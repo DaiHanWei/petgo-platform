@@ -6,5 +6,17 @@
   "tabAdd": "Tambah",
   "tabTriage": "Konsultasi",
   "tabMe": "Saya",
-  "placeholderComingSoon": "Segera hadir"
+  "placeholderComingSoon": "Segera hadir",
+  "loginGoogle": "Masuk dengan Google",
+  "loginAgreementPrefix": "Dengan masuk, Anda menyetujui ",
+  "loginAgreementAnd": " dan ",
+  "termsOfService": "Ketentuan Layanan",
+  "privacyPolicy": "Kebijakan Privasi",
+  "loginFailed": "Gagal masuk, silakan coba lagi",
+  "loginCancelled": "Masuk dibatalkan",
+  "sessionExpired": "Sesi Anda berakhir, silakan masuk lagi",
+  "rateLimited": "Terlalu banyak percobaan, coba lagi nanti",
+  "onboardingWelcomeTitle": "Selamat datang di PetGo",
+  "onboardingWelcomeBody": "Mari selesaikan pengaturan akun Anda",
+  "loginTitle": "Masuk"
 }

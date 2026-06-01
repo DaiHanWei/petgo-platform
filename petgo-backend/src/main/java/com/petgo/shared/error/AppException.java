@@ -42,4 +42,12 @@ public class AppException extends RuntimeException {
     public static AppException conflict(String detail) {
         return new AppException(HttpStatus.CONFLICT, ErrorTypes.CONFLICT, detail);
     }
+
+    public static AppException unauthorized(String detail) {
+        return new AppException(HttpStatus.UNAUTHORIZED, ErrorTypes.UNAUTHORIZED, detail);
+    }
+
+    public static AppException rateLimited(String detail) {
+        return new AppException(HttpStatus.TOO_MANY_REQUESTS, ErrorTypes.RATE_LIMITED, detail);
+    }
 }

@@ -1,3 +1,17 @@
+# PetGo 业务配置（凭证全部 env 注入，绝不入库；下方为占位/默认值）。
+petgo:
+  auth:
+    jwt:
+      # HS256 对称密钥（≥32 字节）。生产经 env JWT_SECRET 注入真实强密钥。
+      secret: ${JWT_SECRET:dev-only-insecure-jwt-secret-please-change-0123456789}
+      issuer: ${JWT_ISSUER:petgo}
+      access-ttl-seconds: ${JWT_ACCESS_TTL_SECONDS:900}
+    refresh:
+      ttl-days: ${JWT_REFRESH_TTL_DAYS:30}
+    google:
+      # Google OAuth client id（aud 校验）。env 注入；留空时跳过 aud 严格校验（仅 dev/L0）。
+      client-id: ${GOOGLE_OAUTH_CLIENT_ID:}
+
 spring:
   application:
     name: petgo-backend

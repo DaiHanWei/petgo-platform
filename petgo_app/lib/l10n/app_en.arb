@@ -27,5 +27,20 @@
   "placeholderComingSoon": "Coming soon",
   "@placeholderComingSoon": {
     "description": "Generic placeholder body for tabs not yet implemented."
-  }
+  },
+  "loginGoogle": "Sign in with Google",
+  "@loginGoogle": {
+    "description": "Google sign-in button label."
+  },
+  "loginAgreementPrefix": "By signing in you agree to the ",
+  "loginAgreementAnd": " and ",
+  "termsOfService": "Terms of Service",
+  "privacyPolicy": "Privacy Policy",
+  "loginFailed": "Sign-in failed, please try again",
+  "loginCancelled": "Sign-in cancelled",
+  "sessionExpired": "Your session expired, please sign in again",
+  "rateLimited": "Too many attempts, please try again later",
+  "onboardingWelcomeTitle": "Welcome to PetGo",
+  "onboardingWelcomeBody": "Let's finish setting up your account",
+  "loginTitle": "Sign in"
 }
