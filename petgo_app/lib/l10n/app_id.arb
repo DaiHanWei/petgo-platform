@@ -37,5 +37,6 @@
   "profileOnboardingTitle": "Buat profil hewan Anda",
   "profileOnboardingBody": "Bangun arsip tumbuh kembang hewan Anda",
   "profileOnboardingSkip": "Lewati dulu",
-  "profileOnboardingCreate": "Buat sekarang"
+  "profileOnboardingCreate": "Buat sekarang",
+  "profilePromptMessage": "Buat profil hewan Anda untuk memulai arsip tumbuh kembang 🐾"
 }

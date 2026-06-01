@@ -2,13 +2,39 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:petgo/app.dart';
+import 'package:petgo/core/storage/prefs.dart';
+import 'package:petgo/features/profile/domain/profile_prompt_controller.dart';
+import 'package:petgo/features/profile/domain/profile_prompt_state.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // V1：锁定竖屏（portrait-only）。
   SystemChrome.setPreferredOrientations(const [
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
-  runApp(const ProviderScope(child: PetGoApp()));
+
+  // Story 1.7：加载档案提示条持久态 + 本次冷启动计数 +1（FR-0H）。
+  final promptBootstrap = await _loadProfilePromptBootstrap();
+
+  runApp(ProviderScope(
+    overrides: [profilePromptBootstrapProvider.overrideWithValue(promptBootstrap)],
+    child: const PetGoApp(),
+  ));
+}
+
+Future<ProfilePromptState> _loadProfilePromptBootstrap() async {
+  try {
+    final prefs = await AppPrefs.create();
+    var state = ProfilePromptState(
+      restartCount: prefs.getInt(AppPrefs.kProfilePromptRestartCount),
+      dismissedPermanently: prefs.getBool(AppPrefs.kProfilePromptDismissedPermanently),
+      petProfileCompleted: prefs.getBool(AppPrefs.kPetProfileCompleted),
+    );
+    state = onColdStartIncrement(state); // 本次冷启动 +1
+    await prefs.setInt(AppPrefs.kProfilePromptRestartCount, state.restartCount);
+    return state;
+  } catch (_) {
+    return const ProfilePromptState(restartCount: 1); // prefs 缺失/损坏 → 默认首启
+  }
 }

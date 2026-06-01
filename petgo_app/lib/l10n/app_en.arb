@@ -61,5 +61,6 @@
   "profileOnboardingTitle": "Create your pet's profile",
   "profileOnboardingBody": "Build your pet's growth archive",
   "profileOnboardingSkip": "Skip for now",
-  "profileOnboardingCreate": "Create now"
+  "profileOnboardingCreate": "Create now",
+  "profilePromptMessage": "Create your pet's profile to start their growth archive 🐾"
 }
