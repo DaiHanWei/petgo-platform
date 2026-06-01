@@ -147,7 +147,9 @@ elevation:
 底部导航栏，**5 个位置**（首页 / 成长档案 / ＋ / 问诊 / 我的），中间为凸起的「＋」发布按钮（PRD FR-19）。白底，顶部 1px `border` 分割线，自动适配安全区。
 - **Active Tab:** 34×34px 填充圆（区域色），白色图标/emoji
 - **Inactive Tab:** 图标/emoji 18px，`text-secondary` 色 + 9px 标签文字
-- **凸起「＋」（中间位）:** 区域色填充圆形 + 白色「＋」，视觉上略高于其余 4 个平级 Tab；颜色随 active Tab 区域色切换
+- **凸起「＋」（中间位）:** 区域色填充圆形（44px）+ 3px 白色描边 + 白色「＋」，**约 1/3 高度突出于白色栏上沿之外**（向上偏移约 20px），形成悬浮发布按钮；颜色随 active Tab 区域色切换
+- **顶部分割线缺口:** 上沿 1px 分割线在「＋」位置**向下内凹成弧形缺口**（concave notch，凹深约 18px、宽约 60px），环抱凸起的「＋」——参考 Material `BottomAppBar` / Flutter `CircularNotchedRectangle` 形态
+- **布局:** 其余 4 个 Tab 等分（`flex:1`，左右各 2 个对称），「＋」居中浮起、不占用平级 Tab 的横向空间
 - Tab 切换动效：图标淡出（旧）→ 淡入（新），持续 120ms ease
 
 ### Masonry Card（首页瀑布流）
