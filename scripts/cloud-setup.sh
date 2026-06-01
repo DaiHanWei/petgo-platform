@@ -1,63 +1,66 @@
 #!/usr/bin/env bash
 # =============================================================================
-# PetGo —— 云端（claude.ai/code）环境 setup script【参考模板】
+# PetGo —— 云端（claude.ai/code）环境 setup script【参考模板 / 复制底稿】
 # -----------------------------------------------------------------------------
-# 这份文件【不是】自动生效的。它是给你【复制粘贴到 Web UI 的 Environment → Setup script】用的底稿。
-# 云端 setup script 配置在网页端，不在仓库里；本文件入库只为版本化留底 + 团队对齐。
+# 这份文件【不自动生效】。把它的内容【粘贴到 Web UI 的 Environment 设置 → Setup script 字段】。
+# 入口：claude.ai/code 顶部「云图标（当前环境名）」→ 环境选择器 → Add environment 或某环境右侧齿轮
+#       → 同一对话框里有：Network access / 环境变量 / Setup script。
+# 仓库这份只为版本化留底；云端 setup script 配在网页端，不读仓库。
 #
-# 运行环境：Ubuntu 24.04，以 root 运行，每个环境【首次】会话执行一次后被缓存
-#          （改本脚本 / 改网络设置 / 缓存约 7 天过期 → 重建）。必须在约 5 分钟内跑完。
+# 运行环境：Ubuntu 24.04（x64），以 root 运行；每个环境【首次】会话执行一次后缓存
+#          （改本脚本 / 改网络设置 / 缓存约 7 天过期 → 重建）。需在约 5 分钟内跑完。
 #
-# 装什么（双产物）：
-#   - Flutter 3.44.x（前端 petgo_app）
-#   - JDK 25 + Maven（后端 petgo-backend）
+# 装什么（双产物 L0 所需）：
+#   - Flutter 3.44.x（前端 petgo_app：analyze / test）
+#   - JDK 25（后端 petgo-backend：编译/打包）
+#   - Maven 【不装】—— 用项目自带 ./mvnw（=Maven 3.9.16，公网 Central），apt 的 3.8.7 太老且会盖掉 JDK 25
 #
-# 网络：Web UI 网络访问选 "Trusted" 通常已含 pub.dev / storage.googleapis.com；
-#       若下列任何下载在首跑失败，多半是域名白名单——把网络切到 "Full" 或加 Custom 允许域名后重试。
+# 网络：Network access 选 "Trusted" 通常已含 github.com / pub.dev / storage.googleapis.com / api.adoptium.net。
+#       某步首跑 404/被挡 → 切 "Full" 或 Custom 放行对应域名后重试（改脚本会重建缓存）。
+# 环境变量：本项目云端只做 L0（不连 DB/第三方），【无需】设任何 secret。
 # =============================================================================
 set -euo pipefail
 
-FLUTTER_CHANNEL="stable"     # VERIFY：需精确 3.44.x 时改为 checkout 具体 tag
 INSTALL_ROOT="/opt"
+FLUTTER_DIR="$INSTALL_ROOT/flutter"
+JDK_DIR="$INSTALL_ROOT/jdk-25"
 PROFILE_D="/etc/profile.d/petgo-toolchain.sh"
 
 echo "==> [1/4] 基础工具"
 apt-get update -y
 apt-get install -y --no-install-recommends git curl unzip xz-utils ca-certificates
 
-echo "==> [2/4] Flutter（前端）"
-# VERIFY：首跑确认 github.com / storage.googleapis.com 可达；precache 是耗时大头，超 5 分钟就去掉 --android 或精简。
-if [ ! -d "$INSTALL_ROOT/flutter" ]; then
-  git clone --depth 1 -b "$FLUTTER_CHANNEL" https://github.com/flutter/flutter.git "$INSTALL_ROOT/flutter"
+echo "==> [2/4] Flutter（前端：analyze/test 用）"
+# git clone --depth 1 取 stable（当前即 3.44.x）。不做 precache：analyze/test 不需要平台引擎产物，省时间。
+if [ ! -d "$FLUTTER_DIR" ]; then
+  git clone --depth 1 -b stable https://github.com/flutter/flutter.git "$FLUTTER_DIR"
 fi
-export PATH="$INSTALL_ROOT/flutter/bin:$PATH"
-git config --global --add safe.directory "$INSTALL_ROOT/flutter"
-flutter --version || true
-flutter precache --android --no-ios   # 云端 headless：iOS 工具链无意义，只留 android/build 用
+git config --global --add safe.directory "$FLUTTER_DIR"
+ln -sf "$FLUTTER_DIR/bin/flutter" /usr/local/bin/flutter
+ln -sf "$FLUTTER_DIR/bin/dart"    /usr/local/bin/dart
+flutter --version || true          # 首次调用触发 Dart SDK 下载到 flutter cache
 flutter config --no-analytics || true
 
-echo "==> [3/4] JDK 25 + Maven（后端）"
-# VERIFY：JDK 25 是前沿版本。下面用 Adoptium 直链装；首跑若 404/域名被挡：
-#   方案A 换 api.adoptium.net 最新 25 资产链接；方案B 用 SDKMAN（需放行 get.sdkman.io / api.sdkman.io）。
-JDK_TARBALL_URL="https://github.com/adoptium/temurin25-binaries/releases/latest/download/OpenJDK25U-jdk_x64_linux_hotspot.tar.gz"  # VERIFY 实际资产名
-if [ ! -d "$INSTALL_ROOT/jdk-25" ]; then
-  curl -fsSL "$JDK_TARBALL_URL" -o /tmp/jdk25.tar.gz
-  mkdir -p "$INSTALL_ROOT/jdk-25"
-  tar -xzf /tmp/jdk25.tar.gz -C "$INSTALL_ROOT/jdk-25" --strip-components=1
+echo "==> [3/4] JDK 25（后端：编译/打包用）"
+# api.adoptium.net 官方端点取 latest GA 25（自动重定向到实际 tarball）。VERIFY：若云 VM 为 arm64，把 x64 改 aarch64。
+JDK_URL="https://api.adoptium.net/v3/binary/latest/25/ga/linux/x64/jdk/hotspot/normal/eclipse"
+if [ ! -x "$JDK_DIR/bin/java" ]; then
+  curl -fsSL "$JDK_URL" -o /tmp/jdk25.tar.gz
+  mkdir -p "$JDK_DIR"
+  tar -xzf /tmp/jdk25.tar.gz -C "$JDK_DIR" --strip-components=1
 fi
-export JAVA_HOME="$INSTALL_ROOT/jdk-25"
-export PATH="$JAVA_HOME/bin:$PATH"
+ln -sf "$JDK_DIR/bin/java"  /usr/local/bin/java
+ln -sf "$JDK_DIR/bin/javac" /usr/local/bin/javac
 java -version || true
 
-apt-get install -y --no-install-recommends maven   # Maven 3.9.x；JAVA_HOME 已指向 25，mvn 会用它
-mvn -version || true
-
-echo "==> [4/4] 持久化 PATH（让后续 agent shell 也认得 flutter/java/mvn）"
+echo "==> [4/4] 持久化 JAVA_HOME（mvnw/maven 需要；PATH 已由 /usr/local/bin 软链兜底）"
 cat > "$PROFILE_D" <<EOF
-export JAVA_HOME="$INSTALL_ROOT/jdk-25"
-export PATH="$INSTALL_ROOT/flutter/bin:\$JAVA_HOME/bin:\$PATH"
+export JAVA_HOME="$JDK_DIR"
+export PATH="$JDK_DIR/bin:$FLUTTER_DIR/bin:\$PATH"
 EOF
-# 非交互 shell 兜底：部分 agent shell 不读 profile.d，再补一份到 root bashrc
 grep -q petgo-toolchain /root/.bashrc 2>/dev/null || echo "source $PROFILE_D" >> /root/.bashrc
+export JAVA_HOME="$JDK_DIR"
 
-echo "==> setup 完成。验证：flutter --version && java -version && mvn -version"
+echo "==> setup 完成。"
+echo "    验证：flutter --version && java -version && (cd petgo-backend && ./mvnw -v)"
+echo "    注：后端用 ./mvnw（不是 mvn）；依赖走项目级 .mvn/settings.xml 直连 Central。"
