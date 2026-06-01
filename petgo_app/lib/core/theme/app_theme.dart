@@ -1,16 +1,37 @@
 import 'package:flutter/material.dart';
 
-/// 应用主题（V1 仅浅色）。
-/// 注：完整设计 token 体系（配色/间距/圆角/Tab Bar 外壳）属 Story 1.2，本 Story 仅给可运行的浅色基线。
+import 'colors.dart';
+import 'typography.dart';
+
+/// 应用主题装配（V1 仅浅色，dark 延 V2）。
+///
+/// 所有视觉常量来自 `core/theme` 设计 token（colors/typography/...）。
+/// `scaffoldBackgroundColor = AppColors.base` —— 底色恒 #FAF8F5，不随 Tab 变（UX-DR1）。
 class AppTheme {
   AppTheme._();
 
-  static ThemeData get light => ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.light,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF4CAF50),
-          brightness: Brightness.light,
-        ),
-      );
+  static ThemeData get light {
+    final ColorScheme scheme = ColorScheme.fromSeed(
+      seedColor: AppColors.accentGrowth,
+      brightness: Brightness.light,
+    ).copyWith(
+      surface: AppColors.surface,
+      onSurface: AppColors.textPrimary,
+    );
+
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.light,
+      colorScheme: scheme,
+      scaffoldBackgroundColor: AppColors.base,
+      textTheme: const TextTheme(
+        displaySmall: AppTypography.display,
+        headlineSmall: AppTypography.headline,
+        titleMedium: AppTypography.title,
+        bodyMedium: AppTypography.body,
+        bodySmall: AppTypography.caption,
+        labelSmall: AppTypography.micro,
+      ),
+    );
+  }
 }

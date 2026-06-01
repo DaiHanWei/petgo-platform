@@ -2,6 +2,30 @@
   "@@locale": "en",
   "appTitle": "PetGo",
   "@appTitle": {
-    "description": "Application title shown on the home placeholder (i18n scaffold smoke key)."
+    "description": "Application title."
+  },
+  "tabHome": "Home",
+  "@tabHome": {
+    "description": "Bottom tab label: Home (Feed)."
+  },
+  "tabProfile": "Growth",
+  "@tabProfile": {
+    "description": "Bottom tab label: Growth archive."
+  },
+  "tabAdd": "Add",
+  "@tabAdd": {
+    "description": "Bottom tab center plus button (publish)."
+  },
+  "tabTriage": "Consult",
+  "@tabTriage": {
+    "description": "Bottom tab label: Triage / consult."
+  },
+  "tabMe": "Me",
+  "@tabMe": {
+    "description": "Bottom tab label: Me / profile center."
+  },
+  "placeholderComingSoon": "Coming soon",
+  "@placeholderComingSoon": {
+    "description": "Generic placeholder body for tabs not yet implemented."
   }
 }

@@ -1,4 +1,10 @@
 {
   "@@locale": "id",
-  "appTitle": "PetGo"
+  "appTitle": "PetGo",
+  "tabHome": "Beranda",
+  "tabProfile": "Tumbuh",
+  "tabAdd": "Tambah",
+  "tabTriage": "Konsultasi",
+  "tabMe": "Saya",
+  "placeholderComingSoon": "Segera hadir"
 }
