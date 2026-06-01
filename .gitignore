@@ -6,8 +6,11 @@
 .vscode/
 *.iml
 
-# Claude Code / BMAD 本地工具配置（不入库）
-.claude/
+# Claude Code / BMAD 本地工具配置（默认不入库）
+# 但 settings.json 与 hooks/ 需入库——云端 session（claude.ai/code）只读仓库里 commit 的 hook
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
 
 # Logs & temp
 *.log
