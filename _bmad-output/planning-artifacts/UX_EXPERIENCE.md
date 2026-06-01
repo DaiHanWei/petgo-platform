@@ -198,7 +198,7 @@ Critical interaction. Triggered when AI returns red-level assessment.
 - **Color contrast:** All text/icon on `{colors.background}` meets WCAG AA (4.5:1 minimum). Triage states use icon + text + color — never color alone.
 - **Touch targets:** Minimum 44×44pt for all interactive elements (iOS HIG / Material baseline).
 - **Disclaimer text:** Even at `{typography.micro}` (10px), must maintain 3:1 contrast on its background.
-- **Red alert:** Half-screen alert is announced to screen readers as "긴급 alert, role=alertdialog" (iOS) / `AccessibilityLiveRegion.ASSERTIVE` (Android).
+- **Red alert:** Half-screen alert is announced to screen readers as "urgent alert, role=alertdialog" (iOS) / `AccessibilityLiveRegion.ASSERTIVE` (Android). 播报文案需提供 id/en 双语（en: "urgent alert" / id: "peringatan darurat"）。
 - **Dynamic type:** Body and below scales with system font size setting (up to 3 steps). Headers capped to prevent layout breakage.
 - **Bilingual (V1):** App 支持印尼语（id）和英语（en）双语（PRD FR-27）。首次启动跟随设备语言，设备为其他语言回退英语；用户可在「我的 → 语言设置」手动切换，即时生效。所有 UI 文案 / 系统提示 / 错误信息均需提供 id + en 两套；UGC 内容不受语言设置限制。
 
@@ -236,14 +236,14 @@ Critical interaction. Triggered when AI returns red-level assessment.
 
 **iOS specifics:**
 - Status bar: system default light content on `{colors.background}`
-- Safe area: home indicator bottom padding applied to Pill Nav
+- Safe area: home indicator bottom padding applied to Bottom Tab Bar
 - Sheet presentation: `.sheet` for Publish Compose; `.fullScreenCover` not used
 - Haptics: `UIImpactFeedbackGenerator` on FAB tap, triage result reveal
 
 **Android specifics:**
 - Status bar: transparent with dark icons (light mode)
 - Bottom sheet: `BottomSheetDialogFragment`
-- Navigation bar: edge-to-edge, Pill Nav sits above system nav bar
+- Navigation bar: edge-to-edge, Bottom Tab Bar sits above system nav bar
 - Ripple: MaterialRipple on all tappable cards; suppress default ripple on FAB (custom pulse animation)
 
 **Dark mode:** `[ASSUMPTION: V1 light-mode only; dark mode deferred to V2]`
