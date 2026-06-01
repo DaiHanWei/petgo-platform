@@ -18,5 +18,9 @@
   "rateLimited": "Terlalu banyak percobaan, coba lagi nanti",
   "onboardingWelcomeTitle": "Selamat datang di PetGo",
   "onboardingWelcomeBody": "Mari selesaikan pengaturan akun Anda",
-  "loginTitle": "Masuk"
+  "loginTitle": "Masuk",
+  "loginGuideSoftTitle": "Masuk untuk pengalaman penuh",
+  "loginGuideSoftSubtitle": "Simpan momen hewan Anda dan bergabung dengan komunitas 🐾",
+  "loginGuideHardMessage": "Masuk untuk terus menggunakan fitur ini",
+  "commonClose": "Tutup"
 }

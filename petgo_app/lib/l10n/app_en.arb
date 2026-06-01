@@ -42,5 +42,9 @@
   "rateLimited": "Too many attempts, please try again later",
   "onboardingWelcomeTitle": "Welcome to PetGo",
   "onboardingWelcomeBody": "Let's finish setting up your account",
-  "loginTitle": "Sign in"
+  "loginTitle": "Sign in",
+  "loginGuideSoftTitle": "Sign in for the full experience",
+  "loginGuideSoftSubtitle": "Save your pet's moments and join the community 🐾",
+  "loginGuideHardMessage": "Sign in to continue using this feature",
+  "commonClose": "Close"
 }

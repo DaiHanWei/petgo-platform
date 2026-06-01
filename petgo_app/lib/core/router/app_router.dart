@@ -1,5 +1,6 @@
 import 'package:go_router/go_router.dart';
 
+import '../../features/auth/presentation/dev_login_guide_page.dart';
 import '../../features/auth/presentation/login_page.dart';
 import '../../features/auth/presentation/onboarding_placeholder_page.dart';
 import '../../features/content/presentation/home_page.dart';
@@ -18,6 +19,8 @@ final GoRouter appRouter = GoRouter(
   routes: <RouteBase>[
     GoRoute(path: '/login', builder: (c, s) => const LoginPage()),
     GoRoute(path: '/onboarding', builder: (c, s) => const OnboardingPlaceholderPage()),
+    // @dev 自测入口（Story 1.4 F3）：不从 UI 链接，仅供手动深链触发登录引导。
+    GoRoute(path: '/dev/login-guide', builder: (c, s) => const DevLoginGuidePage()),
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) => AppShell(navigationShell: navigationShell),
       branches: <StatefulShellBranch>[
