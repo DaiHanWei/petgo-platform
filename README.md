@@ -32,7 +32,7 @@ V1 以两个核心功能构建最小完整体验，**全功能免费，不涉及
 | 层 | 选型 |
 |----|------|
 | 移动端 | **Flutter**（iOS + Android 单一代码库，用户端 + 兽医端角色门控） |
-| 后端 | **Java 25 / Spring Boot 4.0.x**，模块化单体（Maven） |
+| 后端 | **Java 21 / Spring Boot 4.0.x**，模块化单体（Maven） |
 | 数据 | PostgreSQL + Redis（缓存 / 兽医在线态 / 队列态 / 限流） |
 | AI 分诊 | **Google Gemini** 单模型（原生多模态，图像理解 + 分诊推理 + 结构化 JSON）+ 确定性安全规则层 |
 | 实时通信 | **腾讯云 IM (TIM)** —— 承载兽医 ↔ 用户图文 / 视频咨询 |
@@ -94,7 +94,7 @@ petgo-platform/
 仓库根下并列两套工程，各自独立起步：
 
 ```bash
-# 后端（Spring Boot 4 / Java 25）
+# 后端（Spring Boot 4 / Java 21）
 cd petgo-backend && docker compose up -d postgres redis && ./mvnw spring-boot:run
 #   验证：curl localhost:8080/actuator/health  → {"status":"UP"}
 #   详见 petgo-backend/README.md

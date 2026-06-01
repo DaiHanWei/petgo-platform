@@ -23,8 +23,8 @@ story 1.1 的 Dev Notes 已探测：本机 **Flutter 未装、JDK 是 17（需 2
 
 ```bash
 # 1) Flutter 3.44.x（本机没有）—— 按官方 install 装 stable，确认 flutter --version 是 3.44.x
-# 2) JDK 25（本机是 17，pom 写死 25）
-sdk install java 25-tem && sdk use java 25-tem    # 用 sdkman
+# 2) JDK 21（pom 写死 21）—— 本机若无：jenv/sdkman 装 21；本仓库已 jenv local 21
+jenv local 21    # 或 sdk install java 21-tem
 # 3) Docker daemon（L1 验收用）
 open -a Docker                                      # 等就绪
 ```
@@ -98,6 +98,6 @@ L1/L2 在 Completion Notes 标注「待本地验收」。完成后提交到本 s
 |---|---|
 | 云端 session 看不到 CLAUDE.md / hook | 没 commit。云端只读仓库里 commit 的东西。 |
 | hook 没跑 `flutter pub get` | 脚手架（1.1）还没 push，或云端 setup 没装成 flutter → hook 设计为静默跳过。 |
-| setup script 首跑下载失败 | 域名白名单：网络切 Full / 加 Custom 域名；JDK 25 链接按 `VERIFY` 换 Adoptium 实际资产。 |
+| setup script 首跑下载失败 | 域名白名单：网络切 Full / 加 Custom 域名。后端用云端自带 openjdk-21（无需下 JDK），避开了证书/下载坑。 |
 | Flyway 迁移号冲突 | 按执行顺序单调分配，勿照搬 architecture 示例号（决策 E2）。 |
 | 云端要看模拟器 UI | 做不到（headless）。teleport 回本地。 |

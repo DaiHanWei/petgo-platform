@@ -1,10 +1,10 @@
 # petgo-backend
 
-PetGo 后端 —— Spring Boot 4.0.6 / Java 25 / Maven，PostgreSQL + Redis + Flyway，模块化单体（8 业务模块 + shared）。
+PetGo 后端 —— Spring Boot 4.0.6 / Java 21 / Maven，PostgreSQL + Redis + Flyway，模块化单体（8 业务模块 + shared）。
 
 ## 前置
 
-- JDK **25**（本仓库用 jenv 钉定，根目录 `.java-version=25`）
+- JDK **21**（本仓库用 jenv 钉定，根目录 `.java-version=21`）
 - Docker daemon（起 PostgreSQL + Redis）
 - Maven 3.9+（或用自带 `./mvnw`）
 

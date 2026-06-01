@@ -10,9 +10,10 @@
 | 目录 | 技术栈 | 版本基线（架构已联网核实，权威，勿降级） |
 |---|---|---|
 | `petgo_app/` | Flutter 移动端 | Flutter **3.44.x** / Dart **3.12** · Riverpod + go_router + dio + intl · portrait-only · V1 仅浅色 |
-| `petgo-backend/` | Spring Boot 后端 | Spring Boot **4.0.6** · Java **25 LTS** · Maven · PostgreSQL + Redis + Flyway · 部署留德国单机 |
+| `petgo-backend/` | Spring Boot 后端 | Spring Boot **4.0.6** · Java **21 LTS** · Maven · PostgreSQL + Redis + Flyway · 部署留德国单机 |
 
-> ⚠️ 这些版本晚于 LLM 知识截止（2026-01）。以 `start.spring.io` / `pub.dev` 实际可解析版本为准；若 `4.0.6`/`25`/`3.44.x` 不可用，取同大版本最新 patch 并在 story 的 Completion Notes 记录，**禁止降级到 SB3 / Java21 / 旧 Flutter**。
+> ⚠️ 版本说明：以 `start.spring.io` / `pub.dev` 实际可解析版本为准；若 `4.0.6` / `3.44.x` 不可用，取同大版本最新 patch 并在 story 的 Completion Notes 记录。**底线是保持 Spring Boot 4 / Spring 7（勿退回 SB3）**。
+> Java 基线为 **21 LTS**（2026-06-02 决策：原拟 25，但无任何功能需求依赖 25，且云端自带 21、生态更成熟、Temurin 21 LTS 支持到 ~2029；改 21 消除前沿摩擦，符合 V1 轻量姿态。Boot 4 官方支持 Java 17+，21 完全兼容）。
 
 **这不是纯前端原型** —— 后端是真实 Spring Boot 服务，不要用 mock 数据糊弄后端。前端在没有后端时可用占位/mock，但每个 story 的后端子任务要真实落库与接口。
 

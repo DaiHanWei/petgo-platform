@@ -114,7 +114,7 @@ date: '2026-06-01'
 
 **脚手架（架构指定为「实现阶段第一个 Story」）**
 - 移动端：`flutter create --org com.petgo --project-name petgo petgo_app` + Riverpod + go_router + dio + intl/flutter_localizations（id/en，Day-1）+ flutter_lints。
-- 后端：`spring init`（Maven / Spring Boot 4.0.x / Java 25 LTS）依赖 web,validation,data-jpa,postgresql,data-redis,oauth2-resource-server,security,thymeleaf,actuator,flyway,lombok。
+- 后端：`spring init`（Maven / Spring Boot 4.0.x / Java 21 LTS）依赖 web,validation,data-jpa,postgresql,data-redis,oauth2-resource-server,security,thymeleaf,actuator,flyway,lombok。
 - 基建骨架：Docker Compose（app + PostgreSQL + Redis，德国单机 45.90.122.44）+ Cloudflare 前置接入 + GitHub Actions CI 骨架。
 
 **数据与存储**
@@ -275,7 +275,7 @@ So that 团队能在统一约定（命名/分层/错误规范）上"改一行就
 **Acceptance Criteria:**
 
 **Given** 干净的开发环境
-**When** 执行架构文档指定的两条 init 命令（`flutter create --org com.petgo` + Riverpod/go_router/dio/intl/flutter_lints；`spring init` Maven/SB4.0.x/Java25 含 web,validation,data-jpa,postgresql,data-redis,oauth2-resource-server,security,thymeleaf,actuator,flyway,lombok）
+**When** 执行架构文档指定的两条 init 命令（`flutter create --org com.petgo` + Riverpod/go_router/dio/intl/flutter_lints；`spring init` Maven/SB4.0.x/Java21 含 web,validation,data-jpa,postgresql,data-redis,oauth2-resource-server,security,thymeleaf,actuator,flyway,lombok）
 **Then** 生成的两套工程均能本地启动：`flutter run` 出空白首页、后端 `mvn spring-boot:run` 启动成功
 **And** 后端按 8 模块 + shared 的 package-by-feature→layer 目录骨架建立，前端按 core/shared/features 骨架建立
 

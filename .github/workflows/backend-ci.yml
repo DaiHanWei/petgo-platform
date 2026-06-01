@@ -51,11 +51,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 25 (Temurin)
+      - name: Set up JDK 21 (Temurin)
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "25"
+          java-version: "21"
           cache: maven
 
       # 使用项目级 .mvn/settings.xml（直连 Maven Central，见 maven.config）。含测试 → 出 jar。
