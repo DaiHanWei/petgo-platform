@@ -39,9 +39,14 @@ class AuthController extends Notifier<AuthState> {
     );
   }
 
-  /// 新用户完成引导（Story 1.6 回调）→ 转为已登录。
-  void completeOnboarding() {
-    state = AuthState(status: AuthStatus.authenticated, role: state.role, profile: state.profile);
+  /// 新用户完成引导（Story 1.6 回调）→ 转为已登录，并回填最新 profile。
+  void completeOnboarding(UserProfile profile) {
+    state = AuthState(status: AuthStatus.authenticated, role: state.role, profile: profile);
+  }
+
+  /// 资料更新（昵称/状态）后回填 profile（不改变登录态语义）。
+  void applyProfile(UserProfile profile) {
+    state = AuthState(status: state.status, role: state.role, profile: profile);
   }
 
   /// 续期失败 / 注销 → 落游客态。

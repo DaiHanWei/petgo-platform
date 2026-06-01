@@ -5,9 +5,11 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/domain/auth_state.dart';
 import '../../features/auth/presentation/dev_login_guide_page.dart';
 import '../../features/auth/presentation/login_page.dart';
-import '../../features/auth/presentation/onboarding_placeholder_page.dart';
+import '../../features/auth/presentation/nickname_page.dart';
+import '../../features/auth/presentation/pet_status_page.dart';
 import '../../features/content/presentation/home_page.dart';
 import '../../features/me/presentation/me_page.dart';
+import '../../features/profile/presentation/profile_onboarding_page.dart';
 import '../../features/profile/presentation/profile_page.dart';
 import '../../features/triage/presentation/triage_page.dart';
 import '../../shared/widgets/app_shell.dart';
@@ -35,7 +37,10 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
     },
     routes: <RouteBase>[
       GoRoute(path: '/login', builder: (c, s) => const LoginPage()),
-      GoRoute(path: '/onboarding', builder: (c, s) => const OnboardingPlaceholderPage()),
+      // 新用户引导流（Story 1.6）：昵称 → 宠物状态 → (A) 档案创建引导 / (B,C) 首页。
+      GoRoute(path: '/onboarding', builder: (c, s) => const NicknamePage()),
+      GoRoute(path: '/onboarding/pet-status', builder: (c, s) => const PetStatusPage()),
+      GoRoute(path: '/onboarding/profile', builder: (c, s) => const ProfileOnboardingPage()),
       // @dev 自测入口（Story 1.4 F3）：不从 UI 链接，仅供手动深链触发登录引导。
       GoRoute(path: '/dev/login-guide', builder: (c, s) => const DevLoginGuidePage()),
       StatefulShellRoute.indexedStack(
