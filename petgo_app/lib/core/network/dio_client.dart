@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/auth/data/auth_repository.dart';
 import '../../features/auth/data/google_auth_client.dart';
 import '../../features/auth/domain/auth_state.dart';
+import '../../features/auth/domain/login_guide_controller.dart';
+import '../router/app_router.dart';
 import '../storage/secure_storage.dart';
 import 'auth_interceptor.dart';
 
@@ -33,7 +35,15 @@ final Provider<Dio> dioProvider = Provider<Dio>((ref) {
     tokenStore: ref.read(tokenStoreProvider),
     // 懒调用：运行期才读 authRepository，避免 provider 构造期循环依赖。
     refresh: () => ref.read(authRepositoryProvider).refresh(),
-    onSessionExpired: () => ref.read(authControllerProvider.notifier).toGuest(),
+    onSessionExpired: () {
+      // 续期彻底失败：落游客态 + 进登录引导流（Story 1.5 F3，非静默吞掉）。
+      ref.read(authControllerProvider.notifier).toGuest();
+      final ctx = rootNavigatorKey.currentContext;
+      if (ctx != null) {
+        // 并发 401 由 LoginGuideController 单例守卫，不叠多窗。
+        ref.read(loginGuideControllerProvider).showHardDialog(ctx);
+      }
+    },
     localeCode: () {
       final locale = WidgetsBinding.instance.platformDispatcher.locale;
       return locale.languageCode == 'id' ? 'id' : 'en';

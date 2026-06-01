@@ -25,10 +25,12 @@ class LoginGuideController {
   final LoginRunner _login;
 
   bool _softShownThisSession = false;
+  bool _hardDialogShowing = false;
   RouteIntent? _pending;
 
   bool get softShownThisSession => _softShownThisSession;
   bool get hasPending => _pending != null;
+  bool get hardDialogShowing => _hardDialogShowing;
 
   /// 软浮层（每 session 最多一次；第 2 次起 no-op）。
   Future<void> showSoftSheet(BuildContext context, {RouteIntent? pendingAction}) async {
@@ -49,20 +51,29 @@ class LoginGuideController {
     );
   }
 
-  /// 强弹窗（不去重，按触发即弹）。
+  /// 强弹窗（按触发即弹，不做 session 去重）。
+  ///
+  /// 但**并发去重**：同一时刻只存在一个强弹窗（并发 401 不叠多窗，单例引导）。
+  /// 顺序触发（关闭后再触发）仍正常弹出。
   Future<void> showHardDialog(BuildContext context, {RouteIntent? pendingAction}) async {
+    if (_hardDialogShowing) return; // 并发单例
+    _hardDialogShowing = true;
     _pending = pendingAction;
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      builder: (dlgCtx) => LoginHardDialog(
-        onLogin: () => _attemptLogin(context, dlgCtx),
-        onClose: () {
-          _pending = null;
-          Navigator.of(dlgCtx).pop();
-        },
-      ),
-    );
+    try {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: true,
+        builder: (dlgCtx) => LoginHardDialog(
+          onLogin: () => _attemptLogin(context, dlgCtx),
+          onClose: () {
+            _pending = null;
+            Navigator.of(dlgCtx).pop();
+          },
+        ),
+      );
+    } finally {
+      _hardDialogShowing = false;
+    }
   }
 
   Future<void> _attemptLogin(BuildContext rootContext, BuildContext overlayContext) async {

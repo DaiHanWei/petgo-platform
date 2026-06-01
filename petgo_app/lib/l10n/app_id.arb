@@ -22,5 +22,7 @@
   "loginGuideSoftTitle": "Masuk untuk pengalaman penuh",
   "loginGuideSoftSubtitle": "Simpan momen hewan Anda dan bergabung dengan komunitas 🐾",
   "loginGuideHardMessage": "Masuk untuk terus menggunakan fitur ini",
-  "commonClose": "Tutup"
+  "commonClose": "Tutup",
+  "homeEmptyTitle": "Beranda Anda kosong",
+  "homeEmptyBody": "Cerita hewan akan segera muncul di sini"
 }

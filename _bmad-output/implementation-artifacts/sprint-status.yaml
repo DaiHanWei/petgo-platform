@@ -64,7 +64,7 @@ development_status:
   1-2-设计-token-系统-tab-bar-外壳与-i18n-脚手架: review
   1-3-google-登录与-jwt-签发: review
   1-4-登录引导浮层与登录后回跳: review
-  1-5-游客只读进入与受控入口登录门控: ready-for-dev
+  1-5-游客只读进入与受控入口登录门控: review
   1-6-新用户引导-昵称确认与宠物状态选择: ready-for-dev
   1-7-状态-a-档案创建引导与首页提示条: ready-for-dev
   epic-1-retrospective: optional

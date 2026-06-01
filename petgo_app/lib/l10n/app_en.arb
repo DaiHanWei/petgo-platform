@@ -46,5 +46,7 @@
   "loginGuideSoftTitle": "Sign in for the full experience",
   "loginGuideSoftSubtitle": "Save your pet's moments and join the community 🐾",
   "loginGuideHardMessage": "Sign in to continue using this feature",
-  "commonClose": "Close"
+  "commonClose": "Close",
+  "homeEmptyTitle": "Your feed is empty",
+  "homeEmptyBody": "Pet stories will appear here soon"
 }
