@@ -26,9 +26,14 @@ FLUTTER_DIR="$INSTALL_ROOT/flutter"
 JDK_DIR="$INSTALL_ROOT/jdk-25"
 PROFILE_D="/etc/profile.d/petgo-toolchain.sh"
 
-echo "==> [1/4] 基础工具"
-apt-get update -y
-apt-get install -y --no-install-recommends git curl unzip xz-utils ca-certificates
+echo "==> [1/4] 基础工具（云基础镜像通常已带 git/curl/ca-certificates；apt 仅尽力补齐，失败不致命）"
+# 云镜像预置的第三方 PPA（deadsnakes/ondrej 等）可能 403，与本工具链无关 → 移除，避免 apt update 失败
+rm -f /etc/apt/sources.list.d/*deadsnakes* /etc/apt/sources.list.d/*ondrej* 2>/dev/null || true
+apt-get update -y || true
+apt-get install -y --no-install-recommends git curl ca-certificates tar gzip || true
+# 兜底校验：Flutter 需 git、JDK 下载需 curl。缺则明确报错退出。
+command -v git  >/dev/null || { echo "FATAL: git 不可用"; exit 1; }
+command -v curl >/dev/null || { echo "FATAL: curl 不可用"; exit 1; }
 
 echo "==> [2/4] Flutter（前端：analyze/test 用）"
 # git clone --depth 1 取 stable（当前即 3.44.x）。不做 precache：analyze/test 不需要平台引擎产物，省时间。
