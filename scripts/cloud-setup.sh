@@ -47,8 +47,9 @@ flutter --version || true          # 首次调用触发 Dart SDK 下载到 flutt
 flutter config --no-analytics || true
 
 echo "==> [3/4] JDK 25（后端：编译/打包用）"
-# api.adoptium.net 官方端点取 latest GA 25（自动重定向到实际 tarball）。VERIFY：若云 VM 为 arm64，把 x64 改 aarch64。
-JDK_URL="https://api.adoptium.net/v3/binary/latest/25/ga/linux/x64/jdk/hotspot/normal/eclipse"
+# 直接从 github.com 下 Temurin 25.0.3（github 在 Trusted 白名单内；api.adoptium.net 不在 → 会 403）。
+# 版本钉死保证可复现。VERIFY：若云 VM 为 arm64，把 x64→aarch64 并换对应资产名。
+JDK_URL="https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.3%2B9/OpenJDK25U-jdk_x64_linux_hotspot_25.0.3_9.tar.gz"
 if [ ! -x "$JDK_DIR/bin/java" ]; then
   curl -fsSL "$JDK_URL" -o /tmp/jdk25.tar.gz
   mkdir -p "$JDK_DIR"
