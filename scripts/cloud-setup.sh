@@ -59,22 +59,26 @@ ln -sf "$JDK_DIR/bin/java"  /usr/local/bin/java
 ln -sf "$JDK_DIR/bin/javac" /usr/local/bin/javac
 java -version || true
 
-echo "==> [4/4] 让所有 shell 都用 JDK 25（覆盖基础镜像预设的 JAVA_HOME=java-21）"
-# 关键：基础镜像在 /etc/environment 预设了 JAVA_HOME=java-21，mvnw 跟随 JAVA_HOME → 用错 JDK 编译失败。
-# /etc/environment 被 PAM 用于所有会话（含 agent shell），是最可靠的覆盖点。
+echo "==> [4/4] 让 mvnw 用上 JDK 25（关键：harness 把 JAVA_HOME 钉死到 java-21，文件配置压不过它）"
+# 釜底抽薪：直接把基础镜像的 java-21 目录替换成指向 jdk-25 的软链。
+# 这样即便 JAVA_HOME 死咬 /usr/lib/jvm/java-21-openjdk-amd64，它解析到的也是 Java 25。
+JAVA21_DIR="/usr/lib/jvm/java-21-openjdk-amd64"
+if [ -e "$JAVA21_DIR" ] && [ ! -L "$JAVA21_DIR" ]; then
+  rm -rf "$JAVA21_DIR"
+fi
+ln -sfn "$JDK_DIR" "$JAVA21_DIR"
+# 同时把常规来源也指向 25（双保险）
 if grep -q '^JAVA_HOME=' /etc/environment 2>/dev/null; then
   sed -i "s|^JAVA_HOME=.*|JAVA_HOME=$JDK_DIR|" /etc/environment
 else
   echo "JAVA_HOME=$JDK_DIR" >> /etc/environment
 fi
-# 登录 shell 兜底：zzz- 前缀确保排在基础镜像 profile.d 之后生效
 cat > /etc/profile.d/zzz-petgo-toolchain.sh <<EOF
 export JAVA_HOME=$JDK_DIR
 export PATH="$JDK_DIR/bin:$FLUTTER_DIR/bin:\$PATH"
 EOF
-rm -f "$PROFILE_D" 2>/dev/null || true   # 清掉旧的（排序靠前，会被基础镜像覆盖）
 export JAVA_HOME="$JDK_DIR"
-echo "    JAVA_HOME 已设为 $JDK_DIR（/etc/environment + profile.d 双保险）"
+echo "    java-21 路径已重定向到 $JDK_DIR（$($JAVA21_DIR/bin/java -version 2>&1 | head -1)）"
 
 echo "==> setup 完成。"
 echo "    验证：flutter --version && java -version && (cd petgo-backend && ./mvnw -v)"
