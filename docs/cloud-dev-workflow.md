@@ -78,6 +78,31 @@ L1/L2 在 Completion Notes 标注「待本地验收」。完成后提交到本 s
 
 每条 `--remote` = 独立云 session = 全新上下文（无需 `/clear`）。
 
+### Stage E-batch — 按 Epic 批量执行（连续推进 + Epic 末检查点）
+
+一条云会话做完**一个 Epic 内的连续 story**，Epic 末停下等本地验收+合并，再放下一个 Epic。把下面模板里的 `<EPIC_N>` 与 story 范围替换后，`claude --remote "<模板>"` 发起：
+
+```
+你是 PetGo 的 dev agent（云端 headless）。任务：按 bmad-dev-story 流程，依次实现 <EPIC_N> 中所有 ready-for-dev 的 story（按 sprint-status.yaml 的 story 编号升序），一个做完再做下一个，直到该 Epic 全部完成。
+
+每个 story：
+1. 用 bmad-dev-story 流程执行对应 _bmad-output/implementation-artifacts/<story>.md（让 bmad-dev-story 自动挑下一个 ready-for-dev 的）。
+2. 云端只做 L0 绿灯：前端 flutter analyze + flutter test；涉后端 cd petgo-backend && ./mvnw -B -DskipTests package。
+   L1(Docker)/L2(凭证/视觉) 不做——在该 story 的 Completion Notes 明确标「待本地验收」并写清需要什么（哪类凭证 / 需肉眼确认哪个界面）。
+3. 提交到分支 <EPIC_N>-batch（从 main 切），每个 story 一个 commit；更新 sprint-status 该 story 为 review。
+
+停止铁律（命中就停下、写清卡点，禁止硬闯）：
+- 下一个 ready story 已不属于 <EPIC_N>（即本 Epic 做完）→ 停。
+- 需真实凭证的 story（如 1.3 Google OAuth / 2.1 阿里 OSS / 4.1 Gemini / 5.x 腾讯 IM）：实现代码 + 用 mock/stub 把 L0 跑绿即可，禁止伪造凭证或跳过，Completion Notes 标清 L2 待本地。
+- 安全攸关 story（4.2 安全规则层 / 4.5 红色强提醒 / 7.3 注销级联删除）→ 立即停，交人工，不在无监管下做。
+- 任一 story 的 L0 连续修 3 次仍不过 → 停。
+- Flyway 迁移序号按执行顺序单调分配（决策 E2），勿照搬 architecture 示例号。
+
+全 Epic 完成后：推 <EPIC_N>-batch 开一个 PR，标题「<EPIC_N> 批量实现（L0 绿）」，PR 描述逐 story 列「L0 状态 + 待本地验收项」。然后停下，不要继续下一个 Epic。
+```
+
+**Epic 末你要做的**：拉分支本地补 L1/L2（起 Docker 验集成、填凭证验登录/AI/IM、`flutter run` 验视觉），通过后合并；安全节点（4.2/4.5/7.3）本地实现或重点 review。合并后再发下一个 Epic 的批量命令。
+
 **留本地、别过夜批跑的安全攸关节点**（AC 含「只升不降/不可绕过/级联删除」硬约束）：
 - `4-2` 确定性安全规则层（高危强制升红）
 - `4-5` 红色半屏强提醒
