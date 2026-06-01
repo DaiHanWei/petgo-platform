@@ -1,0 +1,15 @@
+# prod profile —— 德国单机部署（占位）。日志 JSON 结构化（Boot 4 内置 structured logging），health 不外泄明细。
+spring:
+  jpa:
+    show-sql: false
+management:
+  endpoint:
+    health:
+      show-details: never
+logging:
+  # Boot 4 内置结构化日志输出 JSON（含 MDC：traceId/userId）。严禁记录 PII/健康数据/令牌/签名 URL（由代码层保证）。
+  structured:
+    format:
+      console: ecs
+  level:
+    com.petgo: INFO

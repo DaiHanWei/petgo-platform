@@ -1,0 +1,11 @@
+# dev profile —— 本地开发（docker-compose 起栈）。日志人类可读，health 显示明细。
+spring:
+  jpa:
+    show-sql: false
+management:
+  endpoint:
+    health:
+      show-details: always
+logging:
+  level:
+    com.petgo: DEBUG

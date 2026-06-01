@@ -1,0 +1,19 @@
+# 静态分析配置 —— flutter_lints 强基线（flutter analyze 零警告为验收门槛）。
+include: package:flutter_lints/flutter.yaml
+
+# ⚠️ riverpod_lint + custom_lint 暂缓启用：
+# custom_lint 0.8.1 仅支持 analyzer ^8，而 Flutter 3.44 / riverpod 3.x 需 analyzer 9，当前生态无法解析。
+# 待 custom_lint 跟上 analyzer 9 后，加回 dev_dependencies 并启用下列插件：
+# analyzer:
+#   plugins:
+#     - custom_lint
+
+analyzer:
+  exclude:
+    # 生成代码不纳入 lint
+    - "**/*.g.dart"
+    - "lib/l10n/app_localizations*.dart"
+
+linter:
+  rules:
+    # 项目专属规则可在此追加

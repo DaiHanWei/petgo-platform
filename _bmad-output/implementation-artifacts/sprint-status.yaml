@@ -50,7 +50,7 @@
 # - 跨 story 决策清单见 implementation-artifacts/CROSS-STORY-DECISIONS.md
 
 generated: 2026-06-01
-last_updated: 2026-06-01
+last_updated: 2026-06-02
 project: petgo-platform
 # epic-1 -> in-progress (首个 story 1.1 已 contexted)
 project_key: NOKEY
@@ -60,7 +60,7 @@ story_location: "{project-root}/_bmad-output/implementation-artifacts"
 development_status:
   # ===== Epic 1: 应用地基与账户接入 =====
   epic-1: in-progress
-  1-1-双产物脚手架与本地可运行骨架: ready-for-dev
+  1-1-双产物脚手架与本地可运行骨架: review
   1-2-设计-token-系统-tab-bar-外壳与-i18n-脚手架: ready-for-dev
   1-3-google-登录与-jwt-签发: ready-for-dev
   1-4-登录引导浮层与登录后回跳: ready-for-dev

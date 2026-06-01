@@ -32,7 +32,7 @@ V1 以两个核心功能构建最小完整体验，**全功能免费，不涉及
 | 层 | 选型 |
 |----|------|
 | 移动端 | **Flutter**（iOS + Android 单一代码库，用户端 + 兽医端角色门控） |
-| 后端 | **Java / Spring Boot 3.x（Java 21）**，模块化单体 |
+| 后端 | **Java 25 / Spring Boot 4.0.x**，模块化单体（Maven） |
 | 数据 | PostgreSQL + Redis（缓存 / 兽医在线态 / 队列态 / 限流） |
 | AI 分诊 | **Google Gemini** 单模型（原生多模态，图像理解 + 分诊推理 + 结构化 JSON）+ 确定性安全规则层 |
 | 实时通信 | **腾讯云 IM (TIM)** —— 承载兽医 ↔ 用户图文 / 视频咨询 |
@@ -89,8 +89,32 @@ petgo-platform/
 
 ---
 
-## 下一步
+## 本地起步（双产物）
 
-规划阶段已对齐（导航 5-Tab、AI 仅图文分诊、兽医聊天支持视频、攒局移 V2）。下一步进入正式架构设计（数据模型 / API 契约 / 时序 / 分诊管线与安全规则层 / 部署 CI-CD），再拆分 Epic 与 Story 进入开发。
+仓库根下并列两套工程，各自独立起步：
+
+```bash
+# 后端（Spring Boot 4 / Java 25）
+cd petgo-backend && docker compose up -d postgres redis && ./mvnw spring-boot:run
+#   验证：curl localhost:8080/actuator/health  → {"status":"UP"}
+#   详见 petgo-backend/README.md
+
+# 前端（Flutter 3.44）
+cd petgo_app && flutter pub get && flutter gen-l10n && flutter run
+#   质量门槛：flutter analyze（零警告）+ flutter test
+#   详见 petgo_app/README.md
+```
+
+Agent 工作约定（命名 / 分层 / 护栏 / 云端 L0 边界）见根 [`CLAUDE.md`](./CLAUDE.md)；
+云端过夜开发循环见 [`docs/cloud-dev-workflow.md`](./docs/cloud-dev-workflow.md)。
+
+---
+
+## 实现进度
+
+规划阶段已完成（PRD / 架构 / UX / 46 Story）。开发已启动：
+
+- ✅ **Story 1.1** 双产物脚手架与本地可运行骨架（后端起栈 + Flyway + ProblemDetail + OpenAPI 3.1 + i18n 空壳 + CI）
+- ⏭️ 按 Epic 1→7、Story 编号升序推进（见 `_bmad-output/implementation-artifacts/sprint-status.yaml`）
 
 > ⚠️ 状态：规划产物为 `draft`。开发前请以 `_bmad-output/planning-artifacts/` 内最新版本为准。

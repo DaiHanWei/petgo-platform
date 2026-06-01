@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  PetGo 项目级 Maven settings —— 直连 Maven Central。
+  目的：绕过本机全局 ~/.m2/settings.xml 里强制走私有 Nexus 的配置（该 Nexus 与 PetGo 无关，且会宕机阻塞构建）。
+  通过 .mvn/maven.config 的 `-s .mvn/settings.xml` 自动生效，不影响机器上其它项目。
+  localRepository 仍用默认 ~/.m2/repository（共享依赖缓存）。
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+  <mirrors>
+    <mirror>
+      <id>central-direct</id>
+      <mirrorOf>*</mirrorOf>
+      <name>Maven Central (direct, bypass corporate Nexus)</name>
+      <url>https://repo.maven.apache.org/maven2</url>
+    </mirror>
+  </mirrors>
+</settings>

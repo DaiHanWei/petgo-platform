@@ -16,3 +16,6 @@
 *.log
 .env
 .env.local
+
+# Flutter/Xcode 在仓库根可能生成的构建产物（子工程自带各自 .gitignore）
+/build/

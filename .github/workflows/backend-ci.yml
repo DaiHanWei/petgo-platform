@@ -1,0 +1,73 @@
+name: backend-ci
+
+on:
+  push:
+    paths:
+      - "petgo-backend/**"
+      - ".github/workflows/backend-ci.yml"
+  pull_request:
+    paths:
+      - "petgo-backend/**"
+      - ".github/workflows/backend-ci.yml"
+
+defaults:
+  run:
+    working-directory: petgo-backend
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: petgo
+          POSTGRES_USER: petgo
+          POSTGRES_PASSWORD: petgo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U petgo -d petgo"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: petgo
+      DB_USER: petgo
+      DB_PASSWORD: petgo
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+      SPRING_PROFILES_ACTIVE: dev
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 25 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+
+      # 使用项目级 .mvn/settings.xml（直连 Maven Central，见 maven.config）。含测试 → 出 jar。
+      - name: Build & test (mvn package)
+        run: ./mvnw -B package
+
+      - name: Upload jar artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: petgo-backend-jar
+          path: petgo-backend/target/petgo-backend-*.jar
+
+      # 部署步骤占位（本 Story 不接德国机真实凭证 = 不引入 L2）
+      - name: Deploy (placeholder)
+        run: echo "deploy placeholder — 德国单机部署在后续 Story 接入"

@@ -1,0 +1,7 @@
+{
+  "@@locale": "en",
+  "appTitle": "PetGo",
+  "@appTitle": {
+    "description": "Application title shown on the home placeholder (i18n scaffold smoke key)."
+  }
+}

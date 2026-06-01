@@ -1,0 +1,57 @@
+spring:
+  application:
+    name: petgo-backend
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:petgo}
+    username: ${DB_USER:petgo}
+    password: ${DB_PASSWORD:petgo}
+  jpa:
+    # schema 由 Flyway 管理；禁用 Hibernate 自动建表（架构强制护栏：禁 update/create）
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  # 命名映射链：JSON camelCase（Jackson 默认）；null 字段省略；时间 ISO-8601 UTC。
+  # 注：Jackson 3（Boot 4）默认即输出 ISO-8601 日期字符串（WRITE_DATES_AS_TIMESTAMPS 已移至 DateTimeFeature 且默认关），无需显式设置。
+  jackson:
+    default-property-inclusion: non_null
+    time-zone: UTC
+
+server:
+  port: ${SERVER_PORT:8080}
+
+# Actuator：仅暴露 health + info（/actuator/** 内网语义，prod 由 CF/防火墙限制）
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  health:
+    db:
+      enabled: true
+    redis:
+      enabled: true
+
+# OpenAPI 3.1 文档（springdoc）
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    version: openapi_3_1
+  swagger-ui:
+    path: /swagger-ui.html

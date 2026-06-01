@@ -19,7 +19,11 @@ if ! command -v flutter >/dev/null 2>&1; then
   exit 0
 fi
 
-# 3) 正常路径：拉依赖（失败也不阻断会话，仅告警）
+# 3) 正常路径：拉依赖 + 生成 l10n（生成代码不入库，靠此处与 CI 现生成）
 echo "[session-start] flutter pub get @ petgo_app ..."
 ( cd "$app_dir" && flutter pub get ) || echo "[session-start] flutter pub get 失败（不阻断会话，dev 时手动排查）。"
+if [ -f "$app_dir/l10n.yaml" ]; then
+  echo "[session-start] flutter gen-l10n @ petgo_app ..."
+  ( cd "$app_dir" && flutter gen-l10n ) || echo "[session-start] flutter gen-l10n 失败（不阻断会话）。"
+fi
 exit 0
