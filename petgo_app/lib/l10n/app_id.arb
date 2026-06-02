@@ -227,5 +227,17 @@
   "triageConsultVet": "Konsultasi dokter hewan",
   "vetAiContextTitle": "Dari triage AI",
   "vetAiContextLevelGreen": "AI: tidak ada risiko mendesak",
-  "vetAiContextLevelYellow": "AI: pantau ketat"
+  "vetAiContextLevelYellow": "AI: pantau ketat",
+  "vetInboxAccept": "Terima",
+  "vetInboxTaken": "Sudah diambil dokter hewan lain",
+  "vetInboxDirect": "Permintaan langsung",
+  "vetInboxImages": "{count} foto",
+  "@vetInboxImages": { "placeholders": { "count": { "type": "int" } } },
+  "consultDisclaimer": "Saran ini sebagai referensi; keputusan akhir ada padamu.",
+  "consultConversationTitle": "Konsultasi",
+  "vetAssistTitle": "Referensi bantuan",
+  "vetAssistAdopt": "Pakai",
+  "vetAssistHistoryEmpty": "Belum ada ringkasan riwayat",
+  "imChatPlaceholder": "Obrolan real-time (Tencent IM)",
+  "imChatPlaceholderHint": "Perpesanan langsung terhubung di perangkat asli."
 }

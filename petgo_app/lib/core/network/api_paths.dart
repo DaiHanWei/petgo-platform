@@ -17,6 +17,15 @@ class ApiPaths {
   static String vetConsultAiContext(int sessionId) =>
       '$base/vet/consult-sessions/$sessionId/ai-context';
 
+  /// 兽医侧待接单/接单/会话/辅助（Story 5.5）。
+  static const String vetConsultWaiting = '$base/vet/consult-sessions/waiting';
+  static String vetConsultAccept(int sessionId) => '$base/vet/consult-sessions/$sessionId/accept';
+  static String vetConsultSession(int sessionId) => '$base/vet/consult-sessions/$sessionId';
+  static String vetConsultAssist(int sessionId) => '$base/vet/consult-sessions/$sessionId/assist';
+
+  /// IM UserSig 签发（Story 5.5，客户端 SDK 登录用）。
+  static const String imUserSig = '$base/im/usersig';
+
   /// 兽医在线态读写 + 心跳 + 登出（Story 5.2）。
   static const String vetOnlineStatus = '$base/vet/online-status';
   static const String vetHeartbeat = '$base/vet/heartbeat';

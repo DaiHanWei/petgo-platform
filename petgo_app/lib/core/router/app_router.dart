@@ -14,8 +14,10 @@ import '../../features/profile/presentation/growth_archive_page.dart';
 import '../../features/profile/presentation/pet_profile_create_page.dart';
 import '../../features/profile/presentation/pet_profile_edit_page.dart';
 import '../../features/profile/presentation/profile_onboarding_page.dart';
+import '../../features/consult/presentation/consult_conversation_page.dart';
 import '../../features/consult/presentation/consult_entry_page.dart';
 import '../../features/consult/presentation/consult_waiting_page.dart';
+import '../../features/vet/presentation/vet_conversation_page.dart';
 import '../../features/triage/presentation/dev_triage_page.dart';
 import '../../features/triage/presentation/triage_page.dart';
 import '../../features/triage/presentation/triage_upload_page.dart';
@@ -77,6 +79,15 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/consult/waiting/:id',
         builder: (c, s) => ConsultWaitingPage(sessionId: int.parse(s.pathParameters['id']!)),
+      ),
+      // 进行中会话界面（Story 5.5）。用户侧 /consult/conversation、兽医侧 /vet/conversation（各自 role 守卫）。
+      GoRoute(
+        path: '/consult/conversation/:id',
+        builder: (c, s) => ConsultConversationPage(sessionId: int.parse(s.pathParameters['id']!)),
+      ),
+      GoRoute(
+        path: '/vet/conversation/:id',
+        builder: (c, s) => VetConversationPage(sessionId: int.parse(s.pathParameters['id']!)),
       ),
       // 内容详情（Story 3.3）。shell 外顶层 push（隐藏 Tab Bar）；返回保持 Feed 滚动位置。游客只读可进。
       GoRoute(

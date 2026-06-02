@@ -108,7 +108,7 @@ development_status:
   5-2-兽医工作台框架与在线状态管理: review
   5-3-兽医咨询发起-排队与超时: review
   5-4-ai-升级至兽医的上下文传递: review
-  5-5-腾讯-im-会话与图文对话界面: ready-for-dev
+  5-5-腾讯-im-会话与图文对话界面: review
   5-6-会话结束机制与用户评分门: ready-for-dev
   5-7-兽医封禁与进行中会话中断处理: ready-for-dev
   5-8-问诊-tab-结构与问诊历史整合: ready-for-dev

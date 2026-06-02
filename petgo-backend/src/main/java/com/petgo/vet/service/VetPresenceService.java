@@ -25,6 +25,8 @@ public class VetPresenceService {
 
     /** 在线集合键（ZSET，score=lastSeen）。 */
     static final String ONLINE_ZSET = "vet:online";
+    /** 忙碌集合键（SET，进行中会话占用，Story 5.5）。 */
+    static final String BUSY_SET = "vet:busy";
     /** 在线态有效窗口：超过此时长未心跳即视为离线（>心跳间隔，留掉线宽限）。 */
     static final Duration TTL = Duration.ofMinutes(3);
 
@@ -44,9 +46,24 @@ public class VetPresenceService {
         goOnline(vetId);
     }
 
-    /** 显式离线 / 登出 / 封禁(5.7) → 移出在线集合。 */
+    /** 显式离线 / 登出 / 封禁(5.7) → 移出在线集合 + 清忙碌标记。 */
     public void goOffline(long vetId) {
         redis.opsForZSet().remove(ONLINE_ZSET, String.valueOf(vetId));
+        redis.opsForSet().remove(BUSY_SET, String.valueOf(vetId));
+    }
+
+    /** 接单占用（Story 5.5）：ONLINE → BUSY（仍在线但不接新请求）。 */
+    public void goBusy(long vetId) {
+        redis.opsForSet().add(BUSY_SET, String.valueOf(vetId));
+    }
+
+    /** 会话结束/中断（5.6/5.7）：BUSY → ONLINE（恢复可接单）。 */
+    public void goAvailable(long vetId) {
+        redis.opsForSet().remove(BUSY_SET, String.valueOf(vetId));
+    }
+
+    public boolean isBusy(long vetId) {
+        return Boolean.TRUE.equals(redis.opsForSet().isMember(BUSY_SET, String.valueOf(vetId)));
     }
 
     /** 某兽医是否在线（lastSeen 在 TTL 窗口内）。 */
@@ -55,9 +72,12 @@ public class VetPresenceService {
         return score != null && score >= staleThreshold();
     }
 
-    /** 当前在线态（本故事仅 ONLINE/OFFLINE；BUSY 由 5.5 接）。 */
+    /** 当前在线态：BUSY 优先（占用中），否则 ONLINE/OFFLINE。 */
     public VetPresenceStatus statusOf(long vetId) {
-        return isOnline(vetId) ? VetPresenceStatus.ONLINE : VetPresenceStatus.OFFLINE;
+        if (!isOnline(vetId)) {
+            return VetPresenceStatus.OFFLINE;
+        }
+        return isBusy(vetId) ? VetPresenceStatus.BUSY : VetPresenceStatus.ONLINE;
     }
 
     /**

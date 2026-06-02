@@ -11,6 +11,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.List;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -78,6 +79,11 @@ public class ConsultSession {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /** 乐观锁版本（Story 5.5 接单并发抢单 CAS）。 */
+    @Version
+    @Column(name = "version", nullable = false)
+    private long version;
+
     protected ConsultSession() {
     }
 
@@ -118,12 +124,19 @@ public class ConsultSession {
         this.status = SessionStatus.CANCELLED;
     }
 
-    /** 兽医接单：WAITING → IN_PROGRESS（Story 5.5 调用）。 */
-    public void accept(long vetId, String imConversationId) {
-        requireStatus(SessionStatus.WAITING, "仅等待中的咨询可被接单");
+    /**
+     * 兽医接单：WAITING → IN_PROGRESS（Story 5.5）。并发抢单由 {@code @Version} 乐观锁裁决
+     * （saveAndFlush 时仅一人成功，其余 OptimisticLock → 「已被接走」）。
+     */
+    public void markInProgress(long vetId) {
+        requireStatus(SessionStatus.WAITING, "该咨询已被接走");
         this.vetId = vetId;
-        this.imConversationId = imConversationId;
         this.status = SessionStatus.IN_PROGRESS;
+    }
+
+    /** 接单成功后绑定 IM 会话标识。 */
+    public void attachImConversation(String imConversationId) {
+        this.imConversationId = imConversationId;
     }
 
     private void requireStatus(SessionStatus expected, String message) {

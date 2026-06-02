@@ -5,6 +5,7 @@ import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/storage/secure_storage.dart';
 import '../domain/consult_ai_context.dart';
+import '../domain/vet_inbox_item.dart';
 import '../domain/vet_login_response.dart';
 
 /// 兽医数据层（Story 5.1）：账密登录换取 role=VET JWT；GET /vet/me 探活。
@@ -55,6 +56,34 @@ class VetRepository {
   Future<ConsultAiContext> aiContext(int sessionId) async {
     final resp = await dio.get<Map<String, dynamic>>(ApiPaths.vetConsultAiContext(sessionId));
     return ConsultAiContext.fromJson(resp.data!);
+  }
+
+  // ===== Story 5.5：待接单 / 接单 / 会话 / 辅助 =====
+
+  /// 待接单列表（含 AI 上下文摘要）。
+  Future<List<VetInboxItem>> waitingList() async {
+    final resp = await dio.get<List<dynamic>>(ApiPaths.vetConsultWaiting);
+    return (resp.data ?? [])
+        .map((e) => VetInboxItem.fromJson((e as Map).cast<String, dynamic>()))
+        .toList();
+  }
+
+  /// 接单（CAS WAITING→IN_PROGRESS + IM 建会话）。被抢则抛 409 DioException。
+  Future<VetSession> accept(int sessionId) async {
+    final resp = await dio.post<Map<String, dynamic>>(ApiPaths.vetConsultAccept(sessionId));
+    return VetSession.fromJson(resp.data!);
+  }
+
+  /// 进行中会话视图（含 im_conversation_id）。
+  Future<VetSession> session(int sessionId) async {
+    final resp = await dio.get<Map<String, dynamic>>(ApiPaths.vetConsultSession(sessionId));
+    return VetSession.fromJson(resp.data!);
+  }
+
+  /// FR-5 辅助（AI 参考回复 + 冷启动空历史）。
+  Future<ConsultAssist> assist(int sessionId) async {
+    final resp = await dio.get<Map<String, dynamic>>(ApiPaths.vetConsultAssist(sessionId));
+    return ConsultAssist.fromJson(resp.data!);
   }
 
   /// 登出即离线（服务端清在线态）+ 清本地 token。

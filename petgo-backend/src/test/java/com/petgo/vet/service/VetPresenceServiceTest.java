@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.SetOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;
 
@@ -24,10 +25,18 @@ class VetPresenceServiceTest {
     StringRedisTemplate redis;
     @Mock
     ZSetOperations<String, String> zset;
+    @Mock
+    SetOperations<String, String> setOps;
 
     private VetPresenceService service() {
-        when(redis.opsForZSet()).thenReturn(zset);
+        org.mockito.Mockito.lenient().when(redis.opsForZSet()).thenReturn(zset);
         return new VetPresenceService(redis);
+    }
+
+    /** statusOf 在线时会查忙碌集合，默认 stub 为非忙碌。 */
+    private void stubNotBusy() {
+        when(redis.opsForSet()).thenReturn(setOps);
+        when(setOps.isMember(VetPresenceService.BUSY_SET, "7")).thenReturn(false);
     }
 
     @Test
@@ -37,15 +46,28 @@ class VetPresenceServiceTest {
     }
 
     @Test
-    void goOfflineRemovesMember() {
+    void goOfflineRemovesMemberAndClearsBusy() {
+        when(redis.opsForSet()).thenReturn(setOps);
         service().goOffline(7L);
         verify(zset).remove(VetPresenceService.ONLINE_ZSET, "7");
+        verify(setOps).remove(VetPresenceService.BUSY_SET, "7");
+    }
+
+    @Test
+    void goBusyAndGoAvailableToggleBusySet() {
+        when(redis.opsForSet()).thenReturn(setOps);
+        VetPresenceService svc = service();
+        svc.goBusy(7L);
+        verify(setOps).add(VetPresenceService.BUSY_SET, "7");
+        svc.goAvailable(7L);
+        verify(setOps).remove(VetPresenceService.BUSY_SET, "7");
     }
 
     @Test
     void isOnlineTrueWhenScoreWithinWindow() {
         when(zset.score(VetPresenceService.ONLINE_ZSET, "7"))
                 .thenReturn((double) System.currentTimeMillis());
+        stubNotBusy();
         assertThat(service().isOnline(7L)).isTrue();
         assertThat(service().statusOf(7L)).isEqualTo(VetPresenceStatus.ONLINE);
     }
@@ -54,8 +76,18 @@ class VetPresenceServiceTest {
     void isOnlineFalseWhenScoreStale() {
         when(zset.score(VetPresenceService.ONLINE_ZSET, "7"))
                 .thenReturn((double) (System.currentTimeMillis() - VetPresenceService.TTL.toMillis() - 1000));
+        // 离线时 statusOf 直接返回 OFFLINE，不查忙碌集合。
         assertThat(service().isOnline(7L)).isFalse();
         assertThat(service().statusOf(7L)).isEqualTo(VetPresenceStatus.OFFLINE);
+    }
+
+    @Test
+    void statusBusyWhenOnlineAndInBusySet() {
+        when(zset.score(VetPresenceService.ONLINE_ZSET, "7"))
+                .thenReturn((double) System.currentTimeMillis());
+        when(redis.opsForSet()).thenReturn(setOps);
+        when(setOps.isMember(VetPresenceService.BUSY_SET, "7")).thenReturn(true);
+        assertThat(service().statusOf(7L)).isEqualTo(VetPresenceStatus.BUSY);
     }
 
     @Test

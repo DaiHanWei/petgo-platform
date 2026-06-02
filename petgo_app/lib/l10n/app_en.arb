@@ -281,5 +281,17 @@
   "triageConsultVet": "Talk to a vet",
   "vetAiContextTitle": "From AI triage",
   "vetAiContextLevelGreen": "AI: no urgent risk",
-  "vetAiContextLevelYellow": "AI: watch closely"
+  "vetAiContextLevelYellow": "AI: watch closely",
+  "vetInboxAccept": "Accept",
+  "vetInboxTaken": "Already taken by another vet",
+  "vetInboxDirect": "Direct request",
+  "vetInboxImages": "{count} photos",
+  "@vetInboxImages": { "placeholders": { "count": { "type": "int" } } },
+  "consultDisclaimer": "This advice is for reference; the final decision is yours.",
+  "consultConversationTitle": "Consultation",
+  "vetAssistTitle": "Assist reference",
+  "vetAssistAdopt": "Use",
+  "vetAssistHistoryEmpty": "No history summary yet",
+  "imChatPlaceholder": "Real-time chat (Tencent IM)",
+  "imChatPlaceholderHint": "Live messaging connects on a real device."
 }

@@ -53,8 +53,9 @@ class _ConsultWaitingPageState extends ConsumerState<ConsultWaitingPage> {
       final s = await ref.read(consultRepositoryProvider).get(widget.sessionId);
       if (!mounted) return;
       if (s.isInProgress) {
-        // 接单 → 进会话（Story 5.5 UI；此处占位提示）。
+        // 接单 → 进会话界面（Story 5.5）。
         _poll?.cancel();
+        if (mounted) context.go('/consult/conversation/${widget.sessionId}');
         return;
       }
       if (s.timedOut && !_timeoutShown) {
