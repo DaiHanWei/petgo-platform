@@ -79,4 +79,34 @@ public class FeedService {
         }
         return new FeedPageResponse(items, nextCursor, hasMore);
     }
+
+    /**
+     * 「我的发布」（Story 7.1，FR-36）：当前用户未软删的三类混合内容，时间倒序游标分页。
+     * 经本 service 接口供 me 端点调用（禁 profile/auth 直 join content repository）。
+     */
+    @Transactional(readOnly = true)
+    public FeedPageResponse myPosts(long userId, String cursor) {
+        FeedCursor decoded = (cursor == null || cursor.isBlank()) ? null : FeedCursor.decode(cursor);
+        List<ContentPost> rows = posts.findMyPosts(
+                userId,
+                decoded == null ? null : decoded.createdAt(),
+                decoded == null ? null : decoded.id(),
+                PageRequest.of(0, PAGE_SIZE + 1));
+
+        boolean hasMore = rows.size() > PAGE_SIZE;
+        List<ContentPost> page = hasMore ? rows.subList(0, PAGE_SIZE) : rows;
+
+        Map<Long, AuthorView> authors = accountQueryService.findAuthorViews(
+                page.stream().map(ContentPost::getAuthorId).toList());
+        List<FeedItemResponse> items = page.stream()
+                .map(p -> FeedItemResponse.of(p, authors.get(p.getAuthorId())))
+                .toList();
+
+        String nextCursor = null;
+        if (hasMore && !page.isEmpty()) {
+            ContentPost last = page.get(page.size() - 1);
+            nextCursor = new FeedCursor(last.getCreatedAt(), last.getId()).encode();
+        }
+        return new FeedPageResponse(items, nextCursor, hasMore);
+    }
 }

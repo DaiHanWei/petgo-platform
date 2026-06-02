@@ -9,5 +9,6 @@ import jakarta.validation.constraints.Size;
  *   <li>{@code petStatus}：A|B|C（service 校验枚举，非法 422；首次设置同时置 onboarding 完成）。</li>
  * </ul>
  */
-public record UpdateMeRequest(@Size(max = 20) String nickname, String petStatus) {
+public record UpdateMeRequest(@Size(max = 20) String nickname, String petStatus,
+        @Size(max = 1024) String avatarUrl) {
 }

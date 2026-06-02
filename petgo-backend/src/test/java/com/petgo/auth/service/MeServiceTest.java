@@ -44,16 +44,29 @@ class MeServiceTest {
         when(users.findById(1L)).thenReturn(Optional.of(u));
         when(users.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        UserProfileResponse resp = meService.updateMe(1L, new UpdateMeRequest("Buddy", null));
+        UserProfileResponse resp = meService.updateMe(1L, new UpdateMeRequest("Buddy", null, null));
 
         assertThat(resp.nickname()).isEqualTo("Buddy");
         assertThat(u.getNickname()).isEqualTo("Buddy");
     }
 
     @Test
+    void avatarUrlUpdatePersistsAppOwnedUrl() {
+        User u = freshUser();
+        when(users.findById(1L)).thenReturn(Optional.of(u));
+        when(users.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        UserProfileResponse resp = meService.updateMe(
+                1L, new UpdateMeRequest(null, null, "https://oss/public/avatars/abc.jpg"));
+
+        assertThat(resp.avatarUrl()).isEqualTo("https://oss/public/avatars/abc.jpg");
+        assertThat(u.getAvatarUrl()).isEqualTo("https://oss/public/avatars/abc.jpg");
+    }
+
+    @Test
     void blankNicknameRejected() {
         when(users.findById(1L)).thenReturn(Optional.of(freshUser()));
-        assertThatThrownBy(() -> meService.updateMe(1L, new UpdateMeRequest("   ", null)))
+        assertThatThrownBy(() -> meService.updateMe(1L, new UpdateMeRequest("   ", null, null)))
                 .isInstanceOf(AppException.class);
     }
 
@@ -64,7 +77,7 @@ class MeServiceTest {
         when(users.findById(1L)).thenReturn(Optional.of(u));
         when(users.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        UserProfileResponse resp = meService.updateMe(1L, new UpdateMeRequest(null, "A"));
+        UserProfileResponse resp = meService.updateMe(1L, new UpdateMeRequest(null, "A", null));
 
         assertThat(u.getPetStatus()).isEqualTo(PetStatus.A);
         assertThat(u.isOnboardingCompleted()).isTrue();
@@ -74,7 +87,7 @@ class MeServiceTest {
     @Test
     void invalidPetStatusRejected() {
         when(users.findById(1L)).thenReturn(Optional.of(freshUser()));
-        assertThatThrownBy(() -> meService.updateMe(1L, new UpdateMeRequest(null, "Z")))
+        assertThatThrownBy(() -> meService.updateMe(1L, new UpdateMeRequest(null, "Z", null)))
                 .isInstanceOf(AppException.class);
     }
 
