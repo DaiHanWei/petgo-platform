@@ -83,13 +83,25 @@ void main() {
     expect(find.byKey(const ValueKey('triageResubmit')), findsOneWidget);
   });
 
-  testWidgets('AC3/F5: DONE → 结果交棒占位（不渲染三态/红色）', (tester) async {
+  testWidgets('AC3/F5: DONE(黄) → 渲染黄色结果页（4.4 三态卡）', (tester) async {
     final c = _container(_FakeTriageRepo(
         [const TriageResult(status: TriageStatus.done, dangerLevel: DangerLevel.yellow)]));
     await _pump(tester, c);
     c.read(triageUploadProvider.notifier).setSymptom('x');
     await c.read(triageUploadProvider.notifier).submit();
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('triageResultHandoff')), findsOneWidget);
+    expect(find.byKey(const ValueKey('triageYellowPage')), findsOneWidget);
+  });
+
+  testWidgets('F5: DONE(红) → 不在本页渲染结果，交棒 4.5 占位', (tester) async {
+    final c = _container(_FakeTriageRepo(
+        [const TriageResult(status: TriageStatus.done, dangerLevel: DangerLevel.red)]));
+    await _pump(tester, c);
+    c.read(triageUploadProvider.notifier).setSymptom('x');
+    await c.read(triageUploadProvider.notifier).submit();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('triageRedHandoff')), findsOneWidget);
+    expect(find.byKey(const ValueKey('triageYellowPage')), findsNothing);
+    expect(find.byKey(const ValueKey('triageGreenPage')), findsNothing);
   });
 }

@@ -13,6 +13,7 @@ import java.util.Map;
  * @param advice        观察 / 处理建议
  * @param medicationRef 用药参考（可空）
  * @param disclaimer    免责声明（NFR-9，前置展示在 4.4）
+ * @param observation   黄色条件倒计时协议三要素（FR-2，可空；绿色通常为 null）
  * @param raw           Gemini 原始响应（JSONB 存档）
  */
 public record GeminiTriageResult(
@@ -20,5 +21,6 @@ public record GeminiTriageResult(
         String advice,
         String medicationRef,
         String disclaimer,
+        TriageObservation observation,
         Map<String, Object> raw) {
 }

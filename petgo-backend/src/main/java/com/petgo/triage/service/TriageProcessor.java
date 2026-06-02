@@ -127,6 +127,14 @@ public class TriageProcessor {
         if (r.disclaimer() != null) {
             m.put("disclaimer", r.disclaimer());
         }
+        if (r.observation() != null) {
+            // FR-2 黄色三要素结构化存档，供 4.4 协议块按结构分区呈现。
+            Map<String, Object> obs = new LinkedHashMap<>();
+            obs.put("indicators", r.observation().indicators());
+            obs.put("timeWindow", r.observation().timeWindow());
+            obs.put("escalationTriggers", r.observation().escalationTriggers());
+            m.put("observation", obs);
+        }
         // 审计标识（非健康数据）：是否因规则层升红 + 命中规则 id。
         m.put("escalatedBySafetyRule", decision.escalatedBySafetyRule());
         if (!decision.matchedRuleIds().isEmpty()) {

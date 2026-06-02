@@ -1,8 +1,10 @@
 package com.petgo.triage.dto;
 
+import com.petgo.shared.ai.TriageObservation;
 import com.petgo.triage.domain.DangerLevel;
 import com.petgo.triage.domain.TriageStatus;
 import com.petgo.triage.domain.TriageTask;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -20,12 +22,13 @@ public record TriageResultResponse(
         DangerLevel dangerLevel,
         String advice,
         String medicationRef,
-        String disclaimer) {
+        String disclaimer,
+        TriageObservation observation) {
 
     public static TriageResultResponse from(TriageTask t) {
         if (t.getStatus() != TriageStatus.DONE) {
             // 处理中 / 失败：仅回 status，不泄露未定级别。
-            return new TriageResultResponse(t.getStatus(), null, null, null, null);
+            return new TriageResultResponse(t.getStatus(), null, null, null, null, null);
         }
         Map<String, Object> p = t.getParsedResult();
         return new TriageResultResponse(
@@ -33,7 +36,8 @@ public record TriageResultResponse(
                 t.getDangerLevel(),
                 str(p, "advice"),
                 str(p, "medicationRef"),
-                str(p, "disclaimer"));
+                str(p, "disclaimer"),
+                observation(p));
     }
 
     private static String str(Map<String, Object> map, String key) {
@@ -42,5 +46,17 @@ public record TriageResultResponse(
         }
         Object v = map.get(key);
         return v == null ? null : v.toString();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static TriageObservation observation(Map<String, Object> p) {
+        if (p == null || !(p.get("observation") instanceof Map<?, ?> obs)) {
+            return null;
+        }
+        Map<String, Object> m = (Map<String, Object>) obs;
+        return new TriageObservation(
+                (List<String>) m.get("indicators"),
+                m.get("timeWindow") == null ? null : m.get("timeWindow").toString(),
+                (List<String>) m.get("escalationTriggers"));
     }
 }

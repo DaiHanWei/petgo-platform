@@ -201,5 +201,17 @@
   "triageErrorBody": "Please try again, or contact a vet directly",
   "triageResubmit": "Resubmit",
   "triageContactVet": "Or contact a vet directly",
-  "triageResultReady": "Assessment ready (full result view coming soon)"
+  "triageResultReady": "Assessment ready (full result view coming soon)",
+  "triageGreenTitle": "No urgent risk found",
+  "triageYellowTitle": "Keep a close watch",
+  "triageSoftVetGuide": "Want extra peace of mind? You can confirm with a vet",
+  "triageSaveToArchive": "Save this result to the archive",
+  "triageMedicationRefLabel": "Home medication reference",
+  "triageObservationTitle": "Observation protocol",
+  "triageIndicatorsLabel": "What to watch",
+  "triageTimeWindowLabel": "Time window",
+  "triageEscalationLabel": "See a vet right away if",
+  "triageNeutralAdvice": "Please keep observing your pet and consult a vet if anything changes.",
+  "triageRedHandoff": "Urgent high-risk result — full alert view coming soon",
+  "triageArchiveNoPet": "Create a pet profile first to save to the archive"
 }

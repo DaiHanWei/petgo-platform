@@ -10,6 +10,33 @@ enum TriageStatus { pending, processing, done, failed, unknown }
 /// 分诊危险级别（对齐后端 {@code DangerLevel}）。绿/黄/红三态由 4.4/4.5 渲染。
 enum DangerLevel { green, yellow, red }
 
+/// 黄色「条件倒计时协议」三要素（Story 4.4 · FR-2）。由后端结构化产出，前端按结构分区呈现。
+class TriageObservation {
+  const TriageObservation({
+    this.indicators = const <String>[],
+    this.timeWindow,
+    this.escalationTriggers = const <String>[],
+  });
+
+  final List<String> indicators;
+  final String? timeWindow;
+  final List<String> escalationTriggers;
+
+  bool get hasContent =>
+      indicators.isNotEmpty ||
+      (timeWindow != null && timeWindow!.isNotEmpty) ||
+      escalationTriggers.isNotEmpty;
+
+  factory TriageObservation.fromJson(Map<String, dynamic> json) => TriageObservation(
+        indicators: _strList(json['indicators']),
+        timeWindow: json['timeWindow'] as String?,
+        escalationTriggers: _strList(json['escalationTriggers']),
+      );
+
+  static List<String> _strList(Object? raw) =>
+      raw is List ? raw.map((Object? e) => e.toString()).toList() : const <String>[];
+}
+
 /// 分诊结果（Story 4.1）。短轮询两态：处理中仅 [status]；DONE 带完整结构。
 ///
 /// 真正的三态卡 / 红色半屏 UI 在 4.4/4.5；本故事仅薄客户端驱动契约。
@@ -20,6 +47,7 @@ class TriageResult {
     this.advice,
     this.medicationRef,
     this.disclaimer,
+    this.observation,
   });
 
   final TriageStatus status;
@@ -27,6 +55,7 @@ class TriageResult {
   final String? advice;
   final String? medicationRef;
   final String? disclaimer;
+  final TriageObservation? observation;
 
   bool get isTerminal =>
       status == TriageStatus.done || status == TriageStatus.failed;
@@ -37,6 +66,9 @@ class TriageResult {
         advice: json['advice'] as String?,
         medicationRef: json['medicationRef'] as String?,
         disclaimer: json['disclaimer'] as String?,
+        observation: json['observation'] is Map<String, dynamic>
+            ? TriageObservation.fromJson(json['observation'] as Map<String, dynamic>)
+            : null,
       );
 
   static TriageStatus _status(String? raw) {

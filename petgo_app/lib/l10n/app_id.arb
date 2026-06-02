@@ -148,5 +148,17 @@
   "triageErrorBody": "Silakan coba lagi, atau hubungi dokter hewan langsung",
   "triageResubmit": "Kirim ulang",
   "triageContactVet": "Atau hubungi dokter hewan langsung",
-  "triageResultReady": "Penilaian siap (tampilan hasil lengkap segera hadir)"
+  "triageResultReady": "Penilaian siap (tampilan hasil lengkap segera hadir)",
+  "triageGreenTitle": "Tidak ada risiko mendesak",
+  "triageYellowTitle": "Pantau dengan saksama",
+  "triageSoftVetGuide": "Ingin lebih tenang? Kamu bisa konfirmasi ke dokter hewan",
+  "triageSaveToArchive": "Simpan hasil ini ke arsip",
+  "triageMedicationRefLabel": "Referensi obat rumahan",
+  "triageObservationTitle": "Protokol pemantauan",
+  "triageIndicatorsLabel": "Yang perlu dipantau",
+  "triageTimeWindowLabel": "Rentang waktu",
+  "triageEscalationLabel": "Segera ke dokter hewan jika",
+  "triageNeutralAdvice": "Terus pantau hewanmu dan konsultasikan ke dokter hewan jika ada perubahan.",
+  "triageRedHandoff": "Hasil berisiko tinggi mendesak — tampilan peringatan lengkap segera hadir",
+  "triageArchiveNoPet": "Buat profil hewan dulu untuk menyimpan ke arsip"
 }

@@ -23,6 +23,7 @@ public class StubGeminiClient implements GeminiClient {
                 "症状描述未见明显急症信号，建议继续观察并保持记录。",
                 null,
                 "AI 分诊仅供参考，不替代专业兽医诊断；情况加重请尽快线下就医。",
+                null, // 绿色无条件倒计时协议；黄色三要素由真实模型结构化产出（L2）
                 raw);
     }
 }

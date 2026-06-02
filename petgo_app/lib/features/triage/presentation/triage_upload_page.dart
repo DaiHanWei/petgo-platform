@@ -9,11 +9,11 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/image_processor.dart';
 import '../../../shared/utils/media_permission.dart';
 import '../../media/domain/media_upload_use_case.dart';
-import '../data/triage_repository.dart';
 import '../domain/triage_result_controller.dart';
 import '../domain/triage_result_state.dart';
 import '../domain/triage_upload_controller.dart';
 import '../domain/triage_upload_state.dart';
+import 'triage_result_view.dart';
 
 /// AI 分诊上传页（Story 4.3 · F2/F3/F4/F5）。图文输入 + STS 直传私密桶 + 提交 → 等待 spinner /
 /// 超时 / 异常降级（重提交复用上次内容不重传 + 软引导兽医）+ 结果交棒占位（4.4/4.5）。
@@ -117,10 +117,20 @@ class _TriageUploadPageState extends ConsumerState<TriageUploadPage> {
             onPrimary: _submit,
             softGuideLabel: l10n.triageContactVet, // 软引导兽医（占位，Epic 5 接通）
           ),
-        TriagePhase.done => _ResultHandoffView(result: ref.watch(triageResultProvider).result),
+        TriagePhase.done => _buildResult(),
         TriagePhase.idle => _buildForm(l10n),
       },
     );
+  }
+
+  Widget _buildResult() {
+    final state = ref.watch(triageResultProvider);
+    final result = state.result;
+    if (result == null) {
+      return const SizedBox.shrink();
+    }
+    // 绿/黄走结果三态卡；红色交棒 4.5（TriageResultView 内对 RED 占位，不软化）。
+    return TriageResultView(result: result, triageId: state.triageId);
   }
 
   Widget _buildForm(AppLocalizations l10n) {
@@ -295,37 +305,6 @@ class _DegradedView extends StatelessWidget {
                 onPressed: () {}, // 软引导兽医占位（Epic 5 接通在线兽医）
                 child: Text(softGuideLabel!),
               ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// 结果交棒占位（Story 4.3 · F5）。DONE 后按 dangerLevel 交棒 4.4（绿/黄）/ 4.5（红）；
-/// 本 Story 不渲染结果三态与红色 overlay，仅占位。
-class _ResultHandoffView extends StatelessWidget {
-  const _ResultHandoffView({required this.result});
-
-  final TriageResult? result;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return Center(
-      key: const ValueKey('triageResultHandoff'),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Icon(Icons.check_circle_outline, color: AppColors.accentConsult, size: 40),
-            const SizedBox(height: AppSpacing.lg),
-            Text(l10n.triageResultReady, style: AppTypography.body, textAlign: TextAlign.center),
-            if (result?.dangerLevel != null) ...<Widget>[
-              const SizedBox(height: AppSpacing.sm),
-              Text('dangerLevel: ${result!.dangerLevel!.name}', style: AppTypography.caption),
             ],
           ],
         ),

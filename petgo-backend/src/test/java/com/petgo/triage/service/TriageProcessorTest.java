@@ -48,7 +48,7 @@ class TriageProcessorTest {
         when(tasks.findById(1L)).thenReturn(Optional.of(task));
         when(signedUrlService.signAll(List.of("k1"))).thenReturn(List.of("https://signed/k1"));
         when(geminiClient.analyze(anyString(), anyList())).thenReturn(
-                new GeminiTriageResult("YELLOW", "尽快就医", null, "仅供参考", Map.of("x", 1)));
+                new GeminiTriageResult("YELLOW", "尽快就医", null, "仅供参考", null, Map.of("x", 1)));
 
         processor.process(1L);
 
@@ -64,7 +64,7 @@ class TriageProcessorTest {
         TriageTask task = TriageTestSupport.task(9L, 7L, TriageStatus.PENDING, "狗误食巧克力", null);
         when(tasks.findById(9L)).thenReturn(Optional.of(task));
         when(geminiClient.analyze(any(), anyList())).thenReturn(
-                new GeminiTriageResult("GREEN", "继续观察", null, "仅供参考", Map.of()));
+                new GeminiTriageResult("GREEN", "继续观察", null, "仅供参考", null, Map.of()));
 
         processor.process(9L);
 
@@ -81,7 +81,7 @@ class TriageProcessorTest {
         TriageTask task = TriageTestSupport.task(10L, 7L, TriageStatus.PENDING, "轻微打喷嚏", null);
         when(tasks.findById(10L)).thenReturn(Optional.of(task));
         when(geminiClient.analyze(any(), anyList())).thenReturn(
-                new GeminiTriageResult("GREEN", "继续观察", null, "仅供参考", Map.of()));
+                new GeminiTriageResult("GREEN", "继续观察", null, "仅供参考", null, Map.of()));
 
         processor.process(10L);
 

@@ -35,7 +35,15 @@ public class GeminiDeveloperApiClient implements GeminiClient {
                     "dangerLevel", Map.of("type", "STRING", "enum", List.of("GREEN", "YELLOW", "RED")),
                     "advice", Map.of("type", "STRING"),
                     "medicationRef", Map.of("type", "STRING"),
-                    "disclaimer", Map.of("type", "STRING")),
+                    "disclaimer", Map.of("type", "STRING"),
+                    // FR-2 黄色三要素：观察指标 / 时间窗口 / 升级触发条件（黄色应给出，绿色可省）。
+                    "observation", Map.of(
+                            "type", "OBJECT",
+                            "properties", Map.of(
+                                    "indicators", Map.of("type", "ARRAY", "items", Map.of("type", "STRING")),
+                                    "timeWindow", Map.of("type", "STRING"),
+                                    "escalationTriggers",
+                                    Map.of("type", "ARRAY", "items", Map.of("type", "STRING"))))),
             "required", List.of("dangerLevel", "advice", "disclaimer"));
 
     private final GeminiProperties props;
@@ -111,10 +119,22 @@ public class GeminiDeveloperApiClient implements GeminiClient {
                     (String) parsed.get("advice"),
                     (String) parsed.get("medicationRef"),
                     (String) parsed.get("disclaimer"),
+                    parseObservation((Map<String, Object>) parsed.get("observation")),
                     response);
         } catch (RuntimeException | com.fasterxml.jackson.core.JsonProcessingException e) {
             log.warn("Gemini 响应解析失败，将重试: {}", e.getClass().getSimpleName());
             throw new GeminiException("Gemini 响应解析失败");
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static TriageObservation parseObservation(Map<String, Object> obs) {
+        if (obs == null) {
+            return null;
+        }
+        return new TriageObservation(
+                (List<String>) obs.get("indicators"),
+                (String) obs.get("timeWindow"),
+                (List<String>) obs.get("escalationTriggers"));
     }
 }
