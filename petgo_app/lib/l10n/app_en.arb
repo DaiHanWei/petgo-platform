@@ -139,5 +139,20 @@
   "feedEmptyCta": "Post your first story",
   "feedGrowthEmptyTitle": "No growth moments yet 🐾",
   "feedLoadError": "Could not load the feed, pull to retry",
-  "feedDeletedUser": "Deleted user"
+  "feedDeletedUser": "Deleted user",
+  "detailGoneTitle": "This content no longer exists",
+  "detailForbiddenTitle": "You don't have access to this content",
+  "detailBackToFeed": "Back to feed",
+  "detailNetworkError": "Could not load, please try again",
+  "detailCommentHint": "Write a comment...",
+  "detailNoComments": "No comments yet",
+  "detailViewMoreComments": "View more comments",
+  "detailViewAllReplies": "View all {count} replies",
+  "@detailViewAllReplies": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "detailMenuReport": "Report",
+  "detailMenuDelete": "Delete"
 }

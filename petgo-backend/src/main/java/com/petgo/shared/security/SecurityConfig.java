@@ -91,6 +91,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/public/**").permitAll()
                         // Feed 只读对游客可见（Story 3.2，FR-0A/17）：GET 内容流放行（写仍需 JWT）
                         .requestMatchers(HttpMethod.GET, "/api/v1/content-posts").permitAll()
+                        // 内容详情 + 评论只读对游客可见（Story 3.3）：GET 详情/评论/回复放行（写仍需 JWT）
+                        .requestMatchers(HttpMethod.GET, "/api/v1/content-posts/**",
+                                "/api/v1/comments/**").permitAll()
                         // 其余 /api/v1 默认需 JWT（写一律拒绝未登录）
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth

@@ -96,5 +96,15 @@
   "feedEmptyCta": "Posting cerita pertamamu",
   "feedGrowthEmptyTitle": "Belum ada momen tumbuh kembang 🐾",
   "feedLoadError": "Gagal memuat feed, tarik untuk coba lagi",
-  "feedDeletedUser": "Pengguna terhapus"
+  "feedDeletedUser": "Pengguna terhapus",
+  "detailGoneTitle": "Konten ini sudah tidak ada",
+  "detailForbiddenTitle": "Anda tidak punya akses ke konten ini",
+  "detailBackToFeed": "Kembali ke beranda",
+  "detailNetworkError": "Gagal memuat, silakan coba lagi",
+  "detailCommentHint": "Tulis komentar...",
+  "detailNoComments": "Belum ada komentar",
+  "detailViewMoreComments": "Lihat komentar lainnya",
+  "detailViewAllReplies": "Lihat semua {count} balasan",
+  "detailMenuReport": "Laporkan",
+  "detailMenuDelete": "Hapus"
 }

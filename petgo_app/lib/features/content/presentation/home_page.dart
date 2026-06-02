@@ -124,6 +124,8 @@ class HomePage extends ConsumerWidget {
           deletedUserLabel: l10n.feedDeletedUser,
           onLoadMore: () => ref.read(feedProvider.notifier).loadMore(),
           onRefresh: () => ref.read(feedProvider.notifier).refresh(),
+          // 点卡进详情（Story 3.3）：push 非 replace，返回保持 Feed 滚动位置。
+          onTapItem: (item) => context.push('/content/${item.id}'),
         );
       },
     );
