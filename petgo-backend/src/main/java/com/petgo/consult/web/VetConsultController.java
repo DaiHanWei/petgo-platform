@@ -57,6 +57,12 @@ public class VetConsultController {
         return VetSessionView.of(closeService.endByVet(currentVetId(jwt), id));
     }
 
+    /** 兽医回复后通知用户（Story 6.2，FR-22A）：发完 IM 消息后 ping → 推送用户「有新回复」。 */
+    @PostMapping("/{id}/notify-reply")
+    public void notifyReply(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
+        vetConsultService.notifyReply(currentVetId(jwt), id);
+    }
+
     @GetMapping("/{id}")
     public VetSessionView session(@PathVariable long id) {
         return vetConsultService.sessionView(id);

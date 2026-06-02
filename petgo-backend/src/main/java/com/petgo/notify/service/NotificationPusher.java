@@ -22,13 +22,23 @@ public class NotificationPusher {
         this.imClient = imClient;
     }
 
+    /** 推送给用户（IM 账号 u_{userId}）。 */
     @Async
-    public void push(long recipientUserId, String title, String body, String deepLinkType, String deepLinkToken) {
+    public void pushToUser(long userId, String title, String body, String deepLinkType, String deepLinkToken) {
+        deliver(ImAccountMapper.userImId(userId), title, body, deepLinkType, deepLinkToken);
+    }
+
+    /** 推送给兽医（IM 账号 v_{vetId}，Story 6.2 新请求推送在线兽医）。 */
+    @Async
+    public void pushToVet(long vetId, String title, String body, String deepLinkType, String deepLinkToken) {
+        deliver(ImAccountMapper.vetImId(vetId), title, body, deepLinkType, deepLinkToken);
+    }
+
+    private void deliver(String imUserId, String title, String body, String deepLinkType, String deepLinkToken) {
         try {
-            imClient.pushOffline(ImAccountMapper.userImId(recipientUserId), title, body, deepLinkType, deepLinkToken);
+            imClient.pushOffline(imUserId, title, body, deepLinkType, deepLinkToken);
         } catch (RuntimeException e) {
-            log.warn("离线推送投递失败 recipient={} type={} cause={}",
-                    recipientUserId, deepLinkType, e.getClass().getSimpleName());
+            log.warn("离线推送投递失败 type={} cause={}", deepLinkType, e.getClass().getSimpleName());
         }
     }
 }

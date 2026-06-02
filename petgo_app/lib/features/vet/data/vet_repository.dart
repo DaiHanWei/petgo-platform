@@ -92,6 +92,15 @@ class VetRepository {
     return VetSession.fromJson(resp.data!);
   }
 
+  /// 兽医发完回复后通知用户（Story 6.2）：触发「有新回复」推送。失败静默（不阻塞对话）。
+  Future<void> notifyReply(int sessionId) async {
+    try {
+      await dio.post<void>(ApiPaths.vetConsultNotifyReply(sessionId));
+    } catch (_) {
+      // 推送是增强，失败不影响 IM 对话本身。
+    }
+  }
+
   /// 登出即离线（服务端清在线态）+ 清本地 token。
   Future<void> logout() async {
     try {

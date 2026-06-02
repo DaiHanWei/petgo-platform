@@ -3,12 +3,14 @@ package com.petgo.consult.service;
 import com.petgo.consult.domain.ConsultSession;
 import com.petgo.consult.domain.ConsultSource;
 import com.petgo.consult.domain.SessionStatus;
+import com.petgo.consult.event.ConsultRequestQueuedEvent;
 import com.petgo.consult.repository.ConsultSessionRepository;
 import com.petgo.shared.error.AppException;
 import com.petgo.triage.domain.DangerLevel;
 import com.petgo.triage.dto.TriageUpgradeContext;
 import com.petgo.triage.service.TriageService;
 import java.util.Optional;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,12 +29,14 @@ public class ConsultSessionService {
     private final ConsultSessionRepository repo;
     private final ConsultQueueService queue;
     private final TriageService triageService;
+    private final ApplicationEventPublisher events;
 
     public ConsultSessionService(ConsultSessionRepository repo, ConsultQueueService queue,
-            TriageService triageService) {
+            TriageService triageService, ApplicationEventPublisher events) {
         this.repo = repo;
         this.queue = queue;
         this.triageService = triageService;
+        this.events = events;
     }
 
     /** 发起结果：新建会话 or 命中已有占用态会话（alreadyActive=true，前端跳「查看进行中 →」）。 */
@@ -51,6 +55,7 @@ public class ConsultSessionService {
         }
         ConsultSession saved = repo.save(ConsultSession.startWaiting(userId, source));
         queue.enqueue(saved.getId());
+        events.publishEvent(new ConsultRequestQueuedEvent(saved.getId())); // → 推送在线兽医（6.2）
         return new CreateResult(saved, false);
     }
 
@@ -77,6 +82,7 @@ public class ConsultSessionService {
                 ctx.symptomText(), ctx.imageObjectKeys());
         ConsultSession saved = repo.save(session);
         queue.enqueue(saved.getId());
+        events.publishEvent(new ConsultRequestQueuedEvent(saved.getId())); // → 推送在线兽医（6.2）
         return new CreateResult(saved, false);
     }
 

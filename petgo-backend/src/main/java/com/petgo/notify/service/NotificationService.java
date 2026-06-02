@@ -46,11 +46,19 @@ public class NotificationService {
         String token = generateToken();
         Notification saved = repo.save(Notification.of(
                 recipientUserId, type, title, body, deepLinkType, token, targetRef));
-        // 未读角标自增。
+        // 未读角标自增（用户侧通知中心 6.6）。
         redis.opsForValue().increment(UNREAD_KEY_PREFIX + recipientUserId);
         // 离线推送异步投递（失败不阻塞）。
-        pusher.push(recipientUserId, title, body, deepLinkType, token);
+        pusher.pushToUser(recipientUserId, title, body, deepLinkType, token);
         return saved;
+    }
+
+    /**
+     * 推送给兽医（Story 6.2 新问诊请求）。兽医为独立角色（v_{vetId}）；V1 兽医侧无 6.6 通知中心，
+     * 故仅离线推送 + 工作台深链，不写用户通知中心行 / 不增用户角标。
+     */
+    public void sendToVet(long vetId, NotificationType type, String title, String body, String deepLinkType) {
+        pusher.pushToVet(vetId, title, body, deepLinkType, null);
     }
 
     private String generateToken() {

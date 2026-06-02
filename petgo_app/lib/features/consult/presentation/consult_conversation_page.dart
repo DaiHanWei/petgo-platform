@@ -8,6 +8,7 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../notify/domain/push_suppression.dart';
 import '../data/consult_repository.dart';
 import 'consult_rating_dialog.dart';
 import 'im_chat_placeholder.dart';
@@ -32,10 +33,16 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
   String _status = 'IN_PROGRESS';
   String? _closedReason;
   bool _rated = false;
+  ActiveConsultSession? _activeNotifier;
 
   @override
   void initState() {
     super.initState();
+    // 标记当前激活会话（Story 6.2 F1）：前台同会话推送抑制 in-app Banner。
+    _activeNotifier = ref.read(activeConsultSessionProvider.notifier);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _activeNotifier?.set(widget.sessionId);
+    });
     _poll = Timer.periodic(_pollInterval, (_) => _tick());
     _tick();
   }
@@ -43,6 +50,8 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
   @override
   void dispose() {
     _poll?.cancel();
+    // 离开会话页 → 清激活标记（用 initState 捕获的 notifier，避免 dispose 期 ref 失效）。
+    _activeNotifier?.set(null);
     super.dispose();
   }
 

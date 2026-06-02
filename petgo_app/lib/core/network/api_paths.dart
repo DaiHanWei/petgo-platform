@@ -49,6 +49,10 @@ class ApiPaths {
   /// 兽医结束会话（Story 5.6）。
   static String vetConsultEnd(int sessionId) => '$base/vet/consult-sessions/$sessionId/end';
 
+  /// 兽医回复后通知用户（Story 6.2，FR-22A）。发完 IM 消息 ping 触发用户推送。
+  static String vetConsultNotifyReply(int sessionId) =>
+      '$base/vet/consult-sessions/$sessionId/notify-reply';
+
   /// 问诊历史聚合（Story 5.8，AI + 兽医两类，游标分页）。
   static const String consultHistory = '$base/consult/history';
 
