@@ -46,6 +46,15 @@ dependencies:
   shared_preferences: ^2.3.2
   google_sign_in: ^7.0.0
   url_launcher: ^6.3.1
+  # Story 2.1：媒体基建（选图 / 权限 / 客户端压缩 + EXIF 剥离）。
+  # 处理用纯 Dart 的 `image`（解码重编码即丢弃 EXIF/GPS，headless 可单测），
+  # 选图/权限用原生插件（仅运行期路径）。
+  image_picker: ^1.1.2
+  permission_handler: ^11.3.1
+  image: ^4.3.0
+  crypto: ^3.0.3
+  # Story 2.7：系统分享菜单（名片链接）。
+  share_plus: ^10.1.4
 
 dev_dependencies:
   flutter_test:

@@ -9,4 +9,21 @@ class ApiPaths {
 
   /// 当前用户主体统一端点（决策 C1：全平台用 /me，不用 /users/me）。
   static const String me = '$base/me';
+
+  /// 媒体 STS 上传凭证（Story 2.1）。
+  static const String mediaStsCredentials = '$base/media/sts-credentials';
+
+  /// 宠物档案（Story 2.2）。
+  static const String petProfiles = '$base/pet-profiles';
+  static const String petProfileMe = '$base/pet-profiles/me';
+
+  /// 成长时间线（Story 2.4）。
+  static const String petProfileTimeline = '$base/pet-profiles/me/timeline';
+
+  /// 内容发布（Story 2.3）。
+  static const String contentPosts = '$base/content-posts';
+
+  /// 问诊存档（Story 2.5）。
+  static const String healthArchiveDecisions = '$base/health-events/archive-decisions';
+  static const String healthDecision = '$base/health-events/decision';
 }

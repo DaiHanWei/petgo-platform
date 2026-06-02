@@ -62,5 +62,72 @@
   "profileOnboardingBody": "Build your pet's growth archive",
   "profileOnboardingSkip": "Skip for now",
   "profileOnboardingCreate": "Create now",
-  "profilePromptMessage": "Create your pet's profile to start their growth archive 🐾"
+  "profilePromptMessage": "Create your pet's profile to start their growth archive 🐾",
+  "commonCancel": "Cancel",
+  "mediaPermissionDeniedTitle": "Permission needed",
+  "@mediaPermissionDeniedTitle": {
+    "description": "Dialog title when camera/photo permission is denied (Story 2.1)."
+  },
+  "mediaPermissionDeniedBody": "Photo access is required to upload. Please enable it in Settings.",
+  "mediaOpenSettings": "Open Settings",
+  "mediaUploadFailed": "Upload failed, please try again",
+  "mediaImageTooLarge": "Image is too large, please choose another",
+  "petProfileCreateTitle": "Create pet profile",
+  "petProfileName": "Name",
+  "petProfileNameHint": "Your pet's name",
+  "petProfileBreed": "Breed",
+  "petProfileBirthday": "Birthday",
+  "petProfileBirthdayPick": "Pick a date",
+  "petProfileIntro": "One-line intro",
+  "petProfileAddPhoto": "Add photo",
+  "petProfileSubmit": "Create",
+  "petProfileNameRequired": "Please enter a name",
+  "petProfileExists": "You already have a pet profile",
+  "petProfileCreateFailed": "Could not create profile, please try again",
+  "publishComposeTitle": "New post",
+  "publishSegmentDaily": "Daily",
+  "publishSegmentGrowth": "Growth",
+  "publishSegmentKnowledge": "Knowledge",
+  "publishTextHint": "Share something...",
+  "publishRemainingChars": "{count} characters left",
+  "@publishRemainingChars": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "publishButton": "Post",
+  "publishPublicNotice": "Your post will be visible to all users.",
+  "publishGrowthNeedsProfile": "Create a pet profile first",
+  "publishCreateProfile": "Create",
+  "publishRetry": "Retry",
+  "publishAddImage": "Add photo",
+  "publishFailed": "Could not post, please try again",
+  "growthArchiveAge": "{years}y {months}m",
+  "@growthArchiveAge": {
+    "placeholders": {
+      "years": { "type": "int" },
+      "months": { "type": "int" }
+    }
+  },
+  "growthArchiveEmptyTitle": "No pet profile yet",
+  "growthArchiveEmptyCreate": "Create now",
+  "growthArchiveNonOwnerTitle": "Growth archive is for pet owners. Change your pet status to unlock it.",
+  "growthArchiveChangeStatus": "Change status",
+  "growthArchiveTimelineEmpty": "No records yet",
+  "growthEditStatusTitle": "Change pet status",
+  "growthStatusSaveFailed": "Could not update status, please try again",
+  "healthEventLabel": "🏥 Consultation record",
+  "commonSave": "Save",
+  "archivePromptTitle": "Save this consultation to {petName}'s archive?",
+  "@archivePromptTitle": {
+    "placeholders": {
+      "petName": { "type": "String" }
+    }
+  },
+  "archivePromptSave": "Save",
+  "archivePromptSkip": "Skip",
+  "shareFabLabel": "Share pet card",
+  "petProfileEditTitle": "Edit pet profile",
+  "petProfileEditEntry": "Edit",
+  "petProfileSaveFailed": "Could not save, please try again"
 }

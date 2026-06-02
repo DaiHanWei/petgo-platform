@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <!-- 失效页同样 noindex；对「不存在/删除/注销」三态统一响应，不泄漏 token 曾否存在（防枚举） -->
+    <meta name="robots" content="noindex,nofollow"/>
+    <title>PetGo</title>
+    <style>
+        body { font-family: -apple-system, system-ui, sans-serif; background: #FAF8F5; color: #2B2B2B;
+            margin: 0; }
+        .wrap { max-width: 640px; margin: 0 auto; padding: 64px 24px; text-align: center; }
+        .title { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+        .sub { color: #9B928A; }
+        .download { display: inline-block; background: #C8874A; color: #fff; padding: 14px 28px;
+            border-radius: 12px; text-decoration: none; margin-top: 24px; font-weight: 600; }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <div class="title">This card is no longer available</div>
+    <div class="sub">The pet card you're looking for can't be found.</div>
+    <a class="download" th:href="${downloadUrl}">Discover pets on PetGo</a>
+</div>
+</body>
+</html>

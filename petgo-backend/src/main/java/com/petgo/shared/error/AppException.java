@@ -50,4 +50,14 @@ public class AppException extends RuntimeException {
     public static AppException rateLimited(String detail) {
         return new AppException(HttpStatus.TOO_MANY_REQUESTS, ErrorTypes.RATE_LIMITED, detail);
     }
+
+    /** Story 2.1：媒体凭证/签名 URL 签发失败（上游 OSS/STS 异常），对外 502，绝不外泄原始错误。 */
+    public static AppException mediaCredential(String detail) {
+        return new AppException(HttpStatus.BAD_GATEWAY, ErrorTypes.MEDIA_CREDENTIAL, detail);
+    }
+
+    /** Story 2.2：单账号单宠物，已存在档案再建（409）。 */
+    public static AppException profileExists(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.PROFILE_EXISTS, detail);
+    }
 }

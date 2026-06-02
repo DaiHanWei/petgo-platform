@@ -6,6 +6,7 @@ import '../../core/router/route_intent.dart';
 import '../../core/theme/colors.dart';
 import '../../core/theme/motion.dart';
 import '../../features/auth/domain/auth_guard.dart';
+import '../../features/content/presentation/publish_compose_page.dart';
 import 'bottom_tab_bar.dart';
 
 /// App 主框架外壳（Story 1.2 外观 + Story 1.5 受控 Tab 门控）。
@@ -68,8 +69,13 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
   }
 
   void _onAddPressed() {
-    // 「＋」=发布入口，受控（Publish 本体属 Epic 2）。未登录弹强弹窗。
-    requireLogin(ref, context, pendingAction: const RouteIntent(location: '/home'));
+    // 「＋」=发布入口，受控。未登录弹强弹窗；已登录打开 Publish Compose（Story 2.3）。
+    requireLogin(
+      ref,
+      context,
+      pendingAction: const RouteIntent(location: '/home'),
+      onAllowed: () => PublishComposePage.open(context),
+    );
   }
 
   @override
