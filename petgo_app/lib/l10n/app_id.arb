@@ -109,5 +109,13 @@
   "detailMenuDelete": "Hapus",
   "detailReply": "Balas",
   "contentDeleteConfirm": "Setelah dihapus, konten ini hilang permanen dan tidak dapat dipulihkan.",
-  "contentDeleteFailed": "Gagal menghapus, silakan coba lagi"
+  "contentDeleteFailed": "Gagal menghapus, silakan coba lagi",
+  "reportTitle": "Laporkan konten ini",
+  "reportReasonIllegal": "Ilegal atau melanggar aturan",
+  "reportReasonMisinfo": "Informasi palsu",
+  "reportReasonInappropriate": "Konten tidak pantas",
+  "reportReasonHarassment": "Pelecehan",
+  "reportReasonOther": "Lainnya",
+  "reportSubmit": "Kirim",
+  "reportSuccess": "Terima kasih, laporanmu sudah kami terima dan akan segera ditinjau 🐾"
 }

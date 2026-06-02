@@ -59,6 +59,9 @@ class _RecordingRepo implements DetailRepository {
 
   @override
   Future<void> deleteContent(int postId) async {}
+
+  @override
+  Future<void> submitReport(int postId, String reasonType) async {}
 }
 
 LoginResponse _user(int id) => LoginResponse(

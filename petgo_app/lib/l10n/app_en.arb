@@ -157,5 +157,13 @@
   "detailMenuDelete": "Delete",
   "detailReply": "Reply",
   "contentDeleteConfirm": "Once deleted, this content is permanently removed and cannot be recovered.",
-  "contentDeleteFailed": "Could not delete, please try again"
+  "contentDeleteFailed": "Could not delete, please try again",
+  "reportTitle": "Report this content",
+  "reportReasonIllegal": "Illegal or against the rules",
+  "reportReasonMisinfo": "False information",
+  "reportReasonInappropriate": "Inappropriate content",
+  "reportReasonHarassment": "Harassment",
+  "reportReasonOther": "Other",
+  "reportSubmit": "Submit",
+  "reportSuccess": "Thanks, we've received your report and will review it soon 🐾"
 }

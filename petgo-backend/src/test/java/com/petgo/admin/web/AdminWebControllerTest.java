@@ -27,12 +27,14 @@ import org.springframework.validation.BindingResult;
 class AdminWebControllerTest {
 
     private AdminContentService adminContentService;
+    private com.petgo.admin.service.AdminModerationService adminModerationService;
     private AdminWebController controller;
 
     @BeforeEach
     void setUp() {
         adminContentService = mock(AdminContentService.class);
-        controller = new AdminWebController(adminContentService);
+        adminModerationService = mock(com.petgo.admin.service.AdminModerationService.class);
+        controller = new AdminWebController(adminContentService, adminModerationService);
     }
 
     private AdminUserDetails admin() {

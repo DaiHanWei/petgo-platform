@@ -86,6 +86,23 @@ public class ContentService {
         log.info("内容软删 postId={} reason={}", post.getId(), reason);
     }
 
+    /** 内容是否存在且可见（Story 3.7：举报前校验，经 service 暴露给 moderation，不让其直读 content 表）。 */
+    @Transactional(readOnly = true)
+    public boolean isVisible(long postId) {
+        return posts.findById(postId).map(p -> p.getDeletedAt() == null).orElse(false);
+    }
+
+    /** 内容摘要（Story 3.7：Admin 举报队列快照，含已删态供运营核对）。 */
+    @Transactional(readOnly = true)
+    public Optional<PostSummary> findSummary(long postId) {
+        return posts.findById(postId).map(p -> new PostSummary(
+                p.getId(), p.getType(), p.getText(), p.getDeletedAt() != null));
+    }
+
+    /** 举报队列快照投影。 */
+    public record PostSummary(long id, ContentType type, String textPreview, boolean deleted) {
+    }
+
     @Transactional
     public ContentPostResponse publish(long authorId, ContentPostCreateRequest req, String idempotencyKey) {
         // 幂等重放：同 key 已落一条则取回，不重复创建。

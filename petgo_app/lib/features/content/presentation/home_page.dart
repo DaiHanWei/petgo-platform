@@ -20,6 +20,7 @@ import 'feed_skeleton.dart';
 import 'feed_tab_row.dart';
 import 'feed_view.dart';
 import 'publish_compose_page.dart';
+import 'report_sheet.dart';
 
 /// 首页 Tab（Story 3.2 Feed 内容流）。
 ///
@@ -126,6 +127,8 @@ class HomePage extends ConsumerWidget {
           onRefresh: () => ref.read(feedProvider.notifier).refresh(),
           // 点卡进详情（Story 3.3）：push 非 replace，返回保持 Feed 滚动位置。
           onTapItem: (item) => context.push('/content/${item.id}'),
+          // 长按举报（Story 3.7，UX-DR12）：未登录触发 FR-0C。
+          onLongPressItem: (item) => openReport(context, ref, item.id),
         );
       },
     );

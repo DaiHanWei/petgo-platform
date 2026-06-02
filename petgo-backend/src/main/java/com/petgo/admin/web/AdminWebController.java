@@ -2,6 +2,7 @@ package com.petgo.admin.web;
 
 import com.petgo.admin.dto.SeedPostForm;
 import com.petgo.admin.service.AdminContentService;
+import com.petgo.admin.service.AdminModerationService;
 import com.petgo.admin.service.AdminUserDetails;
 import com.petgo.content.domain.ContentType;
 import com.petgo.content.dto.ContentPostResponse;
@@ -13,6 +14,7 @@ import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 
 /**
@@ -25,9 +27,12 @@ import org.springframework.web.bind.annotation.PostMapping;
 public class AdminWebController {
 
     private final AdminContentService adminContentService;
+    private final AdminModerationService adminModerationService;
 
-    public AdminWebController(AdminContentService adminContentService) {
+    public AdminWebController(AdminContentService adminContentService,
+            AdminModerationService adminModerationService) {
         this.adminContentService = adminContentService;
+        this.adminModerationService = adminModerationService;
     }
 
     /** 登录页（未认证可访问；认证失败回显 error，登出回显 logout）。 */
@@ -50,6 +55,27 @@ public class AdminWebController {
         }
         model.addAttribute("types", ContentType.values());
         return "admin/seed-post";
+    }
+
+    // ===== Story 3.7：举报审核队列（复用本 shell）=====
+
+    @GetMapping("/admin/reports")
+    public String reports(Model model) {
+        model.addAttribute("active", "reports");
+        model.addAttribute("reports", adminModerationService.pendingQueue());
+        return "admin/reports";
+    }
+
+    @PostMapping("/admin/reports/{id}/takedown")
+    public String takedown(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id) {
+        adminModerationService.takedown(id, admin.getUserId());
+        return "redirect:/admin/reports";
+    }
+
+    @PostMapping("/admin/reports/{id}/dismiss")
+    public String dismiss(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id) {
+        adminModerationService.dismiss(id, admin.getUserId());
+        return "redirect:/admin/reports";
     }
 
     @PostMapping("/admin/seed-post")

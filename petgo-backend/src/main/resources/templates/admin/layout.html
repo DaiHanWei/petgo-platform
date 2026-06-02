@@ -32,8 +32,8 @@
         <a th:href="@{/admin/dashboard}" th:classappend="${active == 'dashboard'} ? 'active'">概览</a>
         <div class="group">内容</div>
         <a th:href="@{/admin/seed-post}" th:classappend="${active == 'seed'} ? 'active'">种子内容发布</a>
-        <!-- 后续 slice 入口位（占位，本 Story 不实现）：-->
-        <a href="#" class="disabled" title="Story 3.7">举报队列</a>
+        <a th:href="@{/admin/reports}" th:classappend="${active == 'reports'} ? 'active'">举报队列</a>
+        <!-- 后续 slice 入口位（占位，Epic 5 实现）：-->
         <div class="group">兽医（Epic 5）</div>
         <a href="#" class="disabled" title="Epic 5">兽医账号</a>
         <a href="#" class="disabled" title="Epic 5">评分查看</a>

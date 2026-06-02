@@ -83,6 +83,9 @@ class _FakeDetailRepo implements DetailRepository {
   Future<void> deleteContent(int postId) async {
     deleteContentCalls++;
   }
+
+  @override
+  Future<void> submitReport(int postId, String reasonType) async {}
 }
 
 Future<void> _pump(WidgetTester tester, _FakeDetailRepo repo) async {

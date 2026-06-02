@@ -15,6 +15,7 @@ import 'comment_section.dart';
 import 'detail_providers.dart';
 import 'feed_controller.dart';
 import 'like_button.dart';
+import 'report_sheet.dart';
 
 /// 内容详情页（Story 3.3，FR-28）。只读容器：正文 + 多图左右滑 + 互动栏占位 + 评论区 + 底部评论框。
 ///
@@ -92,10 +93,14 @@ class _DetailScaffold extends ConsumerWidget {
           PopupMenuButton<String>(
             key: const ValueKey('detailMenu'),
             onSelected: (value) {
-              if (value == 'delete') _confirmDelete(context, ref, l10n);
+              if (value == 'delete') {
+                _confirmDelete(context, ref, l10n);
+              } else if (value == 'report') {
+                openReport(context, ref, detail.id);
+              }
             },
             itemBuilder: (context) => [
-              PopupMenuItem<String>(value: 'report', enabled: false, child: Text(l10n.detailMenuReport)),
+              PopupMenuItem<String>(value: 'report', child: Text(l10n.detailMenuReport)),
               if (detail.isAuthor)
                 PopupMenuItem<String>(
                   value: 'delete',

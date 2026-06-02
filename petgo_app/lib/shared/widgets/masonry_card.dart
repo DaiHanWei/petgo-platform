@@ -16,6 +16,7 @@ class MasonryCard extends StatelessWidget {
     required this.item,
     required this.deletedUserLabel,
     this.onTap,
+    this.onLongPress,
   });
 
   final FeedItem item;
@@ -23,6 +24,9 @@ class MasonryCard extends StatelessWidget {
   /// 注销用户占位文案（来自 .arb，双语）。
   final String deletedUserLabel;
   final VoidCallback? onTap;
+
+  /// 长按 context menu（Story 3.7 举报入口，UX-DR12）。
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -34,6 +38,7 @@ class MasonryCard extends StatelessWidget {
       label: name,
       child: GestureDetector(
         onTap: onTap,
+        onLongPress: onLongPress,
         child: Container(
           decoration: BoxDecoration(
             color: AppColors.surface,
