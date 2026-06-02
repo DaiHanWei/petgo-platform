@@ -46,6 +46,10 @@ public class PetProfile {
     @Column(name = "card_token", nullable = false, length = 64)
     private String cardToken;
 
+    /** 社交预览预渲染 OG 静态图 URL（公开桶+CDN，Story 2.6；档案/头像变更时重渲染）。 */
+    @Column(name = "og_image_url", length = 1024)
+    private String ogImageUrl;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -130,6 +134,14 @@ public class PetProfile {
 
     public String getCardToken() {
         return cardToken;
+    }
+
+    public String getOgImageUrl() {
+        return ogImageUrl;
+    }
+
+    public void setOgImageUrl(String ogImageUrl) {
+        this.ogImageUrl = ogImageUrl;
     }
 
     public Instant getCreatedAt() {

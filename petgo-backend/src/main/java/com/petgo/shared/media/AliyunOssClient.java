@@ -55,6 +55,33 @@ public class AliyunOssClient {
     }
 
     /**
+     * （E4 兜底）给已有公开 URL 追加 {@code x-oss-process} 去 EXIF 样式（Story 2.6 H5 名片对外图）。
+     * 对外分发的头像/快乐时刻/OG 图一律经此，防改过的客户端绕过客户端剥离泄漏 GPS。
+     */
+    public static String exifStrippedDeliveryUrl(String publicUrl) {
+        if (publicUrl == null || publicUrl.isBlank()) {
+            return publicUrl;
+        }
+        String sep = publicUrl.contains("?") ? "&" : "?";
+        return publicUrl + sep + "x-oss-process=" + EXIF_STRIP_PROCESS;
+    }
+
+    /** 服务端上传字节到公开桶①（Story 2.6 OG 预渲染图）。L2 真实网络。返回对外 CDN URL。 */
+    public String putPublicObject(String objectKey, byte[] bytes, String contentType) {
+        OSS client = buildClient();
+        try {
+            com.aliyun.oss.model.ObjectMetadata meta = new com.aliyun.oss.model.ObjectMetadata();
+            meta.setContentType(contentType);
+            meta.setContentLength(bytes.length);
+            client.putObject(props.getOss().getPublicBucket(), stripLeadingSlash(objectKey),
+                    new ByteArrayInputStream(bytes), meta);
+            return publicUrl(objectKey);
+        } finally {
+            client.shutdown();
+        }
+    }
+
+    /**
      * 服务端上传字节到私密桶②（Story 2.5 IM→OSS 桥接用）。L2 真实网络。
      * 调用方负责字节已去 EXIF（IM 图复制场景由 {@link ImToOssArchiver} 控制）。
      */

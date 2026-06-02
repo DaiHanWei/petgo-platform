@@ -68,6 +68,25 @@ public class ProfileService {
         return profiles.findByOwnerId(ownerId);
     }
 
+    /** 按不可枚举名片 token 查档案（Story 2.6 名片 H5）。 */
+    @Transactional(readOnly = true)
+    public Optional<PetProfile> findByCardToken(String cardToken) {
+        return profiles.findByCardToken(cardToken);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<PetProfile> findById(long id) {
+        return profiles.findById(id);
+    }
+
+    @Transactional
+    public void updateOgImageUrl(long profileId, String ogImageUrl) {
+        profiles.findById(profileId).ifPresent(p -> {
+            p.setOgImageUrl(ogImageUrl);
+            profiles.save(p);
+        });
+    }
+
     public boolean hasProfile(long ownerId) {
         return profiles.existsByOwnerId(ownerId);
     }

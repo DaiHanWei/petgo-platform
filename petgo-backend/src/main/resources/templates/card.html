@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <!-- 防爬：名片对外但不进搜索引擎索引（Story 2.6 强制 noindex） -->
+    <meta name="robots" content="noindex,nofollow"/>
+    <title th:text="${name} + ' · PetGo'">PetGo</title>
+
+    <!-- Open Graph（WhatsApp/Line/Instagram 链接预览） -->
+    <meta property="og:type" content="profile"/>
+    <meta property="og:title" th:content="${name}"/>
+    <meta property="og:description" th:content="${intro} ?: ${breed}"/>
+    <meta property="og:image" th:content="${ogImageUrl}"/>
+    <meta property="og:url" th:content="${pageUrl}"/>
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image"/>
+    <meta name="twitter:title" th:content="${name}"/>
+    <meta name="twitter:description" th:content="${intro} ?: ${breed}"/>
+    <meta name="twitter:image" th:content="${ogImageUrl}"/>
+
+    <style>
+        body { font-family: -apple-system, system-ui, sans-serif; background: #FAF8F5; color: #2B2B2B; margin: 0; }
+        .wrap { max-width: 640px; margin: 0 auto; padding: 24px; }
+        .avatar { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; }
+        .name { font-size: 28px; font-weight: 700; margin: 12px 0 4px; }
+        .breed, .intro { color: #9B928A; }
+        .moments img { width: 100%; border-radius: 12px; margin: 8px 0; display: block; }
+        .download { display: block; text-align: center; background: #C8874A; color: #fff;
+            padding: 14px; border-radius: 12px; text-decoration: none; margin-top: 24px; font-weight: 600; }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <header>
+        <img class="avatar" th:if="${avatarUrl}" th:src="${avatarUrl}" alt="avatar"/>
+        <div class="name" th:text="${name}">Pet</div>
+        <div class="breed" th:if="${breed}" th:text="${breed}">Breed</div>
+        <div class="intro" th:if="${intro}" th:text="${intro}">Intro</div>
+    </header>
+
+    <section class="moments">
+        <div th:each="moment : ${moments}">
+            <img th:each="img : ${moment.imageUrls}" th:src="${img}" alt="moment"/>
+            <p th:if="${moment.text}" th:text="${moment.text}">caption</p>
+        </div>
+    </section>
+
+    <a class="download" th:href="${downloadUrl}">Open in PetGo</a>
+</div>
+</body>
+</html>
