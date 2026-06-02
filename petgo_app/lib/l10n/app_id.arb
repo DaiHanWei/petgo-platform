@@ -86,5 +86,15 @@
   "shareFabLabel": "Bagikan kartu hewan",
   "petProfileEditTitle": "Ubah profil hewan",
   "petProfileEditEntry": "Ubah",
-  "petProfileSaveFailed": "Gagal menyimpan, silakan coba lagi"
+  "petProfileSaveFailed": "Gagal menyimpan, silakan coba lagi",
+  "feedTabAll": "Semua",
+  "feedTabDaily": "Harian",
+  "feedTabGrowth": "Momen",
+  "feedTabKnowledge": "Tips",
+  "feedEmptyTitle": "Pamerkan si bulu! 🐾",
+  "feedEmptyBody": "Jadilah yang pertama berbagi momen hewan",
+  "feedEmptyCta": "Posting cerita pertamamu",
+  "feedGrowthEmptyTitle": "Belum ada momen tumbuh kembang 🐾",
+  "feedLoadError": "Gagal memuat feed, tarik untuk coba lagi",
+  "feedDeletedUser": "Pengguna terhapus"
 }

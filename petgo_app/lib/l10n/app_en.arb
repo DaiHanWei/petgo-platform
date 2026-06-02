@@ -129,5 +129,15 @@
   "shareFabLabel": "Share pet card",
   "petProfileEditTitle": "Edit pet profile",
   "petProfileEditEntry": "Edit",
-  "petProfileSaveFailed": "Could not save, please try again"
+  "petProfileSaveFailed": "Could not save, please try again",
+  "feedTabAll": "All",
+  "feedTabDaily": "Daily",
+  "feedTabGrowth": "Moments",
+  "feedTabKnowledge": "Tips",
+  "feedEmptyTitle": "Show off your furry friend! 🐾",
+  "feedEmptyBody": "Be the first to share a pet moment",
+  "feedEmptyCta": "Post your first story",
+  "feedGrowthEmptyTitle": "No growth moments yet 🐾",
+  "feedLoadError": "Could not load the feed, pull to retry",
+  "feedDeletedUser": "Deleted user"
 }

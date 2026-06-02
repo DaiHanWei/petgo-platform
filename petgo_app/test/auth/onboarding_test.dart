@@ -9,9 +9,14 @@ import 'package:petgo/features/auth/domain/onboarding_branch.dart';
 import 'package:petgo/features/auth/presentation/nickname_page.dart';
 import 'package:petgo/features/auth/presentation/pet_status_page.dart';
 import 'package:petgo/features/profile/presentation/profile_onboarding_page.dart';
+import 'package:petgo/features/content/data/feed_repository.dart';
+import 'package:petgo/features/content/presentation/feed_tab_row.dart';
 import 'package:petgo/features/content/presentation/home_page.dart';
 import 'package:petgo/l10n/app_localizations.dart';
 import 'package:petgo/shared/widgets/pet_status_selector.dart';
+import 'package:petgo/shared/widgets/profile_prompt_bar.dart';
+
+import '../support/fake_feed_repository.dart';
 
 class _FakeMeRepository implements MeRepository {
   @override
@@ -124,7 +129,10 @@ void main() {
 
   testWidgets('AC2: 选 B 完成 → 进首页（无提示条）', (tester) async {
     await tester.pumpWidget(ProviderScope(
-      overrides: [meRepositoryProvider.overrideWithValue(_FakeMeRepository())],
+      overrides: [
+        meRepositoryProvider.overrideWithValue(_FakeMeRepository()),
+        feedRepositoryProvider.overrideWithValue(FakeFeedRepository()),
+      ],
       child: MaterialApp.router(
         routerConfig: _flowRouter(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -138,6 +146,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('petStatusComplete')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Your feed is empty'), findsOneWidget);
+    // 进首页（Story 3.2 Feed 已就位）+ B 状态不显示档案提示条。
+    expect(find.byType(FeedTabRow), findsOneWidget);
+    expect(find.byType(ProfilePromptBar), findsNothing);
   });
 }

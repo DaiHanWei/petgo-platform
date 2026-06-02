@@ -89,6 +89,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/_ping-error", "/error").permitAll()
                         // 游客只读放行锚点（Story 1.5 细化具体业务 GET）
                         .requestMatchers(HttpMethod.GET, "/api/v1/public/**").permitAll()
+                        // Feed 只读对游客可见（Story 3.2，FR-0A/17）：GET 内容流放行（写仍需 JWT）
+                        .requestMatchers(HttpMethod.GET, "/api/v1/content-posts").permitAll()
                         // 其余 /api/v1 默认需 JWT（写一律拒绝未登录）
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth

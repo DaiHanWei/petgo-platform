@@ -84,7 +84,7 @@ development_status:
   # ===== Epic 3: 社区 Feed 与内容互动 =====
   epic-3: in-progress
   3-1-运营后台地基与种子内容发布: review
-  3-2-首页-feed-内容流与宠物状态硬过滤: ready-for-dev
+  3-2-首页-feed-内容流与宠物状态硬过滤: review
   3-3-内容详情页: ready-for-dev
   3-4-内容点赞: ready-for-dev
   3-5-内容两级评论: ready-for-dev
