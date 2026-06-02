@@ -250,5 +250,9 @@
   "consultRateCommentHint": "Tambahkan catatan (opsional, maks 100 karakter)",
   "consultRateSubmit": "Kirim",
   "consultRateThanks": "Terima kasih atas penilaianmu",
-  "consultRateFailed": "Gagal mengirim, coba lagi"
+  "consultRateFailed": "Gagal mengirim, coba lagi",
+  "consultInterrupted": "Dokter hewan sedang offline. Konsultasi ini terputus.",
+  "consultReconsult": "Mulai konsultasi baru",
+  "consultInterruptedTag": "Terputus",
+  "vetBannedKicked": "Akunmu telah dinonaktifkan. Hubungi operasional."
 }

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
@@ -49,7 +50,7 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
       final s = await ref.read(consultRepositoryProvider).get(widget.sessionId);
       if (!mounted) return;
       setState(() => _status = s.status);
-      if (s.status == 'CLOSED') _poll?.cancel();
+      if (s.status == 'CLOSED' || s.status == 'INTERRUPTED') _poll?.cancel();
     } catch (_) {
       // 轮询失败静默重试。
     }
@@ -82,6 +83,7 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final pendingClose = _status == 'PENDING_CLOSE' && !_rated;
+    final interrupted = _status == 'INTERRUPTED';
     return Scaffold(
       backgroundColor: AppColors.base,
       appBar: AppBar(title: Text(l10n.consultConversationTitle)),
@@ -96,6 +98,31 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
               color: AppColors.triageYellowSurface,
               child: Text(l10n.consultDisclaimer, style: AppTypography.caption),
             ),
+            // 封禁中断（Story 5.7）：转只读终态 + 软引导重新发起（复用 5.3 发起入口）。
+            if (interrupted)
+              Expanded(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.xl),
+                    child: Column(
+                      key: const ValueKey('consultInterruptedState'),
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.cloud_off_outlined, size: 48, color: AppColors.textTertiary),
+                        const SizedBox(height: AppSpacing.md),
+                        Text(l10n.consultInterrupted,
+                            style: AppTypography.body, textAlign: TextAlign.center),
+                        const SizedBox(height: AppSpacing.section),
+                        FilledButton(
+                          key: const ValueKey('consultReconsult'),
+                          onPressed: () => context.go('/consult'),
+                          child: Text(l10n.consultReconsult),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             // 兽医结束 → 请评分提示（30min 窗口内仍可继续发消息，故非阻断 banner）。
             if (pendingClose)
               Container(
@@ -114,7 +141,8 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
                   ],
                 ),
               ),
-            ImChatPlaceholder(imConversationId: 'session-${widget.sessionId}'),
+            if (!interrupted)
+              ImChatPlaceholder(imConversationId: 'session-${widget.sessionId}'),
           ],
         ),
       ),

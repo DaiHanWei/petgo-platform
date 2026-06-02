@@ -24,4 +24,7 @@ public interface ConsultSessionRepository extends JpaRepository<ConsultSession, 
     /** 某用户待补弹评分的已关闭会话（Story 5.6，进问诊页补弹一次）。 */
     Optional<ConsultSession> findFirstByUserIdAndStatusAndRatingPromptState(
             long userId, SessionStatus status, RatingPromptState ratingPromptState);
+
+    /** 某兽医处于活跃态（IN_PROGRESS/PENDING_CLOSE）的会话（Story 5.7 封禁批量中断）。 */
+    List<ConsultSession> findByVetIdAndStatusIn(long vetId, Collection<SessionStatus> statuses);
 }

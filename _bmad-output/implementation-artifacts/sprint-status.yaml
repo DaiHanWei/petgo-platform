@@ -110,7 +110,7 @@ development_status:
   5-4-ai-升级至兽医的上下文传递: review
   5-5-腾讯-im-会话与图文对话界面: review
   5-6-会话结束机制与用户评分门: review
-  5-7-兽医封禁与进行中会话中断处理: ready-for-dev
+  5-7-兽医封禁与进行中会话中断处理: review
   5-8-问诊-tab-结构与问诊历史整合: ready-for-dev
   epic-5-retrospective: optional
 

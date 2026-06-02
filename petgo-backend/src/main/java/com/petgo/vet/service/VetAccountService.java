@@ -86,6 +86,12 @@ public class VetAccountService {
                 .orElseThrow(() -> AppException.notFound("兽医账号不存在"));
     }
 
+    /** 账号是否活跃（Story 5.7 封禁即生效：已登录请求每次校验 status，BANNED/不存在 → false）。 */
+    @Transactional(readOnly = true)
+    public boolean isActive(long vetId) {
+        return repo.findById(vetId).map(VetAccount::isActive).orElse(false);
+    }
+
     @Transactional(readOnly = true)
     public List<VetAccount> listAll() {
         return repo.findAll();

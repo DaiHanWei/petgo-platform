@@ -69,7 +69,8 @@
                     </form>
                 </td>
                 <td>
-                    <form class="inline" th:action="@{'/admin/vets/' + ${v.id()} + '/status'}" method="post">
+                    <form class="inline" th:action="@{'/admin/vets/' + ${v.id()} + '/status'}" method="post"
+                          onsubmit="return confirm('确认变更该兽医封禁状态？封禁将立即踢下线并中断其进行中会话（不可恢复）。');">
                         <input type="hidden" name="banned" th:value="${v.status() == 'ACTIVE'}"/>
                         <button type="submit" th:text="${v.status() == 'ACTIVE'} ? '封禁' : '解封'">封禁</button>
                     </form>

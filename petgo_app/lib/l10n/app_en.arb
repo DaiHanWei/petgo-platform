@@ -304,5 +304,9 @@
   "consultRateCommentHint": "Add a note (optional, max 100 chars)",
   "consultRateSubmit": "Submit",
   "consultRateThanks": "Thanks for your rating",
-  "consultRateFailed": "Could not submit, please try again"
+  "consultRateFailed": "Could not submit, please try again",
+  "consultInterrupted": "The vet went offline. This consultation was interrupted.",
+  "consultReconsult": "Start a new consultation",
+  "consultInterruptedTag": "Interrupted",
+  "vetBannedKicked": "Your account has been disabled. Please contact operations."
 }

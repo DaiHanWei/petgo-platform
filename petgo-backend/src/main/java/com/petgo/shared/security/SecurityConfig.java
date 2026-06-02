@@ -1,6 +1,7 @@
 package com.petgo.shared.security;
 
 import com.petgo.admin.service.AdminUserDetailsService;
+import com.petgo.vet.web.BannedVetFilter;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -12,6 +13,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 
 /**
  * 安全配置（Story 1.3 起收紧；Story 3.1 增 admin 表单登录链）。
@@ -75,9 +77,12 @@ public class SecurityConfig {
     /** 业务 API 链（无状态 JWT）。 */
     @Bean
     @Order(2)
-    public SecurityFilterChain apiFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain apiFilterChain(HttpSecurity http, BannedVetFilter bannedVetFilter)
+            throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
+                // 封禁即生效（Story 5.7）：JWT 认证后、授权前校验 vet status，BANNED → 401 踢下线。
+                .addFilterBefore(bannedVetFilter, AuthorizationFilter.class)
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         // 登录/刷新放行（换取自签 JWT 的入口）

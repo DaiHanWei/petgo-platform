@@ -98,6 +98,15 @@ public class ConsultSession {
     @Column(name = "rating_prompt_state", nullable = false, length = 16)
     private RatingPromptState ratingPromptState = RatingPromptState.NONE;
 
+    // ===== 封禁中断（Story 5.7）=====
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "interrupted_reason", length = 16)
+    private InterruptReason interruptedReason;
+
+    @Column(name = "interrupted_at")
+    private Instant interruptedAt;
+
     protected ConsultSession() {
     }
 
@@ -179,6 +188,20 @@ public class ConsultSession {
     /** 补弹已展示 → 置 PROMPTED（不再弹）。 */
     public void markRatingPrompted() {
         this.ratingPromptState = RatingPromptState.PROMPTED;
+    }
+
+    /**
+     * 封禁中断（Story 5.7）：IN_PROGRESS / PENDING_CLOSE → INTERRUPTED（终态，不评分、不存档）。
+     * 非进行中态调用即抛错（幂等保护：已终态不再中断）。
+     */
+    public void interrupt(InterruptReason reason) {
+        if (status != SessionStatus.IN_PROGRESS && status != SessionStatus.PENDING_CLOSE) {
+            throw AppException.conflict("会话不在可中断状态");
+        }
+        this.status = SessionStatus.INTERRUPTED;
+        this.interruptedReason = reason;
+        this.interruptedAt = Instant.now();
+        this.ratingPromptState = RatingPromptState.NONE; // 中断不评分
     }
 
     /** 补弹后用户补评分（会话已 CLOSED，仅消除补弹标记，不改 closed_reason 的历史事实）。 */
@@ -272,6 +295,14 @@ public class ConsultSession {
 
     public RatingPromptState getRatingPromptState() {
         return ratingPromptState;
+    }
+
+    public InterruptReason getInterruptedReason() {
+        return interruptedReason;
+    }
+
+    public Instant getInterruptedAt() {
+        return interruptedAt;
     }
 
     public Instant getCreatedAt() {
