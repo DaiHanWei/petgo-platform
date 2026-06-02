@@ -14,7 +14,11 @@ import com.petgo.consult.domain.SessionStatus;
 import com.petgo.consult.repository.ConsultSessionRepository;
 import com.petgo.consult.service.ConsultSessionService.CreateResult;
 import com.petgo.shared.error.AppException;
+import com.petgo.triage.domain.DangerLevel;
+import com.petgo.triage.dto.TriageUpgradeContext;
+import com.petgo.triage.service.TriageService;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,9 +36,11 @@ class ConsultSessionServiceTest {
     ConsultSessionRepository repo;
     @Mock
     ConsultQueueService queue;
+    @Mock
+    TriageService triageService;
 
     private ConsultSessionService service() {
-        return new ConsultSessionService(repo, queue);
+        return new ConsultSessionService(repo, queue, triageService);
     }
 
     @Test
@@ -88,6 +94,42 @@ class ConsultSessionServiceTest {
 
         assertThatThrownBy(() -> service().cancel(999L, 11L)).isInstanceOf(AppException.class);
         verify(queue, never()).dequeue(anyLong());
+    }
+
+    @Test
+    void upgradeBindsAiContextSnapshotForYellow() {
+        when(repo.findFirstByUserIdAndStatusInOrderByCreatedAtDesc(anyLong(), any()))
+                .thenReturn(Optional.empty());
+        when(triageService.getResultForUpgrade(7L, 99L)).thenReturn(
+                new TriageUpgradeContext(99L, DangerLevel.YELLOW, "呕吐两次", List.of("k1", "k2")));
+        when(repo.save(any(ConsultSession.class))).thenAnswer(inv -> {
+            ConsultSession s = inv.getArgument(0);
+            ReflectionTestUtils.setField(s, "id", 21L);
+            return s;
+        });
+
+        CreateResult result = service().createWaitingFromUpgrade(7L, 99L);
+
+        assertThat(result.alreadyActive()).isFalse();
+        assertThat(result.session().getSource()).isEqualTo(ConsultSource.AI_UPGRADE);
+        assertThat(result.session().getAiDangerLevel()).isEqualTo("YELLOW");
+        assertThat(result.session().getAiSymptomText()).isEqualTo("呕吐两次");
+        assertThat(result.session().getAiImageRefs()).containsExactly("k1", "k2");
+        assertThat(result.session().hasAiContext()).isTrue();
+        verify(queue).enqueue(21L);
+    }
+
+    @Test
+    void upgradeRejectsRedDangerLevel() {
+        when(repo.findFirstByUserIdAndStatusInOrderByCreatedAtDesc(anyLong(), any()))
+                .thenReturn(Optional.empty());
+        when(triageService.getResultForUpgrade(7L, 99L)).thenReturn(
+                new TriageUpgradeContext(99L, DangerLevel.RED, "抽搐", List.of()));
+
+        assertThatThrownBy(() -> service().createWaitingFromUpgrade(7L, 99L))
+                .isInstanceOf(AppException.class);
+        verify(repo, never()).save(any());
+        verify(queue, never()).enqueue(anyLong());
     }
 
     @Test

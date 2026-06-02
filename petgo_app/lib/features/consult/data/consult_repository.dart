@@ -37,6 +37,16 @@ class ConsultRepository {
     return ConsultSession.fromJson(resp.data!);
   }
 
+  /// 从 AI 分诊升级（Story 5.4）：只传 triageTaskId，评级/描述/图片由后端从 triage 拉取（前端不重传）。
+  /// 红色态后端兜底拒绝（前端绿/黄才暴露入口）。
+  Future<ConsultSession> createFromUpgrade(int triageTaskId) async {
+    final resp = await dio.post<Map<String, dynamic>>(
+      ApiPaths.consultSessions,
+      data: {'source': 'AI_UPGRADE', 'triageTaskId': triageTaskId},
+    );
+    return ConsultSession.fromJson(resp.data!);
+  }
+
   /// 轮询会话状态（含 timedOut）。
   Future<ConsultSession> get(int id) async {
     final resp = await dio.get<Map<String, dynamic>>(ApiPaths.consultSession(id));

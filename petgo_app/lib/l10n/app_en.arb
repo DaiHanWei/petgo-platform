@@ -277,5 +277,9 @@
   "consultCancelConfirmNo": "Keep waiting",
   "consultOfflineWindow": "Expected back 8:00–23:00 on weekdays",
   "consultOfflineUseAi": "Try AI triage first?",
-  "consultStartFailed": "Could not start, please try again"
+  "consultStartFailed": "Could not start, please try again",
+  "triageConsultVet": "Talk to a vet",
+  "vetAiContextTitle": "From AI triage",
+  "vetAiContextLevelGreen": "AI: no urgent risk",
+  "vetAiContextLevelYellow": "AI: watch closely"
 }

@@ -223,5 +223,9 @@
   "consultCancelConfirmNo": "Terus menunggu",
   "consultOfflineWindow": "Diperkirakan kembali 08.00–23.00 pada hari kerja",
   "consultOfflineUseAi": "Coba triage AI dulu?",
-  "consultStartFailed": "Gagal memulai, coba lagi"
+  "consultStartFailed": "Gagal memulai, coba lagi",
+  "triageConsultVet": "Konsultasi dokter hewan",
+  "vetAiContextTitle": "Dari triage AI",
+  "vetAiContextLevelGreen": "AI: tidak ada risiko mendesak",
+  "vetAiContextLevelYellow": "AI: pantau ketat"
 }

@@ -41,7 +41,16 @@ public class ConsultSessionController {
     @PostMapping
     public ConsultSessionResponse create(@AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody(required = false) CreateConsultSessionRequest req) {
-        CreateResult result = service.createWaiting(currentUserId(jwt), ConsultSource.DIRECT);
+        long userId = currentUserId(jwt);
+        CreateResult result;
+        if (req != null && req.isAiUpgrade()) {
+            if (req.triageTaskId() == null) {
+                throw AppException.validation("升级兽医需提供 triageTaskId");
+            }
+            result = service.createWaitingFromUpgrade(userId, req.triageTaskId());
+        } else {
+            result = service.createWaiting(userId, ConsultSource.DIRECT);
+        }
         return ConsultSessionResponse.of(result.session(),
                 ConsultSessionService.WAITING_TIMEOUT_SECONDS, result.alreadyActive());
     }

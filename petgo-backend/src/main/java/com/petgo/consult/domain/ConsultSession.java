@@ -12,6 +12,9 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.List;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * 兽医咨询会话（Story 5.3 创建 {@code consult_sessions} 表）。Epic 5 会话状态机的数据根。
@@ -51,6 +54,24 @@ public class ConsultSession {
     @Column(name = "im_conversation_id", length = 128)
     private String imConversationId;
 
+    // ===== AI 上下文快照（Story 5.4，source=AI_UPGRADE 时填）=====
+
+    @Column(name = "triage_task_id")
+    private Long triageTaskId;
+
+    /** GREEN | YELLOW（绝不含 RED；红线由 service 兜底拒绝 + 库约束）。 */
+    @Column(name = "ai_danger_level", length = 8)
+    private String aiDangerLevel;
+
+    /** 症状描述快照（健康数据，日志严禁明文）。 */
+    @Column(name = "ai_symptom_text")
+    private String aiSymptomText;
+
+    /** 私密桶对象 key 列表（引用，取用时现签 URL；绝不存签名 URL）。 */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "ai_image_refs")
+    private List<String> aiImageRefs;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -68,6 +89,21 @@ public class ConsultSession {
         s.status = SessionStatus.WAITING;
         s.waitingStartedAt = Instant.now();
         return s;
+    }
+
+    /**
+     * 绑定 AI 上下文快照（Story 5.4，source=AI_UPGRADE）。
+     * 红线：{@code dangerLevel} 仅 GREEN/YELLOW（RED 由 service 兜底拒绝，绝不到达此处）。
+     */
+    public void bindAiContext(Long triageTaskId, String dangerLevel, String symptomText, List<String> imageRefs) {
+        this.triageTaskId = triageTaskId;
+        this.aiDangerLevel = dangerLevel;
+        this.aiSymptomText = symptomText;
+        this.aiImageRefs = imageRefs;
+    }
+
+    public boolean hasAiContext() {
+        return source == ConsultSource.AI_UPGRADE && aiDangerLevel != null;
     }
 
     /** 继续等待：重置计时基准（请求保留队列，不改状态）。 */
@@ -141,6 +177,22 @@ public class ConsultSession {
 
     public String getImConversationId() {
         return imConversationId;
+    }
+
+    public Long getTriageTaskId() {
+        return triageTaskId;
+    }
+
+    public String getAiDangerLevel() {
+        return aiDangerLevel;
+    }
+
+    public String getAiSymptomText() {
+        return aiSymptomText;
+    }
+
+    public List<String> getAiImageRefs() {
+        return aiImageRefs;
     }
 
     public Instant getCreatedAt() {

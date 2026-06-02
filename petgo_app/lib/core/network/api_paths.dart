@@ -13,6 +13,10 @@ class ApiPaths {
   /// 兽医自身视图（Story 5.1 登录后探活 + 工作台顶部展示）。
   static const String vetMe = '$base/vet/me';
 
+  /// 兽医侧会话 AI 上下文（Story 5.4，含私密图签名 URL）。
+  static String vetConsultAiContext(int sessionId) =>
+      '$base/vet/consult-sessions/$sessionId/ai-context';
+
   /// 兽医在线态读写 + 心跳 + 登出（Story 5.2）。
   static const String vetOnlineStatus = '$base/vet/online-status';
   static const String vetHeartbeat = '$base/vet/heartbeat';

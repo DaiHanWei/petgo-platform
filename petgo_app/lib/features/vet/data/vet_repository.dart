@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/storage/secure_storage.dart';
+import '../domain/consult_ai_context.dart';
 import '../domain/vet_login_response.dart';
 
 /// 兽医数据层（Story 5.1）：账密登录换取 role=VET JWT；GET /vet/me 探活。
@@ -49,6 +50,12 @@ class VetRepository {
 
   /// 前台心跳续期 TTL（防幽灵在线靠 TTL 兜底）。
   Future<void> heartbeat() => dio.post<void>(ApiPaths.vetHeartbeat);
+
+  /// 会话 AI 上下文（Story 5.4，含私密图签名 URL）。DIRECT 会话返回 hasAiContext=false。
+  Future<ConsultAiContext> aiContext(int sessionId) async {
+    final resp = await dio.get<Map<String, dynamic>>(ApiPaths.vetConsultAiContext(sessionId));
+    return ConsultAiContext.fromJson(resp.data!);
+  }
 
   /// 登出即离线（服务端清在线态）+ 清本地 token。
   Future<void> logout() async {

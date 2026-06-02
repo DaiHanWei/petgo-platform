@@ -5,6 +5,9 @@ import com.petgo.consult.domain.ConsultSource;
 import com.petgo.consult.domain.SessionStatus;
 import com.petgo.consult.repository.ConsultSessionRepository;
 import com.petgo.shared.error.AppException;
+import com.petgo.triage.domain.DangerLevel;
+import com.petgo.triage.dto.TriageUpgradeContext;
+import com.petgo.triage.service.TriageService;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,10 +26,13 @@ public class ConsultSessionService {
 
     private final ConsultSessionRepository repo;
     private final ConsultQueueService queue;
+    private final TriageService triageService;
 
-    public ConsultSessionService(ConsultSessionRepository repo, ConsultQueueService queue) {
+    public ConsultSessionService(ConsultSessionRepository repo, ConsultQueueService queue,
+            TriageService triageService) {
         this.repo = repo;
         this.queue = queue;
+        this.triageService = triageService;
     }
 
     /** 发起结果：新建会话 or 命中已有占用态会话（alreadyActive=true，前端跳「查看进行中 →」）。 */
@@ -44,6 +50,32 @@ public class ConsultSessionService {
             return new CreateResult(active.get(), true);
         }
         ConsultSession saved = repo.save(ConsultSession.startWaiting(userId, source));
+        queue.enqueue(saved.getId());
+        return new CreateResult(saved, false);
+    }
+
+    /**
+     * 从 AI 分诊升级发起（Story 5.4，source=AI_UPGRADE）。
+     *
+     * <p>经 {@link TriageService} 接口拉评级/症状/私密图 key（禁直读 triage repository），
+     * 定格为 consult 上下文快照。<b>红线兜底：RED 一律拒绝升级</b>（即便前端误放入口）。
+     * 复用「同时仅 1 个」约束（已有占用态 → 返回现有，不重复绑定）。
+     */
+    @Transactional
+    public CreateResult createWaitingFromUpgrade(long userId, long triageTaskId) {
+        Optional<ConsultSession> active = findActiveForUser(userId);
+        if (active.isPresent()) {
+            return new CreateResult(active.get(), true);
+        }
+        TriageUpgradeContext ctx = triageService.getResultForUpgrade(userId, triageTaskId);
+        if (ctx.dangerLevel() == DangerLevel.RED) {
+            // 架构不可协商：红色态零兽医引流。
+            throw AppException.forbidden("高危情况请立即就医，本通道不提供升级");
+        }
+        ConsultSession session = ConsultSession.startWaiting(userId, ConsultSource.AI_UPGRADE);
+        session.bindAiContext(ctx.triageTaskId(), ctx.dangerLevel().name(),
+                ctx.symptomText(), ctx.imageObjectKeys());
+        ConsultSession saved = repo.save(session);
         queue.enqueue(saved.getId());
         return new CreateResult(saved, false);
     }
