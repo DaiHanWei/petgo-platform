@@ -17,4 +17,10 @@ public interface HealthEventRepository extends JpaRepository<HealthEvent, Long> 
     /** 时间线读：某宠物已存档的健康事件，createdAt 倒序游标分页（Story 2.5 → 2.4 聚合）。 */
     List<HealthEvent> findByPetIdAndArchiveDecisionAndCreatedAtLessThanOrderByCreatedAtDesc(
             long petId, ArchiveDecision decision, Instant before, Pageable pageable);
+
+    /** Story 7.3：注销级联删除某宠物全部健康事件（先收集图片 key 再删表）。 */
+    List<HealthEvent> findByPetId(long petId);
+
+    @org.springframework.transaction.annotation.Transactional
+    void deleteByPetId(long petId);
 }

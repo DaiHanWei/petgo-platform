@@ -95,6 +95,26 @@ public class AliyunOssClient {
         }
     }
 
+    /** 删除私密桶②对象（Story 7.3 注销级联删除：分诊/健康/consult 存档图）。L2 真实网络。 */
+    public void deletePrivateObject(String objectKey) {
+        OSS client = buildClient();
+        try {
+            client.deleteObject(props.getOss().getPrivateBucket(), stripLeadingSlash(objectKey));
+        } finally {
+            client.shutdown();
+        }
+    }
+
+    /** 删除公开桶①对象（Story 7.3：纯个人图如头像）。L2 真实网络。 */
+    public void deletePublicObject(String objectKey) {
+        OSS client = buildClient();
+        try {
+            client.deleteObject(props.getOss().getPublicBucket(), stripLeadingSlash(objectKey));
+        } finally {
+            client.shutdown();
+        }
+    }
+
     private static String stripLeadingSlash(String key) {
         return key.startsWith("/") ? key.substring(1) : key;
     }

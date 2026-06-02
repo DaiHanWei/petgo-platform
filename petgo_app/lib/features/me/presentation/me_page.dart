@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/network/dio_client.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
@@ -70,9 +71,9 @@ class MePage extends ConsumerWidget {
               _entry(context, const ValueKey('meLanguage'), Icons.language, l10n.meLanguage,
                   () => context.push('/me/language')),
               _entry(context, const ValueKey('meLogout'), Icons.logout, l10n.meLogout,
-                  () => context.push('/me/logout')),
+                  () => _logout(context, ref)),
               _entry(context, const ValueKey('meDeleteAccount'), Icons.delete_outline,
-                  l10n.meDeleteAccount, () => context.push('/me/delete-account')),
+                  l10n.meDeleteAccount, () => _deleteAccount(context, ref)),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -80,8 +81,11 @@ class MePage extends ConsumerWidget {
           _SectionCard(
             title: l10n.meHelp,
             children: [
-              _entry(context, const ValueKey('meHelp'), Icons.help_outline, l10n.meHelp,
-                  () => context.push('/me/help')),
+              _entry(context, const ValueKey('meHelp'), Icons.help_outline, l10n.meHelp, () {
+                ScaffoldMessenger.of(context)
+                  ..clearSnackBars()
+                  ..showSnackBar(SnackBar(content: Text(l10n.helpComingSoon)));
+              }),
             ],
           ),
         ],
@@ -129,6 +133,99 @@ class MePage extends ConsumerWidget {
         ScaffoldMessenger.of(context)
           ..clearSnackBars()
           ..showSnackBar(SnackBar(content: Text(l10n.meNicknameSaveFailed)));
+      }
+    }
+  }
+
+  /// 退出登录（Story 7.3 AC1）：确认 → 清本地态回游客 → 留首页。<b>不删任何数据</b>。
+  Future<void> _logout(BuildContext context, WidgetRef ref) async {
+    final l10n = AppLocalizations.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.logoutConfirmTitle),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(l10n.consultCancel)),
+          FilledButton(
+            key: const ValueKey('logoutConfirmYes'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(l10n.logoutConfirmYes),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    await ref.read(authRepositoryProvider).logout();
+    ref.read(authControllerProvider.notifier).toGuest();
+    if (context.mounted) context.go('/home');
+  }
+
+  /// 账号注销（Story 7.3 AC2）：双重确认（① 不可恢复警示 → ② 输入「确认注销」短语）→ DELETE /me → 回游客。
+  Future<void> _deleteAccount(BuildContext context, WidgetRef ref) async {
+    final l10n = AppLocalizations.of(context);
+    // 第一步：庄重警示「删除后数据不可恢复」。
+    final cont = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.deleteAccountWarnTitle),
+        content: Text(l10n.deleteAccountWarnBody),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(l10n.consultCancel)),
+          FilledButton(
+            key: const ValueKey('deleteAccountContinue'),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(l10n.deleteAccountContinue),
+          ),
+        ],
+      ),
+    );
+    if (cont != true || !context.mounted) return;
+
+    // 第二步：要求输入确认短语（高危，防误触发不可逆删除）。
+    final phrase = l10n.deleteAccountConfirmPhrase;
+    final controller = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: Text(l10n.deleteAccountConfirmTitle),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(phrase),
+              TextField(
+                key: const ValueKey('deleteConfirmField'),
+                controller: controller,
+                decoration: InputDecoration(hintText: l10n.deleteAccountConfirmHint),
+                onChanged: (_) => setState(() {}),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(l10n.consultCancel)),
+            FilledButton(
+              key: const ValueKey('deleteAccountConfirmYes'),
+              style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+              // 仅当输入与确认短语完全一致才可点（防误删）。
+              onPressed: controller.text.trim() == phrase ? () => Navigator.of(ctx).pop(true) : null,
+              child: Text(l10n.deleteAccountConfirmYes),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      await ref.read(authRepositoryProvider).deleteAccount(phrase);
+      ref.read(authControllerProvider.notifier).toGuest();
+      if (context.mounted) context.go('/home');
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+          ..clearSnackBars()
+          ..showSnackBar(SnackBar(content: Text(l10n.deleteAccountFailed)));
       }
     }
   }

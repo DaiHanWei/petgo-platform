@@ -20,4 +20,10 @@ public interface TriageTaskRepository extends JpaRepository<TriageTask, Long> {
 
     /** 幂等去重：同 Idempotency-Key 命中既有任务。 */
     Optional<TriageTask> findByIdempotencyKey(String idempotencyKey);
+
+    /** Story 7.3：注销级联删除某用户全部分诊（先收集私密图 key 再删表；纯个人 AI 健康记录，物理删除）。 */
+    List<TriageTask> findByUserId(long userId);
+
+    @org.springframework.transaction.annotation.Transactional
+    void deleteByUserId(long userId);
 }

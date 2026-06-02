@@ -135,6 +135,16 @@ public class ConsultSession {
         return source == ConsultSource.AI_UPGRADE && aiDangerLevel != null;
     }
 
+    /**
+     * 注销匿名化（Story 7.3，决策 D1）：剥 user PII（解关联 {@code userId}）+ 清 AI 上下文 PII
+     * （症状文字/私密图引用，图片由级联删除处理），保留 {@code danger_level}/{@code vetId} 等运营/历史价值。
+     */
+    public void anonymize() {
+        this.userId = null;
+        this.aiSymptomText = null;
+        this.aiImageRefs = null;
+    }
+
     /** 继续等待：重置计时基准（请求保留队列，不改状态）。 */
     public void resetWaiting() {
         requireStatus(SessionStatus.WAITING, "仅等待中的咨询可继续等待");

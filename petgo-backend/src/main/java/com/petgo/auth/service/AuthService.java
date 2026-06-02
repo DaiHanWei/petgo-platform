@@ -75,6 +75,21 @@ public class AuthService {
         return new VetLoginResponse(access, refresh, vet.getDisplayName(), Role.VET.name());
     }
 
+    /**
+     * 退出登录（Story 7.3，AC1）：作废当前 refresh 句柄（access 短时自然过期）。<b>不触碰任何业务数据</b>。
+     * 未知/已失效句柄静默成功（幂等，退出不报错）。
+     */
+    @Transactional
+    public void logout(String rawRefresh) {
+        if (rawRefresh == null || rawRefresh.isBlank()) {
+            return;
+        }
+        refreshTokens.findByTokenHash(jwt.hashRefresh(rawRefresh)).ifPresent(token -> {
+            token.revoke();
+            refreshTokens.save(token);
+        });
+    }
+
     @Transactional
     public TokenResponse rotateRefresh(String rawRefresh) {
         String hash = jwt.hashRefresh(rawRefresh);

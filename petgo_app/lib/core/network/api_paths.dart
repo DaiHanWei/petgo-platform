@@ -7,6 +7,9 @@ class ApiPaths {
   static const String authGoogle = '$base/auth/google';
   static const String authRefresh = '$base/auth/refresh';
 
+  /// 退出登录（Story 7.3，作废 refresh，不删数据）。
+  static const String authLogout = '$base/auth/logout';
+
   /// 兽医账密登录（Story 5.1）。签发 role=VET JWT，与用户侧 Google 流程隔离。
   static const String authVetLogin = '$base/auth/vet/login';
 

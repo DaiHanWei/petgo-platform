@@ -29,4 +29,10 @@ public interface TencentImClient {
 
     /** 校验腾讯 IM 服务端回调签名/token（非法回调拒绝）。 */
     boolean verifyCallback(String token);
+
+    /**
+     * 注销时删除该用户 IM 会话的聊天媒体（Story 7.3，决策 D2）。
+     * 真实实现调 IM REST 删消息/会话媒体（L2）；stub 记非敏感日志。已存档到私密桶的副本另由级联删除处理。
+     */
+    void deleteUserConversationMedia(String imUserId);
 }

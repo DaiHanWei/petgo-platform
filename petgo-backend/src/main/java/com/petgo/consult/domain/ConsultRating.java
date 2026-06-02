@@ -54,6 +54,11 @@ public class ConsultRating {
         return r;
     }
 
+    /** 注销匿名化（Story 7.3，决策 D1）：剥 user PII（解关联 userId），保留 stars/comment/vetId 供运营 FR-33。 */
+    public void anonymize() {
+        this.userId = null;
+    }
+
     @PrePersist
     void onCreate() {
         this.createdAt = Instant.now();
