@@ -19,6 +19,15 @@ abstract class ProfileRepository {
 
   /// 当前用户档案；不存在返回 null（后端 404 归一）。
   Future<PetProfile?> getMyProfile();
+
+  /// 编辑档案（Story 2.8，部分更新 PATCH）。cardToken 不变。
+  Future<PetProfile> update({
+    String? name,
+    String? avatarUrl,
+    String? breed,
+    DateTime? birthday,
+    String? intro,
+  });
 }
 
 class DioProfileRepository implements ProfileRepository {
@@ -47,6 +56,24 @@ class DioProfileRepository implements ProfileRepository {
           ? null
           : Options(headers: <String, dynamic>{'Idempotency-Key': idempotencyKey}),
     );
+    return PetProfile.fromJson(resp.data!);
+  }
+
+  @override
+  Future<PetProfile> update({
+    String? name,
+    String? avatarUrl,
+    String? breed,
+    DateTime? birthday,
+    String? intro,
+  }) async {
+    final data = <String, dynamic>{};
+    if (name != null) data['name'] = name;
+    if (avatarUrl != null) data['avatarUrl'] = avatarUrl;
+    if (breed != null) data['breed'] = breed;
+    if (birthday != null) data['birthday'] = _isoDate(birthday);
+    if (intro != null) data['intro'] = intro;
+    final resp = await dio.patch<Map<String, dynamic>>(ApiPaths.petProfileMe, data: data);
     return PetProfile.fromJson(resp.data!);
   }
 

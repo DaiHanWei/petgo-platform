@@ -69,6 +69,39 @@ class ProfileServiceTest {
     }
 
     @Test
+    void updatePartialKeepsCardTokenAndChangesFields() {
+        PetProfile existing = PetProfile.create(1L, "Old", "u", "Breed",
+                java.time.LocalDate.of(2020, 1, 1), "old intro", "TOK_KEEP");
+        when(profiles.findByOwnerId(1L)).thenReturn(java.util.Optional.of(existing));
+        when(profiles.save(any(PetProfile.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        PetProfileResponse resp = service.update(1L,
+                new com.petgo.profile.dto.PetProfileUpdateRequest(null, "New", null, null, "new intro"));
+
+        assertThat(resp.name()).isEqualTo("New");
+        assertThat(resp.intro()).isEqualTo("new intro");
+        assertThat(resp.cardToken()).isEqualTo("TOK_KEEP"); // token 不变
+        assertThat(existing.getBreed()).isEqualTo("Breed"); // 未传字段不变
+    }
+
+    @Test
+    void updateWithoutProfileThrows404() {
+        when(profiles.findByOwnerId(9L)).thenReturn(java.util.Optional.empty());
+        assertThatThrownBy(() -> service.update(9L,
+                new com.petgo.profile.dto.PetProfileUpdateRequest(null, "X", null, null, null)))
+                .isInstanceOf(AppException.class);
+    }
+
+    @Test
+    void updateBlankNameRejected() {
+        PetProfile existing = PetProfile.create(1L, "Old", null, null, null, null, "TOK");
+        when(profiles.findByOwnerId(1L)).thenReturn(java.util.Optional.of(existing));
+        assertThatThrownBy(() -> service.update(1L,
+                new com.petgo.profile.dto.PetProfileUpdateRequest(null, "   ", null, null, null)))
+                .isInstanceOf(AppException.class);
+    }
+
+    @Test
     void blankOptionalFieldsNormalizedToNull() {
         when(profiles.existsByOwnerId(1L)).thenReturn(false);
         when(profiles.save(any(PetProfile.class))).thenAnswer(inv -> inv.getArgument(0));

@@ -25,6 +25,16 @@ class _FakeRepo implements ProfileRepository {
 
   @override
   Future<PetProfile?> getMyProfile() async => existing;
+
+  @override
+  Future<PetProfile> update({
+    String? name,
+    String? avatarUrl,
+    String? breed,
+    DateTime? birthday,
+    String? intro,
+  }) async =>
+      PetProfile(id: 1, name: name ?? 'x', cardToken: 'T');
 }
 
 Widget _wrap(ProfileRepository repo) {

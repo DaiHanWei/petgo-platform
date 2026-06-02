@@ -10,7 +10,9 @@ import static org.mockito.Mockito.when;
 
 import com.petgo.profile.dto.PetProfileCreateRequest;
 import com.petgo.profile.dto.PetProfileResponse;
+import com.petgo.profile.dto.PetProfileUpdateRequest;
 import com.petgo.profile.dto.TimelinePageResponse;
+import com.petgo.profile.service.CardRerenderService;
 import com.petgo.profile.service.ProfileService;
 import com.petgo.profile.service.TimelineService;
 import com.petgo.shared.error.AppException;
@@ -18,16 +20,18 @@ import com.petgo.shared.ratelimit.RedisRateLimiter;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.springframework.security.oauth2.jwt.Jwt;
 
-/** L0：控制器 owner 取自 JWT（不信任客户端）+ 限流（AC1）+ 时间线委派（2.4）。 */
+/** L0：控制器 owner 取自 JWT（不信任客户端）+ 限流（AC1）+ 时间线委派（2.4）+ 编辑联动重渲染（2.8）。 */
 class ProfileApiControllerTest {
 
     private final ProfileService service = mock(ProfileService.class);
     private final TimelineService timelineService = mock(TimelineService.class);
+    private final CardRerenderService cardRerenderService = mock(CardRerenderService.class);
     private final RedisRateLimiter rateLimiter = mock(RedisRateLimiter.class);
     private final ProfileApiController controller =
-            new ProfileApiController(service, timelineService, rateLimiter);
+            new ProfileApiController(service, timelineService, cardRerenderService, rateLimiter);
 
     private static Jwt jwt(String sub) {
         return Jwt.withTokenValue("t").header("alg", "HS256").subject(sub).claim("x", "y").build();
@@ -68,5 +72,20 @@ class ProfileApiControllerTest {
         when(timelineService.getTimeline(77L, "CUR", 20)).thenReturn(stub);
         TimelinePageResponse resp = controller.timeline(jwt("77"), "CUR", 20);
         assertThat(resp.hasMore()).isFalse();
+    }
+
+    @Test
+    void updateUsesJwtOwnerAndTriggersRerender() {
+        PetProfileResponse updated = new PetProfileResponse(
+                5L, null, "Momo2", null, null, null, "TOK", Instant.now());
+        when(service.update(eq(77L), ArgumentMatchers.any())).thenReturn(updated);
+
+        PetProfileResponse resp = controller.update(
+                jwt("77"), new PetProfileUpdateRequest(null, "Momo2", null, null, null));
+
+        assertThat(resp.name()).isEqualTo("Momo2");
+        verify(service).update(eq(77L), ArgumentMatchers.any());
+        // 编辑联动：异步触发 OG 重渲染
+        verify(cardRerenderService).scheduleRerender(5L);
     }
 }

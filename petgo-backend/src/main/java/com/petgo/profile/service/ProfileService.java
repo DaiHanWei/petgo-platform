@@ -3,6 +3,7 @@ package com.petgo.profile.service;
 import com.petgo.profile.domain.PetProfile;
 import com.petgo.profile.dto.PetProfileCreateRequest;
 import com.petgo.profile.dto.PetProfileResponse;
+import com.petgo.profile.dto.PetProfileUpdateRequest;
 import com.petgo.profile.repository.PetProfileRepository;
 import com.petgo.shared.error.AppException;
 import java.util.Optional;
@@ -53,6 +54,37 @@ public class ProfileService {
             // 并发双开窗：唯一约束兜底（owner_id / card_token），归一为 409。
             throw AppException.profileExists("已有宠物档案，V1 暂仅支持单只宠物");
         }
+    }
+
+    /**
+     * 编辑当前用户档案（Story 2.8，部分更新）。无档案 → 404；cardToken 不变；不限次数。
+     */
+    @Transactional
+    public PetProfileResponse update(long ownerId, PetProfileUpdateRequest req) {
+        PetProfile profile = profiles.findByOwnerId(ownerId)
+                .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
+
+        if (req.name() != null) {
+            String n = req.name().trim();
+            if (n.isEmpty()) {
+                throw AppException.validation("宠物名不能为空");
+            }
+            profile.setName(n);
+        }
+        if (req.avatarUrl() != null) {
+            profile.setAvatarUrl(blankToNull(req.avatarUrl()));
+        }
+        if (req.breed() != null) {
+            profile.setBreed(blankToNull(req.breed()));
+        }
+        if (req.birthday() != null) {
+            profile.setBirthday(req.birthday());
+        }
+        if (req.intro() != null) {
+            profile.setIntro(blankToNull(req.intro()));
+        }
+        profiles.save(profile);
+        return PetProfileResponse.from(profile);
     }
 
     /** 当前用户档案（无则 404）。供「已有档案直达」与后续 Story 复用。 */

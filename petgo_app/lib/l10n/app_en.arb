@@ -126,5 +126,8 @@
   },
   "archivePromptSave": "Save",
   "archivePromptSkip": "Skip",
-  "shareFabLabel": "Share pet card"
+  "shareFabLabel": "Share pet card",
+  "petProfileEditTitle": "Edit pet profile",
+  "petProfileEditEntry": "Edit",
+  "petProfileSaveFailed": "Could not save, please try again"
 }

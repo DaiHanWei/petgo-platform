@@ -83,5 +83,8 @@
   "archivePromptTitle": "Simpan konsultasi ini ke arsip {petName}?",
   "archivePromptSave": "Simpan",
   "archivePromptSkip": "Lewati",
-  "shareFabLabel": "Bagikan kartu hewan"
+  "shareFabLabel": "Bagikan kartu hewan",
+  "petProfileEditTitle": "Ubah profil hewan",
+  "petProfileEditEntry": "Ubah",
+  "petProfileSaveFailed": "Gagal menyimpan, silakan coba lagi"
 }

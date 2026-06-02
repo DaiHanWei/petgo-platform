@@ -56,6 +56,7 @@ class GrowthArchivePage extends ConsumerWidget {
             child: PetInfoCard(
               profile: profile,
               onEditStatus: () => _openStatusEditor(context, ref),
+              onEditProfile: () => context.go('/profile/edit'),
             ),
           );
         },
