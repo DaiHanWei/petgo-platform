@@ -15,6 +15,9 @@ public interface TriageTaskRepository extends JpaRepository<TriageTask, Long> {
     /** 启动重扫：取未完成（PENDING/PROCESSING）残留任务续跑。 */
     List<TriageTask> findByStatusIn(List<TriageStatus> statuses);
 
+    /** 用户 AI 问诊历史（Story 5.8）：本人已完成（DONE）任务，按时间倒序。 */
+    List<TriageTask> findByUserIdAndStatusOrderByCreatedAtDesc(long userId, TriageStatus status);
+
     /** 幂等去重：同 Idempotency-Key 命中既有任务。 */
     Optional<TriageTask> findByIdempotencyKey(String idempotencyKey);
 }

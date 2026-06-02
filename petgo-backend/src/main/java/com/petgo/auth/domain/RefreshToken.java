@@ -2,6 +2,8 @@ package com.petgo.auth.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -24,6 +26,11 @@ public class RefreshToken {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
+    /** 主体类型（Story 5.1）：USER → users 表 / VET → vet_accounts 表。默认 USER（Epic 1 历史句柄兼容）。 */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "subject_type", nullable = false, length = 16)
+    private SubjectType subjectType = SubjectType.USER;
+
     @Column(name = "token_hash", nullable = false, length = 255)
     private String tokenHash;
 
@@ -40,7 +47,12 @@ public class RefreshToken {
     }
 
     public RefreshToken(Long userId, String tokenHash, Instant expiresAt) {
+        this(userId, SubjectType.USER, tokenHash, expiresAt);
+    }
+
+    public RefreshToken(Long userId, SubjectType subjectType, String tokenHash, Instant expiresAt) {
         this.userId = userId;
+        this.subjectType = subjectType;
         this.tokenHash = tokenHash;
         this.expiresAt = expiresAt;
     }
@@ -56,6 +68,10 @@ public class RefreshToken {
 
     public Long getUserId() {
         return userId;
+    }
+
+    public SubjectType getSubjectType() {
+        return subjectType;
     }
 
     public String getTokenHash() {

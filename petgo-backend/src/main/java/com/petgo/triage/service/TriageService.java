@@ -1,13 +1,17 @@
 package com.petgo.triage.service;
 
 import com.petgo.shared.error.AppException;
+import com.petgo.triage.domain.TriageStatus;
 import com.petgo.triage.domain.TriageTask;
 import com.petgo.triage.dto.TriageAcceptedResponse;
 import com.petgo.triage.dto.TriageResultResponse;
+import com.petgo.triage.dto.TriageHistoryItem;
 import com.petgo.triage.dto.TriageSubmitRequest;
+import com.petgo.triage.dto.TriageUpgradeContext;
 import com.petgo.triage.event.TriageSubmittedEvent;
 import com.petgo.triage.repository.TriageTaskRepository;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -62,6 +66,33 @@ public class TriageService {
             throw AppException.forbidden("无权访问该分诊任务");
         }
         return TriageResultResponse.from(task);
+    }
+
+    /**
+     * 升级兽医的上下文（Story 5.4）。供 consult 模块经 service 接口拉取（禁直读 triage repository）。
+     *
+     * <p>仅本人、且任务已 DONE 可升级；越权/不存在统一 403 防枚举。返回评级/症状/私密图 key 快照。
+     * <b>RED 红线由 consult 侧兜底拒绝</b>，本方法仍如实返回级别（不在 triage 侧判，职责单一）。
+     */
+    @Transactional(readOnly = true)
+    public TriageUpgradeContext getResultForUpgrade(long userId, long triageTaskId) {
+        TriageTask task = tasks.findById(triageTaskId).orElse(null);
+        if (task == null || task.getUserId() != userId) {
+            throw AppException.forbidden("无权访问该分诊任务");
+        }
+        if (task.getStatus() != TriageStatus.DONE || task.getDangerLevel() == null) {
+            throw AppException.conflict("分诊尚未完成，暂不能升级兽医");
+        }
+        return new TriageUpgradeContext(
+                task.getId(), task.getDangerLevel(), task.getSymptomText(), task.getImageObjectKeys());
+    }
+
+    /** 用户 AI 问诊历史（Story 5.8）。供 consult 历史聚合经本接口拉取（禁直读 triage repository）。 */
+    @Transactional(readOnly = true)
+    public List<TriageHistoryItem> historyForUser(long userId) {
+        return tasks.findByUserIdAndStatusOrderByCreatedAtDesc(userId, TriageStatus.DONE).stream()
+                .map(TriageHistoryItem::of)
+                .toList();
     }
 
     private static String emptyToNull(String s) {

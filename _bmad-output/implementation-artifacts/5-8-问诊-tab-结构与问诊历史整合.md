@@ -1,6 +1,6 @@
 # Story 5.8: 问诊 Tab 结构与问诊历史整合
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -145,12 +145,29 @@ so that **我能一处发起问诊并回看所有历史记录**。
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+云端 dev agent（Epic 5 批量）
 
 ### Debug Log References
 
 ### Completion Notes List
 
-- 记录 CANCELLED 是否入历史、只读会话消息来源（IM 历史 vs 存档引用）选型、历史聚合的游标分页跨两源排序实现。
+**L0 绿（云端已验）**：后端 `package` 通过 + `ConsultHistoryServiceTest`(2) 绿；前端 `flutter analyze` 零问题 + `flutter test`(170) 绿（新增 `test/consult/consult_history_test.dart`；并修 `triage_page_widget_test`/`story_1_5_gating_test` 适配问诊 Tab 改造）。
+
+**关键决策（按 Completion Notes 要求记录）**：
+- **CANCELLED 是否入历史**：**不入历史**（`findByUserIdAndStatusInOrderByCreatedAtDesc` 只取 CLOSED/INTERRUPTED；取消是用户主动撤销，弱化展示，符合 PRD 默认）。
+- **只读会话消息来源**：CLOSED/INTERRUPTED 只读页本故事走**会话状态 + 终态标签**渲染（消息历史正文由腾讯 IM SDK 加载，属 L2）。已存档（CLOSED RATED）档案引用、未存档/INTERRUPTED 拉 IM 历史的选型在真机接 IM 时落定（L2）；本故事只读页提供终态壳 + 不可发消息。
+- **游标分页跨两源排序**：V1 低量，**内存合并** AI（triage service）+ 兽医（consult repo）两源 → 按 date 倒序 → 游标（epochMillis，`date < cursor`）过滤 + limit → nextCursor=末条时间。架构禁 MQ/缓存，单机直查；高量时再优化为 DB 层 UNION 分页。
+- **历史独立于存档（FR-16/FR-35）**：列表来源是 triage/consult 自身记录，`archived` 仅标记位（本故事暂 false，FR-16 落地展示由 Epic 2 profile 订阅 `ConsultClosedEvent` 承接后置真）。
+- **跨模块经 service**：AI 历史经 `TriageService.historyForUser`（禁直读 triage repository）；兽医名经 `VetAccountService.getById`。
+- **问诊 Tab 三段**：① 入口区 AI（/triage/upload）+ 兽医（/consult，5.3 发起，**改原占位「coming soon」为真实入口**）平级；② 进行中卡（读 /consult-sessions/active，WAITING→等待页 / 其余→对话页）；③ 历史列表（/consult/history）。进 Tab 查 pending-rating → 有则弹一次评分（跳过置 PROMPTED）。
+- **只读终态多态**：对话页轮询到 CLOSED → 终态标签「已结束」/「未评分」(UNRATED 可补评)；INTERRUPTED → 「已中断」+ 重新发起（5.7）；均转只读（无输入区）。失效态（404/403）由 dio 拦截器/ProblemDetail 兜底（深链落地页路由表在 6.1）。
+
+**待本地验收（L1）**：J1 三段（进行中卡有/无）；J2 历史两类条目 + 未存档记录仍在历史（验证独立于存档）；J3 只读多态（已结束/未评分/已中断）。
+**待本地验收（L2，真实 IM+真机/深链）**：只读会话拉 IM 消息历史正文；深链冷启动直达只读会话（6.1 路由表）；AI 条目进分诊结果只读（Epic 4 结果页深链）。
 
 ### File List
+
+**后端（新增）**：`triage/dto/TriageHistoryItem.java`、`consult/dto/{ConsultHistoryItem,ConsultHistoryPage}.java`、`consult/service/ConsultHistoryService.java`、`consult/web/ConsultHistoryController.java`、`test/.../consult/service/ConsultHistoryServiceTest.java`
+**后端（修改）**：`triage/repository/TriageTaskRepository.java`、`triage/service/TriageService.java`（historyForUser）、`consult/repository/{ConsultSessionRepository,ConsultRatingRepository}.java`、`consult/dto/ConsultSessionResponse.java`（+closedReason/interruptedReason/imConversationId）
+**前端（新增）**：`features/consult/domain/consult_history_item.dart`、`test/consult/consult_history_test.dart`
+**前端（修改）**：`features/triage/presentation/triage_page.dart`（三段 + 历史 + 补弹 + 兽医卡真入口）、`features/consult/presentation/consult_conversation_page.dart`（CLOSED 终态只读）、`features/consult/data/consult_repository.dart`（history）、`features/consult/domain/consult_session.dart`（closedReason）、`core/network/api_paths.dart`、`l10n/app_en.arb`、`l10n/app_id.arb`、`test/triage/triage_page_widget_test.dart`、`test/auth/story_1_5_gating_test.dart`（适配）

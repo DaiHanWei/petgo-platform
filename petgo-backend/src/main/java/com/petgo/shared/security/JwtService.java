@@ -1,5 +1,6 @@
 package com.petgo.shared.security;
 
+import com.petgo.auth.domain.Role;
 import com.petgo.auth.domain.User;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -34,15 +35,25 @@ public class JwtService {
         this.props = props;
     }
 
-    /** 签发 access token，返回紧凑串。 */
+    /** 签发用户 access token（{@code sub=userId}、{@code role}）。 */
     public String issueAccessToken(User user) {
+        return issueAccessToken(user.getId(), user.getRole());
+    }
+
+    /**
+     * 签发 access token，返回紧凑串。{@code sub=subjectId}、{@code role}。
+     *
+     * <p>Story 5.1：兽医登录复用同一签发体系（{@code role=VET}，{@code sub=vetId}），
+     * 靠 {@code role} claim 与用户/运营严格区分——严禁为兽医另起一套 token 体系。
+     */
+    public String issueAccessToken(long subjectId, Role role) {
         Instant now = Instant.now();
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .issuer(props.getJwt().getIssuer())
                 .issuedAt(now)
                 .expiresAt(now.plusSeconds(props.getJwt().getAccessTtlSeconds()))
-                .subject(String.valueOf(user.getId()))
-                .claim("role", user.getRole().name())
+                .subject(String.valueOf(subjectId))
+                .claim("role", role.name())
                 .build();
         return encoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
     }

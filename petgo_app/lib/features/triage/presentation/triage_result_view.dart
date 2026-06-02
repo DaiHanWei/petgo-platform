@@ -5,8 +5,11 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/rounded.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
+import 'package:go_router/go_router.dart';
+
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/triage_result_card.dart';
+import '../../consult/data/consult_repository.dart';
 import '../data/triage_repository.dart';
 import '../domain/triage_archive.dart';
 import '../domain/triage_upload_controller.dart';
@@ -75,11 +78,35 @@ class TriageResultView extends ConsumerWidget {
           ),
           child: Text(l10n.triageSaveToArchive),
         ),
+        // 「咨询兽医」升级入口（Story 5.4 F1）：仅绿/黄态出现（红色走 TriageRedResult 早返回，此处永不可达）。
+        // 只传 triageId 升级，评级/描述/图片由后端从 triage 拉取（前端不重传，FR-4B）。
+        if (triageId != null) ...<Widget>[
+          const SizedBox(height: AppSpacing.md),
+          FilledButton(
+            key: const ValueKey('triageConsultVet'),
+            onPressed: () => _upgradeToVet(context, ref, triageId!),
+            child: Text(l10n.triageConsultVet),
+          ),
+        ],
         const SizedBox(height: AppSpacing.lg),
         // 前置免责声明（NFR-9）：小号次要色，不干扰主内容。
         Text(result.disclaimer ?? l10n.triageDisclaimer, style: AppTypography.disclaimer),
       ],
     );
+  }
+}
+
+Future<void> _upgradeToVet(BuildContext context, WidgetRef ref, int triageId) async {
+  final l10n = AppLocalizations.of(context);
+  try {
+    final session = await ref.read(consultRepositoryProvider).createFromUpgrade(triageId);
+    if (!context.mounted) return;
+    context.go('/consult/waiting/${session.id}');
+  } catch (_) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(l10n.consultStartFailed)));
   }
 }
 

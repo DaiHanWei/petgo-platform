@@ -28,13 +28,15 @@ class AdminWebControllerTest {
 
     private AdminContentService adminContentService;
     private com.petgo.admin.service.AdminModerationService adminModerationService;
+    private com.petgo.admin.service.AdminVetService adminVetService;
     private AdminWebController controller;
 
     @BeforeEach
     void setUp() {
         adminContentService = mock(AdminContentService.class);
         adminModerationService = mock(com.petgo.admin.service.AdminModerationService.class);
-        controller = new AdminWebController(adminContentService, adminModerationService);
+        adminVetService = mock(com.petgo.admin.service.AdminVetService.class);
+        controller = new AdminWebController(adminContentService, adminModerationService, adminVetService);
     }
 
     private AdminUserDetails admin() {

@@ -14,16 +14,22 @@ import '../../features/profile/presentation/growth_archive_page.dart';
 import '../../features/profile/presentation/pet_profile_create_page.dart';
 import '../../features/profile/presentation/pet_profile_edit_page.dart';
 import '../../features/profile/presentation/profile_onboarding_page.dart';
+import '../../features/consult/presentation/consult_conversation_page.dart';
+import '../../features/consult/presentation/consult_entry_page.dart';
+import '../../features/consult/presentation/consult_waiting_page.dart';
+import '../../features/vet/presentation/vet_conversation_page.dart';
 import '../../features/triage/presentation/dev_triage_page.dart';
 import '../../features/triage/presentation/triage_page.dart';
 import '../../features/triage/presentation/triage_upload_page.dart';
+import '../../features/vet/presentation/vet_login_page.dart';
+import '../../features/vet/presentation/vet_workbench_shell.dart';
 import '../../shared/widgets/app_shell.dart';
 
 /// 根 Navigator key（供拦截器在 401 续期失败后于全局弹登录引导，Story 1.5 F3）。
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
 /// 未登录游客**不可**直接进入的受控路由前缀（FR-19 门控）。
-const Set<String> _controlledLocations = {'/profile', '/triage', '/me'};
+const Set<String> _controlledLocations = {'/profile', '/triage', '/me', '/consult'};
 
 /// 应用路由（provider 化：redirect 可读登录态做受控路由门控）。
 ///
@@ -34,14 +40,26 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
     navigatorKey: rootNavigatorKey,
     initialLocation: '/home',
     redirect: (context, state) {
-      final loggedIn = ref.read(authControllerProvider).isLoggedIn;
+      final auth = ref.read(authControllerProvider);
       final loc = state.matchedLocation;
+      final isVetRoute = loc == '/vet' || loc.startsWith('/vet/');
+      // 兽医登录态：禁止进入用户侧任何路由（反之亦然），命中越权重定向回各自首页（Story 5.1 F2 守卫）。
+      if (auth.isVet) {
+        // /vet/login 是登录入口，登录后不应停留 → 一律收口到工作台。
+        if (!isVetRoute || loc == '/vet/login') return '/vet/workbench';
+        return null;
+      }
+      // 非兽医（用户/游客）不可进兽医工作台等 vet 专属路由（/vet/login 允许，供登录）。
+      if (isVetRoute && loc != '/vet/login') return '/home';
       final controlled = _controlledLocations.any((p) => loc == p || loc.startsWith('$p/'));
-      if (!loggedIn && controlled) return '/home'; // 安全规则只升不降：游客不进受控路由
+      if (!auth.isLoggedIn && controlled) return '/home'; // 安全规则只升不降：游客不进受控路由
       return null;
     },
     routes: <RouteBase>[
       GoRoute(path: '/login', builder: (c, s) => const LoginPage()),
+      // 兽医账密登录 + 工作台壳（Story 5.1）。与用户侧 5-Tab 隔离：shell 外顶层路由。
+      GoRoute(path: '/vet/login', builder: (c, s) => const VetLoginPage()),
+      GoRoute(path: '/vet/workbench', builder: (c, s) => const VetWorkbenchShell()),
       // 新用户引导流（Story 1.6）：昵称 → 宠物状态 → (A) 档案创建引导 / (B,C) 首页。
       GoRoute(path: '/onboarding', builder: (c, s) => const NicknamePage()),
       GoRoute(path: '/onboarding/pet-status', builder: (c, s) => const PetStatusPage()),
@@ -56,6 +74,21 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/dev/triage', builder: (c, s) => const DevTriagePage()),
       // AI 分诊上传页（Story 4.3）。受控路由（/triage/ 前缀，游客被门控）；shell 外 push 隐藏 Tab Bar。
       GoRoute(path: '/triage/upload', builder: (c, s) => const TriageUploadPage()),
+      // 兽医咨询入口 + 等待界面（Story 5.3）。受控路由（/consult 前缀，游客被门控）。
+      GoRoute(path: '/consult', builder: (c, s) => const ConsultEntryPage()),
+      GoRoute(
+        path: '/consult/waiting/:id',
+        builder: (c, s) => ConsultWaitingPage(sessionId: int.parse(s.pathParameters['id']!)),
+      ),
+      // 进行中会话界面（Story 5.5）。用户侧 /consult/conversation、兽医侧 /vet/conversation（各自 role 守卫）。
+      GoRoute(
+        path: '/consult/conversation/:id',
+        builder: (c, s) => ConsultConversationPage(sessionId: int.parse(s.pathParameters['id']!)),
+      ),
+      GoRoute(
+        path: '/vet/conversation/:id',
+        builder: (c, s) => VetConversationPage(sessionId: int.parse(s.pathParameters['id']!)),
+      ),
       // 内容详情（Story 3.3）。shell 外顶层 push（隐藏 Tab Bar）；返回保持 Feed 滚动位置。游客只读可进。
       GoRoute(
         path: '/content/:id',
