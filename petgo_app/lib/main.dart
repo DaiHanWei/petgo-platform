@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:petgo/app.dart';
+import 'package:petgo/core/l10n/locale_controller.dart';
 import 'package:petgo/core/storage/prefs.dart';
 import 'package:petgo/features/profile/domain/profile_prompt_controller.dart';
 import 'package:petgo/features/profile/domain/profile_prompt_state.dart';
@@ -16,11 +17,26 @@ Future<void> main() async {
 
   // Story 1.7：加载档案提示条持久态 + 本次冷启动计数 +1（FR-0H）。
   final promptBootstrap = await _loadProfilePromptBootstrap();
+  // Story 7.2：读持久化语言选择（空/缺失 = 跟随设备）。
+  final savedLocale = await _loadSavedLocale();
 
   runApp(ProviderScope(
-    overrides: [profilePromptBootstrapProvider.overrideWithValue(promptBootstrap)],
+    overrides: [
+      profilePromptBootstrapProvider.overrideWithValue(promptBootstrap),
+      localeOverrideProvider.overrideWithValue(savedLocale),
+    ],
     child: const PetGoApp(),
   ));
+}
+
+/// Story 7.2：读持久化语言码（'id'/'en'）；空串/缺失/损坏 → null（跟随设备）。
+Future<String?> _loadSavedLocale() async {
+  try {
+    final code = (await AppPrefs.create()).localeCode;
+    return (code == 'id' || code == 'en') ? code : null;
+  } catch (_) {
+    return null;
+  }
 }
 
 Future<ProfilePromptState> _loadProfilePromptBootstrap() async {

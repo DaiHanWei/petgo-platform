@@ -9,6 +9,7 @@ import '../../features/auth/presentation/nickname_page.dart';
 import '../../features/auth/presentation/pet_status_page.dart';
 import '../../features/content/presentation/content_detail_page.dart';
 import '../../features/content/presentation/home_page.dart';
+import '../../features/me/presentation/language_settings_page.dart';
 import '../../features/me/presentation/me_page.dart';
 import '../../features/profile/presentation/growth_archive_page.dart';
 import '../../features/profile/presentation/pet_profile_create_page.dart';
@@ -92,6 +93,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       ),
       // 通知中心（Story 6.6）+ 6.1 深链兜底落点。受控路由（需登录）。
       GoRoute(path: '/notifications', builder: (c, s) => const NotificationCenterPage()),
+      // 语言设置（Story 7.2）。
+      GoRoute(path: '/me/language', builder: (c, s) => const LanguageSettingsPage()),
       // 内容详情（Story 3.3）。shell 外顶层 push（隐藏 Tab Bar）；返回保持 Feed 滚动位置。游客只读可进。
       GoRoute(
         path: '/content/:id',

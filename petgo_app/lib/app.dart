@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:petgo/core/l10n/locale_controller.dart';
 import 'package:petgo/core/router/app_router.dart';
 import 'package:petgo/core/theme/app_theme.dart';
 import 'package:petgo/l10n/app_localizations.dart';
@@ -13,12 +14,15 @@ class PetGoApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Story 7.2：用户手动选择优先（localeController）；null → 跟随设备（resolutionCallback 回退英语）。
+    final manualLocale = ref.watch(localeControllerProvider);
     return MaterialApp.router(
       onGenerateTitle: (ctx) => AppLocalizations.of(ctx).appTitle,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       themeMode: ThemeMode.light,
       routerConfig: ref.watch(routerProvider),
+      locale: manualLocale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       // 设备语言 id → 印尼语；其余（含 en 及未支持语言）回退英语。
