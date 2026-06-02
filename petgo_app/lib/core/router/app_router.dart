@@ -16,6 +16,7 @@ import '../../features/profile/presentation/pet_profile_edit_page.dart';
 import '../../features/profile/presentation/profile_onboarding_page.dart';
 import '../../features/triage/presentation/dev_triage_page.dart';
 import '../../features/triage/presentation/triage_page.dart';
+import '../../features/triage/presentation/triage_upload_page.dart';
 import '../../shared/widgets/app_shell.dart';
 
 /// 根 Navigator key（供拦截器在 401 续期失败后于全局弹登录引导，Story 1.5 F3）。
@@ -53,6 +54,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/dev/login-guide', builder: (c, s) => const DevLoginGuidePage()),
       // @dev 自测入口（Story 4.1 F2）：仅供手动深链驱动分诊「提交 → 短轮询」契约（联调）。
       GoRoute(path: '/dev/triage', builder: (c, s) => const DevTriagePage()),
+      // AI 分诊上传页（Story 4.3）。受控路由（/triage/ 前缀，游客被门控）；shell 外 push 隐藏 Tab Bar。
+      GoRoute(path: '/triage/upload', builder: (c, s) => const TriageUploadPage()),
       // 内容详情（Story 3.3）。shell 外顶层 push（隐藏 Tab Bar）；返回保持 Feed 滚动位置。游客只读可进。
       GoRoute(
         path: '/content/:id',
