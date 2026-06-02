@@ -56,5 +56,18 @@
   "petProfileSubmit": "Buat",
   "petProfileNameRequired": "Silakan masukkan nama",
   "petProfileExists": "Anda sudah punya profil hewan",
-  "petProfileCreateFailed": "Gagal membuat profil, silakan coba lagi"
+  "petProfileCreateFailed": "Gagal membuat profil, silakan coba lagi",
+  "publishComposeTitle": "Posting baru",
+  "publishSegmentDaily": "Harian",
+  "publishSegmentGrowth": "Tumbuh",
+  "publishSegmentKnowledge": "Edukasi",
+  "publishTextHint": "Bagikan sesuatu...",
+  "publishRemainingChars": "Sisa {count} karakter",
+  "publishButton": "Posting",
+  "publishPublicNotice": "Postingan Anda akan terlihat oleh semua pengguna.",
+  "publishGrowthNeedsProfile": "Buat profil hewan dulu",
+  "publishCreateProfile": "Buat",
+  "publishRetry": "Coba lagi",
+  "publishAddImage": "Tambah foto",
+  "publishFailed": "Gagal memposting, silakan coba lagi"
 }

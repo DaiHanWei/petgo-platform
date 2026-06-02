@@ -16,4 +16,7 @@ class ApiPaths {
   /// 宠物档案（Story 2.2）。
   static const String petProfiles = '$base/pet-profiles';
   static const String petProfileMe = '$base/pet-profiles/me';
+
+  /// 内容发布（Story 2.3）。
+  static const String contentPosts = '$base/content-posts';
 }

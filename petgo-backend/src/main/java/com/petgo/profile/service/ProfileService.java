@@ -72,6 +72,17 @@ public class ProfileService {
         return profiles.existsByOwnerId(ownerId);
     }
 
+    /**
+     * 校验 {@code petId} 是否属于 {@code ownerId} 的档案（成长日历绑定用）。
+     * 供 content 模块经 service 接口调用，**避免 content 直接读 pet_profiles 表**（架构边界）。
+     */
+    @Transactional(readOnly = true)
+    public boolean ownsPet(long ownerId, long petId) {
+        return profiles.findByOwnerId(ownerId)
+                .map(p -> p.getId().equals(petId))
+                .orElse(false);
+    }
+
     private static String blankToNull(String s) {
         return (s == null || s.isBlank()) ? null : s.trim();
     }

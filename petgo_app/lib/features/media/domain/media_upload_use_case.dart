@@ -52,6 +52,26 @@ class MediaUploadUseCase {
     return uploadBytes(scope: scope, bytes: processed);
   }
 
+  /// 仅选图 + 权限 + 压缩剥 EXIF，返回处理后的字节（**不上传**）。
+  /// 供 2.3 发布的「先选图入草稿、后由上传状态机重传失败件」分步流程使用。
+  /// 权限被拒时弹引导并返回 null。
+  Future<Uint8List?> pickAndProcess({
+    required MediaSource source,
+    BuildContext? context,
+  }) async {
+    final outcome = await permissionGateway.request(source);
+    if (outcome != MediaPermissionOutcome.granted) {
+      if (context != null && context.mounted) {
+        await showMediaPermissionDeniedDialog(context, permissionGateway);
+      }
+      return null;
+    }
+    final picked = await _pick(source);
+    if (picked == null) return null;
+    final raw = await picked.readAsBytes();
+    return processor.process(raw);
+  }
+
   /// 上传已处理好的字节（请求 STS → 直传）。抽出便于单测后半段与复用。
   Future<OssUploadResult> uploadBytes({
     required MediaScope scope,
