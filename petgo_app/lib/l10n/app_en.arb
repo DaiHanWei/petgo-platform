@@ -129,5 +129,48 @@
   "shareFabLabel": "Share pet card",
   "petProfileEditTitle": "Edit pet profile",
   "petProfileEditEntry": "Edit",
-  "petProfileSaveFailed": "Could not save, please try again"
+  "petProfileSaveFailed": "Could not save, please try again",
+  "feedTabAll": "All",
+  "feedTabDaily": "Daily",
+  "feedTabGrowth": "Moments",
+  "feedTabKnowledge": "Tips",
+  "feedEmptyTitle": "Show off your furry friend! 🐾",
+  "feedEmptyBody": "Be the first to share a pet moment",
+  "feedEmptyCta": "Post your first story",
+  "feedGrowthEmptyTitle": "No growth moments yet 🐾",
+  "feedLoadError": "Could not load the feed, pull to retry",
+  "feedDeletedUser": "Deleted user",
+  "detailGoneTitle": "This content no longer exists",
+  "detailForbiddenTitle": "You don't have access to this content",
+  "detailBackToFeed": "Back to feed",
+  "detailNetworkError": "Could not load, please try again",
+  "detailCommentHint": "Write a comment...",
+  "detailNoComments": "No comments yet",
+  "detailViewMoreComments": "View more comments",
+  "detailViewAllReplies": "View all {count} replies",
+  "@detailViewAllReplies": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "detailMenuReport": "Report",
+  "detailMenuDelete": "Delete",
+  "detailReply": "Reply",
+  "contentDeleteConfirm": "Once deleted, this content is permanently removed and cannot be recovered.",
+  "contentDeleteFailed": "Could not delete, please try again",
+  "reportTitle": "Report this content",
+  "reportReasonIllegal": "Illegal or against the rules",
+  "reportReasonMisinfo": "False information",
+  "reportReasonInappropriate": "Inappropriate content",
+  "reportReasonHarassment": "Harassment",
+  "reportReasonOther": "Other",
+  "reportSubmit": "Submit",
+  "reportSuccess": "Thanks, we've received your report and will review it soon 🐾",
+  "miniProfilePostCount": "{count} posts shared",
+  "@miniProfilePostCount": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "miniProfileComingSoon": "Their personal page is being lovingly prepared, with more delights on the way ✨"
 }

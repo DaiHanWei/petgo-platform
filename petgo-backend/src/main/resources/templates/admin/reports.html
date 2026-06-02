@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>举报队列 · PetGo 运营后台</title>
+    <style>
+        table { width:100%; border-collapse:collapse; background:#fff; }
+        th, td { padding:10px 12px; border-bottom:1px solid #eee; font-size:13px; text-align:left; vertical-align:top; }
+        th { background:#f0f2f5; color:#555; }
+        .empty { color:#888; padding:24px; }
+        .gone { color:#c0392b; font-size:12px; }
+        form { display:inline; margin:0; }
+        button { padding:5px 10px; border:0; border-radius:4px; cursor:pointer; font-size:12px; }
+        .takedown { background:#c0392b; color:#fff; }
+        .dismiss { background:#ddd; color:#333; margin-left:6px; }
+    </style>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1>举报队列（待处理）</h1>
+        <p style="color:#888;font-size:13px">所有下架/驳回均由运营人工决定——平台无自动下架。</p>
+        <p class="empty" th:if="${#lists.isEmpty(reports)}">暂无待处理举报。</p>
+        <table th:unless="${#lists.isEmpty(reports)}">
+            <thead>
+            <tr>
+                <th>工单</th><th>内容</th><th>类型</th><th>举报数</th><th>时间</th><th>操作</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="r : ${reports}">
+                <td th:text="${r.reportId}">1</td>
+                <td>
+                    #<span th:text="${r.postId}">0</span>
+                    <span class="gone" th:if="${r.postDeleted}">（已下架）</span>
+                    <div th:text="${r.postTextPreview}" style="color:#666;max-width:280px">…</div>
+                </td>
+                <td th:text="${r.reasonType}">OTHER</td>
+                <td th:text="${r.reportCount}">1</td>
+                <td th:text="${#temporals.format(r.createdAt, 'yyyy-MM-dd HH:mm')}">-</td>
+                <td>
+                    <form th:action="@{/admin/reports/{id}/takedown(id=${r.reportId})}" method="post">
+                        <button type="submit" class="takedown">下架</button>
+                    </form>
+                    <form th:action="@{/admin/reports/{id}/dismiss(id=${r.reportId})}" method="post">
+                        <button type="submit" class="dismiss">驳回</button>
+                    </form>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

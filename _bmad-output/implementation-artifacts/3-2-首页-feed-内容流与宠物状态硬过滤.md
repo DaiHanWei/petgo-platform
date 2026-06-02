@@ -1,6 +1,6 @@
 # Story 3.2: 首页 Feed 内容流与宠物状态硬过滤
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -173,10 +173,44 @@ so that **我能高效发现感兴趣的宠物内容**。
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude（云端 headless dev agent）
 
 ### Debug Log References
 
+- 后端：`./mvnw -B test -Dtest=FeedServiceTest,FeedCursorTest` → 绿；`./mvnw -B -DskipTests package` → 绿。
+- 前端：`flutter analyze` → No issues；`flutter test` → 94 用例全绿（含本 Story 5 个 Feed 用例 + 既有用例适配）。
+
 ### Completion Notes List
 
+**后端（L0 绿）：**
+- ✅ AC1/AC2/AC3 — `GET /api/v1/content-posts`（`ContentFeedController`）：游标分页 `{items,nextCursor,hasMore}` 20/批；`created_at DESC, id DESC` 稳定排序；游标 `FeedCursor`（base64-url 编码 `(createdAt,id)`，不暴露顺序 id）。
+- ✅ AC1 — 宠物状态硬过滤（后端权威 WHERE）：B → `type <> GROWTH_MOMENT`；A/C/游客全显。登录用户从 JWT 取 `petStatus`（经 `AccountQueryService.petStatusOf`），游客视作全显。无缓存（状态修改即时刷新）。
+- ✅ AC3 — 分类过滤（`FeedCategory` ALL/DAILY/GROWTH_MOMENT/KNOWLEDGE）；成长日历分类额外 `pet_id IS NOT NULL`；与 B 硬过滤叠加（B 在成长日历分类得空集）。
+- ✅ AC2 — `FeedItemResponse` 投影**不含 likeCount/commentCount**；作者昵称/头像经 `AccountQueryService.findAuthorViews`（**不直 join users 表**）；注销作者匿名化（`authorDeleted=true`，昵称/头像 null）。
+- ✅ Feed GET 只读对游客放行（`SecurityConfig` 加 `GET /api/v1/content-posts` permitAll，写仍需 JWT）。
+- ✅ V8 复合部分索引 `(created_at DESC, id DESC) WHERE deleted_at IS NULL INCLUDE(type,pet_id)`。
+- ✅ 护栏：无 MQ/缓存层；`ddl-auto=validate`；跨模块只经 service。
+
+**前端（L0 绿）：**
+- ✅ 数据层 `FeedRepository`/`feedRepositoryProvider`；`feed_item.dart`（FeedItem/FeedPage/FeedCategory）。
+- ✅ `FeedController`（AsyncNotifier）：watch `feedCategoryProvider`（切 tab 重拉）+ `homeRefreshProvider`（状态变更即时刷新）；`loadMore` 游标累积；`refresh` 重建首屏；`pagesLoaded` 计数供 FR-0B。
+- ✅ `MasonryCard`（作者头像+昵称、正文 2 行、首图上圆角 14px 不裁切、无图纯文字卡、**无点赞评论数**、注销作者占位+不可点）。
+- ✅ `FeedMasonryView`（2 列按奇偶分列不等高、8px 列间距、16px 屏边距、距底 600px 预加载、RefreshIndicator 下拉刷新、底部 loadingMore 转圈）。
+- ✅ `FeedTabRow`（4 tab、active 区域色 2px 下划线）+ 内容区 `AnimatedSwitcher` cross-fade（不 slide）。
+- ✅ `FeedSkeleton`（2 列灰块骨架，UX-DR9）；`EmptyState` 扩展可选 CTA → 空态「Show off your furry friend! 🐾」+「发布第一条内容」（受 Story 1.5 门控，游客触发 FR-0C）。
+- ✅ FR-0B 接线：游客浏览至第 3 页（`pagesLoaded>=3`）→ 触发软性登录浮层（`showSoftSheet`，session 去重）。
+- ✅ l10n 双语 key（feedTabAll/Daily/Growth(=Moments)/Knowledge、feedEmpty*、feedDeletedUser、feedLoadError），每条 ≤1 emoji。
+- 既有 Story 1.5/onboarding/widget 测试已适配（首页 placeholder → 真实 Feed，避免 tab 标签碰撞）。
+
+**待本地验收：**
+- ⏳ **L1（Docker postgres+redis）**：J1 硬过滤矩阵（A/B/C/游客 × 含 GROWTH_MOMENT 多帖）、J2 游标分页正确性（≥45 帖翻 3 批不漏不重时间倒序）、J3 成长日历分类 `pet_id` 非空 + B 空集。需真实 SQL 跑通游标 `(createdAt,id)` 比较与硬过滤 WHERE；V8 索引 `flyway migrate`。
+- ⏳ **L2（真机/模拟器视觉）**：J4 瀑布流 8px 间距/上圆角 14px/图片不裁切、骨架屏、cross-fade 不 slide、无限滚动距底预加载、下拉刷新手势、第 3 页触发软浮层（游客）。云端 headless 无法渲染。
+
+**Flyway 序号：** V8（接 V7 之后单调分配，决策 E2）。
+
 ### File List
+
+**后端新增：** `content/service/FeedCursor.java`、`content/service/FeedService.java`、`content/domain/FeedCategory.java`、`content/dto/FeedItemResponse.java`、`content/dto/FeedPageResponse.java`、`content/web/ContentFeedController.java`、`auth/dto/AuthorView.java`、`db/migration/V8__feed_index.sql`、测试 `content/service/FeedServiceTest.java`、`content/service/FeedCursorTest.java`
+**后端修改：** `content/repository/ContentPostRepository.java`（findFeed 查询）、`auth/service/AccountQueryService.java`（petStatusOf/findAuthorViews）、`shared/security/SecurityConfig.java`（GET feed 放行）
+**前端新增：** `features/content/domain/feed_item.dart`、`features/content/data/feed_repository.dart`、`features/content/presentation/{feed_controller,feed_tab_row,feed_skeleton,feed_view}.dart`、`shared/widgets/masonry_card.dart`、测试 `test/content/feed_test.dart`、`test/support/fake_feed_repository.dart`
+**前端修改：** `features/content/presentation/home_page.dart`（Feed 宿主）、`shared/widgets/empty_state.dart`（可选 CTA）、`l10n/app_en.arb`、`l10n/app_id.arb`、既有测试适配（`test/auth/story_1_5_gating_test.dart`、`test/auth/onboarding_test.dart`）

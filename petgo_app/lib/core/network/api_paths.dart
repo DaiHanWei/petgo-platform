@@ -20,8 +20,23 @@ class ApiPaths {
   /// 成长时间线（Story 2.4）。
   static const String petProfileTimeline = '$base/pet-profiles/me/timeline';
 
-  /// 内容发布（Story 2.3）。
+  /// 内容发布 + Feed 列表（Story 2.3 / 3.2）。
   static const String contentPosts = '$base/content-posts';
+
+  /// 内容详情（Story 3.3）。
+  static String contentPostDetail(int id) => '$base/content-posts/$id';
+
+  /// 内容一级评论分页（Story 3.3）。
+  static String contentPostComments(int id) => '$base/content-posts/$id/comments';
+
+  /// 某一级评论的二级回复展开（Story 3.3）。
+  static String commentReplies(int parentId) => '$base/comments/$parentId/replies';
+
+  /// 内容点赞开关（Story 3.4）。POST 点赞 / DELETE 取消。
+  static String contentPostLike(int id) => '$base/content-posts/$id/like';
+
+  /// 他人迷你主页投影（Story 3.8）。
+  static String userMiniProfile(int userId) => '$base/users/$userId/mini-profile';
 
   /// 问诊存档（Story 2.5）。
   static const String healthArchiveDecisions = '$base/health-events/archive-decisions';

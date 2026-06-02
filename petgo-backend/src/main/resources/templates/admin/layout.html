@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<!--
+  运营后台外壳（Story 3.1）。横切设施：侧边导航预留后续 slice 入口位
+  （举报队列 3.7 / 兽医账号·评分查看 Epic 5），后三者占位 disabled，由对应 Story 填充。
+  用法：业务页 th:replace="~{admin/layout :: page(~{::content})}"。
+-->
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <meta name="robots" content="noindex,nofollow"/>
+    <title>PetGo 运营后台</title>
+    <style>
+        body { font-family: system-ui, sans-serif; margin: 0; color: #222; }
+        .layout { display: flex; min-height: 100vh; }
+        nav { width: 200px; background: #1f2733; color: #cfd6e0; padding: 18px 0; }
+        nav .brand { font-weight: 600; color: #fff; padding: 0 18px 14px; }
+        nav a { display: block; padding: 10px 18px; color: #cfd6e0; text-decoration: none; font-size: 14px; }
+        nav a.active { background: #2d6cdf; color: #fff; }
+        nav a.disabled { color: #6b7585; pointer-events: none; }
+        nav .group { font-size: 11px; color: #6b7585; padding: 14px 18px 4px; text-transform: uppercase; }
+        main { flex: 1; padding: 24px 32px; background: #f4f5f7; }
+        .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+        .topbar form { margin: 0; }
+        .topbar button { background: none; border: 0; color: #2d6cdf; cursor: pointer; font-size: 13px; }
+    </style>
+</head>
+<body>
+<div class="layout" th:fragment="page(content)">
+    <nav>
+        <div class="brand">🐾 PetGo 运营</div>
+        <a th:href="@{/admin/dashboard}" th:classappend="${active == 'dashboard'} ? 'active'">概览</a>
+        <div class="group">内容</div>
+        <a th:href="@{/admin/seed-post}" th:classappend="${active == 'seed'} ? 'active'">种子内容发布</a>
+        <a th:href="@{/admin/reports}" th:classappend="${active == 'reports'} ? 'active'">举报队列</a>
+        <!-- 后续 slice 入口位（占位，Epic 5 实现）：-->
+        <div class="group">兽医（Epic 5）</div>
+        <a href="#" class="disabled" title="Epic 5">兽医账号</a>
+        <a href="#" class="disabled" title="Epic 5">评分查看</a>
+    </nav>
+    <main>
+        <div class="topbar">
+            <div></div>
+            <form th:action="@{/admin/logout}" method="post">
+                <button type="submit">退出登录</button>
+            </form>
+        </div>
+        <div th:replace="${content}">页面内容占位</div>
+    </main>
+</div>
+</body>
+</html>

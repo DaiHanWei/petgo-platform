@@ -7,6 +7,7 @@ import '../../features/auth/presentation/dev_login_guide_page.dart';
 import '../../features/auth/presentation/login_page.dart';
 import '../../features/auth/presentation/nickname_page.dart';
 import '../../features/auth/presentation/pet_status_page.dart';
+import '../../features/content/presentation/content_detail_page.dart';
 import '../../features/content/presentation/home_page.dart';
 import '../../features/me/presentation/me_page.dart';
 import '../../features/profile/presentation/growth_archive_page.dart';
@@ -49,6 +50,11 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/profile/edit', builder: (c, s) => const PetProfileEditPage()),
       // @dev 自测入口（Story 1.4 F3）：不从 UI 链接，仅供手动深链触发登录引导。
       GoRoute(path: '/dev/login-guide', builder: (c, s) => const DevLoginGuidePage()),
+      // 内容详情（Story 3.3）。shell 外顶层 push（隐藏 Tab Bar）；返回保持 Feed 滚动位置。游客只读可进。
+      GoRoute(
+        path: '/content/:id',
+        builder: (c, s) => ContentDetailPage(postId: int.parse(s.pathParameters['id']!)),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) => AppShell(navigationShell: navigationShell),
         branches: <StatefulShellBranch>[

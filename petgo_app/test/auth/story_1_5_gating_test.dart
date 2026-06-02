@@ -6,9 +6,13 @@ import 'package:petgo/features/auth/domain/auth_guard.dart';
 import 'package:petgo/features/auth/domain/auth_state.dart';
 import 'package:petgo/features/auth/domain/login_guide_controller.dart';
 import 'package:petgo/features/auth/domain/login_response.dart';
+import 'package:petgo/features/content/data/feed_repository.dart';
+import 'package:petgo/features/content/presentation/feed_tab_row.dart';
 import 'package:petgo/l10n/app_localizations.dart';
 import 'package:petgo/shared/widgets/empty_state.dart';
 import 'package:petgo/shared/widgets/login_hard_dialog.dart';
+
+import '../support/fake_feed_repository.dart';
 
 LoginResponse _old() => const LoginResponse(
     accessToken: 'a', refreshToken: 'r', role: 'USER', isNewUser: false, onboardingCompleted: true);
@@ -99,25 +103,32 @@ void main() {
     expect(find.byType(LoginHardDialog), findsOneWidget);
   });
 
-  testWidgets('AC1: 游客首页可滚动只读容器 + 空状态占位', (tester) async {
-    await tester.pumpWidget(const ProviderScope(child: PetGoApp()));
+  testWidgets('AC1: 游客首页可滚动只读容器 + Feed 空状态占位', (tester) async {
+    await tester.pumpWidget(ProviderScope(
+      overrides: [feedRepositoryProvider.overrideWithValue(FakeFeedRepository())],
+      child: const PetGoApp(),
+    ));
     await tester.pumpAndSettle();
 
+    // Story 3.2：首页 Feed 已就位，游客可见分类 Tab + 空状态（可下拉滚动容器）。
+    expect(find.byType(FeedTabRow), findsOneWidget);
     expect(find.byType(EmptyState), findsOneWidget);
-    expect(find.text('Your feed is empty'), findsOneWidget);
-    expect(find.byType(CustomScrollView), findsOneWidget); // 可滚动容器
+    expect(find.byType(SingleChildScrollView), findsWidgets); // 可滚动容器
   });
 
   testWidgets('AC2: 游客点受控 Tab（问诊）→ 弹强弹窗 + 不切换目的地', (tester) async {
-    await tester.pumpWidget(const ProviderScope(child: PetGoApp()));
+    await tester.pumpWidget(ProviderScope(
+      overrides: [feedRepositoryProvider.overrideWithValue(FakeFeedRepository())],
+      child: const PetGoApp(),
+    ));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Consult')); // 问诊 Tab（inactive 标签）
     await tester.pumpAndSettle();
 
     expect(find.byType(LoginHardDialog), findsOneWidget);
-    // 未切换：首页空状态仍在
-    expect(find.byType(EmptyState), findsOneWidget);
+    // 未切换：首页 Feed 仍在
+    expect(find.byType(FeedTabRow), findsOneWidget);
   });
 
   testWidgets('AC2: 已登录点受控 Tab → 直接进入，不弹窗', (tester) async {
