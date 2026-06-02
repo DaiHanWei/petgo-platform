@@ -2,6 +2,65 @@
   "@@locale": "en",
   "appTitle": "PetGo",
   "@appTitle": {
-    "description": "Application title shown on the home placeholder (i18n scaffold smoke key)."
-  }
+    "description": "Application title."
+  },
+  "tabHome": "Home",
+  "@tabHome": {
+    "description": "Bottom tab label: Home (Feed)."
+  },
+  "tabProfile": "Growth",
+  "@tabProfile": {
+    "description": "Bottom tab label: Growth archive."
+  },
+  "tabAdd": "Add",
+  "@tabAdd": {
+    "description": "Bottom tab center plus button (publish)."
+  },
+  "tabTriage": "Consult",
+  "@tabTriage": {
+    "description": "Bottom tab label: Triage / consult."
+  },
+  "tabMe": "Me",
+  "@tabMe": {
+    "description": "Bottom tab label: Me / profile center."
+  },
+  "placeholderComingSoon": "Coming soon",
+  "@placeholderComingSoon": {
+    "description": "Generic placeholder body for tabs not yet implemented."
+  },
+  "loginGoogle": "Sign in with Google",
+  "@loginGoogle": {
+    "description": "Google sign-in button label."
+  },
+  "loginAgreementPrefix": "By signing in you agree to the ",
+  "loginAgreementAnd": " and ",
+  "termsOfService": "Terms of Service",
+  "privacyPolicy": "Privacy Policy",
+  "loginFailed": "Sign-in failed, please try again",
+  "loginCancelled": "Sign-in cancelled",
+  "sessionExpired": "Your session expired, please sign in again",
+  "rateLimited": "Too many attempts, please try again later",
+  "onboardingWelcomeTitle": "Welcome to PetGo",
+  "onboardingWelcomeBody": "Let's finish setting up your account",
+  "loginTitle": "Sign in",
+  "loginGuideSoftTitle": "Sign in for the full experience",
+  "loginGuideSoftSubtitle": "Save your pet's moments and join the community 🐾",
+  "loginGuideHardMessage": "Sign in to continue using this feature",
+  "commonClose": "Close",
+  "homeEmptyTitle": "Your feed is empty",
+  "homeEmptyBody": "Pet stories will appear here soon",
+  "onboardingNicknameTitle": "Confirm your nickname",
+  "onboardingNicknameLabel": "Nickname",
+  "onboardingContinue": "Continue",
+  "onboardingDone": "Done",
+  "onboardingPetStatusTitle": "Tell us about your pet",
+  "onboardingPetStatusSubtitle": "This helps us tailor your home feed",
+  "petStatusA": "I have a pet",
+  "petStatusB": "Not yet, but planning to",
+  "petStatusC": "Pet enthusiast",
+  "profileOnboardingTitle": "Create your pet's profile",
+  "profileOnboardingBody": "Build your pet's growth archive",
+  "profileOnboardingSkip": "Skip for now",
+  "profileOnboardingCreate": "Create now",
+  "profilePromptMessage": "Create your pet's profile to start their growth archive 🐾"
 }

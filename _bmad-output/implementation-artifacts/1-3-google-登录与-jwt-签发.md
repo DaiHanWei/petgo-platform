@@ -1,6 +1,6 @@
 # Story 1.3: Google 登录与 JWT 签发
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -204,7 +204,48 @@ so that **我无需记密码即可获得身份并使用核心功能**。
 
 ### Completion Notes List
 
-- 记录 refresh 轮换存储方案（`refresh_tokens` 表 vs Redis 句柄）及理由。
-- 记录 L2（真实 Google OAuth）验收是在本地/真机完成还是延后，及所用 dev client id 来源（env，不入库）。
+- **L0 全绿**：后端 `./mvnw -B -DskipTests package` BUILD SUCCESS；后端单测 8/8（AuthServiceTest 5 + JwtServiceTest 3，纯 Mockito，无 DB）；前端 `flutter analyze` 零警告 + `flutter test` 18/18（含 dio 拦截器 4 例）。
+- **refresh 轮换存储方案**：选用 **`refresh_tokens` 表**（非 Redis 句柄）。理由：跨重启可验证、不为核心 auth 增运行依赖、轮换语义（revoked 标志 + 重放→401）直观可测；Redis 仅留作限流（符合收窄边界）。表存 SHA-256 hash，明文绝不落库/日志。
+- **Flyway 序号**：`V2__init_auth.sql`（接 V1 基线，决策 E2）。建 `users` + `refresh_tokens` 两表。
+- **令牌设计**：access = HS256 自签 JWT（claim `sub=userId` / `role` / `exp` 15min，密钥 env 注入）；refresh = 256bit 不可枚举随机串，仅 hash 入库。OAuth2 Resource Server 校验**自签 JWT**（非 Google token）；`role` claim→`ROLE_USER`（结构容纳 VET/ADMIN，决策 C2）。
+- **SecurityConfig 收紧**：1.1「全放行」→「`/api/v1/auth/**`+actuator+docs+`/p/**`+dev ping 放行，其余需 JWT」（只升不降）。401/403 统一 ProblemDetail（`ProblemDetailAuthHandlers`，二者不混用）。
+- **限流**：`RedisRateLimiter` 固定窗口；`/auth/google` 10/min、`/auth/refresh` 30/min（按 IP）。Redis 仅 auth 用途。
+- **前端拦截器**：401→单飞 refresh 续期**一次**→带新令牌重放；`retried` 标志防死循环、`skipRefresh` 防 refresh 端点自触发；失败→清 token + 落游客态（弹引导留 Story 1.5）。注入 `Bearer` + `Accept-Language`（id/en）。
+- **Riverpod provider 循环**：`dioProvider`↔`authRepositoryProvider` 经显式变量类型注解打破 top-level 推断环；refresh 闭包运行期惰性 `ref.read` 避免构造期环。
+- **待本地验收**：
+  - **L1（需 Docker postgres+redis）**：① Flyway `V2` 迁移成功 + `users`/`refresh_tokens` 落库（ddl-auto=validate 匹配）；② MockMvc/集成：首登建号 `isNewUser=true`、二登 `false`、refresh 轮换旧句柄重放→401；③ 限流超阈值→429 ProblemDetail。后端集成测试因需真实 DB 未在云端跑（云端 `-DskipTests`），脚本就绪待本地 `mvn -B package`（pg+redis service）。
+  - **L2（需真实 Google OAuth 凭证 + 真机/模拟器）**：完整账号选择器授权→拿 idToken→后端建号→返回 JWT→`flutter_secure_storage` 落盘→进 App（老）/引导占位（新）；Text Link 点击打开 H5。**dev client id 经 env 注入**（`GOOGLE_OAUTH_CLIENT_ID` 后端 / `GOOGLE_SERVER_CLIENT_ID`、`PETGO_TERMS_URL`/`PETGO_PRIVACY_URL` 前端 --dart-define），未入库；尚未配置，待本地。
+  - **Android/iOS google_sign_in 原生配置**（OAuth client、Info.plist/strings、URL scheme）待本地接入真机时补。
 
 ### File List
+
+**后端 — 新增**
+- `petgo-backend/src/main/resources/db/migration/V2__init_auth.sql`
+- `auth/domain/{User,Role,PetStatus,RefreshToken}.java`
+- `auth/repository/{UserRepository,RefreshTokenRepository}.java`
+- `auth/service/AuthService.java`
+- `auth/web/AuthController.java`
+- `auth/dto/{GoogleLoginRequest,RefreshRequest,TokenResponse,LoginResponse,UserProfileResponse}.java`
+- `shared/security/{GoogleIdentity,GoogleTokenVerifier,NimbusGoogleTokenVerifier,AuthProperties,JwtConfig,JwtService,JwtRoleConverter,ProblemDetailAuthHandlers}.java`
+- `shared/ratelimit/RedisRateLimiter.java`
+- `src/test/java/com/petgo/auth/service/AuthServiceTest.java`、`src/test/java/com/petgo/shared/security/JwtServiceTest.java`
+
+**后端 — 修改**
+- `shared/security/SecurityConfig.java`（收紧门控 + JWT resource server）
+- `shared/error/AppException.java`（+unauthorized/rateLimited 工厂）
+- `src/main/resources/application.yml`（petgo.auth.*）
+- `.env.example`（JWT_SECRET / GOOGLE_OAUTH_CLIENT_ID）
+
+**前端 — 新增**
+- `core/network/{api_paths,problem_detail,auth_interceptor,dio_client}.dart`
+- `core/storage/{secure_storage,prefs}.dart`
+- `core/router/route_intent.dart`
+- `features/auth/data/{google_auth_client,auth_repository}.dart`
+- `features/auth/domain/{login_response,auth_routing,auth_state}.dart`
+- `features/auth/presentation/{login_page,onboarding_placeholder_page}.dart`
+- `test/auth/{auth_logic_test,auth_interceptor_test,login_page_test}.dart`
+
+**前端 — 修改**
+- `pubspec.yaml`（dio/flutter_secure_storage/shared_preferences/google_sign_in/url_launcher）
+- `core/router/app_router.dart`（+/login、/onboarding）
+- `lib/l10n/app_en.arb`、`app_id.arb`（登录文案）
