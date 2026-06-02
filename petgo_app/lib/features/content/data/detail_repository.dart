@@ -24,6 +24,9 @@ abstract class DetailRepository {
 
   /// 删除评论（Story 3.5，作者本人 / 内容主；后端权威）。
   Future<void> deleteComment(int commentId);
+
+  /// 删除内容（Story 3.6，仅作者；软删 + 级联清；后端权威）。
+  Future<void> deleteContent(int postId);
 }
 
 class DioDetailRepository implements DetailRepository {
@@ -80,6 +83,11 @@ class DioDetailRepository implements DetailRepository {
   @override
   Future<void> deleteComment(int commentId) async {
     await dio.delete<void>('${ApiPaths.base}/comments/$commentId');
+  }
+
+  @override
+  Future<void> deleteContent(int postId) async {
+    await dio.delete<void>(ApiPaths.contentPostDetail(postId));
   }
 
   ContentLoadErrorKind _classify(DioException e) {

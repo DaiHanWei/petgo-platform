@@ -155,5 +155,7 @@
   },
   "detailMenuReport": "Report",
   "detailMenuDelete": "Delete",
-  "detailReply": "Reply"
+  "detailReply": "Reply",
+  "contentDeleteConfirm": "Once deleted, this content is permanently removed and cannot be recovered.",
+  "contentDeleteFailed": "Could not delete, please try again"
 }

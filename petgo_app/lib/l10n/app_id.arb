@@ -107,5 +107,7 @@
   "detailViewAllReplies": "Lihat semua {count} balasan",
   "detailMenuReport": "Laporkan",
   "detailMenuDelete": "Hapus",
-  "detailReply": "Balas"
+  "detailReply": "Balas",
+  "contentDeleteConfirm": "Setelah dihapus, konten ini hilang permanen dan tidak dapat dipulihkan.",
+  "contentDeleteFailed": "Gagal menghapus, silakan coba lagi"
 }

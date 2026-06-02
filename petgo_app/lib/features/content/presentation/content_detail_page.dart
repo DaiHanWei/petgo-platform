@@ -8,10 +8,12 @@ import '../../../core/theme/typography.dart';
 import '../../../features/auth/domain/auth_state.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../data/detail_repository.dart';
 import '../domain/content_detail.dart';
 import 'comment_composer.dart';
 import 'comment_section.dart';
 import 'detail_providers.dart';
+import 'feed_controller.dart';
 import 'like_button.dart';
 
 /// 内容详情页（Story 3.3，FR-28）。只读容器：正文 + 多图左右滑 + 互动栏占位 + 评论区 + 底部评论框。
@@ -86,13 +88,19 @@ class _DetailScaffold extends ConsumerWidget {
       appBar: AppBar(
         backgroundColor: AppColors.base,
         actions: [
-          // 「···」菜单：举报[3.7] + 作者本人删除[3.6]，本 Story 占位 disabled。
+          // 「···」菜单：举报[3.7] 占位 disabled；作者本人删除[3.6] 可用。
           PopupMenuButton<String>(
             key: const ValueKey('detailMenu'),
+            onSelected: (value) {
+              if (value == 'delete') _confirmDelete(context, ref, l10n);
+            },
             itemBuilder: (context) => [
               PopupMenuItem<String>(value: 'report', enabled: false, child: Text(l10n.detailMenuReport)),
               if (detail.isAuthor)
-                PopupMenuItem<String>(value: 'delete', enabled: false, child: Text(l10n.detailMenuDelete)),
+                PopupMenuItem<String>(
+                  value: 'delete',
+                  child: Text(l10n.detailMenuDelete),
+                ),
             ],
           ),
         ],
@@ -171,6 +179,35 @@ class _DetailScaffold extends ConsumerWidget {
     );
   }
 
+  /// 二次确认删除（Story 3.6）。确认 → 删除 → 刷新 Feed + 返回（该帖已不在列表，详情走 404）。
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref, AppLocalizations l10n) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        content: Text(l10n.contentDeleteConfirm),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(l10n.commonCancel)),
+          TextButton(
+            key: const ValueKey('confirmDeleteContent'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(l10n.detailMenuDelete),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ref.read(detailRepositoryProvider).deleteContent(detail.id);
+      // Feed 同步移除（重拉，软删帖 deleted_at 非空被过滤）。
+      ref.invalidate(feedProvider);
+      if (context.mounted) Navigator.of(context).maybePop();
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(l10n.contentDeleteFailed)));
+      }
+    }
+  }
 }
 
 /// 多图左右滑 + 角标 x/y（UX-DR12）；点击全屏 lightbox。

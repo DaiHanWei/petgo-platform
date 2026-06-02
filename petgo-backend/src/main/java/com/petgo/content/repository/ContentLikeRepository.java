@@ -15,4 +15,8 @@ public interface ContentLikeRepository extends JpaRepository<ContentLike, Long> 
 
     @Transactional
     void deleteByPostIdAndUserId(long postId, long userId);
+
+    /** 内容删除级联：物理清该帖全部点赞（点赞无保留价值，Story 3.6）。 */
+    @Transactional
+    void deleteByPostId(long postId);
 }

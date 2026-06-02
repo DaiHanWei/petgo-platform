@@ -26,6 +26,8 @@ import org.mockito.Mockito;
 class ContentServiceTest {
 
     private ContentPostRepository posts;
+    private com.petgo.content.repository.CommentRepository comments;
+    private com.petgo.content.repository.ContentLikeRepository likes;
     private ProfileService profileService;
     private IdempotencyService idempotency;
     private ContentService service;
@@ -33,15 +35,19 @@ class ContentServiceTest {
     @BeforeEach
     void setUp() {
         posts = Mockito.mock(ContentPostRepository.class);
+        comments = Mockito.mock(com.petgo.content.repository.CommentRepository.class);
+        likes = Mockito.mock(com.petgo.content.repository.ContentLikeRepository.class);
         profileService = Mockito.mock(ProfileService.class);
         idempotency = Mockito.mock(IdempotencyService.class);
         when(idempotency.findResourceId(any())).thenReturn(Optional.empty());
         when(posts.save(any(ContentPost.class))).thenAnswer(inv -> {
             ContentPost p = inv.getArgument(0);
-            setId(p, 100L); // 模拟 DB IDENTITY 回填
+            if (p.getId() == null) {
+                setId(p, 100L); // 模拟 DB IDENTITY 回填（仅新建）
+            }
             return p;
         });
-        service = new ContentService(posts, profileService, idempotency);
+        service = new ContentService(posts, comments, likes, profileService, idempotency);
     }
 
     private static void setId(ContentPost p, long id) {
@@ -106,5 +112,70 @@ class ContentServiceTest {
     void storesIdempotencyKeyAfterCreate() {
         service.publish(1L, new ContentPostCreateRequest(ContentType.DAILY, null, "x", null), "KEY2");
         verify(idempotency).store(org.mockito.ArgumentMatchers.eq("KEY2"), anyLong());
+    }
+
+    // ===== Story 3.6 删除 =====
+
+    private ContentPost ownedPost(long id, long authorId) {
+        ContentPost p = ContentPost.publish(authorId, ContentType.DAILY, null, "x", null);
+        setId(p, id);
+        return p;
+    }
+
+    @Test
+    void authorCanSoftDeleteOwnPostAndCascade() {
+        ContentPost p = ownedPost(5L, 1L);
+        when(posts.findById(5L)).thenReturn(Optional.of(p));
+        when(comments.findByPostIdAndDeletedAtIsNull(5L)).thenReturn(List.of());
+
+        service.deleteByAuthor(5L, 1L);
+
+        assertThat(p.getDeletedAt()).isNotNull(); // 软删置位
+        verify(posts).save(p);
+        verify(likes).deleteByPostId(5L); // 点赞物理清
+    }
+
+    @Test
+    void nonAuthorCannotDelete() {
+        when(posts.findById(5L)).thenReturn(Optional.of(ownedPost(5L, 1L)));
+        assertThatThrownBy(() -> service.deleteByAuthor(5L, 999L)).isInstanceOf(AppException.class);
+        verify(likes, never()).deleteByPostId(anyLong());
+    }
+
+    @Test
+    void deleteMissingOrAlreadyDeletedIsIdempotent() {
+        when(posts.findById(404L)).thenReturn(Optional.empty());
+        service.deleteByAuthor(404L, 1L); // 不抛异常
+        verify(posts, never()).save(any());
+    }
+
+    @Test
+    void softDeleteReusableForTakedownCascadesComments() {
+        ContentPost p = ownedPost(6L, 1L);
+        when(posts.findById(6L)).thenReturn(Optional.of(p));
+        com.petgo.content.domain.Comment c1 = newComment(70L);
+        com.petgo.content.domain.Comment c2 = newComment(71L);
+        when(comments.findByPostIdAndDeletedAtIsNull(6L)).thenReturn(List.of(c1, c2));
+
+        service.softDelete(6L, com.petgo.content.domain.DeleteReason.ADMIN_TAKEDOWN);
+
+        assertThat(p.getDeletedAt()).isNotNull();
+        assertThat(c1.getDeletedAt()).isNotNull();
+        assertThat(c2.getDeletedAt()).isNotNull();
+        verify(likes).deleteByPostId(6L);
+    }
+
+    private static com.petgo.content.domain.Comment newComment(long id) {
+        try {
+            var ctor = com.petgo.content.domain.Comment.class.getDeclaredConstructor();
+            ctor.setAccessible(true);
+            com.petgo.content.domain.Comment c = ctor.newInstance();
+            var f = com.petgo.content.domain.Comment.class.getDeclaredField("id");
+            f.setAccessible(true);
+            f.set(c, id);
+            return c;
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

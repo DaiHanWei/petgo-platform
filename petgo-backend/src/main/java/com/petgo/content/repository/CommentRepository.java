@@ -54,6 +54,9 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
     /** 某一级评论的全部未删二级回复（删一级时级联软删用，Story 3.5）。 */
     List<Comment> findByParentIdAndDeletedAtIsNull(long parentId);
 
+    /** 某帖全部未删评论（内容删除级联软删用，Story 3.6）。 */
+    List<Comment> findByPostIdAndDeletedAtIsNull(long postId);
+
     /** 一批一级评论各自的前 N 条二级回复（首屏内嵌用，按父分组取正序前 N 在 service 裁）。 */
     @Query("""
             SELECT c FROM Comment c

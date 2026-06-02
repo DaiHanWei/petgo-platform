@@ -54,6 +54,7 @@ class _FakeDetailRepo implements DetailRepository {
   final ContentDetail? detail;
   final ContentLoadError? error;
   final List<Comment> comments;
+  int deleteContentCalls = 0;
 
   @override
   Future<ContentDetail> getDetail(int id) async {
@@ -77,6 +78,11 @@ class _FakeDetailRepo implements DetailRepository {
 
   @override
   Future<void> deleteComment(int commentId) async {}
+
+  @override
+  Future<void> deleteContent(int postId) async {
+    deleteContentCalls++;
+  }
 }
 
 Future<void> _pump(WidgetTester tester, _FakeDetailRepo repo) async {
@@ -144,5 +150,29 @@ void main() {
     final l10n = await AppLocalizations.delegate.load(const Locale('en'));
     expect(find.text(l10n.detailMenuDelete), findsOneWidget);
     expect(find.text(l10n.detailMenuReport), findsOneWidget);
+  });
+
+  testWidgets('AC1: 作者删除 → 二次确认 → 调 deleteContent', (tester) async {
+    final repo = _FakeDetailRepo(detail: _detail(isAuthor: true), comments: const []);
+    await _pump(tester, repo);
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+
+    await tester.tap(find.byKey(const ValueKey('detailMenu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(l10n.detailMenuDelete)); // 菜单项
+    await tester.pumpAndSettle();
+    // 二次确认弹窗
+    expect(find.text(l10n.contentDeleteConfirm), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('confirmDeleteContent')));
+    await tester.pumpAndSettle();
+    expect(repo.deleteContentCalls, 1);
+  });
+
+  testWidgets('AC1: 非作者无删除入口', (tester) async {
+    await _pump(tester, _FakeDetailRepo(detail: _detail(isAuthor: false), comments: const []));
+    await tester.tap(find.byKey(const ValueKey('detailMenu')));
+    await tester.pumpAndSettle();
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    expect(find.text(l10n.detailMenuDelete), findsNothing);
   });
 }

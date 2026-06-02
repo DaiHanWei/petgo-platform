@@ -10,6 +10,8 @@ import java.time.Duration;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -46,6 +48,16 @@ public class ContentApiController {
         long authorId = currentUserId(jwt);
         rateLimiter.check("rl:content:publish:" + authorId, PUBLISH_LIMIT, PUBLISH_WINDOW);
         return contentService.publish(authorId, req, idempotencyKey);
+    }
+
+    /**
+     * 内容删除（Story 3.6，FR-36）。仅作者本人；软删 + 级联清评论点赞；已删幂等。
+     * 删除后 Feed/时间线（{@code deleted_at IS NULL} 过滤）即时移除，详情走 404（Story 3.3）。
+     */
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
+        contentService.deleteByAuthor(id, currentUserId(jwt));
     }
 
     private static long currentUserId(Jwt jwt) {

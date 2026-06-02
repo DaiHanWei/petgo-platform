@@ -77,6 +77,11 @@ public class ContentPost {
         return p;
     }
 
+    /** 软删（Story 3.6 作者删除 / 3.7 运营下架 / 7.3 注销级联）。不物理删，保留行结构。 */
+    public void softDelete() {
+        this.deletedAt = Instant.now();
+    }
+
     @PrePersist
     void onCreate() {
         Instant now = Instant.now();
