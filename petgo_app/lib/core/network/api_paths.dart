@@ -13,6 +13,14 @@ class ApiPaths {
   /// 兽医自身视图（Story 5.1 登录后探活 + 工作台顶部展示）。
   static const String vetMe = '$base/vet/me';
 
+  /// 兽医在线态读写 + 心跳 + 登出（Story 5.2）。
+  static const String vetOnlineStatus = '$base/vet/online-status';
+  static const String vetHeartbeat = '$base/vet/heartbeat';
+  static const String vetLogout = '$base/vet/logout';
+
+  /// 用户侧兽医咨询可用性（Story 5.2，只回 vetOnline bool）。
+  static const String consultAvailability = '$base/consult/availability';
+
   /// 当前用户主体统一端点（决策 C1：全平台用 /me，不用 /users/me）。
   static const String me = '$base/me';
 

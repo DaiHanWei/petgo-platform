@@ -194,5 +194,17 @@
   "vetForgotHint": "Lupa kata sandi? Silakan hubungi operasional.",
   "vetWorkbenchTitle": "Meja kerja dokter hewan",
   "vetWorkbenchComingSoon": "Meja kerja segera hadir",
-  "vetLogout": "Keluar"
+  "vetLogout": "Keluar",
+  "vetTabInbox": "Masuk",
+  "vetTabActive": "Aktif",
+  "vetTabHistory": "Riwayat",
+  "vetTabMe": "Saya",
+  "vetInboxEmpty": "Belum ada permintaan masuk",
+  "vetActiveEmpty": "Belum ada konsultasi aktif",
+  "vetHistoryEmpty": "Belum ada riwayat konsultasi",
+  "vetOnlineTitle": "Status online",
+  "vetOnlineLabel": "Online · menerima permintaan",
+  "vetOfflineLabel": "Offline · tidak menerima",
+  "vetStatusUpdateFailed": "Gagal memperbarui status, coba lagi",
+  "consultNoVetOnline": "Belum ada dokter hewan online"
 }

@@ -248,5 +248,17 @@
   "vetForgotHint": "Forgot your password? Please contact operations.",
   "vetWorkbenchTitle": "Vet workbench",
   "vetWorkbenchComingSoon": "Workbench is coming soon",
-  "vetLogout": "Sign out"
+  "vetLogout": "Sign out",
+  "vetTabInbox": "Inbox",
+  "vetTabActive": "Active",
+  "vetTabHistory": "History",
+  "vetTabMe": "Me",
+  "vetInboxEmpty": "No incoming requests",
+  "vetActiveEmpty": "No active consultations",
+  "vetHistoryEmpty": "No consultation history",
+  "vetOnlineTitle": "Online status",
+  "vetOnlineLabel": "Online · accepting requests",
+  "vetOfflineLabel": "Offline · not accepting",
+  "vetStatusUpdateFailed": "Could not update status, please try again",
+  "consultNoVetOnline": "No vets online right now"
 }

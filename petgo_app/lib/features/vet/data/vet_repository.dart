@@ -32,7 +32,33 @@ class VetRepository {
     return VetMe.fromJson(resp.data!);
   }
 
-  Future<void> logout() => tokenStore.clear();
+  /// 读自身在线态（工作台「我的」Tab 开关初值，Story 5.2）。
+  Future<bool> readOnlineStatus() async {
+    final resp = await dio.get<Map<String, dynamic>>(ApiPaths.vetOnlineStatus);
+    return (resp.data!['online'] ?? false) as bool;
+  }
+
+  /// 切在线/离线（写 Redis 在线集合）。返回服务端权威态。
+  Future<bool> setOnline(bool online) async {
+    final resp = await dio.put<Map<String, dynamic>>(
+      ApiPaths.vetOnlineStatus,
+      data: {'online': online},
+    );
+    return (resp.data!['online'] ?? false) as bool;
+  }
+
+  /// 前台心跳续期 TTL（防幽灵在线靠 TTL 兜底）。
+  Future<void> heartbeat() => dio.post<void>(ApiPaths.vetHeartbeat);
+
+  /// 登出即离线（服务端清在线态）+ 清本地 token。
+  Future<void> logout() async {
+    try {
+      await dio.post<void>(ApiPaths.vetLogout);
+    } catch (_) {
+      // 网络失败不阻塞本地落游客态；TTL 会兜底离线。
+    }
+    await tokenStore.clear();
+  }
 }
 
 final vetRepositoryProvider = Provider<VetRepository>((ref) => VetRepository(
