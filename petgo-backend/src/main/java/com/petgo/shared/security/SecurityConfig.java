@@ -94,6 +94,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/_ping-error", "/error").permitAll()
                         // 腾讯 IM 服务端回调（外部来源，内部 token/签名校验，Story 5.5）
                         .requestMatchers("/im/callback").permitAll()
+                        // App 版本信息（Story 6.5，游客可读，App 内更新提醒用）
+                        .requestMatchers(HttpMethod.GET, "/api/v1/app-version").permitAll()
                         // 游客只读放行锚点（Story 1.5 细化具体业务 GET）
                         .requestMatchers(HttpMethod.GET, "/api/v1/public/**").permitAll()
                         // Feed 只读对游客可见（Story 3.2，FR-0A/17）：GET 内容流放行（写仍需 JWT）

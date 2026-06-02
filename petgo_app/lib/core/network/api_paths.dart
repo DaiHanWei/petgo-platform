@@ -49,8 +49,21 @@ class ApiPaths {
   /// 兽医结束会话（Story 5.6）。
   static String vetConsultEnd(int sessionId) => '$base/vet/consult-sessions/$sessionId/end';
 
+  /// 兽医回复后通知用户（Story 6.2，FR-22A）。发完 IM 消息 ping 触发用户推送。
+  static String vetConsultNotifyReply(int sessionId) =>
+      '$base/vet/consult-sessions/$sessionId/notify-reply';
+
   /// 问诊历史聚合（Story 5.8，AI + 兽医两类，游标分页）。
   static const String consultHistory = '$base/consult/history';
+
+  /// App 版本信息（Story 6.5，公开可读，App 内更新提醒）。
+  static const String appVersion = '$base/app-version';
+
+  /// 通知中心（Story 6.6）。列表 / 未读角标 / 标记已读。
+  static const String notifications = '$base/notifications';
+  static const String notificationsUnreadCount = '$base/notifications/unread-count';
+  static const String notificationsReadAll = '$base/notifications/read-all';
+  static String notificationRead(String token) => '$base/notifications/$token/read';
 
   /// 当前用户主体统一端点（决策 C1：全平台用 /me，不用 /users/me）。
   static const String me = '$base/me';

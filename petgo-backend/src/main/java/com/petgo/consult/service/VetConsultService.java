@@ -1,12 +1,15 @@
 package com.petgo.consult.service;
 
 import com.petgo.consult.domain.ConsultSession;
+import com.petgo.consult.domain.SessionStatus;
 import com.petgo.consult.dto.ConsultAssistResponse;
 import com.petgo.consult.dto.VetInboxItem;
 import com.petgo.consult.dto.VetSessionView;
+import com.petgo.consult.event.VetRepliedEvent;
 import com.petgo.consult.repository.ConsultSessionRepository;
 import com.petgo.shared.error.AppException;
 import java.util.List;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,10 +21,29 @@ public class VetConsultService {
 
     private final ConsultSessionRepository repo;
     private final ConsultQueueService queue;
+    private final ApplicationEventPublisher events;
 
-    public VetConsultService(ConsultSessionRepository repo, ConsultQueueService queue) {
+    public VetConsultService(ConsultSessionRepository repo, ConsultQueueService queue,
+            ApplicationEventPublisher events) {
         this.repo = repo;
         this.queue = queue;
+        this.events = events;
+    }
+
+    /**
+     * 兽医回复后通知用户（Story 6.2，FR-22A）。V1 触发：兽医客户端发完 IM 消息后 ping 本端点
+     * （真实腾讯 IM 回调驱动属 L2）。校验兽医归属 + 会话进行中（含待关闭）→ 发 {@link VetRepliedEvent}。
+     */
+    @Transactional
+    public void notifyReply(long vetId, long sessionId) {
+        ConsultSession s = load(sessionId);
+        if (s.getVetId() == null || !s.getVetId().equals(vetId)) {
+            throw AppException.forbidden("无权操作该会话");
+        }
+        if (s.getStatus() != SessionStatus.IN_PROGRESS && s.getStatus() != SessionStatus.PENDING_CLOSE) {
+            throw AppException.conflict("会话不在进行中");
+        }
+        events.publishEvent(new VetRepliedEvent(sessionId, s.getUserId()));
     }
 
     /** 待接单列表：按 Redis 队列 FIFO 取 WAITING 会话，携 AI 上下文摘要。 */

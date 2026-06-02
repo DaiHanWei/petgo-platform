@@ -116,12 +116,12 @@ development_status:
 
   # ===== Epic 6: 推送通知、深链与通知中心 =====
   epic-6: in-progress
-  6-1-推送基建与深链路由表: ready-for-dev
-  6-2-兽医回复与兽医端新请求推送: ready-for-dev
-  6-3-内容互动推送: ready-for-dev
-  6-4-推送权限申请时机与拒绝处理: ready-for-dev
-  6-5-app-版本更新提醒: ready-for-dev
-  6-6-全局通知中心-铃铛: ready-for-dev
+  6-1-推送基建与深链路由表: review
+  6-2-兽医回复与兽医端新请求推送: review
+  6-3-内容互动推送: review
+  6-4-推送权限申请时机与拒绝处理: review
+  6-5-app-版本更新提醒: review
+  6-6-全局通知中心-铃铛: review
   epic-6-retrospective: optional
 
   # ===== Epic 7: 个人中心、双语与账号注销 =====

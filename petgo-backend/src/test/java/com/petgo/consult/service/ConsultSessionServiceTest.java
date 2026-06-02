@@ -38,9 +38,11 @@ class ConsultSessionServiceTest {
     ConsultQueueService queue;
     @Mock
     TriageService triageService;
+    @Mock
+    org.springframework.context.ApplicationEventPublisher events;
 
     private ConsultSessionService service() {
-        return new ConsultSessionService(repo, queue, triageService);
+        return new ConsultSessionService(repo, queue, triageService, events);
     }
 
     @Test

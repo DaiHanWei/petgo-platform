@@ -21,6 +21,12 @@ public interface TencentImClient {
     /** 向会话发系统消息（如「兽医已接受你的问诊，点击开始对话」）。 */
     void sendSystemMessage(String conversationId, String text);
 
+    /**
+     * 经 IM 离线推送通道（底层 APNs/FCM）下发通知（Story 6.1）。
+     * payload 携带 {@code type + deepLinkToken}（绝不带顺序 id / 健康数据明文）。
+     */
+    void pushOffline(String imUserId, String title, String body, String deepLinkType, String deepLinkToken);
+
     /** 校验腾讯 IM 服务端回调签名/token（非法回调拒绝）。 */
     boolean verifyCallback(String token);
 }
