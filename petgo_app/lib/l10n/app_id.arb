@@ -254,5 +254,15 @@
   "consultInterrupted": "Dokter hewan sedang offline. Konsultasi ini terputus.",
   "consultReconsult": "Mulai konsultasi baru",
   "consultInterruptedTag": "Terputus",
-  "vetBannedKicked": "Akunmu telah dinonaktifkan. Hubungi operasional."
+  "vetBannedKicked": "Akunmu telah dinonaktifkan. Hubungi operasional.",
+  "consultHistoryTitle": "Konsultasi saya",
+  "consultHistoryEmpty": "Belum ada riwayat konsultasi",
+  "consultActiveCard": "Lihat konsultasi yang berjalan",
+  "historyTypeAi": "AI",
+  "historyTypeVet": "Dokter hewan",
+  "historyUnrated": "Belum dinilai",
+  "historyArchived": "Diarsipkan",
+  "terminalClosed": "Selesai",
+  "terminalUnrated": "Belum dinilai",
+  "terminalInterrupted": "Terputus"
 }

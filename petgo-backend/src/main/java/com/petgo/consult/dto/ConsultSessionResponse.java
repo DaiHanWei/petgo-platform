@@ -16,7 +16,10 @@ public record ConsultSessionResponse(
         Long vetId,
         long waitingElapsedSeconds,
         boolean timedOut,
-        boolean alreadyActive) {
+        boolean alreadyActive,
+        String imConversationId,
+        String closedReason,
+        String interruptedReason) {
 
     public static ConsultSessionResponse of(ConsultSession s, long timeoutSeconds, boolean alreadyActive) {
         long elapsed = s.getWaitingStartedAt() == null
@@ -29,6 +32,9 @@ public record ConsultSessionResponse(
                 s.getVetId(),
                 elapsed,
                 s.isTimedOut(timeoutSeconds),
-                alreadyActive);
+                alreadyActive,
+                s.getImConversationId(),
+                s.getClosedReason() == null ? null : s.getClosedReason().name(),
+                s.getInterruptedReason() == null ? null : s.getInterruptedReason().name());
     }
 }

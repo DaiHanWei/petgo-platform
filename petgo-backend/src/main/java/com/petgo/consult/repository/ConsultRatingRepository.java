@@ -2,6 +2,7 @@ package com.petgo.consult.repository;
 
 import com.petgo.consult.domain.ConsultRating;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 /**
@@ -12,4 +13,7 @@ public interface ConsultRatingRepository extends JpaRepository<ConsultRating, Lo
     List<ConsultRating> findByVetIdOrderByCreatedAtDesc(long vetId);
 
     boolean existsBySessionId(long sessionId);
+
+    /** 某会话的评分（Story 5.8 历史展示用户评分）。 */
+    Optional<ConsultRating> findBySessionId(long sessionId);
 }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
+import '../domain/consult_history_item.dart';
 import '../domain/consult_session.dart';
 
 /// 用户侧问诊数据层（Story 5.2 起）。可用性查询 + 会话发起/轮询/继续等待/取消（Story 5.3）。
@@ -84,6 +85,15 @@ class ConsultRepository {
   /// 补弹已展示 → 不再弹。
   Future<void> markRatingPrompted(int id) =>
       dio.patch<void>(ApiPaths.consultSessionRatingPrompted(id));
+
+  /// 问诊历史（Story 5.8，AI + 兽医两类，游标分页）。
+  Future<ConsultHistoryPage> history({String? cursor, int limit = 20}) async {
+    final resp = await dio.get<Map<String, dynamic>>(
+      ApiPaths.consultHistory,
+      queryParameters: {'cursor': ?cursor, 'limit': limit},
+    );
+    return ConsultHistoryPage.fromJson(resp.data!);
+  }
 }
 
 final consultRepositoryProvider =

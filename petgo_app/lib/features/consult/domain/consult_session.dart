@@ -8,6 +8,8 @@ class ConsultSession {
     required this.waitingElapsedSeconds,
     required this.timedOut,
     required this.alreadyActive,
+    this.closedReason,
+    this.interruptedReason,
   });
 
   final int id;
@@ -17,6 +19,8 @@ class ConsultSession {
   final int waitingElapsedSeconds;
   final bool timedOut;
   final bool alreadyActive;
+  final String? closedReason; // RATED | UNRATED
+  final String? interruptedReason; // VET_BANNED
 
   bool get isWaiting => status == 'WAITING';
   bool get isInProgress => status == 'IN_PROGRESS';
@@ -29,6 +33,8 @@ class ConsultSession {
         waitingElapsedSeconds: (json['waitingElapsedSeconds'] as num?)?.toInt() ?? 0,
         timedOut: (json['timedOut'] ?? false) as bool,
         alreadyActive: (json['alreadyActive'] ?? false) as bool,
+        closedReason: json['closedReason'] as String?,
+        interruptedReason: json['interruptedReason'] as String?,
       );
 }
 

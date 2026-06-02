@@ -5,11 +5,13 @@ import com.petgo.triage.domain.TriageStatus;
 import com.petgo.triage.domain.TriageTask;
 import com.petgo.triage.dto.TriageAcceptedResponse;
 import com.petgo.triage.dto.TriageResultResponse;
+import com.petgo.triage.dto.TriageHistoryItem;
 import com.petgo.triage.dto.TriageSubmitRequest;
 import com.petgo.triage.dto.TriageUpgradeContext;
 import com.petgo.triage.event.TriageSubmittedEvent;
 import com.petgo.triage.repository.TriageTaskRepository;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -83,6 +85,14 @@ public class TriageService {
         }
         return new TriageUpgradeContext(
                 task.getId(), task.getDangerLevel(), task.getSymptomText(), task.getImageObjectKeys());
+    }
+
+    /** 用户 AI 问诊历史（Story 5.8）。供 consult 历史聚合经本接口拉取（禁直读 triage repository）。 */
+    @Transactional(readOnly = true)
+    public List<TriageHistoryItem> historyForUser(long userId) {
+        return tasks.findByUserIdAndStatusOrderByCreatedAtDesc(userId, TriageStatus.DONE).stream()
+                .map(TriageHistoryItem::of)
+                .toList();
     }
 
     private static String emptyToNull(String s) {

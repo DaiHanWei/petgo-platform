@@ -27,4 +27,8 @@ public interface ConsultSessionRepository extends JpaRepository<ConsultSession, 
 
     /** 某兽医处于活跃态（IN_PROGRESS/PENDING_CLOSE）的会话（Story 5.7 封禁批量中断）。 */
     List<ConsultSession> findByVetIdAndStatusIn(long vetId, Collection<SessionStatus> statuses);
+
+    /** 用户兽医问诊历史（Story 5.8）：终态（CLOSED/INTERRUPTED）会话按时间倒序（CANCELLED 不入历史）。 */
+    List<ConsultSession> findByUserIdAndStatusInOrderByCreatedAtDesc(
+            long userId, Collection<SessionStatus> statuses);
 }

@@ -30,6 +30,7 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
 
   Timer? _poll;
   String _status = 'IN_PROGRESS';
+  String? _closedReason;
   bool _rated = false;
 
   @override
@@ -49,7 +50,10 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
     try {
       final s = await ref.read(consultRepositoryProvider).get(widget.sessionId);
       if (!mounted) return;
-      setState(() => _status = s.status);
+      setState(() {
+        _status = s.status;
+        _closedReason = s.closedReason;
+      });
       if (s.status == 'CLOSED' || s.status == 'INTERRUPTED') _poll?.cancel();
     } catch (_) {
       // 轮询失败静默重试。
@@ -84,9 +88,30 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
     final l10n = AppLocalizations.of(context);
     final pendingClose = _status == 'PENDING_CLOSE' && !_rated;
     final interrupted = _status == 'INTERRUPTED';
+    final closed = _status == 'CLOSED';
+    // 终态只读标签（Story 5.8 AC3）：已结束 / 未评分 / 已中断。
+    final terminalLabel = interrupted
+        ? l10n.terminalInterrupted
+        : (closed && _closedReason == 'UNRATED' && !_rated)
+            ? l10n.terminalUnrated
+            : closed
+                ? l10n.terminalClosed
+                : null;
     return Scaffold(
       backgroundColor: AppColors.base,
-      appBar: AppBar(title: Text(l10n.consultConversationTitle)),
+      appBar: AppBar(
+        title: Text(l10n.consultConversationTitle),
+        actions: [
+          if (terminalLabel != null)
+            Padding(
+              padding: const EdgeInsets.only(right: AppSpacing.md),
+              child: Center(
+                child: Text(terminalLabel,
+                    key: const ValueKey('consultTerminalLabel'), style: AppTypography.caption),
+              ),
+            ),
+        ],
+      ),
       body: SafeArea(
         child: Column(
           children: [
@@ -123,8 +148,8 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
                   ),
                 ),
               ),
-            // 兽医结束 → 请评分提示（30min 窗口内仍可继续发消息，故非阻断 banner）。
-            if (pendingClose)
+            // 兽医结束 → 请评分提示；CLOSED 未评分进入也可补评（30min 内仍可继续发消息，故非阻断 banner）。
+            if (pendingClose || (closed && _closedReason == 'UNRATED' && !_rated))
               Container(
                 key: const ValueKey('consultRatePromptBanner'),
                 width: double.infinity,
@@ -141,8 +166,17 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
                   ],
                 ),
               ),
-            if (!interrupted)
+            // 终态（中断/关闭）转只读：不显示输入区。
+            if (!interrupted && !closed)
               ImChatPlaceholder(imConversationId: 'session-${widget.sessionId}'),
+            // 关闭终态占位（只读，无输入框）。
+            if (closed)
+              Expanded(
+                child: Center(
+                  child: Text(l10n.imChatPlaceholderHint,
+                      style: AppTypography.disclaimer, textAlign: TextAlign.center),
+                ),
+              ),
           ],
         ),
       ),

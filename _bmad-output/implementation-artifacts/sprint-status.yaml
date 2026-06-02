@@ -111,7 +111,7 @@ development_status:
   5-5-腾讯-im-会话与图文对话界面: review
   5-6-会话结束机制与用户评分门: review
   5-7-兽医封禁与进行中会话中断处理: review
-  5-8-问诊-tab-结构与问诊历史整合: ready-for-dev
+  5-8-问诊-tab-结构与问诊历史整合: review
   epic-5-retrospective: optional
 
   # ===== Epic 6: 推送通知、深链与通知中心 =====

@@ -49,6 +49,9 @@ class ApiPaths {
   /// 兽医结束会话（Story 5.6）。
   static String vetConsultEnd(int sessionId) => '$base/vet/consult-sessions/$sessionId/end';
 
+  /// 问诊历史聚合（Story 5.8，AI + 兽医两类，游标分页）。
+  static const String consultHistory = '$base/consult/history';
+
   /// 当前用户主体统一端点（决策 C1：全平台用 /me，不用 /users/me）。
   static const String me = '$base/me';
 

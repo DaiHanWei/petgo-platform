@@ -308,5 +308,15 @@
   "consultInterrupted": "The vet went offline. This consultation was interrupted.",
   "consultReconsult": "Start a new consultation",
   "consultInterruptedTag": "Interrupted",
-  "vetBannedKicked": "Your account has been disabled. Please contact operations."
+  "vetBannedKicked": "Your account has been disabled. Please contact operations.",
+  "consultHistoryTitle": "My consultations",
+  "consultHistoryEmpty": "No consultation records yet",
+  "consultActiveCard": "View your ongoing consultation",
+  "historyTypeAi": "AI",
+  "historyTypeVet": "Vet",
+  "historyUnrated": "Not rated",
+  "historyArchived": "Archived",
+  "terminalClosed": "Completed",
+  "terminalUnrated": "Not rated",
+  "terminalInterrupted": "Interrupted"
 }
