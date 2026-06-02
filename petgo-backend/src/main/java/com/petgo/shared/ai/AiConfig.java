@@ -1,6 +1,5 @@
 package com.petgo.shared.ai;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -18,9 +17,9 @@ import org.springframework.context.annotation.Configuration;
 public class AiConfig {
 
     @Bean
-    public GeminiClient geminiClient(GeminiProperties props, ObjectMapper objectMapper) {
+    public GeminiClient geminiClient(GeminiProperties props) {
         if ("live".equalsIgnoreCase(props.getMode())) {
-            return new GeminiDeveloperApiClient(props, objectMapper);
+            return new GeminiDeveloperApiClient(props);
         }
         return new StubGeminiClient();
     }

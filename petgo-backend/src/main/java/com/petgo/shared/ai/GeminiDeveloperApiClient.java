@@ -47,12 +47,12 @@ public class GeminiDeveloperApiClient implements GeminiClient {
             "required", List.of("dangerLevel", "advice", "disclaimer"));
 
     private final GeminiProperties props;
-    private final ObjectMapper objectMapper;
+    // 自建 ObjectMapper（与 StsService 一致）：Boot 4 默认 Jackson 3，容器内无 Jackson 2 ObjectMapper bean。
+    private final ObjectMapper objectMapper = new ObjectMapper();
     private final RestClient client;
 
-    public GeminiDeveloperApiClient(GeminiProperties props, ObjectMapper objectMapper) {
+    public GeminiDeveloperApiClient(GeminiProperties props) {
         this.props = props;
-        this.objectMapper = objectMapper;
         Duration timeout = Duration.ofSeconds(props.getTimeoutSeconds());
         SimpleClientHttpRequestFactory rf = new SimpleClientHttpRequestFactory();
         rf.setConnectTimeout(timeout);
