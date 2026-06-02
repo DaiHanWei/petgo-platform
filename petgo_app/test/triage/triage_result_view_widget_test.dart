@@ -3,15 +3,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:petgo/core/theme/colors.dart';
 import 'package:petgo/features/triage/data/triage_repository.dart';
+import 'package:petgo/features/profile/data/profile_repository.dart';
 import 'package:petgo/features/triage/domain/triage_archive.dart';
 import 'package:petgo/features/triage/presentation/triage_result_view.dart';
 import 'package:petgo/l10n/app_localizations.dart';
+import 'package:petgo/shared/widgets/red_alert_overlay.dart';
 import 'package:petgo/shared/widgets/triage_result_card.dart';
 
 Future<void> _pump(WidgetTester tester, TriageResult result,
     {TriageArchiveHandler? archiveHandler}) async {
   final container = ProviderContainer(overrides: [
     if (archiveHandler != null) triageArchiveHandlerProvider.overrideWithValue(archiveHandler),
+    petProfileProvider.overrideWith((ref) => null), // 避免红色 overlay 读档案打网络
   ]);
   addTearDown(container.dispose);
   await tester.pumpWidget(UncontrolledProviderScope(
@@ -22,7 +25,9 @@ Future<void> _pump(WidgetTester tester, TriageResult result,
       home: Scaffold(body: TriageResultView(result: result, triageId: 7)),
     ),
   ));
-  await tester.pumpAndSettle();
+  // 不用 pumpAndSettle：红色 overlay 含周期倒计时定时器会阻塞 settle。
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 350));
 }
 
 void main() {
@@ -96,11 +101,16 @@ void main() {
     expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget); // icon 表达
   });
 
-  testWidgets('🔒 红色不在本页软化渲染 → 交棒 4.5 占位', (tester) async {
+  testWidgets('🔒 红色 → 自底滑起半屏强提醒 + 保留红色摘要（无绿黄结果卡）', (tester) async {
     await _pump(tester,
         const TriageResult(status: TriageStatus.done, dangerLevel: DangerLevel.red, advice: 'x'));
-    expect(find.byKey(const ValueKey('triageRedHandoff')), findsOneWidget);
+    // 红色走 4.5 半屏强提醒，绝不渲染绿/黄结果卡
+    expect(find.byType(RedAlertOverlay), findsOneWidget);
+    expect(find.byKey(const ValueKey('triageRedSummary')), findsOneWidget);
     expect(find.byType(TriageResultCard), findsNothing);
+    // 🔒 零兽医 / 零存档（红色态）
+    expect(find.byKey(const ValueKey('triageSaveToArchive')), findsNothing);
+    await tester.pump(const Duration(seconds: 5)); // 倒计时结束，清理定时器
   });
 
   testWidgets('AC3: 点「存入档案」→ 调起存档回调（FR-16 触发）', (tester) async {

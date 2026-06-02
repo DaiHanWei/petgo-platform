@@ -160,5 +160,28 @@
   "triageEscalationLabel": "Segera ke dokter hewan jika",
   "triageNeutralAdvice": "Terus pantau hewanmu dan konsultasikan ke dokter hewan jika ada perubahan.",
   "triageRedHandoff": "Hasil berisiko tinggi mendesak — tampilan peringatan lengkap segera hadir",
-  "triageArchiveNoPet": "Buat profil hewan dulu untuk menyimpan ke arsip"
+  "triageArchiveNoPet": "Buat profil hewan dulu untuk menyimpan ke arsip",
+  "triageRedTitle": "Segera bawa {petName} ke dokter hewan",
+  "@triageRedTitle": {
+    "placeholders": {
+      "petName": { "type": "String" }
+    }
+  },
+  "triageRedTitleNoPet": "Segera ke dokter hewan",
+  "triageRedSubtext": "Terdeteksi kemungkinan kondisi darurat. Segera ke klinik hewan terdekat secepatnya.",
+  "triageRedCountdown": "{seconds} detik lagi bisa beraksi",
+  "@triageRedCountdown": {
+    "placeholders": {
+      "seconds": { "type": "int" }
+    }
+  },
+  "triageRedNavigate": "Navigasi",
+  "triageRedLater": "Nanti saja",
+  "triageRedNavConfirmTitle": "Buka peta ke klinik hewan terdekat?",
+  "triageRedNavConfirmOpen": "Buka peta",
+  "triageRedRiskConfirmTitle": "Konfirmasi kamu paham risikonya?",
+  "triageRedRiskConfirmYes": "Saya paham",
+  "triageRedLevelLabel": "Mendesak: risiko tinggi",
+  "triageRedMapsUnavailable": "Tidak bisa membuka peta. Cari klinik hewan terdekat.",
+  "triageMapSearchQuery": "Klinik Hewan"
 }

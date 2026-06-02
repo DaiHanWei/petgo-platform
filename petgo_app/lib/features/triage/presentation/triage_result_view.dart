@@ -11,6 +11,7 @@ import '../data/triage_repository.dart';
 import '../domain/triage_archive.dart';
 import '../domain/triage_upload_controller.dart';
 import '../domain/triage_wording_guard.dart';
+import 'triage_red_result.dart';
 
 /// 分诊绿/黄结果展示（Story 4.4）。三项同屏（等级 + 观察建议 + 用药参考）+ 黄色条件倒计时协议块 +
 /// 前置免责 + 非红「存入档案」触发 FR-16。红色一律交棒 4.5 半屏（本视图只占位，不软化渲染）。
@@ -25,16 +26,9 @@ class TriageResultView extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final level = result.dangerLevel;
 
-    // 🔒 红色绝不在本视图软化渲染：交棒 4.5 半屏强提醒（本 Story 占位）。
+    // 🔒 红色走 4.5 半屏强提醒（自底滑起 overlay）+ 关闭后保留零兽医/零变现红色摘要。
     if (level == DangerLevel.red || level == null) {
-      return Center(
-        key: const ValueKey('triageRedHandoff'),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          child: Text(l10n.triageRedHandoff,
-              style: AppTypography.body, textAlign: TextAlign.center),
-        ),
-      );
+      return TriageRedResult(result: result);
     }
 
     final isYellow = level == DangerLevel.yellow;

@@ -99,7 +99,7 @@ development_status:
   4-2-确定性安全规则层-高危强制升红: review
   4-3-ai-问诊入口与图文上传: review
   4-4-分诊结果三态展示-绿-黄含条件倒计时协议: review
-  4-5-红色半屏强提醒: ready-for-dev
+  4-5-红色半屏强提醒: review
   epic-4-retrospective: optional
 
   # ===== Epic 5: 在线兽医咨询与兽医工作台 =====

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:petgo/features/profile/data/profile_repository.dart';
 import 'package:petgo/features/triage/data/triage_repository.dart';
 import 'package:petgo/features/triage/domain/triage_result_controller.dart';
 import 'package:petgo/features/triage/domain/triage_upload_controller.dart';
 import 'package:petgo/features/triage/presentation/triage_upload_page.dart';
 import 'package:petgo/l10n/app_localizations.dart';
+import 'package:petgo/shared/widgets/red_alert_overlay.dart';
 
 class _FakeTriageRepo implements TriageRepository {
   _FakeTriageRepo(this.results);
@@ -34,6 +36,7 @@ ProviderContainer _container(_FakeTriageRepo repo) {
     triageRepositoryProvider.overrideWithValue(repo),
     triagePollIntervalProvider.overrideWithValue(const Duration(milliseconds: 1)),
     triageTimeoutProvider.overrideWithValue(const Duration(milliseconds: 120)),
+    petProfileProvider.overrideWith((ref) => null), // 红色 overlay 读档案不打网络
   ]);
   addTearDown(c.dispose);
   return c;
@@ -93,15 +96,17 @@ void main() {
     expect(find.byKey(const ValueKey('triageYellowPage')), findsOneWidget);
   });
 
-  testWidgets('F5: DONE(红) → 不在本页渲染结果，交棒 4.5 占位', (tester) async {
+  testWidgets('F5/4.5: DONE(红) → 自底滑起红色半屏强提醒（不渲染绿/黄页）', (tester) async {
     final c = _container(_FakeTriageRepo(
         [const TriageResult(status: TriageStatus.done, dangerLevel: DangerLevel.red)]));
     await _pump(tester, c);
     c.read(triageUploadProvider.notifier).setSymptom('x');
     await c.read(triageUploadProvider.notifier).submit();
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('triageRedHandoff')), findsOneWidget);
+    await tester.pump(); // 构建红色结果 + 排程 overlay
+    await tester.pump(const Duration(milliseconds: 350)); // 半屏滑起
+    expect(find.byType(RedAlertOverlay), findsOneWidget);
     expect(find.byKey(const ValueKey('triageYellowPage')), findsNothing);
     expect(find.byKey(const ValueKey('triageGreenPage')), findsNothing);
+    await tester.pump(const Duration(seconds: 5)); // 倒计时结束，清理定时器
   });
 }

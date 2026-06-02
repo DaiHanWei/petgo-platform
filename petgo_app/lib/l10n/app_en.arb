@@ -213,5 +213,28 @@
   "triageEscalationLabel": "See a vet right away if",
   "triageNeutralAdvice": "Please keep observing your pet and consult a vet if anything changes.",
   "triageRedHandoff": "Urgent high-risk result — full alert view coming soon",
-  "triageArchiveNoPet": "Create a pet profile first to save to the archive"
+  "triageArchiveNoPet": "Create a pet profile first to save to the archive",
+  "triageRedTitle": "Take {petName} to a vet now",
+  "@triageRedTitle": {
+    "placeholders": {
+      "petName": { "type": "String" }
+    }
+  },
+  "triageRedTitleNoPet": "Get to a vet now",
+  "triageRedSubtext": "A possible emergency was detected. Please go to the nearest animal hospital as soon as possible.",
+  "triageRedCountdown": "{seconds}s until you can act",
+  "@triageRedCountdown": {
+    "placeholders": {
+      "seconds": { "type": "int" }
+    }
+  },
+  "triageRedNavigate": "Navigate",
+  "triageRedLater": "Handle later",
+  "triageRedNavConfirmTitle": "Open maps to a nearby animal hospital?",
+  "triageRedNavConfirmOpen": "Open maps",
+  "triageRedRiskConfirmTitle": "Confirm you understand the risk?",
+  "triageRedRiskConfirmYes": "I understand",
+  "triageRedLevelLabel": "Urgent: high risk",
+  "triageRedMapsUnavailable": "Could not open maps. Please find the nearest animal hospital.",
+  "triageMapSearchQuery": "veterinary clinic"
 }
