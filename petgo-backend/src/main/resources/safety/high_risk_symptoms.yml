@@ -1,0 +1,122 @@
+# =============================================================================
+# 🔒 NFR-6 安全地基 —— 高危急症清单（确定性后置强制升红的【唯一数据源】）
+# -----------------------------------------------------------------------------
+# 本清单是 PetGo 第一根生命安全支柱：SafetyRuleLayer 在 Gemini 返回结果【之后】据此
+# 做确定性后置校验，命中任一【未被否定】的高危信号 → 强制升红 RED（只升不降、独立于
+# Gemini、绝不被业务代码绕过）。即使模型假阴性给「绿/黄」，命中清单也必落 RED。
+#
+# ⚠️ 维护责任（不可协商）：
+#   - 本清单由【兽医顾问维护】。任何条目的增 / 删 / 改【需兽医评审】后方可合入。
+#   - 规则【严禁硬编码进 Java】——兽医顾问应能仅修改本文件即调整覆盖范围。
+#   - 启动时 SafetyRuleLayer 校验本文件结构；缺失 / 为空 / 结构非法 → 【fail-fast 拒绝启动】
+#     （安全层失守宁可不上线）。
+#
+# 匹配语义：
+#   - signals 为多语言同义词（中 zh / 印尼 id / 英 en），归一化为小写子串比对。
+#   - labels 为 id(印尼) / en(英) 双语人类可读名，仅供审计 / 展示，【不参与匹配】。
+#   - 命中 = signal 在「症状原文 + Gemini 解析文本」双源中出现且【未被紧邻否定】（见 E5）。
+#
+# 本批覆盖 20 条最高频致死急症（犬 / 猫），符合 V1 起步范围（15–20）：
+#   误食类: 巧克力 / 葡萄·葡萄干 / 木糖醇 / 百合(猫) / 洋葱·大蒜 / 鼠药 / 防冻液 / 人药布洛芬
+#   呼吸循环: 呼吸困难 / 牙龈苍白(休克) / 虚脱倒地 / 昏迷失去意识
+#   神经: 抽搐癫痫持续
+#   消化: 呕吐带血 / 便血 / 犬胃扭转(GDV)腹胀
+#   泌尿: 猫尿道阻塞排不出尿
+#   其他: 中暑 / 车祸外伤大出血 / 难产
+# =============================================================================
+version: 1
+
+# E5 保守否定处理：仅当高危信号被【紧邻否定】（否定词与该信号之间间隔 ≤ negation_gap 个字符）
+# 且【不跨句/不跨子句】时，才抑制【该次】命中；只要全文存在任一【未被否定】的高危命中，一律升红。
+#   - negation_gap 刻意取小（紧邻语义）：避免「没有发烧今天呕吐带血」里的「没有」误抑制远处的真实急症。
+#   - sentence_boundaries 含逗号/顿号：子句一断，否定不再越界（「没有呼吸困难，但呕吐带血」必升红）。
+# 否定从严是安全偏置：宁可少抑制（多升红）也绝不漏掉真实急症。
+negation_gap: 3
+sentence_boundaries: "。！？!?.;；,，、\n"
+negations:
+  # 中文否定（子串比对）。刻意只取明确「没/未」类，不取「不/别/无」（多义易误抑制）。
+  zh: ["没有", "没", "未"]
+  # 印尼 / 英文否定（整词比对）。
+  id: ["tidak", "tanpa", "belum", "bukan"]
+  en: ["no", "not", "without", "never", "denies", "denied"]
+
+emergencies:
+  - id: chocolate_ingestion
+    labels: { id: "Keracunan cokelat", en: "Chocolate ingestion" }
+    signals: ["误食巧克力", "吃了巧克力", "偷吃巧克力", "巧克力中毒", "巧克力", "cokelat", "chocolate"]
+
+  - id: grape_raisin_ingestion
+    labels: { id: "Konsumsi anggur/kismis", en: "Grape or raisin ingestion" }
+    signals: ["误食葡萄", "吃了葡萄", "葡萄干", "葡萄中毒", "anggur", "kismis", "grape", "raisin"]
+
+  - id: xylitol_ingestion
+    labels: { id: "Konsumsi xylitol", en: "Xylitol ingestion" }
+    signals: ["误食木糖醇", "木糖醇", "无糖口香糖", "xylitol", "pemanis xylitol"]
+
+  - id: lily_ingestion
+    labels: { id: "Konsumsi bunga lili (kucing)", en: "Lily ingestion (cat)" }
+    signals: ["误食百合", "啃百合", "百合花", "百合中毒", "bunga lili", "lili", "lily"]
+
+  - id: onion_garlic_ingestion
+    labels: { id: "Konsumsi bawang", en: "Onion or garlic ingestion" }
+    signals: ["误食洋葱", "误食大蒜", "吃了洋葱", "吃了大蒜", "bawang merah", "bawang putih", "onion", "garlic"]
+
+  - id: rodenticide_ingestion
+    labels: { id: "Keracunan racun tikus", en: "Rodenticide poisoning" }
+    signals: ["误食老鼠药", "吃了老鼠药", "鼠药", "灭鼠药", "racun tikus", "rodenticide", "rat poison"]
+
+  - id: antifreeze_ingestion
+    labels: { id: "Keracunan antibeku", en: "Antifreeze (ethylene glycol) poisoning" }
+    signals: ["误食防冻液", "防冻液", "乙二醇", "antibeku", "antifreeze", "ethylene glycol"]
+
+  - id: ibuprofen_human_meds_ingestion
+    labels: { id: "Konsumsi obat manusia", en: "Human medication (ibuprofen etc.) ingestion" }
+    signals: ["误食布洛芬", "吃了布洛芬", "误食人药", "误食对乙酰氨基酚", "ibuprofen", "paracetamol", "acetaminophen"]
+
+  - id: labored_breathing
+    labels: { id: "Sesak napas", en: "Labored breathing / dyspnea" }
+    signals: ["呼吸困难", "呼吸急促", "喘不上气", "张口呼吸", "呼吸费力", "sesak napas", "susah bernapas", "labored breathing", "difficulty breathing", "dyspnea"]
+
+  - id: pale_gums_shock
+    labels: { id: "Gusi pucat (syok)", en: "Pale gums (shock)" }
+    signals: ["牙龈苍白", "牙龈发白", "舌头发白", "黏膜苍白", "gusi pucat", "pale gums", "white gums"]
+
+  - id: collapse
+    labels: { id: "Kolaps / pingsan", en: "Collapse" }
+    signals: ["虚脱", "倒地不起", "突然倒下", "站不起来", "瘫倒", "kolaps", "ambruk", "collapse", "collapsed"]
+
+  - id: unconscious
+    labels: { id: "Tidak sadarkan diri", en: "Unconscious / unresponsive" }
+    signals: ["昏迷", "失去意识", "叫不醒", "没有反应", "无意识", "tidak sadar", "pingsan", "unconscious", "unresponsive"]
+
+  - id: seizure
+    labels: { id: "Kejang", en: "Seizure" }
+    signals: ["抽搐", "癫痫", "抽风", "全身抽搐", "持续抽搐", "kejang", "seizure", "convulsion", "convulsing"]
+
+  - id: vomiting_blood
+    labels: { id: "Muntah darah", en: "Vomiting blood (hematemesis)" }
+    signals: ["呕吐带血", "吐血", "呕血", "吐出血", "muntah darah", "vomiting blood", "hematemesis", "blood in vomit"]
+
+  - id: bloody_diarrhea
+    labels: { id: "Diare berdarah", en: "Bloody diarrhea" }
+    signals: ["便血", "血便", "拉血", "腹泻带血", "大便带血", "diare berdarah", "berak darah", "bloody diarrhea", "blood in stool"]
+
+  - id: gdv_bloat
+    labels: { id: "Kembung lambung (GDV)", en: "Gastric dilatation-volvulus / bloat" }
+    signals: ["胃扭转", "腹部胀大", "肚子鼓胀", "干呕腹胀", "gdv", "kembung", "perut kembung", "bloat", "stomach bloat"]
+
+  - id: urethral_obstruction
+    labels: { id: "Sumbatan saluran kencing (kucing)", en: "Urethral obstruction (cat)" }
+    signals: ["尿道阻塞", "排不出尿", "尿不出来", "频繁蹲厕无尿", "无法排尿", "tidak bisa kencing", "sulit kencing", "urethral obstruction", "cannot urinate", "straining to urinate"]
+
+  - id: heatstroke
+    labels: { id: "Serangan panas", en: "Heatstroke" }
+    signals: ["中暑", "热射病", "体温过高喘", "serangan panas", "heatstroke", "heat stroke", "overheating"]
+
+  - id: trauma_severe_bleeding
+    labels: { id: "Trauma / pendarahan hebat", en: "Trauma / severe bleeding" }
+    signals: ["车祸", "被车撞", "高处坠落", "大量出血", "止不住血", "外伤大出血", "tertabrak", "kecelakaan", "pendarahan hebat", "hit by car", "severe bleeding", "heavy bleeding"]
+
+  - id: dystocia
+    labels: { id: "Distokia (kesulitan melahirkan)", en: "Dystocia (difficult birth)" }
+    signals: ["难产", "生不出来", "分娩困难", "宫缩很久没产出", "kesulitan melahirkan", "distokia", "dystocia", "difficult labor", "difficult birth"]

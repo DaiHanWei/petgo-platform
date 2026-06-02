@@ -71,10 +71,11 @@ public class TriageProcessor {
 
                 DangerLevel modelLevel = DangerLevel.fromNullable(result.dangerLevel());
                 // === Story 4.2 后置强制升红的唯一挂载点（只升不降、不可旁路）===
-                DangerLevel finalLevel = safetyRuleLayer.enforce(
-                        modelLevel, task.getSymptomText(), task.getImageObjectKeys());
+                // 双源匹配：症状原文 + Gemini 解析文本（建议/用药参考），防模型漏读用户原话。
+                SafetyDecision decision = safetyRuleLayer.enforce(
+                        modelLevel, task.getSymptomText(), parsedText(result));
 
-                task.markDone(finalLevel, result.raw(), toParsed(result, finalLevel));
+                task.markDone(decision.finalLevel(), result.raw(), toParsed(result, decision));
                 tasks.save(task);
                 return;
             } catch (RuntimeException e) {
@@ -97,9 +98,25 @@ public class TriageProcessor {
         return signedUrlService.signAll(objectKeys);
     }
 
-    /** 解析结果落 parsed_result JSONB（dangerLevel 用后置裁决后的最终值）。 */
-    private static Map<String, Object> toParsed(GeminiTriageResult r, DangerLevel finalLevel) {
+    /** Gemini 解析文本（建议 + 用药参考）作为安全层匹配的第二信号源。 */
+    private static String parsedText(GeminiTriageResult r) {
+        StringBuilder sb = new StringBuilder();
+        if (r.advice() != null) {
+            sb.append(r.advice()).append(' ');
+        }
+        if (r.medicationRef() != null) {
+            sb.append(r.medicationRef());
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 解析结果落 parsed_result JSONB（dangerLevel 用后置裁决后的最终值）。
+     * 审计仅落「是否升红 + 命中规则 id」，**不落症状健康数据**（Story 4.2 护栏）。
+     */
+    private static Map<String, Object> toParsed(GeminiTriageResult r, SafetyDecision decision) {
         Map<String, Object> m = new LinkedHashMap<>();
+        DangerLevel finalLevel = decision.finalLevel();
         m.put("dangerLevel", finalLevel == null ? null : finalLevel.name());
         if (r.advice() != null) {
             m.put("advice", r.advice());
@@ -109,6 +126,11 @@ public class TriageProcessor {
         }
         if (r.disclaimer() != null) {
             m.put("disclaimer", r.disclaimer());
+        }
+        // 审计标识（非健康数据）：是否因规则层升红 + 命中规则 id。
+        m.put("escalatedBySafetyRule", decision.escalatedBySafetyRule());
+        if (!decision.matchedRuleIds().isEmpty()) {
+            m.put("matchedSafetyRuleIds", decision.matchedRuleIds());
         }
         return m;
     }
