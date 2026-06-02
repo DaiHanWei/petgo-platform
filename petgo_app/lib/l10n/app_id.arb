@@ -119,5 +119,69 @@
   "reportSubmit": "Kirim",
   "reportSuccess": "Terima kasih, laporanmu sudah kami terima dan akan segera ditinjau 🐾",
   "miniProfilePostCount": "{count} postingan dibagikan",
-  "miniProfileComingSoon": "Halaman pribadi mereka sedang disiapkan dengan penuh perhatian, lebih banyak kejutan menanti ✨"
+  "miniProfileComingSoon": "Halaman pribadi mereka sedang disiapkan dengan penuh perhatian, lebih banyak kejutan menanti ✨",
+  "triageEntryAiTitle": "Triase Pintar AI",
+  "triageEntryAiDesc": "Unggah foto dan gejala untuk penilaian awal cepat",
+  "triageEntryVetTitle": "Dokter Hewan Online",
+  "triageEntryVetDesc": "Konsultasi dengan dokter hewan berlisensi",
+  "triageFreeBadge": "Gratis",
+  "triageVetComingSoon": "Dokter hewan online segera hadir, nantikan ya 🐾",
+  "triageSymptomLabel": "Jelaskan gejalanya",
+  "triageSymptomHint": "Apa yang mengganggu si bulu?",
+  "triageSymptomRemaining": "sisa {count} karakter",
+  "@triageSymptomRemaining": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "triageAddPhoto": "Tambah foto",
+  "triagePhotoFromCamera": "Kamera",
+  "triagePhotoFromGallery": "Galeri",
+  "triagePhotoLimit": "Maks 3 foto, masing-masing di bawah 10 MB (JPG/PNG/HEIC)",
+  "triageSubmit": "Mulai analisis",
+  "triageNeedInput": "Jelaskan gejala atau tambahkan foto dulu",
+  "triageDisclaimer": "Triase AI hanya sebagai referensi dan tidak menggantikan diagnosis dokter hewan profesional. Jika kondisi memburuk, segera ke dokter hewan.",
+  "triageAnalyzing": "Sedang menganalisis kondisi si bulu, tunggu sebentar ya…",
+  "triageTimeoutTitle": "Analisis memakan waktu lebih lama",
+  "triageTimeoutBody": "Silakan coba lagi sebentar",
+  "triageErrorTitle": "Layanan AI sedang tidak tersedia",
+  "triageErrorBody": "Silakan coba lagi, atau hubungi dokter hewan langsung",
+  "triageResubmit": "Kirim ulang",
+  "triageContactVet": "Atau hubungi dokter hewan langsung",
+  "triageResultReady": "Penilaian siap (tampilan hasil lengkap segera hadir)",
+  "triageGreenTitle": "Tidak ada risiko mendesak",
+  "triageYellowTitle": "Pantau dengan saksama",
+  "triageSoftVetGuide": "Ingin lebih tenang? Kamu bisa konfirmasi ke dokter hewan",
+  "triageSaveToArchive": "Simpan hasil ini ke arsip",
+  "triageMedicationRefLabel": "Referensi obat rumahan",
+  "triageObservationTitle": "Protokol pemantauan",
+  "triageIndicatorsLabel": "Yang perlu dipantau",
+  "triageTimeWindowLabel": "Rentang waktu",
+  "triageEscalationLabel": "Segera ke dokter hewan jika",
+  "triageNeutralAdvice": "Terus pantau hewanmu dan konsultasikan ke dokter hewan jika ada perubahan.",
+  "triageRedHandoff": "Hasil berisiko tinggi mendesak — tampilan peringatan lengkap segera hadir",
+  "triageArchiveNoPet": "Buat profil hewan dulu untuk menyimpan ke arsip",
+  "triageRedTitle": "Segera bawa {petName} ke dokter hewan",
+  "@triageRedTitle": {
+    "placeholders": {
+      "petName": { "type": "String" }
+    }
+  },
+  "triageRedTitleNoPet": "Segera ke dokter hewan",
+  "triageRedSubtext": "Terdeteksi kemungkinan kondisi darurat. Segera ke klinik hewan terdekat secepatnya.",
+  "triageRedCountdown": "{seconds} detik lagi bisa beraksi",
+  "@triageRedCountdown": {
+    "placeholders": {
+      "seconds": { "type": "int" }
+    }
+  },
+  "triageRedNavigate": "Navigasi",
+  "triageRedLater": "Nanti saja",
+  "triageRedNavConfirmTitle": "Buka peta ke klinik hewan terdekat?",
+  "triageRedNavConfirmOpen": "Buka peta",
+  "triageRedRiskConfirmTitle": "Konfirmasi kamu paham risikonya?",
+  "triageRedRiskConfirmYes": "Saya paham",
+  "triageRedLevelLabel": "Mendesak: risiko tinggi",
+  "triageRedMapsUnavailable": "Tidak bisa membuka peta. Cari klinik hewan terdekat.",
+  "triageMapSearchQuery": "Klinik Hewan"
 }

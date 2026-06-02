@@ -172,5 +172,69 @@
       "count": { "type": "int" }
     }
   },
-  "miniProfileComingSoon": "Their personal page is being lovingly prepared, with more delights on the way ✨"
+  "miniProfileComingSoon": "Their personal page is being lovingly prepared, with more delights on the way ✨",
+  "triageEntryAiTitle": "AI Smart Triage",
+  "triageEntryAiDesc": "Upload photos and symptoms for a quick first assessment",
+  "triageEntryVetTitle": "Online Vet",
+  "triageEntryVetDesc": "Chat with a licensed veterinarian",
+  "triageFreeBadge": "Free",
+  "triageVetComingSoon": "Online vet is coming soon, stay tuned 🐾",
+  "triageSymptomLabel": "Describe the symptoms",
+  "triageSymptomHint": "What's bothering your fur baby?",
+  "triageSymptomRemaining": "{count} characters left",
+  "@triageSymptomRemaining": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "triageAddPhoto": "Add photo",
+  "triagePhotoFromCamera": "Camera",
+  "triagePhotoFromGallery": "Gallery",
+  "triagePhotoLimit": "Up to 3 photos, each under 10 MB (JPG/PNG/HEIC)",
+  "triageSubmit": "Start analysis",
+  "triageNeedInput": "Please describe the symptoms or add a photo first",
+  "triageDisclaimer": "AI triage is for reference only and does not replace a professional veterinary diagnosis. If the condition worsens, please see a vet promptly.",
+  "triageAnalyzing": "Analyzing your fur baby's condition, hang tight…",
+  "triageTimeoutTitle": "Analysis is taking longer than usual",
+  "triageTimeoutBody": "Please try again in a moment",
+  "triageErrorTitle": "AI service is temporarily unavailable",
+  "triageErrorBody": "Please try again, or contact a vet directly",
+  "triageResubmit": "Resubmit",
+  "triageContactVet": "Or contact a vet directly",
+  "triageResultReady": "Assessment ready (full result view coming soon)",
+  "triageGreenTitle": "No urgent risk found",
+  "triageYellowTitle": "Keep a close watch",
+  "triageSoftVetGuide": "Want extra peace of mind? You can confirm with a vet",
+  "triageSaveToArchive": "Save this result to the archive",
+  "triageMedicationRefLabel": "Home medication reference",
+  "triageObservationTitle": "Observation protocol",
+  "triageIndicatorsLabel": "What to watch",
+  "triageTimeWindowLabel": "Time window",
+  "triageEscalationLabel": "See a vet right away if",
+  "triageNeutralAdvice": "Please keep observing your pet and consult a vet if anything changes.",
+  "triageRedHandoff": "Urgent high-risk result — full alert view coming soon",
+  "triageArchiveNoPet": "Create a pet profile first to save to the archive",
+  "triageRedTitle": "Take {petName} to a vet now",
+  "@triageRedTitle": {
+    "placeholders": {
+      "petName": { "type": "String" }
+    }
+  },
+  "triageRedTitleNoPet": "Get to a vet now",
+  "triageRedSubtext": "A possible emergency was detected. Please go to the nearest animal hospital as soon as possible.",
+  "triageRedCountdown": "{seconds}s until you can act",
+  "@triageRedCountdown": {
+    "placeholders": {
+      "seconds": { "type": "int" }
+    }
+  },
+  "triageRedNavigate": "Navigate",
+  "triageRedLater": "Handle later",
+  "triageRedNavConfirmTitle": "Open maps to a nearby animal hospital?",
+  "triageRedNavConfirmOpen": "Open maps",
+  "triageRedRiskConfirmTitle": "Confirm you understand the risk?",
+  "triageRedRiskConfirmYes": "I understand",
+  "triageRedLevelLabel": "Urgent: high risk",
+  "triageRedMapsUnavailable": "Could not open maps. Please find the nearest animal hospital.",
+  "triageMapSearchQuery": "veterinary clinic"
 }
