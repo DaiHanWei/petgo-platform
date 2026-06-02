@@ -59,6 +59,12 @@ class ApiPaths {
   /// App 版本信息（Story 6.5，公开可读，App 内更新提醒）。
   static const String appVersion = '$base/app-version';
 
+  /// 通知中心（Story 6.6）。列表 / 未读角标 / 标记已读。
+  static const String notifications = '$base/notifications';
+  static const String notificationsUnreadCount = '$base/notifications/unread-count';
+  static const String notificationsReadAll = '$base/notifications/read-all';
+  static String notificationRead(String token) => '$base/notifications/$token/read';
+
   /// 当前用户主体统一端点（决策 C1：全平台用 /me，不用 /users/me）。
   static const String me = '$base/me';
 

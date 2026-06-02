@@ -11,6 +11,7 @@ import '../../../features/auth/domain/auth_state.dart';
 import '../../../features/auth/domain/login_guide_controller.dart';
 import '../../../features/profile/domain/profile_prompt_controller.dart';
 import '../../../features/profile/domain/profile_prompt_state.dart';
+import '../../../features/notify/presentation/notification_bell.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/profile_prompt_bar.dart';
@@ -58,6 +59,15 @@ class HomePage extends ConsumerWidget {
       body: SafeArea(
         child: Column(
           children: [
+            // 通知铃铛（Story 6.6）：登录用户首页右上角入口 + 未读角标。
+            if (auth.isLoggedIn)
+              Align(
+                alignment: Alignment.centerRight,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: AppSpacing.sm),
+                  child: const NotificationBell(),
+                ),
+              ),
             if (showPrompt)
               Padding(
                 padding: const EdgeInsets.fromLTRB(

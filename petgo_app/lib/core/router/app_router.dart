@@ -17,6 +17,7 @@ import '../../features/profile/presentation/profile_onboarding_page.dart';
 import '../../features/consult/presentation/consult_conversation_page.dart';
 import '../../features/consult/presentation/consult_entry_page.dart';
 import '../../features/consult/presentation/consult_waiting_page.dart';
+import '../../features/notify/presentation/notification_center_page.dart';
 import '../../features/vet/presentation/vet_conversation_page.dart';
 import '../../features/triage/presentation/dev_triage_page.dart';
 import '../../features/triage/presentation/triage_page.dart';
@@ -29,7 +30,7 @@ import '../../shared/widgets/app_shell.dart';
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
 /// 未登录游客**不可**直接进入的受控路由前缀（FR-19 门控）。
-const Set<String> _controlledLocations = {'/profile', '/triage', '/me', '/consult'};
+const Set<String> _controlledLocations = {'/profile', '/triage', '/me', '/consult', '/notifications'};
 
 /// 应用路由（provider 化：redirect 可读登录态做受控路由门控）。
 ///
@@ -89,6 +90,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         path: '/vet/conversation/:id',
         builder: (c, s) => VetConversationPage(sessionId: int.parse(s.pathParameters['id']!)),
       ),
+      // 通知中心（Story 6.6）+ 6.1 深链兜底落点。受控路由（需登录）。
+      GoRoute(path: '/notifications', builder: (c, s) => const NotificationCenterPage()),
       // 内容详情（Story 3.3）。shell 外顶层 push（隐藏 Tab Bar）；返回保持 Feed 滚动位置。游客只读可进。
       GoRoute(
         path: '/content/:id',
