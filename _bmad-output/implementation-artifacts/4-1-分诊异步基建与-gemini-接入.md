@@ -1,6 +1,6 @@
 # Story 4.1: 分诊异步基建与 Gemini 接入
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -175,13 +175,87 @@ Flutter 压缩图 → STS 直传②私密桶 →（本 Story 起）`POST /triage
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude（云端 headless dev agent）
 
 ### Debug Log References
 
+- `./mvnw -B compile` → 绿。
+- `./mvnw -B -Dtest='TriageServiceTest,TriageProcessorTest,TriageControllerTest,DangerLevelTest,StubGeminiClientTest' test` → 绿（重试日志可见 retryCount 1→4 后置 FAILED）。
+- `./mvnw -B -DskipTests package` → 绿。
+- `flutter analyze` → No issues found.
+- `flutter test`（全量 122 用例，含 triage 8 用例）→ All tests passed.
+
 ### Completion Notes List
 
-- 记录实际所用 Gemini 模型版本 / SB / Java 版本（若 gemini-2.5-flash 在执行时有更新别名以实际为准，勿降级模型能力）。
-- 记录 L2 端到端提交→结果实测耗时（验证 ≤15s SLA）。
+**已实现（L0 绿）：**
+- ✅ AC1 — `triage_tasks` 建表（Flyway **V12**，接 main 已用到的 V11 之后单调分配，决策 E2）；`POST /api/v1/triage` **202 异步受理** + `triageId`；`status=PENDING` 入库后发 `TriageSubmittedEvent`；`@Async @TransactionalEventListener(AFTER_COMMIT)` 驱动 `TriageProcessor` 置 PROCESSING→调 GeminiClient→后置裁决→写 `gemini_raw`/`parsed_result`/`danger_level`→DONE。
+- ✅ AC1 幂等 — `Idempotency-Key` 头命中既有任务回原 `triageId`，不重复入队（DB 唯一约束 `uq_triage_tasks_idempotency_key` 兜底）。
+- ✅ AC2 — `GET /api/v1/triage/{id}` 短轮询：处理中仅回 `status`，DONE 回完整结构（级别+建议+用药参考+免责声明），FAILED 供降级。**鉴权防枚举**：他人 task 与不存在 task 均返**同一** 403 ProblemDetail（文案/状态码不可区分）。
+- ✅ AC3 — 失败重试：超时/异常 → `retry_count++`，>3 置 FAILED；`TriageTaskScanner` 在 `ApplicationReadyEvent` 异步重扫 status∈{PENDING,PROCESSING} 残留任务续跑（崩溃/重启不丢任务）。**全 DB 状态机，禁 MQ**。
+- ✅ 🔒 安全攸关挂载点 — `SafetyRuleLayer.enforce(...)` 为**唯一、显式、不可旁路**的后置升红挂载点（4.1 为 no-op 占位，**Story 4.2 填充**）；插在「Gemini 返回解析后、写库 DONE 前」一处；`DangerLevel.atLeast` 提供「只升不降」原语；取结果一律读经后置裁决后落库的最终值（无「模型说绿就当绿」快路径）。
+- ✅ Gemini 接入 — `shared/ai/GeminiClient` 接口抽象（便于迁 Vertex，G-3）；`mode=live` 装配 `GeminiDeveloperApiClient`（RestClient 打 gemini-2.5-flash、结构化输出 responseSchema、`fileData.fileUri` 签名 URL 直拉私密图、key 经 `x-goog-api-key` 头）；`mode=stub`（默认）装配 `StubGeminiClient` 使状态机无凭证可 L0/L1 验。
+- ✅ 前端薄客户端 — `TriageRepository`（submit 带 Idempotency-Key / poll 三态映射）+ `TriageController`（submit→短轮询直到 DONE/FAILED/超时，15s SLA）+ `/dev/triage` 调试页（仅手动深链，验收后可移除）。**真正的上传页/spinner/三态卡/红色半屏在 4.3/4.4/4.5**。
+- ✅ 护栏 — 私密图只存对象 key（不存签名 URL）；失败日志只记异常类名，不落症状/图片/签名 URL/解析结果/Gemini key；`ddl-auto=validate` schema 归 Flyway；写端点 Redis 令牌桶限流；key env 注入不入库。
+
+**待本地验收：**
+- ⏳ **L1（需 Docker postgres+redis + 打桩 Gemini，`GEMINI_MODE=stub`）**：
+  - J1 状态机：`POST /triage`→202+triageId、`triage_tasks` 落 PENDING；打桩返回固定 JSON→PROCESSING→DONE、`gemini_raw`/`parsed_result`/`danger_level` 落 JSONB。
+  - J1 幂等：同 `Idempotency-Key` 重复 POST → 同一 triageId、不重复入队。
+  - J1 重试/重扫：打桩抛超时/5xx→`retry_count` 递增、>3 置 FAILED；杀进程留 PROCESSING 残留→重启 `TriageTaskScanner` 续跑。
+  - J1 越权：用户 B 取用户 A 的 `GET /triage/{id}`→403（与「不存在」不可区分）。
+- ⏳ **L2（需真实 `GEMINI_API_KEY` + 真实私密桶签名 URL，`GEMINI_MODE=live`，真机/印尼↔德国网络）**：
+  - J2 端到端：提交真实症状文字 + 私密桶图 → 验 gemini-2.5-flash 经签名 URL 直拉到图、解析出绿/黄/红、写 DONE。
+  - J2 计时：提交→结果 ≤15s（NFR-1），实测耗时回填本节。
+  - J2 抽查 logback JSON：不落症状健康数据 / 签名 URL / Gemini key。
+  - ⚠️ **Gemini 图片摄取机制需 L2 核实**：当前按架构「签名 URL 直拉」用 `fileData.fileUri` 传签名 URL；若真实 Developer API 对任意签名 URL 的 `fileUri` 支持受限（历史上 `fileUri` 主要接 File API / Google 托管资源），需在 L2 调整为 File API 上传或 `inlineData` base64，`GeminiClient` 抽象已为此预留可调整点。
+- ⏳ Gemini 模型/SB/Java 版本：用 gemini-2.5-flash（别名，若执行时有更新以实际为准勿降级）；Spring Boot 4.0.6 / Java 21（与基线一致）。
 
 ### File List
+
+**新增（后端 shared/ai）：**
+- `petgo-backend/src/main/java/com/petgo/shared/ai/GeminiClient.java`
+- `petgo-backend/src/main/java/com/petgo/shared/ai/GeminiTriageResult.java`
+- `petgo-backend/src/main/java/com/petgo/shared/ai/GeminiException.java`
+- `petgo-backend/src/main/java/com/petgo/shared/ai/GeminiProperties.java`
+- `petgo-backend/src/main/java/com/petgo/shared/ai/GeminiDeveloperApiClient.java`
+- `petgo-backend/src/main/java/com/petgo/shared/ai/StubGeminiClient.java`
+- `petgo-backend/src/main/java/com/petgo/shared/ai/AiConfig.java`
+
+**新增（后端 triage 模块）：**
+- `petgo-backend/src/main/java/com/petgo/triage/domain/TriageStatus.java`
+- `petgo-backend/src/main/java/com/petgo/triage/domain/DangerLevel.java`
+- `petgo-backend/src/main/java/com/petgo/triage/domain/TriageTask.java`
+- `petgo-backend/src/main/java/com/petgo/triage/repository/TriageTaskRepository.java`
+- `petgo-backend/src/main/java/com/petgo/triage/dto/TriageSubmitRequest.java`
+- `petgo-backend/src/main/java/com/petgo/triage/dto/TriageAcceptedResponse.java`
+- `petgo-backend/src/main/java/com/petgo/triage/dto/TriageResultResponse.java`
+- `petgo-backend/src/main/java/com/petgo/triage/event/TriageSubmittedEvent.java`
+- `petgo-backend/src/main/java/com/petgo/triage/service/SafetyRuleLayer.java`（4.2 填充挂载点）
+- `petgo-backend/src/main/java/com/petgo/triage/service/TriageService.java`
+- `petgo-backend/src/main/java/com/petgo/triage/service/TriageProcessor.java`
+- `petgo-backend/src/main/java/com/petgo/triage/service/TriageEventListener.java`
+- `petgo-backend/src/main/java/com/petgo/triage/service/TriageTaskScanner.java`
+- `petgo-backend/src/main/java/com/petgo/triage/web/TriageController.java`
+- `petgo-backend/src/main/resources/db/migration/V12__init_triage.sql`
+
+**新增（后端测试 L0）：**
+- `petgo-backend/src/test/java/com/petgo/triage/TriageTestSupport.java`
+- `petgo-backend/src/test/java/com/petgo/triage/service/TriageServiceTest.java`
+- `petgo-backend/src/test/java/com/petgo/triage/service/TriageProcessorTest.java`
+- `petgo-backend/src/test/java/com/petgo/triage/web/TriageControllerTest.java`
+- `petgo-backend/src/test/java/com/petgo/triage/domain/DangerLevelTest.java`
+- `petgo-backend/src/test/java/com/petgo/shared/ai/StubGeminiClientTest.java`
+
+**新增（前端 triage 薄客户端）：**
+- `petgo_app/lib/features/triage/data/triage_repository.dart`
+- `petgo_app/lib/features/triage/domain/triage_result_state.dart`
+- `petgo_app/lib/features/triage/domain/triage_result_controller.dart`
+- `petgo_app/lib/features/triage/presentation/dev_triage_page.dart`
+- `petgo_app/test/triage/triage_repository_test.dart`
+- `petgo_app/test/triage/triage_controller_test.dart`
+
+**修改：**
+- `petgo-backend/src/main/resources/application.yml`（新增 `petgo.ai.gemini` 配置块）
+- `petgo-backend/.env.example`（新增 `GEMINI_MODE`/`GEMINI_API_KEY` 等占位）
+- `petgo_app/lib/core/network/api_paths.dart`（新增 triage 路径）
+- `petgo_app/lib/core/router/app_router.dart`（新增 `/dev/triage` 调试路由）

@@ -41,4 +41,8 @@ class ApiPaths {
   /// 问诊存档（Story 2.5）。
   static const String healthArchiveDecisions = '$base/health-events/archive-decisions';
   static const String healthDecision = '$base/health-events/decision';
+
+  /// AI 智能分诊（Story 4.1）。POST 受理（202+triageId）/ GET 短轮询取结果。
+  static const String triage = '$base/triage';
+  static String triageResult(int id) => '$base/triage/$id';
 }
