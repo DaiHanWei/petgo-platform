@@ -64,6 +64,26 @@ class ConsultRepository {
     final resp = await dio.delete<Map<String, dynamic>>(ApiPaths.consultSession(id));
     return ConsultSession.fromJson(resp.data!);
   }
+
+  /// 提交评分（1-5 星必填 + ≤100 字选填）→ CLOSED(RATED)（Story 5.6）。
+  Future<ConsultSession> rate(int id, int stars, String? comment) async {
+    final resp = await dio.post<Map<String, dynamic>>(
+      ApiPaths.consultSessionRating(id),
+      data: {'stars': stars, if (comment != null && comment.isNotEmpty) 'comment': comment},
+    );
+    return ConsultSession.fromJson(resp.data!);
+  }
+
+  /// 待补弹评分的已关闭会话（无则 null）。
+  Future<ConsultSession?> pendingRating() async {
+    final resp = await dio.get<Map<String, dynamic>>(ApiPaths.consultPendingRating);
+    if (resp.statusCode == 204 || resp.data == null) return null;
+    return ConsultSession.fromJson(resp.data!);
+  }
+
+  /// 补弹已展示 → 不再弹。
+  Future<void> markRatingPrompted(int id) =>
+      dio.patch<void>(ApiPaths.consultSessionRatingPrompted(id));
 }
 
 final consultRepositoryProvider =

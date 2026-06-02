@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,10 +8,13 @@ import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../data/consult_repository.dart';
-import '../domain/consult_session.dart';
+import 'consult_rating_dialog.dart';
 import 'im_chat_placeholder.dart';
 
-/// 用户侧进行中会话界面（Story 5.5）。常驻免责提示（NFR-9）+ IM 对话区（L2 占位）。
+/// 用户侧进行中会话界面（Story 5.5 + 5.6）。
+///
+/// 常驻免责提示（NFR-9）+ IM 对话区（L2 占位）。轮询会话状态：兽医结束 → PENDING_CLOSE →
+/// 展示「请评分」+ 评分弹窗（30min 窗口内仍可继续发消息，输入框不锁）；评分提交 → CLOSED 只读。
 class ConsultConversationPage extends ConsumerStatefulWidget {
   const ConsultConversationPage({super.key, required this.sessionId});
 
@@ -20,17 +25,63 @@ class ConsultConversationPage extends ConsumerStatefulWidget {
 }
 
 class _ConsultConversationPageState extends ConsumerState<ConsultConversationPage> {
-  late Future<ConsultSession> _session;
+  static const Duration _pollInterval = Duration(seconds: 5);
+
+  Timer? _poll;
+  String _status = 'IN_PROGRESS';
+  bool _rated = false;
 
   @override
   void initState() {
     super.initState();
-    _session = ref.read(consultRepositoryProvider).get(widget.sessionId);
+    _poll = Timer.periodic(_pollInterval, (_) => _tick());
+    _tick();
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _tick() async {
+    try {
+      final s = await ref.read(consultRepositoryProvider).get(widget.sessionId);
+      if (!mounted) return;
+      setState(() => _status = s.status);
+      if (s.status == 'CLOSED') _poll?.cancel();
+    } catch (_) {
+      // 轮询失败静默重试。
+    }
+  }
+
+  Future<void> _openRating() async {
+    final l10n = AppLocalizations.of(context);
+    final result = await ConsultRatingDialog.show(context);
+    if (result == null || !mounted) return;
+    try {
+      await ref.read(consultRepositoryProvider).rate(widget.sessionId, result.stars, result.comment);
+      if (!mounted) return;
+      setState(() {
+        _rated = true;
+        _status = 'CLOSED';
+      });
+      _poll?.cancel();
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(content: Text(l10n.consultRateThanks)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(content: Text(l10n.consultRateFailed)));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final pendingClose = _status == 'PENDING_CLOSE' && !_rated;
     return Scaffold(
       backgroundColor: AppColors.base,
       appBar: AppBar(title: Text(l10n.consultConversationTitle)),
@@ -45,12 +96,25 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
               color: AppColors.triageYellowSurface,
               child: Text(l10n.consultDisclaimer, style: AppTypography.caption),
             ),
-            FutureBuilder<ConsultSession>(
-              future: _session,
-              builder: (context, snapshot) => ImChatPlaceholder(
-                imConversationId: snapshot.data == null ? null : 'session-${widget.sessionId}',
+            // 兽医结束 → 请评分提示（30min 窗口内仍可继续发消息，故非阻断 banner）。
+            if (pendingClose)
+              Container(
+                key: const ValueKey('consultRatePromptBanner'),
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppSpacing.md),
+                color: AppColors.surface,
+                child: Row(
+                  children: [
+                    Expanded(child: Text(l10n.consultRatePrompt, style: AppTypography.caption)),
+                    FilledButton(
+                      key: const ValueKey('consultOpenRating'),
+                      onPressed: _openRating,
+                      child: Text(l10n.consultRateSubmit),
+                    ),
+                  ],
+                ),
               ),
-            ),
+            ImChatPlaceholder(imConversationId: 'session-${widget.sessionId}'),
           ],
         ),
       ),

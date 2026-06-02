@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
@@ -44,12 +45,50 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
     );
   }
 
+  Future<void> _endSession() async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.vetEndConfirmTitle),
+        actions: [
+          TextButton(
+            key: const ValueKey('vetEndConfirmNo'),
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(l10n.vetEndConfirmNo),
+          ),
+          FilledButton(
+            key: const ValueKey('vetEndConfirmYes'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(l10n.vetEndConfirmYes),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await ref.read(vetRepositoryProvider).endSession(widget.sessionId);
+    } catch (_) {
+      // 结束失败也返回（服务端状态权威）。
+    }
+    if (mounted) context.go('/vet/workbench');
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: AppColors.base,
-      appBar: AppBar(title: Text(l10n.consultConversationTitle)),
+      appBar: AppBar(
+        title: Text(l10n.consultConversationTitle),
+        actions: [
+          TextButton(
+            key: const ValueKey('vetEndSession'),
+            onPressed: _endSession,
+            child: Text(l10n.vetEndSession),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: FutureBuilder<_VetConvData>(
           future: _data,

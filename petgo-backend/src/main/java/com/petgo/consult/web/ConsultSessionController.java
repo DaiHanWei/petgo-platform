@@ -3,6 +3,8 @@ package com.petgo.consult.web;
 import com.petgo.consult.domain.ConsultSource;
 import com.petgo.consult.dto.ConsultSessionResponse;
 import com.petgo.consult.dto.CreateConsultSessionRequest;
+import com.petgo.consult.dto.SubmitRatingRequest;
+import com.petgo.consult.service.ConsultCloseService;
 import com.petgo.consult.service.ConsultSessionService;
 import com.petgo.consult.service.ConsultSessionService.CreateResult;
 import com.petgo.shared.error.AppException;
@@ -33,9 +35,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class ConsultSessionController {
 
     private final ConsultSessionService service;
+    private final ConsultCloseService closeService;
 
-    public ConsultSessionController(ConsultSessionService service) {
+    public ConsultSessionController(ConsultSessionService service, ConsultCloseService closeService) {
         this.service = service;
+        this.closeService = closeService;
     }
 
     @PostMapping
@@ -81,6 +85,33 @@ public class ConsultSessionController {
     public ConsultSessionResponse cancel(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
         return ConsultSessionResponse.of(service.cancel(currentUserId(jwt), id),
                 ConsultSessionService.WAITING_TIMEOUT_SECONDS, false);
+    }
+
+    // ===== Story 5.6：评分门（用户侧）=====
+
+    /** 提交评分（1-5 星必填 + ≤100 字选填）→ PENDING_CLOSE→CLOSED(RATED) + 存档；或补弹后补记。 */
+    @PostMapping("/{id}/rating")
+    public ConsultSessionResponse rate(@AuthenticationPrincipal Jwt jwt, @PathVariable long id,
+            @Valid @RequestBody SubmitRatingRequest req) {
+        return ConsultSessionResponse.of(
+                closeService.submitRating(currentUserId(jwt), id, req.stars(), req.comment()),
+                ConsultSessionService.WAITING_TIMEOUT_SECONDS, false);
+    }
+
+    /** 补弹已展示 → 置 PROMPTED（不再弹）。 */
+    @PatchMapping("/{id}/rating-prompted")
+    public void ratingPrompted(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
+        closeService.markPrompted(currentUserId(jwt), id);
+    }
+
+    /** 待补弹评分的已关闭会话（无则 204）。进问诊页补弹一次（Story 5.8）。 */
+    @GetMapping("/pending-rating")
+    public org.springframework.http.ResponseEntity<ConsultSessionResponse> pendingRating(
+            @AuthenticationPrincipal Jwt jwt) {
+        return closeService.pendingRating(currentUserId(jwt))
+                .map(s -> org.springframework.http.ResponseEntity.ok(
+                        ConsultSessionResponse.of(s, ConsultSessionService.WAITING_TIMEOUT_SECONDS, false)))
+                .orElseGet(() -> org.springframework.http.ResponseEntity.noContent().build());
     }
 
     private static long currentUserId(Jwt jwt) {

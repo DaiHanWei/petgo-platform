@@ -50,7 +50,7 @@
 
         <table>
             <thead>
-            <tr><th>ID</th><th>昵称</th><th>账号</th><th>状态</th><th>重置密码</th><th>封禁</th></tr>
+            <tr><th>ID</th><th>昵称</th><th>账号</th><th>状态</th><th>评分</th><th>重置密码</th><th>封禁</th></tr>
             </thead>
             <tbody>
             <tr th:each="v : ${vets}">
@@ -61,6 +61,7 @@
                     <span class="badge" th:classappend="${v.status() == 'ACTIVE'} ? 'active' : 'banned'"
                           th:text="${v.status()}">ACTIVE</span>
                 </td>
+                <td><a th:href="@{'/admin/vets/' + ${v.id()} + '/ratings'}">查看</a></td>
                 <td>
                     <form class="inline" th:action="@{'/admin/vets/' + ${v.id()} + '/password'}" method="post">
                         <input type="text" name="newPassword" placeholder="新密码 ≥8 位"/>
@@ -75,7 +76,7 @@
                 </td>
             </tr>
             <tr th:if="${#lists.isEmpty(vets)}">
-                <td colspan="6">暂无兽医账号</td>
+                <td colspan="7">暂无兽医账号</td>
             </tr>
             </tbody>
         </table>

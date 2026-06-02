@@ -84,6 +84,20 @@ public class ConsultSession {
     @Column(name = "version", nullable = false)
     private long version;
 
+    // ===== 会话收尾 + 评分门（Story 5.6）=====
+
+    /** 评分门 30min 计时基准（PENDING_CLOSE 起）。 */
+    @Column(name = "pending_close_started_at")
+    private Instant pendingCloseStartedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "closed_reason", length = 16)
+    private ClosedReason closedReason;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "rating_prompt_state", nullable = false, length = 16)
+    private RatingPromptState ratingPromptState = RatingPromptState.NONE;
+
     protected ConsultSession() {
     }
 
@@ -137,6 +151,46 @@ public class ConsultSession {
     /** 接单成功后绑定 IM 会话标识。 */
     public void attachImConversation(String imConversationId) {
         this.imConversationId = imConversationId;
+    }
+
+    /** 兽医结束：IN_PROGRESS → PENDING_CLOSE（非立即关闭，启动 30min 评分门计时）。 */
+    public void endByVet() {
+        requireStatus(SessionStatus.IN_PROGRESS, "仅进行中的会话可结束");
+        this.status = SessionStatus.PENDING_CLOSE;
+        this.pendingCloseStartedAt = Instant.now();
+    }
+
+    /** 用户评分关闭：PENDING_CLOSE → CLOSED（RATED）。 */
+    public void closeRated() {
+        requireStatus(SessionStatus.PENDING_CLOSE, "本次会话不在可评分状态");
+        this.status = SessionStatus.CLOSED;
+        this.closedReason = ClosedReason.RATED;
+        this.ratingPromptState = RatingPromptState.NONE;
+    }
+
+    /** 30min 超时未评：PENDING_CLOSE → CLOSED（UNRATED），置补弹 PENDING。 */
+    public void closeUnrated() {
+        requireStatus(SessionStatus.PENDING_CLOSE, "本次会话不在可关闭状态");
+        this.status = SessionStatus.CLOSED;
+        this.closedReason = ClosedReason.UNRATED;
+        this.ratingPromptState = RatingPromptState.PENDING;
+    }
+
+    /** 补弹已展示 → 置 PROMPTED（不再弹）。 */
+    public void markRatingPrompted() {
+        this.ratingPromptState = RatingPromptState.PROMPTED;
+    }
+
+    /** 补弹后用户补评分（会话已 CLOSED，仅消除补弹标记，不改 closed_reason 的历史事实）。 */
+    public void clearRatingPrompt() {
+        this.ratingPromptState = RatingPromptState.NONE;
+    }
+
+    /** 是否已过 PENDING_CLOSE 评分门 {@code seconds} 秒（定时扫描判断超时关闭用）。 */
+    public boolean isRatingGateExpired(long seconds) {
+        return status == SessionStatus.PENDING_CLOSE
+                && pendingCloseStartedAt != null
+                && Instant.now().isAfter(pendingCloseStartedAt.plusSeconds(seconds));
     }
 
     private void requireStatus(SessionStatus expected, String message) {
@@ -206,6 +260,18 @@ public class ConsultSession {
 
     public List<String> getAiImageRefs() {
         return aiImageRefs;
+    }
+
+    public Instant getPendingCloseStartedAt() {
+        return pendingCloseStartedAt;
+    }
+
+    public ClosedReason getClosedReason() {
+        return closedReason;
+    }
+
+    public RatingPromptState getRatingPromptState() {
+        return ratingPromptState;
     }
 
     public Instant getCreatedAt() {

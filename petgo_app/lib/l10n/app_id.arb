@@ -239,5 +239,16 @@
   "vetAssistAdopt": "Pakai",
   "vetAssistHistoryEmpty": "Belum ada ringkasan riwayat",
   "imChatPlaceholder": "Obrolan real-time (Tencent IM)",
-  "imChatPlaceholderHint": "Perpesanan langsung terhubung di perangkat asli."
+  "imChatPlaceholderHint": "Perpesanan langsung terhubung di perangkat asli.",
+  "vetEndSession": "Akhiri sesi",
+  "vetEndConfirmTitle": "Akhiri konsultasi ini?",
+  "vetEndConfirmYes": "Akhiri",
+  "vetEndConfirmNo": "Biarkan terbuka",
+  "consultRatePrompt": "Dokter hewan telah menyelesaikan konsultasi. Beri nilai layanannya.",
+  "consultRateTitle": "Beri nilai konsultasi",
+  "consultRateStarsRequired": "Pilih nilai bintang",
+  "consultRateCommentHint": "Tambahkan catatan (opsional, maks 100 karakter)",
+  "consultRateSubmit": "Kirim",
+  "consultRateThanks": "Terima kasih atas penilaianmu",
+  "consultRateFailed": "Gagal mengirim, coba lagi"
 }

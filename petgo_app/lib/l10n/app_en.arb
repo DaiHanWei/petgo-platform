@@ -293,5 +293,16 @@
   "vetAssistAdopt": "Use",
   "vetAssistHistoryEmpty": "No history summary yet",
   "imChatPlaceholder": "Real-time chat (Tencent IM)",
-  "imChatPlaceholderHint": "Live messaging connects on a real device."
+  "imChatPlaceholderHint": "Live messaging connects on a real device.",
+  "vetEndSession": "End session",
+  "vetEndConfirmTitle": "End this consultation?",
+  "vetEndConfirmYes": "End",
+  "vetEndConfirmNo": "Keep open",
+  "consultRatePrompt": "The vet has completed this consultation. Please rate the service.",
+  "consultRateTitle": "Rate this consultation",
+  "consultRateStarsRequired": "Please pick a star rating",
+  "consultRateCommentHint": "Add a note (optional, max 100 chars)",
+  "consultRateSubmit": "Submit",
+  "consultRateThanks": "Thanks for your rating",
+  "consultRateFailed": "Could not submit, please try again"
 }

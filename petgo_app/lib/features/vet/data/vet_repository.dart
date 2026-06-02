@@ -86,6 +86,12 @@ class VetRepository {
     return ConsultAssist.fromJson(resp.data!);
   }
 
+  /// 兽医结束会话（Story 5.6）：IN_PROGRESS → PENDING_CLOSE。
+  Future<VetSession> endSession(int sessionId) async {
+    final resp = await dio.post<Map<String, dynamic>>(ApiPaths.vetConsultEnd(sessionId));
+    return VetSession.fromJson(resp.data!);
+  }
+
   /// 登出即离线（服务端清在线态）+ 清本地 token。
   Future<void> logout() async {
     try {

@@ -4,6 +4,7 @@ import com.petgo.consult.dto.ConsultAssistResponse;
 import com.petgo.consult.dto.VetInboxItem;
 import com.petgo.consult.dto.VetSessionView;
 import com.petgo.consult.service.ConsultAcceptService;
+import com.petgo.consult.service.ConsultCloseService;
 import com.petgo.consult.service.VetConsultService;
 import com.petgo.shared.error.AppException;
 import java.util.List;
@@ -31,10 +32,13 @@ public class VetConsultController {
 
     private final VetConsultService vetConsultService;
     private final ConsultAcceptService acceptService;
+    private final ConsultCloseService closeService;
 
-    public VetConsultController(VetConsultService vetConsultService, ConsultAcceptService acceptService) {
+    public VetConsultController(VetConsultService vetConsultService, ConsultAcceptService acceptService,
+            ConsultCloseService closeService) {
         this.vetConsultService = vetConsultService;
         this.acceptService = acceptService;
+        this.closeService = closeService;
     }
 
     @GetMapping("/waiting")
@@ -45,6 +49,12 @@ public class VetConsultController {
     @PostMapping("/{id}/accept")
     public VetSessionView accept(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
         return VetSessionView.of(acceptService.accept(currentVetId(jwt), id));
+    }
+
+    /** 兽医结束会话（二次确认在前端）：IN_PROGRESS → PENDING_CLOSE（Story 5.6）。 */
+    @PostMapping("/{id}/end")
+    public VetSessionView end(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
+        return VetSessionView.of(closeService.endByVet(currentVetId(jwt), id));
     }
 
     @GetMapping("/{id}")

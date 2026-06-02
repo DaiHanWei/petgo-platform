@@ -129,6 +129,16 @@ public class AdminWebController {
         return "redirect:/admin/vets";
     }
 
+    // ===== Story 5.6：兽医评分查看（仅运营可见）=====
+
+    @GetMapping("/admin/vets/{id}/ratings")
+    public String vetRatings(@PathVariable long id, Model model) {
+        model.addAttribute("active", "vets");
+        model.addAttribute("vet", adminVetService.view(id));
+        model.addAttribute("ratings", adminVetService.ratings(id));
+        return "admin/vet-ratings";
+    }
+
     @PostMapping("/admin/seed-post")
     public String publishSeed(@AuthenticationPrincipal AdminUserDetails admin,
             @Valid @ModelAttribute("seedPostForm") SeedPostForm form, BindingResult binding,

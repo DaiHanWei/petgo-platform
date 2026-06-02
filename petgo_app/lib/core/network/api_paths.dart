@@ -41,6 +41,14 @@ class ApiPaths {
   static String consultSessionContinueWaiting(int id) =>
       '$base/consult-sessions/$id/continue-waiting';
 
+  /// 评分门（Story 5.6）。POST 评分 / PATCH 补弹已展示 / GET 待补弹。
+  static String consultSessionRating(int id) => '$base/consult-sessions/$id/rating';
+  static String consultSessionRatingPrompted(int id) => '$base/consult-sessions/$id/rating-prompted';
+  static const String consultPendingRating = '$base/consult-sessions/pending-rating';
+
+  /// 兽医结束会话（Story 5.6）。
+  static String vetConsultEnd(int sessionId) => '$base/vet/consult-sessions/$sessionId/end';
+
   /// 当前用户主体统一端点（决策 C1：全平台用 /me，不用 /users/me）。
   static const String me = '$base/me';
 

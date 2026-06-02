@@ -1,5 +1,7 @@
 package com.petgo.admin.service;
 
+import com.petgo.consult.dto.VetRatingsView;
+import com.petgo.consult.service.ConsultRatingQueryService;
 import com.petgo.vet.domain.VetAccount;
 import com.petgo.vet.domain.VetStatus;
 import com.petgo.vet.service.VetAccountService;
@@ -16,9 +18,11 @@ import org.springframework.stereotype.Service;
 public class AdminVetService {
 
     private final VetAccountService vetAccounts;
+    private final ConsultRatingQueryService ratingQuery;
 
-    public AdminVetService(VetAccountService vetAccounts) {
+    public AdminVetService(VetAccountService vetAccounts, ConsultRatingQueryService ratingQuery) {
         this.vetAccounts = vetAccounts;
+        this.ratingQuery = ratingQuery;
     }
 
     public List<VetAdminView> list() {
@@ -38,5 +42,14 @@ public class AdminVetService {
     /** 切换封禁/解封（5.7 复用；本故事落 BANNED 不可登录）。 */
     public void setBanned(long vetId, boolean banned) {
         vetAccounts.setStatus(vetId, banned ? VetStatus.BANNED : VetStatus.ACTIVE);
+    }
+
+    /** 兽医历史评分 + 平均分（Story 5.6，AC4，仅运营可见）。经 consult service 聚合，不跨 repository。 */
+    public VetRatingsView ratings(long vetId) {
+        return ratingQuery.forVet(vetId);
+    }
+
+    public VetAdminView view(long vetId) {
+        return VetAdminView.from(vetAccounts.getById(vetId));
     }
 }
