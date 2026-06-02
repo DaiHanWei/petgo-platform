@@ -38,5 +38,11 @@
   "profileOnboardingBody": "Bangun arsip tumbuh kembang hewan Anda",
   "profileOnboardingSkip": "Lewati dulu",
   "profileOnboardingCreate": "Buat sekarang",
-  "profilePromptMessage": "Buat profil hewan Anda untuk memulai arsip tumbuh kembang 🐾"
+  "profilePromptMessage": "Buat profil hewan Anda untuk memulai arsip tumbuh kembang 🐾",
+  "commonCancel": "Batal",
+  "mediaPermissionDeniedTitle": "Perlu izin",
+  "mediaPermissionDeniedBody": "Akses foto diperlukan untuk mengunggah. Aktifkan di Pengaturan.",
+  "mediaOpenSettings": "Buka Pengaturan",
+  "mediaUploadFailed": "Gagal mengunggah, silakan coba lagi",
+  "mediaImageTooLarge": "Gambar terlalu besar, pilih yang lain"
 }

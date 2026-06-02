@@ -62,5 +62,14 @@
   "profileOnboardingBody": "Build your pet's growth archive",
   "profileOnboardingSkip": "Skip for now",
   "profileOnboardingCreate": "Create now",
-  "profilePromptMessage": "Create your pet's profile to start their growth archive 🐾"
+  "profilePromptMessage": "Create your pet's profile to start their growth archive 🐾",
+  "commonCancel": "Cancel",
+  "mediaPermissionDeniedTitle": "Permission needed",
+  "@mediaPermissionDeniedTitle": {
+    "description": "Dialog title when camera/photo permission is denied (Story 2.1)."
+  },
+  "mediaPermissionDeniedBody": "Photo access is required to upload. Please enable it in Settings.",
+  "mediaOpenSettings": "Open Settings",
+  "mediaUploadFailed": "Upload failed, please try again",
+  "mediaImageTooLarge": "Image is too large, please choose another"
 }

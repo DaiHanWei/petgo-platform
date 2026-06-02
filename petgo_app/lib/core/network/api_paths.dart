@@ -9,4 +9,7 @@ class ApiPaths {
 
   /// 当前用户主体统一端点（决策 C1：全平台用 /me，不用 /users/me）。
   static const String me = '$base/me';
+
+  /// 媒体 STS 上传凭证（Story 2.1）。
+  static const String mediaStsCredentials = '$base/media/sts-credentials';
 }

@@ -18,6 +18,9 @@ public final class ErrorTypes {
     public static final URI RATE_LIMITED = URI.create(BASE + "rate-limited");
     public static final URI INTERNAL = URI.create(BASE + "internal");
 
+    /** Story 2.1：媒体凭证 / 签名 URL 签发异常（绝不外泄 OSS 原始错误/堆栈）。 */
+    public static final URI MEDIA_CREDENTIAL = URI.create(BASE + "media-credential");
+
     private ErrorTypes() {
     }
 }
