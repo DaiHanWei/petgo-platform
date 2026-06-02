@@ -7,10 +7,14 @@ import 'package:petgo/l10n/app_localizations.dart';
 
 /// 应用根 Widget。
 /// - go_router 驱动路由（provider 化，含受控路由门控 redirect）
-/// - V1 仅浅色模式
+/// - V1 仅浅色模式、portrait-only（NFR-14）
 /// - i18n：跟随设备语言，支持 en / id，其他语言回退 en（无写死字符串）
+/// - 无障碍（Story 7.4 / NFR-13）：动态字体上限 clamp ≤ [maxTextScale]，防超大字号破布局（标题封顶）。
 class PetGoApp extends ConsumerWidget {
   const PetGoApp({super.key});
+
+  /// 动态字体放大上限（NFR-13「≤3 级」）：body 及以下随系统缩放，封顶防溢出/截断关键信息。
+  static const double maxTextScale = 1.3;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -31,6 +35,14 @@ class PetGoApp extends ConsumerWidget {
           return const Locale('id');
         }
         return const Locale('en');
+      },
+      // 无障碍（Story 7.4 AC3）：clamp 系统字体缩放上限，防超大字号破布局；不可移除。
+      builder: (context, child) {
+        final mq = MediaQuery.of(context);
+        return MediaQuery(
+          data: mq.copyWith(textScaler: mq.textScaler.clamp(maxScaleFactor: maxTextScale)),
+          child: child ?? const SizedBox.shrink(),
+        );
       },
     );
   }
