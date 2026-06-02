@@ -1,6 +1,6 @@
 # Story 6.5: App 版本更新提醒
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -117,10 +117,28 @@ so that **我能用上最新功能、重大问题能被强制修复**。
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+云端 dev agent（Epic 6 批量）
 
 ### Debug Log References
 
 ### Completion Notes List
 
+**L0 绿（云端已验）**：后端 `package` 通过；前端 `flutter analyze` 零问题 + `flutter test`(185) 绿（新增 `app_version_check_test`(3) + `app_update_dialog_test`(2)）。
+
+**关键实现**：
+- **后端版本端点**：`GET /api/v1/app-version`（**公开/游客可读**，permitAll）→ `{latestVersion, minSupportedVersion, iosStoreUrl, androidStoreUrl}`，外部化配置 `petgo.app-version.*`（env 注入，运营可调，**不引入新中间件**）。
+- **三态判定（核心，L0 测）**：`AppVersionCheck.decide(current, latest, minSupported)` → forced(current<min) / recommended(min≤current<latest) / none；`compareSemver` 点分段数值比较（缺位补 0，忽略预发后缀）；`storeUrl` 平台选择。
+- **弹窗**：`AppUpdateDialog`——推荐(可「稍后」下次再提示、可关) / 强制(`PopScope canPop=false` 拦返回 + `barrierDismissible=false`，无「稍后」，唯一「前往更新」**不可跳过**)。
+- **检测失败默认放行**：`AppVersionRepository.fetch` 失败返回 null（不阻断启动）。
+- **不走推送**：纯 App 内 UI + 只读端点，**不调用任何推送权限/通道 API**（与 6.1~6.4 路径完全独立）。
+- **当前版本来源**：V1 用 `--dart-define=APP_VERSION`（缺省 1.0.0）——未引入 package_info_plus 原生插件以免动摇前端 L0；可后续切真机包信息。
+
+**待本地（L1）**：`curl /api/v1/app-version` 返回正确 JSON + 游客可读 + 超时客户端放行。
+**待本地（L2，真机）**：冷启动三态弹窗实弹；「前往更新」跳 App Store/Google Play（`url_launcher`）；强制态真正阻断进入主功能（冷启动编排挂接，需 main/app 启动前置 + 真机版本）。
+
 ### File List
+
+**后端（新增）**：`shared/config/{AppVersionProperties,AppVersionController}.java`
+**后端（修改）**：`shared/security/SecurityConfig.java`（/api/v1/app-version permitAll）、`application.yml`
+**前端（新增）**：`features/notify/domain/app_version_check.dart`、`features/notify/data/app_version_repository.dart`、`features/notify/presentation/app_update_dialog.dart`、`test/notify/{app_version_check_test,app_update_dialog_test}.dart`
+**前端（修改）**：`core/network/api_paths.dart`、`l10n/app_en.arb`、`l10n/app_id.arb`

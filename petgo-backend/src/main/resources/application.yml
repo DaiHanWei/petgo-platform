@@ -29,6 +29,12 @@ petgo:
     secret-key: ${TENCENT_IM_SECRET_KEY:}
     user-sig-ttl-seconds: ${IM_USERSIG_TTL_SECONDS:86400}
     callback-token: ${TENCENT_IM_CALLBACK_TOKEN:}
+  # App 版本更新提醒（Story 6.5，App 内提示，外部化配置运营可调，不走推送）。
+  app-version:
+    latest: ${APP_LATEST_VERSION:1.0.0}
+    min-supported: ${APP_MIN_SUPPORTED_VERSION:1.0.0}
+    ios-store-url: ${APP_IOS_STORE_URL:}
+    android-store-url: ${APP_ANDROID_STORE_URL:}
 
 # 媒体基建（Story 2.1）：阿里云 OSS 雅加达双桶 + STS 直传 + 签名 URL。
 # 凭证全部 env 注入，绝不入库；下方仅占位/默认。

@@ -56,6 +56,9 @@ class ApiPaths {
   /// 问诊历史聚合（Story 5.8，AI + 兽医两类，游标分页）。
   static const String consultHistory = '$base/consult/history';
 
+  /// App 版本信息（Story 6.5，公开可读，App 内更新提醒）。
+  static const String appVersion = '$base/app-version';
+
   /// 当前用户主体统一端点（决策 C1：全平台用 /me，不用 /users/me）。
   static const String me = '$base/me';
 
