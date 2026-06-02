@@ -183,5 +183,16 @@
   "triageRedRiskConfirmYes": "Saya paham",
   "triageRedLevelLabel": "Mendesak: risiko tinggi",
   "triageRedMapsUnavailable": "Tidak bisa membuka peta. Cari klinik hewan terdekat.",
-  "triageMapSearchQuery": "Klinik Hewan"
+  "triageMapSearchQuery": "Klinik Hewan",
+  "vetLoginLink": "Masuk dokter hewan",
+  "vetLoginTitle": "Masuk dokter hewan",
+  "vetUsernameLabel": "Akun",
+  "vetPasswordLabel": "Kata sandi",
+  "vetLoginButton": "Masuk",
+  "vetLoginFailed": "Akun atau kata sandi salah",
+  "vetLoginRateLimited": "Terlalu sering mencoba, coba lagi nanti",
+  "vetForgotHint": "Lupa kata sandi? Silakan hubungi operasional.",
+  "vetWorkbenchTitle": "Meja kerja dokter hewan",
+  "vetWorkbenchComingSoon": "Meja kerja segera hadir",
+  "vetLogout": "Keluar"
 }

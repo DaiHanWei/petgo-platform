@@ -98,6 +98,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
+              // 兽医登录入口（Story 5.1 F1）：Google 按钮下方小字链接，走独立账密登录页。
+              TextButton(
+                key: const ValueKey('vetLoginLink'),
+                onPressed: _busy ? null : () => context.push('/vet/login'),
+                child: Text(l10n.vetLoginLink, style: AppTypography.caption),
+              ),
+              const SizedBox(height: AppSpacing.md),
               _AgreementLinks(
                 prefix: l10n.loginAgreementPrefix,
                 terms: l10n.termsOfService,

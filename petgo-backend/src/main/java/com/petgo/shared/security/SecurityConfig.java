@@ -96,7 +96,9 @@ public class SecurityConfig {
                                 "/api/v1/comments/**").permitAll()
                         // 他人迷你主页只读对游客可见（Story 3.8，FR-26 无登录要求）
                         .requestMatchers(HttpMethod.GET, "/api/v1/users/*/mini-profile").permitAll()
-                        // 其余 /api/v1 默认需 JWT（写一律拒绝未登录）
+                        // 兽医工作台端点（Story 5.1+）：仅 role=VET 可达；user/guest → 403（双向门控）
+                        .requestMatchers("/api/v1/vet/**").hasRole("VET")
+                        // 其余 /api/v1 默认需 JWT（写一律拒绝未登录）；user 写端点对 vet token → 403
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(new JwtRoleConverter())))

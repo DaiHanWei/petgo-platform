@@ -17,6 +17,7 @@ import com.petgo.shared.error.AppException;
 import com.petgo.shared.security.GoogleIdentity;
 import com.petgo.shared.security.GoogleTokenVerifier;
 import com.petgo.shared.security.JwtService;
+import com.petgo.vet.service.VetAccountService;
 import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -40,6 +41,8 @@ class AuthServiceTest {
     GoogleTokenVerifier googleVerifier;
     @Mock
     JwtService jwt;
+    @Mock
+    VetAccountService vetAccounts;
 
     @InjectMocks
     AuthService authService;

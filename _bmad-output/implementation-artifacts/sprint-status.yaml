@@ -104,7 +104,7 @@ development_status:
 
   # ===== Epic 5: 在线兽医咨询与兽医工作台 =====
   epic-5: in-progress
-  5-1-兽医账号与登录-含-admin-开户: ready-for-dev
+  5-1-兽医账号与登录-含-admin-开户: review
   5-2-兽医工作台框架与在线状态管理: ready-for-dev
   5-3-兽医咨询发起-排队与超时: ready-for-dev
   5-4-ai-升级至兽医的上下文传递: ready-for-dev

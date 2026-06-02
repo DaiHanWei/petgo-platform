@@ -1,16 +1,21 @@
 package com.petgo.auth.service;
 
 import com.petgo.auth.domain.RefreshToken;
+import com.petgo.auth.domain.Role;
+import com.petgo.auth.domain.SubjectType;
 import com.petgo.auth.domain.User;
 import com.petgo.auth.dto.LoginResponse;
 import com.petgo.auth.dto.TokenResponse;
 import com.petgo.auth.dto.UserProfileResponse;
+import com.petgo.auth.dto.VetLoginResponse;
 import com.petgo.auth.repository.RefreshTokenRepository;
 import com.petgo.auth.repository.UserRepository;
 import com.petgo.shared.error.AppException;
 import com.petgo.shared.security.GoogleIdentity;
 import com.petgo.shared.security.GoogleTokenVerifier;
 import com.petgo.shared.security.JwtService;
+import com.petgo.vet.domain.VetAccount;
+import com.petgo.vet.service.VetAccountService;
 import java.time.Instant;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,13 +33,15 @@ public class AuthService {
     private final RefreshTokenRepository refreshTokens;
     private final GoogleTokenVerifier googleVerifier;
     private final JwtService jwt;
+    private final VetAccountService vetAccounts;
 
     public AuthService(UserRepository users, RefreshTokenRepository refreshTokens,
-            GoogleTokenVerifier googleVerifier, JwtService jwt) {
+            GoogleTokenVerifier googleVerifier, JwtService jwt, VetAccountService vetAccounts) {
         this.users = users;
         this.refreshTokens = refreshTokens;
         this.googleVerifier = googleVerifier;
         this.jwt = jwt;
+        this.vetAccounts = vetAccounts;
     }
 
     @Transactional
@@ -56,6 +63,18 @@ public class AuthService {
                 isNew[0], user.isOnboardingCompleted(), profile);
     }
 
+    /**
+     * 兽医账密登录（Story 5.1）：与用户侧 Google 流程隔离，签发 {@code role=VET} JWT。
+     * 校验失败统一 401（不区分账号不存在/密码错/封禁，防枚举）。
+     */
+    @Transactional
+    public VetLoginResponse loginVet(String username, String rawPassword) {
+        VetAccount vet = vetAccounts.authenticate(username, rawPassword);
+        String access = jwt.issueAccessToken(vet.getId(), Role.VET);
+        String refresh = issueRefresh(vet.getId(), SubjectType.VET);
+        return new VetLoginResponse(access, refresh, vet.getDisplayName(), Role.VET.name());
+    }
+
     @Transactional
     public TokenResponse rotateRefresh(String rawRefresh) {
         String hash = jwt.hashRefresh(rawRefresh);
@@ -70,17 +89,33 @@ public class AuthService {
         token.revoke();
         refreshTokens.save(token);
 
+        // 按主体类型分派签发（防 vet 的 refresh 误签 user token）。
+        if (token.getSubjectType() == SubjectType.VET) {
+            VetAccount vet = vetAccounts.getById(token.getUserId());
+            if (!vet.isActive()) {
+                throw AppException.unauthorized("登录已过期，请重新登录"); // 被封禁 → refresh 失效
+            }
+            String access = jwt.issueAccessToken(vet.getId(), Role.VET);
+            String refresh = issueRefresh(vet.getId(), SubjectType.VET);
+            return new TokenResponse(access, refresh);
+        }
+
         User user = users.findById(token.getUserId())
                 .orElseThrow(() -> AppException.unauthorized("登录已过期，请重新登录"));
 
         String access = jwt.issueAccessToken(user);
-        String refresh = issueRefresh(user);
+        String refresh = issueRefresh(user.getId(), SubjectType.USER);
         return new TokenResponse(access, refresh);
     }
 
     private String issueRefresh(User user) {
+        return issueRefresh(user.getId(), SubjectType.USER);
+    }
+
+    private String issueRefresh(Long subjectId, SubjectType subjectType) {
         String raw = jwt.generateRefreshRaw();
-        RefreshToken entity = new RefreshToken(user.getId(), jwt.hashRefresh(raw), jwt.refreshExpiry(Instant.now()));
+        RefreshToken entity = new RefreshToken(subjectId, subjectType,
+                jwt.hashRefresh(raw), jwt.refreshExpiry(Instant.now()));
         refreshTokens.save(entity);
         return raw;
     }

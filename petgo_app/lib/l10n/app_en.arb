@@ -236,5 +236,17 @@
   "triageRedRiskConfirmYes": "I understand",
   "triageRedLevelLabel": "Urgent: high risk",
   "triageRedMapsUnavailable": "Could not open maps. Please find the nearest animal hospital.",
-  "triageMapSearchQuery": "veterinary clinic"
+  "triageMapSearchQuery": "veterinary clinic",
+  "vetLoginLink": "Vet sign-in",
+  "@vetLoginLink": { "description": "Small link below Google button leading to vet account login." },
+  "vetLoginTitle": "Vet sign-in",
+  "vetUsernameLabel": "Account",
+  "vetPasswordLabel": "Password",
+  "vetLoginButton": "Sign in",
+  "vetLoginFailed": "Incorrect account or password",
+  "vetLoginRateLimited": "Too many attempts, please try again later",
+  "vetForgotHint": "Forgot your password? Please contact operations.",
+  "vetWorkbenchTitle": "Vet workbench",
+  "vetWorkbenchComingSoon": "Workbench is coming soon",
+  "vetLogout": "Sign out"
 }

@@ -16,6 +16,9 @@ class AuthState {
 
   bool get isLoggedIn => status == AuthStatus.authenticated;
 
+  /// 兽医登录态（Story 5.1：单 App 双角色，role=VET 走兽医工作台壳）。
+  bool get isVet => isLoggedIn && role == 'VET';
+
   const AuthState.guest()
       : status = AuthStatus.guest,
         role = null,
@@ -37,6 +40,11 @@ class AuthController extends Notifier<AuthState> {
       role: resp.role,
       profile: resp.profile,
     );
+  }
+
+  /// 兽医账密登录成功（Story 5.1）→ 已登录态、role=VET（无 UserProfile，无引导流）。
+  void applyVetLogin() {
+    state = const AuthState(status: AuthStatus.authenticated, role: 'VET');
   }
 
   /// 新用户完成引导（Story 1.6 回调）→ 转为已登录，并回填最新 profile。

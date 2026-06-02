@@ -7,6 +7,12 @@ class ApiPaths {
   static const String authGoogle = '$base/auth/google';
   static const String authRefresh = '$base/auth/refresh';
 
+  /// 兽医账密登录（Story 5.1）。签发 role=VET JWT，与用户侧 Google 流程隔离。
+  static const String authVetLogin = '$base/auth/vet/login';
+
+  /// 兽医自身视图（Story 5.1 登录后探活 + 工作台顶部展示）。
+  static const String vetMe = '$base/vet/me';
+
   /// 当前用户主体统一端点（决策 C1：全平台用 /me，不用 /users/me）。
   static const String me = '$base/me';
 
