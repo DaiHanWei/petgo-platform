@@ -117,5 +117,7 @@
   "reportReasonHarassment": "Pelecehan",
   "reportReasonOther": "Lainnya",
   "reportSubmit": "Kirim",
-  "reportSuccess": "Terima kasih, laporanmu sudah kami terima dan akan segera ditinjau 🐾"
+  "reportSuccess": "Terima kasih, laporanmu sudah kami terima dan akan segera ditinjau 🐾",
+  "miniProfilePostCount": "{count} postingan dibagikan",
+  "miniProfileComingSoon": "Halaman pribadi mereka sedang disiapkan dengan penuh perhatian, lebih banyak kejutan menanti ✨"
 }

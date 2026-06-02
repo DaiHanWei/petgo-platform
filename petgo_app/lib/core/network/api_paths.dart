@@ -35,6 +35,9 @@ class ApiPaths {
   /// 内容点赞开关（Story 3.4）。POST 点赞 / DELETE 取消。
   static String contentPostLike(int id) => '$base/content-posts/$id/like';
 
+  /// 他人迷你主页投影（Story 3.8）。
+  static String userMiniProfile(int userId) => '$base/users/$userId/mini-profile';
+
   /// 问诊存档（Story 2.5）。
   static const String healthArchiveDecisions = '$base/health-events/archive-decisions';
   static const String healthDecision = '$base/health-events/decision';

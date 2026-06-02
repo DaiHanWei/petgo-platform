@@ -21,6 +21,7 @@ import 'feed_tab_row.dart';
 import 'feed_view.dart';
 import 'publish_compose_page.dart';
 import 'report_sheet.dart';
+import '../../../shared/widgets/mini_profile_sheet.dart';
 
 /// 首页 Tab（Story 3.2 Feed 内容流）。
 ///
@@ -129,6 +130,8 @@ class HomePage extends ConsumerWidget {
           onTapItem: (item) => context.push('/content/${item.id}'),
           // 长按举报（Story 3.7，UX-DR12）：未登录触发 FR-0C。
           onLongPressItem: (item) => openReport(context, ref, item.id),
+          // 点作者头像/昵称 → 迷你主页卡（Story 3.8）；注销作者不触发（卡内已 gate）。
+          onAuthorTap: (item) => showMiniProfile(context, ref, item.authorId),
         );
       },
     );

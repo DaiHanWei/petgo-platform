@@ -20,6 +20,7 @@ class FeedMasonryView extends StatefulWidget {
     required this.onRefresh,
     this.onTapItem,
     this.onLongPressItem,
+    this.onAuthorTap,
   });
 
   final List<FeedItem> items;
@@ -30,6 +31,7 @@ class FeedMasonryView extends StatefulWidget {
   final Future<void> Function() onRefresh;
   final ValueChanged<FeedItem>? onTapItem;
   final ValueChanged<FeedItem>? onLongPressItem;
+  final ValueChanged<FeedItem>? onAuthorTap;
 
   @override
   State<FeedMasonryView> createState() => _FeedMasonryViewState();
@@ -75,6 +77,8 @@ class _FeedMasonryViewState extends State<FeedMasonryView> {
           onTap: widget.onTapItem == null ? null : () => widget.onTapItem!(widget.items[i]),
           onLongPress:
               widget.onLongPressItem == null ? null : () => widget.onLongPressItem!(widget.items[i]),
+          onAuthorTap:
+              widget.onAuthorTap == null ? null : () => widget.onAuthorTap!(widget.items[i]),
         ),
       );
       (i.isEven ? left : right).add(card);

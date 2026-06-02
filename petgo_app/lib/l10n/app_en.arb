@@ -165,5 +165,12 @@
   "reportReasonHarassment": "Harassment",
   "reportReasonOther": "Other",
   "reportSubmit": "Submit",
-  "reportSuccess": "Thanks, we've received your report and will review it soon 🐾"
+  "reportSuccess": "Thanks, we've received your report and will review it soon 🐾",
+  "miniProfilePostCount": "{count} posts shared",
+  "@miniProfilePostCount": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "miniProfileComingSoon": "Their personal page is being lovingly prepared, with more delights on the way ✨"
 }

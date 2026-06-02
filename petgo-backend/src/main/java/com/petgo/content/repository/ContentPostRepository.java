@@ -2,6 +2,7 @@ package com.petgo.content.repository;
 
 import com.petgo.content.domain.ContentPost;
 import com.petgo.content.domain.ContentType;
+import com.petgo.content.domain.PostStatus;
 import java.time.Instant;
 import java.util.List;
 import org.springframework.data.domain.Pageable;
@@ -10,6 +11,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface ContentPostRepository extends JpaRepository<ContentPost, Long> {
+
+    /** 迷你主页发布数（Story 3.8）：某作者未软删的已发布内容数。 */
+    long countByAuthorIdAndDeletedAtIsNullAndStatus(long authorId, PostStatus status);
 
     /** 成长时间线读：某作者某类型未删内容，createdAt 倒序游标分页（Story 2.4）。 */
     List<ContentPost> findByAuthorIdAndTypeAndDeletedAtIsNullAndCreatedAtLessThanOrderByCreatedAtDesc(

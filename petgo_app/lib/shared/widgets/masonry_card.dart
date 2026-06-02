@@ -17,6 +17,7 @@ class MasonryCard extends StatelessWidget {
     required this.deletedUserLabel,
     this.onTap,
     this.onLongPress,
+    this.onAuthorTap,
   });
 
   final FeedItem item;
@@ -27,6 +28,9 @@ class MasonryCard extends StatelessWidget {
 
   /// 长按 context menu（Story 3.7 举报入口，UX-DR12）。
   final VoidCallback? onLongPress;
+
+  /// 点作者头像/昵称（Story 3.8 迷你主页卡）；注销作者不挂（不触发）。
+  final VoidCallback? onAuthorTap;
 
   @override
   Widget build(BuildContext context) {
@@ -71,19 +75,23 @@ class MasonryCard extends StatelessWidget {
                       ),
                       const SizedBox(height: AppSpacing.sm),
                     ],
-                    Row(
-                      children: [
-                        _Avatar(url: item.authorDeleted ? null : item.authorAvatarUrl),
-                        const SizedBox(width: AppSpacing.xs),
-                        Expanded(
-                          child: Text(
-                            name,
-                            style: AppTypography.caption,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                    GestureDetector(
+                      // 作者头像/昵称点击 → 迷你主页卡（Story 3.8）；注销作者不挂手势（不触发）。
+                      onTap: (item.authorDeleted || onAuthorTap == null) ? null : onAuthorTap,
+                      child: Row(
+                        children: [
+                          _Avatar(url: item.authorDeleted ? null : item.authorAvatarUrl),
+                          const SizedBox(width: AppSpacing.xs),
+                          Expanded(
+                            child: Text(
+                              name,
+                              style: AppTypography.caption,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
                 ),

@@ -90,7 +90,7 @@ development_status:
   3-5-内容两级评论: review
   3-6-内容删除-无编辑: review
   3-7-内容举报与运营人工审核队列: review
-  3-8-他人迷你主页预览卡: ready-for-dev
+  3-8-他人迷你主页预览卡: review
   epic-3-retrospective: optional
 
   # ===== Epic 4: AI 智能分诊 =====

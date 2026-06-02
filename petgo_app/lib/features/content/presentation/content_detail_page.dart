@@ -8,6 +8,7 @@ import '../../../core/theme/typography.dart';
 import '../../../features/auth/domain/auth_state.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/mini_profile_sheet.dart';
 import '../data/detail_repository.dart';
 import '../domain/content_detail.dart';
 import 'comment_composer.dart';
@@ -119,7 +120,7 @@ class _DetailScaffold extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _authorRow(l10n),
+                    _authorRow(context, ref, l10n),
                     const SizedBox(height: AppSpacing.md),
                     if (detail.body != null && detail.body!.isNotEmpty)
                       Text(detail.body!, style: AppTypography.body),
@@ -146,7 +147,7 @@ class _DetailScaffold extends ConsumerWidget {
     );
   }
 
-  Widget _authorRow(AppLocalizations l10n) {
+  Widget _authorRow(BuildContext context, WidgetRef ref, AppLocalizations l10n) {
     final name = detail.authorDeleted ? l10n.feedDeletedUser : (detail.authorNickname ?? l10n.feedDeletedUser);
     final avatar = detail.authorDeleted ? null : detail.authorAvatarUrl;
     final row = Row(
@@ -163,8 +164,13 @@ class _DetailScaffold extends ConsumerWidget {
         Text(name, style: AppTypography.body.copyWith(fontWeight: FontWeight.w600)),
       ],
     );
-    // 作者点击触发迷你卡[3.8]：注销作者不可点（NFR-8）；本 Story 仅占位（不可点 = 不挂手势）。
-    return row;
+    // 作者点击触发迷你卡（Story 3.8）：注销作者不可点（NFR-8）。
+    if (detail.authorDeleted) return row;
+    return GestureDetector(
+      key: const ValueKey('detailAuthorRow'),
+      onTap: () => showMiniProfile(context, ref, detail.authorId),
+      child: row,
+    );
   }
 
   Widget _interactionBar() {

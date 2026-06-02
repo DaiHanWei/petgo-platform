@@ -94,6 +94,8 @@ public class SecurityConfig {
                         // 内容详情 + 评论只读对游客可见（Story 3.3）：GET 详情/评论/回复放行（写仍需 JWT）
                         .requestMatchers(HttpMethod.GET, "/api/v1/content-posts/**",
                                 "/api/v1/comments/**").permitAll()
+                        // 他人迷你主页只读对游客可见（Story 3.8，FR-26 无登录要求）
+                        .requestMatchers(HttpMethod.GET, "/api/v1/users/*/mini-profile").permitAll()
                         // 其余 /api/v1 默认需 JWT（写一律拒绝未登录）
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth

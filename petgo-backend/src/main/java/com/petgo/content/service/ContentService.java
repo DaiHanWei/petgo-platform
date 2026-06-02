@@ -4,6 +4,7 @@ import com.petgo.content.domain.Comment;
 import com.petgo.content.domain.ContentPost;
 import com.petgo.content.domain.ContentType;
 import com.petgo.content.domain.DeleteReason;
+import com.petgo.content.domain.PostStatus;
 import com.petgo.content.dto.ContentPostCreateRequest;
 import com.petgo.content.dto.ContentPostResponse;
 import com.petgo.content.repository.CommentRepository;
@@ -84,6 +85,12 @@ public class ContentService {
         }
         likes.deleteByPostId(post.getId());
         log.info("内容软删 postId={} reason={}", post.getId(), reason);
+    }
+
+    /** 迷你主页发布数（Story 3.8）：某作者未软删的已发布内容数。经 service 暴露，不让 auth 直读 content 表。 */
+    @Transactional(readOnly = true)
+    public long countPublishedByAuthor(long authorId) {
+        return posts.countByAuthorIdAndDeletedAtIsNullAndStatus(authorId, PostStatus.PUBLISHED);
     }
 
     /** 内容是否存在且可见（Story 3.7：举报前校验，经 service 暴露给 moderation，不让其直读 content 表）。 */
