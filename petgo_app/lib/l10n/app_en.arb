@@ -101,5 +101,21 @@
   "publishCreateProfile": "Create",
   "publishRetry": "Retry",
   "publishAddImage": "Add photo",
-  "publishFailed": "Could not post, please try again"
+  "publishFailed": "Could not post, please try again",
+  "growthArchiveAge": "{years}y {months}m",
+  "@growthArchiveAge": {
+    "placeholders": {
+      "years": { "type": "int" },
+      "months": { "type": "int" }
+    }
+  },
+  "growthArchiveEmptyTitle": "No pet profile yet",
+  "growthArchiveEmptyCreate": "Create now",
+  "growthArchiveNonOwnerTitle": "Growth archive is for pet owners. Change your pet status to unlock it.",
+  "growthArchiveChangeStatus": "Change status",
+  "growthArchiveTimelineEmpty": "No records yet",
+  "growthEditStatusTitle": "Change pet status",
+  "growthStatusSaveFailed": "Could not update status, please try again",
+  "healthEventLabel": "🏥 Consultation record",
+  "commonSave": "Save"
 }

@@ -69,5 +69,15 @@
   "publishCreateProfile": "Buat",
   "publishRetry": "Coba lagi",
   "publishAddImage": "Tambah foto",
-  "publishFailed": "Gagal memposting, silakan coba lagi"
+  "publishFailed": "Gagal memposting, silakan coba lagi",
+  "growthArchiveAge": "{years}th {months}bln",
+  "growthArchiveEmptyTitle": "Belum ada profil hewan",
+  "growthArchiveEmptyCreate": "Buat sekarang",
+  "growthArchiveNonOwnerTitle": "Arsip tumbuh kembang khusus pemilik hewan. Ubah status hewan untuk membukanya.",
+  "growthArchiveChangeStatus": "Ubah status",
+  "growthArchiveTimelineEmpty": "Belum ada catatan",
+  "growthEditStatusTitle": "Ubah status hewan",
+  "growthStatusSaveFailed": "Gagal memperbarui status, coba lagi",
+  "healthEventLabel": "🏥 Catatan konsultasi",
+  "commonSave": "Simpan"
 }

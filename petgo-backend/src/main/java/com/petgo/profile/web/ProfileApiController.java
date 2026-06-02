@@ -2,7 +2,9 @@ package com.petgo.profile.web;
 
 import com.petgo.profile.dto.PetProfileCreateRequest;
 import com.petgo.profile.dto.PetProfileResponse;
+import com.petgo.profile.dto.TimelinePageResponse;
 import com.petgo.profile.service.ProfileService;
+import com.petgo.profile.service.TimelineService;
 import com.petgo.shared.error.AppException;
 import com.petgo.shared.ratelimit.RedisRateLimiter;
 import jakarta.validation.Valid;
@@ -14,6 +16,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -33,10 +36,13 @@ public class ProfileApiController {
     private static final Duration CREATE_WINDOW = Duration.ofMinutes(1);
 
     private final ProfileService profileService;
+    private final TimelineService timelineService;
     private final RedisRateLimiter rateLimiter;
 
-    public ProfileApiController(ProfileService profileService, RedisRateLimiter rateLimiter) {
+    public ProfileApiController(ProfileService profileService, TimelineService timelineService,
+            RedisRateLimiter rateLimiter) {
         this.profileService = profileService;
+        this.timelineService = timelineService;
         this.rateLimiter = rateLimiter;
     }
 
@@ -52,6 +58,17 @@ public class ProfileApiController {
     @GetMapping("/me")
     public PetProfileResponse myProfile(@AuthenticationPrincipal Jwt jwt) {
         return profileService.getMyProfile(currentUserId(jwt));
+    }
+
+    /**
+     * 成长时间线（Story 2.4）：快乐时刻 + 健康事件按 createdAt 倒序游标分页。
+     * 无档案 → 404（前端据此渲染空态）。
+     */
+    @GetMapping("/me/timeline")
+    public TimelinePageResponse timeline(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(value = "cursor", required = false) String cursor,
+            @RequestParam(value = "limit", defaultValue = "20") int limit) {
+        return timelineService.getTimeline(currentUserId(jwt), cursor, limit);
     }
 
     private static long currentUserId(Jwt jwt) {

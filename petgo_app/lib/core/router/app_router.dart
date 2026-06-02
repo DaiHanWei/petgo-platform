@@ -9,9 +9,9 @@ import '../../features/auth/presentation/nickname_page.dart';
 import '../../features/auth/presentation/pet_status_page.dart';
 import '../../features/content/presentation/home_page.dart';
 import '../../features/me/presentation/me_page.dart';
+import '../../features/profile/presentation/growth_archive_page.dart';
 import '../../features/profile/presentation/pet_profile_create_page.dart';
 import '../../features/profile/presentation/profile_onboarding_page.dart';
-import '../../features/profile/presentation/profile_page.dart';
 import '../../features/triage/presentation/triage_page.dart';
 import '../../shared/widgets/app_shell.dart';
 
@@ -53,7 +53,7 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
             GoRoute(path: '/home', builder: (c, s) => const HomePage()),
           ]),
           StatefulShellBranch(routes: [
-            GoRoute(path: '/profile', builder: (c, s) => const ProfilePage()),
+            GoRoute(path: '/profile', builder: (c, s) => const GrowthArchivePage()),
           ]),
           StatefulShellBranch(routes: [
             GoRoute(path: '/triage', builder: (c, s) => const TriagePage()),

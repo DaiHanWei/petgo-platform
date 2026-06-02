@@ -8,8 +8,10 @@ import com.petgo.content.repository.ContentPostRepository;
 import com.petgo.profile.service.ProfileService;
 import com.petgo.shared.error.AppException;
 import com.petgo.shared.ratelimit.IdempotencyService;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -67,6 +69,23 @@ public class ContentService {
 
         idempotency.store(idempotencyKey, saved.getId());
         return ContentPostResponse.from(saved);
+    }
+
+    /**
+     * 取某作者的成长日历「快乐时刻」（GROWTH_MOMENT，未删），createdAt 倒序游标分页。
+     * 供 profile 时间线聚合经 service 接口调用（Story 2.4）。
+     *
+     * @param before 仅取该时刻之前的（null = 从最新开始）
+     * @param limit  本批最多条数
+     */
+    @Transactional(readOnly = true)
+    public List<GrowthMomentView> findGrowthMoments(long authorId, Instant before, int limit) {
+        Instant cursor = before == null ? Instant.now() : before;
+        return posts.findByAuthorIdAndTypeAndDeletedAtIsNullAndCreatedAtLessThanOrderByCreatedAtDesc(
+                        authorId, ContentType.GROWTH_MOMENT, cursor, PageRequest.of(0, limit))
+                .stream()
+                .map(p -> new GrowthMomentView(p.getId(), p.getCreatedAt(), p.getImageUrls(), p.getText()))
+                .toList();
     }
 
     private static String blankToNull(String s) {

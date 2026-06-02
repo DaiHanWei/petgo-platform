@@ -17,6 +17,9 @@ class ApiPaths {
   static const String petProfiles = '$base/pet-profiles';
   static const String petProfileMe = '$base/pet-profiles/me';
 
+  /// 成长时间线（Story 2.4）。
+  static const String petProfileTimeline = '$base/pet-profiles/me/timeline';
+
   /// 内容发布（Story 2.3）。
   static const String contentPosts = '$base/content-posts';
 }

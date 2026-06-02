@@ -1,6 +1,6 @@
 # Story 2.4: 成长档案 Tab 时间线与状态快捷编辑
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -124,12 +124,31 @@ so that **我能一览宠物的成长足迹与健康事件**。
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+云端 dev agent（headless，L0 绿）。
 
 ### Debug Log References
 
+- 后端：`./mvnw -B -Dtest='TimelineServiceTest,ProfileApiControllerTest,ContentServiceTest' test` 绿；`./mvnw -B -DskipTests package` 绿。
+- 前端：`flutter analyze` → No issues；`flutter test` → 79 passed。
+
 ### Completion Notes List
 
-- 记录年龄计算放前端还是后端。
+**年龄计算放在前端**（`computePetAge` 纯函数，L0 单测）；后端时间线只回 createdAt，避免重复计算。
+
+**L0 状态（云端已验收）：**
+- 后端：`GET /pet-profiles/me/timeline` 聚合端点——经 ContentService.findGrowthMoments（快乐时刻）+ HealthEventTimelineSource 端口（健康事件，2.5 实现；2.4 期 ObjectProvider 无 bean → 空段稳健）按 createdAt 倒序游标分页。单测覆盖倒序、跨源合并、空健康源、hasMore/nextCursor、无档案 404、无效游标。
+- 前端：GrowthArchivePage 三态（A+档案=信息卡+FAB占位+倒序时间线 / A+无档案=空态立即创建 / B-C=有宠专属+改状态）+ HappyMomentTile/HealthEventTile + PetInfoCard（年龄由 birthday 算）+ 状态快捷编辑（复用 PetStatusSelector → PATCH /me → applyProfile + homeRefresh.bump + invalidate，FR-21 同步）。widget 测试覆盖三态 + 健康事件样式前向兼容。
+
+**模块边界**：profile 时间线经 content/health service 接口取数，未直 join（架构 Boundaries）。
+**本 Story 不建表**（快乐时刻在 2.3 content_posts，健康事件表 2.5）。
+
+**⚠️ 待本地验收（L1/L2）：**
+- **L1（Docker postgres+redis）**：J1 倒序聚合 + 游标翻页（真实快乐时刻数据，健康事件暂空）；J3 状态同步（Tab 改状态 → 「我的」与 Feed 即时一致）。
+- 待肉眼确认界面：成长档案三态布局、信息卡、时间线两类条目、状态编辑 sheet（真机/模拟器视觉）。
+- 健康事件真实数据待 Story 2.5 接入（本 Story 已用 mock 验条目样式）。
 
 ### File List
+
+**后端**：`content/repository/ContentPostRepository.java`(+查询)、`content/service/{ContentService(+findGrowthMoments),GrowthMomentView}.java`、`profile/service/{TimelineService,HealthEventTimelineSource}.java`、`profile/dto/{TimelineItemResponse,TimelinePageResponse}.java`、`profile/web/ProfileApiController.java`(+/me/timeline)；测试 `TimelineServiceTest`、`ProfileApiControllerTest`(+timeline)。
+
+**前端**：`core/network/api_paths.dart`(+timeline)、`features/profile/domain/{timeline_item,pet_age}.dart`、`features/profile/data/timeline_repository.dart`、`features/profile/presentation/growth_archive_page.dart`、`features/profile/presentation/widgets/{pet_info_card,timeline_tiles}.dart`、`core/router/app_router.dart`(/profile→GrowthArchivePage)、删除占位 `profile_page.dart`、`l10n/*.arb`；测试 `test/profile/{pet_age_test,growth_archive_test}.dart`。
