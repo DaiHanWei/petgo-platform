@@ -1,6 +1,6 @@
 # Story 2.7: 档案页动效分享 FAB
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -110,10 +110,27 @@ so that **我能随时把宠物名片分享出去，驱动拉新飞轮**。
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+云端 dev agent（headless，L0 绿）。
 
 ### Debug Log References
 
+- 前端：`flutter analyze` → No issues；`flutter test` → 87 passed。
+- 后端：本 Story 无改动（cardToken 由 2.2、名片 URL 由 2.6 提供）。
+
 ### Completion Notes List
 
+**L0 状态（云端已验收）：**
+- 前端：`ShareFab`（首访 scale pulse + ring ripple 动效，复访静态；pinned 于 Scaffold.floatingActionButton 不随滚动消失）+ `shareServiceProvider`（Share.share，注入便于测试）+ `shareFabAnimatedShownProvider`（prefs 首访标记，动效一次性）。集成 growth_archive_page 替换 2.4 占位 FAB，仅 (状态 A + 有档案 + 有 cardToken) 渲染（B/C/无档案不显示）。分享传 `petCardShareUrl(cardToken)`=/p/{token}（不可枚举）。FAB 无障碍语义 + i18n。
+- 单测：ShareFab 点击触发 onPressed、首访 animate→onAnimationShown 一次性、复访不触发；growth_archive A+档案显示 FAB / B 隐藏 FAB。
+
+**share_plus 版本**：`share_plus:^10.1.4`（`Share.share(text)` 未废弃，直接用）。
+
+**⚠️ 待本地验收（L2）：**
+- J2 真机点击弹系统分享菜单（含 WhatsApp/Instagram/复制链接），分享出正确 `/p/{cardToken}` 链接。
+- 待肉眼确认：FAB 首访动效（scale pulse + ring ripple）视觉、滚动不消失（真机/模拟器）。
+
 ### File List
+
+**前端**：`pubspec.yaml`(+share_plus)、`features/profile/presentation/widgets/share_fab.dart`、`features/profile/domain/share_service.dart`、`features/profile/presentation/growth_archive_page.dart`(集成 FAB)、`l10n/*.arb`(+shareFabLabel)；测试 `test/profile/share_fab_test.dart`、`growth_archive_test.dart`(+FAB 断言)。
+
+**后端**：无改动。

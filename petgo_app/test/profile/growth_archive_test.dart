@@ -6,6 +6,7 @@ import 'package:petgo/features/auth/domain/login_response.dart';
 import 'package:petgo/features/profile/data/profile_repository.dart';
 import 'package:petgo/features/profile/data/timeline_repository.dart';
 import 'package:petgo/features/profile/domain/pet_profile.dart';
+import 'package:petgo/features/profile/domain/share_service.dart';
 import 'package:petgo/features/profile/domain/timeline_item.dart';
 import 'package:petgo/features/profile/presentation/growth_archive_page.dart';
 import 'package:petgo/l10n/app_localizations.dart';
@@ -35,6 +36,7 @@ Widget _wrap({required AuthState auth, PetProfile? profile, TimelinePage? page})
       timelineFirstPageProvider.overrideWith(
         (ref) async => page ?? const TimelinePage(items: []),
       ),
+      shareFabAnimatedShownProvider.overrideWith((ref) async => true),
     ],
     child: const MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -50,6 +52,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('changeStatusButton')), findsOneWidget);
     expect(find.byKey(const ValueKey('petInfoCard')), findsNothing);
+    // 2.7 AC3：B/C 无名片可分享 → 无分享 FAB
+    expect(find.byKey(const ValueKey('shareFab')), findsNothing);
   });
 
   testWidgets('状态 A 无档案 → 空状态「立即创建」（AC2）', (tester) async {
@@ -65,6 +69,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('petInfoCard')), findsOneWidget);
     expect(find.text('Momo'), findsOneWidget);
+    // 2.7 AC1：A + 有档案 → 渲染分享 FAB
+    expect(find.byKey(const ValueKey('shareFab')), findsOneWidget);
   });
 
   testWidgets('有档案 + 含健康事件条目 → 渲染健康事件样式（AC1 前向兼容 J4）', (tester) async {

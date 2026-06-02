@@ -82,5 +82,6 @@
   "commonSave": "Simpan",
   "archivePromptTitle": "Simpan konsultasi ini ke arsip {petName}?",
   "archivePromptSave": "Simpan",
-  "archivePromptSkip": "Lewati"
+  "archivePromptSkip": "Lewati",
+  "shareFabLabel": "Bagikan kartu hewan"
 }

@@ -125,5 +125,6 @@
     }
   },
   "archivePromptSave": "Save",
-  "archivePromptSkip": "Skip"
+  "archivePromptSkip": "Skip",
+  "shareFabLabel": "Share pet card"
 }

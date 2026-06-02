@@ -12,8 +12,12 @@ import '../../auth/domain/auth_state.dart';
 import '../../content/domain/home_refresh_provider.dart';
 import '../data/profile_repository.dart';
 import '../data/timeline_repository.dart';
+import '../domain/card_link.dart';
+import '../domain/pet_profile.dart';
+import '../domain/share_service.dart';
 import '../domain/timeline_item.dart';
 import 'widgets/pet_info_card.dart';
+import 'widgets/share_fab.dart';
 import 'widgets/timeline_tiles.dart';
 
 /// 成长档案 Tab 主屏（Story 2.4）。三态：
@@ -39,14 +43,8 @@ class GrowthArchivePage extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.base,
       appBar: AppBar(title: Text(l10n.tabProfile), backgroundColor: AppColors.base),
-      // 分享名片 FAB 占位（动效/分享逻辑 Story 2.7）。
-      floatingActionButton: profileAsync.asData?.value != null
-          ? FloatingActionButton(
-              key: const ValueKey('shareCardFabPlaceholder'),
-              onPressed: null,
-              child: const Icon(Icons.share),
-            )
-          : null,
+      // 分享名片 FAB（Story 2.7）：仅 A + 有档案 + 有 cardToken 渲染；动效首访一次。
+      floatingActionButton: _shareFab(context, ref, profileAsync.asData?.value),
       body: profileAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, stack) => _EmptyProfileView(onCreate: () => context.go('/profile/create')),
@@ -62,6 +60,22 @@ class GrowthArchivePage extends ConsumerWidget {
           );
         },
       ),
+    );
+  }
+
+  /// 仅 (状态 A + 有档案 + 有 cardToken) 渲染分享 FAB；B/C 或无档案不渲染（AC3）。
+  Widget? _shareFab(BuildContext context, WidgetRef ref, PetProfile? profile) {
+    if (profile == null || profile.cardToken.isEmpty) return null;
+    final l10n = AppLocalizations.of(context);
+    final alreadyShown = ref.watch(shareFabAnimatedShownProvider).asData?.value ?? true;
+    return ShareFab(
+      semanticLabel: l10n.shareFabLabel,
+      animate: !alreadyShown,
+      onAnimationShown: () {
+        markShareFabAnimated();
+        ref.invalidate(shareFabAnimatedShownProvider);
+      },
+      onPressed: () => ref.read(shareServiceProvider)(petCardShareUrl(profile.cardToken)),
     );
   }
 

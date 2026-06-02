@@ -53,6 +53,8 @@ dependencies:
   permission_handler: ^11.3.1
   image: ^4.3.0
   crypto: ^3.0.3
+  # Story 2.7：系统分享菜单（名片链接）。
+  share_plus: ^10.1.4
 
 dev_dependencies:
   flutter_test:
