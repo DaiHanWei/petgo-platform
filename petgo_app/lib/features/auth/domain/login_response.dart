@@ -32,6 +32,7 @@ class LoginResponse {
 /// 当前用户聚合视图（对应后端 `UserProfileResponse`）。
 class UserProfile {
   const UserProfile({
+    this.id,
     this.nickname,
     this.displayName,
     this.avatarUrl,
@@ -40,6 +41,8 @@ class UserProfile {
     this.hasPetProfile = false,
   });
 
+  /// 当前用户 id（Story 3.5：评论删除入口可见性判定）。
+  final int? id;
   final String? nickname;
   final String? displayName;
   final String? avatarUrl;
@@ -48,6 +51,7 @@ class UserProfile {
   final bool hasPetProfile;
 
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
+        id: json['id'] as int?,
         nickname: json['nickname'] as String?,
         displayName: json['displayName'] as String?,
         avatarUrl: json['avatarUrl'] as String?,

@@ -154,5 +154,6 @@
     }
   },
   "detailMenuReport": "Report",
-  "detailMenuDelete": "Delete"
+  "detailMenuDelete": "Delete",
+  "detailReply": "Reply"
 }

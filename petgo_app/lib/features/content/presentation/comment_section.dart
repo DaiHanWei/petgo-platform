@@ -7,13 +7,23 @@ import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../data/detail_repository.dart';
 import '../domain/comment.dart';
+import 'detail_providers.dart';
 
-/// 评论区（Story 3.3，只读）。一级时间正序首 10 + 「查看更多评论」；
-/// 二级默认内嵌 3 条 + 「查看全部 X 条回复」展开（写入在 3.5）。非自身滚动（嵌入详情页滚动）。
+/// 评论区（Story 3.3 只读 + Story 3.5 回复/删除入口）。一级时间正序首 10 + 「查看更多评论」；
+/// 二级默认内嵌 3 条 + 「查看全部 X 条回复」展开。非自身滚动（嵌入详情页滚动）。
+///
+/// [currentUserId]/[isContentAuthor] 决定删除入口可见性（后端权威，前端仅体验）。
 class CommentSection extends ConsumerStatefulWidget {
-  const CommentSection({super.key, required this.postId});
+  const CommentSection({
+    super.key,
+    required this.postId,
+    this.currentUserId,
+    this.isContentAuthor = false,
+  });
 
   final int postId;
+  final int? currentUserId;
+  final bool isContentAuthor;
 
   @override
   ConsumerState<CommentSection> createState() => _CommentSectionState();
@@ -98,9 +108,63 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     }
   }
 
+  /// 静默重拉首屏（发表/回复/删除后，不闪骨架）。
+  Future<void> _reload() async {
+    try {
+      final page = await _repo.getComments(widget.postId);
+      if (!mounted) return;
+      setState(() {
+        _topLevel
+          ..clear()
+          ..addAll(page.items);
+        _nextCursor = page.nextCursor;
+        _hasMore = page.hasMore;
+        _expanded.clear();
+      });
+    } catch (_) {
+      // 保持现状。
+    }
+  }
+
+  Future<void> _confirmDelete(int commentId) async {
+    final l10n = AppLocalizations.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        content: Text(l10n.detailMenuDelete),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(l10n.commonCancel)),
+          TextButton(
+            key: const ValueKey('confirmDeleteComment'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(l10n.detailMenuDelete),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await _repo.deleteComment(commentId);
+      await _reload();
+      // 详情计数随之变化：触发刷新信号（详情页可据此重拉）。
+      ref.read(commentsRefreshProvider.notifier).bump();
+    } catch (_) {
+      // 后端权威（403 等）：保持现状。
+    }
+  }
+
+  bool _canDelete(Comment c) {
+    if (widget.isContentAuthor) return true; // 内容主可删任意
+    return widget.currentUserId != null &&
+        !c.authorDeleted &&
+        c.authorId == widget.currentUserId; // 评论作者本人
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    // 发表/回复/删除后重拉（Story 3.5）。
+    ref.listen<int>(commentsRefreshProvider, (prev, next) => _reload());
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.all(AppSpacing.lg),
@@ -141,16 +205,13 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _CommentTile(comment: c, deletedLabel: l10n.feedDeletedUser),
+          _tile(l10n, c),
           if (shownReplies.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(left: AppSpacing.xl, top: AppSpacing.xs),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (final r in shownReplies)
-                    _CommentTile(comment: r, deletedLabel: l10n.feedDeletedUser),
-                ],
+                children: [for (final r in shownReplies) _tile(l10n, r)],
               ),
             ),
           if (showViewAll || showLoadMoreReplies)
@@ -166,17 +227,40 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
       ),
     );
   }
+
+  Widget _tile(AppLocalizations l10n, Comment c) {
+    final name = c.authorDeleted ? l10n.feedDeletedUser : (c.authorNickname ?? l10n.feedDeletedUser);
+    return _CommentTile(
+      comment: c,
+      name: name,
+      replyLabel: l10n.detailReply,
+      canDelete: _canDelete(c),
+      onReply: () =>
+          ref.read(replyTargetProvider.notifier).set(ReplyTarget(parentId: c.id, toName: name)),
+      onDelete: () => _confirmDelete(c.id),
+    );
+  }
 }
 
 class _CommentTile extends StatelessWidget {
-  const _CommentTile({required this.comment, required this.deletedLabel});
+  const _CommentTile({
+    required this.comment,
+    required this.name,
+    required this.replyLabel,
+    required this.canDelete,
+    required this.onReply,
+    required this.onDelete,
+  });
 
   final Comment comment;
-  final String deletedLabel;
+  final String name;
+  final String replyLabel;
+  final bool canDelete;
+  final VoidCallback onReply;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
-    final name = comment.authorDeleted ? deletedLabel : (comment.authorNickname ?? deletedLabel);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
       child: Column(
@@ -185,6 +269,24 @@ class _CommentTile extends StatelessWidget {
           Text(name, style: AppTypography.caption.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: AppSpacing.xxs),
           Text(comment.body, style: AppTypography.body),
+          Row(
+            children: [
+              GestureDetector(
+                key: ValueKey('replyComment_${comment.id}'),
+                onTap: onReply,
+                child: Text(replyLabel, style: AppTypography.micro),
+              ),
+              if (canDelete) ...[
+                const SizedBox(width: AppSpacing.md),
+                GestureDetector(
+                  key: ValueKey('deleteComment_${comment.id}'),
+                  onTap: onDelete,
+                  child: Icon(Icons.delete_outline_rounded,
+                      size: 14, color: AppColors.textTertiary),
+                ),
+              ],
+            ],
+          ),
         ],
       ),
     );

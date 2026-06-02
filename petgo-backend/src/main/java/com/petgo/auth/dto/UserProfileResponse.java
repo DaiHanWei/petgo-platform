@@ -10,6 +10,7 @@ import com.petgo.auth.domain.User;
  * Epic 2 接入后由真实档案驱动（决策见 1.7）。
  */
 public record UserProfileResponse(
+        Long id,
         String nickname,
         String displayName,
         String avatarUrl,
@@ -19,6 +20,7 @@ public record UserProfileResponse(
 
     public static UserProfileResponse from(User u, boolean hasPetProfile) {
         return new UserProfileResponse(
+                u.getId(),
                 u.getNickname(),
                 u.getDisplayName(),
                 u.getAvatarUrl(),

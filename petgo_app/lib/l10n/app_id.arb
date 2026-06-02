@@ -106,5 +106,6 @@
   "detailViewMoreComments": "Lihat komentar lainnya",
   "detailViewAllReplies": "Lihat semua {count} balasan",
   "detailMenuReport": "Laporkan",
-  "detailMenuDelete": "Hapus"
+  "detailMenuDelete": "Hapus",
+  "detailReply": "Balas"
 }

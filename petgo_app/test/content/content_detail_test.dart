@@ -68,6 +68,15 @@ class _FakeDetailRepo implements DetailRepository {
   @override
   Future<CommentPage> getReplies(int parentId, {String? cursor}) async =>
       const CommentPage(items: [], nextCursor: null, hasMore: false);
+
+  @override
+  Future<Comment> postComment(int postId, String body) async => _top(999);
+
+  @override
+  Future<Comment> postReply(int parentId, String body) async => _reply(999);
+
+  @override
+  Future<void> deleteComment(int commentId) async {}
 }
 
 Future<void> _pump(WidgetTester tester, _FakeDetailRepo repo) async {

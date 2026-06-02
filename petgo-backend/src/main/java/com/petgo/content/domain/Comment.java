@@ -46,6 +46,27 @@ public class Comment {
     protected Comment() {
     }
 
+    /**
+     * 新建评论（Story 3.5）。{@code parentId} 为 null = 一级；非空 = 二级（须为一级 id，两级约束在 service 强制）。
+     */
+    public static Comment create(long postId, Long parentId, long authorId, String body) {
+        Comment c = new Comment();
+        c.postId = postId;
+        c.parentId = parentId;
+        c.authorId = authorId;
+        c.body = body;
+        return c;
+    }
+
+    public boolean isTopLevel() {
+        return parentId == null;
+    }
+
+    /** 软删（Story 3.5 删除 / 级联）。 */
+    public void softDelete() {
+        this.deletedAt = Instant.now();
+    }
+
     @PrePersist
     void onCreate() {
         Instant now = Instant.now();

@@ -15,6 +15,15 @@ abstract class DetailRepository {
   Future<CommentPage> getComments(int postId, {String? cursor});
 
   Future<CommentPage> getReplies(int parentId, {String? cursor});
+
+  /// 发表一级评论（Story 3.5，≤200 字服务端权威）。
+  Future<Comment> postComment(int postId, String body);
+
+  /// 回复（二级，归并到一级；Story 3.5）。
+  Future<Comment> postReply(int parentId, String body);
+
+  /// 删除评论（Story 3.5，作者本人 / 内容主；后端权威）。
+  Future<void> deleteComment(int commentId);
 }
 
 class DioDetailRepository implements DetailRepository {
@@ -48,6 +57,29 @@ class DioDetailRepository implements DetailRepository {
       queryParameters: cursor == null ? null : {'cursor': cursor},
     );
     return CommentPage.fromJson(resp.data!);
+  }
+
+  @override
+  Future<Comment> postComment(int postId, String body) async {
+    final resp = await dio.post<Map<String, dynamic>>(
+      ApiPaths.contentPostComments(postId),
+      data: {'body': body},
+    );
+    return Comment.fromJson(resp.data!);
+  }
+
+  @override
+  Future<Comment> postReply(int parentId, String body) async {
+    final resp = await dio.post<Map<String, dynamic>>(
+      ApiPaths.commentReplies(parentId),
+      data: {'body': body},
+    );
+    return Comment.fromJson(resp.data!);
+  }
+
+  @override
+  Future<void> deleteComment(int commentId) async {
+    await dio.delete<void>('${ApiPaths.base}/comments/$commentId');
   }
 
   ContentLoadErrorKind _classify(DioException e) {

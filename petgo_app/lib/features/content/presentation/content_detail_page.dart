@@ -5,10 +5,11 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/rounded.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
-import '../../../features/auth/domain/auth_guard.dart';
+import '../../../features/auth/domain/auth_state.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../domain/content_detail.dart';
+import 'comment_composer.dart';
 import 'comment_section.dart';
 import 'detail_providers.dart';
 import 'like_button.dart';
@@ -26,6 +27,8 @@ class ContentDetailPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final detailAsync = ref.watch(detailProvider(postId));
+    // 评论发表/删除后重拉详情（更新 commentCount）。
+    ref.listen<int>(commentsRefreshProvider, (prev, next) => ref.invalidate(detailProvider(postId)));
 
     return detailAsync.when(
       loading: () => _shell(context, body: const Center(
@@ -77,6 +80,7 @@ class _DetailScaffold extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    final currentUserId = ref.watch(authControllerProvider).profile?.id;
     return Scaffold(
       backgroundColor: AppColors.base,
       appBar: AppBar(
@@ -113,12 +117,16 @@ class _DetailScaffold extends ConsumerWidget {
                     const SizedBox(height: AppSpacing.md),
                     _interactionBar(),
                     const Divider(height: AppSpacing.xl, color: AppColors.divider),
-                    CommentSection(postId: postId),
+                    CommentSection(
+                      postId: postId,
+                      currentUserId: currentUserId,
+                      isContentAuthor: detail.isAuthor,
+                    ),
                   ],
                 ),
               ),
             ),
-            _commentBox(context, ref, l10n),
+            CommentComposer(postId: postId),
           ],
         ),
       ),
@@ -163,31 +171,6 @@ class _DetailScaffold extends ConsumerWidget {
     );
   }
 
-  Widget _commentBox(BuildContext context, WidgetRef ref, AppLocalizations l10n) {
-    // 底部固定评论框：未登录点击触发 FR-0C；登录态聚焦输入（提交在 3.5）。
-    return SafeArea(
-      top: false,
-      child: GestureDetector(
-        key: const ValueKey('detailCommentBox'),
-        onTap: () => requireLogin(ref, context, onAllowed: () {}),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-          decoration: const BoxDecoration(
-            color: AppColors.surface,
-            border: Border(top: BorderSide(color: AppColors.border)),
-          ),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-            decoration: BoxDecoration(
-              color: AppColors.base,
-              borderRadius: AppRounded.lgRadius,
-            ),
-            child: Text(l10n.detailCommentHint, style: AppTypography.caption),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 /// 多图左右滑 + 角标 x/y（UX-DR12）；点击全屏 lightbox。
