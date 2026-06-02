@@ -25,6 +25,11 @@ class AppPrefs {
   static const kProfilePromptDismissedPermanently = 'petgo.profile_prompt_dismissed';
   static const kPetProfileCompleted = 'petgo.pet_profile_completed';
 
+  // --- 推送权限是否已申请过（Story 6.4，拒绝后不再主动弹）---
+  static const _kPushPermissionAsked = 'petgo.push_permission_asked';
+  bool get pushPermissionAsked => _prefs.getBool(_kPushPermissionAsked) ?? false;
+  Future<void> setPushPermissionAsked(bool asked) => _prefs.setBool(_kPushPermissionAsked, asked);
+
   int getInt(String key, {int fallback = 0}) => _prefs.getInt(key) ?? fallback;
   Future<void> setInt(String key, int value) => _prefs.setInt(key, value);
   bool getBool(String key, {bool fallback = false}) => _prefs.getBool(key) ?? fallback;
