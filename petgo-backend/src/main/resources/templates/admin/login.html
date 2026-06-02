@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <meta name="robots" content="noindex,nofollow"/>
+    <title>PetGo 运营后台 · 登录</title>
+    <style>
+        body { font-family: system-ui, sans-serif; background: #f4f5f7; margin: 0; }
+        .box { max-width: 320px; margin: 12vh auto; background: #fff; padding: 28px;
+               border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+        h1 { font-size: 18px; margin: 0 0 18px; }
+        label { display: block; font-size: 13px; color: #555; margin: 12px 0 4px; }
+        input { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc;
+                border-radius: 4px; }
+        button { width: 100%; margin-top: 18px; padding: 9px; background: #2d6cdf; color: #fff;
+                 border: 0; border-radius: 4px; cursor: pointer; }
+        .err { color: #c0392b; font-size: 13px; margin-top: 12px; }
+        .ok { color: #27ae60; font-size: 13px; margin-top: 12px; }
+    </style>
+</head>
+<body>
+<div class="box">
+    <h1>PetGo 运营后台</h1>
+    <p class="err" th:if="${param.error}">账号或密码不正确。</p>
+    <p class="ok" th:if="${param.logout}">已退出登录。</p>
+    <form th:action="@{/admin/login}" method="post">
+        <label for="username">运营邮箱</label>
+        <input type="text" id="username" name="username" autocomplete="username" autofocus/>
+        <label for="password">密码</label>
+        <input type="password" id="password" name="password" autocomplete="current-password"/>
+        <button type="submit">登录</button>
+    </form>
+</div>
+</body>
+</html>

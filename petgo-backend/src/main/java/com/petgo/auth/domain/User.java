@@ -52,6 +52,10 @@ public class User {
     @Column(name = "role", nullable = false, length = 16)
     private Role role = Role.USER;
 
+    /** 仅 ADMIN 账密登录用（BCrypt 哈希）；OAuth 用户为 null。Story 3.1。 */
+    @Column(name = "password_hash", length = 255)
+    private String passwordHash;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -74,6 +78,27 @@ public class User {
         u.role = Role.USER;
         u.onboardingCompleted = false;
         return u;
+    }
+
+    /**
+     * 运营 ADMIN 账号（Story 3.1）。无 Google 身份，走账密表单登录；
+     * {@code googleSub} 占位为 {@code admin:<email>} 以满足非空+唯一约束。
+     */
+    public static User newAdmin(String email, String displayName, String passwordHash) {
+        User u = new User();
+        u.googleSub = "admin:" + email;
+        u.email = email;
+        u.displayName = displayName;
+        u.nickname = displayName;
+        u.role = Role.ADMIN;
+        u.onboardingCompleted = true;
+        u.passwordHash = passwordHash;
+        return u;
+    }
+
+    /** 更新 ADMIN 密码哈希（bootstrap 幂等重置用）。 */
+    public void setPasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
     }
 
     @PrePersist
@@ -134,6 +159,10 @@ public class User {
 
     public Role getRole() {
         return role;
+    }
+
+    public String getPasswordHash() {
+        return passwordHash;
     }
 
     public Instant getCreatedAt() {
