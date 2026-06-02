@@ -8,6 +8,7 @@ import '../../../shared/widgets/login_hard_dialog.dart';
 import '../../../shared/widgets/login_soft_sheet.dart';
 import '../data/auth_repository.dart';
 import 'auth_routing.dart';
+import 'auth_state.dart';
 import 'login_response.dart';
 
 /// 登录流程执行器：返回 [LoginResponse]，用户取消时返回 null。
@@ -109,7 +110,11 @@ final Provider<LoginGuideController> loginGuideControllerProvider =
     Provider<LoginGuideController>((ref) {
   return LoginGuideController(() async {
     try {
-      return await ref.read(authRepositoryProvider).loginWithGoogle();
+      final resp = await ref.read(authRepositoryProvider).loginWithGoogle();
+      // 关键：登录浮层路径也必须把登录态写入 authController（与 LoginPage 一致），
+      // 否则成功后仍是游客，受控 Tab/路由 redirect 会把用户弹回首页。
+      ref.read(authControllerProvider.notifier).applyLogin(resp);
+      return resp;
     } on LoginCancelled {
       return null;
     }

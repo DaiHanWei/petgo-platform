@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:petgo/core/network/dio_client.dart';
 import 'package:petgo/core/router/route_intent.dart';
+import 'package:petgo/features/auth/data/auth_repository.dart';
+import 'package:petgo/features/auth/domain/auth_state.dart';
 import 'package:petgo/features/auth/domain/login_guide_controller.dart';
 import 'package:petgo/features/auth/domain/login_response.dart';
 import 'package:petgo/l10n/app_localizations.dart';
@@ -16,6 +19,16 @@ LoginResponse _resp({required bool onboardingCompleted, bool isNewUser = false})
       isNewUser: isNewUser,
       onboardingCompleted: onboardingCompleted,
     );
+
+/// 假 AuthRepository：loginWithGoogle 直接返回固定响应，其余成员不触及。
+class _FakeAuthRepository implements AuthRepository {
+  _FakeAuthRepository(this._response);
+  final LoginResponse _response;
+  @override
+  Future<LoginResponse> loginWithGoogle() async => _response;
+  @override
+  dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();
+}
 
 GoRouter _router(LoginGuideController controller, {RouteIntent? pending, bool soft = false}) {
   return GoRouter(
@@ -146,5 +159,40 @@ void main() {
     expect(controller.hasPending, isFalse);
     expect(find.byKey(const ValueKey('trigger')), findsOneWidget); // 仍在原页
     expect(find.text('TRIAGE PAGE'), findsNothing);
+  });
+
+  // 回归测试：用【真实】loginGuideControllerProvider（含 applyLogin wiring），
+  // 防再次出现「浮层登录成功却没把 authController 置为已登录」的缺陷。
+  // 注：上方用例直接 new LoginGuideController(fakeRunner)，绕过了 provider 的真实 wiring，故漏检。
+  testWidgets('回归: 浮层登录成功 → authController 必须置为已登录（applyLogin wiring）', (tester) async {
+    final container = ProviderContainer(overrides: [
+      authRepositoryProvider
+          .overrideWithValue(_FakeAuthRepository(_resp(onboardingCompleted: true))),
+    ]);
+    addTearDown(container.dispose);
+
+    // 真实 provider 构造的 controller（这才是线上路径）
+    final controller = container.read(loginGuideControllerProvider);
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp.router(
+        routerConfig: _router(controller, pending: const RouteIntent(location: '/triage')),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(container.read(authControllerProvider).isLoggedIn, isFalse); // 前置：游客
+
+    await tester.tap(find.byKey(const ValueKey('trigger')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('hardDialogGoogleCta')));
+    await tester.pumpAndSettle();
+
+    // 关键断言（修复前为 false）：浮层登录后真的已登录，且 pendingAction 执行。
+    expect(container.read(authControllerProvider).isLoggedIn, isTrue);
+    expect(find.text('TRIAGE PAGE'), findsOneWidget);
   });
 }

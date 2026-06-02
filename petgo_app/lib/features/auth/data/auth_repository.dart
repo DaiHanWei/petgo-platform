@@ -1,9 +1,14 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_paths.dart';
 import '../../../core/storage/secure_storage.dart';
 import '../domain/login_response.dart';
 import 'google_auth_client.dart';
+
+/// DEV-ONLY 开关：debug 构建默认开启「假登录」（见 [AuthRepository.loginWithGoogle]）。
+/// 关闭：`--dart-define=PETGO_DEV_STUB_LOGIN=false`。release 恒不生效（双护栏 kDebugMode）。
+const bool _kDevStubLogin = bool.fromEnvironment('PETGO_DEV_STUB_LOGIN', defaultValue: true);
 
 /// 取消登录的哨兵（区别于失败）。
 class LoginCancelled implements Exception {
@@ -20,9 +25,32 @@ class AuthRepository {
 
   /// 完整 Google 登录链路。用户取消抛 [LoginCancelled]。
   Future<LoginResponse> loginWithGoogle() async {
+    // 🔧 DEV-ONLY：debug 构建跳过真 Google OAuth + 后端，直接置已登录态——
+    // 便于无真实凭证时验视觉二级页。release 构建恒不走此路（kDebugMode）。
+    if (kDebugMode && _kDevStubLogin) {
+      return _devStubLoginResponse();
+    }
     final idToken = await googleClient.signInAndGetIdToken();
     if (idToken == null) throw const LoginCancelled();
     return exchangeIdToken(idToken);
+  }
+
+  /// DEV-ONLY 合成登录响应（已登录老用户）。
+  Future<LoginResponse> _devStubLoginResponse() async {
+    await tokenStore.saveTokens(access: 'dev-stub-access', refresh: 'dev-stub-refresh');
+    return const LoginResponse(
+      accessToken: 'dev-stub-access',
+      refreshToken: 'dev-stub-refresh',
+      role: 'USER',
+      isNewUser: false,
+      onboardingCompleted: true, // → 进 App 主框架（已登录），受控 Tab 可进
+      profile: UserProfile(
+        nickname: 'Dev',
+        displayName: 'Dev User',
+        petStatus: 'A',
+        onboardingCompleted: true,
+      ),
+    );
   }
 
   /// 用 ID Token 向后端换取自签 JWT（拆出便于测试）。

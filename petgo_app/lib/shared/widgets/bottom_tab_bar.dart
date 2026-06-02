@@ -9,7 +9,7 @@ import '../../l10n/app_localizations.dart';
 enum AppTab { home, profile, triage, me }
 
 /// 「＋」凸起按钮直径（px）。
-const double kAddButtonSize = 44;
+const double kAddButtonSize = 60;
 
 /// active Tab 区域色填充圆直径（px）。
 const double kActiveCircleSize = 34;
@@ -138,7 +138,7 @@ class AddTabButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final Color color = BottomTabBar.regionColorForTab(activeIndex);
     return Transform.translate(
-      offset: const Offset(0, -8), // 约 1/3 高度上移
+      offset: const Offset(0, -14), // 约 1/3 高度上移（按钮加大后相应上提）
       child: Material(
         color: Colors.transparent,
         child: InkResponse(
@@ -155,7 +155,7 @@ class AddTabButton extends StatelessWidget {
                 BoxShadow(color: Color(0x33000000), blurRadius: 6, offset: Offset(0, 2)),
               ],
             ),
-            child: const Icon(Icons.add, color: AppColors.onAccent, size: 26),
+            child: const Icon(Icons.add, color: AppColors.onAccent, size: 34),
           ),
         ),
       ),
