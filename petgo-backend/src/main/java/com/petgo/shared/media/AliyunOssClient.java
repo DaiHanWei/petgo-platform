@@ -2,6 +2,7 @@ package com.petgo.shared.media;
 
 import com.aliyun.oss.OSS;
 import com.aliyun.oss.OSSClientBuilder;
+import java.io.ByteArrayInputStream;
 import org.springframework.stereotype.Component;
 
 /**
@@ -51,6 +52,20 @@ public class AliyunOssClient {
      */
     public String publicExifStrippedUrl(String objectKey) {
         return publicUrl(objectKey) + "?x-oss-process=" + EXIF_STRIP_PROCESS;
+    }
+
+    /**
+     * 服务端上传字节到私密桶②（Story 2.5 IM→OSS 桥接用）。L2 真实网络。
+     * 调用方负责字节已去 EXIF（IM 图复制场景由 {@link ImToOssArchiver} 控制）。
+     */
+    public void putPrivateObject(String objectKey, byte[] bytes) {
+        OSS client = buildClient();
+        try {
+            client.putObject(props.getOss().getPrivateBucket(), stripLeadingSlash(objectKey),
+                    new ByteArrayInputStream(bytes));
+        } finally {
+            client.shutdown();
+        }
     }
 
     private static String stripLeadingSlash(String key) {

@@ -79,5 +79,8 @@
   "growthEditStatusTitle": "Ubah status hewan",
   "growthStatusSaveFailed": "Gagal memperbarui status, coba lagi",
   "healthEventLabel": "🏥 Catatan konsultasi",
-  "commonSave": "Simpan"
+  "commonSave": "Simpan",
+  "archivePromptTitle": "Simpan konsultasi ini ke arsip {petName}?",
+  "archivePromptSave": "Simpan",
+  "archivePromptSkip": "Lewati"
 }

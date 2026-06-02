@@ -22,4 +22,8 @@ class ApiPaths {
 
   /// 内容发布（Story 2.3）。
   static const String contentPosts = '$base/content-posts';
+
+  /// 问诊存档（Story 2.5）。
+  static const String healthArchiveDecisions = '$base/health-events/archive-decisions';
+  static const String healthDecision = '$base/health-events/decision';
 }

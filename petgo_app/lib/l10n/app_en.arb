@@ -117,5 +117,13 @@
   "growthEditStatusTitle": "Change pet status",
   "growthStatusSaveFailed": "Could not update status, please try again",
   "healthEventLabel": "🏥 Consultation record",
-  "commonSave": "Save"
+  "commonSave": "Save",
+  "archivePromptTitle": "Save this consultation to {petName}'s archive?",
+  "@archivePromptTitle": {
+    "placeholders": {
+      "petName": { "type": "String" }
+    }
+  },
+  "archivePromptSave": "Save",
+  "archivePromptSkip": "Skip"
 }
