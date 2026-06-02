@@ -10,6 +10,7 @@ import com.petgo.auth.domain.User;
 import com.petgo.auth.dto.UpdateMeRequest;
 import com.petgo.auth.dto.UserProfileResponse;
 import com.petgo.auth.repository.UserRepository;
+import com.petgo.profile.repository.PetProfileRepository;
 import com.petgo.shared.error.AppException;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -26,6 +27,9 @@ class MeServiceTest {
 
     @Mock
     UserRepository users;
+
+    @Mock
+    PetProfileRepository petProfiles;
 
     @InjectMocks
     MeService meService;

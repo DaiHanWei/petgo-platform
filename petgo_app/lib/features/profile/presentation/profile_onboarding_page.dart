@@ -36,8 +36,8 @@ class ProfileOnboardingPage extends ConsumerWidget {
                 width: double.infinity,
                 child: FilledButton(
                   key: const ValueKey('profileOnboardingCreate'),
-                  // 立即创建 → Epic 2 档案创建表单（本 Story 期占位：跳首页，Epic 2 替换路由）。
-                  onPressed: () => context.go('/home'),
+                  // 立即创建 → 宠物档案创建表单（Story 2.2）。
+                  onPressed: () => context.go('/profile/create'),
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.accentGrowth,
                     foregroundColor: AppColors.onAccent,

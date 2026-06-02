@@ -71,5 +71,17 @@
   "mediaPermissionDeniedBody": "Photo access is required to upload. Please enable it in Settings.",
   "mediaOpenSettings": "Open Settings",
   "mediaUploadFailed": "Upload failed, please try again",
-  "mediaImageTooLarge": "Image is too large, please choose another"
+  "mediaImageTooLarge": "Image is too large, please choose another",
+  "petProfileCreateTitle": "Create pet profile",
+  "petProfileName": "Name",
+  "petProfileNameHint": "Your pet's name",
+  "petProfileBreed": "Breed",
+  "petProfileBirthday": "Birthday",
+  "petProfileBirthdayPick": "Pick a date",
+  "petProfileIntro": "One-line intro",
+  "petProfileAddPhoto": "Add photo",
+  "petProfileSubmit": "Create",
+  "petProfileNameRequired": "Please enter a name",
+  "petProfileExists": "You already have a pet profile",
+  "petProfileCreateFailed": "Could not create profile, please try again"
 }

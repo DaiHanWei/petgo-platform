@@ -44,5 +44,17 @@
   "mediaPermissionDeniedBody": "Akses foto diperlukan untuk mengunggah. Aktifkan di Pengaturan.",
   "mediaOpenSettings": "Buka Pengaturan",
   "mediaUploadFailed": "Gagal mengunggah, silakan coba lagi",
-  "mediaImageTooLarge": "Gambar terlalu besar, pilih yang lain"
+  "mediaImageTooLarge": "Gambar terlalu besar, pilih yang lain",
+  "petProfileCreateTitle": "Buat profil hewan",
+  "petProfileName": "Nama",
+  "petProfileNameHint": "Nama hewan Anda",
+  "petProfileBreed": "Ras",
+  "petProfileBirthday": "Tanggal lahir",
+  "petProfileBirthdayPick": "Pilih tanggal",
+  "petProfileIntro": "Intro satu baris",
+  "petProfileAddPhoto": "Tambah foto",
+  "petProfileSubmit": "Buat",
+  "petProfileNameRequired": "Silakan masukkan nama",
+  "petProfileExists": "Anda sudah punya profil hewan",
+  "petProfileCreateFailed": "Gagal membuat profil, silakan coba lagi"
 }

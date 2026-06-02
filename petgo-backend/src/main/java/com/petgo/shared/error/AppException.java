@@ -55,4 +55,9 @@ public class AppException extends RuntimeException {
     public static AppException mediaCredential(String detail) {
         return new AppException(HttpStatus.BAD_GATEWAY, ErrorTypes.MEDIA_CREDENTIAL, detail);
     }
+
+    /** Story 2.2：单账号单宠物，已存在档案再建（409）。 */
+    public static AppException profileExists(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.PROFILE_EXISTS, detail);
+    }
 }

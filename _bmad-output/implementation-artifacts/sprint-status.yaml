@@ -72,7 +72,7 @@ development_status:
   # ===== Epic 2: 成长档案与宠物名片分享 =====
   epic-2: in-progress
   2-1-媒体基建-oss-双桶-sts-直传-签名-url-与-exif-剥离: review
-  2-2-宠物档案创建-单账号单宠物: ready-for-dev
+  2-2-宠物档案创建-单账号单宠物: review
   2-3-统一-发布入口与内容发布: ready-for-dev
   2-4-成长档案-tab-时间线与状态快捷编辑: ready-for-dev
   2-5-问诊记录存档承接与健康事件时间线: ready-for-dev

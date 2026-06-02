@@ -12,4 +12,8 @@ class ApiPaths {
 
   /// 媒体 STS 上传凭证（Story 2.1）。
   static const String mediaStsCredentials = '$base/media/sts-credentials';
+
+  /// 宠物档案（Story 2.2）。
+  static const String petProfiles = '$base/pet-profiles';
+  static const String petProfileMe = '$base/pet-profiles/me';
 }

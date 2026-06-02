@@ -5,6 +5,7 @@ import com.petgo.auth.domain.User;
 import com.petgo.auth.dto.UpdateMeRequest;
 import com.petgo.auth.dto.UserProfileResponse;
 import com.petgo.auth.repository.UserRepository;
+import com.petgo.profile.repository.PetProfileRepository;
 import com.petgo.shared.error.AppException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,9 +20,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class MeService {
 
     private final UserRepository users;
+    private final PetProfileRepository petProfiles;
 
-    public MeService(UserRepository users) {
+    public MeService(UserRepository users, PetProfileRepository petProfiles) {
         this.users = users;
+        this.petProfiles = petProfiles;
     }
 
     @Transactional(readOnly = true)
@@ -71,10 +74,10 @@ public class MeService {
     }
 
     /**
-     * hasPetProfile：本 Story 期恒 false（pet_profiles 表与档案在 Epic 2 Story 2.2）。
-     * Epic 2 接入后改为按真实档案查询回填（契约见 Story 1.7）。
+     * hasPetProfile：Story 2.2 起按真实档案查询回填（pet_profiles 已建表）。
+     * 兑现 Story 1.7 契约：1.7 期恒 false，Epic 2 接入后由真实档案驱动。
      */
     private boolean hasPetProfile(long userId) {
-        return false;
+        return petProfiles.existsByOwnerId(userId);
     }
 }

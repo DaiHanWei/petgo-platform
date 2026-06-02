@@ -21,6 +21,9 @@ public final class ErrorTypes {
     /** Story 2.1：媒体凭证 / 签名 URL 签发异常（绝不外泄 OSS 原始错误/堆栈）。 */
     public static final URI MEDIA_CREDENTIAL = URI.create(BASE + "media-credential");
 
+    /** Story 2.2：单账号单宠物——已存在档案时再建（409）。 */
+    public static final URI PROFILE_EXISTS = URI.create(BASE + "profile-exists");
+
     private ErrorTypes() {
     }
 }
