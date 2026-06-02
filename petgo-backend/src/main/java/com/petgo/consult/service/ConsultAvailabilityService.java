@@ -21,6 +21,7 @@ public class ConsultAvailabilityService {
     }
 
     public ConsultAvailabilityResponse availability() {
-        return new ConsultAvailabilityResponse(presence.anyOnline());
+        return new ConsultAvailabilityResponse(
+                presence.anyOnline(), ConsultAvailabilityResponse.DEFAULT_WINDOW_KEY);
     }
 }

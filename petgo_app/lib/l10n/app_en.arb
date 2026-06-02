@@ -260,5 +260,22 @@
   "vetOnlineLabel": "Online · accepting requests",
   "vetOfflineLabel": "Offline · not accepting",
   "vetStatusUpdateFailed": "Could not update status, please try again",
-  "consultNoVetOnline": "No vets online right now"
+  "consultNoVetOnline": "No vets online right now",
+  "consultEntryTitle": "Talk to a vet",
+  "consultProbabilisticOnline": "Vets are usually online 8:00–23:00 on weekdays",
+  "consultStart": "Start a consultation",
+  "consultViewActive": "View your ongoing consultation →",
+  "consultMatching": "Matching you with a vet…",
+  "consultCancel": "Cancel",
+  "consultTimeoutTitle": "Still no vet available",
+  "consultTimeoutBody": "You can keep waiting, or try AI triage first.",
+  "consultContinueWaiting": "Keep waiting",
+  "consultUseAi": "Try AI triage first",
+  "consultUseAiKeptHint": "We'll notify you when a vet accepts.",
+  "consultCancelConfirmTitle": "Cancel this match?",
+  "consultCancelConfirmYes": "Cancel match",
+  "consultCancelConfirmNo": "Keep waiting",
+  "consultOfflineWindow": "Expected back 8:00–23:00 on weekdays",
+  "consultOfflineUseAi": "Try AI triage first?",
+  "consultStartFailed": "Could not start, please try again"
 }

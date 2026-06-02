@@ -14,6 +14,8 @@ import '../../features/profile/presentation/growth_archive_page.dart';
 import '../../features/profile/presentation/pet_profile_create_page.dart';
 import '../../features/profile/presentation/pet_profile_edit_page.dart';
 import '../../features/profile/presentation/profile_onboarding_page.dart';
+import '../../features/consult/presentation/consult_entry_page.dart';
+import '../../features/consult/presentation/consult_waiting_page.dart';
 import '../../features/triage/presentation/dev_triage_page.dart';
 import '../../features/triage/presentation/triage_page.dart';
 import '../../features/triage/presentation/triage_upload_page.dart';
@@ -25,7 +27,7 @@ import '../../shared/widgets/app_shell.dart';
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
 /// 未登录游客**不可**直接进入的受控路由前缀（FR-19 门控）。
-const Set<String> _controlledLocations = {'/profile', '/triage', '/me'};
+const Set<String> _controlledLocations = {'/profile', '/triage', '/me', '/consult'};
 
 /// 应用路由（provider 化：redirect 可读登录态做受控路由门控）。
 ///
@@ -70,6 +72,12 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/dev/triage', builder: (c, s) => const DevTriagePage()),
       // AI 分诊上传页（Story 4.3）。受控路由（/triage/ 前缀，游客被门控）；shell 外 push 隐藏 Tab Bar。
       GoRoute(path: '/triage/upload', builder: (c, s) => const TriageUploadPage()),
+      // 兽医咨询入口 + 等待界面（Story 5.3）。受控路由（/consult 前缀，游客被门控）。
+      GoRoute(path: '/consult', builder: (c, s) => const ConsultEntryPage()),
+      GoRoute(
+        path: '/consult/waiting/:id',
+        builder: (c, s) => ConsultWaitingPage(sessionId: int.parse(s.pathParameters['id']!)),
+      ),
       // 内容详情（Story 3.3）。shell 外顶层 push（隐藏 Tab Bar）；返回保持 Feed 滚动位置。游客只读可进。
       GoRoute(
         path: '/content/:id',

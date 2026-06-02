@@ -19,7 +19,7 @@ class ConsultAvailabilityIndicator extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final availability = ref.watch(consultAvailabilityProvider);
     return availability.maybeWhen(
-      data: (online) => online
+      data: (a) => a.vetOnline
           ? const SizedBox.shrink()
           : Container(
               key: const ValueKey('consultNoVetOnline'),

@@ -206,5 +206,22 @@
   "vetOnlineLabel": "Online · menerima permintaan",
   "vetOfflineLabel": "Offline · tidak menerima",
   "vetStatusUpdateFailed": "Gagal memperbarui status, coba lagi",
-  "consultNoVetOnline": "Belum ada dokter hewan online"
+  "consultNoVetOnline": "Belum ada dokter hewan online",
+  "consultEntryTitle": "Konsultasi dokter hewan",
+  "consultProbabilisticOnline": "Dokter hewan biasanya online 08.00–23.00 pada hari kerja",
+  "consultStart": "Mulai konsultasi",
+  "consultViewActive": "Lihat konsultasi yang berjalan →",
+  "consultMatching": "Mencarikan dokter hewan untukmu…",
+  "consultCancel": "Batal",
+  "consultTimeoutTitle": "Masih belum ada dokter hewan",
+  "consultTimeoutBody": "Kamu bisa terus menunggu, atau coba triage AI dulu.",
+  "consultContinueWaiting": "Terus menunggu",
+  "consultUseAi": "Coba triage AI dulu",
+  "consultUseAiKeptHint": "Kami beri tahu saat dokter hewan menerima.",
+  "consultCancelConfirmTitle": "Batalkan pencarian ini?",
+  "consultCancelConfirmYes": "Batalkan",
+  "consultCancelConfirmNo": "Terus menunggu",
+  "consultOfflineWindow": "Diperkirakan kembali 08.00–23.00 pada hari kerja",
+  "consultOfflineUseAi": "Coba triage AI dulu?",
+  "consultStartFailed": "Gagal memulai, coba lagi"
 }

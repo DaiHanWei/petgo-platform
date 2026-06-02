@@ -21,6 +21,13 @@ class ApiPaths {
   /// 用户侧兽医咨询可用性（Story 5.2，只回 vetOnline bool）。
   static const String consultAvailability = '$base/consult/availability';
 
+  /// 咨询会话（Story 5.3）。POST 发起 / GET 轮询 / DELETE 取消。
+  static const String consultSessions = '$base/consult-sessions';
+  static const String consultSessionActive = '$base/consult-sessions/active';
+  static String consultSession(int id) => '$base/consult-sessions/$id';
+  static String consultSessionContinueWaiting(int id) =>
+      '$base/consult-sessions/$id/continue-waiting';
+
   /// 当前用户主体统一端点（决策 C1：全平台用 /me，不用 /users/me）。
   static const String me = '$base/me';
 
