@@ -13,6 +13,7 @@ import com.petgo.content.domain.ContentPost;
 import com.petgo.content.domain.ContentType;
 import com.petgo.content.dto.ContentDetailResponse;
 import com.petgo.content.repository.CommentRepository;
+import com.petgo.content.repository.ContentLikeRepository;
 import com.petgo.content.repository.ContentPostRepository;
 import com.petgo.shared.error.AppException;
 import java.time.Instant;
@@ -27,6 +28,7 @@ class ContentDetailServiceTest {
 
     private ContentPostRepository posts;
     private CommentRepository comments;
+    private ContentLikeRepository likes;
     private AccountQueryService accounts;
     private ContentDetailService service;
 
@@ -34,10 +36,12 @@ class ContentDetailServiceTest {
     void setUp() {
         posts = mock(ContentPostRepository.class);
         comments = mock(CommentRepository.class);
+        likes = mock(ContentLikeRepository.class);
         accounts = mock(AccountQueryService.class);
-        service = new ContentDetailService(posts, comments, accounts);
+        service = new ContentDetailService(posts, comments, likes, accounts);
         when(comments.countByPostIdAndDeletedAtIsNull(org.mockito.ArgumentMatchers.anyLong()))
                 .thenReturn(5L);
+        when(likes.countByPostId(org.mockito.ArgumentMatchers.anyLong())).thenReturn(2L);
     }
 
     private static ContentPost post(long id, long authorId, Instant deletedAt) {
@@ -68,8 +72,8 @@ class ContentDetailServiceTest {
         ContentDetailResponse d = service.getDetail(1L, 7L);
         assertThat(d.imageUrls()).containsExactly("https://cdn/a.jpg", "https://cdn/b.jpg");
         assertThat(d.commentCount()).isEqualTo(5L);
-        assertThat(d.likeCount()).isZero(); // 3.4 占位
-        assertThat(d.liked()).isFalse();
+        assertThat(d.likeCount()).isEqualTo(2L); // Story 3.4 真实计数
+        assertThat(d.liked()).isFalse(); // 未 stub existsBy → 未赞
         assertThat(d.isAuthor()).isTrue(); // viewer == author
         assertThat(d.authorNickname()).isEqualTo("Alice");
     }

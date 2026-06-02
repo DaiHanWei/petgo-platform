@@ -49,15 +49,11 @@ class _FakeDetailRepo implements DetailRepository {
     this.detail,
     this.error,
     this.comments = const [],
-    this.commentsHasMore = false,
-    this.replies = const [],
   });
 
   final ContentDetail? detail;
   final ContentLoadError? error;
   final List<Comment> comments;
-  final bool commentsHasMore;
-  final List<Comment> replies;
 
   @override
   Future<ContentDetail> getDetail(int id) async {
@@ -67,11 +63,11 @@ class _FakeDetailRepo implements DetailRepository {
 
   @override
   Future<CommentPage> getComments(int postId, {String? cursor}) async =>
-      CommentPage(items: comments, nextCursor: commentsHasMore ? 'c' : null, hasMore: commentsHasMore);
+      CommentPage(items: comments, nextCursor: null, hasMore: false);
 
   @override
   Future<CommentPage> getReplies(int parentId, {String? cursor}) async =>
-      CommentPage(items: replies, nextCursor: null, hasMore: false);
+      const CommentPage(items: [], nextCursor: null, hasMore: false);
 }
 
 Future<void> _pump(WidgetTester tester, _FakeDetailRepo repo) async {

@@ -11,6 +11,7 @@ import '../../../shared/widgets/empty_state.dart';
 import '../domain/content_detail.dart';
 import 'comment_section.dart';
 import 'detail_providers.dart';
+import 'like_button.dart';
 
 /// 内容详情页（Story 3.3，FR-28）。只读容器：正文 + 多图左右滑 + 互动栏占位 + 评论区 + 底部评论框。
 ///
@@ -146,12 +147,14 @@ class _DetailScaffold extends ConsumerWidget {
   }
 
   Widget _interactionBar() {
-    // 点赞按钮 + 数为占位（行为在 3.4）；评论数读取展示。卡片不展示计数，但详情互动栏展示。
+    // 点赞按钮（Story 3.4，乐观更新）+ 评论数读取展示。卡片不展示计数，详情互动栏展示。
     return Row(
       children: [
-        const Icon(Icons.favorite_border_rounded, size: 20, color: AppColors.textSecondary),
-        const SizedBox(width: AppSpacing.xs),
-        Text('${detail.likeCount}', style: AppTypography.caption),
+        LikeButton(
+          postId: detail.id,
+          initialLiked: detail.liked,
+          initialCount: detail.likeCount,
+        ),
         const SizedBox(width: AppSpacing.lg),
         const Icon(Icons.mode_comment_outlined, size: 20, color: AppColors.textSecondary),
         const SizedBox(width: AppSpacing.xs),

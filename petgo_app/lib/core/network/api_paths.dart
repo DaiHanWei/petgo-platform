@@ -32,6 +32,9 @@ class ApiPaths {
   /// 某一级评论的二级回复展开（Story 3.3）。
   static String commentReplies(int parentId) => '$base/comments/$parentId/replies';
 
+  /// 内容点赞开关（Story 3.4）。POST 点赞 / DELETE 取消。
+  static String contentPostLike(int id) => '$base/content-posts/$id/like';
+
   /// 问诊存档（Story 2.5）。
   static const String healthArchiveDecisions = '$base/health-events/archive-decisions';
   static const String healthDecision = '$base/health-events/decision';
