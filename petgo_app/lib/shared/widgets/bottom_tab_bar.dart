@@ -31,10 +31,10 @@ class BottomTabBar extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTabSelected;
 
-  /// active Tab 区域色映射（「＋」颜色同此取自当前 active 位）：
-  /// 问诊→莫兰迪蓝，其余（首页/成长档案/我的）→默认焦糖。
-  static Color regionColorForTab(int index) =>
-      index == AppTab.triage.index ? AppColors.accentConsult : AppColors.accentGrowth;
+  /// 底部栏配色：active Tab 填充圆与「＋」按钮**统一焦糖色**，不随问诊位变蓝。
+  /// （用户偏好覆盖 UX §Zone color rule 的底部栏部分；问诊页面本体仍按规格用莫兰迪蓝。）
+  /// 保留 index 形参以兼容调用点，当前所有位返回同一色。
+  static Color regionColorForTab(int index) => AppColors.accentGrowth;
 
   @override
   Widget build(BuildContext context) {

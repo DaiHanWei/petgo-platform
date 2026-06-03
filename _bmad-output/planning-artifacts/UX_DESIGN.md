@@ -51,6 +51,8 @@ colors:
 
 **Zone color rule:** 每个 Tab 使用其区域色作为 active 状态、主要 CTA 按钮、关键 badge 和图标的填充色。页面底色始终为 `background: #FAF8F5`，不因 Tab 切换而整屏变色。
 
+> ⚠️ **偏差（2026-06-03，用户决策）：底部 Tab Bar 不适用本规则。** 底部栏的 active Tab 填充圆与凸起「＋」按钮**统一用焦糖色 `accent-growth`**，不随问诊位切换成莫兰迪蓝（见 `petgo_app/lib/shared/widgets/bottom_tab_bar.dart` 的 `regionColorForTab`）。**问诊页面本体**仍按规格用莫兰迪蓝（见下文「视觉降焦」§问诊界面）。Zone color rule 的其余适用面（页内 CTA、badge、active chip 等）不变。
+
 ---
 
 ## Typography
@@ -145,9 +147,9 @@ elevation:
 
 ### Bottom Tab Bar
 底部导航栏，**5 个位置**（首页 / 成长档案 / ＋ / 问诊 / 我的），中间为凸起的「＋」发布按钮（PRD FR-19）。白底，顶部 1px `border` 分割线，自动适配安全区。
-- **Active Tab:** 34×34px 填充圆（区域色），白色图标/emoji
+- **Active Tab:** 34×34px 填充圆（**统一焦糖色 `accent-growth`**，问诊位不变蓝——见上文 Zone color rule 偏差），白色图标/emoji
 - **Inactive Tab:** 图标/emoji 18px，`text-secondary` 色 + 9px 标签文字
-- **凸起「＋」（中间位）:** 区域色填充圆形（44px）+ 3px 白色描边 + 白色「＋」，**约 1/3 高度突出于白色栏上沿之外**（向上偏移约 20px），形成悬浮发布按钮；颜色随 active Tab 区域色切换
+- **凸起「＋」（中间位）:** 焦糖色填充圆形（44px）+ 3px 白色描边 + 白色「＋」，**约 1/3 高度突出于白色栏上沿之外**（向上偏移约 20px），形成悬浮发布按钮；**固定焦糖色 `accent-growth`，不随 active Tab 切换**（2026-06-03 偏差）
 - **顶部分割线缺口:** 上沿 1px 分割线在「＋」位置**向下内凹成弧形缺口**（concave notch，凹深约 18px、宽约 60px），环抱凸起的「＋」——参考 Material `BottomAppBar` / Flutter `CircularNotchedRectangle` 形态
 - **布局:** 其余 4 个 Tab 等分（`flex:1`，左右各 2 个对称），「＋」居中浮起、不占用平级 Tab 的横向空间
 - Tab 切换动效：图标淡出（旧）→ 淡入（新），持续 120ms ease
