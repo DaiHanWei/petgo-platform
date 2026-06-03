@@ -6,6 +6,8 @@ import '../../features/auth/data/auth_repository.dart';
 import '../../features/auth/data/google_auth_client.dart';
 import '../../features/auth/domain/auth_state.dart';
 import '../../features/auth/domain/login_guide_controller.dart';
+import '../mock/mock_config.dart';
+import '../mock/mock_interceptor.dart';
 import '../router/app_router.dart';
 import '../storage/secure_storage.dart';
 import 'auth_interceptor.dart';
@@ -30,6 +32,8 @@ final Provider<Dio> dioProvider = Provider<Dio>((ref) {
     connectTimeout: const Duration(seconds: 15),
     receiveTimeout: const Duration(seconds: 30),
   ));
+  // Mock 模式：短路所有请求走内存假后端,置于鉴权拦截器之前(resolve 后链路终止,不触网)。
+  if (kMockMode) dio.interceptors.add(MockInterceptor());
   dio.interceptors.add(AuthInterceptor(
     dio: dio,
     tokenStore: ref.read(tokenStoreProvider),

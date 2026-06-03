@@ -1,0 +1,386 @@
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
+
+/// 内存假后端（Mock 模式核心）。
+///
+/// 单例,随 APP 进程生命周期存活 → **重启即重置回初始种子**(创建项消失,符合需求)。
+/// 按 `(method, path)` 解析请求,返回与各 model `fromJson` 匹配的 JSON;
+/// 写入类端点改内存态,后续读端点反映变更(发帖/评论/点赞/改昵称/改状态/分诊/会话/通知已读…)。
+class MockBackend {
+  MockBackend._() {
+    _seed();
+  }
+  static final MockBackend instance = MockBackend._();
+
+  int _id = 1000;
+  int _nextId() => ++_id;
+
+  static String _iso(Duration ago) =>
+      DateTime.now().toUtc().subtract(ago).toIso8601String();
+
+  // ---- 内存态 ----
+  late Map<String, dynamic> _profile;
+  final List<Map<String, dynamic>> _feed = [];
+  final Map<int, List<Map<String, dynamic>>> _comments = {};
+  final List<Map<String, dynamic>> _notifications = [];
+  final List<Map<String, dynamic>> _consultHistory = [];
+  final List<Map<String, dynamic>> _timeline = [];
+  Map<String, dynamic>? _petProfile;
+  final Map<int, String> _triageLevel = {}; // triageId → GREEN/YELLOW/RED
+  final List<String> _triageCycle = ['GREEN', 'YELLOW', 'RED'];
+  int _triageSeq = 0;
+  Map<String, dynamic>? _activeSession;
+
+  void _seed() {
+    _profile = {
+      'id': 1,
+      'nickname': '测试用户',
+      'displayName': '测试用户',
+      'email': 'demo@petgo.app',
+      'avatarUrl': null,
+      'petStatus': 'A', // 有宠物 → 解锁成长档案
+      'onboardingCompleted': true,
+      'hasPetProfile': true,
+      'role': 'USER',
+    };
+
+    final samples = <List<String?>>[
+      ['DAILY', 'Oyen 今天又趴在窗台晒太阳，太治愈了 🐱', null, 'Putri', '24'],
+      ['GROWTH_MOMENT', '第一次带 Rocky 去新家，超级兴奋！🐕', null, 'Budi', '31'],
+      ['KNOWLEDGE', '猫咪正确喂养的 5 个小贴士，铲屎官必看', null, 'Sari', '52'],
+      ['DAILY', '午后的窗台时光，懒洋洋的一天', null, 'Andi', '12'],
+      ['GROWTH_MOMENT', '疫苗打齐啦，证书收好 💉', null, 'Maya', '8'],
+      ['DAILY', '今天教会了它握手 🐾', null, 'Dewi', '17'],
+    ];
+    for (var i = 0; i < samples.length; i++) {
+      final s = samples[i];
+      _feed.add(_post(
+        id: 100 + i,
+        type: s[0]!,
+        body: s[1],
+        nickname: s[3],
+        likeCount: int.parse(s[4]!),
+        ago: Duration(hours: i * 5 + 1),
+      ));
+    }
+    // 详情页评论种子(给第一条帖)
+    _comments[100] = [
+      _comment(id: 900, nickname: 'Rina', body: '太可爱了吧！😍', ago: const Duration(hours: 1)),
+      _comment(id: 901, nickname: 'Joko', body: '同款主子,哈哈', ago: const Duration(hours: 2)),
+    ];
+
+    _notifications.addAll([
+      _notif(token: 'n1', type: 'COMMENT', title: '新评论', body: 'Rina 评论了你的帖子', read: false, ago: const Duration(minutes: 20)),
+      _notif(token: 'n2', type: 'LIKE', title: '新的赞', body: 'Budi 赞了你的帖子', read: false, ago: const Duration(hours: 3)),
+      _notif(token: 'n3', type: 'CONSULT', title: '问诊更新', body: '兽医已回复你的咨询', read: true, ago: const Duration(days: 1)),
+    ]);
+
+    _consultHistory.addAll([
+      {
+        'type': 'AI', 'date': _iso(const Duration(hours: 6)), 'triageId': 5001,
+        'dangerLevel': 'GREEN', 'symptomSummary': '偶尔打喷嚏,精神食欲都正常',
+      },
+      {
+        'type': 'AI', 'date': _iso(const Duration(days: 1)), 'triageId': 5002,
+        'dangerLevel': 'RED', 'symptomSummary': '误食巧克力,现在呕吐',
+      },
+      {
+        'type': 'VET', 'date': _iso(const Duration(days: 2)), 'sessionId': 6001,
+        'vetDisplayName': 'Drh. Andi', 'sessionSummary': '猫咪发热,建议观察并补水',
+        'userStars': 5, 'archived': true, 'terminalState': 'CLOSED',
+      },
+      {
+        'type': 'VET', 'date': _iso(const Duration(days: 4)), 'sessionId': 6002,
+        'vetDisplayName': 'Drh. Maya', 'sessionSummary': null,
+        'userStars': null, 'archived': false, 'terminalState': 'CLOSED',
+      },
+    ]);
+
+    _petProfile = {
+      'id': 7001, 'name': 'Oyen', 'cardToken': 'mock-card-token-oyen',
+      'avatarUrl': null, 'breed': '橘猫', 'birthday': '2022-05-01',
+      'intro': '爱睡觉、爱晒太阳的小橘', 'createdAt': _iso(const Duration(days: 200)),
+    };
+
+    _timeline.addAll([
+      {'kind': 'HAPPY_MOMENT', 'date': _iso(const Duration(days: 1)), 'postId': 101, 'imageUrls': [], 'text': '第一次带 Rocky 去新家'},
+      {'kind': 'HEALTH_EVENT', 'date': _iso(const Duration(days: 3)), 'postId': null, 'imageUrls': [], 'text': '误食巧克力,已就医', 'aiLevel': 'RED', 'symptomSummary': '呕吐'},
+      {'kind': 'HAPPY_MOMENT', 'date': _iso(const Duration(days: 7)), 'postId': 105, 'imageUrls': [], 'text': '学会握手'},
+    ]);
+  }
+
+  Map<String, dynamic> _post({
+    required int id, required String type, String? body, String? nickname,
+    int likeCount = 0, String? imageUrl, required Duration ago,
+  }) => {
+        'id': id, 'authorId': 1, 'authorDeleted': false,
+        'authorNickname': nickname ?? '测试用户', 'authorAvatarUrl': null,
+        'type': type, 'body': body, 'firstImageUrl': imageUrl,
+        'likeCount': likeCount, 'createdAt': _iso(ago),
+      };
+
+  Map<String, dynamic> _comment({
+    required int id, required String nickname, required String body, required Duration ago,
+  }) => {
+        'id': id, 'authorId': 2, 'authorDeleted': false,
+        'authorNickname': nickname, 'authorAvatarUrl': null,
+        'body': body, 'createdAt': _iso(ago), 'replyCount': 0, 'replies': <dynamic>[],
+      };
+
+  Map<String, dynamic> _notif({
+    required String token, required String type, String? title, String? body,
+    required bool read, required Duration ago,
+  }) => {
+        'type': type, 'title': title, 'body': body,
+        'deepLinkType': null, 'deepLinkToken': null, 'read': read, 'createdAt': _iso(ago),
+      }..['_token'] = token;
+
+  Map<String, dynamic> _envelope(List<Map<String, dynamic>> items) =>
+      {'items': items, 'nextCursor': null, 'hasMore': false};
+
+  // ---- 主入口：返回 Response 或抛 DioException(404) ----
+  Response<dynamic>? handle(RequestOptions o) {
+    final m = o.method.toUpperCase();
+    final p = o.path.replaceFirst(RegExp(r'\?.*$'), '');
+    final q = o.queryParameters;
+    final body = o.data is Map ? (o.data as Map).cast<String, dynamic>() : <String, dynamic>{};
+
+    Response<dynamic> ok([dynamic data]) =>
+        Response<dynamic>(requestOptions: o, statusCode: 200, data: data);
+    Response<dynamic> noContent() =>
+        Response<dynamic>(requestOptions: o, statusCode: 204, data: null);
+
+    // ---------- AUTH / ME ----------
+    if (m == 'POST' && p.endsWith('/auth/google')) {
+      return ok({
+        'accessToken': 'mock-access', 'refreshToken': 'mock-refresh',
+        'role': 'USER', 'isNewUser': false, 'onboardingCompleted': true,
+        'profile': _profile,
+      });
+    }
+    if (m == 'POST' && p.endsWith('/auth/refresh')) {
+      return ok({'accessToken': 'mock-access2', 'refreshToken': 'mock-refresh2'});
+    }
+    if (m == 'POST' && (p.endsWith('/auth/logout') || p.endsWith('/vet/logout'))) return noContent();
+    if (m == 'POST' && p.endsWith('/auth/vet/login')) {
+      return ok({'accessToken': 'mock-vet', 'refreshToken': 'mock-vet-r', 'displayName': 'Drh. Demo', 'role': 'VET'});
+    }
+    if (p.endsWith('/me') && m == 'GET') return ok(_profile);
+    if (p.endsWith('/me') && m == 'PATCH') {
+      if (body['nickname'] != null) _profile['nickname'] = body['nickname'];
+      if (body['petStatus'] != null) _profile['petStatus'] = body['petStatus'];
+      return ok(_profile);
+    }
+    if (p.endsWith('/me') && m == 'DELETE') return Response(requestOptions: o, statusCode: 202);
+    if (p.endsWith('/vet/me') && m == 'GET') return ok({'id': 1, 'displayName': 'Drh. Demo', 'status': 'ACTIVE'});
+
+    // ---------- CONTENT / FEED ----------
+    if (m == 'GET' && p.endsWith('/me/posts')) {
+      return ok(_envelope(_feed
+          .where((e) => e['authorId'] == 1)
+          .map((e) => {'id': e['id'], 'type': e['type'], 'body': e['body'], 'firstImageUrl': e['firstImageUrl']})
+          .toList()));
+    }
+    if (m == 'GET' && p.endsWith('/content-posts')) {
+      final cat = (q['category'] ?? 'ALL') as String;
+      final items = cat == 'ALL' ? _feed : _feed.where((e) => e['type'] == cat).toList();
+      return ok(_envelope(items));
+    }
+    if (m == 'POST' && p.endsWith('/content-posts')) {
+      final id = _nextId();
+      _feed.insert(0, _post(id: id, type: (body['type'] ?? 'DAILY') as String,
+          body: body['text'] as String?, likeCount: 0, ago: Duration.zero));
+      return ok({'id': id});
+    }
+    final detailMatch = RegExp(r'/content-posts/(\d+)$').firstMatch(p);
+    if (detailMatch != null && m == 'GET') {
+      final id = int.parse(detailMatch.group(1)!);
+      final post = _feed.firstWhere((e) => e['id'] == id, orElse: () => <String, dynamic>{});
+      if (post.isEmpty) throw _notFound(o);
+      return ok({
+        ...post, 'commentCount': (_comments[id]?.length ?? 0), 'liked': false,
+        'isAuthor': post['authorId'] == 1, 'imageUrls': post['firstImageUrl'] == null ? [] : [post['firstImageUrl']],
+      });
+    }
+    if (detailMatch != null && m == 'DELETE') {
+      _feed.removeWhere((e) => e['id'] == int.parse(detailMatch.group(1)!));
+      return ok();
+    }
+    final commentsMatch = RegExp(r'/content-posts/(\d+)/comments$').firstMatch(p);
+    if (commentsMatch != null) {
+      final id = int.parse(commentsMatch.group(1)!);
+      if (m == 'GET') return ok(_envelope(_comments[id] ?? []));
+      if (m == 'POST') {
+        final c = _comment(id: _nextId(), nickname: _profile['nickname'] as String,
+            body: (body['body'] ?? '') as String, ago: Duration.zero);
+        (_comments[id] ??= []).insert(0, c);
+        return ok(c);
+      }
+    }
+    final repliesMatch = RegExp(r'/comments/(\d+)/replies$').firstMatch(p);
+    if (repliesMatch != null) {
+      if (m == 'GET') return ok(_envelope([]));
+      if (m == 'POST') {
+        return ok({'id': _nextId(), 'authorId': 1, 'authorDeleted': false,
+          'authorNickname': _profile['nickname'], 'authorAvatarUrl': null,
+          'body': body['body'] ?? '', 'createdAt': _iso(Duration.zero), 'replyCount': null, 'replies': null});
+      }
+    }
+    if (RegExp(r'/comments/(\d+)$').hasMatch(p) && m == 'DELETE') return ok();
+    final likeMatch = RegExp(r'/content-posts/(\d+)/like$').firstMatch(p);
+    if (likeMatch != null) {
+      final id = int.parse(likeMatch.group(1)!);
+      final post = _feed.firstWhere((e) => e['id'] == id, orElse: () => <String, dynamic>{});
+      final liked = m == 'POST';
+      if (post.isNotEmpty) post['likeCount'] = (post['likeCount'] as int) + (liked ? 1 : -1);
+      return ok({'liked': liked, 'likeCount': post['likeCount'] ?? 0});
+    }
+    if (RegExp(r'/content-posts/(\d+)/reports$').hasMatch(p)) return ok();
+    if (RegExp(r'/users/(\d+)/mini-profile$').hasMatch(p)) {
+      return ok({'postCount': 6, 'isDeactivated': false, 'nickname': '测试用户', 'avatarUrl': null});
+    }
+
+    // ---------- PET PROFILE / TIMELINE / HEALTH ----------
+    if (p.endsWith('/pet-profiles/me/timeline') && m == 'GET') return ok(_envelope(_timeline));
+    if (p.endsWith('/pet-profiles/me') && m == 'GET') {
+      if (_petProfile == null) throw _notFound(o);
+      return ok(_petProfile);
+    }
+    if (p.endsWith('/pet-profiles/me') && m == 'PATCH') {
+      _petProfile = {...?_petProfile, ...body};
+      return ok(_petProfile);
+    }
+    if (p.endsWith('/pet-profiles') && m == 'POST') {
+      _petProfile = {'id': _nextId(), 'cardToken': 'mock-card-${_nextId()}', ...body, 'createdAt': _iso(Duration.zero)};
+      _profile['hasPetProfile'] = true;
+      return ok(_petProfile);
+    }
+    if (p.endsWith('/health-events/archive-decisions') && m == 'POST') {
+      if (body['decision'] == 'ARCHIVED') {
+        _timeline.insert(0, {'kind': 'HEALTH_EVENT', 'date': _iso(Duration.zero), 'postId': null,
+          'imageUrls': [], 'text': body['symptomSummary'] ?? '健康事件', 'aiLevel': body['aiLevel'], 'symptomSummary': body['symptomSummary']});
+      }
+      return ok();
+    }
+    if (p.endsWith('/health-events/decision') && m == 'GET') return ok({'decided': false});
+
+    // ---------- AI 分诊 ----------
+    if (p.endsWith('/triage') && m == 'POST') {
+      final id = _nextId();
+      _triageLevel[id] = _triageCycle[_triageSeq++ % _triageCycle.length]; // 轮流绿/黄/红
+      return Response(requestOptions: o, statusCode: 202, data: {'triageId': id});
+    }
+    final triageGet = RegExp(r'/triage/(\d+)$').firstMatch(p);
+    if (triageGet != null && m == 'GET') {
+      final id = int.parse(triageGet.group(1)!);
+      final lvl = _triageLevel[id] ?? 'GREEN';
+      return ok({
+        'status': 'DONE', 'dangerLevel': lvl,
+        'advice': lvl == 'RED' ? '请立即就医' : (lvl == 'YELLOW' ? '建议尽快观察并咨询兽医' : '暂无明显风险,保持观察'),
+        'medicationRef': null, 'disclaimer': '本结果仅供参考,不替代专业兽医诊断。',
+        'observation': {'indicators': ['精神状态', '食欲', '排泄'], 'timeWindow': '24 小时', 'escalationTriggers': ['持续呕吐', '精神萎靡']},
+      });
+    }
+
+    // ---------- 兽医咨询(用户侧) ----------
+    if (p.endsWith('/consult/availability') && m == 'GET') return ok({'vetOnline': true, 'expectedWindow': '08:00–23:00'});
+    if (p.endsWith('/consult-sessions/active') && m == 'GET') {
+      return _activeSession == null ? noContent() : ok(_activeSession);
+    }
+    if (p.endsWith('/consult-sessions/pending-rating') && m == 'GET') return noContent();
+    if (p.endsWith('/consult-sessions') && m == 'POST') {
+      _activeSession = {'id': _nextId(), 'status': 'WAITING', 'source': body['source'] ?? 'DIRECT',
+        'vetId': null, 'waitingElapsedSeconds': 0, 'timedOut': false, 'alreadyActive': false,
+        'closedReason': null, 'interruptedReason': null};
+      return ok(_activeSession);
+    }
+    final sessGet = RegExp(r'/consult-sessions/(\d+)$').firstMatch(p);
+    if (sessGet != null && m == 'GET') {
+      return ok(_activeSession ?? {'id': int.parse(sessGet.group(1)!), 'status': 'IN_PROGRESS', 'source': 'DIRECT',
+        'waitingElapsedSeconds': 0, 'timedOut': false, 'alreadyActive': false});
+    }
+    if (RegExp(r'/consult-sessions/(\d+)/continue-waiting$').hasMatch(p)) {
+      _activeSession?['waitingElapsedSeconds'] = 0;
+      return ok(_activeSession ?? {});
+    }
+    if (RegExp(r'/consult-sessions/(\d+)$').hasMatch(p) && m == 'DELETE') {
+      final s = {...?_activeSession, 'status': 'CANCELLED'};
+      _activeSession = null;
+      return ok(s);
+    }
+    if (RegExp(r'/consult-sessions/(\d+)/rating$').hasMatch(p)) {
+      _activeSession = null;
+      return ok({'id': 1, 'status': 'CLOSED', 'closedReason': 'RATED', 'source': 'DIRECT', 'waitingElapsedSeconds': 0, 'timedOut': false, 'alreadyActive': false});
+    }
+    if (RegExp(r'/consult-sessions/(\d+)/rating-prompted$').hasMatch(p)) return ok();
+    if (p.endsWith('/consult/history') && m == 'GET') return ok(_envelope(_consultHistory));
+
+    // ---------- 兽医工作台 ----------
+    if (p.endsWith('/vet/online-status') && m == 'GET') return ok({'online': true});
+    if (p.endsWith('/vet/online-status') && m == 'PUT') return ok({'online': body['online'] ?? true});
+    if (p.endsWith('/vet/heartbeat') && m == 'POST') return ok();
+    if (p.endsWith('/vet/consult-sessions/waiting') && m == 'GET') {
+      return ok([
+        {'sessionId': 8001, 'source': 'DIRECT', 'aiDangerLevel': 'YELLOW', 'symptomPreview': '猫咪持续打喷嚏两天', 'imageCount': 2, 'waitingElapsedSeconds': 45},
+        {'sessionId': 8002, 'source': 'AI_UPGRADE', 'aiDangerLevel': 'RED', 'symptomPreview': '误食异物', 'imageCount': 1, 'waitingElapsedSeconds': 120},
+      ]);
+    }
+    final vetAccept = RegExp(r'/vet/consult-sessions/(\d+)/accept$').firstMatch(p);
+    if (vetAccept != null && m == 'POST') {
+      return ok({'id': int.parse(vetAccept.group(1)!), 'status': 'IN_PROGRESS', 'source': 'DIRECT', 'userId': 1, 'imConversationId': 'mock-im', 'hasAiContext': true});
+    }
+    final vetGet = RegExp(r'/vet/consult-sessions/(\d+)$').firstMatch(p);
+    if (vetGet != null && m == 'GET') {
+      return ok({'id': int.parse(vetGet.group(1)!), 'status': 'IN_PROGRESS', 'source': 'DIRECT', 'userId': 1, 'imConversationId': 'mock-im', 'hasAiContext': true});
+    }
+    if (RegExp(r'/vet/consult-sessions/(\d+)/ai-context$').hasMatch(p)) {
+      return ok({'hasAiContext': true, 'dangerLevel': 'YELLOW', 'symptomText': '猫咪持续打喷嚏两天,精神尚可', 'imageUrls': []});
+    }
+    if (RegExp(r'/vet/consult-sessions/(\d+)/assist$').hasMatch(p)) {
+      return ok({'aiReferenceReply': '建议观察体温与食欲,保持环境清洁,若 24 小时无改善请复诊。', 'historySummaries': []});
+    }
+    if (RegExp(r'/vet/consult-sessions/(\d+)/end$').hasMatch(p)) {
+      return ok({'id': 1, 'status': 'PENDING_CLOSE', 'source': 'DIRECT', 'userId': 1, 'imConversationId': 'mock-im', 'hasAiContext': true});
+    }
+    if (RegExp(r'/vet/consult-sessions/(\d+)/notify-reply$').hasMatch(p)) return ok();
+
+    // ---------- 通知 / 版本 / 媒体 ----------
+    if (p.endsWith('/notifications') && m == 'GET') return ok(_envelope(_notifications));
+    if (p.endsWith('/notifications/unread-count') && m == 'GET') {
+      return ok({'count': _notifications.where((e) => e['read'] == false).length});
+    }
+    if (p.endsWith('/notifications/read-all') && m == 'POST') {
+      for (final n in _notifications) {
+        n['read'] = true;
+      }
+      return ok();
+    }
+    final notifRead = RegExp(r'/notifications/([^/]+)/read$').firstMatch(p);
+    if (notifRead != null && m == 'POST') {
+      final tok = notifRead.group(1);
+      for (final n in _notifications) {
+        if (n['_token'] == tok) n['read'] = true;
+      }
+      return ok();
+    }
+    if (p.endsWith('/app-version') && m == 'GET') {
+      return ok({'latestVersion': '1.0.0', 'minSupportedVersion': '1.0.0', 'iosStoreUrl': null, 'androidStoreUrl': null});
+    }
+    if (p.endsWith('/media/sts-credentials') && m == 'POST') {
+      return ok({'accessKeyId': 'mock', 'accessKeySecret': 'mock', 'securityToken': 'mock',
+        'expiration': _iso(const Duration(hours: -1)), 'bucket': 'mock-bucket', 'region': 'mock',
+        'endpoint': 'https://mock.example', 'uploadDir': 'mock/', 'cdnBaseUrl': 'https://mock.example'});
+    }
+
+    // 未覆盖端点：返回合理空成功(避免触网/崩溃),并 warn。
+    if (kDebugMode) debugPrint('[MOCK] 未覆盖端点 → 空成功: $m $p');
+    if (m == 'GET') return ok(_envelope([]));
+    return ok({});
+  }
+
+  DioException _notFound(RequestOptions o) => DioException(
+        requestOptions: o,
+        response: Response(requestOptions: o, statusCode: 404),
+        type: DioExceptionType.badResponse,
+      );
+}
