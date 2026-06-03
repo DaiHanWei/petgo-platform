@@ -85,12 +85,29 @@ class AuthRepository {
   }
 
   Future<void> logout() async {
+    // 退出登录（Story 7.3 AC1）：先作废服务端 refresh（best-effort），再清本地态。不删任何数据。
+    try {
+      final refresh = await tokenStore.readRefresh();
+      if (refresh != null) {
+        await dio.post<void>(ApiPaths.authLogout,
+            data: {'refreshToken': refresh},
+            options: Options(extra: {AuthExtraKeys.skipRefresh: true}));
+      }
+    } catch (_) {
+      // 服务端失败不阻塞本地登出。
+    }
     await tokenStore.clear();
     try {
       await googleClient.signOut();
     } catch (_) {
       // 注销 Google 失败不阻塞本地落游客态。
     }
+  }
+
+  /// 账号注销（Story 7.3 AC2）：双重确认后 DELETE /me（带确认短语）。202 受理异步级联删除。
+  Future<void> deleteAccount(String confirmation) async {
+    await dio.delete<void>(ApiPaths.me, data: {'confirmation': confirmation});
+    await tokenStore.clear();
   }
 }
 

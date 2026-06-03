@@ -16,4 +16,7 @@ public interface ConsultRatingRepository extends JpaRepository<ConsultRating, Lo
 
     /** 某会话的评分（Story 5.8 历史展示用户评分）。 */
     Optional<ConsultRating> findBySessionId(long sessionId);
+
+    /** Story 7.3：注销匿名化——某用户全部评分（剥 user_id，保留 stars/comment 供运营 FR-33）。 */
+    List<ConsultRating> findByUserId(long userId);
 }

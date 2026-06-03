@@ -21,4 +21,8 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     long countByRecipientUserIdAndReadIsFalse(long recipientUserId);
 
     List<Notification> findByRecipientUserIdAndReadIsFalse(long recipientUserId);
+
+    /** Story 7.3：注销级联删除该用户全部通知（纯个人数据，物理删除）。 */
+    @org.springframework.transaction.annotation.Transactional
+    void deleteByRecipientUserId(long recipientUserId);
 }

@@ -126,8 +126,8 @@ development_status:
 
   # ===== Epic 7: 个人中心、双语与账号注销 =====
   epic-7: in-progress
-  7-1-我的-页面与用户信息编辑: ready-for-dev
-  7-2-语言设置与双语文案收口: ready-for-dev
-  7-3-退出登录与账号注销级联删除: ready-for-dev
-  7-4-全局无障碍验收: ready-for-dev
+  7-1-我的-页面与用户信息编辑: review
+  7-2-语言设置与双语文案收口: review
+  7-3-退出登录与账号注销级联删除: review
+  7-4-全局无障碍验收: review
   epic-7-retrospective: optional

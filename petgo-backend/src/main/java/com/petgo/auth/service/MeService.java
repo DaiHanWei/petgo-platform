@@ -56,6 +56,12 @@ public class MeService {
             }
         }
 
+        if (req.avatarUrl() != null) {
+            // 头像替换（Story 7.1）：客户端 STS 直传①公开桶后回填，仅存应用自有 URL（不存第三方临时 URL）。
+            String url = req.avatarUrl().trim();
+            user.setAvatarUrl(url.isEmpty() ? null : url);
+        }
+
         users.save(user);
         return UserProfileResponse.from(user, hasPetProfile(userId));
     }

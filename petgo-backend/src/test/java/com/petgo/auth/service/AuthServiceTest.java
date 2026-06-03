@@ -105,6 +105,25 @@ class AuthServiceTest {
     }
 
     @Test
+    void logoutRevokesRefreshHandleWithoutDeletingData() {
+        RefreshToken token = new RefreshToken(7L, "h", Instant.now().plusSeconds(3600));
+        when(jwt.hashRefresh("raw")).thenReturn("h");
+        when(refreshTokens.findByTokenHash("h")).thenReturn(Optional.of(token));
+
+        authService.logout("raw");
+
+        assertThat(token.isRevoked()).isTrue();
+        verify(refreshTokens).save(token);
+    }
+
+    @Test
+    void logoutWithUnknownTokenIsSilentlyOk() {
+        when(jwt.hashRefresh("ghost")).thenReturn("gh");
+        when(refreshTokens.findByTokenHash("gh")).thenReturn(Optional.empty());
+        authService.logout("ghost"); // 幂等，不抛
+    }
+
+    @Test
     void refreshWithUnknownTokenIsUnauthorized() {
         when(jwt.hashRefresh("bad")).thenReturn("bad-hash");
         when(refreshTokens.findByTokenHash("bad-hash")).thenReturn(Optional.empty());

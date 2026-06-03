@@ -133,6 +133,11 @@ public class User {
         return avatarUrl;
     }
 
+    /** 头像替换（Story 7.1）：仅存应用自有 OSS URL。 */
+    public void setAvatarUrl(String avatarUrl) {
+        this.avatarUrl = avatarUrl;
+    }
+
     public String getNickname() {
         return nickname;
     }

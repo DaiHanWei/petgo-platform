@@ -47,6 +47,12 @@ public class AuthController {
         return authService.rotateRefresh(req.refreshToken());
     }
 
+    /** 退出登录（Story 7.3 AC1）：作废 refresh 句柄，不删任何数据。放行（与 google/refresh 同链）。 */
+    @PostMapping("/logout")
+    public void logout(@Valid @RequestBody RefreshRequest req) {
+        authService.logout(req.refreshToken());
+    }
+
     private static String clientIp(HttpServletRequest http) {
         String fwd = http.getHeader("X-Forwarded-For");
         if (fwd != null && !fwd.isBlank()) {

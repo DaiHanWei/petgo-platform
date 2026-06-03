@@ -31,4 +31,7 @@ public interface ConsultSessionRepository extends JpaRepository<ConsultSession, 
     /** 用户兽医问诊历史（Story 5.8）：终态（CLOSED/INTERRUPTED）会话按时间倒序（CANCELLED 不入历史）。 */
     List<ConsultSession> findByUserIdAndStatusInOrderByCreatedAtDesc(
             long userId, Collection<SessionStatus> statuses);
+
+    /** Story 7.3：注销匿名化——某用户全部会话（剥 user_id，保留症状/评级供运营，决策 D1）。 */
+    List<ConsultSession> findByUserId(long userId);
 }

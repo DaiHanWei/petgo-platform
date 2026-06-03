@@ -50,6 +50,12 @@ public class StubTencentImClient implements TencentImClient {
     }
 
     @Override
+    public void deleteUserConversationMedia(String imUserId) {
+        // 桩：仅记非敏感日志。真实 IM 删媒体属 L2；亦可依赖 IM 侧媒体 TTL 自动清理（见 Completion Notes）。
+        log.debug("[IM-stub] delete conversation media for {}", imUserId);
+    }
+
+    @Override
     public boolean verifyCallback(String token) {
         // 桩：配置了 callbackToken 则比对，否则放行（仅 stub/本地）。
         String expected = props.getCallbackToken();
