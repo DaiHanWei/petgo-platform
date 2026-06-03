@@ -36,6 +36,15 @@ class AppColors {
   /// 黄色协议浅底（Epic 4 倒计时协议背景）。
   static const Color triageYellowSurface = Color(0xFFEEF4F7);
 
+  // --- Feed/发布卡封面占位柔彩（无真实首图时按内容类型取色，UX 设计稿 S03/S17）---
+  static const Color coverDaily = Color(0xFFF1E4D6); // 暖米（日常）
+  static const Color coverGrowth = Color(0xFFDCEAD9); // 浅绿（成长瞬间）
+  static const Color coverKnowledge = Color(0xFFD9E6EE); // 浅蓝（知识）
+
+  // --- 问诊入口卡柔彩底（UX 设计稿 S11：AI 浅蓝 / 兽医浅粉）---
+  static const Color consultEntryAi = Color(0xFFE7F0F4);
+  static const Color consultEntryVet = Color(0xFFF6E8E6);
+
   // --- 中性 ---
   /// 分割线 / 描边。
   static const Color border = Color(0xFFEDE7E0);

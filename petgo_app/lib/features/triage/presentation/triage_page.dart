@@ -76,33 +76,55 @@ class _TriagePageState extends ConsumerState<TriagePage> {
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.screenEdge),
         children: <Widget>[
-          // ① 功能入口区（AI + 兽医平级）。
-          _EntryCard(
-            valueKey: 'triageEntryAI',
-            icon: Icons.smart_toy_outlined,
-            title: l10n.triageEntryAiTitle,
-            description: l10n.triageEntryAiDesc,
-            freeLabel: l10n.triageFreeBadge,
-            onTap: () => requireLogin(
-              ref,
-              context,
-              pendingAction: const RouteIntent(location: '/triage/upload'),
-              onAllowed: () => context.push('/triage/upload'),
+          // ① 功能入口区（AI + 兽医平级，左右并排大卡，对齐设计稿 S11）。
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Expanded(
+                  child: _EntryCard(
+                    valueKey: 'triageEntryAI',
+                    emoji: '🤖',
+                    bgColor: AppColors.consultEntryAi,
+                    title: l10n.triageEntryAiTitle,
+                    description: l10n.triageEntryAiDesc,
+                    freeLabel: l10n.triageFreeBadge,
+                    onTap: () => requireLogin(
+                      ref,
+                      context,
+                      pendingAction: const RouteIntent(location: '/triage/upload'),
+                      onAllowed: () => context.push('/triage/upload'),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: _EntryCard(
+                    valueKey: 'triageEntryVet',
+                    emoji: '🩺',
+                    bgColor: AppColors.consultEntryVet,
+                    title: l10n.triageEntryVetTitle,
+                    description: l10n.triageEntryVetDesc,
+                    freeLabel: l10n.triageFreeBadge,
+                    // 兽医咨询入口（Story 5.3 发起，含在线/离线态）。
+                    onTap: () => requireLogin(
+                      ref,
+                      context,
+                      pendingAction: const RouteIntent(location: '/consult'),
+                      onAllowed: () => context.push('/consult'),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: AppSpacing.lg),
-          _EntryCard(
-            valueKey: 'triageEntryVet',
-            icon: Icons.medical_services_outlined,
-            title: l10n.triageEntryVetTitle,
-            description: l10n.triageEntryVetDesc,
-            freeLabel: l10n.triageFreeBadge,
-            // 兽医咨询入口（Story 5.3 发起，含在线/离线态）。
-            onTap: () => requireLogin(
-              ref,
-              context,
-              pendingAction: const RouteIntent(location: '/consult'),
-              onAllowed: () => context.push('/consult'),
+          const SizedBox(height: AppSpacing.md),
+          // 营业时间提示（对齐设计稿 S11，文案已有 l10n）。
+          Center(
+            child: Text(
+              l10n.consultProbabilisticOnline,
+              style: AppTypography.caption.copyWith(color: AppColors.textTertiary),
+              textAlign: TextAlign.center,
             ),
           ),
           if (loggedIn) ...<Widget>[
@@ -168,30 +190,58 @@ class _TriagePageState extends ConsumerState<TriagePage> {
   }
 }
 
-/// 历史条目（Story 5.8 F2）：AI（评级 + 摘要）/ 兽医（昵称 + 摘要 + 评分 + 已存档 + 终态）。
+/// 历史条目（Story 5.8 F2，对齐设计稿 S11）：头像 + 严重度胶囊/星评 + 相对时间 + 摘要。
 class _HistoryTile extends StatelessWidget {
   const _HistoryTile({required this.item});
 
   final ConsultHistoryItem item;
 
+  /// 发起相对时间（双语 l10n，复用 content_detail 的语义键）。
+  static String _relativeTime(AppLocalizations l10n, DateTime t) {
+    final d = DateTime.now().difference(t);
+    if (d.inMinutes < 1) return l10n.timeJustNow;
+    if (d.inHours < 1) return l10n.timeMinutesAgo(d.inMinutes);
+    if (d.inDays < 1) return l10n.timeHoursAgo(d.inHours);
+    return l10n.timeDaysAgo(d.inDays);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final isAi = item.isAi;
+    final time = item.date == null ? '' : _relativeTime(l10n, item.date!);
+    final summary = isAi ? (item.symptomSummary ?? '') : _vetSubtitle(l10n);
+
+    final List<Widget> meta = <Widget>[
+      if (isAi)
+        _SeverityChip(level: item.dangerLevel)
+      else
+        Expanded(
+          child: Text(item.vetDisplayName ?? l10n.historyTypeVet,
+              style: AppTypography.body.copyWith(fontWeight: FontWeight.w600),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis),
+        ),
+      if (!isAi && item.userStars != null) ...<Widget>[
+        const SizedBox(width: AppSpacing.sm),
+        _Stars(count: item.userStars!),
+      ],
+      if (isAi) const Spacer(),
+      if (time.isNotEmpty) ...<Widget>[
+        const SizedBox(width: AppSpacing.sm),
+        Text(time, style: AppTypography.micro),
+      ],
+    ];
+
     return Card(
       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: ListTile(
         key: ValueKey(isAi ? 'historyAi_${item.triageId}' : 'historyVet_${item.sessionId}'),
-        leading: Icon(isAi ? Icons.smart_toy_outlined : Icons.medical_services_outlined,
-            color: AppColors.accentConsult),
-        title: Text(isAi
-            ? '${l10n.historyTypeAi} · ${item.dangerLevel ?? ''}'
-            : '${l10n.historyTypeVet} · ${item.vetDisplayName ?? ''}'),
-        subtitle: Text(
-          isAi ? (item.symptomSummary ?? '') : _vetSubtitle(l10n),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
+        leading: _HistoryAvatar(isAi: isAi, vetName: item.vetDisplayName),
+        title: Row(children: meta),
+        subtitle: summary.isEmpty
+            ? null
+            : Text(summary, maxLines: 2, overflow: TextOverflow.ellipsis),
         onTap: () {
           if (isAi) {
             // AI 进分诊结果只读（Epic 4 结果页深链，路由表 6.1 承接，本故事占位不跳）。
@@ -205,13 +255,13 @@ class _HistoryTile extends StatelessWidget {
     );
   }
 
+  /// 兽医副标题：终态/已存档/会话摘要（星评已挪到 title 行星形控件，不再拼字符串）。
   String _vetSubtitle(AppLocalizations l10n) {
     final parts = <String>[];
+    // 互斥：中断态只显示「已中断」；否则未评分时显示「未评分」（避免两者并列）。
     if (item.terminalState == 'INTERRUPTED') {
       parts.add(l10n.terminalInterrupted);
-    } else if (item.userStars != null) {
-      parts.add('${item.userStars} ★');
-    } else {
+    } else if (item.userStars == null) {
       parts.add(l10n.historyUnrated);
     }
     if (item.archived == true) parts.add(l10n.historyArchived);
@@ -222,10 +272,81 @@ class _HistoryTile extends StatelessWidget {
   }
 }
 
+/// 历史项头像：AI → 🤖 浅蓝圆；兽医 → 昵称首字母浅蓝圆。
+class _HistoryAvatar extends StatelessWidget {
+  const _HistoryAvatar({required this.isAi, this.vetName});
+
+  final bool isAi;
+  final String? vetName;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = AppColors.accentConsult.withValues(alpha: 0.15);
+    if (isAi) {
+      return CircleAvatar(
+          radius: 18, backgroundColor: bg, child: const Text('🤖', style: TextStyle(fontSize: 18)));
+    }
+    final n = (vetName ?? '').trim();
+    return CircleAvatar(
+      radius: 18,
+      backgroundColor: bg,
+      child: n.isEmpty
+          ? const Icon(Icons.medical_services_outlined, size: 18, color: AppColors.accentConsult)
+          : Text(n.characters.first.toUpperCase(),
+              style: const TextStyle(
+                  fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.accentConsult)),
+    );
+  }
+}
+
+/// 分诊严重度胶囊（GREEN/YELLOW/RED → 三色 + 本地化标签，对齐设计稿）。
+class _SeverityChip extends StatelessWidget {
+  const _SeverityChip({required this.level});
+
+  final String? level;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final (Color color, String label) = switch (level) {
+      'RED' => (AppColors.triageRed, l10n.triageLevelRed),
+      'YELLOW' => (AppColors.triageYellow, l10n.triageLevelYellow),
+      _ => (AppColors.triageGreen, l10n.triageLevelGreen),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xxs),
+      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(AppRounded.full)),
+      child: Text(label, style: AppTypography.badge),
+    );
+  }
+}
+
+/// 兽医星评（1..5 实心星，其余空星）。
+class _Stars extends StatelessWidget {
+  const _Stars({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = count.clamp(0, 5); // 防越界（评分本应 1..5）。
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        for (int i = 1; i <= 5; i++)
+          Icon(i <= c ? Icons.star_rounded : Icons.star_outline_rounded,
+              size: 14, color: AppColors.triageYellow),
+      ],
+    );
+  }
+}
+
+/// 问诊入口卡（竖向大卡，对齐设计稿 S11）：emoji + 标题 + 描述 + Gratis 胶囊，柔彩底。
 class _EntryCard extends StatelessWidget {
   const _EntryCard({
     required this.valueKey,
-    required this.icon,
+    required this.emoji,
+    required this.bgColor,
     required this.title,
     required this.description,
     required this.freeLabel,
@@ -233,7 +354,8 @@ class _EntryCard extends StatelessWidget {
   });
 
   final String valueKey;
-  final IconData icon;
+  final String emoji;
+  final Color bgColor;
   final String title;
   final String description;
   final String freeLabel;
@@ -242,39 +364,26 @@ class _EntryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: AppColors.surface,
+      color: bgColor,
       borderRadius: BorderRadius.circular(AppRounded.lg),
       child: InkWell(
         key: ValueKey(valueKey),
         borderRadius: BorderRadius.circular(AppRounded.lg),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Row(
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md, vertical: AppSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: <Widget>[
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: AppColors.accentConsult.withValues(alpha: 0.15),
-                child: Icon(icon, color: AppColors.accentConsult),
-              ),
-              const SizedBox(width: AppSpacing.lg),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Row(
-                      children: <Widget>[
-                        Flexible(child: Text(title, style: AppTypography.title)),
-                        const SizedBox(width: AppSpacing.sm),
-                        _FreeBadge(label: freeLabel),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(description, style: AppTypography.caption),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right, color: AppColors.textTertiary),
+              Text(emoji, style: const TextStyle(fontSize: 36)),
+              const SizedBox(height: AppSpacing.md),
+              Text(title, style: AppTypography.title, textAlign: TextAlign.center),
+              const SizedBox(height: AppSpacing.xs),
+              Text(description,
+                  style: AppTypography.caption, textAlign: TextAlign.center),
+              const SizedBox(height: AppSpacing.sm),
+              _FreeBadge(label: freeLabel),
             ],
           ),
         ),

@@ -16,8 +16,8 @@ class MyPost {
   factory MyPost.fromJson(Map<String, dynamic> json) => MyPost(
         id: (json['id'] as num).toInt(),
         type: (json['type'] ?? '') as String,
-        text: json['text'] as String?,
-        firstImageUrl: (json['imageUrls'] as List?)?.cast<String>().firstOrNull,
+        text: json['body'] as String?,
+        firstImageUrl: json['firstImageUrl'] as String?,
       );
 }
 

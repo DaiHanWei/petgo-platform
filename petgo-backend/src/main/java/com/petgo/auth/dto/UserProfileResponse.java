@@ -13,6 +13,7 @@ public record UserProfileResponse(
         Long id,
         String nickname,
         String displayName,
+        String email,
         String avatarUrl,
         PetStatus petStatus,
         boolean onboardingCompleted,
@@ -23,6 +24,8 @@ public record UserProfileResponse(
                 u.getId(),
                 u.getNickname(),
                 u.getDisplayName(),
+                // email 为 PII：仅本人 /me 聚合视图返回，绝不进 Feed/作者视图，且日志已禁记。
+                u.getEmail(),
                 u.getAvatarUrl(),
                 u.getPetStatus(),
                 u.isOnboardingCompleted(),

@@ -5,6 +5,7 @@ import '../../core/theme/rounded.dart';
 import '../../core/theme/spacing.dart';
 import '../../core/theme/typography.dart';
 import '../../features/content/domain/feed_item.dart';
+import 'post_cover.dart';
 
 /// Feed 瀑布流卡片（Story 3.2，UX-DR4）。
 ///
@@ -60,8 +61,13 @@ class MasonryCard extends StatelessWidget {
                   item.firstImageUrl!,
                   fit: BoxFit.fitWidth,
                   width: double.infinity,
-                  errorBuilder: (context, error, stack) => const SizedBox.shrink(),
-                ),
+                  errorBuilder: (context, error, stack) =>
+                      PostCoverPlaceholder(type: item.type, height: _placeholderHeight(item.id)),
+                )
+              else
+                // 无真实首图 → 类型彩块占位（对齐设计稿 S03，避免退化成纯文字白卡）。
+                // 高度按 id 轻微错落，配合两列伪 masonry 形成 Pinterest 观感。
+                PostCoverPlaceholder(type: item.type, height: _placeholderHeight(item.id)),
               Padding(
                 padding: const EdgeInsets.all(AppSpacing.md),
                 child: Column(
@@ -112,6 +118,10 @@ class MasonryCard extends StatelessWidget {
     );
   }
 }
+
+/// 占位封面高度：按 id 在 110/144/178 间轻微错落（配合两列伪 masonry 制造层次）。
+/// 用 abs 防负 id（mock/占位场景）导致高度档位为负。
+double _placeholderHeight(int id) => 110 + (id.abs() % 3) * 34;
 
 class _Avatar extends StatelessWidget {
   const _Avatar({this.url});

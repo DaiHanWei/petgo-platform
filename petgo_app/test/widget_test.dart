@@ -76,7 +76,9 @@ void main() {
     tester.platformDispatcher.localesTestValue = const <Locale>[Locale('id')];
     addTearDown(tester.platformDispatcher.clearLocalesTestValue);
     await _pumpApp(tester);
-    expect(find.text('Tumbuh'), findsOneWidget); // tabProfile id
-    expect(find.text('Konsultasi'), findsOneWidget); // tabTriage id
+    // 'Tumbuh' 同时出现在底部导航(tabProfile)与 Feed 分类 tab(feedTabGrowth)——
+    // 对齐设计稿 S03(两处皆 Tumbuh),故 findsWidgets 而非 findsOneWidget。
+    expect(find.text('Tumbuh'), findsWidgets); // tabProfile + feedTabGrowth id
+    expect(find.text('Konsultasi'), findsOneWidget); // tabTriage id（唯一，确证 id locale）
   });
 }

@@ -35,6 +35,7 @@ class UserProfile {
     this.id,
     this.nickname,
     this.displayName,
+    this.email,
     this.avatarUrl,
     this.petStatus,
     this.onboardingCompleted = false,
@@ -45,6 +46,9 @@ class UserProfile {
   final int? id;
   final String? nickname;
   final String? displayName;
+
+  /// 邮箱（PII）：仅 /me 本人聚合视图返回，绝不进 Feed/作者视图。
+  final String? email;
   final String? avatarUrl;
   final String? petStatus;
   final bool onboardingCompleted;
@@ -54,6 +58,7 @@ class UserProfile {
         id: json['id'] as int?,
         nickname: json['nickname'] as String?,
         displayName: json['displayName'] as String?,
+        email: json['email'] as String?,
         avatarUrl: json['avatarUrl'] as String?,
         petStatus: json['petStatus'] as String?,
         onboardingCompleted: (json['onboardingCompleted'] ?? false) as bool,
