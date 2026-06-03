@@ -165,13 +165,14 @@ class MockBackend {
     if (m == 'POST' && p.endsWith('/auth/vet/login')) {
       return ok({'accessToken': 'mock-vet', 'refreshToken': 'mock-vet-r', 'displayName': 'Drh. Demo', 'role': 'VET'});
     }
-    if (p.endsWith('/me') && m == 'GET') return ok(_profile);
-    if (p.endsWith('/me') && m == 'PATCH') {
+    // 精确匹配用户 /api/v1/me(用 /v1/me 收尾,避免误吃 /pet-profiles/me、/vet/me)。
+    if (p.endsWith('/v1/me') && m == 'GET') return ok(_profile);
+    if (p.endsWith('/v1/me') && m == 'PATCH') {
       if (body['nickname'] != null) _profile['nickname'] = body['nickname'];
       if (body['petStatus'] != null) _profile['petStatus'] = body['petStatus'];
       return ok(_profile);
     }
-    if (p.endsWith('/me') && m == 'DELETE') return Response(requestOptions: o, statusCode: 202);
+    if (p.endsWith('/v1/me') && m == 'DELETE') return Response(requestOptions: o, statusCode: 202);
     if (p.endsWith('/vet/me') && m == 'GET') return ok({'id': 1, 'displayName': 'Drh. Demo', 'status': 'ACTIVE'});
 
     // ---------- CONTENT / FEED ----------
