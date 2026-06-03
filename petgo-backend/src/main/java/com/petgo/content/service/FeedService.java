@@ -7,9 +7,12 @@ import com.petgo.content.domain.ContentType;
 import com.petgo.content.domain.FeedCategory;
 import com.petgo.content.dto.FeedItemResponse;
 import com.petgo.content.dto.FeedPageResponse;
+import com.petgo.content.repository.ContentLikeRepository;
+import com.petgo.content.repository.ContentLikeRepository.PostLikeCount;
 import com.petgo.content.repository.ContentPostRepository;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,10 +36,23 @@ public class FeedService {
 
     private final ContentPostRepository posts;
     private final AccountQueryService accountQueryService;
+    private final ContentLikeRepository likes;
 
-    public FeedService(ContentPostRepository posts, AccountQueryService accountQueryService) {
+    public FeedService(ContentPostRepository posts, AccountQueryService accountQueryService,
+            ContentLikeRepository likes) {
         this.posts = posts;
         this.accountQueryService = accountQueryService;
+        this.likes = likes;
+    }
+
+    /** 一页帖子的点赞数（PRD-642 卡片点赞数）：一次 GROUP BY 批量取，无赞的帖默认 0。 */
+    private Map<Long, Long> likeCounts(List<ContentPost> page) {
+        if (page.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> ids = page.stream().map(ContentPost::getId).toList();
+        return likes.countByPostIdIn(ids).stream()
+                .collect(Collectors.toMap(PostLikeCount::getPostId, PostLikeCount::getLikeCount));
     }
 
     /**
@@ -68,9 +84,11 @@ public class FeedService {
 
         Map<Long, AuthorView> authors = accountQueryService.findAuthorViews(
                 page.stream().map(ContentPost::getAuthorId).toList());
+        Map<Long, Long> likeCounts = likeCounts(page);
 
         List<FeedItemResponse> items = page.stream()
-                .map(p -> FeedItemResponse.of(p, authors.get(p.getAuthorId())))
+                .map(p -> FeedItemResponse.of(p, authors.get(p.getAuthorId()),
+                        likeCounts.getOrDefault(p.getId(), 0L)))
                 .toList();
 
         String nextCursor = null;
@@ -100,8 +118,10 @@ public class FeedService {
 
         Map<Long, AuthorView> authors = accountQueryService.findAuthorViews(
                 page.stream().map(ContentPost::getAuthorId).toList());
+        Map<Long, Long> likeCounts = likeCounts(page);
         List<FeedItemResponse> items = page.stream()
-                .map(p -> FeedItemResponse.of(p, authors.get(p.getAuthorId())))
+                .map(p -> FeedItemResponse.of(p, authors.get(p.getAuthorId()),
+                        likeCounts.getOrDefault(p.getId(), 0L)))
                 .toList();
 
         String nextCursor = null;

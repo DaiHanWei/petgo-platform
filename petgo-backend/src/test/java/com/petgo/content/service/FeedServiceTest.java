@@ -13,6 +13,7 @@ import com.petgo.auth.service.AccountQueryService;
 import com.petgo.content.domain.ContentPost;
 import com.petgo.content.domain.ContentType;
 import com.petgo.content.dto.FeedPageResponse;
+import com.petgo.content.repository.ContentLikeRepository;
 import com.petgo.content.repository.ContentPostRepository;
 import java.time.Instant;
 import java.util.List;
@@ -29,13 +30,15 @@ class FeedServiceTest {
 
     private ContentPostRepository posts;
     private AccountQueryService accounts;
+    private ContentLikeRepository likes;
     private FeedService service;
 
     @BeforeEach
     void setUp() {
         posts = mock(ContentPostRepository.class);
         accounts = mock(AccountQueryService.class);
-        service = new FeedService(posts, accounts);
+        likes = mock(ContentLikeRepository.class); // countByPostIdIn 默认返空表 → likeCount 默认 0
+        service = new FeedService(posts, accounts, likes);
         // 默认作者视图：返回非注销，nickname 由 id 推。
         when(accounts.findAuthorViews(anyList())).thenAnswer(inv -> {
             List<Long> ids = inv.getArgument(0);

@@ -6,6 +6,7 @@ import '../../../core/router/route_intent.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/motion.dart';
 import '../../../core/theme/spacing.dart';
+import '../../../core/theme/typography.dart';
 import '../../../features/auth/domain/auth_guard.dart';
 import '../../../features/auth/domain/auth_state.dart';
 import '../../../features/auth/domain/login_guide_controller.dart';
@@ -59,15 +60,19 @@ class HomePage extends ConsumerWidget {
       body: SafeArea(
         child: Column(
           children: [
-            // 通知铃铛（Story 6.6）：登录用户首页右上角入口 + 未读角标。
-            if (auth.isLoggedIn)
-              Align(
-                alignment: Alignment.centerRight,
-                child: Padding(
-                  padding: const EdgeInsets.only(right: AppSpacing.sm),
-                  child: const NotificationBell(),
-                ),
+            // 顶部品牌字标 + 通知铃铛（设计稿 S03）。字标恒显（含游客）；铃铛仅登录显示（Story 6.6）。
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.screenEdge, AppSpacing.sm, AppSpacing.sm, 0),
+              child: Row(
+                children: [
+                  Text('PetGo',
+                      style: AppTypography.headline.copyWith(color: AppColors.accentGrowth)),
+                  const Spacer(),
+                  if (auth.isLoggedIn) const NotificationBell(),
+                ],
               ),
+            ),
             if (showPrompt)
               Padding(
                 padding: const EdgeInsets.fromLTRB(

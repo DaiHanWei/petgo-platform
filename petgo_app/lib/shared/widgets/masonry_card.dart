@@ -9,7 +9,8 @@ import '../../features/content/domain/feed_item.dart';
 /// Feed 瀑布流卡片（Story 3.2，UX-DR4）。
 ///
 /// 含作者头像+昵称、正文前 2 行、首图（无图 → 纯文字卡）；图片不裁切仅上圆角 14px。
-/// **不展示点赞/评论数**（FR-17）。注销作者 → 本地化「已注销用户」+ 默认头像，头像不可点（Story 3.8）。
+/// 作者行右侧展示点赞数（PRD-642）；评论数仍不在卡片。注销作者 → 本地化「已注销用户」+ 默认头像，
+/// 头像不可点（Story 3.8）。
 class MasonryCard extends StatelessWidget {
   const MasonryCard({
     super.key,
@@ -89,6 +90,14 @@ class MasonryCard extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
+                          ),
+                          // 点赞数（PRD-642）：暖红心 + 计数，右对齐于作者行。
+                          const SizedBox(width: AppSpacing.xs),
+                          const Icon(Icons.favorite_rounded, size: 13, color: AppColors.likeHeart),
+                          const SizedBox(width: 2),
+                          Text(
+                            '${item.likeCount}',
+                            style: AppTypography.caption.copyWith(color: AppColors.textTertiary),
                           ),
                         ],
                       ),

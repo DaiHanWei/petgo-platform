@@ -9,9 +9,10 @@ import java.util.List;
 /**
  * Feed 卡片投影（Story 3.2，AC2）。Jackson NON_NULL；时间 ISO-8601 UTC。
  *
- * <p>**不含 likeCount/commentCount**（FR-17：卡片不展示计数）。{@code body} 给全文，前端截前 2 行。
- * {@code firstImageUrl} 可空（无图 → 纯文字卡）。作者注销时 {@code authorDeleted=true}、
- * 昵称/头像为 null（前端本地化「已注销用户」+ 默认头像，头像不可点 — NFR-8 / Story 3.8）。
+ * <p>{@code likeCount} 卡片点赞数（PRD-642：点赞数显示在内容卡片上；commentCount 仍不在卡片）。
+ * {@code body} 给全文，前端截前 2 行。{@code firstImageUrl} 可空（无图 → 纯文字卡）。作者注销时
+ * {@code authorDeleted=true}、昵称/头像为 null（前端本地化「已注销用户」+ 默认头像，头像不可点 —
+ * NFR-8 / Story 3.8）。
  *
  * @param id            内容 id
  * @param authorId      作者 id（注销后仍返回）
@@ -21,6 +22,7 @@ import java.util.List;
  * @param type          内容类型
  * @param body          正文全文（可空）
  * @param firstImageUrl 首图（可空，无图为纯文字卡）
+ * @param likeCount     卡片点赞数（PRD-642）
  * @param createdAt     发布时刻（ISO UTC）
  */
 public record FeedItemResponse(
@@ -32,9 +34,10 @@ public record FeedItemResponse(
         ContentType type,
         String body,
         String firstImageUrl,
+        long likeCount,
         Instant createdAt) {
 
-    public static FeedItemResponse of(ContentPost p, AuthorView author) {
+    public static FeedItemResponse of(ContentPost p, AuthorView author, long likeCount) {
         List<String> images = p.getImageUrls();
         String firstImage = (images != null && !images.isEmpty()) ? images.get(0) : null;
         return new FeedItemResponse(
@@ -46,6 +49,7 @@ public record FeedItemResponse(
                 p.getType(),
                 p.getText(),
                 firstImage,
+                likeCount,
                 p.getCreatedAt());
     }
 }

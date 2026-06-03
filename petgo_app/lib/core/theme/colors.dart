@@ -46,4 +46,7 @@ class AppColors {
 
   /// 危险 / 错误（复用 triageRed 语义）。
   static const Color danger = triageRed;
+
+  /// 点赞红心（暖珊瑚红，PRD-642 卡片点赞数）。刻意区别于 triageRed，不稀释红色态危险语义。
+  static const Color likeHeart = Color(0xFFE5705F);
 }
