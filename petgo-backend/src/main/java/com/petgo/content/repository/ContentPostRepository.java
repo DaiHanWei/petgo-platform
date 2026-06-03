@@ -27,13 +27,14 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long> 
             WHERE p.authorId = :authorId
               AND p.deletedAt IS NULL
               AND p.status = com.petgo.content.domain.PostStatus.PUBLISHED
-              AND (:cursorTs IS NULL
+              AND (:hasCursor = false
                    OR p.createdAt < :cursorTs
                    OR (p.createdAt = :cursorTs AND p.id < :cursorId))
             ORDER BY p.createdAt DESC, p.id DESC
             """)
     List<ContentPost> findMyPosts(
             @Param("authorId") long authorId,
+            @Param("hasCursor") boolean hasCursor,
             @Param("cursorTs") Instant cursorTs,
             @Param("cursorId") Long cursorId,
             Pageable pageable);
@@ -45,7 +46,9 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long> 
      *   <li>公开口径：{@code deleted_at IS NULL AND status=PUBLISHED}。</li>
      *   <li>硬过滤（B 状态）：{@code excludeGrowth=true} → 排除 GROWTH_MOMENT（后端权威 WHERE）。</li>
      *   <li>分类：{@code type} 非空则精确过滤；{@code requirePet=true}（成长日历分类）→ pet_id 非空。</li>
-     *   <li>游标：{@code (createdAt,id) < (cursorTs,cursorId)}（cursorTs 为 null = 首批）。</li>
+     *   <li>游标：{@code (createdAt,id) < (cursorTs,cursorId)}（{@code hasCursor=false} = 首批）。
+     *       用布尔标志而非裸 {@code :cursorTs IS NULL}：后者令 PG 无法推断 NULL 参数类型
+     *       （42P18 could not determine data type）；此式下 cursorTs 仅与 createdAt 比较即可定型。</li>
      *   <li>排序：{@code created_at DESC, id DESC}（id tie-breaker 保证游标稳定）。</li>
      * </ul>
      */
@@ -56,7 +59,7 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long> 
               AND (:excludeGrowth = false OR p.type <> com.petgo.content.domain.ContentType.GROWTH_MOMENT)
               AND (:type IS NULL OR p.type = :type)
               AND (:requirePet = false OR p.petId IS NOT NULL)
-              AND (:cursorTs IS NULL
+              AND (:hasCursor = false
                    OR p.createdAt < :cursorTs
                    OR (p.createdAt = :cursorTs AND p.id < :cursorId))
             ORDER BY p.createdAt DESC, p.id DESC
@@ -65,6 +68,7 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long> 
             @Param("excludeGrowth") boolean excludeGrowth,
             @Param("type") ContentType type,
             @Param("requirePet") boolean requirePet,
+            @Param("hasCursor") boolean hasCursor,
             @Param("cursorTs") Instant cursorTs,
             @Param("cursorId") Long cursorId,
             Pageable pageable);

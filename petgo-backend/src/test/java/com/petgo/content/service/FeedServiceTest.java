@@ -65,35 +65,35 @@ class FeedServiceTest {
 
     @Test
     void statusBExcludesGrowthMoment() {
-        when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(), any(), any()))
+        when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(Boolean.class), any(), any(), any()))
                 .thenReturn(List.of());
         service.loadFeed("B", "ALL", null);
 
         ArgumentCaptor<Boolean> excludeGrowth = ArgumentCaptor.forClass(Boolean.class);
         org.mockito.Mockito.verify(posts).findFeed(excludeGrowth.capture(), isNull(),
-                eq(false), isNull(), isNull(), any(Pageable.class));
+                eq(false), eq(false), isNull(), isNull(), any(Pageable.class));
         assertThat(excludeGrowth.getValue()).isTrue();
     }
 
     @Test
     void statusAAndGuestDoNotExcludeGrowth() {
-        when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(), any(), any()))
+        when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(Boolean.class), any(), any(), any()))
                 .thenReturn(List.of());
         service.loadFeed("A", "ALL", null);
         service.loadFeed(null, "ALL", null); // 游客
 
         org.mockito.Mockito.verify(posts, org.mockito.Mockito.times(2))
-                .findFeed(eq(false), isNull(), eq(false), isNull(), isNull(), any(Pageable.class));
+                .findFeed(eq(false), isNull(), eq(false), eq(false), isNull(), isNull(), any(Pageable.class));
     }
 
     @Test
     void growthCategoryRequiresPetAndTypeFilter() {
-        when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(), any(), any()))
+        when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(Boolean.class), any(), any(), any()))
                 .thenReturn(List.of());
         service.loadFeed("A", "GROWTH_MOMENT", null);
 
         org.mockito.Mockito.verify(posts).findFeed(eq(false), eq(ContentType.GROWTH_MOMENT),
-                eq(true), isNull(), isNull(), any(Pageable.class));
+                eq(true), eq(false), isNull(), isNull(), any(Pageable.class));
     }
 
     @Test
@@ -103,7 +103,7 @@ class FeedServiceTest {
         List<ContentPost> rows = IntStream.range(0, 21)
                 .mapToObj(i -> post(100 - i, ContentType.DAILY, 1L, base.minusSeconds(i), null))
                 .toList();
-        when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(), any(), any()))
+        when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(Boolean.class), any(), any(), any()))
                 .thenReturn(rows);
 
         FeedPageResponse page = service.loadFeed("A", "ALL", null);
@@ -119,7 +119,7 @@ class FeedServiceTest {
     void lastPageHasNoMoreAndNoCursor() {
         List<ContentPost> rows = List.of(
                 post(2L, ContentType.DAILY, 1L, Instant.now(), List.of("https://cdn/a.jpg")));
-        when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(), any(), any()))
+        when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(Boolean.class), any(), any(), any()))
                 .thenReturn(rows);
 
         FeedPageResponse page = service.loadFeed("A", "ALL", null);
@@ -133,7 +133,7 @@ class FeedServiceTest {
     @Test
     void deletedAuthorAnonymizedInProjection() {
         List<ContentPost> rows = List.of(post(5L, ContentType.DAILY, 9L, Instant.now(), null));
-        when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(), any(), any()))
+        when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(Boolean.class), any(), any(), any()))
                 .thenReturn(rows);
         when(accounts.findAuthorViews(anyList()))
                 .thenReturn(Map.of(9L, AuthorView.anonymized(9L)));
@@ -147,7 +147,7 @@ class FeedServiceTest {
 
     @Test
     void cursorDecodedAndPassedToRepo() {
-        when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(), any(), any()))
+        when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(Boolean.class), any(), any(), any()))
                 .thenReturn(List.of());
         Instant ts = Instant.parse("2026-06-01T12:00:00Z");
         String cursor = new FeedCursor(ts, 50L).encode();
@@ -155,6 +155,6 @@ class FeedServiceTest {
         service.loadFeed("C", "DAILY", cursor);
 
         org.mockito.Mockito.verify(posts).findFeed(eq(false), eq(ContentType.DAILY), eq(false),
-                eq(ts), eq(50L), any(Pageable.class));
+                eq(true), eq(ts), eq(50L), any(Pageable.class));
     }
 }

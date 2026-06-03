@@ -58,6 +58,7 @@ public class FeedService {
         // 多取一条以判定 hasMore（不漏不重）。
         List<ContentPost> rows = posts.findFeed(
                 excludeGrowth, type, requirePet,
+                decoded != null,
                 decoded == null ? null : decoded.createdAt(),
                 decoded == null ? null : decoded.id(),
                 PageRequest.of(0, PAGE_SIZE + 1));
@@ -89,6 +90,7 @@ public class FeedService {
         FeedCursor decoded = (cursor == null || cursor.isBlank()) ? null : FeedCursor.decode(cursor);
         List<ContentPost> rows = posts.findMyPosts(
                 userId,
+                decoded != null,
                 decoded == null ? null : decoded.createdAt(),
                 decoded == null ? null : decoded.id(),
                 PageRequest.of(0, PAGE_SIZE + 1));
