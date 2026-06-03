@@ -295,8 +295,9 @@ class MockBackend {
         'closedReason': null, 'interruptedReason': null};
       return ok(_activeSession);
     }
+    // 用户侧 consult-sessions/{id}:用 !/vet/ 守卫,避免误吞兽医侧 /vet/consult-sessions/{id}。
     final sessGet = RegExp(r'/consult-sessions/(\d+)$').firstMatch(p);
-    if (sessGet != null && m == 'GET') {
+    if (sessGet != null && m == 'GET' && !p.contains('/vet/')) {
       return ok(_activeSession ?? {'id': int.parse(sessGet.group(1)!), 'status': 'IN_PROGRESS', 'source': 'DIRECT',
         'waitingElapsedSeconds': 0, 'timedOut': false, 'alreadyActive': false});
     }
@@ -304,7 +305,7 @@ class MockBackend {
       _activeSession?['waitingElapsedSeconds'] = 0;
       return ok(_activeSession ?? {});
     }
-    if (RegExp(r'/consult-sessions/(\d+)$').hasMatch(p) && m == 'DELETE') {
+    if (RegExp(r'/consult-sessions/(\d+)$').hasMatch(p) && m == 'DELETE' && !p.contains('/vet/')) {
       final s = {...?_activeSession, 'status': 'CANCELLED'};
       _activeSession = null;
       return ok(s);
