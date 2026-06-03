@@ -11,9 +11,11 @@ import '../../media/domain/media_upload_use_case.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../profile/domain/pet_profile.dart';
 import '../../../shared/utils/media_permission.dart';
+import '../../me/data/my_posts_repository.dart';
 import '../data/content_repository.dart';
 import '../domain/content_type.dart';
 import '../domain/publish_controller.dart';
+import 'feed_controller.dart';
 
 /// 发布控制器 provider（autoDispose：sheet 关闭即 dispose，清空内存草稿，NFR-10 无持久草稿）。
 final publishControllerProvider = Provider.autoDispose<PublishController>((ref) {
@@ -98,6 +100,9 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     final id = await controller.publish(idempotencyKey: key, petId: petId);
     if (!mounted) return;
     if (id != null) {
+      // 发布成功 → 刷新 Feed 与「我的发布」,使新帖立即回显(无需手动下拉)。
+      ref.invalidate(feedProvider);
+      ref.invalidate(myPostsProvider);
       Navigator.of(context).pop();
     } else if (controller.hasFailed) {
       _toast(l10n.publishFailed);
