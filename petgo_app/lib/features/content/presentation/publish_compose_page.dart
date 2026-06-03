@@ -8,6 +8,8 @@ import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../media/domain/media_upload_use_case.dart';
+import '../../profile/data/profile_repository.dart';
+import '../../profile/domain/pet_profile.dart';
 import '../../../shared/utils/media_permission.dart';
 import '../data/content_repository.dart';
 import '../domain/content_type.dart';
@@ -53,6 +55,9 @@ class PublishComposePage extends ConsumerStatefulWidget {
 class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   final _textController = TextEditingController();
 
+  /// 成长日历绑定的宠物档案（V1 单账号单宠物）。选「成长日历」时拉取，发布时带其 id。
+  PetProfile? _linkedPet;
+
   @override
   void dispose() {
     _textController.dispose();
@@ -64,6 +69,13 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     return profile?.hasPetProfile ?? false;
   }
 
+  /// 懒加载当前用户的宠物档案（成长日历发帖必带 pet_id，Story 2.3 AC2）。
+  Future<void> _ensurePetLoaded() async {
+    if (_linkedPet != null) return;
+    final pet = await ref.read(profileRepositoryProvider).getMyProfile();
+    if (mounted) setState(() => _linkedPet = pet);
+  }
+
   Future<void> _addImage(PublishController controller) async {
     final bytes = await ref
         .read(mediaUploadUseCaseProvider)
@@ -72,8 +84,18 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   }
 
   Future<void> _publish(PublishController controller, AppLocalizations l10n) async {
+    // 成长日历必带 pet_id（否则后端 422）；V1 单宠物 → 取当前用户唯一档案。
+    if (controller.type == ContentType.growthMoment) {
+      await _ensurePetLoaded();
+      if (!mounted) return;
+      if (_linkedPet == null) {
+        _onGrowthBlocked(l10n); // 无档案兜底（理论上已被 segment 灰置拦住）
+        return;
+      }
+    }
     final key = 'post-${DateTime.now().microsecondsSinceEpoch}';
-    final id = await controller.publish(idempotencyKey: key);
+    final petId = controller.type == ContentType.growthMoment ? _linkedPet?.id : null;
+    final id = await controller.publish(idempotencyKey: key, petId: petId);
     if (!mounted) return;
     if (id != null) {
       Navigator.of(context).pop();
@@ -133,6 +155,10 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
           ),
           const SizedBox(height: AppSpacing.sm),
           _segments(controller, l10n),
+          if (controller.type == ContentType.growthMoment && _linkedPet != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _linkedPetPill(l10n),
+          ],
           const SizedBox(height: AppSpacing.md),
           Expanded(
             child: ListView(
@@ -178,6 +204,31 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     );
   }
 
+  /// 「关联到 {宠物名}」胶囊（设计稿 S08 Tautkan）：成长日历选中后展示绑定的宠物档案。
+  Widget _linkedPetPill(AppLocalizations l10n) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
+        decoration: BoxDecoration(
+          color: AppColors.accentGrowth.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.pets_rounded, size: 14, color: AppColors.accentGrowth),
+            const SizedBox(width: 4),
+            Text(
+              l10n.publishLinkedToPet(_linkedPet!.name),
+              style: const TextStyle(color: AppColors.accentGrowth, fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _segments(PublishController controller, AppLocalizations l10n) {
     final growthEnabled = _hasPetProfile;
     return Wrap(
@@ -206,7 +257,10 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       selected: controller.type == ContentType.growthMoment,
       // B/C 或无档案：灰置不可选；点击 → 悬浮提示 + 跳创建。
       onSelected: enabled
-          ? (_) => controller.setType(ContentType.growthMoment)
+          ? (_) {
+              controller.setType(ContentType.growthMoment);
+              _ensurePetLoaded(); // 预取宠物，供「关联到 {name}」胶囊 + 发布带 pet_id
+            }
           : (_) => _onGrowthBlocked(l10n),
       disabledColor: AppColors.surface,
       labelStyle: enabled ? null : TextStyle(color: AppColors.textTertiary),

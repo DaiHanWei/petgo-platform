@@ -66,6 +66,7 @@
   "publishButton": "Posting",
   "publishPublicNotice": "Postingan Anda akan terlihat oleh semua pengguna.",
   "publishGrowthNeedsProfile": "Buat profil hewan dulu",
+  "publishLinkedToPet": "Tertaut ke {name}",
   "publishCreateProfile": "Buat",
   "publishRetry": "Coba lagi",
   "publishAddImage": "Tambah foto",

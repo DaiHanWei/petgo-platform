@@ -98,6 +98,12 @@
   "publishButton": "Post",
   "publishPublicNotice": "Your post will be visible to all users.",
   "publishGrowthNeedsProfile": "Create a pet profile first",
+  "publishLinkedToPet": "Linked to {name}",
+  "@publishLinkedToPet": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
   "publishCreateProfile": "Create",
   "publishRetry": "Retry",
   "publishAddImage": "Add photo",
