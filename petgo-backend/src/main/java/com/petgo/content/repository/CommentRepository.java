@@ -23,13 +23,14 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
     @Query("""
             SELECT c FROM Comment c
             WHERE c.postId = :postId AND c.parentId IS NULL AND c.deletedAt IS NULL
-              AND (:cursorTs IS NULL
+              AND (:hasCursor = false
                    OR c.createdAt > :cursorTs
                    OR (c.createdAt = :cursorTs AND c.id > :cursorId))
             ORDER BY c.createdAt ASC, c.id ASC
             """)
     List<Comment> findTopLevel(
             @Param("postId") long postId,
+            @Param("hasCursor") boolean hasCursor,
             @Param("cursorTs") Instant cursorTs,
             @Param("cursorId") Long cursorId,
             Pageable pageable);
@@ -40,13 +41,14 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
     @Query("""
             SELECT c FROM Comment c
             WHERE c.parentId = :parentId AND c.deletedAt IS NULL
-              AND (:cursorTs IS NULL
+              AND (:hasCursor = false
                    OR c.createdAt > :cursorTs
                    OR (c.createdAt = :cursorTs AND c.id > :cursorId))
             ORDER BY c.createdAt ASC, c.id ASC
             """)
     List<Comment> findReplies(
             @Param("parentId") long parentId,
+            @Param("hasCursor") boolean hasCursor,
             @Param("cursorTs") Instant cursorTs,
             @Param("cursorId") Long cursorId,
             Pageable pageable);

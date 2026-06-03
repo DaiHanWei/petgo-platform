@@ -113,6 +113,8 @@ public class SecurityConfig {
                         // 其余 /api/v1 默认需 JWT（写一律拒绝未登录）；user 写端点对 vet token → 403
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth
+                        // 坏/过期 token 的 401 也走统一 ProblemDetail（否则默认 BearerToken 入口返回无 body/无 content-type）
+                        .authenticationEntryPoint(problemHandlers)
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(new JwtRoleConverter())))
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(problemHandlers)

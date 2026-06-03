@@ -9,6 +9,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.HexFormat;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
@@ -55,7 +57,10 @@ public class JwtService {
                 .subject(String.valueOf(subjectId))
                 .claim("role", role.name())
                 .build();
-        return encoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
+        // 显式指定 HS256 头：否则 NimbusJwtEncoder 默认按 RS256 选 key，与 HMAC 对称密钥
+        // 不匹配 → 运行期「Failed to select a JWK signing key」（jwtDecoder 已固定 HS256，对称）。
+        JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
+        return encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
     }
 
     /** 生成新的 refresh 明文（仅本次返回给客户端，不入库）。 */

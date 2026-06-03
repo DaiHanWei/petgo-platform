@@ -75,19 +75,23 @@ public class ConsultCloseService {
         if (ratings.existsBySessionId(sessionId)) {
             throw AppException.conflict("本次会话已评分");
         }
+        // 状态校验须在写评分之前：WAITING/IN_PROGRESS 会话 vet_id 可能为空，先写评分会撞约束抛 500，
+        // 而非干净返回 409。仅 PENDING_CLOSE（正常评分）/ CLOSED（补弹补评分）可评分。
+        SessionStatus status = s.getStatus();
+        if (status != SessionStatus.PENDING_CLOSE && status != SessionStatus.CLOSED) {
+            throw AppException.conflict("本次会话不在可评分状态");
+        }
         String trimmed = (comment == null || comment.isBlank()) ? null : comment.trim();
         ratings.save(ConsultRating.of(sessionId, s.getVetId(), userId, stars, trimmed));
 
-        if (s.getStatus() == SessionStatus.PENDING_CLOSE) {
+        if (status == SessionStatus.PENDING_CLOSE) {
             s.closeRated();
             sessions.save(s);
             publishClosed(s, true);
-        } else if (s.getStatus() == SessionStatus.CLOSED) {
+        } else {
             // 补弹后补评分：会话已关闭/已存档，仅清补弹标记，不重复发存档事件。
             s.clearRatingPrompt();
             sessions.save(s);
-        } else {
-            throw AppException.conflict("本次会话不在可评分状态");
         }
         return s;
     }

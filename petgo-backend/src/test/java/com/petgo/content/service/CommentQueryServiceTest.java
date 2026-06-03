@@ -3,6 +3,7 @@ package com.petgo.content.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -96,7 +97,7 @@ class CommentQueryServiceTest {
         List<Comment> rows = IntStream.range(0, 11)
                 .mapToObj(i -> comment(i + 1, null, 100 + i, base.plusSeconds(i)))
                 .toList();
-        when(comments.findTopLevel(eq(1L), any(), any(), any(Pageable.class))).thenReturn(rows);
+        when(comments.findTopLevel(eq(1L), anyBoolean(), any(), any(), any(Pageable.class))).thenReturn(rows);
         when(comments.findRepliesForParents(anyList())).thenReturn(List.of());
 
         CommentPageResponse page = service.topLevel(1L, null);
@@ -112,7 +113,7 @@ class CommentQueryServiceTest {
     void topLevelInlinesFirstThreeRepliesWithCount() {
         Instant base = Instant.parse("2026-06-02T00:00:00Z");
         Comment top = comment(1, null, 50, base);
-        when(comments.findTopLevel(eq(1L), any(), any(), any(Pageable.class)))
+        when(comments.findTopLevel(eq(1L), anyBoolean(), any(), any(), any(Pageable.class)))
                 .thenReturn(List.of(top));
         // 该一级有 8 条二级回复。
         List<Comment> replies = IntStream.range(0, 8)
@@ -133,7 +134,7 @@ class CommentQueryServiceTest {
         List<Comment> rows = IntStream.range(0, 11)
                 .mapToObj(i -> comment(100 + i, 1L, 200 + i, base.plusSeconds(i)))
                 .toList();
-        when(comments.findReplies(eq(1L), any(), any(), any(Pageable.class))).thenReturn(rows);
+        when(comments.findReplies(eq(1L), anyBoolean(), any(), any(), any(Pageable.class))).thenReturn(rows);
 
         CommentPageResponse page = service.replies(1L, null);
         assertThat(page.items()).hasSize(10);

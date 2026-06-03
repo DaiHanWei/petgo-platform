@@ -10,9 +10,14 @@ import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * 全局异常处理 —— 所有异常统一输出 RFC 9457 ProblemDetail。
@@ -39,6 +44,23 @@ public class GlobalExceptionHandler {
                 .toList();
         pd.setProperty("errors", errors);
         return ResponseEntity.unprocessableEntity().body(pd);
+    }
+
+    /** 未匹配任何路由/静态资源 → 404（而非落到 catch-all 误报 500）。 */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ProblemDetail> handleNoResource(NoResourceFoundException ex, HttpServletRequest req) {
+        ProblemDetail pd = base(HttpStatus.NOT_FOUND, ErrorTypes.NOT_FOUND, "Not Found", "请求的资源不存在", req);
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(pd);
+    }
+
+    /** 缺必填参数 / 类型不匹配 / 请求体不可读 / 缺 multipart 部件 → 400（而非 catch-all 误报 500）。 */
+    @ExceptionHandler({MissingServletRequestParameterException.class,
+            MethodArgumentTypeMismatchException.class, HttpMessageNotReadableException.class,
+            MissingServletRequestPartException.class})
+    public ResponseEntity<ProblemDetail> handleBadRequest(Exception ex, HttpServletRequest req) {
+        ProblemDetail pd = base(HttpStatus.BAD_REQUEST, ErrorTypes.VALIDATION, "Bad Request",
+                "请求格式不正确", req);
+        return ResponseEntity.badRequest().body(pd);
     }
 
     @ExceptionHandler(Exception.class)

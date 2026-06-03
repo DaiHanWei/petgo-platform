@@ -53,8 +53,10 @@ class _Tab extends StatelessWidget {
     return Semantics(
       selected: active,
       button: true,
-      child: InkWell(
+      // 用 GestureDetector 而非 InkWell：分类切换靠下划线+文字色表达，去掉点击灰色水波/高亮块。
+      child: GestureDetector(
         onTap: onTap,
+        behavior: HitTestBehavior.opaque,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
           child: Column(

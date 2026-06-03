@@ -9,19 +9,16 @@ import '../../l10n/app_localizations.dart';
 enum AppTab { home, profile, triage, me }
 
 /// 「＋」凸起按钮直径（px）。
-const double kAddButtonSize = 60;
+const double kAddButtonSize = 76;
 
 /// active Tab 区域色填充圆直径（px）。
 const double kActiveCircleSize = 34;
 
-/// 缺口几何（CircularNotchedRectangle）。
-const double kNotchMargin = 6;
-
 /// 底部 Tab Bar 外壳（FR-19 / UX-DR2）。
 ///
 /// 5 位：首页 / 成长档案 / [+] / 问诊 / 我的；中间「＋」为凸起悬浮按钮（[AddTabButton]，
-/// 由外层 Scaffold 以 centerDocked 落入弧形缺口）。上沿在「＋」位向下内凹成
-/// [CircularNotchedRectangle] 缺口。active Tab 显示 [kActiveCircleSize] 区域色填充圆 + 白图标
+/// 由外层 Scaffold 以 centerDocked 停在顶边、约一半埋入白色栏内）。上沿为平直边（无缺口）。
+/// active Tab 显示 [kActiveCircleSize] 区域色填充圆 + 白图标
 /// （入场 scale 0.7→1.0）；inactive 显示 18px 图标 + 9px 标签。
 class BottomTabBar extends StatelessWidget {
   const BottomTabBar({
@@ -45,8 +42,6 @@ class BottomTabBar extends StatelessWidget {
     return BottomAppBar(
       color: AppColors.surface,
       elevation: 8,
-      shape: const CircularNotchedRectangle(),
-      notchMargin: kNotchMargin,
       padding: EdgeInsets.zero,
       child: SizedBox(
         height: 56,
@@ -125,9 +120,10 @@ class _TabItem extends StatelessWidget {
   }
 }
 
-/// 「＋」凸起悬浮按钮（centerDocked，落在 [BottomAppBar] 的弧形缺口内）。
+/// 「＋」凸起悬浮按钮（centerDocked，停在 [BottomAppBar] 平直顶边上，约一半埋入白色栏内）。
 ///
-/// 44px 圆 + 3px 白描边 + 上移约 1/3 高度；颜色随 active Tab 区域色切换。
+/// [kAddButtonSize] 圆 + 3px 白描边；颜色随 active Tab 区域色切换。
+/// centerDocked 默认把按钮中心对齐到栏顶边 → 上半浮于米色背景、下半埋入白色栏（半埋观感）。
 class AddTabButton extends StatelessWidget {
   const AddTabButton({super.key, required this.activeIndex, required this.onPressed});
 
@@ -137,26 +133,23 @@ class AddTabButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color color = BottomTabBar.regionColorForTab(activeIndex);
-    return Transform.translate(
-      offset: const Offset(0, -14), // 约 1/3 高度上移（按钮加大后相应上提）
-      child: Material(
-        color: Colors.transparent,
-        child: InkResponse(
-          onTap: onPressed,
-          radius: kAddButtonSize,
-          child: Container(
-            width: kAddButtonSize,
-            height: kAddButtonSize,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-              border: Border.all(color: AppColors.onAccent, width: 3),
-              boxShadow: const [
-                BoxShadow(color: Color(0x33000000), blurRadius: 6, offset: Offset(0, 2)),
-              ],
-            ),
-            child: const Icon(Icons.add, color: AppColors.onAccent, size: 34),
+    return Material(
+      color: Colors.transparent,
+      child: InkResponse(
+        onTap: onPressed,
+        radius: kAddButtonSize,
+        child: Container(
+          width: kAddButtonSize,
+          height: kAddButtonSize,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.onAccent, width: 3),
+            boxShadow: const [
+              BoxShadow(color: Color(0x33000000), blurRadius: 6, offset: Offset(0, 2)),
+            ],
           ),
+          child: const Icon(Icons.add, color: AppColors.onAccent, size: 42),
         ),
       ),
     );

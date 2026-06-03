@@ -49,6 +49,7 @@ public class CommentQueryService {
         FeedCursor decoded = decode(cursor);
 
         List<Comment> rows = comments.findTopLevel(postId,
+                decoded != null,
                 decoded == null ? null : decoded.createdAt(),
                 decoded == null ? null : decoded.id(),
                 PageRequest.of(0, TOP_LEVEL_PAGE_SIZE + 1));
@@ -91,6 +92,7 @@ public class CommentQueryService {
     public CommentPageResponse replies(long parentId, String cursor) {
         FeedCursor decoded = decode(cursor);
         List<Comment> rows = comments.findReplies(parentId,
+                decoded != null,
                 decoded == null ? null : decoded.createdAt(),
                 decoded == null ? null : decoded.id(),
                 PageRequest.of(0, REPLY_PAGE_SIZE + 1));

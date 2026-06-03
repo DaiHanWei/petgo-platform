@@ -54,7 +54,8 @@ public class ContentDetailService {
         AuthorView author = accountQueryService.findAuthorViews(List.of(post.getAuthorId()))
                 .get(post.getAuthorId());
         long commentCount = comments.countByPostIdAndDeletedAtIsNull(postId);
-        boolean isAuthor = viewerId != null && viewerId == post.getAuthorId();
+        // 用 equals 而非 ==：两者均为装箱 Long，== 是引用比较，id>127（越过 Long 缓存）会误判 false。
+        boolean isAuthor = viewerId != null && viewerId.equals(post.getAuthorId());
         // Story 3.4：真实点赞计数 + 当前用户是否已赞（游客 false）。
         long likeCount = likes.countByPostId(postId);
         boolean liked = viewerId != null && likes.existsByPostIdAndUserId(postId, viewerId);
