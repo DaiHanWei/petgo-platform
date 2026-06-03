@@ -138,6 +138,15 @@ class _TriageUploadPageState extends ConsumerState<TriageUploadPage> {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.screenEdge),
       children: <Widget>[
+        // 设计稿 S12：先图后文——图片上传在上、症状描述在下。
+        Text(l10n.triagePhotoLimit, style: AppTypography.caption),
+        const SizedBox(height: AppSpacing.sm),
+        _ImageRow(
+          images: draft.images,
+          onAdd: _pickSource,
+          onRemove: (i) => ref.read(triageUploadProvider.notifier).removeImageAt(i),
+        ),
+        const SizedBox(height: AppSpacing.lg),
         Text(l10n.triageSymptomLabel, style: AppTypography.title),
         const SizedBox(height: AppSpacing.sm),
         TextField(
@@ -150,14 +159,6 @@ class _TriageUploadPageState extends ConsumerState<TriageUploadPage> {
             hintText: l10n.triageSymptomHint,
             border: const OutlineInputBorder(),
           ),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        Text(l10n.triagePhotoLimit, style: AppTypography.caption),
-        const SizedBox(height: AppSpacing.sm),
-        _ImageRow(
-          images: draft.images,
-          onAdd: _pickSource,
-          onRemove: (i) => ref.read(triageUploadProvider.notifier).removeImageAt(i),
         ),
         const SizedBox(height: AppSpacing.xl),
         FilledButton(

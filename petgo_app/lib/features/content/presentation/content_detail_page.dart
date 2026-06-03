@@ -131,6 +131,8 @@ class _DetailScaffold extends ConsumerWidget {
                     const SizedBox(height: AppSpacing.md),
                     _interactionBar(),
                     const Divider(height: AppSpacing.xl, color: AppColors.divider),
+                    Text(l10n.detailCommentsTitle, style: AppTypography.title),
+                    const SizedBox(height: AppSpacing.sm),
                     CommentSection(
                       postId: postId,
                       currentUserId: currentUserId,
@@ -147,6 +149,15 @@ class _DetailScaffold extends ConsumerWidget {
     );
   }
 
+  /// 发布相对时间（双语 l10n）：<1分→刚刚 / <1时→N分钟前 / <1天→N小时前 / 否则 N天前。
+  static String _relativeTime(AppLocalizations l10n, DateTime t) {
+    final d = DateTime.now().difference(t);
+    if (d.inMinutes < 1) return l10n.timeJustNow;
+    if (d.inHours < 1) return l10n.timeMinutesAgo(d.inMinutes);
+    if (d.inDays < 1) return l10n.timeHoursAgo(d.inHours);
+    return l10n.timeDaysAgo(d.inDays);
+  }
+
   Widget _authorRow(BuildContext context, WidgetRef ref, AppLocalizations l10n) {
     final name = detail.authorDeleted ? l10n.feedDeletedUser : (detail.authorNickname ?? l10n.feedDeletedUser);
     final avatar = detail.authorDeleted ? null : detail.authorAvatarUrl;
@@ -161,7 +172,15 @@ class _DetailScaffold extends ConsumerWidget {
               : null,
         ),
         const SizedBox(width: AppSpacing.sm),
-        Text(name, style: AppTypography.body.copyWith(fontWeight: FontWeight.w600)),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(name, style: AppTypography.body.copyWith(fontWeight: FontWeight.w600)),
+            // 发布相对时间（设计稿作者行；「地区」后端暂无数据故不展示）。
+            Text(_relativeTime(l10n, detail.createdAt),
+                style: AppTypography.caption.copyWith(color: AppColors.textTertiary)),
+          ],
+        ),
       ],
     );
     // 作者点击触发迷你卡（Story 3.8）：注销作者不可点（NFR-8）。

@@ -77,7 +77,8 @@ class _LikeButtonState extends ConsumerState<LikeButton> {
           Icon(
             _liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
             size: 20,
-            color: _liked ? AppColors.accentGrowth : AppColors.textSecondary,
+            // 点赞红心（设计稿）：激活态用暖红 likeHeart，与 Feed 卡片点赞一致。
+            color: _liked ? AppColors.likeHeart : AppColors.textSecondary,
           ),
           const SizedBox(width: AppSpacing.xs),
           Text('$_count', style: AppTypography.caption),
