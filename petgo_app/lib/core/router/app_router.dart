@@ -19,6 +19,7 @@ import '../../features/consult/presentation/consult_conversation_page.dart';
 import '../../features/consult/presentation/consult_entry_page.dart';
 import '../../features/consult/presentation/consult_waiting_page.dart';
 import '../../features/notify/presentation/notification_center_page.dart';
+import '../../features/onboarding/presentation/mint_onboarding_page.dart';
 import '../../features/vet/presentation/vet_conversation_page.dart';
 import '../../features/triage/presentation/dev_triage_page.dart';
 import '../../features/triage/presentation/triage_page.dart';
@@ -62,8 +63,10 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // 兽医账密登录 + 工作台壳（Story 5.1）。与用户侧 5-Tab 隔离：shell 外顶层路由。
       GoRoute(path: '/vet/login', builder: (c, s) => const VetLoginPage()),
       GoRoute(path: '/vet/workbench', builder: (c, s) => const VetWorkbenchShell()),
-      // 新用户引导流（Story 1.6）：昵称 → 宠物状态 → (A) 档案创建引导 / (B,C) 首页。
-      GoRoute(path: '/onboarding', builder: (c, s) => const NicknamePage()),
+      // 新用户引导流（PetGo Prototype 全面换肤 · FR-11）：欢迎(Momo) → 创建宠物 → 完成。
+      GoRoute(path: '/onboarding', builder: (c, s) => const MintOnboardingPage()),
+      // 旧分步引导（昵称 → 宠物状态 → 档案）保留可路由，供后端联动流程复用。
+      GoRoute(path: '/onboarding/nickname', builder: (c, s) => const NicknamePage()),
       GoRoute(path: '/onboarding/pet-status', builder: (c, s) => const PetStatusPage()),
       GoRoute(path: '/onboarding/profile', builder: (c, s) => const ProfileOnboardingPage()),
       // 宠物档案创建表单（Story 2.2）。受控路由（/profile/ 前缀，游客被门控）。
