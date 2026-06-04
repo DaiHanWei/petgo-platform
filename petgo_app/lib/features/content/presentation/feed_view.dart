@@ -21,6 +21,7 @@ class FeedMasonryView extends StatefulWidget {
     this.onTapItem,
     this.onLongPressItem,
     this.onAuthorTap,
+    this.header,
   });
 
   final List<FeedItem> items;
@@ -32,6 +33,9 @@ class FeedMasonryView extends StatefulWidget {
   final ValueChanged<FeedItem>? onTapItem;
   final ValueChanged<FeedItem>? onLongPressItem;
   final ValueChanged<FeedItem>? onAuthorTap;
+
+  /// 可选全幅头部（随 Feed 同滚）。Beranda 用作问候/快捷入口/每日提示区。
+  final Widget? header;
 
   @override
   State<FeedMasonryView> createState() => _FeedMasonryViewState();
@@ -90,22 +94,29 @@ class _FeedMasonryViewState extends State<FeedMasonryView> {
       child: SingleChildScrollView(
         controller: _controller,
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(AppSpacing.screenEdge),
         child: Column(
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: Column(children: left)),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(child: Column(children: right)),
-              ],
-            ),
-            if (widget.loadingMore)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
-                child: CircularProgressIndicator(color: AppColors.accentGrowth),
+            if (widget.header != null) widget.header!,
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.screenEdge),
+              child: Column(
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: Column(children: left)),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(child: Column(children: right)),
+                    ],
+                  ),
+                  if (widget.loadingMore)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
+                      child: CircularProgressIndicator(color: AppColors.accentGrowth),
+                    ),
+                ],
               ),
+            ),
           ],
         ),
       ),
