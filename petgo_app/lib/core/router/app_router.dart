@@ -20,6 +20,8 @@ import '../../features/consult/presentation/consult_entry_page.dart';
 import '../../features/consult/presentation/consult_waiting_page.dart';
 import '../../features/notify/presentation/notification_center_page.dart';
 import '../../features/onboarding/presentation/mint_onboarding_page.dart';
+import '../../features/gath/presentation/gath_page.dart';
+import '../../features/profile/presentation/pet_card_page.dart';
 import '../../features/vet/presentation/vet_conversation_page.dart';
 import '../../features/triage/presentation/dev_triage_page.dart';
 import '../../features/triage/presentation/triage_page.dart';
@@ -98,6 +100,10 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/notifications', builder: (c, s) => const NotificationCenterPage()),
       // 语言设置（Story 7.2）。
       GoRoute(path: '/me/language', builder: (c, s) => const LanguageSettingsPage()),
+      // 宠物聚会 Gath（PetGo Prototype 占位页）。shell 外 push。
+      GoRoute(path: '/gath', builder: (c, s) => const GathPage()),
+      // 宠物名片 H5 预览（FR-14）。shell 外 push（全屏浏览器外壳观感）。
+      GoRoute(path: '/card/preview', builder: (c, s) => const PetCardPage()),
       // 内容详情（Story 3.3）。shell 外顶层 push（隐藏 Tab Bar）；返回保持 Feed 滚动位置。游客只读可进。
       GoRoute(
         path: '/content/:id',

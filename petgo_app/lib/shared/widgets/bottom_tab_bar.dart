@@ -50,7 +50,7 @@ class BottomTabBar extends StatelessWidget {
             _item(AppTab.home, Icons.home_rounded, l10n.tabHome),
             _item(AppTab.profile, Icons.pets_rounded, l10n.tabProfile),
             const Expanded(child: SizedBox()), // 「＋」凸起按钮的缺口占位
-            _item(AppTab.triage, Icons.healing_rounded, l10n.tabTriage),
+            _item(AppTab.triage, Icons.medical_services_rounded, l10n.tabTriage),
             _item(AppTab.me, Icons.person_rounded, l10n.tabMe),
           ],
         ),

@@ -95,9 +95,7 @@ class HomePage extends ConsumerWidget {
       onPromptCreate: () => context.go('/onboarding/profile'),
       onPromptDismiss: () => ref.read(profilePromptProvider.notifier).dismiss(),
       onKonsultasi: () => context.go('/triage'),
-      onGath: () => ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(const SnackBar(content: Text('Gabung Gath segera hadir 🐾'))),
+      onGath: () => context.push('/gath'),
       onPaspor: () => context.go('/profile'),
       onCatat: () => requireLogin(
         ref,

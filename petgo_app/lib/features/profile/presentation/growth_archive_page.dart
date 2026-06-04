@@ -150,7 +150,17 @@ class _ArchiveBody extends ConsumerWidget {
         padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 54, AppSpacing.lg, AppSpacing.section),
         children: [
           child,
-          const SizedBox(height: 18),
+          const SizedBox(height: 10),
+          Center(
+            child: TextButton.icon(
+              key: const ValueKey('previewCardButton'),
+              onPressed: () => context.push('/card/preview'),
+              icon: const Icon(Icons.public, size: 16, color: AppColors.mint700),
+              label: const Text('Pratinjau kartu publik',
+                  style: TextStyle(color: AppColors.mint700, fontWeight: FontWeight.w700, fontSize: 13)),
+            ),
+          ),
+          const SizedBox(height: 8),
           // 时间线区头（PetGo Prototype）。
           Row(
             children: const [
