@@ -146,7 +146,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(LoginHardDialog), findsNothing);
-    // 切到问诊占位（active 时标题由 body 渲染）
-    expect(find.text('Consult'), findsWidgets);
+    // 切到问诊 hub（换肤后页面标题为 Momo 头「Konsultasi Kilat」，确认已落地该页）。
+    expect(find.text('Konsultasi Kilat'), findsOneWidget);
   });
 }

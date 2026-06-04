@@ -26,6 +26,13 @@ class _FakeConsultRepository extends ConsultRepository {
 }
 
 Future<void> _pump(WidgetTester tester, List<ConsultHistoryItem> items) async {
+  // 换肤后问诊 hub 较长（Momo 头 + 双入口卡 + 在线兽医条），历史在下方；
+  // 用高视口让整页布局，历史项落在可见/缓存区（否则 ListView 懒加载不构建）。
+  tester.view.physicalSize = const Size(1170, 6000);
+  tester.view.devicePixelRatio = 3.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+
   final container = ProviderContainer(overrides: [
     consultRepositoryProvider.overrideWithValue(_FakeConsultRepository(items)),
   ]);

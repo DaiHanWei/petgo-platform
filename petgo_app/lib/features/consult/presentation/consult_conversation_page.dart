@@ -124,13 +124,26 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
       body: SafeArea(
         child: Column(
           children: [
-            // 免责提示常驻（NFR-9 / UX-DR14：克制、双语、显著位）。
+            // 免责提示常驻（NFR-9 / UX-DR14：克制、双语、显著位）。PetGo Prototype 金色条。
             Container(
               key: const ValueKey('consultDisclaimerBanner'),
               width: double.infinity,
-              padding: const EdgeInsets.all(AppSpacing.md),
-              color: AppColors.triageYellowSurface,
-              child: Text(l10n.consultDisclaimer, style: AppTypography.caption),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              color: AppColors.goldTint,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('ℹ️', style: TextStyle(fontSize: 14)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      l10n.consultDisclaimer,
+                      style: const TextStyle(
+                          fontSize: 11.5, height: 1.4, color: Color(0xFF8A6A12)),
+                    ),
+                  ),
+                ],
+              ),
             ),
             // 封禁中断（Story 5.7）：转只读终态 + 软引导重新发起（复用 5.3 发起入口）。
             if (interrupted)

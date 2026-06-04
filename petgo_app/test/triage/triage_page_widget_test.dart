@@ -20,11 +20,15 @@ Future<void> _pump(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('AC1: 双入口卡平级 + 均显「免费」', (tester) async {
+  testWidgets('AC1: 双入口卡平级（AI 分诊 + 兽医咨询，PetGo Prototype 换肤）', (tester) async {
     await _pump(tester);
     expect(find.byKey(const ValueKey('triageEntryAI')), findsOneWidget);
     expect(find.byKey(const ValueKey('triageEntryVet')), findsOneWidget);
-    expect(find.text('Free'), findsNWidgets(2)); // 两卡均免费
+    // 双入口标题 + CTA（换肤后印尼语文案）。
+    expect(find.text('Tanya AI (Triase)'), findsOneWidget);
+    expect(find.text('Chat Dokter Hewan'), findsOneWidget);
+    expect(find.text('Mulai triase'), findsOneWidget);
+    expect(find.text('Mulai konsultasi'), findsOneWidget);
   });
 
   testWidgets('AC1/FR-0C: 游客点兽医咨询入口触发强登录引导（Story 5.8 接入 5.3 发起）', (tester) async {
