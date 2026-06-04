@@ -61,11 +61,11 @@ class _ShareFabState extends State<ShareFab> with SingleTickerProviderStateMixin
               Transform.scale(
                 scale: ringScale,
                 child: Container(
-                  width: 56,
-                  height: 56,
+                  width: 60,
+                  height: 60,
                   decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.accentGrowth.withValues(alpha: ringOpacity),
+                    borderRadius: BorderRadius.circular(22),
+                    color: AppColors.mint.withValues(alpha: ringOpacity),
                   ),
                 ),
               ),
@@ -78,10 +78,12 @@ class _ShareFabState extends State<ShareFab> with SingleTickerProviderStateMixin
         label: widget.semanticLabel,
         child: FloatingActionButton(
           key: const ValueKey('shareFab'),
-          backgroundColor: AppColors.accentGrowth,
+          backgroundColor: AppColors.mint,
           foregroundColor: AppColors.onAccent,
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
           onPressed: widget.onPressed,
-          child: const Icon(Icons.share),
+          child: const Icon(Icons.ios_share_rounded),
         ),
       ),
     );

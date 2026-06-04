@@ -29,7 +29,6 @@ class GrowthArchivePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
     final auth = ref.watch(authControllerProvider);
     final petStatus = auth.profile?.petStatus;
 
@@ -41,8 +40,7 @@ class GrowthArchivePage extends ConsumerWidget {
     // 状态 A（或未知）：据是否有档案分支。
     final profileAsync = ref.watch(petProfileProvider);
     return Scaffold(
-      backgroundColor: AppColors.base,
-      appBar: AppBar(title: Text(l10n.tabProfile), backgroundColor: AppColors.base),
+      backgroundColor: AppColors.cream,
       // 分享名片 FAB（Story 2.7）：仅 A + 有档案 + 有 cardToken 渲染；动效首访一次。
       floatingActionButton: _shareFab(context, ref, profileAsync.asData?.value),
       body: profileAsync.when(
@@ -146,11 +144,23 @@ class _ArchiveBody extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final timelineAsync = ref.watch(timelineFirstPageProvider);
     return RefreshIndicator(
+      color: AppColors.mint,
       onRefresh: () async => ref.invalidate(timelineFirstPageProvider),
       child: ListView(
-        padding: const EdgeInsets.all(AppSpacing.lg),
+        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 54, AppSpacing.lg, AppSpacing.section),
         children: [
           child,
+          const SizedBox(height: 18),
+          // 时间线区头（PetGo Prototype）。
+          Row(
+            children: const [
+              Icon(Icons.calendar_today_outlined, size: 19, color: AppColors.mint700),
+              SizedBox(width: 8),
+              Text('Linimasa Tumbuh Kembang',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+            ],
+          ),
+          const SizedBox(height: 14),
           timelineAsync.when(
             loading: () => const Padding(
               padding: EdgeInsets.all(AppSpacing.xl),

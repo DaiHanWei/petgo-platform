@@ -4,13 +4,15 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/media/media_scope.dart';
 import '../../../core/theme/colors.dart';
-import '../../../core/theme/spacing.dart';
+import '../../../core/theme/shadows.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../media/domain/media_upload_use_case.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../profile/domain/pet_profile.dart';
 import '../../../shared/utils/media_permission.dart';
+import '../../../shared/widgets/design/btn3d.dart';
+import '../../../shared/widgets/design/emoji_avatar.dart';
 import '../../me/data/my_posts_repository.dart';
 import '../data/content_repository.dart';
 import '../domain/content_type.dart';
@@ -31,8 +33,8 @@ final publishControllerProvider = Provider.autoDispose<PublishController>((ref) 
   return controller;
 });
 
-/// 统一发布 Compose 全屏 bottom sheet（Story 2.3 · UX-DR16）。
-/// 单页内含类型 Segment → 图片区 → 文字区 → 发布按钮，无独立页面跳转。
+/// 统一发布 Compose 全屏 bottom sheet（Story 2.3 · PetGo Prototype 换肤）。
+/// 类型标签（Cerita / Momen / Edukasi）→ 作者+关联宠物 → 文字 → 图片 → 发布。
 class PublishComposePage extends ConsumerStatefulWidget {
   const PublishComposePage({super.key});
 
@@ -42,7 +44,10 @@ class PublishComposePage extends ConsumerStatefulWidget {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: AppColors.base,
+      backgroundColor: AppColors.cream,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
       builder: (_) => const FractionallySizedBox(
         heightFactor: 0.95,
         child: PublishComposePage(),
@@ -100,7 +105,6 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     final id = await controller.publish(idempotencyKey: key, petId: petId);
     if (!mounted) return;
     if (id != null) {
-      // 发布成功 → 刷新 Feed 与「我的发布」,使新帖立即回显(无需手动下拉)。
       ref.invalidate(feedProvider);
       ref.invalidate(myPostsProvider);
       Navigator.of(context).pop();
@@ -116,7 +120,6 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   }
 
   void _onGrowthBlocked(AppLocalizations l10n) {
-    // B/C 或无档案：悬浮提示 + 跳创建入口。
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
       ..showSnackBar(SnackBar(
@@ -142,150 +145,267 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   }
 
   Widget _body(BuildContext context, AppLocalizations l10n, PublishController controller) {
-    return Padding(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
+    final growthSelected = controller.type == ContentType.growthMoment;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // —— 顶部：把手 + Batal / 标题 / Bagikan ——
+        Container(
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
+          child: Column(
             children: [
-              Text(l10n.publishComposeTitle, style: Theme.of(context).textTheme.titleLarge),
-              const Spacer(),
-              IconButton(
-                key: const ValueKey('publishClose'),
-                icon: const Icon(Icons.close),
-                onPressed: () => Navigator.of(context).pop(),
+              Container(
+                width: 40,
+                height: 5,
+                margin: const EdgeInsets.only(bottom: 14),
+                decoration:
+                    BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(3)),
+              ),
+              Row(
+                children: [
+                  TextButton(
+                    key: const ValueKey('publishClose'),
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(48, 36)),
+                    child: const Text('Batal',
+                        style: TextStyle(
+                            color: AppColors.muted, fontSize: 15, fontWeight: FontWeight.w700)),
+                  ),
+                  const Expanded(
+                    child: Text('Buat Postingan',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                  ),
+                  Btn3d(
+                    key: const ValueKey('publishSubmit'),
+                    onPressed: controller.canPublish ? () => _publish(controller, l10n) : null,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    fontSize: 14,
+                    borderRadius: 12,
+                    child: controller.publishing
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Text('Bagikan'),
+                  ),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.sm),
-          _segments(controller, l10n),
-          if (controller.type == ContentType.growthMoment && _linkedPet != null) ...[
-            const SizedBox(height: AppSpacing.sm),
-            _linkedPetPill(l10n),
-          ],
-          const SizedBox(height: AppSpacing.md),
-          Expanded(
-            child: ListView(
-              children: [
-                _imageRow(controller),
-                const SizedBox(height: AppSpacing.md),
-                TextField(
-                  key: const ValueKey('publishText'),
-                  controller: _textController,
-                  maxLines: 6,
-                  maxLength: kMaxPostTextLength,
-                  onChanged: controller.setText,
-                  decoration: InputDecoration(
-                    hintText: l10n.publishTextHint,
-                    border: const OutlineInputBorder(),
-                    counterText: l10n.publishRemainingChars(controller.remainingChars),
+        ),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 36),
+            children: [
+              _segments(controller, l10n),
+              const SizedBox(height: 16),
+              _authorRow(controller),
+              if (growthSelected && _linkedPet == null) ...[
+                const SizedBox(height: 12),
+                _growthNotice(),
+              ],
+              const SizedBox(height: 12),
+              // —— 文字 ——
+              TextField(
+                key: const ValueKey('publishText'),
+                controller: _textController,
+                maxLines: 5,
+                maxLength: kMaxPostTextLength,
+                onChanged: controller.setText,
+                style: const TextStyle(fontSize: 15.5, color: AppColors.ink, height: 1.5),
+                decoration: InputDecoration(
+                  hintText: _hint(controller),
+                  hintStyle: const TextStyle(color: AppColors.muted, fontSize: 15.5),
+                  filled: true,
+                  fillColor: AppColors.card,
+                  contentPadding: const EdgeInsets.all(15),
+                  counterText: l10n.publishRemainingChars(controller.remainingChars),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
                   ),
                 ),
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  l10n.publishPublicNotice,
-                  style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
+              ),
+              const SizedBox(height: 12),
+              _imageRow(controller),
+              const SizedBox(height: 14),
+              Row(children: const [
+                _SmallChip(icon: Icons.place_outlined, label: 'Lokasi'),
+                SizedBox(width: 10),
+                _SmallChip(icon: Icons.photo_camera_outlined, label: 'Kamera'),
+              ]),
+              if (controller.hasFailed) ...[
+                const SizedBox(height: 12),
+                TextButton.icon(
+                  key: const ValueKey('publishRetry'),
+                  icon: const Icon(Icons.refresh, color: AppColors.mint700),
+                  label: Text(l10n.publishRetry, style: const TextStyle(color: AppColors.mint700)),
+                  onPressed: () => controller.retryFailed(),
                 ),
+              ],
+              const SizedBox(height: 8),
+              Text(l10n.publishPublicNotice,
+                  style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _hint(PublishController c) {
+    switch (c.type) {
+      case ContentType.growthMoment:
+        return 'Tulis satu kalimat manis tentang anabul...';
+      case ContentType.knowledge:
+        return 'Bagikan tips merawat anabul...';
+      default:
+        return 'Apa yang terjadi hari ini?';
+    }
+  }
+
+  /// 类型标签：三个 emoji 立体 tab（日常 / 快乐时刻 / 科普）。
+  Widget _segments(PublishController controller, AppLocalizations l10n) {
+    return Row(
+      children: [
+        Expanded(
+            child: _segTab('💬', l10n.publishSegmentDaily, ContentType.daily, controller,
+                'seg_${ContentType.daily.wire}')),
+        const SizedBox(width: 8),
+        Expanded(child: _growthTab(l10n, controller)),
+        const SizedBox(width: 8),
+        Expanded(
+            child: _segTab('📖', l10n.publishSegmentKnowledge, ContentType.knowledge, controller,
+                'seg_${ContentType.knowledge.wire}')),
+      ],
+    );
+  }
+
+  Widget _segTab(String emoji, String label, ContentType type, PublishController controller,
+      String key) {
+    final on = controller.type == type;
+    return _TabButton(
+      keyValue: key,
+      emoji: emoji,
+      label: label,
+      selected: on,
+      enabled: true,
+      onTap: () => controller.setType(type),
+    );
+  }
+
+  Widget _growthTab(AppLocalizations l10n, PublishController controller) {
+    final enabled = _hasPetProfile;
+    final on = controller.type == ContentType.growthMoment;
+    return _TabButton(
+      keyValue: 'seg_GROWTH_MOMENT',
+      emoji: '🌈',
+      label: l10n.publishSegmentGrowth,
+      selected: on,
+      enabled: enabled,
+      onTap: enabled
+          ? () {
+              controller.setType(ContentType.growthMoment);
+              _ensurePetLoaded();
+            }
+          : () => _onGrowthBlocked(l10n),
+    );
+  }
+
+  /// 作者头像 + 名字 + 关联宠物胶囊。
+  Widget _authorRow(PublishController controller) {
+    final growth = controller.type == ContentType.growthMoment;
+    final linked = growth && _linkedPet != null;
+    final petName = _linkedPet?.name ?? 'anabul';
+    return Row(
+      children: [
+        const EmojiAvatar(emoji: '🧑', size: 38, tone: AppColors.cream2),
+        const SizedBox(width: 10),
+        const Text('Aurel', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+        const Spacer(),
+        if (growth)
+          Container(
+            padding: const EdgeInsets.fromLTRB(6, 6, 10, 6),
+            decoration: BoxDecoration(
+              color: linked ? AppColors.mintTint : AppColors.card,
+              borderRadius: BorderRadius.circular(999),
+              boxShadow: AppShadows.sm,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.pets_rounded,
+                    size: 16, color: linked ? AppColors.mint : AppColors.muted),
+                const SizedBox(width: 6),
+                Text(linked ? petName : 'Tag anabul',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: linked ? AppColors.mint700 : AppColors.muted)),
               ],
             ),
           ),
-          if (controller.hasFailed)
-            TextButton.icon(
-              key: const ValueKey('publishRetry'),
-              icon: const Icon(Icons.refresh),
-              label: Text(l10n.publishRetry),
-              onPressed: () => controller.retryFailed(),
-            ),
-          FilledButton(
-            key: const ValueKey('publishSubmit'),
-            onPressed: controller.canPublish ? () => _publish(controller, l10n) : null,
-            child: controller.publishing
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : Text(l10n.publishButton),
+      ],
+    );
+  }
+
+  Widget _growthNotice() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration:
+          BoxDecoration(color: AppColors.goldTint, borderRadius: BorderRadius.circular(12)),
+      child: const Row(
+        children: [
+          Text('⚠️'),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text('Momen Bahagia wajib di-tag ke anabul agar masuk ke Paspor.',
+                style: TextStyle(fontSize: 12.5, color: Color(0xFF8A6A12), fontWeight: FontWeight.w600)),
           ),
         ],
       ),
     );
   }
 
-  /// 「关联到 {宠物名}」胶囊（设计稿 S08 Tautkan）：成长日历选中后展示绑定的宠物档案。
-  Widget _linkedPetPill(AppLocalizations l10n) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
-        decoration: BoxDecoration(
-          color: AppColors.accentGrowth.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+  Widget _imageRow(PublishController controller) {
+    if (controller.items.isEmpty) {
+      return Btn3d(
+        key: const ValueKey('publishAddImage'),
+        variant: Btn3dVariant.soft,
+        expand: true,
+        onPressed: () => _addImage(controller),
+        padding: const EdgeInsets.all(16),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.pets_rounded, size: 14, color: AppColors.accentGrowth),
-            const SizedBox(width: 4),
-            Text(
-              l10n.publishLinkedToPet(_linkedPet!.name),
-              style: const TextStyle(color: AppColors.accentGrowth, fontSize: 12),
-            ),
+            Icon(Icons.image_outlined, size: 20, color: AppColors.mint700),
+            SizedBox(width: 8),
+            Text('Tambah foto / video', style: TextStyle(fontSize: 14.5)),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _segments(PublishController controller, AppLocalizations l10n) {
-    final growthEnabled = _hasPetProfile;
-    return Wrap(
-      spacing: AppSpacing.sm,
-      children: [
-        _chip(l10n.publishSegmentDaily, ContentType.daily, controller),
-        _growthChip(l10n, controller, growthEnabled),
-        _chip(l10n.publishSegmentKnowledge, ContentType.knowledge, controller),
-      ],
-    );
-  }
-
-  Widget _chip(String label, ContentType type, PublishController controller) {
-    return ChoiceChip(
-      key: ValueKey('seg_${type.wire}'),
-      label: Text(label),
-      selected: controller.type == type,
-      onSelected: (_) => controller.setType(type),
-    );
-  }
-
-  Widget _growthChip(AppLocalizations l10n, PublishController controller, bool enabled) {
-    return ChoiceChip(
-      key: const ValueKey('seg_GROWTH_MOMENT'),
-      label: Text(l10n.publishSegmentGrowth),
-      selected: controller.type == ContentType.growthMoment,
-      // B/C 或无档案：灰置不可选；点击 → 悬浮提示 + 跳创建。
-      onSelected: enabled
-          ? (_) {
-              controller.setType(ContentType.growthMoment);
-              _ensurePetLoaded(); // 预取宠物，供「关联到 {name}」胶囊 + 发布带 pet_id
-            }
-          : (_) => _onGrowthBlocked(l10n),
-      disabledColor: AppColors.surface,
-      labelStyle: enabled ? null : TextStyle(color: AppColors.textTertiary),
-    );
-  }
-
-  Widget _imageRow(PublishController controller) {
+      );
+    }
     return SizedBox(
-      height: 72,
+      height: 88,
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: [
           for (int i = 0; i < controller.items.length; i++) _thumb(controller, i),
           if (controller.items.length < kMaxImages)
-            Padding(
-              padding: const EdgeInsets.only(right: AppSpacing.sm),
-              child: OutlinedButton(
-                key: const ValueKey('publishAddImage'),
-                onPressed: () => _addImage(controller),
-                child: const Icon(Icons.add_a_photo_outlined),
+            GestureDetector(
+              key: const ValueKey('publishAddImage'),
+              onTap: () => _addImage(controller),
+              child: Container(
+                width: 80,
+                height: 80,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.card,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: AppShadows.sm,
+                ),
+                child: const Icon(Icons.add_a_photo_outlined, color: AppColors.mint700),
               ),
             ),
         ],
@@ -296,27 +416,114 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   Widget _thumb(PublishController controller, int index) {
     final item = controller.items[index];
     return Padding(
-      padding: const EdgeInsets.only(right: AppSpacing.sm),
+      padding: const EdgeInsets.only(right: 10),
       child: Stack(
         children: [
-          Container(
-            width: 64,
-            height: 64,
-            color: AppColors.surface,
-            child: Image.memory(item.bytes, fit: BoxFit.cover),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Image.memory(item.bytes, width: 80, height: 80, fit: BoxFit.cover),
           ),
           if (item.status == ImageUploadStatus.uploading)
-            const Positioned.fill(child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
+            const Positioned.fill(
+                child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
           if (item.status == ImageUploadStatus.failed)
-            const Positioned(right: 0, top: 0, child: Icon(Icons.error, color: Colors.red, size: 18)),
+            const Positioned(right: 4, top: 4, child: Icon(Icons.error, color: Colors.red, size: 18)),
           Positioned(
-            right: 0,
-            bottom: 0,
+            right: 2,
+            top: 2,
             child: GestureDetector(
               onTap: () => controller.removeImage(index),
-              child: const Icon(Icons.cancel, size: 18, color: AppColors.textTertiary),
+              child: Container(
+                decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                child: const Icon(Icons.close, size: 16, color: Colors.white),
+              ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 类型标签按钮（emoji + 文字，选中=薄荷立体，灰置=暗淡）。
+class _TabButton extends StatelessWidget {
+  const _TabButton({
+    required this.keyValue,
+    required this.emoji,
+    required this.label,
+    required this.selected,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final String keyValue;
+  final String emoji;
+  final String label;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: enabled ? 1 : 0.5,
+      child: GestureDetector(
+        key: ValueKey(keyValue),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.mint : AppColors.card,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                  color: selected ? AppColors.mint600 : AppColors.line,
+                  offset: const Offset(0, 3),
+                  blurRadius: 0),
+            ],
+          ),
+          child: Column(
+            children: [
+              Text(emoji, style: const TextStyle(fontSize: 18)),
+              const SizedBox(height: 4),
+              Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                      color: selected ? Colors.white : AppColors.ink2)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SmallChip extends StatelessWidget {
+  const _SmallChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: AppShadows.sm,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: AppColors.muted),
+          const SizedBox(width: 6),
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink2)),
         ],
       ),
     );

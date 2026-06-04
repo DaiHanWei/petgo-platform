@@ -1,14 +1,71 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/colors.dart';
-import '../../../../core/theme/spacing.dart';
+import '../../../../core/theme/shadows.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../../shared/widgets/design/striped_photo.dart';
 import '../../domain/timeline_item.dart';
 
 String _dateLabel(DateTime d) =>
     '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-/// 快乐时刻条目：日期 + 照片 + 文字（Story 2.4）。
+/// 时间线行：左侧标记点（emoji 圆）+ 右侧卡片（PetGo Prototype 换肤）。
+class _TimelineRow extends StatelessWidget {
+  const _TimelineRow({
+    required this.markerEmoji,
+    required this.markerBg,
+    required this.card,
+    super.key,
+  });
+
+  final String markerEmoji;
+  final Color markerBg;
+  final Widget card;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: markerBg,
+              shape: BoxShape.circle,
+              boxShadow: const [BoxShadow(color: AppColors.cream, blurRadius: 0, spreadRadius: 3)],
+            ),
+            child: Text(markerEmoji, style: const TextStyle(fontSize: 16)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(child: card),
+        ],
+      ),
+    );
+  }
+}
+
+Widget _cardShell({required Widget child}) => Container(
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: AppShadows.md,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: child,
+    );
+
+Widget _badge(String label, Color color, Color bg) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
+      child: Text(label,
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
+    );
+
+/// 快乐时刻条目：标记 🌈 + 卡片（照片 + 日期 + 徽章 + 文字）。
 class HappyMomentTile extends StatelessWidget {
   const HappyMomentTile({super.key, required this.item});
 
@@ -16,37 +73,43 @@ class HappyMomentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return _TimelineRow(
       key: const ValueKey('happyMomentTile'),
-      margin: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
+      markerEmoji: '🌈',
+      markerBg: AppColors.goldTint,
+      card: _cardShell(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(_dateLabel(item.date), style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
-            if (item.imageUrls.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.sm),
-              SizedBox(
-                height: 80,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    for (final url in item.imageUrls)
-                      Padding(
-                        padding: const EdgeInsets.only(right: AppSpacing.xs),
-                        child: Image.network(url, width: 80, height: 80, fit: BoxFit.cover,
-                            errorBuilder: (context, error, stack) =>
-                                Container(width: 80, height: 80, color: AppColors.surface)),
-                      ),
+            if (item.imageUrls.isNotEmpty)
+              Image.network(item.imageUrls.first,
+                  height: 150,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stack) =>
+                      const StripedPhoto(label: 'foto', height: 150, radius: 0)),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 11, 14, 13),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(_dateLabel(item.date),
+                          style: const TextStyle(
+                              fontSize: 11.5, color: AppColors.muted, fontWeight: FontWeight.w700)),
+                      const SizedBox(width: 8),
+                      _badge('Momen Bahagia', const Color(0xFFA9821E), AppColors.goldTint),
+                    ],
+                  ),
+                  if (item.text != null && item.text!.isNotEmpty) ...[
+                    const SizedBox(height: 5),
+                    Text(item.text!,
+                        style: const TextStyle(fontSize: 14, color: AppColors.ink2, height: 1.5)),
                   ],
-                ),
+                ],
               ),
-            ],
-            if (item.text != null && item.text!.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.sm),
-              Text(item.text!),
-            ],
+            ),
           ],
         ),
       ),
@@ -54,7 +117,7 @@ class HappyMomentTile extends StatelessWidget {
   }
 }
 
-/// 健康事件条目：日期 + 🏥问诊记录标签 + AI 评级 + 症状摘要（Story 2.4 渲染样式，数据 2.5 承接）。
+/// 健康事件条目：标记 🩺 + 卡片（日期 + 级别徽章 + 摘要）。
 class HealthEventTile extends StatelessWidget {
   const HealthEventTile({super.key, required this.item});
 
@@ -63,30 +126,36 @@ class HealthEventTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Card(
+    return _TimelineRow(
       key: const ValueKey('healthEventTile'),
-      margin: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(_dateLabel(item.date), style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
-            const SizedBox(height: AppSpacing.xs),
-            Row(
-              children: [
-                Text(l10n.healthEventLabel, style: const TextStyle(fontWeight: FontWeight.w600)),
-                if (item.aiLevel != null) ...[
-                  const SizedBox(width: AppSpacing.sm),
-                  _LevelChip(level: item.aiLevel!),
+      markerEmoji: '🩺',
+      markerBg: AppColors.skyTint,
+      card: _cardShell(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 11, 14, 13),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(_dateLabel(item.date),
+                      style: const TextStyle(
+                          fontSize: 11.5, color: AppColors.muted, fontWeight: FontWeight.w700)),
+                  const SizedBox(width: 8),
+                  _badge(l10n.healthEventLabel, AppColors.sky, AppColors.skyTint),
+                  if (item.aiLevel != null) ...[
+                    const SizedBox(width: 6),
+                    _LevelChip(level: item.aiLevel!),
+                  ],
                 ],
+              ),
+              if (item.symptomSummary != null && item.symptomSummary!.isNotEmpty) ...[
+                const SizedBox(height: 5),
+                Text(item.symptomSummary!,
+                    style: const TextStyle(fontSize: 14, color: AppColors.ink2, height: 1.5)),
               ],
-            ),
-            if (item.symptomSummary != null && item.symptomSummary!.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.xs),
-              Text(item.symptomSummary!),
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -100,16 +169,12 @@ class _LevelChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = switch (level) {
-      'RED' => Colors.red,
-      'YELLOW' => Colors.orange,
-      'GREEN' => Colors.green,
-      _ => AppColors.textTertiary,
+    final (Color color, Color bg) = switch (level) {
+      'RED' => (AppColors.triageRed, Color(0x22C97A7A)),
+      'YELLOW' => (AppColors.triageYellow, Color(0x22E0A458)),
+      'GREEN' => (AppColors.triageGreen, Color(0x227FB069)),
+      _ => (AppColors.muted, AppColors.cream2),
     };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 2),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
-      child: Text(level, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
-    );
+    return _badge(level, color, bg);
   }
 }
