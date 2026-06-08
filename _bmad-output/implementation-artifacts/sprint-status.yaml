@@ -50,9 +50,17 @@
 # - 跨 story 决策清单见 implementation-artifacts/CROSS-STORY-DECISIONS.md
 
 generated: 2026-06-01
-last_updated: 2026-06-02
+last_updated: 2026-06-08
 project: petgo-platform
 # epic-1 -> in-progress (首个 story 1.1 已 contexted)
+#
+# ===== 2026-06-08 correct-course 修订 (incoming PRD V1.0.0, 已批准) =====
+# 见 planning-artifacts/sprint-change-proposal-2026-06-08.md + CROSS-STORY-DECISIONS F1-F7。
+# - 15 个现有 story 需并入 PRD V1.0.0 修订 (下方各行 [PRD1.0.0✏️] 标注)。
+#   其中 review 态需"回改已实现代码"的 6 个 (4-5/5-5/6-1/6-4/6-6/7-1) 已退回 ready-for-dev。
+#   ready-for-dev 态 (Epic1/2) 仅改 AC 文档,状态不变。
+# - 新增: 6-7 定时类系统推送; epic-8 里程碑系统 mini-epic (FR-42, 分层纳入 F2)。
+# - 命名 TBD: PetGo->[App Name] 定名后单独收口轮,不阻塞。
 project_key: NOKEY
 tracking_system: file-system
 story_location: "{project-root}/_bmad-output/implementation-artifacts"
@@ -62,23 +70,23 @@ development_status:
   epic-1: in-progress
   1-1-双产物脚手架与本地可运行骨架: review
   1-2-设计-token-系统-tab-bar-外壳与-i18n-脚手架: ready-for-dev
-  1-3-google-登录与-jwt-签发: ready-for-dev
+  1-3-google-登录与-jwt-签发: ready-for-dev          # [PRD1.0.0✏️] 加多 IdP 架构预留注记 (为 1.1.0 Apple,非本版 AC)
   1-4-登录引导浮层与登录后回跳: ready-for-dev
   1-5-游客只读进入与受控入口登录门控: ready-for-dev
-  1-6-新用户引导-昵称确认与宠物状态选择: ready-for-dev
-  1-7-状态-a-档案创建引导与首页提示条: ready-for-dev
+  1-6-新用户引导-昵称确认与宠物状态选择: ready-for-dev  # [PRD1.0.0✏️] 改 AC3: B/C→A 复用 FR-0G 建档引导
+  1-7-状态-a-档案创建引导与首页提示条: ready-for-dev    # [PRD1.0.0✏️] 复核 AC2: 运行期 B→A 提示条语义转正
   epic-1-retrospective: optional
 
   # ===== Epic 2: 成长档案与宠物名片分享 =====
   epic-2: in-progress
   2-1-媒体基建-oss-双桶-sts-直传-签名-url-与-exif-剥离: ready-for-dev
-  2-2-宠物档案创建-单账号单宠物: ready-for-dev
+  2-2-宠物档案创建-单账号单宠物: ready-for-dev          # [PRD1.0.0✏️] 改 AC1: 加 pet_type 必选枚举+创建后不可改 (F6,Flyway 加列)
   2-3-统一-发布入口与内容发布: ready-for-dev
-  2-4-成长档案-tab-时间线与状态快捷编辑: ready-for-dev
-  2-5-问诊记录存档承接与健康事件时间线: ready-for-dev
-  2-6-宠物名片-h5-对外分享页: ready-for-dev
+  2-4-成长档案-tab-时间线与状态快捷编辑: ready-for-dev   # [PRD1.0.0✏️] 加 AC: 双视图日历(FR-37)+档案统计栏+里程碑入口+第一条🌟标记
+  2-5-问诊记录存档承接与健康事件时间线: ready-for-dev    # [PRD1.0.0✏️] 改 AC1+加 AC: 存档弹窗三态+先建档→回灌存档延迟串接
+  2-6-宠物名片-h5-对外分享页: ready-for-dev             # [PRD1.0.0✏️] 大改: 单照片流→6 区块(里程碑区块走零态降级,F2)
   2-7-档案页动效分享-fab: ready-for-dev
-  2-8-宠物档案编辑: ready-for-dev
+  2-8-宠物档案编辑: ready-for-dev                       # [PRD1.0.0✏️] 改 AC: 编辑页硬禁修改 pet_type (F6)
   epic-2-retrospective: optional
 
   # ===== Epic 3: 社区 Feed 与内容互动 =====
@@ -97,9 +105,9 @@ development_status:
   epic-4: in-progress
   4-1-分诊异步基建与-gemini-接入: review
   4-2-确定性安全规则层-高危强制升红: review
-  4-3-ai-问诊入口与图文上传: review
+  4-3-ai-问诊入口与图文上传: review                    # [PRD1.0.0✏️] AC2 注脚轻改: 视频 V2→收费模式启用后 (F4,无功能改动)
   4-4-分诊结果三态展示-绿-黄含条件倒计时协议: review
-  4-5-红色半屏强提醒: review
+  4-5-红色半屏强提醒: ready-for-dev                      # [PRD1.0.0✏️⚠️安全] 退回重做: 删地图导航深链→「我已知晓」(F3,原 review 实现需回退)
   epic-4-retrospective: optional
 
   # ===== Epic 5: 在线兽医咨询与兽医工作台 =====
@@ -108,7 +116,7 @@ development_status:
   5-2-兽医工作台框架与在线状态管理: review
   5-3-兽医咨询发起-排队与超时: review
   5-4-ai-升级至兽医的上下文传递: review
-  5-5-腾讯-im-会话与图文对话界面: review
+  5-5-腾讯-im-会话与图文对话界面: ready-for-dev          # [PRD1.0.0✏️] 退回: 删视频聊天能力 AC2/F2/J2 (F4,仅文字/图片)
   5-6-会话结束机制与用户评分门: review
   5-7-兽医封禁与进行中会话中断处理: review
   5-8-问诊-tab-结构与问诊历史整合: review
@@ -116,18 +124,32 @@ development_status:
 
   # ===== Epic 6: 推送通知、深链与通知中心 =====
   epic-6: in-progress
-  6-1-推送基建与深链路由表: review
+  6-1-推送基建与深链路由表: ready-for-dev               # [PRD1.0.0✏️] 退回: NotificationType 加 3 枚举+pushPayloadToLocation 加 3 路由+2 目标 (F2/F5)
   6-2-兽医回复与兽医端新请求推送: review
   6-3-内容互动推送: review
-  6-4-推送权限申请时机与拒绝处理: review
+  6-4-推送权限申请时机与拒绝处理: ready-for-dev          # [PRD1.0.0✏️] 退回: AC1 单时机→双时机 (F7)
   6-5-app-版本更新提醒: review
-  6-6-全局通知中心-铃铛: review
+  6-6-全局通知中心-铃铛: ready-for-dev                  # [PRD1.0.0✏️] 退回: AC2 铃铛列表 4→6(~7) 类(加生日/纪念日/里程碑节点)
+  6-7-定时类系统推送-生日-纪念日-里程碑节点: ready-for-dev # [新增,文件已建] @Scheduled+@Async+DB去重 (F5),依赖 6-1 枚举/路由就绪; 覆盖 FR-40/41/42(仅L级节点推送)
   epic-6-retrospective: optional
 
   # ===== Epic 7: 个人中心、双语与账号注销 =====
   epic-7: in-progress
-  7-1-我的-页面与用户信息编辑: review
-  7-2-语言设置与双语文案收口: review
-  7-3-退出登录与账号注销级联删除: review
-  7-4-全局无障碍验收: review
+  7-1-我的-页面与用户信息编辑: ready-for-dev            # [PRD1.0.0✏️] 退回: 信息架构重构(顶栏图标+设置页二级+宠物卡片/引导卡, 人60宠40)
+  7-2-语言设置与双语文案收口: review                    # [PRD1.0.0✏️] AC2 入口路径层级+1(→设置页), 依赖 7-1 新设置页
+  7-3-退出登录与账号注销级联删除: review                # 不动 (F1: 不据 incoming 尾部回退合规实现)
+  7-4-全局无障碍验收: review                            # 不动 (7-1 新增页由 7-4 横切审计自然覆盖)
   epic-7-retrospective: optional
+
+  # ===== Epic 8: 宠物里程碑系统 (mini-epic, FR-42 分层纳入 F2) =====
+  # 排期 1.0.x / 1.1.0 待定 (产品 6/8 拍板: 本体拆出, 2-6 名片走零态降级不硬依赖)。
+  # 范围: 猫30/狗30/通用15 清单 + S/M/L 三级 + 打卡 + 三级庆祝动效 + 列表页 + 徽章 +
+  #       L级分享卡 + 自动完成事件订阅(订阅既有领域事件,无新中间件)。新表 pet_milestones/milestone_completions。
+  # 待 bmad-create-epics-and-stories 拆解为具体 story; 此处先登记 epic 占位。
+  epic-8-里程碑系统: backlog
+
+  # ===== Backlog 登记 (非 V1.0.0, 不实现) =====
+  # 1.1.0: Apple 登录 (iOS App Store 要求, 靠 1-3 多 IdP 预留); 支付基建 (GoPay/OVO)。
+  # 1.5.0: 攒局 Gabung Gath (发起/海报/报名/临时群聊; GPS 签到再拆后延)。
+  # 其余 §6.2 排期表 (兽医预约1.2.0 / 健康记录1.3.0 / 多宠物1.3.0 / 内容编辑1.4.0 /
+  #   推送分类开关1.4.0 / 公开主页1.6.0 / 搜索1.6.0 / 视频AI问诊1.8.0 ...) 见新 PRD §6.2。

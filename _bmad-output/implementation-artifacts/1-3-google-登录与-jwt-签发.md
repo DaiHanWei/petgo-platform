@@ -161,6 +161,8 @@ so that **我无需记密码即可获得身份并使用核心功能**。
 ### 范围边界（防 scope creep —— 本 Story 明确不做）
 
 - ❌ 不做兽医账密登录（FR-29，Epic 5）——但 `role` 枚举/映射结构预留 VET/ADMIN。
+- ❌ **不实现 Apple 登录**（排期至 1.1.0）——本版只实现 Google；但**身份字段与 token verifier 抽象按多 IdP 可扩展设计**，避免 1.1.0 接 Apple 时 Flyway 改表/接口返工。
+  > 🔄 **PRD V1.0.0 修订（排期：Apple 登录 V2→1.1.0）：** `users` 表预留多 IdP 身份模型（建议 `provider varchar`（如 `GOOGLE`/`APPLE`）+ `provider_sub varchar`，或在现有 `google_sub` 之外预留 `apple_sub varchar NULL`），使首次登录建号、唯一约束、`*TokenVerifier` 校验链按「按 provider 分发」可扩展。`GoogleTokenVerifier` 抽象为通用 `IdentityTokenVerifier`（或保留接口位）便于 1.1.0 平行接入 `AppleTokenVerifier`。**本版只落 Google 实现**，不写 Apple 校验/UI；预留仅为避免改表返工，不扩大本版范围。
 - ❌ 不实现昵称确认页 / 宠物状态选择页（Story 1.6）——本 Story 只产出 `isNewUser`/`onboardingCompleted` 分流信号 + `users.pet_status` 可空字段 + 引导占位路由。
 - ❌ 不实现软浮层 / 强弹窗登录引导组件（Story 1.4）——本 Story 仅最小 `LoginPage` 自测入口。
 - ❌ 不做游客态受控 Tab 门控（Story 1.5）——本 Story 拦截器失败仅「落游客态」，弹引导是 1.5。
@@ -193,6 +195,8 @@ so that **我无需记密码即可获得身份并使用核心功能**。
 - [Source: epics.md#Epic 1] — auth 是其余一切前置；1.3 含 L2（真实 Google）。
 - [Memory: v1-architecture-posture] — 禁 MQ/通用缓存；Redis 仅 auth 限流/幂等等收窄用途。
 - [Memory: spec-page-state-completeness] — 覆盖授权取消/校验失败/refresh 失效/限流多态。
+- [架构预留] 多 IdP 可扩展身份模型（Google 本版 / Apple 1.1.0）——见「范围边界」末条。
+  > 🔄 **PRD V1.0.0 修订（排期：Apple 登录 V2→1.1.0）：** 本版只实现 Google；`users` 身份字段 + token verifier 抽象按多 IdP（`provider`+`provider_sub` 或预留 `apple_sub`）设计，避免 1.1.0 接 Apple 时 Flyway 改表返工。
 
 ## Dev Agent Record
 

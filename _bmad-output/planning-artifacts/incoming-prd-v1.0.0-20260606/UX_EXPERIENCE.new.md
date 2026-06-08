@@ -1,17 +1,15 @@
 ---
-title: "PetGo V1.0 Experience Design"
+title: "[App Name] V1.0 Experience Design"
 status: draft
 created: 2026-05-29
-updated: 2026-06-01
+updated: 2026-05-29
 platform: iOS · Android
 sources:
-  - V1版本20260601/V1-0-0PRD20260601.md
-  - V1版本20260601/PetGo_V1_全屏效果图.html
+  - PRD汇总/V1.0PRD20260529
+  - PRD汇总/讨论记录文件
 ---
 
-> ⚠️ **品牌色板已过期（焦糖色，换肤前）。** 视觉 token 引用的 DESIGN.md 为换肤前焦糖版；**视觉/品牌真相 = `petgo_app/lib/core/theme/colors.dart`（薄荷绿 `#7FD1AE`）+ Claude Design mint 原型**。新功能 UX/交互（个人中心重组 / 名片6区块 / 红色态去导航 / 里程碑三级动效 / 双视图日历 / 推送扩展）以 PRD §4 + mint 原型为准，套 mint token。详见 CROSS-STORY-DECISIONS **F8**。（incoming 的 `UX_EXPERIENCE.new.md` 为焦糖旧版，**不晋升覆盖**，仅作新功能交互结构参考。）
-
-# PetGo — EXPERIENCE.md
+# [App Name] — EXPERIENCE.md
 
 Visual identity tokens referenced as `{colors.*}`, `{typography.*}`, `{rounded.*}`, `{spacing.*}` from DESIGN.md.
 
@@ -30,17 +28,16 @@ Visual identity tokens referenced as `{colors.*}`, `{typography.*}`, `{rounded.*
 ## Information Architecture
 
 ### Navigation Model
-Bottom Tab Bar — **5 个位置**，中间为凸起的「＋」发布按钮（PRD FR-19）。一级页面常显，进入全屏 modal / 二级页面（问诊详情、档案编辑等）时隐藏。**首页是唯一无需登录可访问的 Tab**；其余四个未登录点击触发登录引导（FR-0C）。
+Bottom Pill Navigation — 4 primary Tab destinations, always visible except when a full-screen modal is active.
 
-| 位 | Tab | Icon | Zone accent | Destination | 未登录 |
-|----|-----|------|-------------|-------------|--------|
-| 1 | 首页 | 🏠 | `{colors.accent-growth}` | Community content feed (FR-17) | ✅ 可访问 |
-| 2 | 成长档案 | 🐾 | `{colors.accent-growth}` | 当前用户宠物档案 / 成长时间线 (FR-37) | ❌ FR-0C |
-| 3 | ＋ 发布 | ＋ | active Tab zone accent | Publish Compose bottom sheet (FR-12) | ❌ FR-0C |
-| 4 | 问诊 | 🩺 | `{colors.accent-consult}` | Consultation dual entry | ❌ FR-0C |
-| 5 | 我的 | 👤 | `{colors.accent-growth}` | User profile / settings | ❌ FR-0C |
+| Tab | Icon | Zone accent | Destination |
+|-----|------|-------------|-------------|
+| 首页 | 🏠 | `{colors.accent-growth}` | Community content feed |
+| 活动 | 🐾 | `{colors.accent-gather}` | Pet gathering activities |
+| 问诊 | 🩺 | `{colors.accent-consult}` | Consultation dual entry |
+| 我的 | 👤 | `{colors.accent-growth}` | User + pet profile |
 
-**Raised 「＋」 button (位 3):** 视觉上凸起于 Tab Bar，区别于其他 4 个平级 Tab；全局可见。点击打开 Publish Compose bottom sheet。其颜色随 active Tab 的区域色切换。
+**Global FAB (＋):** Floats above all Tab screens. Tapping opens the Publish Compose bottom sheet. FAB color follows the active Tab's zone accent.
 
 ### Screen Map
 
@@ -48,33 +45,36 @@ Bottom Tab Bar — **5 个位置**，中间为凸起的「＋」发布按钮（P
 🏠 首页
   ├── Community Feed (default, masonry waterfall)
   │   ├── Tab: 全部 / 日常分享 / 成长日历 / 科普
-  │   └── Post Detail Page (FR-28)
-  └── 🔔 通知中心 (铃铛, FR-34)
+  │   └── Post Detail Page
+  └── [FAB] → Publish Compose (bottom sheet)
 
-🐾 成长档案
-  ├── Pet Profile (Growth Timeline, 时间倒序)
-  │   ├── 快乐时刻条目 + 健康事件 (问诊存档, FR-16)
-  │   └── 宠物名片 Preview + Share FAB → H5 link
-  └── 宠物状态快捷编辑入口 (FR-21)
-
-＋ 发布 (center raised button)
-  └── Publish Compose (bottom sheet) — 日常分享 / 专业知识科普 / 成长日历快乐时刻
+🐾 活动
+  ├── Activity List
+  │   └── Filter chips: 全部 / 狗狗 / 猫咪 / 免费
+  ├── Activity Detail Page
+  │   ├── Join / RSVP
+  │   └── → Activity Group Chat
+  ├── Create Activity Page (single-page)
+  │   └── → Poster Preview → Publish
+  └── GPS Check-in Page (in-activity context)
 
 🩺 问诊
-  ├── Consultation Home (dual entry: AI 智能分诊 / 在线兽医)
+  ├── Consultation Home (dual entry)
   ├── AI 问诊 Flow
-  │   ├── Upload Page (photo + text)          ← V1 仅图文，无视频
+  │   ├── Upload Page (photo/video + text)
   │   ├── Analyzing State (loading)
   │   └── Result Page (green / yellow / red)
   │       └── Red: Half-Screen Alert → confirm dialog
   │       └── Save to Records (optional, user-confirmed)
-  ├── 在线兽医 Chat Page (text / image / video, by 腾讯云 IM)
+  ├── 在线兽医 Chat Page
   └── Consultation History List
 
 👤 我的
   ├── User Profile Page
-  ├── 我的发布 (三类内容)
-  └── Settings (语言 id/en, 账号管理 / 注销)
+  ├── Pet Profile (成长档案)
+  │   ├── Growth Timeline (= 成长日历 Tab content, filtered to own pet)
+  │   └── 宠物名片 Preview + Share FAB → H5 link
+  └── Settings
 ```
 
 ---
@@ -88,12 +88,15 @@ Bottom Tab Bar — **5 个位置**，中间为凸起的「＋」发布按钮（P
 | Context | Copy |
 |---------|------|
 | 首页空状态 | "还没有内容，快来晒出你的毛孩子！🐾" |
+| 活动空状态 | "附近还没有聚会，要不要发起一个？🎉" |
 | 问诊历史空状态 | "还没有问诊记录，一切正常就是最好的消息 🥰" |
 | AI分析中 | "正在为你的毛孩子分析，稍等一下～" |
+| GPS签到成功推送 | "[用户名] 和 [宠物名] 已到场 📍 聚会正式开始！" |
 | 分享名片引导 | "分享给朋友，让大家认识 [宠物名]！" |
 | 红色预警 | "⚠️ 请立即带 [宠物名] 就医" |
 | 免责声明 | "本建议仅供参考，最终决策权归您" |
 | 稍后处理确认 | "确认已了解风险？" |
+| 照片认领提示 | "这是你的宠物吗？一键存入成长档案" |
 
 **Tone rules:**
 - 用 emoji 增加温度，但每条 copy 最多 1 个
@@ -104,14 +107,13 @@ Bottom Tab Bar — **5 个位置**，中间为凸起的「＋」发布按钮（P
 
 ## Component Patterns
 
-### Bottom Tab Bar
-See DESIGN.md `## Components > Bottom Tab Bar` for visual spec.
+### Bottom Pill Navigation
+See DESIGN.md `## Components > Bottom Pill Navigation` for visual spec.
 
 **Behavior:**
 - Tab 切换触发左右 Slide 动效：新 Tab 从对应方向滑入（左→右 or 右→左），持续 250ms ease-in-out
 - Active Tab zone accent 随 Tab 切换即时更新
-- 中间凸起「＋」颜色随 active Tab 区域色切换，带 120ms color transition
-- 进入二级页面（问诊详情、档案编辑等）时 Tab Bar 隐藏（PRD FR-19）
+- FAB 颜色随 active Tab 区域色切换，带 120ms color transition
 
 ### FAB (Global Publish Button)
 - 始终悬浮在 Tab Bar 上方右下角，margin-right 16px，margin-bottom = nav height + 12px
@@ -136,6 +138,10 @@ See DESIGN.md `## Components > Bottom Tab Bar` for visual spec.
 - **Yellow:** Left border 3px `{colors.triage-yellow-text}`，badge `{colors.triage-yellow-bg/text}`；Observation Protocol block `{colors.accent-consult}` light tint bg
 - **Red:** See Red Alert Half-Screen below
 
+### Event Card
+- **Featured (top of list):** `rounded.lg`，4px top color strip in `{colors.accent-gather}`，attendee avatar stack (max 3 shown + "+N" overflow)，primary button full-width
+- **Standard:** `rounded.md`，border `{colors.border}`，no top strip，text link CTA right-aligned
+
 ---
 
 ## State Patterns
@@ -146,8 +152,9 @@ Each empty state: centered illustration area (emoji-based, no external image) + 
 | Screen | Headline | CTA |
 |--------|----------|-----|
 | 首页 Feed | "快来晒出你的毛孩子！🐾" | "发布第一条内容" |
+| 活动列表 | "附近还没有聚会" | "发起聚会 +" |
 | 问诊历史 | "还没有问诊记录" | "开始问诊" |
-| 成长档案 (我的) | "还没有记录，快来留下第一个瞬间" | "立即记录" |
+| 成长日历 (我的) | "还没有记录，快来留下第一个瞬间" | "立即记录" |
 
 ### Loading States
 - **Feed loading:** Skeleton cards (gray shimmer placeholders, same masonry layout)
@@ -171,6 +178,12 @@ Critical interaction. Triggered when AI returns red-level assessment.
 
 **Accessibility:** Red background paired with ⚠️ icon + large text — does not rely on color alone.
 
+### GPS Check-in
+- Triggered from Activity Detail page → "我到了！签到" button
+- System requests location permission if not granted
+- On success: confetti micro-animation (0.5s) + group chat system message auto-sent: "[用户名] 和 [宠物名] 已到场 📍"
+- On GPS error (>500m): "定位偏差较大，是否仍然签到？" confirmation
+
 ---
 
 ## Interaction Primitives
@@ -189,6 +202,7 @@ Critical interaction. Triggered when AI returns red-level assessment.
 
 ### Micro-interactions
 - **FAB pulse:** `scale(1.0) → scale(1.04)`, 2s ease-in-out infinite, only when idle ≥30s
+- **GPS check-in success:** Confetti burst, 0.5s, once
 - **Triage result reveal:** Result card fades in + badge bounces once (scale 0.8 → 1.1 → 1.0, 300ms)
 - **Pet card share FAB:** On first visit: scale pulse from 0.9 → 1.0 with ring ripple. Subsequent visits: static.
 - **Tab active circle:** Scale 0.7 → 1.0 when tab becomes active, 150ms spring
@@ -200,9 +214,9 @@ Critical interaction. Triggered when AI returns red-level assessment.
 - **Color contrast:** All text/icon on `{colors.background}` meets WCAG AA (4.5:1 minimum). Triage states use icon + text + color — never color alone.
 - **Touch targets:** Minimum 44×44pt for all interactive elements (iOS HIG / Material baseline).
 - **Disclaimer text:** Even at `{typography.micro}` (10px), must maintain 3:1 contrast on its background.
-- **Red alert:** Half-screen alert is announced to screen readers as "urgent alert, role=alertdialog" (iOS) / `AccessibilityLiveRegion.ASSERTIVE` (Android). 播报文案需提供 id/en 双语（en: "urgent alert" / id: "peringatan darurat"）。
+- **Red alert:** Half-screen alert is announced to screen readers as "긴급 alert, role=alertdialog" (iOS) / `AccessibilityLiveRegion.ASSERTIVE` (Android).
 - **Dynamic type:** Body and below scales with system font size setting (up to 3 steps). Headers capped to prevent layout breakage.
-- **Bilingual (V1):** App 支持印尼语（id）和英语（en）双语（PRD FR-27）。首次启动跟随设备语言，设备为其他语言回退英语；用户可在「我的 → 语言设置」手动切换，即时生效。所有 UI 文案 / 系统提示 / 错误信息均需提供 id + en 两套；UGC 内容不受语言设置限制。
+- **Indonesian language:** All microcopy defaults to Bahasa Indonesia. `[ASSUMPTION: English fallback available for bilingual users in V1.1]`
 
 ---
 
@@ -212,10 +226,10 @@ Critical interaction. Triggered when AI returns red-level assessment.
 1. **Entry:** Bottom nav → 🩺 问诊 Tab (zone shifts to Morandi blue)
 2. **Dual entry page:** Two equal cards — "AI 智能分诊" + "在线兽医"，均标注"免费"
 3. **Tap AI 智能分诊** → Upload page slides in (push)
-4. **Upload:** Photo picker (system sheet, V1 仅图片) + text field for symptom description in Bahasa Indonesia
+4. **Upload:** Photo/video picker (system sheet) + text field for symptom description in Bahasa Indonesia
 5. **Submit** → Analyzing state (full-screen, Morandi blue spinner, "正在分析中～")
 6. **Result page:** Yellow badge + "非紧急" large + Observation Protocol card + Medication card. Soft CTA bottom: "想要更个性化的建议？咨询兽医" (outlined)
-7. **Tap CTA** → Vet chat page (push). Chat interface with "免费" badge visible. 支持发送文字 / 图片 / 视频（腾讯云 IM）。
+7. **Tap CTA** → Vet chat page (push). Chat interface with "免费" badge visible.
 8. **Post-consult:** "是否将本次咨询存入 Oyen 的档案？" bottom sheet. [存入] [跳过].
 9. **Climax:** Consultation saved, badge "已存入档案 ✓" appears briefly.
 
@@ -223,7 +237,19 @@ Critical interaction. Triggered when AI returns red-level assessment.
 
 ---
 
-### KF-2: Aurel — 发布成长记录 + 分享宠物名片 (UJ-2)
+### KF-2: Kevin — 发起聚会 + GPS 签到 (UJ-2)
+1. **Entry:** Bottom nav → 🐾 活动 (zone shifts to orange) → Activity list
+2. **Tap Create FAB (＋ in activity context)** or header "+ 发起" → Create Activity page (single page, slides up as bottom sheet or push)
+3. **Fill form:** 活动名称 / 时间选择器 / 地点（自填文字）/ 人数上限 / 宠物类型（可选 chip）
+4. **Generate poster:** "生成海报" button → poster preview overlay → "分享到 Instagram" calls system share sheet (PNG)
+5. **Publish:** "发布活动" button → Activity Detail page (push with confirmation toast "活动已发布 🎉")
+6. **Event day:** Participants open Activity Detail → "我到了！签到" → GPS confirm → confetti + group chat system message
+7. **Climax:** Group chat shows rolling check-in messages, photos flow in, participants claim photos to growth records.
+8. **7 days post-event:** Group chat auto-close notice push notification → chat archives.
+
+---
+
+### KF-3: Aurel — 发布成长记录 + 分享宠物名片 (UJ-3)
 1. **Entry:** Global FAB (＋) → Publish Compose bottom sheet (slides up)
 2. **Compose:** Segment selector → tap "成长日历" → select "快乐时刻" → upload photo from camera roll → add caption
 3. **Publish** → bottom sheet dismisses → new card appears at top of 成长日历 Tab masonry (insertion animation: fade-in + scale 0.95→1.0)
@@ -238,14 +264,14 @@ Critical interaction. Triggered when AI returns red-level assessment.
 
 **iOS specifics:**
 - Status bar: system default light content on `{colors.background}`
-- Safe area: home indicator bottom padding applied to Bottom Tab Bar
+- Safe area: home indicator bottom padding applied to Pill Nav
 - Sheet presentation: `.sheet` for Publish Compose; `.fullScreenCover` not used
-- Haptics: `UIImpactFeedbackGenerator` on FAB tap, triage result reveal
+- Haptics: `UIImpactFeedbackGenerator` on FAB tap, GPS check-in success, triage result reveal
 
 **Android specifics:**
 - Status bar: transparent with dark icons (light mode)
 - Bottom sheet: `BottomSheetDialogFragment`
-- Navigation bar: edge-to-edge, Bottom Tab Bar sits above system nav bar
+- Navigation bar: edge-to-edge, Pill Nav sits above system nav bar
 - Ripple: MaterialRipple on all tappable cards; suppress default ripple on FAB (custom pulse animation)
 
 **Dark mode:** `[ASSUMPTION: V1 light-mode only; dark mode deferred to V2]`

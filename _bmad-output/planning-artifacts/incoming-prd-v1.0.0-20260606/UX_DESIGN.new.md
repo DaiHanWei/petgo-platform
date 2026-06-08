@@ -1,14 +1,12 @@
 ---
-title: "PetGo V1.0 Design System"
+title: "[App Name] V1.0 Design System"
 status: draft
 created: 2026-05-29
-updated: 2026-06-01
+updated: 2026-05-29
 platform: iOS · Android
 ---
 
-> ⚠️ **品牌色板已过期（焦糖色，换肤前）。** 本文档色板为 2026-06-04 薄荷绿换肤前的旧版（焦糖 `#C8874A` / 米白 `#FAF8F5`）。**视觉/品牌真相 = `petgo_app/lib/core/theme/colors.dart`（薄荷绿 `#7FD1AE`）+ Claude Design mint 原型**，非本文档。新功能 UX/交互见 PRD §4。详见 CROSS-STORY-DECISIONS **F8**。（incoming 的 `UX_DESIGN.new.md` 亦为焦糖旧版，**不晋升覆盖**。）
-
-# PetGo — DESIGN.md
+# [App Name] — DESIGN.md
 
 ## Brand & Style
 
@@ -38,9 +36,9 @@ colors:
   text-disabled: "#C4B8B0"     # 禁用态
 
   # Zone accents — used for CTA, active states, badges, icons only
-  accent-growth: "#C8874A"     # 成长档案 / 首页 / 我的 — 焦糖
+  accent-growth: "#C8874A"     # 成长档案 / 首页 — 焦糖
   accent-consult: "#7BA7BC"    # 专业问诊 — 莫兰迪蓝
-  # 注：宠物聚会活动（暖橙 accent-gather）随攒局整体移至 V2，V1 不使用
+  accent-gather: "#F08040"     # 宠物聚会活动 — 暖橙
 
   # Semantic — medical triage states (Morandi-toned, not pure saturated)
   triage-green-bg: "#D4EDD4"
@@ -52,8 +50,6 @@ colors:
 ```
 
 **Zone color rule:** 每个 Tab 使用其区域色作为 active 状态、主要 CTA 按钮、关键 badge 和图标的填充色。页面底色始终为 `background: #FAF8F5`，不因 Tab 切换而整屏变色。
-
-> ⚠️ **偏差（2026-06-03，用户决策）：底部 Tab Bar 不适用本规则。** 底部栏的 active Tab 填充圆与凸起「＋」按钮**统一用焦糖色 `accent-growth`**，不随问诊位切换成莫兰迪蓝（见 `petgo_app/lib/shared/widgets/bottom_tab_bar.dart` 的 `regionColorForTab`）。**问诊页面本体**仍按规格用莫兰迪蓝（见下文「视觉降焦」§问诊界面）。Zone color rule 的其余适用面（页内 CTA、badge、active chip 等）不变。
 
 ---
 
@@ -136,7 +132,7 @@ elevation:
 
 - **卡片（Card）** — `rounded.md` (14px)，白底，`elevation.card`
 - **Featured Card** — `rounded.lg` (20px)，白底，顶部 4px 区域色条带，`elevation.card`
-- **Bottom Tab Bar 容器** — 白底，顶部 1px `border` 分割线，`elevation.nav`，5 等分位（中间凸起「＋」），自动适配底部安全区
+- **Pill Nav 容器** — `rounded.xl` (28px)，白底，`elevation.nav`，水平 padding 16px，垂直 padding 6px
 - **Active Tab Circle** — 34×34px，`rounded.full`，区域色填充，白色图标
 - **FAB** — 52×52px，`rounded.full`，区域色填充，白色图标，`elevation.fab` + CSS pulse animation
 - **Filter Chip** — `rounded.full`，active=区域色填充/白字；inactive=`border: 1px solid #EDE8E3`/`text-secondary`
@@ -147,13 +143,10 @@ elevation:
 
 ## Components
 
-### Bottom Tab Bar
-底部导航栏，**5 个位置**（首页 / 成长档案 / ＋ / 问诊 / 我的），中间为凸起的「＋」发布按钮（PRD FR-19）。白底，顶部 1px `border` 分割线，自动适配安全区。
-- **Active Tab:** 34×34px 填充圆（**统一焦糖色 `accent-growth`**，问诊位不变蓝——见上文 Zone color rule 偏差），白色图标/emoji
-- **Inactive Tab:** 图标/emoji 18px，`text-secondary` 色 + 9px 标签文字
-- **凸起「＋」（中间位）:** 焦糖色填充圆形（44px）+ 3px 白色描边 + 白色「＋」，**约 1/3 高度突出于白色栏上沿之外**（向上偏移约 20px），形成悬浮发布按钮；**固定焦糖色 `accent-growth`，不随 active Tab 切换**（2026-06-03 偏差）
-- **顶部分割线缺口:** 上沿 1px 分割线在「＋」位置**向下内凹成弧形缺口**（concave notch，凹深约 18px、宽约 60px），环抱凸起的「＋」——参考 Material `BottomAppBar` / Flutter `CircularNotchedRectangle` 形态
-- **布局:** 其余 4 个 Tab 等分（`flex:1`，左右各 2 个对称），「＋」居中浮起、不占用平级 Tab 的横向空间
+### Bottom Pill Navigation
+一个圆角矩形容器悬浮在屏幕底部（margin: 0 16px 8px，自动适配安全区）。4 个 Tab 等宽分布。
+- **Active:** 34×34px 填充圆（区域色），白色图标/emoji
+- **Inactive:** 图标/emoji 14px，`text-disabled`色，无标签文字
 - Tab 切换动效：图标淡出（旧）→ 淡入（新），持续 120ms ease
 
 ### Masonry Card（首页瀑布流）
@@ -165,6 +158,10 @@ elevation:
 白底，`rounded.md`，左侧 3px 区域色边框（黄/绿）或红色背景半屏。
 - 危险等级 badge：`rounded.full`，对应 `triage-*-bg/text` 色
 - 倒计时协议块：`accent-consult` 浅底 `#EEF4F7`，`rounded.sm`
+
+### Event Card（活动卡片）
+Featured：顶部 4px 区域色条带，`rounded.lg`，`elevation.card`，内含出席者头像列表（18px 圆形）+ 橙色主按钮。
+Standard：`border: 1px solid #EDE8E3`，无顶部条带，偏小。
 
 ### Publish Compose（发布页）
 单页全屏 bottom sheet（从底部滑入）。内容：内容类型 Segment（全部/日常/成长日历/科普）→ 图片上传区 → 文字输入区 → 发布按钮。无独立页面跳转。
