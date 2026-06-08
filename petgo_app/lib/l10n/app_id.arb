@@ -260,6 +260,12 @@
   "consultInterruptedTag": "Terputus",
   "vetBannedKicked": "Akunmu telah dinonaktifkan. Hubungi operasional.",
   "pushSoftGuideTitle": "Aktifkan notifikasi agar kami bisa memberi tahu begitu dokter hewan membalas",
+  "pushSoftGuideTitleProfile": "Aktifkan notifikasi agar jadi yang pertama tahu pengingat ulang tahun dan hari jadi {petName}",
+  "@pushSoftGuideTitleProfile": {
+    "placeholders": {
+      "petName": { "type": "String" }
+    }
+  },
   "pushSoftGuideAllow": "Aktifkan",
   "pushSoftGuideLater": "Nanti saja",
   "pushEnableGuideTitle": "Aktifkan notifikasi",

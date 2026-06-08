@@ -322,6 +322,12 @@
   "consultInterruptedTag": "Interrupted",
   "vetBannedKicked": "Your account has been disabled. Please contact operations.",
   "pushSoftGuideTitle": "Turn on notifications so we can alert you the moment a vet replies",
+  "pushSoftGuideTitleProfile": "Turn on notifications to be the first to get {petName}'s birthday and anniversary reminders",
+  "@pushSoftGuideTitleProfile": {
+    "placeholders": {
+      "petName": { "type": "String" }
+    }
+  },
   "pushSoftGuideAllow": "Turn on",
   "pushSoftGuideLater": "Not now",
   "pushEnableGuideTitle": "Enable notifications",
