@@ -54,13 +54,13 @@
 | `users` | 1.3 | 1.6 仅 UPDATE，1.7 读 `hasPetProfile` 信号 |
 | `pet_profiles` | 2.2 | 1.7 期 `hasPetProfile` 恒 false 占位 |
 | `content_posts` | 2.3 | 3.x 全部复用 |
-| `content_posts.event_date`（加列）| 2.3 | F9：成长日历事件日期 `date null`，与 `created_at` 分离；日常/科普为 null |
+| `content_posts.event_date` | 2.3 | F9：成长日历事件日期 `date null`，与 `created_at` 分离；日常/科普为 null。**并入 2.3 `init_content` CREATE，不另起 ALTER / 不额外占号** |
 | `comments` | 3.5 | |
 | `content_likes` | 3.4 | C3 统一命名 |
 | `content_reports` | 3.7 | C3 统一命名 |
 | `triage_tasks` | 4.1 | 4.2 接后置挂载点 |
 | `vet_accounts` | 5.1 | |
-| `consult_sessions` | 5.3 | 5.4/5.6/5.7 ALTER |
+| `consult_sessions` | 5.3 | 5.4/5.6/5.7 ALTER；**F11 加 `release_count`(退单计数 ≤2) 并入 5.3 CREATE；接单原子写用 `status` 条件更新（`WHERE status='WAITING'` 判影响行数）无需 version 列** |
 | `consult_ratings` | 5.6 | |
 | `health_events` | 2.5 | |
 | `notifications` | 6.1 | 6.7 增 type 枚举 PET_BIRTHDAY/COMPANION_ANNIVERSARY/MILESTONE_NODE（F2/F5）|
