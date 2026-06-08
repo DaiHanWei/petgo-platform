@@ -231,13 +231,13 @@
   "triageNeutralAdvice": "Please keep observing your pet and consult a vet if anything changes.",
   "triageRedHandoff": "Urgent high-risk result — full alert view coming soon",
   "triageArchiveNoPet": "Create a pet profile first to save to the archive",
-  "triageRedTitle": "Take {petName} to a vet now",
+  "triageRedTitle": "Take {petName} to an animal hospital now",
   "@triageRedTitle": {
     "placeholders": {
       "petName": { "type": "String" }
     }
   },
-  "triageRedTitleNoPet": "Get to a vet now",
+  "triageRedTitleNoPet": "Take your pet to an animal hospital now",
   "triageRedSubtext": "A possible emergency was detected. Please go to the nearest animal hospital as soon as possible.",
   "triageRedCountdown": "{seconds}s until you can act",
   "@triageRedCountdown": {
@@ -245,15 +245,8 @@
       "seconds": { "type": "int" }
     }
   },
-  "triageRedNavigate": "Navigate",
-  "triageRedLater": "Handle later",
-  "triageRedNavConfirmTitle": "Open maps to a nearby animal hospital?",
-  "triageRedNavConfirmOpen": "Open maps",
-  "triageRedRiskConfirmTitle": "Confirm you understand the risk?",
-  "triageRedRiskConfirmYes": "I understand",
+  "triageRedAcknowledge": "I understand",
   "triageRedLevelLabel": "Urgent: high risk",
-  "triageRedMapsUnavailable": "Could not open maps. Please find the nearest animal hospital.",
-  "triageMapSearchQuery": "veterinary clinic",
   "vetLoginLink": "Vet sign-in",
   "@vetLoginLink": { "description": "Small link below Google button leading to vet account login." },
   "vetLoginTitle": "Vet sign-in",

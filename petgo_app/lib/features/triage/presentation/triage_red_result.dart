@@ -8,11 +8,11 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/red_alert_overlay.dart';
 import '../../profile/data/profile_repository.dart';
 import '../data/triage_repository.dart';
-import '../domain/triage_navigation.dart';
 import '../domain/triage_wording_guard.dart';
 
 /// 红色结果（Story 4.5）。进入即自底滑起 [RedAlertOverlay] 半屏强提醒；关闭后保留红色摘要——
-/// 🔒 **零兽医 CTA / 零存档 / 零变现引流**（区别于绿/黄页），红色态唯一出口是「去导航」就医。
+/// 🔒 **零兽医 CTA / 零存档 / 零变现引流 / 零地图导航 / 零医院推荐**（F3 · 2026-06-08 去导航化，
+/// 区别于绿/黄页），红色态唯一出口是单一「我已知晓」按钮关闭遮罩、返回纯结果摘要。
 class TriageRedResult extends ConsumerStatefulWidget {
   const TriageRedResult({super.key, required this.result});
 
@@ -57,7 +57,8 @@ class _TriageRedResultState extends ConsumerState<TriageRedResult> {
     final l10n = AppLocalizations.of(context);
     final advice =
         TriageWordingGuard.sanitize(widget.result.advice, fallback: l10n.triageNeutralAdvice);
-    // 关闭 overlay 后保留的红色摘要：⚠️ + 等级 + 建议 + 唯一出口「去导航」。无兽医/存档/变现节点。
+    // 关闭 overlay 后保留的红色摘要：⚠️ + 等级 + 建议 + 前置免责。
+    // 🔒 无兽医 CTA / 无存档 / 无变现 / 无地图导航 / 无医院推荐（F3 去导航化）。
     return ListView(
       key: const ValueKey('triageRedSummary'),
       padding: const EdgeInsets.all(AppSpacing.screenEdge),
@@ -72,16 +73,6 @@ class _TriageRedResultState extends ConsumerState<TriageRedResult> {
         ),
         const SizedBox(height: AppSpacing.md),
         Text(advice, style: AppTypography.body),
-        const SizedBox(height: AppSpacing.xl),
-        FilledButton(
-          key: const ValueKey('triageRedSummaryNavigate'),
-          style: FilledButton.styleFrom(
-            backgroundColor: AppColors.triageRed,
-            minimumSize: const Size.fromHeight(48),
-          ),
-          onPressed: () => confirmAndNavigate(context, ref),
-          child: Text(l10n.triageRedNavigate),
-        ),
         const SizedBox(height: AppSpacing.lg),
         Text(widget.result.disclaimer ?? l10n.triageDisclaimer, style: AppTypography.disclaimer),
       ],
