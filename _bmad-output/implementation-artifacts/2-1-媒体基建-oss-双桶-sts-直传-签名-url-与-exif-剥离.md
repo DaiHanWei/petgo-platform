@@ -1,6 +1,6 @@
 # Story 2.1: 媒体基建——OSS 双桶、STS 直传、签名 URL 与 EXIF 剥离
 
-Status: review
+Status: ready-for-dev
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

@@ -1,6 +1,6 @@
 # Story 1.2: 设计 token 系统、Tab Bar 外壳与 i18n 脚手架
 
-Status: review
+Status: ready-for-dev
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

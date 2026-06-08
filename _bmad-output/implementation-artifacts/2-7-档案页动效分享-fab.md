@@ -1,6 +1,6 @@
 # Story 2.7: 档案页动效分享 FAB
 
-Status: review
+Status: ready-for-dev
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

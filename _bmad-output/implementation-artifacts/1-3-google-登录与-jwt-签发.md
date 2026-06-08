@@ -1,6 +1,6 @@
 # Story 1.3: Google 登录与 JWT 签发
 
-Status: review
+Status: ready-for-dev
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -52,6 +52,14 @@ so that **我无需记密码即可获得身份并使用核心功能**。
 **Then** 老用户直接进入 App（不进入昵称/状态引导）；新用户进入注册引导流程（Story 1.6 昵称 + 宠物状态），引导完成后回到触发点
 > 验证层：**L0**（后端登录响应含 `isNewUser`/`onboardingCompleted` 标志，MockMvc 验首次建号=新用户、二次登录=老用户；前端按标志路由——新→引导占位、老→App）+ **L1**（二次登录命中已存在 `users` 行判定老用户，需 postgres）。本 Story 只产出**分流信号 + 路由分叉**，引导页本体在 Story 1.6。
 
+### AC5 — [R2] Google 授权失败统一处理（FR-0D · 决策 F13）
+
+**Given** 用户在登录入口发起 Google 授权
+**When** 授权失败（用户在系统账号选择器取消 / 网络超时 / Google 服务异常 / 后端 OAuth 校验失败）
+**Then** 统一提示「登录失败，请重试」+ 显著「重试」按钮（输入类失败口径：保留原页、不丢上下文、可直接重试，决策 F13），且**不创建任何账号**（后端：Google ID Token 校验失败 / 异常路径**绝不写入 `users` 行**，亦不签发任何 JWT）
+**And** 点击「重试」重新发起 Google 授权（回到账号选择器，复用同一登录入口流程）
+> 验证层：**L0**（后端：单测覆盖 `GoogleTokenVerifier` 校验失败 / 抛异常时 `AuthService` 不调 `UserRepository.save`、`POST /api/v1/auth/google` 返回 401/422 ProblemDetail 且 `users` 行数不变——可用 stub verifier 在无 DB 的服务层 Mockito 单测断言 `save` 零调用；前端：widget test 断言失败态 mock 登录回调（取消返回 null / 抛网络异常）→ 渲染「登录失败，请重试」文案 + 「重试」按钮存在 + 点击重试再次触发登录 runner，文案走 .arb 双语）。失败/异常路径不依赖真实 Google，纯 L0 可验。
+
 ---
 
 ## Tasks / Subtasks
@@ -88,6 +96,10 @@ so that **我无需记密码即可获得身份并使用核心功能**。
   - [ ] `POST /api/v1/auth/google`、`/auth/refresh` 接 `shared/ratelimit/RedisRateLimiter`（令牌桶）；超限 429 ProblemDetail。Redis 仅 auth 限流用途（符合收窄边界）。
 - [ ] **B8. 错误与日志规范对齐** (AC: 1, 3)
   - [ ] 校验失败/token 失效统一走 `shared/error` ProblemDetail（401/422/429 语义）；**日志严禁记录 idToken/JWT/email 等 PII**（架构 §日志）。
+- [ ] **B9. [R2] OAuth 失败路径不建账号（F13）** (AC: 5)
+  - [ ] `AuthService` 在 `GoogleTokenVerifier` 校验失败 / 抛异常时**短路返回 401/422 ProblemDetail，绝不调用 `UserRepository.save`、绝不签发 JWT**；建号只发生在校验通过分支之后。
+  - [ ] 单测（Mockito，无 DB，L0）：stub verifier 抛校验异常 → 断言 `userRepository.save(...)` 零调用 + 抛对应 `AppException`；正常分支保持既有行为不回归。
+  - [ ] 失败响应不外泄 Google 端细节/堆栈（沿用 B8 ProblemDetail 口径）。
 
 ### 🟩 前端子任务（petgo_app / Flutter）
 
@@ -108,6 +120,11 @@ so that **我无需记密码即可获得身份并使用核心功能**。
 - [ ] **F5. 新老用户分流路由（features/auth/presentation + core/router）** (AC: 4)
   - [ ] 登录成功后按 `LoginResponse`：`onboardingCompleted==true` → 进 App 主框架（Story 1.2 Tab 外壳）；`isNewUser || !onboardingCompleted` → 路由到**新用户引导占位**（Story 1.6 实现本体，本 Story 仅留路由分叉 + 占位页 + 回跳锚点）。
   - [ ] 回跳锚点（pendingAction）结构预留，供 Story 1.4 注入触发点后回跳——本 Story 不接具体触发源。
+- [ ] **F6. [R2] Google 授权失败提示 + 重试（F13）** (AC: 5)
+  - [ ] 登录入口页处理登录回调失败态：用户取消（runner 返回 null）/ 网络超时 / Google 异常 / 后端 401/422 → 渲染统一失败提示「登录失败，请重试」（顶部 inline banner，UX-DR10）+ 显著「重试」按钮。
+  - [ ] 「重试」→ 重新发起 Google 授权（复用 F1/F4 登录流程），**不离开当前登录入口、不前进**；保留原页面上下文（决策 F13 输入类失败口径）。
+  - [ ] 失败态**不触发任何建号/分流**（与后端 B9 一致：失败即停留）；文案走 .arb（id/en），样式引用 Story 1.2 token。
+  - [ ] widget test（L0）：mock 登录 runner 返回 null / 抛异常 → 失败提示 + 「重试」按钮渲染 + 点击重试再次调用 runner。
 
 ### 🟨 联调验收子任务（端到端跑起来 + CI）
 

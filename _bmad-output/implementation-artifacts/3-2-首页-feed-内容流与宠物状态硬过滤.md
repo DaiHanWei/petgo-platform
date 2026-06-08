@@ -1,6 +1,6 @@
 # Story 3.2: 首页 Feed 内容流与宠物状态硬过滤
 
-Status: review
+Status: ready-for-dev
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -51,6 +51,16 @@ so that **我能高效发现感兴趣的宠物内容**。
 **When** 列表为空
 **Then** 显示空状态「快来晒出你的毛孩子！🐾」+「发布第一条内容」CTA（FR-18、UX-DR8）
 > 验证层：**L0**（widget test：空 items → 渲染 empty_state；文案双语取自 .arb，每条 ≤1 emoji）。空 CTA 点击触发发布入口（受 Story 1.5 门控：游客点击触发 FR-0C）。
+
+### AC5 — Feed 加载失败态 `[R2·回改]`
+
+> **代码已实现，本轮回改补齐**（review→ready-for-dev）。统一 F13 异常态口径，显式覆盖 Feed 加载/增量加载失败的非 happy path。
+
+**Given** 用户加载首页 Feed
+**When** 首屏加载失败（网络/服务器错误，无任何已加载内容）
+**Then** 展示「加载失败，下拉重试」错误态 + 重试入口（下拉刷新 / 重试按钮），不崩溃不白屏（F13、UX-DR10）
+**And** **已加载内容保留显示**——当列表已有内容、仅在加载**下一批（增量）**时失败，不清空已加载内容，仅在列表**底部**显示「加载失败，点击重试」提示 + 重试入口（重试沿用当前 `nextCursor`，不回顶不重拉首屏）
+> 验证层：**L0**（widget/provider 测试：①首屏失败 → `AsyncError` 渲染失败态 + 重试入口、重试重建首屏；②已有 items + `loadMore` 失败 → 已加载内容保留、底部失败提示 widget 出现、点击底部重试沿用 nextCursor 续拉。文案双语取自 .arb，每条 ≤1 emoji）。任务：前端。
 
 ---
 
