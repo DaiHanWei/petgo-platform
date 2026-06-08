@@ -38,6 +38,13 @@
   "profileOnboardingBody": "Bangun arsip tumbuh kembang hewan Anda",
   "profileOnboardingSkip": "Lewati dulu",
   "profileOnboardingCreate": "Buat sekarang",
+  "profileCreatedTitle": "Profil khusus {petName} sudah siap! 🎉",
+  "@profileCreatedTitle": {
+    "placeholders": {
+      "petName": { "type": "String" }
+    }
+  },
+  "profileCreatedStartExplore": "Mulai jelajahi",
   "profilePromptMessage": "Buat profil hewan Anda untuk memulai arsip tumbuh kembang 🐾",
   "commonCancel": "Batal",
   "mediaPermissionDeniedTitle": "Perlu izin",

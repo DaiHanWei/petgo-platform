@@ -11,6 +11,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../media/domain/media_upload_use_case.dart';
 import '../../../shared/utils/media_permission.dart';
 import '../data/profile_repository.dart';
+import '../domain/profile_created_flow.dart';
 
 /// 宠物档案创建表单（Story 2.2 · F1）。
 ///
@@ -69,7 +70,7 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
     }
     setState(() => _submitting = true);
     try {
-      await ref.read(profileRepositoryProvider).create(
+      final created = await ref.read(profileRepositoryProvider).create(
             name: name,
             avatarUrl: _avatarUrl,
             breed: _emptyToNull(_breedController.text),
@@ -78,7 +79,16 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
             idempotencyKey: 'create-${DateTime.now().microsecondsSinceEpoch}',
           );
       ref.invalidate(petProfileProvider);
-      if (mounted) context.go('/profile');
+      if (!mounted) return;
+      // 建档来源（路由 query `?origin=`）：FR-0G 正常建档 → 庆祝页（AC4/F15）；
+      // FR-16 问诊存档 / FR-12 灰选发布 → 跳过庆祝页，直接回原流程（Story 2.5/2.3 接管）。
+      final origin =
+          buildOriginFromName(GoRouterState.of(context).uri.queryParameters['origin']);
+      if (showsBuildCelebration(origin)) {
+        context.go('/profile/created', extra: created);
+      } else {
+        context.go('/profile');
+      }
     } on DioException catch (e) {
       final pd = ProblemDetail.fromDioException(e);
       if (pd?.typeSlug == 'profile-exists' || pd?.status == 409) {

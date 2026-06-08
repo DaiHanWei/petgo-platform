@@ -62,6 +62,13 @@
   "profileOnboardingBody": "Build your pet's growth archive",
   "profileOnboardingSkip": "Skip for now",
   "profileOnboardingCreate": "Create now",
+  "profileCreatedTitle": "{petName}'s very own profile is ready! 🎉",
+  "@profileCreatedTitle": {
+    "placeholders": {
+      "petName": { "type": "String" }
+    }
+  },
+  "profileCreatedStartExplore": "Start exploring",
   "profilePromptMessage": "Create your pet's profile to start their growth archive 🐾",
   "commonCancel": "Cancel",
   "mediaPermissionDeniedTitle": "Permission needed",

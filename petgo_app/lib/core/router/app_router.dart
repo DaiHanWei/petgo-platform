@@ -16,8 +16,11 @@ import '../../features/me/presentation/me_page.dart';
 import '../../features/me/presentation/settings_page.dart';
 import '../../features/profile/presentation/growth_archive_page.dart';
 import '../../features/profile/presentation/milestone_list_page.dart';
+import '../../features/profile/domain/pet_profile.dart';
+import '../../features/notify/data/push_permission_providers.dart';
 import '../../features/profile/presentation/pet_profile_create_page.dart';
 import '../../features/profile/presentation/pet_profile_edit_page.dart';
+import '../../features/profile/presentation/profile_created_celebration_page.dart';
 import '../../features/profile/presentation/profile_onboarding_page.dart';
 import '../../features/consult/presentation/consult_conversation_page.dart';
 import '../../features/consult/presentation/consult_entry_page.dart';
@@ -77,6 +80,32 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/onboarding/profile', builder: (c, s) => const ProfileOnboardingPage()),
       // 宠物档案创建表单（Story 2.2）。受控路由（/profile/ 前缀，游客被门控）。
       GoRoute(path: '/profile/create', builder: (c, s) => const PetProfileCreatePage()),
+      // 建档「创建成功」庆祝页（Story 1.7 R2 · FR-0G · F15）。受控（/profile/ 前缀）。
+      // 经 extra 接收刚创建的 PetProfile；主 CTA 串接推送时机（庆祝页后、进首页前，Story 6.4）后进首页。
+      GoRoute(
+        path: '/profile/created',
+        builder: (c, s) {
+          final created = s.extra is PetProfile ? s.extra as PetProfile : null;
+          if (created == null) {
+            // 防御：无数据直达（如刷新/深链）→ 回首页，不崩。
+            WidgetsBinding.instance
+                .addPostFrameCallback((_) => c.canPop() ? c.pop() : c.go('/home'));
+            return const SizedBox.shrink();
+          }
+          return ProfileCreatedCelebrationPage(
+            petName: created.name,
+            cardToken: created.cardToken,
+            avatarUrl: created.avatarUrl,
+            onStartExplore: () async {
+              // FR-22D 建档时机（庆祝页后、进首页前）：触发推送权限闸门（Story 6.4）。
+              // neverConsulted 传 true 安全——已问诊者其 `alreadyAsked` 守卫已使闸门跳过（取最早、仅一次）。
+              final gate = await ref.read(pushPermissionGateProvider.future);
+              await gate.maybeRequestAfterProfileCreated(neverConsulted: true);
+              if (c.mounted) c.go('/home');
+            },
+          );
+        },
+      ),
       // 宠物档案编辑（Story 2.8）。两入口（档案 Tab 信息卡 /「我的」Tab）复用同一页。
       GoRoute(path: '/profile/edit', builder: (c, s) => const PetProfileEditPage()),
       // @dev 自测入口（Story 1.4 F3）：不从 UI 链接，仅供手动深链触发登录引导。
