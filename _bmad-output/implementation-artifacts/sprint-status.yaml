@@ -124,7 +124,7 @@ development_status:
 
   # ===== Epic 6: 推送通知、深链与通知中心 =====
   epic-6: in-progress
-  6-1-推送基建与深链路由表: ready-for-dev               # [PRD1.0.0✏️] 退回: NotificationType 加 3 枚举+pushPayloadToLocation 加 3 路由+2 目标 (F2/F5)
+  6-1-推送基建与深链路由表: review                       # [PRD1.0.0✏️] F2/F5 重做完成(L0 绿): 枚举+3·V21·深链+3·2 route;L1/L2 待本地
   6-2-兽医回复与兽医端新请求推送: review
   6-3-内容互动推送: review
   6-4-推送权限申请时机与拒绝处理: ready-for-dev          # [PRD1.0.0✏️] 退回: AC1 单时机→双时机 (F7)

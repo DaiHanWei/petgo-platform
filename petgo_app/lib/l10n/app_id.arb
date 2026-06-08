@@ -79,6 +79,8 @@
   "growthArchiveTimelineEmpty": "Belum ada catatan",
   "growthEditStatusTitle": "Ubah status hewan",
   "growthStatusSaveFailed": "Gagal memperbarui status, coba lagi",
+  "milestoneListTitle": "Tonggak",
+  "milestoneListComingSoon": "Fitur tonggak segera hadir",
   "healthEventLabel": "🏥 Catatan konsultasi",
   "commonSave": "Simpan",
   "archivePromptTitle": "Simpan konsultasi ini ke arsip {petName}?",

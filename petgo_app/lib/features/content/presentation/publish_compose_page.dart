@@ -36,10 +36,13 @@ final publishControllerProvider = Provider.autoDispose<PublishController>((ref) 
 /// 统一发布 Compose 全屏 bottom sheet（Story 2.3 · PetGo Prototype 换肤）。
 /// 类型标签（Cerita / Momen / Edukasi）→ 作者+关联宠物 → 文字 → 图片 → 发布。
 class PublishComposePage extends ConsumerStatefulWidget {
-  const PublishComposePage({super.key});
+  const PublishComposePage({super.key, this.preset});
 
-  /// 以全屏 bottom sheet 形式打开（供「＋」入口调用）。
-  static Future<void> open(BuildContext context) {
+  /// 预选发布类型（如生日深链预选成长日历，Story 6.1 FR-40）；为空时默认 Cerita（daily）。
+  final ContentType? preset;
+
+  /// 以全屏 bottom sheet 形式打开（供「＋」入口 / 深链着陆页调用）。
+  static Future<void> open(BuildContext context, {ContentType? preset}) {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -48,9 +51,9 @@ class PublishComposePage extends ConsumerStatefulWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      builder: (_) => const FractionallySizedBox(
+      builder: (_) => FractionallySizedBox(
         heightFactor: 0.95,
-        child: PublishComposePage(),
+        child: PublishComposePage(preset: preset),
       ),
     );
   }
@@ -61,6 +64,18 @@ class PublishComposePage extends ConsumerStatefulWidget {
 
 class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   final _textController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    // 深链预选类型（如生日 → 成长日历）：首帧后设控制器类型，与手动选 tab 等价。
+    final preset = widget.preset;
+    if (preset != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) ref.read(publishControllerProvider).setType(preset);
+      });
+    }
+  }
 
   /// 成长日历绑定的宠物档案（V1 单账号单宠物）。选「成长日历」时拉取，发布时带其 id。
   PetProfile? _linkedPet;

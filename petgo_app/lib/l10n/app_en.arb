@@ -122,6 +122,8 @@
   "growthArchiveTimelineEmpty": "No records yet",
   "growthEditStatusTitle": "Change pet status",
   "growthStatusSaveFailed": "Could not update status, please try again",
+  "milestoneListTitle": "Milestones",
+  "milestoneListComingSoon": "Milestones are coming soon",
   "healthEventLabel": "🏥 Consultation record",
   "commonSave": "Save",
   "archivePromptTitle": "Save this consultation to {petName}'s archive?",

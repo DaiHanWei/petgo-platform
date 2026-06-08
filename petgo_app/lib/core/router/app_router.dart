@@ -7,11 +7,14 @@ import '../../features/auth/presentation/dev_login_guide_page.dart';
 import '../../features/auth/presentation/login_page.dart';
 import '../../features/auth/presentation/nickname_page.dart';
 import '../../features/auth/presentation/pet_status_page.dart';
+import '../../features/content/domain/content_type.dart';
 import '../../features/content/presentation/content_detail_page.dart';
 import '../../features/content/presentation/home_page.dart';
+import '../../features/content/presentation/publish_landing_page.dart';
 import '../../features/me/presentation/language_settings_page.dart';
 import '../../features/me/presentation/me_page.dart';
 import '../../features/profile/presentation/growth_archive_page.dart';
+import '../../features/profile/presentation/milestone_list_page.dart';
 import '../../features/profile/presentation/pet_profile_create_page.dart';
 import '../../features/profile/presentation/pet_profile_edit_page.dart';
 import '../../features/profile/presentation/profile_onboarding_page.dart';
@@ -34,7 +37,7 @@ import '../../shared/widgets/app_shell.dart';
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
 /// 未登录游客**不可**直接进入的受控路由前缀（FR-19 门控）。
-const Set<String> _controlledLocations = {'/profile', '/triage', '/me', '/consult', '/notifications'};
+const Set<String> _controlledLocations = {'/profile', '/triage', '/me', '/consult', '/notifications', '/publish'};
 
 /// 应用路由（provider 化：redirect 可读登录态做受控路由门控）。
 ///
@@ -109,6 +112,17 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         path: '/content/:id',
         builder: (c, s) => ContentDetailPage(postId: int.parse(s.pathParameters['id']!)),
       ),
+      // 发布深链着陆（Story 6.1 · FR-40）：PET_BIRTHDAY 深链 → 打开统一发布 sheet，可预选成长日历。受控（需登录）。
+      GoRoute(
+        path: '/publish',
+        builder: (c, s) => PublishLandingPage(
+          preset: s.uri.queryParameters['preset'] == 'growth-calendar'
+              ? ContentType.growthMoment
+              : null,
+        ),
+      ),
+      // 里程碑列表页（壳）（Story 6.1 · FR-42）：MILESTONE_NODE 深链承接；本体属里程碑 mini-epic。受控（/profile/ 前缀）。
+      GoRoute(path: '/profile/milestones', builder: (c, s) => const MilestoneListPage()),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) => AppShell(navigationShell: navigationShell),
         branches: <StatefulShellBranch>[
