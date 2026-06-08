@@ -1,4 +1,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 媒体上传（Story 2.1/2.3/4.3/7.1：发布/分诊/头像）：相机 + 相册读取。
+         image_picker 前 permission_handler 闸门需 manifest 声明对应权限方可授予。 -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- Android 13+ 分区媒体；≤12 回退 READ_EXTERNAL_STORAGE。 -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
+    <!-- 推送通知（Story 6.4/6.7，Android 13+ 运行时权限）。 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- 相机非必需：无相机设备仍可装（走相册）。 -->
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
+
     <application
         android:label="petgo"
         android:name="${applicationName}"
