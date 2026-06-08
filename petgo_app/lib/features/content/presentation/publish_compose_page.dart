@@ -98,10 +98,11 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     if (mounted) setState(() => _linkedPet = pet);
   }
 
-  Future<void> _addImage(PublishController controller) async {
+  Future<void> _addImage(PublishController controller,
+      {MediaSource source = MediaSource.gallery}) async {
     final bytes = await ref
         .read(mediaUploadUseCaseProvider)
-        .pickAndProcess(source: MediaSource.gallery, context: context);
+        .pickAndProcess(source: source, context: context);
     if (bytes != null) controller.addImage(bytes);
   }
 
@@ -245,10 +246,17 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
               const SizedBox(height: 12),
               _imageRow(controller),
               const SizedBox(height: 14),
-              Row(children: const [
-                _SmallChip(icon: Icons.place_outlined, label: 'Lokasi'),
-                SizedBox(width: 10),
-                _SmallChip(icon: Icons.photo_camera_outlined, label: 'Kamera'),
+              Row(children: [
+                // Lokasi（定位）：V1 PRD 无定位功能 → 纯展示占位（不接 onTap）。
+                const _SmallChip(icon: Icons.place_outlined, label: 'Lokasi'),
+                const SizedBox(width: 10),
+                // Kamera（相机）：拍照上传，与「Tambah foto」相册同走 pickAndProcess（仅 source 不同）。
+                _SmallChip(
+                  key: const ValueKey('publishCameraChip'),
+                  icon: Icons.photo_camera_outlined,
+                  label: 'Kamera',
+                  onTap: () => _addImage(controller, source: MediaSource.camera),
+                ),
               ]),
               if (controller.hasFailed) ...[
                 const SizedBox(height: 12),
@@ -517,14 +525,17 @@ class _TabButton extends StatelessWidget {
 }
 
 class _SmallChip extends StatelessWidget {
-  const _SmallChip({required this.icon, required this.label});
+  const _SmallChip({required this.icon, required this.label, this.onTap, super.key});
 
   final IconData icon;
   final String label;
 
+  /// 可选点击回调；为空时为纯展示 chip（不可点）。
+  final VoidCallback? onTap;
+
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final chip = Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
         color: AppColors.card,
@@ -541,6 +552,12 @@ class _SmallChip extends StatelessWidget {
                   fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink2)),
         ],
       ),
+    );
+    if (onTap == null) return chip;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: chip,
     );
   }
 }
