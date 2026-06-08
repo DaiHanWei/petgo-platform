@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/network/dio_client.dart';
 import '../../../core/router/route_intent.dart';
+import '../../../shared/widgets/login_guide_outcome.dart';
 import '../../../shared/widgets/login_hard_dialog.dart';
 import '../../../shared/widgets/login_soft_sheet.dart';
 import '../data/auth_repository.dart';
@@ -77,14 +78,28 @@ class LoginGuideController {
     }
   }
 
-  Future<void> _attemptLogin(BuildContext rootContext, BuildContext overlayContext) async {
-    final resp = await _login();
-    if (resp == null) return; // 取消：保持引导，停留原页
+  /// 一次登录尝试（供软浮层/强弹窗的主 CTA 注入）。返回三态结果：
+  /// - 成功：关闭引导 + 按新老分流回跳，返回 [LoginGuideOutcome.success]。
+  /// - 取消（runner 返回 null）：保持引导、停留原页、**保留 pendingAction**，返回 cancelled。
+  /// - 失败（runner 抛异常——网络/Google/后端校验失败，复用 Story 1.3 AC5 失败信号）：
+  ///   **保留 pendingAction 不清空、不路由到注册引导**，由组件内联展示「登录失败，请重试」+
+  ///   重试入口（决策 F13 输入类失败口径），返回 [LoginGuideOutcome.failed]。
+  Future<LoginGuideOutcome> _attemptLogin(
+      BuildContext rootContext, BuildContext overlayContext) async {
+    final LoginResponse? resp;
+    try {
+      resp = await _login();
+    } catch (_) {
+      // 授权失败：保留 _pending（仅「关闭」清），不前进到 /onboarding，组件显示失败态+重试。
+      return LoginGuideOutcome.failed;
+    }
+    if (resp == null) return LoginGuideOutcome.cancelled; // 取消：保持引导，停留原页
     if (overlayContext.mounted && Navigator.of(overlayContext).canPop()) {
       Navigator.of(overlayContext).pop();
     }
-    if (!rootContext.mounted) return;
+    if (!rootContext.mounted) return LoginGuideOutcome.success;
     _handleSuccess(rootContext, resp);
+    return LoginGuideOutcome.success;
   }
 
   void _handleSuccess(BuildContext context, LoginResponse resp) {
