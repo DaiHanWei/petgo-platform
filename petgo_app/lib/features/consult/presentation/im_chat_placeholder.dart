@@ -5,7 +5,8 @@ import '../../../shared/widgets/design/striped_photo.dart';
 
 /// 实时对话区（Story 5.5 · PetGo Prototype VetChat 换肤）。
 ///
-/// 真机接入腾讯 IM Flutter SDK 收发文字/图片/视频（≤60s）+ 后台保连（NFR-5）属 **L2**。
+/// 真机接入腾讯 IM Flutter SDK 收发文字/图片 + 后台保连（NFR-5）属 **L2**。
+/// 🔄 PRD V1.0.0 修订（F4 · 2026-06-08）：V1.0.0 全程无视频，会话仅文字/图片（视频随收费模式后置）。
 /// 本组件为 demo/占位聊天面：种子对话 + 本地回声（发送→打字→兽医罐头回复），
 /// 视觉对齐原型气泡。真机接入时用 [imConversationId] 替换为 IM SDK 会话组件。
 class ImChatPlaceholder extends StatefulWidget {
