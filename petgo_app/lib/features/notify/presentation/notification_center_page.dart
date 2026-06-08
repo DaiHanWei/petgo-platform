@@ -10,7 +10,8 @@ import '../../../shared/widgets/empty_state.dart';
 import '../data/notification_repository.dart';
 import '../domain/notification_item.dart';
 
-/// 通知中心列表页（Story 6.6 F2/F3，FR-34）。倒序四类 + 空态 + 点击标记已读并深链跳目标。
+/// 通知中心列表页（Story 6.6 F2/F3，FR-34）。倒序六(~七)类 + 空态 + 点击标记已读并深链跳目标。
+/// 🔄 PRD V1.0.0 修订（F2 · 2026-06-08）：展示类型由四类扩到六(~七)类（加生日/纪念日/里程碑节点）。
 ///
 /// 亦是 6.1 深链未知/兜底的落地页（`/notifications`）。
 class NotificationCenterPage extends ConsumerStatefulWidget {
@@ -92,6 +93,10 @@ class _NotificationTile extends StatelessWidget {
         'CONTENT_LIKED' => Icons.favorite_border,
         'CONTENT_COMMENTED' => Icons.mode_comment_outlined,
         'NEW_CONSULT_REQUEST' => Icons.inbox_outlined,
+        // 🔄 PRD V1.0.0 修订（F2）：定时系统推送三类。
+        'PET_BIRTHDAY' => Icons.cake_outlined,
+        'COMPANION_ANNIVERSARY' => Icons.celebration_outlined,
+        'MILESTONE_NODE' => Icons.flag_outlined,
         _ => Icons.notifications_outlined,
       };
 
@@ -101,6 +106,10 @@ class _NotificationTile extends StatelessWidget {
         'CONTENT_LIKED' => l10n.notifyTypeContentLiked,
         'CONTENT_COMMENTED' => l10n.notifyTypeContentCommented,
         'NEW_CONSULT_REQUEST' => l10n.notifyTypeNewRequest,
+        // 🔄 PRD V1.0.0 修订（F2）：定时系统推送三类。
+        'PET_BIRTHDAY' => l10n.notifyTypePetBirthday,
+        'COMPANION_ANNIVERSARY' => l10n.notifyTypeCompanionAnniversary,
+        'MILESTONE_NODE' => l10n.notifyTypeMilestoneNode,
         _ => l10n.notificationCenterTitle,
       };
 

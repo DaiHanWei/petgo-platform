@@ -55,6 +55,28 @@ void main() {
     expect(find.byKey(const ValueKey('notification_t1')), findsOneWidget);
   });
 
+  testWidgets('🔄 AC2: 新增三类（生日/纪念日/里程碑节点）渲染图标+文案（F2）', (tester) async {
+    await _pump(
+      tester,
+      const NotificationCenterPage(),
+      _FakeNotifyRepo(items: [
+        const NotificationItem(
+            type: 'PET_BIRTHDAY', title: '生日快乐', deepLinkToken: 'b1', read: false),
+        const NotificationItem(
+            type: 'COMPANION_ANNIVERSARY', title: '陪伴纪念', deepLinkToken: 'a1', read: true),
+        const NotificationItem(
+            type: 'MILESTONE_NODE', title: '里程碑达成', deepLinkToken: 'm1', read: true),
+      ]),
+    );
+    expect(find.text('生日快乐'), findsOneWidget);
+    expect(find.text('陪伴纪念'), findsOneWidget);
+    expect(find.text('里程碑达成'), findsOneWidget);
+    // 三类专属图标
+    expect(find.byIcon(Icons.cake_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.celebration_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.flag_outlined), findsOneWidget);
+  });
+
   testWidgets('AC1: 铃铛角标 >0 显示 / 0 隐藏', (tester) async {
     await _pump(tester, const Scaffold(body: NotificationBell()), _FakeNotifyRepo(unread: 5));
     expect(find.byKey(const ValueKey('notificationBell')), findsOneWidget);

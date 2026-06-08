@@ -129,7 +129,7 @@ development_status:
   6-3-内容互动推送: review
   6-4-推送权限申请时机与拒绝处理: review                 # [PRD1.0.0✏️] F7 重做完成(L0 绿): 单时机→双时机取最早;L2 待本地
   6-5-app-版本更新提醒: review
-  6-6-全局通知中心-铃铛: ready-for-dev                  # [PRD1.0.0✏️] 退回: AC2 铃铛列表 4→6(~7) 类(加生日/纪念日/里程碑节点)
+  6-6-全局通知中心-铃铛: review                         # [PRD1.0.0✏️] F2 重做完成(L0 绿): 铃铛列表 4→6(~7) 类;L1/L2 待本地
   6-7-定时类系统推送-生日-纪念日-里程碑节点: ready-for-dev # [新增,文件已建] @Scheduled+@Async+DB去重 (F5),依赖 6-1 枚举/路由就绪; 覆盖 FR-40/41/42(仅L级节点推送)
   epic-6-retrospective: optional
 
