@@ -233,6 +233,7 @@
   "triageNeutralAdvice": "Please keep observing your pet and consult a vet if anything changes.",
   "triageRedHandoff": "Urgent high-risk result — full alert view coming soon",
   "triageArchiveNoPet": "Create a pet profile first to save to the archive",
+  "triageRedArchived": "Saved to the archive",
   "triageRedTitle": "Take {petName} to an animal hospital now",
   "@triageRedTitle": {
     "placeholders": {

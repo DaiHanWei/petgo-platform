@@ -11,9 +11,11 @@ import 'package:petgo/shared/widgets/red_alert_overlay.dart';
 import 'package:petgo/shared/widgets/triage_result_card.dart';
 
 Future<void> _pump(WidgetTester tester, TriageResult result,
-    {TriageArchiveHandler? archiveHandler}) async {
+    {TriageArchiveHandler? archiveHandler, TriageArchiveHandler? redArchiveHandler}) async {
   final container = ProviderContainer(overrides: [
     if (archiveHandler != null) triageArchiveHandlerProvider.overrideWithValue(archiveHandler),
+    if (redArchiveHandler != null)
+      triageRedArchiveHandlerProvider.overrideWithValue(redArchiveHandler),
     petProfileProvider.overrideWith((ref) => null), // 避免红色 overlay 读档案打网络
   ]);
   addTearDown(container.dispose);
@@ -108,9 +110,32 @@ void main() {
     expect(find.byType(RedAlertOverlay), findsOneWidget);
     expect(find.byKey(const ValueKey('triageRedSummary')), findsOneWidget);
     expect(find.byType(TriageResultCard), findsNothing);
-    // 🔒 零兽医 / 零存档（红色态）
+    // 🔒 零兽医 CTA / 零地图（红色态）；绿/黄存档键不复用于红色
+    expect(find.byKey(const ValueKey('triageConsultVet')), findsNothing);
     expect(find.byKey(const ValueKey('triageSaveToArchive')), findsNothing);
+    // 🆕 R2（FR-3）：红色态新增「存入档案」入口（独立键），存档≠变现护栏不变
+    expect(find.byKey(const ValueKey('triageRedSaveToArchive')), findsOneWidget);
     await tester.pump(const Duration(seconds: 5)); // 倒计时结束，清理定时器
+  });
+
+  testWidgets('AC4(R2·FR-3): 红色态「存入档案」→ 调红色存档回调（守零变现）', (tester) async {
+    var called = false;
+    await _pump(
+      tester,
+      const TriageResult(status: TriageStatus.done, dangerLevel: DangerLevel.red, advice: 'x'),
+      redArchiveHandler: (context, ref, {required triageId, required level, advice, symptom}) async {
+        called = true;
+        expect(triageId, 7);
+        expect(level, DangerLevel.red);
+      },
+    );
+    // 关闭 5s 锁定遮罩（唯一出口「我已知晓」），再点结果页存档入口
+    await tester.pump(const Duration(seconds: 5));
+    await tester.tap(find.byKey(const ValueKey('triageRedAcknowledge')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('triageRedSaveToArchive')));
+    await tester.pump();
+    expect(called, isTrue);
   });
 
   testWidgets('AC3: 点「存入档案」→ 调起存档回调（FR-16 触发）', (tester) async {
