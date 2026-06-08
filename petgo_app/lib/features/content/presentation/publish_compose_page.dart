@@ -246,11 +246,9 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
               const SizedBox(height: 12),
               _imageRow(controller),
               const SizedBox(height: 14),
+              // Kamera（相机）：拍照上传，与「Tambah foto」相册同走 pickAndProcess（仅 source 不同）。
+              // 注：Lokasi（定位）chip 已移除——V1 PRD 无定位功能，不留死按钮。
               Row(children: [
-                // Lokasi（定位）：V1 PRD 无定位功能 → 纯展示占位（不接 onTap）。
-                const _SmallChip(icon: Icons.place_outlined, label: 'Lokasi'),
-                const SizedBox(width: 10),
-                // Kamera（相机）：拍照上传，与「Tambah foto」相册同走 pickAndProcess（仅 source 不同）。
                 _SmallChip(
                   key: const ValueKey('publishCameraChip'),
                   icon: Icons.photo_camera_outlined,

@@ -274,29 +274,10 @@ class _CreatePet extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // 头像 + 相机角标
+                      // 头像（引导期用 emoji 选择；真实头像照片在档案创建/编辑页上传）。
                       const SizedBox(height: 16),
                       Center(
-                        child: Stack(
-                          children: [
-                            EmojiAvatar(emoji: emoji, size: 104, tone: AppColors.mintTint),
-                            Positioned(
-                              right: 0,
-                              bottom: 0,
-                              child: Container(
-                                width: 34,
-                                height: 34,
-                                decoration: BoxDecoration(
-                                  color: AppColors.mint,
-                                  shape: BoxShape.circle,
-                                  boxShadow: AppShadows.sm,
-                                ),
-                                child: const Icon(Icons.photo_camera_outlined,
-                                    size: 18, color: Colors.white),
-                              ),
-                            ),
-                          ],
-                        ),
+                        child: EmojiAvatar(emoji: emoji, size: 104, tone: AppColors.mintTint),
                       ),
                       const SizedBox(height: 14),
                       // emoji 选择
