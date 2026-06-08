@@ -29,7 +29,7 @@ class AccountControllerEndpointTest extends ApiIntegrationTest {
     /** 正常路径：本人 token + 正确确认短语 → 202，并断言已登记本人的注销作业（落库）。 */
     @Test
     void deleteMe_confirmed_is202_andRegistersDeletion() throws Exception {
-        User u = newUser(PetStatus.A);
+        User u = newUser(PetStatus.HAS_PET);
 
         mvc.perform(delete("/api/v1/me")
                         .header(HttpHeaders.AUTHORIZATION, userBearer(u.getId()))
@@ -44,7 +44,7 @@ class AccountControllerEndpointTest extends ApiIntegrationTest {
     /** 校验：确认短语错误 → 422，且不登记注销作业。 */
     @Test
     void deleteMe_wrongPhrase_is422_andNoDeletion() throws Exception {
-        User u = newUser(PetStatus.A);
+        User u = newUser(PetStatus.HAS_PET);
 
         mvc.perform(delete("/api/v1/me")
                         .header(HttpHeaders.AUTHORIZATION, userBearer(u.getId()))
@@ -60,7 +60,7 @@ class AccountControllerEndpointTest extends ApiIntegrationTest {
     /** 校验：缺 body（req == null）→ 422。 */
     @Test
     void deleteMe_missingBody_is422() throws Exception {
-        User u = newUser(PetStatus.A);
+        User u = newUser(PetStatus.HAS_PET);
 
         mvc.perform(delete("/api/v1/me")
                         .header(HttpHeaders.AUTHORIZATION, userBearer(u.getId())))
@@ -84,8 +84,8 @@ class AccountControllerEndpointTest extends ApiIntegrationTest {
      */
     @Test
     void deleteMe_onlyAffectsTokenSubject_notOtherUser() throws Exception {
-        User a = newUser(PetStatus.A);
-        User b = newUser(PetStatus.B);
+        User a = newUser(PetStatus.HAS_PET);
+        User b = newUser(PetStatus.PLANNING);
 
         mvc.perform(delete("/api/v1/me")
                         .header(HttpHeaders.AUTHORIZATION, userBearer(a.getId()))

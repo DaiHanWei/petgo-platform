@@ -80,46 +80,46 @@ GoRouter _flowRouter() => GoRouter(
 void main() {
   group('AC2 分叉（纯函数）', () {
     test('A → 档案创建引导；B/C → 首页', () {
-      expect(petStatusBranchLocation('A'), '/onboarding/profile');
-      expect(petStatusBranchLocation('B'), '/home');
-      expect(petStatusBranchLocation('C'), '/home');
+      expect(petStatusBranchLocation('HAS_PET'), '/onboarding/profile');
+      expect(petStatusBranchLocation('PLANNING'), '/home');
+      expect(petStatusBranchLocation('ENTHUSIAST'), '/home');
     });
   });
 
   group('AC5 状态切换分支（纯函数 · FR-21）', () {
     test('B/C→A 未建档 → 触发建档引导', () {
       expect(
-        petStatusChangeAction(oldStatus: 'B', newStatus: 'A', hasPetProfile: false),
+        petStatusChangeAction(oldStatus: 'PLANNING', newStatus: 'HAS_PET', hasPetProfile: false),
         PetStatusChangeAction.toProfileOnboarding,
       );
       expect(
-        petStatusChangeAction(oldStatus: 'C', newStatus: 'A', hasPetProfile: false),
+        petStatusChangeAction(oldStatus: 'ENTHUSIAST', newStatus: 'HAS_PET', hasPetProfile: false),
         PetStatusChangeAction.toProfileOnboarding,
       );
     });
     test('B/C→A 已建档 → 恢复可见，不重复引导', () {
       expect(
-        petStatusChangeAction(oldStatus: 'B', newStatus: 'A', hasPetProfile: true),
+        petStatusChangeAction(oldStatus: 'PLANNING', newStatus: 'HAS_PET', hasPetProfile: true),
         PetStatusChangeAction.restoreExistingProfile,
       );
     });
     test('A→B/C → 档案保留不删 + 非 A 态', () {
       expect(
-        petStatusChangeAction(oldStatus: 'A', newStatus: 'B', hasPetProfile: true),
+        petStatusChangeAction(oldStatus: 'HAS_PET', newStatus: 'PLANNING', hasPetProfile: true),
         PetStatusChangeAction.switchAwayFromPet,
       );
       expect(
-        petStatusChangeAction(oldStatus: 'A', newStatus: 'C', hasPetProfile: true),
+        petStatusChangeAction(oldStatus: 'HAS_PET', newStatus: 'ENTHUSIAST', hasPetProfile: true),
         PetStatusChangeAction.switchAwayFromPet,
       );
     });
     test('非 A 维度变化（B↔C / A→A）→ 仅刷新', () {
       expect(
-        petStatusChangeAction(oldStatus: 'B', newStatus: 'C', hasPetProfile: false),
+        petStatusChangeAction(oldStatus: 'PLANNING', newStatus: 'ENTHUSIAST', hasPetProfile: false),
         PetStatusChangeAction.refreshOnly,
       );
       expect(
-        petStatusChangeAction(oldStatus: 'A', newStatus: 'A', hasPetProfile: true),
+        petStatusChangeAction(oldStatus: 'HAS_PET', newStatus: 'HAS_PET', hasPetProfile: true),
         PetStatusChangeAction.refreshOnly,
       );
     });
@@ -232,7 +232,7 @@ void main() {
     FilledButton btn() => tester.widget<FilledButton>(find.byKey(const ValueKey('petStatusComplete')));
     expect(btn().onPressed, isNull); // 未选禁用
 
-    await tester.tap(find.byKey(const ValueKey('petStatus_A')));
+    await tester.tap(find.byKey(const ValueKey('petStatus_HAS_PET')));
     await tester.pump();
     expect(btn().onPressed, isNotNull); // 选后可用
   });
@@ -248,7 +248,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('petStatus_A')));
+    await tester.tap(find.byKey(const ValueKey('petStatus_HAS_PET')));
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('petStatusComplete')));
     await tester.pumpAndSettle();
@@ -270,7 +270,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('petStatus_B')));
+    await tester.tap(find.byKey(const ValueKey('petStatus_PLANNING')));
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('petStatusComplete')));
     await tester.pumpAndSettle();

@@ -57,7 +57,7 @@ void main() {
   testWidgets('AC2: 状态 A 未完成档案 → 首页显示提示条', (tester) async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
-    container.read(authControllerProvider.notifier).applyLogin(_userWithStatus('A'));
+    container.read(authControllerProvider.notifier).applyLogin(_userWithStatus('HAS_PET'));
 
     await _pumpHome(tester, container);
     expect(find.byType(ProfilePromptBar), findsOneWidget);
@@ -66,7 +66,7 @@ void main() {
   testWidgets('AC3: 状态 B/C → 首页不显示提示条', (tester) async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
-    container.read(authControllerProvider.notifier).applyLogin(_userWithStatus('B'));
+    container.read(authControllerProvider.notifier).applyLogin(_userWithStatus('PLANNING'));
 
     await _pumpHome(tester, container);
     expect(find.byType(ProfilePromptBar), findsNothing);
@@ -75,7 +75,7 @@ void main() {
   testWidgets('AC2: 关闭 X → 当次 session 隐藏提示条', (tester) async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
-    container.read(authControllerProvider.notifier).applyLogin(_userWithStatus('A'));
+    container.read(authControllerProvider.notifier).applyLogin(_userWithStatus('HAS_PET'));
 
     await _pumpHome(tester, container);
     expect(find.byType(ProfilePromptBar), findsOneWidget);
@@ -89,7 +89,7 @@ void main() {
   testWidgets('AC2: 已完成档案（hasPetProfile）→ 不显示提示条', (tester) async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
-    container.read(authControllerProvider.notifier).applyLogin(_userWithStatus('A', hasPetProfile: true));
+    container.read(authControllerProvider.notifier).applyLogin(_userWithStatus('HAS_PET', hasPetProfile: true));
 
     await _pumpHome(tester, container);
     expect(find.byType(ProfilePromptBar), findsNothing);

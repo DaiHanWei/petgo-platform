@@ -79,9 +79,9 @@ class MeServiceTest {
         when(users.findById(1L)).thenReturn(Optional.of(u));
         when(users.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        UserProfileResponse resp = meService.updateMe(1L, new UpdateMeRequest(null, "A", null));
+        UserProfileResponse resp = meService.updateMe(1L, new UpdateMeRequest(null, "HAS_PET", null));
 
-        assertThat(u.getPetStatus()).isEqualTo(PetStatus.A);
+        assertThat(u.getPetStatus()).isEqualTo(PetStatus.HAS_PET);
         assertThat(u.isOnboardingCompleted()).isTrue();
         assertThat(resp.onboardingCompleted()).isTrue();
     }
@@ -97,16 +97,16 @@ class MeServiceTest {
     void switchingAwayFromPetDoesNotDeletePetProfiles() {
         // AC5 / B5（FR-21）：A→B/C 状态切换绝不级联删除宠物档案（档案数据保留）。
         User u = freshUser();
-        u.setPetStatus(PetStatus.A);
+        u.setPetStatus(PetStatus.HAS_PET);
         u.setOnboardingCompleted(true);
         when(users.findById(1L)).thenReturn(Optional.of(u));
         when(users.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        UserProfileResponse resp = meService.updateMe(1L, new UpdateMeRequest(null, "B", null));
+        UserProfileResponse resp = meService.updateMe(1L, new UpdateMeRequest(null, "PLANNING", null));
 
-        assertThat(u.getPetStatus()).isEqualTo(PetStatus.B);
+        assertThat(u.getPetStatus()).isEqualTo(PetStatus.PLANNING);
         assertThat(u.isOnboardingCompleted()).isTrue(); // onboarding 不回退
-        assertThat(resp.petStatus()).isEqualTo(PetStatus.B);
+        assertThat(resp.petStatus()).isEqualTo(PetStatus.PLANNING);
         // 关键：状态切换路径对 pet_profiles 零删除调用（仅 existsByOwnerId 用于 hasPetProfile）
         verify(petProfiles, never()).delete(any());
         verify(petProfiles, never()).deleteById(any());

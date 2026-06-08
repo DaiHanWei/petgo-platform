@@ -23,7 +23,7 @@ class MiniProfileControllerEndpointTest extends ApiIntegrationTest {
     /** 正常路径：存在的有效用户 → 200 + nickname/avatar/postCount + isDeactivated=false。游客无 token 即可读。 */
     @Test
     void miniProfile_existingUser_isGuestReadable() throws Exception {
-        User u = newUser(PetStatus.A);
+        User u = newUser(PetStatus.HAS_PET);
 
         mvc.perform(get("/api/v1/users/{id}/mini-profile", u.getId()))
                 .andExpect(status().isOk())
@@ -35,7 +35,7 @@ class MiniProfileControllerEndpointTest extends ApiIntegrationTest {
     /** 游客可见性显式验证：完全不带 Authorization 头也返回 200。 */
     @Test
     void miniProfile_noToken_returns200() throws Exception {
-        User u = newUser(PetStatus.A);
+        User u = newUser(PetStatus.HAS_PET);
         mvc.perform(get("/api/v1/users/{id}/mini-profile", u.getId())
                         .header(HttpHeaders.ACCEPT, "application/json"))
                 .andExpect(status().isOk());

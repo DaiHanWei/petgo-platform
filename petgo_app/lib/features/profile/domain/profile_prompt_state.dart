@@ -47,7 +47,7 @@ bool shouldShowProfilePrompt({
   required bool hasPetProfile,
   required ProfilePromptState state,
 }) {
-  if (petStatus != 'A') return false; // B/C 不激活
+  if (petStatus != 'HAS_PET') return false; // PLANNING/ENTHUSIAST 不激活
   if (hasPetProfile || state.petProfileCompleted || state.dismissedPermanently) return false;
   if (state.dismissedThisSession) return false;
   return state.restartCount <= 3;

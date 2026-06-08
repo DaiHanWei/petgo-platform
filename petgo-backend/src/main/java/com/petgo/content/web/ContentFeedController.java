@@ -34,7 +34,7 @@ public class ContentFeedController {
         return feedService.loadFeed(petStatus, category, cursor);
     }
 
-    /** 登录用户取宠物状态（A/B/C）；游客（无 JWT / 无效）返回 null = 全显。 */
+    /** 登录用户取宠物状态（HAS_PET/PLANNING/ENTHUSIAST）；游客（无 JWT / 无效）返回 null = 全显。 */
     private String resolvePetStatus(Jwt jwt) {
         if (jwt == null || jwt.getSubject() == null) {
             return null;

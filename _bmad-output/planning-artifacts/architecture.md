@@ -276,7 +276,7 @@ spring init \
 
 **API（REST）：**
 - 资源路径：小写复数名词，多词用连字符 —— `/api/v1/pet-profiles`、`/api/v1/triage-tasks/{id}`、`/api/v1/consult-sessions/{id}/messages`。
-- 路径参数 `{id}`（Spring 风格）；查询参数 camelCase（`?petStatus=A&cursor=...`）。
+- 路径参数 `{id}`（Spring 风格）；查询参数 camelCase（`?petStatus=HAS_PET&cursor=...`）。
 - 公开/未授权暴露处用不可枚举 token，不暴露顺序 id —— `/p/{cardToken}`、深链用 token。
 - 自定义头：`Idempotency-Key`、`Accept-Language`（驱动 id/en）。
 

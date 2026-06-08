@@ -1,8 +1,8 @@
 /// 宠物状态选择后的分叉去向（AC2，纯函数）。
 ///
-/// A 我有宠物 → 档案创建引导（Story 1.7）；B/C → 直接进首页（不显示档案提示条）。
+/// HAS_PET 我有宠物 → 档案创建引导（Story 1.7）；PLANNING/ENTHUSIAST → 直接进首页（不显示档案提示条）。
 String petStatusBranchLocation(String petStatus) {
-  return petStatus.toUpperCase() == 'A' ? '/onboarding/profile' : '/home';
+  return petStatus.toUpperCase() == 'HAS_PET' ? '/onboarding/profile' : '/home';
 }
 
 /// 运行期改宠物状态的后续动作（Story 1.6 R2 / AC5 · FR-21 · 决策 F15 邻接）。
@@ -34,8 +34,8 @@ PetStatusChangeAction petStatusChangeAction({
   required String newStatus,
   required bool hasPetProfile,
 }) {
-  final wasA = oldStatus.toUpperCase() == 'A';
-  final isA = newStatus.toUpperCase() == 'A';
+  final wasA = oldStatus.toUpperCase() == 'HAS_PET';
+  final isA = newStatus.toUpperCase() == 'HAS_PET';
   if (!wasA && isA) {
     return hasPetProfile
         ? PetStatusChangeAction.restoreExistingProfile

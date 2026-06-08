@@ -20,12 +20,12 @@ class _TestAuthController extends AuthController {
 
 AuthState _authA() => const AuthState(
       status: AuthStatus.authenticated,
-      profile: UserProfile(petStatus: 'A', hasPetProfile: true),
+      profile: UserProfile(petStatus: 'HAS_PET', hasPetProfile: true),
     );
 
 AuthState _authB() => const AuthState(
       status: AuthStatus.authenticated,
-      profile: UserProfile(petStatus: 'B'),
+      profile: UserProfile(petStatus: 'PLANNING'),
     );
 
 Widget _wrap({required AuthState auth, PetProfile? profile, TimelinePage? page}) {

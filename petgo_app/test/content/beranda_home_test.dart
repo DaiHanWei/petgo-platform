@@ -18,7 +18,7 @@ LoginResponse _user() => const LoginResponse(
       isNewUser: false,
       onboardingCompleted: true,
       profile: UserProfile(
-          nickname: 'Aurel', petStatus: 'B', hasPetProfile: true, onboardingCompleted: true),
+          nickname: 'Aurel', petStatus: 'PLANNING', hasPetProfile: true, onboardingCompleted: true),
     );
 
 Future<void> _pumpHome(WidgetTester tester, ProviderContainer c) async {

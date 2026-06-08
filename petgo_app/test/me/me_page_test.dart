@@ -44,7 +44,7 @@ void main() {
   testWidgets('AC1: 顶栏双图标 + 主体人+宠物 + 主体不再平铺语言/退出/注销', (tester) async {
     await _pump(
       tester,
-      profile: const UserProfile(nickname: '小明', petStatus: 'A', hasPetProfile: true),
+      profile: const UserProfile(nickname: '小明', petStatus: 'HAS_PET', hasPetProfile: true),
       pet: const PetProfile(id: 1, name: 'Momo', cardToken: 'tok'),
     );
     // 顶栏右上双图标（帮助 + 设置）
@@ -65,7 +65,7 @@ void main() {
   testWidgets('AC5: 状态 A 且已建档 → 宠物卡片', (tester) async {
     await _pump(
       tester,
-      profile: const UserProfile(nickname: '小明', petStatus: 'A', hasPetProfile: true),
+      profile: const UserProfile(nickname: '小明', petStatus: 'HAS_PET', hasPetProfile: true),
       pet: const PetProfile(id: 1, name: 'Momo', cardToken: 'tok'),
     );
     expect(find.byKey(const ValueKey('mePetCard')), findsOneWidget);
@@ -76,7 +76,7 @@ void main() {
   testWidgets('AC5: 状态 A 未建档 → 引导卡', (tester) async {
     await _pump(
       tester,
-      profile: const UserProfile(nickname: '小明', petStatus: 'A', hasPetProfile: false),
+      profile: const UserProfile(nickname: '小明', petStatus: 'HAS_PET', hasPetProfile: false),
     );
     expect(find.byKey(const ValueKey('mePetGuideCard')), findsOneWidget);
     expect(find.byKey(const ValueKey('mePetCard')), findsNothing);
@@ -85,7 +85,7 @@ void main() {
   testWidgets('AC5: 状态 B/C → 宠物卡片与引导卡均不显示', (tester) async {
     await _pump(
       tester,
-      profile: const UserProfile(nickname: '小明', petStatus: 'B', hasPetProfile: false),
+      profile: const UserProfile(nickname: '小明', petStatus: 'PLANNING', hasPetProfile: false),
     );
     expect(find.byKey(const ValueKey('mePetCard')), findsNothing);
     expect(find.byKey(const ValueKey('mePetGuideCard')), findsNothing);

@@ -32,12 +32,12 @@ class GrowthArchivePage extends ConsumerWidget {
     final auth = ref.watch(authControllerProvider);
     final petStatus = auth.profile?.petStatus;
 
-    // 状态 B/C：非有宠态。
-    if (petStatus != null && petStatus != 'A') {
+    // PLANNING/ENTHUSIAST：非有宠态。
+    if (petStatus != null && petStatus != 'HAS_PET') {
       return _NonOwnerView(onChangeStatus: () => _openStatusEditor(context, ref));
     }
 
-    // 状态 A（或未知）：据是否有档案分支。
+    // HAS_PET（或未知）：据是否有档案分支。
     final profileAsync = ref.watch(petProfileProvider);
     return Scaffold(
       backgroundColor: AppColors.cream,

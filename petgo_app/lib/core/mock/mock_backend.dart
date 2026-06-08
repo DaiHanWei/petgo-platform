@@ -38,7 +38,7 @@ class MockBackend {
       'displayName': '测试用户',
       'email': 'demo@petgo.app',
       'avatarUrl': null,
-      'petStatus': 'A', // 有宠物 → 解锁成长档案
+      'petStatus': 'HAS_PET', // 有宠物 → 解锁成长档案
       'onboardingCompleted': true,
       'hasPetProfile': true,
       'role': 'USER',

@@ -150,8 +150,8 @@ class ContentFeedControllerEndpointTest extends ApiIntegrationTest {
     @Test
     void petStatusBExcludesGrowthMoment() throws Exception {
         // B（计划养）用户：硬过滤掉成长日历快乐时刻。
-        User viewerB = newUser(PetStatus.B);
-        User poster = newUser(PetStatus.A);
+        User viewerB = newUser(PetStatus.PLANNING);
+        User poster = newUser(PetStatus.HAS_PET);
         String growth = "growthmark-" + SEQ.incrementAndGet();
         String daily = "bdailymark-" + SEQ.incrementAndGet();
         // GROWTH_MOMENT 需 petId 非空且满足 FK → 造一只 poster 的真实档案。

@@ -46,7 +46,7 @@ public abstract class ApiIntegrationTest {
 
     /** 造一个已完成 onboarding 的持久化测试用户（唯一 sub），返回实体。 */
     protected User newUser() {
-        return newUser(PetStatus.A);
+        return newUser(PetStatus.HAS_PET);
     }
 
     protected User newUser(PetStatus status) {

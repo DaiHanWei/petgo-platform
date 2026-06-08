@@ -145,8 +145,8 @@ class _PetZone extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(authControllerProvider).profile;
-    if (profile?.petStatus != 'A') return const SizedBox.shrink(); // B/C 不显示
-    if (!(profile?.hasPetProfile ?? false)) return const _PetGuideCard(); // A 未建档 → 引导卡
+    if (profile?.petStatus != 'HAS_PET') return const SizedBox.shrink(); // PLANNING/ENTHUSIAST 不显示
+    if (!(profile?.hasPetProfile ?? false)) return const _PetGuideCard(); // HAS_PET 未建档 → 引导卡
     return const _PetCard(); // A + 已建档 → 宠物卡片
   }
 }
@@ -429,14 +429,14 @@ class _MyPostCard extends StatelessWidget {
   }
 }
 
-/// 宠物状态枚举 → 本地化标签（A=有宠物/B=计划养/C=爱好者；未知→'-'）。
+/// 宠物状态枚举 → 本地化标签（HAS_PET=有宠物/PLANNING=计划养/ENTHUSIAST=爱好者；未知→'-'）。
 String petStatusLabel(String? s, AppLocalizations l10n) {
   switch (s) {
-    case 'A':
+    case 'HAS_PET':
       return l10n.petStatusA;
-    case 'B':
+    case 'PLANNING':
       return l10n.petStatusB;
-    case 'C':
+    case 'ENTHUSIAST':
       return l10n.petStatusC;
     default:
       return '-';

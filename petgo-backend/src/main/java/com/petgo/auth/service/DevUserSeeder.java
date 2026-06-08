@@ -39,7 +39,7 @@ public class DevUserSeeder implements ApplicationRunner {
         }
         User u = User.newGoogleUser(DevGoogleTokenVerifier.DEV_SUB, "test@petgo.dev", "测试用户", null);
         u.setNickname("测试用户");
-        u.setPetStatus(PetStatus.A); // A=已有宠物，三类内容全显，便于验各页
+        u.setPetStatus(PetStatus.HAS_PET); // 已有宠物，三类内容全显，便于验各页
         u.setOnboardingCompleted(true); // 直接进主框架，免每次走 onboarding
         users.save(u);
         log.info("DEV seed：已创建测试用户 sub={}", DevGoogleTokenVerifier.DEV_SUB);

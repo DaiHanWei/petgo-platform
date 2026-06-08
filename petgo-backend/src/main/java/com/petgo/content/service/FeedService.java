@@ -32,7 +32,7 @@ public class FeedService {
 
     /** Feed 每批条数（FR-17）。 */
     public static final int PAGE_SIZE = 20;
-    private static final String STATUS_PLAN_TO_ADOPT = "B";
+    private static final String STATUS_PLAN_TO_ADOPT = "PLANNING";
 
     private final ContentPostRepository posts;
     private final AccountQueryService accountQueryService;
@@ -58,7 +58,7 @@ public class FeedService {
     /**
      * 读取一批 Feed。
      *
-     * @param petStatus 调用者宠物状态（A/B/C）；null = 游客（视作全显）
+     * @param petStatus 调用者宠物状态（HAS_PET/PLANNING/ENTHUSIAST）；null = 游客（视作全显）
      * @param category  分类 Tab（ALL/DAILY/GROWTH_MOMENT/KNOWLEDGE）
      * @param cursor    上一批末尾游标 token；null = 首批
      */
