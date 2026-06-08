@@ -396,7 +396,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
           children: [
             Icon(Icons.image_outlined, size: 20, color: AppColors.mint700),
             SizedBox(width: 8),
-            Text('Tambah foto / video', style: TextStyle(fontSize: 14.5)),
+            Text('Tambah foto', style: TextStyle(fontSize: 14.5)),
           ],
         ),
       );

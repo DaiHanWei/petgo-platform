@@ -111,7 +111,7 @@ class _TriagePageState extends ConsumerState<TriagePage> {
               cn: 'AI 分诊',
               badge: _EntryBadge(label: '≤ 15 detik', color: AppColors.mint700),
               desc:
-                  'Unggah foto / video gejala, AI kasih level bahaya + saran observasi & obat rumahan.',
+                  'Unggah foto gejala, AI kasih level bahaya + saran observasi & obat rumahan.',
               cta: 'Mulai triase',
               primary: false,
               onTap: () => requireLogin(
