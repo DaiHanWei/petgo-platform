@@ -13,6 +13,7 @@ import '../../features/content/presentation/home_page.dart';
 import '../../features/content/presentation/publish_landing_page.dart';
 import '../../features/me/presentation/language_settings_page.dart';
 import '../../features/me/presentation/me_page.dart';
+import '../../features/me/presentation/settings_page.dart';
 import '../../features/profile/presentation/growth_archive_page.dart';
 import '../../features/profile/presentation/milestone_list_page.dart';
 import '../../features/profile/presentation/pet_profile_create_page.dart';
@@ -101,6 +102,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       ),
       // 通知中心（Story 6.6）+ 6.1 深链兜底落点。受控路由（需登录）。
       GoRoute(path: '/notifications', builder: (c, s) => const NotificationCenterPage()),
+      // 二级设置页（Story 7.1 · F8）：语言/退出/注销。受控（/me 前缀，需登录）。
+      GoRoute(path: '/me/settings', builder: (c, s) => const SettingsPage()),
       // 语言设置（Story 7.2）。
       GoRoute(path: '/me/language', builder: (c, s) => const LanguageSettingsPage()),
       // 宠物聚会 Gath（PetGo Prototype 占位页）。shell 外 push。

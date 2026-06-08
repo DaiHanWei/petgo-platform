@@ -299,6 +299,8 @@
   "meLogout": "Keluar",
   "meDeleteAccount": "Hapus akun",
   "meHelp": "Bantuan & masukan",
+  "meSettings": "Pengaturan",
+  "mePetCardCreateTitle": "Buat profil untuk hewanmu",
   "meNicknameSaveFailed": "Gagal menyimpan, coba lagi",
   "logoutConfirmTitle": "Keluar?",
   "logoutConfirmYes": "Keluar",

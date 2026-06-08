@@ -361,6 +361,8 @@
   "meLogout": "Log out",
   "meDeleteAccount": "Delete account",
   "meHelp": "Help & feedback",
+  "meSettings": "Settings",
+  "mePetCardCreateTitle": "Create a profile for your pet",
   "meNicknameSaveFailed": "Could not save, please try again",
   "logoutConfirmTitle": "Log out?",
   "logoutConfirmYes": "Log out",
