@@ -57,6 +57,12 @@ public class VetConsultController {
         return VetSessionView.of(closeService.endByVet(currentVetId(jwt), id));
     }
 
+    /** 兽医退单（Story 5.3 R2，F11）：IN_PROGRESS → WAITING，重新入队广播。仅本会话接单兽医可退单。 */
+    @PostMapping("/{id}/release")
+    public VetSessionView release(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
+        return VetSessionView.of(acceptService.release(currentVetId(jwt), id));
+    }
+
     /** 兽医回复后通知用户（Story 6.2，FR-22A）：发完 IM 消息后 ping → 推送用户「有新回复」。 */
     @PostMapping("/{id}/notify-reply")
     public void notifyReply(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {

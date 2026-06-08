@@ -84,6 +84,10 @@ public class ConsultSession {
     @Column(name = "version", nullable = false)
     private long version;
 
+    /** 退单计数（Story 5.3 R2，决策 F11）：兽医退单 IN_PROGRESS→WAITING 的累计次数；&gt;2 为异常信号供运营。 */
+    @Column(name = "release_count", nullable = false)
+    private int releaseCount;
+
     // ===== 会话收尾 + 评分门（Story 5.6）=====
 
     /** 评分门 30min 计时基准（PENDING_CLOSE 起）。 */
@@ -155,6 +159,25 @@ public class ConsultSession {
     public void cancel() {
         requireStatus(SessionStatus.WAITING, "仅等待中的咨询可取消");
         this.status = SessionStatus.CANCELLED;
+    }
+
+    /**
+     * 兽医退单（Story 5.3 R2，决策 F11）：IN_PROGRESS → WAITING，解绑兽医 + 清 IM 会话 + 重置等待计时，
+     * 退单计数 +1。请求重新入队广播由 service 做。并发互斥沿用 {@code @Version} 乐观锁（saveAndFlush 裁决）。
+     * 每请求最多正常退单 2 次；{@link #isAbnormalReleaseCount()} 为真（&gt;2）即异常信号，由运营人工处理。
+     */
+    public void release() {
+        requireStatus(SessionStatus.IN_PROGRESS, "仅进行中的会话可退单");
+        this.status = SessionStatus.WAITING;
+        this.vetId = null;
+        this.imConversationId = null;
+        this.waitingStartedAt = Instant.now();
+        this.releaseCount += 1;
+    }
+
+    /** 退单次数是否已超过正常上限（&gt;2）——异常信号，运营人工处理（F11）。 */
+    public boolean isAbnormalReleaseCount() {
+        return releaseCount > 2;
     }
 
     /**
@@ -265,6 +288,10 @@ public class ConsultSession {
 
     public SessionStatus getStatus() {
         return status;
+    }
+
+    public int getReleaseCount() {
+        return releaseCount;
     }
 
     public ConsultSource getSource() {

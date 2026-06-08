@@ -123,7 +123,7 @@ development_status:
   epic-5: in-progress
   5-1-兽医账号与登录-含-admin-开户: review
   5-2-兽医工作台框架与在线状态管理: ready-for-dev        # [PRD1.0.0✏️·R2] review→rfd 回改: 加 AC 待接单抢单列表 UI(请求卡片+3min 预览超时) (F11)
-  5-3-兽医咨询发起-排队与超时: ready-for-dev             # [PRD1.0.0✏️·R2⚠️安全] review→rfd 回改: 加 AC 接单后端原子写入先到先得(DB互斥,禁中间件)+退单≤2次重广播(F11)+等待期退出/kill自动取消匹配 WAITING→CANCELLED(F12)
+  5-3-兽医咨询发起-排队与超时: review             # [PRD1.0.0✏️·R2⚠️安全] review→rfd 回改: 加 AC 接单后端原子写入先到先得(DB互斥,禁中间件)+退单≤2次重广播(F11)+等待期退出/kill自动取消匹配 WAITING→CANCELLED(F12) ·R2 实现完成(L0 绿: 退单 release+V23+原子写既有 核实; detached 退出取消); L1/L2 待本地
   5-4-ai-升级至兽医的上下文传递: review
   5-5-腾讯-im-会话与图文对话界面: review                 # [PRD1.0.0✏️] F4 去视频完成(L0 绿): 代码本无视频,删注释残留;L1/L2 待本地
   5-6-会话结束机制与用户评分门: ready-for-dev            # [PRD1.0.0✏️·R2] review→rfd 回改: 加 AC 会话进行中kill→断线30min保护窗口+重开「进行中」恢复(F12)+补评分推迟到进行中会话结束后

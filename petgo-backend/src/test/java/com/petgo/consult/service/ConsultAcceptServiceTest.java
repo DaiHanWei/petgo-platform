@@ -13,6 +13,7 @@ import com.petgo.consult.domain.ConsultSession;
 import com.petgo.consult.domain.ConsultSource;
 import com.petgo.consult.domain.SessionStatus;
 import com.petgo.consult.event.ConsultAcceptedEvent;
+import com.petgo.consult.event.ConsultRequestQueuedEvent;
 import com.petgo.consult.repository.ConsultSessionRepository;
 import com.petgo.shared.error.AppException;
 import com.petgo.shared.im.TencentImClient;
@@ -96,5 +97,61 @@ class ConsultAcceptServiceTest {
         assertThatThrownBy(() -> service().accept(3L, 11L)).isInstanceOf(AppException.class);
         verify(imClient, never()).createConversation(anyString(), anyString());
         verify(presence, never()).goBusy(anyLong());
+    }
+
+    // ===== Story 5.3 R2（F11）退单 =====
+
+    @Test
+    void releaseReturnsToWaitingRequeuesAndGoesAvailable() {
+        ConsultSession s = waiting(11L);
+        s.markInProgress(3L); // 兽医 3 接单
+        when(repo.findById(11L)).thenReturn(Optional.of(s));
+        when(repo.saveAndFlush(s)).thenReturn(s);
+
+        ConsultSession result = service().release(3L, 11L);
+
+        assertThat(result.getStatus()).isEqualTo(SessionStatus.WAITING);
+        assertThat(result.getVetId()).isNull();
+        assertThat(result.getReleaseCount()).isEqualTo(1);
+        verify(queue).enqueue(11L);
+        verify(presence).goAvailable(3L);
+        verify(events).publishEvent(any(ConsultRequestQueuedEvent.class));
+    }
+
+    @Test
+    void releaseRejectsNonOwnerVet() {
+        ConsultSession s = waiting(11L);
+        s.markInProgress(3L); // 兽医 3 接单
+        when(repo.findById(11L)).thenReturn(Optional.of(s));
+
+        assertThatThrownBy(() -> service().release(99L, 11L)).isInstanceOf(AppException.class);
+        verify(queue, never()).enqueue(anyLong());
+        verify(presence, never()).goAvailable(anyLong());
+    }
+
+    @Test
+    void releaseRejectsWaitingSessionWithoutVet() {
+        ConsultSession s = waiting(11L); // 仍 WAITING，无接单兽医（vetId=null）
+        when(repo.findById(11L)).thenReturn(Optional.of(s));
+
+        // 归属校验先挡（vetId 为 null），不泄露存在性；队列不受影响。
+        assertThatThrownBy(() -> service().release(3L, 11L)).isInstanceOf(AppException.class);
+        verify(queue, never()).enqueue(anyLong());
+    }
+
+    @Test
+    void releaseCountIncrementsAndFlagsAbnormalBeyondTwo() {
+        ConsultSession s = waiting(11L);
+        s.markInProgress(3L);
+        s.release(); // 退单 1 → WAITING
+        assertThat(s.getReleaseCount()).isEqualTo(1);
+        assertThat(s.isAbnormalReleaseCount()).isFalse();
+        s.markInProgress(3L);
+        s.release(); // 退单 2
+        assertThat(s.isAbnormalReleaseCount()).isFalse();
+        s.markInProgress(3L);
+        s.release(); // 退单 3 → 异常信号
+        assertThat(s.getReleaseCount()).isEqualTo(3);
+        assertThat(s.isAbnormalReleaseCount()).isTrue();
     }
 }
