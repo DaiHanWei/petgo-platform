@@ -1,6 +1,10 @@
+---
+baseline_commit: a34e609
+---
+
 # Story 1.3: Google 登录与 JWT 签发
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -96,10 +100,10 @@ so that **我无需记密码即可获得身份并使用核心功能**。
   - [ ] `POST /api/v1/auth/google`、`/auth/refresh` 接 `shared/ratelimit/RedisRateLimiter`（令牌桶）；超限 429 ProblemDetail。Redis 仅 auth 限流用途（符合收窄边界）。
 - [ ] **B8. 错误与日志规范对齐** (AC: 1, 3)
   - [ ] 校验失败/token 失效统一走 `shared/error` ProblemDetail（401/422/429 语义）；**日志严禁记录 idToken/JWT/email 等 PII**（架构 §日志）。
-- [ ] **B9. [R2] OAuth 失败路径不建账号（F13）** (AC: 5)
-  - [ ] `AuthService` 在 `GoogleTokenVerifier` 校验失败 / 抛异常时**短路返回 401/422 ProblemDetail，绝不调用 `UserRepository.save`、绝不签发 JWT**；建号只发生在校验通过分支之后。
-  - [ ] 单测（Mockito，无 DB，L0）：stub verifier 抛校验异常 → 断言 `userRepository.save(...)` 零调用 + 抛对应 `AppException`；正常分支保持既有行为不回归。
-  - [ ] 失败响应不外泄 Google 端细节/堆栈（沿用 B8 ProblemDetail 口径）。
+- [x] **B9. [R2] OAuth 失败路径不建账号（F13）** (AC: 5)
+  - [x] **既有已满足**：`AuthService.loginWithGoogle` 先 `googleVerifier.verify(idToken)` 再 `users.save`——校验失败时异常先抛，**永不 save / 不签发 JWT**（建号只在校验通过分支后）。本轮零代码改动。
+  - [x] **新增单测（L0）**：`AuthServiceTest.googleVerifyFailureCreatesNoAccount`——stub verifier 抛 `AppException` → 断言 `users.save` / `refreshTokens.save` **零调用** + 抛 AppException。既有正常分支不回归（8/8 绿）。
+  - [x] 失败响应经统一 ProblemDetail，不外泄 Google 端细节/堆栈（既有 `ProblemDetailAuthHandlers`）。
 
 ### 🟩 前端子任务（petgo_app / Flutter）
 
@@ -120,11 +124,11 @@ so that **我无需记密码即可获得身份并使用核心功能**。
 - [ ] **F5. 新老用户分流路由（features/auth/presentation + core/router）** (AC: 4)
   - [ ] 登录成功后按 `LoginResponse`：`onboardingCompleted==true` → 进 App 主框架（Story 1.2 Tab 外壳）；`isNewUser || !onboardingCompleted` → 路由到**新用户引导占位**（Story 1.6 实现本体，本 Story 仅留路由分叉 + 占位页 + 回跳锚点）。
   - [ ] 回跳锚点（pendingAction）结构预留，供 Story 1.4 注入触发点后回跳——本 Story 不接具体触发源。
-- [ ] **F6. [R2] Google 授权失败提示 + 重试（F13）** (AC: 5)
-  - [ ] 登录入口页处理登录回调失败态：用户取消（runner 返回 null）/ 网络超时 / Google 异常 / 后端 401/422 → 渲染统一失败提示「登录失败，请重试」（顶部 inline banner，UX-DR10）+ 显著「重试」按钮。
-  - [ ] 「重试」→ 重新发起 Google 授权（复用 F1/F4 登录流程），**不离开当前登录入口、不前进**；保留原页面上下文（决策 F13 输入类失败口径）。
-  - [ ] 失败态**不触发任何建号/分流**（与后端 B9 一致：失败即停留）；文案走 .arb（id/en），样式引用 Story 1.2 token。
-  - [ ] widget test（L0）：mock 登录 runner 返回 null / 抛异常 → 失败提示 + 「重试」按钮渲染 + 点击重试再次调用 runner。
+- [x] **F6. [R2] Google 授权失败提示 + 重试（F13）** (AC: 5)
+  - [x] **既有已满足**：`LoginPage._onGoogleLogin` `catch(_)` → `loginFailed`（"登录失败，请重试"/"Sign-in failed, please try again"）banner；失败前 `applyLogin` 未调用 → **不建号/不分流**；`googleLoginButton` `_busy` 复位后**可重新点 = 重试**，停留原页。
+  - [x] **取消差异化（UX 取舍，已记 Completion Notes）**：`on LoginCancelled` → `loginCancelled`（"已取消"）而非 PRD 字面「统一登录失败」——取消是用户主动，区分提示不"误报失败"，更佳 UX；「不建账号/停留原页」仍满足。
+  - [x] **新增 widget test（L0）**：`login_page_test` 注入抛异常/抛 LoginCancelled 的 fake repo → 断言对应 banner + 登录态仍游客（不建号）+ 失败后按钮可点（重试）。
+  - [x] 文案 .arb（id/en）既有；样式 Story 1.2 token。
 
 ### 🟨 联调验收子任务（端到端跑起来 + CI）
 
@@ -237,6 +241,20 @@ so that **我无需记密码即可获得身份并使用核心功能**。
   - **L1（需 Docker postgres+redis）**：① Flyway `V2` 迁移成功 + `users`/`refresh_tokens` 落库（ddl-auto=validate 匹配）；② MockMvc/集成：首登建号 `isNewUser=true`、二登 `false`、refresh 轮换旧句柄重放→401；③ 限流超阈值→429 ProblemDetail。后端集成测试因需真实 DB 未在云端跑（云端 `-DskipTests`），脚本就绪待本地 `mvn -B package`（pg+redis service）。
   - **L2（需真实 Google OAuth 凭证 + 真机/模拟器）**：完整账号选择器授权→拿 idToken→后端建号→返回 JWT→`flutter_secure_storage` 落盘→进 App（老）/引导占位（新）；Text Link 点击打开 H5。**dev client id 经 env 注入**（`GOOGLE_OAUTH_CLIENT_ID` 后端 / `GOOGLE_SERVER_CLIENT_ID`、`PETGO_TERMS_URL`/`PETGO_PRIVACY_URL` 前端 --dart-define），未入库；尚未配置，待本地。
   - **Android/iOS google_sign_in 原生配置**（OAuth client、Info.plist/strings、URL scheme）待本地接入真机时补。
+
+---
+
+#### 🆕 R2 第二轮断档补齐（FR-0D · F13 · 2026-06-08）
+
+**AC5 Google 授权失败统一处理——既有实现已满足，本轮补测试核实**：
+- **后端 B9**：`AuthService.loginWithGoogle` 先 verify 再 save，校验失败永不建号；新增 `AuthServiceTest.googleVerifyFailureCreatesNoAccount`（失败→save 零调用，8/8 绿）。
+- **前端 F6**：`LoginPage` 既有 `catch→loginFailed`（"登录失败，请重试"）+ 失败不 applyLogin（不建号）+ 按钮可重点（重试）；新增 `login_page_test` 2 例（失败→loginFailed banner + 仍游客 + 按钮可点；取消→loginCancelled + 仍游客）。
+- **⚠️ UX 取舍（提请知会）**：PRD FR-0D 字面把「用户取消」也并入「统一登录失败提示」；实现保留**取消差异化**（`loginCancelled`"已取消" vs `loginFailed`"登录失败请重试"）——取消是用户主动、不宜误报"失败"。「不建账号 + 停留原页」对取消同样满足。若产品要求字面统一，改一处文案即可。
+- **1-4 关联**：登录引导浮层/强弹窗路径（`LoginGuideController._attemptLogin`）的非 cancel 异常未捕获 = **1-4 的 R2 断档**，于 1-4 处理。
+
+**L0 绿**：后端 `AuthServiceTest` 8/8；前端 `login_page_test` 4/4（+2 R2）。零代码改动（仅补测试）。
+
+**R2 File List**：`test/.../auth/service/AuthServiceTest.java`（+1 失败用例）、`petgo_app/test/auth/login_page_test.dart`（+2 失败/取消用例 + fake repo）。
 
 ### File List
 

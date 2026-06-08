@@ -79,7 +79,7 @@ development_status:
   epic-1: in-progress
   1-1-双产物脚手架与本地可运行骨架: review
   1-2-设计-token-系统-tab-bar-外壳与-i18n-脚手架: ready-for-dev
-  1-3-google-登录与-jwt-签发: ready-for-dev          # [PRD1.0.0✏️] 加多 IdP 架构预留注记 (为 1.1.0 Apple,非本版 AC) ·[R2] 加 AC: Google 授权失败态(取消/超时/异常)统一提示+重试+不建账号 (FR-0D,F13)
+  1-3-google-登录与-jwt-签发: review          # [PRD1.0.0✏️] 加多 IdP 架构预留注记 (为 1.1.0 Apple,非本版 AC) ·[R2] 加 AC: Google 授权失败态(取消/超时/异常)统一提示+重试+不建账号 (FR-0D,F13) ·R2 完成(L0 绿: AC5 失败态既有满足+补测试,后端 8/8+前端 login 4/4; 取消差异化已记)
   1-4-登录引导浮层与登录后回跳: ready-for-dev          # [PRD1.0.0✏️·R2] 加 AC: 授权失败回触发前页面+重试 (FR-0C/0D,F13)
   1-5-游客只读进入与受控入口登录门控: ready-for-dev
   1-6-新用户引导-昵称确认与宠物状态选择: ready-for-dev  # [PRD1.0.0✏️] 改 AC3: B/C→A 复用 FR-0G 建档引导 ·[R2] 加 AC: 注册返回键语义(0E退登录/0F回0E)+状态切换 A↔B/C 已建档分支 (FR-21,F15邻)

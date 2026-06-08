@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -70,6 +71,16 @@ class AuthServiceTest {
         assertThat(resp.refreshToken()).isEqualTo("raw-refresh");
         assertThat(resp.onboardingCompleted()).isFalse();
         verify(users).save(any(User.class));
+    }
+
+    @Test
+    void googleVerifyFailureCreatesNoAccount() {
+        // Story 1.3 R2（F13）：OAuth 校验失败 → 短路抛异常，绝不建号/不签发。
+        when(googleVerifier.verify("bad")).thenThrow(AppException.unauthorized("无效的 Google 凭证"));
+
+        assertThatThrownBy(() -> authService.loginWithGoogle("bad")).isInstanceOf(AppException.class);
+        verify(users, never()).save(any(User.class));
+        verify(refreshTokens, never()).save(any(RefreshToken.class));
     }
 
     @Test
