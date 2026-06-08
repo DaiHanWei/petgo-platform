@@ -3,6 +3,8 @@ package com.petgo.auth.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.petgo.auth.domain.PetStatus;
@@ -89,6 +91,26 @@ class MeServiceTest {
         when(users.findById(1L)).thenReturn(Optional.of(freshUser()));
         assertThatThrownBy(() -> meService.updateMe(1L, new UpdateMeRequest(null, "Z", null)))
                 .isInstanceOf(AppException.class);
+    }
+
+    @Test
+    void switchingAwayFromPetDoesNotDeletePetProfiles() {
+        // AC5 / B5（FR-21）：A→B/C 状态切换绝不级联删除宠物档案（档案数据保留）。
+        User u = freshUser();
+        u.setPetStatus(PetStatus.A);
+        u.setOnboardingCompleted(true);
+        when(users.findById(1L)).thenReturn(Optional.of(u));
+        when(users.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        UserProfileResponse resp = meService.updateMe(1L, new UpdateMeRequest(null, "B", null));
+
+        assertThat(u.getPetStatus()).isEqualTo(PetStatus.B);
+        assertThat(u.isOnboardingCompleted()).isTrue(); // onboarding 不回退
+        assertThat(resp.petStatus()).isEqualTo(PetStatus.B);
+        // 关键：状态切换路径对 pet_profiles 零删除调用（仅 existsByOwnerId 用于 hasPetProfile）
+        verify(petProfiles, never()).delete(any());
+        verify(petProfiles, never()).deleteById(any());
+        verify(petProfiles, never()).deleteAll();
     }
 
     @Test

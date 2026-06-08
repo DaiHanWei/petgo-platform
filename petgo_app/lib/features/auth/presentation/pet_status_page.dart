@@ -49,10 +49,19 @@ class _PetStatusPageState extends ConsumerState<PetStatusPage> {
     }
   }
 
+  /// FR-0F 返回键语义（AC4）：在状态选择页按返回 → 回昵称确认页（已填昵称保留），
+  /// **不退出登录流程、不跳过状态选择**（账号在状态选择完成前不置 onboarding 完成）。
+  void _onBackToNickname() => context.go('/onboarding/nickname');
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Scaffold(
+    return PopScope(
+      canPop: false, // 返回键语义自定义（AC4）：状态页返回=回昵称页、不退出流程
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _onBackToNickname();
+      },
+      child: Scaffold(
       backgroundColor: AppColors.base,
       appBar: AppBar(title: Text(l10n.onboardingPetStatusTitle), backgroundColor: AppColors.base),
       body: SafeArea(
@@ -82,6 +91,7 @@ class _PetStatusPageState extends ConsumerState<PetStatusPage> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

@@ -29,6 +29,36 @@ class _FakeMeRepository implements MeRepository {
       UserProfile(petStatus: petStatus, onboardingCompleted: true);
 }
 
+/// 记录写端点调用，用于断言「返回键不建账号」（AC4）。
+class _RecordingMeRepository implements MeRepository {
+  final List<String> writeCalls = [];
+  @override
+  Future<UserProfile> getMe() async => const UserProfile();
+  @override
+  Future<UserProfile> updateNickname(String nickname) async {
+    writeCalls.add('nickname');
+    return UserProfile(nickname: nickname);
+  }
+
+  @override
+  Future<UserProfile> updatePetStatus(String petStatus) async {
+    writeCalls.add('petStatus');
+    return UserProfile(petStatus: petStatus, onboardingCompleted: true);
+  }
+}
+
+/// 引导返回键测试用路由（昵称 ↔ 状态 ↔ 未登录首页占位）。
+GoRouter _backRouter(String initial) => GoRouter(
+      initialLocation: initial,
+      routes: [
+        GoRoute(path: '/onboarding/nickname', builder: (c, s) => const NicknamePage()),
+        GoRoute(path: '/onboarding/pet-status', builder: (c, s) => const PetStatusPage()),
+        GoRoute(
+            path: '/home',
+            builder: (c, s) => const Scaffold(body: Center(child: Text('GUEST HOME')))),
+      ],
+    );
+
 LoginResponse _newUser(String displayName) => LoginResponse(
       accessToken: 'a',
       refreshToken: 'r',
@@ -54,6 +84,105 @@ void main() {
       expect(petStatusBranchLocation('B'), '/home');
       expect(petStatusBranchLocation('C'), '/home');
     });
+  });
+
+  group('AC5 状态切换分支（纯函数 · FR-21）', () {
+    test('B/C→A 未建档 → 触发建档引导', () {
+      expect(
+        petStatusChangeAction(oldStatus: 'B', newStatus: 'A', hasPetProfile: false),
+        PetStatusChangeAction.toProfileOnboarding,
+      );
+      expect(
+        petStatusChangeAction(oldStatus: 'C', newStatus: 'A', hasPetProfile: false),
+        PetStatusChangeAction.toProfileOnboarding,
+      );
+    });
+    test('B/C→A 已建档 → 恢复可见，不重复引导', () {
+      expect(
+        petStatusChangeAction(oldStatus: 'B', newStatus: 'A', hasPetProfile: true),
+        PetStatusChangeAction.restoreExistingProfile,
+      );
+    });
+    test('A→B/C → 档案保留不删 + 非 A 态', () {
+      expect(
+        petStatusChangeAction(oldStatus: 'A', newStatus: 'B', hasPetProfile: true),
+        PetStatusChangeAction.switchAwayFromPet,
+      );
+      expect(
+        petStatusChangeAction(oldStatus: 'A', newStatus: 'C', hasPetProfile: true),
+        PetStatusChangeAction.switchAwayFromPet,
+      );
+    });
+    test('非 A 维度变化（B↔C / A→A）→ 仅刷新', () {
+      expect(
+        petStatusChangeAction(oldStatus: 'B', newStatus: 'C', hasPetProfile: false),
+        PetStatusChangeAction.refreshOnly,
+      );
+      expect(
+        petStatusChangeAction(oldStatus: 'A', newStatus: 'A', hasPetProfile: true),
+        PetStatusChangeAction.refreshOnly,
+      );
+    });
+  });
+
+  testWidgets('AC4: 昵称页返回 → 退出登录流程回未登录首页，账号不创建', (tester) async {
+    final fake = _RecordingMeRepository();
+    final container = ProviderContainer(
+        overrides: [meRepositoryProvider.overrideWithValue(fake)]);
+    addTearDown(container.dispose);
+    container.read(authControllerProvider.notifier).applyLogin(_newUser('Alice G'));
+    expect(container.read(authControllerProvider).status,
+        AuthStatus.newUserPendingOnboarding);
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp.router(
+        routerConfig: _backRouter('/onboarding/nickname'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byType(NicknamePage), findsOneWidget);
+
+    await tester.binding.handlePopRoute(); // 模拟设备返回键
+    await tester.pumpAndSettle();
+
+    // 回未登录首页 + 落游客态 + 未调任何写账号端点
+    expect(find.text('GUEST HOME'), findsOneWidget);
+    expect(container.read(authControllerProvider).status, AuthStatus.guest);
+    expect(fake.writeCalls, isEmpty);
+  });
+
+  testWidgets('AC4: 状态页返回 → 回昵称页且已填昵称保留，不退出流程', (tester) async {
+    final container = ProviderContainer(
+        overrides: [meRepositoryProvider.overrideWithValue(_FakeMeRepository())]);
+    addTearDown(container.dispose);
+    container.read(authControllerProvider.notifier).applyLogin(_newUser('Alice G'));
+    // 模拟昵称已填为 Bob（从昵称页继续时写入 profile）
+    container
+        .read(authControllerProvider.notifier)
+        .applyProfile(const UserProfile(displayName: 'Alice G', nickname: 'Bob'));
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp.router(
+        routerConfig: _backRouter('/onboarding/pet-status'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byType(PetStatusPage), findsOneWidget);
+
+    await tester.binding.handlePopRoute(); // 模拟设备返回键
+    await tester.pumpAndSettle();
+
+    // 回昵称页 + 已填昵称保留 + 仍在登录流程（未退出）
+    expect(find.byType(NicknamePage), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Bob'), findsOneWidget);
+    expect(container.read(authControllerProvider).status,
+        AuthStatus.newUserPendingOnboarding);
   });
 
   testWidgets('AC1: 昵称页默认填充 displayName，≤20 可继续、>20 禁继续', (tester) async {

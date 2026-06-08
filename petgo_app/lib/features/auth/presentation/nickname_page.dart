@@ -29,8 +29,19 @@ class _NicknamePageState extends ConsumerState<NicknamePage> {
   @override
   void initState() {
     super.initState();
-    final displayName = ref.read(authControllerProvider).profile?.displayName ?? '';
-    _controller = TextEditingController(text: displayName);
+    // 优先回显已填昵称（从状态选择页返回时保留，AC4）；否则默认 Google displayName。
+    final profile = ref.read(authControllerProvider).profile;
+    final initial = (profile?.nickname?.trim().isNotEmpty ?? false)
+        ? profile!.nickname!
+        : (profile?.displayName ?? '');
+    _controller = TextEditingController(text: initial);
+  }
+
+  /// FR-0E 返回键语义（AC4）：在昵称确认页按返回 → 退出登录流程、回未登录首页，
+  /// **账号不创建**（不调任何写账号端点，清本地登录态回游客）。下次重新从 Google 授权开始。
+  void _onBackExitFlow() {
+    ref.read(authControllerProvider.notifier).toGuest();
+    context.go('/home');
   }
 
   @override
@@ -67,7 +78,12 @@ class _NicknamePageState extends ConsumerState<NicknamePage> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final count = _controller.text.characters.length;
-    return Scaffold(
+    return PopScope(
+      canPop: false, // 返回键语义自定义（AC4）：昵称页返回=退出登录流程、不建账号
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _onBackExitFlow();
+      },
+      child: Scaffold(
       backgroundColor: AppColors.base,
       appBar: AppBar(title: Text(l10n.onboardingNicknameTitle), backgroundColor: AppColors.base),
       body: SafeArea(
@@ -101,6 +117,7 @@ class _NicknamePageState extends ConsumerState<NicknamePage> {
             ],
           ),
         ),
+      ),
       ),
     );
   }
