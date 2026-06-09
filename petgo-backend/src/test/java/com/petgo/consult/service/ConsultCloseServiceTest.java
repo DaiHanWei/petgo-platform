@@ -121,4 +121,31 @@ class ConsultCloseServiceTest {
         assertThat(s.getRatingPromptState()).isEqualTo(RatingPromptState.PENDING);
         verify(events).publishEvent(any(ConsultClosedEvent.class));
     }
+
+    // ===== AC5（F12 · R2）：补评分推迟——有进行中会话则不补弹 =====
+
+    @Test
+    void pendingRatingDeferredWhenActiveSession() {
+        ConsultSession active = inProgress(20L, 3L); // 用户有进行中会话
+        when(sessions.findFirstByUserIdAndStatusInOrderByCreatedAtDesc(7L, SessionStatus.ACTIVE))
+                .thenReturn(Optional.of(active));
+
+        assertThat(service().pendingRating(7L)).isEmpty(); // 推迟补弹
+        // 有活跃会话时根本不查待补弹会话（推迟逻辑短路在前）。
+        verify(sessions, never()).findFirstByUserIdAndStatusAndRatingPromptState(
+                org.mockito.ArgumentMatchers.anyLong(), any(), any());
+    }
+
+    @Test
+    void pendingRatingReturnedWhenNoActiveSession() {
+        ConsultSession closed = ConsultSession.startWaiting(7L, ConsultSource.DIRECT);
+        ReflectionTestUtils.setField(closed, "id", 21L);
+        when(sessions.findFirstByUserIdAndStatusInOrderByCreatedAtDesc(7L, SessionStatus.ACTIVE))
+                .thenReturn(Optional.empty());
+        when(sessions.findFirstByUserIdAndStatusAndRatingPromptState(
+                7L, SessionStatus.CLOSED, RatingPromptState.PENDING))
+                .thenReturn(Optional.of(closed));
+
+        assertThat(service().pendingRating(7L)).contains(closed); // 无活跃会话 → 放行补弹
+    }
 }

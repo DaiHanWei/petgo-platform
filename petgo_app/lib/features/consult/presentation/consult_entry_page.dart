@@ -9,11 +9,16 @@ import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../data/consult_repository.dart';
 import '../domain/consult_session.dart';
+import 'consult_rating_dialog.dart';
 
 /// 兽医咨询入口（Story 5.3 F1）。在线/离线两态 + 已有进行中跳转 + 离线软引导（不强制）。
 ///
 /// 概率性在线展示「工作日 8:00–23:00 通常有兽医在线」（静态 l10n，**不显示人数**）；
 /// 离线态「当前暂无兽医在线」+ 恢复时段 + 「先用 AI 分诊？」可点跳 FR-4A（不强制）。
+///
+/// Story 5.6 AC5（F12 · R2 补评分推迟）：进页若**有进行中会话**（[_active] 非空，即从「进行中」可恢复），
+/// **推迟补弹评分**——不在用户正处理活跃会话时打断；仅当无活跃会话时才补弹一次（后端 `pendingRating`
+/// 同样以「有活跃会话则空」双重兜底）。
 class ConsultEntryPage extends ConsumerStatefulWidget {
   const ConsultEntryPage({super.key});
 
@@ -25,6 +30,7 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
   bool _starting = false;
   ConsultSession? _active;
   bool _activeChecked = false;
+  bool _ratingPromptHandled = false;
 
   @override
   void initState() {
@@ -35,14 +41,35 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
   Future<void> _checkActive() async {
     try {
       final a = await ref.read(consultRepositoryProvider).active();
-      if (mounted) {
-        setState(() {
-          _active = a;
-          _activeChecked = true;
-        });
+      if (!mounted) return;
+      setState(() {
+        _active = a;
+        _activeChecked = true;
+      });
+      // AC5（F12·R2 补评分推迟）：有进行中会话 → 推迟补弹；仅无活跃会话时补弹一次。
+      if (a == null) {
+        await _maybePromptRating();
       }
     } catch (_) {
       if (mounted) setState(() => _activeChecked = true);
+    }
+  }
+
+  /// 补弹评分（AC3 · 推迟门控后）：取待补弹的已关闭会话 → 弹一次 → 置 PROMPTED（无论是否评分，不再弹）。
+  Future<void> _maybePromptRating() async {
+    if (_ratingPromptHandled) return;
+    _ratingPromptHandled = true;
+    final repo = ref.read(consultRepositoryProvider);
+    try {
+      final pending = await repo.pendingRating();
+      if (pending == null || !mounted) return;
+      final result = await ConsultRatingDialog.show(context);
+      await repo.markRatingPrompted(pending.id); // 弹后即不再弹（AC3）
+      if (result != null) {
+        await repo.rate(pending.id, result.stars, result.comment);
+      }
+    } catch (_) {
+      // 补弹失败静默，不阻断入口。
     }
   }
 

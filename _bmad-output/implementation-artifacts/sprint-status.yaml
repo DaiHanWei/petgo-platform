@@ -126,7 +126,7 @@ development_status:
   5-3-兽医咨询发起-排队与超时: review             # [PRD1.0.0✏️·R2⚠️安全] review→rfd 回改: 加 AC 接单后端原子写入先到先得(DB互斥,禁中间件)+退单≤2次重广播(F11)+等待期退出/kill自动取消匹配 WAITING→CANCELLED(F12) ·R2 实现完成(L0 绿: 退单 release+V23+原子写既有 核实; detached 退出取消); L1/L2 待本地
   5-4-ai-升级至兽医的上下文传递: review
   5-5-腾讯-im-会话与图文对话界面: review                 # [PRD1.0.0✏️] F4 去视频完成(L0 绿): 代码本无视频,删注释残留;L1/L2 待本地
-  5-6-会话结束机制与用户评分门: ready-for-dev            # [PRD1.0.0✏️·R2] review→rfd 回改: 加 AC 会话进行中kill→断线30min保护窗口+重开「进行中」恢复(F12)+补评分推迟到进行中会话结束后
+  5-6-会话结束机制与用户评分门: review            # [PRD1.0.0✏️·R2] review→rfd 回改: 加 AC 会话进行中kill→断线30min保护窗口+重开「进行中」恢复(F12)+补评分推迟到进行中会话结束后 ·AC5 完成(① kill 断线恢复复用既有/active 入口+@Scheduled 保护窗口[无新增机制]; ② 补评分推迟: ConsultCloseService.pendingRating 有活跃会话则返回空[权威单点]+ConsultEntryPage 前端门控; 无新增Flyway/定时器/MQ; 后端521 test含AC5×2+前端291; L1/L2待本地)
   5-7-兽医封禁与进行中会话中断处理: ready-for-dev        # [PRD1.0.0✏️·R2] review→rfd 回改: 加 AC 会话断线保护窗口语义对齐 (F12)
   5-8-问诊-tab-结构与问诊历史整合: review
   epic-5-retrospective: optional

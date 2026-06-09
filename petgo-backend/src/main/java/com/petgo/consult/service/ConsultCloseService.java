@@ -96,9 +96,21 @@ public class ConsultCloseService {
         return s;
     }
 
-    /** 补弹查询：某用户待补弹评分的已关闭会话（无则空）。 */
+    /**
+     * 补弹查询：某用户待补弹评分的已关闭会话（无则空）。
+     *
+     * <p>AC5（F12 · R2 补评分推迟）：用户<b>有进行中会话</b>（WAITING/IN_PROGRESS/PENDING_CLOSE）时
+     * <b>推迟补弹</b>——不在用户正处理活跃会话时打断（避免补弹覆盖在恢复的对话上）。补弹推迟到该活跃会话
+     * 结束后再放行（届时本查询自然返回待补弹会话）。此为补评分推迟的<b>权威单点</b>，前端只消费结果。
+     */
     @Transactional(readOnly = true)
     public Optional<ConsultSession> pendingRating(long userId) {
+        boolean hasActive = sessions
+                .findFirstByUserIdAndStatusInOrderByCreatedAtDesc(userId, SessionStatus.ACTIVE)
+                .isPresent();
+        if (hasActive) {
+            return Optional.empty(); // 推迟补弹，待活跃会话结束
+        }
         return sessions.findFirstByUserIdAndStatusAndRatingPromptState(
                 userId, SessionStatus.CLOSED, RatingPromptState.PENDING);
     }
