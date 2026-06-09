@@ -90,7 +90,8 @@ class _DetailScaffold extends ConsumerWidget {
       appBar: AppBar(
         backgroundColor: AppColors.base,
         actions: [
-          // 「···」菜单：举报[3.7] 占位 disabled；作者本人删除[3.6] 可用。
+          // 「···」菜单按内容归属互斥分支（AC5）：自己内容→删除[3.6]；他人内容→举报[3.7]
+          // （游客查看他人内容点举报由 openReport 触发 FR-0C）。绝不同时出现举报与删除。
           PopupMenuButton<String>(
             key: const ValueKey('detailMenu'),
             onSelected: (value) {
@@ -101,11 +102,17 @@ class _DetailScaffold extends ConsumerWidget {
               }
             },
             itemBuilder: (context) => [
-              PopupMenuItem<String>(value: 'report', child: Text(l10n.detailMenuReport)),
               if (detail.isAuthor)
                 PopupMenuItem<String>(
+                  key: const ValueKey('detailMenuDelete'),
                   value: 'delete',
                   child: Text(l10n.detailMenuDelete),
+                )
+              else
+                PopupMenuItem<String>(
+                  key: const ValueKey('detailMenuReport'),
+                  value: 'report',
+                  child: Text(l10n.detailMenuReport),
                 ),
             ],
           ),
