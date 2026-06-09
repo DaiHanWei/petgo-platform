@@ -16,6 +16,7 @@ import com.petgo.profile.domain.PetType;
 import com.petgo.profile.repository.MilestoneCompletionRepository;
 import com.petgo.profile.repository.PetMilestoneRepository;
 import com.petgo.profile.repository.PetProfileRepository;
+import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,7 +40,8 @@ class MilestoneCompletionServiceTest {
         profiles = Mockito.mock(PetProfileRepository.class);
         milestones = Mockito.mock(PetMilestoneRepository.class);
         completions = Mockito.mock(MilestoneCompletionRepository.class);
-        service = new MilestoneCompletionService(profiles, milestones, completions);
+        service = new MilestoneCompletionService(profiles, milestones, completions,
+                Mockito.mock(org.springframework.context.ApplicationEventPublisher.class));
     }
 
     private PetProfile profile(PetType type, long id) {
@@ -119,6 +121,27 @@ class MilestoneCompletionServiceTest {
         service.onGrowthMomentCount(7L, 30);
 
         verify(completions, times(3)).save(any()); // S2 + M10 + L5
+    }
+
+    @Test
+    void dateGatedPublishCompletesBirthdayL1AndCompanionL2() {
+        // 档案：生日今天（month/day 命中）+ 建档 120 天前（≥100 → L2，<365 → 不 L3）。
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneOffset.UTC);
+        PetProfile p = PetProfile.create(7L, PetType.CAT, "Momo", null, null,
+                java.time.LocalDate.of(2024, today.getMonthValue(), today.getDayOfMonth()), null, "TOK");
+        setField(p, "id", 10L);
+        setField(p, "createdAt", Instant.now().minus(java.time.Duration.ofDays(120)));
+        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(p));
+        long l1 = stubRoster(10, "C-L1");
+        long l2 = stubRoster(10, "C-L2");
+        stubRoster(10, "C-L3");
+
+        service.completeDateGatedLNodesOnPublish(7L);
+
+        ArgumentCaptor<MilestoneCompletion> cap = ArgumentCaptor.forClass(MilestoneCompletion.class);
+        verify(completions, times(2)).save(cap.capture());
+        assertThat(cap.getAllValues().stream().map(MilestoneCompletion::getPetMilestoneId))
+                .containsExactlyInAnyOrder(l1, l2);
     }
 
     @Test

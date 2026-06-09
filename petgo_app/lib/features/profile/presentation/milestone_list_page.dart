@@ -8,6 +8,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../data/milestone_repository.dart';
 import '../domain/milestone.dart';
+import '../domain/share_service.dart';
 import 'widgets/milestone_celebration.dart';
 
 /// 里程碑列表页（Story 8.2 · FR-42）。壳→真页：顶部宠物信息 + 总进度 + L/M/S 三级分区徽章
@@ -425,10 +426,18 @@ class _CandidateTile extends ConsumerWidget {
       final completed =
           await ref.read(milestoneRepositoryProvider).checkIn(milestoneCode, candidate.contentId);
       ref.invalidate(milestoneListProvider);
+      // L 级分享卡文案（捕获 l10n，避免 pop 后失效）。
+      final shareText = l10n.milestoneShareText(completed.title);
       navigator.pop(); // 关 picker
       if (!context.mounted) return;
-      // 完成后按级触发三级庆祝动效（Story 8.5）；L 级衔接分享卡（8.6）。
-      await showMilestoneCelebration(context, completed);
+      // 完成后按级触发三级庆祝动效（Story 8.5）；L 级 Duolingo 开宝箱后自动弹分享卡（8.6，复用 2-6 分享通道）。
+      await showMilestoneCelebration(
+        context,
+        completed,
+        onShare: completed.level == MilestoneLevel.l
+            ? () => ref.read(shareServiceProvider)(shareText)
+            : null,
+      );
     } catch (_) {
       messenger.showSnackBar(SnackBar(content: Text(l10n.milestoneCheckinFailed)));
     }

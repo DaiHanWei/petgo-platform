@@ -103,6 +103,8 @@ class MockBackend {
       _notif(token: 'n1', type: 'CONTENT_COMMENTED', title: 'New comment', body: 'Rina commented on your post', read: false, ago: const Duration(minutes: 20)),
       _notif(token: 'n2', type: 'CONTENT_LIKED', title: 'New like', body: 'Budi liked your post', read: false, ago: const Duration(hours: 3)),
       _notif(token: 'n3', type: 'VET_REPLY', title: 'Consult update', body: 'A vet has replied to your consultation', read: true, ago: const Duration(days: 1)),
+      // L 级里程碑达成推送（Story 8.6）：6-6 铃铛里程碑条改真数据驱动。深链跳里程碑列表页。
+      _notif(token: 'n4', type: 'MILESTONE_NODE', title: '重大里程碑达成 🎉', body: '「陪伴满 100 天」已解锁，快去看看吧', read: false, ago: const Duration(hours: 1)),
     ]);
 
     _consultHistory.addAll([

@@ -51,6 +51,8 @@ public class MilestoneAutoCompleteListener {
         if (e.type() == ContentType.GROWTH_MOMENT) {
             // 计数类：首张 S2（≥1）/ 满 10 M10 / 满 30 L5（含 S2，统一走计数判定）。
             completion.onGrowthMomentCount(e.authorId(), e.authorGrowthMomentCount());
+            // 「系统推送 + 当天发布」L 级节点回填：第一个生日 L1 / 满 100 天 L2 / 满 365 天 L3（8.6）。
+            completion.completeDateGatedLNodesOnPublish(e.authorId());
         } else if (e.type() == ContentType.DAILY) {
             completion.completeForOwner(e.authorId(), "S5", MilestoneCompletionSource.SYSTEM_AUTO);
         }

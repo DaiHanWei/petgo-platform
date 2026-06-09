@@ -107,7 +107,8 @@ void main() {
           {'type', 'title', 'body', 'deepLinkType', 'deepLinkToken', 'read', 'createdAt'});
       // type 必须是后端 NotificationType 合法值。
       const legal = {
-        'VET_REPLY', 'CONSULT_CLOSED', 'CONTENT_LIKED', 'CONTENT_COMMENTED', 'NEW_CONSULT_REQUEST'
+        'VET_REPLY', 'CONSULT_CLOSED', 'CONTENT_LIKED', 'CONTENT_COMMENTED', 'NEW_CONSULT_REQUEST',
+        'PET_BIRTHDAY', 'COMPANION_ANNIVERSARY', 'MILESTONE_NODE' // 6-7/8-6 定时/达成类
       };
       for (final n in env['items'] as List) {
         expect(legal, contains((n as Map)['type']), reason: '非法通知 type: ${n['type']}');

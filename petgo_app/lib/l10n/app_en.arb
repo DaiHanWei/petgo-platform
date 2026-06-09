@@ -171,6 +171,8 @@
   "milestoneCheckinFailed": "Could not check in, please try again",
   "milestoneCelebrateUnlocked": "Milestone unlocked!",
   "milestoneCelebrateOpenChest": "Tap to open",
+  "milestoneShareText": "My pet just unlocked the \"{title}\" milestone on PetGo! 🎉",
+  "@milestoneShareText": { "placeholders": { "title": { "type": "String" } } },
   "healthEventLabel": "🏥 Consultation record",
   "commonSave": "Save",
   "archivePromptTitle": "Save this consultation to {petName}'s archive?",

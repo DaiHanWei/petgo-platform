@@ -3,9 +3,11 @@ package com.petgo.profile.service;
 import com.petgo.profile.domain.MilestoneCatalog;
 import com.petgo.profile.domain.MilestoneCompletion;
 import com.petgo.profile.domain.MilestoneCompletionSource;
+import com.petgo.profile.domain.MilestoneDefinition;
 import com.petgo.profile.domain.PetMilestone;
 import com.petgo.profile.domain.PetProfile;
 import com.petgo.profile.domain.PetType;
+import com.petgo.profile.event.MilestoneCompletedEvent;
 import com.petgo.profile.repository.MilestoneCompletionRepository;
 import com.petgo.profile.repository.PetMilestoneRepository;
 import com.petgo.profile.repository.PetProfileRepository;
@@ -14,6 +16,7 @@ import java.util.Optional;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,12 +42,14 @@ public class MilestoneCompletionService {
     private final PetProfileRepository profiles;
     private final PetMilestoneRepository milestones;
     private final MilestoneCompletionRepository completions;
+    private final ApplicationEventPublisher events;
 
     public MilestoneCompletionService(PetProfileRepository profiles, PetMilestoneRepository milestones,
-            MilestoneCompletionRepository completions) {
+            MilestoneCompletionRepository completions, ApplicationEventPublisher events) {
         this.profiles = profiles;
         this.milestones = milestones;
         this.completions = completions;
+        this.events = events;
     }
 
     /** 按档案 owner + 语义后缀幂等完成（系统自动类无关联内容）。返回是否**新**完成。 */
@@ -85,6 +90,11 @@ public class MilestoneCompletionService {
             return false;
         }
         log.info("milestone completed: code={} source={}", code, source); // 不落 PII/健康内容
+        // 完成领域事件（Story 8.6）：notify 订阅，L 级 → MILESTONE_NODE 达成推送 + 通知中心 6.6 真数据。
+        MilestoneDefinition def = MilestoneCatalog.byCode(code);
+        events.publishEvent(new MilestoneCompletedEvent(
+                resolveOwnerId(petProfileId), code, m.getLevel(),
+                def != null ? def.titleZh() : code));
         maybeUnlockHealthCombo(petProfileId, petType, code);
         return true;
     }
@@ -106,6 +116,35 @@ public class MilestoneCompletionService {
         }
     }
 
+    /**
+     * 「系统推送 + 用户当天发布」L 级节点的发布回填（Story 8.6 · FR-42）：发布成长日历记录时，若已达
+     * 对应节点时点则完成 —— 第一个生日 L1（生日当天 month/day 命中）、陪伴满 100 天 L2、满 365 天 L3。
+     * 幂等（completeForOwner 短路）；source=PUBLISH。
+     */
+    @Transactional
+    public void completeDateGatedLNodesOnPublish(long ownerId) {
+        PetProfile p = profiles.findByOwnerId(ownerId).orElse(null);
+        if (p == null) {
+            return;
+        }
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneOffset.UTC);
+        java.time.LocalDate birthday = p.getBirthday();
+        if (birthday != null && birthday.getMonthValue() == today.getMonthValue()
+                && birthday.getDayOfMonth() == today.getDayOfMonth()) {
+            completeForOwner(ownerId, "L1", MilestoneCompletionSource.PUBLISH);
+        }
+        if (p.getCreatedAt() != null) {
+            long days = java.time.temporal.ChronoUnit.DAYS.between(
+                    p.getCreatedAt().atZone(java.time.ZoneOffset.UTC).toLocalDate(), today);
+            if (days >= 100) {
+                completeForOwner(ownerId, "L2", MilestoneCompletionSource.PUBLISH);
+            }
+            if (days >= 365) {
+                completeForOwner(ownerId, "L3", MilestoneCompletionSource.PUBLISH);
+            }
+        }
+    }
+
     /** 健康组合依赖：完成的 code 若为某 combo 前置且前置全完成 → 解锁 combo 节点（SYSTEM_AUTO）。 */
     private void maybeUnlockHealthCombo(long petProfileId, PetType petType, String completedCode) {
         for (Map.Entry<String, Set<String>> combo : MilestoneCatalog.HEALTH_COMBO.entrySet()) {
@@ -123,6 +162,11 @@ public class MilestoneCompletionService {
                         MilestoneCompletionSource.SYSTEM_AUTO, null);
             }
         }
+    }
+
+    /** 由 petProfileId 反查 owner user id（完成事件携带，notify 按 owner 推送）。 */
+    private long resolveOwnerId(long petProfileId) {
+        return profiles.findById(petProfileId).map(PetProfile::getOwnerId).orElse(0L);
     }
 
     /** pet_type → 清单 code 前缀（CAT→C / DOG→D / OTHER→G）。 */
