@@ -155,3 +155,24 @@
 4. **⚠️安全攸关优先单独验**（红线，必须真机/真栈确认）：4-2 强制升红 · 5-3 抢单原子写 · 5-7 封禁中断 · 7-3 注销级联+匿名化 · 4-5 红色态零变现。
 
 > 已知非三方缺口（本地一并处理）：无（2-1 iOS Info.plist 权限串已于 2026-06-09 补齐）。
+
+---
+
+## L1 验收执行记录（2026-06-09 · 本机 macOS + Android 模拟器）
+
+> 环境：Docker（postgres:16 + redis:7，6 天已起、healthy）+ Android AVD `Pixel_9_Pro_API_36`（emulator-5554）。三方全 stub（OSS mock / Gemini stub / IM stub / Google dev stub verifier），无外部凭证。
+
+**后端 L1（✅ 全绿）**
+- `./mvnw -B -o test` → **523 tests, 0 fail**（含全部 `*EndpointTest`/`ApiIntegrationTest` 真连 pg+redis 落库，14s）。
+- `./mvnw spring-boot:run`（host，application.yml 默认连 localhost:5432/6379）→ `GET /actuator/health` = **UP**（db PostgreSQL UP / redis 7.4.9 UP / liveness+readiness UP）。
+- API 烟测：游客 `GET /content-posts` → **200 + 真实 DB 数据**；受控写无 token `POST /triage` → **401 RFC 9457 ProblemDetail**；`/consult/availability` 游客 → **401**（符合设计，5-2 把 `/consult/**` 收为 hasRole USER）。
+
+**前端 L1（✅ 连真后端，Android 模拟器）**
+- `flutter run -d emulator-5554 --dart-define=PETGO_MOCK=false --dart-define=PETGO_API_BASE_URL=http://10.0.2.2:8080` → Gradle assembleDebug 26.5s 构建成功 + 安装 + 启动（Impeller GLES）。
+- **FR-0A 游客可浏览**：清数据后干净游客首页渲染**真实后端 Feed**（「被举报的正文」「用户1690519041…」与 curl 响应一致 → 证明 mock=false 真连后端、非假数据）；通知铃对游客正确隐藏；无强制登录框。
+- **登录流端到端**：点「Sign in with Google」→ dev stub verifier 签发 JWT → 登录态「测试用户」+ 通知铃出现 + FR-0H 建档提示条「Catat momen hari ini」。
+- **门控**：模拟器残留 stale token 冷启动 → restore 失败 → 登录引导弹框（正确行为；清数据后游客态无此弹框，排除 FR-0A 误拦截）。
+
+**结论**：L1（Docker 起栈 + 真连后端运行时）验收通过，无阻塞缺陷。下一步 L2 需真实凭证/真机（见 §3/§4）。
+
+**备注**：dev DB 已累积 523 测试 run 写入的测试行（Feed 显示「测试正文」「被举报的正文」等）；如需干净演示数据可 `docker compose down -v` 重置卷后重跑 seed。后端进程（spring-boot:run）与模拟器本次保持运行，供继续手验。
