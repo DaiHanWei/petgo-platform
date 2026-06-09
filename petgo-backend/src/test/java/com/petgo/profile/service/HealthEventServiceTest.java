@@ -39,7 +39,8 @@ class HealthEventServiceTest {
         archiver = Mockito.mock(ImToOssArchiver.class);
         when(profileService.ownsPet(1L, 5L)).thenReturn(true);
         when(archiver.archiveImImagesToPrivate(anyLong(), anyList())).thenReturn(List.of());
-        service = new HealthEventService(repo, profileService, archiver);
+        service = new HealthEventService(repo, profileService, archiver,
+                Mockito.mock(org.springframework.context.ApplicationEventPublisher.class));
     }
 
     private ArchiveDecisionRequest archivedReq() {

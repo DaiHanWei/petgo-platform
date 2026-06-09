@@ -194,6 +194,9 @@ class MockBackend {
     'C-S1', 'C-S2', 'C-S5', 'C-S15', 'D-S1', 'D-S2', 'D-S5', 'D-S15', 'G-S1', 'G-S2', 'G-S5',
   };
 
+  /// 运行时新增完成（如名片分享信号 → C-S3，Story 8.3），演示态可见进度推进。
+  final Set<String> _extraMilestoneDone = {};
+
   /// 单项 [code, level, trigger, title]。
   List<List<String>> _milestoneCatalog(String type) {
     switch (type) {
@@ -253,7 +256,7 @@ class MockBackend {
     final type = petType ?? 'OTHER';
     final catalog = _milestoneCatalog(type);
     Map<String, dynamic> item(List<String> d) {
-      final done = _milestoneDone.contains(d[0]);
+      final done = _milestoneDone.contains(d[0]) || _extraMilestoneDone.contains(d[0]);
       return {
         'code': d[0], 'title': d[3], 'level': d[1], 'triggerType': d[2], 'completed': done,
         if (done) 'completedAt': _iso(const Duration(days: 5)),
@@ -419,6 +422,15 @@ class MockBackend {
     if (p.endsWith('/pet-profiles/me/milestones') && m == 'GET') {
       if (_petProfile == null) throw _notFound(o);
       return ok(_milestonePayload(_petProfile!['petType'] as String?));
+    }
+    // 名片分享信号 → C-S3 自动完成（Story 8.3）。204，幂等。
+    if (p.endsWith('/pet-profiles/me/card-shares') && m == 'POST') {
+      if (_petProfile == null) throw _notFound(o);
+      final prefix = switch (_petProfile!['petType'] as String?) {
+        'DOG' => 'D', 'CAT' => 'C', _ => 'G',
+      };
+      _extraMilestoneDone.add('$prefix-S3');
+      return ok();
     }
     if (p.endsWith('/pet-profiles/me/archive-stats') && m == 'GET') {
       if (_petProfile == null) throw _notFound(o);

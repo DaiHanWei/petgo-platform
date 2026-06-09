@@ -5,9 +5,12 @@ import com.petgo.profile.domain.PetType;
 import com.petgo.profile.dto.PetProfileCreateRequest;
 import com.petgo.profile.dto.PetProfileResponse;
 import com.petgo.profile.dto.PetProfileUpdateRequest;
+import com.petgo.profile.event.ProfileCreatedEvent;
 import com.petgo.profile.repository.PetProfileRepository;
 import com.petgo.shared.error.AppException;
+import java.time.Instant;
 import java.util.Optional;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,12 +26,14 @@ public class ProfileService {
     private final PetProfileRepository profiles;
     private final CardTokenGenerator tokenGenerator;
     private final MilestoneService milestoneService;
+    private final ApplicationEventPublisher events;
 
     public ProfileService(PetProfileRepository profiles, CardTokenGenerator tokenGenerator,
-            MilestoneService milestoneService) {
+            MilestoneService milestoneService, ApplicationEventPublisher events) {
         this.profiles = profiles;
         this.tokenGenerator = tokenGenerator;
         this.milestoneService = milestoneService;
+        this.events = events;
     }
 
     /**
@@ -57,6 +62,8 @@ public class ProfileService {
             PetProfile saved = profiles.save(profile);
             // 建档按 pet_type 自动分配里程碑 roster（Story 8.1，同模块直调，非事件订阅；幂等）。
             milestoneService.assignRoster(saved.getId(), saved.getPetType());
+            // 里程碑 C-S1「档案创建完成」自动完成（Story 8.3，AFTER_COMMIT 异步订阅，幂等）。
+            events.publishEvent(new ProfileCreatedEvent(ownerId, saved.getId(), Instant.now()));
             return PetProfileResponse.from(saved);
         } catch (DataIntegrityViolationException e) {
             // 并发双开窗：唯一约束兜底（owner_id / card_token），归一为 409。
@@ -106,6 +113,19 @@ public class ProfileService {
     @Transactional(readOnly = true)
     public Optional<PetProfile> findByOwnerId(long ownerId) {
         return profiles.findByOwnerId(ownerId);
+    }
+
+    /**
+     * 名片分享信号（Story 8.3）。名片分享在客户端经系统分享面板完成（无服务端分享动作），App 触发分享后
+     * 回报此信号 → 发布 {@link ProfileCreatedEvent 同域} {@code CardSharedEvent} 驱动里程碑 C-S3 自动完成
+     * （幂等，仅首次有效）。无档案 → 404。
+     */
+    @Transactional
+    public void recordCardShared(long ownerId) {
+        PetProfile pet = profiles.findByOwnerId(ownerId)
+                .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
+        events.publishEvent(new com.petgo.profile.event.CardSharedEvent(
+                ownerId, pet.getId(), Instant.now()));
     }
 
     /** 按不可枚举名片 token 查档案（Story 2.6 名片 H5）。 */

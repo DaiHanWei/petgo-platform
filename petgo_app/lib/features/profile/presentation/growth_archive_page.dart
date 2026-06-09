@@ -10,6 +10,7 @@ import '../../../shared/widgets/pet_status_selector.dart';
 import '../../auth/data/me_repository.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../content/domain/home_refresh_provider.dart';
+import '../data/milestone_repository.dart';
 import '../data/profile_repository.dart';
 import '../data/timeline_repository.dart';
 import '../domain/card_link.dart';
@@ -75,7 +76,12 @@ class GrowthArchivePage extends ConsumerWidget {
         markShareFabAnimated();
         ref.invalidate(shareFabAnimatedShownProvider);
       },
-      onPressed: () => ref.read(shareServiceProvider)(petCardShareUrl(profile.cardToken)),
+      onPressed: () {
+        ref.read(shareServiceProvider)(petCardShareUrl(profile.cardToken));
+        // 名片分享信号 → 里程碑 C-S3 自动完成（Story 8.3，fire-and-forget，失败静默）。
+        ref.read(milestoneRepositoryProvider).signalCardShared().catchError((_) {});
+        ref.invalidate(milestoneListProvider);
+      },
     );
   }
 

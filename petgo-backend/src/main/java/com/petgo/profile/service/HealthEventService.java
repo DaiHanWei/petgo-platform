@@ -4,11 +4,14 @@ import com.petgo.profile.domain.ArchiveDecision;
 import com.petgo.profile.domain.HealthEvent;
 import com.petgo.profile.dto.ArchiveDecisionRequest;
 import com.petgo.profile.dto.ArchiveDecisionResponse;
+import com.petgo.profile.event.HealthArchivedEvent;
 import com.petgo.profile.repository.HealthEventRepository;
 import com.petgo.shared.error.AppException;
 import com.petgo.shared.media.ImToOssArchiver;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,12 +28,14 @@ public class HealthEventService {
     private final HealthEventRepository healthEvents;
     private final ProfileService profileService;
     private final ImToOssArchiver imToOssArchiver;
+    private final ApplicationEventPublisher events;
 
     public HealthEventService(HealthEventRepository healthEvents, ProfileService profileService,
-            ImToOssArchiver imToOssArchiver) {
+            ImToOssArchiver imToOssArchiver, ApplicationEventPublisher events) {
         this.healthEvents = healthEvents;
         this.profileService = profileService;
         this.imToOssArchiver = imToOssArchiver;
+        this.events = events;
     }
 
     /** 该 sourceRef 是否已决策（供 Epic4/5 触发端判断是否还需弹窗）。 */
@@ -68,6 +73,10 @@ public class HealthEventService {
         } catch (DataIntegrityViolationException e) {
             // 并发同 sourceRef：唯一约束兜底，归一为幂等已决策。
             return new ArchiveDecisionResponse(req.sourceRef(), req.decision(), true);
+        }
+        // 里程碑 C-S4「第一次保存兽医问诊结论」自动完成（Story 8.3，仅首次存档触发，幂等）。
+        if (req.decision() == ArchiveDecision.ARCHIVED) {
+            events.publishEvent(new HealthArchivedEvent(ownerId, req.petId(), Instant.now()));
         }
         return new ArchiveDecisionResponse(req.sourceRef(), req.decision(), false);
     }

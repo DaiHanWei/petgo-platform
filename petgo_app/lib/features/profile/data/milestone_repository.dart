@@ -9,6 +9,9 @@ import '../domain/milestone.dart';
 /// 打卡 API（8.4）后续叠加于此接口。
 abstract class MilestoneRepository {
   Future<MilestoneList> getMilestones();
+
+  /// 名片分享信号（Story 8.3 · C-S3 自动完成）。App 触发系统分享面板后回报；失败静默（非阻断）。
+  Future<void> signalCardShared();
 }
 
 class DioMilestoneRepository implements MilestoneRepository {
@@ -20,6 +23,11 @@ class DioMilestoneRepository implements MilestoneRepository {
   Future<MilestoneList> getMilestones() async {
     final resp = await dio.get<Map<String, dynamic>>(ApiPaths.petProfileMilestones);
     return MilestoneList.fromJson(resp.data!);
+  }
+
+  @override
+  Future<void> signalCardShared() async {
+    await dio.post<void>(ApiPaths.petProfileCardShares);
   }
 }
 

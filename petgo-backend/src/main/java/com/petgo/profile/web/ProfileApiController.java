@@ -71,6 +71,16 @@ public class ProfileApiController {
     }
 
     /**
+     * 名片分享信号（Story 8.3 · FR-42）：App 触发系统分享面板后回报 → 驱动里程碑 C-S3「第一次分享名片」
+     * 自动完成（幂等，仅首次有效）。响应 204。无档案 → 404。
+     */
+    @PostMapping("/me/card-shares")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void recordCardShared(@AuthenticationPrincipal Jwt jwt) {
+        profileService.recordCardShared(currentUserId(jwt));
+    }
+
+    /**
      * 编辑当前用户档案（Story 2.8，部分更新）。owner 取自 JWT，仅改自己档案；cardToken 不变。
      * 成功后异步触发名片 OG 图重渲染（2.6 联动）；名片正文实时读库自动最新。
      */

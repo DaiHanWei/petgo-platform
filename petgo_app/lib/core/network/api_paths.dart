@@ -92,6 +92,9 @@ class ApiPaths {
   /// 里程碑列表/进度（Story 8.1/8.2 · FR-42）。
   static const String petProfileMilestones = '$base/pet-profiles/me/milestones';
 
+  /// 名片分享信号（Story 8.3 · FR-42 C-S3 自动完成）。
+  static const String petProfileCardShares = '$base/pet-profiles/me/card-shares';
+
   /// 内容发布 + Feed 列表（Story 2.3 / 3.2）。
   static const String contentPosts = '$base/content-posts';
 

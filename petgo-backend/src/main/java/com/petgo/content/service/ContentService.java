@@ -7,6 +7,7 @@ import com.petgo.content.domain.DeleteReason;
 import com.petgo.content.domain.PostStatus;
 import com.petgo.content.dto.ContentPostCreateRequest;
 import com.petgo.content.dto.ContentPostResponse;
+import com.petgo.content.event.ContentPublishedEvent;
 import com.petgo.content.event.ContentRemovedEvent;
 import com.petgo.content.repository.CommentRepository;
 import com.petgo.content.repository.ContentLikeRepository;
@@ -176,6 +177,15 @@ public class ContentService {
                 authorId, req.type(), petId, text, imageUrls, eventDate));
 
         idempotency.store(idempotencyKey, saved.getId());
+
+        // 里程碑自动完成（Story 8.3）：发布领域事件供 profile 订阅（首张成长日历 S2 / 首条日常 S5 /
+        // 计数类 M10·L5）。GROWTH_MOMENT 携发布后总数供计数判定，非该类为 0。content 不直调 profile 里程碑。
+        long growthCount = req.type() == ContentType.GROWTH_MOMENT
+                ? posts.countByAuthorIdAndTypeAndDeletedAtIsNullAndStatus(
+                        authorId, ContentType.GROWTH_MOMENT, PostStatus.PUBLISHED)
+                : 0L;
+        events.publishEvent(new ContentPublishedEvent(
+                saved.getId(), authorId, req.type(), petId, growthCount, saved.getCreatedAt()));
         return ContentPostResponse.from(saved);
     }
 

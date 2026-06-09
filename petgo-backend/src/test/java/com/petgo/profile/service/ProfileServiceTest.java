@@ -30,7 +30,8 @@ class ProfileServiceTest {
         tokenGenerator = Mockito.mock(CardTokenGenerator.class);
         milestoneService = Mockito.mock(MilestoneService.class);
         when(tokenGenerator.generate()).thenReturn("TOKEN_ABC");
-        service = new ProfileService(profiles, tokenGenerator, milestoneService);
+        service = new ProfileService(profiles, tokenGenerator, milestoneService,
+                Mockito.mock(org.springframework.context.ApplicationEventPublisher.class));
     }
 
     private PetProfileCreateRequest req() {
