@@ -10,6 +10,8 @@ public interface MilestoneCompletionRepository extends JpaRepository<MilestoneCo
 
     List<MilestoneCompletion> findByPetMilestoneIdIn(Collection<Long> petMilestoneIds);
 
+    long countByPetMilestoneIdIn(Collection<Long> petMilestoneIds);
+
     Optional<MilestoneCompletion> findByPetMilestoneId(long petMilestoneId);
 
     boolean existsByPetMilestoneId(long petMilestoneId);

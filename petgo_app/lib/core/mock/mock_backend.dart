@@ -188,6 +188,96 @@ class MockBackend {
   Map<String, dynamic> _envelope(List<Map<String, dynamic>> items) =>
       {'items': items, 'nextCursor': null, 'hasMore': false};
 
+  // ---- 里程碑清单 mock（Story 8.2 · FR-42，后端 MilestoneCatalog/MilestoneListResponse 镜像）----
+  // 演示态：少数 SYSTEM_AUTO 类标记已完成（彩色徽章），其余灰锁。结构 = L/M/S 三级分区。
+  static const Set<String> _milestoneDone = {
+    'C-S1', 'C-S2', 'C-S5', 'C-S15', 'D-S1', 'D-S2', 'D-S5', 'D-S15', 'G-S1', 'G-S2', 'G-S5',
+  };
+
+  /// 单项 [code, level, trigger, title]。
+  List<List<String>> _milestoneCatalog(String type) {
+    switch (type) {
+      case 'DOG':
+        return const [
+          ['D-S1', 'S', 'SYSTEM_AUTO', '宠物档案创建完成'], ['D-S2', 'S', 'SYSTEM_AUTO', '第一张照片上传到成长日历'],
+          ['D-S3', 'S', 'SYSTEM_AUTO', '第一次分享宠物名片'], ['D-S4', 'S', 'SYSTEM_AUTO', '第一次保存兽医问诊结论'],
+          ['D-S5', 'S', 'SYSTEM_AUTO', '第一次发布日常分享'], ['D-S6', 'S', 'USER_CHECKIN', '第一次洗澡'],
+          ['D-S7', 'S', 'USER_CHECKIN', '第一次美容 / 梳毛'], ['D-S8', 'S', 'USER_CHECKIN', '第一次吃零食'],
+          ['D-S9', 'S', 'USER_CHECKIN', '第一次睡在你身边'], ['D-S10', 'S', 'USER_CHECKIN', '第一次摇尾巴'],
+          ['D-S11', 'S', 'USER_CHECKIN', '第一次戴项圈 / 牵引绳'], ['D-S12', 'S', 'USER_CHECKIN', '第一次玩球'],
+          ['D-S13', 'S', 'USER_CHECKIN', '第一次游泳 / 玩水'], ['D-S14', 'S', 'SYSTEM_AUTO', '第一次被评论'],
+          ['D-S15', 'S', 'SYSTEM_AUTO', '第一次收到点赞'],
+          ['D-M1', 'M', 'USER_CHECKIN', '第一次出门散步'], ['D-M2', 'M', 'USER_CHECKIN', '第一次坐车'],
+          ['D-M3', 'M', 'USER_CHECKIN', '完成第一次疫苗接种'], ['D-M4', 'M', 'USER_CHECKIN', '完成第一次驱虫'],
+          ['D-M5', 'M', 'USER_CHECKIN', '第一次看兽医'], ['D-M6', 'M', 'USER_CHECKIN', '第一次见到其他狗狗'],
+          ['D-M7', 'M', 'USER_CHECKIN', '学会第一个指令'], ['D-M8', 'M', 'SYSTEM_AUTO', '陪伴满 30 天'],
+          ['D-M9', 'M', 'USER_CHECKIN', '完成绝育手术'], ['D-M10', 'M', 'SYSTEM_AUTO', '成长日历记录满 10 条'],
+          ['D-L1', 'L', 'PUSH_PUBLISH', '第一个生日 🎂'], ['D-L2', 'L', 'PUSH_PUBLISH', '陪伴满 100 天'],
+          ['D-L3', 'L', 'PUSH_PUBLISH', '陪伴满 365 天'], ['D-L4', 'L', 'SYSTEM_AUTO', '完成全部健康里程碑'],
+          ['D-L5', 'L', 'SYSTEM_AUTO', '成长日历记录满 30 条'],
+        ];
+      case 'CAT':
+        return const [
+          ['C-S1', 'S', 'SYSTEM_AUTO', '宠物档案创建完成'], ['C-S2', 'S', 'SYSTEM_AUTO', '第一张照片上传到成长日历'],
+          ['C-S3', 'S', 'SYSTEM_AUTO', '第一次分享宠物名片'], ['C-S4', 'S', 'SYSTEM_AUTO', '第一次保存兽医问诊结论'],
+          ['C-S5', 'S', 'SYSTEM_AUTO', '第一次发布日常分享'], ['C-S6', 'S', 'USER_CHECKIN', '第一次洗澡'],
+          ['C-S7', 'S', 'USER_CHECKIN', '第一次修剪指甲'], ['C-S8', 'S', 'USER_CHECKIN', '第一次吃零食'],
+          ['C-S9', 'S', 'USER_CHECKIN', '第一次睡在你身边'], ['C-S10', 'S', 'USER_CHECKIN', '第一次发出咕噜声'],
+          ['C-S11', 'S', 'USER_CHECKIN', '第一次在窗边晒太阳'], ['C-S12', 'S', 'USER_CHECKIN', '第一次玩逗猫棒'],
+          ['C-S13', 'S', 'USER_CHECKIN', '第一次钻进纸箱'], ['C-S14', 'S', 'SYSTEM_AUTO', '第一次被评论'],
+          ['C-S15', 'S', 'SYSTEM_AUTO', '第一次收到点赞'],
+          ['C-M1', 'M', 'USER_CHECKIN', '第一次出门探险'], ['C-M2', 'M', 'USER_CHECKIN', '第一次坐车'],
+          ['C-M3', 'M', 'USER_CHECKIN', '完成第一次疫苗接种'], ['C-M4', 'M', 'USER_CHECKIN', '完成第一次驱虫'],
+          ['C-M5', 'M', 'USER_CHECKIN', '第一次看兽医'], ['C-M6', 'M', 'USER_CHECKIN', '第一次见到其他猫咪'],
+          ['C-M7', 'M', 'USER_CHECKIN', '学会回应自己的名字'], ['C-M8', 'M', 'SYSTEM_AUTO', '陪伴满 30 天'],
+          ['C-M9', 'M', 'USER_CHECKIN', '完成绝育手术'], ['C-M10', 'M', 'SYSTEM_AUTO', '成长日历记录满 10 条'],
+          ['C-L1', 'L', 'PUSH_PUBLISH', '第一个生日 🎂'], ['C-L2', 'L', 'PUSH_PUBLISH', '陪伴满 100 天'],
+          ['C-L3', 'L', 'PUSH_PUBLISH', '陪伴满 365 天'], ['C-L4', 'L', 'SYSTEM_AUTO', '完成全部健康里程碑'],
+          ['C-L5', 'L', 'SYSTEM_AUTO', '成长日历记录满 30 条'],
+        ];
+      default: // OTHER → 通用 15
+        return const [
+          ['G-S1', 'S', 'SYSTEM_AUTO', '宠物档案创建完成'], ['G-S2', 'S', 'SYSTEM_AUTO', '第一张照片上传到成长日历'],
+          ['G-S3', 'S', 'SYSTEM_AUTO', '第一次分享宠物名片'], ['G-S4', 'S', 'SYSTEM_AUTO', '第一次保存兽医问诊结论'],
+          ['G-S5', 'S', 'SYSTEM_AUTO', '第一次发布日常分享'], ['G-S6', 'S', 'USER_CHECKIN', '第一次吃零食'],
+          ['G-S7', 'S', 'SYSTEM_AUTO', '第一次被评论'], ['G-S8', 'S', 'SYSTEM_AUTO', '第一次收到点赞'],
+          ['G-M1', 'M', 'USER_CHECKIN', '第一次看兽医'], ['G-M2', 'M', 'USER_CHECKIN', '完成第一次健康检查 / 疫苗'],
+          ['G-M3', 'M', 'SYSTEM_AUTO', '陪伴满 30 天'], ['G-M4', 'M', 'SYSTEM_AUTO', '成长日历记录满 10 条'],
+          ['G-L1', 'L', 'PUSH_PUBLISH', '第一个生日 🎂'], ['G-L2', 'L', 'PUSH_PUBLISH', '陪伴满 100 天'],
+          ['G-L3', 'L', 'PUSH_PUBLISH', '陪伴满 365 天'],
+        ];
+    }
+  }
+
+  Map<String, dynamic> _milestonePayload(String? petType) {
+    final type = petType ?? 'OTHER';
+    final catalog = _milestoneCatalog(type);
+    Map<String, dynamic> item(List<String> d) {
+      final done = _milestoneDone.contains(d[0]);
+      return {
+        'code': d[0], 'title': d[3], 'level': d[1], 'triggerType': d[2], 'completed': done,
+        if (done) 'completedAt': _iso(const Duration(days: 5)),
+      };
+    }
+
+    int totalDone = 0;
+    final groups = <Map<String, dynamic>>[];
+    for (final lvl in const ['L', 'M', 'S']) {
+      final items = catalog.where((d) => d[1] == lvl).map(item).toList();
+      final done = items.where((e) => e['completed'] == true).length;
+      totalDone += done;
+      groups.add({'level': lvl, 'completedCount': done, 'totalCount': items.length, 'items': items});
+    }
+    return {
+      'petName': (_petProfile?['name'] ?? 'Momo') as String,
+      // NON_NULL：与后端一致，头像为 null 时省略该键。
+      'petAvatarUrl': ?_petProfile?['avatarUrl'],
+      'completedCount': totalDone,
+      'totalCount': catalog.length,
+      'groups': groups,
+    };
+  }
+
   // ---- 主入口：返回 Response 或抛 DioException(404) ----
   Response<dynamic>? handle(RequestOptions o) {
     final m = o.method.toUpperCase();
@@ -325,14 +415,20 @@ class MockBackend {
 
     // ---------- PET PROFILE / TIMELINE / HEALTH ----------
     if (p.endsWith('/pet-profiles/me/timeline') && m == 'GET') return ok(_envelope(_timeline));
+    // 里程碑列表/进度（Story 8.2 · FR-42，后端 MilestoneListResponse 镜像）。
+    if (p.endsWith('/pet-profiles/me/milestones') && m == 'GET') {
+      if (_petProfile == null) throw _notFound(o);
+      return ok(_milestonePayload(_petProfile!['petType'] as String?));
+    }
     if (p.endsWith('/pet-profiles/me/archive-stats') && m == 'GET') {
       if (_petProfile == null) throw _notFound(o);
       final happy = _timeline.where((e) => e['kind'] == 'HAPPY_MOMENT').length;
       final consult = _timeline.where((e) => e['kind'] == 'HEALTH_EVENT').length;
-      final type = _petProfile!['petType'] as String?;
+      final ms = _milestonePayload(_petProfile!['petType'] as String?);
       return ok({
         'happyMomentCount': happy, 'consultCount': consult,
-        'milestoneCompleted': 0, 'milestoneTotal': (type == 'CAT' || type == 'DOG') ? 30 : 15,
+        // 里程碑统计与 /me/milestones 同源真计数（连带 2-4 真供数，AC5）。
+        'milestoneCompleted': ms['completedCount'], 'milestoneTotal': ms['totalCount'],
       });
     }
     if (p.endsWith('/pet-profiles/me/calendar') && m == 'GET') {

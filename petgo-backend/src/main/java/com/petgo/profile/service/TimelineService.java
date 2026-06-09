@@ -3,7 +3,6 @@ package com.petgo.profile.service;
 import com.petgo.content.service.ContentService;
 import com.petgo.content.service.GrowthMomentView;
 import com.petgo.profile.domain.PetProfile;
-import com.petgo.profile.domain.PetType;
 import com.petgo.profile.dto.ArchiveStatsResponse;
 import com.petgo.profile.dto.CalendarMonthResponse;
 import com.petgo.profile.dto.DayDetailResponse;
@@ -39,12 +38,15 @@ public class TimelineService {
     private final ProfileService profileService;
     private final ContentService contentService;
     private final ObjectProvider<HealthEventTimelineSource> healthSource;
+    private final MilestoneService milestoneService;
 
     public TimelineService(ProfileService profileService, ContentService contentService,
-            ObjectProvider<HealthEventTimelineSource> healthSource) {
+            ObjectProvider<HealthEventTimelineSource> healthSource,
+            MilestoneService milestoneService) {
         this.profileService = profileService;
         this.contentService = contentService;
         this.healthSource = healthSource;
+        this.milestoneService = milestoneService;
     }
 
     @Transactional(readOnly = true)
@@ -151,7 +153,8 @@ public class TimelineService {
     }
 
     /**
-     * 档案统计栏（Story 2.4 AC5）：快乐时刻数 + 问诊数 + 里程碑（零态 0 / 总数按 pet_type）。
+     * 档案统计栏（Story 2.4 AC5 · 8.2 连带 AC5）：快乐时刻数 + 问诊数 + 里程碑真进度
+     * （已完成 / 总数，接 8.1 roster + completions 真计数）。
      */
     @Transactional(readOnly = true)
     public ArchiveStatsResponse getStats(long ownerId) {
@@ -159,13 +162,9 @@ public class TimelineService {
         long happy = contentService.countGrowthMoments(ownerId);
         HealthEventTimelineSource health = healthSource.getIfAvailable();
         long consult = health == null ? 0L : health.countHealthEvents(ownerId);
-        int milestoneTotal = milestoneTotalFor(profile.getPetType());
-        return new ArchiveStatsResponse(happy, consult, 0L, milestoneTotal);
-    }
-
-    /** 里程碑总数按宠物类型：猫/狗 = 30，其他 = 15（FR-42；本体属 mini-epic，此处仅总数）。 */
-    private static int milestoneTotalFor(PetType type) {
-        return (type == PetType.CAT || type == PetType.DOG) ? 30 : 15;
+        MilestoneService.MilestoneProgress progress =
+                milestoneService.getProgress(profile.getId(), profile.getPetType());
+        return new ArchiveStatsResponse(happy, consult, progress.completed(), progress.total());
     }
 
     private PetProfile requireProfile(long ownerId) {

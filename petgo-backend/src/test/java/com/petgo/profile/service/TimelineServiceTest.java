@@ -32,6 +32,7 @@ class TimelineServiceTest {
 
     private ProfileService profileService;
     private ContentService contentService;
+    private MilestoneService milestoneService;
     @SuppressWarnings("unchecked")
     private final ObjectProvider<HealthEventTimelineSource> healthProvider = Mockito.mock(ObjectProvider.class);
     private TimelineService service;
@@ -40,8 +41,9 @@ class TimelineServiceTest {
     void setUp() {
         profileService = Mockito.mock(ProfileService.class);
         contentService = Mockito.mock(ContentService.class);
+        milestoneService = Mockito.mock(MilestoneService.class);
         when(profileService.hasProfile(1L)).thenReturn(true);
-        service = new TimelineService(profileService, contentService, healthProvider);
+        service = new TimelineService(profileService, contentService, healthProvider, milestoneService);
     }
 
     private GrowthMomentView moment(long id, String iso) {
@@ -54,7 +56,15 @@ class TimelineServiceTest {
     }
 
     private static PetProfile pet(PetType type) {
-        return PetProfile.create(1L, type, "Rocky", null, "Shiba", null, null, "TOK");
+        PetProfile p = PetProfile.create(1L, type, "Rocky", null, "Shiba", null, null, "TOK");
+        try { // 模拟落库回填自增 id（getStats 取 profile.getId() 传里程碑进度查询）。
+            java.lang.reflect.Field f = PetProfile.class.getDeclaredField("id");
+            f.setAccessible(true);
+            f.set(p, 1L);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(e);
+        }
+        return p;
     }
 
     @Test
@@ -188,18 +198,21 @@ class TimelineServiceTest {
     // ===== R2 · AC5 统计栏 =====
 
     @Test
-    void statsCountsAndMilestoneTotalByPetType() {
+    void statsCountsAndMilestoneProgressByPetType() {
         when(profileService.findByOwnerId(1L)).thenReturn(Optional.of(pet(PetType.DOG)));
         HealthEventTimelineSource health = Mockito.mock(HealthEventTimelineSource.class);
         when(healthProvider.getIfAvailable()).thenReturn(health);
         when(contentService.countGrowthMoments(1L)).thenReturn(7L);
         when(health.countHealthEvents(1L)).thenReturn(3L);
+        // 8.2 连带：里程碑改真供数（接 8.1 roster + completions）。
+        when(milestoneService.getProgress(anyLong(), eq(PetType.DOG)))
+                .thenReturn(new MilestoneService.MilestoneProgress(4L, 30));
 
         ArchiveStatsResponse resp = service.getStats(1L);
 
         assertThat(resp.happyMomentCount()).isEqualTo(7L);
         assertThat(resp.consultCount()).isEqualTo(3L);
-        assertThat(resp.milestoneCompleted()).isZero(); // 零态
+        assertThat(resp.milestoneCompleted()).isEqualTo(4L); // 真计数
         assertThat(resp.milestoneTotal()).isEqualTo(30); // 狗 = 30
     }
 
@@ -208,6 +221,8 @@ class TimelineServiceTest {
         when(profileService.findByOwnerId(1L)).thenReturn(Optional.of(pet(PetType.OTHER)));
         when(healthProvider.getIfAvailable()).thenReturn(null);
         when(contentService.countGrowthMoments(1L)).thenReturn(0L);
+        when(milestoneService.getProgress(anyLong(), eq(PetType.OTHER)))
+                .thenReturn(new MilestoneService.MilestoneProgress(0L, 15));
 
         ArchiveStatsResponse resp = service.getStats(1L);
         assertThat(resp.milestoneTotal()).isEqualTo(15);

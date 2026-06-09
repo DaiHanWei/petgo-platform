@@ -15,6 +15,7 @@ import 'package:petgo/features/me/data/my_posts_repository.dart';
 import 'package:petgo/features/media/data/sts_credential.dart';
 import 'package:petgo/features/notify/data/app_version_repository.dart';
 import 'package:petgo/features/notify/domain/notification_item.dart';
+import 'package:petgo/features/profile/domain/milestone.dart';
 import 'package:petgo/features/profile/domain/pet_profile.dart';
 import 'package:petgo/features/profile/domain/timeline_item.dart';
 import 'package:petgo/features/triage/data/triage_repository.dart';
@@ -112,6 +113,36 @@ void main() {
         expect(legal, contains((n as Map)['type']), reason: '非法通知 type: ${n['type']}');
       }
       NotificationPage.fromJson(env);
+    });
+
+    test('Milestone 列表 5 字段 + group 4 字段 + item 字段集（C5 · Story 8.2）', () {
+      final m = call('GET', '/api/v1/pet-profiles/me/milestones');
+      // petAvatarUrl 可省略（NON_NULL）；seed 档案有头像 → 5 字段。
+      expect(contractKeys(m),
+          {'petName', 'petAvatarUrl', 'completedCount', 'totalCount', 'groups'});
+      final groups = m['groups'] as List;
+      expect(groups, isNotEmpty);
+      final g0 = (groups.first as Map).cast<String, dynamic>();
+      expect(contractKeys(g0), {'level', 'completedCount', 'totalCount', 'items'});
+      // 每个 item 字段须 ⊆ 契约集且含必填；已完成项带 completedAt，未完成省略。
+      const allowed = {'code', 'title', 'level', 'triggerType', 'completed', 'completedAt'};
+      const required = {'code', 'title', 'level', 'triggerType', 'completed'};
+      var sawCompleted = false;
+      for (final grp in groups) {
+        for (final it in (grp as Map)['items'] as List) {
+          final keys = contractKeys(it as Map);
+          expect(keys.difference(allowed), isEmpty, reason: 'mock 多字段: $keys');
+          expect(required.difference(keys), isEmpty, reason: 'mock 缺必填: $keys');
+          if (it['completed'] == true) {
+            sawCompleted = true;
+            expect(keys, contains('completedAt'));
+          } else {
+            expect(keys, isNot(contains('completedAt')));
+          }
+        }
+      }
+      expect(sawCompleted, isTrue, reason: 'mock 应含至少一个已完成里程碑（彩色徽章演示）');
+      MilestoneList.fromJson(m); // 真解析不抛
     });
   });
 

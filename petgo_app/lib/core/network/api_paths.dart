@@ -89,6 +89,9 @@ class ApiPaths {
   static const String petProfileDay = '$base/pet-profiles/me/day';
   static const String petProfileArchiveStats = '$base/pet-profiles/me/archive-stats';
 
+  /// 里程碑列表/进度（Story 8.1/8.2 · FR-42）。
+  static const String petProfileMilestones = '$base/pet-profiles/me/milestones';
+
   /// 内容发布 + Feed 列表（Story 2.3 / 3.2）。
   static const String contentPosts = '$base/content-posts';
 

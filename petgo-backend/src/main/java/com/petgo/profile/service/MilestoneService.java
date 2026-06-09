@@ -67,6 +67,23 @@ public class MilestoneService {
         }
     }
 
+    /**
+     * 里程碑进度（已完成 / 总数），供成长档案统计栏（2-4 AC5）与名片（2-6）真供数。只读不物化：
+     * 总数取 catalog（= roster 物化后大小）；已完成取该宠物 roster 行对应 completions 数（roster 缺失 → 0）。
+     */
+    @Transactional(readOnly = true)
+    public MilestoneProgress getProgress(long petProfileId, PetType petType) {
+        int total = com.petgo.profile.domain.MilestoneCatalog.forType(petType).size();
+        List<Long> ids = milestones.findByPetProfileIdOrderBySortOrderAsc(petProfileId).stream()
+                .map(PetMilestone::getId).toList();
+        long completed = ids.isEmpty() ? 0L : completions.countByPetMilestoneIdIn(ids);
+        return new MilestoneProgress(completed, total);
+    }
+
+    /** 里程碑进度计数（已完成 / 总数）。 */
+    public record MilestoneProgress(long completed, int total) {
+    }
+
     /** 当前用户里程碑列表（无档案 → 404）。读路径若 roster 缺失（存量档案）则 lazy 物化兜底。 */
     @Transactional
     public MilestoneListResponse getMilestones(long ownerId) {
