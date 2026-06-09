@@ -40,8 +40,8 @@ class MockBackend {
   void _seed() {
     _profile = {
       'id': 1,
-      'nickname': '测试用户',
-      'displayName': '测试用户',
+      'nickname': 'Demo User',
+      'displayName': 'Demo User',
       'email': 'demo@petgo.app',
       'avatarUrl': null,
       'petStatus': 'HAS_PET', // 有宠物 → 解锁成长档案
@@ -50,29 +50,29 @@ class MockBackend {
       'role': 'USER',
     };
 
-    // 假数据：贴合 10 张真实宠物照片的文案 + asset 封面图（部分多图供详情轮播）。
+    // 假数据：贴合 10 张真实宠物照片的英文文案 + asset 封面图（部分多图供详情轮播）。
     // 图片走 `asset:` 前缀，经 AppImage 解析为打包资源；Feed 卡片 + 详情页均渲染真图。
     const a = 'asset:assets/seed/';
     final samples = <Map<String, dynamic>>[
-      {'type': 'DAILY', 'body': 'Oyen 又跑屋顶看夕阳了，金色的毛真好看 🐱', 'nick': 'Putri', 'like': 124,
+      {'type': 'DAILY', 'body': 'Oyen chasing the sunset on the rooftop again — that golden fur is unreal 🐱', 'nick': 'Putri', 'like': 124,
         'imgs': ['${a}pet01.jpg', '${a}pet08.jpg']},
-      {'type': 'DAILY', 'body': '换上新项圈，眼睛瞪得像铜铃 😺', 'nick': 'Sari', 'like': 88,
+      {'type': 'DAILY', 'body': 'New collar day, and those eyes are wide as saucers 😺', 'nick': 'Sari', 'like': 88,
         'imgs': ['${a}pet07.jpg']},
-      {'type': 'GROWTH_MOMENT', 'body': '你们快看！它身上自带一颗爱心 🩶', 'nick': null, 'like': 256,
+      {'type': 'GROWTH_MOMENT', 'body': 'Look closely — she was born with a little heart on her fur 🩶', 'nick': null, 'like': 256,
         'imgs': ['${a}pet02.jpg', '${a}pet07.jpg']},
-      {'type': 'DAILY', 'body': '金毛弟弟下楼遛弯，捡球捡到飞起 🐕', 'nick': 'Budi', 'like': 73,
+      {'type': 'DAILY', 'body': 'Took the golden boy out for a walk — he fetches like his life depends on it 🐕', 'nick': 'Budi', 'like': 73,
         'imgs': ['${a}pet08.jpg']},
-      {'type': 'DAILY', 'body': '缅因主子的霸气侧颜，气场两米八 😼', 'nick': 'Andi', 'like': 61,
+      {'type': 'DAILY', 'body': 'His majesty the Maine Coon and that regal side profile 😼', 'nick': 'Andi', 'like': 61,
         'imgs': ['${a}pet03.jpg']},
-      {'type': 'DAILY', 'body': '两位主子的迷惑同框，下面那只到底在想啥呢 😹', 'nick': 'Maya', 'like': 142,
+      {'type': 'DAILY', 'body': 'Two fluffballs in one frame — what is the bottom one even thinking? 😹', 'nick': 'Maya', 'like': 142,
         'imgs': ['${a}pet04.jpg', '${a}pet03.jpg', '${a}pet05.jpg']},
-      {'type': 'DAILY', 'body': '深夜偷看猫咪迷之舞步，这是要出道？💃', 'nick': 'Dewi', 'like': 99,
+      {'type': 'DAILY', 'body': 'Caught the cat doing some mysterious midnight dance moves — debut soon? 💃', 'nick': 'Dewi', 'like': 99,
         'imgs': ['${a}pet05.jpg']},
-      {'type': 'GROWTH_MOMENT', 'body': '洗香香时间到！金毛变身泡泡怪 🛁', 'nick': null, 'like': 47,
+      {'type': 'GROWTH_MOMENT', 'body': 'Bath time! The golden retriever turned into a bubble monster 🛁', 'nick': null, 'like': 47,
         'imgs': ['${a}pet10.jpg']},
-      {'type': 'DAILY', 'body': '给牛头梗戴上波波头，文艺范儿瞬间拿捏 💇', 'nick': 'Joko', 'like': 210,
+      {'type': 'DAILY', 'body': 'Gave the bull terrier a little bob cut — instant artsy vibes 💇', 'nick': 'Joko', 'like': 210,
         'imgs': ['${a}pet09.jpg']},
-      {'type': 'KNOWLEDGE', 'body': '给家里两只画了张「相爱相杀」图，附多猫家庭和谐相处指南 🎨', 'nick': 'Rina', 'like': 35,
+      {'type': 'KNOWLEDGE', 'body': 'Drew my two as a "frenemies" sketch — plus a quick guide to a peaceful multi-cat home 🎨', 'nick': 'Rina', 'like': 35,
         'imgs': ['${a}pet06.jpg']},
     ];
     for (var i = 0; i < samples.length; i++) {
@@ -89,29 +89,29 @@ class MockBackend {
     }
     // 详情页评论种子(给第一条帖)
     _comments[100] = [
-      _comment(id: 900, nickname: 'Rina', body: '太可爱了吧！😍', ago: const Duration(hours: 1)),
-      _comment(id: 901, nickname: 'Joko', body: '同款主子,哈哈', ago: const Duration(hours: 2)),
+      _comment(id: 900, nickname: 'Rina', body: 'So adorable! 😍', ago: const Duration(hours: 1)),
+      _comment(id: 901, nickname: 'Joko', body: 'I have the same little guy, haha', ago: const Duration(hours: 2)),
     ];
 
     _notifications.addAll([
       // type 必须是后端 NotificationType 合法值（VET_REPLY/CONSULT_CLOSED/CONTENT_LIKED/CONTENT_COMMENTED/NEW_CONSULT_REQUEST）。
-      _notif(token: 'n1', type: 'CONTENT_COMMENTED', title: '新评论', body: 'Rina 评论了你的帖子', read: false, ago: const Duration(minutes: 20)),
-      _notif(token: 'n2', type: 'CONTENT_LIKED', title: '新的赞', body: 'Budi 赞了你的帖子', read: false, ago: const Duration(hours: 3)),
-      _notif(token: 'n3', type: 'VET_REPLY', title: '问诊更新', body: '兽医已回复你的咨询', read: true, ago: const Duration(days: 1)),
+      _notif(token: 'n1', type: 'CONTENT_COMMENTED', title: 'New comment', body: 'Rina commented on your post', read: false, ago: const Duration(minutes: 20)),
+      _notif(token: 'n2', type: 'CONTENT_LIKED', title: 'New like', body: 'Budi liked your post', read: false, ago: const Duration(hours: 3)),
+      _notif(token: 'n3', type: 'VET_REPLY', title: 'Consult update', body: 'A vet has replied to your consultation', read: true, ago: const Duration(days: 1)),
     ]);
 
     _consultHistory.addAll([
       {
         'type': 'AI', 'date': _iso(const Duration(hours: 6)), 'triageId': 5001,
-        'dangerLevel': 'GREEN', 'symptomSummary': '偶尔打喷嚏,精神食欲都正常',
+        'dangerLevel': 'GREEN', 'symptomSummary': 'Occasional sneezing, energy and appetite normal',
       },
       {
         'type': 'AI', 'date': _iso(const Duration(days: 1)), 'triageId': 5002,
-        'dangerLevel': 'RED', 'symptomSummary': '误食巧克力,现在呕吐',
+        'dangerLevel': 'RED', 'symptomSummary': 'Ate chocolate, now vomiting',
       },
       {
         'type': 'VET', 'date': _iso(const Duration(days: 2)), 'sessionId': 6001,
-        'vetDisplayName': 'Drh. Andi', 'sessionSummary': '猫咪发热,建议观察并补水',
+        'vetDisplayName': 'Drh. Andi', 'sessionSummary': 'Cat has a fever — advised monitoring and hydration',
         'userStars': 5, 'archived': true, 'terminalState': 'CLOSED',
       },
       {
@@ -123,14 +123,14 @@ class MockBackend {
 
     _petProfile = {
       'id': 7001, 'name': 'Oyen', 'cardToken': 'mock-card-token-oyen',
-      'petType': 'CAT', 'avatarUrl': 'asset:assets/seed/pet01.jpg', 'breed': '橘猫', 'birthday': '2022-05-01',
-      'intro': '爱睡觉、爱晒太阳的小橘', 'createdAt': _iso(const Duration(days: 200)),
+      'petType': 'CAT', 'avatarUrl': 'asset:assets/seed/pet01.jpg', 'breed': 'Orange Tabby', 'birthday': '2022-05-01',
+      'intro': 'A little orange cat who loves napping and sunbathing', 'createdAt': _iso(const Duration(days: 200)),
     };
 
     _timeline.addAll([
-      {'kind': 'HAPPY_MOMENT', 'date': _iso(const Duration(days: 1)), 'eventDate': _date(const Duration(days: 1)), 'postId': 101, 'imageUrls': ['asset:assets/seed/pet01.jpg'], 'text': 'Oyen 屋顶看夕阳'},
-      {'kind': 'HEALTH_EVENT', 'date': _iso(const Duration(days: 3)), 'postId': null, 'imageUrls': [], 'text': '误食巧克力,已就医', 'aiLevel': 'RED', 'symptomSummary': '呕吐'},
-      {'kind': 'HAPPY_MOMENT', 'date': _iso(const Duration(days: 7)), 'eventDate': _date(const Duration(days: 7)), 'postId': 105, 'imageUrls': ['asset:assets/seed/pet02.jpg'], 'text': '发现身上的爱心斑纹'},
+      {'kind': 'HAPPY_MOMENT', 'date': _iso(const Duration(days: 1)), 'eventDate': _date(const Duration(days: 1)), 'postId': 101, 'imageUrls': ['asset:assets/seed/pet01.jpg'], 'text': 'Oyen watching the sunset on the rooftop'},
+      {'kind': 'HEALTH_EVENT', 'date': _iso(const Duration(days: 3)), 'postId': null, 'imageUrls': [], 'text': 'Ate chocolate — taken to the vet', 'aiLevel': 'RED', 'symptomSummary': 'Vomiting'},
+      {'kind': 'HAPPY_MOMENT', 'date': _iso(const Duration(days: 7)), 'eventDate': _date(const Duration(days: 7)), 'postId': 105, 'imageUrls': ['asset:assets/seed/pet02.jpg'], 'text': 'Found the heart-shaped patch on her fur'},
     ]);
   }
 
@@ -141,7 +141,7 @@ class MockBackend {
     final imgs = images ?? (imageUrl == null ? const <String>[] : [imageUrl]);
     return {
       'id': id, 'authorId': 1, 'authorDeleted': false,
-      'authorNickname': nickname ?? '测试用户', 'authorAvatarUrl': null,
+      'authorNickname': nickname ?? 'Demo User', 'authorAvatarUrl': null,
       'type': type, 'body': body,
       'firstImageUrl': imgs.isEmpty ? null : imgs.first,
       'imageUrls': imgs, // 详情页轮播全图
@@ -290,7 +290,7 @@ class MockBackend {
     }
     if (RegExp(r'/content-posts/(\d+)/reports$').hasMatch(p)) return ok();
     if (RegExp(r'/users/(\d+)/mini-profile$').hasMatch(p)) {
-      return ok({'postCount': 6, 'isDeactivated': false, 'nickname': '测试用户', 'avatarUrl': null});
+      return ok({'postCount': 6, 'isDeactivated': false, 'nickname': 'Demo User', 'avatarUrl': null});
     }
 
     // ---------- PET PROFILE / TIMELINE / HEALTH ----------
@@ -334,7 +334,7 @@ class MockBackend {
     if (p.endsWith('/health-events/archive-decisions') && m == 'POST') {
       if (body['decision'] == 'ARCHIVED') {
         _timeline.insert(0, {'kind': 'HEALTH_EVENT', 'date': _iso(Duration.zero), 'postId': null,
-          'imageUrls': [], 'text': body['symptomSummary'] ?? '健康事件', 'aiLevel': body['aiLevel'], 'symptomSummary': body['symptomSummary']});
+          'imageUrls': [], 'text': body['symptomSummary'] ?? 'Health event', 'aiLevel': body['aiLevel'], 'symptomSummary': body['symptomSummary']});
       }
       return ok();
     }
@@ -352,9 +352,9 @@ class MockBackend {
       final lvl = _triageLevel[id] ?? 'GREEN';
       return ok({
         'status': 'DONE', 'dangerLevel': lvl,
-        'advice': lvl == 'RED' ? '请立即就医' : (lvl == 'YELLOW' ? '建议尽快观察并咨询兽医' : '暂无明显风险,保持观察'),
-        'medicationRef': null, 'disclaimer': '本结果仅供参考,不替代专业兽医诊断。',
-        'observation': {'indicators': ['精神状态', '食欲', '排泄'], 'timeWindow': '24 小时', 'escalationTriggers': ['持续呕吐', '精神萎靡']},
+        'advice': lvl == 'RED' ? 'Seek veterinary care immediately' : (lvl == 'YELLOW' ? 'Monitor closely and consult a vet soon' : 'No obvious risk for now — keep an eye on it'),
+        'medicationRef': null, 'disclaimer': 'This result is for reference only and does not replace professional veterinary diagnosis.',
+        'observation': {'indicators': ['Alertness', 'Appetite', 'Bowel movements'], 'timeWindow': '24 hours', 'escalationTriggers': ['Persistent vomiting', 'Lethargy']},
       });
     }
 
@@ -403,8 +403,8 @@ class MockBackend {
     if (p.endsWith('/vet/heartbeat') && m == 'POST') return ok();
     if (p.endsWith('/vet/consult-sessions/waiting') && m == 'GET') {
       return ok([
-        {'sessionId': 8001, 'source': 'DIRECT', 'aiDangerLevel': 'YELLOW', 'symptomPreview': '猫咪持续打喷嚏两天', 'imageCount': 2, 'waitingElapsedSeconds': 45},
-        {'sessionId': 8002, 'source': 'AI_UPGRADE', 'aiDangerLevel': 'RED', 'symptomPreview': '误食异物', 'imageCount': 1, 'waitingElapsedSeconds': 120},
+        {'sessionId': 8001, 'source': 'DIRECT', 'aiDangerLevel': 'YELLOW', 'symptomPreview': 'Cat has been sneezing for two days', 'imageCount': 2, 'waitingElapsedSeconds': 45},
+        {'sessionId': 8002, 'source': 'AI_UPGRADE', 'aiDangerLevel': 'RED', 'symptomPreview': 'Swallowed a foreign object', 'imageCount': 1, 'waitingElapsedSeconds': 120},
       ]);
     }
     final vetAccept = RegExp(r'/vet/consult-sessions/(\d+)/accept$').firstMatch(p);
@@ -416,10 +416,10 @@ class MockBackend {
       return ok({'id': int.parse(vetGet.group(1)!), 'status': 'IN_PROGRESS', 'source': 'DIRECT', 'userId': 1, 'imConversationId': 'mock-im', 'hasAiContext': true});
     }
     if (RegExp(r'/vet/consult-sessions/(\d+)/ai-context$').hasMatch(p)) {
-      return ok({'hasAiContext': true, 'dangerLevel': 'YELLOW', 'symptomText': '猫咪持续打喷嚏两天,精神尚可', 'imageUrls': []});
+      return ok({'hasAiContext': true, 'dangerLevel': 'YELLOW', 'symptomText': 'Cat has been sneezing for two days but is still alert', 'imageUrls': []});
     }
     if (RegExp(r'/vet/consult-sessions/(\d+)/assist$').hasMatch(p)) {
-      return ok({'aiReferenceReply': '建议观察体温与食欲,保持环境清洁,若 24 小时无改善请复诊。', 'historySummaries': []});
+      return ok({'aiReferenceReply': 'Monitor temperature and appetite, keep the environment clean, and follow up if there is no improvement within 24 hours.', 'historySummaries': []});
     }
     if (RegExp(r'/vet/consult-sessions/(\d+)/end$').hasMatch(p)) {
       return ok({'id': 1, 'status': 'PENDING_CLOSE', 'source': 'DIRECT', 'userId': 1, 'imConversationId': 'mock-im', 'hasAiContext': true});
