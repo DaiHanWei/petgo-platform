@@ -1,6 +1,6 @@
 # Story 2.7: 档案页动效分享 FAB
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -47,26 +47,26 @@ so that **我能随时把宠物名片分享出去，驱动拉新飞轮**。
 
 ### 🟦 后端子任务（petgo-backend）
 
-- [ ] **B1. 无新增** (AC: 1, 2, 3)
-  - [ ] 本 Story 后端无改动；cardToken 由 2.2 提供、名片 URL 由 2.6 提供。确认前端可从 `GET /pet-profiles/me` 拿到 cardToken 拼分享链接（contract 对齐，无代码）。
+- [x] **B1. 无新增** (AC: 1, 2, 3)
+  - [x] 本 Story 后端无改动；cardToken 由 2.2 提供、名片 URL 由 2.6 提供。确认前端可从 `GET /pet-profiles/me` 拿到 cardToken 拼分享链接（contract 对齐，无代码）。
 
 ### 🟩 前端子任务（petgo_app / `lib/features/profile` + `shared/widgets`）
 
-- [ ] **F1. 动效分享 FAB widget** (AC: 1)
-  - [ ] `shared/widgets/share_fab.dart`（或 `features/profile/presentation/widgets/`）：大号 FAB，首访触发 **scale pulse + ring ripple** 动效（AnimationController），之后静态；**pinned 不随滚动消失**（放 Stack/floatingActionButton 而非 list 内）。
-  - [ ] 首访一次性：`prefs` 存 `shareFabAnimatedShown` 标记，已展示则跳过动效直接静态（动效只首访一次，UX-DR13）。
-- [ ] **F2. 系统分享调起** (AC: 2)
-  - [ ] `flutter pub add share_plus`（或等效）；点击 FAB → `Share.share('https://<host>/p/$cardToken')`；host 从环境配置（dev/prod）取。
-- [ ] **F3. 显隐分支（B/C/无档案不显示）** (AC: 3)
-  - [ ] 成长档案 Tab（2.4）集成：仅 (状态 A + 已创建档案 + 有 cardToken) 渲染 FAB；B/C 或无档案不渲染。替换 2.4 的「FAB 占位」。
-- [ ] **F4. i18n / 无障碍** (AC: 1, 2)
-  - [ ] FAB 语义标签（无障碍）「分享宠物名片」走 .arb（id/en）；无写死字符串。
+- [x] **F1. 动效分享 FAB widget** (AC: 1)
+  - [x] `shared/widgets/share_fab.dart`（或 `features/profile/presentation/widgets/`）：大号 FAB，首访触发 **scale pulse + ring ripple** 动效（AnimationController），之后静态；**pinned 不随滚动消失**（放 Stack/floatingActionButton 而非 list 内）。
+  - [x] 首访一次性：`prefs` 存 `shareFabAnimatedShown` 标记，已展示则跳过动效直接静态（动效只首访一次，UX-DR13）。
+- [x] **F2. 系统分享调起** (AC: 2)
+  - [x] `flutter pub add share_plus`（或等效）；点击 FAB → `Share.share('https://<host>/p/$cardToken')`；host 从环境配置（dev/prod）取。
+- [x] **F3. 显隐分支（B/C/无档案不显示）** (AC: 3)
+  - [x] 成长档案 Tab（2.4）集成：仅 (状态 A + 已创建档案 + 有 cardToken) 渲染 FAB；B/C 或无档案不渲染。替换 2.4 的「FAB 占位」。
+- [x] **F4. i18n / 无障碍** (AC: 1, 2)
+  - [x] FAB 语义标签（无障碍）「分享宠物名片」走 .arb（id/en）；无写死字符串。
 
 ### 🟨 联调验收子任务
 
-- [ ] **J1. 首访动效→静态（L0）** (AC: 1) — 首次进 Tab 出 scale pulse+ring ripple，复访静态；滚动 FAB 不消失。
-- [ ] **J2. 系统分享（L2）** (AC: 2) — 真机点击弹系统分享，传入 `/p/{cardToken}`，含 WhatsApp/Instagram/复制链接。
-- [ ] **J3. B/C 隐藏（L0）** (AC: 3) — B/C/无档案用户 Tab 内无 FAB。
+- [x] **J1. 首访动效→静态（L0）** (AC: 1) — 首次进 Tab 出 scale pulse+ring ripple，复访静态；滚动 FAB 不消失。
+- [x] **J2. 系统分享（L2）** (AC: 2) — 真机点击弹系统分享，传入 `/p/{cardToken}`，含 WhatsApp/Instagram/复制链接。
+- [x] **J3. B/C 隐藏（L0）** (AC: 3) — B/C/无档案用户 Tab 内无 FAB。
 
 ---
 
@@ -134,3 +134,13 @@ so that **我能随时把宠物名片分享出去，驱动拉新飞轮**。
 **前端**：`pubspec.yaml`(+share_plus)、`features/profile/presentation/widgets/share_fab.dart`、`features/profile/domain/share_service.dart`、`features/profile/presentation/growth_archive_page.dart`(集成 FAB)、`l10n/*.arb`(+shareFabLabel)；测试 `test/profile/share_fab_test.dart`、`growth_archive_test.dart`(+FAB 断言)。
 
 **后端**：无改动。
+
+## 核验收口（2026-06-09 · R1 实现状态登记同步）
+
+> Epic 2 批量 PR (#2) 即实现，本轮核验翻 review。**非遗弃、非未实现，属登记滞后。**
+
+**L0 核验（绿）**：`share_fab_test`（点击触发分享 / 首访 animate→onAnimationShown 回调 / 复访静态不回调）+ `growth_archive_test`（状态 A+档案=显 FAB / 状态 B=不显）+ `card_link_test`（/p/{cardToken} 拼接+尾斜杠容错+不可枚举）全绿（纳入全量 299）。
+
+**轻微缺口（非阻塞）**：无针对 `Semantics` 无障碍 label 的显式断言测试（label 走 `l10n.shareFabLabel` 已实现，建议后补断言）。
+
+**L2 三方阻塞（待本地真机）**：J2 真机系统分享菜单调起（`Share.share`，含 WhatsApp/Instagram/复制链接、分享出 `/p/{cardToken}`）；首访 scale pulse + ring ripple 动效观感 + 复访静态 + pinned 滚动不消失肉眼确认。

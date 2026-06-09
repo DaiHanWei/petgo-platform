@@ -78,23 +78,23 @@ development_status:
   # ===== Epic 1: 应用地基与账户接入 =====
   epic-1: in-progress
   1-1-双产物脚手架与本地可运行骨架: review
-  1-2-设计-token-系统-tab-bar-外壳与-i18n-脚手架: ready-for-dev
+  1-2-设计-token-系统-tab-bar-外壳与-i18n-脚手架: review   # [R1 登记同步 2026-06-09] Epic1 批量PR(#1)即实现,本轮核验翻review(非遗弃/非未实现): L0绿(widget_test token底色/Tab外壳5位+凸起/120ms/i18n双语 8例,纳入全量299); 偏差(换肤9bf3a75有意演进): AC2弧形缺口→平直顶边+centerDocked半埋,＋色固定accentGrowth; L2待本地真机视觉(切Tab底色/凸起观感/系统语言/golden)
   1-3-google-登录与-jwt-签发: review          # [PRD1.0.0✏️] 加多 IdP 架构预留注记 (为 1.1.0 Apple,非本版 AC) ·[R2] 加 AC: Google 授权失败态(取消/超时/异常)统一提示+重试+不建账号 (FR-0D,F13) ·R2 完成(L0 绿: AC5 失败态既有满足+补测试,后端 8/8+前端 login 4/4; 取消差异化已记)
   1-4-登录引导浮层与登录后回跳: review          # [PRD1.0.0✏️·R2] 加 AC: 授权失败回触发前页面+重试 (FR-0C/0D,F13) ·R2 完成(L0 绿: _attemptLogin 三态化+失败态横幅+重试,login_guide test 10/10·全套240; L2 真实失败链路待本地)
-  1-5-游客只读进入与受控入口登录门控: ready-for-dev
+  1-5-游客只读进入与受控入口登录门控: review   # [R1 登记同步 2026-06-09] Epic1 批量PR(#1)即实现,本轮核验翻review(非遗弃/非未实现): L0绿(story_1_5_gating 6例+auth_interceptor+后端ProblemDetailAuthHandlers 401/403,纳入全量523/299); 偏差(非AC阻塞): dio401未注入pendingAction自动重放/ProblemDetail缺traceId; L1待本地(GatewayPing对称性需Docker); L2待本地(真Google登录回跳)
   1-6-新用户引导-昵称确认与宠物状态选择: review  # [PRD1.0.0✏️] 改 AC3: B/C→A 复用 FR-0G 建档引导 ·[R2] 加 AC: 注册返回键语义(0E退登录/0F回0E)+状态切换 A↔B/C 已建档分支 (FR-21,F15邻) ·R2 完成(L0 绿: PopScope 返回键两页+petStatusChangeAction 四象限+后端 B5 不删档案; 后端 MeServiceTest 7/7,前端 246; L1/L2 待本地)
   1-7-状态-a-档案创建引导与首页提示条: review    # [PRD1.0.0✏️] 复核 AC2: 运行期 B→A 提示条语义转正 ·[R2] 加 AC: 创建成功庆祝页(分享名片/开始探索)+推送权限时序庆祝页后进首页前 (F15) ·R2 完成(L0 绿: 庆祝页+推送闸门串接+BuildOrigin 跳过分支; 前端 252,无后端改动; L2 真机推送/分享待本地)
   epic-1-retrospective: optional
 
   # ===== Epic 2: 成长档案与宠物名片分享 =====
   epic-2: in-progress
-  2-1-媒体基建-oss-双桶-sts-直传-签名-url-与-exif-剥离: ready-for-dev
+  2-1-媒体基建-oss-双桶-sts-直传-签名-url-与-exif-剥离: review   # [R1 登记同步 2026-06-09] Epic2 批量PR(#2)即实现,本轮核验翻review(非遗弃/非未实现): L0/L1绿(StsService scope收窄/SignedUrl/AliyunOss EXIF兜底/MediaController JWT+限流+前端image_processor GPS剥离+≤10MB/oss_uploader/media_use_case,纳入全量523/299); 本轮补iOS Info.plist NSCamera/NSPhotoLibrary权限串(原缺会闪退)+收敛portrait-only; ⚠️L2三方待本地: 需真阿里OSS/STS凭证(J1直传双桶+越权拒/J2签名403·200·过期/J3 EXIF端到端)+真机相册相机(J4权限引导/HEIC)
   2-2-宠物档案创建-单账号单宠物: review          # [PRD1.0.0✏️] 改 AC1: 加 pet_type 必选枚举+创建后不可改 (F6,Flyway 加列) ·[R2] 加 AC: 字段必填规则(类型/名字/生日必填,头像/品种/介绍选填)+生日完整日期(年月日) ·F6+R2 完成(L0 绿: PetType 枚举+V25 加列+实体无setter+update DTO 不含=双重不可改; birthday @NotNull; 后端 ProfileServiceTest 10/10,前端 253; V25 迁移+端点422 L1 待本地)
   2-3-统一-发布入口与内容发布: review            # [PRD1.0.0✏️·R2] 加 AC: event_date 列+发布事件日期字段(默认/禁未来,F9)+发布最低内容(文图至少一)+B/C灰选跳FR-0G建档返回预选(F15)+发布三方自动审核流程(文字关键词+图像stub,F10,新 ContentModerationService) ·R2 完成(L0 绿: V26 加 event_date[V4已冻结改ALTER]+ContentModerationService stub审核[文字/图片拦截不落库422,印尼/英语占位词]+最低内容422+灰选建档跳过庆祝页回/publish预选; 后端 package+ContentService/Moderation单测绿,前端262; L1[Docker]待本地)
   2-4-成长档案-tab-时间线与状态快捷编辑: review   # [PRD1.0.0✏️] 加 AC: 双视图日历(FR-37)+档案统计栏+里程碑入口+第一条🌟标记 ·[R2] 加 AC: 双视图/时间线按 event_date 排序(F9)+当天详情页+未来格子置灰+视图加载失败态(F13)+A↔B/C 状态分支 ·AC5+R2 完成(L0 绿: AC5 双视图/统计栏/里程碑零态0-N按pet_type/第一条🌟[规划漏列子任务已补建]+AC6 event_date排序/当天详情无加删/未来灰格/「+」预填+AC7失败下拉重试保留信息卡统计; 后端3新端点+健康端口补实现+TimelineServiceTest扩,前端271+growth_archive_r2; L1[Docker]待本地)
   2-5-问诊记录存档承接与健康事件时间线: review    # [PRD1.0.0✏️] 改 AC1+加 AC: 存档弹窗三态+先建档→回灌存档延迟串接 ·[R2] 加 AC: FR-3 红色态结果页存档入口承接(状态分支)+建档完成跳过庆祝页直接回灌 (F15) ·AC1三态+AC3+AC4 完成(L0 绿: showArchivePrompt 三态[①存入/②立即创建/③去创建先FR-0G切A]+pendingArchive挂起+建档跳过庆祝页回灌同sourceRef幂等+AC4红色态A直存/未建档BC走FR-16; triage两handler收敛; 纯前端,后端R1已覆盖; 前端277+archive_prompt_dialog_test; L1/L2待本地)
   2-6-宠物名片-h5-对外分享页: review             # [PRD1.0.0✏️] 大改: 单照片流→6 区块(里程碑区块走零态降级,F2) ·[R2] 加 AC: H5 加载失败/链接失效/已装未装 DeepLink(F13)+快乐时刻流按 event_date(F9) ·AC1+AC5+AC6+AC7 完成(L0 绿: 6区块Thymeleaf[Hero陪伴天数+昵称/徽章条零态/故事数字复用getStats/动态零态/event_date照片流/双CTA平台分流深链]+og标题成长故事+AC5零态不阻塞+AC6统一card_gone404防枚举[pet_profiles无软删收敛到注销]; 纯后端,CardPageControllerTest扩+package; DeepLink真机L2/≤3s L2待本地)
-  2-7-档案页动效分享-fab: ready-for-dev
+  2-7-档案页动效分享-fab: review   # [R1 登记同步 2026-06-09] Epic2 批量PR(#2)即实现,本轮核验翻review(非遗弃/非未实现): L0绿(share_fab 点击/首访动效一次性+growth_archive A显B隐+card_link /p/{token}不可枚举,纳入全量299); 轻微缺口(非阻塞): 无Semantics label断言测试; L2三方待本地: 真机系统分享菜单(Share.share)+动效观感
   2-8-宠物档案编辑: review                       # [PRD1.0.0✏️] 改 AC: 编辑页硬禁修改 pet_type (F6) ·F6 完成(L0 绿: 编辑页 pet_type 置灰只读[ChoiceChip onSelected null+既有选中+🔒]不随PATCH提交; 后端不可变 2.2 已落[DTO无字段+实体无setter]; 纯前端,pet_profile_edit_test+F6用例,278 test; L1/L2待本地)
   epic-2-retrospective: optional
 
