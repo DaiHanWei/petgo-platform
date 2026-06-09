@@ -13,10 +13,11 @@ class _FakeRepo implements ProfileRepository {
 
   @override
   Future<PetProfile> create({
+    required String petType,
     required String name,
+    required DateTime birthday,
     String? avatarUrl,
     String? breed,
-    DateTime? birthday,
     String? intro,
     String? idempotencyKey,
   }) async =>

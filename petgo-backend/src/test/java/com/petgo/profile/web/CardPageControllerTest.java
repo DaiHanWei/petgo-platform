@@ -41,8 +41,8 @@ class CardPageControllerTest {
     }
 
     private PetProfile profile() {
-        PetProfile p = PetProfile.create(7L, "Momo", "https://cdn/a.jpg", "Shiba",
-                LocalDate.of(2022, 1, 1), "好奇宝宝", "TOK");
+        PetProfile p = PetProfile.create(7L, com.petgo.profile.domain.PetType.CAT, "Momo",
+                "https://cdn/a.jpg", "Shiba", LocalDate.of(2022, 1, 1), "好奇宝宝", "TOK");
         return p;
     }
 

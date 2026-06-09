@@ -11,6 +11,7 @@ import java.time.LocalDate;
 public record PetProfileResponse(
         Long id,
         String avatarUrl,
+        String petType,
         String name,
         String breed,
         LocalDate birthday,
@@ -22,6 +23,7 @@ public record PetProfileResponse(
         return new PetProfileResponse(
                 p.getId(),
                 p.getAvatarUrl(),
+                p.getPetType() == null ? null : p.getPetType().name(),
                 p.getName(),
                 p.getBreed(),
                 p.getBirthday(),

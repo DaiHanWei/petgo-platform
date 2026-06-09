@@ -7,6 +7,7 @@ import '../../../core/media/media_scope.dart';
 import '../../../core/network/problem_detail.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
+import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../media/domain/media_upload_use_case.dart';
 import '../../../shared/utils/media_permission.dart';
@@ -30,6 +31,7 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
   final _introController = TextEditingController();
   DateTime? _birthday;
   String? _avatarUrl;
+  String? _petType; // F6 必选：CAT/DOG/OTHER
   bool _uploading = false;
   bool _submitting = false;
 
@@ -41,7 +43,13 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
     super.dispose();
   }
 
-  bool get _canSubmit => _nameController.text.trim().isNotEmpty && !_submitting && !_uploading;
+  // 必填（F6 + R2/AC3）：类型 + 名字 + 生日（完整年月日）齐全方可提交。
+  bool get _canSubmit =>
+      _petType != null &&
+      _nameController.text.trim().isNotEmpty &&
+      _birthday != null &&
+      !_submitting &&
+      !_uploading;
 
   Future<void> _pickAvatar() async {
     setState(() => _uploading = true);
@@ -64,17 +72,21 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context);
     final name = _nameController.text.trim();
-    if (name.isEmpty) {
+    final petType = _petType;
+    final birthday = _birthday;
+    // 必填守卫（与 _canSubmit 一致；按钮已禁用，此处双保险）：类型/名字/生日齐全。
+    if (petType == null || name.isEmpty || birthday == null) {
       _toast(l10n.petProfileNameRequired);
       return;
     }
     setState(() => _submitting = true);
     try {
       final created = await ref.read(profileRepositoryProvider).create(
+            petType: petType,
             name: name,
+            birthday: birthday,
             avatarUrl: _avatarUrl,
             breed: _emptyToNull(_breedController.text),
-            birthday: _birthday,
             intro: _emptyToNull(_introController.text),
             idempotencyKey: 'create-${DateTime.now().microsecondsSinceEpoch}',
           );
@@ -158,13 +170,28 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
               ),
             ),
             const SizedBox(height: AppSpacing.lg),
+            // 宠物类型（F6 必选，创建后不可改）
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Text('${l10n.petTypeLabel} *', style: AppTypography.caption),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: AppSpacing.sm,
+              children: [
+                _petTypeChip('CAT', l10n.petTypeCat),
+                _petTypeChip('DOG', l10n.petTypeDog),
+                _petTypeChip('OTHER', l10n.petTypeOther),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
             TextField(
               key: const ValueKey('petProfileNameField'),
               controller: _nameController,
               maxLength: 20,
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
-                labelText: l10n.petProfileName,
+                labelText: '${l10n.petProfileName} *',
                 hintText: l10n.petProfileNameHint,
               ),
             ),
@@ -177,7 +204,7 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
             ListTile(
               key: const ValueKey('petProfileBirthdayTile'),
               contentPadding: EdgeInsets.zero,
-              title: Text(l10n.petProfileBirthday),
+              title: Text('${l10n.petProfileBirthday} *'),
               subtitle: Text(_birthday == null
                   ? l10n.petProfileBirthdayPick
                   : '${_birthday!.year}-${_birthday!.month}-${_birthday!.day}'),
@@ -204,8 +231,18 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
     );
   }
 
+  Widget _petTypeChip(String value, String label) {
+    return ChoiceChip(
+      key: ValueKey('petType_$value'),
+      label: Text(label),
+      selected: _petType == value,
+      onSelected: (_) => setState(() => _petType = value),
+    );
+  }
+
   Future<void> _pickBirthday() async {
     final now = DateTime.now();
+    // 完整年月日 date picker（R2/AC3）：不提供只月日模式，产出完整 date。
     final picked = await showDatePicker(
       context: context,
       initialDate: _birthday ?? now,

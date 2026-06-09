@@ -40,11 +40,11 @@ class ProfileApiControllerTest {
     @Test
     void createUsesOwnerFromJwtAndRateLimits() {
         PetProfileResponse stub = new PetProfileResponse(
-                5L, null, "Momo", null, null, null, "TOK", Instant.now());
+                5L, null, "CAT", "Momo", null, null, null, "TOK", Instant.now());
         when(service.create(eq(77L), org.mockito.ArgumentMatchers.any())).thenReturn(stub);
 
         PetProfileResponse resp = controller.create(
-                jwt("77"), new PetProfileCreateRequest(null, "Momo", null, null, null));
+                jwt("77"), new PetProfileCreateRequest(null, "CAT", "Momo", null, java.time.LocalDate.of(2022,1,1), null));
 
         assertThat(resp.name()).isEqualTo("Momo");
         verify(rateLimiter).check(eq("rl:profile:create:77"), anyInt(), org.mockito.ArgumentMatchers.any());
@@ -54,14 +54,14 @@ class ProfileApiControllerTest {
     @Test
     void rejectsMissingJwt() {
         assertThatThrownBy(() -> controller.create(
-                null, new PetProfileCreateRequest(null, "Momo", null, null, null)))
+                null, new PetProfileCreateRequest(null, "CAT", "Momo", null, java.time.LocalDate.of(2022,1,1), null)))
                 .isInstanceOf(AppException.class);
     }
 
     @Test
     void myProfileDelegatesWithJwtUser() {
         PetProfileResponse stub = new PetProfileResponse(
-                5L, null, "Momo", null, null, null, "TOK", Instant.now());
+                5L, null, "CAT", "Momo", null, null, null, "TOK", Instant.now());
         when(service.getMyProfile(77L)).thenReturn(stub);
         assertThat(controller.myProfile(jwt("77")).cardToken()).isEqualTo("TOK");
     }
@@ -77,7 +77,7 @@ class ProfileApiControllerTest {
     @Test
     void updateUsesJwtOwnerAndTriggersRerender() {
         PetProfileResponse updated = new PetProfileResponse(
-                5L, null, "Momo2", null, null, null, "TOK", Instant.now());
+                5L, null, "CAT", "Momo2", null, null, null, "TOK", Instant.now());
         when(service.update(eq(77L), ArgumentMatchers.any())).thenReturn(updated);
 
         PetProfileResponse resp = controller.update(

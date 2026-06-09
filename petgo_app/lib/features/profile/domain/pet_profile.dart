@@ -6,6 +6,7 @@ class PetProfile {
     required this.id,
     required this.name,
     required this.cardToken,
+    this.petType,
     this.avatarUrl,
     this.breed,
     this.birthday,
@@ -16,6 +17,9 @@ class PetProfile {
   final int id;
   final String name;
   final String cardToken;
+
+  /// 宠物类型（F6：CAT/DOG/OTHER）。创建后不可改——copyWith 不暴露此字段。
+  final String? petType;
   final String? avatarUrl;
   final String? breed;
   final DateTime? birthday;
@@ -26,6 +30,7 @@ class PetProfile {
         id: json['id'] as int,
         name: json['name'] as String,
         cardToken: json['cardToken'] as String,
+        petType: json['petType'] as String?,
         avatarUrl: json['avatarUrl'] as String?,
         breed: json['breed'] as String?,
         birthday: _parseDate(json['birthday']),
@@ -44,6 +49,7 @@ class PetProfile {
         id: id,
         name: name ?? this.name,
         cardToken: cardToken,
+        petType: petType, // 创建后不可改，恒保留
         avatarUrl: avatarUrl ?? this.avatarUrl,
         breed: breed ?? this.breed,
         birthday: birthday ?? this.birthday,

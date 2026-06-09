@@ -2,6 +2,8 @@ package com.petgo.profile.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -31,6 +33,11 @@ public class PetProfile {
     @Column(name = "avatar_url", length = 1024)
     private String avatarUrl;
 
+    /** 宠物类型（F6）：必选，**创建后不可改**（无 setter，update 路径不含此字段）。 */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "pet_type", nullable = false, length = 16)
+    private PetType petType;
+
     @Column(name = "name", nullable = false, length = 20)
     private String name;
 
@@ -59,10 +66,11 @@ public class PetProfile {
     protected PetProfile() {
     }
 
-    public static PetProfile create(long ownerId, String name, String avatarUrl, String breed,
-            LocalDate birthday, String intro, String cardToken) {
+    public static PetProfile create(long ownerId, PetType petType, String name, String avatarUrl,
+            String breed, LocalDate birthday, String intro, String cardToken) {
         PetProfile p = new PetProfile();
         p.ownerId = ownerId;
+        p.petType = petType;
         p.name = name;
         p.avatarUrl = avatarUrl;
         p.breed = breed;
@@ -98,6 +106,11 @@ public class PetProfile {
 
     public void setAvatarUrl(String avatarUrl) {
         this.avatarUrl = avatarUrl;
+    }
+
+    /** 宠物类型（只读：创建后不可改，无 setter）。 */
+    public PetType getPetType() {
+        return petType;
     }
 
     public String getName() {

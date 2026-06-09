@@ -30,7 +30,7 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
 
     private String createBody(String name) {
         return """
-                {"name":"%s","breed":"柴犬","intro":"乖巧","birthday":"2022-01-01"}
+                {"name":"%s","petType":"DOG","breed":"柴犬","intro":"乖巧","birthday":"2022-01-01"}
                 """.formatted(name);
     }
 
@@ -46,6 +46,7 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
                         .content(createBody("旺财")))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.name").value("旺财"))
+                .andExpect(jsonPath("$.petType").value("DOG"))
                 .andExpect(jsonPath("$.breed").value("柴犬"))
                 .andExpect(jsonPath("$.cardToken").isNotEmpty())
                 .andExpect(jsonPath("$.id").isNumber());
@@ -53,6 +54,60 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
         PetProfile saved = profiles.findByOwnerId(owner.getId()).orElseThrow();
         org.junit.jupiter.api.Assertions.assertEquals("旺财", saved.getName());
         org.junit.jupiter.api.Assertions.assertEquals(owner.getId(), saved.getOwnerId());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                com.petgo.profile.domain.PetType.DOG, saved.getPetType());
+    }
+
+    // ---------- R2/F6 必填校验（决策 F6 + R2/AC3） ----------
+
+    @Test
+    void createMissingPetTypeIs422() throws Exception {
+        User owner = newUser();
+        mvc.perform(post("/api/v1/pet-profiles")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(owner.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"旺财","birthday":"2022-01-01"}
+                                """))
+                .andExpect(status().isUnprocessableEntity());
+    }
+
+    @Test
+    void createInvalidPetTypeIs422() throws Exception {
+        User owner = newUser();
+        mvc.perform(post("/api/v1/pet-profiles")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(owner.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"旺财","petType":"BIRD","birthday":"2022-01-01"}
+                                """))
+                .andExpect(status().isUnprocessableEntity());
+    }
+
+    @Test
+    void createMissingBirthdayIs422() throws Exception {
+        User owner = newUser();
+        mvc.perform(post("/api/v1/pet-profiles")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(owner.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"旺财","petType":"CAT"}
+                                """))
+                .andExpect(status().isUnprocessableEntity());
+    }
+
+    @Test
+    void createOptionalFieldsOmittedSucceeds() throws Exception {
+        // 选填（头像/品种/介绍）缺省不阻塞：仅必填（类型/名字/生日）即可创建。
+        User owner = newUser();
+        mvc.perform(post("/api/v1/pet-profiles")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(owner.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"旺财","petType":"OTHER","birthday":"2021-05-05"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.petType").value("OTHER"));
     }
 
     @Test

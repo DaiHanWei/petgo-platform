@@ -42,7 +42,8 @@ class HealthEventControllerEndpointTest extends ApiIntegrationTest {
 
     /** 直接造一只属于 owner 的宠物档案，返回其 petId。 */
     private long createPetFor(User owner) {
-        PetProfile p = PetProfile.create(owner.getId(), "旺财", null, "柴犬", null, null,
+        PetProfile p = PetProfile.create(owner.getId(), com.petgo.profile.domain.PetType.DOG,
+                "旺财", null, "柴犬", null, null,
                 cardTokenGenerator.generate());
         return profiles.save(p).getId();
     }

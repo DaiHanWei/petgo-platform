@@ -1,6 +1,7 @@
 package com.petgo.profile.service;
 
 import com.petgo.profile.domain.PetProfile;
+import com.petgo.profile.domain.PetType;
 import com.petgo.profile.dto.PetProfileCreateRequest;
 import com.petgo.profile.dto.PetProfileResponse;
 import com.petgo.profile.dto.PetProfileUpdateRequest;
@@ -39,8 +40,10 @@ public class ProfileService {
         if (name == null || name.isEmpty()) {
             throw AppException.validation("宠物名不能为空");
         }
+        PetType petType = parsePetType(req.petType());
         PetProfile profile = PetProfile.create(
                 ownerId,
+                petType,
                 name,
                 blankToNull(req.avatarUrl()),
                 blankToNull(req.breed()),
@@ -132,6 +135,18 @@ public class ProfileService {
         return profiles.findByOwnerId(ownerId)
                 .map(p -> p.getId().equals(petId))
                 .orElse(false);
+    }
+
+    /** 解析宠物类型（F6）：必填 + 枚举合法，非法 → 422。@NotBlank 已拦空，此处兜底大小写/非法值。 */
+    private static PetType parsePetType(String raw) {
+        if (raw == null || raw.isBlank()) {
+            throw AppException.validation("宠物类型必选");
+        }
+        try {
+            return PetType.valueOf(raw.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw AppException.validation("宠物类型非法，须为 CAT/DOG/OTHER 之一");
+        }
     }
 
     private static String blankToNull(String s) {

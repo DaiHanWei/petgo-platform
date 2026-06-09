@@ -98,7 +98,7 @@ class MockBackend {
 
     _petProfile = {
       'id': 7001, 'name': 'Oyen', 'cardToken': 'mock-card-token-oyen',
-      'avatarUrl': null, 'breed': '橘猫', 'birthday': '2022-05-01',
+      'petType': 'CAT', 'avatarUrl': null, 'breed': '橘猫', 'birthday': '2022-05-01',
       'intro': '爱睡觉、爱晒太阳的小橘', 'createdAt': _iso(const Duration(days: 200)),
     };
 

@@ -44,7 +44,8 @@ class ContentFeedControllerEndpointTest extends ApiIntegrationTest {
 
     /** 造一只属于 owner 的真实档案（GROWTH_MOMENT 帖的 pet_id 需满足 FK）。 */
     private long newPetProfile(long ownerId) {
-        PetProfile p = PetProfile.create(ownerId, "宠物" + SEQ.incrementAndGet(), null, null, null, null,
+        PetProfile p = PetProfile.create(ownerId, com.petgo.profile.domain.PetType.OTHER,
+                "宠物" + SEQ.incrementAndGet(), null, null, null, null,
                 "ct-" + SEQ.incrementAndGet());
         return petProfiles.save(p).getId();
     }

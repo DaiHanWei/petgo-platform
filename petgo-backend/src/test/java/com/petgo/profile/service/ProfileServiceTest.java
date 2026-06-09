@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.petgo.profile.domain.PetProfile;
+import com.petgo.profile.domain.PetType;
 import com.petgo.profile.dto.PetProfileCreateRequest;
 import com.petgo.profile.dto.PetProfileResponse;
 import com.petgo.profile.repository.PetProfileRepository;
@@ -31,7 +32,8 @@ class ProfileServiceTest {
     }
 
     private PetProfileCreateRequest req() {
-        return new PetProfileCreateRequest("https://cdn/x.jpg", "Momo", "Shiba", LocalDate.of(2022, 1, 1), "好奇宝宝");
+        return new PetProfileCreateRequest(
+                "https://cdn/x.jpg", "CAT", "Momo", "Shiba", LocalDate.of(2022, 1, 1), "好奇宝宝");
     }
 
     @Test
@@ -42,8 +44,26 @@ class ProfileServiceTest {
         PetProfileResponse resp = service.create(1L, req());
 
         assertThat(resp.name()).isEqualTo("Momo");
+        assertThat(resp.petType()).isEqualTo("CAT"); // F6：类型落库回显
         assertThat(resp.cardToken()).isEqualTo("TOKEN_ABC");
         assertThat(resp.avatarUrl()).isEqualTo("https://cdn/x.jpg");
+    }
+
+    @Test
+    void invalidPetTypeRejected() {
+        when(profiles.existsByOwnerId(1L)).thenReturn(false);
+        assertThatThrownBy(() -> service.create(1L, new PetProfileCreateRequest(
+                null, "BIRD", "Momo", null, LocalDate.of(2022, 1, 1), null)))
+                .isInstanceOf(AppException.class)
+                .hasMessageContaining("CAT/DOG/OTHER");
+    }
+
+    @Test
+    void blankPetTypeRejected() {
+        when(profiles.existsByOwnerId(1L)).thenReturn(false);
+        assertThatThrownBy(() -> service.create(1L, new PetProfileCreateRequest(
+                null, "  ", "Momo", null, LocalDate.of(2022, 1, 1), null)))
+                .isInstanceOf(AppException.class);
     }
 
     @Test
@@ -58,7 +78,7 @@ class ProfileServiceTest {
     void blankNameRejected() {
         when(profiles.existsByOwnerId(1L)).thenReturn(false);
         assertThatThrownBy(() -> service.create(1L,
-                new PetProfileCreateRequest(null, "   ", null, null, null)))
+                new PetProfileCreateRequest(null, "CAT", "   ", null, null, null)))
                 .isInstanceOf(AppException.class);
     }
 
@@ -70,7 +90,7 @@ class ProfileServiceTest {
 
     @Test
     void updatePartialKeepsCardTokenAndChangesFields() {
-        PetProfile existing = PetProfile.create(1L, "Old", "u", "Breed",
+        PetProfile existing = PetProfile.create(1L, PetType.CAT, "Old", "u", "Breed",
                 java.time.LocalDate.of(2020, 1, 1), "old intro", "TOK_KEEP");
         when(profiles.findByOwnerId(1L)).thenReturn(java.util.Optional.of(existing));
         when(profiles.save(any(PetProfile.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -94,7 +114,7 @@ class ProfileServiceTest {
 
     @Test
     void updateBlankNameRejected() {
-        PetProfile existing = PetProfile.create(1L, "Old", null, null, null, null, "TOK");
+        PetProfile existing = PetProfile.create(1L, PetType.CAT, "Old", null, null, null, null, "TOK");
         when(profiles.findByOwnerId(1L)).thenReturn(java.util.Optional.of(existing));
         assertThatThrownBy(() -> service.update(1L,
                 new com.petgo.profile.dto.PetProfileUpdateRequest(null, "   ", null, null, null)))
@@ -106,7 +126,7 @@ class ProfileServiceTest {
         when(profiles.existsByOwnerId(1L)).thenReturn(false);
         when(profiles.save(any(PetProfile.class))).thenAnswer(inv -> inv.getArgument(0));
         PetProfileResponse resp = service.create(1L,
-                new PetProfileCreateRequest("  ", "Momo", "  ", null, "  "));
+                new PetProfileCreateRequest("  ", "DOG", "Momo", "  ", null, "  "));
         assertThat(resp.breed()).isNull();
         assertThat(resp.intro()).isNull();
         assertThat(resp.avatarUrl()).isNull();
