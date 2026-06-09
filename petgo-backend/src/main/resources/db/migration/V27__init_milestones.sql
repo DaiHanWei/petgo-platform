@@ -11,7 +11,7 @@ CREATE TABLE pet_milestones (
     id              BIGSERIAL    PRIMARY KEY,
     pet_profile_id  BIGINT       NOT NULL REFERENCES pet_profiles (id),
     code            VARCHAR(16)  NOT NULL,            -- 目录码（C-S1 / D-M3 / G-L1…），稳定外露标识
-    level           VARCHAR(1)   NOT NULL,            -- S / M / L
+    level           VARCHAR(8)   NOT NULL,            -- S / M / L（VARCHAR≥2：避 Hibernate6 长度1→CHAR 的 validate 失配）
     trigger_type    VARCHAR(24)  NOT NULL,            -- SYSTEM_AUTO / USER_CHECKIN / PUSH_PUBLISH
     sort_order      INT          NOT NULL,            -- 同级展示次序
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),  -- UTC

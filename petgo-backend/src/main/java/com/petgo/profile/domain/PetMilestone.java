@@ -32,7 +32,7 @@ public class PetMilestone {
     private String code;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "level", nullable = false, length = 1)
+    @Column(name = "level", nullable = false, length = 8)
     private MilestoneLevel level;
 
     @Enumerated(EnumType.STRING)
