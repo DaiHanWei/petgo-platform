@@ -28,6 +28,10 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long> 
     List<ContentPost> findByAuthorIdAndTypeAndDeletedAtIsNullAndEventDateOrderByCreatedAtAsc(
             long authorId, ContentType type, LocalDate eventDate);
 
+    /** 名片快乐时刻流（Story 2.6 AC7 · F9）：某作者某类型未删内容，按 event_date 倒序取最近 N。 */
+    List<ContentPost> findByAuthorIdAndTypeAndDeletedAtIsNullOrderByEventDateDescCreatedAtDesc(
+            long authorId, ContentType type, Pageable pageable);
+
     /** 统计：某作者某类型未删且已发布内容数（Story 2.4 AC5 统计栏快乐时刻数）。 */
     long countByAuthorIdAndTypeAndDeletedAtIsNullAndStatus(
             long authorId, ContentType type, PostStatus status);

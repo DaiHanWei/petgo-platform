@@ -210,6 +210,19 @@ public class ContentService {
                 .toList();
     }
 
+    /**
+     * 名片快乐时刻流（Story 2.6 AC7 · F9）：按 {@code event_date} 倒序取最近 limit 条 GROWTH_MOMENT。
+     * 经 service 接口供 H5 名片取数（禁 join）。
+     */
+    @Transactional(readOnly = true)
+    public List<GrowthMomentView> findRecentGrowthMomentsByEventDate(long authorId, int limit) {
+        return posts.findByAuthorIdAndTypeAndDeletedAtIsNullOrderByEventDateDescCreatedAtDesc(
+                        authorId, ContentType.GROWTH_MOMENT, PageRequest.of(0, limit))
+                .stream()
+                .map(ContentService::toGrowthMomentView)
+                .toList();
+    }
+
     /** 某作者快乐时刻总数（Story 2.4 AC5 统计栏）。 */
     @Transactional(readOnly = true)
     public long countGrowthMoments(long authorId) {

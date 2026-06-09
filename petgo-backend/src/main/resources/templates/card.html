@@ -1,52 +1,123 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<html lang="id" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <!-- 防爬：名片对外但不进搜索引擎索引（Story 2.6 强制 noindex） -->
     <meta name="robots" content="noindex,nofollow"/>
-    <title th:text="${name} + ' · PetGo'">PetGo</title>
+    <title th:text="${ogTitle}">PetGo</title>
 
-    <!-- Open Graph（WhatsApp/Line/Instagram 链接预览） -->
+    <!-- Open Graph（WhatsApp/Line/Instagram 链接预览）；标题=「[宠物名] 的成长故事」 -->
     <meta property="og:type" content="profile"/>
-    <meta property="og:title" th:content="${name}"/>
+    <meta property="og:title" th:content="${ogTitle}"/>
     <meta property="og:description" th:content="${intro} ?: ${breed}"/>
     <meta property="og:image" th:content="${ogImageUrl}"/>
     <meta property="og:url" th:content="${pageUrl}"/>
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image"/>
-    <meta name="twitter:title" th:content="${name}"/>
+    <meta name="twitter:title" th:content="${ogTitle}"/>
     <meta name="twitter:description" th:content="${intro} ?: ${breed}"/>
     <meta name="twitter:image" th:content="${ogImageUrl}"/>
 
     <style>
-        body { font-family: -apple-system, system-ui, sans-serif; background: #FAF8F5; color: #2B2B2B; margin: 0; }
+        body { font-family: -apple-system, system-ui, sans-serif; background: #F2FBF8; color: #2B2B2B; margin: 0; }
         .wrap { max-width: 640px; margin: 0 auto; padding: 24px; }
-        .avatar { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; }
-        .name { font-size: 28px; font-weight: 700; margin: 12px 0 4px; }
-        .breed, .intro { color: #9B928A; }
-        .moments img { width: 100%; border-radius: 12px; margin: 8px 0; display: block; }
-        .download { display: block; text-align: center; background: #C8874A; color: #fff;
-            padding: 14px; border-radius: 12px; text-decoration: none; margin-top: 24px; font-weight: 600; }
+        .hero { text-align: center; }
+        .avatar { width: 110px; height: 110px; border-radius: 50%; object-fit: cover; }
+        .name { font-size: 28px; font-weight: 800; margin: 12px 0 4px; }
+        .breed, .intro { color: #7A8B86; }
+        .companion { margin-top: 8px; font-weight: 700; color: #2BB58A; }
+        .badges { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin: 18px 0; }
+        .badge { width: 44px; height: 44px; border-radius: 50%; background: #D9F2EA;
+            display: flex; align-items: center; justify-content: center; font-size: 20px; }
+        .badge.locked { background: #ECECEC; filter: grayscale(1); }
+        .stats { display: flex; justify-content: center; gap: 16px; margin: 18px 0;
+            font-weight: 700; color: #2B2B2B; }
+        .stats .num { color: #2BB58A; }
+        .milestone-news { background: #FFF7E6; border-radius: 12px; padding: 12px 14px; margin: 14px 0;
+            font-weight: 600; color: #8A6A12; }
+        .moments img { width: 100%; border-radius: 14px; margin: 8px 0; display: block; }
+        .empty-moments { text-align: center; color: #9B928A; padding: 28px 0; }
+        .cta { display: block; text-align: center; padding: 14px; border-radius: 12px;
+            text-decoration: none; margin-top: 12px; font-weight: 700; }
+        .cta.primary { background: #2BB58A; color: #fff; }
+        .cta.secondary { background: #D9F2EA; color: #1E8A68; }
     </style>
 </head>
 <body>
 <div class="wrap">
-    <header>
+    <!-- ① Hero：头像 + 名字 + 陪伴天数 -->
+    <section class="hero">
         <img class="avatar" th:if="${avatarUrl}" th:src="${avatarUrl}" alt="avatar"/>
         <div class="name" th:text="${name}">Pet</div>
         <div class="breed" th:if="${breed}" th:text="${breed}">Breed</div>
         <div class="intro" th:if="${intro}" th:text="${intro}">Intro</div>
-    </header>
+        <div class="companion" th:if="${ownerNickname}"
+             th:text="'Bersama ' + ${ownerNickname} + ' selama ' + ${companionDays} + ' hari'">
+            Bersama ... selama X hari</div>
+        <div class="companion" th:unless="${ownerNickname}"
+             th:text="'Sudah ' + ${companionDays} + ' hari bersama'">Sudah X hari bersama</div>
+    </section>
 
-    <section class="moments">
+    <!-- ② 里程碑徽章条（零态降级：里程碑为 0 时隐藏，AC5） -->
+    <section class="badges" th:if="${hasMilestones}">
+        <div class="badge">🏅</div>
+        <div class="badge locked">🔒</div>
+        <div class="badge locked">🔒</div>
+    </section>
+
+    <!-- ③ 故事数字（里程碑完成项零态降级） -->
+    <section class="stats">
+        <span><span class="num" th:text="${happyCount}">0</span> Momen Bahagia</span>
+        <span><span class="num" th:text="${consultCount}">0</span> Konsultasi</span>
+        <span th:if="${hasMilestones}"><span class="num" th:text="${milestoneCompleted}">0</span> Tonggak</span>
+    </section>
+
+    <!-- ④ 最近里程碑动态（零态降级） -->
+    <section class="milestone-news" th:if="${hasMilestones}">
+        <span th:text="${name} + ' baru saja menyelesaikan sebuah tonggak 🎉'">milestone news</span>
+    </section>
+
+    <!-- ⑤ 快乐时刻照片流（按 event_date 倒序，最近 5 条；空态占位） -->
+    <section class="moments" th:if="${hasMoments}">
         <div th:each="moment : ${moments}">
             <img th:each="img : ${moment.imageUrls}" th:src="${img}" alt="moment"/>
             <p th:if="${moment.text}" th:text="${moment.text}">caption</p>
         </div>
     </section>
+    <section class="empty-moments" th:unless="${hasMoments}">
+        Unduh App untuk lihat lebih banyak konten
+    </section>
 
-    <a class="download" th:href="${downloadUrl}">Open in PetGo</a>
+    <!-- ⑥ 双 CTA（平台分流：iOS App Store / Android Google Play；已装 App 尝试深链直开档案） -->
+    <a class="cta primary" id="ctaPrimary" th:href="${downloadUrl}"
+       th:attr="data-ios=${iosUrl},data-android=${androidUrl},data-deeplink=${deepLink}">
+        Buat arsip untuk hewanku</a>
+    <a class="cta secondary" id="ctaSecondary" th:href="${downloadUrl}"
+       th:attr="data-ios=${iosUrl},data-android=${androidUrl},data-deeplink=${deepLink}"
+       th:text="'Lihat cerita lengkap ' + ${name}">Lihat cerita lengkap</a>
+
+    <script th:inline="none">
+      // 平台分流 + 已装尝试深链直开档案，未装跳商店（真机生效，L2 验收）。
+      (function () {
+        var ua = navigator.userAgent || '';
+        var isIOS = /iPad|iPhone|iPod/.test(ua);
+        var isAndroid = /Android/.test(ua);
+        function store(el) { return isIOS ? el.dataset.ios : (isAndroid ? el.dataset.android : el.href); }
+        ['ctaPrimary', 'ctaSecondary'].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (!el) return;
+          el.addEventListener('click', function (e) {
+            e.preventDefault();
+            var deep = el.dataset.deeplink;
+            var fallback = store(el);
+            var t = setTimeout(function () { window.location.href = fallback; }, 800);
+            window.location.href = deep; // 已装直开；未装 800ms 后跳商店
+            window.addEventListener('pagehide', function () { clearTimeout(t); });
+          });
+        });
+      })();
+    </script>
 </div>
 </body>
 </html>
