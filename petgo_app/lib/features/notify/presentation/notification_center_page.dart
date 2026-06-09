@@ -8,6 +8,7 @@ import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../data/notification_repository.dart';
+import '../domain/notification_deep_link.dart';
 import '../domain/notification_item.dart';
 
 /// 通知中心列表页（Story 6.6 F2/F3，FR-34）。倒序六(~七)类 + 空态 + 点击标记已读并深链跳目标。
@@ -31,20 +32,14 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
   }
 
   Future<void> _onTap(NotificationItem item) async {
-    final token = item.deepLinkToken;
-    if (token != null) {
-      try {
-        await ref.read(notificationRepositoryProvider).markRead(token);
-        ref.invalidate(unreadCountProvider); // 角标刷新
-      } catch (_) {
-        // 标记失败不阻断跳转。
-      }
-    }
-    if (!mounted) return;
-    final location = DeepLinkRoutes.pushPayloadToLocation(
-      item.deepLinkType, token,
+    // 列表点击与系统推送直跳共用 NotificationDeepLink.open（标记已读 + 角标重算 + 算 location）。
+    final location = await NotificationDeepLink.open(
+      ref,
+      type: item.deepLinkType,
+      token: item.deepLinkToken,
       commentAnchor: item.deepLinkType == 'CONTENT_COMMENTED',
     );
+    if (!mounted) return;
     // 兜底落点是本页自身时不重复 push。
     if (location != DeepLinkRoutes.notificationsCenter) {
       context.push(location);

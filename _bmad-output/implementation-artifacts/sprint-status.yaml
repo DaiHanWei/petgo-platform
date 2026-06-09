@@ -138,7 +138,7 @@ development_status:
   6-3-内容互动推送: review
   6-4-推送权限申请时机与拒绝处理: review          # [PRD1.0.0✏️] F7 双时机取最早 ·[R2] review→rfd: 加 AC 建档时机弹出位置=庆祝页后进首页前 (F15);L2 待本地 ·AC3 完成(建档时机锚点已对齐: app_router /profile/created onStartExplore 闭包 gate→go home[1.7 R2 落地]; 本轮补时序锁定测试 push_build_timing_test×2[CTA→建档推送时机→首页/已问过仅一次]; 前端296; L2真机视觉时序待本地)
   6-5-app-版本更新提醒: review
-  6-6-全局通知中心-铃铛: ready-for-dev                  # [PRD1.0.0✏️] F2 铃铛列表 4→6(~7) 类 ·[R2] review→rfd: 加 AC L级里程碑达成条目(零态)+推送直跳时通知中心同步标记已读;L1/L2 待本地
+  6-6-全局通知中心-铃铛: review                  # [PRD1.0.0✏️] F2 铃铛列表 4→6(~7) 类 ·[R2] review→rfd: 加 AC L级里程碑达成条目(零态)+推送直跳时通知中心同步标记已读;L1/L2 待本地 ·AC3 完成(① 里程碑零态数据驱动无数据不渲染[widget锁定无旗帜图标]; ② 抽 NotificationDeepLink.open 共用入口[列表点击+系统推送直跳同口径 markRead+invalidate角标+算location], _onTap 重构复用消除推送已读/中心未读不一致; 前端298; 后端零改动; L2推送入口本体待本地)
   6-7-定时类系统推送-生日-纪念日-里程碑节点: review        # [新增] F5 实现完成(L0 绿): @Scheduled 日扫+纯逻辑 Planner+@Async+V22 去重表;L1/L2 待本地
   epic-6-retrospective: optional
 
