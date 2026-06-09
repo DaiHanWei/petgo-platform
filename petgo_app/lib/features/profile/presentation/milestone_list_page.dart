@@ -8,6 +8,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../data/milestone_repository.dart';
 import '../domain/milestone.dart';
+import 'widgets/milestone_celebration.dart';
 
 /// 里程碑列表页（Story 8.2 · FR-42）。壳→真页：顶部宠物信息 + 总进度 + L/M/S 三级分区徽章
 /// （彩色/灰锁）+ 点击弹层分流（系统类→说明文案 / 打卡类→「已打卡 / 去发布」两入口）。
@@ -421,10 +422,13 @@ class _CandidateTile extends ConsumerWidget {
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
     try {
-      await ref.read(milestoneRepositoryProvider).checkIn(milestoneCode, candidate.contentId);
+      final completed =
+          await ref.read(milestoneRepositoryProvider).checkIn(milestoneCode, candidate.contentId);
       ref.invalidate(milestoneListProvider);
-      navigator.pop();
-      messenger.showSnackBar(SnackBar(content: Text(l10n.milestoneCheckinDone)));
+      navigator.pop(); // 关 picker
+      if (!context.mounted) return;
+      // 完成后按级触发三级庆祝动效（Story 8.5）；L 级衔接分享卡（8.6）。
+      await showMilestoneCelebration(context, completed);
     } catch (_) {
       messenger.showSnackBar(SnackBar(content: Text(l10n.milestoneCheckinFailed)));
     }

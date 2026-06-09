@@ -126,6 +126,8 @@
   "milestoneCheckinUntitled": "Momen pertumbuhan",
   "milestoneCheckinDone": "Tonggak terbuka!",
   "milestoneCheckinFailed": "Gagal check-in, coba lagi",
+  "milestoneCelebrateUnlocked": "Tonggak terbuka!",
+  "milestoneCelebrateOpenChest": "Ketuk untuk buka",
   "healthEventLabel": "🏥 Catatan konsultasi",
   "commonSave": "Simpan",
   "archivePromptTitle": "Simpan konsultasi ini ke arsip {petName}?",

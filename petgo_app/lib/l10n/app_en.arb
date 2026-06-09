@@ -169,6 +169,8 @@
   "milestoneCheckinUntitled": "Growth moment",
   "milestoneCheckinDone": "Milestone unlocked!",
   "milestoneCheckinFailed": "Could not check in, please try again",
+  "milestoneCelebrateUnlocked": "Milestone unlocked!",
+  "milestoneCelebrateOpenChest": "Tap to open",
   "healthEventLabel": "🏥 Consultation record",
   "commonSave": "Save",
   "archivePromptTitle": "Save this consultation to {petName}'s archive?",
