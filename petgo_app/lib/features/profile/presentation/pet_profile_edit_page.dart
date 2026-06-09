@@ -26,6 +26,7 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
   final _introController = TextEditingController();
   DateTime? _birthday;
   String? _avatarUrl;
+  String? _petType; // F6：创建后不可改，编辑页置灰只读展示，不随 PATCH 提交
   bool _uploading = false;
   bool _submitting = false;
   bool _prefilled = false;
@@ -46,6 +47,7 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
     _introController.text = p.intro ?? '';
     _birthday = p.birthday;
     _avatarUrl = p.avatarUrl;
+    _petType = p.petType;
   }
 
   bool get _canSubmit => _nameController.text.trim().isNotEmpty && !_submitting && !_uploading;
@@ -142,6 +144,9 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
+          // 宠物类型（F6）：创建后不可改 → 置灰只读展示，不随 PATCH 提交。
+          _petTypeReadonly(l10n),
+          const SizedBox(height: AppSpacing.md),
           TextField(
             key: const ValueKey('petProfileEditNameField'),
             controller: _nameController,
@@ -181,6 +186,40 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
           ),
         ],
       ),
+    );
+  }
+
+  /// 宠物类型只读区（F6）：展示既有类型，三枚 chip 全置灰不可点（onSelected null），不参与提交。
+  Widget _petTypeReadonly(AppLocalizations l10n) {
+    final labels = {'CAT': l10n.petTypeCat, 'DOG': l10n.petTypeDog, 'OTHER': l10n.petTypeOther};
+    return Column(
+      key: const ValueKey('petProfileEditTypeReadonly'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(l10n.petTypeLabel, style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+            const SizedBox(width: 6),
+            const Icon(Icons.lock_outline, size: 13, color: AppColors.textTertiary),
+            const SizedBox(width: 4),
+            Text(l10n.petTypeLockedHint,
+                style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(
+          spacing: AppSpacing.sm,
+          children: [
+            for (final e in labels.entries)
+              ChoiceChip(
+                key: ValueKey('petTypeReadonly_${e.key}'),
+                label: Text(e.value),
+                selected: _petType == e.key,
+                onSelected: null, // 置灰只读：不可改
+              ),
+          ],
+        ),
+      ],
     );
   }
 

@@ -95,7 +95,7 @@ development_status:
   2-5-问诊记录存档承接与健康事件时间线: review    # [PRD1.0.0✏️] 改 AC1+加 AC: 存档弹窗三态+先建档→回灌存档延迟串接 ·[R2] 加 AC: FR-3 红色态结果页存档入口承接(状态分支)+建档完成跳过庆祝页直接回灌 (F15) ·AC1三态+AC3+AC4 完成(L0 绿: showArchivePrompt 三态[①存入/②立即创建/③去创建先FR-0G切A]+pendingArchive挂起+建档跳过庆祝页回灌同sourceRef幂等+AC4红色态A直存/未建档BC走FR-16; triage两handler收敛; 纯前端,后端R1已覆盖; 前端277+archive_prompt_dialog_test; L1/L2待本地)
   2-6-宠物名片-h5-对外分享页: review             # [PRD1.0.0✏️] 大改: 单照片流→6 区块(里程碑区块走零态降级,F2) ·[R2] 加 AC: H5 加载失败/链接失效/已装未装 DeepLink(F13)+快乐时刻流按 event_date(F9) ·AC1+AC5+AC6+AC7 完成(L0 绿: 6区块Thymeleaf[Hero陪伴天数+昵称/徽章条零态/故事数字复用getStats/动态零态/event_date照片流/双CTA平台分流深链]+og标题成长故事+AC5零态不阻塞+AC6统一card_gone404防枚举[pet_profiles无软删收敛到注销]; 纯后端,CardPageControllerTest扩+package; DeepLink真机L2/≤3s L2待本地)
   2-7-档案页动效分享-fab: ready-for-dev
-  2-8-宠物档案编辑: ready-for-dev                       # [PRD1.0.0✏️] 改 AC: 编辑页硬禁修改 pet_type (F6)
+  2-8-宠物档案编辑: review                       # [PRD1.0.0✏️] 改 AC: 编辑页硬禁修改 pet_type (F6) ·F6 完成(L0 绿: 编辑页 pet_type 置灰只读[ChoiceChip onSelected null+既有选中+🔒]不随PATCH提交; 后端不可变 2.2 已落[DTO无字段+实体无setter]; 纯前端,pet_profile_edit_test+F6用例,278 test; L1/L2待本地)
   epic-2-retrospective: optional
 
   # ===== Epic 3: 社区 Feed 与内容互动 =====

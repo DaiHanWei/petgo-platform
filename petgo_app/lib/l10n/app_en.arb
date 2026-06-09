@@ -84,6 +84,7 @@
   "petTypeCat": "Cat",
   "petTypeDog": "Dog",
   "petTypeOther": "Other",
+  "petTypeLockedHint": "Can't be changed",
   "petProfileName": "Name",
   "petProfileNameHint": "Your pet's name",
   "petProfileBreed": "Breed",

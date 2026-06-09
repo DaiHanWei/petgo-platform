@@ -57,6 +57,7 @@
   "petTypeCat": "Kucing",
   "petTypeDog": "Anjing",
   "petTypeOther": "Lainnya",
+  "petTypeLockedHint": "Tidak bisa diubah",
   "petProfileName": "Nama",
   "petProfileNameHint": "Nama hewan Anda",
   "petProfileBreed": "Ras",
