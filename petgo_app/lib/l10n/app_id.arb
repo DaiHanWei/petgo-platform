@@ -131,6 +131,8 @@
   "feedEmptyCta": "Posting cerita pertamamu",
   "feedGrowthEmptyTitle": "Belum ada momen tumbuh kembang 🐾",
   "feedLoadError": "Gagal memuat feed, tarik untuk coba lagi",
+  "feedLoadMoreError": "Gagal memuat lagi, ketuk untuk coba lagi",
+  "feedRetry": "Coba lagi",
   "feedDeletedUser": "Pengguna terhapus",
   "detailGoneTitle": "Konten ini sudah tidak ada",
   "detailForbiddenTitle": "Anda tidak punya akses ke konten ini",

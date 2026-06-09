@@ -18,6 +18,8 @@ class FeedMasonryView extends StatefulWidget {
     required this.deletedUserLabel,
     required this.onLoadMore,
     required this.onRefresh,
+    this.loadMoreFailed = false,
+    this.loadMoreErrorLabel,
     this.onTapItem,
     this.onLongPressItem,
     this.onAuthorTap,
@@ -27,6 +29,10 @@ class FeedMasonryView extends StatefulWidget {
   final List<FeedItem> items;
   final bool hasMore;
   final bool loadingMore;
+
+  /// 增量加载失败（AC5 · F13）：底部显「加载失败，点击重试」，点击沿用 nextCursor 续拉。
+  final bool loadMoreFailed;
+  final String? loadMoreErrorLabel;
   final String deletedUserLabel;
   final Future<void> Function() onLoadMore;
   final Future<void> Function() onRefresh;
@@ -61,7 +67,8 @@ class _FeedMasonryViewState extends State<FeedMasonryView> {
   }
 
   void _onScroll() {
-    if (!widget.hasMore || widget.loadingMore) return;
+    // 失败态停止自动预加载——避免静默重试循环，须用户点击底部「重试」。
+    if (!widget.hasMore || widget.loadingMore || widget.loadMoreFailed) return;
     final pos = _controller.position;
     if (pos.pixels >= pos.maxScrollExtent - _preloadThreshold) {
       widget.onLoadMore();
@@ -113,6 +120,20 @@ class _FeedMasonryViewState extends State<FeedMasonryView> {
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
                       child: CircularProgressIndicator(color: AppColors.accentGrowth),
+                    ),
+                  // AC5：增量加载失败 → 底部「加载失败，点击重试」（已加载内容保留在上方）。
+                  if (widget.loadMoreFailed && !widget.loadingMore)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+                      child: TextButton.icon(
+                        key: const ValueKey('feedLoadMoreRetry'),
+                        onPressed: widget.onLoadMore,
+                        icon: const Icon(Icons.refresh, size: 18, color: AppColors.accentGrowth),
+                        label: Text(
+                          widget.loadMoreErrorLabel ?? 'Gagal memuat lagi, ketuk untuk coba lagi',
+                          style: const TextStyle(color: AppColors.accentGrowth),
+                        ),
+                      ),
                     ),
                 ],
               ),

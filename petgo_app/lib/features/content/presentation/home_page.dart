@@ -118,10 +118,16 @@ class HomePage extends ConsumerWidget {
 
     return feedAsync.when(
       loading: () => wrapped(const FeedSkeleton()),
+      // AC5：首屏加载失败（无任何已加载内容）→ 失败态 + 重试入口（下拉刷新 / 重试按钮），不白屏。
       error: (error, stack) => wrapped(
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 48),
-          child: EmptyState(title: l10n.feedLoadError, icon: Icons.cloud_off_rounded),
+          child: EmptyState(
+            title: l10n.feedLoadError,
+            icon: Icons.cloud_off_rounded,
+            actionLabel: l10n.feedRetry,
+            onAction: () => ref.read(feedProvider.notifier).refresh(),
+          ),
         ),
         onRefresh: () => ref.read(feedProvider.notifier).refresh(),
       ),
@@ -152,6 +158,8 @@ class HomePage extends ConsumerWidget {
           items: state.items,
           hasMore: state.hasMore,
           loadingMore: state.loadingMore,
+          loadMoreFailed: state.loadMoreFailed,
+          loadMoreErrorLabel: l10n.feedLoadMoreError,
           deletedUserLabel: l10n.feedDeletedUser,
           onLoadMore: () => ref.read(feedProvider.notifier).loadMore(),
           onRefresh: () => ref.read(feedProvider.notifier).refresh(),

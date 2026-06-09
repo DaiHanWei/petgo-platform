@@ -179,6 +179,8 @@
   "feedEmptyCta": "Post your first story",
   "feedGrowthEmptyTitle": "No growth moments yet 🐾",
   "feedLoadError": "Could not load the feed, pull to retry",
+  "feedLoadMoreError": "Failed to load more, tap to retry",
+  "feedRetry": "Retry",
   "feedDeletedUser": "Deleted user",
   "detailGoneTitle": "This content no longer exists",
   "detailForbiddenTitle": "You don't have access to this content",
