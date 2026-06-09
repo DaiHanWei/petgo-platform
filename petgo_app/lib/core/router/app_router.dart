@@ -34,7 +34,9 @@ import '../../features/vet/presentation/vet_conversation_page.dart';
 import '../../features/triage/presentation/dev_triage_page.dart';
 import '../../features/triage/presentation/triage_page.dart';
 import '../../features/triage/presentation/triage_upload_page.dart';
+import '../../features/vet/domain/vet_inbox_item.dart';
 import '../../features/vet/presentation/vet_login_page.dart';
+import '../../features/vet/presentation/vet_request_detail_page.dart';
 import '../../features/vet/presentation/vet_workbench_shell.dart';
 import '../../shared/widgets/app_shell.dart';
 
@@ -143,6 +145,11 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/vet/conversation/:id',
         builder: (c, s) => VetConversationPage(sessionId: int.parse(s.pathParameters['id']!)),
+      ),
+      // 抢单请求详情/预览页（Story 5.2 AC5 · F11）：3 分钟预览计时 + 三态返回。
+      GoRoute(
+        path: '/vet/request/:id',
+        builder: (c, s) => VetRequestDetailPage(item: s.extra! as VetInboxItem),
       ),
       // 通知中心（Story 6.6）+ 6.1 深链兜底落点。受控路由（需登录）。
       GoRoute(path: '/notifications', builder: (c, s) => const NotificationCenterPage()),
