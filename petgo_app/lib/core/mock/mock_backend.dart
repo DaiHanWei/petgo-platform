@@ -197,6 +197,9 @@ class MockBackend {
   /// 运行时新增完成（如名片分享信号 → C-S3，Story 8.3），演示态可见进度推进。
   final Set<String> _extraMilestoneDone = {};
 
+  /// 已关联里程碑的成长日历内容 id（Story 8.4，打卡选择器置灰用）。
+  final Set<int> _linkedContentIds = {};
+
   /// 单项 [code, level, trigger, title]。
   List<List<String>> _milestoneCatalog(String type) {
     switch (type) {
@@ -422,6 +425,36 @@ class MockBackend {
     if (p.endsWith('/pet-profiles/me/milestones') && m == 'GET') {
       if (_petProfile == null) throw _notFound(o);
       return ok(_milestonePayload(_petProfile!['petType'] as String?));
+    }
+    // 用户打卡候选（Story 8.4）：本人成长日历内容，已关联的标 linked。
+    if (p.endsWith('/pet-profiles/me/milestones/checkin-candidates') && m == 'GET') {
+      if (_petProfile == null) throw _notFound(o);
+      final items = _timeline
+          .where((e) => e['kind'] == 'HAPPY_MOMENT' && e['postId'] != null)
+          .map((e) => {
+                'contentId': e['postId'],
+                if (e['imageUrls'] is List && (e['imageUrls'] as List).isNotEmpty)
+                  'firstImageUrl': (e['imageUrls'] as List).first,
+                if (e['eventDate'] != null) 'eventDate': e['eventDate'],
+                if (e['text'] != null) 'text': e['text'],
+                'linked': _linkedContentIds.contains(e['postId']),
+              })
+          .toList();
+      return ok({'items': items});
+    }
+    // 用户打卡（Story 8.4）：关联一条成长日历内容并完成里程碑。
+    if (p.contains('/pet-profiles/me/milestones/') && p.endsWith('/check-in') && m == 'POST') {
+      if (_petProfile == null) throw _notFound(o);
+      final code = p.split('/milestones/')[1].split('/check-in')[0];
+      final contentId = body['contentId'];
+      _extraMilestoneDone.add(code);
+      if (contentId != null) _linkedContentIds.add(contentId as int);
+      final def = _milestoneCatalog((_petProfile!['petType'] as String?) ?? 'OTHER')
+          .firstWhere((d) => d[0] == code, orElse: () => [code, 'S', 'USER_CHECKIN', code]);
+      return ok({
+        'code': code, 'title': def[3], 'level': def[1], 'triggerType': def[2],
+        'completed': true, 'completedAt': _iso(Duration.zero),
+      });
     }
     // 名片分享信号 → C-S3 自动完成（Story 8.3）。204，幂等。
     if (p.endsWith('/pet-profiles/me/card-shares') && m == 'POST') {

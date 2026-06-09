@@ -10,6 +10,7 @@ import '../../../core/theme/shadows.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../media/domain/media_upload_use_case.dart';
+import '../../profile/data/milestone_repository.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../profile/domain/pet_profile.dart';
 import '../../../shared/utils/media_permission.dart';
@@ -38,7 +39,8 @@ final publishControllerProvider = Provider.autoDispose<PublishController>((ref) 
 /// 统一发布 Compose 全屏 bottom sheet（Story 2.3 · PetGo Prototype 换肤）。
 /// 类型标签（Cerita / Momen / Edukasi）→ 作者+关联宠物 → 文字 → 图片 → 发布。
 class PublishComposePage extends ConsumerStatefulWidget {
-  const PublishComposePage({super.key, this.preset, this.presetEventDate});
+  const PublishComposePage(
+      {super.key, this.preset, this.presetEventDate, this.milestoneCode});
 
   /// 预选发布类型（如生日深链预选成长日历，Story 6.1 FR-40 / 灰选建档返回，AC7）；为空时默认 daily。
   final ContentType? preset;
@@ -46,9 +48,12 @@ class PublishComposePage extends ConsumerStatefulWidget {
   /// 成长日历事件日期默认值（F9）：从「＋」进取今天、从日历格子进（2.4）取该格子日期；为空取今天。
   final DateTime? presetEventDate;
 
-  /// 以全屏 bottom sheet 形式打开（供「＋」入口 / 深链着陆页 / 灰选建档返回调用）。
+  /// 里程碑「去发布」来源 code（Story 8.4）：发布成功且仍为成长日历类型 → 以新内容 id 自动打卡完成。
+  final String? milestoneCode;
+
+  /// 以全屏 bottom sheet 形式打开（供「＋」入口 / 深链着陆页 / 灰选建档返回 / 里程碑去发布调用）。
   static Future<void> open(BuildContext context,
-      {ContentType? preset, DateTime? presetEventDate}) {
+      {ContentType? preset, DateTime? presetEventDate, String? milestoneCode}) {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -59,7 +64,8 @@ class PublishComposePage extends ConsumerStatefulWidget {
       ),
       builder: (_) => FractionallySizedBox(
         heightFactor: 0.95,
-        child: PublishComposePage(preset: preset, presetEventDate: presetEventDate),
+        child: PublishComposePage(
+            preset: preset, presetEventDate: presetEventDate, milestoneCode: milestoneCode),
       ),
     );
   }
@@ -151,6 +157,16 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     if (id != null) {
       ref.invalidate(feedProvider);
       ref.invalidate(myPostsProvider);
+      // 里程碑「去发布」回填（Story 8.4）：仍为成长日历类型 → 以新内容 id 自动打卡完成（best-effort）。
+      if (widget.milestoneCode != null && controller.type == ContentType.growthMoment) {
+        try {
+          await ref.read(milestoneRepositoryProvider).checkIn(widget.milestoneCode!, id);
+        } catch (_) {
+          // 回填失败静默：用户可回里程碑页手动「已打卡」关联该内容。
+        }
+        ref.invalidate(milestoneListProvider);
+      }
+      if (!mounted) return;
       Navigator.of(context).pop();
     } else if (controller.hasFailed) {
       _toast(l10n.publishFailed);

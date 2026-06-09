@@ -144,6 +144,21 @@ void main() {
       expect(sawCompleted, isTrue, reason: 'mock 应含至少一个已完成里程碑（彩色徽章演示）');
       MilestoneList.fromJson(m); // 真解析不抛
     });
+
+    test('Milestone 打卡候选 item 字段集（C5 · Story 8.4）', () {
+      final env = call('GET', '/api/v1/pet-profiles/me/milestones/checkin-candidates');
+      expect(contractKeys(env), {'items'});
+      const allowed = {'contentId', 'firstImageUrl', 'eventDate', 'text', 'linked'};
+      const required = {'contentId', 'linked'};
+      final items = env['items'] as List;
+      expect(items, isNotEmpty);
+      for (final it in items) {
+        final keys = contractKeys(it as Map);
+        expect(keys.difference(allowed), isEmpty, reason: 'mock 多字段: $keys');
+        expect(required.difference(keys), isEmpty, reason: 'mock 缺必填: $keys');
+        MilestoneCheckinCandidate.fromJson((it).cast<String, dynamic>());
+      }
+    });
   });
 
   group('Group 2 · round-trip（驱动 mock → 真 fromJson 不抛）', () {

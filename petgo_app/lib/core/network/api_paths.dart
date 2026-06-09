@@ -95,6 +95,12 @@ class ApiPaths {
   /// 名片分享信号（Story 8.3 · FR-42 C-S3 自动完成）。
   static const String petProfileCardShares = '$base/pet-profiles/me/card-shares';
 
+  /// 里程碑用户打卡候选 / 打卡（Story 8.4 · FR-42）。
+  static const String petProfileMilestoneCandidates =
+      '$base/pet-profiles/me/milestones/checkin-candidates';
+  static String petProfileMilestoneCheckIn(String code) =>
+      '$base/pet-profiles/me/milestones/$code/check-in';
+
   /// 内容发布 + Feed 列表（Story 2.3 / 3.2）。
   static const String contentPosts = '$base/content-posts';
 

@@ -149,7 +149,7 @@ class _GroupSection extends StatelessWidget {
 }
 
 /// 单枚徽章：已完成彩色（mint 描边 + 奖杯）/ 未完成灰色锁定轮廓。
-class _Badge extends StatelessWidget {
+class _Badge extends ConsumerWidget {
   const _Badge({required this.item});
 
   final MilestoneItem item;
@@ -157,11 +157,11 @@ class _Badge extends StatelessWidget {
   static const double _size = 76;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final completed = item.completed;
     return GestureDetector(
       key: ValueKey('milestoneBadge_${item.code}'),
-      onTap: () => _showBadgeSheet(context, item),
+      onTap: () => _showBadgeSheet(context, ref, item),
       child: SizedBox(
         width: _size,
         child: Column(
@@ -204,7 +204,7 @@ class _Badge extends StatelessWidget {
 }
 
 /// 徽章点击弹层（FR-42）：系统类→说明文案、打卡类未完成→「已打卡 / 去发布」两入口。
-void _showBadgeSheet(BuildContext context, MilestoneItem item) {
+void _showBadgeSheet(BuildContext context, WidgetRef ref, MilestoneItem item) {
   showModalBottomSheet<void>(
     context: context,
     backgroundColor: AppColors.card,
@@ -257,7 +257,7 @@ void _showBadgeSheet(BuildContext context, MilestoneItem item) {
                     Expanded(
                       child: OutlinedButton(
                         key: const ValueKey('milestoneCheckedIn'),
-                        onPressed: () => _onCheckedIn(sheetContext, item),
+                        onPressed: () => _onCheckedIn(sheetContext, ref, item),
                         child: Text(l10n.milestoneActionCheckedIn),
                       ),
                     ),
@@ -265,7 +265,7 @@ void _showBadgeSheet(BuildContext context, MilestoneItem item) {
                     Expanded(
                       child: FilledButton(
                         key: const ValueKey('milestoneGoPublish'),
-                        onPressed: () => _onGoPublish(sheetContext),
+                        onPressed: () => _onGoPublish(sheetContext, item),
                         child: Text(l10n.milestoneActionGoPublish),
                       ),
                     ),
@@ -280,25 +280,155 @@ void _showBadgeSheet(BuildContext context, MilestoneItem item) {
   );
 }
 
-/// 「已打卡」→ 内容关联选择器（picker + 打卡 API 实操在 8.4）。8.2 先落入口占位。
-void _onCheckedIn(BuildContext context, MilestoneItem item) {
-  Navigator.of(context).pop();
-  final l10n = AppLocalizations.of(context);
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(l10n.milestoneListComingSoon)),
+/// 「已打卡」→ 内容关联选择器（Story 8.4）：选一条本人成长日历内容关联并完成。
+void _onCheckedIn(BuildContext context, WidgetRef ref, MilestoneItem item) {
+  Navigator.of(context).pop(); // 关徽章弹层
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: AppColors.card,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (_) => _CheckinPickerSheet(milestoneCode: item.code),
   );
 }
 
-/// 「去发布」→ 统一发布入口（预选成长日历 + 发布成功回填完成在 8.4）。
-void _onGoPublish(BuildContext context) {
+/// 「去发布」→ 统一发布入口预选成长日历，携里程碑 code；发布成功后自动打卡回填（Story 8.4）。
+void _onGoPublish(BuildContext context, MilestoneItem item) {
   Navigator.of(context).pop();
-  context.push('/publish');
+  context.push('/publish?preset=growth-calendar&milestoneCode=${item.code}');
 }
 
 String _formatDate(DateTime d) {
   final local = d.toLocal();
   return '${local.year}-${local.month.toString().padLeft(2, '0')}'
       '-${local.day.toString().padLeft(2, '0')}';
+}
+
+/// 「已打卡」内容关联选择器（Story 8.4）：仅本人成长日历内容，已关联其它里程碑的置灰不可选。
+class _CheckinPickerSheet extends ConsumerWidget {
+  const _CheckinPickerSheet({required this.milestoneCode});
+
+  final String milestoneCode;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final async = ref.watch(milestoneCheckinCandidatesProvider);
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.7),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Text(l10n.milestoneCheckinPickerTitle,
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+            ),
+            Flexible(
+              child: async.when(
+                loading: () => const Padding(
+                  padding: EdgeInsets.all(AppSpacing.xl),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+                error: (_, _) => Padding(
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  child: TextButton(
+                    key: const ValueKey('milestoneCheckinRetry'),
+                    onPressed: () => ref.invalidate(milestoneCheckinCandidatesProvider),
+                    child: Text(l10n.growthLoadRetry),
+                  ),
+                ),
+                data: (items) {
+                  if (items.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.all(AppSpacing.xl),
+                      child: Text(l10n.milestoneCheckinEmpty,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: AppColors.muted)),
+                    );
+                  }
+                  return ListView.separated(
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
+                    itemCount: items.length,
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: (_, i) => _CandidateTile(
+                      candidate: items[i],
+                      milestoneCode: milestoneCode,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CandidateTile extends ConsumerWidget {
+  const _CandidateTile({required this.candidate, required this.milestoneCode});
+
+  final MilestoneCheckinCandidate candidate;
+  final String milestoneCode;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final disabled = candidate.linked;
+    return Opacity(
+      opacity: disabled ? 0.4 : 1,
+      child: ListTile(
+        key: ValueKey('milestoneCandidate_${candidate.contentId}'),
+        contentPadding: EdgeInsets.zero,
+        leading: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: SizedBox(
+            width: 48,
+            height: 48,
+            child: candidate.firstImageUrl == null
+                ? Container(color: AppColors.line2,
+                    child: const Icon(Icons.photo_outlined, color: AppColors.muted, size: 20))
+                : AppImage.widget(candidate.firstImageUrl!, fit: BoxFit.cover),
+          ),
+        ),
+        title: Text(
+          candidate.text?.isNotEmpty == true ? candidate.text! : l10n.milestoneCheckinUntitled,
+          maxLines: 1, overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: candidate.eventDate == null
+            ? null
+            : Text(_formatDate(candidate.eventDate!),
+                style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+        trailing: disabled
+            ? Text(l10n.milestoneCheckinLinked,
+                style: const TextStyle(fontSize: 11, color: AppColors.muted))
+            : const Icon(Icons.chevron_right_rounded),
+        onTap: disabled ? null : () => _confirm(context, ref),
+      ),
+    );
+  }
+
+  Future<void> _confirm(BuildContext context, WidgetRef ref) async {
+    final l10n = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    try {
+      await ref.read(milestoneRepositoryProvider).checkIn(milestoneCode, candidate.contentId);
+      ref.invalidate(milestoneListProvider);
+      navigator.pop();
+      messenger.showSnackBar(SnackBar(content: Text(l10n.milestoneCheckinDone)));
+    } catch (_) {
+      messenger.showSnackBar(SnackBar(content: Text(l10n.milestoneCheckinFailed)));
+    }
+  }
 }
 
 /// F13 统一失败态（加载失败 + 重试入口）。

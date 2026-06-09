@@ -87,6 +87,35 @@ class MilestoneGroup {
       );
 }
 
+/// 「已打卡」内容关联选择器候选（Story 8.4）。后端 MilestoneCheckinCandidateResponse 镜像。
+class MilestoneCheckinCandidate {
+  const MilestoneCheckinCandidate({
+    required this.contentId,
+    this.firstImageUrl,
+    this.eventDate,
+    this.text,
+    required this.linked,
+  });
+
+  final int contentId;
+  final String? firstImageUrl;
+  final DateTime? eventDate;
+  final String? text;
+
+  /// 已关联其它里程碑 → 前端置灰不可选。
+  final bool linked;
+
+  factory MilestoneCheckinCandidate.fromJson(Map<String, dynamic> json) => MilestoneCheckinCandidate(
+        contentId: json['contentId'] as int,
+        firstImageUrl: json['firstImageUrl'] as String?,
+        eventDate: json['eventDate'] == null
+            ? null
+            : DateTime.parse(json['eventDate'] as String),
+        text: json['text'] as String?,
+        linked: (json['linked'] ?? false) as bool,
+      );
+}
+
 /// 里程碑列表页数据（顶部宠物信息 + 总进度 + L/M/S 分区）。
 class MilestoneList {
   const MilestoneList({

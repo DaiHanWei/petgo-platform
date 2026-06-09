@@ -251,6 +251,20 @@ public class ContentService {
                 authorId, ContentType.GROWTH_MOMENT, PostStatus.PUBLISHED);
     }
 
+    /**
+     * 校验 {@code postId} 是否为 {@code ownerId} 本人的、未删的成长日历内容（里程碑用户打卡关联，Story 8.4）。
+     * 经 service 接口供 profile 模块调用，**避免 profile 直读 content_posts 表**（架构边界）。
+     */
+    @Transactional(readOnly = true)
+    public boolean isOwnGrowthMoment(long ownerId, long postId) {
+        return posts.findById(postId)
+                .map(p -> p.getAuthorId() == ownerId
+                        && p.getType() == ContentType.GROWTH_MOMENT
+                        && p.getDeletedAt() == null
+                        && p.getStatus() == PostStatus.PUBLISHED)
+                .orElse(false);
+    }
+
     private static GrowthMomentView toGrowthMomentView(ContentPost p) {
         return new GrowthMomentView(
                 p.getId(), p.getCreatedAt(), p.getEventDate(), p.getImageUrls(), p.getText());
