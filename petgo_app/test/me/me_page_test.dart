@@ -93,4 +93,24 @@ void main() {
     expect(find.byKey(const ValueKey('mePetStatus')), findsOneWidget);
     expect(find.byKey(const ValueKey('meEditPetProfile')), findsNothing);
   });
+
+  testWidgets('AC6(F9): 我的发布原样渲染后端 created_at 倒序，不客户端重排', (tester) async {
+    // 后端已按 created_at 倒序返回（id 30 最新 → 10 最旧）；前端不得重排（MyPost 无 event_date）。
+    await _pump(
+      tester,
+      profile: const UserProfile(nickname: '小明', petStatus: 'HAS_PET', hasPetProfile: true),
+      pet: const PetProfile(id: 1, name: 'Momo', cardToken: 'tok'),
+      posts: const [
+        MyPost(id: 30, type: 'GROWTH_MOMENT', text: '今天补录·事件很久前'),
+        MyPost(id: 20, type: 'DAILY', text: '中间'),
+        MyPost(id: 10, type: 'KNOWLEDGE', text: '最早发布'),
+      ],
+    );
+    // 横向列表保持后端顺序：30 在 20 左侧、20 在 10 左侧。
+    final x30 = tester.getTopLeft(find.byKey(const ValueKey('myPost_30'))).dx;
+    final x20 = tester.getTopLeft(find.byKey(const ValueKey('myPost_20'))).dx;
+    final x10 = tester.getTopLeft(find.byKey(const ValueKey('myPost_10'))).dx;
+    expect(x30, lessThan(x20));
+    expect(x20, lessThan(x10));
+  });
 }

@@ -144,7 +144,7 @@ development_status:
 
   # ===== Epic 7: 个人中心、双语与账号注销 =====
   epic-7: in-progress
-  7-1-我的-页面与用户信息编辑: ready-for-dev            # [PRD1.0.0✏️] F8 信息架构重组完成 ·[R2] review→rfd: 加 AC 我的发布排序口径文案(按发布时间倒序,区别档案 event_date);L1/L2 待本地
+  7-1-我的-页面与用户信息编辑: review            # [PRD1.0.0✏️] F8 信息架构重组完成 ·[R2] review→rfd: 加 AC 我的发布排序口径文案(按发布时间倒序,区别档案 event_date);L1/L2 待本地 ·AC6 完成(findMyPosts 已 ORDER BY created_at DESC 与成长档案 event_date 查询物理分离; 双端锁定: 后端L1 myPostsOrdersByCreatedAtNotEventDate[event_date反序种子证明按created_at]+前端MyPost不带event_date/注释口径/widget保持后端序; 后端523+前端299; L1/L2待本地)
   7-2-语言设置与双语文案收口: review                    # [PRD1.0.0✏️] AC2 入口路径层级+1(→设置页), 依赖 7-1 新设置页
   7-3-退出登录与账号注销级联删除: review         # [PRD1.0.0✏️·R2] review→rfd: 加 AC 注销时 H5 名片 token 立即失效(D2邻接,F14);重申 D1(consult匿名化/triage删除)不回退 — 仅增名片失效,既有合规实现不动 ·R2 核实完成(AC4 既有满足: CardPageController 双重失效守护+测试绿; 零新代码,D1/D2 不回退)
   7-4-全局无障碍验收: review                            # 不动 (7-1 新增页由 7-4 横切审计自然覆盖)
