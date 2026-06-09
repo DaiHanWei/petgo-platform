@@ -60,4 +60,14 @@ public class AppException extends RuntimeException {
     public static AppException profileExists(String detail) {
         return new AppException(HttpStatus.CONFLICT, ErrorTypes.PROFILE_EXISTS, detail);
     }
+
+    /** Story 2.3 R2（F10）：发布审核——文字命中违规（422，不落库，停编辑页可重提）。 */
+    public static AppException contentTextBlocked(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.CONTENT_TEXT_BLOCKED, detail);
+    }
+
+    /** Story 2.3 R2（F10）：发布审核——图像命中违规（422，不落库，停编辑页可重提）。 */
+    public static AppException contentImageBlocked(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.CONTENT_IMAGE_BLOCKED, detail);
+    }
 }

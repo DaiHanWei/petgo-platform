@@ -9,12 +9,19 @@ import static org.mockito.Mockito.when;
 
 import com.petgo.content.service.ContentService;
 import com.petgo.content.service.GrowthMomentView;
+import com.petgo.profile.domain.PetProfile;
+import com.petgo.profile.domain.PetType;
+import com.petgo.profile.dto.ArchiveStatsResponse;
+import com.petgo.profile.dto.CalendarMonthResponse;
+import com.petgo.profile.dto.DayDetailResponse;
 import com.petgo.profile.dto.TimelineItemResponse;
 import com.petgo.profile.dto.TimelinePageResponse;
 import com.petgo.profile.service.HealthEventTimelineSource.HealthEventView;
 import com.petgo.shared.error.AppException;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -38,7 +45,16 @@ class TimelineServiceTest {
     }
 
     private GrowthMomentView moment(long id, String iso) {
-        return new GrowthMomentView(id, Instant.parse(iso), List.of("u" + id), "moment" + id);
+        return new GrowthMomentView(id, Instant.parse(iso), null, List.of("u" + id), "moment" + id);
+    }
+
+    private GrowthMomentView momentEv(long id, String createdIso, String eventIso, String img) {
+        return new GrowthMomentView(id, Instant.parse(createdIso), LocalDate.parse(eventIso),
+                List.of(img), "moment" + id);
+    }
+
+    private static PetProfile pet(PetType type) {
+        return PetProfile.create(1L, type, "Rocky", null, "Shiba", null, null, "TOK");
     }
 
     @Test
@@ -99,5 +115,108 @@ class TimelineServiceTest {
     void invalidCursorRejected() {
         assertThatThrownBy(() -> service.getTimeline(1L, "not-a-time", 20))
                 .isInstanceOf(AppException.class);
+    }
+
+    // ===== R2 · AC6 时间线按 event_date 排序 =====
+
+    @Test
+    void timelineSortsByEventDateNotCreatedAt() {
+        when(healthProvider.getIfAvailable()).thenReturn(null);
+        // id=1 较晚创建但事件日期更早；id=2 较早创建但事件日期更晚 → 应按 event_date 倒序：2 在前。
+        when(contentService.findGrowthMoments(eq(1L), Mockito.any(), anyInt())).thenReturn(List.of(
+                momentEv(1, "2026-06-05T10:00:00Z", "2024-01-01", "a"),
+                momentEv(2, "2026-06-04T10:00:00Z", "2024-12-31", "b")));
+
+        TimelinePageResponse resp = service.getTimeline(1L, null, 20);
+
+        assertThat(resp.items().get(0).postId()).isEqualTo(2L); // event_date 更晚在前
+        assertThat(resp.items().get(0).eventDate()).isEqualTo(LocalDate.parse("2024-12-31"));
+        assertThat(resp.items().get(1).postId()).isEqualTo(1L);
+    }
+
+    // ===== R2 · AC5/AC6 日历月视图 =====
+
+    @Test
+    void calendarAggregatesByEventDateWithEarliestImageAndHealthBadge() {
+        when(profileService.findByOwnerId(1L)).thenReturn(Optional.of(pet(PetType.DOG)));
+        HealthEventTimelineSource health = Mockito.mock(HealthEventTimelineSource.class);
+        when(healthProvider.getIfAvailable()).thenReturn(health);
+        // 同一天 6/2 两条：先 created 的 img2a 应为格子首图；6/10 一条。
+        when(contentService.findGrowthMomentsInMonth(eq(1L), Mockito.any(), Mockito.any())).thenReturn(List.of(
+                momentEv(10, "2026-06-02T08:00:00Z", "2026-06-02", "img2a"),
+                momentEv(11, "2026-06-02T09:00:00Z", "2026-06-02", "img2b"),
+                momentEv(12, "2026-06-10T09:00:00Z", "2026-06-10", "img10")));
+        // 健康事件 6/2（叠加角标）+ 6/20（独立 🏥 日）。
+        when(health.healthEventsInRange(eq(1L), Mockito.any(), Mockito.any())).thenReturn(List.of(
+                new HealthEventView(Instant.parse("2026-06-02T12:00:00Z"), "GREEN", "x"),
+                new HealthEventView(Instant.parse("2026-06-20T12:00:00Z"), "YELLOW", "y")));
+
+        CalendarMonthResponse resp = service.getCalendarMonth(1L, 2026, 6);
+
+        assertThat(resp.days()).hasSize(3); // 6/2, 6/10, 6/20
+        var d2 = resp.days().get(0);
+        assertThat(d2.day()).isEqualTo(2);
+        assertThat(d2.firstImageUrl()).isEqualTo("img2a"); // 最早 created_at 首图
+        assertThat(d2.hasHappyMoment()).isTrue();
+        assertThat(d2.hasHealthEvent()).isTrue();
+        var d20 = resp.days().get(2);
+        assertThat(d20.day()).isEqualTo(20);
+        assertThat(d20.hasHappyMoment()).isFalse();
+        assertThat(d20.hasHealthEvent()).isTrue();
+    }
+
+    // ===== R2 · AC6 当天详情（created_at 正序） =====
+
+    @Test
+    void dayDetailMergesAndSortsByCreatedAtAsc() {
+        when(profileService.findByOwnerId(1L)).thenReturn(Optional.of(pet(PetType.CAT)));
+        HealthEventTimelineSource health = Mockito.mock(HealthEventTimelineSource.class);
+        when(healthProvider.getIfAvailable()).thenReturn(health);
+        when(contentService.findGrowthMomentsOnDate(eq(1L), eq(LocalDate.parse("2026-06-02"))))
+                .thenReturn(List.of(momentEv(10, "2026-06-02T08:00:00Z", "2026-06-02", "a")));
+        when(health.healthEventsOnDay(eq(1L), Mockito.any(), Mockito.any()))
+                .thenReturn(List.of(new HealthEventView(Instant.parse("2026-06-02T07:00:00Z"), "GREEN", "z")));
+
+        DayDetailResponse resp = service.getDayDetail(1L, LocalDate.parse("2026-06-02"));
+
+        assertThat(resp.items()).hasSize(2);
+        // created_at 正序：07:00 健康事件在前，08:00 快乐时刻在后。
+        assertThat(resp.items().get(0).kind()).isEqualTo(TimelineItemResponse.HEALTH_EVENT);
+        assertThat(resp.items().get(1).kind()).isEqualTo(TimelineItemResponse.HAPPY_MOMENT);
+    }
+
+    // ===== R2 · AC5 统计栏 =====
+
+    @Test
+    void statsCountsAndMilestoneTotalByPetType() {
+        when(profileService.findByOwnerId(1L)).thenReturn(Optional.of(pet(PetType.DOG)));
+        HealthEventTimelineSource health = Mockito.mock(HealthEventTimelineSource.class);
+        when(healthProvider.getIfAvailable()).thenReturn(health);
+        when(contentService.countGrowthMoments(1L)).thenReturn(7L);
+        when(health.countHealthEvents(1L)).thenReturn(3L);
+
+        ArchiveStatsResponse resp = service.getStats(1L);
+
+        assertThat(resp.happyMomentCount()).isEqualTo(7L);
+        assertThat(resp.consultCount()).isEqualTo(3L);
+        assertThat(resp.milestoneCompleted()).isZero(); // 零态
+        assertThat(resp.milestoneTotal()).isEqualTo(30); // 狗 = 30
+    }
+
+    @Test
+    void statsMilestoneTotalForOtherPetIs15() {
+        when(profileService.findByOwnerId(1L)).thenReturn(Optional.of(pet(PetType.OTHER)));
+        when(healthProvider.getIfAvailable()).thenReturn(null);
+        when(contentService.countGrowthMoments(1L)).thenReturn(0L);
+
+        ArchiveStatsResponse resp = service.getStats(1L);
+        assertThat(resp.milestoneTotal()).isEqualTo(15);
+        assertThat(resp.consultCount()).isZero(); // 无健康源 → 0
+    }
+
+    @Test
+    void calendarNoProfileThrows404() {
+        when(profileService.findByOwnerId(9L)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.getCalendarMonth(9L, 2026, 6)).isInstanceOf(AppException.class);
     }
 }

@@ -12,6 +12,7 @@ abstract class ContentRepository {
     int? petId,
     String? text,
     List<String> imageUrls,
+    DateTime? eventDate,
     required String idempotencyKey,
   });
 }
@@ -27,12 +28,20 @@ class DioContentRepository implements ContentRepository {
     int? petId,
     String? text,
     List<String> imageUrls = const [],
+    DateTime? eventDate,
     required String idempotencyKey,
   }) async {
     final data = <String, dynamic>{'type': type.wire};
     if (petId != null) data['petId'] = petId;
     if (text != null && text.isNotEmpty) data['text'] = text;
     if (imageUrls.isNotEmpty) data['imageUrls'] = imageUrls;
+    // 事件日期 yyyy-MM-dd（仅成长日历传；后端对日常/科普强制忽略，F9）。
+    if (eventDate != null) {
+      final d = eventDate;
+      final mm = d.month.toString().padLeft(2, '0');
+      final dd = d.day.toString().padLeft(2, '0');
+      data['eventDate'] = '${d.year}-$mm-$dd';
+    }
 
     final resp = await dio.post<Map<String, dynamic>>(
       ApiPaths.contentPosts,

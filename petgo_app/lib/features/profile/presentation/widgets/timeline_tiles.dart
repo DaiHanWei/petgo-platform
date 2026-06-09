@@ -65,11 +65,24 @@ Widget _badge(String label, Color color, Color bg) => Container(
           style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
     );
 
+/// 第一条永久标签（AC5 🌟）。
+Widget _firstStar(String label) => Container(
+      margin: const EdgeInsets.only(top: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(color: AppColors.goldTint, borderRadius: BorderRadius.circular(999)),
+      child: Text('🌟 $label',
+          style: const TextStyle(
+              fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFFA9821E))),
+    );
+
 /// 快乐时刻条目：标记 🌈 + 卡片（照片 + 日期 + 徽章 + 文字）。
 class HappyMomentTile extends StatelessWidget {
-  const HappyMomentTile({super.key, required this.item});
+  const HappyMomentTile({super.key, required this.item, this.firstLabel});
 
   final TimelineItem item;
+
+  /// 非空则为第一条快乐时刻，显 🌟 永久标签（AC5）。
+  final String? firstLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -95,13 +108,19 @@ class HappyMomentTile extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Text(_dateLabel(item.date),
+                      // F9：快乐时刻按事件日期显示。
+                      Text(_dateLabel(item.displayDate),
                           style: const TextStyle(
                               fontSize: 11.5, color: AppColors.muted, fontWeight: FontWeight.w700)),
                       const SizedBox(width: 8),
                       _badge('Momen Bahagia', const Color(0xFFA9821E), AppColors.goldTint),
                     ],
                   ),
+                  if (firstLabel != null)
+                    Align(
+                        alignment: Alignment.centerLeft,
+                        child: KeyedSubtree(
+                            key: const ValueKey('firstHappyStar'), child: _firstStar(firstLabel!))),
                   if (item.text != null && item.text!.isNotEmpty) ...[
                     const SizedBox(height: 5),
                     Text(item.text!,
@@ -119,9 +138,12 @@ class HappyMomentTile extends StatelessWidget {
 
 /// 健康事件条目：标记 🩺 + 卡片（日期 + 级别徽章 + 摘要）。
 class HealthEventTile extends StatelessWidget {
-  const HealthEventTile({super.key, required this.item});
+  const HealthEventTile({super.key, required this.item, this.firstLabel});
 
   final TimelineItem item;
+
+  /// 非空则为第一次问诊记录，显 🌟 永久标签（AC5）。
+  final String? firstLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -149,6 +171,11 @@ class HealthEventTile extends StatelessWidget {
                   ],
                 ],
               ),
+              if (firstLabel != null)
+                Align(
+                    alignment: Alignment.centerLeft,
+                    child: KeyedSubtree(
+                        key: const ValueKey('firstHealthStar'), child: _firstStar(firstLabel!))),
               if (item.symptomSummary != null && item.symptomSummary!.isNotEmpty) ...[
                 const SizedBox(height: 5),
                 Text(item.symptomSummary!,

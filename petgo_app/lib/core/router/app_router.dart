@@ -19,6 +19,7 @@ import '../../features/profile/presentation/milestone_list_page.dart';
 import '../../features/profile/domain/pet_profile.dart';
 import '../../features/notify/data/push_permission_providers.dart';
 import '../../features/profile/presentation/pet_profile_create_page.dart';
+import '../../features/profile/presentation/day_detail_page.dart';
 import '../../features/profile/presentation/pet_profile_edit_page.dart';
 import '../../features/profile/presentation/profile_created_celebration_page.dart';
 import '../../features/profile/presentation/profile_onboarding_page.dart';
@@ -108,6 +109,20 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       ),
       // 宠物档案编辑（Story 2.8）。两入口（档案 Tab 信息卡 /「我的」Tab）复用同一页。
       GoRoute(path: '/profile/edit', builder: (c, s) => const PetProfileEditPage()),
+      // 成长档案当天详情（Story 2.4 AC6 · F9）。?date=yyyy-MM-dd；受控（/profile/ 前缀）。
+      GoRoute(
+        path: '/profile/day',
+        builder: (c, s) {
+          final raw = s.uri.queryParameters['date'];
+          final date = raw != null ? DateTime.tryParse(raw) : null;
+          if (date == null) {
+            WidgetsBinding.instance
+                .addPostFrameCallback((_) => c.canPop() ? c.pop() : c.go('/profile'));
+            return const SizedBox.shrink();
+          }
+          return DayDetailPage(date: date);
+        },
+      ),
       // @dev 自测入口（Story 1.4 F3）：不从 UI 链接，仅供手动深链触发登录引导。
       GoRoute(path: '/dev/login-guide', builder: (c, s) => const DevLoginGuidePage()),
       // @dev 自测入口（Story 4.1 F2）：仅供手动深链驱动分诊「提交 → 短轮询」契约（联调）。
@@ -147,11 +162,16 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // 发布深链着陆（Story 6.1 · FR-40）：PET_BIRTHDAY 深链 → 打开统一发布 sheet，可预选成长日历。受控（需登录）。
       GoRoute(
         path: '/publish',
-        builder: (c, s) => PublishLandingPage(
-          preset: s.uri.queryParameters['preset'] == 'growth-calendar'
-              ? ContentType.growthMoment
-              : null,
-        ),
+        builder: (c, s) {
+          final dateRaw = s.uri.queryParameters['date'];
+          return PublishLandingPage(
+            preset: s.uri.queryParameters['preset'] == 'growth-calendar'
+                ? ContentType.growthMoment
+                : null,
+            // F9：日历无记录格「+」跳发布预填该事件日期（AC6）。
+            presetEventDate: dateRaw != null ? DateTime.tryParse(dateRaw) : null,
+          );
+        },
       ),
       // 里程碑列表页（壳）（Story 6.1 · FR-42）：MILESTONE_NODE 深链承接；本体属里程碑 mini-epic。受控（/profile/ 前缀）。
       GoRoute(path: '/profile/milestones', builder: (c, s) => const MilestoneListPage()),

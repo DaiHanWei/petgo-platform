@@ -11,6 +11,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -49,6 +50,10 @@ public class ContentPost {
     @Column(name = "danger_level", length = 8)
     private String dangerLevel;
 
+    /** 成长日历事件日期（F9）：仅 GROWTH_MOMENT 有值，决定档案侧显示位置；与 createdAt 排序解耦。 */
+    @Column(name = "event_date")
+    private LocalDate eventDate;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 16)
     private PostStatus status = PostStatus.PUBLISHED;
@@ -65,14 +70,21 @@ public class ContentPost {
     protected ContentPost() {
     }
 
+    /** 非成长日历发布（无事件日期）。委托至带 eventDate 的规范工厂。 */
     public static ContentPost publish(long authorId, ContentType type, Long petId, String text,
             List<String> imageUrls) {
+        return publish(authorId, type, petId, text, imageUrls, null);
+    }
+
+    public static ContentPost publish(long authorId, ContentType type, Long petId, String text,
+            List<String> imageUrls, LocalDate eventDate) {
         ContentPost p = new ContentPost();
         p.authorId = authorId;
         p.type = type;
         p.petId = petId;
         p.text = text;
         p.imageUrls = imageUrls;
+        p.eventDate = eventDate;
         p.status = PostStatus.PUBLISHED;
         return p;
     }
@@ -120,6 +132,10 @@ public class ContentPost {
 
     public String getDangerLevel() {
         return dangerLevel;
+    }
+
+    public LocalDate getEventDate() {
+        return eventDate;
     }
 
     public PostStatus getStatus() {

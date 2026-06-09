@@ -1,5 +1,8 @@
 package com.petgo.profile.web;
 
+import com.petgo.profile.dto.ArchiveStatsResponse;
+import com.petgo.profile.dto.CalendarMonthResponse;
+import com.petgo.profile.dto.DayDetailResponse;
 import com.petgo.profile.dto.PetProfileCreateRequest;
 import com.petgo.profile.dto.PetProfileResponse;
 import com.petgo.profile.dto.PetProfileUpdateRequest;
@@ -11,6 +14,8 @@ import com.petgo.shared.error.AppException;
 import com.petgo.shared.ratelimit.RedisRateLimiter;
 import jakarta.validation.Valid;
 import java.time.Duration;
+import java.time.LocalDate;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -88,6 +93,34 @@ public class ProfileApiController {
             @RequestParam(value = "cursor", required = false) String cursor,
             @RequestParam(value = "limit", defaultValue = "20") int limit) {
         return timelineService.getTimeline(currentUserId(jwt), cursor, limit);
+    }
+
+    /**
+     * 日历月视图（Story 2.4 R2 · F9）：按 event_date 聚合当月有记录日（快乐时刻首图 + 健康事件角标）。
+     * 无档案 → 404。
+     */
+    @GetMapping("/me/calendar")
+    public CalendarMonthResponse calendar(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam("year") int year,
+            @RequestParam("month") int month) {
+        return timelineService.getCalendarMonth(currentUserId(jwt), year, month);
+    }
+
+    /**
+     * 当天详情（Story 2.4 R2 · F9）：某 event_date 当天快乐时刻 + 健康事件，created_at 正序。无档案 → 404。
+     */
+    @GetMapping("/me/day")
+    public DayDetailResponse day(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        return timelineService.getDayDetail(currentUserId(jwt), date);
+    }
+
+    /**
+     * 档案统计栏（Story 2.4 AC5）：快乐时刻数 / 问诊数 / 里程碑（零态）。无档案 → 404。
+     */
+    @GetMapping("/me/archive-stats")
+    public ArchiveStatsResponse archiveStats(@AuthenticationPrincipal Jwt jwt) {
+        return timelineService.getStats(currentUserId(jwt));
     }
 
     private static long currentUserId(Jwt jwt) {

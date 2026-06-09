@@ -1,0 +1,83 @@
+package com.petgo.triage.dto;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.petgo.shared.ai.TriageObservation;
+import com.petgo.triage.domain.DangerLevel;
+import com.petgo.triage.domain.TriageStatus;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import org.junit.jupiter.api.Test;
+import tools.jackson.databind.json.JsonMapper;
+
+/**
+ * L0 契约金标 —— **安全攸关**：分诊结果三态 wire（CROSS-STORY-DECISIONS C5）。
+ *
+ * <p>钉死 {@link TriageResultResponse} 的字段集与<b>枚举线格式</b>。红色态判定（App 据 {@code dangerLevel=='RED'}
+ * 弹半屏强提醒、零变现）完全依赖此 wire —— 枚举名一旦漂移（如序列化成序数 / 小写 / 改名），红色态会静默漏判，
+ * <b>出人命</b>。三方同步点：
+ * <ul>
+ *   <li>App   —— {@code petgo_app/lib/features/triage/data/triage_repository.dart}（{@code TriageResult.fromJson}）</li>
+ *   <li>Mock  —— {@code petgo_app/lib/core/mock/mock_backend.dart}（{@code /triage/{id}} 分支，轮流 GREEN/YELLOW/RED）</li>
+ * </ul>
+ */
+class TriageResultContractTest {
+
+    private final JsonMapper json = JsonMapper.builder()
+            .changeDefaultPropertyInclusion(
+                    incl -> incl.withValueInclusion(JsonInclude.Include.NON_NULL))
+            .build();
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> wire(Object dto) {
+        return json.convertValue(dto, Map.class);
+    }
+
+    @Test
+    void doneResultHasExactlyTheContractFields() {
+        TriageResultResponse done = new TriageResultResponse(
+                TriageStatus.DONE, DangerLevel.RED, "请立即就医", "ref-x", "免责声明",
+                new TriageObservation(List.of("精神状态", "食欲"), "24 小时", List.of("持续呕吐")));
+
+        Map<String, Object> m = wire(done);
+        assertThat(m.keySet()).isEqualTo(Set.of(
+                "status", "dangerLevel", "advice", "medicationRef", "disclaimer", "observation"));
+        // observation 嵌套契约。
+        @SuppressWarnings("unchecked")
+        Map<String, Object> obs = (Map<String, Object>) m.get("observation");
+        assertThat(obs.keySet()).isEqualTo(Set.of("indicators", "timeWindow", "escalationTriggers"));
+    }
+
+    @Test
+    void dangerLevelSerializesAsUpperSnakeName() {
+        // 安全攸关：三态必须落 GREEN/YELLOW/RED 字面名，App _danger 据此映射；绝不可变序数/小写。
+        for (DangerLevel lvl : DangerLevel.values()) {
+            TriageResultResponse r = new TriageResultResponse(
+                    TriageStatus.DONE, lvl, "a", null, "d", null);
+            assertThat(wire(r).get("dangerLevel")).isEqualTo(lvl.name());
+        }
+        assertThat(DangerLevel.RED.name()).isEqualTo("RED"); // 红字面锚点
+    }
+
+    @Test
+    void statusSerializesAsEnumName() {
+        for (TriageStatus s : TriageStatus.values()) {
+            TriageResultResponse r = new TriageResultResponse(s, null, null, null, null, null);
+            assertThat(wire(r).get("status")).isEqualTo(s.name());
+        }
+    }
+
+    @Test
+    void notDoneOmitsDangerLevelEntirely() {
+        // PENDING/PROCESSING/FAILED → dangerLevel 等全 null → NON_NULL 省略。
+        // App 必须把「无 dangerLevel」当未就绪/加载态，绝不可残留上一次 RED。
+        TriageResultResponse pending = new TriageResultResponse(
+                TriageStatus.PENDING, null, null, null, null, null);
+
+        Map<String, Object> m = wire(pending);
+        assertThat(m.keySet()).isEqualTo(Set.of("status"));
+        assertThat(m).doesNotContainKey("dangerLevel");
+    }
+}

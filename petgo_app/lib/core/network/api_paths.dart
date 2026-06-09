@@ -84,6 +84,11 @@ class ApiPaths {
   /// 成长时间线（Story 2.4）。
   static const String petProfileTimeline = '$base/pet-profiles/me/timeline';
 
+  /// 成长档案日历月视图 / 当天详情 / 统计栏（Story 2.4 AC5/AC6 · F9）。
+  static const String petProfileCalendar = '$base/pet-profiles/me/calendar';
+  static const String petProfileDay = '$base/pet-profiles/me/day';
+  static const String petProfileArchiveStats = '$base/pet-profiles/me/archive-stats';
+
   /// 内容发布 + Feed 列表（Story 2.3 / 3.2）。
   static const String contentPosts = '$base/content-posts';
 

@@ -24,6 +24,12 @@ public final class ErrorTypes {
     /** Story 2.2：单账号单宠物——已存在档案时再建（409）。 */
     public static final URI PROFILE_EXISTS = URI.create(BASE + "profile-exists");
 
+    /** Story 2.3 R2（F10）：发布时三方自动审核——文字关键词命中违规（422，不落库）。 */
+    public static final URI CONTENT_TEXT_BLOCKED = URI.create(BASE + "content-text-blocked");
+
+    /** Story 2.3 R2（F10）：发布时三方自动审核——图像识别命中违规（422，不落库）。 */
+    public static final URI CONTENT_IMAGE_BLOCKED = URI.create(BASE + "content-image-blocked");
+
     private ErrorTypes() {
     }
 }

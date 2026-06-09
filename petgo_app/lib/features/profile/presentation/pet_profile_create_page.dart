@@ -11,7 +11,10 @@ import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../media/domain/media_upload_use_case.dart';
 import '../../../shared/utils/media_permission.dart';
+import '../data/health_event_repository.dart';
 import '../data/profile_repository.dart';
+import '../data/timeline_repository.dart';
+import '../domain/pending_archive.dart';
 import '../domain/profile_created_flow.dart';
 
 /// 宠物档案创建表单（Story 2.2 · F1）。
@@ -98,6 +101,16 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
           buildOriginFromName(GoRouterState.of(context).uri.queryParameters['origin']);
       if (showsBuildCelebration(origin)) {
         context.go('/profile/created', extra: created);
+      } else if (origin == BuildOrigin.graySelectPublish) {
+        // AC7（F15）：灰选成长日历触发的建档完成 → 跳过庆祝页，回发布着陆页预选成长日历续发
+        // （复用 /publish 着陆页首帧开 sheet 的稳健路径，不从已失效的建档页 context 直接开 sheet）。
+        context.go('/publish?preset=growth-calendar');
+      } else if (origin == BuildOrigin.triageArchive) {
+        // Story 2.5 AC3/AC4：FR-16 问诊存档触发的建档完成 → 跳过庆祝页，用同一 sourceRef
+        // 回灌挂起的存档意图（recordDecision ARCHIVED，幂等键兜底），再回成长档案查看。
+        // 注：红色态语义为「返回结果页」——结果页属 Epic 4 瞬态路由，此处回档案为近似（条目已落库可见）。
+        await _backfillPendingArchive(created.id);
+        if (mounted) context.go('/profile');
       } else {
         context.go('/profile');
       }
@@ -112,6 +125,30 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
       }
     } finally {
       if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  /// AC3/AC4：建档成功后回灌挂起的存档意图（同 sourceRef，幂等）。无挂起则无操作（放弃建档无副作用）。
+  Future<void> _backfillPendingArchive(int newPetId) async {
+    final pending = ref.read(pendingArchiveProvider);
+    if (pending == null) return;
+    try {
+      await ref.read(healthEventRepositoryProvider).recordDecision(
+            sourceType: pending.sourceType,
+            sourceRef: pending.sourceRef,
+            petId: newPetId,
+            decision: ArchiveDecision.archived,
+            symptomSummary: pending.symptomSummary,
+            aiLevel: pending.aiLevel,
+            adviceSummary: pending.adviceSummary,
+            imImageRefs: pending.imImageRefs,
+          );
+    } catch (_) {
+      // 回灌失败不阻断建档完成；幂等键允许后续重试不重存。
+    } finally {
+      ref.read(pendingArchiveProvider.notifier).clear(); // 消费后清空
+      ref.invalidate(timelineFirstPageProvider);
+      ref.invalidate(archiveStatsProvider);
     }
   }
 

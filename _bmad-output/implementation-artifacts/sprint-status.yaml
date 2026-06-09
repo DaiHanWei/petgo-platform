@@ -50,7 +50,7 @@
 # - 跨 story 决策清单见 implementation-artifacts/CROSS-STORY-DECISIONS.md
 
 generated: 2026-06-01
-last_updated: 2026-06-08
+last_updated: 2026-06-09  # 2.3/2.4/2.5 R2 完成
 project: petgo-platform
 # epic-1 -> in-progress (首个 story 1.1 已 contexted)
 #
@@ -90,9 +90,9 @@ development_status:
   epic-2: in-progress
   2-1-媒体基建-oss-双桶-sts-直传-签名-url-与-exif-剥离: ready-for-dev
   2-2-宠物档案创建-单账号单宠物: review          # [PRD1.0.0✏️] 改 AC1: 加 pet_type 必选枚举+创建后不可改 (F6,Flyway 加列) ·[R2] 加 AC: 字段必填规则(类型/名字/生日必填,头像/品种/介绍选填)+生日完整日期(年月日) ·F6+R2 完成(L0 绿: PetType 枚举+V25 加列+实体无setter+update DTO 不含=双重不可改; birthday @NotNull; 后端 ProfileServiceTest 10/10,前端 253; V25 迁移+端点422 L1 待本地)
-  2-3-统一-发布入口与内容发布: ready-for-dev            # [PRD1.0.0✏️·R2] 加 AC: event_date 列+发布事件日期字段(默认/禁未来,F9)+发布最低内容(文图至少一)+B/C灰选跳FR-0G建档返回预选(F15)+发布三方自动审核流程(文字关键词+图像stub,F10,新 ContentModerationService)
-  2-4-成长档案-tab-时间线与状态快捷编辑: ready-for-dev   # [PRD1.0.0✏️] 加 AC: 双视图日历(FR-37)+档案统计栏+里程碑入口+第一条🌟标记 ·[R2] 加 AC: 双视图/时间线按 event_date 排序(F9)+当天详情页+未来格子置灰+视图加载失败态(F13)+A↔B/C 状态分支
-  2-5-问诊记录存档承接与健康事件时间线: ready-for-dev    # [PRD1.0.0✏️] 改 AC1+加 AC: 存档弹窗三态+先建档→回灌存档延迟串接 ·[R2] 加 AC: FR-3 红色态结果页存档入口承接(状态分支)+建档完成跳过庆祝页直接回灌 (F15)
+  2-3-统一-发布入口与内容发布: review            # [PRD1.0.0✏️·R2] 加 AC: event_date 列+发布事件日期字段(默认/禁未来,F9)+发布最低内容(文图至少一)+B/C灰选跳FR-0G建档返回预选(F15)+发布三方自动审核流程(文字关键词+图像stub,F10,新 ContentModerationService) ·R2 完成(L0 绿: V26 加 event_date[V4已冻结改ALTER]+ContentModerationService stub审核[文字/图片拦截不落库422,印尼/英语占位词]+最低内容422+灰选建档跳过庆祝页回/publish预选; 后端 package+ContentService/Moderation单测绿,前端262; L1[Docker]待本地)
+  2-4-成长档案-tab-时间线与状态快捷编辑: review   # [PRD1.0.0✏️] 加 AC: 双视图日历(FR-37)+档案统计栏+里程碑入口+第一条🌟标记 ·[R2] 加 AC: 双视图/时间线按 event_date 排序(F9)+当天详情页+未来格子置灰+视图加载失败态(F13)+A↔B/C 状态分支 ·AC5+R2 完成(L0 绿: AC5 双视图/统计栏/里程碑零态0-N按pet_type/第一条🌟[规划漏列子任务已补建]+AC6 event_date排序/当天详情无加删/未来灰格/「+」预填+AC7失败下拉重试保留信息卡统计; 后端3新端点+健康端口补实现+TimelineServiceTest扩,前端271+growth_archive_r2; L1[Docker]待本地)
+  2-5-问诊记录存档承接与健康事件时间线: review    # [PRD1.0.0✏️] 改 AC1+加 AC: 存档弹窗三态+先建档→回灌存档延迟串接 ·[R2] 加 AC: FR-3 红色态结果页存档入口承接(状态分支)+建档完成跳过庆祝页直接回灌 (F15) ·AC1三态+AC3+AC4 完成(L0 绿: showArchivePrompt 三态[①存入/②立即创建/③去创建先FR-0G切A]+pendingArchive挂起+建档跳过庆祝页回灌同sourceRef幂等+AC4红色态A直存/未建档BC走FR-16; triage两handler收敛; 纯前端,后端R1已覆盖; 前端277+archive_prompt_dialog_test; L1/L2待本地)
   2-6-宠物名片-h5-对外分享页: ready-for-dev             # [PRD1.0.0✏️] 大改: 单照片流→6 区块(里程碑区块走零态降级,F2) ·[R2] 加 AC: H5 加载失败/链接失效/已装未装 DeepLink(F13)+快乐时刻流按 event_date(F9)
   2-7-档案页动效分享-fab: ready-for-dev
   2-8-宠物档案编辑: ready-for-dev                       # [PRD1.0.0✏️] 改 AC: 编辑页硬禁修改 pet_type (F6)

@@ -14,6 +14,7 @@ import com.petgo.profile.service.ProfileService;
 import com.petgo.shared.error.AppException;
 import com.petgo.shared.ratelimit.IdempotencyService;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -39,15 +40,17 @@ public class ContentService {
     private final ContentLikeRepository likes;
     private final ProfileService profileService;
     private final IdempotencyService idempotency;
+    private final ContentModerationService moderation;
 
     public ContentService(ContentPostRepository posts, CommentRepository comments,
             ContentLikeRepository likes, ProfileService profileService,
-            IdempotencyService idempotency) {
+            IdempotencyService idempotency, ContentModerationService moderation) {
         this.posts = posts;
         this.comments = comments;
         this.likes = likes;
         this.profileService = profileService;
         this.idempotency = idempotency;
+        this.moderation = moderation;
     }
 
     /**
@@ -120,7 +123,19 @@ public class ContentService {
                     .orElseThrow(() -> AppException.notFound("内容不存在"));
         }
 
+        String text = blankToNull(req.text());
+        List<String> imageUrls = req.imageUrls();
+        if (imageUrls != null && imageUrls.size() > 9) {
+            throw AppException.validation("最多 9 张图片");
+        }
+
+        // AC6（R2）：最低内容门槛——文字与图片皆空不可发布（服务端权威，前端置灰仅辅助）。
+        if (text == null && (imageUrls == null || imageUrls.isEmpty())) {
+            throw AppException.validation("请填写文字或上传图片");
+        }
+
         Long petId = req.petId();
+        LocalDate eventDate = null;
         if (req.type() == ContentType.GROWTH_MOMENT) {
             // 成长日历必须绑定属于当前用户的宠物档案。
             if (petId == null) {
@@ -129,18 +144,25 @@ public class ContentService {
             if (!profileService.ownsPet(authorId, petId)) {
                 throw AppException.validation("无法绑定该宠物档案");
             }
+            // AC5（R2 · F9）：事件日期仅 GROWTH_MOMENT 有值；缺省取今天（UTC）；不可未来。
+            eventDate = req.eventDate() != null ? req.eventDate() : LocalDate.now(java.time.ZoneOffset.UTC);
+            if (eventDate.isAfter(LocalDate.now(java.time.ZoneOffset.UTC))) {
+                throw AppException.validation("事件日期不能晚于今天");
+            }
         } else {
-            // 普通类型不绑宠物，忽略客户端误传的 petId。
+            // 普通类型不绑宠物、不写事件日期，忽略客户端误传的 petId/eventDate。
             petId = null;
         }
 
-        List<String> imageUrls = req.imageUrls();
-        if (imageUrls != null && imageUrls.size() > 9) {
-            throw AppException.validation("最多 9 张图片");
+        // AC8（R2 · F10）：发布写库前三方自动审核——文字关键词 + 图像识别；任一拦截即失败、不落库。
+        switch (moderation.moderate(text, imageUrls)) {
+            case TEXT_BLOCKED -> throw AppException.contentTextBlocked("内容包含不当词汇，请修改后重试");
+            case IMAGE_BLOCKED -> throw AppException.contentImageBlocked("图片包含违规内容，请替换后重试");
+            case PASS -> { /* 通过，继续落库 */ }
         }
 
         ContentPost saved = posts.save(ContentPost.publish(
-                authorId, req.type(), petId, blankToNull(req.text()), imageUrls));
+                authorId, req.type(), petId, text, imageUrls, eventDate));
 
         idempotency.store(idempotencyKey, saved.getId());
         return ContentPostResponse.from(saved);
@@ -159,8 +181,45 @@ public class ContentService {
         return posts.findByAuthorIdAndTypeAndDeletedAtIsNullAndCreatedAtLessThanOrderByCreatedAtDesc(
                         authorId, ContentType.GROWTH_MOMENT, cursor, PageRequest.of(0, limit))
                 .stream()
-                .map(p -> new GrowthMomentView(p.getId(), p.getCreatedAt(), p.getImageUrls(), p.getText()))
+                .map(ContentService::toGrowthMomentView)
                 .toList();
+    }
+
+    /**
+     * 某作者在某月（按 {@code event_date}）的全部快乐时刻（Story 2.4 R2 · F9 日历视图）。
+     * event_date 升序、同日 created_at 升序——供 profile 按日聚合时取「该日最早 created_at」首图。
+     */
+    @Transactional(readOnly = true)
+    public List<GrowthMomentView> findGrowthMomentsInMonth(long authorId, LocalDate from, LocalDate to) {
+        return posts.findByAuthorIdAndTypeAndDeletedAtIsNullAndEventDateBetweenOrderByEventDateAscCreatedAtAsc(
+                        authorId, ContentType.GROWTH_MOMENT, from, to)
+                .stream()
+                .map(ContentService::toGrowthMomentView)
+                .toList();
+    }
+
+    /**
+     * 某作者在某 {@code event_date} 当天的快乐时刻（Story 2.4 R2 · F9 当天详情），created_at 正序。
+     */
+    @Transactional(readOnly = true)
+    public List<GrowthMomentView> findGrowthMomentsOnDate(long authorId, LocalDate eventDate) {
+        return posts.findByAuthorIdAndTypeAndDeletedAtIsNullAndEventDateOrderByCreatedAtAsc(
+                        authorId, ContentType.GROWTH_MOMENT, eventDate)
+                .stream()
+                .map(ContentService::toGrowthMomentView)
+                .toList();
+    }
+
+    /** 某作者快乐时刻总数（Story 2.4 AC5 统计栏）。 */
+    @Transactional(readOnly = true)
+    public long countGrowthMoments(long authorId) {
+        return posts.countByAuthorIdAndTypeAndDeletedAtIsNullAndStatus(
+                authorId, ContentType.GROWTH_MOMENT, PostStatus.PUBLISHED);
+    }
+
+    private static GrowthMomentView toGrowthMomentView(ContentPost p) {
+        return new GrowthMomentView(
+                p.getId(), p.getCreatedAt(), p.getEventDate(), p.getImageUrls(), p.getText());
     }
 
     private static String blankToNull(String s) {

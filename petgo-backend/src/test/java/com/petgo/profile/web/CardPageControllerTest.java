@@ -51,7 +51,7 @@ class CardPageControllerTest {
         when(profileService.findByCardToken("TOK")).thenReturn(Optional.of(profile()));
         when(accountQueryService.isActive(7L)).thenReturn(true);
         when(contentService.findGrowthMoments(anyLong(), any(), anyInt()))
-                .thenReturn(List.of(new GrowthMomentView(1L, Instant.now(), List.of("https://cdn/m.jpg"), "hi")));
+                .thenReturn(List.of(new GrowthMomentView(1L, Instant.now(), null, List.of("https://cdn/m.jpg"), "hi")));
 
         Model model = new ConcurrentModel();
         HttpServletResponse resp = mock(HttpServletResponse.class);

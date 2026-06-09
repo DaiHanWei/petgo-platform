@@ -28,6 +28,9 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
     @Autowired
     private PetProfileRepository profiles;
 
+    @Autowired
+    private com.petgo.content.repository.ContentPostRepository contentPosts;
+
     private String createBody(String name) {
         return """
                 {"name":"%s","petType":"DOG","breed":"柴犬","intro":"乖巧","birthday":"2022-01-01"}
@@ -332,5 +335,83 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
     void timelineWithoutTokenIs401() throws Exception {
         mvc.perform(get("/api/v1/pet-profiles/me/timeline"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    // ---------- R2 · 日历 / 当天 / 统计（F9 + AC5） ----------
+
+    /** 直接造一条属作者的成长日历快乐时刻（含 event_date）。 */
+    private void seedGrowth(long ownerId, String createdIso, String eventDate, String img) {
+        com.petgo.content.domain.ContentPost p = com.petgo.content.domain.ContentPost.publish(
+                ownerId, com.petgo.content.domain.ContentType.GROWTH_MOMENT, petIdOf(ownerId),
+                "moment", java.util.List.of(img), LocalDate.parse(eventDate));
+        contentPosts.save(p);
+    }
+
+    private long petIdOf(long ownerId) {
+        return profiles.findByOwnerId(ownerId).orElseThrow().getId();
+    }
+
+    @Test
+    void calendarAggregatesByEventDate() throws Exception {
+        User owner = newUser();
+        String token = userBearer(owner.getId());
+        mvc.perform(post("/api/v1/pet-profiles").header(HttpHeaders.AUTHORIZATION, token)
+                .contentType(MediaType.APPLICATION_JSON).content(createBody("旺财")))
+                .andExpect(status().isCreated());
+        seedGrowth(owner.getId(), "2026-06-02T08:00:00Z", "2026-06-02", "https://cdn/a.jpg");
+        seedGrowth(owner.getId(), "2026-06-02T09:00:00Z", "2026-06-02", "https://cdn/b.jpg");
+        seedGrowth(owner.getId(), "2026-06-10T09:00:00Z", "2026-06-10", "https://cdn/c.jpg");
+
+        mvc.perform(get("/api/v1/pet-profiles/me/calendar?year=2026&month=6")
+                        .header(HttpHeaders.AUTHORIZATION, token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.days.length()").value(2))
+                .andExpect(jsonPath("$.days[0].day").value(2))
+                .andExpect(jsonPath("$.days[0].firstImageUrl").value("https://cdn/a.jpg"))
+                .andExpect(jsonPath("$.days[0].hasHappyMoment").value(true));
+    }
+
+    @Test
+    void dayDetailReturnsItemsForDate() throws Exception {
+        User owner = newUser();
+        String token = userBearer(owner.getId());
+        mvc.perform(post("/api/v1/pet-profiles").header(HttpHeaders.AUTHORIZATION, token)
+                .contentType(MediaType.APPLICATION_JSON).content(createBody("旺财")))
+                .andExpect(status().isCreated());
+        seedGrowth(owner.getId(), "2026-06-02T08:00:00Z", "2026-06-02", "https://cdn/a.jpg");
+
+        mvc.perform(get("/api/v1/pet-profiles/me/day?date=2026-06-02")
+                        .header(HttpHeaders.AUTHORIZATION, token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.date").value("2026-06-02"))
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].kind").value("HAPPY_MOMENT"));
+    }
+
+    @Test
+    void archiveStatsCountsAndMilestoneTotal() throws Exception {
+        User owner = newUser();
+        String token = userBearer(owner.getId());
+        mvc.perform(post("/api/v1/pet-profiles").header(HttpHeaders.AUTHORIZATION, token)
+                .contentType(MediaType.APPLICATION_JSON).content(createBody("旺财"))) // DOG
+                .andExpect(status().isCreated());
+        seedGrowth(owner.getId(), "2026-06-02T08:00:00Z", "2026-06-02", "https://cdn/a.jpg");
+        seedGrowth(owner.getId(), "2026-06-03T08:00:00Z", "2026-06-03", "https://cdn/b.jpg");
+
+        mvc.perform(get("/api/v1/pet-profiles/me/archive-stats")
+                        .header(HttpHeaders.AUTHORIZATION, token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.happyMomentCount").value(2))
+                .andExpect(jsonPath("$.consultCount").value(0))
+                .andExpect(jsonPath("$.milestoneCompleted").value(0))
+                .andExpect(jsonPath("$.milestoneTotal").value(30)); // DOG = 30
+    }
+
+    @Test
+    void calendarWithoutProfileIs404() throws Exception {
+        User owner = newUser();
+        mvc.perform(get("/api/v1/pet-profiles/me/calendar?year=2026&month=6")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(owner.getId())))
+                .andExpect(status().isNotFound());
     }
 }

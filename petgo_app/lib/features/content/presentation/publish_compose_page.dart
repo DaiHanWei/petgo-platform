@@ -1,8 +1,10 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/media/media_scope.dart';
+import '../../../core/network/problem_detail.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/shadows.dart';
 import '../../../l10n/app_localizations.dart';
@@ -36,13 +38,17 @@ final publishControllerProvider = Provider.autoDispose<PublishController>((ref) 
 /// 统一发布 Compose 全屏 bottom sheet（Story 2.3 · PetGo Prototype 换肤）。
 /// 类型标签（Cerita / Momen / Edukasi）→ 作者+关联宠物 → 文字 → 图片 → 发布。
 class PublishComposePage extends ConsumerStatefulWidget {
-  const PublishComposePage({super.key, this.preset});
+  const PublishComposePage({super.key, this.preset, this.presetEventDate});
 
-  /// 预选发布类型（如生日深链预选成长日历，Story 6.1 FR-40）；为空时默认 Cerita（daily）。
+  /// 预选发布类型（如生日深链预选成长日历，Story 6.1 FR-40 / 灰选建档返回，AC7）；为空时默认 daily。
   final ContentType? preset;
 
-  /// 以全屏 bottom sheet 形式打开（供「＋」入口 / 深链着陆页调用）。
-  static Future<void> open(BuildContext context, {ContentType? preset}) {
+  /// 成长日历事件日期默认值（F9）：从「＋」进取今天、从日历格子进（2.4）取该格子日期；为空取今天。
+  final DateTime? presetEventDate;
+
+  /// 以全屏 bottom sheet 形式打开（供「＋」入口 / 深链着陆页 / 灰选建档返回调用）。
+  static Future<void> open(BuildContext context,
+      {ContentType? preset, DateTime? presetEventDate}) {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -53,7 +59,7 @@ class PublishComposePage extends ConsumerStatefulWidget {
       ),
       builder: (_) => FractionallySizedBox(
         heightFactor: 0.95,
-        child: PublishComposePage(preset: preset),
+        child: PublishComposePage(preset: preset, presetEventDate: presetEventDate),
       ),
     );
   }
@@ -68,11 +74,17 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   @override
   void initState() {
     super.initState();
-    // 深链预选类型（如生日 → 成长日历）：首帧后设控制器类型，与手动选 tab 等价。
+    // 深链/灰选预选类型（如生日 / 成长日历）：首帧后设控制器类型，与手动选 tab 等价。
     final preset = widget.preset;
     if (preset != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) ref.read(publishControllerProvider).setType(preset);
+        if (!mounted) return;
+        final c = ref.read(publishControllerProvider);
+        c.setType(preset);
+        if (preset == ContentType.growthMoment) {
+          c.setEventDate(widget.presetEventDate ?? DateTime.now()); // F9 默认事件日期
+          _ensurePetLoaded();
+        }
       });
     }
   }
@@ -118,7 +130,23 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     }
     final key = 'post-${DateTime.now().microsecondsSinceEpoch}';
     final petId = controller.type == ContentType.growthMoment ? _linkedPet?.id : null;
-    final id = await controller.publish(idempotencyKey: key, petId: petId);
+    int? id;
+    try {
+      id = await controller.publish(idempotencyKey: key, petId: petId);
+    } on DioException catch (e) {
+      if (!mounted) return;
+      // AC8（F10）：审核拦截 422——文字/图片区分提示，停留编辑页保留输入（改后可重提）。
+      final slug = ProblemDetail.fromDioException(e)?.typeSlug;
+      switch (slug) {
+        case 'content-text-blocked':
+          _toast(l10n.publishTextBlocked);
+        case 'content-image-blocked':
+          _toast(l10n.publishImageBlocked);
+        default:
+          _toast(l10n.publishFailed);
+      }
+      return; // 不关闭 sheet，内存草稿保留
+    }
     if (!mounted) return;
     if (id != null) {
       ref.invalidate(feedProvider);
@@ -143,8 +171,10 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
         action: SnackBarAction(
           label: l10n.publishCreateProfile,
           onPressed: () {
+            // AC7（F15）：B/C 灰选成长日历 → 关闭发布页，跳建档（带 origin），
+            // 建档完成跳过庆祝页直接回发布页预选成长日历（pet_profile_create_page 接管）。
             Navigator.of(context).pop();
-            context.go('/profile/create');
+            context.go('/profile/create?origin=graySelectPublish');
           },
         ),
       ));
@@ -220,6 +250,10 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
               if (growthSelected && _linkedPet == null) ...[
                 const SizedBox(height: 12),
                 _growthNotice(),
+              ],
+              if (growthSelected) ...[
+                const SizedBox(height: 12),
+                _eventDateRow(controller, l10n),
               ],
               const SizedBox(height: 12),
               // —— 文字 ——
@@ -328,6 +362,9 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       onTap: enabled
           ? () {
               controller.setType(ContentType.growthMoment);
+              if (controller.eventDate == null) {
+                controller.setEventDate(widget.presetEventDate ?? DateTime.now()); // F9 默认
+              }
               _ensurePetLoaded();
             }
           : () => _onGrowthBlocked(l10n),
@@ -369,6 +406,53 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
           ),
       ],
     );
+  }
+
+  /// 成长日历事件日期字段（F9）：禁选未来，默认今天/格子日期。点击开日期选择器。
+  Widget _eventDateRow(PublishController controller, AppLocalizations l10n) {
+    final date = controller.eventDate ?? DateTime.now();
+    final label = '${date.year}-${date.month.toString().padLeft(2, '0')}'
+        '-${date.day.toString().padLeft(2, '0')}';
+    return GestureDetector(
+      key: const ValueKey('publishEventDate'),
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _pickEventDate(controller),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: AppShadows.sm,
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.event_rounded, size: 18, color: AppColors.mint700),
+            const SizedBox(width: 10),
+            Text(l10n.publishEventDate,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+            const Spacer(),
+            Text(label,
+                key: const ValueKey('publishEventDateValue'),
+                style: const TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.mint700)),
+            const SizedBox(width: 6),
+            const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.muted),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickEventDate(PublishController controller) async {
+    final today = DateTime.now();
+    final initial = controller.eventDate ?? today;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(today.year - 30),
+      lastDate: DateTime(today.year, today.month, today.day), // 禁选未来（F9）
+    );
+    if (picked != null) controller.setEventDate(picked);
   }
 
   Widget _growthNotice() {

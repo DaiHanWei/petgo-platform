@@ -18,6 +18,12 @@ class MockBackend {
   static String _iso(Duration ago) =>
       DateTime.now().toUtc().subtract(ago).toIso8601String();
 
+  /// yyyy-MM-dd（事件日期，F9）。
+  static String _date(Duration ago) {
+    final d = DateTime.now().toUtc().subtract(ago);
+    return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  }
+
   // ---- 内存态 ----
   late Map<String, dynamic> _profile;
   final List<Map<String, dynamic>> _feed = [];
@@ -70,9 +76,10 @@ class MockBackend {
     ];
 
     _notifications.addAll([
-      _notif(token: 'n1', type: 'COMMENT', title: '新评论', body: 'Rina 评论了你的帖子', read: false, ago: const Duration(minutes: 20)),
-      _notif(token: 'n2', type: 'LIKE', title: '新的赞', body: 'Budi 赞了你的帖子', read: false, ago: const Duration(hours: 3)),
-      _notif(token: 'n3', type: 'CONSULT', title: '问诊更新', body: '兽医已回复你的咨询', read: true, ago: const Duration(days: 1)),
+      // type 必须是后端 NotificationType 合法值（VET_REPLY/CONSULT_CLOSED/CONTENT_LIKED/CONTENT_COMMENTED/NEW_CONSULT_REQUEST）。
+      _notif(token: 'n1', type: 'CONTENT_COMMENTED', title: '新评论', body: 'Rina 评论了你的帖子', read: false, ago: const Duration(minutes: 20)),
+      _notif(token: 'n2', type: 'CONTENT_LIKED', title: '新的赞', body: 'Budi 赞了你的帖子', read: false, ago: const Duration(hours: 3)),
+      _notif(token: 'n3', type: 'VET_REPLY', title: '问诊更新', body: '兽医已回复你的咨询', read: true, ago: const Duration(days: 1)),
     ]);
 
     _consultHistory.addAll([
@@ -103,9 +110,9 @@ class MockBackend {
     };
 
     _timeline.addAll([
-      {'kind': 'HAPPY_MOMENT', 'date': _iso(const Duration(days: 1)), 'postId': 101, 'imageUrls': [], 'text': '第一次带 Rocky 去新家'},
+      {'kind': 'HAPPY_MOMENT', 'date': _iso(const Duration(days: 1)), 'eventDate': _date(const Duration(days: 1)), 'postId': 101, 'imageUrls': [], 'text': '第一次带 Rocky 去新家'},
       {'kind': 'HEALTH_EVENT', 'date': _iso(const Duration(days: 3)), 'postId': null, 'imageUrls': [], 'text': '误食巧克力,已就医', 'aiLevel': 'RED', 'symptomSummary': '呕吐'},
-      {'kind': 'HAPPY_MOMENT', 'date': _iso(const Duration(days: 7)), 'postId': 105, 'imageUrls': [], 'text': '学会握手'},
+      {'kind': 'HAPPY_MOMENT', 'date': _iso(const Duration(days: 7)), 'eventDate': _date(const Duration(days: 7)), 'postId': 105, 'imageUrls': [], 'text': '学会握手'},
     ]);
   }
 
@@ -188,9 +195,21 @@ class MockBackend {
       return ok(_envelope(items));
     }
     if (m == 'POST' && p.endsWith('/content-posts')) {
+      // 镜像后端发布时三方自动审核（AC8 · F10）：占位关键词/图标记命中 → 422，不落库。
+      final text = body['text'] as String?;
+      final imgs = (body['imageUrls'] as List?)?.cast<dynamic>() ?? const [];
+      // 占位敏感词（印尼语/英语，与后端 ContentModerationService 对齐）；真实三方后接。
+      const blockedWords = ['judi', 'narkoba', 'pornografi', 'penipuan', 'gambling', 'scam'];
+      final lower = (text ?? '').toLowerCase();
+      if (blockedWords.any(lower.contains)) {
+        throw _problem(o, 422, 'content-text-blocked', 'Konten mengandung kata tidak pantas');
+      }
+      if (imgs.any((u) => u.toString().contains('moderation-blocked'))) {
+        throw _problem(o, 422, 'content-image-blocked', 'Gambar mengandung konten terlarang');
+      }
       final id = _nextId();
       _feed.insert(0, _post(id: id, type: (body['type'] ?? 'DAILY') as String,
-          body: body['text'] as String?, likeCount: 0, ago: Duration.zero));
+          body: text, likeCount: 0, ago: Duration.zero));
       return ok({'id': id});
     }
     final detailMatch = RegExp(r'/content-posts/(\d+)$').firstMatch(p);
@@ -243,6 +262,29 @@ class MockBackend {
 
     // ---------- PET PROFILE / TIMELINE / HEALTH ----------
     if (p.endsWith('/pet-profiles/me/timeline') && m == 'GET') return ok(_envelope(_timeline));
+    if (p.endsWith('/pet-profiles/me/archive-stats') && m == 'GET') {
+      if (_petProfile == null) throw _notFound(o);
+      final happy = _timeline.where((e) => e['kind'] == 'HAPPY_MOMENT').length;
+      final consult = _timeline.where((e) => e['kind'] == 'HEALTH_EVENT').length;
+      final type = _petProfile!['petType'] as String?;
+      return ok({
+        'happyMomentCount': happy, 'consultCount': consult,
+        'milestoneCompleted': 0, 'milestoneTotal': (type == 'CAT' || type == 'DOG') ? 30 : 15,
+      });
+    }
+    if (p.endsWith('/pet-profiles/me/calendar') && m == 'GET') {
+      if (_petProfile == null) throw _notFound(o);
+      final year = int.tryParse('${q['year']}') ?? DateTime.now().year;
+      final month = int.tryParse('${q['month']}') ?? DateTime.now().month;
+      return ok(_calendarFor(year, month));
+    }
+    if (p.endsWith('/pet-profiles/me/day') && m == 'GET') {
+      if (_petProfile == null) throw _notFound(o);
+      final date = (q['date'] ?? '') as String;
+      final items = _timeline.where((e) => _itemDateKey(e) == date).toList()
+        ..sort((a, b) => (a['date'] as String).compareTo(b['date'] as String)); // created_at 正序
+      return ok({'date': date, 'items': items});
+    }
     if (p.endsWith('/pet-profiles/me') && m == 'GET') {
       if (_petProfile == null) throw _notFound(o);
       return ok(_petProfile);
@@ -284,7 +326,8 @@ class MockBackend {
     }
 
     // ---------- 兽医咨询(用户侧) ----------
-    if (p.endsWith('/consult/availability') && m == 'GET') return ok({'vetOnline': true, 'expectedWindow': '08:00–23:00'});
+    // expectedWindow 是后端文案 key（前端映射 l10n），非渲染文本 —— 镜像 ConsultAvailabilityResponse.DEFAULT_WINDOW_KEY。
+    if (p.endsWith('/consult/availability') && m == 'GET') return ok({'vetOnline': true, 'expectedWindow': 'WEEKDAY_8_23'});
     if (p.endsWith('/consult-sessions/active') && m == 'GET') {
       return _activeSession == null ? noContent() : ok(_activeSession);
     }
@@ -318,8 +361,12 @@ class MockBackend {
     if (p.endsWith('/consult/history') && m == 'GET') return ok(_envelope(_consultHistory));
 
     // ---------- 兽医工作台 ----------
-    if (p.endsWith('/vet/online-status') && m == 'GET') return ok({'online': true});
-    if (p.endsWith('/vet/online-status') && m == 'PUT') return ok({'online': body['online'] ?? true});
+    // 镜像 OnlineStatusResponse{online, status}：status 是 VetPresenceStatus 名（ONLINE/OFFLINE），App 暂只读 online 但 mock 须齐全。
+    if (p.endsWith('/vet/online-status') && m == 'GET') return ok({'online': true, 'status': 'ONLINE'});
+    if (p.endsWith('/vet/online-status') && m == 'PUT') {
+      final online = (body['online'] ?? true) as bool;
+      return ok({'online': online, 'status': online ? 'ONLINE' : 'OFFLINE'});
+    }
     if (p.endsWith('/vet/heartbeat') && m == 'POST') return ok();
     if (p.endsWith('/vet/consult-sessions/waiting') && m == 'GET') {
       return ok([
@@ -380,9 +427,51 @@ class MockBackend {
     return ok({});
   }
 
+  /// 条目的事件日期键（yyyy-MM-dd）：快乐时刻取 eventDate，健康事件取 date 的日期段。
+  String _itemDateKey(Map<String, dynamic> e) {
+    final ev = e['eventDate'] as String?;
+    if (ev != null) return ev;
+    return (e['date'] as String).substring(0, 10);
+  }
+
+  /// 按年月聚合 _timeline → 日历有记录日格子（镜像后端 /me/calendar）。
+  Map<String, dynamic> _calendarFor(int year, int month) {
+    final prefix = '$year-${month.toString().padLeft(2, '0')}-';
+    final byDay = <int, Map<String, dynamic>>{};
+    for (final e in _timeline) {
+      final key = _itemDateKey(e);
+      if (!key.startsWith(prefix)) continue;
+      final day = int.parse(key.substring(8, 10));
+      final happy = e['kind'] == 'HAPPY_MOMENT';
+      final health = e['kind'] == 'HEALTH_EVENT';
+      final cell = byDay[day] ??=
+          {'day': day, 'firstImageUrl': null, 'hasHappyMoment': false, 'hasHealthEvent': false};
+      if (happy) {
+        cell['hasHappyMoment'] = true;
+        final imgs = (e['imageUrls'] as List?) ?? const [];
+        if (cell['firstImageUrl'] == null && imgs.isNotEmpty) cell['firstImageUrl'] = imgs.first;
+      }
+      if (health) cell['hasHealthEvent'] = true;
+    }
+    final days = byDay.values.toList()..sort((a, b) => (a['day'] as int).compareTo(b['day'] as int));
+    return {'year': year, 'month': month, 'days': days};
+  }
+
   DioException _notFound(RequestOptions o) => DioException(
         requestOptions: o,
         response: Response(requestOptions: o, statusCode: 404),
+        type: DioExceptionType.badResponse,
+      );
+
+  /// 构造 RFC 9457 ProblemDetail 错误（mock 镜像后端语义，便于离线演示拦截/校验态）。
+  DioException _problem(RequestOptions o, int status, String typeSlug, String detail) =>
+      DioException(
+        requestOptions: o,
+        response: Response(requestOptions: o, statusCode: status, data: {
+          'type': 'https://petgo/errors/$typeSlug',
+          'status': status,
+          'detail': detail,
+        }),
         type: DioExceptionType.badResponse,
       );
 }

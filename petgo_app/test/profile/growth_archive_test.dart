@@ -5,6 +5,7 @@ import 'package:petgo/features/auth/domain/auth_state.dart';
 import 'package:petgo/features/auth/domain/login_response.dart';
 import 'package:petgo/features/profile/data/profile_repository.dart';
 import 'package:petgo/features/profile/data/timeline_repository.dart';
+import 'package:petgo/features/profile/domain/archive_stats.dart';
 import 'package:petgo/features/profile/domain/pet_profile.dart';
 import 'package:petgo/features/profile/domain/share_service.dart';
 import 'package:petgo/features/profile/domain/timeline_item.dart';
@@ -28,13 +29,19 @@ AuthState _authB() => const AuthState(
       profile: UserProfile(petStatus: 'PLANNING'),
     );
 
-Widget _wrap({required AuthState auth, PetProfile? profile, TimelinePage? page}) {
+Widget _wrap({required AuthState auth, PetProfile? profile, TimelinePage? page, ArchiveStats? stats}) {
   return ProviderScope(
     overrides: [
       authControllerProvider.overrideWith(() => _TestAuthController(auth)),
       petProfileProvider.overrideWith((ref) async => profile),
       timelineFirstPageProvider.overrideWith(
         (ref) async => page ?? const TimelinePage(items: []),
+      ),
+      archiveStatsProvider.overrideWith(
+        (ref) async =>
+            stats ??
+            const ArchiveStats(
+                happyMomentCount: 0, consultCount: 0, milestoneCompleted: 0, milestoneTotal: 30),
       ),
       shareFabAnimatedShownProvider.overrideWith((ref) async => true),
     ],

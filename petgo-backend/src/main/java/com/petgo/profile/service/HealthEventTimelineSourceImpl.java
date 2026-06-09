@@ -32,8 +32,36 @@ public class HealthEventTimelineSourceImpl implements HealthEventTimelineSource 
                                 pet.getId(), ArchiveDecision.ARCHIVED,
                                 before == null ? Instant.now() : before, PageRequest.of(0, limit))
                         .stream()
-                        .map(e -> new HealthEventView(e.getCreatedAt(), e.getAiLevel(), e.getSymptomSummary()))
+                        .map(HealthEventTimelineSourceImpl::toView)
                         .toList())
                 .orElse(List.of());
+    }
+
+    @Override
+    public List<HealthEventView> healthEventsInRange(long ownerId, Instant from, Instant to) {
+        return profileService.findByOwnerId(ownerId)
+                .map(pet -> healthEvents
+                        .findByPetIdAndArchiveDecisionAndCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtAsc(
+                                pet.getId(), ArchiveDecision.ARCHIVED, from, to)
+                        .stream()
+                        .map(HealthEventTimelineSourceImpl::toView)
+                        .toList())
+                .orElse(List.of());
+    }
+
+    @Override
+    public List<HealthEventView> healthEventsOnDay(long ownerId, Instant dayStart, Instant dayEnd) {
+        return healthEventsInRange(ownerId, dayStart, dayEnd);
+    }
+
+    @Override
+    public long countHealthEvents(long ownerId) {
+        return profileService.findByOwnerId(ownerId)
+                .map(pet -> healthEvents.countByPetIdAndArchiveDecision(pet.getId(), ArchiveDecision.ARCHIVED))
+                .orElse(0L);
+    }
+
+    private static HealthEventView toView(com.petgo.profile.domain.HealthEvent e) {
+        return new HealthEventView(e.getCreatedAt(), e.getAiLevel(), e.getSymptomSummary());
     }
 }

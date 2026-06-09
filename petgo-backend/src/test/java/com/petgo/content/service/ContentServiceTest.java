@@ -16,6 +16,8 @@ import com.petgo.content.repository.ContentPostRepository;
 import com.petgo.profile.service.ProfileService;
 import com.petgo.shared.error.AppException;
 import com.petgo.shared.ratelimit.IdempotencyService;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -47,7 +49,9 @@ class ContentServiceTest {
             }
             return p;
         });
-        service = new ContentService(posts, comments, likes, profileService, idempotency);
+        // 审核用真实 stub：既有用例文本均良性 → PASS；R2 用例显式触发拦截标记。
+        service = new ContentService(posts, comments, likes, profileService, idempotency,
+                new ContentModerationService());
     }
 
     private static void setId(ContentPost p, long id) {
@@ -112,6 +116,87 @@ class ContentServiceTest {
     void storesIdempotencyKeyAfterCreate() {
         service.publish(1L, new ContentPostCreateRequest(ContentType.DAILY, null, "x", null), "KEY2");
         verify(idempotency).store(org.mockito.ArgumentMatchers.eq("KEY2"), anyLong());
+    }
+
+    // ===== R2 · AC6 最低内容 =====
+
+    @Test
+    void bothEmptyContentRejected() {
+        assertThatThrownBy(() -> service.publish(1L,
+                new ContentPostCreateRequest(ContentType.DAILY, null, "  ", null), null))
+                .isInstanceOf(AppException.class);
+        verify(posts, never()).save(any());
+    }
+
+    @Test
+    void imageOnlyContentAllowed() {
+        ContentPostResponse resp = service.publish(1L,
+                new ContentPostCreateRequest(ContentType.DAILY, null, null, List.of("u1")), null);
+        assertThat(resp.imageUrls()).containsExactly("u1");
+        assertThat(resp.text()).isNull();
+    }
+
+    // ===== R2 · AC5 成长日历事件日期（F9） =====
+
+    @Test
+    void growthMomentStoresGivenEventDate() {
+        when(profileService.ownsPet(1L, 5L)).thenReturn(true);
+        LocalDate past = LocalDate.of(2020, 1, 2);
+        ContentPostResponse resp = service.publish(1L,
+                new ContentPostCreateRequest(ContentType.GROWTH_MOMENT, 5L, "m", null, past), null);
+        assertThat(resp.eventDate()).isEqualTo(past);
+    }
+
+    @Test
+    void growthMomentDefaultsEventDateToToday() {
+        when(profileService.ownsPet(1L, 5L)).thenReturn(true);
+        ContentPostResponse resp = service.publish(1L,
+                new ContentPostCreateRequest(ContentType.GROWTH_MOMENT, 5L, "m", null, null), null);
+        assertThat(resp.eventDate()).isEqualTo(LocalDate.now(ZoneOffset.UTC));
+    }
+
+    @Test
+    void growthMomentFutureEventDateRejected() {
+        when(profileService.ownsPet(1L, 5L)).thenReturn(true);
+        LocalDate future = LocalDate.now(ZoneOffset.UTC).plusDays(1);
+        assertThatThrownBy(() -> service.publish(1L,
+                new ContentPostCreateRequest(ContentType.GROWTH_MOMENT, 5L, "m", null, future), null))
+                .isInstanceOf(AppException.class);
+        verify(posts, never()).save(any());
+    }
+
+    @Test
+    void nonGrowthIgnoresEventDate() {
+        ContentPostResponse resp = service.publish(1L,
+                new ContentPostCreateRequest(ContentType.DAILY, null, "hi", null,
+                        LocalDate.of(2020, 1, 2)), null);
+        assertThat(resp.eventDate()).isNull();
+    }
+
+    // ===== R2 · AC8 发布时三方自动审核（F10） =====
+
+    @Test
+    void textKeywordBlockedNotSaved() {
+        assertThatThrownBy(() -> service.publish(1L,
+                new ContentPostCreateRequest(ContentType.DAILY, null, "ayo main judi online", null), null))
+                .isInstanceOf(AppException.class);
+        verify(posts, never()).save(any());
+    }
+
+    @Test
+    void imageViolationBlockedNotSaved() {
+        assertThatThrownBy(() -> service.publish(1L,
+                new ContentPostCreateRequest(ContentType.DAILY, null, "ok",
+                        List.of("https://cdn.petgo.test/moderation-blocked-1.jpg")), null))
+                .isInstanceOf(AppException.class);
+        verify(posts, never()).save(any());
+    }
+
+    @Test
+    void cleanContentPasses() {
+        ContentPostResponse resp = service.publish(1L,
+                new ContentPostCreateRequest(ContentType.DAILY, null, "cuaca cerah hari ini", List.of("u1")), null);
+        assertThat(resp.id()).isNotNull();
     }
 
     // ===== Story 3.6 删除 =====
