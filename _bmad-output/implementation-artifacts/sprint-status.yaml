@@ -158,7 +158,7 @@ development_status:
   # Flyway 当前到 V26 → 8-1 新表用 V27 起(占位, E2 执行时顺延)。后端→前端→联调, L0 绿/L1-L2 留本地。
   # story 定义见 planning-artifacts/epics.md §Epic 8;状态 backlog = 待 create-story 逐个生成 story 文件 → dev-story 实现。
   epic-8-里程碑系统: in-progress
-  8-1-里程碑数据基建与清单分配: backlog        # 后端: 新表 pet_milestones/milestone_completions(profile域) + 猫30/狗30/通用15 固定清单常量 + 建档按 pet_type 分配 + GET 列表/进度端点(L/M/S 分区+完成状态)
+  8-1-里程碑数据基建与清单分配: review        # 后端: 新表 pet_milestones/milestone_completions(profile域) + 猫30/狗30/通用15 固定清单常量 + 建档按 pet_type 分配 + GET 列表/进度端点(L/M/S 分区+完成状态) ·完成(L0 绿: V27 两表+MilestoneCatalog(CAT30/DOG30/OTHER15)+roster物化(建档assignRoster幂等)+MilestoneService分区进度+MilestoneController GET /me/milestones+注销级联(ProfileDeletionService先删completions→roster)+契约金标MilestoneListResponseContractTest(无自增id/code外露/枚举UPPER_SNAKE)+计数金标MilestoneCatalogTest; App data DTO/mock镜像在8-2; L1[Docker真分配/级联]待本地)
   8-2-里程碑列表页与徽章展示: backlog          # 前端: milestone_list_page 壳→真; L/M/S 三级分区+各级进度+顶部宠物信息; 徽章彩色/灰锁; 徽章卡片弹层(系统类→说明文案/打卡类→已打卡·去发布入口)
   8-3-里程碑系统自动完成事件订阅: backlog      # 后端: @TransactionalEventListener/@Async 订阅既有领域事件(建档/首张成长日历图/分享名片/存档问诊/首条日常/首评论/首点赞/陪伴30天/记录满10·30/健康全完成 C-L4) → 标记完成(幂等); 定时类(陪伴天数)接 6-7 @Scheduled
   8-4-里程碑用户打卡两路径: backlog            # 后端打卡 API(关联成长日历内容, 一内容一里程碑不可重复) + 前端内容关联选择器(置灰已关联) + 去发布跳转预选成长日历 + 发布成功自动完成回填

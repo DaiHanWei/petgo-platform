@@ -21,14 +21,16 @@ class ProfileServiceTest {
 
     private PetProfileRepository profiles;
     private CardTokenGenerator tokenGenerator;
+    private MilestoneService milestoneService;
     private ProfileService service;
 
     @BeforeEach
     void setUp() {
         profiles = Mockito.mock(PetProfileRepository.class);
         tokenGenerator = Mockito.mock(CardTokenGenerator.class);
+        milestoneService = Mockito.mock(MilestoneService.class);
         when(tokenGenerator.generate()).thenReturn("TOKEN_ABC");
-        service = new ProfileService(profiles, tokenGenerator);
+        service = new ProfileService(profiles, tokenGenerator, milestoneService);
     }
 
     private PetProfileCreateRequest req() {
@@ -36,10 +38,22 @@ class ProfileServiceTest {
                 "https://cdn/x.jpg", "CAT", "Momo", "Shiba", LocalDate.of(2022, 1, 1), "好奇宝宝");
     }
 
+    /** 模拟 JPA 落库回填自增 id（mock repository 无法生成）；供 create() 后 assignRoster(id) 用。 */
+    private static PetProfile withId(PetProfile p, long id) {
+        try {
+            java.lang.reflect.Field f = PetProfile.class.getDeclaredField("id");
+            f.setAccessible(true);
+            f.set(p, id);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(e);
+        }
+        return p;
+    }
+
     @Test
     void createPersistsWithGeneratedToken() {
         when(profiles.existsByOwnerId(1L)).thenReturn(false);
-        when(profiles.save(any(PetProfile.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(profiles.save(any(PetProfile.class))).thenAnswer(inv -> withId(inv.getArgument(0), 100L));
 
         PetProfileResponse resp = service.create(1L, req());
 
@@ -93,7 +107,7 @@ class ProfileServiceTest {
         PetProfile existing = PetProfile.create(1L, PetType.CAT, "Old", "u", "Breed",
                 java.time.LocalDate.of(2020, 1, 1), "old intro", "TOK_KEEP");
         when(profiles.findByOwnerId(1L)).thenReturn(java.util.Optional.of(existing));
-        when(profiles.save(any(PetProfile.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(profiles.save(any(PetProfile.class))).thenAnswer(inv -> withId(inv.getArgument(0), 100L));
 
         PetProfileResponse resp = service.update(1L,
                 new com.petgo.profile.dto.PetProfileUpdateRequest(null, "New", null, null, "new intro"));
@@ -124,7 +138,7 @@ class ProfileServiceTest {
     @Test
     void blankOptionalFieldsNormalizedToNull() {
         when(profiles.existsByOwnerId(1L)).thenReturn(false);
-        when(profiles.save(any(PetProfile.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(profiles.save(any(PetProfile.class))).thenAnswer(inv -> withId(inv.getArgument(0), 100L));
         PetProfileResponse resp = service.create(1L,
                 new PetProfileCreateRequest("  ", "DOG", "Momo", "  ", null, "  "));
         assertThat(resp.breed()).isNull();

@@ -22,10 +22,13 @@ public class ProfileService {
 
     private final PetProfileRepository profiles;
     private final CardTokenGenerator tokenGenerator;
+    private final MilestoneService milestoneService;
 
-    public ProfileService(PetProfileRepository profiles, CardTokenGenerator tokenGenerator) {
+    public ProfileService(PetProfileRepository profiles, CardTokenGenerator tokenGenerator,
+            MilestoneService milestoneService) {
         this.profiles = profiles;
         this.tokenGenerator = tokenGenerator;
+        this.milestoneService = milestoneService;
     }
 
     /**
@@ -52,6 +55,8 @@ public class ProfileService {
                 tokenGenerator.generate());
         try {
             PetProfile saved = profiles.save(profile);
+            // 建档按 pet_type 自动分配里程碑 roster（Story 8.1，同模块直调，非事件订阅；幂等）。
+            milestoneService.assignRoster(saved.getId(), saved.getPetType());
             return PetProfileResponse.from(saved);
         } catch (DataIntegrityViolationException e) {
             // 并发双开窗：唯一约束兜底（owner_id / card_token），归一为 409。
