@@ -12,6 +12,7 @@ package com.petgo.notify.domain;
  *   <li>{@link #PET_BIRTHDAY} 宠物生日 → 「+发布」预选成长日历（6.7，FR-40）。</li>
  *   <li>{@link #COMPANION_ANNIVERSARY} 陪伴纪念日 → 成长档案 Tab（6.7，FR-41）。</li>
  *   <li>{@link #MILESTONE_NODE} L级里程碑节点 → 成长档案 Tab→里程碑列表页（壳）（6.7，FR-42）。</li>
+ *   <li>{@link #CONTENT_REMOVED} 内容因违规被运营下架 → 通知作者（3.7 AC3，无深链/无申诉入口，内容已 404）。</li>
  * </ul>
  *
  * <p>🔄 PRD V1.0.0 修订（Fx · 2026-06-08，决策 F2/F5）：新增后三类定时系统推送目标。
@@ -25,5 +26,6 @@ public enum NotificationType {
     NEW_CONSULT_REQUEST,
     PET_BIRTHDAY,
     COMPANION_ANNIVERSARY,
-    MILESTONE_NODE
+    MILESTONE_NODE,
+    CONTENT_REMOVED
 }

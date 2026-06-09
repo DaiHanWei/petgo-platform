@@ -67,10 +67,10 @@ class FeedServiceTest {
     }
 
     @Test
-    void statusBExcludesGrowthMoment() {
+    void planningExcludesGrowthMoment() {
         when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(Boolean.class), any(), any(), any()))
                 .thenReturn(List.of());
-        service.loadFeed("B", "ALL", null);
+        service.loadFeed("PLANNING", "ALL", null);
 
         ArgumentCaptor<Boolean> excludeGrowth = ArgumentCaptor.forClass(Boolean.class);
         org.mockito.Mockito.verify(posts).findFeed(excludeGrowth.capture(), isNull(),
@@ -79,10 +79,10 @@ class FeedServiceTest {
     }
 
     @Test
-    void statusAAndGuestDoNotExcludeGrowth() {
+    void hasPetAndGuestDoNotExcludeGrowth() {
         when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(Boolean.class), any(), any(), any()))
                 .thenReturn(List.of());
-        service.loadFeed("A", "ALL", null);
+        service.loadFeed("HAS_PET", "ALL", null);
         service.loadFeed(null, "ALL", null); // 游客
 
         org.mockito.Mockito.verify(posts, org.mockito.Mockito.times(2))
@@ -93,7 +93,7 @@ class FeedServiceTest {
     void growthCategoryRequiresPetAndTypeFilter() {
         when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(Boolean.class), any(), any(), any()))
                 .thenReturn(List.of());
-        service.loadFeed("A", "GROWTH_MOMENT", null);
+        service.loadFeed("HAS_PET", "GROWTH_MOMENT", null);
 
         org.mockito.Mockito.verify(posts).findFeed(eq(false), eq(ContentType.GROWTH_MOMENT),
                 eq(true), eq(false), isNull(), isNull(), any(Pageable.class));
@@ -109,7 +109,7 @@ class FeedServiceTest {
         when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(Boolean.class), any(), any(), any()))
                 .thenReturn(rows);
 
-        FeedPageResponse page = service.loadFeed("A", "ALL", null);
+        FeedPageResponse page = service.loadFeed("HAS_PET", "ALL", null);
         assertThat(page.items()).hasSize(20);
         assertThat(page.hasMore()).isTrue();
         assertThat(page.nextCursor()).isNotNull();
@@ -125,7 +125,7 @@ class FeedServiceTest {
         when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(Boolean.class), any(), any(), any()))
                 .thenReturn(rows);
 
-        FeedPageResponse page = service.loadFeed("A", "ALL", null);
+        FeedPageResponse page = service.loadFeed("HAS_PET", "ALL", null);
         assertThat(page.items()).hasSize(1);
         assertThat(page.hasMore()).isFalse();
         assertThat(page.nextCursor()).isNull();
@@ -155,7 +155,7 @@ class FeedServiceTest {
         Instant ts = Instant.parse("2026-06-01T12:00:00Z");
         String cursor = new FeedCursor(ts, 50L).encode();
 
-        service.loadFeed("C", "DAILY", cursor);
+        service.loadFeed("ENTHUSIAST", "DAILY", cursor);
 
         org.mockito.Mockito.verify(posts).findFeed(eq(false), eq(ContentType.DAILY), eq(false),
                 eq(true), eq(ts), eq(50L), any(Pageable.class));

@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 
 import com.petgo.content.event.ContentCommentedEvent;
 import com.petgo.content.event.ContentLikedEvent;
+import com.petgo.content.event.ContentRemovedEvent;
 import com.petgo.notify.domain.NotificationType;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
@@ -51,6 +52,13 @@ class ContentNotifyListenerTest {
     void selfCommentNotPushed() {
         listener().onContentCommented(new ContentCommentedEvent(55L, 7L, 9L, 9L, null, Instant.now()));
         verify(notificationService, never()).send(anyLongArg(), any(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void contentRemovedNotifiesAuthor() {
+        listener().onContentRemoved(new ContentRemovedEvent(55L, 9L, Instant.now()));
+        verify(notificationService).send(eq(9L), eq(NotificationType.CONTENT_REMOVED),
+                anyString(), anyString(), eq(NotificationType.CONTENT_REMOVED.name()), eq("55"));
     }
 
     private static long anyLongArg() {

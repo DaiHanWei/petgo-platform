@@ -2,6 +2,7 @@ package com.petgo.notify.service;
 
 import com.petgo.content.event.ContentCommentedEvent;
 import com.petgo.content.event.ContentLikedEvent;
+import com.petgo.content.event.ContentRemovedEvent;
 import com.petgo.notify.domain.NotificationType;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -11,6 +12,8 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * <ul>
  *   <li>{@link ContentLikedEvent} → 推送作者「有人赞了你的内容」。</li>
  *   <li>{@link ContentCommentedEvent} → 推送作者「有人评论了你的内容」（点击详情定位评论区）。</li>
+ *   <li>{@link ContentRemovedEvent} → 推送作者「你发布的内容因违反社区规范已被移除」（Story 3.7 AC3，
+ *       运营人工下架触发；<b>不说明举报人</b>、V1 <b>无申诉入口</b>；内容已 404 故 targetRef 仅作内部标识）。</li>
  * </ul>
  * 护栏：<b>自互动不推</b>（actor == author 跳过）；<b>逐条不合并</b>（每事件独立 send，无聚合/去抖，不引 MQ）。
  *
@@ -44,5 +47,16 @@ public class ContentNotifyListener {
         notificationService.send(event.contentAuthorId(), NotificationType.CONTENT_COMMENTED,
                 "有人评论了你的内容", "点击查看",
                 NotificationType.CONTENT_COMMENTED.name(), String.valueOf(event.postId()));
+    }
+
+    /**
+     * 内容被运营下架（Story 3.7 AC3）→ 通知作者内容因违规已被移除。无举报人信息、无申诉入口；
+     * 内容已 404，深链仅承载 postId 作内部标识（点击不导向有效内容）。驳回（DISMISSED）不发事件故不触达此处。
+     */
+    @TransactionalEventListener
+    public void onContentRemoved(ContentRemovedEvent event) {
+        notificationService.send(event.authorId(), NotificationType.CONTENT_REMOVED,
+                "内容已被移除", "你发布的内容因违反社区规范已被移除",
+                NotificationType.CONTENT_REMOVED.name(), String.valueOf(event.postId()));
     }
 }

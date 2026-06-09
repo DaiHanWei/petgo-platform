@@ -7,6 +7,7 @@ import com.petgo.content.domain.DeleteReason;
 import com.petgo.content.domain.PostStatus;
 import com.petgo.content.dto.ContentPostCreateRequest;
 import com.petgo.content.dto.ContentPostResponse;
+import com.petgo.content.event.ContentRemovedEvent;
 import com.petgo.content.repository.CommentRepository;
 import com.petgo.content.repository.ContentLikeRepository;
 import com.petgo.content.repository.ContentPostRepository;
@@ -19,6 +20,7 @@ import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,16 +43,19 @@ public class ContentService {
     private final ProfileService profileService;
     private final IdempotencyService idempotency;
     private final ContentModerationService moderation;
+    private final ApplicationEventPublisher events;
 
     public ContentService(ContentPostRepository posts, CommentRepository comments,
             ContentLikeRepository likes, ProfileService profileService,
-            IdempotencyService idempotency, ContentModerationService moderation) {
+            IdempotencyService idempotency, ContentModerationService moderation,
+            ApplicationEventPublisher events) {
         this.posts = posts;
         this.comments = comments;
         this.likes = likes;
         this.profileService = profileService;
         this.idempotency = idempotency;
         this.moderation = moderation;
+        this.events = events;
     }
 
     /**
@@ -88,6 +93,12 @@ public class ContentService {
         }
         likes.deleteByPostId(post.getId());
         log.info("内容软删 postId={} reason={}", post.getId(), reason);
+        // AC3 ②：仅运营下架通知作者「内容因违规被移除」；作者自删不发事件（不自通知）。
+        // 经领域事件 → notify 消费（content 不直调 notify）；不说明举报人、V1 无申诉入口。
+        if (reason == DeleteReason.ADMIN_TAKEDOWN) {
+            events.publishEvent(new ContentRemovedEvent(
+                    post.getId(), post.getAuthorId(), Instant.now()));
+        }
     }
 
     /** 迷你主页发布数（Story 3.8）：某作者未软删的已发布内容数。经 service 暴露，不让 auth 直读 content 表。 */

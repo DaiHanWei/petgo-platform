@@ -32,6 +32,7 @@ class ContentServiceTest {
     private com.petgo.content.repository.ContentLikeRepository likes;
     private ProfileService profileService;
     private IdempotencyService idempotency;
+    private org.springframework.context.ApplicationEventPublisher events;
     private ContentService service;
 
     @BeforeEach
@@ -49,9 +50,10 @@ class ContentServiceTest {
             }
             return p;
         });
+        events = Mockito.mock(org.springframework.context.ApplicationEventPublisher.class);
         // 审核用真实 stub：既有用例文本均良性 → PASS；R2 用例显式触发拦截标记。
         service = new ContentService(posts, comments, likes, profileService, idempotency,
-                new ContentModerationService());
+                new ContentModerationService(), events);
     }
 
     private static void setId(ContentPost p, long id) {
@@ -248,6 +250,35 @@ class ContentServiceTest {
         assertThat(c1.getDeletedAt()).isNotNull();
         assertThat(c2.getDeletedAt()).isNotNull();
         verify(likes).deleteByPostId(6L);
+    }
+
+    // ===== R2 · AC3 运营下架 → 通知作者领域事件 =====
+
+    @Test
+    void adminTakedownPublishesContentRemovedEvent() {
+        ContentPost p = ownedPost(8L, 42L);
+        when(posts.findById(8L)).thenReturn(Optional.of(p));
+        when(comments.findByPostIdAndDeletedAtIsNull(8L)).thenReturn(List.of());
+
+        service.softDelete(8L, com.petgo.content.domain.DeleteReason.ADMIN_TAKEDOWN);
+
+        var captor = org.mockito.ArgumentCaptor.forClass(
+                com.petgo.content.event.ContentRemovedEvent.class);
+        verify(events).publishEvent(captor.capture());
+        assertThat(captor.getValue().postId()).isEqualTo(8L);
+        assertThat(captor.getValue().authorId()).isEqualTo(42L); // 推送目标=作者
+    }
+
+    @Test
+    void authorDeleteDoesNotPublishRemovedEvent() {
+        ContentPost p = ownedPost(9L, 1L);
+        when(posts.findById(9L)).thenReturn(Optional.of(p));
+        when(comments.findByPostIdAndDeletedAtIsNull(9L)).thenReturn(List.of());
+
+        service.deleteByAuthor(9L, 1L); // 作者自删不自通知
+
+        verify(events, never()).publishEvent(any(
+                com.petgo.content.event.ContentRemovedEvent.class));
     }
 
     private static com.petgo.content.domain.Comment newComment(long id) {

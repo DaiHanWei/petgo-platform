@@ -106,7 +106,7 @@ development_status:
   3-4-内容点赞: review
   3-5-内容两级评论: review                       # [PRD1.0.0✏️·R2] review→rfd 回改: 加 AC 评论发送失败保留输入直接重试 (F13) ·AC3 完成(L0 绿: 发送失败 SnackBar 提示+保留输入框内容与回复态可直接重试,仅成功才清空+刷新; 纯前端,comment_write_test +AC3用例,282 test; L1/L2待本地)
   3-6-内容删除-无编辑: review
-  3-7-内容举报与运营人工审核队列: ready-for-dev          # [PRD1.0.0✏️·R2] review→rfd 回改: 加 AC 运营判定违规→内容下架(Feed/我的发布/档案同步移除+通知作者无申诉)+描述对齐发布时三方自动审核 (F10)
+  3-7-内容举报与运营人工审核队列: review          # [PRD1.0.0✏️·R2] review→rfd 回改: 加 AC 运营判定违规→内容下架(Feed/我的发布/档案同步移除+通知作者无申诉)+描述对齐发布时三方自动审核 (F10) ·AC3 完成(L0 绿: 运营下架仅ADMIN_TAKEDOWN publish ContentRemovedEvent→ContentNotifyListener 通知作者[不含举报人/无申诉]; 作者自删不发; DISMISSED 静默零通知; 举报人审核结果不回告; F10 范围对齐 ReportService javadoc; 顺带修复既有红 FeedServiceTest 状态码; 后端512 test+前端282; L1/L2待本地)
   3-8-他人迷你主页预览卡: review
   epic-3-retrospective: optional
 

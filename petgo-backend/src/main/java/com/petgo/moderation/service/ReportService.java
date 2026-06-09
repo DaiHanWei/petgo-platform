@@ -18,6 +18,11 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>模块边界：内容存在性校验经 {@link ContentService}（**不直读 content 表**）；下架由 admin 层经
  * content service 完成。V1 仅内容举报。
+ *
+ * <p>F10 范围对齐（AC3 ④）：关键词过滤 + 三方图像识别已<b>前移到发布时</b>由三方系统执行
+ * （FR-12，Story 2.3 {@code ContentService.publish}）；本举报模块<b>仅处理已发布内容</b>的用户举报与
+ * 运营人工下架，<b>不含</b>发布时自动过滤逻辑，亦无任何规则自动下架——所有下架决定人工经 Admin。
+ * 举报人侧仅收到提交反馈，<b>审核结果不回告</b>（V1 无举报进度查询、无申诉入口）。
  */
 @Service
 public class ReportService {
