@@ -58,4 +58,29 @@ void main() {
     expect(find.byKey(const ValueKey('consultInterruptedState')), findsNothing);
     expect(find.byKey(const ValueKey('consultDisclaimerBanner')), findsOneWidget);
   });
+
+  // ===== AC3（F12 语义对齐）：封禁中断 vs 断线可恢复，状态/文案严格区分不混淆 =====
+
+  testWidgets('AC3: INTERRUPTED=封禁终态（已中断+重新发起，无活跃输入）', (tester) async {
+    await _pump(tester, 'INTERRUPTED');
+    // 终态：已中断 + 重新发起入口；无 IM 活跃输入区（不可恢复）。
+    expect(find.byKey(const ValueKey('consultReconsult')), findsOneWidget);
+    expect(find.byKey(const ValueKey('consultTerminalLabel')), findsOneWidget);
+  });
+
+  testWidgets('AC3: IN_PROGRESS=断线可恢复（活跃对话，绝不显示「已中断」/重新发起）', (tester) async {
+    await _pump(tester, 'IN_PROGRESS');
+    // kill 断线属保护窗口可恢复——仍是活跃对话，绝不复用封禁中断的终态/文案。
+    expect(find.byKey(const ValueKey('consultInterruptedState')), findsNothing);
+    expect(find.byKey(const ValueKey('consultReconsult')), findsNothing);
+    expect(find.byKey(const ValueKey('consultTerminalLabel')), findsNothing);
+  });
+
+  testWidgets('AC3: PENDING_CLOSE=可恢复评分窗口（非封禁终态，不显示中断态）', (tester) async {
+    await _pump(tester, 'PENDING_CLOSE');
+    // 兽医正常结束的评分窗口（5.6）——非封禁中断，绝不显示「已中断」终态。
+    expect(find.byKey(const ValueKey('consultInterruptedState')), findsNothing);
+    expect(find.byKey(const ValueKey('consultReconsult')), findsNothing);
+    expect(find.byKey(const ValueKey('consultRatePromptBanner')), findsOneWidget);
+  });
 }

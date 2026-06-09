@@ -67,6 +67,26 @@ class ConsultInterruptServiceTest {
         assertThat(service().interruptByVetBan(3L)).isZero();
     }
 
+    /**
+     * AC3（F12 语义对齐）：封禁中断的查询范围**仅** {@code IN_PROGRESS / PENDING_CLOSE} 且**限本兽医**——
+     * 锁定不误伤：① 未接的 WAITING 请求（vet_id 为空、属用户）不在范围；② 用户 kill 断线的会话留在
+     * IN_PROGRESS 保护窗口由 5.6 处理，封禁中断只按 vetId+这两态命中本兽医已接会话，不触碰他人会话。
+     */
+    @Test
+    void interruptScopesToBannedVetInProgressAndPendingCloseOnly() {
+        when(sessions.findByVetIdAndStatusIn(eq3(), any())).thenReturn(List.of());
+
+        service().interruptByVetBan(3L);
+
+        @SuppressWarnings("unchecked")
+        var statusCaptor = (org.mockito.ArgumentCaptor<java.util.Collection<SessionStatus>>)
+                (org.mockito.ArgumentCaptor<?>) org.mockito.ArgumentCaptor.forClass(java.util.Collection.class);
+        verify(sessions).findByVetIdAndStatusIn(eq3(), statusCaptor.capture());
+        assertThat(statusCaptor.getValue())
+                .containsExactlyInAnyOrder(SessionStatus.IN_PROGRESS, SessionStatus.PENDING_CLOSE)
+                .doesNotContain(SessionStatus.WAITING); // 未接 WAITING 不被封禁误中断
+    }
+
     private static long eq3() {
         return org.mockito.ArgumentMatchers.eq(3L);
     }
