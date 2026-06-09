@@ -6,6 +6,7 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/app_image.dart';
 import '../../../shared/widgets/post_cover.dart';
 import '../../auth/data/me_repository.dart';
 import '../../auth/domain/auth_state.dart';
@@ -221,7 +222,7 @@ class _PetCard extends ConsumerWidget {
                   const SizedBox(width: AppSpacing.sm),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.network(happyImg,
+                    child: AppImage.widget(happyImg,
                         key: const ValueKey('mePetCardHappyImage'),
                         height: 44, width: 44, fit: BoxFit.cover,
                         errorBuilder: (_, _, _) => const SizedBox.shrink()),
@@ -339,7 +340,7 @@ class _InitialAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (avatarUrl != null && avatarUrl!.isNotEmpty) {
-      return CircleAvatar(radius: radius, backgroundImage: NetworkImage(avatarUrl!));
+      return CircleAvatar(radius: radius, backgroundImage: AppImage.provider(avatarUrl));
     }
     final trimmed = nickname.trim();
     if (trimmed.isEmpty) {
@@ -410,7 +411,7 @@ class _MyPostCard extends StatelessWidget {
                 height: 90,
                 width: 110,
                 child: hasImage
-                    ? Image.network(
+                    ? AppImage.widget(
                         post.firstImageUrl!,
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stack) =>

@@ -14,6 +14,7 @@ class AppImage {
   /// 渲染为 [Widget]（封面/轮播用）。[errorBuilder] 缺省回退到调用方传入的占位。
   static Widget widget(
     String url, {
+    Key? key,
     double? width,
     double? height,
     BoxFit fit = BoxFit.cover,
@@ -21,18 +22,18 @@ class AppImage {
   }) {
     if (url.startsWith('asset:')) {
       return Image.asset(url.substring(6),
-          width: width, height: height, fit: fit, errorBuilder: errorBuilder);
+          key: key, width: width, height: height, fit: fit, errorBuilder: errorBuilder);
     }
     if (url.startsWith('file:')) {
       return Image.file(File(url.substring(5)),
-          width: width, height: height, fit: fit, errorBuilder: errorBuilder);
+          key: key, width: width, height: height, fit: fit, errorBuilder: errorBuilder);
     }
     if (url.startsWith('/')) {
       return Image.file(File(url),
-          width: width, height: height, fit: fit, errorBuilder: errorBuilder);
+          key: key, width: width, height: height, fit: fit, errorBuilder: errorBuilder);
     }
     return Image.network(url,
-        width: width, height: height, fit: fit, errorBuilder: errorBuilder);
+        key: key, width: width, height: height, fit: fit, errorBuilder: errorBuilder);
   }
 
   /// 渲染为 [ImageProvider]（头像 CircleAvatar.backgroundImage 用）；空/null → null。

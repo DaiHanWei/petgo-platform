@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/colors.dart';
 import '../../../../core/theme/shadows.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../../shared/widgets/app_image.dart';
 import '../../../../shared/widgets/design/striped_photo.dart';
 import '../../domain/timeline_item.dart';
 
@@ -95,7 +96,7 @@ class HappyMomentTile extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (item.imageUrls.isNotEmpty)
-              Image.network(item.imageUrls.first,
+              AppImage.widget(item.imageUrls.first,
                   height: 150,
                   width: double.infinity,
                   fit: BoxFit.cover,

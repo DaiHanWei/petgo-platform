@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../../shared/widgets/app_image.dart';
 import '../../data/timeline_repository.dart';
 import '../../domain/calendar_month.dart';
 
@@ -144,7 +145,7 @@ class _ArchiveCalendarState extends ConsumerState<ArchiveCalendar> {
             ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: cell.firstImageUrl != null
-                  ? Image.network(cell.firstImageUrl!,
+                  ? AppImage.widget(cell.firstImageUrl!,
                       fit: BoxFit.cover,
                       errorBuilder: (_, _, _) => _healthOnlyBox(day))
                   : _healthOnlyBox(day),

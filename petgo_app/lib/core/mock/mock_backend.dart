@@ -28,6 +28,7 @@ class MockBackend {
   late Map<String, dynamic> _profile;
   final List<Map<String, dynamic>> _feed = [];
   final Map<int, List<Map<String, dynamic>>> _comments = {};
+  final Map<int, List<Map<String, dynamic>>> _replies = {}; // 一级评论 id → 二级回复
   final List<Map<String, dynamic>> _notifications = [];
   final List<Map<String, dynamic>> _consultHistory = [];
   final List<Map<String, dynamic>> _timeline = [];
@@ -87,10 +88,14 @@ class MockBackend {
         ago: Duration(hours: i * 5 + 1),
       ));
     }
-    // 详情页评论种子(给第一条帖)
+    // 详情页评论种子(给第一条帖)；第一条挂 2 条二级回复（replyCount=2 触发「查看回复」）。
     _comments[100] = [
-      _comment(id: 900, nickname: 'Rina', body: 'So adorable! 😍', ago: const Duration(hours: 1)),
+      _comment(id: 900, nickname: 'Rina', body: 'So adorable! 😍', ago: const Duration(hours: 1))..['replyCount'] = 2,
       _comment(id: 901, nickname: 'Joko', body: 'I have the same little guy, haha', ago: const Duration(hours: 2)),
+    ];
+    _replies[900] = [
+      _comment(id: 9001, nickname: 'Sari', body: 'Right?! Those eyes 😍', ago: const Duration(minutes: 40)),
+      _comment(id: 9002, nickname: 'Budi', body: 'Mine strikes the exact same pose haha', ago: const Duration(minutes: 55)),
     ];
 
     _notifications.addAll([
@@ -127,10 +132,25 @@ class MockBackend {
       'intro': 'A little orange cat who loves napping and sunbathing', 'createdAt': _iso(const Duration(days: 200)),
     };
 
+    // 成长时间线种子（快乐时刻 9 + 健康事件 5，跨 ~4 周分布）。
+    // 快乐时刻带 eventDate（F9）+ pet 照片，postId 指向真实存在的 Feed 帖（100~109）可点进详情；
+    // 健康事件取 date、绿/黄/红混合。日历 /day / archive-stats 全部从此聚合，自动丰满。
+    const sa = 'asset:assets/seed/';
     _timeline.addAll([
-      {'kind': 'HAPPY_MOMENT', 'date': _iso(const Duration(days: 1)), 'eventDate': _date(const Duration(days: 1)), 'postId': 101, 'imageUrls': ['asset:assets/seed/pet01.jpg'], 'text': 'Oyen watching the sunset on the rooftop'},
-      {'kind': 'HEALTH_EVENT', 'date': _iso(const Duration(days: 3)), 'postId': null, 'imageUrls': [], 'text': 'Ate chocolate — taken to the vet', 'aiLevel': 'RED', 'symptomSummary': 'Vomiting'},
-      {'kind': 'HAPPY_MOMENT', 'date': _iso(const Duration(days: 7)), 'eventDate': _date(const Duration(days: 7)), 'postId': 105, 'imageUrls': ['asset:assets/seed/pet02.jpg'], 'text': 'Found the heart-shaped patch on her fur'},
+      {'kind': 'HAPPY_MOMENT', 'date': _iso(const Duration(hours: 2)), 'eventDate': _date(Duration.zero), 'postId': 100, 'imageUrls': ['${sa}pet01.jpg', '${sa}pet08.jpg'], 'text': 'Rooftop sunset session with Oyen 🌇'},
+      {'kind': 'HEALTH_EVENT', 'date': _iso(const Duration(days: 1, hours: 5)), 'postId': null, 'imageUrls': [], 'text': 'Annual checkup — all clear', 'aiLevel': 'GREEN', 'symptomSummary': 'Routine vaccination, healthy'},
+      {'kind': 'HAPPY_MOMENT', 'date': _iso(const Duration(days: 2)), 'eventDate': _date(const Duration(days: 2)), 'postId': 101, 'imageUrls': ['${sa}pet07.jpg'], 'text': 'New collar, big round eyes 😺'},
+      {'kind': 'HAPPY_MOMENT', 'date': _iso(const Duration(days: 3)), 'eventDate': _date(const Duration(days: 3)), 'postId': 102, 'imageUrls': ['${sa}pet02.jpg', '${sa}pet07.jpg'], 'text': 'Found the little heart on her fur 🩶'},
+      {'kind': 'HEALTH_EVENT', 'date': _iso(const Duration(days: 3, hours: 8)), 'postId': null, 'imageUrls': [], 'text': 'Mild sneezing — monitoring', 'aiLevel': 'YELLOW', 'symptomSummary': 'Occasional sneezing, still alert'},
+      {'kind': 'HAPPY_MOMENT', 'date': _iso(const Duration(days: 4)), 'eventDate': _date(const Duration(days: 4)), 'postId': 103, 'imageUrls': ['${sa}pet08.jpg'], 'text': 'Fetch champion at the park 🐕'},
+      {'kind': 'HAPPY_MOMENT', 'date': _iso(const Duration(days: 5)), 'eventDate': _date(const Duration(days: 5)), 'postId': 105, 'imageUrls': ['${sa}pet04.jpg', '${sa}pet03.jpg'], 'text': 'Two fluffballs, one couch 😹'},
+      {'kind': 'HEALTH_EVENT', 'date': _iso(const Duration(days: 6)), 'postId': null, 'imageUrls': [], 'text': 'Ate chocolate — taken to the vet', 'aiLevel': 'RED', 'symptomSummary': 'Vomiting after ingestion'},
+      {'kind': 'HAPPY_MOMENT', 'date': _iso(const Duration(days: 7)), 'eventDate': _date(const Duration(days: 7)), 'postId': 106, 'imageUrls': ['${sa}pet05.jpg'], 'text': 'Midnight dance moves 💃'},
+      {'kind': 'HAPPY_MOMENT', 'date': _iso(const Duration(days: 8)), 'eventDate': _date(const Duration(days: 8)), 'postId': 107, 'imageUrls': ['${sa}pet10.jpg'], 'text': 'Bubble bath day 🛁'},
+      {'kind': 'HEALTH_EVENT', 'date': _iso(const Duration(days: 10)), 'postId': null, 'imageUrls': [], 'text': 'Follow-up — appetite back to normal', 'aiLevel': 'GREEN', 'symptomSummary': 'Recovered, eating well'},
+      {'kind': 'HAPPY_MOMENT', 'date': _iso(const Duration(days: 12)), 'eventDate': _date(const Duration(days: 12)), 'postId': 108, 'imageUrls': ['${sa}pet09.jpg'], 'text': 'New bob haircut, very artsy 💇'},
+      {'kind': 'HAPPY_MOMENT', 'date': _iso(const Duration(days: 18)), 'eventDate': _date(const Duration(days: 18)), 'postId': 109, 'imageUrls': ['${sa}pet06.jpg'], 'text': 'Sketched my two as frenemies 🎨'},
+      {'kind': 'HAPPY_MOMENT', 'date': _iso(const Duration(days: 26)), 'eventDate': _date(const Duration(days: 26)), 'postId': 104, 'imageUrls': ['${sa}pet03.jpg'], 'text': 'His majesty the Maine Coon 😼'},
     ]);
   }
 
@@ -272,11 +292,14 @@ class MockBackend {
     }
     final repliesMatch = RegExp(r'/comments/(\d+)/replies$').firstMatch(p);
     if (repliesMatch != null) {
-      if (m == 'GET') return ok(_envelope([]));
+      final parentId = int.parse(repliesMatch.group(1)!);
+      if (m == 'GET') return ok(_envelope(_replies[parentId] ?? []));
       if (m == 'POST') {
-        return ok({'id': _nextId(), 'authorId': 1, 'authorDeleted': false,
+        final r = {'id': _nextId(), 'authorId': 1, 'authorDeleted': false,
           'authorNickname': _profile['nickname'], 'authorAvatarUrl': null,
-          'body': body['body'] ?? '', 'createdAt': _iso(Duration.zero), 'replyCount': null, 'replies': null});
+          'body': body['body'] ?? '', 'createdAt': _iso(Duration.zero), 'replyCount': null, 'replies': null};
+        (_replies[parentId] ??= []).add(r);
+        return ok(r);
       }
     }
     if (RegExp(r'/comments/(\d+)$').hasMatch(p) && m == 'DELETE') return ok();
@@ -289,8 +312,15 @@ class MockBackend {
       return ok({'liked': liked, 'likeCount': post['likeCount'] ?? 0});
     }
     if (RegExp(r'/content-posts/(\d+)/reports$').hasMatch(p)) return ok();
-    if (RegExp(r'/users/(\d+)/mini-profile$').hasMatch(p)) {
-      return ok({'postCount': 6, 'isDeactivated': false, 'nickname': 'Demo User', 'avatarUrl': null});
+    final miniMatch = RegExp(r'/users/(\d+)/mini-profile$').firstMatch(p);
+    if (miniMatch != null) {
+      // 按 userId 投影不同昵称/发布数，迷你卡不再千篇一律。
+      final uid = int.parse(miniMatch.group(1)!);
+      const names = ['Putri', 'Sari', 'Budi', 'Andi', 'Maya', 'Dewi', 'Joko', 'Rina'];
+      const avatars = ['pet07', 'pet02', 'pet08', 'pet03', 'pet04', 'pet05', 'pet09', 'pet06'];
+      final i = uid % names.length;
+      return ok({'postCount': 3 + uid % 9, 'isDeactivated': false,
+        'nickname': names[i], 'avatarUrl': 'asset:assets/seed/${avatars[i]}.jpg'});
     }
 
     // ---------- PET PROFILE / TIMELINE / HEALTH ----------

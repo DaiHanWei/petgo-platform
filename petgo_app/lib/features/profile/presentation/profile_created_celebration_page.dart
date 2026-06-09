@@ -5,6 +5,7 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/app_image.dart';
 import '../domain/card_link.dart';
 import '../domain/share_service.dart';
 
@@ -48,7 +49,7 @@ class ProfileCreatedCelebrationPage extends ConsumerWidget {
                 key: const ValueKey('celebrationAvatar'),
                 radius: 48,
                 backgroundColor: AppColors.surface,
-                backgroundImage: avatarUrl == null ? null : NetworkImage(avatarUrl!),
+                backgroundImage: AppImage.provider(avatarUrl),
                 child: avatarUrl == null
                     ? const Icon(Icons.pets_rounded, size: 44, color: AppColors.accentGrowth)
                     : null,

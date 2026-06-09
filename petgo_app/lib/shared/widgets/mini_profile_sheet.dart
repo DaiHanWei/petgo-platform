@@ -6,6 +6,7 @@ import '../../core/theme/spacing.dart';
 import '../../core/theme/typography.dart';
 import '../../features/content/data/mini_profile_repository.dart';
 import '../../l10n/app_localizations.dart';
+import 'app_image.dart';
 
 /// 他人迷你主页预览卡（Story 3.8，FR-26）。点他人头像/昵称从底部弹卡。
 ///
@@ -47,7 +48,7 @@ class _MiniProfileCard extends StatelessWidget {
             CircleAvatar(
               radius: 32,
               backgroundColor: AppColors.border,
-              backgroundImage: (avatar != null && avatar.isNotEmpty) ? NetworkImage(avatar) : null,
+              backgroundImage: AppImage.provider(avatar),
               child: (avatar == null || avatar.isEmpty)
                   ? const Icon(Icons.person_rounded, size: 32, color: AppColors.textTertiary)
                   : null,

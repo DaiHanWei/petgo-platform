@@ -8,6 +8,7 @@ import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../media/domain/media_upload_use_case.dart';
 import '../../../shared/utils/media_permission.dart';
+import '../../../shared/widgets/app_image.dart';
 import '../data/profile_repository.dart';
 import '../domain/pet_profile.dart';
 
@@ -134,7 +135,7 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
               child: CircleAvatar(
                 radius: 44,
                 backgroundColor: AppColors.surface,
-                backgroundImage: _avatarUrl == null ? null : NetworkImage(_avatarUrl!),
+                backgroundImage: AppImage.provider(_avatarUrl),
                 child: _uploading
                     ? const CircularProgressIndicator()
                     : (_avatarUrl == null

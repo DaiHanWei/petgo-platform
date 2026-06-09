@@ -140,6 +140,6 @@ class _Avatar extends StatelessWidget {
         child: Icon(Icons.person_rounded, size: 14, color: AppColors.textTertiary),
       );
     }
-    return CircleAvatar(radius: size / 2, backgroundImage: NetworkImage(url!));
+    return CircleAvatar(radius: size / 2, backgroundImage: AppImage.provider(url));
   }
 }
