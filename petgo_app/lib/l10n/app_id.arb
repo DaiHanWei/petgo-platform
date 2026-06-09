@@ -139,6 +139,7 @@
   "detailBackToFeed": "Kembali ke beranda",
   "detailNetworkError": "Gagal memuat, silakan coba lagi",
   "detailCommentHint": "Tulis komentar...",
+  "commentSendFailed": "Gagal mengirim, silakan coba lagi",
   "detailCommentsTitle": "Komentar",
   "detailNoComments": "Belum ada komentar",
   "detailViewMoreComments": "Lihat komentar lainnya",

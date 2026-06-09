@@ -187,6 +187,7 @@
   "detailBackToFeed": "Back to feed",
   "detailNetworkError": "Could not load, please try again",
   "detailCommentHint": "Write a comment...",
+  "commentSendFailed": "Failed to send, please retry",
   "detailCommentsTitle": "Comments",
   "detailNoComments": "No comments yet",
   "detailViewMoreComments": "View more comments",

@@ -104,7 +104,7 @@ development_status:
   3-2-首页-feed-内容流与宠物状态硬过滤: review   # [PRD1.0.0✏️·R2] review→rfd 回改: 加 AC Feed 加载失败态(增量失败底部重试,已加载保留) (F13) ·AC5 完成(L0 绿: 首屏失败显式重试refresh重建+增量loadMore失败保留已加载+底部点击重试沿用nextCursor+失败停自动预加载; 纯前端,feed_test +3用例,analyze+281 test; L1/L2待本地)
   3-3-内容详情页: review                         # [PRD1.0.0✏️·R2] review→rfd 回改: 加 AC 「···」菜单按归属分支(他人举报/自己删除)+成长档案当天详情页入口承接 ·AC5 完成(L0 绿: 「···」菜单按 isAuthor 互斥[他人仅举报/自己仅删除,绝不同现]+游客点举报触发FR-0C; 当天详情入口由2.4 day_detail_page push /content/:id 承接复用; 纯前端,content_detail_test 改互斥断言,281 test; L1/L2待本地)
   3-4-内容点赞: review
-  3-5-内容两级评论: ready-for-dev                       # [PRD1.0.0✏️·R2] review→rfd 回改: 加 AC 评论发送失败保留输入直接重试 (F13)
+  3-5-内容两级评论: review                       # [PRD1.0.0✏️·R2] review→rfd 回改: 加 AC 评论发送失败保留输入直接重试 (F13) ·AC3 完成(L0 绿: 发送失败 SnackBar 提示+保留输入框内容与回复态可直接重试,仅成功才清空+刷新; 纯前端,comment_write_test +AC3用例,282 test; L1/L2待本地)
   3-6-内容删除-无编辑: review
   3-7-内容举报与运营人工审核队列: ready-for-dev          # [PRD1.0.0✏️·R2] review→rfd 回改: 加 AC 运营判定违规→内容下架(Feed/我的发布/档案同步移除+通知作者无申诉)+描述对齐发布时三方自动审核 (F10)
   3-8-他人迷你主页预览卡: review

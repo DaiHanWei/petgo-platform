@@ -45,12 +45,17 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
         await repo.postComment(widget.postId, text);
       }
       if (!mounted) return;
+      // 仅成功后清空输入 + 退出回复态 + 刷新评论区（AC3）。
       _controller.clear();
       ref.read(replyTargetProvider.notifier).clear();
-      // 触发评论区重拉（正序末尾即时出现）。
       ref.read(commentsRefreshProvider.notifier).bump();
     } catch (_) {
-      // 失败：保留输入，停止 loading（错误提示可由全局拦截器/banner 承载）。
+      // AC3（F13）：发送失败（网络/服务器/422）→ 提示重试，**保留输入与回复态**，可直接重试。
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context);
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(content: Text(l10n.commentSendFailed)));
     } finally {
       if (mounted) setState(() => _sending = false);
     }
