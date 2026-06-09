@@ -50,22 +50,40 @@ class MockBackend {
       'role': 'USER',
     };
 
-    final samples = <List<String?>>[
-      ['DAILY', 'Oyen 今天又趴在窗台晒太阳，太治愈了 🐱', null, 'Putri', '24'],
-      ['GROWTH_MOMENT', '第一次带 Rocky 去新家，超级兴奋！🐕', null, 'Budi', '31'],
-      ['KNOWLEDGE', '猫咪正确喂养的 5 个小贴士，铲屎官必看', null, 'Sari', '52'],
-      ['DAILY', '午后的窗台时光，懒洋洋的一天', null, 'Andi', '12'],
-      ['GROWTH_MOMENT', '疫苗打齐啦，证书收好 💉', null, 'Maya', '8'],
-      ['DAILY', '今天教会了它握手 🐾', null, 'Dewi', '17'],
+    // 假数据：贴合 10 张真实宠物照片的文案 + asset 封面图（部分多图供详情轮播）。
+    // 图片走 `asset:` 前缀，经 AppImage 解析为打包资源；Feed 卡片 + 详情页均渲染真图。
+    const a = 'asset:assets/seed/';
+    final samples = <Map<String, dynamic>>[
+      {'type': 'DAILY', 'body': 'Oyen 又跑屋顶看夕阳了，金色的毛真好看 🐱', 'nick': 'Putri', 'like': 124,
+        'imgs': ['${a}pet01.jpg', '${a}pet08.jpg']},
+      {'type': 'DAILY', 'body': '换上新项圈，眼睛瞪得像铜铃 😺', 'nick': 'Sari', 'like': 88,
+        'imgs': ['${a}pet07.jpg']},
+      {'type': 'GROWTH_MOMENT', 'body': '你们快看！它身上自带一颗爱心 🩶', 'nick': null, 'like': 256,
+        'imgs': ['${a}pet02.jpg', '${a}pet07.jpg']},
+      {'type': 'DAILY', 'body': '金毛弟弟下楼遛弯，捡球捡到飞起 🐕', 'nick': 'Budi', 'like': 73,
+        'imgs': ['${a}pet08.jpg']},
+      {'type': 'DAILY', 'body': '缅因主子的霸气侧颜，气场两米八 😼', 'nick': 'Andi', 'like': 61,
+        'imgs': ['${a}pet03.jpg']},
+      {'type': 'DAILY', 'body': '两位主子的迷惑同框，下面那只到底在想啥呢 😹', 'nick': 'Maya', 'like': 142,
+        'imgs': ['${a}pet04.jpg', '${a}pet03.jpg', '${a}pet05.jpg']},
+      {'type': 'DAILY', 'body': '深夜偷看猫咪迷之舞步，这是要出道？💃', 'nick': 'Dewi', 'like': 99,
+        'imgs': ['${a}pet05.jpg']},
+      {'type': 'GROWTH_MOMENT', 'body': '洗香香时间到！金毛变身泡泡怪 🛁', 'nick': null, 'like': 47,
+        'imgs': ['${a}pet10.jpg']},
+      {'type': 'DAILY', 'body': '给牛头梗戴上波波头，文艺范儿瞬间拿捏 💇', 'nick': 'Joko', 'like': 210,
+        'imgs': ['${a}pet09.jpg']},
+      {'type': 'KNOWLEDGE', 'body': '给家里两只画了张「相爱相杀」图，附多猫家庭和谐相处指南 🎨', 'nick': 'Rina', 'like': 35,
+        'imgs': ['${a}pet06.jpg']},
     ];
     for (var i = 0; i < samples.length; i++) {
       final s = samples[i];
       _feed.add(_post(
         id: 100 + i,
-        type: s[0]!,
-        body: s[1],
-        nickname: s[3],
-        likeCount: int.parse(s[4]!),
+        type: s['type'] as String,
+        body: s['body'] as String?,
+        nickname: s['nick'] as String?,
+        likeCount: s['like'] as int,
+        images: (s['imgs'] as List).cast<String>(),
         ago: Duration(hours: i * 5 + 1),
       ));
     }
@@ -105,26 +123,31 @@ class MockBackend {
 
     _petProfile = {
       'id': 7001, 'name': 'Oyen', 'cardToken': 'mock-card-token-oyen',
-      'petType': 'CAT', 'avatarUrl': null, 'breed': '橘猫', 'birthday': '2022-05-01',
+      'petType': 'CAT', 'avatarUrl': 'asset:assets/seed/pet01.jpg', 'breed': '橘猫', 'birthday': '2022-05-01',
       'intro': '爱睡觉、爱晒太阳的小橘', 'createdAt': _iso(const Duration(days: 200)),
     };
 
     _timeline.addAll([
-      {'kind': 'HAPPY_MOMENT', 'date': _iso(const Duration(days: 1)), 'eventDate': _date(const Duration(days: 1)), 'postId': 101, 'imageUrls': [], 'text': '第一次带 Rocky 去新家'},
+      {'kind': 'HAPPY_MOMENT', 'date': _iso(const Duration(days: 1)), 'eventDate': _date(const Duration(days: 1)), 'postId': 101, 'imageUrls': ['asset:assets/seed/pet01.jpg'], 'text': 'Oyen 屋顶看夕阳'},
       {'kind': 'HEALTH_EVENT', 'date': _iso(const Duration(days: 3)), 'postId': null, 'imageUrls': [], 'text': '误食巧克力,已就医', 'aiLevel': 'RED', 'symptomSummary': '呕吐'},
-      {'kind': 'HAPPY_MOMENT', 'date': _iso(const Duration(days: 7)), 'eventDate': _date(const Duration(days: 7)), 'postId': 105, 'imageUrls': [], 'text': '学会握手'},
+      {'kind': 'HAPPY_MOMENT', 'date': _iso(const Duration(days: 7)), 'eventDate': _date(const Duration(days: 7)), 'postId': 105, 'imageUrls': ['asset:assets/seed/pet02.jpg'], 'text': '发现身上的爱心斑纹'},
     ]);
   }
 
   Map<String, dynamic> _post({
     required int id, required String type, String? body, String? nickname,
-    int likeCount = 0, String? imageUrl, required Duration ago,
-  }) => {
-        'id': id, 'authorId': 1, 'authorDeleted': false,
-        'authorNickname': nickname ?? '测试用户', 'authorAvatarUrl': null,
-        'type': type, 'body': body, 'firstImageUrl': imageUrl,
-        'likeCount': likeCount, 'createdAt': _iso(ago),
-      };
+    int likeCount = 0, String? imageUrl, List<String>? images, required Duration ago,
+  }) {
+    final imgs = images ?? (imageUrl == null ? const <String>[] : [imageUrl]);
+    return {
+      'id': id, 'authorId': 1, 'authorDeleted': false,
+      'authorNickname': nickname ?? '测试用户', 'authorAvatarUrl': null,
+      'type': type, 'body': body,
+      'firstImageUrl': imgs.isEmpty ? null : imgs.first,
+      'imageUrls': imgs, // 详情页轮播全图
+      'likeCount': likeCount, 'createdAt': _iso(ago),
+    };
+  }
 
   Map<String, dynamic> _comment({
     required int id, required String nickname, required String body, required Duration ago,
@@ -192,7 +215,11 @@ class MockBackend {
     if (m == 'GET' && p.endsWith('/content-posts')) {
       final cat = (q['category'] ?? 'ALL') as String;
       final items = cat == 'ALL' ? _feed : _feed.where((e) => e['type'] == cat).toList();
-      return ok(_envelope(items));
+      // 投影为卡片 10 字段契约：内部 imageUrls（详情多图）不进 Feed 信封。
+      return ok(_envelope(items.map((e) {
+        final card = Map<String, dynamic>.from(e)..remove('imageUrls');
+        return card;
+      }).toList()));
     }
     if (m == 'POST' && p.endsWith('/content-posts')) {
       // 镜像后端发布时三方自动审核（AC8 · F10）：占位关键词/图标记命中 → 422，不落库。
@@ -208,8 +235,10 @@ class MockBackend {
         throw _problem(o, 422, 'content-image-blocked', 'Gambar mengandung konten terlarang');
       }
       final id = _nextId();
+      // 发布回灌：把刚选/拍的图（mock 上传返回的 file: URL）带进新帖，Feed/详情即时显示真图。
       _feed.insert(0, _post(id: id, type: (body['type'] ?? 'DAILY') as String,
-          body: text, likeCount: 0, ago: Duration.zero));
+          body: text, likeCount: 0, images: imgs.map((e) => e.toString()).toList(),
+          ago: Duration.zero));
       return ok({'id': id});
     }
     final detailMatch = RegExp(r'/content-posts/(\d+)$').firstMatch(p);
@@ -219,7 +248,11 @@ class MockBackend {
       if (post.isEmpty) throw _notFound(o);
       return ok({
         ...post, 'commentCount': (_comments[id]?.length ?? 0), 'liked': false,
-        'isAuthor': post['authorId'] == 1, 'imageUrls': post['firstImageUrl'] == null ? [] : [post['firstImageUrl']],
+        'isAuthor': post['authorId'] == 1,
+        // 详情轮播取全图列表（多图帖展示多张）；回退 firstImageUrl。
+        'imageUrls': (post['imageUrls'] as List?)?.isNotEmpty == true
+            ? post['imageUrls']
+            : (post['firstImageUrl'] == null ? [] : [post['firstImageUrl']]),
       });
     }
     if (detailMatch != null && m == 'DELETE') {
