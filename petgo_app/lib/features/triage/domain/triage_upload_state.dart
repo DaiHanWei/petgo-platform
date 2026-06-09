@@ -24,8 +24,9 @@ class TriageUploadDraft {
   final List<TriageDraftImage> images;
   final String symptomText;
 
-  /// 提交可用：至少有文字或图片（后端 Bean Validation 为权威）。
-  bool get canSubmit => symptomText.trim().isNotEmpty || images.isNotEmpty;
+  /// 提交可用（Story 4.3 AC5 · R2）：**文字必填、图片选填**——仅以「症状文字非空」为准，
+  /// 不再 require 图片（可仅凭文字提交）；图片仍受 ≤3 张 / ≤10MB 上限约束。后端 `@NotBlank` 为权威。
+  bool get canSubmit => symptomText.trim().isNotEmpty;
 
   TriageUploadDraft copyWith({
     List<TriageDraftImage>? images,

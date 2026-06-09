@@ -71,6 +71,31 @@ class TriageControllerEndpointTest extends ApiIntegrationTest {
         org.assertj.core.api.Assertions.assertThat(saved.getStatus()).isEqualTo(TriageStatus.PENDING);
     }
 
+    /** AC5（R2）：仅文字、无图（图片选填）→ 202 受理并落库。 */
+    @Test
+    void submitTextOnlyNoImagesAccepted() throws Exception {
+        User u = newUser();
+        mvc.perform(post("/api/v1/triage")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(u.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(
+                                new TriageSubmitRequest("只是有点没精神，没拍照", List.of(), null))))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.triageId").isNumber());
+    }
+
+    /** AC5（R2）：文字空白（即便有图）→ @NotBlank 拦截 422（文字仍必填）。 */
+    @Test
+    void submitBlankSymptomTextIs422() throws Exception {
+        User u = newUser();
+        mvc.perform(post("/api/v1/triage")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(u.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(
+                                new TriageSubmitRequest("   ", List.of("priv/k1.jpg"), null))))
+                .andExpect(status().isUnprocessableEntity());
+    }
+
     /** 缺 token → 401（端点需 USER JWT）。 */
     @Test
     void submitWithoutJwtIs401() throws Exception {

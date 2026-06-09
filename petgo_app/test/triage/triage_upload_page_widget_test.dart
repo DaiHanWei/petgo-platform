@@ -64,6 +64,16 @@ void main() {
     expect(submit.onPressed, isNull); // 无输入禁用
   });
 
+  testWidgets('AC5: 仅文字、无图 → 提交按钮可用（图片选填）', (tester) async {
+    final c = _container(_FakeTriageRepo([const TriageResult(status: TriageStatus.done)]));
+    await _pump(tester, c);
+    // 仅填文字、不加任何图片。
+    await tester.enterText(find.byKey(const ValueKey('triageSymptomField')), '只是有点没精神');
+    await tester.pump();
+    final submit = tester.widget<FilledButton>(find.byKey(const ValueKey('triageSubmit')));
+    expect(submit.onPressed, isNotNull); // 文字非空即可提交，不依赖图片 widget
+  });
+
   testWidgets('AC4: 服务异常(FAILED) → 异常态 + 软引导兽医', (tester) async {
     final c = _container(_FakeTriageRepo([const TriageResult(status: TriageStatus.failed)]));
     await _pump(tester, c);

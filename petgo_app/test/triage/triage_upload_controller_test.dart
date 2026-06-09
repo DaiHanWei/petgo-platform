@@ -84,14 +84,22 @@ void main() {
     expect(c.read(triageUploadProvider).images.length, 1);
   });
 
-  test('canSubmit：有文字或有图才可提交', () {
+  test('canSubmit[AC5]：文字必填、图片选填——仅文字可提交，仅图片不可', () {
     final c = _container(_FakeMediaUseCase(), _FakeTriageRepo());
     final ctrl = c.read(triageUploadProvider.notifier);
+    // 空表单不可提交。
     expect(c.read(triageUploadProvider).canSubmit, isFalse);
+    // 空白文字不可提交。
     ctrl.setSymptom('  ');
     expect(c.read(triageUploadProvider).canSubmit, isFalse);
-    ctrl.setSymptom('咳嗽');
-    expect(c.read(triageUploadProvider).canSubmit, isTrue);
+    // 仅加图、无文字 → 仍不可提交（图片选填、文字必填）。
+    ctrl.addImage(bytes(1));
+    ctrl.addImage(bytes(2));
+    expect(c.read(triageUploadProvider).canSubmit, isFalse);
+    // 仅文字、无图 → 可提交（图片选填）。
+    final c2 = _container(_FakeMediaUseCase(), _FakeTriageRepo());
+    c2.read(triageUploadProvider.notifier).setSymptom('咳嗽');
+    expect(c2.read(triageUploadProvider).canSubmit, isTrue);
   });
 
   test('submit 上传未上传图并提交；重提交复用对象 key 不重传', () async {

@@ -114,7 +114,7 @@ development_status:
   epic-4: in-progress
   4-1-分诊异步基建与-gemini-接入: review
   4-2-确定性安全规则层-高危强制升红: review
-  4-3-ai-问诊入口与图文上传: ready-for-dev             # [PRD1.0.0✏️] AC2 注脚轻改: 视频 V2→收费模式启用后 (F4) ·[R2] review→rfd: 加 AC AI 问诊图片改选填(可仅文字提交)
+  4-3-ai-问诊入口与图文上传: review             # [PRD1.0.0✏️] AC2 注脚轻改: 视频 V2→收费模式启用后 (F4) ·[R2] review→rfd: 加 AC AI 问诊图片改选填(可仅文字提交) ·AC5 完成(后端 TriageSubmitRequest.symptomText @NotBlank[空→422,无图通过]+前端 canSubmit 收紧为文字非空[仅图不可仅文字可]; 后端519 test 绿含 L0 Validator×5+L1 MockMvc×2 真跑; 前端283; 无新增迁移; L2真机待本地)
   4-4-分诊结果三态展示-绿-黄含条件倒计时协议: review
   4-5-红色半屏强提醒: review                       # [PRD1.0.0✏️⚠️安全] F3 去导航化重做完成 ·[R2] review→rfd: 加 AC 结果页底部存档入口(按状态分支,守红色态零变现护栏) (FR-3/F15);L1/L2 待本地/真机 ·R2 实现完成(L0 绿: 红色态存档入口+专用 handler,守零变现;前端 234 test 全过); L2 待真机
   epic-4-retrospective: optional
