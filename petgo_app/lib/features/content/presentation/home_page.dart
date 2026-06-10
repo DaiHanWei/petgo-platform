@@ -298,6 +298,7 @@ class _BerandaTop extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       _ActionCard(
                         tone: AppColors.goldTint,
