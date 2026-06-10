@@ -44,7 +44,7 @@ class GathPage extends StatelessWidget {
           ],
           const SizedBox(height: 4),
           const Center(
-            child: Text('活动 / 报名 / 群聊 / GPS 签到 —— 演示外，仅占位',
+            child: Text('Acara / Pendaftaran / Grup / Check-in GPS — pratinjau, masih placeholder',
                 style: TextStyle(fontSize: 12, color: AppColors.muted)),
           ),
         ],

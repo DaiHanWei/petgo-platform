@@ -108,7 +108,6 @@ class _TriagePageState extends ConsumerState<TriagePage> {
               emoji: '🤖',
               tone: AppColors.mintTint,
               title: 'Tanya AI (Triase)',
-              cn: 'AI 分诊',
               badge: _EntryBadge(label: '≤ 15 detik', color: AppColors.mint700),
               desc:
                   'Unggah foto gejala, AI kasih level bahaya + saran observasi & obat rumahan.',
@@ -128,7 +127,6 @@ class _TriagePageState extends ConsumerState<TriagePage> {
               emoji: '🩺',
               tone: AppColors.skyTint,
               title: 'Chat Dokter Hewan',
-              cn: '兽医咨询',
               badge: const _EntryBadge(label: '2 dokter online', color: Color(0xFF2F7DB8), live: true),
               desc: 'Ngobrol langsung (teks & foto) dengan dokter mitra. Gratis di versi ini.',
               cta: 'Mulai konsultasi',
@@ -220,7 +218,6 @@ class _EntryCard extends StatelessWidget {
     required this.emoji,
     required this.tone,
     required this.title,
-    required this.cn,
     required this.badge,
     required this.desc,
     required this.cta,
@@ -232,7 +229,6 @@ class _EntryCard extends StatelessWidget {
   final String emoji;
   final Color tone;
   final String title;
-  final String cn;
   final Widget badge;
   final String desc;
   final String cta;
@@ -273,7 +269,6 @@ class _EntryCard extends StatelessWidget {
                         Text(title,
                             style: const TextStyle(
                                 fontSize: 17, fontWeight: FontWeight.w900, letterSpacing: -0.2)),
-                        Text(cn, style: const TextStyle(fontSize: 11.5, color: AppColors.muted)),
                       ],
                     ),
                     const SizedBox(height: 6),

@@ -310,12 +310,12 @@ class _CreatePet extends StatelessWidget {
                       const SizedBox(height: 18),
                       _Field(
                         label: 'Nama',
-                        hint: '昵称',
+                        hint: 'Panggilan',
                         child: _input(name, 'cth. Mochi', onChanged),
                       ),
                       _Field(
                         label: 'Jenis / Ras',
-                        hint: '品种',
+                        hint: 'Opsional',
                         child: Wrap(
                           spacing: 8,
                           runSpacing: 8,
@@ -334,12 +334,12 @@ class _CreatePet extends StatelessWidget {
                       ),
                       _Field(
                         label: 'Tanggal lahir',
-                        hint: '生日',
+                        hint: 'Opsional',
                         child: _input(birthday, 'cth. 14 Feb 2023', onChanged),
                       ),
                       _Field(
                         label: 'Bio singkat',
-                        hint: '一句话介绍 · ≤30 字',
+                        hint: 'Maks. 30 karakter',
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [

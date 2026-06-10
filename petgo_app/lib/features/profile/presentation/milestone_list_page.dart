@@ -8,6 +8,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../data/milestone_repository.dart';
 import '../domain/milestone.dart';
+import '../domain/milestone_titles.dart';
 import '../domain/share_service.dart';
 import 'widgets/milestone_celebration.dart';
 
@@ -187,7 +188,7 @@ class _Badge extends ConsumerWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              item.title,
+              localizedMilestoneTitle(item.code, Localizations.localeOf(context)),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
@@ -238,7 +239,7 @@ void _showBadgeSheet(BuildContext context, WidgetRef ref, MilestoneItem item) {
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(item.title,
+                    child: Text(localizedMilestoneTitle(item.code, Localizations.localeOf(sheetContext)),
                         style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
                   ),
                 ],
@@ -420,14 +421,15 @@ class _CandidateTile extends ConsumerWidget {
 
   Future<void> _confirm(BuildContext context, WidgetRef ref) async {
     final l10n = AppLocalizations.of(context);
+    final locale = Localizations.localeOf(context);
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
     try {
       final completed =
           await ref.read(milestoneRepositoryProvider).checkIn(milestoneCode, candidate.contentId);
       ref.invalidate(milestoneListProvider);
-      // L 级分享卡文案（捕获 l10n，避免 pop 后失效）。
-      final shareText = l10n.milestoneShareText(completed.title);
+      // L 级分享卡文案（捕获 l10n / locale，避免 pop 后失效）。标题按 locale 本地化（杜绝后端中文）。
+      final shareText = l10n.milestoneShareText(localizedMilestoneTitle(completed.code, locale));
       navigator.pop(); // 关 picker
       if (!context.mounted) return;
       // 完成后按级触发三级庆祝动效（Story 8.5）；L 级 Duolingo 开宝箱后自动弹分享卡（8.6，复用 2-6 分享通道）。

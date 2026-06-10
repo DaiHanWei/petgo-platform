@@ -6,6 +6,7 @@ import '../../../../core/theme/colors.dart';
 import '../../../../core/theme/spacing.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../domain/milestone.dart';
+import '../../domain/milestone_titles.dart';
 
 /// 里程碑三级庆祝动效（Story 8.5 · FR-42）。完成后按级触发，mint 风格、无第三方动画包（手绘 implicit 动画）：
 /// - **S（小）**：半屏庆祝弹层，1-2 秒自动消失，含徽章展示。
@@ -130,7 +131,7 @@ class _MilestoneCelebrationViewState extends State<_MilestoneCelebrationView>
                     Text(l10n.milestoneCelebrateUnlocked,
                         style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.mint700)),
                     const SizedBox(height: 4),
-                    Text(widget.item.title,
+                    Text(localizedMilestoneTitle(widget.item.code, Localizations.localeOf(context)),
                         maxLines: 2, overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontWeight: FontWeight.w700)),
                   ],
@@ -164,7 +165,7 @@ class _MilestoneCelebrationViewState extends State<_MilestoneCelebrationView>
             const SizedBox(height: 6),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-              child: Text(widget.item.title,
+              child: Text(localizedMilestoneTitle(widget.item.code, Localizations.localeOf(context)),
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
             ),
@@ -198,7 +199,7 @@ class _MilestoneCelebrationViewState extends State<_MilestoneCelebrationView>
               child: _badge(140),
             ),
             const SizedBox(height: AppSpacing.lg),
-            Text(widget.item.title,
+            Text(localizedMilestoneTitle(widget.item.code, Localizations.localeOf(context)),
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 18)),
           ],

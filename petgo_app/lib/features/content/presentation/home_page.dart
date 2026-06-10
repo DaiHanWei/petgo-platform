@@ -337,7 +337,6 @@ class _BerandaTop extends StatelessWidget {
               Text('Untukmu',
                   style: TextStyle(
                       fontSize: 17, fontWeight: FontWeight.w900, letterSpacing: -0.2)),
-              Text('个人动态流', style: TextStyle(fontSize: 13, color: AppColors.muted)),
             ],
           ),
         ),

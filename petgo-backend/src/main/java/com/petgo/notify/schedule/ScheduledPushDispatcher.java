@@ -54,20 +54,21 @@ public class ScheduledPushDispatcher {
         }
     }
 
-    /** 中文推送文案（[title, body]）。不含健康数据明文。 */
+    /** 印尼语推送文案（[title, body]，市场主语言）。不含健康数据明文。 */
     private String[] buildText(PlannedPush push) {
-        String name = push.petName() == null ? "你的宠物" : push.petName();
+        String name = push.petName() == null ? "hewanmu" : push.petName();
         return switch (push.type()) {
             case PET_BIRTHDAY -> new String[] {
-                    "🎂 生日提醒",
-                    name + " 明天就 " + push.number() + " 岁啦！记录一条特别的快乐时刻吧"};
+                    "🎂 Pengingat ulang tahun",
+                    name + " besok berusia " + push.number() + " tahun! Catat momen spesial yuk"};
             case COMPANION_ANNIVERSARY -> new String[] {
-                    "🎉 陪伴纪念日",
-                    "你和 " + name + " 在一起 " + push.number() + " 天了，快去看看 TA 的成长故事"};
+                    "🎉 Hari jadi kebersamaan",
+                    "Kamu dan " + name + " sudah bersama " + push.number()
+                            + " hari — lihat kisah tumbuh kembangnya"};
             case MILESTONE_NODE -> new String[] {
-                    "🎖️ 成长里程碑",
-                    name + " 即将迎来第一个生日，这是一个值得珍藏的里程碑"};
-            default -> new String[] {"提醒", ""};
+                    "🎖️ Tonggak tumbuh kembang",
+                    name + " akan segera merayakan ulang tahun pertamanya — tonggak yang patut dikenang"};
+            default -> new String[] {"Pengingat", ""};
         };
     }
 }

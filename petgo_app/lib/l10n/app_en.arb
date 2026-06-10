@@ -434,7 +434,7 @@
   "deleteAccountContinue": "Continue",
   "deleteAccountConfirmTitle": "Confirm deletion",
   "deleteAccountConfirmHint": "Type the phrase below to confirm",
-  "deleteAccountConfirmPhrase": "确认注销",
+  "deleteAccountConfirmPhrase": "DELETE",
   "deleteAccountConfirmYes": "Delete permanently",
   "deleteAccountFailed": "Could not delete, please try again",
   "anonymizedUser": "Deleted user",

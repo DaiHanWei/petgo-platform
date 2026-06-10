@@ -13,7 +13,9 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * {@code MILESTONE_NODE} 通知至通知中心（6.6 真数据）+ 已授权用户同时收系统推送；点击深链跳成长档案 Tab →
  * 里程碑列表页（FR-38，App 侧 deepLink 路由 MILESTONE_NODE→/profile/milestones）。
  *
- * <p>护栏：仅 L 级触达（S/M 不推，避免打扰）；逐条不合并、不引 MQ。文案中文常量（i18n 既有系统级缺口）。
+ * <p>护栏：仅 L 级触达（S/M 不推，避免打扰）；逐条不合并、不引 MQ。文案印尼语（市场主语言）——
+ * 不嵌 catalog 的 {@code titleZh}（中文参考标题，仅内部用；App 按 code 客户端本地化）；具名印尼语
+ * 推送需后端补 {@code titleId}，列为后续增强。
  */
 @Component
 public class MilestoneNotifyListener {
@@ -31,7 +33,7 @@ public class MilestoneNotifyListener {
             return; // 仅 L 级达成推送。
         }
         notificationService.send(event.ownerId(), NotificationType.MILESTONE_NODE,
-                "重大里程碑达成 🎉", "「" + event.title() + "」已解锁，快去看看吧",
+                "Tonggak penting tercapai 🎉", "Kamu baru saja membuka tonggak baru — lihat sekarang!",
                 NotificationType.MILESTONE_NODE.name(), event.code());
     }
 }
