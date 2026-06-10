@@ -14,10 +14,14 @@ import 'login_guide_outcome.dart';
 /// **R2 / AC3（决策 F13）**：[onLogin] 返回 [LoginGuideOutcome]——失败时弹窗内联展示
 /// 「登录失败，请重试」失败态（主 CTA 即重试入口）；取消静默保持；成功由协调器关闭弹窗。
 class LoginHardDialog extends StatefulWidget {
-  const LoginHardDialog({super.key, required this.onLogin, required this.onClose});
+  const LoginHardDialog(
+      {super.key, required this.onLogin, required this.onClose, this.onVet});
 
   final Future<LoginGuideOutcome> Function() onLogin;
   final VoidCallback onClose;
+
+  /// 兽医登录入口（可选）：游客无需先登普通用户，直接进 /vet/login（单 App 双角色）。
+  final VoidCallback? onVet;
 
   @override
   State<LoginHardDialog> createState() => _LoginHardDialogState();
@@ -63,6 +67,15 @@ class _LoginHardDialogState extends State<LoginHardDialog> {
         ],
       ),
       actions: [
+        if (widget.onVet != null)
+          TextButton(
+            key: const ValueKey('hardDialogVetLink'),
+            onPressed: _loading ? null : widget.onVet,
+            child: Text(
+              l10n.vetLoginLink,
+              style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+            ),
+          ),
         TextButton(
           key: const ValueKey('hardDialogClose'),
           onPressed: _loading ? null : widget.onClose,

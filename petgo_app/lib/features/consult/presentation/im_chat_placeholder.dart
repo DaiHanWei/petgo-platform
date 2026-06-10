@@ -52,12 +52,27 @@ class _ImChatPlaceholderState extends State<ImChatPlaceholder> {
 
   final List<_ChatMsg> _msgs = [
     const _ChatMsg.sys('Konsultasi dengan drh. Sari dimulai. Sampaikan keluhan anabul-mu ya 🐾'),
-    const _ChatMsg.me('Halo dok, kucing saya tadi muntah busa putih 2x malam ini 😟'),
-    const _ChatMsg.photo('foto anabul'),
-    const _ChatMsg.vet('Halo Kak, terima kasih fotonya. Apakah masih mau makan & minum? Lemas atau tidak?'),
-    const _ChatMsg.me('Masih mau minum sedikit, agak diem aja'),
+    const _ChatMsg.me('Halo dok, kucing saya Oyen tadi muntah busa putih 2x malam ini 😟'),
+    const _ChatMsg.me('Dari sore dia jadi lebih diam, nggak seaktif biasanya'),
+    const _ChatMsg.photo('Oyen tadi malam'),
     const _ChatMsg.vet(
-        'Baik. Untuk sekarang puasakan makanan 2-3 jam, tetap sediakan air. Pantau apakah muntah berulang. Kalau >3x atau makin lemas, sebaiknya ke klinik ya.'),
+        'Halo Kak, saya drh. Sari ya. Terima kasih fotonya 🙏 Oyen umur berapa, dan terakhir vaksin/obat cacing kapan?'),
+    const _ChatMsg.me('Umur 2 tahun, vaksin rutin. Obat cacing terakhir sekitar 3 bulan lalu'),
+    const _ChatMsg.vet(
+        'Baik. Sekarang masih mau makan & minum nggak? Pup dan pipisnya gimana? Ada kemungkinan dia gigit benang/tanaman/makanan asing?'),
+    const _ChatMsg.me(
+        'Minum masih mau sedikit, makan belum mau sama sekali. Pup normal kemarin. Tadi sempat gigit-gigit tali tirai sih 😅'),
+    const _ChatMsg.vet(
+        'Noted. Muntah busa putih + nafsu makan turun paling sering karena iritasi lambung ringan atau hairball. Tapi karena ada riwayat gigit tali, kita tetap waspadai kemungkinan benda asing ya.'),
+    const _ChatMsg.vet(
+        'Untuk sekarang:\n1) Puasakan makanan 2-3 jam dulu\n2) Tetap sediakan air, kasih sedikit tapi sering\n3) Setelah itu coba makanan basah hambar (ayam rebus tanpa bumbu) porsi kecil'),
+    const _ChatMsg.me('Oke dok. Kalau nanti masih muntah lagi gimana?'),
+    const _ChatMsg.vet(
+        'Kalau muntah berulang >3x, ada darah, lemas berat, atau sama sekali nggak mau minum dalam 12 jam → segera ke klinik untuk cek fisik & kemungkinan rontgen, mastiin nggak ada tali yang tertelan ya.'),
+    const _ChatMsg.me('Baik dok, makasih banyak penjelasannya 🙏'),
+    const _ChatMsg.vet(
+        'Sama-sama Kak 🙏 Saya rangkum konsultasinya ya:\n• Dugaan: iritasi lambung ringan / hairball\n• Tindakan: puasa 2-3 jam → hidrasi → makanan hambar porsi kecil\n• Pantau 24 jam, waspada benda asing (tali tirai)\n• Ke klinik bila muntah berulang / lemas / ada darah\nSemoga Oyen cepat pulih! 🐱'),
+    const _ChatMsg.sys('drh. Sari melampirkan kesimpulan konsultasi. Kamu bisa mengakhiri sesi & memberi rating.'),
   ];
 
   @override

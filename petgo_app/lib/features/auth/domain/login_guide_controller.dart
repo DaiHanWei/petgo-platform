@@ -49,6 +49,7 @@ class LoginGuideController {
           _pending = null;
           Navigator.of(sheetCtx).pop();
         },
+        onVet: () => _goVetLogin(context, sheetCtx),
       ),
     );
   }
@@ -71,11 +72,22 @@ class LoginGuideController {
             _pending = null;
             Navigator.of(dlgCtx).pop();
           },
+          onVet: () => _goVetLogin(context, dlgCtx),
         ),
       );
     } finally {
       _hardDialogShowing = false;
     }
+  }
+
+  /// 兽医登录入口（游客可达）：关闭当前引导浮层 → 跳 /vet/login（单 App 双角色）。
+  /// 清空 pendingAction——兽医登录后由 redirect 收口到 /vet/workbench，用户侧 pending 不再适用。
+  void _goVetLogin(BuildContext rootContext, BuildContext overlayContext) {
+    _pending = null;
+    if (overlayContext.mounted && Navigator.of(overlayContext).canPop()) {
+      Navigator.of(overlayContext).pop();
+    }
+    if (rootContext.mounted) rootContext.push('/vet/login');
   }
 
   /// 一次登录尝试（供软浮层/强弹窗的主 CTA 注入）。返回三态结果：

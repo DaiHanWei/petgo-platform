@@ -16,11 +16,15 @@ import 'login_guide_outcome.dart';
 /// 「登录失败，请重试」失败态（主 CTA 即重试入口，再点重新发起）；取消则静默保持；
 /// 成功由协调器关闭浮层。失败/取消均不清空 pendingAction（仅「关闭」清）。
 class LoginSoftSheet extends StatefulWidget {
-  const LoginSoftSheet({super.key, required this.onLogin, required this.onClose});
+  const LoginSoftSheet(
+      {super.key, required this.onLogin, required this.onClose, this.onVet});
 
   /// 主 CTA 回调（调用 Story 1.3 登录流程，由协调器注入）；返回本次尝试结果。
   final Future<LoginGuideOutcome> Function() onLogin;
   final VoidCallback onClose;
+
+  /// 兽医登录入口（可选）：游客直接进 /vet/login（单 App 双角色）。
+  final VoidCallback? onVet;
 
   @override
   State<LoginSoftSheet> createState() => _LoginSoftSheetState();
@@ -107,6 +111,18 @@ class _LoginSoftSheetState extends State<LoginSoftSheet> {
               ),
             ),
           ),
+          // 兽医登录入口（游客可达）：单 App 双角色，绕过普通用户登录直进 /vet/login。
+          if (widget.onVet != null)
+            Center(
+              child: TextButton(
+                key: const ValueKey('softSheetVetLink'),
+                onPressed: _loading ? null : widget.onVet,
+                child: Text(
+                  l10n.vetLoginLink,
+                  style: AppTypography.caption.copyWith(color: AppColors.textTertiary),
+                ),
+              ),
+            ),
         ],
       ),
     );

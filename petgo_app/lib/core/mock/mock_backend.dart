@@ -38,6 +38,15 @@ class MockBackend {
   int _triageSeq = 0;
   Map<String, dynamic>? _activeSession;
 
+  /// 兽医工作台 demo 会话元数据（id → source）。待接单池 8101-8103 + 进行中 8001/8002。
+  static const Map<int, String> _vetSessionSource = {
+    8101: 'AI_UPGRADE', 8102: 'AI_UPGRADE', 8103: 'DIRECT', // 待接单池
+    8001: 'AI_UPGRADE', 8002: 'DIRECT', // 进行中
+  };
+  /// 待接单池：未接单前 GET 返回 WAITING（让请求预览页不被「已被抢」误判弹出）。
+  static const Set<int> _vetWaitingPool = {8101, 8102, 8103};
+  final Set<int> _vetAccepted = {}; // 已接单的 session id（接单后转 IN_PROGRESS）
+
   void _seed() {
     _profile = {
       'id': 1,
@@ -576,23 +585,55 @@ class MockBackend {
     if (p.endsWith('/vet/heartbeat') && m == 'POST') return ok();
     if (p.endsWith('/vet/consult-sessions/waiting') && m == 'GET') {
       return ok([
-        {'sessionId': 8001, 'source': 'DIRECT', 'aiDangerLevel': 'YELLOW', 'symptomPreview': 'Cat has been sneezing for two days', 'imageCount': 2, 'waitingElapsedSeconds': 45},
-        {'sessionId': 8002, 'source': 'AI_UPGRADE', 'aiDangerLevel': 'RED', 'symptomPreview': 'Swallowed a foreign object', 'imageCount': 1, 'waitingElapsedSeconds': 120},
+        {'sessionId': 8101, 'source': 'AI_UPGRADE', 'aiDangerLevel': 'YELLOW', 'symptomPreview': 'Oyen (kucing, 2th) muntah busa putih 2x semalam, jadi lebih lemas', 'imageCount': 2, 'waitingElapsedSeconds': 45},
+        {'sessionId': 8102, 'source': 'AI_UPGRADE', 'aiDangerLevel': 'GREEN', 'symptomPreview': 'Bruno (anjing) bersin-bersin sejak 2 hari, makan & main masih normal', 'imageCount': 1, 'waitingElapsedSeconds': 90},
+        {'sessionId': 8103, 'source': 'DIRECT', 'aiDangerLevel': null, 'symptomPreview': null, 'imageCount': 0, 'waitingElapsedSeconds': 150},
+      ]);
+    }
+    // 「进行中」会话列表（工作台 Active Tab）。点卡 → /vet/conversation/:id（IM 占位聊天）。
+    if (p.endsWith('/vet/consult-sessions/in-progress') && m == 'GET') {
+      return ok([
+        {'sessionId': 8001, 'source': 'AI_UPGRADE', 'petName': 'Oyen', 'unread': 1,
+          'lastMessage': 'Minum masih mau sedikit, makan belum mau. Tadi sempat gigit tali tirai 😅'},
+        {'sessionId': 8002, 'source': 'DIRECT', 'petName': 'Milo', 'unread': 0,
+          'lastMessage': 'Oke dok, nanti saya pantau lagi 2 jam ke depan 🙏'},
+      ]);
+    }
+    // 已结束「历史」列表（工作台 History Tab）。
+    if (p.endsWith('/vet/consult-sessions/history') && m == 'GET') {
+      return ok([
+        {'sessionId': 7901, 'petName': 'Cookie', 'date': _iso(const Duration(days: 1)), 'stars': 5,
+          'terminalState': 'CLOSED', 'summary': 'Diare ringan — disarankan diet hambar & oralit, pantau 24 jam'},
+        {'sessionId': 7902, 'petName': 'Luna', 'date': _iso(const Duration(days: 3)), 'stars': 4,
+          'terminalState': 'CLOSED', 'summary': 'Gatal & garuk telinga — dugaan ear mites, rujuk klinik untuk cek mikroskop'},
+        {'sessionId': 7903, 'petName': 'Tofu', 'date': _iso(const Duration(days: 6)), 'stars': null,
+          'terminalState': 'INTERRUPTED', 'summary': 'Sesi terputus sebelum selesai (user keluar)'},
       ]);
     }
     final vetAccept = RegExp(r'/vet/consult-sessions/(\d+)/accept$').firstMatch(p);
     if (vetAccept != null && m == 'POST') {
-      return ok({'id': int.parse(vetAccept.group(1)!), 'status': 'IN_PROGRESS', 'source': 'DIRECT', 'userId': 1, 'imConversationId': 'mock-im', 'hasAiContext': true});
+      final id = int.parse(vetAccept.group(1)!);
+      _vetAccepted.add(id); // 接单成功：转 IN_PROGRESS（后续 GET 不再回 WAITING）
+      return ok(_vetSessionView(id, 'IN_PROGRESS'));
     }
     final vetGet = RegExp(r'/vet/consult-sessions/(\d+)$').firstMatch(p);
     if (vetGet != null && m == 'GET') {
-      return ok({'id': int.parse(vetGet.group(1)!), 'status': 'IN_PROGRESS', 'source': 'DIRECT', 'userId': 1, 'imConversationId': 'mock-im', 'hasAiContext': true});
+      final id = int.parse(vetGet.group(1)!);
+      // 待接单池且未接单 → WAITING（请求预览页轮询见 WAITING 才不会判「已被抢」弹出）。
+      final waiting = _vetWaitingPool.contains(id) && !_vetAccepted.contains(id);
+      return ok(_vetSessionView(id, waiting ? 'WAITING' : 'IN_PROGRESS'));
     }
-    if (RegExp(r'/vet/consult-sessions/(\d+)/ai-context$').hasMatch(p)) {
-      return ok({'hasAiContext': true, 'dangerLevel': 'YELLOW', 'symptomText': 'Cat has been sneezing for two days but is still alert', 'imageUrls': []});
+    final aiCtx = RegExp(r'/vet/consult-sessions/(\d+)/ai-context$').firstMatch(p);
+    if (aiCtx != null && m == 'GET') {
+      final id = int.parse(aiCtx.group(1)!);
+      // DIRECT 会话无 AI 分诊上下文 → 会话页不渲染 AI 卡。
+      if ((_vetSessionSource[id] ?? 'DIRECT') == 'DIRECT') {
+        return ok({'hasAiContext': false, 'dangerLevel': null, 'symptomText': null, 'imageUrls': []});
+      }
+      return ok({'hasAiContext': true, 'dangerLevel': 'YELLOW', 'symptomText': 'Kucing (Oyen, 2th) muntah busa putih 2x semalam, nafsu makan turun & lebih lemas. Riwayat gigit tali tirai.', 'imageUrls': []});
     }
     if (RegExp(r'/vet/consult-sessions/(\d+)/assist$').hasMatch(p)) {
-      return ok({'aiReferenceReply': 'Monitor temperature and appetite, keep the environment clean, and follow up if there is no improvement within 24 hours.', 'historySummaries': []});
+      return ok({'aiReferenceReply': 'Puasakan makanan 2-3 jam, tetap sediakan air sedikit tapi sering, lalu coba makanan hambar porsi kecil. Pantau 24 jam; bila muntah >3x, ada darah, atau makin lemas segera ke klinik.', 'historySummaries': []});
     }
     if (RegExp(r'/vet/consult-sessions/(\d+)/end$').hasMatch(p)) {
       return ok({'id': 1, 'status': 'PENDING_CLOSE', 'source': 'DIRECT', 'userId': 1, 'imConversationId': 'mock-im', 'hasAiContext': true});
@@ -631,6 +672,15 @@ class MockBackend {
     if (kDebugMode) debugPrint('[MOCK] 未覆盖端点 → 空成功: $m $p');
     if (m == 'GET') return ok(_envelope([]));
     return ok({});
+  }
+
+  /// 兽医侧会话视图 JSON（source/hasAiContext 按 demo 元数据映射；DIRECT 无 AI 上下文卡）。
+  Map<String, dynamic> _vetSessionView(int id, String status) {
+    final source = _vetSessionSource[id] ?? 'DIRECT';
+    return {
+      'id': id, 'status': status, 'source': source, 'userId': 1,
+      'imConversationId': 'mock-im-$id', 'hasAiContext': source == 'AI_UPGRADE',
+    };
   }
 
   /// 条目的事件日期键（yyyy-MM-dd）：快乐时刻取 eventDate，健康事件取 date 的日期段。

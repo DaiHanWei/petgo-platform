@@ -36,6 +36,10 @@ class SettingsPage extends ConsumerWidget {
               children: [
                 _entry(const ValueKey('meLanguage'), Icons.language, l10n.meLanguage,
                     () => context.push('/me/language')),
+                // 兽医登录入口（单 App 双角色）：从已登录用户态切到兽医工作台。
+                // 路由对非兽医放行 /vet/login；登录成功后 applyVetLogin → redirect 收口 /vet/workbench。
+                _entry(const ValueKey('meVetLogin'), Icons.medical_services_outlined,
+                    l10n.vetLoginLink, () => context.push('/vet/login')),
                 _entry(const ValueKey('meLogout'), Icons.logout, l10n.meLogout,
                     () => _logout(context, ref)),
                 _entry(const ValueKey('meDeleteAccount'), Icons.delete_outline,

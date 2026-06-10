@@ -7,6 +7,7 @@ import '../../../core/storage/secure_storage.dart';
 import '../domain/consult_ai_context.dart';
 import '../domain/vet_inbox_item.dart';
 import '../domain/vet_login_response.dart';
+import '../domain/vet_workbench_lists.dart';
 
 /// 兽医数据层（Story 5.1）：账密登录换取 role=VET JWT；GET /vet/me 探活。
 ///
@@ -84,6 +85,22 @@ class VetRepository {
   Future<ConsultAssist> assist(int sessionId) async {
     final resp = await dio.get<Map<String, dynamic>>(ApiPaths.vetConsultAssist(sessionId));
     return ConsultAssist.fromJson(resp.data!);
+  }
+
+  /// 「进行中」会话列表（工作台 Active Tab）。
+  Future<List<VetActiveItem>> activeSessions() async {
+    final resp = await dio.get<List<dynamic>>(ApiPaths.vetConsultInProgress);
+    return (resp.data ?? [])
+        .map((e) => VetActiveItem.fromJson((e as Map).cast<String, dynamic>()))
+        .toList();
+  }
+
+  /// 已结束「历史」列表（工作台 History Tab）。
+  Future<List<VetHistoryEntry>> history() async {
+    final resp = await dio.get<List<dynamic>>(ApiPaths.vetConsultHistory);
+    return (resp.data ?? [])
+        .map((e) => VetHistoryEntry.fromJson((e as Map).cast<String, dynamic>()))
+        .toList();
   }
 
   /// 兽医结束会话（Story 5.6）：IN_PROGRESS → PENDING_CLOSE。
