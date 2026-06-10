@@ -1,48 +1,116 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/auth/domain/auth_state.dart';
-import 'package:petgo/features/auth/domain/login_response.dart';
-import 'package:petgo/features/me/data/my_posts_repository.dart';
-import 'package:petgo/features/me/presentation/me_page.dart';
-import 'package:petgo/l10n/app_localizations.dart';
+import 'package:tailtopia/features/auth/domain/auth_state.dart';
+import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/features/me/data/my_posts_repository.dart';
+import 'package:tailtopia/features/me/presentation/me_page.dart';
+import 'package:tailtopia/features/profile/data/profile_repository.dart';
+import 'package:tailtopia/features/profile/domain/pet_profile.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 
-/// Story 7.1 AC1：「我的」五大区块就位（用户信息/宠物状态/我的发布/账号设置含退出+注销/帮助）。
+/// Story 7.1 · F8：信息架构重组——顶栏双图标 + 主体「人+宠物」 + AC5 宠物区位三态。
+Future<void> _pump(
+  WidgetTester tester, {
+  required UserProfile profile,
+  PetProfile? pet,
+  List<MyPost> posts = const [],
+}) async {
+  tester.view.physicalSize = const Size(1200, 3200);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+
+  final container = ProviderContainer(overrides: [
+    myPostsProvider.overrideWith((ref) async => posts),
+    petProfileProvider.overrideWith((ref) async => pet),
+  ]);
+  addTearDown(container.dispose);
+  container.read(authControllerProvider.notifier).applyProfile(profile);
+
+  await tester.pumpWidget(UncontrolledProviderScope(
+    container: container,
+    child: const MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: Locale('en'),
+      home: MePage(),
+    ),
+  ));
+  await tester.pumpAndSettle();
+}
+
 void main() {
-  testWidgets('五区块入口齐全（含注销入口，PDP 权利可达）', (tester) async {
-    // 高视口：使 ListView 一次性构建全部 5 区块（含底部帮助入口）。
-    tester.view.physicalSize = const Size(1200, 3200);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-
-    final container = ProviderContainer(overrides: [
-      myPostsProvider.overrideWith((ref) async => const <MyPost>[]),
-    ]);
-    addTearDown(container.dispose);
-    container.read(authControllerProvider.notifier).applyProfile(
-          const UserProfile(nickname: '小明', petStatus: 'A', hasPetProfile: true),
-        );
-
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        locale: Locale('en'),
-        home: MePage(),
-      ),
-    ));
-    await tester.pumpAndSettle();
-
-    expect(find.text('小明'), findsOneWidget); // 用户信息
+  testWidgets('AC1: 顶栏双图标 + 主体人+宠物 + 主体不再平铺语言/退出/注销', (tester) async {
+    await _pump(
+      tester,
+      profile: const UserProfile(nickname: '小明', petStatus: 'HAS_PET', hasPetProfile: true),
+      pet: const PetProfile(id: 1, name: 'Momo', cardToken: 'tok'),
+    );
+    // 顶栏右上双图标（帮助 + 设置）
+    expect(find.byKey(const ValueKey('meHelp')), findsOneWidget);
+    expect(find.byKey(const ValueKey('meSettings')), findsOneWidget);
+    // 主体：用户信息 / 宠物状态 / 我的发布
+    expect(find.text('小明'), findsOneWidget);
     expect(find.byKey(const ValueKey('meEditNickname')), findsOneWidget);
-    expect(find.byKey(const ValueKey('mePetStatus')), findsOneWidget); // 宠物状态
-    expect(find.byKey(const ValueKey('meEditPetProfile')), findsOneWidget); // 状态A 档案入口
-    expect(find.byKey(const ValueKey('meNoPosts')), findsOneWidget); // 我的发布空态
-    expect(find.byKey(const ValueKey('meLogout')), findsOneWidget); // 退出登录入口（7.3）
-    expect(find.byKey(const ValueKey('meDeleteAccount')), findsOneWidget); // 账号注销入口（7.3）
-    expect(find.byKey(const ValueKey('meLanguage')), findsOneWidget); // 语言（7.2）
-    expect(find.byKey(const ValueKey('meHelp')), findsOneWidget); // 帮助与反馈
+    expect(find.byKey(const ValueKey('mePetStatus')), findsOneWidget);
+    expect(find.byKey(const ValueKey('meEditPetProfile')), findsOneWidget);
+    expect(find.byKey(const ValueKey('meNoPosts')), findsOneWidget);
+    // 🔄 F8：语言/退出/注销不再在主页平铺（已挪入二级设置页）
+    expect(find.byKey(const ValueKey('meLanguage')), findsNothing);
+    expect(find.byKey(const ValueKey('meLogout')), findsNothing);
+    expect(find.byKey(const ValueKey('meDeleteAccount')), findsNothing);
+  });
+
+  testWidgets('AC5: 状态 A 且已建档 → 宠物卡片', (tester) async {
+    await _pump(
+      tester,
+      profile: const UserProfile(nickname: '小明', petStatus: 'HAS_PET', hasPetProfile: true),
+      pet: const PetProfile(id: 1, name: 'Momo', cardToken: 'tok'),
+    );
+    expect(find.byKey(const ValueKey('mePetCard')), findsOneWidget);
+    expect(find.byKey(const ValueKey('mePetGuideCard')), findsNothing);
+    expect(find.text('Momo'), findsOneWidget);
+  });
+
+  testWidgets('AC5: 状态 A 未建档 → 引导卡', (tester) async {
+    await _pump(
+      tester,
+      profile: const UserProfile(nickname: '小明', petStatus: 'HAS_PET', hasPetProfile: false),
+    );
+    expect(find.byKey(const ValueKey('mePetGuideCard')), findsOneWidget);
+    expect(find.byKey(const ValueKey('mePetCard')), findsNothing);
+  });
+
+  testWidgets('AC5: 状态 B/C → 宠物卡片与引导卡均不显示', (tester) async {
+    await _pump(
+      tester,
+      profile: const UserProfile(nickname: '小明', petStatus: 'PLANNING', hasPetProfile: false),
+    );
+    expect(find.byKey(const ValueKey('mePetCard')), findsNothing);
+    expect(find.byKey(const ValueKey('mePetGuideCard')), findsNothing);
+    // 宠物状态区块仍在（B 不显示档案编辑入口）
+    expect(find.byKey(const ValueKey('mePetStatus')), findsOneWidget);
+    expect(find.byKey(const ValueKey('meEditPetProfile')), findsNothing);
+  });
+
+  testWidgets('AC6(F9): 我的发布原样渲染后端 created_at 倒序，不客户端重排', (tester) async {
+    // 后端已按 created_at 倒序返回（id 30 最新 → 10 最旧）；前端不得重排（MyPost 无 event_date）。
+    await _pump(
+      tester,
+      profile: const UserProfile(nickname: '小明', petStatus: 'HAS_PET', hasPetProfile: true),
+      pet: const PetProfile(id: 1, name: 'Momo', cardToken: 'tok'),
+      posts: const [
+        MyPost(id: 30, type: 'GROWTH_MOMENT', text: '今天补录·事件很久前'),
+        MyPost(id: 20, type: 'DAILY', text: '中间'),
+        MyPost(id: 10, type: 'KNOWLEDGE', text: '最早发布'),
+      ],
+    );
+    // 横向列表保持后端顺序：30 在 20 左侧、20 在 10 左侧。
+    final x30 = tester.getTopLeft(find.byKey(const ValueKey('myPost_30'))).dx;
+    final x20 = tester.getTopLeft(find.byKey(const ValueKey('myPost_20'))).dx;
+    final x10 = tester.getTopLeft(find.byKey(const ValueKey('myPost_10'))).dx;
+    expect(x30, lessThan(x20));
+    expect(x20, lessThan(x10));
   });
 }

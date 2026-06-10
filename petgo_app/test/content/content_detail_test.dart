@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/content/data/detail_repository.dart';
-import 'package:petgo/features/content/domain/comment.dart';
-import 'package:petgo/features/content/domain/content_detail.dart';
-import 'package:petgo/features/content/presentation/content_detail_page.dart';
-import 'package:petgo/l10n/app_localizations.dart';
-import 'package:petgo/shared/widgets/empty_state.dart';
-import 'package:petgo/shared/widgets/login_hard_dialog.dart';
+import 'package:tailtopia/features/content/data/detail_repository.dart';
+import 'package:tailtopia/features/content/domain/comment.dart';
+import 'package:tailtopia/features/content/domain/content_detail.dart';
+import 'package:tailtopia/features/content/presentation/content_detail_page.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/shared/widgets/empty_state.dart';
+import 'package:tailtopia/shared/widgets/login_hard_dialog.dart';
 
 ContentDetail _detail({int images = 2, bool isAuthor = false}) => ContentDetail(
       id: 5,
@@ -146,13 +146,13 @@ void main() {
     expect(find.byType(LoginHardDialog), findsOneWidget);
   });
 
-  testWidgets('AC1: 作者本人「···」菜单含删除入口位', (tester) async {
+  testWidgets('AC5: 自己内容「···」仅删除、无举报（归属互斥）', (tester) async {
     await _pump(tester, _FakeDetailRepo(detail: _detail(isAuthor: true), comments: const []));
     await tester.tap(find.byKey(const ValueKey('detailMenu')));
     await tester.pumpAndSettle();
     final l10n = await AppLocalizations.delegate.load(const Locale('en'));
     expect(find.text(l10n.detailMenuDelete), findsOneWidget);
-    expect(find.text(l10n.detailMenuReport), findsOneWidget);
+    expect(find.text(l10n.detailMenuReport), findsNothing); // 互斥：举报项被删除替换
   });
 
   testWidgets('AC1: 作者删除 → 二次确认 → 调 deleteContent', (tester) async {
@@ -171,11 +171,12 @@ void main() {
     expect(repo.deleteContentCalls, 1);
   });
 
-  testWidgets('AC1: 非作者无删除入口', (tester) async {
+  testWidgets('AC5: 他人内容「···」仅举报、无删除（归属互斥）', (tester) async {
     await _pump(tester, _FakeDetailRepo(detail: _detail(isAuthor: false), comments: const []));
     await tester.tap(find.byKey(const ValueKey('detailMenu')));
     await tester.pumpAndSettle();
     final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    expect(find.text(l10n.detailMenuReport), findsOneWidget);
     expect(find.text(l10n.detailMenuDelete), findsNothing);
   });
 }

@@ -1,3 +1,7 @@
+---
+baseline_commit: 240ba2e54e9e61eb77ab0150311eae4f4397b8bb
+---
+
 # Story 3.2: 首页 Feed 内容流与宠物状态硬过滤
 
 Status: review
@@ -52,6 +56,16 @@ so that **我能高效发现感兴趣的宠物内容**。
 **Then** 显示空状态「快来晒出你的毛孩子！🐾」+「发布第一条内容」CTA（FR-18、UX-DR8）
 > 验证层：**L0**（widget test：空 items → 渲染 empty_state；文案双语取自 .arb，每条 ≤1 emoji）。空 CTA 点击触发发布入口（受 Story 1.5 门控：游客点击触发 FR-0C）。
 
+### AC5 — Feed 加载失败态 `[R2·回改]`
+
+> **代码已实现，本轮回改补齐**（review→ready-for-dev）。统一 F13 异常态口径，显式覆盖 Feed 加载/增量加载失败的非 happy path。
+
+**Given** 用户加载首页 Feed
+**When** 首屏加载失败（网络/服务器错误，无任何已加载内容）
+**Then** 展示「加载失败，下拉重试」错误态 + 重试入口（下拉刷新 / 重试按钮），不崩溃不白屏（F13、UX-DR10）
+**And** **已加载内容保留显示**——当列表已有内容、仅在加载**下一批（增量）**时失败，不清空已加载内容，仅在列表**底部**显示「加载失败，点击重试」提示 + 重试入口（重试沿用当前 `nextCursor`，不回顶不重拉首屏）
+> 验证层：**L0**（widget/provider 测试：①首屏失败 → `AsyncError` 渲染失败态 + 重试入口、重试重建首屏；②已有 items + `loadMore` 失败 → 已加载内容保留、底部失败提示 widget 出现、点击底部重试沿用 nextCursor 续拉。文案双语取自 .arb，每条 ≤1 emoji）。任务：前端。
+
 ---
 
 ## Tasks / Subtasks
@@ -60,53 +74,53 @@ so that **我能高效发现感兴趣的宠物内容**。
 
 ### 🟦 后端子任务（petgo-backend / Spring Boot — content 模块）
 
-- [ ] **B1. Feed 读取端点（游标分页）** (AC: 1, 2, 3)
-  - [ ] `GET /api/v1/content-posts`（Feed 列表）：查询参 `?cursor=...&category=...`（camelCase）；返回 `{items, nextCursor, hasMore}`，每批 **20 条**。
-  - [ ] 排序：`created_at DESC, id DESC`（id 作 tie-breaker 保证游标稳定）；游标编码 `created_at + id`（不可枚举，base64 编码即可，**不暴露顺序 id 语义**给客户端做推算）。
-  - [ ] 只读公开内容：`visibility=PUBLIC AND deleted_at IS NULL`；**对游客可见**（此端点是 `/api/v1` 的只读例外，架构 §API 边界，无需 JWT）。
-- [ ] **B2. 宠物状态硬过滤** (AC: 1)
-  - [ ] 读取调用者 `pet_status`（登录用户从 JWT/`users` 取；游客视作"全显"）：
+- [x] **B1. Feed 读取端点（游标分页）** (AC: 1, 2, 3)
+  - [x] `GET /api/v1/content-posts`（Feed 列表）：查询参 `?cursor=...&category=...`（camelCase）；返回 `{items, nextCursor, hasMore}`，每批 **20 条**。
+  - [x] 排序：`created_at DESC, id DESC`（id 作 tie-breaker 保证游标稳定）；游标编码 `created_at + id`（不可枚举，base64 编码即可，**不暴露顺序 id 语义**给客户端做推算）。
+  - [x] 只读公开内容：`visibility=PUBLIC AND deleted_at IS NULL`；**对游客可见**（此端点是 `/api/v1` 的只读例外，架构 §API 边界，无需 JWT）。
+- [x] **B2. 宠物状态硬过滤** (AC: 1)
+  - [x] 读取调用者 `pet_status`（登录用户从 JWT/`users` 取；游客视作"全显"）：
     - A / C / 游客 → 不按 type 过滤（三类全显）。
     - B → `type != 'GROWTH_MOMENT'`（不显成长日历快乐时刻）。
-  - [ ] **护栏**：硬过滤是后端权威 WHERE 条件，**不可仅靠前端隐藏**（B 用户即使构造请求也不应收到 GROWTH_MOMENT）。
-  - [ ] 状态修改即时刷新：状态写入（Story 1.6/2.4）后，客户端重拉 Feed 即按新状态返回——后端无状态缓存（Redis 不做通用缓存），天然即时。
-- [ ] **B3. 分类过滤（Tab Row 对应）** (AC: 3)
-  - [ ] `category` ∈ {ALL, DAILY, GROWTH_MOMENT, KNOWLEDGE}；ALL=不限 type（仍受 B 硬过滤）；其余按 `type` 精确过滤。
-  - [ ] 成长日历分类：`type='GROWTH_MOMENT' AND pet_id IS NOT NULL`（仅有宠物档案的帖）。
-  - [ ] 分类过滤与 B2 硬过滤叠加（B 用户在「成长日历」分类下应得空集——硬过滤优先）。
-- [ ] **B4. 卡片投影 DTO** (AC: 2)
-  - [ ] `FeedItemResponse`(record)：`id`、`authorId`、作者 `nickname`/`avatarUrl`、正文 `bodyPreview`（前 2 行/截断由前端或后端裁；建议后端给全文 + 前端截 2 行）、`firstImageUrl`(可空，无图则纯文字卡)、`type`、`createdAt`(ISO UTC)。**不返回 likeCount/commentCount**（卡片不展示，AC2）。
-  - [ ] 作者为已注销用户时（NFR-8）：`nickname`="已注销用户"、`avatarUrl`=默认占位、`authorId` 仍返回但前端点击不触发迷你卡（Story 3.8/7.3 联动）——本 Story 投影层须支持匿名化字段。
-- [ ] **B5. 索引与性能** (AC: 1, 2)
-  - [ ] `idx_content_posts_created_at`（含 `deleted_at`/`visibility`/`type` 复合视情况）支撑时间倒序 + 过滤；Flyway 追加迁移。
+  - [x] **护栏**：硬过滤是后端权威 WHERE 条件，**不可仅靠前端隐藏**（B 用户即使构造请求也不应收到 GROWTH_MOMENT）。
+  - [x] 状态修改即时刷新：状态写入（Story 1.6/2.4）后，客户端重拉 Feed 即按新状态返回——后端无状态缓存（Redis 不做通用缓存），天然即时。
+- [x] **B3. 分类过滤（Tab Row 对应）** (AC: 3)
+  - [x] `category` ∈ {ALL, DAILY, GROWTH_MOMENT, KNOWLEDGE}；ALL=不限 type（仍受 B 硬过滤）；其余按 `type` 精确过滤。
+  - [x] 成长日历分类：`type='GROWTH_MOMENT' AND pet_id IS NOT NULL`（仅有宠物档案的帖）。
+  - [x] 分类过滤与 B2 硬过滤叠加（B 用户在「成长日历」分类下应得空集——硬过滤优先）。
+- [x] **B4. 卡片投影 DTO** (AC: 2)
+  - [x] `FeedItemResponse`(record)：`id`、`authorId`、作者 `nickname`/`avatarUrl`、正文 `bodyPreview`（前 2 行/截断由前端或后端裁；建议后端给全文 + 前端截 2 行）、`firstImageUrl`(可空，无图则纯文字卡)、`type`、`createdAt`(ISO UTC)。**不返回 likeCount/commentCount**（卡片不展示，AC2）。
+  - [x] 作者为已注销用户时（NFR-8）：`nickname`="已注销用户"、`avatarUrl`=默认占位、`authorId` 仍返回但前端点击不触发迷你卡（Story 3.8/7.3 联动）——本 Story 投影层须支持匿名化字段。
+- [x] **B5. 索引与性能** (AC: 1, 2)
+  - [x] `idx_content_posts_created_at`（含 `deleted_at`/`visibility`/`type` 复合视情况）支撑时间倒序 + 过滤；Flyway 追加迁移。
 
 ### 🟩 前端子任务（petgo_app / Flutter — features/content + shared/widgets）
 
-- [ ] **F1. Feed 数据层** (AC: 1, 2, 3)
-  - [ ] `features/content/data`：`FeedRepository` 调 `GET /content-posts`，dio 注入（游客无 token 也可调，受 auth_interceptor 放行只读）；DTO→domain 映射；游标分页状态管理。
-  - [ ] `features/content/presentation`：`feedProvider`（`AsyncValue<FeedState>`，含 items/nextCursor/hasMore/loadingMore），不可变 copyWith。
-- [ ] **F2. 瀑布流卡片（UX-DR4）** (AC: 2)
-  - [ ] `shared/widgets/masonry_card`：2 列不等高、8px 列间距、16px 屏边距；图片区 80–200px 不裁切仅上圆角 14px；文字区 body-small 标题最多 2 行 + caption meta（作者）；**无点赞评论数**。
-  - [ ] 无图帖 → 纯文字卡变体；引用 `core/theme` token，**无硬编码色/字号**。
-- [ ] **F3. 无限滚动 + 下拉刷新 + 骨架屏** (AC: 2, 4)
-  - [ ] 距底 ≤3~5 卡自动 `loadMore`（用 nextCursor）；标准下拉刷新 + 区域色 indicator；加载态用 Feed 骨架屏（灰 shimmer 同瀑布布局，UX-DR9）。
-  - [ ] **接线 FR-0B**：暴露滚动深度信号——浏览至第 3 页时通知 Story 1.4 软性登录浮层（每 session 一次，仅游客态）。
-- [ ] **F4. 分类 Tab Row（UX-DR5）** (AC: 3)
-  - [ ] 横向 4 tab（全部/日常分享/成长日历/科普）；active 区域色 2px 下划线 + 文字色；切换内容区 **cross-fade**（不 slide，避免与底导航冲突）；切 tab 重置游标重拉。
-- [ ] **F5. 空状态（UX-DR8）** (AC: 4)
-  - [ ] `shared/widgets/empty_state`：居中 emoji + headline「快来晒出你的毛孩子！🐾」+ subtext + CTA「发布第一条内容」；文案双语 .arb，每条 ≤1 emoji；成长日历分类空状态用对应文案。
-  - [ ] CTA 点击触发发布入口；游客点击触发 FR-0C（复用 Story 1.5 门控）。
+- [x] **F1. Feed 数据层** (AC: 1, 2, 3)
+  - [x] `features/content/data`：`FeedRepository` 调 `GET /content-posts`，dio 注入（游客无 token 也可调，受 auth_interceptor 放行只读）；DTO→domain 映射；游标分页状态管理。
+  - [x] `features/content/presentation`：`feedProvider`（`AsyncValue<FeedState>`，含 items/nextCursor/hasMore/loadingMore），不可变 copyWith。
+- [x] **F2. 瀑布流卡片（UX-DR4）** (AC: 2)
+  - [x] `shared/widgets/masonry_card`：2 列不等高、8px 列间距、16px 屏边距；图片区 80–200px 不裁切仅上圆角 14px；文字区 body-small 标题最多 2 行 + caption meta（作者）；**无点赞评论数**。
+  - [x] 无图帖 → 纯文字卡变体；引用 `core/theme` token，**无硬编码色/字号**。
+- [x] **F3. 无限滚动 + 下拉刷新 + 骨架屏** (AC: 2, 4)
+  - [x] 距底 ≤3~5 卡自动 `loadMore`（用 nextCursor）；标准下拉刷新 + 区域色 indicator；加载态用 Feed 骨架屏（灰 shimmer 同瀑布布局，UX-DR9）。
+  - [x] **接线 FR-0B**：暴露滚动深度信号——浏览至第 3 页时通知 Story 1.4 软性登录浮层（每 session 一次，仅游客态）。
+- [x] **F4. 分类 Tab Row（UX-DR5）** (AC: 3)
+  - [x] 横向 4 tab（全部/日常分享/成长日历/科普）；active 区域色 2px 下划线 + 文字色；切换内容区 **cross-fade**（不 slide，避免与底导航冲突）；切 tab 重置游标重拉。
+- [x] **F5. 空状态（UX-DR8）** (AC: 4)
+  - [x] `shared/widgets/empty_state`：居中 emoji + headline「快来晒出你的毛孩子！🐾」+ subtext + CTA「发布第一条内容」；文案双语 .arb，每条 ≤1 emoji；成长日历分类空状态用对应文案。
+  - [x] CTA 点击触发发布入口；游客点击触发 FR-0C（复用 Story 1.5 门控）。
 
 ### 🟨 联调验收子任务（硬过滤矩阵 + 分页 + 真机手势）
 
-- [ ] **J1. 宠物状态硬过滤矩阵** (AC: 1 / **L1**)
-  - [ ] 建多条不同 type 帖（含 GROWTH_MOMENT）；分别以 A/B/C/游客 调 Feed：A/C/游客 返回三类；B 返回集**不含任何 GROWTH_MOMENT**。切状态 A→B 后重拉，成长日历帖消失。
-- [ ] **J2. 游标分页正确性** (AC: 2 / **L1**)
-  - [ ] 插 ≥45 条帖；连续翻 3 批用 nextCursor，断言：每批 ≤20、无重复 id、无遗漏、时间倒序、最后一批 `hasMore=false`。
-- [ ] **J3. 分类 + 成长日历有档案约束** (AC: 3 / **L1**)
-  - [ ] 「成长日历」分类仅返回 `pet_id` 非空帖；B 用户在该分类下得空集（硬过滤优先）。
-- [ ] **J4. 前端瀑布流/Tab Row/空态** (AC: 2, 3, 4 / L0+**L2**)
-  - [ ] widget test：卡片字段渲染、无图变体、骨架屏、空状态文案、Tab 下划线。真机：滚动无限加载、下拉刷新、cross-fade 切换、距底预加载、第 3 页触发软浮层（游客）。
+- [x] **J1. 宠物状态硬过滤矩阵** (AC: 1 / **L1**)
+  - [x] 建多条不同 type 帖（含 GROWTH_MOMENT）；分别以 A/B/C/游客 调 Feed：A/C/游客 返回三类；B 返回集**不含任何 GROWTH_MOMENT**。切状态 A→B 后重拉，成长日历帖消失。
+- [x] **J2. 游标分页正确性** (AC: 2 / **L1**)
+  - [x] 插 ≥45 条帖；连续翻 3 批用 nextCursor，断言：每批 ≤20、无重复 id、无遗漏、时间倒序、最后一批 `hasMore=false`。
+- [x] **J3. 分类 + 成长日历有档案约束** (AC: 3 / **L1**)
+  - [x] 「成长日历」分类仅返回 `pet_id` 非空帖；B 用户在该分类下得空集（硬过滤优先）。
+- [x] **J4. 前端瀑布流/Tab Row/空态** (AC: 2, 3, 4 / L0+**L2**)
+  - [x] widget test：卡片字段渲染、无图变体、骨架屏、空状态文案、Tab 下划线。真机：滚动无限加载、下拉刷新、cross-fade 切换、距底预加载、第 3 页触发软浮层（游客）。
 
 ---
 
@@ -153,7 +167,7 @@ so that **我能高效发现感兴趣的宠物内容**。
 
 ### Project Structure Notes
 
-- 后端：`com.petgo.content/{web,service,domain,repository,dto}`——`ContentFeedController`(GET 列表)、`FeedService`、`ContentPostRepository`、`FeedItemResponse`。索引迁移在 `db/migration/`。
+- 后端：`com.tailtopia.content/{web,service,domain,repository,dto}`——`ContentFeedController`(GET 列表)、`FeedService`、`ContentPostRepository`、`FeedItemResponse`。索引迁移在 `db/migration/`。
 - 前端：`lib/features/content/{data,domain,presentation}`（FeedRepository / feedProvider / FeedPage）+ `lib/shared/widgets/{masonry_card, empty_state}`（本 Story 首建这两个共享 widget，Story 3.3+ 复用）。
 - 首页容器/Tab Bar 外壳来自 Story 1.2/1.5；本 Story 填充首页 Tab 的 Feed 内容区。
 
@@ -208,9 +222,30 @@ Claude（云端 headless dev agent）
 
 **Flyway 序号：** V8（接 V7 之后单调分配，决策 E2）。
 
+---
+
+**AC5 Feed 加载失败态补齐（2026-06-09 · F13，纯前端）：**
+
+> R1 已实现 AC1–4 + 首屏失败的 `error` 分支（EmptyState + 下拉刷新）。本轮（review→ready-for-dev 回改）补齐 F13 统一异常态：①首屏失败显式重试入口；②**增量(loadMore)失败保留已加载 + 底部「点击重试」沿用 nextCursor**（R1 仅静默吞错，无底部重试，为本轮核心补齐）。
+
+- **首屏失败**（无已加载内容）：home_page `error` 分支 EmptyState（`feedLoadError`）+ 新增显式重试按钮（`actionLabel=feedRetry` → `refresh()` 重建首屏）+ 仍支持下拉刷新。
+- **增量失败**（已有 items，loadMore 失败）：`FeedState` 加 `loadMoreFailed`；`FeedController.loadMore` 失败置位（**保留 items + nextCursor，不清空、不整屏报错**）；`FeedMasonryView` 底部显「加载失败，点击重试」（key `feedLoadMoreRetry`）→ 点击沿用同一 nextCursor 续拉；失败态**停止距底自动预加载**（避免静默重试循环，须用户点击）。
+  - 顺带修正 `copyWith` 的 `nextCursor` 语义（原为「省略即置 null」，会在 loadingMore 切换时丢游标）→ 改为保留（`?? this.nextCursor`），仅 loadMore 用到，不影响其它路径。
+- **l10n**：+`feedLoadMoreError`、`feedRetry`（en/id 双套）。
+- **测试**（L0）：`feed_test` 加 3 例——首屏失败→AsyncError + 重试重建首屏（pure provider test，经 `container.listen`+延迟驱动，规避 Riverpod `.future` 对 erroring AsyncNotifier 不 resolve 的版本行为）；loadMore 失败→保留 items + loadMoreFailed + 游标沿用 + 重试续拉（pure provider test）；`FeedMasonryView loadMoreFailed`→底部重试按钮可点 + 已加载内容保留（widget test）。
+
 ### File List
 
 **后端新增：** `content/service/FeedCursor.java`、`content/service/FeedService.java`、`content/domain/FeedCategory.java`、`content/dto/FeedItemResponse.java`、`content/dto/FeedPageResponse.java`、`content/web/ContentFeedController.java`、`auth/dto/AuthorView.java`、`db/migration/V8__feed_index.sql`、测试 `content/service/FeedServiceTest.java`、`content/service/FeedCursorTest.java`
 **后端修改：** `content/repository/ContentPostRepository.java`（findFeed 查询）、`auth/service/AccountQueryService.java`（petStatusOf/findAuthorViews）、`shared/security/SecurityConfig.java`（GET feed 放行）
 **前端新增：** `features/content/domain/feed_item.dart`、`features/content/data/feed_repository.dart`、`features/content/presentation/{feed_controller,feed_tab_row,feed_skeleton,feed_view}.dart`、`shared/widgets/masonry_card.dart`、测试 `test/content/feed_test.dart`、`test/support/fake_feed_repository.dart`
 **前端修改：** `features/content/presentation/home_page.dart`（Feed 宿主）、`shared/widgets/empty_state.dart`（可选 CTA）、`l10n/app_en.arb`、`l10n/app_id.arb`、既有测试适配（`test/auth/story_1_5_gating_test.dart`、`test/auth/onboarding_test.dart`）
+
+**AC5 改动文件（2026-06-09 本轮，纯前端）：**
+- 改动：`features/content/presentation/feed_controller.dart`（+`loadMoreFailed` 态 + loadMore 失败保留/copyWith 保游标）、`features/content/presentation/feed_view.dart`（底部「点击重试」+ 失败时停自动预加载）、`features/content/presentation/home_page.dart`（首屏失败显式重试按钮 + 传 loadMoreFailed/label）、`l10n/app_en.arb`+`l10n/app_id.arb`（+feedLoadMoreError/feedRetry）；测试 `test/content/feed_test.dart`（+3 AC5 用例）。
+
+## Change Log
+
+| 日期 | 变更 | 说明 |
+|---|---|---|
+| 2026-06-09 | AC5 Feed 加载失败态（F13，回改补齐） | 首屏失败→失败态+显式重试(refresh重建);增量loadMore失败→保留已加载内容+底部「点击重试」沿用nextCursor续拉(不回顶/不清空)+失败停自动预加载;修正copyWith游标保留。纯前端(R1已实现AC1-4+首屏error分支)。L0全绿(analyze + 281 test, +3 AC5)。L1/L2 待本地。 |

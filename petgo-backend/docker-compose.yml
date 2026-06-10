@@ -1,4 +1,4 @@
-# PetGo 后端本地编排（德国单机配置占位）：app + PostgreSQL + Redis。
+# TailTopia 后端本地编排（德国单机配置占位）：app + PostgreSQL + Redis。
 # 凭证全部走 .env（见 .env.example），真实凭证绝不入库。
 services:
   postgres:

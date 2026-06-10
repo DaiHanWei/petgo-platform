@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/notify/domain/app_version_check.dart';
+import 'package:tailtopia/features/notify/domain/app_version_check.dart';
 
 /// Story 6.5 J4：语义版本比较 + 三态判定 + 平台 URL 选择（含相等/补丁/预发边界）。
 void main() {

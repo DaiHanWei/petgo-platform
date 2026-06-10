@@ -2,9 +2,9 @@
 
 ## Hand-off Brief
 
-> ⚠️ **2026-06-03 重大更正**：初版结论「UX 没有设计登录页」**错误**。见 Follow-up——用户提供的 `PetGo_V1_mockups.html` 中 **S01 就是独立全屏登录页**（且为第一屏）。根因实为**规划产物自相矛盾**，非 AI 即兴。
+> ⚠️ **2026-06-03 重大更正**：初版结论「UX 没有设计登录页」**错误**。见 Follow-up——用户提供的 `TailTopia_V1_mockups.html` 中 **S01 就是独立全屏登录页**（且为第一屏）。根因实为**规划产物自相矛盾**，非 AI 即兴。
 
-1. **What happened.** 弹窗本身有正当依据（PRD §4.0 FR-0B/0C → Story 1.4）；但 UX 可视化 mockup（`PetGo_V1_mockups.html` S01）设计的是**独立全屏登录页**，二者冲突。实现时（Story 1.3）把已建好的登录页降级为「仅自测」、改用 Story 1.4 弹窗，**静默选边、未标记冲突**（Confirmed）。
+1. **What happened.** 弹窗本身有正当依据（PRD §4.0 FR-0B/0C → Story 1.4）；但 UX 可视化 mockup（`TailTopia_V1_mockups.html` S01）设计的是**独立全屏登录页**，二者冲突。实现时（Story 1.3）把已建好的登录页降级为「仅自测」、改用 Story 1.4 弹窗，**静默选边、未标记冲突**（Confirmed）。
 2. **Where the case stands.** 根因 Confirmed：**两份规划产物对「登录形态」存在未解决的冲突**——mockup S01=独立登录页（无游客跳过）vs PRD FR-0A/0B/0C=游客优先+弹窗。dev 选了 PRD，把对应 S01 的 `login_page.dart` 架空成孤儿路由（`/login` 无人导航）。
 3. **What's needed next.** 仍无需立即改代码。需用户做**产品决策 + 修订规划单一事实源**：登录到底走 S01 独立页还是 FR-0C 弹窗？定了之后走 `bmad-correct-course` 改 PRD/mockup 之一并记入 CROSS-STORY-DECISIONS。
 
@@ -153,10 +153,10 @@ UX_EXPERIENCE Navigation Model + Screen Map（游客优先·无登录页·FR-0C 
 
 ## Follow-up: 2026-06-03
 
-### New Evidence — 用户提供 `PetGo_V1_mockups.html`（推翻初版结论）
+### New Evidence — 用户提供 `TailTopia_V1_mockups.html`（推翻初版结论）
 
 - **F6 (Confirmed)：mockup S01 = 独立全屏登录页，且是第一屏。**
-  `_bmad-output/planning-artifacts/PetGo_V1_mockups.html:60-103`。Group A「Authentication & Feed」首屏 `S01 · Login Page`：注释 `No status bar, no nav for pre-login`（66 行）、居中 Logo 块（🐾 PetGo + tagline）、`Masuk dengan Google` 全宽按钮（78-87）、服务条款/隐私小字（88-90）、底部 `Masuk Akun Dokter Hewan` 兽医登录链接（94-99）。**整页无任何「游客浏览/跳过」入口。**
+  `_bmad-output/planning-artifacts/TailTopia_V1_mockups.html:60-103`。Group A「Authentication & Feed」首屏 `S01 · Login Page`：注释 `No status bar, no nav for pre-login`（66 行）、居中 Logo 块（🐾 TailTopia + tagline）、`Masuk dengan Google` 全宽按钮（78-87）、服务条款/隐私小字（88-90）、底部 `Masuk Akun Dokter Hewan` 兽医登录链接（94-99）。**整页无任何「游客浏览/跳过」入口。**
 - **F7 (Confirmed)：整份 mockup 没有任何 FR-0B/0C 登录弹窗屏幕。**
   21 个屏幕（S01–S21，四组）全清单中登录只有 S01（用户）+ S19（兽医），均为独立全屏页；**软浮层/强弹窗在 mockup 中不存在**。
 - **F8 (Confirmed)：`login_page.dart` 就是 S01 的实现，但被 Story 1.3 主动降级为「自测入口」。**
@@ -164,13 +164,13 @@ UX_EXPERIENCE Navigation Model + Screen Map（游客优先·无登录页·FR-0C 
 
 ### Updated Hypotheses
 
-- **Hypothesis 1 → Confirmed（用户前提成立，初版判断 refute 错误）。** 用户记忆的「UX 设计了登录页」属实，出处即 `PetGo_V1_mockups.html` S01。初版仅查 UX_DESIGN.md / UX_EXPERIENCE.md 两份 markdown 而漏读 mockup HTML，导致误判——**取证范围不全是本案最大教训**。
+- **Hypothesis 1 → Confirmed（用户前提成立，初版判断 refute 错误）。** 用户记忆的「UX 设计了登录页」属实，出处即 `TailTopia_V1_mockups.html` S01。初版仅查 UX_DESIGN.md / UX_EXPERIENCE.md 两份 markdown 而漏读 mockup HTML，导致误判——**取证范围不全是本案最大教训**。
 
 ### 真根因（更正）：规划产物之间未解决的冲突，被实现阶段静默选边
 
 | 产物 | 对「登录」的设计 | 性质 |
 | --- | --- | --- |
-| `PetGo_V1_mockups.html` S01 | 独立全屏登录页，无游客跳过 → **登录优先** | 可视化稿 |
+| `TailTopia_V1_mockups.html` S01 | 独立全屏登录页，无游客跳过 → **登录优先** | 可视化稿 |
 | PRD §4.0 FR-0A/0B/0C | 游客优先、无登录墙、上下文软浮层+强弹窗 → **游客优先** | 功能需求（带 AC） |
 | UX_EXPERIENCE.md Screen Map | 首页唯一免登录 Tab，其余 FR-0C 弹窗 → **游客优先** | 体验文档 |
 | UX_DESIGN.md | 无登录页组件（中性，未表态） | 设计系统 |
@@ -181,7 +181,7 @@ UX_EXPERIENCE Navigation Model + Screen Map（游客优先·无登录页·FR-0C 
 
 ### Backlog Changes
 
-- 已查（Done）：`epics.md:8` 把 `PetGo_V1_mockups.html` 列为官方输入 → S01 是正式规划稿。`architecture.md:201` 把「登录页前置同意+FR-0D 条款/隐私链接」列为**不可砍**合规地基。三处（epics/architecture/CROSS-STORY-DECISIONS）**均无对「S01 独立页 vs FR-0A 弹窗」的显式裁决** → 确认为未裁决冲突。
+- 已查（Done）：`epics.md:8` 把 `TailTopia_V1_mockups.html` 列为官方输入 → S01 是正式规划稿。`architecture.md:201` 把「登录页前置同意+FR-0D 条款/隐私链接」列为**不可砍**合规地基。三处（epics/architecture/CROSS-STORY-DECISIONS）**均无对「S01 独立页 vs FR-0A 弹窗」的显式裁决** → 确认为未裁决冲突。
 
 ### 🔴 Side Finding（高价值·合规）：实际登录路径缺 FR-0D 前置同意
 

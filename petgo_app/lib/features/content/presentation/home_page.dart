@@ -25,7 +25,7 @@ import 'publish_compose_page.dart';
 import 'report_sheet.dart';
 import '../../../shared/widgets/mini_profile_sheet.dart';
 
-/// 首页 Beranda（PetGo Prototype 全面换肤）。
+/// 首页 Beranda（TailTopia Prototype 全面换肤）。
 ///
 /// 固定问候头（Momo + 时段问候 + 通知铃）；随 Feed 同滚的 Beranda 头部
 /// （快捷入口卡 + 每日记录提示卡 + 「Untukmu」区头 + 分类 Tab）；下方瀑布流 Feed。
@@ -118,10 +118,16 @@ class HomePage extends ConsumerWidget {
 
     return feedAsync.when(
       loading: () => wrapped(const FeedSkeleton()),
+      // AC5：首屏加载失败（无任何已加载内容）→ 失败态 + 重试入口（下拉刷新 / 重试按钮），不白屏。
       error: (error, stack) => wrapped(
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 48),
-          child: EmptyState(title: l10n.feedLoadError, icon: Icons.cloud_off_rounded),
+          child: EmptyState(
+            title: l10n.feedLoadError,
+            icon: Icons.cloud_off_rounded,
+            actionLabel: l10n.feedRetry,
+            onAction: () => ref.read(feedProvider.notifier).refresh(),
+          ),
         ),
         onRefresh: () => ref.read(feedProvider.notifier).refresh(),
       ),
@@ -152,6 +158,8 @@ class HomePage extends ConsumerWidget {
           items: state.items,
           hasMore: state.hasMore,
           loadingMore: state.loadingMore,
+          loadMoreFailed: state.loadMoreFailed,
+          loadMoreErrorLabel: l10n.feedLoadMoreError,
           deletedUserLabel: l10n.feedDeletedUser,
           onLoadMore: () => ref.read(feedProvider.notifier).loadMore(),
           onRefresh: () => ref.read(feedProvider.notifier).refresh(),
@@ -290,6 +298,7 @@ class _BerandaTop extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       _ActionCard(
                         tone: AppColors.goldTint,
@@ -329,7 +338,6 @@ class _BerandaTop extends StatelessWidget {
               Text('Untukmu',
                   style: TextStyle(
                       fontSize: 17, fontWeight: FontWeight.w900, letterSpacing: -0.2)),
-              Text('个人动态流', style: TextStyle(fontSize: 13, color: AppColors.muted)),
             ],
           ),
         ),

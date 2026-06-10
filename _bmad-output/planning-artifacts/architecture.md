@@ -11,12 +11,12 @@ inputDocuments:
   - _bmad-output/planning-artifacts/implementation-readiness-report-2026-06-01.md
   - _bmad-output/planning-artifacts/index.md
 workflowType: 'architecture'
-project_name: 'PetGo'
+project_name: 'TailTopia'
 user_name: 'Dai'
 date: '2026-06-01'
 ---
 
-# PetGo V1.0 架构决策文档（Architecture Decision Document）
+# TailTopia V1.0 架构决策文档（Architecture Decision Document）
 
 _本文档通过逐步协作发现的方式构建。每完成一项架构决策，对应章节将被追加进来。本文档的唯一权威范围来自 PRD（39 个 FR）；技术选型以 TECH_FRAMEWORK 对齐稿为方向起点，在本工作流中细化为正式架构。_
 
@@ -28,13 +28,13 @@ V1 硬约束：**快速上线、快速试错；目标 DAU ≤ 500；不过度设
 
 ### Requirements Overview
 
-**Functional Requirements（39 FR / 8 模块）：**
+**Functional Requirements（42 FR / 8 模块；2026-06-08 V1.0.0 收口新增 FR-40 生日提醒 / FR-41 陪伴纪念日 / FR-42 里程碑系统）：**
 - auth（FR-0A~0H, FR-19, FR-29）：Google OAuth + 兽医账密双路；单 App 双角色门控（JWT role claim）；游客态 + 软/强登录引导。
 - triage（FR-1~3, FR-4A）：AI 图文分诊（**同步直连 Gemini**，异步仅用进程内 `@Async`）+ **确定性安全规则层**（高危→强制红，独立于模型）；≤15s SLA；绿/黄/红结构化输出。
 - consult（FR-4B, FR-5, FR-30~33）：会话状态机（待接单→进行中→待关闭→关闭/中断）；1min 无人接单超时、30min 评分确认门、兽医封禁中断；编排腾讯云 IM（后端不持长连接）。
 - content（FR-12, FR-17, FR-18, FR-23, FR-24, FR-28, FR-36）：读扩散 Feed（时间倒序 + 宠物状态硬过滤 + 无限滚动 20/批）；两级评论；点赞开关；删除级联。V1 不做收藏/@提及/搜索。
-- profile（FR-11, FR-14~16, FR-37, FR-39）：单账号单宠物；成长时间线（快乐时刻 + 健康事件）；**H5 名片 = Java 服务端模板直出 + OG 预渲染静态图**（防枚举 token + noindex）。
-- notify（FR-22A~E, FR-34, FR-38）：推送**复用腾讯 IM 离线推送** + 统一深链接路由表 + 通知中心铃铛角标。
+- profile（FR-11, FR-14~16, FR-37, FR-39, **FR-42**）：单账号单宠物（**+ pet_type 字段 F6**）；成长时间线（快乐时刻 + 健康事件）+ **双视图日历 + 统计栏（FR-37）**；**H5 名片 = Java 服务端模板直出 + OG 预渲染静态图**（防枚举 token + noindex；V1.0.0 重构为 6 区块，里程碑区块零态降级）；**里程碑系统 FR-42 本体拆 mini-epic（分层 F2，排期 1.0.x/1.1.0 待定）**。
+- notify（FR-22A~E, FR-34, FR-38, **FR-40, FR-41**）：推送**复用腾讯 IM 离线推送** + 统一深链接路由表（**+3 类目标**） + 通知中心铃铛角标。**V1.0.0 增量**：定时类推送 FR-40 生日 / FR-41 纪念日 / FR-42 L级节点（Spring 原生 `@Scheduled` + `@Async` + DB 去重，**禁中间件 F5**）；权限申请双时机（F7）。
 - moderation（FR-25）：举报工单进人工队列，V1 无自动下架。
 - me/i18n（FR-20, FR-21, FR-27）：账号注销（PDP 强制 + 内容匿名化保留 + 级联删除）；id/en 双语跟随设备。
 
@@ -60,8 +60,8 @@ V1 硬约束：**快速上线、快速试错；目标 DAU ≤ 500；不过度设
 - 推送：**砍独立 TPNS** → 复用腾讯 IM 离线推送能力。
 - 关系库：**PostgreSQL 保留**，单实例 + 每日备份，JSONB 存 Gemini 原始响应。
 - 缓存：**Redis 收窄**为 auth 限流 + 调用幂等键/防重锁，不当通用缓存、不当队列、不上 Cluster。
-- 媒体存储：单一 S3 兼容对象存储承载分诊图 + 档案图；**V1 不做 VOD/视频转码**（AI 分诊仅图文；内容 Feed V1 不支持视频；兽医聊天视频由腾讯 IM 托管）。
-- 外部依赖（不可避免）：Google Gemini（分诊模型）、腾讯云 IM（免费实时聊天 + 离线推送）、Google OAuth、系统地图深链。
+- 媒体存储：单一 S3 兼容对象存储承载分诊图 + 档案图；**V1.0.0 不做 VOD/视频转码**（AI 分诊仅图文；内容 Feed 不支持视频；**兽医聊天 V1.0.0 仅图片、无视频** —— 决策 F4，原"IM 托管聊天视频 ≤60s"整条移除）。
+- 外部依赖（不可避免）：Google Gemini（分诊模型）、腾讯云 IM（免费实时聊天 + 离线推送）、Google OAuth。**（已删除原列的「系统地图深链」—— 红色态去导航化，决策 F3：红色页不再调起系统地图，V1.0.0 无任何地图/定位依赖。）**
 - 跨云交互收敛到极少点：IM→对象存储存档复制、Gemini 签名 URL 直拉私密图。
 
 ### 不可协商地基（Non-Negotiables，与 DAU 无关）
@@ -76,7 +76,7 @@ V1 硬约束：**快速上线、快速试错；目标 DAU ≤ 500；不过度设
 ### Cross-Cutting Concerns Identified
 
 1. 鉴权与角色门控（user/vet JWT claim，游客态）
-2. 异步任务（DB 状态机 + `@Async`：AI 分诊 / 通知 / 审核）
+2. 异步任务（DB 状态机 + `@Async`：AI 分诊 / 通知 / 审核；**+ 定时类推送用 Spring 原生 `@Scheduled` 每日扫描 + `@Async` 逐条 + DB 去重，禁调度/消息中间件 —— F5**）
 3. 会话状态机 + 在线态（Redis）
 4. 媒体存储与跨云存档复制桥接
 5. 统一推送（复用 IM）+ 深链接路由
@@ -115,7 +115,7 @@ V1 是**双产物全栈移动**项目，需两套脚手架（无独立 SSR——
 
 ```bash
 # 1) 生成骨架（org 决定包名/Bundle ID，可改）
-flutter create --org com.petgo --project-name petgo petgo_app
+flutter create --org com.tailtopia --project-name petgo petgo_app
 cd petgo_app
 
 # 2) 状态管理 Riverpod
@@ -152,10 +152,10 @@ spring init \
   --type=maven-project \
   --boot-version=4.0.6 \
   --java-version=21 \
-  --group-id=com.petgo \
+  --group-id=com.tailtopia \
   --artifact-id=petgo-backend \
   --name=petgo-backend \
-  --package-name=com.petgo \
+  --package-name=com.tailtopia \
   --dependencies=web,validation,data-jpa,postgresql,data-redis,oauth2-resource-server,security,thymeleaf,actuator,flyway,lombok \
   petgo-backend
 ```
@@ -187,7 +187,16 @@ spring init \
 - **建模**：8 模块按 schema/包划界；分诊结构化结果与档案弹性字段用 **JSONB**（存 Gemini 原始响应 + 解析后绿/黄/红字段）。
 - **主键与对外标识**：内部 `bigint` 代理主键；**对外暴露处一律用不可枚举 token**——H5 名片 `/p/{token}`（FR-14 安全要求，随机 token + noindex，绝不暴露顺序 ID），推送深链亦用 token。
 - **缓存（Redis 收窄）**：auth 限流、调用幂等键/防重锁、兽医在线态(在线/忙/离线)、问诊队列态、未读角标计数。**不做通用缓存、不当队列、不上 Cluster。**
-- **媒体三层（隐私边界）**：① 阿里 OSS 公开桶（Feed/档案/H5 名片图，阿里 CDN 分发）；② 阿里 OSS 私密桶（AI 分诊图/健康历史图，仅短期签名 URL）；③ 腾讯 IM 托管（兽医聊天图/视频）。客户端 **STS 临时凭证直传 OSS**（不经后端）。**桥接规则**：问诊存档时把所需图从 IM 复制一份到 ②私密桶，档案只引用应用自有 URL（不引用会过期的 IM URL）。
+- **媒体三层（隐私边界）**：① 阿里 OSS 公开桶（Feed/档案/H5 名片图，阿里 CDN 分发）；② 阿里 OSS 私密桶（AI 分诊图/健康历史图，仅短期签名 URL）；③ 腾讯 IM 托管（兽医聊天图；**V1.0.0 仅图片、无视频** —— F4）。客户端 **STS 临时凭证直传 OSS**（不经后端）。**桥接规则**：问诊存档时把所需图从 IM 复制一份到 ②私密桶，档案只引用应用自有 URL（不引用会过期的 IM URL）。
+
+- **V1.0.0 增量（2026-06-08 correct-course 收口；详见 PRD §4 + CROSS-STORY-DECISIONS F1–F7，遇冲突以该台账为准）：**
+  - **`pet_profiles` 加列 `pet_type`**（`varchar` 枚举 `CAT`/`DOG`/`OTHER`，UPPER_SNAKE，not null，**创建后不可改**——服务端硬拒 + 前端置灰）。Flyway 加列迁移，序号按执行顺序单调顺延（决策 E2，勿照搬示例号）。决策 **F6**。
+  - **里程碑系统（FR-42，分层纳入 F2）**：新表 `pet_milestones` / `milestone_completions`，归 **profile 域**；「系统自动完成」**订阅既有领域事件**（ContentPublished/ContentLiked/ContentCommented/ConsultClosed 等），跨模块经领域事件、不直访 repository、**无新中间件**。本体（清单 + S/M/L 三级动效 + 徽章 + L级分享卡 + 列表页）拆为**独立 mini-epic，排期 1.0.x/1.1.0 待定**；V1.0.0 仅落 pet_type / 档案统计栏 / 第一条🌟标记 / 双视图日历（前端聚合）。决策 **F2**。
+  - **定时类系统推送（生日 FR-40 / 陪伴纪念日 FR-41 / L级里程碑节点 FR-42）**：用 **Spring 原生 `@Scheduled` 每日扫描 + `@Async` 逐条投递 + DB 去重标记位**（扫 `pet_profiles.birthday` 前 1 天、`profile.created_at + {30,100,365}d`；标记"当年/该节点是否已推"去重）。**禁 Quartz / Kafka / Redis Stream / 任何调度或消息中间件**——与既有「砍 RocketMQ → DB 状态机 + @Async」一脉，复用 6-2「批量在线兽医循环走 @Async」范式。≤500 DAU 单机日扫足够。决策 **F5**。
+  - **`notifications.type` 扩枚举**：新增 `PET_BIRTHDAY` / `COMPANION_ANNIVERSARY` / `MILESTONE_NODE`（决策 F2/F5；表归属仍 6.1 建、6.7 扩枚举）。
+  - **深链路由表（FR-38）+3 类目标 location**：生日 → 「+ 发布预选成长日历」、纪念日 → 「成长档案 Tab」、L级里程碑节点 → 「成长档案 Tab → 里程碑列表页」。对外深链仍用**不可枚举 token**（与既有约定一致）。
+  - **`GET /api/v1/me` 聚合**（契约 C1）补「最近一条快乐时刻首图」字段供个人中心宠物卡片；**经 content service 取、禁跨模块 join**（沿用既有模块边界护栏；契约改动遵 C4/C5 四处同步）。
+  - **推送权限申请时机** 单 → 双（首次问诊完成 **或** 建档完成且从未问诊，取最早、仅弹一次）。决策 **F7**。前端门控，无后端/中间件影响。
 
 ### Authentication & Security
 
@@ -244,7 +253,7 @@ spring init \
 **Cross-Component Dependencies：**
 - auth 的 JWT/role 是所有写操作与角色门控的根；游客态贯穿 Feed/详情只读。
 - 媒体 STS + 签名 URL 被 triage(私密图)、profile(档案/名片图)、content(Feed 图) 共用。
-- 安全规则层挂在 triage 结果后置，红色态联动 UX 半屏告警 + 零变现入口。
+- 安全规则层挂在 triage 结果后置，红色态联动 UX 半屏告警 + 零变现入口。**红色态去导航化（F3）**：删除系统地图深链，红色半屏唯一出口为 5 秒后「我已知晓」关闭返回结果页；不推荐医院、不导航——平台仅告知紧急程度，零兽医 / 零变现入口不变。
 - IM 编排 + 状态机串起 consult/notify/vet；存档桥接(IM→OSS)连接 consult→profile。
 - 深链路由表(go_router) 连接 notify 推送 → content 详情/consult 会话/评分。
 
@@ -267,14 +276,14 @@ spring init \
 
 **API（REST）：**
 - 资源路径：小写复数名词，多词用连字符 —— `/api/v1/pet-profiles`、`/api/v1/triage-tasks/{id}`、`/api/v1/consult-sessions/{id}/messages`。
-- 路径参数 `{id}`（Spring 风格）；查询参数 camelCase（`?petStatus=A&cursor=...`）。
+- 路径参数 `{id}`（Spring 风格）；查询参数 camelCase（`?petStatus=HAS_PET&cursor=...`）。
 - 公开/未授权暴露处用不可枚举 token，不暴露顺序 id —— `/p/{cardToken}`、深链用 token。
 - 自定义头：`Idempotency-Key`、`Accept-Language`（驱动 id/en）。
 
 **Java 代码：**
 - 类 PascalCase、方法/字段 camelCase、常量 UPPER_SNAKE、包全小写。
 - 分层后缀：`XxxController` / `XxxService` / `XxxRepository` / 实体 `Xxx`（JPA `@Entity`）/ `XxxRequest`·`XxxResponse`（DTO，record）/ `XxxMapper`。
-- 包按模块再分层：`com.petgo.<module>.{web,service,domain,repository,dto,event}`（module ∈ auth/triage/consult/content/profile/notify/moderation/vet）。
+- 包按模块再分层：`com.tailtopia.<module>.{web,service,domain,repository,dto,event}`（module ∈ auth/triage/consult/content/profile/notify/moderation/vet）。
 - 领域事件 `XxxEvent`（过去式语义，如 `TriageSubmittedEvent`）。
 
 **Dart / Flutter：**
@@ -286,12 +295,12 @@ spring init \
 
 **后端（package-by-feature → layer）：**
 ```
-src/main/java/com/petgo/
+src/main/java/com/tailtopia/
   <module>/{web,service,domain,repository,dto,event}
   shared/{config,security,error,async,media,im}   # 跨模块基础设施
 src/main/resources/db/migration/                    # Flyway
 src/main/resources/templates/                       # Thymeleaf H5 名片
-src/test/java/com/petgo/<module>/...                # 镜像结构
+src/test/java/com/tailtopia/<module>/...                # 镜像结构
 ```
 
 **Flutter（feature-first）：**
@@ -363,8 +372,8 @@ petgo-backend/
 ├── Dockerfile
 ├── docker-compose.yml              # app + postgres + redis（德国单机）
 ├── .github/workflows/ci.yml        # build jar+镜像 → 部署德国机
-├── src/main/java/com/petgo/
-│   ├── PetgoApplication.java
+├── src/main/java/com/tailtopia/
+│   ├── TailtopiaApplication.java
 │   ├── auth/        {web, service, domain, repository, dto, event}   # FR-0A~0H,19,29
 │   ├── triage/      {web, service, domain, repository, dto, event}   # FR-1~3,4A,5
 │   │   └── service/{TriageService, SafetyRuleLayer, TriageTaskScanner}
@@ -390,7 +399,7 @@ petgo-backend/
 │   ├── db/migration/   V1__init_auth.sql, V2__init_profile.sql, ...   # Flyway
 │   ├── templates/      card.html                                      # H5 名片 + OG meta
 │   └── safety/         high_risk_symptoms.yml                         # 安全规则层清单（兽医顾问维护）
-└── src/test/java/com/petgo/<module>/...                               # 镜像，关键路径优先
+└── src/test/java/com/tailtopia/<module>/...                               # 镜像，关键路径优先
 ```
 
 **移动端 —— petgo_app（Flutter feature-first）**
@@ -521,7 +530,7 @@ petgo_app/
 
 ### Validation Issues Addressed
 
-- **G-1**：新增 `com.petgo.admin/`（`role=ADMIN` 端点 + Thymeleaf 简易后台），FR-18/25/29/33/封禁均挂此 slice，复用各模块 service，不引入新系统。
+- **G-1**：新增 `com.tailtopia.admin/`（`role=ADMIN` 端点 + Thymeleaf 简易后台），FR-18/25/29/33/封禁均挂此 slice，复用各模块 service，不引入新系统。
 - **G-4**：`shared/media` 上传链路增加 EXIF GPS 剥离。
 
 ### Architecture Completeness Checklist

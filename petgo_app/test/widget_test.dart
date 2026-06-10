@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/app.dart';
-import 'package:petgo/core/theme/colors.dart';
-import 'package:petgo/core/theme/motion.dart';
-import 'package:petgo/shared/widgets/app_shell.dart';
-import 'package:petgo/shared/widgets/bottom_tab_bar.dart';
+import 'package:tailtopia/app.dart';
+import 'package:tailtopia/core/theme/colors.dart';
+import 'package:tailtopia/core/theme/motion.dart';
+import 'package:tailtopia/shared/widgets/app_shell.dart';
+import 'package:tailtopia/shared/widgets/bottom_tab_bar.dart';
 
 Future<void> _pumpApp(WidgetTester tester) async {
-  await tester.pumpWidget(const ProviderScope(child: PetGoApp()));
+  await tester.pumpWidget(const ProviderScope(child: TailTopiaApp()));
   await tester.pumpAndSettle();
 }
 

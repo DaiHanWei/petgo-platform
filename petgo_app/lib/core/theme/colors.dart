@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// 设计 token —— 颜色（PetGo Prototype / 薄荷绿 × 米白 · Duolingo×Notion）。
+/// 设计 token —— 颜色（TailTopia Prototype / 薄荷绿 × 米白 · Duolingo×Notion）。
 ///
 /// 2026-06-04 全面换肤：主色由焦糖色切换为**薄荷绿 #7FD1AE**，作为新设计源真相。
 /// 强制护栏：业务/组件文件**禁止**硬编码 `Color(0x...)` / hex，一律引用此处常量。

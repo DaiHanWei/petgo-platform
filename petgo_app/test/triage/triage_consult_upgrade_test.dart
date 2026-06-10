@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/triage/data/triage_repository.dart';
-import 'package:petgo/features/profile/data/profile_repository.dart';
-import 'package:petgo/features/triage/presentation/triage_result_view.dart';
-import 'package:petgo/l10n/app_localizations.dart';
+import 'package:tailtopia/features/triage/data/triage_repository.dart';
+import 'package:tailtopia/features/profile/data/profile_repository.dart';
+import 'package:tailtopia/features/triage/presentation/triage_result_view.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// Story 5.4 F1：绿/黄态有「咨询兽医」升级入口；红色态严禁出现（零兽医引流，架构红线）。
 Future<void> _pump(WidgetTester tester, TriageResult result) async {

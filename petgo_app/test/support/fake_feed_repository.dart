@@ -1,5 +1,5 @@
-import 'package:petgo/features/content/data/feed_repository.dart';
-import 'package:petgo/features/content/domain/feed_item.dart';
+import 'package:tailtopia/features/content/data/feed_repository.dart';
+import 'package:tailtopia/features/content/domain/feed_item.dart';
 
 /// 测试用 Feed 仓库：返回固定 items（默认空），hasMore=false，同步完成。
 ///

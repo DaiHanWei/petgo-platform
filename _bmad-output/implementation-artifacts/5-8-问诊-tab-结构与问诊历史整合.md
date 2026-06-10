@@ -126,7 +126,7 @@ so that **我能一处发起问诊并回看所有历史记录**。
 
 ### Project Structure Notes
 
-- 后端：`com.petgo.consult.web`(`/api/v1/consult/history`、`/active`、`pending-rating` 复用 5.6、`/consult-sessions/{id}` 只读视角)；历史经 `triage` service 拿 AI 历史。游标分页。
+- 后端：`com.tailtopia.consult.web`(`/api/v1/consult/history`、`/active`、`pending-rating` 复用 5.6、`/consult-sessions/{id}` 只读视角)；历史经 `triage` service 拿 AI 历史。游标分页。
 - 前端：`lib/features/consult/presentation`——问诊 Tab 主页(三段)、历史列表、只读会话页；功能入口区 AI 卡跳 `features/triage`、兽医卡走 5.3 发起。补弹复用 5.6、重发复用 5.3/5.7。
 - 用户侧问诊在 `features/consult`（本 Story 是其用户侧主页）；兽医工作台 `features/vet`（本 Story 不碰）。
 

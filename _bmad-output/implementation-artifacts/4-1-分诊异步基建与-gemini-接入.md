@@ -154,7 +154,7 @@ Flutter 压缩图 → STS 直传②私密桶 →（本 Story 起）`POST /triage
 
 ### Project Structure Notes
 
-- 后端：`com.petgo.triage.{web,service,domain,repository,dto,event}` + `triage/service/{TriageService, SafetyRuleLayer(4.2 填充), TriageTaskScanner}` + `shared/ai/GeminiClient` + `resources/safety/high_risk_symptoms.yml`（**4.2 填充，本 Story 仅确保 `resources/safety/` 目录存在**）。
+- 后端：`com.tailtopia.triage.{web,service,domain,repository,dto,event}` + `triage/service/{TriageService, SafetyRuleLayer(4.2 填充), TriageTaskScanner}` + `shared/ai/GeminiClient` + `resources/safety/high_risk_symptoms.yml`（**4.2 填充，本 Story 仅确保 `resources/safety/` 目录存在**）。
 - 前端：`lib/features/triage/{data,domain,presentation}`（本 Story 仅 data + domain 薄层；presentation 的 `shared/widgets/{triage_result_card, red_alert_overlay}` 在 4.4/4.5 实现）。
 - 模块边界：triage 模块只经自身 service / 领域事件通信，禁跨模块直接访问对方 repository；`shared/ai`、`shared/media` 为跨模块基础设施。
 
@@ -213,38 +213,38 @@ Claude（云端 headless dev agent）
 ### File List
 
 **新增（后端 shared/ai）：**
-- `petgo-backend/src/main/java/com/petgo/shared/ai/GeminiClient.java`
-- `petgo-backend/src/main/java/com/petgo/shared/ai/GeminiTriageResult.java`
-- `petgo-backend/src/main/java/com/petgo/shared/ai/GeminiException.java`
-- `petgo-backend/src/main/java/com/petgo/shared/ai/GeminiProperties.java`
-- `petgo-backend/src/main/java/com/petgo/shared/ai/GeminiDeveloperApiClient.java`
-- `petgo-backend/src/main/java/com/petgo/shared/ai/StubGeminiClient.java`
-- `petgo-backend/src/main/java/com/petgo/shared/ai/AiConfig.java`
+- `petgo-backend/src/main/java/com/tailtopia/shared/ai/GeminiClient.java`
+- `petgo-backend/src/main/java/com/tailtopia/shared/ai/GeminiTriageResult.java`
+- `petgo-backend/src/main/java/com/tailtopia/shared/ai/GeminiException.java`
+- `petgo-backend/src/main/java/com/tailtopia/shared/ai/GeminiProperties.java`
+- `petgo-backend/src/main/java/com/tailtopia/shared/ai/GeminiDeveloperApiClient.java`
+- `petgo-backend/src/main/java/com/tailtopia/shared/ai/StubGeminiClient.java`
+- `petgo-backend/src/main/java/com/tailtopia/shared/ai/AiConfig.java`
 
 **新增（后端 triage 模块）：**
-- `petgo-backend/src/main/java/com/petgo/triage/domain/TriageStatus.java`
-- `petgo-backend/src/main/java/com/petgo/triage/domain/DangerLevel.java`
-- `petgo-backend/src/main/java/com/petgo/triage/domain/TriageTask.java`
-- `petgo-backend/src/main/java/com/petgo/triage/repository/TriageTaskRepository.java`
-- `petgo-backend/src/main/java/com/petgo/triage/dto/TriageSubmitRequest.java`
-- `petgo-backend/src/main/java/com/petgo/triage/dto/TriageAcceptedResponse.java`
-- `petgo-backend/src/main/java/com/petgo/triage/dto/TriageResultResponse.java`
-- `petgo-backend/src/main/java/com/petgo/triage/event/TriageSubmittedEvent.java`
-- `petgo-backend/src/main/java/com/petgo/triage/service/SafetyRuleLayer.java`（4.2 填充挂载点）
-- `petgo-backend/src/main/java/com/petgo/triage/service/TriageService.java`
-- `petgo-backend/src/main/java/com/petgo/triage/service/TriageProcessor.java`
-- `petgo-backend/src/main/java/com/petgo/triage/service/TriageEventListener.java`
-- `petgo-backend/src/main/java/com/petgo/triage/service/TriageTaskScanner.java`
-- `petgo-backend/src/main/java/com/petgo/triage/web/TriageController.java`
+- `petgo-backend/src/main/java/com/tailtopia/triage/domain/TriageStatus.java`
+- `petgo-backend/src/main/java/com/tailtopia/triage/domain/DangerLevel.java`
+- `petgo-backend/src/main/java/com/tailtopia/triage/domain/TriageTask.java`
+- `petgo-backend/src/main/java/com/tailtopia/triage/repository/TriageTaskRepository.java`
+- `petgo-backend/src/main/java/com/tailtopia/triage/dto/TriageSubmitRequest.java`
+- `petgo-backend/src/main/java/com/tailtopia/triage/dto/TriageAcceptedResponse.java`
+- `petgo-backend/src/main/java/com/tailtopia/triage/dto/TriageResultResponse.java`
+- `petgo-backend/src/main/java/com/tailtopia/triage/event/TriageSubmittedEvent.java`
+- `petgo-backend/src/main/java/com/tailtopia/triage/service/SafetyRuleLayer.java`（4.2 填充挂载点）
+- `petgo-backend/src/main/java/com/tailtopia/triage/service/TriageService.java`
+- `petgo-backend/src/main/java/com/tailtopia/triage/service/TriageProcessor.java`
+- `petgo-backend/src/main/java/com/tailtopia/triage/service/TriageEventListener.java`
+- `petgo-backend/src/main/java/com/tailtopia/triage/service/TriageTaskScanner.java`
+- `petgo-backend/src/main/java/com/tailtopia/triage/web/TriageController.java`
 - `petgo-backend/src/main/resources/db/migration/V12__init_triage.sql`
 
 **新增（后端测试 L0）：**
-- `petgo-backend/src/test/java/com/petgo/triage/TriageTestSupport.java`
-- `petgo-backend/src/test/java/com/petgo/triage/service/TriageServiceTest.java`
-- `petgo-backend/src/test/java/com/petgo/triage/service/TriageProcessorTest.java`
-- `petgo-backend/src/test/java/com/petgo/triage/web/TriageControllerTest.java`
-- `petgo-backend/src/test/java/com/petgo/triage/domain/DangerLevelTest.java`
-- `petgo-backend/src/test/java/com/petgo/shared/ai/StubGeminiClientTest.java`
+- `petgo-backend/src/test/java/com/tailtopia/triage/TriageTestSupport.java`
+- `petgo-backend/src/test/java/com/tailtopia/triage/service/TriageServiceTest.java`
+- `petgo-backend/src/test/java/com/tailtopia/triage/service/TriageProcessorTest.java`
+- `petgo-backend/src/test/java/com/tailtopia/triage/web/TriageControllerTest.java`
+- `petgo-backend/src/test/java/com/tailtopia/triage/domain/DangerLevelTest.java`
+- `petgo-backend/src/test/java/com/tailtopia/shared/ai/StubGeminiClientTest.java`
 
 **新增（前端 triage 薄客户端）：**
 - `petgo_app/lib/features/triage/data/triage_repository.dart`

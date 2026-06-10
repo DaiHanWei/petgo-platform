@@ -23,6 +23,7 @@ class FeedState {
     this.nextCursor,
     this.hasMore = false,
     this.loadingMore = false,
+    this.loadMoreFailed = false,
     this.pagesLoaded = 1,
   });
 
@@ -31,6 +32,10 @@ class FeedState {
   final String? nextCursor;
   final bool hasMore;
   final bool loadingMore;
+
+  /// 增量加载（loadMore）失败（AC5 · F13）：已加载内容保留，列表底部显「加载失败，点击重试」，
+  /// 重试沿用当前 nextCursor 续拉，不回顶不重拉首屏。
+  final bool loadMoreFailed;
 
   /// 已加载批次数（FR-0B：游客浏览至第 3 页触发软性登录浮层）。
   final int pagesLoaded;
@@ -42,14 +47,16 @@ class FeedState {
     String? nextCursor,
     bool? hasMore,
     bool? loadingMore,
+    bool? loadMoreFailed,
     int? pagesLoaded,
   }) =>
       FeedState(
         items: items ?? this.items,
         category: category,
-        nextCursor: nextCursor,
+        nextCursor: nextCursor ?? this.nextCursor,
         hasMore: hasMore ?? this.hasMore,
         loadingMore: loadingMore ?? this.loadingMore,
+        loadMoreFailed: loadMoreFailed ?? this.loadMoreFailed,
         pagesLoaded: pagesLoaded ?? this.pagesLoaded,
       );
 }
@@ -73,13 +80,15 @@ class FeedController extends AsyncNotifier<FeedState> {
     );
   }
 
-  /// 距底预加载：用 nextCursor 拉下一批并追加（去重由游标稳定性保证）。
+  /// 距底预加载 / 底部重试：用 nextCursor 拉下一批并追加（去重由游标稳定性保证）。
+  /// 失败置 [FeedState.loadMoreFailed]——保留已加载内容，底部显「点击重试」，重试沿用同一 nextCursor。
   Future<void> loadMore() async {
     final current = state.value;
     if (current == null || !current.hasMore || current.loadingMore || current.nextCursor == null) {
       return;
     }
-    state = AsyncData(current.copyWith(loadingMore: true));
+    // 进入加载：清失败态（重试场景）+ 置 loadingMore；nextCursor 由 copyWith 保留。
+    state = AsyncData(current.copyWith(loadingMore: true, loadMoreFailed: false));
     try {
       final page = await ref
           .read(feedRepositoryProvider)
@@ -89,11 +98,12 @@ class FeedController extends AsyncNotifier<FeedState> {
         nextCursor: page.nextCursor,
         hasMore: page.hasMore,
         loadingMore: false,
+        loadMoreFailed: false,
         pagesLoaded: current.pagesLoaded + 1,
       ));
     } catch (_) {
-      // 加载更多失败：复位 loadingMore，保留已有列表（不整屏报错）。
-      state = AsyncData(current.copyWith(loadingMore: false));
+      // AC5：加载更多失败 → 保留已加载内容（不整屏报错、不清空），底部失败提示 + 重试入口。
+      state = AsyncData(current.copyWith(loadingMore: false, loadMoreFailed: true));
     }
   }
 

@@ -4,7 +4,7 @@
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <meta name="robots" content="noindex,nofollow"/>
-    <title>PetGo 运营后台 · 登录</title>
+    <title>TailTopia 运营后台 · 登录</title>
     <style>
         body { font-family: system-ui, sans-serif; background: #f4f5f7; margin: 0; }
         .box { max-width: 320px; margin: 12vh auto; background: #fff; padding: 28px;
@@ -21,7 +21,7 @@
 </head>
 <body>
 <div class="box">
-    <h1>PetGo 运营后台</h1>
+    <h1>TailTopia 运营后台</h1>
     <p class="err" th:if="${param.error}">账号或密码不正确。</p>
     <p class="ok" th:if="${param.logout}">已退出登录。</p>
     <form th:action="@{/admin/login}" method="post">

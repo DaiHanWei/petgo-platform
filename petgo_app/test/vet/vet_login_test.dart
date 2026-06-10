@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/auth/presentation/login_page.dart';
-import 'package:petgo/features/vet/presentation/vet_login_page.dart';
-import 'package:petgo/l10n/app_localizations.dart';
+import 'package:tailtopia/features/auth/presentation/login_page.dart';
+import 'package:tailtopia/features/vet/presentation/vet_login_page.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 
 Future<void> _pump(WidgetTester tester, Widget home, Locale locale) async {
   await tester.pumpWidget(ProviderScope(

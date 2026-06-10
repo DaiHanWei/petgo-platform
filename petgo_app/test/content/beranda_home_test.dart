@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/auth/domain/auth_state.dart';
-import 'package:petgo/features/auth/domain/login_response.dart';
-import 'package:petgo/features/content/presentation/feed_tab_row.dart';
-import 'package:petgo/features/content/presentation/home_page.dart';
-import 'package:petgo/l10n/app_localizations.dart';
+import 'package:tailtopia/features/auth/domain/auth_state.dart';
+import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/features/content/presentation/feed_tab_row.dart';
+import 'package:tailtopia/features/content/presentation/home_page.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Beranda 首页换肤回归（PetGo Prototype）：问候头 + 快捷入口 + 每日卡 + 区头恒渲染。
+/// Beranda 首页换肤回归（TailTopia Prototype）：问候头 + 快捷入口 + 每日卡 + 区头恒渲染。
 ///
 /// 注：测试环境 feed 走真网→error 态，验证「头部在非 data 态也恒在」（Tab/提示条/快捷入口可达）。
 LoginResponse _user() => const LoginResponse(
@@ -18,7 +18,7 @@ LoginResponse _user() => const LoginResponse(
       isNewUser: false,
       onboardingCompleted: true,
       profile: UserProfile(
-          nickname: 'Aurel', petStatus: 'B', hasPetProfile: true, onboardingCompleted: true),
+          nickname: 'Aurel', petStatus: 'PLANNING', hasPetProfile: true, onboardingCompleted: true),
     );
 
 Future<void> _pumpHome(WidgetTester tester, ProviderContainer c) async {

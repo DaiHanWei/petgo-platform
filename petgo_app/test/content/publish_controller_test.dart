@@ -2,16 +2,20 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/content/data/content_repository.dart';
-import 'package:petgo/features/content/domain/content_type.dart';
-import 'package:petgo/features/content/domain/publish_controller.dart';
+import 'package:tailtopia/features/content/data/content_repository.dart';
+import 'package:tailtopia/features/content/domain/content_type.dart';
+import 'package:tailtopia/features/content/domain/publish_controller.dart';
 
 class _FakeRepo implements ContentRepository {
   ContentType? lastType;
   int? lastPetId;
   List<String>? lastUrls;
   String? lastIdem;
+  DateTime? lastEventDate;
   int publishCalls = 0;
+
+  /// 注入式发布异常（模拟审核 422 等）；非空则 publish 抛出。
+  Object? throwOnPublish;
 
   @override
   Future<int> publish({
@@ -19,13 +23,16 @@ class _FakeRepo implements ContentRepository {
     int? petId,
     String? text,
     List<String> imageUrls = const [],
+    DateTime? eventDate,
     required String idempotencyKey,
   }) async {
     publishCalls++;
     lastType = type;
     lastPetId = petId;
     lastUrls = imageUrls;
+    lastEventDate = eventDate;
     lastIdem = idempotencyKey;
+    if (throwOnPublish != null) throw throwOnPublish!;
     return 123;
   }
 }
@@ -117,6 +124,45 @@ void main() {
     m2.c.setType(ContentType.daily);
     await m2.c.publish(idempotencyKey: 'K', petId: 5);
     expect(m2.repo.lastPetId, isNull); // 普通类型忽略 petId
+  });
+
+  test('最低内容（AC6）：文字图片皆空禁发，任一非空可发', () {
+    final m = make();
+    expect(m.c.canPublish, isFalse); // 皆空
+    m.c.addImage(bytes('img')); // 仅图片
+    expect(m.c.canPublish, isTrue);
+    m.c.removeImage(0);
+    expect(m.c.canPublish, isFalse);
+    m.c.setText('  '); // 纯空白不算内容
+    expect(m.c.canPublish, isFalse);
+    m.c.setText('hi'); // 仅文字
+    expect(m.c.canPublish, isTrue);
+  });
+
+  test('成长日历默认带今天事件日期；普通类型不带（F9）', () async {
+    final m = make();
+    m.c.setText('moment');
+    m.c.setType(ContentType.growthMoment);
+    await m.c.publish(idempotencyKey: 'K', petId: 5);
+    final today = DateTime.now();
+    expect(m.repo.lastEventDate, isNotNull);
+    expect(m.repo.lastEventDate!.year, today.year);
+    expect(m.repo.lastEventDate!.month, today.month);
+    expect(m.repo.lastEventDate!.day, today.day);
+
+    final m2 = make();
+    m2.c.setText('daily');
+    await m2.c.publish(idempotencyKey: 'K');
+    expect(m2.repo.lastEventDate, isNull); // 日常不带事件日期
+  });
+
+  test('setEventDate 显式日期透传（去时分）', () async {
+    final m = make();
+    m.c.setText('生日');
+    m.c.setType(ContentType.growthMoment);
+    m.c.setEventDate(DateTime(2024, 5, 1, 13, 30));
+    await m.c.publish(idempotencyKey: 'K', petId: 9);
+    expect(m.repo.lastEventDate, DateTime(2024, 5, 1));
   });
 
   test('字数实时计数与发布禁用', () {

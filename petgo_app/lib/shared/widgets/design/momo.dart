@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/colors.dart';
 
-/// Momo —— PetGo 吉祥物（占位 IP）。
+/// Momo —— TailTopia 吉祥物（占位 IP）。
 ///
 /// 纯几何图形拼搭的圆润薄荷绿小猫，对应 prototype `components.jsx` 的 `Momo`。
 /// - [size] 像素边长。

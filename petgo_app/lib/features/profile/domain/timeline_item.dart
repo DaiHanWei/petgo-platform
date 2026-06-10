@@ -6,6 +6,7 @@ class TimelineItem {
   const TimelineItem({
     required this.kind,
     required this.date,
+    this.eventDate,
     this.postId,
     this.imageUrls = const [],
     this.text,
@@ -14,7 +15,12 @@ class TimelineItem {
   });
 
   final TimelineKind kind;
+
+  /// 发生/创建时刻（createdAt）；兼作游标与健康事件显示日期。
   final DateTime date;
+
+  /// 成长日历事件日期（F9，仅快乐时刻有值）；为空回退 [date]。决定时间线显示与排序位置。
+  final DateTime? eventDate;
 
   // 快乐时刻字段
   final int? postId;
@@ -25,11 +31,16 @@ class TimelineItem {
   final String? aiLevel;
   final String? symptomSummary;
 
+  /// 时间线显示日期：快乐时刻取事件日期（F9），健康事件取发生时刻。
+  DateTime get displayDate => eventDate ?? date;
+
   factory TimelineItem.fromJson(Map<String, dynamic> json) {
     final rawImages = json['imageUrls'];
+    final rawEvent = json['eventDate'] as String?;
     return TimelineItem(
       kind: _parseKind(json['kind'] as String?),
       date: DateTime.parse(json['date'] as String),
+      eventDate: rawEvent != null ? DateTime.parse(rawEvent) : null,
       postId: json['postId'] as int?,
       imageUrls: rawImages is List ? rawImages.map((e) => e.toString()).toList() : const [],
       text: json['text'] as String?,

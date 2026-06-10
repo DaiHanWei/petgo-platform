@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:petgo/app.dart';
-import 'package:petgo/core/l10n/locale_controller.dart';
-import 'package:petgo/core/mock/mock_config.dart';
-import 'package:petgo/core/mock/mock_media.dart';
-import 'package:petgo/core/storage/prefs.dart';
-import 'package:petgo/features/profile/domain/profile_prompt_controller.dart';
-import 'package:petgo/features/profile/domain/profile_prompt_state.dart';
+import 'package:tailtopia/app.dart';
+import 'package:tailtopia/core/l10n/locale_controller.dart';
+import 'package:tailtopia/core/mock/mock_config.dart';
+import 'package:tailtopia/core/mock/mock_media.dart';
+import 'package:tailtopia/core/storage/prefs.dart';
+import 'package:tailtopia/features/profile/domain/profile_prompt_controller.dart';
+import 'package:tailtopia/features/profile/domain/profile_prompt_state.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,7 +29,7 @@ Future<void> main() async {
       // Mock 模式:覆盖上传用例(唯一不走 dio 的 OSS 直传 → 占位 URL)。其余靠 Dio MockInterceptor。
       if (kMockMode) mediaUploadUseCaseMockOverride,
     ],
-    child: const PetGoApp(),
+    child: const TailTopiaApp(),
   ));
 }
 

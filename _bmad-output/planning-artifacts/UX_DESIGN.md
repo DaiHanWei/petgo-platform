@@ -1,12 +1,14 @@
 ---
-title: "PetGo V1.0 Design System"
+title: "TailTopia V1.0 Design System"
 status: draft
 created: 2026-05-29
 updated: 2026-06-01
 platform: iOS · Android
 ---
 
-# PetGo — DESIGN.md
+> ⚠️ **品牌色板已过期（焦糖色，换肤前）。** 本文档色板为 2026-06-04 薄荷绿换肤前的旧版（焦糖 `#C8874A` / 米白 `#FAF8F5`）。**视觉/品牌真相 = `petgo_app/lib/core/theme/colors.dart`（薄荷绿 `#7FD1AE`）+ Claude Design mint 原型**，非本文档。新功能 UX/交互见 PRD §4。详见 CROSS-STORY-DECISIONS **F8**。（incoming 的 `UX_DESIGN.new.md` 亦为焦糖旧版，**不晋升覆盖**。）
+
+# TailTopia — DESIGN.md
 
 ## Brand & Style
 

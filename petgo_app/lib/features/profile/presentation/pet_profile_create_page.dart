@@ -7,10 +7,16 @@ import '../../../core/media/media_scope.dart';
 import '../../../core/network/problem_detail.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
+import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../media/domain/media_upload_use_case.dart';
 import '../../../shared/utils/media_permission.dart';
+import '../../../shared/widgets/app_image.dart';
+import '../data/health_event_repository.dart';
 import '../data/profile_repository.dart';
+import '../data/timeline_repository.dart';
+import '../domain/pending_archive.dart';
+import '../domain/profile_created_flow.dart';
 
 /// 宠物档案创建表单（Story 2.2 · F1）。
 ///
@@ -29,6 +35,7 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
   final _introController = TextEditingController();
   DateTime? _birthday;
   String? _avatarUrl;
+  String? _petType; // F6 必选：CAT/DOG/OTHER
   bool _uploading = false;
   bool _submitting = false;
 
@@ -40,7 +47,13 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
     super.dispose();
   }
 
-  bool get _canSubmit => _nameController.text.trim().isNotEmpty && !_submitting && !_uploading;
+  // 必填（F6 + R2/AC3）：类型 + 名字 + 生日（完整年月日）齐全方可提交。
+  bool get _canSubmit =>
+      _petType != null &&
+      _nameController.text.trim().isNotEmpty &&
+      _birthday != null &&
+      !_submitting &&
+      !_uploading;
 
   Future<void> _pickAvatar() async {
     setState(() => _uploading = true);
@@ -63,22 +76,45 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context);
     final name = _nameController.text.trim();
-    if (name.isEmpty) {
+    final petType = _petType;
+    final birthday = _birthday;
+    // 必填守卫（与 _canSubmit 一致；按钮已禁用，此处双保险）：类型/名字/生日齐全。
+    if (petType == null || name.isEmpty || birthday == null) {
       _toast(l10n.petProfileNameRequired);
       return;
     }
     setState(() => _submitting = true);
     try {
-      await ref.read(profileRepositoryProvider).create(
+      final created = await ref.read(profileRepositoryProvider).create(
+            petType: petType,
             name: name,
+            birthday: birthday,
             avatarUrl: _avatarUrl,
             breed: _emptyToNull(_breedController.text),
-            birthday: _birthday,
             intro: _emptyToNull(_introController.text),
             idempotencyKey: 'create-${DateTime.now().microsecondsSinceEpoch}',
           );
       ref.invalidate(petProfileProvider);
-      if (mounted) context.go('/profile');
+      if (!mounted) return;
+      // 建档来源（路由 query `?origin=`）：FR-0G 正常建档 → 庆祝页（AC4/F15）；
+      // FR-16 问诊存档 / FR-12 灰选发布 → 跳过庆祝页，直接回原流程（Story 2.5/2.3 接管）。
+      final origin =
+          buildOriginFromName(GoRouterState.of(context).uri.queryParameters['origin']);
+      if (showsBuildCelebration(origin)) {
+        context.go('/profile/created', extra: created);
+      } else if (origin == BuildOrigin.graySelectPublish) {
+        // AC7（F15）：灰选成长日历触发的建档完成 → 跳过庆祝页，回发布着陆页预选成长日历续发
+        // （复用 /publish 着陆页首帧开 sheet 的稳健路径，不从已失效的建档页 context 直接开 sheet）。
+        context.go('/publish?preset=growth-calendar');
+      } else if (origin == BuildOrigin.triageArchive) {
+        // Story 2.5 AC3/AC4：FR-16 问诊存档触发的建档完成 → 跳过庆祝页，用同一 sourceRef
+        // 回灌挂起的存档意图（recordDecision ARCHIVED，幂等键兜底），再回成长档案查看。
+        // 注：红色态语义为「返回结果页」——结果页属 Epic 4 瞬态路由，此处回档案为近似（条目已落库可见）。
+        await _backfillPendingArchive(created.id);
+        if (mounted) context.go('/profile');
+      } else {
+        context.go('/profile');
+      }
     } on DioException catch (e) {
       final pd = ProblemDetail.fromDioException(e);
       if (pd?.typeSlug == 'profile-exists' || pd?.status == 409) {
@@ -90,6 +126,30 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
       }
     } finally {
       if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  /// AC3/AC4：建档成功后回灌挂起的存档意图（同 sourceRef，幂等）。无挂起则无操作（放弃建档无副作用）。
+  Future<void> _backfillPendingArchive(int newPetId) async {
+    final pending = ref.read(pendingArchiveProvider);
+    if (pending == null) return;
+    try {
+      await ref.read(healthEventRepositoryProvider).recordDecision(
+            sourceType: pending.sourceType,
+            sourceRef: pending.sourceRef,
+            petId: newPetId,
+            decision: ArchiveDecision.archived,
+            symptomSummary: pending.symptomSummary,
+            aiLevel: pending.aiLevel,
+            adviceSummary: pending.adviceSummary,
+            imImageRefs: pending.imImageRefs,
+          );
+    } catch (_) {
+      // 回灌失败不阻断建档完成；幂等键允许后续重试不重存。
+    } finally {
+      ref.read(pendingArchiveProvider.notifier).clear(); // 消费后清空
+      ref.invalidate(timelineFirstPageProvider);
+      ref.invalidate(archiveStatsProvider);
     }
   }
 
@@ -138,7 +198,7 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
                 child: CircleAvatar(
                   radius: 44,
                   backgroundColor: AppColors.surface,
-                  backgroundImage: _avatarUrl == null ? null : NetworkImage(_avatarUrl!),
+                  backgroundImage: AppImage.provider(_avatarUrl),
                   child: _uploading
                       ? const CircularProgressIndicator()
                       : (_avatarUrl == null
@@ -148,13 +208,28 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
               ),
             ),
             const SizedBox(height: AppSpacing.lg),
+            // 宠物类型（F6 必选，创建后不可改）
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Text('${l10n.petTypeLabel} *', style: AppTypography.caption),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: AppSpacing.sm,
+              children: [
+                _petTypeChip('CAT', l10n.petTypeCat),
+                _petTypeChip('DOG', l10n.petTypeDog),
+                _petTypeChip('OTHER', l10n.petTypeOther),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
             TextField(
               key: const ValueKey('petProfileNameField'),
               controller: _nameController,
               maxLength: 20,
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
-                labelText: l10n.petProfileName,
+                labelText: '${l10n.petProfileName} *',
                 hintText: l10n.petProfileNameHint,
               ),
             ),
@@ -167,7 +242,7 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
             ListTile(
               key: const ValueKey('petProfileBirthdayTile'),
               contentPadding: EdgeInsets.zero,
-              title: Text(l10n.petProfileBirthday),
+              title: Text('${l10n.petProfileBirthday} *'),
               subtitle: Text(_birthday == null
                   ? l10n.petProfileBirthdayPick
                   : '${_birthday!.year}-${_birthday!.month}-${_birthday!.day}'),
@@ -194,8 +269,18 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
     );
   }
 
+  Widget _petTypeChip(String value, String label) {
+    return ChoiceChip(
+      key: ValueKey('petType_$value'),
+      label: Text(label),
+      selected: _petType == value,
+      onSelected: (_) => setState(() => _petType = value),
+    );
+  }
+
   Future<void> _pickBirthday() async {
     final now = DateTime.now();
+    // 完整年月日 date picker（R2/AC3）：不提供只月日模式，产出完整 date。
     final picked = await showDatePicker(
       context: context,
       initialDate: _birthday ?? now,

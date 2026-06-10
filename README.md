@@ -1,10 +1,10 @@
-# PetGo Platform
+# TailTopia Platform
 
 > 印尼第一款以「宠物主人全生命周期陪伴」为核心的宠物社区 App —— 研发主仓库。
 
-**PetGo** 为雅加达及印尼各地的宠物主解决三个长期痛点：宠物突发健康问题时找不到低价可信的专业指导、宠物成长记忆没有专属归处、以及缺少与同好宠物主连接的社区。
+**TailTopia** 为雅加达及印尼各地的宠物主解决三个长期痛点：宠物突发健康问题时找不到低价可信的专业指导、宠物成长记忆没有专属归处、以及缺少与同好宠物主连接的社区。
 
-本仓库是 PetGo 的**工程研发仓库**。产品需求、UX 规范与技术框架等规划产物，作为唯一事实源沉淀在 [`_bmad-output/planning-artifacts/`](./_bmad-output/planning-artifacts/) 下，供架构、Epic、Story 等下游开发环节引用。
+本仓库是 TailTopia 的**工程研发仓库**。产品需求、UX 规范与技术框架等规划产物，作为唯一事实源沉淀在 [`_bmad-output/planning-artifacts/`](./_bmad-output/planning-artifacts/) 下，供架构、Epic、Story 等下游开发环节引用。
 
 ---
 
@@ -67,7 +67,7 @@ petgo-platform/
 │   ├── UX_DESIGN.md                   #   UX 视觉规范（Design System）
 │   ├── UX_EXPERIENCE.md               #   UX 行为规范（信息架构 / 流程 / 无障碍）
 │   ├── TECH_FRAMEWORK.md              #   技术框架与多云拓扑对齐稿
-│   ├── PetGo_V1_mockups.html          #   21 屏全屏效果图（S01–S21）
+│   ├── TailTopia_V1_mockups.html          #   21 屏全屏效果图（S01–S21）
 │   └── implementation-readiness-report-2026-06-01.md  # 就绪度评审
 ├── _bmad/                             # BMAD 工作流配置
 ├── docs/                              # 工程文档（架构 / API 契约，待产出）
@@ -85,7 +85,7 @@ petgo-platform/
 | [`UX_DESIGN.md`](./_bmad-output/planning-artifacts/UX_DESIGN.md) | 🎨 UX 视觉 | 色彩 / 字体 / 间距 / 组件 / Do's & Don'ts |
 | [`UX_EXPERIENCE.md`](./_bmad-output/planning-artifacts/UX_EXPERIENCE.md) | 🧭 UX 行为 | 导航 / 状态 / 关键流程 / 无障碍 |
 | [`TECH_FRAMEWORK.md`](./_bmad-output/planning-artifacts/TECH_FRAMEWORK.md) | 🏗️ 技术框架 | 技术选型与多云拓扑 |
-| [`PetGo_V1_mockups.html`](./_bmad-output/planning-artifacts/PetGo_V1_mockups.html) | 🖼️ 效果图 | 21 屏全屏效果图 |
+| [`TailTopia_V1_mockups.html`](./_bmad-output/planning-artifacts/TailTopia_V1_mockups.html) | 🖼️ 效果图 | 21 屏全屏效果图 |
 
 ---
 

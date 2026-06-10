@@ -23,23 +23,50 @@ class ConsultWaitingPage extends ConsumerStatefulWidget {
   ConsumerState<ConsultWaitingPage> createState() => _ConsultWaitingPageState();
 }
 
-class _ConsultWaitingPageState extends ConsumerState<ConsultWaitingPage> {
+class _ConsultWaitingPageState extends ConsumerState<ConsultWaitingPage>
+    with WidgetsBindingObserver {
   static const Duration _pollInterval = Duration(seconds: 3);
 
   Timer? _poll;
   bool _timeoutShown = false;
   bool _navigating = false;
 
+  /// AC7（F12）：退出取消的抑制位。接单成功 / 「先用 AI」保留请求 / 主动取消 时置真，
+  /// 避免在这些已决态下因生命周期 detached 误触发取消。
+  bool _exitCancelDisabled = false;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _startPolling();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _poll?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // AC7（F12）：等待期间退出 App（含 kill 进程）→ 自动取消本次匹配，从待接单队列删除，兽医不会接到此单。
+    // detached = 进程终止前最后信号；best-effort 复用既有 cancel 路径（无二次确认）。
+    // 注：硬 SIGKILL 可能不触发 detached；可靠兜底需后端心跳/TTL（V1 禁中间件、从简，见 story Dev Notes）。
+    if (state == AppLifecycleState.detached && !_exitCancelDisabled) {
+      _exitCancelDisabled = true;
+      _poll?.cancel();
+      unawaited(_cancelOnExit());
+    }
+  }
+
+  Future<void> _cancelOnExit() async {
+    try {
+      await ref.read(consultRepositoryProvider).cancel(widget.sessionId);
+    } catch (_) {
+      // 进程终止中无法保证送达；硬 kill 兜底依赖后端（见 Dev Notes）。
+    }
   }
 
   void _startPolling() {
@@ -53,7 +80,8 @@ class _ConsultWaitingPageState extends ConsumerState<ConsultWaitingPage> {
       final s = await ref.read(consultRepositoryProvider).get(widget.sessionId);
       if (!mounted) return;
       if (s.isInProgress) {
-        // 接单 → 进会话界面（Story 5.5）。
+        // 接单 → 进会话界面（Story 5.5）。已决态，退出不再取消。
+        _exitCancelDisabled = true;
         _poll?.cancel();
         if (mounted) context.go('/consult/conversation/${widget.sessionId}');
         return;
@@ -122,6 +150,8 @@ class _ConsultWaitingPageState extends ConsumerState<ConsultWaitingPage> {
 
   void _useAi() {
     // 原 WAITING 请求保留（不取消）；跳分诊上传页，提示兽医接单后会通知。
+    // 显式保留请求 → 退出时不自动取消（与 AC7 退出取消区分）。
+    _exitCancelDisabled = true;
     final l10n = AppLocalizations.of(context);
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
@@ -151,6 +181,7 @@ class _ConsultWaitingPageState extends ConsumerState<ConsultWaitingPage> {
       ),
     );
     if (confirmed != true) return;
+    _exitCancelDisabled = true; // 主动取消进行中，避免 detached 重复触发
     _poll?.cancel();
     try {
       await ref.read(consultRepositoryProvider).cancel(widget.sessionId);

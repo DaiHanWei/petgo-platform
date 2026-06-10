@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/profile/data/profile_repository.dart';
-import 'package:petgo/features/triage/data/triage_repository.dart';
-import 'package:petgo/features/triage/domain/triage_result_controller.dart';
-import 'package:petgo/features/triage/domain/triage_upload_controller.dart';
-import 'package:petgo/features/triage/presentation/triage_upload_page.dart';
-import 'package:petgo/l10n/app_localizations.dart';
-import 'package:petgo/shared/widgets/red_alert_overlay.dart';
+import 'package:tailtopia/features/profile/data/profile_repository.dart';
+import 'package:tailtopia/features/triage/data/triage_repository.dart';
+import 'package:tailtopia/features/triage/domain/triage_result_controller.dart';
+import 'package:tailtopia/features/triage/domain/triage_upload_controller.dart';
+import 'package:tailtopia/features/triage/presentation/triage_upload_page.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/shared/widgets/red_alert_overlay.dart';
 
 class _FakeTriageRepo implements TriageRepository {
   _FakeTriageRepo(this.results);
@@ -62,6 +62,16 @@ void main() {
     expect(find.byKey(const ValueKey('triageAddImage')), findsOneWidget);
     final submit = tester.widget<FilledButton>(find.byKey(const ValueKey('triageSubmit')));
     expect(submit.onPressed, isNull); // 无输入禁用
+  });
+
+  testWidgets('AC5: 仅文字、无图 → 提交按钮可用（图片选填）', (tester) async {
+    final c = _container(_FakeTriageRepo([const TriageResult(status: TriageStatus.done)]));
+    await _pump(tester, c);
+    // 仅填文字、不加任何图片。
+    await tester.enterText(find.byKey(const ValueKey('triageSymptomField')), '只是有点没精神');
+    await tester.pump();
+    final submit = tester.widget<FilledButton>(find.byKey(const ValueKey('triageSubmit')));
+    expect(submit.onPressed, isNotNull); // 文字非空即可提交，不依赖图片 widget
   });
 
   testWidgets('AC4: 服务异常(FAILED) → 异常态 + 软引导兽医', (tester) async {

@@ -8,15 +8,20 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/red_alert_overlay.dart';
 import '../../profile/data/profile_repository.dart';
 import '../data/triage_repository.dart';
-import '../domain/triage_navigation.dart';
+import '../domain/triage_archive.dart';
+import '../domain/triage_upload_controller.dart';
 import '../domain/triage_wording_guard.dart';
 
-/// 红色结果（Story 4.5）。进入即自底滑起 [RedAlertOverlay] 半屏强提醒；关闭后保留红色摘要——
-/// 🔒 **零兽医 CTA / 零存档 / 零变现引流**（区别于绿/黄页），红色态唯一出口是「去导航」就医。
+/// 红色结果（Story 4.5）。进入即自底滑起 [RedAlertOverlay] 半屏强提醒；关闭后保留红色摘要。
+/// 🔒 **零兽医 CTA / 零变现引流 / 零地图导航 / 零医院推荐**（F3 · 去导航化），红色态唯一关闭出口
+/// 是单一「我已知晓」按钮。
+/// 🆕 **R2（FR-3 · F15）：结果页底部加「存入档案」入口**——存档为免费工具，**非变现/引流**，
+/// 零变现护栏不变；A 已建档直接存、未建档/B-C 引导建档（见 [triageRedArchiveHandlerProvider]）。
 class TriageRedResult extends ConsumerStatefulWidget {
-  const TriageRedResult({super.key, required this.result});
+  const TriageRedResult({super.key, required this.result, this.triageId});
 
   final TriageResult result;
+  final int? triageId;
 
   @override
   ConsumerState<TriageRedResult> createState() => _TriageRedResultState();
@@ -57,7 +62,9 @@ class _TriageRedResultState extends ConsumerState<TriageRedResult> {
     final l10n = AppLocalizations.of(context);
     final advice =
         TriageWordingGuard.sanitize(widget.result.advice, fallback: l10n.triageNeutralAdvice);
-    // 关闭 overlay 后保留的红色摘要：⚠️ + 等级 + 建议 + 唯一出口「去导航」。无兽医/存档/变现节点。
+    // 关闭 overlay 后保留的红色摘要：⚠️ + 等级 + 建议 +「存入档案」(R2 · FR-3) + 前置免责。
+    // 🔒 仍无兽医 CTA / 无变现引流 / 无地图导航 / 无医院推荐（F3 去导航化）；
+    //    「存入档案」是唯一新增工具入口——免费存档、非变现（守 NFR-9 零变现护栏）。
     return ListView(
       key: const ValueKey('triageRedSummary'),
       padding: const EdgeInsets.all(AppSpacing.screenEdge),
@@ -72,15 +79,19 @@ class _TriageRedResultState extends ConsumerState<TriageRedResult> {
         ),
         const SizedBox(height: AppSpacing.md),
         Text(advice, style: AppTypography.body),
-        const SizedBox(height: AppSpacing.xl),
-        FilledButton(
-          key: const ValueKey('triageRedSummaryNavigate'),
-          style: FilledButton.styleFrom(
-            backgroundColor: AppColors.triageRed,
-            minimumSize: const Size.fromHeight(48),
+        const SizedBox(height: AppSpacing.lg),
+        // R2（FR-3 · F15）：红色态「存入档案」入口（仅存档、免费；A 已建档直存 / 未建档·B-C 引导建档）。
+        FilledButton.tonal(
+          key: const ValueKey('triageRedSaveToArchive'),
+          onPressed: () => ref.read(triageRedArchiveHandlerProvider)(
+            context,
+            ref,
+            triageId: widget.triageId,
+            level: DangerLevel.red,
+            advice: widget.result.advice,
+            symptom: ref.read(triageUploadProvider).symptomText,
           ),
-          onPressed: () => confirmAndNavigate(context, ref),
-          child: Text(l10n.triageRedNavigate),
+          child: Text(l10n.triageSaveToArchive),
         ),
         const SizedBox(height: AppSpacing.lg),
         Text(widget.result.disclaimer ?? l10n.triageDisclaimer, style: AppTypography.disclaimer),

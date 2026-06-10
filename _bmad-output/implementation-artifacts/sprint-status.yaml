@@ -50,9 +50,26 @@
 # - 跨 story 决策清单见 implementation-artifacts/CROSS-STORY-DECISIONS.md
 
 generated: 2026-06-01
-last_updated: 2026-06-02
+last_updated: 2026-06-09  # 2.3/2.4/2.5 R2 完成
 project: petgo-platform
 # epic-1 -> in-progress (首个 story 1.1 已 contexted)
+#
+# ===== 2026-06-08 correct-course 修订 (incoming PRD V1.0.0, 已批准) =====
+# 见 planning-artifacts/sprint-change-proposal-2026-06-08.md + CROSS-STORY-DECISIONS F1-F7。
+# - 15 个现有 story 需并入 PRD V1.0.0 修订 (下方各行 [PRD1.0.0✏️] 标注)。
+#   其中 review 态需"回改已实现代码"的 6 个 (4-5/5-5/6-1/6-4/6-6/7-1) 已退回 ready-for-dev。
+#   ready-for-dev 态 (Epic1/2) 仅改 AC 文档,状态不变。
+# - 新增: 6-7 定时类系统推送; epic-8 里程碑系统 mini-epic (FR-42, 分层纳入 F2)。
+# - 命名 TBD: TailTopia->[App Name] 定名后单独收口轮,不阻塞。
+#
+# ===== 2026-06-08 第二轮 correct-course (PRD 12 处断档补齐) =====
+# 见 planning-artifacts/sprint-change-proposal-2026-06-08-gapfixes.md + CROSS-STORY-DECISIONS F9-F15。
+# 主题: 异常态 / 退出态 / 并发竞争 / 跨模块一致性补齐 (非新功能)。下方各行 [PRD1.0.0✏️·R2] 标注。
+# - A 类 (Epic1/2, ready-for-dev): 仅改 AC,状态不变 — 1-3/1-4/1-6/1-7/2-2/2-3/2-4/2-5/2-6。
+# - B 类 (Epic3-7, review→ready-for-dev 回改代码): 3-2/3-3/3-5/3-7/4-3/4-5/5-2/5-3/5-6/5-7/6-4/6-6/7-1/7-3。
+# - ⚠️安全攸关优先单独验: 5-3 抢单原子写入(F11) / 等待退出取消(F12)。
+# - D 类 (仅规格,不实现): FR-42 in-page picker 打卡/L级达成推送/已过生日补录 → Epic8 mini-epic。
+# - 内容审核决策反转(F10): 人工→发布时三方自动审核(文字关键词+图像 stub),影响 2-3/3-7。
 project_key: NOKEY
 tracking_system: file-system
 story_location: "{project-root}/_bmad-output/implementation-artifacts"
@@ -61,35 +78,35 @@ development_status:
   # ===== Epic 1: 应用地基与账户接入 =====
   epic-1: in-progress
   1-1-双产物脚手架与本地可运行骨架: review
-  1-2-设计-token-系统-tab-bar-外壳与-i18n-脚手架: ready-for-dev
-  1-3-google-登录与-jwt-签发: ready-for-dev
-  1-4-登录引导浮层与登录后回跳: ready-for-dev
-  1-5-游客只读进入与受控入口登录门控: ready-for-dev
-  1-6-新用户引导-昵称确认与宠物状态选择: ready-for-dev
-  1-7-状态-a-档案创建引导与首页提示条: ready-for-dev
+  1-2-设计-token-系统-tab-bar-外壳与-i18n-脚手架: review   # [R1 登记同步 2026-06-09] Epic1 批量PR(#1)即实现,本轮核验翻review(非遗弃/非未实现): L0绿(widget_test token底色/Tab外壳5位+凸起/120ms/i18n双语 8例,纳入全量299); 偏差(换肤9bf3a75有意演进): AC2弧形缺口→平直顶边+centerDocked半埋,＋色固定accentGrowth; L2待本地真机视觉(切Tab底色/凸起观感/系统语言/golden)
+  1-3-google-登录与-jwt-签发: review          # [PRD1.0.0✏️] 加多 IdP 架构预留注记 (为 1.1.0 Apple,非本版 AC) ·[R2] 加 AC: Google 授权失败态(取消/超时/异常)统一提示+重试+不建账号 (FR-0D,F13) ·R2 完成(L0 绿: AC5 失败态既有满足+补测试,后端 8/8+前端 login 4/4; 取消差异化已记)
+  1-4-登录引导浮层与登录后回跳: review          # [PRD1.0.0✏️·R2] 加 AC: 授权失败回触发前页面+重试 (FR-0C/0D,F13) ·R2 完成(L0 绿: _attemptLogin 三态化+失败态横幅+重试,login_guide test 10/10·全套240; L2 真实失败链路待本地)
+  1-5-游客只读进入与受控入口登录门控: review   # [R1 登记同步 2026-06-09] Epic1 批量PR(#1)即实现,本轮核验翻review(非遗弃/非未实现): L0绿(story_1_5_gating 6例+auth_interceptor+后端ProblemDetailAuthHandlers 401/403,纳入全量523/299); 偏差(非AC阻塞): dio401未注入pendingAction自动重放/ProblemDetail缺traceId; L1待本地(GatewayPing对称性需Docker); L2待本地(真Google登录回跳)
+  1-6-新用户引导-昵称确认与宠物状态选择: review  # [PRD1.0.0✏️] 改 AC3: B/C→A 复用 FR-0G 建档引导 ·[R2] 加 AC: 注册返回键语义(0E退登录/0F回0E)+状态切换 A↔B/C 已建档分支 (FR-21,F15邻) ·R2 完成(L0 绿: PopScope 返回键两页+petStatusChangeAction 四象限+后端 B5 不删档案; 后端 MeServiceTest 7/7,前端 246; L1/L2 待本地)
+  1-7-状态-a-档案创建引导与首页提示条: review    # [PRD1.0.0✏️] 复核 AC2: 运行期 B→A 提示条语义转正 ·[R2] 加 AC: 创建成功庆祝页(分享名片/开始探索)+推送权限时序庆祝页后进首页前 (F15) ·R2 完成(L0 绿: 庆祝页+推送闸门串接+BuildOrigin 跳过分支; 前端 252,无后端改动; L2 真机推送/分享待本地)
   epic-1-retrospective: optional
 
   # ===== Epic 2: 成长档案与宠物名片分享 =====
   epic-2: in-progress
-  2-1-媒体基建-oss-双桶-sts-直传-签名-url-与-exif-剥离: ready-for-dev
-  2-2-宠物档案创建-单账号单宠物: ready-for-dev
-  2-3-统一-发布入口与内容发布: ready-for-dev
-  2-4-成长档案-tab-时间线与状态快捷编辑: ready-for-dev
-  2-5-问诊记录存档承接与健康事件时间线: ready-for-dev
-  2-6-宠物名片-h5-对外分享页: ready-for-dev
-  2-7-档案页动效分享-fab: ready-for-dev
-  2-8-宠物档案编辑: ready-for-dev
+  2-1-媒体基建-oss-双桶-sts-直传-签名-url-与-exif-剥离: review   # [R1 登记同步 2026-06-09] Epic2 批量PR(#2)即实现,本轮核验翻review(非遗弃/非未实现): L0/L1绿(StsService scope收窄/SignedUrl/AliyunOss EXIF兜底/MediaController JWT+限流+前端image_processor GPS剥离+≤10MB/oss_uploader/media_use_case,纳入全量523/299); 本轮补iOS Info.plist NSCamera/NSPhotoLibrary权限串(原缺会闪退)+收敛portrait-only; ⚠️L2三方待本地: 需真阿里OSS/STS凭证(J1直传双桶+越权拒/J2签名403·200·过期/J3 EXIF端到端)+真机相册相机(J4权限引导/HEIC)
+  2-2-宠物档案创建-单账号单宠物: review          # [PRD1.0.0✏️] 改 AC1: 加 pet_type 必选枚举+创建后不可改 (F6,Flyway 加列) ·[R2] 加 AC: 字段必填规则(类型/名字/生日必填,头像/品种/介绍选填)+生日完整日期(年月日) ·F6+R2 完成(L0 绿: PetType 枚举+V25 加列+实体无setter+update DTO 不含=双重不可改; birthday @NotNull; 后端 ProfileServiceTest 10/10,前端 253; V25 迁移+端点422 L1 待本地)
+  2-3-统一-发布入口与内容发布: review            # [PRD1.0.0✏️·R2] 加 AC: event_date 列+发布事件日期字段(默认/禁未来,F9)+发布最低内容(文图至少一)+B/C灰选跳FR-0G建档返回预选(F15)+发布三方自动审核流程(文字关键词+图像stub,F10,新 ContentModerationService) ·R2 完成(L0 绿: V26 加 event_date[V4已冻结改ALTER]+ContentModerationService stub审核[文字/图片拦截不落库422,印尼/英语占位词]+最低内容422+灰选建档跳过庆祝页回/publish预选; 后端 package+ContentService/Moderation单测绿,前端262; L1[Docker]待本地)
+  2-4-成长档案-tab-时间线与状态快捷编辑: review   # [PRD1.0.0✏️] 加 AC: 双视图日历(FR-37)+档案统计栏+里程碑入口+第一条🌟标记 ·[R2] 加 AC: 双视图/时间线按 event_date 排序(F9)+当天详情页+未来格子置灰+视图加载失败态(F13)+A↔B/C 状态分支 ·AC5+R2 完成(L0 绿: AC5 双视图/统计栏/里程碑零态0-N按pet_type/第一条🌟[规划漏列子任务已补建]+AC6 event_date排序/当天详情无加删/未来灰格/「+」预填+AC7失败下拉重试保留信息卡统计; 后端3新端点+健康端口补实现+TimelineServiceTest扩,前端271+growth_archive_r2; L1[Docker]待本地)
+  2-5-问诊记录存档承接与健康事件时间线: review    # [PRD1.0.0✏️] 改 AC1+加 AC: 存档弹窗三态+先建档→回灌存档延迟串接 ·[R2] 加 AC: FR-3 红色态结果页存档入口承接(状态分支)+建档完成跳过庆祝页直接回灌 (F15) ·AC1三态+AC3+AC4 完成(L0 绿: showArchivePrompt 三态[①存入/②立即创建/③去创建先FR-0G切A]+pendingArchive挂起+建档跳过庆祝页回灌同sourceRef幂等+AC4红色态A直存/未建档BC走FR-16; triage两handler收敛; 纯前端,后端R1已覆盖; 前端277+archive_prompt_dialog_test; L1/L2待本地)
+  2-6-宠物名片-h5-对外分享页: review             # [PRD1.0.0✏️] 大改: 单照片流→6 区块(里程碑区块走零态降级,F2) ·[R2] 加 AC: H5 加载失败/链接失效/已装未装 DeepLink(F13)+快乐时刻流按 event_date(F9) ·AC1+AC5+AC6+AC7 完成(L0 绿: 6区块Thymeleaf[Hero陪伴天数+昵称/徽章条零态/故事数字复用getStats/动态零态/event_date照片流/双CTA平台分流深链]+og标题成长故事+AC5零态不阻塞+AC6统一card_gone404防枚举[pet_profiles无软删收敛到注销]; 纯后端,CardPageControllerTest扩+package; DeepLink真机L2/≤3s L2待本地)
+  2-7-档案页动效分享-fab: review   # [R1 登记同步 2026-06-09] Epic2 批量PR(#2)即实现,本轮核验翻review(非遗弃/非未实现): L0绿(share_fab 点击/首访动效一次性+growth_archive A显B隐+card_link /p/{token}不可枚举,纳入全量299); 轻微缺口(非阻塞): 无Semantics label断言测试; L2三方待本地: 真机系统分享菜单(Share.share)+动效观感
+  2-8-宠物档案编辑: review                       # [PRD1.0.0✏️] 改 AC: 编辑页硬禁修改 pet_type (F6) ·F6 完成(L0 绿: 编辑页 pet_type 置灰只读[ChoiceChip onSelected null+既有选中+🔒]不随PATCH提交; 后端不可变 2.2 已落[DTO无字段+实体无setter]; 纯前端,pet_profile_edit_test+F6用例,278 test; L1/L2待本地)
   epic-2-retrospective: optional
 
   # ===== Epic 3: 社区 Feed 与内容互动 =====
   epic-3: in-progress
   3-1-运营后台地基与种子内容发布: review
-  3-2-首页-feed-内容流与宠物状态硬过滤: review
-  3-3-内容详情页: review
+  3-2-首页-feed-内容流与宠物状态硬过滤: review   # [PRD1.0.0✏️·R2] review→rfd 回改: 加 AC Feed 加载失败态(增量失败底部重试,已加载保留) (F13) ·AC5 完成(L0 绿: 首屏失败显式重试refresh重建+增量loadMore失败保留已加载+底部点击重试沿用nextCursor+失败停自动预加载; 纯前端,feed_test +3用例,analyze+281 test; L1/L2待本地)
+  3-3-内容详情页: review                         # [PRD1.0.0✏️·R2] review→rfd 回改: 加 AC 「···」菜单按归属分支(他人举报/自己删除)+成长档案当天详情页入口承接 ·AC5 完成(L0 绿: 「···」菜单按 isAuthor 互斥[他人仅举报/自己仅删除,绝不同现]+游客点举报触发FR-0C; 当天详情入口由2.4 day_detail_page push /content/:id 承接复用; 纯前端,content_detail_test 改互斥断言,281 test; L1/L2待本地)
   3-4-内容点赞: review
-  3-5-内容两级评论: review
+  3-5-内容两级评论: review                       # [PRD1.0.0✏️·R2] review→rfd 回改: 加 AC 评论发送失败保留输入直接重试 (F13) ·AC3 完成(L0 绿: 发送失败 SnackBar 提示+保留输入框内容与回复态可直接重试,仅成功才清空+刷新; 纯前端,comment_write_test +AC3用例,282 test; L1/L2待本地)
   3-6-内容删除-无编辑: review
-  3-7-内容举报与运营人工审核队列: review
+  3-7-内容举报与运营人工审核队列: review          # [PRD1.0.0✏️·R2] review→rfd 回改: 加 AC 运营判定违规→内容下架(Feed/我的发布/档案同步移除+通知作者无申诉)+描述对齐发布时三方自动审核 (F10) ·AC3 完成(L0 绿: 运营下架仅ADMIN_TAKEDOWN publish ContentRemovedEvent→ContentNotifyListener 通知作者[不含举报人/无申诉]; 作者自删不发; DISMISSED 静默零通知; 举报人审核结果不回告; F10 范围对齐 ReportService javadoc; 顺带修复既有红 FeedServiceTest 状态码; 后端512 test+前端282; L1/L2待本地)
   3-8-他人迷你主页预览卡: review
   epic-3-retrospective: optional
 
@@ -97,37 +114,59 @@ development_status:
   epic-4: in-progress
   4-1-分诊异步基建与-gemini-接入: review
   4-2-确定性安全规则层-高危强制升红: review
-  4-3-ai-问诊入口与图文上传: review
+  4-3-ai-问诊入口与图文上传: review             # [PRD1.0.0✏️] AC2 注脚轻改: 视频 V2→收费模式启用后 (F4) ·[R2] review→rfd: 加 AC AI 问诊图片改选填(可仅文字提交) ·AC5 完成(后端 TriageSubmitRequest.symptomText @NotBlank[空→422,无图通过]+前端 canSubmit 收紧为文字非空[仅图不可仅文字可]; 后端519 test 绿含 L0 Validator×5+L1 MockMvc×2 真跑; 前端283; 无新增迁移; L2真机待本地)
   4-4-分诊结果三态展示-绿-黄含条件倒计时协议: review
-  4-5-红色半屏强提醒: review
+  4-5-红色半屏强提醒: review                       # [PRD1.0.0✏️⚠️安全] F3 去导航化重做完成 ·[R2] review→rfd: 加 AC 结果页底部存档入口(按状态分支,守红色态零变现护栏) (FR-3/F15);L1/L2 待本地/真机 ·R2 实现完成(L0 绿: 红色态存档入口+专用 handler,守零变现;前端 234 test 全过); L2 待真机
   epic-4-retrospective: optional
 
   # ===== Epic 5: 在线兽医咨询与兽医工作台 =====
   epic-5: in-progress
   5-1-兽医账号与登录-含-admin-开户: review
-  5-2-兽医工作台框架与在线状态管理: review
-  5-3-兽医咨询发起-排队与超时: review
+  5-2-兽医工作台框架与在线状态管理: review        # [PRD1.0.0✏️·R2] review→rfd 回改: 加 AC 待接单抢单列表 UI(请求卡片+3min 预览超时) (F11) ·AC5 完成(纯前端: VetInboxPage 内联接单→卡片点进 VetRequestDetailPage[3min 预览倒计时+5s 状态轮询]; 三返回态[用户取消已关闭/他人接单·409已被接单/3min超时自动返回]; 复用既有 session()/accept() 端点无后端改动+不写consult_sessions+无MQ锁[原子写归5.3]; vet_request_detail_test×6+inbox改写; 289 test 绿; L1/L2双端联动待本地)
+  5-3-兽医咨询发起-排队与超时: review             # [PRD1.0.0✏️·R2⚠️安全] review→rfd 回改: 加 AC 接单后端原子写入先到先得(DB互斥,禁中间件)+退单≤2次重广播(F11)+等待期退出/kill自动取消匹配 WAITING→CANCELLED(F12) ·R2 实现完成(L0 绿: 退单 release+V23+原子写既有 核实; detached 退出取消); L1/L2 待本地
   5-4-ai-升级至兽医的上下文传递: review
-  5-5-腾讯-im-会话与图文对话界面: review
-  5-6-会话结束机制与用户评分门: review
-  5-7-兽医封禁与进行中会话中断处理: review
+  5-5-腾讯-im-会话与图文对话界面: review                 # [PRD1.0.0✏️] F4 去视频完成(L0 绿): 代码本无视频,删注释残留;L1/L2 待本地
+  5-6-会话结束机制与用户评分门: review            # [PRD1.0.0✏️·R2] review→rfd 回改: 加 AC 会话进行中kill→断线30min保护窗口+重开「进行中」恢复(F12)+补评分推迟到进行中会话结束后 ·AC5 完成(① kill 断线恢复复用既有/active 入口+@Scheduled 保护窗口[无新增机制]; ② 补评分推迟: ConsultCloseService.pendingRating 有活跃会话则返回空[权威单点]+ConsultEntryPage 前端门控; 无新增Flyway/定时器/MQ; 后端521 test含AC5×2+前端291; L1/L2待本地)
+  5-7-兽医封禁与进行中会话中断处理: review        # [PRD1.0.0✏️·R2] review→rfd 回改: 加 AC 会话断线保护窗口语义对齐 (F12) ·AC3 完成(既有语义已正交,加回归锁定测试无生产改动: 后端锁定封禁中断查询范围仅 IN_PROGRESS/PENDING_CLOSE 不含WAITING[不误伤未接/他人/断线可恢复]; 前端锁定 INTERRUPTED终态 vs IN_PROGRESS/PENDING_CLOSE可恢复 三态文案区分; 后端522+前端294; 无新增Flyway/MQ; L1/L2待本地)
   5-8-问诊-tab-结构与问诊历史整合: review
   epic-5-retrospective: optional
 
   # ===== Epic 6: 推送通知、深链与通知中心 =====
   epic-6: in-progress
-  6-1-推送基建与深链路由表: review
+  6-1-推送基建与深链路由表: review                       # [PRD1.0.0✏️] F2/F5 重做完成(L0 绿): 枚举+3·V21·深链+3·2 route;L1/L2 待本地
   6-2-兽医回复与兽医端新请求推送: review
   6-3-内容互动推送: review
-  6-4-推送权限申请时机与拒绝处理: review
+  6-4-推送权限申请时机与拒绝处理: review          # [PRD1.0.0✏️] F7 双时机取最早 ·[R2] review→rfd: 加 AC 建档时机弹出位置=庆祝页后进首页前 (F15);L2 待本地 ·AC3 完成(建档时机锚点已对齐: app_router /profile/created onStartExplore 闭包 gate→go home[1.7 R2 落地]; 本轮补时序锁定测试 push_build_timing_test×2[CTA→建档推送时机→首页/已问过仅一次]; 前端296; L2真机视觉时序待本地)
   6-5-app-版本更新提醒: review
-  6-6-全局通知中心-铃铛: review
+  6-6-全局通知中心-铃铛: review                  # [PRD1.0.0✏️] F2 铃铛列表 4→6(~7) 类 ·[R2] review→rfd: 加 AC L级里程碑达成条目(零态)+推送直跳时通知中心同步标记已读;L1/L2 待本地 ·AC3 完成(① 里程碑零态数据驱动无数据不渲染[widget锁定无旗帜图标]; ② 抽 NotificationDeepLink.open 共用入口[列表点击+系统推送直跳同口径 markRead+invalidate角标+算location], _onTap 重构复用消除推送已读/中心未读不一致; 前端298; 后端零改动; L2推送入口本体待本地)
+  6-7-定时类系统推送-生日-纪念日-里程碑节点: review        # [新增] F5 实现完成(L0 绿): @Scheduled 日扫+纯逻辑 Planner+@Async+V22 去重表;L1/L2 待本地
   epic-6-retrospective: optional
 
   # ===== Epic 7: 个人中心、双语与账号注销 =====
   epic-7: in-progress
-  7-1-我的-页面与用户信息编辑: review
-  7-2-语言设置与双语文案收口: review
-  7-3-退出登录与账号注销级联删除: review
-  7-4-全局无障碍验收: review
+  7-1-我的-页面与用户信息编辑: review            # [PRD1.0.0✏️] F8 信息架构重组完成 ·[R2] review→rfd: 加 AC 我的发布排序口径文案(按发布时间倒序,区别档案 event_date);L1/L2 待本地 ·AC6 完成(findMyPosts 已 ORDER BY created_at DESC 与成长档案 event_date 查询物理分离; 双端锁定: 后端L1 myPostsOrdersByCreatedAtNotEventDate[event_date反序种子证明按created_at]+前端MyPost不带event_date/注释口径/widget保持后端序; 后端523+前端299; L1/L2待本地)
+  7-2-语言设置与双语文案收口: review                    # [PRD1.0.0✏️] AC2 入口路径层级+1(→设置页), 依赖 7-1 新设置页
+  7-3-退出登录与账号注销级联删除: review         # [PRD1.0.0✏️·R2] review→rfd: 加 AC 注销时 H5 名片 token 立即失效(D2邻接,F14);重申 D1(consult匿名化/triage删除)不回退 — 仅增名片失效,既有合规实现不动 ·R2 核实完成(AC4 既有满足: CardPageController 双重失效守护+测试绿; 零新代码,D1/D2 不回退)
+  7-4-全局无障碍验收: review                            # 不动 (7-1 新增页由 7-4 横切审计自然覆盖)
   epic-7-retrospective: optional
+
+  # ===== Epic 8: 宠物里程碑系统 (FR-42 全量, 决策 F16 纳入 V1.0.0) =====
+  # 2026-06-09 产品拍板 (F16) 反转 F2②: 里程碑本体**全量纳入 V1.0.0**, Epic 8 转入实现。
+  # 范围: 猫30/狗30/通用15 清单 + S/M/L 三级 + 系统自动完成(事件订阅) + 用户打卡两路径 +
+  #       三级庆祝动效 + 列表页徽章 + L级达成推送(经6-1) + L级分享卡。新表 pet_milestones/milestone_completions。
+  # 护栏: @TransactionalEventListener/@Async 订阅既有事件 + 定时类走 6-7 @Scheduled; 禁 MQ/Quartz/缓存/新中间件。
+  # Flyway 当前到 V26 → 8-1 新表用 V27 起(占位, E2 执行时顺延)。后端→前端→联调, L0 绿/L1-L2 留本地。
+  # story 定义见 planning-artifacts/epics.md §Epic 8;状态 backlog = 待 create-story 逐个生成 story 文件 → dev-story 实现。
+  epic-8-里程碑系统: in-progress   # 8-1~8-6 全部 review（L0 全绿，云端 headless）；L1 核心已本地验收✅(2026-06-10: spring-boot:run health=UP + V27 首次迁进真持久库V26→V27/validate过 + roster真分配15[L3M4S8] + 发成长→G-S2自动完成异步落库 + 幂等不重复 + G-M1打卡落库/重复409；剩 @Scheduled陪伴天数+L级达成推送为时间驱动，由绿CI集成测覆盖)；L2（三级动效·L宝箱·分享卡·真机推送视觉）仍待本地→全过后转 done
+  8-1-里程碑数据基建与清单分配: review        # 后端: 新表 pet_milestones/milestone_completions(profile域) + 猫30/狗30/通用15 固定清单常量 + 建档按 pet_type 分配 + GET 列表/进度端点(L/M/S 分区+完成状态) ·完成(L0 绿: V27 两表+MilestoneCatalog(CAT30/DOG30/OTHER15)+roster物化(建档assignRoster幂等)+MilestoneService分区进度+MilestoneController GET /me/milestones+注销级联(ProfileDeletionService先删completions→roster)+契约金标MilestoneListResponseContractTest(无自增id/code外露/枚举UPPER_SNAKE)+计数金标MilestoneCatalogTest; App data DTO/mock镜像在8-2; L1[Docker真分配/级联]待本地)
+  8-2-里程碑列表页与徽章展示: review          # 前端: milestone_list_page 壳→真; L/M/S 三级分区+各级进度+顶部宠物信息; 徽章彩色/灰锁; 徽章卡片弹层(系统类→说明文案/打卡类→已打卡·去发布入口) ·完成(L0 绿: milestone.dart DTO镜像+milestone_repository+page(header/总进度/L-M-S分区/徽章彩色-灰锁/弹层分流/F13重试)+l10n双语+mock catalog镜像(30/30/15含已完成)+archive-stats真计数; 契约金标mock_contract_test(列表5/group4/item字段集)+widget test5例; 后端连带AC5: TimelineService.getStats接MilestoneService.getProgress真计数(替零态)→2-4统计栏+2-6名片milestoneCompleted/hasMilestones自动真供数; 已打卡picker+打卡API/去发布回填=8-4; L1/L2真机视觉待本地)
+  8-3-里程碑系统自动完成事件订阅: review      # 后端: @TransactionalEventListener/@Async 订阅既有领域事件(建档/首张成长日历图/分享名片/存档问诊/首条日常/首评论/首点赞/陪伴30天/记录满10·30/健康全完成 C-L4) → 标记完成(幂等); 定时类(陪伴天数)接 6-7 @Scheduled ·完成(L0 绿: MilestoneCompletionService(前缀C/D/G+后缀解析/幂等/onGrowthMomentCount S2-M10-L5阈值/maybeUnlockHealthCombo C-L4-D-L4)+4新事件(ContentPublished携成长日历计数/ProfileCreated/CardShared/HealthArchived)+发布点(ContentService.publish/ProfileService.create=S1/HealthEventService存档=S4/recordCardShared=S3)+MilestoneAutoCompleteListener(@Async+@TxEventListener全订阅,自评排除S14)+MilestoneScheduledCompleter(@Scheduled日扫陪伴30天M8/M3,禁Quartz)+POST /me/card-shares; 前端signalCardShared+分享FAB回报+mock204; MilestoneCompletionServiceTest6例+既有测适配; L1全上下文/真事件/真扫待本地)
+  8-4-里程碑用户打卡两路径: review            # 后端打卡 API(关联成长日历内容, 一内容一里程碑不可重复) + 前端内容关联选择器(置灰已关联) + 去发布跳转预选成长日历 + 发布成功自动完成回填 ·完成(L0 绿: 后端 MilestoneCheckInService(candidates+linked标记/checkIn校验打卡类·未完成·本人成长日历·未被关联→USER_CHECKIN+linkedContentId)+ContentService.isOwnGrowthMoment+GET candidates/POST {code}/check-in; 前端 picker bottom sheet(置灰已关联/选择→checkIn刷新)替占位+去发布?milestoneCode线程进PublishComposePage发布成功回填+mock candidates/check-in; MilestoneCheckInServiceTest6例+picker widget test+候选契约金标; L1真打卡落库/去发布回填待本地)
+  8-5-里程碑三级庆祝动效: review              # 前端: S 半屏弹层1-2s / M 全屏3s+徽章解锁 / L Duolingo开宝箱; 完成后按级触发; mint 风格
+  8-6-l级里程碑达成推送与分享卡: review        # 后端 L级完成→MILESTONE_NODE 推送(接 6-1 NotificationService, 复用 6-7 切片) + 前端 L级分享卡生成 + 分享 WhatsApp/Instagram; 连带 6-6 铃铛里程碑条改真数据
+
+  # ===== Backlog 登记 (非 V1.0.0, 不实现) =====
+  # 1.1.0: Apple 登录 (iOS App Store 要求, 靠 1-3 多 IdP 预留); 支付基建 (GoPay/OVO)。
+  # 1.5.0: 攒局 Gabung Gath (发起/海报/报名/临时群聊; GPS 签到再拆后延)。
+  # 其余 §6.2 排期表 (兽医预约1.2.0 / 健康记录1.3.0 / 多宠物1.3.0 / 内容编辑1.4.0 /
+  #   推送分类开关1.4.0 / 公开主页1.6.0 / 搜索1.6.0 / 视频AI问诊1.8.0 ...) 见新 PRD §6.2。

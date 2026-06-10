@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/triage/presentation/triage_page.dart';
-import 'package:petgo/l10n/app_localizations.dart';
-import 'package:petgo/shared/widgets/login_hard_dialog.dart';
+import 'package:tailtopia/features/triage/presentation/triage_page.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/shared/widgets/login_hard_dialog.dart';
 
 Future<void> _pump(WidgetTester tester) async {
   final container = ProviderContainer();
@@ -20,7 +20,7 @@ Future<void> _pump(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('AC1: 双入口卡平级（AI 分诊 + 兽医咨询，PetGo Prototype 换肤）', (tester) async {
+  testWidgets('AC1: 双入口卡平级（AI 分诊 + 兽医咨询，TailTopia Prototype 换肤）', (tester) async {
     await _pump(tester);
     expect(find.byKey(const ValueKey('triageEntryAI')), findsOneWidget);
     expect(find.byKey(const ValueKey('triageEntryVet')), findsOneWidget);

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/onboarding/presentation/mint_onboarding_page.dart';
+import 'package:tailtopia/features/onboarding/presentation/mint_onboarding_page.dart';
 
-/// PetGo Prototype 引导流（welcome → create pet → done）回归。
+/// TailTopia Prototype 引导流（welcome → create pet → done）回归。
 ///
 /// 注：含无限漂浮/眨眼动效，统一用 `pump(Duration)` 而非 `pumpAndSettle`。
 void main() {
@@ -30,7 +30,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 600)); // 等 popIn
 
     // —— Step 2 完成 ——
-    expect(find.text('Masuk ke PetGo'), findsOneWidget);
+    expect(find.text('Masuk ke TailTopia'), findsOneWidget);
     expect(find.textContaining('Halo, Mochi'), findsOneWidget);
     expect(find.textContaining('petgo.id/m/mochi'), findsOneWidget);
   });
@@ -45,6 +45,6 @@ void main() {
     await tester.tap(find.text('Lanjut'));
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.text('Kenalan dengan anabul'), findsOneWidget);
-    expect(find.text('Masuk ke PetGo'), findsNothing);
+    expect(find.text('Masuk ke TailTopia'), findsNothing);
   });
 }

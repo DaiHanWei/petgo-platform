@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:petgo/core/network/dio_client.dart';
-import 'package:petgo/core/router/route_intent.dart';
-import 'package:petgo/features/auth/data/auth_repository.dart';
-import 'package:petgo/features/auth/domain/auth_state.dart';
-import 'package:petgo/features/auth/domain/login_guide_controller.dart';
-import 'package:petgo/features/auth/domain/login_response.dart';
-import 'package:petgo/l10n/app_localizations.dart';
-import 'package:petgo/shared/widgets/login_hard_dialog.dart';
-import 'package:petgo/shared/widgets/login_soft_sheet.dart';
+import 'package:tailtopia/core/network/dio_client.dart';
+import 'package:tailtopia/core/router/route_intent.dart';
+import 'package:tailtopia/features/auth/data/auth_repository.dart';
+import 'package:tailtopia/features/auth/domain/auth_state.dart';
+import 'package:tailtopia/features/auth/domain/login_guide_controller.dart';
+import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/shared/widgets/login_hard_dialog.dart';
+import 'package:tailtopia/shared/widgets/login_soft_sheet.dart';
 
 LoginResponse _resp({required bool onboardingCompleted, bool isNewUser = false}) => LoginResponse(
       accessToken: 'a',
@@ -158,6 +158,83 @@ void main() {
 
     expect(controller.hasPending, isFalse);
     expect(find.byKey(const ValueKey('trigger')), findsOneWidget); // 仍在原页
+    expect(find.text('TRIAGE PAGE'), findsNothing);
+  });
+
+  // ===== R2 / AC3（决策 F13）：授权失败回触发前页面 + 重试 =====
+
+  testWidgets('AC3: 强弹窗登录失败 → 失败态+重试入口；pending 保留、不路由注册引导', (tester) async {
+    final controller = LoginGuideController(() async => throw Exception('boom'));
+    await _pump(tester, _router(controller, pending: const RouteIntent(location: '/triage')));
+
+    await tester.tap(find.byKey(const ValueKey('trigger')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('hardDialogGoogleCta')));
+    await tester.pumpAndSettle();
+
+    // 失败态内联渲染 + 重试入口（主 CTA 仍在）
+    expect(find.byKey(const ValueKey('hardDialogError')), findsOneWidget);
+    expect(find.text('Sign-in failed, please try again'), findsOneWidget);
+    expect(find.byKey(const ValueKey('hardDialogGoogleCta')), findsOneWidget);
+    // pendingAction 保留、未前进到注册引导、未执行 pendingAction
+    expect(controller.hasPending, isTrue);
+    expect(find.text('ONBOARDING PAGE'), findsNothing);
+    expect(find.text('TRIAGE PAGE'), findsNothing);
+    expect(find.byType(LoginHardDialog), findsOneWidget); // 引导仍在（停留原页之上）
+  });
+
+  testWidgets('AC3: 失败后重试成功（老用户）→ 用保留的 pendingAction 回跳触发点', (tester) async {
+    var calls = 0;
+    final controller = LoginGuideController(() async {
+      calls++;
+      if (calls == 1) throw Exception('boom'); // 首次失败
+      return _resp(onboardingCompleted: true); // 重试成功（老用户）
+    });
+    await _pump(tester, _router(controller, pending: const RouteIntent(location: '/triage')));
+
+    await tester.tap(find.byKey(const ValueKey('trigger')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('hardDialogGoogleCta')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('hardDialogError')), findsOneWidget); // 失败态
+
+    // 重试 → 成功 → 用保留 pending 回跳
+    await tester.tap(find.byKey(const ValueKey('hardDialogGoogleCta')));
+    await tester.pumpAndSettle();
+    expect(find.text('TRIAGE PAGE'), findsOneWidget);
+    expect(controller.hasPending, isFalse);
+  });
+
+  testWidgets('AC3: 失败后主动关闭 → pendingAction 清空、停留原页', (tester) async {
+    final controller = LoginGuideController(() async => throw Exception('boom'));
+    await _pump(tester, _router(controller, pending: const RouteIntent(location: '/triage')));
+
+    await tester.tap(find.byKey(const ValueKey('trigger')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('hardDialogGoogleCta')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('hardDialogError')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('hardDialogClose')));
+    await tester.pumpAndSettle();
+    expect(controller.hasPending, isFalse);
+    expect(find.byKey(const ValueKey('trigger')), findsOneWidget); // 停留原页
+    expect(find.text('TRIAGE PAGE'), findsNothing);
+  });
+
+  testWidgets('AC3: 软浮层登录失败 → 失败态+重试入口；pending 保留', (tester) async {
+    final controller = LoginGuideController(() async => throw Exception('boom'));
+    await _pump(tester,
+        _router(controller, soft: true, pending: const RouteIntent(location: '/triage')));
+
+    await tester.tap(find.byKey(const ValueKey('trigger')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('softSheetGoogleCta')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('softSheetError')), findsOneWidget);
+    expect(find.byKey(const ValueKey('softSheetGoogleCta')), findsOneWidget); // 重试入口
+    expect(controller.hasPending, isTrue);
     expect(find.text('TRIAGE PAGE'), findsNothing);
   });
 

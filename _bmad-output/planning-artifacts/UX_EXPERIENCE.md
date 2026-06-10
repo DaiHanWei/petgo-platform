@@ -1,15 +1,17 @@
 ---
-title: "PetGo V1.0 Experience Design"
+title: "TailTopia V1.0 Experience Design"
 status: draft
 created: 2026-05-29
 updated: 2026-06-01
 platform: iOS · Android
 sources:
   - V1版本20260601/V1-0-0PRD20260601.md
-  - V1版本20260601/PetGo_V1_全屏效果图.html
+  - V1版本20260601/TailTopia_V1_全屏效果图.html
 ---
 
-# PetGo — EXPERIENCE.md
+> ⚠️ **品牌色板已过期（焦糖色，换肤前）。** 视觉 token 引用的 DESIGN.md 为换肤前焦糖版；**视觉/品牌真相 = `petgo_app/lib/core/theme/colors.dart`（薄荷绿 `#7FD1AE`）+ Claude Design mint 原型**。新功能 UX/交互（个人中心重组 / 名片6区块 / 红色态去导航 / 里程碑三级动效 / 双视图日历 / 推送扩展）以 PRD §4 + mint 原型为准，套 mint token。详见 CROSS-STORY-DECISIONS **F8**。（incoming 的 `UX_EXPERIENCE.new.md` 为焦糖旧版，**不晋升覆盖**，仅作新功能交互结构参考。）
+
+# TailTopia — EXPERIENCE.md
 
 Visual identity tokens referenced as `{colors.*}`, `{typography.*}`, `{rounded.*}`, `{spacing.*}` from DESIGN.md.
 

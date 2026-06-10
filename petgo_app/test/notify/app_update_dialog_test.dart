@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/notify/domain/app_version_check.dart';
-import 'package:petgo/features/notify/presentation/app_update_dialog.dart';
-import 'package:petgo/l10n/app_localizations.dart';
+import 'package:tailtopia/features/notify/domain/app_version_check.dart';
+import 'package:tailtopia/features/notify/presentation/app_update_dialog.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// Story 6.5 F2/F3：推荐弹窗有「稍后」可关；强制弹窗无「稍后」、不可跳过。
 Future<void> _pump(WidgetTester tester, UpdateDecision decision) async {

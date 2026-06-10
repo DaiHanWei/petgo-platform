@@ -1,0 +1,126 @@
+package com.tailtopia.content.web;
+
+import static org.hamcrest.Matchers.is;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.tailtopia.auth.domain.User;
+import com.tailtopia.content.domain.ContentPost;
+import com.tailtopia.content.domain.ContentType;
+import com.tailtopia.content.repository.ContentPostRepository;
+import com.tailtopia.support.ApiIntegrationTest;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
+
+/**
+ * {@link MeContentController} 集成测试（L1，真 Spring + 安全链 + 落库）。
+ *
+ * <p>覆盖：GET /me/posts 仅返回当前用户帖子（不含他人）、游标分页、缺 token 401。
+ */
+class MeContentControllerEndpointTest extends ApiIntegrationTest {
+
+    @Autowired
+    private ContentPostRepository posts;
+
+    private ContentPost newPost(long authorId) {
+        return posts.save(ContentPost.publish(
+                authorId, ContentType.DAILY, null, "测试正文", List.of()));
+    }
+
+    @Test
+    void myPostsReturnsOnlyCurrentUserPosts() throws Exception {
+        User me = newUser();
+        User other = newUser();
+
+        long p1 = newPost(me.getId()).getId();
+        long p2 = newPost(me.getId()).getId();
+        long otherPost = newPost(other.getId()).getId();
+
+        String resp = mvc.perform(get("/api/v1/me/posts")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isArray())
+                .andReturn().getResponse().getContentAsString();
+
+        var items = json.readTree(resp).get("items");
+        var ids = new java.util.HashSet<Long>();
+        items.forEach(node -> ids.add(node.get("id").asLong()));
+
+        org.assertj.core.api.Assertions.assertThat(ids).contains(p1, p2);
+        org.assertj.core.api.Assertions.assertThat(ids).doesNotContain(otherPost);
+        // 每条都属于 me。
+        items.forEach(node ->
+                org.assertj.core.api.Assertions.assertThat(node.get("authorId").asLong())
+                        .isEqualTo(me.getId()));
+    }
+
+    @Test
+    void myPostsSupportsCursorPagination() throws Exception {
+        User me = newUser();
+        // 造 PAGE_SIZE + 1 条以触发 hasMore / nextCursor。
+        int total = com.tailtopia.content.service.FeedService.PAGE_SIZE + 1;
+        for (int i = 0; i < total; i++) {
+            newPost(me.getId());
+        }
+
+        String firstPage = mvc.perform(get("/api/v1/me/posts")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.hasMore", is(true)))
+                .andReturn().getResponse().getContentAsString();
+
+        var firstNode = json.readTree(firstPage);
+        org.assertj.core.api.Assertions.assertThat(firstNode.get("items").size())
+                .isEqualTo(com.tailtopia.content.service.FeedService.PAGE_SIZE);
+        String cursor = firstNode.get("nextCursor").asText();
+        org.assertj.core.api.Assertions.assertThat(cursor).isNotBlank();
+
+        // 翻第二页：剩余 1 条，hasMore=false。
+        mvc.perform(get("/api/v1/me/posts")
+                        .param("cursor", cursor)
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()", is(1)))
+                .andExpect(jsonPath("$.hasMore", is(false)));
+    }
+
+    @Test
+    void myPostsWithoutTokenReturns401() throws Exception {
+        mvc.perform(get("/api/v1/me/posts"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    /**
+     * AC6（F9 · R2）：「我的发布」按**发布时间 created_at 倒序**，<b>非</b>事件日期 event_date。
+     *
+     * <p>造两条 GROWTH_MOMENT，使 event_date 顺序与插入（created_at）顺序<b>相反</b>：
+     * 先插 early（event_date=今天），后插 late（event_date=很久以前）。
+     * 若误用 event_date 排序 → late 在前；正确按 created_at 倒序 → 后插的 late（created_at 更晚）在前。
+     * 二者首条不同，锁定「我的发布」用 created_at 口径、与成长档案 event_date 口径分离。
+     */
+    @Test
+    void myPostsOrdersByCreatedAtNotEventDate() throws Exception {
+        User me = newUser();
+        // 先插：event_date=今天（事件日期最“新”），但 created_at 最早。
+        long early = posts.save(ContentPost.publish(
+                me.getId(), ContentType.GROWTH_MOMENT, null, "先发·事件今天",
+                List.of(), java.time.LocalDate.now(java.time.ZoneOffset.UTC))).getId();
+        // 后插：event_date=很久以前（事件日期最“旧”），但 created_at 最晚。
+        long late = posts.save(ContentPost.publish(
+                me.getId(), ContentType.GROWTH_MOMENT, null, "后发·事件很久前",
+                List.of(), java.time.LocalDate.of(2020, 1, 1))).getId();
+
+        String resp = mvc.perform(get("/api/v1/me/posts")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(me.getId())))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        var items = json.readTree(resp).get("items");
+        // 首条 = 后发的 late（created_at 最晚）——证明按 created_at 倒序，非 event_date。
+        org.assertj.core.api.Assertions.assertThat(items.get(0).get("id").asLong()).isEqualTo(late);
+        org.assertj.core.api.Assertions.assertThat(items.get(1).get("id").asLong()).isEqualTo(early);
+    }
+}

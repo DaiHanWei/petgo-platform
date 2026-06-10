@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/profile/data/profile_repository.dart';
-import 'package:petgo/features/profile/domain/pet_profile.dart';
-import 'package:petgo/features/profile/presentation/pet_profile_edit_page.dart';
-import 'package:petgo/l10n/app_localizations.dart';
+import 'package:tailtopia/features/profile/data/profile_repository.dart';
+import 'package:tailtopia/features/profile/domain/pet_profile.dart';
+import 'package:tailtopia/features/profile/presentation/pet_profile_edit_page.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 
 class _FakeRepo implements ProfileRepository {
   _FakeRepo(this.profile);
@@ -13,10 +13,11 @@ class _FakeRepo implements ProfileRepository {
 
   @override
   Future<PetProfile> create({
+    required String petType,
     required String name,
+    required DateTime birthday,
     String? avatarUrl,
     String? breed,
-    DateTime? birthday,
     String? intro,
     String? idempotencyKey,
   }) async =>
@@ -82,5 +83,20 @@ void main() {
     // 直接触发提交逻辑（避免依赖 go_router 导航）
     final submit = tester.widget<FilledButton>(find.byKey(const ValueKey('petProfileEditSubmit')));
     expect(submit.onPressed, isNotNull);
+  });
+
+  testWidgets('F6: pet_type 置灰只读，展示既有类型不可改', (tester) async {
+    final repo = _FakeRepo(const PetProfile(id: 1, name: 'Momo', cardToken: 'TOK', petType: 'DOG'));
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('petProfileEditTypeReadonly')), findsOneWidget);
+    final dogChip = tester.widget<ChoiceChip>(find.byKey(const ValueKey('petTypeReadonly_DOG')));
+    expect(dogChip.selected, isTrue); // 既有类型选中
+    expect(dogChip.onSelected, isNull); // 置灰不可点
+    final catChip = tester.widget<ChoiceChip>(find.byKey(const ValueKey('petTypeReadonly_CAT')));
+    expect(catChip.selected, isFalse);
+    expect(catChip.onSelected, isNull);
+    // update() 签名无 petType 参数 → 结构上不可能随 PATCH 提交（后端 DTO 亦无该字段）。
   });
 }

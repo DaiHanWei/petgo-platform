@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PetGo SessionStart hook —— 本地 + 云端（claude.ai/code）通用。
+# TailTopia SessionStart hook —— 本地 + 云端（claude.ai/code）通用。
 # 职责：会话开始时，在 Flutter 工程已存在且 flutter 可用时，预拉前端依赖。
 # 设计为完全容错：脚手架（story 1.1）尚未生成、或本机/云端未装 Flutter 时，静默跳过、绝不让会话启动失败。
 set -u

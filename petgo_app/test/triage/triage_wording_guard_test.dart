@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/triage/domain/triage_wording_guard.dart';
+import 'package:tailtopia/features/triage/domain/triage_wording_guard.dart';
 
 void main() {
   group('TriageWordingGuard', () {

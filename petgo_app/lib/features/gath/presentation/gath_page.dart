@@ -6,7 +6,7 @@ import '../../../shared/widgets/design/btn3d.dart';
 import '../../../shared/widgets/design/pill_tag.dart';
 import '../../../shared/widgets/design/striped_photo.dart';
 
-/// Gabung Gath 宠物聚会（PetGo Prototype 占位页）。
+/// Gabung Gath 宠物聚会（TailTopia Prototype 占位页）。
 ///
 /// V1 演示范围外，仅占位展示活动卡样式。完整含：发起活动、海报生成、报名管理、
 /// 临时群聊、GPS 签到（FR-6→FR-10）。
@@ -44,7 +44,7 @@ class GathPage extends StatelessWidget {
           ],
           const SizedBox(height: 4),
           const Center(
-            child: Text('活动 / 报名 / 群聊 / GPS 签到 —— 演示外，仅占位',
+            child: Text('Acara / Pendaftaran / Grup / Check-in GPS — pratinjau, masih placeholder',
                 style: TextStyle(fontSize: 12, color: AppColors.muted)),
           ),
         ],

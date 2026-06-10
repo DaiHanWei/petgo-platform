@@ -40,6 +40,10 @@ class PublishController extends ChangeNotifier {
   final List<ImageUploadItem> items = <ImageUploadItem>[];
   bool publishing = false;
 
+  /// 成长日历事件日期（F9）：仅 GROWTH_MOMENT 有意义，决定档案侧显示位置（与发布时间解耦）。
+  /// 不可未来——由 UI date picker 与服务端共同守护。
+  DateTime? eventDate;
+
   int get remainingChars => kMaxPostTextLength - text.length;
   bool get textWithinLimit => text.length <= kMaxPostTextLength;
   bool get hasFailed => items.any((i) => i.status == ImageUploadStatus.failed);
@@ -56,6 +60,12 @@ class PublishController extends ChangeNotifier {
 
   void setText(String value) {
     text = value;
+    notifyListeners();
+  }
+
+  /// 设成长日历事件日期（仅日期，去时分；未来日期由调用方/picker 拦截）。
+  void setEventDate(DateTime date) {
+    eventDate = DateTime(date.year, date.month, date.day);
     notifyListeners();
   }
 
@@ -106,11 +116,13 @@ class PublishController extends ChangeNotifier {
       await uploadAll();
       if (!allUploaded) return null; // 仍有失败件 → 让用户重试，不提交
       final urls = items.map((i) => i.url!).toList();
+      final growth = type == ContentType.growthMoment;
       return await repository.publish(
         type: type,
-        petId: type == ContentType.growthMoment ? petId : null,
+        petId: growth ? petId : null,
         text: text.trim().isEmpty ? null : text.trim(),
         imageUrls: urls,
+        eventDate: growth ? (eventDate ?? DateTime.now()) : null,
         idempotencyKey: idempotencyKey,
       );
     } finally {

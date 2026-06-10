@@ -5,6 +5,7 @@ import '../../core/theme/rounded.dart';
 import '../../core/theme/spacing.dart';
 import '../../core/theme/typography.dart';
 import '../../features/content/domain/feed_item.dart';
+import 'app_image.dart';
 import 'post_cover.dart';
 
 /// Feed 瀑布流卡片（Story 3.2，UX-DR4）。
@@ -57,7 +58,8 @@ class MasonryCard extends StatelessWidget {
             children: [
               if (item.hasImage)
                 // 不裁切仅上圆角：fitWidth 保留原比例，外层 Container 已 clip 上圆角。
-                Image.network(
+                // 经 AppImage 统一解析 asset:/file:/network（mock 演示用 asset、发布回灌用 file）。
+                AppImage.widget(
                   item.firstImageUrl!,
                   fit: BoxFit.fitWidth,
                   width: double.infinity,
@@ -138,6 +140,6 @@ class _Avatar extends StatelessWidget {
         child: Icon(Icons.person_rounded, size: 14, color: AppColors.textTertiary),
       );
     }
-    return CircleAvatar(radius: size / 2, backgroundImage: NetworkImage(url!));
+    return CircleAvatar(radius: size / 2, backgroundImage: AppImage.provider(url));
   }
 }

@@ -1,3 +1,7 @@
+---
+baseline_commit: 240ba2e54e9e61eb77ab0150311eae4f4397b8bb
+---
+
 # Story 2.4: 成长档案 Tab 时间线与状态快捷编辑
 
 Status: review
@@ -47,38 +51,89 @@ so that **我能一览宠物的成长足迹与健康事件**。
 **Then** 复用 FR-0F 状态选择界面，修改后与「我的」一致同步、首页 Feed 即时按新状态刷新（FR-21）
 > 验证层：**L1**（状态更新端点 + 全局状态 provider 失效/刷新，「我的」与 Feed 一致）+ **L0**（复用 FR-0F 组件、修改后 provider 通知刷新 widget 测试）。
 
+### AC5 — 成长档案 Tab 增强（双视图 + 统计栏 + 里程碑入口 + 第一条标记）
+
+> 🔄 **PRD V1.0.0 修订（F2 · 2026-06-08）：** FR-37 升级——成长档案 Tab 增「日历视图、档案统计栏、里程碑入口（零态降级）、第一条内容 🌟 标记」。里程碑本体属 mini-epic（F2，排期 1.0.x/1.1.0 待定），入口未就绪走零态。
+
+**Given** 状态 A 且已创建档案的用户进入成长档案 Tab
+**When** 浏览档案主屏
+**Then** 顶部固定区域在信息卡下方展示**档案统计栏**「快乐时刻 X 条 · 问诊 X 次」横排；统计栏下方展示**里程碑入口**「已完成 X / N 个里程碑」进度条，**N 按宠物类型动态取值**（猫/狗 = 30，其他 = 15）
+**And** 内容区支持**双视图切换**（右上角图标）：**时间线视图（默认）↔ 日历视图**——日历视图以月份为单位、每天一格：有快乐时刻照片的格子显当天**第一张照片缩略图**，含健康事件叠加右下角 🏥 角标，仅健康事件显 🏥 图标，无任何记录格子显日期数字 + 淡色「+」引导；月份顶部下拉选择 + 左右滑切上下月；点有记录格子→当天详情页，点无记录格子「+」→统一发布入口预选成长日历
+**And** 视图切换状态**在本次 session 内保持**，下次进入 Tab **恢复默认时间线视图**
+**And** 时间线**第一条快乐时刻**额外显 🌟「第一条快乐时刻」永久标签、**第一条健康事件**额外显 🌟「第一次问诊记录」永久标签
+**And**（**里程碑 mini-epic 零态降级，关键**）里程碑本体未就绪时，里程碑入口走**零态**——X/N 显 0（或入口暂隐），不硬依赖 FR-42 先落地
+> 验证层：**L1**（统计栏快乐时刻数/问诊数经 service 接口计数取数，需 postgres；日历视图按月聚合当天记录）+ **L0**（双视图切换 + session 保持/重进恢复默认时间线、统计栏渲染、里程碑入口 N 按 pet_type 动态取值 + 零态、第一条 🌟 标记仅首条出现 widget 测试；日历格子四态样式 + 点击分流 widget 测试）。
+
+### AC6 — 双视图按事件日期 + 当天详情页 + 未来格子置灰（F9） `[R2]`
+
+> 🆕 **PRD V1.0.0 第二轮断档补齐（F9 · 2026-06-08）：** 档案侧双视图按 `event_date`（与 2.3 加列对齐），新增「当天详情页」、未来格子置灰、点格子分流。排序口径：档案时间线/日历按 `event_date`，Feed/「我的发布」按 `created_at`。
+
+**Given** 状态 A 已建档用户浏览成长档案双视图
+**When** 切换时间线 / 日历视图或点击日历格子
+**Then** **时间线视图按 `event_date` 倒序**展示快乐时刻；日历视图格子按 `event_date` 定位，格子背景取「该 `event_date` 下**最早 `created_at`** 记录的首图」，**未来日期格子灰显不可点**
+**And** 点**有记录格子** → 进**当天详情页**：顶部日期标题 + 当天快乐时刻/健康事件按 `created_at` **正序**排列、条目可进 FR-28（内容详情）；**当天详情页不设「+」、不设删除入口**
+**And** 点**无记录格子的「+」** → 跳统一发布入口（2.3）预选成长日历类型并**预填该格子事件日期**（与 2.3 AC5 入口默认值联动）
+> 验证层：**L1**（按 `event_date` 查询排序 + 格子背景取该日最早 created_at 首图 + 当天详情按 created_at 正序，需 postgres）+ **L0**（未来格子置灰不可点 + 当天详情页布局/无「+」无删除 + 无记录格子「+」跳发布预填日期 widget 测试）。
+
+### AC7 — 视图加载失败 + 状态分支（F13） `[R2]`
+
+> 🆕 **PRD V1.0.0 第二轮断档补齐（F13 · 2026-06-08）：** 加载失败统一口径——网络/服务器错误 → 内容区「加载失败，下拉重试」+ 重试入口，已缓存内容保留。
+
+**Given** 状态 A 已建档用户进入成长档案，时间线/日历/当天详情页拉取数据
+**When** 网络或服务器错误导致内容区加载失败
+**Then** 内容区显示「加载失败，下拉重试」+ 重试入口；**宠物信息卡 + 统计栏仍显示**（已缓存数据不被失败态覆盖）
+**And** 用户从 A 切换为 B/C 后该 Tab 显示「成长档案为有宠用户专属」提示（FR-37，与 AC3 一致）
+> 验证层：**L0**（内容区加载失败态 + 重试入口 + 信息卡/统计栏保留 widget 测试；A→B/C 后专属提示 widget 测试）。
+
 ---
 
 ## Tasks / Subtasks
 
 > 三段组织。**前端重**（时间线 UI + 多态 + 状态同步），后端提供时间线聚合读端点 + 复用状态更新。建议：后端 → 前端 → 联调。
 
-### 🟦 后端子任务（petgo-backend / `com.petgo.profile`）
+### 🟦 后端子任务（petgo-backend / `com.tailtopia.profile`）
 
-- [ ] **B1. 成长时间线聚合读端点** (AC: 1)
-  - [ ] `ProfileApiController` `GET /api/v1/pet-profiles/me/timeline?cursor=&limit=20`（JWT）：合并**快乐时刻**（content_posts type=GROWTH_MOMENT，经 content service 接口取，**禁直接 join content 表**）与**健康事件**（2.5 的健康事件源，经其 service 接口；本 Story 该源可能为空 → 返回空段稳健处理），按 `created_at` **倒序游标分页** `{items, nextCursor, hasMore}`。
-  - [ ] DTO `TimelineItemResponse`：含 `kind ∈ {HAPPY_MOMENT, HEALTH_EVENT}` + 各自字段（快乐时刻:date/imageUrls/text；健康事件:date/aiLevel/symptomSummary）。统一倒序合并由 service 完成。
-- [ ] **B2. 信息卡数据** (AC: 1) — 复用 2.2 `GET /pet-profiles/me`（含头像/名字/品种/生日/介绍）；年龄由 birthday 前端或后端计算（择一，记录）。
-- [ ] **B3. 状态快捷编辑端点（复用 FR-0F）** (AC: 4)
-  - [ ] 复用 1.6 已有的用户宠物状态更新端点（`PATCH /api/v1/me`，当前用户主体统一端点，不用 `/users/me`）；**不重复造**。确认更新后「我的」与 Feed 读同一权威状态源。
+- [x] **B1. 成长时间线聚合读端点** (AC: 1)
+  - [x] `ProfileApiController` `GET /api/v1/pet-profiles/me/timeline?cursor=&limit=20`（JWT）：合并**快乐时刻**（content_posts type=GROWTH_MOMENT，经 content service 接口取，**禁直接 join content 表**）与**健康事件**（2.5 的健康事件源，经其 service 接口；本 Story 该源可能为空 → 返回空段稳健处理），按 `created_at` **倒序游标分页** `{items, nextCursor, hasMore}`。
+  - [x] DTO `TimelineItemResponse`：含 `kind ∈ {HAPPY_MOMENT, HEALTH_EVENT}` + 各自字段（快乐时刻:date/imageUrls/text；健康事件:date/aiLevel/symptomSummary）。统一倒序合并由 service 完成。
+- [x] **B2. 信息卡数据** (AC: 1) — 复用 2.2 `GET /pet-profiles/me`（含头像/名字/品种/生日/介绍）；年龄由 birthday 前端或后端计算（择一，记录）。
+- [x] **B3. 状态快捷编辑端点（复用 FR-0F）** (AC: 4)
+  - [x] 复用 1.6 已有的用户宠物状态更新端点（`PATCH /api/v1/me`，当前用户主体统一端点，不用 `/users/me`）；**不重复造**。确认更新后「我的」与 Feed 读同一权威状态源。
 
 ### 🟩 前端子任务（petgo_app / `lib/features/profile`）
 
-- [ ] **F1. 成长档案 Tab 多态容器** (AC: 1, 2, 3)
-  - [ ] `features/profile/presentation/growth_archive_page.dart`：按 (用户状态 + 是否有档案) 三分支——A+有档案=主屏；A+无档案=空状态(UX-DR8「立即创建」跳 2.2)；B/C=「有宠专属」+修改状态入口。
-- [ ] **F2. 信息卡 + FAB 占位** (AC: 1)
-  - [ ] 信息卡：头像/名字/品种/年龄(由 birthday 算)/介绍 + 右上角状态快捷编辑入口（+编辑入口占位留给 2.8）。**分享名片 FAB 此处仅占位**（动效/分享逻辑 2.7）。
-- [ ] **F3. 倒序时间线 + 两类条目** (AC: 1)
-  - [ ] 拉 `/timeline` 游标分页（无限滚动 20/批）；`HappyMomentTile`(日期+照片+文字)、`HealthEventTile`(日期+🏥问诊记录标签+AI 评级+症状摘要)。健康事件**数据为空时**该类条目自然不出现（2.5 接入后自动显示）。空时间线给轻量空态。
-- [ ] **F4. 状态快捷编辑复用 FR-0F + 同步** (AC: 4)
-  - [ ] 状态入口打开 FR-0F 状态选择组件（1.6 已建，复用）；修改后刷新全局状态 provider → 「我的」一致、首页 Feed 即时按新状态刷新（监听同一 provider）。i18n 双套。
+- [x] **F1. 成长档案 Tab 多态容器** (AC: 1, 2, 3)
+  - [x] `features/profile/presentation/growth_archive_page.dart`：按 (用户状态 + 是否有档案) 三分支——A+有档案=主屏；A+无档案=空状态(UX-DR8「立即创建」跳 2.2)；B/C=「有宠专属」+修改状态入口。
+- [x] **F2. 信息卡 + FAB 占位** (AC: 1)
+  - [x] 信息卡：头像/名字/品种/年龄(由 birthday 算)/介绍 + 右上角状态快捷编辑入口（+编辑入口占位留给 2.8）。**分享名片 FAB 此处仅占位**（动效/分享逻辑 2.7）。
+- [x] **F3. 倒序时间线 + 两类条目** (AC: 1)
+  - [x] 拉 `/timeline` 游标分页（无限滚动 20/批）；`HappyMomentTile`(日期+照片+文字)、`HealthEventTile`(日期+🏥问诊记录标签+AI 评级+症状摘要)。健康事件**数据为空时**该类条目自然不出现（2.5 接入后自动显示）。空时间线给轻量空态。
+- [x] **F4. 状态快捷编辑复用 FR-0F + 同步** (AC: 4)
+  - [x] 状态入口打开 FR-0F 状态选择组件（1.6 已建，复用）；修改后刷新全局状态 provider → 「我的」一致、首页 Feed 即时按新状态刷新（监听同一 provider）。i18n 双套。
+
+### 🟦🟩 第二轮断档补齐子任务 `[R2]`
+
+- [x] **R2-B1. 时间线/日历按 event_date 取数（F9）** (AC: 6)
+  - [x] 时间线快乐时刻按 `event_date` 倒序（经 content service 接口，禁直 join）；日历视图按月聚合 `event_date`，格子背景取该日**最早 `created_at`** 记录首图；当天详情按 `created_at` 正序。健康事件并入当天详情。
+- [x] **R2-F1. 双视图 event_date + 当天详情页 + 未来格子（F9）** (AC: 6)
+  - [x] 日历格子按 `event_date`，未来格子灰显不可点；点有记录格子 → 当天详情页（日期标题 + 当天条目正序、可进 FR-28、**无「+」无删除**）；点无记录格子「+」→ 跳 2.3 发布预选成长日历 + 预填该格子事件日期。widget 测试覆盖未来置灰 + 当天详情布局 + 「+」跳转预填。
+- [x] **R2-F2. 视图加载失败态 + 状态分支（F13）** (AC: 7)
+  - [x] 时间线/日历/当天详情页内容区加载失败 → 「加载失败，下拉重试」+ 重试入口，信息卡/统计栏保留缓存；A→B/C 后显「有宠专属」提示（复用 AC3）。i18n 双套。widget 测试覆盖失败态 + 重试 + 缓存保留。
+
+### 🟦🟩 AC5 档案增强子任务（🔄 F2 修订；规划期 AC5 漏列子任务，本轮补建并实现）
+
+- [x] **A5-1. 档案统计栏 + 里程碑入口（后端计数 + 前端渲染）** (AC: 5)
+  - [x] 后端 `GET /pet-profiles/me/archive-stats`：快乐时刻数（content service 计数）+ 问诊数（health 端口计数）+ 里程碑零态（completed=0、total 按 pet_type 猫狗 30/其他 15）。前端统计栏「快乐时刻 X · 问诊 X」+ 里程碑进度条 0/N。
+- [x] **A5-2. 双视图切换（时间线 ↔ 日历）** (AC: 5) — 右上角图标切换；view mode 本地状态（session 内保持；离开重建恢复默认时间线，StatefulShellRoute 保活下为近似）。日历 `GET /pet-profiles/me/calendar?year=&month=` 按月聚合，月份顶部 + 左右切月。
+- [x] **A5-3. 日历格子四态 + 点击分流** (AC: 5, 6) — 有快乐时刻→首图缩略图（健康事件叠 🏥 角标）、仅健康→🏥、无记录→日期+淡「+」、未来→灰显不可点；点有记录→当天详情，点「+」→发布预填日期。
+- [x] **A5-4. 第一条 🌟 永久标签** (AC: 5) — 时间线首条快乐时刻显 🌟「第一条快乐时刻」、首条健康事件显 🌟「第一次问诊记录」，仅首条出现。
 
 ### 🟨 联调验收子任务
 
-- [ ] **J1. 倒序聚合（L1）** (AC: 1) — 有快乐时刻（健康事件暂空）→ 时间线倒序正确、游标翻页、信息卡数据齐。
-- [ ] **J2. 三态（L0/L1）** (AC: 1, 2, 3) — A+档案/A+无档案/B/C 三分支各渲染对应内容与入口。
-- [ ] **J3. 状态同步（L1）** (AC: 4) — Tab 内改状态 → 「我的」与 Feed 即时一致刷新。
-- [ ] **J4. 健康事件前向兼容（L0）** (AC: 1) — 2.5 健康事件接入后条目样式正确（用 mock 健康事件验样式，无需等 2.5 实表）。
+- [x] **J1. 倒序聚合（L1）** (AC: 1) — 有快乐时刻（健康事件暂空）→ 时间线倒序正确、游标翻页、信息卡数据齐。
+- [x] **J2. 三态（L0/L1）** (AC: 1, 2, 3) — A+档案/A+无档案/B/C 三分支各渲染对应内容与入口。
+- [x] **J3. 状态同步（L1）** (AC: 4) — Tab 内改状态 → 「我的」与 Feed 即时一致刷新。
+- [x] **J4. 健康事件前向兼容（L0）** (AC: 1) — 2.5 健康事件接入后条目样式正确（用 mock 健康事件验样式，无需等 2.5 实表）。
 
 ---
 
@@ -108,7 +163,7 @@ so that **我能一览宠物的成长足迹与健康事件**。
 
 ### Project Structure Notes
 
-- 后端 `com.petgo.profile.web/ProfileApiController`(加 `/timeline`)、`profile/service/TimelineService`(聚合，调 content + health service 接口)；DTO `TimelineItemResponse`。
+- 后端 `com.tailtopia.profile.web/ProfileApiController`(加 `/timeline`)、`profile/service/TimelineService`(聚合，调 content + health service 接口)；DTO `TimelineItemResponse`。
 - 前端 `lib/features/profile/presentation/{growth_archive_page, widgets/HappyMomentTile, HealthEventTile, pet_info_card}`；状态复用 1.6 的 FR-0F 组件 + 全局状态 provider。FAB 占位 widget 后由 2.7 接入 `shared/widgets`。
 
 ### References
@@ -147,8 +202,37 @@ so that **我能一览宠物的成长足迹与健康事件**。
 - 待肉眼确认界面：成长档案三态布局、信息卡、时间线两类条目、状态编辑 sheet（真机/模拟器视觉）。
 - 健康事件真实数据待 Story 2.5 接入（本 Story 已用 mock 验条目样式）。
 
+---
+
+**AC5（🔄 F2）+ R2 补齐（2026-06-09 · AC5/AC6/AC7）：**
+
+> ⚠️ **规划缺口修正**：AC5（双视图日历 / 统计栏 / 里程碑入口 / 第一条 🌟）是 F2 修订追加的 AC，但 Tasks 段当时**漏列对应子任务**，且代码仅实现了原始 AC1–4。本轮补建 AC5 子任务块（A5-1~A5-4）并连同 AC6/AC7 一并实现。
+
+- **AC5 统计栏 + 里程碑（零态）**：后端 `GET /me/archive-stats` → `ArchiveStatsResponse{happyMomentCount, consultCount, milestoneCompleted=0, milestoneTotal}`；里程碑总数按 `pet_type`（CAT/DOG=30，OTHER=15）。前端统计栏 + 里程碑进度条 0/N（点入口跳 `/profile/milestones` 占位）。
+- **AC5 双视图**：右上角图标切「时间线 ↔ 日历」；view mode 为页面**本地状态**（session 内保持；StatefulShellRoute 分支保活下「重进恢复默认时间线」为近似实现，记此偏差）。日历 `GET /me/calendar?year=&month=` 按 `event_date` 月聚合，月份顶部 + 左右切月。
+- **AC5 第一条 🌟**：时间线首条快乐时刻 / 首条健康事件各加 🌟 永久标签（仅首条）。
+- **AC6（F9 event_date）**：时间线快乐时刻按 `event_date` 倒序（`effectiveDate` 回退 createdAt 日）；日历格子按 `event_date`、背景取该日**最早 created_at** 首图、健康事件叠 🏥 角标、**未来日格灰显不可点**；点有记录格 → 当天详情页（`GET /me/day?date=`，当天条目按 created_at **正序**、快乐时刻可进 FR-28、**无「+」无删除**）；点无记录格「+」→ `/publish?preset=growth-calendar&date=` 预选成长日历 + 预填该日（与 2.3 AC5 入口默认值联动）。
+- **AC7（F13）**：时间线 / 日历 / 当天详情内容区加载失败 → 「加载失败，下拉重试」+ 重试入口；**信息卡 + 统计栏走独立 provider，失败不被覆盖**。A→B/C 由顶层 petStatus 分支落「有宠专属」（复用 AC3）。
+- **健康事件已接入**：发现 `HealthEventTimelineSourceImpl`（2.5）已存在，故为日历/当天/统计补实现端口新增方法（`healthEventsInRange/healthEventsOnDay/countHealthEvents`，默认空实现保证无 bean 时稳健）——统计「问诊 X 次」、日历 🏥 角标、当天详情健康条目均真实取数。
+- **占位敏感词无关**（本 Story 无审核）。
+- **测试**：后端 `TimelineServiceTest` 加 event_date 排序 / 日历聚合（最早首图 + 🏥）/ 当天详情正序 / 统计计数与里程碑按类型 / 无档案 404；`ProfileApiControllerEndpointTest` 加日历/当天/统计端点（**L1，待本地 Docker**）。前端 `growth_archive_r2_test`（统计栏、里程碑 0/N、首条 🌟 唯一、视图切换、时间线失败态保留信息卡/统计、日历未来灰格不可点、有记录格点击、当天详情无「+」无删除、当天详情失败态）。
+
+**Flyway**：本 Story 不新增迁移（event_date 列由 2.3 的 V26 提供）。
+
 ### File List
 
 **后端**：`content/repository/ContentPostRepository.java`(+查询)、`content/service/{ContentService(+findGrowthMoments),GrowthMomentView}.java`、`profile/service/{TimelineService,HealthEventTimelineSource}.java`、`profile/dto/{TimelineItemResponse,TimelinePageResponse}.java`、`profile/web/ProfileApiController.java`(+/me/timeline)；测试 `TimelineServiceTest`、`ProfileApiControllerTest`(+timeline)。
 
 **前端**：`core/network/api_paths.dart`(+timeline)、`features/profile/domain/{timeline_item,pet_age}.dart`、`features/profile/data/timeline_repository.dart`、`features/profile/presentation/growth_archive_page.dart`、`features/profile/presentation/widgets/{pet_info_card,timeline_tiles}.dart`、`core/router/app_router.dart`(/profile→GrowthArchivePage)、删除占位 `profile_page.dart`、`l10n/*.arb`；测试 `test/profile/{pet_age_test,growth_archive_test}.dart`。
+
+**AC5/R2 新增/改动文件（2.4 本轮）：**
+- 后端新增：`profile/dto/{CalendarMonthResponse,DayDetailResponse,ArchiveStatsResponse}.java`；测试新增 `ContentModerationServiceTest`(2.3)、扩 `TimelineServiceTest`、`ProfileApiControllerEndpointTest`(+calendar/day/stats)。
+- 后端改动：`content/service/{GrowthMomentView(+eventDate/firstImageUrl),ContentService(+月/日/计数)}.java`、`content/repository/ContentPostRepository.java`(+event_date 区间/当日/计数查询)、`profile/service/{TimelineService(+日历/当天/统计 + event_date 排序),HealthEventTimelineSource(+区间/当日/计数端口),HealthEventTimelineSourceImpl(+实现)}.java`、`profile/repository/HealthEventRepository.java`(+区间/计数)、`profile/dto/TimelineItemResponse.java`(+eventDate/effectiveDate)、`profile/web/ProfileApiController.java`(+/me/calendar、/me/day、/me/archive-stats)。
+- 前端新增：`features/profile/domain/{archive_stats,calendar_month,day_detail}.dart`、`features/profile/presentation/day_detail_page.dart`、`features/profile/presentation/widgets/archive_calendar.dart`；测试 `test/profile/growth_archive_r2_test.dart`。
+- 前端改动：`core/network/api_paths.dart`(+calendar/day/archive-stats)、`features/profile/domain/timeline_item.dart`(+eventDate/displayDate)、`features/profile/data/timeline_repository.dart`(+calendar/day/stats + providers)、`features/profile/presentation/growth_archive_page.dart`(统计栏/里程碑/双视图/首条🌟/失败态)、`features/profile/presentation/widgets/timeline_tiles.dart`(+firstLabel/displayDate)、`features/content/presentation/publish_landing_page.dart`(+presetEventDate)、`core/router/app_router.dart`(+/profile/day、/publish 加 date)、`core/mock/mock_backend.dart`(+calendar/day/archive-stats 镜像 + eventDate)、`l10n/app_en.arb`+`l10n/app_id.arb`(+统计/里程碑/视图/首条/失败态键)；改 `test/profile/growth_archive_test.dart`(+archiveStats override)。
+
+## Change Log
+
+| 日期 | 变更 | 说明 |
+|---|---|---|
+| 2026-06-09 | AC5（🔄 F2）+ R2（F9/F13）成长档案增强 | 补建并实现 AC5（漏列子任务）：双视图(时间线↔月历)、统计栏(快乐时刻/问诊计数)、里程碑入口零态 0/N(按 pet_type)、第一条🌟；AC6 event_date 排序 + 当天详情页(无「+」无删除) + 未来格灰显 + 「+」跳发布预填日期；AC7 加载失败「下拉重试」+ 信息卡/统计栏保留。后端 3 新端点(calendar/day/archive-stats) + 健康端口补实现。L0 全绿(前端 271 / 后端 package+单测)，L1(Docker) 待本地。 |

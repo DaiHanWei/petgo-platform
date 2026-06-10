@@ -31,7 +31,7 @@ class TriageResultView extends ConsumerWidget {
 
     // 🔒 红色走 4.5 半屏强提醒（自底滑起 overlay）+ 关闭后保留零兽医/零变现红色摘要。
     if (level == DangerLevel.red || level == null) {
-      return TriageRedResult(result: result);
+      return TriageRedResult(result: result, triageId: triageId);
     }
 
     final isYellow = level == DangerLevel.yellow;

@@ -1,0 +1,1949 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TailTopia · V1.0 全屏效果图 · 2026-06-01</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', sans-serif;
+  background: linear-gradient(135deg, #2C2320 0%, #3D3028 40%, #2C2320 100%);
+  min-height: 100vh; padding: 40px 30px 60px;
+}
+.page-header { text-align: center; margin-bottom: 48px; }
+.page-header h1 { color: #fff; font-size: 26px; font-weight: 700; letter-spacing: -0.3px; margin-bottom: 6px; }
+.page-header p { color: rgba(255,255,255,0.55); font-size: 13px; }
+.page-footer { text-align: center; margin-top: 48px; color: rgba(255,255,255,0.3); font-size: 11px; }
+.group-sep { height: 1px; background: rgba(255,255,255,0.1); margin: 48px 0; }
+.group-block { margin-bottom: 0; }
+.pg-mockup * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, 'Segoe UI', sans-serif; }
+.pg-mockup { padding: 0; }
+.pg-mockup .section-title { font-size: 12px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: rgba(255,255,255,0.5); margin-bottom: 24px; text-align: center; }
+.pg-mockup .screen-grid { display: flex; flex-wrap: wrap; gap: 28px; justify-content: center; align-items: flex-start; }
+.pg-mockup .phone { width: 260px; height: 563px; border-radius: 40px; background: #FAF8F5; overflow: hidden; position: relative; box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08), inset 0 1px 0 rgba(255,255,255,.5); display: flex; flex-direction: column; }
+.pg-mockup .status-bar { height: 44px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; flex-shrink: 0; background: #FAF8F5; }
+.pg-mockup .status-bar .time { font-size: 11px; font-weight: 600; color: #1C1917; }
+.pg-mockup .status-bar .icons { font-size: 10px; color: #1C1917; display: flex; gap: 4px; align-items: center; }
+.pg-mockup .nav-bar { height: 44px; display: flex; align-items: center; padding: 0 16px; gap: 8px; flex-shrink: 0; border-bottom: 1px solid #EDE8E3; background: #FAF8F5; }
+.pg-mockup .nav-back { font-size: 16px; color: #1C1917; cursor: pointer; padding: 4px; }
+.pg-mockup .nav-title { font-size: 14px; font-weight: 600; color: #1C1917; flex: 1; text-align: center; }
+.pg-mockup .nav-spacer { width: 24px; }
+.pg-mockup .scroll-area { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+.pg-mockup .bottom-nav { position: relative; height: 64px; background: transparent; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='64' viewBox='0 0 260 64' preserveAspectRatio='none'%3E%3Cpath d='M0,1 L100,1 C113,1 116,19 130,19 C144,19 147,1 160,1 L260,1 L260,64 L0,64 Z' fill='%23FFFFFF' stroke='%23EDE8E3' stroke-width='1'/%3E%3C/svg%3E"); background-size: 100% 100%; background-repeat: no-repeat; display: flex; align-items: center; justify-content: space-around; padding: 0 8px 8px; flex-shrink: 0; }
+.pg-mockup .nav-item { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 9px; color: #9C8C84; cursor: pointer; flex: 1; }
+.pg-mockup .nav-item.active { color: #C8874A; }
+.pg-mockup .nav-icon { font-size: 18px; line-height: 1; }
+.pg-mockup .nav-icon-active { background: #C8874A; border-radius: 999px; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+.pg-mockup .fab-btn { width: 44px; height: 44px; border-radius: 999px; background: #C8874A; border: 3px solid #FFFFFF; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(200,135,74,.45); font-size: 22px; color: #FFFFFF; flex-shrink: 0; position: relative; transform: translateY(-20px); z-index: 3; }
+.pg-mockup .card { background: #FFFFFF; border: 1px solid #EDE8E3; border-radius: 14px; overflow: hidden; }
+.pg-mockup .card-pad { padding: 12px; }
+.pg-mockup .divider { height: 1px; background: #EDE8E3; }
+.pg-mockup .btn-primary { background: #C8874A; color: #FFFFFF; border: none; border-radius: 14px; height: 44px; font-size: 14px; font-weight: 600; width: 100%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.pg-mockup .btn-google { background: #FFFFFF; border: 1px solid #EDE8E3; border-radius: 14px; height: 44px; font-size: 13px; font-weight: 500; color: #1C1917; width: 100%; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.pg-mockup .avatar { border-radius: 999px; background: #EDE8E3; overflow: hidden; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #9C8C84; flex-shrink: 0; }
+.pg-mockup .screen-label { margin-top: 10px; text-align: center; font-size: 10px; color: rgba(255,255,255,0.5); font-weight: 600; letter-spacing: .05em; text-transform: uppercase; }
+.pg-mockup .phone-wrap { display: flex; flex-direction: column; align-items: center; }
+.pg-mockup .badge { background: #E84040; color: #FFFFFF; border-radius: 999px; font-size: 8px; font-weight: 700; padding: 1px 4px; min-width: 14px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="page-header">
+  <h1>🐾 TailTopia · V1.0 全屏效果图</h1>
+  <p>21 screens · Bahasa Indonesia · iOS + Android · 2026-06-01</p>
+</div>
+<div class="group-block">
+<div class="pg-mockup">
+  <div class="section-title">Group A — Authentication &amp; Feed</div>
+  <div class="screen-grid">
+
+    <!-- ═══════════════════════════════════════════
+         S01 · Login Page
+    ═══════════════════════════════════════════ -->
+    <div class="phone-wrap">
+      <div class="phone" id="s01">
+
+        <!-- No status bar, no nav for pre-login -->
+        <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 28px; gap:0;">
+
+          <!-- Logo block -->
+          <div style="display:flex; flex-direction:column; align-items:center; gap:6px; margin-bottom:48px;">
+            <span style="font-size:48px; line-height:1;">🐾</span>
+            <span style="font-size:24px; font-weight:700; color:#C8874A; letter-spacing:-.5px;">TailTopia</span>
+            <span style="font-size:13px; color:#9C8C84; text-align:center; line-height:1.4;">Komunitas Pecinta Hewan Indonesia</span>
+          </div>
+
+          <!-- Google login -->
+          <div style="width:100%; display:flex; flex-direction:column; gap:12px;">
+            <button class="btn-google">
+              <!-- Google G SVG -->
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
+                <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/>
+                <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
+                <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+              </svg>
+              Masuk dengan Google
+            </button>
+            <p style="font-size:10px; color:#C4B8B0; text-align:center; line-height:1.5; padding:0 8px;">
+              Dengan masuk, kamu setuju dengan<br>Syarat &amp; Kebijakan Privasi
+            </p>
+          </div>
+        </div>
+
+        <!-- Vet login link at very bottom -->
+        <div style="padding:0 28px 28px; text-align:center;">
+          <span style="font-size:12px; color:#7BA7BC; cursor:pointer; text-decoration:underline; text-underline-offset:2px;">
+            Masuk Akun Dokter Hewan
+          </span>
+        </div>
+
+      </div>
+      <div class="screen-label">S01 · Login</div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         S02 · Onboarding — Pet Status Selection
+    ═══════════════════════════════════════════ -->
+    <div class="phone-wrap">
+      <div class="phone" id="s02">
+
+        <!-- Nav bar -->
+        <div class="nav-bar">
+          <span class="nav-back">←</span>
+          <span class="nav-title">Profil Hewan Peliharaan</span>
+          <span class="nav-spacer"></span>
+        </div>
+
+        <div style="flex:1; display:flex; flex-direction:column; padding:20px 16px 16px; gap:24px;">
+
+          <!-- Progress dots -->
+          <div style="display:flex; align-items:center; justify-content:center; gap:8px;">
+            <div style="width:24px; height:6px; border-radius:999px; background:#EDE8E3;"></div>
+            <div style="width:24px; height:6px; border-radius:999px; background:#C8874A;"></div>
+            <div style="width:24px; height:6px; border-radius:999px; background:#EDE8E3;"></div>
+          </div>
+
+          <!-- Heading -->
+          <div>
+            <p style="font-size:11px; color:#9C8C84; margin-bottom:4px;">Langkah 2 dari 3</p>
+            <h2 style="font-size:18px; font-weight:700; color:#1C1917; line-height:1.3;">Bagaimana statusmu?</h2>
+            <p style="font-size:13px; color:#9C8C84; margin-top:4px;">Ceritakan tentang hubunganmu dengan hewan.</p>
+          </div>
+
+          <!-- Selection cards -->
+          <div style="display:flex; flex-direction:column; gap:10px;">
+
+            <!-- Option A: selected -->
+            <div style="display:flex; align-items:center; height:56px; padding:0 14px; border-radius:14px; border:2px solid #C8874A; background:#FFF8F2; gap:10px; cursor:pointer;">
+              <span style="font-size:20px;">🐾</span>
+              <span style="font-size:13px; font-weight:500; color:#1C1917; flex:1;">Saya punya hewan peliharaan</span>
+              <!-- Filled radio -->
+              <div style="width:20px; height:20px; border-radius:999px; border:2px solid #C8874A; background:#C8874A; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                <div style="width:7px; height:7px; border-radius:999px; background:#FFFFFF;"></div>
+              </div>
+            </div>
+
+            <!-- Option B -->
+            <div style="display:flex; align-items:center; height:56px; padding:0 14px; border-radius:14px; border:1.5px solid #EDE8E3; background:#FFFFFF; gap:10px; cursor:pointer;">
+              <span style="font-size:20px;">💭</span>
+              <span style="font-size:13px; color:#1C1917; flex:1;">Berencana memelihara hewan</span>
+              <div style="width:20px; height:20px; border-radius:999px; border:2px solid #C4B8B0; background:#FFFFFF; flex-shrink:0;"></div>
+            </div>
+
+            <!-- Option C -->
+            <div style="display:flex; align-items:center; height:56px; padding:0 14px; border-radius:14px; border:1.5px solid #EDE8E3; background:#FFFFFF; gap:10px; cursor:pointer;">
+              <span style="font-size:20px;">❤️</span>
+              <span style="font-size:13px; color:#1C1917; flex:1;">Saya pecinta hewan saja</span>
+              <div style="width:20px; height:20px; border-radius:999px; border:2px solid #C4B8B0; background:#FFFFFF; flex-shrink:0;"></div>
+            </div>
+
+          </div>
+
+          <div style="flex:1;"></div>
+
+          <!-- CTA -->
+          <button class="btn-primary">Lanjut →</button>
+
+        </div>
+      </div>
+      <div class="screen-label">S02 · Onboarding</div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         S03 · Home Feed
+    ═══════════════════════════════════════════ -->
+    <div class="phone-wrap">
+      <div class="phone" id="s03">
+
+        <!-- Status bar -->
+        <div class="status-bar">
+          <span class="time">9:41</span>
+          <div class="icons">
+            <span>▪▪▪</span>
+            <span style="font-size:12px;">●</span>
+            <span>⬛</span>
+          </div>
+        </div>
+
+        <!-- Top nav -->
+        <div style="height:44px; display:flex; align-items:center; justify-content:space-between; padding:0 16px; border-bottom:1px solid #EDE8E3; background:#FAF8F5; flex-shrink:0;">
+          <span style="font-size:18px; font-weight:700; color:#C8874A;">TailTopia</span>
+          <div style="position:relative; cursor:pointer;">
+            <span style="font-size:20px;">🔔</span>
+            <span style="position:absolute; top:-4px; right:-6px; background:#E84040; color:#FFFFFF; border-radius:999px; font-size:8px; font-weight:700; padding:1px 4px; min-width:14px; text-align:center;">3</span>
+          </div>
+        </div>
+
+        <!-- Filter tabs -->
+        <div style="display:flex; align-items:center; gap:0; padding:0 16px; border-bottom:1px solid #EDE8E3; background:#FAF8F5; flex-shrink:0; overflow:hidden;">
+          <div style="padding:10px 10px 8px; font-size:12px; font-weight:600; color:#C8874A; border-bottom:2px solid #C8874A; white-space:nowrap;">Semua</div>
+          <div style="padding:10px 10px 8px; font-size:12px; color:#9C8C84; white-space:nowrap;">Harian</div>
+          <div style="padding:10px 10px 8px; font-size:12px; color:#9C8C84; white-space:nowrap;">Tumbuh</div>
+          <div style="padding:10px 10px 8px; font-size:12px; color:#9C8C84; white-space:nowrap;">Edukasi</div>
+        </div>
+
+        <!-- Masonry feed -->
+        <div style="flex:1; overflow:hidden; padding:10px 16px 8px;">
+          <div style="display:flex; gap:8px; align-items:flex-start;">
+
+            <!-- Left column -->
+            <div style="flex:1; display:flex; flex-direction:column; gap:8px;">
+
+              <!-- Card 1 -->
+              <div class="card">
+                <div style="height:80px; background:#F5EBE0; display:flex; align-items:center; justify-content:center;">
+                  <span style="font-size:28px;">🐱</span>
+                </div>
+                <div style="padding:8px 10px;">
+                  <p style="font-size:12px; color:#1C1917; line-height:1.4; margin-bottom:6px;">Oyen lagi suka duduk di jendela 🐱</p>
+                  <div style="display:flex; align-items:center; gap:5px;">
+                    <div class="avatar" style="width:18px; height:18px; font-size:8px;">P</div>
+                    <span style="font-size:11px; color:#9C8C84; flex:1;">Putri</span>
+                    <span style="font-size:11px; color:#C8874A;">❤️ 24</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card 2 -->
+              <div class="card">
+                <div style="height:120px; background:#E8F0F5; display:flex; align-items:center; justify-content:center;">
+                  <span style="font-size:32px;">🍽️</span>
+                </div>
+                <div style="padding:8px 10px;">
+                  <p style="font-size:12px; color:#1C1917; line-height:1.4; margin-bottom:6px;">Tips ngasih makan kucing yang benar</p>
+                  <div style="display:flex; align-items:center; gap:5px;">
+                    <div class="avatar" style="width:18px; height:18px; font-size:8px;">A</div>
+                    <span style="font-size:11px; color:#9C8C84; flex:1;">Andi</span>
+                    <span style="font-size:11px; color:#C8874A;">❤️ 58</span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Right column -->
+            <div style="flex:1; display:flex; flex-direction:column; gap:8px; margin-top:16px;">
+
+              <!-- Card 3 -->
+              <div class="card">
+                <div style="height:100px; background:#E8F4E8; display:flex; align-items:center; justify-content:center;">
+                  <span style="font-size:32px;">🐕</span>
+                </div>
+                <div style="padding:8px 10px;">
+                  <p style="font-size:12px; color:#1C1917; line-height:1.4; margin-bottom:6px;">Hari pertama Rocky di rumah baru! 🐕</p>
+                  <div style="display:flex; align-items:center; gap:5px;">
+                    <div class="avatar" style="width:18px; height:18px; font-size:8px;">B</div>
+                    <span style="font-size:11px; color:#9C8C84; flex:1;">Budi</span>
+                    <span style="font-size:11px; color:#C8874A;">❤️ 31</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card 4 -->
+              <div class="card">
+                <div style="height:90px; background:#F5E8F0; display:flex; align-items:center; justify-content:center;">
+                  <span style="font-size:28px;">💉</span>
+                </div>
+                <div style="padding:8px 10px;">
+                  <p style="font-size:12px; color:#1C1917; line-height:1.4; margin-bottom:6px;">Vaksin lengkap sudah! Sertifikat di tangan</p>
+                  <div style="display:flex; align-items:center; gap:5px;">
+                    <div class="avatar" style="width:18px; height:18px; font-size:8px;">S</div>
+                    <span style="font-size:11px; color:#9C8C84; flex:1;">Sari</span>
+                    <span style="font-size:11px; color:#C8874A;">❤️ 17</span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom nav -->
+        <div class="bottom-nav">
+          <div class="nav-item active">
+            <div class="nav-icon-active">🏠</div>
+          </div>
+          <div class="nav-item">
+            <span class="nav-icon">🐾</span>
+            <span>Tumbuh</span>
+          </div>
+          <div class="fab-btn">＋</div>
+          <div class="nav-item">
+            <span class="nav-icon">🩺</span>
+            <span>Konsul</span>
+          </div>
+          <div class="nav-item">
+            <span class="nav-icon">👤</span>
+            <span>Saya</span>
+          </div>
+        </div>
+
+      </div>
+      <div class="screen-label">S03 · Home Feed</div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         S04 · Post Detail
+    ═══════════════════════════════════════════ -->
+    <div class="phone-wrap">
+      <div class="phone" id="s04">
+
+        <!-- Status bar -->
+        <div class="status-bar">
+          <span class="time">9:41</span>
+          <div class="icons"><span>▪▪▪</span><span style="font-size:12px;">●</span><span>⬛</span></div>
+        </div>
+
+        <!-- Nav bar -->
+        <div class="nav-bar">
+          <span class="nav-back">←</span>
+          <span class="nav-title">Detail Postingan</span>
+          <span class="nav-spacer"></span>
+        </div>
+
+        <!-- Scrollable content -->
+        <div style="flex:1; overflow:hidden; padding:14px 16px; display:flex; flex-direction:column; gap:12px;">
+
+          <!-- Author row -->
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div class="avatar" style="width:36px; height:36px; font-size:14px; font-weight:600; background:#FDDAB8; color:#C8874A;">P</div>
+            <div style="flex:1;">
+              <p style="font-size:14px; font-weight:600; color:#1C1917;">Putri</p>
+              <p style="font-size:11px; color:#9C8C84;">Depok · 2 jam lalu</p>
+            </div>
+            <div style="cursor:pointer; padding:4px; font-size:16px; color:#9C8C84;">···</div>
+          </div>
+
+          <!-- Post image -->
+          <div style="height:160px; background:#F5EBE0; border-radius:14px; display:flex; align-items:center; justify-content:center; overflow:hidden; flex-shrink:0;">
+            <span style="font-size:48px;">🐱</span>
+          </div>
+
+          <!-- Post text -->
+          <p style="font-size:14px; color:#1C1917; line-height:1.55;">
+            Oyen lagi suka duduk di jendela, nonton kucing-kucing tetangga di luar 🐱 Setiap pagi pasti ada disana!
+          </p>
+
+          <!-- Interactions -->
+          <div style="display:flex; align-items:center; gap:14px;">
+            <span style="font-size:13px; color:#9C8C84; cursor:pointer;">❤️ 24</span>
+            <span style="font-size:13px; color:#9C8C84; cursor:pointer;">💬 8</span>
+          </div>
+
+          <!-- Divider -->
+          <div class="divider"></div>
+
+          <!-- Comments section -->
+          <div style="display:flex; flex-direction:column; gap:10px;">
+            <p style="font-size:13px; font-weight:600; color:#1C1917;">Komentar</p>
+
+            <!-- Comment 1 -->
+            <div style="display:flex; align-items:flex-start; gap:8px;">
+              <div class="avatar" style="width:26px; height:26px; font-size:10px; background:#E8F0F5; color:#7BA7BC; font-weight:600;">R</div>
+              <div style="background:#F5F2EF; border-radius:10px; padding:7px 10px; flex:1;">
+                <p style="font-size:13px; color:#1C1917;"><span style="font-weight:600;">Rina</span> Gemesin banget! Kucingku juga suka 😍</p>
+              </div>
+            </div>
+
+            <!-- Comment 2 -->
+            <div style="display:flex; align-items:flex-start; gap:8px;">
+              <div class="avatar" style="width:26px; height:26px; font-size:10px; background:#F5EBE0; color:#C8874A; font-weight:600;">D</div>
+              <div style="background:#F5F2EF; border-radius:10px; padding:7px 10px; flex:1;">
+                <p style="font-size:13px; color:#1C1917;"><span style="font-weight:600;">Dika</span> Oyen lucu banget hehe</p>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+        <!-- Fixed comment input -->
+        <div style="padding:8px 16px 10px; background:#FFFFFF; border-top:1px solid #EDE8E3; display:flex; align-items:center; gap:10px; flex-shrink:0;">
+          <div class="avatar" style="width:28px; height:28px; font-size:11px; background:#FDDAB8; color:#C8874A; font-weight:600;">P</div>
+          <div style="flex:1; background:#F5F2EF; border-radius:999px; height:34px; display:flex; align-items:center; padding:0 14px;">
+            <span style="font-size:13px; color:#C4B8B0;">Tulis komentar...</span>
+          </div>
+          <div style="width:32px; height:32px; border-radius:999px; background:#C8874A; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;">
+            <span style="font-size:14px; color:#FFFFFF;">➤</span>
+          </div>
+        </div>
+
+      </div>
+      <div class="screen-label">S04 · Post Detail</div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         S05 · Notification Center
+    ═══════════════════════════════════════════ -->
+    <div class="phone-wrap">
+      <div class="phone" id="s05">
+
+        <!-- Status bar -->
+        <div class="status-bar">
+          <span class="time">9:41</span>
+          <div class="icons"><span>▪▪▪</span><span style="font-size:12px;">●</span><span>⬛</span></div>
+        </div>
+
+        <!-- Nav bar -->
+        <div class="nav-bar">
+          <span class="nav-back">←</span>
+          <span class="nav-title">Notifikasi</span>
+          <span class="nav-spacer"></span>
+        </div>
+
+        <!-- Notification list -->
+        <div style="flex:1; overflow:hidden; display:flex; flex-direction:column;">
+
+          <!-- Item 1 -->
+          <div style="display:flex; align-items:center; gap:10px; padding:12px 16px; cursor:pointer; background:#FFFFFF;">
+            <div style="width:32px; height:32px; border-radius:999px; background:#E8F4FA; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:16px;">🩺</div>
+            <div style="flex:1; min-width:0;">
+              <p style="font-size:13px; font-weight:600; color:#1C1917; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Dokter Hewan membalas konsultasimu</p>
+              <p style="font-size:11px; color:#9C8C84;">Tap untuk melihat jawaban</p>
+            </div>
+            <span style="font-size:10px; color:#C4B8B0; flex-shrink:0;">5 mnt lalu</span>
+          </div>
+          <div class="divider" style="margin:0 16px;"></div>
+
+          <!-- Item 2 -->
+          <div style="display:flex; align-items:center; gap:10px; padding:12px 16px; cursor:pointer; background:#FAF8F5;">
+            <div style="width:32px; height:32px; border-radius:999px; background:#FDEAEA; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:16px;">❤️</div>
+            <div style="flex:1; min-width:0;">
+              <p style="font-size:13px; color:#1C1917; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Rina menyukai postinganmu</p>
+              <p style="font-size:11px; color:#9C8C84; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Oyen lagi suka duduk...</p>
+            </div>
+            <span style="font-size:10px; color:#C4B8B0; flex-shrink:0;">1 jam lalu</span>
+          </div>
+          <div class="divider" style="margin:0 16px;"></div>
+
+          <!-- Item 3 -->
+          <div style="display:flex; align-items:center; gap:10px; padding:12px 16px; cursor:pointer; background:#FFFFFF;">
+            <div style="width:32px; height:32px; border-radius:999px; background:#FFF0E8; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:16px;">💬</div>
+            <div style="flex:1; min-width:0;">
+              <p style="font-size:13px; color:#1C1917; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Dika mengomentari postinganmu</p>
+              <p style="font-size:11px; color:#9C8C84; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Oyen lucu banget hehe</p>
+            </div>
+            <span style="font-size:10px; color:#C4B8B0; flex-shrink:0;">2 jam lalu</span>
+          </div>
+          <div class="divider" style="margin:0 16px;"></div>
+
+          <!-- Item 4 -->
+          <div style="display:flex; align-items:center; gap:10px; padding:12px 16px; cursor:pointer; background:#FAF8F5;">
+            <div style="width:32px; height:32px; border-radius:999px; background:#E8F4FA; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:16px;">🩺</div>
+            <div style="flex:1; min-width:0;">
+              <p style="font-size:13px; font-weight:600; color:#1C1917; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Konsultasi selesai - beri penilaian</p>
+              <p style="font-size:11px; color:#9C8C84;">Tap untuk memberi bintang</p>
+            </div>
+            <span style="font-size:10px; color:#C4B8B0; flex-shrink:0;">Kemarin</span>
+          </div>
+          <div class="divider"></div>
+
+          <div style="flex:1; background:#FAF8F5;"></div>
+        </div>
+
+        <!-- Bottom nav -->
+        <div class="bottom-nav">
+          <div class="nav-item active">
+            <div class="nav-icon-active">🏠</div>
+          </div>
+          <div class="nav-item">
+            <span class="nav-icon">🐾</span>
+            <span>Tumbuh</span>
+          </div>
+          <div class="fab-btn">＋</div>
+          <div class="nav-item">
+            <span class="nav-icon">🩺</span>
+            <span>Konsul</span>
+          </div>
+          <div class="nav-item">
+            <span class="nav-icon">👤</span>
+            <span>Saya</span>
+          </div>
+        </div>
+
+      </div>
+      <div class="screen-label">S05 · Notifikasi</div>
+    </div>
+
+  </div><!-- /.screen-grid -->
+</div><!-- /.pg-mockup -->
+</div><div class="group-sep"></div>
+<div class="group-block">
+<div class="pg-mockup pg-group-b">
+  <div class="section-title">Group B — 成长档案 &amp; 发布 · Archive &amp; Publish</div>
+  <div class="screen-grid">
+
+    <!-- ═══════════════════════════════════════════
+         S06 · Growth Archive Tab (成长档案 Tab)
+    ═══════════════════════════════════════════ -->
+    <div class="phone-wrap">
+      <div class="phone" id="s06">
+
+        <!-- Status bar -->
+        <div class="status-bar">
+          <span class="time">9:41</span>
+          <div class="icons"><span>▪▪▪</span><span style="font-size:12px;">●</span><span>⬛</span></div>
+        </div>
+
+        <!-- Tab-level nav (no back arrow) -->
+        <div class="nav-bar" style="justify-content:center; position:relative;">
+          <span class="nav-title" style="text-align:center; flex:none;">Arsip Kenangan</span>
+        </div>
+
+        <!-- Scrollable content -->
+        <div style="flex:1; overflow:hidden; display:flex; flex-direction:column; padding:12px 14px 8px; gap:10px;">
+
+          <!-- Pet profile card -->
+          <div style="background:#FFFFFF; border:1px solid #EDE8E3; border-radius:14px; box-shadow:0 2px 8px rgba(0,0,0,.06); padding:12px; display:flex; align-items:center; gap:10px; position:relative; flex-shrink:0;">
+            <!-- Avatar -->
+            <div class="avatar" style="width:48px; height:48px; background:#F5EBE0; font-size:24px; flex-shrink:0;">🐱</div>
+            <!-- Info -->
+            <div style="flex:1; min-width:0;">
+              <p style="font-size:16px; font-weight:700; color:#1C1917; margin-bottom:2px;">Oyen</p>
+              <p style="font-size:12px; color:#9C8C84;">Kucing Oranye · 3 tahun</p>
+            </div>
+            <!-- Edit pill top-right -->
+            <div style="position:absolute; top:10px; right:10px; border:1px solid #C8874A; color:#C8874A; font-size:10px; border-radius:999px; padding:2px 8px; cursor:pointer; white-space:nowrap;">✏️ Edit</div>
+          </div>
+
+          <!-- Share name card pill button -->
+          <div style="display:flex; justify-content:center; flex-shrink:0;">
+            <div style="border:1.5px solid #C8874A; color:#C8874A; font-size:12px; border-radius:999px; height:32px; padding:0 16px; display:flex; align-items:center; gap:6px; cursor:pointer;">
+              <span>📤</span>
+              <span>Bagikan Nama Kartu</span>
+            </div>
+          </div>
+
+          <!-- Section title -->
+          <p style="font-size:12px; font-weight:700; color:#1C1917; flex-shrink:0;">Timeline Kenangan</p>
+
+          <!-- Timeline -->
+          <div style="flex:1; overflow:hidden; display:flex; flex-direction:column; gap:0; position:relative;">
+
+            <!-- Vertical line -->
+            <div style="position:absolute; left:7px; top:0; bottom:0; width:1.5px; background:#EDE8E3; z-index:0;"></div>
+
+            <!-- Timeline item 1 -->
+            <div style="display:flex; align-items:flex-start; gap:10px; padding:0 0 14px 0; position:relative;">
+              <!-- Dot -->
+              <div style="width:15px; height:15px; border-radius:999px; background:#C8874A; border:2.5px solid #FAF8F5; flex-shrink:0; margin-top:1px; z-index:1; position:relative;"></div>
+              <!-- Content -->
+              <div style="flex:1; display:flex; align-items:flex-start; gap:8px; min-width:0;">
+                <div style="flex:1; min-width:0;">
+                  <p style="font-size:13px; font-weight:600; color:#1C1917; margin-bottom:1px;">Oyen suka jendela</p>
+                  <p style="font-size:10px; color:#9C8C84;">2 jam lalu</p>
+                </div>
+                <!-- Image placeholder -->
+                <div style="width:50px; height:50px; border-radius:10px; background:#F5EBE0; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:18px;">🐱</div>
+              </div>
+            </div>
+
+            <!-- Timeline item 2 -->
+            <div style="display:flex; align-items:flex-start; gap:10px; padding:0 0 14px 0; position:relative;">
+              <!-- Blue dot -->
+              <div style="width:15px; height:15px; border-radius:999px; background:#7BA7BC; border:2.5px solid #FAF8F5; flex-shrink:0; margin-top:1px; z-index:1; position:relative;"></div>
+              <!-- Content -->
+              <div style="flex:1; min-width:0;">
+                <p style="font-size:13px; font-weight:600; color:#1C1917; margin-bottom:4px;">🏥 Catatan Konsultasi</p>
+                <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                  <span style="background:#D4EDD4; color:#3A7A3A; font-size:10px; border-radius:999px; padding:2px 8px; white-space:nowrap;">Tidak Mendesak</span>
+                  <span style="font-size:10px; color:#9C8C84;">3 hari lalu</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Timeline item 3 -->
+            <div style="display:flex; align-items:flex-start; gap:10px; position:relative;">
+              <!-- Orange dot -->
+              <div style="width:15px; height:15px; border-radius:999px; background:#C8874A; border:2.5px solid #FAF8F5; flex-shrink:0; margin-top:1px; z-index:1; position:relative;"></div>
+              <!-- Content -->
+              <div style="flex:1; display:flex; align-items:flex-start; gap:8px; min-width:0;">
+                <div style="flex:1; min-width:0;">
+                  <p style="font-size:13px; font-weight:600; color:#1C1917; margin-bottom:1px;">Bermain di taman</p>
+                  <p style="font-size:10px; color:#9C8C84;">1 minggu lalu</p>
+                </div>
+                <!-- Image placeholder -->
+                <div style="width:50px; height:50px; border-radius:10px; background:#E8F4E8; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:18px;">🌿</div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- FAB share bottom-right -->
+          <div style="position:absolute; bottom:78px; right:14px; width:40px; height:40px; border-radius:999px; background:#C8874A; display:flex; align-items:center; justify-content:center; font-size:18px; box-shadow:0 2px 8px rgba(200,135,74,.4); cursor:pointer; z-index:10;">📤</div>
+
+        </div>
+
+        <!-- Bottom nav -->
+        <div class="bottom-nav">
+          <div class="nav-item">
+            <span class="nav-icon">🏠</span>
+            <span>Beranda</span>
+          </div>
+          <div class="nav-item active">
+            <div class="nav-icon-active">🐾</div>
+            <span>Tumbuh</span>
+          </div>
+          <div class="fab-btn">＋</div>
+          <div class="nav-item">
+            <span class="nav-icon">🩺</span>
+            <span>Konsul</span>
+          </div>
+          <div class="nav-item">
+            <span class="nav-icon">👤</span>
+            <span>Saya</span>
+          </div>
+        </div>
+
+      </div>
+      <div class="screen-label">S06 · Growth Archive</div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         S07 · Pet Card H5 Share Page (外部分享页)
+    ═══════════════════════════════════════════ -->
+    <div class="phone-wrap">
+      <div class="phone" id="s07" style="background:#FFFFFF;">
+
+        <!-- No status bar, external page -->
+        <div style="flex:1; display:flex; flex-direction:column; padding:24px 20px 20px; gap:0; overflow:hidden;">
+
+          <!-- TailTopia watermark top-center -->
+          <div style="text-align:center; margin-bottom:20px; flex-shrink:0;">
+            <span style="font-size:12px; color:#9C8C84;">TailTopia 🐾</span>
+          </div>
+
+          <!-- Hero section -->
+          <div style="display:flex; flex-direction:column; align-items:center; gap:8px; margin-bottom:16px; flex-shrink:0;">
+            <div class="avatar" style="width:64px; height:64px; background:#F5EBE0; font-size:32px;">🐱</div>
+            <p style="font-size:22px; font-weight:700; color:#1C1917;">Oyen</p>
+            <p style="font-size:12px; color:#9C8C84; text-align:center;">Kucing Oranye · 3 tahun · Jakarta</p>
+          </div>
+
+          <!-- Thin divider -->
+          <div class="divider" style="margin-bottom:14px; flex-shrink:0;"></div>
+
+          <!-- Momen Terbaru label -->
+          <p style="font-size:12px; font-weight:700; color:#1C1917; margin-bottom:10px; flex-shrink:0;">Momen Terbaru</p>
+
+          <!-- 2×2 image grid -->
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:16px; flex-shrink:0;">
+            <div style="height:60px; background:#F5EBE0; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:22px;">🐱</div>
+            <div style="height:60px; background:#E8F4E8; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:22px;">🌿</div>
+            <div style="height:60px; background:#F5E8F0; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:22px;">🎀</div>
+            <div style="height:60px; background:#EEF4F7; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:22px;">🌅</div>
+          </div>
+
+          <!-- CTA banner -->
+          <div style="background:#C8874A; border-radius:14px; padding:14px 16px; display:flex; flex-direction:column; gap:4px; flex-shrink:0;">
+            <p style="font-size:12px; font-weight:700; color:#FFFFFF; line-height:1.4;">Lihat cerita lengkap Oyen di TailTopia</p>
+            <p style="font-size:11px; color:rgba(255,255,255,0.85);">Download Sekarang →</p>
+          </div>
+
+        </div>
+      </div>
+      <div class="screen-label">S07 · Pet Card Share</div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         S08 · Publish Compose Bottom Sheet (发布页底部弹层)
+    ═══════════════════════════════════════════ -->
+    <div class="phone-wrap">
+      <div class="phone" id="s08">
+
+        <!-- Backdrop: partial home feed visible under overlay -->
+        <div style="position:absolute; inset:0; display:flex; flex-direction:column; z-index:0;">
+          <!-- Simulated feed cards in bg -->
+          <div style="padding:44px 14px 0; display:flex; flex-direction:column; gap:8px; opacity:0.5;">
+            <div style="height:10px; background:#EDE8E3; border-radius:4px; width:60%;"></div>
+            <div class="card" style="height:64px; display:flex; align-items:center; justify-content:center; font-size:22px; opacity:0.6;">🐱</div>
+            <div class="card" style="height:48px; display:flex; align-items:center; justify-content:center; font-size:18px; opacity:0.5;">🐕</div>
+          </div>
+          <!-- Dark overlay -->
+          <div style="position:absolute; inset:0; background:rgba(0,0,0,0.30); z-index:1;"></div>
+        </div>
+
+        <!-- Bottom sheet -->
+        <div style="position:absolute; bottom:0; left:0; right:0; background:#FFFFFF; border-radius:20px 20px 0 0; padding:8px 0 0; z-index:10; display:flex; flex-direction:column;">
+
+          <!-- Handle -->
+          <div style="display:flex; justify-content:center; margin-bottom:10px; flex-shrink:0;">
+            <div style="width:32px; height:4px; border-radius:999px; background:#EDE8E3;"></div>
+          </div>
+
+          <!-- Sheet header -->
+          <p style="font-size:15px; font-weight:700; color:#1C1917; padding:0 16px; margin-bottom:12px; flex-shrink:0;">Buat Postingan</p>
+
+          <!-- Content type chips -->
+          <div style="display:flex; gap:8px; padding:0 16px; margin-bottom:12px; flex-shrink:0;">
+            <div style="background:#C8874A; color:#FFFFFF; font-size:11px; border-radius:999px; padding:5px 12px; cursor:pointer; white-space:nowrap;">Harian</div>
+            <div style="border:1px solid #EDE8E3; color:#9C8C84; font-size:11px; border-radius:999px; padding:5px 12px; cursor:pointer; white-space:nowrap;">Tumbuh</div>
+            <div style="border:1px solid #EDE8E3; color:#9C8C84; font-size:11px; border-radius:999px; padding:5px 12px; cursor:pointer; white-space:nowrap;">Edukasi</div>
+          </div>
+
+          <!-- Image upload area -->
+          <div style="margin:0 16px 10px; border:1.5px dashed #EDE8E3; border-radius:14px; height:80px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; flex-shrink:0;">
+            <span style="font-size:13px; color:#9C8C84;">📷 Tambah Foto</span>
+            <span style="font-size:10px; color:#C4B8B0;">Maks 9 foto · 10MB</span>
+          </div>
+
+          <!-- Text input area -->
+          <div style="margin:0 16px 4px; border:1px solid #EDE8E3; border-radius:10px; height:70px; padding:10px; display:flex; align-items:flex-start; flex-shrink:0;">
+            <span style="font-size:12px; color:#C4B8B0; line-height:1.5;">Apa yang ingin kamu bagikan? (maks. 1000 karakter)</span>
+          </div>
+
+          <!-- Char count -->
+          <p style="font-size:10px; color:#C4B8B0; text-align:right; padding:0 16px; margin-bottom:6px; flex-shrink:0;">0 / 1000</p>
+
+          <!-- Visibility note -->
+          <p style="font-size:10px; color:#C4B8B0; text-align:center; margin-bottom:12px; flex-shrink:0;">Konten ini akan terlihat oleh semua pengguna</p>
+
+          <!-- Post button -->
+          <div style="padding:0 16px 20px; flex-shrink:0;">
+            <button class="btn-primary">Posting</button>
+          </div>
+
+        </div>
+
+      </div>
+      <div class="screen-label">S08 · Publish Compose</div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         S09 · Content Publish Page FILLED (已填写发布)
+    ═══════════════════════════════════════════ -->
+    <div class="phone-wrap">
+      <div class="phone" id="s09">
+
+        <!-- Status bar -->
+        <div class="status-bar">
+          <span class="time">9:41</span>
+          <div class="icons"><span>▪▪▪</span><span style="font-size:12px;">●</span><span>⬛</span></div>
+        </div>
+
+        <!-- Nav bar with right Posting action -->
+        <div class="nav-bar" style="position:relative;">
+          <span class="nav-back">←</span>
+          <span class="nav-title">Buat Postingan</span>
+          <span style="font-size:13px; font-weight:700; color:#C8874A; cursor:pointer; white-space:nowrap;">Posting</span>
+        </div>
+
+        <!-- Content area -->
+        <div style="flex:1; overflow:hidden; display:flex; flex-direction:column; padding:14px 14px 10px; gap:12px;">
+
+          <!-- Content type chips row -->
+          <div style="display:flex; gap:8px; flex-shrink:0;">
+            <div style="background:#C8874A; color:#FFFFFF; font-size:11px; border-radius:999px; padding:5px 12px; cursor:pointer; white-space:nowrap;">Harian</div>
+            <div style="border:1px solid #EDE8E3; color:#9C8C84; font-size:11px; border-radius:999px; padding:5px 12px; cursor:pointer; white-space:nowrap;">Tumbuh</div>
+            <div style="border:1px solid #EDE8E3; color:#9C8C84; font-size:11px; border-radius:999px; padding:5px 12px; cursor:pointer; white-space:nowrap;">Edukasi</div>
+          </div>
+
+          <!-- Uploaded image thumbnails row -->
+          <div style="display:flex; gap:8px; flex-shrink:0;">
+
+            <!-- Thumb 1 -->
+            <div style="width:56px; height:56px; border-radius:10px; background:#F5EBE0; position:relative; display:flex; align-items:center; justify-content:center; font-size:22px; flex-shrink:0;">
+              🐱
+              <div style="position:absolute; top:-5px; right:-5px; width:16px; height:16px; border-radius:999px; background:#9C8C84; display:flex; align-items:center; justify-content:center; font-size:9px; color:#FFFFFF; cursor:pointer;">✕</div>
+            </div>
+
+            <!-- Thumb 2 -->
+            <div style="width:56px; height:56px; border-radius:10px; background:#E8F4E8; position:relative; display:flex; align-items:center; justify-content:center; font-size:22px; flex-shrink:0;">
+              🌿
+              <div style="position:absolute; top:-5px; right:-5px; width:16px; height:16px; border-radius:999px; background:#9C8C84; display:flex; align-items:center; justify-content:center; font-size:9px; color:#FFFFFF; cursor:pointer;">✕</div>
+            </div>
+
+            <!-- Thumb 3: add more slot -->
+            <div style="width:56px; height:56px; border-radius:10px; border:1.5px dashed #EDE8E3; display:flex; align-items:center; justify-content:center; font-size:20px; color:#C4B8B0; cursor:pointer; flex-shrink:0;">+</div>
+
+          </div>
+
+          <!-- Filled text area -->
+          <div style="border:1px solid #EDE8E3; border-radius:10px; padding:10px; flex-shrink:0;">
+            <p style="font-size:13px; color:#1C1917; line-height:1.55;">Oyen hari ini lagi seneng banget main di bawah sinar matahari pagi! Matanya berbinar-binar 🐱✨</p>
+          </div>
+
+          <!-- Character count -->
+          <p style="font-size:10px; color:#9C8C84; text-align:right; flex-shrink:0; margin-top:-6px;">87 / 1000</p>
+
+          <!-- Pet linkage pill -->
+          <div style="flex-shrink:0;">
+            <div style="display:inline-flex; align-items:center; gap:6px; background:#FFF0E6; border-radius:999px; padding:6px 12px; cursor:pointer;">
+              <span style="font-size:12px;">🐾</span>
+              <span style="font-size:12px; color:#C8874A; font-weight:500;">Tautkan ke Oyen</span>
+              <span style="font-size:12px; color:#C8874A;">✓</span>
+            </div>
+          </div>
+
+          <!-- Visibility disclaimer -->
+          <p style="font-size:10px; color:#C4B8B0; text-align:center; flex-shrink:0;">Konten ini akan terlihat oleh semua pengguna</p>
+
+          <div style="flex:1;"></div>
+
+          <!-- Post button -->
+          <button class="btn-primary" style="flex-shrink:0;">Posting</button>
+
+        </div>
+
+      </div>
+      <div class="screen-label">S09 · Publish Filled</div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         S10 · Mini User Profile Preview Card (迷你主页预览卡)
+    ═══════════════════════════════════════════ -->
+    <div class="phone-wrap">
+      <div class="phone" id="s10">
+
+        <!-- Backdrop: home feed barely visible under overlay -->
+        <div style="position:absolute; inset:0; display:flex; flex-direction:column; z-index:0;">
+          <!-- Simulated feed in background -->
+          <div style="padding:44px 14px 0; display:flex; flex-direction:column; gap:8px; opacity:0.45;">
+            <div style="height:10px; background:#EDE8E3; border-radius:4px; width:55%;"></div>
+            <div class="card" style="height:70px; display:flex; align-items:center; justify-content:center; font-size:24px; opacity:0.6;">🐱</div>
+            <div class="card" style="height:52px; display:flex; align-items:center; justify-content:center; font-size:20px; opacity:0.5;">🐕</div>
+            <div class="card" style="height:40px; display:flex; align-items:center; justify-content:center; font-size:16px; opacity:0.4;">🌿</div>
+          </div>
+          <!-- Dark overlay -->
+          <div style="position:absolute; inset:0; background:rgba(0,0,0,0.35); z-index:1;"></div>
+        </div>
+
+        <!-- Bottom sheet (~55% of screen height = ~310px) -->
+        <div style="position:absolute; bottom:0; left:0; right:0; height:310px; background:#FFFFFF; border-radius:20px 20px 0 0; padding:8px 0 0; z-index:10; display:flex; flex-direction:column;">
+
+          <!-- Handle -->
+          <div style="display:flex; justify-content:center; margin-bottom:6px; flex-shrink:0;">
+            <div style="width:32px; height:4px; border-radius:999px; background:#EDE8E3;"></div>
+          </div>
+
+          <!-- X close button top-right -->
+          <div style="position:absolute; top:12px; right:16px; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:16px; color:#9C8C84; cursor:pointer; z-index:11;">✕</div>
+
+          <!-- Content -->
+          <div style="flex:1; display:flex; flex-direction:column; align-items:center; padding:8px 16px 20px;">
+
+            <!-- Avatar with letter -->
+            <div class="avatar" style="width:52px; height:52px; background:#EDE8E3; font-size:22px; font-weight:600; color:#9C8C84; margin-bottom:10px;">R</div>
+
+            <!-- Name -->
+            <p style="font-size:18px; font-weight:700; color:#1C1917; margin-bottom:4px;">Rina</p>
+
+            <!-- Post count -->
+            <p style="font-size:13px; color:#9C8C84; margin-bottom:14px;">12 postingan</p>
+
+            <!-- Divider -->
+            <div class="divider" style="width:100%; margin-bottom:16px;"></div>
+
+            <!-- Italic placeholder text -->
+            <p style="font-size:13px; color:#9C8C84; font-style:italic; text-align:center; line-height:1.5; margin-bottom:6px;">
+              "Halaman profil Rina sedang disiapkan dengan penuh cinta ✨"
+            </p>
+
+            <!-- Sub text -->
+            <p style="font-size:11px; color:#C4B8B0; text-align:center;">Segera hadir untuk kamu!</p>
+
+          </div>
+
+        </div>
+
+      </div>
+      <div class="screen-label">S10 · Profile Preview</div>
+    </div>
+
+  </div><!-- /.screen-grid -->
+</div><!-- /.pg-mockup.pg-group-b -->
+</div><div class="group-sep"></div>
+<div class="group-block">
+<div class="pg-mockup pg-group-c">
+  <div class="section-title">Group C — 问诊流程 · Consultation Flow</div>
+  <div class="screen-grid" style="display:flex;flex-wrap:wrap;gap:32px;padding:24px 0;justify-content:flex-start;align-items:flex-start;">
+
+    <!-- S11: Consultation Home -->
+    <div class="phone-wrap" style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+      <div class="phone" style="width:260px;height:563px;border-radius:40px;overflow:hidden;background:#FAF8F5;border:1.5px solid #EDE8E3;display:flex;flex-direction:column;position:relative;box-shadow:0 8px 32px rgba(0,0,0,0.10);">
+        <!-- Status bar -->
+        <div class="status-bar" style="background:#FFFFFF;padding:10px 18px 4px;display:flex;justify-content:space-between;align-items:center;font-size:11px;font-weight:600;color:#1C1917;flex-shrink:0;">
+          <span>9:41</span>
+          <div style="display:flex;gap:4px;align-items:center;">
+            <span style="font-size:9px;">●●●</span>
+            <span style="font-size:9px;">WiFi</span>
+            <span style="font-size:9px;">🔋</span>
+          </div>
+        </div>
+        <!-- Nav bar -->
+        <div class="nav-bar" style="background:#FFFFFF;padding:8px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #EDE8E3;flex-shrink:0;">
+          <div class="nav-spacer" style="width:28px;"></div>
+          <div class="nav-title" style="font-size:15px;font-weight:700;color:#1C1917;">Konsultasi</div>
+          <div style="font-size:18px;cursor:pointer;">🔔</div>
+        </div>
+        <!-- Content -->
+        <div style="flex:1;overflow:hidden;display:flex;flex-direction:column;padding:14px 14px 0;">
+          <!-- Mulai Konsultasi -->
+          <div style="font-size:13px;font-weight:700;color:#1C1917;margin-bottom:10px;">Mulai Konsultasi</div>
+          <!-- 2 entry cards -->
+          <div style="display:flex;gap:10px;margin-bottom:8px;">
+            <!-- AI Triage card -->
+            <div class="card" style="flex:1;background:#EEF4F7;border-radius:14px;padding:14px 8px;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;">
+              <div style="font-size:24px;margin-bottom:2px;">🤖</div>
+              <div style="font-size:13px;font-weight:700;color:#1C1917;text-align:center;">AI Triage</div>
+              <div style="font-size:11px;color:#7BA7BC;text-align:center;">Analisis foto &amp; gejala</div>
+              <div style="background:#D4EDD4;color:#3A7A3A;font-size:10px;font-weight:600;border-radius:999px;padding:2px 8px;margin-top:2px;">Gratis</div>
+            </div>
+            <!-- Dokter Hewan card -->
+            <div class="card" style="flex:1;background:#FAF5F0;border-radius:14px;padding:14px 8px;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;">
+              <div style="font-size:24px;margin-bottom:2px;">👨‍⚕️</div>
+              <div style="font-size:13px;font-weight:700;color:#1C1917;text-align:center;">Dokter Hewan</div>
+              <div style="font-size:11px;color:#C8874A;text-align:center;">Chat langsung</div>
+              <div style="background:#D4EDD4;color:#3A7A3A;font-size:10px;font-weight:600;border-radius:999px;padding:2px 8px;margin-top:2px;">Gratis</div>
+            </div>
+          </div>
+          <!-- Availability hint -->
+          <div style="font-size:10px;color:#9C8C84;text-align:center;margin-bottom:10px;">Biasanya tersedia 08.00–23.00</div>
+          <!-- Divider -->
+          <div class="divider" style="height:1px;background:#EDE8E3;margin-bottom:10px;"></div>
+          <!-- Riwayat Konsultasi -->
+          <div style="font-size:12px;font-weight:700;color:#1C1917;margin-bottom:10px;">Riwayat Konsultasi</div>
+          <!-- History item 1 -->
+          <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:10px;">
+            <div style="width:32px;height:32px;background:#EEF4F7;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">🤖</div>
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                <span style="font-size:13px;font-weight:700;color:#1C1917;">AI Triage · Kucing</span>
+                <span style="background:#D4EDD4;color:#3A7A3A;font-size:10px;font-weight:600;border-radius:999px;padding:1px 7px;">Tidak Mendesak</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;margin-top:2px;">
+                <span style="font-size:10px;color:#9C8C84;">3 hari lalu</span>
+                <span style="font-size:10px;color:#3A7A3A;font-weight:600;">✓ Tersimpan</span>
+              </div>
+            </div>
+          </div>
+          <!-- History item 2 -->
+          <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:10px;">
+            <div style="width:32px;height:32px;background:#FAF5F0;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">👨‍⚕️</div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:13px;font-weight:700;color:#1C1917;">Drh. Andi · ⭐⭐⭐⭐⭐</div>
+              <div style="font-size:11px;color:#9C8C84;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;">Kucing demam...</div>
+              <div style="font-size:10px;color:#9C8C84;margin-top:2px;">1 minggu</div>
+            </div>
+          </div>
+        </div>
+        <!-- Bottom Nav -->
+        <div class="bottom-nav">
+          <div class="nav-item"><span class="nav-icon">🏠</span><span style="font-size:9px;color:#9C8C84;">Beranda</span></div>
+          <div class="nav-item"><span class="nav-icon">🐾</span><span style="font-size:9px;color:#9C8C84;">Tumbuh</span></div>
+          <div class="fab-btn">＋</div>
+          <div class="nav-item"><div style="background:#7BA7BC;border-radius:999px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:16px;">🩺</div></div>
+          <div class="nav-item"><span class="nav-icon">👤</span><span style="font-size:9px;color:#9C8C84;">Saya</span></div>
+        </div>
+      </div>
+      <div class="screen-label" style="font-size:12px;font-weight:600;color:#9C8C84;text-align:center;">S11 — Consultation Home</div>
+    </div>
+
+    <!-- S12: AI Upload Page -->
+    <div class="phone-wrap" style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+      <div class="phone" style="width:260px;height:563px;border-radius:40px;overflow:hidden;background:#FAF8F5;border:1.5px solid #EDE8E3;display:flex;flex-direction:column;position:relative;box-shadow:0 8px 32px rgba(0,0,0,0.10);">
+        <!-- Status bar -->
+        <div class="status-bar" style="background:#FFFFFF;padding:10px 18px 4px;display:flex;justify-content:space-between;align-items:center;font-size:11px;font-weight:600;color:#1C1917;flex-shrink:0;">
+          <span>9:41</span>
+          <div style="display:flex;gap:4px;align-items:center;">
+            <span style="font-size:9px;">●●●</span>
+            <span style="font-size:9px;">WiFi</span>
+            <span style="font-size:9px;">🔋</span>
+          </div>
+        </div>
+        <!-- Nav bar -->
+        <div class="nav-bar" style="background:#FFFFFF;padding:8px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #EDE8E3;flex-shrink:0;">
+          <div class="nav-back" style="font-size:18px;color:#1C1917;cursor:pointer;">‹</div>
+          <div class="nav-title" style="font-size:15px;font-weight:700;color:#1C1917;">AI Triage Pintar</div>
+          <div class="nav-spacer" style="width:28px;"></div>
+        </div>
+        <!-- Content -->
+        <div style="flex:1;overflow:hidden;display:flex;flex-direction:column;padding:14px 14px 0;gap:10px;">
+          <!-- Info banner -->
+          <div style="background:#EEF4F7;border-radius:10px;padding:10px;font-size:12px;color:#7BA7BC;font-weight:500;">
+            📸 Unggah foto gejala hewanmu
+          </div>
+          <!-- Upload zone -->
+          <div style="border:1.5px dashed #7BA7BC;border-radius:14px;height:100px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;">
+            <div style="font-size:13px;color:#9C8C84;">📷 Tambah Foto</div>
+            <div style="font-size:10px;color:#C4B8B0;text-align:center;">Maks 3 foto · Foto ≤10MB</div>
+          </div>
+          <!-- Uploaded preview -->
+          <div style="display:flex;gap:8px;align-items:center;">
+            <div style="position:relative;display:inline-flex;">
+              <div style="width:50px;height:50px;background:#F5EBE0;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;">🐱</div>
+              <div style="position:absolute;top:-4px;right:-4px;width:14px;height:14px;background:#E53E3E;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:8px;color:#FFFFFF;font-weight:700;cursor:pointer;">✕</div>
+            </div>
+            <div style="font-size:11px;color:#9C8C84;">1 file diunggah</div>
+          </div>
+          <!-- Textarea -->
+          <div style="border:1px solid #EDE8E3;border-radius:10px;height:80px;padding:10px;background:#FFFFFF;display:flex;align-items:flex-start;">
+            <span style="font-size:12px;color:#C4B8B0;">Deskripsikan gejala dengan bahasa sehari-hari...</span>
+          </div>
+          <!-- Hint -->
+          <div style="font-size:11px;color:#9C8C84;">Contoh: Kucing saya tadi malam muntah busa putih, lemas</div>
+          <!-- Analisis button -->
+          <div class="btn-primary" style="background:#7BA7BC;color:#FFFFFF;border-radius:12px;height:44px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;cursor:pointer;">Analisis AI</div>
+          <!-- Disclaimer -->
+          <div style="font-size:10px;color:#C4B8B0;text-align:center;">Hasil AI bersifat referensi, bukan diagnosis medis resmi</div>
+        </div>
+        <!-- Bottom Nav -->
+        <div class="bottom-nav">
+          <div class="nav-item"><span class="nav-icon">🏠</span><span style="font-size:9px;color:#9C8C84;">Beranda</span></div>
+          <div class="nav-item"><span class="nav-icon">🐾</span><span style="font-size:9px;color:#9C8C84;">Tumbuh</span></div>
+          <div class="fab-btn">＋</div>
+          <div class="nav-item"><div style="background:#7BA7BC;border-radius:999px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:16px;">🩺</div></div>
+          <div class="nav-item"><span class="nav-icon">👤</span><span style="font-size:9px;color:#9C8C84;">Saya</span></div>
+        </div>
+      </div>
+      <div class="screen-label" style="font-size:12px;font-weight:600;color:#9C8C84;text-align:center;">S12 — AI Upload Page</div>
+    </div>
+
+    <!-- S13: AI Result Green -->
+    <div class="phone-wrap" style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+      <div class="phone" style="width:260px;height:563px;border-radius:40px;overflow:hidden;background:#FAF8F5;border:1.5px solid #EDE8E3;display:flex;flex-direction:column;position:relative;box-shadow:0 8px 32px rgba(0,0,0,0.10);">
+        <!-- Status bar -->
+        <div class="status-bar" style="background:#FFFFFF;padding:10px 18px 4px;display:flex;justify-content:space-between;align-items:center;font-size:11px;font-weight:600;color:#1C1917;flex-shrink:0;">
+          <span>9:41</span>
+          <div style="display:flex;gap:4px;align-items:center;">
+            <span style="font-size:9px;">●●●</span>
+            <span style="font-size:9px;">WiFi</span>
+            <span style="font-size:9px;">🔋</span>
+          </div>
+        </div>
+        <!-- Nav bar -->
+        <div class="nav-bar" style="background:#FFFFFF;padding:8px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #EDE8E3;flex-shrink:0;">
+          <div class="nav-back" style="font-size:18px;color:#1C1917;cursor:pointer;">‹</div>
+          <div class="nav-title" style="font-size:15px;font-weight:700;color:#1C1917;">Hasil Analisis</div>
+          <div class="nav-spacer" style="width:28px;"></div>
+        </div>
+        <!-- Content -->
+        <div style="flex:1;overflow:hidden;display:flex;flex-direction:column;padding:14px 14px 0;gap:10px;">
+          <!-- Result card green -->
+          <div class="card" style="background:#FFFFFF;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,0.08);border-left:3px solid #3A7A3A;padding:14px;">
+            <div style="display:inline-block;background:#D4EDD4;color:#3A7A3A;font-size:11px;font-weight:700;border-radius:999px;padding:3px 10px;margin-bottom:8px;">✅ Aman</div>
+            <div style="font-size:17px;font-weight:700;color:#3A7A3A;margin-bottom:4px;">Tidak Ada Risiko Sekarang</div>
+            <div style="font-size:12px;color:#9C8C84;">Kondisi hewan tampak normal saat ini</div>
+          </div>
+          <!-- Home care card -->
+          <div class="card" style="background:#FFFFFF;border-radius:10px;border:1px solid #EDE8E3;padding:12px;">
+            <div style="font-size:13px;font-weight:700;color:#1C1917;margin-bottom:8px;">💊 Saran Perawatan</div>
+            <div style="font-size:12px;color:#1C1917;margin-bottom:4px;">• Pastikan air minum cukup</div>
+            <div style="font-size:12px;color:#1C1917;margin-bottom:4px;">• Berikan makanan biasa</div>
+            <div style="font-size:12px;color:#1C1917;">• Pantau 24 jam ke depan</div>
+          </div>
+          <!-- Soft CTA -->
+          <div style="border:1.5px solid #7BA7BC;border-radius:12px;height:44px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#7BA7BC;cursor:pointer;">Ingin lebih yakin? Konsultasi dokter</div>
+          <!-- Save row -->
+          <div style="display:flex;align-items:center;justify-content:center;gap:10px;">
+            <span style="font-size:12px;color:#9C8C84;">Simpan ke arsip?</span>
+            <div style="background:#D4EDD4;color:#3A7A3A;font-size:11px;font-weight:600;border-radius:999px;padding:4px 12px;cursor:pointer;">Ya, simpan</div>
+            <span style="font-size:11px;color:#9C8C84;cursor:pointer;">Lewati</span>
+          </div>
+          <!-- Disclaimer -->
+          <div style="font-size:10px;color:#C4B8B0;text-align:center;">Hasil AI bersifat referensi, bukan diagnosis medis resmi</div>
+        </div>
+        <!-- Bottom Nav -->
+        <div class="bottom-nav">
+          <div class="nav-item"><span class="nav-icon">🏠</span><span style="font-size:9px;color:#9C8C84;">Beranda</span></div>
+          <div class="nav-item"><span class="nav-icon">🐾</span><span style="font-size:9px;color:#9C8C84;">Tumbuh</span></div>
+          <div class="fab-btn">＋</div>
+          <div class="nav-item"><div style="background:#7BA7BC;border-radius:999px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:16px;">🩺</div></div>
+          <div class="nav-item"><span class="nav-icon">👤</span><span style="font-size:9px;color:#9C8C84;">Saya</span></div>
+        </div>
+      </div>
+      <div class="screen-label" style="font-size:12px;font-weight:600;color:#9C8C84;text-align:center;">S13 — AI Result Green</div>
+    </div>
+
+    <!-- S14: AI Result Yellow -->
+    <div class="phone-wrap" style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+      <div class="phone" style="width:260px;height:563px;border-radius:40px;overflow:hidden;background:#FAF8F5;border:1.5px solid #EDE8E3;display:flex;flex-direction:column;position:relative;box-shadow:0 8px 32px rgba(0,0,0,0.10);">
+        <!-- Status bar -->
+        <div class="status-bar" style="background:#FFFFFF;padding:10px 18px 4px;display:flex;justify-content:space-between;align-items:center;font-size:11px;font-weight:600;color:#1C1917;flex-shrink:0;">
+          <span>9:41</span>
+          <div style="display:flex;gap:4px;align-items:center;"><span style="font-size:9px;">●●●</span><span style="font-size:9px;">WiFi</span><span style="font-size:9px;">🔋</span></div>
+        </div>
+        <!-- Nav bar -->
+        <div class="nav-bar" style="background:#FFFFFF;padding:8px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #EDE8E3;flex-shrink:0;">
+          <div class="nav-back" style="font-size:18px;color:#1C1917;cursor:pointer;">‹</div>
+          <div class="nav-title" style="font-size:15px;font-weight:700;color:#1C1917;">Hasil Analisis</div>
+          <div class="nav-spacer" style="width:28px;"></div>
+        </div>
+        <!-- Content -->
+        <div style="flex:1;overflow:hidden;display:flex;flex-direction:column;padding:14px 14px 0;gap:10px;">
+          <!-- Result card yellow -->
+          <div class="card" style="background:#FFFFFF;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,0.08);border-left:3px solid #8B6914;padding:14px;">
+            <div style="display:inline-block;background:#F5E8C0;color:#8B6914;font-size:11px;font-weight:700;border-radius:999px;padding:3px 10px;margin-bottom:8px;">⚠️ Perlu Dipantau</div>
+            <div style="font-size:17px;font-weight:700;color:#8B6914;margin-bottom:4px;">Tidak Gawat Darurat</div>
+            <div style="font-size:12px;color:#9C8C84;">Pantau dengan seksama dalam 2 jam ke depan</div>
+          </div>
+          <!-- Observation protocol -->
+          <div style="background:#EEF4F7;border-radius:10px;padding:10px;">
+            <div style="font-size:12px;font-weight:700;color:#7BA7BC;margin-bottom:6px;">🕐 Protokol Observasi</div>
+            <div style="font-size:11px;color:#1C1917;margin-bottom:4px;">Dalam 2 jam: jika muntah lagi → segera ke dokter</div>
+            <div style="font-size:11px;color:#1C1917;">Jika tidak ada gejala → buat janji besok pagi</div>
+          </div>
+          <!-- Medication card -->
+          <div class="card" style="background:#FFFFFF;border-radius:10px;border:1px solid #EDE8E3;padding:10px;">
+            <div style="font-size:12px;font-weight:700;color:#1C1917;margin-bottom:6px;">💊 Saran Perawatan</div>
+            <div style="font-size:11px;color:#9C8C84;">Pastikan air minum cukup, hindari makanan keras</div>
+          </div>
+          <!-- Outlined CTA -->
+          <div style="border:1.5px solid #7BA7BC;border-radius:12px;height:44px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#7BA7BC;cursor:pointer;padding:0 8px;text-align:center;">Ingin lebih yakin? Konsultasi dengan dokter</div>
+          <!-- Save row -->
+          <div style="display:flex;align-items:center;justify-content:center;gap:10px;">
+            <span style="font-size:12px;color:#9C8C84;">Simpan ke arsip?</span>
+            <div style="background:#D4EDD4;color:#3A7A3A;font-size:11px;font-weight:600;border-radius:999px;padding:4px 12px;cursor:pointer;">Ya, simpan</div>
+            <span style="font-size:11px;color:#9C8C84;cursor:pointer;">Lewati</span>
+          </div>
+          <!-- Disclaimer -->
+          <div style="font-size:10px;color:#C4B8B0;text-align:center;">Hasil AI bersifat referensi, bukan diagnosis medis resmi</div>
+        </div>
+        <!-- Bottom Nav -->
+        <div class="bottom-nav">
+          <div class="nav-item"><span class="nav-icon">🏠</span><span style="font-size:9px;color:#9C8C84;">Beranda</span></div>
+          <div class="nav-item"><span class="nav-icon">🐾</span><span style="font-size:9px;color:#9C8C84;">Tumbuh</span></div>
+          <div class="fab-btn">＋</div>
+          <div class="nav-item"><div style="background:#7BA7BC;border-radius:999px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:16px;">🩺</div></div>
+          <div class="nav-item"><span class="nav-icon">👤</span><span style="font-size:9px;color:#9C8C84;">Saya</span></div>
+        </div>
+      </div>
+      <div class="screen-label" style="font-size:12px;font-weight:600;color:#9C8C84;text-align:center;">S14 — AI Result Yellow</div>
+    </div>
+
+    <!-- S15: Red Alert Half-Screen -->
+    <div class="phone-wrap" style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+      <div class="phone" style="width:260px;height:563px;border-radius:40px;overflow:hidden;background:#2C2C2C;border:1.5px solid #EDE8E3;display:flex;flex-direction:column;position:relative;box-shadow:0 8px 32px rgba(0,0,0,0.10);">
+        <!-- Darkened background — partial cards barely visible -->
+        <div style="position:absolute;top:0;left:0;right:0;height:40%;padding:16px 14px;opacity:0.3;pointer-events:none;">
+          <div style="background:#3A3A3A;border-radius:12px;height:50px;margin-bottom:8px;"></div>
+          <div style="background:#3A3A3A;border-radius:12px;height:60px;margin-bottom:8px;"></div>
+          <div style="background:#3A3A3A;border-radius:12px;height:40px;"></div>
+        </div>
+        <!-- Red half-screen panel -->
+        <div style="position:absolute;bottom:0;left:0;right:0;height:60%;background:#C97A7A;border-radius:20px 20px 0 0;display:flex;flex-direction:column;align-items:center;padding:20px 18px 14px;">
+          <!-- Warning emoji -->
+          <div style="font-size:32px;margin-bottom:8px;">⚠️</div>
+          <!-- Title -->
+          <div style="font-size:20px;font-weight:700;color:#FFFFFF;text-align:center;margin-bottom:4px;">Segera Bawa ke Dokter!</div>
+          <!-- Subtitle -->
+          <div style="font-size:12px;color:rgba(255,255,255,0.9);text-align:center;margin-bottom:8px;">AI mendeteksi situasi darurat</div>
+          <!-- Body text -->
+          <div style="font-size:12px;color:rgba(255,255,255,0.8);text-align:center;margin-bottom:10px;">Mohon segera bawa Oyen ke klinik hewan terdekat</div>
+          <!-- Divider -->
+          <div style="width:100%;height:1px;background:rgba(255,255,255,0.2);margin-bottom:10px;"></div>
+          <!-- Countdown hint -->
+          <div style="font-size:11px;color:rgba(255,255,255,0.6);text-align:center;margin-bottom:12px;">Tombol aktif dalam 5 detik...</div>
+          <!-- Primary button -->
+          <div style="width:100%;background:#FFFFFF;color:#C97A7A;border-radius:14px;height:44px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;cursor:not-allowed;margin-bottom:8px;opacity:0.75;">🗺️ Cari Klinik Terdekat</div>
+          <!-- Secondary button -->
+          <div style="width:100%;border:1.5px solid rgba(255,255,255,0.6);color:#FFFFFF;border-radius:14px;height:44px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:not-allowed;margin-bottom:10px;opacity:0.75;">Tangani Sendiri Dulu</div>
+          <!-- Footer note -->
+          <div style="font-size:9px;color:rgba(255,255,255,0.5);text-align:center;">Catatan: Tidak ada konsultasi dokter untuk kasus darurat</div>
+        </div>
+      </div>
+      <div class="screen-label" style="font-size:12px;font-weight:600;color:#9C8C84;text-align:center;">S15 — Red Alert Half-Screen</div>
+    </div>
+
+    <!-- S16: Vet Chat Page -->
+    <div class="phone-wrap" style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+      <div class="phone" style="width:260px;height:563px;border-radius:40px;overflow:hidden;background:#FAF8F5;border:1.5px solid #EDE8E3;display:flex;flex-direction:column;position:relative;box-shadow:0 8px 32px rgba(0,0,0,0.10);">
+        <!-- Status bar -->
+        <div class="status-bar" style="background:#FFFFFF;padding:10px 18px 4px;display:flex;justify-content:space-between;align-items:center;font-size:11px;font-weight:600;color:#1C1917;flex-shrink:0;">
+          <span>9:41</span>
+          <div style="display:flex;gap:4px;align-items:center;"><span style="font-size:9px;">●●●</span><span style="font-size:9px;">WiFi</span><span style="font-size:9px;">🔋</span></div>
+        </div>
+        <!-- Nav bar -->
+        <div class="nav-bar" style="background:#FFFFFF;padding:8px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #EDE8E3;flex-shrink:0;">
+          <div class="nav-back" style="font-size:18px;color:#1C1917;cursor:pointer;">‹</div>
+          <div class="nav-title" style="font-size:14px;font-weight:700;color:#1C1917;">Drh. Andi Santoso</div>
+          <!-- Online pill -->
+          <div style="display:flex;align-items:center;gap:4px;background:#D4EDD4;border-radius:999px;padding:3px 8px;">
+            <div style="width:8px;height:8px;background:#3A7A3A;border-radius:999px;"></div>
+            <span style="font-size:10px;color:#3A7A3A;font-weight:600;">Online</span>
+          </div>
+        </div>
+        <!-- Context banner -->
+        <div style="background:#EEF4F7;border-radius:10px;margin:10px 14px 0;padding:8px 12px;font-size:11px;color:#7BA7BC;font-weight:500;flex-shrink:0;">
+          📋 AI: ⚠️ Perlu Dipantau · Kucing 3th · 1 foto
+        </div>
+        <!-- Chat area -->
+        <div style="flex:1;overflow:hidden;display:flex;flex-direction:column;padding:10px 14px;gap:8px;">
+          <!-- Vet bubble 1 -->
+          <div style="display:flex;justify-content:flex-start;">
+            <div style="background:#F5F2EF;border-radius:12px;padding:8px 10px;max-width:80%;font-size:12px;color:#1C1917;line-height:1.4;">
+              Halo! Sudah saya lihat hasil AI-nya. Bisa ceritakan lebih detail seperti apa muntahnya?
+            </div>
+          </div>
+          <!-- User bubble 1 -->
+          <div style="display:flex;justify-content:flex-end;">
+            <div style="background:#C8874A;border-radius:12px;padding:8px 10px;max-width:80%;font-size:12px;color:#FFFFFF;line-height:1.4;">
+              Tadi malam sekitar jam 11 muntah 2x, busa putih agak berbusa
+            </div>
+          </div>
+          <!-- Vet bubble 2 -->
+          <div style="display:flex;justify-content:flex-start;">
+            <div style="background:#F5F2EF;border-radius:12px;padding:8px 10px;max-width:80%;font-size:12px;color:#1C1917;line-height:1.4;">
+              Baik. Apakah setelah muntah masih mau makan/minum?
+            </div>
+          </div>
+          <!-- User bubble 2 -->
+          <div style="display:flex;justify-content:flex-end;">
+            <div style="background:#C8874A;border-radius:12px;padding:8px 10px;max-width:80%;font-size:12px;color:#FFFFFF;line-height:1.4;">
+              Minum masih, tapi tidak mau makan
+            </div>
+          </div>
+        </div>
+        <!-- Disclaimer bar -->
+        <div style="border-top:1px solid rgba(123,167,188,0.25);padding:6px 14px;font-size:10px;color:#9C8C84;text-align:center;flex-shrink:0;background:#FFFFFF;">
+          💡 Saran ini bersifat referensi
+        </div>
+        <!-- Input area -->
+        <div style="background:#FFFFFF;border-top:1px solid #EDE8E3;padding:8px 14px 14px;display:flex;align-items:center;gap:8px;flex-shrink:0;">
+          <!-- Avatar -->
+          <div class="avatar" style="width:24px;height:24px;background:#C8874A;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;">👤</div>
+          <!-- Input -->
+          <div style="flex:1;background:#F5F2EF;border-radius:999px;padding:8px 14px;font-size:12px;color:#C4B8B0;">Kirim pesan...</div>
+          <!-- Send button -->
+          <div style="width:32px;height:32px;background:#7BA7BC;border-radius:999px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;">
+            <span style="color:#FFFFFF;font-size:14px;line-height:1;">➤</span>
+          </div>
+        </div>
+      </div>
+      <div class="screen-label" style="font-size:12px;font-weight:600;color:#9C8C84;text-align:center;">S16 — Vet Chat Page</div>
+    </div>
+
+  </div>
+</div>
+</div><div class="group-sep"></div>
+<div class="group-block">
+<!-- TailTopia Mockup - Group D: My Profile & Vet Workbench Screens -->
+<style>
+  /* ── Reset & Base ── */
+  .pg-mockup * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, 'Segoe UI', sans-serif; }
+
+  /* ── Layout ── */
+  .pg-mockup { background: #F0EDE8; padding: 40px 24px; }
+  .pg-mockup .section-title {
+    font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+    color: #9C8C84; margin-bottom: 32px; text-align: center;
+  }
+  .pg-mockup .screen-grid {
+    display: flex; flex-wrap: wrap; gap: 40px; justify-content: center; align-items: flex-start;
+  }
+
+  /* ── Phone Shell ── */
+  .pg-mockup .phone {
+    width: 260px; height: 563px; border-radius: 40px;
+    background: #FAF8F5; overflow: hidden; position: relative;
+    box-shadow: 0 2px 8px rgba(0,0,0,.08), 0 0 0 1px rgba(0,0,0,.06), inset 0 1px 0 rgba(255,255,255,.6);
+    display: flex; flex-direction: column;
+  }
+
+  /* ── Status Bar ── */
+  .pg-mockup .status-bar {
+    height: 44px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 20px; flex-shrink: 0;
+  }
+  .pg-mockup .status-bar .time { font-size: 11px; font-weight: 600; color: #1C1917; }
+  .pg-mockup .status-bar .icons { font-size: 10px; color: #1C1917; display: flex; gap: 4px; align-items: center; }
+
+  /* ── Nav Bar ── */
+  .pg-mockup .nav-bar {
+    height: 44px; display: flex; align-items: center;
+    padding: 0 16px; gap: 8px; flex-shrink: 0;
+    border-bottom: 1px solid #EDE8E3; background: #FAF8F5;
+  }
+  .pg-mockup .nav-back { font-size: 16px; color: #1C1917; cursor: pointer; padding: 4px; }
+  .pg-mockup .nav-title { font-size: 14px; font-weight: 600; color: #1C1917; flex: 1; text-align: center; }
+  .pg-mockup .nav-spacer { width: 24px; }
+
+  /* ── Scroll Area ── */
+  .pg-mockup .scroll-area {
+    flex: 1; overflow: hidden; display: flex; flex-direction: column;
+  }
+
+  /* ── Bottom Pill Nav (user) ── */
+  .pg-mockup .bottom-nav {
+    position: relative; height: 64px; background: transparent;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='64' viewBox='0 0 260 64' preserveAspectRatio='none'%3E%3Cpath d='M0,1 L100,1 C113,1 116,19 130,19 C144,19 147,1 160,1 L260,1 L260,64 L0,64 Z' fill='%23FFFFFF' stroke='%23EDE8E3' stroke-width='1'/%3E%3C/svg%3E");
+    background-size: 100% 100%; background-repeat: no-repeat;
+    display: flex; align-items: center; justify-content: space-around;
+    padding: 0 8px 8px; flex-shrink: 0;
+  }
+  .pg-mockup .nav-item {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    font-size: 9px; color: #9C8C84; cursor: pointer; flex: 1;
+  }
+  .pg-mockup .nav-item.active { color: #C8874A; }
+  .pg-mockup .nav-icon { font-size: 18px; line-height: 1; }
+  .pg-mockup .nav-icon-active {
+    background: #C8874A; border-radius: 999px; width: 34px; height: 34px;
+    display: flex; align-items: center; justify-content: center; font-size: 16px;
+  }
+  .pg-mockup .fab-btn {
+    width: 44px; height: 44px; border-radius: 999px; background: #C8874A;
+    border: 3px solid #FFFFFF;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 10px rgba(200,135,74,.45); font-size: 22px; color: #FFFFFF;
+    flex-shrink: 0; position: relative; transform: translateY(-20px); z-index: 3;
+  }
+
+  /* ── Typography helpers ── */
+  .pg-mockup .t-xs  { font-size: 10px; }
+  .pg-mockup .t-sm  { font-size: 11px; }
+  .pg-mockup .t-base{ font-size: 13px; }
+  .pg-mockup .t-md  { font-size: 14px; }
+  .pg-mockup .fw-6  { font-weight: 600; }
+  .pg-mockup .fw-7  { font-weight: 700; }
+  .pg-mockup .c-pri { color: #1C1917; }
+  .pg-mockup .c-sec { color: #9C8C84; }
+  .pg-mockup .c-dis { color: #C4B8B0; }
+  .pg-mockup .c-growth { color: #C8874A; }
+  .pg-mockup .c-consult { color: #7BA7BC; }
+
+  /* ── Cards ── */
+  .pg-mockup .card {
+    background: #FFFFFF; border: 1px solid #EDE8E3; border-radius: 14px; overflow: hidden;
+  }
+  .pg-mockup .card-pad { padding: 12px; }
+
+  /* ── Divider ── */
+  .pg-mockup .divider { height: 1px; background: #EDE8E3; flex-shrink: 0; }
+
+  /* ── Buttons ── */
+  .pg-mockup .btn-primary {
+    background: #C8874A; color: #FFFFFF; border: none; border-radius: 14px;
+    height: 44px; font-size: 14px; font-weight: 600; width: 100%; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* ── Avatar ── */
+  .pg-mockup .avatar {
+    border-radius: 999px; background: #EDE8E3; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; color: #9C8C84; flex-shrink: 0;
+  }
+
+  /* ── Screen label ── */
+  .pg-mockup .screen-label {
+    position: absolute; bottom: -22px; left: 0; right: 0;
+    text-align: center; font-size: 10px; color: #9C8C84; font-weight: 600;
+    letter-spacing: .04em; text-transform: uppercase;
+  }
+  .pg-mockup .phone-wrap { position: relative; margin-bottom: 28px; }
+
+  /* ── Notification badge ── */
+  .pg-mockup .badge {
+    background: #E84040; color: #FFFFFF; border-radius: 999px;
+    font-size: 8px; font-weight: 700; padding: 1px 4px;
+  }
+
+  /* ── Vet bottom tab bar ── */
+  .pg-mockup .vet-tab-bar {
+    height: 52px; background: #FFFFFF; border-top: 1px solid #EDE8E3;
+    display: flex; align-items: center; justify-content: space-around;
+    padding: 0 4px; flex-shrink: 0;
+  }
+  .pg-mockup .vet-tab-item {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 2px; font-size: 11px; color: #9C8C84; cursor: pointer; flex: 1;
+    position: relative;
+  }
+  .pg-mockup .vet-tab-item.active { color: #7BA7BC; font-weight: 600; }
+  .pg-mockup .vet-badge {
+    background: #E84040; color: #FFFFFF; border-radius: 999px;
+    font-size: 8px; font-weight: 700; padding: 1px 4px;
+    position: absolute; top: 0px; right: 22px;
+  }
+
+  /* ── Toggle switch ── */
+  .pg-mockup .toggle-track {
+    width: 36px; height: 20px; border-radius: 999px; flex-shrink: 0;
+    display: flex; align-items: center; padding: 2px; cursor: pointer;
+  }
+  .pg-mockup .toggle-thumb {
+    width: 16px; height: 16px; border-radius: 999px; background: #FFFFFF;
+    box-shadow: 0 1px 3px rgba(0,0,0,.2);
+  }
+  .pg-mockup .toggle-on .toggle-thumb { margin-left: auto; }
+
+  /* ── Input field ── */
+  .pg-mockup .input-field {
+    height: 44px; border: 1px solid #EDE8E3; border-radius: 10px;
+    padding: 0 14px; font-size: 13px; color: #1C1917; background: #FFFFFF;
+    display: flex; align-items: center; width: 100%;
+  }
+
+  /* ── Settings row ── */
+  .pg-mockup .settings-row {
+    display: flex; align-items: center; padding: 12px 16px; gap: 10px;
+    background: #FFFFFF; cursor: pointer;
+  }
+  .pg-mockup .settings-row:not(:last-child) {
+    border-bottom: 1px solid #EDE8E3;
+  }
+  .pg-mockup .settings-row-icon { font-size: 16px; width: 22px; text-align: center; flex-shrink: 0; }
+  .pg-mockup .settings-row-text { flex: 1; font-size: 13px; color: #1C1917; }
+  .pg-mockup .settings-row-right { font-size: 12px; color: #9C8C84; }
+</style>
+
+<div class="pg-mockup pg-group-d">
+  <div class="section-title">Group D — 我的 &amp; 兽医端 · My Profile &amp; Vet Workbench</div>
+  <div class="screen-grid">
+
+    <!-- ═══════════════════════════════════════════
+         S17 · My Profile Tab
+    ═══════════════════════════════════════════ -->
+    <div class="phone-wrap">
+      <div class="phone" id="s17">
+
+        <!-- Status Bar -->
+        <div class="status-bar">
+          <span class="time">9:41</span>
+          <div class="icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
+        </div>
+
+        <!-- Tab-style nav (no back arrow) -->
+        <div class="nav-bar">
+          <span class="nav-spacer"></span>
+          <span class="nav-title">Profil Saya</span>
+          <span class="nav-spacer"></span>
+        </div>
+
+        <!-- Scroll area -->
+        <div class="scroll-area" style="overflow-y:auto; gap:0;">
+
+          <!-- User Info Section -->
+          <div style="padding:14px 16px; background:#FFFFFF; display:flex; align-items:center; gap:12px;">
+            <!-- Avatar -->
+            <div class="avatar" style="width:52px; height:52px; background:#FDDAB8; font-size:22px; font-weight:700; color:#C8874A; flex-shrink:0;">H</div>
+            <!-- Name & email -->
+            <div style="flex:1; display:flex; flex-direction:column; gap:2px;">
+              <span style="font-size:18px; font-weight:700; color:#1C1917; line-height:1.2;">Heksfile</span>
+              <span style="font-size:12px; color:#9C8C84;">heksfile@gmail.com</span>
+            </div>
+            <!-- Edit pill -->
+            <div style="border:1px solid #EDE8E3; border-radius:999px; padding:4px 10px; cursor:pointer; flex-shrink:0;">
+              <span style="font-size:10px; color:#9C8C84;">✏️ Edit</span>
+            </div>
+          </div>
+
+          <!-- Pet Status pill row -->
+          <div style="padding:10px 16px; background:#FFFFFF; border-top:1px solid #EDE8E3; display:flex; align-items:center; gap:8px;">
+            <div style="background:#FFF0E6; border-radius:999px; padding:4px 10px; display:inline-flex; align-items:center; gap:4px;">
+              <span style="font-size:12px; color:#C8874A;">🐾 Punya Hewan Peliharaan</span>
+            </div>
+            <span style="font-size:11px; color:#C8874A; cursor:pointer; margin-left:auto;">Ubah</span>
+          </div>
+
+          <!-- Edit Pet Profile link -->
+          <div style="padding:10px 16px; background:#FFFFFF; border-top:1px solid #EDE8E3; display:flex; align-items:center; justify-content:space-between; cursor:pointer;">
+            <span style="font-size:13px; color:#C8874A;">✏️ Edit Profil Hewan</span>
+            <span style="font-size:13px; color:#C8874A;">→</span>
+          </div>
+
+          <!-- Divider -->
+          <div class="divider" style="margin:0; height:6px; background:#F0EDE8;"></div>
+
+          <!-- My Posts section -->
+          <div style="padding:10px 16px 6px; background:#FFFFFF; display:flex; align-items:center; justify-content:space-between;">
+            <span style="font-size:12px; font-weight:700; color:#1C1917;">Postingan Saya</span>
+            <span style="font-size:11px; color:#C8874A; cursor:pointer;">Lihat semua</span>
+          </div>
+
+          <!-- 2 compact post cards side-by-side -->
+          <div style="padding:0 16px 10px; background:#FFFFFF; display:flex; gap:8px;">
+            <!-- Card 1 -->
+            <div class="card" style="flex:1; overflow:hidden;">
+              <div style="width:100%; height:70px; background:#F5EBE0;"></div>
+              <div style="padding:4px 6px;">
+                <span style="font-size:11px; color:#1C1917; display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;">Oyen lagi suka jendela</span>
+              </div>
+            </div>
+            <!-- Card 2 -->
+            <div class="card" style="flex:1; overflow:hidden;">
+              <div style="width:100%; height:70px; background:#E8F4E8;"></div>
+              <div style="padding:4px 6px;">
+                <span style="font-size:11px; color:#1C1917; display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;">Bermain di taman sore</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Divider thick -->
+          <div class="divider" style="margin:0; height:6px; background:#F0EDE8;"></div>
+
+          <!-- Settings links list -->
+          <div style="background:#FFFFFF;">
+            <!-- Language -->
+            <div class="settings-row">
+              <span class="settings-row-icon">⚙️</span>
+              <span class="settings-row-text">Pengaturan Bahasa</span>
+              <span class="settings-row-right">›</span>
+            </div>
+            <!-- Notifications -->
+            <div class="settings-row">
+              <span class="settings-row-icon">🔔</span>
+              <span class="settings-row-text">Notifikasi</span>
+              <span class="settings-row-right">›</span>
+            </div>
+            <!-- Terms -->
+            <div class="settings-row">
+              <span class="settings-row-icon">📋</span>
+              <span class="settings-row-text">Syarat &amp; Kebijakan</span>
+              <span class="settings-row-right">›</span>
+            </div>
+            <!-- Logout - no chevron, red text -->
+            <div class="settings-row" style="border-top:1px solid #EDE8E3;">
+              <span class="settings-row-icon">🚪</span>
+              <span class="settings-row-text" style="color:#E84040;">Keluar</span>
+            </div>
+          </div>
+
+          <!-- Delete account link -->
+          <div style="padding:10px 16px; background:#FFFFFF; border-top:1px solid #EDE8E3; text-align:center;">
+            <span style="font-size:11px; color:#E84040; cursor:pointer;">Hapus Akun</span>
+          </div>
+
+        </div>
+
+        <!-- Bottom Nav (user) — 我的 active -->
+        <div class="bottom-nav">
+          <div class="nav-item"><span class="nav-icon">🏠</span><span style="font-size:9px;color:#9C8C84;">Beranda</span></div>
+          <div class="nav-item"><span class="nav-icon">🐾</span><span style="font-size:9px;color:#9C8C84;">Tumbuh</span></div>
+          <div class="fab-btn">＋</div>
+          <div class="nav-item"><span class="nav-icon">🩺</span><span style="font-size:9px;color:#9C8C84;">Konsul</span></div>
+          <div class="nav-item active"><div class="nav-icon-active">👤</div></div>
+        </div>
+
+      </div>
+      <div class="screen-label">S17 · My Profile</div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         S18 · Settings
+    ═══════════════════════════════════════════ -->
+    <div class="phone-wrap">
+      <div class="phone" id="s18">
+
+        <!-- Status Bar -->
+        <div class="status-bar">
+          <span class="time">9:41</span>
+          <div class="icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
+        </div>
+
+        <!-- Nav bar with back -->
+        <div class="nav-bar">
+          <span class="nav-back">←</span>
+          <span class="nav-title">Pengaturan</span>
+          <span class="nav-spacer"></span>
+        </div>
+
+        <!-- Scroll area -->
+        <div class="scroll-area" style="overflow-y:auto;">
+
+          <!-- Section: Bahasa Aplikasi -->
+          <div style="padding:8px 16px 4px;">
+            <span style="font-size:10px; color:#9C8C84; font-weight:600; letter-spacing:.08em; text-transform:uppercase;">Bahasa Aplikasi</span>
+          </div>
+          <div style="background:#FFFFFF; border-top:1px solid #EDE8E3; border-bottom:1px solid #EDE8E3;">
+            <!-- Language row -->
+            <div style="display:flex; align-items:center; padding:12px 16px; gap:10px;">
+              <span style="font-size:16px;">🌐</span>
+              <span style="flex:1; font-size:13px; color:#1C1917;">Bahasa</span>
+              <span style="font-size:12px; color:#9C8C84;">Bahasa Indonesia</span>
+              <span style="font-size:12px; color:#9C8C84; margin-left:2px;">›</span>
+            </div>
+            <!-- Radio options indented -->
+            <div style="padding:0 16px 12px 44px; display:flex; flex-direction:column; gap:10px; border-top:1px solid #EDE8E3; padding-top:10px;">
+              <!-- Selected: Bahasa Indonesia -->
+              <div style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                <div style="width:16px; height:16px; border-radius:999px; border:2px solid #C8874A; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                  <div style="width:8px; height:8px; border-radius:999px; background:#C8874A;"></div>
+                </div>
+                <span style="font-size:13px; color:#1C1917;">Bahasa Indonesia</span>
+              </div>
+              <!-- Unselected: English -->
+              <div style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                <div style="width:16px; height:16px; border-radius:999px; border:2px solid #C4B8B0; flex-shrink:0;"></div>
+                <span style="font-size:13px; color:#9C8C84;">English</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section divider -->
+          <div class="divider" style="height:8px; background:#F0EDE8;"></div>
+
+          <!-- Section: Notifikasi -->
+          <div style="padding:8px 16px 4px;">
+            <span style="font-size:10px; color:#9C8C84; font-weight:600; letter-spacing:.08em; text-transform:uppercase;">Notifikasi</span>
+          </div>
+          <div style="background:#FFFFFF; border-top:1px solid #EDE8E3; border-bottom:1px solid #EDE8E3;">
+            <!-- Balasan Dokter toggle ON -->
+            <div style="display:flex; align-items:center; padding:12px 16px; gap:10px; border-bottom:1px solid #EDE8E3;">
+              <span style="font-size:16px;">🔔</span>
+              <span style="flex:1; font-size:13px; color:#1C1917;">Balasan Dokter</span>
+              <!-- Toggle ON -->
+              <div class="toggle-track toggle-on" style="background:#C8874A;">
+                <div class="toggle-thumb"></div>
+              </div>
+            </div>
+            <!-- Suka & Komentar toggle OFF -->
+            <div style="display:flex; align-items:center; padding:12px 16px; gap:10px;">
+              <span style="font-size:16px;">❤️</span>
+              <span style="flex:1; font-size:13px; color:#1C1917;">Suka &amp; Komentar</span>
+              <!-- Toggle OFF -->
+              <div class="toggle-track" style="background:#EDE8E3;">
+                <div class="toggle-thumb"></div>
+              </div>
+            </div>
+          </div>
+          <!-- Note -->
+          <div style="padding:6px 16px 4px;">
+            <span style="font-size:10px; color:#C4B8B0;">Pengaturan lebih lanjut hadir di versi berikutnya</span>
+          </div>
+
+          <!-- Section divider -->
+          <div class="divider" style="height:8px; background:#F0EDE8;"></div>
+
+          <!-- Section: Akun -->
+          <div style="padding:8px 16px 4px;">
+            <span style="font-size:10px; color:#9C8C84; font-weight:600; letter-spacing:.08em; text-transform:uppercase;">Akun</span>
+          </div>
+          <div style="background:#FFFFFF; border-top:1px solid #EDE8E3; border-bottom:1px solid #EDE8E3;">
+            <div style="display:flex; align-items:center; padding:12px 16px; border-bottom:1px solid #EDE8E3;">
+              <span style="flex:1; font-size:13px; color:#1C1917;">Kebijakan Privasi</span>
+              <span style="font-size:12px; color:#9C8C84;">›</span>
+            </div>
+            <div style="display:flex; align-items:center; padding:12px 16px; border-bottom:1px solid #EDE8E3;">
+              <span style="flex:1; font-size:13px; color:#1C1917;">Syarat Layanan</span>
+              <span style="font-size:12px; color:#9C8C84;">›</span>
+            </div>
+            <div style="display:flex; align-items:center; padding:12px 16px;">
+              <span style="flex:1; font-size:13px; color:#1C1917;">Versi</span>
+              <span style="font-size:12px; color:#9C8C84;">v1.0.0</span>
+            </div>
+          </div>
+
+          <!-- Section divider -->
+          <div class="divider" style="height:8px; background:#F0EDE8;"></div>
+
+          <!-- Logout button + delete -->
+          <div style="padding:12px 16px; display:flex; flex-direction:column; gap:10px; background:#FFFFFF;">
+            <button style="height:40px; border:1.5px solid #E84040; border-radius:14px; background:#FFFFFF; color:#E84040; font-size:13px; font-weight:600; cursor:pointer; width:100%;">Keluar</button>
+            <div style="text-align:center;">
+              <span style="font-size:11px; color:#E84040; cursor:pointer;">Hapus Akun</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+      <div class="screen-label">S18 · Settings</div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         S19 · Vet Login
+    ═══════════════════════════════════════════ -->
+    <div class="phone-wrap">
+      <div class="phone" id="s19">
+
+        <!-- Full screen centered login, no status bar / nav -->
+        <div style="flex:1; display:flex; flex-direction:column; justify-content:center; padding:28px; gap:0;">
+
+          <!-- Header -->
+          <div style="display:flex; flex-direction:column; align-items:center; gap:6px; margin-bottom:32px;">
+            <span style="font-size:48px; line-height:1.1;">🩺</span>
+            <span style="font-size:20px; font-weight:700; color:#1C1917; margin-top:4px;">Akun Dokter Hewan</span>
+            <span style="font-size:13px; color:#9C8C84;">Portal Veteriner TailTopia</span>
+          </div>
+
+          <!-- Form fields -->
+          <div style="display:flex; flex-direction:column; gap:12px; width:100%;">
+            <!-- Email -->
+            <div style="display:flex; flex-direction:column; gap:4px;">
+              <span style="font-size:12px; color:#9C8C84;">Email</span>
+              <div class="input-field">
+                <span style="color:#C4B8B0;">dokter@email.com</span>
+              </div>
+            </div>
+            <!-- Password -->
+            <div style="display:flex; flex-direction:column; gap:4px;">
+              <span style="font-size:12px; color:#9C8C84;">Kata Sandi</span>
+              <div class="input-field">
+                <span style="color:#1C1917; letter-spacing:3px;">••••••••</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Login button (consult color) -->
+          <div style="margin-top:8px;">
+            <button style="height:44px; border:none; border-radius:14px; background:#7BA7BC; color:#FFFFFF; font-size:14px; font-weight:600; width:100%; cursor:pointer;">Masuk</button>
+          </div>
+
+          <!-- Forgot password -->
+          <div style="text-align:center; margin-top:10px;">
+            <span style="font-size:12px; color:#9C8C84;">Lupa kata sandi? Hubungi admin</span>
+          </div>
+
+          <!-- Divider -->
+          <div class="divider" style="margin:16px 0;"></div>
+
+          <!-- Switch to user login -->
+          <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
+            <span style="font-size:11px; color:#9C8C84;">Bukan dokter hewan?</span>
+            <span style="font-size:12px; color:#C8874A; cursor:pointer;">Masuk sebagai pengguna →</span>
+          </div>
+
+        </div>
+      </div>
+      <div class="screen-label">S19 · Vet Login</div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         S20 · Vet Workbench — Queue
+    ═══════════════════════════════════════════ -->
+    <div class="phone-wrap">
+      <div class="phone" id="s20">
+
+        <!-- Status Bar -->
+        <div class="status-bar">
+          <span class="time">9:41</span>
+          <div class="icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
+        </div>
+
+        <!-- Nav bar (no back, different zone) -->
+        <div class="nav-bar">
+          <span class="nav-spacer"></span>
+          <span class="nav-title">Antrean Masuk</span>
+          <span class="nav-spacer"></span>
+        </div>
+
+        <!-- Content area -->
+        <div class="scroll-area" style="overflow-y:auto; padding:10px 12px; gap:10px; display:flex; flex-direction:column;">
+
+          <!-- Online status toggle row -->
+          <div style="display:flex; align-items:center; gap:8px; background:#FFFFFF; border:1px solid #EDE8E3; border-radius:10px; padding:8px 12px;">
+            <span style="font-size:12px; color:#1C1917;">Status:</span>
+            <div style="background:#D4EDD4; border-radius:999px; padding:3px 10px;">
+              <span style="font-size:11px; color:#3A7A3A; font-weight:600;">🟢 Online</span>
+            </div>
+            <div style="margin-left:auto;">
+              <!-- Toggle ON (#7BA7BC) -->
+              <div class="toggle-track toggle-on" style="background:#7BA7BC;">
+                <div class="toggle-thumb"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Queue counter -->
+          <div>
+            <span style="font-size:12px; color:#7BA7BC; font-weight:600;">2 antrean masuk</span>
+          </div>
+
+          <!-- Queue Card 1: urgent, yellow left border -->
+          <div style="background:#FFFFFF; border-radius:14px; box-shadow:0 1px 6px rgba(0,0,0,.08); border-left:3px solid #8B6914; overflow:hidden; padding:10px 10px 10px 10px;">
+            <!-- Top row: badge + time -->
+            <div style="display:flex; align-items:center; margin-bottom:6px;">
+              <div style="background:#F5E8C0; border-radius:6px; padding:2px 7px;">
+                <span style="font-size:10px; color:#8B6914; font-weight:600;">Konsultasi Baru</span>
+              </div>
+              <span style="font-size:10px; color:#9C8C84; margin-left:auto;">2 mnt lalu</span>
+            </div>
+            <!-- AI context -->
+            <div style="margin-bottom:5px;">
+              <span style="font-size:11px; color:#8B6914;">🤖 AI: ⚠️ Perlu Dipantau</span>
+            </div>
+            <!-- Description -->
+            <div style="margin-bottom:8px;">
+              <span style="font-size:12px; color:#1C1917; line-height:1.4;">Kucing, 3 tahun - Muntah busa putih 2x malam ini</span>
+            </div>
+            <!-- Photo thumbnails -->
+            <div style="display:flex; gap:6px; margin-bottom:8px;">
+              <div style="width:32px; height:32px; background:#F5EBE0; border-radius:6px; flex-shrink:0;"></div>
+              <div style="width:32px; height:32px; background:#F5EBE0; border-radius:6px; flex-shrink:0;"></div>
+            </div>
+            <!-- Action row -->
+            <div style="display:flex; gap:8px;">
+              <button style="background:#7BA7BC; color:#FFFFFF; border:none; border-radius:999px; font-size:10px; font-weight:600; padding:5px 14px; cursor:pointer;">Terima</button>
+              <button style="background:#FFFFFF; color:#9C8C84; border:1px solid #EDE8E3; border-radius:999px; font-size:10px; padding:5px 14px; cursor:pointer;">Lewati</button>
+            </div>
+          </div>
+
+          <!-- Queue Card 2: lighter, dog case, green AI -->
+          <div style="background:#FFFFFF; border-radius:14px; box-shadow:0 1px 4px rgba(0,0,0,.06); border-left:3px solid #7BA7BC; overflow:hidden; padding:10px 10px 10px 10px; opacity:.85;">
+            <!-- Top row: badge + time -->
+            <div style="display:flex; align-items:center; margin-bottom:6px;">
+              <div style="background:#EEF4F7; border-radius:6px; padding:2px 7px;">
+                <span style="font-size:10px; color:#7BA7BC; font-weight:600;">Konsultasi Baru</span>
+              </div>
+              <span style="font-size:10px; color:#9C8C84; margin-left:auto;">5 mnt lalu</span>
+            </div>
+            <!-- AI context: green = monitor ok -->
+            <div style="margin-bottom:5px;">
+              <span style="font-size:11px; color:#3A7A3A;">🤖 AI: ✅ Tampak Normal</span>
+            </div>
+            <!-- Description -->
+            <div style="margin-bottom:8px;">
+              <span style="font-size:12px; color:#1C1917; line-height:1.4;">Anjing, 5 tahun - Nafsu makan turun 2 hari</span>
+            </div>
+            <!-- Photo thumbnails (1) -->
+            <div style="display:flex; gap:6px; margin-bottom:8px;">
+              <div style="width:32px; height:32px; background:#E8F4E8; border-radius:6px; flex-shrink:0;"></div>
+            </div>
+            <!-- Action row -->
+            <div style="display:flex; gap:8px;">
+              <button style="background:#7BA7BC; color:#FFFFFF; border:none; border-radius:999px; font-size:10px; font-weight:600; padding:5px 14px; cursor:pointer;">Terima</button>
+              <button style="background:#FFFFFF; color:#9C8C84; border:1px solid #EDE8E3; border-radius:999px; font-size:10px; padding:5px 14px; cursor:pointer;">Lewati</button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Vet bottom tab bar -->
+        <div class="vet-tab-bar">
+          <div class="vet-tab-item active" style="position:relative;">
+            <span style="font-size:11px;">Antrean</span>
+            <span class="vet-badge">2</span>
+          </div>
+          <div class="vet-tab-item">
+            <span style="font-size:11px;">Berlangsung</span>
+          </div>
+          <div class="vet-tab-item">
+            <span style="font-size:11px;">Riwayat</span>
+          </div>
+          <div class="vet-tab-item">
+            <span style="font-size:11px;">Saya</span>
+          </div>
+        </div>
+
+      </div>
+      <div class="screen-label">S20 · Vet Queue</div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         S21 · Vet Workbench — Active Chat
+    ═══════════════════════════════════════════ -->
+    <div class="phone-wrap">
+      <div class="phone" id="s21">
+
+        <!-- Status Bar -->
+        <div class="status-bar">
+          <span class="time">9:41</span>
+          <div class="icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
+        </div>
+
+        <!-- Nav bar: back + title + timer right -->
+        <div class="nav-bar">
+          <span class="nav-back">←</span>
+          <span class="nav-title">Putri · Konsultasi</span>
+          <span style="font-size:11px; color:#7BA7BC; flex-shrink:0; font-weight:600;">⏱️ 15:32</span>
+        </div>
+
+        <!-- Context bar -->
+        <div style="margin:8px 10px 0; background:#EEF4F7; border-radius:10px; padding:7px 10px; flex-shrink:0;">
+          <span style="font-size:10px; color:#7BA7BC; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block;">📋 AI: ⚠️ Perlu Dipantau | Kucing 3th | Foto: 1</span>
+        </div>
+
+        <!-- AI helper pill right-aligned -->
+        <div style="padding:6px 10px 0; display:flex; justify-content:flex-end; flex-shrink:0;">
+          <div style="border:1px solid #7BA7BC; border-radius:999px; padding:3px 10px; cursor:pointer; display:inline-flex; align-items:center;">
+            <span style="font-size:10px; color:#7BA7BC;">🤖 Referensi AI ▸</span>
+          </div>
+        </div>
+
+        <!-- Chat area -->
+        <div style="flex:1; overflow-y:auto; padding:8px 12px; display:flex; flex-direction:column; gap:8px;">
+
+          <!-- User bubble left -->
+          <div style="display:flex; justify-content:flex-start;">
+            <div style="max-width:80%; background:#F5F2EF; border-radius:12px; padding:7px 10px;">
+              <span style="font-size:12px; color:#1C1917; line-height:1.4;">Kucing saya tadi malam sekitar jam 11 muntah 2x busa putih</span>
+            </div>
+          </div>
+
+          <!-- Vet bubble right -->
+          <div style="display:flex; justify-content:flex-end;">
+            <div style="max-width:80%; background:#EEF4F7; border-radius:12px; padding:7px 10px;">
+              <span style="font-size:12px; color:#1C1917; line-height:1.4;">Baik, sudah saya lihat fotonya. Apakah setelah muntah masih mau minum?</span>
+            </div>
+          </div>
+
+          <!-- User bubble left -->
+          <div style="display:flex; justify-content:flex-start;">
+            <div style="max-width:80%; background:#F5F2EF; border-radius:12px; padding:7px 10px;">
+              <span style="font-size:12px; color:#1C1917; line-height:1.4;">Minum masih, tapi tidak mau makan</span>
+            </div>
+          </div>
+
+          <!-- Vet bubble right -->
+          <div style="display:flex; justify-content:flex-end;">
+            <div style="max-width:80%; background:#EEF4F7; border-radius:12px; padding:7px 10px;">
+              <span style="font-size:12px; color:#1C1917; line-height:1.4;">Baik, ini kemungkinan gastritis ringan atau hairball. Saya akan berikan saran...</span>
+            </div>
+          </div>
+
+          <!-- AI hint bar -->
+          <div style="background:#EEF4F7; border-radius:8px; padding:5px 10px;">
+            <span style="font-size:10px; color:#7BA7BC;">💡 85% kasus serupa: hairball/gastritis ringan</span>
+          </div>
+
+        </div>
+
+        <!-- Disclaimer -->
+        <div style="border-top:1px solid #EDE8E3; padding:5px 12px; text-align:center; flex-shrink:0;">
+          <span style="font-size:10px; color:#9C8C84;">Saran ini bersifat referensi · Keputusan ada di tangan klien</span>
+        </div>
+
+        <!-- Input row -->
+        <div style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:#FFFFFF; border-top:1px solid #EDE8E3; flex-shrink:0;">
+          <div style="flex:1; background:#F5F2EF; border-radius:999px; padding:8px 14px; min-height:36px; display:flex; align-items:center;">
+            <span style="font-size:12px; color:#C4B8B0;">Kirim pesan...</span>
+          </div>
+          <span style="font-size:11px; color:#E84040; cursor:pointer; flex-shrink:0; font-weight:600;">Akhiri Sesi</span>
+        </div>
+
+        <!-- Vet bottom tab bar — Berlangsung active -->
+        <div class="vet-tab-bar">
+          <div class="vet-tab-item">
+            <span style="font-size:11px;">Antrean</span>
+          </div>
+          <div class="vet-tab-item active">
+            <span style="font-size:11px;">Berlangsung</span>
+          </div>
+          <div class="vet-tab-item">
+            <span style="font-size:11px;">Riwayat</span>
+          </div>
+          <div class="vet-tab-item">
+            <span style="font-size:11px;">Saya</span>
+          </div>
+        </div>
+
+      </div>
+      <div class="screen-label">S21 · Vet Active Chat</div>
+    </div>
+
+  </div>
+</div>
+</div><div class="group-sep"></div>
+<div class="page-footer">© 2026 TailTopia · BMad UX · PRD V1-0-20260601</div></body></html>

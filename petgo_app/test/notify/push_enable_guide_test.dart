@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/notify/presentation/push_enable_guide.dart';
-import 'package:petgo/l10n/app_localizations.dart';
+import 'package:tailtopia/features/notify/presentation/push_enable_guide.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// Story 6.4 F3：「我的」页推送开启引导渲染 + 「去设置」触发。
 void main() {

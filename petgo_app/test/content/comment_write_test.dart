@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/auth/domain/auth_state.dart';
-import 'package:petgo/features/auth/domain/login_response.dart';
-import 'package:petgo/features/content/data/detail_repository.dart';
-import 'package:petgo/features/content/domain/comment.dart';
-import 'package:petgo/features/content/domain/content_detail.dart';
-import 'package:petgo/features/content/presentation/comment_composer.dart';
-import 'package:petgo/features/content/presentation/comment_section.dart';
-import 'package:petgo/l10n/app_localizations.dart';
-import 'package:petgo/shared/widgets/login_hard_dialog.dart';
+import 'package:tailtopia/features/auth/domain/auth_state.dart';
+import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/features/content/data/detail_repository.dart';
+import 'package:tailtopia/features/content/domain/comment.dart';
+import 'package:tailtopia/features/content/domain/content_detail.dart';
+import 'package:tailtopia/features/content/presentation/comment_composer.dart';
+import 'package:tailtopia/features/content/presentation/comment_section.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/shared/widgets/login_hard_dialog.dart';
 
 Comment _c(int id, int authorId) => Comment(
       id: id,
@@ -23,8 +23,11 @@ Comment _c(int id, int authorId) => Comment(
     );
 
 class _RecordingRepo implements DetailRepository {
-  _RecordingRepo({this.comments = const []});
+  _RecordingRepo({this.comments = const [], this.failPost = false});
   final List<Comment> comments;
+
+  /// 注入发送失败（AC3：网络/服务器/422）。
+  bool failPost;
   int postCommentCalls = 0;
   int postReplyCalls = 0;
   int deleteCalls = 0;
@@ -43,12 +46,14 @@ class _RecordingRepo implements DetailRepository {
   @override
   Future<Comment> postComment(int postId, String body) async {
     postCommentCalls++;
+    if (failPost) throw Exception('boom');
     return _c(999, 1);
   }
 
   @override
   Future<Comment> postReply(int parentId, String body) async {
     postReplyCalls++;
+    if (failPost) throw Exception('boom');
     return _c(999, 1);
   }
 
@@ -94,6 +99,41 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('detailCommentSend')));
     await tester.pumpAndSettle();
     expect(repo.postCommentCalls, 1);
+  });
+
+  testWidgets('AC3: 发送失败 → 提示重试 + 保留输入（可直接重试）', (tester) async {
+    final repo = _RecordingRepo(failPost: true);
+    final container = ProviderContainer(overrides: [detailRepositoryProvider.overrideWithValue(repo)]);
+    addTearDown(container.dispose);
+    container.read(authControllerProvider.notifier).applyLogin(_user(1));
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(body: CommentComposer(postId: 5)),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const ValueKey('detailCommentInput')), 'keep me');
+    await tester.tap(find.byKey(const ValueKey('detailCommentSend')));
+    await tester.pumpAndSettle();
+
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    expect(find.text(l10n.commentSendFailed), findsOneWidget); // 失败提示
+    // 输入保留，可直接重试。
+    final field = tester.widget<TextField>(find.byKey(const ValueKey('detailCommentInput')));
+    expect(field.controller!.text, 'keep me');
+
+    // 网络恢复后直接重试 → 成功，输入清空。
+    repo.failPost = false;
+    await tester.tap(find.byKey(const ValueKey('detailCommentSend')));
+    await tester.pumpAndSettle();
+    final field2 = tester.widget<TextField>(find.byKey(const ValueKey('detailCommentInput')));
+    expect(field2.controller!.text, isEmpty);
+    expect(repo.postCommentCalls, 2); // 首次失败 + 重试成功
   });
 
   testWidgets('AC2: 游客点评论框 → FR-0C 强登录弹窗', (tester) async {

@@ -10,7 +10,8 @@ class NotificationItem {
     this.createdAt,
   });
 
-  final String type; // VET_REPLY | CONSULT_CLOSED | CONTENT_LIKED | CONTENT_COMMENTED | NEW_CONSULT_REQUEST
+  // VET_REPLY|CONSULT_CLOSED|CONTENT_LIKED|CONTENT_COMMENTED|NEW_CONSULT_REQUEST|PET_BIRTHDAY|COMPANION_ANNIVERSARY|MILESTONE_NODE
+  final String type;
   final String? title;
   final String? body;
   final String? deepLinkType;

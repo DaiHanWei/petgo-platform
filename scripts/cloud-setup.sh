@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# PetGo —— 云端（claude.ai/code）环境 setup script【复制底稿】
+# TailTopia —— 云端（claude.ai/code）环境 setup script【复制底稿】
 # 把本文件内容【整段粘贴到 Web UI 的 Environment 设置 → Setup script 字段】。
 # 入口：claude.ai/code 顶部「云图标（当前环境名）」→ 环境选择器 → Add environment / 齿轮 → Setup script。
 #

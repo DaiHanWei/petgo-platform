@@ -2,15 +2,15 @@ import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/core/media/media_scope.dart';
-import 'package:petgo/features/media/data/media_repository.dart';
-import 'package:petgo/features/media/data/oss_uploader.dart';
-import 'package:petgo/features/media/data/sts_credential.dart';
-import 'package:petgo/features/media/domain/media_upload_use_case.dart';
-import 'package:petgo/features/triage/data/triage_repository.dart';
-import 'package:petgo/features/triage/domain/triage_result_controller.dart';
-import 'package:petgo/features/triage/domain/triage_result_state.dart';
-import 'package:petgo/features/triage/domain/triage_upload_controller.dart';
+import 'package:tailtopia/core/media/media_scope.dart';
+import 'package:tailtopia/features/media/data/media_repository.dart';
+import 'package:tailtopia/features/media/data/oss_uploader.dart';
+import 'package:tailtopia/features/media/data/sts_credential.dart';
+import 'package:tailtopia/features/media/domain/media_upload_use_case.dart';
+import 'package:tailtopia/features/triage/data/triage_repository.dart';
+import 'package:tailtopia/features/triage/domain/triage_result_controller.dart';
+import 'package:tailtopia/features/triage/domain/triage_result_state.dart';
+import 'package:tailtopia/features/triage/domain/triage_upload_controller.dart';
 
 class _FakeRepo implements MediaRepository {
   @override
@@ -84,14 +84,22 @@ void main() {
     expect(c.read(triageUploadProvider).images.length, 1);
   });
 
-  test('canSubmit：有文字或有图才可提交', () {
+  test('canSubmit[AC5]：文字必填、图片选填——仅文字可提交，仅图片不可', () {
     final c = _container(_FakeMediaUseCase(), _FakeTriageRepo());
     final ctrl = c.read(triageUploadProvider.notifier);
+    // 空表单不可提交。
     expect(c.read(triageUploadProvider).canSubmit, isFalse);
+    // 空白文字不可提交。
     ctrl.setSymptom('  ');
     expect(c.read(triageUploadProvider).canSubmit, isFalse);
-    ctrl.setSymptom('咳嗽');
-    expect(c.read(triageUploadProvider).canSubmit, isTrue);
+    // 仅加图、无文字 → 仍不可提交（图片选填、文字必填）。
+    ctrl.addImage(bytes(1));
+    ctrl.addImage(bytes(2));
+    expect(c.read(triageUploadProvider).canSubmit, isFalse);
+    // 仅文字、无图 → 可提交（图片选填）。
+    final c2 = _container(_FakeMediaUseCase(), _FakeTriageRepo());
+    c2.read(triageUploadProvider.notifier).setSymptom('咳嗽');
+    expect(c2.read(triageUploadProvider).canSubmit, isTrue);
   });
 
   test('submit 上传未上传图并提交；重提交复用对象 key 不重传', () async {

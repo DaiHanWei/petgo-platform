@@ -12,4 +12,4 @@ logging:
     format:
       console: ecs
   level:
-    com.petgo: INFO
+    com.tailtopia: INFO

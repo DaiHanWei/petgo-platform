@@ -2,8 +2,8 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/core/network/auth_interceptor.dart';
-import 'package:petgo/core/storage/secure_storage.dart';
+import 'package:tailtopia/core/network/auth_interceptor.dart';
+import 'package:tailtopia/core/storage/secure_storage.dart';
 
 /// 可编程的假 HttpClientAdapter：按「路径 + 第几次调用」返回状态码。
 class _FakeAdapter implements HttpClientAdapter {

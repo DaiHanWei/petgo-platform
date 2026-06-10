@@ -58,7 +58,7 @@ sourceDocuments:
 |------|------|------|
 | `UX_DESIGN.md` | 183 | ⚠️ Design System；frontmatter 仍为 2026-05-29，含已废弃的"活动"区域色与 Event Card |
 | `UX_EXPERIENCE.md` | 277 | ⚠️ 行为/IA 规格；`sources` 指向 **20260529 旧 PRD**，含 4-Tab、活动 Tab、GPS、KF-2(Kevin 攒局) |
-| `PetGo_V1_全屏效果图.html` | 1946 | ✅ 最新效果图（21 屏，S01–S21），cc81660 新增，**已剔除攒局、已与 PRD 对齐** |
+| `TailTopia_V1_全屏效果图.html` | 1946 | ✅ 最新效果图（21 屏，S01–S21），cc81660 新增，**已剔除攒局、已与 PRD 对齐** |
 
 ### 技术文档
 | 文件 | 行数 | 状态 |
@@ -161,7 +161,7 @@ UX 两份 markdown 文档的**视觉与组件规范质量很高**（Design token
 | **C-7** | **医疗责任 / 红色无升级入口** | ✅ FR-3/附录C | ✅ Red Alert 时序明确无 vet CTA | ✅ S15 | ✅ 安全规则层兜底 | 🟢 一致（亮点）|
 | **C-8** | **媒体存储隐私边界** | 私密问诊图 vs 公开内容 | — | — | ✅ 三层模型 + 桥接规则 | 🟢 一致 |
 | **C-9** | **实时聊天连续性** | 切 Tab 不断连（FR-19）| ✅ 行为一致 | — | ✅ TIM 天然保证 | 🟢 一致 |
-| **C-10** | **产品名** | `[App Name]` 占位 | `[App Name]` 占位 | PetGo | petGo | 🟡 待定名 |
+| **C-10** | **产品名** | `[App Name]` 占位 | `[App Name]` 占位 | TailTopia | petGo | 🟡 待定名 |
 | **C-11** | **源文档引用** | — | ❌ 指向 20260529 | — | ❌ 指向旧文件名 | 🟡 元数据待更新 |
 
 ---
@@ -203,7 +203,7 @@ UX 两份 markdown 文档的**视觉与组件规范质量很高**（Design token
 - **🟡 P-1**：PRD 把 FR-11/12/14/15/16 的 `UJ-3` 改为 `UJ-2`。
 - **🟡 P-2**：PRD 修复重复的 4.10 章节号。
 - **🟡 P-3 / P-4**：PRD 移除/标注指向 V2-FR-10 的 OQ#4、A-3；术语表攒局词条分区为 V2。
-- **🟡 C-10 / P-6**：尽快敲定产品名，统一替换 `[App Name]`（技术与效果图已用 PetGo/petGo）。
+- **🟡 C-10 / P-6**：尽快敲定产品名，统一替换 `[App Name]`（技术与效果图已用 TailTopia/petGo）。
 - **🟡 C-11 / T-3 / U-4**：更新 UX 与技术文档 frontmatter 的 `sources` 指向最新 PRD 文件名。
 
 ---
@@ -264,7 +264,7 @@ UX 两份 markdown 文档的**视觉与组件规范质量很高**（Design token
 - 删 `accent-gather` 暖橙区域色（保留 V2 说明注释）与 Event Card 组件
 - Bottom Pill Navigation → Bottom Tab Bar（5 位 + 凸起「＋」）；Shapes 容器描述同步；updated→2026-06-01
 
-**`PetGo_V1_全屏效果图.html`**
+**`TailTopia_V1_全屏效果图.html`**
 - S12 上传页三处文案去视频：`Unggah foto`、`Tambah Foto`、`Maks 3 foto · Foto ≤10MB`
 
 ### 验证
@@ -277,7 +277,7 @@ UX 两份 markdown 文档的**视觉与组件规范质量很高**（Design token
 ### 追加已解决（2026-06-01 第三轮）
 - ✅ **P-2**：PRD §4 章节号去重——第二个「4.10」（其他用户头像点击）→ 4.11，兽医端 4.11→4.12、兽医评分 4.12→4.13、通知中心 4.13→4.14，连续无重复（无按章节号的交叉引用，重编号安全）。
 - ✅ **R-1**：技术文档 `content` 模块「FR-收藏等」矫正为「FR-12, FR-17, FR-23, FR-24, FR-28, FR-36」，职责注明「V1 不做收藏/@提及」。
-- ✅ **C-10**：产品名 `[App Name]` 全部替换为 **PetGo**（PRD 6 处 / UX_DESIGN 2 处 / UX_EXPERIENCE 2 处）；OQ#5 标注「已暂定 PetGo，不排除未来调整」。
+- ✅ **C-10**：产品名 `[App Name]` 全部替换为 **TailTopia**（PRD 6 处 / UX_DESIGN 2 处 / UX_EXPERIENCE 2 处）；OQ#5 标注「已暂定 TailTopia，不排除未来调整」。
 
 ### 按用户决定不处理
 - ⏭️ **C-3(PDP)/T-2**：数据出境德国的 PDP 跨境合规——用户决定本阶段不考虑。

@@ -7,6 +7,7 @@ import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../features/auth/domain/auth_state.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/app_image.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/mini_profile_sheet.dart';
 import '../data/detail_repository.dart';
@@ -90,7 +91,8 @@ class _DetailScaffold extends ConsumerWidget {
       appBar: AppBar(
         backgroundColor: AppColors.base,
         actions: [
-          // 「···」菜单：举报[3.7] 占位 disabled；作者本人删除[3.6] 可用。
+          // 「···」菜单按内容归属互斥分支（AC5）：自己内容→删除[3.6]；他人内容→举报[3.7]
+          // （游客查看他人内容点举报由 openReport 触发 FR-0C）。绝不同时出现举报与删除。
           PopupMenuButton<String>(
             key: const ValueKey('detailMenu'),
             onSelected: (value) {
@@ -101,11 +103,17 @@ class _DetailScaffold extends ConsumerWidget {
               }
             },
             itemBuilder: (context) => [
-              PopupMenuItem<String>(value: 'report', child: Text(l10n.detailMenuReport)),
               if (detail.isAuthor)
                 PopupMenuItem<String>(
+                  key: const ValueKey('detailMenuDelete'),
                   value: 'delete',
                   child: Text(l10n.detailMenuDelete),
+                )
+              else
+                PopupMenuItem<String>(
+                  key: const ValueKey('detailMenuReport'),
+                  value: 'report',
+                  child: Text(l10n.detailMenuReport),
                 ),
             ],
           ),
@@ -166,7 +174,7 @@ class _DetailScaffold extends ConsumerWidget {
         CircleAvatar(
           radius: 16,
           backgroundColor: AppColors.border,
-          backgroundImage: (avatar != null && avatar.isNotEmpty) ? NetworkImage(avatar) : null,
+          backgroundImage: AppImage.provider(avatar),
           child: (avatar == null || avatar.isEmpty)
               ? const Icon(Icons.person_rounded, size: 18, color: AppColors.textTertiary)
               : null,
@@ -266,7 +274,7 @@ class _ImageCarouselState extends State<_ImageCarousel> {
         backgroundColor: Colors.black,
         appBar: AppBar(backgroundColor: Colors.black),
         body: Center(
-          child: InteractiveViewer(child: Image.network(widget.urls[index])),
+          child: InteractiveViewer(child: AppImage.widget(widget.urls[index], fit: BoxFit.contain)),
         ),
       ),
     ));
@@ -286,7 +294,7 @@ class _ImageCarouselState extends State<_ImageCarousel> {
               onPageChanged: (i) => setState(() => _current = i),
               itemBuilder: (context, i) => GestureDetector(
                 onTap: () => _openLightbox(i),
-                child: Image.network(
+                child: AppImage.widget(
                   widget.urls[i],
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stack) =>

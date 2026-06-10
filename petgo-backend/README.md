@@ -1,6 +1,6 @@
 # petgo-backend
 
-PetGo 后端 —— Spring Boot 4.0.6 / Java 21 / Maven，PostgreSQL + Redis + Flyway，模块化单体（8 业务模块 + shared）。
+TailTopia 后端 —— Spring Boot 4.0.6 / Java 21 / Maven，PostgreSQL + Redis + Flyway，模块化单体（8 业务模块 + shared）。
 
 ## 前置
 

@@ -8,11 +8,13 @@ import '../domain/pet_profile.dart';
 /// 宠物档案数据层（Story 2.2 · F2）。创建 + 当前用户档案查询。抽象便于测试注入 fake。
 abstract class ProfileRepository {
   /// 创建档案。[idempotencyKey] 经 `Idempotency-Key` 头去重（防并发双开窗）。
+  /// [petType]（F6，CAT/DOG/OTHER）与 [name]/[birthday] 必填（服务端权威校验）。
   Future<PetProfile> create({
+    required String petType,
     required String name,
+    required DateTime birthday,
     String? avatarUrl,
     String? breed,
-    DateTime? birthday,
     String? intro,
     String? idempotencyKey,
   });
@@ -37,17 +39,21 @@ class DioProfileRepository implements ProfileRepository {
 
   @override
   Future<PetProfile> create({
+    required String petType,
     required String name,
+    required DateTime birthday,
     String? avatarUrl,
     String? breed,
-    DateTime? birthday,
     String? intro,
     String? idempotencyKey,
   }) async {
-    final data = <String, dynamic>{'name': name};
+    final data = <String, dynamic>{
+      'petType': petType,
+      'name': name,
+      'birthday': _isoDate(birthday),
+    };
     if (avatarUrl != null) data['avatarUrl'] = avatarUrl;
     if (breed != null) data['breed'] = breed;
-    if (birthday != null) data['birthday'] = _isoDate(birthday);
     if (intro != null) data['intro'] = intro;
     final resp = await dio.post<Map<String, dynamic>>(
       ApiPaths.petProfiles,

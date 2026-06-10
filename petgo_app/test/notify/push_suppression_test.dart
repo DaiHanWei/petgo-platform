@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/notify/domain/push_suppression.dart';
+import 'package:tailtopia/features/notify/domain/push_suppression.dart';
 
 /// Story 6.2 AC1：前台正在查看同一会话 → 抑制 in-app 重复推送；其它情形不抑制。
 void main() {

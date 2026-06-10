@@ -10,12 +10,14 @@ import '../../../shared/widgets/pet_status_selector.dart';
 import '../../auth/data/me_repository.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../content/domain/home_refresh_provider.dart';
+import '../data/milestone_repository.dart';
 import '../data/profile_repository.dart';
 import '../data/timeline_repository.dart';
 import '../domain/card_link.dart';
 import '../domain/pet_profile.dart';
 import '../domain/share_service.dart';
 import '../domain/timeline_item.dart';
+import 'widgets/archive_calendar.dart';
 import 'widgets/pet_info_card.dart';
 import 'widgets/share_fab.dart';
 import 'widgets/timeline_tiles.dart';
@@ -32,12 +34,12 @@ class GrowthArchivePage extends ConsumerWidget {
     final auth = ref.watch(authControllerProvider);
     final petStatus = auth.profile?.petStatus;
 
-    // 状态 B/C：非有宠态。
-    if (petStatus != null && petStatus != 'A') {
+    // PLANNING/ENTHUSIAST：非有宠态。
+    if (petStatus != null && petStatus != 'HAS_PET') {
       return _NonOwnerView(onChangeStatus: () => _openStatusEditor(context, ref));
     }
 
-    // 状态 A（或未知）：据是否有档案分支。
+    // HAS_PET（或未知）：据是否有档案分支。
     final profileAsync = ref.watch(petProfileProvider);
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -74,7 +76,12 @@ class GrowthArchivePage extends ConsumerWidget {
         markShareFabAnimated();
         ref.invalidate(shareFabAnimatedShownProvider);
       },
-      onPressed: () => ref.read(shareServiceProvider)(petCardShareUrl(profile.cardToken)),
+      onPressed: () {
+        ref.read(shareServiceProvider)(petCardShareUrl(profile.cardToken));
+        // 名片分享信号 → 里程碑 C-S3 自动完成（Story 8.3，fire-and-forget，失败静默）。
+        ref.read(milestoneRepositoryProvider).signalCardShared().catchError((_) {});
+        ref.invalidate(milestoneListProvider);
+      },
     );
   }
 
@@ -124,6 +131,7 @@ class GrowthArchivePage extends ConsumerWidget {
       ref.read(homeRefreshProvider.notifier).bump();
       ref.invalidate(petProfileProvider);
       ref.invalidate(timelineFirstPageProvider);
+      ref.invalidate(archiveStatsProvider);
     } catch (_) {
       if (context.mounted) {
         ScaffoldMessenger.of(context)
@@ -134,22 +142,38 @@ class GrowthArchivePage extends ConsumerWidget {
   }
 }
 
-class _ArchiveBody extends ConsumerWidget {
+/// 档案主屏内容（信息卡 + 统计栏 + 里程碑 + 双视图）。view mode 为本地状态：
+/// 留在页面切换时保持（session 内），离开后重建恢复默认时间线（StatefulShellRoute 分支保活下为近似）。
+enum _ArchiveView { timeline, calendar }
+
+class _ArchiveBody extends ConsumerStatefulWidget {
   const _ArchiveBody({required this.child});
 
   final Widget child;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
-    final timelineAsync = ref.watch(timelineFirstPageProvider);
+  ConsumerState<_ArchiveBody> createState() => _ArchiveBodyState();
+}
+
+class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
+  _ArchiveView _view = _ArchiveView.timeline;
+
+  @override
+  Widget build(BuildContext context) {
     return RefreshIndicator(
       color: AppColors.mint,
-      onRefresh: () async => ref.invalidate(timelineFirstPageProvider),
+      onRefresh: () async {
+        ref.invalidate(timelineFirstPageProvider);
+        ref.invalidate(archiveStatsProvider);
+      },
       child: ListView(
         padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 54, AppSpacing.lg, AppSpacing.section),
         children: [
-          child,
+          widget.child, // 信息卡（缓存数据，内容区失败不覆盖，AC7）
+          const SizedBox(height: 12),
+          const _StatsBar(),
+          const SizedBox(height: 10),
+          const _MilestoneBar(),
           const SizedBox(height: 10),
           Center(
             child: TextButton.icon(
@@ -161,45 +185,193 @@ class _ArchiveBody extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 8),
-          // 时间线区头（PetGo Prototype）。
-          Row(
-            children: const [
-              Icon(Icons.calendar_today_outlined, size: 19, color: AppColors.mint700),
-              SizedBox(width: 8),
-              Text('Linimasa Tumbuh Kembang',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
-            ],
-          ),
+          _viewToggleRow(),
           const SizedBox(height: 14),
-          timelineAsync.when(
-            loading: () => const Padding(
-              padding: EdgeInsets.all(AppSpacing.xl),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-            error: (err, stack) => const SizedBox.shrink(),
-            data: (page) {
-              if (page.items.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.all(AppSpacing.xl),
-                  child: Center(
-                    child: Text(l10n.growthArchiveTimelineEmpty,
-                        style: TextStyle(color: AppColors.textTertiary)),
-                  ),
-                );
-              }
-              return Column(children: [for (final item in page.items) _tile(item)]);
-            },
-          ),
+          if (_view == _ArchiveView.timeline) const _TimelineView() else _calendarView(),
         ],
       ),
     );
   }
 
-  Widget _tile(TimelineItem item) {
-    return switch (item.kind) {
-      TimelineKind.healthEvent => HealthEventTile(item: item),
-      _ => HappyMomentTile(item: item),
-    };
+  /// 视图切换行（右上角图标）：时间线 ↔ 日历。
+  Widget _viewToggleRow() {
+    final l10n = AppLocalizations.of(context);
+    return Row(
+      children: [
+        const Icon(Icons.calendar_today_outlined, size: 19, color: AppColors.mint700),
+        const SizedBox(width: 8),
+        Text(
+            _view == _ArchiveView.timeline ? 'Linimasa Tumbuh Kembang' : l10n.growthViewCalendar,
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+        const Spacer(),
+        IconButton(
+          key: const ValueKey('archiveViewTimeline'),
+          tooltip: l10n.growthViewTimeline,
+          isSelected: _view == _ArchiveView.timeline,
+          onPressed: () => setState(() => _view = _ArchiveView.timeline),
+          icon: const Icon(Icons.view_agenda_outlined),
+        ),
+        IconButton(
+          key: const ValueKey('archiveViewCalendar'),
+          tooltip: l10n.growthViewCalendar,
+          isSelected: _view == _ArchiveView.calendar,
+          onPressed: () => setState(() => _view = _ArchiveView.calendar),
+          icon: const Icon(Icons.calendar_month_outlined),
+        ),
+      ],
+    );
+  }
+
+  Widget _calendarView() {
+    return ArchiveCalendar(
+      onOpenDay: (date) => context.push(
+          '/profile/day?date=${date.year}-${_two(date.month)}-${_two(date.day)}'),
+      onAddOnDate: (date) => context.go(
+          '/publish?preset=growth-calendar&date=${date.year}-${_two(date.month)}-${_two(date.day)}'),
+    );
+  }
+
+  static String _two(int n) => n.toString().padLeft(2, '0');
+}
+
+/// 统计栏「快乐时刻 X · 问诊 X」（AC5）。统计失败不阻断页面——退化为隐藏。
+class _StatsBar extends ConsumerWidget {
+  const _StatsBar();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final stats = ref.watch(archiveStatsProvider);
+    return stats.maybeWhen(
+      data: (s) => Container(
+        key: const ValueKey('archiveStatsBar'),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(14)),
+        child: Row(
+          children: [
+            const Text('🌈', style: TextStyle(fontSize: 16)),
+            const SizedBox(width: 6),
+            Text(l10n.growthStatsHappy(s.happyMomentCount),
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+            const SizedBox(width: 14),
+            const Text('🏥', style: TextStyle(fontSize: 15)),
+            const SizedBox(width: 6),
+            Text(l10n.growthStatsConsult(s.consultCount),
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+          ],
+        ),
+      ),
+      orElse: () => const SizedBox.shrink(),
+    );
+  }
+}
+
+/// 里程碑入口进度条「已完成 X / N」（AC5；mini-epic 未就绪走零态）。
+class _MilestoneBar extends ConsumerWidget {
+  const _MilestoneBar();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final stats = ref.watch(archiveStatsProvider);
+    return stats.maybeWhen(
+      data: (s) {
+        final ratio = s.milestoneTotal == 0 ? 0.0 : s.milestoneCompleted / s.milestoneTotal;
+        return GestureDetector(
+          key: const ValueKey('archiveMilestoneBar'),
+          onTap: () => context.push('/profile/milestones'),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(14)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Text('🏆', style: TextStyle(fontSize: 15)),
+                    const SizedBox(width: 6),
+                    Text(l10n.growthMilestoneProgress(s.milestoneCompleted, s.milestoneTotal),
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: LinearProgressIndicator(
+                    value: ratio,
+                    minHeight: 6,
+                    backgroundColor: AppColors.line,
+                    color: AppColors.mint,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+      orElse: () => const SizedBox.shrink(),
+    );
+  }
+}
+
+/// 时间线视图（倒序快乐时刻 + 健康事件；首条各显 🌟；加载失败可重试，AC7）。
+class _TimelineView extends ConsumerWidget {
+  const _TimelineView();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final timelineAsync = ref.watch(timelineFirstPageProvider);
+    return timelineAsync.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.all(AppSpacing.xl),
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      // AC7：内容区加载失败 → 「加载失败，下拉重试」+ 重试入口（信息卡/统计栏不受影响）。
+      error: (err, stack) => Container(
+        key: const ValueKey('timelineError'),
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(12)),
+        child: Column(
+          children: [
+            Text(l10n.growthLoadFailed, style: const TextStyle(color: AppColors.muted)),
+            const SizedBox(height: 8),
+            TextButton(
+              key: const ValueKey('timelineRetry'),
+              onPressed: () => ref.invalidate(timelineFirstPageProvider),
+              child: Text(l10n.growthLoadRetry),
+            ),
+          ],
+        ),
+      ),
+      data: (page) {
+        if (page.items.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            child: Center(
+              child: Text(l10n.growthArchiveTimelineEmpty,
+                  style: const TextStyle(color: AppColors.textTertiary)),
+            ),
+          );
+        }
+        // 首条快乐时刻 / 首条健康事件各加 🌟 永久标签（AC5）。
+        bool firstHappy = true;
+        bool firstHealth = true;
+        final tiles = <Widget>[];
+        for (final item in page.items) {
+          if (item.kind == TimelineKind.healthEvent) {
+            tiles.add(HealthEventTile(
+                item: item, firstLabel: firstHealth ? l10n.growthFirstHealthEvent : null));
+            firstHealth = false;
+          } else {
+            tiles.add(HappyMomentTile(
+                item: item, firstLabel: firstHappy ? l10n.growthFirstHappyMoment : null));
+            firstHappy = false;
+          }
+        }
+        return Column(children: tiles);
+      },
+    );
   }
 }
 
