@@ -1,6 +1,6 @@
-package com.petgo.notify.schedule;
+package com.tailtopia.notify.schedule;
 
-import com.petgo.notify.domain.NotificationType;
+import com.tailtopia.notify.domain.NotificationType;
 
 /**
  * 一条待投递的定时推送计划（Story 6.7）。由 {@link ScheduledPushPlanner} 纯逻辑产出，

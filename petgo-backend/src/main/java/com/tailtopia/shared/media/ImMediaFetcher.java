@@ -1,4 +1,4 @@
-package com.petgo.shared.media;
+package com.tailtopia.shared.media;
 
 /**
  * 腾讯 IM 媒体取流端口（Story 2.5 定义，Epic 5 实现）。

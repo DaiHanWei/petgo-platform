@@ -1,6 +1,6 @@
-package com.petgo.vet.service;
+package com.tailtopia.vet.service;
 
-import com.petgo.vet.domain.VetPresenceStatus;
+import com.tailtopia.vet.domain.VetPresenceStatus;
 import java.time.Duration;
 import java.util.List;
 import java.util.Set;

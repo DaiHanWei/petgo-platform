@@ -1,4 +1,4 @@
-package com.petgo.vet.domain;
+package com.tailtopia.vet.domain;
 
 /**
  * 兽医账号状态（落库 varchar + UPPER，Story 5.1）。

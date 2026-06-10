@@ -1,11 +1,11 @@
-package com.petgo.admin.service;
+package com.tailtopia.admin.service;
 
-import com.petgo.content.domain.DeleteReason;
-import com.petgo.content.service.ContentService;
-import com.petgo.moderation.domain.ContentReport;
-import com.petgo.moderation.domain.ReportStatus;
-import com.petgo.moderation.service.ReportService;
-import com.petgo.shared.error.AppException;
+import com.tailtopia.content.domain.DeleteReason;
+import com.tailtopia.content.service.ContentService;
+import com.tailtopia.moderation.domain.ContentReport;
+import com.tailtopia.moderation.domain.ReportStatus;
+import com.tailtopia.moderation.service.ReportService;
+import com.tailtopia.shared.error.AppException;
 import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;

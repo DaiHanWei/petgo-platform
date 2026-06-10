@@ -1,11 +1,11 @@
-package com.petgo.support;
+package com.tailtopia.support;
 
-import com.petgo.consult.domain.ConsultSession;
-import com.petgo.consult.domain.ConsultSource;
-import com.petgo.consult.repository.ConsultSessionRepository;
-import com.petgo.vet.domain.VetAccount;
-import com.petgo.vet.domain.VetStatus;
-import com.petgo.vet.repository.VetAccountRepository;
+import com.tailtopia.consult.domain.ConsultSession;
+import com.tailtopia.consult.domain.ConsultSource;
+import com.tailtopia.consult.repository.ConsultSessionRepository;
+import com.tailtopia.vet.domain.VetAccount;
+import com.tailtopia.vet.domain.VetStatus;
+import com.tailtopia.vet.repository.VetAccountRepository;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import org.springframework.security.crypto.password.PasswordEncoder;

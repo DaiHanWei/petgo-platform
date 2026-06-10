@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:petgo/core/storage/secure_storage.dart';
-import 'package:petgo/features/vet/data/vet_repository.dart';
-import 'package:petgo/features/vet/domain/vet_inbox_item.dart';
-import 'package:petgo/features/vet/presentation/vet_request_detail_page.dart';
-import 'package:petgo/l10n/app_localizations.dart';
+import 'package:tailtopia/core/storage/secure_storage.dart';
+import 'package:tailtopia/features/vet/data/vet_repository.dart';
+import 'package:tailtopia/features/vet/domain/vet_inbox_item.dart';
+import 'package:tailtopia/features/vet/presentation/vet_request_detail_page.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// 假兽医 repo：可控 session() 轮询状态与 accept() 结果（成功 / 409 已被抢）。
 class _FakeVetRepository extends VetRepository {

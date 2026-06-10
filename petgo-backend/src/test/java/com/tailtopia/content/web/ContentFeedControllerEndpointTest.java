@@ -1,18 +1,18 @@
-package com.petgo.content.web;
+package com.tailtopia.content.web;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.petgo.auth.domain.PetStatus;
-import com.petgo.auth.domain.User;
-import com.petgo.content.domain.ContentPost;
-import com.petgo.content.domain.ContentType;
-import com.petgo.content.repository.ContentPostRepository;
-import com.petgo.content.service.FeedService;
-import com.petgo.profile.domain.PetProfile;
-import com.petgo.profile.repository.PetProfileRepository;
-import com.petgo.support.ApiIntegrationTest;
+import com.tailtopia.auth.domain.PetStatus;
+import com.tailtopia.auth.domain.User;
+import com.tailtopia.content.domain.ContentPost;
+import com.tailtopia.content.domain.ContentType;
+import com.tailtopia.content.repository.ContentPostRepository;
+import com.tailtopia.content.service.FeedService;
+import com.tailtopia.profile.domain.PetProfile;
+import com.tailtopia.profile.repository.PetProfileRepository;
+import com.tailtopia.support.ApiIntegrationTest;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -44,7 +44,7 @@ class ContentFeedControllerEndpointTest extends ApiIntegrationTest {
 
     /** 造一只属于 owner 的真实档案（GROWTH_MOMENT 帖的 pet_id 需满足 FK）。 */
     private long newPetProfile(long ownerId) {
-        PetProfile p = PetProfile.create(ownerId, com.petgo.profile.domain.PetType.OTHER,
+        PetProfile p = PetProfile.create(ownerId, com.tailtopia.profile.domain.PetType.OTHER,
                 "宠物" + SEQ.incrementAndGet(), null, null, null, null,
                 "ct-" + SEQ.incrementAndGet());
         return petProfiles.save(p).getId();

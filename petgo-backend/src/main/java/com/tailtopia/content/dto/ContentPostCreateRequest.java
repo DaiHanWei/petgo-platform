@@ -1,6 +1,6 @@
-package com.petgo.content.dto;
+package com.tailtopia.content.dto;
 
-import com.petgo.content.domain.ContentType;
+import com.tailtopia.content.domain.ContentType;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;

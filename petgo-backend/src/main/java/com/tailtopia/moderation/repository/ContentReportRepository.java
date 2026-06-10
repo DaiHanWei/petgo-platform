@@ -1,7 +1,7 @@
-package com.petgo.moderation.repository;
+package com.tailtopia.moderation.repository;
 
-import com.petgo.moderation.domain.ContentReport;
-import com.petgo.moderation.domain.ReportStatus;
+import com.tailtopia.moderation.domain.ContentReport;
+import com.tailtopia.moderation.domain.ReportStatus;
 import java.util.List;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;

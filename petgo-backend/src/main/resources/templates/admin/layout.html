@@ -9,7 +9,7 @@
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <meta name="robots" content="noindex,nofollow"/>
-    <title>PetGo 运营后台</title>
+    <title>TailTopia 运营后台</title>
     <style>
         body { font-family: system-ui, sans-serif; margin: 0; color: #222; }
         .layout { display: flex; min-height: 100vh; }
@@ -28,7 +28,7 @@
 <body>
 <div class="layout" th:fragment="page(content)">
     <nav>
-        <div class="brand">🐾 PetGo 运营</div>
+        <div class="brand">🐾 TailTopia 运营</div>
         <a th:href="@{/admin/dashboard}" th:classappend="${active == 'dashboard'} ? 'active'">概览</a>
         <div class="group">内容</div>
         <a th:href="@{/admin/seed-post}" th:classappend="${active == 'seed'} ? 'active'">种子内容发布</a>

@@ -1,6 +1,6 @@
-package com.petgo.content.repository;
+package com.tailtopia.content.repository;
 
-import com.petgo.content.domain.Comment;
+import com.tailtopia.content.domain.Comment;
 import java.time.Instant;
 import java.util.List;
 import org.springframework.data.domain.Pageable;

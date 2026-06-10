@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/colors.dart';
 import '../../../shared/widgets/design/striped_photo.dart';
 
-/// 实时对话区（Story 5.5 · PetGo Prototype VetChat 换肤）。
+/// 实时对话区（Story 5.5 · TailTopia Prototype VetChat 换肤）。
 ///
 /// 真机接入腾讯 IM Flutter SDK 收发文字/图片 + 后台保连（NFR-5）属 **L2**。
 /// 🔄 PRD V1.0.0 修订（F4 · 2026-06-08）：V1.0.0 全程无视频，会话仅文字/图片（视频随收费模式后置）。

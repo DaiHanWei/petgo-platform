@@ -1,4 +1,4 @@
-package com.petgo.vet.domain;
+package com.tailtopia.vet.domain;
 
 /**
  * 兽医在线态（Story 5.2，架构「在线/忙/离线」三态）。

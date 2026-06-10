@@ -1,4 +1,4 @@
-package com.petgo.auth.dto;
+package com.tailtopia.auth.dto;
 
 /**
  * 兽医登录响应（Story 5.1）：自签令牌 + 展示名 + 角色（恒 VET）。

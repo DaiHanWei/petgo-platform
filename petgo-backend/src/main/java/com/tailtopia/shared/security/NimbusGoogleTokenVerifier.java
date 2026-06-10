@@ -1,6 +1,6 @@
-package com.petgo.shared.security;
+package com.tailtopia.shared.security;
 
-import com.petgo.shared.error.AppException;
+import com.tailtopia.shared.error.AppException;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

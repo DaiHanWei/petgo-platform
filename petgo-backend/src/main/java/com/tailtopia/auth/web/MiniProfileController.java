@@ -1,9 +1,9 @@
-package com.petgo.auth.web;
+package com.tailtopia.auth.web;
 
-import com.petgo.auth.dto.AuthorView;
-import com.petgo.auth.dto.MiniProfileResponse;
-import com.petgo.auth.service.AccountQueryService;
-import com.petgo.content.service.ContentService;
+import com.tailtopia.auth.dto.AuthorView;
+import com.tailtopia.auth.dto.MiniProfileResponse;
+import com.tailtopia.auth.service.AccountQueryService;
+import com.tailtopia.content.service.ContentService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;

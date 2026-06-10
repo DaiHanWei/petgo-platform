@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/profile/domain/pet_profile.dart';
+import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 
 void main() {
   test('fromJson 解析全字段 + 日期', () {

@@ -1,4 +1,4 @@
-package com.petgo.shared.media.dto;
+package com.tailtopia.shared.media.dto;
 
 /**
  * STS 上传凭证信封（返回给客户端直传 OSS 用）。Jackson NON_NULL：null 字段省略。

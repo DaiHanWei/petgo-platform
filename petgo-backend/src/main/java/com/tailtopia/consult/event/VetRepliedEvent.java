@@ -1,4 +1,4 @@
-package com.petgo.consult.event;
+package com.tailtopia.consult.event;
 
 /**
  * 兽医已回复事件（Story 6.2，FR-22A）。兽医在会话中回复时发布，notify 订阅 → 推送用户「有新回复」。

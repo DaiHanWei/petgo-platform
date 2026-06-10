@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/profile/domain/card_link.dart';
-import 'package:petgo/features/profile/domain/profile_created_flow.dart';
-import 'package:petgo/features/profile/domain/share_service.dart';
-import 'package:petgo/features/profile/presentation/profile_created_celebration_page.dart';
-import 'package:petgo/l10n/app_localizations.dart';
+import 'package:tailtopia/features/profile/domain/card_link.dart';
+import 'package:tailtopia/features/profile/domain/profile_created_flow.dart';
+import 'package:tailtopia/features/profile/domain/share_service.dart';
+import 'package:tailtopia/features/profile/presentation/profile_created_celebration_page.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 
 void main() {
   group('AC4 来源分支（纯函数 · F15）', () {

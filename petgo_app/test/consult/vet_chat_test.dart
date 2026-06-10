@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/consult/presentation/im_chat_placeholder.dart';
+import 'package:tailtopia/features/consult/presentation/im_chat_placeholder.dart';
 
-/// VetChat 聊天面（PetGo Prototype 换肤）：种子气泡 + 发送→打字→兽医回复。
+/// VetChat 聊天面（TailTopia Prototype 换肤）：种子气泡 + 发送→打字→兽医回复。
 void main() {
   Widget host() => const MaterialApp(
         home: Scaffold(

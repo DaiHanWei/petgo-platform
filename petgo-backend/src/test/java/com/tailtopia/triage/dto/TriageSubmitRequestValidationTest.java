@@ -1,4 +1,4 @@
-package com.petgo.triage.dto;
+package com.tailtopia.triage.dto;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

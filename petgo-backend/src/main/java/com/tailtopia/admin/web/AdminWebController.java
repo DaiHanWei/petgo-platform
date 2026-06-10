@@ -1,14 +1,14 @@
-package com.petgo.admin.web;
+package com.tailtopia.admin.web;
 
-import com.petgo.admin.dto.CreateVetForm;
-import com.petgo.admin.dto.SeedPostForm;
-import com.petgo.admin.service.AdminContentService;
-import com.petgo.admin.service.AdminModerationService;
-import com.petgo.admin.service.AdminUserDetails;
-import com.petgo.admin.service.AdminVetService;
-import com.petgo.content.domain.ContentType;
-import com.petgo.content.dto.ContentPostResponse;
-import com.petgo.shared.error.AppException;
+import com.tailtopia.admin.dto.CreateVetForm;
+import com.tailtopia.admin.dto.SeedPostForm;
+import com.tailtopia.admin.service.AdminContentService;
+import com.tailtopia.admin.service.AdminModerationService;
+import com.tailtopia.admin.service.AdminUserDetails;
+import com.tailtopia.admin.service.AdminVetService;
+import com.tailtopia.content.domain.ContentType;
+import com.tailtopia.content.dto.ContentPostResponse;
+import com.tailtopia.shared.error.AppException;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;

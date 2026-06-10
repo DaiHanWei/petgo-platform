@@ -60,7 +60,7 @@ project: petgo-platform
 #   其中 review 态需"回改已实现代码"的 6 个 (4-5/5-5/6-1/6-4/6-6/7-1) 已退回 ready-for-dev。
 #   ready-for-dev 态 (Epic1/2) 仅改 AC 文档,状态不变。
 # - 新增: 6-7 定时类系统推送; epic-8 里程碑系统 mini-epic (FR-42, 分层纳入 F2)。
-# - 命名 TBD: PetGo->[App Name] 定名后单独收口轮,不阻塞。
+# - 命名 TBD: TailTopia->[App Name] 定名后单独收口轮,不阻塞。
 #
 # ===== 2026-06-08 第二轮 correct-course (PRD 12 处断档补齐) =====
 # 见 planning-artifacts/sprint-change-proposal-2026-06-08-gapfixes.md + CROSS-STORY-DECISIONS F9-F15。

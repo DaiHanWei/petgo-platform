@@ -1,6 +1,6 @@
-package com.petgo.consult.dto;
+package com.tailtopia.consult.dto;
 
-import com.petgo.consult.domain.ConsultSession;
+import com.tailtopia.consult.domain.ConsultSession;
 
 /**
  * 兽医待接单列表项（Story 5.5）。AI_UPGRADE 携带 AI 上下文摘要；DIRECT 摘要为空。

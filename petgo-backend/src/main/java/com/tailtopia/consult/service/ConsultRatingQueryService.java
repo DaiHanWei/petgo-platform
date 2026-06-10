@@ -1,7 +1,7 @@
-package com.petgo.consult.service;
+package com.tailtopia.consult.service;
 
-import com.petgo.consult.dto.VetRatingsView;
-import com.petgo.consult.repository.ConsultRatingRepository;
+import com.tailtopia.consult.dto.VetRatingsView;
+import com.tailtopia.consult.repository.ConsultRatingRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

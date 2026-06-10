@@ -1,6 +1,6 @@
-package com.petgo.profile.dto;
+package com.tailtopia.profile.dto;
 
-import com.petgo.profile.domain.PetProfile;
+import com.tailtopia.profile.domain.PetProfile;
 import java.time.Instant;
 import java.time.LocalDate;
 

@@ -1,9 +1,9 @@
-package com.petgo.vet.service;
+package com.tailtopia.vet.service;
 
-import com.petgo.shared.error.AppException;
-import com.petgo.vet.domain.VetAccount;
-import com.petgo.vet.domain.VetStatus;
-import com.petgo.vet.repository.VetAccountRepository;
+import com.tailtopia.shared.error.AppException;
+import com.tailtopia.vet.domain.VetAccount;
+import com.tailtopia.vet.domain.VetStatus;
+import com.tailtopia.vet.repository.VetAccountRepository;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.security.crypto.password.PasswordEncoder;

@@ -1,4 +1,4 @@
-package com.petgo.auth.dto;
+package com.tailtopia.auth.dto;
 
 import jakarta.validation.constraints.Size;
 

@@ -1,9 +1,9 @@
-package com.petgo.notify.service;
+package com.tailtopia.notify.service;
 
-import com.petgo.consult.event.ConsultRequestQueuedEvent;
-import com.petgo.consult.event.VetRepliedEvent;
-import com.petgo.notify.domain.NotificationType;
-import com.petgo.vet.service.VetPresenceService;
+import com.tailtopia.consult.event.ConsultRequestQueuedEvent;
+import com.tailtopia.consult.event.VetRepliedEvent;
+import com.tailtopia.notify.domain.NotificationType;
+import com.tailtopia.vet.service.VetPresenceService;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionalEventListener;
 

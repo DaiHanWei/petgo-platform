@@ -1,4 +1,4 @@
-package com.petgo.triage.domain;
+package com.tailtopia.triage.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

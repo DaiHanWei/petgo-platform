@@ -1,6 +1,6 @@
-package com.petgo.shared.ratelimit;
+package com.tailtopia.shared.ratelimit;
 
-import com.petgo.shared.error.AppException;
+import com.tailtopia.shared.error.AppException;
 import java.time.Duration;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;

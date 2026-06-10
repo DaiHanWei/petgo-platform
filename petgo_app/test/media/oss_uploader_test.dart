@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/media/data/oss_uploader.dart';
-import 'package:petgo/features/media/data/sts_credential.dart';
+import 'package:tailtopia/features/media/data/oss_uploader.dart';
+import 'package:tailtopia/features/media/data/sts_credential.dart';
 
 void main() {
   group('OSS V1 签名（纯函数）', () {

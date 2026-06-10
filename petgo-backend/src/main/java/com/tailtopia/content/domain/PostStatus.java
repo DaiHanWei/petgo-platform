@@ -1,4 +1,4 @@
-package com.petgo.content.domain;
+package com.tailtopia.content.domain;
 
 /**
  * 内容状态（落库 varchar）。本 Story 仅 {@link #PUBLISHED}（发布即全平台公开）；

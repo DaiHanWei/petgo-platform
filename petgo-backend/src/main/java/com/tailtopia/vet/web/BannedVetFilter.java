@@ -1,6 +1,6 @@
-package com.petgo.vet.web;
+package com.tailtopia.vet.web;
 
-import com.petgo.vet.service.VetAccountService;
+import com.tailtopia.vet.service.VetAccountService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

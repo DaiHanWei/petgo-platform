@@ -1,8 +1,8 @@
-package com.petgo.vet.web;
+package com.tailtopia.vet.web;
 
-import com.petgo.vet.dto.OnlineStatusRequest;
-import com.petgo.vet.dto.OnlineStatusResponse;
-import com.petgo.vet.service.VetPresenceService;
+import com.tailtopia.vet.dto.OnlineStatusRequest;
+import com.tailtopia.vet.dto.OnlineStatusResponse;
+import com.tailtopia.vet.service.VetPresenceService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;

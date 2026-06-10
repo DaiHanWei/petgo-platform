@@ -1,6 +1,6 @@
-package com.petgo.consult.domain;
+package com.tailtopia.consult.domain;
 
-import com.petgo.shared.error.AppException;
+import com.tailtopia.shared.error.AppException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

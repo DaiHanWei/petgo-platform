@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Petgo</string>
+	<string>TailTopia</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -27,9 +27,9 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>PetGo needs camera access so you can take photos of your pet for profiles, posts, and AI triage.</string>
+	<string>TailTopia needs camera access so you can take photos of your pet for profiles, posts, and AI triage.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>PetGo needs photo library access so you can choose pet photos for profiles, posts, and AI triage.</string>
+	<string>TailTopia needs photo library access so you can choose pet photos for profiles, posts, and AI triage.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

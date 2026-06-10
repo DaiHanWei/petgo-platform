@@ -1,4 +1,4 @@
-package com.petgo.triage.service;
+package com.tailtopia.triage.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -7,15 +7,15 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.petgo.shared.ai.GeminiClient;
-import com.petgo.shared.ai.GeminiException;
-import com.petgo.shared.ai.GeminiTriageResult;
-import com.petgo.shared.media.SignedUrlService;
-import com.petgo.triage.TriageTestSupport;
-import com.petgo.triage.domain.DangerLevel;
-import com.petgo.triage.domain.TriageStatus;
-import com.petgo.triage.domain.TriageTask;
-import com.petgo.triage.repository.TriageTaskRepository;
+import com.tailtopia.shared.ai.GeminiClient;
+import com.tailtopia.shared.ai.GeminiException;
+import com.tailtopia.shared.ai.GeminiTriageResult;
+import com.tailtopia.shared.media.SignedUrlService;
+import com.tailtopia.triage.TriageTestSupport;
+import com.tailtopia.triage.domain.DangerLevel;
+import com.tailtopia.triage.domain.TriageStatus;
+import com.tailtopia.triage.domain.TriageTask;
+import com.tailtopia.triage.repository.TriageTaskRepository;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;

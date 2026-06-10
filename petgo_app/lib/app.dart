@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:petgo/core/l10n/locale_controller.dart';
-import 'package:petgo/core/router/app_router.dart';
-import 'package:petgo/core/theme/app_theme.dart';
-import 'package:petgo/l10n/app_localizations.dart';
+import 'package:tailtopia/core/l10n/locale_controller.dart';
+import 'package:tailtopia/core/router/app_router.dart';
+import 'package:tailtopia/core/theme/app_theme.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// 应用根 Widget。
 /// - go_router 驱动路由（provider 化，含受控路由门控 redirect）
 /// - V1 仅浅色模式、portrait-only（NFR-14）
 /// - i18n：跟随设备语言，支持 en / id，其他语言回退 en（无写死字符串）
 /// - 无障碍（Story 7.4 / NFR-13）：动态字体上限 clamp ≤ [maxTextScale]，防超大字号破布局（标题封顶）。
-class PetGoApp extends ConsumerWidget {
-  const PetGoApp({super.key});
+class TailTopiaApp extends ConsumerWidget {
+  const TailTopiaApp({super.key});
 
   /// 动态字体放大上限（NFR-13「≤3 级」）：body 及以下随系统缩放，封顶防溢出/截断关键信息。
   static const double maxTextScale = 1.3;

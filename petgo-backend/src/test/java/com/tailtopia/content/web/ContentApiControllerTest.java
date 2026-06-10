@@ -1,4 +1,4 @@
-package com.petgo.content.web;
+package com.tailtopia.content.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -8,12 +8,12 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.petgo.content.domain.ContentType;
-import com.petgo.content.dto.ContentPostCreateRequest;
-import com.petgo.content.dto.ContentPostResponse;
-import com.petgo.content.service.ContentService;
-import com.petgo.shared.error.AppException;
-import com.petgo.shared.ratelimit.RedisRateLimiter;
+import com.tailtopia.content.domain.ContentType;
+import com.tailtopia.content.dto.ContentPostCreateRequest;
+import com.tailtopia.content.dto.ContentPostResponse;
+import com.tailtopia.content.service.ContentService;
+import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.ratelimit.RedisRateLimiter;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;

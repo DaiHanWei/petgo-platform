@@ -1,4 +1,4 @@
 /**
- * PetGo moderation 模块 — domain 层（脚手架占位，业务后续 Story 填充）。
+ * TailTopia moderation 模块 — domain 层（脚手架占位，业务后续 Story 填充）。
  */
-package com.petgo.moderation.domain;
+package com.tailtopia.moderation.domain;

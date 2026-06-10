@@ -75,8 +75,9 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // 兽医账密登录 + 工作台壳（Story 5.1）。与用户侧 5-Tab 隔离：shell 外顶层路由。
       GoRoute(path: '/vet/login', builder: (c, s) => const VetLoginPage()),
       GoRoute(path: '/vet/workbench', builder: (c, s) => const VetWorkbenchShell()),
-      // 新用户引导流（PetGo Prototype 全面换肤 · FR-11）：欢迎(Momo) → 创建宠物 → 完成。
-      GoRoute(path: '/onboarding', builder: (c, s) => const MintOnboardingPage()),
+      // 新用户引导流（TailTopia Prototype 全面换肤 · FR-11）：欢迎(Momo) → 创建宠物 → 完成。
+      // [临时·勿提交] B 方案：入口暂指向 Story 1.6 规格流（昵称→状态→分叉），看完改回 MintOnboardingPage。
+      GoRoute(path: '/onboarding', redirect: (c, s) => '/onboarding/nickname'),
       // 旧分步引导（昵称 → 宠物状态 → 档案）保留可路由，供后端联动流程复用。
       GoRoute(path: '/onboarding/nickname', builder: (c, s) => const NicknamePage()),
       GoRoute(path: '/onboarding/pet-status', builder: (c, s) => const PetStatusPage()),
@@ -157,7 +158,7 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/me/settings', builder: (c, s) => const SettingsPage()),
       // 语言设置（Story 7.2）。
       GoRoute(path: '/me/language', builder: (c, s) => const LanguageSettingsPage()),
-      // 宠物聚会 Gath（PetGo Prototype 占位页）。shell 外 push。
+      // 宠物聚会 Gath（TailTopia Prototype 占位页）。shell 外 push。
       GoRoute(path: '/gath', builder: (c, s) => const GathPage()),
       // 宠物名片 H5 预览（FR-14）。shell 外 push（全屏浏览器外壳观感）。
       GoRoute(path: '/card/preview', builder: (c, s) => const PetCardPage()),

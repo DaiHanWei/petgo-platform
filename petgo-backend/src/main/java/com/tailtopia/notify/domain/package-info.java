@@ -1,4 +1,4 @@
 /**
- * PetGo notify 模块 — domain 层（脚手架占位，业务后续 Story 填充）。
+ * TailTopia notify 模块 — domain 层（脚手架占位，业务后续 Story 填充）。
  */
-package com.petgo.notify.domain;
+package com.tailtopia.notify.domain;

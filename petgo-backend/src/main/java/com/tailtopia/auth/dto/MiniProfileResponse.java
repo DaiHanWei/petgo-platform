@@ -1,4 +1,4 @@
-package com.petgo.auth.dto;
+package com.tailtopia.auth.dto;
 
 /**
  * 他人迷你主页投影（Story 3.8，FR-26）。Jackson NON_NULL。

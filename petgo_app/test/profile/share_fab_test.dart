@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/profile/presentation/widgets/share_fab.dart';
+import 'package:tailtopia/features/profile/presentation/widgets/share_fab.dart';
 
 void main() {
   testWidgets('点击 FAB 调用 onPressed（AC2 分享触发）', (tester) async {

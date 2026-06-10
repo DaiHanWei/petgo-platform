@@ -1,8 +1,8 @@
-package com.petgo.content.web;
+package com.tailtopia.content.web;
 
-import com.petgo.content.dto.LikeResponse;
-import com.petgo.content.service.LikeService;
-import com.petgo.shared.error.AppException;
+import com.tailtopia.content.dto.LikeResponse;
+import com.tailtopia.content.service.LikeService;
+import com.tailtopia.shared.error.AppException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;

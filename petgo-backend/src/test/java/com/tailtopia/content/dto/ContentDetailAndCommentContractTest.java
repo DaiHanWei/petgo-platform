@@ -1,9 +1,9 @@
-package com.petgo.content.dto;
+package com.tailtopia.content.dto;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.petgo.content.domain.ContentType;
+import com.tailtopia.content.domain.ContentType;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;

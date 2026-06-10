@@ -1,7 +1,7 @@
-package com.petgo.shared.security;
+package com.tailtopia.shared.security;
 
-import com.petgo.admin.service.AdminUserDetailsService;
-import com.petgo.vet.web.BannedVetFilter;
+import com.tailtopia.admin.service.AdminUserDetailsService;
+import com.tailtopia.vet.web.BannedVetFilter;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

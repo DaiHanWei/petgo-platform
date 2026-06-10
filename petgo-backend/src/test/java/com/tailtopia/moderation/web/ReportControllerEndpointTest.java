@@ -1,18 +1,18 @@
-package com.petgo.moderation.web;
+package com.tailtopia.moderation.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.petgo.auth.domain.User;
-import com.petgo.content.domain.ContentPost;
-import com.petgo.content.domain.ContentType;
-import com.petgo.content.repository.ContentPostRepository;
-import com.petgo.moderation.domain.ContentReport;
-import com.petgo.moderation.domain.ReportReason;
-import com.petgo.moderation.domain.ReportStatus;
-import com.petgo.moderation.repository.ContentReportRepository;
-import com.petgo.support.ApiIntegrationTest;
+import com.tailtopia.auth.domain.User;
+import com.tailtopia.content.domain.ContentPost;
+import com.tailtopia.content.domain.ContentType;
+import com.tailtopia.content.repository.ContentPostRepository;
+import com.tailtopia.moderation.domain.ContentReport;
+import com.tailtopia.moderation.domain.ReportReason;
+import com.tailtopia.moderation.domain.ReportStatus;
+import com.tailtopia.moderation.repository.ContentReportRepository;
+import com.tailtopia.support.ApiIntegrationTest;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

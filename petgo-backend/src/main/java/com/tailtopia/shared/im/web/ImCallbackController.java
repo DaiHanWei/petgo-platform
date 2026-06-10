@@ -1,7 +1,7 @@
-package com.petgo.shared.im.web;
+package com.tailtopia.shared.im.web;
 
-import com.petgo.shared.error.AppException;
-import com.petgo.shared.im.TencentImClient;
+import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.im.TencentImClient;
 import java.util.Map;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

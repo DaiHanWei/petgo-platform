@@ -1,4 +1,4 @@
-package com.petgo.shared.media;
+package com.tailtopia.shared.media;
 
 /**
  * STS AssumeRole 调用边界（薄接口）。把真实阿里云 SDK 调用与 {@link StsService} 的

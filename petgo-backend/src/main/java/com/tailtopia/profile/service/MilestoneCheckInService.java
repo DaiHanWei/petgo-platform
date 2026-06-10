@@ -1,17 +1,17 @@
-package com.petgo.profile.service;
+package com.tailtopia.profile.service;
 
-import com.petgo.content.service.ContentService;
-import com.petgo.content.service.GrowthMomentView;
-import com.petgo.profile.domain.MilestoneCompletionSource;
-import com.petgo.profile.domain.MilestoneTriggerType;
-import com.petgo.profile.domain.PetMilestone;
-import com.petgo.profile.domain.PetProfile;
-import com.petgo.profile.dto.MilestoneCheckinCandidateResponse;
-import com.petgo.profile.dto.MilestoneItemResponse;
-import com.petgo.profile.repository.MilestoneCompletionRepository;
-import com.petgo.profile.repository.PetMilestoneRepository;
-import com.petgo.profile.repository.PetProfileRepository;
-import com.petgo.shared.error.AppException;
+import com.tailtopia.content.service.ContentService;
+import com.tailtopia.content.service.GrowthMomentView;
+import com.tailtopia.profile.domain.MilestoneCompletionSource;
+import com.tailtopia.profile.domain.MilestoneTriggerType;
+import com.tailtopia.profile.domain.PetMilestone;
+import com.tailtopia.profile.domain.PetProfile;
+import com.tailtopia.profile.dto.MilestoneCheckinCandidateResponse;
+import com.tailtopia.profile.dto.MilestoneItemResponse;
+import com.tailtopia.profile.repository.MilestoneCompletionRepository;
+import com.tailtopia.profile.repository.PetMilestoneRepository;
+import com.tailtopia.profile.repository.PetProfileRepository;
+import com.tailtopia.shared.error.AppException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -122,7 +122,7 @@ public class MilestoneCheckInService {
     }
 
     private static String titleOf(String code) {
-        var def = com.petgo.profile.domain.MilestoneCatalog.byCode(code);
+        var def = com.tailtopia.profile.domain.MilestoneCatalog.byCode(code);
         return def != null ? def.titleZh() : code;
     }
 }

@@ -2,13 +2,13 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/core/router/deep_link_routes.dart';
-import 'package:petgo/features/notify/data/notification_repository.dart';
-import 'package:petgo/features/notify/domain/notification_deep_link.dart';
-import 'package:petgo/features/notify/domain/notification_item.dart';
-import 'package:petgo/features/notify/presentation/notification_bell.dart';
-import 'package:petgo/features/notify/presentation/notification_center_page.dart';
-import 'package:petgo/l10n/app_localizations.dart';
+import 'package:tailtopia/core/router/deep_link_routes.dart';
+import 'package:tailtopia/features/notify/data/notification_repository.dart';
+import 'package:tailtopia/features/notify/domain/notification_deep_link.dart';
+import 'package:tailtopia/features/notify/domain/notification_item.dart';
+import 'package:tailtopia/features/notify/presentation/notification_bell.dart';
+import 'package:tailtopia/features/notify/presentation/notification_center_page.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 
 class _FakeNotifyRepo extends NotificationRepository {
   _FakeNotifyRepo({this.items = const [], this.unread = 0}) : super(dio: Dio());

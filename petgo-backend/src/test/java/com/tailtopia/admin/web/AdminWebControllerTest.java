@@ -1,4 +1,4 @@
-package com.petgo.admin.web;
+package com.tailtopia.admin.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -8,12 +8,12 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.petgo.admin.dto.SeedPostForm;
-import com.petgo.admin.service.AdminContentService;
-import com.petgo.admin.service.AdminUserDetails;
-import com.petgo.content.domain.ContentType;
-import com.petgo.content.dto.ContentPostResponse;
-import com.petgo.shared.error.AppException;
+import com.tailtopia.admin.dto.SeedPostForm;
+import com.tailtopia.admin.service.AdminContentService;
+import com.tailtopia.admin.service.AdminUserDetails;
+import com.tailtopia.content.domain.ContentType;
+import com.tailtopia.content.dto.ContentPostResponse;
+import com.tailtopia.shared.error.AppException;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,15 +27,15 @@ import org.springframework.validation.BindingResult;
 class AdminWebControllerTest {
 
     private AdminContentService adminContentService;
-    private com.petgo.admin.service.AdminModerationService adminModerationService;
-    private com.petgo.admin.service.AdminVetService adminVetService;
+    private com.tailtopia.admin.service.AdminModerationService adminModerationService;
+    private com.tailtopia.admin.service.AdminVetService adminVetService;
     private AdminWebController controller;
 
     @BeforeEach
     void setUp() {
         adminContentService = mock(AdminContentService.class);
-        adminModerationService = mock(com.petgo.admin.service.AdminModerationService.class);
-        adminVetService = mock(com.petgo.admin.service.AdminVetService.class);
+        adminModerationService = mock(com.tailtopia.admin.service.AdminModerationService.class);
+        adminVetService = mock(com.tailtopia.admin.service.AdminVetService.class);
         controller = new AdminWebController(adminContentService, adminModerationService, adminVetService);
     }
 

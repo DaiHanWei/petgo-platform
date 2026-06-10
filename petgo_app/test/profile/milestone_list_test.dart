@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/profile/data/milestone_repository.dart';
-import 'package:petgo/features/profile/domain/milestone.dart';
-import 'package:petgo/features/profile/presentation/milestone_list_page.dart';
-import 'package:petgo/l10n/app_localizations.dart';
+import 'package:tailtopia/features/profile/data/milestone_repository.dart';
+import 'package:tailtopia/features/profile/domain/milestone.dart';
+import 'package:tailtopia/features/profile/presentation/milestone_list_page.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// L0 widget（Story 8.2 · FR-42）：L/M/S 分区 + 进度 + 徽章彩色/灰锁 + 点击弹层分流 + 失败重试。
 MilestoneList _sample() => const MilestoneList(

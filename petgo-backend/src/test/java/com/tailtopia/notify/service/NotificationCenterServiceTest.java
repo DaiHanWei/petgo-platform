@@ -1,4 +1,4 @@
-package com.petgo.notify.service;
+package com.tailtopia.notify.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -7,10 +7,10 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.petgo.notify.domain.Notification;
-import com.petgo.notify.domain.NotificationType;
-import com.petgo.notify.repository.NotificationRepository;
-import com.petgo.shared.error.AppException;
+import com.tailtopia.notify.domain.Notification;
+import com.tailtopia.notify.domain.NotificationType;
+import com.tailtopia.notify.repository.NotificationRepository;
+import com.tailtopia.shared.error.AppException;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

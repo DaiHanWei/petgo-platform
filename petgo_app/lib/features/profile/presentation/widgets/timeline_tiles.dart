@@ -10,7 +10,7 @@ import '../../domain/timeline_item.dart';
 String _dateLabel(DateTime d) =>
     '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-/// 时间线行：左侧标记点（emoji 圆）+ 右侧卡片（PetGo Prototype 换肤）。
+/// 时间线行：左侧标记点（emoji 圆）+ 右侧卡片（TailTopia Prototype 换肤）。
 class _TimelineRow extends StatelessWidget {
   const _TimelineRow({
     required this.markerEmoji,

@@ -1,4 +1,4 @@
-package com.petgo.content.service;
+package com.tailtopia.content.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -9,14 +9,14 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.petgo.content.domain.ContentLike;
-import com.petgo.content.domain.ContentPost;
-import com.petgo.content.domain.ContentType;
-import com.petgo.content.dto.LikeResponse;
-import com.petgo.content.event.ContentLikedEvent;
-import com.petgo.content.repository.ContentLikeRepository;
-import com.petgo.content.repository.ContentPostRepository;
-import com.petgo.shared.error.AppException;
+import com.tailtopia.content.domain.ContentLike;
+import com.tailtopia.content.domain.ContentPost;
+import com.tailtopia.content.domain.ContentType;
+import com.tailtopia.content.dto.LikeResponse;
+import com.tailtopia.content.event.ContentLikedEvent;
+import com.tailtopia.content.repository.ContentLikeRepository;
+import com.tailtopia.content.repository.ContentPostRepository;
+import com.tailtopia.shared.error.AppException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;

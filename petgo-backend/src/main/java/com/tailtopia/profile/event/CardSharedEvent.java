@@ -1,4 +1,4 @@
-package com.petgo.profile.event;
+package com.tailtopia.profile.event;
 
 import java.time.Instant;
 

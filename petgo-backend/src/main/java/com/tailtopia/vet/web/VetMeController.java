@@ -1,8 +1,8 @@
-package com.petgo.vet.web;
+package com.tailtopia.vet.web;
 
-import com.petgo.shared.error.AppException;
-import com.petgo.vet.dto.VetMeResponse;
-import com.petgo.vet.service.VetAccountService;
+import com.tailtopia.shared.error.AppException;
+import com.tailtopia.vet.dto.VetMeResponse;
+import com.tailtopia.vet.service.VetAccountService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;

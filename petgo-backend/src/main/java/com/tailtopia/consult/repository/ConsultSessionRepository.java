@@ -1,8 +1,8 @@
-package com.petgo.consult.repository;
+package com.tailtopia.consult.repository;
 
-import com.petgo.consult.domain.ConsultSession;
-import com.petgo.consult.domain.RatingPromptState;
-import com.petgo.consult.domain.SessionStatus;
+import com.tailtopia.consult.domain.ConsultSession;
+import com.tailtopia.consult.domain.RatingPromptState;
+import com.tailtopia.consult.domain.SessionStatus;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;

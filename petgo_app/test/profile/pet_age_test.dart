@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/profile/domain/pet_age.dart';
-import 'package:petgo/features/profile/domain/timeline_item.dart';
+import 'package:tailtopia/features/profile/domain/pet_age.dart';
+import 'package:tailtopia/features/profile/domain/timeline_item.dart';
 
 void main() {
   group('computePetAge', () {

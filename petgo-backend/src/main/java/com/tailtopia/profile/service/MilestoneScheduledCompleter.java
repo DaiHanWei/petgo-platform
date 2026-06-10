@@ -1,8 +1,8 @@
-package com.petgo.profile.service;
+package com.tailtopia.profile.service;
 
-import com.petgo.profile.domain.MilestoneCompletionSource;
-import com.petgo.profile.domain.PetProfile;
-import com.petgo.profile.repository.PetProfileRepository;
+import com.tailtopia.profile.domain.MilestoneCompletionSource;
+import com.tailtopia.profile.domain.PetProfile;
+import com.tailtopia.profile.repository.PetProfileRepository;
 import java.time.Duration;
 import java.time.Instant;
 import org.slf4j.Logger;

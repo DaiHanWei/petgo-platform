@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/auth/domain/auth_state.dart';
-import 'package:petgo/features/auth/domain/login_response.dart';
-import 'package:petgo/features/content/data/detail_repository.dart';
-import 'package:petgo/features/content/domain/comment.dart';
-import 'package:petgo/features/content/domain/content_detail.dart';
-import 'package:petgo/features/content/presentation/comment_composer.dart';
-import 'package:petgo/features/content/presentation/comment_section.dart';
-import 'package:petgo/l10n/app_localizations.dart';
-import 'package:petgo/shared/widgets/login_hard_dialog.dart';
+import 'package:tailtopia/features/auth/domain/auth_state.dart';
+import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/features/content/data/detail_repository.dart';
+import 'package:tailtopia/features/content/domain/comment.dart';
+import 'package:tailtopia/features/content/domain/content_detail.dart';
+import 'package:tailtopia/features/content/presentation/comment_composer.dart';
+import 'package:tailtopia/features/content/presentation/comment_section.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/shared/widgets/login_hard_dialog.dart';
 
 Comment _c(int id, int authorId) => Comment(
       id: id,

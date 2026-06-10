@@ -8,4 +8,4 @@ management:
       show-details: always
 logging:
   level:
-    com.petgo: DEBUG
+    com.tailtopia: DEBUG

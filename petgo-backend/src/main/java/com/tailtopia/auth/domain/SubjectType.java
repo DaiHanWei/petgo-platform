@@ -1,4 +1,4 @@
-package com.petgo.auth.domain;
+package com.tailtopia.auth.domain;
 
 /**
  * refresh 令牌主体类型（Story 5.1）。{@code refresh_tokens.user_id} 的命名空间归属：

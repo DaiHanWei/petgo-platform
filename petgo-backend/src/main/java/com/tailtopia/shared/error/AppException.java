@@ -1,4 +1,4 @@
-package com.petgo.shared.error;
+package com.tailtopia.shared.error;
 
 import java.net.URI;
 import org.springframework.http.HttpStatus;

@@ -1,4 +1,4 @@
 /**
- * PetGo shared — media（跨模块基础设施；本 Story 仅 config/error 落实现，其余占位）。
+ * TailTopia shared — media（跨模块基础设施；本 Story 仅 config/error 落实现，其余占位）。
  */
-package com.petgo.shared.media;
+package com.tailtopia.shared.media;

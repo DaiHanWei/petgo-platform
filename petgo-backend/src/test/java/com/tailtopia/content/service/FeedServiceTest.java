@@ -1,4 +1,4 @@
-package com.petgo.content.service;
+package com.tailtopia.content.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -8,13 +8,13 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.petgo.auth.dto.AuthorView;
-import com.petgo.auth.service.AccountQueryService;
-import com.petgo.content.domain.ContentPost;
-import com.petgo.content.domain.ContentType;
-import com.petgo.content.dto.FeedPageResponse;
-import com.petgo.content.repository.ContentLikeRepository;
-import com.petgo.content.repository.ContentPostRepository;
+import com.tailtopia.auth.dto.AuthorView;
+import com.tailtopia.auth.service.AccountQueryService;
+import com.tailtopia.content.domain.ContentPost;
+import com.tailtopia.content.domain.ContentType;
+import com.tailtopia.content.dto.FeedPageResponse;
+import com.tailtopia.content.repository.ContentLikeRepository;
+import com.tailtopia.content.repository.ContentPostRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;

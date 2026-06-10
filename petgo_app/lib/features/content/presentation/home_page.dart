@@ -25,7 +25,7 @@ import 'publish_compose_page.dart';
 import 'report_sheet.dart';
 import '../../../shared/widgets/mini_profile_sheet.dart';
 
-/// 首页 Beranda（PetGo Prototype 全面换肤）。
+/// 首页 Beranda（TailTopia Prototype 全面换肤）。
 ///
 /// 固定问候头（Momo + 时段问候 + 通知铃）；随 Feed 同滚的 Beranda 头部
 /// （快捷入口卡 + 每日记录提示卡 + 「Untukmu」区头 + 分类 Tab）；下方瀑布流 Feed。

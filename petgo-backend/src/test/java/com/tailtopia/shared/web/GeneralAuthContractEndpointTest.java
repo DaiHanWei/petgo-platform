@@ -1,18 +1,18 @@
-package com.petgo.shared.web;
+package com.tailtopia.shared.web;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.petgo.auth.domain.User;
-import com.petgo.support.ApiIntegrationTest;
+import com.tailtopia.auth.domain.User;
+import com.tailtopia.support.ApiIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 
 /**
- * 通用鉴权 / 错误契约集成测试（跨端点的横切保证，放 {@code com.petgo.shared.web}）。
+ * 通用鉴权 / 错误契约集成测试（跨端点的横切保证，放 {@code com.tailtopia.shared.web}）。
  *
  * <p>覆盖三类平台级契约：
  * <ol>

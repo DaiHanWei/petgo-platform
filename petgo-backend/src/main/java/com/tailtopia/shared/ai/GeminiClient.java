@@ -1,4 +1,4 @@
-package com.petgo.shared.ai;
+package com.tailtopia.shared.ai;
 
 import java.util.List;
 

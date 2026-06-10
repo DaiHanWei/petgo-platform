@@ -1,4 +1,4 @@
-# PetGo Platform — Agent 工作约定（本地 + 云端通用）
+# TailTopia Platform — Agent 工作约定（本地 + 云端通用）
 
 > 本文件随仓库 commit，**云端 session（claude.ai/code）clone 后会自动加载**。本地 / 云端 dev agent 都以此为准。
 > 与用户沟通用**中文**。

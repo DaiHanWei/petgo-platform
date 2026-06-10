@@ -1,4 +1,4 @@
-package com.petgo.shared.config;
+package com.tailtopia.shared.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 

@@ -1,4 +1,4 @@
-package com.petgo.shared.security;
+package com.tailtopia.shared.security;
 
 import java.util.Map;
 import org.springframework.context.annotation.Profile;

@@ -2,15 +2,15 @@ import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/core/media/media_scope.dart';
-import 'package:petgo/features/media/data/media_repository.dart';
-import 'package:petgo/features/media/data/oss_uploader.dart';
-import 'package:petgo/features/media/data/sts_credential.dart';
-import 'package:petgo/features/media/domain/media_upload_use_case.dart';
-import 'package:petgo/features/triage/data/triage_repository.dart';
-import 'package:petgo/features/triage/domain/triage_result_controller.dart';
-import 'package:petgo/features/triage/domain/triage_result_state.dart';
-import 'package:petgo/features/triage/domain/triage_upload_controller.dart';
+import 'package:tailtopia/core/media/media_scope.dart';
+import 'package:tailtopia/features/media/data/media_repository.dart';
+import 'package:tailtopia/features/media/data/oss_uploader.dart';
+import 'package:tailtopia/features/media/data/sts_credential.dart';
+import 'package:tailtopia/features/media/domain/media_upload_use_case.dart';
+import 'package:tailtopia/features/triage/data/triage_repository.dart';
+import 'package:tailtopia/features/triage/domain/triage_result_controller.dart';
+import 'package:tailtopia/features/triage/domain/triage_result_state.dart';
+import 'package:tailtopia/features/triage/domain/triage_upload_controller.dart';
 
 class _FakeRepo implements MediaRepository {
   @override

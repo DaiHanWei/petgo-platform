@@ -1,4 +1,4 @@
-package com.petgo.triage.service;
+package com.tailtopia.triage.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -8,15 +8,15 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.petgo.shared.error.AppException;
-import com.petgo.triage.TriageTestSupport;
-import com.petgo.triage.domain.TriageStatus;
-import com.petgo.triage.domain.TriageTask;
-import com.petgo.triage.dto.TriageAcceptedResponse;
-import com.petgo.triage.dto.TriageResultResponse;
-import com.petgo.triage.dto.TriageSubmitRequest;
-import com.petgo.triage.event.TriageSubmittedEvent;
-import com.petgo.triage.repository.TriageTaskRepository;
+import com.tailtopia.shared.error.AppException;
+import com.tailtopia.triage.TriageTestSupport;
+import com.tailtopia.triage.domain.TriageStatus;
+import com.tailtopia.triage.domain.TriageTask;
+import com.tailtopia.triage.dto.TriageAcceptedResponse;
+import com.tailtopia.triage.dto.TriageResultResponse;
+import com.tailtopia.triage.dto.TriageSubmitRequest;
+import com.tailtopia.triage.event.TriageSubmittedEvent;
+import com.tailtopia.triage.repository.TriageTaskRepository;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -72,7 +72,7 @@ class TriageServiceTest {
     @Test
     void getResultReturnsDoneStructureForOwner() {
         TriageTask done = TriageTestSupport.task(5L, 7L, TriageStatus.DONE, "x", null);
-        TriageTestSupport.set(done, "dangerLevel", com.petgo.triage.domain.DangerLevel.YELLOW);
+        TriageTestSupport.set(done, "dangerLevel", com.tailtopia.triage.domain.DangerLevel.YELLOW);
         TriageTestSupport.set(done, "parsedResult",
                 java.util.Map.of("advice", "尽快就医", "disclaimer", "仅供参考"));
         when(tasks.findById(5L)).thenReturn(Optional.of(done));
@@ -80,7 +80,7 @@ class TriageServiceTest {
         TriageResultResponse resp = service.getResult(7L, 5L);
 
         assertThat(resp.status()).isEqualTo(TriageStatus.DONE);
-        assertThat(resp.dangerLevel()).isEqualTo(com.petgo.triage.domain.DangerLevel.YELLOW);
+        assertThat(resp.dangerLevel()).isEqualTo(com.tailtopia.triage.domain.DangerLevel.YELLOW);
         assertThat(resp.advice()).isEqualTo("尽快就医");
     }
 

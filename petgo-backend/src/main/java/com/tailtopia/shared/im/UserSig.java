@@ -1,4 +1,4 @@
-package com.petgo.shared.im;
+package com.tailtopia.shared.im;
 
 /**
  * IM UserSig 签发结果（Story 5.5）。客户端 SDK 用 {@code userSig} + {@code sdkAppId} 登录 IM。

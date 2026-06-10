@@ -1,8 +1,8 @@
-package com.petgo.notify.web;
+package com.tailtopia.notify.web;
 
-import com.petgo.notify.dto.NotificationPage;
-import com.petgo.notify.service.NotificationCenterService;
-import com.petgo.shared.error.AppException;
+import com.tailtopia.notify.dto.NotificationPage;
+import com.tailtopia.notify.service.NotificationCenterService;
+import com.tailtopia.shared.error.AppException;
 import java.util.Map;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;

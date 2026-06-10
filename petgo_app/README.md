@@ -1,6 +1,6 @@
 # petgo_app
 
-PetGo 移动端 —— Flutter 3.44.x / Dart 3.12，Riverpod + go_router，feature-first 结构，portrait-only，V1 仅浅色，双语（id / en）。
+TailTopia 移动端 —— Flutter 3.44.x / Dart 3.12，Riverpod + go_router，feature-first 结构，portrait-only，V1 仅浅色，双语（id / en）。
 
 ## 前置
 

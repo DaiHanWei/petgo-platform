@@ -1,4 +1,4 @@
-package com.petgo.shared.error;
+package com.tailtopia.shared.error;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;

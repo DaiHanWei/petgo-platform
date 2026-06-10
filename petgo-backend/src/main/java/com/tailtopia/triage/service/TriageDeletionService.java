@@ -1,8 +1,8 @@
-package com.petgo.triage.service;
+package com.tailtopia.triage.service;
 
-import com.petgo.shared.media.PersonalMedia;
-import com.petgo.triage.domain.TriageTask;
-import com.petgo.triage.repository.TriageTaskRepository;
+import com.tailtopia.shared.media.PersonalMedia;
+import com.tailtopia.triage.domain.TriageTask;
+import com.tailtopia.triage.repository.TriageTaskRepository;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Service;

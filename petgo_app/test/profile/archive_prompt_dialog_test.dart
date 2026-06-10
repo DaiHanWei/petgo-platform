@@ -2,16 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:petgo/features/auth/data/me_repository.dart';
-import 'package:petgo/features/auth/domain/auth_state.dart';
-import 'package:petgo/features/auth/domain/login_response.dart';
-import 'package:petgo/features/profile/data/health_event_repository.dart';
-import 'package:petgo/features/profile/data/profile_repository.dart';
-import 'package:petgo/features/profile/domain/pending_archive.dart';
-import 'package:petgo/features/profile/domain/pet_profile.dart';
-import 'package:petgo/features/profile/presentation/archive_prompt_dialog.dart';
-import 'package:petgo/features/profile/presentation/pet_profile_create_page.dart';
-import 'package:petgo/l10n/app_localizations.dart';
+import 'package:tailtopia/features/auth/data/me_repository.dart';
+import 'package:tailtopia/features/auth/domain/auth_state.dart';
+import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/features/profile/data/health_event_repository.dart';
+import 'package:tailtopia/features/profile/data/profile_repository.dart';
+import 'package:tailtopia/features/profile/domain/pending_archive.dart';
+import 'package:tailtopia/features/profile/domain/pet_profile.dart';
+import 'package:tailtopia/features/profile/presentation/archive_prompt_dialog.dart';
+import 'package:tailtopia/features/profile/presentation/pet_profile_create_page.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 
 class _FakeHealthRepo implements HealthEventRepository {
   final List<({String sourceRef, int petId, ArchiveDecision decision})> calls = [];

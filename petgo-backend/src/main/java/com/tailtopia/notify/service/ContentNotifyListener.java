@@ -1,9 +1,9 @@
-package com.petgo.notify.service;
+package com.tailtopia.notify.service;
 
-import com.petgo.content.event.ContentCommentedEvent;
-import com.petgo.content.event.ContentLikedEvent;
-import com.petgo.content.event.ContentRemovedEvent;
-import com.petgo.notify.domain.NotificationType;
+import com.tailtopia.content.event.ContentCommentedEvent;
+import com.tailtopia.content.event.ContentLikedEvent;
+import com.tailtopia.content.event.ContentRemovedEvent;
+import com.tailtopia.notify.domain.NotificationType;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionalEventListener;
 

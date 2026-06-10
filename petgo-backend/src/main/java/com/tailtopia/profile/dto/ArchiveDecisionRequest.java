@@ -1,7 +1,7 @@
-package com.petgo.profile.dto;
+package com.tailtopia.profile.dto;
 
-import com.petgo.profile.domain.ArchiveDecision;
-import com.petgo.profile.domain.HealthSourceType;
+import com.tailtopia.profile.domain.ArchiveDecision;
+import com.tailtopia.profile.domain.HealthSourceType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.time.LocalDate;

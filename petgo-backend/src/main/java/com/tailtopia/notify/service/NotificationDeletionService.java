@@ -1,6 +1,6 @@
-package com.petgo.notify.service;
+package com.tailtopia.notify.service;
 
-import com.petgo.notify.repository.NotificationRepository;
+import com.tailtopia.notify.repository.NotificationRepository;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

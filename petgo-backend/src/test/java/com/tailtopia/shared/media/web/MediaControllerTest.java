@@ -1,4 +1,4 @@
-package com.petgo.shared.media.web;
+package com.tailtopia.shared.media.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -9,12 +9,12 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.petgo.shared.error.AppException;
-import com.petgo.shared.media.MediaScope;
-import com.petgo.shared.media.StsService;
-import com.petgo.shared.media.dto.StsCredentialRequest;
-import com.petgo.shared.media.dto.StsCredentialResponse;
-import com.petgo.shared.ratelimit.RedisRateLimiter;
+import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.media.MediaScope;
+import com.tailtopia.shared.media.StsService;
+import com.tailtopia.shared.media.dto.StsCredentialRequest;
+import com.tailtopia.shared.media.dto.StsCredentialResponse;
+import com.tailtopia.shared.ratelimit.RedisRateLimiter;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.oauth2.jwt.Jwt;

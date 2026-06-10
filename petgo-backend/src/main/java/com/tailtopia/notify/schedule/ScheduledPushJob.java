@@ -1,7 +1,7 @@
-package com.petgo.notify.schedule;
+package com.tailtopia.notify.schedule;
 
-import com.petgo.profile.dto.PetProfileSnapshot;
-import com.petgo.profile.service.PetProfileQueryService;
+import com.tailtopia.profile.dto.PetProfileSnapshot;
+import com.tailtopia.profile.service.PetProfileQueryService;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;

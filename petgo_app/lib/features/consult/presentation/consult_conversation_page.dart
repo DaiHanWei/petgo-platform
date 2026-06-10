@@ -124,7 +124,7 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
       body: SafeArea(
         child: Column(
           children: [
-            // 免责提示常驻（NFR-9 / UX-DR14：克制、双语、显著位）。PetGo Prototype 金色条。
+            // 免责提示常驻（NFR-9 / UX-DR14：克制、双语、显著位）。TailTopia Prototype 金色条。
             Container(
               key: const ValueKey('consultDisclaimerBanner'),
               width: double.infinity,

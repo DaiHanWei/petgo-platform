@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/profile/domain/profile_prompt_state.dart';
+import 'package:tailtopia/features/profile/domain/profile_prompt_state.dart';
 
 void main() {
   ProfilePromptState s({

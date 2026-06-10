@@ -2,14 +2,14 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/core/network/dio_client.dart';
-import 'package:petgo/core/storage/secure_storage.dart';
-import 'package:petgo/features/auth/data/auth_repository.dart';
-import 'package:petgo/features/auth/data/google_auth_client.dart';
-import 'package:petgo/features/auth/domain/auth_state.dart';
-import 'package:petgo/features/auth/domain/login_response.dart';
-import 'package:petgo/features/auth/presentation/login_page.dart';
-import 'package:petgo/l10n/app_localizations.dart';
+import 'package:tailtopia/core/network/dio_client.dart';
+import 'package:tailtopia/core/storage/secure_storage.dart';
+import 'package:tailtopia/features/auth/data/auth_repository.dart';
+import 'package:tailtopia/features/auth/data/google_auth_client.dart';
+import 'package:tailtopia/features/auth/domain/auth_state.dart';
+import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/features/auth/presentation/login_page.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 
 Future<void> _pump(WidgetTester tester, Locale locale) async {
   await tester.pumpWidget(ProviderScope(

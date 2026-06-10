@@ -1,25 +1,25 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/core/mock/mock_backend.dart';
+import 'package:tailtopia/core/mock/mock_backend.dart';
 
 // 被对账的 App 侧 DTO（真 fromJson）。
-import 'package:petgo/features/auth/domain/login_response.dart';
-import 'package:petgo/features/consult/domain/consult_history_item.dart';
-import 'package:petgo/features/consult/domain/consult_session.dart';
-import 'package:petgo/features/content/data/like_repository.dart';
-import 'package:petgo/features/content/data/mini_profile_repository.dart';
-import 'package:petgo/features/content/domain/comment.dart';
-import 'package:petgo/features/content/domain/content_detail.dart';
-import 'package:petgo/features/content/domain/feed_item.dart';
-import 'package:petgo/features/me/data/my_posts_repository.dart';
-import 'package:petgo/features/media/data/sts_credential.dart';
-import 'package:petgo/features/notify/data/app_version_repository.dart';
-import 'package:petgo/features/notify/domain/notification_item.dart';
-import 'package:petgo/features/profile/domain/milestone.dart';
-import 'package:petgo/features/profile/domain/pet_profile.dart';
-import 'package:petgo/features/profile/domain/timeline_item.dart';
-import 'package:petgo/features/triage/data/triage_repository.dart';
-import 'package:petgo/features/vet/domain/vet_login_response.dart';
+import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/features/consult/domain/consult_history_item.dart';
+import 'package:tailtopia/features/consult/domain/consult_session.dart';
+import 'package:tailtopia/features/content/data/like_repository.dart';
+import 'package:tailtopia/features/content/data/mini_profile_repository.dart';
+import 'package:tailtopia/features/content/domain/comment.dart';
+import 'package:tailtopia/features/content/domain/content_detail.dart';
+import 'package:tailtopia/features/content/domain/feed_item.dart';
+import 'package:tailtopia/features/me/data/my_posts_repository.dart';
+import 'package:tailtopia/features/media/data/sts_credential.dart';
+import 'package:tailtopia/features/notify/data/app_version_repository.dart';
+import 'package:tailtopia/features/notify/domain/notification_item.dart';
+import 'package:tailtopia/features/profile/domain/milestone.dart';
+import 'package:tailtopia/features/profile/domain/pet_profile.dart';
+import 'package:tailtopia/features/profile/domain/timeline_item.dart';
+import 'package:tailtopia/features/triage/data/triage_repository.dart';
+import 'package:tailtopia/features/vet/domain/vet_login_response.dart';
 
 /// L0 契约对账（CROSS-STORY-DECISIONS C5 ②：**App mock ↔ data DTO 字段一致**）。
 ///

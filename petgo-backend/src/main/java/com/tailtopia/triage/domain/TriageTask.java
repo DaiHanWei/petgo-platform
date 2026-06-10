@@ -1,4 +1,4 @@
-package com.petgo.triage.domain;
+package com.tailtopia.triage.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

@@ -1,4 +1,4 @@
-package com.petgo.shared.ratelimit;
+package com.tailtopia.shared.ratelimit;
 
 import java.time.Duration;
 import java.util.Optional;

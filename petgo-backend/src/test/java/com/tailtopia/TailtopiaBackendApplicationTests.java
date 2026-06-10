@@ -1,10 +1,10 @@
-package com.petgo;
+package com.tailtopia;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
-class PetgoBackendApplicationTests {
+class TailtopiaBackendApplicationTests {
 
 	@Test
 	void contextLoads() {

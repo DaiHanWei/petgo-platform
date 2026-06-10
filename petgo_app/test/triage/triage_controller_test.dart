@@ -1,8 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/triage/data/triage_repository.dart';
-import 'package:petgo/features/triage/domain/triage_result_controller.dart';
-import 'package:petgo/features/triage/domain/triage_result_state.dart';
+import 'package:tailtopia/features/triage/data/triage_repository.dart';
+import 'package:tailtopia/features/triage/domain/triage_result_controller.dart';
+import 'package:tailtopia/features/triage/domain/triage_result_state.dart';
 
 /// 可编排的假仓储：按序返回轮询结果，记录提交参数。
 class _FakeTriageRepo implements TriageRepository {

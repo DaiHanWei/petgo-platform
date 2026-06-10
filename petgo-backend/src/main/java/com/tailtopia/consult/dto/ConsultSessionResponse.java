@@ -1,6 +1,6 @@
-package com.petgo.consult.dto;
+package com.tailtopia.consult.dto;
 
-import com.petgo.consult.domain.ConsultSession;
+import com.tailtopia.consult.domain.ConsultSession;
 
 /**
  * 咨询会话视图（Story 5.3）。

@@ -1,9 +1,9 @@
-package com.petgo.notify.schedule;
+package com.tailtopia.notify.schedule;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.petgo.notify.domain.NotificationType;
-import com.petgo.profile.dto.PetProfileSnapshot;
+import com.tailtopia.notify.domain.NotificationType;
+import com.tailtopia.profile.dto.PetProfileSnapshot;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;

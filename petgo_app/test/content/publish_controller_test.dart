@@ -2,9 +2,9 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/content/data/content_repository.dart';
-import 'package:petgo/features/content/domain/content_type.dart';
-import 'package:petgo/features/content/domain/publish_controller.dart';
+import 'package:tailtopia/features/content/data/content_repository.dart';
+import 'package:tailtopia/features/content/domain/content_type.dart';
+import 'package:tailtopia/features/content/domain/publish_controller.dart';
 
 class _FakeRepo implements ContentRepository {
   ContentType? lastType;

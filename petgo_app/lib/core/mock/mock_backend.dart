@@ -302,7 +302,7 @@ class MockBackend {
     if (m == 'POST' && p.endsWith('/auth/google')) {
       return ok({
         'accessToken': 'mock-access', 'refreshToken': 'mock-refresh',
-        'role': 'USER', 'isNewUser': false, 'onboardingCompleted': true,
+        'role': 'USER', 'isNewUser': true, 'onboardingCompleted': false,
         'profile': _profile,
       });
     }

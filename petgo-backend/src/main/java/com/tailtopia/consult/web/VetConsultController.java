@@ -1,12 +1,12 @@
-package com.petgo.consult.web;
+package com.tailtopia.consult.web;
 
-import com.petgo.consult.dto.ConsultAssistResponse;
-import com.petgo.consult.dto.VetInboxItem;
-import com.petgo.consult.dto.VetSessionView;
-import com.petgo.consult.service.ConsultAcceptService;
-import com.petgo.consult.service.ConsultCloseService;
-import com.petgo.consult.service.VetConsultService;
-import com.petgo.shared.error.AppException;
+import com.tailtopia.consult.dto.ConsultAssistResponse;
+import com.tailtopia.consult.dto.VetInboxItem;
+import com.tailtopia.consult.dto.VetSessionView;
+import com.tailtopia.consult.service.ConsultAcceptService;
+import com.tailtopia.consult.service.ConsultCloseService;
+import com.tailtopia.consult.service.VetConsultService;
+import com.tailtopia.shared.error.AppException;
 import java.util.List;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;

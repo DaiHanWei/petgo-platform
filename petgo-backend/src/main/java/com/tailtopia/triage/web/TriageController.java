@@ -1,11 +1,11 @@
-package com.petgo.triage.web;
+package com.tailtopia.triage.web;
 
-import com.petgo.shared.error.AppException;
-import com.petgo.shared.ratelimit.RedisRateLimiter;
-import com.petgo.triage.dto.TriageAcceptedResponse;
-import com.petgo.triage.dto.TriageResultResponse;
-import com.petgo.triage.dto.TriageSubmitRequest;
-import com.petgo.triage.service.TriageService;
+import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.ratelimit.RedisRateLimiter;
+import com.tailtopia.triage.dto.TriageAcceptedResponse;
+import com.tailtopia.triage.dto.TriageResultResponse;
+import com.tailtopia.triage.dto.TriageSubmitRequest;
+import com.tailtopia.triage.service.TriageService;
 import jakarta.validation.Valid;
 import java.time.Duration;
 import org.springframework.http.HttpStatus;

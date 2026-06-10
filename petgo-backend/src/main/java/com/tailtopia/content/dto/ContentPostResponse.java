@@ -1,7 +1,7 @@
-package com.petgo.content.dto;
+package com.tailtopia.content.dto;
 
-import com.petgo.content.domain.ContentPost;
-import com.petgo.content.domain.ContentType;
+import com.tailtopia.content.domain.ContentPost;
+import com.tailtopia.content.domain.ContentType;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;

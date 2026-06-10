@@ -1,21 +1,21 @@
-package com.petgo.consult.service;
+package com.tailtopia.consult.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
-import com.petgo.consult.domain.ConsultRating;
-import com.petgo.consult.domain.ConsultSession;
-import com.petgo.consult.domain.ConsultSource;
-import com.petgo.consult.dto.ConsultHistoryPage;
-import com.petgo.consult.repository.ConsultRatingRepository;
-import com.petgo.consult.repository.ConsultSessionRepository;
-import com.petgo.triage.domain.DangerLevel;
-import com.petgo.triage.dto.TriageHistoryItem;
-import com.petgo.triage.service.TriageService;
-import com.petgo.vet.domain.VetAccount;
-import com.petgo.vet.service.VetAccountService;
+import com.tailtopia.consult.domain.ConsultRating;
+import com.tailtopia.consult.domain.ConsultSession;
+import com.tailtopia.consult.domain.ConsultSource;
+import com.tailtopia.consult.dto.ConsultHistoryPage;
+import com.tailtopia.consult.repository.ConsultRatingRepository;
+import com.tailtopia.consult.repository.ConsultSessionRepository;
+import com.tailtopia.triage.domain.DangerLevel;
+import com.tailtopia.triage.dto.TriageHistoryItem;
+import com.tailtopia.triage.service.TriageService;
+import com.tailtopia.vet.domain.VetAccount;
+import com.tailtopia.vet.service.VetAccountService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;

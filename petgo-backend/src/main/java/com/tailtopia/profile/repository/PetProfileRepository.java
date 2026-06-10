@@ -1,6 +1,6 @@
-package com.petgo.profile.repository;
+package com.tailtopia.profile.repository;
 
-import com.petgo.profile.domain.PetProfile;
+import com.tailtopia.profile.domain.PetProfile;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;

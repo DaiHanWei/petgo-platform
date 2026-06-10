@@ -1,13 +1,13 @@
-package com.petgo.consult.service;
+package com.tailtopia.consult.service;
 
-import com.petgo.consult.domain.ConsultSession;
-import com.petgo.consult.domain.SessionStatus;
-import com.petgo.consult.dto.ConsultAssistResponse;
-import com.petgo.consult.dto.VetInboxItem;
-import com.petgo.consult.dto.VetSessionView;
-import com.petgo.consult.event.VetRepliedEvent;
-import com.petgo.consult.repository.ConsultSessionRepository;
-import com.petgo.shared.error.AppException;
+import com.tailtopia.consult.domain.ConsultSession;
+import com.tailtopia.consult.domain.SessionStatus;
+import com.tailtopia.consult.dto.ConsultAssistResponse;
+import com.tailtopia.consult.dto.VetInboxItem;
+import com.tailtopia.consult.dto.VetSessionView;
+import com.tailtopia.consult.event.VetRepliedEvent;
+import com.tailtopia.consult.repository.ConsultSessionRepository;
+import com.tailtopia.shared.error.AppException;
 import java.util.List;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -52,7 +52,7 @@ public class VetConsultService {
         return queue.waitingSessionIds().stream()
                 .map(repo::findById)
                 .flatMap(java.util.Optional::stream)
-                .filter(s -> s.getStatus() == com.petgo.consult.domain.SessionStatus.WAITING)
+                .filter(s -> s.getStatus() == com.tailtopia.consult.domain.SessionStatus.WAITING)
                 .map(VetInboxItem::of)
                 .toList();
     }

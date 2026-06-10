@@ -1,10 +1,10 @@
-package com.petgo.consult.service;
+package com.tailtopia.consult.service;
 
-import com.petgo.consult.domain.ConsultSession;
-import com.petgo.consult.dto.ConsultAiContextResponse;
-import com.petgo.consult.repository.ConsultSessionRepository;
-import com.petgo.shared.error.AppException;
-import com.petgo.shared.media.SignedUrlService;
+import com.tailtopia.consult.domain.ConsultSession;
+import com.tailtopia.consult.dto.ConsultAiContextResponse;
+import com.tailtopia.consult.repository.ConsultSessionRepository;
+import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.media.SignedUrlService;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

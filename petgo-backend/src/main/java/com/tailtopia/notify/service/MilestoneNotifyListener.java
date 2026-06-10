@@ -1,8 +1,8 @@
-package com.petgo.notify.service;
+package com.tailtopia.notify.service;
 
-import com.petgo.notify.domain.NotificationType;
-import com.petgo.profile.domain.MilestoneLevel;
-import com.petgo.profile.event.MilestoneCompletedEvent;
+import com.tailtopia.notify.domain.NotificationType;
+import com.tailtopia.profile.domain.MilestoneLevel;
+import com.tailtopia.profile.event.MilestoneCompletedEvent;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionalEventListener;

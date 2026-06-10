@@ -1,10 +1,10 @@
-package com.petgo.auth.web;
+package com.tailtopia.auth.web;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.petgo.support.ApiIntegrationTest;
+import com.tailtopia.support.ApiIntegrationTest;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;

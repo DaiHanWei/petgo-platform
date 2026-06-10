@@ -1,13 +1,13 @@
-package com.petgo.profile.service;
+package com.tailtopia.profile.service;
 
-import com.petgo.profile.domain.HealthEvent;
-import com.petgo.profile.domain.PetMilestone;
-import com.petgo.profile.domain.PetProfile;
-import com.petgo.profile.repository.HealthEventRepository;
-import com.petgo.profile.repository.MilestoneCompletionRepository;
-import com.petgo.profile.repository.PetMilestoneRepository;
-import com.petgo.profile.repository.PetProfileRepository;
-import com.petgo.shared.media.PersonalMedia;
+import com.tailtopia.profile.domain.HealthEvent;
+import com.tailtopia.profile.domain.PetMilestone;
+import com.tailtopia.profile.domain.PetProfile;
+import com.tailtopia.profile.repository.HealthEventRepository;
+import com.tailtopia.profile.repository.MilestoneCompletionRepository;
+import com.tailtopia.profile.repository.PetMilestoneRepository;
+import com.tailtopia.profile.repository.PetProfileRepository;
+import com.tailtopia.shared.media.PersonalMedia;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;

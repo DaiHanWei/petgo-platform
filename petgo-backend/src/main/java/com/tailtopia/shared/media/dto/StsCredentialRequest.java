@@ -1,4 +1,4 @@
-package com.petgo.shared.media.dto;
+package com.tailtopia.shared.media.dto;
 
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -12,7 +12,7 @@ import jakarta.validation.constraints.NotNull;
  * @param count       本批拟上传张数（1..9，默认 1）
  */
 public record StsCredentialRequest(
-        @NotNull(message = "scope 不能为空") com.petgo.shared.media.MediaScope scope,
+        @NotNull(message = "scope 不能为空") com.tailtopia.shared.media.MediaScope scope,
         String contentType,
         @Min(value = 1, message = "count 至少为 1") @Max(value = 9, message = "count 最多 9") Integer count) {
 }

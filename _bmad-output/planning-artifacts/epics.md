@@ -5,13 +5,13 @@ inputDocuments:
   - _bmad-output/planning-artifacts/architecture.md
   - _bmad-output/planning-artifacts/UX_DESIGN.md
   - _bmad-output/planning-artifacts/UX_EXPERIENCE.md
-  - _bmad-output/planning-artifacts/PetGo_V1_mockups.html
-project_name: 'PetGo V1.0'
+  - _bmad-output/planning-artifacts/TailTopia_V1_mockups.html
+project_name: 'TailTopia V1.0'
 user_name: 'Dai'
 date: '2026-06-01'
 ---
 
-# PetGo V1.0 - Epic Breakdown
+# TailTopia V1.0 - Epic Breakdown
 
 ## Overview
 
@@ -113,7 +113,7 @@ date: '2026-06-01'
 > 来源：architecture.md（Starter / 数据 / 基建 / 模式 / Gap 处置）。这些技术与基建要求直接塑形 Story 拆分与序列，尤其影响 Epic 1（脚手架与地基）。
 
 **脚手架（架构指定为「实现阶段第一个 Story」）**
-- 移动端：`flutter create --org com.petgo --project-name petgo petgo_app` + Riverpod + go_router + dio + intl/flutter_localizations（id/en，Day-1）+ flutter_lints。
+- 移动端：`flutter create --org com.tailtopia --project-name petgo petgo_app` + Riverpod + go_router + dio + intl/flutter_localizations（id/en，Day-1）+ flutter_lints。
 - 后端：`spring init`（Maven / Spring Boot 4.0.x / Java 21 LTS）依赖 web,validation,data-jpa,postgresql,data-redis,oauth2-resource-server,security,thymeleaf,actuator,flyway,lombok。
 - 基建骨架：Docker Compose（app + PostgreSQL + Redis，德国单机 45.90.122.44）+ Cloudflare 前置接入 + GitHub Actions CI 骨架。
 
@@ -134,7 +134,7 @@ date: '2026-06-01'
 - `triage/service/SafetyRuleLayer` + `resources/safety/high_risk_symptoms.yml`（兽医顾问维护）；后置强制升红，只升不降，绝不被绕过。
 
 **运营/Admin slice（Gap G-1 补齐）**
-- 新增 `com.petgo.admin/`：`role=ADMIN` 受保护端点 + 极简 Thymeleaf 后台，复用各模块 service，承载：兽医账号 CRUD（FR-29）、举报工单处理/人工下架（FR-25）、种子内容发帖（FR-18）、评分查看（FR-33）、封禁兽医（FR-19）。不做独立系统。
+- 新增 `com.tailtopia.admin/`：`role=ADMIN` 受保护端点 + 极简 Thymeleaf 后台，复用各模块 service，承载：兽医账号 CRUD（FR-29）、举报工单处理/人工下架（FR-25）、种子内容发帖（FR-18）、评分查看（FR-33）、封禁兽医（FR-19）。不做独立系统。
 
 **H5 名片与部署**
 - H5 名片：Thymeleaf `GET /p/{cardToken}` 服务端直出 + OG/Twitter meta + noindex；生成卡片即预渲染 OG 静态图存公开桶。
@@ -275,7 +275,7 @@ So that 团队能在统一约定（命名/分层/错误规范）上"改一行就
 **Acceptance Criteria:**
 
 **Given** 干净的开发环境
-**When** 执行架构文档指定的两条 init 命令（`flutter create --org com.petgo` + Riverpod/go_router/dio/intl/flutter_lints；`spring init` Maven/SB4.0.x/Java21 含 web,validation,data-jpa,postgresql,data-redis,oauth2-resource-server,security,thymeleaf,actuator,flyway,lombok）
+**When** 执行架构文档指定的两条 init 命令（`flutter create --org com.tailtopia` + Riverpod/go_router/dio/intl/flutter_lints；`spring init` Maven/SB4.0.x/Java21 含 web,validation,data-jpa,postgresql,data-redis,oauth2-resource-server,security,thymeleaf,actuator,flyway,lombok）
 **Then** 生成的两套工程均能本地启动：`flutter run` 出空白首页、后端 `mvn spring-boot:run` 启动成功
 **And** 后端按 8 模块 + shared 的 package-by-feature→layer 目录骨架建立，前端按 core/shared/features 骨架建立
 

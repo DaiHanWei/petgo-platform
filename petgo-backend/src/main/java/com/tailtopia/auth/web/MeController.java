@@ -1,9 +1,9 @@
-package com.petgo.auth.web;
+package com.tailtopia.auth.web;
 
-import com.petgo.auth.dto.UpdateMeRequest;
-import com.petgo.auth.dto.UserProfileResponse;
-import com.petgo.auth.service.MeService;
-import com.petgo.shared.error.AppException;
+import com.tailtopia.auth.dto.UpdateMeRequest;
+import com.tailtopia.auth.dto.UserProfileResponse;
+import com.tailtopia.auth.service.MeService;
+import com.tailtopia.shared.error.AppException;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;

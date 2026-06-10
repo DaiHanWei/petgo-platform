@@ -1,7 +1,7 @@
-package com.petgo.notify.service;
+package com.tailtopia.notify.service;
 
-import com.petgo.shared.im.ImAccountMapper;
-import com.petgo.shared.im.TencentImClient;
+import com.tailtopia.shared.im.ImAccountMapper;
+import com.tailtopia.shared.im.TencentImClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;

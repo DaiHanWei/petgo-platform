@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/core/storage/prefs.dart';
-import 'package:petgo/features/notify/domain/push_permission_gate.dart';
+import 'package:tailtopia/core/storage/prefs.dart';
+import 'package:tailtopia/features/notify/domain/push_permission_gate.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Story 6.4 J4：推送权限双时机门控（首启不触发 / 首次问诊完成或建档完成且未问过才触发 / 已问过不再弹）+ 持久化。

@@ -1,7 +1,7 @@
-package com.petgo.auth.repository;
+package com.tailtopia.auth.repository;
 
-import com.petgo.auth.domain.Role;
-import com.petgo.auth.domain.User;
+import com.tailtopia.auth.domain.Role;
+import com.tailtopia.auth.domain.User;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 

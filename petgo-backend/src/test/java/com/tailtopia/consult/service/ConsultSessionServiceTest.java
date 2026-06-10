@@ -1,4 +1,4 @@
-package com.petgo.consult.service;
+package com.tailtopia.consult.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -8,15 +8,15 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.petgo.consult.domain.ConsultSession;
-import com.petgo.consult.domain.ConsultSource;
-import com.petgo.consult.domain.SessionStatus;
-import com.petgo.consult.repository.ConsultSessionRepository;
-import com.petgo.consult.service.ConsultSessionService.CreateResult;
-import com.petgo.shared.error.AppException;
-import com.petgo.triage.domain.DangerLevel;
-import com.petgo.triage.dto.TriageUpgradeContext;
-import com.petgo.triage.service.TriageService;
+import com.tailtopia.consult.domain.ConsultSession;
+import com.tailtopia.consult.domain.ConsultSource;
+import com.tailtopia.consult.domain.SessionStatus;
+import com.tailtopia.consult.repository.ConsultSessionRepository;
+import com.tailtopia.consult.service.ConsultSessionService.CreateResult;
+import com.tailtopia.shared.error.AppException;
+import com.tailtopia.triage.domain.DangerLevel;
+import com.tailtopia.triage.dto.TriageUpgradeContext;
+import com.tailtopia.triage.service.TriageService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;

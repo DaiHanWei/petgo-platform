@@ -1,9 +1,9 @@
-package com.petgo.content.web;
+package com.tailtopia.content.web;
 
-import com.petgo.content.dto.CommentCreateRequest;
-import com.petgo.content.dto.CommentResponse;
-import com.petgo.content.service.CommentService;
-import com.petgo.shared.error.AppException;
+import com.tailtopia.content.dto.CommentCreateRequest;
+import com.tailtopia.content.dto.CommentResponse;
+import com.tailtopia.content.service.CommentService;
+import com.tailtopia.shared.error.AppException;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;

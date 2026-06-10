@@ -1,7 +1,7 @@
-package com.petgo.consult.service;
+package com.tailtopia.consult.service;
 
-import com.petgo.consult.dto.ConsultAvailabilityResponse;
-import com.petgo.vet.service.VetPresenceService;
+import com.tailtopia.consult.dto.ConsultAvailabilityResponse;
+import com.tailtopia.vet.service.VetPresenceService;
 import org.springframework.stereotype.Service;
 
 /**

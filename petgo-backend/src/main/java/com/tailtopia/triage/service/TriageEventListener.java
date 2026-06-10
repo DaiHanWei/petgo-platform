@@ -1,6 +1,6 @@
-package com.petgo.triage.service;
+package com.tailtopia.triage.service;
 
-import com.petgo.triage.event.TriageSubmittedEvent;
+import com.tailtopia.triage.event.TriageSubmittedEvent;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;

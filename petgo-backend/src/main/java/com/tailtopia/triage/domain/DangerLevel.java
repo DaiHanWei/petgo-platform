@@ -1,4 +1,4 @@
-package com.petgo.triage.domain;
+package com.tailtopia.triage.domain;
 
 /**
  * 分诊危险级别（Story 4.1）。落库 varchar + UPPER_SNAKE。

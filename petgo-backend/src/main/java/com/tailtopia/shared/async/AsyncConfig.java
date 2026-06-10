@@ -1,4 +1,4 @@
-package com.petgo.shared.async;
+package com.tailtopia.shared.async;
 
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableAsync;

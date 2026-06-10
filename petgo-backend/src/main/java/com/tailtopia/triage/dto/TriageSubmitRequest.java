@@ -1,4 +1,4 @@
-package com.petgo.triage.dto;
+package com.tailtopia.triage.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;

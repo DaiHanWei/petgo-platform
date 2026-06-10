@@ -1,15 +1,15 @@
-package com.petgo.consult.service;
+package com.tailtopia.consult.service;
 
-import com.petgo.consult.domain.ConsultRating;
-import com.petgo.consult.domain.ConsultSession;
-import com.petgo.consult.domain.SessionStatus;
-import com.petgo.consult.dto.ConsultHistoryItem;
-import com.petgo.consult.dto.ConsultHistoryPage;
-import com.petgo.consult.repository.ConsultRatingRepository;
-import com.petgo.consult.repository.ConsultSessionRepository;
-import com.petgo.triage.dto.TriageHistoryItem;
-import com.petgo.triage.service.TriageService;
-import com.petgo.vet.service.VetAccountService;
+import com.tailtopia.consult.domain.ConsultRating;
+import com.tailtopia.consult.domain.ConsultSession;
+import com.tailtopia.consult.domain.SessionStatus;
+import com.tailtopia.consult.dto.ConsultHistoryItem;
+import com.tailtopia.consult.dto.ConsultHistoryPage;
+import com.tailtopia.consult.repository.ConsultRatingRepository;
+import com.tailtopia.consult.repository.ConsultSessionRepository;
+import com.tailtopia.triage.dto.TriageHistoryItem;
+import com.tailtopia.triage.service.TriageService;
+import com.tailtopia.vet.service.VetAccountService;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;

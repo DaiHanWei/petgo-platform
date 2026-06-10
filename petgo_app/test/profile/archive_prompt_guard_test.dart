@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/profile/data/health_event_repository.dart';
-import 'package:petgo/features/profile/domain/archive_prompt_guard.dart';
+import 'package:tailtopia/features/profile/data/health_event_repository.dart';
+import 'package:tailtopia/features/profile/domain/archive_prompt_guard.dart';
 
 class _FakeRepo implements HealthEventRepository {
   _FakeRepo(this.decidedRefs);

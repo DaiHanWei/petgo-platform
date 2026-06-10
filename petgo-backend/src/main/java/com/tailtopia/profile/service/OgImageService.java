@@ -1,7 +1,7 @@
-package com.petgo.profile.service;
+package com.tailtopia.profile.service;
 
-import com.petgo.profile.domain.PetProfile;
-import com.petgo.shared.media.AliyunOssClient;
+import com.tailtopia.profile.domain.PetProfile;
+import com.tailtopia.shared.media.AliyunOssClient;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics2D;
@@ -52,7 +52,7 @@ public class OgImageService {
             }
             g.setColor(new Color(0x9B, 0x92, 0x8A));
             g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 36));
-            g.drawString("PetGo", 80, 560);
+            g.drawString("TailTopia", 80, 560);
         } finally {
             g.dispose();
         }
@@ -77,6 +77,6 @@ public class OgImageService {
     }
 
     private static String safe(String s) {
-        return (s == null || s.isBlank()) ? "PetGo" : s;
+        return (s == null || s.isBlank()) ? "TailTopia" : s;
     }
 }

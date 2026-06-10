@@ -1,4 +1,4 @@
-package com.petgo.triage.domain;
+package com.tailtopia.triage.domain;
 
 /**
  * 分诊任务状态（Story 4.1）。统一异步 DB 状态机：PENDING -> PROCESSING -> DONE/FAILED + retry_count。

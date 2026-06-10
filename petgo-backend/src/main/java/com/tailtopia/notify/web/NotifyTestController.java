@@ -1,9 +1,9 @@
-package com.petgo.notify.web;
+package com.tailtopia.notify.web;
 
-import com.petgo.notify.domain.NotificationType;
-import com.petgo.notify.dto.PushPayload;
-import com.petgo.notify.service.NotificationService;
-import com.petgo.shared.error.AppException;
+import com.tailtopia.notify.domain.NotificationType;
+import com.tailtopia.notify.dto.PushPayload;
+import com.tailtopia.notify.service.NotificationService;
+import com.tailtopia.shared.error.AppException;
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;

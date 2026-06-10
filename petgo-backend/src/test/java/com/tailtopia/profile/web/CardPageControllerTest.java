@@ -1,4 +1,4 @@
-package com.petgo.profile.web;
+package com.tailtopia.profile.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -6,14 +6,14 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.petgo.auth.dto.AuthorView;
-import com.petgo.auth.service.AccountQueryService;
-import com.petgo.content.service.ContentService;
-import com.petgo.content.service.GrowthMomentView;
-import com.petgo.profile.domain.PetProfile;
-import com.petgo.profile.dto.ArchiveStatsResponse;
-import com.petgo.profile.service.ProfileService;
-import com.petgo.profile.service.TimelineService;
+import com.tailtopia.auth.dto.AuthorView;
+import com.tailtopia.auth.service.AccountQueryService;
+import com.tailtopia.content.service.ContentService;
+import com.tailtopia.content.service.GrowthMomentView;
+import com.tailtopia.profile.domain.PetProfile;
+import com.tailtopia.profile.dto.ArchiveStatsResponse;
+import com.tailtopia.profile.service.ProfileService;
+import com.tailtopia.profile.service.TimelineService;
 import jakarta.servlet.http.HttpServletResponse;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -46,7 +46,7 @@ class CardPageControllerTest {
     }
 
     private PetProfile profile() {
-        return PetProfile.create(7L, com.petgo.profile.domain.PetType.CAT, "Momo",
+        return PetProfile.create(7L, com.tailtopia.profile.domain.PetType.CAT, "Momo",
                 "https://cdn/a.jpg", "Shiba", LocalDate.of(2022, 1, 1), "好奇宝宝", "TOK");
     }
 

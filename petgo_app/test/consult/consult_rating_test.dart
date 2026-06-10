@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/consult/presentation/consult_rating_dialog.dart';
-import 'package:petgo/l10n/app_localizations.dart';
+import 'package:tailtopia/features/consult/presentation/consult_rating_dialog.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// Story 5.6 F2/F3：评分弹窗——星必选才可提交（1-5），≤100 字选填。
 Future<void> _pump(WidgetTester tester) async {

@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:petgo/core/storage/secure_storage.dart';
-import 'package:petgo/features/vet/data/vet_repository.dart';
-import 'package:petgo/features/vet/domain/vet_inbox_item.dart';
-import 'package:petgo/features/vet/presentation/vet_inbox_page.dart';
-import 'package:petgo/l10n/app_localizations.dart';
+import 'package:tailtopia/core/storage/secure_storage.dart';
+import 'package:tailtopia/features/vet/data/vet_repository.dart';
+import 'package:tailtopia/features/vet/domain/vet_inbox_item.dart';
+import 'package:tailtopia/features/vet/presentation/vet_inbox_page.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 
 class _FakeVetRepository extends VetRepository {
   _FakeVetRepository(this._items) : super(dio: Dio(), tokenStore: InMemoryTokenStore());

@@ -1,4 +1,4 @@
-package com.petgo.shared.ai;
+package com.tailtopia.shared.ai;
 
 /**
  * Gemini 调用可重试异常（Story 4.1）。超时 / 非 2xx / 响应不可解析时抛出，交 triage DB 状态机重试 ≤3。

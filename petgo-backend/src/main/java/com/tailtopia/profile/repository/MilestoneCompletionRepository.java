@@ -1,6 +1,6 @@
-package com.petgo.profile.repository;
+package com.tailtopia.profile.repository;
 
-import com.petgo.profile.domain.MilestoneCompletion;
+import com.tailtopia.profile.domain.MilestoneCompletion;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;

@@ -91,7 +91,7 @@ so that **我能一览宠物的成长足迹与健康事件**。
 
 > 三段组织。**前端重**（时间线 UI + 多态 + 状态同步），后端提供时间线聚合读端点 + 复用状态更新。建议：后端 → 前端 → 联调。
 
-### 🟦 后端子任务（petgo-backend / `com.petgo.profile`）
+### 🟦 后端子任务（petgo-backend / `com.tailtopia.profile`）
 
 - [x] **B1. 成长时间线聚合读端点** (AC: 1)
   - [x] `ProfileApiController` `GET /api/v1/pet-profiles/me/timeline?cursor=&limit=20`（JWT）：合并**快乐时刻**（content_posts type=GROWTH_MOMENT，经 content service 接口取，**禁直接 join content 表**）与**健康事件**（2.5 的健康事件源，经其 service 接口；本 Story 该源可能为空 → 返回空段稳健处理），按 `created_at` **倒序游标分页** `{items, nextCursor, hasMore}`。
@@ -163,7 +163,7 @@ so that **我能一览宠物的成长足迹与健康事件**。
 
 ### Project Structure Notes
 
-- 后端 `com.petgo.profile.web/ProfileApiController`(加 `/timeline`)、`profile/service/TimelineService`(聚合，调 content + health service 接口)；DTO `TimelineItemResponse`。
+- 后端 `com.tailtopia.profile.web/ProfileApiController`(加 `/timeline`)、`profile/service/TimelineService`(聚合，调 content + health service 接口)；DTO `TimelineItemResponse`。
 - 前端 `lib/features/profile/presentation/{growth_archive_page, widgets/HappyMomentTile, HealthEventTile, pet_info_card}`；状态复用 1.6 的 FR-0F 组件 + 全局状态 provider。FAB 占位 widget 后由 2.7 接入 `shared/widgets`。
 
 ### References

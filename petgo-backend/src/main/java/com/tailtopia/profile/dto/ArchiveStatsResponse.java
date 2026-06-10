@@ -1,4 +1,4 @@
-package com.petgo.profile.dto;
+package com.tailtopia.profile.dto;
 
 /**
  * 成长档案统计栏（Story 2.4 AC5）。「快乐时刻 X 条 · 问诊 X 次」。

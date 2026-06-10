@@ -1,4 +1,4 @@
-package com.petgo.profile.service;
+package com.tailtopia.profile.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -7,15 +7,15 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.petgo.profile.domain.MilestoneCatalog;
-import com.petgo.profile.domain.MilestoneCompletion;
-import com.petgo.profile.domain.MilestoneCompletionSource;
-import com.petgo.profile.domain.PetMilestone;
-import com.petgo.profile.domain.PetProfile;
-import com.petgo.profile.domain.PetType;
-import com.petgo.profile.repository.MilestoneCompletionRepository;
-import com.petgo.profile.repository.PetMilestoneRepository;
-import com.petgo.profile.repository.PetProfileRepository;
+import com.tailtopia.profile.domain.MilestoneCatalog;
+import com.tailtopia.profile.domain.MilestoneCompletion;
+import com.tailtopia.profile.domain.MilestoneCompletionSource;
+import com.tailtopia.profile.domain.PetMilestone;
+import com.tailtopia.profile.domain.PetProfile;
+import com.tailtopia.profile.domain.PetType;
+import com.tailtopia.profile.repository.MilestoneCompletionRepository;
+import com.tailtopia.profile.repository.PetMilestoneRepository;
+import com.tailtopia.profile.repository.PetProfileRepository;
 import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;

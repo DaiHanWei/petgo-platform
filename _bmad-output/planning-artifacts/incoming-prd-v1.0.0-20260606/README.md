@@ -30,7 +30,7 @@
 
 ## ⚠️ 命名待定（不阻塞）
 
-新 PRD 标题用占位 `[App Name]`，decision-log 提到 "Pomo Go"，现行代码/规格用 "PetGo"。
+新 PRD 标题用占位 `[App Name]`，decision-log 提到 "Pomo Go"，现行代码/规格用 "TailTopia"。
 **产品本周才定名。** 在拍板前：
 
 - 一律按 **TBD** 处理，**不改包名 / 品牌资产 / 文案**；

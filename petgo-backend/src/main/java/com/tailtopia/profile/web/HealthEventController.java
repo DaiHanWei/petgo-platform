@@ -1,10 +1,10 @@
-package com.petgo.profile.web;
+package com.tailtopia.profile.web;
 
-import com.petgo.profile.dto.ArchiveDecisionRequest;
-import com.petgo.profile.dto.ArchiveDecisionResponse;
-import com.petgo.profile.service.HealthEventService;
-import com.petgo.shared.error.AppException;
-import com.petgo.shared.ratelimit.RedisRateLimiter;
+import com.tailtopia.profile.dto.ArchiveDecisionRequest;
+import com.tailtopia.profile.dto.ArchiveDecisionResponse;
+import com.tailtopia.profile.service.HealthEventService;
+import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.ratelimit.RedisRateLimiter;
 import jakarta.validation.Valid;
 import java.time.Duration;
 import java.util.Map;

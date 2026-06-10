@@ -1,4 +1,4 @@
-package com.petgo.profile.domain;
+package com.tailtopia.profile.domain;
 
 /**
  * 里程碑触发方式（FR-42，落库 UPPER_SNAKE）。决定列表页点击徽章的交互（8.2）与完成路径（8.3/8.4/8.6）。

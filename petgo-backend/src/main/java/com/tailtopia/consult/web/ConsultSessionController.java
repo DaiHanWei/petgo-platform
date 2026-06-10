@@ -1,13 +1,13 @@
-package com.petgo.consult.web;
+package com.tailtopia.consult.web;
 
-import com.petgo.consult.domain.ConsultSource;
-import com.petgo.consult.dto.ConsultSessionResponse;
-import com.petgo.consult.dto.CreateConsultSessionRequest;
-import com.petgo.consult.dto.SubmitRatingRequest;
-import com.petgo.consult.service.ConsultCloseService;
-import com.petgo.consult.service.ConsultSessionService;
-import com.petgo.consult.service.ConsultSessionService.CreateResult;
-import com.petgo.shared.error.AppException;
+import com.tailtopia.consult.domain.ConsultSource;
+import com.tailtopia.consult.dto.ConsultSessionResponse;
+import com.tailtopia.consult.dto.CreateConsultSessionRequest;
+import com.tailtopia.consult.dto.SubmitRatingRequest;
+import com.tailtopia.consult.service.ConsultCloseService;
+import com.tailtopia.consult.service.ConsultSessionService;
+import com.tailtopia.consult.service.ConsultSessionService.CreateResult;
+import com.tailtopia.shared.error.AppException;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;

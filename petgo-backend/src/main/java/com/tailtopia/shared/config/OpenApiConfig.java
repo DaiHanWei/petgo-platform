@@ -1,4 +1,4 @@
-package com.petgo.shared.config;
+package com.tailtopia.shared.config;
 
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
@@ -15,8 +15,8 @@ public class OpenApiConfig {
     @Bean
     public OpenAPI petgoOpenAPI() {
         return new OpenAPI().info(new Info()
-                .title("PetGo API")
+                .title("TailTopia API")
                 .version("v1")
-                .description("PetGo V1 后端 API（Spring Boot 4 / OpenAPI 3.1）"));
+                .description("TailTopia V1 后端 API（Spring Boot 4 / OpenAPI 3.1）"));
     }
 }

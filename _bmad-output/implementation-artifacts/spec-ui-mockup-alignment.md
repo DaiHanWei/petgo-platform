@@ -12,7 +12,7 @@ context:
 
 ## Intent
 
-**Problem:** 实机与设计稿(PetGo_V1_mockups S03/S11/S17)在三屏有真实视觉差距:① Home feed 卡无封面(纯文字白卡)② Consult 首页入口卡上下堆叠且历史项是纯文字「AI·GREEN」无胶囊/星评/时间 ③ Me 屏头像是灰图标、宠物状态露原始码「B」、邮箱不显示、编辑按钮是裸图标,且「我的发布」因前端字段名错位(读 text/imageUrls 而后端给 body/firstImageUrl)永远显示「#id」无标题无图。
+**Problem:** 实机与设计稿(TailTopia_V1_mockups S03/S11/S17)在三屏有真实视觉差距:① Home feed 卡无封面(纯文字白卡)② Consult 首页入口卡上下堆叠且历史项是纯文字「AI·GREEN」无胶囊/星评/时间 ③ Me 屏头像是灰图标、宠物状态露原始码「B」、邮箱不显示、编辑按钮是裸图标,且「我的发布」因前端字段名错位(读 text/imageUrls 而后端给 body/firstImageUrl)永远显示「#id」无标题无图。
 
 **Approach:** 以前端 UI 修复为主对齐设计稿;唯一后端改动是 `/me` 的 `UserProfileResponse` 补 email(实体已有,DTO 漏带)。修复后继续逐屏审计剩余 17 屏。
 
@@ -48,7 +48,7 @@ context:
 - `petgo_app/lib/features/me/data/my_posts_repository.dart` -- MyPost.fromJson :16-21 字段映射 Bug(text→body, imageUrls→firstImageUrl)
 - `petgo_app/lib/features/auth/domain/login_response.dart` -- UserProfile 模型 :33-62,补 email 字段
 - `petgo_app/lib/l10n/app_id.arb` / `app_en.arb` -- tab 文案 + 新增问诊严重度/营业时间 label key
-- `petgo-backend/src/main/java/com/petgo/auth/dto/UserProfileResponse.java` -- /me 聚合视图 :12-30,补 email(实体已有 getEmail())
+- `petgo-backend/src/main/java/com/tailtopia/auth/dto/UserProfileResponse.java` -- /me 聚合视图 :12-30,补 email(实体已有 getEmail())
 
 ## Tasks & Acceptance
 
@@ -121,7 +121,7 @@ context:
 **邮箱（PII，仅 /me 本人态）**
 
 - 后端聚合视图补 email（实体已有 getEmail）
-  [`UserProfileResponse.java:16`](../../petgo-backend/src/main/java/com/petgo/auth/dto/UserProfileResponse.java#L16)
+  [`UserProfileResponse.java:16`](../../petgo-backend/src/main/java/com/tailtopia/auth/dto/UserProfileResponse.java#L16)
 - 前端模型解析 email
   [`login_response.dart:61`](../../petgo_app/lib/features/auth/domain/login_response.dart#L61)
 

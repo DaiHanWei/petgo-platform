@@ -1,4 +1,4 @@
-package com.petgo.notify.dto;
+package com.tailtopia.notify.dto;
 
 /**
  * 推送 payload（Story 6.1）。客户端据 {@code type + deepLinkToken} 映射 go_router location。

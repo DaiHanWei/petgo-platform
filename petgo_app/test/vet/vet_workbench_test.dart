@@ -2,11 +2,11 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/core/storage/secure_storage.dart';
-import 'package:petgo/features/vet/data/vet_repository.dart';
-import 'package:petgo/features/vet/domain/vet_login_response.dart';
-import 'package:petgo/features/vet/presentation/vet_workbench_shell.dart';
-import 'package:petgo/l10n/app_localizations.dart';
+import 'package:tailtopia/core/storage/secure_storage.dart';
+import 'package:tailtopia/features/vet/data/vet_repository.dart';
+import 'package:tailtopia/features/vet/domain/vet_login_response.dart';
+import 'package:tailtopia/features/vet/presentation/vet_workbench_shell.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// 测试用假 VetRepository：返回固定 me/在线态，不打网络。
 class _FakeVetRepository extends VetRepository {

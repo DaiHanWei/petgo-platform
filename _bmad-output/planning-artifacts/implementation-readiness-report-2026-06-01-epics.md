@@ -3,7 +3,7 @@ stepsCompleted: [1, 2, 3, 4, 5, 6]
 status: 'complete'
 overallReadiness: 'READY（M-1 与 UX 文档卫生已修复，可进入 Sprint Planning）'
 date: '2026-06-01'
-project_name: 'PetGo V1.0'
+project_name: 'TailTopia V1.0'
 user_name: 'Dai'
 workflowType: 'implementation-readiness'
 inputDocuments:
@@ -18,7 +18,7 @@ note: '本报告为 epics/stories 创建后的就绪度校验；早于 epics 的
 # Implementation Readiness Assessment Report
 
 **Date:** 2026-06-01
-**Project:** PetGo V1.0
+**Project:** TailTopia V1.0
 
 ## 1. Document Inventory
 

@@ -1,4 +1,4 @@
-package com.petgo.vet.dto;
+package com.tailtopia.vet.dto;
 
 import jakarta.validation.constraints.NotNull;
 

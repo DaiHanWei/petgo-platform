@@ -1,4 +1,4 @@
-package com.petgo.shared.security;
+package com.tailtopia.shared.security;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;

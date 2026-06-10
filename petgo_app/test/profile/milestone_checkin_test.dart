@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/profile/data/milestone_repository.dart';
-import 'package:petgo/features/profile/domain/milestone.dart';
-import 'package:petgo/features/profile/presentation/milestone_list_page.dart';
-import 'package:petgo/l10n/app_localizations.dart';
+import 'package:tailtopia/features/profile/data/milestone_repository.dart';
+import 'package:tailtopia/features/profile/domain/milestone.dart';
+import 'package:tailtopia/features/profile/presentation/milestone_list_page.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// L0 widget（Story 8.4）：「已打卡」picker — 候选列表、已关联置灰、选择 → checkIn 调用。
 class _FakeRepo implements MilestoneRepository {

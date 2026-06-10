@@ -1,4 +1,4 @@
-package com.petgo.auth.domain;
+package com.tailtopia.auth.domain;
 
 /**
  * 宠物状态（FR-0F，落库 varchar，枚举名即存储值/API 契约值）。

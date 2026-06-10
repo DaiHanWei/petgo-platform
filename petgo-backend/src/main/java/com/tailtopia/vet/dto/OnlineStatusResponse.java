@@ -1,6 +1,6 @@
-package com.petgo.vet.dto;
+package com.tailtopia.vet.dto;
 
-import com.petgo.vet.domain.VetPresenceStatus;
+import com.tailtopia.vet.domain.VetPresenceStatus;
 
 /** 兽医自身在线态（Story 5.2 工作台「我的」Tab 渲染开关初值）。 */
 public record OnlineStatusResponse(boolean online, String status) {

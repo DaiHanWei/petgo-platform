@@ -1,10 +1,10 @@
-package com.petgo.content.web;
+package com.tailtopia.content.web;
 
-import com.petgo.content.dto.ContentPostCreateRequest;
-import com.petgo.content.dto.ContentPostResponse;
-import com.petgo.content.service.ContentService;
-import com.petgo.shared.error.AppException;
-import com.petgo.shared.ratelimit.RedisRateLimiter;
+import com.tailtopia.content.dto.ContentPostCreateRequest;
+import com.tailtopia.content.dto.ContentPostResponse;
+import com.tailtopia.content.service.ContentService;
+import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.ratelimit.RedisRateLimiter;
 import jakarta.validation.Valid;
 import java.time.Duration;
 import org.springframework.http.HttpStatus;

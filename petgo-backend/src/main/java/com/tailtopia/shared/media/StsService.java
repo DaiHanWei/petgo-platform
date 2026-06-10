@@ -1,9 +1,9 @@
-package com.petgo.shared.media;
+package com.tailtopia.shared.media;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.petgo.shared.error.AppException;
-import com.petgo.shared.media.dto.StsCredentialResponse;
+import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.media.dto.StsCredentialResponse;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Service;

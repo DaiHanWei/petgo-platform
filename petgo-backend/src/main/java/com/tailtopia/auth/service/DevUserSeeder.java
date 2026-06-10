@@ -1,9 +1,9 @@
-package com.petgo.auth.service;
+package com.tailtopia.auth.service;
 
-import com.petgo.auth.domain.PetStatus;
-import com.petgo.auth.domain.User;
-import com.petgo.auth.repository.UserRepository;
-import com.petgo.shared.security.DevGoogleTokenVerifier;
+import com.tailtopia.auth.domain.PetStatus;
+import com.tailtopia.auth.domain.User;
+import com.tailtopia.auth.repository.UserRepository;
+import com.tailtopia.shared.security.DevGoogleTokenVerifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;

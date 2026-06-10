@@ -1,13 +1,13 @@
-package com.petgo;
+package com.tailtopia;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class PetgoBackendApplication {
+public class TailtopiaBackendApplication {
 
 	public static void main(String[] args) {
-		SpringApplication.run(PetgoBackendApplication.class, args);
+		SpringApplication.run(TailtopiaBackendApplication.class, args);
 	}
 
 }

@@ -1,7 +1,7 @@
-package com.petgo.account.repository;
+package com.tailtopia.account.repository;
 
-import com.petgo.account.domain.AccountDeletion;
-import com.petgo.account.domain.DeletionStatus;
+import com.tailtopia.account.domain.AccountDeletion;
+import com.tailtopia.account.domain.DeletionStatus;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;

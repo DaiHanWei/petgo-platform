@@ -1,15 +1,15 @@
-package com.petgo.notify.web;
+package com.tailtopia.notify.web;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.petgo.auth.domain.User;
-import com.petgo.notify.domain.Notification;
-import com.petgo.notify.domain.NotificationType;
-import com.petgo.notify.repository.NotificationRepository;
-import com.petgo.support.ApiIntegrationTest;
+import com.tailtopia.auth.domain.User;
+import com.tailtopia.notify.domain.Notification;
+import com.tailtopia.notify.domain.NotificationType;
+import com.tailtopia.notify.repository.NotificationRepository;
+import com.tailtopia.support.ApiIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;

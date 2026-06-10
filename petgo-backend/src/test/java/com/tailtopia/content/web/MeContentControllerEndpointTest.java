@@ -1,15 +1,15 @@
-package com.petgo.content.web;
+package com.tailtopia.content.web;
 
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.petgo.auth.domain.User;
-import com.petgo.content.domain.ContentPost;
-import com.petgo.content.domain.ContentType;
-import com.petgo.content.repository.ContentPostRepository;
-import com.petgo.support.ApiIntegrationTest;
+import com.tailtopia.auth.domain.User;
+import com.tailtopia.content.domain.ContentPost;
+import com.tailtopia.content.domain.ContentType;
+import com.tailtopia.content.repository.ContentPostRepository;
+import com.tailtopia.support.ApiIntegrationTest;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -61,7 +61,7 @@ class MeContentControllerEndpointTest extends ApiIntegrationTest {
     void myPostsSupportsCursorPagination() throws Exception {
         User me = newUser();
         // 造 PAGE_SIZE + 1 条以触发 hasMore / nextCursor。
-        int total = com.petgo.content.service.FeedService.PAGE_SIZE + 1;
+        int total = com.tailtopia.content.service.FeedService.PAGE_SIZE + 1;
         for (int i = 0; i < total; i++) {
             newPost(me.getId());
         }
@@ -74,7 +74,7 @@ class MeContentControllerEndpointTest extends ApiIntegrationTest {
 
         var firstNode = json.readTree(firstPage);
         org.assertj.core.api.Assertions.assertThat(firstNode.get("items").size())
-                .isEqualTo(com.petgo.content.service.FeedService.PAGE_SIZE);
+                .isEqualTo(com.tailtopia.content.service.FeedService.PAGE_SIZE);
         String cursor = firstNode.get("nextCursor").asText();
         org.assertj.core.api.Assertions.assertThat(cursor).isNotBlank();
 

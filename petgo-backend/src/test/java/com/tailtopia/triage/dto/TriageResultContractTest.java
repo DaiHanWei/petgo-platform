@@ -1,11 +1,11 @@
-package com.petgo.triage.dto;
+package com.tailtopia.triage.dto;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.petgo.shared.ai.TriageObservation;
-import com.petgo.triage.domain.DangerLevel;
-import com.petgo.triage.domain.TriageStatus;
+import com.tailtopia.shared.ai.TriageObservation;
+import com.tailtopia.triage.domain.DangerLevel;
+import com.tailtopia.triage.domain.TriageStatus;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;

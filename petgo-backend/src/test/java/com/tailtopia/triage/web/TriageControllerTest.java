@@ -1,4 +1,4 @@
-package com.petgo.triage.web;
+package com.tailtopia.triage.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -9,12 +9,12 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.petgo.shared.error.AppException;
-import com.petgo.shared.ratelimit.RedisRateLimiter;
-import com.petgo.triage.domain.TriageStatus;
-import com.petgo.triage.dto.TriageAcceptedResponse;
-import com.petgo.triage.dto.TriageSubmitRequest;
-import com.petgo.triage.service.TriageService;
+import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.ratelimit.RedisRateLimiter;
+import com.tailtopia.triage.domain.TriageStatus;
+import com.tailtopia.triage.dto.TriageAcceptedResponse;
+import com.tailtopia.triage.dto.TriageSubmitRequest;
+import com.tailtopia.triage.service.TriageService;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;

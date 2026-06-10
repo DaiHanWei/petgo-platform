@@ -1,6 +1,6 @@
-package com.petgo.triage.dto;
+package com.tailtopia.triage.dto;
 
-import com.petgo.triage.domain.DangerLevel;
+import com.tailtopia.triage.domain.DangerLevel;
 import java.util.List;
 
 /**

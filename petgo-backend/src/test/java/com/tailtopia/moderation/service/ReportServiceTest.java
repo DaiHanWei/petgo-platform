@@ -1,4 +1,4 @@
-package com.petgo.moderation.service;
+package com.tailtopia.moderation.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -8,12 +8,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.petgo.content.service.ContentService;
-import com.petgo.moderation.domain.ContentReport;
-import com.petgo.moderation.domain.ReportReason;
-import com.petgo.moderation.domain.ReportStatus;
-import com.petgo.moderation.repository.ContentReportRepository;
-import com.petgo.shared.error.AppException;
+import com.tailtopia.content.service.ContentService;
+import com.tailtopia.moderation.domain.ContentReport;
+import com.tailtopia.moderation.domain.ReportReason;
+import com.tailtopia.moderation.domain.ReportStatus;
+import com.tailtopia.moderation.repository.ContentReportRepository;
+import com.tailtopia.shared.error.AppException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;

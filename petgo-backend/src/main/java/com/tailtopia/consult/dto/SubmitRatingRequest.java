@@ -1,4 +1,4 @@
-package com.petgo.consult.dto;
+package com.tailtopia.consult.dto;
 
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;

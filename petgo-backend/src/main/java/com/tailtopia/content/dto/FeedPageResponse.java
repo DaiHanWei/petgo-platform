@@ -1,4 +1,4 @@
-package com.petgo.content.dto;
+package com.tailtopia.content.dto;
 
 import java.util.List;
 

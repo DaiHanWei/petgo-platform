@@ -1,4 +1,4 @@
-package com.petgo.content.event;
+package com.tailtopia.content.event;
 
 import java.time.Instant;
 

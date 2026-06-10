@@ -1,4 +1,4 @@
-package com.petgo.auth.dto;
+package com.tailtopia.auth.dto;
 
 /**
  * Google 登录响应：自签令牌 + 角色 + 新老用户分流信号 + 用户聚合视图。

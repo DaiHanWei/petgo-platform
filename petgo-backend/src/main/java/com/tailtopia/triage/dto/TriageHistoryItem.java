@@ -1,6 +1,6 @@
-package com.petgo.triage.dto;
+package com.tailtopia.triage.dto;
 
-import com.petgo.triage.domain.TriageTask;
+import com.tailtopia.triage.domain.TriageTask;
 import java.time.Instant;
 
 /**

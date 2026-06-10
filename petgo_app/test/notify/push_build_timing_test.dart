@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:petgo/core/storage/prefs.dart';
-import 'package:petgo/features/notify/data/push_permission_providers.dart';
-import 'package:petgo/features/notify/domain/push_permission_gate.dart';
-import 'package:petgo/features/profile/domain/share_service.dart';
-import 'package:petgo/features/profile/presentation/profile_created_celebration_page.dart';
-import 'package:petgo/l10n/app_localizations.dart';
+import 'package:tailtopia/core/storage/prefs.dart';
+import 'package:tailtopia/features/notify/data/push_permission_providers.dart';
+import 'package:tailtopia/features/notify/domain/push_permission_gate.dart';
+import 'package:tailtopia/features/profile/domain/share_service.dart';
+import 'package:tailtopia/features/profile/presentation/profile_created_celebration_page.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Story 6.4 AC3（F15）：建档时机推送权限的**弹出位置锚点**——FR-0G 庆祝页主 CTA「开始探索」

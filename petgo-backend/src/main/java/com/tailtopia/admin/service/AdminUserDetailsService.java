@@ -1,8 +1,8 @@
-package com.petgo.admin.service;
+package com.tailtopia.admin.service;
 
-import com.petgo.auth.domain.Role;
-import com.petgo.auth.domain.User;
-import com.petgo.auth.repository.UserRepository;
+import com.tailtopia.auth.domain.Role;
+import com.tailtopia.auth.domain.User;
+import com.tailtopia.auth.repository.UserRepository;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;

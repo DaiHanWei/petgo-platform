@@ -1,4 +1,4 @@
-package com.petgo.consult.domain;
+package com.tailtopia.consult.domain;
 
 import java.util.Set;
 

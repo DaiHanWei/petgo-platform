@@ -1,16 +1,16 @@
-package com.petgo.profile.service;
+package com.tailtopia.profile.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-import com.petgo.profile.domain.PetProfile;
-import com.petgo.profile.domain.PetType;
-import com.petgo.profile.dto.PetProfileCreateRequest;
-import com.petgo.profile.dto.PetProfileResponse;
-import com.petgo.profile.repository.PetProfileRepository;
-import com.petgo.shared.error.AppException;
+import com.tailtopia.profile.domain.PetProfile;
+import com.tailtopia.profile.domain.PetType;
+import com.tailtopia.profile.dto.PetProfileCreateRequest;
+import com.tailtopia.profile.dto.PetProfileResponse;
+import com.tailtopia.profile.repository.PetProfileRepository;
+import com.tailtopia.shared.error.AppException;
 import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -111,7 +111,7 @@ class ProfileServiceTest {
         when(profiles.save(any(PetProfile.class))).thenAnswer(inv -> withId(inv.getArgument(0), 100L));
 
         PetProfileResponse resp = service.update(1L,
-                new com.petgo.profile.dto.PetProfileUpdateRequest(null, "New", null, null, "new intro"));
+                new com.tailtopia.profile.dto.PetProfileUpdateRequest(null, "New", null, null, "new intro"));
 
         assertThat(resp.name()).isEqualTo("New");
         assertThat(resp.intro()).isEqualTo("new intro");
@@ -123,7 +123,7 @@ class ProfileServiceTest {
     void updateWithoutProfileThrows404() {
         when(profiles.findByOwnerId(9L)).thenReturn(java.util.Optional.empty());
         assertThatThrownBy(() -> service.update(9L,
-                new com.petgo.profile.dto.PetProfileUpdateRequest(null, "X", null, null, null)))
+                new com.tailtopia.profile.dto.PetProfileUpdateRequest(null, "X", null, null, null)))
                 .isInstanceOf(AppException.class);
     }
 
@@ -132,7 +132,7 @@ class ProfileServiceTest {
         PetProfile existing = PetProfile.create(1L, PetType.CAT, "Old", null, null, null, null, "TOK");
         when(profiles.findByOwnerId(1L)).thenReturn(java.util.Optional.of(existing));
         assertThatThrownBy(() -> service.update(1L,
-                new com.petgo.profile.dto.PetProfileUpdateRequest(null, "   ", null, null, null)))
+                new com.tailtopia.profile.dto.PetProfileUpdateRequest(null, "   ", null, null, null)))
                 .isInstanceOf(AppException.class);
     }
 

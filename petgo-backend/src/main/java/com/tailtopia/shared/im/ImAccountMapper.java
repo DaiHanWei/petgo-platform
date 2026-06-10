@@ -1,4 +1,4 @@
-package com.petgo.shared.im;
+package com.tailtopia.shared.im;
 
 /**
  * 平台 id ↔ 腾讯 IM userId 映射（Story 5.5）。规则：用户 {@code u_<userId>}、兽医 {@code v_<vetId>}。

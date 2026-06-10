@@ -1,6 +1,6 @@
-package com.petgo.notify.repository;
+package com.tailtopia.notify.repository;
 
-import com.petgo.notify.domain.Notification;
+import com.tailtopia.notify.domain.Notification;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;

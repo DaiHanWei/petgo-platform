@@ -1,10 +1,10 @@
-package com.petgo.admin.service;
+package com.tailtopia.admin.service;
 
-import com.petgo.content.domain.ContentType;
-import com.petgo.content.dto.ContentPostCreateRequest;
-import com.petgo.content.dto.ContentPostResponse;
-import com.petgo.content.service.ContentService;
-import com.petgo.shared.error.AppException;
+import com.tailtopia.content.domain.ContentType;
+import com.tailtopia.content.dto.ContentPostCreateRequest;
+import com.tailtopia.content.dto.ContentPostResponse;
+import com.tailtopia.content.service.ContentService;
+import com.tailtopia.shared.error.AppException;
 import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;

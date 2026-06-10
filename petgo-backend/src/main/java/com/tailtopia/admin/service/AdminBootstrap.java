@@ -1,8 +1,8 @@
-package com.petgo.admin.service;
+package com.tailtopia.admin.service;
 
-import com.petgo.auth.domain.Role;
-import com.petgo.auth.domain.User;
-import com.petgo.auth.repository.UserRepository;
+import com.tailtopia.auth.domain.Role;
+import com.tailtopia.auth.domain.User;
+import com.tailtopia.auth.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -52,7 +52,7 @@ public class AdminBootstrap implements ApplicationRunner {
             users.save(existing);
             log.info("ADMIN bootstrap：已重置现有管理员密码 email={}", bootstrapEmail);
         }, () -> {
-            users.save(User.newAdmin(bootstrapEmail, "PetGo 运营", hash));
+            users.save(User.newAdmin(bootstrapEmail, "TailTopia 运营", hash));
             log.info("ADMIN bootstrap：已创建管理员 email={}", bootstrapEmail);
         });
     }

@@ -1,4 +1,4 @@
-package com.petgo.moderation.domain;
+package com.tailtopia.moderation.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

@@ -1,4 +1,4 @@
-package com.petgo.consult.dto;
+package com.tailtopia.consult.dto;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

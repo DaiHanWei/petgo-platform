@@ -2,7 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/core/theme/colors.dart';
+import 'package:tailtopia/core/theme/colors.dart';
 
 /// Story 7.4 AC1（NFR-13 / UX-DR15）：文本/disclaimer 对 #FAF8F5 底色对比度守门（CI 防回退）。
 ///

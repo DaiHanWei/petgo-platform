@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/content/data/mini_profile_repository.dart';
-import 'package:petgo/l10n/app_localizations.dart';
-import 'package:petgo/shared/widgets/mini_profile_sheet.dart';
+import 'package:tailtopia/features/content/data/mini_profile_repository.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/shared/widgets/mini_profile_sheet.dart';
 
 class _FakeMiniRepo implements MiniProfileRepository {
   _FakeMiniRepo(this.profile);

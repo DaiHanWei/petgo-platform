@@ -1,7 +1,7 @@
-package com.petgo.auth.dto;
+package com.tailtopia.auth.dto;
 
-import com.petgo.auth.domain.PetStatus;
-import com.petgo.auth.domain.User;
+import com.tailtopia.auth.domain.PetStatus;
+import com.tailtopia.auth.domain.User;
 
 /**
  * 当前用户聚合视图（{@code GET /api/v1/me} 与登录响应内嵌）。

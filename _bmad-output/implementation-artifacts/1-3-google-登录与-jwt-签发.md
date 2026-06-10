@@ -78,8 +78,8 @@ so that **我无需记密码即可获得身份并使用核心功能**。
   - [ ] 约束/索引：`uq_users_google_sub`；枚举落库 `varchar` + UPPER（`role ∈ {USER,VET,ADMIN}`，本 Story 只用 USER；`pet_status ∈ {A,B,C}`）。
   - [ ] `ddl-auto=validate` 下迁移须与实体严格匹配。
 - [ ] **B2. User 实体 + Repository** (AC: 1, 4)
-  - [ ] `com.petgo.auth.domain.User`（JPA `@Entity`，字段 camelCase ↔ 列 snake_case 由 JPA 桥接）。
-  - [ ] `com.petgo.auth.repository.UserRepository`（`findByGoogleSub`）。
+  - [ ] `com.tailtopia.auth.domain.User`（JPA `@Entity`，字段 camelCase ↔ 列 snake_case 由 JPA 桥接）。
+  - [ ] `com.tailtopia.auth.repository.UserRepository`（`findByGoogleSub`）。
 - [ ] **B3. Google ID Token 校验（shared/security/GoogleTokenVerifier）** (AC: 1)
   - [ ] 校验 Google ID Token（验签/aud=本应用 client、iss、exp）；解析 sub/email/name/picture。用 Google 官方库或 JWKS 校验。
   - [ ] **抽象为接口**便于测试注入 stub（L0 用伪 verifier）；client id/secret **env 注入**（`GOOGLE_OAUTH_CLIENT_ID` 等，**绝不入库**）。
@@ -160,7 +160,7 @@ so that **我无需记密码即可获得身份并使用核心功能**。
 - 密钥管理：JWT 签名密钥、Google client id/secret 全 **env 注入，不入库**。
 
 **目录/分层（架构 §Project Structure）**：
-- 后端：`com.petgo.auth/{web,service,domain,repository,dto,event}` + `com.petgo.shared/security/{SecurityConfig, JwtService, JwtAuthFilter, GoogleTokenVerifier, RoleGuard}` + `shared/ratelimit/{RedisRateLimiter, IdempotencyService}` + `shared/error`。
+- 后端：`com.tailtopia.auth/{web,service,domain,repository,dto,event}` + `com.tailtopia.shared/security/{SecurityConfig, JwtService, JwtAuthFilter, GoogleTokenVerifier, RoleGuard}` + `shared/ratelimit/{RedisRateLimiter, IdempotencyService}` + `shared/error`。
 - 前端：`lib/features/auth/{data,domain,presentation}` + `lib/core/network/{dio_client, auth_interceptor, problem_detail, api_paths}` + `lib/core/storage/{secure_storage, prefs}`。
 - 模块间只经 service/事件通信，禁跨模块直接访问对方 repository；`shared/` 不放业务。
 
@@ -267,7 +267,7 @@ so that **我无需记密码即可获得身份并使用核心功能**。
 - `auth/dto/{GoogleLoginRequest,RefreshRequest,TokenResponse,LoginResponse,UserProfileResponse}.java`
 - `shared/security/{GoogleIdentity,GoogleTokenVerifier,NimbusGoogleTokenVerifier,AuthProperties,JwtConfig,JwtService,JwtRoleConverter,ProblemDetailAuthHandlers}.java`
 - `shared/ratelimit/RedisRateLimiter.java`
-- `src/test/java/com/petgo/auth/service/AuthServiceTest.java`、`src/test/java/com/petgo/shared/security/JwtServiceTest.java`
+- `src/test/java/com/tailtopia/auth/service/AuthServiceTest.java`、`src/test/java/com/tailtopia/shared/security/JwtServiceTest.java`
 
 **后端 — 修改**
 - `shared/security/SecurityConfig.java`（收紧门控 + JWT resource server）

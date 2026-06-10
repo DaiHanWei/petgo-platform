@@ -9,10 +9,10 @@ import '../../../shared/widgets/design/momo.dart';
 import '../../../shared/widgets/design/striped_photo.dart';
 import '../data/profile_repository.dart';
 
-/// 宠物名片 H5 对外分享页（FR-14 · PetGo Prototype）。
+/// 宠物名片 H5 对外分享页（FR-14 · TailTopia Prototype）。
 ///
 /// 模拟非 App 用户在浏览器看到的公开页：浏览器地址栏 + 名片 hero + 最近照片流 +
-/// 「Unduh PetGo」下载引导（拉新飞轮）。App 内作为「预览名片」入口呈现。
+/// 「Unduh TailTopia」下载引导（拉新飞轮）。App 内作为「预览名片」入口呈现。
 class PetCardPage extends ConsumerWidget {
   const PetCardPage({super.key});
 
@@ -192,7 +192,7 @@ class PetCardPage extends ConsumerWidget {
                             ],
                           ),
                           const SizedBox(height: 14),
-                          Text('Mau lihat cerita lengkap $name?\nUnduh PetGo untuk ikuti tumbuh kembangnya 🐾',
+                          Text('Mau lihat cerita lengkap $name?\nUnduh TailTopia untuk ikuti tumbuh kembangnya 🐾',
                               textAlign: TextAlign.center,
                               style: const TextStyle(
                                   fontSize: 14.5, height: 1.5, color: AppColors.ink2)),
@@ -220,7 +220,7 @@ class PetCardPage extends ConsumerWidget {
                         children: [
                           Icon(Icons.download_rounded, size: 20, color: Colors.white),
                           SizedBox(width: 8),
-                          Text('Unduh PetGo'),
+                          Text('Unduh TailTopia'),
                         ],
                       ),
                     ),

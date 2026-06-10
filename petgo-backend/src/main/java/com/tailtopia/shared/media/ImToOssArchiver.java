@@ -1,4 +1,4 @@
-package com.petgo.shared.media;
+package com.tailtopia.shared.media;
 
 import java.security.SecureRandom;
 import java.util.ArrayList;

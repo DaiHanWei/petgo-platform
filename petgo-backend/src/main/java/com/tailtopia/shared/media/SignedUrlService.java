@@ -1,8 +1,8 @@
-package com.petgo.shared.media;
+package com.tailtopia.shared.media;
 
 import com.aliyun.oss.HttpMethod;
 import com.aliyun.oss.OSS;
-import com.petgo.shared.error.AppException;
+import com.tailtopia.shared.error.AppException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;

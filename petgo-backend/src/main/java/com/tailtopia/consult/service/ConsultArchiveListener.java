@@ -1,7 +1,7 @@
-package com.petgo.consult.service;
+package com.tailtopia.consult.service;
 
-import com.petgo.consult.event.ConsultClosedEvent;
-import com.petgo.shared.media.ImToOssArchiver;
+import com.tailtopia.consult.event.ConsultClosedEvent;
+import com.tailtopia.shared.media.ImToOssArchiver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;

@@ -1,4 +1,4 @@
-package com.petgo.content.dto;
+package com.tailtopia.content.dto;
 
 /**
  * 点赞开关响应（Story 3.4）。返回服务端真值供前端校正乐观更新。

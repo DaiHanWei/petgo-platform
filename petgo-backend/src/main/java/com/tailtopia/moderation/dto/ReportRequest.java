@@ -1,6 +1,6 @@
-package com.petgo.moderation.dto;
+package com.tailtopia.moderation.dto;
 
-import com.petgo.moderation.domain.ReportReason;
+import com.tailtopia.moderation.domain.ReportReason;
 import jakarta.validation.constraints.NotNull;
 
 /**

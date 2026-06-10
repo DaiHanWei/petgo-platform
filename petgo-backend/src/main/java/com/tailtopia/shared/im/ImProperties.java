@@ -1,4 +1,4 @@
-package com.petgo.shared.im;
+package com.tailtopia.shared.im;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 

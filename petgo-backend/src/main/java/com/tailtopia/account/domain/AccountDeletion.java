@@ -1,4 +1,4 @@
-package com.petgo.account.domain;
+package com.tailtopia.account.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

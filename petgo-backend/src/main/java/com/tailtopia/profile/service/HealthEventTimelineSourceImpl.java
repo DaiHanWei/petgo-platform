@@ -1,7 +1,7 @@
-package com.petgo.profile.service;
+package com.tailtopia.profile.service;
 
-import com.petgo.profile.domain.ArchiveDecision;
-import com.petgo.profile.repository.HealthEventRepository;
+import com.tailtopia.profile.domain.ArchiveDecision;
+import com.tailtopia.profile.repository.HealthEventRepository;
 import java.time.Instant;
 import java.util.List;
 import org.springframework.data.domain.PageRequest;
@@ -61,7 +61,7 @@ public class HealthEventTimelineSourceImpl implements HealthEventTimelineSource 
                 .orElse(0L);
     }
 
-    private static HealthEventView toView(com.petgo.profile.domain.HealthEvent e) {
+    private static HealthEventView toView(com.tailtopia.profile.domain.HealthEvent e) {
         return new HealthEventView(e.getCreatedAt(), e.getAiLevel(), e.getSymptomSummary());
     }
 }

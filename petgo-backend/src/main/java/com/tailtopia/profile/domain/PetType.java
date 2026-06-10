@@ -1,4 +1,4 @@
-package com.petgo.profile.domain;
+package com.tailtopia.profile.domain;
 
 /**
  * 宠物类型（FR-11 / 决策 F6，落库 varchar，枚举名即存储值/API 契约值）。

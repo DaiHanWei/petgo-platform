@@ -1,8 +1,8 @@
-package com.petgo.content.service;
+package com.tailtopia.content.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.petgo.content.service.ContentModerationService.Verdict;
+import com.tailtopia.content.service.ContentModerationService.Verdict;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 

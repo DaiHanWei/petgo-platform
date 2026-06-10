@@ -1,18 +1,18 @@
-package com.petgo.profile.web;
+package com.tailtopia.profile.web;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.petgo.auth.domain.User;
-import com.petgo.profile.domain.ArchiveDecision;
-import com.petgo.profile.domain.HealthEvent;
-import com.petgo.profile.domain.PetProfile;
-import com.petgo.profile.repository.HealthEventRepository;
-import com.petgo.profile.repository.PetProfileRepository;
-import com.petgo.profile.service.CardTokenGenerator;
-import com.petgo.support.ApiIntegrationTest;
+import com.tailtopia.auth.domain.User;
+import com.tailtopia.profile.domain.ArchiveDecision;
+import com.tailtopia.profile.domain.HealthEvent;
+import com.tailtopia.profile.domain.PetProfile;
+import com.tailtopia.profile.repository.HealthEventRepository;
+import com.tailtopia.profile.repository.PetProfileRepository;
+import com.tailtopia.profile.service.CardTokenGenerator;
+import com.tailtopia.support.ApiIntegrationTest;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -42,7 +42,7 @@ class HealthEventControllerEndpointTest extends ApiIntegrationTest {
 
     /** 直接造一只属于 owner 的宠物档案，返回其 petId。 */
     private long createPetFor(User owner) {
-        PetProfile p = PetProfile.create(owner.getId(), com.petgo.profile.domain.PetType.DOG,
+        PetProfile p = PetProfile.create(owner.getId(), com.tailtopia.profile.domain.PetType.DOG,
                 "旺财", null, "柴犬", null, null,
                 cardTokenGenerator.generate());
         return profiles.save(p).getId();

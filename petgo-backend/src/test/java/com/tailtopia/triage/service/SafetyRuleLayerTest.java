@@ -1,9 +1,9 @@
-package com.petgo.triage.service;
+package com.tailtopia.triage.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.petgo.triage.domain.DangerLevel;
+import com.tailtopia.triage.domain.DangerLevel;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;

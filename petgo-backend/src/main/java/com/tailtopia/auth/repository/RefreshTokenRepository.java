@@ -1,7 +1,7 @@
-package com.petgo.auth.repository;
+package com.tailtopia.auth.repository;
 
-import com.petgo.auth.domain.RefreshToken;
-import com.petgo.auth.domain.SubjectType;
+import com.tailtopia.auth.domain.RefreshToken;
+import com.tailtopia.auth.domain.SubjectType;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.transaction.annotation.Transactional;

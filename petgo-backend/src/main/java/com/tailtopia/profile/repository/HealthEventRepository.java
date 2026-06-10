@@ -1,7 +1,7 @@
-package com.petgo.profile.repository;
+package com.tailtopia.profile.repository;
 
-import com.petgo.profile.domain.ArchiveDecision;
-import com.petgo.profile.domain.HealthEvent;
+import com.tailtopia.profile.domain.ArchiveDecision;
+import com.tailtopia.profile.domain.HealthEvent;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;

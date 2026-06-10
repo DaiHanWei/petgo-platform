@@ -1,4 +1,4 @@
-package com.petgo.profile.domain;
+package com.tailtopia.profile.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

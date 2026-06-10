@@ -1,6 +1,6 @@
-package com.petgo.notify.repository;
+package com.tailtopia.notify.repository;
 
-import com.petgo.notify.domain.ScheduledPushMark;
+import com.tailtopia.notify.domain.ScheduledPushMark;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 /**

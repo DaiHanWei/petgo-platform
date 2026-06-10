@@ -1,15 +1,15 @@
-package com.petgo.content.service;
+package com.tailtopia.content.service;
 
-import com.petgo.auth.dto.AuthorView;
-import com.petgo.auth.service.AccountQueryService;
-import com.petgo.content.domain.ContentPost;
-import com.petgo.content.domain.ContentType;
-import com.petgo.content.domain.FeedCategory;
-import com.petgo.content.dto.FeedItemResponse;
-import com.petgo.content.dto.FeedPageResponse;
-import com.petgo.content.repository.ContentLikeRepository;
-import com.petgo.content.repository.ContentLikeRepository.PostLikeCount;
-import com.petgo.content.repository.ContentPostRepository;
+import com.tailtopia.auth.dto.AuthorView;
+import com.tailtopia.auth.service.AccountQueryService;
+import com.tailtopia.content.domain.ContentPost;
+import com.tailtopia.content.domain.ContentType;
+import com.tailtopia.content.domain.FeedCategory;
+import com.tailtopia.content.dto.FeedItemResponse;
+import com.tailtopia.content.dto.FeedPageResponse;
+import com.tailtopia.content.repository.ContentLikeRepository;
+import com.tailtopia.content.repository.ContentLikeRepository.PostLikeCount;
+import com.tailtopia.content.repository.ContentPostRepository;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;

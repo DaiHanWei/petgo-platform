@@ -1,4 +1,4 @@
-package com.petgo.auth.service;
+package com.tailtopia.auth.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -7,13 +7,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.petgo.auth.domain.PetStatus;
-import com.petgo.auth.domain.User;
-import com.petgo.auth.dto.UpdateMeRequest;
-import com.petgo.auth.dto.UserProfileResponse;
-import com.petgo.auth.repository.UserRepository;
-import com.petgo.profile.repository.PetProfileRepository;
-import com.petgo.shared.error.AppException;
+import com.tailtopia.auth.domain.PetStatus;
+import com.tailtopia.auth.domain.User;
+import com.tailtopia.auth.dto.UpdateMeRequest;
+import com.tailtopia.auth.dto.UserProfileResponse;
+import com.tailtopia.auth.repository.UserRepository;
+import com.tailtopia.profile.repository.PetProfileRepository;
+import com.tailtopia.shared.error.AppException;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

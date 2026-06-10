@@ -1,10 +1,10 @@
-package com.petgo.notify.service;
+package com.tailtopia.notify.service;
 
-import com.petgo.notify.domain.Notification;
-import com.petgo.notify.dto.NotificationItem;
-import com.petgo.notify.dto.NotificationPage;
-import com.petgo.notify.repository.NotificationRepository;
-import com.petgo.shared.error.AppException;
+import com.tailtopia.notify.domain.Notification;
+import com.tailtopia.notify.dto.NotificationItem;
+import com.tailtopia.notify.dto.NotificationPage;
+import com.tailtopia.notify.repository.NotificationRepository;
+import com.tailtopia.shared.error.AppException;
 import java.time.Instant;
 import java.util.List;
 import org.springframework.data.domain.PageRequest;

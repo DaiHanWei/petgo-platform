@@ -1,6 +1,6 @@
 {
   "@@locale": "en",
-  "appTitle": "PetGo",
+  "appTitle": "TailTopia",
   "@appTitle": {
     "description": "Application title."
   },
@@ -40,7 +40,7 @@
   "loginCancelled": "Sign-in cancelled",
   "sessionExpired": "Your session expired, please sign in again",
   "rateLimited": "Too many attempts, please try again later",
-  "onboardingWelcomeTitle": "Welcome to PetGo",
+  "onboardingWelcomeTitle": "Welcome to TailTopia",
   "onboardingWelcomeBody": "Let's finish setting up your account",
   "loginTitle": "Sign in",
   "loginGuideSoftTitle": "Sign in for the full experience",
@@ -171,7 +171,7 @@
   "milestoneCheckinFailed": "Could not check in, please try again",
   "milestoneCelebrateUnlocked": "Milestone unlocked!",
   "milestoneCelebrateOpenChest": "Tap to open",
-  "milestoneShareText": "My pet just unlocked the \"{title}\" milestone on PetGo! 🎉",
+  "milestoneShareText": "My pet just unlocked the \"{title}\" milestone on TailTopia! 🎉",
   "@milestoneShareText": { "placeholders": { "title": { "type": "String" } } },
   "healthEventLabel": "🏥 Consultation record",
   "commonSave": "Save",
@@ -398,7 +398,7 @@
   "updateRecommendTitle": "A new version is available",
   "updateRecommendBody": "Update for the latest features and fixes.",
   "updateForceTitle": "Update required to continue",
-  "updateForceBody": "Please update to the latest version to keep using PetGo.",
+  "updateForceBody": "Please update to the latest version to keep using TailTopia.",
   "updateGoStore": "Update now",
   "updateLater": "Later",
   "notificationCenterTitle": "Notifications",

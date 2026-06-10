@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:petgo/core/network/dio_client.dart';
-import 'package:petgo/core/router/route_intent.dart';
-import 'package:petgo/features/auth/data/auth_repository.dart';
-import 'package:petgo/features/auth/domain/auth_state.dart';
-import 'package:petgo/features/auth/domain/login_guide_controller.dart';
-import 'package:petgo/features/auth/domain/login_response.dart';
-import 'package:petgo/l10n/app_localizations.dart';
-import 'package:petgo/shared/widgets/login_hard_dialog.dart';
-import 'package:petgo/shared/widgets/login_soft_sheet.dart';
+import 'package:tailtopia/core/network/dio_client.dart';
+import 'package:tailtopia/core/router/route_intent.dart';
+import 'package:tailtopia/features/auth/data/auth_repository.dart';
+import 'package:tailtopia/features/auth/domain/auth_state.dart';
+import 'package:tailtopia/features/auth/domain/login_guide_controller.dart';
+import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/shared/widgets/login_hard_dialog.dart';
+import 'package:tailtopia/shared/widgets/login_soft_sheet.dart';
 
 LoginResponse _resp({required bool onboardingCompleted, bool isNewUser = false}) => LoginResponse(
       accessToken: 'a',

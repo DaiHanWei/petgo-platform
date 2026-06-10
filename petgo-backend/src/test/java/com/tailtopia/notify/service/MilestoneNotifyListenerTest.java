@@ -1,4 +1,4 @@
-package com.petgo.notify.service;
+package com.tailtopia.notify.service;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -6,9 +6,9 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import com.petgo.notify.domain.NotificationType;
-import com.petgo.profile.domain.MilestoneLevel;
-import com.petgo.profile.event.MilestoneCompletedEvent;
+import com.tailtopia.notify.domain.NotificationType;
+import com.tailtopia.profile.domain.MilestoneLevel;
+import com.tailtopia.profile.event.MilestoneCompletedEvent;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 

@@ -1,7 +1,7 @@
-package com.petgo.notify.schedule;
+package com.tailtopia.notify.schedule;
 
-import com.petgo.notify.domain.NotificationType;
-import com.petgo.profile.dto.PetProfileSnapshot;
+import com.tailtopia.notify.domain.NotificationType;
+import com.tailtopia.profile.dto.PetProfileSnapshot;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;

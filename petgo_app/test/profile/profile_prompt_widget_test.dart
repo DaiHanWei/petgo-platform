@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:petgo/features/auth/domain/auth_state.dart';
-import 'package:petgo/features/auth/domain/login_response.dart';
-import 'package:petgo/features/content/presentation/home_page.dart';
-import 'package:petgo/features/profile/presentation/profile_onboarding_page.dart';
-import 'package:petgo/l10n/app_localizations.dart';
-import 'package:petgo/shared/widgets/profile_prompt_bar.dart';
+import 'package:tailtopia/features/auth/domain/auth_state.dart';
+import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/features/content/presentation/home_page.dart';
+import 'package:tailtopia/features/profile/presentation/profile_onboarding_page.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/shared/widgets/profile_prompt_bar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 LoginResponse _userWithStatus(String status, {bool hasPetProfile = false}) => LoginResponse(

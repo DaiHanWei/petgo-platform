@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/app.dart';
-import 'package:petgo/features/auth/domain/auth_guard.dart';
-import 'package:petgo/features/auth/domain/auth_state.dart';
-import 'package:petgo/features/auth/domain/login_guide_controller.dart';
-import 'package:petgo/features/auth/domain/login_response.dart';
-import 'package:petgo/features/content/data/feed_repository.dart';
-import 'package:petgo/features/content/presentation/feed_tab_row.dart';
-import 'package:petgo/l10n/app_localizations.dart';
-import 'package:petgo/shared/widgets/empty_state.dart';
-import 'package:petgo/shared/widgets/login_hard_dialog.dart';
+import 'package:tailtopia/app.dart';
+import 'package:tailtopia/features/auth/domain/auth_guard.dart';
+import 'package:tailtopia/features/auth/domain/auth_state.dart';
+import 'package:tailtopia/features/auth/domain/login_guide_controller.dart';
+import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/features/content/data/feed_repository.dart';
+import 'package:tailtopia/features/content/presentation/feed_tab_row.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/shared/widgets/empty_state.dart';
+import 'package:tailtopia/shared/widgets/login_hard_dialog.dart';
 
 import '../support/fake_feed_repository.dart';
 
@@ -106,7 +106,7 @@ void main() {
   testWidgets('AC1: 游客首页可滚动只读容器 + Feed 空状态占位', (tester) async {
     await tester.pumpWidget(ProviderScope(
       overrides: [feedRepositoryProvider.overrideWithValue(FakeFeedRepository())],
-      child: const PetGoApp(),
+      child: const TailTopiaApp(),
     ));
     await tester.pumpAndSettle();
 
@@ -119,7 +119,7 @@ void main() {
   testWidgets('AC2: 游客点受控 Tab（问诊）→ 弹强弹窗 + 不切换目的地', (tester) async {
     await tester.pumpWidget(ProviderScope(
       overrides: [feedRepositoryProvider.overrideWithValue(FakeFeedRepository())],
-      child: const PetGoApp(),
+      child: const TailTopiaApp(),
     ));
     await tester.pumpAndSettle();
 
@@ -138,7 +138,7 @@ void main() {
 
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
-      child: const PetGoApp(),
+      child: const TailTopiaApp(),
     ));
     await tester.pumpAndSettle();
 

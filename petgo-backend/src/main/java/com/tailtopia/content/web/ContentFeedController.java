@@ -1,8 +1,8 @@
-package com.petgo.content.web;
+package com.tailtopia.content.web;
 
-import com.petgo.auth.service.AccountQueryService;
-import com.petgo.content.dto.FeedPageResponse;
-import com.petgo.content.service.FeedService;
+import com.tailtopia.auth.service.AccountQueryService;
+import com.tailtopia.content.dto.FeedPageResponse;
+import com.tailtopia.content.service.FeedService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;

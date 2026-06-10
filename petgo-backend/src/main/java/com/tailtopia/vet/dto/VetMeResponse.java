@@ -1,6 +1,6 @@
-package com.petgo.vet.dto;
+package com.tailtopia.vet.dto;
 
-import com.petgo.vet.domain.VetAccount;
+import com.tailtopia.vet.domain.VetAccount;
 
 /**
  * 兽医自身视图（Story 5.1 探活 + 工作台顶部展示）。绝不含 username/passwordHash。

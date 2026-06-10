@@ -1,6 +1,6 @@
-package com.petgo.profile.event;
+package com.tailtopia.profile.event;
 
-import com.petgo.profile.domain.MilestoneLevel;
+import com.tailtopia.profile.domain.MilestoneLevel;
 
 /**
  * 里程碑完成领域事件（Story 8.6，过去式）。每次**新**完成（自动 / 打卡 / 计数 / 组合）后由

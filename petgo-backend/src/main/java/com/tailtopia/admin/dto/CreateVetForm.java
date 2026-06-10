@@ -1,4 +1,4 @@
-package com.petgo.admin.dto;
+package com.tailtopia.admin.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;

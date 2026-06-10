@@ -1,4 +1,4 @@
 /**
- * PetGo profile 模块 — service 层（脚手架占位，业务后续 Story 填充）。
+ * TailTopia profile 模块 — service 层（脚手架占位，业务后续 Story 填充）。
  */
-package com.petgo.profile.service;
+package com.tailtopia.profile.service;

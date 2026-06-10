@@ -1,4 +1,4 @@
-package com.petgo.profile.service;
+package com.tailtopia.profile.service;
 
 import java.time.Instant;
 import java.time.LocalDate;

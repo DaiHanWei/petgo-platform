@@ -1,4 +1,4 @@
-package com.petgo.shared.media;
+package com.tailtopia.shared.media;
 
 import com.aliyun.oss.OSS;
 import com.aliyun.oss.OSSClientBuilder;

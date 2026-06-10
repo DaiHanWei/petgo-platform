@@ -1,4 +1,4 @@
-package com.petgo.auth.service;
+package com.tailtopia.auth.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -8,17 +8,17 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.petgo.auth.domain.RefreshToken;
-import com.petgo.auth.domain.User;
-import com.petgo.auth.dto.LoginResponse;
-import com.petgo.auth.dto.TokenResponse;
-import com.petgo.auth.repository.RefreshTokenRepository;
-import com.petgo.auth.repository.UserRepository;
-import com.petgo.shared.error.AppException;
-import com.petgo.shared.security.GoogleIdentity;
-import com.petgo.shared.security.GoogleTokenVerifier;
-import com.petgo.shared.security.JwtService;
-import com.petgo.vet.service.VetAccountService;
+import com.tailtopia.auth.domain.RefreshToken;
+import com.tailtopia.auth.domain.User;
+import com.tailtopia.auth.dto.LoginResponse;
+import com.tailtopia.auth.dto.TokenResponse;
+import com.tailtopia.auth.repository.RefreshTokenRepository;
+import com.tailtopia.auth.repository.UserRepository;
+import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.security.GoogleIdentity;
+import com.tailtopia.shared.security.GoogleTokenVerifier;
+import com.tailtopia.shared.security.JwtService;
+import com.tailtopia.vet.service.VetAccountService;
 import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;

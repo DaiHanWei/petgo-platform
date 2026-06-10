@@ -1,13 +1,13 @@
-package com.petgo.consult.web;
+package com.tailtopia.consult.web;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.petgo.auth.domain.User;
-import com.petgo.support.ApiIntegrationTest;
-import com.petgo.vet.domain.VetAccount;
-import com.petgo.vet.repository.VetAccountRepository;
+import com.tailtopia.auth.domain.User;
+import com.tailtopia.support.ApiIntegrationTest;
+import com.tailtopia.vet.domain.VetAccount;
+import com.tailtopia.vet.repository.VetAccountRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 

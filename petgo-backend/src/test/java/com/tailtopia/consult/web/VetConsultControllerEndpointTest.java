@@ -1,18 +1,18 @@
-package com.petgo.consult.web;
+package com.tailtopia.consult.web;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.petgo.auth.domain.User;
-import com.petgo.consult.domain.ConsultSession;
-import com.petgo.consult.domain.SessionStatus;
-import com.petgo.consult.repository.ConsultSessionRepository;
-import com.petgo.consult.service.ConsultQueueService;
-import com.petgo.support.ApiIntegrationTest;
-import com.petgo.support.VetTestSupport;
-import com.petgo.vet.domain.VetAccount;
+import com.tailtopia.auth.domain.User;
+import com.tailtopia.consult.domain.ConsultSession;
+import com.tailtopia.consult.domain.SessionStatus;
+import com.tailtopia.consult.repository.ConsultSessionRepository;
+import com.tailtopia.consult.service.ConsultQueueService;
+import com.tailtopia.support.ApiIntegrationTest;
+import com.tailtopia.support.VetTestSupport;
+import com.tailtopia.vet.domain.VetAccount;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

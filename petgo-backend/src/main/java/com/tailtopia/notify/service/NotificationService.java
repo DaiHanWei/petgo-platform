@@ -1,8 +1,8 @@
-package com.petgo.notify.service;
+package com.tailtopia.notify.service;
 
-import com.petgo.notify.domain.Notification;
-import com.petgo.notify.domain.NotificationType;
-import com.petgo.notify.repository.NotificationRepository;
+import com.tailtopia.notify.domain.Notification;
+import com.tailtopia.notify.domain.NotificationType;
+import com.tailtopia.notify.repository.NotificationRepository;
 import java.security.SecureRandom;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;

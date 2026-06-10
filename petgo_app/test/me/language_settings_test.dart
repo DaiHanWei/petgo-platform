@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/core/l10n/locale_controller.dart';
-import 'package:petgo/features/me/presentation/language_settings_page.dart';
-import 'package:petgo/l10n/app_localizations.dart';
+import 'package:tailtopia/core/l10n/locale_controller.dart';
+import 'package:tailtopia/features/me/presentation/language_settings_page.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Story 7.2 AC1/AC2：回退逻辑 + 手动切换即时生效。

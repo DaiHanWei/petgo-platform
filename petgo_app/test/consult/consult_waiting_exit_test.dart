@@ -2,10 +2,10 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/consult/data/consult_repository.dart';
-import 'package:petgo/features/consult/domain/consult_session.dart';
-import 'package:petgo/features/consult/presentation/consult_waiting_page.dart';
-import 'package:petgo/l10n/app_localizations.dart';
+import 'package:tailtopia/features/consult/data/consult_repository.dart';
+import 'package:tailtopia/features/consult/domain/consult_session.dart';
+import 'package:tailtopia/features/consult/presentation/consult_waiting_page.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// Story 5.3 R2 / AC7（决策 F12）：等待期间退出 App（含 kill 进程）→ 自动取消匹配。
 /// detached = 进程终止前最后信号；仅 paused（切后台）不取消。

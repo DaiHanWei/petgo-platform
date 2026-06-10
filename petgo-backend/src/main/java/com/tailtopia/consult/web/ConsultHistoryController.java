@@ -1,8 +1,8 @@
-package com.petgo.consult.web;
+package com.tailtopia.consult.web;
 
-import com.petgo.consult.dto.ConsultHistoryPage;
-import com.petgo.consult.service.ConsultHistoryService;
-import com.petgo.shared.error.AppException;
+import com.tailtopia.consult.dto.ConsultHistoryPage;
+import com.tailtopia.consult.service.ConsultHistoryService;
+import com.tailtopia.shared.error.AppException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;

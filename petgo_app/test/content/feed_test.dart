@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/content/data/feed_repository.dart';
-import 'package:petgo/features/content/domain/feed_item.dart';
-import 'package:petgo/features/content/presentation/feed_controller.dart';
-import 'package:petgo/features/content/presentation/feed_tab_row.dart';
-import 'package:petgo/features/content/presentation/feed_view.dart';
-import 'package:petgo/features/content/presentation/home_page.dart';
-import 'package:petgo/l10n/app_localizations.dart';
-import 'package:petgo/shared/widgets/masonry_card.dart';
+import 'package:tailtopia/features/content/data/feed_repository.dart';
+import 'package:tailtopia/features/content/domain/feed_item.dart';
+import 'package:tailtopia/features/content/presentation/feed_controller.dart';
+import 'package:tailtopia/features/content/presentation/feed_tab_row.dart';
+import 'package:tailtopia/features/content/presentation/feed_view.dart';
+import 'package:tailtopia/features/content/presentation/home_page.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/shared/widgets/masonry_card.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 FeedItem _item({

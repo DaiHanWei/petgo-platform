@@ -1,4 +1,4 @@
-package com.petgo.profile.domain;
+package com.tailtopia.profile.domain;
 
 /**
  * 里程碑清单单项定义（FR-42 后端固定常量元素，见 {@link MilestoneCatalog}）。

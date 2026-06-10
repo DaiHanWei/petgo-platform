@@ -1,8 +1,8 @@
-package com.petgo.moderation.web;
+package com.tailtopia.moderation.web;
 
-import com.petgo.moderation.dto.ReportRequest;
-import com.petgo.moderation.service.ReportService;
-import com.petgo.shared.error.AppException;
+import com.tailtopia.moderation.dto.ReportRequest;
+import com.tailtopia.moderation.service.ReportService;
+import com.tailtopia.shared.error.AppException;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;

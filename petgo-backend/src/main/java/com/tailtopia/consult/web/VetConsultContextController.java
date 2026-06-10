@@ -1,7 +1,7 @@
-package com.petgo.consult.web;
+package com.tailtopia.consult.web;
 
-import com.petgo.consult.dto.ConsultAiContextResponse;
-import com.petgo.consult.service.ConsultAiContextService;
+import com.tailtopia.consult.dto.ConsultAiContextResponse;
+import com.tailtopia.consult.service.ConsultAiContextService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;

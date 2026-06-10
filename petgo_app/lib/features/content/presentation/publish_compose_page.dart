@@ -36,7 +36,7 @@ final publishControllerProvider = Provider.autoDispose<PublishController>((ref) 
   return controller;
 });
 
-/// 统一发布 Compose 全屏 bottom sheet（Story 2.3 · PetGo Prototype 换肤）。
+/// 统一发布 Compose 全屏 bottom sheet（Story 2.3 · TailTopia Prototype 换肤）。
 /// 类型标签（Cerita / Momen / Edukasi）→ 作者+关联宠物 → 文字 → 图片 → 发布。
 class PublishComposePage extends ConsumerStatefulWidget {
   const PublishComposePage(

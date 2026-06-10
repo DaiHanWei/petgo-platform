@@ -1,4 +1,4 @@
-package com.petgo.profile.domain;
+package com.tailtopia.profile.domain;
 
 /**
  * 里程碑级别（FR-42，落库单字符 S/M/L）。决定庆祝动效分量（8.5）与展示分区。

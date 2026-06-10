@@ -1,8 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/core/network/problem_detail.dart';
-import 'package:petgo/features/auth/domain/auth_routing.dart';
-import 'package:petgo/features/auth/domain/login_response.dart';
+import 'package:tailtopia/core/network/problem_detail.dart';
+import 'package:tailtopia/features/auth/domain/auth_routing.dart';
+import 'package:tailtopia/features/auth/domain/login_response.dart';
 
 void main() {
   group('AC4 新老用户分流（纯函数）', () {

@@ -1,8 +1,8 @@
-package com.petgo.auth.service;
+package com.tailtopia.auth.service;
 
-import com.petgo.auth.domain.User;
-import com.petgo.auth.dto.AuthorView;
-import com.petgo.auth.repository.UserRepository;
+import com.tailtopia.auth.domain.User;
+import com.tailtopia.auth.dto.AuthorView;
+import com.tailtopia.auth.repository.UserRepository;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Optional;

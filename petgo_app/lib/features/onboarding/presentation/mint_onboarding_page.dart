@@ -7,7 +7,7 @@ import '../../../shared/widgets/design/btn3d.dart';
 import '../../../shared/widgets/design/emoji_avatar.dart';
 import '../../../shared/widgets/design/momo.dart';
 
-/// 新用户引导流（PetGo Prototype · FR-11）。
+/// 新用户引导流（TailTopia Prototype · FR-11）。
 ///
 /// 三步：欢迎页（吉祥物 Momo）→ 创建宠物档案 → 完成动效。
 /// 全面换肤后的薄荷绿 × Duolingo 风格，界面文案印尼语（真实语境）+ 中文注释。
@@ -524,7 +524,7 @@ class _DoneState extends State<_Done> with TickerProviderStateMixin {
               child: Btn3d(
                 expand: true,
                 onPressed: widget.onEnter,
-                child: const Text('Masuk ke PetGo'),
+                child: const Text('Masuk ke TailTopia'),
               ),
             ),
           ],

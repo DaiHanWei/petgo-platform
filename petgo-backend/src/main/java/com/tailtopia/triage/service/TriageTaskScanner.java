@@ -1,8 +1,8 @@
-package com.petgo.triage.service;
+package com.tailtopia.triage.service;
 
-import com.petgo.triage.domain.TriageStatus;
-import com.petgo.triage.domain.TriageTask;
-import com.petgo.triage.repository.TriageTaskRepository;
+import com.tailtopia.triage.domain.TriageStatus;
+import com.tailtopia.triage.domain.TriageTask;
+import com.tailtopia.triage.repository.TriageTaskRepository;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

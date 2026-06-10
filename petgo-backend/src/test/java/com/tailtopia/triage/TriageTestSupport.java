@@ -1,7 +1,7 @@
-package com.petgo.triage;
+package com.tailtopia.triage;
 
-import com.petgo.triage.domain.TriageStatus;
-import com.petgo.triage.domain.TriageTask;
+import com.tailtopia.triage.domain.TriageStatus;
+import com.tailtopia.triage.domain.TriageTask;
 import java.lang.reflect.Field;
 import java.util.List;
 

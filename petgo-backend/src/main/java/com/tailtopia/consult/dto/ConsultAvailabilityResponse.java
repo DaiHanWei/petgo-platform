@@ -1,4 +1,4 @@
-package com.petgo.consult.dto;
+package com.tailtopia.consult.dto;
 
 /**
  * 兽医咨询可用性（Story 5.2 建，Story 5.3 扩展）。

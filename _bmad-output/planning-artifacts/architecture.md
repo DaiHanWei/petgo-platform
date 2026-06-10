@@ -11,12 +11,12 @@ inputDocuments:
   - _bmad-output/planning-artifacts/implementation-readiness-report-2026-06-01.md
   - _bmad-output/planning-artifacts/index.md
 workflowType: 'architecture'
-project_name: 'PetGo'
+project_name: 'TailTopia'
 user_name: 'Dai'
 date: '2026-06-01'
 ---
 
-# PetGo V1.0 架构决策文档（Architecture Decision Document）
+# TailTopia V1.0 架构决策文档（Architecture Decision Document）
 
 _本文档通过逐步协作发现的方式构建。每完成一项架构决策，对应章节将被追加进来。本文档的唯一权威范围来自 PRD（39 个 FR）；技术选型以 TECH_FRAMEWORK 对齐稿为方向起点，在本工作流中细化为正式架构。_
 
@@ -115,7 +115,7 @@ V1 是**双产物全栈移动**项目，需两套脚手架（无独立 SSR——
 
 ```bash
 # 1) 生成骨架（org 决定包名/Bundle ID，可改）
-flutter create --org com.petgo --project-name petgo petgo_app
+flutter create --org com.tailtopia --project-name petgo petgo_app
 cd petgo_app
 
 # 2) 状态管理 Riverpod
@@ -152,10 +152,10 @@ spring init \
   --type=maven-project \
   --boot-version=4.0.6 \
   --java-version=21 \
-  --group-id=com.petgo \
+  --group-id=com.tailtopia \
   --artifact-id=petgo-backend \
   --name=petgo-backend \
-  --package-name=com.petgo \
+  --package-name=com.tailtopia \
   --dependencies=web,validation,data-jpa,postgresql,data-redis,oauth2-resource-server,security,thymeleaf,actuator,flyway,lombok \
   petgo-backend
 ```
@@ -283,7 +283,7 @@ spring init \
 **Java 代码：**
 - 类 PascalCase、方法/字段 camelCase、常量 UPPER_SNAKE、包全小写。
 - 分层后缀：`XxxController` / `XxxService` / `XxxRepository` / 实体 `Xxx`（JPA `@Entity`）/ `XxxRequest`·`XxxResponse`（DTO，record）/ `XxxMapper`。
-- 包按模块再分层：`com.petgo.<module>.{web,service,domain,repository,dto,event}`（module ∈ auth/triage/consult/content/profile/notify/moderation/vet）。
+- 包按模块再分层：`com.tailtopia.<module>.{web,service,domain,repository,dto,event}`（module ∈ auth/triage/consult/content/profile/notify/moderation/vet）。
 - 领域事件 `XxxEvent`（过去式语义，如 `TriageSubmittedEvent`）。
 
 **Dart / Flutter：**
@@ -295,12 +295,12 @@ spring init \
 
 **后端（package-by-feature → layer）：**
 ```
-src/main/java/com/petgo/
+src/main/java/com/tailtopia/
   <module>/{web,service,domain,repository,dto,event}
   shared/{config,security,error,async,media,im}   # 跨模块基础设施
 src/main/resources/db/migration/                    # Flyway
 src/main/resources/templates/                       # Thymeleaf H5 名片
-src/test/java/com/petgo/<module>/...                # 镜像结构
+src/test/java/com/tailtopia/<module>/...                # 镜像结构
 ```
 
 **Flutter（feature-first）：**
@@ -372,8 +372,8 @@ petgo-backend/
 ├── Dockerfile
 ├── docker-compose.yml              # app + postgres + redis（德国单机）
 ├── .github/workflows/ci.yml        # build jar+镜像 → 部署德国机
-├── src/main/java/com/petgo/
-│   ├── PetgoApplication.java
+├── src/main/java/com/tailtopia/
+│   ├── TailtopiaApplication.java
 │   ├── auth/        {web, service, domain, repository, dto, event}   # FR-0A~0H,19,29
 │   ├── triage/      {web, service, domain, repository, dto, event}   # FR-1~3,4A,5
 │   │   └── service/{TriageService, SafetyRuleLayer, TriageTaskScanner}
@@ -399,7 +399,7 @@ petgo-backend/
 │   ├── db/migration/   V1__init_auth.sql, V2__init_profile.sql, ...   # Flyway
 │   ├── templates/      card.html                                      # H5 名片 + OG meta
 │   └── safety/         high_risk_symptoms.yml                         # 安全规则层清单（兽医顾问维护）
-└── src/test/java/com/petgo/<module>/...                               # 镜像，关键路径优先
+└── src/test/java/com/tailtopia/<module>/...                               # 镜像，关键路径优先
 ```
 
 **移动端 —— petgo_app（Flutter feature-first）**
@@ -530,7 +530,7 @@ petgo_app/
 
 ### Validation Issues Addressed
 
-- **G-1**：新增 `com.petgo.admin/`（`role=ADMIN` 端点 + Thymeleaf 简易后台），FR-18/25/29/33/封禁均挂此 slice，复用各模块 service，不引入新系统。
+- **G-1**：新增 `com.tailtopia.admin/`（`role=ADMIN` 端点 + Thymeleaf 简易后台），FR-18/25/29/33/封禁均挂此 slice，复用各模块 service，不引入新系统。
 - **G-4**：`shared/media` 上传链路增加 EXIF GPS 剥离。
 
 ### Architecture Completeness Checklist

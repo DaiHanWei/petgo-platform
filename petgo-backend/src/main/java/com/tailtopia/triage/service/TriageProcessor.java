@@ -1,12 +1,12 @@
-package com.petgo.triage.service;
+package com.tailtopia.triage.service;
 
-import com.petgo.shared.ai.GeminiClient;
-import com.petgo.shared.ai.GeminiTriageResult;
-import com.petgo.shared.media.SignedUrlService;
-import com.petgo.triage.domain.DangerLevel;
-import com.petgo.triage.domain.TriageStatus;
-import com.petgo.triage.domain.TriageTask;
-import com.petgo.triage.repository.TriageTaskRepository;
+import com.tailtopia.shared.ai.GeminiClient;
+import com.tailtopia.shared.ai.GeminiTriageResult;
+import com.tailtopia.shared.media.SignedUrlService;
+import com.tailtopia.triage.domain.DangerLevel;
+import com.tailtopia.triage.domain.TriageStatus;
+import com.tailtopia.triage.domain.TriageTask;
+import com.tailtopia.triage.repository.TriageTaskRepository;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;

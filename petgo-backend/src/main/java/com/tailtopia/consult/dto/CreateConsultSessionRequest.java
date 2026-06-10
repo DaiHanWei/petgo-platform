@@ -1,4 +1,4 @@
-package com.petgo.consult.dto;
+package com.tailtopia.consult.dto;
 
 /**
  * 发起咨询请求（Story 5.3 建，Story 5.4 扩展）。

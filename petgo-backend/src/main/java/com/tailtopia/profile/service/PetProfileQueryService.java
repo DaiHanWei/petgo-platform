@@ -1,7 +1,7 @@
-package com.petgo.profile.service;
+package com.tailtopia.profile.service;
 
-import com.petgo.profile.dto.PetProfileSnapshot;
-import com.petgo.profile.repository.PetProfileRepository;
+import com.tailtopia.profile.dto.PetProfileSnapshot;
+import com.tailtopia.profile.repository.PetProfileRepository;
 import java.time.ZoneOffset;
 import java.util.List;
 import org.springframework.stereotype.Service;

@@ -1,10 +1,10 @@
-package com.petgo.shared.media.web;
+package com.tailtopia.shared.media.web;
 
-import com.petgo.shared.error.AppException;
-import com.petgo.shared.media.StsService;
-import com.petgo.shared.media.dto.StsCredentialRequest;
-import com.petgo.shared.media.dto.StsCredentialResponse;
-import com.petgo.shared.ratelimit.RedisRateLimiter;
+import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.media.StsService;
+import com.tailtopia.shared.media.dto.StsCredentialRequest;
+import com.tailtopia.shared.media.dto.StsCredentialResponse;
+import com.tailtopia.shared.ratelimit.RedisRateLimiter;
 import jakarta.validation.Valid;
 import java.time.Duration;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;

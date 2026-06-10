@@ -1,11 +1,11 @@
-package com.petgo.moderation.service;
+package com.tailtopia.moderation.service;
 
-import com.petgo.content.service.ContentService;
-import com.petgo.moderation.domain.ContentReport;
-import com.petgo.moderation.domain.ReportReason;
-import com.petgo.moderation.domain.ReportStatus;
-import com.petgo.moderation.repository.ContentReportRepository;
-import com.petgo.shared.error.AppException;
+import com.tailtopia.content.service.ContentService;
+import com.tailtopia.moderation.domain.ContentReport;
+import com.tailtopia.moderation.domain.ReportReason;
+import com.tailtopia.moderation.domain.ReportStatus;
+import com.tailtopia.moderation.repository.ContentReportRepository;
+import com.tailtopia.shared.error.AppException;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.dao.DataIntegrityViolationException;

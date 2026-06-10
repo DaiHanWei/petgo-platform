@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/profile/data/profile_repository.dart';
-import 'package:petgo/features/profile/domain/pet_profile.dart';
-import 'package:petgo/features/profile/presentation/pet_profile_edit_page.dart';
-import 'package:petgo/l10n/app_localizations.dart';
+import 'package:tailtopia/features/profile/data/profile_repository.dart';
+import 'package:tailtopia/features/profile/domain/pet_profile.dart';
+import 'package:tailtopia/features/profile/presentation/pet_profile_edit_page.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 
 class _FakeRepo implements ProfileRepository {
   _FakeRepo(this.profile);

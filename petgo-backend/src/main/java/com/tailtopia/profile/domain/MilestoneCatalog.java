@@ -1,11 +1,11 @@
-package com.petgo.profile.domain;
+package com.tailtopia.profile.domain;
 
-import static com.petgo.profile.domain.MilestoneLevel.L;
-import static com.petgo.profile.domain.MilestoneLevel.M;
-import static com.petgo.profile.domain.MilestoneLevel.S;
-import static com.petgo.profile.domain.MilestoneTriggerType.PUSH_PUBLISH;
-import static com.petgo.profile.domain.MilestoneTriggerType.SYSTEM_AUTO;
-import static com.petgo.profile.domain.MilestoneTriggerType.USER_CHECKIN;
+import static com.tailtopia.profile.domain.MilestoneLevel.L;
+import static com.tailtopia.profile.domain.MilestoneLevel.M;
+import static com.tailtopia.profile.domain.MilestoneLevel.S;
+import static com.tailtopia.profile.domain.MilestoneTriggerType.PUSH_PUBLISH;
+import static com.tailtopia.profile.domain.MilestoneTriggerType.SYSTEM_AUTO;
+import static com.tailtopia.profile.domain.MilestoneTriggerType.USER_CHECKIN;
 
 import java.util.LinkedHashMap;
 import java.util.List;

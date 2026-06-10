@@ -1,13 +1,13 @@
-package com.petgo.profile.service;
+package com.tailtopia.profile.service;
 
-import com.petgo.content.domain.ContentType;
-import com.petgo.content.event.ContentCommentedEvent;
-import com.petgo.content.event.ContentLikedEvent;
-import com.petgo.content.event.ContentPublishedEvent;
-import com.petgo.profile.domain.MilestoneCompletionSource;
-import com.petgo.profile.event.CardSharedEvent;
-import com.petgo.profile.event.HealthArchivedEvent;
-import com.petgo.profile.event.ProfileCreatedEvent;
+import com.tailtopia.content.domain.ContentType;
+import com.tailtopia.content.event.ContentCommentedEvent;
+import com.tailtopia.content.event.ContentLikedEvent;
+import com.tailtopia.content.event.ContentPublishedEvent;
+import com.tailtopia.profile.domain.MilestoneCompletionSource;
+import com.tailtopia.profile.event.CardSharedEvent;
+import com.tailtopia.profile.event.HealthArchivedEvent;
+import com.tailtopia.profile.event.ProfileCreatedEvent;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionalEventListener;

@@ -1,18 +1,18 @@
-package com.petgo.profile.service;
+package com.tailtopia.profile.service;
 
-import com.petgo.profile.domain.MilestoneCompletion;
-import com.petgo.profile.domain.MilestoneDefinition;
-import com.petgo.profile.domain.MilestoneLevel;
-import com.petgo.profile.domain.PetMilestone;
-import com.petgo.profile.domain.PetProfile;
-import com.petgo.profile.domain.PetType;
-import com.petgo.profile.dto.MilestoneGroupResponse;
-import com.petgo.profile.dto.MilestoneItemResponse;
-import com.petgo.profile.dto.MilestoneListResponse;
-import com.petgo.profile.repository.MilestoneCompletionRepository;
-import com.petgo.profile.repository.PetMilestoneRepository;
-import com.petgo.profile.repository.PetProfileRepository;
-import com.petgo.shared.error.AppException;
+import com.tailtopia.profile.domain.MilestoneCompletion;
+import com.tailtopia.profile.domain.MilestoneDefinition;
+import com.tailtopia.profile.domain.MilestoneLevel;
+import com.tailtopia.profile.domain.PetMilestone;
+import com.tailtopia.profile.domain.PetProfile;
+import com.tailtopia.profile.domain.PetType;
+import com.tailtopia.profile.dto.MilestoneGroupResponse;
+import com.tailtopia.profile.dto.MilestoneItemResponse;
+import com.tailtopia.profile.dto.MilestoneListResponse;
+import com.tailtopia.profile.repository.MilestoneCompletionRepository;
+import com.tailtopia.profile.repository.PetMilestoneRepository;
+import com.tailtopia.profile.repository.PetProfileRepository;
+import com.tailtopia.shared.error.AppException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -25,7 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 里程碑服务（Story 8.1，FR-42 / 决策 F16）。归 profile 域。
  *
- * <p>职责：① 建档时按 {@link com.petgo.profile.domain.MilestoneCatalog} 按 pet_type 物化 roster
+ * <p>职责：① 建档时按 {@link com.tailtopia.profile.domain.MilestoneCatalog} 按 pet_type 物化 roster
  * （{@link #assignRoster}，幂等）；② 组装列表页 L/M/S 分区进度响应（{@link #getMilestones}）。
  * 清单为后端固定常量，本服务不写运营可编辑逻辑（护栏）。
  */
@@ -57,7 +57,7 @@ public class MilestoneService {
             return;
         }
         List<PetMilestone> roster = new ArrayList<>();
-        for (MilestoneDefinition def : com.petgo.profile.domain.MilestoneCatalog.forType(petType)) {
+        for (MilestoneDefinition def : com.tailtopia.profile.domain.MilestoneCatalog.forType(petType)) {
             roster.add(PetMilestone.of(petProfileId, def));
         }
         try {
@@ -73,7 +73,7 @@ public class MilestoneService {
      */
     @Transactional(readOnly = true)
     public MilestoneProgress getProgress(long petProfileId, PetType petType) {
-        int total = com.petgo.profile.domain.MilestoneCatalog.forType(petType).size();
+        int total = com.tailtopia.profile.domain.MilestoneCatalog.forType(petType).size();
         List<Long> ids = milestones.findByPetProfileIdOrderBySortOrderAsc(petProfileId).stream()
                 .map(PetMilestone::getId).toList();
         long completed = ids.isEmpty() ? 0L : completions.countByPetMilestoneIdIn(ids);
@@ -115,7 +115,7 @@ public class MilestoneService {
 
         int totalDone = 0;
         for (PetMilestone m : roster) {
-            MilestoneDefinition def = com.petgo.profile.domain.MilestoneCatalog.byCode(m.getCode());
+            MilestoneDefinition def = com.tailtopia.profile.domain.MilestoneCatalog.byCode(m.getCode());
             String title = def != null ? def.titleZh() : m.getCode();
             boolean completed = completedMilestoneIds.contains(m.getId());
             if (completed) {

@@ -1,4 +1,4 @@
-package com.petgo.shared.im;
+package com.tailtopia.shared.im;
 
 import java.util.UUID;
 import org.slf4j.Logger;

@@ -1,9 +1,9 @@
-package com.petgo.profile.service;
+package com.tailtopia.profile.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
-import com.petgo.shared.media.AliyunOssClient;
+import com.tailtopia.shared.media.AliyunOssClient;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import javax.imageio.ImageIO;

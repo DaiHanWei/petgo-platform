@@ -1,4 +1,4 @@
-package com.petgo.profile.service;
+package com.tailtopia.profile.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

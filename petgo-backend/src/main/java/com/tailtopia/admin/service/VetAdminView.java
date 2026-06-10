@@ -1,6 +1,6 @@
-package com.petgo.admin.service;
+package com.tailtopia.admin.service;
 
-import com.petgo.vet.domain.VetAccount;
+import com.tailtopia.vet.domain.VetAccount;
 import java.time.Instant;
 
 /**

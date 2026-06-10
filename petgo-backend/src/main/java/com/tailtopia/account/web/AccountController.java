@@ -1,7 +1,7 @@
-package com.petgo.account.web;
+package com.tailtopia.account.web;
 
-import com.petgo.account.service.AccountDeletionService;
-import com.petgo.shared.error.AppException;
+import com.tailtopia.account.service.AccountDeletionService;
+import com.tailtopia.shared.error.AppException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;

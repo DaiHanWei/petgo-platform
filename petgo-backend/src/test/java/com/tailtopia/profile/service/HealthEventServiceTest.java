@@ -1,4 +1,4 @@
-package com.petgo.profile.service;
+package com.tailtopia.profile.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -9,14 +9,14 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.petgo.profile.domain.ArchiveDecision;
-import com.petgo.profile.domain.HealthEvent;
-import com.petgo.profile.domain.HealthSourceType;
-import com.petgo.profile.dto.ArchiveDecisionRequest;
-import com.petgo.profile.dto.ArchiveDecisionResponse;
-import com.petgo.profile.repository.HealthEventRepository;
-import com.petgo.shared.error.AppException;
-import com.petgo.shared.media.ImToOssArchiver;
+import com.tailtopia.profile.domain.ArchiveDecision;
+import com.tailtopia.profile.domain.HealthEvent;
+import com.tailtopia.profile.domain.HealthSourceType;
+import com.tailtopia.profile.dto.ArchiveDecisionRequest;
+import com.tailtopia.profile.dto.ArchiveDecisionResponse;
+import com.tailtopia.profile.repository.HealthEventRepository;
+import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.media.ImToOssArchiver;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;

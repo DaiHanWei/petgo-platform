@@ -1,4 +1,4 @@
-# PetGo 云端开发循环 Runbook（claude.ai/code 过夜批跑）
+# TailTopia 云端开发循环 Runbook（claude.ai/code 过夜批跑）
 
 > 目标：本地负责**规划 + 视觉/集成验收**，云端 headless VM 负责**过夜批量实现 + 命令行验证（L0）**。Mac 合盖/关机不影响云端 session。
 
@@ -83,7 +83,7 @@ L1/L2 在 Completion Notes 标注「待本地验收」。完成后提交到本 s
 一条云会话做完**一个 Epic 内的连续 story**，Epic 末停下等本地验收+合并，再放下一个 Epic。把下面模板里的 `<EPIC_N>` 与 story 范围替换后，`claude --remote "<模板>"` 发起：
 
 ```
-你是 PetGo 的 dev agent（云端 headless）。任务：按 bmad-dev-story 流程，依次实现 <EPIC_N> 中所有 ready-for-dev 的 story（按 sprint-status.yaml 的 story 编号升序），一个做完再做下一个，直到该 Epic 全部完成。
+你是 TailTopia 的 dev agent（云端 headless）。任务：按 bmad-dev-story 流程，依次实现 <EPIC_N> 中所有 ready-for-dev 的 story（按 sprint-status.yaml 的 story 编号升序），一个做完再做下一个，直到该 Epic 全部完成。
 
 每个 story：
 1. 用 bmad-dev-story 流程执行对应 _bmad-output/implementation-artifacts/<story>.md（让 bmad-dev-story 自动挑下一个 ready-for-dev 的）。

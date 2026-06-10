@@ -1,4 +1,4 @@
-package com.petgo.shared.media;
+package com.tailtopia.shared.media;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 

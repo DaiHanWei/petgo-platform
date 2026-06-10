@@ -1,4 +1,4 @@
-package com.petgo.shared.security;
+package com.tailtopia.shared.security;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 

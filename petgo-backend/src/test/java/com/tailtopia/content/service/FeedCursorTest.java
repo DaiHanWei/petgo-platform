@@ -1,9 +1,9 @@
-package com.petgo.content.service;
+package com.tailtopia.content.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.petgo.shared.error.AppException;
+import com.tailtopia.shared.error.AppException;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 

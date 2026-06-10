@@ -1,4 +1,4 @@
-package com.petgo.shared.im;
+package com.tailtopia.shared.im;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

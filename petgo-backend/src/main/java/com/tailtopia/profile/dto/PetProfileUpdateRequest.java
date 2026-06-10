@@ -1,4 +1,4 @@
-package com.petgo.profile.dto;
+package com.tailtopia.profile.dto;
 
 import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Size;

@@ -1,4 +1,4 @@
 /**
- * PetGo moderation 模块 — web 层（脚手架占位，业务后续 Story 填充）。
+ * TailTopia moderation 模块 — web 层（脚手架占位，业务后续 Story 填充）。
  */
-package com.petgo.moderation.web;
+package com.tailtopia.moderation.web;

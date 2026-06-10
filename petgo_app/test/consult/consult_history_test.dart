@@ -2,12 +2,12 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/auth/domain/auth_state.dart';
-import 'package:petgo/features/consult/data/consult_repository.dart';
-import 'package:petgo/features/consult/domain/consult_history_item.dart';
-import 'package:petgo/features/consult/domain/consult_session.dart';
-import 'package:petgo/features/triage/presentation/triage_page.dart';
-import 'package:petgo/l10n/app_localizations.dart';
+import 'package:tailtopia/features/auth/domain/auth_state.dart';
+import 'package:tailtopia/features/consult/data/consult_repository.dart';
+import 'package:tailtopia/features/consult/domain/consult_history_item.dart';
+import 'package:tailtopia/features/consult/domain/consult_session.dart';
+import 'package:tailtopia/features/triage/presentation/triage_page.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 
 class _FakeConsultRepository extends ConsultRepository {
   _FakeConsultRepository(this._items) : super(dio: Dio());

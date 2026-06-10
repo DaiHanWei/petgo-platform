@@ -1,4 +1,4 @@
-package com.petgo.consult.domain;
+package com.tailtopia.consult.domain;
 
 /**
  * 评分补弹标记流转（Story 5.6，FR-33）。

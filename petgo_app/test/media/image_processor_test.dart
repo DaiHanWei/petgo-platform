@@ -2,7 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
-import 'package:petgo/shared/utils/image_processor.dart';
+import 'package:tailtopia/shared/utils/image_processor.dart';
 
 void main() {
   const processor = ImageProcessor();

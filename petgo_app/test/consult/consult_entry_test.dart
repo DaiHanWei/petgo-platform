@@ -2,11 +2,11 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/consult/data/consult_repository.dart';
-import 'package:petgo/features/consult/domain/consult_session.dart';
-import 'package:petgo/features/consult/presentation/consult_entry_page.dart';
-import 'package:petgo/features/consult/presentation/consult_rating_dialog.dart';
-import 'package:petgo/l10n/app_localizations.dart';
+import 'package:tailtopia/features/consult/data/consult_repository.dart';
+import 'package:tailtopia/features/consult/domain/consult_session.dart';
+import 'package:tailtopia/features/consult/presentation/consult_entry_page.dart';
+import 'package:tailtopia/features/consult/presentation/consult_rating_dialog.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 
 class _FakeConsultRepository extends ConsultRepository {
   _FakeConsultRepository({required this.online, this.activeSession, this.pending})

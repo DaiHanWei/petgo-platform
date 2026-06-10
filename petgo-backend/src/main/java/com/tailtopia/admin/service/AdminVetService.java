@@ -1,12 +1,12 @@
-package com.petgo.admin.service;
+package com.tailtopia.admin.service;
 
-import com.petgo.consult.dto.VetRatingsView;
-import com.petgo.consult.service.ConsultInterruptService;
-import com.petgo.consult.service.ConsultRatingQueryService;
-import com.petgo.vet.domain.VetAccount;
-import com.petgo.vet.domain.VetStatus;
-import com.petgo.vet.service.VetAccountService;
-import com.petgo.vet.service.VetPresenceService;
+import com.tailtopia.consult.dto.VetRatingsView;
+import com.tailtopia.consult.service.ConsultInterruptService;
+import com.tailtopia.consult.service.ConsultRatingQueryService;
+import com.tailtopia.vet.domain.VetAccount;
+import com.tailtopia.vet.domain.VetStatus;
+import com.tailtopia.vet.service.VetAccountService;
+import com.tailtopia.vet.service.VetPresenceService;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

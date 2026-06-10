@@ -1,6 +1,6 @@
-package com.petgo.consult.dto;
+package com.tailtopia.consult.dto;
 
-import com.petgo.consult.domain.ConsultRating;
+import com.tailtopia.consult.domain.ConsultRating;
 import java.time.Instant;
 import java.util.List;
 

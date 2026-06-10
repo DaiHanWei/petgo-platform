@@ -1,6 +1,6 @@
-package com.petgo.profile.dto;
+package com.tailtopia.profile.dto;
 
-import com.petgo.profile.domain.ArchiveDecision;
+import com.tailtopia.profile.domain.ArchiveDecision;
 
 /**
  * 存档决策结果（Story 2.5）。{@code alreadyDecided=true} 表示此 sourceRef 已决策过（幂等无操作）。

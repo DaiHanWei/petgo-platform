@@ -1,6 +1,6 @@
-package com.petgo.consult.repository;
+package com.tailtopia.consult.repository;
 
-import com.petgo.consult.domain.ConsultRating;
+import com.tailtopia.consult.domain.ConsultRating;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;

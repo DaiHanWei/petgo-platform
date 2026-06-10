@@ -1,9 +1,9 @@
-package com.petgo.auth.web;
+package com.tailtopia.auth.web;
 
-import com.petgo.auth.dto.VetLoginRequest;
-import com.petgo.auth.dto.VetLoginResponse;
-import com.petgo.auth.service.AuthService;
-import com.petgo.shared.ratelimit.RedisRateLimiter;
+import com.tailtopia.auth.dto.VetLoginRequest;
+import com.tailtopia.auth.dto.VetLoginResponse;
+import com.tailtopia.auth.service.AuthService;
+import com.tailtopia.shared.ratelimit.RedisRateLimiter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.time.Duration;

@@ -1,4 +1,4 @@
-package com.petgo.shared.im;
+package com.tailtopia.shared.im;
 
 /**
  * 腾讯 IM 编排客户端（Story 5.5）。后端经 IM REST 建会话 / 发系统消息 / 签 UserSig，

@@ -1,6 +1,6 @@
-package com.petgo.triage.dto;
+package com.tailtopia.triage.dto;
 
-import com.petgo.triage.domain.TriageStatus;
+import com.tailtopia.triage.domain.TriageStatus;
 
 /**
  * 分诊受理响应（Story 4.1）。{@code POST /triage} 返回 202 + 本体；{@code triageId} 仅授权本人可读，

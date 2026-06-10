@@ -1,8 +1,8 @@
-package com.petgo.notify.schedule;
+package com.tailtopia.notify.schedule;
 
-import com.petgo.notify.domain.ScheduledPushMark;
-import com.petgo.notify.repository.ScheduledPushMarkRepository;
-import com.petgo.notify.service.NotificationService;
+import com.tailtopia.notify.domain.ScheduledPushMark;
+import com.tailtopia.notify.repository.ScheduledPushMarkRepository;
+import com.tailtopia.notify.service.NotificationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;

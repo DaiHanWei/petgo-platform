@@ -1,15 +1,15 @@
-package com.petgo.content.service;
+package com.tailtopia.content.service;
 
-import com.petgo.auth.dto.AuthorView;
-import com.petgo.auth.service.AccountQueryService;
-import com.petgo.content.domain.Comment;
-import com.petgo.content.domain.ContentPost;
-import com.petgo.content.domain.PostStatus;
-import com.petgo.content.dto.CommentResponse;
-import com.petgo.content.event.ContentCommentedEvent;
-import com.petgo.content.repository.CommentRepository;
-import com.petgo.content.repository.ContentPostRepository;
-import com.petgo.shared.error.AppException;
+import com.tailtopia.auth.dto.AuthorView;
+import com.tailtopia.auth.service.AccountQueryService;
+import com.tailtopia.content.domain.Comment;
+import com.tailtopia.content.domain.ContentPost;
+import com.tailtopia.content.domain.PostStatus;
+import com.tailtopia.content.dto.CommentResponse;
+import com.tailtopia.content.event.ContentCommentedEvent;
+import com.tailtopia.content.repository.CommentRepository;
+import com.tailtopia.content.repository.ContentPostRepository;
+import com.tailtopia.shared.error.AppException;
 import java.time.Instant;
 import java.util.List;
 import org.springframework.context.ApplicationEventPublisher;

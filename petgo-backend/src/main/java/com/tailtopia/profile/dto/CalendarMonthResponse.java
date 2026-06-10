@@ -1,4 +1,4 @@
-package com.petgo.profile.dto;
+package com.tailtopia.profile.dto;
 
 import java.util.List;
 

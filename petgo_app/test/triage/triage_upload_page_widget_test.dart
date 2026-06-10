@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/profile/data/profile_repository.dart';
-import 'package:petgo/features/triage/data/triage_repository.dart';
-import 'package:petgo/features/triage/domain/triage_result_controller.dart';
-import 'package:petgo/features/triage/domain/triage_upload_controller.dart';
-import 'package:petgo/features/triage/presentation/triage_upload_page.dart';
-import 'package:petgo/l10n/app_localizations.dart';
-import 'package:petgo/shared/widgets/red_alert_overlay.dart';
+import 'package:tailtopia/features/profile/data/profile_repository.dart';
+import 'package:tailtopia/features/triage/data/triage_repository.dart';
+import 'package:tailtopia/features/triage/domain/triage_result_controller.dart';
+import 'package:tailtopia/features/triage/domain/triage_upload_controller.dart';
+import 'package:tailtopia/features/triage/presentation/triage_upload_page.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/shared/widgets/red_alert_overlay.dart';
 
 class _FakeTriageRepo implements TriageRepository {
   _FakeTriageRepo(this.results);

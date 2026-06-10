@@ -1,7 +1,7 @@
-package com.petgo.triage.repository;
+package com.tailtopia.triage.repository;
 
-import com.petgo.triage.domain.TriageStatus;
-import com.petgo.triage.domain.TriageTask;
+import com.tailtopia.triage.domain.TriageStatus;
+import com.tailtopia.triage.domain.TriageTask;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;

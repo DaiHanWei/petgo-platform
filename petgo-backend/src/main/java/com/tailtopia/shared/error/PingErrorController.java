@@ -1,4 +1,4 @@
-package com.petgo.shared.error;
+package com.tailtopia.shared.error;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.GetMapping;

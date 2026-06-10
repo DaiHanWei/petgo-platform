@@ -1,4 +1,4 @@
-package com.petgo.triage.event;
+package com.tailtopia.triage.event;
 
 import java.time.Instant;
 

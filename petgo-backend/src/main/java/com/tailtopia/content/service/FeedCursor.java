@@ -1,6 +1,6 @@
-package com.petgo.content.service;
+package com.tailtopia.content.service;
 
-import com.petgo.shared.error.AppException;
+import com.tailtopia.shared.error.AppException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;

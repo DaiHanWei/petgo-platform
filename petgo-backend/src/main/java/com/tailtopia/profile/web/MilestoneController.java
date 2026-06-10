@@ -1,12 +1,12 @@
-package com.petgo.profile.web;
+package com.tailtopia.profile.web;
 
-import com.petgo.profile.dto.MilestoneCheckinCandidateResponse;
-import com.petgo.profile.dto.MilestoneCheckinRequest;
-import com.petgo.profile.dto.MilestoneItemResponse;
-import com.petgo.profile.dto.MilestoneListResponse;
-import com.petgo.profile.service.MilestoneCheckInService;
-import com.petgo.profile.service.MilestoneService;
-import com.petgo.shared.error.AppException;
+import com.tailtopia.profile.dto.MilestoneCheckinCandidateResponse;
+import com.tailtopia.profile.dto.MilestoneCheckinRequest;
+import com.tailtopia.profile.dto.MilestoneItemResponse;
+import com.tailtopia.profile.dto.MilestoneListResponse;
+import com.tailtopia.profile.service.MilestoneCheckInService;
+import com.tailtopia.profile.service.MilestoneService;
+import com.tailtopia.shared.error.AppException;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;

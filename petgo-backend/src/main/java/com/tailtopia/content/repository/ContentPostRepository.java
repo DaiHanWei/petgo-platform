@@ -1,8 +1,8 @@
-package com.petgo.content.repository;
+package com.tailtopia.content.repository;
 
-import com.petgo.content.domain.ContentPost;
-import com.petgo.content.domain.ContentType;
-import com.petgo.content.domain.PostStatus;
+import com.tailtopia.content.domain.ContentPost;
+import com.tailtopia.content.domain.ContentType;
+import com.tailtopia.content.domain.PostStatus;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -43,7 +43,7 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long> 
             SELECT p FROM ContentPost p
             WHERE p.authorId = :authorId
               AND p.deletedAt IS NULL
-              AND p.status = com.petgo.content.domain.PostStatus.PUBLISHED
+              AND p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
               AND (:hasCursor = false
                    OR p.createdAt < :cursorTs
                    OR (p.createdAt = :cursorTs AND p.id < :cursorId))
@@ -72,8 +72,8 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long> 
     @Query("""
             SELECT p FROM ContentPost p
             WHERE p.deletedAt IS NULL
-              AND p.status = com.petgo.content.domain.PostStatus.PUBLISHED
-              AND (:excludeGrowth = false OR p.type <> com.petgo.content.domain.ContentType.GROWTH_MOMENT)
+              AND p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
+              AND (:excludeGrowth = false OR p.type <> com.tailtopia.content.domain.ContentType.GROWTH_MOMENT)
               AND (:type IS NULL OR p.type = :type)
               AND (:requirePet = false OR p.petId IS NOT NULL)
               AND (:hasCursor = false

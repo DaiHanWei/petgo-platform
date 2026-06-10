@@ -1,4 +1,4 @@
-package com.petgo.notify.domain;
+package com.tailtopia.notify.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

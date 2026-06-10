@@ -1,4 +1,4 @@
-package com.petgo.consult.event;
+package com.tailtopia.consult.event;
 
 /**
  * 新问诊请求入队事件（Story 6.2，FR-22E）。用户发起咨询进 WAITING 待接单队列时发布，

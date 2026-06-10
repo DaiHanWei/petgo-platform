@@ -1,18 +1,18 @@
-package com.petgo.triage.web;
+package com.tailtopia.triage.web;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.petgo.auth.domain.User;
-import com.petgo.support.ApiIntegrationTest;
-import com.petgo.triage.domain.DangerLevel;
-import com.petgo.triage.domain.TriageStatus;
-import com.petgo.triage.domain.TriageTask;
-import com.petgo.triage.dto.TriageSubmitRequest;
-import com.petgo.triage.repository.TriageTaskRepository;
-import com.petgo.triage.service.TriageProcessor;
+import com.tailtopia.auth.domain.User;
+import com.tailtopia.support.ApiIntegrationTest;
+import com.tailtopia.triage.domain.DangerLevel;
+import com.tailtopia.triage.domain.TriageStatus;
+import com.tailtopia.triage.domain.TriageTask;
+import com.tailtopia.triage.dto.TriageSubmitRequest;
+import com.tailtopia.triage.repository.TriageTaskRepository;
+import com.tailtopia.triage.service.TriageProcessor;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -193,7 +193,7 @@ class TriageControllerEndpointTest extends ApiIntegrationTest {
     /**
      * 高危症状（误食巧克力）经后置安全规则层强制升红 → DONE + danger_level=RED。
      *
-     * <p>Gemini stub 固定回 GREEN；RED 完全由 {@link com.petgo.triage.service.SafetyRuleLayer} 后置裁决，
+     * <p>Gemini stub 固定回 GREEN；RED 完全由 {@link com.tailtopia.triage.service.SafetyRuleLayer} 后置裁决，
      * 证明「红色不被模型假阴性绕过」。@Async 异步不易断言，故同步驱动 {@link TriageProcessor#process} 后 GET。
      */
     @Test

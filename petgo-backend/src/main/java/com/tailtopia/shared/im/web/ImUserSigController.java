@@ -1,9 +1,9 @@
-package com.petgo.shared.im.web;
+package com.tailtopia.shared.im.web;
 
-import com.petgo.shared.error.AppException;
-import com.petgo.shared.im.ImAccountMapper;
-import com.petgo.shared.im.TencentImClient;
-import com.petgo.shared.im.UserSig;
+import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.im.ImAccountMapper;
+import com.tailtopia.shared.im.TencentImClient;
+import com.tailtopia.shared.im.UserSig;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;

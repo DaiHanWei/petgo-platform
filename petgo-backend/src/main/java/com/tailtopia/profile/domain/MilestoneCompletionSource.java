@@ -1,4 +1,4 @@
-package com.petgo.profile.domain;
+package com.tailtopia.profile.domain;
 
 /**
  * 里程碑完成来源（FR-42，落 {@code milestone_completions.source} UPPER_SNAKE）。记录该完成由何路径产生。

@@ -1,4 +1,4 @@
-package com.petgo.profile.web;
+package com.tailtopia.profile.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -8,15 +8,15 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.petgo.profile.dto.PetProfileCreateRequest;
-import com.petgo.profile.dto.PetProfileResponse;
-import com.petgo.profile.dto.PetProfileUpdateRequest;
-import com.petgo.profile.dto.TimelinePageResponse;
-import com.petgo.profile.service.CardRerenderService;
-import com.petgo.profile.service.ProfileService;
-import com.petgo.profile.service.TimelineService;
-import com.petgo.shared.error.AppException;
-import com.petgo.shared.ratelimit.RedisRateLimiter;
+import com.tailtopia.profile.dto.PetProfileCreateRequest;
+import com.tailtopia.profile.dto.PetProfileResponse;
+import com.tailtopia.profile.dto.PetProfileUpdateRequest;
+import com.tailtopia.profile.dto.TimelinePageResponse;
+import com.tailtopia.profile.service.CardRerenderService;
+import com.tailtopia.profile.service.ProfileService;
+import com.tailtopia.profile.service.TimelineService;
+import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.ratelimit.RedisRateLimiter;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;

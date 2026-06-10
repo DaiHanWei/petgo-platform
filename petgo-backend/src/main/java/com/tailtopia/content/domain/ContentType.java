@@ -1,4 +1,4 @@
-package com.petgo.content.domain;
+package com.tailtopia.content.domain;
 
 /**
  * 内容类型（FR-12，落库 varchar UPPER_SNAKE）。

@@ -1,10 +1,10 @@
-package com.petgo.support;
+package com.tailtopia.support;
 
-import com.petgo.auth.domain.PetStatus;
-import com.petgo.auth.domain.Role;
-import com.petgo.auth.domain.User;
-import com.petgo.auth.repository.UserRepository;
-import com.petgo.shared.security.JwtService;
+import com.tailtopia.auth.domain.PetStatus;
+import com.tailtopia.auth.domain.Role;
+import com.tailtopia.auth.domain.User;
+import com.tailtopia.auth.repository.UserRepository;
+import com.tailtopia.shared.security.JwtService;
 import java.util.concurrent.atomic.AtomicLong;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -17,7 +17,7 @@ import tools.jackson.databind.ObjectMapper;
  * API 集成测试基类（L1）：真 Spring 上下文 + MockMvc 走完整安全过滤链 + 真 PostgreSQL/Redis 写库。
  *
  * <p>与既有「直接 new 控制器 + mock service」的 L0 单测互补：此层验证<b>真实 HTTP 行为</b>——
- * 序列化、Bean 校验、JWT 鉴权/角色门控（{@link com.petgo.shared.security.SecurityConfig}）、
+ * 序列化、Bean 校验、JWT 鉴权/角色门控（{@link com.tailtopia.shared.security.SecurityConfig}）、
  * RFC 9457 ProblemDetail、以及数据真正落库。
  *
  * <p>dev profile 生效（{@code DevGoogleTokenVerifier} / {@code DevUserSeeder} 在场，无碍）。

@@ -1,6 +1,6 @@
-package com.petgo.content.event;
+package com.tailtopia.content.event;
 
-import com.petgo.content.domain.ContentType;
+import com.tailtopia.content.domain.ContentType;
 import java.time.Instant;
 
 /**

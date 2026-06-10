@@ -1,4 +1,4 @@
-package com.petgo.account.web;
+package com.tailtopia.account.web;
 
 /**
  * 账号注销请求（Story 7.3）。双重确认第二步：要求客户端回传确认短语（与前端高危确认一致），

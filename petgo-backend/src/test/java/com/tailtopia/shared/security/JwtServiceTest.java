@@ -1,4 +1,4 @@
-package com.petgo.shared.security;
+package com.tailtopia.shared.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

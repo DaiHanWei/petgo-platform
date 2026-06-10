@@ -1,4 +1,4 @@
-package com.petgo.shared.security;
+package com.tailtopia.shared.security;
 
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import javax.crypto.SecretKey;

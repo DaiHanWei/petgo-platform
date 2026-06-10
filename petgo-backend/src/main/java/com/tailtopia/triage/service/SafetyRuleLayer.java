@@ -1,6 +1,6 @@
-package com.petgo.triage.service;
+package com.tailtopia.triage.service;
 
-import com.petgo.triage.domain.DangerLevel;
+import com.tailtopia.triage.domain.DangerLevel;
 import jakarta.annotation.PostConstruct;
 import java.io.InputStream;
 import java.util.ArrayList;

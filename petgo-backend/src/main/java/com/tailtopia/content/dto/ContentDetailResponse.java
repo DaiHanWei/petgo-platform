@@ -1,8 +1,8 @@
-package com.petgo.content.dto;
+package com.tailtopia.content.dto;
 
-import com.petgo.auth.dto.AuthorView;
-import com.petgo.content.domain.ContentPost;
-import com.petgo.content.domain.ContentType;
+import com.tailtopia.auth.dto.AuthorView;
+import com.tailtopia.content.domain.ContentPost;
+import com.tailtopia.content.domain.ContentType;
 import java.time.Instant;
 import java.util.List;
 

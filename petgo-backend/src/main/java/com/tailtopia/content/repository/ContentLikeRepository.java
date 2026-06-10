@@ -1,6 +1,6 @@
-package com.petgo.content.repository;
+package com.tailtopia.content.repository;
 
-import com.petgo.content.domain.ContentLike;
+import com.tailtopia.content.domain.ContentLike;
 import java.util.Collection;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;

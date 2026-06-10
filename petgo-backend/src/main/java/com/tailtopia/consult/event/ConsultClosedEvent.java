@@ -1,4 +1,4 @@
-package com.petgo.consult.event;
+package com.tailtopia.consult.event;
 
 import java.util.List;
 

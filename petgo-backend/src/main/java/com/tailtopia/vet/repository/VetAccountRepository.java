@@ -1,6 +1,6 @@
-package com.petgo.vet.repository;
+package com.tailtopia.vet.repository;
 
-import com.petgo.vet.domain.VetAccount;
+import com.tailtopia.vet.domain.VetAccount;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 

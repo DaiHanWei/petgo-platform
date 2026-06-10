@@ -1,12 +1,12 @@
-package com.petgo.profile.web;
+package com.tailtopia.profile.web;
 
-import com.petgo.auth.service.AccountQueryService;
-import com.petgo.content.service.ContentService;
-import com.petgo.content.service.GrowthMomentView;
-import com.petgo.profile.domain.PetProfile;
-import com.petgo.profile.dto.ArchiveStatsResponse;
-import com.petgo.profile.service.TimelineService;
-import com.petgo.shared.media.AliyunOssClient;
+import com.tailtopia.auth.service.AccountQueryService;
+import com.tailtopia.content.service.ContentService;
+import com.tailtopia.content.service.GrowthMomentView;
+import com.tailtopia.profile.domain.PetProfile;
+import com.tailtopia.profile.dto.ArchiveStatsResponse;
+import com.tailtopia.profile.service.TimelineService;
+import com.tailtopia.shared.media.AliyunOssClient;
 import jakarta.servlet.http.HttpServletResponse;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -45,12 +45,12 @@ public class CardPageController {
     private final String androidUrl;
     private final String publicBaseUrl;
 
-    public CardPageController(com.petgo.profile.service.ProfileService profileService,
+    public CardPageController(com.tailtopia.profile.service.ProfileService profileService,
             ContentService contentService, AccountQueryService accountQueryService,
             TimelineService timelineService,
             @Value("${petgo.card.app-download-url:https://petgo.example/download}") String downloadUrl,
             @Value("${petgo.card.ios-url:https://apps.apple.com/app/petgo}") String iosUrl,
-            @Value("${petgo.card.android-url:https://play.google.com/store/apps/details?id=com.petgo}")
+            @Value("${petgo.card.android-url:https://play.google.com/store/apps/details?id=com.tailtopia}")
                     String androidUrl,
             @Value("${petgo.card.public-base-url:}") String publicBaseUrl) {
         this.profiles = profileService::findByCardToken;

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// 设计 token —— 柔和阴影（PetGo Prototype `--sh-sm/md/lg/mint`）。
+/// 设计 token —— 柔和阴影（TailTopia Prototype `--sh-sm/md/lg/mint`）。
 ///
 /// 对应 CSS 多层 box-shadow，组件用 `boxShadow: AppShadows.md`。
 /// 注：`blurRadius` = CSS 第三值，`spreadRadius` 默认 0，`offset` = 前两值。

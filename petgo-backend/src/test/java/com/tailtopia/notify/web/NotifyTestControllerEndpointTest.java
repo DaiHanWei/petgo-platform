@@ -1,12 +1,12 @@
-package com.petgo.notify.web;
+package com.tailtopia.notify.web;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.petgo.auth.domain.User;
-import com.petgo.support.ApiIntegrationTest;
+import com.tailtopia.auth.domain.User;
+import com.tailtopia.support.ApiIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 
@@ -14,7 +14,7 @@ import org.springframework.http.HttpHeaders;
  * {@link NotifyTestController} 端点集成测试（{@code POST /api/v1/notify/_test-push}，仅 dev profile）。
  *
  * <p>测试基类已 {@code @ActiveProfiles("dev")}，故该端点在场。它经统一推送出口写一行 VET_REPLY 通知
- * 并返回 {@link com.petgo.notify.dto.PushPayload}（type/deepLinkToken/title/body）。需 USER JWT
+ * 并返回 {@link com.tailtopia.notify.dto.PushPayload}（type/deepLinkToken/title/body）。需 USER JWT
  * （落 {@code anyRequest().authenticated()}），缺 token → 401。
  */
 class NotifyTestControllerEndpointTest extends ApiIntegrationTest {

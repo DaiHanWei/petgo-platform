@@ -6,7 +6,7 @@ import '../../../../shared/widgets/design/emoji_avatar.dart';
 import '../../domain/pet_age.dart';
 import '../../domain/pet_profile.dart';
 
-/// 宠物名片 hero（Story 2.4 · F2 · PetGo Prototype 换肤）。
+/// 宠物名片 hero（Story 2.4 · F2 · TailTopia Prototype 换肤）。
 ///
 /// 居中头像 + 名字 + 品种·年龄 + 一句话介绍 + 「Hari bareng」天数；右上角编辑/状态入口。
 class PetInfoCard extends StatelessWidget {

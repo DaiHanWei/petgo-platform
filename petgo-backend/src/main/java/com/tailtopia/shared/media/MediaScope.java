@@ -1,4 +1,4 @@
-package com.petgo.shared.media;
+package com.tailtopia.shared.media;
 
 /**
  * 媒体隐私域（架构 §Data Architecture 媒体三层）。决定 STS 直传的目标桶与对象前缀。

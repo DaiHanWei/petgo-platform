@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/auth/domain/auth_state.dart';
-import 'package:petgo/features/auth/domain/login_response.dart';
-import 'package:petgo/features/profile/data/profile_repository.dart';
-import 'package:petgo/features/profile/data/timeline_repository.dart';
-import 'package:petgo/features/profile/domain/archive_stats.dart';
-import 'package:petgo/features/profile/domain/pet_profile.dart';
-import 'package:petgo/features/profile/domain/share_service.dart';
-import 'package:petgo/features/profile/domain/timeline_item.dart';
-import 'package:petgo/features/profile/presentation/growth_archive_page.dart';
-import 'package:petgo/l10n/app_localizations.dart';
+import 'package:tailtopia/features/auth/domain/auth_state.dart';
+import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/features/profile/data/profile_repository.dart';
+import 'package:tailtopia/features/profile/data/timeline_repository.dart';
+import 'package:tailtopia/features/profile/domain/archive_stats.dart';
+import 'package:tailtopia/features/profile/domain/pet_profile.dart';
+import 'package:tailtopia/features/profile/domain/share_service.dart';
+import 'package:tailtopia/features/profile/domain/timeline_item.dart';
+import 'package:tailtopia/features/profile/presentation/growth_archive_page.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 
 class _TestAuthController extends AuthController {
   _TestAuthController(this._initial);

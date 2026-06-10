@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:petgo/features/consult/data/consult_repository.dart';
-import 'package:petgo/features/consult/domain/consult_session.dart';
-import 'package:petgo/features/consult/presentation/consult_conversation_page.dart';
-import 'package:petgo/l10n/app_localizations.dart';
+import 'package:tailtopia/features/consult/data/consult_repository.dart';
+import 'package:tailtopia/features/consult/domain/consult_session.dart';
+import 'package:tailtopia/features/consult/presentation/consult_conversation_page.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 
 class _FakeConsultRepository extends ConsultRepository {
   _FakeConsultRepository(this._status) : super(dio: Dio());

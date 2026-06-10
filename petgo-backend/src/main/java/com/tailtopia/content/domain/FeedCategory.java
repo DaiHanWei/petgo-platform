@@ -1,6 +1,6 @@
-package com.petgo.content.domain;
+package com.tailtopia.content.domain;
 
-import com.petgo.shared.error.AppException;
+import com.tailtopia.shared.error.AppException;
 
 /**
  * Feed 分类 Tab（Story 3.2，AC3）。{@link #ALL} 不限 type；其余按 {@link ContentType} 精确过滤。

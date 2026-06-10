@@ -1,14 +1,14 @@
-package com.petgo.notify.service;
+package com.tailtopia.notify.service;
 
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import com.petgo.content.event.ContentCommentedEvent;
-import com.petgo.content.event.ContentLikedEvent;
-import com.petgo.content.event.ContentRemovedEvent;
-import com.petgo.notify.domain.NotificationType;
+import com.tailtopia.content.event.ContentCommentedEvent;
+import com.tailtopia.content.event.ContentLikedEvent;
+import com.tailtopia.content.event.ContentRemovedEvent;
+import com.tailtopia.notify.domain.NotificationType;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

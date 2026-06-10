@@ -167,7 +167,7 @@ so that **我能高效发现感兴趣的宠物内容**。
 
 ### Project Structure Notes
 
-- 后端：`com.petgo.content/{web,service,domain,repository,dto}`——`ContentFeedController`(GET 列表)、`FeedService`、`ContentPostRepository`、`FeedItemResponse`。索引迁移在 `db/migration/`。
+- 后端：`com.tailtopia.content/{web,service,domain,repository,dto}`——`ContentFeedController`(GET 列表)、`FeedService`、`ContentPostRepository`、`FeedItemResponse`。索引迁移在 `db/migration/`。
 - 前端：`lib/features/content/{data,domain,presentation}`（FeedRepository / feedProvider / FeedPage）+ `lib/shared/widgets/{masonry_card, empty_state}`（本 Story 首建这两个共享 widget，Story 3.3+ 复用）。
 - 首页容器/Tab Bar 外壳来自 Story 1.2/1.5；本 Story 填充首页 Tab 的 Feed 内容区。
 

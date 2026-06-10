@@ -1,4 +1,4 @@
-package com.petgo.moderation.domain;
+package com.tailtopia.moderation.domain;
 
 /**
  * 举报类型（Story 3.7，FR-25，落库 varchar UPPER_SNAKE）。用户单选其一。

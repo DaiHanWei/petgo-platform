@@ -1,4 +1,4 @@
-package com.petgo.consult.event;
+package com.tailtopia.consult.event;
 
 /**
  * 会话已中断事件（Story 5.7）。封禁兽医导致进行中会话强制中断时发布。

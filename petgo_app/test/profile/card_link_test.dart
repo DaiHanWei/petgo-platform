@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/profile/domain/card_link.dart';
+import 'package:tailtopia/features/profile/domain/card_link.dart';
 
 void main() {
   test('拼出 /p/{cardToken}，用不可枚举 token', () {

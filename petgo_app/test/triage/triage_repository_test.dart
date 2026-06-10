@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/triage/data/triage_repository.dart';
+import 'package:tailtopia/features/triage/data/triage_repository.dart';
 
 void main() {
   group('TriageResult.fromJson', () {

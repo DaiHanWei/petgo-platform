@@ -1,7 +1,7 @@
-package com.petgo.shared.security;
+package com.tailtopia.shared.security;
 
-import com.petgo.auth.domain.Role;
-import com.petgo.auth.domain.User;
+import com.tailtopia.auth.domain.Role;
+import com.tailtopia.auth.domain.User;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;

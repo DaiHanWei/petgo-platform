@@ -1,4 +1,4 @@
-package com.petgo.notify.dto;
+package com.tailtopia.notify.dto;
 
 import java.util.List;
 

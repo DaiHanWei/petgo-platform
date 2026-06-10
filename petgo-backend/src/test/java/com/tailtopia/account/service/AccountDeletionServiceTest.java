@@ -1,4 +1,4 @@
-package com.petgo.account.service;
+package com.tailtopia.account.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -8,17 +8,17 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.petgo.account.domain.AccountDeletion;
-import com.petgo.account.domain.DeletionStatus;
-import com.petgo.account.repository.AccountDeletionRepository;
-import com.petgo.auth.service.AuthAccountDeletionService;
-import com.petgo.consult.service.ConsultAnonymizationService;
-import com.petgo.notify.service.NotificationDeletionService;
-import com.petgo.profile.service.ProfileDeletionService;
-import com.petgo.shared.im.TencentImClient;
-import com.petgo.shared.media.MediaDeletionService;
-import com.petgo.shared.media.PersonalMedia;
-import com.petgo.triage.service.TriageDeletionService;
+import com.tailtopia.account.domain.AccountDeletion;
+import com.tailtopia.account.domain.DeletionStatus;
+import com.tailtopia.account.repository.AccountDeletionRepository;
+import com.tailtopia.auth.service.AuthAccountDeletionService;
+import com.tailtopia.consult.service.ConsultAnonymizationService;
+import com.tailtopia.notify.service.NotificationDeletionService;
+import com.tailtopia.profile.service.ProfileDeletionService;
+import com.tailtopia.shared.im.TencentImClient;
+import com.tailtopia.shared.media.MediaDeletionService;
+import com.tailtopia.shared.media.PersonalMedia;
+import com.tailtopia.triage.service.TriageDeletionService;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -86,7 +86,7 @@ class AccountDeletionServiceTest {
         when(deletions.findByUserId(7L)).thenReturn(Optional.of(pending(1L, 7L)));
         service().requestDeletion(7L);
         // 受理 → 发事件触发异步级联（指定类型消歧 publishEvent 重载）。
-        verify(events).publishEvent(any(com.petgo.account.event.AccountDeletionRequestedEvent.class));
+        verify(events).publishEvent(any(com.tailtopia.account.event.AccountDeletionRequestedEvent.class));
     }
 
     @Test

@@ -1,4 +1,4 @@
-package com.petgo.notify.domain;
+package com.tailtopia.notify.domain;
 
 /**
  * 推送/通知类型（Story 6.1，落库 UPPER_SNAKE）。与 FR-38 深链七类目标 + 兽医端新请求对齐。

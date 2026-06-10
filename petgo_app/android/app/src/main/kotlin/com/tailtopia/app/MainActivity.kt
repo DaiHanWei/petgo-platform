@@ -1,4 +1,4 @@
-package com.petgo.petgo
+package com.tailtopia.app
 
 import io.flutter.embedding.android.FlutterActivity
 

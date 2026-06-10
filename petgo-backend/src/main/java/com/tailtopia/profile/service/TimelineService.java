@@ -1,15 +1,15 @@
-package com.petgo.profile.service;
+package com.tailtopia.profile.service;
 
-import com.petgo.content.service.ContentService;
-import com.petgo.content.service.GrowthMomentView;
-import com.petgo.profile.domain.PetProfile;
-import com.petgo.profile.dto.ArchiveStatsResponse;
-import com.petgo.profile.dto.CalendarMonthResponse;
-import com.petgo.profile.dto.DayDetailResponse;
-import com.petgo.profile.dto.TimelineItemResponse;
-import com.petgo.profile.dto.TimelinePageResponse;
-import com.petgo.profile.service.HealthEventTimelineSource.HealthEventView;
-import com.petgo.shared.error.AppException;
+import com.tailtopia.content.service.ContentService;
+import com.tailtopia.content.service.GrowthMomentView;
+import com.tailtopia.profile.domain.PetProfile;
+import com.tailtopia.profile.dto.ArchiveStatsResponse;
+import com.tailtopia.profile.dto.CalendarMonthResponse;
+import com.tailtopia.profile.dto.DayDetailResponse;
+import com.tailtopia.profile.dto.TimelineItemResponse;
+import com.tailtopia.profile.dto.TimelinePageResponse;
+import com.tailtopia.profile.service.HealthEventTimelineSource.HealthEventView;
+import com.tailtopia.shared.error.AppException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;

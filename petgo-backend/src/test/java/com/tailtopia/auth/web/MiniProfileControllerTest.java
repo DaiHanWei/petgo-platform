@@ -1,4 +1,4 @@
-package com.petgo.auth.web;
+package com.tailtopia.auth.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -8,10 +8,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.petgo.auth.dto.AuthorView;
-import com.petgo.auth.dto.MiniProfileResponse;
-import com.petgo.auth.service.AccountQueryService;
-import com.petgo.content.service.ContentService;
+import com.tailtopia.auth.dto.AuthorView;
+import com.tailtopia.auth.dto.MiniProfileResponse;
+import com.tailtopia.auth.service.AccountQueryService;
+import com.tailtopia.content.service.ContentService;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

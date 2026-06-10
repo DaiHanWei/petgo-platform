@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/core/router/deep_link_routes.dart';
+import 'package:tailtopia/core/router/deep_link_routes.dart';
 
 /// Story 6.1 J4：pushPayloadToLocation 七类映射 + 评论区锚点 + 未知 type/空 token 兜底。
 /// 🔄 PRD V1.0.0 修订（Fx · 2026-06-08）：四类→七类，新增生日/纪念日/里程碑节点三类固定目标（F2/F5）。

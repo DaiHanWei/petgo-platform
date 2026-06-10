@@ -1,9 +1,9 @@
-package com.petgo.content.web;
+package com.tailtopia.content.web;
 
-import com.petgo.content.dto.CommentPageResponse;
-import com.petgo.content.dto.ContentDetailResponse;
-import com.petgo.content.service.CommentQueryService;
-import com.petgo.content.service.ContentDetailService;
+import com.tailtopia.content.dto.CommentPageResponse;
+import com.tailtopia.content.dto.ContentDetailResponse;
+import com.tailtopia.content.service.CommentQueryService;
+import com.tailtopia.content.service.ContentDetailService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;

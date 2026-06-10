@@ -1,4 +1,4 @@
-package com.petgo.content.service;
+package com.tailtopia.content.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -8,14 +8,14 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.petgo.content.domain.ContentPost;
-import com.petgo.content.domain.ContentType;
-import com.petgo.content.dto.ContentPostCreateRequest;
-import com.petgo.content.dto.ContentPostResponse;
-import com.petgo.content.repository.ContentPostRepository;
-import com.petgo.profile.service.ProfileService;
-import com.petgo.shared.error.AppException;
-import com.petgo.shared.ratelimit.IdempotencyService;
+import com.tailtopia.content.domain.ContentPost;
+import com.tailtopia.content.domain.ContentType;
+import com.tailtopia.content.dto.ContentPostCreateRequest;
+import com.tailtopia.content.dto.ContentPostResponse;
+import com.tailtopia.content.repository.ContentPostRepository;
+import com.tailtopia.profile.service.ProfileService;
+import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.ratelimit.IdempotencyService;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -28,8 +28,8 @@ import org.mockito.Mockito;
 class ContentServiceTest {
 
     private ContentPostRepository posts;
-    private com.petgo.content.repository.CommentRepository comments;
-    private com.petgo.content.repository.ContentLikeRepository likes;
+    private com.tailtopia.content.repository.CommentRepository comments;
+    private com.tailtopia.content.repository.ContentLikeRepository likes;
     private ProfileService profileService;
     private IdempotencyService idempotency;
     private org.springframework.context.ApplicationEventPublisher events;
@@ -38,8 +38,8 @@ class ContentServiceTest {
     @BeforeEach
     void setUp() {
         posts = Mockito.mock(ContentPostRepository.class);
-        comments = Mockito.mock(com.petgo.content.repository.CommentRepository.class);
-        likes = Mockito.mock(com.petgo.content.repository.ContentLikeRepository.class);
+        comments = Mockito.mock(com.tailtopia.content.repository.CommentRepository.class);
+        likes = Mockito.mock(com.tailtopia.content.repository.ContentLikeRepository.class);
         profileService = Mockito.mock(ProfileService.class);
         idempotency = Mockito.mock(IdempotencyService.class);
         when(idempotency.findResourceId(any())).thenReturn(Optional.empty());
@@ -240,11 +240,11 @@ class ContentServiceTest {
     void softDeleteReusableForTakedownCascadesComments() {
         ContentPost p = ownedPost(6L, 1L);
         when(posts.findById(6L)).thenReturn(Optional.of(p));
-        com.petgo.content.domain.Comment c1 = newComment(70L);
-        com.petgo.content.domain.Comment c2 = newComment(71L);
+        com.tailtopia.content.domain.Comment c1 = newComment(70L);
+        com.tailtopia.content.domain.Comment c2 = newComment(71L);
         when(comments.findByPostIdAndDeletedAtIsNull(6L)).thenReturn(List.of(c1, c2));
 
-        service.softDelete(6L, com.petgo.content.domain.DeleteReason.ADMIN_TAKEDOWN);
+        service.softDelete(6L, com.tailtopia.content.domain.DeleteReason.ADMIN_TAKEDOWN);
 
         assertThat(p.getDeletedAt()).isNotNull();
         assertThat(c1.getDeletedAt()).isNotNull();
@@ -260,10 +260,10 @@ class ContentServiceTest {
         when(posts.findById(8L)).thenReturn(Optional.of(p));
         when(comments.findByPostIdAndDeletedAtIsNull(8L)).thenReturn(List.of());
 
-        service.softDelete(8L, com.petgo.content.domain.DeleteReason.ADMIN_TAKEDOWN);
+        service.softDelete(8L, com.tailtopia.content.domain.DeleteReason.ADMIN_TAKEDOWN);
 
         var captor = org.mockito.ArgumentCaptor.forClass(
-                com.petgo.content.event.ContentRemovedEvent.class);
+                com.tailtopia.content.event.ContentRemovedEvent.class);
         verify(events).publishEvent(captor.capture());
         assertThat(captor.getValue().postId()).isEqualTo(8L);
         assertThat(captor.getValue().authorId()).isEqualTo(42L); // 推送目标=作者
@@ -278,15 +278,15 @@ class ContentServiceTest {
         service.deleteByAuthor(9L, 1L); // 作者自删不自通知
 
         verify(events, never()).publishEvent(any(
-                com.petgo.content.event.ContentRemovedEvent.class));
+                com.tailtopia.content.event.ContentRemovedEvent.class));
     }
 
-    private static com.petgo.content.domain.Comment newComment(long id) {
+    private static com.tailtopia.content.domain.Comment newComment(long id) {
         try {
-            var ctor = com.petgo.content.domain.Comment.class.getDeclaredConstructor();
+            var ctor = com.tailtopia.content.domain.Comment.class.getDeclaredConstructor();
             ctor.setAccessible(true);
-            com.petgo.content.domain.Comment c = ctor.newInstance();
-            var f = com.petgo.content.domain.Comment.class.getDeclaredField("id");
+            com.tailtopia.content.domain.Comment c = ctor.newInstance();
+            var f = com.tailtopia.content.domain.Comment.class.getDeclaredField("id");
             f.setAccessible(true);
             f.set(c, id);
             return c;

@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/auth/domain/auth_state.dart';
-import 'package:petgo/features/auth/domain/login_response.dart';
-import 'package:petgo/features/me/data/my_posts_repository.dart';
-import 'package:petgo/features/me/presentation/me_page.dart';
-import 'package:petgo/features/profile/data/profile_repository.dart';
-import 'package:petgo/features/profile/domain/pet_profile.dart';
-import 'package:petgo/l10n/app_localizations.dart';
+import 'package:tailtopia/features/auth/domain/auth_state.dart';
+import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/features/me/data/my_posts_repository.dart';
+import 'package:tailtopia/features/me/presentation/me_page.dart';
+import 'package:tailtopia/features/profile/data/profile_repository.dart';
+import 'package:tailtopia/features/profile/domain/pet_profile.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// Story 7.1 · F8：信息架构重组——顶栏双图标 + 主体「人+宠物」 + AC5 宠物区位三态。
 Future<void> _pump(

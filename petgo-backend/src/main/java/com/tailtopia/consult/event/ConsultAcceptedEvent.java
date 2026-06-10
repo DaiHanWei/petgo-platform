@@ -1,4 +1,4 @@
-package com.petgo.consult.event;
+package com.tailtopia.consult.event;
 
 /**
  * 兽医已接单事件（Story 5.3 定义占位，Story 5.5 接单时发布，Epic 6/6.2 notify 订阅推送「兽医已接受」）。

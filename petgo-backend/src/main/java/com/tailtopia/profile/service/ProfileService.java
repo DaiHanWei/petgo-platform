@@ -1,13 +1,13 @@
-package com.petgo.profile.service;
+package com.tailtopia.profile.service;
 
-import com.petgo.profile.domain.PetProfile;
-import com.petgo.profile.domain.PetType;
-import com.petgo.profile.dto.PetProfileCreateRequest;
-import com.petgo.profile.dto.PetProfileResponse;
-import com.petgo.profile.dto.PetProfileUpdateRequest;
-import com.petgo.profile.event.ProfileCreatedEvent;
-import com.petgo.profile.repository.PetProfileRepository;
-import com.petgo.shared.error.AppException;
+import com.tailtopia.profile.domain.PetProfile;
+import com.tailtopia.profile.domain.PetType;
+import com.tailtopia.profile.dto.PetProfileCreateRequest;
+import com.tailtopia.profile.dto.PetProfileResponse;
+import com.tailtopia.profile.dto.PetProfileUpdateRequest;
+import com.tailtopia.profile.event.ProfileCreatedEvent;
+import com.tailtopia.profile.repository.PetProfileRepository;
+import com.tailtopia.shared.error.AppException;
 import java.time.Instant;
 import java.util.Optional;
 import org.springframework.context.ApplicationEventPublisher;
@@ -124,7 +124,7 @@ public class ProfileService {
     public void recordCardShared(long ownerId) {
         PetProfile pet = profiles.findByOwnerId(ownerId)
                 .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
-        events.publishEvent(new com.petgo.profile.event.CardSharedEvent(
+        events.publishEvent(new com.tailtopia.profile.event.CardSharedEvent(
                 ownerId, pet.getId(), Instant.now()));
     }
 

@@ -1,4 +1,4 @@
-package com.petgo.profile.web;
+package com.tailtopia.profile.web;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -6,10 +6,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.petgo.auth.domain.User;
-import com.petgo.profile.domain.PetProfile;
-import com.petgo.profile.repository.PetProfileRepository;
-import com.petgo.support.ApiIntegrationTest;
+import com.tailtopia.auth.domain.User;
+import com.tailtopia.profile.domain.PetProfile;
+import com.tailtopia.profile.repository.PetProfileRepository;
+import com.tailtopia.support.ApiIntegrationTest;
 import java.time.LocalDate;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,7 +29,7 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
     private PetProfileRepository profiles;
 
     @Autowired
-    private com.petgo.content.repository.ContentPostRepository contentPosts;
+    private com.tailtopia.content.repository.ContentPostRepository contentPosts;
 
     private String createBody(String name) {
         return """
@@ -58,7 +58,7 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
         org.junit.jupiter.api.Assertions.assertEquals("旺财", saved.getName());
         org.junit.jupiter.api.Assertions.assertEquals(owner.getId(), saved.getOwnerId());
         org.junit.jupiter.api.Assertions.assertEquals(
-                com.petgo.profile.domain.PetType.DOG, saved.getPetType());
+                com.tailtopia.profile.domain.PetType.DOG, saved.getPetType());
     }
 
     // ---------- R2/F6 必填校验（决策 F6 + R2/AC3） ----------
@@ -341,8 +341,8 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
 
     /** 直接造一条属作者的成长日历快乐时刻（含 event_date）。 */
     private void seedGrowth(long ownerId, String createdIso, String eventDate, String img) {
-        com.petgo.content.domain.ContentPost p = com.petgo.content.domain.ContentPost.publish(
-                ownerId, com.petgo.content.domain.ContentType.GROWTH_MOMENT, petIdOf(ownerId),
+        com.tailtopia.content.domain.ContentPost p = com.tailtopia.content.domain.ContentPost.publish(
+                ownerId, com.tailtopia.content.domain.ContentType.GROWTH_MOMENT, petIdOf(ownerId),
                 "moment", java.util.List.of(img), LocalDate.parse(eventDate));
         contentPosts.save(p);
     }

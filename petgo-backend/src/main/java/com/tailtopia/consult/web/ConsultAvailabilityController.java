@@ -1,7 +1,7 @@
-package com.petgo.consult.web;
+package com.tailtopia.consult.web;
 
-import com.petgo.consult.dto.ConsultAvailabilityResponse;
-import com.petgo.consult.service.ConsultAvailabilityService;
+import com.tailtopia.consult.dto.ConsultAvailabilityResponse;
+import com.tailtopia.consult.service.ConsultAvailabilityService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;

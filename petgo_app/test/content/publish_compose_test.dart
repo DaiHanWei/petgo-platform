@@ -3,15 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:petgo/features/content/data/content_repository.dart';
-import 'package:petgo/features/content/domain/content_type.dart';
-import 'package:petgo/features/content/domain/publish_controller.dart';
-import 'package:petgo/features/content/presentation/publish_compose_page.dart';
-import 'package:petgo/features/content/presentation/publish_landing_page.dart';
-import 'package:petgo/features/profile/data/profile_repository.dart';
-import 'package:petgo/features/profile/domain/pet_profile.dart';
-import 'package:petgo/features/profile/presentation/pet_profile_create_page.dart';
-import 'package:petgo/l10n/app_localizations.dart';
+import 'package:tailtopia/features/content/data/content_repository.dart';
+import 'package:tailtopia/features/content/domain/content_type.dart';
+import 'package:tailtopia/features/content/domain/publish_controller.dart';
+import 'package:tailtopia/features/content/presentation/publish_compose_page.dart';
+import 'package:tailtopia/features/content/presentation/publish_landing_page.dart';
+import 'package:tailtopia/features/profile/data/profile_repository.dart';
+import 'package:tailtopia/features/profile/domain/pet_profile.dart';
+import 'package:tailtopia/features/profile/presentation/pet_profile_create_page.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// 发布请求抛注入异常的 fake（模拟审核 422）。
 class _ThrowRepo implements ContentRepository {

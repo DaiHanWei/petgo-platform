@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petgo/features/profile/domain/milestone.dart';
-import 'package:petgo/features/profile/presentation/widgets/milestone_celebration.dart';
-import 'package:petgo/l10n/app_localizations.dart';
+import 'package:tailtopia/features/profile/domain/milestone.dart';
+import 'package:tailtopia/features/profile/presentation/widgets/milestone_celebration.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// L0 widget（Story 8.5）：三级庆祝按级渲染 + S 自动消失 + L 开宝箱交互。视觉/计时观感 L2 待本地。
 MilestoneItem _item(MilestoneLevel level) => MilestoneItem(

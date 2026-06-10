@@ -1,13 +1,13 @@
-package com.petgo.profile.service;
+package com.tailtopia.profile.service;
 
-import com.petgo.profile.domain.ArchiveDecision;
-import com.petgo.profile.domain.HealthEvent;
-import com.petgo.profile.dto.ArchiveDecisionRequest;
-import com.petgo.profile.dto.ArchiveDecisionResponse;
-import com.petgo.profile.event.HealthArchivedEvent;
-import com.petgo.profile.repository.HealthEventRepository;
-import com.petgo.shared.error.AppException;
-import com.petgo.shared.media.ImToOssArchiver;
+import com.tailtopia.profile.domain.ArchiveDecision;
+import com.tailtopia.profile.domain.HealthEvent;
+import com.tailtopia.profile.dto.ArchiveDecisionRequest;
+import com.tailtopia.profile.dto.ArchiveDecisionResponse;
+import com.tailtopia.profile.event.HealthArchivedEvent;
+import com.tailtopia.profile.repository.HealthEventRepository;
+import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.media.ImToOssArchiver;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;

@@ -19,7 +19,7 @@ import '../../consult/domain/consult_history_item.dart';
 import '../../consult/domain/consult_session.dart';
 import '../../consult/presentation/consult_rating_dialog.dart';
 
-/// Konsultasi Kilat 问诊 hub（PetGo Prototype 换肤 · Story 4.3 + 5.8）。
+/// Konsultasi Kilat 问诊 hub（TailTopia Prototype 换肤 · Story 4.3 + 5.8）。
 ///
 /// 从上至下：① Momo 头部 ② AI 分诊 / 兽医咨询**平级**双入口卡 ③ 在线兽医条
 /// ④ 进行中会话卡（若有）⑤ 我的问诊历史。进 Tab 查 5.6 补弹评分。
@@ -211,7 +211,7 @@ class _TriagePageState extends ConsumerState<TriagePage> {
   }
 }
 
-/// 问诊入口卡（PetGo Prototype EntryCard）：图标盒 + 标题/中文 + 徽章 + 描述 + 全宽 CTA。
+/// 问诊入口卡（TailTopia Prototype EntryCard）：图标盒 + 标题/中文 + 徽章 + 描述 + 全宽 CTA。
 class _EntryCard extends StatelessWidget {
   const _EntryCard({
     required this.ctaKey,

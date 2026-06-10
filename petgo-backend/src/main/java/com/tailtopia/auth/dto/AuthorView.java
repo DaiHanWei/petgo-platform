@@ -1,4 +1,4 @@
-package com.petgo.auth.dto;
+package com.tailtopia.auth.dto;
 
 /**
  * 作者展示投影（Story 3.2）。供 content Feed 经 service 取作者昵称/头像，**不让 content 直 join users 表**。
