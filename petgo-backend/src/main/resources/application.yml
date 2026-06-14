@@ -29,6 +29,9 @@ petgo:
     secret-key: ${TENCENT_IM_SECRET_KEY:}
     user-sig-ttl-seconds: ${IM_USERSIG_TTL_SECONDS:86400}
     callback-token: ${TENCENT_IM_CALLBACK_TOKEN:}
+    # live REST 域名（按数据中心选德国/欧洲，与后端同区）+ 管理员 IM 标识（REST 鉴权身份，不计 MAU）。
+    rest-base-url: ${IM_REST_BASE_URL:https://adminapiger.im.qcloud.com}
+    admin-identifier: ${IM_ADMIN_IDENTIFIER:administrator}
   # App 版本更新提醒（Story 6.5，App 内提示，外部化配置运营可调，不走推送）。
   app-version:
     latest: ${APP_LATEST_VERSION:1.0.0}

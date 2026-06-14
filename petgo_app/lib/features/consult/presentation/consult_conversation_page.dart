@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/im/im_service.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
@@ -35,9 +36,16 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
   bool _rated = false;
   ActiveConsultSession? _activeNotifier;
 
+  // Story 5.5 live 增量：进行中会话登录 IM 收发；离开/结束登出（控 MAU + 不留连接）。
+  ImService? _imService;
+  bool _imLoginStarted = false;
+  String? _peerId; // 对端 IM 账号 v_<vetId>（用户侧）
+
   @override
   void initState() {
     super.initState();
+    // 捕获 IM 封装（dispose 期登出，避免 ref 失效）。
+    _imService = ref.read(imServiceProvider);
     // 标记当前激活会话（Story 6.2 F1）：前台同会话推送抑制 in-app Banner。
     _activeNotifier = ref.read(activeConsultSessionProvider.notifier);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -52,6 +60,8 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
     _poll?.cancel();
     // 离开会话页 → 清激活标记（用 initState 捕获的 notifier，避免 dispose 期 ref 失效）。
     _activeNotifier?.set(null);
+    // 离开即登出 IM（不留长连接 / 控 MAU）。
+    if (_imLoginStarted) _imService?.logout();
     super.dispose();
   }
 
@@ -62,7 +72,16 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
       setState(() {
         _status = s.status;
         _closedReason = s.closedReason;
+        if (s.vetId != null) _peerId = 'v_${s.vetId}';
       });
+      // 进行中（已接单）才登录 IM：取 UserSig 经后端 MAU 闸门（用户须有活跃会话）。
+      if (!_imLoginStarted && s.status == 'IN_PROGRESS' && s.vetId != null) {
+        _imLoginStarted = true;
+        _imService?.loginIfNeeded().catchError((_) {
+          // 取 sig 403/网络失败 → 不崩；保留占位演示，下次轮询可重试。
+          _imLoginStarted = false;
+        });
+      }
       if (s.status == 'CLOSED' || s.status == 'INTERRUPTED') _poll?.cancel();
     } catch (_) {
       // 轮询失败静默重试。
@@ -190,7 +209,10 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
               ),
             // 终态（中断/关闭）转只读：不显示输入区。
             if (!interrupted && !closed)
-              ImChatPlaceholder(imConversationId: 'session-${widget.sessionId}'),
+              ImChatPlaceholder(
+                imConversationId: 'session-${widget.sessionId}',
+                peerId: _peerId,
+              ),
             // 关闭终态占位（只读，无输入框）。
             if (closed)
               Expanded(

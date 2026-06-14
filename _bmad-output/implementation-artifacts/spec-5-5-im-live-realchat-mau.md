@@ -2,7 +2,7 @@
 title: 'Story 5.5 增量：腾讯 IM live 真实接入 + 按需登录控 MAU'
 type: 'feature'
 created: '2026-06-15'
-status: 'ready-for-dev'
+status: 'l0-green'
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/5-5-腾讯-im-会话与图文对话界面.md'
   - '{project-root}/_bmad-output/implementation-artifacts/CROSS-STORY-DECISIONS.md'
@@ -130,3 +130,50 @@ context:
 - **Flyway**：本增量**无新表 / 无新列**（复用既有 `consult_sessions`/`vet_accounts`），勿新增迁移；如确需，按决策 E2 顺延新号、勿照搬示例号。
 - **新依赖需停（Ask First）**：`pubspec.yaml` 加 `tencent_cloud_chat_sdk`——若版本无法解析或 `flutter pub get` 失败，**先以接口/封装占位 `im_service` 让 analyze/test 绿**，在 Completion Notes 标注 SDK 集成待本地，勿因拉不到包卡死整批。
 - **完工**：更新本文件 File List + Completion Notes（记关键决策与「L1/L2 待本地」）；并在 sprint-status 的 `5-5-腾讯-im-会话与图文对话界面` 备注补「live 增量 L0 绿」。
+
+## File List
+
+**后端（petgo-backend）**
+- `src/main/java/com/tailtopia/shared/im/TencentImClient.java` — 接口新增 `ensureAccount(imUserId, displayName)`（幂等建号，不计 MAU）。
+- `src/main/java/com/tailtopia/shared/im/LiveTencentImClient.java` — **新增**：TLSSigAPIv2 签 UserSig（纯 JDK `Mac`+`Deflater`+腾讯变体 base64url，注入 `Clock` 确定性）+ REST `account_import`/`sendmsg`；createConversation 返回 `c2c-<userImId>-<vetImId>`；REST 失败仅记异常类名不阻断。
+- `src/main/java/com/tailtopia/shared/im/StubTencentImClient.java` — 补 `ensureAccount` 空实现。
+- `src/main/java/com/tailtopia/shared/im/ImConfig.java` — live 分支装配 `LiveTencentImClient`（去掉抛错）。
+- `src/main/java/com/tailtopia/shared/im/ImProperties.java` — 新增 `restBaseUrl`、`adminIdentifier`。
+- `src/main/java/com/tailtopia/shared/im/web/ImUserSigController.java` — 注入 `ConsultSessionService`，非 VET 须有 IN_PROGRESS/PENDING_CLOSE 会话否则 403，VET 恒签。
+- `src/main/java/com/tailtopia/consult/domain/SessionStatus.java` — 新增 `IM_LOGIN_ELIGIBLE={IN_PROGRESS,PENDING_CLOSE}`。
+- `src/main/java/com/tailtopia/consult/service/ConsultSessionService.java` — 新增 `hasImLoginEligibleSession(userId)`（控制器经 service 接口查询，不跨模块直访 repository）。
+- `src/main/java/com/tailtopia/consult/service/ConsultAcceptService.java` — 接单建会话前 `ensureAccount(u_<userId>)`。
+- `src/main/java/com/tailtopia/admin/service/AdminVetService.java` — `create()` 后 hook `ensureAccount(v_<vetId>)`，失败不阻断开户。
+- `src/main/java/com/tailtopia/shared/security/SecurityConfig.java` — 显式 `/api/v1/im/usersig` authenticated。
+- `src/main/resources/application.yml` + `.env.example` — 加 `IM_REST_BASE_URL`、`IM_ADMIN_IDENTIFIER`。
+- `src/test/java/com/tailtopia/shared/im/LiveTencentImClientTest.java` — **新增 L0**：UserSig 签名确定性 + 独立 HMAC 交叉校验 + 解压断言 TLSSigAPIv2 结构 + base64url 字符集 + C2C 会话 id + 回调校验。
+- `src/test/java/com/tailtopia/shared/im/web/ImUserSigGateTest.java` — **新增 L0**：闸门矩阵（用户有会话 200/无会话 403/兽医恒签/缺 JWT 401/非数字 sub 401）。
+- `src/test/java/com/tailtopia/shared/im/web/ImUserSigControllerEndpointTest.java` — L1 闸门矩阵改写（IN_PROGRESS→200 / 无会话→403 / VET→200 / 缺 token→401）。
+- `src/test/java/com/tailtopia/shared/im/StubTencentImClientTest.java` — 补 `ensureAccount` 不抛错。
+- `src/test/java/com/tailtopia/consult/service/ConsultAcceptServiceTest.java` — 断言接单前 `ensureAccount(u_<userId>)`。
+
+**前端（petgo_app）**
+- `lib/core/im/im_service.dart` — **新增**：`ImService` 接口 + `ImMessage`/`ImCredential` + `MockImService`（mock/测试空转）+ `LiveImService`（取 UserSig + 生命周期骨架，SDK 收发标 L2）+ `imServiceProvider`。
+- `lib/features/consult/presentation/consult_conversation_page.dart` — IN_PROGRESS 且有 vetId 时 `loginIfNeeded()`，离开 `logout()`，传 peer=`v_<vetId>`。
+- `lib/features/vet/presentation/vet_conversation_page.dart` — 进会话 login（兽医恒签），传 peer=`u_<userId>`，离开 logout（AI 卡/辅助面板不动）。
+- `lib/features/vet/presentation/vet_me_page.dart` — 上线 `loginIfNeeded()` / 下线 + 登出 `logout()`。
+- `lib/features/consult/presentation/im_chat_placeholder.dart` — 加 `peerId` 形参 + 真机收发接入点注释（视觉保留，mock/测试仍本地演示气泡）。
+
+## Completion Notes
+
+**已实现（L0 云端真验）**
+- `LiveTencentImClient.signUserSig` 是真实 TLSSigAPIv2（HMAC-SHA256 + zlib + 腾讯变体 base64url `+/=`→`*-_`），注入固定 `Clock` 输出确定性；单测独立重算 HMAC 并解压内嵌 `TLS.sig`/`TLS.identifier`/`TLS.time` 断言，证明算法正确非占位。`IM_MODE=live` 启动装配不抛错。
+- `/api/v1/im/usersig` 用户态 MAU 硬门控：非 VET 须有 IN_PROGRESS/PENDING_CLOSE 会话才签发，否则 403；VET 恒签；闸门同时有 L0 纯控制器单测与 L1 安全链端点测试。WAITING（尚无兽医/会话）不放行——避免无关用户吃 MAU。
+- 建号 hook：兽医建号 `ensureAccount(v_<vetId>)`、接单 `ensureAccount(u_<userId>)`；幂等、失败不阻断业务（`account_import` 不计 MAU，仅客户端 `TIM.login` 计 MAU）。
+- 后端 `./mvnw test`（L0 子集）：`LiveTencentImClientTest`/`ImUserSigGateTest`/`StubTencentImClientTest`/`ConsultAcceptServiceTest` 共 23 用例绿。前端 `flutter analyze`（仅 1 条 pre-existing 无关 router 警告，非本增量引入）+ `flutter test` 310 全绿。
+
+**关键决策**
+- 模块边界：IM UserSig 控制器经 `ConsultSessionService`（service 接口）查询会话，不直访 `consult.repository`（遵守「禁跨模块直访对方 repository」），新增 `hasImLoginEligibleSession` 单点。
+- 兽医上线 login / 用户进咨询 login 的生命周期放在**页面层**（`vet_me_page`/`*_conversation_page`，经 `imServiceProvider`），未塞进 `vet_repository`（HTTP 数据层）——IM SDK 是运行期/表现层关切，与数据层职责正交。spec Code Map 列 `vet_repository` 仅作触点提示，实际落点更内聚。
+- `LiveTencentImClient.verifyCallback`：live 下未配 token **一律拒绝**（与 stub「未配则放行」相反），不放行未签名回调，安全只升不降。
+
+**Ask First / 待本地（L1/L2）**
+- **新 Flutter 依赖 `tencent_cloud_chat_sdk` 未引入**（Ask First + 云端拉包不稳）：按「云端执行须知」以接口/封装占位 `im_service` 让 analyze/test 绿，SDK `login/sendMessage/onRecvNewMessage` 接入点以 `TODO(L2 本地)` 标注，绝不在前端自签 UserSig / 硬编码 SecretKey。本地接 SDK 时仅替换 `LiveImService` 的 TODO 与 `ImChatPlaceholder` 收发桥接，视觉/接口不变。
+- **L2 待本地**：真实 REST 建号 / 系统消息、真机双端 C2C 收发文字/图片、切 Tab 后台保连、兽医上线 login、用户进咨询 login、腾讯控制台 MAU 仅随实际咨询用户增长观测；需真实 SDKAppID(`20043419`)/SecretKey（本地 `.env`，gitignored）+ 数据中心德国/欧洲（`IM_REST_BASE_URL`）。
+- **L1 待本地**：接单 WAITING→IN_PROGRESS + `im_conversation_id` 落库；usersig 闸门 403/200/恒签真跑（需 Docker pg+redis）——闸门逻辑已有 L0 单测覆盖，L1 仅复验安全链。
+- 护栏复述落实：SecretKey 仅后端 env、绝不下发/入日志；UserSig 短时；后端不持长连接/不中转媒体；无新 Flyway（复用 `consult_sessions`/`vet_accounts`）；禁 MQ/缓存/新中间件；**未动 5.3 抢单 CAS 逻辑**。

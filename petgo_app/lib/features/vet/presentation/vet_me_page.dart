@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/im/im_service.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
@@ -85,8 +86,11 @@ class _VetMePageState extends ConsumerState<VetMePage> with WidgetsBindingObserv
       setState(() => _online = authoritative);
       if (authoritative) {
         _startHeartbeat();
+        // Story 5.5 live 增量：兽医上线即登录 IM（按需登录控 MAU——兽医上线就 login）。失败不阻塞在线态。
+        ref.read(imServiceProvider).loginIfNeeded().catchError((_) {});
       } else {
         _stopHeartbeat();
+        ref.read(imServiceProvider).logout();
       }
     } catch (_) {
       if (!mounted) return;
@@ -113,6 +117,8 @@ class _VetMePageState extends ConsumerState<VetMePage> with WidgetsBindingObserv
 
   Future<void> _logout() async {
     _stopHeartbeat();
+    // 登出即登出 IM（下线，不留长连接）。
+    await ref.read(imServiceProvider).logout();
     await ref.read(vetRepositoryProvider).logout();
     ref.read(authControllerProvider.notifier).toGuest();
     if (mounted) context.go('/home');

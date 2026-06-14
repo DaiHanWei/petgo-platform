@@ -31,6 +31,12 @@ class StubTencentImClientTest {
     }
 
     @Test
+    void ensureAccountIsNoopAndDoesNotThrow() {
+        // 桩：建号空实现，绝不抛错（保持接单/建号 L0/L1 绿）。
+        client().ensureAccount("u_1", "用户1");
+    }
+
+    @Test
     void verifyCallbackAllowsWhenNoTokenConfigured() {
         assertThat(client().verifyCallback("anything")).isTrue();
     }

@@ -67,6 +67,9 @@ class ConsultAcceptServiceTest {
         assertThat(result.getStatus()).isEqualTo(SessionStatus.IN_PROGRESS);
         assertThat(result.getVetId()).isEqualTo(3L);
         assertThat(result.getImConversationId()).isEqualTo("conv-1");
+        // 5.5 live 增量：建会话前先幂等 ensure 用户 IM 账号（系统消息要求账号存在；不计 MAU）。
+        verify(imClient).ensureAccount(org.mockito.ArgumentMatchers.eq("u_7"),
+                org.mockito.ArgumentMatchers.anyString());
         verify(queue).dequeue(11L);
         verify(presence).goBusy(3L);
         verify(events).publishEvent(any(ConsultAcceptedEvent.class));

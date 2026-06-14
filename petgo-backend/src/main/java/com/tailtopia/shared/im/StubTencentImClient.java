@@ -25,6 +25,12 @@ public class StubTencentImClient implements TencentImClient {
     }
 
     @Override
+    public void ensureAccount(String imUserId, String displayName) {
+        // 桩：不真导入；仅记非敏感日志（不打印 displayName 以外的 PII，displayName 是兽医对外昵称，非敏感）。
+        log.debug("[IM-stub] ensure account {}", imUserId);
+    }
+
+    @Override
     public String createConversation(String userImId, String vetImId) {
         // 本地确定性会话 id（真实 IM 由腾讯返回）。
         return "stub-conv-" + UUID.randomUUID();

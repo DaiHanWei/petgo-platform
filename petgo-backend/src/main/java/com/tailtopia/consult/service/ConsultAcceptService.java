@@ -53,9 +53,11 @@ public class ConsultAcceptService {
             throw AppException.conflict("该咨询已被接走");
         }
 
-        // 赢家：建 IM 会话、绑定会话标识。
-        String conv = imClient.createConversation(
-                ImAccountMapper.userImId(s.getUserId()), ImAccountMapper.vetImId(vetId));
+        // 赢家：先幂等 ensure 用户 IM 账号（系统消息要求目标账号存在；导入不计 MAU，绝不替用户 login），
+        // 再建 C2C 会话、绑定会话标识。IM 失败不回滚已成接单（见 ensureAccount/createConversation 的非阻断语义）。
+        String userImId = ImAccountMapper.userImId(s.getUserId());
+        imClient.ensureAccount(userImId, "用户" + s.getUserId());
+        String conv = imClient.createConversation(userImId, ImAccountMapper.vetImId(vetId));
         s.attachImConversation(conv);
         repo.save(s);
 

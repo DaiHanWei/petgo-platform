@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/im/im_service.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
@@ -25,10 +28,21 @@ class VetConversationPage extends ConsumerStatefulWidget {
 class _VetConversationPageState extends ConsumerState<VetConversationPage> {
   late Future<_VetConvData> _data;
 
+  // Story 5.5 live 增量：进会话即登录 IM（兽医恒签）；离开登出（不留长连接）。
+  ImService? _imService;
+  bool _imLoginStarted = false;
+
   @override
   void initState() {
     super.initState();
+    _imService = ref.read(imServiceProvider);
     _data = _load();
+  }
+
+  @override
+  void dispose() {
+    if (_imLoginStarted) _imService?.logout();
+    super.dispose();
   }
 
   Future<_VetConvData> _load() async {
@@ -38,11 +52,19 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
       repo.aiContext(widget.sessionId),
       repo.assist(widget.sessionId),
     ]);
-    return _VetConvData(
+    final data = _VetConvData(
       results[0] as VetSession,
       results[1] as ConsultAiContext,
       results[2] as ConsultAssist,
     );
+    // 兽医进入进行中会话即登录 IM（UserSig 后端恒签兽医）。失败不崩，保留占位演示。
+    if (!_imLoginStarted && data.session.status == 'IN_PROGRESS') {
+      _imLoginStarted = true;
+      unawaited(_imService!.loginIfNeeded().catchError((_) {
+        _imLoginStarted = false;
+      }));
+    }
+    return data;
   }
 
   Future<void> _endSession() async {
@@ -102,7 +124,10 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
                 // 顶部 AI 上下文卡（DIRECT 会话 hasAiContext=false → 不渲染）。
                 VetAiContextCard(context_: d.aiContext),
                 _AssistPanel(assist: d.assist),
-                ImChatPlaceholder(imConversationId: d.session.imConversationId),
+                ImChatPlaceholder(
+                  imConversationId: d.session.imConversationId,
+                  peerId: d.session.userId != null ? 'u_${d.session.userId}' : null,
+                ),
               ],
             );
           },
