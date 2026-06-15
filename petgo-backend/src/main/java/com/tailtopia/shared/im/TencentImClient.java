@@ -12,6 +12,15 @@ package com.tailtopia.shared.im;
  */
 public interface TencentImClient {
 
+    /**
+     * 幂等导入/确保 IM 账号存在（Story 5.5 live 增量）。兽医建号即导入 {@code v_<vetId>}、
+     * 接单前确保 {@code u_<userId>}（系统消息要求目标账号存在）。
+     *
+     * <p><b>账号导入不计 MAU</b>（仅客户端 {@code TIM.login} 计 MAU），故可对用户提前 ensure 以便系统消息落地，
+     * 但绝不替用户 login。导入失败仅记非敏感日志，<b>不阻断</b>调用方业务（首次签 UserSig/登录前可再幂等导入）。
+     */
+    void ensureAccount(String imUserId, String displayName);
+
     /** 为一对 user/vet 建会话，返回 {@code im_conversation_id}（写入 consult_sessions）。 */
     String createConversation(String userImId, String vetImId);
 

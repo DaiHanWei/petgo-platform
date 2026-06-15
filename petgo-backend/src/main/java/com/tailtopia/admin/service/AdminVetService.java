@@ -3,11 +3,15 @@ package com.tailtopia.admin.service;
 import com.tailtopia.consult.dto.VetRatingsView;
 import com.tailtopia.consult.service.ConsultInterruptService;
 import com.tailtopia.consult.service.ConsultRatingQueryService;
+import com.tailtopia.shared.im.ImAccountMapper;
+import com.tailtopia.shared.im.TencentImClient;
 import com.tailtopia.vet.domain.VetAccount;
 import com.tailtopia.vet.domain.VetStatus;
 import com.tailtopia.vet.service.VetAccountService;
 import com.tailtopia.vet.service.VetPresenceService;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,17 +24,22 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AdminVetService {
 
+    private static final Logger log = LoggerFactory.getLogger(AdminVetService.class);
+
     private final VetAccountService vetAccounts;
     private final ConsultRatingQueryService ratingQuery;
     private final VetPresenceService presence;
     private final ConsultInterruptService interruptService;
+    private final TencentImClient imClient;
 
     public AdminVetService(VetAccountService vetAccounts, ConsultRatingQueryService ratingQuery,
-            VetPresenceService presence, ConsultInterruptService interruptService) {
+            VetPresenceService presence, ConsultInterruptService interruptService,
+            TencentImClient imClient) {
         this.vetAccounts = vetAccounts;
         this.ratingQuery = ratingQuery;
         this.presence = presence;
         this.interruptService = interruptService;
+        this.imClient = imClient;
     }
 
     public List<VetAdminView> list() {
@@ -40,6 +49,13 @@ public class AdminVetService {
     /** 创建兽医账号，返回新建账号 id（明文密码仅本次由运营手填/一次性回显，不再可读）。 */
     public long create(String displayName, String username, String rawPassword) {
         VetAccount created = vetAccounts.create(displayName, username, rawPassword);
+        // Story 5.5 增量：建号即幂等 REST 导入 IM 账号 v_<vetId>（不计 MAU）。
+        // 导入失败不阻断建号（Live 客户端内部已吞 REST 异常；此处兜底任何意外，仅记非敏感日志）。
+        try {
+            imClient.ensureAccount(ImAccountMapper.vetImId(created.getId()), displayName);
+        } catch (RuntimeException e) {
+            log.warn("兽医 IM 建号失败（不阻断开户）: {}", e.getClass().getSimpleName());
+        }
         return created.getId();
     }
 

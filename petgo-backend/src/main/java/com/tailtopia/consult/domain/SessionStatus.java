@@ -20,6 +20,12 @@ public enum SessionStatus {
     /** 「占用中」三态：任一存在即视为该用户已有进行中咨询（FR-4B「同时仅 1 个」）。 */
     public static final Set<SessionStatus> ACTIVE = Set.of(WAITING, IN_PROGRESS, PENDING_CLOSE);
 
+    /**
+     * Story 5.5 增量：可 IM 登录态——已接单（存在 C2C 会话与对端兽医）的两态。
+     * 仅此两态用户可签 UserSig 触发 SDK login（控 MAU）；{@code WAITING}（尚无兽医/会话）不放行。
+     */
+    public static final Set<SessionStatus> IM_LOGIN_ELIGIBLE = Set.of(IN_PROGRESS, PENDING_CLOSE);
+
     public boolean isActive() {
         return ACTIVE.contains(this);
     }

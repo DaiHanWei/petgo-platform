@@ -91,6 +91,17 @@ public class ConsultSessionService {
         return repo.findFirstByUserIdAndStatusInOrderByCreatedAtDesc(userId, SessionStatus.ACTIVE);
     }
 
+    /**
+     * Story 5.5 增量：用户 IM UserSig 闸门（控 MAU）。仅当该用户有「已接单进行中/待关闭」会话才放行
+     * SDK login——{@code WAITING}（尚无兽医/会话）不放行，避免无关用户吃 MAU。供 IM UserSig 控制器经
+     * <b>service 接口</b>调用（不跨模块直访 repository）。
+     */
+    @Transactional(readOnly = true)
+    public boolean hasImLoginEligibleSession(long userId) {
+        return repo.findFirstByUserIdAndStatusInOrderByCreatedAtDesc(userId, SessionStatus.IM_LOGIN_ELIGIBLE)
+                .isPresent();
+    }
+
     @Transactional(readOnly = true)
     public ConsultSession getForUser(long userId, long sessionId) {
         return loadOwned(userId, sessionId);

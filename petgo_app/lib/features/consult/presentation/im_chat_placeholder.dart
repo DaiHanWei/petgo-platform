@@ -8,11 +8,19 @@ import '../../../shared/widgets/design/striped_photo.dart';
 /// 真机接入腾讯 IM Flutter SDK 收发文字/图片 + 后台保连（NFR-5）属 **L2**。
 /// 🔄 PRD V1.0.0 修订（F4 · 2026-06-08）：V1.0.0 全程无视频，会话仅文字/图片（视频随收费模式后置）。
 /// 本组件为 demo/占位聊天面：种子对话 + 本地回声（发送→打字→兽医罐头回复），
-/// 视觉对齐原型气泡。真机接入时用 [imConversationId] 替换为 IM SDK 会话组件。
+/// 视觉对齐原型气泡。
+///
+/// 🔌 真机接入（**L2 待本地**）：登录/收发由页面经 `imServiceProvider` 驱动（见
+/// `consult_conversation_page` / `vet_conversation_page`）；[peerId]（对端 `u_`/`v_` 账号）与
+/// [imConversationId] 用于真实 C2C 收发，绑定腾讯 IM Flutter SDK 后此面用 [ImService.onMessages]/`sendText`
+/// 替换本地回声，视觉保留。mock / 测试下保持本地演示气泡（不触真实 SDK）。
 class ImChatPlaceholder extends StatefulWidget {
-  const ImChatPlaceholder({super.key, this.imConversationId});
+  const ImChatPlaceholder({super.key, this.imConversationId, this.peerId});
 
   final String? imConversationId;
+
+  /// 对端 IM 账号（用户侧 `v_<vetId>` / 兽医侧 `u_<userId>`）。真机 C2C 收发用（L2）。
+  final String? peerId;
 
   @override
   State<ImChatPlaceholder> createState() => _ImChatPlaceholderState();
