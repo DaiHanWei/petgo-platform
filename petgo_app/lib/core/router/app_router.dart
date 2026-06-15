@@ -27,7 +27,6 @@ import '../../features/consult/presentation/consult_conversation_page.dart';
 import '../../features/consult/presentation/consult_entry_page.dart';
 import '../../features/consult/presentation/consult_waiting_page.dart';
 import '../../features/notify/presentation/notification_center_page.dart';
-import '../../features/onboarding/presentation/mint_onboarding_page.dart';
 import '../../features/gath/presentation/gath_page.dart';
 import '../../features/profile/presentation/pet_card_page.dart';
 import '../../features/vet/presentation/vet_conversation_page.dart';
