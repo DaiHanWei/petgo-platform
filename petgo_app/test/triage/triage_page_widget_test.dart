@@ -11,6 +11,7 @@ Future<void> _pump(WidgetTester tester) async {
   await tester.pumpWidget(UncontrolledProviderScope(
     container: container,
     child: const MaterialApp(
+      locale: Locale('id'), // 文案已迁 arb：固定印尼语以断言 'Tanya AI (Triase)' 等 id 文案
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: TriagePage(),

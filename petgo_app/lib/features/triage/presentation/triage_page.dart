@@ -81,21 +81,21 @@ class _TriagePageState extends ConsumerState<TriagePage> {
           children: <Widget>[
             // ① Momo 头部。
             Row(
-              children: const [
-                Momo(size: 44, happy: false),
-                SizedBox(width: 10),
+              children: [
+                const Momo(size: 44, happy: false),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Konsultasi Kilat',
-                          style: TextStyle(
+                      Text(l10n.triageHeroTitle,
+                          style: const TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.w900,
                               letterSpacing: -0.4,
                               color: AppColors.ink)),
-                      Text('Tenang, kami bantu cek anabul-mu 💚',
-                          style: TextStyle(fontSize: 13, color: AppColors.muted)),
+                      Text(l10n.triageHeroSubtitle,
+                          style: const TextStyle(fontSize: 13, color: AppColors.muted)),
                     ],
                   ),
                 ),
@@ -107,11 +107,10 @@ class _TriagePageState extends ConsumerState<TriagePage> {
               ctaKey: 'triageEntryAI',
               emoji: '🤖',
               tone: AppColors.mintTint,
-              title: 'Tanya AI (Triase)',
-              badge: _EntryBadge(label: '≤ 15 detik', color: AppColors.mint700),
-              desc:
-                  'Unggah foto gejala, AI kasih level bahaya + saran observasi & obat rumahan.',
-              cta: 'Mulai triase',
+              title: l10n.triageAiCardTitle,
+              badge: _EntryBadge(label: l10n.triageAiSpeedBadge, color: AppColors.mint700),
+              desc: l10n.triageAiCardDesc,
+              cta: l10n.triageAiCardCta,
               primary: false,
               onTap: () => requireLogin(
                 ref,
@@ -126,10 +125,10 @@ class _TriagePageState extends ConsumerState<TriagePage> {
               ctaKey: 'triageEntryVet',
               emoji: '🩺',
               tone: AppColors.skyTint,
-              title: 'Chat Dokter Hewan',
-              badge: const _EntryBadge(label: '2 dokter online', color: Color(0xFF2F7DB8), live: true),
-              desc: 'Ngobrol langsung (teks & foto) dengan dokter mitra. Gratis di versi ini.',
-              cta: 'Mulai konsultasi',
+              title: l10n.triageVetCardTitle,
+              badge: _EntryBadge(label: l10n.triageVetOnlineBadge(2), color: const Color(0xFF2F7DB8), live: true),
+              desc: l10n.triageVetCardDesc,
+              cta: l10n.triageVetCardCta,
               primary: true,
               onTap: () => requireLogin(
                 ref,
@@ -140,8 +139,8 @@ class _TriagePageState extends ConsumerState<TriagePage> {
             ),
             const SizedBox(height: 18),
             // ③ 在线兽医条。
-            const Text('Dokter sedang online',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.ink)),
+            Text(l10n.triageOnlineVetsHeader,
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.ink)),
             const SizedBox(height: 10),
             const _VetRow(emoji: '🧑‍⚕️', name: 'drh. Sari', spec: 'Kucing & Anjing', online: true),
             const SizedBox(height: 10),

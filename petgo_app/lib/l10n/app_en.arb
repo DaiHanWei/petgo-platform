@@ -507,5 +507,22 @@
     "placeholders": {
       "name": { "type": "String" }
     }
-  }
+  },
+
+  "triageHeroTitle": "Quick consultation",
+  "triageHeroSubtitle": "Relax, we'll help check your fur baby 💚",
+  "triageAiCardTitle": "Ask AI (Triage)",
+  "triageAiSpeedBadge": "≤ 15 sec",
+  "triageAiCardDesc": "Upload symptom photos; AI gives a danger level plus observation & home-care tips.",
+  "triageAiCardCta": "Start triage",
+  "triageVetCardTitle": "Chat with a vet",
+  "triageVetOnlineBadge": "{count} vets online",
+  "@triageVetOnlineBadge": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "triageVetCardDesc": "Chat directly (text & photos) with partner vets. Free in this version.",
+  "triageVetCardCta": "Start consultation",
+  "triageOnlineVetsHeader": "Vets online now"
 }

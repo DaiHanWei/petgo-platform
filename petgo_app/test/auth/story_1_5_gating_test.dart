@@ -146,7 +146,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(LoginHardDialog), findsNothing);
-    // 切到问诊 hub（换肤后页面标题为 Momo 头「Konsultasi Kilat」，确认已落地该页）。
-    expect(find.text('Konsultasi Kilat'), findsOneWidget);
+    // 切到问诊 hub（文案已迁 arb；本测试 pump 真实 App 默认 en locale、tab 为 'Consult'，故断言英文标题）。
+    expect(find.text('Quick consultation'), findsOneWidget);
   });
 }

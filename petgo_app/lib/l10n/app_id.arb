@@ -435,5 +435,17 @@
   "greetingAfternoon": "Selamat siang 🌤️",
   "greetingEvening": "Selamat sore 🌇",
   "greetingNight": "Selamat malam 🌙",
-  "greetingHowAreYou": "Apa kabar, {name}?"
+  "greetingHowAreYou": "Apa kabar, {name}?",
+
+  "triageHeroTitle": "Konsultasi Kilat",
+  "triageHeroSubtitle": "Tenang, kami bantu cek anabul-mu 💚",
+  "triageAiCardTitle": "Tanya AI (Triase)",
+  "triageAiSpeedBadge": "≤ 15 detik",
+  "triageAiCardDesc": "Unggah foto gejala, AI kasih level bahaya + saran observasi & obat rumahan.",
+  "triageAiCardCta": "Mulai triase",
+  "triageVetCardTitle": "Chat Dokter Hewan",
+  "triageVetOnlineBadge": "{count} dokter online",
+  "triageVetCardDesc": "Ngobrol langsung (teks & foto) dengan dokter mitra. Gratis di versi ini.",
+  "triageVetCardCta": "Mulai konsultasi",
+  "triageOnlineVetsHeader": "Dokter sedang online"
 }
