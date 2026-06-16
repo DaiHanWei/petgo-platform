@@ -491,5 +491,21 @@
     }
   },
   "onboardDoneBody": "Your Passport card is ready. Save their first moment and introduce them to friends.",
-  "onboardDoneEnter": "Enter TailTopia"
+  "onboardDoneEnter": "Enter TailTopia",
+
+  "publishCancel": "Cancel",
+  "publishCamera": "Camera",
+  "publishHintDaily": "What happened today?",
+  "publishHintGrowth": "Write a sweet line about your pet...",
+  "publishHintKnowledge": "Share a pet care tip...",
+  "greetingMorning": "Good morning ☀️",
+  "greetingAfternoon": "Good afternoon 🌤️",
+  "greetingEvening": "Good evening 🌇",
+  "greetingNight": "Good night 🌙",
+  "greetingHowAreYou": "How are you, {name}?",
+  "@greetingHowAreYou": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  }
 }

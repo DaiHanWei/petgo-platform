@@ -424,5 +424,16 @@
   "onboardNext": "Lanjut",
   "onboardDoneTitle": "Halo, {name}! 🎉",
   "onboardDoneBody": "Kartu Paspor sudah dibuat. Yuk simpan momen pertamanya dan kenalkan ke teman-teman.",
-  "onboardDoneEnter": "Masuk ke TailTopia"
+  "onboardDoneEnter": "Masuk ke TailTopia",
+
+  "publishCancel": "Batal",
+  "publishCamera": "Kamera",
+  "publishHintDaily": "Apa yang terjadi hari ini?",
+  "publishHintGrowth": "Tulis satu kalimat manis tentang anabul...",
+  "publishHintKnowledge": "Bagikan tips merawat anabul...",
+  "greetingMorning": "Selamat pagi ☀️",
+  "greetingAfternoon": "Selamat siang 🌤️",
+  "greetingEvening": "Selamat sore 🌇",
+  "greetingNight": "Selamat malam 🌙",
+  "greetingHowAreYou": "Apa kabar, {name}?"
 }

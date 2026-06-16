@@ -25,6 +25,7 @@ Future<void> _pumpHome(WidgetTester tester, ProviderContainer c) async {
   await tester.pumpWidget(UncontrolledProviderScope(
     container: c,
     child: const MaterialApp(
+      locale: Locale('id'), // 文案已迁 arb：固定印尼语以断言 'Apa kabar, ...' 等 id 文案
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: HomePage(),

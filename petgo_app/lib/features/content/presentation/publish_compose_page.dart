@@ -229,14 +229,14 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                     key: const ValueKey('publishClose'),
                     onPressed: () => Navigator.of(context).pop(),
                     style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(48, 36)),
-                    child: const Text('Batal',
-                        style: TextStyle(
+                    child: Text(l10n.publishCancel,
+                        style: const TextStyle(
                             color: AppColors.muted, fontSize: 15, fontWeight: FontWeight.w700)),
                   ),
-                  const Expanded(
-                    child: Text('Buat Postingan',
+                  Expanded(
+                    child: Text(l10n.publishComposeTitle,
                         textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
                   ),
                   Btn3d(
                     key: const ValueKey('publishSubmit'),
@@ -249,7 +249,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                             width: 18,
                             height: 18,
                             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Text('Bagikan'),
+                        : Text(l10n.publishButton),
                   ),
                 ],
               ),
@@ -281,7 +281,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                 onChanged: controller.setText,
                 style: const TextStyle(fontSize: 15.5, color: AppColors.ink, height: 1.5),
                 decoration: InputDecoration(
-                  hintText: _hint(controller),
+                  hintText: _hint(controller, l10n),
                   hintStyle: const TextStyle(color: AppColors.muted, fontSize: 15.5),
                   filled: true,
                   fillColor: AppColors.card,
@@ -294,7 +294,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                 ),
               ),
               const SizedBox(height: 12),
-              _imageRow(controller),
+              _imageRow(controller, l10n),
               const SizedBox(height: 14),
               // Kamera（相机）：拍照上传，与「Tambah foto」相册同走 pickAndProcess（仅 source 不同）。
               // 注：Lokasi（定位）chip 已移除——V1 PRD 无定位功能，不留死按钮。
@@ -302,7 +302,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                 _SmallChip(
                   key: const ValueKey('publishCameraChip'),
                   icon: Icons.photo_camera_outlined,
-                  label: 'Kamera',
+                  label: l10n.publishCamera,
                   onTap: () => _addImage(controller, source: MediaSource.camera),
                 ),
               ]),
@@ -325,14 +325,14 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     );
   }
 
-  String _hint(PublishController c) {
+  String _hint(PublishController c, AppLocalizations l10n) {
     switch (c.type) {
       case ContentType.growthMoment:
-        return 'Tulis satu kalimat manis tentang anabul...';
+        return l10n.publishHintGrowth;
       case ContentType.knowledge:
-        return 'Bagikan tips merawat anabul...';
+        return l10n.publishHintKnowledge;
       default:
-        return 'Apa yang terjadi hari ini?';
+        return l10n.publishHintDaily;
     }
   }
 
@@ -489,7 +489,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     );
   }
 
-  Widget _imageRow(PublishController controller) {
+  Widget _imageRow(PublishController controller, AppLocalizations l10n) {
     if (controller.items.isEmpty) {
       return Btn3d(
         key: const ValueKey('publishAddImage'),
@@ -497,12 +497,12 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
         expand: true,
         onPressed: () => _addImage(controller),
         padding: const EdgeInsets.all(16),
-        child: const Row(
+        child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.image_outlined, size: 20, color: AppColors.mint700),
-            SizedBox(width: 8),
-            Text('Tambah foto', style: TextStyle(fontSize: 14.5)),
+            const Icon(Icons.image_outlined, size: 20, color: AppColors.mint700),
+            const SizedBox(width: 8),
+            Text(l10n.publishAddImage, style: const TextStyle(fontSize: 14.5)),
           ],
         ),
       );

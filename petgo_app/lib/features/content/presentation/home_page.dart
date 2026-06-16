@@ -186,16 +186,17 @@ class _GreetingHeader extends StatelessWidget {
   final String name;
   final bool showBell;
 
-  String _greeting() {
+  String _greeting(AppLocalizations l10n) {
     final h = DateTime.now().hour;
-    if (h < 11) return 'Selamat pagi ☀️';
-    if (h < 15) return 'Selamat siang 🌤️';
-    if (h < 18) return 'Selamat sore 🌇';
-    return 'Selamat malam 🌙';
+    if (h < 11) return l10n.greetingMorning;
+    if (h < 15) return l10n.greetingAfternoon;
+    if (h < 18) return l10n.greetingEvening;
+    return l10n.greetingNight;
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 8, 18, 14),
       decoration: const BoxDecoration(
@@ -215,12 +216,12 @@ class _GreetingHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _greeting(),
+                  _greeting(l10n),
                   style: const TextStyle(
                       fontSize: 13, color: AppColors.mint700, fontWeight: FontWeight.w700),
                 ),
                 Text(
-                  'Apa kabar, $name?',
+                  l10n.greetingHowAreYou(name),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
