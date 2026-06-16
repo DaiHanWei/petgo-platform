@@ -18,6 +18,7 @@ import '../../features/profile/presentation/growth_archive_page.dart';
 import '../../features/profile/presentation/milestone_list_page.dart';
 import '../../features/profile/domain/pet_profile.dart';
 import '../../features/notify/data/push_permission_providers.dart';
+import '../../features/onboarding/presentation/splash_page.dart';
 import '../../features/profile/presentation/pet_profile_create_page.dart';
 import '../../features/profile/presentation/day_detail_page.dart';
 import '../../features/profile/presentation/pet_profile_edit_page.dart';
@@ -52,10 +53,12 @@ const Set<String> _controlledLocations = {'/profile', '/triage', '/me', '/consul
 final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: rootNavigatorKey,
-    initialLocation: '/home',
+    initialLocation: '/splash',
     redirect: (context, state) {
       final auth = ref.read(authControllerProvider);
       final loc = state.matchedLocation;
+      // 启动屏（P-01）：永远先显示品牌过场，由 SplashPage 自行 go('/home') 再交回本 redirect 分流。
+      if (loc == '/splash') return null;
       final isVetRoute = loc == '/vet' || loc.startsWith('/vet/');
       // 兽医登录态：禁止进入用户侧任何路由（反之亦然），命中越权重定向回各自首页（Story 5.1 F2 守卫）。
       if (auth.isVet) {
@@ -70,6 +73,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: <RouteBase>[
+      // 启动屏（P-01）：initialLocation；动画后转 /home。
+      GoRoute(path: '/splash', builder: (c, s) => const SplashPage()),
       GoRoute(path: '/login', builder: (c, s) => const LoginPage()),
       // 兽医账密登录 + 工作台壳（Story 5.1）。与用户侧 5-Tab 隔离：shell 外顶层路由。
       GoRoute(path: '/vet/login', builder: (c, s) => const VetLoginPage()),

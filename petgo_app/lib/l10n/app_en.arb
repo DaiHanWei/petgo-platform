@@ -452,5 +452,44 @@
   "historyArchived": "Archived",
   "terminalClosed": "Completed",
   "terminalUnrated": "Not rated",
-  "terminalInterrupted": "Interrupted"
+  "terminalInterrupted": "Interrupted",
+
+  "splashTagline": "A community for Indonesia's pet lovers",
+
+  "pushPromptTitle": "Turn on notifications for your furry friend?",
+  "pushPromptSubtitle": "Don't miss the important moments with them.",
+  "pushPromptBenefitBirthdayTitle": "Birthday reminders",
+  "pushPromptBenefitBirthdayBody": "Nothing is more special than their first celebration",
+  "pushPromptBenefitVetTitle": "Vet replies",
+  "pushPromptBenefitVetBody": "Know the moment a vet replies to your consultation",
+  "pushPromptBenefitMilestoneTitle": "Special milestones",
+  "pushPromptBenefitMilestoneBody": "Celebrate every achievement together",
+  "pushPromptAllow": "Turn on notifications",
+  "pushPromptDismiss": "No, thanks",
+
+  "onboardWelcomeTagline": "A loyal friend\nfor your furry buddy 🐾",
+  "onboardWelcomeSubtitle": "Quick consultations, community, and every growth moment saved — all in one place.",
+  "onboardWelcomeStart": "Get started",
+  "onboardWelcomeHaveAccount": "Already have an account? Sign in",
+  "onboardCreateTitle": "Meet your pet",
+  "onboardCreateSubtitle": "Create a card for one of your pets first.",
+  "onboardFieldName": "Name",
+  "onboardFieldNameHint": "Nickname",
+  "onboardFieldNamePlaceholder": "e.g. Mochi",
+  "onboardFieldBreed": "Type / Breed",
+  "onboardFieldOptional": "Optional",
+  "onboardFieldBirthday": "Date of birth",
+  "onboardFieldBirthdayPlaceholder": "e.g. 14 Feb 2023",
+  "onboardFieldBio": "Short bio",
+  "onboardFieldBioHint": "Max 30 characters",
+  "onboardFieldBioPlaceholder": "Mochi, the laziest orange cat in Jakarta",
+  "onboardNext": "Next",
+  "onboardDoneTitle": "Hi, {name}! 🎉",
+  "@onboardDoneTitle": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "onboardDoneBody": "Your Passport card is ready. Save their first moment and introduce them to friends.",
+  "onboardDoneEnter": "Enter TailTopia"
 }

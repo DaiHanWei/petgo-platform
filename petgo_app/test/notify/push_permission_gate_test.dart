@@ -89,4 +89,40 @@ void main() {
     expect(requestCount, 0);
     expect(prefs.pushPermissionAsked, isFalse);
   });
+
+  // ── P-09 前置说明（confirmViaRationale）路径 ──
+  test('前置说明点「开启」→ 请求系统权限并置 asked', () async {
+    final prefs = await AppPrefs.create();
+    var requestCount = 0;
+    final gate = PushPermissionGate(
+      prefs: prefs,
+      requestSystemPermission: () async {
+        requestCount++;
+        return true;
+      },
+      confirmViaRationale: () async => true, // 用户点「开启」
+    );
+    expect(await gate.maybeRequestAfterFirstConsult(firstConsultDone: true), isTrue);
+    expect(requestCount, 1); // 同意 → 走系统请求
+    expect(prefs.pushPermissionAsked, isTrue);
+  });
+
+  test('前置说明点「暂不」→ 不请求系统权限，但仍置 asked（拒绝后不再主动弹）', () async {
+    final prefs = await AppPrefs.create();
+    var requestCount = 0;
+    final gate = PushPermissionGate(
+      prefs: prefs,
+      requestSystemPermission: () async {
+        requestCount++;
+        return true;
+      },
+      confirmViaRationale: () async => false, // 用户点「暂不」
+    );
+    expect(await gate.maybeRequestAfterProfileCreated(neverConsulted: true), isTrue);
+    expect(requestCount, 0); // 拒绝 → 跳过系统弹窗
+    expect(prefs.pushPermissionAsked, isTrue); // 仍记为已问，下次不再弹
+    // 二次任意时机被门控跳过
+    expect(await gate.maybeRequestAfterFirstConsult(firstConsultDone: true), isFalse);
+    expect(requestCount, 0);
+  });
 }

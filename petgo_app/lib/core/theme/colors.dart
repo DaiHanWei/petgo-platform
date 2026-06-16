@@ -53,6 +53,10 @@ class AppColors {
   static const Color momoBlush = Color(0x8CF496A4); // rgba(244,150,164,.55)
   static const Color momoNose = Color(0xFFE78CA0);
 
+  // —— Splash 启动屏品牌暗底（一次性品牌过场，深薄荷墨；本流唯一深色屏）——
+  static const Color splashInk = Color(0xFF12211B); // 深底
+  static const Color splashGlow = mint; // 中心辉光（薄荷，非原型紫）
+
   // —— Status ——
   static const Color danger = Color(0xFFE5604D);
 
