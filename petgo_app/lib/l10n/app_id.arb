@@ -447,5 +447,7 @@
   "triageVetOnlineBadge": "{count} dokter online",
   "triageVetCardDesc": "Ngobrol langsung (teks & foto) dengan dokter mitra. Gratis di versi ini.",
   "triageVetCardCta": "Mulai konsultasi",
-  "triageOnlineVetsHeader": "Dokter sedang online"
+  "triageOnlineVetsHeader": "Dokter sedang online",
+
+  "imInputHint": "Tulis pesan..."
 }

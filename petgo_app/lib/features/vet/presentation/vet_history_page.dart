@@ -60,6 +60,7 @@ class _HistoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final interrupted = entry.terminalState == 'INTERRUPTED';
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -88,7 +89,8 @@ class _HistoryCard extends StatelessWidget {
                   color: AppColors.divider,
                   borderRadius: BorderRadius.circular(999),
                 ),
-                child: Text(interrupted ? 'Terputus' : 'Selesai', style: AppTypography.disclaimer),
+                child: Text(interrupted ? l10n.terminalInterrupted : l10n.terminalClosed,
+                    style: AppTypography.disclaimer),
               ),
               const Spacer(),
               if (!interrupted && entry.stars != null) _Stars(filled: entry.stars!),

@@ -9,6 +9,7 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../notify/data/push_permission_providers.dart';
 import '../../notify/domain/push_suppression.dart';
 import '../data/consult_repository.dart';
 import 'consult_rating_dialog.dart';
@@ -34,6 +35,7 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
   String _status = 'IN_PROGRESS';
   String? _closedReason;
   bool _rated = false;
+  bool _firstConsultPushTried = false; // 首次问诊推送闸门本页只触发一次（gate 另有持久化自守）
   ActiveConsultSession? _activeNotifier;
 
   // Story 5.5 live 增量：进行中会话登录 IM 收发；离开/结束登出（控 MAU + 不留连接）。
@@ -83,8 +85,23 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
         });
       }
       if (s.status == 'CLOSED' || s.status == 'INTERRUPTED') _poll?.cancel();
+      if (s.status == 'CLOSED') _maybeTriggerFirstConsultPush();
     } catch (_) {
       // 轮询失败静默重试。
+    }
+  }
+
+  /// 首次问诊完成（会话 CLOSED）→ 触发推送权限闸门（Story 6.4 双时机之一）。
+  /// 接 ① 的 P-09 前置 sheet；gate 凭 `pushPermissionAsked` 持久化自守仅一次，本页再加一道防重入。
+  /// 失败静默——绝不阻断问诊完成体验。
+  Future<void> _maybeTriggerFirstConsultPush() async {
+    if (_firstConsultPushTried) return;
+    _firstConsultPushTried = true;
+    try {
+      final gate = await ref.read(pushPermissionGateProvider.future);
+      await gate.maybeRequestAfterFirstConsult(firstConsultDone: true);
+    } catch (_) {
+      // 推送闸门异常不影响问诊流程。
     }
   }
 
@@ -100,6 +117,7 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
         _status = 'CLOSED';
       });
       _poll?.cancel();
+      _maybeTriggerFirstConsultPush();
       ScaffoldMessenger.of(context)
         ..clearSnackBars()
         ..showSnackBar(SnackBar(content: Text(l10n.consultRateThanks)));

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/colors.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/design/striped_photo.dart';
 
 /// 实时对话区（Story 5.5 · TailTopia Prototype VetChat 换肤）。
@@ -253,6 +254,7 @@ class _InputBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
       decoration: const BoxDecoration(
@@ -274,7 +276,7 @@ class _InputBar extends StatelessWidget {
               onSubmitted: (_) => onSend(),
               style: const TextStyle(fontSize: 15, color: AppColors.ink),
               decoration: InputDecoration(
-                hintText: 'Tulis pesan...',
+                hintText: l10n.imInputHint,
                 hintStyle: const TextStyle(color: AppColors.muted, fontSize: 15),
                 filled: true,
                 fillColor: AppColors.cream2,

@@ -524,5 +524,7 @@
   },
   "triageVetCardDesc": "Chat directly (text & photos) with partner vets. Free in this version.",
   "triageVetCardCta": "Start consultation",
-  "triageOnlineVetsHeader": "Vets online now"
+  "triageOnlineVetsHeader": "Vets online now",
+
+  "imInputHint": "Write a message..."
 }
