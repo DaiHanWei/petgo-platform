@@ -105,6 +105,12 @@ class AppColors {
   /// 问诊区强调 = 紫主色。
   static const Color accentConsult = mint;
 
+  /// 在线态深绿文字（原型 #136B41，配 vetSurface 浅底）。
+  static const Color onlineDeepGreen = Color(0xFF136B41);
+
+  /// 流程第 3 步浅紫圆（原型 #B4A0E3）。
+  static const Color violetSoft = Color(0xFFB4A0E3);
+
   // 分诊语义三色（原型值：绿/黄/红）
   static const Color triageGreen = Color(0xFF1F9E6A);
   static const Color triageYellow = Color(0xFFF6A609);

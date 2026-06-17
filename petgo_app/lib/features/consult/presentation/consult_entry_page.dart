@@ -7,6 +7,7 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/design/online_pulse_dot.dart';
 import '../data/consult_repository.dart';
 import '../domain/consult_session.dart';
 import 'consult_rating_dialog.dart';
@@ -136,11 +137,55 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
   }
 
   Widget _online(AppLocalizations l10n) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
+    return ListView(
       children: [
-        Text(l10n.consultProbabilisticOnline, style: AppTypography.body, textAlign: TextAlign.center),
-        const SizedBox(height: AppSpacing.section),
+        // 在线提示条（原型）：vetSurface 浅底 + 绿脉冲点 + 「Dokter Hewan Tersedia」（决策 #3：省略人数）。
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+              color: AppColors.vetSurface, borderRadius: BorderRadius.circular(14)),
+          child: Row(
+            children: [
+              const OnlinePulseDot(size: 10, color: AppColors.triageGreen),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(l10n.consultAvailableTitle,
+                        style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.onlineDeepGreen)),
+                    Text(l10n.consultProbabilisticOnline,
+                        style: const TextStyle(fontSize: 11, color: AppColors.ink2)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 22),
+        // 3 步流程（原型 CARA KERJA）。
+        Text(l10n.consultHowItWorks.toUpperCase(),
+            style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.4,
+                color: AppColors.ink)),
+        const SizedBox(height: 14),
+        _StepRow(n: '1', color: AppColors.mint, title: l10n.consultStep1Title, desc: l10n.consultStep1Desc),
+        const SizedBox(height: 12),
+        _StepRow(n: '2', color: AppColors.mint500, title: l10n.consultStep2Title, desc: l10n.consultStep2Desc),
+        const SizedBox(height: 12),
+        _StepRow(n: '3', color: AppColors.violetSoft, title: l10n.consultStep3Title, desc: l10n.consultStep3Desc),
+        const SizedBox(height: 22),
+        // 责任声明。
+        Text(l10n.consultEntryDisclaimer,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 11, height: 1.55, color: AppColors.muted)),
+        const SizedBox(height: 18),
+        // CTA：全宽紫底「Mulai Konsultasi →」。
         SizedBox(
           width: double.infinity,
           child: FilledButton(
@@ -149,9 +194,18 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.accentConsult,
               foregroundColor: AppColors.onAccent,
-              padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+              padding: const EdgeInsets.symmetric(vertical: 15),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
-            child: Text(l10n.consultStart, style: AppTypography.button),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(l10n.consultStart, style: AppTypography.button),
+                const SizedBox(width: 6),
+                const Icon(Icons.arrow_forward_rounded, size: 18),
+              ],
+            ),
           ),
         ),
       ],
@@ -174,6 +228,50 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
           key: const ValueKey('consultOfflineUseAi'),
           onPressed: () => context.push('/triage/upload'),
           child: Text(l10n.consultOfflineUseAi),
+        ),
+      ],
+    );
+  }
+}
+
+/// 流程步骤行（原型）：编号紫渐变圆 + 标题 + 副标题。
+class _StepRow extends StatelessWidget {
+  const _StepRow(
+      {required this.n, required this.color, required this.title, required this.desc});
+
+  final String n;
+  final Color color;
+  final String title;
+  final String desc;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 32,
+          height: 32,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          child: Text(n,
+              style: const TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.onAccent)),
+        ),
+        const SizedBox(width: 13),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 3),
+              Text(title,
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
+              const SizedBox(height: 2),
+              Text(desc,
+                  style: const TextStyle(fontSize: 12, height: 1.4, color: AppColors.ink2)),
+            ],
+          ),
         ),
       ],
     );

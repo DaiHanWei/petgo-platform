@@ -52,7 +52,10 @@ Future<void> _pump(WidgetTester tester, _FakeConsultRepository repo) async {
       home: ConsultEntryPage(),
     ),
   ));
-  await tester.pumpAndSettle();
+  // 在线态绿脉冲为常驻动画，pumpAndSettle 不收敛——用固定帧推进（含 _checkActive 微任务）。
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 50));
+  await tester.pump(const Duration(milliseconds: 50));
 }
 
 void main() {
@@ -113,8 +116,10 @@ void main() {
     await _pump(tester, repo);
     expect(find.byType(ConsultRatingDialog), findsOneWidget);
     // 用户跳过（点击遮罩关闭）→ 弹后置 PROMPTED 不再弹（mark 在弹窗关闭后才调）。
+    // 在线态绿脉冲常驻 → 用固定帧推进而非 pumpAndSettle。
     await tester.tapAt(const Offset(20, 20));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
     expect(find.byType(ConsultRatingDialog), findsNothing);
     expect(repo.markPromptedCalls, 1);
   });
