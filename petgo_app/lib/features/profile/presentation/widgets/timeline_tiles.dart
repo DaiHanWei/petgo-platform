@@ -87,6 +87,7 @@ class HappyMomentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return _TimelineRow(
       key: const ValueKey('happyMomentTile'),
       markerEmoji: '🌈',
@@ -114,7 +115,7 @@ class HappyMomentTile extends StatelessWidget {
                           style: const TextStyle(
                               fontSize: 11.5, color: AppColors.muted, fontWeight: FontWeight.w700)),
                       const SizedBox(width: 8),
-                      _badge('Momen Bahagia', const Color(0xFFA9821E), AppColors.goldTint),
+                      _badge(l10n.happyMomentLabel, const Color(0xFFA9821E), AppColors.goldTint),
                     ],
                   ),
                   if (firstLabel != null)

@@ -80,8 +80,8 @@ class PetInfoCard extends StatelessWidget {
                 children: [
                   Text('$daysTogether',
                       style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
-                  const Text('Hari bareng',
-                      style: TextStyle(fontSize: 11.5, color: AppColors.muted, fontWeight: FontWeight.w600)),
+                  Text(l10n.daysTogetherLabel,
+                      style: const TextStyle(fontSize: 11.5, color: AppColors.muted, fontWeight: FontWeight.w600)),
                 ],
               ),
             ),

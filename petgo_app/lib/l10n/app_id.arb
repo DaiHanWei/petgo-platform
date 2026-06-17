@@ -449,5 +449,13 @@
   "triageVetCardCta": "Mulai konsultasi",
   "triageOnlineVetsHeader": "Dokter sedang online",
 
-  "imInputHint": "Tulis pesan..."
+  "imInputHint": "Tulis pesan...",
+
+  "happyMomentLabel": "Momen Bahagia",
+  "daysTogetherLabel": "Hari bareng",
+  "petCardHeader": "TailTopia · KARTU ANABUL",
+  "petCardRecentMoments": "Momen terbaru",
+  "petCardRecentCount": "5 terakhir",
+  "petCardDownloadPrompt": "Mau lihat cerita lengkap {name}?\nUnduh TailTopia untuk ikuti tumbuh kembangnya 🐾",
+  "petCardDownloadCta": "Unduh TailTopia"
 }

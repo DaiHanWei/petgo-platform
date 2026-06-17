@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/shadows.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/design/btn3d.dart';
 import '../../../shared/widgets/design/emoji_avatar.dart';
 import '../../../shared/widgets/design/momo.dart';
@@ -18,6 +19,7 @@ class PetCardPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final profileAsync = ref.watch(petProfileProvider);
     final profile = profileAsync.asData?.value;
     final name = profile?.name ?? 'Mochi';
@@ -89,8 +91,8 @@ class PetCardPage extends ConsumerWidget {
                       ),
                       child: Column(
                         children: [
-                          const Text('PETGO · KARTU ANABUL',
-                              style: TextStyle(
+                          Text(l10n.petCardHeader,
+                              style: const TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: 2,
@@ -137,12 +139,13 @@ class PetCardPage extends ConsumerWidget {
                             children: [
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: const [
-                                  Text('Momen terbaru',
-                                      style:
-                                          TextStyle(fontSize: 15, fontWeight: FontWeight.w900)),
-                                  Text('5 terakhir',
-                                      style: TextStyle(fontSize: 12.5, color: AppColors.muted)),
+                                children: [
+                                  Text(l10n.petCardRecentMoments,
+                                      style: const TextStyle(
+                                          fontSize: 15, fontWeight: FontWeight.w900)),
+                                  Text(l10n.petCardRecentCount,
+                                      style: const TextStyle(
+                                          fontSize: 12.5, color: AppColors.muted)),
                                 ],
                               ),
                               const SizedBox(height: 12),
@@ -192,7 +195,7 @@ class PetCardPage extends ConsumerWidget {
                             ],
                           ),
                           const SizedBox(height: 14),
-                          Text('Mau lihat cerita lengkap $name?\nUnduh TailTopia untuk ikuti tumbuh kembangnya 🐾',
+                          Text(l10n.petCardDownloadPrompt(name),
                               textAlign: TextAlign.center,
                               style: const TextStyle(
                                   fontSize: 14.5, height: 1.5, color: AppColors.ink2)),
@@ -215,12 +218,12 @@ class PetCardPage extends ConsumerWidget {
                     child: Btn3d(
                       expand: true,
                       onPressed: () => Navigator.of(context).maybePop(),
-                      child: const Row(
+                      child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.download_rounded, size: 20, color: Colors.white),
-                          SizedBox(width: 8),
-                          Text('Unduh TailTopia'),
+                          const Icon(Icons.download_rounded, size: 20, color: Colors.white),
+                          const SizedBox(width: 8),
+                          Text(l10n.petCardDownloadCta),
                         ],
                       ),
                     ),

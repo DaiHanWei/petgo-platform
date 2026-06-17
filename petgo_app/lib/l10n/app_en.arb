@@ -526,5 +526,18 @@
   "triageVetCardCta": "Start consultation",
   "triageOnlineVetsHeader": "Vets online now",
 
-  "imInputHint": "Write a message..."
+  "imInputHint": "Write a message...",
+
+  "happyMomentLabel": "Happy Moment",
+  "daysTogetherLabel": "Days together",
+  "petCardHeader": "TailTopia · PET CARD",
+  "petCardRecentMoments": "Recent moments",
+  "petCardRecentCount": "Last 5",
+  "petCardDownloadPrompt": "Want to see {name}'s full story?\nDownload TailTopia to follow along 🐾",
+  "@petCardDownloadPrompt": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "petCardDownloadCta": "Download TailTopia"
 }
