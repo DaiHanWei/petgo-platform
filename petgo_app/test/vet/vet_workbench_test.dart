@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/core/storage/secure_storage.dart';
 import 'package:tailtopia/features/vet/data/vet_repository.dart';
 import 'package:tailtopia/features/vet/domain/vet_login_response.dart';
+import 'package:tailtopia/features/vet/domain/vet_workbench_lists.dart';
 import 'package:tailtopia/features/vet/presentation/vet_workbench_shell.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
@@ -28,6 +29,9 @@ class _FakeVetRepository extends VetRepository {
 
   @override
   Future<void> heartbeat() async {}
+
+  @override
+  Future<List<VetHistoryEntry>> history() async => const [];
 }
 
 Future<void> _pump(WidgetTester tester, _FakeVetRepository repo) async {
@@ -67,13 +71,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('王医生'), findsOneWidget);
-    final sw = find.byKey(const ValueKey('vetOnlineSwitch'));
-    expect(sw, findsOneWidget);
-    expect(tester.widget<Switch>(sw).value, isFalse);
+    // 在线状态分段控件：默认离线 → 点「Online」段切在线。
+    final onlineSeg = find.byKey(const ValueKey('vetStatusOnline'));
+    expect(onlineSeg, findsOneWidget);
+    expect(repo.online, isFalse);
 
-    await tester.tap(sw);
+    await tester.tap(onlineSeg);
     await tester.pumpAndSettle();
     expect(repo.online, isTrue);
-    expect(tester.widget<Switch>(find.byKey(const ValueKey('vetOnlineSwitch'))).value, isTrue);
   });
 }

@@ -32,13 +32,14 @@ class _VetMePageState extends ConsumerState<VetMePage> with WidgetsBindingObserv
   bool _loading = true;
   bool _updating = false;
   String _displayName = '';
+  int? _doneCount; // 完成数（history 列表长度）；null=加载中/失败 → 占位「—」
   Timer? _heartbeat;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _loadName();
+    _loadProfile();
   }
 
   @override
@@ -58,9 +59,10 @@ class _VetMePageState extends ConsumerState<VetMePage> with WidgetsBindingObserv
     }
   }
 
-  Future<void> _loadName() async {
+  Future<void> _loadProfile() async {
+    final repo = ref.read(vetRepositoryProvider);
     try {
-      final me = await ref.read(vetRepositoryProvider).me();
+      final me = await repo.me();
       if (!mounted) return;
       setState(() {
         _displayName = me.displayName;
@@ -69,6 +71,18 @@ class _VetMePageState extends ConsumerState<VetMePage> with WidgetsBindingObserv
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
+    // 完成数（history 长度）单独拉，失败不阻塞名字/页面，仅统计占位「—」。
+    try {
+      final history = await repo.history();
+      if (mounted) setState(() => _doneCount = history.length);
+    } catch (_) {/* 占位「—」 */}
+  }
+
+  void _onUnavailable() {
+    final l10n = AppLocalizations.of(context);
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(l10n.vetChatToolUnavailable)));
   }
 
   Future<void> _toggle(bool next) async {
@@ -121,55 +135,256 @@ class _VetMePageState extends ConsumerState<VetMePage> with WidgetsBindingObserv
     });
     final online = ref.watch(vetOnlineStatusProvider);
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.vetTabMe)),
+      backgroundColor: AppColors.vetSurface2,
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(AppSpacing.xl),
+          : Column(
               children: [
-                Text(_displayName, key: const ValueKey('vetDisplayName'), style: AppTypography.headline),
-                const SizedBox(height: AppSpacing.section),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Row(
+                _topBar(l10n),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.md, AppSpacing.md, AppSpacing.xl),
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(l10n.vetOnlineTitle, style: AppTypography.title),
-                            const SizedBox(height: 2),
-                            Text(
-                              online ? l10n.vetOnlineLabel : l10n.vetOfflineLabel,
-                              style: AppTypography.caption.copyWith(
-                                color: online ? AppColors.vetPrimary : AppColors.textTertiary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Switch(
-                        key: const ValueKey('vetOnlineSwitch'),
-                        value: online,
-                        activeThumbColor: AppColors.vetPrimary,
-                        onChanged: _updating ? null : _toggle,
+                      _infoCard(l10n, online),
+                      const SizedBox(height: AppSpacing.md),
+                      _availabilityCard(l10n, online),
+                      const SizedBox(height: AppSpacing.md),
+                      _settingsCard(l10n),
+                      const SizedBox(height: AppSpacing.md),
+                      Center(
+                        child: Text(l10n.vetProfileVersion,
+                            style: AppTypography.caption.copyWith(color: AppColors.textTertiary)),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(height: AppSpacing.section),
-                OutlinedButton(
-                  key: const ValueKey('vetLogoutButton'),
-                  onPressed: _logout,
-                  child: Text(l10n.vetLogout),
                 ),
               ],
             ),
     );
   }
+
+  /// 深色顶栏 #2B2540：「Profil Saya」。
+  Widget _topBar(AppLocalizations l10n) {
+    return Container(
+      width: double.infinity,
+      color: AppColors.vetTopBar,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.md),
+          child: Text(l10n.vetProfileTitle, style: AppTypography.headline.copyWith(color: Colors.white)),
+        ),
+      ),
+    );
+  }
+
+  /// 个人信息卡：薄荷头像(首字母+在线点) + 名 + PDHI 认证标 + 3 统计卡。
+  Widget _infoCard(AppLocalizations l10n, bool online) {
+    final trimmed = _displayName.trim();
+    final initial = trimmed.isNotEmpty ? trimmed.substring(0, 1).toUpperCase() : '?';
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: _cardDecoration(),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              SizedBox(
+                width: 60,
+                height: 60,
+                child: Stack(
+                  children: [
+                    Container(
+                      width: 60,
+                      height: 60,
+                      alignment: Alignment.center,
+                      decoration: const BoxDecoration(color: AppColors.vetPrimary, shape: BoxShape.circle),
+                      child: Text(initial,
+                          style: AppTypography.headline.copyWith(color: AppColors.vetOnAccent)),
+                    ),
+                    if (online)
+                      Positioned(
+                        right: 1,
+                        bottom: 1,
+                        child: Container(
+                          width: 16,
+                          height: 16,
+                          decoration: BoxDecoration(
+                            color: AppColors.vetPrimary,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: AppColors.surface, width: 2),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(_displayName,
+                        key: const ValueKey('vetDisplayName'),
+                        style: AppTypography.title.copyWith(color: AppColors.ink)),
+                    const SizedBox(height: 5),
+                    Row(
+                      children: [
+                        Icon(Icons.verified_user_outlined, size: 13, color: AppColors.vetPrimary),
+                        const SizedBox(width: 4),
+                        Text(l10n.vetProfileVerified,
+                            style: AppTypography.caption
+                                .copyWith(color: AppColors.vetPrimary, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              _statCard(_doneCount?.toString() ?? '—', l10n.vetDashboardStatDone),
+              const SizedBox(width: AppSpacing.sm),
+              _statCard('—', l10n.vetDashboardStatRating), // 评分无后端端点 → 占位「—」
+              const SizedBox(width: AppSpacing.sm),
+              _statCard('—', l10n.vetProfileStatTotal), // 总数无后端端点 → 占位「—」
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statCard(String value, String label) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        decoration: BoxDecoration(color: AppColors.vetSurface, borderRadius: BorderRadius.circular(11)),
+        child: Column(
+          children: [
+            Text(value, style: AppTypography.title.copyWith(color: AppColors.vetPrimary)),
+            const SizedBox(height: 2),
+            Text(label,
+                textAlign: TextAlign.center,
+                style: AppTypography.micro.copyWith(color: AppColors.textTertiary)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 在线状态分段控件：Online/Offline 真切（走 _toggle），Sibuk 仅视觉占位（→未提供）。
+  Widget _availabilityCard(AppLocalizations l10n, bool online) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: _cardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(l10n.vetProfileAvailability,
+              style: AppTypography.micro.copyWith(color: AppColors.textTertiary, letterSpacing: 0.5)),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              _statusSeg('🟢', l10n.vetStatusOnline, l10n.vetStatusOnlineSub,
+                  selected: online, valueKey: 'vetStatusOnline',
+                  onTap: () => _updating ? null : _toggle(true)),
+              const SizedBox(width: AppSpacing.sm),
+              _statusSeg('🟡', l10n.vetStatusBusy, l10n.vetStatusBusySub,
+                  selected: false, valueKey: 'vetStatusBusy', onTap: _onUnavailable),
+              const SizedBox(width: AppSpacing.sm),
+              _statusSeg('⚫', l10n.vetStatusOffline, l10n.vetStatusOfflineSub,
+                  selected: !online, valueKey: 'vetStatusOffline',
+                  onTap: () => _updating ? null : _toggle(false)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statusSeg(String emoji, String label, String sub,
+      {required bool selected, required String valueKey, required VoidCallback onTap}) {
+    return Expanded(
+      child: InkWell(
+        key: ValueKey(valueKey),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md, horizontal: 4),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.vetPrimary : AppColors.muted.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            children: [
+              Text(emoji, style: const TextStyle(fontSize: 18)),
+              const SizedBox(height: 3),
+              Text(label,
+                  style: AppTypography.caption.copyWith(
+                    color: selected ? AppColors.vetOnAccent : AppColors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                  )),
+              const SizedBox(height: 1),
+              Text(sub,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.micro.copyWith(
+                    color: selected ? AppColors.vetOnAccent.withValues(alpha: 0.8) : AppColors.textTertiary,
+                  )),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 设置列表：Edit Profil & SIP / Notifikasi（无后端→未提供） + Keluar（真登出）。
+  Widget _settingsCard(AppLocalizations l10n) {
+    return Container(
+      decoration: _cardDecoration(),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          _settingsRow(l10n.vetProfileEditProfile, onTap: _onUnavailable),
+          const Divider(height: 1, color: AppColors.line2),
+          _settingsRow(l10n.vetProfileNotif, onTap: _onUnavailable),
+          const Divider(height: 1, color: AppColors.line2),
+          _settingsRow(l10n.vetLogout, onTap: _logout, danger: true, valueKey: 'vetLogoutButton'),
+        ],
+      ),
+    );
+  }
+
+  Widget _settingsRow(String label, {required VoidCallback onTap, bool danger = false, String? valueKey}) {
+    final color = danger ? AppColors.coral : AppColors.ink;
+    return InkWell(
+      key: valueKey != null ? ValueKey(valueKey) : null,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 13),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(label,
+                  style: AppTypography.body
+                      .copyWith(color: color, fontWeight: danger ? FontWeight.w500 : FontWeight.w400)),
+            ),
+            Icon(Icons.chevron_right, size: 18, color: danger ? AppColors.coral : AppColors.textTertiary),
+          ],
+        ),
+      ),
+    );
+  }
+
+  BoxDecoration _cardDecoration() => BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(color: AppColors.ink.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, 3)),
+        ],
+      );
 }
