@@ -601,6 +601,9 @@
   },
   "triageVetCardDesc": "Chat directly (text & photos) with partner vets. Free in this version.",
   "triageVetCardCta": "Start consultation",
+  "triageAiAlwaysOn": "Always on · Instant answers",
+  "triageVetAvailableNow": "Vets available now",
+  "triageVetHours": "Usually available 08:00–23:00 WIB",
   "triageOnlineVetsHeader": "Vets online now",
 
   "imInputHint": "Write a message...",

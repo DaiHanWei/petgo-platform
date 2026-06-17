@@ -524,6 +524,9 @@
   "triageVetOnlineBadge": "{count} dokter online",
   "triageVetCardDesc": "Ngobrol langsung (teks & foto) dengan dokter mitra. Gratis di versi ini.",
   "triageVetCardCta": "Mulai konsultasi",
+  "triageAiAlwaysOn": "Selalu aktif · Jawaban otomatis",
+  "triageVetAvailableNow": "Dokter tersedia sekarang",
+  "triageVetHours": "Biasanya tersedia 08:00–23:00 WIB",
   "triageOnlineVetsHeader": "Dokter sedang online",
 
   "imInputHint": "Tulis pesan...",
