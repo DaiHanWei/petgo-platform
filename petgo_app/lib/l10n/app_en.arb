@@ -309,6 +309,12 @@
     }
   },
   "triageRedAcknowledge": "I understand",
+  "triageRedSymptomHeader": "Detected symptoms",
+  "triageRedStepsHeader": "Do this now",
+  "triageRedStep1": "Keep the animal calm — don't force food/water",
+  "triageRedStep2": "Wrap it in a warm cloth during transport",
+  "triageRedStep3": "Find the nearest 24-hour vet clinic immediately",
+  "triageRedCtaHint": "Button activates after you read the warning",
   "triageRedLevelLabel": "Urgent: high risk",
   "vetLoginLink": "Vet sign-in",
   "@vetLoginLink": { "description": "Small link below Google button leading to vet account login." },

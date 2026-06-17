@@ -248,6 +248,12 @@
     }
   },
   "triageRedAcknowledge": "Saya mengerti",
+  "triageRedSymptomHeader": "Gejala terdeteksi",
+  "triageRedStepsHeader": "Langkah sekarang",
+  "triageRedStep1": "Tenangkan hewan — jangan paksa makan/minum",
+  "triageRedStep2": "Bungkus dengan kain hangat saat transportasi",
+  "triageRedStep3": "Cari klinik hewan 24 jam terdekat segera",
+  "triageRedCtaHint": "Tombol aktif setelah membaca peringatan",
   "triageRedLevelLabel": "Mendesak: risiko tinggi",
   "vetLoginLink": "Masuk dokter hewan",
   "vetLoginTitle": "Masuk dokter hewan",
