@@ -5,6 +5,7 @@ import '../../core/theme/rounded.dart';
 import '../../core/theme/spacing.dart';
 import '../../core/theme/typography.dart';
 import '../../features/content/domain/feed_item.dart';
+import '../../l10n/app_localizations.dart';
 import 'app_image.dart';
 import 'post_cover.dart';
 
@@ -35,10 +36,24 @@ class MasonryCard extends StatelessWidget {
   /// 点作者头像/昵称（Story 3.8 迷你主页卡）；注销作者不挂（不触发）。
   final VoidCallback? onAuthorTap;
 
+  /// 类型 → (badge 文案, 文字色, 底色)：Momen 绿 / Tips 黄 / Cerita 紫（原型 b-happy/b-tips/b-story）。
+  static (String, Color, Color) _badgeStyle(String type, AppLocalizations l10n) {
+    switch (type) {
+      case 'GROWTH_MOMENT':
+        return (l10n.mePostTypeMomen, AppColors.momenBadgeText, AppColors.momenBadgeBg);
+      case 'KNOWLEDGE':
+        return (l10n.mePostTypeTips, AppColors.tipsBadgeText, AppColors.goldTint);
+      default: // DAILY
+        return (l10n.mePostTypeCerita, AppColors.mint, AppColors.skyTint);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final String name =
         item.authorDeleted ? deletedUserLabel : (item.authorNickname ?? deletedUserLabel);
+    final (badgeLabel, badgeFg, badgeBg) = _badgeStyle(item.type, l10n);
 
     return Semantics(
       button: onTap != null,
@@ -75,6 +90,19 @@ class MasonryCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // 类型彩徽章（原型 feed 卡 badge）。
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                            color: badgeBg, borderRadius: BorderRadius.circular(6)),
+                        child: Text(badgeLabel,
+                            style: TextStyle(
+                                fontSize: 10, fontWeight: FontWeight.w700, color: badgeFg)),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
                     if (item.body != null && item.body!.isNotEmpty) ...[
                       Text(
                         item.body!,

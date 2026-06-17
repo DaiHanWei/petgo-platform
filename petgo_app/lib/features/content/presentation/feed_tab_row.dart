@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
-import '../../../core/theme/typography.dart';
 import '../domain/feed_item.dart';
 
-/// 首页分类 Tab Row（Story 3.2，UX-DR5）。
+/// 首页分类 Tab Row（Story 3.2 · 原型 feed.html chips 换肤）。
 ///
-/// active 区域色 2px 下划线 + 文字色；内容区 cross-fade 由上层 [AnimatedSwitcher] 负责（不 slide）。
+/// 原型 pill chips：选中=紫底白字；未选=白底 #E6E6E6 边框灰字。横向可滚。
 class FeedTabRow extends StatelessWidget {
   const FeedTabRow({
     super.key,
@@ -29,12 +28,14 @@ class FeedTabRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenEdge),
       child: Row(
         children: [
-          for (final category in FeedCategory.values)
+          for (final category in FeedCategory.values) ...[
             _Tab(
               label: labels[category] ?? category.wire,
               active: category == selected,
               onTap: () => onSelected(category),
             ),
+            const SizedBox(width: 7),
+          ],
         ],
       ),
     );
@@ -53,30 +54,23 @@ class _Tab extends StatelessWidget {
     return Semantics(
       selected: active,
       button: true,
-      // 用 GestureDetector 而非 InkWell：分类切换靠下划线+文字色表达，去掉点击灰色水波/高亮块。
       child: GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                label,
-                style: active
-                    ? AppTypography.body.copyWith(
-                        color: AppColors.accentGrowth, fontWeight: FontWeight.w600)
-                    : AppTypography.body.copyWith(color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              // active 区域色 2px 下划线；非 active 透明占位保持高度稳定。
-              Container(
-                height: 2,
-                width: 24,
-                color: active ? AppColors.accentGrowth : Colors.transparent,
-              ),
-            ],
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
+          decoration: BoxDecoration(
+            color: active ? AppColors.mint : AppColors.card,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: active ? AppColors.mint : AppColors.line, width: 1.5),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: active ? Colors.white : AppColors.textSecondary,
+            ),
           ),
         ),
       ),

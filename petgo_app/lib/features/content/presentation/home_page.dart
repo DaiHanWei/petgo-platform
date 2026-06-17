@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_intent.dart';
 import '../../../core/theme/colors.dart';
-import '../../../core/theme/shadows.dart';
 import '../../../features/auth/domain/auth_guard.dart';
 import '../../../features/auth/domain/auth_state.dart';
 import '../../../features/auth/domain/login_guide_controller.dart';
@@ -12,8 +11,6 @@ import '../../../features/profile/domain/profile_prompt_controller.dart';
 import '../../../features/profile/domain/profile_prompt_state.dart';
 import '../../../features/notify/presentation/notification_bell.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../../shared/widgets/design/btn3d.dart';
-import '../../../shared/widgets/design/momo.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/profile_prompt_bar.dart';
 import '../domain/feed_item.dart';
@@ -56,24 +53,27 @@ class HomePage extends ConsumerWidget {
       }
     });
 
-    final name = (auth.profile?.nickname?.trim().isNotEmpty ?? false)
-        ? auth.profile!.nickname!.trim()
-        : (auth.profile?.displayName?.trim().isNotEmpty ?? false)
-            ? auth.profile!.displayName!.trim()
-            : 'teman';
-
+    // 推倒重做为原型 feed.html：AppBar「TailTopia 🐾」+ 通知铃；下方分类 Chips + 瀑布流。
     return Scaffold(
       backgroundColor: AppColors.cream,
+      appBar: AppBar(
+        backgroundColor: AppColors.cream,
+        scrolledUnderElevation: 0,
+        titleSpacing: 20,
+        title: Text('${l10n.appTitle} 🐾',
+            style: const TextStyle(
+                fontSize: 19, fontWeight: FontWeight.w700, color: AppColors.ink)),
+        actions: [
+          if (auth.isLoggedIn) const Padding(
+            padding: EdgeInsets.only(right: 12),
+            child: NotificationBell(),
+          ),
+        ],
+      ),
       body: SafeArea(
+        top: false,
         bottom: false,
-        child: Column(
-          children: [
-            _GreetingHeader(name: name, showBell: auth.isLoggedIn),
-            Expanded(
-              child: _content(context, ref, l10n, feedAsync, selectedCategory, showPrompt),
-            ),
-          ],
-        ),
+        child: _content(context, ref, l10n, feedAsync, selectedCategory, showPrompt),
       ),
     );
   }
@@ -87,22 +87,12 @@ class HomePage extends ConsumerWidget {
     bool showPrompt,
   ) {
     final header = _BerandaTop(
-      l10n: l10n,
       showPrompt: showPrompt,
       selectedCategory: category,
       labels: _tabLabels(l10n),
       onSelectCategory: (c) => ref.read(feedCategoryProvider.notifier).select(c),
       onPromptCreate: () => context.go('/onboarding/profile'),
       onPromptDismiss: () => ref.read(profilePromptProvider.notifier).dismiss(),
-      onKonsultasi: () => context.go('/triage'),
-      onGath: () => context.push('/gath'),
-      onPaspor: () => context.go('/profile'),
-      onCatat: () => requireLogin(
-        ref,
-        context,
-        pendingAction: const RouteIntent(location: '/home'),
-        onAllowed: () => PublishComposePage.open(context),
-      ),
     );
 
     // 头部（提示条+快捷入口+每日卡+Untukmu+分类Tab）在四态恒渲染：
@@ -179,94 +169,24 @@ class HomePage extends ConsumerWidget {
       };
 }
 
-/// 固定问候头：Momo + 时段问候 + 通知铃（薄荷渐变底）。
-class _GreetingHeader extends StatelessWidget {
-  const _GreetingHeader({required this.name, required this.showBell});
-
-  final String name;
-  final bool showBell;
-
-  String _greeting(AppLocalizations l10n) {
-    final h = DateTime.now().hour;
-    if (h < 11) return l10n.greetingMorning;
-    if (h < 15) return l10n.greetingAfternoon;
-    if (h < 18) return l10n.greetingEvening;
-    return l10n.greetingNight;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return Container(
-      padding: const EdgeInsets.fromLTRB(18, 8, 18, 14),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [AppColors.mintTint, AppColors.cream],
-        ),
-      ),
-      child: Row(
-        children: [
-          // happy:false → 不跑常驻眨眼动画（避免阻塞测试 pumpAndSettle；首页静态足矣）。
-          const Momo(size: 52, happy: false),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _greeting(l10n),
-                  style: const TextStyle(
-                      fontSize: 13, color: AppColors.mint700, fontWeight: FontWeight.w700),
-                ),
-                Text(
-                  l10n.greetingHowAreYou(name),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontSize: 19,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: -0.3,
-                      color: AppColors.ink),
-                ),
-              ],
-            ),
-          ),
-          if (showBell) const NotificationBell(),
-        ],
-      ),
-    );
-  }
-}
-
-/// Beranda 滚动头部：档案提示条 + 快捷入口 + 每日提示卡 + 区头 + 分类 Tab。
+/// Beranda 滚动头部（原型 feed.html）：档案提示条（FR-0H）+ 分类 Chips。
+/// 已移除 Momo 问候头 / 快捷入口卡 / 每日提示卡 / 「Untukmu」区头（推倒重做决策 #6）。
 class _BerandaTop extends StatelessWidget {
   const _BerandaTop({
-    required this.l10n,
     required this.showPrompt,
     required this.selectedCategory,
     required this.labels,
     required this.onSelectCategory,
     required this.onPromptCreate,
     required this.onPromptDismiss,
-    required this.onKonsultasi,
-    required this.onGath,
-    required this.onPaspor,
-    required this.onCatat,
   });
 
-  final AppLocalizations l10n;
   final bool showPrompt;
   final FeedCategory selectedCategory;
   final Map<FeedCategory, String> labels;
   final ValueChanged<FeedCategory> onSelectCategory;
   final VoidCallback onPromptCreate;
   final VoidCallback onPromptDismiss;
-  final VoidCallback onKonsultasi;
-  final VoidCallback onGath;
-  final VoidCallback onPaspor;
-  final VoidCallback onCatat;
 
   @override
   Widget build(BuildContext context) {
@@ -278,194 +198,10 @@ class _BerandaTop extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: ProfilePromptBar(onCreate: onPromptCreate, onDismiss: onPromptDismiss),
           ),
-        // 快捷入口：左大 Konsultasi + 右列 Gath / Paspor。
-        Padding(
-          padding: const EdgeInsets.fromLTRB(18, 8, 18, 6),
-          child: IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  child: _ActionCard(
-                    tone: AppColors.mintTint,
-                    iconColor: AppColors.mint700,
-                    icon: Icons.medical_services_outlined,
-                    title: 'Konsultasi Kilat',
-                    sub: 'Tanya dokter / AI',
-                    big: true,
-                    onTap: onKonsultasi,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _ActionCard(
-                        tone: AppColors.goldTint,
-                        iconColor: const Color(0xFFA9821E),
-                        icon: Icons.calendar_today_outlined,
-                        title: 'Gabung Gath',
-                        sub: 'Kumpul bareng',
-                        onTap: onGath,
-                      ),
-                      const SizedBox(height: 12),
-                      _ActionCard(
-                        tone: AppColors.coralTint,
-                        iconColor: const Color(0xFFC26A4E),
-                        icon: Icons.pets,
-                        title: 'Paspor',
-                        sub: 'Tumbuh kembang',
-                        onTap: onPaspor,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        // 每日记录提示卡。
-        Padding(
-          padding: const EdgeInsets.fromLTRB(18, 12, 18, 4),
-          child: _DailyPromptCard(onCatat: onCatat),
-        ),
-        // 区头 Untukmu。
-        Padding(
-          padding: const EdgeInsets.fromLTRB(18, 16, 18, 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              Text('Untukmu',
-                  style: TextStyle(
-                      fontSize: 17, fontWeight: FontWeight.w900, letterSpacing: -0.2)),
-            ],
-          ),
-        ),
+        const SizedBox(height: 8),
         FeedTabRow(selected: selectedCategory, labels: labels, onSelected: onSelectCategory),
-        const SizedBox(height: 4),
+        const SizedBox(height: 8),
       ],
-    );
-  }
-}
-
-/// 快捷入口卡（白卡 + 柔阴影 + 色块图标）。
-class _ActionCard extends StatelessWidget {
-  const _ActionCard({
-    required this.tone,
-    required this.iconColor,
-    required this.icon,
-    required this.title,
-    required this.sub,
-    required this.onTap,
-    this.big = false,
-  });
-
-  final Color tone;
-  final Color iconColor;
-  final IconData icon;
-  final String title;
-  final String sub;
-  final VoidCallback onTap;
-  final bool big;
-
-  @override
-  Widget build(BuildContext context) {
-    final box = big ? 52.0 : 40.0;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        constraints: BoxConstraints(minHeight: big ? 0 : 78),
-        padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: AppShadows.md,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Container(
-              width: box,
-              height: box,
-              decoration:
-                  BoxDecoration(color: tone, borderRadius: BorderRadius.circular(big ? 16 : 12)),
-              child: Icon(icon, size: big ? 28 : 22, color: iconColor),
-            ),
-            SizedBox(height: big ? 12 : 6),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title,
-                    style: TextStyle(
-                        fontSize: big ? 16.5 : 14,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.2,
-                        color: AppColors.ink)),
-                const SizedBox(height: 2),
-                Text(sub, style: TextStyle(fontSize: big ? 13 : 12, color: AppColors.muted)),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// 每日记录提示卡（📸 + 文案 + 「+ Catat」立体小按钮）。
-class _DailyPromptCard extends StatelessWidget {
-  const _DailyPromptCard({required this.onCatat});
-
-  final VoidCallback onCatat;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [AppColors.card, AppColors.mintTint2],
-        ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: AppShadows.md,
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 50,
-            height: 50,
-            alignment: Alignment.center,
-            decoration:
-                BoxDecoration(color: AppColors.goldTint, borderRadius: BorderRadius.circular(16)),
-            child: const Text('📸', style: TextStyle(fontSize: 26)),
-          ),
-          const SizedBox(width: 14),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Catat momen hari ini',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
-                SizedBox(height: 1),
-                Text('Simpan kenangan kecil hari ini ~',
-                    style: TextStyle(fontSize: 13, color: AppColors.muted)),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Btn3d(
-            onPressed: onCatat,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            fontSize: 14,
-            borderRadius: 13,
-            child: const Text('+ Catat'),
-          ),
-        ],
-      ),
     );
   }
 }
