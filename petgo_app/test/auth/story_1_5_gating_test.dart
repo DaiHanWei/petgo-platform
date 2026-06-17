@@ -143,7 +143,9 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Consult'));
-    await tester.pumpAndSettle();
+    // 问诊 hub AI 卡在线脉冲为常驻动画，pumpAndSettle 不收敛——固定帧推进。
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.byType(LoginHardDialog), findsNothing);
     // 切到问诊 hub（文案已迁 arb；本测试 pump 真实 App 默认 en locale、tab 为 'Consult'，故断言英文标题）。
