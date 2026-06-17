@@ -190,11 +190,9 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-/// 抢单请求卡片（原型 vet-queue.html）：等级徽章(绿/黄/红) + 等待时间 + RINGKASAN AI 摘要框
-/// + Lewati(跳过) / Lihat Detail(详情) 双按钮；RED 额外加 ⚠️ 紧急横幅 + 红强调按钮。
-/// DIRECT 项无 AI 框，仅「Direct request」。
-///
-/// 注：宠物名/种类/年龄/主人 原型有，但 `VetInboxItem` 无字段、后端无契约 → 本步 omit（见 deferred）。
+/// 抢单请求卡片（原型 vet-queue.html）：宠物身份块（头像+名+meta）+ 等级徽章(绿/黄/红)
+/// + 等待时间 + RINGKASAN AI 摘要框(按等级配色) + Lewati/Lihat Detail 双按钮；RED 加 ⚠️ 紧急横幅。
+/// 身份字段全 nullable：`petName==null`（真后端未下发）→ 优雅降级不显身份块。
 class _InboxCard extends StatelessWidget {
   const _InboxCard({required this.item, required this.onDetail, required this.onSkip});
 
@@ -218,17 +216,61 @@ class _InboxCard extends StatelessWidget {
   String _levelLabel(AppLocalizations l10n) {
     switch (item.aiDangerLevel) {
       case 'RED':
-        return l10n.vetAiContextLevelRed;
+        return l10n.vetQueueLevelRed;
       case 'YELLOW':
-        return l10n.vetAiContextLevelYellow;
+        return l10n.vetQueueLevelYellow;
       default:
-        return l10n.vetAiContextLevelGreen;
+        return l10n.vetQueueLevelGreen;
     }
   }
 
   String _waitingLabel(AppLocalizations l10n) {
     final s = item.waitingElapsedSeconds;
     return s < 60 ? l10n.vetQueueWaitingJustNow : l10n.vetQueueWaitingMinutes(s ~/ 60);
+  }
+
+  String _speciesEmoji() {
+    switch (item.petSpecies) {
+      case 'CAT':
+        return '🐱';
+      case 'DOG':
+        return '🐶';
+      default:
+        return '🐾';
+    }
+  }
+
+  /// meta 行：「种类 · 性别 · 年龄 · @主人」，缺项跳过。
+  String _metaLine(AppLocalizations l10n) {
+    final parts = <String>[];
+    switch (item.petSpecies) {
+      case 'CAT':
+        parts.add(l10n.vetSpeciesCat);
+      case 'DOG':
+        parts.add(l10n.vetSpeciesDog);
+    }
+    switch (item.petSex) {
+      case 'MALE':
+        parts.add(l10n.vetSexMale);
+      case 'FEMALE':
+        parts.add(l10n.vetSexFemale);
+    }
+    final m = item.petAgeMonths;
+    if (m != null) parts.add(m >= 12 ? l10n.vetAgeYears(m ~/ 12) : l10n.vetAgeMonths(m));
+    if (item.ownerHandle != null) parts.add('@${item.ownerHandle}');
+    return parts.join(' · ');
+  }
+
+  /// AI 摘要框底色（按等级 tint）：黄→琥珀、红→珊瑚浅红、绿→薄荷派生。
+  Color _aiBoxBg() {
+    switch (item.aiDangerLevel) {
+      case 'RED':
+        return AppColors.coralTint;
+      case 'YELLOW':
+        return AppColors.goldTint;
+      default:
+        return AppColors.triageGreen.withValues(alpha: 0.10);
+    }
   }
 
   @override
@@ -261,6 +303,42 @@ class _InboxCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // 宠物身份块（头像 + 名 + meta）；petName==null（真后端未下发）→ 跳过降级
+                if (item.petName != null) ...[
+                  Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          // 非 AI 升级项（DIRECT）无等级 → 中性底，避免误用「绿=Normal」语义
+                          color: (item.isAiUpgrade ? _levelColor() : AppColors.muted).withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(_speciesEmoji(), style: const TextStyle(fontSize: 20)),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(item.petName!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTypography.title.copyWith(color: AppColors.ink)),
+                            if (_metaLine(l10n).isNotEmpty)
+                              Text(_metaLine(l10n),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                ],
                 // 顶行：等级徽章 + 等待时间
                 Row(
                   children: [
@@ -289,7 +367,7 @@ class _InboxCard extends StatelessWidget {
                     width: double.infinity,
                     padding: const EdgeInsets.all(AppSpacing.sm),
                     decoration: BoxDecoration(
-                      color: AppColors.vetSurface,
+                      color: _aiBoxBg(),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Column(
@@ -297,16 +375,22 @@ class _InboxCard extends StatelessWidget {
                       children: [
                         Text(
                           l10n.vetQueueAiSummaryTitle,
-                          style: AppTypography.micro.copyWith(color: AppColors.vetPrimaryDeep, letterSpacing: 0.5),
+                          style: AppTypography.micro.copyWith(color: AppColors.ink2, letterSpacing: 0.5),
                         ),
                         if (item.symptomPreview != null) ...[
                           const SizedBox(height: 4),
                           Text(item.symptomPreview!, style: AppTypography.body),
                         ],
                         const SizedBox(height: 4),
-                        Text(
-                          item.imageCount > 0 ? l10n.vetQueuePhotosAttached(item.imageCount) : l10n.vetQueueNoPhoto,
-                          style: AppTypography.caption.copyWith(color: AppColors.textTertiary),
+                        Row(
+                          children: [
+                            Icon(Icons.photo_outlined, size: 13, color: AppColors.textTertiary),
+                            const SizedBox(width: 4),
+                            Text(
+                              item.imageCount > 0 ? l10n.vetQueuePhotosAttached(item.imageCount) : l10n.vetQueueNoPhoto,
+                              style: AppTypography.caption.copyWith(color: AppColors.textTertiary),
+                            ),
+                          ],
                         ),
                       ],
                     ),

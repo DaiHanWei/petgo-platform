@@ -585,10 +585,14 @@ class MockBackend {
     if (p.endsWith('/vet/heartbeat') && m == 'POST') return ok();
     if (p.endsWith('/vet/consult-sessions/waiting') && m == 'GET') {
       return ok([
-        {'sessionId': 8100, 'source': 'AI_UPGRADE', 'aiDangerLevel': 'RED', 'symptomPreview': 'Benji (anjing, 5th) makan cokelat lalu muntah berulang & lemas drastis', 'imageCount': 3, 'waitingElapsedSeconds': 50},
-        {'sessionId': 8101, 'source': 'AI_UPGRADE', 'aiDangerLevel': 'YELLOW', 'symptomPreview': 'Oyen (kucing, 2th) muntah busa putih 2x semalam, jadi lebih lemas', 'imageCount': 2, 'waitingElapsedSeconds': 45},
-        {'sessionId': 8102, 'source': 'AI_UPGRADE', 'aiDangerLevel': 'GREEN', 'symptomPreview': 'Bruno (anjing) bersin-bersin sejak 2 hari, makan & main masih normal', 'imageCount': 1, 'waitingElapsedSeconds': 90},
-        {'sessionId': 8103, 'source': 'DIRECT', 'aiDangerLevel': null, 'symptomPreview': null, 'imageCount': 0, 'waitingElapsedSeconds': 150},
+        {'sessionId': 8100, 'source': 'AI_UPGRADE', 'aiDangerLevel': 'RED', 'symptomPreview': 'Makan cokelat lalu muntah berulang & lemas drastis sejak pagi', 'imageCount': 3, 'waitingElapsedSeconds': 50,
+          'petName': 'Benji', 'petSpecies': 'DOG', 'petSex': 'MALE', 'petAgeMonths': 60, 'ownerHandle': 'bagas'},
+        {'sessionId': 8101, 'source': 'AI_UPGRADE', 'aiDangerLevel': 'YELLOW', 'symptomPreview': 'Muntah busa putih 2x semalam, jadi lebih lemas & kurang nafsu makan', 'imageCount': 2, 'waitingElapsedSeconds': 45,
+          'petName': 'Oyen', 'petSpecies': 'CAT', 'petSex': 'MALE', 'petAgeMonths': 24, 'ownerHandle': 'rani'},
+        {'sessionId': 8102, 'source': 'AI_UPGRADE', 'aiDangerLevel': 'GREEN', 'symptomPreview': 'Bersin-bersin sejak 2 hari, makan & main masih normal', 'imageCount': 1, 'waitingElapsedSeconds': 90,
+          'petName': 'Bruno', 'petSpecies': 'DOG', 'petSex': 'MALE', 'petAgeMonths': 36, 'ownerHandle': 'dimas'},
+        {'sessionId': 8103, 'source': 'DIRECT', 'aiDangerLevel': null, 'symptomPreview': null, 'imageCount': 0, 'waitingElapsedSeconds': 150,
+          'petName': 'Mochi', 'petSpecies': 'CAT', 'petSex': 'FEMALE', 'petAgeMonths': 8, 'ownerHandle': 'aditya'},
       ]);
     }
     // 「进行中」会话列表（工作台 Active Tab）。点卡 → /vet/conversation/:id（IM 占位聊天）。

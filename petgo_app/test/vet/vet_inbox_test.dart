@@ -61,7 +61,7 @@ void main() {
     await _pump(tester, repo);
 
     expect(find.text('呕吐两次'), findsOneWidget);
-    expect(find.text('AI: watch closely'), findsOneWidget); // 等级徽章
+    expect(find.text('Needs consult'), findsOneWidget); // 等级徽章（queue 措辞）
     expect(find.text('AI SUMMARY'), findsOneWidget); // RINGKASAN AI 框
     expect(find.text('2 photos attached'), findsOneWidget);
     expect(find.byKey(const ValueKey('vetRequestCard_5')), findsOneWidget);
@@ -76,7 +76,28 @@ void main() {
       VetInboxItem(sessionId: 9, source: 'AI_UPGRADE', aiDangerLevel: 'RED', symptomPreview: 'darurat', imageCount: 1, waitingElapsedSeconds: 20),
     ]));
     expect(find.text('⚠️ IMMEDIATE ATTENTION'), findsOneWidget);
-    expect(find.text('AI: urgent'), findsOneWidget);
+    expect(find.text('Urgent'), findsOneWidget);
+  });
+
+  testWidgets('宠物身份块渲染（名 + meta 行）', (tester) async {
+    await _pump(tester, _FakeVetRepository(const [
+      VetInboxItem(
+        sessionId: 11, source: 'AI_UPGRADE', aiDangerLevel: 'YELLOW',
+        symptomPreview: 'lemas', imageCount: 1, waitingElapsedSeconds: 30,
+        petName: 'Oyen', petSpecies: 'CAT', petSex: 'MALE', petAgeMonths: 24, ownerHandle: 'rani',
+      ),
+    ]));
+    expect(find.text('Oyen'), findsOneWidget);
+    expect(find.text('Cat · Male · 2 yr · @rani'), findsOneWidget);
+  });
+
+  testWidgets('无 petName → 降级不显身份块', (tester) async {
+    await _pump(tester, _FakeVetRepository(const [
+      VetInboxItem(sessionId: 12, source: 'AI_UPGRADE', aiDangerLevel: 'GREEN', symptomPreview: 'ok', imageCount: 0, waitingElapsedSeconds: 5),
+    ]));
+    // 卡仍在，但无 @ 主人 meta（身份块未渲染）
+    expect(find.byKey(const ValueKey('vetRequestCard_12')), findsOneWidget);
+    expect(find.textContaining('@'), findsNothing);
   });
 
   testWidgets('Lewati 跳过 → 卡片本地移除', (tester) async {
