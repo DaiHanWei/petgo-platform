@@ -618,9 +618,17 @@ class MockBackend {
     if (p.endsWith('/vet/consult-sessions/history') && m == 'GET') {
       return ok([
         {'sessionId': 7901, 'petName': 'Cookie', 'date': _iso(const Duration(days: 1)), 'stars': 5,
-          'terminalState': 'CLOSED', 'summary': 'Diare ringan — disarankan diet hambar & oralit, pantau 24 jam'},
+          'terminalState': 'CLOSED', 'summary': 'Diare ringan — disarankan diet hambar & oralit, pantau 24 jam',
+          'dangerLevel': 'GREEN', 'ownerHandle': 'hana', 'petSpecies': 'CAT',
+          'reviewText': 'Dokternya sangat responsif dan penjelasannya mudah dimengerti 🙏'},
         {'sessionId': 7902, 'petName': 'Luna', 'date': _iso(const Duration(days: 3)), 'stars': 4,
-          'terminalState': 'CLOSED', 'summary': 'Gatal & garuk telinga — dugaan ear mites, rujuk klinik untuk cek mikroskop'},
+          'terminalState': 'CLOSED', 'summary': 'Gatal & garuk telinga — dugaan ear mites, rujuk klinik untuk cek mikroskop',
+          'dangerLevel': 'YELLOW', 'ownerHandle': 'rio', 'petSpecies': 'DOG',
+          'reviewText': 'Cepat ditanggapi, sarannya jelas. Terima kasih dok!'},
+        {'sessionId': 7904, 'petName': 'Benji', 'date': _iso(const Duration(days: 4)), 'stars': 5,
+          'terminalState': 'CLOSED', 'summary': 'Kesulitan bernapas (darurat) — diarahkan segera ke klinik UGD terdekat',
+          'dangerLevel': 'RED', 'ownerHandle': 'bagas', 'petSpecies': 'DOG',
+          'reviewText': 'Sigap dan menenangkan saat panik. Sangat membantu!'},
         {'sessionId': 7903, 'petName': 'Tofu', 'date': _iso(const Duration(days: 6)), 'stars': null,
           'terminalState': 'INTERRUPTED', 'summary': 'Sesi terputus sebelum selesai (user keluar)'},
       ]);

@@ -34,6 +34,10 @@ class VetHistoryEntry {
     required this.date,
     this.stars,
     required this.terminalState,
+    this.dangerLevel,
+    this.ownerHandle,
+    this.petSpecies,
+    this.reviewText,
   });
 
   final int sessionId;
@@ -42,6 +46,13 @@ class VetHistoryEntry {
   final String date; // ISO8601
   final int? stars; // 用户评分（无则未评）
   final String terminalState; // CLOSED | INTERRUPTED
+
+  // 历史卡丰富字段（决策：Mock 先做满、后端随后补，同 VetSession/VetInboxItem）。全 nullable →
+  // 真后端未下发时卡片对应段优雅降级、不进等级筛选。
+  final String? dangerLevel; // GREEN | YELLOW | RED
+  final String? ownerHandle; // 不含 @，渲染时前置
+  final String? petSpecies; // CAT | DOG
+  final String? reviewText; // 用户评价引用文案
 
   /// 仅取日期段（yyyy-MM-dd）供卡片展示，避免引 intl。
   String get dateLabel => date.length >= 10 ? date.substring(0, 10) : date;
@@ -53,5 +64,9 @@ class VetHistoryEntry {
         date: (json['date'] ?? '') as String,
         stars: (json['stars'] as num?)?.toInt(),
         terminalState: (json['terminalState'] ?? 'CLOSED') as String,
+        dangerLevel: json['dangerLevel'] as String?,
+        ownerHandle: json['ownerHandle'] as String?,
+        petSpecies: json['petSpecies'] as String?,
+        reviewText: json['reviewText'] as String?,
       );
 }
