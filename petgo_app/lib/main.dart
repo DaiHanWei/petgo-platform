@@ -8,6 +8,7 @@ import 'package:tailtopia/core/mock/mock_config.dart';
 import 'package:tailtopia/core/mock/mock_media.dart';
 import 'package:tailtopia/core/storage/prefs.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
+import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/profile/domain/profile_prompt_controller.dart';
 import 'package:tailtopia/features/profile/domain/profile_prompt_state.dart';
 
@@ -33,6 +34,10 @@ Future<void> main() async {
       // Debug-only：--dart-define=DEV_VET=true 启动即种子兽医登录态，配合 DEV_ROUTE 直达兽医屏做视觉验收。
       if (kDebugMode && const bool.fromEnvironment('DEV_VET'))
         authControllerProvider.overrideWith(_DevVetAuthController.new),
+      // Debug-only：--dart-define=DEV_USER=true 启动即种子普通用户登录态（HAS_PET 已建档），
+      // 配合 DEV_ROUTE 直达登录态用户屏（首页/成长档案/我的/咨询）做视觉验收。
+      if (kDebugMode && const bool.fromEnvironment('DEV_USER'))
+        authControllerProvider.overrideWith(_DevUserAuthController.new),
     ],
     child: const TailTopiaApp(),
   ));
@@ -42,6 +47,22 @@ Future<void> main() async {
 class _DevVetAuthController extends AuthController {
   @override
   AuthState build() => const AuthState(status: AuthStatus.authenticated, role: 'VET');
+}
+
+/// Debug-only：开发直达登录态用户屏的预置普通用户（HAS_PET 已建档；仅 `DEV_USER=true` 时注入）。
+class _DevUserAuthController extends AuthController {
+  @override
+  AuthState build() => const AuthState(
+        status: AuthStatus.authenticated,
+        role: 'USER',
+        profile: UserProfile(
+          nickname: 'Aurel',
+          email: 'aurel@tailtopia.id',
+          petStatus: 'HAS_PET',
+          hasPetProfile: true,
+          onboardingCompleted: true,
+        ),
+      );
 }
 
 /// Story 7.2：读持久化语言码（'id'/'en'）；空串/缺失/损坏 → null（跟随设备）。
