@@ -5,10 +5,9 @@ import '../../../core/theme/spacing.dart';
 import '../../../shared/widgets/masonry_card.dart';
 import '../domain/feed_item.dart';
 
-/// Feed 瀑布流视图（Story 3.2，UX-DR4）。
+/// Feed 单列视图（原型 feed.html：单列全宽卡片，非 2 列瀑布）。
 ///
-/// 2 列不等高（按 index 奇偶分列，内容高度天然不等）、8px 列间距、16px 屏边距；
-/// 距底自动 [onLoadMore]；[onRefresh] 下拉刷新；底部 [loadingMore] 转圈。
+/// 12px 卡间距、16px 屏边距；距底自动 [onLoadMore]；[onRefresh] 下拉刷新；底部 [loadingMore] 转圈。
 class FeedMasonryView extends StatefulWidget {
   const FeedMasonryView({
     super.key,
@@ -77,23 +76,22 @@ class _FeedMasonryViewState extends State<FeedMasonryView> {
 
   @override
   Widget build(BuildContext context) {
-    final left = <Widget>[];
-    final right = <Widget>[];
-    for (var i = 0; i < widget.items.length; i++) {
-      final card = Padding(
-        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-        child: MasonryCard(
-          item: widget.items[i],
-          deletedUserLabel: widget.deletedUserLabel,
-          onTap: widget.onTapItem == null ? null : () => widget.onTapItem!(widget.items[i]),
-          onLongPress:
-              widget.onLongPressItem == null ? null : () => widget.onLongPressItem!(widget.items[i]),
-          onAuthorTap:
-              widget.onAuthorTap == null ? null : () => widget.onAuthorTap!(widget.items[i]),
+    final cards = <Widget>[
+      for (var i = 0; i < widget.items.length; i++)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: MasonryCard(
+            item: widget.items[i],
+            deletedUserLabel: widget.deletedUserLabel,
+            onTap: widget.onTapItem == null ? null : () => widget.onTapItem!(widget.items[i]),
+            onLongPress: widget.onLongPressItem == null
+                ? null
+                : () => widget.onLongPressItem!(widget.items[i]),
+            onAuthorTap:
+                widget.onAuthorTap == null ? null : () => widget.onAuthorTap!(widget.items[i]),
+          ),
         ),
-      );
-      (i.isEven ? left : right).add(card);
-    }
+    ];
 
     return RefreshIndicator(
       color: AppColors.accentGrowth,
@@ -108,14 +106,8 @@ class _FeedMasonryViewState extends State<FeedMasonryView> {
               padding: const EdgeInsets.all(AppSpacing.screenEdge),
               child: Column(
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: Column(children: left)),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(child: Column(children: right)),
-                    ],
-                  ),
+                  // 单列全宽卡片（原型 feed.html）。
+                  ...cards,
                   if (widget.loadingMore)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),

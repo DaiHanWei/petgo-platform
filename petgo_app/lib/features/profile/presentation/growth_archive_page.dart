@@ -200,10 +200,13 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
       children: [
         const Icon(Icons.calendar_today_outlined, size: 19, color: AppColors.mint700),
         const SizedBox(width: 8),
-        Text(
-            _view == _ArchiveView.timeline ? 'Linimasa Tumbuh Kembang' : l10n.growthViewCalendar,
-            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
-        const Spacer(),
+        Expanded(
+          child: Text(
+              _view == _ArchiveView.timeline ? 'Linimasa Tumbuh Kembang' : l10n.growthViewCalendar,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+        ),
         IconButton(
           key: const ValueKey('archiveViewTimeline'),
           tooltip: l10n.growthViewTimeline,
@@ -251,13 +254,21 @@ class _StatsBar extends ConsumerWidget {
           children: [
             const Text('🌈', style: TextStyle(fontSize: 16)),
             const SizedBox(width: 6),
-            Text(l10n.growthStatsHappy(s.happyMomentCount),
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+            Flexible(
+              child: Text(l10n.growthStatsHappy(s.happyMomentCount),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+            ),
             const SizedBox(width: 14),
             const Text('🏥', style: TextStyle(fontSize: 15)),
             const SizedBox(width: 6),
-            Text(l10n.growthStatsConsult(s.consultCount),
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+            Flexible(
+              child: Text(l10n.growthStatsConsult(s.consultCount),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+            ),
           ],
         ),
       ),

@@ -108,13 +108,15 @@ class HappyMomentTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 4,
                     children: [
                       // F9：快乐时刻按事件日期显示。
                       Text(_dateLabel(item.displayDate),
                           style: const TextStyle(
                               fontSize: 11.5, color: AppColors.muted, fontWeight: FontWeight.w700)),
-                      const SizedBox(width: 8),
                       _badge(l10n.happyMomentLabel, const Color(0xFFA9821E), AppColors.goldTint),
                     ],
                   ),
@@ -166,19 +168,18 @@ class HealthEventTile extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
                 children: [
                   Text(_dateLabel(item.date),
                       style: TextStyle(
                           fontSize: 11.5,
                           color: AppColors.healthEventText.withValues(alpha: 0.8),
                           fontWeight: FontWeight.w700)),
-                  const SizedBox(width: 8),
                   _badge(l10n.healthEventLabel, AppColors.onAccent, AppColors.triageRed),
-                  if (item.aiLevel != null) ...[
-                    const SizedBox(width: 6),
-                    _LevelChip(level: item.aiLevel!),
-                  ],
+                  if (item.aiLevel != null) _LevelChip(level: item.aiLevel!),
                 ],
               ),
               if (firstLabel != null)
