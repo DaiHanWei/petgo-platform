@@ -119,6 +119,7 @@
   "publishCreateProfile": "Create",
   "publishRetry": "Retry",
   "publishAddImage": "Add photo",
+  "publishPhotoLabel": "Photos (max. 9)",
   "publishFailed": "Could not post, please try again",
   "publishEventDate": "Event date",
   "publishTextBlocked": "Your post contains inappropriate words, please edit and try again",

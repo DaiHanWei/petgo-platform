@@ -34,6 +34,8 @@ class AppColors {
   static const Color muted = Color(0xFF9690A6); // 弱化/占位
   static const Color line = Color(0xFFE6E6E6);
   static const Color line2 = Color(0xFFF0F0F0);
+  static const Color lineViolet = Color(0xFFDCD2F7); // 紫浅底卡描边（原型 daterow/紫浅底）
+  static const Color dashedViolet = Color(0xFFC2B0EC); // 虚线占位描边（原型照片格 pcell-add）
 
   // —— Pop Art 红 + accents（原型体系）——
   static const Color popRed = Color(0xFFF0425A); // Pop Art 红（错位影/危险/点赞）

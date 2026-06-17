@@ -82,6 +82,7 @@
   "publishCreateProfile": "Buat",
   "publishRetry": "Coba lagi",
   "publishAddImage": "Tambah foto",
+  "publishPhotoLabel": "Foto / Gambar (maks. 9)",
   "publishFailed": "Gagal memposting, silakan coba lagi",
   "publishEventDate": "Tanggal momen",
   "publishTextBlocked": "Postingan mengandung kata tidak pantas, silakan ubah lalu coba lagi",
