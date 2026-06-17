@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/network/dio_client.dart';
 import '../../../core/router/route_intent.dart';
+import '../../../core/theme/colors.dart';
 import '../../../shared/widgets/login_guide_outcome.dart';
 import '../../../shared/widgets/login_hard_dialog.dart';
 import '../../../shared/widgets/login_soft_sheet.dart';
@@ -66,6 +67,8 @@ class LoginGuideController {
       await showDialog<void>(
         context: context,
         barrierDismissible: true,
+        // 原型深遮罩（rgba(14,16,25,.72)）：强门控视觉强度高于软浮层。
+        barrierColor: AppColors.splashInk.withValues(alpha: 0.72),
         builder: (dlgCtx) => LoginHardDialog(
           onLogin: () => _attemptLogin(context, dlgCtx),
           onClose: () {
