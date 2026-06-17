@@ -61,6 +61,17 @@ class AppColors {
   // —— Status ——
   static const Color danger = Color(0xFFE5604D);
 
+  // —— 兽医端独立主题 token（原型 H5 pages/vet-*.html 权威色值）——
+  // 用户侧紫体系不动；vet 子树用这套薄荷绿。深顶栏/工具栏本步仅落 token，
+  // 结构性铺设留 P1 逐屏（见 spec-vet-mint-theme.md）。
+  static const Color vetPrimary = Color(0xFF5BCBBB); // vet 主薄荷（按钮/在线态/气泡）
+  static const Color vetPrimaryDeep = Color(0xFF203D39); // 薄荷之上深绿字
+  static const Color vetSurface = Color(0xFFEFF7F4); // 薄荷浅底（badge/卡）
+  static const Color vetSurface2 = Color(0xFFF8FBFA); // 更浅薄荷底
+  static const Color vetTopBar = Color(0xFF2B2540); // 深色顶栏（P1 备用）
+  static const Color vetToolbar = Color(0xFF1A2B28); // 对话工具栏深底（P1 备用）
+  static const Color vetOnAccent = Color(0xFFFFFFFF); // 薄荷之上前景白
+
   // ============================================================
   // 2) 兼容别名（老页面照旧引用；值已迁薄荷绿）
   // ============================================================

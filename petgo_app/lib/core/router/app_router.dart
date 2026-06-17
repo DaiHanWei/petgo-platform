@@ -1,6 +1,8 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
+import '../theme/app_theme.dart';
 
 import '../../features/auth/domain/auth_state.dart';
 import '../../features/auth/presentation/dev_login_guide_page.dart';
@@ -43,6 +45,10 @@ import '../../shared/widgets/app_shell.dart';
 /// 根 Navigator key（供拦截器在 401 续期失败后于全局弹登录引导，Story 1.5 F3）。
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
+/// 兽医端主题作用域：给 `/vet/*` 子树注入薄荷主题（spec-vet-mint-theme.md），
+/// 与用户侧紫主题物理隔离。
+Widget _vetScoped(Widget child) => Theme(data: AppTheme.vet, child: child);
+
 /// 未登录游客**不可**直接进入的受控路由前缀（FR-19 门控）。
 const Set<String> _controlledLocations = {'/profile', '/triage', '/me', '/consult', '/notifications', '/publish'};
 
@@ -77,8 +83,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/splash', builder: (c, s) => const SplashPage()),
       GoRoute(path: '/login', builder: (c, s) => const LoginPage()),
       // 兽医账密登录 + 工作台壳（Story 5.1）。与用户侧 5-Tab 隔离：shell 外顶层路由。
-      GoRoute(path: '/vet/login', builder: (c, s) => const VetLoginPage()),
-      GoRoute(path: '/vet/workbench', builder: (c, s) => const VetWorkbenchShell()),
+      GoRoute(path: '/vet/login', builder: (c, s) => _vetScoped(const VetLoginPage())),
+      GoRoute(path: '/vet/workbench', builder: (c, s) => _vetScoped(const VetWorkbenchShell())),
       // 新用户引导流（TailTopia Prototype 全面换肤 · FR-11）：欢迎(Momo) → 创建宠物 → 完成。
       // [临时·勿提交] B 方案：入口暂指向 Story 1.6 规格流（昵称→状态→分叉），看完改回 MintOnboardingPage。
       GoRoute(path: '/onboarding', redirect: (c, s) => '/onboarding/nickname'),
@@ -149,12 +155,12 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/vet/conversation/:id',
-        builder: (c, s) => VetConversationPage(sessionId: int.parse(s.pathParameters['id']!)),
+        builder: (c, s) => _vetScoped(VetConversationPage(sessionId: int.parse(s.pathParameters['id']!))),
       ),
       // 抢单请求详情/预览页（Story 5.2 AC5 · F11）：3 分钟预览计时 + 三态返回。
       GoRoute(
         path: '/vet/request/:id',
-        builder: (c, s) => VetRequestDetailPage(item: s.extra! as VetInboxItem),
+        builder: (c, s) => _vetScoped(VetRequestDetailPage(item: s.extra! as VetInboxItem)),
       ),
       // 通知中心（Story 6.6）+ 6.1 深链兜底落点。受控路由（需登录）。
       GoRoute(path: '/notifications', builder: (c, s) => const NotificationCenterPage()),

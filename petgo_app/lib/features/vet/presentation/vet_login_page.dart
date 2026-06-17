@@ -92,7 +92,7 @@ class _VetLoginPageState extends ConsumerState<VetLoginPage> {
                 key: const ValueKey('vetLoginButton'),
                 onPressed: _busy ? null : _onLogin,
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.accentConsult,
+                  backgroundColor: AppColors.vetPrimary,
                   foregroundColor: AppColors.onAccent,
                   padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
                 ),

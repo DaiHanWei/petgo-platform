@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/im/im_service.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
@@ -71,7 +72,10 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
     final l10n = AppLocalizations.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      // 弹窗挂根 Navigator（在 _vetScoped 主题子树之上）→ 显式包薄荷主题，避免按钮回落紫色。
+      builder: (ctx) => Theme(
+        data: AppTheme.vet,
+        child: AlertDialog(
         title: Text(l10n.vetEndConfirmTitle),
         actions: [
           TextButton(
@@ -85,6 +89,7 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
             child: Text(l10n.vetEndConfirmYes),
           ),
         ],
+        ),
       ),
     );
     if (confirmed != true || !mounted) return;

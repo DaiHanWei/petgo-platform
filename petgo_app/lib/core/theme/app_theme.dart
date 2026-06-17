@@ -10,9 +10,15 @@ import 'typography.dart';
 class AppTheme {
   AppTheme._();
 
-  static ThemeData get light {
+  static ThemeData get light => _build(AppColors.accentGrowth);
+
+  /// 兽医端独立主题：以薄荷绿 `vetPrimary` 种子化（原型 H5）。
+  /// 由 router 在 `/vet/*` 子树包 `Theme(data: AppTheme.vet)` 应用，与用户侧紫物理隔离。
+  static ThemeData get vet => _build(AppColors.vetPrimary);
+
+  static ThemeData _build(Color seed) {
     final ColorScheme scheme = ColorScheme.fromSeed(
-      seedColor: AppColors.accentGrowth,
+      seedColor: seed,
       brightness: Brightness.light,
     ).copyWith(
       surface: AppColors.surface,

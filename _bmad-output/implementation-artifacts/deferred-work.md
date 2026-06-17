@@ -36,3 +36,13 @@
 - **P-43「永久删除项清单」展示**：合理 UX 增强、不涉契约，可后续在注销确认框补「将删除：宠物档案/成长记录/分诊记录…」清单 + arb 键（本条未做，低优）。
 - **P-41 深色模式开关**：V1 仅浅色（无 dark theme），画开关=死按钮，违反「不留死按钮」。待 V2 dark theme 实现再加。
 - **P-41 档案公开开关**：无 isPublic 字段/无后端契约/涉 PII 政策，需后端与隐私决策配合，延后。
+
+---
+
+## 兽医端薄荷主题（P0 色彩系统层）—— 审查 defer 项
+
+> 来源：spec-vet-mint-theme.md step-04 三方审查。以下为 defer（非本步缺陷，留 P1 逐屏处理）。
+
+- **vet 主题化组件 M3 色调偏差**：`AppTheme.vet` 仅以 `vetPrimary #5BCBBB` 种子化，M3 由种子推导 `colorScheme.primary/onPrimary`（紫… 实为薄荷的色调变体），与手绘 `backgroundColor: vetPrimary` 的按钮（如 vet_login）可能有细微色调/对比差。属 seed-based 主题固有行为；P1 逐屏精调 vet 组件时统一（或在 `vet` 主题显式 `copyWith(primary: vetPrimary, onPrimary: vetOnAccent)`）。
+- **vet SnackBar 主题逃逸**：vet 屏 SnackBar 走 app 级 `ScaffoldMessenger`（在 `_vetScoped` 主题子树之上），解析到用户侧紫主题。当前 vet SnackBar 均为纯文本无强调色 → **无可见色差**，故 defer。若 P1 给 SnackBar 加薄荷强调/Action，需在 vet 子树内置独立 `ScaffoldMessenger` 或逐处包 `Theme`。
+- **vet 预留 token 未接线**：`vetPrimaryDeep / vetSurface / vetSurface2 / vetTopBar / vetToolbar / vetOnAccent` 本步仅落 token，待 P1「兽医端深色顶栏 #2B2540 + 统计卡/队列卡/对话工具栏」结构性逐屏还原时接线（审计 P1 项）。

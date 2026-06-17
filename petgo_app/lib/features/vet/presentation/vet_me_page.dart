@@ -154,7 +154,7 @@ class _VetMePageState extends ConsumerState<VetMePage> with WidgetsBindingObserv
                             Text(
                               _online ? l10n.vetOnlineLabel : l10n.vetOfflineLabel,
                               style: AppTypography.caption.copyWith(
-                                color: _online ? AppColors.accentGrowth : AppColors.textTertiary,
+                                color: _online ? AppColors.vetPrimary : AppColors.textTertiary,
                               ),
                             ),
                           ],
