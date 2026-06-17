@@ -15,35 +15,36 @@ class AppColors {
   // 1) 新设计 token
   // ============================================================
 
-  // —— Brand: mint ——
-  static const Color mint = Color(0xFF7FD1AE); // primary
-  static const Color mint500 = Color(0xFF63C49B);
-  static const Color mint600 = Color(0xFF48B083); // 按钮下唇 / 按下态
-  static const Color mint700 = Color(0xFF2F9669); // tint 上深色文字
-  static const Color mintTint = Color(0xFFEAF7F1); // 柔填充
-  static const Color mintTint2 = Color(0xFFF2FBF7);
+  // —— Brand: violet（原型 #845EC9 体系。常量名沿用 mint* 不改，业务代码照旧编译）——
+  static const Color mint = Color(0xFF845EC9); // violet-500 primary
+  static const Color mint500 = Color(0xFF9E83DA); // violet-400 secondary
+  static const Color mint600 = Color(0xFF6C48AE); // violet-700 按下态/下唇
+  static const Color mint700 = Color(0xFF6C48AE); // tint 上深色文字
+  static const Color mintTint = Color(0xFFF8F2FF); // violet-50 柔填充
+  static const Color mintTint2 = Color(0xFFF8F6FF);
 
-  // —— Canvas: 米白 ——
-  static const Color cream = Color(0xFFFBF8F1); // app 画布
-  static const Color cream2 = Color(0xFFF5F0E5); // 分组背景
+  // —— Canvas: 纯白（原型 QA：画布纯白无紫调）——
+  static const Color cream = Color(0xFFFFFFFF); // app 画布
+  static const Color cream2 = Color(0xFFF8F2FF); // 分组背景（violet-50 点缀）
   static const Color card = Color(0xFFFFFFFF);
 
-  // —— Ink ——
-  static const Color ink = Color(0xFF2B2A27);
-  static const Color ink2 = Color(0xFF5C594F);
-  static const Color muted = Color(0xFF98948A);
-  static const Color line = Color(0xFFECE7DB);
-  static const Color line2 = Color(0xFFF3EFE6);
+  // —— Ink（原型文字色）——
+  static const Color ink = Color(0xFF2E2A45); // 标题/正文主
+  static const Color ink2 = Color(0xFF544864); // ink-700 次级
+  static const Color muted = Color(0xFF9690A6); // 弱化/占位
+  static const Color line = Color(0xFFE6E6E6);
+  static const Color line2 = Color(0xFFF0F0F0);
 
-  // —— Playful accents（oklch 等明度/彩度、异相 → 已换算为 sRGB）——
-  static const Color coral = Color(0xFFF5997C); // 日常分享 / warm
-  static const Color gold = Color(0xFFE4C064); // 成长日历 / 快乐
-  static const Color sky = Color(0xFF5BC1F2); // 专业科普 / info
-  static const Color grape = Color(0xFFBD8EDA); // 群聊认领
-  static const Color coralTint = Color(0xFFFFE3D8);
-  static const Color goldTint = Color(0xFFFBEDCD);
-  static const Color skyTint = Color(0xFFD5F4FF);
-  static const Color grapeTint = Color(0xFFF5E9FE);
+  // —— Pop Art 红 + accents（原型体系）——
+  static const Color popRed = Color(0xFFF0425A); // Pop Art 红（错位影/危险/点赞）
+  static const Color coral = Color(0xFFF0425A); // 日常/点赞红心 → Pop Art 红
+  static const Color gold = Color(0xFFF6A609); // 成长/快乐/分诊黄
+  static const Color sky = Color(0xFF845EC9); // 问诊强调 → 统一紫
+  static const Color grape = Color(0xFF9E83DA); // 群聊 → violet-400
+  static const Color coralTint = Color(0xFFFDE7EB); // 红浅底
+  static const Color goldTint = Color(0xFFFEF3DE); // 黄浅底（badge tips）
+  static const Color skyTint = Color(0xFFF8F6FF); // → violet-50 浅底
+  static const Color grapeTint = Color(0xFFF8F2FF);
 
   // —— 吉祥物 Momo（占位 IP，仅插画内部用，业务勿引）——
   static const Color momoBody = Color(0xFF7FD1AE);
@@ -53,9 +54,9 @@ class AppColors {
   static const Color momoBlush = Color(0x8CF496A4); // rgba(244,150,164,.55)
   static const Color momoNose = Color(0xFFE78CA0);
 
-  // —— Splash 启动屏品牌暗底（一次性品牌过场，深薄荷墨；本流唯一深色屏）——
-  static const Color splashInk = Color(0xFF12211B); // 深底
-  static const Color splashGlow = mint; // 中心辉光（薄荷，非原型紫）
+  // —— Splash 启动屏品牌暗底（原型 #141019 深墨 + 紫辉光 + Pop Art 红错位）——
+  static const Color splashInk = Color(0xFF141019); // 原型深墨底
+  static const Color splashGlow = mint; // 中心辉光 = violet
 
   // —— Status ——
   static const Color danger = Color(0xFFE5604D);
@@ -76,20 +77,20 @@ class AppColors {
   static const Color textTertiary = muted;
 
   /// disclaimer 文案。
-  static const Color textDisclaimer = Color(0xFF8A817A);
+  static const Color textDisclaimer = Color(0xFF9690A6);
 
-  /// 区域强调色 —— 全面换肤后统一为薄荷绿主色。
+  /// 区域强调色 = 紫主色。
   static const Color accentGrowth = mint;
 
-  /// 问诊区强调 —— 迁为 sky（原莫兰迪蓝）。
-  static const Color accentConsult = sky;
+  /// 问诊区强调 = 紫主色。
+  static const Color accentConsult = mint;
 
-  // 分诊语义三色（Epic 4；保留语义不动）
-  static const Color triageGreen = Color(0xFF7FB069);
-  static const Color triageYellow = Color(0xFFE0A458);
-  static const Color triageRed = Color(0xFFC97A7A);
+  // 分诊语义三色（原型值：绿/黄/红）
+  static const Color triageGreen = Color(0xFF1F9E6A);
+  static const Color triageYellow = Color(0xFFF6A609);
+  static const Color triageRed = Color(0xFFF0425A);
 
-  /// 黄色协议浅底（Epic 4 倒计时协议背景）。
+  /// 黄色协议浅底（原型倒计时协议背景 #EEF4F7）。
   static const Color triageYellowSurface = Color(0xFFEEF4F7);
 
   // Feed/发布卡封面占位柔彩（按内容类型取色）—— 迁到新强调 tint。
