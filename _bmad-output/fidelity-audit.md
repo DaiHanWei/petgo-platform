@@ -92,3 +92,109 @@
 - **P3 缺页/缺态**：AI 红态步骤列表、注销整页(去掉冲突的冷静期、保留清单+邮箱)、设置分组、徽章图鉴/名片逐项核验。
 
 > 注：审计中部分屏(里程碑抽屉/图鉴/名片/兽医对话气泡)子代理未充分读到代码细节，标注「待验证」，改进前需再逐屏确认实际实现。
+
+## 五、路由 × 原型 × 审计 全量对照（覆盖盲区核验）
+
+> 2026-06-17 追加。以 `app_router` 真实路由表 × `pages/` 原型 53 屏（权威编号见 `core-pages-reference-解读.md`）× 本审计逐条交叉比对，确认逐屏计划无盲区。
+> 计划状态：✅在逐屏还原计划 / ⚫缺页且已 deferred(暂不做) / ⚠️无原型标准或审计未覆盖(需先定) / 🛠️调试页(故意排除)。
+
+### 认证 & 引导
+| 原型 | html | app 路由/触发 | 档次 | 状态 |
+|---|---|---|---|---|
+| P-01 | splash.html | `/splash` | 🟡 | ✅(①已做) |
+| P-02 | feed-guest.html | `/home`(游客) | 🟢 | ✅ |
+| P-03 | (P-02 内浮层) | 软登录浮层 | 🟡 | ✅ |
+| P-04 | login-gate.html | 登录门控弹窗(全局) | 🟠 | ✅ |
+| P-05 | login.html | `/login` | 🟠 | ✅(②已做) |
+| P-06 | nickname.html | `/onboarding/nickname` | 🟡 | ✅(③已做) |
+| P-07 | pet-select.html | `/onboarding/pet-status` | 🟡 | ✅(④已做) |
+| P-08 | onboard.html | `/onboarding/profile` | 🟢 | ✅ |
+| P-09 | notif-gate.html | 通知权限 sheet | 🟡 | ✅ |
+
+### 核心 Tab（底部 4 tab + ＋发布）
+| 原型 | html | app 路由 | 档次 | 状态 |
+|---|---|---|---|---|
+| P-10 | feed.html | `/home`(登录态) **tab1** | 🟠 | ✅(两套设计,需重做) |
+| P-27 | paspor.html | `/profile` 成长档案 **tab2** | 🟡 | ✅ |
+| P-17 | konsultasi.html | `/triage` 问诊 **tab3** | 🟡 | ✅ |
+| P-40 | profil.html | `/me` 我的 **tab4** | 🟡 | ✅ |
+| P-38 | create.html | `/publish` ＋发布 | 🟠 | ✅ |
+
+### AI 分诊
+| 原型 | html | app 路由 | 档次 | 状态 |
+|---|---|---|---|---|
+| P-18 | ai-upload.html | `/triage/upload` | 🟡 | ✅ |
+| P-19 | ai-result.html | 结果黄态 | 🟡 | ✅ |
+| P-19b | ai-result-green.html | 结果绿态 | 🟢 | ✅(顺验 level 切换) |
+| P-19c | ai-result-red.html | 结果红态 | 🟠 | ✅ |
+
+### 兽医问诊（用户视角）
+| 原型 | html | app 路由 | 档次 | 状态 |
+|---|---|---|---|---|
+| P-20 | konsultasi-home.html | `/consult` 咨询入口 | 🟠 | ✅ |
+| P-21 | match-wait.html | `/consult/waiting/:id` | 🟠 | ✅ |
+| P-22 | chat.html | `/consult/conversation/:id` | 🟡 | ✅ |
+| P-23 | rate.html | 评分(consult 流内) | 🟡 | ✅ |
+| P-25 | archive-confirm.html | 存档确认 | ⚫ | ⚫deferred(④,与同步模型冲突) |
+
+### 内容 / 通知
+| 原型 | html | app 路由 | 档次 | 状态 |
+|---|---|---|---|---|
+| P-12 | detail.html | `/content/:id` | 🟡 | ✅ |
+| P-13 | notif.html | `/notifications` | 🟡 | ✅ |
+| P-39 | publish-done.html | 发布成功 | ⚫ | ⚫deferred(②) |
+| P-39b | publish-reviewing.html | 审核中 | ⚫ | ⚫deferred(②) |
+| P-39c | publish-rejected.html | 被拒 | ⚫ | ⚫deferred(②) |
+
+### 成长档案 / 里程碑
+| 原型 | html | app 路由 | 档次 | 状态 |
+|---|---|---|---|---|
+| P-28 | catatan-calendar.html | `/profile/day` 日历 | 🟡 | ✅ |
+| P-30 | pet-create.html | `/profile/create` | 🟡 | ✅ |
+| P-31 | pet-success.html | `/profile/created` 庆祝 | 🟢 | ✅(顺验纸屑动画) |
+| P-32 | pet-edit.html | `/profile/edit` | 🟡 | ✅ |
+| P-33 | milestone.html | `/profile/milestones` | 🟡 | ✅ |
+| P-33b | milestone-sheet.html | 里程碑抽屉(页内,无独立路由) | 🟠 | ⚠️实现待核验 |
+| P-34 | badge-gallery.html | 徽章图鉴(无独立路由) | 🟠 | ⚠️实现待核验 |
+| P-35 | milestone-unlock.html | 解锁动效 | 🟡 | ✅待逐项验 |
+| P-36 | namecard.html | `/card/preview` 名片H5 | 🟠 | ✅待验 |
+
+### 设置 / 账户
+| 原型 | html | app 路由 | 档次 | 状态 |
+|---|---|---|---|---|
+| P-41 | settings.html | `/me/settings` | 🟡 | ✅ |
+| P-43 | delete-account.html | 注销(settings 内) | 🟠 | ✅(去掉冲突冷静期,⑥) |
+
+### 空态 / 错误态
+| 原型 | html | app 路由 | 档次 | 状态 |
+|---|---|---|---|---|
+| P-10b | feed-empty.html | Feed 空态 | 🟡 | ✅ |
+| P-10c | feed-error.html | Feed 错误态 | 🟡 | ✅ |
+| P-13b | notif-empty.html | 通知空态 | 🟢 | ✅ |
+| P-28b | timeline-empty.html | 时间线空态 | 🟢 | ✅ |
+| (通用) | network-error.html | 系统级无网络态 | — | ⚠️审计未单列,需补核 |
+
+### 兽医端（V- 系列）
+| 原型 | html | app 路由 | 档次 | 状态 |
+|---|---|---|---|---|
+| V-01b | vet-login.html | `/vet/login` | 🟠 | ✅ |
+| V-01 | vet-dashboard.html | `/vet/workbench` 首页 tab | 🟠 | ✅ |
+| V-02 | vet-queue.html | 待接单(workbench tab) | 🟡 | ✅ |
+| V-03 | vet-case.html | `/vet/request/:id` | 🟡 | ✅ |
+| V-05 | vet-chat.html | `/vet/conversation/:id` | 🟡 | ✅ |
+| V-06 | vet-history.html | 历史(workbench tab) | 🟢 | ✅ |
+| V-07 | vet-profile.html | 兽医我的(workbench tab) | 🟡 | ✅ |
+| V-08 | vet-final-diagnosis.html | 诊断表单 | ⚫ | ⚫deferred(④,无后端契约) |
+| V-ST | vet-status-popup.html | 状态弹窗 | ⚫ | ⚫简化为 toggle |
+
+### ⚠️ app 有路由但无原型标准（计划外，需先定）
+| app 路由 | 页 | 情况 |
+|---|---|---|
+| `/gath` | 聚会页 GathPage | 原型 `pages/` **无对应 html**；仅首页快捷卡有 "Gabung Gath" 入口文案。无 1:1 标准，需产品定视觉规范 |
+| `/me/language` | 独立语言设置页 | 原型把语言放在 settings 内，**无独立 language.html**。需确认是并入设置还是单独定规范 |
+| `/dev/login-guide`、`/dev/triage` | 调试入口 | 🛠️非生产屏，故意排除，不还原 |
+
+### 盲区结论
+- **53 屏原型 + 4 tab 全部已对账**：✅在计划 ~40 屏 / ⚫deferred 6 屏(publish 三态·存档确认·诊断表单·状态弹窗) / ⚠️待核或无标准 5 屏(里程碑抽屉·徽章图鉴·network-error·gath·me/language)。
+- **唯一两个「无原型标准」**：`/gath`、`/me/language` —— 需产品先给规范，否则游离计划外。
+- **里程碑抽屉 / 徽章图鉴**：原型有(P-33b/P-34)但 app 无独立路由，实现是否到位待核；改进前必须逐屏确认。
