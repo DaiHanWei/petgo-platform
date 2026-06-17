@@ -165,15 +165,23 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // 抢单请求详情/预览页（Story 5.2 AC5 · F11）：3 分钟预览计时 + 三态返回。
       GoRoute(
         path: '/vet/request/:id',
-        // 正常流程从列表带入 extra(VetInboxItem)；extra 为空时（dev 深链 DEV_ROUTE）按 path id
-        // 合成最小项——详情页仅用 sessionId，其余靠 repo 拉取。
+        // 正常流程从列表带入 extra(VetInboxItem)；extra 为空时仅出现在 dev 深链（DEV_ROUTE，
+        // 生产流程恒带 extra）→ 合成一份代表性富样本（含宠物身份），供逐屏视觉验收完整渲染。
         builder: (c, s) => _vetScoped(VetRequestDetailPage(
           item: s.extra as VetInboxItem? ??
               VetInboxItem(
                 sessionId: int.parse(s.pathParameters['id']!),
                 source: 'AI_UPGRADE',
-                imageCount: 0,
-                waitingElapsedSeconds: 0,
+                aiDangerLevel: 'YELLOW',
+                symptomPreview:
+                    'Muntah busa putih 2x semalam, jadi lebih lemas & kurang nafsu makan',
+                imageCount: 2,
+                waitingElapsedSeconds: 45,
+                petName: 'Oyen',
+                petSpecies: 'CAT',
+                petSex: 'MALE',
+                petAgeMonths: 24,
+                ownerHandle: 'rani',
               ),
         )),
       ),
