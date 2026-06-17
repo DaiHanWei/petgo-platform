@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -56,10 +57,14 @@ const Set<String> _controlledLocations = {'/profile', '/triage', '/me', '/consul
 ///
 /// `StatefulShellRoute.indexedStack` 承载 4 个 Tab；`/login`、`/onboarding`、`/dev/*` 为
 /// shell 外顶层路由。游客深链受控路由 → redirect 回 `/home`（Tab 点击门控由 [AppShell] 单一入口处理）。
+/// Debug-only 开发直达路由：`--dart-define=DEV_ROUTE=/vet/workbench` 启动即落该屏，
+/// 供本地逐屏视觉验收（配合 `DEV_VET=true` 种子兽医态）。release 恒走 /splash。
+const String _devRoute = String.fromEnvironment('DEV_ROUTE');
+
 final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: rootNavigatorKey,
-    initialLocation: '/splash',
+    initialLocation: kDebugMode && _devRoute.isNotEmpty ? _devRoute : '/splash',
     redirect: (context, state) {
       final auth = ref.read(authControllerProvider);
       final loc = state.matchedLocation;

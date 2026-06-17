@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +7,7 @@ import 'package:tailtopia/core/l10n/locale_controller.dart';
 import 'package:tailtopia/core/mock/mock_config.dart';
 import 'package:tailtopia/core/mock/mock_media.dart';
 import 'package:tailtopia/core/storage/prefs.dart';
+import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/profile/domain/profile_prompt_controller.dart';
 import 'package:tailtopia/features/profile/domain/profile_prompt_state.dart';
 
@@ -28,9 +30,18 @@ Future<void> main() async {
       localeOverrideProvider.overrideWithValue(savedLocale),
       // Mock 模式:覆盖上传用例(唯一不走 dio 的 OSS 直传 → 占位 URL)。其余靠 Dio MockInterceptor。
       if (kMockMode) mediaUploadUseCaseMockOverride,
+      // Debug-only：--dart-define=DEV_VET=true 启动即种子兽医登录态，配合 DEV_ROUTE 直达兽医屏做视觉验收。
+      if (kDebugMode && const bool.fromEnvironment('DEV_VET'))
+        authControllerProvider.overrideWith(_DevVetAuthController.new),
     ],
     child: const TailTopiaApp(),
   ));
+}
+
+/// Debug-only：开发直达兽医屏时的预置兽医登录态（仅 `DEV_VET=true` 时注入）。
+class _DevVetAuthController extends AuthController {
+  @override
+  AuthState build() => const AuthState(status: AuthStatus.authenticated, role: 'VET');
 }
 
 /// Story 7.2：读持久化语言码（'id'/'en'）；空串/缺失/损坏 → null（跟随设备）。
