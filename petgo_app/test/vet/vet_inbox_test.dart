@@ -47,7 +47,7 @@ void main() {
     expect(find.text('No incoming requests'), findsOneWidget);
   });
 
-  testWidgets('AC5: 抢单请求卡片展示 AI 摘要，点卡片进请求详情/预览页', (tester) async {
+  testWidgets('AC5: 抢单卡 RINGKASAN AI 摘要 + 等级徽章，点 Detail 进详情/预览页', (tester) async {
     final repo = _FakeVetRepository(const [
       VetInboxItem(
         sessionId: 5,
@@ -61,20 +61,40 @@ void main() {
     await _pump(tester, repo);
 
     expect(find.text('呕吐两次'), findsOneWidget);
-    expect(find.text('AI: watch closely'), findsOneWidget);
-    // 抢单模式：卡片整体可点（无列表内联接单按钮）。
+    expect(find.text('AI: watch closely'), findsOneWidget); // 等级徽章
+    expect(find.text('AI SUMMARY'), findsOneWidget); // RINGKASAN AI 框
+    expect(find.text('2 photos attached'), findsOneWidget);
     expect(find.byKey(const ValueKey('vetRequestCard_5')), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('vetRequestCard_5')));
+    await tester.tap(find.byKey(const ValueKey('vetDetail_5')));
     await tester.pumpAndSettle();
-    // 进入请求详情/预览页。
     expect(find.text('detail 5'), findsOneWidget);
   });
 
-  testWidgets('DIRECT 项无 AI 摘要', (tester) async {
+  testWidgets('RED 卡显紧急横幅', (tester) async {
+    await _pump(tester, _FakeVetRepository(const [
+      VetInboxItem(sessionId: 9, source: 'AI_UPGRADE', aiDangerLevel: 'RED', symptomPreview: 'darurat', imageCount: 1, waitingElapsedSeconds: 20),
+    ]));
+    expect(find.text('⚠️ IMMEDIATE ATTENTION'), findsOneWidget);
+    expect(find.text('AI: urgent'), findsOneWidget);
+  });
+
+  testWidgets('Lewati 跳过 → 卡片本地移除', (tester) async {
+    await _pump(tester, _FakeVetRepository(const [
+      VetInboxItem(sessionId: 7, source: 'AI_UPGRADE', aiDangerLevel: 'GREEN', symptomPreview: 'ringan', imageCount: 0, waitingElapsedSeconds: 10),
+    ]));
+    expect(find.byKey(const ValueKey('vetRequestCard_7')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('vetSkip_7')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('vetRequestCard_7')), findsNothing);
+  });
+
+  testWidgets('DIRECT 项无 AI 摘要框', (tester) async {
     await _pump(tester, _FakeVetRepository(const [
       VetInboxItem(sessionId: 6, source: 'DIRECT', imageCount: 0, waitingElapsedSeconds: 5),
     ]));
     expect(find.text('Direct request'), findsOneWidget);
+    expect(find.text('AI SUMMARY'), findsNothing);
   });
 }

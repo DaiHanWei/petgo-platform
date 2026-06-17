@@ -40,11 +40,11 @@ class MockBackend {
 
   /// 兽医工作台 demo 会话元数据（id → source）。待接单池 8101-8103 + 进行中 8001/8002。
   static const Map<int, String> _vetSessionSource = {
-    8101: 'AI_UPGRADE', 8102: 'AI_UPGRADE', 8103: 'DIRECT', // 待接单池
+    8100: 'AI_UPGRADE', 8101: 'AI_UPGRADE', 8102: 'AI_UPGRADE', 8103: 'DIRECT', // 待接单池
     8001: 'AI_UPGRADE', 8002: 'DIRECT', // 进行中
   };
   /// 待接单池：未接单前 GET 返回 WAITING（让请求预览页不被「已被抢」误判弹出）。
-  static const Set<int> _vetWaitingPool = {8101, 8102, 8103};
+  static const Set<int> _vetWaitingPool = {8100, 8101, 8102, 8103};
   final Set<int> _vetAccepted = {}; // 已接单的 session id（接单后转 IN_PROGRESS）
 
   void _seed() {
@@ -585,6 +585,7 @@ class MockBackend {
     if (p.endsWith('/vet/heartbeat') && m == 'POST') return ok();
     if (p.endsWith('/vet/consult-sessions/waiting') && m == 'GET') {
       return ok([
+        {'sessionId': 8100, 'source': 'AI_UPGRADE', 'aiDangerLevel': 'RED', 'symptomPreview': 'Benji (anjing, 5th) makan cokelat lalu muntah berulang & lemas drastis', 'imageCount': 3, 'waitingElapsedSeconds': 50},
         {'sessionId': 8101, 'source': 'AI_UPGRADE', 'aiDangerLevel': 'YELLOW', 'symptomPreview': 'Oyen (kucing, 2th) muntah busa putih 2x semalam, jadi lebih lemas', 'imageCount': 2, 'waitingElapsedSeconds': 45},
         {'sessionId': 8102, 'source': 'AI_UPGRADE', 'aiDangerLevel': 'GREEN', 'symptomPreview': 'Bruno (anjing) bersin-bersin sejak 2 hari, makan & main masih normal', 'imageCount': 1, 'waitingElapsedSeconds': 90},
         {'sessionId': 8103, 'source': 'DIRECT', 'aiDangerLevel': null, 'symptomPreview': null, 'imageCount': 0, 'waitingElapsedSeconds': 150},

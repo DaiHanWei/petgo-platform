@@ -27,6 +27,7 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> {
   late Future<List<VetInboxItem>> _items;
   String _displayName = '';
   int? _doneCount; // 完成数（history 列表长度，全量非仅今日）；null=加载中/失败 → 占位
+  final Set<int> _skipped = {}; // Lewati 客户端本地跳过的 sessionId（不调后端；刷新后可重现）
 
   @override
   void initState() {
@@ -38,6 +39,15 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> {
   void _reload() {
     _items = ref.read(vetRepositoryProvider).waitingList();
   }
+
+  /// 显式刷新：重拉列表并清空本地跳过（详情返回的隐式刷新不清，跳过本会话内保留）。
+  void _refresh() => setState(() {
+        _skipped.clear();
+        _reload();
+      });
+
+  /// Lewati：客户端本地移除该卡（抢单模式，不发起后端调用）。
+  void _skip(VetInboxItem item) => setState(() => _skipped.add(item.sessionId));
 
   Future<void> _loadHeaderStats() async {
     final repo = ref.read(vetRepositoryProvider);
@@ -72,7 +82,9 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> {
               future: _items,
               builder: (context, snapshot) {
                 final loading = snapshot.connectionState == ConnectionState.waiting;
-                final items = snapshot.data ?? const <VetInboxItem>[];
+                final items = (snapshot.data ?? const <VetInboxItem>[])
+                    .where((it) => !_skipped.contains(it.sessionId))
+                    .toList();
                 return ListView(
                   padding: const EdgeInsets.all(AppSpacing.md),
                   children: [
@@ -95,7 +107,7 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> {
                         IconButton(
                           key: const ValueKey('vetInboxRefresh'),
                           icon: const Icon(Icons.refresh, size: 20),
-                          onPressed: () => setState(_reload),
+                          onPressed: _refresh,
                         ),
                       ],
                     ),
@@ -110,7 +122,11 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> {
                     else
                       ...items.map((it) => Padding(
                             padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                            child: _InboxCard(item: it, onTap: () => _openDetail(it)),
+                            child: _InboxCard(
+                              item: it,
+                              onDetail: () => _openDetail(it),
+                              onSkip: () => _skip(it),
+                            ),
                           )),
                   ],
                 );
@@ -174,58 +190,153 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-/// 抢单请求卡片：症状摘要 + 图片张数 + AI 评级；整卡可点进详情/预览。
-/// （视觉增强——AI 摘要框 / Lewati·Detail 双按钮 / 宠物 meta——留下一单元。）
+/// 抢单请求卡片（原型 vet-queue.html）：等级徽章(绿/黄/红) + 等待时间 + RINGKASAN AI 摘要框
+/// + Lewati(跳过) / Lihat Detail(详情) 双按钮；RED 额外加 ⚠️ 紧急横幅 + 红强调按钮。
+/// DIRECT 项无 AI 框，仅「Direct request」。
+///
+/// 注：宠物名/种类/年龄/主人 原型有，但 `VetInboxItem` 无字段、后端无契约 → 本步 omit（见 deferred）。
 class _InboxCard extends StatelessWidget {
-  const _InboxCard({required this.item, required this.onTap});
+  const _InboxCard({required this.item, required this.onDetail, required this.onSkip});
 
   final VetInboxItem item;
-  final VoidCallback onTap;
+  final VoidCallback onDetail;
+  final VoidCallback onSkip;
+
+  bool get _isRed => item.aiDangerLevel == 'RED';
+
+  Color _levelColor() {
+    switch (item.aiDangerLevel) {
+      case 'RED':
+        return AppColors.triageRed;
+      case 'YELLOW':
+        return AppColors.triageYellow;
+      default:
+        return AppColors.triageGreen;
+    }
+  }
+
+  String _levelLabel(AppLocalizations l10n) {
+    switch (item.aiDangerLevel) {
+      case 'RED':
+        return l10n.vetAiContextLevelRed;
+      case 'YELLOW':
+        return l10n.vetAiContextLevelYellow;
+      default:
+        return l10n.vetAiContextLevelGreen;
+    }
+  }
+
+  String _waitingLabel(AppLocalizations l10n) {
+    final s = item.waitingElapsedSeconds;
+    return s < 60 ? l10n.vetQueueWaitingJustNow : l10n.vetQueueWaitingMinutes(s ~/ 60);
+  }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final isYellow = item.aiDangerLevel == 'YELLOW';
-    return InkWell(
+    final accent = _levelColor();
+    return Container(
       key: ValueKey('vetRequestCard_${item.sessionId}'),
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (item.isAiUpgrade) ...[
-                    Text(
-                      isYellow ? l10n.vetAiContextLevelYellow : l10n.vetAiContextLevelGreen,
-                      style: AppTypography.caption.copyWith(
-                        color: isYellow ? AppColors.triageYellow : AppColors.triageGreen,
-                      ),
-                    ),
-                    if (item.symptomPreview != null) ...[
-                      const SizedBox(height: 4),
-                      Text(item.symptomPreview!, style: AppTypography.body),
-                    ],
-                    if (item.imageCount > 0) ...[
-                      const SizedBox(height: 4),
-                      Text(l10n.vetInboxImages(item.imageCount), style: AppTypography.caption),
-                    ],
-                  ] else
-                    Text(l10n.vetInboxDirect, style: AppTypography.body),
-                ],
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _isRed ? AppColors.triageRed : AppColors.border, width: _isRed ? 1.5 : 1),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_isRed)
+            Container(
+              width: double.infinity,
+              color: AppColors.triageRed,
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: AppSpacing.md),
+              child: Text(
+                l10n.vetQueueUrgentBanner,
+                style: AppTypography.caption.copyWith(color: AppColors.onAccent),
               ),
             ),
-            const Icon(Icons.chevron_right, color: AppColors.textSecondary),
-          ],
-        ),
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 顶行：等级徽章 + 等待时间
+                Row(
+                  children: [
+                    if (item.isAiUpgrade)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: accent.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          _levelLabel(l10n),
+                          style: AppTypography.micro.copyWith(color: accent, fontWeight: FontWeight.w700),
+                        ),
+                      )
+                    else
+                      Text(l10n.vetInboxDirect, style: AppTypography.title),
+                    const Spacer(),
+                    Text(_waitingLabel(l10n), style: AppTypography.micro.copyWith(color: AppColors.textTertiary)),
+                  ],
+                ),
+                // RINGKASAN AI 摘要框（仅 AI 升级项）
+                if (item.isAiUpgrade) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(AppSpacing.sm),
+                    decoration: BoxDecoration(
+                      color: AppColors.vetSurface,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          l10n.vetQueueAiSummaryTitle,
+                          style: AppTypography.micro.copyWith(color: AppColors.vetPrimaryDeep, letterSpacing: 0.5),
+                        ),
+                        if (item.symptomPreview != null) ...[
+                          const SizedBox(height: 4),
+                          Text(item.symptomPreview!, style: AppTypography.body),
+                        ],
+                        const SizedBox(height: 4),
+                        Text(
+                          item.imageCount > 0 ? l10n.vetQueuePhotosAttached(item.imageCount) : l10n.vetQueueNoPhoto,
+                          style: AppTypography.caption.copyWith(color: AppColors.textTertiary),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: AppSpacing.sm),
+                // 底行：Lewati / Lihat Detail 双按钮
+                Row(
+                  children: [
+                    TextButton(
+                      key: ValueKey('vetSkip_${item.sessionId}'),
+                      onPressed: onSkip,
+                      child: Text(l10n.vetQueueSkip),
+                    ),
+                    const Spacer(),
+                    FilledButton(
+                      key: ValueKey('vetDetail_${item.sessionId}'),
+                      onPressed: onDetail,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _isRed ? AppColors.triageRed : AppColors.vetPrimary,
+                        foregroundColor: AppColors.onAccent,
+                      ),
+                      child: Text(l10n.vetQueueViewDetail),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

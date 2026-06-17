@@ -56,3 +56,12 @@
 - **「完成」统计卡依赖未实现端点**：`done` 取 `vetRepository.history()` 长度；但 `/vet/consult-sessions/history`（及 `/in-progress`）**真后端 `VetConsultController` 未实现，仅 mock 应答**。真后端（`PETGO_MOCK=false`）下 history() → 404 → 优雅降级显示「—」（不崩）。同时 Active/History 两 tab 真后端也非功能态。属预存后端契约缺口（见 `backend-remaining.md` 范畴），需后端补 `/history`、`/in-progress` 端点；若要「今日完成」语义还需 server 端按当日过滤（当前 history 为全量）。
 - **`waitingList` 加载失败被当空态**：dashboard `FutureBuilder` 用 `snapshot.data ?? []`，网络错误（401/500/断网）与「队列为空」展示相同的「No incoming requests」，无 error 分支/重试。**非本次回归**（旧 VetInboxPage 同款行为）。留「兽医端错误态专项」补 `snapshot.hasError` 分支 + 重试。
 - **统计卡分色**：原型 3 卡有不同 tint（薄荷/黄浅底）；本步统一贴 `vetSurface` 薄荷浅底（token 化、不造色）。如需逐卡分色（队列薄荷/完成绿/评分黄），P1 精修时再细化。
+
+---
+
+## 兽医待接单卡片（P1 第2屏）—— defer 项
+
+> 来源：spec-vet-queue-cards.md step-04。
+
+- **抢单卡缺宠物 meta（名/种类/年龄/主人）**：原型 vet-queue 卡含「Mochi · Kucing · Betina · 1 thn · @aditya」，但 `VetInboxItem` 仅 sessionId/source/aiDangerLevel/symptomPreview/imageCount/waitingElapsedSeconds，**后端无这些字段契约** → 本步 omit（不造结构化假数据；symptomPreview 里的宠物描述属症状叙述文本、非结构化字段）。补全需：后端 `VetInboxItem` DTO 加 petName/species/sex/ageLabel/ownerHandle + 前端 model + mock，再在卡顶渲染。属跨前后端 contract 扩展。
+- **等待时间无小时进位**：`waitingElapsedSeconds ~/ 60` 仅显分钟（如 3600s→「60 min ago」），原型也只用分钟，V1 可接受；若需 >60min 显小时后续加。
