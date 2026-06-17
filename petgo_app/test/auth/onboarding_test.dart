@@ -13,7 +13,6 @@ import 'package:tailtopia/features/content/data/feed_repository.dart';
 import 'package:tailtopia/features/content/presentation/feed_tab_row.dart';
 import 'package:tailtopia/features/content/presentation/home_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
-import 'package:tailtopia/shared/widgets/pet_status_selector.dart';
 import 'package:tailtopia/shared/widgets/profile_prompt_bar.dart';
 
 import '../support/fake_feed_repository.dart';
@@ -228,7 +227,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    expect(find.byType(PetStatusSelector), findsOneWidget);
+    expect(find.byKey(const ValueKey('petStatus_HAS_PET')), findsOneWidget);
     FilledButton btn() => tester.widget<FilledButton>(find.byKey(const ValueKey('petStatusComplete')));
     expect(btn().onPressed, isNull); // 未选禁用
 

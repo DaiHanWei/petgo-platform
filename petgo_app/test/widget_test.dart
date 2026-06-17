@@ -13,15 +13,15 @@ Future<void> _pumpApp(WidgetTester tester) async {
 }
 
 void main() {
-  // AC1 — 全局底色恒为米白画布（2026-06-04 全面换肤：#FAF8F5 → #FBF8F1 cream）。
-  testWidgets('AC1: scaffold background is constant cream #FBF8F1', (tester) async {
+  // AC1 — 全局底色恒为画布色（2026-06-17 还原原型：cream → 纯白 #FFFFFF，原型 QA 画布纯白无紫调）。
+  testWidgets('AC1: scaffold background is constant canvas white #FFFFFF', (tester) async {
     await _pumpApp(tester);
     // AppShell 的 Scaffold 背景。
     final scaffold = tester.widget<Scaffold>(
       find.descendant(of: find.byType(AppShell), matching: find.byType(Scaffold)).first,
     );
     expect(scaffold.backgroundColor, AppColors.base);
-    expect(AppColors.base, const Color(0xFFFBF8F1));
+    expect(AppColors.base, const Color(0xFFFFFFFF));
   });
 
   // AC2 — 底部 Tab Bar 5 位（4 标签 + 中间凸起「＋」）。

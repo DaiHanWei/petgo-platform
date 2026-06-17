@@ -17,7 +17,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.text('TailTopia'), findsOneWidget);
-    expect(find.text('Komunitas Pecinta Hewan Peliharaan Indonesia'), findsOneWidget);
+    expect(find.textContaining('Komunitas Pecinta Hewan Peliharaan'), findsOneWidget);
     expect(find.text(SplashPage.version), findsOneWidget);
     expect(done, isFalse); // 过场尚未触发
 

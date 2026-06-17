@@ -48,6 +48,7 @@ class _LoginHardDialogState extends State<LoginHardDialog> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return AlertDialog(
+      scrollable: true, // Poppins 行高下小视口防 content 溢出
       backgroundColor: AppColors.surface,
       title: Text(l10n.appTitle, style: AppTypography.title),
       content: Column(
