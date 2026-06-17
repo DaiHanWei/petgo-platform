@@ -11,11 +11,13 @@ import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/domain/auth_state.dart';
 import '../data/vet_repository.dart';
+import '../domain/vet_online_status.dart';
 
 /// 「我的」Tab（Story 5.2 F2）：兽医信息 + 在线/离线开关 + 登出。
 ///
-/// 在线/离线切换写 `PUT /vet/online-status`（乐观更新 + 失败回滚）；在线时定时心跳续期 TTL，
-/// App 退后台/登出停止心跳 → TTL 兜底离线（防幽灵在线）。
+/// 在线态用共享 [vetOnlineStatusProvider]（与工作台首页顶栏同源，切换走
+/// `PUT /vet/online-status` 乐观更新 + 失败回滚 + IM 联动）；本页持有心跳与前后台生命周期：
+/// 在线时定时心跳续期 TTL，App 退后台/登出停止心跳 → TTL 兜底离线（防幽灵在线）。
 class VetMePage extends ConsumerStatefulWidget {
   const VetMePage({super.key});
 
@@ -27,7 +29,6 @@ class _VetMePageState extends ConsumerState<VetMePage> with WidgetsBindingObserv
   /// 心跳间隔（< 后端 TTL=3min，留掉线宽限）。
   static const Duration _heartbeatInterval = Duration(seconds: 60);
 
-  bool _online = false;
   bool _loading = true;
   bool _updating = false;
   String _displayName = '';
@@ -37,7 +38,7 @@ class _VetMePageState extends ConsumerState<VetMePage> with WidgetsBindingObserv
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _load();
+    _loadName();
   }
 
   @override
@@ -51,23 +52,20 @@ class _VetMePageState extends ConsumerState<VetMePage> with WidgetsBindingObserv
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // 退后台停止心跳（TTL 兜底离线）；回前台且在线则恢复。
     if (state == AppLifecycleState.resumed) {
-      if (_online) _startHeartbeat();
+      if (ref.read(vetOnlineStatusProvider)) _startHeartbeat();
     } else {
       _stopHeartbeat();
     }
   }
 
-  Future<void> _load() async {
-    final repo = ref.read(vetRepositoryProvider);
+  Future<void> _loadName() async {
     try {
-      final results = await Future.wait([repo.me(), repo.readOnlineStatus()]);
+      final me = await ref.read(vetRepositoryProvider).me();
       if (!mounted) return;
       setState(() {
-        _displayName = (results[0] as dynamic).displayName as String;
-        _online = results[1] as bool;
+        _displayName = me.displayName;
         _loading = false;
       });
-      if (_online) _startHeartbeat();
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
@@ -76,25 +74,11 @@ class _VetMePageState extends ConsumerState<VetMePage> with WidgetsBindingObserv
   Future<void> _toggle(bool next) async {
     if (_updating) return;
     final l10n = AppLocalizations.of(context);
-    setState(() {
-      _online = next; // 乐观更新
-      _updating = true;
-    });
+    setState(() => _updating = true);
     try {
-      final authoritative = await ref.read(vetRepositoryProvider).setOnline(next);
-      if (!mounted) return;
-      setState(() => _online = authoritative);
-      if (authoritative) {
-        _startHeartbeat();
-        // Story 5.5 live 增量：兽医上线即登录 IM（按需登录控 MAU——兽医上线就 login）。失败不阻塞在线态。
-        ref.read(imServiceProvider).loginIfNeeded().catchError((_) {});
-      } else {
-        _stopHeartbeat();
-        ref.read(imServiceProvider).logout();
-      }
+      await ref.read(vetOnlineStatusProvider.notifier).toggle(next);
     } catch (_) {
       if (!mounted) return;
-      setState(() => _online = !next); // 失败回滚
       ScaffoldMessenger.of(context)
         ..clearSnackBars()
         ..showSnackBar(SnackBar(content: Text(l10n.vetStatusUpdateFailed)));
@@ -127,6 +111,15 @@ class _VetMePageState extends ConsumerState<VetMePage> with WidgetsBindingObserv
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    // 在线态变化 → 心跳跟随（无论从本页还是工作台顶栏切换）。
+    ref.listen<bool>(vetOnlineStatusProvider, (prev, next) {
+      if (next) {
+        _startHeartbeat();
+      } else {
+        _stopHeartbeat();
+      }
+    });
+    final online = ref.watch(vetOnlineStatusProvider);
     return Scaffold(
       appBar: AppBar(title: Text(l10n.vetTabMe)),
       body: _loading
@@ -152,9 +145,9 @@ class _VetMePageState extends ConsumerState<VetMePage> with WidgetsBindingObserv
                             Text(l10n.vetOnlineTitle, style: AppTypography.title),
                             const SizedBox(height: 2),
                             Text(
-                              _online ? l10n.vetOnlineLabel : l10n.vetOfflineLabel,
+                              online ? l10n.vetOnlineLabel : l10n.vetOfflineLabel,
                               style: AppTypography.caption.copyWith(
-                                color: _online ? AppColors.vetPrimary : AppColors.textTertiary,
+                                color: online ? AppColors.vetPrimary : AppColors.textTertiary,
                               ),
                             ),
                           ],
@@ -162,7 +155,8 @@ class _VetMePageState extends ConsumerState<VetMePage> with WidgetsBindingObserv
                       ),
                       Switch(
                         key: const ValueKey('vetOnlineSwitch'),
-                        value: _online,
+                        value: online,
+                        activeThumbColor: AppColors.vetPrimary,
                         onChanged: _updating ? null : _toggle,
                       ),
                     ],

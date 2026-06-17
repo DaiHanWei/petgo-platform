@@ -46,3 +46,13 @@
 - **vet 主题化组件 M3 色调偏差**：`AppTheme.vet` 仅以 `vetPrimary #5BCBBB` 种子化，M3 由种子推导 `colorScheme.primary/onPrimary`（紫… 实为薄荷的色调变体），与手绘 `backgroundColor: vetPrimary` 的按钮（如 vet_login）可能有细微色调/对比差。属 seed-based 主题固有行为；P1 逐屏精调 vet 组件时统一（或在 `vet` 主题显式 `copyWith(primary: vetPrimary, onPrimary: vetOnAccent)`）。
 - **vet SnackBar 主题逃逸**：vet 屏 SnackBar 走 app 级 `ScaffoldMessenger`（在 `_vetScoped` 主题子树之上），解析到用户侧紫主题。当前 vet SnackBar 均为纯文本无强调色 → **无可见色差**，故 defer。若 P1 给 SnackBar 加薄荷强调/Action，需在 vet 子树内置独立 `ScaffoldMessenger` 或逐处包 `Theme`。
 - **vet 预留 token 未接线**：`vetPrimaryDeep / vetSurface / vetSurface2 / vetTopBar / vetToolbar / vetOnAccent` 本步仅落 token，待 P1「兽医端深色顶栏 #2B2540 + 统计卡/队列卡/对话工具栏」结构性逐屏还原时接线（审计 P1 项）。
+
+---
+
+## 兽医工作台首页 dashboard（P1 第1屏）—— 审查 defer 项
+
+> 来源：spec-vet-dashboard-home.md step-04 三方审查。非本单元缺陷/预存问题，留后续。
+
+- **「完成」统计卡依赖未实现端点**：`done` 取 `vetRepository.history()` 长度；但 `/vet/consult-sessions/history`（及 `/in-progress`）**真后端 `VetConsultController` 未实现，仅 mock 应答**。真后端（`PETGO_MOCK=false`）下 history() → 404 → 优雅降级显示「—」（不崩）。同时 Active/History 两 tab 真后端也非功能态。属预存后端契约缺口（见 `backend-remaining.md` 范畴），需后端补 `/history`、`/in-progress` 端点；若要「今日完成」语义还需 server 端按当日过滤（当前 history 为全量）。
+- **`waitingList` 加载失败被当空态**：dashboard `FutureBuilder` 用 `snapshot.data ?? []`，网络错误（401/500/断网）与「队列为空」展示相同的「No incoming requests」，无 error 分支/重试。**非本次回归**（旧 VetInboxPage 同款行为）。留「兽医端错误态专项」补 `snapshot.hasError` 分支 + 重试。
+- **统计卡分色**：原型 3 卡有不同 tint（薄荷/黄浅底）；本步统一贴 `vetSurface` 薄荷浅底（token 化、不造色）。如需逐卡分色（队列薄荷/完成绿/评分黄），P1 精修时再细化。
