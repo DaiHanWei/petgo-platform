@@ -43,6 +43,16 @@ class MockBackend {
     8100: 'AI_UPGRADE', 8101: 'AI_UPGRADE', 8102: 'AI_UPGRADE', 8103: 'DIRECT', // 待接单池
     8001: 'AI_UPGRADE', 8002: 'DIRECT', // 进行中
   };
+  /// 会话宠物身份样本（Story 5.5 顶栏；Mock 先做满、后端随后补）。未命中 → 取 8101(Oyen) 兜底，
+  /// 保证 dev 深链 /vet/conversation/:id 顶栏也有真身份可看。
+  static const Map<int, Map<String, Object>> _vetSessionPet = {
+    8100: {'petName': 'Benji', 'petSpecies': 'DOG', 'petSex': 'MALE', 'petAgeMonths': 60, 'ownerHandle': 'bagas'},
+    8101: {'petName': 'Oyen', 'petSpecies': 'CAT', 'petSex': 'MALE', 'petAgeMonths': 24, 'ownerHandle': 'rani'},
+    8102: {'petName': 'Bruno', 'petSpecies': 'DOG', 'petSex': 'MALE', 'petAgeMonths': 36, 'ownerHandle': 'dimas'},
+    8103: {'petName': 'Mochi', 'petSpecies': 'CAT', 'petSex': 'FEMALE', 'petAgeMonths': 8, 'ownerHandle': 'aditya'},
+    8001: {'petName': 'Oyen', 'petSpecies': 'CAT', 'petSex': 'MALE', 'petAgeMonths': 24, 'ownerHandle': 'rani'},
+    8002: {'petName': 'Milo', 'petSpecies': 'DOG', 'petSex': 'MALE', 'petAgeMonths': 18, 'ownerHandle': 'putri'},
+  };
   /// 待接单池：未接单前 GET 返回 WAITING（让请求预览页不被「已被抢」误判弹出）。
   static const Set<int> _vetWaitingPool = {8100, 8101, 8102, 8103};
   final Set<int> _vetAccepted = {}; // 已接单的 session id（接单后转 IN_PROGRESS）
@@ -682,9 +692,11 @@ class MockBackend {
   /// 兽医侧会话视图 JSON（source/hasAiContext 按 demo 元数据映射；DIRECT 无 AI 上下文卡）。
   Map<String, dynamic> _vetSessionView(int id, String status) {
     final source = _vetSessionSource[id] ?? 'DIRECT';
+    final pet = _vetSessionPet[id] ?? _vetSessionPet[8101]!; // 未命中取 Oyen 兜底（dev 深链）
     return {
       'id': id, 'status': status, 'source': source, 'userId': 1,
       'imConversationId': 'mock-im-$id', 'hasAiContext': source == 'AI_UPGRADE',
+      ...pet,
     };
   }
 

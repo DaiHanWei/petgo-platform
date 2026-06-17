@@ -16,12 +16,16 @@ import '../../../shared/widgets/design/striped_photo.dart';
 /// [imConversationId] 用于真实 C2C 收发，绑定腾讯 IM Flutter SDK 后此面用 [ImService.onMessages]/`sendText`
 /// 替换本地回声，视觉保留。mock / 测试下保持本地演示气泡（不触真实 SDK）。
 class ImChatPlaceholder extends StatefulWidget {
-  const ImChatPlaceholder({super.key, this.imConversationId, this.peerId});
+  const ImChatPlaceholder({super.key, this.imConversationId, this.peerId, this.accent = AppColors.mint});
 
   final String? imConversationId;
 
   /// 对端 IM 账号（用户侧 `v_<vetId>` / 兽医侧 `u_<userId>`）。真机 C2C 收发用（L2）。
   final String? peerId;
+
+  /// 己方气泡 + 发送钮品牌主色：用户侧紫 `AppColors.mint`(#845EC9 默认) / 兽医侧薄荷 `vetPrimary`(#5BCBBB)。
+  /// 直接取品牌 token（非 M3 colorScheme.primary，避免色调偏移失真）。
+  final Color accent;
 
   @override
   State<ImChatPlaceholder> createState() => _ImChatPlaceholderState();
@@ -123,12 +127,12 @@ class _ImChatPlaceholderState extends State<ImChatPlaceholder> {
               controller: _scroll,
               padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
               children: [
-                for (final m in _msgs) _Bubble(msg: m),
-                if (_typing) const _Bubble(msg: _ChatMsg.vet('...'), typing: true),
+                for (final m in _msgs) _Bubble(msg: m, accent: widget.accent),
+                if (_typing) _Bubble(msg: const _ChatMsg.vet('...'), typing: true, accent: widget.accent),
               ],
             ),
           ),
-          _InputBar(controller: _input, onSend: _send),
+          _InputBar(controller: _input, onSend: _send, accent: widget.accent),
         ],
       ),
     );
@@ -136,10 +140,11 @@ class _ImChatPlaceholderState extends State<ImChatPlaceholder> {
 }
 
 class _Bubble extends StatelessWidget {
-  const _Bubble({required this.msg, this.typing = false});
+  const _Bubble({required this.msg, this.typing = false, required this.accent});
 
   final _ChatMsg msg;
   final bool typing;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) {
@@ -173,7 +178,7 @@ class _Bubble extends StatelessWidget {
             ? const EdgeInsets.symmetric(horizontal: 16, vertical: 12)
             : const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: me ? AppColors.mint : AppColors.card,
+          color: me ? accent : AppColors.card,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(18),
             topRight: const Radius.circular(18),
@@ -247,10 +252,11 @@ class _TypingDotsState extends State<_TypingDots> with SingleTickerProviderState
 }
 
 class _InputBar extends StatelessWidget {
-  const _InputBar({required this.controller, required this.onSend});
+  const _InputBar({required this.controller, required this.onSend, required this.accent});
 
   final TextEditingController controller;
   final VoidCallback onSend;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) {
@@ -296,7 +302,7 @@ class _InputBar extends StatelessWidget {
             child: Container(
               width: 44,
               height: 44,
-              decoration: const BoxDecoration(color: AppColors.mint, shape: BoxShape.circle),
+              decoration: BoxDecoration(color: accent, shape: BoxShape.circle), // 用户侧紫 / 兽医侧薄荷
               child: const Icon(Icons.send_rounded, size: 21, color: Colors.white),
             ),
           ),
