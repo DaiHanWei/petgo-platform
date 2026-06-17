@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
+import 'mock_config.dart';
+
 /// 内存假后端（Mock 模式核心）。
 ///
 /// 单例,随 APP 进程生命周期存活 → **重启即重置回初始种子**(创建项消失,符合需求)。
@@ -350,6 +352,9 @@ class MockBackend {
           .toList()));
     }
     if (m == 'GET' && p.endsWith('/content-posts')) {
+      // DEV_STATE：feed 空态 / 失败态（截 feed-empty / feed-error 用）。
+      if (kDevState == 'feed-empty') return ok(_envelope(const []));
+      if (kDevState == 'feed-error') throw _devError(o);
       final cat = (q['category'] ?? 'ALL') as String;
       final items = cat == 'ALL' ? _feed : _feed.where((e) => e['type'] == cat).toList();
       // 投影为卡片 10 字段契约：内部 imageUrls（详情多图）不进 Feed 信封。
@@ -441,7 +446,10 @@ class MockBackend {
     }
 
     // ---------- PET PROFILE / TIMELINE / HEALTH ----------
-    if (p.endsWith('/pet-profiles/me/timeline') && m == 'GET') return ok(_envelope(_timeline));
+    if (p.endsWith('/pet-profiles/me/timeline') && m == 'GET') {
+      if (kDevState == 'timeline-empty') return ok(_envelope(const []));
+      return ok(_envelope(_timeline));
+    }
     // 里程碑列表/进度（Story 8.2 · FR-42，后端 MilestoneListResponse 镜像）。
     if (p.endsWith('/pet-profiles/me/milestones') && m == 'GET') {
       if (_petProfile == null) throw _notFound(o);
@@ -535,7 +543,14 @@ class MockBackend {
     // ---------- AI 分诊 ----------
     if (p.endsWith('/triage') && m == 'POST') {
       final id = _nextId();
-      _triageLevel[id] = _triageCycle[_triageSeq++ % _triageCycle.length]; // 轮流绿/黄/红
+      // DEV_STATE=triage-red/yellow/green：强制本次分诊等级（截 ai-result-* 用）；否则轮流绿/黄/红。
+      final forced = switch (kDevState) {
+        'triage-red' => 'RED',
+        'triage-yellow' => 'YELLOW',
+        'triage-green' => 'GREEN',
+        _ => null,
+      };
+      _triageLevel[id] = forced ?? _triageCycle[_triageSeq++ % _triageCycle.length];
       return Response(requestOptions: o, statusCode: 202, data: {'triageId': id});
     }
     final triageGet = RegExp(r'/triage/(\d+)$').firstMatch(p);
@@ -556,7 +571,14 @@ class MockBackend {
     if (p.endsWith('/consult-sessions/active') && m == 'GET') {
       return _activeSession == null ? noContent() : ok(_activeSession);
     }
-    if (p.endsWith('/consult-sessions/pending-rating') && m == 'GET') return noContent();
+    if (p.endsWith('/consult-sessions/pending-rating') && m == 'GET') {
+      // DEV_STATE=rate：返回一条待补弹评分的已关闭会话（截 rate 弹窗用）。
+      if (kDevState == 'rate') {
+        return ok({'id': 9001, 'status': 'CLOSED', 'source': 'DIRECT', 'vetDisplayName': 'drh. Sari',
+          'waitingElapsedSeconds': 0, 'timedOut': false, 'alreadyActive': false});
+      }
+      return noContent();
+    }
     if (p.endsWith('/consult-sessions') && m == 'POST') {
       _activeSession = {'id': _nextId(), 'status': 'WAITING', 'source': body['source'] ?? 'DIRECT',
         'vetId': null, 'waitingElapsedSeconds': 0, 'timedOut': false, 'alreadyActive': false,
@@ -566,6 +588,11 @@ class MockBackend {
     // 用户侧 consult-sessions/{id}:用 !/vet/ 守卫,避免误吞兽医侧 /vet/consult-sessions/{id}。
     final sessGet = RegExp(r'/consult-sessions/(\d+)$').firstMatch(p);
     if (sessGet != null && m == 'GET' && !p.contains('/vet/')) {
+      // DEV_STATE=consult-waiting：恒返回 WAITING，让 match-wait 等待页停住可截（默认会秒转 IN_PROGRESS）。
+      if (kDevState == 'consult-waiting') {
+        return ok({'id': int.parse(sessGet.group(1)!), 'status': 'WAITING', 'source': 'DIRECT',
+          'vetId': null, 'waitingElapsedSeconds': 23, 'timedOut': false, 'alreadyActive': false});
+      }
       return ok(_activeSession ?? {'id': int.parse(sessGet.group(1)!), 'status': 'IN_PROGRESS', 'source': 'DIRECT',
         'waitingElapsedSeconds': 0, 'timedOut': false, 'alreadyActive': false});
     }
@@ -664,7 +691,10 @@ class MockBackend {
     if (RegExp(r'/vet/consult-sessions/(\d+)/notify-reply$').hasMatch(p)) return ok();
 
     // ---------- 通知 / 版本 / 媒体 ----------
-    if (p.endsWith('/notifications') && m == 'GET') return ok(_envelope(_notifications));
+    if (p.endsWith('/notifications') && m == 'GET') {
+      if (kDevState == 'notif-empty') return ok(_envelope(const []));
+      return ok(_envelope(_notifications));
+    }
     if (p.endsWith('/notifications/unread-count') && m == 'GET') {
       return ok({'count': _notifications.where((e) => e['read'] == false).length});
     }
@@ -741,6 +771,13 @@ class MockBackend {
   DioException _notFound(RequestOptions o) => DioException(
         requestOptions: o,
         response: Response(requestOptions: o, statusCode: 404),
+        type: DioExceptionType.badResponse,
+      );
+
+  /// DEV_STATE 失败态：抛 500，让页面进失败/重试分支（截 feed-error / network-error 用）。
+  DioException _devError(RequestOptions o) => DioException(
+        requestOptions: o,
+        response: Response(requestOptions: o, statusCode: 500),
         type: DioExceptionType.badResponse,
       );
 

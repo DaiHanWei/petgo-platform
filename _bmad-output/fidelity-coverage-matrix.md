@@ -112,7 +112,28 @@
 - **弹窗/状态屏（最难，约 20 屏）**：login-gate/rate/milestone-sheet/milestone-unlock/archive-confirm/vet-status-popup（弹窗）、feed-empty/feed-error/timeline-empty/notif-empty（空/错态，需控 mock）、publish-reviewing/done/rejected（发布后态）、ai-result*/match-wait/chat（需流程态）、pet-success（建档完成）。这些要靠 **mock 状态注入 / dev 入口扩展** 才能稳定截到。
 - **疑似未实现/待核实**：badge-gallery、delete-account（整页?）、notif-gate、network-error、final-diagnosis、若干 sheet —— 打分前逐个 `grep` 确认；未实现的直接进「待实现」而非「待重做」。
 
-## 下一步（阶段 B/C 前置）
-1. **扩展 dev 可达手段**（关键基建）：给 router/shell 加 `DEV_TAB`、给 mock 加 `DEV_STATE`（empty/error/red/waiting…）开关，把「弹窗/状态屏」变成可直达——否则覆盖率卡在 ~40%。
-2. 批量产出 `reference/*.png`（52 张，一条命令循环）。
-3. 逐屏 rubric + 独立 reviewer（串行 or 并行待定）。
+## Dev 可达性手段（已就绪）
+
+直达任意屏的 dart-define 组合（debug + mock 下生效，release/test 恒空）：
+
+| 手段 | 用法 | 解锁 |
+|---|---|---|
+| `DEV_ROUTE=/x` | 启动落该路由 | 所有有独立路由的屏 |
+| `DEV_USER=true` | 种普通登录态(HAS_PET) | 登录态用户屏 |
+| `DEV_VET=true` | 种兽医登录态 | 兽医端 |
+| `DEV_VET_TAB=0..3` | 兽医工作台落指定 tab（**原已存在**） | vet-dashboard/queue/history/profile |
+| `DEV_STATE=<s>` | mock 强制态（**本次新增**） | 见下 |
+
+`DEV_STATE` 已支持：`feed-empty` `feed-error` `timeline-empty` `notif-empty` `consult-waiting`(match-wait 停 WAITING) `rate`(补弹评分) `triage-red/yellow/green`(强制分诊等级)。
+样例（match-wait，已验证可截）：
+```
+flutter run -d <dev> --dart-define=DEV_USER=true \
+  --dart-define=DEV_ROUTE=/consult/waiting/1 --dart-define=DEV_STATE=consult-waiting
+```
+
+仍需交互/暂未覆盖（后续按需补 DEV_STATE 或 dev 入口）：ai-result-red/green（需走 upload 提交，DEV_STATE 只定等级）、publish-reviewing/done/rejected、pet-success、各 sheet/popup（milestone-sheet/unlock、vet-status-popup、final-diagnosis、archive-confirm）、notif-gate、badge-gallery/delete-account（疑未实现，待 grep 确认）。
+
+## 下一步（阶段 B/C）
+1. 批量产出 `reference/*.png` ✅（52 张已出，full-content）。
+2. 逐屏截 App actual（用上表手段，完整内容）→ rubric + 独立 reviewer 打分。串行 or 并行待定。
+3. 仍不可达的屏：补对应 DEV_STATE / dev 入口，或人工交互截图。

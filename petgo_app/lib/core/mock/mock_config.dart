@@ -19,3 +19,13 @@ bool _isFlutterTest() {
 final bool kMockMode = kDebugMode &&
     !_isFlutterTest() &&
     const bool.fromEnvironment('PETGO_MOCK', defaultValue: true);
+
+/// Debug-only 视觉验收用「强制状态」开关：`--dart-define=DEV_STATE=<state>` 让 mock 返回特定态，
+/// 把弹窗/空态/错误态/分诊红黄绿/等待态等否则不可达的屏变成可直达截图。
+///
+/// 支持值：`feed-empty` `feed-error` `timeline-empty` `notif-empty`
+/// `consult-waiting`（match-wait 停在 WAITING）`rate`（补弹评分）
+/// `triage-red` `triage-yellow` `triage-green`（强制分诊结果等级）。
+/// release/test 恒空（不影响生产与单测）。
+const String _devStateRaw = String.fromEnvironment('DEV_STATE');
+final String kDevState = kDebugMode && !_isFlutterTest() ? _devStateRaw : '';
