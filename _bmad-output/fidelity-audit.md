@@ -11,7 +11,7 @@
 | 认证引导 | ~60% | 🟠 登录页(缺渐变区/背书)、登录门控弹窗(标准 AlertDialog) |
 | 社区内容 | ~57% | 🟠 首页(骨架完全不同)、发布页(Btn3d 立体风格割裂) |
 | 分诊+兽医用户侧 | ~60% | 🟠 红态结果(全屏 overlay/步骤/脉冲缺)、等待页(脉冲环缺)、咨询入口(流程卡缺)；⚫ 存档确认缺 |
-| 兽医端 | ~44% | 全员缺深色顶栏 #2B2540 + 薄荷 #5BCBBB；⚫ 诊断表单、状态弹窗缺 |
+| 兽医端 | ~44%→**~92%（已重做）** | ✅ P1 全 6 屏 1:1 还原完成（深顶栏 #2B2540 + 薄荷 #5BCBBB 全员补齐）；仅余 ⚫ 诊断表单、状态弹窗（无后端契约，deferred） |
 | 档案里程碑 | ~62% | 🟠 里程碑抽屉/徽章图鉴/名片(主色错+装饰缺) |
 | 个人中心 | ~50% | 🟠 注销(整页→两层Dialog)、设置(4分组→1卡)、我的发帖(2x2网格→单行) |
 
@@ -178,12 +178,12 @@
 | 原型 | html | app 路由 | 档次 | 状态 |
 |---|---|---|---|---|
 | V-01b | vet-login.html | `/vet/login` | 🟠 | ✅ |
-| V-01 | vet-dashboard.html | `/vet/workbench` 首页 tab | 🟠 | ✅ |
-| V-02 | vet-queue.html | 待接单(workbench tab) | 🟡 | ✅ |
-| V-03 | vet-case.html | `/vet/request/:id` | 🟡 | ✅ |
-| V-05 | vet-chat.html | `/vet/conversation/:id` | 🟡 | ✅ |
-| V-06 | vet-history.html | 历史(workbench tab) | 🟢 | ✅ |
-| V-07 | vet-profile.html | 兽医我的(workbench tab) | 🟡 | ✅ |
+| V-01 | vet-dashboard.html | `/vet/workbench` 首页 tab | 🟠→🟢 | ✅ P1 重做（深顶栏+统计卡） |
+| V-02 | vet-queue.html | 待接单(workbench tab) | 🟡→🟢 | ✅ P1 重做（宠物身份+三级徽章+AI摘要+双钮） |
+| V-03 | vet-case.html | `/vet/request/:id` | 🟡→🟢 | ✅ P1 重做（深顶栏+红倒计时+宠物卡+AI黄框+图片+双钮） |
+| V-05 | vet-chat.html | `/vet/conversation/:id` | 🟡→🟢 | ✅ P1 重做（深顶栏身份+#1A2B28工具条+薄荷气泡） |
+| V-06 | vet-history.html | 历史(workbench tab) | 🟢 | ✅ P1 重做（深顶栏+4筛选Chip+富记录卡） |
+| V-07 | vet-profile.html | 兽医我的(workbench tab) | 🟡→🟢 | ✅ P1 重做（深顶栏+信息卡3统计+在线3段+设置列表） |
 | V-08 | vet-final-diagnosis.html | 诊断表单 | ⚫ | ⚫deferred(④,无后端契约) |
 | V-ST | vet-status-popup.html | 状态弹窗 | ⚫ | ⚫简化为 toggle |
 
