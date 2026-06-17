@@ -150,11 +150,17 @@ class HealthEventTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    // 原型 hentry 红体系：红浅底 #FDE7EB + 深红文字 #C4263C + 实心红等级徽章 #F0425A。
     return _TimelineRow(
       key: const ValueKey('healthEventTile'),
       markerEmoji: '🩺',
-      markerBg: AppColors.skyTint,
-      card: _cardShell(
+      markerBg: AppColors.coralTint,
+      card: Container(
+        decoration: BoxDecoration(
+          color: AppColors.coralTint,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        clipBehavior: Clip.antiAlias,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 11, 14, 13),
           child: Column(
@@ -163,10 +169,12 @@ class HealthEventTile extends StatelessWidget {
               Row(
                 children: [
                   Text(_dateLabel(item.date),
-                      style: const TextStyle(
-                          fontSize: 11.5, color: AppColors.muted, fontWeight: FontWeight.w700)),
+                      style: TextStyle(
+                          fontSize: 11.5,
+                          color: AppColors.healthEventText.withValues(alpha: 0.8),
+                          fontWeight: FontWeight.w700)),
                   const SizedBox(width: 8),
-                  _badge(l10n.healthEventLabel, AppColors.sky, AppColors.skyTint),
+                  _badge(l10n.healthEventLabel, AppColors.onAccent, AppColors.triageRed),
                   if (item.aiLevel != null) ...[
                     const SizedBox(width: 6),
                     _LevelChip(level: item.aiLevel!),
@@ -181,7 +189,8 @@ class HealthEventTile extends StatelessWidget {
               if (item.symptomSummary != null && item.symptomSummary!.isNotEmpty) ...[
                 const SizedBox(height: 5),
                 Text(item.symptomSummary!,
-                    style: const TextStyle(fontSize: 14, color: AppColors.ink2, height: 1.5)),
+                    style: const TextStyle(
+                        fontSize: 14, color: AppColors.healthEventText, height: 1.5)),
               ],
             ],
           ),

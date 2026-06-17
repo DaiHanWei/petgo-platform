@@ -42,6 +42,7 @@ class AppColors {
   static const Color sky = Color(0xFF845EC9); // 问诊强调 → 统一紫
   static const Color grape = Color(0xFF9E83DA); // 群聊 → violet-400
   static const Color coralTint = Color(0xFFFDE7EB); // 红浅底
+  static const Color healthEventText = Color(0xFFC4263C); // 健康事件深红文字（原型 hentry #C4263C）
   static const Color goldTint = Color(0xFFFEF3DE); // 黄浅底（badge tips）
   static const Color skyTint = Color(0xFFF8F6FF); // → violet-50 浅底
   static const Color grapeTint = Color(0xFFF8F2FF);
