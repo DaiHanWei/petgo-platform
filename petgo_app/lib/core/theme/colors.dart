@@ -46,6 +46,9 @@ class AppColors {
   static const Color coralTint = Color(0xFFFDE7EB); // 红浅底
   static const Color healthEventText = Color(0xFFC4263C); // 健康事件深红文字（原型 hentry #C4263C）
   static const Color goldTint = Color(0xFFFEF3DE); // 黄浅底（badge tips）
+  static const Color momenBadgeBg = Color(0xFFE7F8F0); // Momen 绿浅底（原型 b-happy）
+  static const Color momenBadgeText = Color(0xFF0E7A4D); // Momen 绿文字
+  static const Color tipsBadgeText = Color(0xFF8A5A00); // Tips 黄文字（原型 b-tips）
   static const Color skyTint = Color(0xFFF8F6FF); // → violet-50 浅底
   static const Color grapeTint = Color(0xFFF8F2FF);
 
