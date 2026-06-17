@@ -165,7 +165,17 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // 抢单请求详情/预览页（Story 5.2 AC5 · F11）：3 分钟预览计时 + 三态返回。
       GoRoute(
         path: '/vet/request/:id',
-        builder: (c, s) => _vetScoped(VetRequestDetailPage(item: s.extra! as VetInboxItem)),
+        // 正常流程从列表带入 extra(VetInboxItem)；extra 为空时（dev 深链 DEV_ROUTE）按 path id
+        // 合成最小项——详情页仅用 sessionId，其余靠 repo 拉取。
+        builder: (c, s) => _vetScoped(VetRequestDetailPage(
+          item: s.extra as VetInboxItem? ??
+              VetInboxItem(
+                sessionId: int.parse(s.pathParameters['id']!),
+                source: 'AI_UPGRADE',
+                imageCount: 0,
+                waitingElapsedSeconds: 0,
+              ),
+        )),
       ),
       // 通知中心（Story 6.6）+ 6.1 深链兜底落点。受控路由（需登录）。
       GoRoute(path: '/notifications', builder: (c, s) => const NotificationCenterPage()),
