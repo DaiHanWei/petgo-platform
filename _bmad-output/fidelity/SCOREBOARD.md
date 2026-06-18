@@ -58,3 +58,30 @@ ai-result/ai-result-green/ai-result-red、publish-reviewing/done/rejected、pet-
 3. **C 类 12 屏排打磨**：补区块 + 清语言残留（部分仍有硬编码英文）。
 4. 每屏做完按验收标准（真值图 vs 完整 actual + 独立 reviewer ≥95% 且 FAIL 清零）才算过。
 5. 剩 ~18 屏补可达手段后纳入。
+
+---
+
+## 进度日志 · 2026-06-18（第一批：A 类 + B 类前 6 屏）
+
+> 全量 `flutter analyze` 干净 + `flutter test` 321 全绿；逐屏 actual 已更新（actual/ + actual_small/）。
+> ⚠️ 这些是「实现完成 + 模拟器目检高度吻合」状态，**尚未跑独立 reviewer 重新打分**——下一步对这 7 屏重判确认达标。
+
+### A 类（bug）— 1/1 ✅
+- **detail**：根因＝capture 用了不存在的帖 `/content/1`（mock 种子帖 id=100–106）→ 永远 404 gone 态。详情页代码本身健全。修：capture.sh 改 `/content/100`。
+
+### B 类重做 — 6 屏（本批）
+| 屏 | 改动 | 备注 |
+|---|---|---|
+| paspor | 整页重做：横向护照卡+三列统计、msbar、Timeline/Kalender 药丸、按月分组紧凑时间线、健康事件粉底行 | 改 growth_archive_page + pet_info_card + timeline_tiles；测试同步更新 |
+| vet-case | 页面本已忠实原型，根因＝capture 用非 waiting-pool 的 id `/vet/request/1`（5s 轮询判「已被抢」弹回队列）。修：capture 改 `8101` + 路由 synth 身份对齐原型 |
+| vet-queue | 共享队列卡 `_InboxCard` 升级到 vet-queue.html（顶部色条/徽章/RINGKASAN AI·PERHATIAN SEGERA 框/照片 chip/RED 单红钮）。capture 改 tab=0（app 真队列），同时提升 vet-dashboard |
+| settings | 整页重做：四分组（AKUN/TAMPILAN/PRIVASI/ZONA BAHAYA）+ 开关 + 红字危险区 + 版本脚注。保留 7.3 退出/注销逻辑与 keys |
+| namecard | 整页重做：深色档案卡（#141019+紫辉光+pop-art）+ hero+成就徽章条+5格快乐时刻+双CTA。原浅色 web 卡弃用 |
+| login | 整页重做：紫渐变品牌头（光晕+pop-art+logo+欢迎语）+ Google 钮+自动建号提示+三数字背书+兽医入口+条款。保留 FR-0D keys |
+
+### 关键决策
+- **vet workbench 不重建导航架构**：原型本身不一致（dashboard/profile 底部 nav、queue 顶部 tab）。保留 app 已实现的底部 4-tab（标准移动范式、匹配最高分的 dashboard）；真正保真缺口是**队列卡设计**，已升级且为 dashboard+queue 共享。
+- **i18n**：vet 徽章复用既有 l10n key（vetQueueLevel*）+ emoji 前缀，保持双语；paspor/settings/namecard/login 的展示串按 rework 惯例硬编码印尼语（capture 强制 locale=id）。
+
+### 下一批
+- B 类剩 15 屏：vet-case 已顺带验证 → 继续 onboard/pet-create/feed/notif/create/ai-upload/paspor 同源的 timeline-empty/feed-empty/chat/rate/feed-guest/vet-login/pet-edit/feed-error。

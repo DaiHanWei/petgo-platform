@@ -93,6 +93,7 @@ void main() {
     await tester.pumpWidget(_wrap(auth: _authA(), profile: profile, page: page));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('healthEventTile')), findsOneWidget);
-    expect(find.text('YELLOW'), findsOneWidget);
+    // paspor.html 重做：等级徽章用印尼语 emoji 标签（🟡 Kuning），不再裸露 enum 值。
+    expect(find.text('🟡 Kuning'), findsOneWidget);
   });
 }

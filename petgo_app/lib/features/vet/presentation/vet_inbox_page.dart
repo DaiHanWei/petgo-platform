@@ -213,22 +213,6 @@ class _InboxCard extends StatelessWidget {
     }
   }
 
-  String _levelLabel(AppLocalizations l10n) {
-    switch (item.aiDangerLevel) {
-      case 'RED':
-        return l10n.vetQueueLevelRed;
-      case 'YELLOW':
-        return l10n.vetQueueLevelYellow;
-      default:
-        return l10n.vetQueueLevelGreen;
-    }
-  }
-
-  String _waitingLabel(AppLocalizations l10n) {
-    final s = item.waitingElapsedSeconds;
-    return s < 60 ? l10n.vetQueueWaitingJustNow : l10n.vetQueueWaitingMinutes(s ~/ 60);
-  }
-
   String _speciesEmoji() {
     switch (item.petSpecies) {
       case 'CAT':
@@ -261,167 +245,267 @@ class _InboxCard extends StatelessWidget {
     return parts.join(' · ');
   }
 
-  /// AI 摘要框底色（按等级 tint）：黄→琥珀、红→珊瑚浅红、绿→薄荷派生。
-  Color _aiBoxBg() {
+  /// 等级徽章配色（文字/底）：黄→琥珀、红→珊瑚、绿/DIRECT→薄荷。
+  (Color, Color) _badgeColors() {
     switch (item.aiDangerLevel) {
       case 'RED':
-        return AppColors.coralTint;
+        return (AppColors.healthEventText, AppColors.coralTint);
       case 'YELLOW':
-        return AppColors.goldTint;
+        return (AppColors.tipsBadgeText, AppColors.goldTint);
       default:
-        return AppColors.triageGreen.withValues(alpha: 0.10);
+        return (AppColors.vetPrimary, AppColors.vetSurface);
     }
+  }
+
+  /// 等级徽章 emoji（前缀，对齐原型 vet-queue.html）；标签走 l10n。
+  String _badgeEmoji() {
+    switch (item.aiDangerLevel) {
+      case 'RED':
+        return '🔴';
+      case 'YELLOW':
+        return '🟡';
+      default:
+        return '🟢';
+    }
+  }
+
+  String _badgeLabel(AppLocalizations l10n) {
+    switch (item.aiDangerLevel) {
+      case 'RED':
+        return l10n.vetQueueLevelRed;
+      case 'YELLOW':
+        return l10n.vetQueueLevelYellow;
+      default:
+        return l10n.vetQueueLevelGreen;
+    }
+  }
+
+  /// 顶部色条颜色（4px）：按等级；DIRECT→薄荷。
+  Color _stripColor() {
+    switch (item.aiDangerLevel) {
+      case 'RED':
+        return AppColors.triageRed;
+      case 'YELLOW':
+        return AppColors.triageYellow;
+      default:
+        return AppColors.vetPrimary;
+    }
+  }
+
+  String _waitingShort() {
+    final s = item.waitingElapsedSeconds;
+    return s < 60 ? 'baru saja' : '${s ~/ 60} mnt lalu';
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final accent = _levelColor();
+    final (badgeFg, badgeBg) = _badgeColors();
     return Container(
       key: ValueKey('vetRequestCard_${item.sessionId}'),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _isRed ? AppColors.triageRed : AppColors.border, width: _isRed ? 1.5 : 1),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(color: AppColors.ink.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, 3)),
+        ],
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (_isRed)
-            Container(
-              width: double.infinity,
-              color: AppColors.triageRed,
-              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: AppSpacing.md),
-              child: Text(
-                l10n.vetQueueUrgentBanner,
-                style: AppTypography.caption.copyWith(color: AppColors.onAccent),
-              ),
-            ),
+          // 顶部 4px 等级色条
+          Container(height: 4, color: _stripColor()),
           Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 宠物身份块（头像 + 名 + meta）；petName==null（真后端未下发）→ 跳过降级
-                if (item.petName != null) ...[
-                  Row(
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          // 非 AI 升级项（DIRECT）无等级 → 中性底，避免误用「绿=Normal」语义
-                          color: (item.isAiUpgrade ? _levelColor() : AppColors.muted).withValues(alpha: 0.12),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Text(_speciesEmoji(), style: const TextStyle(fontSize: 20)),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(item.petName!,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTypography.title.copyWith(color: AppColors.ink)),
-                            if (_metaLine(l10n).isNotEmpty)
-                              Text(_metaLine(l10n),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                ],
-                // 顶行：等级徽章 + 等待时间
+                // 头行：头像+名/meta（左） · 等级徽章+时间（右）
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (item.isAiUpgrade)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: accent.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          _levelLabel(l10n),
-                          style: AppTypography.micro.copyWith(color: accent, fontWeight: FontWeight.w700),
-                        ),
-                      )
-                    else
-                      Text(l10n.vetInboxDirect, style: AppTypography.title),
-                    const Spacer(),
-                    Text(_waitingLabel(l10n), style: AppTypography.micro.copyWith(color: AppColors.textTertiary)),
-                  ],
-                ),
-                // RINGKASAN AI 摘要框（仅 AI 升级项）
-                if (item.isAiUpgrade) ...[
-                  const SizedBox(height: AppSpacing.sm),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(AppSpacing.sm),
-                    decoration: BoxDecoration(
-                      color: _aiBoxBg(),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          l10n.vetQueueAiSummaryTitle,
-                          style: AppTypography.micro.copyWith(color: AppColors.ink2, letterSpacing: 0.5),
-                        ),
-                        if (item.symptomPreview != null) ...[
-                          const SizedBox(height: 4),
-                          Text(item.symptomPreview!, style: AppTypography.body),
-                        ],
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Icon(Icons.photo_outlined, size: 13, color: AppColors.textTertiary),
-                            const SizedBox(width: 4),
-                            Text(
-                              item.imageCount > 0 ? l10n.vetQueuePhotosAttached(item.imageCount) : l10n.vetQueueNoPhoto,
-                              style: AppTypography.caption.copyWith(color: AppColors.textTertiary),
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: (item.isAiUpgrade ? _levelColor() : AppColors.vetPrimary)
+                                  .withValues(alpha: 0.14),
+                              shape: BoxShape.circle,
                             ),
-                          ],
+                            child: Text(_speciesEmoji(), style: const TextStyle(fontSize: 18)),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(item.petName ?? l10n.vetInboxDirect,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: AppTypography.title.copyWith(color: AppColors.ink)),
+                                if (_metaLine(l10n).isNotEmpty)
+                                  Text(_metaLine(l10n),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: AppTypography.caption
+                                          .copyWith(color: AppColors.textSecondary)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: badgeBg,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(_badgeEmoji(), style: AppTypography.micro),
+                              const SizedBox(width: 4),
+                              Text(_badgeLabel(l10n),
+                                  style: AppTypography.micro
+                                      .copyWith(color: badgeFg, fontWeight: FontWeight.w700)),
+                            ],
+                          ),
                         ),
+                        const SizedBox(height: 4),
+                        Text(_waitingShort(),
+                            style: AppTypography.micro.copyWith(color: AppColors.textTertiary)),
                       ],
                     ),
-                  ),
-                ],
-                const SizedBox(height: AppSpacing.sm),
-                // 底行：Lewati / Lihat Detail 双按钮
-                Row(
-                  children: [
-                    TextButton(
-                      key: ValueKey('vetSkip_${item.sessionId}'),
-                      onPressed: onSkip,
-                      child: Text(l10n.vetQueueSkip),
-                    ),
-                    const Spacer(),
-                    FilledButton(
-                      key: ValueKey('vetDetail_${item.sessionId}'),
-                      onPressed: onDetail,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: _isRed ? AppColors.triageRed : AppColors.vetPrimary,
-                        foregroundColor: AppColors.onAccent,
-                      ),
-                      child: Text(l10n.vetQueueViewDetail),
-                    ),
                   ],
                 ),
+                const SizedBox(height: 10),
+                // 摘要：RED→PERHATIAN SEGERA 框 / YELLOW→RINGKASAN AI 框 / 其余→纯文本行
+                _summary(l10n),
+                const SizedBox(height: 12),
+                // CTA：RED→单个红色「Tangani Sekarang」；其余→Lewati + Lihat Detail
+                _isRed
+                    ? SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          key: ValueKey('vetDetail_${item.sessionId}'),
+                          onPressed: onDetail,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.triageRed,
+                            foregroundColor: AppColors.onAccent,
+                            padding: const EdgeInsets.symmetric(vertical: 11),
+                          ),
+                          child: const Text('⚠ Tangani Sekarang'),
+                        ),
+                      )
+                    : Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              key: ValueKey('vetSkip_${item.sessionId}'),
+                              onPressed: onSkip,
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.textSecondary,
+                                side: BorderSide(color: AppColors.border, width: 1.5),
+                                padding: const EdgeInsets.symmetric(vertical: 11),
+                              ),
+                              child: Text(l10n.vetQueueSkip),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            flex: 2,
+                            child: FilledButton(
+                              key: ValueKey('vetDetail_${item.sessionId}'),
+                              onPressed: onDetail,
+                              style: FilledButton.styleFrom(
+                                backgroundColor: AppColors.vetPrimary,
+                                foregroundColor: AppColors.onAccent,
+                                padding: const EdgeInsets.symmetric(vertical: 11),
+                              ),
+                              child: Text(l10n.vetQueueViewDetail),
+                            ),
+                          ),
+                        ],
+                      ),
               ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  /// 摘要区：RED/YELLOW 标签框；GREEN/DIRECT 纯文本行（含照片状态后缀）。
+  Widget _summary(AppLocalizations l10n) {
+    if (_isRed || item.aiDangerLevel == 'YELLOW') {
+      final box = _isRed ? AppColors.coralTint : AppColors.goldTint;
+      final titleColor = _isRed ? AppColors.healthEventText : AppColors.tipsBadgeText;
+      final title = _isRed ? l10n.vetQueueUrgentBanner : l10n.vetQueueAiSummaryTitle;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(color: box, borderRadius: BorderRadius.circular(10)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: AppTypography.caption
+                        .copyWith(color: titleColor, fontWeight: FontWeight.w700)),
+                if (item.symptomPreview != null) ...[
+                  const SizedBox(height: 4),
+                  Text(item.symptomPreview!,
+                      style: AppTypography.body.copyWith(height: 1.5)),
+                ],
+              ],
+            ),
+          ),
+          if (item.imageCount > 0) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Icon(Icons.grid_view_rounded, size: 13, color: AppColors.textTertiary),
+                const SizedBox(width: 6),
+                Text(l10n.vetQueuePhotosAttached(item.imageCount),
+                    style: AppTypography.caption.copyWith(color: AppColors.textTertiary)),
+                const SizedBox(width: 8),
+                for (var i = 0; i < item.imageCount.clamp(0, 3); i++) ...[
+                  if (i > 0) const SizedBox(width: 4),
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: i.isEven ? AppColors.skyTint : AppColors.goldTint,
+                      borderRadius: BorderRadius.circular(7),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(_speciesEmoji(), style: const TextStyle(fontSize: 13)),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ],
+      );
+    }
+    // GREEN / DIRECT：纯文本行 + 照片状态后缀
+    final base = item.symptomPreview ?? l10n.vetRequestNoDetail;
+    final photoSuffix = item.imageCount > 0
+        ? ' · ${l10n.vetQueuePhotosAttached(item.imageCount)}'
+        : ' · ${l10n.vetQueueNoPhoto}';
+    return Text('$base$photoSuffix',
+        style: AppTypography.body.copyWith(color: AppColors.textSecondary, height: 1.5));
   }
 }
