@@ -115,14 +115,32 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
                     hintText: l10n.detailCommentHint,
                     counterText: '',
                     isDense: true,
-                    border: OutlineInputBorder(borderRadius: AppRounded.lgRadius),
+                    filled: true,
+                    fillColor: AppColors.cream2,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    // 原型 pill 输入框：无边框圆角填充。
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(999),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
                 ),
               ),
-              IconButton(
-                key: const ValueKey('detailCommentSend'),
-                onPressed: _sending ? null : () => _send(replyTarget?.parentId),
-                icon: const Icon(Icons.send_rounded, color: AppColors.accentGrowth),
+              const SizedBox(width: AppSpacing.sm),
+              // 紫色实心圆发送钮（detail.html）。
+              Material(
+                color: AppColors.mint,
+                shape: const CircleBorder(),
+                child: InkWell(
+                  key: const ValueKey('detailCommentSend'),
+                  customBorder: const CircleBorder(),
+                  onTap: _sending ? null : () => _send(replyTarget?.parentId),
+                  child: const SizedBox(
+                    width: 42,
+                    height: 42,
+                    child: Icon(Icons.send_rounded, size: 20, color: AppColors.onAccent),
+                  ),
+                ),
               ),
             ],
           ),

@@ -1,208 +1,212 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/colors.dart';
-import '../../../../core/theme/shadows.dart';
-import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/widgets/app_image.dart';
-import '../../../../shared/widgets/design/striped_photo.dart';
 import '../../domain/timeline_item.dart';
 
-String _dateLabel(DateTime d) =>
-    '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+/// 印尼语月份缩写（paspor.html 日期列 "15\nJun"）。
+const List<String> _idMonthAbbr = [
+  '', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
+];
 
-/// 时间线行：左侧标记点（emoji 圆）+ 右侧卡片（TailTopia Prototype 换肤）。
-class _TimelineRow extends StatelessWidget {
-  const _TimelineRow({
-    required this.markerEmoji,
-    required this.markerBg,
-    required this.card,
-    super.key,
-  });
+/// 时间线条目（paspor.html tentry/hentry 1:1 还原）。
+/// 快乐时刻=紧凑横行（日期列+52缩略+标题/副标题）；健康事件=粉底行+等级徽章。
 
-  final String markerEmoji;
-  final Color markerBg;
-  final Widget card;
+/// 快乐时刻条目（tentry）：日期列 + 52px 缩略 + 标题 + "Momen Bahagia · N foto"。
+class HappyMomentTile extends StatelessWidget {
+  const HappyMomentTile({super.key, required this.item, this.firstLabel, this.index = 0});
+
+  final TimelineItem item;
+
+  /// 非空则为第一条快乐时刻（debut），紫色加粗标题 + 🌟（AC5）。
+  final String? firstLabel;
+
+  /// 用于无图时缩略底色轮换（对齐原型 violet/gold/green 交替）。
+  final int index;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: markerBg,
-              shape: BoxShape.circle,
-              boxShadow: const [BoxShadow(color: AppColors.cream, blurRadius: 0, spreadRadius: 3)],
-            ),
-            child: Text(markerEmoji, style: const TextStyle(fontSize: 16)),
-          ),
-          const SizedBox(width: 14),
-          Expanded(child: card),
-        ],
+    final d = item.displayDate;
+    final isFirst = firstLabel != null;
+    final photoN = item.imageUrls.length;
+    final title = isFirst
+        ? '🌟 $firstLabel'
+        : (item.text != null && item.text!.isNotEmpty ? item.text! : 'Momen Bahagia');
+    final sub = isFirst
+        ? 'Foto debut · ${d.day} ${_idMonthAbbr[d.month]} ${d.year}'
+        : 'Momen Bahagia${photoN > 0 ? ' · $photoN foto' : ''}';
+
+    return _entryShell(
+      key: const ValueKey('happyMomentTile'),
+      date: d,
+      thumb: _thumb(),
+      title: title,
+      titleKey: isFirst ? const ValueKey('firstHappyStar') : null,
+      titleColor: isFirst ? AppColors.mint : AppColors.ink,
+      titleWeight: isFirst ? FontWeight.w700 : FontWeight.w500,
+      sub: sub,
+    );
+  }
+
+  Widget _thumb() {
+    if (item.imageUrls.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(9),
+        child: AppImage.widget(item.imageUrls.first,
+            width: 52, height: 52, fit: BoxFit.cover,
+            errorBuilder: (c, e, s) => _emojiThumb()),
+      );
+    }
+    return _emojiThumb();
+  }
+
+  Widget _emojiThumb() {
+    const bgs = [AppColors.skyTint, AppColors.goldTint, AppColors.momenBadgeBg];
+    const emojis = ['🐾', '🧶', '☀️'];
+    return Container(
+      width: 52,
+      height: 52,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: firstLabel != null ? AppColors.momenBadgeBg : bgs[index % bgs.length],
+        borderRadius: BorderRadius.circular(9),
       ),
+      child: Text(firstLabel != null ? '🌟' : emojis[index % emojis.length],
+          style: const TextStyle(fontSize: 22)),
     );
   }
 }
 
-Widget _cardShell({required Widget child}) => Container(
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: AppShadows.md,
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: child,
-    );
-
-Widget _badge(String label, Color color, Color bg) => Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
-      child: Text(label,
-          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
-    );
-
-/// 第一条永久标签（AC5 🌟）。
-Widget _firstStar(String label) => Container(
-      margin: const EdgeInsets.only(top: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-      decoration: BoxDecoration(color: AppColors.goldTint, borderRadius: BorderRadius.circular(999)),
-      child: Text('🌟 $label',
-          style: const TextStyle(
-              fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFFA9821E))),
-    );
-
-/// 快乐时刻条目：标记 🌈 + 卡片（照片 + 日期 + 徽章 + 文字）。
-class HappyMomentTile extends StatelessWidget {
-  const HappyMomentTile({super.key, required this.item, this.firstLabel});
+/// 健康事件条目（hentry）：粉底 #FDE7EB 行 + 🏥 + 深红标题/副标题 + 等级徽章。
+class HealthEventTile extends StatelessWidget {
+  const HealthEventTile({super.key, required this.item, this.firstLabel});
 
   final TimelineItem item;
-
-  /// 非空则为第一条快乐时刻，显 🌟 永久标签（AC5）。
   final String? firstLabel;
 
   @override
   Widget build(BuildContext context) {
-    return _TimelineRow(
-      key: const ValueKey('happyMomentTile'),
-      markerEmoji: '🌈',
-      markerBg: AppColors.goldTint,
-      card: _cardShell(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    final d = item.date;
+    return Padding(
+      key: const ValueKey('healthEventTile'),
+      padding: const EdgeInsets.only(bottom: 9),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.coralTint,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
           children: [
-            if (item.imageUrls.isNotEmpty)
-              AppImage.widget(item.imageUrls.first,
-                  height: 150,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stack) =>
-                      const StripedPhoto(label: 'foto', height: 150, radius: 0)),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 11, 14, 13),
+            const Text('🏥', style: TextStyle(fontSize: 18)),
+            const SizedBox(width: 9),
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      // F9：快乐时刻按事件日期显示。
-                      Text(_dateLabel(item.displayDate),
-                          style: const TextStyle(
-                              fontSize: 11.5, color: AppColors.muted, fontWeight: FontWeight.w700)),
-                      const SizedBox(width: 8),
-                      _badge('Momen Bahagia', const Color(0xFFA9821E), AppColors.goldTint),
-                    ],
-                  ),
-                  if (firstLabel != null)
-                    Align(
-                        alignment: Alignment.centerLeft,
-                        child: KeyedSubtree(
-                            key: const ValueKey('firstHappyStar'), child: _firstStar(firstLabel!))),
-                  if (item.text != null && item.text!.isNotEmpty) ...[
-                    const SizedBox(height: 5),
-                    Text(item.text!,
-                        style: const TextStyle(fontSize: 14, color: AppColors.ink2, height: 1.5)),
+                  Text('Konsultasi AI — ${d.day} ${_idMonthAbbr[d.month]}',
+                      style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.healthEventText)),
+                  if (item.symptomSummary != null && item.symptomSummary!.isNotEmpty) ...[
+                    const SizedBox(height: 1),
+                    Text(item.symptomSummary!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.healthEventText.withValues(alpha: 0.8))),
                   ],
                 ],
               ),
             ),
+            if (item.aiLevel != null) ...[
+              const SizedBox(width: 9),
+              _levelBadge(item.aiLevel!),
+            ],
           ],
         ),
       ),
     );
   }
-}
 
-/// 健康事件条目：标记 🩺 + 卡片（日期 + 级别徽章 + 摘要）。
-class HealthEventTile extends StatelessWidget {
-  const HealthEventTile({super.key, required this.item, this.firstLabel});
-
-  final TimelineItem item;
-
-  /// 非空则为第一次问诊记录，显 🌟 永久标签（AC5）。
-  final String? firstLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return _TimelineRow(
-      key: const ValueKey('healthEventTile'),
-      markerEmoji: '🩺',
-      markerBg: AppColors.skyTint,
-      card: _cardShell(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 11, 14, 13),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text(_dateLabel(item.date),
-                      style: const TextStyle(
-                          fontSize: 11.5, color: AppColors.muted, fontWeight: FontWeight.w700)),
-                  const SizedBox(width: 8),
-                  _badge(l10n.healthEventLabel, AppColors.sky, AppColors.skyTint),
-                  if (item.aiLevel != null) ...[
-                    const SizedBox(width: 6),
-                    _LevelChip(level: item.aiLevel!),
-                  ],
-                ],
-              ),
-              if (firstLabel != null)
-                Align(
-                    alignment: Alignment.centerLeft,
-                    child: KeyedSubtree(
-                        key: const ValueKey('firstHealthStar'), child: _firstStar(firstLabel!))),
-              if (item.symptomSummary != null && item.symptomSummary!.isNotEmpty) ...[
-                const SizedBox(height: 5),
-                Text(item.symptomSummary!,
-                    style: const TextStyle(fontSize: 14, color: AppColors.ink2, height: 1.5)),
-              ],
-            ],
-          ),
-        ),
-      ),
+  Widget _levelBadge(String level) {
+    final (String text, Color bg) = switch (level) {
+      'RED' => ('🔴 Merah', AppColors.popRed),
+      'YELLOW' => ('🟡 Kuning', AppColors.popRed),
+      'GREEN' => ('🟢 Hijau', AppColors.triageGreen),
+      _ => (level, AppColors.muted),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(7)),
+      child: Text(text,
+          style: const TextStyle(
+              fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.onAccent)),
     );
   }
 }
 
-class _LevelChip extends StatelessWidget {
-  const _LevelChip({required this.level});
-
-  final String level;
-
-  @override
-  Widget build(BuildContext context) {
-    final (Color color, Color bg) = switch (level) {
-      'RED' => (AppColors.triageRed, Color(0x22C97A7A)),
-      'YELLOW' => (AppColors.triageYellow, Color(0x22E0A458)),
-      'GREEN' => (AppColors.triageGreen, Color(0x227FB069)),
-      _ => (AppColors.muted, AppColors.cream2),
-    };
-    return _badge(level, color, bg);
-  }
+/// tentry 外壳：日期列 + 缩略 + 标题/副标题（白底 rounded-13 + 柔阴影）。
+Widget _entryShell({
+  required Key key,
+  required DateTime date,
+  required Widget thumb,
+  required String title,
+  Key? titleKey,
+  required Color titleColor,
+  required FontWeight titleWeight,
+  required String sub,
+}) {
+  return Padding(
+    key: key,
+    padding: const EdgeInsets.only(bottom: 9),
+    child: Container(
+      padding: const EdgeInsets.all(11),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(13),
+        boxShadow: const [
+          BoxShadow(color: Color(0x0D2B2A27), offset: Offset(0, 2), blurRadius: 8),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 32,
+            child: Column(
+              children: [
+                Text('${date.day}',
+                    style: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.muted)),
+                Text(_idMonthAbbr[date.month],
+                    style: const TextStyle(
+                        fontSize: 10, fontWeight: FontWeight.w500, color: AppColors.muted)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          thumb,
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    key: titleKey,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 13, fontWeight: titleWeight, color: titleColor)),
+                const SizedBox(height: 2),
+                Text(sub,
+                    style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }

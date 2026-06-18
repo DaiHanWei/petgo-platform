@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -60,7 +61,9 @@ class _MilestoneCelebrationViewState extends State<_MilestoneCelebrationView>
       duration: const Duration(milliseconds: 700),
     )..forward();
     // S/M 自动消失；L 需用户开宝箱后再自动收尾（交互式）。
-    if (widget.item.level != MilestoneLevel.l) {
+    // Debug 截图钩子（仅 debug + flag）：跳过自动消失，让 S/M 庆祝层停住可截 milestone-unlock。
+    final devHold = kDebugMode && const bool.fromEnvironment('DEV_HOLD_CELEBRATION');
+    if (widget.item.level != MilestoneLevel.l && !devHold) {
       _autoClose = Timer(_holdDuration, _close);
     }
   }

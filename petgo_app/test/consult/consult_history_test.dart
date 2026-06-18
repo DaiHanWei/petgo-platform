@@ -48,7 +48,10 @@ Future<void> _pump(WidgetTester tester, List<ConsultHistoryItem> items) async {
       home: TriagePage(),
     ),
   ));
-  await tester.pumpAndSettle();
+  // AI 卡在线脉冲为常驻动画，pumpAndSettle 不收敛——固定帧推进（含历史 FutureBuilder 微任务）。
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 50));
+  await tester.pump(const Duration(milliseconds: 50));
 }
 
 void main() {

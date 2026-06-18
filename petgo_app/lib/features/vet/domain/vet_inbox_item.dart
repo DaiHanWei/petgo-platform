@@ -7,6 +7,11 @@ class VetInboxItem {
     this.symptomPreview,
     required this.imageCount,
     required this.waitingElapsedSeconds,
+    this.petName,
+    this.petSpecies,
+    this.petSex,
+    this.petAgeMonths,
+    this.ownerHandle,
   });
 
   final int sessionId;
@@ -15,6 +20,13 @@ class VetInboxItem {
   final String? symptomPreview;
   final int imageCount;
   final int waitingElapsedSeconds;
+
+  // 宠物身份（决策：Mock 先做满、后端随后补）。全 nullable：真后端未下发 → null → 卡片优雅降级不显身份块。
+  final String? petName;
+  final String? petSpecies; // CAT | DOG
+  final String? petSex; // MALE | FEMALE
+  final int? petAgeMonths;
+  final String? ownerHandle; // 不含 @，渲染时前置
 
   bool get isAiUpgrade => source == 'AI_UPGRADE';
 
@@ -25,6 +37,11 @@ class VetInboxItem {
         symptomPreview: json['symptomPreview'] as String?,
         imageCount: (json['imageCount'] as num?)?.toInt() ?? 0,
         waitingElapsedSeconds: (json['waitingElapsedSeconds'] as num?)?.toInt() ?? 0,
+        petName: json['petName'] as String?,
+        petSpecies: json['petSpecies'] as String?,
+        petSex: json['petSex'] as String?,
+        petAgeMonths: (json['petAgeMonths'] as num?)?.toInt(),
+        ownerHandle: json['ownerHandle'] as String?,
       );
 }
 
@@ -37,6 +54,11 @@ class VetSession {
     this.userId,
     this.imConversationId,
     required this.hasAiContext,
+    this.petName,
+    this.petSpecies,
+    this.petSex,
+    this.petAgeMonths,
+    this.ownerHandle,
   });
 
   final int id;
@@ -46,6 +68,14 @@ class VetSession {
   final String? imConversationId;
   final bool hasAiContext;
 
+  // 宠物身份（决策：Mock 先做满、后端随后补，同 VetInboxItem）。全 nullable → 真后端未下发时
+  // 会话页顶栏优雅降级（标题回落、状态行隐藏）。
+  final String? petName;
+  final String? petSpecies; // CAT | DOG
+  final String? petSex; // MALE | FEMALE
+  final int? petAgeMonths;
+  final String? ownerHandle; // 不含 @，渲染时前置
+
   factory VetSession.fromJson(Map<String, dynamic> json) => VetSession(
         id: (json['id'] as num).toInt(),
         status: (json['status'] ?? 'IN_PROGRESS') as String,
@@ -53,6 +83,11 @@ class VetSession {
         userId: (json['userId'] as num?)?.toInt(),
         imConversationId: json['imConversationId'] as String?,
         hasAiContext: (json['hasAiContext'] ?? false) as bool,
+        petName: json['petName'] as String?,
+        petSpecies: json['petSpecies'] as String?,
+        petSex: json['petSex'] as String?,
+        petAgeMonths: (json['petAgeMonths'] as num?)?.toInt(),
+        ownerHandle: json['ownerHandle'] as String?,
       );
 }
 

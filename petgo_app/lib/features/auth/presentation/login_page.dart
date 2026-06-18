@@ -5,8 +5,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/network/dio_client.dart';
 import '../../../core/theme/colors.dart';
-import '../../../core/theme/spacing.dart';
-import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../data/auth_repository.dart';
 import '../domain/auth_routing.dart';
@@ -18,10 +16,10 @@ const String _kTermsUrl =
 const String _kPrivacyUrl =
     String.fromEnvironment('PETGO_PRIVACY_URL', defaultValue: 'https://petgo.example/privacy');
 
-/// 最小登录入口页（Story 1.3 自测入口）。
+/// 登录入口页（Story 1.3/1.4 · login.html 1:1 还原）。
 ///
-/// 「Google 登录」按钮 + 按钮下方《服务条款》《隐私政策》Text Link（FR-0D，无勾选框）。
-/// 正式触发场景（软浮层/强弹窗）由 Story 1.4 提供，本页可被其复用或仅作自测。
+/// 紫渐变品牌头（光晕 + Pop Art + logo + 欢迎语）+ 白色主体：Google 一键登录 +
+/// 「自动建号」提示 + 社区数字背书 + 兽医登录入口（FR-29）+ 条款/隐私 Text Link（FR-0D，无勾选框）。
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
 
@@ -75,55 +73,272 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: AppColors.base,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(l10n.appTitle, style: AppTypography.display),
-              const SizedBox(height: AppSpacing.section),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  key: const ValueKey('googleLoginButton'),
-                  onPressed: _busy ? null : _onGoogleLogin,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.accentGrowth,
-                    foregroundColor: AppColors.onAccent,
-                    padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+      body: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          _brandHeader(context),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(22, 28, 22, 16),
+            child: Column(
+              children: [
+                // Google 一键登录（白底主钮）
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    key: const ValueKey('googleLoginButton'),
+                    onPressed: _busy ? null : _onGoogleLogin,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.card,
+                      foregroundColor: AppColors.ink,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        side: const BorderSide(color: AppColors.line, width: 1.5),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const _GoogleG(),
+                        const SizedBox(width: 11),
+                        Text(l10n.loginGoogle,
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
                   ),
-                  icon: const Icon(Icons.login),
-                  label: Text(l10n.loginGoogle, style: AppTypography.button),
+                ),
+                const SizedBox(height: 12),
+                // 自动建号提示（violet-50 底）
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                  decoration: BoxDecoration(
+                    color: AppColors.cream2,
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.info_outline, size: 15, color: AppColors.mint),
+                      const SizedBox(width: 9),
+                      Expanded(
+                        child: RichText(
+                          text: const TextSpan(
+                            style: TextStyle(fontSize: 12, color: AppColors.mint, height: 1.6),
+                            children: [
+                              TextSpan(text: 'Belum punya akun? '),
+                              TextSpan(
+                                  text: 'Akun baru dibuat otomatis',
+                                  style: TextStyle(fontWeight: FontWeight.w700)),
+                              TextSpan(text: ' — cukup satu tap!'),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 26),
+                // 社区数字背书
+                _trustStats(),
+                const SizedBox(height: 28),
+                // 兽医登录入口（FR-29）
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: const BoxDecoration(
+                    border: Border(top: BorderSide(color: AppColors.line2)),
+                  ),
+                  child: GestureDetector(
+                    key: const ValueKey('vetLoginLink'),
+                    onTap: _busy ? null : () => context.push('/vet/login'),
+                    behavior: HitTestBehavior.opaque,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Flexible(
+                          child: Text('Kamu adalah dokter hewan? ',
+                              style: TextStyle(fontSize: 12, color: AppColors.muted)),
+                        ),
+                        Text(l10n.vetLoginLink,
+                            style: const TextStyle(
+                                fontSize: 12, color: AppColors.mint, fontWeight: FontWeight.w600)),
+                        const Text(' →',
+                            style: TextStyle(
+                                fontSize: 12, color: AppColors.mint, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // 条款与隐私（FR-0D：两份可点链接，无勾选框）
+                _AgreementLinks(
+                  prefix: l10n.loginAgreementPrefix,
+                  terms: l10n.termsOfService,
+                  and: l10n.loginAgreementAnd,
+                  privacy: l10n.privacyPolicy,
+                  onTerms: () => _open(_kTermsUrl),
+                  onPrivacy: () => _open(_kPrivacyUrl),
+                ),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 紫渐变品牌头：光晕圆 + Pop Art 方块 + 返回钮 + logo + 欢迎语。
+  Widget _brandHeader(BuildContext context) {
+    final topInset = MediaQuery.of(context).padding.top;
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.mint, AppColors.mint500],
+        ),
+      ),
+      child: ClipRect(
+        child: Stack(
+          children: [
+            // 装饰光晕圆
+            Positioned(
+              top: -50,
+              right: -50,
+              child: _glowCircle(190, 0.08),
+            ),
+            Positioned(
+              bottom: -70,
+              left: -30,
+              child: _glowCircle(160, 0.06),
+            ),
+            // Pop Art 错位方块（右上）
+            Positioned(
+              top: topInset + 18,
+              right: 22,
+              child: Transform.rotate(
+                angle: 0.26,
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                      color: AppColors.popRed.withValues(alpha: 0.55),
+                      borderRadius: BorderRadius.circular(7)),
                 ),
               ),
-              const SizedBox(height: AppSpacing.md),
-              // 兽医登录入口（Story 5.1 F1）：Google 按钮下方小字链接，走独立账密登录页。
-              TextButton(
-                key: const ValueKey('vetLoginLink'),
-                onPressed: _busy ? null : () => context.push('/vet/login'),
-                child: Text(l10n.vetLoginLink, style: AppTypography.caption),
+            ),
+            // 内容
+            Padding(
+              padding: EdgeInsets.fromLTRB(24, topInset + 16, 24, 34),
+              child: Column(
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Material(
+                      color: Colors.white.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(11),
+                      child: InkWell(
+                        key: const ValueKey('loginBack'),
+                        borderRadius: BorderRadius.circular(11),
+                        onTap: () =>
+                            context.canPop() ? context.pop() : context.go('/home'),
+                        child: const SizedBox(
+                          width: 36,
+                          height: 36,
+                          child: Icon(Icons.arrow_back, size: 18, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  // Logo 方块
+                  Container(
+                    width: 54,
+                    height: 54,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.25), width: 1.5),
+                    ),
+                    child: const Icon(Icons.pets, size: 28, color: Colors.white),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text('Selamat datang!',
+                      style: TextStyle(
+                          fontSize: 23, fontWeight: FontWeight.w700, color: Colors.white)),
+                  const SizedBox(height: 7),
+                  Text(
+                    'Rekam tumbuh kembang & konsultasi\ndokter hewan untuk si kecil berbulu',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        fontSize: 12.5, height: 1.6, color: Colors.white.withValues(alpha: 0.72)),
+                  ),
+                ],
               ),
-              const SizedBox(height: AppSpacing.md),
-              _AgreementLinks(
-                prefix: l10n.loginAgreementPrefix,
-                terms: l10n.termsOfService,
-                and: l10n.loginAgreementAnd,
-                privacy: l10n.privacyPolicy,
-                onTerms: () => _open(_kTermsUrl),
-                onPrivacy: () => _open(_kPrivacyUrl),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
+
+  Widget _glowCircle(double size, double opacity) => Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.white.withValues(alpha: opacity),
+        ),
+      );
+
+  Widget _trustStats() => Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _stat('10K+', 'Anggota aktif'),
+          _statDivider(),
+          _stat('50K+', 'Momen direkam'),
+          _statDivider(),
+          _stat('100+', 'Dokter hewan'),
+        ],
+      );
+
+  Widget _stat(String n, String label) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        child: Column(
+          children: [
+            Text(n,
+                style: const TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.mint)),
+            const SizedBox(height: 2),
+            Text(label, style: const TextStyle(fontSize: 10, color: AppColors.muted)),
+          ],
+        ),
+      );
+
+  Widget _statDivider() =>
+      Container(width: 1, height: 32, color: AppColors.line);
+}
+
+/// Google「G」彩色字标（品牌简化呈现）。
+class _GoogleG extends StatelessWidget {
+  const _GoogleG();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Text('G',
+        style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: AppColors.brandGoogleBlue,
+            height: 1.0));
+  }
 }
 
 /// 协议链接（Text Link 模式，FR-0D：两份可点链接，**无勾选框**）。
-///
-/// 用离散可点 [Text] 而非 RichText 内联 span：① 无 recognizer 生命周期；② widget test 可直接定位链接。
 class _AgreementLinks extends StatelessWidget {
   const _AgreementLinks({
     required this.prefix,
@@ -143,21 +358,22 @@ class _AgreementLinks extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final linkStyle = AppTypography.disclaimer.copyWith(
-      color: AppColors.accentConsult,
+    const baseStyle = TextStyle(fontSize: 10.5, color: AppColors.textDisclaimer, height: 1.7);
+    final linkStyle = baseStyle.copyWith(
+      color: AppColors.muted,
       decoration: TextDecoration.underline,
     );
     return Wrap(
       alignment: WrapAlignment.center,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Text(prefix, style: AppTypography.disclaimer),
+        Text(prefix, style: baseStyle),
         GestureDetector(
           key: const ValueKey('termsLink'),
           onTap: onTerms,
           child: Text(terms, style: linkStyle),
         ),
-        Text(and, style: AppTypography.disclaimer),
+        Text(and, style: baseStyle),
         GestureDetector(
           key: const ValueKey('privacyLink'),
           onTap: onPrivacy,

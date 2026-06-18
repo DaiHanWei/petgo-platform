@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/colors.dart';
@@ -19,7 +20,8 @@ class VetWorkbenchShell extends StatefulWidget {
 }
 
 class _VetWorkbenchShellState extends State<VetWorkbenchShell> {
-  int _index = 0;
+  // Debug-only：--dart-define=DEV_VET_TAB=3 启动即落对应 tab（逐屏视觉验收用）；release 恒 0。
+  int _index = kDebugMode ? const int.fromEnvironment('DEV_VET_TAB') : 0;
 
   static const List<Widget> _pages = [
     VetInboxPage(),

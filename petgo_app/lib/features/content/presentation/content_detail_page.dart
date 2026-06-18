@@ -139,7 +139,12 @@ class _DetailScaffold extends ConsumerWidget {
                     const SizedBox(height: AppSpacing.md),
                     _interactionBar(),
                     const Divider(height: AppSpacing.xl, color: AppColors.divider),
-                    Text(l10n.detailCommentsTitle, style: AppTypography.title),
+                    // KOMENTAR (n) 计数标题（detail.html）。
+                    Text('${l10n.detailCommentsTitle.toUpperCase()} (${detail.commentCount})',
+                        style: AppTypography.caption.copyWith(
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.5,
+                            color: AppColors.ink2)),
                     const SizedBox(height: AppSpacing.sm),
                     CommentSection(
                       postId: postId,
@@ -166,28 +171,54 @@ class _DetailScaffold extends ConsumerWidget {
     return l10n.timeDaysAgo(d.inDays);
   }
 
+  /// 内容类型徽章（detail.html 作者行右侧 chip）：Momen 绿 / Tips 黄 / Cerita 紫。
+  static (String, Color, Color) _typeBadge(String type, AppLocalizations l10n) => switch (type) {
+        'GROWTH_MOMENT' => (l10n.mePostTypeMomen, AppColors.momenBadgeText, AppColors.momenBadgeBg),
+        'KNOWLEDGE' => (l10n.mePostTypeTips, AppColors.tipsBadgeText, AppColors.goldTint),
+        _ => (l10n.mePostTypeCerita, AppColors.mint, AppColors.skyTint),
+      };
+
   Widget _authorRow(BuildContext context, WidgetRef ref, AppLocalizations l10n) {
     final name = detail.authorDeleted ? l10n.feedDeletedUser : (detail.authorNickname ?? l10n.feedDeletedUser);
     final avatar = detail.authorDeleted ? null : detail.authorAvatarUrl;
+    final hasImg = avatar != null && avatar.isNotEmpty;
+    final initial = name.trim().isEmpty ? '?' : name.trim().characters.first.toUpperCase();
+    final (badgeLabel, badgeFg, badgeBg) = _typeBadge(detail.type, l10n);
     final row = Row(
       children: [
+        // 紫圆头像（有图用图，否则紫底首字母）。
         CircleAvatar(
-          radius: 16,
-          backgroundColor: AppColors.border,
-          backgroundImage: AppImage.provider(avatar),
-          child: (avatar == null || avatar.isEmpty)
-              ? const Icon(Icons.person_rounded, size: 18, color: AppColors.textTertiary)
-              : null,
+          radius: 18,
+          backgroundColor: AppColors.mint,
+          backgroundImage: hasImg ? AppImage.provider(avatar) : null,
+          child: hasImg
+              ? null
+              : (detail.authorDeleted
+                  ? const Icon(Icons.person_rounded, size: 18, color: AppColors.onAccent)
+                  : Text(initial,
+                      style: const TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.onAccent))),
         ),
         const SizedBox(width: AppSpacing.sm),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(name, style: AppTypography.body.copyWith(fontWeight: FontWeight.w600)),
-            // 发布相对时间（设计稿作者行；「地区」后端暂无数据故不展示）。
-            Text(_relativeTime(l10n, detail.createdAt),
-                style: AppTypography.caption.copyWith(color: AppColors.textTertiary)),
-          ],
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(name,
+                  style: AppTypography.body.copyWith(fontWeight: FontWeight.w700),
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              Text(_relativeTime(l10n, detail.createdAt),
+                  style: AppTypography.caption.copyWith(color: AppColors.textTertiary)),
+            ],
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        // 分类彩徽章。
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+          decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(7)),
+          child: Text(badgeLabel,
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: badgeFg)),
         ),
       ],
     );

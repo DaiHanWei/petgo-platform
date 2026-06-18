@@ -59,6 +59,9 @@ FilledButton _submitBtn(WidgetTester tester) =>
 
 void main() {
   testWidgets('AC3: 必填三项（类型/名字/生日）齐全才可提交；缺一即禁用', (tester) async {
+    // 表单较长（虚线头像+分段label+多行bio），用高视口确保 ListView 全量构建（提交钮不出 fold）。
+    await tester.binding.setSurfaceSize(const Size(440, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(_wrap(_FakeRepo()));
     await tester.pumpAndSettle();
 
@@ -91,8 +94,8 @@ void main() {
   testWidgets('AC3: 头像未传 → 渲染默认占位（add photo）；选填品种/介绍可空', (tester) async {
     await tester.pumpWidget(_wrap(_FakeRepo()));
     await tester.pumpAndSettle();
-    // 头像缺省占位 widget
-    expect(find.byIcon(Icons.add_a_photo_outlined), findsOneWidget);
+    // 头像缺省占位 widget（pet-create.html：虚线圆 + 相机角标 + Upload Foto）。
+    expect(find.byIcon(Icons.photo_camera_rounded), findsOneWidget);
     expect(find.byKey(const ValueKey('petProfileAvatar')), findsOneWidget);
   });
 

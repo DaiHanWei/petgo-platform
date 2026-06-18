@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/colors.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/design/striped_photo.dart';
 
 /// 实时对话区（Story 5.5 · TailTopia Prototype VetChat 换肤）。
@@ -15,12 +16,21 @@ import '../../../shared/widgets/design/striped_photo.dart';
 /// [imConversationId] 用于真实 C2C 收发，绑定腾讯 IM Flutter SDK 后此面用 [ImService.onMessages]/`sendText`
 /// 替换本地回声，视觉保留。mock / 测试下保持本地演示气泡（不触真实 SDK）。
 class ImChatPlaceholder extends StatefulWidget {
-  const ImChatPlaceholder({super.key, this.imConversationId, this.peerId});
+  const ImChatPlaceholder(
+      {super.key, this.imConversationId, this.peerId, this.accent = AppColors.mint, this.selfIsVet = false});
 
   final String? imConversationId;
 
   /// 对端 IM 账号（用户侧 `v_<vetId>` / 兽医侧 `u_<userId>`）。真机 C2C 收发用（L2）。
   final String? peerId;
+
+  /// 己方气泡 + 发送钮品牌主色：用户侧紫 `AppColors.mint`(#845EC9 默认) / 兽医侧薄荷 `vetPrimary`(#5BCBBB)。
+  /// 直接取品牌 token（非 M3 colorScheme.primary，避免色调偏移失真）。
+  final Color accent;
+
+  /// 视角：兽医侧 true（己方=兽医薄荷「D」头像，对端=用户紫「A」）/ 用户侧 false（己方=用户紫「A」，对端=兽医薄荷「D」）。
+  /// 控气泡两侧头像配色/字母（原型 chat.html / vet-chat.html）。
+  final bool selfIsVet;
 
   @override
   State<ImChatPlaceholder> createState() => _ImChatPlaceholderState();
@@ -122,12 +132,17 @@ class _ImChatPlaceholderState extends State<ImChatPlaceholder> {
               controller: _scroll,
               padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
               children: [
-                for (final m in _msgs) _Bubble(msg: m),
-                if (_typing) const _Bubble(msg: _ChatMsg.vet('...'), typing: true),
+                for (final m in _msgs) _Bubble(msg: m, accent: widget.accent, selfIsVet: widget.selfIsVet),
+                if (_typing)
+                  _Bubble(
+                      msg: const _ChatMsg.vet('...'),
+                      typing: true,
+                      accent: widget.accent,
+                      selfIsVet: widget.selfIsVet),
               ],
             ),
           ),
-          _InputBar(controller: _input, onSend: _send),
+          _InputBar(controller: _input, onSend: _send, accent: widget.accent),
         ],
       ),
     );
@@ -135,10 +150,33 @@ class _ImChatPlaceholderState extends State<ImChatPlaceholder> {
 }
 
 class _Bubble extends StatelessWidget {
-  const _Bubble({required this.msg, this.typing = false});
+  const _Bubble({required this.msg, this.typing = false, required this.accent, this.selfIsVet = false});
 
   final _ChatMsg msg;
   final bool typing;
+  final Color accent;
+  final bool selfIsVet;
+
+  /// 28px 圆头像：薄荷实心（兽医「D」）/ 紫渐变（用户「A」）。
+  Widget _avatar({required bool mint, required String label}) {
+    return Container(
+      width: 28,
+      height: 28,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: mint ? AppColors.vetPrimary : null,
+        gradient: mint
+            ? null
+            : const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [AppColors.mint500, AppColors.mint]),
+      ),
+      child: Text(label,
+          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -158,7 +196,12 @@ class _Bubble extends StatelessWidget {
     }
 
     final me = msg.who == 'me';
-    final align = me ? Alignment.centerRight : Alignment.centerLeft;
+
+    // 头像：己方 me（兽医侧薄荷「D」/ 用户侧紫「A」）；对端（反之）。原型两侧贴头像，sys 无。
+    final meMint = selfIsVet; // 兽医视角己方=薄荷
+    final avatar = me
+        ? _avatar(mint: meMint, label: meMint ? 'D' : 'A')
+        : _avatar(mint: !meMint, label: !meMint ? 'D' : 'A');
 
     Widget content;
     if (msg.photo != null) {
@@ -172,7 +215,7 @@ class _Bubble extends StatelessWidget {
             ? const EdgeInsets.symmetric(horizontal: 16, vertical: 12)
             : const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: me ? AppColors.mint : AppColors.card,
+          color: me ? accent : AppColors.card,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(18),
             topRight: const Radius.circular(18),
@@ -189,12 +232,19 @@ class _Bubble extends StatelessWidget {
       );
     }
 
+    final bubble = ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.72),
+      child: content,
+    );
+
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4.5),
-      alignment: align,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.8),
-        child: content,
+      child: Row(
+        mainAxisAlignment: me ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: me
+            ? [Flexible(child: bubble), const SizedBox(width: 8), avatar]
+            : [avatar, const SizedBox(width: 8), Flexible(child: bubble)],
       ),
     );
   }
@@ -246,13 +296,15 @@ class _TypingDotsState extends State<_TypingDots> with SingleTickerProviderState
 }
 
 class _InputBar extends StatelessWidget {
-  const _InputBar({required this.controller, required this.onSend});
+  const _InputBar({required this.controller, required this.onSend, required this.accent});
 
   final TextEditingController controller;
   final VoidCallback onSend;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
       decoration: const BoxDecoration(
@@ -274,7 +326,7 @@ class _InputBar extends StatelessWidget {
               onSubmitted: (_) => onSend(),
               style: const TextStyle(fontSize: 15, color: AppColors.ink),
               decoration: InputDecoration(
-                hintText: 'Tulis pesan...',
+                hintText: l10n.imInputHint,
                 hintStyle: const TextStyle(color: AppColors.muted, fontSize: 15),
                 filled: true,
                 fillColor: AppColors.cream2,
@@ -294,7 +346,7 @@ class _InputBar extends StatelessWidget {
             child: Container(
               width: 44,
               height: 44,
-              decoration: const BoxDecoration(color: AppColors.mint, shape: BoxShape.circle),
+              decoration: BoxDecoration(color: accent, shape: BoxShape.circle), // 用户侧紫 / 兽医侧薄荷
               child: const Icon(Icons.send_rounded, size: 21, color: Colors.white),
             ),
           ),

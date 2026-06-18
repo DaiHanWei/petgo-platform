@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -15,6 +16,9 @@ import '../domain/triage_archive.dart';
 import '../domain/triage_upload_controller.dart';
 import '../domain/triage_wording_guard.dart';
 import 'triage_red_result.dart';
+
+/// Debug 截图钩子一次性 guard（DEV_ARCHIVE_PROMPT 在结果就绪后自动弹存档确认，截 archive-confirm 用）。
+bool _devArchiveShown = false;
 
 /// 分诊绿/黄结果展示（Story 4.4）。三项同屏（等级 + 观察建议 + 用药参考）+ 黄色条件倒计时协议块 +
 /// 前置免责 + 非红「存入档案」触发 FR-16。红色一律交棒 4.5 半屏（本视图只占位，不软化渲染）。
@@ -37,6 +41,22 @@ class TriageResultView extends ConsumerWidget {
     final isYellow = level == DangerLevel.yellow;
     // 终结性表述守卫：模型若吐出「不严重/可以放心」等，拦截降级为中性提示。
     final advice = TriageWordingGuard.sanitize(result.advice, fallback: l10n.triageNeutralAdvice);
+
+    // Debug 截图钩子（仅 debug + flag）：结果就绪后自动弹存档确认（截 archive-confirm 用）。
+    if (kDebugMode && const bool.fromEnvironment('DEV_ARCHIVE_PROMPT') && !_devArchiveShown) {
+      _devArchiveShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted) return;
+        ref.read(triageArchiveHandlerProvider)(
+          context,
+          ref,
+          triageId: triageId,
+          level: level,
+          advice: result.advice,
+          symptom: ref.read(triageUploadProvider).symptomText,
+        );
+      });
+    }
 
     return ListView(
       key: ValueKey(isYellow ? 'triageYellowPage' : 'triageGreenPage'),

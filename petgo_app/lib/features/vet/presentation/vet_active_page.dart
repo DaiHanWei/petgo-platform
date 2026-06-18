@@ -94,8 +94,8 @@ class _ActiveCard extends StatelessWidget {
         child: Row(
           children: [
             CircleAvatar(
-              backgroundColor: AppColors.accentConsult.withValues(alpha: 0.15),
-              child: const Icon(Icons.pets, color: AppColors.accentConsult),
+              backgroundColor: AppColors.vetPrimary.withValues(alpha: 0.15),
+              child: const Icon(Icons.pets, color: AppColors.vetPrimary),
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(

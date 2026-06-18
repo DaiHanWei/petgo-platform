@@ -206,6 +206,8 @@ void main() {
   testWidgets('AC5: FeedMasonryView loadMoreFailed → 底部重试按钮可点', (tester) async {
     var retried = false;
     await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: FeedMasonryView(
           items: [_item(id: 1, body: 'kept')],

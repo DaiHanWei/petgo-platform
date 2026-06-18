@@ -1,0 +1,111 @@
+import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/core/storage/secure_storage.dart';
+import 'package:tailtopia/features/vet/data/vet_repository.dart';
+import 'package:tailtopia/features/vet/domain/vet_inbox_item.dart';
+import 'package:tailtopia/features/vet/domain/vet_login_response.dart';
+import 'package:tailtopia/features/vet/domain/vet_workbench_lists.dart';
+import 'package:tailtopia/features/vet/presentation/vet_inbox_page.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
+
+/// 假 VetRepository：dashboard 头部用 me/history/在线态，队列用 waitingList。
+class _FakeVetRepository extends VetRepository {
+  _FakeVetRepository({this.items = const [], this.historyCount = 0})
+      : super(dio: Dio(), tokenStore: InMemoryTokenStore());
+
+  final List<VetInboxItem> items;
+  final int historyCount;
+  bool online = false;
+
+  @override
+  Future<VetMe> me() async => const VetMe(id: 1, displayName: '王医生', status: 'ACTIVE');
+
+  @override
+  Future<List<VetInboxItem>> waitingList() async => items;
+
+  @override
+  Future<List<VetHistoryEntry>> history() async => List.generate(
+        historyCount,
+        (i) => VetHistoryEntry(
+          sessionId: i,
+          petName: 'p$i',
+          summary: 's',
+          date: '2026-06-17',
+          terminalState: 'CLOSED',
+        ),
+      );
+
+  @override
+  Future<bool> readOnlineStatus() async => online;
+
+  @override
+  Future<bool> setOnline(bool next) async {
+    online = next;
+    return next;
+  }
+
+  @override
+  Future<void> heartbeat() async {}
+}
+
+Future<void> _pump(WidgetTester tester, _FakeVetRepository repo) async {
+  await tester.pumpWidget(ProviderScope(
+    overrides: [vetRepositoryProvider.overrideWithValue(repo)],
+    child: const MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: Locale('en'),
+      home: VetInboxPage(),
+    ),
+  ));
+  await tester.pumpAndSettle();
+}
+
+void main() {
+  testWidgets('深色顶栏渲染医生名 + 在线开关', (tester) async {
+    await _pump(tester, _FakeVetRepository());
+    expect(find.byKey(const ValueKey('vetTopBarName')), findsOneWidget);
+    expect(find.text('王医生'), findsOneWidget);
+    expect(find.byKey(const ValueKey('vetTopBarOnlineSwitch')), findsOneWidget);
+  });
+
+  testWidgets('3 统计卡：队列=列表数、完成=今日 history 数、评分占位「—」', (tester) async {
+    final repo = _FakeVetRepository(
+      items: const [
+        VetInboxItem(sessionId: 1, source: 'DIRECT', imageCount: 0, waitingElapsedSeconds: 5),
+        VetInboxItem(sessionId: 2, source: 'DIRECT', imageCount: 0, waitingElapsedSeconds: 5),
+      ],
+      historyCount: 3,
+    );
+    await _pump(tester, repo);
+
+    expect(find.text('Queue'), findsOneWidget);
+    expect(find.text('Done'), findsOneWidget);
+    expect(find.text('Rating'), findsOneWidget);
+    expect(find.text('2'), findsOneWidget); // 队列=2
+    expect(find.text('3'), findsOneWidget); // 完成=3
+    expect(find.text('—'), findsOneWidget); // 评分无端点 → 占位
+  });
+
+  testWidgets('空队列 → 分区头 (0) + 空态', (tester) async {
+    await _pump(tester, _FakeVetRepository(historyCount: 0));
+    expect(find.text('CURRENT QUEUE (0)'), findsOneWidget);
+    expect(find.text('No incoming requests'), findsOneWidget);
+  });
+
+  testWidgets('顶栏在线开关：乐观更新 + 写 setOnline', (tester) async {
+    final repo = _FakeVetRepository();
+    await _pump(tester, repo);
+
+    final sw = find.byKey(const ValueKey('vetTopBarOnlineSwitch'));
+    expect(tester.widget<Switch>(sw).value, isFalse);
+
+    await tester.tap(sw);
+    await tester.pumpAndSettle();
+
+    expect(repo.online, isTrue);
+    expect(tester.widget<Switch>(find.byKey(const ValueKey('vetTopBarOnlineSwitch'))).value, isTrue);
+  });
+}
