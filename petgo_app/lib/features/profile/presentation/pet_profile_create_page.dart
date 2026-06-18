@@ -7,7 +7,6 @@ import '../../../core/media/media_scope.dart';
 import '../../../core/network/problem_detail.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
-import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../media/domain/media_upload_use_case.dart';
 import '../../../shared/utils/media_permission.dart';
@@ -186,82 +185,135 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
   Widget _form(BuildContext context, AppLocalizations l10n) {
     return Scaffold(
       backgroundColor: AppColors.base,
-      appBar: AppBar(title: Text(l10n.petProfileCreateTitle), backgroundColor: AppColors.base),
+      appBar: AppBar(
+        backgroundColor: AppColors.base,
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.ink),
+          onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
+        ),
+        title: const Text('Buat Profil Hewan',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink)),
+      ),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.all(AppSpacing.xl),
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
           children: [
-            Center(
-              child: GestureDetector(
-                key: const ValueKey('petProfileAvatar'),
-                onTap: _uploading ? null : _pickAvatar,
-                child: CircleAvatar(
-                  radius: 44,
-                  backgroundColor: AppColors.surface,
-                  backgroundImage: AppImage.provider(_avatarUrl),
-                  child: _uploading
-                      ? const CircularProgressIndicator()
-                      : (_avatarUrl == null
-                          ? const Icon(Icons.add_a_photo_outlined, color: AppColors.textTertiary)
-                          : null),
-                ),
+            // 虚线圆头像 + 相机角标 + Upload Foto（pet-create.html）。
+            Center(child: _avatarPicker()),
+            const SizedBox(height: AppSpacing.lg),
+            // NAMA HEWAN *
+            _sectionLabel('NAMA HEWAN', required: true),
+            const SizedBox(height: 6),
+            _field(
+              child: TextField(
+                key: const ValueKey('petProfileNameField'),
+                controller: _nameController,
+                maxLength: 20,
+                onChanged: (_) => setState(() {}),
+                decoration: _inputDeco(hint: l10n.petProfileNameHint),
               ),
             ),
-            const SizedBox(height: AppSpacing.lg),
-            // 宠物类型（F6 必选，创建后不可改）
-            Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: Text('${l10n.petTypeLabel} *', style: AppTypography.caption),
+            const SizedBox(height: 16),
+            // JENIS HEWAN * (Tidak bisa diubah setelah dibuat)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                _sectionLabel('JENIS HEWAN', required: true),
+                const SizedBox(width: 6),
+                const Flexible(
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: 1),
+                    child: Text('(tidak bisa diubah setelah dibuat)',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 9.5, fontWeight: FontWeight.w600, color: AppColors.popRed)),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: AppSpacing.sm),
+            const SizedBox(height: 8),
             Wrap(
               spacing: AppSpacing.sm,
               children: [
-                _petTypeChip('CAT', l10n.petTypeCat),
-                _petTypeChip('DOG', l10n.petTypeDog),
-                _petTypeChip('OTHER', l10n.petTypeOther),
+                _petTypeChip('CAT', '🐱 ${l10n.petTypeCat}'),
+                _petTypeChip('DOG', '🐶 ${l10n.petTypeDog}'),
+                _petTypeChip('OTHER', '🐾 ${l10n.petTypeOther}'),
               ],
             ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              key: const ValueKey('petProfileNameField'),
-              controller: _nameController,
-              maxLength: 20,
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                labelText: '${l10n.petProfileName} *',
-                hintText: l10n.petProfileNameHint,
+            const SizedBox(height: 16),
+            // RAS
+            _sectionLabel('RAS'),
+            const SizedBox(height: 6),
+            _field(
+              child: TextField(
+                key: const ValueKey('petProfileBreedField'),
+                controller: _breedController,
+                maxLength: 60,
+                decoration: _inputDeco(hint: 'Domestic, Persia, ...'),
               ),
             ),
-            TextField(
-              key: const ValueKey('petProfileBreedField'),
-              controller: _breedController,
-              maxLength: 60,
-              decoration: InputDecoration(labelText: l10n.petProfileBreed),
-            ),
-            ListTile(
+            const SizedBox(height: 16),
+            // TANGGAL LAHIR *
+            _sectionLabel('TANGGAL LAHIR', required: true),
+            const SizedBox(height: 6),
+            InkWell(
               key: const ValueKey('petProfileBirthdayTile'),
-              contentPadding: EdgeInsets.zero,
-              title: Text('${l10n.petProfileBirthday} *'),
-              subtitle: Text(_birthday == null
-                  ? l10n.petProfileBirthdayPick
-                  : '${_birthday!.year}-${_birthday!.month}-${_birthday!.day}'),
-              trailing: const Icon(Icons.calendar_today_outlined),
               onTap: _pickBirthday,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.line, width: 1.5),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _birthday == null ? l10n.petProfileBirthdayPick : _formatBirthday(_birthday!),
+                        style: TextStyle(
+                            fontSize: 15,
+                            color: _birthday == null ? AppColors.muted : AppColors.ink),
+                      ),
+                    ),
+                    const Icon(Icons.calendar_today_outlined, size: 18, color: AppColors.muted),
+                  ],
+                ),
+              ),
             ),
-            TextField(
-              key: const ValueKey('petProfileIntroField'),
-              controller: _introController,
-              maxLength: 30,
-              decoration: InputDecoration(labelText: l10n.petProfileIntro),
+            const SizedBox(height: 16),
+            // BIO (OPSIONAL)
+            _sectionLabel('BIO (OPSIONAL)'),
+            const SizedBox(height: 6),
+            _field(
+              child: TextField(
+                key: const ValueKey('petProfileIntroField'),
+                controller: _introController,
+                maxLength: 30,
+                maxLines: 3,
+                decoration: _inputDeco(hint: 'Ceritakan tentang hewan peliharaanmu...'),
+              ),
             ),
             const SizedBox(height: AppSpacing.lg),
-            FilledButton(
-              key: const ValueKey('petProfileSubmit'),
-              onPressed: _canSubmit ? _submit : null,
-              child: _submitting
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : Text(l10n.petProfileSubmit),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                key: const ValueKey('petProfileSubmit'),
+                onPressed: _canSubmit ? _submit : null,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.mint,
+                  foregroundColor: AppColors.onAccent,
+                  disabledBackgroundColor: AppColors.line,
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                child: _submitting
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('Buat Profil',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+              ),
             ),
           ],
         ),
@@ -269,11 +321,113 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
     );
   }
 
+  /// 虚线圆头像 + 紫色相机角标 + 「Upload Foto」紫链（pet-create.html）。
+  Widget _avatarPicker() {
+    return GestureDetector(
+      key: const ValueKey('petProfileAvatar'),
+      onTap: _uploading ? null : _pickAvatar,
+      child: Column(
+        children: [
+          SizedBox(
+            width: 96,
+            height: 96,
+            child: CustomPaint(
+              painter: _DashedCirclePainter(color: AppColors.dashedViolet),
+              child: Stack(
+                children: [
+                  Center(
+                    child: _avatarUrl == null
+                        ? (_uploading
+                            ? const CircularProgressIndicator()
+                            : const Text('🐱', style: TextStyle(fontSize: 38)))
+                        : ClipOval(
+                            child: AppImage.widget(_avatarUrl!,
+                                width: 88, height: 88, fit: BoxFit.cover)),
+                  ),
+                  Positioned(
+                    right: 4,
+                    bottom: 4,
+                    child: Container(
+                      width: 30,
+                      height: 30,
+                      decoration: const BoxDecoration(
+                          shape: BoxShape.circle, color: AppColors.mint),
+                      child: const Icon(Icons.photo_camera_rounded,
+                          size: 16, color: AppColors.onAccent),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text('Upload Foto',
+              style: TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.mint)),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionLabel(String text, {bool required = false}) => RichText(
+        text: TextSpan(
+          style: const TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.5,
+              color: AppColors.ink2),
+          children: [
+            TextSpan(text: text),
+            if (required)
+              const TextSpan(text: ' *', style: TextStyle(color: AppColors.popRed)),
+          ],
+        ),
+      );
+
+  /// 紫边框圆角输入容器（包 TextField，去掉其默认下划线）。
+  Widget _field({required Widget child}) => child;
+
+  InputDecoration _inputDeco({String? hint}) => InputDecoration(
+        hintText: hint,
+        hintStyle: const TextStyle(color: AppColors.muted, fontSize: 14),
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        counterText: '',
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.line, width: 1.5),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.mint, width: 1.5),
+        ),
+      );
+
+  static String _formatBirthday(DateTime d) {
+    const months = [
+      '', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+    ];
+    return '${d.day} ${months[d.month]} ${d.year}';
+  }
+
   Widget _petTypeChip(String value, String label) {
+    final selected = _petType == value;
     return ChoiceChip(
       key: ValueKey('petType_$value'),
       label: Text(label),
-      selected: _petType == value,
+      selected: selected,
+      showCheckmark: false,
+      labelStyle: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: selected ? AppColors.onAccent : AppColors.ink2),
+      selectedColor: AppColors.mint,
+      backgroundColor: AppColors.card,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: selected ? AppColors.mint : AppColors.line, width: 1.5),
+      ),
       onSelected: (_) => setState(() => _petType = value),
     );
   }
@@ -289,4 +443,38 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
     );
     if (picked != null) setState(() => _birthday = picked);
   }
+}
+
+/// 虚线圆边框画笔（pet-create.html 头像 dashed ring）。
+class _DashedCirclePainter extends CustomPainter {
+  _DashedCirclePainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2 - 1;
+    const dashCount = 36;
+    const gapRatio = 0.45;
+    final sweep = (2 * 3.1415926 / dashCount) * (1 - gapRatio);
+    final step = 2 * 3.1415926 / dashCount;
+    for (var i = 0; i < dashCount; i++) {
+      final start = step * i;
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        start,
+        sweep,
+        false,
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedCirclePainter oldDelegate) => oldDelegate.color != color;
 }

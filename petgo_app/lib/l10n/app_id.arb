@@ -37,10 +37,10 @@
   "petStatusA": "Saya punya hewan",
   "petStatusB": "Belum, tapi berencana",
   "petStatusC": "Pencinta hewan",
-  "profileOnboardingTitle": "Buat profil hewan Anda",
-  "profileOnboardingBody": "Bangun arsip tumbuh kembang hewan Anda",
-  "profileOnboardingSkip": "Lewati dulu",
-  "profileOnboardingCreate": "Buat sekarang",
+  "profileOnboardingTitle": "Selamat bergabung! 🐾",
+  "profileOnboardingBody": "Bikin profil hewan peliharaanmu sekarang — jadi tonggak pertama perjalanan bersama mereka!",
+  "profileOnboardingSkip": "Nanti saja, masuk ke beranda dulu",
+  "profileOnboardingCreate": "Buat Profil Hewan Sekarang",
   "profileCreatedTitle": "Profil khusus {petName} sudah siap! 🎉",
   "@profileCreatedTitle": {
     "placeholders": {
