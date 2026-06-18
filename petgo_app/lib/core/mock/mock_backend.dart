@@ -730,10 +730,16 @@ class MockBackend {
     if (p.endsWith('/app-version') && m == 'GET') {
       return ok({'latestVersion': '1.0.0', 'minSupportedVersion': '1.0.0', 'iosStoreUrl': null, 'androidStoreUrl': null});
     }
-    if (p.endsWith('/media/sts-credentials') && m == 'POST') {
-      return ok({'accessKeyId': 'mock', 'accessKeySecret': 'mock', 'securityToken': 'mock',
-        'expiration': _iso(const Duration(hours: -1)), 'bucket': 'mock-bucket', 'region': 'mock',
-        'endpoint': 'https://mock.example', 'uploadDir': 'mock/', 'cdnBaseUrl': 'https://mock.example'});
+    if (p.endsWith('/media/upload-url') && m == 'POST') {
+      // mock 模式下 _MockOssUploader 会拦截真实 PUT，故 uploadUrl 仅占位；objectKey 供落盘命名。
+      final scope = (body['scope'] as String?) == 'PRIVATE' ? 'private' : 'public';
+      return ok({
+        'uploadUrl': 'https://mock.example/put',
+        'objectKey': '$scope/0/mockobj.jpg',
+        'method': 'PUT',
+        'headers': {'Content-Type': 'image/jpeg'},
+        'publicUrl': scope == 'public' ? 'https://mock.example/$scope/0/mockobj.jpg' : null,
+      });
     }
 
     // 未覆盖端点：返回合理空成功(避免触网/崩溃),并 warn。

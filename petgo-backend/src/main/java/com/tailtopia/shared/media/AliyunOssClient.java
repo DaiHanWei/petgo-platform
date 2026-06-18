@@ -1,8 +1,12 @@
 package com.tailtopia.shared.media;
 
+import com.aliyun.oss.HttpMethod;
 import com.aliyun.oss.OSS;
 import com.aliyun.oss.OSSClientBuilder;
+import com.aliyun.oss.model.GeneratePresignedUrlRequest;
 import java.io.ByteArrayInputStream;
+import java.net.URL;
+import java.util.Date;
 import org.springframework.stereotype.Component;
 
 /**
@@ -29,6 +33,33 @@ public class AliyunOssClient {
                 props.getOss().getEndpoint(),
                 props.getAccessKeyId(),
                 props.getAccessKeySecret());
+    }
+
+    /**
+     * 生成预签名 PUT URL（客户端凭此直传 OSS，**真 key 始终只在后端**）。
+     *
+     * <p>用 env 注入的 AccessKey 现签，无需 STS/RAM 角色。{@code contentType} 计入签名——客户端 PUT
+     * 时必须发同名 {@code Content-Type} 头，否则 SignatureDoesNotMatch。{@code publicRead=true}（公开域）
+     * 时把 {@code x-oss-object-acl:public-read} 签入，客户端须同发该头，对象落桶即公开可读。
+     *
+     * @return 预签名上传 URL 字符串
+     */
+    public String presignedPutUrl(String bucket, String objectKey, String contentType,
+            long ttlSeconds, boolean publicRead) {
+        OSS client = buildClient();
+        try {
+            GeneratePresignedUrlRequest req =
+                    new GeneratePresignedUrlRequest(bucket, stripLeadingSlash(objectKey), HttpMethod.PUT);
+            req.setExpiration(new Date(System.currentTimeMillis() + ttlSeconds * 1000L));
+            req.setContentType(contentType);
+            if (publicRead) {
+                req.addHeader("x-oss-object-acl", "public-read");
+            }
+            URL url = client.generatePresignedUrl(req);
+            return url.toString();
+        } finally {
+            client.shutdown();
+        }
     }
 
     public String privateBucket() {

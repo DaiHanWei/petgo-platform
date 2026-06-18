@@ -12,7 +12,7 @@ import 'package:tailtopia/features/content/domain/comment.dart';
 import 'package:tailtopia/features/content/domain/content_detail.dart';
 import 'package:tailtopia/features/content/domain/feed_item.dart';
 import 'package:tailtopia/features/me/data/my_posts_repository.dart';
-import 'package:tailtopia/features/media/data/sts_credential.dart';
+import 'package:tailtopia/features/media/data/upload_ticket.dart';
 import 'package:tailtopia/features/notify/data/app_version_repository.dart';
 import 'package:tailtopia/features/notify/domain/notification_item.dart';
 import 'package:tailtopia/features/profile/domain/milestone.dart';
@@ -211,8 +211,8 @@ void main() {
       ConsultHistoryPage.fromJson(call('GET', '/api/v1/consult/history'));
     });
 
-    test('POST /media/sts-credentials → StsCredential', () {
-      StsCredential.fromJson(call('POST', '/api/v1/media/sts-credentials', {'scene': 'CONTENT'}));
+    test('POST /media/upload-url → UploadTicket', () {
+      UploadTicket.fromJson(call('POST', '/api/v1/media/upload-url', {'scope': 'PUBLIC'}));
     });
   });
 }

@@ -65,3 +65,11 @@
 
 - **抢单卡缺宠物 meta（名/种类/年龄/主人）**：原型 vet-queue 卡含「Mochi · Kucing · Betina · 1 thn · @aditya」，但 `VetInboxItem` 仅 sessionId/source/aiDangerLevel/symptomPreview/imageCount/waitingElapsedSeconds，**后端无这些字段契约** → 本步 omit（不造结构化假数据；symptomPreview 里的宠物描述属症状叙述文本、非结构化字段）。补全需：后端 `VetInboxItem` DTO 加 petName/species/sex/ageLabel/ownerHandle + 前端 model + mock，再在卡顶渲染。属跨前后端 contract 扩展。
 - **等待时间无小时进位**：`waitingElapsedSeconds ~/ 60` 仅显分钟（如 3600s→「60 min ago」），原型也只用分钟，V1 可接受；若需 >60min 显小时后续加。
+
+## OSS 媒体地基（spec-2-1-oss-single-bucket-l2.md step-04 审查带出，既有/非本次引入）
+
+> 来源：Story 2.1 单桶适配 L2 审查。以下为 review 暴露的既有债，非本次改动引入，不阻断本次验收。
+
+- **前端 `OssUploader.put` 非 2xx 上传错误无领域映射**：OSS 直传返回 403/404/3xx 时 dio 裸抛 `DioException`，未 try/catch 映射为本地化上传失败（UX「底部 toast 3s」）。本次新增 public-read ACL 使 403 更易触发，但错误处理是既有路径。补全：在 `put`/`MediaUploadUseCase` 包装 OSS 失败为领域错误 + i18n toast；`followRedirects:false` 对 3xx 显式失败。
+- **直传无 Content-MD5 完整性校验**：预签名上传未带 Content-MD5，在途字节截断/篡改 OSS 不拒收。V1 可接受；如需强一致补传 Content-MD5。
+

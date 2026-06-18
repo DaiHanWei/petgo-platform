@@ -72,14 +72,13 @@ class MediaUploadUseCase {
     return processor.process(raw);
   }
 
-  /// 上传已处理好的字节（请求 STS → 直传）。抽出便于单测后半段与复用。
+  /// 上传已处理好的字节（请求预签名票据 → 直传）。抽出便于单测后半段与复用。
   Future<OssUploadResult> uploadBytes({
     required MediaScope scope,
     required Uint8List bytes,
   }) async {
-    final cred = await repository.requestStsCredential(scope, contentType: 'image/jpeg');
-    final key = OssUploader.buildObjectKey(cred.uploadDir, extension: 'jpg');
-    return uploader.put(cred, objectKey: key, bytes: bytes, contentType: 'image/jpeg');
+    final ticket = await repository.requestUploadTicket(scope, contentType: 'image/jpeg');
+    return uploader.put(ticket, bytes: bytes);
   }
 
   Future<XFile?> _pick(MediaSource source) {
