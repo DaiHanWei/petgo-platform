@@ -85,3 +85,37 @@ ai-result/ai-result-green/ai-result-red、publish-reviewing/done/rejected、pet-
 
 ### 下一批
 - B 类剩 15 屏：vet-case 已顺带验证 → 继续 onboard/pet-create/feed/notif/create/ai-upload/paspor 同源的 timeline-empty/feed-empty/chat/rate/feed-guest/vet-login/pet-edit/feed-error。
+
+---
+
+## 进度日志 · 2026-06-18（第二批：重判 + feed系 + 引导流 + 发布分诊 + pet-edit）
+
+> 全量 `flutter analyze` 干净 + `flutter test` 321 全绿。逐屏 actual 已更新。
+
+### 重判这批（A+前6屏）结论
+独立 reviewer 重判：**paspor 95 / settings 98 真 pass**；namecard 实为 pass（reviewer 把 Oyen/数据差异误判 FAIL）；login/vet-queue/vet-case 真实小瑕已修（login 文案贴原型、vet-queue 加箭头、vet-case 照片渐变色）。**关键发现：reviewer 系统性把「mock 数据差异」当 FAIL**（宠物名/天数/统计值），对数据屏打分偏低——按结构/组件/颜色/布局看才准。
+
+### 本批完成（B 类 + 连带）
+| 屏 | 类型 | 结果 |
+|---|---|---|
+| feed | 卡图固定高度 cover（一屏多卡贴原型紧凑流） | ✅ |
+| feed-empty | 文案贴原型+Temukan Teman次链接+无icon（像素级） | ✅ |
+| feed-error | 错误态文案贴原型（Gagal memuat feed+Coba Lagi+Laporkan Masalah）；FeedSkeleton 2列→单列 | ✅ UI（dev截图卡loading骨架是DEV_STATE时序，错误态有测试覆盖） |
+| feed-guest | AppBar Masuk钮 + 底部紫渐变登录引导横幅 | ✅ |
+| onboard | 渐变条+🎉+短线+欢迎语+档案预览卡+紫钮（像素级） | ✅ |
+| pet-create | 虚线圆头像+Upload Foto+大写label+紫边框输入+不可改红字+紫钮 | ✅ |
+| ai-upload | 居中标题+紫渐变速度横幅+FOTO GEJALA 3列+紫边框文本框+黄字免责+紫钮 | ✅ |
+| create | 实现已含全部原型元素，capture 改 preset=growth-calendar 进 growthMoment 态展现宠物tag+日期条 | ✅（捕获态问题，非实现） |
+| pet-edit | 套用 pet-create 样式（返回+居中+大写label+紫边框+只读类型+紫钮） | ✅ |
+| timeline-empty | paspor 重做连带达标 | ✅ |
+
+### 关键洞察：多屏低分实为「捕获态/数据」问题而非实现
+- **detail**（/content/1→不存在帖）、**vet-case**（id 不在 waiting-pool→轮询弹回）、**create**（默认 Harian 态不显 growthMoment 元素）——都是 capture 用错状态/id 导致截错屏，实现本身达标或接近。**教训：低分屏先核对捕获条件（id/DEV_STATE/类型态）再决定是否重做**。
+
+### B 类仍待做（真需重做，下一批）
+- **vet-login**（22）：当前极简（标题+下划线输入+钮），原型薄荷主题完整表单（图标块+信息条+大写label+薄荷边框输入+Hubungi Mitra钮+底部三信任标）。注：spec F3 无忘记密码，以 spec 为准。
+- **notif**（25）：结构接近但缺圆角方形彩色图标块 + HARI INI/KEMARIN 时间分组 + 未读紫浅底高亮；mock 种子文案是英文，需改印尼语。
+- **milestone**（28）：结构已接近（分组+徽章网格+进度），缺返回箭头；徽章全灰锁是 mock 数据态（应有已解锁彩色）。轻微。
+- **rate / chat**：未重新捕获评估（rate 需 DEV_STATE=rate 弹窗，chat 是 /consult/conversation/1）。
+
+### C 类打磨（12 屏）+ 未纳入屏（~18）仍待后续。
