@@ -112,10 +112,16 @@ ai-result/ai-result-green/ai-result-red、publish-reviewing/done/rejected、pet-
 ### 关键洞察：多屏低分实为「捕获态/数据」问题而非实现
 - **detail**（/content/1→不存在帖）、**vet-case**（id 不在 waiting-pool→轮询弹回）、**create**（默认 Harian 态不显 growthMoment 元素）——都是 capture 用错状态/id 导致截错屏，实现本身达标或接近。**教训：低分屏先核对捕获条件（id/DEV_STATE/类型态）再决定是否重做**。
 
-### B 类仍待做（真需重做，下一批）
-- **vet-login**（22）：当前极简（标题+下划线输入+钮），原型薄荷主题完整表单（图标块+信息条+大写label+薄荷边框输入+Hubungi Mitra钮+底部三信任标）。注：spec F3 无忘记密码，以 spec 为准。
-- **notif**（25）：结构接近但缺圆角方形彩色图标块 + HARI INI/KEMARIN 时间分组 + 未读紫浅底高亮；mock 种子文案是英文，需改印尼语。
-- **milestone**（28）：结构已接近（分组+徽章网格+进度），缺返回箭头；徽章全灰锁是 mock 数据态（应有已解锁彩色）。轻微。
-- **rate / chat**：未重新捕获评估（rate 需 DEV_STATE=rate 弹窗，chat 是 /consult/conversation/1）。
+### B 类完成（第三轮，已重做+模拟器验收）
+- **vet-login** ✅：薄荷主题完整重做（返回钮+薄荷图标块「Portal Dokter Hewan」+副文+薄荷浅底信息条+EMAIL/KATA SANDI 大写label+薄荷边框输入信封/锁图标+眼睛+薄荷「Masuk sebagai Dokter」大钮+Belum terdaftar分隔+Hubungi Mitra描边钮+底部三信任标）。spec F3 无忘记密码链接仅提示。
+- **notif** ✅：HARI INI/KEMARIN 时间分组+圆角方形彩色图标块(按type配色)+未读紫浅底高亮+紫点+印尼语相对时间；mock 种子改印尼语扩 5 条。
+- **milestone** ✅：返回+居中标题+Header横向(右侧 4/30 大字)+分组彩色标题(L金LEGENDA/M紫MAJOR/S绿SMALL)+徽章按级别配色(已解锁彩色实心圆奖杯/灰锁)。剩 L/M 全灰是 mock 数据态、标题「Tonggak」vs「Milestone Mochi」。
 
-### C 类打磨（12 屏）+ 未纳入屏（~18）仍待后续。
+### B 类仍待做（架构差异，需决策后做）
+- **rate**：当前是**评分弹窗**（标题+5小星+备注+Kirim），原型是**全屏评价页**（头像+医生名+时长 Durasi+大金星+快捷标签chips Responsif/Penjelasan Jelas+备注+Kirim Ulasan大钮+Lewati）。架构差异（弹窗→全屏页），且缺医生信息/快捷标签。
+- **chat**：气泡配色已对（紫/白）+免责+系统行+输入栏，但缺顶栏（头像+🟢Online·Klinik+红Akhiri钮）+紫浅底病例条（⚠Mochi—muntah·2 foto·Lihat）+气泡头像(D/A)+打字指示。中等重做（涉及 consult_conversation IM 逻辑，改顶栏/病例条/气泡头像不动消息流）。
+
+### 本 session 累计完成
+A 类 1（detail bug）+ B 类重做/达标 ~20 屏（paspor/vet-case/vet-queue/settings/namecard/login/feed系4/onboard/pet-create/ai-upload/create/pet-edit/timeline-empty/vet-login/notif/milestone）。全程 analyze 干净 + 321 测试绿。**核心方法论沉淀：低分先查捕获条件（id/DEV_STATE/类型态）；reviewer 对 mock 数据差异系统误判；表单重做统一模式 + 高视口测试。**
+
+### C 类打磨（12 屏）+ 未纳入屏（~18）+ rate/chat 仍待后续。
