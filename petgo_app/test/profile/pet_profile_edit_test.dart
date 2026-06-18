@@ -74,6 +74,9 @@ void main() {
   });
 
   testWidgets('修改名字提交调 update（PATCH）', (tester) async {
+    // 表单较长（分段label+多行bio），用高视口确保 ListView 全量构建（提交钮不出 fold）。
+    await tester.binding.setSurfaceSize(const Size(440, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     final repo = _FakeRepo(const PetProfile(id: 1, name: 'Momo', cardToken: 'TOK'));
     await tester.pumpWidget(_wrap(repo));
     await tester.pumpAndSettle();

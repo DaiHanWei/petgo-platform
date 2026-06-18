@@ -104,7 +104,16 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
 
     return Scaffold(
       backgroundColor: AppColors.base,
-      appBar: AppBar(title: Text(l10n.petProfileEditTitle), backgroundColor: AppColors.base),
+      appBar: AppBar(
+        backgroundColor: AppColors.base,
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.ink),
+          onPressed: () => context.canPop() ? context.pop() : context.go('/profile'),
+        ),
+        title: const Text('Ubah Profil Hewan',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink)),
+      ),
       body: profileAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, stack) => Center(child: Text(l10n.petProfileSaveFailed)),
@@ -126,88 +135,193 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
   Widget _form(AppLocalizations l10n) {
     return SafeArea(
       child: ListView(
-        padding: const EdgeInsets.all(AppSpacing.xl),
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
         children: [
+          // 实心圆头像 + 紫相机角标（编辑态有图；点击换图）。
           Center(
             child: GestureDetector(
               key: const ValueKey('petProfileEditAvatar'),
               onTap: _uploading ? null : _pickAvatar,
-              child: CircleAvatar(
-                radius: 44,
-                backgroundColor: AppColors.surface,
-                backgroundImage: AppImage.provider(_avatarUrl),
-                child: _uploading
-                    ? const CircularProgressIndicator()
-                    : (_avatarUrl == null
-                        ? const Icon(Icons.add_a_photo_outlined, color: AppColors.textTertiary)
-                        : null),
+              child: SizedBox(
+                width: 96,
+                height: 96,
+                child: Stack(
+                  children: [
+                    Center(
+                      child: CircleAvatar(
+                        radius: 44,
+                        backgroundColor: AppColors.cream2,
+                        backgroundImage: AppImage.provider(_avatarUrl),
+                        child: _uploading
+                            ? const CircularProgressIndicator()
+                            : (_avatarUrl == null
+                                ? const Text('🐱', style: TextStyle(fontSize: 38))
+                                : null),
+                      ),
+                    ),
+                    Positioned(
+                      right: 4,
+                      bottom: 4,
+                      child: Container(
+                        width: 30,
+                        height: 30,
+                        decoration: const BoxDecoration(
+                            shape: BoxShape.circle, color: AppColors.mint),
+                        child: const Icon(Icons.photo_camera_rounded,
+                            size: 16, color: AppColors.onAccent),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
-          // 宠物类型（F6）：创建后不可改 → 置灰只读展示，不随 PATCH 提交。
-          _petTypeReadonly(l10n),
-          const SizedBox(height: AppSpacing.md),
+          _sectionLabel('NAMA HEWAN', required: true),
+          const SizedBox(height: 6),
           TextField(
             key: const ValueKey('petProfileEditNameField'),
             controller: _nameController,
             maxLength: 20,
             onChanged: (_) => setState(() {}),
-            decoration: InputDecoration(labelText: l10n.petProfileName),
+            decoration: _inputDeco(),
           ),
+          const SizedBox(height: 16),
+          // 宠物类型（F6）：创建后不可改 → 置灰只读展示，不随 PATCH 提交。
+          _petTypeReadonly(l10n),
+          const SizedBox(height: 16),
+          _sectionLabel('RAS'),
+          const SizedBox(height: 6),
           TextField(
             key: const ValueKey('petProfileEditBreedField'),
             controller: _breedController,
             maxLength: 60,
-            decoration: InputDecoration(labelText: l10n.petProfileBreed),
+            decoration: _inputDeco(),
           ),
-          ListTile(
+          const SizedBox(height: 16),
+          _sectionLabel('TANGGAL LAHIR'),
+          const SizedBox(height: 6),
+          InkWell(
             key: const ValueKey('petProfileEditBirthdayTile'),
-            contentPadding: EdgeInsets.zero,
-            title: Text(l10n.petProfileBirthday),
-            subtitle: Text(_birthday == null
-                ? l10n.petProfileBirthdayPick
-                : '${_birthday!.year}-${_birthday!.month}-${_birthday!.day}'),
-            trailing: const Icon(Icons.calendar_today_outlined),
             onTap: _pickBirthday,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.line, width: 1.5),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _birthday == null ? l10n.petProfileBirthdayPick : _formatBirthday(_birthday!),
+                      style: TextStyle(
+                          fontSize: 15,
+                          color: _birthday == null ? AppColors.muted : AppColors.ink),
+                    ),
+                  ),
+                  const Icon(Icons.calendar_today_outlined, size: 18, color: AppColors.muted),
+                ],
+              ),
+            ),
           ),
+          const SizedBox(height: 16),
+          _sectionLabel('BIO (OPSIONAL)'),
+          const SizedBox(height: 6),
           TextField(
             key: const ValueKey('petProfileEditIntroField'),
             controller: _introController,
             maxLength: 30,
-            decoration: InputDecoration(labelText: l10n.petProfileIntro),
+            maxLines: 3,
+            decoration: _inputDeco(),
           ),
           const SizedBox(height: AppSpacing.lg),
-          FilledButton(
-            key: const ValueKey('petProfileEditSubmit'),
-            onPressed: _canSubmit ? _submit : null,
-            child: _submitting
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : Text(l10n.commonSave),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              key: const ValueKey('petProfileEditSubmit'),
+              onPressed: _canSubmit ? _submit : null,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.mint,
+                foregroundColor: AppColors.onAccent,
+                disabledBackgroundColor: AppColors.line,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              child: _submitting
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : Text(l10n.commonSave,
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+            ),
           ),
         ],
       ),
     );
   }
 
-  /// 宠物类型只读区（F6）：展示既有类型，三枚 chip 全置灰不可点（onSelected null），不参与提交。
+  Widget _sectionLabel(String text, {bool required = false}) => RichText(
+        text: TextSpan(
+          style: const TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.5,
+              color: AppColors.ink2),
+          children: [
+            TextSpan(text: text),
+            if (required) const TextSpan(text: ' *', style: TextStyle(color: AppColors.popRed)),
+          ],
+        ),
+      );
+
+  InputDecoration _inputDeco() => InputDecoration(
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        counterText: '',
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.line, width: 1.5),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.mint, width: 1.5),
+        ),
+      );
+
+  static String _formatBirthday(DateTime d) {
+    const months = [
+      '', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+    ];
+    return '${d.day} ${months[d.month]} ${d.year}';
+  }
+
+  /// 宠物类型只读区（F6）：展示既有类型，三枚 emoji chip 全置灰不可点（onSelected null），不参与提交。
   Widget _petTypeReadonly(AppLocalizations l10n) {
-    final labels = {'CAT': l10n.petTypeCat, 'DOG': l10n.petTypeDog, 'OTHER': l10n.petTypeOther};
+    final labels = {
+      'CAT': '🐱 ${l10n.petTypeCat}',
+      'DOG': '🐶 ${l10n.petTypeDog}',
+      'OTHER': '🐾 ${l10n.petTypeOther}',
+    };
     return Column(
       key: const ValueKey('petProfileEditTypeReadonly'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Text(l10n.petTypeLabel, style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+            _sectionLabel('JENIS HEWAN'),
             const SizedBox(width: 6),
-            const Icon(Icons.lock_outline, size: 13, color: AppColors.textTertiary),
-            const SizedBox(width: 4),
-            Text(l10n.petTypeLockedHint,
-                style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+            const Icon(Icons.lock_outline, size: 12, color: AppColors.muted),
+            const SizedBox(width: 3),
+            Flexible(
+              child: Text(l10n.petTypeLockedHint,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppColors.muted, fontSize: 10)),
+            ),
           ],
         ),
-        const SizedBox(height: AppSpacing.sm),
+        const SizedBox(height: 8),
         Wrap(
           spacing: AppSpacing.sm,
           children: [
@@ -216,6 +330,19 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
                 key: ValueKey('petTypeReadonly_${e.key}'),
                 label: Text(e.value),
                 selected: _petType == e.key,
+                showCheckmark: false,
+                labelStyle: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: _petType == e.key ? AppColors.mint700 : AppColors.muted),
+                selectedColor: AppColors.cream2,
+                backgroundColor: AppColors.card,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  side: BorderSide(
+                      color: _petType == e.key ? AppColors.dashedViolet : AppColors.line,
+                      width: 1.5),
+                ),
                 onSelected: null, // 置灰只读：不可改
               ),
           ],
