@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
@@ -46,10 +47,15 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
     } else {
       _enter.forward();
     }
-    _timer = Timer(SplashPage.hold, () {
-      if (!mounted) return;
-      (widget.onComplete ?? () => context.go('/home'))();
-    });
+    // Debug-only：DEV_ROUTE=/splash 时定屏不跳转，供视觉验收截图。
+    const devPinSplash =
+        kDebugMode && String.fromEnvironment('DEV_ROUTE') == '/splash';
+    if (!devPinSplash) {
+      _timer = Timer(SplashPage.hold, () {
+        if (!mounted) return;
+        (widget.onComplete ?? () => context.go('/home'))();
+      });
+    }
   }
 
   @override
