@@ -464,6 +464,8 @@
   "consultRateStarsRequired": "Please pick a star rating",
   "consultRateCommentHint": "Add a note (optional, max 100 chars)",
   "consultRateSubmit": "Submit",
+  "consultRateSubmitReview": "Submit Review",
+  "consultRateSkip": "Skip",
   "consultRateThanks": "Thanks for your rating",
   "consultRateFailed": "Could not submit, please try again",
   "consultInterrupted": "The vet went offline. This consultation was interrupted.",

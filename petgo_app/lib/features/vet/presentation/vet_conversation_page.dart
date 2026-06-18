@@ -148,6 +148,7 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
                 imConversationId: d.session.imConversationId,
                 peerId: d.session.userId != null ? 'u_${d.session.userId}' : null,
                 accent: AppColors.vetPrimary, // 兽医侧气泡/发送钮薄荷 #5BCBBB（非 M3 偏移色）
+                selfIsVet: true, // 兽医视角：己方薄荷「D」/ 对端用户紫「A」
               ),
             ],
           );

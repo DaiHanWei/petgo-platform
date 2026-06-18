@@ -402,6 +402,8 @@
   "consultRateStarsRequired": "Pilih nilai bintang",
   "consultRateCommentHint": "Tambahkan catatan (opsional, maks 100 karakter)",
   "consultRateSubmit": "Kirim",
+  "consultRateSubmitReview": "Kirim Ulasan",
+  "consultRateSkip": "Lewati",
   "consultRateThanks": "Terima kasih atas penilaianmu",
   "consultRateFailed": "Gagal mengirim, coba lagi",
   "consultInterrupted": "Dokter hewan sedang offline. Konsultasi ini terputus.",

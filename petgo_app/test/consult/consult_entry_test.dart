@@ -109,15 +109,20 @@ void main() {
   });
 
   testWidgets('AC5: 无进行中会话 + 有待补弹 → 补弹评分一次', (tester) async {
+    // 全屏评价页较高，设大视口让「Lewati」可见可点。
+    tester.view.physicalSize = const Size(400, 1000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     final repo = _FakeConsultRepository(
       online: true,
       pending: _session(9, 'CLOSED'),
     );
     await _pump(tester, repo);
     expect(find.byType(ConsultRatingDialog), findsOneWidget);
-    // 用户跳过（点击遮罩关闭）→ 弹后置 PROMPTED 不再弹（mark 在弹窗关闭后才调）。
+    // 用户跳过（点「Lewati」关闭全屏评价页）→ 弹后置 PROMPTED 不再弹（mark 在页关闭后才调）。
     // 在线态绿脉冲常驻 → 用固定帧推进而非 pumpAndSettle。
-    await tester.tapAt(const Offset(20, 20));
+    await tester.tap(find.byKey(const ValueKey('ratingSkip')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.byType(ConsultRatingDialog), findsNothing);

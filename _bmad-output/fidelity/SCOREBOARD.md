@@ -129,4 +129,14 @@ A 类 1（detail bug）+ B 类重做/达标 ~20 屏（paspor/vet-case/vet-queue/
 - **timeline-empty**（38%→~70%）：空态从一行字改为居中引导（「Belum ada catatan」标题+副文+紫「+ Catat Momen Pertama」CTA，对齐原型 timeline-empty.html）。护照卡保留（App 合理增强：有档案显档案信息，原型该图疑似裁切未画护照卡）。
 - **feed-error**（仍 5%，dev 截图工具限制）：错误态 UI 已实现且 **feed_test AC5 覆盖验证正确**（provider override 抛错→EmptyState「Gagal memuat feed」+Coba Lagi 正确渲染）。但 `DEV_STATE=feed-error`（mock GET /content-posts `throw 500`）在真实 dio 链路下截图**卡 loading 骨架**不触发 error 态——已排查：AuthInterceptor.onError 对 500 正确放行(next)，feed-empty(同机制 return ok)正常，故疑为 mock async reject + provider 重建时序问题。**待 dev 后续根因定位（非产品 bug）**。
 
-### C 类打磨（12 屏）+ 未纳入屏（~18）+ rate/chat（架构差异）仍待后续。
+### 第五轮（B 类收尾：rate + chat）—— B 类 21/21 全部完成 ✅
+> 全量 `flutter analyze` 干净 + `flutter test` 321 全绿；rate/chat 已 Android 模拟器截图肉眼验过贴原型。
+
+- **rate**（22%→达标，架构差异已消化）：由**评分弹窗**改为**全屏评价页**（原型 rate.html 1:1）。薄荷头像「D」+ 兽医名 + 「Klinik Hewan Sehat · Durasi: 18 menit」+ 标题「Bagaimana pengalamanmu?」+ 副文 → 5 大星（必填，金 #F6A609）→ 快捷标签 chips 多选（Responsif👍/Penjelasan Jelas📋/Sabar/Ramah/Profesional）→ ≤100 字备注 → 紫「Kirim Ulasan」大钮 → 「Lewati」。
+  - **保契约不动后端**：`ConsultRatingDialog.show()` 静态 API + `RatingResult(stars,comment)` 返回不变（3 调用点：triage 补弹 / 会话页结束 / 入口延迟补弹）；仅 AlertDialog→fullscreenDialog 路由。快捷标签为原型呈现元素（不在数据模型）→ 选中标签随备注**折叠进单一 comment 字段**（≤100 裁断，不新增后端字段）。
+  - 测试随之改：入口页 AC5 原「点遮罩关弹窗」→ 改「点 Lewati(ratingSkip)」+ 设大视口（全屏页高于默认 600 视口，Skip 在 fold 外）。
+- **chat**（35%→达标，中等重做）：自定义浅色顶栏（返回钮 + 薄荷「D」头像带在线点 + 「drh. Dewi Santoso」+ 「● Online · Klinik Hewan Sehat」/终态副行 + 红描边 Akhiri）+ 紫浅底症状摘要条（info + 占位症状 + 「Lihat ↓」）+ 气泡两侧头像（兽医薄荷「D」/ 用户紫渐变「A」）。**不动消息流**：保留 NFR-9 金色免责条、评分提示条、中断态、IM 占位、全部 key（consultTerminalLabel/consultInterruptedState/consultReconsult/consultRatePromptBanner/consultOpenRating/consultDisclaimerBanner）。
+  - **气泡头像参数化共享**：ImChatPlaceholder 加 `selfIsVet`（用户侧 false：己方紫「A」/对端薄荷「D」；兽医侧 true：反之），vet_conversation_page 传 true，两端各自正确。
+  - 「Akhiri」用户侧无结束端点 → 确认后离开会话（服务端状态权威，本页不发起结束）。
+
+### 仍待后续：C 类打磨（12 屏）+ 未纳入屏（~18，需补可达手段）。

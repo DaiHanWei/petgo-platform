@@ -16,7 +16,8 @@ import '../../../shared/widgets/design/striped_photo.dart';
 /// [imConversationId] 用于真实 C2C 收发，绑定腾讯 IM Flutter SDK 后此面用 [ImService.onMessages]/`sendText`
 /// 替换本地回声，视觉保留。mock / 测试下保持本地演示气泡（不触真实 SDK）。
 class ImChatPlaceholder extends StatefulWidget {
-  const ImChatPlaceholder({super.key, this.imConversationId, this.peerId, this.accent = AppColors.mint});
+  const ImChatPlaceholder(
+      {super.key, this.imConversationId, this.peerId, this.accent = AppColors.mint, this.selfIsVet = false});
 
   final String? imConversationId;
 
@@ -26,6 +27,10 @@ class ImChatPlaceholder extends StatefulWidget {
   /// 己方气泡 + 发送钮品牌主色：用户侧紫 `AppColors.mint`(#845EC9 默认) / 兽医侧薄荷 `vetPrimary`(#5BCBBB)。
   /// 直接取品牌 token（非 M3 colorScheme.primary，避免色调偏移失真）。
   final Color accent;
+
+  /// 视角：兽医侧 true（己方=兽医薄荷「D」头像，对端=用户紫「A」）/ 用户侧 false（己方=用户紫「A」，对端=兽医薄荷「D」）。
+  /// 控气泡两侧头像配色/字母（原型 chat.html / vet-chat.html）。
+  final bool selfIsVet;
 
   @override
   State<ImChatPlaceholder> createState() => _ImChatPlaceholderState();
@@ -127,8 +132,13 @@ class _ImChatPlaceholderState extends State<ImChatPlaceholder> {
               controller: _scroll,
               padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
               children: [
-                for (final m in _msgs) _Bubble(msg: m, accent: widget.accent),
-                if (_typing) _Bubble(msg: const _ChatMsg.vet('...'), typing: true, accent: widget.accent),
+                for (final m in _msgs) _Bubble(msg: m, accent: widget.accent, selfIsVet: widget.selfIsVet),
+                if (_typing)
+                  _Bubble(
+                      msg: const _ChatMsg.vet('...'),
+                      typing: true,
+                      accent: widget.accent,
+                      selfIsVet: widget.selfIsVet),
               ],
             ),
           ),
@@ -140,11 +150,33 @@ class _ImChatPlaceholderState extends State<ImChatPlaceholder> {
 }
 
 class _Bubble extends StatelessWidget {
-  const _Bubble({required this.msg, this.typing = false, required this.accent});
+  const _Bubble({required this.msg, this.typing = false, required this.accent, this.selfIsVet = false});
 
   final _ChatMsg msg;
   final bool typing;
   final Color accent;
+  final bool selfIsVet;
+
+  /// 28px 圆头像：薄荷实心（兽医「D」）/ 紫渐变（用户「A」）。
+  Widget _avatar({required bool mint, required String label}) {
+    return Container(
+      width: 28,
+      height: 28,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: mint ? AppColors.vetPrimary : null,
+        gradient: mint
+            ? null
+            : const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [AppColors.mint500, AppColors.mint]),
+      ),
+      child: Text(label,
+          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -164,7 +196,12 @@ class _Bubble extends StatelessWidget {
     }
 
     final me = msg.who == 'me';
-    final align = me ? Alignment.centerRight : Alignment.centerLeft;
+
+    // 头像：己方 me（兽医侧薄荷「D」/ 用户侧紫「A」）；对端（反之）。原型两侧贴头像，sys 无。
+    final meMint = selfIsVet; // 兽医视角己方=薄荷
+    final avatar = me
+        ? _avatar(mint: meMint, label: meMint ? 'D' : 'A')
+        : _avatar(mint: !meMint, label: !meMint ? 'D' : 'A');
 
     Widget content;
     if (msg.photo != null) {
@@ -195,12 +232,19 @@ class _Bubble extends StatelessWidget {
       );
     }
 
+    final bubble = ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.72),
+      child: content,
+    );
+
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4.5),
-      alignment: align,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.8),
-        child: content,
+      child: Row(
+        mainAxisAlignment: me ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: me
+            ? [Flexible(child: bubble), const SizedBox(width: 8), avatar]
+            : [avatar, const SizedBox(width: 8), Flexible(child: bubble)],
       ),
     );
   }

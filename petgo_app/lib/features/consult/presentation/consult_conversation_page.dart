@@ -129,12 +129,38 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
     }
   }
 
+  /// 离开会话页（返回上一屏；无栈可弹则回问诊入口）。
+  void _leave() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/consult');
+    }
+  }
+
+  /// 用户侧「Akhiri」：确认后离开会话（会话状态由服务端权威；本页不发起结束端点）。
+  Future<void> _confirmLeave() async {
+    final l10n = AppLocalizations.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.vetEndConfirmTitle),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(l10n.vetEndConfirmNo)),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(l10n.vetEndConfirmYes)),
+        ],
+      ),
+    );
+    if (ok == true && mounted) _leave();
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final pendingClose = _status == 'PENDING_CLOSE' && !_rated;
     final interrupted = _status == 'INTERRUPTED';
     final closed = _status == 'CLOSED';
+    final active = _status == 'IN_PROGRESS';
     // 终态只读标签（Story 5.8 AC3）：已结束 / 未评分 / 已中断。
     final terminalLabel = interrupted
         ? l10n.terminalInterrupted
@@ -145,102 +171,229 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
                 : null;
     return Scaffold(
       backgroundColor: AppColors.base,
-      appBar: AppBar(
-        title: Text(l10n.consultConversationTitle),
-        actions: [
-          if (terminalLabel != null)
-            Padding(
-              padding: const EdgeInsets.only(right: AppSpacing.md),
-              child: Center(
-                child: Text(terminalLabel,
-                    key: const ValueKey('consultTerminalLabel'), style: AppTypography.caption),
-              ),
-            ),
-        ],
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // 免责提示常驻（NFR-9 / UX-DR14：克制、双语、显著位）。TailTopia Prototype 金色条。
-            Container(
-              key: const ValueKey('consultDisclaimerBanner'),
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              color: AppColors.goldTint,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('ℹ️', style: TextStyle(fontSize: 14)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      l10n.consultDisclaimer,
-                      style: const TextStyle(
-                          fontSize: 11.5, height: 1.4, color: Color(0xFF8A6A12)),
-                    ),
+      body: Column(
+        children: [
+          _topBar(l10n, terminalLabel: terminalLabel, showEnd: active),
+          // 免责提示常驻（NFR-9 / UX-DR14：克制、双语、显著位）。TailTopia Prototype 金色条。
+          Container(
+            key: const ValueKey('consultDisclaimerBanner'),
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            color: AppColors.goldTint,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('ℹ️', style: TextStyle(fontSize: 14)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    l10n.consultDisclaimer,
+                    style: const TextStyle(fontSize: 11.5, height: 1.4, color: Color(0xFF8A6A12)),
                   ),
+                ),
+              ],
+            ),
+          ),
+          // 原始症状摘要条（原型紫浅底折叠条）。占位内容；仅活跃会话显示。
+          if (active || pendingClose) _symptomBar(),
+          Expanded(
+            child: SafeArea(
+              top: false,
+              child: Column(
+                children: [
+                  // 封禁中断（Story 5.7）：转只读终态 + 软引导重新发起（复用 5.3 发起入口）。
+                  if (interrupted)
+                    Expanded(
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(AppSpacing.xl),
+                          child: Column(
+                            key: const ValueKey('consultInterruptedState'),
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.cloud_off_outlined, size: 48, color: AppColors.textTertiary),
+                              const SizedBox(height: AppSpacing.md),
+                              Text(l10n.consultInterrupted,
+                                  style: AppTypography.body, textAlign: TextAlign.center),
+                              const SizedBox(height: AppSpacing.section),
+                              FilledButton(
+                                key: const ValueKey('consultReconsult'),
+                                onPressed: () => context.go('/consult'),
+                                child: Text(l10n.consultReconsult),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  // 兽医结束 → 请评分提示；CLOSED 未评分进入也可补评（30min 内仍可继续发消息，故非阻断 banner）。
+                  if (pendingClose || (closed && _closedReason == 'UNRATED' && !_rated))
+                    Container(
+                      key: const ValueKey('consultRatePromptBanner'),
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      color: AppColors.surface,
+                      child: Row(
+                        children: [
+                          Expanded(child: Text(l10n.consultRatePrompt, style: AppTypography.caption)),
+                          FilledButton(
+                            key: const ValueKey('consultOpenRating'),
+                            onPressed: _openRating,
+                            child: Text(l10n.consultRateSubmit),
+                          ),
+                        ],
+                      ),
+                    ),
+                  // 终态（中断/关闭）转只读：不显示输入区。
+                  if (!interrupted && !closed)
+                    ImChatPlaceholder(
+                      imConversationId: 'session-${widget.sessionId}',
+                      peerId: _peerId,
+                    ),
+                  // 关闭终态占位（只读，无输入框）。
+                  if (closed)
+                    Expanded(
+                      child: Center(
+                        child: Text(l10n.imChatPlaceholderHint,
+                            style: AppTypography.disclaimer, textAlign: TextAlign.center),
+                      ),
+                    ),
                 ],
               ),
             ),
-            // 封禁中断（Story 5.7）：转只读终态 + 软引导重新发起（复用 5.3 发起入口）。
-            if (interrupted)
-              Expanded(
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(AppSpacing.xl),
-                    child: Column(
-                      key: const ValueKey('consultInterruptedState'),
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.cloud_off_outlined, size: 48, color: AppColors.textTertiary),
-                        const SizedBox(height: AppSpacing.md),
-                        Text(l10n.consultInterrupted,
-                            style: AppTypography.body, textAlign: TextAlign.center),
-                        const SizedBox(height: AppSpacing.section),
-                        FilledButton(
-                          key: const ValueKey('consultReconsult'),
-                          onPressed: () => context.go('/consult'),
-                          child: Text(l10n.consultReconsult),
-                        ),
-                      ],
-                    ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 浅色顶栏（原型 chat.html）：返回钮 + 薄荷头像（在线点）+ 兽医名 + 「● Online · 诊所」/终态副行 + Akhiri。
+  Widget _topBar(AppLocalizations l10n, {required String? terminalLabel, required bool showEnd}) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(bottom: BorderSide(color: AppColors.line2)),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+          child: Row(
+            children: [
+              InkWell(
+                key: const ValueKey('consultLeave'),
+                onTap: _leave,
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  width: 34,
+                  height: 34,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3F3F3),
+                    borderRadius: BorderRadius.circular(10),
                   ),
+                  child: const Icon(Icons.arrow_back, size: 18, color: AppColors.ink2),
                 ),
               ),
-            // 兽医结束 → 请评分提示；CLOSED 未评分进入也可补评（30min 内仍可继续发消息，故非阻断 banner）。
-            if (pendingClose || (closed && _closedReason == 'UNRATED' && !_rated))
-              Container(
-                key: const ValueKey('consultRatePromptBanner'),
-                width: double.infinity,
-                padding: const EdgeInsets.all(AppSpacing.md),
-                color: AppColors.surface,
-                child: Row(
+              const SizedBox(width: 11),
+              // 兽医头像 + 在线点。占位内容。
+              SizedBox(
+                width: 38,
+                height: 38,
+                child: Stack(
                   children: [
-                    Expanded(child: Text(l10n.consultRatePrompt, style: AppTypography.caption)),
-                    FilledButton(
-                      key: const ValueKey('consultOpenRating'),
-                      onPressed: _openRating,
-                      child: Text(l10n.consultRateSubmit),
+                    Container(
+                      width: 38,
+                      height: 38,
+                      alignment: Alignment.center,
+                      decoration: const BoxDecoration(color: AppColors.vetPrimary, shape: BoxShape.circle),
+                      child: const Text('D',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+                    ),
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        width: 11,
+                        height: 11,
+                        decoration: BoxDecoration(
+                          color: AppColors.vetPrimary,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.surface, width: 2),
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
-            // 终态（中断/关闭）转只读：不显示输入区。
-            if (!interrupted && !closed)
-              ImChatPlaceholder(
-                imConversationId: 'session-${widget.sessionId}',
-                peerId: _peerId,
-              ),
-            // 关闭终态占位（只读，无输入框）。
-            if (closed)
+              const SizedBox(width: 11),
               Expanded(
-                child: Center(
-                  child: Text(l10n.imChatPlaceholderHint,
-                      style: AppTypography.disclaimer, textAlign: TextAlign.center),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('drh. Dewi Santoso',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink)),
+                    if (terminalLabel != null)
+                      Text(terminalLabel,
+                          key: const ValueKey('consultTerminalLabel'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 11, color: AppColors.muted))
+                    else
+                      const Text('● Online · Klinik Hewan Sehat',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.vetPrimary)),
+                  ],
                 ),
               ),
-          ],
+              if (showEnd) ...[
+                const SizedBox(width: 8),
+                OutlinedButton(
+                  key: const ValueKey('consultEndSession'),
+                  onPressed: _confirmLeave,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.coral,
+                    side: const BorderSide(color: AppColors.coral, width: 1.5),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: Text(l10n.vetEndConfirmYes,
+                      style: const TextStyle(fontSize: 12, color: AppColors.coral)),
+                ),
+              ],
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  /// 原始症状摘要折叠条（原型紫浅底）：info 图标 + 占位症状摘要 + 「Lihat ↓」。
+  Widget _symptomBar() {
+    return Container(
+      width: double.infinity,
+      color: AppColors.mintTint,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline, size: 15, color: AppColors.mint),
+          const SizedBox(width: 9),
+          const Expanded(
+            child: Text('Mochi — muntah busa putih 2x · 2 foto',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.mint)),
+          ),
+          const SizedBox(width: 8),
+          Text('Lihat ↓', style: TextStyle(fontSize: 11, color: AppColors.violetSoft)),
+        ],
       ),
     );
   }
