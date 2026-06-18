@@ -14,10 +14,14 @@ import 'login_guide_outcome.dart';
 /// **R2 / AC3（决策 F13）**：[onLogin] 返回 [LoginGuideOutcome]——失败时弹窗内联展示
 /// 「登录失败，请重试」失败态（主 CTA 即重试入口）；取消静默保持；成功由协调器关闭弹窗。
 class LoginHardDialog extends StatefulWidget {
-  const LoginHardDialog({super.key, required this.onLogin, required this.onClose});
+  const LoginHardDialog(
+      {super.key, required this.onLogin, required this.onClose, this.onVet});
 
   final Future<LoginGuideOutcome> Function() onLogin;
   final VoidCallback onClose;
+
+  /// 兽医登录入口（可选）：游客无需先登普通用户，直接进 /vet/login（单 App 双角色）。
+  final VoidCallback? onVet;
 
   @override
   State<LoginHardDialog> createState() => _LoginHardDialogState();
@@ -43,46 +47,130 @@ class _LoginHardDialogState extends State<LoginHardDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return AlertDialog(
+    // 原型 login-gate：居中定制 modal（紫浅底 icon 区 + 标题 + 利益文案 + 纵向按钮）。
+    return Dialog(
       backgroundColor: AppColors.surface,
-      title: Text(l10n.appTitle, style: AppTypography.title),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(l10n.loginGuideHardMessage, style: AppTypography.body),
-          // 失败态：内联「登录失败，请重试」（决策 F13；主 CTA 即重试入口）
-          if (_failed) ...[
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              l10n.loginFailed,
-              key: const ValueKey('hardDialogError'),
-              style: AppTypography.caption.copyWith(color: AppColors.danger),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 图标区：紫浅底圆角盒 + lock 图标。
+            Container(
+              width: 68,
+              height: 68,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                  color: AppColors.mintTint2, borderRadius: BorderRadius.circular(20)),
+              child: const Icon(Icons.lock_outline_rounded, size: 34, color: AppColors.mint),
             ),
+            const SizedBox(height: 18),
+            Text(l10n.loginGateTitle,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    fontSize: 19,
+                    height: 1.3,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.ink)),
+            const SizedBox(height: 8),
+            // 利益文案（保留 loginGuideHardMessage 文案契约）。
+            Text(l10n.loginGuideHardMessage,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 13, height: 1.65, color: AppColors.ink2)),
+            if (_failed) ...[
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                l10n.loginFailed,
+                key: const ValueKey('hardDialogError'),
+                style: AppTypography.caption.copyWith(color: AppColors.danger),
+              ),
+            ],
+            const SizedBox(height: 24),
+            // 主按钮：Google 登录（白底 + 描边 + Google G）。
+            _GoogleButton(loading: _loading, onTap: _loading ? null : _handleLogin),
+            const SizedBox(height: 10),
+            // 次按钮：Daftar Gratis（实心紫）——决策 #4：V1 无独立注册流，与 Google 同源建号。
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                key: const ValueKey('hardDialogRegisterCta'),
+                onPressed: _loading ? null : _handleLogin,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.mint,
+                  foregroundColor: AppColors.onAccent,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
+                ),
+                child: Text(l10n.loginGateRegister,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            // 继续看（文字链）。
+            TextButton(
+              key: const ValueKey('hardDialogClose'),
+              onPressed: _loading ? null : widget.onClose,
+              child: Text(l10n.loginGateContinue,
+                  style: const TextStyle(fontSize: 13, color: AppColors.muted)),
+            ),
+            // 兽医登录入口（游客可达，单 App 双角色）。
+            if (widget.onVet != null)
+              TextButton(
+                key: const ValueKey('hardDialogVetLink'),
+                onPressed: _loading ? null : widget.onVet,
+                child: Text(l10n.vetLoginLink,
+                    style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+              ),
           ],
-        ],
+        ),
       ),
-      actions: [
-        TextButton(
-          key: const ValueKey('hardDialogClose'),
-          onPressed: _loading ? null : widget.onClose,
-          child: Text(
-            l10n.commonClose,
-            style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
-          ),
+    );
+  }
+}
+
+/// Google 登录按钮（原型：白底 + #E6E6E6 描边 + 多色 G + 文案）。加载态显示进度环。
+class _GoogleButton extends StatelessWidget {
+  const _GoogleButton({required this.loading, required this.onTap});
+
+  final bool loading;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton(
+        key: const ValueKey('hardDialogGoogleCta'),
+        onPressed: onTap,
+        style: OutlinedButton.styleFrom(
+          backgroundColor: AppColors.surface,
+          foregroundColor: AppColors.ink,
+          side: const BorderSide(color: AppColors.line, width: 1.5),
+          padding: const EdgeInsets.symmetric(vertical: 13),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
         ),
-        FilledButton.icon(
-          key: const ValueKey('hardDialogGoogleCta'),
-          onPressed: _loading ? null : _handleLogin,
-          style: FilledButton.styleFrom(
-            backgroundColor: AppColors.accentGrowth,
-            foregroundColor: AppColors.onAccent,
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
-          ),
-          icon: const Icon(Icons.login),
-          label: Text(l10n.loginGoogle, style: AppTypography.button),
-        ),
-      ],
+        child: loading
+            ? const SizedBox(
+                width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 多色「G」字标（避免引入 Google 图标资源）。
+                  const Text('G',
+                      style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.brandGoogleBlue)),
+                  const SizedBox(width: 10),
+                  Text(l10n.loginGoogle,
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                ],
+              ),
+      ),
     );
   }
 }

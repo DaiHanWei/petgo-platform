@@ -75,8 +75,8 @@ void main() {
 
   testWidgets('AC2: 文案随 id 切换', (tester) async {
     await _pump(tester, const Locale('id'));
-    expect(find.text('Masuk dengan Google'), findsOneWidget);
-    expect(find.text('Ketentuan Layanan'), findsOneWidget);
+    expect(find.text('Lanjutkan dengan Google'), findsOneWidget);
+    expect(find.text('Syarat & Ketentuan'), findsOneWidget);
     expect(find.text('Kebijakan Privasi'), findsOneWidget);
   });
 

@@ -9,9 +9,7 @@ import '../../../core/theme/shadows.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../../shared/widgets/design/btn3d.dart';
-import '../../../shared/widgets/design/emoji_avatar.dart';
-import '../../../shared/widgets/design/momo.dart';
+import '../../../shared/widgets/design/online_pulse_dot.dart';
 import '../../auth/domain/auth_guard.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../consult/data/consult_repository.dart';
@@ -50,6 +48,29 @@ class _TriagePageState extends ConsumerState<TriagePage> {
     _history = repo.history();
   }
 
+  /// 兽医卡：登录态读 [consultAvailabilityProvider] 的在线 bool 驱动绿点（在线→脉冲「Dokter tersedia」，
+  /// 否则静态营业时段提示）；游客不打 availability 请求，显示默认营业时段（不造假具名医生）。
+  Widget _vetCard(BuildContext context, WidgetRef ref, AppLocalizations l10n, bool loggedIn) {
+    final online =
+        loggedIn && (ref.watch(consultAvailabilityProvider).asData?.value.vetOnline ?? false);
+    return _KCard(
+      ctaKey: 'triageEntryVet',
+      emoji: '🩺',
+      ai: false,
+      title: l10n.triageVetCardTitle,
+      desc: l10n.triageVetCardDesc,
+      dotText: online ? l10n.triageVetAvailableNow : l10n.triageVetHours,
+      pulse: online,
+      cta: l10n.triageVetCardCta,
+      onTap: () => requireLogin(
+        ref,
+        context,
+        pendingAction: const RouteIntent(location: '/consult'),
+        onAllowed: () => context.push('/consult'),
+      ),
+    );
+  }
+
   Future<void> _checkPendingRating() async {
     if (_promptChecked) return;
     _promptChecked = true;
@@ -79,40 +100,28 @@ class _TriagePageState extends ConsumerState<TriagePage> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
           children: <Widget>[
-            // ① Momo 头部。
-            Row(
-              children: const [
-                Momo(size: 44, happy: false),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Konsultasi Kilat',
-                          style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: -0.4,
-                              color: AppColors.ink)),
-                      Text('Tenang, kami bantu cek anabul-mu 💚',
-                          style: TextStyle(fontSize: 13, color: AppColors.muted)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            // ② AI 分诊（soft CTA）。
-            _EntryCard(
+            // ① 文案 Hero（原型 khero）。
+            Text(l10n.triageHeroTitle,
+                style: const TextStyle(
+                    fontSize: 23,
+                    height: 1.2,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.4,
+                    color: AppColors.ink)),
+            const SizedBox(height: 4),
+            Text(l10n.triageHeroSubtitle,
+                style: const TextStyle(fontSize: 13, color: AppColors.muted)),
+            const SizedBox(height: 16),
+            // ② AI 分诊卡（原型 kcard-ai：135° 紫渐变 + ⚡ + 白字 + 绿点常驻态 + 白底 CTA）。
+            _KCard(
               ctaKey: 'triageEntryAI',
-              emoji: '🤖',
-              tone: AppColors.mintTint,
-              title: 'Tanya AI (Triase)',
-              badge: _EntryBadge(label: '≤ 15 detik', color: AppColors.mint700),
-              desc:
-                  'Unggah foto gejala, AI kasih level bahaya + saran observasi & obat rumahan.',
-              cta: 'Mulai triase',
-              primary: false,
+              emoji: '⚡',
+              ai: true,
+              title: l10n.triageAiCardTitle,
+              desc: l10n.triageAiCardDesc,
+              dotText: l10n.triageAiAlwaysOn,
+              pulse: true,
+              cta: l10n.triageAiCardCta,
               onTap: () => requireLogin(
                 ref,
                 context,
@@ -121,33 +130,9 @@ class _TriagePageState extends ConsumerState<TriagePage> {
               ),
             ),
             const SizedBox(height: 14),
-            // ② 兽医咨询（primary CTA）。
-            _EntryCard(
-              ctaKey: 'triageEntryVet',
-              emoji: '🩺',
-              tone: AppColors.skyTint,
-              title: 'Chat Dokter Hewan',
-              badge: const _EntryBadge(label: '2 dokter online', color: Color(0xFF2F7DB8), live: true),
-              desc: 'Ngobrol langsung (teks & foto) dengan dokter mitra. Gratis di versi ini.',
-              cta: 'Mulai konsultasi',
-              primary: true,
-              onTap: () => requireLogin(
-                ref,
-                context,
-                pendingAction: const RouteIntent(location: '/consult'),
-                onAllowed: () => context.push('/consult'),
-              ),
-            ),
+            // ② 兽医咨询卡（原型 kcard-vet：白底 + #E6E6E6 边框 + 🩺 + availability 绿点 + 营业时段）。
+            _vetCard(context, ref, l10n, loggedIn),
             const SizedBox(height: 18),
-            // ③ 在线兽医条。
-            const Text('Dokter sedang online',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.ink)),
-            const SizedBox(height: 10),
-            const _VetRow(emoji: '🧑‍⚕️', name: 'drh. Sari', spec: 'Kucing & Anjing', online: true),
-            const SizedBox(height: 10),
-            const _VetRow(emoji: '👨‍⚕️', name: 'drh. Bayu', spec: 'Eksotik & Burung', online: true),
-            const SizedBox(height: 10),
-            const _VetRow(emoji: '👩‍⚕️', name: 'drh. Indah', spec: 'Umum', online: false),
             if (loggedIn) ...<Widget>[
               // ④ 进行中会话卡（若有）。
               FutureBuilder<ConsultSession?>(
@@ -211,187 +196,140 @@ class _TriagePageState extends ConsumerState<TriagePage> {
   }
 }
 
-/// 问诊入口卡（TailTopia Prototype EntryCard）：图标盒 + 标题/中文 + 徽章 + 描述 + 全宽 CTA。
-class _EntryCard extends StatelessWidget {
-  const _EntryCard({
+/// 问诊入口卡（原型 kcard）：AI 态=135° 紫渐变 + 白字；兽医态=白底 + #E6E6E6 边框。
+/// 图标盒 + 标题 + 描述 + 绿点行（可脉冲）+ 全宽 CTA（带「→」）。
+class _KCard extends StatelessWidget {
+  const _KCard({
     required this.ctaKey,
     required this.emoji,
-    required this.tone,
+    required this.ai,
     required this.title,
-    required this.badge,
     required this.desc,
+    required this.dotText,
+    required this.pulse,
     required this.cta,
-    required this.primary,
     required this.onTap,
   });
 
   final String ctaKey;
   final String emoji;
-  final Color tone;
+  final bool ai;
   final String title;
-  final Widget badge;
   final String desc;
+  final String dotText;
+  final bool pulse;
   final String cta;
-  final bool primary;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final onCard = ai ? AppColors.onAccent : AppColors.ink;
+    final subColor = ai ? AppColors.onAccent.withValues(alpha: 0.85) : AppColors.ink2;
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(24),
+        gradient: ai
+            ? const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [AppColors.mint, AppColors.mint500],
+              )
+            : null,
+        color: ai ? null : AppColors.card,
+        borderRadius: BorderRadius.circular(20),
+        border: ai ? null : Border.all(color: AppColors.line, width: 1.5),
         boxShadow: AppShadows.md,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Container(
+            width: 46,
+            height: 46,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: ai ? AppColors.onAccent.withValues(alpha: 0.2) : AppColors.skyTint,
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: Text(emoji, style: const TextStyle(fontSize: 22)),
+          ),
+          const SizedBox(height: 11),
+          Text(title,
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: onCard)),
+          const SizedBox(height: 3),
+          Text(desc, style: TextStyle(fontSize: 12, height: 1.5, color: subColor)),
+          const SizedBox(height: 13),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 52,
-                height: 52,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(color: tone, borderRadius: BorderRadius.circular(16)),
-                child: Text(emoji, style: const TextStyle(fontSize: 27)),
-              ),
-              const SizedBox(width: 13),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 8,
-                      children: [
-                        Text(title,
-                            style: const TextStyle(
-                                fontSize: 17, fontWeight: FontWeight.w900, letterSpacing: -0.2)),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    badge,
-                  ],
-                ),
+              OnlinePulseDot(size: 7, color: AppColors.triageGreen, pulsing: pulse),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(dotText,
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: ai ? AppColors.onAccent.withValues(alpha: 0.9) : AppColors.ink2)),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(desc,
-              style: const TextStyle(fontSize: 13.5, color: AppColors.ink2, height: 1.5)),
-          const SizedBox(height: 14),
-          Btn3d(
-            key: ValueKey(ctaKey),
-            expand: true,
-            variant: primary ? Btn3dVariant.primary : Btn3dVariant.soft,
-            fontSize: 15,
-            onPressed: onTap,
-            child: Text(cta),
-          ),
+          const SizedBox(height: 13),
+          // CTA：AI=白底紫字；兽医=描边紫字。文案保持 arb，箭头作为独立图标（测试按文案断言）。
+          _CtaButton(ctaKey: ctaKey, label: cta, ai: ai, onTap: onTap),
         ],
       ),
     );
   }
 }
 
-/// 入口卡徽章（白底胶囊 + 可选在线绿点）。
-class _EntryBadge extends StatelessWidget {
-  const _EntryBadge({required this.label, required this.color, this.live = false});
+/// 入口卡 CTA 按钮（原型 kbtn）：AI 白底紫字 / 兽医白底紫字描边，末尾「→」。
+class _CtaButton extends StatelessWidget {
+  const _CtaButton(
+      {required this.ctaKey, required this.label, required this.ai, required this.onTap});
 
+  final String ctaKey;
   final String label;
-  final Color color;
-  final bool live;
+  final bool ai;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(999),
-        boxShadow: AppShadows.sm,
-      ),
-      child: Row(
+    return SizedBox(
+      width: double.infinity,
+      child: ai
+          ? FilledButton(
+              key: ValueKey(ctaKey),
+              onPressed: onTap,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.card,
+                foregroundColor: AppColors.mint,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(vertical: 11),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
+              ),
+              child: _label(),
+            )
+          : OutlinedButton(
+              key: ValueKey(ctaKey),
+              onPressed: onTap,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.mint,
+                side: const BorderSide(color: AppColors.mint, width: 1.5),
+                padding: const EdgeInsets.symmetric(vertical: 11),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
+              ),
+              child: _label(),
+            ),
+    );
+  }
+
+  Widget _label() => Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (live) ...[
-            Container(
-                width: 7,
-                height: 7,
-                decoration: const BoxDecoration(color: AppColors.mint, shape: BoxShape.circle)),
-            const SizedBox(width: 5),
-          ],
-          Text(label,
-              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: color)),
+          Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+          const SizedBox(width: 6),
+          const Icon(Icons.arrow_forward_rounded, size: 16),
         ],
-      ),
-    );
-  }
-}
-
-/// 在线兽医条目（头像 + 在线点 + 姓名/专长 + 状态）。
-class _VetRow extends StatelessWidget {
-  const _VetRow(
-      {required this.emoji, required this.name, required this.spec, required this.online});
-
-  final String emoji;
-  final String name;
-  final String spec;
-  final bool online;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: AppShadows.md,
-      ),
-      child: Row(
-        children: [
-          Stack(
-            children: [
-              EmojiAvatar(emoji: emoji, size: 42, tone: AppColors.cream2),
-              Positioned(
-                right: 0,
-                bottom: 0,
-                child: Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    color: online ? AppColors.mint : AppColors.line,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.card, width: 2.5),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name,
-                    style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800)),
-                Text(spec, style: const TextStyle(fontSize: 12.5, color: AppColors.muted)),
-              ],
-            ),
-          ),
-          Text(
-            online ? 'Online' : 'Sibuk',
-            style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: online ? AppColors.mint700 : AppColors.muted),
-          ),
-        ],
-      ),
-    );
-  }
+      );
 }
 
 /// 历史条目（Story 5.8 F2）：头像 + 严重度胶囊/星评 + 相对时间 + 摘要。

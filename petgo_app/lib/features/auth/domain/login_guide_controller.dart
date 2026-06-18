@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/network/dio_client.dart';
 import '../../../core/router/route_intent.dart';
+import '../../../core/theme/colors.dart';
 import '../../../shared/widgets/login_guide_outcome.dart';
 import '../../../shared/widgets/login_hard_dialog.dart';
 import '../../../shared/widgets/login_soft_sheet.dart';
@@ -49,6 +50,7 @@ class LoginGuideController {
           _pending = null;
           Navigator.of(sheetCtx).pop();
         },
+        onVet: () => _goVetLogin(context, sheetCtx),
       ),
     );
   }
@@ -65,17 +67,30 @@ class LoginGuideController {
       await showDialog<void>(
         context: context,
         barrierDismissible: true,
+        // 原型深遮罩（rgba(14,16,25,.72)）：强门控视觉强度高于软浮层。
+        barrierColor: AppColors.splashInk.withValues(alpha: 0.72),
         builder: (dlgCtx) => LoginHardDialog(
           onLogin: () => _attemptLogin(context, dlgCtx),
           onClose: () {
             _pending = null;
             Navigator.of(dlgCtx).pop();
           },
+          onVet: () => _goVetLogin(context, dlgCtx),
         ),
       );
     } finally {
       _hardDialogShowing = false;
     }
+  }
+
+  /// 兽医登录入口（游客可达）：关闭当前引导浮层 → 跳 /vet/login（单 App 双角色）。
+  /// 清空 pendingAction——兽医登录后由 redirect 收口到 /vet/workbench，用户侧 pending 不再适用。
+  void _goVetLogin(BuildContext rootContext, BuildContext overlayContext) {
+    _pending = null;
+    if (overlayContext.mounted && Navigator.of(overlayContext).canPop()) {
+      Navigator.of(overlayContext).pop();
+    }
+    if (rootContext.mounted) rootContext.push('/vet/login');
   }
 
   /// 一次登录尝试（供软浮层/强弹窗的主 CTA 注入）。返回三态结果：

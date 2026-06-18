@@ -9,12 +9,21 @@ import '../../../core/storage/prefs.dart';
 /// 🔄 PRD V1.0.0 修订（F7 · 2026-06-08）：由单时机（首次问诊后）扩为双时机取最早。
 /// 建档时机加 `neverConsulted` 限定，避免与问诊时机对已问诊用户重复触发。
 class PushPermissionGate {
-  PushPermissionGate({required this.prefs, required this.requestSystemPermission});
+  PushPermissionGate({
+    required this.prefs,
+    required this.requestSystemPermission,
+    this.confirmViaRationale,
+  });
 
   final AppPrefs prefs;
 
   /// 触发系统权限弹窗（注入：真机用 permission_handler，测试用 fake）。返回是否授予。
   final Future<bool> Function() requestSystemPermission;
+
+  /// 系统弹窗前的「前置说明」抽屉（原型 P-09）。可选——为 null 时直接请求系统权限（向后兼容）。
+  /// 返回 true=用户点「开启」（继续请求系统权限）；false=点「暂不」/关闭（跳过系统请求）。
+  /// 无论哪种结果，本次门控都记为「已问」（拒绝后不再主动弹）。
+  final Future<bool> Function()? confirmViaRationale;
 
   /// 纯判定：两时机任一成立且未问过 → 应触发一次。
   /// - 首次问诊完成（`firstConsultDone`）；或
@@ -54,7 +63,11 @@ class PushPermissionGate {
       return false;
     }
     try {
-      await requestSystemPermission();
+      // 先弹「前置说明」（若注入）：用户同意才请求系统权限；拒绝则跳过系统弹窗。
+      final agreed = confirmViaRationale == null ? true : await confirmViaRationale!();
+      if (agreed) {
+        await requestSystemPermission();
+      }
     } finally {
       // 无论同意/拒绝/异常，都标记已问过——拒绝后不再主动弹。
       await prefs.setPushPermissionAsked(true);

@@ -80,10 +80,10 @@ void main() {
     expect(find.text('生日快乐'), findsOneWidget);
     expect(find.text('陪伴纪念'), findsOneWidget);
     expect(find.text('里程碑达成'), findsOneWidget);
-    // 三类专属图标
-    expect(find.byIcon(Icons.cake_outlined), findsOneWidget);
-    expect(find.byIcon(Icons.celebration_outlined), findsOneWidget);
-    expect(find.byIcon(Icons.flag_outlined), findsOneWidget);
+    // 三类专属图标（notif.html 重做：圆角方形彩色图标块用 rounded 图标）。
+    expect(find.byIcon(Icons.cake_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.celebration_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.emoji_events_rounded), findsOneWidget);
   });
 
   testWidgets('AC1: 铃铛角标 >0 显示 / 0 隐藏', (tester) async {

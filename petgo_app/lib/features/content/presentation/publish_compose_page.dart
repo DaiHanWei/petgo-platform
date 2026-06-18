@@ -14,7 +14,6 @@ import '../../profile/data/milestone_repository.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../profile/domain/pet_profile.dart';
 import '../../../shared/utils/media_permission.dart';
-import '../../../shared/widgets/design/btn3d.dart';
 import '../../../shared/widgets/design/emoji_avatar.dart';
 import '../../me/data/my_posts_repository.dart';
 import '../data/content_repository.dart';
@@ -225,31 +224,50 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
               ),
               Row(
                 children: [
-                  TextButton(
-                    key: const ValueKey('publishClose'),
-                    onPressed: () => Navigator.of(context).pop(),
-                    style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(48, 36)),
-                    child: const Text('Batal',
-                        style: TextStyle(
-                            color: AppColors.muted, fontSize: 15, fontWeight: FontWeight.w700)),
+                  // 原型 closebtn：34px 圆钮 + × 图标。
+                  Semantics(
+                    button: true,
+                    label: l10n.publishCancel,
+                    child: InkWell(
+                      key: const ValueKey('publishClose'),
+                      onTap: () => Navigator.of(context).pop(),
+                      customBorder: const CircleBorder(),
+                      child: Container(
+                        width: 34,
+                        height: 34,
+                        alignment: Alignment.center,
+                        decoration:
+                            const BoxDecoration(color: AppColors.cream2, shape: BoxShape.circle),
+                        child: const Icon(Icons.close_rounded, size: 18, color: AppColors.ink2),
+                      ),
+                    ),
                   ),
-                  const Expanded(
-                    child: Text('Buat Postingan',
+                  Expanded(
+                    child: Text(l10n.publishComposeTitle,
                         textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                   ),
-                  Btn3d(
+                  // 原型 pubbtn：扁平紫钮（off=灰）。
+                  FilledButton(
                     key: const ValueKey('publishSubmit'),
                     onPressed: controller.canPublish ? () => _publish(controller, l10n) : null,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    fontSize: 14,
-                    borderRadius: 12,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.mint,
+                      disabledBackgroundColor: AppColors.muted,
+                      foregroundColor: AppColors.onAccent,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 9),
+                      minimumSize: const Size(0, 0),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                    ),
                     child: controller.publishing
                         ? const SizedBox(
-                            width: 18,
-                            height: 18,
+                            width: 16,
+                            height: 16,
                             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Text('Bagikan'),
+                        : Text(l10n.publishButton),
                   ),
                 ],
               ),
@@ -281,7 +299,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                 onChanged: controller.setText,
                 style: const TextStyle(fontSize: 15.5, color: AppColors.ink, height: 1.5),
                 decoration: InputDecoration(
-                  hintText: _hint(controller),
+                  hintText: _hint(controller, l10n),
                   hintStyle: const TextStyle(color: AppColors.muted, fontSize: 15.5),
                   filled: true,
                   fillColor: AppColors.card,
@@ -294,7 +312,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                 ),
               ),
               const SizedBox(height: 12),
-              _imageRow(controller),
+              _imageRow(controller, l10n),
               const SizedBox(height: 14),
               // Kamera（相机）：拍照上传，与「Tambah foto」相册同走 pickAndProcess（仅 source 不同）。
               // 注：Lokasi（定位）chip 已移除——V1 PRD 无定位功能，不留死按钮。
@@ -302,7 +320,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                 _SmallChip(
                   key: const ValueKey('publishCameraChip'),
                   icon: Icons.photo_camera_outlined,
-                  label: 'Kamera',
+                  label: l10n.publishCamera,
                   onTap: () => _addImage(controller, source: MediaSource.camera),
                 ),
               ]),
@@ -325,55 +343,52 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     );
   }
 
-  String _hint(PublishController c) {
+  String _hint(PublishController c, AppLocalizations l10n) {
     switch (c.type) {
       case ContentType.growthMoment:
-        return 'Tulis satu kalimat manis tentang anabul...';
+        return l10n.publishHintGrowth;
       case ContentType.knowledge:
-        return 'Bagikan tips merawat anabul...';
+        return l10n.publishHintKnowledge;
       default:
-        return 'Apa yang terjadi hari ini?';
+        return l10n.publishHintDaily;
     }
   }
 
-  /// 类型标签：三个 emoji 立体 tab（日常 / 快乐时刻 / 科普）。
+  /// 类型标签：原型横向 pill chips（紫底圆角 9999 选中态，#E6E6E6 边框未选）。
   Widget _segments(PublishController controller, AppLocalizations l10n) {
-    return Row(
-      children: [
-        Expanded(
-            child: _segTab('💬', l10n.publishSegmentDaily, ContentType.daily, controller,
-                'seg_${ContentType.daily.wire}')),
-        const SizedBox(width: 8),
-        Expanded(child: _growthTab(l10n, controller)),
-        const SizedBox(width: 8),
-        Expanded(
-            child: _segTab('📖', l10n.publishSegmentKnowledge, ContentType.knowledge, controller,
-                'seg_${ContentType.knowledge.wire}')),
-      ],
+    return SizedBox(
+      height: 34,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          _segChip(l10n.publishSegmentDaily, ContentType.daily, controller,
+              'seg_${ContentType.daily.wire}'),
+          const SizedBox(width: 7),
+          _growthChip(l10n, controller),
+          const SizedBox(width: 7),
+          _segChip(l10n.publishSegmentKnowledge, ContentType.knowledge, controller,
+              'seg_${ContentType.knowledge.wire}'),
+        ],
+      ),
     );
   }
 
-  Widget _segTab(String emoji, String label, ContentType type, PublishController controller,
-      String key) {
-    final on = controller.type == type;
-    return _TabButton(
+  Widget _segChip(String label, ContentType type, PublishController controller, String key) {
+    return _TypeChip(
       keyValue: key,
-      emoji: emoji,
       label: label,
-      selected: on,
+      selected: controller.type == type,
       enabled: true,
       onTap: () => controller.setType(type),
     );
   }
 
-  Widget _growthTab(AppLocalizations l10n, PublishController controller) {
+  Widget _growthChip(AppLocalizations l10n, PublishController controller) {
     final enabled = _hasPetProfile;
-    final on = controller.type == ContentType.growthMoment;
-    return _TabButton(
+    return _TypeChip(
       keyValue: 'seg_GROWTH_MOMENT',
-      emoji: '🌈',
-      label: l10n.publishSegmentGrowth,
-      selected: on,
+      label: '${l10n.publishSegmentGrowth} 🌟',
+      selected: controller.type == ContentType.growthMoment,
       enabled: enabled,
       onTap: enabled
           ? () {
@@ -434,11 +449,11 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       behavior: HitTestBehavior.opaque,
       onTap: () => _pickEventDate(controller),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: AppShadows.sm,
+          color: AppColors.mintTint2, // 原型紫浅底 #F8F6FF
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.lineViolet, width: 1.5),
         ),
         child: Row(
           children: [
@@ -489,88 +504,129 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     );
   }
 
-  Widget _imageRow(PublishController controller) {
-    if (controller.items.isEmpty) {
-      return Btn3d(
-        key: const ValueKey('publishAddImage'),
-        variant: Btn3dVariant.soft,
-        expand: true,
-        onPressed: () => _addImage(controller),
-        padding: const EdgeInsets.all(16),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+  /// 照片区：原型 3 列网格，首格为虚线「Tambah」添加格，其后为缩略图（带上传态/删除）。
+  Widget _imageRow(PublishController controller, AppLocalizations l10n) {
+    final items = controller.items;
+    final showAdd = items.length < kMaxImages;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(l10n.publishPhotoLabel,
+            style: const TextStyle(
+                fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.muted)),
+        const SizedBox(height: 8),
+        GridView.count(
+          crossAxisCount: 3,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 5,
+          crossAxisSpacing: 5,
           children: [
-            Icon(Icons.image_outlined, size: 20, color: AppColors.mint700),
-            SizedBox(width: 8),
-            Text('Tambah foto', style: TextStyle(fontSize: 14.5)),
+            if (showAdd) _addCell(controller, l10n),
+            for (int i = 0; i < items.length; i++) _thumb(controller, i),
           ],
         ),
-      );
-    }
-    return SizedBox(
-      height: 88,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        children: [
-          for (int i = 0; i < controller.items.length; i++) _thumb(controller, i),
-          if (controller.items.length < kMaxImages)
-            GestureDetector(
-              key: const ValueKey('publishAddImage'),
-              onTap: () => _addImage(controller),
-              child: Container(
-                width: 80,
-                height: 80,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.card,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: AppShadows.sm,
-                ),
-                child: const Icon(Icons.add_a_photo_outlined, color: AppColors.mint700),
-              ),
-            ),
-        ],
+      ],
+    );
+  }
+
+  /// 虚线添加格（pcell-add）：2px 虚线紫描边 + 「＋」+ Tambah。
+  Widget _addCell(PublishController controller, AppLocalizations l10n) {
+    return GestureDetector(
+      key: const ValueKey('publishAddImage'),
+      onTap: () => _addImage(controller),
+      child: CustomPaint(
+        painter: _DashedRRectPainter(color: AppColors.dashedViolet, radius: 9, dash: 5, gap: 4),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppColors.cream2,
+            borderRadius: BorderRadius.circular(9),
+          ),
+          alignment: Alignment.center,
+          child: const Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.add_rounded, size: 22, color: AppColors.mint),
+              SizedBox(height: 3),
+              Text('Tambah',
+                  style: TextStyle(
+                      fontSize: 10, fontWeight: FontWeight.w500, color: AppColors.mint)),
+            ],
+          ),
+        ),
       ),
     );
   }
 
   Widget _thumb(PublishController controller, int index) {
     final item = controller.items[index];
-    return Padding(
-      padding: const EdgeInsets.only(right: 10),
-      child: Stack(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: Image.memory(item.bytes, width: 80, height: 80, fit: BoxFit.cover),
-          ),
-          if (item.status == ImageUploadStatus.uploading)
-            const Positioned.fill(
-                child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
-          if (item.status == ImageUploadStatus.failed)
-            const Positioned(right: 4, top: 4, child: Icon(Icons.error, color: Colors.red, size: 18)),
-          Positioned(
-            right: 2,
-            top: 2,
-            child: GestureDetector(
-              onTap: () => controller.removeImage(index),
-              child: Container(
-                decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                child: const Icon(Icons.close, size: 16, color: Colors.white),
-              ),
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(9),
+          child: Image.memory(item.bytes, fit: BoxFit.cover),
+        ),
+        if (item.status == ImageUploadStatus.uploading)
+          const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+        if (item.status == ImageUploadStatus.failed)
+          const Positioned(
+              right: 4, top: 4, child: Icon(Icons.error, color: Colors.red, size: 18)),
+        Positioned(
+          right: 3,
+          top: 3,
+          child: GestureDetector(
+            onTap: () => controller.removeImage(index),
+            child: Container(
+              decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+              child: const Icon(Icons.close, size: 16, color: Colors.white),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
-/// 类型标签按钮（emoji + 文字，选中=薄荷立体，灰置=暗淡）。
-class _TabButton extends StatelessWidget {
-  const _TabButton({
+/// 虚线圆角矩形描边画笔（占位添加格用，避免引入 dotted_border 依赖）。
+class _DashedRRectPainter extends CustomPainter {
+  _DashedRRectPainter(
+      {required this.color, required this.radius, required this.dash, required this.gap});
+
+  final Color color;
+  final double radius;
+  final double dash;
+  final double gap;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    final rrect = RRect.fromRectAndRadius(
+        Offset.zero & size, Radius.circular(radius));
+    final path = Path()..addRRect(rrect);
+    for (final metric in path.computeMetrics()) {
+      double dist = 0;
+      while (dist < metric.length) {
+        final next = dist + dash;
+        canvas.drawPath(
+            metric.extractPath(dist, next.clamp(0, metric.length)), paint);
+        dist = next + gap;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedRRectPainter old) =>
+      old.color != color || old.radius != radius || old.dash != dash || old.gap != gap;
+}
+
+/// 类型 pill chip（原型 tchip）：选中=紫底白字；未选=白底 #E6E6E6 边框；灰置=暗淡。
+class _TypeChip extends StatelessWidget {
+  const _TypeChip({
     required this.keyValue,
-    required this.emoji,
     required this.label,
     required this.selected,
     required this.enabled,
@@ -578,7 +634,6 @@ class _TabButton extends StatelessWidget {
   });
 
   final String keyValue;
-  final String emoji;
   final String label;
   final bool selected;
   final bool enabled;
@@ -592,30 +647,20 @@ class _TabButton extends StatelessWidget {
         key: ValueKey(keyValue),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+          padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 13),
+          alignment: Alignment.center,
           decoration: BoxDecoration(
             color: selected ? AppColors.mint : AppColors.card,
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [
-              BoxShadow(
-                  color: selected ? AppColors.mint600 : AppColors.line,
-                  offset: const Offset(0, 3),
-                  blurRadius: 0),
-            ],
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+                color: selected ? AppColors.mint : AppColors.line, width: 1.5),
           ),
-          child: Column(
-            children: [
-              Text(emoji, style: const TextStyle(fontSize: 18)),
-              const SizedBox(height: 4),
-              Text(label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w800,
-                      color: selected ? Colors.white : AppColors.ink2)),
-            ],
-          ),
+          child: Text(label,
+              maxLines: 1,
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: selected ? Colors.white : AppColors.ink2)),
         ),
       ),
     );

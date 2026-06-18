@@ -4,29 +4,35 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/colors.dart';
-import '../../core/theme/spacing.dart';
-import '../../core/theme/typography.dart';
 import '../../l10n/app_localizations.dart';
 
-/// 红色半屏强提醒 overlay（Story 4.5，FR-3/UX-DR7）。生命安全支柱最直接用户面。
+/// 红色**全屏沉浸**强提醒（Story 4.5，FR-3/UX-DR7 · 决策 #5 还原 ai-result-red.html）。
+/// 生命安全支柱最直接用户面。
 ///
-/// 🔒 不可协商：① 0–5s 锁定（单按钮禁用 + 倒计时，背景/拖拽/返回键均不可关闭）；
-/// ② 解锁后**单一「我已知晓」按钮**关闭遮罩、返回结果页；
-/// ③ 全程**零兽医 / 零变现引流 / 零地图导航 / 零医院推荐**（F3 · 2026-06-08 去导航化）；
-/// ④ alertdialog + assertive 打断式播报、⚠️+大字非颜色单一。
+/// 🔒 不可协商（安全语义只升不降）：① 0–5s 锁定（CTA 禁用 + 倒计时，背景/拖拽/返回键均不可关闭）；
+/// ② 解锁后**单一「我已知晓」按钮**关闭、返回结果页；
+/// ③ 全程**零兽医 / 零变现引流 / 零地图导航 / 零医院推荐**（F3 · 去导航化）；
+/// ④ assertive 打断式播报 + ⚠️ 非颜色单一。
+///
+/// 视觉：上半屏红底 #F0425A + breathGlow 呼吸 ⚠️ 圆 + 主文案；下半屏白卡浮起
+/// （症状摘要红浅底 + 3 步骤圆 badge + 倒计时锁 CTA）。
 class RedAlertOverlay extends ConsumerStatefulWidget {
   const RedAlertOverlay({
     super.key,
     required this.title,
     required this.onAcknowledge,
+    this.symptom,
     this.lockSeconds = 5,
   });
 
   /// 已本地化主标题（含宠物名，如「请立即带 Momo 去宠物医院就诊」）。
   final String title;
 
-  /// 解锁后点击「我已知晓」的回调（由宿主关闭半屏）。
+  /// 解锁后点击「我已知晓」的回调（由宿主关闭全屏）。
   final VoidCallback onAcknowledge;
+
+  /// 症状摘要（上游经 sanitize；为空时不渲染症状框，不臆造）。
+  final String? symptom;
 
   /// 锁定秒数（默认 5；测试可注入更短）。
   final int lockSeconds;
@@ -35,15 +41,19 @@ class RedAlertOverlay extends ConsumerStatefulWidget {
   ConsumerState<RedAlertOverlay> createState() => _RedAlertOverlayState();
 }
 
-class _RedAlertOverlayState extends ConsumerState<RedAlertOverlay> {
+class _RedAlertOverlayState extends ConsumerState<RedAlertOverlay>
+    with SingleTickerProviderStateMixin {
   late int _remaining = widget.lockSeconds;
   Timer? _timer;
+  late final AnimationController _breath;
 
   bool get _locked => _remaining > 0;
 
   @override
   void initState() {
     super.initState();
+    _breath = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500))
+      ..repeat(reverse: true);
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (_remaining <= 0) {
         t.cancel();
@@ -57,6 +67,7 @@ class _RedAlertOverlayState extends ConsumerState<RedAlertOverlay> {
   @override
   void dispose() {
     _timer?.cancel();
+    _breath.dispose();
     super.dispose();
   }
 
@@ -72,49 +83,172 @@ class _RedAlertOverlayState extends ConsumerState<RedAlertOverlay> {
         label: '${widget.title}. ${l10n.triageRedSubtext}',
         child: Container(
           width: double.infinity,
-          color: AppColors.triageRed, // #C97A7A
-          padding: const EdgeInsets.fromLTRB(
-              AppSpacing.xl, AppSpacing.xl, AppSpacing.xl, AppSpacing.xxl),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              // ⚠️ 大白图标（非颜色单一：icon + 大字 + 红底三重）
-              const Icon(Icons.warning_amber_rounded,
-                  key: ValueKey('triageRedIcon'), color: Colors.white, size: 64),
-              const SizedBox(height: AppSpacing.lg),
-              Text(widget.title,
-                  style: AppTypography.display.copyWith(color: Colors.white),
-                  textAlign: TextAlign.center),
-              const SizedBox(height: AppSpacing.md),
-              Text(l10n.triageRedSubtext,
-                  style: AppTypography.body.copyWith(color: Colors.white),
-                  textAlign: TextAlign.center),
-              const SizedBox(height: AppSpacing.xl),
-              if (_locked)
-                Text(
-                  l10n.triageRedCountdown(_remaining),
-                  key: const ValueKey('triageRedCountdown'),
-                  style: AppTypography.caption.copyWith(color: Colors.white),
-                ),
-              const SizedBox(height: AppSpacing.sm),
-              // 解锁后单一「我已知晓」——关闭遮罩、返回结果页。无地图导航、无医院推荐。
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  key: const ValueKey('triageRedAcknowledge'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: AppColors.triageRed,
-                    minimumSize: const Size.fromHeight(48), // ≥44pt 触摸目标
+          color: AppColors.triageRed, // 全屏红底（#F0425A）
+          child: SafeArea(
+            child: Column(
+              children: <Widget>[
+                // —— 上半屏：呼吸 ⚠️ 圆 + 主文案 ——
+                Expanded(
+                  child: Center(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          AnimatedBuilder(
+                            animation: _breath,
+                            builder: (context, child) => Container(
+                              width: 88,
+                              height: 88,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white
+                                    .withValues(alpha: 0.28 + 0.27 * _breath.value),
+                              ),
+                              child: child,
+                            ),
+                            child: const Icon(Icons.warning_amber_rounded,
+                                key: ValueKey('triageRedIcon'), color: Colors.white, size: 44),
+                          ),
+                          const SizedBox(height: 20),
+                          Text(widget.title,
+                              style: const TextStyle(
+                                  fontSize: 24,
+                                  height: 1.3,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white),
+                              textAlign: TextAlign.center),
+                          const SizedBox(height: 10),
+                          Text(l10n.triageRedSubtext,
+                              style: TextStyle(
+                                  fontSize: 14,
+                                  height: 1.6,
+                                  color: Colors.white.withValues(alpha: 0.9)),
+                              textAlign: TextAlign.center),
+                        ],
+                      ),
+                    ),
                   ),
-                  onPressed: _locked ? null : widget.onAcknowledge,
-                  child: Text(l10n.triageRedAcknowledge),
                 ),
-              ),
-            ],
+                // —— 下半屏：白卡浮起 ——
+                Container(
+                  width: double.infinity,
+                  decoration: const BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                  ),
+                  padding: const EdgeInsets.fromLTRB(22, 24, 22, 28),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      // 症状摘要（红浅底，仅有数据时渲染）。
+                      if (widget.symptom != null && widget.symptom!.trim().isNotEmpty) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                          decoration: BoxDecoration(
+                              color: AppColors.coralTint,
+                              borderRadius: BorderRadius.circular(12)),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(l10n.triageRedSymptomHeader.toUpperCase(),
+                                  style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 0.4,
+                                      color: AppColors.healthEventText)),
+                              const SizedBox(height: 6),
+                              Text(widget.symptom!.trim(),
+                                  style: const TextStyle(
+                                      fontSize: 13, height: 1.6, color: AppColors.ink)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                      ],
+                      // 立即步骤（3 步圆 badge）。
+                      Text(l10n.triageRedStepsHeader.toUpperCase(),
+                          style: const TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                      const SizedBox(height: 10),
+                      _StepLine(n: '1', text: l10n.triageRedStep1),
+                      const SizedBox(height: 8),
+                      _StepLine(n: '2', text: l10n.triageRedStep2),
+                      const SizedBox(height: 8),
+                      _StepLine(n: '3', text: l10n.triageRedStep3),
+                      const SizedBox(height: 22),
+                      // 倒计时锁 CTA（解锁后单一「我已知晓」）。
+                      FilledButton(
+                        key: const ValueKey('triageRedAcknowledge'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.triageRed,
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: AppColors.triageRed.withValues(alpha: 0.45),
+                          disabledForegroundColor: Colors.white,
+                          minimumSize: const Size.fromHeight(50),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          textStyle:
+                              const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                        ),
+                        onPressed: _locked ? null : widget.onAcknowledge,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(l10n.triageRedAcknowledge),
+                            if (_locked) ...[
+                              const SizedBox(width: 6),
+                              Text('($_remaining)', key: const ValueKey('triageRedCountdown')),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(l10n.triageRedCtaHint,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// 立即步骤行（原型 LANGKAH SEKARANG）：红圆数字 badge + 步骤文案。
+class _StepLine extends StatelessWidget {
+  const _StepLine({required this.n, required this.text});
+
+  final String n;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 22,
+          height: 22,
+          margin: const EdgeInsets.only(top: 1),
+          alignment: Alignment.center,
+          decoration: const BoxDecoration(color: AppColors.triageRed, shape: BoxShape.circle),
+          child: Text(n,
+              style: const TextStyle(
+                  fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(text,
+              style: const TextStyle(fontSize: 13, height: 1.5, color: AppColors.ink)),
+        ),
+      ],
     );
   }
 }

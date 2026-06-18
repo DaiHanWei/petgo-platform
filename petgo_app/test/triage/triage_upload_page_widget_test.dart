@@ -43,6 +43,9 @@ ProviderContainer _container(_FakeTriageRepo repo) {
 }
 
 Future<void> _pump(WidgetTester tester, ProviderContainer c) async {
+  // ai-upload.html 重做后表单较长（速度横幅+分段label），用高视口确保提交钮不出 fold。
+  await tester.binding.setSurfaceSize(const Size(440, 1600));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(UncontrolledProviderScope(
     container: c,
     child: const MaterialApp(

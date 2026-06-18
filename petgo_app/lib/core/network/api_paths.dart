@@ -26,6 +26,10 @@ class ApiPaths {
   static String vetConsultSession(int sessionId) => '$base/vet/consult-sessions/$sessionId';
   static String vetConsultAssist(int sessionId) => '$base/vet/consult-sessions/$sessionId/assist';
 
+  /// 兽医侧「进行中」会话列表 + 已结束「历史」列表（工作台 Active/History Tab）。
+  static const String vetConsultInProgress = '$base/vet/consult-sessions/in-progress';
+  static const String vetConsultHistory = '$base/vet/consult-sessions/history';
+
   /// IM UserSig 签发（Story 5.5，客户端 SDK 登录用）。
   static const String imUserSig = '$base/im/usersig';
 

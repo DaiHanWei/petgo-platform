@@ -1,18 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/onboarding/presentation/mint_onboarding_page.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// TailTopia Prototype 引导流（welcome → create pet → done）回归。
 ///
 /// 注：含无限漂浮/眨眼动效，统一用 `pump(Duration)` 而非 `pumpAndSettle`。
+/// 文案已迁 arb（印尼语）：用 locale('id') + l10n delegates 包裹，断言印尼语文案。
+Widget _wrap() => MaterialApp(
+      locale: const Locale('id'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: const MintOnboardingPage(),
+    );
+
 void main() {
   testWidgets('引导流三步：欢迎 → 创建宠物 → 完成', (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: MintOnboardingPage()));
+    await tester.pumpWidget(_wrap());
     await tester.pump(const Duration(milliseconds: 100));
 
     // —— Step 0 欢迎 ——
     expect(find.text('Mulai sekarang'), findsOneWidget);
-    expect(find.text('PETGO'), findsOneWidget);
+    // 字标改名后为 TailTopia（不再硬编码 'PETGO'）。
+    expect(find.text('TailTopia'), findsOneWidget);
 
     await tester.tap(find.text('Mulai sekarang'));
     await tester.pump(const Duration(milliseconds: 100));
@@ -36,7 +46,7 @@ void main() {
   });
 
   testWidgets('未填名称/品种时 Lanjut 禁用，不进入下一步', (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: MintOnboardingPage()));
+    await tester.pumpWidget(_wrap());
     await tester.pump(const Duration(milliseconds: 100));
     await tester.tap(find.text('Mulai sekarang'));
     await tester.pump(const Duration(milliseconds: 100));

@@ -6,6 +6,8 @@ import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/me/data/my_posts_repository.dart';
 import 'package:tailtopia/features/me/presentation/me_page.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
+import 'package:tailtopia/features/profile/data/timeline_repository.dart';
+import 'package:tailtopia/features/profile/domain/archive_stats.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
@@ -24,6 +26,9 @@ Future<void> _pump(
   final container = ProviderContainer(overrides: [
     myPostsProvider.overrideWith((ref) async => posts),
     petProfileProvider.overrideWith((ref) async => pet),
+    // 宠物卡元数据「momen 数」取此 provider；测试不打真实后端。
+    archiveStatsProvider.overrideWith((ref) async => const ArchiveStats(
+        happyMomentCount: 12, consultCount: 0, milestoneCompleted: 0, milestoneTotal: 30)),
   ]);
   addTearDown(container.dispose);
   container.read(authControllerProvider.notifier).applyProfile(profile);
@@ -106,11 +111,12 @@ void main() {
         MyPost(id: 10, type: 'KNOWLEDGE', text: '最早发布'),
       ],
     );
-    // 横向列表保持后端顺序：30 在 20 左侧、20 在 10 左侧。
-    final x30 = tester.getTopLeft(find.byKey(const ValueKey('myPost_30'))).dx;
-    final x20 = tester.getTopLeft(find.byKey(const ValueKey('myPost_20'))).dx;
-    final x10 = tester.getTopLeft(find.byKey(const ValueKey('myPost_10'))).dx;
-    expect(x30, lessThan(x20));
-    expect(x20, lessThan(x10));
+    // 2 列网格 row-major 保持后端顺序：30 左上、20 右上（同行），10 换到次行左（在 30 下方）。
+    final t30 = tester.getTopLeft(find.byKey(const ValueKey('myPost_30')));
+    final t20 = tester.getTopLeft(find.byKey(const ValueKey('myPost_20')));
+    final t10 = tester.getTopLeft(find.byKey(const ValueKey('myPost_10')));
+    expect(t30.dx, lessThan(t20.dx)); // 同行：左→右
+    expect(t30.dy, closeTo(t20.dy, 1)); // 30/20 同一行
+    expect(t10.dy, greaterThan(t30.dy)); // 第三条换行到下一行
   });
 }

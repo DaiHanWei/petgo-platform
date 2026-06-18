@@ -1,8 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/colors.dart';
-import '../../../core/theme/rounded.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
@@ -27,6 +27,18 @@ class TriageUploadPage extends ConsumerStatefulWidget {
 class _TriageUploadPageState extends ConsumerState<TriageUploadPage> {
   static const int _maxSymptomChars = 2000;
   final TextEditingController _symptomController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Debug 截图钩子（仅 debug + flag）：自动提交一次，直达分诊结果态（配 DEV_STATE=triage-green/yellow/red）。
+    // 截 ai-result/-green/-red 用。生产/测试不编译进逻辑（flag 默认空）。
+    if (kDebugMode && const bool.fromEnvironment('DEV_TRIAGE_AUTO')) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _submit();
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -99,7 +111,12 @@ class _TriageUploadPageState extends ConsumerState<TriageUploadPage> {
 
     return Scaffold(
       backgroundColor: AppColors.base,
-      appBar: AppBar(title: Text(l10n.triageEntryAiTitle)),
+      appBar: AppBar(
+        backgroundColor: AppColors.base,
+        centerTitle: true,
+        title: const Text('Diagnosa AI',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink)),
+      ),
       body: switch (phase) {
         TriagePhase.submitting || TriagePhase.polling => _WaitingView(message: l10n.triageAnalyzing),
         TriagePhase.timedOut => _DegradedView(
@@ -136,18 +153,46 @@ class _TriageUploadPageState extends ConsumerState<TriageUploadPage> {
   Widget _buildForm(AppLocalizations l10n) {
     final draft = ref.watch(triageUploadProvider);
     return ListView(
-      padding: const EdgeInsets.all(AppSpacing.screenEdge),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
       children: <Widget>[
-        // 设计稿 S12：先图后文——图片上传在上、症状描述在下。
-        Text(l10n.triagePhotoLimit, style: AppTypography.caption),
+        // 紫渐变速度横幅（ai-upload.html：⚡ Hasil dalam 15 detik）。
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [AppColors.mint, AppColors.mint500],
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('⚡ Hasil dalam 15 detik',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
+              const SizedBox(height: 4),
+              Text('Upload foto + cerita gejala → evaluasi instan hijau / kuning / merah.',
+                  style: TextStyle(fontSize: 12, height: 1.5, color: Colors.white.withValues(alpha: 0.85))),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        // FOTO GEJALA (MAKS. 3) 大写 label + 3 列方格。
+        Text('FOTO GEJALA (MAKS. $kTriageMaxImages)',
+            style: AppTypography.micro.copyWith(
+                color: AppColors.ink2, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
         const SizedBox(height: AppSpacing.sm),
-        _ImageRow(
+        _ImageGrid(
           images: draft.images,
           onAdd: _pickSource,
           onRemove: (i) => ref.read(triageUploadProvider.notifier).removeImageAt(i),
         ),
         const SizedBox(height: AppSpacing.lg),
-        Text(l10n.triageSymptomLabel, style: AppTypography.title),
+        // CERITAKAN GEJALA 大写 label + 紫边框文本框。
+        Text('CERITAKAN GEJALA',
+            style: AppTypography.micro.copyWith(
+                color: AppColors.ink2, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
         const SizedBox(height: AppSpacing.sm),
         TextField(
           key: const ValueKey('triageSymptomField'),
@@ -157,31 +202,60 @@ class _TriageUploadPageState extends ConsumerState<TriageUploadPage> {
           onChanged: (v) => ref.read(triageUploadProvider.notifier).setSymptom(v),
           decoration: InputDecoration(
             hintText: l10n.triageSymptomHint,
-            border: const OutlineInputBorder(),
+            hintStyle: const TextStyle(color: AppColors.muted),
+            contentPadding: const EdgeInsets.all(14),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.line, width: 1.5),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.mint, width: 1.5),
+            ),
           ),
         ),
-        const SizedBox(height: AppSpacing.xl),
-        FilledButton(
-          key: const ValueKey('triageSubmit'),
-          style: FilledButton.styleFrom(backgroundColor: AppColors.accentConsult),
-          onPressed: draft.canSubmit ? _submit : null,
-          child: Text(l10n.triageSubmit),
+        const SizedBox(height: AppSpacing.md),
+        // 黄字免责（⚠️ Hasil AI bersifat referensi...）。
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('⚠️ ', style: TextStyle(fontSize: 12)),
+            Expanded(
+              child: Text(l10n.triageDisclaimer,
+                  style: const TextStyle(fontSize: 11, height: 1.5, color: AppColors.tipsBadgeText)),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            key: const ValueKey('triageSubmit'),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.mint,
+              foregroundColor: AppColors.onAccent,
+              disabledBackgroundColor: AppColors.line,
+              padding: const EdgeInsets.symmetric(vertical: 15),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+            onPressed: draft.canSubmit ? _submit : null,
+            child: const Text('Analisis Sekarang →',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+          ),
         ),
         if (!draft.canSubmit) ...<Widget>[
           const SizedBox(height: AppSpacing.sm),
           Text(l10n.triageNeedInput,
               style: AppTypography.caption, textAlign: TextAlign.center),
         ],
-        const SizedBox(height: AppSpacing.lg),
-        // 免责声明前置（NFR-9）：小号字不干扰主流程。
-        Text(l10n.triageDisclaimer, style: AppTypography.disclaimer),
       ],
     );
   }
 }
 
-class _ImageRow extends StatelessWidget {
-  const _ImageRow({required this.images, required this.onAdd, required this.onRemove});
+/// 症状图片 3 列方格（ai-upload.html FOTO GEJALA）：已选图带 ✗ 删除角标 + 虚线 Tambah 格。
+class _ImageGrid extends StatelessWidget {
+  const _ImageGrid({required this.images, required this.onAdd, required this.onRemove});
 
   final List<TriageDraftImage> images;
   final VoidCallback onAdd;
@@ -190,51 +264,75 @@ class _ImageRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return SizedBox(
-      height: 80,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        children: <Widget>[
-          for (int i = 0; i < images.length; i++)
-            Padding(
-              padding: const EdgeInsets.only(right: AppSpacing.sm),
-              child: Stack(
-                children: <Widget>[
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(AppRounded.sm),
-                    child: Image.memory(images[i].bytes,
-                        width: 72, height: 72, fit: BoxFit.cover),
+    final cells = <Widget>[
+      for (int i = 0; i < images.length; i++)
+        Expanded(
+          child: AspectRatio(
+            aspectRatio: 1,
+            child: Stack(
+              children: <Widget>[
+                Positioned.fill(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.memory(images[i].bytes, fit: BoxFit.cover),
                   ),
-                  Positioned(
-                    right: 0,
-                    top: 0,
-                    child: GestureDetector(
-                      key: ValueKey('triageRemoveImage$i'),
-                      onTap: () => onRemove(i),
-                      child: const CircleAvatar(
-                        radius: 11,
-                        backgroundColor: Colors.black54,
-                        child: Icon(Icons.close, size: 14, color: Colors.white),
-                      ),
+                ),
+                Positioned(
+                  right: 5,
+                  top: 5,
+                  child: GestureDetector(
+                    key: ValueKey('triageRemoveImage$i'),
+                    onTap: () => onRemove(i),
+                    child: const CircleAvatar(
+                      radius: 11,
+                      backgroundColor: AppColors.popRed,
+                      child: Icon(Icons.close, size: 14, color: Colors.white),
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          if (images.length < kTriageMaxImages)
-            OutlinedButton(
+          ),
+        ),
+      if (images.length < kTriageMaxImages)
+        Expanded(
+          child: AspectRatio(
+            aspectRatio: 1,
+            child: GestureDetector(
               key: const ValueKey('triageAddImage'),
-              onPressed: onAdd,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
-                  const Icon(Icons.add_a_photo_outlined, size: 20),
-                  Text(l10n.triageAddPhoto, style: AppTypography.micro),
-                ],
+              onTap: onAdd,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: AppColors.cream2,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.dashedViolet, width: 1.5),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: <Widget>[
+                    const Icon(Icons.add, size: 22, color: AppColors.mint),
+                    const SizedBox(height: 3),
+                    Text(l10n.triageAddPhoto,
+                        style: AppTypography.micro.copyWith(color: AppColors.mint)),
+                  ],
+                ),
               ),
             ),
+          ),
+        ),
+    ];
+    // 补齐到 3 列（占位空格保持等宽方格对齐）。
+    while (cells.length < kTriageMaxImages) {
+      cells.add(const Expanded(child: SizedBox()));
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (int i = 0; i < cells.length; i++) ...[
+          if (i > 0) const SizedBox(width: 10),
+          cells[i],
         ],
-      ),
+      ],
     );
   }
 }

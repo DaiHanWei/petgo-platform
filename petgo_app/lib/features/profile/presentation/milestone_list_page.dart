@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -17,15 +18,68 @@ import 'widgets/milestone_celebration.dart';
 ///
 /// 承接 `MILESTONE_NODE` 推送深链（`/profile/milestones`）。三级庆祝动效在 8.5；
 /// 「已打卡」picker + 打卡 API、「去发布」预选成长日历的完成回填在 8.4。
-class MilestoneListPage extends ConsumerWidget {
+class MilestoneListPage extends ConsumerStatefulWidget {
   const MilestoneListPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MilestoneListPage> createState() => _MilestoneListPageState();
+}
+
+class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
+  bool _devShown = false;
+
+  /// Debug 截图钩子（仅 debug + flag）：数据就绪后自动弹 milestone-sheet / milestone-unlock。
+  void _maybeDevShow(MilestoneList data) {
+    if (_devShown || !kDebugMode) return;
+    const sheet = String.fromEnvironment('DEV_SHEET'); // 'milestone' → 弹徽章详情 sheet
+    const celebrate = String.fromEnvironment('DEV_CELEBRATE'); // 's|m|l' → 弹解锁庆祝
+    if (sheet != 'milestone' && celebrate.isEmpty) return;
+    _devShown = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (sheet == 'milestone') {
+        // 选一个「打卡类未完成」item 以展现两入口；无则取首个。
+        final items = [for (final g in data.groups) ...g.items];
+        final item = items.firstWhere((i) => i.trigger.isCheckin && !i.completed,
+            orElse: () => items.isNotEmpty ? items.first : _devItem(MilestoneLevel.s));
+        _showBadgeSheet(context, ref, item);
+      } else {
+        final level = switch (celebrate) {
+          'l' => MilestoneLevel.l,
+          's' => MilestoneLevel.s,
+          _ => MilestoneLevel.m,
+        };
+        showMilestoneCelebration(context, _devItem(level));
+      }
+    });
+  }
+
+  MilestoneItem _devItem(MilestoneLevel level) => MilestoneItem(
+        code: 'FIRST_PHOTO',
+        title: 'Foto Pertama',
+        level: level,
+        trigger: MilestoneTrigger.userCheckin,
+        completed: true,
+        completedAt: DateTime(2026, 6, 18),
+      );
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final async = ref.watch(milestoneListProvider);
+    async.whenData(_maybeDevShow);
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.milestoneListTitle)),
+      backgroundColor: AppColors.base,
+      appBar: AppBar(
+        backgroundColor: AppColors.base,
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.ink),
+          onPressed: () => context.canPop() ? context.pop() : context.go('/profile'),
+        ),
+        title: Text(l10n.milestoneListTitle,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink)),
+      ),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => _MilestoneError(
@@ -59,7 +113,6 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
     final ratio = data.totalCount == 0 ? 0.0 : data.completedCount / data.totalCount;
     return Container(
       key: const ValueKey('milestoneHeader'),
@@ -68,42 +121,50 @@ class _Header extends StatelessWidget {
         color: AppColors.card,
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Row(
+      child: Column(
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(28),
-            child: SizedBox(
-              width: 56,
-              height: 56,
-              child: data.petAvatarUrl == null
-                  ? Container(
-                      color: AppColors.mintTint,
-                      child: const Icon(Icons.pets_rounded, color: AppColors.mint),
-                    )
-                  : AppImage.widget(data.petAvatarUrl!, fit: BoxFit.cover),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(data.petName,
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
-                const SizedBox(height: 6),
-                Text(l10n.growthMilestoneProgress(data.completedCount, data.totalCount),
-                    style: const TextStyle(color: AppColors.ink2, fontSize: 13)),
-                const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(999),
-                  child: LinearProgressIndicator(
-                    value: ratio,
-                    minHeight: 7,
-                    backgroundColor: AppColors.line,
-                    color: AppColors.mint,
-                  ),
+          Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(28),
+                child: SizedBox(
+                  width: 52,
+                  height: 52,
+                  child: data.petAvatarUrl == null
+                      ? Container(
+                          color: AppColors.mintTint,
+                          child: const Icon(Icons.pets_rounded, color: AppColors.mint),
+                        )
+                      : AppImage.widget(data.petAvatarUrl!, fit: BoxFit.cover),
                 ),
-              ],
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Text(data.petName,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700, fontSize: 17, color: AppColors.ink)),
+              ),
+              // 右侧总进度大字（原型 5 / 30 milestone）。
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text('${data.completedCount} / ${data.totalCount}',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 19, color: AppColors.mint)),
+                  const Text('milestone',
+                      style: TextStyle(fontSize: 11, color: AppColors.muted)),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: ratio,
+              minHeight: 6,
+              backgroundColor: AppColors.cream2,
+              color: AppColors.mint,
             ),
           ),
         ],
@@ -112,7 +173,21 @@ class _Header extends StatelessWidget {
   }
 }
 
-/// 一个级别分区：标题（含该级进度）+ 徽章网格。
+/// 级别主题色（原型：L 金 / M 紫 / S 绿）。
+Color _levelColor(MilestoneLevel level) => switch (level) {
+      MilestoneLevel.l => AppColors.gold,
+      MilestoneLevel.m => AppColors.mint,
+      MilestoneLevel.s => AppColors.triageGreen,
+    };
+
+/// 级别分区标题（原型印尼语：L 级 — LEGENDA / M 级 — MAJOR / S 级 — SMALL）。
+String _levelTitle(MilestoneLevel level) => switch (level) {
+      MilestoneLevel.l => 'L 级 — LEGENDA',
+      MilestoneLevel.m => 'M 级 — MAJOR',
+      MilestoneLevel.s => 'S 级 — SMALL',
+    };
+
+/// 一个级别分区：彩色标题（含该级进度）+ 徽章网格。
 class _GroupSection extends StatelessWidget {
   const _GroupSection({required this.group});
 
@@ -120,12 +195,7 @@ class _GroupSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final label = switch (group.level) {
-      MilestoneLevel.l => l10n.milestoneLevelL,
-      MilestoneLevel.m => l10n.milestoneLevelM,
-      MilestoneLevel.s => l10n.milestoneLevelS,
-    };
+    final color = _levelColor(group.level);
     return Column(
       key: ValueKey('milestoneSection_${group.level.name}'),
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -133,9 +203,10 @@ class _GroupSection extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(label, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+            Text(_levelTitle(group.level),
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: color, letterSpacing: 0.3)),
             Text('${group.completedCount}/${group.totalCount}',
-                style: const TextStyle(color: AppColors.ink2, fontWeight: FontWeight.w700)),
+                style: const TextStyle(color: AppColors.muted, fontWeight: FontWeight.w600, fontSize: 12)),
           ],
         ),
         const SizedBox(height: AppSpacing.md),
@@ -143,7 +214,7 @@ class _GroupSection extends StatelessWidget {
           spacing: AppSpacing.md,
           runSpacing: AppSpacing.md,
           children: [
-            for (final item in group.items) _Badge(item: item),
+            for (final item in group.items) _Badge(item: item, levelColor: color),
           ],
         ),
       ],
@@ -151,13 +222,14 @@ class _GroupSection extends StatelessWidget {
   }
 }
 
-/// 单枚徽章：已完成彩色（mint 描边 + 奖杯）/ 未完成灰色锁定轮廓。
+/// 单枚徽章：已完成按级别配色（彩色实心圆 + 奖杯）/ 未完成灰色锁定轮廓。
 class _Badge extends ConsumerWidget {
-  const _Badge({required this.item});
+  const _Badge({required this.item, required this.levelColor});
 
   final MilestoneItem item;
+  final Color levelColor;
 
-  static const double _size = 76;
+  static const double _size = 64;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -173,17 +245,17 @@ class _Badge extends ConsumerWidget {
               width: _size,
               height: _size,
               decoration: BoxDecoration(
-                color: completed ? AppColors.mintTint : AppColors.line2,
+                // 已解锁：级别彩色实心圆 + 同色辉光；未解锁：浅灰圆。
+                color: completed ? levelColor : AppColors.line2,
                 shape: BoxShape.circle,
-                border: Border.all(
-                  color: completed ? AppColors.mint : AppColors.line,
-                  width: 2,
-                ),
+                boxShadow: completed
+                    ? [BoxShadow(color: levelColor.withValues(alpha: 0.35), blurRadius: 10, offset: const Offset(0, 3))]
+                    : null,
               ),
               child: Icon(
                 completed ? Icons.emoji_events_rounded : Icons.lock_outline_rounded,
-                color: completed ? AppColors.mint700 : AppColors.muted,
-                size: 30,
+                color: completed ? AppColors.onAccent : AppColors.muted,
+                size: 26,
               ),
             ),
             const SizedBox(height: 6),

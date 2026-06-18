@@ -11,12 +11,15 @@ Future<void> _pump(WidgetTester tester) async {
   await tester.pumpWidget(UncontrolledProviderScope(
     container: container,
     child: const MaterialApp(
+      locale: Locale('id'), // 文案已迁 arb：固定印尼语以断言 'Tanya AI (Triase)' 等 id 文案
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: TriagePage(),
     ),
   ));
-  await tester.pumpAndSettle();
+  // 在线脉冲点为常驻动画，pumpAndSettle 不会收敛——用固定帧推进。
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 100));
 }
 
 void main() {
@@ -34,14 +37,16 @@ void main() {
   testWidgets('AC1/FR-0C: 游客点兽医咨询入口触发强登录引导（Story 5.8 接入 5.3 发起）', (tester) async {
     await _pump(tester);
     await tester.tap(find.byKey(const ValueKey('triageEntryVet')));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
     expect(find.byType(LoginHardDialog), findsOneWidget);
   });
 
   testWidgets('AC1/FR-0C: 游客点 AI 入口触发强登录引导（不进入上传页）', (tester) async {
     await _pump(tester);
     await tester.tap(find.byKey(const ValueKey('triageEntryAI')));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
     expect(find.byType(LoginHardDialog), findsOneWidget);
   });
 }

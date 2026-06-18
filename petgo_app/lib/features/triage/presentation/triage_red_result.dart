@@ -44,15 +44,17 @@ class _TriageRedResultState extends ConsumerState<TriageRedResult> {
     final l10n = AppLocalizations.of(context);
     final title =
         pet?.name != null ? l10n.triageRedTitle(pet!.name) : l10n.triageRedTitleNoPet;
-    await showModalBottomSheet<void>(
+    final symptom = ref.read(triageUploadProvider).symptomText;
+    // 决策 #5：全屏沉浸（opaque 红屏，barrier 不可点关，PopScope 锁返回键）。
+    await showGeneralDialog<void>(
       context: context,
-      isDismissible: false, // 🔒 背景点击不可关闭
-      enableDrag: false, // 🔒 拖拽不可关闭
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetCtx) => RedAlertOverlay(
+      barrierDismissible: false, // 🔒 背景点击不可关闭
+      barrierColor: AppColors.triageRed,
+      barrierLabel: l10n.triageRedLevelLabel,
+      pageBuilder: (dialogCtx, _, _) => RedAlertOverlay(
         title: title,
-        onAcknowledge: () => Navigator.of(sheetCtx).pop(),
+        symptom: symptom,
+        onAcknowledge: () => Navigator.of(dialogCtx).pop(),
       ),
     );
   }

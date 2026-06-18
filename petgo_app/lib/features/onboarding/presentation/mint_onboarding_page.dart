@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/shadows.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/design/btn3d.dart';
 import '../../../shared/widgets/design/emoji_avatar.dart';
 import '../../../shared/widgets/design/momo.dart';
@@ -95,6 +96,7 @@ class _Welcome extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return DecoratedBox(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -128,9 +130,9 @@ class _Welcome extends StatelessWidget {
                       children: [
                         const Momo(size: 150, float: true),
                         const SizedBox(height: 30),
-                        const Text(
-                          'PETGO',
-                          style: TextStyle(
+                        Text(
+                          l10n.appTitle,
+                          style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w800,
                             color: AppColors.mint700,
@@ -138,10 +140,10 @@ class _Welcome extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 10),
-                        const Text(
-                          'Teman setia\nuntuk anabul-mu 🐾',
+                        Text(
+                          l10n.onboardWelcomeTagline,
                           textAlign: TextAlign.center,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 30,
                             fontWeight: FontWeight.w900,
                             height: 1.15,
@@ -152,10 +154,10 @@ class _Welcome extends StatelessWidget {
                         const SizedBox(height: 14),
                         ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 280),
-                          child: const Text(
-                            'Konsultasi cepat, kumpul bareng, dan simpan setiap momen tumbuh kembangnya — di satu tempat.',
+                          child: Text(
+                            l10n.onboardWelcomeSubtitle,
                             textAlign: TextAlign.center,
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 15.5,
                               color: AppColors.ink2,
                               height: 1.5,
@@ -173,14 +175,14 @@ class _Welcome extends StatelessWidget {
                       Btn3d(
                         expand: true,
                         onPressed: onStart,
-                        child: const Text('Mulai sekarang'),
+                        child: Text(l10n.onboardWelcomeStart),
                       ),
                       const SizedBox(height: 8),
                       TextButton(
                         onPressed: onStart,
-                        child: const Text(
-                          'Sudah punya akun? Masuk',
-                          style: TextStyle(
+                        child: Text(
+                          l10n.onboardWelcomeHaveAccount,
+                          style: const TextStyle(
                             color: AppColors.muted,
                             fontWeight: FontWeight.w700,
                             fontSize: 15,
@@ -237,6 +239,7 @@ class _CreatePet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final canNext = name.text.trim().isNotEmpty && breed.isNotEmpty;
     return SafeArea(
       child: Column(
@@ -252,9 +255,9 @@ class _CreatePet extends StatelessWidget {
                     children: [
                       const _Steps(n: 3, i: 1),
                       const SizedBox(height: 18),
-                      const Text(
-                        'Kenalan dengan anabul',
-                        style: TextStyle(
+                      Text(
+                        l10n.onboardCreateTitle,
+                        style: const TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.w900,
                           letterSpacing: -0.4,
@@ -262,9 +265,9 @@ class _CreatePet extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      const Text(
-                        'Buat kartu untuk satu peliharaanmu dulu.',
-                        style: TextStyle(fontSize: 14.5, color: AppColors.muted),
+                      Text(
+                        l10n.onboardCreateSubtitle,
+                        style: const TextStyle(fontSize: 14.5, color: AppColors.muted),
                       ),
                     ],
                   ),
@@ -309,13 +312,13 @@ class _CreatePet extends StatelessWidget {
                       ),
                       const SizedBox(height: 18),
                       _Field(
-                        label: 'Nama',
-                        hint: 'Panggilan',
-                        child: _input(name, 'cth. Mochi', onChanged),
+                        label: l10n.onboardFieldName,
+                        hint: l10n.onboardFieldNameHint,
+                        child: _input(name, l10n.onboardFieldNamePlaceholder, onChanged),
                       ),
                       _Field(
-                        label: 'Jenis / Ras',
-                        hint: 'Opsional',
+                        label: l10n.onboardFieldBreed,
+                        hint: l10n.onboardFieldOptional,
                         child: Wrap(
                           spacing: 8,
                           runSpacing: 8,
@@ -333,17 +336,17 @@ class _CreatePet extends StatelessWidget {
                         ),
                       ),
                       _Field(
-                        label: 'Tanggal lahir',
-                        hint: 'Opsional',
-                        child: _input(birthday, 'cth. 14 Feb 2023', onChanged),
+                        label: l10n.onboardFieldBirthday,
+                        hint: l10n.onboardFieldOptional,
+                        child: _input(birthday, l10n.onboardFieldBirthdayPlaceholder, onChanged),
                       ),
                       _Field(
-                        label: 'Bio singkat',
-                        hint: 'Maks. 30 karakter',
+                        label: l10n.onboardFieldBio,
+                        hint: l10n.onboardFieldBioHint,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            _input(bio, 'Mochi, kucing oren termalas se-Jakarta', onChanged,
+                            _input(bio, l10n.onboardFieldBioPlaceholder, onChanged,
                                 maxLength: 30),
                             Padding(
                               padding: const EdgeInsets.only(top: 4),
@@ -367,7 +370,7 @@ class _CreatePet extends StatelessWidget {
             child: Btn3d(
               expand: true,
               onPressed: canNext ? onNext : null,
-              child: const Text('Lanjut'),
+              child: Text(l10n.onboardNext),
             ),
           ),
         ],
@@ -435,6 +438,7 @@ class _DoneState extends State<_Done> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return DecoratedBox(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -479,7 +483,7 @@ class _DoneState extends State<_Done> with TickerProviderStateMixin {
                     ),
                     const SizedBox(height: 22),
                     Text(
-                      'Halo, ${widget.name}! 🎉',
+                      l10n.onboardDoneTitle(widget.name),
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         fontSize: 26,
@@ -491,10 +495,10 @@ class _DoneState extends State<_Done> with TickerProviderStateMixin {
                     const SizedBox(height: 6),
                     ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 280),
-                      child: const Text(
-                        'Kartu Paspor sudah dibuat. Yuk simpan momen pertamanya dan kenalkan ke teman-teman.',
+                      child: Text(
+                        l10n.onboardDoneBody,
                         textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 15, color: AppColors.ink2, height: 1.5),
+                        style: const TextStyle(fontSize: 15, color: AppColors.ink2, height: 1.5),
                       ),
                     ),
                     const SizedBox(height: 18),
@@ -524,7 +528,7 @@ class _DoneState extends State<_Done> with TickerProviderStateMixin {
               child: Btn3d(
                 expand: true,
                 onPressed: widget.onEnter,
-                child: const Text('Masuk ke TailTopia'),
+                child: Text(l10n.onboardDoneEnter),
               ),
             ),
           ],

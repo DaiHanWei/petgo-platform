@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/colors.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/design/striped_photo.dart';
 
 /// 实时对话区（Story 5.5 · TailTopia Prototype VetChat 换肤）。
@@ -15,12 +16,21 @@ import '../../../shared/widgets/design/striped_photo.dart';
 /// [imConversationId] 用于真实 C2C 收发，绑定腾讯 IM Flutter SDK 后此面用 [ImService.onMessages]/`sendText`
 /// 替换本地回声，视觉保留。mock / 测试下保持本地演示气泡（不触真实 SDK）。
 class ImChatPlaceholder extends StatefulWidget {
-  const ImChatPlaceholder({super.key, this.imConversationId, this.peerId});
+  const ImChatPlaceholder(
+      {super.key, this.imConversationId, this.peerId, this.accent = AppColors.mint, this.selfIsVet = false});
 
   final String? imConversationId;
 
   /// 对端 IM 账号（用户侧 `v_<vetId>` / 兽医侧 `u_<userId>`）。真机 C2C 收发用（L2）。
   final String? peerId;
+
+  /// 己方气泡 + 发送钮品牌主色：用户侧紫 `AppColors.mint`(#845EC9 默认) / 兽医侧薄荷 `vetPrimary`(#5BCBBB)。
+  /// 直接取品牌 token（非 M3 colorScheme.primary，避免色调偏移失真）。
+  final Color accent;
+
+  /// 视角：兽医侧 true（己方=兽医薄荷「D」头像，对端=用户紫「A」）/ 用户侧 false（己方=用户紫「A」，对端=兽医薄荷「D」）。
+  /// 控气泡两侧头像配色/字母（原型 chat.html / vet-chat.html）。
+  final bool selfIsVet;
 
   @override
   State<ImChatPlaceholder> createState() => _ImChatPlaceholderState();
@@ -52,12 +62,27 @@ class _ImChatPlaceholderState extends State<ImChatPlaceholder> {
 
   final List<_ChatMsg> _msgs = [
     const _ChatMsg.sys('Konsultasi dengan drh. Sari dimulai. Sampaikan keluhan anabul-mu ya 🐾'),
-    const _ChatMsg.me('Halo dok, kucing saya tadi muntah busa putih 2x malam ini 😟'),
-    const _ChatMsg.photo('foto anabul'),
-    const _ChatMsg.vet('Halo Kak, terima kasih fotonya. Apakah masih mau makan & minum? Lemas atau tidak?'),
-    const _ChatMsg.me('Masih mau minum sedikit, agak diem aja'),
+    const _ChatMsg.me('Halo dok, kucing saya Oyen tadi muntah busa putih 2x malam ini 😟'),
+    const _ChatMsg.me('Dari sore dia jadi lebih diam, nggak seaktif biasanya'),
+    const _ChatMsg.photo('Oyen tadi malam'),
     const _ChatMsg.vet(
-        'Baik. Untuk sekarang puasakan makanan 2-3 jam, tetap sediakan air. Pantau apakah muntah berulang. Kalau >3x atau makin lemas, sebaiknya ke klinik ya.'),
+        'Halo Kak, saya drh. Sari ya. Terima kasih fotonya 🙏 Oyen umur berapa, dan terakhir vaksin/obat cacing kapan?'),
+    const _ChatMsg.me('Umur 2 tahun, vaksin rutin. Obat cacing terakhir sekitar 3 bulan lalu'),
+    const _ChatMsg.vet(
+        'Baik. Sekarang masih mau makan & minum nggak? Pup dan pipisnya gimana? Ada kemungkinan dia gigit benang/tanaman/makanan asing?'),
+    const _ChatMsg.me(
+        'Minum masih mau sedikit, makan belum mau sama sekali. Pup normal kemarin. Tadi sempat gigit-gigit tali tirai sih 😅'),
+    const _ChatMsg.vet(
+        'Noted. Muntah busa putih + nafsu makan turun paling sering karena iritasi lambung ringan atau hairball. Tapi karena ada riwayat gigit tali, kita tetap waspadai kemungkinan benda asing ya.'),
+    const _ChatMsg.vet(
+        'Untuk sekarang:\n1) Puasakan makanan 2-3 jam dulu\n2) Tetap sediakan air, kasih sedikit tapi sering\n3) Setelah itu coba makanan basah hambar (ayam rebus tanpa bumbu) porsi kecil'),
+    const _ChatMsg.me('Oke dok. Kalau nanti masih muntah lagi gimana?'),
+    const _ChatMsg.vet(
+        'Kalau muntah berulang >3x, ada darah, lemas berat, atau sama sekali nggak mau minum dalam 12 jam → segera ke klinik untuk cek fisik & kemungkinan rontgen, mastiin nggak ada tali yang tertelan ya.'),
+    const _ChatMsg.me('Baik dok, makasih banyak penjelasannya 🙏'),
+    const _ChatMsg.vet(
+        'Sama-sama Kak 🙏 Saya rangkum konsultasinya ya:\n• Dugaan: iritasi lambung ringan / hairball\n• Tindakan: puasa 2-3 jam → hidrasi → makanan hambar porsi kecil\n• Pantau 24 jam, waspada benda asing (tali tirai)\n• Ke klinik bila muntah berulang / lemas / ada darah\nSemoga Oyen cepat pulih! 🐱'),
+    const _ChatMsg.sys('drh. Sari melampirkan kesimpulan konsultasi. Kamu bisa mengakhiri sesi & memberi rating.'),
   ];
 
   @override
@@ -107,12 +132,17 @@ class _ImChatPlaceholderState extends State<ImChatPlaceholder> {
               controller: _scroll,
               padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
               children: [
-                for (final m in _msgs) _Bubble(msg: m),
-                if (_typing) const _Bubble(msg: _ChatMsg.vet('...'), typing: true),
+                for (final m in _msgs) _Bubble(msg: m, accent: widget.accent, selfIsVet: widget.selfIsVet),
+                if (_typing)
+                  _Bubble(
+                      msg: const _ChatMsg.vet('...'),
+                      typing: true,
+                      accent: widget.accent,
+                      selfIsVet: widget.selfIsVet),
               ],
             ),
           ),
-          _InputBar(controller: _input, onSend: _send),
+          _InputBar(controller: _input, onSend: _send, accent: widget.accent),
         ],
       ),
     );
@@ -120,10 +150,33 @@ class _ImChatPlaceholderState extends State<ImChatPlaceholder> {
 }
 
 class _Bubble extends StatelessWidget {
-  const _Bubble({required this.msg, this.typing = false});
+  const _Bubble({required this.msg, this.typing = false, required this.accent, this.selfIsVet = false});
 
   final _ChatMsg msg;
   final bool typing;
+  final Color accent;
+  final bool selfIsVet;
+
+  /// 28px 圆头像：薄荷实心（兽医「D」）/ 紫渐变（用户「A」）。
+  Widget _avatar({required bool mint, required String label}) {
+    return Container(
+      width: 28,
+      height: 28,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: mint ? AppColors.vetPrimary : null,
+        gradient: mint
+            ? null
+            : const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [AppColors.mint500, AppColors.mint]),
+      ),
+      child: Text(label,
+          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -143,7 +196,12 @@ class _Bubble extends StatelessWidget {
     }
 
     final me = msg.who == 'me';
-    final align = me ? Alignment.centerRight : Alignment.centerLeft;
+
+    // 头像：己方 me（兽医侧薄荷「D」/ 用户侧紫「A」）；对端（反之）。原型两侧贴头像，sys 无。
+    final meMint = selfIsVet; // 兽医视角己方=薄荷
+    final avatar = me
+        ? _avatar(mint: meMint, label: meMint ? 'D' : 'A')
+        : _avatar(mint: !meMint, label: !meMint ? 'D' : 'A');
 
     Widget content;
     if (msg.photo != null) {
@@ -157,7 +215,7 @@ class _Bubble extends StatelessWidget {
             ? const EdgeInsets.symmetric(horizontal: 16, vertical: 12)
             : const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: me ? AppColors.mint : AppColors.card,
+          color: me ? accent : AppColors.card,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(18),
             topRight: const Radius.circular(18),
@@ -174,12 +232,19 @@ class _Bubble extends StatelessWidget {
       );
     }
 
+    final bubble = ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.72),
+      child: content,
+    );
+
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4.5),
-      alignment: align,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.8),
-        child: content,
+      child: Row(
+        mainAxisAlignment: me ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: me
+            ? [Flexible(child: bubble), const SizedBox(width: 8), avatar]
+            : [avatar, const SizedBox(width: 8), Flexible(child: bubble)],
       ),
     );
   }
@@ -231,13 +296,15 @@ class _TypingDotsState extends State<_TypingDots> with SingleTickerProviderState
 }
 
 class _InputBar extends StatelessWidget {
-  const _InputBar({required this.controller, required this.onSend});
+  const _InputBar({required this.controller, required this.onSend, required this.accent});
 
   final TextEditingController controller;
   final VoidCallback onSend;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
       decoration: const BoxDecoration(
@@ -259,7 +326,7 @@ class _InputBar extends StatelessWidget {
               onSubmitted: (_) => onSend(),
               style: const TextStyle(fontSize: 15, color: AppColors.ink),
               decoration: InputDecoration(
-                hintText: 'Tulis pesan...',
+                hintText: l10n.imInputHint,
                 hintStyle: const TextStyle(color: AppColors.muted, fontSize: 15),
                 filled: true,
                 fillColor: AppColors.cream2,
@@ -279,7 +346,7 @@ class _InputBar extends StatelessWidget {
             child: Container(
               width: 44,
               height: 44,
-              decoration: const BoxDecoration(color: AppColors.mint, shape: BoxShape.circle),
+              decoration: BoxDecoration(color: accent, shape: BoxShape.circle), // 用户侧紫 / 兽医侧薄荷
               child: const Icon(Icons.send_rounded, size: 21, color: Colors.white),
             ),
           ),

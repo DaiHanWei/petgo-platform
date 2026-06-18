@@ -86,12 +86,12 @@ Future<void> _pump(WidgetTester tester, _FakeVetRepository repo) async {
 void main() {
   testWidgets('AC5: 进入即展示请求详情 + 3 分钟预览倒计时', (tester) async {
     await _pump(tester, _FakeVetRepository());
-    expect(find.text('呕吐两次'), findsOneWidget);
-    expect(find.text('2 photos'), findsOneWidget);
-    // 倒计时可见；走过 1 秒后显示 02:5x。
+    expect(find.text('呕吐两次'), findsOneWidget); // symptomPreview 在 AI 评估框正文
+    expect(find.text('SYMPTOM PHOTOS (2)'), findsOneWidget);
+    // 倒计时框可见；走过 1 秒后显示裸 MM:SS = 02:5x。
     await tester.pump(const Duration(seconds: 1));
     final countdown = tester.widget<Text>(find.byKey(const ValueKey('vetPreviewCountdown')));
-    expect(countdown.data, startsWith('Preview 02:5'));
+    expect(countdown.data, startsWith('02:5'));
   });
 
   testWidgets('AC5 接单成功 → 进会话页', (tester) async {

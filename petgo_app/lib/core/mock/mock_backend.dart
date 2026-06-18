@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
+import 'mock_config.dart';
+
 /// 内存假后端（Mock 模式核心）。
 ///
 /// 单例,随 APP 进程生命周期存活 → **重启即重置回初始种子**(创建项消失,符合需求)。
@@ -37,6 +39,25 @@ class MockBackend {
   final List<String> _triageCycle = ['GREEN', 'YELLOW', 'RED'];
   int _triageSeq = 0;
   Map<String, dynamic>? _activeSession;
+
+  /// 兽医工作台 demo 会话元数据（id → source）。待接单池 8101-8103 + 进行中 8001/8002。
+  static const Map<int, String> _vetSessionSource = {
+    8100: 'AI_UPGRADE', 8101: 'AI_UPGRADE', 8102: 'AI_UPGRADE', 8103: 'DIRECT', // 待接单池
+    8001: 'AI_UPGRADE', 8002: 'DIRECT', // 进行中
+  };
+  /// 会话宠物身份样本（Story 5.5 顶栏；Mock 先做满、后端随后补）。未命中 → 取 8101(Oyen) 兜底，
+  /// 保证 dev 深链 /vet/conversation/:id 顶栏也有真身份可看。
+  static const Map<int, Map<String, Object>> _vetSessionPet = {
+    8100: {'petName': 'Benji', 'petSpecies': 'DOG', 'petSex': 'MALE', 'petAgeMonths': 60, 'ownerHandle': 'bagas'},
+    8101: {'petName': 'Oyen', 'petSpecies': 'CAT', 'petSex': 'MALE', 'petAgeMonths': 24, 'ownerHandle': 'rani'},
+    8102: {'petName': 'Bruno', 'petSpecies': 'DOG', 'petSex': 'MALE', 'petAgeMonths': 36, 'ownerHandle': 'dimas'},
+    8103: {'petName': 'Mochi', 'petSpecies': 'CAT', 'petSex': 'FEMALE', 'petAgeMonths': 8, 'ownerHandle': 'aditya'},
+    8001: {'petName': 'Oyen', 'petSpecies': 'CAT', 'petSex': 'MALE', 'petAgeMonths': 24, 'ownerHandle': 'rani'},
+    8002: {'petName': 'Milo', 'petSpecies': 'DOG', 'petSex': 'MALE', 'petAgeMonths': 18, 'ownerHandle': 'putri'},
+  };
+  /// 待接单池：未接单前 GET 返回 WAITING（让请求预览页不被「已被抢」误判弹出）。
+  static const Set<int> _vetWaitingPool = {8100, 8101, 8102, 8103};
+  final Set<int> _vetAccepted = {}; // 已接单的 session id（接单后转 IN_PROGRESS）
 
   void _seed() {
     _profile = {
@@ -99,12 +120,25 @@ class MockBackend {
     ];
 
     _notifications.addAll([
-      // type 必须是后端 NotificationType 合法值（VET_REPLY/CONSULT_CLOSED/CONTENT_LIKED/CONTENT_COMMENTED/NEW_CONSULT_REQUEST）。
-      _notif(token: 'n1', type: 'CONTENT_COMMENTED', title: 'New comment', body: 'Rina commented on your post', read: false, ago: const Duration(minutes: 20)),
-      _notif(token: 'n2', type: 'CONTENT_LIKED', title: 'New like', body: 'Budi liked your post', read: false, ago: const Duration(hours: 3)),
-      _notif(token: 'n3', type: 'VET_REPLY', title: 'Consult update', body: 'A vet has replied to your consultation', read: true, ago: const Duration(days: 1)),
+      // type 必须是后端 NotificationType 合法值（VET_REPLY/CONSULT_CLOSED/CONTENT_LIKED/CONTENT_COMMENTED/
+      // NEW_CONSULT_REQUEST/PET_BIRTHDAY/COMPANION_ANNIVERSARY/MILESTONE_NODE）。文案印尼语对齐 notif.html。
+      // ago 跨今天/昨天，供通知中心按时间分组（HARI INI / KEMARIN）。
+      _notif(token: 'n1', type: 'VET_REPLY', title: 'Dokter Hewan membalas konsultasimu',
+          body: '"Kondisi Mochi sudah membaik, lanjutkan diet makanan basah selama 3 hari..."',
+          read: false, ago: const Duration(minutes: 5)),
+      _notif(token: 'n2', type: 'CONTENT_LIKED', title: 'Rani Fitriani menyukai postinganmu',
+          body: '"Oyen akhirnya mau makan lagi setelah semalam muntah..."',
+          read: false, ago: const Duration(hours: 1)),
+      _notif(token: 'n3', type: 'CONTENT_COMMENTED', title: 'dr. Dewi mengomentari postinganmu',
+          body: '"Syukurlah Oyen sudah membaik! Kalau dalam 24 jam..."',
+          read: true, ago: const Duration(hours: 2)),
       // L 级里程碑达成推送（Story 8.6）：6-6 铃铛里程碑条改真数据驱动。深链跳里程碑列表页。
-      _notif(token: 'n4', type: 'MILESTONE_NODE', title: 'Milestone unlocked 🎉', body: '"100 days together" is unlocked — take a look', read: false, ago: const Duration(hours: 1)),
+      _notif(token: 'n4', type: 'MILESTONE_NODE', title: 'Mochi mencapai milestone Level L!',
+          body: '🎂 Ulang tahun pertama — 365 hari bersama!',
+          read: false, ago: const Duration(days: 1, hours: 3)),
+      _notif(token: 'n5', type: 'PET_BIRTHDAY', title: 'Ulang tahun Mochi minggu depan! 🎉',
+          body: 'Abadikan momennya — buat postingan spesial sekarang',
+          read: true, ago: const Duration(days: 1, hours: 8)),
     ]);
 
     _consultHistory.addAll([
@@ -331,6 +365,9 @@ class MockBackend {
           .toList()));
     }
     if (m == 'GET' && p.endsWith('/content-posts')) {
+      // DEV_STATE：feed 空态 / 失败态（截 feed-empty / feed-error 用）。
+      if (kDevState == 'feed-empty') return ok(_envelope(const []));
+      if (kDevState == 'feed-error') throw _devError(o);
       final cat = (q['category'] ?? 'ALL') as String;
       final items = cat == 'ALL' ? _feed : _feed.where((e) => e['type'] == cat).toList();
       // 投影为卡片 10 字段契约：内部 imageUrls（详情多图）不进 Feed 信封。
@@ -422,7 +459,10 @@ class MockBackend {
     }
 
     // ---------- PET PROFILE / TIMELINE / HEALTH ----------
-    if (p.endsWith('/pet-profiles/me/timeline') && m == 'GET') return ok(_envelope(_timeline));
+    if (p.endsWith('/pet-profiles/me/timeline') && m == 'GET') {
+      if (kDevState == 'timeline-empty') return ok(_envelope(const []));
+      return ok(_envelope(_timeline));
+    }
     // 里程碑列表/进度（Story 8.2 · FR-42，后端 MilestoneListResponse 镜像）。
     if (p.endsWith('/pet-profiles/me/milestones') && m == 'GET') {
       if (_petProfile == null) throw _notFound(o);
@@ -492,6 +532,8 @@ class MockBackend {
       return ok({'date': date, 'items': items});
     }
     if (p.endsWith('/pet-profiles/me') && m == 'GET') {
+      // DEV_NOPET：模拟「未建档」→ 404，让建档表单页(pet-create)正常呈现而非被重定向到已有档案。
+      if (kDebugMode && const bool.fromEnvironment('DEV_NOPET')) throw _notFound(o);
       if (_petProfile == null) throw _notFound(o);
       return ok(_petProfile);
     }
@@ -516,7 +558,14 @@ class MockBackend {
     // ---------- AI 分诊 ----------
     if (p.endsWith('/triage') && m == 'POST') {
       final id = _nextId();
-      _triageLevel[id] = _triageCycle[_triageSeq++ % _triageCycle.length]; // 轮流绿/黄/红
+      // DEV_STATE=triage-red/yellow/green：强制本次分诊等级（截 ai-result-* 用）；否则轮流绿/黄/红。
+      final forced = switch (kDevState) {
+        'triage-red' => 'RED',
+        'triage-yellow' => 'YELLOW',
+        'triage-green' => 'GREEN',
+        _ => null,
+      };
+      _triageLevel[id] = forced ?? _triageCycle[_triageSeq++ % _triageCycle.length];
       return Response(requestOptions: o, statusCode: 202, data: {'triageId': id});
     }
     final triageGet = RegExp(r'/triage/(\d+)$').firstMatch(p);
@@ -537,7 +586,14 @@ class MockBackend {
     if (p.endsWith('/consult-sessions/active') && m == 'GET') {
       return _activeSession == null ? noContent() : ok(_activeSession);
     }
-    if (p.endsWith('/consult-sessions/pending-rating') && m == 'GET') return noContent();
+    if (p.endsWith('/consult-sessions/pending-rating') && m == 'GET') {
+      // DEV_STATE=rate：返回一条待补弹评分的已关闭会话（截 rate 弹窗用）。
+      if (kDevState == 'rate') {
+        return ok({'id': 9001, 'status': 'CLOSED', 'source': 'DIRECT', 'vetDisplayName': 'drh. Sari',
+          'waitingElapsedSeconds': 0, 'timedOut': false, 'alreadyActive': false});
+      }
+      return noContent();
+    }
     if (p.endsWith('/consult-sessions') && m == 'POST') {
       _activeSession = {'id': _nextId(), 'status': 'WAITING', 'source': body['source'] ?? 'DIRECT',
         'vetId': null, 'waitingElapsedSeconds': 0, 'timedOut': false, 'alreadyActive': false,
@@ -547,6 +603,11 @@ class MockBackend {
     // 用户侧 consult-sessions/{id}:用 !/vet/ 守卫,避免误吞兽医侧 /vet/consult-sessions/{id}。
     final sessGet = RegExp(r'/consult-sessions/(\d+)$').firstMatch(p);
     if (sessGet != null && m == 'GET' && !p.contains('/vet/')) {
+      // DEV_STATE=consult-waiting：恒返回 WAITING，让 match-wait 等待页停住可截（默认会秒转 IN_PROGRESS）。
+      if (kDevState == 'consult-waiting') {
+        return ok({'id': int.parse(sessGet.group(1)!), 'status': 'WAITING', 'source': 'DIRECT',
+          'vetId': null, 'waitingElapsedSeconds': 23, 'timedOut': false, 'alreadyActive': false});
+      }
       return ok(_activeSession ?? {'id': int.parse(sessGet.group(1)!), 'status': 'IN_PROGRESS', 'source': 'DIRECT',
         'waitingElapsedSeconds': 0, 'timedOut': false, 'alreadyActive': false});
     }
@@ -576,23 +637,68 @@ class MockBackend {
     if (p.endsWith('/vet/heartbeat') && m == 'POST') return ok();
     if (p.endsWith('/vet/consult-sessions/waiting') && m == 'GET') {
       return ok([
-        {'sessionId': 8001, 'source': 'DIRECT', 'aiDangerLevel': 'YELLOW', 'symptomPreview': 'Cat has been sneezing for two days', 'imageCount': 2, 'waitingElapsedSeconds': 45},
-        {'sessionId': 8002, 'source': 'AI_UPGRADE', 'aiDangerLevel': 'RED', 'symptomPreview': 'Swallowed a foreign object', 'imageCount': 1, 'waitingElapsedSeconds': 120},
+        {'sessionId': 8100, 'source': 'AI_UPGRADE', 'aiDangerLevel': 'RED', 'symptomPreview': 'Makan cokelat lalu muntah berulang & lemas drastis sejak pagi', 'imageCount': 3, 'waitingElapsedSeconds': 50,
+          'petName': 'Benji', 'petSpecies': 'DOG', 'petSex': 'MALE', 'petAgeMonths': 60, 'ownerHandle': 'bagas'},
+        {'sessionId': 8101, 'source': 'AI_UPGRADE', 'aiDangerLevel': 'YELLOW', 'symptomPreview': 'Muntah busa putih 2x semalam, jadi lebih lemas & kurang nafsu makan', 'imageCount': 2, 'waitingElapsedSeconds': 45,
+          'petName': 'Oyen', 'petSpecies': 'CAT', 'petSex': 'MALE', 'petAgeMonths': 24, 'ownerHandle': 'rani'},
+        {'sessionId': 8102, 'source': 'AI_UPGRADE', 'aiDangerLevel': 'GREEN', 'symptomPreview': 'Bersin-bersin sejak 2 hari, makan & main masih normal', 'imageCount': 1, 'waitingElapsedSeconds': 90,
+          'petName': 'Bruno', 'petSpecies': 'DOG', 'petSex': 'MALE', 'petAgeMonths': 36, 'ownerHandle': 'dimas'},
+        {'sessionId': 8103, 'source': 'DIRECT', 'aiDangerLevel': null, 'symptomPreview': null, 'imageCount': 0, 'waitingElapsedSeconds': 150,
+          'petName': 'Mochi', 'petSpecies': 'CAT', 'petSex': 'FEMALE', 'petAgeMonths': 8, 'ownerHandle': 'aditya'},
+      ]);
+    }
+    // 「进行中」会话列表（工作台 Active Tab）。点卡 → /vet/conversation/:id（IM 占位聊天）。
+    if (p.endsWith('/vet/consult-sessions/in-progress') && m == 'GET') {
+      return ok([
+        {'sessionId': 8001, 'source': 'AI_UPGRADE', 'petName': 'Oyen', 'unread': 1,
+          'lastMessage': 'Minum masih mau sedikit, makan belum mau. Tadi sempat gigit tali tirai 😅'},
+        {'sessionId': 8002, 'source': 'DIRECT', 'petName': 'Milo', 'unread': 0,
+          'lastMessage': 'Oke dok, nanti saya pantau lagi 2 jam ke depan 🙏'},
+      ]);
+    }
+    // 已结束「历史」列表（工作台 History Tab）。
+    if (p.endsWith('/vet/consult-sessions/history') && m == 'GET') {
+      return ok([
+        {'sessionId': 7901, 'petName': 'Cookie', 'date': _iso(const Duration(days: 1)), 'stars': 5,
+          'terminalState': 'CLOSED', 'summary': 'Diare ringan — disarankan diet hambar & oralit, pantau 24 jam',
+          'dangerLevel': 'GREEN', 'ownerHandle': 'hana', 'petSpecies': 'CAT',
+          'reviewText': 'Dokternya sangat responsif dan penjelasannya mudah dimengerti 🙏'},
+        {'sessionId': 7902, 'petName': 'Luna', 'date': _iso(const Duration(days: 3)), 'stars': 4,
+          'terminalState': 'CLOSED', 'summary': 'Gatal & garuk telinga — dugaan ear mites, rujuk klinik untuk cek mikroskop',
+          'dangerLevel': 'YELLOW', 'ownerHandle': 'rio', 'petSpecies': 'DOG',
+          'reviewText': 'Cepat ditanggapi, sarannya jelas. Terima kasih dok!'},
+        {'sessionId': 7904, 'petName': 'Benji', 'date': _iso(const Duration(days: 4)), 'stars': 5,
+          'terminalState': 'CLOSED', 'summary': 'Kesulitan bernapas (darurat) — diarahkan segera ke klinik UGD terdekat',
+          'dangerLevel': 'RED', 'ownerHandle': 'bagas', 'petSpecies': 'DOG',
+          'reviewText': 'Sigap dan menenangkan saat panik. Sangat membantu!'},
+        {'sessionId': 7903, 'petName': 'Tofu', 'date': _iso(const Duration(days: 6)), 'stars': null,
+          'terminalState': 'INTERRUPTED', 'summary': 'Sesi terputus sebelum selesai (user keluar)'},
       ]);
     }
     final vetAccept = RegExp(r'/vet/consult-sessions/(\d+)/accept$').firstMatch(p);
     if (vetAccept != null && m == 'POST') {
-      return ok({'id': int.parse(vetAccept.group(1)!), 'status': 'IN_PROGRESS', 'source': 'DIRECT', 'userId': 1, 'imConversationId': 'mock-im', 'hasAiContext': true});
+      final id = int.parse(vetAccept.group(1)!);
+      _vetAccepted.add(id); // 接单成功：转 IN_PROGRESS（后续 GET 不再回 WAITING）
+      return ok(_vetSessionView(id, 'IN_PROGRESS'));
     }
     final vetGet = RegExp(r'/vet/consult-sessions/(\d+)$').firstMatch(p);
     if (vetGet != null && m == 'GET') {
-      return ok({'id': int.parse(vetGet.group(1)!), 'status': 'IN_PROGRESS', 'source': 'DIRECT', 'userId': 1, 'imConversationId': 'mock-im', 'hasAiContext': true});
+      final id = int.parse(vetGet.group(1)!);
+      // 待接单池且未接单 → WAITING（请求预览页轮询见 WAITING 才不会判「已被抢」弹出）。
+      final waiting = _vetWaitingPool.contains(id) && !_vetAccepted.contains(id);
+      return ok(_vetSessionView(id, waiting ? 'WAITING' : 'IN_PROGRESS'));
     }
-    if (RegExp(r'/vet/consult-sessions/(\d+)/ai-context$').hasMatch(p)) {
-      return ok({'hasAiContext': true, 'dangerLevel': 'YELLOW', 'symptomText': 'Cat has been sneezing for two days but is still alert', 'imageUrls': []});
+    final aiCtx = RegExp(r'/vet/consult-sessions/(\d+)/ai-context$').firstMatch(p);
+    if (aiCtx != null && m == 'GET') {
+      final id = int.parse(aiCtx.group(1)!);
+      // DIRECT 会话无 AI 分诊上下文 → 会话页不渲染 AI 卡。
+      if ((_vetSessionSource[id] ?? 'DIRECT') == 'DIRECT') {
+        return ok({'hasAiContext': false, 'dangerLevel': null, 'symptomText': null, 'imageUrls': []});
+      }
+      return ok({'hasAiContext': true, 'dangerLevel': 'YELLOW', 'symptomText': 'Kucing (Oyen, 2th) muntah busa putih 2x semalam, nafsu makan turun & lebih lemas. Riwayat gigit tali tirai.', 'imageUrls': []});
     }
     if (RegExp(r'/vet/consult-sessions/(\d+)/assist$').hasMatch(p)) {
-      return ok({'aiReferenceReply': 'Monitor temperature and appetite, keep the environment clean, and follow up if there is no improvement within 24 hours.', 'historySummaries': []});
+      return ok({'aiReferenceReply': 'Puasakan makanan 2-3 jam, tetap sediakan air sedikit tapi sering, lalu coba makanan hambar porsi kecil. Pantau 24 jam; bila muntah >3x, ada darah, atau makin lemas segera ke klinik.', 'historySummaries': []});
     }
     if (RegExp(r'/vet/consult-sessions/(\d+)/end$').hasMatch(p)) {
       return ok({'id': 1, 'status': 'PENDING_CLOSE', 'source': 'DIRECT', 'userId': 1, 'imConversationId': 'mock-im', 'hasAiContext': true});
@@ -600,7 +706,10 @@ class MockBackend {
     if (RegExp(r'/vet/consult-sessions/(\d+)/notify-reply$').hasMatch(p)) return ok();
 
     // ---------- 通知 / 版本 / 媒体 ----------
-    if (p.endsWith('/notifications') && m == 'GET') return ok(_envelope(_notifications));
+    if (p.endsWith('/notifications') && m == 'GET') {
+      if (kDevState == 'notif-empty') return ok(_envelope(const []));
+      return ok(_envelope(_notifications));
+    }
     if (p.endsWith('/notifications/unread-count') && m == 'GET') {
       return ok({'count': _notifications.where((e) => e['read'] == false).length});
     }
@@ -631,6 +740,17 @@ class MockBackend {
     if (kDebugMode) debugPrint('[MOCK] 未覆盖端点 → 空成功: $m $p');
     if (m == 'GET') return ok(_envelope([]));
     return ok({});
+  }
+
+  /// 兽医侧会话视图 JSON（source/hasAiContext 按 demo 元数据映射；DIRECT 无 AI 上下文卡）。
+  Map<String, dynamic> _vetSessionView(int id, String status) {
+    final source = _vetSessionSource[id] ?? 'DIRECT';
+    final pet = _vetSessionPet[id] ?? _vetSessionPet[8101]!; // 未命中取 Oyen 兜底（dev 深链）
+    return {
+      'id': id, 'status': status, 'source': source, 'userId': 1,
+      'imConversationId': 'mock-im-$id', 'hasAiContext': source == 'AI_UPGRADE',
+      ...pet,
+    };
   }
 
   /// 条目的事件日期键（yyyy-MM-dd）：快乐时刻取 eventDate，健康事件取 date 的日期段。
@@ -666,6 +786,13 @@ class MockBackend {
   DioException _notFound(RequestOptions o) => DioException(
         requestOptions: o,
         response: Response(requestOptions: o, statusCode: 404),
+        type: DioExceptionType.badResponse,
+      );
+
+  /// DEV_STATE 失败态：抛 500，让页面进失败/重试分支（截 feed-error / network-error 用）。
+  DioException _devError(RequestOptions o) => DioException(
+        requestOptions: o,
+        response: Response(requestOptions: o, statusCode: 500),
         type: DioExceptionType.badResponse,
       );
 

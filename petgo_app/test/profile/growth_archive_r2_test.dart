@@ -68,20 +68,24 @@ TimelineItem _happy(int id, String eventDate) => TimelineItem(
 void main() {
   // ===== AC5 统计栏 / 里程碑 / 第一条 🌟 / 视图切换 =====
 
-  testWidgets('AC5: 统计栏显示快乐时刻/问诊数', (tester) async {
+  testWidgets('AC5: 护照卡内统计显示快乐时刻/问诊数', (tester) async {
     await tester.pumpWidget(_wrapPage());
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('archiveStatsBar')), findsOneWidget);
-    expect(find.textContaining('5'), findsWidgets); // happy 5
-    expect(find.textContaining('2'), findsWidgets); // consult 2
+    // paspor.html 重做：统计三列并入护照卡（Momen Bahagia/Konsultasi/Milestone）。
+    expect(find.byKey(const ValueKey('petInfoCard')), findsOneWidget);
+    expect(find.text('5'), findsWidgets); // happy 5
+    expect(find.text('2'), findsWidgets); // consult 2
+    expect(find.text('Momen Bahagia'), findsOneWidget);
+    expect(find.text('Konsultasi'), findsOneWidget);
   });
 
   testWidgets('AC5: 里程碑入口零态进度 0 / N', (tester) async {
     await tester.pumpWidget(_wrapPage());
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('archiveMilestoneBar')), findsOneWidget);
-    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
-    expect(find.text(l10n.growthMilestoneProgress(0, 30)), findsOneWidget);
+    // paspor.html 重做：msbar 显示「🏆 Pencapaian {name}」+「done / total」。
+    expect(find.text('🏆 Pencapaian Momo'), findsOneWidget);
+    expect(find.text('0 / 30'), findsOneWidget);
   });
 
   testWidgets('AC5: 仅第一条快乐时刻显 🌟 标签', (tester) async {
@@ -123,9 +127,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('timelineError')), findsOneWidget);
     expect(find.byKey(const ValueKey('timelineRetry')), findsOneWidget);
-    // 信息卡 + 统计栏仍在（未被失败态覆盖）。
+    // 信息卡（含统计三列）仍在（未被失败态覆盖）。
     expect(find.byKey(const ValueKey('petInfoCard')), findsOneWidget);
-    expect(find.byKey(const ValueKey('archiveStatsBar')), findsOneWidget);
   });
 
   // ===== AC6 日历未来格子置灰 / 记录格 / 空格「+」 =====

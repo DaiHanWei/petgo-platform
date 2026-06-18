@@ -61,10 +61,10 @@ class _ShareFabState extends State<ShareFab> with SingleTickerProviderStateMixin
               Transform.scale(
                 scale: ringScale,
                 child: Container(
-                  width: 60,
-                  height: 60,
+                  width: 56,
+                  height: 56,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(22),
+                    shape: BoxShape.circle,
                     color: AppColors.mint.withValues(alpha: ringOpacity),
                   ),
                 ),
@@ -73,17 +73,42 @@ class _ShareFabState extends State<ShareFab> with SingleTickerProviderStateMixin
           ],
         );
       },
+      // 原型 145° 三段紫渐变 FAB（#9E83DA→#845EC9→#6C48AE），圆形 56px。
       child: Semantics(
         button: true,
         label: widget.semanticLabel,
-        child: FloatingActionButton(
+        child: Container(
           key: const ValueKey('shareFab'),
-          backgroundColor: AppColors.mint,
-          foregroundColor: AppColors.onAccent,
-          elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-          onPressed: widget.onPressed,
-          child: const Icon(Icons.ios_share_rounded),
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [AppColors.mint500, AppColors.mint, AppColors.mint600],
+              stops: [0.0, 0.55, 1.0],
+            ),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.22),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4)),
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.12),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2)),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            shape: const CircleBorder(),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: widget.onPressed,
+              child: const Icon(Icons.ios_share_rounded, color: AppColors.onAccent),
+            ),
+          ),
         ),
       ),
     );

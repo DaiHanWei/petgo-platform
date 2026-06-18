@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -28,6 +29,8 @@ class _ConsultWaitingPageState extends ConsumerState<ConsultWaitingPage>
   static const Duration _pollInterval = Duration(seconds: 3);
 
   Timer? _poll;
+  Timer? _display; // 倒计时显示用本地 1s timer（不影响轮询/状态机）
+  int _seconds = 0; // 已等待秒数（服务端 waitingElapsedSeconds 权威，本地逐秒推进）
   bool _timeoutShown = false;
   bool _navigating = false;
 
@@ -40,12 +43,17 @@ class _ConsultWaitingPageState extends ConsumerState<ConsultWaitingPage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _startPolling();
+    // 显示用本地倒计时（逐秒，仅驱动 UI；轮询/超时/取消逻辑不依赖它）。
+    _display = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _seconds++);
+    });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _poll?.cancel();
+    _display?.cancel();
     super.dispose();
   }
 
@@ -79,6 +87,8 @@ class _ConsultWaitingPageState extends ConsumerState<ConsultWaitingPage>
     try {
       final s = await ref.read(consultRepositoryProvider).get(widget.sessionId);
       if (!mounted) return;
+      // 服务端等待秒数权威，回填本地倒计时显示。
+      setState(() => _seconds = s.waitingElapsedSeconds);
       if (s.isInProgress) {
         // 接单 → 进会话界面（Story 5.5）。已决态，退出不再取消。
         _exitCancelDisabled = true;
@@ -193,34 +203,215 @@ class _ConsultWaitingPageState extends ConsumerState<ConsultWaitingPage>
     context.go('/triage');
   }
 
+  String get _mmss {
+    final m = (_seconds ~/ 60).toString().padLeft(2, '0');
+    final s = (_seconds % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: AppColors.base,
       body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.xl),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const CircularProgressIndicator(),
-                const SizedBox(height: AppSpacing.section),
+        child: Column(
+          children: [
+            // 顶部返回钮（原型 match-wait 左上）。离开等待页（请求保留，由「Batalkan」显式取消）。
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: InkWell(
+                  key: const ValueKey('consultWaitingBack'),
+                  onTap: () => context.canPop() ? context.pop() : context.go('/triage'),
+                  borderRadius: BorderRadius.circular(11),
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFEDF3),
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    child: const Icon(Icons.arrow_back, size: 18, color: AppColors.ink2),
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // 3 层脉冲环 + 中心呼吸医生头像（自绘，不引依赖）。
+                      const _MatchPulse(),
+                const SizedBox(height: 24),
                 Text(
                   l10n.consultMatching,
                   key: const ValueKey('consultMatching'),
-                  style: AppTypography.title,
+                  style: const TextStyle(
+                      fontSize: 20, height: 1.3, fontWeight: FontWeight.w700, color: AppColors.ink),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: AppSpacing.section),
-                TextButton(
-                  key: const ValueKey('consultCancel'),
-                  onPressed: _navigating ? null : _confirmCancel,
-                  child: Text(l10n.consultCancel),
+                const SizedBox(height: 8),
+                Text(l10n.consultMatchingSubtitle,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 13, height: 1.6, color: AppColors.ink2)),
+                const SizedBox(height: 28),
+                // 倒计时盒（已等待 MM:SS + 1 分钟搜索上限说明）。
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  decoration: BoxDecoration(
+                      color: AppColors.cream2, borderRadius: BorderRadius.circular(14)),
+                  child: Column(
+                    children: [
+                      Text(_mmss,
+                          key: const ValueKey('consultCountdown'),
+                          style: const TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 2,
+                              color: AppColors.mint,
+                              fontFeatures: [FontFeature.tabularFigures()])),
+                      const SizedBox(height: 3),
+                      Text(l10n.consultSearchLimit,
+                          style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+                    ],
+                  ),
                 ),
-              ],
+                      const SizedBox(height: 16),
+                      // 已发送症状摘要卡（原型 RINGKASAN YANG DIKIRIM）。占位内容。
+                      _summaryCard(l10n),
+                      const SizedBox(height: 24),
+                      TextButton(
+                        key: const ValueKey('consultCancel'),
+                        onPressed: _navigating ? null : _confirmCancel,
+                        child: Text(l10n.consultCancelRequest,
+                            style: const TextStyle(fontSize: 13, color: AppColors.muted)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 症状摘要卡（原型 match-wait）：白底圆角14 + 阴影 + 大写灰小标题 + 占位摘要正文。
+  Widget _summaryCard(AppLocalizations l10n) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: const [
+          BoxShadow(color: Color(0x14162233), blurRadius: 12, offset: Offset(0, 4)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(l10n.consultSummaryLabel,
+              style: const TextStyle(
+                  fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.5, color: AppColors.muted)),
+          const SizedBox(height: 6),
+          const Text('Mochi — muntah busa putih 2x · 2 foto dilampirkan',
+              style: TextStyle(fontSize: 13, height: 1.5, color: AppColors.ink)),
+        ],
+      ),
+    );
+  }
+}
+
+/// 匹配脉冲动画（原型 match-wait）：3 层 matchPulse 扩散环（scale 1→1.9 交错延迟）
+/// + 中心 breathGlow 呼吸医生头像。用单个 [AnimationController] 自绘，不引三方动画库。
+class _MatchPulse extends StatefulWidget {
+  const _MatchPulse();
+
+  @override
+  State<_MatchPulse> createState() => _MatchPulseState();
+}
+
+class _MatchPulseState extends State<_MatchPulse> with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 2400))..repeat();
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 160,
+      height: 160,
+      child: AnimatedBuilder(
+        animation: _c,
+        builder: (context, child) {
+          final breath = 0.28 + 0.27 * (0.5 + 0.5 * math.sin(_c.value * 2 * math.pi));
+          return Stack(
+            alignment: Alignment.center,
+            children: [
+              _ring(phase: 0.0, base: 80),
+              _ring(phase: 1 / 3, base: 80),
+              _ring(phase: 2 / 3, base: 80),
+              // 中心呼吸医生头像。
+              Container(
+                width: 70,
+                height: 70,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [AppColors.mint, AppColors.mint500],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                        color: AppColors.mint.withValues(alpha: breath),
+                        blurRadius: 28,
+                        spreadRadius: 2),
+                  ],
+                ),
+                child: const Text('🩺', style: TextStyle(fontSize: 30)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// 单层扩散环：local t = (value + phase) % 1；scale 1→1.9，opacity 0.7→0。
+  Widget _ring({required double phase, required double base}) {
+    final t = (_c.value + phase) % 1.0;
+    final scale = 1.0 + 0.9 * t;
+    final opacity = 0.7 * (1 - t);
+    return Opacity(
+      opacity: opacity,
+      child: Transform.scale(
+        scale: scale,
+        child: Container(
+          width: base,
+          height: base,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.mint.withValues(alpha: 0.4), width: 2),
           ),
         ),
       ),

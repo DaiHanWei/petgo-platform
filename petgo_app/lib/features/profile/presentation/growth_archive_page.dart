@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -21,6 +22,12 @@ import 'widgets/archive_calendar.dart';
 import 'widgets/pet_info_card.dart';
 import 'widgets/share_fab.dart';
 import 'widgets/timeline_tiles.dart';
+
+/// 印尼语月份全称（paspor.html 月份区标题 "Juni 2026"）。
+const List<String> _idMonthFull = [
+  '', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+];
 
 /// 成长档案 Tab 主屏（Story 2.4）。三态：
 /// - 状态 A + 有档案 → 信息卡 + FAB 占位 + 倒序时间线；
@@ -53,11 +60,8 @@ class GrowthArchivePage extends ConsumerWidget {
             return _EmptyProfileView(onCreate: () => context.go('/profile/create'));
           }
           return _ArchiveBody(
-            child: PetInfoCard(
-              profile: profile,
-              onEditStatus: () => _openStatusEditor(context, ref),
-              onEditProfile: () => context.go('/profile/edit'),
-            ),
+            profile: profile,
+            onEditProfile: () => context.go('/profile/edit'),
           );
         },
       ),
@@ -147,19 +151,26 @@ class GrowthArchivePage extends ConsumerWidget {
 enum _ArchiveView { timeline, calendar }
 
 class _ArchiveBody extends ConsumerStatefulWidget {
-  const _ArchiveBody({required this.child});
+  const _ArchiveBody({required this.profile, required this.onEditProfile});
 
-  final Widget child;
+  final PetProfile profile;
+  final VoidCallback onEditProfile;
 
   @override
   ConsumerState<_ArchiveBody> createState() => _ArchiveBodyState();
 }
 
 class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
-  _ArchiveView _view = _ArchiveView.timeline;
+  // Debug 截图钩子（仅 debug + flag）：默认进 Kalender 视图，截 catatan-calendar 用。
+  _ArchiveView _view =
+      (kDebugMode && const String.fromEnvironment('DEV_ARCHIVE_VIEW') == 'calendar')
+          ? _ArchiveView.calendar
+          : _ArchiveView.timeline;
 
   @override
   Widget build(BuildContext context) {
+    final stats = ref.watch(archiveStatsProvider).asData?.value;
+    final name = widget.profile.name;
     return RefreshIndicator(
       color: AppColors.mint,
       onRefresh: () async {
@@ -167,24 +178,31 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
         ref.invalidate(archiveStatsProvider);
       },
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 54, AppSpacing.lg, AppSpacing.section),
+        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 50, AppSpacing.lg, AppSpacing.section),
         children: [
-          widget.child, // 信息卡（缓存数据，内容区失败不覆盖，AC7）
-          const SizedBox(height: 12),
-          const _StatsBar(),
-          const SizedBox(height: 10),
-          const _MilestoneBar(),
-          const SizedBox(height: 10),
-          Center(
-            child: TextButton.icon(
-              key: const ValueKey('previewCardButton'),
-              onPressed: () => context.push('/card/preview'),
-              icon: const Icon(Icons.public, size: 16, color: AppColors.mint700),
-              label: const Text('Pratinjau kartu publik',
-                  style: TextStyle(color: AppColors.mint700, fontWeight: FontWeight.w700, fontSize: 13)),
-            ),
+          // AppBar：Paspor {name} + 编辑铅笔（paspor.html appbar）
+          Row(
+            children: [
+              Expanded(
+                child: Text('Paspor $name',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 19, fontWeight: FontWeight.w700, color: AppColors.ink)),
+              ),
+              _appbarBtn(),
+            ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 14),
+          PetInfoCard(
+            profile: widget.profile,
+            happyCount: stats?.happyMomentCount,
+            consultCount: stats?.consultCount,
+            milestoneCount: stats?.milestoneCompleted,
+          ),
+          const SizedBox(height: 11),
+          _MilestoneBar(petName: name),
+          const SizedBox(height: 12),
           _viewToggleRow(),
           const SizedBox(height: 14),
           if (_view == _ArchiveView.timeline) const _TimelineView() else _calendarView(),
@@ -193,34 +211,61 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
     );
   }
 
-  /// 视图切换行（右上角图标）：时间线 ↔ 日历。
+  /// appbar 编辑按钮（ibtn：白底 rounded-11 + 柔阴影 + 铅笔）。
+  Widget _appbarBtn() => Material(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(11),
+        elevation: 0,
+        child: InkWell(
+          key: const ValueKey('editProfileButton'),
+          borderRadius: BorderRadius.circular(11),
+          onTap: widget.onEditProfile,
+          child: Container(
+            width: 38,
+            height: 38,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(11),
+              boxShadow: const [
+                BoxShadow(color: Color(0x122B2A27), offset: Offset(0, 2), blurRadius: 8),
+              ],
+            ),
+            child: const Icon(Icons.edit_outlined, size: 18, color: AppColors.ink),
+          ),
+        ),
+      );
+
+  /// Timeline / Kalender 药丸切换（paspor.html 双按钮）。
   Widget _viewToggleRow() {
-    final l10n = AppLocalizations.of(context);
     return Row(
       children: [
-        const Icon(Icons.calendar_today_outlined, size: 19, color: AppColors.mint700),
-        const SizedBox(width: 8),
-        Text(
-            _view == _ArchiveView.timeline ? 'Linimasa Tumbuh Kembang' : l10n.growthViewCalendar,
-            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
-        const Spacer(),
-        IconButton(
-          key: const ValueKey('archiveViewTimeline'),
-          tooltip: l10n.growthViewTimeline,
-          isSelected: _view == _ArchiveView.timeline,
-          onPressed: () => setState(() => _view = _ArchiveView.timeline),
-          icon: const Icon(Icons.view_agenda_outlined),
-        ),
-        IconButton(
-          key: const ValueKey('archiveViewCalendar'),
-          tooltip: l10n.growthViewCalendar,
-          isSelected: _view == _ArchiveView.calendar,
-          onPressed: () => setState(() => _view = _ArchiveView.calendar),
-          icon: const Icon(Icons.calendar_month_outlined),
-        ),
+        Expanded(child: _toggleBtn('⏱ Timeline', _view == _ArchiveView.timeline,
+            () => setState(() => _view = _ArchiveView.timeline), const ValueKey('archiveViewTimeline'))),
+        const SizedBox(width: 7),
+        Expanded(child: _toggleBtn('📅 Kalender', _view == _ArchiveView.calendar,
+            () => setState(() => _view = _ArchiveView.calendar), const ValueKey('archiveViewCalendar'))),
       ],
     );
   }
+
+  Widget _toggleBtn(String label, bool on, VoidCallback onTap, Key key) => GestureDetector(
+        key: key,
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: on ? AppColors.mint : AppColors.card,
+            borderRadius: BorderRadius.circular(10),
+            border: on ? null : Border.all(color: AppColors.line, width: 1.5),
+          ),
+          child: Text(label,
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: on ? AppColors.onAccent : AppColors.ink2)),
+        ),
+      );
 
   Widget _calendarView() {
     return ArchiveCalendar(
@@ -234,45 +279,14 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
   static String _two(int n) => n.toString().padLeft(2, '0');
 }
 
-/// 统计栏「快乐时刻 X · 问诊 X」（AC5）。统计失败不阻断页面——退化为隐藏。
-class _StatsBar extends ConsumerWidget {
-  const _StatsBar();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
-    final stats = ref.watch(archiveStatsProvider);
-    return stats.maybeWhen(
-      data: (s) => Container(
-        key: const ValueKey('archiveStatsBar'),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(14)),
-        child: Row(
-          children: [
-            const Text('🌈', style: TextStyle(fontSize: 16)),
-            const SizedBox(width: 6),
-            Text(l10n.growthStatsHappy(s.happyMomentCount),
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-            const SizedBox(width: 14),
-            const Text('🏥', style: TextStyle(fontSize: 15)),
-            const SizedBox(width: 6),
-            Text(l10n.growthStatsConsult(s.consultCount),
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-          ],
-        ),
-      ),
-      orElse: () => const SizedBox.shrink(),
-    );
-  }
-}
-
-/// 里程碑入口进度条「已完成 X / N」（AC5；mini-epic 未就绪走零态）。
+/// 里程碑进度卡（msbar）：「🏆 Pencapaian {name}」+ "X / N" 紫色 + 进度槽（AC5）。
 class _MilestoneBar extends ConsumerWidget {
-  const _MilestoneBar();
+  const _MilestoneBar({required this.petName});
+
+  final String petName;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
     final stats = ref.watch(archiveStatsProvider);
     return stats.maybeWhen(
       data: (s) {
@@ -281,26 +295,39 @@ class _MilestoneBar extends ConsumerWidget {
           key: const ValueKey('archiveMilestoneBar'),
           onTap: () => context.push('/profile/milestones'),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(14)),
+            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: const [
+                BoxShadow(color: Color(0x0D2B2A27), offset: Offset(0, 2), blurRadius: 8),
+              ],
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('🏆', style: TextStyle(fontSize: 15)),
-                    const SizedBox(width: 6),
-                    Text(l10n.growthMilestoneProgress(s.milestoneCompleted, s.milestoneTotal),
-                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                    Expanded(
+                      child: Text('🏆 Pencapaian $petName',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w600, fontSize: 12, color: AppColors.ink)),
+                    ),
+                    Text('${s.milestoneCompleted} / ${s.milestoneTotal}',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 12, color: AppColors.mint)),
                   ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 7),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(999),
                   child: LinearProgressIndicator(
                     value: ratio,
-                    minHeight: 6,
-                    backgroundColor: AppColors.line,
+                    minHeight: 5,
+                    backgroundColor: AppColors.cream2,
                     color: AppColors.mint,
                   ),
                 ),
@@ -346,30 +373,79 @@ class _TimelineView extends ConsumerWidget {
       ),
       data: (page) {
         if (page.items.isEmpty) {
+          // timeline-empty.html：居中空态引导（标题 + 副文 + 紫 CTA「+ Catat Momen Pertama」）。
           return Padding(
-            padding: const EdgeInsets.all(AppSpacing.xl),
-            child: Center(
-              child: Text(l10n.growthArchiveTimelineEmpty,
-                  style: const TextStyle(color: AppColors.textTertiary)),
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 32, AppSpacing.lg, AppSpacing.xl),
+            child: Column(
+              children: [
+                Text(l10n.growthArchiveTimelineEmpty,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                const SizedBox(height: 10),
+                const Text(
+                  'Mulai catat momen pertama hewanmu!\nSetiap foto dan cerita tersimpan di sini.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, height: 1.5, color: AppColors.ink2),
+                ),
+                const SizedBox(height: 22),
+                FilledButton(
+                  key: const ValueKey('timelineEmptyCta'),
+                  onPressed: () => context.push('/publish?preset=growth-calendar'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.mint,
+                    foregroundColor: AppColors.onAccent,
+                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: const Text('+ Catat Momen Pertama',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                ),
+              ],
             ),
           );
         }
-        // 首条快乐时刻 / 首条健康事件各加 🌟 永久标签（AC5）。
-        bool firstHappy = true;
-        bool firstHealth = true;
-        final tiles = <Widget>[];
-        for (final item in page.items) {
-          if (item.kind == TimelineKind.healthEvent) {
-            tiles.add(HealthEventTile(
-                item: item, firstLabel: firstHealth ? l10n.growthFirstHealthEvent : null));
-            firstHealth = false;
-          } else {
-            tiles.add(HappyMomentTile(
-                item: item, firstLabel: firstHappy ? l10n.growthFirstHappyMoment : null));
-            firstHappy = false;
+        final items = page.items;
+        // 「Pertama」🌟 标在最旧的那条（debut，列表为倒序故取最后出现的索引）；
+        // 仅在已无更多分页时可断定为真正第一条（AC5）。
+        int debutHappy = -1, debutHealth = -1;
+        if (!page.hasMore) {
+          for (var i = 0; i < items.length; i++) {
+            if (items[i].kind == TimelineKind.healthEvent) {
+              debutHealth = i;
+            } else if (items[i].kind != TimelineKind.unknown) {
+              debutHappy = i;
+            }
           }
         }
-        return Column(children: tiles);
+        // 按月分组：月份变化插入 "Juni 2026" 区标题。
+        final tiles = <Widget>[];
+        String? lastMonthKey;
+        var happyIdx = 0;
+        for (var i = 0; i < items.length; i++) {
+          final item = items[i];
+          final d = item.kind == TimelineKind.healthEvent ? item.date : item.displayDate;
+          final monthKey = '${d.year}-${d.month}';
+          if (monthKey != lastMonthKey) {
+            tiles.add(Padding(
+              padding: EdgeInsets.only(top: lastMonthKey == null ? 0 : 6, bottom: 10),
+              child: Text('${_idMonthFull[d.month]} ${d.year}',
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink)),
+            ));
+            lastMonthKey = monthKey;
+          }
+          if (item.kind == TimelineKind.healthEvent) {
+            tiles.add(HealthEventTile(
+                item: item, firstLabel: i == debutHealth ? l10n.growthFirstHealthEvent : null));
+          } else {
+            tiles.add(HappyMomentTile(
+                item: item,
+                index: happyIdx++,
+                firstLabel: i == debutHappy ? l10n.growthFirstHappyMoment : null));
+          }
+        }
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: tiles);
       },
     );
   }

@@ -1,6 +1,9 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
+import '../theme/app_theme.dart';
 
 import '../../features/auth/domain/auth_state.dart';
 import '../../features/auth/presentation/dev_login_guide_page.dart';
@@ -18,6 +21,7 @@ import '../../features/profile/presentation/growth_archive_page.dart';
 import '../../features/profile/presentation/milestone_list_page.dart';
 import '../../features/profile/domain/pet_profile.dart';
 import '../../features/notify/data/push_permission_providers.dart';
+import '../../features/onboarding/presentation/splash_page.dart';
 import '../../features/profile/presentation/pet_profile_create_page.dart';
 import '../../features/profile/presentation/day_detail_page.dart';
 import '../../features/profile/presentation/pet_profile_edit_page.dart';
@@ -42,6 +46,10 @@ import '../../shared/widgets/app_shell.dart';
 /// 根 Navigator key（供拦截器在 401 续期失败后于全局弹登录引导，Story 1.5 F3）。
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
+/// 兽医端主题作用域：给 `/vet/*` 子树注入薄荷主题（spec-vet-mint-theme.md），
+/// 与用户侧紫主题物理隔离。
+Widget _vetScoped(Widget child) => Theme(data: AppTheme.vet, child: child);
+
 /// 未登录游客**不可**直接进入的受控路由前缀（FR-19 门控）。
 const Set<String> _controlledLocations = {'/profile', '/triage', '/me', '/consult', '/notifications', '/publish'};
 
@@ -49,13 +57,19 @@ const Set<String> _controlledLocations = {'/profile', '/triage', '/me', '/consul
 ///
 /// `StatefulShellRoute.indexedStack` 承载 4 个 Tab；`/login`、`/onboarding`、`/dev/*` 为
 /// shell 外顶层路由。游客深链受控路由 → redirect 回 `/home`（Tab 点击门控由 [AppShell] 单一入口处理）。
+/// Debug-only 开发直达路由：`--dart-define=DEV_ROUTE=/vet/workbench` 启动即落该屏，
+/// 供本地逐屏视觉验收（配合 `DEV_VET=true` 种子兽医态）。release 恒走 /splash。
+const String _devRoute = String.fromEnvironment('DEV_ROUTE');
+
 final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: rootNavigatorKey,
-    initialLocation: '/home',
+    initialLocation: kDebugMode && _devRoute.isNotEmpty ? _devRoute : '/splash',
     redirect: (context, state) {
       final auth = ref.read(authControllerProvider);
       final loc = state.matchedLocation;
+      // 启动屏（P-01）：永远先显示品牌过场，由 SplashPage 自行 go('/home') 再交回本 redirect 分流。
+      if (loc == '/splash') return null;
       final isVetRoute = loc == '/vet' || loc.startsWith('/vet/');
       // 兽医登录态：禁止进入用户侧任何路由（反之亦然），命中越权重定向回各自首页（Story 5.1 F2 守卫）。
       if (auth.isVet) {
@@ -70,10 +84,12 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: <RouteBase>[
+      // 启动屏（P-01）：initialLocation；动画后转 /home。
+      GoRoute(path: '/splash', builder: (c, s) => const SplashPage()),
       GoRoute(path: '/login', builder: (c, s) => const LoginPage()),
       // 兽医账密登录 + 工作台壳（Story 5.1）。与用户侧 5-Tab 隔离：shell 外顶层路由。
-      GoRoute(path: '/vet/login', builder: (c, s) => const VetLoginPage()),
-      GoRoute(path: '/vet/workbench', builder: (c, s) => const VetWorkbenchShell()),
+      GoRoute(path: '/vet/login', builder: (c, s) => _vetScoped(const VetLoginPage())),
+      GoRoute(path: '/vet/workbench', builder: (c, s) => _vetScoped(const VetWorkbenchShell())),
       // 新用户引导流（TailTopia Prototype 全面换肤 · FR-11）：欢迎(Momo) → 创建宠物 → 完成。
       // [临时·勿提交] B 方案：入口暂指向 Story 1.6 规格流（昵称→状态→分叉），看完改回 MintOnboardingPage。
       GoRoute(path: '/onboarding', redirect: (c, s) => '/onboarding/nickname'),
@@ -88,7 +104,11 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/profile/created',
         builder: (c, s) {
-          final created = s.extra is PetProfile ? s.extra as PetProfile : null;
+          var created = s.extra is PetProfile ? s.extra as PetProfile : null;
+          // Debug 截图钩子（仅 debug + flag）：深链无 extra 时合成代表性档案，让 pet-success 庆祝页可直达。
+          if (created == null && kDebugMode && const bool.fromEnvironment('DEV_CELEBRATE')) {
+            created = const PetProfile(id: 7001, name: 'Mochi', cardToken: 'dev-token', petType: 'CAT');
+          }
           if (created == null) {
             // 防御：无数据直达（如刷新/深链）→ 回首页，不崩。
             WidgetsBinding.instance
@@ -144,12 +164,30 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/vet/conversation/:id',
-        builder: (c, s) => VetConversationPage(sessionId: int.parse(s.pathParameters['id']!)),
+        builder: (c, s) => _vetScoped(VetConversationPage(sessionId: int.parse(s.pathParameters['id']!))),
       ),
       // 抢单请求详情/预览页（Story 5.2 AC5 · F11）：3 分钟预览计时 + 三态返回。
       GoRoute(
         path: '/vet/request/:id',
-        builder: (c, s) => VetRequestDetailPage(item: s.extra! as VetInboxItem),
+        // 正常流程从列表带入 extra(VetInboxItem)；extra 为空时仅出现在 dev 深链（DEV_ROUTE，
+        // 生产流程恒带 extra）→ 合成一份代表性富样本（含宠物身份），供逐屏视觉验收完整渲染。
+        builder: (c, s) => _vetScoped(VetRequestDetailPage(
+          item: s.extra as VetInboxItem? ??
+              VetInboxItem(
+                sessionId: int.parse(s.pathParameters['id']!),
+                source: 'AI_UPGRADE',
+                aiDangerLevel: 'YELLOW',
+                symptomPreview:
+                    'Muntah busa putih 2x semalam, jadi lebih lemas & kurang nafsu makan',
+                imageCount: 2,
+                waitingElapsedSeconds: 45,
+                petName: 'Mochi',
+                petSpecies: 'CAT',
+                petSex: 'FEMALE',
+                petAgeMonths: 12,
+                ownerHandle: 'aditya.kurniawan',
+              ),
+        )),
       ),
       // 通知中心（Story 6.6）+ 6.1 深链兜底落点。受控路由（需登录）。
       GoRoute(path: '/notifications', builder: (c, s) => const NotificationCenterPage()),
