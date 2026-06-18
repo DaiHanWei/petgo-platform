@@ -432,7 +432,7 @@ class _InboxCard extends StatelessWidget {
                                 foregroundColor: AppColors.onAccent,
                                 padding: const EdgeInsets.symmetric(vertical: 11),
                               ),
-                              child: Text(l10n.vetQueueViewDetail),
+                              child: Text('${l10n.vetQueueViewDetail} →'),
                             ),
                           ),
                         ],

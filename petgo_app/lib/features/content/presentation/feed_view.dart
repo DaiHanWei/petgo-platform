@@ -23,6 +23,7 @@ class FeedMasonryView extends StatefulWidget {
     this.onLongPressItem,
     this.onAuthorTap,
     this.header,
+    this.footer,
   });
 
   final List<FeedItem> items;
@@ -41,6 +42,9 @@ class FeedMasonryView extends StatefulWidget {
 
   /// 可选全幅头部（随 Feed 同滚）。Beranda 用作问候/快捷入口/每日提示区。
   final Widget? header;
+
+  /// 可选全幅尾部（随 Feed 同滚）。feed-guest 用作底部登录引导横幅。
+  final Widget? footer;
 
   @override
   State<FeedMasonryView> createState() => _FeedMasonryViewState();
@@ -108,6 +112,7 @@ class _FeedMasonryViewState extends State<FeedMasonryView> {
                 children: [
                   // 单列全宽卡片（原型 feed.html）。
                   ...cards,
+                  if (widget.footer != null) widget.footer!,
                   if (widget.loadingMore)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),

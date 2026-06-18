@@ -450,10 +450,17 @@ class _VetRequestDetailPageState extends ConsumerState<VetRequestDetailPage> {
                     aspectRatio: 1,
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        color: AppColors.vetSurface,
+                        // 原型 FOTO GEJALA 缩略用紫/黄渐变交替占位（非纯薄荷底）。
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: i.isEven
+                              ? const [AppColors.skyTint, AppColors.dashedViolet]
+                              : const [AppColors.goldTint, AppColors.gold],
+                        ),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Icon(Icons.photo_outlined, color: AppColors.vetPrimary, size: 28),
+                      child: Text(_speciesEmoji(), style: const TextStyle(fontSize: 30)),
                     ),
                   ),
                 ),

@@ -137,12 +137,14 @@ class MasonryCard extends StatelessWidget {
                   ],
                 ),
               ),
-              // 全宽首图（无图 → 类型彩块占位）。
+              // 全宽首图（无图 → 类型彩块占位）。固定高度 cover：原型图区高度受控，
+              // 一屏可见多卡（避免真图按宽比撑满整屏，单卡占屏）。
               if (item.hasImage)
                 AppImage.widget(
                   item.firstImageUrl!,
-                  fit: BoxFit.fitWidth,
+                  fit: BoxFit.cover,
                   width: double.infinity,
+                  height: _placeholderHeight(item.id),
                   errorBuilder: (context, error, stack) =>
                       PostCoverPlaceholder(type: item.type, height: _placeholderHeight(item.id)),
                 ),

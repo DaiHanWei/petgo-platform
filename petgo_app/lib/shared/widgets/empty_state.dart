@@ -16,6 +16,9 @@ class EmptyState extends StatelessWidget {
     this.icon,
     this.actionLabel,
     this.onAction,
+    this.secondaryLabel,
+    this.onSecondary,
+    this.hideIcon = false,
   });
 
   final String title;
@@ -23,6 +26,13 @@ class EmptyState extends StatelessWidget {
   final IconData? icon;
   final String? actionLabel;
   final VoidCallback? onAction;
+
+  /// 可选次级链接（原型 feed 空/错态的「Temukan Teman →」/「Laporkan Masalah」）。
+  final String? secondaryLabel;
+  final VoidCallback? onSecondary;
+
+  /// 隐藏大图标（原型 feed 空/错态无大 icon，仅标题+副文+按钮）。
+  final bool hideIcon;
 
   @override
   Widget build(BuildContext context) {
@@ -32,8 +42,10 @@ class EmptyState extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon ?? Icons.pets_rounded, size: 48, color: AppColors.textTertiary),
-            const SizedBox(height: AppSpacing.md),
+            if (!hideIcon) ...[
+              Icon(icon ?? Icons.pets_rounded, size: 48, color: AppColors.textTertiary),
+              const SizedBox(height: AppSpacing.md),
+            ],
             Text(title, style: AppTypography.title, textAlign: TextAlign.center),
             if (message != null) ...[
               const SizedBox(height: AppSpacing.sm),
@@ -45,6 +57,16 @@ class EmptyState extends StatelessWidget {
                 key: const ValueKey('emptyStateAction'),
                 onPressed: onAction,
                 child: Text(actionLabel!),
+              ),
+            ],
+            if (secondaryLabel != null && onSecondary != null) ...[
+              const SizedBox(height: AppSpacing.xs),
+              TextButton(
+                key: const ValueKey('emptyStateSecondary'),
+                onPressed: onSecondary,
+                child: Text(secondaryLabel!,
+                    style: const TextStyle(
+                        color: AppColors.mint, fontWeight: FontWeight.w600)),
               ),
             ],
           ],

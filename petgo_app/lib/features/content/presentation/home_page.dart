@@ -64,10 +64,29 @@ class HomePage extends ConsumerWidget {
             style: const TextStyle(
                 fontSize: 19, fontWeight: FontWeight.w700, color: AppColors.ink)),
         actions: [
-          if (auth.isLoggedIn) const Padding(
-            padding: EdgeInsets.only(right: 12),
-            child: NotificationBell(),
-          ),
+          if (auth.isLoggedIn)
+            const Padding(
+              padding: EdgeInsets.only(right: 12),
+              child: NotificationBell(),
+            )
+          else
+            // 访客态（feed-guest.html）：AppBar 右「Masuk」描边按钮 → 登录。
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: OutlinedButton(
+                key: const ValueKey('feedGuestLoginButton'),
+                onPressed: () => context.push('/login'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.mint,
+                  side: const BorderSide(color: AppColors.dashedViolet, width: 1.5),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text('Masuk',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              ),
+            ),
         ],
       ),
       body: SafeArea(
@@ -113,10 +132,14 @@ class HomePage extends ConsumerWidget {
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 48),
           child: EmptyState(
-            title: l10n.feedLoadError,
-            icon: Icons.cloud_off_rounded,
+            // feed-error.html：标题 + 副文 + 紫「Coba Lagi」+ 灰「Laporkan Masalah」次链接，无大 icon。
+            title: 'Gagal memuat feed',
+            message: 'Periksa koneksi internet kamu dan coba lagi.',
+            hideIcon: true,
             actionLabel: l10n.feedRetry,
             onAction: () => ref.read(feedProvider.notifier).refresh(),
+            secondaryLabel: 'Laporkan Masalah',
+            onSecondary: () => ref.read(feedProvider.notifier).refresh(),
           ),
         ),
         onRefresh: () => ref.read(feedProvider.notifier).refresh(),
@@ -127,10 +150,12 @@ class HomePage extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 24),
               child: EmptyState(
+                // feed-empty.html：标题 + 副文 + 紫「✨ Bagikan Momen Pertama」+「Temukan Teman →」次链接，无大 icon。
                 title: category == FeedCategory.growthMoment
                     ? l10n.feedGrowthEmptyTitle
                     : l10n.feedEmptyTitle,
                 message: l10n.feedEmptyBody,
+                hideIcon: true,
                 actionLabel: l10n.feedEmptyCta,
                 onAction: () => requireLogin(
                   ref,
@@ -138,13 +163,17 @@ class HomePage extends ConsumerWidget {
                   pendingAction: const RouteIntent(location: '/home'),
                   onAllowed: () => PublishComposePage.open(context),
                 ),
+                secondaryLabel: 'Temukan Teman →',
+                onSecondary: () => context.go('/home'),
               ),
             ),
             onRefresh: () => ref.read(feedProvider.notifier).refresh(),
           );
         }
+        final isGuest = ref.read(authControllerProvider).status == AuthStatus.guest;
         return FeedMasonryView(
           header: header,
+          footer: isGuest ? _GuestJoinBanner(onLogin: () => context.push('/login')) : null,
           items: state.items,
           hasMore: state.hasMore,
           loadingMore: state.loadingMore,
@@ -202,6 +231,80 @@ class _BerandaTop extends StatelessWidget {
         FeedTabRow(selected: selectedCategory, labels: labels, onSelected: onSelectCategory),
         const SizedBox(height: 8),
       ],
+    );
+  }
+}
+
+/// 访客登录引导横幅（feed-guest.html 底部）：紫渐变卡 + 标题/副文 + Daftar Gratis / Masuk 双钮 + 「Lanjut lihat dulu →」。
+class _GuestJoinBanner extends StatelessWidget {
+  const _GuestJoinBanner({required this.onLogin});
+
+  final VoidCallback onLogin;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('feedGuestJoinBanner'),
+      margin: const EdgeInsets.only(top: 4, bottom: 8),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.mint, AppColors.mint500],
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Bergabunglah dengan komunitas!',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+          const SizedBox(height: 6),
+          Text('Rekam tumbuh kembang, konsultasi dokter hewan, dan bagikan momen berharga bersama mereka.',
+              style: TextStyle(fontSize: 12, height: 1.5, color: Colors.white.withValues(alpha: 0.85))),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: FilledButton(
+                  onPressed: onLogin,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: AppColors.mint,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: const Text('Daftar Gratis',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: onLogin,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    backgroundColor: Colors.white.withValues(alpha: 0.15),
+                    side: BorderSide(color: Colors.white.withValues(alpha: 0.4), width: 1.5),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: const Text('Masuk',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Center(
+            child: TextButton(
+              onPressed: () {},
+              child: Text('Lanjut lihat dulu →',
+                  style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.8))),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
