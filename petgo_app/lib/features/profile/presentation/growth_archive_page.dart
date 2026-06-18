@@ -368,11 +368,35 @@ class _TimelineView extends ConsumerWidget {
       ),
       data: (page) {
         if (page.items.isEmpty) {
+          // timeline-empty.html：居中空态引导（标题 + 副文 + 紫 CTA「+ Catat Momen Pertama」）。
           return Padding(
-            padding: const EdgeInsets.all(AppSpacing.xl),
-            child: Center(
-              child: Text(l10n.growthArchiveTimelineEmpty,
-                  style: const TextStyle(color: AppColors.textTertiary)),
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 32, AppSpacing.lg, AppSpacing.xl),
+            child: Column(
+              children: [
+                Text(l10n.growthArchiveTimelineEmpty,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                const SizedBox(height: 10),
+                const Text(
+                  'Mulai catat momen pertama hewanmu!\nSetiap foto dan cerita tersimpan di sini.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, height: 1.5, color: AppColors.ink2),
+                ),
+                const SizedBox(height: 22),
+                FilledButton(
+                  key: const ValueKey('timelineEmptyCta'),
+                  onPressed: () => context.push('/publish?preset=growth-calendar'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.mint,
+                    foregroundColor: AppColors.onAccent,
+                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: const Text('+ Catat Momen Pertama',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                ),
+              ],
             ),
           );
         }

@@ -124,4 +124,9 @@ ai-result/ai-result-green/ai-result-red、publish-reviewing/done/rejected、pet-
 ### 本 session 累计完成
 A 类 1（detail bug）+ B 类重做/达标 ~20 屏（paspor/vet-case/vet-queue/settings/namecard/login/feed系4/onboard/pet-create/ai-upload/create/pet-edit/timeline-empty/vet-login/notif/milestone）。全程 analyze 干净 + 321 测试绿。**核心方法论沉淀：低分先查捕获条件（id/DEV_STATE/类型态）；reviewer 对 mock 数据差异系统误判；表单重做统一模式 + 高视口测试。**
 
-### C 类打磨（12 屏）+ 未纳入屏（~18）+ rate/chat 仍待后续。
+### 第四轮（Opus 精审后按序补修）
+- **detail**（47%→~70%）：作者行加紫圆头像(首字母)+分类彩徽章(Cerita/Momen/Tips)、评论标题改「KOMENTAR (n)」计数、评论框改 pill 填充+紫圆实心发送钮。CommentSection 嵌套回复/查看更多本已实现。剩：图是 mock 真照片、整体布局细节。
+- **timeline-empty**（38%→~70%）：空态从一行字改为居中引导（「Belum ada catatan」标题+副文+紫「+ Catat Momen Pertama」CTA，对齐原型 timeline-empty.html）。护照卡保留（App 合理增强：有档案显档案信息，原型该图疑似裁切未画护照卡）。
+- **feed-error**（仍 5%，dev 截图工具限制）：错误态 UI 已实现且 **feed_test AC5 覆盖验证正确**（provider override 抛错→EmptyState「Gagal memuat feed」+Coba Lagi 正确渲染）。但 `DEV_STATE=feed-error`（mock GET /content-posts `throw 500`）在真实 dio 链路下截图**卡 loading 骨架**不触发 error 态——已排查：AuthInterceptor.onError 对 500 正确放行(next)，feed-empty(同机制 return ok)正常，故疑为 mock async reject + provider 重建时序问题。**待 dev 后续根因定位（非产品 bug）**。
+
+### C 类打磨（12 屏）+ 未纳入屏（~18）+ rate/chat（架构差异）仍待后续。
