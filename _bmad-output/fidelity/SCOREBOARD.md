@@ -139,4 +139,22 @@ A 类 1（detail bug）+ B 类重做/达标 ~20 屏（paspor/vet-case/vet-queue/
   - **气泡头像参数化共享**：ImChatPlaceholder 加 `selfIsVet`（用户侧 false：己方紫「A」/对端薄荷「D」；兽医侧 true：反之），vet_conversation_page 传 true，两端各自正确。
   - 「Akhiri」用户侧无结束端点 → 确认后离开会话（服务端状态权威，本页不发起结束）。
 
-### 仍待后续：C 类打磨（12 屏）+ 未纳入屏（~18，需补可达手段）。
+### 第六轮（C 类打磨 12 屏）
+> 并行 3 诊断 agent（reference 真值 + 原型 HTML + actual + 源码）逐屏定位差距 → 主 agent 实施。
+> 全量 `flutter analyze` 干净 + `flutter test` 321 全绿；改动 7 屏已 Android 模拟器肉眼验过贴原型。
+
+**真实补齐（7 屏）**：
+- **notif-empty**：EmptyState 加可选 `iconBackground`（80×80 浅紫 #F8F2FF 圆底盘包图标）+ 补副文案 `notificationEmptyHint` + 标题 22→19。
+- **konsultasi-home**：标准 AppBar → 自定义返回 header（36×36 #EFEDF3 圆角11 返回钮 + 17px w700「Mulai Konsultasi」，l10n consultEntryTitle 改）。
+- **match-wait**：补顶部返回钮 + 倒计时下方「RINGKASAN YANG DIKIRIM」白底圆角14 阴影摘要卡（占位症状正文）。
+- **vet-dashboard**：3 统计卡统一薄荷 → 三色（Antrian 紫 #F8F2FF/#845EC9、Selesai 薄荷 #EFF7F4/#5BCBBB、Rating 金 #FEF3DE/#F6A609），去边框。
+- **vet-profile**：同款三色统计卡 + 名字下补诊所·地点副行（占位）+ 顶栏字号 headline→title(17/700) + Online 选中段薄荷投影。
+- **vet-chat**：Template 工具 chip / 辅助面板由薄荷改**紫色**（原型深薄荷 chrome 中唯一的紫点缀：紫左边框 + skyTint 底 + 紫标题 + 紫钮）。
+- **profil/me_page**：去「Saya」AppBar 大标题 + 双图标改 .ibtn 样式（38×38 白底圆角11 阴影，headset+gear）+ 用户卡边框改阴影（profhead box-shadow）。**保留 PRD F8 宠物状态区**（原型 profil.html 无此区，但 F8 信息架构明文要求，守「不碰 PRD」不删）。
+
+**判定已达标/有意偏离，不改（5 屏）**：
+- **splash / nickname / konsultasi / pet-select**：结构已 1:1（nickname/pet-select 的「空/未选」是 mock 数据态非实现差距；konsultasi/pet-select 文案是有意改写版；仅余 1-2 色阶微差可忽略）。
+- **vet-history 顶部四 tab 条**：原型有，但与「兽医端保留底部 4-tab、不重建第二套导航」决策冲突 → 不加（已 70%，卡片配色达标）。
+- **konsultasi-home banner 副标题**「不报在线人数」、**nickname 用词**：合规/产品决策，非保真缺陷。
+
+### 仍待后续：未纳入打分屏（~18，需补 DEV_STATE/dev 入口可达手段）。

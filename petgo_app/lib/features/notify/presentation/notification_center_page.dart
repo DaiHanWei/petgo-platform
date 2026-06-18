@@ -55,7 +55,7 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
         scrolledUnderElevation: 0,
         titleSpacing: 20,
         title: Text(l10n.notificationCenterTitle,
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.ink)),
+            style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: AppColors.ink)),
       ),
       body: FutureBuilder<NotificationPage>(
         future: _page,
@@ -68,7 +68,9 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
             return EmptyState(
               key: const ValueKey('notificationEmpty'),
               icon: Icons.notifications_none,
+              iconBackground: AppColors.cream2, // 浅紫圆底盘（原型 notif-empty）
               title: l10n.notificationEmpty,
+              message: l10n.notificationEmptyHint,
             );
           }
           // 按时间分组：今天 → HARI INI；其余 → KEMARIN（notif.html）。

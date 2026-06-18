@@ -316,10 +316,11 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: active ? AppColors.vetPrimary.withValues(alpha: 0.4) : Colors.white.withValues(alpha: 0.08),
+          // 工具/辅助区是紫色点缀（原型 vet-chat.html：深薄荷 chrome 中唯一的紫）。
+          color: active ? AppColors.mint.withValues(alpha: 0.4) : Colors.white.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: active ? AppColors.vetPrimary.withValues(alpha: 0.6) : Colors.white.withValues(alpha: 0.12),
+            color: active ? AppColors.mint.withValues(alpha: 0.6) : Colors.white.withValues(alpha: 0.12),
           ),
         ),
         child: Text(
@@ -343,14 +344,14 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
       margin: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.md, 0),
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.skyTint, // 紫浅底（原型 #F8F6FF）
         borderRadius: BorderRadius.circular(12),
-        border: const Border(left: BorderSide(color: AppColors.vetPrimary, width: 3)),
+        border: const Border(left: BorderSide(color: AppColors.mint, width: 3)), // 紫左边框
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(l10n.vetAssistTitle, style: AppTypography.micro.copyWith(color: AppColors.vetPrimaryDeep, letterSpacing: 0.5)),
+          Text(l10n.vetAssistTitle, style: AppTypography.micro.copyWith(color: AppColors.mint, letterSpacing: 0.5)),
           const SizedBox(height: 6),
           Text(assist.aiReferenceReply, style: AppTypography.body.copyWith(color: AppColors.ink, height: 1.5)),
           const SizedBox(height: AppSpacing.sm),
@@ -361,8 +362,8 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
               // 「采用」填入输入框供编辑后发送（不自动发，NFR-9）；真实输入框接入随 IM SDK（L2）。
               onPressed: () {},
               style: FilledButton.styleFrom(
-                backgroundColor: AppColors.vetPrimary,
-                foregroundColor: AppColors.vetOnAccent,
+                backgroundColor: AppColors.mint,
+                foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -383,9 +384,9 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
       margin: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.md, 0),
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.skyTint, // 紫浅底，与 Template 辅助区一致
         borderRadius: BorderRadius.circular(12),
-        border: const Border(left: BorderSide(color: AppColors.vetPrimary, width: 3)),
+        border: const Border(left: BorderSide(color: AppColors.mint, width: 3)),
       ),
       child: assist.historySummaries.isEmpty
           ? Text(l10n.vetAssistHistoryEmpty, style: AppTypography.body.copyWith(color: AppColors.textTertiary))

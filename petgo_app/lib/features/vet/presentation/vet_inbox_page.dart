@@ -151,22 +151,37 @@ class _StatRow extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     return Row(
       children: [
-        _StatCard(value: queue?.toString() ?? '—', label: l10n.vetDashboardStatQueue),
+        // 原型 vet-dashboard.html：三卡各异色（Antrian 紫 / Selesai 薄荷 / Rating 金），无边框。
+        _StatCard(
+            value: queue?.toString() ?? '—',
+            label: l10n.vetDashboardStatQueue,
+            bg: AppColors.cream2,
+            valueColor: AppColors.mint),
         const SizedBox(width: AppSpacing.sm),
-        _StatCard(value: done?.toString() ?? '—', label: l10n.vetDashboardStatDone),
+        _StatCard(
+            value: done?.toString() ?? '—',
+            label: l10n.vetDashboardStatDone,
+            bg: AppColors.vetSurface,
+            valueColor: AppColors.vetPrimary),
         const SizedBox(width: AppSpacing.sm),
         // 评分：暂无后端端点 → 占位「—」（见 spec / deferred）。
-        _StatCard(value: '—', label: l10n.vetDashboardStatRating),
+        _StatCard(
+            value: '—',
+            label: l10n.vetDashboardStatRating,
+            bg: AppColors.goldTint,
+            valueColor: AppColors.gold),
       ],
     );
   }
 }
 
 class _StatCard extends StatelessWidget {
-  const _StatCard({required this.value, required this.label});
+  const _StatCard({required this.value, required this.label, required this.bg, required this.valueColor});
 
   final String value;
   final String label;
+  final Color bg;
+  final Color valueColor;
 
   @override
   Widget build(BuildContext context) {
@@ -174,13 +189,12 @@ class _StatCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
         decoration: BoxDecoration(
-          color: AppColors.vetSurface, // 薄荷浅底点缀（原型卡有 tint，非纯白）
+          color: bg, // 原型三卡各异 tint，无边框
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border),
         ),
         child: Column(
           children: [
-            Text(value, style: AppTypography.display.copyWith(color: AppColors.vetPrimary)),
+            Text(value, style: AppTypography.display.copyWith(color: valueColor)),
             const SizedBox(height: 2),
             Text(label, style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
           ],

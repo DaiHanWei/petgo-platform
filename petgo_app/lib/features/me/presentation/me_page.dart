@@ -31,27 +31,32 @@ class MePage extends ConsumerWidget {
     final profile = auth.profile;
     return Scaffold(
       backgroundColor: AppColors.base,
+      // 原型 profil.html：无大标题，右上仅 headset + gear 双 ibtn（白底圆角+阴影）。
       appBar: AppBar(
-        title: Text(l10n.tabMe),
+        backgroundColor: AppColors.base,
+        scrolledUnderElevation: 0,
+        automaticallyImplyLeading: false,
         actions: [
           // 帮助反馈图标（PDP 数据主体权利可达路径承载之一）。
-          IconButton(
-            key: const ValueKey('meHelp'),
-            icon: const Icon(Icons.help_outline),
+          _IconBtn(
+            valueKey: 'meHelp',
+            icon: Icons.support_agent_outlined,
             tooltip: l10n.meHelp,
-            onPressed: () {
+            onTap: () {
               ScaffoldMessenger.of(context)
                 ..clearSnackBars()
                 ..showSnackBar(SnackBar(content: Text(l10n.helpComingSoon)));
             },
           ),
+          const SizedBox(width: 8),
           // 设置图标 → 二级设置页（语言/退出/注销）。PDP 注销入口经此可达。
-          IconButton(
-            key: const ValueKey('meSettings'),
-            icon: const Icon(Icons.settings_outlined),
+          _IconBtn(
+            valueKey: 'meSettings',
+            icon: Icons.settings_outlined,
             tooltip: l10n.meSettings,
-            onPressed: () => context.push('/me/settings'),
+            onTap: () => context.push('/me/settings'),
           ),
+          const SizedBox(width: AppSpacing.screenEdge),
         ],
       ),
       body: ListView(
@@ -379,6 +384,41 @@ class _PetCard extends ConsumerWidget {
   }
 }
 
+/// 原型 .ibtn：38×38 白底圆角11 带阴影的图标按钮（profil 顶部 headset/gear）。
+class _IconBtn extends StatelessWidget {
+  const _IconBtn({required this.valueKey, required this.icon, required this.tooltip, required this.onTap});
+
+  final String valueKey;
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        key: ValueKey(valueKey),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(11),
+        child: Container(
+          width: 38,
+          height: 38,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(11),
+            boxShadow: const [
+              BoxShadow(color: Color(0x12162233), blurRadius: 8, offset: Offset(0, 2)),
+            ],
+          ),
+          child: Icon(icon, size: 18, color: AppColors.ink2),
+        ),
+      ),
+    );
+  }
+}
+
 class _UserInfoCard extends StatelessWidget {
   const _UserInfoCard({
     required this.avatarUrl,
@@ -400,7 +440,10 @@ class _UserInfoCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+        // 原型 profhead box-shadow（非边框）。
+        boxShadow: const [
+          BoxShadow(color: Color(0x0F162233), blurRadius: 12, offset: Offset(0, 2)),
+        ],
       ),
       child: Row(
         children: [

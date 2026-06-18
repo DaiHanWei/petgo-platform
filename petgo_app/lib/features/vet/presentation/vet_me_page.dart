@@ -172,7 +172,7 @@ class _VetMePageState extends ConsumerState<VetMePage> with WidgetsBindingObserv
         bottom: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.md),
-          child: Text(l10n.vetProfileTitle, style: AppTypography.headline.copyWith(color: Colors.white)),
+          child: Text(l10n.vetProfileTitle, style: AppTypography.title.copyWith(color: Colors.white)),
         ),
       ),
     );
@@ -227,6 +227,12 @@ class _VetMePageState extends ConsumerState<VetMePage> with WidgetsBindingObserv
                     Text(_displayName,
                         key: const ValueKey('vetDisplayName'),
                         style: AppTypography.title.copyWith(color: AppColors.ink)),
+                    const SizedBox(height: 2),
+                    // 诊所·地点副行（原型结构；无后端字段 → 占位）。
+                    const Text('Klinik Hewan Sehat · Jakarta Selatan',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 12, color: Color(0xFF808080))),
                     const SizedBox(height: 5),
                     Row(
                       children: [
@@ -245,11 +251,15 @@ class _VetMePageState extends ConsumerState<VetMePage> with WidgetsBindingObserv
           const SizedBox(height: AppSpacing.md),
           Row(
             children: [
-              _statCard(_doneCount?.toString() ?? '—', l10n.vetDashboardStatDone),
+              // 原型 vet-profile.html：三卡各异色（薄荷 / 金 / 紫），与 dashboard 一致。
+              _statCard(_doneCount?.toString() ?? '—', l10n.vetDashboardStatDone,
+                  bg: AppColors.vetSurface, valueColor: AppColors.vetPrimary),
               const SizedBox(width: AppSpacing.sm),
-              _statCard('—', l10n.vetDashboardStatRating), // 评分无后端端点 → 占位「—」
+              _statCard('—', l10n.vetDashboardStatRating,
+                  bg: AppColors.goldTint, valueColor: AppColors.gold), // 评分无后端端点 → 占位「—」
               const SizedBox(width: AppSpacing.sm),
-              _statCard('—', l10n.vetProfileStatTotal), // 总数无后端端点 → 占位「—」
+              _statCard('—', l10n.vetProfileStatTotal,
+                  bg: AppColors.cream2, valueColor: AppColors.mint), // 总数无后端端点 → 占位「—」
             ],
           ),
         ],
@@ -257,14 +267,14 @@ class _VetMePageState extends ConsumerState<VetMePage> with WidgetsBindingObserv
     );
   }
 
-  Widget _statCard(String value, String label) {
+  Widget _statCard(String value, String label, {required Color bg, required Color valueColor}) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-        decoration: BoxDecoration(color: AppColors.vetSurface, borderRadius: BorderRadius.circular(11)),
+        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(11)),
         child: Column(
           children: [
-            Text(value, style: AppTypography.title.copyWith(color: AppColors.vetPrimary)),
+            Text(value, style: AppTypography.title.copyWith(color: valueColor)),
             const SizedBox(height: 2),
             Text(label,
                 textAlign: TextAlign.center,
@@ -317,6 +327,10 @@ class _VetMePageState extends ConsumerState<VetMePage> with WidgetsBindingObserv
           decoration: BoxDecoration(
             color: selected ? AppColors.vetPrimary : AppColors.muted.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(12),
+            // 选中段薄荷投影（原型 box-shadow:0 4px 12px rgba(91,203,187,.3)）。
+            boxShadow: selected
+                ? [BoxShadow(color: AppColors.vetPrimary.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4))]
+                : null,
           ),
           child: Column(
             children: [

@@ -103,11 +103,15 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
     final availability = ref.watch(consultAvailabilityProvider);
     return Scaffold(
       backgroundColor: AppColors.base,
-      appBar: AppBar(title: Text(l10n.consultEntryTitle)),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          child: availability.when(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _backHeader(l10n),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(AppSpacing.xl, AppSpacing.sm, AppSpacing.xl, AppSpacing.xl),
+                child: availability.when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (_, _) => _offline(l10n),
             data: (a) {
@@ -118,10 +122,42 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
               if (!_activeChecked) {
                 return const Center(child: CircularProgressIndicator());
               }
-              return a.vetOnline ? _online(l10n) : _offline(l10n);
-            },
-          ),
+                    return a.vetOnline ? _online(l10n) : _offline(l10n);
+                  },
+                ),
+              ),
+            ),
+          ],
         ),
+      ),
+    );
+  }
+
+  /// 自定义返回 header（原型 konsultasi-home.html）：圆角灰底返回钮 + 17px 粗标题。
+  Widget _backHeader(AppLocalizations l10n) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: Row(
+        children: [
+          InkWell(
+            key: const ValueKey('consultEntryBack'),
+            onTap: () => context.canPop() ? context.pop() : context.go('/home'),
+            borderRadius: BorderRadius.circular(11),
+            child: Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFEDF3),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: const Icon(Icons.arrow_back, size: 18, color: AppColors.ink2),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(l10n.consultEntryTitle,
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.ink)),
+        ],
       ),
     );
   }

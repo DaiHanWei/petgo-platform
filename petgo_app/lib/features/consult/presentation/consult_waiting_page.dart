@@ -215,14 +215,39 @@ class _ConsultWaitingPageState extends ConsumerState<ConsultWaitingPage>
     return Scaffold(
       backgroundColor: AppColors.base,
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // 3 层脉冲环 + 中心呼吸医生头像（自绘，不引依赖）。
-                const _MatchPulse(),
+        child: Column(
+          children: [
+            // 顶部返回钮（原型 match-wait 左上）。离开等待页（请求保留，由「Batalkan」显式取消）。
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: InkWell(
+                  key: const ValueKey('consultWaitingBack'),
+                  onTap: () => context.canPop() ? context.pop() : context.go('/triage'),
+                  borderRadius: BorderRadius.circular(11),
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFEDF3),
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    child: const Icon(Icons.arrow_back, size: 18, color: AppColors.ink2),
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // 3 层脉冲环 + 中心呼吸医生头像（自绘，不引依赖）。
+                      const _MatchPulse(),
                 const SizedBox(height: 24),
                 Text(
                   l10n.consultMatching,
@@ -257,17 +282,49 @@ class _ConsultWaitingPageState extends ConsumerState<ConsultWaitingPage>
                     ],
                   ),
                 ),
-                const SizedBox(height: 28),
-                TextButton(
-                  key: const ValueKey('consultCancel'),
-                  onPressed: _navigating ? null : _confirmCancel,
-                  child: Text(l10n.consultCancelRequest,
-                      style: const TextStyle(fontSize: 13, color: AppColors.muted)),
+                      const SizedBox(height: 16),
+                      // 已发送症状摘要卡（原型 RINGKASAN YANG DIKIRIM）。占位内容。
+                      _summaryCard(l10n),
+                      const SizedBox(height: 24),
+                      TextButton(
+                        key: const ValueKey('consultCancel'),
+                        onPressed: _navigating ? null : _confirmCancel,
+                        child: Text(l10n.consultCancelRequest,
+                            style: const TextStyle(fontSize: 13, color: AppColors.muted)),
+                      ),
+                    ],
+                  ),
                 ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
+      ),
+    );
+  }
+
+  /// 症状摘要卡（原型 match-wait）：白底圆角14 + 阴影 + 大写灰小标题 + 占位摘要正文。
+  Widget _summaryCard(AppLocalizations l10n) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: const [
+          BoxShadow(color: Color(0x14162233), blurRadius: 12, offset: Offset(0, 4)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(l10n.consultSummaryLabel,
+              style: const TextStyle(
+                  fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.5, color: AppColors.muted)),
+          const SizedBox(height: 6),
+          const Text('Mochi — muntah busa putih 2x · 2 foto dilampirkan',
+              style: TextStyle(fontSize: 13, height: 1.5, color: AppColors.ink)),
+        ],
       ),
     );
   }
