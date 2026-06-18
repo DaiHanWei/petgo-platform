@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -17,13 +18,56 @@ import 'widgets/milestone_celebration.dart';
 ///
 /// 承接 `MILESTONE_NODE` 推送深链（`/profile/milestones`）。三级庆祝动效在 8.5；
 /// 「已打卡」picker + 打卡 API、「去发布」预选成长日历的完成回填在 8.4。
-class MilestoneListPage extends ConsumerWidget {
+class MilestoneListPage extends ConsumerStatefulWidget {
   const MilestoneListPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MilestoneListPage> createState() => _MilestoneListPageState();
+}
+
+class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
+  bool _devShown = false;
+
+  /// Debug 截图钩子（仅 debug + flag）：数据就绪后自动弹 milestone-sheet / milestone-unlock。
+  void _maybeDevShow(MilestoneList data) {
+    if (_devShown || !kDebugMode) return;
+    const sheet = String.fromEnvironment('DEV_SHEET'); // 'milestone' → 弹徽章详情 sheet
+    const celebrate = String.fromEnvironment('DEV_CELEBRATE'); // 's|m|l' → 弹解锁庆祝
+    if (sheet != 'milestone' && celebrate.isEmpty) return;
+    _devShown = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (sheet == 'milestone') {
+        // 选一个「打卡类未完成」item 以展现两入口；无则取首个。
+        final items = [for (final g in data.groups) ...g.items];
+        final item = items.firstWhere((i) => i.trigger.isCheckin && !i.completed,
+            orElse: () => items.isNotEmpty ? items.first : _devItem(MilestoneLevel.s));
+        _showBadgeSheet(context, ref, item);
+      } else {
+        final level = switch (celebrate) {
+          'l' => MilestoneLevel.l,
+          's' => MilestoneLevel.s,
+          _ => MilestoneLevel.m,
+        };
+        showMilestoneCelebration(context, _devItem(level));
+      }
+    });
+  }
+
+  MilestoneItem _devItem(MilestoneLevel level) => MilestoneItem(
+        code: 'FIRST_PHOTO',
+        title: 'Foto Pertama',
+        level: level,
+        trigger: MilestoneTrigger.userCheckin,
+        completed: true,
+        completedAt: DateTime(2026, 6, 18),
+      );
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final async = ref.watch(milestoneListProvider);
+    async.whenData(_maybeDevShow);
     return Scaffold(
       backgroundColor: AppColors.base,
       appBar: AppBar(

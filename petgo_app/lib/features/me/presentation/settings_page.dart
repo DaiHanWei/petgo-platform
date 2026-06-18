@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -26,6 +27,18 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool _petPublic = true;
 
   static const Color _danger = AppColors.popRed;
+
+  @override
+  void initState() {
+    super.initState();
+    // Debug 截图钩子（仅 debug + flag）：自动弹注销首段警示 dialog（截 delete-account 用）。
+    // 仅弹 UI，绝不真删（删除须用户输确认短语并点红钮才触发 DELETE /me）。
+    if (kDebugMode && const bool.fromEnvironment('DEV_DELETE_ACCOUNT')) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _deleteAccount(context, ref);
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

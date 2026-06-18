@@ -157,4 +157,31 @@ A 类 1（detail bug）+ B 类重做/达标 ~20 屏（paspor/vet-case/vet-queue/
 - **vet-history 顶部四 tab 条**：原型有，但与「兽医端保留底部 4-tab、不重建第二套导航」决策冲突 → 不加（已 70%，卡片配色达标）。
 - **konsultasi-home banner 副标题**「不报在线人数」、**nickname 用词**：合规/产品决策，非保真缺陷。
 
-### 仍待后续：未纳入打分屏（~18，需补 DEV_STATE/dev 入口可达手段）。
+### 第七轮（未纳入屏补可达手段）
+> 并行 3 排查 agent 摸清每屏触发方式 → 加 debug-only 截图钩子（仅 `kDebugMode` + dart-define 门控，测试/生产不触发）→ 截图肉眼验证命中。analyze 干净 + 321 测试绿。
+
+**已补可达 + 截图命中（12 屏）**：
+| 屏 | 入口 | 钩子 |
+|---|---|---|
+| ai-result(黄)/-green/-red | /triage/upload + `DEV_TRIAGE_AUTO` + `DEV_STATE=triage-yellow/green/red` | 上传页 initState 自动提交 |
+| pet-success | /profile/created + `DEV_CELEBRATE=true` | 路由 builder 无 extra 时合成 PetProfile |
+| catatan-calendar | /profile + `DEV_ARCHIVE_VIEW=calendar` | `_view` 默认 calendar |
+| milestone-sheet | /profile/milestones + `DEV_SHEET=milestone` | 数据就绪后自动弹徽章 sheet |
+| milestone-unlock | /profile/milestones + `DEV_CELEBRATE=m` + `DEV_HOLD_CELEBRATION` | 合成 item 弹 M 级庆祝 + 跳过自动消失 |
+| archive-confirm | /triage/upload + triage-yellow + `DEV_ARCHIVE_PROMPT` | 结果就绪后自动弹存档确认 |
+| notif-gate | /home + `DEV_STATE=notif-gate` | 首页自动弹推送权限 sheet |
+| delete-account | /me/settings + `DEV_DELETE_ACCOUNT` | settings initState 自动弹注销警示（不真删） |
+| badge-gallery | /profile/milestones（无钩子，本就是该页） | — |
+| vet-status-popup | /vet/workbench + `DEV_VET_TAB=3`（无钩子） | 兽医「我的」内联三态控件 |
+
+**3 处实现为对话框、原型为整屏/富 sheet（架构差异，非可达性问题，已记录不强改）**：
+- `archive-confirm`：实现 AlertDialog vs 原型富 bottom-sheet（含保存清单+自动保存提示）。
+- `delete-account`：实现两段 AlertDialog（短语确认）vs 原型整屏专页（删除清单+30 天冷静期+邮箱确认）。
+- `vet-status-popup`：实现兽医「我的」内联三态分段控件 vs 原型弹出式 sheet。
+
+**V1 根本未实现、无 widget 可截（不是可达性问题，是功能缺口）——4 屏**：
+- `publish-reviewing` / `publish-done` / `publish-rejected`：现行发布是**同步 pop + toast**，无「审核中/成功庆祝/被拒详情」三个结果全屏态。要截图须先实现这三页（功能缺口，建议另立 story）。
+- `vet-final-diagnosis`：V1 兽医诊断结论走 **IM 系统消息 + 评分流**，无结构化「最终诊断表单」页。要截图须先实现该功能页。
+- `network-error` 独立全屏离线页：仅有 feed 失败态卡区（home_page error 分支 = feed-error），无原型那张独立全屏 WiFi-off 页。`DEV_STATE=network-error` 实际未接线（仅 feed-error 用 _devError）。
+
+> 决策：**不为截图临时造生产无对应的孤立假页**（守「不碰 PRD / 只还原已实现」）。这 4-7 屏需当作功能缺口/架构差异由产品决策，不在「补 dev 可达钩子」范畴。

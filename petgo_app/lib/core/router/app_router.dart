@@ -104,7 +104,11 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/profile/created',
         builder: (c, s) {
-          final created = s.extra is PetProfile ? s.extra as PetProfile : null;
+          var created = s.extra is PetProfile ? s.extra as PetProfile : null;
+          // Debug 截图钩子（仅 debug + flag）：深链无 extra 时合成代表性档案，让 pet-success 庆祝页可直达。
+          if (created == null && kDebugMode && const bool.fromEnvironment('DEV_CELEBRATE')) {
+            created = const PetProfile(id: 7001, name: 'Mochi', cardToken: 'dev-token', petType: 'CAT');
+          }
           if (created == null) {
             // 防御：无数据直达（如刷新/深链）→ 回首页，不崩。
             WidgetsBinding.instance

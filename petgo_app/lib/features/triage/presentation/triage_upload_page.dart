@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -26,6 +27,18 @@ class TriageUploadPage extends ConsumerStatefulWidget {
 class _TriageUploadPageState extends ConsumerState<TriageUploadPage> {
   static const int _maxSymptomChars = 2000;
   final TextEditingController _symptomController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Debug 截图钩子（仅 debug + flag）：自动提交一次，直达分诊结果态（配 DEV_STATE=triage-green/yellow/red）。
+    // 截 ai-result/-green/-red 用。生产/测试不编译进逻辑（flag 默认空）。
+    if (kDebugMode && const bool.fromEnvironment('DEV_TRIAGE_AUTO')) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _submit();
+      });
+    }
+  }
 
   @override
   void dispose() {

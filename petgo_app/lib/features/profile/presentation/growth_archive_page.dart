@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -160,7 +161,11 @@ class _ArchiveBody extends ConsumerStatefulWidget {
 }
 
 class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
-  _ArchiveView _view = _ArchiveView.timeline;
+  // Debug 截图钩子（仅 debug + flag）：默认进 Kalender 视图，截 catatan-calendar 用。
+  _ArchiveView _view =
+      (kDebugMode && const String.fromEnvironment('DEV_ARCHIVE_VIEW') == 'calendar')
+          ? _ArchiveView.calendar
+          : _ArchiveView.timeline;
 
   @override
   Widget build(BuildContext context) {

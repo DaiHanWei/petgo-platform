@@ -25,7 +25,11 @@ final bool kMockMode = kDebugMode &&
 ///
 /// 支持值：`feed-empty` `feed-error` `timeline-empty` `notif-empty`
 /// `consult-waiting`（match-wait 停在 WAITING）`rate`（补弹评分）
-/// `triage-red` `triage-yellow` `triage-green`（强制分诊结果等级）。
+/// `triage-red` `triage-yellow` `triage-green`（强制分诊结果等级）
+/// `notif-gate`（首页自动弹推送权限 sheet）。
+/// 另有截图直达 flag（非 DEV_STATE，见各页 `bool.fromEnvironment`）：`DEV_TRIAGE_AUTO`
+/// `DEV_CELEBRATE`(pet-success/里程碑解锁) `DEV_HOLD_CELEBRATION` `DEV_SHEET=milestone`
+/// `DEV_ARCHIVE_VIEW=calendar` `DEV_ARCHIVE_PROMPT` `DEV_DELETE_ACCOUNT`。
 /// release/test 恒空（不影响生产与单测）。
 const String _devStateRaw = String.fromEnvironment('DEV_STATE');
 final String kDevState = kDebugMode && !_isFlutterTest() ? _devStateRaw : '';
