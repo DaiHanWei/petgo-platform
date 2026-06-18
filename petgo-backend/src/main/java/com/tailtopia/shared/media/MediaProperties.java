@@ -5,18 +5,17 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /**
  * 媒体基建配置（Story 2.1）。前缀 {@code media}。
  *
- * <p>全部从 env 注入，绝不入库；{@code .env.example} 仅放占位。包含阿里云 OSS 雅加达双桶寻址、
- * STS AssumeRole 参数、签名 URL TTL。AccessKey/Secret 仅运行环境注入。
+ * <p>全部从 env 注入，绝不入库；{@code .env.example} 仅放占位。包含阿里云 OSS 雅加达单桶寻址、
+ * 预签名上传/读签名 URL TTL。AccessKey/Secret 仅运行环境注入。
  */
 @ConfigurationProperties(prefix = "media")
 public class MediaProperties {
 
-    /** 阿里云主账号 / 子账号 AccessKey（env 注入）。用于 STS AssumeRole 与服务端 OSS 操作。 */
+    /** 阿里云 AccessKey（env 注入）。用于服务端 OSS 操作与预签名上传/读 URL 现签。 */
     private String accessKeyId = "";
     private String accessKeySecret = "";
 
     private final Oss oss = new Oss();
-    private final Sts sts = new Sts();
     private final SignedUrl signedUrl = new SignedUrl();
 
     public String getAccessKeyId() {
@@ -37,10 +36,6 @@ public class MediaProperties {
 
     public Oss getOss() {
         return oss;
-    }
-
-    public Sts getSts() {
-        return sts;
     }
 
     public SignedUrl getSignedUrl() {
@@ -101,42 +96,11 @@ public class MediaProperties {
         }
     }
 
-    public static class Sts {
-        /** AssumeRole 目标角色 ARN（env 注入）。 */
-        private String roleArn = "";
-        /** STS 服务 endpoint。 */
-        private String endpoint = "sts.ap-southeast-5.aliyuncs.com";
-        /** 临时凭证时效（秒），默认 900（15 分钟）。 */
-        private long durationSeconds = 900;
-
-        public String getRoleArn() {
-            return roleArn;
-        }
-
-        public void setRoleArn(String roleArn) {
-            this.roleArn = roleArn;
-        }
-
-        public String getEndpoint() {
-            return endpoint;
-        }
-
-        public void setEndpoint(String endpoint) {
-            this.endpoint = endpoint;
-        }
-
-        public long getDurationSeconds() {
-            return durationSeconds;
-        }
-
-        public void setDurationSeconds(long durationSeconds) {
-            this.durationSeconds = durationSeconds;
-        }
-    }
-
     public static class SignedUrl {
-        /** 私密桶签名 URL TTL（秒），默认 300（5 分钟）。短 TTL=降低泄漏面。 */
+        /** 私密桶读签名 URL TTL（秒），默认 300（5 分钟）。短 TTL=降低泄漏面。 */
         private long ttlSeconds = 300;
+        /** 预签名上传 URL TTL（秒），默认 600（上传需更长窗口，含弱网重试）。 */
+        private long uploadTtlSeconds = 600;
 
         public long getTtlSeconds() {
             return ttlSeconds;
@@ -144,6 +108,14 @@ public class MediaProperties {
 
         public void setTtlSeconds(long ttlSeconds) {
             this.ttlSeconds = ttlSeconds;
+        }
+
+        public long getUploadTtlSeconds() {
+            return uploadTtlSeconds;
+        }
+
+        public void setUploadTtlSeconds(long uploadTtlSeconds) {
+            this.uploadTtlSeconds = uploadTtlSeconds;
         }
     }
 }

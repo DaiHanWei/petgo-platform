@@ -1,103 +1,98 @@
+import 'dart:async';
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/media/data/oss_uploader.dart';
-import 'package:tailtopia/features/media/data/sts_credential.dart';
+import 'package:tailtopia/features/media/data/upload_ticket.dart';
+
+/// 捕获 PUT 请求并回 200 的假适配器，断言 OssUploader 发出的 URL/头。
+class _CapturingAdapter implements HttpClientAdapter {
+  RequestOptions? captured;
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    captured = options;
+    // 需消费 requestStream，否则 dio 卡住。
+    if (requestStream != null) {
+      await requestStream.drain<void>();
+    }
+    return ResponseBody.fromString('', 200);
+  }
+}
 
 void main() {
-  group('OSS V1 签名（纯函数）', () {
-    test('stringToSign 含 VERB / Content-Type / Date / security-token / 资源路径', () {
-      final s = OssUploader.stringToSign(
-        verb: 'PUT',
-        contentType: 'image/jpeg',
-        date: 'Mon, 02 Jun 2026 00:00:00 GMT',
-        securityToken: 'tok123',
-        bucket: 'petgo-public',
-        objectKey: 'public/42/abc.jpg',
-      );
-      expect(s, startsWith('PUT\n'));
-      expect(s, contains('image/jpeg'));
-      expect(s, contains('x-oss-security-token:tok123\n'));
-      expect(s, endsWith('/petgo-public/public/42/abc.jpg'));
-      // 私有域（无 objectAcl）不含 x-oss-object-acl 头。
-      expect(s, isNot(contains('x-oss-object-acl')));
-    });
+  group('UploadTicket.fromJson', () {
+    test('解析公开/私密票据', () {
+      final pub = UploadTicket.fromJson({
+        'uploadUrl': 'https://x/put?sig',
+        'objectKey': 'public/42/a.jpg',
+        'method': 'PUT',
+        'headers': {'Content-Type': 'image/jpeg', 'x-oss-object-acl': 'public-read'},
+        'publicUrl': 'https://cdn/public/42/a.jpg',
+      });
+      expect(pub.headers['x-oss-object-acl'], 'public-read');
+      expect(pub.publicUrl, 'https://cdn/public/42/a.jpg');
 
-    test('公开域 objectAcl=public-read 计入签名串且按字母序在 security-token 之前', () {
-      final s = OssUploader.stringToSign(
-        verb: 'PUT',
-        contentType: 'image/jpeg',
-        date: 'Mon, 02 Jun 2026 00:00:00 GMT',
-        securityToken: 'tok123',
-        bucket: 'tailtopia',
-        objectKey: 'public/42/abc.jpg',
-        objectAcl: 'public-read',
-      );
-      expect(s, contains('x-oss-object-acl:public-read\n'));
-      // OSS 要求 x-oss-* 按字母序：object-acl 必须排在 security-token 之前。
-      expect(
-        s.indexOf('x-oss-object-acl:'),
-        lessThan(s.indexOf('x-oss-security-token:')),
-      );
-    });
-
-    test('authorization 形如 "OSS <ak>:<sig>" 且对相同输入稳定', () {
-      const sts = 'PUT\n\nimage/jpeg\nDATE\nx-oss-security-token:t\n/b/k';
-      final a1 = OssUploader.authorization(accessKeyId: 'AK', accessKeySecret: 'SK', stringToSign: sts);
-      final a2 = OssUploader.authorization(accessKeyId: 'AK', accessKeySecret: 'SK', stringToSign: sts);
-      expect(a1, startsWith('OSS AK:'));
-      expect(a1, a2);
-      // 不同密钥 → 不同签名
-      final a3 = OssUploader.authorization(accessKeyId: 'AK', accessKeySecret: 'OTHER', stringToSign: sts);
-      expect(a1, isNot(a3));
+      final priv = UploadTicket.fromJson({
+        'uploadUrl': 'https://x/put?sig',
+        'objectKey': 'private/7/b.jpg',
+        'method': 'PUT',
+        'headers': {'Content-Type': 'image/jpeg'},
+      });
+      expect(priv.publicUrl, isNull);
+      expect(priv.headers.containsKey('x-oss-object-acl'), isFalse);
+      expect(priv.method, 'PUT');
     });
   });
 
-  group('对象 key / 上传 URL', () {
-    test('buildObjectKey 落在 uploadDir 前缀下、带扩展名、不可枚举', () {
-      final k1 = OssUploader.buildObjectKey('public/42/', extension: 'jpg');
-      final k2 = OssUploader.buildObjectKey('public/42/', extension: 'jpg');
-      expect(k1, startsWith('public/42/'));
-      expect(k1, endsWith('.jpg'));
-      expect(k1, isNot(k2)); // 随机不可枚举
-    });
+  group('OssUploader.put', () {
+    test('PUT 到预签名 URL，原样带票据头 + Content-Length，返回 objectKey/publicUrl', () async {
+      final adapter = _CapturingAdapter();
+      final dio = Dio()..httpClientAdapter = adapter;
+      final uploader = OssUploader(dio: dio);
 
-    test('uploadUrl 为虚拟主机式 bucket.host', () {
-      const cred = StsCredential(
-        accessKeyId: 'ak',
-        accessKeySecret: 'sk',
-        securityToken: 'st',
-        expiration: '',
-        bucket: 'petgo-public',
-        region: 'ap-southeast-5',
-        endpoint: 'https://oss-ap-southeast-5.aliyuncs.com',
-        uploadDir: 'public/42/',
+      const ticket = UploadTicket(
+        uploadUrl: 'https://tailtopia.oss/public/42/a.jpg?OSSAccessKeyId=k&Expires=1&Signature=s',
+        objectKey: 'public/42/a.jpg',
+        method: 'PUT',
+        headers: {'Content-Type': 'image/jpeg', 'x-oss-object-acl': 'public-read'},
+        publicUrl: 'https://cdn/public/42/a.jpg',
       );
-      final url = OssUploader.uploadUrl(cred, 'public/42/x.jpg');
-      expect(url, 'https://petgo-public.oss-ap-southeast-5.aliyuncs.com/public/42/x.jpg');
-    });
-  });
 
-  test('StsCredential.fromJson 解析公开/私密信封', () {
-    final pub = StsCredential.fromJson({
-      'accessKeyId': 'ak',
-      'accessKeySecret': 'sk',
-      'securityToken': 'st',
-      'expiration': '2026-06-02T00:00:00Z',
-      'bucket': 'petgo-public',
-      'region': 'ap-southeast-5',
-      'endpoint': 'https://ep',
-      'cdnBaseUrl': 'https://cdn',
-      'uploadDir': 'public/42/',
-    });
-    expect(pub.cdnBaseUrl, 'https://cdn');
+      final result = await uploader.put(ticket, bytes: Uint8List.fromList([1, 2, 3]));
 
-    final priv = StsCredential.fromJson({
-      'accessKeyId': 'ak',
-      'accessKeySecret': 'sk',
-      'securityToken': 'st',
-      'bucket': 'petgo-private',
-      'endpoint': 'https://ep',
-      'uploadDir': 'private/42/',
+      expect(adapter.captured!.method, 'PUT');
+      expect(adapter.captured!.uri.toString(), ticket.uploadUrl);
+      // 票据头原样回带（OSS 预签名要求 Content-Type/ACL 与签名一致）。
+      expect(adapter.captured!.headers['Content-Type'], 'image/jpeg');
+      expect(adapter.captured!.headers['x-oss-object-acl'], 'public-read');
+      expect(adapter.captured!.headers['Content-Length'], 3);
+      expect(result.objectKey, 'public/42/a.jpg');
+      expect(result.publicUrl, 'https://cdn/public/42/a.jpg');
     });
-    expect(priv.cdnBaseUrl, isNull);
+
+    test('私密票据无 ACL 头、publicUrl 为 null', () async {
+      final adapter = _CapturingAdapter();
+      final uploader = OssUploader(dio: Dio()..httpClientAdapter = adapter);
+      const ticket = UploadTicket(
+        uploadUrl: 'https://tailtopia.oss/private/7/b.jpg?sig',
+        objectKey: 'private/7/b.jpg',
+        method: 'PUT',
+        headers: {'Content-Type': 'image/jpeg'},
+      );
+
+      final result = await uploader.put(ticket, bytes: Uint8List.fromList([9]));
+
+      expect(adapter.captured!.headers.containsKey('x-oss-object-acl'), isFalse);
+      expect(result.publicUrl, isNull);
+    });
   });
 }

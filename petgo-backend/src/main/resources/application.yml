@@ -50,12 +50,9 @@ media:
     public-bucket: ${OSS_PUBLIC_BUCKET:}
     private-bucket: ${OSS_PRIVATE_BUCKET:}
     cdn-base-url: ${OSS_CDN_BASE_URL:}
-  sts:
-    role-arn: ${STS_ROLE_ARN:}
-    endpoint: ${STS_ENDPOINT:sts.ap-southeast-5.aliyuncs.com}
-    duration-seconds: ${STS_DURATION_SECONDS:900}
   signed-url:
     ttl-seconds: ${SIGNED_URL_TTL_SECONDS:300}
+    upload-ttl-seconds: ${UPLOAD_URL_TTL_SECONDS:600}
 
 spring:
   application:
