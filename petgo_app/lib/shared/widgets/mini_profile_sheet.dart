@@ -48,7 +48,7 @@ class _MiniProfileCard extends StatelessWidget {
             CircleAvatar(
               radius: 32,
               backgroundColor: AppColors.border,
-              backgroundImage: AppImage.provider(avatar),
+              backgroundImage: AppImage.provider(avatar, thumbWidth: 200),
               child: (avatar == null || avatar.isEmpty)
                   ? const Icon(Icons.person_rounded, size: 32, color: AppColors.textTertiary)
                   : null,
