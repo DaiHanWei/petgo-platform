@@ -1,0 +1,1016 @@
+{
+  "total": 34,
+  "pass": [],
+  "needsWork": [
+    "login",
+    "onboard",
+    "nickname",
+    "pet-select",
+    "pet-edit",
+    "feed",
+    "feed-guest",
+    "feed-empty",
+    "feed-error",
+    "create",
+    "ai-upload",
+    "konsultasi",
+    "konsultasi-home",
+    "match-wait",
+    "rate",
+    "chat",
+    "paspor",
+    "timeline-empty",
+    "milestone",
+    "namecard",
+    "profil",
+    "settings",
+    "notif",
+    "notif-empty",
+    "vet-login",
+    "vet-dashboard",
+    "vet-queue",
+    "vet-history",
+    "vet-profile",
+    "vet-case",
+    "vet-chat"
+  ],
+  "blocked": [
+    "splash",
+    "pet-create",
+    "detail"
+  ],
+  "scored": [
+    {
+      "screen": "pet-create",
+      "foldCovered": false,
+      "verdict": "blocked",
+      "checkPercent": 0,
+      "failHits": [
+        "App 截到的是错屏：原型为创建宠物档案表单，App 显示的是宠物详情/成长档案页（Oyen + Linimasa Tumbuh Kembang），完全不是同一个页面",
+        "缺原型全部表单区块：头像上传(Upload Foto)、NAMA HEWAN 输入、JENIS HEWAN 下拉、RAS/JENIS KELAMIN 双列、TANGGAL LAHIR、BIO、Buat Profil 提交按钮 均不存在",
+        "多出原型没有的区块：积分卡片(1509 Days together)、happy moments/consultations 统计、4/30 milestones 进度条、Pratinjau kartu publik、Linimasa Tumbuh Kembang 时间轴卡片",
+        "顶部标题不符：原型为居中标题 Buat Profil Hewan + 返回箭头，App 为编辑/筛选图标 + 宠物名 Oyen 详情头"
+      ],
+      "deltas": [
+        "① 存在性：原型是一个表单页（头像上传+5组字段+提交按钮），App 是宠物详情/成长档案页——主体内容全部缺失且全部多出无关区块",
+        "① 存在性：原型 Upload Foto 虚线圆头像上传 + 紫色相机角标缺失；App 头像为蓝色爪印静态展示",
+        "② 布局：原型为单列纵向表单 + RAS/JENIS KELAMIN 两列并排；App 为居中宠物资料头 + 统计行 + 时间轴卡片，结构完全不同",
+        "③ 组件类型：原型是输入框/下拉/日期选择器/大号填充提交按钮；App 是统计卡片/进度条/媒体时间轴卡片/FAB，组件族完全不符",
+        "④ 颜色：原型主色紫(选中输入框紫描边、Buat Profil 紫填充按钮、相机角标紫)；App 出现蓝色爪印 + 紫色辅助色，且无紫色提交按钮",
+        "⑤ 文案：原型 Buat Profil Hewan / NAMA HEWAN / JENIS HEWAN(TIDAK BISA DIUBAH...) / RAS / JENIS KELAMIN / TANGGAL LAHIR / BIO(OPSIONAL) / Buat Profil 全部缺失；App 显示 Oyen / Orange Tabby / Days together / Linimasa Tumbuh Kembang 等无关文案",
+        "⑥ 尺寸/间距：无法比对——非同一页面"
+      ],
+      "summary": "App 截图是错屏（宠物详情/成长档案页），与原型 pet-create 创建表单完全不是同一个页面，无法进行保真比对，判 blocked。"
+    },
+    {
+      "screen": "detail",
+      "foldCovered": false,
+      "verdict": "blocked",
+      "checkPercent": 0,
+      "failHits": [
+        "App 图为加载中状态（居中紫色 spinner + 空白白屏），未渲染任何原型内容",
+        "缺全部原型区块：帖子作者头部、正文文本、图片卡片、评论输入框、评论线程、查看更多评论链接",
+        "App 图只截到加载态，未覆盖 fold 以下内容（foldCovered=false）"
+      ],
+      "deltas": [
+        "① 存在性：原型有作者头部（P / Putri Rahayu / 2 jam lalu · Cerita Harian / 紫色 Cerita Harian 标签），App 完全缺失——仅显示 loading spinner",
+        "① 存在性：原型有两段正文文本（Oyen akhirnya... / Sempet panik banget...），App 缺失",
+        "① 存在性：原型有一张淡紫色圆角图片卡片（猫表情 + 右下 2/3 分页角标），App 缺失",
+        "① 存在性：原型有评论输入栏（紫色头像 + Tulis komentar... 占位 + 紫色发送按钮），App 缺失",
+        "① 存在性：原型有评论线程（dr. Dewi 绿头像、Rani Fitriani 红头像、Putri Rahayu 回复、各 Balas），App 缺失",
+        "① 存在性：原型底部有紫色 Lihat 21 komentar lainnya → 链接，App 缺失",
+        "③ 组件类型：原型为完整可滚动详情页，App 仅为单个 CircularProgressIndicator 加载指示器",
+        "App 处于加载中/未完成数据加载状态，无法进行布局/颜色/文案/尺寸维度的比对"
+      ],
+      "summary": "App 详情页卡在加载态（仅居中紫色 spinner + 空白白屏），未渲染原型任何内容，无法审查，判 blocked。"
+    },
+    {
+      "screen": "timeline-empty",
+      "foldCovered": true,
+      "verdict": "needs_work",
+      "checkPercent": 8,
+      "failHits": [
+        "主结构完全不符：原型是简洁的 Catatan 空状态页，App 渲染的是宠物档案页（头像/姓名/品种/简介/统计卡），是两套完全不同的屏",
+        "缺原型的页面标题区：原型左上 'Catatan' 大标题 App 没有",
+        "缺原型的分段切换器：原型顶部紫色胶囊 'Timeline / Kalender' 分段按钮，App 用的是右上两个图标按钮（列表/日历）+ 'Linimasa Tumbuh Kembang' 行内标题，组件类型与位置都不符",
+        "缺原型核心空状态文案：'Belum ada catatan' / 'Mulai catat momen pertama Mochi!' / 'Setiap foto dan cerita tersimpan di sini.' 全部缺失，App 仅显示英文 'No records yet'",
+        "缺原型主 CTA 大紫色按钮 '+ Catat Momen Pertama'，App 没有",
+        "多出大量原型没有的区块：宠物头像、'Oyen' 姓名、'Orange Tabby · 4y 1m'、英文 bio、'1509 Days together' 卡、happy moments/consultations 统计、'4 / 30 milestones done' 进度条、'Pratinjau kartu publik' 链接、右下分享 FAB",
+        "文案语言不符：原型空状态为印尼语，App 空状态及多个区块为英文（No records yet / Days together / happy moments / consultations / milestones done / bio）",
+        "底部导航文案不符：原型为 Beranda/Catatan/Konsultasi/Profil（印尼语），App 为 Home/Consult/Me（英文）且 tab 结构不同（中间出现爪印 tab）"
+      ],
+      "deltas": [
+        "页面标题：原型左上 'Catatan' 大黑标题；App 无此标题，顶部仅右上两个图标按钮（铅笔/调节）",
+        "顶部分段：原型为紫色胶囊分段按钮 Timeline(选中)/Kalender；App 无，改为页面中部行内标题 'Linimasa Tumbuh Kembang' + 右侧两个图标",
+        "空状态主体：原型居中 'Belum ada catatan'(粗黑大标题)+两行印尼语副文+紫色大 CTA '+ Catat Momen Pertama'；App 仅居中灰色英文 'No records yet'，无副文无 CTA",
+        "顶部内容：原型空状态页顶部除标题/分段外无其他内容；App 多出圆形爪印头像、'Oyen'、'Orange Tabby · 4y 1m'(紫)、引号 bio、'1509 Days together' 浅卡片",
+        "统计区：App 多出 '10 happy moments / 4 consultations' 行 + '4 / 30 milestones done' 紫色进度条 + 'Pratinjau kartu publik' 链接；原型完全无",
+        "悬浮元素：App 右下多出紫色分享 FAB；原型无",
+        "底部导航：原型 5 项 Beranda/Catatan/(+)/Konsultasi/Profil 印尼语，Konsultasi 有红点；App 为 Home/(爪印)/(+)/Consult/Me，英文且分区不同",
+        "颜色体系：两者均用紫色主色，但 App 未呈现原型的紫色分段胶囊与紫色主 CTA，紫色用法上下文不一致",
+        "语言：原型全印尼语；App 大量英文（bio、统计、空态、底栏），i18n 未落地"
+      ],
+      "summary": "App 渲染的是宠物档案页而非原型的 Catatan 空状态页，主结构、组件、文案（印尼语 vs 英文）全面不符，几乎无一区域对齐。"
+    },
+    {
+      "screen": "vet-queue",
+      "foldCovered": true,
+      "verdict": "needs_work",
+      "checkPercent": 8,
+      "failHits": [
+        "缺原型区块：深色头部（'Senin, 15 Juni 2026' + 'drh. Dewi Santoso' + 'Online' 胶囊）整块缺失",
+        "缺原型区块：分段标签栏 Antrian(3)/Aktif(1)/Riwayat/Profil 全部缺失，App 顶部只有单标题 'Active'",
+        "缺原型区块：富信息病例卡（AI 摘要 RINGKASAN AI、紧急度徽章 Perlu Konsul/Normal/Darurat、Lewati/Lihat Detail 按钮、PERHATIAN SEGERA + Tangani Sekarang）全部缺失",
+        "多出原型没有的区块：底部四项 tab bar（Inbox/Active/History/Me）原型无此结构",
+        "组件类型不符：原型为带 AI 摘要+徽章+双按钮的整图大卡片，App 为简化的单行列表行（头像+标题+一行预览+chevron）",
+        "颜色用错体系：原型用紫/琥珀/红/绿语义体系且深色头部，App 用薄荷绿+白底，无紫色主题、无深色头部",
+        "文案语言/内容不符：原型标题 'Antrian' 印尼语，App 标题 'Active' 英文；原型病例 Mochi/Oyen/Benji，App 为 Oyen/Milo 不同会话内容",
+        "状态栏/机型不符：原型 9:41 + iPhone 灵动岛，App 12:41 + Android LTE（仅环境差异，记录）"
+      ],
+      "deltas": [
+        "头部：原型深色导航条含日期'Senin, 15 Juni 2026'、医生名'drh. Dewi Santoso'、右侧绿色'Online'胶囊；App 为浅色单行大标题'Active'+右侧刷新图标——结构与文案完全不同",
+        "标签栏：原型有四个分段标签 Antrian(3)/Aktif(1)/Riwayat/Profil 且'Antrian'选中(紫色下划线)；App 完全没有顶部标签，转而用底部 tab bar——信息架构不同",
+        "列表项 1：原型 Mochi(Kucing·Betina·1thn·@aditya)带黄色'Perlu Konsul'徽章+'2 mnt lalu'+黄色 RINGKASAN AI 摘要框+附件行+Lewati/Lihat Detail 双按钮；App 第一项为 Oyen 单行预览'Minum masih mau sedikit...'+红色未读角标'1'+chevron——组件类型与内容均不符",
+        "列表项 2：原型 Oyen(Kucing·Jantan·3thn·@rani)带绿色'Normal'徽章+提问文本+Lewati/Lihat Detail 双按钮；App 第二项为 Milo 单行预览'Oke dok, nanti saya pantau...'——内容/结构不符",
+        "列表项 3：原型 Benji(Anjing·Jantan·5thn·@bagas)带红色'Darurat'徽章+红色 PERHATIAN SEGERA 警告框+红色'Tangani Sekarang'按钮；App 无此项及任何紧急态——缺失安全攸关的急诊处理入口",
+        "配色：原型紫主题+语义色（黄/绿/红徽章、深色头部）；App 薄荷绿+灰白、无紫、无语义徽章体系",
+        "底部：原型底部为 Benji 急诊卡（无 tab bar）；App 底部为 Inbox/Active/History/Me 四项 tab bar——原型不存在该结构",
+        "整体：App 实现的是简化会话收件箱列表，并非原型的'兽医接诊队列'功能页，几乎是两个不同页面"
+      ],
+      "summary": "App 实现与原型几乎完全不符：缺失深色头部、四分段标签栏、带 AI 摘要/紧急度徽章/双按钮的富病例卡及急诊处理入口，且用薄荷绿+底部 tab bar 的简化会话列表替代了原型紫色主题的接诊队列页，文案语言（Active vs Antrian）与配色体系均错。"
+    },
+    {
+      "screen": "vet-case",
+      "foldCovered": true,
+      "verdict": "needs_work",
+      "checkPercent": 8,
+      "failHits": [
+        "缺原型区块：标题栏应为「Detail Permintaan」+「02:47 sisa waktu」倒计时，App 显示的是「Good afternoon / Drh. Demo」+ 上线开关——非同一屏",
+        "缺原型区块：宠物档案卡（Mochi + Kucing/Betina/1 tahun/Domestic 紫色标签 + 主人 @aditya.kurniawan）完全缺失",
+        "缺原型区块：黄色「Evaluasi AI: Perlu Konsultasi」AI 评估横幅缺失",
+        "缺原型区块：「KELUHAN PEMILIK」主人主诉段落缺失",
+        "缺原型区块：「FOTO GEJALA (2)」症状照片网格缺失",
+        "缺原型区块：底部「Lewati」/「Ambil Kasus → Mulai Chat」双按钮缺失",
+        "多出原型没有的区块：统计卡（Queue/Done/Rating）、CURRENT QUEUE 列表、Benji/Oyen 多卡片、底部 Inbox/Active/History/Me tab 栏——均非详情页内容",
+        "组件类型不符：原型是单案例详情页（卡片+横幅+网格+按钮），App 是队列列表页（多行案例卡 + tab 栏）",
+        "文案不符：原型逐字文案（Detail Permintaan / Mochi / sisa waktu / Ambil Kasus 等）在 App 中均不存在",
+        "颜色体系：原型用紫色标签体系，App 案例卡用红/黄底色 + 青绿主色，未体现详情页紫体系"
+      ],
+      "deltas": [
+        "标题栏：原型=深色栏「Detail Permintaan / Tinjau sebelum mengambil kasus」+ 返回箭头 + 红色倒计时胶囊「02:47 sisa waktu」；App=深色栏「Good afternoon / Drh. Demo」+「Online · accepting requests」+ 绿色开关。结构与文案完全不同",
+        "宠物卡：原型有圆角白卡，含猫 emoji 头像、Mochi 名、四个紫色 pill（Kucing/Betina/1 tahun/Domestic）、主人行 @aditya.kurniawan + TailTopia + sejak Jan 2025；App 无此卡",
+        "AI 评估：原型有米黄底圆角横幅 + 黄点图标 +「Evaluasi AI: Perlu Konsultasi」标题 + 两段诊断文字；App 无此横幅（App 仅在列表卡内嵌「AI SUMMARY」短句）",
+        "主诉：原型有「KELUHAN PEMILIK」标签 + 白卡内主人完整主诉文字；App 无独立主诉区",
+        "照片：原型有「FOTO GEJALA (2)」标题 + 两张紫/橙渐变占位的照片网格（2 列）；App 无照片网格区",
+        "底部操作：原型有并排两按钮——白底「Lewati」+ 青绿大按钮「Ambil Kasus → Mulai Chat」；App 底部是 4 项 tab 栏（Inbox/Active/History/Me）+ 黑色 toast「Already taken by another vet」",
+        "整体：App 呈现的是 vet 队列/收件箱列表页（含统计卡 + 多案例卡 + tab 栏），与原型的单案例详情页不是同一屏，几乎全部区域不匹配"
+      ],
+      "summary": "App 截图是 vet 队列列表页（统计卡 + 多案例 + tab 栏），与原型的单案例详情页「Detail Permintaan」完全不是同一屏，几乎所有区块缺失或多出，需重做对齐。"
+    },
+    {
+      "screen": "splash",
+      "foldCovered": true,
+      "verdict": "blocked",
+      "checkPercent": 10,
+      "failHits": [
+        "App 图是错屏：原型为 splash 启动页，App 实现图是社区 feed/首页（猫照片帖子流），完全不是同一屏",
+        "缺原型核心区块：原型的 TailTopia 大标题 logo 居中缺失",
+        "缺原型副标题文案：'Komunitas Pecinta Hewan Peliharaan Indonesia' 在 App 图中不存在",
+        "多出原型没有的区块：筛选分段（All/Daily/Moments/Tips）、帖子卡片、点赞/Share、FAB、底部导航栏",
+        "组件类型不符：原型是无交互的居中品牌启动屏，App 是滚动 feed",
+        "布局不符：原型内容居中且大量留白，App 为顶部 appbar+列表+底栏的多区结构"
+      ],
+      "deltas": [
+        "背景：原型纯白配淡紫装饰色块/彩色碎屑（confetti），App 顶部为照片帖、无 splash 装饰",
+        "标题：原型有超大 'TailTopia' 白色描边大字 logo 居中；App 仅左上角小号 'TailTopia 🐾' appbar 标题",
+        "副标题：原型有三行紫灰副标题 'Komunitas Pecinta Hewan Peliharaan / Indonesia'；App 无",
+        "状态栏：原型 9:41；App 12:15（不同但非核心）",
+        "主体内容：原型为空白等待加载的启动屏；App 显示用户 'Putri' 发的猫帖、文案 'Oyen chasing the sunset on the rooftop again...'、点赞 12.6k、Share",
+        "导航：原型无任何导航/控件；App 有 All/Daily/Moments/Tips 分段 tab + 紫色 FAB(+) + 底部 4 项导航(首页/Growth/Consult/我)",
+        "颜色体系：两者都偏紫，但 App 与原型不是同一屏，颜色比对不成立"
+      ],
+      "summary": "App 实现图是社区 feed/首页，并非原型的 TailTopia 启动 splash 屏，截到的是错屏，无法进行同屏保真比对。"
+    },
+    {
+      "screen": "feed-error",
+      "foldCovered": true,
+      "verdict": "needs_work",
+      "checkPercent": 10,
+      "failHits": [
+        "缺原型核心区块：整个 feed 加载失败错误态（标题/说明/按钮/链接）在 App 中完全不存在",
+        "多出原型没有的区块：App 显示分类筛选 chip 行（All/Daily/Moments/Tips）+ 瀑布流骨架卡片网格",
+        "组件类型不符：原型为居中错误信息+CTA 卡片，App 为骨架屏加载态网格",
+        "文案语言/内容不符：原型印尼语错误文案缺失，App 顶栏 chip 为英文 All/Daily/Moments/Tips",
+        "底部导航文案不符：原型 Beranda/Catatan/Konsultasi/Profil（印尼语），App 为 Home(无文字)/Growth/Consult/Me（英文）",
+        "顶栏不符：原型 'TailTopia' 无铃铛/角标，App 有铃铛+红色角标 3 与爪印图标"
+      ],
+      "deltas": [
+        "状态完全不同：原型是『加载失败错误态』(Gagal memuat feed)，App 是『加载中骨架屏』状态——被审屏根本不是错误态",
+        "标题：原型粗体 'Gagal memuat feed' 居中；App 无此标题",
+        "说明文案：原型 'Periksa koneksi internet kamu dan coba lagi.' 居中两行；App 无",
+        "主 CTA：原型紫色实心圆角按钮 'Coba Lagi'；App 无",
+        "次级链接：原型灰色文字链 'Laporkan Masalah'；App 无",
+        "顶栏：原型 'TailTopia' 文字标题、右上角仅状态图标；App 'TailTopia'+蓝色爪印 emoji+右上铃铛带红色角标 '3'",
+        "筛选 chip：App 顶部有 All/Daily/Moments/Tips 分段 chip（All 选中为紫底白字）；原型无此行",
+        "内容区：App 为左右双列高低错落的灰色骨架占位卡（瀑布流 6 块）；原型内容区为空白+居中错误信息",
+        "底部导航标签：原型 5 项 Beranda/Catatan/(+)/Konsultasi/Profil 印尼语；App 为 Home/Growth/(+)/Consult/Me 英文，且 Beranda 项 App 无文字标签",
+        "底部导航图标：原型 Catatan=书本、Konsultasi=听诊器带红点；App Growth=爪印、Consult=公文包带+号，图标体系不一致",
+        "中央 FAB：原型紫色圆 + 号无白描边；App 紫色圆 + 号带白色描边外圈——风格略异但都为紫色",
+        "颜色体系：两者主色都为紫色，基本一致"
+      ],
+      "summary": "被审 App 屏根本不是原型的『feed 加载失败错误态』，而是带英文筛选 chip 的瀑布流骨架加载屏——错误态全部区块缺失、底栏/顶栏文案与图标体系也与原型不符，严重不达标。"
+    },
+    {
+      "screen": "namecard",
+      "foldCovered": true,
+      "verdict": "needs_work",
+      "checkPercent": 12,
+      "failHits": [
+        "缺原型区块：PENCAPAIAN 成就横滚行（彩色圆形徽章 Ulang Tahun/Profil Lengkap/Foto Pertama/Konsultasi Pertama/10 Momen…）整段缺失",
+        "缺原型区块：里程碑卡片『Ulang Tahun Pertama · 15 Jun 2025 \"Sudah 1 tahun bersama!\"』缺失",
+        "缺原型区块：『Milik @hexsfile · bersama 365 hari』归属行与紫色徽章缺失",
+        "缺原型区块：统计行『12 Momen Bahagia · 2 Konsultasi · 5 Milestone』缺失",
+        "缺原型 CTA：第二按钮『Buat Profil Hewan Serupa』(深色描边)缺失",
+        "缺原型链接：『Lihat Cerita Lengkap Mochi →』缺失",
+        "多出原型没有的区块：顶部浏览器地址栏(petgo.id/m/oyen)与底部系统手势条",
+        "颜色用错体系：原型为深色(近黑/深蓝)主题，App 用浅色+紫绿渐变白卡，整体配色体系不符",
+        "组件类型不符：MOMEN 原型为一行 6 个横滚小方块图标，App 为 1+2x2 斜纹大占位网格(Recent moments/Last 5 白卡)",
+        "文案语言/内容不符：副标题原型印尼语『Kucing Betina · Domestic Shorthair · 2 tahun』，App 英文『Orange Tabby · 1 Mei 2022』；并多出英文引言句",
+        "文案不符：宠物名原型 Mochi，App 为 Oyen（不同数据）",
+        "主结构/对齐不符：原型为深色全屏分段式档案页，App 为浅色单白卡 web 名片，整体信息架构不同"
+      ],
+      "deltas": [
+        "主题色：原型深色(近黑)背景 vs App 浅色+顶部紫→绿渐变、白色内容卡——颜色体系完全不符",
+        "头部标签：App 多出『TailTopia · PET CARD』小标题 + 浏览器 URL 栏，原型无",
+        "名字：原型『Mochi』白字 vs App『Oyen』深绿字",
+        "副标题：原型『Kucing Betina · Domestic Shorthair · 2 tahun』(印尼语) vs App『Orange Tabby · 1 Mei 2022』(英文品种+日期)",
+        "归属行：原型有『Milik @hexsfile · bersama 365 hari』+紫徽章，App 缺失",
+        "统计行：原型『12 Momen Bahagia · 2 Konsultasi · 5 Milestone』，App 缺失",
+        "成就区：原型『PENCAPAIAN』整段彩色圆形徽章横滚，App 完全缺失",
+        "里程碑卡：原型『Ulang Tahun Pertama · 15 Jun 2025』深色卡，App 缺失",
+        "引言：App 多出英文『A little orange cat who loves napping and sunbathing』，原型无此句",
+        "近期 momen：原型『MOMEN BAHAGIA TERAKHIR』一行 6 个浅色小方块 emoji vs App『Recent moments/Last 5』1+2x2 斜纹占位大网格——组件类型与列数均不符",
+        "CTA：原型双按钮(紫『Download TailTopia — Gratis!』+深色描边『Buat Profil Hewan Serupa』)+文本链接『Lihat Cerita Lengkap Mochi →』 vs App 单紫按钮『Download TailTopia』",
+        "底部：App 多出系统手势条"
+      ],
+      "summary": "App 名片页与原型几乎完全不同：浅色紫绿渐变 web 卡片 vs 原型深色分段式档案，缺 PENCAPAIAN 成就、里程碑卡、归属/统计行、第二 CTA 与文本链接，且文案英文化、数据不同——大幅返工。"
+    },
+    {
+      "screen": "ai-upload",
+      "foldCovered": true,
+      "verdict": "needs_work",
+      "checkPercent": 15,
+      "failHits": [
+        "缺原型区块：顶部导航栏（返回箭头 + 居中标题 Diagnosa AI）完全缺失，App 只有左对齐大标题",
+        "缺原型区块：紫色渐变信息横幅『⚡ Hasil dalam 15 detik / Upload foto...』整块缺失",
+        "组件类型不符：原型照片区为『3 格缩略图网格（已上传 2 张带红 × + 1 个虚线 Tambah 占位）』，App 退化为单个圆形『Add photo』按钮",
+        "组件类型不符：原型『Analisis Sekarang →』为实心紫色激活态按钮，App 为灰色禁用态『Start analysis』",
+        "文案语言不符：原型全印尼语，App 全英语（AI Smart Triage / Add photo / Describe the symptoms / Start analysis 等）",
+        "文案内容不符：原型文本框含预填症状描述与字数 87/500，App 为空占位『What's bothering your fur baby?』且字数 0/2000",
+        "颜色用错体系：原型大量使用紫色渐变体系（横幅、按钮、缩略图），App 几乎纯黑白灰，紫色仅出现在相机图标"
+      ],
+      "deltas": [
+        "① 存在性：原型顶部有返回箭头 + 居中标题『Diagnosa AI』导航栏 → App 无导航栏，仅左对齐裸标题『AI Smart Triage』",
+        "① 存在性：原型有紫色渐变 hero 横幅『⚡ Hasil dalam 15 detik / Upload foto + cerita gejala → evaluasi instan hijau / kuning / merah』→ App 完全缺失此横幅",
+        "① 存在性：原型有小节标题『FOTO GEJALA (MAKS. 3)』→ App 用普通说明文字『Up to 3 photos, each under 10 MB (JPG/PNG/HEIC)』替代，标题缺失",
+        "① 存在性：原型底部有黄色警示文案『⚠️ Hasil AI bersifat referensi...』→ App 有等价英文免责声明但位置/样式不同（在按钮下方且无黄色警示图标）",
+        "③ 组件类型：照片上传——原型=3 列方形缩略图网格（2 张已上传猫图带红色 × 删除角标 + 虚线方框 +Tambah）；App=单个圆形虚线『Add photo』按钮，无网格、无已上传项",
+        "③ 组件类型：主 CTA——原型=紫色实心激活按钮『Analisis Sekarang →』；App=灰色禁用胶囊按钮『Start analysis』+ 下方提示『Please describe...first』",
+        "② 布局：原型标题居中在导航栏内；App 标题左对齐独立成行",
+        "④ 颜色：原型紫色渐变体系贯穿（横幅/按钮/缩略图占位）；App 基本黑白灰，缺紫色主体",
+        "⑤ 文案：全局语言 印尼语 vs 英语；输入框预填内容 vs 空占位；字数上限 500 vs 2000",
+        "⑥ 尺寸/间距：原型为信息密集的卡片化布局充满首屏；App 内容稀疏，下半屏大量留白"
+      ],
+      "summary": "App 实现与原型几乎完全不一致：缺导航栏/紫色 hero 横幅/缩略图网格/激活态紫色 CTA，照片区退化为单圆按钮，且全英文取代印尼语、紫色体系几乎丢失——判 needs_work。"
+    },
+    {
+      "screen": "rate",
+      "foldCovered": true,
+      "verdict": "needs_work",
+      "checkPercent": 15,
+      "failHits": [
+        "组件类型不符：原型为全屏评价页（占满屏幕、灰底卡片堆叠），App 实现为悬浮小弹窗 modal 叠在问诊 hub 之上，主结构完全不同",
+        "缺原型区块：医生头像（绿色圆形 D）缺失",
+        "缺原型区块：医生姓名 drh. Dewi Santoso + 副标题 Klinik Hewan Sehat · Durasi: 18 menit 缺失",
+        "缺原型区块：紫色快捷标签 chip（Responsif 👍 / Penjelasan Jelas 📋 / Sabar / Ramah / Profesional）整组缺失",
+        "缺原型区块：底部独立的 Lewati（跳过）文字链接缺失",
+        "文案语言不符：原型全印尼语（Bagaimana pengalamanmu? / Kirim Ulasan / Lewati），App 为英文（Rate this consultation / Submit / Add a note）",
+        "文案内容不符：原型预填评价正文且 4 星高亮，App 为 0 星 + 0/100 空输入 + 红色报错 Please pick a star rating",
+        "颜色用错体系：原型星星为金黄高亮，App 星星为灰色空心未选；原型 Kirim Ulasan 为大号紫色填充按钮，App Submit 为小号灰色禁用按钮"
+      ],
+      "deltas": [
+        "整体结构：原型=独立全屏评价页（白/浅灰底，内容垂直居中铺满）；App=小尺寸圆角 modal 弹窗，背景透出灰化的 Quick consultation hub 页面（Ask AI Triage 卡片、My consultations 列表、底部 tab bar、加号 FAB 都可见），二者根本不是同一形态",
+        "头部：原型有绿色圆形头像 D + 医生名 drh. Dewi Santoso + 副信息 Klinik Hewan Sehat · Durasi: 18 menit；App 弹窗内完全无头像与医生信息",
+        "标题：原型为大号印尼语问句 Bagaimana pengalamanmu? + 副文案 Ulasanmu membantu pemilik hewan lain memilih dokter yang tepat；App 为英文 Rate this consultation，无副文案",
+        "星级：原型 5 星且前 4 星金黄高亮（已评分态）；App 5 星全灰空心（未评分态）",
+        "标签 chip：原型有两行 chip——首行紫色填充 Responsif 👍 / Penjelasan Jelas 📋，次行浅色 Sabar / Ramah / Profesional；App 完全没有快捷标签",
+        "文本输入：原型为带边框白色多行文本卡片，预填印尼语评价 Dokternya sangat responsif dan penjelasannya mudah dimengerti...；App 为单下划线输入框，占位 Add a note (optional, max 100 chars)，计数 0/100，空内容",
+        "校验提示：原型无报错；App 显示红色 Please pick a star rating",
+        "主按钮：原型 Kirim Ulasan 为整宽大号紫色实心按钮；App Submit 为右下角小号灰色禁用按钮",
+        "跳过入口：原型底部居中 Lewati 灰色文字链接；App 无对应跳过入口",
+        "状态栏：原型 9:41 / 信号满格；App 12:25 / LTE（次要差异）"
+      ],
+      "summary": "App 把全屏评价页做成了悬浮小弹窗，结构完全偏离原型：缺医生头像/姓名/快捷标签 chip/跳过链接，文案为英文非印尼语，星级与按钮处于灰色未评分态而非原型的金黄高亮+紫色实心填充，几乎全维度不达标。"
+    },
+    {
+      "screen": "settings",
+      "foldCovered": true,
+      "verdict": "needs_work",
+      "checkPercent": 15,
+      "failHits": [
+        "缺原型区块：4 个分组（AKUN / TAMPILAN / PRIVASI & KEAMANAN / ZONA BAHAYA）全部缺失，App 无任何分组标题",
+        "缺原型区块：Edit Profil 行缺失",
+        "缺原型区块：Notifikasi 开关行缺失",
+        "缺原型区块：Mode Gelap（Mengikuti sistem）开关行缺失",
+        "缺原型区块：Profil Hewan (publik) 开关行缺失",
+        "缺原型区块：Kebijakan Privasi、Syarat & Ketentuan 行缺失",
+        "缺原型区块：Bahasa 行右侧值 Bahasa Indonesia 缺失（App 仅 Language 无当前值）",
+        "缺原型区块：底部版本号 TailTopia v1.0.0 · Build 100 缺失",
+        "多出原型没有的区块：Vet sign-in 行原型不存在",
+        "组件类型不符：原型为多张分组卡片含 Switch 组件，App 为单张卡片纯箭头列表，无任何开关",
+        "颜色用错体系：原型 ZONA BAHAYA 红色文字（Keluar/Hapus Akun）+ 紫色开关，App 全为灰黑文字无紫无红危险体系",
+        "文案语言不符：App 全英文（Settings/Language/Vet sign-in/Log out/Delete account），原型全印尼语",
+        "缺顶部返回箭头：原型标题左侧有返回按钮，App 无",
+        "缺顶部分组结构与导航行图标体系：App 用每行左侧线性图标，原型行无左侧图标"
+      ],
+      "deltas": [
+        "顶部栏：原型『← Pengaturan』含返回按钮 + 印尼语标题；App『Settings』英文、无返回箭头",
+        "分组：原型 4 段分组标题（AKUN/TAMPILAN/PRIVASI & KEAMANAN/ZONA BAHAYA，紫灰大写小字）；App 完全无分组标题",
+        "AKUN 段：原型有 Edit Profil（箭头）、Notifikasi（紫色 Switch 开）、Bahasa（右侧值 Bahasa Indonesia + 箭头）；App 仅有 Language 一行且无当前值",
+        "TAMPILAN 段：原型有 Mode Gelap + 副文案『Mengikuti sistem』+ 关闭态 Switch；App 完全缺失",
+        "PRIVASI & KEAMANAN 段：原型有 Profil Hewan (publik)（紫 Switch 开）、Kebijakan Privasi、Syarat & Ketentuan；App 完全缺失",
+        "ZONA BAHAYA 段：原型 Keluar (Logout)、Hapus Akun 均为红色文字 + 红色箭头独立危险卡片；App 用 Log out / Delete account 黑灰文字，无红色危险体系",
+        "多出项：App 含 Vet sign-in 行，原型无此项",
+        "组件类型：原型多张白卡片分段、含多个 Switch 控件；App 为单一白卡片纯箭头列表，0 个开关",
+        "图标：App 每行左侧带线性图标（地球/医箱/登出/垃圾桶）；原型导航行无左侧图标",
+        "颜色体系：原型大量使用紫色（Switch 开态）+ 红色（危险区）；App 全灰黑，无紫无红",
+        "底部：原型有版本号『TailTopia v1.0.0 · Build 100』居中灰字；App 无",
+        "整体完成度：App 仅实现了原型约 1/4 的功能项，且语言、组件、配色、结构全部偏离"
+      ],
+      "summary": "App 设置页与原型严重不符：缺全部 4 个分组、所有 Switch 行、版本号与红色危险体系，全文英文且多出 Vet sign-in 行，仅为原型约 15% 还原度。"
+    },
+    {
+      "screen": "vet-login",
+      "foldCovered": true,
+      "verdict": "needs_work",
+      "checkPercent": 15,
+      "failHits": [
+        "缺原型区块：返回箭头按钮（左上灰色圆角方块内紫色箭头）完全缺失",
+        "缺原型区块：品牌头部（薄荷绿圆角图标 + 标题『Portal Dokter Hewan』+ 副标题『Akses khusus tenaga medis hewan berlisensi』）完全缺失，App 仅有裸标题『Vet sign-in』",
+        "缺原型区块：薄荷绿左竖条提示卡片（『Halaman ini hanya untuk dokter hewan...』）完全缺失",
+        "缺原型区块：底部『Belum terdaftar?』分隔线 + 『Hubungi Kami, Jadilah Mitra』描边按钮完全缺失",
+        "缺原型区块：底部三枚信任标识（Terenkripsi / PDHI Terverifikasi / Data aman）完全缺失",
+        "组件类型不符：原型输入框为带描边圆角卡片含图标（信封/锁/眼睛），App 为裸下划线 TextField 无边框无图标",
+        "文案语言不符：原型为印尼语全套，App 全英文（Vet sign-in / Account / Password / Sign in / Forgot your password? Please contact operations.）",
+        "文案内容不符：原型字段标签『EMAIL TERDAFTAR』『KATA SANDI』，App 为『Account』『Password』；主按钮原型『Masuk sebagai Dokter』，App『Sign in』；找回密码原型『Lupa kata sandi?』，App『Forgot your password? Please contact operations.』",
+        "布局/对齐不符：原型为顶部对齐紧凑表单堆叠，App 表单垂直居中、上方大片空白，整体结构错位",
+        "颜色体系部分缺失：原型大量使用薄荷绿点缀（图标块/提示卡竖条/链接/按钮），App 仅主按钮为薄荷绿，其余薄荷绿元素全无"
+      ],
+      "deltas": [
+        "状态栏：原型 9:41，App 12:39（环境差异，非问题）",
+        "返回按钮：原型左上有灰底圆角方块 + 紫色返回箭头；App 无",
+        "品牌头部：原型有薄荷绿圆角听诊器图标 + 粗体标题『Portal Dokter Hewan』+ 灰色副标题两行；App 仅一行裸标题『Vet sign-in』黑色",
+        "提示卡：原型有薄荷绿左竖条浅绿底圆角提示卡含加粗强调文案；App 完全无",
+        "邮箱字段：原型标签『EMAIL TERDAFTAR』+ 描边圆角输入框带信封图标 + 预填值『dewi.santoso@kliniksehat.id』；App 标签『Account』+ 裸下划线输入框无图标无预填",
+        "密码字段：原型标签『KATA SANDI』+ 描边圆角框带锁图标 + 圆点掩码 + 右侧眼睛图标；App 标签『Password』+ 裸下划线无图标无掩码无眼睛",
+        "找回密码：原型右对齐薄荷绿粗体链接『Lupa kata sandi?』在按钮上方；App 灰色居中长句『Forgot your password? Please contact operations.』在按钮下方",
+        "主按钮：原型薄荷绿圆角『Masuk sebagai Dokter』；App 薄荷绿胶囊『Sign in』（颜色形状近似，文案不符）",
+        "分隔与转化区：原型有『Belum terdaftar?』分隔线 + 描边按钮『Hubungi Kami, Jadilah Mitra 🤝』；App 完全无",
+        "信任标识行：原型底部三枚带图标信任标识；App 完全无",
+        "整体布局：原型顶起紧凑、信息密度高；App 居中稀疏、大量留白"
+      ],
+      "summary": "App 实现几乎与原型无关：仅保留一个薄荷绿主按钮，品牌头部/提示卡/描边输入框/找回链接/合作转化区/信任标识全部缺失，且全英文文案与原型印尼语完全不符，判 needs_work。"
+    },
+    {
+      "screen": "notif",
+      "foldCovered": true,
+      "verdict": "needs_work",
+      "checkPercent": 20,
+      "failHits": [
+        "文案语言不符：原型全印尼语（Notifikasi/HARI INI/KEMARIN/Dokter Hewan membalas konsultasimu 等），App 全英文（Notifications/New comment/New like/Consult update/Milestone unlocked）",
+        "缺原型区块：原型有 HARI INI / KEMARIN 两个日期分组标题，App 完全没有分组分隔",
+        "组件类型不符：原型为卡片式（带圆角图标方块 + 卡片背景，首条高亮紫色卡），App 为无卡片的细分隔线行式列表",
+        "缺原型区块：原型每条均有时间戳（5 menit lalu / 1 jam lalu / Kemarin, 14:30 等），App 完全无时间戳",
+        "文案内容不符：原型 5 条通知文案具体（含宠物名 Mochi/Oyen、Level L、365 hari）；App 4 条通用占位文案，条数与内容均不符",
+        "图标体系不符：原型用圆角方块底色容器内放表情/图标，App 用裸线性描边图标无容器底色"
+      ],
+      "deltas": [
+        "标题：原型 'Notifikasi'（印尼语，深色粗体）vs App 'Notifications'（英文）",
+        "状态栏：原型 9:41 + iOS 信号/电池（刘海）vs App 12:38 + LTE Android 样式——属设备差异，非主审项",
+        "分组标题：原型有 'HARI INI'、'KEMARIN' 灰色小字分组 vs App 无任何分组",
+        "首条高亮：原型首条 'Dokter Hewan membalas konsultasimu' 为浅紫高亮卡片+左侧紫色竖条+右上紫点 vs App 无高亮卡片态",
+        "条目数：原型 5 条 vs App 4 条",
+        "图标容器：原型每条左侧为圆角方块色块（紫/粉/灰/绿/黄）含图标 vs App 为无底色裸描边图标（聊天框/心/医箱/旗）",
+        "正文文案：原型含引号内具体内容摘要（Kondisi Mochi.../Oyen akhirnya.../Syukurlah Oyen...）vs App 为短英文占位（Rina commented on your post 等）",
+        "时间戳：原型每条带相对/绝对时间（5 menit lalu、1 jam lalu、Kemarin 14:30/09:00）vs App 完全缺失",
+        "未读红点：原型仅首条右上有紫色未读点 vs App 三条右侧有红色未读点（颜色与位置体系不同）",
+        "里程碑文案：原型 'Mochi mencapai milestone Level L!' + 'Ulang tahun pertama — 365 hari bersama!' vs App 'Milestone unlocked' + '\"100 days together\" is unlocked'",
+        "生日通知：原型有 'Ulang tahun Mochi minggu depan!' 蛋糕条目 vs App 无此条目",
+        "整体留白：App fold 以下大面积空白（仅4条），原型内容更密实充满首屏"
+      ],
+      "summary": "App 通知页与原型仅页面骨架（顶部标题+列表）相似，文案全英文化、缺日期分组与时间戳、组件由紫色卡片退化为裸图标分隔线行、文案为通用占位，几乎全维度不符，判 needs_work。"
+    },
+    {
+      "screen": "login",
+      "foldCovered": true,
+      "verdict": "needs_work",
+      "checkPercent": 22,
+      "failHits": [
+        "缺原型区块: 紫色渐变 hero header（返回箭头 + 右上角图标 + 圆形爪印 logo）完全缺失",
+        "缺原型区块: 主标题 'Selamat datang!' 缺失（App 显示英文 'TailTopia'）",
+        "缺原型区块: 副标题 'Rekam tumbuh kembang & konsultasi dokter hewan untuk si kecil berbulu' 缺失",
+        "缺原型区块: 浅紫提示卡 'Belum punya akun? Akun baru dibuat otomatis — cukup satu tap!' 缺失",
+        "缺原型区块: 三栏数据统计（10K+ Anggota aktif / 50K+ Momen direkam / 100+ Dokter hewan）完全缺失",
+        "组件类型不符: Google 登录原型为白底描边卡片含彩色 G 图标，App 为紫色实心圆角按钮 + 单色箭头图标",
+        "文案语言不符: App 用英文 'Sign in with Google'/'Vet sign-in'/'By signing in you agree to...'，原型全印尼语",
+        "文案不符: 兽医入口原型 'Kamu adalah dokter hewan? Login Dokter Hewan →'，App 仅 'Vet sign-in'",
+        "布局不符: 原型为顶部 hero + 内容分区从上铺排，App 为垂直居中极简布局"
+      ],
+      "deltas": [
+        "存在性: 原型顶部整块紫色渐变 hero（含返回箭头、右上角方形图标、半透明圆形爪印 logo、主副标题）在 App 中全部缺失，App 顶部为纯白空白",
+        "存在性: 原型的浅紫提示卡（info 图标 + 'Belum punya akun? Akun baru dibuat otomatis — cukup satu tap!'）App 无",
+        "存在性: 原型三栏数据统计区（10K+/50K+/100+ 含分隔线）App 完全没有",
+        "组件类型: Google 按钮 — 原型=白底+灰描边卡片+正版彩色 Google 'G' logo+黑字 'Lanjutkan dengan Google'；App=紫色实心填充胶囊按钮+白色 login 箭头图标+白字 'Sign in with Google'",
+        "颜色: 原型 Google 按钮为白底（紫体系用于 hero 与文字强调）；App 把主按钮做成大面积紫色填充，色彩分布与原型不一致",
+        "文案①标题: 原型主标题 'Selamat datang!'（印尼语）vs App 'TailTopia'（品牌名/英文）",
+        "文案②按钮: 原型 'Lanjutkan dengan Google' vs App 'Sign in with Google'（语言不符）",
+        "文案③兽医入口: 原型 'Kamu adalah dokter hewan? Login Dokter Hewan →' vs App 'Vet sign-in'（语言+内容大幅缩水）",
+        "文案④条款: 原型 'Dengan melanjutkan, kamu menyetujui Syarat & Ketentuan dan Kebijakan Privasi'（印尼语，两个紫色链接）vs App 'By signing in you agree to the Terms of Service and Privacy Policy'（英文）",
+        "布局/对齐: 原型内容自 hero 下方依次紧凑排布（Google按钮→提示卡→统计→兽医入口→条款）；App 为整屏垂直居中，仅标题+按钮+一行小字+条款，大量留白",
+        "尺寸/间距: App 缺少 hero 占据的上半屏，整体重心下移居中，与原型自上而下分区铺排的节奏完全不同"
+      ],
+      "summary": "App 登录页与原型差异极大：缺失紫色 hero 头部、印尼语标题/副标题、提示卡、三栏统计；Google 按钮组件类型相反（紫实心 vs 白描边彩 G），全屏文案为英文而非印尼语，仅达标约 22%。"
+    },
+    {
+      "screen": "onboard",
+      "foldCovered": true,
+      "verdict": "needs_work",
+      "checkPercent": 22,
+      "failHits": [
+        "缺原型区块：顶部紫→红渐变进度/分隔条缺失",
+        "缺原型区块：彩色派对喇叭(party popper)插画 + 紫色下划线，App 用单一紫色爪印图标替代",
+        "缺原型区块：宠物预览卡片(头像+'Nama hewan kamu'+'Kucing · Betina · 2 tahun'+三段统计 Momen/Konsultasi/Milestone)整块缺失",
+        "文案语言不符：全部英文(Create your pet's profile / Build your pet's growth archive / Create now / Skip for now)，原型为印尼语",
+        "文案不符：标题应为'Selamat bergabung, Aurel! 🐾'，副标为两行印尼语介绍文",
+        "文案不符：主按钮应为'Buat Profil Hewan Sekarang'，跳过链接应为'Nanti saja, masuk ke beranda dulu'",
+        "组件类型不符：原型为顶对齐(插画在上1/3处)，App 为垂直居中布局",
+        "组件类型不符：原型主按钮为方角矩形(略圆角)，App 为全圆角胶囊按钮"
+      ],
+      "deltas": [
+        "顶部状态栏下方：原型有紫→红水平渐变线，App 无",
+        "主插画：原型=彩色派对喇叭emoji插画+下方紫色短下划线；App=紫色爪印矢量图标，体系与造型均不同",
+        "标题：原型'Selamat bergabung, Aurel! 🐾'(含名字+爪印emoji，两行)；App'Create your pet's profile'(英文，单义)",
+        "副标题：原型为印尼语两行长描述'Bikin profil hewan peliharaanmu sekarang — jadi tonggak pertama perjalanan bersama mereka!'；App 仅一行英文'Build your pet's growth archive'",
+        "宠物预览卡片：原型有完整白卡(圆角头像🐱+'Nama hewan kamu'标题+'Kucing · Betina · 2 tahun'灰副标+底部三列统计 0 Momen / 0 Konsultasi / 0/30 Milestone，紫色数字)；App 完全没有此卡片",
+        "主按钮文案：原型'Buat Profil Hewan Sekarang'；App'Create now'",
+        "主按钮形状：原型轻圆角矩形(宽块)；App 全圆胶囊形",
+        "跳过链接：原型'Nanti saja, masuk ke beranda dulu'(灰)；App'Skip for now'(灰)",
+        "整体布局：原型内容顶对齐从约15%高度起排列；App 内容垂直居中",
+        "颜色：主按钮紫色两者接近，但 App 缺少卡片内紫色统计数字与紫色下划线等紫体系细节"
+      ],
+      "summary": "App 仅为通用英文占位欢迎页，缺失派对插画、印尼语文案与宠物预览统计卡片，与原型严重不符。"
+    },
+    {
+      "screen": "pet-edit",
+      "foldCovered": true,
+      "verdict": "needs_work",
+      "checkPercent": 22,
+      "failHits": [
+        "文案语言不符：App 全英文（Edit pet profile / Pet type / Name / Breed / Birthday / One-line intro / Save），原型为印尼语（Edit Profil Mochi / JENIS HEWAN / NAMA HEWAN / RAS / TANGGAL LAHIR / BIO / Simpan）",
+        "缺顶栏返回箭头与右上角紫色 Simpan 主按钮（原型 header 左箭头+中标题+右紫色 Simpan 胶囊）",
+        "Save 按钮组件类型/位置不符：原型为顶栏右上紫色胶囊，App 为底部整宽紫色长条按钮",
+        "缺头像下方紫色 Ganti Foto 文字链接，且原型头像有右下角编辑铅笔徽标，App 仅纯圆形照片无编辑入口",
+        "组件类型不符：宠物类型原型为带锁的只读输入框（🐱 Kucing + tidak bisa diubah 红字），App 为三段分段选择按钮 Cat/Dog/Other",
+        "缺原型字段 RAS 与 KELAMIN 的并排下拉胶囊；App Breed 为下划线内联文本且完全无 KELAMIN(性别)字段",
+        "组件类型不符：原型字段为卡片/带框输入框（圆角边框），App 为下划线内联输入行",
+        "缺底部 TabBar（原型有 Beranda/Catatan/+/Konsultasi/Profil 五项含中央紫色 FAB），App 无任何底部导航",
+        "缺底部红色危险区：原型有 🗑 Hapus Profil Mochi 红色边框按钮 + Tindakan ini tidak dapat dibatalkan 说明，App 完全没有删除入口",
+        "字段颜色体系错：原型 label 为深色大写、BIO 标签深色；App 把 One-line intro 标签错误标成红色",
+        "缺生日字段的只读灰底框样式与 tidak bisa diubah 红字标记，App 生日为普通可点行",
+        "Name 字段原型无字符计数显示且有紫色聚焦边框，App 显示 4/20 计数下划线样式"
+      ],
+      "deltas": [
+        "顶栏：原型=左返回箭头+居中标题 Edit Profil Mochi+右上紫色 Simpan 胶囊按钮；App=仅左对齐黑色标题 Edit pet profile，无返回、无右上按钮",
+        "头像：原型=紫粉渐变圆底+猫 emoji+右下编辑铅笔徽标+下方紫色 Ganti Foto 链接；App=真实猫照片圆形，无徽标无 Ganti Foto",
+        "宠物类型：原型=只读锁定输入框(🐱 Kucing + 右上 tidak bisa diubah 红字 + 框内锁图标)；App=分段按钮组 Cat(选中)/Dog/Other",
+        "名称字段：原型=NAMA HEWAN 大写深色标签 + 紫色聚焦边框圆角输入框(Mochi)，无计数；App=Name 标签 + 下划线输入(Oyen) + 4/20 计数",
+        "品种/性别：原型=RAS 与 KELAMIN 两列并排下拉胶囊(Domestic / Betina)；App=单个 Breed 下划线输入(Orange Tabby)+12/60，完全缺性别",
+        "生日：原型=TANGGAL LAHIR + tidak bisa diubah 红字 + 灰底只读框(15 Juni 2024)+日历图标；App=Birthday 普通行(2022-5-1)+日历图标，无只读样式无红字",
+        "简介：原型=BIO 深色标签 + 圆角边框框(印尼语文案)+ 42/200 右下灰字；App=One-line intro 红色标签 + 下划线输入(英文)+ 52/30 红色超限计数",
+        "删除区：原型有 🗑 Hapus Profil Mochi 红边框按钮 + 灰字说明；App 完全缺失",
+        "底部导航：原型有五项 TabBar+中央紫色 FAB；App 完全缺失",
+        "保存：原型在顶栏右上紫色 Simpan 胶囊；App 在内容底部整宽紫色 Save 长按钮",
+        "整体结构：原型字段卡片化、分两列布局、含锁定态/删除区/导航；App 扁平下划线表单、单列、缺多个区块"
+      ],
+      "summary": "App 与原型几乎全维度不符：全英文文案、缺顶栏 Simpan 按钮/返回、缺 Ganti Foto、宠物类型用错组件(分段按钮 vs 锁定框)、缺 KELAMIN 字段、缺删除危险区与底部 TabBar，整体为下划线扁平表单而非原型卡片化布局，判 needs_work。"
+    },
+    {
+      "screen": "paspor",
+      "foldCovered": false,
+      "verdict": "needs_work",
+      "checkPercent": 22,
+      "failHits": [
+        "头部缺失：原型有标题栏「Paspor Mochi」+ 编辑笔图标，App 顶部无页面标题，只有右上角两个图标（笔+滑块）",
+        "组件类型不符：原型用一张白色身份卡（头像+名字+品种+斜体标语 内联在卡内），App 散开为圆形头像+独立文字块，无卡片容器",
+        "头像不符：原型为紫底橙猫 emoji 圆头像，App 为白底蓝色爪印 logo",
+        "统计区组件不符：原型为卡内三栏分隔（12 Momen Bahagia / 2 Konsultasi / 5 Milestone），App 拆成大数字「1509 Days together」卡 + 下方一行「10 happy moments / 4 consultations」+「4/30 milestones done」",
+        "进度条标题不符：原型「Pencapaian Mochi 5/30」带奖杯，App 为「4/30 milestones done」+裸进度条，文案与结构都不同",
+        "分段切换缺失：原型有「Timeline / Kalender」两个大分段按钮（紫实心+白描边），App 只有一行小图标无文字标签",
+        "文案语言混用：原型全印尼语，App 出现大量英文（Orange Tabby/Days together/happy moments/consultations/milestones done/Happy Moment/First happy/Home/Consult/Me）",
+        "时间线条目结构不符：原型为左侧日期块+emoji+标题+副标题的行式列表（多条，含 Kuning 红色健康事件卡），App 为大整图卡片",
+        "缺红色健康事件体系：原型「Konsultasi AI — 12 Jun」带红色 Kuning 徽章的告警卡，App 无",
+        "底部导航文案不符：原型 Beranda/Catatan/Konsultasi/Profil（印尼语），App Home/(空)/Consult/Me（英文且标签缺失）",
+        "App 图未覆盖 fold 以下：时间线仅露出半条，底部内容被截断",
+        "公开卡入口位置/样式不符：原型无明显该入口（分享走 FAB），App 有「Pratinjau kartu publik」文字链"
+      ],
+      "deltas": [
+        "标题栏：原型左对齐粗体「Paspor Mochi」+右上编辑笔；App 无标题文字，右上为笔+滑块两图标",
+        "身份卡：原型白卡内 紫圆头像(橙猫emoji)+「Mochi」+「Kucing Oranye · 3 tahun」+斜体紫标语；App 无卡，蓝爪印白头像+「Oyen」+紫色「Orange Tabby · 4y 1m」+黑色双引号英文标语",
+        "统计：原型卡内三等分 12/2/5 配印尼标签；App 改为「1509 Days together」单卡 + 「10 happy moments」「4 consultations」并列 + 「4/30 milestones done」",
+        "进度区：原型「🏆 Pencapaian Mochi … 5/30」；App「🏆 4/30 milestones done」文案英文化、数值不同",
+        "视图切换：原型紫实心 Timeline + 白描边 Kalender 双按钮；App 退化为右侧两个无文字小图标",
+        "月份分组：原型有「Juni 2026」分组标题；App 为「Linimasa Tumbuh Kembang」标题（印尼语但语义/位置不同）",
+        "时间线项：原型多条行式（日期块+图标+双行文字）含红色 Kuning 告警；App 为单张大照片卡 + 黄色「Happy Moment」标签",
+        "颜色体系：紫色主色两图都在，但 App 头像主图标用蓝色爪印，偏离原型紫体系；红色健康事件体系在 App 缺失",
+        "分享 FAB：两图都有右下紫色分享 FAB，位置一致（少数一致点）",
+        "底部 tab：原型 5 icon 含中央 + 与印尼标签；App 中央 + 在，左右标签英文且部分缺名",
+        "语言：原型 100% 印尼语；App 大面积英文 + 个别印尼语，明显未本地化对齐",
+        "截图覆盖：App 仅到时间线首条上沿，fold 以下未截全"
+      ],
+      "summary": "App 几乎全维度偏离原型：身份卡/统计三栏/分段按钮/行式时间线/红色健康事件体系全部缺失或改型，且大面积英文未本地化，截图也未覆盖 fold 以下，判 needs_work。"
+    },
+    {
+      "screen": "feed-guest",
+      "foldCovered": false,
+      "verdict": "needs_work",
+      "checkPercent": 25,
+      "failHits": [
+        "缺原型区块：右上角『Masuk』登录按钮缺失（App header 只有 logo）",
+        "缺原型区块：底部紫色访客转化 banner『Bergabunglah dengan komunitas!』+ Daftar Gratis/Masuk 按钮整块缺失",
+        "文案语言不符：筛选 chip 原型为印尼语 Semua/Kucing/Anjing/Lainnya，App 为英文 All/Daily/Moments/Tips",
+        "文案语言不符：底部导航原型 Beranda/Catatan/Konsultasi/Profil，App 为英文 Smooth/Consult 等",
+        "组件类型不符：卡片右侧原型为分类标签（Cerita Harian/Momen Bahagia/Tips Kesehatan），App 为内联点赞/分享计数（124/Share）",
+        "组件类型不符：媒体区原型为浅色 pastel 色块+emoji，App 为真实整图照片",
+        "存在性：原型 4+ 张内容卡片+banner，App 仅 1 张卡片，内容缺失",
+        "App 图只截首屏未覆盖 fold 以下，无法确认下方区块"
+      ],
+      "deltas": [
+        "Header：原型 logo『TailTopia🐾』+右上紫描边胶囊按钮『Masuk』；App 仅有 logo，无登录按钮",
+        "筛选 chip：原型印尼语 Semua(选中紫)/Kucing/Anjing/Lainnya 带 emoji；App 英文 All(选中)/Daily/Moments/Tips",
+        "Feed 卡片头部：原型彩色字母圆形头像+姓名+『N 时间前』+右侧分类彩签；App 绿色 P 头像+Putri+1h ago，右侧为红心点赞 124+Share，无分类签",
+        "媒体区：原型为浅紫/浅橙/浅绿 pastel 色块居中 emoji（占位风格）；App 为铺满的真实猫照片",
+        "卡片数量：原型可见 4 张（Putri/Aurel/dr.Dewi/Rani）；App 仅 1 张 Putri",
+        "访客转化 banner：原型底部三段紫渐变卡片『Bergabunglah dengan komunitas!』+副文案+白底『Daftar Gratis』按钮+紫『Masuk』按钮+『Lanjut lihat dulu→』；App 完全缺失",
+        "底部导航：原型 5 项 Beranda/Catatan/(+)/Konsultasi/Profil 印尼语；App 英文 Smooth/Consult 等且项目不全",
+        "整体色彩体系：原型一致紫色主题（chip 选中、banner、FAB、按钮）；App FAB 为紫但 header/chip/banner 紫体系大量缺失",
+        "截图覆盖：App 仅首屏 1 卡，未滚动到 fold 以下，无法验证下方卡片与 banner"
+      ],
+      "summary": "App 实现与原型差异巨大：缺登录按钮和紫色访客转化 banner、文案全为英文（应印尼语）、分类彩签变内联点赞、pastel 占位媒体变真实整图、仅 1 张卡片且未覆盖 fold 以下，需大幅返工。"
+    },
+    {
+      "screen": "milestone",
+      "foldCovered": false,
+      "verdict": "needs_work",
+      "checkPercent": 25,
+      "failHits": [
+        "文案语言不符：全屏为英文（Milestones / Major milestones / First birthday / 100 days together / milestones done），原型为印尼语（LEGENDA/MAJOR/SMALL、Ulang tahun、Vaksin Pertama、Profil Lengkap）",
+        "缺原型区块：顶部缺 back 箭头 + 居中标题卡 'Milestone Mochi'，App 只有裸标题 'Milestones'",
+        "缺原型区块：底部 TabBar（Beranda/Catatan/+FAB/Konsultasi/Profil）完全未出现",
+        "组件类型不符：徽章网格原型为 5 列彩色填充图标（含已解锁亮色 + 锁定灰），App 为 4 列且全部灰色挂锁占位",
+        "颜色用错体系：原型分级标题用橙/紫/绿三色 + 计数紫色强调，App 全为灰黑文字无配色体系",
+        "缺原型元素：'Obat Cacing' 的紫色 'Top!' 标签 + 虚线高亮环未实现",
+        "文案/数据不符：宠物名 'Oyen' vs 原型 'Mochi'；进度 4/30 且分级计数 0/5·0/10·4/15 vs 原型 5/30 且 1/5·2/10·2/15",
+        "App 图只截到 S 级开头，fold 以下（S 级网格 + 底部 TabBar）未覆盖，foldCovered=false"
+      ],
+      "deltas": [
+        "顶部栏：原型=圆角返回按钮+居中标题'Milestone Mochi'位于浅灰圆角条；App=左对齐裸标题'Milestones'，无返回、无标题卡",
+        "宠物卡：原型=橙圈猫头像+'Mochi'/'Kucing · 1 tahun'+右侧紫色'5 / 30 milestone'+紫色进度条；App=圆形照片头像+'Oyen'+'4 / 30 milestones done'(英文)+灰紫细进度条",
+        "分级标题 L：原型='L 级 — LEGENDA'橙色+右'1 / 5'；App='L · Major milestones'灰色+右'0/5'",
+        "分级标题 M：原型='M 级 — MAJOR'紫色+右'2 / 10'；App='M · Meaningful milestones'+右'0/10'",
+        "分级标题 S：原型='S 级 — SMALL'绿色+右'2 / 15'；App='S · Everyday milestones'+右'4/15'(数据不符)",
+        "徽章网格列数：原型每行5个；App每行4个",
+        "徽章视觉：原型已解锁徽章彩色填充(蛋糕橙圈/疫苗紫圈/绿圈相机等)、锁定灰；App全部统一灰圆+灰挂锁，无任何已解锁彩色态",
+        "标签文案：原型印尼语'Ulang tahun/100 Hari/365 Hari/Semua Sehat/30 Catatan/Pertama Naik Mobil/Vaksin Pertama/Obat Cacing/Pertama ke Dokter/Profil Lengkap/Foto Pertama/Mandi Pertama/Tidur Bareng/+11 lainnya'；App英文'First birthday/100 days together/...First vaccination/First deworming/...Spay-neuter done/10 growth entries'",
+        "高亮态：原型'Obat Cacing'有紫色'Top!'胶囊标签+虚线环；App无任何高亮/标签/虚线环",
+        "底部导航：原型有5项TabBar+中央紫色圆形FAB；App截图内完全缺失",
+        "截图覆盖：App仅到S级标题与首行顶部，fold以下内容缺失，无法核对S级完整网格与TabBar"
+      ],
+      "summary": "App 里程碑页与原型差距巨大：全英文文案、缺返回标题栏与底部 TabBar、徽章 4 列全灰挂锁（原型 5 列彩色分级 + Top! 高亮）、宠物名与计数数据均不符，判 needs_work。"
+    },
+    {
+      "screen": "notif-empty",
+      "foldCovered": true,
+      "verdict": "needs_work",
+      "checkPercent": 25,
+      "failHits": [
+        "文案语言不符：标题/正文为英文（Notifications / No notifications yet），原型为印尼语（Notifikasi / Belum ada notifikasi）",
+        "缺原型正文说明区块：原型空态有副文案『Kamu akan menerima notifikasi tentang likes, komentar, dan pembaruan konsultasi.』，App 完全缺失",
+        "组件类型不符：原型 bell 为金色 3D emoji 置于紫色圆角卡片徽章内，App 为细线描边灰紫色 outline 图标无卡片背景",
+        "布局不符：原型空态内容靠上（顶部 AppBar 下方居中偏上），App 空态内容垂直居中于屏幕中部",
+        "缺顶部返回按钮：原型 AppBar 左侧有圆角灰底返回箭头，App 无返回按钮且标题左对齐无图标"
+      ],
+      "deltas": [
+        "状态栏：原型 9:41 居中灵动岛 iOS 风；App 12:39 Android LTE 风（环境差异，不计分）",
+        "标题文案：原型『Notifikasi』印尼语；App『Notifications』英文 — 语言错误",
+        "AppBar 返回键：原型左侧圆角灰底←按钮；App 无返回按钮",
+        "顶部徽章：原型标题右侧有紫色圆角卡片包裹的金色 3D bell emoji；App 无此徽章",
+        "空态位置：原型内容紧贴 AppBar 下方靠上排布；App 内容垂直居中于屏幕",
+        "空态图标：原型金色 3D 立体 bell emoji；App 灰紫色细线 outline bell 图标 — 组件类型与配色均不符",
+        "空态标题：原型『Belum ada notifikasi』粗黑体居中；App『No notifications yet』英文",
+        "空态副文案：原型三行说明『Kamu akan menerima notifikasi tentang likes, komentar, dan pembaruan konsultasi.』；App 完全缺失该副文案",
+        "配色：原型用紫体系卡片 + 金色 emoji；App 仅灰紫描边图标，未体现紫色卡片徽章体系"
+      ],
+      "summary": "App 通知空态与原型差异显著：文案为英文（应印尼语）、缺副说明文案、bell 改为灰线 outline 图标且无紫色卡片徽章、缺返回按钮、空态居中而非靠上，判 needs_work。"
+    },
+    {
+      "screen": "profil",
+      "foldCovered": true,
+      "verdict": "needs_work",
+      "checkPercent": 28,
+      "failHits": [
+        "文案语言不符：App 全英文（Me / I have a pet / Change status / Edit pet profile / My posts / Home / Growth / Consult / View），原型为印尼语（POSTINGANKU / Lihat / Beranda / Catatan / Konsultasi / Profil）",
+        "多出原型没有的区块：App 顶部有 'Me' 标题 app bar、'I have a pet + Change status' 行、'Edit pet profile' 行；原型均无",
+        "缺原型区块：原型右上角两个方形图标按钮（耳机/headphone + 齿轮）App 只有 help + gear，缺耳机/客服入口",
+        "组件类型不符：原型帖子卡是浅色 tint 背景 + 大号 emoji 插画 + 左上角分类 badge（Momen/Tips/Cerita），App 用真实照片缩略图",
+        "文案内容不符：用户名/邮箱/宠物全不同（Hexsfile vs Aurel；hexhexin1226@gmail.com vs aurel@tailtopia.id；Mochi 3tahun 12momen vs Oyen 4y1m 10moments）——属占位数据但语言/格式也偏离印尼语原型",
+        "底部导航语言不符：Home/Growth/Consult vs Beranda/Catatan/Konsultasi；且原型 Profil 用 person 线框图标，App 用紫色头像",
+        "组件类型不符：原型 Edit 是紫色描边胶囊按钮，App 是带铅笔图标的内联紫色文字链接"
+      ],
+      "deltas": [
+        "① 存在性：App 多出顶部 'Me' app bar 标题（原型无标题栏）；多出 'I have a pet/Change status' 状态行与 'Edit pet profile' 行（原型无）；原型右上耳机按钮在 App 变成 help 圆圈图标",
+        "② 布局/对齐：整体结构相近（头像行→宠物行→帖子网格→底栏），但 App 在宠物卡与帖子网格之间插入了两行额外控件，破坏原型 '宠物卡直接接 POSTINGANKU' 的节奏",
+        "③ 组件类型：帖子网格——原型=浅紫/浅橙/浅绿 tint 卡 + 居中大 emoji + 左上分类标签；App=真实照片 + 小标签，组件形态完全不同。Edit 原型=描边胶囊，App=铅笔+文字内联",
+        "④ 颜色：紫色主题大体保留（头像、+ FAB、强调色都紫），方向一致；但帖子卡丢失原型的多色 tint 体系（紫/橙/绿/紫）",
+        "⑤ 文案：全屏英文 vs 原型印尼语，逐字不符（Me/My posts/View/I have a pet/Home/Growth/Consult 等），最严重维度",
+        "⑥ 尺寸/间距：原型头像/卡片更大留白更舒展，帖子卡为大方块；App 信息密度更高、卡片更小，且 app bar 占用顶部空间——间距体系偏离"
+      ],
+      "summary": "主结构（头像/宠物/帖子网格/底栏）方向对齐，但文案全英文（原型印尼语）、帖子卡用真实照片替代原型的彩色 tint+emoji 插画卡、且多出 'Me' 标题栏与宠物状态/编辑两行原型没有的控件，需大幅返工。"
+    },
+    {
+      "screen": "vet-dashboard",
+      "foldCovered": true,
+      "verdict": "needs_work",
+      "checkPercent": 28,
+      "failHits": [
+        "文案语言不符：原型印尼语，App 大量英文（Good afternoon / Queue / Done / Rating / CURRENT QUEUE / IMMEDIATE ATTENTION / AI SUMMARY / Urgent / Needs consult / Skip / View detail / just now / Inbox/Active/History/Me）",
+        "文案内容不符：问候语 'Selamat pagi' vs 'Good afternoon'；医生名 'drh. Dewi Santoso' vs 'Drh. Demo'；状态 'Online' vs 'Online · accepting requests'",
+        "组件类型不符：原型 Online 为绿点药丸标签 + 圆形头像 'D'，App 为绿色文字 + 拨动开关 toggle，无头像",
+        "颜色用错体系：原型紧急/置顶项为黄色/橙色琥珀体系（'Perlu Konsul' 黄牌 + 米黄卡片 + 顶部黄条），App 首项用红色体系（红色 IMMEDIATE ATTENTION 条 + 红边框 + 红色 Urgent + 粉红卡 + 红色 View detail 按钮）——违反紫色/薄荷主题，红色态强调错误",
+        "统计卡数值/内容不符：原型 3 Antrian / 8 Selesai / 4.9 Rating，App 4 Queue / 4 Done / — Rating；原型数字带紫/青/橙多彩配色，App 全青色",
+        "缺原型区块：原型患宠行有 emoji 头像（猫/狗圆形彩底），App Benji 用狗头像但整体头像样式与原型不一致；App 多出 '3 photos attached / 2 photos attached' 附件行，原型无",
+        "底部导航文案与项不符：原型 Antrian/Aktif/Riwayat/Profil，App Inbox/Active/History/Me；原型激活项为紫色，App 激活项为青色药丸",
+        "顶部状态栏：原型 9:41 + iOS 样式，App 12:40 + Android 样式（次要）"
+      ],
+      "deltas": [
+        "顶部 header：原型问候 'Selamat pagi,' + 粗体 'drh. Dewi Santoso'；App 'Good afternoon' + 'Drh. Demo'。原型右侧为绿点'Online'药丸+圆头像D，App为'Online · accepting requests'文字+toggle开关。",
+        "统计三卡：原型 Antrian=3(紫)/Selesai=8(青)/Rating=4.9(橙)，卡片有淡彩底色；App Queue=4/Done=4/Rating=—，全为青色数字、灰白卡，文案全英文，数值不同。",
+        "区块标题：原型 'ANTRIAN SEKARANG (3)'，App 'CURRENT QUEUE (4)'——语言+计数不符。App 右侧多了刷新图标（原型无）。",
+        "首张患宠卡（置顶/紧急）：原型用黄色琥珀体系——顶部黄色条、'Perlu Konsul' 黄色徽章、'RINGKASAN AI' 米黄卡；App 用红色体系——红色 'IMMEDIATE ATTENTION' 横条、红色边框、红色 'Urgent' 标签、粉红 AI 卡、红色 'View detail' 按钮。颜色体系完全错位。",
+        "患宠信息：原型 'Mochi · @aditya / Kucing · Betina · 1 thn'；App 'Benji / Dog · Male · 5 yr · @bagas'——内容与语言均不同。",
+        "AI 摘要文案：原型印尼语 'Muntah busa putih 2x sejak dini hari...'；App 英文 'Makan cokelat lalu muntah...'——语言不符。",
+        "第二张卡：原型 'Oyen · @rani / Kucing · Jantan · 3 thn' + 绿色 'Normal' 徽章 + 青色 'Lihat Detail →' 按钮；App 'Oyen / Cat · Male · 2 yr' + 黄色 'Needs consult' + 青色 'View detail'——徽章颜色/文案/年龄不符。",
+        "按钮文案：原型 'Lewati' / 'Lihat Detail →'；App 'Skip' / 'View detail'——语言不符。",
+        "附件行：App 卡内多出 '3 photos attached' / '2 photos attached' 灰色行，原型无此元素。",
+        "时间戳：原型 '2 mnt lalu' / '5 mnt lalu'；App 'just now' / 'just now'——语言+内容不符。",
+        "底部导航：原型 Antrian(紫激活)/Aktif/Riwayat/Profil，紫色高亮；App Inbox(青激活)/Active/History/Me，青色药丸高亮——标签全英文、激活色由紫变青。"
+      ],
+      "summary": "App 实现整体英文文案、红色紧急体系替换原型黄/琥珀体系、底部导航与激活色由紫变青，且统计数值与多处内容均不符，与印尼语紫色原型差距大，判 needs_work。"
+    },
+    {
+      "screen": "vet-history",
+      "foldCovered": true,
+      "verdict": "needs_work",
+      "checkPercent": 28,
+      "failHits": [
+        "文案语言不符：原型全印尼语（Riwayat Konsultasi / Total: 8 hari ini / 4-5 bintang / Perlu Konsul / Lihat），App 标题与多处为英文（Consultation history / Total: 4 today / 4-5 stars / Needs consult / Emergency / View / Inbox / Active / History / Me）",
+        "顶部分段 tab 结构不符：原型有顶部白底 tab 行 Antrian / Aktif / Riwayat(高亮) / Profil 配下划线，App 完全缺失这一整条顶部 tab 区块",
+        "多出原型没有的区块：App 底部有 Inbox/Active/History/Me 四宫格底部导航栏，原型该页无底部导航栏",
+        "数据内容不符：原型卡片为 Mochi @aditya / Oyen @rani / Benji @bagas 共 3 条，App 为 Cookie @hana / Luna @rio / Benji @bagas / Tofu 共 4 条（且 Total 数字 8 vs 4）",
+        "状态徽章/文案不符：原型用 Perlu Konsul(黄) / Normal(绿) / Darurat(红) + Selesai，App 用 Normal / Needs consult / Urgent + Completed，且新增了原型没有的 Interrupted(已中断) 状态卡片",
+        "时间元数据不符：原型每条显示相对时间(18 mnt / 9 mnt / 35 mnt)与具体时刻(14:32/13:10/11:45)，App 显示绝对日期(2026-06-17 等)且无时刻",
+        "链接文案不符：原型 Lihat →，App View →（语言不符）"
+      ],
+      "deltas": [
+        "标题栏：原型 紫黑底 'Riwayat Konsultasi' + 右侧 'Total: 8 hari ini'；App 同色底但文案英文 'Consultation history' + 'Total: 4 today'。颜色体系一致，文案语言不符",
+        "顶部 tab 行：原型存在 Antrian/Aktif/Riwayat/Profil 四 tab，Riwayat 薄荷色高亮带下划线；App 此区块整块缺失",
+        "筛选 chips：原型 Semua(选中薄荷绿实心)/4-5 bintang/Perlu Konsul/(红色省略)；App All(选中薄荷绿)/4-5 stars/Needs consult/Emergency。结构一致但文案语言不符（Semua→All 等）",
+        "卡片组件类型：双方都是白底圆角卡片 + 头像 + 名称 + 副标题 + 引用块 + 状态徽章 + 评分 + Lihat/View 链接，组件类型基本一致",
+        "卡片数量与数据：原型 3 张卡（Mochi/Oyen/Benji）；App 4 张卡（Cookie/Luna/Benji/Tofu），多 1 张且宠物名/主人 handle 完全不同",
+        "状态徽章：原型 Perlu Konsul(黄点) / Normal(绿点) / Darurat(红点) 各配 Selesai；App Normal(绿) / Needs consult(黄) / Urgent(红) 配 Completed，并多出 Interrupted 灰徽",
+        "评分/时间：原型评分 5.0/4.8/5.0 + 相对时间(mnt)与时刻；App 评分 5.0/4.0/5.0 + 绝对日期，无时刻、无相对时间",
+        "底部导航：原型该屏无底部导航栏；App 多出 Inbox/Active/History(高亮)/Me 底部 tab bar",
+        "引用块/副标题文案：均为印尼语内容但具体句子不同（原型 Gastroenteritis ringan 等；App Diare ringan 等），属占位数据差异叠加语言混用"
+      ],
+      "summary": "主结构卡片与配色体系大体接近，但 App 大量界面文案仍是英文（标题/筛选/状态/链接/底部导航），原型顶部四 tab 行整块缺失，且 App 多出原型没有的底部导航栏与 Interrupted 卡片、数据条数与时间格式均不符——多处 failHits，判 needs_work。"
+    },
+    {
+      "screen": "create",
+      "foldCovered": true,
+      "verdict": "needs_work",
+      "checkPercent": 30,
+      "failHits": [
+        "语言体系错误：App 全英文（New post / Post / Daily / Growth / Knowledge / What happened today? / characters left / Camera / Your post will be visible to all users），原型为印尼语（Postingan Baru / Bagikan / Cerita Harian / Momen Bahagia / Tips & Info / Ceritakan momen spesial / Tambah）",
+        "分段标签选中态不符：原型选中『Momen Bahagia』(紫底白字，第三个)，App 选中『Daily』(第一个)，且标签集合与顺序均不同",
+        "缺原型区块：『Tanggal kejadian』日期行（紫色浅底胶囊，带日历图标+紫色日期值+右箭头）整块缺失",
+        "缺原型区块：『Untuk: Mochi (wajib diisi)』收件对象浅紫横条缺失，App 改成了头像+名字『Aurel』的内联行",
+        "多出原型没有的区块：App 多了一个独立的『Camera』白色按钮，原型无此按钮",
+        "缺原型区块：底部 5 项 TabBar（Beranda/Catatan/+/Konsultasi/Profil）缺失，原型有 App 无",
+        "组件类型/布局不符：图片区原型为 1 行 3 格（含 2 张已选预览缩略图），App 为单个大『Tambah』方块占满左侧且无预览",
+        "顶部容器形态不符：App 为底部半屏 sheet（顶部圆角+灰色遮罩+拖动条），原型为整页全屏（含状态栏 9:41 完整页面）"
+      ],
+      "deltas": [
+        "状态栏/容器：原型整页全屏（9:41，深色 X 圆钮 + 标题居中 + 灰色禁用态 Bagikan 胶囊）；App 为底部半屏弹层 sheet，上方有灰色遮罩与拖动手柄",
+        "标题文案：原型『Postingan Baru』vs App『New post』（语言不符）",
+        "右上按钮：原型『Bagikan』灰禁用胶囊 vs App『Post』灰禁用胶囊（文案语言不符）",
+        "分段标签：原型三段=Cerita Harian / Tips & Info / Momen Bahagia⭐，选中第三个『Momen Bahagia』紫底白字；App=Daily(选中,紫底) / Growth⭐ / Knowledge，选中第一个，标签语言与选中项均不符",
+        "收件对象：原型有浅紫横条『Untuk: 🐱 Mochi (wajib diisi)』红字提示；App 改为头像 + 『Aurel』黑体名字的内联行，区块形态与内容均不符",
+        "图片选择区：原型标题『Foto / Gambar (maks. 9)』+ 一行 3 格（含『+ Tambah』虚线框 + 2 张已选缩略图猫/太阳）；App 标题『Photos (max. 9)』为英文 + 仅单个大『+ Tambah』虚线方块、无预览缩略图",
+        "正文输入：原型为带边框大卡片，占位『Ceritakan momen spesial Mochi…』，右下角字数『0 / 1000』；App 占位『What happened today?』无边框卡片，字数『1000 characters left』位置与措辞均不同",
+        "日期行：原型有『📅 Tanggal kejadian: 15 Jun 2026 ›』紫色浅底胶囊整行；App 完全缺失",
+        "额外按钮：App 多出独立白色『📷 Camera』按钮，原型无",
+        "底部说明文案：原型『Setelah dibagikan, konten akan terlihat oleh semua pengguna』居中两行；App『Your post will be visible to all users.』英文且左对齐",
+        "底部导航：原型有 5 项 TabBar（Beranda/Catatan/中央紫+/Konsultasi(带红点)/Profil）；App 无底栏"
+      ],
+      "summary": "App 与原型差异巨大：整体语言为英文（原型印尼语）、标签集合与选中项不符、缺日期行/收件对象浅紫条/底部 TabBar、图片区退化为单格无预览、且多出 Camera 按钮并改成半屏 sheet 形态，判 needs_work。"
+    },
+    {
+      "screen": "feed",
+      "foldCovered": false,
+      "verdict": "needs_work",
+      "checkPercent": 35,
+      "failHits": [
+        "文案语言不符：filter chips 用英文 All/Daily/Moments/Tips，原型为印尼语 Semua/Kucing/Anjing/Lainnya",
+        "文案语言不符：卡片正文与时间戳用英文（'...golden fur is unreal'、'1 h ago'），原型全印尼语（'Oyen akhirnya mau makan...'、'2 jam lalu'）",
+        "多出原型没有的区块：卡片内联 like 计数（heart 12.6）+ Share 链接行，原型卡片无内联点赞/分享行",
+        "缺原型区块：卡片右上角分类 tag（Cerita Harian / Momen Bahagia / Tips Kesehatan）在 App 中缺失",
+        "组件类型不符：媒体区原型为浅紫/米/绿 pastel 色块+居中 emoji，App 用真实整图照片（full-bleed photo）",
+        "App 图只截首屏，fold 以下多卡片未覆盖（仅 1 张卡片可见，原型有 4 张）"
+      ],
+      "deltas": [
+        "Header：两者都有 TailTopia+爪印；原型右上为铃铛 icon，App 也有铃铛（带红点 badge，原型无 badge）——基本一致但 App 多红点",
+        "Filter chips：原型 Semua/Kucing/Anjing/Lainnya（宠物种类，带 emoji），App 为 All/Daily/Moments/Tips（内容类型，英文）——语言+语义双错",
+        "首卡作者：原型 'Putri Rahayu'，App 截断为 'Putri'；时间原型 '2 jam lalu'，App '1 h ago'",
+        "卡片正文：原型印尼语 'Oyen akhirnya mau makan lagi setelah semalam muntah'，App 英文 'Oyen chasing the sunset on the rooftop again'——语言不符",
+        "分类 tag：原型每卡右上有紫/绿/橙圆角 tag，App 卡片无 tag",
+        "媒体区：原型 pastel 纯色块（浅紫/米/浅绿）+ 居中大 emoji（猫/狗头），App 为真实猫照片 full-bleed",
+        "内联交互行：App 卡片右下有 ♥12.6 + Share，原型卡片无任何内联点赞/分享/计数",
+        "可见卡片数：原型 4 张（Putri/Aurel/dr.Dewi/Rani），App 仅 1 张可见，无法判断后续卡片",
+        "底部导航：原型 Beranda/Catatan/+/Konsultasi/Profil（印尼语+紫色 active），App 底栏被遮挡且标签疑似英文/不清，未覆盖完整",
+        "颜色体系：紫色主调两者大体一致（active chip、FAB、bottom nav 紫），未发现明显配色体系错误"
+      ],
+      "summary": "App feed 主结构（紫主题、爪印 header、紫 FAB）方向对，但文案整屏用英文（filter/正文/时间戳）而非原型印尼语，卡片缺分类 tag、媒体改成真实照片而非 pastel emoji 块、且多出内联点赞/Share 行；App 图仅截到 1 张卡片未覆盖 fold 以下，多项 failHits，判 needs_work。"
+    },
+    {
+      "screen": "feed-empty",
+      "foldCovered": true,
+      "verdict": "needs_work",
+      "checkPercent": 35,
+      "failHits": [
+        "多出原型没有的区块：App 顶部多了 All/Daily/Moments/Tips 分段筛选 chip 行，原型无任何筛选行",
+        "多出原型没有的区块：App 右上角有铃铛通知图标（带红色 3 角标），原型 header 右侧为空",
+        "缺原型区块：原型空态文案为两段三行的灰色副标题段落，App 只有单行短句",
+        "文案语言不符：原型全印尼语（Feed masih kosong! / Mulai bagikan... / Bagikan Momen Pertama / Temukan Teman），App 全英文（Show off your furry friend! / Be the first to share a pet moment / Post your first story）",
+        "缺原型区块：原型主 CTA 按钮下方有紫色文字链接 'Temukan Teman →'，App 完全没有该次级链接",
+        "组件类型不符：原型 CTA 按钮为全宽大圆角紫色按钮带 sparkle 图标，App 为窄居中胶囊按钮无图标",
+        "底部导航文案/标签不符：原型 Beranda/Catatan/Konsultasi/Profil，App 为 Home(无字)/Growth/Consult/Me，标签名与语言均不符",
+        "底部导航 icon 不符：原型 Catatan=书本、Konsultasi=听诊器（带红点）、Profil=人像且均有文字标签；App 第一项无文字、Growth=爪印、Consult=公文包、图标体系不一致"
+      ],
+      "deltas": [
+        "Header 标题：原型 'TailTopia' 纯文字粗体；App 'TailTopia' 后附蓝色爪印 emoji — 文案/装饰不符",
+        "Header 右侧：原型空白；App 有铃铛+红色'3'角标 — 多出区块",
+        "筛选行：原型无；App 有 All/Daily/Moments/Tips 四个 chip（All 紫色选中态）— 多出整行区块",
+        "空态插画：原型为大号灰色实心爪印居中；App 为较小灰色爪印 — 尺寸偏小、位置因 chip 行下移",
+        "空态主标题：原型 'Feed masih kosong!' 黑色粗体居中；App 'Show off your furry friend! 🐾' 带 emoji 且英文 — 文案+语言不符",
+        "空态副文案：原型三行印尼语段落 'Mulai bagikan momen pertama hewanmu, atau temukan teman-teman baru di komunitas.'；App 单行英文 'Be the first to share a pet moment' — 内容/行数/语言不符",
+        "主 CTA：原型全宽紫色大圆角按钮 '✨ Bagikan Momen Pertama'；App 窄居中胶囊 'Post your first story' 无 sparkle 图标、宽度小、文案英文 — 组件尺寸+文案不符",
+        "次级链接：原型 CTA 下有紫色 'Temukan Teman →'；App 缺失 — 缺区块",
+        "底部导航：原型 5 项视觉(Beranda/Catatan/中心FAB/Konsultasi/Profil)均带文字标签，FAB 为紫色实心带白边外凸；App 4 项+FAB，第一项 Home 无文字、标签为英文 Growth/Consult/Me、Konsultasi 红点缺失 — 标签语言+icon+红点不符",
+        "状态栏：原型 iOS 9:41 + 信号/电池；App Android 12:21 + LTE — 平台外壳不同（次要）"
+      ],
+      "summary": "App 空态整体与原型偏差大：文案全为英文（原型印尼语）、多出筛选 chip 行与通知铃铛、缺次级 'Temukan Teman' 链接、CTA 按钮尺寸与图标不符、底部导航标签语言与图标体系均不一致，判 needs_work。"
+    },
+    {
+      "screen": "chat",
+      "foldCovered": true,
+      "verdict": "needs_work",
+      "checkPercent": 38,
+      "failHits": [
+        "顶栏结构不符：原型为医生头像(D)+姓名 drh. Dewi Santoso+在线状态行+红框 Akhiri 按钮+返回箭头；App 仅有一个左对齐大标题 Consultation，缺头像/医生名/在线状态/Akhiri 结束按钮/返回箭头",
+        "缺原型紫色 context 摘要条（Mochi — muntah busa putih 2x · 2 foto + Lihat），App 替换成米黄色免责声明条 This advice is for reference; the final decision is yours（多出原型没有的区块）",
+        "组件类型不符：原型对方(医生)气泡为白底深色字卡片，App 对方气泡是紫底白字，整页几乎全是紫色气泡，未区分双方",
+        "颜色体系不符：原型对方气泡=白底/我方=紫底形成对比；App 双方气泡均为紫色，丢失对比层级",
+        "文案逐字不符：宠物名 Mochi(原型) vs Oyen(App)；医生名 Dewi Santoso(原型) vs Sari(App)；正文对话内容完全不同（muntah busa putih 上下文一致但具体句子全不同）",
+        "缺原型底部输入区右侧紫色圆形发送按钮样式一致但左侧附件按钮不同：原型为紫色方形 + 图标，App 为相机图标",
+        "缺原型系统提示气泡样式：原型为灰色胶囊 drh. Dewi bergabung · 14:32，App 为虚线描边浅色块",
+        "缺原型对方正在输入指示器（D 头像 + 三点 ... 气泡），App 无",
+        "缺消息时间戳与已读双勾（原型每条气泡含 14:32/14:35 ✓✓），App 气泡无时间戳"
+      ],
+      "deltas": [
+        "顶栏：原型=返回箭头+圆形头像D+医生名+绿点 Online · Klinik Hewan Sehat+红框 Akhiri；App=仅左对齐标题文字 Consultation，无任何医生信息或操作按钮",
+        "context 条：原型=紫色背景 ⚠ Mochi — muntah busa putih 2x · 2 foto · Lihat↓；App=米黄背景 ℹ This advice is for reference; the final decision is yours（区块类型与文案均不同）",
+        "系统起始提示：原型=灰胶囊 drh. Dewi bergabung · 14:32；App=虚线框 Konsultasi dengan drh. Sari dimulai. Sampaikan keluhan anabul-mu ya",
+        "对方气泡：原型=白底深字卡片；App=紫底白字",
+        "我方气泡：原型与 App 均为紫底白字（一致），但 App 紫色饱和度/排版与原型有差异",
+        "气泡密度：原型仅 3 条+输入指示器，App 显示 5 条消息，对话脚本完全不同",
+        "图片消息：原型无独立图片气泡，App 有一个虚线斜纹占位 Oyen tadi malam（多出/不同处理）",
+        "时间戳：原型每条带 14:32/14:35 与 ✓✓；App 无任何时间戳",
+        "正在输入：原型底部有 D+三点气泡；App 无",
+        "输入栏：原型左=紫色方形+图标、右=紫圆发送；App 左=相机图标、右=紫圆发送",
+        "状态栏：原型 9:41，App 12:26（次要）"
+      ],
+      "summary": "App 聊天屏与原型差异大：顶栏丢失医生头像/姓名/在线状态/Akhiri 按钮仅剩纯标题，紫色上下文摘要条被换成米黄免责条，对方气泡误用紫底（原型应白底）丧失双方对比，时间戳/正在输入指示器缺失，且对话脚本与宠物/医生姓名逐字不符，判 needs_work。"
+    },
+    {
+      "screen": "vet-chat",
+      "foldCovered": true,
+      "verdict": "needs_work",
+      "checkPercent": 40,
+      "failHits": [
+        "文案语言不符：原型为印尼语（Mochi (Aditya) / Perlu Konsul · 1 thn · Kucing Betina / Akhiri Sesi / Template Saran / Daftar Obat / Riwayat / Ketik pesan...），App 多处用英文（Cat · Male · 2 yr / End session / Advice template / Drug list / History / Write a message...）",
+        "文案内容不符：宠物名与主人原型为 Mochi (Aditya)，App 为 Oyen (rani)；问诊状态 badge 原型 Perlu Konsul，App 缺失",
+        "组件类型不符：原型『TEMPLATE SARAN — Gastroenteritis Ringan』为底部紫色边框建议卡 + 紫色『Kirim Template ini →』实心按钮，App 顶部为白底『Assist reference』卡 + 青色『Use』胶囊按钮，结构与位置完全不同",
+        "缺原型区块：原型顶部有居中灰色分隔 chip『Kamu bergabung · 14:32』，App 对应文案为『Konsultasi dengan drh. Sari dimulai. Sampaikan keluhan anabul-mu ya』且样式不同",
+        "多出原型没有的区块：App 中部出现斜纹占位气泡『Oyen tadi malam』(疑似图片/加载占位)，原型无此元素",
+        "颜色/品牌不符：原型未读/强调用紫色体系（紫色头像圈 A、紫色模板卡与按钮），App 把模板按钮做成青色『Use』，丢失紫色建议体系",
+        "输入框组件不符：原型左侧为『+』加号方形按钮 + 青色圆形发送箭头，App 左侧为相机图标 + 发送箭头，加号 vs 相机不一致"
+      ],
+      "deltas": [
+        "顶栏：原型『Mochi (Aditya)』+ 黄点『Perlu Konsul · 1 thn · Kucing Betina』+ 红描边『Akhiri Sesi』；App『Oyen (rani)』+『Cat · Male · 2 yr』(无状态 badge) + 红描边『End session』——名字、状态、语言全不同",
+        "工具行 TOOLS：原型『Template Saran / Daftar Obat / Riwaya...』（印尼语，首项紫色高亮）；App『Advice template / Drug list / History / 红色第4项』（英文，首项绿色高亮）——语言不符、高亮色由紫变绿",
+        "建议模板：原型在消息流底部，紫色左边框卡『TEMPLATE SARAN — Gastroenteritis Ringan』正文印尼语 + 紫色实心按钮『Kirim Template ini →』；App 在顶部白卡『Assist reference』英文正文 + 青色胶囊『Use』——位置/语言/颜色/按钮文案全不符",
+        "系统分隔 chip：原型居中灰胶囊『Kamu bergabung · 14:32』；App 居中浅紫胶囊两行『Konsultasi dengan drh. Sari dimulai...』——文案与样式不同",
+        "气泡：原型青色我方气泡 + 白色对方气泡，含时间戳 14:32 ✓✓ / 14:35 与紫色/青色头像圈；App 类似青/白气泡但多出斜纹占位『Oyen tadi malam』图片占位，且头像/时间戳呈现不同",
+        "输入栏：原型『+』加号 + 占位『Ketik pesan...』+ 青色圆形发送；App 相机图标 + 占位『Write a message...』+ 青色圆形发送——左侧按钮类型与占位文案不符"
+      ],
+      "summary": "主结构(顶栏/工具行/气泡流/建议模板/输入栏)大体对位，但全屏文案用英文而非原型印尼语，宠物名与状态不符，建议模板卡位置/紫色体系/按钮被改成顶部青色 Use 卡，且多出斜纹图片占位——多处 failHits，判 needs_work。"
+    },
+    {
+      "screen": "nickname",
+      "foldCovered": true,
+      "verdict": "needs_work",
+      "checkPercent": 45,
+      "failHits": [
+        "文案语言不符：标题原型为印尼语「Konfirmasi nama tampilanmu」，App 用英文「Confirm your nickname」",
+        "文案语言不符：字段标签原型「NAMA TAMPILAN」，App 用英文「NICKNAME」",
+        "文案语言不符：按钮原型「Lanjut」，App 用英文「Continue」",
+        "存在性缺失：用户卡片缺少姓名「Aurel Kusuma」与邮箱「aurel@gmail.com」两行文本，App 卡片只剩头像",
+        "存在性缺失：输入框缺少预填值「Aurel Kusuma」，App 为空",
+        "尺寸不符：字符上限原型 12 / 30，App 为 0 / 20",
+        "颜色/状态不符：主按钮原型为实心紫色可用态，App 为浅紫禁用态"
+      ],
+      "deltas": [
+        "状态栏：原型 9:41 + 信号/电池图标（iOS 灵动岛），App 为 12:17 + LTE（Android）——平台壳差异，可忽略",
+        "顶部进度条：两者一致（紫色填充约 50%，1 / 2），对齐基本一致",
+        "标题：原型印尼语两行「Konfirmasi nama tampilanmu」（深色粗体），App 英文一行「Confirm your nickname」——语言不符，且原型换行为两行",
+        "副标题：两者一致「Ini yang dilihat komunitas TailTopia.」",
+        "用户卡片：原型为浅紫圆角卡 + 紫色圆形头像「A」+ 右侧「Aurel Kusuma」「aurel@gmail.com」两行；App 仅头像「A」，右侧文本完全缺失",
+        "字段标签：原型「NAMA TAMPILAN」，App「NICKNAME」——语言不符",
+        "输入框：原型预填「Aurel Kusuma」+ 右侧编辑铅笔图标；App 输入框为空+铅笔图标，结构相近但无预填值",
+        "字符计数：原型「12 / 30」，App「0 / 20」——上限与当前值均不符",
+        "帮助文案：原型「Nama dapat diubah kapan saja dari pengaturan profil.」两行；App 同文案一行，内容一致",
+        "主按钮：原型实心紫「Lanjut」（可用态，带阴影）；App 浅紫「Continue」（禁用态，文案为英文）——颜色态+文案均不符",
+        "整体留白/间距：两者卡片宽度、圆角、字段顺序结构一致；fold 以下底部空白均已截到"
+      ],
+      "summary": "主结构与紫色体系对齐，但多处文案仍为英文（标题/标签/按钮），用户卡片缺姓名邮箱、输入框无预填、字符上限 0/20 vs 12/30、按钮处于禁用浅紫态，需返工。"
+    },
+    {
+      "screen": "konsultasi",
+      "foldCovered": true,
+      "verdict": "needs_work",
+      "checkPercent": 45,
+      "failHits": [
+        "文案语言不符：原型全印尼语，App 全英文（标题/正文/按钮/底部 tab 全部）",
+        "标题文案不符：原型 'Konsultasi' + 'Bantuan Cepat untuk Hewanmu' vs App 'Quick consultation' + 'Relax, we'll help check your fur baby'",
+        "Diagnosa AI 卡片文案不符：原型 'Diagnosa AI / Mulai Diagnosa →' vs App 'Ask AI (Triage) / Start triage →'",
+        "Dokter Hewan Online 卡片文案不符：原型 'Dokter Hewan Online / Chat dengan Dokter →' vs App 'Chat with a vet / Start consultation →'",
+        "Konsultasi Terakhir 区块组件结构不符：原型为带头像+'AI Diagnosa·Oyen'+日期+黄色'Kuning'标签的完整卡片，App 为 'Not urgent' 绿标+'6 h ago'+单行文案，结构与标签体系不同",
+        "底部 tab 文案/图标不符：原型 Beranda/Catatan/Konsultasi/Profil 且 Konsultasi 高亮，App Home/Growth/Me 英文且 tab 数量与高亮态不同"
+      ],
+      "deltas": [
+        "顶栏：原型小标题 'Konsultasi' 在大标题之上；App 缺该小标题，直接是大标题 'Quick consultation'",
+        "大标题：原型两行 'Bantuan Cepat untuk Hewanmu' 带爪印 emoji；App 单行 'Quick consultation' 无装饰",
+        "副标题：原型 'Gratis untuk semua pengguna V1.0.0'；App 'Relax, we'll help check your fur baby 💚'（含绿心 emoji，原型无）",
+        "紫色卡片①：原型标题 'Diagnosa AI'，正文 'Upload foto + cerita gejala → hasil instan dalam 15 detik. Evaluasi hijau/kuning/merah.'；App 'Ask AI (Triage)' + 英文正文，闪电图标位置一致但文案全英文",
+        "卡片①状态行：原型 'Selalu aktif · Jawaban otomatis'；App 'Always on · Instant answers'",
+        "卡片①按钮：原型 'Mulai Diagnosa →'；App 'Start triage →'（白底紫字结构一致）",
+        "白卡②：原型 'Dokter Hewan Online' + 'Chat langsung dengan drh. berlisensi dari mitra kami'；App 'Chat with a vet' + 英文正文；听诊器图标一致",
+        "白卡②状态行：原型 'Biasanya tersedia 08:00–23:00 WIB'；App 'Vets available now'（含义不同，原型给营业时段，App 给即时可用）",
+        "白卡②按钮：原型 'Chat dengan Dokter →'；App 'Start consultation →'（紫边框白底结构一致）",
+        "区块标题：原型 'Konsultasi Terakhir'；App 'My consultations'",
+        "最近记录卡片：原型含宠物头像+'AI Diagnosa · Oyen'+'12 Jun 2026 · 23:14'+正文 'Muntah busa putih · Observasi 2 jam · Tersimpan di paspor Mochi'+右上黄色'Kuning'pill；App 头像+绿色'Not urgent'pill+'6 h ago'+'Occasional sneezing, energy and appetite normal'，缺标题行/日期格式不同/标签体系不同（黄 Kuning vs 绿 Not urgent）",
+        "底部导航：原型 5 tab(Beranda/Catatan/+/Konsultasi/Profil)，当前页 Konsultasi 紫色高亮；App tab 标签为 Home/Growth/(+)/(相机?)/Me，第4个图标非 Konsultasi 听诊器且无高亮态匹配",
+        "整体配色：紫色渐变体系两者一致（达标）；emoji 使用差异（原型爪印，App 绿心）"
+      ],
+      "summary": "紫色卡片布局与渐变体系基本对齐，但全屏文案语言为英文（原型为印尼语）、最近记录卡片结构与标签体系不符、底部 tab 文案与高亮态不符，达标率低，判 needs_work。"
+    },
+    {
+      "screen": "match-wait",
+      "foldCovered": true,
+      "verdict": "needs_work",
+      "checkPercent": 45,
+      "failHits": [
+        "文案语言不符：原型全印尼语，App 渲染英文（'Matching you with a vet...' / 'Usually available within 1 minute. Please wait a moment' / '1-minute search limit' / 'Cancel request'）",
+        "缺原型区块：原型底部有 'RINGKASAN YANG DIKIRIM' 提交摘要卡片（含 Mochi 症状描述 + 2 foto dilampirkan），App 完全缺失该卡片",
+        "缺原型区块：原型左上角有返回箭头按钮（圆角灰底），App 无任何返回按钮",
+        "颜色/组件：原型中心圆形图标为浅紫渐变（柔和紫），内含淡紫宠物/听诊器线描；App 为高饱和实心紫圆 + 蓝色听诊器，紫色体系偏离原型柔和紫调",
+        "布局：原型整体内容自顶部紧凑排布（返回键→图标→标题→计时器→摘要卡→取消），App 把内容垂直居中且大量留白，主结构纵向节奏与原型不符"
+      ],
+      "deltas": [
+        "状态栏：原型 9:41 iOS 风格 + 灵动岛；App 12:25 Android 风格（仅环境差异，不计入 failHits）",
+        "返回按钮：原型左上有圆角灰底返回箭头；App 缺失",
+        "中心图标：原型为浅紫渐变圆 + 淡紫线描宠物/听诊器；App 为深紫实心圆 + 蓝色卡通听诊器，颜色与图形均不符",
+        "同心圆涟漪：原型为大范围淡紫多层同心圆扩散；App 涟漪范围更小、圈数偏少",
+        "主标题：原型 'Mencarikan dokter hewan untukmu...'（印尼语两行）；App 'Matching you with a vet...'（英文）",
+        "副标题：原型 'Biasanya tersedia dalam 1 menit. Mohon tunggu sebentar 🙏'；App 'Usually available within 1 minute. Please wait a moment 🙏'（英文）",
+        "计时器卡片：原型淡紫圆角卡 '00:47' + 'batas waktu pencarian 1 menit'；App 同款卡但 '00:23' + '1-minute search limit'（英文，数值为动态可忽略）",
+        "提交摘要卡：原型有白色圆角卡 'RINGKASAN YANG DIKIRIM' + 'Mochi — muntah busa putih 2x, lemas, tidak nafsu makan · 2 foto dilampirkan'；App 完全缺失",
+        "取消链接：原型 'Batalkan permintaan'；App 'Cancel request'（英文）",
+        "垂直布局：原型内容自上而下紧凑、底部含摘要卡；App 内容整体居中、上下大量空白"
+      ],
+      "summary": "App 实现整体框架（同心圆+紫圆图标+计时卡+取消链接）方向对，但全屏文案仍是英文（原型为印尼语）、缺失底部 RINGKASAN 提交摘要卡与左上返回按钮、中心图标配色偏离原型柔紫体系，需返工。"
+    },
+    {
+      "screen": "vet-profile",
+      "foldCovered": true,
+      "verdict": "needs_work",
+      "checkPercent": 52,
+      "failHits": [
+        "文案语言不符：全屏英文，原型为印尼语（My profile/Done/Rating/Total cases/AVAILABILITY/Busy/Finish current/Offline/Resting/Edit profile & license/Queue notifications/Sign out/Inbox/Active/History/Me）",
+        "缺原型区块：医生名片缺第二行副标题「Klinik Hewan Sehat · Jakarta Selatan」",
+        "组件类型不符：原型「Notifikasi Antrian」行为带绿色开关 Toggle，App「Queue notifications」改为右侧 chevron 箭头",
+        "导航标签文案/语言不符：Antrian/Aktif/Riwayat/Profil → Inbox/Active/History/Me"
+      ],
+      "deltas": [
+        "顶部标题栏：原型「Profil Saya」印尼语，App「My profile」英文",
+        "医生姓名：原型「drh. Dewi Santoso」，App「Drh. Demo」（占位数据，且无第二行诊所/地区副标题）",
+        "名片副标题：原型有「Klinik Hewan Sehat · Jakarta Selatan」整行，App 完全缺失，直接从名字跳到 PDHI 徽章",
+        "认证徽章：原型「PDHI Terverifikasi」，App「PDHI Verified」语言不符（图标+绿色体系一致）",
+        "统计卡 1：原型数值 8 +「Selesai hari ini」，App 数值 4 +「Done」（语言不符、占位数值）",
+        "统计卡 2：原型 4.9 +「Rating keseluruhan」，App 显示「—」+「Rating」（占位/空数据、语言不符）",
+        "统计卡 3：原型 247 +「Total kasus」，App「—」+「Total cases」（占位/空数据、语言不符）",
+        "统计卡配色：原型三卡分别为淡紫/淡绿/淡橙差异化背景且数值为紫/青/橙；App 三卡统一为淡绿背景、数值统一青绿，丢失紫橙差异色体系",
+        "可用性区标题：原型「STATUS KETERSEDIAAN」，App「AVAILABILITY」",
+        "可用性三段按钮：原型 Online「Terima antrian」/Sibuk「Selesaikan dulu」/Offline「Istirahat」；App Online「Accepting queue」/Busy「Finish current」/Offline「Resting」——结构一致但全英文",
+        "Online 选中态指示灯：原型亮绿色圆点，App 偏暗的橄榄绿圆点，颜色略偏",
+        "列表行 1：原型「Edit Profil & SIP」，App「Edit profile & license」语言不符",
+        "列表行 2：原型「Notifikasi Antrian」+绿色开关 Toggle（开启态）；App「Queue notifications」+右侧 chevron，组件类型从开关退化为箭头",
+        "列表行 3：原型「Keluar」红字+红箭头，App「Sign out」红字+红箭头（结构色一致，语言不符）",
+        "页脚版本号：两者均「TailTopia Vet Portal v1.0.0」一致",
+        "底部导航：原型 Antrian/Aktif/Riwayat/Profil（含网格/对话/时钟/人形图标，选中 Profil 紫青高亮）；App Inbox/Active/History/Me，且选中态「Me」带圆角浅色胶囊背景，原型无此胶囊底",
+        "整体留白：App 名片因缺副标题行高度更紧凑，fold 以下大片空白，与原型节奏不同"
+      ],
+      "summary": "主结构（名片/统计三卡/可用性三段/设置列表/页脚/底栏）大体对齐，但全屏文案为英文而非印尼语、名片缺诊所副标题行、统计卡丢失紫橙差异色、Notifikasi Antrian 开关退化为箭头，多处占位数据，判 needs_work。"
+    },
+    {
+      "screen": "pet-select",
+      "foldCovered": true,
+      "verdict": "needs_work",
+      "checkPercent": 55,
+      "failHits": [
+        "标题文案语言不符：原型印尼语「Kamu punya hewan peliharaan? 🐾」，App 英语「Tell us about your pet」",
+        "副标题文案语言不符：原型「Ini membantu kami menyesuaikan pengalamanmu.」，App「This helps us tailor your home feed」",
+        "CTA 按钮文案语言不符：原型「Lanjut」，App「Done」",
+        "选中态缺失：原型第一张卡为选中态（紫色描边 + 右上角紫色圆形勾选徽标），App 两张卡均为同一灰色描边、无勾选徽标，默认选中态丢失",
+        "CTA 按钮颜色态不符：原型为饱和紫色实心可用态，App 为浅紫/置灰禁用态"
+      ],
+      "deltas": [
+        "顶部进度条：两图均为两段满紫 + 「2 / 2」，一致",
+        "返回按钮：两图均为左上灰底圆角方框内紫黑箭头，一致",
+        "主标题文案：原型『Kamu punya hewan peliharaan?』含 🐾 表情，App 改为英文『Tell us about your pet』且无表情 —— 文案与语言不符",
+        "副标题：原型『Ini membantu kami menyesuaikan pengalamanmu.』两行灰字，App『This helps us tailor your home feed』一行英文 —— 文案与语言不符",
+        "卡片1（狗+猫 emoji）：标题与正文印尼语文案一致；但原型为选中态——紫色描边 + 右上角紫色圆勾徽标，App 为普通灰描边、无勾选徽标 —— 组件态/存在性不符",
+        "卡片2（灰心 emoji）：标题『Belum punya, tapi suka hewan』与正文印尼语一致，灰描边一致",
+        "卡片布局：两图均为上下两张圆角卡片、emoji 居左上、标题加粗、正文灰字，结构一致",
+        "CTA 按钮：原型『Lanjut』饱和紫色可用态，App『Done』浅紫置灰禁用态 —— 文案语言 + 颜色态不符",
+        "底部留白：App fold 以下为空白，已截全，foldCovered=true"
+      ],
+      "summary": "主结构/卡片布局与原型一致，但全屏文案被改成英文（标题/副标题/CTA），且原型第一张卡的选中态（紫描边+勾选徽标）和 CTA 紫色可用态在 App 中均丢失，判 needs_work。"
+    },
+    {
+      "screen": "konsultasi-home",
+      "foldCovered": true,
+      "verdict": "needs_work",
+      "checkPercent": 62,
+      "failHits": [
+        "文案语言不符：原型全印尼语，App 全英文（逐区块均不符）",
+        "缺原型区块：标题行左侧缺返回箭头按钮（原型有圆形灰底 ← 按钮）",
+        "文案内容不符：可用性 banner 副标题原型为「3 dokter online · rata-rata respons 45 detik」，App 为「Vets are usually online 8:00–23:00 on weekdays」（语义与内容均不同）"
+      ],
+      "deltas": [
+        "标题：原型「Mulai Konsultasi」(粗体黑) + 左侧圆形返回箭头；App「Talk to a vet」(细体、无返回箭头、字号偏大且更轻)",
+        "状态栏：原型 9:41 / 信号电池为深色描边图标；App 12:24 / LTE 信号（属设备 chrome，可忽略）",
+        "可用性 banner 标题：原型「Dokter Hewan Tersedia」绿色；App「Vet available」绿色——结构/绿色体系一致，文案语言不符",
+        "可用性 banner 副标题：原型「3 dokter online · rata-rata respons 45 detik」；App「Vets are usually online 8:00–23:00 on weekdays」——内容不符",
+        "小节标题：原型「CARA KERJA」；App「HOW IT WORKS」——大写灰字结构一致，语言不符",
+        "步骤1：原型「Kirim pertanyaan / Ceritakan gejala dan lampirkan foto jika ada」；App「Send your question / Describe the symptoms and attach a photo if you have one」——紫色实心圆+白数字一致，语言不符",
+        "步骤2：原型「Tunggu pencocokan / Sistem mencarikan drh. berlisensi yang tersedia」；App「Wait for a match / We find an available licensed vet for you」——中紫圆一致，语言不符",
+        "步骤3：原型「Chat langsung / Setelah diagnosa dikirim, kamu masih bisa chat 30 menit lagi — gratis」；App「Chat directly / After the assessment is sent, you can still chat for 30 more minutes — free」——浅紫圆一致，语言不符",
+        "免责声明：原型「Layanan konsultasi teks. Bukan pengganti pemeriksaan klinik untuk kondisi darurat.」灰色居中；App「Text consultation service. Not a substitute for an in-clinic exam in emergencies.」灰色居中——结构/颜色一致，语言不符",
+        "CTA 按钮：原型「Mulai Konsultasi →」紫色圆角实心；App「Start a consultation →」紫色圆角实心——结构/颜色/箭头一致，语言不符",
+        "三步圆点紫色渐变体系（深→中→浅）两侧一致，颜色维度达标",
+        "整体布局/组件类型/紫色体系/间距高度一致，主要偏差集中在文案语言与标题返回箭头"
+      ],
+      "summary": "主结构、组件类型、紫色体系与布局 1:1 对齐，但 App 整屏为英文而原型为印尼语，且缺返回箭头、banner 副标题内容不符——文案维度严重不达标，判 needs_work。"
+    }
+  ]
+}
