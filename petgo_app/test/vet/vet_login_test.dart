@@ -36,7 +36,8 @@ void main() {
 
   testWidgets('文案随 id 切换', (tester) async {
     await _pump(tester, const VetLoginPage(), const Locale('id'));
-    expect(find.text('Masuk'), findsOneWidget);
-    expect(find.text('Akun'), findsOneWidget);
+    // vet-login.html 重做：按钮「Masuk sebagai Dokter」+ forgot hint 印尼语（验证 i18n 切换）。
+    expect(find.text('Masuk sebagai Dokter'), findsOneWidget);
+    expect(find.textContaining('Lupa kata sandi'), findsOneWidget);
   });
 }

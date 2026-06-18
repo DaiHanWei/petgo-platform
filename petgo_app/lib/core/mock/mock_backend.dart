@@ -120,12 +120,25 @@ class MockBackend {
     ];
 
     _notifications.addAll([
-      // type 必须是后端 NotificationType 合法值（VET_REPLY/CONSULT_CLOSED/CONTENT_LIKED/CONTENT_COMMENTED/NEW_CONSULT_REQUEST）。
-      _notif(token: 'n1', type: 'CONTENT_COMMENTED', title: 'New comment', body: 'Rina commented on your post', read: false, ago: const Duration(minutes: 20)),
-      _notif(token: 'n2', type: 'CONTENT_LIKED', title: 'New like', body: 'Budi liked your post', read: false, ago: const Duration(hours: 3)),
-      _notif(token: 'n3', type: 'VET_REPLY', title: 'Consult update', body: 'A vet has replied to your consultation', read: true, ago: const Duration(days: 1)),
+      // type 必须是后端 NotificationType 合法值（VET_REPLY/CONSULT_CLOSED/CONTENT_LIKED/CONTENT_COMMENTED/
+      // NEW_CONSULT_REQUEST/PET_BIRTHDAY/COMPANION_ANNIVERSARY/MILESTONE_NODE）。文案印尼语对齐 notif.html。
+      // ago 跨今天/昨天，供通知中心按时间分组（HARI INI / KEMARIN）。
+      _notif(token: 'n1', type: 'VET_REPLY', title: 'Dokter Hewan membalas konsultasimu',
+          body: '"Kondisi Mochi sudah membaik, lanjutkan diet makanan basah selama 3 hari..."',
+          read: false, ago: const Duration(minutes: 5)),
+      _notif(token: 'n2', type: 'CONTENT_LIKED', title: 'Rani Fitriani menyukai postinganmu',
+          body: '"Oyen akhirnya mau makan lagi setelah semalam muntah..."',
+          read: false, ago: const Duration(hours: 1)),
+      _notif(token: 'n3', type: 'CONTENT_COMMENTED', title: 'dr. Dewi mengomentari postinganmu',
+          body: '"Syukurlah Oyen sudah membaik! Kalau dalam 24 jam..."',
+          read: true, ago: const Duration(hours: 2)),
       // L 级里程碑达成推送（Story 8.6）：6-6 铃铛里程碑条改真数据驱动。深链跳里程碑列表页。
-      _notif(token: 'n4', type: 'MILESTONE_NODE', title: 'Milestone unlocked 🎉', body: '"100 days together" is unlocked — take a look', read: false, ago: const Duration(hours: 1)),
+      _notif(token: 'n4', type: 'MILESTONE_NODE', title: 'Mochi mencapai milestone Level L!',
+          body: '🎂 Ulang tahun pertama — 365 hari bersama!',
+          read: false, ago: const Duration(days: 1, hours: 3)),
+      _notif(token: 'n5', type: 'PET_BIRTHDAY', title: 'Ulang tahun Mochi minggu depan! 🎉',
+          body: 'Abadikan momennya — buat postingan spesial sekarang',
+          read: true, ago: const Duration(days: 1, hours: 8)),
     ]);
 
     _consultHistory.addAll([

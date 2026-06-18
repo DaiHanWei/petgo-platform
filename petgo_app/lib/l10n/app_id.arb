@@ -259,7 +259,7 @@
   "vetLoginTitle": "Masuk dokter hewan",
   "vetUsernameLabel": "Akun",
   "vetPasswordLabel": "Kata sandi",
-  "vetLoginButton": "Masuk",
+  "vetLoginButton": "Masuk sebagai Dokter",
   "vetLoginFailed": "Akun atau kata sandi salah",
   "vetLoginRateLimited": "Terlalu sering mencoba, coba lagi nanti",
   "vetForgotHint": "Lupa kata sandi? Silakan hubungi operasional.",
