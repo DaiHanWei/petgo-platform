@@ -1,71 +1,60 @@
-# 保真重新基线 · 打分榜（第一轮）
+# 保真重新基线 · 打分榜（干净基线 / 第二轮）
 
 > 2026-06-18 · 34 屏并行打分（每屏独立 reviewer 对照原型真值图审 App 实现图，6 维 rubric + FAIL 门）。
-> 工具：workflow `fidelity-score`，34 agent / 87 万 token / 3 分钟。原始逐屏 deltas 见 `scores-raw.json`。
+> **第二轮已修捕获条件**：强制 `locale=id`（消除语言噪声）+ splash/pet-create 错屏归位。这才是真实结构保真基线。
+> 逐屏 deltas：`scores-raw-clean.json`（第一轮含语言噪声的存 `scores-raw.json`）。
 
 ## 总结论
-**0 / 34 通过**，中位保真率 ~25%，最高 konsultasi-home 62%。
-量化印证了之前在 paspor 上发现的问题：**实现与原型大面积分歧，不是个例**。
+**0 / 34 通过**，中位 ~28%，最高 vet-history 70 / konsultasi-home 68。
+语言修正后多数屏回升（vet-history +42、splash +45、profil +17、vet-dashboard +14…），但**没有一屏达标**。
+→ 语言只是部分因素；**结构性分歧是主因**。1:1 还原 `pages/` 是整屏重做为主、打磨为辅的工程。
 
-## ⚠️ 必须先认的两个「污染源」（否则会把分数误读）
+> ⚠️ 打分有 ±10 的 LLM 随机波动（个别屏 R2 反而略低，如 feed 35→25），**按区间看，不要抠绝对值**。
 
-**① 语言错配（系统性，29/34 屏被扣）——是我捕获失误，不全是设计缺陷。**
-我截 App 图时没强制 `locale=id`，模拟器默认英文 → 几乎每屏都被扣「英文 vs 原型印尼语」。其中**大部分屏其实有印尼语 arb**，强制 id 重截后语言项可消。但也确有真 i18n 债（部分硬编码英文）。**结论：语言维度的分数偏低，需 locale=id 重截后才准。**
+## 两轮对比（R1 含语言噪声 → R2 干净）
 
-**② 3 屏是「错屏/加载态」，是捕获问题不是实现缺失 → 需重截：**
-- `splash`(10%)：截晚了，splash ~2s 后自动跳 /home，截到的是首页。→ 截图延时改 <1.5s。
-- `pet-create`(0%)：DEV_USER 自带 hasPetProfile=true → /profile/create 被重定向到已存在档案页。→ 需「无宠物档案」种子。
-- `detail`(0%)：/content/1 卡加载态（mock 该 id 无数据）。→ 换有效 id 或补 mock。
+| 屏 | R1 | R2 | Δ | | 屏 | R1 | R2 | Δ |
+|---|---|---|---|---|---|---|---|---|
+| detail | 0 | 0🔒 | +0 | | ai-upload | 15 | 28 | +13 |
+| vet-queue | 8 | 8 | +0 | | paspor | 22 | 28 | +6 |
+| vet-case | 8 | 8 | +0 | | milestone | 25 | 28 | +3 |
+| feed-error | 10 | 10 | +0 | | feed-empty | 35 | 35 | +0 |
+| namecard | 12 | 12 | +0 | | chat | 38 | 35 | -3 |
+| timeline-empty | 8 | 15 | +7 | | notif-empty | 25 | 38 | +13 |
+| login | 22 | 22 | +0 | | vet-dashboard | 28 | 42 | +14 |
+| pet-edit | 22 | 22 | +0 | | vet-chat | 40 | 42 | +2 |
+| feed-guest | 25 | 22 | -3 | | profil | 28 | 45 | +17 |
+| rate | 15 | 22 | +7 | | konsultasi | 45 | 52 | +7 |
+| vet-login | 15 | 22 | +7 | | splash | 10 | 55 | +45 |
+| onboard | 22 | 25 | +3 | | nickname | 45 | 55 | +10 |
+| pet-create | 0 | 25 | +25 | | match-wait | 45 | 58 | +13 |
+| feed | 35 | 25 | -10 | | pet-select | 55 | 62 | +7 |
+| settings | 15 | 25 | +10 | | vet-profile | 52 | 62 | +10 |
+| notif | 20 | 25 | +5 | | konsultasi-home | 62 | 68 | +6 |
+| create | 30 | 28 | -2 | | vet-history | 28 | 70 | +42 |
 
-## 分类清单（按结构保真，已剔除语言因素的判断）
+## 最终分类（干净基线，按区间）
 
-### A. 需重截（捕获污染，先修条件再评）— 3
-`splash` · `pet-create` · `detail`
+### A. 错屏/Bug，先修再评 — 1
+- `detail`(0,blocked)：详情页在 mock 下渲染不出（卡加载态）。**这是真 bug**，需先查 `/content/:id` 详情数据流（mock 或页面），修好才能评分。
 
-### B. 设计分歧，需整屏重做（结构/组件/主体与原型不符，非纯语言）— ~17
-| 屏 | % | 核心分歧 |
-|---|---|---|
-| vet-queue | 8 | 缺深色头部+四分段标签+AI摘要/紧急度徽章富病例卡+急诊入口；退化成薄荷绿会话列表 |
-| vet-case | 8 | 截到的是队列列表，非单案例详情页（缺宠物卡/AI评估/主诉/症状图/双按钮） |
-| timeline-empty | 8 | 渲染成完整档案页，非极简 Catatan 空态（缺分段按钮+空态文案+大CTA） |
-| namecard | 12 | 浅色渐变 web 卡 vs 原型深色分段档案，缺成就/统计 |
-| ai-upload | 15 | 缺导航栏/紫hero/缩略图网格/激活态CTA，照片区退化单圆按钮 |
-| rate | 15 | 做成悬浮小弹窗，原型是全屏评价页（缺医生头像/标签chip/跳过） |
-| settings | 15 | 缺全部4分组/Switch行/版本号/红色危险体系 |
-| vet-login | 15 | 仅剩一个薄荷绿按钮，品牌头/提示卡/输入框/信任区全缺 |
-| login | 22 | 缺紫hero头/提示卡/三栏统计；Google按钮组件不符 |
-| onboard | 22 | 通用占位欢迎页，缺派对插画/宠物预览卡 |
-| pet-edit | 22 | 缺顶栏Simpan/返回/Ganti Foto，宠物类型用错组件 |
-| paspor | 22 | 身份卡/三栏统计/分段按钮/行式时间线/红健康体系 全缺或改型（已确认须重做） |
-| milestone | 25 | 缺返回标题栏/底部TabBar，徽章4列全灰挂锁 vs 原型5列彩色分级 |
-| feed-empty | 35 | 多出筛选chip+铃铛，缺次级文案（结构偏差大） |
-| feed-error | 10 | 截到骨架加载屏，非失败错误态（也可能 capture 时序） |
-| notif-empty | 25 | 缺副说明文案，bell 改灰线图标无紫卡 |
-| vet-dashboard | 28 | 红色紧急体系替原型黄/琥珀，底栏激活色紫→青，数值/内容不符 |
+### B. 整屏重做（R2 <35%，结构/组件/主体与原型不符）— 21
+vet-queue(8) · vet-case(8) · feed-error(10) · namecard(12) · timeline-empty(15) · login(22) · pet-edit(22) · feed-guest(22) · rate(22) · vet-login(22) · onboard(25) · pet-create(25) · feed(25) · settings(25) · notif(25) · create(28) · ai-upload(28) · paspor(28) · milestone(28) · feed-empty(35) · chat(35)
 
-### C. 结构基本对位，主要差语言 + 细节，需打磨（≥38%）— ~11
-| 屏 | % | 主要待修 |
-|---|---|---|
-| konsultasi-home | 62 | 仅差语言 + 返回箭头 + banner 副标题（最接近达标） |
-| pet-select | 55 | 差语言 + 第一卡选中态（紫描边+勾选） |
-| vet-profile | 52 | 差语言 + 名片诊所副标题 + 统计细节 |
-| match-wait | 45 | 差语言 + 缺底部说明；动画框架已对 |
-| konsultasi | 45 | 差语言 + 最近记录卡结构/标签 |
-| nickname | 45 | 差语言 + 用户卡缺姓名邮箱 + 输入框预填/字数 |
-| vet-chat | 40 | 差语言 + 宠物名/状态 + 建议模板卡位 |
-| chat | 38 | 顶栏缺医生头像/在线/Akhiri，摘要条样式不符 |
-| feed | 35 | 差语言；紫主题/爪印header/紫FAB 方向对 |
-| vet-history | 28 | 差语言；卡片/配色大体接近，缺顶部四 tab |
-| profil | 28 | 差语言 + 帖子卡用真实照片 vs 原型彩tint+emoji |
+**典型**：vet-case 截到的是队列页而非案例详情；namecard 是浅色 web 卡 vs 原型深色档案卡；rate 做成小弹窗 vs 原型全屏评价页；settings 缺全部分组/开关/危险区；feed-error 截到骨架加载而非失败态。
 
-> feed-guest(25)、create(30) 介于 B/C 之间：结构方向对但缺关键区块（访客转化 banner / 日期行 / 收件对象条 / 底部 TabBar），归 B 处理。
+### C. 打磨（R2 ≥38%，结构可辨，补区块/细节/语言残留）— 12
+notif-empty(38) · vet-dashboard(42) · vet-chat(42) · profil(45) · konsultasi(52) · splash(55) · nickname(55) · match-wait(58) · pet-select(62) · vet-profile(62) · konsultasi-home(68) · vet-history(70)
+
+**典型**：konsultasi-home 仅差返回箭头 + banner 副标题；vet-history 卡片配色已接近，补顶部四 tab；match-wait 动画框架已对，补底部说明 + 细节。
+
+## 仍未纳入打分的屏（~18，需补可达手段）
+ai-result/ai-result-green/ai-result-red、publish-reviewing/done/rejected、pet-success、milestone-sheet/unlock、archive-confirm、vet-status-popup、vet-final-diagnosis、notif-gate、network-error、badge-gallery、delete-account、catatan-calendar。
+→ 需补 DEV_STATE / dev 入口 / 人工交互后截图再评。
 
 ## 下一步建议
-1. **修捕获条件再重跑一轮**（消除污染，得到干净基线）：
-   - 全部强制 `locale=id`（capture.sh 注入 + app 支持 dev locale 覆盖）；
-   - splash 截图延时 <1.5s；pet-create 用「无档案」种子；detail 换有效 id。
-2. **干净基线出来后**，B 类（~17 屏）排期整屏重做，C 类（~11 屏）排期打磨，A 类重截归位。
-3. 仍未截的 ~18 屏（ai-result-*/publish-*/各 sheet&popup/notif-gate/badge-gallery/delete-account 等）补 DEV_STATE 或人工截图后纳入打分。
-
-## 诚实结论
-即便剔除语言因素，**结构性分歧依然普遍**（B 类 ~17 屏是「不同设计/缺核心区块」）。这套 app 的多数屏当初是按另一套设计稿实现的，与 `pages/` 原型不是一套。要真做到「1:1 还原 pages」，是一个**整屏重做为主、打磨为辅**的中大型工程，不是补丁级。
+1. **先修 detail bug**（A 类，1 屏）——它阻塞自己的评分。
+2. **B 类 21 屏排重做**：从最烂、且业务重要的开打——建议序 `paspor → vet-case → vet-queue → settings → namecard → login → ...`（兼顾保真差距 + 用户价值）。
+3. **C 类 12 屏排打磨**：补区块 + 清语言残留（部分仍有硬编码英文）。
+4. 每屏做完按验收标准（真值图 vs 完整 actual + 独立 reviewer ≥95% 且 FAIL 清零）才算过。
+5. 剩 ~18 屏补可达手段后纳入。
