@@ -35,6 +35,10 @@ class OssUploader {
   }
 
   /// OSS V1 StringToSign（PUT）。纯函数，便于单测。
+  ///
+  /// [objectAcl] 非空时（单桶公开域上传打 `public-read`），将 `x-oss-object-acl` 计入
+  /// CanonicalizedOSSHeaders。OSS 要求所有 `x-oss-` 头按字母序排列——`x-oss-object-acl`
+  /// 字母序在 `x-oss-security-token` **之前**，顺序错会 SignatureDoesNotMatch。
   static String stringToSign({
     required String verb,
     required String contentType,
@@ -42,10 +46,13 @@ class OssUploader {
     required String securityToken,
     required String bucket,
     required String objectKey,
+    String? objectAcl,
   }) {
     const contentMd5 = '';
-    // CanonicalizedOSSHeaders：仅 x-oss-security-token，小写 + 末尾换行。
-    final canonicalizedHeaders = 'x-oss-security-token:$securityToken\n';
+    // CanonicalizedOSSHeaders：x-oss-* 小写按字母序，每个末尾换行。
+    final aclHeader =
+        (objectAcl == null || objectAcl.isEmpty) ? '' : 'x-oss-object-acl:$objectAcl\n';
+    final canonicalizedHeaders = '${aclHeader}x-oss-security-token:$securityToken\n';
     final canonicalizedResource = '/$bucket/$objectKey';
     return '$verb\n$contentMd5\n$contentType\n$date\n$canonicalizedHeaders$canonicalizedResource';
   }
@@ -75,6 +82,8 @@ class OssUploader {
     required String contentType,
   }) async {
     final date = _httpDate(DateTime.now().toUtc());
+    // 单桶 + 对象级 ACL：公开域（有 cdnBaseUrl）上传时打 public-read，私有域不打（读走签名 URL）。
+    final objectAcl = cred.cdnBaseUrl == null ? null : 'public-read';
     final sts = stringToSign(
       verb: 'PUT',
       contentType: contentType,
@@ -82,6 +91,7 @@ class OssUploader {
       securityToken: cred.securityToken,
       bucket: cred.bucket,
       objectKey: objectKey,
+      objectAcl: objectAcl,
     );
     final auth = authorization(
       accessKeyId: cred.accessKeyId,
@@ -89,18 +99,21 @@ class OssUploader {
       stringToSign: sts,
     );
 
+    final headers = <String, dynamic>{
+      'Content-Type': contentType,
+      'Content-Length': bytes.length,
+      'Date': date,
+      'x-oss-security-token': cred.securityToken,
+      'Authorization': auth,
+    };
+    if (objectAcl != null) {
+      headers['x-oss-object-acl'] = objectAcl;
+    }
+
     await _dio.put<void>(
       uploadUrl(cred, objectKey),
       data: Stream.fromIterable([bytes]),
-      options: Options(
-        headers: <String, dynamic>{
-          'Content-Type': contentType,
-          'Content-Length': bytes.length,
-          'Date': date,
-          'x-oss-security-token': cred.securityToken,
-          'Authorization': auth,
-        },
-      ),
+      options: Options(headers: headers),
     );
 
     final base = cred.cdnBaseUrl;

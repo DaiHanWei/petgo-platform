@@ -56,12 +56,14 @@ class StsServiceTest {
     }
 
     @Test
-    void policyIsScopedToBucketUserPrefixAndPutOnly() {
+    void publicPolicyAllowsPutAndPutAclScopedToUserPrefix() {
         service.issueUploadCredential(MediaScope.PUBLIC, 42L);
         ArgumentCaptor<String> policyCaptor = ArgumentCaptor.forClass(String.class);
         Mockito.verify(stsClient).assumeRole(policyCaptor.capture(), eq(900L), anyString());
         String policy = policyCaptor.getValue();
         assertThat(policy).contains("oss:PutObject");
+        // 单桶 + 对象级 ACL：PUBLIC 域允许打 public-read ACL（仍限同一前缀）。
+        assertThat(policy).contains("oss:PutObjectAcl");
         assertThat(policy).contains("petgo-public/public/42/*");
         // 最小权限：不含 list / get 他人前缀。
         assertThat(policy).doesNotContain("oss:ListObjects");
@@ -69,8 +71,29 @@ class StsServiceTest {
     }
 
     @Test
+    void privatePolicyIsPutOnlyNoAcl() {
+        service.issueUploadCredential(MediaScope.PRIVATE, 7L);
+        ArgumentCaptor<String> policyCaptor = ArgumentCaptor.forClass(String.class);
+        Mockito.verify(stsClient).assumeRole(policyCaptor.capture(), eq(900L), anyString());
+        String policy = policyCaptor.getValue();
+        assertThat(policy).contains("oss:PutObject");
+        assertThat(policy).contains("petgo-private/private/7/*");
+        // 私密域绝不给 ACL 权（读走签名 URL）。
+        assertThat(policy).doesNotContain("oss:PutObjectAcl");
+        assertThat(policy).doesNotContain("oss:GetObject");
+    }
+
+    @Test
     void missingBucketConfigThrows() {
         props.getOss().setPublicBucket("");
+        assertThatThrownBy(() -> service.issueUploadCredential(MediaScope.PUBLIC, 1L))
+                .isInstanceOf(AppException.class);
+    }
+
+    @Test
+    void publicScopeMissingCdnBaseThrows() {
+        // 公开域漏配 CDN/公网 base → fail-fast，杜绝前端误判私有、对象上传后不可公网读。
+        props.getOss().setCdnBaseUrl("");
         assertThatThrownBy(() -> service.issueUploadCredential(MediaScope.PUBLIC, 1L))
                 .isInstanceOf(AppException.class);
     }

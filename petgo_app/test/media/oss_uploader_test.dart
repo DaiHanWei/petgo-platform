@@ -17,6 +17,26 @@ void main() {
       expect(s, contains('image/jpeg'));
       expect(s, contains('x-oss-security-token:tok123\n'));
       expect(s, endsWith('/petgo-public/public/42/abc.jpg'));
+      // 私有域（无 objectAcl）不含 x-oss-object-acl 头。
+      expect(s, isNot(contains('x-oss-object-acl')));
+    });
+
+    test('公开域 objectAcl=public-read 计入签名串且按字母序在 security-token 之前', () {
+      final s = OssUploader.stringToSign(
+        verb: 'PUT',
+        contentType: 'image/jpeg',
+        date: 'Mon, 02 Jun 2026 00:00:00 GMT',
+        securityToken: 'tok123',
+        bucket: 'tailtopia',
+        objectKey: 'public/42/abc.jpg',
+        objectAcl: 'public-read',
+      );
+      expect(s, contains('x-oss-object-acl:public-read\n'));
+      // OSS 要求 x-oss-* 按字母序：object-acl 必须排在 security-token 之前。
+      expect(
+        s.indexOf('x-oss-object-acl:'),
+        lessThan(s.indexOf('x-oss-security-token:')),
+      );
     });
 
     test('authorization 形如 "OSS <ak>:<sig>" 且对相同输入稳定', () {

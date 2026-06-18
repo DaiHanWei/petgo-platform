@@ -39,8 +39,13 @@ public class StsService {
         if (bucket == null || bucket.isBlank()) {
             throw AppException.mediaCredential("媒体存储未配置，请联系运营");
         }
+        // 公开域必须能公网读：若漏配 CDN/公网 base，前端会按 cdnBaseUrl==null 误判为私有、
+        // 不打 public-read ACL → 对象静默落公开桶却不可访问。此处 fail-fast 杜绝该不一致。
+        if (scope == MediaScope.PUBLIC && blankToNull(props.getOss().getCdnBaseUrl()) == null) {
+            throw AppException.mediaCredential("媒体存储未配置，请联系运营");
+        }
         String uploadDir = scope.prefix() + "/" + userId + "/";
-        String policy = buildPolicy(bucket, uploadDir);
+        String policy = buildPolicy(scope, bucket, uploadDir);
         String sessionName = "petgo-" + scope.name().toLowerCase() + "-" + userId;
 
         AliyunStsClient.AssumedCredential cred =
@@ -69,13 +74,23 @@ public class StsService {
     }
 
     /**
-     * 构造最小权限 RAM 策略：仅 {@code oss:PutObject} 到 {@code bucket/uploadDir*}。
-     * 不含 list / get / 其他前缀，杜绝越权（NFR-7）。
+     * 构造最小权限 RAM 策略：限定 {@code bucket/uploadDir*} 前缀。
+     *
+     * <p>动作按域收窄（单桶 + 对象级 ACL 适配，决策：单桶 tailtopia）：
+     * <ul>
+     *   <li>{@link MediaScope#PUBLIC}：{@code oss:PutObject} + {@code oss:PutObjectAcl}——后者仅为
+     *       上传时打 {@code public-read} ACL（私有桶中走公网读），仍限同一前缀，最小权限不破。</li>
+     *   <li>{@link MediaScope#PRIVATE}：仅 {@code oss:PutObject}（读走签名 URL，绝不给 ACL 权）。</li>
+     * </ul>
+     * 两域均不含 list / get / 其他前缀，杜绝越权（NFR-7）。
      */
-    String buildPolicy(String bucket, String uploadDir) {
+    String buildPolicy(MediaScope scope, String bucket, String uploadDir) {
+        List<String> actions = scope == MediaScope.PUBLIC
+                ? List.of("oss:PutObject", "oss:PutObjectAcl")
+                : List.of("oss:PutObject");
         Map<String, Object> statement = Map.of(
                 "Effect", "Allow",
-                "Action", List.of("oss:PutObject"),
+                "Action", actions,
                 "Resource", List.of("acs:oss:*:*:" + bucket + "/" + uploadDir + "*"));
         Map<String, Object> policy = Map.of(
                 "Version", "1",
