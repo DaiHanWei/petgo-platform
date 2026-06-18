@@ -519,6 +519,8 @@ class MockBackend {
       return ok({'date': date, 'items': items});
     }
     if (p.endsWith('/pet-profiles/me') && m == 'GET') {
+      // DEV_NOPET：模拟「未建档」→ 404，让建档表单页(pet-create)正常呈现而非被重定向到已有档案。
+      if (kDebugMode && const bool.fromEnvironment('DEV_NOPET')) throw _notFound(o);
       if (_petProfile == null) throw _notFound(o);
       return ok(_petProfile);
     }
