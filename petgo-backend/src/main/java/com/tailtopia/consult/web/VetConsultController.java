@@ -1,6 +1,8 @@
 package com.tailtopia.consult.web;
 
 import com.tailtopia.consult.dto.ConsultAssistResponse;
+import com.tailtopia.consult.dto.VetActiveItem;
+import com.tailtopia.consult.dto.VetHistoryItem;
 import com.tailtopia.consult.dto.VetInboxItem;
 import com.tailtopia.consult.dto.VetSessionView;
 import com.tailtopia.consult.service.ConsultAcceptService;
@@ -20,9 +22,11 @@ import org.springframework.web.bind.annotation.RestController;
  * 兽医侧咨询端点（Story 5.5，{@code hasRole('VET')}，落 vet 前缀）。
  *
  * <ul>
- *   <li>{@code GET /api/v1/vet/consult-sessions/waiting}：待接单列表（含 AI 上下文摘要）。</li>
+ *   <li>{@code GET /api/v1/vet/consult-sessions/waiting}：待接单列表（含 AI 上下文摘要 + 宠物身份）。</li>
+ *   <li>{@code GET /api/v1/vet/consult-sessions/in-progress}：工作台「进行中」Tab 活跃会话列表。</li>
+ *   <li>{@code GET /api/v1/vet/consult-sessions/history}：工作台「历史」Tab 终态会话 + 评分列表。</li>
  *   <li>{@code POST /api/v1/vet/consult-sessions/{id}/accept}：接单（CAS WAITING→IN_PROGRESS + IM 建会话）。</li>
- *   <li>{@code GET /api/v1/vet/consult-sessions/{id}}：进行中会话视图（含 im_conversation_id）。</li>
+ *   <li>{@code GET /api/v1/vet/consult-sessions/{id}}：进行中会话视图（含 im_conversation_id + 宠物身份）。</li>
  *   <li>{@code GET /api/v1/vet/consult-sessions/{id}/assist}：FR-5 辅助（AI 参考回复 + 冷启动空历史）。</li>
  * </ul>
  */
@@ -46,21 +50,33 @@ public class VetConsultController {
         return vetConsultService.waitingList();
     }
 
+    /** 工作台「进行中」Tab：当前兽医活跃态会话列表（IN_PROGRESS/PENDING_CLOSE）。 */
+    @GetMapping("/in-progress")
+    public List<VetActiveItem> inProgress(@AuthenticationPrincipal Jwt jwt) {
+        return vetConsultService.inProgressList(currentVetId(jwt));
+    }
+
+    /** 工作台「历史」Tab：当前兽医终态会话 + 用户评分摘要，时间倒序。 */
+    @GetMapping("/history")
+    public List<VetHistoryItem> history(@AuthenticationPrincipal Jwt jwt) {
+        return vetConsultService.historyList(currentVetId(jwt));
+    }
+
     @PostMapping("/{id}/accept")
     public VetSessionView accept(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
-        return VetSessionView.of(acceptService.accept(currentVetId(jwt), id));
+        return vetConsultService.toSessionView(acceptService.accept(currentVetId(jwt), id));
     }
 
     /** 兽医结束会话（二次确认在前端）：IN_PROGRESS → PENDING_CLOSE（Story 5.6）。 */
     @PostMapping("/{id}/end")
     public VetSessionView end(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
-        return VetSessionView.of(closeService.endByVet(currentVetId(jwt), id));
+        return vetConsultService.toSessionView(closeService.endByVet(currentVetId(jwt), id));
     }
 
     /** 兽医退单（Story 5.3 R2，F11）：IN_PROGRESS → WAITING，重新入队广播。仅本会话接单兽医可退单。 */
     @PostMapping("/{id}/release")
     public VetSessionView release(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
-        return VetSessionView.of(acceptService.release(currentVetId(jwt), id));
+        return vetConsultService.toSessionView(acceptService.release(currentVetId(jwt), id));
     }
 
     /** 兽医回复后通知用户（Story 6.2，FR-22A）：发完 IM 消息后 ping → 推送用户「有新回复」。 */
