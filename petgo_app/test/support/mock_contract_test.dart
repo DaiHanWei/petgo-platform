@@ -19,7 +19,9 @@ import 'package:tailtopia/features/profile/domain/milestone.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/features/profile/domain/timeline_item.dart';
 import 'package:tailtopia/features/triage/data/triage_repository.dart';
+import 'package:tailtopia/features/vet/domain/vet_inbox_item.dart';
 import 'package:tailtopia/features/vet/domain/vet_login_response.dart';
+import 'package:tailtopia/features/vet/domain/vet_workbench_lists.dart';
 
 /// L0 契约对账（CROSS-STORY-DECISIONS C5 ②：**App mock ↔ data DTO 字段一致**）。
 ///
@@ -41,6 +43,14 @@ void main() {
     expect(res, isNotNull, reason: '$method $path 未被 mock 命中');
     expect(res!.statusCode, inInclusiveRange(200, 299), reason: '$method $path → ${res.statusCode}');
     return (res.data as Map).cast<String, dynamic>();
+  }
+
+  /// 驱动 mock，断言命中且 2xx，返回 data List（兽医工作台列表端点回裸数组）。
+  List<Map<String, dynamic>> callList(String method, String path) {
+    final res = mock.handle(RequestOptions(path: path, method: method));
+    expect(res, isNotNull, reason: '$method $path 未被 mock 命中');
+    expect(res!.statusCode, inInclusiveRange(200, 299), reason: '$method $path → ${res.statusCode}');
+    return (res.data as List).map((e) => (e as Map).cast<String, dynamic>()).toList();
   }
 
   /// 对外契约字段集（剔除 `_` 前缀的 mock 内部键）。
@@ -213,6 +223,33 @@ void main() {
 
     test('POST /media/upload-url → UploadTicket', () {
       UploadTicket.fromJson(call('POST', '/api/v1/media/upload-url', {'scope': 'PUBLIC'}));
+    });
+
+    test('GET /vet/consult-sessions/waiting → VetInboxItem（后端不下发 petSex）', () {
+      final list = callList('GET', '/api/v1/vet/consult-sessions/waiting');
+      expect(list, isNotEmpty);
+      for (final m in list) {
+        expect(m.containsKey('petSex'), isFalse, reason: '后端不下发 petSex，前端兜底隐藏');
+        VetInboxItem.fromJson(m);
+      }
+    });
+
+    test('GET /vet/consult-sessions/in-progress → VetActiveItem', () {
+      for (final m in callList('GET', '/api/v1/vet/consult-sessions/in-progress')) {
+        VetActiveItem.fromJson(m);
+      }
+    });
+
+    test('GET /vet/consult-sessions/history → VetHistoryEntry', () {
+      for (final m in callList('GET', '/api/v1/vet/consult-sessions/history')) {
+        VetHistoryEntry.fromJson(m);
+      }
+    });
+
+    test('GET /vet/consult-sessions/{id} → VetSession（后端不下发 petSex）', () {
+      final m = call('GET', '/api/v1/vet/consult-sessions/8001');
+      expect(m.containsKey('petSex'), isFalse, reason: '后端不下发 petSex');
+      VetSession.fromJson(m);
     });
   });
 }

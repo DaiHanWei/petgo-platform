@@ -10,7 +10,6 @@ import com.tailtopia.consult.repository.ConsultSessionRepository;
 import com.tailtopia.triage.dto.TriageHistoryItem;
 import com.tailtopia.triage.service.TriageService;
 import com.tailtopia.vet.service.VetAccountService;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -79,14 +78,7 @@ public class ConsultHistoryService {
         String interruptedReason = s.getInterruptedReason() == null ? null : s.getInterruptedReason().name();
         // archived 标记位：FR-16 存档落地在 Epic 2 profile，本故事暂为 false（历史独立于存档）。
         return ConsultHistoryItem.vet(s.getId(), vetName, summary, stars, false,
-                s.getStatus().name(), closedReason, interruptedReason, terminalDate(s));
-    }
-
-    private static Instant terminalDate(ConsultSession s) {
-        if (s.getInterruptedAt() != null) {
-            return s.getInterruptedAt();
-        }
-        return s.getUpdatedAt() != null ? s.getUpdatedAt() : s.getCreatedAt();
+                s.getStatus().name(), closedReason, interruptedReason, s.terminalAt());
     }
 
     private String safeVetName(long vetId) {

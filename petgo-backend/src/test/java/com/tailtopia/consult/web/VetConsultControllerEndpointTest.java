@@ -6,13 +6,19 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.tailtopia.auth.domain.User;
+import com.tailtopia.consult.domain.ConsultRating;
 import com.tailtopia.consult.domain.ConsultSession;
 import com.tailtopia.consult.domain.SessionStatus;
+import com.tailtopia.consult.repository.ConsultRatingRepository;
 import com.tailtopia.consult.repository.ConsultSessionRepository;
 import com.tailtopia.consult.service.ConsultQueueService;
+import com.tailtopia.profile.domain.PetProfile;
+import com.tailtopia.profile.domain.PetType;
+import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.support.ApiIntegrationTest;
 import com.tailtopia.support.VetTestSupport;
 import com.tailtopia.vet.domain.VetAccount;
+import java.time.LocalDate;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +47,18 @@ class VetConsultControllerEndpointTest extends ApiIntegrationTest {
 
     @Autowired
     private ConsultQueueService queue;
+
+    @Autowired
+    private PetProfileRepository petProfiles;
+
+    @Autowired
+    private ConsultRatingRepository ratings;
+
+    /** 给用户造一只宠物（富化断言用）；cardToken 唯一。 */
+    private PetProfile newPet(long ownerId, PetType type, String name, LocalDate birthday) {
+        return petProfiles.save(PetProfile.create(
+                ownerId, type, name, null, null, birthday, null, "card-it-" + SEQ.incrementAndGet()));
+    }
 
     // ===== GET /waiting =====
 
@@ -294,6 +312,108 @@ class VetConsultControllerEndpointTest extends ApiIntegrationTest {
     @Test
     void assist_missingToken_isUnauthorized401() throws Exception {
         mvc.perform(get("/api/v1/vet/consult-sessions/1/assist"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    // ===== 宠物身份富化（待接单 / 会话视图）=====
+
+    @Test
+    void waiting_enrichesPetIdentityAndOwnerHandle() throws Exception {
+        VetAccount vet = vets.newActiveVet("富化医生");
+        User user = newUser();
+        newPet(user.getId(), PetType.CAT, "Oyen", LocalDate.now().minusMonths(24));
+        ConsultSession s = vets.newWaitingAiSession(
+                user.getId(), "YELLOW", "呕吐", java.util.List.of());
+        queue.enqueue(s.getId());
+
+        mvc.perform(get("/api/v1/vet/consult-sessions/waiting")
+                        .header("Authorization", vetBearer(vet.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.sessionId == " + s.getId() + ")].petName")
+                        .value(org.hamcrest.Matchers.hasItem("Oyen")))
+                .andExpect(jsonPath("$[?(@.sessionId == " + s.getId() + ")].petSpecies")
+                        .value(org.hamcrest.Matchers.hasItem("CAT")))
+                .andExpect(jsonPath("$[?(@.sessionId == " + s.getId() + ")].ownerHandle")
+                        .value(org.hamcrest.Matchers.hasItem(user.getNickname())));
+    }
+
+    @Test
+    void session_enrichesPetIdentity() throws Exception {
+        VetAccount vet = vets.newActiveVet("视图富化医生");
+        User user = newUser();
+        newPet(user.getId(), PetType.DOG, "Milo", LocalDate.now().minusMonths(18));
+        ConsultSession s = vets.newInProgressSession(user.getId(), vet.getId());
+
+        mvc.perform(get("/api/v1/vet/consult-sessions/" + s.getId())
+                        .header("Authorization", vetBearer(vet.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.petName").value("Milo"))
+                .andExpect(jsonPath("$.petSpecies").value("DOG"))
+                .andExpect(jsonPath("$.petAgeMonths").value(18))
+                .andExpect(jsonPath("$.ownerHandle").value(user.getNickname()));
+    }
+
+    // ===== GET /in-progress =====
+
+    @Test
+    void inProgress_listsVetActiveSessions() throws Exception {
+        VetAccount vet = vets.newActiveVet("进行中医生");
+        User user = newUser();
+        newPet(user.getId(), PetType.CAT, "Mochi", LocalDate.now().minusMonths(8));
+        ConsultSession s = vets.newInProgressSession(user.getId(), vet.getId());
+
+        mvc.perform(get("/api/v1/vet/consult-sessions/in-progress")
+                        .header("Authorization", vetBearer(vet.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.sessionId == " + s.getId() + ")].petName")
+                        .value(org.hamcrest.Matchers.hasItem("Mochi")));
+    }
+
+    @Test
+    void inProgress_userToken_isForbidden403() throws Exception {
+        var user = newUser();
+        mvc.perform(get("/api/v1/vet/consult-sessions/in-progress")
+                        .header("Authorization", userBearer(user.getId())))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void inProgress_missingToken_isUnauthorized401() throws Exception {
+        mvc.perform(get("/api/v1/vet/consult-sessions/in-progress"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    // ===== GET /history =====
+
+    @Test
+    void history_listsTerminalSessionsWithRating() throws Exception {
+        VetAccount vet = vets.newActiveVet("历史医生");
+        User user = newUser();
+        ConsultSession s = vets.newClosedSession(user.getId(), vet.getId());
+        ratings.save(ConsultRating.of(s.getId(), vet.getId(), user.getId(), 5, "讲解很清楚"));
+
+        mvc.perform(get("/api/v1/vet/consult-sessions/history")
+                        .header("Authorization", vetBearer(vet.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.sessionId == " + s.getId() + ")].terminalState")
+                        .value(org.hamcrest.Matchers.hasItem("CLOSED")))
+                .andExpect(jsonPath("$[?(@.sessionId == " + s.getId() + ")].stars")
+                        .value(org.hamcrest.Matchers.hasItem(5)))
+                .andExpect(jsonPath("$[?(@.sessionId == " + s.getId() + ")].reviewText")
+                        .value(org.hamcrest.Matchers.hasItem("讲解很清楚")));
+    }
+
+    @Test
+    void history_userToken_isForbidden403() throws Exception {
+        var user = newUser();
+        mvc.perform(get("/api/v1/vet/consult-sessions/history")
+                        .header("Authorization", userBearer(user.getId())))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void history_missingToken_isUnauthorized401() throws Exception {
+        mvc.perform(get("/api/v1/vet/consult-sessions/history"))
                 .andExpect(status().isUnauthorized());
     }
 }
