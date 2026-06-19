@@ -84,11 +84,11 @@ void main() {
       VetInboxItem(
         sessionId: 11, source: 'AI_UPGRADE', aiDangerLevel: 'YELLOW',
         symptomPreview: 'lemas', imageCount: 1, waitingElapsedSeconds: 30,
-        petName: 'Oyen', petSpecies: 'CAT', petSex: 'MALE', petAgeMonths: 24, ownerHandle: 'rani',
+        petName: 'Oyen', petSpecies: 'CAT', petAgeMonths: 24, ownerHandle: 'rani',
       ),
     ]));
     expect(find.text('Oyen'), findsOneWidget);
-    expect(find.text('Cat · Male · 2 yr · @rani'), findsOneWidget);
+    expect(find.text('Cat · 2 yr · @rani'), findsOneWidget);
   });
 
   testWidgets('无 petName → 降级不显身份块', (tester) async {

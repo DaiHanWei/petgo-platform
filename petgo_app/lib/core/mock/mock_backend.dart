@@ -48,12 +48,12 @@ class MockBackend {
   /// 会话宠物身份样本（Story 5.5 顶栏；Mock 先做满、后端随后补）。未命中 → 取 8101(Oyen) 兜底，
   /// 保证 dev 深链 /vet/conversation/:id 顶栏也有真身份可看。
   static const Map<int, Map<String, Object>> _vetSessionPet = {
-    8100: {'petName': 'Benji', 'petSpecies': 'DOG', 'petSex': 'MALE', 'petAgeMonths': 60, 'ownerHandle': 'bagas'},
-    8101: {'petName': 'Oyen', 'petSpecies': 'CAT', 'petSex': 'MALE', 'petAgeMonths': 24, 'ownerHandle': 'rani'},
-    8102: {'petName': 'Bruno', 'petSpecies': 'DOG', 'petSex': 'MALE', 'petAgeMonths': 36, 'ownerHandle': 'dimas'},
-    8103: {'petName': 'Mochi', 'petSpecies': 'CAT', 'petSex': 'FEMALE', 'petAgeMonths': 8, 'ownerHandle': 'aditya'},
-    8001: {'petName': 'Oyen', 'petSpecies': 'CAT', 'petSex': 'MALE', 'petAgeMonths': 24, 'ownerHandle': 'rani'},
-    8002: {'petName': 'Milo', 'petSpecies': 'DOG', 'petSex': 'MALE', 'petAgeMonths': 18, 'ownerHandle': 'putri'},
+    8100: {'petName': 'Benji', 'petSpecies': 'DOG', 'petAgeMonths': 60, 'ownerHandle': 'bagas'},
+    8101: {'petName': 'Oyen', 'petSpecies': 'CAT', 'petAgeMonths': 24, 'ownerHandle': 'rani'},
+    8102: {'petName': 'Bruno', 'petSpecies': 'DOG', 'petAgeMonths': 36, 'ownerHandle': 'dimas'},
+    8103: {'petName': 'Mochi', 'petSpecies': 'CAT', 'petAgeMonths': 8, 'ownerHandle': 'aditya'},
+    8001: {'petName': 'Oyen', 'petSpecies': 'CAT', 'petAgeMonths': 24, 'ownerHandle': 'rani'},
+    8002: {'petName': 'Milo', 'petSpecies': 'DOG', 'petAgeMonths': 18, 'ownerHandle': 'putri'},
   };
   /// 待接单池：未接单前 GET 返回 WAITING（让请求预览页不被「已被抢」误判弹出）。
   static const Set<int> _vetWaitingPool = {8100, 8101, 8102, 8103};
@@ -638,16 +638,17 @@ class MockBackend {
     if (p.endsWith('/vet/consult-sessions/waiting') && m == 'GET') {
       return ok([
         {'sessionId': 8100, 'source': 'AI_UPGRADE', 'aiDangerLevel': 'RED', 'symptomPreview': 'Makan cokelat lalu muntah berulang & lemas drastis sejak pagi', 'imageCount': 3, 'waitingElapsedSeconds': 50,
-          'petName': 'Benji', 'petSpecies': 'DOG', 'petSex': 'MALE', 'petAgeMonths': 60, 'ownerHandle': 'bagas'},
+          'petName': 'Benji', 'petSpecies': 'DOG', 'petAgeMonths': 60, 'ownerHandle': 'bagas'},
         {'sessionId': 8101, 'source': 'AI_UPGRADE', 'aiDangerLevel': 'YELLOW', 'symptomPreview': 'Muntah busa putih 2x semalam, jadi lebih lemas & kurang nafsu makan', 'imageCount': 2, 'waitingElapsedSeconds': 45,
-          'petName': 'Oyen', 'petSpecies': 'CAT', 'petSex': 'MALE', 'petAgeMonths': 24, 'ownerHandle': 'rani'},
+          'petName': 'Oyen', 'petSpecies': 'CAT', 'petAgeMonths': 24, 'ownerHandle': 'rani'},
         {'sessionId': 8102, 'source': 'AI_UPGRADE', 'aiDangerLevel': 'GREEN', 'symptomPreview': 'Bersin-bersin sejak 2 hari, makan & main masih normal', 'imageCount': 1, 'waitingElapsedSeconds': 90,
-          'petName': 'Bruno', 'petSpecies': 'DOG', 'petSex': 'MALE', 'petAgeMonths': 36, 'ownerHandle': 'dimas'},
+          'petName': 'Bruno', 'petSpecies': 'DOG', 'petAgeMonths': 36, 'ownerHandle': 'dimas'},
         {'sessionId': 8103, 'source': 'DIRECT', 'aiDangerLevel': null, 'symptomPreview': null, 'imageCount': 0, 'waitingElapsedSeconds': 150,
-          'petName': 'Mochi', 'petSpecies': 'CAT', 'petSex': 'FEMALE', 'petAgeMonths': 8, 'ownerHandle': 'aditya'},
+          'petName': 'Mochi', 'petSpecies': 'CAT', 'petAgeMonths': 8, 'ownerHandle': 'aditya'},
       ]);
     }
     // 「进行中」会话列表（工作台 Active Tab）。点卡 → /vet/conversation/:id（IM 占位聊天）。
+    // 后端仅下发 sessionId/source/petName；unread/lastMessage 为 IM SDK 字段，此处 mock 兼任 IM 离线占位。
     if (p.endsWith('/vet/consult-sessions/in-progress') && m == 'GET') {
       return ok([
         {'sessionId': 8001, 'source': 'AI_UPGRADE', 'petName': 'Oyen', 'unread': 1,

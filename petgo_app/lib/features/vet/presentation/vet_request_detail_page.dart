@@ -202,7 +202,7 @@ class _VetRequestDetailPageState extends ConsumerState<VetRequestDetailPage> {
     }
   }
 
-  /// 宠物标签：种类 / 性别 / 年龄，缺项跳过。
+  /// 宠物标签：种类 / 年龄，缺项跳过（无性别——后端不下发 petSex）。
   List<String> _tags(AppLocalizations l10n) {
     final tags = <String>[];
     switch (widget.item.petSpecies) {
@@ -210,12 +210,6 @@ class _VetRequestDetailPageState extends ConsumerState<VetRequestDetailPage> {
         tags.add(l10n.vetSpeciesCat);
       case 'DOG':
         tags.add(l10n.vetSpeciesDog);
-    }
-    switch (widget.item.petSex) {
-      case 'MALE':
-        tags.add(l10n.vetSexMale);
-      case 'FEMALE':
-        tags.add(l10n.vetSexFemale);
     }
     final m = widget.item.petAgeMonths;
     if (m != null) tags.add(m >= 12 ? l10n.vetAgeYears(m ~/ 12) : l10n.vetAgeMonths(m));
