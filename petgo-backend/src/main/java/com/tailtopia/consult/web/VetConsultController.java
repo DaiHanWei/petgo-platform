@@ -62,21 +62,25 @@ public class VetConsultController {
         return vetConsultService.historyList(currentVetId(jwt));
     }
 
+    // 写路径（接单/结束/退单）返回不富化的基础视图：CAS 写事务已提交，不再挂跨模块身份富化
+    // （否则富化查询失败会把「已成功的写」翻成 500 → 幽灵接单态分歧）。前端接单后跳会话页，
+    // 经 GET /{id}（sessionView）单独拉富化顶栏，故写响应无需 petName 等字段。
+
     @PostMapping("/{id}/accept")
     public VetSessionView accept(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
-        return vetConsultService.toSessionView(acceptService.accept(currentVetId(jwt), id));
+        return VetSessionView.of(acceptService.accept(currentVetId(jwt), id));
     }
 
     /** 兽医结束会话（二次确认在前端）：IN_PROGRESS → PENDING_CLOSE（Story 5.6）。 */
     @PostMapping("/{id}/end")
     public VetSessionView end(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
-        return vetConsultService.toSessionView(closeService.endByVet(currentVetId(jwt), id));
+        return VetSessionView.of(closeService.endByVet(currentVetId(jwt), id));
     }
 
     /** 兽医退单（Story 5.3 R2，F11）：IN_PROGRESS → WAITING，重新入队广播。仅本会话接单兽医可退单。 */
     @PostMapping("/{id}/release")
     public VetSessionView release(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
-        return vetConsultService.toSessionView(acceptService.release(currentVetId(jwt), id));
+        return VetSessionView.of(acceptService.release(currentVetId(jwt), id));
     }
 
     /** 兽医回复后通知用户（Story 6.2，FR-22A）：发完 IM 消息后 ping → 推送用户「有新回复」。 */

@@ -303,12 +303,13 @@
 - Story 5.5。响应 `200`：**VetInboxItem**[]：`sessionId`, `source`, `aiDangerLevel`?(仅 AI_UPGRADE), `symptomPreview`?(≤40 字截断), `imageCount`(int), `waitingElapsedSeconds`(long), `petName`?, `petSpecies`?(CAT/DOG/OTHER), `petAgeMonths`?(由生日折算), `ownerHandle`?(机主昵称)。
   > 宠物身份经跨模块只读端口富化（`pet_profiles` JOIN + 用户昵称）；注销匿名化后会话已剥 user_id → 这些字段为 null。**不含 `petSex`**（建档不收集性别，前端兜底隐藏）。
 
-### 7.4 `POST /vet/consult-sessions/{id}/accept` — 接单
-- Story 5.5。响应 `200`：**VetSessionView**：`id`, `status`(IN_PROGRESS), `source`, `userId`?, `imConversationId`?, `hasAiContext`(bool), `petName`?, `petSpecies`?, `petAgeMonths`?, `ownerHandle`?（同 §7.3 富化规则，不含 `petSex`）。
-- 并发抢单由 `@Version` 乐观锁裁决，仅一人成功，余者「已被接走」。WAITING→IN_PROGRESS + 建 IM C2C 会话。
+### 7.4 `POST /vet/consult-sessions/{id}/accept` · `/end` · `/release` — 写路径
+- Story 5.5/5.6。响应 `200`：**VetSessionView 基础视图**：`id`, `status`, `source`, `userId`?, `imConversationId`?, `hasAiContext`(bool)。
+- **写路径不富化宠物身份**（`petName`/`petSpecies`/`petAgeMonths`/`ownerHandle` 省略）：CAS 写事务已提交，响应不挂跨模块身份查询，避免富化失败把已成功的写翻成 500（幽灵接单）。前端接单后跳会话页，经 §7.5 单独拉富化顶栏。
+- 接单并发由 `@Version` 乐观锁裁决，仅一人成功，余者「已被接走」；WAITING→IN_PROGRESS + 建 IM C2C 会话。
 
-### 7.5 `GET /vet/consult-sessions/{id}` — 会话视图
-- 响应 `200`：VetSessionView（含 imConversationId 供 SDK 加载对话 + 宠物身份顶栏字段）。
+### 7.5 `GET /vet/consult-sessions/{id}` — 会话视图（读路径，富化）
+- 响应 `200`：VetSessionView，含 `imConversationId`（供 SDK 加载对话）+ **宠物身份顶栏字段**（`petName`/`petSpecies`/`petAgeMonths`/`ownerHandle`，注销匿名化兜底 null；不含 `petSex`）。
 
 ### 7.6 `GET /vet/consult-sessions/{id}/ai-context` — AI 上下文
 - Story 5.4。响应 `200`（ConsultAiContextResponse）：`hasAiContext`(bool), `dangerLevel`?, `symptomText`?(健康数据，日志严禁明文), `imageUrls`?(私密桶短 TTL 签名 URL，现签不入库)。DIRECT 会话 → `hasAiContext=false`。

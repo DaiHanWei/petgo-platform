@@ -20,7 +20,10 @@ public record VetSessionView(
         Integer petAgeMonths,
         String ownerHandle) {
 
-    /** 基础视图（无宠物身份）——保留供不需富化的调用方/测试用。 */
+    /**
+     * 基础视图（无宠物身份）。写路径（接单/结束/退单）专用：写事务已提交，响应不挂跨模块身份富化，
+     * 避免富化查询失败把已成功的写翻成 500。读路径（sessionView）走 service 富化的五参重载。
+     */
     public static VetSessionView of(ConsultSession s) {
         return of(s, null, null, null, null);
     }

@@ -1,13 +1,17 @@
 package com.tailtopia.profile.service;
 
+import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.dto.PetIdentityView;
 import com.tailtopia.profile.dto.PetProfileSnapshot;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import java.time.LocalDate;
-import java.time.Period;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,16 +53,32 @@ public class PetProfileQueryService {
         if (ownerId == null) {
             return Optional.empty();
         }
-        return petProfiles.findByOwnerId(ownerId)
-                .map(p -> new PetIdentityView(p.getName(), p.getPetType().name(), ageMonths(p.getBirthday())));
+        return petProfiles.findByOwnerId(ownerId).map(PetProfileQueryService::toIdentity);
     }
 
+    /**
+     * 批量取多账号宠物身份（兽医工作台列表富化，避免逐条 N+1）。返回 {@code ownerId → 身份}，
+     * 缺档/null 账号不入 map（调用方按 key 缺失兜底）。
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, PetIdentityView> findIdentitiesByOwners(Collection<Long> ownerIds) {
+        if (ownerIds == null || ownerIds.isEmpty()) {
+            return Map.of();
+        }
+        return petProfiles.findByOwnerIdIn(ownerIds).stream()
+                .collect(Collectors.toMap(PetProfile::getOwnerId, PetProfileQueryService::toIdentity));
+    }
+
+    private static PetIdentityView toIdentity(PetProfile p) {
+        return new PetIdentityView(p.getName(), p.getPetType().name(), ageMonths(p.getBirthday()));
+    }
+
+    /** 整月龄：UTC 今日与生日之间的完整月数（生日缺失 null；未来生日钳为 0，绝不为负）。 */
     private static Integer ageMonths(LocalDate birthday) {
         if (birthday == null) {
             return null;
         }
-        Period age = Period.between(birthday, LocalDate.now(ZoneOffset.UTC));
-        long months = age.getYears() * 12L + age.getMonths();
+        long months = ChronoUnit.MONTHS.between(birthday, LocalDate.now(ZoneOffset.UTC));
         return (int) Math.max(0L, months);
     }
 }
