@@ -14,6 +14,7 @@ import '../../features/content/domain/content_type.dart';
 import '../../features/content/presentation/content_detail_page.dart';
 import '../../features/content/presentation/home_page.dart';
 import '../../features/content/presentation/publish_landing_page.dart';
+import '../../features/me/presentation/delete_account_page.dart';
 import '../../features/me/presentation/language_settings_page.dart';
 import '../../features/me/presentation/me_page.dart';
 import '../../features/me/presentation/settings_page.dart';
@@ -195,6 +196,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/me/settings', builder: (c, s) => const SettingsPage()),
       // 语言设置（Story 7.2）。
       GoRoute(path: '/me/language', builder: (c, s) => const LanguageSettingsPage()),
+      // 账号注销整页（P-43 · Story 7.3）。受控（/me 前缀，需登录）。
+      GoRoute(path: '/me/delete-account', builder: (c, s) => const DeleteAccountPage()),
       // 宠物聚会 Gath（TailTopia Prototype 占位页）。shell 外 push。
       GoRoute(path: '/gath', builder: (c, s) => const GathPage()),
       // 宠物名片 H5 预览（FR-14）。shell 外 push（全屏浏览器外壳观感）。

@@ -368,7 +368,7 @@ class _VetRequestDetailPageState extends ConsumerState<VetRequestDetailPage> {
                 ],
                 if (item.ownerHandle != null) ...[
                   const SizedBox(height: 6),
-                  Text('Pemilik: @${item.ownerHandle} · 🐾',
+                  Text('${l10n.vetRequestOwnerLabel} @${item.ownerHandle} · 🐾',
                       style: AppTypography.caption.copyWith(color: AppColors.textTertiary)),
                 ],
               ],

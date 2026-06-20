@@ -11,7 +11,7 @@ import 'post_cover.dart';
 
 /// Feed 单列卡片（原型 feed.html `.card`）。
 ///
-/// 头部行：作者头像（彩色首字母圆）+ 昵称 / 相对时间 + 点赞数（PRD-642）+ 类型彩徽章；
+/// 头部行：作者头像（彩色首字母圆）+ 昵称 / 相对时间 + 类型彩徽章；
 /// 其下正文（前 3 行）+ 全宽首图（无图 → 类型彩块）。注销作者 → 本地化「已注销用户」+ 默认头像，
 /// 头像不可点（Story 3.8）。
 class MasonryCard extends StatelessWidget {
@@ -109,12 +109,6 @@ class MasonryCard extends StatelessWidget {
                               ],
                             ),
                           ),
-                          const SizedBox(width: AppSpacing.xs),
-                          // 点赞数（PRD-642）。
-                          const Icon(Icons.favorite_rounded, size: 13, color: AppColors.likeHeart),
-                          const SizedBox(width: 2),
-                          Text('${item.likeCount}',
-                              style: AppTypography.caption.copyWith(color: AppColors.textTertiary)),
                           const SizedBox(width: AppSpacing.sm),
                           // 类型彩徽章（原型 badge）。
                           Container(

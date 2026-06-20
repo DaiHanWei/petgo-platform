@@ -3,10 +3,37 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TailTopia · Core Pages Reference V1.0.0</title>
+<title>TailTopia · namecard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../tokens.css">
+<!-- tokens.css 内联（自包含，不依赖外部相对路径）-->
+<style>
+/* ──────────────────────────────────────────────────────────────
+   tokens.css · TailTopia Core Pages Reference
+   ⚠️ 重建版（非设计师原档）。原 preview-core-pages.html 引用了 ./tokens.css
+   但该文件未随附，导致所有 var(--color-*) 失效、页面白底变透明、透出画布淡紫。
+   本文件按 HTML 内置图例面板（Color Palette）+ QA 验证清单的明确描述重建：
+     · 画布/卡片纯白 #FFFFFF（QA: 画布背景为纯白，无紫调）
+     · violet-50 #F8F2FF 仅作局部点缀
+     · 文字 ink-700 #544864（图例文档值）
+   灰阶层级(heading/primary/tertiary)与兽医端底色 bg-vet 为合理推断，
+   拿到设计师原件后可直接覆盖本文件。
+   ────────────────────────────────────────────────────────────── */
+:root{
+  /* ── Backgrounds ── */
+  --color-bg-default:#FFFFFF;   /* 页面画布（手机屏内），纯白无紫调 */
+  --color-bg-surface:#FFFFFF;   /* 卡片 / AppBar / TabBar，白底靠阴影分层 */
+  --color-bg-subtle:#F8F2FF;    /* violet-50，局部点缀底（petsel/统计条/进度槽） */
+  --color-bg-muted:#EFEDF3;     /* 中性浅灰：关闭按钮、离线态等 */
+  --color-bg-vet:#F0F4F4;       /* 兽医端浅薄荷底（推断值，待原件校正） */
+
+  /* ── Text（4 级层级，仅 secondary 为图例文档值，其余为层级推断） ── */
+  --color-text-heading:#1C1830;   /* 大标题，最深 */
+  --color-text-primary:#2E2A45;   /* 正文主色 / 状态栏 / 标题 */
+  --color-text-secondary:#544864; /* ink-700（图例文档值），次级文字 */
+  --color-text-tertiary:#9690A6;  /* 弱化：时间戳、占位、caption */
+}
+</style>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;padding:36px;min-height:100vh;align-items:flex-start;justify-content:center;}
@@ -19,6 +46,8 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
 .statusbar .icons{display:flex;align-items:center;gap:5px;}
 .pages{flex:1;overflow:hidden;position:relative;}
 .page{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;display:none;padding-bottom:4px;background:var(--color-bg-default);}
+#paspor-fab{display:none;}
+.phone:has(#p-paspor.on) #paspor-fab{display:block;}
 .page::-webkit-scrollbar{display:none;}
 .page.on{display:block;}
 
@@ -248,10 +277,7 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
 </head>
 <body>
 <div class="phone">
-
   <div class="pill"></div>
-
-  <!-- Status Bar -->
   <div class="statusbar">
     <span class="t">9:41</span>
     <div class="icons">
@@ -268,8 +294,6 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
       </svg>
     </div>
   </div>
-
-  <!-- Pages -->
   <div class="pages">
 <div class="page on" id="p-namecard" data-notab="true" style="background:#141019;overflow-x:hidden;">
       <!-- 背景光晕 -->
@@ -359,6 +383,7 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
       </div>
     </div>
   </div>
-</div>
+  </div>
 <script>function go(){return false;}function nav(){return false;}</script>
-</body></html>
+</body>
+</html>

@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/pet_status_selector.dart';
 import '../../auth/data/me_repository.dart';
@@ -22,12 +23,6 @@ import 'widgets/archive_calendar.dart';
 import 'widgets/pet_info_card.dart';
 import 'widgets/share_fab.dart';
 import 'widgets/timeline_tiles.dart';
-
-/// 印尼语月份全称（paspor.html 月份区标题 "Juni 2026"）。
-const List<String> _idMonthFull = [
-  '', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
-];
 
 /// 成长档案 Tab 主屏（Story 2.4）。三态：
 /// - 状态 A + 有档案 → 信息卡 + FAB 占位 + 倒序时间线；
@@ -169,6 +164,7 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final stats = ref.watch(archiveStatsProvider).asData?.value;
     final name = widget.profile.name;
     return RefreshIndicator(
@@ -184,7 +180,7 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
           Row(
             children: [
               Expanded(
-                child: Text('Paspor $name',
+                child: Text(l10n.growthArchivePassportTitle(name),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -203,7 +199,7 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
           const SizedBox(height: 11),
           _MilestoneBar(petName: name),
           const SizedBox(height: 12),
-          _viewToggleRow(),
+          _viewToggleRow(l10n),
           const SizedBox(height: 14),
           if (_view == _ArchiveView.timeline) const _TimelineView() else _calendarView(),
         ],
@@ -236,13 +232,13 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
       );
 
   /// Timeline / Kalender 药丸切换（paspor.html 双按钮）。
-  Widget _viewToggleRow() {
+  Widget _viewToggleRow(AppLocalizations l10n) {
     return Row(
       children: [
-        Expanded(child: _toggleBtn('⏱ Timeline', _view == _ArchiveView.timeline,
+        Expanded(child: _toggleBtn('⏱ ${l10n.growthArchiveViewTimeline}', _view == _ArchiveView.timeline,
             () => setState(() => _view = _ArchiveView.timeline), const ValueKey('archiveViewTimeline'))),
         const SizedBox(width: 7),
-        Expanded(child: _toggleBtn('📅 Kalender', _view == _ArchiveView.calendar,
+        Expanded(child: _toggleBtn('📅 ${l10n.growthArchiveViewCalendar}', _view == _ArchiveView.calendar,
             () => setState(() => _view = _ArchiveView.calendar), const ValueKey('archiveViewCalendar'))),
       ],
     );
@@ -287,6 +283,7 @@ class _MilestoneBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final stats = ref.watch(archiveStatsProvider);
     return stats.maybeWhen(
       data: (s) {
@@ -310,7 +307,7 @@ class _MilestoneBar extends ConsumerWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Expanded(
-                      child: Text('🏆 Pencapaian $petName',
+                      child: Text('🏆 ${l10n.growthArchiveAchievements(petName)}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
@@ -383,10 +380,10 @@ class _TimelineView extends ConsumerWidget {
                     style: const TextStyle(
                         fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink)),
                 const SizedBox(height: 10),
-                const Text(
-                  'Mulai catat momen pertama hewanmu!\nSetiap foto dan cerita tersimpan di sini.',
+                Text(
+                  l10n.growthArchiveTimelineEmptyBody,
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13, height: 1.5, color: AppColors.ink2),
+                  style: const TextStyle(fontSize: 13, height: 1.5, color: AppColors.ink2),
                 ),
                 const SizedBox(height: 22),
                 FilledButton(
@@ -398,8 +395,8 @@ class _TimelineView extends ConsumerWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
-                  child: const Text('+ Catat Momen Pertama',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                  child: Text('+ ${l10n.growthArchiveRecordFirstMoment}',
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
                 ),
               ],
             ),
@@ -429,7 +426,7 @@ class _TimelineView extends ConsumerWidget {
           if (monthKey != lastMonthKey) {
             tiles.add(Padding(
               padding: EdgeInsets.only(top: lastMonthKey == null ? 0 : 6, bottom: 10),
-              child: Text('${_idMonthFull[d.month]} ${d.year}',
+              child: Text(formatMonthYear(context, d),
                   style: const TextStyle(
                       fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink)),
             ));

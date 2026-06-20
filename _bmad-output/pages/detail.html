@@ -3,10 +3,37 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TailTopia · Core Pages Reference V1.0.0</title>
+<title>TailTopia · detail</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../tokens.css">
+<!-- tokens.css 内联（自包含，不依赖外部相对路径）-->
+<style>
+/* ──────────────────────────────────────────────────────────────
+   tokens.css · TailTopia Core Pages Reference
+   ⚠️ 重建版（非设计师原档）。原 preview-core-pages.html 引用了 ./tokens.css
+   但该文件未随附，导致所有 var(--color-*) 失效、页面白底变透明、透出画布淡紫。
+   本文件按 HTML 内置图例面板（Color Palette）+ QA 验证清单的明确描述重建：
+     · 画布/卡片纯白 #FFFFFF（QA: 画布背景为纯白，无紫调）
+     · violet-50 #F8F2FF 仅作局部点缀
+     · 文字 ink-700 #544864（图例文档值）
+   灰阶层级(heading/primary/tertiary)与兽医端底色 bg-vet 为合理推断，
+   拿到设计师原件后可直接覆盖本文件。
+   ────────────────────────────────────────────────────────────── */
+:root{
+  /* ── Backgrounds ── */
+  --color-bg-default:#FFFFFF;   /* 页面画布（手机屏内），纯白无紫调 */
+  --color-bg-surface:#FFFFFF;   /* 卡片 / AppBar / TabBar，白底靠阴影分层 */
+  --color-bg-subtle:#F8F2FF;    /* violet-50，局部点缀底（petsel/统计条/进度槽） */
+  --color-bg-muted:#EFEDF3;     /* 中性浅灰：关闭按钮、离线态等 */
+  --color-bg-vet:#F0F4F4;       /* 兽医端浅薄荷底（推断值，待原件校正） */
+
+  /* ── Text（4 级层级，仅 secondary 为图例文档值，其余为层级推断） ── */
+  --color-text-heading:#1C1830;   /* 大标题，最深 */
+  --color-text-primary:#2E2A45;   /* 正文主色 / 状态栏 / 标题 */
+  --color-text-secondary:#544864; /* ink-700（图例文档值），次级文字 */
+  --color-text-tertiary:#9690A6;  /* 弱化：时间戳、占位、caption */
+}
+</style>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;padding:36px;min-height:100vh;align-items:flex-start;justify-content:center;}
@@ -19,6 +46,8 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
 .statusbar .icons{display:flex;align-items:center;gap:5px;}
 .pages{flex:1;overflow:hidden;position:relative;}
 .page{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;display:none;padding-bottom:4px;background:var(--color-bg-default);}
+#paspor-fab{display:none;}
+.phone:has(#p-paspor.on) #paspor-fab{display:block;}
 .page::-webkit-scrollbar{display:none;}
 .page.on{display:block;}
 
@@ -248,10 +277,7 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
 </head>
 <body>
 <div class="phone">
-
   <div class="pill"></div>
-
-  <!-- Status Bar -->
   <div class="statusbar">
     <span class="t">9:41</span>
     <div class="icons">
@@ -268,8 +294,6 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
       </svg>
     </div>
   </div>
-
-  <!-- Pages -->
   <div class="pages">
 <div class="page on" id="p-detail" data-notab="true">
 
@@ -279,15 +303,15 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#544864" stroke-width="2.2" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
         </button>
         <!-- ··· 菜单 -->
-        <button style="width:36px;height:36px;border-radius:11px;background:var(--color-bg-muted);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;">
+        <button onclick="document.getElementById('detail-more-sheet').style.display='flex'" style="width:36px;height:36px;border-radius:11px;background:var(--color-bg-muted);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" color="#544864"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
         </button>
       </div>
 
       <!-- 作者信息 -->
       <div style="display:flex;align-items:center;gap:10px;padding:4px 20px 14px;">
-        <div style="width:38px;height:38px;border-radius:9999px;background:linear-gradient(135deg,#9E83DA,#845EC9);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff;flex-shrink:0;cursor:pointer;">P</div>
-        <div style="flex:1;">
+        <div onclick="document.getElementById('mini-profile-sheet').style.display='flex'" style="width:38px;height:38px;border-radius:9999px;background:linear-gradient(135deg,#9E83DA,#845EC9);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff;flex-shrink:0;cursor:pointer;">P</div>
+        <div style="flex:1;" onclick="document.getElementById('mini-profile-sheet').style.display='flex'">
           <div style="font-size:14px;font-weight:600;color:var(--color-text-heading);cursor:pointer;">Putri Rahayu</div>
           <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:1px;">2 jam lalu · Cerita Harian</div>
         </div>
@@ -374,8 +398,77 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z"/></svg>
         </button>
       </div>
+
+      <!-- FR-26 · 迷你主页预览卡（头像/昵称点击） -->
+      <div id="mini-profile-sheet" style="display:none;position:absolute;inset:0;background:rgba(14,10,20,.6);z-index:998;align-items:flex-end;overflow:hidden;touch-action:none;" onclick="if(event.target===this)this.style.display='none'" onwheel="if(event.target===this)event.preventDefault()" ontouchmove="if(event.target===this)event.preventDefault()">
+        <div style="background:var(--color-bg-surface);border-radius:24px 24px 0 0;width:100%;padding:24px 22px 38px;animation:slideUp .25s ease-out;text-align:center;" onclick="event.stopPropagation()">
+          <div style="width:36px;height:4px;background:#E6E6E6;border-radius:9999px;margin:0 auto 20px;"></div>
+          <div style="width:64px;height:64px;border-radius:9999px;background:linear-gradient(135deg,#9E83DA,#845EC9);display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;color:#fff;margin:0 auto 12px;">P</div>
+          <div style="font-size:16px;font-weight:700;color:var(--color-text-heading);margin-bottom:6px;">Putri Rahayu</div>
+          <div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:16px;">TA telah memposting 7 konten</div>
+          <div style="background:var(--color-bg-subtle);border-radius:14px;padding:14px 16px;margin-bottom:18px;">
+            <div style="font-size:12px;color:#845EC9;line-height:1.6;">TA punya halaman profil khusus yang sedang dipersiapkan dengan penuh perhatian, lebih banyak keseruan akan segera hadir ✨</div>
+          </div>
+          <button onclick="document.getElementById('mini-profile-sheet').style.display='none'" style="width:100%;padding:13px;background:var(--color-bg-muted);border:none;border-radius:14px;font-size:14px;color:var(--color-text-secondary);font-family:'Poppins',sans-serif;cursor:pointer;">Tutup</button>
+        </div>
+      </div>
+
+      <!-- FR-28 ··· 菜单：默认=他人内容(举报)，可切换至 自己内容(删除) 演示两种状态 -->
+      <div id="detail-more-sheet" style="display:none;position:absolute;inset:0;background:rgba(14,10,20,.6);z-index:998;align-items:flex-end;overflow:hidden;touch-action:none;" onclick="if(event.target===this)this.style.display='none'" onwheel="if(event.target===this)event.preventDefault()" ontouchmove="if(event.target===this)event.preventDefault()">
+        <div style="background:var(--color-bg-surface);border-radius:24px 24px 0 0;width:100%;padding:10px 22px 32px;animation:slideUp .25s ease-out;" onclick="event.stopPropagation()">
+          <div style="width:36px;height:4px;background:#E6E6E6;border-radius:9999px;margin:0 auto 14px;"></div>
+          <!-- 他人内容状态 -->
+          <div id="more-sheet-other">
+            <button onclick="document.getElementById('detail-more-sheet').style.display='none';document.getElementById('report-type-sheet').style.display='flex'" style="width:100%;text-align:left;padding:14px 4px;background:none;border:none;border-bottom:1px solid #F3F3F3;font-size:14px;color:#F0425A;font-family:'Poppins',sans-serif;cursor:pointer;display:flex;align-items:center;gap:10px;">🚩 Laporkan Konten</button>
+            <button onclick="document.getElementById('detail-more-sheet').style.display='none'" style="width:100%;text-align:left;padding:14px 4px 4px;background:none;border:none;font-size:14px;color:var(--color-text-secondary);font-family:'Poppins',sans-serif;cursor:pointer;">Batal</button>
+            <div style="text-align:center;margin-top:10px;"><span onclick="document.getElementById('more-sheet-other').style.display='none';document.getElementById('more-sheet-own').style.display='block'" style="font-size:11px;color:var(--color-text-tertiary);cursor:pointer;text-decoration:underline;">（演示：切换至作者视角 →）</span></div>
+          </div>
+          <!-- 自己内容状态 (FR-36) -->
+          <div id="more-sheet-own" style="display:none;">
+            <button onclick="document.getElementById('detail-more-sheet').style.display='none';document.getElementById('delete-confirm-sheet').style.display='flex'" style="width:100%;text-align:left;padding:14px 4px;background:none;border:none;border-bottom:1px solid #F3F3F3;font-size:14px;color:#F0425A;font-family:'Poppins',sans-serif;cursor:pointer;display:flex;align-items:center;gap:10px;">🗑 Hapus Konten</button>
+            <button onclick="document.getElementById('detail-more-sheet').style.display='none'" style="width:100%;text-align:left;padding:14px 4px 4px;background:none;border:none;font-size:14px;color:var(--color-text-secondary);font-family:'Poppins',sans-serif;cursor:pointer;">Batal</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- FR-25 · 举报类型选择 -->
+      <div id="report-type-sheet" style="display:none;position:absolute;inset:0;background:rgba(14,10,20,.6);z-index:998;align-items:flex-end;overflow:hidden;touch-action:none;" onclick="if(event.target===this)this.style.display='none'" onwheel="if(event.target===this)event.preventDefault()" ontouchmove="if(event.target===this)event.preventDefault()">
+        <div id="report-type-form" style="background:var(--color-bg-surface);border-radius:24px 24px 0 0;width:100%;padding:20px 22px 32px;animation:slideUp .25s ease-out;" onclick="event.stopPropagation()">
+          <div style="width:36px;height:4px;background:#E6E6E6;border-radius:9999px;margin:0 auto 18px;"></div>
+          <div style="font-size:16px;font-weight:700;color:var(--color-text-heading);margin-bottom:4px;">Laporkan Konten</div>
+          <div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:16px;">Pilih alasan yang paling sesuai</div>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px;">
+            <label style="display:flex;align-items:center;gap:10px;padding:12px 14px;border:1.5px solid #845EC9;border-radius:13px;background:var(--color-bg-subtle);cursor:pointer;"><input type="radio" name="report-reason" checked style="accent-color:#845EC9;"><span style="font-size:13px;color:var(--color-text-heading);">Melanggar hukum / aturan</span></label>
+            <label style="display:flex;align-items:center;gap:10px;padding:12px 14px;border:1.5px solid #E6E6E6;border-radius:13px;cursor:pointer;"><input type="radio" name="report-reason" style="accent-color:#845EC9;"><span style="font-size:13px;color:var(--color-text-primary);">Informasi palsu</span></label>
+            <label style="display:flex;align-items:center;gap:10px;padding:12px 14px;border:1.5px solid #E6E6E6;border-radius:13px;cursor:pointer;"><input type="radio" name="report-reason" style="accent-color:#845EC9;"><span style="font-size:13px;color:var(--color-text-primary);">Konten tidak pantas</span></label>
+            <label style="display:flex;align-items:center;gap:10px;padding:12px 14px;border:1.5px solid #E6E6E6;border-radius:13px;cursor:pointer;"><input type="radio" name="report-reason" style="accent-color:#845EC9;"><span style="font-size:13px;color:var(--color-text-primary);">Pelecehan</span></label>
+            <label style="display:flex;align-items:center;gap:10px;padding:12px 14px;border:1.5px solid #E6E6E6;border-radius:13px;cursor:pointer;"><input type="radio" name="report-reason" style="accent-color:#845EC9;"><span style="font-size:13px;color:var(--color-text-primary);">Lainnya</span></label>
+          </div>
+          <button onclick="document.getElementById('report-type-form').style.display='none';document.getElementById('report-type-done').style.display='block'" style="width:100%;padding:14px;background:#845EC9;border:none;border-radius:14px;font-size:14px;font-weight:700;color:#fff;font-family:'Poppins',sans-serif;cursor:pointer;box-shadow:0 6px 18px rgba(132,94,201,.28);margin-bottom:10px;">Kirim Laporan</button>
+          <button onclick="document.getElementById('report-type-sheet').style.display='none'" style="width:100%;padding:13px;background:transparent;border:1.5px solid #E6E6E6;border-radius:14px;font-size:14px;color:var(--color-text-secondary);font-family:'Poppins',sans-serif;cursor:pointer;">Batal</button>
+        </div>
+        <div id="report-type-done" style="display:none;background:var(--color-bg-surface);border-radius:24px 24px 0 0;width:100%;padding:32px 22px 40px;text-align:center;animation:slideUp .25s ease-out;" onclick="event.stopPropagation()">
+          <div style="width:60px;height:60px;border-radius:9999px;background:var(--color-bg-subtle);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:28px;">✅</div>
+          <div style="font-size:15px;font-weight:700;color:var(--color-text-heading);margin-bottom:6px;">Laporan diterima</div>
+          <div style="font-size:13px;color:var(--color-text-secondary);line-height:1.6;margin-bottom:20px;">Kami akan segera memprosesnya.</div>
+          <button onclick="document.getElementById('report-type-sheet').style.display='none';document.getElementById('report-type-form').style.display='block';document.getElementById('report-type-done').style.display='none'" style="width:100%;padding:13px;background:var(--color-bg-muted);border:none;border-radius:14px;font-size:14px;color:var(--color-text-secondary);font-family:'Poppins',sans-serif;cursor:pointer;">Tutup</button>
+        </div>
+      </div>
+
+      <!-- FR-36 · 删除确认 -->
+      <div id="delete-confirm-sheet" style="display:none;position:absolute;inset:0;background:rgba(14,10,20,.6);z-index:998;align-items:flex-end;overflow:hidden;touch-action:none;" onclick="if(event.target===this)this.style.display='none'" onwheel="if(event.target===this)event.preventDefault()" ontouchmove="if(event.target===this)event.preventDefault()">
+        <div style="background:var(--color-bg-surface);border-radius:24px 24px 0 0;width:100%;padding:24px 22px 32px;animation:slideUp .25s ease-out;text-align:center;" onclick="event.stopPropagation()">
+          <div style="width:36px;height:4px;background:#E6E6E6;border-radius:9999px;margin:0 auto 18px;"></div>
+          <div style="width:60px;height:60px;border-radius:9999px;background:#FDE7EB;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:28px;">⚠️</div>
+          <div style="font-size:16px;font-weight:700;color:var(--color-text-heading);margin-bottom:6px;">Hapus konten ini?</div>
+          <div style="font-size:13px;color:var(--color-text-secondary);line-height:1.6;margin-bottom:22px;">Konten yang dihapus akan dihilangkan secara permanen dan tidak dapat dikembalikan.</div>
+          <button onclick="document.getElementById('delete-confirm-sheet').style.display='none'" style="width:100%;padding:14px;background:#F0425A;border:none;border-radius:14px;font-size:14px;font-weight:700;color:#fff;font-family:'Poppins',sans-serif;cursor:pointer;box-shadow:0 6px 18px rgba(240,66,90,.3);margin-bottom:10px;">Hapus</button>
+          <button onclick="document.getElementById('delete-confirm-sheet').style.display='none'" style="width:100%;padding:13px;background:transparent;border:1.5px solid #E6E6E6;border-radius:14px;font-size:14px;color:var(--color-text-secondary);font-family:'Poppins',sans-serif;cursor:pointer;">Batal</button>
+        </div>
+      </div>
     </div>
   </div>
-</div>
+  </div>
 <script>function go(){return false;}function nav(){return false;}</script>
-</body></html>
+</body>
+</html>

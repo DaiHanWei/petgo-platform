@@ -37,14 +37,30 @@ class ConsultRatingDialog extends StatefulWidget {
   State<ConsultRatingDialog> createState() => _ConsultRatingDialogState();
 }
 
-/// 快捷标签（label, 可选 emoji）—— 原型呈现元素。
-const List<(String, String?)> _quickTags = [
-  ('Responsif', '👍'),
-  ('Penjelasan Jelas', '📋'),
-  ('Sabar', null),
-  ('Ramah', null),
-  ('Profesional', null),
+/// 快捷标签 emoji（可选）—— 原型呈现元素；label 由 l10n 解析（见 [_tagLabel]）。
+const List<String?> _quickTagEmojis = [
+  '👍',
+  '📋',
+  null,
+  null,
+  null,
 ];
+
+/// 快捷标签本地化文案（与 [_quickTagEmojis] 同序）。
+String _tagLabel(AppLocalizations l10n, int i) {
+  switch (i) {
+    case 0:
+      return l10n.consultRateTagResponsive;
+    case 1:
+      return l10n.consultRateTagClearExplanation;
+    case 2:
+      return l10n.consultRateTagPatient;
+    case 3:
+      return l10n.consultRateTagFriendly;
+    default:
+      return l10n.consultRateTagProfessional;
+  }
+}
 
 class _ConsultRatingDialogState extends State<ConsultRatingDialog> {
   static const Color _bg = Color(0xFFFBFAFD); // 原型 --color-bg-vet
@@ -64,9 +80,9 @@ class _ConsultRatingDialogState extends State<ConsultRatingDialog> {
   }
 
   /// 选中标签 + 备注折叠进单一 comment 字段（≤100 字裁断，不新增后端字段）。
-  String? _composeComment() {
+  String? _composeComment(AppLocalizations l10n) {
     final parts = <String>[];
-    final tags = [for (final i in (_selected.toList()..sort())) _quickTags[i].$1];
+    final tags = [for (final i in (_selected.toList()..sort())) _tagLabel(l10n, i)];
     if (tags.isNotEmpty) parts.add(tags.join(', '));
     final typed = _comment.text.trim();
     if (typed.isNotEmpty) parts.add(typed);
@@ -77,7 +93,8 @@ class _ConsultRatingDialogState extends State<ConsultRatingDialog> {
   }
 
   void _submit() {
-    Navigator.of(context).pop(RatingResult(_stars, _composeComment()));
+    final l10n = AppLocalizations.of(context);
+    Navigator.of(context).pop(RatingResult(_stars, _composeComment(l10n)));
   }
 
   @override
@@ -114,13 +131,13 @@ class _ConsultRatingDialogState extends State<ConsultRatingDialog> {
               const Text('Klinik Hewan Sehat · Durasi: 18 menit',
                   textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: _secondary)),
               const SizedBox(height: 24),
-              const Text('Bagaimana pengalamanmu?',
+              Text(l10n.consultRateHeading,
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: _heading)),
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: _heading)),
               const SizedBox(height: 5),
-              const Text('Ulasanmu membantu pemilik hewan lain memilih dokter yang tepat',
+              Text(l10n.consultRateSubheading,
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13, color: _secondary, height: 1.5)),
+                  style: const TextStyle(fontSize: 13, color: _secondary, height: 1.5)),
               const SizedBox(height: 22),
               // 1-5 星（必填）。
               Row(
@@ -149,7 +166,7 @@ class _ConsultRatingDialogState extends State<ConsultRatingDialog> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  for (var i = 0; i < _quickTags.length; i++) _tagChip(i),
+                  for (var i = 0; i < _quickTagEmojis.length; i++) _tagChip(l10n, i),
                 ],
               ),
               const SizedBox(height: 18),
@@ -219,8 +236,9 @@ class _ConsultRatingDialogState extends State<ConsultRatingDialog> {
     );
   }
 
-  Widget _tagChip(int i) {
-    final (label, emoji) = _quickTags[i];
+  Widget _tagChip(AppLocalizations l10n, int i) {
+    final label = _tagLabel(l10n, i);
+    final emoji = _quickTagEmojis[i];
     final on = _selected.contains(i);
     return GestureDetector(
       key: ValueKey('ratingTag_$i'),

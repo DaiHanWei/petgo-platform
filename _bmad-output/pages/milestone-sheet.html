@@ -3,10 +3,37 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TailTopia · Core Pages Reference V1.0.0</title>
+<title>TailTopia · milestone-sheet</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../tokens.css">
+<!-- tokens.css 内联（自包含，不依赖外部相对路径）-->
+<style>
+/* ──────────────────────────────────────────────────────────────
+   tokens.css · TailTopia Core Pages Reference
+   ⚠️ 重建版（非设计师原档）。原 preview-core-pages.html 引用了 ./tokens.css
+   但该文件未随附，导致所有 var(--color-*) 失效、页面白底变透明、透出画布淡紫。
+   本文件按 HTML 内置图例面板（Color Palette）+ QA 验证清单的明确描述重建：
+     · 画布/卡片纯白 #FFFFFF（QA: 画布背景为纯白，无紫调）
+     · violet-50 #F8F2FF 仅作局部点缀
+     · 文字 ink-700 #544864（图例文档值）
+   灰阶层级(heading/primary/tertiary)与兽医端底色 bg-vet 为合理推断，
+   拿到设计师原件后可直接覆盖本文件。
+   ────────────────────────────────────────────────────────────── */
+:root{
+  /* ── Backgrounds ── */
+  --color-bg-default:#FFFFFF;   /* 页面画布（手机屏内），纯白无紫调 */
+  --color-bg-surface:#FFFFFF;   /* 卡片 / AppBar / TabBar，白底靠阴影分层 */
+  --color-bg-subtle:#F8F2FF;    /* violet-50，局部点缀底（petsel/统计条/进度槽） */
+  --color-bg-muted:#EFEDF3;     /* 中性浅灰：关闭按钮、离线态等 */
+  --color-bg-vet:#F0F4F4;       /* 兽医端浅薄荷底（推断值，待原件校正） */
+
+  /* ── Text（4 级层级，仅 secondary 为图例文档值，其余为层级推断） ── */
+  --color-text-heading:#1C1830;   /* 大标题，最深 */
+  --color-text-primary:#2E2A45;   /* 正文主色 / 状态栏 / 标题 */
+  --color-text-secondary:#544864; /* ink-700（图例文档值），次级文字 */
+  --color-text-tertiary:#9690A6;  /* 弱化：时间戳、占位、caption */
+}
+</style>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;padding:36px;min-height:100vh;align-items:flex-start;justify-content:center;}
@@ -19,6 +46,8 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
 .statusbar .icons{display:flex;align-items:center;gap:5px;}
 .pages{flex:1;overflow:hidden;position:relative;}
 .page{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;display:none;padding-bottom:4px;background:var(--color-bg-default);}
+#paspor-fab{display:none;}
+.phone:has(#p-paspor.on) #paspor-fab{display:block;}
 .page::-webkit-scrollbar{display:none;}
 .page.on{display:block;}
 
@@ -248,10 +277,7 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
 </head>
 <body>
 <div class="phone">
-
   <div class="pill"></div>
-
-  <!-- Status Bar -->
   <div class="statusbar">
     <span class="t">9:41</span>
     <div class="icons">
@@ -268,16 +294,18 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
       </svg>
     </div>
   </div>
-
-  <!-- Pages -->
   <div class="pages">
 <div class="page on" id="p-milestone-sheet" data-notab="true" style="background:var(--color-bg-subtle);flex-direction:column;justify-content:flex-end;">
       <!-- 顶部模拟底层屏幕（遮暗效果） -->
       <div style="flex:1;background:linear-gradient(180deg,rgba(43,37,64,.0) 0%,rgba(43,37,64,.4) 100%);display:flex;flex-direction:column;justify-content:flex-end;align-items:center;padding-bottom:16px;">
         <div style="font-size:11px;color:rgba(255,255,255,.7);background:rgba(43,37,64,.45);padding:5px 14px;border-radius:9999px;">⬆ 底抽屉，叠加于 P-33 里程碑页上方</div>
       </div>
-      <div style="background:var(--color-bg-surface);border-radius:24px 24px 0 0;padding:20px 22px 36px;animation:slideUp .25s ease-out;">
-        <div style="width:36px;height:4px;background:#E6E6E6;border-radius:9999px;margin:0 auto 18px;"></div>
+      <div style="background:var(--color-bg-surface);border-radius:24px 24px 0 0;padding:14px 22px 36px;animation:slideUp .25s ease-out;position:relative;">
+        <!-- 不显眼的关闭按钮 -->
+        <button onclick="go(null,'milestone')" style="position:absolute;top:14px;right:18px;width:28px;height:28px;border-radius:9999px;background:var(--color-bg-muted);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-tertiary)" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+        <div style="width:36px;height:4px;background:#E6E6E6;border-radius:9999px;margin:4px auto 18px;"></div>
         <!-- 徽章图标 + 名字 -->
         <div style="text-align:center;margin-bottom:18px;">
           <div style="width:76px;height:76px;border-radius:9999px;background:linear-gradient(135deg,#845EC9,#9E83DA);display:flex;align-items:center;justify-content:center;font-size:38px;margin:0 auto 12px;box-shadow:0 8px 24px rgba(132,94,201,.3);">🎂</div>
@@ -296,12 +324,14 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
         </div>
         <!-- 两个CTA -->
         <div style="display:flex;flex-direction:column;gap:10px;" id="milestone-cta-default">
-          <button onclick="document.getElementById('milestone-cta-default').style.display='none';document.getElementById('milestone-content-picker').style.display='block'" style="width:100%;padding:14px;background:#845EC9;border:none;border-radius:14px;font-size:14px;font-weight:700;color:#fff;font-family:'Poppins',sans-serif;cursor:pointer;box-shadow:0 6px 18px rgba(132,94,201,.28);">📸 Pergi Posting</button>
-          <button style="width:100%;padding:13px;background:transparent;border:1.5px solid #845EC9;border-radius:14px;font-size:14px;color:#845EC9;font-family:'Poppins',sans-serif;cursor:pointer;">✓ Sudah Checkin</button>
+          <button onclick="go(null,'create')" style="width:100%;padding:14px;background:#845EC9;border:none;border-radius:14px;font-size:14px;font-weight:700;color:#fff;font-family:'Poppins',sans-serif;cursor:pointer;box-shadow:0 6px 18px rgba(132,94,201,.28);">📸 Pergi Posting</button>
+          <button onclick="document.getElementById('milestone-cta-default').style.display='none';document.getElementById('milestone-content-picker').style.display='block'" style="width:100%;padding:13px;background:transparent;border:1.5px solid #845EC9;border-radius:14px;font-size:14px;color:#845EC9;font-family:'Poppins',sans-serif;cursor:pointer;">📷 Pilih dari Kenangan</button>
+          <button onclick="go(null,'milestone')" style="font-size:12px;color:var(--color-text-tertiary);border:none;background:none;cursor:pointer;margin-top:2px;">Nanti saja</button>
         </div>
-        <!-- 内容选择器（点击Pergi Posting后出现） -->
+        <!-- 内容选择器（点击 Pilih dari Kenangan 后出现） -->
         <div id="milestone-content-picker" style="display:none;">
-          <div style="font-size:13px;font-weight:700;color:var(--color-text-heading);margin-bottom:12px;">Pilih catatan untuk diposting:</div>
+          <div style="font-size:13px;font-weight:700;color:var(--color-text-heading);margin-bottom:4px;">Pilih catatan yang sudah ada:</div>
+          <div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:12px;">Hubungkan catatan ini untuk menyelesaikan milestone</div>
           <div style="display:flex;flex-direction:column;gap:9px;margin-bottom:16px;">
             <div style="background:var(--color-bg-subtle);border:2px solid #845EC9;border-radius:13px;padding:12px 14px;display:flex;gap:11px;align-items:center;cursor:pointer;">
               <div style="font-size:22px;">☀️</div>
@@ -318,12 +348,20 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
               <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:var(--color-text-heading);">Momen Bahagia Pertama!</div><div style="font-size:11px;color:var(--color-text-tertiary);">3 Jun 2026 · Momen Bahagia</div></div>
               <div style="width:18px;height:18px;border-radius:9999px;border:1.5px solid #E6E6E6;"></div>
             </div>
+            <!-- 已被其他里程碑关联，置灰不可选 (FR-42) -->
+            <div style="background:var(--color-bg-muted);border:1.5px solid transparent;border-radius:13px;padding:12px 14px;display:flex;gap:11px;align-items:center;opacity:.5;cursor:not-allowed;">
+              <div style="font-size:22px;">🛁</div>
+              <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:var(--color-text-secondary);">Mandi pertama, lucu banget!</div><div style="font-size:11px;color:var(--color-text-tertiary);">2 Jun 2026 · Sudah terhubung milestone lain</div></div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-tertiary)" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            </div>
           </div>
-          <button style="width:100%;padding:14px;background:#845EC9;border:none;border-radius:14px;font-size:14px;font-weight:700;color:#fff;font-family:'Poppins',sans-serif;cursor:pointer;box-shadow:0 6px 18px rgba(132,94,201,.28);">Bagikan ke Feed 🐾</button>
+          <button onclick="go(null,'milestone-unlock')" style="width:100%;padding:14px;background:#845EC9;border:none;border-radius:14px;font-size:14px;font-weight:700;color:#fff;font-family:'Poppins',sans-serif;cursor:pointer;box-shadow:0 6px 18px rgba(132,94,201,.28);margin-bottom:10px;">Konfirmasi & Selesaikan Milestone</button>
+          <button onclick="document.getElementById('milestone-content-picker').style.display='none';document.getElementById('milestone-cta-default').style.display='flex'" style="width:100%;padding:0;border:none;background:none;font-size:12px;color:var(--color-text-tertiary);cursor:pointer;">← Batal, kembali</button>
         </div>
       </div>
     </div>
   </div>
-</div>
+  </div>
 <script>function go(){return false;}function nav(){return false;}</script>
-</body></html>
+</body>
+</html>

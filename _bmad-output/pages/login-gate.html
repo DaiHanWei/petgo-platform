@@ -3,10 +3,37 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TailTopia · Core Pages Reference V1.0.0</title>
+<title>TailTopia · login-gate</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../tokens.css">
+<!-- tokens.css 内联（自包含，不依赖外部相对路径）-->
+<style>
+/* ──────────────────────────────────────────────────────────────
+   tokens.css · TailTopia Core Pages Reference
+   ⚠️ 重建版（非设计师原档）。原 preview-core-pages.html 引用了 ./tokens.css
+   但该文件未随附，导致所有 var(--color-*) 失效、页面白底变透明、透出画布淡紫。
+   本文件按 HTML 内置图例面板（Color Palette）+ QA 验证清单的明确描述重建：
+     · 画布/卡片纯白 #FFFFFF（QA: 画布背景为纯白，无紫调）
+     · violet-50 #F8F2FF 仅作局部点缀
+     · 文字 ink-700 #544864（图例文档值）
+   灰阶层级(heading/primary/tertiary)与兽医端底色 bg-vet 为合理推断，
+   拿到设计师原件后可直接覆盖本文件。
+   ────────────────────────────────────────────────────────────── */
+:root{
+  /* ── Backgrounds ── */
+  --color-bg-default:#FFFFFF;   /* 页面画布（手机屏内），纯白无紫调 */
+  --color-bg-surface:#FFFFFF;   /* 卡片 / AppBar / TabBar，白底靠阴影分层 */
+  --color-bg-subtle:#F8F2FF;    /* violet-50，局部点缀底（petsel/统计条/进度槽） */
+  --color-bg-muted:#EFEDF3;     /* 中性浅灰：关闭按钮、离线态等 */
+  --color-bg-vet:#F0F4F4;       /* 兽医端浅薄荷底（推断值，待原件校正） */
+
+  /* ── Text（4 级层级，仅 secondary 为图例文档值，其余为层级推断） ── */
+  --color-text-heading:#1C1830;   /* 大标题，最深 */
+  --color-text-primary:#2E2A45;   /* 正文主色 / 状态栏 / 标题 */
+  --color-text-secondary:#544864; /* ink-700（图例文档值），次级文字 */
+  --color-text-tertiary:#9690A6;  /* 弱化：时间戳、占位、caption */
+}
+</style>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;padding:36px;min-height:100vh;align-items:flex-start;justify-content:center;}
@@ -19,6 +46,8 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
 .statusbar .icons{display:flex;align-items:center;gap:5px;}
 .pages{flex:1;overflow:hidden;position:relative;}
 .page{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;display:none;padding-bottom:4px;background:var(--color-bg-default);}
+#paspor-fab{display:none;}
+.phone:has(#p-paspor.on) #paspor-fab{display:block;}
 .page::-webkit-scrollbar{display:none;}
 .page.on{display:block;}
 
@@ -248,10 +277,7 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
 </head>
 <body>
 <div class="phone">
-
   <div class="pill"></div>
-
-  <!-- Status Bar -->
   <div class="statusbar">
     <span class="t">9:41</span>
     <div class="icons">
@@ -268,8 +294,6 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
       </svg>
     </div>
   </div>
-
-  <!-- Pages -->
   <div class="pages">
 <div class="page on" id="p-login-gate" data-notab="true">
 
@@ -299,27 +323,21 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
             Buat akun gratis untuk mencatat tumbuh kembang, konsultasi dokter hewan, dan menyimpan momen berharga bersama hewan peliharaanmu.
           </div>
 
-          <!-- Google 登录 CTA（主按钮）-->
+          <!-- Google 登录 CTA（唯一登录方式，FR-0D：登录/注册不区分入口）-->
           <button style="width:100%;display:flex;align-items:center;justify-content:center;gap:10px;
-                         padding:13px;border-radius:13px;border:1.5px solid #E6E6E6;
-                         background:var(--color-bg-surface);cursor:pointer;margin-bottom:10px;
-                         box-shadow:0 2px 8px rgba(22,34,51,.08);font-family:'Poppins',sans-serif;">
-            <!-- Google G SVG -->
-            <svg width="20" height="20" viewBox="0 0 48 48">
-              <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-              <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-              <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-              <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-            </svg>
-            <span style="font-size:14px;font-weight:600;color:var(--color-text-heading);">Masuk dengan Google</span>
-          </button>
-
-          <!-- 注册（次按钮）-->
-          <button style="width:100%;padding:13px;border-radius:13px;border:none;
-                         background:#845EC9;color:#fff;font-size:14px;font-weight:600;
-                         font-family:'Poppins',sans-serif;cursor:pointer;
-                         box-shadow:0 6px 16px rgba(132,94,201,.30);margin-bottom:18px;">
-            Daftar Gratis
+                         padding:14px;border-radius:13px;border:none;
+                         background:#845EC9;cursor:pointer;margin-bottom:18px;
+                         box-shadow:0 6px 16px rgba(132,94,201,.30);font-family:'Poppins',sans-serif;">
+            <!-- Google G SVG (白底圆形，凸显在紫色按钮上) -->
+            <span style="width:22px;height:22px;border-radius:9999px;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <svg width="14" height="14" viewBox="0 0 48 48">
+                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+              </svg>
+            </span>
+            <span style="font-size:14px;font-weight:700;color:#fff;">Lanjutkan dengan Google</span>
           </button>
 
           <!-- 取消 -->
@@ -331,6 +349,7 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
       </div>
     </div>
   </div>
-</div>
+  </div>
 <script>function go(){return false;}function nav(){return false;}</script>
-</body></html>
+</body>
+</html>

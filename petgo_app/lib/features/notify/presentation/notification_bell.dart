@@ -18,15 +18,29 @@ class NotificationBell extends ConsumerWidget {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        IconButton(
+        // 与「我的」页右上 ibtn 同款：38×38 白底圆角11 + 淡阴影（原型 .ibtn）。
+        InkWell(
           key: const ValueKey('notificationBell'),
-          icon: const Icon(Icons.notifications_outlined),
-          onPressed: () => context.push('/notifications'),
+          onTap: () => context.push('/notifications'),
+          borderRadius: BorderRadius.circular(11),
+          child: Container(
+            width: 38,
+            height: 38,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(11),
+              boxShadow: const [
+                BoxShadow(color: Color(0x12162233), blurRadius: 8, offset: Offset(0, 2)),
+              ],
+            ),
+            child: const Icon(Icons.notifications_outlined, size: 18, color: AppColors.ink2),
+          ),
         ),
         if (unread > 0)
           Positioned(
-            right: 6,
-            top: 6,
+            right: -2,
+            top: -2,
             child: Container(
               key: const ValueKey('notificationBadge'),
               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TailTopia · vet-profile</title>
+<title>TailTopia · match-timeout</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 <!-- tokens.css 内联（自包含，不依赖外部相对路径）-->
@@ -295,105 +295,23 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
     </div>
   </div>
   <div class="pages">
-<div class="page on" id="p-vet-profile" data-notab="true" data-theme="light" style="background:var(--color-bg-vet);overflow:hidden;flex-direction:column;">
-      <div style="background:#2B2540;padding:14px 18px 12px;flex-shrink:0;">
-        <div style="font-size:17px;font-weight:700;color:#fff;">Profil Saya</div>
+<div class="page on" id="p-match-timeout" data-notab="true" style="background:var(--color-bg-vet);">
+      <div style="display:flex;align-items:center;padding:14px 18px 0;">
+        <button style="width:36px;height:36px;border-radius:11px;background:var(--color-bg-muted);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#544864" stroke-width="2.2" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        </button>
       </div>
-
-      <div style="padding:16px 18px 80px;flex:1;overflow-y:auto;">
-        <!-- 个人信息卡 -->
-        <div style="background:var(--color-bg-surface);border-radius:16px;padding:18px 16px;box-shadow:0 3px 12px rgba(22,34,51,.08);margin-bottom:14px;">
-          <div style="display:flex;gap:14px;align-items:center;margin-bottom:14px;">
-            <div style="width:60px;height:60px;border-radius:9999px;background:#5BCBBB;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#fff;position:relative;flex-shrink:0;">D
-              <div style="position:absolute;bottom:1px;right:1px;width:16px;height:16px;border-radius:9999px;background:#5BCBBB;border:2px solid #fff;"></div>
-            </div>
-            <div style="flex:1;">
-              <div style="font-size:16px;font-weight:700;color:var(--color-text-heading);">drh. Dewi Santoso</div>
-              <div style="font-size:12px;color:var(--color-text-secondary);">Klinik Hewan Sehat · Jakarta Selatan</div>
-              <div style="display:flex;align-items:center;gap:5px;margin-top:5px;">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#5BCBBB" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                <span style="font-size:11px;color:#5BCBBB;font-weight:600;">PDHI Terverifikasi</span>
-              </div>
-            </div>
-          </div>
-          <!-- 今日统计 -->
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
-            <div style="background:var(--color-bg-subtle);border-radius:11px;padding:10px;text-align:center;">
-              <div style="font-size:18px;font-weight:700;color:#845EC9;">8</div>
-              <div style="font-size:9px;color:var(--color-text-tertiary);">Selesai hari ini</div>
-            </div>
-            <div style="background:#EFF7F4;border-radius:11px;padding:10px;text-align:center;">
-              <div style="font-size:18px;font-weight:700;color:#5BCBBB;">4.9</div>
-              <div style="font-size:9px;color:var(--color-text-tertiary);">Rating keseluruhan</div>
-            </div>
-            <div style="background:#FEF3DE;border-radius:11px;padding:10px;text-align:center;">
-              <div style="font-size:18px;font-weight:700;color:#F6A609;">247</div>
-              <div style="font-size:9px;color:var(--color-text-tertiary);">Total kasus</div>
-            </div>
-          </div>
+      <div style="padding:28px 24px;text-align:center;">
+        <div style="width:88px;height:88px;border-radius:9999px;background:var(--color-bg-muted);display:flex;align-items:center;justify-content:center;margin:0 auto 22px;font-size:38px;">⏳</div>
+        <div style="font-size:19px;font-weight:700;color:var(--color-text-heading);margin-bottom:8px;line-height:1.3;">Belum ada dokter<br>yang merespons</div>
+        <div style="font-size:13px;color:var(--color-text-secondary);line-height:1.6;margin-bottom:24px;">Semua dokter sedang sibuk menangani konsultasi lain. Permintaanmu tetap ada di antrean.</div>
+        <div style="background:var(--color-bg-surface);border-radius:14px;padding:13px 16px;box-shadow:0 2px 10px rgba(22,34,51,.07);text-align:left;margin-bottom:24px;">
+          <div style="font-size:11px;font-weight:700;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">RINGKASAN YANG DIKIRIM</div>
+          <div style="font-size:13px;color:var(--color-text-primary);line-height:1.5;">Mochi — muntah busa putih 2x, lemas, tidak nafsu makan · 2 foto dilampirkan</div>
         </div>
-
-        <!-- 在线状态控制 -->
-        <div style="background:var(--color-bg-surface);border-radius:16px;padding:14px 16px;box-shadow:0 3px 12px rgba(22,34,51,.08);margin-bottom:14px;">
-          <div style="font-size:11px;font-weight:700;color:var(--color-text-tertiary);letter-spacing:.5px;text-transform:uppercase;margin-bottom:10px;">STATUS KETERSEDIAAN</div>
-          <div style="display:flex;gap:8px;">
-            <div style="flex:1;background:#5BCBBB;border-radius:12px;padding:12px;text-align:center;cursor:pointer;box-shadow:0 4px 12px rgba(91,203,187,.3);">
-              <div style="font-size:18px;margin-bottom:3px;">🟢</div>
-              <div style="font-size:12px;font-weight:700;color:#fff;">Online</div>
-              <div style="font-size:10px;color:rgba(255,255,255,.75);">Terima antrian</div>
-            </div>
-            <div style="flex:1;background:var(--color-bg-muted);border-radius:12px;padding:12px;text-align:center;cursor:pointer;">
-              <div style="font-size:18px;margin-bottom:3px;">🟡</div>
-              <div style="font-size:12px;font-weight:600;color:var(--color-text-secondary);">Sibuk</div>
-              <div style="font-size:10px;color:var(--color-text-tertiary);">Selesaikan dulu</div>
-            </div>
-            <div style="flex:1;background:var(--color-bg-muted);border-radius:12px;padding:12px;text-align:center;cursor:pointer;">
-              <div style="font-size:18px;margin-bottom:3px;">⚫</div>
-              <div style="font-size:12px;font-weight:600;color:var(--color-text-secondary);">Offline</div>
-              <div style="font-size:10px;color:var(--color-text-tertiary);">Istirahat</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 设置列表 -->
-        <div style="background:var(--color-bg-surface);border-radius:16px;box-shadow:0 2px 8px rgba(22,34,51,.06);overflow:hidden;margin-bottom:14px;">
-          <div style="display:flex;align-items:center;padding:13px 16px;border-bottom:1px solid #F3F3F3;">
-            <div style="flex:1;font-size:14px;color:var(--color-text-heading);">Edit Profil & SIP</div>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A7A7A7" stroke-width="2" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
-          </div>
-          <div style="display:flex;align-items:center;padding:13px 16px;border-bottom:1px solid #F3F3F3;">
-            <div style="flex:1;font-size:14px;color:var(--color-text-heading);">Notifikasi Antrian</div>
-            <div style="width:42px;height:24px;border-radius:9999px;background:#5BCBBB;position:relative;cursor:pointer;flex-shrink:0;">
-              <div style="position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:9999px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.2);"></div>
-            </div>
-          </div>
-          <div style="display:flex;align-items:center;padding:13px 16px;">
-            <div style="flex:1;font-size:14px;color:#F0425A;font-weight:500;">Keluar</div>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F0425A" stroke-width="2" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
-          </div>
-        </div>
-
-        <div style="text-align:center;font-size:11px;color:var(--color-text-tertiary);">TailTopia Vet Portal v1.0.0</div>
-      </div>
-
-      <!-- 底部 Tab Bar (兽医工作台，Profil 高亮) -->
-      <div style="flex-shrink:0;background:var(--color-bg-surface);border-top:1px solid #F3F3F3;padding:10px 0 14px;display:flex;justify-content:space-around;">
-        <div style="display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;" onclick="go(null,'vet-queue')">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#A7A7A7" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-          <span style="font-size:10px;color:var(--color-text-tertiary);">Antrian</span>
-        </div>
-        <div style="display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;" onclick="go(null,'vet-case')">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#A7A7A7" stroke-width="1.8" stroke-linecap="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-          <span style="font-size:10px;color:var(--color-text-tertiary);">Aktif</span>
-        </div>
-        <div style="display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;" onclick="go(null,'vet-history')">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#A7A7A7" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          <span style="font-size:10px;color:var(--color-text-tertiary);">Riwayat</span>
-        </div>
-        <div style="display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="#5BCBBB"><circle cx="12" cy="7" r="5"/><path d="M3.5 22a9 9 0 0117 0H3.5z"/></svg>
-          <span style="font-size:10px;font-weight:700;color:#5BCBBB;">Profil</span>
-        </div>
+        <button onclick="go(null,'match-wait')" style="width:100%;padding:15px;background:#845EC9;border:none;border-radius:14px;font-size:15px;font-weight:700;color:#fff;font-family:'Poppins',sans-serif;cursor:pointer;box-shadow:0 8px 24px rgba(132,94,201,.3);margin-bottom:10px;">Lanjut Menunggu</button>
+        <button onclick="go(null,'ai-upload')" style="width:100%;padding:14px;background:transparent;border:1.5px solid #845EC9;border-radius:14px;font-size:14px;font-weight:700;color:#845EC9;font-family:'Poppins',sans-serif;cursor:pointer;margin-bottom:14px;">⚡ Pakai Diagnosa AI Dulu</button>
+        <button style="font-size:13px;color:var(--color-text-tertiary);border:none;background:none;cursor:pointer;">Batalkan permintaan</button>
       </div>
     </div>
   </div>

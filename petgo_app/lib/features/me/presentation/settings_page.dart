@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/l10n/locale_controller.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
@@ -31,17 +32,24 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   @override
   void initState() {
     super.initState();
-    // Debug 截图钩子（仅 debug + flag）：自动弹注销首段警示 dialog（截 delete-account 用）。
-    // 仅弹 UI，绝不真删（删除须用户输确认短语并点红钮才触发 DELETE /me）。
+    // Debug 截图钩子（仅 debug + flag）：自动进注销整页（P-43，截 delete-account 用）。绝不真删。
     if (kDebugMode && const bool.fromEnvironment('DEV_DELETE_ACCOUNT')) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _deleteAccount(context, ref);
+        if (mounted) context.push('/me/delete-account');
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    // 语言行右值随当前选择动态显示（null=跟随系统）；与 language_settings_page 同一套映射。
+    final localeCode = ref.watch(localeControllerProvider)?.languageCode;
+    final langValue = switch (localeCode) {
+      'en' => l10n.languageEnglish,
+      'id' => l10n.languageIndonesian,
+      _ => l10n.languageFollowSystem,
+    };
     return Scaffold(
       backgroundColor: AppColors.base,
       body: SafeArea(
@@ -53,49 +61,50 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               children: [
                 _backBtn(),
                 const SizedBox(width: 14),
-                const Text('Pengaturan',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                Text(l10n.settingsTitle,
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.ink)),
               ],
             ),
             const SizedBox(height: 22),
 
-            _sectionTitle('AKUN'),
+            _sectionTitle(l10n.settingsSectionAccount),
             _card([
-              _navRow('Edit Profil', onTap: () => context.push('/profile/edit'),
+              _navRow(l10n.meEditProfileTitle, onTap: () => context.push('/profile/edit'),
                   key: const ValueKey('meEditProfile')),
               _divider(),
-              _toggleRow('Notifikasi', _notif, (v) => setState(() => _notif = v),
+              _toggleRow(l10n.notificationCenterTitle, _notif, (v) => setState(() => _notif = v),
                   key: const ValueKey('meNotifToggle')),
               _divider(),
-              _navRow('Bahasa', value: 'Bahasa Indonesia',
+              _navRow(l10n.meLanguage, value: langValue,
                   onTap: () => context.push('/me/language'), key: const ValueKey('meLanguage')),
             ]),
             const SizedBox(height: 22),
 
-            _sectionTitle('TAMPILAN'),
+            _sectionTitle(l10n.settingsSectionDisplay),
             _card([
-              _toggleRow('Mode Gelap', _darkMode, (v) => setState(() => _darkMode = v),
-                  subtitle: 'Mengikuti sistem', key: const ValueKey('meDarkModeToggle')),
+              _toggleRow(l10n.settingsDarkMode, _darkMode, (v) => setState(() => _darkMode = v),
+                  subtitle: l10n.settingsDarkModeSubtitle, key: const ValueKey('meDarkModeToggle')),
             ]),
             const SizedBox(height: 22),
 
-            _sectionTitle('PRIVASI & KEAMANAN'),
+            _sectionTitle(l10n.settingsSectionPrivacy),
             _card([
-              _toggleRow('Profil Hewan (publik)', _petPublic, (v) => setState(() => _petPublic = v),
+              _toggleRow(l10n.settingsPetPublic, _petPublic, (v) => setState(() => _petPublic = v),
                   key: const ValueKey('mePetPublicToggle')),
               _divider(),
-              _navRow('Kebijakan Privasi', onTap: () => _soon(context)),
+              _navRow(l10n.privacyPolicy, onTap: () => _soon(context)),
               _divider(),
-              _navRow('Syarat & Ketentuan', onTap: () => _soon(context)),
+              _navRow(l10n.termsOfService, onTap: () => _soon(context)),
             ]),
             const SizedBox(height: 22),
 
-            _sectionTitle('ZONA BAHAYA'),
+            _sectionTitle(l10n.settingsSectionDanger),
             _card([
-              _navRow('Keluar (Logout)', danger: true, onTap: () => _logout(context, ref),
+              _navRow(l10n.meLogout, danger: true, onTap: () => _logout(context, ref),
                   key: const ValueKey('meLogout')),
               _divider(),
-              _navRow('Hapus Akun', danger: true, onTap: () => _deleteAccount(context, ref),
+              _navRow(l10n.meDeleteAccount, danger: true,
+                  onTap: () => context.push('/me/delete-account'),
                   key: const ValueKey('meDeleteAccount')),
             ]),
             const SizedBox(height: 24),
@@ -210,9 +219,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   void _soon(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
-      ..showSnackBar(const SnackBar(content: Text('Segera hadir')));
+      ..showSnackBar(SnackBar(content: Text(l10n.placeholderComingSoon)));
   }
 
   /// 退出登录（Story 7.3 AC1）：确认 → 清本地态回游客 → 留首页。<b>不删任何数据</b>。
@@ -238,70 +248,4 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     if (context.mounted) context.go('/home');
   }
 
-  /// 账号注销（Story 7.3 AC2）：双重确认（① 不可恢复警示 → ② 输入「确认注销」短语）→ DELETE /me → 回游客。
-  Future<void> _deleteAccount(BuildContext context, WidgetRef ref) async {
-    final l10n = AppLocalizations.of(context);
-    final cont = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.deleteAccountWarnTitle),
-        content: Text(l10n.deleteAccountWarnBody),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(l10n.consultCancel)),
-          FilledButton(
-            key: const ValueKey('deleteAccountContinue'),
-            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(l10n.deleteAccountContinue),
-          ),
-        ],
-      ),
-    );
-    if (cont != true || !context.mounted) return;
-
-    final phrase = l10n.deleteAccountConfirmPhrase;
-    final controller = TextEditingController();
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) => AlertDialog(
-          title: Text(l10n.deleteAccountConfirmTitle),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(phrase),
-              TextField(
-                key: const ValueKey('deleteConfirmField'),
-                controller: controller,
-                decoration: InputDecoration(hintText: l10n.deleteAccountConfirmHint),
-                onChanged: (_) => setState(() {}),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(l10n.consultCancel)),
-            FilledButton(
-              key: const ValueKey('deleteAccountConfirmYes'),
-              style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
-              onPressed: controller.text.trim() == phrase ? () => Navigator.of(ctx).pop(true) : null,
-              child: Text(l10n.deleteAccountConfirmYes),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (confirmed != true || !context.mounted) return;
-    try {
-      await ref.read(authRepositoryProvider).deleteAccount(phrase);
-      ref.read(authControllerProvider.notifier).toGuest();
-      if (context.mounted) context.go('/home');
-    } catch (_) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-          ..clearSnackBars()
-          ..showSnackBar(SnackBar(content: Text(l10n.deleteAccountFailed)));
-      }
-    }
-  }
 }

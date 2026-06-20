@@ -9,6 +9,7 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../media/domain/media_upload_use_case.dart';
+import '../../../shared/utils/date_format.dart';
 import '../../../shared/utils/media_permission.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../data/health_event_repository.dart';
@@ -192,18 +193,18 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
           icon: const Icon(Icons.arrow_back, color: AppColors.ink),
           onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
         ),
-        title: const Text('Buat Profil Hewan',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink)),
+        title: Text(l10n.petProfileCreateTitle,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink)),
       ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
           children: [
             // 虚线圆头像 + 相机角标 + Upload Foto（pet-create.html）。
-            Center(child: _avatarPicker()),
+            Center(child: _avatarPicker(l10n)),
             const SizedBox(height: AppSpacing.lg),
             // NAMA HEWAN *
-            _sectionLabel('NAMA HEWAN', required: true),
+            _sectionLabel(l10n.petProfileNameLabel, required: true),
             const SizedBox(height: 6),
             _field(
               child: TextField(
@@ -219,15 +220,15 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                _sectionLabel('JENIS HEWAN', required: true),
+                _sectionLabel(l10n.petProfileTypeLabel, required: true),
                 const SizedBox(width: 6),
-                const Flexible(
+                Flexible(
                   child: Padding(
-                    padding: EdgeInsets.only(bottom: 1),
-                    child: Text('(tidak bisa diubah setelah dibuat)',
+                    padding: const EdgeInsets.only(bottom: 1),
+                    child: Text(l10n.petProfileTypeImmutableHint,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
+                        style: const TextStyle(
                             fontSize: 9.5, fontWeight: FontWeight.w600, color: AppColors.popRed)),
                   ),
                 ),
@@ -244,19 +245,19 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
             ),
             const SizedBox(height: 16),
             // RAS
-            _sectionLabel('RAS'),
+            _sectionLabel(l10n.petProfileBreedLabel),
             const SizedBox(height: 6),
             _field(
               child: TextField(
                 key: const ValueKey('petProfileBreedField'),
                 controller: _breedController,
                 maxLength: 60,
-                decoration: _inputDeco(hint: 'Domestic, Persia, ...'),
+                decoration: _inputDeco(hint: l10n.petProfileBreedHint),
               ),
             ),
             const SizedBox(height: 16),
             // TANGGAL LAHIR *
-            _sectionLabel('TANGGAL LAHIR', required: true),
+            _sectionLabel(l10n.petProfileBirthdayLabel, required: true),
             const SizedBox(height: 6),
             InkWell(
               key: const ValueKey('petProfileBirthdayTile'),
@@ -272,7 +273,7 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
                   children: [
                     Expanded(
                       child: Text(
-                        _birthday == null ? l10n.petProfileBirthdayPick : _formatBirthday(_birthday!),
+                        _birthday == null ? l10n.petProfileBirthdayPick : formatBirthday(context, _birthday!),
                         style: TextStyle(
                             fontSize: 15,
                             color: _birthday == null ? AppColors.muted : AppColors.ink),
@@ -285,7 +286,7 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
             ),
             const SizedBox(height: 16),
             // BIO (OPSIONAL)
-            _sectionLabel('BIO (OPSIONAL)'),
+            _sectionLabel(l10n.petProfileBioLabel),
             const SizedBox(height: 6),
             _field(
               child: TextField(
@@ -293,7 +294,7 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
                 controller: _introController,
                 maxLength: 30,
                 maxLines: 3,
-                decoration: _inputDeco(hint: 'Ceritakan tentang hewan peliharaanmu...'),
+                decoration: _inputDeco(hint: l10n.petProfileBioHint),
               ),
             ),
             const SizedBox(height: AppSpacing.lg),
@@ -311,8 +312,8 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
                 ),
                 child: _submitting
                     ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('Buat Profil',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                    : Text(l10n.petProfileCreateSubmit,
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
               ),
             ),
           ],
@@ -322,7 +323,7 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
   }
 
   /// 虚线圆头像 + 紫色相机角标 + 「Upload Foto」紫链（pet-create.html）。
-  Widget _avatarPicker() {
+  Widget _avatarPicker(AppLocalizations l10n) {
     return GestureDetector(
       key: const ValueKey('petProfileAvatar'),
       onTap: _uploading ? null : _pickAvatar,
@@ -361,8 +362,8 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
             ),
           ),
           const SizedBox(height: 8),
-          const Text('Upload Foto',
-              style: TextStyle(
+          Text(l10n.petProfileUploadPhoto,
+              style: const TextStyle(
                   fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.mint)),
         ],
       ),
@@ -402,14 +403,6 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
           borderSide: const BorderSide(color: AppColors.mint, width: 1.5),
         ),
       );
-
-  static String _formatBirthday(DateTime d) {
-    const months = [
-      '', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
-    ];
-    return '${d.day} ${months[d.month]} ${d.year}';
-  }
 
   Widget _petTypeChip(String value, String label) {
     final selected = _petType == value;

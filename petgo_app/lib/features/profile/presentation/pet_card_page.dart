@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/colors.dart';
+import '../../../l10n/app_localizations.dart';
 import '../data/profile_repository.dart';
 import '../data/timeline_repository.dart';
 import '../domain/pet_age.dart';
@@ -20,20 +21,24 @@ class PetCardPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final profile = ref.watch(petProfileProvider).asData?.value;
     final stats = ref.watch(archiveStatsProvider).asData?.value;
     final name = profile?.name ?? 'Mochi';
     final age = computePetAge(profile?.birthday);
     final breedLine = [
-      _speciesLabel(profile?.petType),
+      _speciesLabel(l10n, profile?.petType),
       if (profile?.breed != null && profile!.breed!.isNotEmpty) profile.breed!,
-      if (profile?.birthday != null) '${age.years} tahun',
+      if (profile?.birthday != null) l10n.petCardYears(age.years),
     ].join(' · ');
     final daysTogether = profile?.birthday == null
         ? 365
         : DateTime.now().difference(profile!.birthday!).inDays;
-    final statsLine =
-        '${stats?.happyMomentCount ?? 12} Momen Bahagia · ${stats?.consultCount ?? 2} Konsultasi · ${stats?.milestoneCompleted ?? 5} Milestone';
+    final statsLine = l10n.petCardStatsLine(
+      stats?.happyMomentCount ?? 12,
+      stats?.consultCount ?? 2,
+      stats?.milestoneCompleted ?? 5,
+    );
 
     return Scaffold(
       backgroundColor: _bg,
@@ -107,7 +112,7 @@ class PetCardPage extends ConsumerWidget {
                                     fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
                           ),
                           const SizedBox(width: 6),
-                          _ownerLine(daysTogether),
+                          _ownerLine(l10n, daysTogether),
                         ],
                       ),
                       const SizedBox(height: 10),
@@ -118,14 +123,14 @@ class PetCardPage extends ConsumerWidget {
                 ),
                 const SizedBox(height: 22),
                 // —— PENCAPAIAN 徽章条 ——
-                _sectionLabel('PENCAPAIAN'),
+                _sectionLabel(l10n.petCardAchievements),
                 const SizedBox(height: 10),
                 SizedBox(
                   height: 72,
                   child: ListView(
                     scrollDirection: Axis.horizontal,
                     children: [
-                      for (final b in _badges) _badge(b),
+                      for (final b in _badges) _badge(l10n, b),
                     ],
                   ),
                 ),
@@ -145,8 +150,8 @@ class PetCardPage extends ConsumerWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Ulang Tahun Pertama 🏅',
-                                style: TextStyle(
+                            Text('${l10n.petCardBadgeFirstBirthday} 🏅',
+                                style: const TextStyle(
                                     fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
                             const SizedBox(height: 2),
                             Text('Milestone L · 15 Jun 2025 · "Sudah 1 tahun bersama!"',
@@ -160,7 +165,7 @@ class PetCardPage extends ConsumerWidget {
                 ),
                 const SizedBox(height: 16),
                 // —— MOMEN BAHAGIA TERAKHIR 5 格 ——
-                _sectionLabel('MOMEN BAHAGIA TERAKHIR'),
+                _sectionLabel(l10n.petCardRecentMoments),
                 const SizedBox(height: 10),
                 Row(
                   children: [
@@ -172,14 +177,14 @@ class PetCardPage extends ConsumerWidget {
                 ),
                 const SizedBox(height: 20),
                 // —— 双 CTA ——
-                _primaryCta(context),
+                _primaryCta(context, l10n),
                 const SizedBox(height: 10),
-                _secondaryCta(context),
+                _secondaryCta(context, l10n),
                 const SizedBox(height: 12),
                 Center(
                   child: GestureDetector(
                     onTap: () => Navigator.of(context).maybePop(),
-                    child: Text('Lihat Cerita Lengkap $name →',
+                    child: Text('${l10n.petCardViewFullStory(name)} →',
                         style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.4))),
                   ),
                 ),
@@ -191,17 +196,17 @@ class PetCardPage extends ConsumerWidget {
     );
   }
 
-  Widget _ownerLine(int days) => RichText(
+  Widget _ownerLine(AppLocalizations l10n, int days) => RichText(
         text: TextSpan(
           style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.6)),
           children: [
-            const TextSpan(text: 'Milik '),
+            TextSpan(text: '${l10n.petCardOwnedBy} '),
             const TextSpan(
                 text: '@hexsfile',
                 style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-            const TextSpan(text: ' · bersama '),
+            TextSpan(text: ' · ${l10n.petCardTogetherFor} '),
             TextSpan(
-                text: '$days hari',
+                text: l10n.petCardDays(days),
                 style: const TextStyle(color: AppColors.mint500, fontWeight: FontWeight.w700)),
           ],
         ),
@@ -230,7 +235,7 @@ class PetCardPage extends ConsumerWidget {
         ),
       );
 
-  Widget _badge(_Badge b) {
+  Widget _badge(AppLocalizations l10n, _Badge b) {
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: SizedBox(
@@ -252,7 +257,7 @@ class PetCardPage extends ConsumerWidget {
               child: Opacity(opacity: b.locked ? 0.5 : 1, child: Text(b.emoji, style: const TextStyle(fontSize: 20))),
             ),
             const SizedBox(height: 4),
-            Text(b.label,
+            Text(_badgeLabel(l10n, b.labelKey),
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 style: TextStyle(
@@ -281,7 +286,7 @@ class PetCardPage extends ConsumerWidget {
         ),
       );
 
-  Widget _primaryCta(BuildContext context) => SizedBox(
+  Widget _primaryCta(BuildContext context, AppLocalizations l10n) => SizedBox(
         width: double.infinity,
         child: FilledButton(
           onPressed: () => Navigator.of(context).maybePop(),
@@ -291,12 +296,12 @@ class PetCardPage extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(vertical: 14),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           ),
-          child: const Text('🐾 Download TailTopia — Gratis!',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+          child: Text('🐾 ${l10n.petCardDownloadCta}',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
         ),
       );
 
-  Widget _secondaryCta(BuildContext context) => SizedBox(
+  Widget _secondaryCta(BuildContext context, AppLocalizations l10n) => SizedBox(
         width: double.infinity,
         child: OutlinedButton(
           onPressed: () => Navigator.of(context).maybePop(),
@@ -307,31 +312,42 @@ class PetCardPage extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(vertical: 13),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           ),
-          child: const Text('Buat Profil Hewan Serupa',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+          child: Text(l10n.petCardCreateSimilar,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
         ),
       );
 
-  static String _speciesLabel(String? petType) {
+  static String _speciesLabel(AppLocalizations l10n, String? petType) {
     switch (petType) {
       case 'CAT':
-        return 'Kucing';
+        return l10n.petTypeCat;
       case 'DOG':
-        return 'Anjing';
+        return l10n.petTypeDog;
       default:
-        return 'Kucing';
+        return l10n.petTypeCat;
     }
   }
 
+  static String _badgeLabel(AppLocalizations l10n, String key) => switch (key) {
+        'birthday' => l10n.petCardBadgeBirthday,
+        'profileComplete' => l10n.petCardBadgeProfileComplete,
+        'firstPhoto' => l10n.petCardBadgeFirstPhoto,
+        'firstConsult' => l10n.petCardBadgeFirstConsult,
+        'tenMoments' => l10n.petCardBadgeTenMoments,
+        'firstBath' => l10n.petCardBadgeFirstBath,
+        'sleepTogether' => l10n.petCardBadgeSleepTogether,
+        _ => '',
+      };
+
   // 代表性成就徽章（公开卡策展展示，配色对齐原型）。
   static const List<_Badge> _badges = [
-    _Badge('🎂', 'Ulang Tahun', [AppColors.gold, Color(0xFFFFD166)]),
-    _Badge('📋', 'Profil Lengkap', [Color(0xFF1F9E6A), Color(0xFF56D4A0)]),
-    _Badge('📷', 'Foto Pertama', [AppColors.mint, AppColors.mint500]),
-    _Badge('🏥', 'Konsultasi Pertama', [AppColors.popRed, Color(0xFFFF7089)]),
-    _Badge('🌟', '10 Momen', [Color(0xFF5BCBBB), Color(0xFF31B3A2)]),
-    _Badge('🛁', 'Mandi Pertama', [], locked: true),
-    _Badge('😴', 'Tidur Bareng', [], locked: true),
+    _Badge('🎂', 'birthday', [AppColors.gold, Color(0xFFFFD166)]),
+    _Badge('📋', 'profileComplete', [Color(0xFF1F9E6A), Color(0xFF56D4A0)]),
+    _Badge('📷', 'firstPhoto', [AppColors.mint, AppColors.mint500]),
+    _Badge('🏥', 'firstConsult', [AppColors.popRed, Color(0xFFFF7089)]),
+    _Badge('🌟', 'tenMoments', [Color(0xFF5BCBBB), Color(0xFF31B3A2)]),
+    _Badge('🛁', 'firstBath', [], locked: true),
+    _Badge('😴', 'sleepTogether', [], locked: true),
   ];
 
   // 最近快乐时刻 5 格（emoji + 渐变底，对齐原型）。
@@ -345,9 +361,9 @@ class PetCardPage extends ConsumerWidget {
 }
 
 class _Badge {
-  const _Badge(this.emoji, this.label, this.colors, {this.locked = false});
+  const _Badge(this.emoji, this.labelKey, this.colors, {this.locked = false});
   final String emoji;
-  final String label;
+  final String labelKey;
   final List<Color> colors;
   final bool locked;
 }

@@ -123,14 +123,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       const SizedBox(width: 9),
                       Expanded(
                         child: RichText(
-                          text: const TextSpan(
-                            style: TextStyle(fontSize: 12, color: AppColors.mint, height: 1.6),
+                          text: TextSpan(
+                            style: const TextStyle(fontSize: 12, color: AppColors.mint, height: 1.6),
                             children: [
-                              TextSpan(text: 'Belum punya akun? '),
+                              TextSpan(text: l10n.loginAutoAccountPrefix),
                               TextSpan(
-                                  text: 'Akun baru dibuat otomatis',
-                                  style: TextStyle(fontWeight: FontWeight.w700)),
-                              TextSpan(text: ' — cukup satu tap!'),
+                                  text: l10n.loginAutoAccountEmphasis,
+                                  style: const TextStyle(fontWeight: FontWeight.w700)),
+                              TextSpan(text: l10n.loginAutoAccountSuffix),
                             ],
                           ),
                         ),
@@ -140,7 +140,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 ),
                 const SizedBox(height: 26),
                 // 社区数字背书
-                _trustStats(),
+                _trustStats(l10n),
                 const SizedBox(height: 28),
                 // 兽医登录入口（FR-29）
                 Container(
@@ -156,9 +156,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Flexible(
-                          child: Text('Kamu adalah dokter hewan? ',
-                              style: TextStyle(fontSize: 12, color: AppColors.muted)),
+                        Flexible(
+                          child: Text(l10n.loginVetPrompt,
+                              style: const TextStyle(fontSize: 12, color: AppColors.muted)),
                         ),
                         Text(l10n.vetLoginLink,
                             style: const TextStyle(
@@ -191,6 +191,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
   /// 紫渐变品牌头：光晕圆 + Pop Art 方块 + 返回钮 + logo + 欢迎语。
   Widget _brandHeader(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final topInset = MediaQuery.of(context).padding.top;
     return Container(
       width: double.infinity,
@@ -267,12 +268,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     child: const Icon(Icons.pets, size: 28, color: Colors.white),
                   ),
                   const SizedBox(height: 14),
-                  const Text('Selamat datang!',
-                      style: TextStyle(
+                  Text(l10n.loginWelcomeTitle,
+                      style: const TextStyle(
                           fontSize: 23, fontWeight: FontWeight.w700, color: Colors.white)),
                   const SizedBox(height: 7),
                   Text(
-                    'Rekam tumbuh kembang & konsultasi\ndokter hewan untuk si kecil berbulu',
+                    l10n.loginWelcomeSubtitle,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                         fontSize: 12.5, height: 1.6, color: Colors.white.withValues(alpha: 0.72)),
@@ -295,14 +296,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         ),
       );
 
-  Widget _trustStats() => Row(
+  Widget _trustStats(AppLocalizations l10n) => Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _stat('10K+', 'Anggota aktif'),
+          _stat('10K+', l10n.loginStatActiveMembers),
           _statDivider(),
-          _stat('50K+', 'Momen direkam'),
+          _stat('50K+', l10n.loginStatMomentsRecorded),
           _statDivider(),
-          _stat('100+', 'Dokter hewan'),
+          _stat('100+', l10n.loginStatVets),
         ],
       );
 

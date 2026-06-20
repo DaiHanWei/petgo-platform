@@ -3,10 +3,37 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TailTopia · Core Pages Reference V1.0.0</title>
+<title>TailTopia · timeline-empty</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../tokens.css">
+<!-- tokens.css 内联（自包含，不依赖外部相对路径）-->
+<style>
+/* ──────────────────────────────────────────────────────────────
+   tokens.css · TailTopia Core Pages Reference
+   ⚠️ 重建版（非设计师原档）。原 preview-core-pages.html 引用了 ./tokens.css
+   但该文件未随附，导致所有 var(--color-*) 失效、页面白底变透明、透出画布淡紫。
+   本文件按 HTML 内置图例面板（Color Palette）+ QA 验证清单的明确描述重建：
+     · 画布/卡片纯白 #FFFFFF（QA: 画布背景为纯白，无紫调）
+     · violet-50 #F8F2FF 仅作局部点缀
+     · 文字 ink-700 #544864（图例文档值）
+   灰阶层级(heading/primary/tertiary)与兽医端底色 bg-vet 为合理推断，
+   拿到设计师原件后可直接覆盖本文件。
+   ────────────────────────────────────────────────────────────── */
+:root{
+  /* ── Backgrounds ── */
+  --color-bg-default:#FFFFFF;   /* 页面画布（手机屏内），纯白无紫调 */
+  --color-bg-surface:#FFFFFF;   /* 卡片 / AppBar / TabBar，白底靠阴影分层 */
+  --color-bg-subtle:#F8F2FF;    /* violet-50，局部点缀底（petsel/统计条/进度槽） */
+  --color-bg-muted:#EFEDF3;     /* 中性浅灰：关闭按钮、离线态等 */
+  --color-bg-vet:#F0F4F4;       /* 兽医端浅薄荷底（推断值，待原件校正） */
+
+  /* ── Text（4 级层级，仅 secondary 为图例文档值，其余为层级推断） ── */
+  --color-text-heading:#1C1830;   /* 大标题，最深 */
+  --color-text-primary:#2E2A45;   /* 正文主色 / 状态栏 / 标题 */
+  --color-text-secondary:#544864; /* ink-700（图例文档值），次级文字 */
+  --color-text-tertiary:#9690A6;  /* 弱化：时间戳、占位、caption */
+}
+</style>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;padding:36px;min-height:100vh;align-items:flex-start;justify-content:center;}
@@ -19,6 +46,8 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
 .statusbar .icons{display:flex;align-items:center;gap:5px;}
 .pages{flex:1;overflow:hidden;position:relative;}
 .page{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;display:none;padding-bottom:4px;background:var(--color-bg-default);}
+#paspor-fab{display:none;}
+.phone:has(#p-paspor.on) #paspor-fab{display:block;}
 .page::-webkit-scrollbar{display:none;}
 .page.on{display:block;}
 
@@ -248,10 +277,7 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
 </head>
 <body>
 <div class="phone">
-
   <div class="pill"></div>
-
-  <!-- Status Bar -->
   <div class="statusbar">
     <span class="t">9:41</span>
     <div class="icons">
@@ -268,29 +294,57 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
       </svg>
     </div>
   </div>
-
-  <!-- Pages -->
   <div class="pages">
 <div class="page on" id="p-timeline-empty">
       <div class="appbar">
-        <span class="appbar-title">Catatan</span>
-        <div style="display:flex;background:var(--color-bg-muted);border-radius:10px;padding:3px;gap:2px;">
-          <div style="padding:5px 14px;border-radius:8px;background:#845EC9;font-size:12px;font-weight:600;color:#fff;cursor:pointer;">Timeline</div>
-          <div style="padding:5px 14px;border-radius:8px;font-size:12px;font-weight:600;color:var(--color-text-secondary);cursor:pointer;">Kalender</div>
+        <span class="appbar-title">Paspor Mochi</span>
+        <button class="ibtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+      </div>
+
+      <!-- 宠物基本信息卡 (FR-37 — 始终显示，与时间线内容是否为空无关) -->
+      <div class="petcard">
+        <div class="pet-top">
+          <div class="avlg" style="background:linear-gradient(135deg,#9E83DA,#845EC9);">🐱</div>
+          <div style="flex:1">
+            <div class="pname">Mochi</div>
+            <div class="psub">Kucing Oranye · 2 hari</div>
+            <div class="pbio">"Jakarta's laziest boy 🧡"</div>
+          </div>
+        </div>
+        <div class="statsrow">
+          <div class="statcol"><div class="statn">0</div><div class="statl">Momen Bahagia</div></div>
+          <div class="statcol"><div class="statn">0</div><div class="statl">Konsultasi</div></div>
+          <div class="statcol"><div class="statn">1</div><div class="statl">Milestone</div></div>
         </div>
       </div>
-      <div style="position:absolute;inset:0;top:60px;bottom:83px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;">
-        <div style="font-size:72px;margin-bottom:8px;opacity:.55;">📖</div>
-        <div style="font-size:18px;font-weight:700;color:var(--color-text-heading);margin-bottom:8px;">Belum ada catatan</div>
-        <div style="font-size:13px;color:var(--color-text-secondary);line-height:1.65;max-width:260px;margin-bottom:26px;">Mulai catat momen pertama Mochi! Setiap foto dan cerita tersimpan di sini.</div>
+
+      <!-- 里程碑入口 (FR-37) -->
+      <div class="msbar">
+        <div class="msrow"><span class="mst">🏆 Pencapaian Mochi</span><span class="msn">1 / 30</span></div>
+        <div class="track"><div class="fill" style="width:3.3%"></div></div>
+      </div>
+
+      <!-- 视图切换栏 -->
+      <div style="display:flex;gap:7px;padding:0 20px;margin-bottom:12px;">
+        <button style="flex:1;padding:8px;border-radius:10px;border:none;background:#845EC9;color:#fff;font-size:12px;font-weight:600;font-family:'Poppins',sans-serif;cursor:pointer;">⏱ Timeline</button>
+        <button style="flex:1;padding:8px;border-radius:10px;border:1.5px solid #E6E6E6;background:var(--color-bg-surface);color:var(--color-text-secondary);font-size:12px;font-weight:600;font-family:'Poppins',sans-serif;cursor:pointer;">📅 Kalender</button>
+      </div>
+
+      <!-- 内容区：仅此区域为空状态 -->
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px 24px 40px;text-align:center;">
+        <div style="font-size:64px;margin-bottom:8px;opacity:.55;">📖</div>
+        <div style="font-size:17px;font-weight:700;color:var(--color-text-heading);margin-bottom:8px;">Belum ada catatan</div>
+        <div style="font-size:13px;color:var(--color-text-secondary);line-height:1.65;max-width:260px;margin-bottom:24px;">Mulai catat momen pertama Mochi! Setiap foto dan cerita tersimpan di sini.</div>
         <button onclick="go(null,'create')" style="padding:13px 24px;background:#845EC9;border:none;border-radius:14px;font-size:14px;font-weight:700;color:#fff;font-family:'Poppins',sans-serif;cursor:pointer;box-shadow:0 6px 18px rgba(132,94,201,.28);">+ Catat Momen Pertama</button>
       </div>
     </div>
   </div>
-<div class="tabbar">
+  <div class="tabbar">
 
     <!-- Beranda -->
-    <button class="tab on" onclick="go(this,'feed')">
+    <button class="tab" onclick="go(this,'feed')">
       <div class="istack">
         <svg class="ishadow" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5L3 9.7V21h6v-6h6v6h6V9.7L12 2.5z"/></svg>
         <svg class="iout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 01-1 1H5a1 1 0 01-1-1v-9.5z"/><path d="M9 21V14h6v7"/></svg>
@@ -300,7 +354,7 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
     </button>
 
     <!-- Catatan (成长档案) — BookOpen icon -->
-    <button class="tab" onclick="go(this,'paspor')">
+    <button class="tab on" onclick="go(this,'paspor')">
       <div class="istack">
         <!-- Pop Art shadow layer: fill -->
         <svg class="ishadow" viewBox="0 0 24 24" fill="currentColor">
@@ -351,7 +405,8 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
     </button>
 
   </div>
-<div class="homebar"><div></div></div>
+  <div class="homebar"><div></div></div>
 </div>
 <script>function go(){return false;}function nav(){return false;}</script>
-</body></html>
+</body>
+</html>

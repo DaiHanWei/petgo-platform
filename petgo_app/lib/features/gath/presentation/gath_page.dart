@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/colors.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../core/theme/shadows.dart';
 import '../../../shared/widgets/design/btn3d.dart';
 import '../../../shared/widgets/design/pill_tag.dart';
@@ -20,6 +21,7 @@ class GathPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: AppColors.cream,
       appBar: AppBar(
@@ -27,25 +29,25 @@ class GathPage extends StatelessWidget {
         elevation: 0,
         scrolledUnderElevation: 0,
         foregroundColor: AppColors.ink,
-        title: const Text('Gabung Gath',
-            style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: -0.4)),
+        title: Text(l10n.gathTitle,
+            style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: -0.4)),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(18, 4, 18, 24),
         children: [
-          const Padding(
-            padding: EdgeInsets.only(bottom: 12),
-            child: Text('Kumpul bareng anabul di Jakarta 📍',
-                style: TextStyle(fontSize: 13, color: AppColors.muted)),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text('${l10n.gathSubtitle} 📍',
+                style: const TextStyle(fontSize: 13, color: AppColors.muted)),
           ),
           for (final e in _events) ...[
             _EventCard(title: e.$1, when: e.$2, loc: e.$3, count: e.$4, emoji: e.$5),
             const SizedBox(height: 14),
           ],
           const SizedBox(height: 4),
-          const Center(
-            child: Text('Acara / Pendaftaran / Grup / Check-in GPS — pratinjau, masih placeholder',
-                style: TextStyle(fontSize: 12, color: AppColors.muted)),
+          Center(
+            child: Text(l10n.gathPlaceholder,
+                style: const TextStyle(fontSize: 12, color: AppColors.muted)),
           ),
         ],
       ),
@@ -70,6 +72,7 @@ class _EventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Container(
       decoration: BoxDecoration(
         color: AppColors.card,
@@ -80,7 +83,7 @@ class _EventCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const StripedPhoto(label: 'poster acara', height: 130, radius: 0),
+          StripedPhoto(label: l10n.gathPosterLabel, height: 130, radius: 0),
           Padding(
             padding: const EdgeInsets.all(14),
             child: Column(
@@ -88,9 +91,9 @@ class _EventCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    PillTag(label: '$emoji Open'),
+                    PillTag(label: '$emoji ${l10n.gathStatusOpen}'),
                     const SizedBox(width: 8),
-                    PillTag(label: '$count ikut', color: AppColors.muted, background: AppColors.cream2),
+                    PillTag(label: '$count ${l10n.gathJoinedCount}', color: AppColors.muted, background: AppColors.cream2),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -105,9 +108,9 @@ class _EventCard extends StatelessWidget {
                   expand: true,
                   onPressed: () => ScaffoldMessenger.of(context)
                     ..clearSnackBars()
-                    ..showSnackBar(const SnackBar(content: Text('Pendaftaran segera hadir 🐾'))),
+                    ..showSnackBar(SnackBar(content: Text('${l10n.gathRegisterComingSoon} 🐾'))),
                   fontSize: 14.5,
-                  child: const Text('Daftar ikut'),
+                  child: Text(l10n.gathJoinButton),
                 ),
               ],
             ),

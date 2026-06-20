@@ -101,11 +101,11 @@ class PetInfoCard extends StatelessWidget {
             ),
             child: Row(
               children: [
-                _statCol(happyCount, 'Momen Bahagia'),
+                _statCol(happyCount, l10n.petInfoStatHappyMoments),
                 _divider(),
-                _statCol(consultCount, 'Konsultasi'),
+                _statCol(consultCount, l10n.petInfoStatConsult),
                 _divider(),
-                _statCol(milestoneCount, 'Milestone'),
+                _statCol(milestoneCount, l10n.petInfoStatMilestone),
               ],
             ),
           ),

@@ -113,6 +113,7 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final ratio = data.totalCount == 0 ? 0.0 : data.completedCount / data.totalCount;
     return Container(
       key: const ValueKey('milestoneHeader'),
@@ -151,8 +152,8 @@ class _Header extends StatelessWidget {
                   Text('${data.completedCount} / ${data.totalCount}',
                       style: const TextStyle(
                           fontWeight: FontWeight.w700, fontSize: 19, color: AppColors.mint)),
-                  const Text('milestone',
-                      style: TextStyle(fontSize: 11, color: AppColors.muted)),
+                  Text(l10n.milestoneCountLabel,
+                      style: const TextStyle(fontSize: 11, color: AppColors.muted)),
                 ],
               ),
             ],
@@ -181,10 +182,10 @@ Color _levelColor(MilestoneLevel level) => switch (level) {
     };
 
 /// 级别分区标题（原型印尼语：L 级 — LEGENDA / M 级 — MAJOR / S 级 — SMALL）。
-String _levelTitle(MilestoneLevel level) => switch (level) {
-      MilestoneLevel.l => 'L 级 — LEGENDA',
-      MilestoneLevel.m => 'M 级 — MAJOR',
-      MilestoneLevel.s => 'S 级 — SMALL',
+String _levelTitle(AppLocalizations l10n, MilestoneLevel level) => switch (level) {
+      MilestoneLevel.l => l10n.milestoneLevelLegenda,
+      MilestoneLevel.m => l10n.milestoneLevelMajor,
+      MilestoneLevel.s => l10n.milestoneLevelSmall,
     };
 
 /// 一个级别分区：彩色标题（含该级进度）+ 徽章网格。
@@ -195,6 +196,7 @@ class _GroupSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final color = _levelColor(group.level);
     return Column(
       key: ValueKey('milestoneSection_${group.level.name}'),
@@ -203,7 +205,7 @@ class _GroupSection extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(_levelTitle(group.level),
+            Text(_levelTitle(l10n, group.level),
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: color, letterSpacing: 0.3)),
             Text('${group.completedCount}/${group.totalCount}',
                 style: const TextStyle(color: AppColors.muted, fontWeight: FontWeight.w600, fontSize: 12)),

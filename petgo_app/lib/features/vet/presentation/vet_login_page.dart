@@ -104,13 +104,13 @@ class _VetLoginPageState extends ConsumerState<VetLoginPage> {
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text('Portal Dokter Hewan',
-                          style: TextStyle(
+                    children: [
+                      Text(l10n.vetLoginPortalTitle,
+                          style: const TextStyle(
                               fontSize: 19, fontWeight: FontWeight.w700, color: AppColors.vetPrimaryDeep)),
-                      SizedBox(height: 2),
-                      Text('Akses khusus tenaga medis hewan berlisensi',
-                          style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                      const SizedBox(height: 2),
+                      Text(l10n.vetLoginPortalSubtitle,
+                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                     ],
                   ),
                 ),
@@ -126,21 +126,21 @@ class _VetLoginPageState extends ConsumerState<VetLoginPage> {
                 border: const Border(left: BorderSide(color: AppColors.vetPrimary, width: 3)),
               ),
               child: RichText(
-                text: const TextSpan(
-                  style: TextStyle(fontSize: 13, height: 1.6, color: AppColors.vetPrimaryDeep),
+                text: TextSpan(
+                  style: const TextStyle(fontSize: 13, height: 1.6, color: AppColors.vetPrimaryDeep),
                   children: [
-                    TextSpan(text: 'Halaman ini '),
+                    TextSpan(text: l10n.vetLoginNoticePrefix),
                     TextSpan(
-                        text: 'hanya untuk dokter hewan',
-                        style: TextStyle(fontWeight: FontWeight.w700)),
-                    TextSpan(text: '. Kalau kamu pemilik hewan peliharaan, gunakan tombol kembali.'),
+                        text: l10n.vetLoginNoticeBold,
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                    TextSpan(text: l10n.vetLoginNoticeSuffix),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 24),
             // EMAIL TERDAFTAR
-            _sectionLabel('EMAIL TERDAFTAR'),
+            _sectionLabel(l10n.vetLoginEmailLabel),
             const SizedBox(height: 6),
             TextField(
               key: const ValueKey('vetUsernameField'),
@@ -149,11 +149,11 @@ class _VetLoginPageState extends ConsumerState<VetLoginPage> {
               enableSuggestions: false,
               keyboardType: TextInputType.emailAddress,
               decoration: _inputDeco(
-                  icon: Icons.mail_outline_rounded, hint: 'nama@kliniksehat.id'),
+                  icon: Icons.mail_outline_rounded, hint: l10n.vetLoginEmailHint),
             ),
             const SizedBox(height: 18),
             // KATA SANDI
-            _sectionLabel('KATA SANDI'),
+            _sectionLabel(l10n.vetLoginPasswordLabel),
             const SizedBox(height: 6),
             TextField(
               key: const ValueKey('vetPasswordField'),
@@ -202,7 +202,7 @@ class _VetLoginPageState extends ConsumerState<VetLoginPage> {
                 const Expanded(child: Divider(color: AppColors.border)),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Text('Belum terdaftar?',
+                  child: Text(l10n.vetLoginNotRegistered,
                       style: const TextStyle(fontSize: 12, color: AppColors.textTertiary)),
                 ),
                 const Expanded(child: Divider(color: AppColors.border)),
@@ -220,20 +220,20 @@ class _VetLoginPageState extends ConsumerState<VetLoginPage> {
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
-                child: const Text('Hubungi Kami, Jadilah Mitra 🤝',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                child: Text('${l10n.vetLoginBecomePartner} 🤝',
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
               ),
             ),
             const SizedBox(height: 20),
             // 底部三信任标。
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
-              children: const [
-                _TrustBadge(icon: Icons.shield_outlined, label: 'Terenkripsi'),
-                SizedBox(width: 18),
-                _TrustBadge(icon: Icons.verified_outlined, label: 'PDHI Terverifikasi'),
-                SizedBox(width: 18),
-                _TrustBadge(icon: Icons.info_outline, label: 'Data aman'),
+              children: [
+                _TrustBadge(icon: Icons.shield_outlined, label: l10n.vetLoginTrustEncrypted),
+                const SizedBox(width: 18),
+                _TrustBadge(icon: Icons.verified_outlined, label: l10n.vetLoginTrustVerified),
+                const SizedBox(width: 18),
+                _TrustBadge(icon: Icons.info_outline, label: l10n.vetLoginTrustSecure),
               ],
             ),
           ],

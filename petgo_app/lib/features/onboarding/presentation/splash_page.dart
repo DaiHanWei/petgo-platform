@@ -6,6 +6,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
+import '../../../l10n/app_localizations.dart';
 
 /// 启动屏（原型 P-01，1:1 还原 splash.html）。
 ///
@@ -70,6 +71,7 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     const white = Color(0xFFFFFFFF);
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: AppColors.splashInk,
       body: Stack(
@@ -128,7 +130,7 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
                             fontSize: 36, fontWeight: FontWeight.w700, color: white,
                             letterSpacing: -1.5, height: 1.0)),
                     const SizedBox(height: 11),
-                    Text('Komunitas Pecinta Hewan Peliharaan\nIndonesia',
+                    Text(l10n.splashTagline,
                         textAlign: TextAlign.center,
                         style: TextStyle(
                             fontSize: 12, height: 1.7, letterSpacing: 0.12,

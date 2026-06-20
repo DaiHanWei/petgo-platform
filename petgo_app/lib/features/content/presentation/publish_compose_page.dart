@@ -6,15 +6,15 @@ import 'package:go_router/go_router.dart';
 import '../../../core/media/media_scope.dart';
 import '../../../core/network/problem_detail.dart';
 import '../../../core/theme/colors.dart';
-import '../../../core/theme/shadows.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../media/domain/media_upload_use_case.dart';
 import '../../profile/data/milestone_repository.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../profile/domain/pet_profile.dart';
+import '../../../shared/utils/date_format.dart';
+import '../../../shared/widgets/dashed_rect.dart';
 import '../../../shared/utils/media_permission.dart';
-import '../../../shared/widgets/design/emoji_avatar.dart';
 import '../../me/data/my_posts_repository.dart';
 import '../data/content_repository.dart';
 import '../domain/content_type.dart';
@@ -236,8 +236,9 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                         width: 34,
                         height: 34,
                         alignment: Alignment.center,
+                        // 原型 closebtn：中性浅灰底 bg-muted #EFEDF3。
                         decoration:
-                            const BoxDecoration(color: AppColors.cream2, shape: BoxShape.circle),
+                            const BoxDecoration(color: Color(0xFFEFEDF3), shape: BoxShape.circle),
                         child: const Icon(Icons.close_rounded, size: 18, color: AppColors.ink2),
                       ),
                     ),
@@ -247,15 +248,19 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                         textAlign: TextAlign.center,
                         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                   ),
-                  // 原型 pubbtn：扁平紫钮（off=灰）。
+                  // 原型 pubbtn：扁平紫钮（启用 #845EC9）/ off=中性灰 #B6B6B6。
                   FilledButton(
                     key: const ValueKey('publishSubmit'),
                     onPressed: controller.canPublish ? () => _publish(controller, l10n) : null,
                     style: FilledButton.styleFrom(
                       backgroundColor: AppColors.mint,
-                      disabledBackgroundColor: AppColors.muted,
+                      disabledBackgroundColor: const Color(0xFFB6B6B6),
                       foregroundColor: AppColors.onAccent,
-                      elevation: 0,
+                      // 原型 .pubbtn 始终白字（.off 只改底色不改字色）。
+                      disabledForegroundColor: AppColors.onAccent,
+                      // 原型 pubbtn 启用：紫色柔阴影 0 4px 12px rgba(132,94,201,.30)；off 无阴影。
+                      elevation: controller.canPublish ? 4 : 0,
+                      shadowColor: AppColors.mint.withValues(alpha: 0.30),
                       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 9),
                       minimumSize: const Size(0, 0),
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -278,52 +283,54 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 36),
             children: [
+              // 原型 p-create 顺序：类型 chips → petsel(成长) → 照片 → 文字 → 事件日期 → 公开提示。
               _segments(controller, l10n),
-              const SizedBox(height: 16),
-              _authorRow(controller),
-              if (growthSelected && _linkedPet == null) ...[
-                const SizedBox(height: 12),
-                _growthNotice(),
+              if (growthSelected) ...[
+                const SizedBox(height: 14),
+                _petTargetRow(l10n),
               ],
+              const SizedBox(height: 16),
+              _imageRow(controller, l10n),
+              const SizedBox(height: 14),
+              // —— 文字 ——（原型 textarea-wrap：1.5px #E6E6E6 外框 + 圆角11 + 内部右下字数）
+              Container(
+                decoration: BoxDecoration(
+                  color: AppColors.card,
+                  borderRadius: BorderRadius.circular(11),
+                  border: Border.all(color: AppColors.line, width: 1.5),
+                ),
+                padding: const EdgeInsets.all(11),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextField(
+                      key: const ValueKey('publishText'),
+                      controller: _textController,
+                      minLines: 3,
+                      maxLines: 6,
+                      maxLength: kMaxPostTextLength,
+                      onChanged: controller.setText,
+                      style: const TextStyle(fontSize: 14, color: AppColors.ink, height: 1.6),
+                      decoration: InputDecoration(
+                        isCollapsed: true,
+                        hintText: _hint(controller, l10n),
+                        hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 14, height: 1.6),
+                        border: InputBorder.none,
+                        counterText: '', // 隐藏默认计数器，改放容器内右下
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    // 原型 charcount：框内右下「已用 / 总数」，弱色 11px。
+                    Text('${_textController.text.length} / $kMaxPostTextLength',
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(fontSize: 11, color: AppColors.textTertiary)),
+                  ],
+                ),
+              ),
               if (growthSelected) ...[
                 const SizedBox(height: 12),
                 _eventDateRow(controller, l10n),
               ],
-              const SizedBox(height: 12),
-              // —— 文字 ——
-              TextField(
-                key: const ValueKey('publishText'),
-                controller: _textController,
-                maxLines: 5,
-                maxLength: kMaxPostTextLength,
-                onChanged: controller.setText,
-                style: const TextStyle(fontSize: 15.5, color: AppColors.ink, height: 1.5),
-                decoration: InputDecoration(
-                  hintText: _hint(controller, l10n),
-                  hintStyle: const TextStyle(color: AppColors.muted, fontSize: 15.5),
-                  filled: true,
-                  fillColor: AppColors.card,
-                  contentPadding: const EdgeInsets.all(15),
-                  counterText: l10n.publishRemainingChars(controller.remainingChars),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _imageRow(controller, l10n),
-              const SizedBox(height: 14),
-              // Kamera（相机）：拍照上传，与「Tambah foto」相册同走 pickAndProcess（仅 source 不同）。
-              // 注：Lokasi（定位）chip 已移除——V1 PRD 无定位功能，不留死按钮。
-              Row(children: [
-                _SmallChip(
-                  key: const ValueKey('publishCameraChip'),
-                  icon: Icons.photo_camera_outlined,
-                  label: l10n.publishCamera,
-                  onTap: () => _addImage(controller, source: MediaSource.camera),
-                ),
-              ]),
               if (controller.hasFailed) ...[
                 const SizedBox(height: 12),
                 TextButton.icon(
@@ -333,9 +340,14 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                   onPressed: () => controller.retryFailed(),
                 ),
               ],
-              const SizedBox(height: 8),
-              Text(l10n.publishPublicNotice,
-                  style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+              const SizedBox(height: 16),
+              // 原型底部：居中公开提示。
+              Center(
+                child: Text(l10n.publishPublicNotice,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        color: AppColors.textTertiary, fontSize: 12, height: 1.6)),
+              ),
             ],
           ),
         ),
@@ -346,7 +358,8 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   String _hint(PublishController c, AppLocalizations l10n) {
     switch (c.type) {
       case ContentType.growthMoment:
-        return l10n.publishHintGrowth;
+        // 原型 fake-ta：「Ceritakan momen spesial {宠物名}...」。
+        return l10n.publishHintGrowth(_linkedPet?.name ?? l10n.publishPetFallback);
       case ContentType.knowledge:
         return l10n.publishHintKnowledge;
       default:
@@ -361,13 +374,14 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: [
+          // 原型 typechips 顺序：Cerita Harian / Tips & Info / Momen Bahagia🌟（成长末位）。
           _segChip(l10n.publishSegmentDaily, ContentType.daily, controller,
               'seg_${ContentType.daily.wire}'),
           const SizedBox(width: 7),
-          _growthChip(l10n, controller),
-          const SizedBox(width: 7),
           _segChip(l10n.publishSegmentKnowledge, ContentType.knowledge, controller,
               'seg_${ContentType.knowledge.wire}'),
+          const SizedBox(width: 7),
+          _growthChip(l10n, controller),
         ],
       ),
     );
@@ -402,48 +416,67 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     );
   }
 
-  /// 作者头像 + 名字 + 关联宠物胶囊。
-  Widget _authorRow(PublishController controller) {
-    final growth = controller.type == ContentType.growthMoment;
-    final linked = growth && _linkedPet != null;
-    final petName = _linkedPet?.name ?? 'anabul';
-    return Row(
-      children: [
-        const EmojiAvatar(emoji: '🧑', size: 38, tone: AppColors.cream2),
-        const SizedBox(width: 10),
-        const Text('Aurel', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-        const Spacer(),
-        if (growth)
-          Container(
-            padding: const EdgeInsets.fromLTRB(6, 6, 10, 6),
-            decoration: BoxDecoration(
-              color: linked ? AppColors.mintTint : AppColors.card,
-              borderRadius: BorderRadius.circular(999),
-              boxShadow: AppShadows.sm,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.pets_rounded,
-                    size: 16, color: linked ? AppColors.mint : AppColors.muted),
-                const SizedBox(width: 6),
-                Text(linked ? petName : 'Tag anabul',
-                    style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: linked ? AppColors.mint700 : AppColors.muted)),
-              ],
-            ),
-          ),
-      ],
+  /// 关联对象（原型 petsel，仅成长）：紫浅底行「Untuk: 🐾 {pet} (wajib diisi)」。
+  Widget _petTargetRow(AppLocalizations l10n) {
+    final petName = _linkedPet?.name ?? l10n.publishPetFallback;
+    final emoji = switch (_linkedPet?.petType) {
+      'CAT' => '🐱',
+      'DOG' => '🐶',
+      _ => '🐾',
+    };
+    return Container(
+      key: const ValueKey('publishPetTarget'),
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+      decoration: BoxDecoration(
+        color: AppColors.mintTint2, // 原型 petsel 紫浅底 #F8F6FF
+        borderRadius: BorderRadius.circular(11),
+      ),
+      child: Row(
+        children: [
+          Text(l10n.publishForLabel,
+              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          const SizedBox(width: 6),
+          Text('$emoji $petName',
+              style: const TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.mint)),
+        ],
+      ),
     );
+  }
+
+  /// 图片来源选择（原型「Tambah」单入口 → 相机 / 相册）。
+  Future<void> _pickImageSource(PublishController controller, AppLocalizations l10n) async {
+    final source = await showModalBottomSheet<MediaSource>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined, color: AppColors.mint),
+              title: Text(l10n.publishCamera),
+              onTap: () => Navigator.of(ctx).pop(MediaSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined, color: AppColors.mint),
+              title: Text(l10n.publishGallery),
+              onTap: () => Navigator.of(ctx).pop(MediaSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source != null) await _addImage(controller, source: source);
   }
 
   /// 成长日历事件日期字段（F9）：禁选未来，默认今天/格子日期。点击开日期选择器。
   Widget _eventDateRow(PublishController controller, AppLocalizations l10n) {
     final date = controller.eventDate ?? DateTime.now();
-    final label = '${date.year}-${date.month.toString().padLeft(2, '0')}'
-        '-${date.day.toString().padLeft(2, '0')}';
+    // 原型 daterow：「Tanggal momen: 15 Jun 2026」（本地化月份）+ chevron。
     return GestureDetector(
       key: const ValueKey('publishEventDate'),
       behavior: HitTestBehavior.opaque,
@@ -457,17 +490,24 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
         ),
         child: Row(
           children: [
-            const Icon(Icons.event_rounded, size: 18, color: AppColors.mint700),
+            const Icon(Icons.event_rounded, size: 18, color: AppColors.mint),
             const SizedBox(width: 10),
-            Text(l10n.publishEventDate,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-            const Spacer(),
-            Text(label,
-                key: const ValueKey('publishEventDateValue'),
-                style: const TextStyle(
-                    fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.mint700)),
-            const SizedBox(width: 6),
-            const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.muted),
+            Expanded(
+              child: Text.rich(
+                TextSpan(
+                  text: '${l10n.publishEventDate}: ',
+                  style: const TextStyle(fontSize: 13, color: AppColors.ink),
+                  children: [
+                    TextSpan(
+                      text: formatDayMonthYear(context, date),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700, color: AppColors.mint),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.mint700),
           ],
         ),
       ),
@@ -486,24 +526,6 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     if (picked != null) controller.setEventDate(picked);
   }
 
-  Widget _growthNotice() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration:
-          BoxDecoration(color: AppColors.goldTint, borderRadius: BorderRadius.circular(12)),
-      child: const Row(
-        children: [
-          Text('⚠️'),
-          SizedBox(width: 8),
-          Expanded(
-            child: Text('Momen Bahagia wajib di-tag ke anabul agar masuk ke Paspor.',
-                style: TextStyle(fontSize: 12.5, color: Color(0xFF8A6A12), fontWeight: FontWeight.w600)),
-          ),
-        ],
-      ),
-    );
-  }
-
   /// 照片区：原型 3 列网格，首格为虚线「Tambah」添加格，其后为缩略图（带上传态/删除）。
   Widget _imageRow(PublishController controller, AppLocalizations l10n) {
     final items = controller.items;
@@ -513,7 +535,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       children: [
         Text(l10n.publishPhotoLabel,
             style: const TextStyle(
-                fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.muted)),
+                fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
         const SizedBox(height: 8),
         GridView.count(
           crossAxisCount: 3,
@@ -534,22 +556,22 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   Widget _addCell(PublishController controller, AppLocalizations l10n) {
     return GestureDetector(
       key: const ValueKey('publishAddImage'),
-      onTap: () => _addImage(controller),
+      onTap: () => _pickImageSource(controller, l10n),
       child: CustomPaint(
-        painter: _DashedRRectPainter(color: AppColors.dashedViolet, radius: 9, dash: 5, gap: 4),
+        painter: DashedRRectPainter(color: AppColors.dashedViolet, radius: 9, dash: 5, gap: 4),
         child: Container(
           decoration: BoxDecoration(
             color: AppColors.cream2,
             borderRadius: BorderRadius.circular(9),
           ),
           alignment: Alignment.center,
-          child: const Column(
+          child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.add_rounded, size: 22, color: AppColors.mint),
-              SizedBox(height: 3),
-              Text('Tambah',
-                  style: TextStyle(
+              const Icon(Icons.add_rounded, size: 22, color: AppColors.mint),
+              const SizedBox(height: 3),
+              Text(l10n.tabAdd,
+                  style: const TextStyle(
                       fontSize: 10, fontWeight: FontWeight.w500, color: AppColors.mint)),
             ],
           ),
@@ -586,41 +608,6 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       ],
     );
   }
-}
-
-/// 虚线圆角矩形描边画笔（占位添加格用，避免引入 dotted_border 依赖）。
-class _DashedRRectPainter extends CustomPainter {
-  _DashedRRectPainter(
-      {required this.color, required this.radius, required this.dash, required this.gap});
-
-  final Color color;
-  final double radius;
-  final double dash;
-  final double gap;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    final rrect = RRect.fromRectAndRadius(
-        Offset.zero & size, Radius.circular(radius));
-    final path = Path()..addRRect(rrect);
-    for (final metric in path.computeMetrics()) {
-      double dist = 0;
-      while (dist < metric.length) {
-        final next = dist + dash;
-        canvas.drawPath(
-            metric.extractPath(dist, next.clamp(0, metric.length)), paint);
-        dist = next + gap;
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(_DashedRRectPainter old) =>
-      old.color != color || old.radius != radius || old.dash != dash || old.gap != gap;
 }
 
 /// 类型 pill chip（原型 tchip）：选中=紫底白字；未选=白底 #E6E6E6 边框；灰置=暗淡。
@@ -667,40 +654,3 @@ class _TypeChip extends StatelessWidget {
   }
 }
 
-class _SmallChip extends StatelessWidget {
-  const _SmallChip({required this.icon, required this.label, this.onTap, super.key});
-
-  final IconData icon;
-  final String label;
-
-  /// 可选点击回调；为空时为纯展示 chip（不可点）。
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final chip = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(999),
-        boxShadow: AppShadows.sm,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: AppColors.muted),
-          const SizedBox(width: 6),
-          Text(label,
-              style: const TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink2)),
-        ],
-      ),
-    );
-    if (onTap == null) return chip;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: chip,
-    );
-  }
-}

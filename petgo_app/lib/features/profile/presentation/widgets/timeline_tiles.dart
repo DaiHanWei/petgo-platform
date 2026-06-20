@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/colors.dart';
+import '../../../../l10n/app_localizations.dart';
+import '../../../../shared/utils/date_format.dart';
 import '../../../../shared/widgets/app_image.dart';
 import '../../domain/timeline_item.dart';
-
-/// 印尼语月份缩写（paspor.html 日期列 "15\nJun"）。
-const List<String> _idMonthAbbr = [
-  '', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
-];
 
 /// 时间线条目（paspor.html tentry/hentry 1:1 还原）。
 /// 快乐时刻=紧凑横行（日期列+52缩略+标题/副标题）；健康事件=粉底行+等级徽章。
@@ -26,18 +23,22 @@ class HappyMomentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final d = item.displayDate;
     final isFirst = firstLabel != null;
     final photoN = item.imageUrls.length;
     final title = isFirst
         ? '🌟 $firstLabel'
-        : (item.text != null && item.text!.isNotEmpty ? item.text! : 'Momen Bahagia');
+        : (item.text != null && item.text!.isNotEmpty ? item.text! : l10n.timelineHappyMoment);
     final sub = isFirst
-        ? 'Foto debut · ${d.day} ${_idMonthAbbr[d.month]} ${d.year}'
-        : 'Momen Bahagia${photoN > 0 ? ' · $photoN foto' : ''}';
+        ? '${l10n.timelineDebutPhoto} · ${formatDayMonthYear(context, d)}'
+        : (photoN > 0
+            ? l10n.timelineHappyMomentPhotos(photoN)
+            : l10n.timelineHappyMoment);
 
     return _entryShell(
       key: const ValueKey('happyMomentTile'),
+      monthAbbr: formatMonthAbbr(context, d),
       date: d,
       thumb: _thumb(),
       title: title,
@@ -86,6 +87,7 @@ class HealthEventTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final d = item.date;
     return Padding(
       key: const ValueKey('healthEventTile'),
@@ -104,7 +106,7 @@ class HealthEventTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Konsultasi AI — ${d.day} ${_idMonthAbbr[d.month]}',
+                  Text('${l10n.timelineAiConsult} — ${formatDayMonth(context, d)}',
                       style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -123,7 +125,7 @@ class HealthEventTile extends StatelessWidget {
             ),
             if (item.aiLevel != null) ...[
               const SizedBox(width: 9),
-              _levelBadge(item.aiLevel!),
+              _levelBadge(l10n, item.aiLevel!),
             ],
           ],
         ),
@@ -131,11 +133,11 @@ class HealthEventTile extends StatelessWidget {
     );
   }
 
-  Widget _levelBadge(String level) {
+  Widget _levelBadge(AppLocalizations l10n, String level) {
     final (String text, Color bg) = switch (level) {
-      'RED' => ('🔴 Merah', AppColors.popRed),
-      'YELLOW' => ('🟡 Kuning', AppColors.popRed),
-      'GREEN' => ('🟢 Hijau', AppColors.triageGreen),
+      'RED' => ('🔴 ${l10n.triageBadgeRed}', AppColors.popRed),
+      'YELLOW' => ('🟡 ${l10n.triageBadgeYellow}', AppColors.popRed),
+      'GREEN' => ('🟢 ${l10n.triageBadgeGreen}', AppColors.triageGreen),
       _ => (level, AppColors.muted),
     };
     return Container(
@@ -152,6 +154,7 @@ class HealthEventTile extends StatelessWidget {
 Widget _entryShell({
   required Key key,
   required DateTime date,
+  required String monthAbbr,
   required Widget thumb,
   required String title,
   Key? titleKey,
@@ -181,7 +184,7 @@ Widget _entryShell({
                 Text('${date.day}',
                     style: const TextStyle(
                         fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.muted)),
-                Text(_idMonthAbbr[date.month],
+                Text(monthAbbr,
                     style: const TextStyle(
                         fontSize: 10, fontWeight: FontWeight.w500, color: AppColors.muted)),
               ],

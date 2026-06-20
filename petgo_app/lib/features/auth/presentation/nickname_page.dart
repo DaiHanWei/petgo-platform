@@ -127,8 +127,8 @@ class _NicknamePageState extends ConsumerState<NicknamePage> {
                       Text(l10n.onboardingNicknameTitle,
                           style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, height: 1.3, color: Color(0xFF2E2A45))),
                       const SizedBox(height: 6),
-                      const Text('Ini yang dilihat komunitas TailTopia.',
-                          style: TextStyle(fontSize: 13, color: Color(0xFF9690A6))),
+                      Text(l10n.onboardingNicknameSubtitle,
+                          style: const TextStyle(fontSize: 13, color: Color(0xFF9690A6))),
                       const SizedBox(height: 28),
                       // Google avatar + email 卡
                       Container(
@@ -196,8 +196,8 @@ class _NicknamePageState extends ConsumerState<NicknamePage> {
                           textAlign: TextAlign.right,
                           style: TextStyle(fontSize: 11, color: over ? const Color(0xFFF0425A) : const Color(0xFF9690A6))),
                       const SizedBox(height: 10),
-                      const Text('Nama dapat diubah kapan saja dari pengaturan profil.',
-                          style: TextStyle(fontSize: 12, height: 1.5, color: Color(0xFF9690A6))),
+                      Text(l10n.onboardingNicknameHelper,
+                          style: const TextStyle(fontSize: 12, height: 1.5, color: Color(0xFF9690A6))),
                       const SizedBox(height: 44),
                       // Lanjut 按钮
                       _ContinueButton(enabled: _valid && !_busy, busy: _busy, label: l10n.onboardingContinue, onTap: _onContinue),

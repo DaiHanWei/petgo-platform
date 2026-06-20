@@ -6,7 +6,34 @@
 <title>TailTopia · Core Pages Reference V1.0.0</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="./tokens.css">
+<!-- tokens.css 内联（自包含，避免相对路径不加载导致 var 失效）-->
+<style>
+/* ──────────────────────────────────────────────────────────────
+   tokens.css · TailTopia Core Pages Reference
+   ⚠️ 重建版（非设计师原档）。原 preview-core-pages.html 引用了 ./tokens.css
+   但该文件未随附，导致所有 var(--color-*) 失效、页面白底变透明、透出画布淡紫。
+   本文件按 HTML 内置图例面板（Color Palette）+ QA 验证清单的明确描述重建：
+     · 画布/卡片纯白 #FFFFFF（QA: 画布背景为纯白，无紫调）
+     · violet-50 #F8F2FF 仅作局部点缀
+     · 文字 ink-700 #544864（图例文档值）
+   灰阶层级(heading/primary/tertiary)与兽医端底色 bg-vet 为合理推断，
+   拿到设计师原件后可直接覆盖本文件。
+   ────────────────────────────────────────────────────────────── */
+:root{
+  /* ── Backgrounds ── */
+  --color-bg-default:#FFFFFF;   /* 页面画布（手机屏内），纯白无紫调 */
+  --color-bg-surface:#FFFFFF;   /* 卡片 / AppBar / TabBar，白底靠阴影分层 */
+  --color-bg-subtle:#F8F2FF;    /* violet-50，局部点缀底（petsel/统计条/进度槽） */
+  --color-bg-muted:#EFEDF3;     /* 中性浅灰：关闭按钮、离线态等 */
+  --color-bg-vet:#F0F4F4;       /* 兽医端浅薄荷底（推断值，待原件校正） */
+
+  /* ── Text（4 级层级，仅 secondary 为图例文档值，其余为层级推断） ── */
+  --color-text-heading:#1C1830;   /* 大标题，最深 */
+  --color-text-primary:#2E2A45;   /* 正文主色 / 状态栏 / 标题 */
+  --color-text-secondary:#544864; /* ink-700（图例文档值），次级文字 */
+  --color-text-tertiary:#9690A6;  /* 弱化：时间戳、占位、caption */
+}
+</style>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;padding:36px;min-height:100vh;align-items:flex-start;justify-content:center;}
@@ -19,6 +46,8 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
 .statusbar .icons{display:flex;align-items:center;gap:5px;}
 .pages{flex:1;overflow:hidden;position:relative;}
 .page{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;display:none;padding-bottom:4px;background:var(--color-bg-default);}
+#paspor-fab{display:none;}
+.phone:has(#p-paspor.on) #paspor-fab{display:block;}
 .page::-webkit-scrollbar{display:none;}
 .page.on{display:block;}
 
@@ -433,16 +462,17 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
         <div style="font-size:12px;color:rgba(255,255,255,.78);margin-bottom:16px;line-height:1.55;">
           Rekam tumbuh kembang, konsultasi dokter hewan, dan bagikan momen berharga bersama mereka.
         </div>
-        <div style="display:flex;gap:9px;">
-          <button style="flex:1;padding:10px;background:var(--color-bg-surface);border:none;border-radius:11px;
-                         font-size:13px;font-weight:700;color:#845EC9;font-family:'Poppins',sans-serif;cursor:pointer;">
-            Daftar Gratis
-          </button>
-          <button style="padding:10px 16px;background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.3);
-                         border-radius:11px;font-size:13px;color:#fff;font-family:'Poppins',sans-serif;cursor:pointer;">
-            Masuk
-          </button>
-        </div>
+        <button style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;
+                       padding:11px;background:var(--color-bg-surface);border:none;border-radius:11px;
+                       font-size:13px;font-weight:700;color:#845EC9;font-family:'Poppins',sans-serif;cursor:pointer;">
+          <svg width="16" height="16" viewBox="0 0 48 48">
+            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+          </svg>
+          Masuk dengan Google
+        </button>
         <div style="text-align:center;margin-top:11px;font-size:11px;color:rgba(255,255,255,.45);cursor:pointer;">
           Lanjut lihat dulu →
         </div>
@@ -484,27 +514,21 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
             Buat akun gratis untuk mencatat tumbuh kembang, konsultasi dokter hewan, dan menyimpan momen berharga bersama hewan peliharaanmu.
           </div>
 
-          <!-- Google 登录 CTA（主按钮）-->
+          <!-- Google 登录 CTA（唯一登录方式，FR-0D：登录/注册不区分入口）-->
           <button style="width:100%;display:flex;align-items:center;justify-content:center;gap:10px;
-                         padding:13px;border-radius:13px;border:1.5px solid #E6E6E6;
-                         background:var(--color-bg-surface);cursor:pointer;margin-bottom:10px;
-                         box-shadow:0 2px 8px rgba(22,34,51,.08);font-family:'Poppins',sans-serif;">
-            <!-- Google G SVG -->
-            <svg width="20" height="20" viewBox="0 0 48 48">
-              <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-              <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-              <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-              <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-            </svg>
-            <span style="font-size:14px;font-weight:600;color:var(--color-text-heading);">Masuk dengan Google</span>
-          </button>
-
-          <!-- 注册（次按钮）-->
-          <button style="width:100%;padding:13px;border-radius:13px;border:none;
-                         background:#845EC9;color:#fff;font-size:14px;font-weight:600;
-                         font-family:'Poppins',sans-serif;cursor:pointer;
-                         box-shadow:0 6px 16px rgba(132,94,201,.30);margin-bottom:18px;">
-            Daftar Gratis
+                         padding:14px;border-radius:13px;border:none;
+                         background:#845EC9;cursor:pointer;margin-bottom:18px;
+                         box-shadow:0 6px 16px rgba(132,94,201,.30);font-family:'Poppins',sans-serif;">
+            <!-- Google G SVG (白底圆形，凸显在紫色按钮上) -->
+            <span style="width:22px;height:22px;border-radius:9999px;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <svg width="14" height="14" viewBox="0 0 48 48">
+                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+              </svg>
+            </span>
+            <span style="font-size:14px;font-weight:700;color:#fff;">Lanjutkan dengan Google</span>
           </button>
 
           <!-- 取消 -->
@@ -846,6 +870,15 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
           <div class="imgph" style="background:#E7F8F0;">🐶</div>
         </div>
       </div>
+
+      <!-- Feed 卡片长按菜单（仅举报，§5 Non-Goal 已排除"分享"） -->
+      <div id="feed-longpress-sheet" style="display:none;position:absolute;inset:0;background:rgba(14,10,20,.6);z-index:998;align-items:flex-end;overflow:hidden;touch-action:none;" onclick="if(event.target===this)this.style.display='none'" onwheel="if(event.target===this)event.preventDefault()" ontouchmove="if(event.target===this)event.preventDefault()">
+        <div style="background:var(--color-bg-surface);border-radius:24px 24px 0 0;width:100%;padding:10px 22px 32px;animation:slideUp .25s ease-out;" onclick="event.stopPropagation()">
+          <div style="width:36px;height:4px;background:#E6E6E6;border-radius:9999px;margin:0 auto 14px;"></div>
+          <button onclick="document.getElementById('feed-longpress-sheet').style.display='none'" style="width:100%;text-align:left;padding:14px 4px;background:none;border:none;border-bottom:1px solid #F3F3F3;font-size:14px;color:#F0425A;font-family:'Poppins',sans-serif;cursor:pointer;display:flex;align-items:center;gap:10px;">🚩 Laporkan Konten</button>
+          <button onclick="document.getElementById('feed-longpress-sheet').style.display='none'" style="width:100%;text-align:left;padding:14px 4px 4px;background:none;border:none;font-size:14px;color:var(--color-text-secondary);font-family:'Poppins',sans-serif;cursor:pointer;">Batal</button>
+        </div>
+      </div>
     </div>
 
     <!-- ══════════════════════════════════════════════════════════════
@@ -861,15 +894,15 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#544864" stroke-width="2.2" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
         </button>
         <!-- ··· 菜单 -->
-        <button style="width:36px;height:36px;border-radius:11px;background:var(--color-bg-muted);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;">
+        <button onclick="document.getElementById('detail-more-sheet').style.display='flex'" style="width:36px;height:36px;border-radius:11px;background:var(--color-bg-muted);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" color="#544864"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
         </button>
       </div>
 
       <!-- 作者信息 -->
       <div style="display:flex;align-items:center;gap:10px;padding:4px 20px 14px;">
-        <div style="width:38px;height:38px;border-radius:9999px;background:linear-gradient(135deg,#9E83DA,#845EC9);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff;flex-shrink:0;cursor:pointer;">P</div>
-        <div style="flex:1;">
+        <div onclick="document.getElementById('mini-profile-sheet').style.display='flex'" style="width:38px;height:38px;border-radius:9999px;background:linear-gradient(135deg,#9E83DA,#845EC9);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff;flex-shrink:0;cursor:pointer;">P</div>
+        <div style="flex:1;" onclick="document.getElementById('mini-profile-sheet').style.display='flex'">
           <div style="font-size:14px;font-weight:600;color:var(--color-text-heading);cursor:pointer;">Putri Rahayu</div>
           <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:1px;">2 jam lalu · Cerita Harian</div>
         </div>
@@ -956,6 +989,74 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z"/></svg>
         </button>
       </div>
+
+      <!-- FR-26 · 迷你主页预览卡（头像/昵称点击） -->
+      <div id="mini-profile-sheet" style="display:none;position:absolute;inset:0;background:rgba(14,10,20,.6);z-index:998;align-items:flex-end;overflow:hidden;touch-action:none;" onclick="if(event.target===this)this.style.display='none'" onwheel="if(event.target===this)event.preventDefault()" ontouchmove="if(event.target===this)event.preventDefault()">
+        <div style="background:var(--color-bg-surface);border-radius:24px 24px 0 0;width:100%;padding:24px 22px 38px;animation:slideUp .25s ease-out;text-align:center;" onclick="event.stopPropagation()">
+          <div style="width:36px;height:4px;background:#E6E6E6;border-radius:9999px;margin:0 auto 20px;"></div>
+          <div style="width:64px;height:64px;border-radius:9999px;background:linear-gradient(135deg,#9E83DA,#845EC9);display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;color:#fff;margin:0 auto 12px;">P</div>
+          <div style="font-size:16px;font-weight:700;color:var(--color-text-heading);margin-bottom:6px;">Putri Rahayu</div>
+          <div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:16px;">TA telah memposting 7 konten</div>
+          <div style="background:var(--color-bg-subtle);border-radius:14px;padding:14px 16px;margin-bottom:18px;">
+            <div style="font-size:12px;color:#845EC9;line-height:1.6;">TA punya halaman profil khusus yang sedang dipersiapkan dengan penuh perhatian, lebih banyak keseruan akan segera hadir ✨</div>
+          </div>
+          <button onclick="document.getElementById('mini-profile-sheet').style.display='none'" style="width:100%;padding:13px;background:var(--color-bg-muted);border:none;border-radius:14px;font-size:14px;color:var(--color-text-secondary);font-family:'Poppins',sans-serif;cursor:pointer;">Tutup</button>
+        </div>
+      </div>
+
+      <!-- FR-28 ··· 菜单：默认=他人内容(举报)，可切换至 自己内容(删除) 演示两种状态 -->
+      <div id="detail-more-sheet" style="display:none;position:absolute;inset:0;background:rgba(14,10,20,.6);z-index:998;align-items:flex-end;overflow:hidden;touch-action:none;" onclick="if(event.target===this)this.style.display='none'" onwheel="if(event.target===this)event.preventDefault()" ontouchmove="if(event.target===this)event.preventDefault()">
+        <div style="background:var(--color-bg-surface);border-radius:24px 24px 0 0;width:100%;padding:10px 22px 32px;animation:slideUp .25s ease-out;" onclick="event.stopPropagation()">
+          <div style="width:36px;height:4px;background:#E6E6E6;border-radius:9999px;margin:0 auto 14px;"></div>
+          <!-- 他人内容状态 -->
+          <div id="more-sheet-other">
+            <button onclick="document.getElementById('detail-more-sheet').style.display='none';document.getElementById('report-type-sheet').style.display='flex'" style="width:100%;text-align:left;padding:14px 4px;background:none;border:none;border-bottom:1px solid #F3F3F3;font-size:14px;color:#F0425A;font-family:'Poppins',sans-serif;cursor:pointer;display:flex;align-items:center;gap:10px;">🚩 Laporkan Konten</button>
+            <button onclick="document.getElementById('detail-more-sheet').style.display='none'" style="width:100%;text-align:left;padding:14px 4px 4px;background:none;border:none;font-size:14px;color:var(--color-text-secondary);font-family:'Poppins',sans-serif;cursor:pointer;">Batal</button>
+            <div style="text-align:center;margin-top:10px;"><span onclick="document.getElementById('more-sheet-other').style.display='none';document.getElementById('more-sheet-own').style.display='block'" style="font-size:11px;color:var(--color-text-tertiary);cursor:pointer;text-decoration:underline;">（演示：切换至作者视角 →）</span></div>
+          </div>
+          <!-- 自己内容状态 (FR-36) -->
+          <div id="more-sheet-own" style="display:none;">
+            <button onclick="document.getElementById('detail-more-sheet').style.display='none';document.getElementById('delete-confirm-sheet').style.display='flex'" style="width:100%;text-align:left;padding:14px 4px;background:none;border:none;border-bottom:1px solid #F3F3F3;font-size:14px;color:#F0425A;font-family:'Poppins',sans-serif;cursor:pointer;display:flex;align-items:center;gap:10px;">🗑 Hapus Konten</button>
+            <button onclick="document.getElementById('detail-more-sheet').style.display='none'" style="width:100%;text-align:left;padding:14px 4px 4px;background:none;border:none;font-size:14px;color:var(--color-text-secondary);font-family:'Poppins',sans-serif;cursor:pointer;">Batal</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- FR-25 · 举报类型选择 -->
+      <div id="report-type-sheet" style="display:none;position:absolute;inset:0;background:rgba(14,10,20,.6);z-index:998;align-items:flex-end;overflow:hidden;touch-action:none;" onclick="if(event.target===this)this.style.display='none'" onwheel="if(event.target===this)event.preventDefault()" ontouchmove="if(event.target===this)event.preventDefault()">
+        <div id="report-type-form" style="background:var(--color-bg-surface);border-radius:24px 24px 0 0;width:100%;padding:20px 22px 32px;animation:slideUp .25s ease-out;" onclick="event.stopPropagation()">
+          <div style="width:36px;height:4px;background:#E6E6E6;border-radius:9999px;margin:0 auto 18px;"></div>
+          <div style="font-size:16px;font-weight:700;color:var(--color-text-heading);margin-bottom:4px;">Laporkan Konten</div>
+          <div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:16px;">Pilih alasan yang paling sesuai</div>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px;">
+            <label style="display:flex;align-items:center;gap:10px;padding:12px 14px;border:1.5px solid #845EC9;border-radius:13px;background:var(--color-bg-subtle);cursor:pointer;"><input type="radio" name="report-reason" checked style="accent-color:#845EC9;"><span style="font-size:13px;color:var(--color-text-heading);">Melanggar hukum / aturan</span></label>
+            <label style="display:flex;align-items:center;gap:10px;padding:12px 14px;border:1.5px solid #E6E6E6;border-radius:13px;cursor:pointer;"><input type="radio" name="report-reason" style="accent-color:#845EC9;"><span style="font-size:13px;color:var(--color-text-primary);">Informasi palsu</span></label>
+            <label style="display:flex;align-items:center;gap:10px;padding:12px 14px;border:1.5px solid #E6E6E6;border-radius:13px;cursor:pointer;"><input type="radio" name="report-reason" style="accent-color:#845EC9;"><span style="font-size:13px;color:var(--color-text-primary);">Konten tidak pantas</span></label>
+            <label style="display:flex;align-items:center;gap:10px;padding:12px 14px;border:1.5px solid #E6E6E6;border-radius:13px;cursor:pointer;"><input type="radio" name="report-reason" style="accent-color:#845EC9;"><span style="font-size:13px;color:var(--color-text-primary);">Pelecehan</span></label>
+            <label style="display:flex;align-items:center;gap:10px;padding:12px 14px;border:1.5px solid #E6E6E6;border-radius:13px;cursor:pointer;"><input type="radio" name="report-reason" style="accent-color:#845EC9;"><span style="font-size:13px;color:var(--color-text-primary);">Lainnya</span></label>
+          </div>
+          <button onclick="document.getElementById('report-type-form').style.display='none';document.getElementById('report-type-done').style.display='block'" style="width:100%;padding:14px;background:#845EC9;border:none;border-radius:14px;font-size:14px;font-weight:700;color:#fff;font-family:'Poppins',sans-serif;cursor:pointer;box-shadow:0 6px 18px rgba(132,94,201,.28);margin-bottom:10px;">Kirim Laporan</button>
+          <button onclick="document.getElementById('report-type-sheet').style.display='none'" style="width:100%;padding:13px;background:transparent;border:1.5px solid #E6E6E6;border-radius:14px;font-size:14px;color:var(--color-text-secondary);font-family:'Poppins',sans-serif;cursor:pointer;">Batal</button>
+        </div>
+        <div id="report-type-done" style="display:none;background:var(--color-bg-surface);border-radius:24px 24px 0 0;width:100%;padding:32px 22px 40px;text-align:center;animation:slideUp .25s ease-out;" onclick="event.stopPropagation()">
+          <div style="width:60px;height:60px;border-radius:9999px;background:var(--color-bg-subtle);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:28px;">✅</div>
+          <div style="font-size:15px;font-weight:700;color:var(--color-text-heading);margin-bottom:6px;">Laporan diterima</div>
+          <div style="font-size:13px;color:var(--color-text-secondary);line-height:1.6;margin-bottom:20px;">Kami akan segera memprosesnya.</div>
+          <button onclick="document.getElementById('report-type-sheet').style.display='none';document.getElementById('report-type-form').style.display='block';document.getElementById('report-type-done').style.display='none'" style="width:100%;padding:13px;background:var(--color-bg-muted);border:none;border-radius:14px;font-size:14px;color:var(--color-text-secondary);font-family:'Poppins',sans-serif;cursor:pointer;">Tutup</button>
+        </div>
+      </div>
+
+      <!-- FR-36 · 删除确认 -->
+      <div id="delete-confirm-sheet" style="display:none;position:absolute;inset:0;background:rgba(14,10,20,.6);z-index:998;align-items:flex-end;overflow:hidden;touch-action:none;" onclick="if(event.target===this)this.style.display='none'" onwheel="if(event.target===this)event.preventDefault()" ontouchmove="if(event.target===this)event.preventDefault()">
+        <div style="background:var(--color-bg-surface);border-radius:24px 24px 0 0;width:100%;padding:24px 22px 32px;animation:slideUp .25s ease-out;text-align:center;" onclick="event.stopPropagation()">
+          <div style="width:36px;height:4px;background:#E6E6E6;border-radius:9999px;margin:0 auto 18px;"></div>
+          <div style="width:60px;height:60px;border-radius:9999px;background:#FDE7EB;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:28px;">⚠️</div>
+          <div style="font-size:16px;font-weight:700;color:var(--color-text-heading);margin-bottom:6px;">Hapus konten ini?</div>
+          <div style="font-size:13px;color:var(--color-text-secondary);line-height:1.6;margin-bottom:22px;">Konten yang dihapus akan dihilangkan secara permanen dan tidak dapat dikembalikan.</div>
+          <button onclick="document.getElementById('delete-confirm-sheet').style.display='none'" style="width:100%;padding:14px;background:#F0425A;border:none;border-radius:14px;font-size:14px;font-weight:700;color:#fff;font-family:'Poppins',sans-serif;cursor:pointer;box-shadow:0 6px 18px rgba(240,66,90,.3);margin-bottom:10px;">Hapus</button>
+          <button onclick="document.getElementById('delete-confirm-sheet').style.display='none'" style="width:100%;padding:13px;background:transparent;border:1.5px solid #E6E6E6;border-radius:14px;font-size:14px;color:var(--color-text-secondary);font-family:'Poppins',sans-serif;cursor:pointer;">Batal</button>
+        </div>
+      </div>
     </div>
 
     <!-- ── PASPOR ── -->
@@ -1019,14 +1120,8 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
         <div class="tcol"><div class="ttitle" style="color:#845EC9;font-weight:700;">🌟 Momen Bahagia Pertama!</div><div class="tsub">Foto debut · 3 Jun 2026</div></div>
       </div>
 
-      <!-- 分享悬浮按钮 (FR-15) -->
-      <div style="position:absolute;bottom:16px;right:16px;z-index:20;">
-        <button onclick="document.getElementById('paspor-share-sheet').style.display='flex'" style="width:54px;height:54px;border-radius:9999px;background:linear-gradient(145deg,#9E83DA 0%,#845EC9 55%,#6C48AE 100%);border:none;box-shadow:0 4px 16px rgba(0,0,0,.22),0 2px 6px rgba(0,0,0,.12),inset 0 1px 0 rgba(255,255,255,.18);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .12s ease-out;" onmousedown="this.style.transform='scale(.93)'" onmouseup="this.style.transform='scale(1)'" onmouseleave="this.style.transform='scale(1)'">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter:drop-shadow(0 1px 2px rgba(0,0,0,.25))"><circle cx="18" cy="5" r="3" fill="rgba(255,255,255,.15)"/><circle cx="6" cy="12" r="3" fill="rgba(255,255,255,.15)"/><circle cx="18" cy="19" r="3" fill="rgba(255,255,255,.15)"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-        </button>
-      </div>
       <!-- 分享底抽屉 -->
-      <div id="paspor-share-sheet" style="display:none;position:absolute;inset:0;background:rgba(14,10,20,.6);z-index:998;align-items:flex-end;" onclick="if(event.target===this)this.style.display='none'">
+      <div id="paspor-share-sheet" style="display:none;position:absolute;inset:0;background:rgba(14,10,20,.6);z-index:998;align-items:flex-end;overflow:hidden;touch-action:none;" onclick="if(event.target===this)this.style.display='none'" onwheel="if(event.target===this)event.preventDefault()" ontouchmove="if(event.target===this)event.preventDefault()">
         <div style="background:var(--color-bg-surface);border-radius:24px 24px 0 0;width:100%;padding:20px 22px 40px;" onclick="event.stopPropagation()">
           <div style="width:36px;height:4px;background:#E6E6E6;border-radius:9999px;margin:0 auto 18px;"></div>
           <div style="font-size:17px;font-weight:700;color:var(--color-text-heading);margin-bottom:3px;">Bagikan Profil Mochi</div>
@@ -1115,7 +1210,7 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
       </div>
 
       <!-- 编辑资料底抽屉 -->
-      <div id="profil-edit-sheet" style="display:none;position:absolute;inset:0;background:rgba(14,10,20,.6);z-index:998;align-items:flex-end;" onclick="if(event.target===this)this.style.display='none'">
+      <div id="profil-edit-sheet" style="display:none;position:absolute;inset:0;background:rgba(14,10,20,.6);z-index:998;align-items:flex-end;overflow:hidden;touch-action:none;" onclick="if(event.target===this)this.style.display='none'" onwheel="if(event.target===this)event.preventDefault()" ontouchmove="if(event.target===this)event.preventDefault()">
         <div style="background:var(--color-bg-surface);border-radius:24px 24px 0 0;width:100%;padding:20px 22px 40px;animation:slideUp .25s cubic-bezier(0,0,.2,1);box-shadow:0 -8px 40px rgba(0,0,0,.18);" onclick="event.stopPropagation()">
           <div style="width:36px;height:4px;background:#E6E6E6;border-radius:9999px;margin:0 auto 18px;"></div>
           <div style="font-size:17px;font-weight:700;color:var(--color-text-heading);margin-bottom:20px;">Edit Profil</div>
@@ -1296,8 +1391,11 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
           <div style="font-size:13px;color:var(--color-text-heading);line-height:1.65;">Oyen tadi malam muntah busa putih 2x. Sekarang lemas dan tidak mau makan. Sudah minum air sedikit. Biasanya aktif dan makan banyak.</div>
         </div>
         <div style="text-align:right;font-size:11px;color:var(--color-text-tertiary);margin-bottom:6px;">87 / 500</div>
-        <!-- 免责提示 -->
-        <div style="font-size:11px;color:var(--color-text-tertiary);line-height:1.5;margin-bottom:24px;">⚠️ Hasil AI bersifat referensi, bukan pengganti diagnosis dokter hewan berlisensi.</div>
+        <!-- 免责提示承载位 -->
+        <div style="display:flex;gap:8px;align-items:flex-start;background:var(--color-bg-muted);border-radius:10px;padding:10px 12px;margin-bottom:24px;">
+          <span style="font-size:13px;flex-shrink:0;line-height:1.5;">⚠️</span>
+          <span style="font-size:11px;color:var(--color-text-tertiary);line-height:1.5;">Hasil AI bersifat referensi, bukan pengganti diagnosis dokter hewan berlisensi.</span>
+        </div>
         <!-- CTA -->
         <button style="width:100%;padding:15px;background:#845EC9;border:none;border-radius:14px;font-size:15px;font-weight:700;color:#fff;font-family:'Poppins',sans-serif;cursor:pointer;box-shadow:0 8px 20px rgba(132,94,201,.28);">Analisis Sekarang →</button>
       </div>
@@ -1327,14 +1425,45 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
           <div style="font-size:12px;font-weight:700;color:#8A5A00;margin-bottom:8px;">RINGKASAN GEJALA</div>
           <div style="font-size:13px;color:var(--color-text-primary);line-height:1.6;">Mochi (kucing, betina, 2 thn) — <strong>muntah busa putih 2x</strong>, lemas, tidak nafsu makan. Kondisi tidak mengancam jiwa namun perlu evaluasi dalam 24 jam.</div>
         </div>
-        <!-- 建议 -->
+        <!-- 居家处理建议 -->
         <div style="background:var(--color-bg-surface);border-radius:14px;padding:14px 16px;box-shadow:0 2px 10px rgba(22,34,51,.07);margin-bottom:14px;">
-          <div style="font-size:12px;font-weight:700;color:var(--color-text-primary);margin-bottom:10px;">SARAN AI</div>
+          <div style="font-size:12px;font-weight:700;color:var(--color-text-primary);margin-bottom:10px;">SARAN PERAWATAN</div>
           <div style="display:flex;flex-direction:column;gap:8px;">
             <div style="display:flex;gap:9px;font-size:13px;color:var(--color-text-primary);line-height:1.5;"><span style="color:#F6A609;font-size:16px;">•</span>Hentikan makanan kering, ganti makanan basah rendah lemak</div>
             <div style="display:flex;gap:9px;font-size:13px;color:var(--color-text-primary);line-height:1.5;"><span style="color:#F6A609;font-size:16px;">•</span>Pastikan hidrasi cukup — sediakan air bersih setiap saat</div>
-            <div style="display:flex;gap:9px;font-size:13px;color:var(--color-text-primary);line-height:1.5;"><span style="color:#F6A609;font-size:16px;">•</span>Pantau frekuensi muntah; jika >3x dalam 4 jam → segera ke klinik</div>
             <div style="display:flex;gap:9px;font-size:13px;color:var(--color-text-primary);line-height:1.5;"><span style="color:#F6A609;font-size:16px;">•</span>Hindari obat manusia — bisa berbahaya untuk kucing</div>
+          </div>
+        </div>
+        <!-- 条件倒计时协议 (FR-2)：观察指标 / 时间窗口 / 升级触发条件 三要素结构化分区 -->
+        <div style="background:var(--color-bg-surface);border-radius:14px;padding:14px 16px;box-shadow:0 2px 10px rgba(22,34,51,.07);margin-bottom:14px;">
+          <div style="font-size:12px;font-weight:700;color:var(--color-text-primary);margin-bottom:12px;">PROTOKOL OBSERVASI</div>
+          <!-- 1. 观察指标 -->
+          <div style="margin-bottom:14px;">
+            <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;">
+              <span style="font-size:15px;">👁</span>
+              <span style="font-size:11px;font-weight:700;color:var(--color-text-tertiary);letter-spacing:.4px;text-transform:uppercase;">Indikator yang Diawasi</span>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;padding-left:22px;">
+              <span style="font-size:12px;background:var(--color-bg-muted);color:var(--color-text-primary);padding:5px 10px;border-radius:8px;">Frekuensi muntah</span>
+              <span style="font-size:12px;background:var(--color-bg-muted);color:var(--color-text-primary);padding:5px 10px;border-radius:8px;">Nafsu makan</span>
+              <span style="font-size:12px;background:var(--color-bg-muted);color:var(--color-text-primary);padding:5px 10px;border-radius:8px;">Tingkat energi</span>
+            </div>
+          </div>
+          <!-- 2. 时间窗口 (独立高亮卡片) -->
+          <div style="background:#FEF3DE;border-radius:12px;padding:12px 14px;margin-bottom:10px;display:flex;gap:10px;align-items:flex-start;">
+            <span style="font-size:16px;flex-shrink:0;">⏱</span>
+            <div>
+              <div style="font-size:11px;font-weight:700;color:#8A5A00;letter-spacing:.3px;text-transform:uppercase;margin-bottom:3px;">Jendela Waktu</div>
+              <div style="font-size:13px;font-weight:700;color:var(--color-text-heading);">2 jam ke depan</div>
+            </div>
+          </div>
+          <!-- 3. 升级触发条件 (加粗 + 高亮卡片) -->
+          <div style="background:#FDE7EB;border-radius:12px;padding:12px 14px;display:flex;gap:10px;align-items:flex-start;">
+            <span style="font-size:16px;flex-shrink:0;">🚨</span>
+            <div>
+              <div style="font-size:11px;font-weight:700;color:#C4263C;letter-spacing:.3px;text-transform:uppercase;margin-bottom:5px;">Segera ke Dokter Jika</div>
+              <div style="font-size:13px;font-weight:700;color:var(--color-text-heading);line-height:1.55;">Muntah lagi, atau lesu makin parah</div>
+            </div>
           </div>
         </div>
         <!-- 免责 -->
@@ -1382,6 +1511,68 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
           <div style="font-size:13px;color:var(--color-text-primary);line-height:1.5;">Mochi — muntah busa putih 2x, lemas, tidak nafsu makan · 2 foto dilampirkan</div>
         </div>
         <button style="font-size:13px;color:var(--color-text-tertiary);border:none;background:none;cursor:pointer;">Batalkan permintaan</button>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         P-21b · 兽医匹配 - 等待超时（1分钟无人接单）
+         角色: 已登录  触发: P-21 等待满1分钟仍无兽医接单  FR-4B
+         ══════════════════════════════════════════════════════════════ -->
+    <div class="page" id="p-match-timeout" data-notab="true" style="background:var(--color-bg-vet);">
+      <div style="display:flex;align-items:center;padding:14px 18px 0;">
+        <button style="width:36px;height:36px;border-radius:11px;background:var(--color-bg-muted);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#544864" stroke-width="2.2" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        </button>
+      </div>
+      <div style="padding:28px 24px;text-align:center;">
+        <div style="width:88px;height:88px;border-radius:9999px;background:var(--color-bg-muted);display:flex;align-items:center;justify-content:center;margin:0 auto 22px;font-size:38px;">⏳</div>
+        <div style="font-size:19px;font-weight:700;color:var(--color-text-heading);margin-bottom:8px;line-height:1.3;">Belum ada dokter<br>yang merespons</div>
+        <div style="font-size:13px;color:var(--color-text-secondary);line-height:1.6;margin-bottom:24px;">Semua dokter sedang sibuk menangani konsultasi lain. Permintaanmu tetap ada di antrean.</div>
+        <div style="background:var(--color-bg-surface);border-radius:14px;padding:13px 16px;box-shadow:0 2px 10px rgba(22,34,51,.07);text-align:left;margin-bottom:24px;">
+          <div style="font-size:11px;font-weight:700;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">RINGKASAN YANG DIKIRIM</div>
+          <div style="font-size:13px;color:var(--color-text-primary);line-height:1.5;">Mochi — muntah busa putih 2x, lemas, tidak nafsu makan · 2 foto dilampirkan</div>
+        </div>
+        <button onclick="go(null,'match-wait')" style="width:100%;padding:15px;background:#845EC9;border:none;border-radius:14px;font-size:15px;font-weight:700;color:#fff;font-family:'Poppins',sans-serif;cursor:pointer;box-shadow:0 8px 24px rgba(132,94,201,.3);margin-bottom:10px;">Lanjut Menunggu</button>
+        <button onclick="go(null,'ai-upload')" style="width:100%;padding:14px;background:transparent;border:1.5px solid #845EC9;border-radius:14px;font-size:14px;font-weight:700;color:#845EC9;font-family:'Poppins',sans-serif;cursor:pointer;margin-bottom:14px;">⚡ Pakai Diagnosa AI Dulu</button>
+        <button style="font-size:13px;color:var(--color-text-tertiary);border:none;background:none;cursor:pointer;">Batalkan permintaan</button>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         P-20b · 兽医咨询入口 - 离线态（深夜无兽医在线）
+         角色: 已登录  触发: 进入问诊咨询入口检测到无兽医可接单  FR-4B
+         ══════════════════════════════════════════════════════════════ -->
+    <div class="page" id="p-konsultasi-offline" data-notab="true" style="background:var(--color-bg-default);">
+      <div style="display:flex;align-items:center;gap:12px;padding:14px 18px 0;">
+        <button onclick="go(document.querySelector('.tab[onclick*=konsultasi]'),'konsultasi')" style="width:36px;height:36px;border-radius:11px;background:var(--color-bg-muted);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#544864" stroke-width="2.2" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        </button>
+        <span style="font-size:17px;font-weight:700;color:var(--color-text-heading);">Konsultasi Dokter Hewan</span>
+      </div>
+      <div style="padding:20px 20px 24px;">
+        <!-- 离线状态提示 -->
+        <div style="background:var(--color-bg-muted);border-radius:14px;padding:12px 16px;margin-bottom:18px;display:flex;align-items:center;gap:10px;">
+          <div style="width:10px;height:10px;border-radius:9999px;background:#A7A7A7;flex-shrink:0;"></div>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--color-text-heading);">Tidak Ada Dokter Online</div>
+            <div style="font-size:11px;color:var(--color-text-secondary);">Biasanya tersedia kembali besok pukul 08:00</div>
+          </div>
+        </div>
+        <!-- 软性引导卡片 -->
+        <div style="background:linear-gradient(135deg,#845EC9,#9E83DA);border-radius:18px;padding:20px;margin-bottom:20px;text-align:center;">
+          <div style="font-size:34px;margin-bottom:10px;">⚡</div>
+          <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:6px;">Coba Diagnosa AI dulu?</div>
+          <div style="font-size:12px;color:rgba(255,255,255,.85);line-height:1.55;margin-bottom:16px;">AI bisa langsung kasih evaluasi awal sekarang. Kamu tetap bisa konsultasi ke dokter setelah mereka online.</div>
+          <button onclick="go(null,'ai-upload')" style="width:100%;padding:13px;background:#fff;border:none;border-radius:13px;font-size:14px;font-weight:700;color:#845EC9;font-family:'Poppins',sans-serif;cursor:pointer;">Mulai Diagnosa AI →</button>
+        </div>
+        <!-- 流程说明 -->
+        <div style="margin-bottom:8px;">
+          <div style="font-size:12px;font-weight:700;color:var(--color-text-primary);letter-spacing:.4px;text-transform:uppercase;margin-bottom:14px;">JAM OPERASIONAL DOKTER</div>
+          <div style="background:var(--color-bg-surface);border-radius:14px;padding:14px 16px;box-shadow:0 2px 10px rgba(22,34,51,.06);">
+            <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--color-text-primary);padding:6px 0;border-bottom:1px solid #F3F3F3;"><span>Senin – Jumat</span><span style="font-weight:600;color:var(--color-text-heading);">08:00 – 23:00</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--color-text-primary);padding:6px 0;"><span>Sabtu – Minggu</span><span style="font-weight:600;color:var(--color-text-heading);">09:00 – 21:00</span></div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -2760,6 +2951,75 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
     </div>
 
     <!-- ══════════════════════════════════════════════════════════════
+         V-03b · 兽医工作台 - 请求详情预览页（用户未经AI问诊，直接找兽医）
+         角色: 兽医  触发: V-02 点击案例卡（用户经 FR-4B 直接咨询，无 AI 评级数据）  FR-30
+         与 V-03 唯一差异：无"Evaluasi AI"模块——因为没有 AI 升级数据可传递（FR-4B）
+         ══════════════════════════════════════════════════════════════ -->
+    <div class="page" id="p-vet-case-direct" data-notab="true" data-theme="light" style="background:var(--color-bg-vet);">
+      <!-- 顶部 -->
+      <div style="background:#2B2540;padding:14px 18px 16px;display:flex;align-items:center;gap:12px;">
+        <button style="width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.12);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        </button>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:700;color:#fff;">Detail Permintaan</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.5);">Tinjau sebelum mengambil kasus</div>
+        </div>
+        <!-- 3分钟倒计时 -->
+        <div style="background:#F0425A;border-radius:10px;padding:6px 12px;text-align:center;">
+          <div style="font-size:16px;font-weight:700;color:#fff;font-variant-numeric:tabular-nums;">02:47</div>
+          <div style="font-size:9px;color:rgba(255,255,255,.8);">sisa waktu</div>
+        </div>
+      </div>
+
+      <div style="padding:16px 18px 20px;display:flex;flex-direction:column;gap:14px;">
+        <!-- 宠物信息卡 -->
+        <div style="background:var(--color-bg-surface);border-radius:16px;padding:14px 16px;box-shadow:0 3px 12px rgba(22,34,51,.08);">
+          <div style="display:flex;gap:12px;align-items:center;">
+            <div style="width:56px;height:56px;border-radius:9999px;background:linear-gradient(135deg,#F8F6FF,#DCD2F7);display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;">🐱</div>
+            <div style="flex:1;">
+              <div style="font-size:15px;font-weight:700;color:var(--color-text-heading);">Mochi</div>
+              <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;">
+                <span style="font-size:10px;background:var(--color-bg-subtle);color:#845EC9;padding:2px 8px;border-radius:5px;font-weight:600;">Kucing</span>
+                <span style="font-size:10px;background:var(--color-bg-subtle);color:#845EC9;padding:2px 8px;border-radius:5px;font-weight:600;">Betina</span>
+                <span style="font-size:10px;background:var(--color-bg-subtle);color:#845EC9;padding:2px 8px;border-radius:5px;font-weight:600;">1 tahun</span>
+                <span style="font-size:10px;background:var(--color-bg-subtle);color:#845EC9;padding:2px 8px;border-radius:5px;font-weight:600;">Domestic</span>
+              </div>
+              <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:5px;">Pemilik: @aditya.kurniawan · 🐾 TailTopia sejak Jan 2025</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 无 AI 评估标记：直接咨询提示 -->
+        <div style="background:var(--color-bg-muted);border-radius:16px;padding:12px 16px;display:flex;align-items:center;gap:9px;">
+          <span style="font-size:16px;">💬</span>
+          <div style="font-size:12px;color:var(--color-text-secondary);line-height:1.5;">Pemilik langsung memilih konsultasi dokter, belum melalui Diagnosa AI. Tidak ada data evaluasi AI untuk kasus ini.</div>
+        </div>
+
+        <!-- 症状描述 -->
+        <div style="background:var(--color-bg-surface);border-radius:16px;padding:14px 16px;box-shadow:0 3px 12px rgba(22,34,51,.06);">
+          <div style="font-size:11px;font-weight:700;color:var(--color-text-tertiary);letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px;">KELUHAN PEMILIK</div>
+          <div style="font-size:13px;color:var(--color-text-heading);line-height:1.65;">Oyen tadi malam muntah busa putih 2x. Sekarang lemas dan tidak mau makan. Sudah minum air sedikit. Biasanya aktif dan makan banyak. Ini pertama kali terjadi.</div>
+        </div>
+
+        <!-- 症状图片 -->
+        <div style="background:var(--color-bg-surface);border-radius:16px;padding:14px 16px;box-shadow:0 3px 12px rgba(22,34,51,.06);">
+          <div style="font-size:11px;font-weight:700;color:var(--color-text-tertiary);letter-spacing:.5px;text-transform:uppercase;margin-bottom:10px;">FOTO GEJALA (2)</div>
+          <div style="display:flex;gap:10px;">
+            <div style="flex:1;aspect-ratio:1;border-radius:12px;background:linear-gradient(135deg,#F8F6FF,#DCD2F7);display:flex;align-items:center;justify-content:center;font-size:32px;">🐱</div>
+            <div style="flex:1;aspect-ratio:1;border-radius:12px;background:linear-gradient(135deg,#FEF3DE,#F6A609);display:flex;align-items:center;justify-content:center;font-size:32px;">😿</div>
+          </div>
+        </div>
+
+        <!-- CTA -->
+        <div style="display:flex;gap:10px;">
+          <button style="flex:1;padding:14px;background:transparent;border:1.5px solid #E6E6E6;border-radius:13px;font-size:14px;color:var(--color-text-secondary);font-family:'Poppins',sans-serif;cursor:pointer;">Lewati</button>
+          <button style="flex:2;padding:14px;background:#5BCBBB;border:none;border-radius:13px;font-size:14px;font-weight:700;color:#fff;font-family:'Poppins',sans-serif;cursor:pointer;box-shadow:0 6px 16px rgba(91,203,187,.3);">Ambil Kasus → Mulai Chat</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════
          V-05 · 兽医工作台 - 图文对话界面（兽医视角）
          角色: 兽医  触发: 接单成功后 / V-04 会话卡点击  FR-5/31
          ══════════════════════════════════════════════════════════════ -->
@@ -3314,11 +3574,14 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
             <div style="display:flex;gap:10px;align-items:flex-start;font-size:13px;color:var(--color-text-primary);line-height:1.5;"><span style="min-width:22px;height:22px;border-radius:9999px;background:#F0425A;color:#fff;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;margin-top:1px;">3</span>Cari klinik hewan 24 jam terdekat segera</div>
           </div>
         </div>
-        <button id="btn-red-ok" style="width:100%;padding:15px;background:#F0425A;border:none;border-radius:14px;font-size:15px;font-weight:700;color:#fff;font-family:'Poppins',sans-serif;cursor:default;box-shadow:0 6px 18px rgba(240,66,90,.35);opacity:.45;" disabled>Saya Mengerti <span id="red-cd">(5)</span></button>
+        <button id="btn-red-ok" style="width:100%;padding:15px;background:#F0425A;border:none;border-radius:14px;font-size:15px;font-weight:700;color:#fff;font-family:'Poppins',sans-serif;cursor:default;box-shadow:0 6px 18px rgba(240,66,90,.35);opacity:.55;display:flex;align-items:center;justify-content:center;gap:9px;transition:opacity .3s;" disabled>
+          <span id="red-cd" style="width:22px;height:22px;border-radius:9999px;background:rgba(255,255,255,.25);display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;font-variant-numeric:tabular-nums;">5</span>
+          <span>Saya Mengerti</span>
+        </button>
         <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:8px;text-align:center;">Tombol aktif setelah membaca peringatan</div>
       </div>
     </div>
-    <script>(function(){var s=5,b=document.getElementById('btn-red-ok'),c=document.getElementById('red-cd');if(!b)return;var iv=setInterval(function(){s--;if(s>0){c.textContent='('+s+')';}else{clearInterval(iv);b.disabled=false;b.style.opacity='1';b.style.cursor='pointer';c.textContent='';}},1000);}());</script>
+    <script>(function(){var s=5,b=document.getElementById('btn-red-ok'),c=document.getElementById('red-cd');if(!b)return;var iv=setInterval(function(){s--;if(s>0){c.textContent=s;}else{clearInterval(iv);b.disabled=false;b.style.opacity='1';b.style.cursor='pointer';c.textContent='✓';}},1000);}());</script>
 
     <!-- ══════════════════════════════════════════════════════════════
          P-39b · 内容审核中
@@ -3530,8 +3793,12 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
       <div style="flex:1;background:linear-gradient(180deg,rgba(43,37,64,.0) 0%,rgba(43,37,64,.4) 100%);display:flex;flex-direction:column;justify-content:flex-end;align-items:center;padding-bottom:16px;">
         <div style="font-size:11px;color:rgba(255,255,255,.7);background:rgba(43,37,64,.45);padding:5px 14px;border-radius:9999px;">⬆ 底抽屉，叠加于 P-33 里程碑页上方</div>
       </div>
-      <div style="background:var(--color-bg-surface);border-radius:24px 24px 0 0;padding:20px 22px 36px;animation:slideUp .25s ease-out;">
-        <div style="width:36px;height:4px;background:#E6E6E6;border-radius:9999px;margin:0 auto 18px;"></div>
+      <div style="background:var(--color-bg-surface);border-radius:24px 24px 0 0;padding:14px 22px 36px;animation:slideUp .25s ease-out;position:relative;">
+        <!-- 不显眼的关闭按钮 -->
+        <button onclick="go(null,'milestone')" style="position:absolute;top:14px;right:18px;width:28px;height:28px;border-radius:9999px;background:var(--color-bg-muted);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-tertiary)" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+        <div style="width:36px;height:4px;background:#E6E6E6;border-radius:9999px;margin:4px auto 18px;"></div>
         <!-- 徽章图标 + 名字 -->
         <div style="text-align:center;margin-bottom:18px;">
           <div style="width:76px;height:76px;border-radius:9999px;background:linear-gradient(135deg,#845EC9,#9E83DA);display:flex;align-items:center;justify-content:center;font-size:38px;margin:0 auto 12px;box-shadow:0 8px 24px rgba(132,94,201,.3);">🎂</div>
@@ -3550,12 +3817,14 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
         </div>
         <!-- 两个CTA -->
         <div style="display:flex;flex-direction:column;gap:10px;" id="milestone-cta-default">
-          <button onclick="document.getElementById('milestone-cta-default').style.display='none';document.getElementById('milestone-content-picker').style.display='block'" style="width:100%;padding:14px;background:#845EC9;border:none;border-radius:14px;font-size:14px;font-weight:700;color:#fff;font-family:'Poppins',sans-serif;cursor:pointer;box-shadow:0 6px 18px rgba(132,94,201,.28);">📸 Pergi Posting</button>
-          <button style="width:100%;padding:13px;background:transparent;border:1.5px solid #845EC9;border-radius:14px;font-size:14px;color:#845EC9;font-family:'Poppins',sans-serif;cursor:pointer;">✓ Sudah Checkin</button>
+          <button onclick="go(null,'create')" style="width:100%;padding:14px;background:#845EC9;border:none;border-radius:14px;font-size:14px;font-weight:700;color:#fff;font-family:'Poppins',sans-serif;cursor:pointer;box-shadow:0 6px 18px rgba(132,94,201,.28);">📸 Pergi Posting</button>
+          <button onclick="document.getElementById('milestone-cta-default').style.display='none';document.getElementById('milestone-content-picker').style.display='block'" style="width:100%;padding:13px;background:transparent;border:1.5px solid #845EC9;border-radius:14px;font-size:14px;color:#845EC9;font-family:'Poppins',sans-serif;cursor:pointer;">📷 Pilih dari Kenangan</button>
+          <button onclick="go(null,'milestone')" style="font-size:12px;color:var(--color-text-tertiary);border:none;background:none;cursor:pointer;margin-top:2px;">Nanti saja</button>
         </div>
-        <!-- 内容选择器（点击Pergi Posting后出现） -->
+        <!-- 内容选择器（点击 Pilih dari Kenangan 后出现） -->
         <div id="milestone-content-picker" style="display:none;">
-          <div style="font-size:13px;font-weight:700;color:var(--color-text-heading);margin-bottom:12px;">Pilih catatan untuk diposting:</div>
+          <div style="font-size:13px;font-weight:700;color:var(--color-text-heading);margin-bottom:4px;">Pilih catatan yang sudah ada:</div>
+          <div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:12px;">Hubungkan catatan ini untuk menyelesaikan milestone</div>
           <div style="display:flex;flex-direction:column;gap:9px;margin-bottom:16px;">
             <div style="background:var(--color-bg-subtle);border:2px solid #845EC9;border-radius:13px;padding:12px 14px;display:flex;gap:11px;align-items:center;cursor:pointer;">
               <div style="font-size:22px;">☀️</div>
@@ -3572,8 +3841,15 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
               <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:var(--color-text-heading);">Momen Bahagia Pertama!</div><div style="font-size:11px;color:var(--color-text-tertiary);">3 Jun 2026 · Momen Bahagia</div></div>
               <div style="width:18px;height:18px;border-radius:9999px;border:1.5px solid #E6E6E6;"></div>
             </div>
+            <!-- 已被其他里程碑关联，置灰不可选 (FR-42) -->
+            <div style="background:var(--color-bg-muted);border:1.5px solid transparent;border-radius:13px;padding:12px 14px;display:flex;gap:11px;align-items:center;opacity:.5;cursor:not-allowed;">
+              <div style="font-size:22px;">🛁</div>
+              <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:var(--color-text-secondary);">Mandi pertama, lucu banget!</div><div style="font-size:11px;color:var(--color-text-tertiary);">2 Jun 2026 · Sudah terhubung milestone lain</div></div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-tertiary)" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            </div>
           </div>
-          <button style="width:100%;padding:14px;background:#845EC9;border:none;border-radius:14px;font-size:14px;font-weight:700;color:#fff;font-family:'Poppins',sans-serif;cursor:pointer;box-shadow:0 6px 18px rgba(132,94,201,.28);">Bagikan ke Feed 🐾</button>
+          <button onclick="go(null,'milestone-unlock')" style="width:100%;padding:14px;background:#845EC9;border:none;border-radius:14px;font-size:14px;font-weight:700;color:#fff;font-family:'Poppins',sans-serif;cursor:pointer;box-shadow:0 6px 18px rgba(132,94,201,.28);margin-bottom:10px;">Konfirmasi & Selesaikan Milestone</button>
+          <button onclick="document.getElementById('milestone-content-picker').style.display='none';document.getElementById('milestone-cta-default').style.display='flex'" style="width:100%;padding:0;border:none;background:none;font-size:12px;color:var(--color-text-tertiary);cursor:pointer;">← Batal, kembali</button>
         </div>
       </div>
     </div>
@@ -3626,21 +3902,67 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
     </div>
 
     <!-- ══════════════════════════════════════════════════════════════
-         P-28b · 成长时间线 - 空状态
+         P-28b · 成长时间线 - 空状态（FR-37：已有宠物档案，仅时间线内容为空）
+         注意：宠物基本信息卡 / 统计栏 / 里程碑入口在此状态下仍须正常显示
+         （区别于"未创建宠物档案"的空状态——后者见 FR-37「还没有宠物档案，立即创建」）
          ══════════════════════════════════════════════════════════════ -->
     <div class="page" id="p-timeline-empty">
       <div class="appbar">
-        <span class="appbar-title">Catatan</span>
-        <div style="display:flex;background:var(--color-bg-muted);border-radius:10px;padding:3px;gap:2px;">
-          <div style="padding:5px 14px;border-radius:8px;background:#845EC9;font-size:12px;font-weight:600;color:#fff;cursor:pointer;">Timeline</div>
-          <div style="padding:5px 14px;border-radius:8px;font-size:12px;font-weight:600;color:var(--color-text-secondary);cursor:pointer;">Kalender</div>
+        <span class="appbar-title">Paspor Mochi</span>
+        <button class="ibtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+      </div>
+
+      <!-- 宠物基本信息卡 (FR-37 — 始终显示，与时间线内容是否为空无关) -->
+      <div class="petcard">
+        <div class="pet-top">
+          <div class="avlg" style="background:linear-gradient(135deg,#9E83DA,#845EC9);">🐱</div>
+          <div style="flex:1">
+            <div class="pname">Mochi</div>
+            <div class="psub">Kucing Oranye · 2 hari</div>
+            <div class="pbio">"Jakarta's laziest boy 🧡"</div>
+          </div>
+        </div>
+        <div class="statsrow">
+          <div class="statcol"><div class="statn">0</div><div class="statl">Momen Bahagia</div></div>
+          <div class="statcol"><div class="statn">0</div><div class="statl">Konsultasi</div></div>
+          <div class="statcol"><div class="statn">1</div><div class="statl">Milestone</div></div>
         </div>
       </div>
-      <div style="position:absolute;inset:0;top:60px;bottom:83px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;">
-        <div style="font-size:72px;margin-bottom:8px;opacity:.55;">📖</div>
-        <div style="font-size:18px;font-weight:700;color:var(--color-text-heading);margin-bottom:8px;">Belum ada catatan</div>
-        <div style="font-size:13px;color:var(--color-text-secondary);line-height:1.65;max-width:260px;margin-bottom:26px;">Mulai catat momen pertama Mochi! Setiap foto dan cerita tersimpan di sini.</div>
+
+      <!-- 里程碑入口 (FR-37) -->
+      <div class="msbar">
+        <div class="msrow"><span class="mst">🏆 Pencapaian Mochi</span><span class="msn">1 / 30</span></div>
+        <div class="track"><div class="fill" style="width:3.3%"></div></div>
+      </div>
+
+      <!-- 视图切换栏 -->
+      <div style="display:flex;gap:7px;padding:0 20px;margin-bottom:12px;">
+        <button style="flex:1;padding:8px;border-radius:10px;border:none;background:#845EC9;color:#fff;font-size:12px;font-weight:600;font-family:'Poppins',sans-serif;cursor:pointer;">⏱ Timeline</button>
+        <button style="flex:1;padding:8px;border-radius:10px;border:1.5px solid #E6E6E6;background:var(--color-bg-surface);color:var(--color-text-secondary);font-size:12px;font-weight:600;font-family:'Poppins',sans-serif;cursor:pointer;">📅 Kalender</button>
+      </div>
+
+      <!-- 内容区：仅此区域为空状态 -->
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px 24px 40px;text-align:center;">
+        <div style="font-size:64px;margin-bottom:8px;opacity:.55;">📖</div>
+        <div style="font-size:17px;font-weight:700;color:var(--color-text-heading);margin-bottom:8px;">Belum ada catatan</div>
+        <div style="font-size:13px;color:var(--color-text-secondary);line-height:1.65;max-width:260px;margin-bottom:24px;">Mulai catat momen pertama Mochi! Setiap foto dan cerita tersimpan di sini.</div>
         <button onclick="go(null,'create')" style="padding:13px 24px;background:#845EC9;border:none;border-radius:14px;font-size:14px;font-weight:700;color:#fff;font-family:'Poppins',sans-serif;cursor:pointer;box-shadow:0 6px 18px rgba(132,94,201,.28);">+ Catat Momen Pertama</button>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         P-28c · 成长档案 Tab - 未创建宠物档案的空状态（FR-37，状态A但跳过建档）
+         与 P-28b 不同：这里压根没有宠物档案数据，因此不展示宠物信息卡/统计栏
+         ══════════════════════════════════════════════════════════════ -->
+    <div class="page" id="p-paspor-no-profile">
+      <div class="appbar"><span class="appbar-title">Paspor</span></div>
+      <div style="position:absolute;inset:0;top:60px;bottom:83px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;">
+        <div style="font-size:72px;margin-bottom:8px;opacity:.55;">🐾</div>
+        <div style="font-size:18px;font-weight:700;color:var(--color-text-heading);margin-bottom:8px;">Belum ada profil hewan</div>
+        <div style="font-size:13px;color:var(--color-text-secondary);line-height:1.65;max-width:260px;margin-bottom:26px;">Buat profil untuk hewan peliharaanmu dan mulai catat perjalanan tumbuh kembangnya.</div>
+        <button onclick="go(null,'pet-create')" style="padding:13px 24px;background:#845EC9;border:none;border-radius:14px;font-size:14px;font-weight:700;color:#fff;font-family:'Poppins',sans-serif;cursor:pointer;box-shadow:0 6px 18px rgba(132,94,201,.28);">+ Buat Profil Sekarang</button>
       </div>
     </div>
 
@@ -3662,6 +3984,13 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
     </div>
 
   </div><!-- /pages -->
+
+  <!-- 分享悬浮按钮 (FR-15) — 固定于手机框内 Tab Bar 上方，不随页面内容滚动 -->
+  <div id="paspor-fab" style="position:absolute;right:16px;bottom:99px;z-index:15;">
+    <button onclick="document.getElementById('paspor-share-sheet').style.display='flex'" style="width:54px;height:54px;border-radius:9999px;background:linear-gradient(145deg,#9E83DA 0%,#845EC9 55%,#6C48AE 100%);border:none;box-shadow:0 4px 16px rgba(0,0,0,.22),0 2px 6px rgba(0,0,0,.12),inset 0 1px 0 rgba(255,255,255,.18);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .12s ease-out;" onmousedown="this.style.transform='scale(.93)'" onmouseup="this.style.transform='scale(1)'" onmouseleave="this.style.transform='scale(1)'">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter:drop-shadow(0 1px 2px rgba(0,0,0,.25))"><circle cx="18" cy="5" r="3" fill="rgba(255,255,255,.15)"/><circle cx="6" cy="12" r="3" fill="rgba(255,255,255,.15)"/><circle cx="18" cy="19" r="3" fill="rgba(255,255,255,.15)"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+    </button>
+  </div>
 
   <!-- Tab Bar -->
   <div class="tabbar">
@@ -3810,8 +4139,12 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
         <button class="navbtn" onclick="nav(this,'notif-empty')">通知中心 空状态</button>
         <button class="navbtn" onclick="nav(this,'feed-empty')">Feed 空状态</button>
         <button class="navbtn" onclick="nav(this,'feed-error')">Feed 加载错误</button>
-        <button class="navbtn" onclick="nav(this,'timeline-empty')">时间线 空状态</button>
+        <button class="navbtn" onclick="nav(this,'timeline-empty')">时间线 空状态(已有档案)</button>
+        <button class="navbtn" onclick="nav(this,'paspor-no-profile')">档案 空状态(未建档)</button>
         <button class="navbtn" onclick="nav(this,'network-error')">网络错误通用</button>
+        <button class="navbtn" onclick="nav(this,'match-timeout')">P-21b 匹配超时</button>
+        <button class="navbtn" onclick="nav(this,'konsultasi-offline')">P-20b 兽医离线引导</button>
+        <button class="navbtn" onclick="nav(this,'vet-case-direct')">V-03b 直接咨询(无AI)</button>
       </div>
     </div>
 
@@ -3978,7 +4311,7 @@ function nav(btn, page) {
   btn.classList.add('cur');
   go(null, page);
   // If switching to a core-tab page, also highlight the matching tab button
-  const tabMap = {'feed':'feed','feed-guest':'feed','feed-empty':'feed','feed-error':'feed','paspor':'paspor','catatan-calendar':'paspor','timeline-empty':'paspor','konsultasi':'konsultasi','profil':'profil','create':'create'};
+  const tabMap = {'feed':'feed','feed-guest':'feed','feed-empty':'feed','feed-error':'feed','paspor':'paspor','catatan-calendar':'paspor','timeline-empty':'paspor','paspor-no-profile':'paspor','konsultasi':'konsultasi','profil':'profil','create':'create'};
   if (tabMap[page]) {
     document.querySelectorAll('.tab').forEach(b => b.classList.remove('on'));
     const tabBtn = [...document.querySelectorAll('.tab')].find(
@@ -3986,6 +4319,21 @@ function nav(btn, page) {
     if (tabBtn) tabBtn.classList.add('on');
   }
 }
+
+// Feed 卡片长按 → 举报菜单（§5 Non-Goal 已排除"分享"，仅保留举报）
+(function(){
+  document.querySelectorAll('#p-feed .card').forEach(function(card){
+    card.style.cursor = 'pointer';
+    var timer;
+    var start = function(){ timer = setTimeout(function(){ document.getElementById('feed-longpress-sheet').style.display='flex'; }, 500); };
+    var cancel = function(){ clearTimeout(timer); };
+    card.addEventListener('touchstart', start);
+    card.addEventListener('touchend', cancel);
+    card.addEventListener('mousedown', start);
+    card.addEventListener('mouseup', cancel);
+    card.addEventListener('mouseleave', cancel);
+  });
+}());
 </script>
 </body>
 </html>

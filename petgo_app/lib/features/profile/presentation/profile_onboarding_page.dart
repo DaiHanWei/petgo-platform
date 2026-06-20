@@ -59,7 +59,7 @@ class ProfileOnboardingPage extends ConsumerWidget {
                         style: const TextStyle(
                             fontSize: 13, height: 1.6, color: AppColors.ink2)),
                     const SizedBox(height: 26),
-                    _previewCard(),
+                    _previewCard(l10n),
                     const SizedBox(height: 24),
                     SizedBox(
                       width: double.infinity,
@@ -97,7 +97,7 @@ class ProfileOnboardingPage extends ConsumerWidget {
   }
 
   /// 档案预览卡（onboard.html）：头像 + 「Nama hewan kamu」+ meta + 零态三列统计。
-  Widget _previewCard() {
+  Widget _previewCard(AppLocalizations l10n) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -124,12 +124,12 @@ class ProfileOnboardingPage extends ConsumerWidget {
               const SizedBox(width: 12),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text('Nama hewan kamu',
-                      style: TextStyle(
+                children: [
+                  Text(l10n.profileOnboardingPreviewName,
+                      style: const TextStyle(
                           fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink)),
-                  SizedBox(height: 2),
-                  Text('Kucing · Betina · 2 tahun',
+                  const SizedBox(height: 2),
+                  const Text('Kucing · Betina · 2 tahun',
                       style: TextStyle(fontSize: 11, color: AppColors.muted)),
                 ],
               ),
@@ -141,11 +141,11 @@ class ProfileOnboardingPage extends ConsumerWidget {
                 color: AppColors.cream2, borderRadius: BorderRadius.circular(10)),
             child: Row(
               children: [
-                _stat('0', 'Momen'),
+                _stat('0', l10n.profileOnboardingStatMoments),
                 _statDivider(),
-                _stat('0', 'Konsultasi'),
+                _stat('0', l10n.profileOnboardingStatConsult),
                 _statDivider(),
-                _stat('0/30', 'Milestone'),
+                _stat('0/30', l10n.profileOnboardingStatMilestone),
               ],
             ),
           ),

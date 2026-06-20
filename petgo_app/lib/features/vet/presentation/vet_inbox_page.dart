@@ -306,9 +306,9 @@ class _InboxCard extends StatelessWidget {
     }
   }
 
-  String _waitingShort() {
+  String _waitingShort(AppLocalizations l10n) {
     final s = item.waitingElapsedSeconds;
-    return s < 60 ? 'baru saja' : '${s ~/ 60} mnt lalu';
+    return s < 60 ? l10n.vetQueueWaitJustNow : l10n.vetQueueWaitMinutesAgo(s ~/ 60);
   }
 
   @override
@@ -396,7 +396,7 @@ class _InboxCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 4),
-                        Text(_waitingShort(),
+                        Text(_waitingShort(l10n),
                             style: AppTypography.micro.copyWith(color: AppColors.textTertiary)),
                       ],
                     ),
@@ -418,7 +418,7 @@ class _InboxCard extends StatelessWidget {
                             foregroundColor: AppColors.onAccent,
                             padding: const EdgeInsets.symmetric(vertical: 11),
                           ),
-                          child: const Text('⚠ Tangani Sekarang'),
+                          child: Text('⚠ ${l10n.vetQueueHandleNow}'),
                         ),
                       )
                     : Row(

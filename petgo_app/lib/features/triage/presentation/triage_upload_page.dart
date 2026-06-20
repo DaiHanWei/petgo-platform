@@ -8,6 +8,7 @@ import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/image_processor.dart';
 import '../../../shared/utils/media_permission.dart';
+import '../../../shared/widgets/dashed_rect.dart';
 import '../../media/domain/media_upload_use_case.dart';
 import '../domain/triage_result_controller.dart';
 import '../domain/triage_result_state.dart';
@@ -25,7 +26,7 @@ class TriageUploadPage extends ConsumerStatefulWidget {
 }
 
 class _TriageUploadPageState extends ConsumerState<TriageUploadPage> {
-  static const int _maxSymptomChars = 2000;
+  static const int _maxSymptomChars = 500; // 原型 ai-upload：「/ 500」
   final TextEditingController _symptomController = TextEditingController();
 
   @override
@@ -114,8 +115,8 @@ class _TriageUploadPageState extends ConsumerState<TriageUploadPage> {
       appBar: AppBar(
         backgroundColor: AppColors.base,
         centerTitle: true,
-        title: const Text('Diagnosa AI',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink)),
+        title: Text(l10n.triageUploadTitle,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink)),
       ),
       body: switch (phase) {
         TriagePhase.submitting || TriagePhase.polling => _WaitingView(message: l10n.triageAnalyzing),
@@ -169,17 +170,17 @@ class _TriageUploadPageState extends ConsumerState<TriageUploadPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('⚡ Hasil dalam 15 detik',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
+              Text('⚡ ${l10n.triageSpeedBannerTitle}',
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
               const SizedBox(height: 4),
-              Text('Upload foto + cerita gejala → evaluasi instan hijau / kuning / merah.',
+              Text(l10n.triageSpeedBannerBody,
                   style: TextStyle(fontSize: 12, height: 1.5, color: Colors.white.withValues(alpha: 0.85))),
             ],
           ),
         ),
         const SizedBox(height: AppSpacing.lg),
         // FOTO GEJALA (MAKS. 3) 大写 label + 3 列方格。
-        Text('FOTO GEJALA (MAKS. $kTriageMaxImages)',
+        Text(l10n.triagePhotoSectionLabel(kTriageMaxImages),
             style: AppTypography.micro.copyWith(
                 color: AppColors.ink2, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
         const SizedBox(height: AppSpacing.sm),
@@ -190,41 +191,68 @@ class _TriageUploadPageState extends ConsumerState<TriageUploadPage> {
         ),
         const SizedBox(height: AppSpacing.lg),
         // CERITAKAN GEJALA 大写 label + 紫边框文本框。
-        Text('CERITAKAN GEJALA',
+        Text(l10n.triageSymptomSectionLabel,
             style: AppTypography.micro.copyWith(
                 color: AppColors.ink2, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
         const SizedBox(height: AppSpacing.sm),
-        TextField(
-          key: const ValueKey('triageSymptomField'),
-          controller: _symptomController,
-          maxLines: 5,
-          maxLength: _maxSymptomChars,
-          onChanged: (v) => ref.read(triageUploadProvider.notifier).setSymptom(v),
-          decoration: InputDecoration(
-            hintText: l10n.triageSymptomHint,
-            hintStyle: const TextStyle(color: AppColors.muted),
-            contentPadding: const EdgeInsets.all(14),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.line, width: 1.5),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.mint, width: 1.5),
+        // 原型：紫边框 1.5 + 圆角13 + 紫色光晕阴影(0 0 0 3px rgba(132,94,201,.07))；字数在框外右下。
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(13),
+            border: Border.all(color: AppColors.mint, width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                  color: AppColors.mint.withValues(alpha: 0.07),
+                  blurRadius: 0,
+                  spreadRadius: 3),
+            ],
+          ),
+          padding: const EdgeInsets.all(14),
+          child: TextField(
+            key: const ValueKey('triageSymptomField'),
+            controller: _symptomController,
+            minLines: 4,
+            maxLines: 6,
+            maxLength: _maxSymptomChars,
+            onChanged: (v) => ref.read(triageUploadProvider.notifier).setSymptom(v),
+            style: const TextStyle(fontSize: 13, color: AppColors.ink, height: 1.65),
+            decoration: InputDecoration(
+              isCollapsed: true,
+              hintText: l10n.triageSymptomHint,
+              hintStyle: const TextStyle(color: AppColors.muted, fontSize: 13, height: 1.65),
+              border: InputBorder.none,
+              counterText: '',
             ),
           ),
         ),
+        const SizedBox(height: 6),
+        // 原型 charcount：框外右对齐「已用 / 总数」，弱灰。
+        Align(
+          alignment: Alignment.centerRight,
+          child: Text('${_symptomController.text.length} / $_maxSymptomChars',
+              style: const TextStyle(fontSize: 11, color: AppColors.textTertiary)),
+        ),
         const SizedBox(height: AppSpacing.md),
-        // 黄字免责（⚠️ Hasil AI bersifat referensi...）。
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('⚠️ ', style: TextStyle(fontSize: 12)),
-            Expanded(
-              child: Text(l10n.triageDisclaimer,
-                  style: const TextStyle(fontSize: 11, height: 1.5, color: AppColors.tipsBadgeText)),
-            ),
-          ],
+        // 原型免责承载位：灰底盒(bg-muted #EFEDF3) + ⚠️ + 弱灰字(tertiary)。
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEFEDF3),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('⚠️', style: TextStyle(fontSize: 13)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(l10n.triageDisclaimer,
+                    style: const TextStyle(
+                        fontSize: 11, height: 1.5, color: AppColors.textTertiary)),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: AppSpacing.lg),
         SizedBox(
@@ -239,15 +267,11 @@ class _TriageUploadPageState extends ConsumerState<TriageUploadPage> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
             onPressed: draft.canSubmit ? _submit : null,
-            child: const Text('Analisis Sekarang →',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+            child: Text('${l10n.triageAnalyzeNow} →',
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
           ),
         ),
-        if (!draft.canSubmit) ...<Widget>[
-          const SizedBox(height: AppSpacing.sm),
-          Text(l10n.triageNeedInput,
-              style: AppTypography.caption, textAlign: TextAlign.center),
-        ],
+        // 注：原型 ai-upload 按钮下方无文案，移除原「请先描述症状/加图」提示。
       ],
     );
   }
@@ -301,20 +325,24 @@ class _ImageGrid extends StatelessWidget {
             child: GestureDetector(
               key: const ValueKey('triageAddImage'),
               onTap: onAdd,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: AppColors.cream2,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.dashedViolet, width: 1.5),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: <Widget>[
-                    const Icon(Icons.add, size: 22, color: AppColors.mint),
-                    const SizedBox(height: 3),
-                    Text(l10n.triageAddPhoto,
-                        style: AppTypography.micro.copyWith(color: AppColors.mint)),
-                  ],
+              // 原型 pcell-add：2px 虚线 #C2B0EC 边框 + 紫浅底 + ＋ + 「Tambah」。
+              child: CustomPaint(
+                painter: DashedRRectPainter(
+                    color: AppColors.dashedViolet, radius: 12, dash: 5, gap: 4),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: AppColors.cream2,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      const Icon(Icons.add, size: 22, color: AppColors.mint),
+                      const SizedBox(height: 3),
+                      Text(l10n.tabAdd,
+                          style: AppTypography.micro.copyWith(color: AppColors.mint)),
+                    ],
+                  ),
                 ),
               ),
             ),

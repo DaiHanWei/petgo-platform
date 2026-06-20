@@ -75,10 +75,13 @@ class _LoginHardDialogState extends State<LoginHardDialog> {
                     fontWeight: FontWeight.w700,
                     color: AppColors.ink)),
             const SizedBox(height: 8),
-            // 利益文案（保留 loginGuideHardMessage 文案契约）。
-            Text(l10n.loginGuideHardMessage,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 13, height: 1.65, color: AppColors.ink2)),
+            // 利益文案（原型 login-gate：说明建号好处，不说「功能不支持」）。
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Text(l10n.loginGateBody,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 13, height: 1.65, color: AppColors.ink2)),
+            ),
             if (_failed) ...[
               const SizedBox(height: AppSpacing.md),
               Text(

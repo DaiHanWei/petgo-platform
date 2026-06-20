@@ -94,8 +94,8 @@ class _PetStatusPageState extends ConsumerState<PetStatusPage> {
                       const SizedBox(height: 28),
                       _OptionCard(
                         emoji: '🐶🐱',
-                        title: 'Punya! Mau bikin profilnya',
-                        desc: 'Rekam tumbuh kembang, milestone, dan momen berharga bersamanya.',
+                        title: l10n.onboardingPetStatusHasPetTitle,
+                        desc: l10n.onboardingPetStatusHasPetDesc,
                         selected: _selected == 'HAS_PET',
                         valueKey: 'petStatus_HAS_PET',
                         onTap: () => setState(() => _selected = 'HAS_PET'),
@@ -103,8 +103,8 @@ class _PetStatusPageState extends ConsumerState<PetStatusPage> {
                       const SizedBox(height: 11),
                       _OptionCard(
                         emoji: '🤍',
-                        title: 'Belum punya, tapi suka hewan',
-                        desc: 'Jelajahi komunitas dan tips merawat hewan dari para ahli.',
+                        title: l10n.onboardingPetStatusPlanningTitle,
+                        desc: l10n.onboardingPetStatusPlanningDesc,
                         selected: _selected == 'PLANNING',
                         valueKey: 'petStatus_PLANNING',
                         onTap: () => setState(() => _selected = 'PLANNING'),

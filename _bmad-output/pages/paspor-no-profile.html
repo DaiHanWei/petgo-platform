@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TailTopia · badge-gallery</title>
+<title>TailTopia · paspor-no-profile</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 <!-- tokens.css 内联（自包含，不依赖外部相对路径）-->
@@ -295,225 +295,20 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
     </div>
   </div>
   <div class="pages">
-<div class="page on" id="p-badge-gallery">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 18px 14px;">
-        <button style="width:36px;height:36px;border-radius:11px;background:var(--color-bg-muted);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#544864" stroke-width="2.2" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
-        </button>
-        <span style="font-size:16px;font-weight:700;color:var(--color-text-heading);">Koleksi Badge Mochi</span>
-        <div style="font-size:12px;font-weight:700;color:#845EC9;">6 / 30</div>
-      </div>
-
-      <!-- ── 进度条 ── -->
-      <div style="margin:0 20px 18px;">
-        <div style="height:6px;background:var(--color-bg-muted);border-radius:9999px;overflow:hidden;">
-          <div style="height:100%;width:20%;background:linear-gradient(90deg,#845EC9,#9E83DA);border-radius:9999px;"></div>
-        </div>
-        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--color-text-tertiary);margin-top:4px;">
-          <span>0</span><span style="color:#845EC9;font-weight:700;">6 terbuka</span><span>30</span>
-        </div>
-      </div>
-
-      <!-- ── L 级 (Legenda · 金色) ── -->
-      <div style="padding:0 20px 4px;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-          <div style="width:4px;height:18px;background:#F6A609;border-radius:2px;"></div>
-          <span style="font-size:13px;font-weight:700;color:#F6A609;">L · LEGENDA</span>
-          <span style="font-size:11px;color:var(--color-text-tertiary);">1 / 5</span>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px;">
-
-          <!-- L-1 已解锁 🎂 -->
-          <div style="text-align:center;">
-            <div style="position:relative;width:52px;height:52px;margin:0 auto 5px;">
-              <div style="position:absolute;top:3px;left:3px;width:46px;height:46px;border-radius:9999px;background:linear-gradient(135deg,#F0425A,#C4263C);"></div>
-              <div style="position:absolute;top:0;left:0;width:46px;height:46px;border-radius:9999px;background:linear-gradient(135deg,#F6A609,#FFD166);display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 4px 10px rgba(246,166,9,.45);">🎂</div>
-            </div>
-            <div style="font-size:9px;font-weight:600;color:var(--color-text-primary);line-height:1.3;">Ulang<br>Tahun</div>
-            <div style="font-size:8px;color:#F6A609;font-weight:700;margin-top:2px;">LEGENDA</div>
-          </div>
-
-          <!-- L-2 锁定 🗓️ -->
-          <div style="text-align:center;opacity:.4;">
-            <div style="position:relative;width:52px;height:52px;margin:0 auto 5px;">
-              <div style="position:absolute;top:0;left:0;width:46px;height:46px;border-radius:9999px;background:var(--color-bg-muted);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px dashed #E6E6E6;">🗓️</div>
-            </div>
-            <div style="font-size:9px;color:var(--color-text-tertiary);line-height:1.3;">100<br>Hari</div>
-            <div style="font-size:8px;color:#CCCCCC;margin-top:2px;">LEGENDA</div>
-          </div>
-
-          <!-- L-3 锁定 ⭐ -->
-          <div style="text-align:center;opacity:.4;">
-            <div style="position:relative;width:52px;height:52px;margin:0 auto 5px;">
-              <div style="position:absolute;top:0;left:0;width:46px;height:46px;border-radius:9999px;background:var(--color-bg-muted);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px dashed #E6E6E6;">⭐</div>
-            </div>
-            <div style="font-size:9px;color:var(--color-text-tertiary);line-height:1.3;">365<br>Hari</div>
-            <div style="font-size:8px;color:#CCCCCC;margin-top:2px;">LEGENDA</div>
-          </div>
-
-          <!-- L-4 锁定 🏥 -->
-          <div style="text-align:center;opacity:.4;">
-            <div style="position:relative;width:52px;height:52px;margin:0 auto 5px;">
-              <div style="position:absolute;top:0;left:0;width:46px;height:46px;border-radius:9999px;background:var(--color-bg-muted);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px dashed #E6E6E6;">🏥</div>
-            </div>
-            <div style="font-size:9px;color:var(--color-text-tertiary);line-height:1.3;">Semua<br>Sehat</div>
-            <div style="font-size:8px;color:#CCCCCC;margin-top:2px;">LEGENDA</div>
-          </div>
-
-          <!-- L-5 锁定 📖 -->
-          <div style="text-align:center;opacity:.4;">
-            <div style="position:relative;width:52px;height:52px;margin:0 auto 5px;">
-              <div style="position:absolute;top:0;left:0;width:46px;height:46px;border-radius:9999px;background:var(--color-bg-muted);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px dashed #E6E6E6;">📖</div>
-            </div>
-            <div style="font-size:9px;color:var(--color-text-tertiary);line-height:1.3;">30<br>Catatan</div>
-            <div style="font-size:8px;color:#CCCCCC;margin-top:2px;">LEGENDA</div>
-          </div>
-
-        </div>
-
-        <!-- ── M 级 (Major · 紫色) ── -->
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-          <div style="width:4px;height:18px;background:#845EC9;border-radius:2px;"></div>
-          <span style="font-size:13px;font-weight:700;color:#845EC9;">M · MAJOR</span>
-          <span style="font-size:11px;color:var(--color-text-tertiary);">3 / 10</span>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px;">
-
-          <!-- M-1 已解锁 🚗 -->
-          <div style="text-align:center;">
-            <div style="position:relative;width:52px;height:52px;margin:0 auto 5px;">
-              <div style="position:absolute;top:3px;left:3px;width:46px;height:46px;border-radius:9999px;background:#F0425A;"></div>
-              <div style="position:absolute;top:0;left:0;width:46px;height:46px;border-radius:9999px;background:linear-gradient(135deg,#845EC9,#9E83DA);display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 4px 10px rgba(132,94,201,.4);">🚗</div>
-            </div>
-            <div style="font-size:9px;font-weight:600;color:var(--color-text-primary);line-height:1.3;">Naik<br>Mobil</div>
-            <div style="font-size:8px;color:#845EC9;font-weight:700;margin-top:2px;">MAJOR</div>
-          </div>
-
-          <!-- M-2 已解锁 💉 -->
-          <div style="text-align:center;">
-            <div style="position:relative;width:52px;height:52px;margin:0 auto 5px;">
-              <div style="position:absolute;top:3px;left:3px;width:46px;height:46px;border-radius:9999px;background:#F0425A;"></div>
-              <div style="position:absolute;top:0;left:0;width:46px;height:46px;border-radius:9999px;background:linear-gradient(135deg,#845EC9,#9E83DA);display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 4px 10px rgba(132,94,201,.4);">💉</div>
-            </div>
-            <div style="font-size:9px;font-weight:600;color:var(--color-text-primary);line-height:1.3;">Vaksin<br>Pertama</div>
-            <div style="font-size:8px;color:#845EC9;font-weight:700;margin-top:2px;">MAJOR</div>
-          </div>
-
-          <!-- M-3 刚解锁 🩺 (发光边框) -->
-          <div style="text-align:center;">
-            <div style="position:relative;width:52px;height:52px;margin:0 auto 5px;">
-              <div style="position:absolute;top:3px;left:3px;width:46px;height:46px;border-radius:9999px;background:#F0425A;"></div>
-              <div style="position:absolute;top:0;left:0;width:46px;height:46px;border-radius:9999px;background:linear-gradient(135deg,#845EC9,#9E83DA);display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 0 0 3px #9E83DA,0 0 12px rgba(132,94,201,.7);">🩺</div>
-              <!-- 「新」角标 -->
-              <div style="position:absolute;top:-4px;right:-4px;background:#F0425A;border:1.5px solid #FEFEFE;border-radius:9999px;width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;color:#fff;">N</div>
-            </div>
-            <div style="font-size:9px;font-weight:700;color:#845EC9;line-height:1.3;">ke Dokter<br>Hewan</div>
-            <div style="font-size:8px;color:#845EC9;font-weight:700;margin-top:2px;">MAJOR ✦</div>
-          </div>
-
-          <!-- M-4 锁定 🛡️ -->
-          <div style="text-align:center;opacity:.4;">
-            <div style="position:relative;width:52px;height:52px;margin:0 auto 5px;">
-              <div style="position:absolute;top:0;left:0;width:46px;height:46px;border-radius:9999px;background:var(--color-bg-muted);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px dashed #CCCCCC;">🐛</div>
-            </div>
-            <div style="font-size:9px;color:var(--color-text-tertiary);line-height:1.3;">Obat<br>Cacing</div>
-            <div style="font-size:8px;color:#CCCCCC;margin-top:2px;">MAJOR</div>
-          </div>
-
-          <!-- M-5 锁定 🏊 -->
-          <div style="text-align:center;opacity:.4;">
-            <div style="position:relative;width:52px;height:52px;margin:0 auto 5px;">
-              <div style="position:absolute;top:0;left:0;width:46px;height:46px;border-radius:9999px;background:var(--color-bg-muted);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px dashed #CCCCCC;">✂️</div>
-            </div>
-            <div style="font-size:9px;color:var(--color-text-tertiary);line-height:1.3;">Pertama<br>Grooming</div>
-            <div style="font-size:8px;color:#CCCCCC;margin-top:2px;">MAJOR</div>
-          </div>
-
-          <!-- M-6~10 锁定批次 -->
-          <div style="text-align:center;opacity:.4;">
-            <div style="width:46px;height:46px;border-radius:9999px;background:var(--color-bg-muted);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px dashed #CCCCCC;margin:0 auto 5px;">🐾</div>
-            <div style="font-size:9px;color:var(--color-text-tertiary);line-height:1.3;">1000<br>Langkah</div>
-            <div style="font-size:8px;color:#CCCCCC;margin-top:2px;">MAJOR</div>
-          </div>
-          <div style="text-align:center;opacity:.4;">
-            <div style="width:46px;height:46px;border-radius:9999px;background:var(--color-bg-muted);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px dashed #CCCCCC;margin:0 auto 5px;">🎭</div>
-            <div style="font-size:9px;color:var(--color-text-tertiary);line-height:1.3;">Bermain<br>Bersama</div>
-            <div style="font-size:8px;color:#CCCCCC;margin-top:2px;">MAJOR</div>
-          </div>
-          <div style="text-align:center;opacity:.4;">
-            <div style="width:46px;height:46px;border-radius:9999px;background:var(--color-bg-muted);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px dashed #CCCCCC;margin:0 auto 5px;">🏡</div>
-            <div style="font-size:9px;color:var(--color-text-tertiary);line-height:1.3;">Pindah<br>Rumah</div>
-            <div style="font-size:8px;color:#CCCCCC;margin-top:2px;">MAJOR</div>
-          </div>
-          <div style="text-align:center;opacity:.4;">
-            <div style="width:46px;height:46px;border-radius:9999px;background:var(--color-bg-muted);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px dashed #CCCCCC;margin:0 auto 5px;">👶</div>
-            <div style="font-size:9px;color:var(--color-text-tertiary);line-height:1.3;">Ketemu<br>Bayi</div>
-            <div style="font-size:8px;color:#CCCCCC;margin-top:2px;">MAJOR</div>
-          </div>
-          <div style="text-align:center;opacity:.4;">
-            <div style="width:46px;height:46px;border-radius:9999px;background:var(--color-bg-muted);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px dashed #CCCCCC;margin:0 auto 5px;">🌊</div>
-            <div style="font-size:9px;color:var(--color-text-tertiary);line-height:1.3;">Mandi<br>Sendiri</div>
-            <div style="font-size:8px;color:#CCCCCC;margin-top:2px;">MAJOR</div>
-          </div>
-
-        </div>
-
-        <!-- ── S 级 (Small · 绿色) ── -->
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-          <div style="width:4px;height:18px;background:#1FB877;border-radius:2px;"></div>
-          <span style="font-size:13px;font-weight:700;color:#1FB877;">S · SMALL</span>
-          <span style="font-size:11px;color:var(--color-text-tertiary);">2 / 15</span>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:8px;">
-
-          <!-- S-1 已解锁 📋 -->
-          <div style="text-align:center;">
-            <div style="position:relative;width:52px;height:52px;margin:0 auto 5px;">
-              <div style="position:absolute;top:3px;left:3px;width:46px;height:46px;border-radius:9999px;background:#F0425A;"></div>
-              <div style="position:absolute;top:0;left:0;width:46px;height:46px;border-radius:9999px;background:linear-gradient(135deg,#1FB877,#0E7A4D);display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 4px 10px rgba(31,184,119,.4);">📋</div>
-            </div>
-            <div style="font-size:9px;font-weight:600;color:var(--color-text-primary);line-height:1.3;">Profil<br>Lengkap</div>
-            <div style="font-size:8px;color:#1FB877;font-weight:700;margin-top:2px;">SMALL</div>
-          </div>
-
-          <!-- S-2 已解锁 📷 -->
-          <div style="text-align:center;">
-            <div style="position:relative;width:52px;height:52px;margin:0 auto 5px;">
-              <div style="position:absolute;top:3px;left:3px;width:46px;height:46px;border-radius:9999px;background:#F0425A;"></div>
-              <div style="position:absolute;top:0;left:0;width:46px;height:46px;border-radius:9999px;background:linear-gradient(135deg,#1FB877,#0E7A4D);display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 4px 10px rgba(31,184,119,.4);">📷</div>
-            </div>
-            <div style="font-size:9px;font-weight:600;color:var(--color-text-primary);line-height:1.3;">Foto<br>Pertama</div>
-            <div style="font-size:8px;color:#1FB877;font-weight:700;margin-top:2px;">SMALL</div>
-          </div>
-
-          <!-- S-3~15 锁定 -->
-          <div style="text-align:center;opacity:.4;"><div style="width:46px;height:46px;border-radius:9999px;background:var(--color-bg-muted);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px dashed #E6E6E6;margin:0 auto 5px;">🛁</div><div style="font-size:9px;color:var(--color-text-tertiary);line-height:1.3;">Mandi<br>Pertama</div><div style="font-size:8px;color:#CCCCCC;margin-top:2px;">SMALL</div></div>
-          <div style="text-align:center;opacity:.4;"><div style="width:46px;height:46px;border-radius:9999px;background:var(--color-bg-muted);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px dashed #E6E6E6;margin:0 auto 5px;">😴</div><div style="font-size:9px;color:var(--color-text-tertiary);line-height:1.3;">Tidur<br>Bareng</div><div style="font-size:8px;color:#CCCCCC;margin-top:2px;">SMALL</div></div>
-          <div style="text-align:center;opacity:.4;"><div style="width:46px;height:46px;border-radius:9999px;background:var(--color-bg-muted);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px dashed #E6E6E6;margin:0 auto 5px;">🍖</div><div style="font-size:9px;color:var(--color-text-tertiary);line-height:1.3;">Makanan<br>Favorit</div><div style="font-size:8px;color:#CCCCCC;margin-top:2px;">SMALL</div></div>
-          <div style="text-align:center;opacity:.4;"><div style="width:46px;height:46px;border-radius:9999px;background:var(--color-bg-muted);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px dashed #E6E6E6;margin:0 auto 5px;">🎀</div><div style="font-size:9px;color:var(--color-text-tertiary);line-height:1.3;">Aksesori<br>Baru</div><div style="font-size:8px;color:#CCCCCC;margin-top:2px;">SMALL</div></div>
-          <div style="text-align:center;opacity:.4;"><div style="width:46px;height:46px;border-radius:9999px;background:var(--color-bg-muted);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px dashed #E6E6E6;margin:0 auto 5px;">🌳</div><div style="font-size:9px;color:var(--color-text-tertiary);line-height:1.3;">Keluar<br>Pertama</div><div style="font-size:8px;color:#CCCCCC;margin-top:2px;">SMALL</div></div>
-          <div style="text-align:center;opacity:.4;"><div style="width:46px;height:46px;border-radius:9999px;background:var(--color-bg-muted);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px dashed #E6E6E6;margin:0 auto 5px;">🐶</div><div style="font-size:9px;color:var(--color-text-tertiary);line-height:1.3;">Teman<br>Baru</div><div style="font-size:8px;color:#CCCCCC;margin-top:2px;">SMALL</div></div>
-          <div style="text-align:center;opacity:.4;"><div style="width:46px;height:46px;border-radius:9999px;background:var(--color-bg-muted);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px dashed #E6E6E6;margin:0 auto 5px;">🎵</div><div style="font-size:9px;color:var(--color-text-tertiary);line-height:1.3;">Lagu<br>Favorit</div><div style="font-size:8px;color:#CCCCCC;margin-top:2px;">SMALL</div></div>
-          <div style="text-align:center;opacity:.4;"><div style="width:46px;height:46px;border-radius:9999px;background:var(--color-bg-muted);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px dashed #E6E6E6;margin:0 auto 5px;">🏆</div><div style="font-size:9px;color:var(--color-text-tertiary);line-height:1.3;">Lomba<br>Foto</div><div style="font-size:8px;color:#CCCCCC;margin-top:2px;">SMALL</div></div>
-          <div style="text-align:center;opacity:.4;"><div style="width:46px;height:46px;border-radius:9999px;background:var(--color-bg-muted);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px dashed #E6E6E6;margin:0 auto 5px;">💊</div><div style="font-size:9px;color:var(--color-text-tertiary);line-height:1.3;">Obat<br>Pertama</div><div style="font-size:8px;color:#CCCCCC;margin-top:2px;">SMALL</div></div>
-          <div style="text-align:center;opacity:.4;"><div style="width:46px;height:46px;border-radius:9999px;background:var(--color-bg-muted);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px dashed #E6E6E6;margin:0 auto 5px;">🤝</div><div style="font-size:9px;color:var(--color-text-tertiary);line-height:1.3;">Ketemu<br>Pemilik</div><div style="font-size:8px;color:#CCCCCC;margin-top:2px;">SMALL</div></div>
-          <div style="text-align:center;opacity:.4;"><div style="width:46px;height:46px;border-radius:9999px;background:var(--color-bg-muted);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px dashed #E6E6E6;margin:0 auto 5px;">📚</div><div style="font-size:9px;color:var(--color-text-tertiary);line-height:1.3;">Catatan<br>ke-10</div><div style="font-size:8px;color:#CCCCCC;margin-top:2px;">SMALL</div></div>
-          <div style="text-align:center;opacity:.4;"><div style="width:46px;height:46px;border-radius:9999px;background:var(--color-bg-muted);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px dashed #E6E6E6;margin:0 auto 5px;">🌙</div><div style="font-size:9px;color:var(--color-text-tertiary);line-height:1.3;">Rutinitas<br>Malam</div><div style="font-size:8px;color:#CCCCCC;margin-top:2px;">SMALL</div></div>
-
-        </div>
-      </div>
-
-      <!-- 徽章说明 tooltip 区 -->
-      <div style="margin:14px 20px 20px;background:var(--color-bg-subtle);border-radius:14px;padding:13px 16px;display:flex;gap:12px;align-items:flex-start;">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#845EC9" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;margin-top:1px;"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
-        <div style="font-size:11.5px;color:var(--color-text-primary);line-height:1.6;"><strong style="color:#845EC9;">Badge dengan border merah bawah</strong> = Pop Art offset aktif (sudah terbuka). Badge abu-abu = masih terkunci. Tap badge terbuka untuk berbagi.</div>
+<div class="page on" id="p-paspor-no-profile">
+      <div class="appbar"><span class="appbar-title">Paspor</span></div>
+      <div style="position:absolute;inset:0;top:60px;bottom:83px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;">
+        <div style="font-size:72px;margin-bottom:8px;opacity:.55;">🐾</div>
+        <div style="font-size:18px;font-weight:700;color:var(--color-text-heading);margin-bottom:8px;">Belum ada profil hewan</div>
+        <div style="font-size:13px;color:var(--color-text-secondary);line-height:1.65;max-width:260px;margin-bottom:26px;">Buat profil untuk hewan peliharaanmu dan mulai catat perjalanan tumbuh kembangnya.</div>
+        <button onclick="go(null,'pet-create')" style="padding:13px 24px;background:#845EC9;border:none;border-radius:14px;font-size:14px;font-weight:700;color:#fff;font-family:'Poppins',sans-serif;cursor:pointer;box-shadow:0 6px 18px rgba(132,94,201,.28);">+ Buat Profil Sekarang</button>
       </div>
     </div>
   </div>
   <div class="tabbar">
 
     <!-- Beranda -->
-    <button class="tab on" onclick="go(this,'feed')">
+    <button class="tab" onclick="go(this,'feed')">
       <div class="istack">
         <svg class="ishadow" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5L3 9.7V21h6v-6h6v6h6V9.7L12 2.5z"/></svg>
         <svg class="iout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 01-1 1H5a1 1 0 01-1-1v-9.5z"/><path d="M9 21V14h6v7"/></svg>
@@ -523,7 +318,7 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
     </button>
 
     <!-- Catatan (成长档案) — BookOpen icon -->
-    <button class="tab" onclick="go(this,'paspor')">
+    <button class="tab on" onclick="go(this,'paspor')">
       <div class="istack">
         <!-- Pop Art shadow layer: fill -->
         <svg class="ishadow" viewBox="0 0 24 24" fill="currentColor">

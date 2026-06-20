@@ -10,6 +10,7 @@ import '../../../shared/widgets/app_image.dart';
 import '../../../shared/widgets/post_cover.dart';
 import '../../auth/data/me_repository.dart';
 import '../../auth/domain/auth_state.dart';
+import '../../auth/domain/login_response.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../profile/data/timeline_repository.dart';
 import '../../profile/domain/pet_age.dart';
@@ -62,47 +63,28 @@ class MePage extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.screenEdge),
         children: [
-          // ① 用户信息（主视觉，人 60%）：头像 + 昵称 + 邮箱 + 编辑。
-          _UserInfoCard(
-            avatarUrl: profile?.avatarUrl,
-            nickname: profile?.nickname ?? profile?.displayName ?? '',
-            email: profile?.email,
+          // ① profhead：用户信息 + 宠物 mini 同卡（原型 p-profil profhead）。
+          _ProfileHeadCard(
+            profile: profile,
             onEdit: () => _editProfile(context, ref),
           ),
-          const SizedBox(height: AppSpacing.md),
-          // ② 宠物区位（次视觉，宠物 40%，AC5 三态）：A+已建档=宠物卡片 / A 未建档=引导卡 / B·C=不显示。
-          const _PetZone(),
           const SizedBox(height: AppSpacing.lg),
-          // ③ 宠物状态（A/B/C + 修改入口；状态 A 显示编辑档案入口）。
-          _SectionCard(
-            title: l10n.mePetStatusTitle,
-            children: [
-              ListTile(
-                key: const ValueKey('mePetStatus'),
-                title: Align(
-                  alignment: Alignment.centerLeft,
-                  child: _PetStatusChip(label: petStatusLabel(profile?.petStatus, l10n)),
-                ),
-                trailing: TextButton(
-                  onPressed: () => context.push('/onboarding/pet-status'),
-                  child: Text(l10n.meChangeStatus),
-                ),
+          // ② 我的发布（原型 Postinganku）：小标题 + 裸 2 列网格（无卡边框）。
+          // 注：宠物状态/改状态/编辑档案区块已按设计（原型 p-profil 无此块）移除。
+          Padding(
+            padding: const EdgeInsets.only(
+              left: AppSpacing.xs,
+              bottom: AppSpacing.sm,
+            ),
+            child: Text(
+              l10n.meMyPostsTitle.toUpperCase(),
+              style: AppTypography.caption.copyWith(
+                letterSpacing: 0.6,
+                fontWeight: FontWeight.w600,
               ),
-              if (profile?.hasPetProfile ?? false)
-                ListTile(
-                  key: const ValueKey('meEditPetProfile'),
-                  title: Text(l10n.meEditPetProfile),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => context.push('/profile/edit'),
-                ),
-            ],
+            ),
           ),
-          const SizedBox(height: AppSpacing.lg),
-          // ④ 我的发布（三类混合倒序）。
-          _SectionCard(
-            title: l10n.meMyPostsTitle,
-            children: [_MyPostsList()],
-          ),
+          _MyPostsList(),
         ],
       ),
     );
@@ -115,8 +97,9 @@ class MePage extends ConsumerWidget {
   Future<void> _editProfile(BuildContext context, WidgetRef ref) async {
     final l10n = AppLocalizations.of(context);
     final profile = ref.read(authControllerProvider).profile;
-    final controller =
-        TextEditingController(text: profile?.nickname ?? profile?.displayName ?? '');
+    final controller = TextEditingController(
+      text: profile?.nickname ?? profile?.displayName ?? '',
+    );
     final newName = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
@@ -140,43 +123,58 @@ class MePage extends ConsumerWidget {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                    color: AppColors.line, borderRadius: BorderRadius.circular(999)),
+                  color: AppColors.line,
+                  borderRadius: BorderRadius.circular(999),
+                ),
               ),
             ),
             const SizedBox(height: 18),
-            Text(l10n.meEditProfileTitle,
-                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+            Text(
+              l10n.meEditProfileTitle,
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+            ),
             const SizedBox(height: 20),
             // 头像区（展示 + Ganti Foto 占位，头像上传本期降级）。
             Center(
               child: Column(
                 children: [
                   _InitialAvatar(
-                      avatarUrl: profile?.avatarUrl,
-                      nickname: profile?.nickname ?? '',
-                      radius: 38),
+                    avatarUrl: profile?.avatarUrl,
+                    nickname: profile?.nickname ?? '',
+                    radius: 38,
+                  ),
                   const SizedBox(height: 8),
                   TextButton(
                     key: const ValueKey('meEditPhoto'),
                     onPressed: () {
                       ScaffoldMessenger.of(ctx)
                         ..clearSnackBars()
-                        ..showSnackBar(SnackBar(content: Text(l10n.helpComingSoon)));
+                        ..showSnackBar(
+                          SnackBar(content: Text(l10n.helpComingSoon)),
+                        );
                     },
-                    child: Text(l10n.meEditPhotoChange,
-                        style: const TextStyle(fontSize: 12, color: AppColors.mint)),
+                    child: Text(
+                      l10n.meEditPhotoChange,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.mint,
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 14),
             // 昵称（可编辑）。
-            Text(l10n.meEditNicknameLabel.toUpperCase(),
-                style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.4,
-                    color: AppColors.textSecondary)),
+            Text(
+              l10n.meEditNicknameLabel.toUpperCase(),
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.4,
+                color: AppColors.textSecondary,
+              ),
+            ),
             const SizedBox(height: 6),
             TextField(
               key: const ValueKey('nicknameField'),
@@ -187,25 +185,37 @@ class MePage extends ConsumerWidget {
                 counterText: '',
                 filled: true,
                 fillColor: AppColors.surface,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 15,
+                  vertical: 13,
+                ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.mint, width: 1.5),
+                  borderSide: const BorderSide(
+                    color: AppColors.mint,
+                    width: 1.5,
+                  ),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.mint, width: 1.5),
+                  borderSide: const BorderSide(
+                    color: AppColors.mint,
+                    width: 1.5,
+                  ),
                 ),
               ),
             ),
             const SizedBox(height: 14),
             // 邮箱（只读）。
-            Text(l10n.meEditEmailLabel.toUpperCase(),
-                style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.4,
-                    color: AppColors.textSecondary)),
+            Text(
+              l10n.meEditEmailLabel.toUpperCase(),
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.4,
+                color: AppColors.textSecondary,
+              ),
+            ),
             const SizedBox(height: 6),
             Container(
               width: double.infinity,
@@ -215,8 +225,13 @@ class MePage extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: AppColors.line, width: 1.5),
               ),
-              child: Text(profile?.email ?? '',
-                  style: const TextStyle(fontSize: 14, color: AppColors.textTertiary)),
+              child: Text(
+                profile?.email ?? '',
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textTertiary,
+                ),
+              ),
             ),
             const SizedBox(height: 22),
             FilledButton(
@@ -226,10 +241,17 @@ class MePage extends ConsumerWidget {
                 backgroundColor: AppColors.mint,
                 foregroundColor: AppColors.onAccent,
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
-              child: Text(l10n.meEditSave,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+              child: Text(
+                l10n.meEditSave,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
             const SizedBox(height: 10),
             OutlinedButton(
@@ -238,9 +260,14 @@ class MePage extends ConsumerWidget {
                 foregroundColor: AppColors.textSecondary,
                 side: const BorderSide(color: AppColors.line, width: 1.5),
                 padding: const EdgeInsets.symmetric(vertical: 13),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
-              child: Text(l10n.meEditCancel, style: const TextStyle(fontSize: 14)),
+              child: Text(
+                l10n.meEditCancel,
+                style: const TextStyle(fontSize: 14),
+              ),
             ),
           ],
         ),
@@ -248,7 +275,9 @@ class MePage extends ConsumerWidget {
     );
     if (newName == null || newName.isEmpty || !context.mounted) return;
     try {
-      final updated = await ref.read(meRepositoryProvider).updateNickname(newName);
+      final updated = await ref
+          .read(meRepositoryProvider)
+          .updateNickname(newName);
       ref.read(authControllerProvider.notifier).applyProfile(updated);
     } catch (_) {
       if (context.mounted) {
@@ -271,8 +300,10 @@ class _PetZone extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(authControllerProvider).profile;
-    if (profile?.petStatus != 'HAS_PET') return const SizedBox.shrink(); // PLANNING/ENTHUSIAST 不显示
-    if (!(profile?.hasPetProfile ?? false)) return const _PetGuideCard(); // HAS_PET 未建档 → 引导卡
+    // PLANNING/ENTHUSIAST 不显示
+    if (profile?.petStatus != 'HAS_PET') return const SizedBox.shrink();
+    // HAS_PET 未建档 → 引导卡
+    if (!(profile?.hasPetProfile ?? false)) return const _PetGuideCard();
     return const _PetCard(); // A + 已建档 → 宠物卡片
   }
 }
@@ -292,15 +323,21 @@ class _PetGuideCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.accentGrowth.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.accentGrowth.withValues(alpha: 0.3)),
+          border: Border.all(
+            color: AppColors.accentGrowth.withValues(alpha: 0.3),
+          ),
         ),
         child: Row(
           children: [
             const Icon(Icons.pets, color: AppColors.accentGrowth),
             const SizedBox(width: AppSpacing.md),
             Expanded(
-              child: Text(l10n.mePetCardCreateTitle,
-                  style: AppTypography.body.copyWith(color: AppColors.accentGrowth)),
+              child: Text(
+                l10n.mePetCardCreateTitle,
+                style: AppTypography.body.copyWith(
+                  color: AppColors.accentGrowth,
+                ),
+              ),
             ),
             const Icon(Icons.chevron_right, color: AppColors.accentGrowth),
           ],
@@ -333,30 +370,49 @@ class _PetCard extends ConsumerWidget {
             ),
             child: Row(
               children: [
-                _InitialAvatar(avatarUrl: pet.avatarUrl, nickname: pet.name, radius: 21),
+                _InitialAvatar(
+                  avatarUrl: pet.avatarUrl,
+                  nickname: pet.name,
+                  radius: 21,
+                ),
                 const SizedBox(width: 11),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(pet.name,
-                          style: AppTypography.body.copyWith(fontWeight: FontWeight.w700),
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                      Text(
+                        pet.name,
+                        style: AppTypography.body.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       if (meta.isNotEmpty) ...[
                         const SizedBox(height: 2),
-                        Text(meta,
-                            key: const ValueKey('mePetCardMeta'),
-                            style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
-                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                        Text(
+                          meta,
+                          key: const ValueKey('mePetCardMeta'),
+                          style: AppTypography.caption.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ],
                     ],
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
-                Text('${l10n.meViewArchive} →',
-                    style: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.mint)),
+                Text(
+                  '${l10n.meViewArchive} →',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.mint,
+                  ),
+                ),
               ],
             ),
           ),
@@ -367,14 +423,23 @@ class _PetCard extends ConsumerWidget {
   }
 
   /// 元数据「种类 · 年龄 · momen 数」：种类由 petType、年龄由 birthday 计算、momen 数取 archiveStats。
-  String _petMeta(BuildContext context, WidgetRef ref, PetProfile pet, AppLocalizations l10n) {
+  String _petMeta(
+    BuildContext context,
+    WidgetRef ref,
+    PetProfile pet,
+    AppLocalizations l10n,
+  ) {
     final species = switch (pet.petType) {
       'CAT' => l10n.petTypeCat,
       'DOG' => l10n.petTypeDog,
       'OTHER' => l10n.petTypeOther,
       _ => null,
     };
-    final momen = ref.watch(archiveStatsProvider).asData?.value.happyMomentCount;
+    final momen = ref
+        .watch(archiveStatsProvider)
+        .asData
+        ?.value
+        .happyMomentCount;
     final age = computePetAge(pet.birthday);
     return [
       ?species,
@@ -386,7 +451,12 @@ class _PetCard extends ConsumerWidget {
 
 /// 原型 .ibtn：38×38 白底圆角11 带阴影的图标按钮（profil 顶部 headset/gear）。
 class _IconBtn extends StatelessWidget {
-  const _IconBtn({required this.valueKey, required this.icon, required this.tooltip, required this.onTap});
+  const _IconBtn({
+    required this.valueKey,
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
 
   final String valueKey;
   final IconData icon;
@@ -409,7 +479,11 @@ class _IconBtn extends StatelessWidget {
             color: AppColors.surface,
             borderRadius: BorderRadius.circular(11),
             boxShadow: const [
-              BoxShadow(color: Color(0x12162233), blurRadius: 8, offset: Offset(0, 2)),
+              BoxShadow(
+                color: Color(0x12162233),
+                blurRadius: 8,
+                offset: Offset(0, 2),
+              ),
             ],
           ),
           child: Icon(icon, size: 18, color: AppColors.ink2),
@@ -419,92 +493,115 @@ class _IconBtn extends StatelessWidget {
   }
 }
 
-class _UserInfoCard extends StatelessWidget {
-  const _UserInfoCard({
-    required this.avatarUrl,
-    required this.nickname,
-    required this.email,
-    required this.onEdit,
-  });
+/// profhead 卡（原型 p-profil）：白卡 + 阴影，内含「用户行（渐变头像 + 名/邮箱 + Edit）」+
+/// 状态 A 时下挂「宠物 mini」（[_PetZone]，紫浅底行）。B/C 仅用户行。
+class _ProfileHeadCard extends StatelessWidget {
+  const _ProfileHeadCard({required this.profile, required this.onEdit});
 
-  final String? avatarUrl;
-  final String nickname;
-  final String? email;
+  final UserProfile? profile;
   final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        // 原型 profhead box-shadow（非边框）。
-        boxShadow: const [
-          BoxShadow(color: Color(0x0F162233), blurRadius: 12, offset: Offset(0, 2)),
-        ],
-      ),
-      child: Row(
-        children: [
-          _InitialAvatar(avatarUrl: avatarUrl, nickname: nickname, radius: 28),
-          const SizedBox(width: AppSpacing.lg),
-          // 昵称 + 邮箱（邮箱仅本人 /me 可见，PII 不外泄）。
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(nickname, style: AppTypography.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                if (email != null && email!.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(email!, style: AppTypography.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
+    final name = profile?.nickname ?? profile?.displayName ?? '';
+    final email = profile?.email ?? '';
+    final showPet = profile?.petStatus == 'HAS_PET';
+    // 原型 profhead：背景与页面同为白，无可见卡片/阴影（白叠白 + 6% 阴影≈无），故不加卡片装饰；
+    // 仅内部 petmini 用紫浅底区分。
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            // 原型 avlg 62（渐变 + 首字母）。
+            _InitialAvatar(
+              avatarUrl: profile?.avatarUrl,
+              nickname: name,
+              radius: 31,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    name,
+                    style: AppTypography.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (email.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      email,
+                      style: AppTypography.caption,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          // 描边「Edit」胶囊（对齐设计稿 S17，替代裸铅笔图标）。
-          OutlinedButton.icon(
-            key: const ValueKey('meEditNickname'),
-            onPressed: onEdit,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.accentGrowth,
-              side: const BorderSide(color: AppColors.border),
-              shape: const StadiumBorder(),
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.xs),
-              visualDensity: VisualDensity.compact,
+            const SizedBox(width: AppSpacing.sm),
+            // 原型 editbtn：圆角矩形(8) + 1.5px 浅紫描边(#C2B0EC) + 紫字，无图标。
+            OutlinedButton(
+              key: const ValueKey('meEditNickname'),
+              onPressed: onEdit,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.accentGrowth,
+                side: const BorderSide(
+                  color: AppColors.dashedViolet,
+                  width: 1.5,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                // 原型 padding:6 12；给文字与描边留足内边距（去掉 compact 压缩）。
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Text(
+                l10n.meEditButton,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
-            icon: const Icon(Icons.edit_outlined, size: 16),
-            label: Text(l10n.meEditButton),
-          ),
-        ],
-      ),
+          ],
+        ),
+        // 宠物 mini（状态 A：已建档=宠物卡 / 未建档=引导卡；B/C 不挂）。
+        if (showPet) ...[const SizedBox(height: 14), const _PetZone()],
+      ],
     );
   }
 }
 
 /// 头像：有 URL 用网络图，否则彩色圆 + 昵称首字母（对齐设计稿 S17）。
 class _InitialAvatar extends StatelessWidget {
-  const _InitialAvatar({required this.avatarUrl, required this.nickname, required this.radius});
+  const _InitialAvatar({
+    required this.avatarUrl,
+    required this.nickname,
+    required this.radius,
+  });
 
   final String? avatarUrl;
   final String nickname;
   final double radius;
 
-  /// 首字母底色调色板（柔和、与品牌协调）。按昵称哈希取一色，保证同名同色。
-  static const List<Color> _palette = [
-    AppColors.accentGrowth,
-    AppColors.accentConsult,
-    AppColors.triageGreen,
-    AppColors.triageYellow,
-    AppColors.likeHeart,
-  ];
-
   @override
   Widget build(BuildContext context) {
     if (avatarUrl != null && avatarUrl!.isNotEmpty) {
-      return CircleAvatar(radius: radius, backgroundImage: AppImage.provider(avatarUrl));
+      return CircleAvatar(
+        radius: radius,
+        backgroundImage: AppImage.provider(avatarUrl),
+      );
     }
     final trimmed = nickname.trim();
     if (trimmed.isEmpty) {
@@ -515,34 +612,27 @@ class _InitialAvatar extends StatelessWidget {
       );
     }
     final initial = trimmed.characters.first.toUpperCase();
-    final color = _palette[trimmed.codeUnits.fold<int>(0, (a, b) => a + b) % _palette.length];
-    return CircleAvatar(
-      radius: radius,
-      backgroundColor: color,
+    // 原型 avlg：紫色渐变（135deg #845EC9 → 深紫）+ 白首字母。
+    return Container(
+      width: radius * 2,
+      height: radius * 2,
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.mint, AppColors.mint600],
+        ),
+      ),
       child: Text(
         initial,
-        style: TextStyle(fontSize: radius * 0.8, fontWeight: FontWeight.w700, color: AppColors.onAccent),
+        style: TextStyle(
+          fontSize: radius * 0.8,
+          fontWeight: FontWeight.w700,
+          color: AppColors.onAccent,
+        ),
       ),
-    );
-  }
-}
-
-/// 宠物状态友好标签胶囊（对齐设计稿 S17，替代原始枚举码 A/B/C）。
-class _PetStatusChip extends StatelessWidget {
-  const _PetStatusChip({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.xs),
-      decoration: BoxDecoration(
-        color: AppColors.accentGrowth.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text('🐾 $label',
-          style: AppTypography.caption.copyWith(color: AppColors.accentGrowth)),
     );
   }
 }
@@ -555,12 +645,23 @@ class _MyPostCard extends StatelessWidget {
   final VoidCallback onTap;
 
   /// 类型 → (badge 文案, 文字色, 底色)：Momen 绿 / Tips 黄 / Cerita 紫（原型 b-happy/b-tips/b-story）。
-  static (String, Color, Color) _badgeStyle(String type, AppLocalizations l10n) {
+  static (String, Color, Color) _badgeStyle(
+    String type,
+    AppLocalizations l10n,
+  ) {
     switch (type) {
       case 'GROWTH_MOMENT':
-        return (l10n.mePostTypeMomen, AppColors.momenBadgeText, AppColors.momenBadgeBg);
+        return (
+          l10n.mePostTypeMomen,
+          AppColors.momenBadgeText,
+          AppColors.momenBadgeBg,
+        );
       case 'KNOWLEDGE':
-        return (l10n.mePostTypeTips, AppColors.tipsBadgeText, AppColors.goldTint);
+        return (
+          l10n.mePostTypeTips,
+          AppColors.tipsBadgeText,
+          AppColors.goldTint,
+        );
       default: // DAILY
         return (l10n.mePostTypeCerita, AppColors.mint, AppColors.skyTint);
     }
@@ -569,7 +670,8 @@ class _MyPostCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final hasImage = post.firstImageUrl != null && post.firstImageUrl!.isNotEmpty;
+    final hasImage =
+        post.firstImageUrl != null && post.firstImageUrl!.isNotEmpty;
     final (label, fg, bg) = _badgeStyle(post.type, l10n);
     return GestureDetector(
       key: ValueKey('myPost_${post.id}'),
@@ -592,57 +694,23 @@ class _MyPostCard extends StatelessWidget {
               left: 5,
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(5)),
-                child: Text(label,
-                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: fg)),
+                decoration: BoxDecoration(
+                  color: bg,
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: fg,
+                  ),
+                ),
               ),
             ),
           ],
         ),
       ),
-    );
-  }
-}
-
-/// 宠物状态枚举 → 本地化标签（HAS_PET=有宠物/PLANNING=计划养/ENTHUSIAST=爱好者；未知→'-'）。
-String petStatusLabel(String? s, AppLocalizations l10n) {
-  switch (s) {
-    case 'HAS_PET':
-      return l10n.petStatusA;
-    case 'PLANNING':
-      return l10n.petStatusB;
-    case 'ENTHUSIAST':
-      return l10n.petStatusC;
-    default:
-      return '-';
-  }
-}
-
-class _SectionCard extends StatelessWidget {
-  const _SectionCard({required this.title, required this.children});
-
-  final String title;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: AppSpacing.sm, left: AppSpacing.xs),
-          child: Text(title, style: AppTypography.caption),
-        ),
-        Material(
-          color: AppColors.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: const BorderSide(color: AppColors.border),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(children: children),
-        ),
-      ],
     );
   }
 }
@@ -661,25 +729,28 @@ class _MyPostsList extends ConsumerWidget {
       data: (items) {
         if (items.isEmpty) {
           return Padding(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Text(l10n.meNoPosts,
-                key: const ValueKey('meNoPosts'), style: AppTypography.caption),
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+            child: Text(
+              l10n.meNoPosts,
+              key: const ValueKey('meNoPosts'),
+              style: AppTypography.caption,
+            ),
           );
         }
-        // 2 列方形网格（原型 pgrid）：封面图（无图→彩块）+ 左上类型 badge；保留后端 created_at 倒序，不重排。
-        return Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 7,
-            crossAxisSpacing: 7,
-            children: [
-              for (final p in items)
-                _MyPostCard(post: p, onTap: () => context.push('/content/${p.id}')),
-            ],
-          ),
+        // 2 列方形裸网格（原型 pgrid，无卡边框）：封面图（无图→彩块）+ 左上类型 badge；保留后端 created_at 倒序。
+        return GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 7,
+          crossAxisSpacing: 7,
+          children: [
+            for (final p in items)
+              _MyPostCard(
+                post: p,
+                onTap: () => context.push('/content/${p.id}'),
+              ),
+          ],
         );
       },
     );

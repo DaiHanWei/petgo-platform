@@ -7,6 +7,7 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../media/domain/media_upload_use_case.dart';
+import '../../../shared/utils/date_format.dart';
 import '../../../shared/utils/media_permission.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../data/profile_repository.dart';
@@ -111,8 +112,8 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
           icon: const Icon(Icons.arrow_back, color: AppColors.ink),
           onPressed: () => context.canPop() ? context.pop() : context.go('/profile'),
         ),
-        title: const Text('Ubah Profil Hewan',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink)),
+        title: Text(l10n.petProfileEditTitle,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink)),
       ),
       body: profileAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -126,13 +127,13 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
             return const SizedBox.shrink();
           }
           _prefill(profile);
-          return _form(l10n);
+          return _form(context, l10n);
         },
       ),
     );
   }
 
-  Widget _form(AppLocalizations l10n) {
+  Widget _form(BuildContext context, AppLocalizations l10n) {
     return SafeArea(
       child: ListView(
         padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
@@ -177,7 +178,7 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
-          _sectionLabel('NAMA HEWAN', required: true),
+          _sectionLabel(l10n.petProfileNameLabel, required: true),
           const SizedBox(height: 6),
           TextField(
             key: const ValueKey('petProfileEditNameField'),
@@ -190,7 +191,7 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
           // 宠物类型（F6）：创建后不可改 → 置灰只读展示，不随 PATCH 提交。
           _petTypeReadonly(l10n),
           const SizedBox(height: 16),
-          _sectionLabel('RAS'),
+          _sectionLabel(l10n.petProfileBreedLabel),
           const SizedBox(height: 6),
           TextField(
             key: const ValueKey('petProfileEditBreedField'),
@@ -199,7 +200,7 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
             decoration: _inputDeco(),
           ),
           const SizedBox(height: 16),
-          _sectionLabel('TANGGAL LAHIR'),
+          _sectionLabel(l10n.petProfileBirthdayLabel),
           const SizedBox(height: 6),
           InkWell(
             key: const ValueKey('petProfileEditBirthdayTile'),
@@ -215,7 +216,7 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
                 children: [
                   Expanded(
                     child: Text(
-                      _birthday == null ? l10n.petProfileBirthdayPick : _formatBirthday(_birthday!),
+                      _birthday == null ? l10n.petProfileBirthdayPick : formatBirthday(context, _birthday!),
                       style: TextStyle(
                           fontSize: 15,
                           color: _birthday == null ? AppColors.muted : AppColors.ink),
@@ -227,7 +228,7 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
             ),
           ),
           const SizedBox(height: 16),
-          _sectionLabel('BIO (OPSIONAL)'),
+          _sectionLabel(l10n.petProfileBioLabel),
           const SizedBox(height: 6),
           TextField(
             key: const ValueKey('petProfileEditIntroField'),
@@ -288,14 +289,6 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
         ),
       );
 
-  static String _formatBirthday(DateTime d) {
-    const months = [
-      '', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
-    ];
-    return '${d.day} ${months[d.month]} ${d.year}';
-  }
-
   /// 宠物类型只读区（F6）：展示既有类型，三枚 emoji chip 全置灰不可点（onSelected null），不参与提交。
   Widget _petTypeReadonly(AppLocalizations l10n) {
     final labels = {
@@ -309,7 +302,7 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
       children: [
         Row(
           children: [
-            _sectionLabel('JENIS HEWAN'),
+            _sectionLabel(l10n.petProfileTypeLabel),
             const SizedBox(width: 6),
             const Icon(Icons.lock_outline, size: 12, color: AppColors.muted),
             const SizedBox(width: 3),

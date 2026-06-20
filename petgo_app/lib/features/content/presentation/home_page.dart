@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/mock/mock_config.dart';
@@ -94,8 +95,8 @@ class HomePage extends ConsumerWidget {
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                child: const Text('Masuk',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                child: Text(l10n.loginTitle,
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
               ),
             ),
         ],
@@ -144,12 +145,12 @@ class HomePage extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(vertical: 48),
           child: EmptyState(
             // feed-error.html：标题 + 副文 + 紫「Coba Lagi」+ 灰「Laporkan Masalah」次链接，无大 icon。
-            title: 'Gagal memuat feed',
-            message: 'Periksa koneksi internet kamu dan coba lagi.',
+            title: l10n.feedErrorTitle,
+            message: l10n.feedErrorBody,
             hideIcon: true,
             actionLabel: l10n.feedRetry,
             onAction: () => ref.read(feedProvider.notifier).refresh(),
-            secondaryLabel: 'Laporkan Masalah',
+            secondaryLabel: l10n.feedReportProblem,
             onSecondary: () => ref.read(feedProvider.notifier).refresh(),
           ),
         ),
@@ -174,7 +175,7 @@ class HomePage extends ConsumerWidget {
                   pendingAction: const RouteIntent(location: '/home'),
                   onAllowed: () => PublishComposePage.open(context),
                 ),
-                secondaryLabel: 'Temukan Teman →',
+                secondaryLabel: '${l10n.feedFindFriends} →',
                 onSecondary: () => context.go('/home'),
               ),
             ),
@@ -246,7 +247,16 @@ class _BerandaTop extends StatelessWidget {
   }
 }
 
-/// 访客登录引导横幅（feed-guest.html 底部）：紫渐变卡 + 标题/副文 + Daftar Gratis / Masuk 双钮 + 「Lanjut lihat dulu →」。
+/// 多色 Google「G」标（preview-core-pages_1 P-03 软登录按钮用；与原型 svg 同 path）。
+const String _kGoogleG =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">'
+    '<path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>'
+    '<path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>'
+    '<path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>'
+    '<path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>'
+    '</svg>';
+
+/// 访客登录引导横幅（feed-guest.html 底部 P-03）：紫渐变卡 + 标题/副文 + 单个「Masuk dengan Google」按钮 + 「Lanjut lihat dulu →」。
 class _GuestJoinBanner extends StatelessWidget {
   const _GuestJoinBanner({required this.onLogin});
 
@@ -254,10 +264,12 @@ class _GuestJoinBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    // feed-guest.html 1:1：紫渐变卡 + 标题/副文 + Daftar Gratis(撑满) / Masuk(自适应) + 「Lanjut lihat dulu →」。
     return Container(
       key: const ValueKey('feedGuestJoinBanner'),
       margin: const EdgeInsets.only(top: 4, bottom: 8),
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         gradient: const LinearGradient(
@@ -265,54 +277,52 @@ class _GuestJoinBanner extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: [AppColors.mint, AppColors.mint500],
         ),
+        // 原型 box-shadow: 0 8px 24px rgba(132,94,201,.30)。
+        boxShadow: [
+          BoxShadow(
+              color: AppColors.mint.withValues(alpha: 0.30),
+              blurRadius: 24,
+              offset: const Offset(0, 8)),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Bergabunglah dengan komunitas!',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
-          const SizedBox(height: 6),
-          Text('Rekam tumbuh kembang, konsultasi dokter hewan, dan bagikan momen berharga bersama mereka.',
-              style: TextStyle(fontSize: 12, height: 1.5, color: Colors.white.withValues(alpha: 0.85))),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                flex: 2,
-                child: FilledButton(
-                  onPressed: onLogin,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: AppColors.mint,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  child: const Text('Daftar Gratis',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                ),
+          Text(l10n.feedGuestJoinTitle,
+              style: const TextStyle(
+                  fontSize: 15, height: 1.3, fontWeight: FontWeight.w700, color: Colors.white)),
+          const SizedBox(height: 4),
+          Text(l10n.feedGuestJoinBody,
+              style: TextStyle(fontSize: 12, height: 1.55, color: Colors.white.withValues(alpha: 0.78))),
+          const SizedBox(height: 16),
+          // 单个 Google 登录按钮（preview-core-pages_1 P-03）：白底 + 多色 G + 「Masuk dengan Google」。
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: onLogin,
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: AppColors.mint,
+                padding: const EdgeInsets.symmetric(vertical: 11),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: onLogin,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    backgroundColor: Colors.white.withValues(alpha: 0.15),
-                    side: BorderSide(color: Colors.white.withValues(alpha: 0.4), width: 1.5),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  child: const Text('Masuk',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SvgPicture.string(_kGoogleG, width: 16, height: 16),
+                  const SizedBox(width: 8),
+                  Text(l10n.loginGoogle,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                ],
               ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Center(
-            child: TextButton(
-              onPressed: () {},
-              child: Text('Lanjut lihat dulu →',
-                  style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.8))),
             ),
+          ),
+          const SizedBox(height: 11),
+          // 「Lanjut lihat dulu →」——继续浏览的轻链接（原型居中、淡白）。
+          Center(
+            child: Text('${l10n.loginGateContinue} →',
+                style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.45))),
           ),
         ],
       ),

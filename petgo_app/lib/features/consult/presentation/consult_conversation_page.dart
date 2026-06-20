@@ -195,7 +195,7 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
             ),
           ),
           // 原始症状摘要条（原型紫浅底折叠条）。占位内容；仅活跃会话显示。
-          if (active || pendingClose) _symptomBar(),
+          if (active || pendingClose) _symptomBar(l10n),
           Expanded(
             child: SafeArea(
               top: false,
@@ -343,10 +343,10 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 11, color: AppColors.muted))
                     else
-                      const Text('● Online · Klinik Hewan Sehat',
+                      Text('${l10n.consultPeerOnline} · Klinik Hewan Sehat',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
+                          style: const TextStyle(
                               fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.vetPrimary)),
                   ],
                 ),
@@ -376,7 +376,7 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
   }
 
   /// 原始症状摘要折叠条（原型紫浅底）：info 图标 + 占位症状摘要 + 「Lihat ↓」。
-  Widget _symptomBar() {
+  Widget _symptomBar(AppLocalizations l10n) {
     return Container(
       width: double.infinity,
       color: AppColors.mintTint,
@@ -392,7 +392,8 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.mint)),
           ),
           const SizedBox(width: 8),
-          Text('Lihat ↓', style: TextStyle(fontSize: 11, color: AppColors.violetSoft)),
+          Text('${l10n.consultSymptomView} ↓',
+              style: const TextStyle(fontSize: 11, color: AppColors.violetSoft)),
         ],
       ),
     );

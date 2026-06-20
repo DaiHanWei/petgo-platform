@@ -30,6 +30,8 @@ class AppTheme {
       brightness: Brightness.light,
       colorScheme: scheme,
       scaffoldBackgroundColor: AppColors.base,
+      // 全局字体 = Poppins（原型 UI 字体，已打包 assets/fonts，权重 400/500/600/700）。
+      fontFamily: 'Poppins',
       textTheme: const TextTheme(
         displaySmall: AppTypography.display,
         headlineSmall: AppTypography.headline,
