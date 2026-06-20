@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/features/profile/presentation/pet_profile_edit_page.dart';
+import 'package:tailtopia/features/profile/presentation/widgets/pet_form_fields.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
 class _FakeRepo implements ProfileRepository {
@@ -59,6 +60,7 @@ void main() {
       id: 1,
       name: 'Momo',
       cardToken: 'TOK',
+      petType: 'DOG',
       breed: 'Shiba',
       intro: '好奇宝宝',
     ));
@@ -67,8 +69,9 @@ void main() {
 
     final nameField = tester.widget<TextField>(find.byKey(const ValueKey('petProfileEditNameField')));
     expect(nameField.controller!.text, 'Momo');
-    final breedField = tester.widget<TextField>(find.byKey(const ValueKey('petProfileEditBreedField')));
-    expect(breedField.controller!.text, 'Shiba');
+    // RAS 改为下拉字段（BreedField）：既有品种 'Shiba' 预填并显示。
+    expect(find.byKey(const ValueKey('petProfileEditBreedField')), findsOneWidget);
+    expect(find.text('Shiba'), findsOneWidget);
     // 名字字段上限 20
     expect(nameField.maxLength, 20);
   });
@@ -93,13 +96,12 @@ void main() {
     await tester.pumpWidget(_wrap(repo));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('petProfileEditTypeReadonly')), findsOneWidget);
-    final dogChip = tester.widget<ChoiceChip>(find.byKey(const ValueKey('petTypeReadonly_DOG')));
-    expect(dogChip.selected, isTrue); // 既有类型选中
-    expect(dogChip.onSelected, isNull); // 置灰不可点
-    final catChip = tester.widget<ChoiceChip>(find.byKey(const ValueKey('petTypeReadonly_CAT')));
-    expect(catChip.selected, isFalse);
-    expect(catChip.onSelected, isNull);
+    // JENIS HEWAN 改为锁定下拉字段（SpeciesField locked）：展示既有类型，不可改。
+    final speciesField =
+        tester.widget<SpeciesField>(find.byKey(const ValueKey('petProfileEditTypeReadonly')));
+    expect(speciesField.petType, 'DOG'); // 既有类型
+    expect(speciesField.locked, isTrue); // 锁定不可改
+    expect(speciesField.onChanged, isNull); // 无变更回调
     // update() 签名无 petType 参数 → 结构上不可能随 PATCH 提交（后端 DTO 亦无该字段）。
   });
 }

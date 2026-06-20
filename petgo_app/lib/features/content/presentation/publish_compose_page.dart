@@ -20,6 +20,7 @@ import '../data/content_repository.dart';
 import '../domain/content_type.dart';
 import '../domain/publish_controller.dart';
 import 'feed_controller.dart';
+import 'publish_result_page.dart';
 
 /// 发布控制器 provider（autoDispose：sheet 关闭即 dispose，清空内存草稿，NFR-10 无持久草稿）。
 final publishControllerProvider = Provider.autoDispose<PublishController>((ref) {
@@ -97,6 +98,10 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   /// 成长日历绑定的宠物档案（V1 单账号单宠物）。选「成长日历」时拉取，发布时带其 id。
   PetProfile? _linkedPet;
 
+  /// 提交期间的「审核中」覆盖层（P-39b）：覆盖编辑表单，提交结束后跳成功/被拒页。
+  bool _reviewing = false;
+  PublishResultArgs? _reviewingArgs;
+
   @override
   void dispose() {
     _textController.dispose();
@@ -135,24 +140,30 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     }
     final key = 'post-${DateTime.now().microsecondsSinceEpoch}';
     final petId = controller.type == ContentType.growthMoment ? _linkedPet?.id : null;
+    final args = _buildArgs(controller, l10n);
+    // 进入「审核中」覆盖层（P-39b）。
+    setState(() {
+      _reviewing = true;
+      _reviewingArgs = args;
+    });
+    final started = DateTime.now();
     int? id;
+    String? blockSlug; // content-text-blocked / content-image-blocked（F10 审核拦截）
     try {
       id = await controller.publish(idempotencyKey: key, petId: petId);
     } on DioException catch (e) {
-      if (!mounted) return;
-      // AC8（F10）：审核拦截 422——文字/图片区分提示，停留编辑页保留输入（改后可重提）。
       final slug = ProblemDetail.fromDioException(e)?.typeSlug;
-      switch (slug) {
-        case 'content-text-blocked':
-          _toast(l10n.publishTextBlocked);
-        case 'content-image-blocked':
-          _toast(l10n.publishImageBlocked);
-        default:
-          _toast(l10n.publishFailed);
+      if (slug == 'content-text-blocked' || slug == 'content-image-blocked') {
+        blockSlug = slug;
       }
-      return; // 不关闭 sheet，内存草稿保留
+    }
+    // 「审核中」至少展示 ~900ms，避免一闪而过（faithful verifying affordance）。
+    final elapsed = DateTime.now().difference(started);
+    if (elapsed < const Duration(milliseconds: 900)) {
+      await Future<void>.delayed(const Duration(milliseconds: 900) - elapsed);
     }
     if (!mounted) return;
+
     if (id != null) {
       ref.invalidate(feedProvider);
       ref.invalidate(myPostsProvider);
@@ -166,10 +177,39 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
         ref.invalidate(milestoneListProvider);
       }
       if (!mounted) return;
+      Navigator.of(context).pop(); // 关闭发布 sheet
+      context.push('/publish/done', extra: args); // → P-39 发布成功
+    } else if (blockSlug != null) {
+      // AC8（F10）：审核拦截 → P-39c 内容被拒（整页 + 拒因）。
+      final reasons = <String>[
+        if (blockSlug == 'content-text-blocked') l10n.publishRejectedReasonText,
+        if (blockSlug == 'content-image-blocked') l10n.publishRejectedReasonImage,
+      ];
       Navigator.of(context).pop();
-    } else if (controller.hasFailed) {
+      context.push('/publish/rejected', extra: args.withReasons(reasons)); // → P-39c 被拒
+    } else {
+      // 其它失败（网络/图片上传）：退出审核中覆盖层，留在编辑页保留草稿，提示重试。
+      setState(() => _reviewing = false);
       _toast(l10n.publishFailed);
     }
+  }
+
+  /// 类型展示文案（与发布 segment 一致）。
+  String _typeLabel(ContentType t, AppLocalizations l10n) => switch (t) {
+        ContentType.daily => l10n.publishSegmentDaily,
+        ContentType.growthMoment => l10n.publishSegmentGrowth,
+        ContentType.knowledge => l10n.publishSegmentKnowledge,
+      };
+
+  /// 构建结果三屏预览参数（文本截断 + 类型 + 图片数 + 宠物 emoji）。
+  PublishResultArgs _buildArgs(PublishController controller, AppLocalizations l10n) {
+    final text = controller.text.trim();
+    final excerpt = text.length > 48 ? '${text.substring(0, 48)}…' : text;
+    return PublishResultArgs(
+      excerpt: excerpt,
+      typeLabel: _typeLabel(controller.type, l10n),
+      photoCount: controller.items.length,
+    );
   }
 
   void _toast(String msg) {
@@ -206,6 +246,10 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   }
 
   Widget _body(BuildContext context, AppLocalizations l10n, PublishController controller) {
+    // 提交期间：整屏「审核中」覆盖层（P-39b），覆盖编辑表单。
+    if (_reviewing && _reviewingArgs != null) {
+      return PublishReviewingView(args: _reviewingArgs!);
+    }
     final growthSelected = controller.type == ContentType.growthMoment;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

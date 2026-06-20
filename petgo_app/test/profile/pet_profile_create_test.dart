@@ -65,17 +65,17 @@ void main() {
     await tester.pumpWidget(_wrap(_FakeRepo()));
     await tester.pumpAndSettle();
 
-    // 三个类型选择器存在
-    expect(find.byKey(const ValueKey('petType_CAT')), findsOneWidget);
-    expect(find.byKey(const ValueKey('petType_DOG')), findsOneWidget);
-    expect(find.byKey(const ValueKey('petType_OTHER')), findsOneWidget);
+    // JENIS HEWAN 下拉选择器存在
+    expect(find.byKey(const ValueKey('petProfileSpeciesField')), findsOneWidget);
 
     // 空表单 → 禁用
     expect(_submitBtn(tester).onPressed, isNull);
 
-    // 仅选类型 → 仍禁用（缺名字/生日）
-    await tester.tap(find.byKey(const ValueKey('petType_CAT')));
-    await tester.pump();
+    // 仅选类型（下拉弹层选 Kucing）→ 仍禁用（缺名字/生日）
+    await tester.tap(find.byKey(const ValueKey('petProfileSpeciesField')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('speciesOption_CAT')));
+    await tester.pumpAndSettle();
     expect(_submitBtn(tester).onPressed, isNull);
 
     // 类型 + 名字 → 仍禁用（缺生日，R2/AC3：生日必填）

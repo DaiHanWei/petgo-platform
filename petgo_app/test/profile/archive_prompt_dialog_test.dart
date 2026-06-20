@@ -271,8 +271,11 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('petType_DOG')));
-    await tester.pump();
+    // JENIS HEWAN 下拉：弹层选 Anjing。
+    await tester.tap(find.byKey(const ValueKey('petProfileSpeciesField')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('speciesOption_DOG')));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('petProfileNameField')), 'Rocky');
     await tester.pump();
     await tester.ensureVisible(find.byKey(const ValueKey('petProfileBirthdayTile')));

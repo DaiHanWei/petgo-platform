@@ -14,6 +14,7 @@ import '../../features/content/domain/content_type.dart';
 import '../../features/content/presentation/content_detail_page.dart';
 import '../../features/content/presentation/home_page.dart';
 import '../../features/content/presentation/publish_landing_page.dart';
+import '../../features/content/presentation/publish_result_page.dart';
 import '../../features/me/presentation/delete_account_page.dart';
 import '../../features/me/presentation/language_settings_page.dart';
 import '../../features/me/presentation/me_page.dart';
@@ -220,6 +221,25 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
             presetEventDate: dateRaw != null ? DateTime.tryParse(dateRaw) : null,
           );
         },
+      ),
+      // 发布结果三屏（P-39 成功 / P-39b 审核中 / P-39c 被拒）。受控（/publish 前缀，需登录）；
+      // 正常流程由发布 sheet 提交后 push（带 extra=PublishResultArgs）；extra 为空仅 DEV 深链 → 用样例渲染。
+      GoRoute(
+        path: '/publish/reviewing',
+        builder: (c, s) => PublishReviewingPage(
+            args: s.extra is PublishResultArgs ? s.extra as PublishResultArgs : PublishResultArgs.sample),
+      ),
+      GoRoute(
+        path: '/publish/done',
+        builder: (c, s) => PublishDonePage(
+            args: s.extra is PublishResultArgs ? s.extra as PublishResultArgs : PublishResultArgs.sample),
+      ),
+      GoRoute(
+        path: '/publish/rejected',
+        builder: (c, s) => PublishRejectedPage(
+            args: s.extra is PublishResultArgs
+                ? s.extra as PublishResultArgs
+                : PublishResultArgs.sampleRejected),
       ),
       // 里程碑列表页（壳）（Story 6.1 · FR-42）：MILESTONE_NODE 深链承接；本体属里程碑 mini-epic。受控（/profile/ 前缀）。
       GoRoute(path: '/profile/milestones', builder: (c, s) => const MilestoneListPage()),

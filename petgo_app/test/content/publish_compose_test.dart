@@ -8,6 +8,7 @@ import 'package:tailtopia/features/content/domain/content_type.dart';
 import 'package:tailtopia/features/content/domain/publish_controller.dart';
 import 'package:tailtopia/features/content/presentation/publish_compose_page.dart';
 import 'package:tailtopia/features/content/presentation/publish_landing_page.dart';
+import 'package:tailtopia/features/content/presentation/publish_result_page.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/features/profile/presentation/pet_profile_create_page.dart';
@@ -108,37 +109,98 @@ Widget _composeApp(ProviderContainer container, {ContentType? preset, DateTime? 
 void main() {
   // ===== AC8 审核拦截提示（F10） =====
 
-  testWidgets('AC8: 文字命中违规 → 文字拦截提示，停留发布页（可重提）', (tester) async {
+  // 提交期间会展示「审核中」覆盖层（含无限旋转的进度环），故用显式 pump 跨过最小展示时长，
+  // 不能 pumpAndSettle（会因动画永不 settle 而超时）。被拒后跳 P-39c 整页。
+  Future<void> pumpThroughReviewing(WidgetTester tester) async {
+    await tester.pump(); // 审核中覆盖层出现
+    await tester.pump(const Duration(seconds: 1)); // 跨过 ~900ms 最小展示
+    await tester.pump(); // pop sheet + push 结果页
+    await tester.pump(const Duration(milliseconds: 500)); // 路由切换
+  }
+
+  Widget routerApp(ProviderContainer container, GoRouter router) => UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp.router(
+          routerConfig: router,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+        ),
+      );
+
+  GoRouter publishFlowRouter() => GoRouter(
+        initialLocation: '/home',
+        routes: [
+          GoRoute(path: '/home', builder: (c, s) => const Scaffold(body: Text('home'))),
+          GoRoute(path: '/compose', builder: (c, s) => const Scaffold(body: PublishComposePage())),
+          GoRoute(
+              path: '/publish/done',
+              builder: (c, s) => PublishDonePage(args: s.extra as PublishResultArgs)),
+          GoRoute(
+              path: '/publish/rejected',
+              builder: (c, s) => PublishRejectedPage(args: s.extra as PublishResultArgs)),
+        ],
+      );
+
+  testWidgets('AC8: 文字命中违规 → 跳内容被拒页（P-39c）', (tester) async {
+    _tallView(tester);
     final controller = _controller(_ThrowRepo('content-text-blocked'))..setText('ayo main judi');
     final container = ProviderContainer(
         overrides: [publishControllerProvider.overrideWithValue(controller)]);
     addTearDown(container.dispose);
 
-    await tester.pumpWidget(_composeApp(container));
+    final router = publishFlowRouter();
+    await tester.pumpWidget(routerApp(container, router));
+    await tester.pumpAndSettle();
+    router.push('/compose');
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('publishSubmit')));
-    await tester.pumpAndSettle();
+    await pumpThroughReviewing(tester);
 
     final l10n = await _en();
-    expect(find.text(l10n.publishTextBlocked), findsOneWidget);
-    expect(find.byType(PublishComposePage), findsOneWidget); // 未关闭，草稿保留
-    expect(controller.text, 'ayo main judi');
+    // P-39c：标题 + 文字违规拒因。
+    expect(find.text(l10n.publishRejectedHeading), findsOneWidget);
+    expect(find.text(l10n.publishRejectedReasonText), findsOneWidget);
   });
 
-  testWidgets('AC8: 图片命中违规 → 图片拦截提示', (tester) async {
+  testWidgets('AC8: 图片命中违规 → 跳内容被拒页（图片拒因）', (tester) async {
+    _tallView(tester);
     final controller = _controller(_ThrowRepo('content-image-blocked'))..setText('teks');
     final container = ProviderContainer(
         overrides: [publishControllerProvider.overrideWithValue(controller)]);
     addTearDown(container.dispose);
 
-    await tester.pumpWidget(_composeApp(container));
+    final router = publishFlowRouter();
+    await tester.pumpWidget(routerApp(container, router));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('publishSubmit')));
+    router.push('/compose');
     await tester.pumpAndSettle();
 
+    await tester.tap(find.byKey(const ValueKey('publishSubmit')));
+    await pumpThroughReviewing(tester);
+
     final l10n = await _en();
-    expect(find.text(l10n.publishImageBlocked), findsOneWidget);
+    expect(find.text(l10n.publishRejectedReasonImage), findsOneWidget);
+  });
+
+  testWidgets('AC8: 发布成功 → 跳发布成功页（P-39）', (tester) async {
+    _tallView(tester);
+    final controller = _controller(_OkRepo())..setText('Oyen sehat hari ini');
+    final container = ProviderContainer(
+        overrides: [publishControllerProvider.overrideWithValue(controller)]);
+    addTearDown(container.dispose);
+
+    final router = publishFlowRouter();
+    await tester.pumpWidget(routerApp(container, router));
+    await tester.pumpAndSettle();
+    router.push('/compose');
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('publishSubmit')));
+    await pumpThroughReviewing(tester);
+
+    final l10n = await _en();
+    expect(find.text(l10n.publishDoneViewFeed), findsOneWidget);
   });
 
   // ===== AC5 成长日历事件日期（F9） =====
@@ -229,9 +291,11 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    // 填必填三项：类型 + 名字 + 生日。
-    await tester.tap(find.byKey(const ValueKey('petType_DOG')));
-    await tester.pump();
+    // 填必填三项：类型（下拉弹层选 Anjing）+ 名字 + 生日。
+    await tester.tap(find.byKey(const ValueKey('petProfileSpeciesField')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('speciesOption_DOG')));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('petProfileNameField')), 'Rocky');
     await tester.pump();
     await tester.ensureVisible(find.byKey(const ValueKey('petProfileBirthdayTile')));

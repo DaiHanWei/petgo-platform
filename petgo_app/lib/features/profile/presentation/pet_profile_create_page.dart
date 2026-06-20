@@ -17,6 +17,7 @@ import '../data/profile_repository.dart';
 import '../data/timeline_repository.dart';
 import '../domain/pending_archive.dart';
 import '../domain/profile_created_flow.dart';
+import 'widgets/pet_form_fields.dart';
 
 /// 宠物档案创建表单（Story 2.2 · F1）。
 ///
@@ -235,25 +236,22 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
               ],
             ),
             const SizedBox(height: 8),
-            Wrap(
-              spacing: AppSpacing.sm,
-              children: [
-                _petTypeChip('CAT', '🐱 ${l10n.petTypeCat}'),
-                _petTypeChip('DOG', '🐶 ${l10n.petTypeDog}'),
-                _petTypeChip('OTHER', '🐾 ${l10n.petTypeOther}'),
-              ],
+            // JENIS HEWAN：下拉按枚举选（原型 P-30）。
+            SpeciesField(
+              petType: _petType,
+              onChanged: (t) => setState(() {
+                _petType = t;
+                _breedController.clear(); // 物种切换 → 品种清单变，清空已选 RAS
+              }),
             ),
             const SizedBox(height: 16),
-            // RAS
+            // RAS：按物种精选清单下拉 + Lainnya 手填（原型 P-30）。
             _sectionLabel(l10n.petProfileBreedLabel),
             const SizedBox(height: 6),
-            _field(
-              child: TextField(
-                key: const ValueKey('petProfileBreedField'),
-                controller: _breedController,
-                maxLength: 60,
-                decoration: _inputDeco(hint: l10n.petProfileBreedHint),
-              ),
+            BreedField(
+              petType: _petType,
+              controller: _breedController,
+              onChanged: () => setState(() {}),
             ),
             const SizedBox(height: 16),
             // TANGGAL LAHIR *
@@ -403,27 +401,6 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
           borderSide: const BorderSide(color: AppColors.mint, width: 1.5),
         ),
       );
-
-  Widget _petTypeChip(String value, String label) {
-    final selected = _petType == value;
-    return ChoiceChip(
-      key: ValueKey('petType_$value'),
-      label: Text(label),
-      selected: selected,
-      showCheckmark: false,
-      labelStyle: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          color: selected ? AppColors.onAccent : AppColors.ink2),
-      selectedColor: AppColors.mint,
-      backgroundColor: AppColors.card,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-        side: BorderSide(color: selected ? AppColors.mint : AppColors.line, width: 1.5),
-      ),
-      onSelected: (_) => setState(() => _petType = value),
-    );
-  }
 
   Future<void> _pickBirthday() async {
     final now = DateTime.now();

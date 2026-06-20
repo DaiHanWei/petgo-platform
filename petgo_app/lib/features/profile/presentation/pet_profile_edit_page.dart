@@ -12,6 +12,7 @@ import '../../../shared/utils/media_permission.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../data/profile_repository.dart';
 import '../domain/pet_profile.dart';
+import 'widgets/pet_form_fields.dart';
 
 /// 宠物档案编辑页（Story 2.8）。复用 2.2 创建表单结构，预填既有值；部分更新 PATCH。
 /// 两入口（档案 Tab 信息卡「编辑」/「我的」Tab）经 go_router 复用本页（/profile/edit）。
@@ -107,6 +108,10 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final profileAsync = ref.watch(petProfileProvider);
+    // 提前预填（在 AppBar 求值 _canSubmit 之前），否则右上「Simpan」首帧因 name 空而禁用。
+    final loaded = profileAsync.asData?.value;
+    if (loaded != null) _prefill(loaded);
+    final loadedName = loaded?.name;
 
     return Scaffold(
       backgroundColor: AppColors.base,
@@ -117,8 +122,38 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
           icon: const Icon(Icons.arrow_back, color: AppColors.ink),
           onPressed: () => context.canPop() ? context.pop() : context.go('/profile'),
         ),
-        title: Text(l10n.petProfileEditTitle,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink)),
+        // 标题随宠物名（原型 P-32「Edit Profil {名}」）；加载中回退通用标题。
+        title: Text(
+          (loadedName != null && loadedName.isNotEmpty)
+              ? l10n.petProfileEditTitleNamed(loadedName)
+              : l10n.petProfileEditTitle,
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink),
+        ),
+        // 保存按钮在右上角（原型 P-32，区别于创建页底部按钮）。
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: FilledButton(
+              key: const ValueKey('petProfileEditSubmit'),
+              onPressed: _canSubmit ? _submit : null,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.mint,
+                foregroundColor: AppColors.onAccent,
+                disabledBackgroundColor: AppColors.line,
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+              ),
+              child: _submitting
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : Text(l10n.commonSave,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ],
       ),
       body: profileAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -193,8 +228,26 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
             decoration: _inputDeco(),
           ),
           const SizedBox(height: 16),
-          // 宠物类型（F6）：创建后不可改 → 置灰只读展示，不随 PATCH 提交。
-          _petTypeReadonly(l10n),
+          // JENIS HEWAN（F6 编辑态锁定）：标签左 + 红「锁 + tidak bisa diubah」右 + 灰底锁定下拉。
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _sectionLabel(l10n.petProfileTypeLabel),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.lock_outline, size: 11, color: AppColors.popRed),
+                  const SizedBox(width: 4),
+                  Text(l10n.petTypeLockedHint,
+                      style: const TextStyle(
+                          color: AppColors.popRed, fontSize: 10, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          SpeciesField(
+              key: const ValueKey('petProfileEditTypeReadonly'), petType: _petType, locked: true),
           const SizedBox(height: 16),
           // RAS（品种）+ KELAMIN（性别）两列（原型 pet-edit）。
           Row(
@@ -206,11 +259,11 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
                   children: [
                     _sectionLabel(l10n.petProfileBreedLabel),
                     const SizedBox(height: 6),
-                    TextField(
-                      key: const ValueKey('petProfileEditBreedField'),
+                    BreedField(
+                      petType: _petType,
                       controller: _breedController,
-                      maxLength: 60,
-                      decoration: _inputDeco(),
+                      onChanged: () => setState(() {}),
+                      fieldKey: const ValueKey('petProfileEditBreedField'),
                     ),
                   ],
                 ),
@@ -274,25 +327,8 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
             child: Text('${_introController.text.characters.length} / $_kBioMax',
                 style: const TextStyle(fontSize: 11, color: AppColors.textTertiary)),
           ),
-          const SizedBox(height: AppSpacing.lg),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              key: const ValueKey('petProfileEditSubmit'),
-              onPressed: _canSubmit ? _submit : null,
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.mint,
-                foregroundColor: AppColors.onAccent,
-                disabledBackgroundColor: AppColors.line,
-                padding: const EdgeInsets.symmetric(vertical: 15),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              ),
-              child: _submitting
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : Text(l10n.commonSave,
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-            ),
-          ),
+          const SizedBox(height: AppSpacing.sm),
+          // 保存按钮在右上角 AppBar（原型 P-32），此处不再放底部按钮。
           // 危险区：删除档案（原型 pet-edit）。⚠️ 仅前端 UI + 二次确认；DELETE 端点待后端（D1/D2 级联/匿名化）。
           const Divider(color: Color(0xFFF3F3F3), thickness: 1, height: 32),
           SizedBox(
@@ -347,64 +383,6 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
           borderSide: const BorderSide(color: AppColors.mint, width: 1.5),
         ),
       );
-
-  /// 宠物类型只读区（F6）：展示既有类型，三枚 emoji chip 全置灰不可点（onSelected null），不参与提交。
-  Widget _petTypeReadonly(AppLocalizations l10n) {
-    final labels = {
-      'CAT': '🐱 ${l10n.petTypeCat}',
-      'DOG': '🐶 ${l10n.petTypeDog}',
-      'OTHER': '🐾 ${l10n.petTypeOther}',
-    };
-    return Column(
-      key: const ValueKey('petProfileEditTypeReadonly'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // 标签左 + 红色「锁 + tidak bisa diubah」右（原型 pet-edit：#F0425A，右对齐）。
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            _sectionLabel(l10n.petProfileTypeLabel),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.lock_outline, size: 11, color: AppColors.popRed),
-                const SizedBox(width: 4),
-                Text(l10n.petTypeLockedHint,
-                    style: const TextStyle(
-                        color: AppColors.popRed, fontSize: 10, fontWeight: FontWeight.w600)),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: AppSpacing.sm,
-          children: [
-            for (final e in labels.entries)
-              ChoiceChip(
-                key: ValueKey('petTypeReadonly_${e.key}'),
-                label: Text(e.value),
-                selected: _petType == e.key,
-                showCheckmark: false,
-                labelStyle: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: _petType == e.key ? AppColors.mint700 : AppColors.muted),
-                selectedColor: AppColors.cream2,
-                backgroundColor: AppColors.card,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  side: BorderSide(
-                      color: _petType == e.key ? AppColors.dashedViolet : AppColors.line,
-                      width: 1.5),
-                ),
-                onSelected: null, // 置灰只读：不可改
-              ),
-          ],
-        ),
-      ],
-    );
-  }
 
   /// KELAMIN 选择字段（原型 pet-edit：边框 + 下拉箭头）。⚠️ 占位：选了不持久化。
   Widget _sexField(AppLocalizations l10n) {
