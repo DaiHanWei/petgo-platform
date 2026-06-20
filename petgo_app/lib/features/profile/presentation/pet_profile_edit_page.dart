@@ -23,12 +23,17 @@ class PetProfileEditPage extends ConsumerStatefulWidget {
 }
 
 class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
+  /// BIO 字数上限（原型 pet-edit：「42 / 200」）。
+  static const int _kBioMax = 200;
+
   final _nameController = TextEditingController();
   final _breedController = TextEditingController();
   final _introController = TextEditingController();
   DateTime? _birthday;
   String? _avatarUrl;
   String? _petType; // F6：创建后不可改，编辑页置灰只读展示，不随 PATCH 提交
+  // KELAMIN（性别）：MALE/FEMALE。⚠️ 仅前端占位——后端 PetProfile 暂无 sex 字段，不随 PATCH 提交、不持久化。
+  String? _sex;
   bool _uploading = false;
   bool _submitting = false;
   bool _prefilled = false;
@@ -191,13 +196,37 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
           // 宠物类型（F6）：创建后不可改 → 置灰只读展示，不随 PATCH 提交。
           _petTypeReadonly(l10n),
           const SizedBox(height: 16),
-          _sectionLabel(l10n.petProfileBreedLabel),
-          const SizedBox(height: 6),
-          TextField(
-            key: const ValueKey('petProfileEditBreedField'),
-            controller: _breedController,
-            maxLength: 60,
-            decoration: _inputDeco(),
+          // RAS（品种）+ KELAMIN（性别）两列（原型 pet-edit）。
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _sectionLabel(l10n.petProfileBreedLabel),
+                    const SizedBox(height: 6),
+                    TextField(
+                      key: const ValueKey('petProfileEditBreedField'),
+                      controller: _breedController,
+                      maxLength: 60,
+                      decoration: _inputDeco(),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _sectionLabel(l10n.petProfileSexLabel),
+                    const SizedBox(height: 6),
+                    _sexField(l10n),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           _sectionLabel(l10n.petProfileBirthdayLabel),
@@ -233,9 +262,17 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
           TextField(
             key: const ValueKey('petProfileEditIntroField'),
             controller: _introController,
-            maxLength: 30,
+            maxLength: _kBioMax,
             maxLines: 3,
+            onChanged: (_) => setState(() {}),
             decoration: _inputDeco(),
+          ),
+          // BIO 字数计数（原型 pet-edit：右下「x / 200」）。
+          const SizedBox(height: 4),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text('${_introController.text.characters.length} / $_kBioMax',
+                style: const TextStyle(fontSize: 11, color: AppColors.textTertiary)),
           ),
           const SizedBox(height: AppSpacing.lg),
           SizedBox(
@@ -255,6 +292,28 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
                   : Text(l10n.commonSave,
                       style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
             ),
+          ),
+          // 危险区：删除档案（原型 pet-edit）。⚠️ 仅前端 UI + 二次确认；DELETE 端点待后端（D1/D2 级联/匿名化）。
+          const Divider(color: Color(0xFFF3F3F3), thickness: 1, height: 32),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              key: const ValueKey('petProfileDeleteButton'),
+              onPressed: _submitting ? null : () => _confirmDelete(l10n),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.popRed,
+                side: const BorderSide(color: Color(0xFFFDE7EB), width: 1.5),
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: Text('🗑 ${l10n.petProfileDeleteButton(_nameController.text.trim())}',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Center(
+            child: Text(l10n.petProfileDeleteIrreversible,
+                style: const TextStyle(fontSize: 11, color: AppColors.textTertiary)),
           ),
         ],
       ),
@@ -300,17 +359,20 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
       key: const ValueKey('petProfileEditTypeReadonly'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // 标签左 + 红色「锁 + tidak bisa diubah」右（原型 pet-edit：#F0425A，右对齐）。
         Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             _sectionLabel(l10n.petProfileTypeLabel),
-            const SizedBox(width: 6),
-            const Icon(Icons.lock_outline, size: 12, color: AppColors.muted),
-            const SizedBox(width: 3),
-            Flexible(
-              child: Text(l10n.petTypeLockedHint,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: AppColors.muted, fontSize: 10)),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.lock_outline, size: 11, color: AppColors.popRed),
+                const SizedBox(width: 4),
+                Text(l10n.petTypeLockedHint,
+                    style: const TextStyle(
+                        color: AppColors.popRed, fontSize: 10, fontWeight: FontWeight.w600)),
+              ],
             ),
           ],
         ),
@@ -342,6 +404,92 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
         ),
       ],
     );
+  }
+
+  /// KELAMIN 选择字段（原型 pet-edit：边框 + 下拉箭头）。⚠️ 占位：选了不持久化。
+  Widget _sexField(AppLocalizations l10n) {
+    final label = switch (_sex) {
+      'MALE' => l10n.petProfileSexMale,
+      'FEMALE' => l10n.petProfileSexFemale,
+      _ => l10n.petProfileSexPick,
+    };
+    return InkWell(
+      key: const ValueKey('petProfileEditSexTile'),
+      onTap: _pickSex,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.line, width: 1.5),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 14, color: _sex == null ? AppColors.muted : AppColors.ink)),
+            ),
+            const Icon(Icons.keyboard_arrow_down, size: 18, color: AppColors.muted),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickSex() async {
+    final l10n = AppLocalizations.of(context);
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              key: const ValueKey('petSexMaleOption'),
+              title: Text(l10n.petProfileSexMale),
+              onTap: () => Navigator.of(ctx).pop('MALE'),
+            ),
+            ListTile(
+              key: const ValueKey('petSexFemaleOption'),
+              title: Text(l10n.petProfileSexFemale),
+              onTap: () => Navigator.of(ctx).pop('FEMALE'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (picked != null) setState(() => _sex = picked);
+  }
+
+  /// 删除档案二次确认（原型 pet-edit）。⚠️ 端点待后端：当前确认后仅占位提示，不真正删除。
+  Future<void> _confirmDelete(AppLocalizations l10n) async {
+    final name = _nameController.text.trim();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.petProfileDeleteConfirmTitle),
+        content: Text(l10n.petProfileDeleteConfirmBody(name)),
+        actions: [
+          TextButton(
+            key: const ValueKey('petProfileDeleteCancel'),
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(l10n.commonCancel),
+          ),
+          FilledButton(
+            key: const ValueKey('petProfileDeleteConfirmYes'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.popRed),
+            child: Text(l10n.petProfileDeleteConfirmYes),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    // TODO(backend): 接 DELETE /pet-profiles/me（级联删除/匿名化按 D1/D2）。当前仅占位提示。
+    _toast(l10n.placeholderComingSoon);
   }
 
   Future<void> _pickBirthday() async {

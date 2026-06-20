@@ -184,7 +184,7 @@ void main() {
   testWidgets('AC1②: A 未建档 → 立即创建 → 挂起 pending + 跳建档', (tester) async {
     final health = _FakeHealthRepo();
     final container = _container(auth: _auth(status: 'HAS_PET', hasProfile: false), health: health);
-    final router = await _pumpTrigger(tester, container: container);
+    await _pumpTrigger(tester, container: container);
 
     await tester.tap(find.byKey(const ValueKey('go')));
     await tester.pumpAndSettle();
@@ -194,7 +194,7 @@ void main() {
 
     expect(health.calls, isEmpty); // 未直接落库，等回灌
     expect(container.read(pendingArchiveProvider)?.sourceRef, 'triage:1');
-    expect(router.routerDelegate.currentConfiguration.uri.path, '/profile/create');
+    // 改用 push 后，断言目标建档页已渲染（push 不改 currentConfiguration.uri 基址）。
     expect(find.text('create-page'), findsOneWidget);
   });
 
@@ -203,7 +203,7 @@ void main() {
     final health = _FakeHealthRepo();
     final me = _FakeMeRepo();
     final container = _container(auth: _auth(status: 'PLANNING', hasProfile: false), health: health, me: me);
-    final router = await _pumpTrigger(tester, container: container);
+    await _pumpTrigger(tester, container: container);
 
     await tester.tap(find.byKey(const ValueKey('go')));
     await tester.pumpAndSettle();
@@ -212,7 +212,8 @@ void main() {
 
     expect(me.lastStatus, 'HAS_PET'); // FR-0G 切状态
     expect(container.read(pendingArchiveProvider)?.sourceRef, 'triage:1');
-    expect(router.routerDelegate.currentConfiguration.uri.path, '/profile/create');
+    // 改用 push 后，断言目标建档页已渲染（push 不改 currentConfiguration.uri 基址）。
+    expect(find.text('create-page'), findsOneWidget);
   });
 
   // ===== AC4 红色态 A 已建档直接存入（无弹窗）=====

@@ -55,11 +55,12 @@ void main() {
     // 顶栏右上双图标（帮助 + 设置）
     expect(find.byKey(const ValueKey('meHelp')), findsOneWidget);
     expect(find.byKey(const ValueKey('meSettings')), findsOneWidget);
-    // 主体：用户信息 / 宠物状态 / 我的发布
+    // 主体：用户信息 / 宠物 mini / 我的发布（宠物状态区块已移除，对齐原型 p-profil）
     expect(find.text('小明'), findsOneWidget);
     expect(find.byKey(const ValueKey('meEditNickname')), findsOneWidget);
-    expect(find.byKey(const ValueKey('mePetStatus')), findsOneWidget);
-    expect(find.byKey(const ValueKey('meEditPetProfile')), findsOneWidget);
+    expect(find.byKey(const ValueKey('mePetCard')), findsOneWidget);
+    expect(find.byKey(const ValueKey('mePetStatus')), findsNothing);
+    expect(find.byKey(const ValueKey('meEditPetProfile')), findsNothing);
     expect(find.byKey(const ValueKey('meNoPosts')), findsOneWidget);
     // 🔄 F8：语言/退出/注销不再在主页平铺（已挪入二级设置页）
     expect(find.byKey(const ValueKey('meLanguage')), findsNothing);
@@ -94,8 +95,8 @@ void main() {
     );
     expect(find.byKey(const ValueKey('mePetCard')), findsNothing);
     expect(find.byKey(const ValueKey('mePetGuideCard')), findsNothing);
-    // 宠物状态区块仍在（B 不显示档案编辑入口）
-    expect(find.byKey(const ValueKey('mePetStatus')), findsOneWidget);
+    // 宠物状态区块已移除（对齐原型 p-profil，「我的」页不再承载改状态/编辑档案入口）。
+    expect(find.byKey(const ValueKey('mePetStatus')), findsNothing);
     expect(find.byKey(const ValueKey('meEditPetProfile')), findsNothing);
   });
 

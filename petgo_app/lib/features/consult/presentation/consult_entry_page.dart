@@ -82,7 +82,7 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
       final session = await ref.read(consultRepositoryProvider).create();
       if (!mounted) return;
       // 进行中 → 进会话（5.5 暂跳等待页占位）；WAITING/已有 → 等待页。
-      context.go('/consult/waiting/${session.id}');
+      context.push('/consult/waiting/${session.id}');
     } on DioException {
       _banner(l10n.consultStartFailed);
     } finally {
@@ -166,7 +166,7 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
     return Center(
       child: FilledButton(
         key: const ValueKey('consultViewActive'),
-        onPressed: () => context.go('/consult/waiting/${_active!.id}'),
+        onPressed: () => context.push('/consult/waiting/${_active!.id}'),
         child: Text(l10n.consultViewActive),
       ),
     );

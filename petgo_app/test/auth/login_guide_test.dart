@@ -104,7 +104,11 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('trigger')));
     await tester.pumpAndSettle();
     expect(find.byType(LoginHardDialog), findsOneWidget);
-    expect(find.text('Sign in to continue using this feature'), findsOneWidget);
+    // login-gate 原型：副文案为建号利益点（loginGateBody）。
+    expect(
+        find.text(
+            'Create a free account to record growth, consult a vet, and save precious moments with your pet.'),
+        findsOneWidget);
     expect(find.byKey(const ValueKey('hardDialogGoogleCta')), findsOneWidget);
     expect(find.byKey(const ValueKey('hardDialogClose')), findsOneWidget);
 

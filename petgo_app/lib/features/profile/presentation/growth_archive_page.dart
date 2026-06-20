@@ -49,14 +49,14 @@ class GrowthArchivePage extends ConsumerWidget {
       floatingActionButton: _shareFab(context, ref, profileAsync.asData?.value),
       body: profileAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => _EmptyProfileView(onCreate: () => context.go('/profile/create')),
+        error: (err, stack) => _EmptyProfileView(onCreate: () => context.push('/profile/create')),
         data: (profile) {
           if (profile == null) {
-            return _EmptyProfileView(onCreate: () => context.go('/profile/create'));
+            return _EmptyProfileView(onCreate: () => context.push('/profile/create'));
           }
           return _ArchiveBody(
             profile: profile,
-            onEditProfile: () => context.go('/profile/edit'),
+            onEditProfile: () => context.push('/profile/edit'),
           );
         },
       ),
@@ -267,7 +267,7 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
     return ArchiveCalendar(
       onOpenDay: (date) => context.push(
           '/profile/day?date=${date.year}-${_two(date.month)}-${_two(date.day)}'),
-      onAddOnDate: (date) => context.go(
+      onAddOnDate: (date) => context.push(
           '/publish?preset=growth-calendar&date=${date.year}-${_two(date.month)}-${_two(date.day)}'),
     );
   }

@@ -189,7 +189,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
             // AC7（F15）：B/C 灰选成长日历 → 关闭发布页，跳建档（带 origin），
             // 建档完成跳过庆祝页直接回发布页预选成长日历（pet_profile_create_page 接管）。
             Navigator.of(context).pop();
-            context.go('/profile/create?origin=graySelectPublish');
+            context.push('/profile/create?origin=graySelectPublish');
           },
         ),
       ));

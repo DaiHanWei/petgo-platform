@@ -75,16 +75,17 @@ void main() {
     expect(find.byKey(const ValueKey('petInfoCard')), findsOneWidget);
     expect(find.text('5'), findsWidgets); // happy 5
     expect(find.text('2'), findsWidgets); // consult 2
-    expect(find.text('Momen Bahagia'), findsOneWidget);
-    expect(find.text('Konsultasi'), findsOneWidget);
+    // 默认英文 locale：统计列标题走 l10n（不再硬编码印尼语）。
+    expect(find.text('Happy Moments'), findsOneWidget);
+    expect(find.text('Consultations'), findsOneWidget);
   });
 
   testWidgets('AC5: 里程碑入口零态进度 0 / N', (tester) async {
     await tester.pumpWidget(_wrapPage());
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('archiveMilestoneBar')), findsOneWidget);
-    // paspor.html 重做：msbar 显示「🏆 Pencapaian {name}」+「done / total」。
-    expect(find.text('🏆 Pencapaian Momo'), findsOneWidget);
+    // paspor.html 重做：msbar 显示「🏆 {name}'s Achievements」+「done / total」（默认英文 locale）。
+    expect(find.text("🏆 Momo's Achievements"), findsOneWidget);
     expect(find.text('0 / 30'), findsOneWidget);
   });
 

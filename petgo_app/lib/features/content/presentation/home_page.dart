@@ -122,7 +122,7 @@ class HomePage extends ConsumerWidget {
       selectedCategory: category,
       labels: _tabLabels(l10n),
       onSelectCategory: (c) => ref.read(feedCategoryProvider.notifier).select(c),
-      onPromptCreate: () => context.go('/onboarding/profile'),
+      onPromptCreate: () => context.push('/onboarding/profile'),
       onPromptDismiss: () => ref.read(profilePromptProvider.notifier).dismiss(),
     );
 

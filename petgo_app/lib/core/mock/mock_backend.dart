@@ -40,6 +40,9 @@ class MockBackend {
   int _triageSeq = 0;
   Map<String, dynamic>? _activeSession;
 
+  /// consult 会话发起时刻（mock 用真实时间模拟等待倒计时/超时；DEV_STATE=consult-waiting）。
+  DateTime? _consultWaitStart;
+
   /// 兽医工作台 demo 会话元数据（id → source）。待接单池 8101-8103 + 进行中 8001/8002。
   static const Map<int, String> _vetSessionSource = {
     8100: 'AI_UPGRADE', 8101: 'AI_UPGRADE', 8102: 'AI_UPGRADE', 8103: 'DIRECT', // 待接单池
@@ -595,6 +598,7 @@ class MockBackend {
       return noContent();
     }
     if (p.endsWith('/consult-sessions') && m == 'POST') {
+      _consultWaitStart = DateTime.now(); // 记起始，供 consult-waiting 模拟倒计时/超时
       _activeSession = {'id': _nextId(), 'status': 'WAITING', 'source': body['source'] ?? 'DIRECT',
         'vetId': null, 'waitingElapsedSeconds': 0, 'timedOut': false, 'alreadyActive': false,
         'closedReason': null, 'interruptedReason': null};
@@ -603,16 +607,21 @@ class MockBackend {
     // 用户侧 consult-sessions/{id}:用 !/vet/ 守卫,避免误吞兽医侧 /vet/consult-sessions/{id}。
     final sessGet = RegExp(r'/consult-sessions/(\d+)$').firstMatch(p);
     if (sessGet != null && m == 'GET' && !p.contains('/vet/')) {
-      // DEV_STATE=consult-waiting：恒返回 WAITING，让 match-wait 等待页停住可截（默认会秒转 IN_PROGRESS）。
+      // DEV_STATE=consult-waiting：保持 WAITING 不秒转 IN_PROGRESS；用真实时间模拟倒计时——
+      // elapsed 从 0 增长（倒计时从 01:00 起），满 60s 置 timedOut → 触发超时界面（可在 mock 下测全流程）。
       if (kDevState == 'consult-waiting') {
+        final start = _consultWaitStart ??= DateTime.now();
+        final elapsed = DateTime.now().difference(start).inSeconds;
         return ok({'id': int.parse(sessGet.group(1)!), 'status': 'WAITING', 'source': 'DIRECT',
-          'vetId': null, 'waitingElapsedSeconds': 23, 'timedOut': false, 'alreadyActive': false});
+          'vetId': null, 'waitingElapsedSeconds': elapsed, 'timedOut': elapsed >= 60,
+          'alreadyActive': false});
       }
       return ok(_activeSession ?? {'id': int.parse(sessGet.group(1)!), 'status': 'IN_PROGRESS', 'source': 'DIRECT',
         'waitingElapsedSeconds': 0, 'timedOut': false, 'alreadyActive': false});
     }
     if (RegExp(r'/consult-sessions/(\d+)/continue-waiting$').hasMatch(p)) {
       _activeSession?['waitingElapsedSeconds'] = 0;
+      _consultWaitStart = DateTime.now(); // 继续等待：重置时间基准，倒计时从 01:00 重新开始
       return ok(_activeSession ?? {});
     }
     if (RegExp(r'/consult-sessions/(\d+)$').hasMatch(p) && m == 'DELETE' && !p.contains('/vet/')) {

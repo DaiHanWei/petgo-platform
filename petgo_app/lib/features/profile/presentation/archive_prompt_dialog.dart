@@ -138,7 +138,7 @@ Future<void> showArchivePrompt(
   }
   if (!context.mounted) return;
   // 跳 FR-11 建档；origin=triageArchive → 建档完成跳过庆祝页并回灌（pet_profile_create_page 接管）。
-  context.go('/profile/create?origin=triageArchive');
+  context.push('/profile/create?origin=triageArchive');
 }
 
 Future<void> _record(

@@ -65,7 +65,7 @@ class ProfileOnboardingPage extends ConsumerWidget {
                       width: double.infinity,
                       child: FilledButton(
                         key: const ValueKey('profileOnboardingCreate'),
-                        onPressed: () => context.go('/profile/create'),
+                        onPressed: () => context.push('/profile/create'),
                         style: FilledButton.styleFrom(
                           backgroundColor: AppColors.mint,
                           foregroundColor: AppColors.onAccent,

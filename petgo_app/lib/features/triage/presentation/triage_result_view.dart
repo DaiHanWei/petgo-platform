@@ -121,7 +121,7 @@ Future<void> _upgradeToVet(BuildContext context, WidgetRef ref, int triageId) as
   try {
     final session = await ref.read(consultRepositoryProvider).createFromUpgrade(triageId);
     if (!context.mounted) return;
-    context.go('/consult/waiting/${session.id}');
+    context.push('/consult/waiting/${session.id}');
   } catch (_) {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context)

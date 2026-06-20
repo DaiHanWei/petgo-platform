@@ -35,14 +35,10 @@ void main() {
     expect(find.text('Me'), findsOneWidget);
   });
 
-  // AC2 — active 区域圆 34×34。
-  testWidgets('AC2: active tab circle is 34x34', (tester) async {
+  // AC2 — 选中态为 pop-art 实心图标（紫 + 红错位影），非圆底（feed.html 还原）。
+  testWidgets('AC2: active tab renders pop-art active icon', (tester) async {
     await _pumpApp(tester);
-    final circle = find.byKey(const ValueKey('activeTabCircle'));
-    expect(circle, findsOneWidget);
-    final size = tester.getSize(circle);
-    expect(size.width, kActiveCircleSize);
-    expect(size.height, kActiveCircleSize);
+    expect(find.byKey(const ValueKey('activeTabIcon')), findsOneWidget);
   });
 
   // AC2 — 内容区切换 120ms 淡入（FadeTransition 由 AppMotion.tabFade 驱动）。

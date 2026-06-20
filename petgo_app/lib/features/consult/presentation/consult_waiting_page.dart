@@ -6,14 +6,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
-import '../../../core/theme/spacing.dart';
-import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../data/consult_repository.dart';
 
-/// 等待界面（Story 5.3 F2/F3/F4）：「正在为你匹配兽医…」+ 轮询 + 1min 超时弹层 + 取消二次确认。
+/// 等待界面（Story 5.3 F2/F3/F4）：「正在为你匹配兽医…」+ 轮询 + 1min 超时整页 + 取消二次确认。
 ///
-/// 超时**不迁移状态**（仍 WAITING）：弹「继续等待 / 先用 AI 分诊」。
+/// 超时**不迁移状态**（仍 WAITING）：整页切到 P-21b（match-timeout）——「继续等待 / 先用 AI 分诊 / 取消」。
 /// 「先用 AI」→ 跳 FR-4A，原 WAITING 请求保留（不取消），兽医接单后推送通知。
 class ConsultWaitingPage extends ConsumerStatefulWidget {
   const ConsultWaitingPage({super.key, required this.sessionId});
@@ -28,10 +26,13 @@ class _ConsultWaitingPageState extends ConsumerState<ConsultWaitingPage>
     with WidgetsBindingObserver {
   static const Duration _pollInterval = Duration(seconds: 3);
 
+  /// 搜索上限 = 1 分钟（原型 P-21：从 01:00 倒数到 00:00）。
+  static const int _searchLimitSeconds = 60;
+
   Timer? _poll;
   Timer? _display; // 倒计时显示用本地 1s timer（不影响轮询/状态机）
   int _seconds = 0; // 已等待秒数（服务端 waitingElapsedSeconds 权威，本地逐秒推进）
-  bool _timeoutShown = false;
+  bool _timedOut = false; // 超时态：整页切到 P-21b（match-timeout），非弹层
   bool _navigating = false;
 
   /// AC7（F12）：退出取消的抑制位。接单成功 / 「先用 AI」保留请求 / 主动取消 时置真，
@@ -43,9 +44,11 @@ class _ConsultWaitingPageState extends ConsumerState<ConsultWaitingPage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _startPolling();
-    // 显示用本地倒计时（逐秒，仅驱动 UI；轮询/超时/取消逻辑不依赖它）。
+    // 显示用本地倒计时（逐秒驱动 UI）；并兜底：归零仍 WAITING → 直接弹超时（不等服务端 timedOut）。
     _display = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() => _seconds++);
+      if (!mounted) return;
+      setState(() => _seconds++);
+      if (_seconds >= _searchLimitSeconds) _triggerTimeout();
     });
   }
 
@@ -87,75 +90,53 @@ class _ConsultWaitingPageState extends ConsumerState<ConsultWaitingPage>
     try {
       final s = await ref.read(consultRepositoryProvider).get(widget.sessionId);
       if (!mounted) return;
-      // 服务端等待秒数权威，回填本地倒计时显示。
-      setState(() => _seconds = s.waitingElapsedSeconds);
+      // 服务端等待秒数回填，但**只向前同步**（取较大值）：本地 1s timer 平滑推进，
+      // 服务端仅在更靠前时纠正（如退后台/轮询滞后）。避免 mock 固定 elapsed 导致倒计时来回跳。
+      setState(() {
+        if (s.waitingElapsedSeconds > _seconds) _seconds = s.waitingElapsedSeconds;
+      });
       if (s.isInProgress) {
         // 接单 → 进会话界面（Story 5.5）。已决态，退出不再取消。
         _exitCancelDisabled = true;
         _poll?.cancel();
-        if (mounted) context.go('/consult/conversation/${widget.sessionId}');
+        // 状态跃迁：换掉等待页（不可回退到已结束的等待），保留下层 entry。
+        if (mounted) context.pushReplacement('/consult/conversation/${widget.sessionId}');
         return;
       }
-      if (s.timedOut && !_timeoutShown) {
-        _timeoutShown = true;
-        _poll?.cancel();
-        _showTimeoutSheet();
-      }
+      if (s.timedOut) _triggerTimeout();
     } catch (_) {
       // 轮询失败静默重试（下个 tick）。
     }
   }
 
-  Future<void> _showTimeoutSheet() async {
-    final l10n = AppLocalizations.of(context);
-    await showModalBottomSheet<void>(
-      context: context,
-      isDismissible: false,
-      enableDrag: false,
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(l10n.consultTimeoutTitle, style: AppTypography.headline),
-              const SizedBox(height: AppSpacing.sm),
-              Text(l10n.consultTimeoutBody, style: AppTypography.body),
-              const SizedBox(height: AppSpacing.section),
-              FilledButton(
-                key: const ValueKey('consultContinueWaiting'),
-                onPressed: () {
-                  Navigator.of(ctx).pop();
-                  _continueWaiting();
-                },
-                child: Text(l10n.consultContinueWaiting),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              OutlinedButton(
-                key: const ValueKey('consultUseAi'),
-                onPressed: () {
-                  Navigator.of(ctx).pop();
-                  _useAi();
-                },
-                child: Text(l10n.consultUseAi),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  /// 触发超时（服务端 timedOut 或本地倒计时归零兜底，二者先到即切，单次）。
+  /// 不弹层，而是整页切到 P-21b（match-timeout）。
+  void _triggerTimeout() {
+    if (_timedOut || _navigating) return;
+    _poll?.cancel();
+    _display?.cancel();
+    setState(() => _timedOut = true);
   }
 
   Future<void> _continueWaiting() async {
+    setState(() {
+      _timedOut = false;
+      _seconds = 0; // 倒计时从 01:00 重新开始
+    });
     try {
       await ref.read(consultRepositoryProvider).continueWaiting(widget.sessionId);
     } catch (_) {
-      // 失败也恢复轮询，下次超时再弹。
+      // 失败也恢复轮询，下次超时再切。
     }
     if (!mounted) return;
-    _timeoutShown = false;
     _startPolling();
+    // 恢复逐秒倒计时显示。
+    _display?.cancel();
+    _display = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() => _seconds++);
+      if (_seconds >= _searchLimitSeconds) _triggerTimeout();
+    });
   }
 
   void _useAi() {
@@ -191,8 +172,14 @@ class _ConsultWaitingPageState extends ConsumerState<ConsultWaitingPage>
       ),
     );
     if (confirmed != true) return;
+    await _doCancel();
+  }
+
+  /// 真正执行取消（不弹确认）：超时态的「Batalkan permintaan」直接调用此方法（无二次确认）。
+  Future<void> _doCancel() async {
     _exitCancelDisabled = true; // 主动取消进行中，避免 detached 重复触发
     _poll?.cancel();
+    _display?.cancel();
     try {
       await ref.read(consultRepositoryProvider).cancel(widget.sessionId);
     } catch (_) {
@@ -203,28 +190,49 @@ class _ConsultWaitingPageState extends ConsumerState<ConsultWaitingPage>
     context.go('/triage');
   }
 
+  /// 1 分钟倒计时显示（原型 P-21：从 01:00 倒数；剩余 = 上限 − 已等待，钳到 [0, 上限]）。
   String get _mmss {
-    final m = (_seconds ~/ 60).toString().padLeft(2, '0');
-    final s = (_seconds % 60).toString().padLeft(2, '0');
+    final remaining = (_searchLimitSeconds - _seconds).clamp(0, _searchLimitSeconds);
+    final m = (remaining ~/ 60).toString().padLeft(2, '0');
+    final s = (remaining % 60).toString().padLeft(2, '0');
     return '$m:$s';
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Scaffold(
-      backgroundColor: AppColors.base,
-      body: SafeArea(
-        child: Column(
+    // 拦截系统/手势返回：倒计时态 → 二次确认（同 Batalkan）；超时态 → 无确认，回继续等待。
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop || _navigating) return;
+        if (_timedOut) {
+          _continueWaiting();
+        } else {
+          _confirmCancel();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: _timedOut ? const Color(0xFFF0F4F4) : AppColors.base,
+        body: SafeArea(
+          child: _timedOut ? _buildTimeout(l10n) : _buildMatching(l10n),
+        ),
+      ),
+    );
+  }
+
+  /// 匹配中（原型 P-21 / match-wait）。
+  Widget _buildMatching(AppLocalizations l10n) {
+    return Column(
           children: [
-            // 顶部返回钮（原型 match-wait 左上）。离开等待页（请求保留，由「Batalkan」显式取消）。
+            // 顶部返回钮（原型 match-wait 左上）。倒计时态返回 = 二次确认取消（同 Batalkan permintaan）。
             Align(
               alignment: Alignment.centerLeft,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                 child: InkWell(
                   key: const ValueKey('consultWaitingBack'),
-                  onTap: () => context.canPop() ? context.pop() : context.go('/triage'),
+                  onTap: _confirmCancel,
                   borderRadius: BorderRadius.circular(11),
                   child: Container(
                     width: 36,
@@ -298,8 +306,111 @@ class _ConsultWaitingPageState extends ConsumerState<ConsultWaitingPage>
               ),
             ),
           ],
+        );
+  }
+
+  /// 超时整页（原型 P-21b / match-timeout）：返回钮 + ⏳ + 标题/正文 + 摘要卡 + 继续等待/先用AI/取消。
+  Widget _buildTimeout(AppLocalizations l10n) {
+    return Column(
+      key: const ValueKey('consultTimeoutPage'),
+      children: [
+        // 顶部返回钮：返回即「继续等待」（请求保留，回匹配态）。
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
+            child: InkWell(
+              key: const ValueKey('consultTimeoutBack'),
+              onTap: _continueWaiting,
+              borderRadius: BorderRadius.circular(11),
+              child: Container(
+                width: 36,
+                height: 36,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFEDF3),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: const Icon(Icons.arrow_back, size: 18, color: AppColors.ink2),
+              ),
+            ),
+          ),
         ),
-      ),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+            child: Column(
+              children: [
+                // ⏳ 灰圆图标。
+                Container(
+                  width: 88,
+                  height: 88,
+                  alignment: Alignment.center,
+                  decoration: const BoxDecoration(
+                      color: Color(0xFFEFEDF3), shape: BoxShape.circle),
+                  child: const Text('⏳', style: TextStyle(fontSize: 38)),
+                ),
+                const SizedBox(height: 22),
+                Text(l10n.consultTimeoutTitle,
+                    key: const ValueKey('consultTimeoutTitle'),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        fontSize: 19, height: 1.3, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                const SizedBox(height: 8),
+                Text(l10n.consultTimeoutBody,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 13, height: 1.6, color: AppColors.ink2)),
+                const SizedBox(height: 24),
+                _summaryCard(l10n),
+                const SizedBox(height: 24),
+                // 主操作：继续等待（回匹配态，倒计时重置）。
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    key: const ValueKey('consultContinueWaiting'),
+                    onPressed: _continueWaiting,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.mint,
+                      foregroundColor: Colors.white,
+                      elevation: 4,
+                      shadowColor: AppColors.mint.withValues(alpha: 0.30),
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    child: Text(l10n.consultContinueWaiting,
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                // 次操作：先用 AI 分诊（请求保留）。
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    key: const ValueKey('consultUseAi'),
+                    onPressed: _useAi,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.mint,
+                      side: const BorderSide(color: AppColors.mint, width: 1.5),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    child: Text('⚡ ${l10n.consultUseAi}',
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                // 取消请求（超时态：无二次确认，直接取消）。
+                TextButton(
+                  key: const ValueKey('consultCancel'),
+                  onPressed: _navigating ? null : _doCancel,
+                  child: Text(l10n.consultCancelRequest,
+                      style: const TextStyle(fontSize: 13, color: AppColors.muted)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 

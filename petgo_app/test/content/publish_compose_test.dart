@@ -86,6 +86,14 @@ PublishController _controller(ContentRepository repo) =>
 
 Future<AppLocalizations> _en() => AppLocalizations.delegate.load(const Locale('en'));
 
+/// 高视口：发帖页事件日期行位于文字框之后（原型顺序），默认 800×600 会被 ListView 懒加载裁掉。
+void _tallView(WidgetTester tester) {
+  tester.view.physicalSize = const Size(1200, 3200);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+}
+
 Widget _composeApp(ProviderContainer container, {ContentType? preset, DateTime? presetEventDate}) {
   return UncontrolledProviderScope(
     container: container,
@@ -136,6 +144,7 @@ void main() {
   // ===== AC5 成长日历事件日期（F9） =====
 
   testWidgets('AC5: 成长日历显示事件日期字段，默认今天', (tester) async {
+    _tallView(tester); // 事件日期行在文字框之后（原型顺序），需高视口避免被 ListView 懒加载裁掉
     final controller = _controller(_OkRepo());
     final container = ProviderContainer(overrides: [
       publishControllerProvider.overrideWithValue(controller),
@@ -147,15 +156,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('publishEventDate')), findsOneWidget);
+    // 控制器持有去时分的今天（日期展示已改本地化富文本「Tanggal momen: 1 May 2024」，不再断言 YYYY-MM-DD）。
     final today = DateTime.now();
-    final label = '${today.year}-${today.month.toString().padLeft(2, '0')}'
-        '-${today.day.toString().padLeft(2, '0')}';
-    expect(find.text(label), findsOneWidget);
-    // 控制器持有去时分的今天
     expect(controller.eventDate, DateTime(today.year, today.month, today.day));
   });
 
   testWidgets('AC5: 入口默认值分流 — presetEventDate（日历格子日期）优先于今天', (tester) async {
+    _tallView(tester);
     final controller = _controller(_OkRepo());
     final container = ProviderContainer(overrides: [
       publishControllerProvider.overrideWithValue(controller),
@@ -167,7 +174,8 @@ void main() {
         preset: ContentType.growthMoment, presetEventDate: DateTime(2024, 5, 1)));
     await tester.pumpAndSettle();
 
-    expect(find.text('2024-05-01'), findsOneWidget);
+    // presetEventDate 优先于今天（展示为本地化富文本，断言控制器值即可）。
+    expect(find.byKey(const ValueKey('publishEventDate')), findsOneWidget);
     expect(controller.eventDate, DateTime(2024, 5, 1));
   });
 
@@ -185,6 +193,7 @@ void main() {
   // ===== AC7 B/C 灰选建档返回（F15 跳过庆祝页） =====
 
   testWidgets('AC7: 灰选建档完成跳过庆祝页 → 回发布页预选成长日历', (tester) async {
+    _tallView(tester);
     final container = ProviderContainer(overrides: [
       profileRepositoryProvider.overrideWithValue(_FakeProfileRepo()), // getMyProfile null → 渲染表单
       petProfileProvider.overrideWith((ref) async => null),
