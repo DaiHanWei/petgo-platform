@@ -75,9 +75,13 @@ class _RedAlertOverlayState extends ConsumerState<RedAlertOverlay>
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     // 🔒 5s 内拦截系统返回键（锁定不可绕过）；解锁后唯一出口为「我已知晓」按钮，故恒不可 pop。
-    return PopScope(
-      canPop: false,
-      child: Semantics(
+    // showGeneralDialog 的 pageBuilder 不自带 Material 祖先 → Text 落到调试 DefaultTextStyle 会出黄下划线；
+    // 透明 Material 提供正确 DefaultTextStyle（不绘制底色，红底仍由内层 Container 负责）。
+    return Material(
+      type: MaterialType.transparency,
+      child: PopScope(
+        canPop: false,
+        child: Semantics(
         container: true,
         liveRegion: true, // assertive 打断式播报
         label: '${widget.title}. ${l10n.triageRedSubtext}',
@@ -216,6 +220,7 @@ class _RedAlertOverlayState extends ConsumerState<RedAlertOverlay>
             ),
           ),
         ),
+      ),
       ),
     );
   }

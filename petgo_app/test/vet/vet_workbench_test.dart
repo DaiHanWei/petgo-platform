@@ -52,10 +52,10 @@ void main() {
     await _pump(tester, _FakeVetRepository());
 
     expect(find.byKey(const ValueKey('vetBottomNav')), findsOneWidget);
-    expect(find.text('Inbox'), findsWidgets);
+    expect(find.text('Queue'), findsWidgets);
     expect(find.text('Active'), findsWidgets);
     expect(find.text('History'), findsWidgets);
-    expect(find.text('Me'), findsWidgets);
+    expect(find.text('Profile'), findsWidgets);
     // 默认在待接单 Tab：空态占位
     expect(find.text('No incoming requests'), findsOneWidget);
     // 无用户侧凸起「+」发布 FAB
@@ -79,5 +79,22 @@ void main() {
     await tester.tap(onlineSeg);
     await tester.pumpAndSettle();
     expect(repo.online, isTrue);
+  });
+
+  testWidgets('AC2: 「我的」Tab 可切到 Sibuk（前端占位态 → 后端置不接单 false）', (tester) async {
+    final repo = _FakeVetRepository();
+    await _pump(tester, repo);
+
+    await tester.tap(find.byIcon(Icons.person_outline));
+    await tester.pumpAndSettle();
+
+    // 先上线 → 再切 Sibuk，验证 Sibuk 段真生效（不再是 no-op）：后端被置为不接单。
+    await tester.tap(find.byKey(const ValueKey('vetStatusOnline')));
+    await tester.pumpAndSettle();
+    expect(repo.online, isTrue);
+
+    await tester.tap(find.byKey(const ValueKey('vetStatusBusy')));
+    await tester.pumpAndSettle();
+    expect(repo.online, isFalse); // Sibuk 映射为不接单
   });
 }

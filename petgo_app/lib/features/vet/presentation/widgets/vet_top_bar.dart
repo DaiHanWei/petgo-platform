@@ -6,6 +6,7 @@ import '../../../../core/theme/spacing.dart';
 import '../../../../core/theme/typography.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../domain/vet_online_status.dart';
+import 'vet_status_sheet.dart';
 
 /// 兽医端共享深色顶栏（原型 V- 系列 `#2B2540`）。供工作台首页/待接单/案例/对话/我的复用。
 ///
@@ -32,22 +33,17 @@ class VetTopBar extends ConsumerWidget {
     return l10n.greetingNight;
   }
 
-  Future<void> _toggle(BuildContext context, WidgetRef ref, bool next) async {
-    final l10n = AppLocalizations.of(context);
-    try {
-      await ref.read(vetOnlineStatusProvider.notifier).toggle(next);
-    } catch (_) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(SnackBar(content: Text(l10n.vetStatusUpdateFailed)));
-    }
+  /// 头像首字母：去掉「drh.」/「dr.」头衔前缀后取首字母大写（如「Drh. Demo」→「D」）。
+  String _avatarInitial(String name) {
+    final cleaned = name.replaceFirst(RegExp(r'^\s*drh?\.\s*', caseSensitive: false), '').trim();
+    final base = cleaned.isNotEmpty ? cleaned : name.trim();
+    return base.isEmpty ? '?' : base.substring(0, 1).toUpperCase();
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final online = ref.watch(vetOnlineStatusProvider);
+    final availability = ref.watch(vetAvailabilityProvider);
     final isGreeting = greetingName != null;
 
     return Container(
@@ -70,43 +66,100 @@ class VetTopBar extends ConsumerWidget {
                   children: [
                     if (isGreeting) ...[
                       Text(
-                        _greeting(l10n),
+                        '${_greeting(l10n)},',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: AppTypography.caption.copyWith(color: AppColors.vetOnAccent.withValues(alpha: 0.7)),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         greetingName!,
                         key: const ValueKey('vetTopBarName'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: AppTypography.headline.copyWith(color: AppColors.vetOnAccent),
                       ),
                     ] else
                       Text(
                         title ?? '',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: AppTypography.title.copyWith(color: AppColors.vetOnAccent),
                       ),
                   ],
                 ),
               ),
-              if (showOnlineToggle)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      online ? l10n.vetOnlineLabel : l10n.vetOfflineLabel,
-                      style: AppTypography.caption.copyWith(
-                        color: online ? AppColors.vetPrimary : AppColors.vetOnAccent.withValues(alpha: 0.7),
-                      ),
-                    ),
-                    Switch(
-                      key: const ValueKey('vetTopBarOnlineSwitch'),
-                      value: online,
-                      activeThumbColor: AppColors.vetPrimary,
-                      onChanged: (v) => _toggle(context, ref, v),
-                    ),
-                  ],
+              // 在线态药丸（原型：白 10% 底圆角，状态点 + 短标签）；点击弹 V-st 状态切换抽屉。
+              if (showOnlineToggle) ...[
+                const SizedBox(width: AppSpacing.sm),
+                _OnlinePill(availability: availability, onTap: () => showVetStatusSheet(context)),
+              ],
+              // 医生头像圆（仅问候模式；首字母）。
+              if (isGreeting) ...[
+                const SizedBox(width: AppSpacing.sm),
+                Container(
+                  width: 36,
+                  height: 36,
+                  alignment: Alignment.center,
+                  decoration: const BoxDecoration(color: AppColors.vetPrimary, shape: BoxShape.circle),
+                  child: Text(
+                    _avatarInitial(greetingName!),
+                    style: AppTypography.title.copyWith(color: AppColors.vetOnAccent, fontSize: 14),
+                  ),
                 ),
+              ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 在线态药丸（原型 vet-dashboard）：白 10% 底圆角 + 状态点（在线薄荷/忙琥珀/离线灰）+ 短标签；
+/// 点击弹 V-st 状态切换抽屉（不再直接切换）。
+class _OnlinePill extends StatelessWidget {
+  const _OnlinePill({required this.availability, required this.onTap});
+
+  final VetAvailability availability;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final (Color dot, String label) = switch (availability) {
+      VetAvailability.online => (AppColors.vetPrimary, l10n.vetOnlineShort),
+      VetAvailability.busy => (AppColors.triageYellow, l10n.vetBusyShort),
+      VetAvailability.offline => (AppColors.vetOnAccent.withValues(alpha: 0.4), l10n.vetOfflineShort),
+    };
+    final dim = availability == VetAvailability.offline;
+    return GestureDetector(
+      key: const ValueKey('vetTopBarOnlineToggle'),
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        decoration: BoxDecoration(
+          color: AppColors.vetOnAccent.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(9999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: AppTypography.caption.copyWith(
+                color: AppColors.vetOnAccent.withValues(alpha: dim ? 0.7 : 1.0),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
         ),
       ),
     );

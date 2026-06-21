@@ -142,38 +142,37 @@ class _VetLoginPageState extends ConsumerState<VetLoginPage> {
             // EMAIL TERDAFTAR
             _sectionLabel(l10n.vetLoginEmailLabel),
             const SizedBox(height: 6),
-            TextField(
-              key: const ValueKey('vetUsernameField'),
+            _VetInputField(
+              fieldKey: const ValueKey('vetUsernameField'),
               controller: _username,
+              icon: Icons.mail_outline_rounded,
+              hint: l10n.vetLoginEmailHint,
+              keyboardType: TextInputType.emailAddress,
               autocorrect: false,
               enableSuggestions: false,
-              keyboardType: TextInputType.emailAddress,
-              decoration: _inputDeco(
-                  icon: Icons.mail_outline_rounded, hint: l10n.vetLoginEmailHint),
             ),
             const SizedBox(height: 18),
             // KATA SANDI
             _sectionLabel(l10n.vetLoginPasswordLabel),
             const SizedBox(height: 6),
-            TextField(
-              key: const ValueKey('vetPasswordField'),
+            _VetInputField(
+              fieldKey: const ValueKey('vetPasswordField'),
               controller: _password,
+              icon: Icons.lock_outline_rounded,
+              hint: '••••••••',
               obscureText: _obscure,
-              decoration: _inputDeco(
-                icon: Icons.lock_outline_rounded,
-                hint: '••••••••',
-                suffix: IconButton(
-                  icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                      size: 20, color: AppColors.textTertiary),
-                  onPressed: () => setState(() => _obscure = !_obscure),
-                ),
+              suffix: IconButton(
+                icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                    size: 20, color: AppColors.textTertiary),
+                onPressed: () => setState(() => _obscure = !_obscure),
               ),
             ),
             const SizedBox(height: 8),
             // 无自助「忘记密码」流程——仅提示联系运营（FR-29 / NFR-12，spec F3）。
             Text(
               l10n.vetForgotHint,
-              style: const TextStyle(fontSize: 12, color: AppColors.textTertiary),
+              style: const TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.vetPrimary),
               textAlign: TextAlign.end,
             ),
             const SizedBox(height: 18),
@@ -249,25 +248,101 @@ class _VetLoginPageState extends ConsumerState<VetLoginPage> {
           letterSpacing: 0.5,
           color: AppColors.textSecondary));
 
-  InputDecoration _inputDeco({required IconData icon, String? hint, Widget? suffix}) =>
-      InputDecoration(
-        prefixIcon: Icon(icon, size: 20, color: AppColors.textTertiary),
-        suffixIcon: suffix,
-        hintText: hint,
-        hintStyle: const TextStyle(color: AppColors.muted, fontSize: 14),
-        isDense: true,
-        filled: true,
-        fillColor: AppColors.surface,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.line, width: 1.5),
+}
+
+/// 兽医登录输入框（原型 vet-login）：聚焦时**图标转薄荷 + 1.5px 薄荷边 + 3px 薄荷光晕圈**；
+/// 未聚焦灰边、灰图标。自管 [FocusNode] 以驱动聚焦态重建。
+class _VetInputField extends StatefulWidget {
+  const _VetInputField({
+    required this.fieldKey,
+    required this.controller,
+    required this.icon,
+    this.hint,
+    this.obscureText = false,
+    this.keyboardType,
+    this.autocorrect = true,
+    this.enableSuggestions = true,
+    this.suffix,
+  });
+
+  final Key fieldKey;
+  final TextEditingController controller;
+  final IconData icon;
+  final String? hint;
+  final bool obscureText;
+  final TextInputType? keyboardType;
+  final bool autocorrect;
+  final bool enableSuggestions;
+  final Widget? suffix;
+
+  @override
+  State<_VetInputField> createState() => _VetInputFieldState();
+}
+
+class _VetInputFieldState extends State<_VetInputField> {
+  final FocusNode _node = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _node.addListener(_onFocusChange);
+  }
+
+  void _onFocusChange() => setState(() {});
+
+  @override
+  void dispose() {
+    _node.removeListener(_onFocusChange);
+    _node.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final focused = _node.hasFocus;
+    final accent = focused ? AppColors.vetPrimary : AppColors.textTertiary;
+    return DecoratedBox(
+      // 原型 box-shadow:0 0 0 3px rgba(91,203,187,.08)：聚焦时边框外一圈薄荷光晕（spread 3 / blur 0）。
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: focused
+            ? [
+                BoxShadow(
+                    color: AppColors.vetPrimary.withValues(alpha: 0.08),
+                    blurRadius: 0,
+                    spreadRadius: 3),
+              ]
+            : null,
+      ),
+      child: TextField(
+        key: widget.fieldKey,
+        focusNode: _node,
+        controller: widget.controller,
+        obscureText: widget.obscureText,
+        keyboardType: widget.keyboardType,
+        autocorrect: widget.autocorrect,
+        enableSuggestions: widget.enableSuggestions,
+        decoration: InputDecoration(
+          prefixIcon: Icon(widget.icon, size: 20, color: accent),
+          suffixIcon: widget.suffix,
+          hintText: widget.hint,
+          hintStyle: const TextStyle(color: AppColors.muted, fontSize: 14),
+          isDense: true,
+          filled: true,
+          fillColor: AppColors.surface,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.line, width: 1.5),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.vetPrimary, width: 1.5),
+          ),
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.vetPrimary, width: 1.5),
-        ),
-      );
+      ),
+    );
+  }
 }
 
 /// 底部信任标（图标 + 标签，薄荷灰）。

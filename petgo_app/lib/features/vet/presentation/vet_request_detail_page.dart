@@ -490,6 +490,8 @@ class _VetRequestDetailPageState extends ConsumerState<VetRequestDetailPage> {
                     foregroundColor: AppColors.textSecondary,
                     side: BorderSide(color: AppColors.border),
                     padding: const EdgeInsets.symmetric(vertical: 14),
+                    // 原型 vet-case：圆角矩形 13px（非默认 StadiumBorder 半圆）。
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
                   ),
                   child: Text(l10n.vetQueueSkip),
                 ),
@@ -504,6 +506,7 @@ class _VetRequestDetailPageState extends ConsumerState<VetRequestDetailPage> {
                     backgroundColor: AppColors.vetPrimary,
                     foregroundColor: AppColors.vetOnAccent,
                     padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
                   ),
                   child: Text(l10n.vetRequestAcceptCta),
                 ),

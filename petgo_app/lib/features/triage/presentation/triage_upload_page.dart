@@ -10,6 +10,7 @@ import '../../../shared/utils/image_processor.dart';
 import '../../../shared/utils/media_permission.dart';
 import '../../../shared/widgets/dashed_rect.dart';
 import '../../media/domain/media_upload_use_case.dart';
+import '../data/triage_repository.dart';
 import '../domain/triage_result_controller.dart';
 import '../domain/triage_result_state.dart';
 import '../domain/triage_upload_controller.dart';
@@ -32,6 +33,12 @@ class _TriageUploadPageState extends ConsumerState<TriageUploadPage> {
   @override
   void initState() {
     super.initState();
+    // 每次进入上传页都从空闲态重开：清上次结果 + 草稿，避免「重进分诊直接看到旧结果」。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(triageResultProvider.notifier).reset();
+      ref.read(triageUploadProvider.notifier).reset();
+    });
     // Debug 截图钩子（仅 debug + flag）：自动提交一次，直达分诊结果态（配 DEV_STATE=triage-green/yellow/red）。
     // 截 ai-result/-green/-red 用。生产/测试不编译进逻辑（flag 默认空）。
     if (kDebugMode && const bool.fromEnvironment('DEV_TRIAGE_AUTO')) {
@@ -108,16 +115,25 @@ class _TriageUploadPageState extends ConsumerState<TriageUploadPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final phase = ref.watch(triageResultProvider).phase;
+    final state = ref.watch(triageResultProvider);
+    final phase = state.phase;
+    // 绿/黄结果页自带彩色 header（含返回），隐藏顶栏避免双返回 + 多余「AI Diagnosis」。
+    // 红色（沉浸层 + 摘要）与 表单/等待/降级态 仍保留顶栏返回。
+    final greenYellowResult = phase == TriagePhase.done &&
+        state.result?.dangerLevel != null &&
+        state.result!.dangerLevel != DangerLevel.red;
 
     return Scaffold(
       backgroundColor: AppColors.base,
-      appBar: AppBar(
-        backgroundColor: AppColors.base,
-        centerTitle: true,
-        title: Text(l10n.triageUploadTitle,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink)),
-      ),
+      appBar: greenYellowResult
+          ? null
+          : AppBar(
+              backgroundColor: AppColors.base,
+              centerTitle: true,
+              title: Text(l10n.triageUploadTitle,
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink)),
+            ),
       body: switch (phase) {
         TriagePhase.submitting || TriagePhase.polling => _WaitingView(message: l10n.triageAnalyzing),
         TriagePhase.timedOut => _DegradedView(

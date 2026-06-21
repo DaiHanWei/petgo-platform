@@ -48,6 +48,7 @@ class TriageResult {
     this.medicationRef,
     this.disclaimer,
     this.observation,
+    this.symptomSummary,
   });
 
   final TriageStatus status;
@@ -56,6 +57,9 @@ class TriageResult {
   final String? medicationRef;
   final String? disclaimer;
   final TriageObservation? observation;
+
+  /// AI 归纳的症状摘要（原型「RINGKASAN GEJALA」）。后端结果可回传；为空时 UI 回退用户输入的症状文本。
+  final String? symptomSummary;
 
   bool get isTerminal =>
       status == TriageStatus.done || status == TriageStatus.failed;
@@ -69,6 +73,7 @@ class TriageResult {
         observation: json['observation'] is Map<String, dynamic>
             ? TriageObservation.fromJson(json['observation'] as Map<String, dynamic>)
             : null,
+        symptomSummary: json['symptomSummary'] as String?,
       );
 
   static TriageStatus _status(String? raw) {

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/colors.dart';
+import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import 'vet_active_page.dart';
 import 'vet_history_page.dart';
@@ -36,16 +37,76 @@ class _VetWorkbenchShellState extends State<VetWorkbenchShell> {
     return Scaffold(
       backgroundColor: AppColors.base,
       body: SafeArea(child: IndexedStack(index: _index, children: _pages)),
-      bottomNavigationBar: NavigationBar(
+      // 原型 vet-dashboard：白底 + 顶细线 + 列式 4 tab，选中紫色 (#845EC9)、未选灰。
+      bottomNavigationBar: Container(
         key: const ValueKey('vetBottomNav'),
-        selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
-        destinations: [
-          NavigationDestination(icon: const Icon(Icons.inbox_outlined), label: l10n.vetTabInbox),
-          NavigationDestination(icon: const Icon(Icons.chat_outlined), label: l10n.vetTabActive),
-          NavigationDestination(icon: const Icon(Icons.history), label: l10n.vetTabHistory),
-          NavigationDestination(icon: const Icon(Icons.person_outline), label: l10n.vetTabMe),
-        ],
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          border: Border(top: BorderSide(color: AppColors.line)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _VetNavItem(
+                    icon: Icons.inbox_outlined, label: l10n.vetTabInbox, selected: _index == 0, onTap: () => _select(0)),
+                _VetNavItem(
+                    icon: Icons.chat_bubble_outline, label: l10n.vetTabActive, selected: _index == 1, onTap: () => _select(1)),
+                _VetNavItem(
+                    icon: Icons.history, label: l10n.vetTabHistory, selected: _index == 2, onTap: () => _select(2)),
+                _VetNavItem(
+                    icon: Icons.person_outline, label: l10n.vetTabMe, selected: _index == 3, onTap: () => _select(3)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _select(int i) => setState(() => _index = i);
+}
+
+/// 兽医底栏单项（原型列式）：图标 + 标签，选中紫高亮 + 标签加粗。
+class _VetNavItem extends StatelessWidget {
+  const _VetNavItem({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? AppColors.mint : AppColors.textTertiary;
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 24, color: color),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                style: AppTypography.micro.copyWith(
+                  color: color,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -19,6 +19,9 @@ class TriageController extends Notifier<TriageResultState> {
   @override
   TriageResultState build() => const TriageResultState();
 
+  /// 重置回初始空闲态：重新发起一次分诊前清除上次结果（避免重进分诊直接看到旧结果）。
+  void reset() => state = const TriageResultState();
+
   /// 提交并短轮询。失败/超时落降级态供 4.3 重试 UI（复用上次提交内容）。
   Future<void> submitAndPoll({
     String? symptomText,

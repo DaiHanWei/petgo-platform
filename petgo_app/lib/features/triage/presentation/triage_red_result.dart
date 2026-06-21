@@ -44,7 +44,10 @@ class _TriageRedResultState extends ConsumerState<TriageRedResult> {
     final l10n = AppLocalizations.of(context);
     final title =
         pet?.name != null ? l10n.triageRedTitle(pet!.name) : l10n.triageRedTitleNoPet;
-    final symptom = ref.read(triageUploadProvider).symptomText;
+    // GEJALA TERDETEKSI：优先 AI 摘要，回退用户输入的症状文本。
+    final symptom = (widget.result.symptomSummary?.trim().isNotEmpty ?? false)
+        ? widget.result.symptomSummary!.trim()
+        : ref.read(triageUploadProvider).symptomText;
     // 决策 #5：全屏沉浸（opaque 红屏，barrier 不可点关，PopScope 锁返回键）。
     await showGeneralDialog<void>(
       context: context,

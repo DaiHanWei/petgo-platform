@@ -85,17 +85,20 @@ class _VetMePageState extends ConsumerState<VetMePage> with WidgetsBindingObserv
       ..showSnackBar(SnackBar(content: Text(l10n.vetChatToolUnavailable)));
   }
 
-  Future<void> _toggle(bool next) async {
+  /// 三态可用状态切换（Online/Sibuk/Offline）：经 [vetAvailabilityProvider] 持久化二元在线态
+  /// （Online=接单 / Sibuk·Offline=不接单），Sibuk 为前端占位态（见 CROSS-STORY-DECISIONS F19）。
+  /// 失败时 provider 自愈回落权威态；若结果与所选不符则提示。
+  Future<void> _selectAvailability(VetAvailability next) async {
     if (_updating) return;
     final l10n = AppLocalizations.of(context);
     setState(() => _updating = true);
     try {
-      await ref.read(vetOnlineStatusProvider.notifier).toggle(next);
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(SnackBar(content: Text(l10n.vetStatusUpdateFailed)));
+      await ref.read(vetAvailabilityProvider.notifier).select(next);
+      if (mounted && ref.read(vetAvailabilityProvider) != next) {
+        ScaffoldMessenger.of(context)
+          ..clearSnackBars()
+          ..showSnackBar(SnackBar(content: Text(l10n.vetStatusUpdateFailed)));
+      }
     } finally {
       if (mounted) setState(() => _updating = false);
     }
@@ -134,6 +137,7 @@ class _VetMePageState extends ConsumerState<VetMePage> with WidgetsBindingObserv
       }
     });
     final online = ref.watch(vetOnlineStatusProvider);
+    final availability = ref.watch(vetAvailabilityProvider);
     return Scaffold(
       backgroundColor: AppColors.vetSurface2,
       body: _loading
@@ -147,7 +151,7 @@ class _VetMePageState extends ConsumerState<VetMePage> with WidgetsBindingObserv
                     children: [
                       _infoCard(l10n, online),
                       const SizedBox(height: AppSpacing.md),
-                      _availabilityCard(l10n, online),
+                      _availabilityCard(l10n, availability),
                       const SizedBox(height: AppSpacing.md),
                       _settingsCard(l10n),
                       const SizedBox(height: AppSpacing.md),
@@ -285,8 +289,9 @@ class _VetMePageState extends ConsumerState<VetMePage> with WidgetsBindingObserv
     );
   }
 
-  /// 在线状态分段控件：Online/Offline 真切（走 _toggle），Sibuk 仅视觉占位（→未提供）。
-  Widget _availabilityCard(AppLocalizations l10n, bool online) {
+  /// 在线状态分段控件（三态真切）：Online / Sibuk / Offline 均经 [_selectAvailability] 持久化。
+  /// Online=接单；Sibuk/Offline=不接单（Sibuk 为前端占位态，F19）。选中段按等级配色。
+  Widget _availabilityCard(AppLocalizations l10n, VetAvailability availability) {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: _cardDecoration(),
@@ -299,15 +304,22 @@ class _VetMePageState extends ConsumerState<VetMePage> with WidgetsBindingObserv
           Row(
             children: [
               _statusSeg('🟢', l10n.vetStatusOnline, l10n.vetStatusOnlineSub,
-                  selected: online, valueKey: 'vetStatusOnline',
-                  onTap: () => _updating ? null : _toggle(true)),
+                  selected: availability == VetAvailability.online,
+                  accent: AppColors.vetPrimary,
+                  valueKey: 'vetStatusOnline',
+                  onTap: () => _selectAvailability(VetAvailability.online)),
               const SizedBox(width: AppSpacing.sm),
               _statusSeg('🟡', l10n.vetStatusBusy, l10n.vetStatusBusySub,
-                  selected: false, valueKey: 'vetStatusBusy', onTap: _onUnavailable),
+                  selected: availability == VetAvailability.busy,
+                  accent: AppColors.triageYellow,
+                  valueKey: 'vetStatusBusy',
+                  onTap: () => _selectAvailability(VetAvailability.busy)),
               const SizedBox(width: AppSpacing.sm),
               _statusSeg('⚫', l10n.vetStatusOffline, l10n.vetStatusOfflineSub,
-                  selected: !online, valueKey: 'vetStatusOffline',
-                  onTap: () => _updating ? null : _toggle(false)),
+                  selected: availability == VetAvailability.offline,
+                  accent: AppColors.textTertiary,
+                  valueKey: 'vetStatusOffline',
+                  onTap: () => _selectAvailability(VetAvailability.offline)),
             ],
           ),
         ],
@@ -316,7 +328,10 @@ class _VetMePageState extends ConsumerState<VetMePage> with WidgetsBindingObserv
   }
 
   Widget _statusSeg(String emoji, String label, String sub,
-      {required bool selected, required String valueKey, required VoidCallback onTap}) {
+      {required bool selected,
+      required Color accent,
+      required String valueKey,
+      required VoidCallback onTap}) {
     return Expanded(
       child: InkWell(
         key: ValueKey(valueKey),
@@ -325,11 +340,11 @@ class _VetMePageState extends ConsumerState<VetMePage> with WidgetsBindingObserv
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.md, horizontal: 4),
           decoration: BoxDecoration(
-            color: selected ? AppColors.vetPrimary : AppColors.muted.withValues(alpha: 0.12),
+            color: selected ? accent : AppColors.muted.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(12),
-            // 选中段薄荷投影（原型 box-shadow:0 4px 12px rgba(91,203,187,.3)）。
+            // 选中段投影（原型 box-shadow:0 4px 12px rgba(...,.3)）按等级取色。
             boxShadow: selected
-                ? [BoxShadow(color: AppColors.vetPrimary.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4))]
+                ? [BoxShadow(color: accent.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4))]
                 : null,
           ),
           child: Column(

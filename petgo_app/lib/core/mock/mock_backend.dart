@@ -36,6 +36,7 @@ class MockBackend {
   final List<Map<String, dynamic>> _timeline = [];
   Map<String, dynamic>? _petProfile;
   final Map<int, String> _triageLevel = {}; // triageId → GREEN/YELLOW/RED
+  final Map<int, String> _triageSymptom = {}; // triageId → 提交的症状文本（回作 symptomSummary）
   final List<String> _triageCycle = ['GREEN', 'YELLOW', 'RED'];
   int _triageSeq = 0;
   Map<String, dynamic>? _activeSession;
@@ -569,17 +570,28 @@ class MockBackend {
         _ => null,
       };
       _triageLevel[id] = forced ?? _triageCycle[_triageSeq++ % _triageCycle.length];
+      _triageSymptom[id] = (body['symptomText'] as String?)?.trim() ?? '';
       return Response(requestOptions: o, statusCode: 202, data: {'triageId': id});
     }
     final triageGet = RegExp(r'/triage/(\d+)$').firstMatch(p);
     if (triageGet != null && m == 'GET') {
       final id = int.parse(triageGet.group(1)!);
       final lvl = _triageLevel[id] ?? 'GREEN';
+      // symptomSummary：优先回用户提交的症状；为空（如 DEV 自动提交）给该等级代表性样例。
+      final submitted = _triageSymptom[id] ?? '';
+      final summary = submitted.isNotEmpty
+          ? submitted
+          : (lvl == 'RED'
+              ? 'Kejang, tidak sadarkan diri, pendarahan dari hidung — kondisi darurat'
+              : lvl == 'YELLOW'
+                  ? 'Muntah busa putih 2x, lemas, kurang nafsu makan'
+                  : 'Bersin ringan 1x, nafsu makan normal, aktif seperti biasa');
       return ok({
         'status': 'DONE', 'dangerLevel': lvl,
         'advice': lvl == 'RED' ? 'Seek veterinary care immediately' : (lvl == 'YELLOW' ? 'Monitor closely and consult a vet soon' : 'No obvious risk for now — keep an eye on it'),
         'medicationRef': null, 'disclaimer': 'This result is for reference only and does not replace professional veterinary diagnosis.',
         'observation': {'indicators': ['Alertness', 'Appetite', 'Bowel movements'], 'timeWindow': '24 hours', 'escalationTriggers': ['Persistent vomiting', 'Lethargy']},
+        'symptomSummary': summary,
       });
     }
 

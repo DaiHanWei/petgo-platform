@@ -42,8 +42,8 @@ void main() {
             advice: '继续观察精神与进食',
             disclaimer: 'AI 仅供参考'));
     expect(find.byKey(const ValueKey('triageGreenPage')), findsOneWidget);
-    expect(find.text('No urgent risk found'), findsOneWidget);
-    expect(find.text('Want extra peace of mind? You can confirm with a vet'), findsOneWidget);
+    expect(find.text('Relax, no danger detected'), findsOneWidget); // 绿色 header 文案
+    expect(find.text('🟢'), findsOneWidget); // 非颜色单一：等级 emoji
     expect(find.byKey(const ValueKey('triageSaveToArchive')), findsOneWidget);
     expect(find.text('AI 仅供参考'), findsOneWidget); // 免责前置
   });
@@ -68,10 +68,10 @@ void main() {
     // accent-consult 浅底 #EEF4F7
     final box = tester.widget<Container>(protocol);
     expect((box.decoration as BoxDecoration).color, AppColors.triageYellowSurface);
-    // 三要素
-    expect(find.text('· 精神状态'), findsOneWidget);
-    expect(find.text('· 未来 12 小时'), findsOneWidget);
-    expect(find.text('· 出现呕吐'), findsOneWidget);
+    // 三要素（指标 chip / 时间窗口卡 / 升级触发卡）
+    expect(find.text('精神状态'), findsOneWidget);
+    expect(find.text('未来 12 小时'), findsOneWidget);
+    expect(find.text('出现呕吐 · 拒食'), findsOneWidget); // 升级触发合并展示
     // 用药参考同屏
     expect(find.text('可补充电解质水'), findsOneWidget);
   });
@@ -89,18 +89,25 @@ void main() {
     expect(find.textContaining('Please keep observing'), findsOneWidget);
   });
 
-  testWidgets('F1: 三态卡左 3px 区域色边框 + icon（非颜色单一）', (tester) async {
+  testWidgets('F1: 等级以 emoji + 彩色 header 表达（非颜色单一）', (tester) async {
     await _pump(
         tester,
         const TriageResult(
             status: TriageStatus.done, dangerLevel: DangerLevel.yellow, advice: '观察'));
-    final card = tester.widget<Container>(
-      find.descendant(of: find.byType(TriageResultCard), matching: find.byType(Container)).first,
-    );
-    final border = (card.decoration as BoxDecoration).border as Border;
-    expect(border.left.width, 3);
-    expect(border.left.color, AppColors.triageYellow);
-    expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget); // icon 表达
+    expect(find.byKey(const ValueKey('triageYellowPage')), findsOneWidget);
+    expect(find.text('🟡'), findsOneWidget); // 非颜色单一：等级 emoji
+    expect(find.text('Consultation recommended'), findsOneWidget); // 黄色 header 文案
+  });
+
+  testWidgets('黄色态仅 2 钮（Konsultasi + Selesai），无独立存档按钮（原型 ai-result）', (tester) async {
+    await _pump(
+        tester,
+        const TriageResult(
+            status: TriageStatus.done, dangerLevel: DangerLevel.yellow, advice: '观察'));
+    expect(find.byKey(const ValueKey('triageConsultVet')), findsOneWidget);
+    expect(find.byKey(const ValueKey('triageDone')), findsOneWidget);
+    // 黄色态存档入口折叠进「Selesai」(P-25)，不再单列「存入档案」按钮
+    expect(find.byKey(const ValueKey('triageSaveToArchive')), findsNothing);
   });
 
   testWidgets('🔒 红色 → 自底滑起半屏强提醒 + 保留红色摘要（无绿黄结果卡）', (tester) async {
