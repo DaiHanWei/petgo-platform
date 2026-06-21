@@ -33,15 +33,15 @@ class TriageControllerTest {
 
     @Test
     void submitUsesUserFromJwtAndRateLimits() {
-        when(triageService.submit(eq(77L), any(), ArgumentMatchers.isNull()))
+        when(triageService.submit(eq(77L), any(), ArgumentMatchers.isNull(), eq("en")))
                 .thenReturn(TriageAcceptedResponse.of(3L, TriageStatus.PENDING));
 
         TriageAcceptedResponse resp = controller.submit(
-                jwt("77"), null, new TriageSubmitRequest("咳嗽", List.of("k1"), null));
+                jwt("77"), null, null, new TriageSubmitRequest("咳嗽", List.of("k1"), null));
 
         assertThat(resp.triageId()).isEqualTo(3L);
         verify(rateLimiter).check(eq("rl:triage:submit:77"), anyInt(), any());
-        verify(triageService).submit(eq(77L), any(), ArgumentMatchers.isNull());
+        verify(triageService).submit(eq(77L), any(), ArgumentMatchers.isNull(), eq("en"));
     }
 
     @Test
@@ -53,7 +53,7 @@ class TriageControllerTest {
     @Test
     void rejectsMissingJwt() {
         assertThatThrownBy(() -> controller.submit(
-                null, null, new TriageSubmitRequest("x", null, null)))
+                null, null, null, new TriageSubmitRequest("x", null, null)))
                 .isInstanceOf(AppException.class);
     }
 }

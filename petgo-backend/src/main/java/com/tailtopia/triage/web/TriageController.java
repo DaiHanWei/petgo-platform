@@ -47,10 +47,22 @@ public class TriageController {
     @ResponseStatus(HttpStatus.ACCEPTED)
     public TriageAcceptedResponse submit(@AuthenticationPrincipal Jwt jwt,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
             @Valid @RequestBody TriageSubmitRequest req) {
         long userId = currentUserId(jwt);
         rateLimiter.check("rl:triage:submit:" + userId, SUBMIT_LIMIT, SUBMIT_WINDOW);
-        return triageService.submit(userId, req, idempotencyKey);
+        return triageService.submit(userId, req, idempotencyKey, resolveLocale(acceptLanguage));
+    }
+
+    /**
+     * 归一回复语言：仅 {@code id}/{@code en} 两种，默认 {@code en}（兜底英语，绝不中文）。
+     * 取 Accept-Language 首选项的主语言子标签（如 {@code id-ID} → {@code id}）。
+     */
+    private static String resolveLocale(String acceptLanguage) {
+        if (acceptLanguage != null && acceptLanguage.trim().toLowerCase().startsWith("id")) {
+            return "id";
+        }
+        return "en";
     }
 
     /** 短轮询取结果：处理中仅回 status，DONE 回完整结构，FAILED 供降级（AC2）。 */

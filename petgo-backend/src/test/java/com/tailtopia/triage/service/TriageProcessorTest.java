@@ -47,7 +47,7 @@ class TriageProcessorTest {
         TriageTask task = TriageTestSupport.task(1L, 7L, TriageStatus.PENDING, "咳嗽", List.of("k1"));
         when(tasks.findById(1L)).thenReturn(Optional.of(task));
         when(signedUrlService.signAll(List.of("k1"))).thenReturn(List.of("https://signed/k1"));
-        when(geminiClient.analyze(anyString(), anyList())).thenReturn(
+        when(geminiClient.analyze(anyString(), anyList(), any())).thenReturn(
                 new GeminiTriageResult("YELLOW", "尽快就医", null, "仅供参考", null, Map.of("x", 1)));
 
         processor.process(1L);
@@ -63,7 +63,7 @@ class TriageProcessorTest {
         // 整链路：模型假阴性给 GREEN，但症状命中高危清单 → 最终落库 RED（AC2）。
         TriageTask task = TriageTestSupport.task(9L, 7L, TriageStatus.PENDING, "狗误食巧克力", null);
         when(tasks.findById(9L)).thenReturn(Optional.of(task));
-        when(geminiClient.analyze(any(), anyList())).thenReturn(
+        when(geminiClient.analyze(any(), anyList(), any())).thenReturn(
                 new GeminiTriageResult("GREEN", "继续观察", null, "仅供参考", null, Map.of()));
 
         processor.process(9L);
@@ -80,7 +80,7 @@ class TriageProcessorTest {
         // 反向：非高危 + 模型 GREEN → 保持 GREEN（不误升，避免红色滥用）。
         TriageTask task = TriageTestSupport.task(10L, 7L, TriageStatus.PENDING, "轻微打喷嚏", null);
         when(tasks.findById(10L)).thenReturn(Optional.of(task));
-        when(geminiClient.analyze(any(), anyList())).thenReturn(
+        when(geminiClient.analyze(any(), anyList(), any())).thenReturn(
                 new GeminiTriageResult("GREEN", "继续观察", null, "仅供参考", null, Map.of()));
 
         processor.process(10L);
@@ -93,7 +93,7 @@ class TriageProcessorTest {
     void retriesThenFailsAfterMaxRetry() {
         TriageTask task = TriageTestSupport.task(2L, 7L, TriageStatus.PENDING, "x", null);
         when(tasks.findById(2L)).thenReturn(Optional.of(task));
-        when(geminiClient.analyze(any(), anyList())).thenThrow(new GeminiException("timeout"));
+        when(geminiClient.analyze(any(), anyList(), any())).thenThrow(new GeminiException("timeout"));
 
         processor.process(2L);
 
