@@ -111,6 +111,8 @@ class MockBackend {
         likeCount: s['like'] as int,
         images: (s['imgs'] as List).cast<String>(),
         ago: Duration(hours: i * 5 + 1),
+        // 有昵称=他人发布（authorId 2 → isAuthor=false → 可举报）；无昵称=自己（authorId 1 → 可删）。
+        authorId: s['nick'] == null ? 1 : 2,
       ));
     }
     // 详情页评论种子(给第一条帖)；第一条挂 2 条二级回复（replyCount=2 触发「查看回复」）。
@@ -127,13 +129,14 @@ class MockBackend {
       // type 必须是后端 NotificationType 合法值（VET_REPLY/CONSULT_CLOSED/CONTENT_LIKED/CONTENT_COMMENTED/
       // NEW_CONSULT_REQUEST/PET_BIRTHDAY/COMPANION_ANNIVERSARY/MILESTONE_NODE）。文案印尼语对齐 notif.html。
       // ago 跨今天/昨天，供通知中心按时间分组（HARI INI / KEMARIN）。
-      _notif(token: 'n1', type: 'VET_REPLY', title: 'Dokter Hewan membalas konsultasimu',
+      // token 寻址类：用真实资源 id（会话 6001 / 内容帖 100、101）以便深链落地。
+      _notif(token: '6001', type: 'VET_REPLY', title: 'Dokter Hewan membalas konsultasimu',
           body: '"Kondisi Mochi sudah membaik, lanjutkan diet makanan basah selama 3 hari..."',
           read: false, ago: const Duration(minutes: 5)),
-      _notif(token: 'n2', type: 'CONTENT_LIKED', title: 'Rani Fitriani menyukai postinganmu',
+      _notif(token: '100', type: 'CONTENT_LIKED', title: 'Rani Fitriani menyukai postinganmu',
           body: '"Oyen akhirnya mau makan lagi setelah semalam muntah..."',
           read: false, ago: const Duration(hours: 1)),
-      _notif(token: 'n3', type: 'CONTENT_COMMENTED', title: 'dr. Dewi mengomentari postinganmu',
+      _notif(token: '101', type: 'CONTENT_COMMENTED', title: 'dr. Dewi mengomentari postinganmu',
           body: '"Syukurlah Oyen sudah membaik! Kalau dalam 24 jam..."',
           read: true, ago: const Duration(hours: 2)),
       // L 级里程碑达成推送（Story 8.6）：6-6 铃铛里程碑条改真数据驱动。深链跳里程碑列表页。
@@ -197,10 +200,11 @@ class MockBackend {
   Map<String, dynamic> _post({
     required int id, required String type, String? body, String? nickname,
     int likeCount = 0, String? imageUrl, List<String>? images, required Duration ago,
+    int authorId = 1,
   }) {
     final imgs = images ?? (imageUrl == null ? const <String>[] : [imageUrl]);
     return {
-      'id': id, 'authorId': 1, 'authorDeleted': false,
+      'id': id, 'authorId': authorId, 'authorDeleted': false,
       'authorNickname': nickname ?? 'Demo User', 'authorAvatarUrl': null,
       'type': type, 'body': body,
       'firstImageUrl': imgs.isEmpty ? null : imgs.first,
@@ -222,7 +226,10 @@ class MockBackend {
     required bool read, required Duration ago,
   }) => {
         'type': type, 'title': title, 'body': body,
-        'deepLinkType': null, 'deepLinkToken': null, 'read': read, 'createdAt': _iso(ago),
+        // 深链（FR-38/FR-34）：deepLinkType=type 决定目标路由；token 同时用于路由寻址与标记已读(_token)。
+        // token 寻址类（VET_REPLY/CONTENT_*）的 token 须为真实可解析资源 id（会话 id/内容 id）；
+        // 固定目标类（PET_BIRTHDAY/MILESTONE_NODE 等）路由不依赖 token。
+        'deepLinkType': type, 'deepLinkToken': token, 'read': read, 'createdAt': _iso(ago),
       }..['_token'] = token;
 
   Map<String, dynamic> _envelope(List<Map<String, dynamic>> items) =>

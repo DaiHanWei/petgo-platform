@@ -91,31 +91,12 @@ class _DetailScaffold extends ConsumerWidget {
       appBar: AppBar(
         backgroundColor: AppColors.base,
         actions: [
-          // 「···」菜单按内容归属互斥分支（AC5）：自己内容→删除[3.6]；他人内容→举报[3.7]
-          // （游客查看他人内容点举报由 openReport 触发 FR-0C）。绝不同时出现举报与删除。
-          PopupMenuButton<String>(
+          // 「···」更多：原型 detail.html 为底抽屉。按归属互斥（自己→删除[3.6] / 他人→举报[3.7]，
+          // 游客点举报由 openReport 触发 FR-0C）。绝不同时出现举报与删除。
+          IconButton(
             key: const ValueKey('detailMenu'),
-            onSelected: (value) {
-              if (value == 'delete') {
-                _confirmDelete(context, ref, l10n);
-              } else if (value == 'report') {
-                openReport(context, ref, detail.id);
-              }
-            },
-            itemBuilder: (context) => [
-              if (detail.isAuthor)
-                PopupMenuItem<String>(
-                  key: const ValueKey('detailMenuDelete'),
-                  value: 'delete',
-                  child: Text(l10n.detailMenuDelete),
-                )
-              else
-                PopupMenuItem<String>(
-                  key: const ValueKey('detailMenuReport'),
-                  value: 'report',
-                  child: Text(l10n.detailMenuReport),
-                ),
-            ],
+            icon: const Icon(Icons.more_horiz, color: AppColors.ink),
+            onPressed: () => _showMoreSheet(context, ref, detail, l10n),
           ),
         ],
       ),
@@ -248,20 +229,142 @@ class _DetailScaffold extends ConsumerWidget {
     );
   }
 
-  /// 二次确认删除（Story 3.6）。确认 → 删除 → 刷新 Feed + 返回（该帖已不在列表，详情走 404）。
-  Future<void> _confirmDelete(BuildContext context, WidgetRef ref, AppLocalizations l10n) async {
-    final ok = await showDialog<bool>(
+  /// 「···」更多底抽屉（原型 detail.html `detail-more-sheet`）：把手 + 单一互斥动作（红字行）+ Batal。
+  /// 自己内容 → 🗑 删除；他人内容 → 🚩 举报。
+  void _showMoreSheet(
+      BuildContext context, WidgetRef ref, ContentDetail detail, AppLocalizations l10n) {
+    final isAuthor = detail.isAuthor;
+    showModalBottomSheet<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        content: Text(l10n.contentDeleteConfirm),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(l10n.commonCancel)),
-          TextButton(
-            key: const ValueKey('confirmDeleteContent'),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(l10n.detailMenuDelete),
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (sheetCtx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(
+                      color: AppColors.line, borderRadius: BorderRadius.circular(9999)),
+                ),
+              ),
+              // 单一互斥动作行（红字 + emoji，左对齐，底分隔线）。
+              InkWell(
+                key: ValueKey(isAuthor ? 'detailMenuDelete' : 'detailMenuReport'),
+                onTap: () {
+                  Navigator.of(sheetCtx).pop();
+                  if (isAuthor) {
+                    _confirmDelete(context, ref, l10n);
+                  } else {
+                    openReport(context, ref, detail.id);
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: const BoxDecoration(
+                    border: Border(bottom: BorderSide(color: AppColors.line2)),
+                  ),
+                  child: Row(
+                    children: [
+                      Text(isAuthor ? '🗑' : '🚩', style: const TextStyle(fontSize: 16)),
+                      const SizedBox(width: 10),
+                      Text(
+                        isAuthor ? l10n.detailMoreDeleteContent : l10n.detailMoreReportContent,
+                        style: const TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.popRed),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: () => Navigator.of(sheetCtx).pop(),
+                  style: TextButton.styleFrom(
+                      foregroundColor: AppColors.textSecondary,
+                      padding: const EdgeInsets.symmetric(vertical: 12)),
+                  child: Text(l10n.commonCancel),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
+      ),
+    );
+  }
+
+  /// 二次确认删除（Story 3.6 · 原型 detail.html `delete-confirm-sheet`）：底抽屉 ⚠️ + 标题 + 正文
+  /// + 红 Hapus + Batal。确认 → 删除 → 刷新 Feed + 返回（该帖已不在列表，详情走 404）。
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref, AppLocalizations l10n) async {
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(22, 12, 22, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                    color: AppColors.line, borderRadius: BorderRadius.circular(9999)),
+              ),
+              const Text('⚠️', style: TextStyle(fontSize: 36)),
+              const SizedBox(height: 10),
+              Text(l10n.contentDeleteTitle,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink)),
+              const SizedBox(height: 6),
+              Text(l10n.contentDeleteConfirm,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 13, height: 1.5, color: AppColors.textSecondary)),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  key: const ValueKey('confirmDeleteContent'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.popRed,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: () => Navigator.of(ctx).pop(true),
+                  child: Text(l10n.detailMenuDelete,
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(ctx).pop(false),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.textSecondary,
+                    side: const BorderSide(color: AppColors.line, width: 1.5),
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: Text(l10n.commonCancel),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
     if (ok != true) return;

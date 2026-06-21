@@ -83,7 +83,9 @@ void main() {
     expect(repo.reportCalls, 1);
     expect(repo.lastReason, 'HARASSMENT');
     final l10n = await AppLocalizations.delegate.load(const Locale('en'));
-    expect(find.text(l10n.reportSuccess), findsOneWidget); // 反馈 toast
+    // 提交成功 → sheet 内成功态（原型 report-type-done），不再用 toast。
+    expect(find.text(l10n.reportDoneTitle), findsOneWidget);
+    expect(find.byKey(const ValueKey('reportDoneClose')), findsOneWidget);
   });
 
   testWidgets('AC1: 游客举报 → FR-0C 强登录弹窗，不弹 sheet', (tester) async {

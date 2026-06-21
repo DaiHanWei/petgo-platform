@@ -151,8 +151,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('detailMenu')));
     await tester.pumpAndSettle();
     final l10n = await AppLocalizations.delegate.load(const Locale('en'));
-    expect(find.text(l10n.detailMenuDelete), findsOneWidget);
-    expect(find.text(l10n.detailMenuReport), findsNothing); // 互斥：举报项被删除替换
+    expect(find.text(l10n.detailMoreDeleteContent), findsOneWidget);
+    expect(find.text(l10n.detailMoreReportContent), findsNothing); // 互斥：举报项被删除替换
   });
 
   testWidgets('AC1: 作者删除 → 二次确认 → 调 deleteContent', (tester) async {
@@ -162,7 +162,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('detailMenu')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text(l10n.detailMenuDelete)); // 菜单项
+    await tester.tap(find.text(l10n.detailMoreDeleteContent)); // 底抽屉删除行
     await tester.pumpAndSettle();
     // 二次确认弹窗
     expect(find.text(l10n.contentDeleteConfirm), findsOneWidget);
@@ -176,7 +176,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('detailMenu')));
     await tester.pumpAndSettle();
     final l10n = await AppLocalizations.delegate.load(const Locale('en'));
-    expect(find.text(l10n.detailMenuReport), findsOneWidget);
-    expect(find.text(l10n.detailMenuDelete), findsNothing);
+    expect(find.text(l10n.detailMoreReportContent), findsOneWidget);
+    expect(find.text(l10n.detailMoreDeleteContent), findsNothing);
   });
 }
