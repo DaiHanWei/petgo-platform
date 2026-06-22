@@ -227,4 +227,27 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('feedLoadMoreRetry')));
     expect(retried, isTrue);
   });
+
+  testWidgets('autoLoadMore=false：滚动到底不自动翻页（访客闸门）', (tester) async {
+    var loaded = false;
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: FeedMasonryView(
+          items: List.generate(8, (i) => _item(id: i + 1, body: 'post $i')),
+          hasMore: true,
+          loadingMore: false,
+          autoLoadMore: false,
+          deletedUserLabel: 'x',
+          onLoadMore: () async => loaded = true,
+          onRefresh: () async {},
+        ),
+      ),
+    ));
+    await tester.pump();
+    await tester.drag(find.byType(FeedMasonryView), const Offset(0, -2000));
+    await tester.pump();
+    expect(loaded, isFalse); // 闸门：滚动不触发 loadMore
+  });
 }

@@ -24,6 +24,7 @@ class FeedMasonryView extends StatefulWidget {
     this.onAuthorTap,
     this.header,
     this.footer,
+    this.autoLoadMore = true,
   });
 
   final List<FeedItem> items;
@@ -43,8 +44,11 @@ class FeedMasonryView extends StatefulWidget {
   /// 可选全幅头部（随 Feed 同滚）。Beranda 用作问候/快捷入口/每日提示区。
   final Widget? header;
 
-  /// 可选全幅尾部（随 Feed 同滚）。feed-guest 用作底部登录引导横幅。
+  /// 可选全幅尾部（随 Feed 同滚）。feed-guest 用作底部登录引导横幅（访客翻页闸门）。
   final Widget? footer;
+
+  /// 滚动到底是否自动翻页。默认 true；访客态置 false——翻页只由底部引导卡「Lanjut lihat dulu」手动触发。
+  final bool autoLoadMore;
 
   @override
   State<FeedMasonryView> createState() => _FeedMasonryViewState();
@@ -70,6 +74,8 @@ class _FeedMasonryViewState extends State<FeedMasonryView> {
   }
 
   void _onScroll() {
+    // 访客态闸门：禁用滚动自动翻页，翻页由底部引导卡「Lanjut lihat dulu」手动触发。
+    if (!widget.autoLoadMore) return;
     // 失败态停止自动预加载——避免静默重试循环，须用户点击底部「重试」。
     if (!widget.hasMore || widget.loadingMore || widget.loadMoreFailed) return;
     final pos = _controller.position;

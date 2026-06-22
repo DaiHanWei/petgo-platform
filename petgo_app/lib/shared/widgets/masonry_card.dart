@@ -131,17 +131,20 @@ class MasonryCard extends StatelessWidget {
                   ],
                 ),
               ),
-              // 全宽首图（无图 → 类型彩块占位）。固定高度 cover：原型图区高度受控，
-              // 一屏可见多卡（避免真图按宽比撑满整屏，单卡占屏）。
+              // 全宽首图：固定 4:3 图区（高度由卡片宽度按 4:3 推出），BoxFit.cover 填满不留白
+              // （仅裁掉超出 4:3 的部分，统一比例裁切、卡片高度齐整）。无图 → 类型彩块占位。
               if (item.hasImage)
-                AppImage.widget(
-                  item.firstImageUrl!,
-                  fit: BoxFit.cover,
-                  width: double.infinity,
-                  height: _placeholderHeight(item.id),
-                  thumbWidth: 800, // Feed 全宽封面：OSS 缩略图省流量、列表滚动更顺
-                  errorBuilder: (context, error, stack) =>
-                      PostCoverPlaceholder(type: item.type, height: _placeholderHeight(item.id)),
+                AspectRatio(
+                  aspectRatio: 4 / 3,
+                  child: AppImage.widget(
+                    item.firstImageUrl!,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: double.infinity,
+                    thumbWidth: 800, // Feed 全宽封面：OSS 缩略图省流量、列表滚动更顺
+                    errorBuilder: (context, error, stack) =>
+                        PostCoverPlaceholder(type: item.type),
+                  ),
                 ),
             ],
           ),
@@ -151,8 +154,6 @@ class MasonryCard extends StatelessWidget {
   }
 }
 
-/// 占位封面高度：按 id 在 140/180/220 间轻微错落（单列卡更宽，封面更高）。
-double _placeholderHeight(int id) => 140 + (id.abs() % 3) * 40;
 
 /// 作者头像（原型 .av）：有图用网络图，否则彩色圆 + 昵称首字母。
 class _Avatar extends StatelessWidget {
