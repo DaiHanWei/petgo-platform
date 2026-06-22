@@ -112,11 +112,11 @@ development_status:
 
   # ===== Epic 4: AI 智能分诊 =====
   epic-4: in-progress
-  4-1-分诊异步基建与-gemini-接入: review
+  4-1-分诊异步基建与-gemini-接入: review        # [L2 Gemini 本地验收 2026-06-21] mode=live 真打 gemini-2.5-flash 通过: GeminiDeveloperApiClient 加 systemInstruction 把模型硬锁为「宠物健康分诊助手」+症状以<symptom>包裹明示为数据(抗prompt injection); 越界(人医/写码/闲聊/改角色)恒判GREEN+引导,绝不误判RED/YELLOW(原人医提问会被判RED已修); 真急症RED/真轻症GREEN/印尼语按语言作答均正确; fileData.fileUri 实测可抓OSS签名外链(无需改inlineData)。新增 GeminiDeveloperApiClientLiveTest(4例,@EnabledIfEnvironmentVariable 门控,无key自动跳过可提交); 全量578/578绿(Docker postgres+redis起,L0+L1+L2一锅)。key 走 .env(gitignored,GEMINI_MODE=live); 确定性 SafetyRuleLayer 未动(正交兜底)
   4-2-确定性安全规则层-高危强制升红: review
   4-3-ai-问诊入口与图文上传: review             # [PRD1.0.0✏️] AC2 注脚轻改: 视频 V2→收费模式启用后 (F4) ·[R2] review→rfd: 加 AC AI 问诊图片改选填(可仅文字提交) ·AC5 完成(后端 TriageSubmitRequest.symptomText @NotBlank[空→422,无图通过]+前端 canSubmit 收紧为文字非空[仅图不可仅文字可]; 后端519 test 绿含 L0 Validator×5+L1 MockMvc×2 真跑; 前端283; 无新增迁移; L2真机待本地)
-  4-4-分诊结果三态展示-绿-黄含条件倒计时协议: review
-  4-5-红色半屏强提醒: review                       # [PRD1.0.0✏️⚠️安全] F3 去导航化重做完成 ·[R2] review→rfd: 加 AC 结果页底部存档入口(按状态分支,守红色态零变现护栏) (FR-3/F15);L1/L2 待本地/真机 ·R2 实现完成(L0 绿: 红色态存档入口+专用 handler,守零变现;前端 234 test 全过); L2 待真机
+  4-4-分诊结果三态展示-绿-黄含条件倒计时协议: review   # [L2 联调本地验收 2026-06-21] iOS 模拟器真连后端(PETGO_MOCK=false+dev-stub真JWT)+live Gemini 端到端: GREEN「No urgent risk found」/YELLOW「Keep a close watch」协议块三要素(观察指标/时间窗/升级触发)齐全渲染。连带修复: GeminiDeveloperApiClient systemInstruction 强化为「判 YELLOW 必填 observation 三要素」(原模型时有时无→黄色协议块会空,FR-2)。前端解析契约逐字段对齐真后端JSON。新增 debug-only 联调钩子 DEV_REAL_LOGIN(main 启动前真登录写JWT)+DEV_TRIAGE_SYMPTOM(注入真症状自动提交) ·[作答语言 2026-06-21] AI 回复语言跟随 app(Accept-Language id/en,默认en英语兜底,绝不中文): V28 加 triage_tasks.response_locale(submit按header归一落库,@Async处理喂Gemini)+GeminiClient.analyze加locale参数+systemInstruction按locale指定语言;live测加「中文输入→en输出无CJK」+「id→印尼语无CJK」硬断言;后端579全绿
+  4-5-红色半屏强提醒: review                       # [PRD1.0.0✏️⚠️安全] F3 去导航化重做完成 ·[R2] review→rfd: 加 AC 结果页底部存档入口(按状态分支,守红色态零变现护栏) (FR-3/F15);L1/L2 待本地/真机 ·R2 实现完成(L0 绿: 红色态存档入口+专用 handler,守零变现;前端 234 test 全过) ·[L2 联调本地验收 2026-06-21] iOS 模拟器真连后端+live Gemini: 误食巧克力+抽搐→SafetyRuleLayer确定性强制升红→红色半屏强提醒全屏渲染(⚠️+症状回显+5s「activates after you read」锁+「I understand」),零变现护栏在位
   epic-4-retrospective: optional
 
   # ===== Epic 5: 在线兽医咨询与兽医工作台 =====

@@ -10,7 +10,7 @@ class StubGeminiClientTest {
 
     @Test
     void returnsFixedGreenStructuredResult() {
-        GeminiTriageResult r = new StubGeminiClient().analyze("咳嗽", List.of("k1"));
+        GeminiTriageResult r = new StubGeminiClient().analyze("咳嗽", List.of("k1"), "en");
         assertThat(r.dangerLevel()).isEqualTo("GREEN");
         assertThat(r.advice()).isNotBlank();
         assertThat(r.disclaimer()).isNotBlank();

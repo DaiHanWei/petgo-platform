@@ -242,6 +242,18 @@ public class ConsultSession {
         this.ratingPromptState = RatingPromptState.NONE;
     }
 
+    /**
+     * 终态时间（历史展示 + 排序的单一口径）：中断取 {@code interruptedAt}，否则取 {@code updatedAt}
+     * 兜底 {@code createdAt}。用户侧 {@code ConsultHistoryService} 与兽医侧 {@code VetConsultService}
+     * 共用此口径，避免两份重复定义静默漂移。
+     */
+    public Instant terminalAt() {
+        if (interruptedAt != null) {
+            return interruptedAt;
+        }
+        return updatedAt != null ? updatedAt : createdAt;
+    }
+
     /** 是否已过 PENDING_CLOSE 评分门 {@code seconds} 秒（定时扫描判断超时关闭用）。 */
     public boolean isRatingGateExpired(long seconds) {
         return status == SessionStatus.PENDING_CLOSE

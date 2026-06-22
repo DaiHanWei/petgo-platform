@@ -47,7 +47,7 @@ class TriageServiceTest {
         });
 
         TriageAcceptedResponse resp = service.submit(
-                7L, new TriageSubmitRequest("咳嗽", List.of("k1"), null), null);
+                7L, new TriageSubmitRequest("咳嗽", List.of("k1"), null), null, "en");
 
         assertThat(resp.triageId()).isEqualTo(42L);
         assertThat(resp.status()).isEqualTo(TriageStatus.PENDING);
@@ -62,7 +62,7 @@ class TriageServiceTest {
         when(tasks.findByIdempotencyKey("idem-1")).thenReturn(Optional.of(existing));
 
         TriageAcceptedResponse resp = service.submit(
-                7L, new TriageSubmitRequest("咳嗽", null, null), "idem-1");
+                7L, new TriageSubmitRequest("咳嗽", null, null), "idem-1", "en");
 
         assertThat(resp.triageId()).isEqualTo(99L);
         verify(tasks, never()).save(any());

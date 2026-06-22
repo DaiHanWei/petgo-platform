@@ -9,7 +9,6 @@ class VetInboxItem {
     required this.waitingElapsedSeconds,
     this.petName,
     this.petSpecies,
-    this.petSex,
     this.petAgeMonths,
     this.ownerHandle,
   });
@@ -21,10 +20,10 @@ class VetInboxItem {
   final int imageCount;
   final int waitingElapsedSeconds;
 
-  // 宠物身份（决策：Mock 先做满、后端随后补）。全 nullable：真后端未下发 → null → 卡片优雅降级不显身份块。
+  // 宠物身份（后端已下发：pet_profiles JOIN + 机主昵称富化）。全 nullable：注销匿名化/无档案 → null →
+  // 卡片优雅降级不显身份块。无性别字段（建档不收集性别，后端不下发 petSex）。
   final String? petName;
   final String? petSpecies; // CAT | DOG
-  final String? petSex; // MALE | FEMALE
   final int? petAgeMonths;
   final String? ownerHandle; // 不含 @，渲染时前置
 
@@ -39,7 +38,6 @@ class VetInboxItem {
         waitingElapsedSeconds: (json['waitingElapsedSeconds'] as num?)?.toInt() ?? 0,
         petName: json['petName'] as String?,
         petSpecies: json['petSpecies'] as String?,
-        petSex: json['petSex'] as String?,
         petAgeMonths: (json['petAgeMonths'] as num?)?.toInt(),
         ownerHandle: json['ownerHandle'] as String?,
       );
@@ -56,7 +54,6 @@ class VetSession {
     required this.hasAiContext,
     this.petName,
     this.petSpecies,
-    this.petSex,
     this.petAgeMonths,
     this.ownerHandle,
   });
@@ -68,11 +65,10 @@ class VetSession {
   final String? imConversationId;
   final bool hasAiContext;
 
-  // 宠物身份（决策：Mock 先做满、后端随后补，同 VetInboxItem）。全 nullable → 真后端未下发时
-  // 会话页顶栏优雅降级（标题回落、状态行隐藏）。
+  // 宠物身份（后端已下发，同 VetInboxItem）。全 nullable → 注销匿名化/无档案时会话页顶栏优雅降级
+  // （标题回落、状态行隐藏）。无性别字段（后端不下发 petSex）。
   final String? petName;
   final String? petSpecies; // CAT | DOG
-  final String? petSex; // MALE | FEMALE
   final int? petAgeMonths;
   final String? ownerHandle; // 不含 @，渲染时前置
 
@@ -85,7 +81,6 @@ class VetSession {
         hasAiContext: (json['hasAiContext'] ?? false) as bool,
         petName: json['petName'] as String?,
         petSpecies: json['petSpecies'] as String?,
-        petSex: json['petSex'] as String?,
         petAgeMonths: (json['petAgeMonths'] as num?)?.toInt(),
         ownerHandle: json['ownerHandle'] as String?,
       );

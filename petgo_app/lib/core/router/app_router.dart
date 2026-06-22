@@ -183,7 +183,6 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
                 waitingElapsedSeconds: 45,
                 petName: 'Mochi',
                 petSpecies: 'CAT',
-                petSex: 'FEMALE',
                 petAgeMonths: 12,
                 ownerHandle: 'aditya.kurniawan',
               ),

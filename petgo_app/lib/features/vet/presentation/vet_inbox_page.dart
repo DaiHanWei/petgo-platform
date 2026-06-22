@@ -238,7 +238,7 @@ class _InboxCard extends StatelessWidget {
     }
   }
 
-  /// meta 行：「种类 · 性别 · 年龄 · @主人」，缺项跳过。
+  /// meta 行：「种类 · 年龄 · @主人」，缺项跳过（无性别——后端不下发 petSex）。
   String _metaLine(AppLocalizations l10n) {
     final parts = <String>[];
     switch (item.petSpecies) {
@@ -246,12 +246,6 @@ class _InboxCard extends StatelessWidget {
         parts.add(l10n.vetSpeciesCat);
       case 'DOG':
         parts.add(l10n.vetSpeciesDog);
-    }
-    switch (item.petSex) {
-      case 'MALE':
-        parts.add(l10n.vetSexMale);
-      case 'FEMALE':
-        parts.add(l10n.vetSexFemale);
     }
     final m = item.petAgeMonths;
     if (m != null) parts.add(m >= 12 ? l10n.vetAgeYears(m ~/ 12) : l10n.vetAgeMonths(m));
