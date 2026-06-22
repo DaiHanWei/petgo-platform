@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -80,6 +81,26 @@ void main() {
     expect(find.text('Kebijakan Privasi'), findsOneWidget);
   });
 
+  testWidgets('FR-44: Apple 按钮仅 iOS 显示且置于 Google 之上', (tester) async {
+    // 默认（非 iOS）→ 无 Apple 按钮，只有 Google。
+    await _pump(tester, const Locale('id'));
+    expect(find.byKey(const ValueKey('appleLoginButton')), findsNothing);
+    expect(find.byKey(const ValueKey('googleLoginButton')), findsOneWidget);
+
+    // iOS → Apple 显示，且在 Google 上方（App Store 4.8 同级置顶）。
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    try {
+      await _pump(tester, const Locale('id'));
+      expect(find.byKey(const ValueKey('appleLoginButton')), findsOneWidget);
+      expect(find.text('Lanjutkan dengan Apple'), findsOneWidget);
+      final appleDy = tester.getTopLeft(find.byKey(const ValueKey('appleLoginButton'))).dy;
+      final googleDy = tester.getTopLeft(find.byKey(const ValueKey('googleLoginButton'))).dy;
+      expect(appleDy, lessThan(googleDy));
+    } finally {
+      debugDefaultTargetPlatformOverride = null; // 体内重置，过 foundation 调试变量不变式校验
+    }
+  });
+
   testWidgets('AC5(R2/F13): 授权失败（网络/服务异常）→ 「登录失败，请重试」+ 不创建账号（仍游客）',
       (tester) async {
     final c = await _pumpWith(tester, () async => throw Exception('network error'));
@@ -89,7 +110,10 @@ void main() {
     expect(find.text('Sign-in failed, please try again'), findsOneWidget);
     // 不创建账号：登录态仍为游客；按钮恢复可点（=重试）
     expect(c.read(authControllerProvider).isLoggedIn, isFalse);
-    final btn = tester.widget<FilledButton>(find.byKey(const ValueKey('googleLoginButton')));
+    final btn = tester.widget<FilledButton>(find.descendant(
+      of: find.byKey(const ValueKey('googleLoginButton')),
+      matching: find.byType(FilledButton),
+    ));
     expect(btn.onPressed, isNotNull);
   });
 
