@@ -342,7 +342,7 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
                             : const Text('🐱', style: TextStyle(fontSize: 38)))
                         : ClipOval(
                             child: AppImage.widget(_avatarUrl!,
-                                width: 88, height: 88, fit: BoxFit.cover)),
+                                width: 88, height: 88, fit: BoxFit.cover, thumbWidth: 280)),
                   ),
                   Positioned(
                     right: 4,

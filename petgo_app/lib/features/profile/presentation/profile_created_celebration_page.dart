@@ -49,7 +49,7 @@ class ProfileCreatedCelebrationPage extends ConsumerWidget {
                 key: const ValueKey('celebrationAvatar'),
                 radius: 48,
                 backgroundColor: AppColors.surface,
-                backgroundImage: AppImage.provider(avatarUrl),
+                backgroundImage: AppImage.provider(avatarUrl, thumbWidth: 240),
                 child: avatarUrl == null
                     ? const Icon(Icons.pets_rounded, size: 44, color: AppColors.accentGrowth)
                     : null,

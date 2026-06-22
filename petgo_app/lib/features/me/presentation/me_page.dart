@@ -504,7 +504,8 @@ class _InitialAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (avatarUrl != null && avatarUrl!.isNotEmpty) {
-      return CircleAvatar(radius: radius, backgroundImage: AppImage.provider(avatarUrl));
+      return CircleAvatar(
+          radius: radius, backgroundImage: AppImage.provider(avatarUrl, thumbWidth: 240));
     }
     final trimmed = nickname.trim();
     if (trimmed.isEmpty) {
@@ -583,6 +584,7 @@ class _MyPostCard extends StatelessWidget {
                 ? AppImage.widget(
                     post.firstImageUrl!,
                     fit: BoxFit.cover,
+                    thumbWidth: 400, // 「我的帖子」网格小图
                     errorBuilder: (context, error, stack) =>
                         PostCoverPlaceholder(type: post.type, emojiSize: 30),
                   )

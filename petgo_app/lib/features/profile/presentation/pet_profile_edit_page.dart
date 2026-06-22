@@ -151,7 +151,7 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
                       child: CircleAvatar(
                         radius: 44,
                         backgroundColor: AppColors.cream2,
-                        backgroundImage: AppImage.provider(_avatarUrl),
+                        backgroundImage: AppImage.provider(_avatarUrl, thumbWidth: 240),
                         child: _uploading
                             ? const CircularProgressIndicator()
                             : (_avatarUrl == null

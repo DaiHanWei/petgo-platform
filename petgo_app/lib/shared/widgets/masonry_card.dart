@@ -145,6 +145,7 @@ class MasonryCard extends StatelessWidget {
                   fit: BoxFit.cover,
                   width: double.infinity,
                   height: _placeholderHeight(item.id),
+                  thumbWidth: 800, // Feed 全宽封面：OSS 缩略图省流量、列表滚动更顺
                   errorBuilder: (context, error, stack) =>
                       PostCoverPlaceholder(type: item.type, height: _placeholderHeight(item.id)),
                 ),
@@ -179,7 +180,8 @@ class _Avatar extends StatelessWidget {
   Widget build(BuildContext context) {
     const double size = 34;
     if (url != null && url!.isNotEmpty) {
-      return CircleAvatar(radius: size / 2, backgroundImage: AppImage.provider(url));
+      return CircleAvatar(
+          radius: size / 2, backgroundImage: AppImage.provider(url, thumbWidth: 120));
     }
     final trimmed = name.trim();
     // 注销作者 → 默认 person 头像（Story 3.8），不用昵称首字母。

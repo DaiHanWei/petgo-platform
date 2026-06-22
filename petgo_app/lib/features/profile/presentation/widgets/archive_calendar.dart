@@ -146,7 +146,7 @@ class _ArchiveCalendarState extends ConsumerState<ArchiveCalendar> {
               borderRadius: BorderRadius.circular(10),
               child: cell.firstImageUrl != null
                   ? AppImage.widget(cell.firstImageUrl!,
-                      fit: BoxFit.cover,
+                      fit: BoxFit.cover, thumbWidth: 200, // 日历格小图
                       errorBuilder: (_, _, _) => _healthOnlyBox(day))
                   : _healthOnlyBox(day),
             ),
