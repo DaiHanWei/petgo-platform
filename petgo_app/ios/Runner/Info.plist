@@ -30,6 +30,24 @@
 	<string>TailTopia needs camera access so you can take photos of your pet for profiles, posts, and AI triage.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>TailTopia needs photo library access so you can choose pet photos for profiles, posts, and AI triage.</string>
+	<!-- Google Sign-In (google_sign_in 7.x)。client ID 非机密，随客户端分发。 -->
+	<key>GIDClientID</key>
+	<string>952015467016-rip06l8hh1mn4ppi4t3f758b0ah1nb8d.apps.googleusercontent.com</string>
+	<!-- serverClientId：后端校验 idToken 的 aud（Web 类型客户端）。 -->
+	<key>GIDServerClientID</key>
+	<string>952015467016-3q9vb0ro18fnecl9gpnrddbfj9snqer0.apps.googleusercontent.com</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<!-- iOS client ID 的 reversed 形式，供 Google OAuth 回跳。 -->
+				<string>com.googleusercontent.apps.952015467016-rip06l8hh1mn4ppi4t3f758b0ah1nb8d</string>
+			</array>
+		</dict>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
