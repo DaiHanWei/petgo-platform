@@ -136,7 +136,7 @@ class _Header extends StatelessWidget {
                           color: AppColors.mintTint,
                           child: const Icon(Icons.pets_rounded, color: AppColors.mint),
                         )
-                      : AppImage.widget(data.petAvatarUrl!, fit: BoxFit.cover),
+                      : AppImage.widget(data.petAvatarUrl!, fit: BoxFit.cover, thumbWidth: 240),
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
@@ -473,7 +473,7 @@ class _CandidateTile extends ConsumerWidget {
             child: candidate.firstImageUrl == null
                 ? Container(color: AppColors.line2,
                     child: const Icon(Icons.photo_outlined, color: AppColors.muted, size: 20))
-                : AppImage.widget(candidate.firstImageUrl!, fit: BoxFit.cover),
+                : AppImage.widget(candidate.firstImageUrl!, fit: BoxFit.cover, thumbWidth: 240),
           ),
         ),
         title: Text(

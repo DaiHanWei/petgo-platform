@@ -39,7 +39,8 @@ public class TriageService {
      * 否则建 PENDING 任务并发 {@link TriageSubmittedEvent}（AFTER_COMMIT 异步处理）。
      */
     @Transactional
-    public TriageAcceptedResponse submit(long userId, TriageSubmitRequest req, String idempotencyKey) {
+    public TriageAcceptedResponse submit(long userId, TriageSubmitRequest req, String idempotencyKey,
+            String responseLocale) {
         String key = emptyToNull(idempotencyKey);
         if (key != null) {
             Optional<TriageTask> existing = tasks.findByIdempotencyKey(key);
@@ -49,7 +50,7 @@ public class TriageService {
             }
         }
         TriageTask task = tasks.save(TriageTask.submit(
-                userId, req.petId(), req.symptomText(), req.imageObjectKeys(), key));
+                userId, req.petId(), req.symptomText(), req.imageObjectKeys(), key, responseLocale));
         // 提交后再异步处理：AFTER_COMMIT 保证任务已落库可见。
         events.publishEvent(new TriageSubmittedEvent(task.getId(), Instant.now()));
         return TriageAcceptedResponse.of(task.getId(), task.getStatus());

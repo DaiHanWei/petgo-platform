@@ -18,8 +18,9 @@ public interface GeminiClient {
      *
      * @param symptomText     症状文字（健康数据，调用方负责不落日志）
      * @param signedImageUrls 私密桶图的短 TTL 签名 URL 列表（≤3，可空）
+     * @param responseLocale  回复语言（{@code id}/{@code en}，null 视为 en）；模型按此作答，绝不中文
      * @return 结构化解析结果
      * @throws GeminiException 调用失败（超时 / 非 2xx / 响应不可解析），可重试
      */
-    GeminiTriageResult analyze(String symptomText, List<String> signedImageUrls);
+    GeminiTriageResult analyze(String symptomText, List<String> signedImageUrls, String responseLocale);
 }

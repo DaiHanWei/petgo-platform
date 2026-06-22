@@ -4,15 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/media/media_scope.dart';
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
-import 'sts_credential.dart';
+import 'upload_ticket.dart';
 
-/// 媒体上传数据层（Story 2.1 · F2）。请求 STS 凭证（`POST /media/sts-credentials`）。
+/// 媒体上传数据层（Story 2.1 · F2）。请求预签名上传票据（`POST /media/upload-url`）。
 /// 抽象便于测试注入 fake。
 abstract class MediaRepository {
-  Future<StsCredential> requestStsCredential(
+  Future<UploadTicket> requestUploadTicket(
     MediaScope scope, {
     String? contentType,
-    int count = 1,
   });
 }
 
@@ -22,17 +21,16 @@ class DioMediaRepository implements MediaRepository {
   final Dio dio;
 
   @override
-  Future<StsCredential> requestStsCredential(
+  Future<UploadTicket> requestUploadTicket(
     MediaScope scope, {
     String? contentType,
-    int count = 1,
   }) async {
-    final data = <String, dynamic>{'scope': scope.wire, 'count': count};
+    final data = <String, dynamic>{'scope': scope.wire};
     if (contentType != null) {
       data['contentType'] = contentType;
     }
-    final resp = await dio.post<Map<String, dynamic>>(ApiPaths.mediaStsCredentials, data: data);
-    return StsCredential.fromJson(resp.data!);
+    final resp = await dio.post<Map<String, dynamic>>(ApiPaths.mediaUploadUrl, data: data);
+    return UploadTicket.fromJson(resp.data!);
   }
 }
 

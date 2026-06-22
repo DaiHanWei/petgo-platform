@@ -39,11 +39,19 @@ class _TriageUploadPageState extends ConsumerState<TriageUploadPage> {
       ref.read(triageResultProvider.notifier).reset();
       ref.read(triageUploadProvider.notifier).reset();
     });
-    // Debug 截图钩子（仅 debug + flag）：自动提交一次，直达分诊结果态（配 DEV_STATE=triage-green/yellow/red）。
-    // 截 ai-result/-green/-red 用。生产/测试不编译进逻辑（flag 默认空）。
+    // Debug 截图钩子（仅 debug + flag）：自动提交一次，直达分诊结果态。
+    // - mock：配 DEV_STATE=triage-green/yellow/red 直出对应态。
+    // - 真后端联调：配 PETGO_MOCK=false + DEV_REAL_LOGIN + DEV_TRIAGE_SYMPTOM=<真症状>，
+    //   自动注入症状并提交，真打后端 + live Gemini，落真实结果页（红/黄/绿）。
+    // 生产/测试不编译进逻辑（flag 默认空）。
     if (kDebugMode && const bool.fromEnvironment('DEV_TRIAGE_AUTO')) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _submit();
+        if (!mounted) return;
+        const devSymptom = String.fromEnvironment('DEV_TRIAGE_SYMPTOM');
+        if (devSymptom.isNotEmpty) {
+          ref.read(triageUploadProvider.notifier).setSymptom(devSymptom);
+        }
+        _submit();
       });
     }
   }

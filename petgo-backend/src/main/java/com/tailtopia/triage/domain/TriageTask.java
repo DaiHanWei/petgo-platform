@@ -69,6 +69,10 @@ public class TriageTask {
     @Column(name = "idempotency_key", length = 80)
     private String idempotencyKey;
 
+    /** 回复语言（submit 时按 Accept-Language 归一 id/en，默认 en）。处理时喂 Gemini，绝不中文。 */
+    @Column(name = "response_locale", length = 8)
+    private String responseLocale;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -80,13 +84,14 @@ public class TriageTask {
 
     /** 受理：建任务，status=PENDING、retry_count=0、danger_level 待定。 */
     public static TriageTask submit(long userId, Long petId, String symptomText,
-            List<String> imageObjectKeys, String idempotencyKey) {
+            List<String> imageObjectKeys, String idempotencyKey, String responseLocale) {
         TriageTask t = new TriageTask();
         t.userId = userId;
         t.petId = petId;
         t.symptomText = symptomText;
         t.imageObjectKeys = imageObjectKeys;
         t.idempotencyKey = idempotencyKey;
+        t.responseLocale = responseLocale;
         t.status = TriageStatus.PENDING;
         t.retryCount = 0;
         return t;
@@ -158,6 +163,10 @@ public class TriageTask {
 
     public String getIdempotencyKey() {
         return idempotencyKey;
+    }
+
+    public String getResponseLocale() {
+        return responseLocale;
     }
 
     public Instant getCreatedAt() {

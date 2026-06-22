@@ -13,7 +13,7 @@ import java.util.Map;
 public class StubGeminiClient implements GeminiClient {
 
     @Override
-    public GeminiTriageResult analyze(String symptomText, List<String> signedImageUrls) {
+    public GeminiTriageResult analyze(String symptomText, List<String> signedImageUrls, String responseLocale) {
         Map<String, Object> raw = Map.of(
                 "stub", true,
                 "model", "stub-gemini",

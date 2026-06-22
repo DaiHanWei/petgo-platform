@@ -54,7 +54,7 @@ class HappyMomentTile extends StatelessWidget {
       return ClipRRect(
         borderRadius: BorderRadius.circular(9),
         child: AppImage.widget(item.imageUrls.first,
-            width: 52, height: 52, fit: BoxFit.cover,
+            width: 52, height: 52, fit: BoxFit.cover, thumbWidth: 160,
             errorBuilder: (c, e, s) => _emojiThumb()),
       );
     }

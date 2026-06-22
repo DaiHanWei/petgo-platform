@@ -13,7 +13,7 @@ public final class TriageTestSupport {
 
     public static TriageTask task(long id, long userId, TriageStatus status,
             String symptom, List<String> imageKeys) {
-        TriageTask t = TriageTask.submit(userId, null, symptom, imageKeys, null);
+        TriageTask t = TriageTask.submit(userId, null, symptom, imageKeys, null, "en");
         set(t, "id", id);
         set(t, "status", status);
         return t;

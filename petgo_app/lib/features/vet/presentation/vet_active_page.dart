@@ -103,13 +103,17 @@ class _ActiveCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(item.petName, style: AppTypography.body),
-                  const SizedBox(height: 2),
-                  Text(
-                    item.lastMessage,
-                    style: AppTypography.caption,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  // TODO(IM-SDK, L2 · 决策 C6): unread/lastMessage 后端列表不下发，需从腾讯 IM SDK
+                  //   会话摘要补填后传入 VetActiveItem；当前 mock 离线态有占位、真机无 IM 数据时隐藏降级。
+                  if (item.lastMessage.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      item.lastMessage,
+                      style: AppTypography.caption,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ],
               ),
             ),

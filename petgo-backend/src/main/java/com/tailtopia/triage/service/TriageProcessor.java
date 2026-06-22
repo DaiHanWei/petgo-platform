@@ -67,7 +67,8 @@ public class TriageProcessor {
         while (true) {
             try {
                 List<String> signedUrls = signImages(task.getImageObjectKeys());
-                GeminiTriageResult result = geminiClient.analyze(task.getSymptomText(), signedUrls);
+                GeminiTriageResult result =
+                        geminiClient.analyze(task.getSymptomText(), signedUrls, task.getResponseLocale());
 
                 DangerLevel modelLevel = DangerLevel.fromNullable(result.dangerLevel());
                 // === Story 4.2 后置强制升红的唯一挂载点（只升不降、不可旁路）===

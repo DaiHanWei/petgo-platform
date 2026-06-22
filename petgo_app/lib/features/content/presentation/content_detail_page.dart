@@ -171,7 +171,7 @@ class _DetailScaffold extends ConsumerWidget {
         CircleAvatar(
           radius: 18,
           backgroundColor: AppColors.mint,
-          backgroundImage: hasImg ? AppImage.provider(avatar) : null,
+          backgroundImage: hasImg ? AppImage.provider(avatar, thumbWidth: 160) : null,
           child: hasImg
               ? null
               : (detail.authorDeleted
@@ -431,6 +431,7 @@ class _ImageCarouselState extends State<_ImageCarousel> {
                 child: AppImage.widget(
                   widget.urls[i],
                   fit: BoxFit.cover,
+                  thumbWidth: 1080, // 详情方图：按手机全宽取缩略图（全屏放大走原图）
                   errorBuilder: (context, error, stack) =>
                       Container(color: AppColors.border),
                 ),

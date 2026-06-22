@@ -256,12 +256,6 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
       case 'DOG':
         parts.add(l10n.vetSpeciesDog);
     }
-    switch (s.petSex) {
-      case 'MALE':
-        parts.add(l10n.vetSexMale);
-      case 'FEMALE':
-        parts.add(l10n.vetSexFemale);
-    }
     final m = s.petAgeMonths;
     if (m != null) parts.add(m >= 12 ? l10n.vetAgeYears(m ~/ 12) : l10n.vetAgeMonths(m));
     return parts.join(' · ');

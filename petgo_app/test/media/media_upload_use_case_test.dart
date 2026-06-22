@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/core/media/media_scope.dart';
 import 'package:tailtopia/features/media/data/media_repository.dart';
 import 'package:tailtopia/features/media/data/oss_uploader.dart';
-import 'package:tailtopia/features/media/data/sts_credential.dart';
+import 'package:tailtopia/features/media/data/upload_ticket.dart';
 import 'package:tailtopia/features/media/domain/media_upload_use_case.dart';
 import 'package:tailtopia/shared/utils/media_permission.dart';
 
@@ -27,34 +27,25 @@ class _FakeRepo implements MediaRepository {
   MediaScope? lastScope;
 
   @override
-  Future<StsCredential> requestStsCredential(MediaScope scope, {String? contentType, int count = 1}) async {
+  Future<UploadTicket> requestUploadTicket(MediaScope scope, {String? contentType}) async {
     lastScope = scope;
-    return const StsCredential(
-      accessKeyId: 'ak',
-      accessKeySecret: 'sk',
-      securityToken: 'st',
-      expiration: '',
-      bucket: 'petgo-public',
-      region: 'ap-southeast-5',
-      endpoint: 'https://oss-ap-southeast-5.aliyuncs.com',
-      uploadDir: 'public/42/',
-      cdnBaseUrl: 'https://cdn.petgo.example',
+    return const UploadTicket(
+      uploadUrl: 'https://tailtopia.oss/public/42/obj.jpg?sig',
+      objectKey: 'public/42/obj.jpg',
+      method: 'PUT',
+      headers: {'Content-Type': 'image/jpeg', 'x-oss-object-acl': 'public-read'},
+      publicUrl: 'https://cdn.petgo.example/public/42/obj.jpg',
     );
   }
 }
 
 class _FakeUploader extends OssUploader {
-  String? putKey;
+  UploadTicket? putTicket;
 
   @override
-  Future<OssUploadResult> put(
-    StsCredential cred, {
-    required String objectKey,
-    required Uint8List bytes,
-    required String contentType,
-  }) async {
-    putKey = objectKey;
-    return OssUploadResult(objectKey: objectKey, publicUrl: '${cred.cdnBaseUrl}/$objectKey');
+  Future<OssUploadResult> put(UploadTicket ticket, {required Uint8List bytes}) async {
+    putTicket = ticket;
+    return OssUploadResult(objectKey: ticket.objectKey, publicUrl: ticket.publicUrl);
   }
 }
 
@@ -71,10 +62,10 @@ void main() {
       source: MediaSource.gallery,
     );
     expect(result, isNull);
-    expect(repo.lastScope, isNull); // 未请求 STS
+    expect(repo.lastScope, isNull); // 未请求上传票据
   });
 
-  test('uploadBytes：请求 STS → 直传 → 返回 key 落在前缀下 + 公开 URL', () async {
+  test('uploadBytes：请求预签名票据 → 直传 → 返回服务端 key + 公开 URL', () async {
     final repo = _FakeRepo();
     final uploader = _FakeUploader();
     final useCase = MediaUploadUseCase(repository: repo, uploader: uploader);
@@ -87,6 +78,6 @@ void main() {
     expect(repo.lastScope, MediaScope.public);
     expect(result.objectKey, startsWith('public/42/'));
     expect(result.publicUrl, startsWith('https://cdn.petgo.example/public/42/'));
-    expect(uploader.putKey, result.objectKey);
+    expect(uploader.putTicket!.objectKey, result.objectKey);
   });
 }

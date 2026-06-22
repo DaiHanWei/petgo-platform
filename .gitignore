@@ -19,3 +19,6 @@
 
 # Flutter/Xcode 在仓库根可能生成的构建产物（子工程自带各自 .gitignore）
 /build/
+
+# 本地 L2 验收脚本（含真实凭证调用，绝不入库）
+scripts/local/
