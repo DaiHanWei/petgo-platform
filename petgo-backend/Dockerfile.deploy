@@ -1,0 +1,11 @@
+# 运行期专用镜像（部署用）。
+# 与本目录的多阶段 Dockerfile 分工不同：
+#   - Dockerfile        ：容器内 JDK21 跑 mvn 构建（本地 docker-compose 用，免装本地 maven）
+#   - Dockerfile.deploy ：jar 已在本地 mvn 构建好，这里只装运行时 → 配合 scripts/deploy-backend.sh
+#                         走「本地 build jar → scp → 服务器 docker build(仅 COPY jar)」，对齐 logistic，构建快。
+# profile / DB / Redis / 各类密钥全部经 docker run --env-file ~/.env.petgo 注入，绝不入镜像。
+FROM eclipse-temurin:21-jre
+WORKDIR /app
+COPY target/petgo-backend-*.jar app.jar
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "app.jar"]

@@ -79,6 +79,9 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      # 逻辑 DB 序号：本地独占 redis 用 0；生产与其他项目共用同一 redis 容器时，
+      # 经 env REDIS_DB 指定独立序号（如 2）隔离 keyspace，避免撞键 / 跨项目 FLUSHDB 误伤。
+      database: ${REDIS_DB:0}
   # 命名映射链：JSON camelCase（Jackson 默认）；null 字段省略；时间 ISO-8601 UTC。
   # 注：Jackson 3（Boot 4）默认即输出 ISO-8601 日期字符串（WRITE_DATES_AS_TIMESTAMPS 已移至 DateTimeFeature 且默认关），无需显式设置。
   jackson:
