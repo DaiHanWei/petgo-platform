@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/dio_client.dart';
 import 'auth_routing.dart';
 import 'login_response.dart';
 
@@ -28,7 +29,29 @@ class AuthState {
 /// 登录态管理。副作用（令牌读写）在 repository，本 Notifier 仅持有不可变态。
 class AuthController extends Notifier<AuthState> {
   @override
-  AuthState build() => const AuthState.guest();
+  AuthState build() {
+    // 冷启动恢复会话（修复:登录态未跨重启持久）。fire-and-forget,先返回游客态,
+    // restore 成功后异步切换到已登录/待引导态。
+    _restoreSession();
+    return const AuthState.guest();
+  }
+
+  /// 冷启动用本地 token 调 `/me` 恢复登录态;无 token / 失效则保持游客。
+  Future<void> _restoreSession() async {
+    try {
+      final profile = await ref.read(authRepositoryProvider).restoreSession();
+      if (profile == null) return;
+      state = AuthState(
+        status: profile.onboardingCompleted
+            ? AuthStatus.authenticated
+            : AuthStatus.newUserPendingOnboarding,
+        role: 'USER',
+        profile: profile,
+      );
+    } catch (_) {
+      // 恢复失败保持游客态（不阻塞启动）。
+    }
+  }
 
   /// 登录成功后根据分流信号置态。
   void applyLogin(LoginResponse resp) {

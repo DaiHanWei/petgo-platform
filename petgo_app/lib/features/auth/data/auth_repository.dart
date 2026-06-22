@@ -48,6 +48,21 @@ class AuthRepository {
     return login;
   }
 
+  /// 冷启动恢复会话：本地有 access token 则调 `/me` 验证并返回 profile；
+  /// access 过期时鉴权拦截器会自动用 refresh 续期重放；无 token / 刷新失败返回 null（保持游客）。
+  Future<UserProfile?> restoreSession() async {
+    final access = await tokenStore.readAccess();
+    if (access == null) return null;
+    try {
+      final resp = await dio.get<Map<String, dynamic>>(ApiPaths.me);
+      final data = resp.data;
+      if (data == null) return null;
+      return UserProfile.fromJson(data);
+    } on DioException {
+      return null;
+    }
+  }
+
   /// refresh 轮换：成功返回 true 并落盘新令牌；失败返回 false。
   Future<bool> refresh() async {
     final current = await tokenStore.readRefresh();
