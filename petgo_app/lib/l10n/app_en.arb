@@ -570,6 +570,7 @@
   "mePetCardCreateTitle": "Create a profile for your pet",
   "meNicknameSaveFailed": "Could not save, please try again",
   "meAvatarSaveFailed": "Could not update photo, please try again",
+  "meAvatarSaved": "Profile photo updated",
   "logoutConfirmTitle": "Log out?",
   "logoutConfirmYes": "Log out",
   "deleteAccountWarnTitle": "Are you sure you want to delete your account?",

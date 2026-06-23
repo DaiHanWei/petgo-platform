@@ -505,6 +505,7 @@
   "mePetCardCreateTitle": "Buat profil untuk hewanmu",
   "meNicknameSaveFailed": "Gagal menyimpan, coba lagi",
   "meAvatarSaveFailed": "Gagal memperbarui foto, coba lagi",
+  "meAvatarSaved": "Foto profil diperbarui",
   "logoutConfirmTitle": "Keluar?",
   "logoutConfirmYes": "Keluar",
   "deleteAccountWarnTitle": "Yakin ingin menghapus akun?",

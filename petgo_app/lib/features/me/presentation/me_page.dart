@@ -1,3 +1,6 @@
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -293,23 +296,54 @@ class MePage extends ConsumerWidget {
   }
 
   /// Story B：换头像 —— 选图 → 公开桶直传(CDN) → PATCH /me avatarUrl → 刷新资料。
+  ///
+  /// 失败不再静默吞：按「上传 / 保存」两段分别捕获，提示**具体失败原因**(含状态码)，
+  /// 便于真机现场定位「没报错却不生效」类问题。成功给一次确认提示。
   Future<void> _changeAvatar(BuildContext context, WidgetRef ref) async {
     final l10n = AppLocalizations.of(context);
     final useCase = ref.read(mediaUploadUseCaseProvider);
+
+    final Uint8List? bytes;
     try {
-      final bytes = await useCase.pickAndProcess(source: MediaSource.gallery, context: context);
-      if (bytes == null) return; // 取消 / 权限拒(已弹引导)
+      bytes = await useCase.pickAndProcess(source: MediaSource.gallery, context: context);
+    } catch (e) {
+      if (context.mounted) _avatarSnack(context, '${l10n.meAvatarSaveFailed}（选图/处理）: ${_briefErr(e)}');
+      return;
+    }
+    if (bytes == null) return; // 取消 / 权限拒(已弹引导)
+
+    final String url;
+    try {
       final res = await useCase.uploadBytes(scope: MediaScope.public, bytes: bytes);
-      final url = res.publicUrl ?? res.objectKey;
+      url = res.publicUrl ?? res.objectKey;
+    } catch (e) {
+      if (context.mounted) _avatarSnack(context, '${l10n.meAvatarSaveFailed}（上传）: ${_briefErr(e)}');
+      return;
+    }
+
+    try {
       final updated = await ref.read(meRepositoryProvider).updateAvatar(url);
       ref.read(authControllerProvider.notifier).applyProfile(updated);
-    } catch (_) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-          ..clearSnackBars()
-          ..showSnackBar(SnackBar(content: Text(l10n.meAvatarSaveFailed)));
-      }
+      if (context.mounted) _avatarSnack(context, l10n.meAvatarSaved);
+    } catch (e) {
+      if (context.mounted) _avatarSnack(context, '${l10n.meAvatarSaveFailed}（保存）: ${_briefErr(e)}');
     }
+  }
+
+  /// Dio 异常优先抽状态码/简短信息,避免堆栈刷屏。
+  String _briefErr(Object e) {
+    if (e is DioException) {
+      final code = e.response?.statusCode;
+      return code != null ? 'HTTP $code' : (e.message ?? e.type.name);
+    }
+    return e.toString();
+  }
+
+  void _avatarSnack(BuildContext context, String msg) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(msg)));
   }
 }
 
@@ -641,6 +675,8 @@ class _InitialAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     if (avatarUrl != null && avatarUrl!.isNotEmpty) {
       return CircleAvatar(
+        // key 随 URL 变：换头像后 URL 变 → 强制重建,杜绝「provider 原地变更但旧图不重绘」。
+        key: ValueKey('avatar-$avatarUrl'),
         radius: radius,
         backgroundImage: AppImage.provider(avatarUrl, thumbWidth: 240),
       );
