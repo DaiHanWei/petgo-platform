@@ -48,6 +48,7 @@ class ApiPaths {
   static const String consultSessions = '$base/consult-sessions';
   static const String consultSessionActive = '$base/consult-sessions/active';
   static String consultSession(int id) => '$base/consult-sessions/$id';
+  static String consultSessionCase(int id) => '$base/consult-sessions/$id/case';
   static String consultSessionContinueWaiting(int id) =>
       '$base/consult-sessions/$id/continue-waiting';
 

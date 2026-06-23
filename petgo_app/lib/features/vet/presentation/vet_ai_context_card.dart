@@ -4,7 +4,11 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/case_image_viewer.dart';
 import '../domain/consult_ai_context.dart';
+
+// 全屏看图迁至 shared（兽医/用户侧共用）；re-export 保持既有引用方（vet_request_detail_page）不变。
+export '../../../shared/widgets/case_image_viewer.dart' show showCaseImageFullScreen;
 
 /// 兽医侧「AI 上下文卡」（Story 5.4 F3）。挂载在 5.5 对话界面顶部 / 待接单详情。
 ///
@@ -85,39 +89,3 @@ class VetAiContextCard extends StatelessWidget {
   }
 }
 
-/// 病例图全屏查看（黑底 + 双指缩放 + 点击关闭）。会话页/预览页缩略图共用。
-Future<void> showCaseImageFullScreen(BuildContext context, String url) {
-  return showDialog<void>(
-    context: context,
-    barrierColor: Colors.black87,
-    builder: (ctx) => GestureDetector(
-      onTap: () => Navigator.of(ctx).pop(),
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: InteractiveViewer(
-              minScale: 1,
-              maxScale: 4,
-              child: Center(
-                child: Image.network(
-                  url,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, _, _) =>
-                      const Icon(Icons.broken_image_outlined, color: Colors.white54, size: 48),
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 40,
-            right: 16,
-            child: IconButton(
-              icon: const Icon(Icons.close, color: Colors.white, size: 28),
-              onPressed: () => Navigator.of(ctx).pop(),
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-}

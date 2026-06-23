@@ -194,16 +194,17 @@ public class VetConsultService {
     }
 
     private String buildReferenceReply(ConsultSession s) {
-        StringBuilder sb = new StringBuilder("您好，我已了解您的情况");
+        StringBuilder sb = new StringBuilder("Hello, I've reviewed your case");
         if (s.hasAiContext()) {
             if ("YELLOW".equals(s.getAiDangerLevel())) {
-                sb.append("，AI 初判需密切观察");
+                sb.append(". The AI pre-assessment flags it for close monitoring");
             }
             if (s.getAiSymptomText() != null && !s.getAiSymptomText().isBlank()) {
-                sb.append("（症状：").append(s.getAiSymptomText()).append("）");
+                sb.append(" (symptoms: ").append(s.getAiSymptomText()).append(")");
             }
         }
-        sb.append("。请问最近的精神、进食和排便情况如何？方便的话再补充一张清晰照片。");
+        sb.append(". How have your pet's energy, appetite, and bowel movements been lately? "
+                + "If possible, please share a clear photo.");
         return sb.toString();
     }
 
