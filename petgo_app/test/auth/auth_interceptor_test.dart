@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/core/network/auth_interceptor.dart';
 import 'package:tailtopia/core/storage/secure_storage.dart';
+import 'package:tailtopia/features/auth/data/auth_repository.dart' show AuthExtraKeys;
 
 /// 可编程的假 HttpClientAdapter：按「路径 + 第几次调用」返回状态码。
 class _FakeAdapter implements HttpClientAdapter {
@@ -127,5 +128,35 @@ void main() {
 
     expect(seen?.headers['Authorization'], 'Bearer tok');
     expect(seen?.headers['Accept-Language'], 'id');
+  });
+
+  test('auth-self 请求(skipRefresh)不附带 access token（修复会话 15min 掉线 bug）', () async {
+    // 回归：refresh/logout 打 permitAll 端点，若带上已过期的 access token，
+    // 后端鉴权过滤器会在端点逻辑前 401 → refresh 永远失败 → access 过期即掉游客。
+    final store = InMemoryTokenStore();
+    await store.saveTokens(access: 'expired-access', refresh: 'r');
+    RequestOptions? seen;
+    final adapter = _FakeAdapter((path, call) => 200);
+    final dio = Dio(BaseOptions(baseUrl: 'http://test.local'));
+    dio.httpClientAdapter = adapter;
+    dio.interceptors.add(AuthInterceptor(
+      dio: dio,
+      tokenStore: store,
+      refresh: () async => true,
+      onSessionExpired: () {},
+      localeCode: () => 'en',
+    ));
+    dio.interceptors.add(InterceptorsWrapper(onRequest: (o, h) {
+      seen = o;
+      h.next(o);
+    }));
+
+    await dio.post<dynamic>('/api/v1/auth/refresh',
+        data: {'refreshToken': 'r'},
+        options: Options(extra: {AuthExtraKeys.skipRefresh: true}));
+
+    expect(seen?.headers.containsKey('Authorization'), false,
+        reason: 'auth-self 请求不应带 access token，否则后端过期 Bearer→401');
+    expect(seen?.headers['Accept-Language'], 'en'); // 语言头仍注入
   });
 }
