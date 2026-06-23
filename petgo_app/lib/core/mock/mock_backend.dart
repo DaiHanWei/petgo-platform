@@ -345,7 +345,7 @@ class MockBackend {
         Response<dynamic>(requestOptions: o, statusCode: 204, data: null);
 
     // ---------- AUTH / ME ----------
-    if (m == 'POST' && p.endsWith('/auth/google')) {
+    if (m == 'POST' && (p.endsWith('/auth/google') || p.endsWith('/auth/apple'))) {
       return ok({
         'accessToken': 'mock-access', 'refreshToken': 'mock-refresh',
         'role': 'USER', 'isNewUser': true, 'onboardingCompleted': false,

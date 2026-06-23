@@ -32,6 +32,10 @@
   "@loginGoogle": {
     "description": "Google sign-in button label."
   },
+  "loginApple": "Continue with Apple",
+  "@loginApple": {
+    "description": "Apple sign-in button label (iOS only, FR-44)."
+  },
   "loginAgreementPrefix": "By signing in you agree to the ",
   "loginAgreementAnd": " and ",
   "termsOfService": "Terms of Service",

@@ -64,6 +64,9 @@ class AppColors {
   static const Color splashInk = Color(0xFF141019); // 原型深墨底
   static const Color splashGlow = mint; // 中心辉光 = violet
 
+  /// 品牌重塑紫（新 logo 实底；splash / 登录页头同色，原型 preview-new-splash-auth-0622）。
+  static const Color brandViolet = Color(0xFF7D45F6);
+
   // —— Status ——
   static const Color danger = Color(0xFFE5604D);
 
