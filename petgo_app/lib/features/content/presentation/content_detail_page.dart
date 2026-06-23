@@ -8,6 +8,7 @@ import '../../../core/theme/typography.dart';
 import '../../../features/auth/domain/auth_state.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_image.dart';
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/mini_profile_sheet.dart';
 import '../data/detail_repository.dart';
@@ -104,9 +105,14 @@ class _DetailScaffold extends ConsumerWidget {
         child: Column(
           children: [
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(AppSpacing.screenEdge),
-                child: Column(
+              // 点空白 / 滚动 → 收起评论键盘（仅返回键收回的体验问题修复）。
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: () => FocusScope.of(context).unfocus(),
+                child: SingleChildScrollView(
+                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: const EdgeInsets.all(AppSpacing.screenEdge),
+                  child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _authorRow(context, ref, l10n),
@@ -133,6 +139,7 @@ class _DetailScaffold extends ConsumerWidget {
                       isContentAuthor: detail.isAuthor,
                     ),
                   ],
+                ),
                 ),
               ),
             ),
@@ -304,70 +311,17 @@ class _DetailScaffold extends ConsumerWidget {
   /// 二次确认删除（Story 3.6 · 原型 detail.html `delete-confirm-sheet`）：底抽屉 ⚠️ + 标题 + 正文
   /// + 红 Hapus + Batal。确认 → 删除 → 刷新 Feed + 返回（该帖已不在列表，详情走 404）。
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref, AppLocalizations l10n) async {
-    final ok = await showModalBottomSheet<bool>(
-      context: context,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(22, 12, 22, 28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                    color: AppColors.line, borderRadius: BorderRadius.circular(9999)),
-              ),
-              const Text('⚠️', style: TextStyle(fontSize: 36)),
-              const SizedBox(height: 10),
-              Text(l10n.contentDeleteTitle,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink)),
-              const SizedBox(height: 6),
-              Text(l10n.contentDeleteConfirm,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 13, height: 1.5, color: AppColors.textSecondary)),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  key: const ValueKey('confirmDeleteContent'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.popRed,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                  onPressed: () => Navigator.of(ctx).pop(true),
-                  child: Text(l10n.detailMenuDelete,
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-                ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: () => Navigator.of(ctx).pop(false),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.textSecondary,
-                    side: const BorderSide(color: AppColors.line, width: 1.5),
-                    padding: const EdgeInsets.symmetric(vertical: 13),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                  child: Text(l10n.commonCancel),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    final ok = await showConfirmSheet(
+      context,
+      title: l10n.contentDeleteTitle,
+      message: l10n.contentDeleteConfirm,
+      confirmLabel: l10n.detailMenuDelete,
+      cancelLabel: l10n.commonCancel,
+      icon: Icons.delete_outline_rounded,
+      danger: true,
+      confirmKey: const ValueKey('confirmDeleteContent'),
     );
-    if (ok != true) return;
+    if (!ok) return;
     try {
       await ref.read(detailRepositoryProvider).deleteContent(detail.id);
       // Feed 同步移除（重拉，软删帖 deleted_at 非空被过滤）。

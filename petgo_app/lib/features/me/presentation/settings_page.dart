@@ -7,11 +7,12 @@ import '../../../core/l10n/locale_controller.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../../auth/domain/auth_state.dart';
 
 /// 二级「设置」页（Story 7.1 · F8 · settings.html 1:1 还原）。
 ///
-/// 四分组：AKUN（编辑档案/通知/语言）· TAMPILAN（深色模式，V1 仅浅色故为占位开关）·
+/// 分组：AKUN（编辑档案/通知/语言）·（TAMPILAN 深色模式下版本再做，暂隐藏）·
 /// PRIVASI & KEAMANAN（公开档案/隐私政策/条款）· ZONA BAHAYA（退出/注销，红字）。
 /// 语言逻辑在 7.2、退出/注销逻辑在 7.3（双重确认 + 短语校验，PDP 数据主体权利可达）。
 class SettingsPage extends ConsumerStatefulWidget {
@@ -22,9 +23,8 @@ class SettingsPage extends ConsumerStatefulWidget {
 }
 
 class _SettingsPageState extends ConsumerState<SettingsPage> {
-  // V1 占位开关（无后端持久化）：通知默认开、深色跟随系统（V1 仅浅色）、公开档案默认开。
+  // V1 占位开关（无后端持久化）：通知默认开、公开档案默认开。（深色模式下版本再做，暂隐藏）
   bool _notif = true;
-  bool _darkMode = false;
   bool _petPublic = true;
 
   static const Color _danger = AppColors.popRed;
@@ -80,12 +80,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ]),
             const SizedBox(height: 22),
 
-            _sectionTitle(l10n.settingsSectionDisplay),
-            _card([
-              _toggleRow(l10n.settingsDarkMode, _darkMode, (v) => setState(() => _darkMode = v),
-                  subtitle: l10n.settingsDarkModeSubtitle, key: const ValueKey('meDarkModeToggle')),
-            ]),
-            const SizedBox(height: 22),
+            // TODO(next): 深色模式（TAMPILAN）暂隐藏，下个版本接入暗色主题后再放出。
+            //   需先建 dark token 体系 + 迁移硬编码色 + 逐屏 QA（见 dark mode 评估）。
 
             _sectionTitle(l10n.settingsSectionPrivacy),
             _card([
@@ -228,21 +224,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   /// 退出登录（Story 7.3 AC1）：确认 → 清本地态回游客 → 留首页。<b>不删任何数据</b>。
   Future<void> _logout(BuildContext context, WidgetRef ref) async {
     final l10n = AppLocalizations.of(context);
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.logoutConfirmTitle),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(l10n.consultCancel)),
-          FilledButton(
-            key: const ValueKey('logoutConfirmYes'),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(l10n.logoutConfirmYes),
-          ),
-        ],
-      ),
+    final ok = await showConfirmSheet(
+      context,
+      title: l10n.logoutConfirmTitle,
+      confirmLabel: l10n.logoutConfirmYes,
+      cancelLabel: l10n.consultCancel,
+      icon: Icons.logout_rounded,
+      confirmKey: const ValueKey('logoutConfirmYes'),
     );
-    if (ok != true || !context.mounted) return;
+    if (!ok || !context.mounted) return;
     await ref.read(authRepositoryProvider).logout();
     ref.read(authControllerProvider.notifier).toGuest();
     if (context.mounted) context.go('/home');

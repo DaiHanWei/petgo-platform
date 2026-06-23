@@ -5,6 +5,7 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../data/detail_repository.dart';
 import '../domain/comment.dart';
 import 'detail_providers.dart';
@@ -128,21 +129,16 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
 
   Future<void> _confirmDelete(int commentId) async {
     final l10n = AppLocalizations.of(context);
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        content: Text(l10n.detailMenuDelete),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(l10n.commonCancel)),
-          TextButton(
-            key: const ValueKey('confirmDeleteComment'),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(l10n.detailMenuDelete),
-          ),
-        ],
-      ),
+    final ok = await showConfirmSheet(
+      context,
+      title: l10n.detailMenuDelete,
+      confirmLabel: l10n.detailMenuDelete,
+      cancelLabel: l10n.commonCancel,
+      icon: Icons.delete_outline_rounded,
+      danger: true,
+      confirmKey: const ValueKey('confirmDeleteComment'),
     );
-    if (ok != true) return;
+    if (!ok) return;
     try {
       await _repo.deleteComment(commentId);
       await _reload();

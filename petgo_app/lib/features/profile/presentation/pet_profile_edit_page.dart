@@ -10,6 +10,7 @@ import '../../media/domain/media_upload_use_case.dart';
 import '../../../shared/utils/date_format.dart';
 import '../../../shared/utils/media_permission.dart';
 import '../../../shared/widgets/app_image.dart';
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../data/profile_repository.dart';
 import '../domain/pet_profile.dart';
 import 'widgets/pet_form_fields.dart';
@@ -445,27 +446,18 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
   /// 删除档案二次确认（原型 pet-edit）。⚠️ 端点待后端：当前确认后仅占位提示，不真正删除。
   Future<void> _confirmDelete(AppLocalizations l10n) async {
     final name = _nameController.text.trim();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.petProfileDeleteConfirmTitle),
-        content: Text(l10n.petProfileDeleteConfirmBody(name)),
-        actions: [
-          TextButton(
-            key: const ValueKey('petProfileDeleteCancel'),
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(l10n.commonCancel),
-          ),
-          FilledButton(
-            key: const ValueKey('petProfileDeleteConfirmYes'),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: AppColors.popRed),
-            child: Text(l10n.petProfileDeleteConfirmYes),
-          ),
-        ],
-      ),
+    final ok = await showConfirmSheet(
+      context,
+      title: l10n.petProfileDeleteConfirmTitle,
+      message: l10n.petProfileDeleteConfirmBody(name),
+      confirmLabel: l10n.petProfileDeleteConfirmYes,
+      cancelLabel: l10n.commonCancel,
+      icon: Icons.delete_outline_rounded,
+      danger: true,
+      confirmKey: const ValueKey('petProfileDeleteConfirmYes'),
+      cancelKey: const ValueKey('petProfileDeleteCancel'),
     );
-    if (ok != true || !mounted) return;
+    if (!ok || !mounted) return;
     // TODO(backend): 接 DELETE /pet-profiles/me（级联删除/匿名化按 D1/D2）。当前仅占位提示。
     _toast(l10n.placeholderComingSoon);
   }

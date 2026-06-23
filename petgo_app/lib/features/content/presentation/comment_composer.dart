@@ -45,8 +45,9 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
         await repo.postComment(widget.postId, text);
       }
       if (!mounted) return;
-      // 仅成功后清空输入 + 退出回复态 + 刷新评论区（AC3）。
+      // 仅成功后清空输入 + 收起键盘 + 退出回复态 + 刷新评论区（AC3）。
       _controller.clear();
+      FocusScope.of(context).unfocus();
       ref.read(replyTargetProvider.notifier).clear();
       ref.read(commentsRefreshProvider.notifier).bump();
     } catch (_) {
