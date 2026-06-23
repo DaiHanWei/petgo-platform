@@ -22,6 +22,7 @@ import java.time.LocalDate;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 
 /**
  * L1 集成：{@link VetConsultController}（{@code /api/v1/vet/consult-sessions}，6 端点）。
@@ -170,7 +171,9 @@ class VetConsultControllerEndpointTest extends ApiIntegrationTest {
         ConsultSession s = vets.newInProgressSession(user.getId(), vet.getId());
 
         mvc.perform(post("/api/v1/vet/consult-sessions/" + s.getId() + "/end")
-                        .header("Authorization", vetBearer(vet.getId())))
+                        .header("Authorization", vetBearer(vet.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"diagnosis\":\"Gastritis ringan\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("PENDING_CLOSE"));
 
@@ -185,9 +188,11 @@ class VetConsultControllerEndpointTest extends ApiIntegrationTest {
         User user = newUser();
         ConsultSession s = vets.newInProgressSession(user.getId(), owner.getId());
 
-        // 非归属兽医结束 → service 抛 forbidden → 403
+        // 非归属兽医结束 → service 抛 forbidden → 403（带合法诊断 body 以越过校验，触发归属判定）
         mvc.perform(post("/api/v1/vet/consult-sessions/" + s.getId() + "/end")
-                        .header("Authorization", vetBearer(other.getId())))
+                        .header("Authorization", vetBearer(other.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"diagnosis\":\"x\"}"))
                 .andExpect(status().isForbidden());
     }
 
