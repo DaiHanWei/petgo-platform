@@ -3,10 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/mock/mock_config.dart';
 import '../../../core/router/route_intent.dart';
 import '../../../core/theme/colors.dart';
-import '../../notify/presentation/push_permission_sheet.dart';
 import '../../../features/auth/domain/auth_guard.dart';
 import '../../../features/auth/domain/auth_state.dart';
 import '../../../features/auth/domain/login_guide_controller.dart';
@@ -31,21 +29,12 @@ import '../../../shared/widgets/mini_profile_sheet.dart';
 /// （快捷入口卡 + 每日记录提示卡 + 「Untukmu」区头 + 分类 Tab）；下方瀑布流 Feed。
 /// 保留全部数据接线：feedProvider 三态、分类过滤、档案提示条（FR-0H）、
 /// 游客第 3 页软登录（FR-0B）、门控发布（Story 1.5）。
-/// Debug 截图钩子一次性 guard（DEV_STATE=notif-gate 自动弹推送权限 sheet，截 notif-gate 用）。
-bool _devNotifGateShown = false;
-
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    if (kDevState == 'notif-gate' && !_devNotifGateShown) {
-      _devNotifGateShown = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (context.mounted) showPushPermissionSheet(context);
-      });
-    }
     final auth = ref.watch(authControllerProvider);
     final promptState = ref.watch(profilePromptProvider);
     final bool showPrompt = shouldShowProfilePrompt(

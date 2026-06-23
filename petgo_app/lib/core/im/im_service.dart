@@ -2,7 +2,6 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../mock/mock_config.dart';
 import '../network/api_paths.dart';
 import '../network/dio_client.dart';
 
@@ -38,11 +37,9 @@ class ImCredential {
 /// IM 会话能力封装（Story 5.5 live 增量）。
 ///
 /// 抽象 login/logout/收发/监听，UserSig 取自后端 `/im/usersig`（用户态由后端 MAU 闸门控）。
-/// 实现二选一：
-/// - [MockImService]：mock 模式 / widget 测试下<b>全部空转</b>，不取真实 UserSig、不触真实 SDK（保 L0 绿）。
-/// - [LiveImService]：真机经腾讯 IM Flutter SDK 直连收发（**L2 待本地接 `tencent_cloud_chat_sdk`**）；
-///   本批次（云端 headless）SDK 依赖未引入，[LiveImService] 先落「取 UserSig + 生命周期」骨架，
-///   实际 SDK login/收发标注待本地，绝不在前端自签 UserSig / 硬编码 SecretKey。
+/// [LiveImService]：真机经腾讯 IM Flutter SDK 直连收发（**L2 待本地接 `tencent_cloud_chat_sdk`**）；
+/// 本批次（云端 headless）SDK 依赖未引入，[LiveImService] 先落「取 UserSig + 生命周期」骨架，
+/// 实际 SDK login/收发标注待本地，绝不在前端自签 UserSig / 硬编码 SecretKey。
 abstract interface class ImService {
   /// 取 UserSig 并登录 IM（幂等：已登录则空转）。失败抛 [DioException]（调用方提示重试，不崩）。
   Future<void> loginIfNeeded();
@@ -58,26 +55,6 @@ abstract interface class ImService {
 
   /// 订阅与某会话的实时消息流（离开时取消订阅）。
   Stream<ImMessage> onMessages(String conversationId);
-}
-
-/// mock / 测试用空转实现：不取 UserSig、不连 SDK，收发即本地丢弃（占位聊天面自管演示气泡）。
-class MockImService implements ImService {
-  const MockImService();
-
-  @override
-  Future<void> loginIfNeeded() async {}
-
-  @override
-  Future<void> logout() async {}
-
-  @override
-  Future<void> sendText({required String peerId, required String text}) async {}
-
-  @override
-  Future<void> sendImage({required String peerId, required String filePath}) async {}
-
-  @override
-  Stream<ImMessage> onMessages(String conversationId) => const Stream.empty();
 }
 
 /// 真机 live 实现（Story 5.5）。取 UserSig 后经腾讯 IM Flutter SDK 登录/收发。
@@ -128,8 +105,7 @@ class LiveImService implements ImService {
   }
 }
 
-/// IM 能力 provider：mock 模式 / 测试下空转（[MockImService]）；真机连真后端时走 [LiveImService]。
+/// IM 能力 provider：真机连真后端时走 [LiveImService]。
 final imServiceProvider = Provider<ImService>((ref) {
-  if (kMockMode) return const MockImService();
   return LiveImService(dio: ref.read(dioProvider));
 });
