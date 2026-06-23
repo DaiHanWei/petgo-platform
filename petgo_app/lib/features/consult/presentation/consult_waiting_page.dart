@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../data/consult_repository.dart';
 
 /// 等待界面（Story 5.3 F2/F3/F4）：「正在为你匹配兽医…」+ 轮询 + 1min 超时整页 + 取消二次确认。
@@ -153,25 +154,16 @@ class _ConsultWaitingPageState extends ConsumerState<ConsultWaitingPage>
 
   Future<void> _confirmCancel() async {
     final l10n = AppLocalizations.of(context);
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.consultCancelConfirmTitle),
-        actions: [
-          TextButton(
-            key: const ValueKey('consultCancelConfirmNo'),
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(l10n.consultCancelConfirmNo),
-          ),
-          FilledButton(
-            key: const ValueKey('consultCancelConfirmYes'),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(l10n.consultCancelConfirmYes),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmSheet(
+      context,
+      title: l10n.consultCancelConfirmTitle,
+      confirmLabel: l10n.consultCancelConfirmYes,
+      cancelLabel: l10n.consultCancelConfirmNo,
+      icon: Icons.close_rounded,
+      confirmKey: const ValueKey('consultCancelConfirmYes'),
+      cancelKey: const ValueKey('consultCancelConfirmNo'),
     );
-    if (confirmed != true) return;
+    if (!confirmed) return;
     await _doCancel();
   }
 

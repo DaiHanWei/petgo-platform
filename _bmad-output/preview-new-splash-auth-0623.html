@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tailtopia · Rebrand Splash / Confirm / Apple Login</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="./tokens.css">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Quicksand:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css?v=20260623">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;padding:36px;min-height:100vh;align-items:flex-start;justify-content:center;}
+body{background:var(--color-bg-default);font-family:'Poppins',sans-serif;display:flex;gap:36px;padding:36px;min-height:100vh;align-items:flex-start;justify-content:center;}
 
 /* ── PHONE FRAME (matches preview-core-pages.html) ── */
 .phone{width:390px;height:844px;background:var(--color-bg-default);border-radius:44px;border:9px solid #18152A;box-shadow:0 0 0 2px #2E2A4A,inset 0 0 0 1px rgba(255,255,255,.08),0 40px 80px rgba(0,0,0,.35);display:flex;flex-direction:column;overflow:hidden;position:relative;flex-shrink:0;}
@@ -115,7 +115,8 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
 @keyframes wmUp{0%{opacity:0;transform:translateY(16px);}100%{opacity:1;transform:translateY(0);}}
 
 .splash-tagline{
-  width:240px;text-align:center;font-size:12px;line-height:1.7;letter-spacing:.12px;
+  width:240px;text-align:center;font-family:'Quicksand',sans-serif;font-weight:600;
+  font-size:12.5px;line-height:1.65;letter-spacing:.15px;
   color:rgba(255,255,255,.62);opacity:0;
   animation:wmUp .5s cubic-bezier(0,0,.2,1) 3.82s both;
 }
@@ -305,7 +306,7 @@ body{background:#DDD5EE;font-family:'Poppins',sans-serif;display:flex;gap:36px;p
           </div>
 
           <!-- WORDMARK — extracted from FULL LOGO SVG.svg Layer_8, all st94 paths, recolored white -->
-          <svg class="splash-wordmark" viewBox="20 195 460 110">
+          <svg class="splash-wordmark" viewBox="28 183 444 134">
             <path d="M157.8,247.9c-1.1-2.8-2.7-5.2-5-7.1c-2.2-2-5.1-3.5-8.6-4.6c-3.5-1.1-7.7-1.6-12.5-1.6
               c-4.8,0-8.9,0.6-12.3,1.7c-3.4,1.1-6.2,2.5-8.3,4.2c-2.1,1.7-3.7,3.4-4.7,5.2c-1,1.8-1.6,3.3-1.6,4.6c-0.1,0.7,0.1,1.3,0.5,1.7
               c0.4,0.4,1,0.7,1.9,0.7h15.3c1.2,0,2.1-0.4,2.8-1.2c0.8-1.1,1.7-1.9,2.6-2.5c0.9-0.6,2.2-0.9,3.7-0.9c2.2,0,3.6,0.6,4.3,1.7

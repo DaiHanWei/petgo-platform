@@ -10,6 +10,7 @@ import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/case_image_viewer.dart';
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../../notify/data/push_permission_providers.dart';
 import '../../notify/domain/push_suppression.dart';
 import '../data/consult_repository.dart';
@@ -151,17 +152,14 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
   /// 用户侧「Akhiri」：确认后离开会话（会话状态由服务端权威；本页不发起结束端点）。
   Future<void> _confirmLeave() async {
     final l10n = AppLocalizations.of(context);
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.vetEndConfirmTitle),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(l10n.vetEndConfirmNo)),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(l10n.vetEndConfirmYes)),
-        ],
-      ),
+    final ok = await showConfirmSheet(
+      context,
+      title: l10n.vetEndConfirmTitle,
+      confirmLabel: l10n.vetEndConfirmYes,
+      cancelLabel: l10n.vetEndConfirmNo,
+      icon: Icons.logout_rounded,
     );
-    if (ok == true && mounted) _leave();
+    if (ok && mounted) _leave();
   }
 
   @override
