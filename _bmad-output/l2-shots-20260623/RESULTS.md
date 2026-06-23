@@ -23,7 +23,35 @@
 ### 首轮 AUTH-01 阻塞复盘（已解决）
 首次失败仅因打包漏传 `GOOGLE_SERVER_CLIENT_ID`。OAuth 三件套其实早已就位：Web client `...3q9vb0ro18...`(凭证在 `~/Downloads/client_secret_...json`)、后端 `GOOGLE_OAUTH_CLIENT_ID` 已=此 Web client(audience 本就对齐，无需改后端)、用户昨天已建 Android client(包 com.tailtopia.app)。
 
-| FEED-02 | 内容 | 🔵 部分 | Golden Bro 帖详情顶部图带「1/3」角标=多图 pager + N/M 计数存在；横滑/全屏缩放未及验(被会话掉线打断) |
+| FEED-02 | 内容 | ✅ | 多图详情 pager 横滑（角标 1/3→2/3 换图）+ N/M 计数。全屏缩放未单独验 |
+| FEED-03 | 内容 | ✅ | 登录态发评论成功。DB 印证：comments id=2,post_id=94,author_id=22,body="L2-test-comment-halo" |
+| PUB-01 | 内容 | ✅ | 发布编辑页（分类 Daily/Knowledge/Growth、Photos max9、文本 0/1000、Post）。发纯文本帖成功 |
+| PUB-02 | 内容 | ✅(done态) | 「Posted successfully🎉」结果页 + 预览卡 + View in Feed/Back to Home。DB：content_posts id=210,type=DAILY,**status=PUBLISHED**(直发)。reviewing/rejected 态未触发 |
+| CON-01 | 问诊 | ✅ | Consult 双卡(Ask AI Triage / Chat with vet)+ My consultations 真实历史 |
+| TRI-01 | 分诊 | ✅ | 上传页：虚线加图框(max3)、症状 0/500、免责声明、Analyze now |
+| TRI-02/03 | 分诊 | ✅ | **真打 Gemini live** 跑通：返回结构化绿色结果(SYMPTOM SUMMARY/HOME CARE/免责/Save to health notes/Still want to consult a vet/Done)。DB：triage_tasks id=3 status=DONE danger_level=GREEN response_locale=en |
+| TRI-05 | 分诊 | ✅ | 超时整页 P-21b(「Analysis is taking longer than usual」+ Resubmit)正确呈现 |
+| TRI-06 | 分诊 | ⚠️ | 危急症状 Gemini 连续 503 ServiceUnavailable→后端 retry4 次 FAILED；客户端 **fail-closed 正确**(不误判「安全」),但仅显示超时/Resubmit,未显式软引导兽医。属外部瞬时(非 app bug) |
+| TRI-04 | 分诊/护栏 | ✅ | **红色态硬过**(task id=8 DONE danger_level=RED,巧克力中毒急症)。红底警告页「Segera bawa <宠物名> ke rumah sakit hewan」+ 急救三步,Gemini 正确判 RED |
+| G1 红色态零变现 | 护栏 | ✅ | 红色结果页**无任何付费/转化/升级入口**,唯一动作「Saya mengerti」 |
+| G2 只升不降不可绕过 | 护栏 | ✅ | 措辞不软化;「Saya mengerti」按钮**读完警告才激活**(Tombol aktif setelah membaca peringatan)防秒跳;全程交棒线下急诊 |
+
+> **Gemini 503 真相(深查)**:gemini-2.5-flash **间歇性**过载(连测 3 次=200/503/200,~1/3 撞 503「high demand」UNAVAILABLE),**非费用/网络/key 问题**(flash-lite/flash-latest 同 key 均 200)。后端 4 次重试间隔太近(~2s/14s 内)赶上尖峰即 4 连挂。**建议 story**:重试退避拉长+jitter；503 时 fallback gemini-2.5-flash-lite。本次重试 1 次即拿到 RED。i18n 小观察:response_locale 跟设备 locale(en)非应用内语言(id)。
+| ME-03 | 我的 | ✅ | 设置页(通知/隐私开关、语言、版本 Build 100、登出、注销入口) |
+| ME-02 | 我的 | ✅ | 语言切 Bahasa Indonesia 文案实时变(Language→Bahasa、tab→Semua/Harian/Tumbuh/Edukasi、nav→Beranda/Konsultasi/Saya)；**冷重启后仍印尼语=持久化生效** |
+| CON-02 | 问诊 | ⏭️ | 兽医会话:无兽医在线态渲染正确(「Belum ada dokter hewan online」08-23 工作日 + 降级引导 AI triage)。IM_MODE=stub + prod 兽医账号=0 → 实时收发跳过 |
+| CON-03 | 问诊 | ⏭️ | 评分依赖完成的兽医会话,无法触达 |
+| VET-01~03 | 兽医 | ⏭️ | prod `vet_accounts`=0、无兽医角色可登录 → 工作台/在线状态/请求富化全跳过(环境限制非 app 问题) |
+| DEL-01 | 注销/护栏 | ✅ | Hapus akun 页:删除清单 5 项(宠物档案/成长里程碑/帖子评论/问诊历史/Google数据)+ **30天宽限可登录撤销** + **邮箱确认守卫**。守卫实测:输错误邮箱删除按钮恒 enabled=false(非破坏验证) |
+| DEL-02 / G3 | 注销/护栏 | ⏸️ 暂缓 | 真删会级联删 shawnliugj(IM 测试还要用该账号)+ 破坏性 → 暂不执行。后端级联删除/匿名化(D1/D2)待用专用测试账号验 |
+
+| NOTIF-01 | 通知 | ⚠️ | 通知页+空态正确(「Belum ada notifikasi」);列表空(无他人互动)→deep-link 无从点;真推送 FCM 属 §6 |
+| MED-01 | 媒体 | ✅ | 相册选图(规范申请媒体权限)→处理→预签名上传→OSS 真存。DB content_posts id=211 image_urls=OSS真链;curl 该对象 HTTP200 image/jpeg 317KB |
+| MED-02 | 媒体 | ✅ | OSS 图片处理缩略图:w_240→23.6KB、w_1080→211KB(原图317KB)→取缩略非原图 |
+| G5 日志无PII | 护栏 | ✅ | 后端日志近30min grep 症状/邮箱/JWT/Bearer/OSS签名/refreshToken/idToken = 0 命中 |
+| G4 RFC9457 | 护栏 | ✅ | 多处 401(/feed、/auth/refresh)响应体 type/title/status/detail/instance 齐,不外泄堆栈 |
+
+> **IM 实时会话(CON-02 + 真机兽医测)阻塞根因**:app **未集成腾讯 IM SDK**(pubspec 无 `tencent_cloud_chat_sdk`,`LiveImService` 5 处 TODO 仅骨架)+ 后端 IM_MODE=stub + prod 无兽医账号。真机↔模拟器 IM 测试需先做 SDK 集成(开发任务),非仅配账号。用户计划:其余测完后再定(集成后测 / 或 IM 整体留后续)。
 
 ### 🔴→✅ 关键缺陷 — 会话 15min 掉线（bug#2，根因已定+已修+L0验证）
 **现象**：真 Google 登录后 access(900s)过期，下一次受保护接口调用触发的静默 refresh 失败 → 清 token 落游客（每 ~15min 被踢）。
@@ -36,17 +64,12 @@
 - **网格单元重影/叠字**：Home 首卡 + Me「MY POSTS」左格出现页面其它控件的半透明残影叠加，2s 后不消散。形态像**模拟器 GPU 帧缓冲复用伪影**，非真机必现；需真机/iOS 复核才能定性。
 - 登录失败仅一闪 snackbar 无重试（首轮观察，前端待办）。
 
-## AUTH-01 阻塞根因（待你配 Google Cloud）
+## 参考：真 Google 登录构建参数（AUTH-01 已解决）
 
-Android `google_sign_in` 7.x 走 Credential Manager，真登录需要：
-
-1. **Android OAuth client**（项目 `952015467016`）：
-   - 包名：`com.tailtopia.app`
-   - debug SHA-1：`D0:07:DC:96:D1:4D:7F:B1:AA:2E:AB:0C:78:42:A0:B8:B1:A0:8E:96`
-   - debug SHA-256：`F2:84:8C:67:F0:8F:79:7D:C1:A1:CC:C4:1A:DF:D2:77:5A:FC:3B:AD:4F:6C:D4:D7:8C:EC:AA:D5:67:BF:46:90`
-2. **Web OAuth client**：其 id 作为 app 构建的 `--dart-define=GOOGLE_SERVER_CLIENT_ID=<web client id>`。Android idToken 的 `aud` = 此 Web client。
-3. **后端 audience 对齐**：`NimbusGoogleTokenVerifier` 校验 `aud.contains(petgo.auth.google.client-id)`，当前 env `GOOGLE_OAUTH_CLIENT_ID=952015467016-3q9vb0ro18...`（iOS client）。需改成上面的 **Web client id**（动生产 env → 重启 petgo-server）。
-
-> ⚠️ UX 观察项：登录失败仅一闪而过的 snackbar，无重试/原因说明 —— 可作前端待办。
-
-配好后把 Web client id 给我，我用 `GOOGLE_SERVER_CLIENT_ID=<id>` 重打包继续跑登录态用例。
+```bash
+flutter build apk --debug \
+  --dart-define=PETGO_API_BASE_URL=https://api.tailtopia.id \
+  --dart-define=PETGO_DEV_STUB_LOGIN=false \
+  --dart-define=GOOGLE_SERVER_CLIENT_ID=952015467016-3q9vb0ro18fnecl9gpnrddbfj9snqer0.apps.googleusercontent.com
+```
+debug SHA-1 `D0:07:DC:96:D1:4D:7F:B1:AA:2E:AB:0C:78:42:A0:B8:B1:A0:8E:96` 已注册 Android client(com.tailtopia.app);后端 GOOGLE_OAUTH_CLIENT_ID 已=该 Web client,audience 对齐。
