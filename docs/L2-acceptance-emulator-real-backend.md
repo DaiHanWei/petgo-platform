@@ -1,8 +1,10 @@
-# L2 验收文档 —— 安卓模拟器 × 真实后端（自动化可覆盖部分）
+# L2 验收文档 —— 安卓模拟器 × 真实生产后端（自动化可覆盖部分）
 
-> **目的**：后端上线（`https://api.tailtopia.id` health=UP）后，在安卓模拟器上以「真实接口」跑一轮端到端验收，覆盖**约 80%** 可自动化的 L2，并产出截图 + 后端交叉印证报告。
-> **覆盖边界**：本文档只列「我（agent）能用 adb 驱动 + 截图 + 后端日志/`curl` 印证」的用例。需真 Google 鉴权交互 / 真相机 / 推送 / 真机手感的部分，归 [§6 范围外清单](#6-范围外20需真机真鉴权要你或后端补)。
+> **目的**：在安卓模拟器上以「真实接口」直打**生产** `https://api.tailtopia.id`（health=UP）跑一轮端到端验收，覆盖**约 80%** 可自动化的 L2，并产出截图 + 后端交叉印证报告。
+> **登录态来源（已定）**：**不另起测试实例**。生产为 `prod` profile、拒收假 idToken（安全护栏，绝不削弱），故登录态由**真 Google 登录**在模拟器上**人工完成一次**（§1 P3），之后 agent 用 adb 驱动 + 截图 + 后端 `curl`/日志印证其余流程。
+> **覆盖边界**：本文档只列「agent 能用 adb 驱动 + 截图 + 后端日志/`curl` 印证」的用例。真相机 / 推送 / 真机手感归 [§6 范围外清单](#6-范围外需真机真相机要你或后端补)。
 > **关联**：域名配置见 [`domain-setup-cloudflare.md`](./domain-setup-cloudflare.md)；后端部署见 [`deployment-guide-backend.md`](./deployment-guide-backend.md)。
+> **已废弃**：`spec-l2-test-login-channel.md` / `runbook-l2-test-instance.md`（api-test 测试实例方案）—— 已决定不部署测试实例，改为生产直验，两文档仅留作历史记录。
 
 ---
 
@@ -10,25 +12,25 @@
 
 | # | 前置 | 验证命令 / 方式 |
 |---|---|---|
-| P1 | 后端公网在线 | `curl -s https://api.tailtopia.id/actuator/health` → `{"status":"UP"}` |
+| P1 | 生产后端公网在线 | `curl -s https://api.tailtopia.id/actuator/health` → `{"status":"UP"}` |
 | P2 | 后端 live 凭证已配 | `~/.env.petgo` 里 Gemini=`live`、OSS key、Google client id 已填（否则对应功能降级，相关 TC 跳过并标注） |
-| P3 | **测试登录通道**（关键） | 后端提供仅测试环境可用的 dev-login 端点或预置会话 token，用于**绕过真 Google OAuth 交互**（见 §6 的后端补丁需求）。无此通道则所有「需登录态」TC 阻塞 |
+| P3 | **登录态：真 Google 登录（人工一次）** | 模拟器（API 36 Google Play 镜像）已登录一个 Google 账号；App 内点 Google 登录走真 OAuth → 拿到真实会话。**不绕鉴权、不用 stub**（prod 拒收假 idToken）。完成后该 session 供后续需登录态 TC 复用 |
 | P4 | 安卓模拟器在跑 | `adb devices` 有一台 `device` |
 | P5 | App 已装真接口包 | 见 §2 构建命令 |
 
-### 2. 构建 & 启动（真接口）
+### 2. 构建 & 启动（真接口，直打生产）
 
 ```bash
 cd petgo_app
 flutter build apk --release \
-  --dart-define=PETGO_MOCK=false \
   --dart-define=PETGO_API_BASE_URL=https://api.tailtopia.id \
-  --dart-define=PETGO_DEV_STUB_LOGIN=false \
   --dart-define=GOOGLE_SERVER_CLIENT_ID=<server client id>
 adb install -r build/app/outputs/flutter-apk/app-release.apk
 ```
 
-> 若用 §6 的「测试登录通道」绕鉴权，按后端最终方案追加对应 `--dart-define`（如 `PETGO_TEST_LOGIN_TOKEN=...`）。
+> **本分支（L2 测试分支）已物理删除全部 mock 子系统** —— app 恒连真后端，无需再传 `PETGO_MOCK=false`（开关已不存在）。
+> 登录走真 Google：`PETGO_DEV_STUB_LOGIN` 在 release 构建恒不生效（kDebugMode 护栏），故 release 包无需传它。
+> 若需 debug 包做截图直达，可用 `DEV_*` 真后端驱动 flag（`DEV_REAL_LOGIN` 已随 stub 一并失效于 prod，故 prod 验收以真 Google 登录为准）。
 
 ---
 
@@ -135,21 +137,16 @@ adb install -r build/app/outputs/flutter-apk/app-release.apk
 
 ---
 
-## 6. 范围外 20%（需真机/真鉴权，要你或后端补）
+## 6. 范围外（需真机/真相机，要你或后端补）
 
 | 项 | 为什么自动化做不了 | 补法 |
 |---|---|---|
-| 真 Google 登录交互 | 不能代过 Google 同意屏/输真实账号密码 | **后端加测试登录通道**（仅 test profile 生效、能换真实会话 token）→ 解锁全部「需登录态」TC |
 | 真相机实拍 | 模拟器相机为合成画面 | 真机手测；模拟器用相册选图代偿 |
 | 推送通知（FCM） | 模拟器真推送不可靠 | 真机验 |
 | 真机手感/性能/iOS 视觉 | 模拟器≠真机；iOS 视觉需 teleport 本地 | 真机 + 本地 iOS 收尾 |
 | 像素级视觉签字 | 截图比对≈原型级，非 1px | 设计走查 |
 
-### 后端「测试登录通道」需求（解锁 80% 的钥匙）
-- **仅** `SPRING_PROFILES_ACTIVE` 含 test/dev 或独立 flag 时启用；prod 默认关、绝不可达。
-- 输入一个测试标识 → 返回真实结构的会话 token（与正式登录同形），可落到真用户或专用测试用户。
-- App 侧用 `--dart-define` 传入触发，不污染正式 Google 登录路径。
-- 安全：通道开关入库即违规——走 env/profile 控制，文档记录。
+> **登录**：真 Google 登录交互（同意屏/账号密码）由**你在模拟器上人工完成一次**（P3），不绕鉴权。完成后会话供后续需登录态 TC 复用——故登录态用例**在本轮范围内**，仅「点登录那一下」是人工。已决定**不部署 api-test 测试实例**，原 `spec-l2-test-login-channel.md` / `runbook-l2-test-instance.md` 作废留档。
 
 ---
 
@@ -158,15 +155,15 @@ adb install -r build/app/outputs/flutter-apk/app-release.apk
 - **结果矩阵**：每个 TC 一行 → ✅/⚠️/❌/⏭️ + 截图链接 + 印证摘要。
 - **缺陷清单**：❌/⚠️ 项 → 复现步骤 + 截图 + 后端日志片段 + 初判（前端/后端/契约）。
 - **护栏结论**：G1–G6 逐条结论（安全攸关，单列）。
-- **范围外移交单**：§6 各项当轮状态（待真机/待后端通道）。
+- **范围外移交单**：§6 各项当轮状态（待真机）。
 - **通过率**：可自动化 TC 的通过比例 + 阻塞项根因。
 
 ---
 
 ## 8. 执行前确认清单
 
-- [ ] P1 后端 `/actuator/health` = UP
-- [ ] P3 测试登录通道就绪（否则仅能跑游客态 AUTH-03/FEED-01 等少数 TC）
+- [ ] P1 生产后端 `/actuator/health` = UP
+- [ ] P3 模拟器已真 Google 登录拿到会话（否则仅能跑游客态 AUTH-03/FEED-01 等少数 TC）
 - [ ] live 凭证状态已知（Gemini/OSS/IM/Google）→ 决定哪些 TC 跑/跳
-- [ ] 真接口包已装（`PETGO_MOCK=false` + 正确 base URL）
+- [ ] 真接口包已装（直打 `api.tailtopia.id`，本分支已无 mock）
 - [ ] 截图/日志留存目录已建
