@@ -1,6 +1,13 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tencent_cloud_chat_sdk/enum/V2TimAdvancedMsgListener.dart';
+import 'package:tencent_cloud_chat_sdk/enum/log_level_enum.dart';
+import 'package:tencent_cloud_chat_sdk/enum/message_elem_type.dart';
+import 'package:tencent_cloud_chat_sdk/models/v2_tim_message.dart';
+import 'package:tencent_cloud_chat_sdk/tencent_im_sdk_plugin.dart';
 
 import '../network/api_paths.dart';
 import '../network/dio_client.dart';
@@ -37,11 +44,10 @@ class ImCredential {
 /// IM 会话能力封装（Story 5.5 live 增量）。
 ///
 /// 抽象 login/logout/收发/监听，UserSig 取自后端 `/im/usersig`（用户态由后端 MAU 闸门控）。
-/// [LiveImService]：真机经腾讯 IM Flutter SDK 直连收发（**L2 待本地接 `tencent_cloud_chat_sdk`**）；
-/// 本批次（云端 headless）SDK 依赖未引入，[LiveImService] 先落「取 UserSig + 生命周期」骨架，
-/// 实际 SDK login/收发标注待本地，绝不在前端自签 UserSig / 硬编码 SecretKey。
+/// [LiveImService]：真机经腾讯 IM Flutter SDK（`tencent_cloud_chat_sdk`）直连 C2C 收发。
+/// **前端绝不自签 UserSig / 不持 SecretKey**——登录凭证一律向后端短时换取。
 abstract interface class ImService {
-  /// 取 UserSig 并登录 IM（幂等：已登录则空转）。失败抛 [DioException]（调用方提示重试，不崩）。
+  /// 取 UserSig 并登录 IM（幂等：已登录则空转）。失败抛异常（调用方提示重试，不崩）。
   Future<void> loginIfNeeded();
 
   /// 登出 IM（离开会话 / 兽医下线 / 登出时）。
@@ -53,24 +59,51 @@ abstract interface class ImService {
   /// 向对端发图片（本地路径，C2C）。媒体留 IM，不落 OSS / 后端。
   Future<void> sendImage({required String peerId, required String filePath});
 
-  /// 订阅与某会话的实时消息流（离开时取消订阅）。
-  Stream<ImMessage> onMessages(String conversationId);
+  /// 订阅与某对端（[peerId]）的实时消息流（取消订阅即离开）。
+  Stream<ImMessage> onMessages(String peerId);
+
+  /// 拉某对端最近历史消息（进入会话补全上文）。失败返回空表，不崩。
+  Future<List<ImMessage>> loadHistory(String peerId, {int count});
 }
 
 /// 真机 live 实现（Story 5.5）。取 UserSig 后经腾讯 IM Flutter SDK 登录/收发。
 ///
-/// **L2 待本地**：`tencent_cloud_chat_sdk` 依赖与原生权限本批次未引入（Ask First + 云端拉包不稳），
-/// 故 SDK `login/sendMessage/onRecvNewMessage` 接入点以 TODO 标注。已实现：经后端取 UserSig（验 MAU 闸门链路），
-/// 生命周期幂等。绝不在前端自签 UserSig / 硬编码 SecretKey。
+/// 生命周期：首次 [loginIfNeeded] 惰性 `initSDK` + 注册 advanced 消息监听（仅一次），再以后端 UserSig
+/// SDK `login`；[logout] 仅退登录、保留 SDK 实例与监听以便复登。收发走 C2C（按对端 userID，无需服务端会话）。
+/// 护栏：仅用后端下发的短时 UserSig，绝不自签 / 绝不接触 SecretKey。
 class LiveImService implements ImService {
   LiveImService({required this.dio});
 
   final Dio dio;
   ImCredential? _credential;
+  bool _sdkInited = false;
+  V2TimAdvancedMsgListener? _listener;
+
+  /// 全量入站 C2C 消息广播（[onMessages] 按对端过滤）。服务随 Provider 贯穿 app 生命周期，不主动关闭。
+  final StreamController<V2TimMessage> _incoming = StreamController<V2TimMessage>.broadcast();
 
   Future<ImCredential> _fetchUserSig() async {
     final resp = await dio.get<Map<String, dynamic>>(ApiPaths.imUserSig);
     return ImCredential.fromJson(resp.data!);
+  }
+
+  Future<void> _ensureSdkInit(int sdkAppId) async {
+    if (_sdkInited) return;
+    final init = await TencentImSDKPlugin.v2TIMManager.initSDK(
+      sdkAppID: sdkAppId,
+      loglevel: LogLevelEnum.V2TIM_LOG_ERROR,
+    );
+    if (init.code != 0) {
+      throw StateError('IM initSDK 失败: ${init.code}');
+    }
+    _listener = V2TimAdvancedMsgListener()
+      ..onRecvNewMessage = (V2TimMessage msg) {
+        if (!_incoming.isClosed) _incoming.add(msg);
+      };
+    await TencentImSDKPlugin.v2TIMManager
+        .getMessageManager()
+        .addAdvancedMsgListener(listener: _listener!);
+    _sdkInited = true;
   }
 
   @override
@@ -78,30 +111,87 @@ class LiveImService implements ImService {
     if (_credential != null) return;
     // 经后端 MAU 闸门取短时 UserSig（用户须有进行中会话，否则后端 403）。
     final cred = await _fetchUserSig();
+    final sdkAppId = int.tryParse(cred.sdkAppId);
+    if (sdkAppId == null || sdkAppId == 0) {
+      throw StateError('IM SDKAppID 无效');
+    }
+    await _ensureSdkInit(sdkAppId);
+    final res = await TencentImSDKPlugin.v2TIMManager
+        .login(userID: cred.imUserId, userSig: cred.userSig);
+    if (res.code != 0) {
+      throw StateError('IM login 失败: ${res.code}');
+    }
     _credential = cred;
-    // TODO(L2 本地): TencentImSDKPlugin.v2TIMManager.login(userID: cred.imUserId, userSig: cred.userSig)
   }
 
   @override
   Future<void> logout() async {
     _credential = null;
-    // TODO(L2 本地): TencentImSDKPlugin.v2TIMManager.logout()
+    if (!_sdkInited) return;
+    try {
+      await TencentImSDKPlugin.v2TIMManager.logout();
+    } catch (_) {
+      // 退登录失败不抛（页面 dispose 路径，吞掉避免噪声）。
+    }
   }
 
   @override
   Future<void> sendText({required String peerId, required String text}) async {
-    // TODO(L2 本地): v2TIMManager.getMessageManager().createTextMessage + sendMessage(receiver: peerId)
+    final mm = TencentImSDKPlugin.v2TIMManager.getMessageManager();
+    final created = await mm.createTextMessage(text: text);
+    final msg = created.data?.messageInfo;
+    if (msg == null) {
+      throw StateError('createTextMessage 失败: ${created.code}');
+    }
+    final res = await mm.sendMessage(message: msg, receiver: peerId, groupID: '');
+    if (res.code != 0) {
+      throw StateError('sendMessage 失败: ${res.code}');
+    }
   }
 
   @override
   Future<void> sendImage({required String peerId, required String filePath}) async {
-    // TODO(L2 本地): createImageMessage(imagePath: filePath) + sendMessage（媒体留 IM，不落 OSS/后端）
+    // 媒体留 IM，不落 OSS/后端：直接以本地路径建图片消息发出。
+    final mm = TencentImSDKPlugin.v2TIMManager.getMessageManager();
+    final created = await mm.createImageMessage(imagePath: filePath);
+    final msg = created.data?.messageInfo;
+    if (msg == null) {
+      throw StateError('createImageMessage 失败: ${created.code}');
+    }
+    final res = await mm.sendMessage(message: msg, receiver: peerId, groupID: '');
+    if (res.code != 0) {
+      throw StateError('sendMessage(image) 失败: ${res.code}');
+    }
   }
 
   @override
-  Stream<ImMessage> onMessages(String conversationId) {
-    // TODO(L2 本地): 桥接 v2TIMManager.addAdvancedMsgListener.onRecvNewMessage → ImMessage 流
-    return const Stream.empty();
+  Stream<ImMessage> onMessages(String peerId) {
+    // C2C：无论收发，V2TimMessage.userID 恒为对端 userID。按对端过滤本会话消息。
+    return _incoming.stream.where((m) => m.userID == peerId).map(_toImMessage);
+  }
+
+  @override
+  Future<List<ImMessage>> loadHistory(String peerId, {int count = 20}) async {
+    try {
+      final res = await TencentImSDKPlugin.v2TIMManager
+          .getMessageManager()
+          .getC2CHistoryMessageList(userID: peerId, count: count);
+      final list = res.data ?? const <V2TimMessage>[];
+      // SDK 返回新→旧，展示需旧→新。
+      return list.reversed.map(_toImMessage).toList();
+    } catch (_) {
+      return const <ImMessage>[];
+    }
+  }
+
+  ImMessage _toImMessage(V2TimMessage m) {
+    final who = (m.isSelf ?? false) ? 'me' : 'peer';
+    if (m.elemType == MessageElemType.V2TIM_ELEM_TYPE_IMAGE) {
+      final images = m.imageElem?.imageList;
+      final url = (images != null && images.isNotEmpty) ? images.first?.url : null;
+      return ImMessage(who: who, imageUrl: url);
+    }
+    return ImMessage(who: who, text: m.textElem?.text);
   }
 }
 

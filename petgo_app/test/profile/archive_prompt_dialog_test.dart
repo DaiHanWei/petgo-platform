@@ -47,6 +47,9 @@ class _FakeMeRepo implements MeRepository {
     lastStatus = petStatus;
     return UserProfile(petStatus: petStatus, hasPetProfile: false);
   }
+
+  @override
+  Future<UserProfile> updateAvatar(String avatarUrl) async => UserProfile(avatarUrl: avatarUrl);
 }
 
 class _TestAuthController extends AuthController {

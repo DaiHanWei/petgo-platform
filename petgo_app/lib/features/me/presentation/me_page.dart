@@ -2,15 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/media/media_scope.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/utils/media_permission.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../../../shared/widgets/post_cover.dart';
 import '../../auth/data/me_repository.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../auth/domain/login_response.dart';
+import '../../media/domain/media_upload_use_case.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../profile/data/timeline_repository.dart';
 import '../../profile/domain/pet_age.dart';
@@ -67,6 +70,7 @@ class MePage extends ConsumerWidget {
           _ProfileHeadCard(
             profile: profile,
             onEdit: () => _editProfile(context, ref),
+            onAvatarTap: () => _changeAvatar(context, ref),
           ),
           const SizedBox(height: AppSpacing.lg),
           // ② 我的发布（原型 Postinganku）：小标题 + 裸 2 列网格（无卡边框）。
@@ -287,6 +291,26 @@ class MePage extends ConsumerWidget {
       }
     }
   }
+
+  /// Story B：换头像 —— 选图 → 公开桶直传(CDN) → PATCH /me avatarUrl → 刷新资料。
+  Future<void> _changeAvatar(BuildContext context, WidgetRef ref) async {
+    final l10n = AppLocalizations.of(context);
+    final useCase = ref.read(mediaUploadUseCaseProvider);
+    try {
+      final bytes = await useCase.pickAndProcess(source: MediaSource.gallery, context: context);
+      if (bytes == null) return; // 取消 / 权限拒(已弹引导)
+      final res = await useCase.uploadBytes(scope: MediaScope.public, bytes: bytes);
+      final url = res.publicUrl ?? res.objectKey;
+      final updated = await ref.read(meRepositoryProvider).updateAvatar(url);
+      ref.read(authControllerProvider.notifier).applyProfile(updated);
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+          ..clearSnackBars()
+          ..showSnackBar(SnackBar(content: Text(l10n.meAvatarSaveFailed)));
+      }
+    }
+  }
 }
 
 /// AC5 宠物区位三态分支（人 60%/宠物 40%）。
@@ -496,10 +520,11 @@ class _IconBtn extends StatelessWidget {
 /// profhead 卡（原型 p-profil）：白卡 + 阴影，内含「用户行（渐变头像 + 名/邮箱 + Edit）」+
 /// 状态 A 时下挂「宠物 mini」（[_PetZone]，紫浅底行）。B/C 仅用户行。
 class _ProfileHeadCard extends StatelessWidget {
-  const _ProfileHeadCard({required this.profile, required this.onEdit});
+  const _ProfileHeadCard({required this.profile, required this.onEdit, this.onAvatarTap});
 
   final UserProfile? profile;
   final VoidCallback onEdit;
+  final VoidCallback? onAvatarTap; // Story B：点头像换图(上传)
 
   @override
   Widget build(BuildContext context) {
@@ -514,11 +539,28 @@ class _ProfileHeadCard extends StatelessWidget {
       children: [
         Row(
           children: [
-            // 原型 avlg 62（渐变 + 首字母）。
-            _InitialAvatar(
-              avatarUrl: profile?.avatarUrl,
-              nickname: name,
-              radius: 31,
+            // 原型 avlg 62（渐变 + 首字母）。Story B：点击换头像(上传) + 右下角相机角标。
+            GestureDetector(
+              key: const ValueKey('meAvatarUpload'),
+              onTap: onAvatarTap,
+              child: Stack(
+                children: [
+                  _InitialAvatar(avatarUrl: profile?.avatarUrl, nickname: name, radius: 31),
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: AppColors.accentGrowth,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.surface, width: 2),
+                      ),
+                      child: const Icon(Icons.photo_camera, size: 12, color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(width: 14),
             Expanded(

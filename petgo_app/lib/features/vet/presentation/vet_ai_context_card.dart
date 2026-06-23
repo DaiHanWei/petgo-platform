@@ -20,9 +20,13 @@ class VetAiContextCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     if (!context_.hasAiContext) return const SizedBox.shrink();
 
+    // 直连病例 dangerLevel=null:不显假评级,标题用「病例」,左边框中性薄荷;AI 升级才显 GREEN/YELLOW 评级。
+    final hasLevel = context_.dangerLevel != null;
     final isYellow = context_.dangerLevel == 'YELLOW';
     final levelLabel = isYellow ? l10n.vetAiContextLevelYellow : l10n.vetAiContextLevelGreen;
-    final levelColor = isYellow ? AppColors.triageYellow : AppColors.triageGreen;
+    final levelColor = !hasLevel
+        ? AppColors.mint
+        : (isYellow ? AppColors.triageYellow : AppColors.triageGreen);
 
     return Container(
       key: const ValueKey('vetAiContextCard'),
@@ -37,9 +41,11 @@ class VetAiContextCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(l10n.vetAiContextTitle, style: AppTypography.caption),
-          const SizedBox(height: 2),
-          Text(levelLabel, style: AppTypography.title.copyWith(color: levelColor)),
+          Text(hasLevel ? l10n.vetAiContextTitle : l10n.vetCaseTitle, style: AppTypography.caption),
+          if (hasLevel) ...[
+            const SizedBox(height: 2),
+            Text(levelLabel, style: AppTypography.title.copyWith(color: levelColor)),
+          ],
           if (context_.symptomText != null && context_.symptomText!.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.sm),
             Text(context_.symptomText!, style: AppTypography.body),
@@ -52,18 +58,21 @@ class VetAiContextCard extends StatelessWidget {
                 scrollDirection: Axis.horizontal,
                 itemCount: context_.imageUrls.length,
                 separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.sm),
-                itemBuilder: (ctx, i) => ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    context_.imageUrls[i],
-                    width: 72,
-                    height: 72,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Container(
+                itemBuilder: (ctx, i) => GestureDetector(
+                  onTap: () => showCaseImageFullScreen(ctx, context_.imageUrls[i]),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      context_.imageUrls[i],
                       width: 72,
                       height: 72,
-                      color: AppColors.divider,
-                      child: const Icon(Icons.broken_image_outlined, color: AppColors.textTertiary),
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => Container(
+                        width: 72,
+                        height: 72,
+                        color: AppColors.divider,
+                        child: const Icon(Icons.broken_image_outlined, color: AppColors.textTertiary),
+                      ),
                     ),
                   ),
                 ),
@@ -74,4 +83,41 @@ class VetAiContextCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 病例图全屏查看（黑底 + 双指缩放 + 点击关闭）。会话页/预览页缩略图共用。
+Future<void> showCaseImageFullScreen(BuildContext context, String url) {
+  return showDialog<void>(
+    context: context,
+    barrierColor: Colors.black87,
+    builder: (ctx) => GestureDetector(
+      onTap: () => Navigator.of(ctx).pop(),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: InteractiveViewer(
+              minScale: 1,
+              maxScale: 4,
+              child: Center(
+                child: Image.network(
+                  url,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) =>
+                      const Icon(Icons.broken_image_outlined, color: Colors.white54, size: 48),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 40,
+            right: 16,
+            child: IconButton(
+              icon: const Icon(Icons.close, color: Colors.white, size: 28),
+              onPressed: () => Navigator.of(ctx).pop(),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }

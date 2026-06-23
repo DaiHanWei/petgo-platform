@@ -33,8 +33,12 @@ class ConsultRepository {
   }
 
   /// 发起咨询（DIRECT）。已有占用态会话则返回现有（alreadyActive=true）。
-  Future<ConsultSession> create() async {
-    final resp = await dio.post<Map<String, dynamic>>(ApiPaths.consultSessions, data: {});
+  /// Story F：可带用户自填病例 —— [symptomText] 症状 + [imageObjectKeys] 私密桶对象 key（前端已直传）。
+  Future<ConsultSession> create({String? symptomText, List<String>? imageObjectKeys}) async {
+    final body = <String, dynamic>{};
+    if (symptomText != null && symptomText.trim().isNotEmpty) body['symptomText'] = symptomText.trim();
+    if (imageObjectKeys != null && imageObjectKeys.isNotEmpty) body['imageObjectKeys'] = imageObjectKeys;
+    final resp = await dio.post<Map<String, dynamic>>(ApiPaths.consultSessions, data: body);
     return ConsultSession.fromJson(resp.data!);
   }
 

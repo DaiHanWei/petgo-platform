@@ -95,7 +95,8 @@ public class VetConsultService {
                 vetId, List.of(SessionStatus.IN_PROGRESS, SessionStatus.PENDING_CLOSE));
         Identities ids = resolveIdentities(sessions);
         return sessions.stream()
-                .map(s -> new VetActiveItem(s.getId(), s.getSource().name(), ids.pet(s.getUserId()).name()))
+                .map(s -> new VetActiveItem(s.getId(), s.getSource().name(), ids.pet(s.getUserId()).name(),
+                        ids.handle(s.getUserId()), ids.avatar(s.getUserId())))
                 .toList();
     }
 
@@ -170,6 +171,12 @@ public class VetConsultService {
         String handle(Long userId) {
             AuthorView a = userId == null ? null : authors.get(userId);
             return a == null ? null : a.nickname();
+        }
+
+        /** 机主头像 URL（注销/未设 → null，前端降级首字母）。 */
+        String avatar(Long userId) {
+            AuthorView a = userId == null ? null : authors.get(userId);
+            return a == null ? null : a.avatarUrl();
         }
     }
 

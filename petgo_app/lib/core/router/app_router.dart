@@ -29,6 +29,7 @@ import '../../features/profile/presentation/day_detail_page.dart';
 import '../../features/profile/presentation/pet_profile_edit_page.dart';
 import '../../features/profile/presentation/profile_created_celebration_page.dart';
 import '../../features/profile/presentation/profile_onboarding_page.dart';
+import '../../features/consult/presentation/consult_case_form_page.dart';
 import '../../features/consult/presentation/consult_conversation_page.dart';
 import '../../features/consult/presentation/consult_entry_page.dart';
 import '../../features/consult/presentation/consult_waiting_page.dart';
@@ -155,6 +156,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/triage/upload', builder: (c, s) => const TriageUploadPage()),
       // 兽医咨询入口 + 等待界面（Story 5.3）。受控路由（/consult 前缀，游客被门控）。
       GoRoute(path: '/consult', builder: (c, s) => const ConsultEntryPage()),
+      // 直连问诊病例填写页（Story F）：症状 + 照片，提交才发起 DIRECT 会话。
+      GoRoute(path: '/consult/case', builder: (c, s) => const ConsultCaseFormPage()),
       GoRoute(
         path: '/consult/waiting/:id',
         builder: (c, s) => ConsultWaitingPage(sessionId: int.parse(s.pathParameters['id']!)),

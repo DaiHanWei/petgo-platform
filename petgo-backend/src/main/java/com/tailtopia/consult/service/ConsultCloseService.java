@@ -4,6 +4,7 @@ import com.tailtopia.consult.domain.ConsultRating;
 import com.tailtopia.consult.domain.ConsultSession;
 import com.tailtopia.consult.domain.RatingPromptState;
 import com.tailtopia.consult.domain.SessionStatus;
+import com.tailtopia.consult.domain.VetDiagnosis;
 import com.tailtopia.consult.event.ConsultClosedEvent;
 import com.tailtopia.consult.repository.ConsultRatingRepository;
 import com.tailtopia.consult.repository.ConsultSessionRepository;
@@ -44,21 +45,56 @@ public class ConsultCloseService {
         this.events = events;
     }
 
-    /** 兽医结束：IN_PROGRESS → PENDING_CLOSE（非立即关闭）+ 兽医 BUSY→ONLINE + IM 系统消息「请评分」。 */
+    /**
+     * 兽医结束（Story 5.6 + Story C）：IN_PROGRESS → PENDING_CLOSE + 兽医 BUSY→ONLINE +
+     * 定格最终诊断（{@code diagnosis}，必填由 web 层校验）+ IM 系统消息把结构化诊断推给用户。
+     */
     @Transactional
-    public ConsultSession endByVet(long vetId, long sessionId) {
+    public ConsultSession endByVet(long vetId, long sessionId, VetDiagnosis diagnosis) {
         ConsultSession s = sessions.findById(sessionId)
                 .orElseThrow(() -> AppException.notFound("咨询不存在"));
         if (s.getVetId() == null || !s.getVetId().equals(vetId)) {
             throw AppException.forbidden("无权结束该会话");
         }
+        s.recordDiagnosis(diagnosis); // Story C：先定格诊断，再转 PENDING_CLOSE
         s.endByVet();
         sessions.save(s);
         presence.goAvailable(vetId); // 结束后回在线可接新单（解除 5.5 BUSY）
         if (s.getImConversationId() != null) {
-            imClient.sendSystemMessage(s.getImConversationId(), "兽医已完成本次问诊，请为本次服务评分");
+            // 诊断作为系统消息推给用户（聊天里直接可见）。含健康数据：仅经 IM 投递，绝不进日志。
+            imClient.sendSystemMessage(s.getImConversationId(), buildDiagnosisMessage(diagnosis));
         }
         return s;
+    }
+
+    /** 构建用户侧诊断系统消息（印尼语标签 + 兽医填写内容，跳过空字段）。 */
+    private static String buildDiagnosisMessage(VetDiagnosis d) {
+        StringBuilder sb = new StringBuilder("📋 Diagnosa Akhir\n");
+        sb.append("Diagnosa: ").append(d.diagnosis());
+        if (notBlank(d.generalAdvice())) {
+            sb.append("\nSaran: ").append(d.generalAdvice());
+        }
+        if (d.needsMedication() && notBlank(d.medName())) {
+            sb.append("\nObat: ").append(d.medName());
+            if (notBlank(d.medFrequency())) {
+                sb.append(" (").append(d.medFrequency()).append(')');
+            }
+        }
+        if (notBlank(d.followUp())) {
+            sb.append("\nKontrol ulang: ").append(d.followUp());
+        }
+        if (notBlank(d.worseningSigns())) {
+            sb.append("\nWaspada: ").append(d.worseningSigns());
+        }
+        if (notBlank(d.clinicWithin())) {
+            sb.append("\nKe klinik bila memburuk dalam: ").append(d.clinicWithin());
+        }
+        sb.append("\n\nSesi selesai. Mohon beri rating ya 🙏");
+        return sb.toString();
+    }
+
+    private static boolean notBlank(String s) {
+        return s != null && !s.isBlank();
     }
 
     /**

@@ -1,4 +1,3 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -76,25 +75,13 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
 
   Future<void> _start() async {
     if (_starting) return;
+    // Story F：先去病例填写页（症状 + 照片），提交才发起 DIRECT 会话 → 等待页。
     setState(() => _starting = true);
-    final l10n = AppLocalizations.of(context);
     try {
-      final session = await ref.read(consultRepositoryProvider).create();
-      if (!mounted) return;
-      // 进行中 → 进会话（5.5 暂跳等待页占位）；WAITING/已有 → 等待页。
-      context.push('/consult/waiting/${session.id}');
-    } on DioException {
-      _banner(l10n.consultStartFailed);
+      await context.push('/consult/case');
     } finally {
       if (mounted) setState(() => _starting = false);
     }
-  }
-
-  void _banner(String msg) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override

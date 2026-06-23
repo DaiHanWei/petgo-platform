@@ -73,3 +73,29 @@ flutter build apk --debug \
   --dart-define=GOOGLE_SERVER_CLIENT_ID=952015467016-3q9vb0ro18fnecl9gpnrddbfj9snqer0.apps.googleusercontent.com
 ```
 debug SHA-1 `D0:07:DC:96:D1:4D:7F:B1:AA:2E:AB:0C:78:42:A0:B8:B1:A0:8E:96` 已注册 Android client(com.tailtopia.app);后端 GOOGLE_OAUTH_CLIENT_ID 已=该 Web client,audience 对齐。
+
+---
+
+## ✅ IM SDK 集成完成 + 后端切 live + 兽医账号(2026-06-23,本次 session)
+
+> 上面 CON-02「IM 未集成」阻塞已解除。客户端集成腾讯 IM + 后端 live + 建号 + 链路冒烟全过;仅剩双端真机视觉验收(用户自行手动跑)。
+
+### 客户端(L0 全绿,未 commit)
+- `pubspec`:加 `tencent_cloud_chat_sdk ^9.0.7652+1`。
+- `LiveImService`(`core/im/im_service.dart`):5 TODO 全实现 —— 惰性 `initSDK`+注册 advanced 监听 → 后端 UserSig `login`(幂等);`sendText`/`sendImage`(C2C,媒体留 IM);`onMessages` 按对端 `u_/v_` 过滤入站流;`logout`;补 `loadHistory`。**前端不自签 UserSig / 不碰 SecretKey。**
+- `ImChatPlaceholder`:demo→真实 IM 驱动(订阅流+乐观上屏+发图),保留原型气泡;`peerId` 空不触 SDK。兽医「Pakai」接通预填。
+- 验证:`flutter analyze` 净 · `flutter test` **322 过** · `flutter build apk --debug` 成功。
+
+### 后端生产(62.146.239.156)
+- `~/.env.petgo`:`IM_MODE=stub→live`(已备份 `.env.petgo.bak.*`);仅 `--env-file` 重建 `petgo-server`(无 `-e`,保住假 idToken 修复)。
+- 启动:Flyway 校验 28 迁移、schema 最新;`Started ... 29.9s`;`/actuator/health`=200。
+- 兽医账号(无 admin 后台,直写库 + bcrypt):`vet_accounts` id=1 / **`vetdev` / `12345678`**(简化于 2026-06-23)/ `drh. Dewi Santoso` / ACTIVE。
+- **链路冒烟(curl@host)**:`POST /api/v1/auth/vet/login`(drdewi)→ role=VET JWT;`GET /api/v1/im/usersig` → 真实腾讯 UserSig(`imUserId=v_1`,`sdkAppId=20043419`,sig.len=188,ttl 86400)。**证明 live 模式真签 UserSig。**
+
+### ⏳ 待手动验收(用户自跑,双端 + 真 Google)
+- APK:`petgo_app/build/app/outputs/flutter-apk/app-debug.apk`(连 `api.tailtopia.id` + 真 Google,见上构建参数)。同一 APK 装两端。
+- 用户侧:emulator-5554(Google Play 镜像,已挂 shawnliugj@gmail.com)真 Google 登录。
+- 兽医侧:第二个安卓模拟器 / 物理机,登录页「Vet sign-in」→ `vetdev` / `12345678`。**保持 App 前台 + Online**(退后台即停心跳→3min 后离线)。
+- **CON-02**:用户发起问诊 → 兽医工作台接单 → 双向收发文字/图片验通(发送方己方气泡=乐观上屏,对端经实时流上屏)。
+- **CON-03**:兽医结束会话 → 用户评分 → 落 `consult_ratings`。落库核验 SQL:
+  `docker exec petgo-postgres psql -U petgo -d petgo -c "SELECT id,session_id,stars,left(comment,20),created_at FROM consult_ratings ORDER BY id DESC LIMIT 5;"`

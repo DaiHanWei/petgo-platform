@@ -31,11 +31,13 @@ public class ConsultAiContextService {
     public ConsultAiContextResponse forSession(long sessionId) {
         ConsultSession s = repo.findById(sessionId)
                 .orElseThrow(() -> AppException.notFound("咨询不存在"));
-        if (!s.hasAiContext()) {
+        // Story F：直连自填病例也要展示给兽医，故按「有病例」判（AI 上下文 或 直连症状/图）。
+        if (!s.hasCase()) {
             return ConsultAiContextResponse.empty();
         }
         List<String> refs = s.getAiImageRefs();
         List<String> urls = (refs == null || refs.isEmpty()) ? List.of() : signedUrlService.signAll(refs);
+        // dangerLevel 对直连为 null（无 AI 评级），前端据此显示「病例」而非「AI 上下文」标题。
         return new ConsultAiContextResponse(true, s.getAiDangerLevel(), s.getAiSymptomText(), urls);
     }
 }

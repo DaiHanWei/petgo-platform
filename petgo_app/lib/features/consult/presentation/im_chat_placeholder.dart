@@ -1,27 +1,38 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
+import 'dart:io';
 
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
+
+import '../../../core/im/im_service.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../../shared/widgets/design/striped_photo.dart';
 
 /// 实时对话区（Story 5.5 · TailTopia Prototype VetChat 换肤）。
 ///
-/// 真机接入腾讯 IM Flutter SDK 收发文字/图片 + 后台保连（NFR-5）属 **L2**。
-/// 🔄 PRD V1.0.0 修订（F4 · 2026-06-08）：V1.0.0 全程无视频，会话仅文字/图片（视频随收费模式后置）。
-/// 本组件为 demo/占位聊天面：种子对话 + 本地回声（发送→打字→兽医罐头回复），
-/// 视觉对齐原型气泡。
+/// 经腾讯 IM Flutter SDK（`imServiceProvider` → [LiveImService]）做真实 C2C 收发：
+/// 进入按 [peerId]（对端 `u_<userId>` / `v_<vetId>`）订阅实时消息流 + 拉最近历史，
+/// 发送走 [ImService.sendText] / [ImService.sendImage]（媒体留 IM，不落 OSS）。
+/// 视觉对齐原型气泡。[peerId] 为空（兽医未接单 / 未登录）时只渲染壳,不触 SDK。
 ///
-/// 🔌 真机接入（**L2 待本地**）：登录/收发由页面经 `imServiceProvider` 驱动（见
-/// `consult_conversation_page` / `vet_conversation_page`）；[peerId]（对端 `u_`/`v_` 账号）与
-/// [imConversationId] 用于真实 C2C 收发，绑定腾讯 IM Flutter SDK 后此面用 [ImService.onMessages]/`sendText`
-/// 替换本地回声，视觉保留。mock / 测试下保持本地演示气泡（不触真实 SDK）。
-class ImChatPlaceholder extends StatefulWidget {
+/// 🔄 PRD V1.0.0（F4 · 2026-06-08）：V1.0.0 全程无视频，会话仅文字 / 图片。
+class ImChatPlaceholder extends ConsumerStatefulWidget {
   const ImChatPlaceholder(
-      {super.key, this.imConversationId, this.peerId, this.accent = AppColors.mint, this.selfIsVet = false});
+      {super.key,
+      this.imConversationId,
+      this.peerId,
+      this.accent = AppColors.mint,
+      this.selfIsVet = false,
+      this.inputController});
 
+  /// 外部输入框控制器（兽医侧「Pakai」预填用）。为空则内部自管理（并负责销毁）。
+  final TextEditingController? inputController;
+
+  /// 仅作展示 / Widget key 用途；真实 C2C 收发以 [peerId] 为准。
   final String? imConversationId;
 
-  /// 对端 IM 账号（用户侧 `v_<vetId>` / 兽医侧 `u_<userId>`）。真机 C2C 收发用（L2）。
+  /// 对端 IM 账号（用户侧 `v_<vetId>` / 兽医侧 `u_<userId>`）。真机 C2C 收发用。
   final String? peerId;
 
   /// 己方气泡 + 发送钮品牌主色：用户侧紫 `AppColors.mint`(#845EC9 默认) / 兽医侧薄荷 `vetPrimary`(#5BCBBB)。
@@ -33,61 +44,66 @@ class ImChatPlaceholder extends StatefulWidget {
   final bool selfIsVet;
 
   @override
-  State<ImChatPlaceholder> createState() => _ImChatPlaceholderState();
+  ConsumerState<ImChatPlaceholder> createState() => _ImChatPlaceholderState();
 }
 
-class _ChatMsg {
-  const _ChatMsg.sys(this.text)
-      : who = 'sys',
-        photo = null;
-  const _ChatMsg.me(this.text)
-      : who = 'me',
-        photo = null;
-  const _ChatMsg.vet(this.text)
-      : who = 'vet',
-        photo = null;
-  const _ChatMsg.photo(this.photo)
-      : who = 'me',
-        text = null;
-
-  final String who;
-  final String? text;
-  final String? photo;
-}
-
-class _ImChatPlaceholderState extends State<ImChatPlaceholder> {
-  final _input = TextEditingController();
+class _ImChatPlaceholderState extends ConsumerState<ImChatPlaceholder> {
+  late final TextEditingController _input;
+  late final bool _ownsInput;
   final _scroll = ScrollController();
-  bool _typing = false;
+  final _picker = ImagePicker();
 
-  final List<_ChatMsg> _msgs = [
-    const _ChatMsg.sys('Konsultasi dengan drh. Sari dimulai. Sampaikan keluhan anabul-mu ya 🐾'),
-    const _ChatMsg.me('Halo dok, kucing saya Oyen tadi muntah busa putih 2x malam ini 😟'),
-    const _ChatMsg.me('Dari sore dia jadi lebih diam, nggak seaktif biasanya'),
-    const _ChatMsg.photo('Oyen tadi malam'),
-    const _ChatMsg.vet(
-        'Halo Kak, saya drh. Sari ya. Terima kasih fotonya 🙏 Oyen umur berapa, dan terakhir vaksin/obat cacing kapan?'),
-    const _ChatMsg.me('Umur 2 tahun, vaksin rutin. Obat cacing terakhir sekitar 3 bulan lalu'),
-    const _ChatMsg.vet(
-        'Baik. Sekarang masih mau makan & minum nggak? Pup dan pipisnya gimana? Ada kemungkinan dia gigit benang/tanaman/makanan asing?'),
-    const _ChatMsg.me(
-        'Minum masih mau sedikit, makan belum mau sama sekali. Pup normal kemarin. Tadi sempat gigit-gigit tali tirai sih 😅'),
-    const _ChatMsg.vet(
-        'Noted. Muntah busa putih + nafsu makan turun paling sering karena iritasi lambung ringan atau hairball. Tapi karena ada riwayat gigit tali, kita tetap waspadai kemungkinan benda asing ya.'),
-    const _ChatMsg.vet(
-        'Untuk sekarang:\n1) Puasakan makanan 2-3 jam dulu\n2) Tetap sediakan air, kasih sedikit tapi sering\n3) Setelah itu coba makanan basah hambar (ayam rebus tanpa bumbu) porsi kecil'),
-    const _ChatMsg.me('Oke dok. Kalau nanti masih muntah lagi gimana?'),
-    const _ChatMsg.vet(
-        'Kalau muntah berulang >3x, ada darah, lemas berat, atau sama sekali nggak mau minum dalam 12 jam → segera ke klinik untuk cek fisik & kemungkinan rontgen, mastiin nggak ada tali yang tertelan ya.'),
-    const _ChatMsg.me('Baik dok, makasih banyak penjelasannya 🙏'),
-    const _ChatMsg.vet(
-        'Sama-sama Kak 🙏 Saya rangkum konsultasinya ya:\n• Dugaan: iritasi lambung ringan / hairball\n• Tindakan: puasa 2-3 jam → hidrasi → makanan hambar porsi kecil\n• Pantau 24 jam, waspada benda asing (tali tirai)\n• Ke klinik bila muntah berulang / lemas / ada darah\nSemoga Oyen cepat pulih! 🐱'),
-    const _ChatMsg.sys('drh. Sari melampirkan kesimpulan konsultasi. Kamu bisa mengakhiri sesi & memberi rating.'),
-  ];
+  ImService? _service;
+  StreamSubscription<ImMessage>? _sub;
+  bool _bootstrapped = false;
+  final List<ImMessage> _msgs = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _ownsInput = widget.inputController == null;
+    _input = widget.inputController ?? TextEditingController();
+    _service = ref.read(imServiceProvider);
+    _maybeBootstrap();
+  }
+
+  @override
+  void didUpdateWidget(covariant ImChatPlaceholder oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 兽医接单后 peerId 由 null 变为 v_/u_ → 此时才挂载实时流。
+    if (oldWidget.peerId != widget.peerId) _maybeBootstrap();
+  }
+
+  /// 订阅实时流 + 登录后拉历史（仅一次，幂等）。[peerId] 为空不触 SDK。
+  void _maybeBootstrap() {
+    final peer = widget.peerId;
+    if (peer == null || peer.isEmpty || _bootstrapped) return;
+    _bootstrapped = true;
+    // 入站流广播：登录前订阅亦无害，登录成功后开始有消息流入。
+    _sub = _service!.onMessages(peer).listen((m) {
+      if (!mounted) return;
+      setState(() => _msgs.add(m));
+      _scrollToEnd();
+    });
+    // 页面（consult/vet conversation）已驱动 loginIfNeeded；此处兜底再唤一次（幂等）后拉历史。
+    _service!.loginIfNeeded().then((_) => _loadHistory()).catchError((_) {
+      // 取 sig 403 / 网络失败：保留空壳，下次进入重试。
+    });
+  }
+
+  Future<void> _loadHistory() async {
+    final peer = widget.peerId;
+    if (peer == null) return;
+    final hist = await _service!.loadHistory(peer);
+    if (!mounted || hist.isEmpty) return;
+    setState(() => _msgs.insertAll(0, hist));
+    _scrollToEnd();
+  }
 
   @override
   void dispose() {
-    _input.dispose();
+    _sub?.cancel();
+    if (_ownsInput) _input.dispose();
     _scroll.dispose();
     super.dispose();
   }
@@ -103,46 +119,70 @@ class _ImChatPlaceholderState extends State<ImChatPlaceholder> {
 
   void _send() {
     final t = _input.text.trim();
-    if (t.isEmpty) return;
+    final peer = widget.peerId;
+    if (t.isEmpty || peer == null) return;
+    // 乐观上屏己方气泡（发送回执经 SDK；入站流只回对端消息）。
     setState(() {
-      _msgs.add(_ChatMsg.me(t));
+      _msgs.add(ImMessage(who: 'me', text: t));
       _input.clear();
-      _typing = true;
     });
     _scrollToEnd();
-    Future.delayed(const Duration(milliseconds: 1500), () {
-      if (!mounted) return;
-      setState(() {
-        _typing = false;
-        _msgs.add(const _ChatMsg.vet(
-            'Siap, saya catat ya. Tetap pantau kondisinya dalam 2 jam ke depan 🙏'));
-      });
-      _scrollToEnd();
+    _service!.sendText(peerId: peer, text: t).catchError((_) {
+      if (mounted) _toast(AppLocalizations.of(context).imSendFailed);
     });
+  }
+
+  Future<void> _pickAndSendImage() async {
+    final peer = widget.peerId;
+    if (peer == null) return;
+    final XFile? picked = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (picked == null || !mounted) return;
+    setState(() {
+      _msgs.add(ImMessage(who: 'me', imageUrl: picked.path)); // 本地路径乐观上屏
+    });
+    _scrollToEnd();
+    _service!.sendImage(peerId: peer, filePath: picked.path).catchError((_) {
+      if (mounted) _toast(AppLocalizations.of(context).imSendFailed);
+    });
+  }
+
+  void _toast(String msg) {
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Expanded(
       key: const ValueKey('imChatPlaceholder'),
       child: Column(
         children: [
           Expanded(
-            child: ListView(
-              controller: _scroll,
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
-              children: [
-                for (final m in _msgs) _Bubble(msg: m, accent: widget.accent, selfIsVet: widget.selfIsVet),
-                if (_typing)
-                  _Bubble(
-                      msg: const _ChatMsg.vet('...'),
-                      typing: true,
-                      accent: widget.accent,
-                      selfIsVet: widget.selfIsVet),
-              ],
-            ),
+            child: _msgs.isEmpty
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(l10n.imChatPlaceholderHint,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 12.5, color: AppColors.muted, height: 1.5)),
+                    ),
+                  )
+                : ListView(
+                    controller: _scroll,
+                    padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
+                    children: [
+                      for (final m in _msgs) _Bubble(msg: m, accent: widget.accent, selfIsVet: widget.selfIsVet),
+                    ],
+                  ),
           ),
-          _InputBar(controller: _input, onSend: _send, accent: widget.accent),
+          _InputBar(
+            controller: _input,
+            onSend: _send,
+            onPickImage: _pickAndSendImage,
+            accent: widget.accent,
+          ),
         ],
       ),
     );
@@ -150,10 +190,9 @@ class _ImChatPlaceholderState extends State<ImChatPlaceholder> {
 }
 
 class _Bubble extends StatelessWidget {
-  const _Bubble({required this.msg, this.typing = false, required this.accent, this.selfIsVet = false});
+  const _Bubble({required this.msg, required this.accent, this.selfIsVet = false});
 
-  final _ChatMsg msg;
-  final bool typing;
+  final ImMessage msg;
   final Color accent;
   final bool selfIsVet;
 
@@ -180,7 +219,7 @@ class _Bubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (msg.who == 'sys') {
+    if (msg.isSystem) {
       return Container(
         margin: const EdgeInsets.symmetric(vertical: 6),
         alignment: Alignment.center,
@@ -188,32 +227,30 @@ class _Bubble extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 280),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           decoration: BoxDecoration(color: AppColors.cream2, borderRadius: BorderRadius.circular(999)),
-          child: Text(msg.text!,
+          child: Text(msg.text ?? '',
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 12, color: AppColors.muted)),
         ),
       );
     }
 
-    final me = msg.who == 'me';
+    final me = msg.isMine;
 
-    // 头像：己方 me（兽医侧薄荷「D」/ 用户侧紫「A」）；对端（反之）。原型两侧贴头像，sys 无。
+    // 头像：己方 me（兽医侧薄荷「D」/ 用户侧紫「A」）；对端（反之）。
     final meMint = selfIsVet; // 兽医视角己方=薄荷
     final avatar = me
         ? _avatar(mint: meMint, label: meMint ? 'D' : 'A')
         : _avatar(mint: !meMint, label: !meMint ? 'D' : 'A');
 
     Widget content;
-    if (msg.photo != null) {
+    if (msg.imageUrl != null) {
       content = ClipRRect(
         borderRadius: BorderRadius.circular(18),
-        child: StripedPhoto(label: msg.photo!, height: 120, width: 150, radius: 18),
+        child: _image(msg.imageUrl!),
       );
     } else {
       content = Container(
-        padding: typing
-            ? const EdgeInsets.symmetric(horizontal: 16, vertical: 12)
-            : const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: me ? accent : AppColors.card,
           borderRadius: BorderRadius.only(
@@ -224,11 +261,8 @@ class _Bubble extends StatelessWidget {
           ),
           boxShadow: const [BoxShadow(color: Color(0x0A2B2A27), offset: Offset(0, 1), blurRadius: 2)],
         ),
-        child: typing
-            ? const _TypingDots()
-            : Text(msg.text!,
-                style: TextStyle(
-                    fontSize: 14.5, height: 1.45, color: me ? Colors.white : AppColors.ink)),
+        child: Text(msg.text ?? '',
+            style: TextStyle(fontSize: 14.5, height: 1.45, color: me ? Colors.white : AppColors.ink)),
       );
     }
 
@@ -248,58 +282,23 @@ class _Bubble extends StatelessWidget {
       ),
     );
   }
-}
 
-class _TypingDots extends StatefulWidget {
-  const _TypingDots();
-
-  @override
-  State<_TypingDots> createState() => _TypingDotsState();
-}
-
-class _TypingDotsState extends State<_TypingDots> with SingleTickerProviderStateMixin {
-  late final AnimationController _c =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat();
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 32,
-      height: 8,
-      child: AnimatedBuilder(
-        animation: _c,
-        builder: (_, _) => Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (int i = 0; i < 3; i++) ...[
-              if (i > 0) const SizedBox(width: 4),
-              Opacity(
-                opacity: (((_c.value + i * 0.2) % 1.0) < 0.5) ? 1.0 : 0.3,
-                child: Container(
-                  width: 7,
-                  height: 7,
-                  decoration: const BoxDecoration(color: AppColors.muted, shape: BoxShape.circle),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
+  /// 本地路径（乐观上屏）走 [Image.file]；远端 IM url 走 [Image.network]。
+  Widget _image(String src) {
+    final w = src.startsWith('http')
+        ? Image.network(src, width: 150, height: 120, fit: BoxFit.cover)
+        : Image.file(File(src), width: 150, height: 120, fit: BoxFit.cover);
+    return SizedBox(width: 150, height: 120, child: w);
   }
 }
 
 class _InputBar extends StatelessWidget {
-  const _InputBar({required this.controller, required this.onSend, required this.accent});
+  const _InputBar(
+      {required this.controller, required this.onSend, required this.onPickImage, required this.accent});
 
   final TextEditingController controller;
   final VoidCallback onSend;
+  final VoidCallback onPickImage;
   final Color accent;
 
   @override
@@ -313,11 +312,15 @@ class _InputBar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: const BoxDecoration(color: AppColors.cream2, shape: BoxShape.circle),
-            child: const Icon(Icons.photo_camera_outlined, size: 21, color: AppColors.ink2),
+          GestureDetector(
+            key: const ValueKey('vetChatPickImage'),
+            onTap: onPickImage,
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: const BoxDecoration(color: AppColors.cream2, shape: BoxShape.circle),
+              child: const Icon(Icons.photo_camera_outlined, size: 21, color: AppColors.ink2),
+            ),
           ),
           const SizedBox(width: 8),
           Expanded(

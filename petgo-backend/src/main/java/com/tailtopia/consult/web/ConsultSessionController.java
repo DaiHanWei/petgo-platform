@@ -53,7 +53,10 @@ public class ConsultSessionController {
             }
             result = service.createWaitingFromUpgrade(userId, req.triageTaskId());
         } else {
-            result = service.createWaiting(userId, ConsultSource.DIRECT);
+            // 直连问诊：带用户自填病例（症状 + 私密桶图 key），无则为空（兼容旧客户端）。
+            result = service.createWaiting(userId, ConsultSource.DIRECT,
+                    req == null ? null : req.symptomText(),
+                    req == null ? null : req.imageObjectKeys());
         }
         return ConsultSessionResponse.of(result.session(),
                 ConsultSessionService.WAITING_TIMEOUT_SECONDS, result.alreadyActive());

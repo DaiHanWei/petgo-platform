@@ -9,6 +9,7 @@ import com.tailtopia.shared.error.AppException;
 import com.tailtopia.triage.domain.DangerLevel;
 import com.tailtopia.triage.dto.TriageUpgradeContext;
 import com.tailtopia.triage.service.TriageService;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -49,11 +50,26 @@ public class ConsultSessionService {
      */
     @Transactional
     public CreateResult createWaiting(long userId, ConsultSource source) {
+        return createWaiting(userId, source, null, null);
+    }
+
+    /**
+     * 发起咨询（Story F 增量：直连问诊可带用户自填病例 —— 症状 + 私密桶图 key）。
+     * 病例存进与 AI 上下文同列（{@code ai_symptom_text}/{@code ai_image_refs}），供兽医侧 aiContext 展示；
+     * {@code ai_danger_level} 留空（无 AI 评级）。
+     */
+    public CreateResult createWaiting(long userId, ConsultSource source,
+            String symptomText, List<String> imageObjectKeys) {
         Optional<ConsultSession> active = findActiveForUser(userId);
         if (active.isPresent()) {
             return new CreateResult(active.get(), true);
         }
-        ConsultSession saved = repo.save(ConsultSession.startWaiting(userId, source));
+        ConsultSession session = ConsultSession.startWaiting(userId, source);
+        if ((symptomText != null && !symptomText.isBlank())
+                || (imageObjectKeys != null && !imageObjectKeys.isEmpty())) {
+            session.bindDirectCase(symptomText, imageObjectKeys);
+        }
+        ConsultSession saved = repo.save(session);
         queue.enqueue(saved.getId());
         events.publishEvent(new ConsultRequestQueuedEvent(saved.getId())); // → 推送在线兽医（6.2）
         return new CreateResult(saved, false);
