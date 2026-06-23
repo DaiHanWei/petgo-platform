@@ -57,6 +57,9 @@ dependencies:
   share_plus: ^10.1.4
   # 高保真还原：原型内联 SVG 图标 1:1 渲染（禁止 Material Icons 近似替代）。
   flutter_svg: ^2.0.10+1
+  # Story 5.5 L2：腾讯 IM Flutter SDK（兽医↔用户实时 C2C 收发）。
+  # UserSig 取自后端 /im/usersig（短时），前端绝不自签 / 不持 SecretKey。
+  tencent_cloud_chat_sdk: ^9.0.7652+1
 
 dev_dependencies:
   flutter_test:

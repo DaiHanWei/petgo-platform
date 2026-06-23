@@ -7,6 +7,8 @@ class VetActiveItem {
     required this.sessionId,
     required this.petName,
     required this.source,
+    this.ownerName,
+    this.ownerAvatarUrl,
     this.lastMessage = '',
     this.unread = 0,
   });
@@ -14,6 +16,10 @@ class VetActiveItem {
   final int sessionId;
   final String petName;
   final String source; // DIRECT | AI_UPGRADE
+
+  // Story B：机主身份（后端下发）。注销/未设则 null → 卡片降级到宠物名/首字母。
+  final String? ownerName; // 机主昵称
+  final String? ownerAvatarUrl; // 机主头像 URL（可空）
 
   // unread / lastMessage 来自腾讯 IM SDK（后端列表端点不下发）：mock 离线态附占位演示，
   // 真机由 IM 数据填充；缺失时卡片优雅降级（不显未读角标 / 最近消息行）。
@@ -24,6 +30,8 @@ class VetActiveItem {
         sessionId: (json['sessionId'] as num).toInt(),
         petName: (json['petName'] ?? '') as String,
         source: (json['source'] ?? 'DIRECT') as String,
+        ownerName: json['ownerName'] as String?,
+        ownerAvatarUrl: json['ownerAvatarUrl'] as String?,
         lastMessage: (json['lastMessage'] ?? '') as String,
         unread: (json['unread'] as num?)?.toInt() ?? 0,
       );

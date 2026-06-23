@@ -2,6 +2,7 @@ package com.tailtopia.consult.web;
 
 import com.tailtopia.consult.dto.ConsultAssistResponse;
 import com.tailtopia.consult.dto.VetActiveItem;
+import com.tailtopia.consult.dto.VetEndRequest;
 import com.tailtopia.consult.dto.VetHistoryItem;
 import com.tailtopia.consult.dto.VetInboxItem;
 import com.tailtopia.consult.dto.VetSessionView;
@@ -9,12 +10,14 @@ import com.tailtopia.consult.service.ConsultAcceptService;
 import com.tailtopia.consult.service.ConsultCloseService;
 import com.tailtopia.consult.service.VetConsultService;
 import com.tailtopia.shared.error.AppException;
+import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -71,10 +74,14 @@ public class VetConsultController {
         return VetSessionView.of(acceptService.accept(currentVetId(jwt), id));
     }
 
-    /** 兽医结束会话（二次确认在前端）：IN_PROGRESS → PENDING_CLOSE（Story 5.6）。 */
+    /**
+     * 兽医结束会话（二次确认在前端）：IN_PROGRESS → PENDING_CLOSE（Story 5.6）。
+     * Story C：必须随结束提交最终诊断（{@code diagnosis} 必填，空 → 422）；诊断定格存档 + 推用户。
+     */
     @PostMapping("/{id}/end")
-    public VetSessionView end(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
-        return VetSessionView.of(closeService.endByVet(currentVetId(jwt), id));
+    public VetSessionView end(@AuthenticationPrincipal Jwt jwt, @PathVariable long id,
+            @Valid @RequestBody VetEndRequest req) {
+        return VetSessionView.of(closeService.endByVet(currentVetId(jwt), id, req.toDiagnosis()));
     }
 
     /** 兽医退单（Story 5.3 R2，F11）：IN_PROGRESS → WAITING，重新入队广播。仅本会话接单兽医可退单。 */

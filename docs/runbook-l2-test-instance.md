@@ -1,5 +1,7 @@
 # Runbook — L2 测试实例（方案 A，dev profile 旁路）
 
+> ⚠️ **已作废（2026-06-23）**：决定**不部署本测试实例**，L2 改为直打生产 `api.tailtopia.id` + 真 Google 登录人工一次。本 runbook 仅留作历史记录，**勿执行**。现行口径见 [`L2-acceptance-emulator-real-backend.md`](./L2-acceptance-emulator-real-backend.md)。
+>
 > 在 `62.146.239.156` 上与生产 `petgo-server` **并列**起一个 dev-profile 测试实例，复用现有 `DevGoogleTokenVerifier`+`DevUserSeeder`，接真实 live 凭证 + 独立测试库 + 独立隧道 hostname `api-test.tailtopia.id`。
 > **零改 prod 鉴权**。详见 [`spec-l2-test-login-channel.md`](./spec-l2-test-login-channel.md)。
 > ⚠️ 占位 `<...>` 自行替换；密码/密钥走 env，绝不入库。共享 redis **禁 FLUSHALL**。

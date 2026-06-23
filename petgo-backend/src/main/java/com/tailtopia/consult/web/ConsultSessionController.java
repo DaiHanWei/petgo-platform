@@ -1,9 +1,11 @@
 package com.tailtopia.consult.web;
 
 import com.tailtopia.consult.domain.ConsultSource;
+import com.tailtopia.consult.dto.ConsultAiContextResponse;
 import com.tailtopia.consult.dto.ConsultSessionResponse;
 import com.tailtopia.consult.dto.CreateConsultSessionRequest;
 import com.tailtopia.consult.dto.SubmitRatingRequest;
+import com.tailtopia.consult.service.ConsultAiContextService;
 import com.tailtopia.consult.service.ConsultCloseService;
 import com.tailtopia.consult.service.ConsultSessionService;
 import com.tailtopia.consult.service.ConsultSessionService.CreateResult;
@@ -36,10 +38,13 @@ public class ConsultSessionController {
 
     private final ConsultSessionService service;
     private final ConsultCloseService closeService;
+    private final ConsultAiContextService aiContextService;
 
-    public ConsultSessionController(ConsultSessionService service, ConsultCloseService closeService) {
+    public ConsultSessionController(ConsultSessionService service, ConsultCloseService closeService,
+            ConsultAiContextService aiContextService) {
         this.service = service;
         this.closeService = closeService;
+        this.aiContextService = aiContextService;
     }
 
     @PostMapping
@@ -53,7 +58,10 @@ public class ConsultSessionController {
             }
             result = service.createWaitingFromUpgrade(userId, req.triageTaskId());
         } else {
-            result = service.createWaiting(userId, ConsultSource.DIRECT);
+            // 直连问诊：带用户自填病例（症状 + 私密桶图 key），无则为空（兼容旧客户端）。
+            result = service.createWaiting(userId, ConsultSource.DIRECT,
+                    req == null ? null : req.symptomText(),
+                    req == null ? null : req.imageObjectKeys());
         }
         return ConsultSessionResponse.of(result.session(),
                 ConsultSessionService.WAITING_TIMEOUT_SECONDS, result.alreadyActive());
@@ -73,6 +81,17 @@ public class ConsultSessionController {
     public ConsultSessionResponse get(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
         return ConsultSessionResponse.of(service.getForUser(currentUserId(jwt), id),
                 ConsultSessionService.WAITING_TIMEOUT_SECONDS, false);
+    }
+
+    /**
+     * 用户查看自己提交的病例（症状 + 私密图签名 URL）。会话页顶部摘要条「View」展开用。
+     * 归属经 {@link ConsultSessionService#getForUser} 校验（非本人 → 404，不泄露他人会话）。
+     */
+    @GetMapping("/{id}/case")
+    public ConsultAiContextResponse caseContext(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
+        long userId = currentUserId(jwt);
+        service.getForUser(userId, id); // 归属校验：非本人即抛 notFound
+        return aiContextService.forSession(id);
     }
 
     @PatchMapping("/{id}/continue-waiting")

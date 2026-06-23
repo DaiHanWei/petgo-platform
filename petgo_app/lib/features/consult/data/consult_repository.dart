@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
+import '../domain/consult_case.dart';
 import '../domain/consult_history_item.dart';
 import '../domain/consult_session.dart';
 
@@ -25,6 +26,16 @@ class ConsultRepository {
   /// 是否有兽医在线（仅 bool，兼容旧 indicator）。
   Future<bool> vetOnline() async => (await availability()).vetOnline;
 
+  /// 当前用户自己提交的病例（症状 + 私密图签名 URL）。会话页摘要条「View」展开用。失败/无病例按空处理。
+  Future<ConsultCase> caseContext(int sessionId) async {
+    try {
+      final resp = await dio.get<Map<String, dynamic>>(ApiPaths.consultSessionCase(sessionId));
+      return ConsultCase.fromJson(resp.data!);
+    } on DioException {
+      return const ConsultCase(hasCase: false);
+    }
+  }
+
   /// 当前用户的占用态会话（无则 null）。入口据此显示「查看进行中 →」。
   Future<ConsultSession?> active() async {
     final resp = await dio.get<Map<String, dynamic>>(ApiPaths.consultSessionActive);
@@ -33,8 +44,12 @@ class ConsultRepository {
   }
 
   /// 发起咨询（DIRECT）。已有占用态会话则返回现有（alreadyActive=true）。
-  Future<ConsultSession> create() async {
-    final resp = await dio.post<Map<String, dynamic>>(ApiPaths.consultSessions, data: {});
+  /// Story F：可带用户自填病例 —— [symptomText] 症状 + [imageObjectKeys] 私密桶对象 key（前端已直传）。
+  Future<ConsultSession> create({String? symptomText, List<String>? imageObjectKeys}) async {
+    final body = <String, dynamic>{};
+    if (symptomText != null && symptomText.trim().isNotEmpty) body['symptomText'] = symptomText.trim();
+    if (imageObjectKeys != null && imageObjectKeys.isNotEmpty) body['imageObjectKeys'] = imageObjectKeys;
+    final resp = await dio.post<Map<String, dynamic>>(ApiPaths.consultSessions, data: body);
     return ConsultSession.fromJson(resp.data!);
   }
 

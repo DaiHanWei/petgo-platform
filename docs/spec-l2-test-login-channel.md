@@ -1,5 +1,7 @@
 # SPEC — L2 测试登录通道（绕真 Google OAuth）
 
+> ⚠️ **已作废（2026-06-23）**：决定**不部署 api-test 测试实例**，L2 改为直打生产 `api.tailtopia.id` + 真 Google 登录人工一次。本文档仅留作历史/方案记录，**勿据此部署**。现行口径见 [`L2-acceptance-emulator-real-backend.md`](./L2-acceptance-emulator-real-backend.md)。
+>
 > **状态**：ready-for-dev（自包含，可交云端/本地实现）
 > **目的**：让自动化 L2 验收能在**真实后端**上拿到合法会话 token，无需人工过 Google OAuth 同意屏，从而解锁需登录态的 ~80% 用例（见 [`L2-acceptance-emulator-real-backend.md`](./L2-acceptance-emulator-real-backend.md)）。
 > **护栏（不可违反）**：CLAUDE.md §Enforcement —— **安全规则层只升不降不可绕过**；凭证 env 注入绝不入库；日志严禁 PII/token。本通道**绝不可在真公网生产暴露**。

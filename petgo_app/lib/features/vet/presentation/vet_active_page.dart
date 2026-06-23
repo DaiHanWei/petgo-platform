@@ -78,6 +78,26 @@ class _ActiveCard extends StatelessWidget {
   final VetActiveItem item;
   final VoidCallback onTap;
 
+  /// 机主头像:有 URL → 网络图;否则机主名/宠物名首字母圆底。
+  Widget _ownerAvatar() {
+    final url = item.ownerAvatarUrl;
+    if (url != null && url.isNotEmpty) {
+      return CircleAvatar(
+        backgroundColor: AppColors.vetPrimary.withValues(alpha: 0.15),
+        backgroundImage: NetworkImage(url),
+        onBackgroundImageError: (_, _) {},
+      );
+    }
+    final label = (item.ownerName?.isNotEmpty ?? false)
+        ? item.ownerName!
+        : (item.petName.isNotEmpty ? item.petName : '?');
+    return CircleAvatar(
+      backgroundColor: AppColors.vetPrimary.withValues(alpha: 0.15),
+      child: Text(label.characters.first.toUpperCase(),
+          style: const TextStyle(color: AppColors.vetPrimary, fontWeight: FontWeight.w700)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return InkWell(
@@ -93,16 +113,22 @@ class _ActiveCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            CircleAvatar(
-              backgroundColor: AppColors.vetPrimary.withValues(alpha: 0.15),
-              child: const Icon(Icons.pets, color: AppColors.vetPrimary),
-            ),
+            _ownerAvatar(),
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(item.petName, style: AppTypography.body),
+                  // 标题=机主名(无则宠物名);有机主名时副行带宠物名,兽医一眼看到「人 + 宠物」。
+                  Text(
+                    (item.ownerName?.isNotEmpty ?? false) ? item.ownerName! : item.petName,
+                    style: AppTypography.body,
+                  ),
+                  if ((item.ownerName?.isNotEmpty ?? false) && item.petName.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text('🐾 ${item.petName}',
+                        style: AppTypography.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ],
                   // TODO(IM-SDK, L2 · 决策 C6): unread/lastMessage 后端列表不下发，需从腾讯 IM SDK
                   //   会话摘要补填后传入 VetActiveItem；当前 mock 离线态有占位、真机无 IM 数据时隐藏降级。
                   if (item.lastMessage.isNotEmpty) ...[

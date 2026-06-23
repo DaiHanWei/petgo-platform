@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -23,8 +25,12 @@ class VetInboxPage extends ConsumerStatefulWidget {
   ConsumerState<VetInboxPage> createState() => _VetInboxPageState();
 }
 
-class _VetInboxPageState extends ConsumerState<VetInboxPage> {
-  late Future<List<VetInboxItem>> _items;
+class _VetInboxPageState extends ConsumerState<VetInboxPage> with WidgetsBindingObserver {
+  /// 队列轮询间隔（抢单列表实时性；退后台暂停）。
+  static const Duration _pollInterval = Duration(seconds: 8);
+
+  List<VetInboxItem>? _items; // null = 首次加载中
+  Timer? _poll;
   String _displayName = '';
   int? _doneCount; // 完成数（history 列表长度，全量非仅今日）；null=加载中/失败 → 占位
   final Set<int> _skipped = {}; // Lewati 客户端本地跳过的 sessionId（不调后端；刷新后可重现）
@@ -32,19 +38,51 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _reload();
     _loadHeaderStats();
+    _startPoll();
   }
 
-  void _reload() {
-    _items = ref.read(vetRepositoryProvider).waitingList();
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _poll?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 退后台停轮询省流量/电；回前台立即拉一次再恢复轮询。
+    if (state == AppLifecycleState.resumed) {
+      _reload();
+      _startPoll();
+    } else {
+      _poll?.cancel();
+    }
+  }
+
+  void _startPoll() {
+    _poll?.cancel();
+    _poll = Timer.periodic(_pollInterval, (_) => _reload());
+  }
+
+  /// 拉抢单列表（轮询 / 手动共用）：静默刷新，保留旧数据避免闪烁。
+  /// 失败时：已有数据则保留（不闪空态）；首次加载就失败则落空态（不卡死在 spinner）。
+  Future<void> _reload() async {
+    try {
+      final list = await ref.read(vetRepositoryProvider).waitingList();
+      if (mounted) setState(() => _items = list);
+    } catch (_) {
+      if (mounted && _items == null) setState(() => _items = const []);
+    }
   }
 
   /// 显式刷新：重拉列表并清空本地跳过（详情返回的隐式刷新不清，跳过本会话内保留）。
-  void _refresh() => setState(() {
-        _skipped.clear();
-        _reload();
-      });
+  void _refresh() {
+    setState(() => _skipped.clear());
+    _reload();
+  }
 
   /// Lewati：客户端本地移除该卡（抢单模式，不发起后端调用）。
   void _skip(VetInboxItem item) => setState(() => _skipped.add(item.sessionId));
@@ -66,7 +104,7 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> {
   /// 点卡片 → 请求详情/预览页；返回后刷新列表（被抢/取消/超时的项已不再 WAITING）。
   Future<void> _openDetail(VetInboxItem item) async {
     await context.push('/vet/request/${item.sessionId}', extra: item);
-    if (mounted) setState(_reload);
+    _reload();
   }
 
   @override
@@ -78,11 +116,10 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> {
         children: [
           VetTopBar(greetingName: _displayName, showOnlineToggle: true),
           Expanded(
-            child: FutureBuilder<List<VetInboxItem>>(
-              future: _items,
-              builder: (context, snapshot) {
-                final loading = snapshot.connectionState == ConnectionState.waiting;
-                final items = (snapshot.data ?? const <VetInboxItem>[])
+            child: Builder(
+              builder: (context) {
+                final loading = _items == null; // 仅首次加载显 spinner；轮询保留旧数据不闪
+                final items = (_items ?? const <VetInboxItem>[])
                     .where((it) => !_skipped.contains(it.sessionId))
                     .toList();
                 return ListView(

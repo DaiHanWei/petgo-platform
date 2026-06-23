@@ -10,7 +10,9 @@ import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../data/vet_repository.dart';
+import '../domain/consult_ai_context.dart';
 import '../domain/vet_inbox_item.dart';
+import 'vet_ai_context_card.dart';
 
 /// 请求详情 / 抢单预览页（Story 5.2 AC5 · 决策 F11）。
 ///
@@ -42,6 +44,7 @@ class _VetRequestDetailPageState extends ConsumerState<VetRequestDetailPage> {
   Duration _remaining = VetRequestDetailPage.previewWindow;
   bool _resolved = false; // 三态之一已触发后，封锁后续计时/轮询/接单
   bool _accepting = false;
+  ConsultAiContext? _aiContext; // 病例真图(签名 URL):异步拉,到了换掉占位方块
 
   int get _sessionId => widget.item.sessionId;
 
@@ -50,6 +53,18 @@ class _VetRequestDetailPageState extends ConsumerState<VetRequestDetailPage> {
     super.initState();
     _countdown = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
     _poll = Timer.periodic(VetRequestDetailPage.pollInterval, (_) => _pollStatus());
+    _loadAiContext();
+  }
+
+  /// 拉病例真图(签名 URL):仅有照片时有意义;失败静默,回退占位。
+  Future<void> _loadAiContext() async {
+    if (widget.item.imageCount <= 0) return;
+    try {
+      final ctx = await ref.read(vetRepositoryProvider).aiContext(_sessionId);
+      if (mounted) setState(() => _aiContext = ctx);
+    } catch (_) {
+      // 拉不到签名 URL → 保留占位方块,不崩。
+    }
   }
 
   @override
@@ -424,6 +439,7 @@ class _VetRequestDetailPageState extends ConsumerState<VetRequestDetailPage> {
 
   /// 症状图片卡：FOTO GEJALA (n) + 占位缩略格（最多 3 格并排）。
   Widget _photosCard(AppLocalizations l10n, VetInboxItem item) {
+    final urls = _aiContext?.imageUrls ?? const <String>[];
     final shown = item.imageCount.clamp(0, 3);
     return Container(
       width: double.infinity,
@@ -442,20 +458,21 @@ class _VetRequestDetailPageState extends ConsumerState<VetRequestDetailPage> {
                 Expanded(
                   child: AspectRatio(
                     aspectRatio: 1,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        // 原型 FOTO GEJALA 缩略用紫/黄渐变交替占位（非纯薄荷底）。
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: i.isEven
-                              ? const [AppColors.skyTint, AppColors.dashedViolet]
-                              : const [AppColors.goldTint, AppColors.gold],
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(_speciesEmoji(), style: const TextStyle(fontSize: 30)),
-                    ),
+                    child: i < urls.length
+                        // 真图(签名 URL):点开看大图。
+                        ? GestureDetector(
+                            onTap: () => showCaseImageFullScreen(context, urls[i]),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.network(
+                                urls[i],
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) => _photoPlaceholder(i),
+                              ),
+                            ),
+                          )
+                        // 未拉到签名 URL(加载中/失败)→ 占位方块。
+                        : _photoPlaceholder(i),
                   ),
                 ),
               ],
@@ -463,6 +480,23 @@ class _VetRequestDetailPageState extends ConsumerState<VetRequestDetailPage> {
           ),
         ],
       ),
+    );
+  }
+
+  /// 占位缩略(原型 FOTO GEJALA 紫/黄渐变交替),真图未就绪时兜底。
+  Widget _photoPlaceholder(int i) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: i.isEven
+              ? const [AppColors.skyTint, AppColors.dashedViolet]
+              : const [AppColors.goldTint, AppColors.gold],
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(_speciesEmoji(), style: const TextStyle(fontSize: 30)),
     );
   }
 

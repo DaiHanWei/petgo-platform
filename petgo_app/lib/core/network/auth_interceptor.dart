@@ -38,9 +38,15 @@ class AuthInterceptor extends Interceptor {
 
   @override
   Future<void> onRequest(RequestOptions options, RequestInterceptorHandler handler) async {
-    final access = await tokenStore.readAccess();
-    if (access != null && !options.headers.containsKey('Authorization')) {
-      options.headers['Authorization'] = 'Bearer $access';
+    // auth-self 请求（refresh / logout，标记 skipRefresh）打到 permitAll 端点，
+    // 绝不附带（可能已过期的）access token：否则后端鉴权过滤器会因过期 Bearer 在端点逻辑前 401，
+    // 导致 refresh 永远失败、access 过期即掉游客（会话 15min 掉线 bug）。
+    final bool isAuthSelf = options.extra[AuthExtraKeys.skipRefresh] == true;
+    if (!isAuthSelf) {
+      final access = await tokenStore.readAccess();
+      if (access != null && !options.headers.containsKey('Authorization')) {
+        options.headers['Authorization'] = 'Bearer $access';
+      }
     }
     options.headers['Accept-Language'] = localeCode();
     handler.next(options);

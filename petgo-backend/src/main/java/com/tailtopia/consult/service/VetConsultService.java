@@ -95,7 +95,8 @@ public class VetConsultService {
                 vetId, List.of(SessionStatus.IN_PROGRESS, SessionStatus.PENDING_CLOSE));
         Identities ids = resolveIdentities(sessions);
         return sessions.stream()
-                .map(s -> new VetActiveItem(s.getId(), s.getSource().name(), ids.pet(s.getUserId()).name()))
+                .map(s -> new VetActiveItem(s.getId(), s.getSource().name(), ids.pet(s.getUserId()).name(),
+                        ids.handle(s.getUserId()), ids.avatar(s.getUserId())))
                 .toList();
     }
 
@@ -171,6 +172,12 @@ public class VetConsultService {
             AuthorView a = userId == null ? null : authors.get(userId);
             return a == null ? null : a.nickname();
         }
+
+        /** 机主头像 URL（注销/未设 → null，前端降级首字母）。 */
+        String avatar(Long userId) {
+            AuthorView a = userId == null ? null : authors.get(userId);
+            return a == null ? null : a.avatarUrl();
+        }
     }
 
     /**
@@ -187,16 +194,17 @@ public class VetConsultService {
     }
 
     private String buildReferenceReply(ConsultSession s) {
-        StringBuilder sb = new StringBuilder("您好，我已了解您的情况");
+        StringBuilder sb = new StringBuilder("Hello, I've reviewed your case");
         if (s.hasAiContext()) {
             if ("YELLOW".equals(s.getAiDangerLevel())) {
-                sb.append("，AI 初判需密切观察");
+                sb.append(". The AI pre-assessment flags it for close monitoring");
             }
             if (s.getAiSymptomText() != null && !s.getAiSymptomText().isBlank()) {
-                sb.append("（症状：").append(s.getAiSymptomText()).append("）");
+                sb.append(" (symptoms: ").append(s.getAiSymptomText()).append(")");
             }
         }
-        sb.append("。请问最近的精神、进食和排便情况如何？方便的话再补充一张清晰照片。");
+        sb.append(". How have your pet's energy, appetite, and bowel movements been lately? "
+                + "If possible, please share a clear photo.");
         return sb.toString();
     }
 

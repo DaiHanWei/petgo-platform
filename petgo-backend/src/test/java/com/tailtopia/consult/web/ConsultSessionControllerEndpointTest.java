@@ -129,6 +129,36 @@ class ConsultSessionControllerEndpointTest extends ApiIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
+    // ===== 用户查看自己病例 GET /{id}/case =====
+
+    @Test
+    void case_ownSessionWithSymptom_returns200() throws Exception {
+        User u = newUser();
+        ConsultSession s = ConsultSession.startWaiting(u.getId(), ConsultSource.DIRECT);
+        s.bindDirectCase("muntah busa putih 2x", java.util.List.of());
+        s = sessions.save(s);
+        mvc.perform(get(BASE + "/" + s.getId() + "/case").header("Authorization", userBearer(u.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.hasAiContext", is(true)))
+                .andExpect(jsonPath("$.symptomText", is("muntah busa putih 2x")));
+    }
+
+    @Test
+    void case_otherUsersSession_returns404_noLeak() throws Exception {
+        User owner = newUser();
+        User attacker = newUser();
+        ConsultSession s = ConsultSession.startWaiting(owner.getId(), ConsultSource.DIRECT);
+        s.bindDirectCase("private symptom", java.util.List.of());
+        s = sessions.save(s);
+        mvc.perform(get(BASE + "/" + s.getId() + "/case").header("Authorization", userBearer(attacker.getId())))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void case_missingToken_returns401() throws Exception {
+        mvc.perform(get(BASE + "/1/case")).andExpect(status().isUnauthorized());
+    }
+
     @Test
     void active_whenNone_returns204() throws Exception {
         User u = newUser();

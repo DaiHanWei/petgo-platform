@@ -4,7 +4,11 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/case_image_viewer.dart';
 import '../domain/consult_ai_context.dart';
+
+// 全屏看图迁至 shared（兽医/用户侧共用）；re-export 保持既有引用方（vet_request_detail_page）不变。
+export '../../../shared/widgets/case_image_viewer.dart' show showCaseImageFullScreen;
 
 /// 兽医侧「AI 上下文卡」（Story 5.4 F3）。挂载在 5.5 对话界面顶部 / 待接单详情。
 ///
@@ -20,9 +24,13 @@ class VetAiContextCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     if (!context_.hasAiContext) return const SizedBox.shrink();
 
+    // 直连病例 dangerLevel=null:不显假评级,标题用「病例」,左边框中性薄荷;AI 升级才显 GREEN/YELLOW 评级。
+    final hasLevel = context_.dangerLevel != null;
     final isYellow = context_.dangerLevel == 'YELLOW';
     final levelLabel = isYellow ? l10n.vetAiContextLevelYellow : l10n.vetAiContextLevelGreen;
-    final levelColor = isYellow ? AppColors.triageYellow : AppColors.triageGreen;
+    final levelColor = !hasLevel
+        ? AppColors.mint
+        : (isYellow ? AppColors.triageYellow : AppColors.triageGreen);
 
     return Container(
       key: const ValueKey('vetAiContextCard'),
@@ -37,9 +45,11 @@ class VetAiContextCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(l10n.vetAiContextTitle, style: AppTypography.caption),
-          const SizedBox(height: 2),
-          Text(levelLabel, style: AppTypography.title.copyWith(color: levelColor)),
+          Text(hasLevel ? l10n.vetAiContextTitle : l10n.vetCaseTitle, style: AppTypography.caption),
+          if (hasLevel) ...[
+            const SizedBox(height: 2),
+            Text(levelLabel, style: AppTypography.title.copyWith(color: levelColor)),
+          ],
           if (context_.symptomText != null && context_.symptomText!.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.sm),
             Text(context_.symptomText!, style: AppTypography.body),
@@ -52,18 +62,21 @@ class VetAiContextCard extends StatelessWidget {
                 scrollDirection: Axis.horizontal,
                 itemCount: context_.imageUrls.length,
                 separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.sm),
-                itemBuilder: (ctx, i) => ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    context_.imageUrls[i],
-                    width: 72,
-                    height: 72,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Container(
+                itemBuilder: (ctx, i) => GestureDetector(
+                  onTap: () => showCaseImageFullScreen(ctx, context_.imageUrls[i]),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      context_.imageUrls[i],
                       width: 72,
                       height: 72,
-                      color: AppColors.divider,
-                      child: const Icon(Icons.broken_image_outlined, color: AppColors.textTertiary),
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => Container(
+                        width: 72,
+                        height: 72,
+                        color: AppColors.divider,
+                        child: const Icon(Icons.broken_image_outlined, color: AppColors.textTertiary),
+                      ),
                     ),
                   ),
                 ),
@@ -75,3 +88,4 @@ class VetAiContextCard extends StatelessWidget {
     );
   }
 }
+

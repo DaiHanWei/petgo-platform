@@ -44,7 +44,9 @@ Future<void> _pump(WidgetTester tester, _FakeVetRepository repo) async {
       home: VetWorkbenchShell(),
     ),
   ));
-  await tester.pumpAndSettle();
+  // 注意:Inbox 有周期轮询 Timer,不能用 pumpAndSettle(永不 settle)。pump 数帧刷新异步加载即可。
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 100));
 }
 
 void main() {
@@ -68,7 +70,7 @@ void main() {
 
     // 切到「我的」Tab
     await tester.tap(find.byIcon(Icons.person_outline));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.text('王医生'), findsOneWidget);
     // 在线状态分段控件：默认离线 → 点「Online」段切在线。
@@ -77,7 +79,7 @@ void main() {
     expect(repo.online, isFalse);
 
     await tester.tap(onlineSeg);
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 100));
     expect(repo.online, isTrue);
   });
 
@@ -86,15 +88,15 @@ void main() {
     await _pump(tester, repo);
 
     await tester.tap(find.byIcon(Icons.person_outline));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 100));
 
     // 先上线 → 再切 Sibuk，验证 Sibuk 段真生效（不再是 no-op）：后端被置为不接单。
     await tester.tap(find.byKey(const ValueKey('vetStatusOnline')));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 100));
     expect(repo.online, isTrue);
 
     await tester.tap(find.byKey(const ValueKey('vetStatusBusy')));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 100));
     expect(repo.online, isFalse); // Sibuk 映射为不接单
   });
 }

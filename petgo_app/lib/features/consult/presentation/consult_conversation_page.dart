@@ -9,9 +9,11 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/case_image_viewer.dart';
 import '../../notify/data/push_permission_providers.dart';
 import '../../notify/domain/push_suppression.dart';
 import '../data/consult_repository.dart';
+import '../domain/consult_case.dart';
 import 'consult_rating_dialog.dart';
 import 'im_chat_placeholder.dart';
 
@@ -37,6 +39,7 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
   bool _rated = false;
   bool _firstConsultPushTried = false; // 首次问诊推送闸门本页只触发一次（gate 另有持久化自守）
   ActiveConsultSession? _activeNotifier;
+  ConsultCase? _case; // 用户自填病例（症状 + 私密图签名 URL）：摘要条展开用，异步拉
 
   // Story 5.5 live 增量：进行中会话登录 IM 收发；离开/结束登出（控 MAU + 不留连接）。
   ImService? _imService;
@@ -55,6 +58,13 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
     });
     _poll = Timer.periodic(_pollInterval, (_) => _tick());
     _tick();
+    _loadCase();
+  }
+
+  /// 拉用户自己提交的病例（症状 + 私密图签名 URL）。失败/无病例则不渲染摘要条。
+  Future<void> _loadCase() async {
+    final c = await ref.read(consultRepositoryProvider).caseContext(widget.sessionId);
+    if (mounted) setState(() => _case = c);
   }
 
   @override
@@ -375,26 +385,110 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
     );
   }
 
-  /// 原始症状摘要折叠条（原型紫浅底）：info 图标 + 占位症状摘要 + 「Lihat ↓」。
+  /// 原始病例摘要折叠条（原型紫浅底）：info 图标 + 真实症状/照片数 + 「View ↓」（可点 → 病例弹层）。
+  /// 病例为空（未自填症状/图）时不渲染；数据未到时也先不渲染（拉到再 setState）。
   Widget _symptomBar(AppLocalizations l10n) {
-    return Container(
-      width: double.infinity,
+    final c = _case;
+    if (c == null || c.isEmpty) return const SizedBox.shrink();
+    final summary = [
+      if (c.symptomText != null && c.symptomText!.trim().isNotEmpty) c.symptomText!.trim(),
+      if (c.imageUrls.isNotEmpty) '${c.imageUrls.length} foto',
+    ].join(' · ');
+    return Material(
       color: AppColors.mintTint,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: Row(
-        children: [
-          const Icon(Icons.info_outline, size: 15, color: AppColors.mint),
-          const SizedBox(width: 9),
-          const Expanded(
-            child: Text('Mochi — muntah busa putih 2x · 2 foto',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.mint)),
+      child: InkWell(
+        key: const ValueKey('consultSymptomBar'),
+        onTap: () => _showCaseSheet(l10n, c),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              const Icon(Icons.info_outline, size: 15, color: AppColors.mint),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(summary,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.mint)),
+              ),
+              const SizedBox(width: 8),
+              Text('${l10n.consultSymptomView} ↓',
+                  style: const TextStyle(fontSize: 11, color: AppColors.violetSoft)),
+            ],
           ),
-          const SizedBox(width: 8),
-          Text('${l10n.consultSymptomView} ↓',
-              style: const TextStyle(fontSize: 11, color: AppColors.violetSoft)),
-        ],
+        ),
+      ),
+    );
+  }
+
+  /// 病例详情底部弹层：完整症状文 + 私密图缩略网格（点 → 全屏看图）。
+  void _showCaseSheet(AppLocalizations l10n, ConsultCase c) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(AppSpacing.xl, AppSpacing.lg, AppSpacing.xl, AppSpacing.xl),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.divider,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Text(l10n.consultCaseTitle, style: AppTypography.title),
+              if (c.symptomText != null && c.symptomText!.trim().isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.md),
+                Text(l10n.consultCaseSymptomLabel, style: AppTypography.caption),
+                const SizedBox(height: 4),
+                Text(c.symptomText!.trim(), style: AppTypography.body),
+              ],
+              if (c.imageUrls.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.lg),
+                Text(l10n.consultCasePhotosLabel, style: AppTypography.caption),
+                const SizedBox(height: AppSpacing.sm),
+                SizedBox(
+                  height: 88,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: c.imageUrls.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.sm),
+                    itemBuilder: (ictx, i) => GestureDetector(
+                      onTap: () => showCaseImageFullScreen(ictx, c.imageUrls[i]),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Image.network(
+                          c.imageUrls[i],
+                          width: 88,
+                          height: 88,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => Container(
+                            width: 88,
+                            height: 88,
+                            color: AppColors.divider,
+                            child: const Icon(Icons.broken_image_outlined, color: AppColors.textTertiary),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }

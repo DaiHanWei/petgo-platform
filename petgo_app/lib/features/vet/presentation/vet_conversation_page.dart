@@ -13,7 +13,10 @@ import '../../../l10n/app_localizations.dart';
 import '../../consult/presentation/im_chat_placeholder.dart';
 import '../data/vet_repository.dart';
 import '../domain/consult_ai_context.dart';
+import '../domain/vet_diagnosis_draft.dart';
 import '../domain/vet_inbox_item.dart';
+import 'vet_ai_context_card.dart';
+import 'vet_final_diagnosis_page.dart';
 
 /// 兽医侧进行中会话界面（Story 5.5 · 原型 vet-chat.html 1:1）。
 ///
@@ -38,8 +41,14 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
   ImService? _imService;
   bool _imLoginStarted = false;
 
+  // 聊天输入框控制器由本页持有（供 Template「Pakai」预填），传给 ImChatPlaceholder。
+  final TextEditingController _chatInput = TextEditingController();
+
   // 默认展开「Template Saran」辅助参考（原型默认激活态）。
   _Tool _activeTool = _Tool.template;
+
+  // 病例区（症状+照片）默认折叠：薄条常驻,点开看完整病例 + 真图(签名 URL)。
+  bool _caseExpanded = false;
 
   @override
   void initState() {
@@ -51,6 +60,7 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
   @override
   void dispose() {
     if (_imLoginStarted) _imService?.logout();
+    _chatInput.dispose();
     super.dispose();
   }
 
@@ -76,35 +86,29 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
     return data;
   }
 
-  Future<void> _endSession() async {
+  /// Story C：结束会话前必须填最终诊断表单（原型 `#p-vet-final-diagnosis`）。
+  /// 进诊断表单页 → 填完(Diagnosa 必填)提交才真正调 end；返回则取消结束。诊断推用户 + 存档。
+  Future<void> _endSession(_VetConvData d) async {
     final l10n = AppLocalizations.of(context);
-    final confirmed = await showDialog<bool>(
-      context: context,
-      // 弹窗挂根 Navigator（在 _vetScoped 主题子树之上）→ 显式包薄荷主题，避免按钮回落紫色。
-      builder: (ctx) => Theme(
-        data: AppTheme.vet,
-        child: AlertDialog(
-          title: Text(l10n.vetEndConfirmTitle),
-          actions: [
-            TextButton(
-              key: const ValueKey('vetEndConfirmNo'),
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: Text(l10n.vetEndConfirmNo),
-            ),
-            FilledButton(
-              key: const ValueKey('vetEndConfirmYes'),
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: Text(l10n.vetEndConfirmYes),
-            ),
-          ],
+    final draft = await Navigator.of(context).push<VetDiagnosisDraft>(
+      MaterialPageRoute(
+        // 诊断页挂根 Navigator → 显式包薄荷主题，避免回落紫色。
+        builder: (_) => Theme(
+          data: AppTheme.vet,
+          child: VetFinalDiagnosisPage(petName: d.session.petName),
         ),
       ),
     );
-    if (confirmed != true || !mounted) return;
+    if (draft == null || !mounted) return;
     try {
-      await ref.read(vetRepositoryProvider).endSession(widget.sessionId);
+      await ref.read(vetRepositoryProvider).endSession(widget.sessionId, draft);
     } catch (_) {
-      // 结束失败也返回（服务端状态权威）。
+      // 结束失败也返回（服务端状态权威）；诊断必填校验已在表单本地完成。
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..clearSnackBars()
+          ..showSnackBar(SnackBar(content: Text(l10n.consultStartFailed)));
+      }
     }
     if (mounted) context.go('/vet/workbench');
   }
@@ -143,12 +147,15 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
                 _templatePanel(d.assist)
               else
                 _historyPanel(d.assist),
+              // 病例区(症状+照片):有 AI 上下文时显薄条,点开看完整病例 + 真图。
+              if (d.aiContext.hasAiContext) _caseSection(d.aiContext),
               // 消息区 + 输入栏（已对齐原型；气泡/发送色随兽医薄荷主题）。Expanded 贴底。
               ImChatPlaceholder(
                 imConversationId: d.session.imConversationId,
                 peerId: d.session.userId != null ? 'u_${d.session.userId}' : null,
                 accent: AppColors.vetPrimary, // 兽医侧气泡/发送钮薄荷 #5BCBBB（非 M3 偏移色）
                 selfIsVet: true, // 兽医视角：己方薄荷「D」/ 对端用户紫「A」
+                inputController: _chatInput, // Template「Pakai」预填进此框
               ),
             ],
           );
@@ -220,7 +227,7 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
               const SizedBox(width: AppSpacing.sm),
               OutlinedButton(
                 key: const ValueKey('vetEndSession'),
-                onPressed: _endSession,
+                onPressed: () => _endSession(d),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.coral,
                   side: const BorderSide(color: AppColors.coral, width: 1.5),
@@ -353,8 +360,12 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
             alignment: Alignment.centerRight,
             child: FilledButton(
               key: const ValueKey('vetAssistAdopt'),
-              // 「采用」填入输入框供编辑后发送（不自动发，NFR-9）；真实输入框接入随 IM SDK（L2）。
-              onPressed: () {},
+              // 「采用」填入输入框供编辑后发送（不自动发，NFR-9）。
+              onPressed: () {
+                _chatInput.text = assist.aiReferenceReply;
+                _chatInput.selection =
+                    TextSelection.collapsed(offset: _chatInput.text.length);
+              },
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.mint,
                 foregroundColor: Colors.white,
@@ -367,6 +378,48 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
           ),
         ],
       ),
+    );
+  }
+
+  /// 病例区:薄荷薄条(病例 · N 张照片 · 展开/收起),展开渲染 [VetAiContextCard](症状+真图缩略,点开大图)。
+  /// 解决「兽医看不到病例图」:后端 aiContext 已返签名 URL,此处真正渲染。
+  Widget _caseSection(ConsultAiContext ctx) {
+    final l10n = AppLocalizations.of(context);
+    final photoCount = ctx.imageUrls.length;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InkWell(
+          key: const ValueKey('vetCaseBar'),
+          onTap: () => setState(() => _caseExpanded = !_caseExpanded),
+          child: Container(
+            width: double.infinity,
+            color: AppColors.mintTint,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              children: [
+                const Icon(Icons.assignment_outlined, size: 15, color: AppColors.mint),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    photoCount > 0 ? l10n.vetQueuePhotosAttached(photoCount) : l10n.vetAiContextTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.mint),
+                  ),
+                ),
+                Icon(_caseExpanded ? Icons.expand_less : Icons.expand_more,
+                    size: 18, color: AppColors.mint),
+              ],
+            ),
+          ),
+        ),
+        if (_caseExpanded)
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 260),
+            child: SingleChildScrollView(child: VetAiContextCard(context_: ctx)),
+          ),
+      ],
     );
   }
 

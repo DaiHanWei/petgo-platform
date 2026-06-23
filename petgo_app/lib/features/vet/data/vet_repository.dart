@@ -5,6 +5,7 @@ import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/storage/secure_storage.dart';
 import '../domain/consult_ai_context.dart';
+import '../domain/vet_diagnosis_draft.dart';
 import '../domain/vet_inbox_item.dart';
 import '../domain/vet_login_response.dart';
 import '../domain/vet_workbench_lists.dart';
@@ -103,9 +104,13 @@ class VetRepository {
         .toList();
   }
 
-  /// 兽医结束会话（Story 5.6）：IN_PROGRESS → PENDING_CLOSE。
-  Future<VetSession> endSession(int sessionId) async {
-    final resp = await dio.post<Map<String, dynamic>>(ApiPaths.vetConsultEnd(sessionId));
+  /// 兽医结束会话（Story 5.6 + Story C）：随结束提交最终诊断（Diagnosa 必填，后端校验）。
+  /// IN_PROGRESS → PENDING_CLOSE；诊断定格存档 + 推用户。
+  Future<VetSession> endSession(int sessionId, VetDiagnosisDraft diagnosis) async {
+    final resp = await dio.post<Map<String, dynamic>>(
+      ApiPaths.vetConsultEnd(sessionId),
+      data: diagnosis.toJson(),
+    );
     return VetSession.fromJson(resp.data!);
   }
 

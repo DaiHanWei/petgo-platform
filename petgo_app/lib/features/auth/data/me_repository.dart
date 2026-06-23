@@ -10,6 +10,7 @@ abstract class MeRepository {
   Future<UserProfile> getMe();
   Future<UserProfile> updateNickname(String nickname);
   Future<UserProfile> updatePetStatus(String petStatus);
+  Future<UserProfile> updateAvatar(String avatarUrl);
 }
 
 class DioMeRepository implements MeRepository {
@@ -28,6 +29,9 @@ class DioMeRepository implements MeRepository {
 
   @override
   Future<UserProfile> updatePetStatus(String petStatus) => _patch({'petStatus': petStatus});
+
+  @override
+  Future<UserProfile> updateAvatar(String avatarUrl) => _patch({'avatarUrl': avatarUrl});
 
   Future<UserProfile> _patch(Map<String, dynamic> body) async {
     final resp = await dio.patch<Map<String, dynamic>>(ApiPaths.me, data: body);

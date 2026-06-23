@@ -73,6 +73,11 @@ public class ConsultSession {
     @Column(name = "ai_image_refs")
     private List<String> aiImageRefs;
 
+    /** 兽医最终诊断（Story C，结构化 JSONB，结束会话时定格）。健康数据：禁日志。 */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "vet_diagnosis")
+    private VetDiagnosis vetDiagnosis;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -140,6 +145,22 @@ public class ConsultSession {
     }
 
     /**
+     * 直连问诊病例（Story F：用户自填症状 + 私密图 key，无 AI 评级）。
+     * 复用 AI 上下文同列存储（{@code ai_symptom_text}/{@code ai_image_refs}），{@code ai_danger_level} 留空。
+     */
+    public void bindDirectCase(String symptomText, List<String> imageObjectKeys) {
+        this.aiSymptomText = symptomText;
+        this.aiImageRefs = imageObjectKeys;
+    }
+
+    /** 是否有可展示给兽医的病例（AI 升级上下文 或 直连自填症状/图）。 */
+    public boolean hasCase() {
+        return hasAiContext()
+                || (aiSymptomText != null && !aiSymptomText.isBlank())
+                || (aiImageRefs != null && !aiImageRefs.isEmpty());
+    }
+
+    /**
      * 注销匿名化（Story 7.3，决策 D1）：剥 user PII（解关联 {@code userId}）+ 清 AI 上下文 PII
      * （症状文字/私密图引用，图片由级联删除处理），保留 {@code danger_level}/{@code vetId} 等运营/历史价值。
      */
@@ -200,6 +221,11 @@ public class ConsultSession {
         requireStatus(SessionStatus.IN_PROGRESS, "仅进行中的会话可结束");
         this.status = SessionStatus.PENDING_CLOSE;
         this.pendingCloseStartedAt = Instant.now();
+    }
+
+    /** 结束前定格最终诊断（Story C）。Diagnosa 必填由 web 层校验。 */
+    public void recordDiagnosis(VetDiagnosis diagnosis) {
+        this.vetDiagnosis = diagnosis;
     }
 
     /** 用户评分关闭：PENDING_CLOSE → CLOSED（RATED）。 */
@@ -332,6 +358,10 @@ public class ConsultSession {
 
     public List<String> getAiImageRefs() {
         return aiImageRefs;
+    }
+
+    public VetDiagnosis getVetDiagnosis() {
+        return vetDiagnosis;
     }
 
     public Instant getPendingCloseStartedAt() {

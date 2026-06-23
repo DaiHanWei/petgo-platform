@@ -13,6 +13,7 @@ import com.tailtopia.consult.domain.ConsultSession;
 import com.tailtopia.consult.domain.ConsultSource;
 import com.tailtopia.consult.domain.RatingPromptState;
 import com.tailtopia.consult.domain.SessionStatus;
+import com.tailtopia.consult.domain.VetDiagnosis;
 import com.tailtopia.consult.event.ConsultClosedEvent;
 import com.tailtopia.consult.repository.ConsultRatingRepository;
 import com.tailtopia.consult.repository.ConsultSessionRepository;
@@ -34,6 +35,9 @@ import org.springframework.test.util.ReflectionTestUtils;
  */
 @ExtendWith(MockitoExtension.class)
 class ConsultCloseServiceTest {
+
+    private static final VetDiagnosis DIAGNOSIS =
+            new VetDiagnosis("Gastritis akut ringan", null, false, null, null, null, null, null);
 
     @Mock
     ConsultSessionRepository sessions;
@@ -63,9 +67,10 @@ class ConsultCloseServiceTest {
         ConsultSession s = inProgress(11L, 3L);
         when(sessions.findById(11L)).thenReturn(Optional.of(s));
 
-        service().endByVet(3L, 11L);
+        service().endByVet(3L, 11L, DIAGNOSIS);
 
         assertThat(s.getStatus()).isEqualTo(SessionStatus.PENDING_CLOSE);
+        assertThat(s.getVetDiagnosis()).isNotNull(); // Story C：诊断已定格
         assertThat(s.getPendingCloseStartedAt()).isNotNull();
         verify(presence).goAvailable(3L);
         verify(imClient).sendSystemMessage(org.mockito.ArgumentMatchers.eq("conv-1"),
@@ -76,7 +81,7 @@ class ConsultCloseServiceTest {
     void endByVetRejectsForeignVet() {
         ConsultSession s = inProgress(11L, 3L);
         when(sessions.findById(11L)).thenReturn(Optional.of(s));
-        assertThatThrownBy(() -> service().endByVet(99L, 11L)).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service().endByVet(99L, 11L, DIAGNOSIS)).isInstanceOf(AppException.class);
     }
 
     @Test
