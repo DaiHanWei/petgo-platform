@@ -22,6 +22,7 @@ import java.time.LocalDate;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 
 /**
  * L1 集成：{@link VetConsultController}（{@code /api/v1/vet/consult-sessions}，6 端点）。
@@ -163,6 +164,16 @@ class VetConsultControllerEndpointTest extends ApiIntegrationTest {
 
     // ===== POST /{id}/end =====
 
+    /**
+     * 结束问诊请求体（Story C：必填最终诊断）。
+     * 须发**全部 8 个字段**——客户端 {@code VetDiagnosisDraft.toJson()} 即如此（空值传 null），
+     * 缺字段会触发 {@code HttpMessageNotReadableException}→400（记录反序列化要求 creator 属性齐全）。
+     */
+    private static final String END_BODY = "{\"diagnosis\":\"Gastritis ringan\","
+            + "\"generalAdvice\":\"Banyak istirahat\",\"needsMedication\":false,"
+            + "\"medName\":null,\"medFrequency\":null,\"followUp\":null,"
+            + "\"worseningSigns\":null,\"clinicWithin\":null}";
+
     @Test
     void end_transitionsInProgressToPendingClose() throws Exception {
         VetAccount vet = vets.newActiveVet("结束医生");
@@ -170,7 +181,9 @@ class VetConsultControllerEndpointTest extends ApiIntegrationTest {
         ConsultSession s = vets.newInProgressSession(user.getId(), vet.getId());
 
         mvc.perform(post("/api/v1/vet/consult-sessions/" + s.getId() + "/end")
-                        .header("Authorization", vetBearer(vet.getId())))
+                        .header("Authorization", vetBearer(vet.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(END_BODY))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("PENDING_CLOSE"));
 
@@ -185,9 +198,11 @@ class VetConsultControllerEndpointTest extends ApiIntegrationTest {
         User user = newUser();
         ConsultSession s = vets.newInProgressSession(user.getId(), owner.getId());
 
-        // 非归属兽医结束 → service 抛 forbidden → 403
+        // 非归属兽医结束 → service 抛 forbidden → 403（带完整诊断 body 越过反序列化/校验，触发归属判定）
         mvc.perform(post("/api/v1/vet/consult-sessions/" + s.getId() + "/end")
-                        .header("Authorization", vetBearer(other.getId())))
+                        .header("Authorization", vetBearer(other.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(END_BODY))
                 .andExpect(status().isForbidden());
     }
 
