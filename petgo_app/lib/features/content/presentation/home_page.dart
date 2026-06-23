@@ -183,9 +183,19 @@ class HomePage extends ConsumerWidget {
           );
         }
         final isGuest = ref.read(authControllerProvider).status == AuthStatus.guest;
+        // 访客翻页闸门：底部常驻登录引导卡；滚动不自动翻页，点「Lanjut lihat dulu」一次加载 3 页，
+        // 卡片随之落到新底部（消失→浏览新内容→再出现）。无更多内容时隐藏「继续浏览」链接。
         return FeedMasonryView(
           header: header,
-          footer: isGuest ? _GuestJoinBanner(onLogin: () => context.push('/login')) : null,
+          autoLoadMore: !isGuest,
+          footer: !isGuest
+              ? null
+              : _GuestJoinBanner(
+                  onLogin: () => context.push('/login'),
+                  onKeepBrowsing: state.hasMore
+                      ? () => ref.read(feedProvider.notifier).loadMore(pages: 3)
+                      : null,
+                ),
           items: state.items,
           hasMore: state.hasMore,
           loadingMore: state.loadingMore,
@@ -258,9 +268,13 @@ const String _kGoogleG =
 
 /// 访客登录引导横幅（feed-guest.html 底部 P-03）：紫渐变卡 + 标题/副文 + 单个「Masuk dengan Google」按钮 + 「Lanjut lihat dulu →」。
 class _GuestJoinBanner extends StatelessWidget {
-  const _GuestJoinBanner({required this.onLogin});
+  const _GuestJoinBanner({required this.onLogin, required this.onKeepBrowsing});
 
   final VoidCallback onLogin;
+
+  /// 点「Lanjut lihat dulu →」继续浏览：加载下 3 页（卡片随之落到新底部）。
+  /// 为 null 表示无更多内容 → 隐藏该链接。
+  final VoidCallback? onKeepBrowsing;
 
   @override
   Widget build(BuildContext context) {
@@ -318,12 +332,25 @@ class _GuestJoinBanner extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 11),
-          // 「Lanjut lihat dulu →」——继续浏览的轻链接（原型居中、淡白）。
-          Center(
-            child: Text('${l10n.loginGateContinue} →',
-                style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.45))),
-          ),
+          // 「Lanjut lihat dulu →」——继续浏览（加载下 3 页）的轻链接（原型居中、淡白）。
+          // 无更多内容时隐藏；NFR-13：≥44pt 触摸目标。
+          if (onKeepBrowsing != null) ...[
+            const SizedBox(height: 11),
+            Center(
+              child: GestureDetector(
+                key: const ValueKey('feedGuestKeepBrowsing'),
+                behavior: HitTestBehavior.opaque,
+                onTap: onKeepBrowsing,
+                child: Container(
+                  constraints: const BoxConstraints(minHeight: 44),
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text('${l10n.loginGateContinue} →',
+                      style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.45))),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

@@ -5,6 +5,9 @@ class ApiPaths {
   static const String base = '/api/v1';
 
   static const String authGoogle = '$base/auth/google';
+
+  /// Apple Sign-In（FR-44，iOS App Store 要求与 Google 同级）。后端校验 identityToken 换发自签 JWT。
+  static const String authApple = '$base/auth/apple';
   static const String authRefresh = '$base/auth/refresh';
 
   /// 退出登录（Story 7.3，作废 refresh，不删数据）。

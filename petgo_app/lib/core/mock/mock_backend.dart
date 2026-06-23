@@ -101,8 +101,9 @@ class MockBackend {
       {'type': 'KNOWLEDGE', 'body': 'Drew my two as a "frenemies" sketch — plus a quick guide to a peaceful multi-cat home 🎨', 'nick': 'Rina', 'like': 35,
         'imgs': ['${a}pet06.jpg']},
     ];
-    for (var i = 0; i < samples.length; i++) {
-      final s = samples[i];
+    // 重复样本铺到 30 条（演示访客翻页闸门：每点一次「继续浏览」加载 3 页，可多轮重复）。
+    for (var i = 0; i < 30; i++) {
+      final s = samples[i % samples.length];
       _feed.add(_post(
         id: 100 + i,
         type: s['type'] as String,
@@ -344,7 +345,7 @@ class MockBackend {
         Response<dynamic>(requestOptions: o, statusCode: 204, data: null);
 
     // ---------- AUTH / ME ----------
-    if (m == 'POST' && p.endsWith('/auth/google')) {
+    if (m == 'POST' && (p.endsWith('/auth/google') || p.endsWith('/auth/apple'))) {
       return ok({
         'accessToken': 'mock-access', 'refreshToken': 'mock-refresh',
         'role': 'USER', 'isNewUser': true, 'onboardingCompleted': false,
@@ -380,12 +381,20 @@ class MockBackend {
       if (kDevState == 'feed-empty') return ok(_envelope(const []));
       if (kDevState == 'feed-error') throw _devError(o);
       final cat = (q['category'] ?? 'ALL') as String;
-      final items = cat == 'ALL' ? _feed : _feed.where((e) => e['type'] == cat).toList();
+      final all = cat == 'ALL' ? _feed : _feed.where((e) => e['type'] == cat).toList();
+      // 演示分页：cursor = 偏移量字符串，每页 _kFeedPageSize 条，驱动 loadMore / pagesLoaded
+      // 递增（FR-0B 第 3 页软浮层、访客横幅「再浏览 3 页重现」均依赖翻页才能演示）。
+      const pageSize = 3;
+      final offset = int.tryParse((q['cursor'] ?? '') as String) ?? 0;
+      final slice = all.skip(offset).take(pageSize).toList();
+      final nextOffset = offset + slice.length;
+      final hasMore = nextOffset < all.length;
       // 投影为卡片 10 字段契约：内部 imageUrls（详情多图）不进 Feed 信封。
-      return ok(_envelope(items.map((e) {
+      final cards = slice.map((e) {
         final card = Map<String, dynamic>.from(e)..remove('imageUrls');
         return card;
-      }).toList()));
+      }).toList();
+      return ok({'items': cards, 'nextCursor': hasMore ? '$nextOffset' : null, 'hasMore': hasMore});
     }
     if (m == 'POST' && p.endsWith('/content-posts')) {
       // 镜像后端发布时三方自动审核（AC8 · F10）：占位关键词/图标记命中 → 422，不落库。

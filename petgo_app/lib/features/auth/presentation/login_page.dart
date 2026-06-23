@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -9,6 +11,7 @@ import '../../../l10n/app_localizations.dart';
 import '../data/auth_repository.dart';
 import '../domain/auth_routing.dart';
 import '../domain/auth_state.dart';
+import '../domain/login_response.dart';
 
 /// 法务 H5 链接（env 注入，默认占位；正式页本体由运营/法务产出）。
 const String _kTermsUrl =
@@ -30,12 +33,16 @@ class LoginPage extends ConsumerStatefulWidget {
 class _LoginPageState extends ConsumerState<LoginPage> {
   bool _busy = false;
 
-  Future<void> _onGoogleLogin() async {
+  void _onGoogleLogin() => _login(() => ref.read(authRepositoryProvider).loginWithGoogle());
+  void _onAppleLogin() => _login(() => ref.read(authRepositoryProvider).loginWithApple());
+
+  /// 统一登录链路（Google / Apple 共用）：成功落态 + 新老分流；取消/失败内联提示。
+  Future<void> _login(Future<LoginResponse> Function() runner) async {
     if (_busy) return;
     setState(() => _busy = true);
     final l10n = AppLocalizations.of(context);
     try {
-      final resp = await ref.read(authRepositoryProvider).loginWithGoogle();
+      final resp = await runner();
       ref.read(authControllerProvider.notifier).applyLogin(resp);
       if (!mounted) return;
       // 新老分流：老用户进 App；新用户进引导占位（Story 1.6 本体）。
@@ -81,32 +88,28 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             padding: const EdgeInsets.fromLTRB(22, 28, 22, 16),
             child: Column(
               children: [
-                // Google 一键登录（白底主钮）
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    key: const ValueKey('googleLoginButton'),
-                    onPressed: _busy ? null : _onGoogleLogin,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.card,
-                      foregroundColor: AppColors.ink,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        side: const BorderSide(color: AppColors.line, width: 1.5),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const _GoogleG(),
-                        const SizedBox(width: 11),
-                        Text(l10n.loginGoogle,
-                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-                      ],
-                    ),
+                // Apple 登录（FR-44）：仅 iOS 显示，与 Google 同级且置顶（App Store 4.8）。黑底白字。
+                if (defaultTargetPlatform == TargetPlatform.iOS) ...[
+                  _AuthButton(
+                    key: const ValueKey('appleLoginButton'),
+                    onPressed: _busy ? null : _onAppleLogin,
+                    background: const Color(0xFF000000),
+                    foreground: Colors.white,
+                    border: false,
+                    icon: SvgPicture.string(_kAppleLogo, width: 19, height: 19),
+                    label: l10n.loginApple,
                   ),
+                  const SizedBox(height: 12),
+                ],
+                // Google 登录（与 Apple 同高/同圆角/同字重，白底描边，不弱化）。
+                _AuthButton(
+                  key: const ValueKey('googleLoginButton'),
+                  onPressed: _busy ? null : _onGoogleLogin,
+                  background: AppColors.card,
+                  foreground: AppColors.ink,
+                  border: true,
+                  icon: SvgPicture.string(_kGoogleG, width: 22, height: 22),
+                  label: l10n.loginGoogle,
                 ),
                 const SizedBox(height: 12),
                 // 自动建号提示（violet-50 底）
@@ -189,45 +192,32 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     );
   }
 
-  /// 紫渐变品牌头：光晕圆 + Pop Art 方块 + 返回钮 + logo + 欢迎语。
+  /// 品牌头（原型 P-03 重塑）：纯紫实底 #7D45F6 + 白光晕圆/中心辉光 + 返回钮 + 新 logo 镂空标 + 欢迎语。
   Widget _brandHeader(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final topInset = MediaQuery.of(context).padding.top;
     return Container(
       width: double.infinity,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.mint, AppColors.mint500],
-        ),
-      ),
+      color: AppColors.brandViolet,
       child: ClipRect(
         child: Stack(
           children: [
-            // 装饰光晕圆
-            Positioned(
-              top: -50,
-              right: -50,
-              child: _glowCircle(190, 0.08),
-            ),
-            Positioned(
-              bottom: -70,
-              left: -30,
-              child: _glowCircle(160, 0.06),
-            ),
-            // Pop Art 错位方块（右上）
-            Positioned(
-              top: topInset + 18,
-              right: 22,
-              child: Transform.rotate(
-                angle: 0.26,
+            // 装饰光晕圆（右上 / 左下）。
+            Positioned(top: -50, right: -50, child: _glowCircle(190, 0.08)),
+            Positioned(bottom: -70, left: -30, child: _glowCircle(160, 0.06)),
+            // 中心径向辉光（呼应 splash）。
+            Positioned.fill(
+              child: Center(
                 child: Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                      color: AppColors.popRed.withValues(alpha: 0.55),
-                      borderRadius: BorderRadius.circular(7)),
+                  width: 240,
+                  height: 240,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [Color(0x2EFFFFFF), Color(0x00FFFFFF)],
+                      stops: [0.0, 0.68],
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -255,18 +245,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  // Logo 方块
-                  Container(
-                    width: 54,
-                    height: 54,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.25), width: 1.5),
-                    ),
-                    child: const Icon(Icons.pets, size: 28, color: Colors.white),
-                  ),
+                  // 新 logo 镂空标：白狗 + 紫猫（= 实底色，呈负空间镂空，同 splash 终态）。
+                  const _BrandMark(size: 58),
                   const SizedBox(height: 14),
                   Text(l10n.loginWelcomeTitle,
                       style: const TextStyle(
@@ -324,18 +304,93 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       Container(width: 1, height: 32, color: AppColors.line);
 }
 
-/// Google「G」彩色字标（品牌简化呈现）。
-class _GoogleG extends StatelessWidget {
-  const _GoogleG();
+/// 多色 Google「G」标（原型 P-03 svg 同 path）。
+const String _kGoogleG =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">'
+    '<path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>'
+    '<path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>'
+    '<path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>'
+    '<path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>'
+    '</svg>';
+
+/// Apple 标（白色，原型 P-03 svg 同 path）。
+const String _kAppleLogo =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white">'
+    '<path d="M16.365 1.43c0 1.14-.493 2.27-1.177 3.08-.744.9-1.99 1.57-2.987 1.57-.12 0-.23-.02-.3-.03-.01-.06-.04-.22-.04-.39 0-1.15.572-2.27 1.206-2.98.804-.94 2.142-1.64 3.248-1.68.03.13.05.28.05.43zm4.565 15.71c-.03.07-.463 1.58-1.518 3.12-.945 1.34-1.94 2.71-3.43 2.71-1.517 0-1.9-.88-3.63-.88-1.698 0-2.302.91-3.67.91-1.377 0-2.332-1.26-3.428-2.8-1.287-1.82-2.323-4.63-2.323-7.28 0-4.28 2.797-6.55 5.552-6.55 1.448 0 2.675.95 3.6.95.865 0 2.222-1.01 3.902-1.01.613 0 2.886.06 4.374 2.19-.13.09-2.383 1.37-2.383 4.19 0 3.26 2.854 4.42 2.955 4.45z"/>'
+    '</svg>';
+
+/// 新品牌 logo 镂空标：白狗 + 实底紫猫（猫 = 背景色 → 呈负空间镂空，同 splash 终态）。
+class _BrandMark extends StatelessWidget {
+  const _BrandMark({required this.size});
+
+  final double size;
 
   @override
   Widget build(BuildContext context) {
-    return const Text('G',
-        style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: AppColors.brandGoogleBlue,
-            height: 1.0));
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          SvgPicture.asset('assets/brand/mark_dog.svg', width: size, height: size),
+          SvgPicture.asset('assets/brand/mark_cat.svg',
+              width: size,
+              height: size,
+              colorFilter: const ColorFilter.mode(AppColors.brandViolet, BlendMode.srcIn)),
+        ],
+      ),
+    );
+  }
+}
+
+/// 登录按钮（Apple/Google 共用）：等高/等圆角/等字重，图标 + 标签居中。
+class _AuthButton extends StatelessWidget {
+  const _AuthButton({
+    super.key,
+    required this.onPressed,
+    required this.background,
+    required this.foreground,
+    required this.border,
+    required this.icon,
+    required this.label,
+  });
+
+  final VoidCallback? onPressed;
+  final Color background;
+  final Color foreground;
+  final bool border;
+  final Widget icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: FilledButton(
+        onPressed: onPressed,
+        style: FilledButton.styleFrom(
+          backgroundColor: background,
+          foregroundColor: foreground,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: border
+                ? const BorderSide(color: AppColors.line, width: 1.5)
+                : BorderSide.none,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            icon,
+            const SizedBox(width: 11),
+            Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ),
+    );
   }
 }
 

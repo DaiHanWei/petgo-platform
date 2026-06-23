@@ -48,6 +48,30 @@ class AuthRepository {
     return login;
   }
 
+  /// 完整 Apple 登录链路（FR-44，iOS）。用户取消抛 [LoginCancelled]。
+  ///
+  /// debug 构建走后端 dev 桩（同 Google），可在 mock / dev 下打通；
+  /// release iOS 真机需接 `sign_in_with_apple` 取 identityToken（+ iOS「Sign in with Apple」
+  /// 能力 + 后端 /auth/apple 校验器，留作 L2 接入点）。
+  Future<LoginResponse> loginWithApple() async {
+    if (kDebugMode && _kDevStubLogin) {
+      return exchangeAppleToken('dev-stub');
+    }
+    // TODO(L2): 接入 sign_in_with_apple 取真实 identityToken；当前 release 暂作取消处理。
+    throw const LoginCancelled();
+  }
+
+  /// 用 Apple identityToken 向后端换取自签 JWT（拆出便于测试）。
+  Future<LoginResponse> exchangeAppleToken(String identityToken) async {
+    final resp = await dio.post<Map<String, dynamic>>(
+      ApiPaths.authApple,
+      data: {'identityToken': identityToken},
+    );
+    final login = LoginResponse.fromJson(resp.data!);
+    await tokenStore.saveTokens(access: login.accessToken, refresh: login.refreshToken);
+    return login;
+  }
+
   /// 冷启动恢复会话：本地有 access token 则调 `/me` 验证并返回 profile；
   /// access 过期时鉴权拦截器会自动用 refresh 续期重放；无 token / 刷新失败返回 null（保持游客）。
   Future<UserProfile?> restoreSession() async {
