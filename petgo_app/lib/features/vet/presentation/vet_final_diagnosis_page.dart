@@ -39,7 +39,19 @@ class _VetFinalDiagnosisPageState extends State<VetFinalDiagnosisPage> {
     super.dispose();
   }
 
-  bool get _canSubmit => _diagnosis.text.trim().isNotEmpty;
+  /// 全字段必填：诊断/建议/复诊/恶化征兆/恶化就医时限均须填；选「需用药」则药名+频次也须填。
+  bool get _canSubmit {
+    final baseFilled = _diagnosis.text.trim().isNotEmpty &&
+        _advice.text.trim().isNotEmpty &&
+        _followUp.text.trim().isNotEmpty &&
+        _worsening.text.trim().isNotEmpty &&
+        _clinicWithin.text.trim().isNotEmpty;
+    if (!baseFilled) return false;
+    if (_needsMed) {
+      return _medName.text.trim().isNotEmpty && _medFreq.text.trim().isNotEmpty;
+    }
+    return true;
+  }
 
   void _submit() {
     if (!_canSubmit) return;
@@ -77,17 +89,18 @@ class _VetFinalDiagnosisPageState extends State<VetFinalDiagnosisPage> {
                     padding: const EdgeInsets.only(bottom: AppSpacing.md),
                     child: Text(subtitle, style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
                   ),
-                _field(l10n.vetDiagDiagnosis, _diagnosis, required: true, maxLines: 2),
-                _field(l10n.vetDiagAdvice, _advice, maxLines: 3),
+                _field(l10n.vetDiagDiagnosis, _diagnosis,
+                    required: true, maxLines: 2, fieldKey: const ValueKey('vetDiagInput')),
+                _field(l10n.vetDiagAdvice, _advice, required: true, maxLines: 3),
                 const SizedBox(height: AppSpacing.sm),
                 _medToggle(l10n),
                 if (_needsMed) ...[
-                  _field(l10n.vetDiagMedName, _medName),
-                  _field(l10n.vetDiagMedFreq, _medFreq),
+                  _field(l10n.vetDiagMedName, _medName, required: true),
+                  _field(l10n.vetDiagMedFreq, _medFreq, required: true),
                 ],
-                _field(l10n.vetDiagFollowUp, _followUp),
-                _field(l10n.vetDiagWorsening, _worsening, maxLines: 2),
-                _field(l10n.vetDiagClinicWithin, _clinicWithin),
+                _field(l10n.vetDiagFollowUp, _followUp, required: true),
+                _field(l10n.vetDiagWorsening, _worsening, required: true, maxLines: 2),
+                _field(l10n.vetDiagClinicWithin, _clinicWithin, required: true),
               ],
             ),
           ),
@@ -97,7 +110,8 @@ class _VetFinalDiagnosisPageState extends State<VetFinalDiagnosisPage> {
     );
   }
 
-  Widget _field(String label, TextEditingController c, {bool required = false, int maxLines = 1}) {
+  Widget _field(String label, TextEditingController c,
+      {bool required = false, int maxLines = 1, ValueKey<String>? fieldKey}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
       child: Column(
@@ -121,10 +135,11 @@ class _VetFinalDiagnosisPageState extends State<VetFinalDiagnosisPage> {
               border: Border.all(color: AppColors.border),
             ),
             child: TextField(
-              key: required ? const ValueKey('vetDiagInput') : null,
+              key: fieldKey,
               controller: c,
               maxLines: maxLines,
-              onChanged: required ? (_) => setState(() {}) : null,
+              // 全字段必填 → 任一变更都重算提交可用态。
+              onChanged: (_) => setState(() {}),
               decoration: const InputDecoration(border: InputBorder.none, isDense: true),
             ),
           ),
