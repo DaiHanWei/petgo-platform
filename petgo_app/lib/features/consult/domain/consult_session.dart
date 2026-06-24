@@ -10,6 +10,7 @@ class ConsultSession {
     required this.alreadyActive,
     this.closedReason,
     this.interruptedReason,
+    this.rated = false,
   });
 
   final int id;
@@ -21,6 +22,9 @@ class ConsultSession {
   final bool alreadyActive;
   final String? closedReason; // RATED | UNRATED
   final String? interruptedReason; // VET_BANNED
+  // 本次会话是否已评分（后端权威）。已评分则关闭评分入口，避免重复评分被 409。
+  // 注意:不能只看 closedReason —— 补评分只清补弹标记、不改 UNRATED。
+  final bool rated;
 
   bool get isWaiting => status == 'WAITING';
   bool get isInProgress => status == 'IN_PROGRESS';
@@ -35,6 +39,7 @@ class ConsultSession {
         alreadyActive: (json['alreadyActive'] ?? false) as bool,
         closedReason: json['closedReason'] as String?,
         interruptedReason: json['interruptedReason'] as String?,
+        rated: (json['rated'] ?? false) as bool,
       );
 }
 
