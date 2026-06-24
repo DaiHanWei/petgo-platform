@@ -11,7 +11,7 @@ Future<void> _pump(WidgetTester tester) async {
   await tester.pumpWidget(UncontrolledProviderScope(
     container: container,
     child: const MaterialApp(
-      locale: Locale('id'), // 文案已迁 arb：固定印尼语以断言 'Tanya AI (Triase)' 等 id 文案
+      locale: Locale('id'), // 文案已迁 arb：固定印尼语以断言 'Cek Gejala' 等 id 文案
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: TriagePage(),
@@ -28,9 +28,9 @@ void main() {
     expect(find.byKey(const ValueKey('triageEntryAI')), findsOneWidget);
     expect(find.byKey(const ValueKey('triageEntryVet')), findsOneWidget);
     // 双入口标题 + CTA（换肤后印尼语文案）。
-    expect(find.text('Tanya AI (Triase)'), findsOneWidget);
+    expect(find.text('Cek Gejala'), findsOneWidget);
     expect(find.text('Chat Dokter Hewan'), findsOneWidget);
-    expect(find.text('Mulai triase'), findsOneWidget);
+    expect(find.text('Mulai Cek'), findsOneWidget);
     expect(find.text('Mulai konsultasi'), findsOneWidget);
   });
 

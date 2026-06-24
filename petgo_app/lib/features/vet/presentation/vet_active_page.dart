@@ -28,24 +28,38 @@ class _VetActivePageState extends ConsumerState<VetActivePage> {
   // 入站消息信号 → 实时刷新未读角标（兽医停在本 Tab 时收到机主新消息即跳数）。
   StreamSubscription<void>? _inboundSub;
   bool _refreshing = false;
+  Timer? _reloadDebounce;
 
   @override
   void initState() {
     super.initState();
     _reloadAll();
     // 工作台 IndexedStack 下本页常驻：跨 Tab 也能在收到消息时后台刷新角标。
-    _inboundSub = ref.read(imServiceProvider).inboundSignals.listen((_) => _refreshUnread());
+    _inboundSub = ref.read(imServiceProvider).inboundSignals.listen((_) {
+      _refreshUnread(); // 即时刷未读角标
+      _scheduleReload(); // 节流重拉列表：捕获新会话进入 / 排序变化
+    });
   }
 
   @override
   void dispose() {
     _inboundSub?.cancel();
+    _reloadDebounce?.cancel();
     super.dispose();
   }
 
+  /// 入站消息节流重拉：连续消息只在停顿 2s 后打一次后端，静默更新（不闪首屏加载圈）。
+  void _scheduleReload() {
+    _reloadDebounce?.cancel();
+    _reloadDebounce = Timer(const Duration(seconds: 2), () {
+      if (mounted) _reloadAll(silent: true);
+    });
+  }
+
   /// 全量重载：后端取进行中列表 → 登录 IM → 合并未读 / 最近消息。
-  Future<void> _reloadAll() async {
-    setState(() => _loading = true);
+  /// [silent]=true 时不显首屏加载圈（后台节流刷新用）。
+  Future<void> _reloadAll({bool silent = false}) async {
+    if (!silent) setState(() => _loading = true);
     List<VetActiveItem> items;
     try {
       items = await ref.read(vetRepositoryProvider).activeSessions();

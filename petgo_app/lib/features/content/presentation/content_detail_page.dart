@@ -11,6 +11,7 @@ import '../../../shared/widgets/app_image.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/mini_profile_sheet.dart';
+import '../../me/data/my_posts_repository.dart';
 import '../data/detail_repository.dart';
 import '../domain/content_detail.dart';
 import 'comment_composer.dart';
@@ -324,8 +325,9 @@ class _DetailScaffold extends ConsumerWidget {
     if (!ok) return;
     try {
       await ref.read(detailRepositoryProvider).deleteContent(detail.id);
-      // Feed 同步移除（重拉，软删帖 deleted_at 非空被过滤）。
+      // Feed + me 页「我的发布」同步移除（重拉，软删帖 deleted_at 非空被过滤）。
       ref.invalidate(feedProvider);
+      ref.invalidate(myPostsProvider);
       if (context.mounted) Navigator.of(context).maybePop();
     } catch (_) {
       if (context.mounted) {

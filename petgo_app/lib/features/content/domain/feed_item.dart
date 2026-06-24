@@ -22,7 +22,6 @@ class FeedItem {
     this.authorAvatarUrl,
     this.body,
     this.firstImageUrl,
-    this.likeCount = 0,
     required this.createdAt,
   });
 
@@ -43,8 +42,6 @@ class FeedItem {
   /// 首图（无图 → 纯文字卡）。
   final String? firstImageUrl;
 
-  /// 卡片点赞数（PRD-642）。
-  final int likeCount;
   final DateTime createdAt;
 
   bool get hasImage => firstImageUrl != null && firstImageUrl!.isNotEmpty;
@@ -58,7 +55,6 @@ class FeedItem {
         type: (json['type'] ?? 'DAILY') as String,
         body: json['body'] as String?,
         firstImageUrl: json['firstImageUrl'] as String?,
-        likeCount: (json['likeCount'] ?? 0) as int,
         createdAt: DateTime.parse(json['createdAt'] as String),
       );
 }

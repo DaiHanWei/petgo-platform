@@ -84,6 +84,11 @@ class MediaUploadUseCase {
   Future<XFile?> _pick(MediaSource source) {
     return picker.pickImage(
       source: source == MediaSource.camera ? ImageSource.camera : ImageSource.gallery,
+      // 原生层降采样（不占主 isolate）：相机原图常 4000×3000/十几 MB，会让后续纯 Dart
+      // 解码/压缩同步卡死主线程、预览迟迟不出。先压到 ≤2048px + 质量 85 再交给 process 剥 EXIF。
+      maxWidth: 2048,
+      maxHeight: 2048,
+      imageQuality: 85,
     );
   }
 }

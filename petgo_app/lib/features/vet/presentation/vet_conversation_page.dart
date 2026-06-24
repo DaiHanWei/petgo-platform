@@ -103,13 +103,16 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
     try {
       await ref.read(vetRepositoryProvider).endSession(widget.sessionId, draft);
     } catch (_) {
-      // 结束失败也返回（服务端状态权威）；诊断必填校验已在表单本地完成。
+      // 结束失败 → 留在会话页让兽医重试，不跳工作台。
+      // 否则服务端仍 IN_PROGRESS、用户端仍显「进行中」，而兽医已离开 = 两端状态撕裂。
       if (mounted) {
         ScaffoldMessenger.of(context)
           ..clearSnackBars()
           ..showSnackBar(SnackBar(content: Text(l10n.consultStartFailed)));
       }
+      return;
     }
+    // 仅 end 成功才归工作台。
     if (mounted) context.go('/vet/workbench');
   }
 

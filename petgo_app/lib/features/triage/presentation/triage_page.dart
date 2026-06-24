@@ -16,6 +16,7 @@ import '../../consult/data/consult_repository.dart';
 import '../../consult/domain/consult_history_item.dart';
 import '../../consult/domain/consult_session.dart';
 import '../../consult/presentation/consult_rating_dialog.dart';
+import '../../consult/presentation/consult_refresh.dart';
 
 /// Konsultasi Kilat 问诊 hub（TailTopia Prototype 换肤 · Story 4.3 + 5.8）。
 ///
@@ -91,6 +92,10 @@ class _TriagePageState extends ConsumerState<TriagePage> {
 
   @override
   Widget build(BuildContext context) {
+    // 任意入口评分后 → 重拉历史列表（否则停在「未评分」）。
+    ref.listen<int>(consultRefreshProvider, (_, _) {
+      if (mounted) setState(_load);
+    });
     final l10n = AppLocalizations.of(context);
     final loggedIn = ref.watch(authControllerProvider).isLoggedIn;
     return Scaffold(

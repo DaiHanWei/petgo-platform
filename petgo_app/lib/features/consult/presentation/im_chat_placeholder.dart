@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/im/im_service.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/case_image_viewer.dart';
 
 /// 实时对话区（Story 5.5 · TailTopia Prototype VetChat 换肤）。
 ///
@@ -249,9 +250,14 @@ class _Bubble extends StatelessWidget {
 
     Widget content;
     if (msg.imageUrl != null) {
-      content = ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: _image(msg.imageUrl!),
+      // 点击气泡图 → 全屏看大图（双指缩放，远端 url / 本地刚发图都支持）。
+      content = GestureDetector(
+        key: const ValueKey('imBubbleImage'),
+        onTap: () => showCaseImageFullScreen(context, msg.imageUrl!),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: _image(msg.imageUrl!),
+        ),
       );
     } else {
       content = Container(

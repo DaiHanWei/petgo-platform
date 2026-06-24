@@ -11,6 +11,7 @@ import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/case_image_viewer.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
+import 'consult_refresh.dart';
 import '../../notify/data/push_permission_providers.dart';
 import '../../notify/domain/push_suppression.dart';
 import '../data/consult_repository.dart';
@@ -153,6 +154,7 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
     if (result == null || !mounted) return;
     try {
       await ref.read(consultRepositoryProvider).rate(widget.sessionId, result.stars, result.comment);
+      ref.read(consultRefreshProvider.notifier).bump(); // 通知历史列表刷新已评分
       if (!mounted) return;
       setState(() {
         _rated = true;
