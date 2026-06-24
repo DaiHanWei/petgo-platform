@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
 import '../domain/consult_case.dart';
+import '../domain/consult_diagnosis.dart';
 import '../domain/consult_history_item.dart';
 import '../domain/consult_session.dart';
 
@@ -25,6 +26,17 @@ class ConsultRepository {
 
   /// 是否有兽医在线（仅 bool，兼容旧 indicator）。
   Future<bool> vetOnline() async => (await availability()).vetOnline;
+
+  /// 本次会诊最终诊断（兽医结束时定格）。未出诊断(204)/失败 → null。「查看会诊结果」入口用。
+  Future<ConsultDiagnosis?> diagnosis(int sessionId) async {
+    try {
+      final resp = await dio.get<Map<String, dynamic>>(ApiPaths.consultSessionDiagnosis(sessionId));
+      if (resp.statusCode == 204 || resp.data == null) return null;
+      return ConsultDiagnosis.fromJson(resp.data!);
+    } on DioException {
+      return null;
+    }
+  }
 
   /// 当前用户自己提交的病例（症状 + 私密图签名 URL）。会话页摘要条「View」展开用。失败/无病例按空处理。
   Future<ConsultCase> caseContext(int sessionId) async {

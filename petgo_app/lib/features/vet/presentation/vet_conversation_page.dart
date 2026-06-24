@@ -225,18 +225,21 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
-              OutlinedButton(
-                key: const ValueKey('vetEndSession'),
-                onPressed: () => _endSession(d),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.coral,
-                  side: const BorderSide(color: AppColors.coral, width: 1.5),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              // 仅 IN_PROGRESS 才可结束:每个 case 只能 end 一次(按 session 状态门控,
+              // 天然区分同一用户的多个 case);已结束(PENDING_CLOSE/CLOSED)重进不再显示。
+              if (d.session.status == 'IN_PROGRESS')
+                OutlinedButton(
+                  key: const ValueKey('vetEndSession'),
+                  onPressed: () => _endSession(d),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.coral,
+                    side: const BorderSide(color: AppColors.coral, width: 1.5),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text(l10n.vetEndSession, style: AppTypography.caption.copyWith(color: AppColors.coral)),
                 ),
-                child: Text(l10n.vetEndSession, style: AppTypography.caption.copyWith(color: AppColors.coral)),
-              ),
             ],
           ),
         ),

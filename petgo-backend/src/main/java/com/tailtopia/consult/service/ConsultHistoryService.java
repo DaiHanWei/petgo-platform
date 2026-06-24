@@ -47,8 +47,10 @@ public class ConsultHistoryService {
         for (TriageHistoryItem t : triageService.historyForUser(userId)) {
             all.add(ConsultHistoryItem.ai(t.triageId(), t.dangerLevel(), t.symptomSummary(), t.date()));
         }
-        for (ConsultSession s : sessions.findByUserIdAndStatusInOrderByCreatedAtDesc(
-                userId, List.of(SessionStatus.CLOSED, SessionStatus.INTERRUPTED))) {
+        // PENDING_CLOSE(兽医已结束、30min 续聊窗口) 也归入历史,带 terminalState=PENDING_CLOSE 标记——
+        // 不再算「进行中」(见 SessionStatus.ACTIVE);用户从历史进入仍可在窗口内续聊。
+        for (ConsultSession s : sessions.findByUserIdAndStatusInOrderByCreatedAtDesc(userId,
+                List.of(SessionStatus.PENDING_CLOSE, SessionStatus.CLOSED, SessionStatus.INTERRUPTED))) {
             all.add(toVetItem(s));
         }
 

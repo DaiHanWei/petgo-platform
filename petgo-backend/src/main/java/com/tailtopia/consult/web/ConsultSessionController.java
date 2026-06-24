@@ -94,6 +94,21 @@ public class ConsultSessionController {
         return aiContextService.forSession(id);
     }
 
+    /**
+     * 用户查看本次会诊最终诊断（Story C 收尾）。兽医结束会话时定格于 {@code consult_sessions.vet_diagnosis}；
+     * 结束后(含 30min 续聊期 / CLOSED)仍可查，作为用户侧「查看会诊结果」入口的数据源。
+     * 归属经 {@link ConsultSessionService#getForUser} 校验（非本人 → 404）；未出诊断 → 204。
+     * <p>诊断为健康数据：仅按需返回，绝不进日志（访问日志层已对 {@code diagnosis} 字段脱敏）。
+     */
+    @GetMapping("/{id}/diagnosis")
+    public org.springframework.http.ResponseEntity<com.tailtopia.consult.domain.VetDiagnosis> diagnosis(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
+        var d = service.getForUser(currentUserId(jwt), id).getVetDiagnosis();
+        return d == null
+                ? org.springframework.http.ResponseEntity.noContent().build()
+                : org.springframework.http.ResponseEntity.ok(d);
+    }
+
     @PatchMapping("/{id}/continue-waiting")
     public ConsultSessionResponse continueWaiting(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
         return ConsultSessionResponse.of(service.continueWaiting(currentUserId(jwt), id),

@@ -49,6 +49,8 @@ class ApiPaths {
   static const String consultSessionActive = '$base/consult-sessions/active';
   static String consultSession(int id) => '$base/consult-sessions/$id';
   static String consultSessionCase(int id) => '$base/consult-sessions/$id/case';
+  /// 本次会诊最终诊断（兽医结束时定格；用户侧「查看会诊结果」入口数据源，未出诊断 204）。
+  static String consultSessionDiagnosis(int id) => '$base/consult-sessions/$id/diagnosis';
   static String consultSessionContinueWaiting(int id) =>
       '$base/consult-sessions/$id/continue-waiting';
 

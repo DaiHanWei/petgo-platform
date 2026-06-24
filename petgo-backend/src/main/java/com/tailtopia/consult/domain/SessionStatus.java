@@ -17,8 +17,12 @@ public enum SessionStatus {
     INTERRUPTED,
     CANCELLED;
 
-    /** 「占用中」三态：任一存在即视为该用户已有进行中咨询（FR-4B「同时仅 1 个」）。 */
-    public static final Set<SessionStatus> ACTIVE = Set.of(WAITING, IN_PROGRESS, PENDING_CLOSE);
+    /**
+     * 「占用中（进行中）」两态：任一存在即视为该用户已有进行中咨询（FR-4B「同时仅 1 个」 + 用户侧「查看进行中」入口）。
+     * <b>不含 {@code PENDING_CLOSE}</b>：兽医结束后的 30min 续聊窗口不算「进行中」——会话进历史(带标记)、
+     * 不占名额(可发起新咨询)、不显示「查看进行中」。续聊能力由 {@link #IM_LOGIN_ELIGIBLE}(含 PENDING_CLOSE)保障。
+     */
+    public static final Set<SessionStatus> ACTIVE = Set.of(WAITING, IN_PROGRESS);
 
     /**
      * Story 5.5 增量：可 IM 登录态——已接单（存在 C2C 会话与对端兽医）的两态。

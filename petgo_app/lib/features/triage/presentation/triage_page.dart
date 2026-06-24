@@ -397,7 +397,10 @@ class _HistoryTile extends StatelessWidget {
 
   String _vetSubtitle(AppLocalizations l10n) {
     final parts = <String>[];
-    if (item.terminalState == 'INTERRUPTED') {
+    if (item.terminalState == 'PENDING_CLOSE') {
+      // 兽医已结束、30min 续聊窗口：归历史但标记仍可继续（点进可在窗口内续聊）。
+      parts.add(l10n.consultHistoryStillOpen);
+    } else if (item.terminalState == 'INTERRUPTED') {
       parts.add(l10n.terminalInterrupted);
     } else if (item.userStars == null) {
       parts.add(l10n.historyUnrated);

@@ -15,6 +15,7 @@ import '../../notify/data/push_permission_providers.dart';
 import '../../notify/domain/push_suppression.dart';
 import '../data/consult_repository.dart';
 import '../domain/consult_case.dart';
+import 'consult_diagnosis_sheet.dart';
 import 'consult_rating_dialog.dart';
 import 'im_chat_placeholder.dart';
 
@@ -162,6 +163,46 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
     if (ok && mounted) _leave();
   }
 
+  /// 查看会诊结果：拉本次最终诊断 → 只读弹层；未出诊断则提示。
+  Future<void> _openDiagnosis() async {
+    final l10n = AppLocalizations.of(context);
+    final d = await ref.read(consultRepositoryProvider).diagnosis(widget.sessionId);
+    if (!mounted) return;
+    if (d == null) {
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(content: Text(l10n.consultResultEmpty)));
+      return;
+    }
+    await showConsultDiagnosisSheet(context, d);
+  }
+
+  /// 「查看会诊结果」入口横幅（兽医结束后常驻）。
+  Widget _resultEntry(AppLocalizations l10n) {
+    return Material(
+      color: AppColors.vetSurface,
+      child: InkWell(
+        key: const ValueKey('consultViewResult'),
+        onTap: _openDiagnosis,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          child: Row(
+            children: [
+              const Text('📋', style: TextStyle(fontSize: 15)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(l10n.consultViewResult,
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.mint)),
+              ),
+              const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.mint),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -169,6 +210,8 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
     final interrupted = _status == 'INTERRUPTED';
     final closed = _status == 'CLOSED';
     final active = _status == 'IN_PROGRESS';
+    // 兽医已结束(含 30min 续聊期 PENDING_CLOSE 与 CLOSED)→ 显「查看会诊结果」入口。
+    final endedByVet = _status == 'PENDING_CLOSE' || _status == 'CLOSED';
     // 终态只读标签（Story 5.8 AC3）：已结束 / 未评分 / 已中断。
     final terminalLabel = interrupted
         ? l10n.terminalInterrupted
@@ -202,6 +245,8 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
               ],
             ),
           ),
+          // 兽医已结束 → 「查看会诊结果」入口（持久,30min 续聊期及关闭后均可查最终诊断）。
+          if (endedByVet) _resultEntry(l10n),
           // 原始症状摘要条（原型紫浅底折叠条）。占位内容；仅活跃会话显示。
           if (active || pendingClose) _symptomBar(l10n),
           Expanded(
