@@ -1,9 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
+import '../data/vet_repository.dart';
+import '../domain/vet_online_status.dart';
 import 'vet_active_page.dart';
 import 'vet_history_page.dart';
 import 'vet_inbox_page.dart';
@@ -13,14 +18,15 @@ import 'vet_me_page.dart';
 /// 与用户侧 5-Tab（凸起「+」发布/Feed/档案）物理隔离——此处无发布 FAB、无 Feed/档案入口。
 ///
 /// role 守卫保证只有 role=VET 能进（承接 5.1）。四 Tab 内容多为空态占位，5.3/5.5/5.8 填充。
-class VetWorkbenchShell extends StatefulWidget {
+class VetWorkbenchShell extends ConsumerStatefulWidget {
   const VetWorkbenchShell({super.key});
 
   @override
-  State<VetWorkbenchShell> createState() => _VetWorkbenchShellState();
+  ConsumerState<VetWorkbenchShell> createState() => _VetWorkbenchShellState();
 }
 
-class _VetWorkbenchShellState extends State<VetWorkbenchShell> {
+class _VetWorkbenchShellState extends ConsumerState<VetWorkbenchShell>
+    with WidgetsBindingObserver {
   // Debug-only：--dart-define=DEV_VET_TAB=3 启动即落对应 tab（逐屏视觉验收用）；release 恒 0。
   int _index = kDebugMode ? const int.fromEnvironment('DEV_VET_TAB') : 0;
 
@@ -31,9 +37,69 @@ class _VetWorkbenchShellState extends State<VetWorkbenchShell> {
     VetMePage(),
   ];
 
+  /// 在线态保活心跳（< 后端 TTL=3min，留掉线宽限）。工作台壳常驻——与当前 Tab 无关,
+  /// 故兽医停在任意 Tab(收件箱/进行中…)都保活,不再依赖「我的」页是否激活。
+  static const Duration _heartbeatInterval = Duration(seconds: 60);
+  Timer? _heartbeat;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _heartbeat?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _onResume();
+    } else {
+      _stopHeartbeat(); // 退后台停心跳 → TTL 兜底离线(防幽灵在线)
+    }
+  }
+
+  /// 回前台:在线则立即补一次心跳(消除解锁后的撒谎窗口)+ 续上定时心跳;
+  /// 再以服务端真值兜底纠偏显示态(保活失败则如实翻 offline)。
+  Future<void> _onResume() async {
+    if (ref.read(vetOnlineStatusProvider)) {
+      await _beat();
+      _startHeartbeat();
+    }
+    await ref.read(vetOnlineStatusProvider.notifier).syncFromServer();
+  }
+
+  Future<void> _beat() =>
+      ref.read(vetRepositoryProvider).heartbeat().catchError((_) {});
+
+  void _startHeartbeat() {
+    _heartbeat?.cancel();
+    _heartbeat = Timer.periodic(_heartbeatInterval, (_) => _beat());
+  }
+
+  void _stopHeartbeat() {
+    _heartbeat?.cancel();
+    _heartbeat = null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    // 在线态变化即跟随心跳（顶栏/「我的」任一处切换均经 vetOnlineStatusProvider 单一源）：
+    // 上线 → 立即心跳 + 续期定时；离线 → 停心跳(TTL 自然过期)。
+    ref.listen<bool>(vetOnlineStatusProvider, (prev, next) {
+      if (next) {
+        _beat();
+        _startHeartbeat();
+      } else {
+        _stopHeartbeat();
+      }
+    });
     return Scaffold(
       backgroundColor: AppColors.base,
       body: SafeArea(child: IndexedStack(index: _index, children: _pages)),

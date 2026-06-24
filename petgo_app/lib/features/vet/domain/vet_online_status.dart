@@ -29,6 +29,17 @@ class VetOnlineStatusNotifier extends Notifier<bool> {
     }
   }
 
+  /// 兜底纠偏：以服务端权威在线态校正本地显示态（回前台时调用）。
+  /// 防「客户端乐观态显示 online 但服务端已过期 offline」的撒谎窗口；保活失败时如实翻 offline。
+  Future<void> syncFromServer() async {
+    if (_inFlight) return; // 切换在途时不覆盖乐观态
+    try {
+      state = await ref.read(vetRepositoryProvider).readOnlineStatus();
+    } catch (_) {
+      // 读失败保持现状,不误翻。
+    }
+  }
+
   /// 切在线/离线。乐观更新 → 服务端权威态；失败回滚并 rethrow 供调用方提示。
   /// 成功后 IM 跟随：上线 `loginIfNeeded`、下线 `logout`（不阻塞在线态）。
   Future<void> toggle(bool next) async {

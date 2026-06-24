@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -16,8 +14,9 @@ import '../domain/vet_online_status.dart';
 /// 「我的」Tab（Story 5.2 F2）：兽医信息 + 在线/离线开关 + 登出。
 ///
 /// 在线态用共享 [vetOnlineStatusProvider]（与工作台首页顶栏同源，切换走
-/// `PUT /vet/online-status` 乐观更新 + 失败回滚 + IM 联动）；本页持有心跳与前后台生命周期：
-/// 在线时定时心跳续期 TTL，App 退后台/登出停止心跳 → TTL 兜底离线（防幽灵在线）。
+/// `PUT /vet/online-status` 乐观更新 + 失败回滚 + IM 联动）。
+/// 心跳保活与前后台生命周期由工作台外壳 [VetWorkbenchShell] 统一持有（常驻、与 Tab 无关），
+/// 本页只读写在线态、不再各自持有心跳。
 class VetMePage extends ConsumerStatefulWidget {
   const VetMePage({super.key});
 
@@ -25,38 +24,16 @@ class VetMePage extends ConsumerStatefulWidget {
   ConsumerState<VetMePage> createState() => _VetMePageState();
 }
 
-class _VetMePageState extends ConsumerState<VetMePage> with WidgetsBindingObserver {
-  /// 心跳间隔（< 后端 TTL=3min，留掉线宽限）。
-  static const Duration _heartbeatInterval = Duration(seconds: 60);
-
+class _VetMePageState extends ConsumerState<VetMePage> {
   bool _loading = true;
   bool _updating = false;
   String _displayName = '';
   int? _doneCount; // 完成数（history 列表长度）；null=加载中/失败 → 占位「—」
-  Timer? _heartbeat;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     _loadProfile();
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _heartbeat?.cancel();
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // 退后台停止心跳（TTL 兜底离线）；回前台且在线则恢复。
-    if (state == AppLifecycleState.resumed) {
-      if (ref.read(vetOnlineStatusProvider)) _startHeartbeat();
-    } else {
-      _stopHeartbeat();
-    }
   }
 
   Future<void> _loadProfile() async {
@@ -104,20 +81,7 @@ class _VetMePageState extends ConsumerState<VetMePage> with WidgetsBindingObserv
     }
   }
 
-  void _startHeartbeat() {
-    _heartbeat?.cancel();
-    _heartbeat = Timer.periodic(_heartbeatInterval, (_) {
-      ref.read(vetRepositoryProvider).heartbeat();
-    });
-  }
-
-  void _stopHeartbeat() {
-    _heartbeat?.cancel();
-    _heartbeat = null;
-  }
-
   Future<void> _logout() async {
-    _stopHeartbeat();
     // 登出即登出 IM（下线，不留长连接）。
     await ref.read(imServiceProvider).logout();
     await ref.read(vetRepositoryProvider).logout();
@@ -128,14 +92,6 @@ class _VetMePageState extends ConsumerState<VetMePage> with WidgetsBindingObserv
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    // 在线态变化 → 心跳跟随（无论从本页还是工作台顶栏切换）。
-    ref.listen<bool>(vetOnlineStatusProvider, (prev, next) {
-      if (next) {
-        _startHeartbeat();
-      } else {
-        _stopHeartbeat();
-      }
-    });
     final online = ref.watch(vetOnlineStatusProvider);
     final availability = ref.watch(vetAvailabilityProvider);
     return Scaffold(
