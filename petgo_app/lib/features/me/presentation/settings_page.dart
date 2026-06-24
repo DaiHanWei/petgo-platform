@@ -2,7 +2,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/config/legal_urls.dart';
 import '../../../core/l10n/locale_controller.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/theme/colors.dart';
@@ -88,9 +90,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               _toggleRow(l10n.settingsPetPublic, _petPublic, (v) => setState(() => _petPublic = v),
                   key: const ValueKey('mePetPublicToggle')),
               _divider(),
-              _navRow(l10n.privacyPolicy, onTap: () => _soon(context)),
+              _navRow(l10n.privacyPolicy, onTap: () => _openUrl(kPrivacyUrl),
+                  key: const ValueKey('mePrivacyPolicy')),
               _divider(),
-              _navRow(l10n.termsOfService, onTap: () => _soon(context)),
+              _navRow(l10n.termsOfService, onTap: () => _openUrl(kTermsUrl),
+                  key: const ValueKey('meTermsOfService')),
             ]),
             const SizedBox(height: 22),
 
@@ -214,11 +218,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
   }
 
-  void _soon(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(l10n.placeholderComingSoon)));
+  /// 打开法务 H5（隐私政策 / 服务条款）外部浏览器；解析失败静默不崩。
+  Future<void> _openUrl(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri != null) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 
   /// 退出登录（Story 7.3 AC1）：确认 → 清本地态回游客 → 留首页。<b>不删任何数据</b>。
