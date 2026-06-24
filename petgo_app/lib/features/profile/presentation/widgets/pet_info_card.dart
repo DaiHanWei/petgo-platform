@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../../shared/widgets/app_image.dart';
 import '../../domain/pet_age.dart';
 import '../../domain/pet_profile.dart';
 
@@ -25,11 +26,30 @@ class PetInfoCard extends StatelessWidget {
   final int? consultCount;
   final int? milestoneCount;
 
+  /// 头像：有 avatarUrl 渲染真实头像图（填满圆圈，与 Me/编辑页同用 AppImage），
+  /// 加载中/失败回退 emoji 占位。无 URL → 🐱 占位。
+  Widget _avatar() {
+    final provider = AppImage.provider(profile.avatarUrl, thumbWidth: 240);
+    if (provider == null) {
+      return const Text('🐱', style: TextStyle(fontSize: 26));
+    }
+    const fallback = Text('🐾', style: TextStyle(fontSize: 26));
+    return Image(
+      image: provider,
+      key: ValueKey('petAvatar-${profile.avatarUrl}'), // URL 变即重建，避免换头像后旧图残留
+      width: 62,
+      height: 62,
+      fit: BoxFit.cover,
+      gaplessPlayback: true,
+      errorBuilder: (_, _, _) => fallback,
+      loadingBuilder: (_, child, progress) => progress == null ? child : fallback,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final age = computePetAge(profile.birthday);
-    final emoji = (profile.avatarUrl == null || profile.avatarUrl!.isEmpty) ? '🐱' : '🐾';
     final sub = [
       if (profile.breed != null && profile.breed!.isNotEmpty) profile.breed!,
       if (profile.birthday != null) l10n.growthArchiveAge(age.years, age.months),
@@ -54,6 +74,7 @@ class PetInfoCard extends StatelessWidget {
                 width: 62,
                 height: 62,
                 alignment: Alignment.center,
+                clipBehavior: Clip.antiAlias,
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: LinearGradient(
@@ -62,7 +83,7 @@ class PetInfoCard extends StatelessWidget {
                     colors: [AppColors.mint500, AppColors.mint],
                   ),
                 ),
-                child: Text(emoji, style: const TextStyle(fontSize: 26)),
+                child: _avatar(),
               ),
               const SizedBox(width: 14),
               Expanded(
