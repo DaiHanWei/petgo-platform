@@ -12,3 +12,6 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+# 例外：团队共享的 debug keystore（标准密码 android、非敏感，仅供开发/内部测试包，
+# 使所有人编译 SHA-1 一致、Google 登录免逐机注册）。正式发布须另用 release keystore（勿入库）。
+!app/debug.keystore

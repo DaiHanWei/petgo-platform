@@ -25,10 +25,20 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        getByName("debug") {
+            // 团队共享 debug keystore：所有人编译 SHA-1 一致，Google 登录免逐机注册 Cloud。
+            // 标准密码、非敏感，仅供开发 / 内部测试包；正式发布须另建 release keystore（勿入库）。
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            // 正式发布前请替换为独立 release 签名；当前用共享 debug 签名以便 `flutter run --release` 与内测一致。
             signingConfig = signingConfigs.getByName("debug")
         }
     }
