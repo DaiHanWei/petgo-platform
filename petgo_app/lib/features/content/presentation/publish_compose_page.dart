@@ -632,7 +632,8 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   Widget _addCell(PublishController controller, AppLocalizations l10n) {
     return GestureDetector(
       key: const ValueKey('publishAddImage'),
-      onTap: () => _pickImageSource(controller, l10n),
+      // 处理中禁用，避免连点触发多次 _addImage 提前撤占位/闪烁。
+      onTap: _addingImage ? null : () => _pickImageSource(controller, l10n),
       child: CustomPaint(
         painter: DashedRRectPainter(color: AppColors.dashedViolet, radius: 9, dash: 5, gap: 4),
         child: Container(
