@@ -5,6 +5,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/config/legal_urls.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
@@ -12,12 +13,6 @@ import '../data/auth_repository.dart';
 import '../domain/auth_routing.dart';
 import '../domain/auth_state.dart';
 import '../domain/login_response.dart';
-
-/// 法务 H5 链接（env 注入，默认占位；正式页本体由运营/法务产出）。
-const String _kTermsUrl =
-    String.fromEnvironment('PETGO_TERMS_URL', defaultValue: 'https://petgo.example/terms');
-const String _kPrivacyUrl =
-    String.fromEnvironment('PETGO_PRIVACY_URL', defaultValue: 'https://petgo.example/privacy');
 
 /// 登录入口页（Story 1.3/1.4 · login.html 1:1 还原）。
 ///
@@ -180,8 +175,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   terms: l10n.termsOfService,
                   and: l10n.loginAgreementAnd,
                   privacy: l10n.privacyPolicy,
-                  onTerms: () => _open(_kTermsUrl),
-                  onPrivacy: () => _open(_kPrivacyUrl),
+                  onTerms: () => _open(kTermsUrl),
+                  onPrivacy: () => _open(kPrivacyUrl),
                 ),
                 const SizedBox(height: 12),
               ],
