@@ -6,6 +6,7 @@ import '../../../core/theme/rounded.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../features/auth/domain/auth_state.dart';
+import '../../../features/me/data/my_posts_repository.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
@@ -324,8 +325,9 @@ class _DetailScaffold extends ConsumerWidget {
     if (!ok) return;
     try {
       await ref.read(detailRepositoryProvider).deleteContent(detail.id);
-      // Feed 同步移除（重拉，软删帖 deleted_at 非空被过滤）。
+      // Feed + 「我的发布」同步移除（重拉；与发布流程同款失效，否则返回 Me 页仍显旧帖）。
       ref.invalidate(feedProvider);
+      ref.invalidate(myPostsProvider);
       if (context.mounted) Navigator.of(context).maybePop();
     } catch (_) {
       if (context.mounted) {

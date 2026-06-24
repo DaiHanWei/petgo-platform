@@ -28,9 +28,9 @@ void main() {
     expect(find.byKey(const ValueKey('triageEntryAI')), findsOneWidget);
     expect(find.byKey(const ValueKey('triageEntryVet')), findsOneWidget);
     // 双入口标题 + CTA（换肤后印尼语文案）。
-    expect(find.text('Tanya AI (Triase)'), findsOneWidget);
+    expect(find.text('Cek Gejala'), findsOneWidget);
     expect(find.text('Chat Dokter Hewan'), findsOneWidget);
-    expect(find.text('Mulai triase'), findsOneWidget);
+    expect(find.text('Mulai Cek'), findsOneWidget);
     expect(find.text('Mulai konsultasi'), findsOneWidget);
   });
 

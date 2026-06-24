@@ -141,7 +141,6 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
           }
           return ProfileCreatedCelebrationPage(
             petName: created.name,
-            cardToken: created.cardToken,
             avatarUrl: created.avatarUrl,
             onStartExplore: () async {
               // FR-22D 建档时机（庆祝页后、进首页前）：触发推送权限闸门（Story 6.4）。

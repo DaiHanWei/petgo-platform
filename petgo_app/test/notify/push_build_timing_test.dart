@@ -37,7 +37,6 @@ void main() {
           builder: (c, s) => Consumer(builder: (ctx, ref, _) {
             return ProfileCreatedCelebrationPage(
               petName: 'Momo',
-              cardToken: 'tok',
               avatarUrl: null,
               onStartExplore: () async {
                 // 与 app_router /profile/created 同构：建档时机锚点 = CTA 后、go home 前。
