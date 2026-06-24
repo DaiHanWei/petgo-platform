@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/im/im_service.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
@@ -19,26 +22,89 @@ class VetActivePage extends ConsumerStatefulWidget {
 }
 
 class _VetActivePageState extends ConsumerState<VetActivePage> {
-  late Future<List<VetActiveItem>> _items;
+  List<VetActiveItem>? _items; // null = 首屏加载中
+  bool _loading = true;
+
+  // 入站消息信号 → 实时刷新未读角标（兽医停在本 Tab 时收到机主新消息即跳数）。
+  StreamSubscription<void>? _inboundSub;
+  bool _refreshing = false;
 
   @override
   void initState() {
     super.initState();
-    _reload();
+    _reloadAll();
+    // 工作台 IndexedStack 下本页常驻：跨 Tab 也能在收到消息时后台刷新角标。
+    _inboundSub = ref.read(imServiceProvider).inboundSignals.listen((_) => _refreshUnread());
   }
 
-  void _reload() {
-    _items = ref.read(vetRepositoryProvider).activeSessions();
+  @override
+  void dispose() {
+    _inboundSub?.cancel();
+    super.dispose();
+  }
+
+  /// 全量重载：后端取进行中列表 → 登录 IM → 合并未读 / 最近消息。
+  Future<void> _reloadAll() async {
+    setState(() => _loading = true);
+    List<VetActiveItem> items;
+    try {
+      items = await ref.read(vetRepositoryProvider).activeSessions();
+    } catch (_) {
+      items = const [];
+    }
+    items = await _mergeUnread(items);
+    if (mounted) {
+      setState(() {
+        _items = items;
+        _loading = false;
+      });
+    }
+  }
+
+  /// 仅刷新未读（不打后端）：用当前列表对端 ID 回查 IM 会话摘要，合并跳数。
+  Future<void> _refreshUnread() async {
+    final current = _items;
+    if (current == null || current.isEmpty || _refreshing) return;
+    _refreshing = true;
+    try {
+      final merged = await _mergeUnread(current);
+      if (mounted) setState(() => _items = merged);
+    } finally {
+      _refreshing = false;
+    }
+  }
+
+  /// 登录 IM（兽医恒可签）后按 userId 拼对端账号回查未读 + 最近消息，合并进卡片。
+  /// IM 任一步失败 → 原样返回（卡片不显角标，优雅降级，不阻塞列表）。
+  Future<List<VetActiveItem>> _mergeUnread(List<VetActiveItem> items) async {
+    if (items.isEmpty) return items;
+    final im = ref.read(imServiceProvider);
+    try {
+      await im.loginIfNeeded();
+      final summaries = await im.conversationSummaries(items.map((e) => e.imPeerId).toList());
+      if (summaries.isEmpty) return items;
+      return items.map((e) {
+        final s = summaries[e.imPeerId];
+        if (s == null) return e;
+        return e.copyWith(unread: s.unread, lastMessage: s.lastMessage ?? e.lastMessage);
+      }).toList();
+    } catch (_) {
+      return items;
+    }
   }
 
   Future<void> _open(VetActiveItem item) async {
+    // 进会话即清该对端未读（标已读），返回后全量重载纠偏。
+    await ref.read(imServiceProvider).markRead(item.imPeerId);
+    if (!mounted) return;
     await context.push('/vet/conversation/${item.sessionId}');
-    if (mounted) setState(_reload);
+    if (mounted) _reloadAll();
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final items = _items;
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.vetTabActive),
@@ -46,28 +112,23 @@ class _VetActivePageState extends ConsumerState<VetActivePage> {
           IconButton(
             key: const ValueKey('vetActiveRefresh'),
             icon: const Icon(Icons.refresh),
-            onPressed: () => setState(_reload),
+            onPressed: _reloadAll,
           ),
         ],
       ),
-      body: FutureBuilder<List<VetActiveItem>>(
-        future: _items,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final items = snapshot.data ?? const [];
-          if (items.isEmpty) {
-            return VetEmptyState(icon: Icons.chat_outlined, message: l10n.vetActiveEmpty);
-          }
-          return ListView.separated(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            itemCount: items.length,
-            separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
-            itemBuilder: (ctx, i) => _ActiveCard(item: items[i], onTap: () => _open(items[i])),
-          );
-        },
-      ),
+      body: _loading && items == null
+          ? const Center(child: CircularProgressIndicator())
+          : (items == null || items.isEmpty)
+              ? VetEmptyState(icon: Icons.chat_outlined, message: l10n.vetActiveEmpty)
+              : RefreshIndicator(
+                  onRefresh: _reloadAll,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    itemCount: items.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
+                    itemBuilder: (ctx, i) => _ActiveCard(item: items[i], onTap: () => _open(items[i])),
+                  ),
+                ),
     );
   }
 }
@@ -129,8 +190,8 @@ class _ActiveCard extends StatelessWidget {
                     Text('🐾 ${item.petName}',
                         style: AppTypography.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
                   ],
-                  // TODO(IM-SDK, L2 · 决策 C6): unread/lastMessage 后端列表不下发，需从腾讯 IM SDK
-                  //   会话摘要补填后传入 VetActiveItem；当前 mock 离线态有占位、真机无 IM 数据时隐藏降级。
+                  // unread/lastMessage 由 active 页登录 IM 后按 userId 回查会话摘要合并（后端不下发）；
+                  // 无 IM 数据 / 未登录时隐藏降级。
                   if (item.lastMessage.isNotEmpty) ...[
                     const SizedBox(height: 2),
                     Text(

@@ -7,6 +7,7 @@ import 'package:tencent_cloud_chat_sdk/enum/V2TimAdvancedMsgListener.dart';
 import 'package:tencent_cloud_chat_sdk/enum/V2TimSDKListener.dart';
 import 'package:tencent_cloud_chat_sdk/enum/log_level_enum.dart';
 import 'package:tencent_cloud_chat_sdk/enum/message_elem_type.dart';
+import 'package:tencent_cloud_chat_sdk/models/v2_tim_conversation.dart';
 import 'package:tencent_cloud_chat_sdk/models/v2_tim_message.dart';
 import 'package:tencent_cloud_chat_sdk/tencent_im_sdk_plugin.dart';
 
@@ -24,6 +25,17 @@ class ImMessage {
 
   bool get isMine => who == 'me';
   bool get isSystem => who == 'system';
+}
+
+/// 一条会话的未读摘要（兽医工作台「进行中」卡角标用）。来自腾讯 IM SDK 会话对象。
+@immutable
+class ImConversationSummary {
+  const ImConversationSummary({required this.unread, this.lastMessage});
+
+  final int unread;
+  final String? lastMessage; // 最近一条消息预览（图片消息折成占位符）
+
+  static const empty = ImConversationSummary(unread: 0);
 }
 
 /// 取自 `/im/usersig` 的登录凭证（客户端 SDK 登录 IM 用）。SecretKey 绝不下发，此处只有短时 UserSig。
@@ -62,6 +74,16 @@ abstract interface class ImService {
 
   /// 订阅与某对端（[peerId]）的实时消息流（取消订阅即离开）。
   Stream<ImMessage> onMessages(String peerId);
+
+  /// 任意入站消息的轻量信号流（不带内容）——列表角标实时刷新触发用。
+  Stream<void> get inboundSignals;
+
+  /// 批量取若干对端会话的未读数 + 最近消息预览（工作台列表角标）。
+  /// 未登录 / 失败 / 无会话 → 缺省返回空 Map，调用方按缺省优雅降级（不显角标）。
+  Future<Map<String, ImConversationSummary>> conversationSummaries(List<String> peerIds);
+
+  /// 标记与某对端的会话为已读（进入会话即清未读角标）。失败静默。
+  Future<void> markRead(String peerId);
 
   /// 拉某对端最近历史消息（进入会话补全上文）。失败返回空表，不崩。
   Future<List<ImMessage>> loadHistory(String peerId, {int count});
@@ -187,6 +209,56 @@ class LiveImService implements ImService {
   Stream<ImMessage> onMessages(String peerId) {
     // C2C：无论收发，V2TimMessage.userID 恒为对端 userID。按对端过滤本会话消息。
     return _incoming.stream.where((m) => m.userID == peerId).map(_toImMessage);
+  }
+
+  @override
+  Stream<void> get inboundSignals => _incoming.stream.map((_) {});
+
+  @override
+  Future<Map<String, ImConversationSummary>> conversationSummaries(List<String> peerIds) async {
+    if (peerIds.isEmpty) return const {};
+    try {
+      // C2C 会话 ID 形如 c2c_<peerUserID>；按对端账号批量回查未读 + 最近消息。
+      final res = await TencentImSDKPlugin.v2TIMManager
+          .getConversationManager()
+          .getConversationListByConversationIds(
+            conversationIDList: peerIds.map((p) => 'c2c_$p').toList(),
+          );
+      final list = res.data ?? const <V2TimConversation?>[];
+      final out = <String, ImConversationSummary>{};
+      for (final c in list) {
+        final peer = c?.userID;
+        if (peer == null) continue;
+        out[peer] = ImConversationSummary(
+          unread: c?.unreadCount ?? 0,
+          lastMessage: _previewOf(c?.lastMessage),
+        );
+      }
+      return out;
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  @override
+  Future<void> markRead(String peerId) async {
+    try {
+      // cleanTimestamp/cleanSequence 传 0 → 清空该会话全部未读（markC2CMessageAsRead 已弃用）。
+      await TencentImSDKPlugin.v2TIMManager.getConversationManager().cleanConversationUnreadMessageCount(
+        conversationID: 'c2c_$peerId',
+        cleanTimestamp: 0,
+        cleanSequence: 0,
+      );
+    } catch (_) {
+      // 标已读失败不影响会话本身（角标下次拉取仍会纠偏）。
+    }
+  }
+
+  /// 最近一条消息预览：文字直取，图片折占位符，其它类型留空。
+  String? _previewOf(V2TimMessage? m) {
+    if (m == null) return null;
+    if (m.elemType == MessageElemType.V2TIM_ELEM_TYPE_IMAGE) return '[📷]';
+    return m.textElem?.text;
   }
 
   @override

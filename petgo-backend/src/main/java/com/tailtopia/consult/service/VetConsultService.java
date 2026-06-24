@@ -88,23 +88,36 @@ public class VetConsultService {
                 .toList();
     }
 
-    /** 工作台「进行中」Tab：兽医活跃态（IN_PROGRESS/PENDING_CLOSE）会话卡片（批量富化宠物名）。 */
+    /**
+     * 工作台「进行中」Tab：兽医活跃态会话卡片（批量富化宠物名）。
+     *
+     * <p><b>仅 {@code IN_PROGRESS}</b>——与 {@link SessionStatus#ACTIVE} 口径一致：兽医结束后 PENDING_CLOSE
+     * 不再算「进行中」（兽医侧已无法续聊：会话页仅 IN_PROGRESS 登录 IM、结束钮也仅 IN_PROGRESS 显示），
+     * 归入 {@link #historyList}。若仍含 PENDING_CLOSE，会与「用户结束后名额释放、可发起新咨询」叠加 ——
+     * 同一用户同时出现 PENDING_CLOSE + 新 IN_PROGRESS 两张卡（重复 item bug）。
+     */
     @Transactional(readOnly = true)
     public List<VetActiveItem> inProgressList(long vetId) {
         List<ConsultSession> sessions = repo.findByVetIdAndStatusIn(
-                vetId, List.of(SessionStatus.IN_PROGRESS, SessionStatus.PENDING_CLOSE));
+                vetId, List.of(SessionStatus.IN_PROGRESS));
         Identities ids = resolveIdentities(sessions);
         return sessions.stream()
-                .map(s -> new VetActiveItem(s.getId(), s.getSource().name(), ids.pet(s.getUserId()).name(),
-                        ids.handle(s.getUserId()), ids.avatar(s.getUserId())))
+                .map(s -> new VetActiveItem(s.getId(), s.getUserId(), s.getSource().name(),
+                        ids.pet(s.getUserId()).name(), ids.handle(s.getUserId()), ids.avatar(s.getUserId())))
                 .toList();
     }
 
-    /** 工作台「历史」Tab：兽医终态（CLOSED/INTERRUPTED）会话 + 评分摘要，按终态时间倒序（批量富化）。 */
+    /**
+     * 工作台「历史」Tab：兽医已结束会话 + 评分摘要，按终态时间倒序（批量富化）。
+     *
+     * <p>含 {@code PENDING_CLOSE}（兽医已提交诊断、30min 评分门窗口）——与用户侧
+     * {@code ConsultHistoryService} 口径一致：结束即归历史、不再占「进行中」。兽医侧此态只读
+     * （诊断已定格、无法续聊），停在历史供回看。
+     */
     @Transactional(readOnly = true)
     public List<VetHistoryItem> historyList(long vetId) {
         List<ConsultSession> sessions = repo.findByVetIdAndStatusInOrderByCreatedAtDesc(
-                vetId, List.of(SessionStatus.CLOSED, SessionStatus.INTERRUPTED));
+                vetId, List.of(SessionStatus.PENDING_CLOSE, SessionStatus.CLOSED, SessionStatus.INTERRUPTED));
         Identities ids = resolveIdentities(sessions);
         // 评分批量取（一次拿全该兽医的评分，按 sessionId 建 Map），避免逐条 findBySessionId。
         Map<Long, ConsultRating> ratingBySession = ratings.findByVetIdOrderByCreatedAtDesc(vetId).stream()

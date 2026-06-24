@@ -35,6 +35,16 @@ class _FakeImService implements ImService {
   Stream<ImMessage> onMessages(String peerId) => _incoming.stream;
 
   @override
+  Stream<void> get inboundSignals => _incoming.stream.map((_) {});
+
+  @override
+  Future<Map<String, ImConversationSummary>> conversationSummaries(List<String> peerIds) async =>
+      const {};
+
+  @override
+  Future<void> markRead(String peerId) async {}
+
+  @override
   Future<List<ImMessage>> loadHistory(String peerId, {int count = 20}) async => const [];
 
   void emitPeer(String text) => _incoming.add(ImMessage(who: 'peer', text: text));

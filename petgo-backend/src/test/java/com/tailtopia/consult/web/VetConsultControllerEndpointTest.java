@@ -381,7 +381,30 @@ class VetConsultControllerEndpointTest extends ApiIntegrationTest {
                         .header("Authorization", vetBearer(vet.getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.sessionId == " + s.getId() + ")].petName")
-                        .value(org.hamcrest.Matchers.hasItem("Mochi")));
+                        .value(org.hamcrest.Matchers.hasItem("Mochi")))
+                // 客户端按 userId 拼 IM 对端账号回查未读，必须下发。
+                .andExpect(jsonPath("$[?(@.sessionId == " + s.getId() + ")].userId")
+                        .value(org.hamcrest.Matchers.hasItem(user.getId().intValue())));
+    }
+
+    /**
+     * Bug 回归：兽医结束（PENDING_CLOSE）后不再算「进行中」——否则同一用户发起新咨询后，
+     * 会与新 IN_PROGRESS 卡叠成两条（重复 item）。PENDING_CLOSE 归历史，进行中只剩新会话。
+     */
+    @Test
+    void inProgress_excludesPendingClose_noDuplicatePerUser() throws Exception {
+        VetAccount vet = vets.newActiveVet("去重医生");
+        User user = newUser();
+        ConsultSession pendingClose = vets.newPendingCloseSession(user.getId(), vet.getId());
+        ConsultSession active = vets.newInProgressSession(user.getId(), vet.getId());
+
+        mvc.perform(get("/api/v1/vet/consult-sessions/in-progress")
+                        .header("Authorization", vetBearer(vet.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.sessionId == " + active.getId() + ")]")
+                        .value(org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$[?(@.sessionId == " + pendingClose.getId() + ")]")
+                        .value(org.hamcrest.Matchers.empty()));
     }
 
     @Test
@@ -416,6 +439,20 @@ class VetConsultControllerEndpointTest extends ApiIntegrationTest {
                         .value(org.hamcrest.Matchers.hasItem(5)))
                 .andExpect(jsonPath("$[?(@.sessionId == " + s.getId() + ")].reviewText")
                         .value(org.hamcrest.Matchers.hasItem("讲解很清楚")));
+    }
+
+    /** Bug 回归：PENDING_CLOSE（兽医已结束、评分门窗口）归入兽医历史，终态标记 PENDING_CLOSE。 */
+    @Test
+    void history_includesPendingClose() throws Exception {
+        VetAccount vet = vets.newActiveVet("待评分医生");
+        User user = newUser();
+        ConsultSession s = vets.newPendingCloseSession(user.getId(), vet.getId());
+
+        mvc.perform(get("/api/v1/vet/consult-sessions/history")
+                        .header("Authorization", vetBearer(vet.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.sessionId == " + s.getId() + ")].terminalState")
+                        .value(org.hamcrest.Matchers.hasItem("PENDING_CLOSE")));
     }
 
     @Test

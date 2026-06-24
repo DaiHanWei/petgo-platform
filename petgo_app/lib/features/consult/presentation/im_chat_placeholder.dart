@@ -84,9 +84,14 @@ class _ImChatPlaceholderState extends ConsumerState<ImChatPlaceholder> {
       if (!mounted) return;
       setState(() => _msgs.add(m));
       _scrollToEnd();
+      // 会话打开期间收到对端消息即标已读 → 工作台列表角标不残留。
+      _service!.markRead(peer);
     });
-    // 页面（consult/vet conversation）已驱动 loginIfNeeded；此处兜底再唤一次（幂等）后拉历史。
-    _service!.loginIfNeeded().then((_) => _loadHistory()).catchError((_) {
+    // 页面（consult/vet conversation）已驱动 loginIfNeeded；此处兜底再唤一次（幂等）后拉历史 + 进入即清未读。
+    _service!.loginIfNeeded().then((_) {
+      _service!.markRead(peer);
+      return _loadHistory();
+    }).catchError((_) {
       // 取 sig 403 / 网络失败：保留空壳，下次进入重试。
     });
   }
