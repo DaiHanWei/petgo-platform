@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -163,6 +164,29 @@ void main() {
     m.c.setEventDate(DateTime(2024, 5, 1, 13, 30));
     await m.c.publish(idempotencyKey: 'K', petId: 9);
     expect(m.repo.lastEventDate, DateTime(2024, 5, 1));
+  });
+
+  test('上传中禁止发布（即选即传期间发布按钮置灰）', () async {
+    final repo = _FakeRepo();
+    final gate = Completer<String>();
+    final c = PublishController(
+      repository: repo,
+      uploadOne: (b) => gate.future, // 挂起上传，模拟上传中
+    );
+    c.setText('hi');
+    expect(c.canPublish, isTrue); // 未加图，可发
+
+    c.addImage(bytes('img'));
+    final fut = c.uploadAll(); // 即选即传：进入 uploading（gate 未完成）
+    await Future<void>.value(); // 让 _upload 推进到 uploading 并 notify
+    expect(c.isUploading, isTrue);
+    expect(c.canPublish, isFalse); // 上传中禁发
+
+    gate.complete('https://cdn/img.jpg');
+    await fut;
+    expect(c.isUploading, isFalse);
+    expect(c.allUploaded, isTrue);
+    expect(c.canPublish, isTrue); // 传完恢复
   });
 
   test('字数实时计数与发布禁用', () {

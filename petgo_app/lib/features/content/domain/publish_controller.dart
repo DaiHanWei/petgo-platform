@@ -50,8 +50,15 @@ class PublishController extends ChangeNotifier {
   bool get allUploaded =>
       items.every((i) => i.status == ImageUploadStatus.success);
 
+  /// 是否有图片正在上传（即选即传期间）。上传中禁止发布——发布按钮置灰。
+  bool get isUploading =>
+      items.any((i) => i.status == ImageUploadStatus.uploading);
+
   bool get canPublish =>
-      !publishing && textWithinLimit && (text.trim().isNotEmpty || items.isNotEmpty);
+      !publishing &&
+      !isUploading &&
+      textWithinLimit &&
+      (text.trim().isNotEmpty || items.isNotEmpty);
 
   void setType(ContentType t) {
     type = t;

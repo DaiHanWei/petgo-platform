@@ -125,7 +125,10 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     final bytes = await ref
         .read(mediaUploadUseCaseProvider)
         .pickAndProcess(source: source, context: context);
-    if (bytes != null) controller.addImage(bytes);
+    // 即选即传：缩略图立刻出现，其上盖 loading；上传期间发布按钮置灰（canPublish 含 !isUploading）。
+    if (bytes != null && controller.addImage(bytes)) {
+      await controller.uploadAll();
+    }
   }
 
   Future<void> _publish(PublishController controller, AppLocalizations l10n) async {
@@ -633,8 +636,24 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
           borderRadius: BorderRadius.circular(9),
           child: Image.memory(item.bytes, fit: BoxFit.cover),
         ),
-        if (item.status == ImageUploadStatus.uploading)
-          const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+        // 上传中（含刚加入的 pending 瞬态）：整格盖半透明遮罩 + 居中 spinner。
+        if (item.status == ImageUploadStatus.uploading ||
+            item.status == ImageUploadStatus.pending)
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.38),
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: const Center(
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                ),
+              ),
+            ),
+          ),
         if (item.status == ImageUploadStatus.failed)
           const Positioned(
               right: 4, top: 4, child: Icon(Icons.error, color: Colors.red, size: 18)),
