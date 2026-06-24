@@ -4,7 +4,10 @@ import '../data/detail_repository.dart';
 import '../domain/content_detail.dart';
 
 /// 内容详情（按 id 的 family）。AsyncValue 三态：loading 骨架 / data / error（多态分类）。
-final detailProvider = FutureProvider.family<ContentDetail, int>(
+///
+/// autoDispose：离开详情页即弃缓存，重进重新拉取——否则点赞/评论变化后重进读到旧缓存
+/// （如点赞后返回列表再进入，liked 显示丢失）。
+final detailProvider = FutureProvider.autoDispose.family<ContentDetail, int>(
   (ref, id) => ref.read(detailRepositoryProvider).getDetail(id),
 );
 
