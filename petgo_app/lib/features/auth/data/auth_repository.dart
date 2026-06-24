@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
@@ -70,6 +72,33 @@ class AuthRepository {
     final login = LoginResponse.fromJson(resp.data!);
     await tokenStore.saveTokens(access: login.accessToken, refresh: login.refreshToken);
     return login;
+  }
+
+  /// 解码本地 access token 的 `role` claim（不验签，仅冷启动本地路由分流用；权威校验仍走后端）。
+  /// 返回 'USER' / 'VET' / 'ADMIN' / null。
+  Future<String?> readTokenRole() async {
+    final access = await tokenStore.readAccess();
+    if (access == null) return null;
+    try {
+      final parts = access.split('.');
+      if (parts.length < 2) return null;
+      final payload = utf8.decode(base64Url.decode(base64Url.normalize(parts[1])));
+      final role = (jsonDecode(payload) as Map<String, dynamic>)['role'];
+      return role is String ? role : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 冷启动恢复兽医会话：校验 `/vet/me`（access 过期由拦截器续期重放）；成功 true，失败/无 token false。
+  Future<bool> restoreVetSession() async {
+    if (await tokenStore.readAccess() == null) return false;
+    try {
+      final resp = await dio.get<Map<String, dynamic>>(ApiPaths.vetMe);
+      return resp.data != null;
+    } on DioException {
+      return false;
+    }
   }
 
   /// 冷启动恢复会话：本地有 access token 则调 `/me` 验证并返回 profile；

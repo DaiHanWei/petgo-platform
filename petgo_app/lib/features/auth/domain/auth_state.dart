@@ -28,18 +28,35 @@ class AuthState {
 
 /// 登录态管理。副作用（令牌读写）在 repository，本 Notifier 仅持有不可变态。
 class AuthController extends Notifier<AuthState> {
+  /// 冷启动恢复任务（splash 据此等待，按真实角色精确分流，避免先进 home 再跳工作台的闪屏）。
+  Future<void>? _restoreFuture;
+
   @override
   AuthState build() {
     // 冷启动恢复会话（修复:登录态未跨重启持久）。fire-and-forget,先返回游客态,
     // restore 成功后异步切换到已登录/待引导态。
-    _restoreSession();
+    _restoreFuture = _restoreSession();
     return const AuthState.guest();
   }
 
-  /// 冷启动用本地 token 调 `/me` 恢复登录态;无 token / 失效则保持游客。
+  /// 等冷启动会话恢复结束（成功或失败均完成）。splash 用它在分流前确保 role 已就绪。
+  Future<void> ensureRestored() => _restoreFuture ?? Future<void>.value();
+
+  /// 冷启动按本地 token 的真实 role 恢复登录态;无 token / 失效则保持游客。
+  ///
+  /// 兽医(role=VET)走 `/vet/me` 校验 → 置 VET 态，router 据此直达兽医工作台(不再误进用户首页);
+  /// 用户走 `/me` 恢复 profile。**修复**:原先 role 写死 'USER'，致兽医冷启动被当成用户进 home。
   Future<void> _restoreSession() async {
     try {
-      final profile = await ref.read(authRepositoryProvider).restoreSession();
+      final repo = ref.read(authRepositoryProvider);
+      final role = await repo.readTokenRole();
+      if (role == 'VET') {
+        if (await repo.restoreVetSession()) {
+          state = const AuthState(status: AuthStatus.authenticated, role: 'VET');
+        }
+        return; // 兽医无 UserProfile / 无引导流
+      }
+      final profile = await repo.restoreSession();
       if (profile == null) return;
       state = AuthState(
         status: profile.onboardingCompleted

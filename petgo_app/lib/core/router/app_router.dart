@@ -65,13 +65,19 @@ const Set<String> _controlledLocations = {'/profile', '/triage', '/me', '/consul
 const String _devRoute = String.fromEnvironment('DEV_ROUTE');
 
 final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
+  // 登录态变化(尤其冷启动异步恢复完成)后让 redirect 重跑——否则兽医会话恢复晚于
+  // splash→home 跳转时不会被分流到工作台。
+  final authRefresh = ValueNotifier<int>(0);
+  ref.listen(authControllerProvider, (_, _) => authRefresh.value++);
+  ref.onDispose(authRefresh.dispose);
   return GoRouter(
     navigatorKey: rootNavigatorKey,
+    refreshListenable: authRefresh,
     initialLocation: kDebugMode && _devRoute.isNotEmpty ? _devRoute : '/splash',
     redirect: (context, state) {
       final auth = ref.read(authControllerProvider);
       final loc = state.matchedLocation;
-      // 启动屏（P-01）：永远先显示品牌过场，由 SplashPage 自行 go('/home') 再交回本 redirect 分流。
+      // 启动屏（P-01）：先显示品牌过场，由 SplashPage 完成时按角色直达（vet→工作台 / 其余→home）。
       if (loc == '/splash') return null;
       final isVetRoute = loc == '/vet' || loc.startsWith('/vet/');
       // 兽医登录态：禁止进入用户侧任何路由（反之亦然），命中越权重定向回各自首页（Story 5.1 F2 守卫）。
@@ -88,7 +94,22 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
     },
     routes: <RouteBase>[
       // 启动屏（P-01）：initialLocation；动画后转 /home。
-      GoRoute(path: '/splash', builder: (c, s) => const SplashPage()),
+      // 启动屏：动效结束时**等会话恢复完成再按角色直达**——兽医直进工作台，其余进 home。
+      // 避免「先渲染用户首页再跳兽医工作台」的闪屏（恢复慢则 3s 兜底后跳，余下交 redirect 收口）。
+      GoRoute(
+        path: '/splash',
+        builder: (c, s) => SplashPage(
+          onComplete: () async {
+            await ref
+                .read(authControllerProvider.notifier)
+                .ensureRestored()
+                .timeout(const Duration(seconds: 3), onTimeout: () {});
+            final ctx = rootNavigatorKey.currentContext;
+            if (ctx == null || !ctx.mounted) return;
+            ctx.go(ref.read(authControllerProvider).isVet ? '/vet/workbench' : '/home');
+          },
+        ),
+      ),
       GoRoute(path: '/login', builder: (c, s) => const LoginPage()),
       // 兽医账密登录 + 工作台壳（Story 5.1）。与用户侧 5-Tab 隔离：shell 外顶层路由。
       GoRoute(path: '/vet/login', builder: (c, s) => _vetScoped(const VetLoginPage())),
