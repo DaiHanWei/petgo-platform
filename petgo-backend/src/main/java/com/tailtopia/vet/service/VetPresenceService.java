@@ -46,6 +46,17 @@ public class VetPresenceService {
         goOnline(vetId);
     }
 
+    /**
+     * 活动续期（兜底）：兽医<b>已在线</b>时，凭工作台任意请求续期在线 TTL；<b>已离线则不复活</b>
+     * （显式 goOffline / 退后台停轮询后不被活动重新拉起）。解决「工作台在用但客户端心跳缺失 → 误判离线」
+     * （见 ApiAccessLoggingFilter 实证：兽医狂轮询 waiting 却 0 心跳）。
+     */
+    public void refreshIfOnline(long vetId) {
+        if (isOnline(vetId)) {
+            goOnline(vetId);
+        }
+    }
+
     /** 显式离线 / 登出 / 封禁(5.7) → 移出在线集合 + 清忙碌标记。 */
     public void goOffline(long vetId) {
         redis.opsForZSet().remove(ONLINE_ZSET, String.valueOf(vetId));
