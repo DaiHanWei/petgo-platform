@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -8,6 +9,7 @@ import '../../features/auth/domain/auth_state.dart';
 import '../../features/auth/domain/login_guide_controller.dart';
 import '../router/app_router.dart';
 import '../storage/secure_storage.dart';
+import 'api_log_interceptor.dart';
 import 'auth_interceptor.dart';
 
 /// 后端基址（运行时配置；env/--dart-define 注入，默认本地）。
@@ -49,6 +51,10 @@ final Provider<Dio> dioProvider = Provider<Dio>((ref) {
       return locale.languageCode == 'id' ? 'id' : 'en';
     },
   ));
+  // 接口日志（仅 debug 输出控制台，脱敏）。置于 auth 之后 → 打印的是最终带鉴权的请求与真实响应。
+  if (kDebugMode) {
+    dio.interceptors.add(ApiLogInterceptor());
+  }
   return dio;
 });
 

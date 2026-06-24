@@ -107,6 +107,22 @@ management:
     redis:
       enabled: true
 
+# 接口日志落盘（全环境）：全部应用日志（含 ApiAccessLoggingFilter 的 req+resp）写文件，按日期拆分。
+# 文件为 ECS JSON；按 log.logger=...ApiAccessLog 过滤即「接口访问日志」。脱敏由 LogSanitizer 保证（护栏）。
+# 生产容器请把 ${LOG_PATH} 指向挂载卷以持久化（否则随容器重建丢失）。
+logging:
+  file:
+    name: ${LOG_PATH:logs}/petgo.log
+  logback:
+    rollingpolicy:
+      file-name-pattern: ${LOG_PATH:logs}/petgo-%d{yyyy-MM-dd}.%i.log.gz
+      max-file-size: 50MB
+      max-history: 14
+      total-size-cap: 2GB
+  structured:
+    format:
+      file: ecs
+
 # OpenAPI 3.1 文档（springdoc）
 springdoc:
   api-docs:

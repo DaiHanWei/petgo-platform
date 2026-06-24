@@ -117,12 +117,14 @@ docker build -f Dockerfile.deploy -t $IMAGE:latest -t "$IMAGE:$TIMESTAMP" .
 # 重启容器
 docker stop $CONTAINER 2>/dev/null || true
 docker rm   $CONTAINER 2>/dev/null || true
+mkdir -p ~/petgo-server/logs
 docker run -d \\
   --name $CONTAINER \\
   --network $NETWORK \\
   -p 127.0.0.1:$HOST_PORT:8080 \\
   --restart unless-stopped \\
   --env-file ~/.env.petgo \\
+  -v ~/petgo-server/logs:/app/logs \\
   $IMAGE:latest
 
 # 等待健康检查（health 含 db + redis，UP 即三者连通）
