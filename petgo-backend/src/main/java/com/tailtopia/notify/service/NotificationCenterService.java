@@ -43,6 +43,12 @@ public class NotificationCenterService {
         String nextCursor = hasMore && !pageRows.isEmpty()
                 ? String.valueOf(pageRows.get(pageRows.size() - 1).getCreatedAt().toEpochMilli())
                 : null;
+        // 打开通知中心（首页）时以 DB 真实未读数校准 Redis 角标，自愈计数漂移
+        // （如计数器残留致角标>0 但列表空，或行被清而计数未减）。仅校准计数，不改已读态。
+        if (cursor == null) {
+            long actualUnread = repo.countByRecipientUserIdAndReadIsFalse(userId);
+            redis.opsForValue().set(unreadKey(userId), String.valueOf(actualUnread));
+        }
         return new NotificationPage(items, nextCursor, hasMore);
     }
 

@@ -28,6 +28,11 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
   void initState() {
     super.initState();
     _page = ref.read(notificationRepositoryProvider).list();
+    // list() 服务端按 DB 真实未读校准 Redis 角标（自愈计数漂移：角标>0 但列表空等）；
+    // 拉完刷新铃铛未读角标使其立即与真实一致。
+    _page.whenComplete(() {
+      if (mounted) ref.invalidate(unreadCountProvider);
+    });
   }
 
   Future<void> _onTap(NotificationItem item) async {
