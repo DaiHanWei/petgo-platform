@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tencent_cloud_chat_sdk/enum/V2TimAdvancedMsgListener.dart';
+import 'package:tencent_cloud_chat_sdk/enum/V2TimSDKListener.dart';
 import 'package:tencent_cloud_chat_sdk/enum/log_level_enum.dart';
 import 'package:tencent_cloud_chat_sdk/enum/message_elem_type.dart';
 import 'package:tencent_cloud_chat_sdk/models/v2_tim_message.dart';
@@ -74,6 +75,9 @@ abstract interface class ImService {
 class LiveImService implements ImService {
   LiveImService({required this.dio});
 
+  /// 腾讯 IM「未登录 / 被踢下线」错误码：发送时命中即重登一次重试。
+  static const int _kImNotLoggedIn = 6014;
+
   final Dio dio;
   ImCredential? _credential;
   bool _sdkInited = false;
@@ -92,6 +96,12 @@ class LiveImService implements ImService {
     final init = await TencentImSDKPlugin.v2TIMManager.initSDK(
       sdkAppID: sdkAppId,
       loglevel: LogLevelEnum.V2TIM_LOG_ERROR,
+      // 被踢下线 / UserSig 过期：清凭证（不在此处自动重登，避免双设备同账号互踢死循环）；
+      // 下次 loginIfNeeded（进会话）或发送遇 6014 时再重登恢复。
+      listener: V2TimSDKListener(
+        onKickedOffline: () => _credential = null,
+        onUserSigExpired: () => _credential = null,
+      ),
     );
     if (init.code != 0) {
       throw StateError('IM initSDK 失败: ${init.code}');
@@ -143,10 +153,7 @@ class LiveImService implements ImService {
     if (msg == null) {
       throw StateError('createTextMessage 失败: ${created.code}');
     }
-    final res = await mm.sendMessage(message: msg, receiver: peerId, groupID: '');
-    if (res.code != 0) {
-      throw StateError('sendMessage 失败: ${res.code}');
-    }
+    await _sendWithRelogin(msg, peerId, 'sendText');
   }
 
   @override
@@ -158,9 +165,21 @@ class LiveImService implements ImService {
     if (msg == null) {
       throw StateError('createImageMessage 失败: ${created.code}');
     }
-    final res = await mm.sendMessage(message: msg, receiver: peerId, groupID: '');
+    await _sendWithRelogin(msg, peerId, 'sendImage');
+  }
+
+  /// 发送 + 被踢自愈：遇 6014（未登录/被踢下线）→ 清凭证重登一次再重试，
+  /// 解决「被踢后发送恒失败、需重启 App」（Story 5.5 live）。
+  Future<void> _sendWithRelogin(V2TimMessage msg, String peerId, String label) async {
+    final mm = TencentImSDKPlugin.v2TIMManager.getMessageManager();
+    var res = await mm.sendMessage(message: msg, receiver: peerId, groupID: '');
+    if (res.code == _kImNotLoggedIn) {
+      _credential = null; // 强制下次 login 真正执行（绕过幂等 guard）
+      await loginIfNeeded();
+      res = await mm.sendMessage(message: msg, receiver: peerId, groupID: '');
+    }
     if (res.code != 0) {
-      throw StateError('sendMessage(image) 失败: ${res.code}');
+      throw StateError('$label 失败: ${res.code}');
     }
   }
 
