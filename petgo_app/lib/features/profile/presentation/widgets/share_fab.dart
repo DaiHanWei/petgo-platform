@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../core/theme/colors.dart';
 
@@ -106,7 +107,14 @@ class _ShareFabState extends State<ShareFab> with SingleTickerProviderStateMixin
             clipBehavior: Clip.antiAlias,
             child: InkWell(
               onTap: widget.onPressed,
-              child: const Icon(Icons.ios_share_rounded, color: AppColors.onAccent),
+              child: Center(
+                child: SvgPicture.asset(
+                  'assets/brand/ic_link.svg',
+                  width: 24,
+                  height: 24,
+                  colorFilter: const ColorFilter.mode(AppColors.onAccent, BlendMode.srcIn),
+                ),
+              ),
             ),
           ),
         ),

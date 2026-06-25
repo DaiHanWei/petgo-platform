@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
@@ -221,12 +222,19 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
             height: 38,
             alignment: Alignment.center,
             decoration: BoxDecoration(
+              color: AppColors.card,
               borderRadius: BorderRadius.circular(11),
+              // 原型 .ibtn 阴影：0 2px 8px rgba(22,34,51,.07)（蓝灰，非棕）。
               boxShadow: const [
-                BoxShadow(color: Color(0x122B2A27), offset: Offset(0, 2), blurRadius: 8),
+                BoxShadow(color: Color(0x12162233), offset: Offset(0, 2), blurRadius: 8),
               ],
             ),
-            child: const Icon(Icons.edit_outlined, size: 18, color: AppColors.ink),
+            child: SvgPicture.asset(
+              'assets/brand/ic_edit.svg',
+              width: 18,
+              height: 18,
+              colorFilter: const ColorFilter.mode(AppColors.ink, BlendMode.srcIn),
+            ),
           ),
         ),
       );
