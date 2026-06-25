@@ -436,10 +436,17 @@ class _TimelineView extends ConsumerWidget {
             tiles.add(HealthEventTile(
                 item: item, firstLabel: i == debutHealth ? l10n.growthFirstHealthEvent : null));
           } else {
-            tiles.add(HappyMomentTile(
-                item: item,
-                index: happyIdx++,
-                firstLabel: i == debutHappy ? l10n.growthFirstHappyMoment : null));
+            // 快乐时刻 → FR-28 内容详情（与 day_detail 一致：postId 为空不可点）。
+            tiles.add(GestureDetector(
+              key: ValueKey('timelineItem_${item.postId}'),
+              onTap: item.postId == null
+                  ? null
+                  : () => context.push('/content/${item.postId}'),
+              child: HappyMomentTile(
+                  item: item,
+                  index: happyIdx++,
+                  firstLabel: i == debutHappy ? l10n.growthFirstHappyMoment : null),
+            ));
           }
         }
         return Column(crossAxisAlignment: CrossAxisAlignment.start, children: tiles);
