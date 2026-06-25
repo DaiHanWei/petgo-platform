@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tailtopia/features/profile/domain/card_link.dart';
 import 'package:tailtopia/features/profile/domain/profile_created_flow.dart';
-import 'package:tailtopia/features/profile/domain/share_service.dart';
 import 'package:tailtopia/features/profile/presentation/profile_created_celebration_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
@@ -27,57 +24,44 @@ void main() {
   Future<void> pumpCelebration(
     WidgetTester tester, {
     required Future<void> Function() onStartExplore,
-    required ShareFn shareFn,
   }) async {
-    await tester.pumpWidget(ProviderScope(
-      overrides: [shareServiceProvider.overrideWithValue(shareFn)],
-      child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: ProfileCreatedCelebrationPage(
-          petName: 'Momo',
-          cardToken: 'tok123',
-          avatarUrl: null,
-          onStartExplore: onStartExplore,
-        ),
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: ProfileCreatedCelebrationPage(
+        petName: 'Momo',
+        avatarUrl: null,
+        onStartExplore: onStartExplore,
       ),
     ));
     await tester.pumpAndSettle();
   }
 
-  testWidgets('AC4: 庆祝页渲染（头像/名字/文案/主副双 CTA）', (tester) async {
-    await pumpCelebration(tester, onStartExplore: () async {}, shareFn: (_) async {});
+  testWidgets('AC4: 庆祝页渲染（头像/问候/里程碑卡/主次双 CTA，对齐 pet-success）', (tester) async {
+    await pumpCelebration(tester, onStartExplore: () async {});
 
     expect(find.byKey(const ValueKey('celebrationAvatar')), findsOneWidget);
-    expect(find.text('Momo'), findsOneWidget);
-    expect(find.text("Momo's very own profile is ready! 🎉"), findsOneWidget);
-    expect(find.byKey(const ValueKey('celebrationStartExplore')), findsOneWidget);
-    expect(find.byKey(const ValueKey('celebrationShare')), findsOneWidget);
+    expect(find.text('Hello, Momo! 🎉'), findsOneWidget); // 问候（en 默认 locale）
+    expect(find.text('First milestone unlocked!'), findsOneWidget); // 里程碑解锁卡
+    expect(find.byKey(const ValueKey('celebrationStartExplore')), findsOneWidget); // 主 CTA
+    expect(find.byKey(const ValueKey('celebrationViewProfile')), findsOneWidget); // 次 CTA
   });
 
-  testWidgets('AC4: 主 CTA「开始探索」→ 触发推送/进首页钩子', (tester) async {
+  testWidgets('AC4: 主 CTA → 触发推送/进首页钩子', (tester) async {
     var started = false;
-    await pumpCelebration(
-      tester,
-      onStartExplore: () async => started = true,
-      shareFn: (_) async {},
-    );
+    await pumpCelebration(tester, onStartExplore: () async => started = true);
 
     await tester.tap(find.byKey(const ValueKey('celebrationStartExplore')));
     await tester.pumpAndSettle();
     expect(started, isTrue);
   });
 
-  testWidgets('AC4: 副 CTA「分享宠物名片」→ 调系统分享传 FR-14 名片链接', (tester) async {
-    String? shared;
-    await pumpCelebration(
-      tester,
-      onStartExplore: () async {},
-      shareFn: (text) async => shared = text,
-    );
+  testWidgets('AC4: 次 CTA「Lihat profil dulu」→ 同样进 App（共用 onStartExplore）', (tester) async {
+    var started = false;
+    await pumpCelebration(tester, onStartExplore: () async => started = true);
 
-    await tester.tap(find.byKey(const ValueKey('celebrationShare')));
+    await tester.tap(find.byKey(const ValueKey('celebrationViewProfile')));
     await tester.pumpAndSettle();
-    expect(shared, petCardShareUrl('tok123'));
+    expect(started, isTrue);
   });
 }

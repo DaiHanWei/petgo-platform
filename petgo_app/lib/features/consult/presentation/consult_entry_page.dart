@@ -247,24 +247,137 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
     );
   }
 
+  // 离线态（konsultasi-offline.html 1:1）：灰点状态条 + 紫渐变 AI 引导卡 + 营业时间卡。
   Widget _offline(AppLocalizations l10n) {
-    return Column(
+    return SingleChildScrollView(
       key: const ValueKey('consultOfflineState'),
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        const Icon(Icons.schedule, size: 48, color: AppColors.textTertiary),
-        const SizedBox(height: AppSpacing.md),
-        Text(l10n.consultNoVetOnline, style: AppTypography.title, textAlign: TextAlign.center),
-        const SizedBox(height: AppSpacing.sm),
-        Text(l10n.consultOfflineWindow, style: AppTypography.caption, textAlign: TextAlign.center),
-        const SizedBox(height: AppSpacing.section),
-        // 软引导：可点跳 AI 分诊，不强制（用户可留在本页）。
-        OutlinedButton(
-          key: const ValueKey('consultOfflineUseAi'),
-          onPressed: () => context.push('/triage/upload'),
-          child: Text(l10n.consultOfflineUseAi),
-        ),
-      ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ① 离线状态条（灰点 + 标题 + 预计恢复时间）。
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.line2,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.muted),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(l10n.consultNoVetOnline,
+                          style: const TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                      Text(l10n.consultOfflineWindow,
+                          style: const TextStyle(fontSize: 11, color: AppColors.ink2)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          // ② 紫渐变 AI 引导卡。
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [AppColors.mint, AppColors.mint500],
+              ),
+            ),
+            child: Column(
+              children: [
+                const Text('⚡', style: TextStyle(fontSize: 34)),
+                const SizedBox(height: 10),
+                Text(l10n.consultOfflineAiPrompt,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
+                const SizedBox(height: 6),
+                Text(l10n.consultOfflineAiBody,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        fontSize: 12, height: 1.55, color: Colors.white.withValues(alpha: 0.85))),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    key: const ValueKey('consultOfflineUseAi'),
+                    onPressed: () => context.push('/triage/upload'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: AppColors.mint,
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
+                      elevation: 0,
+                    ),
+                    child: Text('${l10n.consultOfflineUseAi} →',
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          // ③ 营业时间卡（JAM OPERASIONAL DOKTER）。
+          Text(l10n.consultHoursTitle,
+              style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.4,
+                  color: AppColors.ink2)),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2)),
+              ],
+            ),
+            child: Column(
+              children: [
+                _hourRow(l10n.consultHoursWeekday, '08:00 – 23:00', divider: true),
+                _hourRow(l10n.consultHoursWeekend, '09:00 – 21:00', divider: false),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _hourRow(String day, String time, {required bool divider}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: divider
+          ? const BoxDecoration(
+              border: Border(bottom: BorderSide(color: AppColors.line2)))
+          : null,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(day, style: const TextStyle(fontSize: 13, color: AppColors.ink)),
+          Text(time,
+              style: const TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink)),
+        ],
+      ),
     );
   }
 }
