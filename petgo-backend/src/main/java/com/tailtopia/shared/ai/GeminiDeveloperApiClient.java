@@ -139,7 +139,10 @@ public class GeminiDeveloperApiClient implements GeminiClient {
                 "contents", List.of(Map.of("parts", parts)),
                 "generationConfig", Map.of(
                         "responseMimeType", "application/json",
-                        "responseSchema", RESPONSE_SCHEMA));
+                        "responseSchema", RESPONSE_SCHEMA,
+                        // 关闭「思考(thinking)」：分诊是结构化分级，思考 token 占计费一半且对质量无明显帮助
+                        // （生产实测思考 token 常为输出的 5–13 倍）。thinkingBudget=0 在 2.5-flash 上直接禁用思考。
+                        "thinkingConfig", Map.of("thinkingBudget", 0)));
     }
 
     /**
