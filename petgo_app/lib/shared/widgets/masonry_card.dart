@@ -85,7 +85,7 @@ class MasonryCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 头部行：头像 + 昵称/时间 + 点赞 + 类型徽章（原型 .row）。
+                    // 头部行：头像 + 昵称/时间 + 类型徽章（原型 .row）。瀑布流不含点赞数（FR-17）。
                     GestureDetector(
                       onTap: (item.authorDeleted || onAuthorTap == null) ? null : onAuthorTap,
                       child: Row(

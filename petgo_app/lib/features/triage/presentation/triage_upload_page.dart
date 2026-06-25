@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
@@ -124,7 +125,7 @@ class _TriageUploadPageState extends ConsumerState<TriageUploadPage> {
     final l10n = AppLocalizations.of(context);
     final state = ref.watch(triageResultProvider);
     final phase = state.phase;
-    // 绿/黄结果页自带彩色 header（含返回），隐藏顶栏避免双返回 + 多余「AI Diagnosis」。
+    // 绿/黄结果页自带彩色 header（含返回），隐藏顶栏避免双返回 + 多余「Cek Gejala」标题。
     // 红色（沉浸层 + 摘要）与 表单/等待/降级态 仍保留顶栏返回。
     final greenYellowResult = phase == TriagePhase.done &&
         state.result?.dangerLevel != null &&
@@ -156,7 +157,8 @@ class _TriageUploadPageState extends ConsumerState<TriageUploadPage> {
             body: l10n.triageErrorBody,
             primaryLabel: l10n.triageResubmit,
             onPrimary: _submit,
-            softGuideLabel: l10n.triageContactVet, // 软引导兽医（占位，Epic 5 接通）
+            softGuideLabel: l10n.triageContactVet, // 软引导：失败降级时去在线兽医咨询
+            onSoftGuide: () => context.push('/consult'),
           ),
         TriagePhase.done => _buildResult(),
         TriagePhase.idle => _buildForm(l10n),
@@ -420,6 +422,7 @@ class _DegradedView extends StatelessWidget {
     required this.primaryLabel,
     required this.onPrimary,
     this.softGuideLabel,
+    this.onSoftGuide,
   });
 
   final String valueKey;
@@ -428,6 +431,7 @@ class _DegradedView extends StatelessWidget {
   final String primaryLabel;
   final VoidCallback onPrimary;
   final String? softGuideLabel;
+  final VoidCallback? onSoftGuide;
 
   @override
   Widget build(BuildContext context) {
@@ -452,7 +456,7 @@ class _DegradedView extends StatelessWidget {
               const SizedBox(height: AppSpacing.sm),
               TextButton(
                 key: const ValueKey('triageContactVet'),
-                onPressed: () {}, // 软引导兽医占位（Epic 5 接通在线兽医）
+                onPressed: onSoftGuide,
                 child: Text(softGuideLabel!),
               ),
             ],

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -102,6 +104,9 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   bool _reviewing = false;
   PublishResultArgs? _reviewingArgs;
 
+  /// 选图/处理中（拍照返回 → 解码压缩剥 EXIF）：网格显占位 loading，避免「拍完没反应」。
+  bool _addingImage = false;
+
   @override
   void dispose() {
     _textController.dispose();
@@ -122,10 +127,17 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
 
   Future<void> _addImage(PublishController controller,
       {MediaSource source = MediaSource.gallery}) async {
-    final bytes = await ref
-        .read(mediaUploadUseCaseProvider)
-        .pickAndProcess(source: source, context: context);
-    // 即选即传：缩略图立刻出现，其上盖 loading；上传期间发布按钮置灰（canPublish 含 !isUploading）。
+    setState(() => _addingImage = true);
+    Uint8List? bytes;
+    try {
+      bytes = await ref
+          .read(mediaUploadUseCaseProvider)
+          .pickAndProcess(source: source, context: context);
+    } finally {
+      // 处理结束即撤占位：成功则下方 item 入列接管显示，失败/取消则恢复添加格。
+      if (mounted) setState(() => _addingImage = false);
+    }
+    // 即选即传：item 入列即以 pending/uploading 态渲染（自带 loading 盖层）；上传期间发布按钮置灰。
     if (bytes != null && controller.addImage(bytes)) {
       await controller.uploadAll();
     }
@@ -592,6 +604,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
           crossAxisSpacing: 5,
           children: [
             if (showAdd) _addCell(controller, l10n),
+            if (_addingImage) _processingCell(),
             for (int i = 0; i < items.length; i++) _thumb(controller, i),
           ],
         ),
@@ -599,11 +612,28 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     );
   }
 
+  /// 选图/处理中的占位格：拍照返回后到缩略图出现前显示，给「正在加图」的即时反馈。
+  Widget _processingCell() {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.cream2,
+        borderRadius: BorderRadius.circular(9),
+      ),
+      alignment: Alignment.center,
+      child: const SizedBox(
+        width: 22,
+        height: 22,
+        child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.mint),
+      ),
+    );
+  }
+
   /// 虚线添加格（pcell-add）：2px 虚线紫描边 + 「＋」+ Tambah。
   Widget _addCell(PublishController controller, AppLocalizations l10n) {
     return GestureDetector(
       key: const ValueKey('publishAddImage'),
-      onTap: () => _pickImageSource(controller, l10n),
+      // 处理中禁用，避免连点触发多次 _addImage 提前撤占位/闪烁。
+      onTap: _addingImage ? null : () => _pickImageSource(controller, l10n),
       child: CustomPaint(
         painter: DashedRRectPainter(color: AppColors.dashedViolet, radius: 9, dash: 5, gap: 4),
         child: Container(
@@ -634,7 +664,8 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(9),
-          child: Image.memory(item.bytes, fit: BoxFit.cover),
+          // cacheWidth：按缩略尺寸解码，避免对整张大图解出全分辨率 bitmap（数十 MB×多张 → ANR）。
+          child: Image.memory(item.bytes, fit: BoxFit.cover, cacheWidth: 400),
         ),
         // 上传中（含刚加入的 pending 瞬态）：整格盖半透明遮罩 + 居中 spinner。
         if (item.status == ImageUploadStatus.uploading ||

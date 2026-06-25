@@ -37,28 +37,29 @@ class ConsultSessionContractTest {
     void fullSessionHasExactlyTheContractFields() {
         ConsultSessionResponse full = new ConsultSessionResponse(
                 7L, "IN_PROGRESS", "DIRECT", 9L, 12L, false, true,
-                "im-conv-1", "RATED", "VET_BANNED");
+                "im-conv-1", "RATED", "VET_BANNED", true);
 
         assertThat(wire(full).keySet()).isEqualTo(Set.of(
                 "id", "status", "source", "vetId", "waitingElapsedSeconds", "timedOut",
-                "alreadyActive", "imConversationId", "closedReason", "interruptedReason"));
+                "alreadyActive", "imConversationId", "closedReason", "interruptedReason", "rated"));
     }
 
     @Test
     void waitingSessionOmitsNullables() {
         // 排队中：vetId/imConversationId/closedReason/interruptedReason 均 null → NON_NULL 省略。
+        // rated 为原始 boolean（false 不省略），故仍在键集内。
         ConsultSessionResponse waiting = new ConsultSessionResponse(
-                7L, "WAITING", "DIRECT", null, 0L, false, false, null, null, null);
+                7L, "WAITING", "DIRECT", null, 0L, false, false, null, null, null, false);
 
         assertThat(wire(waiting).keySet()).isEqualTo(Set.of(
-                "id", "status", "source", "waitingElapsedSeconds", "timedOut", "alreadyActive"));
+                "id", "status", "source", "waitingElapsedSeconds", "timedOut", "alreadyActive", "rated"));
     }
 
     @Test
     void allSixStatesSerializeVerbatim() {
         for (String state : SIX_STATES) {
             ConsultSessionResponse r = new ConsultSessionResponse(
-                    1L, state, "DIRECT", null, 0L, false, false, null, null, null);
+                    1L, state, "DIRECT", null, 0L, false, false, null, null, null, false);
             assertThat(wire(r).get("status")).isEqualTo(state);
         }
     }

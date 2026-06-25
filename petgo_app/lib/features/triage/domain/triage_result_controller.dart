@@ -7,9 +7,12 @@ import 'triage_result_state.dart';
 final Provider<Duration> triagePollIntervalProvider =
     Provider<Duration>((ref) => const Duration(seconds: 1));
 
-/// 轮询总超时（≤15s SLA，NFR-1）。超时映射 4.3「分析时间较长」降级。
+/// 轮询总超时。超时映射 4.3「分析时间较长」降级。
+/// 原 15s（NFR-1 SLA，匹配 gemini-2.5-flash ~3-5s）；**临时提到 30s**：flash 全家 503 过载、
+/// 生产临时切 gemini-2.5-pro，pro 带思考 ~15-18s，15s 会卡在后端已成功前误报失败。
+/// flash 容量恢复、回退模型后应一并改回 15s。
 final Provider<Duration> triageTimeoutProvider =
-    Provider<Duration>((ref) => const Duration(seconds: 15));
+    Provider<Duration>((ref) => const Duration(seconds: 30));
 
 /// 分诊流程控制器（Story 4.1 · F2）。封装「提交 → 短轮询直到 DONE/FAILED/超时」，
 /// 仅薄客户端驱动契约；真正的上传页 / spinner / 三态卡 / 红色半屏在 4.3/4.4/4.5。

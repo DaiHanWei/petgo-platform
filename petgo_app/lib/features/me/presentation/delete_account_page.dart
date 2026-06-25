@@ -116,24 +116,7 @@ class _DeleteAccountPageState extends ConsumerState<DeleteAccountPage> {
                 ],
               ),
             ),
-            const SizedBox(height: 16),
-            // 冷静期提示（紫浅底 + info）。注：需后端实现 30 天软删宽限期，否则与立即删除行为不符。
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-              decoration:
-                  BoxDecoration(color: AppColors.mintTint, borderRadius: BorderRadius.circular(14)),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.info_outline, size: 16, color: AppColors.mint),
-                  const SizedBox(width: 11),
-                  Expanded(
-                    child: Text(l10n.deleteAccountCooldown,
-                        style: const TextStyle(fontSize: 12, height: 1.55, color: AppColors.ink)),
-                  ),
-                ],
-              ),
-            ),
+            // 注销为「立即级联删除/匿名化」（D1/D2），不展示 30 天冷静期，避免与不可撤销实现矛盾。
             const SizedBox(height: 22),
             // 输入本人邮箱确认（红边框 + 红光晕）。
             Text(l10n.deleteAccountEmailLabel,

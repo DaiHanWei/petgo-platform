@@ -1,9 +1,14 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
-/// 病例图全屏查看（黑底 + 双指缩放 + 点击关闭）。
+/// 图片全屏查看（黑底 + 双指缩放 + 点击关闭）。
 ///
-/// 兽医侧上下文卡 / 待接单预览、用户侧会话病例摘要条共用（私密桶短 TTL 签名 URL）。
-Future<void> showCaseImageFullScreen(BuildContext context, String url) {
+/// 兽医侧上下文卡 / 待接单预览、用户侧会话病例摘要条、IM 聊天气泡共用。
+/// [src] 支持远端 http(s) 签名 URL（[Image.network]）与本地文件路径（[Image.file]，
+/// 如聊天刚发出的乐观上屏图），按前缀自动择一。
+Future<void> showCaseImageFullScreen(BuildContext context, String src) {
+  final bool remote = src.startsWith('http');
   return showDialog<void>(
     context: context,
     barrierColor: Colors.black87,
@@ -16,12 +21,19 @@ Future<void> showCaseImageFullScreen(BuildContext context, String url) {
               minScale: 1,
               maxScale: 4,
               child: Center(
-                child: Image.network(
-                  url,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, _, _) =>
-                      const Icon(Icons.broken_image_outlined, color: Colors.white54, size: 48),
-                ),
+                child: remote
+                    ? Image.network(
+                        src,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, _, _) =>
+                            const Icon(Icons.broken_image_outlined, color: Colors.white54, size: 48),
+                      )
+                    : Image.file(
+                        File(src),
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, _, _) =>
+                            const Icon(Icons.broken_image_outlined, color: Colors.white54, size: 48),
+                      ),
               ),
             ),
           ),

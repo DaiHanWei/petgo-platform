@@ -166,13 +166,13 @@ class VetConsultControllerEndpointTest extends ApiIntegrationTest {
 
     /**
      * 结束问诊请求体（Story C：必填最终诊断）。
-     * 须发**全部 8 个字段**——客户端 {@code VetDiagnosisDraft.toJson()} 即如此（空值传 null），
-     * 缺字段会触发 {@code HttpMessageNotReadableException}→400（记录反序列化要求 creator 属性齐全）。
+     * 须发**全部 8 个字段**——客户端 {@code VetDiagnosisDraft.toJson()} 即如此。
+     * 全字段必填（needsMedication=false 时 medName/medFrequency 可空）：此处填满（不需用药）作合法基线。
      */
     private static final String END_BODY = "{\"diagnosis\":\"Gastritis ringan\","
             + "\"generalAdvice\":\"Banyak istirahat\",\"needsMedication\":false,"
-            + "\"medName\":null,\"medFrequency\":null,\"followUp\":null,"
-            + "\"worseningSigns\":null,\"clinicWithin\":null}";
+            + "\"medName\":null,\"medFrequency\":null,\"followUp\":\"Kontrol 3 hari\","
+            + "\"worseningSigns\":\"Muntah terus\",\"clinicWithin\":\"24 jam\"}";
 
     @Test
     void end_transitionsInProgressToPendingClose() throws Exception {
@@ -189,6 +189,39 @@ class VetConsultControllerEndpointTest extends ApiIntegrationTest {
 
         Assertions.assertThat(vets.reload(s.getId()).getStatus())
                 .isEqualTo(SessionStatus.PENDING_CLOSE);
+    }
+
+    @Test
+    void end_blankRequiredField_returns422() throws Exception {
+        VetAccount vet = vets.newActiveVet("缺字段医生");
+        User user = newUser();
+        ConsultSession s = vets.newInProgressSession(user.getId(), vet.getId());
+        // clinicWithin 空 → 全字段必填校验 422，不结束。
+        String body = "{\"diagnosis\":\"Gastritis ringan\",\"generalAdvice\":\"Istirahat\","
+                + "\"needsMedication\":false,\"medName\":null,\"medFrequency\":null,"
+                + "\"followUp\":\"Kontrol 3 hari\",\"worseningSigns\":\"Muntah terus\",\"clinicWithin\":\"\"}";
+        mvc.perform(post("/api/v1/vet/consult-sessions/" + s.getId() + "/end")
+                        .header("Authorization", vetBearer(vet.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isUnprocessableEntity());
+        Assertions.assertThat(vets.reload(s.getId()).getStatus()).isEqualTo(SessionStatus.IN_PROGRESS);
+    }
+
+    @Test
+    void end_needsMedicationButBlankMedDetails_returns422() throws Exception {
+        VetAccount vet = vets.newActiveVet("缺药名医生");
+        User user = newUser();
+        ConsultSession s = vets.newInProgressSession(user.getId(), vet.getId());
+        // 需用药但药名/频次空 → 跨字段校验 422。
+        String body = "{\"diagnosis\":\"Infeksi\",\"generalAdvice\":\"Istirahat\","
+                + "\"needsMedication\":true,\"medName\":\"\",\"medFrequency\":\"\","
+                + "\"followUp\":\"Kontrol 3 hari\",\"worseningSigns\":\"Lemas\",\"clinicWithin\":\"24 jam\"}";
+        mvc.perform(post("/api/v1/vet/consult-sessions/" + s.getId() + "/end")
+                        .header("Authorization", vetBearer(vet.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isUnprocessableEntity());
     }
 
     @Test
@@ -381,7 +414,30 @@ class VetConsultControllerEndpointTest extends ApiIntegrationTest {
                         .header("Authorization", vetBearer(vet.getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.sessionId == " + s.getId() + ")].petName")
-                        .value(org.hamcrest.Matchers.hasItem("Mochi")));
+                        .value(org.hamcrest.Matchers.hasItem("Mochi")))
+                // 客户端按 userId 拼 IM 对端账号回查未读，必须下发。
+                .andExpect(jsonPath("$[?(@.sessionId == " + s.getId() + ")].userId")
+                        .value(org.hamcrest.Matchers.hasItem(user.getId().intValue())));
+    }
+
+    /**
+     * Bug 回归：兽医结束（PENDING_CLOSE）后不再算「进行中」——否则同一用户发起新咨询后，
+     * 会与新 IN_PROGRESS 卡叠成两条（重复 item）。PENDING_CLOSE 归历史，进行中只剩新会话。
+     */
+    @Test
+    void inProgress_excludesPendingClose_noDuplicatePerUser() throws Exception {
+        VetAccount vet = vets.newActiveVet("去重医生");
+        User user = newUser();
+        ConsultSession pendingClose = vets.newPendingCloseSession(user.getId(), vet.getId());
+        ConsultSession active = vets.newInProgressSession(user.getId(), vet.getId());
+
+        mvc.perform(get("/api/v1/vet/consult-sessions/in-progress")
+                        .header("Authorization", vetBearer(vet.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.sessionId == " + active.getId() + ")]")
+                        .value(org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$[?(@.sessionId == " + pendingClose.getId() + ")]")
+                        .value(org.hamcrest.Matchers.empty()));
     }
 
     @Test
@@ -416,6 +472,20 @@ class VetConsultControllerEndpointTest extends ApiIntegrationTest {
                         .value(org.hamcrest.Matchers.hasItem(5)))
                 .andExpect(jsonPath("$[?(@.sessionId == " + s.getId() + ")].reviewText")
                         .value(org.hamcrest.Matchers.hasItem("讲解很清楚")));
+    }
+
+    /** Bug 回归：PENDING_CLOSE（兽医已结束、评分门窗口）归入兽医历史，终态标记 PENDING_CLOSE。 */
+    @Test
+    void history_includesPendingClose() throws Exception {
+        VetAccount vet = vets.newActiveVet("待评分医生");
+        User user = newUser();
+        ConsultSession s = vets.newPendingCloseSession(user.getId(), vet.getId());
+
+        mvc.perform(get("/api/v1/vet/consult-sessions/history")
+                        .header("Authorization", vetBearer(vet.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.sessionId == " + s.getId() + ")].terminalState")
+                        .value(org.hamcrest.Matchers.hasItem("PENDING_CLOSE")));
     }
 
     @Test

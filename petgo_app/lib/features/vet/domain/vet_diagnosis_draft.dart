@@ -1,5 +1,5 @@
 /// 兽医最终诊断输入（Story C，原型 `#p-vet-final-diagnosis`）。提交结束会话时随 body 发后端。
-/// [diagnosis] 必填（前端按钮置灰 + 后端 422 双重兜底）；其余按原型选填。
+/// **全字段必填**（前端按钮置灰 + 后端 422 双重兜底）；药名/频次仅在 [needsMedication] 时必填。
 class VetDiagnosisDraft {
   const VetDiagnosisDraft({
     required this.diagnosis,

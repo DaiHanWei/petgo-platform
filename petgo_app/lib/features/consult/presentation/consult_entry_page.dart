@@ -9,6 +9,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/design/online_pulse_dot.dart';
 import '../data/consult_repository.dart';
 import '../domain/consult_session.dart';
+import 'consult_refresh.dart';
 import 'consult_rating_dialog.dart';
 
 /// 兽医咨询入口（Story 5.3 F1）。在线/离线两态 + 已有进行中跳转 + 离线软引导（不强制）。
@@ -63,10 +64,16 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
     try {
       final pending = await repo.pendingRating();
       if (pending == null || !mounted) return;
+      // 已评分会话只清补弹标记、不再弹评分：补弹只清标记不改 UNRATED，重复弹会触发后端 409。
+      if (pending.rated) {
+        await repo.markRatingPrompted(pending.id);
+        return;
+      }
       final result = await ConsultRatingDialog.show(context);
       await repo.markRatingPrompted(pending.id); // 弹后即不再弹（AC3）
       if (result != null) {
         await repo.rate(pending.id, result.stars, result.comment);
+        ref.read(consultRefreshProvider.notifier).bump(); // 通知历史列表刷新已评分
       }
     } catch (_) {
       // 补弹失败静默，不阻断入口。
@@ -150,10 +157,15 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
   }
 
   Widget _ongoing(AppLocalizations l10n) {
+    // 仅 WAITING 进等待/匹配页；IN_PROGRESS / PENDING_CLOSE 直达会话页。
+    // 否则 waiting 页 _tick 不处理后两态 → 永停「匹配中」并在 1 分钟后误弹超时。
+    final target = _active!.isWaiting
+        ? '/consult/waiting/${_active!.id}'
+        : '/consult/conversation/${_active!.id}';
     return Center(
       child: FilledButton(
         key: const ValueKey('consultViewActive'),
-        onPressed: () => context.push('/consult/waiting/${_active!.id}'),
+        onPressed: () => context.push(target),
         child: Text(l10n.consultViewActive),
       ),
     );

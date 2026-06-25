@@ -221,7 +221,8 @@ class ConsultSessionControllerEndpointTest extends ApiIntegrationTest {
                         .content("{\"stars\":5,\"comment\":\"很专业\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status", is("CLOSED")))
-                .andExpect(jsonPath("$.closedReason", is("RATED")));
+                .andExpect(jsonPath("$.closedReason", is("RATED")))
+                .andExpect(jsonPath("$.rated", is(true)));
     }
 
     @Test
@@ -348,6 +349,40 @@ class ConsultSessionControllerEndpointTest extends ApiIntegrationTest {
     void ratingPrompted_missingToken_returns401() throws Exception {
         mvc.perform(patch(BASE + "/1/rating-prompted"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    /**
+     * Bug 回归：CLOSED(UNRATED) 补评分后 GET 须报 {@code rated=true}（虽 closedReason 仍 UNRATED）——
+     * 前端据此关闭评分入口，否则补评分后重进会再次显示评分、提交被 409。
+     */
+    @Test
+    void get_afterLateRatingOnUnratedClosed_ratedTrue() throws Exception {
+        User u = newUser();
+        ConsultSession s = pendingClose(u.getId(), 4260L);
+        s.closeUnrated(); // CLOSED(UNRATED) + ratingPromptState=PENDING
+        sessions.save(s);
+        // 补评分（CLOSED/UNRATED 仍可评）→ clearRatingPrompt 置 NONE，closedReason 不变。
+        mvc.perform(post(BASE + "/" + s.getId() + "/rating")
+                        .header("Authorization", userBearer(u.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"stars\":4}"))
+                .andExpect(status().isOk());
+        mvc.perform(get(BASE + "/" + s.getId()).header("Authorization", userBearer(u.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.closedReason", is("UNRATED")))
+                .andExpect(jsonPath("$.rated", is(true)));
+    }
+
+    /** 超时未评（CLOSED/UNRATED + PENDING）未评分 → rated=false，前端仍可补评分。 */
+    @Test
+    void get_unratedTimeoutClosed_ratedFalse() throws Exception {
+        User u = newUser();
+        ConsultSession s = pendingClose(u.getId(), 4261L);
+        s.closeUnrated();
+        sessions.save(s);
+        mvc.perform(get(BASE + "/" + s.getId()).header("Authorization", userBearer(u.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rated", is(false)));
     }
 
     /** 造一条 PENDING_CLOSE 会话（驱动状态机 WAITING→IN_PROGRESS→PENDING_CLOSE）。 */

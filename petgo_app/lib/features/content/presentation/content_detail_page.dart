@@ -12,8 +12,10 @@ import '../../../shared/widgets/app_image.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/mini_profile_sheet.dart';
+import '../../profile/data/timeline_repository.dart';
 import '../data/detail_repository.dart';
 import '../domain/content_detail.dart';
+import '../domain/content_type.dart';
 import 'comment_composer.dart';
 import 'comment_section.dart';
 import 'detail_providers.dart';
@@ -325,9 +327,16 @@ class _DetailScaffold extends ConsumerWidget {
     if (!ok) return;
     try {
       await ref.read(detailRepositoryProvider).deleteContent(detail.id);
-      // Feed + 「我的发布」同步移除（重拉；与发布流程同款失效，否则返回 Me 页仍显旧帖）。
+      // Feed + me 页「我的发布」同步移除（重拉，软删帖 deleted_at 非空被过滤）。
       ref.invalidate(feedProvider);
       ref.invalidate(myPostsProvider);
+      // 成长日历帖还出现在档案/时间线/日历视图，删后一并刷新（否则那些页仍显旧帖直到重启）。
+      if (detail.type == ContentType.growthMoment.wire) {
+        ref.invalidate(timelineFirstPageProvider);
+        ref.invalidate(archiveStatsProvider);
+        ref.invalidate(calendarMonthProvider);
+        ref.invalidate(dayDetailProvider);
+      }
       if (context.mounted) Navigator.of(context).maybePop();
     } catch (_) {
       if (context.mounted) {

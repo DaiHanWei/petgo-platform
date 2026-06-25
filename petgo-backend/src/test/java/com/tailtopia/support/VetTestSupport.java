@@ -69,6 +69,15 @@ public class VetTestSupport {
         return sessions.save(s);
     }
 
+    /** PENDING_CLOSE 会话（接单 → 兽医结束，未评分），绑定 vet。结束后不再算「进行中」、归历史。 */
+    public ConsultSession newPendingCloseSession(long userId, long vetId) {
+        ConsultSession s = ConsultSession.startWaiting(userId, ConsultSource.DIRECT);
+        s.markInProgress(vetId);
+        s.attachImConversation("stub-conv-it-" + VET_SEQ.incrementAndGet());
+        s.endByVet();
+        return sessions.save(s);
+    }
+
     /** 终态 CLOSED 会话（接单 → 兽医结束 → 用户评分关闭），绑定 vet（工作台「历史」Tab 用）。 */
     public ConsultSession newClosedSession(long userId, long vetId) {
         ConsultSession s = ConsultSession.startWaiting(userId, ConsultSource.DIRECT);

@@ -11,11 +11,14 @@ import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/case_image_viewer.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
+import 'consult_refresh.dart';
 import '../../notify/data/push_permission_providers.dart';
 import '../../notify/domain/push_suppression.dart';
 import '../data/consult_repository.dart';
 import '../domain/consult_case.dart';
+import '../domain/consult_diagnosis.dart';
 import 'consult_diagnosis_sheet.dart';
+import 'consult_diagnosis_view.dart';
 import 'consult_rating_dialog.dart';
 import 'im_chat_placeholder.dart';
 
@@ -43,6 +46,11 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
   ActiveConsultSession? _activeNotifier;
   ConsultCase? _case; // 用户自填病例（症状 + 私密图签名 URL）：摘要条展开用，异步拉
 
+  // 会话 CLOSED（30min 续聊窗口过）后正文平铺只读会诊结果，替代实时聊天占位。
+  ConsultDiagnosis? _diagnosis;
+  bool _diagnosisFetched = false; // 完成一次拉取（成功 / 确认无诊断）；失败保持 false 待重试
+  bool _diagnosisLoading = false;
+
   // Story 5.5 live 增量：进行中会话登录 IM 收发；离开/结束登出（控 MAU + 不留连接）。
   ImService? _imService;
   bool _imLoginStarted = false;
@@ -69,6 +77,22 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
     if (mounted) setState(() => _case = c);
   }
 
+  /// CLOSED 后拉本次最终诊断供正文平铺。成功（含确认无诊断=null）后置 fetched；
+  /// 失败保持 false，由轮询重试。并发/已完成则空转。
+  Future<void> _fetchDiagnosisOnce() async {
+    if (_diagnosisFetched || _diagnosisLoading) return;
+    _diagnosisLoading = true;
+    try {
+      final d = await ref.read(consultRepositoryProvider).diagnosis(widget.sessionId);
+      if (mounted) setState(() => _diagnosis = d);
+      _diagnosisFetched = true;
+    } catch (_) {
+      // 失败不置 fetched → 下次轮询重试。
+    } finally {
+      _diagnosisLoading = false;
+    }
+  }
+
   @override
   void dispose() {
     _poll?.cancel();
@@ -86,6 +110,8 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
       setState(() {
         _status = s.status;
         _closedReason = s.closedReason;
+        // 后端报已评分即锁死评分入口（含补评分后 closedReason 仍 UNRATED 的情形）。
+        if (s.rated) _rated = true;
         if (s.vetId != null) _peerId = 'v_${s.vetId}';
       });
       // 进行中（已接单）才登录 IM：取 UserSig 经后端 MAU 闸门（用户须有活跃会话）。
@@ -96,8 +122,13 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
           _imLoginStarted = false;
         });
       }
-      if (s.status == 'CLOSED' || s.status == 'INTERRUPTED') _poll?.cancel();
-      if (s.status == 'CLOSED') _maybeTriggerFirstConsultPush();
+      if (s.status == 'INTERRUPTED') _poll?.cancel();
+      if (s.status == 'CLOSED') {
+        _maybeTriggerFirstConsultPush();
+        // CLOSED → 正文平铺只读诊断；诊断到手（或确认无）再停轮询，失败则随轮询自动重试。
+        await _fetchDiagnosisOnce();
+        if (_diagnosisFetched) _poll?.cancel();
+      }
     } catch (_) {
       // 轮询失败静默重试。
     }
@@ -123,6 +154,7 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
     if (result == null || !mounted) return;
     try {
       await ref.read(consultRepositoryProvider).rate(widget.sessionId, result.stars, result.comment);
+      ref.read(consultRefreshProvider.notifier).bump(); // 通知历史列表刷新已评分
       if (!mounted) return;
       setState(() {
         _rated = true;
@@ -130,6 +162,7 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
       });
       _poll?.cancel();
       _maybeTriggerFirstConsultPush();
+      _fetchDiagnosisOnce(); // 评分即关闭 → 正文平铺只读诊断（poll 已停，须主动拉）。
       ScaffoldMessenger.of(context)
         ..clearSnackBars()
         ..showSnackBar(SnackBar(content: Text(l10n.consultRateThanks)));
@@ -203,6 +236,20 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
     );
   }
 
+  /// CLOSED 正文区：平铺只读会诊结果。诊断在途显加载圈；确无诊断（异常/极早期）显温和空态。
+  Widget _closedResultArea(AppLocalizations l10n) {
+    final d = _diagnosis;
+    if (d != null) return ConsultDiagnosisView(diagnosis: d);
+    if (!_diagnosisFetched) return const Center(child: CircularProgressIndicator());
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Text(l10n.consultResultEmpty,
+            style: AppTypography.disclaimer, textAlign: TextAlign.center),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -210,8 +257,9 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
     final interrupted = _status == 'INTERRUPTED';
     final closed = _status == 'CLOSED';
     final active = _status == 'IN_PROGRESS';
-    // 兽医已结束(含 30min 续聊期 PENDING_CLOSE 与 CLOSED)→ 显「查看会诊结果」入口。
-    final endedByVet = _status == 'PENDING_CLOSE' || _status == 'CLOSED';
+    // 30min 续聊期(PENDING_CLOSE)：仍可聊天 → 顶部「查看会诊结果」入口（弹层）。
+    // CLOSED(窗口过)：不再聊天，会诊结果改为正文平铺（见下），故此入口仅续聊期显示。
+    final showResultEntry = _status == 'PENDING_CLOSE';
     // 终态只读标签（Story 5.8 AC3）：已结束 / 未评分 / 已中断。
     final terminalLabel = interrupted
         ? l10n.terminalInterrupted
@@ -245,8 +293,8 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
               ],
             ),
           ),
-          // 兽医已结束 → 「查看会诊结果」入口（持久,30min 续聊期及关闭后均可查最终诊断）。
-          if (endedByVet) _resultEntry(l10n),
+          // 30min 续聊期 → 「查看会诊结果」入口（弹层）；CLOSED 后改正文平铺，不再显示此条。
+          if (showResultEntry) _resultEntry(l10n),
           // 原始症状摘要条（原型紫浅底折叠条）。占位内容；仅活跃会话显示。
           if (active || pendingClose) _symptomBar(l10n),
           Expanded(
@@ -303,14 +351,8 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
                       imConversationId: 'session-${widget.sessionId}',
                       peerId: _peerId,
                     ),
-                  // 关闭终态占位（只读，无输入框）。
-                  if (closed)
-                    Expanded(
-                      child: Center(
-                        child: Text(l10n.imChatPlaceholderHint,
-                            style: AppTypography.disclaimer, textAlign: TextAlign.center),
-                      ),
-                    ),
+                  // CLOSED(30min 窗口过)：不再实时聊天，正文平铺只读会诊结果（参考兽医填写页，不可编辑）。
+                  if (closed) Expanded(child: _closedResultArea(l10n)),
                 ],
               ),
             ),

@@ -5,6 +5,7 @@
 class VetActiveItem {
   const VetActiveItem({
     required this.sessionId,
+    required this.userId,
     required this.petName,
     required this.source,
     this.ownerName,
@@ -14,6 +15,7 @@ class VetActiveItem {
   });
 
   final int sessionId;
+  final int userId; // 机主 userId：客户端按此拼 IM 对端账号 u_<userId> 回查未读
   final String petName;
   final String source; // DIRECT | AI_UPGRADE
 
@@ -21,13 +23,28 @@ class VetActiveItem {
   final String? ownerName; // 机主昵称
   final String? ownerAvatarUrl; // 机主头像 URL（可空）
 
-  // unread / lastMessage 来自腾讯 IM SDK（后端列表端点不下发）：mock 离线态附占位演示，
-  // 真机由 IM 数据填充；缺失时卡片优雅降级（不显未读角标 / 最近消息行）。
+  // unread / lastMessage 来自腾讯 IM SDK（后端列表端点不下发）：active 页登录 IM 后按 userId 回查
+  // 会话未读数 + 最近消息合并进来；缺失时卡片优雅降级（不显未读角标 / 最近消息行）。
   final String lastMessage;
   final int unread;
 
+  /// IM C2C 对端账号（机主侧固定前缀 u_）。供拼会话查询 / 标已读。
+  String get imPeerId => 'u_$userId';
+
+  VetActiveItem copyWith({String? lastMessage, int? unread}) => VetActiveItem(
+        sessionId: sessionId,
+        userId: userId,
+        petName: petName,
+        source: source,
+        ownerName: ownerName,
+        ownerAvatarUrl: ownerAvatarUrl,
+        lastMessage: lastMessage ?? this.lastMessage,
+        unread: unread ?? this.unread,
+      );
+
   factory VetActiveItem.fromJson(Map<String, dynamic> json) => VetActiveItem(
         sessionId: (json['sessionId'] as num).toInt(),
+        userId: (json['userId'] as num?)?.toInt() ?? 0,
         petName: (json['petName'] ?? '') as String,
         source: (json['source'] ?? 'DIRECT') as String,
         ownerName: json['ownerName'] as String?,

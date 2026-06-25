@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:tailtopia/core/theme/colors.dart';
 import 'package:tailtopia/features/triage/data/triage_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
@@ -11,11 +12,9 @@ import 'package:tailtopia/shared/widgets/red_alert_overlay.dart';
 import 'package:tailtopia/shared/widgets/triage_result_card.dart';
 
 Future<void> _pump(WidgetTester tester, TriageResult result,
-    {TriageArchiveHandler? archiveHandler, TriageArchiveHandler? redArchiveHandler}) async {
+    {TriageArchiveHandler? archiveHandler}) async {
   final container = ProviderContainer(overrides: [
     if (archiveHandler != null) triageArchiveHandlerProvider.overrideWithValue(archiveHandler),
-    if (redArchiveHandler != null)
-      triageRedArchiveHandlerProvider.overrideWithValue(redArchiveHandler),
     petProfileProvider.overrideWith((ref) => null), // 避免红色 overlay 读档案打网络
   ]);
   addTearDown(container.dispose);
@@ -110,39 +109,48 @@ void main() {
     expect(find.byKey(const ValueKey('triageSaveToArchive')), findsNothing);
   });
 
-  testWidgets('🔒 红色 → 自底滑起半屏强提醒 + 保留红色摘要（无绿黄结果卡）', (tester) async {
-    await _pump(tester,
-        const TriageResult(status: TriageStatus.done, dangerLevel: DangerLevel.red, advice: 'x'));
-    // 红色走 4.5 半屏强提醒，绝不渲染绿/黄结果卡
+  testWidgets('🔒 红色 → 半屏强提醒；点「我已知晓」退出 AI 问诊（无结果卡 / 无存档）', (tester) async {
+    // 退出走 go_router pop/go，故用 GoRouter 承载（home: 无 router context）。
+    final container = ProviderContainer(
+        overrides: [petProfileProvider.overrideWith((ref) => null)]);
+    addTearDown(container.dispose);
+    final router = GoRouter(
+      initialLocation: '/triage/upload',
+      routes: [
+        GoRoute(path: '/triage', builder: (c, s) => const Scaffold(body: Text('triage-home'))),
+        GoRoute(
+            path: '/triage/upload',
+            builder: (c, s) => const Scaffold(
+                body: TriageResultView(
+                    result: TriageResult(
+                        status: TriageStatus.done, dangerLevel: DangerLevel.red, advice: 'x'),
+                    triageId: 7))),
+      ],
+    );
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp.router(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        routerConfig: router,
+      ),
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+
+    // 半屏强提醒在场；绝不渲染绿/黄结果卡；红色态无任何 CTA / 无存档入口。
     expect(find.byType(RedAlertOverlay), findsOneWidget);
-    expect(find.byKey(const ValueKey('triageRedSummary')), findsOneWidget);
     expect(find.byType(TriageResultCard), findsNothing);
-    // 🔒 零兽医 CTA / 零地图（红色态）；绿/黄存档键不复用于红色
     expect(find.byKey(const ValueKey('triageConsultVet')), findsNothing);
     expect(find.byKey(const ValueKey('triageSaveToArchive')), findsNothing);
-    // 🆕 R2（FR-3）：红色态新增「存入档案」入口（独立键），存档≠变现护栏不变
-    expect(find.byKey(const ValueKey('triageRedSaveToArchive')), findsOneWidget);
-    await tester.pump(const Duration(seconds: 5)); // 倒计时结束，清理定时器
-  });
+    expect(find.byKey(const ValueKey('triageRedSaveToArchive')), findsNothing);
 
-  testWidgets('AC4(R2·FR-3): 红色态「存入档案」→ 调红色存档回调（守零变现）', (tester) async {
-    var called = false;
-    await _pump(
-      tester,
-      const TriageResult(status: TriageStatus.done, dangerLevel: DangerLevel.red, advice: 'x'),
-      redArchiveHandler: (context, ref, {required triageId, required level, advice, symptom}) async {
-        called = true;
-        expect(triageId, 7);
-        expect(level, DangerLevel.red);
-      },
-    );
-    // 关闭 5s 锁定遮罩（唯一出口「我已知晓」），再点结果页存档入口
-    await tester.pump(const Duration(seconds: 5));
+    await tester.pump(const Duration(seconds: 5)); // 倒计时结束，解锁「我已知晓」
     await tester.tap(find.byKey(const ValueKey('triageRedAcknowledge')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('triageRedSaveToArchive')));
-    await tester.pump();
-    expect(called, isTrue);
+    // 点「我已知晓」→ 退出 AI 问诊：overlay 消失 + 离开结果页回到 triage 首页。
+    expect(find.byType(RedAlertOverlay), findsNothing);
+    expect(find.text('triage-home'), findsOneWidget);
   });
 
   testWidgets('AC3: 点「存入档案」→ 调起存档回调（FR-16 触发）', (tester) async {
