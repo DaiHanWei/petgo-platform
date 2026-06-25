@@ -13,6 +13,7 @@ import '../../auth/domain/auth_state.dart';
 import '../../media/domain/media_upload_use_case.dart';
 import '../../profile/data/milestone_repository.dart';
 import '../../profile/data/profile_repository.dart';
+import '../../profile/data/timeline_repository.dart';
 import '../../profile/domain/pet_profile.dart';
 import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/dashed_rect.dart';
@@ -182,6 +183,11 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     if (id != null) {
       ref.invalidate(feedProvider);
       ref.invalidate(myPostsProvider);
+      // 成长日历发帖 → 同步刷新成长档案时间线与统计，避免需手动下拉刷新才显示（F9）。
+      if (controller.type == ContentType.growthMoment) {
+        ref.invalidate(timelineFirstPageProvider);
+        ref.invalidate(archiveStatsProvider);
+      }
       // 里程碑「去发布」回填（Story 8.4）：仍为成长日历类型 → 以新内容 id 自动打卡完成（best-effort）。
       if (widget.milestoneCode != null && controller.type == ContentType.growthMoment) {
         try {
