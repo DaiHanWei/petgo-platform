@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/customer_service_sheet.dart';
 import '../../auth/domain/auth_state.dart';
 import '../data/vet_repository.dart';
 
@@ -212,7 +213,7 @@ class _VetLoginPageState extends ConsumerState<VetLoginPage> {
             SizedBox(
               width: double.infinity,
               child: OutlinedButton(
-                onPressed: () {},
+                onPressed: () => showCustomerServiceSheet(context),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.vetPrimary,
                   side: const BorderSide(color: AppColors.vetPrimary, width: 1.5),
