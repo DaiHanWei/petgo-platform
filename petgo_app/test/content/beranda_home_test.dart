@@ -45,8 +45,8 @@ void main() {
 
     await _pumpHome(tester, c);
 
-    // AppBar 标题 + 分类 Chips 恒在。
-    expect(find.text('TailTopia 🐾'), findsOneWidget);
+    // AppBar 品牌标(logo.svg，semanticsLabel=TailTopia) + 分类 Chips 恒在。
+    expect(find.bySemanticsLabel('TailTopia'), findsOneWidget);
     expect(find.byType(FeedTabRow), findsOneWidget);
     // 推倒重做：旧 Momo 问候头 / 快捷入口 / 每日卡 / 「Untukmu」区头不再渲染。
     expect(find.text('Apa kabar, Aurel?'), findsNothing);

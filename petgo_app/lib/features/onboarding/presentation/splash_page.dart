@@ -207,6 +207,7 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
             child: Text(SplashPage.version,
                 textAlign: TextAlign.center,
                 style: TextStyle(
+                    fontFamily: 'Poppins',
                     fontSize: 10, letterSpacing: 0.5,
                     color: const Color(0xFFFFFFFF).withValues(alpha: 0.30))),
           ),
@@ -282,8 +283,12 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
         child: Text(
           l10n.splashTagline,
           textAlign: TextAlign.center,
+          // 原型 p-01：Quicksand 600（圆角字体）+ 12.5 / 1.65 / .15。
           style: TextStyle(
-              fontSize: 12, height: 1.7, letterSpacing: 0.12,
+              fontFamily: 'Quicksand',
+              fontVariations: const [FontVariation('wght', 600)],
+              fontWeight: FontWeight.w600,
+              fontSize: 12.5, height: 1.65, letterSpacing: 0.15,
               color: const Color(0xFFFFFFFF).withValues(alpha: 0.62)),
         ),
       ),

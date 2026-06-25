@@ -66,9 +66,13 @@ class HomePage extends ConsumerWidget {
         backgroundColor: AppColors.cream,
         scrolledUnderElevation: 0,
         titleSpacing: 20,
-        title: Text('${l10n.appTitle} 🐾',
-            style: const TextStyle(
-                fontSize: 19, fontWeight: FontWeight.w700, color: AppColors.ink)),
+        // 左上角品牌标：Tailtopia wordmark。源 logo.svg(Adobe 多图层导出)经 svgo 清洗——
+        // 去 display:none 隐藏层 + 内联样式转属性 + viewBox 裁到文字区，得 flutter_svg 可渲的干净 SVG。
+        title: SvgPicture.asset(
+          'assets/brand/logo.svg',
+          height: 28,
+          semanticsLabel: l10n.appTitle,
+        ),
         actions: [
           if (auth.isLoggedIn)
             const Padding(
