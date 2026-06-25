@@ -41,4 +41,22 @@ class LegalPageControllerTest {
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("Syarat")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("BANI")));
     }
+
+    @Test
+    void accountDeletion_returnsHtmlPage() throws Exception {
+        mvc.perform(get("/account-deletion"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith("text/html"))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Delete Your TailTopia Account")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("cs@tailtopia.id")));
+    }
+
+    @Test
+    void childSafety_returnsHtmlPage() throws Exception {
+        mvc.perform(get("/child-safety"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith("text/html"))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Child Safety Standards")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("CSAE")));
+    }
 }
