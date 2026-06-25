@@ -30,7 +30,9 @@ void main() {
     expect(find.byType(BottomTabBar), findsOneWidget);
     expect(find.byType(AddTabButton), findsOneWidget);
     // 4 个 Tab 标签（active 的首页显示圆而非标签，其余 3 个显示标签）。
-    expect(find.text('Growth'), findsOneWidget);
+    // 'Growth' 同时出现在底部导航(tabProfile)与 Feed 分类 tab(feedTabGrowth=GROWTH_MOMENT)，
+    // 故 findsWidgets（与 id 'Tumbuh' 同理）。
+    expect(find.text('Growth'), findsWidgets);
     expect(find.text('Consult'), findsOneWidget);
     expect(find.text('Me'), findsOneWidget);
   });
@@ -63,7 +65,8 @@ void main() {
   // AC3 — i18n 默认英语。
   testWidgets('AC3: default locale renders English tab labels', (tester) async {
     await _pumpApp(tester);
-    expect(find.text('Growth'), findsOneWidget);
+    // 'Growth' = tabProfile + feedTabGrowth 两处（en），故 findsWidgets。
+    expect(find.text('Growth'), findsWidgets);
     expect(find.text('Beranda'), findsNothing);
   });
 
