@@ -135,6 +135,10 @@ flutter:
           weight: 600
         - asset: assets/fonts/Poppins-Bold.ttf
           weight: 700
+    # Quicksand：圆角字体，splash 标语用（原型 p-01）。可变字体(300–700)，按 fontVariations 取字重。
+    - family: Quicksand
+      fonts:
+        - asset: assets/fonts/Quicksand-VariableFont_wght.ttf
 
 # App 图标（紫色猫狗 logo）。重生成：dart run flutter_launcher_icons
 flutter_launcher_icons:
