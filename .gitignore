@@ -22,3 +22,5 @@
 
 # 本地 L2 验收脚本（含真实凭证调用，绝不入库）
 scripts/local/
+.agents/
+skills-lock.json

@@ -142,7 +142,9 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
             return const Center(child: CircularProgressIndicator());
           }
           final d = snapshot.data!;
-          return Column(
+          return SafeArea(
+            top: false, // 底部输入栏避让系统导航栏（手势/三键），不被遮挡（用户侧同款处理）。
+            child: Column(
             children: [
               _topBar(d),
               _toolsBar(),
@@ -161,6 +163,7 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
                 inputController: _chatInput, // Template「Pakai」预填进此框
               ),
             ],
+            ),
           );
         },
       ),

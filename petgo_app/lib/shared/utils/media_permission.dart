@@ -1,3 +1,6 @@
+import 'dart:io' show Platform;
+
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
 
@@ -24,7 +27,7 @@ class PermissionHandlerGateway implements PermissionGateway {
 
   @override
   Future<MediaPermissionOutcome> request(MediaSource source) async {
-    final permission = source == MediaSource.camera ? ph.Permission.camera : ph.Permission.photos;
+    final permission = await _resolvePermission(source);
     final status = await permission.request();
     if (status.isGranted || status.isLimited) {
       return MediaPermissionOutcome.granted;
@@ -33,6 +36,24 @@ class PermissionHandlerGateway implements PermissionGateway {
       return MediaPermissionOutcome.permanentlyDenied;
     }
     return MediaPermissionOutcome.denied;
+  }
+
+  /// 把「来源」映射到具体系统权限。相册必须按 Android 版本分流：
+  /// `Permission.photos` 仅对应 Android 13+(SDK 33) 的 `READ_MEDIA_IMAGES`，在 ≤12 上
+  /// permission_handler 拿到空权限列表 → 不弹窗、直接 permanentlyDenied，而系统设置页又
+  /// 只暴露 Storage、无 Photos 项 → 用户永远开不了相册（死循环 bug）。≤12 必须改用
+  /// `Permission.storage`(READ_EXTERNAL_STORAGE，manifest 已带 maxSdkVersion=32)。iOS 恒用 photos。
+  Future<ph.Permission> _resolvePermission(MediaSource source) async {
+    if (source == MediaSource.camera) return ph.Permission.camera;
+    if (Platform.isAndroid && await _androidSdkInt() < 33) {
+      return ph.Permission.storage;
+    }
+    return ph.Permission.photos;
+  }
+
+  Future<int> _androidSdkInt() async {
+    final info = await DeviceInfoPlugin().androidInfo;
+    return info.version.sdkInt;
   }
 
   @override

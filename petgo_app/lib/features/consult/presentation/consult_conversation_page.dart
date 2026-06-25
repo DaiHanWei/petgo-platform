@@ -174,13 +174,10 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
     }
   }
 
-  /// 离开会话页（返回上一屏；无栈可弹则回问诊入口）。
+  /// 离开会话页：一律回最外层主页 Tab（/home），不逐层退回 /consult 发起入口
+  /// —— 用户和兽医聊完点返回，不应再看到 Start Consultation 页。
   void _leave() {
-    if (context.canPop()) {
-      context.pop();
-    } else {
-      context.go('/consult');
-    }
+    context.go('/home');
   }
 
   /// 用户侧「Akhiri」：确认后离开会话（会话状态由服务端权威；本页不发起结束端点）。
@@ -268,7 +265,13 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
             : closed
                 ? l10n.terminalClosed
                 : null;
-    return Scaffold(
+    return PopScope(
+      // 系统返回键也回最外层 /home（_leave），与顶栏返回钮一致；不逐层退回 Start Consultation。
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _leave();
+      },
+      child: Scaffold(
       backgroundColor: AppColors.base,
       body: Column(
         children: [
@@ -358,6 +361,7 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
             ),
           ),
         ],
+      ),
       ),
     );
   }

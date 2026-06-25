@@ -51,6 +51,9 @@ dependencies:
   # 选图/权限用原生插件（仅运行期路径）。
   image_picker: ^1.1.2
   permission_handler: ^11.3.1
+  # 相册权限需按 Android SDK 分流（≤12 用 READ_EXTERNAL_STORAGE，13+ 用 READ_MEDIA_IMAGES），
+  # 取 androidInfo.version.sdkInt 判定；否则 Android 12 设备请求 photos 恒 permanentlyDenied（死循环）。
+  device_info_plus: ^11.1.0
   image: ^4.3.0
   crypto: ^3.0.3
   # Story 2.7：系统分享菜单（名片链接）。
@@ -64,6 +67,8 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.6
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
@@ -130,3 +135,20 @@ flutter:
           weight: 600
         - asset: assets/fonts/Poppins-Bold.ttf
           weight: 700
+
+# App 图标（紫色猫狗 logo）。重生成：dart run flutter_launcher_icons
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/brand/app_icon.png"
+  remove_alpha_ios: true
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/brand/app_icon_padded.png"
+
+# 原生启动屏（白底 + logo 居中，替换 Flutter 默认）。重生成：dart run flutter_native_splash:create
+flutter_native_splash:
+  color: "#FFFFFF"
+  image: "assets/brand/app_icon.png"
+  android_12:
+    image: "assets/brand/app_icon_padded.png"
+    color: "#FFFFFF"

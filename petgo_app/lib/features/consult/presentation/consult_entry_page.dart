@@ -6,7 +6,6 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../../shared/widgets/design/online_pulse_dot.dart';
 import '../data/consult_repository.dart';
 import '../domain/consult_session.dart';
 import 'consult_refresh.dart';
@@ -32,6 +31,10 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
   ConsultSession? _active;
   bool _activeChecked = false;
   bool _ratingPromptHandled = false;
+
+  /// 点「Mulai Konsultasi」时即时查后台在线态：查到无兽医在线 → 置 true 切到离线引导。
+  /// 不再进页预查 / 轮询（决策：在线态只在用户真正发起时校验，避免缓存/轮询的时序问题）。
+  bool _noVetOnline = false;
 
   @override
   void initState() {
@@ -82,9 +85,16 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
 
   Future<void> _start() async {
     if (_starting) return;
-    // Story F：先去病例填写页（症状 + 照片），提交才发起 DIRECT 会话 → 等待页。
+    // 点击即时查后台在线态（loading 在按钮上）。有兽医 → 去病例填写页（Story F：提交才发起 DIRECT
+    // 会话 → 等待页）；无兽医 → 切到离线引导（AI 分诊 + 营业时间），不进发起流程。
     setState(() => _starting = true);
     try {
+      final online = await ref.read(consultRepositoryProvider).vetOnline();
+      if (!mounted) return;
+      if (!online) {
+        setState(() => _noVetOnline = true);
+        return;
+      }
       await context.push('/consult/case');
     } finally {
       if (mounted) setState(() => _starting = false);
@@ -94,7 +104,6 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final availability = ref.watch(consultAvailabilityProvider);
     return Scaffold(
       backgroundColor: AppColors.base,
       body: SafeArea(
@@ -105,26 +114,23 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(AppSpacing.xl, AppSpacing.sm, AppSpacing.xl, AppSpacing.xl),
-                child: availability.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (_, _) => _offline(l10n),
-            data: (a) {
-              // 已有进行中咨询 → 「查看进行中 →」（优先于发起）。
-              if (_active != null) {
-                return _ongoing(l10n);
-              }
-              if (!_activeChecked) {
-                return const Center(child: CircularProgressIndicator());
-              }
-                    return a.vetOnline ? _online(l10n) : _offline(l10n);
-                  },
-                ),
+                child: _body(l10n),
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _body(AppLocalizations l10n) {
+    // 已有进行中咨询 → 「查看进行中 →」（优先于发起）。
+    if (_active != null) return _ongoing(l10n);
+    // 仅等 active 检查（不再进页预查在线态）。
+    if (!_activeChecked) return const Center(child: CircularProgressIndicator());
+    // 点 Start 查到无兽医 → 离线引导；否则就绪态（步骤 + 发起按钮）。
+    if (_noVetOnline) return _offline(l10n);
+    return _ready(l10n);
   }
 
   /// 自定义返回 header（原型 konsultasi-home.html）：圆角灰底返回钮 + 17px 粗标题。
@@ -171,36 +177,10 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
     );
   }
 
-  Widget _online(AppLocalizations l10n) {
+  /// 就绪态（无在线提示条）：进页即展示流程 + 发起按钮；在线与否在点「Mulai」时即时校验。
+  Widget _ready(AppLocalizations l10n) {
     return ListView(
       children: [
-        // 在线提示条（原型）：vetSurface 浅底 + 绿脉冲点 + 「Dokter Hewan Tersedia」（决策 #3：省略人数）。
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-              color: AppColors.vetSurface, borderRadius: BorderRadius.circular(14)),
-          child: Row(
-            children: [
-              const OnlinePulseDot(size: 10, color: AppColors.triageGreen),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(l10n.consultAvailableTitle,
-                        style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.onlineDeepGreen)),
-                    Text(l10n.consultProbabilisticOnline,
-                        style: const TextStyle(fontSize: 11, color: AppColors.ink2)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 22),
         // 3 步流程（原型 CARA KERJA）。
         Text(l10n.consultHowItWorks.toUpperCase(),
             style: const TextStyle(
@@ -232,15 +212,22 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
               padding: const EdgeInsets.symmetric(vertical: 15),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(l10n.consultStart, style: AppTypography.button),
-                const SizedBox(width: 6),
-                const Icon(Icons.arrow_forward_rounded, size: 18),
-              ],
-            ),
+            child: _starting
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2.4, color: AppColors.onAccent),
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(l10n.consultStart, style: AppTypography.button),
+                      const SizedBox(width: 6),
+                      const Icon(Icons.arrow_forward_rounded, size: 18),
+                    ],
+                  ),
           ),
         ),
       ],
