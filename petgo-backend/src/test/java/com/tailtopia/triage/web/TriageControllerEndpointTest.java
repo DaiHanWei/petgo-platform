@@ -12,12 +12,14 @@ import com.tailtopia.triage.domain.TriageStatus;
 import com.tailtopia.triage.domain.TriageTask;
 import com.tailtopia.triage.dto.TriageSubmitRequest;
 import com.tailtopia.triage.repository.TriageTaskRepository;
+import com.tailtopia.triage.service.TriageEventListener;
 import com.tailtopia.triage.service.TriageProcessor;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MvcResult;
 
 /**
@@ -34,6 +36,12 @@ class TriageControllerEndpointTest extends ApiIntegrationTest {
 
     @Autowired
     private TriageTaskRepository triageTasks;
+
+    // 隔离异步处理：submit 后的 @Async AFTER_COMMIT listener 会调 Gemini 改 status，
+    // 在 CI(无 Gemini key)常于断言前跑完并置 FAILED → 与「断言受理即 PENDING」形成竞态。
+    // mock 掉 listener 使受理后 status 稳定 PENDING；不影响其它同步直驱 TriageProcessor.process 的用例。
+    @MockitoBean
+    private TriageEventListener triageEventListener;
 
     private MvcResult submit(long userId, TriageSubmitRequest req) throws Exception {
         return mvc.perform(post("/api/v1/triage")
