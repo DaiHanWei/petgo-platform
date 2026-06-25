@@ -1,7 +1,6 @@
-import 'dart:typed_data';
-
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -12,6 +11,7 @@ import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/media_permission.dart';
 import '../../../shared/widgets/app_image.dart';
+import '../../../shared/widgets/customer_service_sheet.dart';
 import '../../../shared/widgets/post_cover.dart';
 import '../../auth/data/me_repository.dart';
 import '../../auth/domain/auth_state.dart';
@@ -49,11 +49,7 @@ class MePage extends ConsumerWidget {
             valueKey: 'meHelp',
             icon: Icons.support_agent_outlined,
             tooltip: l10n.meHelp,
-            onTap: () {
-              ScaffoldMessenger.of(context)
-                ..clearSnackBars()
-                ..showSnackBar(SnackBar(content: Text(l10n.helpComingSoon)));
-            },
+            onTap: () => showCustomerServiceSheet(context),
           ),
           const SizedBox(width: 8),
           // 设置图标 → 二级设置页（语言/退出/注销）。PDP 注销入口经此可达。

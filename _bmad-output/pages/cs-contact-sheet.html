@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="id" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>TailTopia · CS Contact Sheet</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../tokens.css?v=20260623">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--color-bg-default);
+      color: var(--color-text-primary);
+      min-height: 100dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ── Demo wrapper ── */
+    .demo-phone {
+      width: 390px;
+      height: 720px;
+      background: var(--color-bg-subtle);
+      border-radius: 40px;
+      border: 2px solid var(--color-border-default);
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2);
+    }
+    .demo-label {
+      font-size: var(--text-xs);
+      color: var(--color-text-tertiary);
+      font-weight: var(--font-weight-medium);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .trigger-btn {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      background: var(--color-bg-surface);
+      border: 1.5px solid var(--color-border-default);
+      border-radius: var(--radius-full);
+      padding: var(--space-3) var(--space-5);
+      font-family: var(--font-body);
+      font-size: var(--text-sm);
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-text-primary);
+      cursor: pointer;
+      box-shadow: var(--shadow-sm);
+      transition: box-shadow 0.15s, transform 0.1s;
+    }
+    .trigger-btn:active { transform: scale(0.97); }
+    .trigger-btn svg { color: var(--color-brand-primary); }
+
+    /* ── Overlay ── */
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(46, 39, 66, 0.45);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.28s ease;
+      border-radius: inherit;
+    }
+    .overlay.open {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    /* ── Bottom Sheet ── */
+    .sheet {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--color-bg-surface);
+      border-radius: var(--radius-3xl) var(--radius-3xl) 0 0;
+      padding: 10px var(--space-5) 28px;
+      transform: translateY(100%);
+      transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+      will-change: transform;
+    }
+    .sheet.open {
+      transform: translateY(0);
+    }
+
+    /* handle */
+    .handle {
+      width: 36px;
+      height: 4px;
+      background: var(--color-border-default);
+      border-radius: var(--radius-full);
+      margin: 0 auto var(--space-5);
+    }
+
+    .sheet-title {
+      font-family: var(--font-display);
+      font-size: var(--text-lg);
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-text-primary);
+      margin-bottom: var(--space-5);
+    }
+
+    /* ── Contact row ── */
+    .contact-row {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-3) 0;
+    }
+
+    .contact-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: var(--radius-xl);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .contact-icon.wa  { background: #E7F8EF; }
+    .contact-icon.mail { background: var(--color-bg-brand-subtle); }
+
+    .contact-body {
+      flex: 1;
+      min-width: 0;
+    }
+    .contact-value {
+      font-size: var(--text-md);
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .contact-sub {
+      font-size: var(--text-xs);
+      color: var(--color-text-tertiary);
+      margin-top: 2px;
+    }
+
+    .copy-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-lg);
+      background: var(--color-bg-muted);
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      color: var(--color-text-secondary);
+      transition: background 0.12s, color 0.12s, transform 0.1s;
+    }
+    .copy-btn:hover  { background: var(--color-border-default); }
+    .copy-btn:active { transform: scale(0.9); }
+    .copy-btn.copied {
+      background: #E7F8EF;
+      color: #0E7A4D;
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--color-border-subtle, var(--color-border-default));
+      margin: var(--space-1) 0;
+    }
+
+    /* ── Cancel button ── */
+    .cancel-btn {
+      display: block;
+      width: 100%;
+      margin-top: var(--space-4);
+      padding: var(--space-4);
+      background: var(--color-bg-muted);
+      border: none;
+      border-radius: var(--radius-2xl);
+      font-family: var(--font-body);
+      font-size: var(--text-md);
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-text-secondary);
+      cursor: pointer;
+      transition: background 0.12s, transform 0.1s;
+    }
+    .cancel-btn:hover  { background: var(--color-border-default); }
+    .cancel-btn:active { transform: scale(0.98); }
+
+    /* ── Toast ── */
+    .toast {
+      position: absolute;
+      bottom: 100px;
+      left: 50%;
+      transform: translateX(-50%) translateY(8px);
+      background: var(--ink-900, #2E2742);
+      color: #fff;
+      font-size: var(--text-sm);
+      font-weight: var(--font-weight-medium);
+      padding: var(--space-2) var(--space-4);
+      border-radius: var(--radius-full);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.18s, transform 0.18s;
+      white-space: nowrap;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="demo-phone" id="phone">
+
+    <!-- Demo trigger -->
+    <span class="demo-label">Tap untuk coba</span>
+    <button class="trigger-btn" onclick="openSheet()">
+      <!-- headset icon (Basil outlined 2px rounded) -->
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 11C3 7.134 7.03 4 12 4s9 3.134 9 7"/>
+        <rect x="2" y="11" width="4" height="6" rx="2"/>
+        <rect x="18" y="11" width="4" height="6" rx="2"/>
+        <path d="M22 17v1a4 4 0 0 1-4 4h-3"/>
+        <circle cx="12" cy="22" r="1.5"/>
+      </svg>
+      Hubungi CS
+    </button>
+
+    <!-- Overlay -->
+    <div class="overlay" id="overlay" onclick="closeSheet()"></div>
+
+    <!-- Bottom Sheet -->
+    <div class="sheet" id="sheet">
+      <div class="handle"></div>
+      <div class="sheet-title">Hubungi Kami</div>
+
+      <!-- WhatsApp -->
+      <div class="contact-row">
+        <div class="contact-icon wa">
+          <!-- WhatsApp icon (Basil outlined 2px rounded) -->
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1FB877" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2 22l4.98-1.418A9.956 9.956 0 0 0 12 22c5.523 0 10-4.477 10-10S17.523 2 12 2z"/>
+            <path d="M8.5 9.5c.5 1 1 2 2 3s2 1.5 3 2l1-1c.5-.5 1-.5 1.5 0l1.5 1.5c.5.5.5 1 0 1.5l-1 1c-.5.5-1 .5-1.5.5-4 0-8-4-8-8 0-.5 0-1 .5-1.5L8 8c.5-.5 1-.5 1.5 0L11 9.5c.5.5.5 1 0 1.5L10.5 11"/>
+          </svg>
+        </div>
+        <div class="contact-body">
+          <div class="contact-value">081290906953</div>
+          <div class="contact-sub">WhatsApp · Dibalas dalam 24 jam di hari kerja</div>
+        </div>
+        <button class="copy-btn" id="copy-wa" onclick="copyText('081290906953', 'copy-wa')" title="Salin nomor">
+          <!-- copy icon -->
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Email -->
+      <div class="contact-row">
+        <div class="contact-icon mail">
+          <!-- mail icon (Basil outlined 2px rounded) -->
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-brand-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="4" width="20" height="16" rx="2"/>
+            <path d="m2 7 8.5 6a2.5 2.5 0 0 0 3 0L22 7"/>
+          </svg>
+        </div>
+        <div class="contact-body">
+          <div class="contact-value">cs@tailtopia.id</div>
+          <div class="contact-sub">Email · Dibalas dalam 1–3 hari kerja</div>
+        </div>
+        <button class="copy-btn" id="copy-email" onclick="copyText('cs@tailtopia.id', 'copy-email')" title="Salin email">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+        </button>
+      </div>
+
+      <button class="cancel-btn" onclick="closeSheet()">Batal</button>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast">Disalin!</div>
+
+  </div><!-- /demo-phone -->
+
+  <script>
+    const phone   = document.getElementById('phone');
+    const overlay = document.getElementById('overlay');
+    const sheet   = document.getElementById('sheet');
+    const toast   = document.getElementById('toast');
+
+    function openSheet() {
+      overlay.classList.add('open');
+      sheet.classList.add('open');
+    }
+
+    function closeSheet() {
+      overlay.classList.remove('open');
+      sheet.classList.remove('open');
+    }
+
+    let toastTimer;
+    function showToast() {
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 1800);
+    }
+
+    function copyText(text, btnId) {
+      const btn = document.getElementById(btnId);
+
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(() => {
+          flashBtn(btn);
+          showToast();
+        });
+      } else {
+        // fallback for non-https / older webview
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.cssText = 'position:fixed;opacity:0';
+        document.body.appendChild(ta);
+        ta.focus(); ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        flashBtn(btn);
+        showToast();
+      }
+    }
+
+    function flashBtn(btn) {
+      btn.classList.add('copied');
+      setTimeout(() => btn.classList.remove('copied'), 1500);
+    }
+
+    // close on Escape
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
+  </script>
+
+</body>
+</html>
