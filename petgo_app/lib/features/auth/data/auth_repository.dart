@@ -1,16 +1,11 @@
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_paths.dart';
 import '../../../core/storage/secure_storage.dart';
 import '../domain/login_response.dart';
 import 'google_auth_client.dart';
-
-/// DEV-ONLY 开关：debug 构建默认开启「假登录」（见 [AuthRepository.loginWithGoogle]）。
-/// 关闭：`--dart-define=PETGO_DEV_STUB_LOGIN=false`。release 恒不生效（双护栏 kDebugMode）。
-const bool _kDevStubLogin = bool.fromEnvironment('PETGO_DEV_STUB_LOGIN', defaultValue: true);
 
 /// 取消登录的哨兵（区别于失败）。
 class LoginCancelled implements Exception {
@@ -27,13 +22,6 @@ class AuthRepository {
 
   /// 完整 Google 登录链路。用户取消抛 [LoginCancelled]。
   Future<LoginResponse> loginWithGoogle() async {
-    // 🔧 DEV-ONLY：debug 构建跳过真 Google OAuth，但仍<b>真打后端 dev 桩</b>——后端
-    // DevGoogleTokenVerifier（dev profile）忽略此占位 token，恒解析成固定测试账号，返回<b>真实
-    // JWT</b>，故所有鉴权接口（/me、发布、问诊…）均可用（区别于旧版伪造 token 仅能看壳）。
-    // release 构建恒不走此路（kDebugMode 双护栏）。
-    if (kDebugMode && _kDevStubLogin) {
-      return exchangeIdToken('dev-stub');
-    }
     final idToken = await googleClient.signInAndGetIdToken();
     if (idToken == null) throw const LoginCancelled();
     return exchangeIdToken(idToken);
@@ -52,14 +40,10 @@ class AuthRepository {
 
   /// 完整 Apple 登录链路（FR-44，iOS）。用户取消抛 [LoginCancelled]。
   ///
-  /// debug 构建走后端 dev 桩（同 Google），可在 mock / dev 下打通；
-  /// release iOS 真机需接 `sign_in_with_apple` 取 identityToken（+ iOS「Sign in with Apple」
+  /// iOS 真机需接 `sign_in_with_apple` 取 identityToken（+ iOS「Sign in with Apple」
   /// 能力 + 后端 /auth/apple 校验器，留作 L2 接入点）。
   Future<LoginResponse> loginWithApple() async {
-    if (kDebugMode && _kDevStubLogin) {
-      return exchangeAppleToken('dev-stub');
-    }
-    // TODO(L2): 接入 sign_in_with_apple 取真实 identityToken；当前 release 暂作取消处理。
+    // TODO(L2): 接入 sign_in_with_apple 取真实 identityToken；当前暂作取消处理。
     throw const LoginCancelled();
   }
 
