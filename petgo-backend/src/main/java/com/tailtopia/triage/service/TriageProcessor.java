@@ -67,8 +67,12 @@ public class TriageProcessor {
         while (true) {
             try {
                 List<String> signedUrls = signImages(task.getImageObjectKeys());
+                // 作答语言优先跟随用户文字（确定性检测，不赌模型自判）：判得出 id/en 则用之，
+                // 判不出（其它语言/过短）才回落 App locale（Accept-Language 解析所得）。
+                String detected = SymptomLanguageDetector.detect(task.getSymptomText());
+                String effectiveLocale = detected != null ? detected : task.getResponseLocale();
                 GeminiTriageResult result =
-                        geminiClient.analyze(task.getSymptomText(), signedUrls, task.getResponseLocale());
+                        geminiClient.analyze(task.getSymptomText(), signedUrls, effectiveLocale);
 
                 DangerLevel modelLevel = DangerLevel.fromNullable(result.dangerLevel());
                 // === Story 4.2 后置强制升红的唯一挂载点（只升不降、不可旁路）===
