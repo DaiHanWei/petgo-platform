@@ -12,9 +12,10 @@ import '../storage/secure_storage.dart';
 import 'api_log_interceptor.dart';
 import 'auth_interceptor.dart';
 
-/// 后端基址（运行时配置；env/--dart-define 注入，默认本地）。
+/// 后端基址（运行时配置；env/--dart-define 注入，默认线上正式服）。
+/// 默认值为用户明确指令固定：非用户明确要求，不得改动此默认值。
 const String kApiBaseUrl =
-    String.fromEnvironment('PETGO_API_BASE_URL', defaultValue: 'http://localhost:8080');
+    String.fromEnvironment('PETGO_API_BASE_URL', defaultValue: 'https://api.tailtopia.id');
 
 /// Google OAuth serverClientId（L2 真实登录需要；env 注入，留空走默认配置文件）。
 const String _kGoogleServerClientId = String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
