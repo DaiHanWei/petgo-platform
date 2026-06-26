@@ -50,7 +50,7 @@ public class CardPageController {
             TimelineService timelineService,
             @Value("${petgo.card.app-download-url:https://petgo.example/download}") String downloadUrl,
             @Value("${petgo.card.ios-url:https://apps.apple.com/app/petgo}") String iosUrl,
-            @Value("${petgo.card.android-url:https://play.google.com/store/apps/details?id=com.tailtopia}")
+            @Value("${petgo.card.android-url:https://play.google.com/store/apps/details?id=com.tailtopia.app}")
                     String androidUrl,
             @Value("${petgo.card.public-base-url:}") String publicBaseUrl) {
         this.profiles = profileService::findByCardToken;
@@ -115,7 +115,7 @@ public class CardPageController {
         model.addAttribute("downloadUrl", downloadUrl);
         model.addAttribute("iosUrl", iosUrl);
         model.addAttribute("androidUrl", androidUrl);
-        model.addAttribute("deepLink", "petgo://card/" + cardToken);
+        model.addAttribute("deepLink", "tailtopia://card/" + cardToken);
         return "card";
     }
 

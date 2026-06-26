@@ -49,6 +49,19 @@ import '../../shared/widgets/app_shell.dart';
 /// 根 Navigator key（供拦截器在 401 续期失败后于全局弹登录引导，Story 1.5 F3）。
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
+/// 冷启动深链落点暂存（成长档案分享页 `tailtopia://card/...` → `/profile`）。
+/// 冷启动时 app_links 拿到的初始链接存这里，由 [SplashPage] 完成时消费（替代默认 `/home`），
+/// 避免与 splash 的 `go('/home')` 抢路由。热启动（app 已活）直接 `router.go`，不经此。
+class PendingDeepLinkNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void set(String? location) => state = location;
+}
+
+final NotifierProvider<PendingDeepLinkNotifier, String?> pendingDeepLinkProvider =
+    NotifierProvider<PendingDeepLinkNotifier, String?>(PendingDeepLinkNotifier.new);
+
 /// 兽医端主题作用域：给 `/vet/*` 子树注入薄荷主题（spec-vet-mint-theme.md），
 /// 与用户侧紫主题物理隔离。
 Widget _vetScoped(Widget child) => Theme(data: AppTheme.vet, child: child);
@@ -106,6 +119,14 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
                 .timeout(const Duration(seconds: 3), onTimeout: () {});
             final ctx = rootNavigatorKey.currentContext;
             if (ctx == null || !ctx.mounted) return;
+            // 冷启动若由分享页深链唤起 → 落该目标（成长档案）；否则按角色直达。
+            // 受控路由门控仍由 redirect 收口（游客 /profile → /home）。
+            final pending = ref.read(pendingDeepLinkProvider);
+            if (pending != null) {
+              ref.read(pendingDeepLinkProvider.notifier).set(null);
+              ctx.go(pending);
+              return;
+            }
             ctx.go(ref.read(authControllerProvider).isVet ? '/vet/workbench' : '/home');
           },
         ),

@@ -47,6 +47,17 @@
 					<string>com.googleusercontent.apps.952015467016-rip06l8hh1mn4ppi4t3f758b0ah1nb8d</string>
 				</array>
 			</dict>
+			<dict>
+				<!-- 成长档案分享页深链：tailtopia://card/{token} → App 落成长档案（app_links 接收）。 -->
+				<key>CFBundleTypeRole</key>
+				<string>Editor</string>
+				<key>CFBundleURLName</key>
+				<string>id.tailtopia.card</string>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>tailtopia</string>
+				</array>
+			</dict>
 		</array>
 		<key>UIApplicationSceneManifest</key>
 		<dict>

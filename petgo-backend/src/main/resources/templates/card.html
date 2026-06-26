@@ -98,22 +98,47 @@
        th:text="'Lihat cerita lengkap ' + ${name}">Lihat cerita lengkap</a>
 
     <script th:inline="none">
-      // 平台分流 + 已装尝试深链直开档案，未装跳商店（真机生效，L2 验收）。
+      // 平台分流 + 三级回退（真机生效，L2 验收）：
+      //   Android：① 深链开 App（成长档案）→ ② market:// 开 Play Store App → ③ Play 网页。
+      //   iOS：① 深链开 App → ② App Store。
+      //   桌面：直接落下载页。
+      // 每级用 setTimeout 守护；若上一级成功（App/商店打开→页面 hidden），pagehide 清除后续跳转。
       (function () {
         var ua = navigator.userAgent || '';
         var isIOS = /iPad|iPhone|iPod/.test(ua);
         var isAndroid = /Android/.test(ua);
-        function store(el) { return isIOS ? el.dataset.ios : (isAndroid ? el.dataset.android : el.href); }
+        // web Play 链接 → market:// 应用直达链接（同包名）。
+        function toMarket(webUrl) {
+          return webUrl.replace('https://play.google.com/store/apps/details', 'market://details');
+        }
+        function go(url) { window.location.href = url; }
+        // 注册一个「页面隐藏即取消」的定时器：返回 cancel 句柄。
+        function guard(fn, ms) {
+          var t = setTimeout(fn, ms);
+          window.addEventListener('pagehide', function () { clearTimeout(t); }, { once: true });
+          return t;
+        }
         ['ctaPrimary', 'ctaSecondary'].forEach(function (id) {
           var el = document.getElementById(id);
           if (!el) return;
           el.addEventListener('click', function (e) {
             e.preventDefault();
             var deep = el.dataset.deeplink;
-            var fallback = store(el);
-            var t = setTimeout(function () { window.location.href = fallback; }, 800);
-            window.location.href = deep; // 已装直开；未装 800ms 后跳商店
-            window.addEventListener('pagehide', function () { clearTimeout(t); });
+            var androidWeb = el.dataset.android;
+            var ios = el.dataset.ios;
+            if (isAndroid) {
+              // ① 深链；900ms 内没走（未装/未注册）→ ② Play App；再 700ms 没走 → ③ Play 网页。
+              guard(function () {
+                guard(function () { go(androidWeb); }, 700);
+                go(toMarket(androidWeb));
+              }, 900);
+              go(deep);
+            } else if (isIOS) {
+              guard(function () { go(ios); }, 900);
+              go(deep);
+            } else {
+              go(el.href); // 桌面：下载页
+            }
           });
         });
       })();

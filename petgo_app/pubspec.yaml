@@ -40,6 +40,8 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   go_router: ^17.2.3
+  # 成长档案分享页深链（tailtopia://card/{token} → App 落成长档案）。原生自动深链已关，由本包显式接收。
+  app_links: ^6.3.2
   # Story 1.3：网络 / 安全存储 / 偏好 / Google 登录
   dio: ^5.7.0
   flutter_secure_storage: ^9.2.2
