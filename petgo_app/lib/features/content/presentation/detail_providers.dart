@@ -41,3 +41,15 @@ class ReplyTargetNotifier extends Notifier<ReplyTarget?> {
 
 final NotifierProvider<ReplyTargetNotifier, ReplyTarget?> replyTargetProvider =
     NotifierProvider<ReplyTargetNotifier, ReplyTarget?>(ReplyTargetNotifier.new);
+
+/// 评论框聚焦请求信号。点击互动栏评论图标时 [requestFocus]，CommentComposer 监听后弹出键盘。
+/// （回复按钮通过 [replyTargetProvider] 变更触发聚焦，无需经此信号。）
+class CommentFocusNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void requestFocus() => state = state + 1;
+}
+
+final NotifierProvider<CommentFocusNotifier, int> commentFocusProvider =
+    NotifierProvider<CommentFocusNotifier, int>(CommentFocusNotifier.new);

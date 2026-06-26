@@ -24,12 +24,14 @@ class CommentComposer extends ConsumerStatefulWidget {
 
 class _CommentComposerState extends ConsumerState<CommentComposer> {
   final TextEditingController _controller = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
   static const int _maxLen = 200;
   bool _sending = false;
 
   @override
   void dispose() {
     _controller.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -67,6 +69,19 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
     final l10n = AppLocalizations.of(context);
     final isGuest = ref.watch(authControllerProvider).status == AuthStatus.guest;
     final replyTarget = ref.watch(replyTargetProvider);
+
+    // 点「回复」设置回复目标 → 自动弹键盘（游客无回复入口，无需判 guest）。
+    ref.listen<ReplyTarget?>(replyTargetProvider, (prev, next) {
+      if (next != null) _focusNode.requestFocus();
+    });
+    // 点互动栏评论图标 → 弹键盘；游客转登录引导（FR-0C）。
+    ref.listen<int>(commentFocusProvider, (prev, next) {
+      if (isGuest) {
+        requireLogin(ref, context, onAllowed: () {});
+      } else {
+        _focusNode.requestFocus();
+      }
+    });
 
     // 游客：只读提示框，点击触发 FR-0C。
     if (isGuest) {
@@ -108,6 +123,7 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
                 child: TextField(
                   key: const ValueKey('detailCommentInput'),
                   controller: _controller,
+                  focusNode: _focusNode,
                   maxLength: _maxLen,
                   minLines: 1,
                   maxLines: 3,

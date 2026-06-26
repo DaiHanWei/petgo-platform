@@ -127,7 +127,7 @@ class _DetailScaffold extends ConsumerWidget {
                       _ImageCarousel(urls: detail.imageUrls),
                     ],
                     const SizedBox(height: AppSpacing.md),
-                    _interactionBar(),
+                    _interactionBar(ref),
                     const Divider(height: AppSpacing.xl, color: AppColors.divider),
                     // KOMENTAR (n) 计数标题（detail.html）。
                     Text('${l10n.detailCommentsTitle.toUpperCase()} (${detail.commentCount})',
@@ -222,7 +222,7 @@ class _DetailScaffold extends ConsumerWidget {
     );
   }
 
-  Widget _interactionBar() {
+  Widget _interactionBar(WidgetRef ref) {
     // 点赞按钮（Story 3.4，乐观更新）+ 评论数读取展示。卡片不展示计数，详情互动栏展示。
     return Row(
       children: [
@@ -232,9 +232,19 @@ class _DetailScaffold extends ConsumerWidget {
           initialCount: detail.likeCount,
         ),
         const SizedBox(width: AppSpacing.lg),
-        const Icon(Icons.mode_comment_outlined, size: 20, color: AppColors.textSecondary),
-        const SizedBox(width: AppSpacing.xs),
-        Text('${detail.commentCount}', style: AppTypography.caption),
+        // 点评论图标/计数 → 聚焦底部评论框弹键盘（游客转登录引导）。
+        GestureDetector(
+          key: const ValueKey('detailCommentIcon'),
+          behavior: HitTestBehavior.opaque,
+          onTap: () => ref.read(commentFocusProvider.notifier).requestFocus(),
+          child: Row(
+            children: [
+              const Icon(Icons.mode_comment_outlined, size: 20, color: AppColors.textSecondary),
+              const SizedBox(width: AppSpacing.xs),
+              Text('${detail.commentCount}', style: AppTypography.caption),
+            ],
+          ),
+        ),
       ],
     );
   }
