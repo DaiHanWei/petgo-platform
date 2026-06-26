@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/media/media_scope.dart';
 import '../../../core/network/problem_detail.dart';
+import '../../../core/router/deep_link_routes.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/domain/auth_state.dart';
@@ -14,7 +15,11 @@ import '../../media/domain/media_upload_use_case.dart';
 import '../../profile/data/milestone_repository.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../profile/data/timeline_repository.dart';
+import '../../profile/domain/milestone.dart';
+import '../../profile/domain/milestone_titles.dart';
 import '../../profile/domain/pet_profile.dart';
+import '../../profile/domain/share_service.dart';
+import '../../profile/presentation/widgets/milestone_celebration.dart';
 import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/dashed_rect.dart';
 import '../../../shared/utils/media_permission.dart';
@@ -189,15 +194,45 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
         ref.invalidate(archiveStatsProvider);
       }
       // 里程碑「去发布」回填（Story 8.4）：仍为成长日历类型 → 以新内容 id 自动打卡完成（best-effort）。
+      MilestoneItem? completedMilestone;
       if (widget.milestoneCode != null && controller.type == ContentType.growthMoment) {
         try {
-          await ref.read(milestoneRepositoryProvider).checkIn(widget.milestoneCode!, id);
+          completedMilestone =
+              await ref.read(milestoneRepositoryProvider).checkIn(widget.milestoneCode!, id);
         } catch (_) {
           // 回填失败静默：用户可回里程碑页手动「已打卡」关联该内容。
         }
         ref.invalidate(milestoneListProvider);
       }
       if (!mounted) return;
+      // 回填成功 → 先弹 P-35 解锁庆祝（与「去打卡」路径一致，修复「去发布」无完成弹框）。
+      if (completedMilestone != null) {
+        final done = completedMilestone;
+        final locale = Localizations.localeOf(context);
+        final listData = ref.read(milestoneListProvider).asData?.value;
+        final petName = listData?.petName ?? '';
+        final collection = listData == null
+            ? const <MilestoneItem>[]
+            : [
+                for (final g in listData.groups)
+                  for (final it in g.items) it.code == done.code ? done : it,
+              ];
+        final shareText = l10n.milestoneShareText(localizedMilestoneTitle(done.code, locale));
+        final router = GoRouter.maybeOf(context);
+        await showMilestoneCelebration(
+          context,
+          done,
+          petName: petName,
+          collection: collection,
+          onShare: () => ref.read(shareServiceProvider)(shareText),
+          // onSeeAll 省略：庆祝关闭后统一在下方先关 sheet 再跳列表（否则 sheet 挡住跳转）。
+        );
+        if (!mounted) return;
+        // 里程碑路径：庆祝即成功反馈 → 关闭发布 sheet → 跳回里程碑列表（不叠加通用「发布成功」页）。
+        Navigator.of(context).pop();
+        router?.go(DeepLinkRoutes.milestoneList);
+        return;
+      }
       Navigator.of(context).pop(); // 关闭发布 sheet
       context.push('/publish/done', extra: args); // → P-39 发布成功
     } else if (blockSlug != null) {

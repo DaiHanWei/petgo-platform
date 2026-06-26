@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/router/deep_link_routes.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../data/milestone_repository.dart';
 import '../domain/milestone.dart';
+import '../domain/milestone_checkin_prompt_copy.dart';
 import '../domain/milestone_titles.dart';
 import '../domain/share_service.dart';
 import 'widgets/milestone_celebration.dart';
@@ -49,7 +51,8 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
           's' => MilestoneLevel.s,
           _ => MilestoneLevel.m,
         };
-        showMilestoneCelebration(context, _devItem(level));
+        showMilestoneCelebration(context, _devItem(level),
+            petName: data.petName, collection: [for (final g in data.groups) ...g.items]);
       }
     });
   }
@@ -238,7 +241,10 @@ class _Badge extends ConsumerWidget {
     final completed = item.completed;
     return GestureDetector(
       key: ValueKey('milestoneBadge_${item.code}'),
-      onTap: () => _showBadgeSheet(context, ref, item),
+      // 已完成 → 重温 P-35 解锁庆祝；未完成 → P-33b 详情底抽屉。
+      onTap: () => completed
+          ? _showCelebration(context, ref, item)
+          : _showBadgeSheet(context, ref, item),
       child: SizedBox(
         width: _size,
         child: Column(
@@ -281,76 +287,179 @@ class _Badge extends ConsumerWidget {
 }
 
 /// 徽章点击弹层（FR-42）：系统类→说明文案、打卡类未完成→「已打卡 / 去发布」两入口。
+/// 点击已完成徽章 → 重温 P-35 解锁庆祝动效（L 级附分享卡）。
+void _showCelebration(BuildContext context, WidgetRef ref, MilestoneItem item) {
+  final l10n = AppLocalizations.of(context);
+  final locale = Localizations.localeOf(context);
+  final data = ref.read(milestoneListProvider).asData?.value;
+  final petName = data?.petName ?? '';
+  final collection = data == null ? const <MilestoneItem>[] : [for (final g in data.groups) ...g.items];
+  final shareText = l10n.milestoneShareText(localizedMilestoneTitle(item.code, locale));
+  final router = GoRouter.maybeOf(context);
+  showMilestoneCelebration(
+    context,
+    item,
+    petName: petName,
+    collection: collection,
+    onShare: () => ref.read(shareServiceProvider)(shareText),
+    onSeeAll: router == null ? null : () => router.go(DeepLinkRoutes.milestoneList),
+  );
+}
+
+/// P-33b 里程碑详情底抽屉（原型 milestone-sheet）：把手 + 居中大徽章 + 标题 + 级别 chip
+/// + DESKRIPSI 说明卡（FR-43 文案）+ 打卡类两入口/系统类只读。
 void _showBadgeSheet(BuildContext context, WidgetRef ref, MilestoneItem item) {
+  // 打卡引导/说明文案（P-33b · FR-43）需替换 {name} → 宠物名（列表已加载，取当前值即可）。
+  final petName = ref.read(milestoneListProvider).asData?.value.petName ?? '';
   showModalBottomSheet<void>(
     context: context,
-    backgroundColor: AppColors.card,
+    isScrollControlled: true,
+    backgroundColor: AppColors.surface,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
     builder: (sheetContext) {
       final l10n = AppLocalizations.of(sheetContext);
-      final hint = switch (item.trigger) {
+      final locale = Localizations.localeOf(sheetContext);
+      final levelColor = _levelColor(item.level);
+      final completed = item.completed;
+      // FR-43 文案：打卡类→提问 Header + 描述 Body；系统/推送类→仅说明（header 空）。
+      // 未配文案的 code（如生日 *-L1）→ body 空 → 回退到通用 hint。
+      final copy = localizedMilestoneCheckinPrompt(item.code, locale, petName);
+      final fallbackHint = switch (item.trigger) {
         MilestoneTrigger.systemAuto => l10n.milestoneHintSystemAuto,
         MilestoneTrigger.pushPublish => l10n.milestoneHintPushPublish,
         MilestoneTrigger.userCheckin => l10n.milestoneHintCheckin,
       };
+      final body = copy.body.isNotEmpty ? copy.body : fallbackHint;
       // 仅「用户打卡」且未完成才出两入口；系统/推送类、或已完成 → 只读说明。
-      final showCheckinActions = item.trigger.isCheckin && !item.completed;
+      final showCheckinActions = item.trigger.isCheckin && !completed;
+      // CTA 文案按级别取（FR-43）；S/M 之外（不会出现在打卡类）兜底用通用文案。
+      final (checkedInLabel, goPublishLabel) = switch (item.level) {
+        MilestoneLevel.m => (l10n.milestoneActionCheckedInM, l10n.milestoneActionGoPublishM),
+        MilestoneLevel.s => (l10n.milestoneActionCheckedInS, l10n.milestoneActionGoPublishS),
+        MilestoneLevel.l => (l10n.milestoneActionCheckedIn, l10n.milestoneActionGoPublish),
+      };
+      final levelChip = switch (item.level) {
+        MilestoneLevel.l => l10n.milestoneLevelL,
+        MilestoneLevel.m => l10n.milestoneLevelM,
+        MilestoneLevel.s => l10n.milestoneLevelS,
+      };
       return SafeArea(
+        child: SingleChildScrollView(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.lg),
+          padding: const EdgeInsets.fromLTRB(22, 8, 22, 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  Icon(
-                    item.completed ? Icons.emoji_events_rounded : Icons.flag_outlined,
-                    color: item.completed ? AppColors.mint700 : AppColors.muted,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(localizedMilestoneTitle(item.code, Localizations.localeOf(sheetContext)),
-                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-                  ),
-                ],
-              ),
-              if (item.completed && item.completedAt != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  l10n.milestoneCompletedOn(_formatDate(item.completedAt!)),
-                  style: const TextStyle(color: AppColors.mint700, fontWeight: FontWeight.w700),
+              // 拖拽把手。
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 18),
+                  decoration: BoxDecoration(
+                    color: AppColors.line, borderRadius: BorderRadius.circular(9999)),
                 ),
-              ],
-              const SizedBox(height: 10),
-              Text(hint, style: const TextStyle(color: AppColors.ink2, height: 1.35)),
-              if (showCheckinActions) ...[
-                const SizedBox(height: AppSpacing.lg),
-                Row(
+              ),
+              // 居中大徽章 + 标题 + 级别 chip。
+              Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        key: const ValueKey('milestoneCheckedIn'),
-                        onPressed: () => _onCheckedIn(sheetContext, ref, item),
-                        child: Text(l10n.milestoneActionCheckedIn),
+                    Container(
+                      width: 76,
+                      height: 76,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: completed
+                            ? LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [levelColor, Color.lerp(levelColor, Colors.white, 0.25)!],
+                              )
+                            : null,
+                        color: completed ? null : AppColors.line2,
+                        boxShadow: completed
+                            ? [BoxShadow(color: levelColor.withValues(alpha: 0.3), blurRadius: 24, offset: const Offset(0, 8))]
+                            : null,
+                      ),
+                      child: Icon(
+                        completed ? Icons.emoji_events_rounded : Icons.lock_outline_rounded,
+                        size: 36,
+                        color: completed ? AppColors.onAccent : AppColors.muted,
                       ),
                     ),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      child: FilledButton(
-                        key: const ValueKey('milestoneGoPublish'),
-                        onPressed: () => _onGoPublish(sheetContext, item),
-                        child: Text(l10n.milestoneActionGoPublish),
-                      ),
+                    const SizedBox(height: 12),
+                    Text(
+                      localizedMilestoneTitle(item.code, locale),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink),
                     ),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppColors.mintTint, borderRadius: BorderRadius.circular(9999)),
+                      child: Text(levelChip,
+                          style: const TextStyle(
+                              fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.mint700)),
+                    ),
+                    if (completed && item.completedAt != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        l10n.milestoneCompletedOn(_formatDate(item.completedAt!)),
+                        style: const TextStyle(color: AppColors.mint700, fontWeight: FontWeight.w700, fontSize: 12),
+                      ),
+                    ],
                   ],
+                ),
+              ),
+              const SizedBox(height: 18),
+              // 说明卡（DESKRIPSI）：打卡类→提问 Header + 描述；系统类→自动点亮说明。
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(15, 13, 15, 15),
+                decoration: BoxDecoration(
+                  color: AppColors.mintTint, borderRadius: BorderRadius.circular(14)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (copy.header.isNotEmpty) ...[
+                      Text(copy.header,
+                          style: const TextStyle(
+                              fontSize: 14.5, fontWeight: FontWeight.w800, height: 1.35, color: AppColors.ink)),
+                      const SizedBox(height: 8),
+                    ],
+                    Text(body, style: const TextStyle(fontSize: 13, height: 1.55, color: AppColors.ink2)),
+                  ],
+                ),
+              ),
+              if (showCheckinActions) ...[
+                const SizedBox(height: 18),
+                // 主按钮「已经历过」在上、次按钮「去拍」在下、最后「稍后」软关闭（原型 P-33b CTA 结构）。
+                FilledButton(
+                  key: const ValueKey('milestoneCheckedIn'),
+                  onPressed: () => _onCheckedIn(sheetContext, ref, item),
+                  child: Text(checkedInLabel, textAlign: TextAlign.center),
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton(
+                  key: const ValueKey('milestoneGoPublish'),
+                  onPressed: () => _onGoPublish(sheetContext, item),
+                  child: Text(goPublishLabel, textAlign: TextAlign.center),
+                ),
+                const SizedBox(height: 4),
+                TextButton(
+                  onPressed: () => Navigator.of(sheetContext).pop(),
+                  child: Text(l10n.pushSoftGuideLater,
+                      style: const TextStyle(color: AppColors.muted, fontSize: 12)),
                 ),
               ],
             ],
           ),
+        ),
         ),
       );
     },
@@ -498,21 +607,33 @@ class _CandidateTile extends ConsumerWidget {
     final locale = Localizations.localeOf(context);
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
+    final router = GoRouter.maybeOf(context);
     try {
+      // 庆祝卡片文案需替换 {name} → 宠物名（列表已加载，取当前值即可）。
+      final listData = ref.read(milestoneListProvider).asData?.value;
+      final petName = listData?.petName ?? '';
       final completed =
           await ref.read(milestoneRepositoryProvider).checkIn(milestoneCode, candidate.contentId);
       ref.invalidate(milestoneListProvider);
+      // 合集预览：用 checkIn 前的快照，并把刚打卡的那条替换为已完成态（refetch 是异步的，拿不到即时新值）。
+      final collection = listData == null
+          ? const <MilestoneItem>[]
+          : [
+              for (final g in listData.groups)
+                for (final it in g.items) it.code == completed.code ? completed : it,
+            ];
       // L 级分享卡文案（捕获 l10n / locale，避免 pop 后失效）。标题按 locale 本地化（杜绝后端中文）。
       final shareText = l10n.milestoneShareText(localizedMilestoneTitle(completed.code, locale));
       navigator.pop(); // 关 picker
       if (!context.mounted) return;
-      // 完成后按级触发三级庆祝动效（Story 8.5）；L 级 Duolingo 开宝箱后自动弹分享卡（8.6，复用 2-6 分享通道）。
+      // 完成后触发统一 P-35 庆祝动效（Story 8.5）；L 级分享卡复用 2-6 分享通道（8.6）。
       await showMilestoneCelebration(
         context,
         completed,
-        onShare: completed.level == MilestoneLevel.l
-            ? () => ref.read(shareServiceProvider)(shareText)
-            : null,
+        petName: petName,
+        collection: collection,
+        onShare: () => ref.read(shareServiceProvider)(shareText),
+        onSeeAll: router == null ? null : () => router.go(DeepLinkRoutes.milestoneList),
       );
     } catch (_) {
       messenger.showSnackBar(SnackBar(content: Text(l10n.milestoneCheckinFailed)));

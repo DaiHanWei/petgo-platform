@@ -71,7 +71,9 @@ void main() {
 
     // 选未关联候选 → 调 checkIn(code, contentId)。
     await tester.tap(find.byKey(const ValueKey('milestoneCandidate_101')));
-    await tester.pumpAndSettle();
+    // checkIn 后弹 P-35 庆祝（含循环彩纸，勿 pumpAndSettle）；lastCode 在 checkIn 时已同步置位。
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
     expect(repo.lastCode, 'C-S6');
     expect(repo.lastContentId, 101);
   });

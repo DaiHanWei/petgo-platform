@@ -70,14 +70,28 @@ void main() {
     expect(find.byIcon(Icons.lock_outline_rounded), findsWidgets);
   });
 
-  testWidgets('点击系统自动徽章 → 只读说明（无打卡按钮）', (tester) async {
+  testWidgets('点击未完成非打卡徽章 → P-33b 只读说明（无打卡按钮）', (tester) async {
     await tester.pumpWidget(_wrap());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('milestoneBadge_C-S1')));
+    // C-L1：未完成 + 推送发布类（非用户打卡）→ 弹 P-33b 详情，但不出打卡两入口。
+    await tester.tap(find.byKey(const ValueKey('milestoneBadge_C-L1')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('milestoneCheckedIn')), findsNothing);
     expect(find.byKey(const ValueKey('milestoneGoPublish')), findsNothing);
+  });
+
+  testWidgets('点击已完成徽章 → P-35 解锁庆祝（而非 P-33b 详情）', (tester) async {
+    await tester.pumpWidget(_wrap());
+    await tester.pumpAndSettle();
+
+    // C-S1：已完成 → 重温 P-35 统一庆祝。
+    await tester.tap(find.byKey(const ValueKey('milestoneBadge_C-S1')));
+    await tester.pump(); // 打开
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(const ValueKey('milestoneCelebration')), findsOneWidget);
+    // 不应是 P-33b 详情（无打卡按钮）。
+    expect(find.byKey(const ValueKey('milestoneCheckedIn')), findsNothing);
   });
 
   testWidgets('点击用户打卡未完成徽章 → 「已打卡 / 去发布」两入口', (tester) async {

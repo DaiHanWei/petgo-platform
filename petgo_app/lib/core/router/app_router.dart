@@ -262,6 +262,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
                 : null,
             // F9：日历无记录格「+」跳发布预填该事件日期（AC6）。
             presetEventDate: dateRaw != null ? DateTime.tryParse(dateRaw) : null,
+            // 里程碑「去发布」回填（Story 8.4）：携里程碑 code，发布成功后自动打卡。
+            milestoneCode: s.uri.queryParameters['milestoneCode'],
           );
         },
       ),

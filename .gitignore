@@ -20,6 +20,11 @@
 # Flutter/Xcode 在仓库根可能生成的构建产物（子工程自带各自 .gitignore）
 /build/
 
+# 本地打包产物（APK/AAB 不入库，避免仓库暴涨）
+dist/
+*.apk
+*.aab
+
 # 本地 L2 验收脚本（含真实凭证调用，绝不入库）
 scripts/local/
 .agents/
