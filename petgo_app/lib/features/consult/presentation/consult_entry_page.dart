@@ -32,31 +32,45 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
   bool _activeChecked = false;
   bool _ratingPromptHandled = false;
 
-  /// 点「Mulai Konsultasi」时即时查后台在线态：查到无兽医在线 → 置 true 切到离线引导。
-  /// 不再进页预查 / 轮询（决策：在线态只在用户真正发起时校验，避免缓存/轮询的时序问题）。
+  /// 进页即查后台在线态：无兽医在线 → 直接展示离线引导，不必先让用户走「确认问诊流程」。
+  /// 点「Mulai Konsultasi」时仍即时复查一次（覆盖进页后兽医下线的情况）。
   bool _noVetOnline = false;
+  bool _availabilityChecked = false;
 
   @override
   void initState() {
     super.initState();
-    _checkActive();
+    _init();
   }
 
-  Future<void> _checkActive() async {
+  Future<void> _init() async {
+    ConsultSession? a;
     try {
-      final a = await ref.read(consultRepositoryProvider).active();
+      a = await ref.read(consultRepositoryProvider).active();
+    } catch (_) {
+      // active 查询失败：当作无进行中会话，继续查在线态。
+    }
+    if (!mounted) return;
+    setState(() {
+      _active = a;
+      _activeChecked = true;
+    });
+    if (a != null) return; // 有进行中会话 → 展示恢复入口（不查在线态、不补弹评分）。
+
+    // 无进行中 → 进页即查在线态：无兽医直接切离线引导（不必先点 Mulai 走流程）。
+    try {
+      final online = await ref.read(consultRepositoryProvider).vetOnline();
       if (!mounted) return;
       setState(() {
-        _active = a;
-        _activeChecked = true;
+        _noVetOnline = !online;
+        _availabilityChecked = true;
       });
-      // AC5（F12·R2 补评分推迟）：有进行中会话 → 推迟补弹；仅无活跃会话时补弹一次。
-      if (a == null) {
-        await _maybePromptRating();
-      }
     } catch (_) {
-      if (mounted) setState(() => _activeChecked = true);
+      // 在线态查询失败 → 当就绪态（点 Mulai 再校验），不卡 loading。
+      if (mounted) setState(() => _availabilityChecked = true);
     }
+    // AC5（F12·R2 补评分推迟）：仅无活跃会话时补弹一次。
+    await _maybePromptRating();
   }
 
   /// 补弹评分（AC3 · 推迟门控后）：取待补弹的已关闭会话 → 弹一次 → 置 PROMPTED（无论是否评分，不再弹）。
@@ -126,9 +140,11 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
   Widget _body(AppLocalizations l10n) {
     // 已有进行中咨询 → 「查看进行中 →」（优先于发起）。
     if (_active != null) return _ongoing(l10n);
-    // 仅等 active 检查（不再进页预查在线态）。
-    if (!_activeChecked) return const Center(child: CircularProgressIndicator());
-    // 点 Start 查到无兽医 → 离线引导；否则就绪态（步骤 + 发起按钮）。
+    // 等 active + 在线态都查完再渲染（避免就绪态闪一下再跳离线）。
+    if (!_activeChecked || !_availabilityChecked) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    // 进页查到无兽医 → 直接离线引导；否则就绪态（步骤 + 发起按钮）。
     if (_noVetOnline) return _offline(l10n);
     return _ready(l10n);
   }
