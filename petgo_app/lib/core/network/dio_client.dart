@@ -17,8 +17,14 @@ import 'auth_interceptor.dart';
 const String kApiBaseUrl =
     String.fromEnvironment('PETGO_API_BASE_URL', defaultValue: 'https://api.tailtopia.id');
 
-/// Google OAuth serverClientId（L2 真实登录需要；env 注入，留空走默认配置文件）。
-const String _kGoogleServerClientId = String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
+/// Google OAuth serverClientId（web client；公开值/非密钥，与 iOS Info.plist 的 GIDServerClientID 同一串）。
+/// 默认硬编码生产 web client：确保任何构建（含同事 pull 后漏传 dart-define 的 Android 包）拿到的
+/// idToken 的 aud 恒为 web client → 后端校验得过。可经 --dart-define=GOOGLE_SERVER_CLIENT_ID 覆盖。
+/// 注意：本项目无 google-services.json / strings.xml，"留空"不会回落任何配置——必须有此默认值。
+const String _kGoogleServerClientId = String.fromEnvironment(
+  'GOOGLE_SERVER_CLIENT_ID',
+  defaultValue: '952015467016-3q9vb0ro18fnecl9gpnrddbfj9snqer0.apps.googleusercontent.com',
+);
 
 final tokenStoreProvider = Provider<TokenStore>((ref) => SecureTokenStore());
 
