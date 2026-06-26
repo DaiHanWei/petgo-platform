@@ -7,6 +7,7 @@ import '../../features/auth/data/auth_repository.dart';
 import '../../features/auth/data/google_auth_client.dart';
 import '../../features/auth/domain/auth_state.dart';
 import '../../features/auth/domain/login_guide_controller.dart';
+import '../l10n/locale_controller.dart';
 import '../router/app_router.dart';
 import '../storage/secure_storage.dart';
 import 'api_log_interceptor.dart';
@@ -54,8 +55,13 @@ final Provider<Dio> dioProvider = Provider<Dio>((ref) {
       }
     },
     localeCode: () {
-      final locale = WidgetsBinding.instance.platformDispatcher.locale;
-      return locale.languageCode == 'id' ? 'id' : 'en';
+      // 先取 App 内生效语言（用户在设置里手选的 id/en）；为空（跟随设备）才回落设备语言。
+      // 旧实现只读设备语言 → App 选了印尼语但系统是英语时仍发 Accept-Language: en，
+      // 导致后端 response_locale 恒为 en（AI 问诊/通知等按错语言作答）。
+      final selected = ref.read(localeControllerProvider)?.languageCode;
+      if (selected == 'id' || selected == 'en') return selected!;
+      final device = WidgetsBinding.instance.platformDispatcher.locale.languageCode;
+      return device == 'id' ? 'id' : 'en';
     },
   ));
   // 接口日志（仅 debug 输出控制台，脱敏）。置于 auth 之后 → 打印的是最终带鉴权的请求与真实响应。
