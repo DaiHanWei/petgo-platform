@@ -190,6 +190,8 @@
   "milestoneCheckinDone": "Milestone unlocked!",
   "milestoneCheckinFailed": "Could not check in, please try again",
   "milestoneCelebrateUnlocked": "Milestone unlocked!",
+  "milestoneCelebrateCongrats": "Another precious moment in your journey together. 🐾",
+  "@milestoneCelebrateCongrats": { "description": "Celebration sheet: warm congratulatory line under the milestone name" },
   "milestoneCelebrateOpenChest": "Tap to open",
   "milestoneShareText": "My pet just unlocked the \"{title}\" milestone on TailTopia! 🎉",
   "@milestoneShareText": { "placeholders": { "title": { "type": "String" } } },

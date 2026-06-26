@@ -144,6 +144,7 @@
   "milestoneCheckinDone": "Tonggak terbuka!",
   "milestoneCheckinFailed": "Gagal check-in, coba lagi",
   "milestoneCelebrateUnlocked": "Tonggak terbuka!",
+  "milestoneCelebrateCongrats": "Satu lagi momen berharga dalam perjalanan kalian. 🐾",
   "milestoneCelebrateOpenChest": "Ketuk untuk buka",
   "milestoneShareText": "Peliharaanku baru membuka tonggak \"{title}\" di TailTopia! 🎉",
   "@milestoneShareText": { "placeholders": { "title": { "type": "String" } } },

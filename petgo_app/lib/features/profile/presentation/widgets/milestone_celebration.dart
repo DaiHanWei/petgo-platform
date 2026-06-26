@@ -46,9 +46,10 @@ class _MilestoneCelebrationViewState extends State<_MilestoneCelebrationView>
   Timer? _autoClose;
   bool _opened = false; // L 级宝箱是否已开
 
-  /// 各级停留时长（FR-42：S 1-2s / M ~3s / L 交互后停留）。
+  /// 各级停留时长（FR-42：S/M ~3s / L 交互后停留）。
+  /// S 改为底部抽屉式三段内容（名字/级别+日期/贺词），停留延长到 3.5s 供阅读。
   Duration get _holdDuration => switch (widget.item.level) {
-        MilestoneLevel.s => const Duration(milliseconds: 1500),
+        MilestoneLevel.s => const Duration(milliseconds: 3500),
         MilestoneLevel.m => const Duration(milliseconds: 3000),
         MilestoneLevel.l => const Duration(milliseconds: 4000),
       };
@@ -105,46 +106,85 @@ class _MilestoneCelebrationViewState extends State<_MilestoneCelebrationView>
     };
   }
 
-  // ---- S：半屏庆祝弹层 ----
+  // ---- S：底部抽屉式庆祝弹层（复用 more-sheet/confirm-sheet 样式：把手 + 顶圆角 + surface 底）----
   Widget _half(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final locale = Localizations.localeOf(context);
+    final title = localizedMilestoneTitle(widget.item.code, locale);
+    // 「具体内容」：里程碑级别 +（若有）达成日期。无逐条描述字段，用真实元信息。
+    final levelLabel = switch (widget.item.level) {
+      MilestoneLevel.s => l10n.milestoneLevelS,
+      MilestoneLevel.m => l10n.milestoneLevelM,
+      MilestoneLevel.l => l10n.milestoneLevelL,
+    };
+    final completedLine =
+        widget.item.completedAt == null ? null : l10n.milestoneCompletedOn(_fmtDate(widget.item.completedAt!));
     return Align(
       alignment: Alignment.bottomCenter,
-      child: ScaleTransition(
-        scale: CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
+      child: SlideTransition(
+        position: Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero)
+            .animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic)),
         child: Container(
           key: const ValueKey('milestoneCelebrationS'),
-          margin: const EdgeInsets.all(AppSpacing.lg),
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          decoration: BoxDecoration(
-            color: AppColors.card,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 24, offset: Offset(0, 8))],
+          width: double.infinity,
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 24, offset: Offset(0, -4))],
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _badge(56),
-              const SizedBox(width: AppSpacing.md),
-              Flexible(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(l10n.milestoneCelebrateUnlocked,
-                        style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.mint700)),
-                    const SizedBox(height: 4),
-                    Text(localizedMilestoneTitle(widget.item.code, Localizations.localeOf(context)),
-                        maxLines: 2, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w700)),
-                  ],
-                ),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 12, AppSpacing.lg, AppSpacing.lg),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 顶部把手（与 detail 更多抽屉一致）。
+                  Container(
+                    width: 36,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+                    decoration:
+                        BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(9999)),
+                  ),
+                  _badge(64),
+                  const SizedBox(height: AppSpacing.md),
+                  // 解锁标头。
+                  Text(l10n.milestoneCelebrateUnlocked,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.mint700)),
+                  const SizedBox(height: AppSpacing.xs),
+                  // ① 里程碑名字。
+                  Text(title,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w800, fontSize: 19, color: AppColors.ink)),
+                  const SizedBox(height: 6),
+                  // ② 具体内容：级别（+ 达成日期）。
+                  Text(
+                    completedLine == null ? levelLabel : '$levelLabel · $completedLine',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  // ③ 贺词。
+                  Text(l10n.milestoneCelebrateCongrats,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 14, height: 1.4, color: AppColors.ink2)),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
     );
+  }
+
+  /// 达成日期格式（与里程碑列表页一致：yyyy-MM-dd，本地时区）。
+  static String _fmtDate(DateTime d) {
+    final local = d.toLocal();
+    return '${local.year}-${local.month.toString().padLeft(2, '0')}'
+        '-${local.day.toString().padLeft(2, '0')}';
   }
 
   // ---- M：全屏动效 + 徽章解锁 ----
