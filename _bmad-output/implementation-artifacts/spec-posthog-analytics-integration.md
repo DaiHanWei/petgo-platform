@@ -58,7 +58,7 @@ context: ['{project-root}/CLAUDE.md']
 
 **Execution:**
 - [x] `petgo_app/pubspec.yaml` -- 加 `posthog_flutter: ^4.0.0`；`flutter pub get` 解析为 **4.11.0**（^4.0.0 约束内最新），成功。
-- [x] `petgo_app/lib/core/analytics/analytics.dart` -- 门面已建：`init()` 用 dart-define `POSTHOG_KEY`/`POSTHOG_HOST`（默认生产 token / `https://us.i.posthog.com`）建 `PostHogConfig`（debug=kDebugMode、captureApplicationLifecycleEvents=true、sessionReplay=false）；`identifyUser(int)` sha256 distinctId；`reset()`；`capture()` 经 `scrub` 剥离敏感键。全 try/catch 吞错。
+- [x] `petgo_app/lib/core/analytics/analytics.dart` -- 门面已建：`init()` 用 dart-define `POSTHOG_KEY`/`POSTHOG_HOST`（默认生产 token / `https://eu.i.posthog.com`，EU 节点 project 211847）建 `PostHogConfig`（debug=kDebugMode、captureApplicationLifecycleEvents=true、sessionReplay=false）；`identifyUser(int)` sha256 distinctId；`reset()`；`capture()` 经 `scrub` 剥离敏感键。全 try/catch 吞错。
 - [x] `petgo_app/lib/main.dart` -- `runApp` 前 `await Analytics.init()`。
 - [x] `petgo_app/lib/app.dart` -- `build` 内 `ref.listen(authControllerProvider)`：authenticated 且 `profile?.id != null` → identify；guest → reset。
 - [x] `petgo_app/lib/core/router/app_router.dart` -- `GoRouter(... observers: [PosthogObserver()])`。

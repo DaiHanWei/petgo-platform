@@ -19,13 +19,13 @@ class Analytics {
   /// write-only Project Token（可安全入端）。dart-define `POSTHOG_KEY` 覆盖，默认生产值。
   static const String _apiKey = String.fromEnvironment(
     'POSTHOG_KEY',
-    defaultValue: 'phc_CbE82kmfaij8HiT9GXGMbGHDo7DXVWgrbHcTRmue5knb',
+    defaultValue: 'phc_mw2Qxs3pXeHkcyyd4ahjAXUUh6aruzMxLfcFmg8ePzC',
   );
 
-  /// 数据节点。dart-define `POSTHOG_HOST` 覆盖，默认 US Cloud。
+  /// 数据节点。dart-define `POSTHOG_HOST` 覆盖，默认 EU Cloud（project 211847）。
   static const String _host = String.fromEnvironment(
     'POSTHOG_HOST',
-    defaultValue: 'https://us.i.posthog.com',
+    defaultValue: 'https://eu.i.posthog.com',
   );
 
   /// 误传也不出端的敏感键黑名单：PII / 健康数据 / 凭证 / 精确位置 兜底剥离。
@@ -49,7 +49,9 @@ class Analytics {
         ..host = _host
         ..debug = kDebugMode // release 自动关，避免日志泄露
         ..captureApplicationLifecycleEvents = true
-        ..sessionReplay = false;
+        ..sessionReplay = false
+        // debug 下每条即时上送，便于本地/控制台实时验收；release 保持默认批量(20)。
+        ..flushAt = kDebugMode ? 1 : 20;
       // 限时：setup 卡住（弱网/原生异常）不得阻塞 runApp 拖慢首帧。
       await Posthog().setup(config).timeout(const Duration(seconds: 3));
     } catch (e) {
@@ -85,6 +87,24 @@ class Analytics {
     } catch (e) {
       debugPrint('[Analytics] capture failed: $e');
     }
+  }
+
+  /// autocapture 点击上报：统一事件 `button_tapped`，带 `button_name`(已脱敏) + `autocaptured`。
+  /// 当前屏幕由 SDK 自动以 `$screen_name` 注入（无需手动带），故此处不再附 screen。
+  static Future<void> captureTap(String rawLabel) => capture('button_tapped', {
+        'button_name': sanitizeTapLabel(rawLabel),
+        'autocaptured': true,
+      });
+
+  /// autocapture 标签脱敏（纯函数，L0 可测）。控件标签可能是用户名/宠物名/症状等自由文本——
+  /// 命中疑似 PII/自由文本（过长 / 含 `@` / 长数字串）一律替换为占位，空标签记 `(unlabeled)`。
+  static String sanitizeTapLabel(String raw) {
+    final s = raw.trim().replaceAll(RegExp(r'\s+'), ' ');
+    if (s.isEmpty) return '(unlabeled)';
+    if (s.length > 40 || s.contains('@') || RegExp(r'\d{6,}').hasMatch(s)) {
+      return '(redacted)';
+    }
+    return s;
   }
 
   /// 稳定、非明文的用户标识（送 PostHog 的 distinctId）。纯函数，L0 可测。

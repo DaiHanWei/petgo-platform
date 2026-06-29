@@ -4,6 +4,7 @@ import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
+import 'package:tailtopia/core/analytics/analytics_autocapture.dart';
 import 'package:tailtopia/core/l10n/locale_controller.dart';
 import 'package:tailtopia/core/router/app_router.dart';
 import 'package:tailtopia/core/theme/app_theme.dart';
@@ -112,7 +113,8 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> {
         final mq = MediaQuery.of(context);
         return MediaQuery(
           data: mq.copyWith(textScaler: mq.textScaler.clamp(maxScaleFactor: TailTopiaApp.maxTextScale)),
-          child: child ?? const SizedBox.shrink(),
+          // 全局点击 autocapture：根部旁路监听所有 tap → button_tapped（不影响正常点击）。
+          child: AnalyticsAutocapture(child: child ?? const SizedBox.shrink()),
         );
       },
     );

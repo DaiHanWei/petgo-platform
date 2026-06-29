@@ -51,6 +51,27 @@ void main() {
     });
   });
 
+  group('Analytics.sanitizeTapLabel', () {
+    test('普通 CTA 文案原样保留(去多余空白)', () {
+      expect(Analytics.sanitizeTapLabel('  Lanjut  '), 'Lanjut');
+      expect(Analytics.sanitizeTapLabel('Masuk dengan Google'), 'Masuk dengan Google');
+    });
+
+    test('空标签 → (unlabeled)', () {
+      expect(Analytics.sanitizeTapLabel(''), '(unlabeled)');
+      expect(Analytics.sanitizeTapLabel('   '), '(unlabeled)');
+    });
+
+    test('疑似 PII/自由文本 → (redacted)', () {
+      expect(Analytics.sanitizeTapLabel('aurel@tailtopia.id'), '(redacted)'); // 含 @
+      expect(Analytics.sanitizeTapLabel('0812345678'), '(redacted)'); // 长数字串
+      expect(
+        Analytics.sanitizeTapLabel('This is a long free-form note exceeding forty characters'),
+        '(redacted)',
+      ); // 过长自由文本(>40)
+    });
+  });
+
   group('Analytics.distinctIdFor', () {
     test('确定性：同 id 同输出', () {
       expect(Analytics.distinctIdFor(42), Analytics.distinctIdFor(42));
