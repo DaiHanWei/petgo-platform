@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -89,8 +91,35 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
       backgroundColor: AppColors.base,
       body: FadeTransition(opacity: _fade, child: widget.navigationShell),
       floatingActionButton: AddTabButton(activeIndex: index, onPressed: _onAddPressed),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      // 与 centerDocked 同位，但忽略 SnackBar 高度：底部出现「sign-in」等错误弹框时
+      // 中间「＋」发布按钮保持固定，不被顶起（iOS/Android 一致）。
+      floatingActionButtonLocation: const _FixedCenterDockedFabLocation(),
       bottomNavigationBar: BottomTabBar(currentIndex: index, onTabSelected: _onTabSelected),
     );
+  }
+}
+
+/// 居中贴底栏顶边的 FAB 定位，复刻 [FloatingActionButtonLocation.centerDocked]，
+/// **但不把 SnackBar 高度计入**——底部错误弹框出现时「＋」发布按钮固定不动（用户反馈：按钮被顶起）。
+/// 仍为底部 sheet 让位（与 centerDocked 行为一致）。
+class _FixedCenterDockedFabLocation extends FloatingActionButtonLocation {
+  const _FixedCenterDockedFabLocation();
+
+  @override
+  Offset getOffset(ScaffoldPrelayoutGeometry geometry) {
+    final double fabWidth = geometry.floatingActionButtonSize.width;
+    final double fabHeight = geometry.floatingActionButtonSize.height;
+    final double fabX = (geometry.scaffoldSize.width - fabWidth) / 2.0;
+
+    // centerDocked 的 Y：FAB 中心落在内容区底边（= bottomNavigationBar 顶边）。
+    final double contentBottom = geometry.contentBottom;
+    double fabY = contentBottom - fabHeight / 2.0;
+    // 关键：不再像 centerDocked 那样因 geometry.snackBarSize 上移。
+    final double bottomSheetHeight = geometry.bottomSheetSize.height;
+    if (bottomSheetHeight > 0.0) {
+      fabY = math.max(geometry.contentTop, math.min(fabY, contentBottom - bottomSheetHeight - fabHeight / 2.0));
+    }
+    final double maxFabY = geometry.scaffoldSize.height - fabHeight;
+    return Offset(fabX, math.min(fabY, maxFabY));
   }
 }
