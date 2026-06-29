@@ -1,0 +1,97 @@
+# generated: 2026-06-29
+# last_updated: 2026-06-29 (1-1 created)
+# project: TailTopia 管理后台 V1.0.0
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts/admin-backend
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:        backlog → in-progress → done
+# Story Status:       backlog → ready-for-dev → in-progress → review → done
+# Retrospective:      optional ↔ done
+#
+# WORKFLOW NOTES:
+# ===============
+# - 范围 = 管理后台（admin-backend 子目录），独立于 App 根目录的 sprint-status.yaml。
+# - brownfield：复用既有 com.tailtopia.admin Thymeleaf slice；非新脚手架。
+# - 实现起点 = 1-1（admin_accounts + 认证重构 AG-1），一切后台操作前置。
+# - 故事文件创建后状态升 ready-for-dev；create-story 时 epic 自动转 in-progress。
+#
+# FLYWAY 权威分配（决策 E2 —— 单一事实源；story 文件内的指示号若与此冲突以此为准，
+#   且实现时一律按 db/migration 实测最大号 +1 单调落库）。已落地 V30/V31（Story 1.1）。
+#   按 dev 执行顺序（Epic1→6、story 升序）只列「建表/加列」的故事：
+#     V30 admin_accounts            (1-1 ✅已落)
+#     V31 admin_account_permissions (1-1 ✅已落)
+#     V32 admin_audit_logs          (1-3)
+#     V33 admin_session_logs        (1-4)
+#     V34 vet_qualifications        (2-1)
+#     V35 vet_accounts.contact_phone ALTER (2-3)
+#     V36 failed_consult_requests   (2-9)
+#     V37 users.status ALTER        (3-2)
+#     V38 manual_review_queue       (4-3)
+#     V39 admin_settings            (4-3)
+#     V40 consult_anomalies         (5-1)
+#   其余故事无新迁移。AB-3D 种子标记已移除：不建 users.is_seed_account 列。
+#   ⚠️ 注意：部分 story 文件指示号写成 V38（2-3/3-2/5-1 各自暂记），以本表为准、勿照搬。
+#
+# CROSS-PRODUCT FOLLOW-UP（不在本 epics 内，需另行排期到 App 侧）：
+#   - [MC-3] 兽医封禁后「用户重新匹配/结束」选项：AB-2E V1.0.0 修订要求 App 侧呈现该选项；
+#     后端在 2-5 已发系统消息/事件，App 侧 UI/路径为配套改动，归 petgo_app 排期。
+
+generated: 2026-06-29
+last_updated: 2026-06-29
+project: TailTopia 管理后台 V1.0.0
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts/admin-backend
+
+development_status:
+  # ===== Epic 1: 后台地基 — 账号、权限、登录与审计 =====
+  epic-1: in-progress
+  1-1-后台账号模型与认证重构: review
+  1-2-lark-oauth登录与邮箱白名单门控: review
+  1-3-操作审计日志哈希链与查询: ready-for-dev
+  1-4-会话审计记录: ready-for-dev
+  1-5-后台账号管理ui两级权限与生命周期: ready-for-dev
+  1-6-双语i18n基建与admin设计令牌与既有模板统一: ready-for-dev
+  epic-1-retrospective: optional
+
+  # ===== Epic 2: 兽医账号治理 =====
+  epic-2: in-progress
+  2-1-兽医资质数据模型与接单门控: ready-for-dev
+  2-2-兽医账号列表与搜索筛选: ready-for-dev
+  2-3-创建兽医账号: ready-for-dev
+  2-4-编辑兽医账号与重置密码: ready-for-dev
+  2-5-封禁解封兽医账号: ready-for-dev
+  2-6-兽医在线状态快照查询: ready-for-dev
+  2-7-兽医资质录入与审核: ready-for-dev
+  2-8-sipdh到期自动阻断与30天预警: ready-for-dev
+  2-9-问诊请求未成功记录: ready-for-dev
+  epic-2-retrospective: optional
+
+  # ===== Epic 3: 用户账号治理 =====
+  epic-3: in-progress
+  3-1-用户搜索与详情查看: ready-for-dev
+  3-2-停用与重新激活用户账号: ready-for-dev
+  3-3-删除用户账号d1注销d2违规: ready-for-dev
+  epic-3-retrospective: optional
+
+  # ===== Epic 4: 内容审核 =====
+  epic-4: in-progress
+  4-1-用户举报队列处理: ready-for-dev
+  4-2-全量内容管理与主动下架: ready-for-dev
+  4-3-人工审核队列预建未激活: ready-for-dev
+  epic-4-retrospective: optional
+
+  # ===== Epic 5: 问诊异常与会话查询 =====
+  epic-5: in-progress
+  5-1-异常工单队列: ready-for-dev
+  5-2-问诊会话元数据查询: ready-for-dev
+  epic-5-retrospective: optional
+
+  # ===== Epic 6: 兽医评分质量看板 =====
+  epic-6: in-progress
+  6-1-兽医评分总览: ready-for-dev
+  6-2-单个兽医评分详情: ready-for-dev
+  epic-6-retrospective: optional

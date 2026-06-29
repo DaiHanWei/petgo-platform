@@ -15,6 +15,10 @@
                 border-radius: 4px; }
         button { width: 100%; margin-top: 18px; padding: 9px; background: #2d6cdf; color: #fff;
                  border: 0; border-radius: 4px; cursor: pointer; }
+        a.lark { display: block; text-align: center; margin-top: 8px; padding: 10px;
+                 background: #845EC9; color: #fff; border-radius: 6px; text-decoration: none; font-size: 14px; }
+        details { margin-top: 18px; }
+        details summary { color: #888; font-size: 12px; cursor: pointer; }
         .err { color: #c0392b; font-size: 13px; margin-top: 12px; }
         .ok { color: #27ae60; font-size: 13px; margin-top: 12px; }
     </style>
@@ -23,14 +27,25 @@
 <div class="box">
     <h1>TailTopia 运营后台</h1>
     <p class="err" th:if="${param.error}">账号或密码不正确。</p>
+    <p class="err" th:if="${param.locked}">登录失败次数过多，账号已临时锁定，请稍后再试。</p>
+    <p class="err" th:if="${param.denied}">你的账号无访问权限，请联系管理员。</p>
+    <p class="err" th:if="${param.expired}">会话已过期，请重新登录。</p>
     <p class="ok" th:if="${param.logout}">已退出登录。</p>
-    <form th:action="@{/admin/login}" method="post">
-        <label for="username">运营邮箱</label>
-        <input type="text" id="username" name="username" autocomplete="username" autofocus/>
-        <label for="password">密码</label>
-        <input type="password" id="password" name="password" autocomplete="current-password"/>
-        <button type="submit">登录</button>
-    </form>
+
+    <!-- 主入口：Lark OAuth（团队全员复用 Lark 身份） -->
+    <a class="lark" th:href="@{/admin/oauth/lark/login}">用 Lark 登录</a>
+
+    <!-- 紧急入口：超管用户名+密码，仅 Lark 服务异常时使用 -->
+    <details>
+        <summary>紧急登录</summary>
+        <form th:action="@{/admin/login}" method="post">
+            <label for="username">运营邮箱</label>
+            <input type="text" id="username" name="username" autocomplete="username"/>
+            <label for="password">密码</label>
+            <input type="password" id="password" name="password" autocomplete="current-password"/>
+            <button type="submit">登录</button>
+        </form>
+    </details>
 </div>
 </body>
 </html>

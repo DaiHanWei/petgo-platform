@@ -90,6 +90,19 @@ spring:
 
 server:
   port: ${SERVER_PORT:8080}
+  servlet:
+    session:
+      # Story 1.2 AC6：后台会话闲置 8h 过期（滑动续期）。仅影响会话链（/admin/**）；/api/v1 无状态不受影响。
+      timeout: ${ADMIN_SESSION_TIMEOUT:8h}
+
+# 管理后台（Story 1.2）：Lark OAuth + 企业租户白名单门控。凭证 env 注入绝不入库。
+admin:
+  lark:
+    base-url: ${LARK_BASE_URL:https://open.larksuite.com}
+    app-id: ${LARK_APP_ID:}
+    app-secret: ${LARK_APP_SECRET:}
+    redirect-uri: ${LARK_REDIRECT_URI:}
+    tenant-key: ${LARK_TENANT_KEY:}
 
 # Actuator：仅暴露 health + info（/actuator/** 内网语义，prod 由 CF/防火墙限制）
 management:

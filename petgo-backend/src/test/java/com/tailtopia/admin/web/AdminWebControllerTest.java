@@ -40,7 +40,9 @@ class AdminWebControllerTest {
     }
 
     private AdminUserDetails admin() {
-        return new AdminUserDetails(99L, "ops@petgo", "{bcrypt}x");
+        // Story 1.1：(adminAccountId, operatorUserId=官方内容作者 users.id, email, passwordHash, accountType)
+        return new AdminUserDetails(7L, 99L, "ops@petgo", "{bcrypt}x",
+                com.tailtopia.admin.account.domain.AdminAccountType.SUPER_ADMIN);
     }
 
     private SeedPostForm form(ContentType type, String text) {

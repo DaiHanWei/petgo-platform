@@ -1,5 +1,9 @@
 package com.tailtopia.shared.security;
 
+import com.tailtopia.admin.account.repository.AdminAccountRepository;
+import com.tailtopia.admin.account.service.AdminLoginThrottle;
+import com.tailtopia.admin.account.web.AdminLoginThrottleFilter;
+import com.tailtopia.admin.account.web.AdminSessionGuardFilter;
 import com.tailtopia.admin.service.AdminUserDetailsService;
 import com.tailtopia.vet.web.BannedVetFilter;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -14,6 +18,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
  * 安全配置（Story 1.3 起收紧；Story 3.1 增 admin 表单登录链）。
@@ -52,20 +57,39 @@ public class SecurityConfig {
     @Bean
     @Order(1)
     public SecurityFilterChain adminFilterChain(HttpSecurity http,
-            AdminUserDetailsService adminUserDetailsService) throws Exception {
+            AdminUserDetailsService adminUserDetailsService,
+            AdminLoginThrottle loginThrottle,
+            AdminAccountRepository adminAccounts) throws Exception {
         http
                 .securityMatcher("/admin/**")
                 .userDetailsService(adminUserDetailsService)
+                // Story 1.1 AC4：前置限流——已锁定 username 的 POST /admin/login 直接回登录页(?locked)，不进入认证。
+                .addFilterBefore(new AdminLoginThrottleFilter(loginThrottle),
+                        UsernamePasswordAuthenticationFilter.class)
+                // Story 1.2 AC5（A1）：会话守卫——每请求复查账号仍 ACTIVE，撤权/停用即时失效（放行 login/oauth 防死循环）。
+                .addFilterBefore(new AdminSessionGuardFilter(adminAccounts),
+                        AuthorizationFilter.class)
                 .authorizeHttpRequests(auth -> auth
-                        // 登录页本身放行（未登录可访问以输入账密）
-                        .requestMatchers("/admin/login").permitAll()
+                        // 登录页 + Lark OAuth 登录/回调放行（未登录可访问以建会话）
+                        .requestMatchers("/admin/login", "/admin/oauth/**").permitAll()
                         // 其余后台页面一律要求 ADMIN（user/vet → 403 越权）
                         .anyRequest().hasRole("ADMIN"))
                 .formLogin(form -> form
                         .loginPage("/admin/login")
                         .loginProcessingUrl("/admin/login")
-                        .defaultSuccessUrl("/admin/dashboard", true)
-                        .failureUrl("/admin/login?error")
+                        // Story 1.1 AC4：失败计数 + 达阈值锁定；统一文案不区分字段。
+                        .failureHandler((request, response, exception) -> {
+                            String username = request.getParameter("username");
+                            loginThrottle.recordFailure(username);
+                            String target = loginThrottle.isLocked(username)
+                                    ? "/admin/login?locked" : "/admin/login?error";
+                            response.sendRedirect(request.getContextPath() + target);
+                        })
+                        // 成功登录清零失败计数后进入后台。
+                        .successHandler((request, response, authentication) -> {
+                            loginThrottle.clear(request.getParameter("username"));
+                            response.sendRedirect(request.getContextPath() + "/admin/dashboard");
+                        })
                         .permitAll())
                 .logout(logout -> logout
                         .logoutUrl("/admin/logout")
