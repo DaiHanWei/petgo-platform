@@ -1,13 +1,13 @@
-import 'package:flutter/foundation.dart';
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../core/theme/colors.dart';
-import '../../../../core/theme/spacing.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../domain/milestone.dart';
-import '../../domain/milestone_titles.dart';
+import '../../domain/milestone_celebration_copy.dart';
 
 /// 里程碑三级庆祝动效（Story 8.5 · FR-42）。完成后按级触发，mint 风格、无第三方动画包（手绘 implicit 动画）：
 /// - **S（小）**：半屏庆祝弹层，1-2 秒自动消失，含徽章展示。
@@ -15,26 +15,54 @@ import '../../domain/milestone_titles.dart';
 /// - **L（大）**：Duolingo 开宝箱式交互（宝箱→爆发→奖杯），结束自动衔接分享卡（8.6 通过 [onShare] 注入）。
 ///
 /// 云端 headless 验不了视觉/计时观感（L2 待本地）；本组件保证构建/计时/自动消失逻辑 L0 可测。
+/// 庆祝振动通道：原生直接驱动 `Vibrator`，绕过系统「触感反馈」开关（见 android MainActivity.kt）。
+const MethodChannel _hapticsChannel = MethodChannel('petgo/haptics');
+
+/// 触发一次短振动；无原生实现（iOS 等）回退系统 HapticFeedback。
+Future<void> _celebrationVibrate() async {
+  try {
+    await _hapticsChannel.invokeMethod<void>('vibrate', {'ms': 45});
+  } catch (_) {
+    try {
+      await HapticFeedback.vibrate();
+    } catch (_) {}
+  }
+}
+
 Future<void> showMilestoneCelebration(
   BuildContext context,
   MilestoneItem item, {
+  required String petName,
   FutureOr<void> Function()? onShare,
+  VoidCallback? onSeeAll,
+  List<MilestoneItem> collection = const [],
 }) {
   return showGeneralDialog<void>(
     context: context,
-    barrierDismissible: item.level == MilestoneLevel.s,
+    barrierDismissible: true,
     barrierLabel: 'milestone-celebration',
-    barrierColor: Colors.black.withValues(alpha: item.level == MilestoneLevel.s ? 0.25 : 0.55),
+    barrierColor: Colors.black.withValues(alpha: 0.6),
     transitionDuration: const Duration(milliseconds: 240),
-    pageBuilder: (_, _, _) => _MilestoneCelebrationView(item: item, onShare: onShare),
+    pageBuilder: (_, _, _) => _MilestoneCelebrationView(
+        item: item, petName: petName, onShare: onShare, onSeeAll: onSeeAll, collection: collection),
   );
 }
 
 class _MilestoneCelebrationView extends StatefulWidget {
-  const _MilestoneCelebrationView({required this.item, this.onShare});
+  const _MilestoneCelebrationView(
+      {required this.item,
+      required this.petName,
+      this.onShare,
+      this.onSeeAll,
+      this.collection = const []});
 
   final MilestoneItem item;
+  final String petName;
   final FutureOr<void> Function()? onShare;
+  final VoidCallback? onSeeAll;
+
+  /// 全部里程碑（用于「已解锁合集」预览）；为空则不显示该区。
+  final List<MilestoneItem> collection;
 
   @override
   State<_MilestoneCelebrationView> createState() => _MilestoneCelebrationViewState();
@@ -43,16 +71,6 @@ class _MilestoneCelebrationView extends StatefulWidget {
 class _MilestoneCelebrationViewState extends State<_MilestoneCelebrationView>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
-  Timer? _autoClose;
-  bool _opened = false; // L 级宝箱是否已开
-
-  /// 各级停留时长（FR-42：S/M ~3s / L 交互后停留）。
-  /// S 改为底部抽屉式三段内容（名字/级别+日期/贺词），停留延长到 3.5s 供阅读。
-  Duration get _holdDuration => switch (widget.item.level) {
-        MilestoneLevel.s => const Duration(milliseconds: 3500),
-        MilestoneLevel.m => const Duration(milliseconds: 3000),
-        MilestoneLevel.l => const Duration(milliseconds: 4000),
-      };
 
   @override
   void initState() {
@@ -61,17 +79,12 @@ class _MilestoneCelebrationViewState extends State<_MilestoneCelebrationView>
       vsync: this,
       duration: const Duration(milliseconds: 700),
     )..forward();
-    // S/M 自动消失；L 需用户开宝箱后再自动收尾（交互式）。
-    // Debug 截图钩子（仅 debug + flag）：跳过自动消失，让 S/M 庆祝层停住可截 milestone-unlock。
-    final devHold = kDebugMode && const bool.fromEnvironment('DEV_HOLD_CELEBRATION');
-    if (widget.item.level != MilestoneLevel.l && !devHold) {
-      _autoClose = Timer(_holdDuration, _close);
-    }
+    // 解锁瞬间一次振动反馈（弹框一打开即触发，方便测）。
+    _celebrationVibrate();
   }
 
   @override
   void dispose() {
-    _autoClose?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -82,186 +95,410 @@ class _MilestoneCelebrationViewState extends State<_MilestoneCelebrationView>
     }
   }
 
-  Future<void> _openChest() async {
-    if (_opened) return;
-    setState(() => _opened = true);
-    _controller
-      ..reset()
-      ..forward();
-    // 开箱后停留，衔接分享卡（8.6），再自动收尾。
-    _autoClose = Timer(_holdDuration, () async {
-      if (widget.onShare != null) {
-        await widget.onShare!.call();
-      }
-      _close();
-    });
+  Future<void> _onSharePressed() async {
+    if (widget.onShare != null) {
+      await widget.onShare!.call();
+    }
+    _close();
+  }
+
+  // 查看全部里程碑：先关庆祝层，再跳里程碑列表（由调用方注入跳转）。
+  void _seeAll() {
+    _close();
+    widget.onSeeAll?.call();
   }
 
   @override
-  Widget build(BuildContext context) {
-    return switch (widget.item.level) {
-      MilestoneLevel.s => _half(context),
-      MilestoneLevel.m => _full(context, big: false),
-      MilestoneLevel.l => _chest(context),
-    };
-  }
+  Widget build(BuildContext context) => _celebration(context);
 
-  // ---- S：底部抽屉式庆祝弹层（复用 more-sheet/confirm-sheet 样式：把手 + 顶圆角 + surface 底）----
-  Widget _half(BuildContext context) {
+  // ---- P-35 统一解锁庆祝（不分级别，原型 milestone-unlock）：纯深色全屏页 + 渐变大徽章
+  //      + 解锁标头 + 标题/正文 + 宠物·日期 + 分享到社区 + 查看全部 ----
+  Widget _celebration(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final locale = Localizations.localeOf(context);
-    final title = localizedMilestoneTitle(widget.item.code, locale);
-    // 「具体内容」：里程碑级别 +（若有）达成日期。无逐条描述字段，用真实元信息。
-    final levelLabel = switch (widget.item.level) {
-      MilestoneLevel.s => l10n.milestoneLevelS,
-      MilestoneLevel.m => l10n.milestoneLevelM,
-      MilestoneLevel.l => l10n.milestoneLevelL,
-    };
-    final completedLine =
-        widget.item.completedAt == null ? null : l10n.milestoneCompletedOn(_fmtDate(widget.item.completedAt!));
-    return Align(
-      alignment: Alignment.bottomCenter,
-      child: SlideTransition(
-        position: Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero)
-            .animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic)),
-        child: Container(
-          key: const ValueKey('milestoneCelebrationS'),
-          width: double.infinity,
-          decoration: const BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-            boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 24, offset: Offset(0, -4))],
-          ),
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 12, AppSpacing.lg, AppSpacing.lg),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // 顶部把手（与 detail 更多抽屉一致）。
-                  Container(
-                    width: 36,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: AppSpacing.lg),
-                    decoration:
-                        BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(9999)),
-                  ),
-                  _badge(64),
-                  const SizedBox(height: AppSpacing.md),
-                  // 解锁标头。
-                  Text(l10n.milestoneCelebrateUnlocked,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.mint700)),
-                  const SizedBox(height: AppSpacing.xs),
-                  // ① 里程碑名字。
-                  Text(title,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w800, fontSize: 19, color: AppColors.ink)),
-                  const SizedBox(height: 6),
-                  // ② 具体内容：级别（+ 达成日期）。
-                  Text(
-                    completedLine == null ? levelLabel : '$levelLabel · $completedLine',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  // ③ 贺词。
-                  Text(l10n.milestoneCelebrateCongrats,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 14, height: 1.4, color: AppColors.ink2)),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// 达成日期格式（与里程碑列表页一致：yyyy-MM-dd，本地时区）。
-  static String _fmtDate(DateTime d) {
-    final local = d.toLocal();
-    return '${local.year}-${local.month.toString().padLeft(2, '0')}'
-        '-${local.day.toString().padLeft(2, '0')}';
-  }
-
-  // ---- M：全屏动效 + 徽章解锁 ----
-  Widget _full(BuildContext context, {required bool big}) {
-    final l10n = AppLocalizations.of(context);
-    return Center(
-      key: const ValueKey('milestoneCelebrationM'),
-      child: FadeTransition(
-        opacity: _controller,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ScaleTransition(
-              scale: CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
-              child: _badge(120),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            Text(l10n.milestoneCelebrateUnlocked,
-                style: const TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.w800, fontSize: 18)),
-            const SizedBox(height: 6),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-              child: Text(localizedMilestoneTitle(widget.item.code, Localizations.localeOf(context)),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ---- L：Duolingo 开宝箱 ----
-  Widget _chest(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return Center(
-      key: const ValueKey('milestoneCelebrationL'),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+    final copy = localizedMilestoneCelebration(widget.item.code, locale, widget.petName);
+    final dateText = widget.item.completedAt == null
+        ? widget.petName
+        : '${widget.petName} · ${_formatLongDate(widget.item.completedAt!, locale)}';
+    // 整页纯深色（#141019），非半透明遮罩——与原型一致。
+    return Material(
+      color: AppColors.splashInk,
+      child: Stack(
         children: [
-          if (!_opened)
-            GestureDetector(
-              key: const ValueKey('milestoneChestTap'),
-              onTap: _openChest,
-              child: ScaleTransition(
-                scale: Tween<double>(begin: 0.96, end: 1.04).animate(
-                    CurvedAnimation(parent: _controller, curve: Curves.easeInOut)),
-                child: const Icon(Icons.card_giftcard_rounded, size: 140, color: AppColors.gold),
-              ),
-            )
-          else ...[
-            ScaleTransition(
-              scale: CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
-              child: _badge(140),
+          // 掉落彩纸（纯自绘，不挡交互）。
+          const Positioned.fill(child: IgnorePointer(child: _Confetti())),
+          SafeArea(
+            child: Center(
+              key: const ValueKey('milestoneCelebration'),
+              child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ScaleTransition(
+                  scale: CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
+                  child: SizedBox(
+                    width: 140,
+                    height: 120,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      clipBehavior: Clip.none,
+                      children: [
+                        _badge(120),
+                        // 级别小标签，叠在徽章下沿（原型 milestone-unlock）。
+                        Positioned(bottom: -10, child: _levelChip(l10n)),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 26),
+                // 解锁标头（大写、字距）。
+                Text(l10n.milestoneCelebrateUnlocked.toUpperCase(),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.5),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        letterSpacing: 0.6)),
+                const SizedBox(height: 8),
+                // 庆祝标题（粗体，emoji 结尾）。
+                Text(copy.title,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w700, fontSize: 26, height: 1.2)),
+                if (copy.body.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(copy.body,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.6), fontSize: 13, height: 1.6)),
+                ],
+                const SizedBox(height: 20),
+                // 宠物 + 日期胶囊。
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.07),
+                    borderRadius: BorderRadius.circular(9999),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(_speciesEmoji(widget.item.code), style: const TextStyle(fontSize: 16)),
+                      const SizedBox(width: 8),
+                      Text(dateText,
+                          style: TextStyle(
+                              fontSize: 12, color: Colors.white.withValues(alpha: 0.7))),
+                    ],
+                  ),
+                ),
+                if (widget.collection.isNotEmpty) ...[
+                  const SizedBox(height: 24),
+                  _collection(l10n),
+                ],
+                const SizedBox(height: 28),
+                if (widget.onShare != null)
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      key: const ValueKey('milestoneShare'),
+                      onPressed: _onSharePressed,
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(52),
+                        textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      child: Text(l10n.milestoneCelebrateShare),
+                    ),
+                  ),
+                const SizedBox(height: 14),
+                // 查看全部里程碑 → 跳转列表页。
+                GestureDetector(
+                  key: const ValueKey('milestoneCelebrateSeeAll'),
+                  onTap: _seeAll,
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Text(l10n.milestoneCelebrateSeeAll,
+                        style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.45), fontSize: 13)),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: AppSpacing.lg),
-            Text(localizedMilestoneTitle(widget.item.code, Localizations.localeOf(context)),
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 18)),
-          ],
-          const SizedBox(height: AppSpacing.lg),
-          Text(_opened ? l10n.milestoneCelebrateUnlocked : l10n.milestoneCelebrateOpenChest,
-              style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w600)),
+          ),
+        ),
+      ),
         ],
       ),
     );
   }
 
+  // 物种 emoji（按 code 前缀：C=猫 / D=狗 / 其余=通用）。
+  String _speciesEmoji(String code) => switch (code.isEmpty ? '' : code[0]) {
+        'C' => '🐱',
+        'D' => '🐶',
+        _ => '🐾',
+      };
+
+  // 「15 Juni 2026」/「15 June 2026」——手写月份名，避免依赖 intl locale 数据加载。
+  static const _monthsId = [
+    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+  ];
+  static const _monthsEn = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  String _formatLongDate(DateTime d, Locale locale) {
+    final local = d.toLocal();
+    final months = locale.languageCode == 'id' ? _monthsId : _monthsEn;
+    return '${local.day} ${months[local.month - 1]} ${local.year}';
+  }
+
+  // 渐变大徽章（原型 P-35：紫渐变圆 + 辉光 + 白奖杯）。
   Widget _badge(double size) => Container(
         width: size,
         height: size,
         decoration: BoxDecoration(
-          color: AppColors.mintTint,
           shape: BoxShape.circle,
-          border: Border.all(color: AppColors.mint, width: 3),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [AppColors.mint, AppColors.mint500],
+          ),
+          boxShadow: [
+            BoxShadow(
+                color: AppColors.mint.withValues(alpha: 0.45),
+                blurRadius: size * 0.22,
+                offset: Offset(0, size * 0.06)),
+          ],
         ),
-        child: Icon(Icons.emoji_events_rounded, color: AppColors.mint700, size: size * 0.5),
+        child: Icon(Icons.emoji_events_rounded, color: Colors.white, size: size * 0.5),
       );
+
+  // 级别配色（与列表页一致：L 金 / M 紫 / S 绿）。
+  Color _levelColor(MilestoneLevel level) => switch (level) {
+        MilestoneLevel.l => AppColors.gold,
+        MilestoneLevel.m => AppColors.mint,
+        MilestoneLevel.s => AppColors.triageGreen,
+      };
+
+  // 级别小标签（M · MAJOR 等），叠在徽章下沿。
+  Widget _levelChip(AppLocalizations l10n) {
+    final label = switch (widget.item.level) {
+      MilestoneLevel.l => l10n.milestoneLevelChipL,
+      MilestoneLevel.m => l10n.milestoneLevelChipM,
+      MilestoneLevel.s => l10n.milestoneLevelChipS,
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+      decoration: BoxDecoration(
+        color: _levelColor(widget.item.level),
+        borderRadius: BorderRadius.circular(9999),
+        border: Border.all(color: AppColors.splashInk, width: 2),
+      ),
+      child: Text(label,
+          style: const TextStyle(
+              fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: 0.6)),
+    );
+  }
+
+  // 已解锁徽章合集预览（原型 KOLEKSI）：只展示已解锁项（级别色圆），最多两排，
+  // 放不下时最后一格折叠为「+N」，故「圆点数 + N = 已解锁总数」，与列表页进度一致。
+  Widget _collection(AppLocalizations l10n) {
+    final unlocked = widget.collection.where((m) => m.completed).toList();
+    if (unlocked.isEmpty) return const SizedBox.shrink();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text('${l10n.milestoneCelebrateCollection(widget.petName).toUpperCase()} · ${unlocked.length}',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                  color: Colors.white.withValues(alpha: 0.4))),
+          const SizedBox(height: 10),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              const cell = 44.0, gap = 8.0;
+              // 按实际宽度算每排个数 → 两排容量；超出则末格显示「+N」。
+              final perRow = ((constraints.maxWidth + gap) / (cell + gap)).floor().clamp(1, 99);
+              final capacity = perRow * 2;
+              final List<Widget> cells;
+              if (unlocked.length <= capacity) {
+                cells = [for (final m in unlocked) _collectionCircle(color: _levelColor(m.level))];
+              } else {
+                final showN = capacity - 1; // 留一格给「+N」
+                cells = [
+                  for (final m in unlocked.take(showN)) _collectionCircle(color: _levelColor(m.level)),
+                  _collectionCircle(text: '+${unlocked.length - showN}'),
+                ];
+              }
+              return Wrap(
+                spacing: gap,
+                runSpacing: gap,
+                alignment: WrapAlignment.center,
+                children: cells,
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _collectionCircle({Color? color, String? text}) => Container(
+        width: 44,
+        height: 44,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: color == null
+              ? null
+              : LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [color, Color.lerp(color, Colors.white, 0.25)!]),
+          color: color == null ? Colors.white.withValues(alpha: 0.1) : null,
+          boxShadow: color == null
+              ? null
+              : [BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 8, offset: const Offset(0, 3))],
+        ),
+        child: text != null
+            ? Text(text,
+                style: TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white.withValues(alpha: 0.6)))
+            : const Icon(Icons.emoji_events_rounded, color: Colors.white, size: 20),
+      );
+}
+
+/// 持续掉落彩纸覆盖层（纯自绘 CustomPainter，无第三方包）。
+///
+/// 连续不断的关键：每片彩纸有独立的初始相位 [offset] 均匀铺在 0..1（即任意时刻整屏都有彩纸），
+/// 且每轮的「下落圈数 [fallTurns]」「自转圈数 [spinTurns]」「左右摆动圈数 [swayTurns]」都取**整数**，
+/// 使位置/角度对 progress 以 1 为周期连续 —— controller `repeat()` 在 1→0 回绕时无跳变、无空档。
+class _Confetti extends StatefulWidget {
+  const _Confetti();
+
+  @override
+  State<_Confetti> createState() => _ConfettiState();
+}
+
+class _ConfettiState extends State<_Confetti> with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+  late final List<_ConfettiPiece> _pieces;
+
+  static const _palette = [
+    AppColors.mint,
+    AppColors.gold,
+    AppColors.coral,
+    AppColors.triageGreen,
+    AppColors.mint500,
+    AppColors.grape,
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    final rnd = Random();
+    _pieces = List.generate(54, (i) {
+      return _ConfettiPiece(
+        x: rnd.nextDouble(),
+        size: 5 + rnd.nextDouble() * 9,
+        color: _palette[i % _palette.length],
+        offset: rnd.nextDouble(), // 均匀铺满整屏，无空档
+        fallTurns: 1 + rnd.nextInt(2), // 每轮下落 1~2 屏（整数 → 回绕连续）
+        spinTurns: (rnd.nextBool() ? 1 : -1) * (1 + rnd.nextInt(2)), // 整数圈自转
+        swayTurns: 1 + rnd.nextInt(2), // 整数次左右摆动
+        swayAmp: 10 + rnd.nextDouble() * 34,
+        swayPhase: rnd.nextDouble() * pi * 2,
+        spin0: rnd.nextDouble() * pi * 2,
+      );
+    });
+    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 5200))..repeat();
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+        animation: _c,
+        builder: (_, _) => CustomPaint(
+          size: Size.infinite,
+          painter: _ConfettiPainter(_c.value, _pieces),
+        ),
+      );
+}
+
+class _ConfettiPiece {
+  const _ConfettiPiece({
+    required this.x,
+    required this.size,
+    required this.color,
+    required this.offset,
+    required this.fallTurns,
+    required this.spinTurns,
+    required this.swayTurns,
+    required this.swayAmp,
+    required this.swayPhase,
+    required this.spin0,
+  });
+
+  final double x; // 0..1 水平基准
+  final double size;
+  final Color color;
+  final double offset; // 0..1 垂直初始相位
+  final int fallTurns; // 每轮下落屏数（整数）
+  final int spinTurns; // 每轮自转圈数（整数，带方向）
+  final int swayTurns; // 每轮摆动次数（整数）
+  final double swayAmp; // 水平摆幅 px
+  final double swayPhase;
+  final double spin0; // 初始角度
+}
+
+class _ConfettiPainter extends CustomPainter {
+  _ConfettiPainter(this.progress, this.pieces);
+
+  final double progress;
+  final List<_ConfettiPiece> pieces;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint();
+    for (final p in pieces) {
+      // 垂直相位 0..1（整数 fallTurns → 1→0 回绕处连续）。
+      final phase = (p.offset + progress * p.fallTurns) % 1.0;
+      final y = phase * (size.height + 40) - 20;
+      final x = p.x * size.width + sin(phase * 2 * pi * p.swayTurns + p.swayPhase) * p.swayAmp;
+      final rot = p.spin0 + progress * p.spinTurns * 2 * pi;
+      paint.color = p.color;
+      canvas.save();
+      canvas.translate(x, y);
+      canvas.rotate(rot);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(center: Offset.zero, width: p.size, height: p.size * 0.6),
+          const Radius.circular(2),
+        ),
+        paint,
+      );
+      canvas.restore();
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ConfettiPainter oldDelegate) => oldDelegate.progress != progress;
 }

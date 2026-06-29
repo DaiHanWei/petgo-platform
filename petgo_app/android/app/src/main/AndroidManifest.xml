@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
     <!-- 推送通知（Story 6.4/6.7，Android 13+ 运行时权限）。 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- 里程碑解锁庆祝振动（直接驱动 Vibrator，绕过系统触感反馈开关）。 -->
+    <uses-permission android:name="android.permission.VIBRATE"/>
     <!-- 相机非必需：无相机设备仍可装（走相册）。 -->
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
 

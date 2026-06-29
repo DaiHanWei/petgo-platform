@@ -58,26 +58,21 @@ Future<void> _pump(WidgetTester tester, _FakeConsultRepository repo) async {
 }
 
 void main() {
-  testWidgets('就绪态：进页直接显示流程 + 发起按钮，不预查在线（无在线提示条）', (tester) async {
-    // 即便后台无兽医，进页也先展示就绪态（在线校验推迟到点击发起时）。
+  testWidgets('无兽医在线 → 进页直接显示离线引导（不必先点 Mulai）', (tester) async {
     await _pump(tester, _FakeConsultRepository(online: false));
-    expect(find.byKey(const ValueKey('consultStartButton')), findsOneWidget);
-    // 删除的「Vets available now」概率性提示条不再出现。
-    expect(find.textContaining('usually online'), findsNothing);
-    // 未点发起前不显示离线引导。
-    expect(find.byKey(const ValueKey('consultOfflineState')), findsNothing);
-  });
-
-  testWidgets('点发起 → 查到无兽医 → 切到离线引导（AI 软引导，不强制）', (tester) async {
-    await _pump(tester, _FakeConsultRepository(online: false));
-    await tester.tap(find.byKey(const ValueKey('consultStartButton')));
-    await tester.pump(); // 触发 loading + 异步查询
-    await tester.pump(const Duration(milliseconds: 50));
+    // 进页即查在线态：无兽医 → 直接离线引导，不再先展示就绪态/发起按钮。
     expect(find.byKey(const ValueKey('consultOfflineState')), findsOneWidget);
     expect(find.text('No vets online right now'), findsOneWidget);
     expect(find.byKey(const ValueKey('consultOfflineUseAi')), findsOneWidget);
-    // 切离线后发起按钮消失。
     expect(find.byKey(const ValueKey('consultStartButton')), findsNothing);
+  });
+
+  testWidgets('有兽医在线 → 进页显示就绪态（流程 + 发起按钮，无离线引导）', (tester) async {
+    await _pump(tester, _FakeConsultRepository(online: true));
+    expect(find.byKey(const ValueKey('consultStartButton')), findsOneWidget);
+    expect(find.byKey(const ValueKey('consultOfflineState')), findsNothing);
+    // 删除的「Vets available now」概率性提示条不再出现。
+    expect(find.textContaining('usually online'), findsNothing);
   });
 
   testWidgets('AC2: 已有进行中 → 查看进行中跳转入口', (tester) async {
