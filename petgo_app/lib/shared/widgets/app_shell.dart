@@ -89,6 +89,9 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
     final int index = widget.navigationShell.currentIndex;
     return Scaffold(
       backgroundColor: AppColors.base,
+      // 键盘弹出时不收缩外壳：底栏 + 中间「＋」发布按钮固定在屏幕底部不被顶起（用户反馈）。
+      // 各 Tab 根页本身无内联输入框，文字编辑均走 modal bottom sheet（自带 viewInsets 让位），故安全。
+      resizeToAvoidBottomInset: false,
       body: FadeTransition(opacity: _fade, child: widget.navigationShell),
       floatingActionButton: AddTabButton(activeIndex: index, onPressed: _onAddPressed),
       // 与 centerDocked 同位，但忽略 SnackBar 高度：底部出现「sign-in」等错误弹框时
