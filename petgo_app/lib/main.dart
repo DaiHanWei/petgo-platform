@@ -4,8 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:tailtopia/app.dart';
+import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/core/l10n/locale_controller.dart';
-import 'package:tailtopia/core/network/dio_client.dart';
 import 'package:tailtopia/core/storage/prefs.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
@@ -16,6 +16,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // 本地化日期格式化的 locale 数据（id 非默认 locale，DateFormat 用前必须初始化）。
   await initializeDateFormatting();
+  // 前端行为分析（PostHog）：runApp 前初始化，失败不阻断启动。
+  await Analytics.init();
   // V1：锁定竖屏（portrait-only）。
   SystemChrome.setPreferredOrientations(const [
     DeviceOrientation.portraitUp,
@@ -26,20 +28,6 @@ Future<void> main() async {
   final promptBootstrap = await _loadProfilePromptBootstrap();
   // Story 7.2：读持久化语言选择（空/缺失 = 跟随设备）。
   final savedLocale = await _loadSavedLocale();
-
-  // Debug-only 真后端联调钩子：DEV_REAL_LOGIN=true 时，runApp 前先走 dev-stub 真登录
-  // （后端 dev profile DevGoogleTokenVerifier 接受占位 token → 返真实 JWT），写入安全存储。
-  // 配合 DEV_USER=true（已登录态免门控）+ DEV_ROUTE=/triage/upload + DEV_TRIAGE_AUTO 实现「真后端驱动」
-  // 的逐屏视觉验收。release/测试恒不生效（kDebugMode 护栏）。
-  if (kDebugMode && const bool.fromEnvironment('DEV_REAL_LOGIN')) {
-    final bootstrap = ProviderContainer();
-    try {
-      await bootstrap.read(authRepositoryProvider).loginWithGoogle();
-    } catch (_) {
-      // 登录失败不阻塞启动（后端未起时仍能进 app 壳）。
-    }
-    bootstrap.dispose();
-  }
 
   runApp(ProviderScope(
     overrides: [

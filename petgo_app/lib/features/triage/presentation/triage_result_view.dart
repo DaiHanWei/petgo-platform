@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../data/triage_repository.dart';
@@ -130,7 +131,10 @@ class TriageResultView extends ConsumerWidget {
                   btnKey: const ValueKey('triageConsultVet'),
                   label: '💬 ${l10n.triageConsultNow}',
                   color: AppColors.mint,
-                  onTap: () => context.push('/consult'),
+                  onTap: () {
+                    Analytics.capture('consult_started');
+                    context.push('/consult');
+                  },
                 ),
                 _outlineBtn(
                   btnKey: const ValueKey('triageDone'),
@@ -152,7 +156,10 @@ class TriageResultView extends ConsumerWidget {
                   label: '💬 ${l10n.triageConsultStill}',
                   border: AppColors.triageGreen,
                   text: AppColors.triageGreen,
-                  onTap: () => context.push('/consult'),
+                  onTap: () {
+                    Analytics.capture('consult_started');
+                    context.push('/consult');
+                  },
                 ),
                 _outlineBtn(
                   btnKey: const ValueKey('triageDone'),

@@ -65,6 +65,9 @@ dependencies:
   # Story 5.5 L2：腾讯 IM Flutter SDK（兽医↔用户实时 C2C 收发）。
   # UserSig 取自后端 /im/usersig（短时），前端绝不自签 / 不持 SecretKey。
   tencent_cloud_chat_sdk: ^9.0.7652+1
+  # 前端行为分析（PostHog Cloud US）。Project Token 走 dart-define 注入（POSTHOG_KEY），
+  # 不外露 PII / 不传自增 id（identify 用哈希 distinctId，见 core/analytics/analytics.dart）。
+  posthog_flutter: ^4.0.0
 
 dev_dependencies:
   flutter_test:

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/media/media_scope.dart';
 import '../../../core/network/problem_detail.dart';
 import '../../../core/theme/colors.dart';
@@ -84,6 +85,7 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
       _toast(l10n.petProfileNameRequired);
       return;
     }
+    Analytics.capture('pet_profile_create_submitted');
     setState(() => _submitting = true);
     try {
       final created = await ref.read(profileRepositoryProvider).create(

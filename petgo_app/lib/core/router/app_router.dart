@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:posthog_flutter/posthog_flutter.dart';
 
 import '../theme/app_theme.dart';
 
@@ -85,6 +86,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
   ref.onDispose(authRefresh.dispose);
   return GoRouter(
     navigatorKey: rootNavigatorKey,
+    // PostHog 自动页面追踪：路由跳转 → $screen 事件（页面名取自路由 path）。
+    observers: [PosthogObserver()],
     refreshListenable: authRefresh,
     initialLocation: kDebugMode && _devRoute.isNotEmpty ? _devRoute : '/splash',
     redirect: (context, state) {

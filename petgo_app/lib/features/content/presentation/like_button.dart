@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
@@ -37,6 +38,7 @@ class _LikeButtonState extends ConsumerState<LikeButton> {
     final allowed = requireLogin(ref, context, onAllowed: () {});
     if (!allowed) return;
 
+    Analytics.capture('post_like_tapped', {'liked': !_liked});
     final prevLiked = _liked;
     final prevCount = _count;
     // 乐观更新：先翻转 UI。
