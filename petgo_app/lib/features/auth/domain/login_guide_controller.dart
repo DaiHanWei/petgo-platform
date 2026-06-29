@@ -23,9 +23,12 @@ typedef LoginRunner = Future<LoginResponse?> Function();
 /// 登录成功后按新老分流回跳：老用户执行 pendingAction；新用户先 `/onboarding` 引导，
 /// 引导完成后由 [resumePendingAfterOnboarding] 执行 pendingAction。
 class LoginGuideController {
-  LoginGuideController(this._login);
+  LoginGuideController(this._login, [this._loginApple]);
 
   final LoginRunner _login;
+
+  /// Apple 登录执行器（FR-44，仅 iOS）：为空则引导浮层不展示 Apple 入口。
+  final LoginRunner? _loginApple;
 
   bool _softShownThisSession = false;
   bool _hardDialogShowing = false;
@@ -45,7 +48,10 @@ class LoginGuideController {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetCtx) => LoginSoftSheet(
-        onLogin: () => _attemptLogin(context, sheetCtx),
+        onLogin: () => _attemptLogin(context, sheetCtx, _login),
+        onAppleLogin: _loginApple == null
+            ? null
+            : () => _attemptLogin(context, sheetCtx, _loginApple),
         onClose: () {
           _pending = null;
           Navigator.of(sheetCtx).pop();
@@ -70,7 +76,10 @@ class LoginGuideController {
         // 原型深遮罩（rgba(14,16,25,.72)）：强门控视觉强度高于软浮层。
         barrierColor: AppColors.splashInk.withValues(alpha: 0.72),
         builder: (dlgCtx) => LoginHardDialog(
-          onLogin: () => _attemptLogin(context, dlgCtx),
+          onLogin: () => _attemptLogin(context, dlgCtx, _login),
+          onAppleLogin: _loginApple == null
+              ? null
+              : () => _attemptLogin(context, dlgCtx, _loginApple),
           onClose: () {
             _pending = null;
             Navigator.of(dlgCtx).pop();
@@ -100,10 +109,10 @@ class LoginGuideController {
   ///   **保留 pendingAction 不清空、不路由到注册引导**，由组件内联展示「登录失败，请重试」+
   ///   重试入口（决策 F13 输入类失败口径），返回 [LoginGuideOutcome.failed]。
   Future<LoginGuideOutcome> _attemptLogin(
-      BuildContext rootContext, BuildContext overlayContext) async {
+      BuildContext rootContext, BuildContext overlayContext, LoginRunner runner) async {
     final LoginResponse? resp;
     try {
-      resp = await _login();
+      resp = await runner();
     } catch (_) {
       // 授权失败：保留 _pending（仅「关闭」清），不前进到 /onboarding，组件显示失败态+重试。
       return LoginGuideOutcome.failed;
@@ -138,15 +147,27 @@ class LoginGuideController {
 
 final Provider<LoginGuideController> loginGuideControllerProvider =
     Provider<LoginGuideController>((ref) {
-  return LoginGuideController(() async {
-    try {
-      final resp = await ref.read(authRepositoryProvider).loginWithGoogle();
-      // 关键：登录浮层路径也必须把登录态写入 authController（与 LoginPage 一致），
-      // 否则成功后仍是游客，受控 Tab/路由 redirect 会把用户弹回首页。
-      ref.read(authControllerProvider.notifier).applyLogin(resp);
-      return resp;
-    } on LoginCancelled {
-      return null;
-    }
-  });
+  return LoginGuideController(
+    () async {
+      try {
+        final resp = await ref.read(authRepositoryProvider).loginWithGoogle();
+        // 关键：登录浮层路径也必须把登录态写入 authController（与 LoginPage 一致），
+        // 否则成功后仍是游客，受控 Tab/路由 redirect 会把用户弹回首页。
+        ref.read(authControllerProvider.notifier).applyLogin(resp);
+        return resp;
+      } on LoginCancelled {
+        return null;
+      }
+    },
+    // Apple 登录（FR-44，仅 iOS）：与 Google 同样把登录态写回 authController。
+    () async {
+      try {
+        final resp = await ref.read(authRepositoryProvider).loginWithApple();
+        ref.read(authControllerProvider.notifier).applyLogin(resp);
+        return resp;
+      } on LoginCancelled {
+        return null;
+      }
+    },
+  );
 });

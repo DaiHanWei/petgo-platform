@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- FR-44 Sign in with Apple。真机生效还需 Apple Developer 后台为该 App ID 勾选
+	     「Sign in with Apple」能力并重新生成 provisioning profile（L2，本地 Xcode 完成）。 -->
+	<key>com.apple.developer.applesignin</key>
+	<array>
+		<string>Default</string>
+	</array>
+</dict>
+</plist>

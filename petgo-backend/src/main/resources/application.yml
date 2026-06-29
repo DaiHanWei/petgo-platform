@@ -11,6 +11,9 @@ petgo:
     google:
       # Google OAuth client id（aud 校验）。env 注入；留空时跳过 aud 严格校验（仅 dev/L0）。
       client-id: ${GOOGLE_OAUTH_CLIENT_ID:}
+    apple:
+      # Apple Sign-In client id（aud 校验，通常 = iOS bundle id）。env 注入；留空时跳过 aud 严格校验（仅 dev/L0）。
+      client-id: ${APPLE_CLIENT_ID:}
   # AI 智能分诊（Story 4.1）：Gemini Developer API（gemini-2.5-flash，签名 URL 直拉私密图）。
   # mode=stub（默认）走打桩客户端，无凭证即可启动并验状态机；mode=live 才打真实 Gemini（L2，需 key）。
   ai:

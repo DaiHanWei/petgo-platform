@@ -1,5 +1,6 @@
 package com.tailtopia.auth.web;
 
+import com.tailtopia.auth.dto.AppleLoginRequest;
 import com.tailtopia.auth.dto.GoogleLoginRequest;
 import com.tailtopia.auth.dto.LoginResponse;
 import com.tailtopia.auth.dto.RefreshRequest;
@@ -19,9 +20,10 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <ul>
  *   <li>{@code POST /api/v1/auth/google}：Google ID Token → 建号/取号 → 签发自签 JWT。</li>
+ *   <li>{@code POST /api/v1/auth/apple}：Apple identity token → 建号/取号 → 签发自签 JWT（FR-44）。</li>
  *   <li>{@code POST /api/v1/auth/refresh}：refresh 轮换。</li>
  * </ul>
- * 两端点接 Redis 令牌桶限流；超限 429 ProblemDetail。日志严禁记录 idToken/JWT/email/refresh。
+ * 各登录端点接 Redis 令牌桶限流；超限 429 ProblemDetail。日志严禁记录 idToken/identityToken/JWT/email/refresh。
  */
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -39,6 +41,12 @@ public class AuthController {
     public LoginResponse google(@Valid @RequestBody GoogleLoginRequest req, HttpServletRequest http) {
         rateLimiter.check("rl:auth:google:" + clientIp(http), 10, Duration.ofMinutes(1));
         return authService.loginWithGoogle(req.idToken());
+    }
+
+    @PostMapping("/apple")
+    public LoginResponse apple(@Valid @RequestBody AppleLoginRequest req, HttpServletRequest http) {
+        rateLimiter.check("rl:auth:apple:" + clientIp(http), 10, Duration.ofMinutes(1));
+        return authService.loginWithApple(req.identityToken());
     }
 
     @PostMapping("/refresh")
