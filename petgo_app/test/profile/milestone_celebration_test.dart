@@ -31,8 +31,9 @@ void main() {
     await tester.pump(); // 打开
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.byKey(const ValueKey('milestoneCelebrationS')), findsOneWidget);
-    // 1.5s 后自动关闭。
-    await tester.pump(const Duration(milliseconds: 1600));
+    // S 级 hold 3.5s（widget `_holdDuration`）后自动关闭。确定性推进越过该计时 + 跑完出场过场，
+    // 避免之前 pump 1.6s（< 3.5s）靠 pumpAndSettle 偶然多跑才过的「伪 flaky」。
+    await tester.pump(const Duration(seconds: 4));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('milestoneCelebrationS')), findsNothing);
   });
