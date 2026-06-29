@@ -51,6 +51,30 @@ class AuthControllerEndpointTest extends ApiIntegrationTest {
                 .andExpect(status().isUnprocessableEntity());
     }
 
+    /** apple 登录正常路径（FR-44）：dev 桩固定身份 → access/refresh + role=USER + 内嵌 profile。 */
+    @Test
+    void appleLogin_returnsTokensAndProfile() throws Exception {
+        mvc.perform(post("/api/v1/auth/apple")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("identityToken", "any-dev-token"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isNotEmpty())
+                .andExpect(jsonPath("$.refreshToken").isNotEmpty())
+                .andExpect(jsonPath("$.role").value("USER"))
+                .andExpect(jsonPath("$.profile.id").isNumber());
+    }
+
+    /** apple 登录校验：缺 identityToken（@NotBlank）→ 422 ProblemDetail。 */
+    @Test
+    void appleLogin_missingIdentityToken_is422() throws Exception {
+        mvc.perform(post("/api/v1/auth/apple")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of())))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.status").value(422))
+                .andExpect(jsonPath("$.traceId").isNotEmpty());
+    }
+
     /** refresh 正常路径：拿登录返回的 refresh 轮换 → 新 access + 新 refresh，且新旧 refresh 不同（防重放）。 */
     @Test
     void refresh_rotatesTokens() throws Exception {

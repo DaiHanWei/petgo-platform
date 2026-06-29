@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/auth/data/apple_auth_client.dart';
 import '../../features/auth/data/auth_repository.dart';
 import '../../features/auth/data/google_auth_client.dart';
 import '../../features/auth/domain/auth_state.dart';
@@ -32,6 +33,10 @@ final tokenStoreProvider = Provider<TokenStore>((ref) => SecureTokenStore());
 final googleAuthClientProvider = Provider<GoogleAuthClient>((ref) => GoogleSignInAuthClient(
       serverClientId: _kGoogleServerClientId.isEmpty ? null : _kGoogleServerClientId,
     ));
+
+/// Apple 登录客户端（FR-44）。按钮仅 iOS 显示；非 iOS 平台不会触发授权。
+final appleAuthClientProvider =
+    Provider<AppleAuthClient>((ref) => SignInWithAppleClient());
 
 /// 应用 Dio：基址 + 鉴权拦截器（注入 JWT / Accept-Language / 401 续期一次重放）。
 final Provider<Dio> dioProvider = Provider<Dio>((ref) {
@@ -75,4 +80,5 @@ final Provider<AuthRepository> authRepositoryProvider = Provider<AuthRepository>
       dio: ref.read(dioProvider),
       tokenStore: ref.read(tokenStoreProvider),
       googleClient: ref.read(googleAuthClientProvider),
+      appleClient: ref.read(appleAuthClientProvider),
     ));

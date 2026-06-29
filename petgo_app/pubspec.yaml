@@ -47,6 +47,8 @@ dependencies:
   flutter_secure_storage: ^9.2.2
   shared_preferences: ^2.3.2
   google_sign_in: ^7.0.0
+  # FR-44：Apple Sign-In（仅 iOS 展示按钮；真机授权需 iOS「Sign in with Apple」能力，L2 节点）。
+  sign_in_with_apple: ^8.0.0
   url_launcher: ^6.3.1
   # Story 2.1：媒体基建（选图 / 权限 / 客户端压缩 + EXIF 剥离）。
   # 处理用纯 Dart 的 `image`（解码重编码即丢弃 EXIF/GPS，headless 可单测），

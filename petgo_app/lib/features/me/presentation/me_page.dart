@@ -111,7 +111,10 @@ class MePage extends ConsumerWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (ctx) => Padding(
+      builder: (ctx) => SingleChildScrollView(
+        // padding（含键盘 viewInsets）直接加在滚动视图上：sheet 按内容自适应高度、
+        // 内容可滚动且 Save/Cancel 始终可见；viewInsets 区落在键盘之后，不显示为白区。
+        // （用户反馈：之前结构把 sheet 撑满高 → 底部大片白遮住按钮。）
         padding: EdgeInsets.only(
           left: 22,
           right: 22,
@@ -349,9 +352,16 @@ class _PetZone extends ConsumerWidget {
     final profile = ref.watch(authControllerProvider).profile;
     // PLANNING/ENTHUSIAST 不显示
     if (profile?.petStatus != 'HAS_PET') return const SizedBox.shrink();
-    // HAS_PET 未建档 → 引导卡
-    if (!(profile?.hasPetProfile ?? false)) return const _PetGuideCard();
-    return const _PetCard(); // A + 已建档 → 宠物卡片
+    // 「已建档」以真实档案为准，不信任登录响应里可能 stale 的 hasPetProfile：
+    // 后端 /auth/* 登录响应恒返回 hasPetProfile=false，仅 /me 与 /pet-profiles 才是权威，
+    // 否则老用户登录后即便有档案，/me 仍会错误显示「创建宠物档案」引导卡（用户反馈）。
+    final petAsync = ref.watch(petProfileProvider);
+    return petAsync.when(
+      data: (pet) => pet == null ? const _PetGuideCard() : const _PetCard(),
+      loading: () => const SizedBox.shrink(),
+      // 拉取失败不误导地催建档，留空待重试。
+      error: (_, _) => const SizedBox.shrink(),
+    );
   }
 }
 

@@ -9,6 +9,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByGoogleSub(String googleSub);
 
+    /** FR-44：Apple 登录按 apple_sub 取号（首登未命中则建号）。 */
+    Optional<User> findByAppleSub(String appleSub);
+
     /** Story 3.1：ADMIN 账密登录按 email + role 精确匹配。 */
     Optional<User> findByEmailAndRole(String email, Role role);
 }

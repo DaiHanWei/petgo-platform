@@ -171,10 +171,12 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
     }
   }
 
-  /// 离开会话页：一律回最外层主页 Tab（/home），不逐层退回 /consult 发起入口
-  /// —— 用户和兽医聊完点返回，不应再看到 Start Consultation 页。
+  /// 离开会话页：回「问诊」Tab（/triage，含咨询记录），不逐层退回 /consult 发起/case 表单页
+  /// —— 用户聊完点返回应回到问诊记录列表（用户反馈：原先错误地回到了首页 /home）；
+  /// 用 go 而非 pop：新发起流程栈下是 /consult/case 表单，pop 会错误退回表单（indexedStack
+  /// 保留 /triage 既有状态，go 回去等价于回到记录页）。
   void _leave() {
-    context.go('/home');
+    context.go('/triage');
   }
 
   /// 用户侧「Akhiri」：确认后离开会话（会话状态由服务端权威；本页不发起结束端点）。
@@ -261,7 +263,7 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
                 ? l10n.terminalClosed
                 : null;
     return PopScope(
-      // 系统返回键也回最外层 /home（_leave），与顶栏返回钮一致；不逐层退回 Start Consultation。
+      // 系统返回键也走 _leave（回 /triage 问诊 Tab），与顶栏返回钮一致；不逐层退回 Start Consultation/case 表单。
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _leave();

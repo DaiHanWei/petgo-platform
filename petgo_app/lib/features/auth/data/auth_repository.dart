@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import '../../../core/network/api_paths.dart';
 import '../../../core/storage/secure_storage.dart';
 import '../domain/login_response.dart';
+import 'apple_auth_client.dart';
 import 'google_auth_client.dart';
 
 /// 取消登录的哨兵（区别于失败）。
@@ -14,11 +15,18 @@ class LoginCancelled implements Exception {
 
 /// auth 数据层：Google 授权 → 后端换取自签 JWT → 安全存储；refresh 轮换。
 class AuthRepository {
-  AuthRepository({required this.dio, required this.tokenStore, required this.googleClient});
+  AuthRepository(
+      {required this.dio,
+      required this.tokenStore,
+      required this.googleClient,
+      this.appleClient});
 
   final Dio dio;
   final TokenStore tokenStore;
   final GoogleAuthClient googleClient;
+
+  /// Apple 登录客户端（FR-44，仅 iOS 注入）。为空时 [loginWithApple] 视作取消。
+  final AppleAuthClient? appleClient;
 
   /// 完整 Google 登录链路。用户取消抛 [LoginCancelled]。
   Future<LoginResponse> loginWithGoogle() async {
@@ -38,13 +46,16 @@ class AuthRepository {
     return login;
   }
 
-  /// 完整 Apple 登录链路（FR-44，iOS）。用户取消抛 [LoginCancelled]。
+  /// 完整 Apple 登录链路（FR-44，iOS）。用户取消（或未注入 [appleClient]）抛 [LoginCancelled]。
   ///
-  /// iOS 真机需接 `sign_in_with_apple` 取 identityToken（+ iOS「Sign in with Apple」
-  /// 能力 + 后端 /auth/apple 校验器，留作 L2 接入点）。
+  /// 真机授权是 L2 节点（需 iOS「Sign in with Apple」能力 + 真实 client id / bundle id）；
+  /// 取得 identityToken 后走 [exchangeAppleToken] 由后端 `/auth/apple` 校验建号。
   Future<LoginResponse> loginWithApple() async {
-    // TODO(L2): 接入 sign_in_with_apple 取真实 identityToken；当前暂作取消处理。
-    throw const LoginCancelled();
+    final client = appleClient;
+    if (client == null) throw const LoginCancelled();
+    final identityToken = await client.signInAndGetIdentityToken();
+    if (identityToken == null) throw const LoginCancelled();
+    return exchangeAppleToken(identityToken);
   }
 
   /// 用 Apple identityToken 向后端换取自签 JWT（拆出便于测试）。
