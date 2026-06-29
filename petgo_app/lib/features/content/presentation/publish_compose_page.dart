@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/media/media_scope.dart';
 import '../../../core/network/problem_detail.dart';
 import '../../../core/theme/colors.dart';
@@ -145,6 +146,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   }
 
   Future<void> _publish(PublishController controller, AppLocalizations l10n) async {
+    Analytics.capture('content_publish_submitted', {'type': controller.type.name});
     // 成长日历必带 pet_id（否则后端 422）；V1 单宠物 → 取当前用户唯一档案。
     if (controller.type == ContentType.growthMoment) {
       await _ensurePetLoaded();

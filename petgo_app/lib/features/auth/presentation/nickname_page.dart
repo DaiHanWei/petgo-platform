@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../data/me_repository.dart';
 import '../domain/auth_state.dart';
@@ -54,6 +55,7 @@ class _NicknamePageState extends ConsumerState<NicknamePage> {
 
   Future<void> _onContinue() async {
     if (!_valid || _busy) return;
+    Analytics.capture('onboarding_nickname_submitted');
     setState(() => _busy = true);
     try {
       final profile = await ref.read(meRepositoryProvider).updateNickname(_controller.text.trim());

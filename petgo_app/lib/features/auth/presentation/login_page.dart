@@ -5,6 +5,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/config/legal_urls.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/theme/colors.dart';
@@ -28,8 +29,15 @@ class LoginPage extends ConsumerStatefulWidget {
 class _LoginPageState extends ConsumerState<LoginPage> {
   bool _busy = false;
 
-  void _onGoogleLogin() => _login(() => ref.read(authRepositoryProvider).loginWithGoogle());
-  void _onAppleLogin() => _login(() => ref.read(authRepositoryProvider).loginWithApple());
+  void _onGoogleLogin() {
+    Analytics.capture('login_tapped', {'method': 'google'});
+    _login(() => ref.read(authRepositoryProvider).loginWithGoogle());
+  }
+
+  void _onAppleLogin() {
+    Analytics.capture('login_tapped', {'method': 'apple'});
+    _login(() => ref.read(authRepositoryProvider).loginWithApple());
+  }
 
   /// 统一登录链路（Google / Apple 共用）：成功落态 + 新老分流；取消/失败内联提示。
   Future<void> _login(Future<LoginResponse> Function() runner) async {

@@ -81,6 +81,25 @@ context: ['{project-root}/CLAUDE.md']
 
 ## Design Notes
 
+### 核心漏斗语义事件（与 autocapture `button_tapped` 并存，2026-06-29 补）
+
+埋在各 CTA handler 入口 = 记录点击意图。命名独立于 autocapture，便于在 PostHog 直接搭漏斗：
+
+| event | 触发 | properties | 文件 |
+|---|---|---|---|
+| `login_tapped` | 点 Google/Apple 登录 | `method`: google\|apple | `login_page.dart` `_onGoogleLogin/_onAppleLogin` |
+| `onboarding_nickname_submitted` | 引导填昵称点继续 | — | `nickname_page.dart` `_onContinue` |
+| `onboarding_completed` | 引导选宠物状态点完成 | `pet_status`: HAS_PET\|PLANNING | `pet_status_page.dart` `_onComplete` |
+| `pet_profile_create_submitted` | 提交建宠物档案 | — | `pet_profile_create_page.dart` `_submit` |
+| `triage_submitted` | 提交 AI 分诊 | — | `triage_upload_page.dart` `_submit` |
+| `post_like_tapped` | 点赞/取消赞 | `liked`: bool(新状态) | `like_button.dart` `_toggle` |
+| `content_publish_submitted` | 发帖/发成长动态 | `type`: 内容类型 | `publish_compose_page.dart` `_publish` |
+| `consult_started` | 分诊结果页点发起咨询 | — | `triage_result_view.dart`（红/绿两态各一处） |
+
+护栏：props 不带 postId/petId 等自增 id（CLAUDE.md「不外露自增 id」）；全部经 `Analytics.capture`→`scrub`。
+
+### identify / distinctId
+
 distinctId 同时满足两条约束（无 PII + 不外露自增 id），用已在依赖里的 `crypto`：
 
 ```dart

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../features/content/domain/home_refresh_provider.dart';
 import '../../../l10n/app_localizations.dart';
 import '../data/me_repository.dart';
@@ -24,6 +25,7 @@ class _PetStatusPageState extends ConsumerState<PetStatusPage> {
   Future<void> _onComplete() async {
     final status = _selected;
     if (status == null || _busy) return;
+    Analytics.capture('onboarding_completed', {'pet_status': status});
     setState(() => _busy = true);
     try {
       final profile = await ref.read(meRepositoryProvider).updatePetStatus(status);
