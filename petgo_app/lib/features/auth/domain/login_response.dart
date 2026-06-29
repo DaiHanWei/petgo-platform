@@ -64,4 +64,25 @@ class UserProfile {
         onboardingCompleted: (json['onboardingCompleted'] ?? false) as bool,
         hasPetProfile: (json['hasPetProfile'] ?? false) as bool,
       );
+
+  UserProfile copyWith({
+    int? id,
+    String? nickname,
+    String? displayName,
+    String? email,
+    String? avatarUrl,
+    String? petStatus,
+    bool? onboardingCompleted,
+    bool? hasPetProfile,
+  }) =>
+      UserProfile(
+        id: id ?? this.id,
+        nickname: nickname ?? this.nickname,
+        displayName: displayName ?? this.displayName,
+        email: email ?? this.email,
+        avatarUrl: avatarUrl ?? this.avatarUrl,
+        petStatus: petStatus ?? this.petStatus,
+        onboardingCompleted: onboardingCompleted ?? this.onboardingCompleted,
+        hasPetProfile: hasPetProfile ?? this.hasPetProfile,
+      );
 }
