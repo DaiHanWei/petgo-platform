@@ -19,7 +19,7 @@ class Analytics {
   /// write-only Project Token（可安全入端）。dart-define `POSTHOG_KEY` 覆盖，默认生产值。
   static const String _apiKey = String.fromEnvironment(
     'POSTHOG_KEY',
-    defaultValue: 'phc_mw2Qxs3pXeHkcyyd4ahjAXUUh6aruzMxLfcFmg8ePzC',
+    defaultValue: 'phc_mww2QxsJpXeHkcyyd4ahjAXUUh6aruzMxLfcFmg8ePzC',
   );
 
   /// 数据节点。dart-define `POSTHOG_HOST` 覆盖，默认 EU Cloud（project 211847）。
