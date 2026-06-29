@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
@@ -134,9 +135,7 @@ class GrowthArchivePage extends ConsumerWidget {
       ref.invalidate(archiveStatsProvider);
     } catch (_) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-          ..clearSnackBars()
-          ..showSnackBar(SnackBar(content: Text(l10n.growthStatusSaveFailed)));
+        showAppToast(context, l10n.growthStatusSaveFailed);
       }
     }
   }

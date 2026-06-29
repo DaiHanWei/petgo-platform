@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -120,9 +121,7 @@ class _VetRequestDetailPageState extends ConsumerState<VetRequestDetailPage> {
         _leave(l10n.vetInboxTaken);
       } else {
         setState(() => _accepting = false);
-        ScaffoldMessenger.of(context)
-          ..clearSnackBars()
-          ..showSnackBar(SnackBar(content: Text(l10n.vetStatusUpdateFailed)));
+        showAppToast(context, l10n.vetStatusUpdateFailed);
       }
     }
   }
@@ -134,9 +133,7 @@ class _VetRequestDetailPageState extends ConsumerState<VetRequestDetailPage> {
     _countdown?.cancel();
     _poll?.cancel();
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showAppToast(context, message);
     if (context.canPop()) {
       context.pop();
     } else {

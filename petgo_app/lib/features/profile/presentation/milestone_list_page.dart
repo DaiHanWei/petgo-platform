@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -606,7 +607,7 @@ class _CandidateTile extends ConsumerWidget {
   Future<void> _confirm(BuildContext context, WidgetRef ref) async {
     final l10n = AppLocalizations.of(context);
     final locale = Localizations.localeOf(context);
-    final messenger = ScaffoldMessenger.of(context);
+    final overlay = Overlay.of(context, rootOverlay: true);
     final navigator = Navigator.of(context);
     final router = GoRouter.maybeOf(context);
     try {
@@ -642,7 +643,7 @@ class _CandidateTile extends ConsumerWidget {
         onSeeAll: router == null ? null : () => router.go(DeepLinkRoutes.milestoneList),
       );
     } catch (_) {
-      messenger.showSnackBar(SnackBar(content: Text(l10n.milestoneCheckinFailed)));
+      showAppToastOnOverlay(overlay, l10n.milestoneCheckinFailed);
     }
   }
 }

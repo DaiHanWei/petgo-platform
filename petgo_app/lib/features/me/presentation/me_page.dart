@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -150,11 +151,7 @@ class MePage extends ConsumerWidget {
                   TextButton(
                     key: const ValueKey('meEditPhoto'),
                     onPressed: () {
-                      ScaffoldMessenger.of(ctx)
-                        ..clearSnackBars()
-                        ..showSnackBar(
-                          SnackBar(content: Text(l10n.helpComingSoon)),
-                        );
+                      showAppToast(ctx, l10n.helpComingSoon);
                     },
                     child: Text(
                       l10n.meEditPhotoChange,
@@ -284,9 +281,7 @@ class MePage extends ConsumerWidget {
       ref.read(authControllerProvider.notifier).applyProfile(updated);
     } catch (_) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-          ..clearSnackBars()
-          ..showSnackBar(SnackBar(content: Text(l10n.meNicknameSaveFailed)));
+        showAppToast(context, l10n.meNicknameSaveFailed);
       }
     }
   }
@@ -337,9 +332,7 @@ class MePage extends ConsumerWidget {
 
   void _avatarSnack(BuildContext context, String msg) {
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(msg)));
+    showAppToast(context, msg);
   }
 }
 

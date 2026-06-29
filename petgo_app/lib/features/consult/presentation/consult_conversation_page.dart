@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -163,14 +164,10 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
       _poll?.cancel();
       _maybeTriggerFirstConsultPush();
       _fetchDiagnosisOnce(); // 评分即关闭 → 正文平铺只读诊断（poll 已停，须主动拉）。
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(SnackBar(content: Text(l10n.consultRateThanks)));
+      showAppToast(context, l10n.consultRateThanks);
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(SnackBar(content: Text(l10n.consultRateFailed)));
+      showAppToast(context, l10n.consultRateFailed);
     }
   }
 
@@ -199,9 +196,7 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
     final d = await ref.read(consultRepositoryProvider).diagnosis(widget.sessionId);
     if (!mounted) return;
     if (d == null) {
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(SnackBar(content: Text(l10n.consultResultEmpty)));
+      showAppToast(context, l10n.consultResultEmpty);
       return;
     }
     await showConsultDiagnosisSheet(context, d);

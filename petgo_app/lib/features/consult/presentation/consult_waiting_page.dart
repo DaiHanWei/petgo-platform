@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -145,9 +146,7 @@ class _ConsultWaitingPageState extends ConsumerState<ConsultWaitingPage>
     // 显式保留请求 → 退出时不自动取消（与 AC7 退出取消区分）。
     _exitCancelDisabled = true;
     final l10n = AppLocalizations.of(context);
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(l10n.consultUseAiKeptHint)));
+    showAppToast(context, l10n.consultUseAiKeptHint);
     context.push('/triage/upload');
     // 留在等待页（返回时仍可见）；继续保留请求不轮询，避免重复弹。
   }

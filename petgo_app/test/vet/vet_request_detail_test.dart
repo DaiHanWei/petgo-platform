@@ -111,6 +111,7 @@ void main() {
     expect(find.text('Already taken by another vet'), findsWidgets);
     await tester.pumpAndSettle();
     expect(find.text('go'), findsOneWidget); // 已返回列表
+    await tester.pump(const Duration(seconds: 3)); // 走完 toast 定时器
   });
 
   testWidgets('AC5 状态1：预览期用户取消（轮询 CANCELLED）→ 此请求已关闭 + 返回', (tester) async {
@@ -121,6 +122,7 @@ void main() {
     expect(find.text('This request has been closed'), findsOneWidget);
     await tester.pumpAndSettle();
     expect(find.text('go'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 3)); // 走完 toast 定时器
   });
 
   testWidgets('AC5 状态2：预览期他人接单（轮询非 WAITING）→ 已被接单 + 返回', (tester) async {
@@ -131,6 +133,7 @@ void main() {
     expect(find.text('Already taken by another vet'), findsOneWidget);
     await tester.pumpAndSettle();
     expect(find.text('go'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 3)); // 走完 toast 定时器
   });
 
   testWidgets('AC5 状态3：3 分钟预览未操作 → 自动返回列表', (tester) async {
@@ -141,5 +144,6 @@ void main() {
     expect(find.text('Preview time ended, back to the list'), findsOneWidget);
     await tester.pumpAndSettle();
     expect(find.text('go'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 3)); // 走完 toast 定时器
   });
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_toast.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -164,9 +165,7 @@ class _CsContactRow extends StatelessWidget {
               onTap: () async {
                 await Clipboard.setData(ClipboardData(text: copyText));
                 if (!context.mounted) return;
-                ScaffoldMessenger.of(context)
-                  ..clearSnackBars()
-                  ..showSnackBar(SnackBar(content: Text(l10n.csCopied)));
+                showAppToast(context, l10n.csCopied);
               },
               child: const SizedBox(
                 width: 36,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/app_toast.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
@@ -106,9 +107,7 @@ class _EventCard extends StatelessWidget {
                 const SizedBox(height: 12),
                 Btn3d(
                   expand: true,
-                  onPressed: () => ScaffoldMessenger.of(context)
-                    ..clearSnackBars()
-                    ..showSnackBar(SnackBar(content: Text('${l10n.gathRegisterComingSoon} 🐾'))),
+                  onPressed: () => showAppToast(context, '${l10n.gathRegisterComingSoon} 🐾'),
                   fontSize: 14.5,
                   child: Text(l10n.gathJoinButton),
                 ),

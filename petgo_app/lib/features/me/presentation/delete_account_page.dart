@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -42,9 +43,7 @@ class _DeleteAccountPageState extends ConsumerState<DeleteAccountPage> {
       if (!mounted) return;
       setState(() => _deleting = false);
       final l10n = AppLocalizations.of(context);
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(SnackBar(content: Text(l10n.deleteAccountFailed)));
+      showAppToast(context, l10n.deleteAccountFailed);
     }
   }
 

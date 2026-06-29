@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -106,9 +107,7 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
       // 结束失败 → 留在会话页让兽医重试，不跳工作台。
       // 否则服务端仍 IN_PROGRESS、用户端仍显「进行中」，而兽医已离开 = 两端状态撕裂。
       if (mounted) {
-        ScaffoldMessenger.of(context)
-          ..clearSnackBars()
-          ..showSnackBar(SnackBar(content: Text(l10n.consultStartFailed)));
+        showAppToast(context, l10n.consultStartFailed);
       }
       return;
     }
@@ -126,9 +125,7 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
 
   void _onToolUnavailable() {
     final l10n = AppLocalizations.of(context);
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(l10n.vetChatToolUnavailable)));
+    showAppToast(context, l10n.vetChatToolUnavailable);
   }
 
   @override

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/colors.dart';
@@ -350,8 +351,7 @@ class _DetailScaffold extends ConsumerWidget {
       if (context.mounted) Navigator.of(context).maybePop();
     } catch (_) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(l10n.contentDeleteFailed)));
+        showAppToast(context, l10n.contentDeleteFailed);
       }
     }
   }

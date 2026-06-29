@@ -134,6 +134,7 @@ void main() {
     final field2 = tester.widget<TextField>(find.byKey(const ValueKey('detailCommentInput')));
     expect(field2.controller!.text, isEmpty);
     expect(repo.postCommentCalls, 2); // 首次失败 + 重试成功
+    await tester.pump(const Duration(seconds: 3)); // 走完失败 toast 定时器
   });
 
   testWidgets('AC2: 游客点评论框 → FR-0C 强登录弹窗', (tester) async {

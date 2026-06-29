@@ -115,6 +115,7 @@ void main() {
       matching: find.byType(FilledButton),
     ));
     expect(btn.onPressed, isNotNull);
+    await tester.pump(const Duration(seconds: 3)); // 走完 toast 自动消失定时器，避免 pending timer
   });
 
   testWidgets('AC5(R2/F13): 用户取消 → 取消提示 + 不创建账号（仍游客）', (tester) async {
@@ -124,5 +125,6 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('Sign-in cancelled'), findsOneWidget);
     expect(c.read(authControllerProvider).isLoggedIn, isFalse);
+    await tester.pump(const Duration(seconds: 3)); // 走完 toast 定时器
   });
 }

@@ -207,5 +207,6 @@ void main() {
     expect(container.read(authControllerProvider).profile?.hasPetProfile, isTrue);
     expect(container.read(profilePromptProvider).petProfileCompleted, isTrue);
     expect(find.text('profile'), findsOneWidget); // 提示并直达档案 Tab
+    await tester.pump(const Duration(seconds: 3)); // 走完 petProfileExists toast 定时器
   });
 }

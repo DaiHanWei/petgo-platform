@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -57,9 +58,7 @@ class _VetMePageState extends ConsumerState<VetMePage> {
 
   void _onUnavailable() {
     final l10n = AppLocalizations.of(context);
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(l10n.vetChatToolUnavailable)));
+    showAppToast(context, l10n.vetChatToolUnavailable);
   }
 
   /// 三态可用状态切换（Online/Sibuk/Offline）：经 [vetAvailabilityProvider] 持久化二元在线态
@@ -72,9 +71,7 @@ class _VetMePageState extends ConsumerState<VetMePage> {
     try {
       await ref.read(vetAvailabilityProvider.notifier).select(next);
       if (mounted && ref.read(vetAvailabilityProvider) != next) {
-        ScaffoldMessenger.of(context)
-          ..clearSnackBars()
-          ..showSnackBar(SnackBar(content: Text(l10n.vetStatusUpdateFailed)));
+        showAppToast(context, l10n.vetStatusUpdateFailed);
       }
     } finally {
       if (mounted) setState(() => _updating = false);

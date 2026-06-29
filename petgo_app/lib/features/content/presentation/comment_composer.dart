@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/colors.dart';
@@ -56,9 +57,7 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
       // AC3（F13）：发送失败（网络/服务器/422）→ 提示重试，**保留输入与回复态**，可直接重试。
       if (!mounted) return;
       final l10n = AppLocalizations.of(context);
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(SnackBar(content: Text(l10n.commentSendFailed)));
+      showAppToast(context, l10n.commentSendFailed);
     } finally {
       if (mounted) setState(() => _sending = false);
     }

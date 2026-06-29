@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -35,9 +36,7 @@ class _PetStatusPageState extends ConsumerState<PetStatusPage> {
       context.go(petStatusBranchLocation(status));
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-          ..clearSnackBars()
-          ..showSnackBar(SnackBar(content: Text(AppLocalizations.of(context).loginFailed)));
+        showAppToast(context, AppLocalizations.of(context).loginFailed);
       }
     } finally {
       if (mounted) setState(() => _busy = false);

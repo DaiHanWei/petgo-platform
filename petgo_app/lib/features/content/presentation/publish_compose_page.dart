@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -276,26 +277,11 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   }
 
   void _toast(String msg) {
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(msg), duration: const Duration(seconds: 3)));
+    showAppToast(context, msg, duration: const Duration(seconds: 3));
   }
 
   void _onGrowthBlocked(AppLocalizations l10n) {
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(
-        content: Text(l10n.publishGrowthNeedsProfile),
-        action: SnackBarAction(
-          label: l10n.publishCreateProfile,
-          onPressed: () {
-            // AC7（F15）：B/C 灰选成长日历 → 关闭发布页，跳建档（带 origin），
-            // 建档完成跳过庆祝页直接回发布页预选成长日历（pet_profile_create_page 接管）。
-            Navigator.of(context).pop();
-            context.push('/profile/create?origin=graySelectPublish');
-          },
-        ),
-      ));
+    showAppToast(context, l10n.publishGrowthNeedsProfile);
   }
 
   @override
