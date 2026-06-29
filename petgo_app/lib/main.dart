@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:tailtopia/app.dart';
+import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/core/l10n/locale_controller.dart';
 import 'package:tailtopia/core/storage/prefs.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
@@ -15,6 +16,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // 本地化日期格式化的 locale 数据（id 非默认 locale，DateFormat 用前必须初始化）。
   await initializeDateFormatting();
+  // 前端行为分析（PostHog）：runApp 前初始化，失败不阻断启动。
+  await Analytics.init();
   // V1：锁定竖屏（portrait-only）。
   SystemChrome.setPreferredOrientations(const [
     DeviceOrientation.portraitUp,

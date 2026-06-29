@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/core/l10n/locale_controller.dart';
 import 'package:tailtopia/core/router/app_router.dart';
 import 'package:tailtopia/core/theme/app_theme.dart';
+import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// 成长档案分享页深链 → go_router location 的纯映射（L0 可测）。
@@ -70,6 +72,23 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> {
 
   @override
   Widget build(BuildContext context) {
+    // 分析身份绑定：登录(含待引导新用户,有 id)→ identify(哈希 distinctId)；登出 → reset。
+    // 收口于此单点，保持 AuthController 纯净（不在 9 处 call-site 散埋副作用）。
+    ref.listen<AuthState>(authControllerProvider, (prev, next) {
+      final prevId = prev?.profile?.id;
+      final nextId = next.profile?.id;
+      if (next.status != AuthStatus.guest && nextId != null) {
+        // 非 guest 且拿到 id（含 newUserPendingOnboarding 引导期）。仅在 id 变化时上报，避免改资料重复 identify；
+        // 直接切到另一用户（中途未过 guest）时先 reset 再 identify，遵守 PostHog「换人先 reset」规约。
+        if (nextId != prevId) {
+          if (prevId != null) Analytics.reset();
+          Analytics.identifyUser(nextId);
+        }
+      } else if (next.status == AuthStatus.guest && prevId != null) {
+        // 仅在此前确有身份时 reset，避免纯游客态抖动平白重置匿名 id（破坏匿名漏斗连续性）。
+        Analytics.reset();
+      }
+    });
     // Story 7.2：用户手动选择优先（localeController）；null → 跟随设备（resolutionCallback 回退英语）。
     final manualLocale = ref.watch(localeControllerProvider);
     return MaterialApp.router(

@@ -73,3 +73,16 @@
 - **前端 `OssUploader.put` 非 2xx 上传错误无领域映射**：OSS 直传返回 403/404/3xx 时 dio 裸抛 `DioException`，未 try/catch 映射为本地化上传失败（UX「底部 toast 3s」）。本次新增 public-read ACL 使 403 更易触发，但错误处理是既有路径。补全：在 `put`/`MediaUploadUseCase` 包装 OSS 失败为领域错误 + i18n toast；`followRedirects:false` 对 3xx 显式失败。
 - **直传无 Content-MD5 完整性校验**：预签名上传未带 Content-MD5，在途字节截断/篡改 OSS 不拒收。V1 可接受；如需强一致补传 Content-MD5。
 
+
+---
+
+## PostHog 分析基建接入（2026-06-29，spec-posthog-analytics-integration）
+
+> 来源：三路对抗式 review（Blind Hunter / Edge Case Hunter / Acceptance Auditor）。以下为本期「基建层」范围外、刻意延后的项，不阻断本次验收；多数为 `capture()` 业务事件铺开后才生效的潜伏项。
+
+- **[重要] 底部 4 主 Tab 不发 `$screen`（Edge#10）**：`PosthogObserver` 挂 root navigator，靠 push/pop 取页面名；但 `StatefulShellRoute.indexedStack` 的 home/profile/triage/me 走 `goBranch` 切 IndexedStack 子树、各在 branch navigator（未挂 observer），切 Tab 不产生 push → **使用率最高的四个主屏自动埋点缺失**。仅 shell 外 push 的二级页正常追踪。后续需在 Tab 切换回调里手动 `Posthog().screen(...)` 补埋（属新增埋点工作，非本期基建范围）。
+- **冷启动登出残留身份（Edge#1）**：用户登录后强杀 → token 失效 → 冷启动 `_restoreSession` 失败保持 guest（无状态转换）→ 监听器不触发 reset，PostHog 仍持久着上次 distinctId。常见情形是「同人自己的登出后浏览被归到自己」（个人设备，影响小）；仅共享设备才跨用户。修法（如需）：splash `ensureRestored()` 完成后若非登录态且曾 identify 过（prefs 标志）则 reset，避免纯游客每启动 churn 匿名 id。V1 暂接受。
+- **事件 props 的 id 类键导出策略（Edge#9）**：`scrub` 黑名单未含 `petId`/`sessionId`/`postId` 等自增 id 类键；CLAUDE.md 护栏「自增 id 不外露」。当前 `capture` 未铺业务事件故未触发。铺埋点前需定策略：要么哈希后再带、要么禁带。
+- **自由文本值含 PII（Edge#8）**：`scrub` 仅按键剥离，不查值；`{'query':'我的狗吐血'}` 这类值里的健康/联系文本仍会上报。约定：埋点时 query/note 等自由文本不入 props，或入前在调用点脱敏。
+- **A→B 直切 / reset↔identify 抖动竞态（Edge#3/#13）**：已用「id 变化才触发 + 换人先 reset」缓解；极端快速 guest↔authenticated 交错下 method channel 保序但无序号保护，需端到端核实（低）。
+- **USER 态 profile.id 为 null（Edge#4）**：后端某响应未回 id 时该用户既不 identify 也不 reset。属后端不变量，监听器 `id != null` 守卫有意为之。
