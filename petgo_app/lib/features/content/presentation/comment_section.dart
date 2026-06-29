@@ -257,7 +257,13 @@ class _CommentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    // 点整条评论 = 回复它（FR-24 两级评论，与「回复」按钮同一入口）：一级→生成二级；
+    // 二级→后端 /comments/{parentId}/replies 归并到其一级父（绝不产生三级）。用户反馈：点别人评论应弹出评论框。
+    return GestureDetector(
+      key: ValueKey('commentItem_${comment.id}'),
+      behavior: HitTestBehavior.opaque,
+      onTap: onReply,
+      child: Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -284,6 +290,7 @@ class _CommentTile extends StatelessWidget {
             ],
           ),
         ],
+      ),
       ),
     );
   }
