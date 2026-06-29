@@ -17,9 +17,9 @@ import '../../profile/data/milestone_repository.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../profile/data/timeline_repository.dart';
 import '../../profile/domain/milestone.dart';
+import '../../profile/domain/milestone_share.dart';
 import '../../profile/domain/milestone_titles.dart';
 import '../../profile/domain/pet_profile.dart';
-import '../../profile/domain/share_service.dart';
 import '../../profile/presentation/widgets/milestone_celebration.dart';
 import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/dashed_rect.dart';
@@ -226,7 +226,12 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
           done,
           petName: petName,
           collection: collection,
-          onShare: () => ref.read(shareServiceProvider)(shareText),
+          onShare: () => shareMilestoneWithLink(ref,
+              item: done,
+              locale: locale,
+              petName: petName,
+              shareText: shareText,
+              collection: collection),
           // onSeeAll 省略：庆祝关闭后统一在下方先关 sheet 再跳列表（否则 sheet 挡住跳转）。
         );
         if (!mounted) return;

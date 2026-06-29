@@ -5,6 +5,7 @@ import com.tailtopia.profile.domain.PetMilestone;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.repository.HealthEventRepository;
 import com.tailtopia.profile.repository.MilestoneCompletionRepository;
+import com.tailtopia.profile.repository.MilestoneShareRepository;
 import com.tailtopia.profile.repository.PetMilestoneRepository;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.shared.media.PersonalMedia;
@@ -26,13 +27,16 @@ public class ProfileDeletionService {
     private final HealthEventRepository healthEvents;
     private final PetMilestoneRepository petMilestones;
     private final MilestoneCompletionRepository milestoneCompletions;
+    private final MilestoneShareRepository milestoneShares;
 
     public ProfileDeletionService(PetProfileRepository petProfiles, HealthEventRepository healthEvents,
-            PetMilestoneRepository petMilestones, MilestoneCompletionRepository milestoneCompletions) {
+            PetMilestoneRepository petMilestones, MilestoneCompletionRepository milestoneCompletions,
+            MilestoneShareRepository milestoneShares) {
         this.petProfiles = petProfiles;
         this.healthEvents = healthEvents;
         this.petMilestones = petMilestones;
         this.milestoneCompletions = milestoneCompletions;
+        this.milestoneShares = milestoneShares;
     }
 
     @Transactional
@@ -59,6 +63,8 @@ public class ProfileDeletionService {
             milestoneCompletions.deleteByPetMilestoneIdIn(milestoneIds);
         }
         petMilestones.deleteByPetProfileId(petId);
+        // 里程碑对外分享（P-35 分享链接）：随档案删除，token 立即失效（防注销后仍可访问 H5）。
+        milestoneShares.deleteByPetProfileId(petId);
 
         List<String> publicUrls = new ArrayList<>();
         if (pet.getAvatarUrl() != null) {

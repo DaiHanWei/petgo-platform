@@ -39,6 +39,14 @@ class _FakeRepo implements MilestoneRepository {
 
   @override
   Future<void> signalCardShared() async {}
+
+  @override
+  Future<String> createShare(String code,
+          {required String title,
+          required String body,
+          required String locale,
+          required String collectionLevels}) async =>
+      'token';
 }
 
 Widget _wrap(_FakeRepo repo) => ProviderScope(

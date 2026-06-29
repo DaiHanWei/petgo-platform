@@ -11,8 +11,8 @@ import '../../../shared/widgets/app_image.dart';
 import '../data/milestone_repository.dart';
 import '../domain/milestone.dart';
 import '../domain/milestone_checkin_prompt_copy.dart';
+import '../domain/milestone_share.dart';
 import '../domain/milestone_titles.dart';
-import '../domain/share_service.dart';
 import 'widgets/milestone_celebration.dart';
 
 /// 里程碑列表页（Story 8.2 · FR-42）。壳→真页：顶部宠物信息 + 总进度 + L/M/S 三级分区徽章
@@ -301,7 +301,8 @@ void _showCelebration(BuildContext context, WidgetRef ref, MilestoneItem item) {
     item,
     petName: petName,
     collection: collection,
-    onShare: () => ref.read(shareServiceProvider)(shareText),
+    onShare: () => shareMilestoneWithLink(ref,
+        item: item, locale: locale, petName: petName, shareText: shareText, collection: collection),
     onSeeAll: router == null ? null : () => router.go(DeepLinkRoutes.milestoneList),
   );
 }
@@ -632,7 +633,12 @@ class _CandidateTile extends ConsumerWidget {
         completed,
         petName: petName,
         collection: collection,
-        onShare: () => ref.read(shareServiceProvider)(shareText),
+        onShare: () => shareMilestoneWithLink(ref,
+            item: completed,
+            locale: locale,
+            petName: petName,
+            shareText: shareText,
+            collection: collection),
         onSeeAll: router == null ? null : () => router.go(DeepLinkRoutes.milestoneList),
       );
     } catch (_) {
