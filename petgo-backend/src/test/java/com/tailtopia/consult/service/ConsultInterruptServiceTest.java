@@ -10,6 +10,7 @@ import com.tailtopia.consult.domain.ConsultSession;
 import com.tailtopia.consult.domain.ConsultSource;
 import com.tailtopia.consult.domain.InterruptReason;
 import com.tailtopia.consult.domain.SessionStatus;
+import com.tailtopia.consult.event.ConsultAnomalyRaisedEvent;
 import com.tailtopia.consult.event.ConsultInterruptedEvent;
 import com.tailtopia.consult.repository.ConsultSessionRepository;
 import com.tailtopia.shared.im.TencentImClient;
@@ -57,8 +58,13 @@ class ConsultInterruptServiceTest {
         assertThat(s.getStatus()).isEqualTo(SessionStatus.INTERRUPTED);
         assertThat(s.getInterruptedReason()).isEqualTo(InterruptReason.VET_BANNED);
         assertThat(s.getInterruptedAt()).isNotNull();
-        verify(imClient).sendSystemMessage(org.mockito.ArgumentMatchers.eq("conv-11"), anyString());
+        // 系统消息文案（2.5）：含「重新匹配」与「结束」选项语义。
+        org.mockito.ArgumentCaptor<String> msg = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(imClient).sendSystemMessage(org.mockito.ArgumentMatchers.eq("conv-11"), msg.capture());
+        assertThat(msg.getValue()).contains("重新匹配").contains("结束");
+        // 两个事件都发：推送/历史 + 运营工单（2.5）。
         verify(events).publishEvent(any(ConsultInterruptedEvent.class));
+        verify(events).publishEvent(any(ConsultAnomalyRaisedEvent.class));
     }
 
     @Test

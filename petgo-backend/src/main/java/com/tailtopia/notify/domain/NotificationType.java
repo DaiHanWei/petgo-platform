@@ -27,5 +27,11 @@ public enum NotificationType {
     PET_BIRTHDAY,
     COMPANION_ANNIVERSARY,
     MILESTONE_NODE,
-    CONTENT_REMOVED
+    CONTENT_REMOVED,
+    /** 举报已处理 → 通知举报人的统一模糊闭环（Story 4.1，AB-3A；不透露处置结果/内容/作者）。 */
+    REPORT_REVIEWED,
+    /** 人工审核通过 → 通知作者「已通过」（Story 4.3，仅开关激活后产生）。 */
+    CONTENT_REVIEW_APPROVED,
+    /** 人工审核未通过/超时丢弃 → 通知作者「未通过」（Story 4.3，仅开关激活后产生）。 */
+    CONTENT_REVIEW_REJECTED
 }

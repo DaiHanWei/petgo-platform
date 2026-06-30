@@ -2,46 +2,39 @@
 <html lang="zh" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8"/>
-    <title>种子内容发布 · TailTopia 运营后台</title>
-    <style>
-        .card { background:#fff; padding:24px; border-radius:8px; max-width:640px; box-shadow:0 1px 4px rgba(0,0,0,.08); }
-        label { display:block; font-size:13px; color:#555; margin:14px 0 4px; }
-        select, input, textarea { width:100%; box-sizing:border-box; padding:8px; border:1px solid #ccc; border-radius:4px; font-family:inherit; }
-        textarea { min-height:96px; resize:vertical; }
-        button { margin-top:18px; padding:9px 20px; background:#2d6cdf; color:#fff; border:0; border-radius:4px; cursor:pointer; }
-        .ok { color:#27ae60; font-size:14px; margin:12px 0; }
-        .err { color:#c0392b; font-size:13px; margin:6px 0; }
-        .hint { color:#888; font-size:12px; margin-top:4px; }
-    </style>
+    <title th:text="#{admin.seed.title}">种子内容发布 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
         <div class="card">
-            <h1>发布种子内容</h1>
-            <p class="ok" th:if="${publishedId}">已发布，内容 ID：<span th:text="${publishedId}">0</span>（与用户内容混排，无特殊标记）。</p>
-            <div th:if="${#fields.hasGlobalErrors()}">
-                <p class="err" th:each="e : ${#fields.globalErrors()}" th:text="${e}">错误</p>
-            </div>
+            <h1 th:text="#{admin.seed.title}">发布种子内容</h1>
+            <p class="ok" th:if="${publishedId}">
+                <span th:text="#{admin.seed.published.prefix}">已发布，内容 ID：</span><span th:text="${publishedId}">0</span><span th:text="#{admin.seed.published.suffix}">（与用户内容混排，无特殊标记）。</span>
+            </p>
             <form th:action="@{/admin/seed-post}" th:object="${seedPostForm}" method="post">
-                <label for="type">内容类型</label>
-                <select id="type" th:field="*{type}">
+                <div th:if="${#fields.hasGlobalErrors()}">
+                    <p class="err" th:each="e : ${#fields.globalErrors()}" th:text="${e}">错误</p>
+                </div>
+                <label class="field" for="type" th:text="#{admin.seed.type}">内容类型</label>
+                <select id="type" th:field="*{type}" class="field-full">
                     <option th:each="t : ${types}" th:value="${t}" th:text="${t}">类型</option>
                 </select>
                 <p class="err" th:if="${#fields.hasErrors('type')}" th:errors="*{type}">类型错误</p>
 
-                <label for="text">正文（≤1000 字）</label>
+                <label class="field" for="text" th:text="#{admin.seed.text}">正文（≤1000 字）</label>
                 <textarea id="text" th:field="*{text}" maxlength="1000"></textarea>
                 <p class="err" th:if="${#fields.hasErrors('text')}" th:errors="*{text}">正文错误</p>
 
-                <label for="imageUrlsRaw">图片 URL（每行一个，≤9 张，公开桶 CDN 链接）</label>
+                <label class="field" for="imageUrlsRaw" th:text="#{admin.seed.images}">图片 URL（每行一个，≤9 张，公开桶 CDN 链接）</label>
                 <textarea id="imageUrlsRaw" th:field="*{imageUrlsRaw}"></textarea>
-                <p class="hint">种子图须为已上传公开桶的 URL（本 Story 不做后台直传）。</p>
+                <p class="hint" th:text="#{admin.seed.images.hint}">种子图须为已上传公开桶的 URL。</p>
 
-                <label for="petId">绑定宠物 ID（仅「成长日历快乐时刻」需要，且须属运营账号）</label>
-                <input type="number" id="petId" th:field="*{petId}"/>
+                <label class="field" for="petId" th:text="#{admin.seed.petId}">绑定宠物 ID</label>
+                <input type="number" id="petId" th:field="*{petId}" class="field-full"/>
 
-                <button type="submit">发布</button>
+                <button type="submit" class="btn btn-primary" th:text="#{admin.seed.submit}">发布</button>
             </form>
         </div>
     </div>

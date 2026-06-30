@@ -4,33 +4,37 @@
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <meta name="robots" content="noindex,nofollow"/>
-    <title>TailTopia 运营后台 · 登录</title>
-    <style>
-        body { font-family: system-ui, sans-serif; background: #f4f5f7; margin: 0; }
-        .box { max-width: 320px; margin: 12vh auto; background: #fff; padding: 28px;
-               border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
-        h1 { font-size: 18px; margin: 0 0 18px; }
-        label { display: block; font-size: 13px; color: #555; margin: 12px 0 4px; }
-        input { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc;
-                border-radius: 4px; }
-        button { width: 100%; margin-top: 18px; padding: 9px; background: #2d6cdf; color: #fff;
-                 border: 0; border-radius: 4px; cursor: pointer; }
-        .err { color: #c0392b; font-size: 13px; margin-top: 12px; }
-        .ok { color: #27ae60; font-size: 13px; margin-top: 12px; }
-    </style>
+    <title th:text="#{admin.login.title}">TailTopia 运营后台 · 登录</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
 </head>
 <body>
-<div class="box">
-    <h1>TailTopia 运营后台</h1>
-    <p class="err" th:if="${param.error}">账号或密码不正确。</p>
-    <p class="ok" th:if="${param.logout}">已退出登录。</p>
-    <form th:action="@{/admin/login}" method="post">
-        <label for="username">运营邮箱</label>
-        <input type="text" id="username" name="username" autocomplete="username" autofocus/>
-        <label for="password">密码</label>
-        <input type="password" id="password" name="password" autocomplete="current-password"/>
-        <button type="submit">登录</button>
-    </form>
+<div class="login-box">
+    <div class="lang">
+        <a href="?lang=zh_CN" th:text="#{admin.topbar.lang.zh}">中文</a>
+        /
+        <a href="?lang=en" th:text="#{admin.topbar.lang.en}">EN</a>
+    </div>
+    <h1 th:text="#{admin.login.title}">TailTopia 运营后台</h1>
+    <p class="err" th:if="${param.error}" th:text="#{admin.login.error}">账号或密码不正确。</p>
+    <p class="err" th:if="${param.locked}" th:text="#{admin.login.locked}">登录失败次数过多。</p>
+    <p class="err" th:if="${param.denied}" th:text="#{admin.login.denied}">你的账号无访问权限。</p>
+    <p class="err" th:if="${param.expired}" th:text="#{admin.login.expired}">会话已过期。</p>
+    <p class="ok" th:if="${param.logout}" th:text="#{admin.login.logout}">已退出登录。</p>
+
+    <!-- 主入口：Lark OAuth（团队全员复用 Lark 身份） -->
+    <a class="lark" th:href="@{/admin/oauth/lark/login}" th:text="#{admin.login.lark}">用 Lark 登录</a>
+
+    <!-- 紧急入口：超管用户名+密码，仅 Lark 服务异常时使用 -->
+    <details>
+        <summary th:text="#{admin.login.emergency}">紧急登录</summary>
+        <form th:action="@{/admin/login}" method="post">
+            <label class="field" for="username" th:text="#{admin.login.email}">运营邮箱</label>
+            <input type="text" id="username" name="username" autocomplete="username" class="field-full"/>
+            <label class="field" for="password" th:text="#{admin.login.password}">密码</label>
+            <input type="password" id="password" name="password" autocomplete="current-password" class="field-full"/>
+            <button type="submit" class="btn btn-primary" th:text="#{admin.login.submit}">登录</button>
+        </form>
+    </details>
 </div>
 </body>
 </html>

@@ -4,6 +4,7 @@ import com.tailtopia.consult.domain.ConsultSession;
 import com.tailtopia.consult.domain.SessionStatus;
 import com.tailtopia.consult.event.ConsultAcceptedEvent;
 import com.tailtopia.consult.event.ConsultRequestQueuedEvent;
+import com.tailtopia.admin.vetqual.service.VetQualificationService;
 import com.tailtopia.consult.repository.ConsultSessionRepository;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.im.ImAccountMapper;
@@ -28,14 +29,17 @@ public class ConsultAcceptService {
     private final VetPresenceService presence;
     private final TencentImClient imClient;
     private final ApplicationEventPublisher events;
+    private final VetQualificationService vetQualificationService;
 
     public ConsultAcceptService(ConsultSessionRepository repo, ConsultQueueService queue,
-            VetPresenceService presence, TencentImClient imClient, ApplicationEventPublisher events) {
+            VetPresenceService presence, TencentImClient imClient, ApplicationEventPublisher events,
+            VetQualificationService vetQualificationService) {
         this.repo = repo;
         this.queue = queue;
         this.presence = presence;
         this.imClient = imClient;
         this.events = events;
+        this.vetQualificationService = vetQualificationService;
     }
 
     @Transactional
@@ -44,6 +48,11 @@ public class ConsultAcceptService {
                 .orElseThrow(() -> AppException.notFound("咨询不存在"));
         if (s.getStatus() != SessionStatus.WAITING) {
             throw AppException.conflict("该咨询已被接走");
+        }
+        // Story 2.1：资质门控（权威点）——仅 CERTIFIED/EXPIRING_SOON 可接单；未过资质即拒，
+        // 不进 IN_PROGRESS、不占会话、不消队列。跨模块经 service（禁跨 repo）。
+        if (!vetQualificationService.canTakeConsult(vetId)) {
+            throw AppException.forbidden("资质未通过审核，暂不可接单");
         }
         // CAS：乐观锁裁决并发抢单（仅一人成功）。
         try {

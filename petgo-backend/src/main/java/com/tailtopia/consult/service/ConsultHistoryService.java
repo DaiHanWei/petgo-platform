@@ -37,6 +37,25 @@ public class ConsultHistoryService {
     }
 
     /**
+     * 后台用户详情（Story 3.1）：某用户兽医问诊会话**仅元数据**（会话 id/兽医/起止/状态/评分），
+     * createdAt 倒序。<b>绝不投影 aiImageRefs/症状文本/IM 正文</b>（数据边界 AG-6）。
+     */
+    @Transactional(readOnly = true)
+    public List<SessionMeta> adminSessionMetadata(long userId) {
+        return sessions.findByUserId(userId).stream()
+                .sorted(Comparator.comparing(ConsultSession::getCreatedAt).reversed())
+                .map(s -> new SessionMeta(s.getId(), s.getVetId(), s.getStatus().name(),
+                        s.getCreatedAt(), s.terminalAt(),
+                        ratings.findBySessionId(s.getId()).map(ConsultRating::getStars).orElse(null)))
+                .toList();
+    }
+
+    /** 后台会话元数据投影（不含任何对话内容/AI 上下文/媒体）。 */
+    public record SessionMeta(long sessionId, Long vetId, String status,
+            java.time.Instant createdAt, java.time.Instant endedAt, Integer stars) {
+    }
+
+    /**
      * 聚合历史。{@code cursor}=上一页末条 epochMillis（首页 null）；返回 {@code limit} 条 + nextCursor。
      * V1 低量：内存合并两源 + 游标过滤（架构禁 MQ/缓存，单机直查）。
      */

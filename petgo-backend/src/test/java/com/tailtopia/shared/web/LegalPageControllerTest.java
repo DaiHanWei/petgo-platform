@@ -59,4 +59,13 @@ class LegalPageControllerTest {
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("Child Safety Standards")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("CSAE")));
     }
+
+    @Test
+    void support_returnsHtmlPage() throws Exception {
+        mvc.perform(get("/support"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith("text/html"))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Support")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("cs@tailtopia.id")));
+    }
 }

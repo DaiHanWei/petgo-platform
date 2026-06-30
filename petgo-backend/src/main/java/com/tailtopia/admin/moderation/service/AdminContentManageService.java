@@ -1,0 +1,77 @@
+package com.tailtopia.admin.moderation.service;
+
+import com.tailtopia.admin.audit.service.AdminAuditService;
+import com.tailtopia.admin.audit.service.AuditActions;
+import com.tailtopia.content.domain.ContentType;
+import com.tailtopia.content.domain.DeleteReason;
+import com.tailtopia.content.dto.AdminContentRow;
+import com.tailtopia.content.service.ContentService;
+import com.tailtopia.shared.error.AppException;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.List;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * 后台全量内容管理（Story 4.2，AB-3B）。**经 {@link ContentService}** 浏览/主动下架/恢复，禁 admin 直读 content repo。
+ * 下架/恢复同事务写审计；下架必填原因（进审计 summary，不进作者通知）。安全攸关：勿埋绕过点。
+ */
+@Service
+public class AdminContentManageService {
+
+    private static final int PAGE_SIZE = 50;
+
+    private final ContentService contentService;
+    private final AdminAuditService auditService;
+
+    public AdminContentManageService(ContentService contentService, AdminAuditService auditService) {
+        this.contentService = contentService;
+        this.auditService = auditService;
+    }
+
+    /** 全量浏览/筛选/搜索。status: ONLINE / DELETED / null=全部；type/authorId/q 任一空忽略。 */
+    @Transactional(readOnly = true)
+    public List<AdminContentRow> browse(String type, Long authorId, LocalDate from, LocalDate to,
+            String status, String q, int page) {
+        ContentType ct = parseType(type);
+        Boolean deleted = "DELETED".equals(status) ? Boolean.TRUE
+                : ("ONLINE".equals(status) ? Boolean.FALSE : null);
+        Instant fromI = from == null ? null : from.atStartOfDay(ZoneOffset.UTC).toInstant();
+        Instant toI = to == null ? null : to.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+        String keyword = (q == null || q.isBlank()) ? null : q;
+        return contentService.adminSearch(ct, authorId, fromI, toI, deleted, keyword,
+                PAGE_SIZE, Math.max(page, 0) * PAGE_SIZE);
+    }
+
+    /** 主动下架（必填原因）：软删 + 作者通知（既有事件）+ 审计。 */
+    @Transactional
+    public void takedown(long postId, String reason, long actorAccountId) {
+        if (reason == null || reason.isBlank()) {
+            throw AppException.validation("下架原因不能为空");
+        }
+        contentService.softDelete(postId, DeleteReason.ADMIN_TAKEDOWN);
+        auditService.record(actorAccountId, AuditActions.CONTENT_TAKEN_DOWN, "CONTENT_POST",
+                String.valueOf(postId), "主动下架内容（原因：" + reason.trim() + "）");
+    }
+
+    /** 恢复已下架内容 + 审计。 */
+    @Transactional
+    public void restore(long postId, long actorAccountId) {
+        contentService.restore(postId);
+        auditService.record(actorAccountId, AuditActions.CONTENT_RESTORED, "CONTENT_POST",
+                String.valueOf(postId), "恢复已下架内容");
+    }
+
+    private ContentType parseType(String type) {
+        if (type == null || type.isBlank()) {
+            return null;
+        }
+        try {
+            return ContentType.valueOf(type);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+}

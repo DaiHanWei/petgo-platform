@@ -19,6 +19,7 @@ import com.tailtopia.support.ApiIntegrationTest;
 import com.tailtopia.support.VetTestSupport;
 import com.tailtopia.vet.domain.VetAccount;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -369,7 +370,7 @@ class VetConsultControllerEndpointTest extends ApiIntegrationTest {
     void waiting_enrichesPetIdentityAndOwnerHandle() throws Exception {
         VetAccount vet = vets.newActiveVet("富化医生");
         User user = newUser();
-        newPet(user.getId(), PetType.CAT, "Oyen", LocalDate.now().minusMonths(24));
+        newPet(user.getId(), PetType.CAT, "Oyen", LocalDate.now(ZoneOffset.UTC).minusMonths(24));
         ConsultSession s = vets.newWaitingAiSession(
                 user.getId(), "YELLOW", "呕吐", java.util.List.of());
         queue.enqueue(s.getId());
@@ -389,7 +390,7 @@ class VetConsultControllerEndpointTest extends ApiIntegrationTest {
     void session_enrichesPetIdentity() throws Exception {
         VetAccount vet = vets.newActiveVet("视图富化医生");
         User user = newUser();
-        newPet(user.getId(), PetType.DOG, "Milo", LocalDate.now().minusMonths(18));
+        newPet(user.getId(), PetType.DOG, "Milo", LocalDate.now(ZoneOffset.UTC).minusMonths(18));
         ConsultSession s = vets.newInProgressSession(user.getId(), vet.getId());
 
         mvc.perform(get("/api/v1/vet/consult-sessions/" + s.getId())
@@ -407,7 +408,7 @@ class VetConsultControllerEndpointTest extends ApiIntegrationTest {
     void inProgress_listsVetActiveSessions() throws Exception {
         VetAccount vet = vets.newActiveVet("进行中医生");
         User user = newUser();
-        newPet(user.getId(), PetType.CAT, "Mochi", LocalDate.now().minusMonths(8));
+        newPet(user.getId(), PetType.CAT, "Mochi", LocalDate.now(ZoneOffset.UTC).minusMonths(8));
         ConsultSession s = vets.newInProgressSession(user.getId(), vet.getId());
 
         mvc.perform(get("/api/v1/vet/consult-sessions/in-progress")

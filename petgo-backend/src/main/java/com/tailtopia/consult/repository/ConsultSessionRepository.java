@@ -8,11 +8,14 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 /**
  * 咨询会话持久层（Story 5.3）。模块边界：仅 {@code consult.service} 直接访问。
+ * Story 5.2：加 {@link JpaSpecificationExecutor} 供后台会话元数据多维动态查询（经 consult 只读 service）。
  */
-public interface ConsultSessionRepository extends JpaRepository<ConsultSession, Long> {
+public interface ConsultSessionRepository extends JpaRepository<ConsultSession, Long>,
+        JpaSpecificationExecutor<ConsultSession> {
 
     /** 某用户处于占用态（WAITING/IN_PROGRESS/PENDING_CLOSE）的会话（「同时仅 1 个」约束用）。 */
     Optional<ConsultSession> findFirstByUserIdAndStatusInOrderByCreatedAtDesc(

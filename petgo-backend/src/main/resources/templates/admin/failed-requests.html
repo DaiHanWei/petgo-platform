@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<!-- 问诊请求未成功队列（Story 2.9，AB-2G）。活动/归档分区；SYSTEM_FAILURE 红预警 + 强制跟进方可归档。门控 vet.view。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.failed.title}">未成功请求 · TailTopia 运营</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1 th:text="#{admin.failed.title}">问诊请求未成功队列</h1>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+
+        <h2 th:text="#{admin.failed.active}">活动</h2>
+        <table>
+            <thead>
+            <tr>
+                <th th:text="#{admin.failed.col.token}">请求</th>
+                <th th:text="#{admin.failed.col.user}">用户</th>
+                <th th:text="#{admin.failed.col.submitted}">提交</th>
+                <th th:text="#{admin.failed.col.cancelled}">取消</th>
+                <th th:text="#{admin.failed.col.reason}">原因</th>
+                <th th:text="#{admin.failed.col.online}">在线兽医</th>
+                <th th:text="#{admin.failed.col.followed}">跟进</th>
+                <th th:text="#{admin.failed.col.note}">备注</th>
+                <th th:text="#{admin.failed.col.action}">操作</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="r : ${activeItems}"
+                th:classappend="${r.systemFailure} ? 'row-alert'">
+                <td class="mono" th:text="${#strings.abbreviate(r.requestToken, 10)}">tok</td>
+                <td th:text="${r.userId}">1</td>
+                <td th:text="${#temporals.format(r.submittedAt, 'MM-dd HH:mm')}">-</td>
+                <td th:text="${#temporals.format(r.cancelledAt, 'MM-dd HH:mm')}">-</td>
+                <td>
+                    <span class="badge" th:classappend="${r.systemFailure} ? 'badge-danger' : 'badge-info'"
+                          th:text="#{'admin.failed.reason.' + ${r.cancelReason.name()}}">原因</span>
+                </td>
+                <td th:text="${r.onlineVetCount}">0</td>
+                <td th:text="${r.followedUp} ? #{admin.failed.yes} : #{admin.failed.no}">否</td>
+                <td>
+                    <form class="inline" th:action="@{/admin/failed-requests/{id}/note(id=${r.id})}" method="post">
+                        <input type="text" name="note" th:value="${r.note}"/>
+                        <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.failed.saveNote}">保存备注</button>
+                    </form>
+                </td>
+                <td>
+                    <form class="inline" th:unless="${r.followedUp}"
+                          th:action="@{/admin/failed-requests/{id}/follow-up(id=${r.id})}" method="post">
+                        <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.failed.followUp}">标记跟进</button>
+                    </form>
+                    <form class="inline" th:action="@{/admin/failed-requests/{id}/archive(id=${r.id})}" method="post">
+                        <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.failed.archive}">归档</button>
+                    </form>
+                </td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(activeItems)}">
+                <td colspan="9" class="empty" th:text="#{admin.failed.empty}">暂无记录</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <h2 style="margin-top:24px" th:text="#{admin.failed.archived}">归档</h2>
+        <table>
+            <thead>
+            <tr>
+                <th th:text="#{admin.failed.col.token}">请求</th>
+                <th th:text="#{admin.failed.col.user}">用户</th>
+                <th th:text="#{admin.failed.col.reason}">原因</th>
+                <th th:text="#{admin.failed.col.online}">在线兽医</th>
+                <th th:text="#{admin.failed.col.note}">备注</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="r : ${archivedItems}">
+                <td class="mono" th:text="${#strings.abbreviate(r.requestToken, 10)}">tok</td>
+                <td th:text="${r.userId}">1</td>
+                <td th:text="#{'admin.failed.reason.' + ${r.cancelReason.name()}}">原因</td>
+                <td th:text="${r.onlineVetCount}">0</td>
+                <td th:text="${r.note}">-</td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(archivedItems)}">
+                <td colspan="5" class="empty" th:text="#{admin.failed.empty}">暂无记录</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

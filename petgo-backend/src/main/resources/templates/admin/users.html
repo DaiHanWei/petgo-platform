@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<!-- 用户搜索（Story 3.1，只读）。按 ID/注册邮箱查普通用户；HTMX 片段刷新。门控 user.view。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.users.title}">用户搜索 · TailTopia 运营</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script th:src="@{/admin/vendor/htmx.min.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1 th:text="#{admin.users.title}">用户搜索</h1>
+
+        <form class="filter-bar" th:action="@{/admin/users}" method="get"
+              hx-get="/admin/users" hx-target="#user-rows" hx-swap="outerHTML">
+            <label>
+                <input type="search" name="q" th:value="${q}" th:placeholder="#{admin.users.searchPlaceholder}"
+                       style="width:280px"/>
+            </label>
+            <button type="submit" class="btn btn-primary" th:text="#{admin.users.search}">搜索</button>
+        </form>
+
+        <table>
+            <thead>
+            <tr>
+                <th th:text="#{admin.users.col.id}">ID</th>
+                <th th:text="#{admin.users.col.name}">昵称</th>
+                <th th:text="#{admin.users.col.email}">注册邮箱</th>
+                <th th:text="#{admin.users.col.created}">注册时间</th>
+                <th th:text="#{admin.users.col.status}">状态</th>
+                <th th:text="#{admin.users.col.action}">操作</th>
+            </tr>
+            </thead>
+            <tbody id="user-rows" th:fragment="rows">
+            <tr th:each="u : ${results}">
+                <td th:text="${u.id()}">1</td>
+                <td th:text="${u.displayName()}">用户</td>
+                <td th:text="${u.email()}">a@x</td>
+                <td th:text="${#temporals.format(u.createdAt(), 'yyyy-MM-dd')}">-</td>
+                <td>
+                    <span class="badge" th:classappend="${u.deactivated()} ? 'badge-danger' : 'badge-ok'"
+                          th:text="${u.deactivated()} ? #{admin.users.status.deactivated} : #{admin.users.status.active}">正常</span>
+                </td>
+                <td>
+                    <a class="btn btn-neutral btn-sm" th:href="@{'/admin/users/' + ${u.id()}}"
+                       th:text="#{admin.users.view}">查看详情</a>
+                </td>
+            </tr>
+            <tr th:if="${searched and #lists.isEmpty(results)}">
+                <td colspan="6" class="empty" th:text="#{admin.users.empty}">无匹配用户</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

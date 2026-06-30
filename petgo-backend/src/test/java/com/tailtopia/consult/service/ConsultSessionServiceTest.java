@@ -40,9 +40,11 @@ class ConsultSessionServiceTest {
     TriageService triageService;
     @Mock
     org.springframework.context.ApplicationEventPublisher events;
+    @Mock
+    com.tailtopia.vet.service.VetPresenceService presence;
 
     private ConsultSessionService service() {
-        return new ConsultSessionService(repo, queue, triageService, events);
+        return new ConsultSessionService(repo, queue, triageService, events, presence);
     }
 
     @Test
@@ -82,11 +84,14 @@ class ConsultSessionServiceTest {
         ConsultSession s = ConsultSession.startWaiting(7L, ConsultSource.DIRECT);
         when(repo.findById(11L)).thenReturn(Optional.of(s));
         when(repo.save(any(ConsultSession.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(presence.onlineVetIds()).thenReturn(java.util.List.of(1L, 2L));
 
         service().cancel(7L, 11L);
 
         assertThat(s.getStatus()).isEqualTo(SessionStatus.CANCELLED);
         verify(queue).dequeue(11L);
+        // Story 2.9：取消发失败请求事件（USER_CANCEL，含失败时刻在线兽医数）。
+        verify(events).publishEvent(any(com.tailtopia.consult.event.ConsultRequestFailedEvent.class));
     }
 
     @Test

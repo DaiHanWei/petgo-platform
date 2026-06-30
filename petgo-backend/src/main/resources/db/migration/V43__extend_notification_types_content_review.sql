@@ -1,0 +1,7 @@
+-- Story 4.3（管理后台 Epic 4）：人工审核通过/拒绝通知作者，新增 CONTENT_REVIEW_APPROVED / CONTENT_REVIEW_REJECTED。
+-- 实测最大号+1 = V41（V40=admin_settings）。扩 notifications.type CHECK 容纳新值（沿用 V38 范式）。
+ALTER TABLE notifications DROP CONSTRAINT ck_notifications_type;
+ALTER TABLE notifications ADD CONSTRAINT ck_notifications_type CHECK (type IN (
+    'VET_REPLY', 'CONSULT_CLOSED', 'CONTENT_LIKED', 'CONTENT_COMMENTED', 'NEW_CONSULT_REQUEST',
+    'PET_BIRTHDAY', 'COMPANION_ANNIVERSARY', 'MILESTONE_NODE', 'CONTENT_REMOVED', 'REPORT_REVIEWED',
+    'CONTENT_REVIEW_APPROVED', 'CONTENT_REVIEW_REJECTED'));

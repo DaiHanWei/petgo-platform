@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<!--
+  操作审计日志查询页（Story 1.3；1.6 外化 i18n + 换肤 + 本地托管 htmx）。门控在控制器 @PreAuthorize。
+  筛选：日期范围 / 操作人账号 id / 操作类型；HTMX 局部刷新 #results（HX-Request 返 resultsFragment 片段）。
+-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.audit.title}">操作审计 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <!-- HTMX：本地静态托管（不走 CDN）；未加载时表单退化为整页 GET 提交（仍可用）。 -->
+    <script th:src="@{/admin/vendor/htmx.min.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1 th:text="#{admin.audit.title}">操作审计</h1>
+        <p class="muted" th:text="#{admin.audit.subtitle}">所有后台写操作的不可篡改记录（哈希链 append-only，永久保留）。</p>
+
+        <!-- 筛选条：HTMX 提交局部刷新 #results -->
+        <form class="filter-bar" th:action="@{/admin/audit-logs}" method="get"
+              hx-get="/admin/audit-logs" hx-target="#results" hx-swap="innerHTML">
+            <label><span th:text="#{admin.audit.filter.from}">起始日期</span>
+                <input type="date" name="from" th:value="${from}"/></label>
+            <label><span th:text="#{admin.audit.filter.to}">结束日期</span>
+                <input type="date" name="to" th:value="${to}"/></label>
+            <label><span th:text="#{admin.audit.filter.actor}">操作人账号id</span>
+                <input type="number" name="actor" th:value="${actor}" min="1"/></label>
+            <label><span th:text="#{admin.audit.filter.action}">操作类型</span>
+                <select name="action">
+                    <option value="" th:text="#{admin.audit.filter.all}">全部</option>
+                    <option th:each="t : ${actionTypes}" th:value="${t}" th:text="${t}"
+                            th:selected="${t == action}">ACTION</option>
+                </select>
+            </label>
+            <button type="submit" class="btn btn-primary" th:text="#{admin.audit.filter.submit}">筛选</button>
+        </form>
+
+        <!-- 结果区（HTMX 局部刷新目标）。整页与片段共用同一 resultsFragment。 -->
+        <div id="results" th:insert="~{:: resultsFragment}">结果占位</div>
+    </div>
+
+    <!-- ===== 结果片段（HX-Request 时控制器单独返回此片段）===== -->
+    <div th:fragment="resultsFragment" th:remove="tag">
+        <p class="empty" th:if="${result.totalElements == 0}" th:text="#{admin.audit.empty}">无匹配的审计记录。</p>
+        <table th:if="${result.totalElements > 0}">
+            <thead>
+            <tr>
+                <th th:text="#{admin.audit.col.id}">id</th>
+                <th th:text="#{admin.audit.col.time}">时间(UTC)</th>
+                <th th:text="#{admin.audit.col.actor}">操作人账号</th>
+                <th th:text="#{admin.audit.col.action}">操作类型</th>
+                <th th:text="#{admin.audit.col.target}">目标</th>
+                <th th:text="#{admin.audit.col.summary}">摘要</th>
+                <th th:text="#{admin.audit.col.hash}">行哈希</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="r : ${result.content}">
+                <td th:text="${r.id}">1</td>
+                <td th:text="${#temporals.format(r.createdAt, 'yyyy-MM-dd HH:mm:ss')}">-</td>
+                <td th:text="${r.actorAccountId}">-</td>
+                <td><code th:text="${r.actionType}">ACTION</code></td>
+                <td>
+                    <span th:text="${r.targetType}">TYPE</span>
+                    <span class="muted" th:if="${r.targetId}" th:text="'#' + ${r.targetId}">#id</span>
+                </td>
+                <td th:text="${r.summary}" class="cell-wide">-</td>
+                <td class="mono" th:title="${r.rowHash}" th:text="${#strings.abbreviate(r.rowHash, 14)}">hash</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <div class="pager" th:if="${result.totalElements > 0}">
+            <a th:if="${result.hasPrevious()}"
+               th:hx-get="@{/admin/audit-logs(from=${from},to=${to},actor=${actor},action=${action},page=${result.number - 1})}"
+               hx-target="#results" hx-swap="innerHTML"
+               th:href="@{/admin/audit-logs(from=${from},to=${to},actor=${actor},action=${action},page=${result.number - 1})}"
+               th:text="#{admin.audit.prev}">← 上一页</a>
+            <span th:text="#{admin.audit.page(${result.number + 1}, ${result.totalPages}, ${result.totalElements})}">分页</span>
+            <a th:if="${result.hasNext()}"
+               th:hx-get="@{/admin/audit-logs(from=${from},to=${to},actor=${actor},action=${action},page=${result.number + 1})}"
+               hx-target="#results" hx-swap="innerHTML"
+               th:href="@{/admin/audit-logs(from=${from},to=${to},actor=${actor},action=${action},page=${result.number + 1})}"
+               th:text="#{admin.audit.next}">下一页 →</a>
+        </div>
+    </div>
+</div>
+</body>
+</html>

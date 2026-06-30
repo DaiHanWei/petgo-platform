@@ -1,5 +1,6 @@
 package com.tailtopia.auth.service;
 
+import com.tailtopia.auth.domain.Role;
 import com.tailtopia.auth.domain.User;
 import com.tailtopia.auth.dto.AuthorView;
 import com.tailtopia.auth.repository.UserRepository;
@@ -53,6 +54,18 @@ public class AccountQueryService {
         return userIds.stream().distinct()
                 .collect(Collectors.toMap(Function.identity(),
                         id -> found.getOrDefault(id, AuthorView.anonymized(id))));
+    }
+
+    /** Story 3.1：按 id 取普通用户（role=USER），供后台用户详情只读聚合。 */
+    @Transactional(readOnly = true)
+    public Optional<User> findUserById(long userId) {
+        return users.findById(userId).filter(u -> u.getRole() == Role.USER);
+    }
+
+    /** Story 3.1：按注册邮箱精确取普通用户（role=USER），供后台搜索。 */
+    @Transactional(readOnly = true)
+    public Optional<User> findUserByEmail(String email) {
+        return users.findByEmailAndRole(email, Role.USER);
     }
 
     private static AuthorView toAuthorView(User u) {

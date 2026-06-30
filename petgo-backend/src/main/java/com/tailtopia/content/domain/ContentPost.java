@@ -89,9 +89,30 @@ public class ContentPost {
         return p;
     }
 
+    /**
+     * 人工审核挂起发布（Story 4.3）：未过自动审核但开关已激活时——落库为 {@link PostStatus#UNDER_REVIEW}
+     * （不进任何公开口径），等运营处置。委托规范工厂后改状态。
+     */
+    public static ContentPost pendingReview(long authorId, ContentType type, Long petId, String text,
+            List<String> imageUrls, LocalDate eventDate) {
+        ContentPost p = publish(authorId, type, petId, text, imageUrls, eventDate);
+        p.status = PostStatus.UNDER_REVIEW;
+        return p;
+    }
+
+    /** Story 4.3：运营审核通过——UNDER_REVIEW → PUBLISHED，重回公开口径。 */
+    public void approveReview() {
+        this.status = PostStatus.PUBLISHED;
+    }
+
     /** 软删（Story 3.6 作者删除 / 3.7 运营下架 / 7.3 注销级联）。不物理删，保留行结构。 */
     public void softDelete() {
         this.deletedAt = Instant.now();
+    }
+
+    /** Story 4.2：运营恢复已下架内容——清 deletedAt 重回公开口径（评论保持软删、点赞已物删不还原）。 */
+    public void restore() {
+        this.deletedAt = null;
     }
 
     @PrePersist
