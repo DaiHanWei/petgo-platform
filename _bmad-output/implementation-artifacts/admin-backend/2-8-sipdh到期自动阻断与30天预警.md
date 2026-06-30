@@ -1,6 +1,10 @@
+---
+baseline_commit: 2bc770495356fcedf949135653dd6974ac99f824
+---
+
 # Story 2.8: SIPDH 到期自动阻断与 30 天预警
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -26,15 +30,15 @@ so that **杜绝证件过期仍接诊，并提醒运营提前续期**。
 
 ## Tasks / Subtasks
 
-- [ ] **T1 扫描器 + 状态切换（AC1/AC2/AC3）**
-  - [ ] 新建 `admin/vetqual/service/SipdhExpiryScanner`（`@Component`，`@Scheduled(cron=...)` 每日一次，cron 可 env 配，沿用 `ConsultCloseScanner` 的 try/catch + 日志风格）
-  - [ ] `VetQualificationService` 新增 `scanExpiry(LocalDate today)`：查 `CERTIFIED`/`EXPIRING_SOON` 且有 `sipdh_expiry` 的资质 → 逐条：`expiry < today` → `EXPIRED`；`today <= expiry <= today+30` → `EXPIRING_SOON`（若当前 CERTIFIED）；状态机幂等（已目标态跳过）；返回 (expired数, warned数)
-  - [ ] `VetQualificationRepository` 加到期查询（`findByStatusInAndSipdhExpiryNotNull(...)` 或按 expiry 范围）
-  - [ ] 实体加 `markExpired()`/`markExpiringSoon()` 状态机方法（合法迁移校验）
-- [ ] **T2 后台预警（AC1/AC4）**
-  - [ ] 预警呈现：列表（2.2）「证件即将到期/已过期」筛选 + 详情页橙色标识为主；另在 dashboard 或资质相关页展示「到期/即将到期数量」徽标（轻量，读资质状态统计）。**不发 IM/邮件**（V1.0.0 无外部通知）
-- [ ] **T3 回归（AC5）**
-  - [ ] `VetQualificationServiceTest`（mock repo + 固定 today/clock）：过期→EXPIRED、≤30 天→EXPIRING_SOON、未到期保持 CERTIFIED、幂等（已 EXPIRED 不再切）、边界（恰好 30 天 / 恰好今日到期）；`SipdhExpiryScanner` 调度方法异常吞掉不崩；`mvn -B compile` + 单测全绿
+- [x] **T1 扫描器 + 状态切换（AC1/AC2/AC3）**
+  - [x] `SipdhExpiryScanner`（`@Component @Scheduled(cron 可 env 配，默认每日 03:00 UTC)`，try/catch 吞异常 + 日志，仿 ConsultCloseScanner）
+  - [x] `VetQualificationService.scanExpiry(LocalDate today)`：查 CERTIFIED/EXPIRING_SOON 且有 sipdh_expiry → `expiry<today`→EXPIRED；`today<=expiry<=today+30` 且 CERTIFIED→EXPIRING_SOON；状态机幂等；返回 ScanResult(expired,warned)
+  - [x] `VetQualificationRepository.findByStatusInAndSipdhExpiryNotNull` + `countByStatus`
+  - [x] 实体 `markExpired()`/`markExpiringSoon()`（单向收紧 + 幂等）
+- [x] **T2 后台预警（AC1/AC4）**
+  - [x] 列表（2.2）「即将到期/已过期」筛选 + 详情/列表橙红 badge（已有）；兽医页顶部到期计数预警 banner（`expiryStats` 即将到期/已过期数）。**不发 IM/邮件**（系统行为不写审计，经 SLF4J JSON 日志可观测）
+- [x] **T3 回归（AC5）**
+  - [x] `VetQualificationScanTest`（过期/≤30天/恰好30天/未到期保持/已预警幂等/已过期最后一天=today仅预警/EXPIRING_SOON 过期再 EXPIRED/scanner 吞异常）；L1 `SipdhExpiryScanIntegrationTest`（过期→EXPIRED 停接单、≤30 天→EXPIRING_SOON 仍可接单、远期保持）；全量回归 734
 
 ## Dev Notes
 
@@ -81,8 +85,34 @@ so that **杜绝证件过期仍接诊，并提醒运营提前续期**。
 
 ### Agent Model Used
 
-### Debug Log References
+claude-opus-4-8[1m]
 
 ### Completion Notes List
 
+- **到期判定按 UTC 日**：`scanExpiry(LocalDate today)`，scanner 传 `LocalDate.now(ZoneOffset.UTC)`。`expiry < today` 才阻断（=有效期最后一天 today 仍仅预警不阻断，避免最后一天误杀）；30 天预警 `today <= expiry <= today+30`（含恰好 30 天）。L0 边界用例覆盖。
+- **状态机幂等去重，无去重表**：CERTIFIED→EXPIRING_SOON→EXPIRED 单向，扫描只查 CERTIFIED/EXPIRING_SOON；已 EXPIRED 不再处理、已 EXPIRING_SOON 不重复预警。**无新 Flyway、无 MQ/调度/缓存中间件（F5）**。续期回切 CERTIFIED 由 2.7 renew 负责，扫描器不回切。
+- **门控零改动联动**：切 EXPIRED → 2.1 `canTakeConsult` 自动返 false（停接单）；EXPIRING_SOON 仍 true（仍可接单）。L1 已验。
+- **系统行为不写审计**（无 admin 操作人）；经 SLF4J JSON 日志可观测（不含证件 PII）。预警呈现 = 列表筛选 + 详情/列表 badge + 兽医页顶部到期计数 banner（不发外部通知）。
+- **验证**：L0 `VetQualificationScanTest`(4) + scanner 吞异常；L1 `SipdhExpiryScanIntegrationTest`(1)；全量回归 **734 tests, 0 failures, 0 errors, 6 skipped**。无新迁移。
+
 ### File List
+
+**新增（main）**
+- petgo-backend/src/main/java/com/tailtopia/admin/vetqual/service/SipdhExpiryScanner.java
+
+**修改（main）**
+- petgo-backend/src/main/java/com/tailtopia/admin/vetqual/domain/VetQualification.java（markExpired/markExpiringSoon）
+- petgo-backend/src/main/java/com/tailtopia/admin/vetqual/repository/VetQualificationRepository.java（findByStatusInAndSipdhExpiryNotNull + countByStatus）
+- petgo-backend/src/main/java/com/tailtopia/admin/vetqual/service/VetQualificationService.java（scanExpiry + expiryStats + records）
+- petgo-backend/src/main/java/com/tailtopia/admin/service/AdminVetService.java（qualificationExpiryStats）
+- petgo-backend/src/main/java/com/tailtopia/admin/web/AdminWebController.java（vets 页注入 expiryStats）
+- petgo-backend/src/main/resources/templates/admin/vets.html（到期预警 banner）
+- petgo-backend/src/main/resources/i18n/messages_zh_CN.properties / messages_en.properties（expiryWarn 键）
+
+**新增（test）**
+- petgo-backend/src/test/java/com/tailtopia/admin/vetqual/service/VetQualificationScanTest.java
+- petgo-backend/src/test/java/com/tailtopia/admin/vetqual/SipdhExpiryScanIntegrationTest.java
+
+### Change Log
+
+- 2026-06-29：实现 Story 2.8 SIPDH 到期每日扫描（@Scheduled，到期→EXPIRED 停接单、≤30 天→EXPIRING_SOON 仍可接单，状态机幂等去重无中间件）+ 兽医页到期预警计数。系统行为不写审计。无新迁移。L0+L1 绿，全量回归 734。

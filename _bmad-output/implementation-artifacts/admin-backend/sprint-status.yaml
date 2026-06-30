@@ -1,5 +1,5 @@
 # generated: 2026-06-29
-# last_updated: 2026-06-29 (1-1 created)
+# last_updated: 2026-06-29 (Epic1 1-3/1-5/1-6 + Epic2 全 + Epic3 全 review; 1-4 deferred; Flyway 至 V37)
 # project: TailTopia 管理后台 V1.0.0
 # project_key: NOKEY
 # tracking_system: file-system
@@ -23,15 +23,16 @@
 #   按 dev 执行顺序（Epic1→6、story 升序）只列「建表/加列」的故事：
 #     V30 admin_accounts            (1-1 ✅已落)
 #     V31 admin_account_permissions (1-1 ✅已落)
-#     V32 admin_audit_logs          (1-3)
-#     V33 admin_session_logs        (1-4)
-#     V34 vet_qualifications        (2-1)
-#     V35 vet_accounts.contact_phone ALTER (2-3)
-#     V36 failed_consult_requests   (2-9)
-#     V37 users.status ALTER        (3-2)
-#     V38 manual_review_queue       (4-3)
-#     V39 admin_settings            (4-3)
-#     V40 consult_anomalies         (5-1)
+#     V32 admin_audit_logs          (1-3 ✅已落)
+#     V33 vet_qualifications        (2-1 ✅已落)  ⚠️ 实测顺延：1-4 已跳过未占号，按「实测最大号+1」2-1 取 V33（非原规划 V34）
+#     -- admin_session_logs (1-4) 延后未实现，落地时取当时最大号+1（不再预留固定号）
+#     V34 vet_accounts.contact_phone ALTER (2-3)  -- 顺延：下一个建表/加列取实测最大号+1
+#     V35 failed_consult_requests   (2-9)
+#     V36 users.status ALTER        (3-2)
+#     V37 manual_review_queue       (4-3)
+#     V38 admin_settings            (4-3)
+#     V39 consult_anomalies         (5-1)
+#   （以上 V34+ 为指示性顺序；实现时一律以 db/migration 实测最大号+1 为准）
 #   其余故事无新迁移。AB-3D 种子标记已移除：不建 users.is_seed_account 列。
 #   ⚠️ 注意：部分 story 文件指示号写成 V38（2-3/3-2/5-1 各自暂记），以本表为准、勿照搬。
 #
@@ -40,7 +41,7 @@
 #     后端在 2-5 已发系统消息/事件，App 侧 UI/路径为配套改动，归 petgo_app 排期。
 
 generated: 2026-06-29
-last_updated: 2026-06-29
+last_updated: 2026-06-30 (4-2~6-2 全 → review; Epic2~6 全 story review，仅 1-4 会话审计 deferred; Flyway 至 V42)
 project: TailTopia 管理后台 V1.0.0
 project_key: NOKEY
 tracking_system: file-system
@@ -51,47 +52,47 @@ development_status:
   epic-1: in-progress
   1-1-后台账号模型与认证重构: review
   1-2-lark-oauth登录与邮箱白名单门控: review
-  1-3-操作审计日志哈希链与查询: ready-for-dev
+  1-3-操作审计日志哈希链与查询: review
   1-4-会话审计记录: ready-for-dev
-  1-5-后台账号管理ui两级权限与生命周期: ready-for-dev
-  1-6-双语i18n基建与admin设计令牌与既有模板统一: ready-for-dev
+  1-5-后台账号管理ui两级权限与生命周期: review
+  1-6-双语i18n基建与admin设计令牌与既有模板统一: review
   epic-1-retrospective: optional
 
   # ===== Epic 2: 兽医账号治理 =====
   epic-2: in-progress
-  2-1-兽医资质数据模型与接单门控: ready-for-dev
-  2-2-兽医账号列表与搜索筛选: ready-for-dev
-  2-3-创建兽医账号: ready-for-dev
-  2-4-编辑兽医账号与重置密码: ready-for-dev
-  2-5-封禁解封兽医账号: ready-for-dev
-  2-6-兽医在线状态快照查询: ready-for-dev
-  2-7-兽医资质录入与审核: ready-for-dev
-  2-8-sipdh到期自动阻断与30天预警: ready-for-dev
-  2-9-问诊请求未成功记录: ready-for-dev
+  2-1-兽医资质数据模型与接单门控: review
+  2-2-兽医账号列表与搜索筛选: review
+  2-3-创建兽医账号: review
+  2-4-编辑兽医账号与重置密码: review
+  2-5-封禁解封兽医账号: review
+  2-6-兽医在线状态快照查询: review
+  2-7-兽医资质录入与审核: review
+  2-8-sipdh到期自动阻断与30天预警: review
+  2-9-问诊请求未成功记录: review
   epic-2-retrospective: optional
 
   # ===== Epic 3: 用户账号治理 =====
   epic-3: in-progress
-  3-1-用户搜索与详情查看: ready-for-dev
-  3-2-停用与重新激活用户账号: ready-for-dev
-  3-3-删除用户账号d1注销d2违规: ready-for-dev
+  3-1-用户搜索与详情查看: review
+  3-2-停用与重新激活用户账号: review
+  3-3-删除用户账号d1注销d2违规: review
   epic-3-retrospective: optional
 
   # ===== Epic 4: 内容审核 =====
   epic-4: in-progress
-  4-1-用户举报队列处理: ready-for-dev
-  4-2-全量内容管理与主动下架: ready-for-dev
-  4-3-人工审核队列预建未激活: ready-for-dev
+  4-1-用户举报队列处理: review
+  4-2-全量内容管理与主动下架: review
+  4-3-人工审核队列预建未激活: review
   epic-4-retrospective: optional
 
   # ===== Epic 5: 问诊异常与会话查询 =====
   epic-5: in-progress
-  5-1-异常工单队列: ready-for-dev
-  5-2-问诊会话元数据查询: ready-for-dev
+  5-1-异常工单队列: review
+  5-2-问诊会话元数据查询: review
   epic-5-retrospective: optional
 
   # ===== Epic 6: 兽医评分质量看板 =====
   epic-6: in-progress
-  6-1-兽医评分总览: ready-for-dev
-  6-2-单个兽医评分详情: ready-for-dev
+  6-1-兽医评分总览: review
+  6-2-单个兽医评分详情: review
   epic-6-retrospective: optional
