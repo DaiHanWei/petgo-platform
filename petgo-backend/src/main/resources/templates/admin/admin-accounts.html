@@ -38,7 +38,7 @@
                 <div class="perms">
                     <label th:each="p : ${allPermissions}">
                         <input type="checkbox" th:field="*{permissionCodes}" th:value="${p}"/>
-                        <span th:text="${p}">code</span>
+                        <span th:text="#{'perm.' + ${p}}" th:title="${p}">code</span>
                     </label>
                 </div>
                 <p><button type="submit" class="btn btn-primary" th:text="#{admin.accounts.submit.create}">创建账号</button></p>
@@ -72,7 +72,7 @@
                     <span th:if="${a.accountType.name() == 'SUPER_ADMIN'}" class="muted" th:text="#{admin.accounts.implicitAll}">隐式全权</span>
                     <span th:unless="${a.accountType.name() == 'SUPER_ADMIN'}">
                         <span th:if="${#lists.isEmpty(a.permissionCodes)}" class="muted" th:text="#{admin.accounts.none}">（无）</span>
-                        <span th:each="c : ${a.permissionCodes}" class="tag" th:text="${c}">code</span>
+                        <span th:each="c : ${a.permissionCodes}" class="tag" th:text="#{'perm.' + ${c}}" th:title="${c}">code</span>
                     </span>
                 </td>
                 <td>
@@ -86,7 +86,7 @@
                                 <label th:each="p : ${allPermissions}">
                                     <input type="checkbox" name="permissionCodes" th:value="${p}"
                                            th:checked="${#lists.contains(a.permissionCodes, p)}"/>
-                                    <span th:text="${p}">code</span>
+                                    <span th:text="#{'perm.' + ${p}}" th:title="${p}">code</span>
                                 </label>
                             </div>
                             <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.accounts.savePerms}">保存权限</button>
