@@ -1,5 +1,6 @@
 package com.tailtopia.shared.ai;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -14,6 +15,8 @@ import java.util.Map;
  * @param medicationRef 用药参考（可空）
  * @param disclaimer    免责声明（NFR-9，前置展示在 4.4）
  * @param observation   黄色条件倒计时协议三要素（FR-2，可空；绿色通常为 null）
+ * @param emergencySteps 红色态对症「现在该做」院前应急步骤（仅红色态产出，可空/空表）
+ * @param emergencyAvoid 红色态对症「切勿」禁忌（仅红色态产出，可空/空表）
  * @param raw           Gemini 原始响应（JSONB 存档）
  */
 public record GeminiTriageResult(
@@ -22,5 +25,7 @@ public record GeminiTriageResult(
         String medicationRef,
         String disclaimer,
         TriageObservation observation,
+        List<String> emergencySteps,
+        List<String> emergencyAvoid,
         Map<String, Object> raw) {
 }

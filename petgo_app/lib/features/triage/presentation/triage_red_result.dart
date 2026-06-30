@@ -55,6 +55,8 @@ class _TriageRedResultState extends ConsumerState<TriageRedResult> {
       pageBuilder: (dialogCtx, _, _) => RedAlertOverlay(
         title: title,
         symptom: symptom,
+        emergencySteps: widget.result.emergencySteps,
+        emergencyAvoid: widget.result.emergencyAvoid,
         onAcknowledge: () => Navigator.of(dialogCtx).pop(),
       ),
     );

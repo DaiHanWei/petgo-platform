@@ -36,14 +36,22 @@ class TriageResultContractTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void doneResultHasExactlyTheContractFields() {
         TriageResultResponse done = new TriageResultResponse(
                 TriageStatus.DONE, DangerLevel.RED, "请立即就医", "ref-x", "免责声明",
-                new TriageObservation(List.of("精神状态", "食欲"), "24 小时", List.of("持续呕吐")));
+                new TriageObservation(List.of("精神状态", "食欲"), "24 小时", List.of("持续呕吐")),
+                List.of("将宠物移到阴凉通风处", "用常温水浸湿身体辅助降温"),
+                List.of("切勿强行喂食或灌水"));
 
         Map<String, Object> m = wire(done);
         assertThat(m.keySet()).isEqualTo(Set.of(
-                "status", "dangerLevel", "advice", "medicationRef", "disclaimer", "observation"));
+                "status", "dangerLevel", "advice", "medicationRef", "disclaimer", "observation",
+                "emergencySteps", "emergencyAvoid"));
+        // 红色态对症应急透出契约（App RedAlertOverlay 据此渲染「现在该做 / 切勿」）。
+        assertThat((List<String>) m.get("emergencySteps")).containsExactly(
+                "将宠物移到阴凉通风处", "用常温水浸湿身体辅助降温");
+        assertThat((List<String>) m.get("emergencyAvoid")).containsExactly("切勿强行喂食或灌水");
         // observation 嵌套契约。
         @SuppressWarnings("unchecked")
         Map<String, Object> obs = (Map<String, Object>) m.get("observation");
@@ -55,7 +63,7 @@ class TriageResultContractTest {
         // 安全攸关：三态必须落 GREEN/YELLOW/RED 字面名，App _danger 据此映射；绝不可变序数/小写。
         for (DangerLevel lvl : DangerLevel.values()) {
             TriageResultResponse r = new TriageResultResponse(
-                    TriageStatus.DONE, lvl, "a", null, "d", null);
+                    TriageStatus.DONE, lvl, "a", null, "d", null, null, null);
             assertThat(wire(r).get("dangerLevel")).isEqualTo(lvl.name());
         }
         assertThat(DangerLevel.RED.name()).isEqualTo("RED"); // 红字面锚点
@@ -64,7 +72,7 @@ class TriageResultContractTest {
     @Test
     void statusSerializesAsEnumName() {
         for (TriageStatus s : TriageStatus.values()) {
-            TriageResultResponse r = new TriageResultResponse(s, null, null, null, null, null);
+            TriageResultResponse r = new TriageResultResponse(s, null, null, null, null, null, null, null);
             assertThat(wire(r).get("status")).isEqualTo(s.name());
         }
     }
@@ -74,7 +82,7 @@ class TriageResultContractTest {
         // PENDING/PROCESSING/FAILED → dangerLevel 等全 null → NON_NULL 省略。
         // App 必须把「无 dangerLevel」当未就绪/加载态，绝不可残留上一次 RED。
         TriageResultResponse pending = new TriageResultResponse(
-                TriageStatus.PENDING, null, null, null, null, null);
+                TriageStatus.PENDING, null, null, null, null, null, null, null);
 
         Map<String, Object> m = wire(pending);
         assertThat(m.keySet()).isEqualTo(Set.of("status"));

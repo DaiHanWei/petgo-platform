@@ -49,6 +49,8 @@ class TriageResult {
     this.disclaimer,
     this.observation,
     this.symptomSummary,
+    this.emergencySteps = const <String>[],
+    this.emergencyAvoid = const <String>[],
   });
 
   final TriageStatus status;
@@ -57,6 +59,10 @@ class TriageResult {
   final String? medicationRef;
   final String? disclaimer;
   final TriageObservation? observation;
+
+  /// 红色态对症院前应急（仅红色态后端产出；安全层升红/AI 失败时为空 → UI 回退通用步骤）。
+  final List<String> emergencySteps;
+  final List<String> emergencyAvoid;
 
   /// AI 归纳的症状摘要（原型「RINGKASAN GEJALA」）。后端结果可回传；为空时 UI 回退用户输入的症状文本。
   final String? symptomSummary;
@@ -74,7 +80,12 @@ class TriageResult {
             ? TriageObservation.fromJson(json['observation'] as Map<String, dynamic>)
             : null,
         symptomSummary: json['symptomSummary'] as String?,
+        emergencySteps: _emergencyList(json['emergencySteps']),
+        emergencyAvoid: _emergencyList(json['emergencyAvoid']),
       );
+
+  static List<String> _emergencyList(Object? raw) =>
+      raw is List ? raw.map((Object? e) => e.toString()).toList() : const <String>[];
 
   static TriageStatus _status(String? raw) {
     switch (raw) {

@@ -52,7 +52,14 @@ public class GeminiDeveloperApiClient implements GeminiClient {
             + "advice 给观察或处理建议；medicationRef 仅限宠物用药参考（无则省略，绝不给人类用药）；disclaimer 声明不替代专业兽医诊断。"
             + "判 YELLOW 时【必须】填写 observation 三要素（FR-2 条件倒计时协议）：indicators（需持续观察的具体指标）、"
             + "timeWindow（观察时间窗口，如『12-24 小时』）、escalationTriggers（一旦出现即需立即就医的升级信号）；"
-            + "GREEN/RED 可省略 observation。不开处方，建议就医而非替代兽医。";
+            + "GREEN/YELLOW 不填 observation 外的应急字段。\n"
+            + "【RED 红色态·对症院前应急】判 RED 时【必须】另填 emergencySteps 与 emergencyAvoid 两个数组，"
+            + "设想『主人此刻无法立即抵达医院（偏远/深夜/无车）』，给出针对该具体症状的到院前应急处理：\n"
+            + "- emergencySteps：3-5 条『现在该做』的对症步骤，每条一个简短可操作的单一动作（按该症状定制，不同症状必须不同）；\n"
+            + "- emergencyAvoid：1-3 条『切勿』禁忌，列出此症状下做了会加重伤害的动作（如疑似中毒切勿自行催吐、疑似骨折切勿搬动患处）。\n"
+            + "这两组仅为送医途中/到院前的应急辅助，【绝不能替代或淡化立即就医】，不开处方、不给剂量；"
+            + "emergencySteps 与 emergencyAvoid 仅在 RED 时填写，GREEN/YELLOW/越界一律省略。"
+            + "不开处方，建议就医而非替代兽医。";
 
     /**
      * 拼「作答语言」指令（追加到 systemInstruction 末尾）。输出语言恒为 English 或 Bahasa Indonesia
@@ -83,6 +90,9 @@ public class GeminiDeveloperApiClient implements GeminiClient {
                     "advice", Map.of("type", "STRING"),
                     "medicationRef", Map.of("type", "STRING"),
                     "disclaimer", Map.of("type", "STRING"),
+                    // 红色态对症院前应急（仅 RED 填）：现在该做 / 切勿。
+                    "emergencySteps", Map.of("type", "ARRAY", "items", Map.of("type", "STRING")),
+                    "emergencyAvoid", Map.of("type", "ARRAY", "items", Map.of("type", "STRING")),
                     // FR-2 黄色三要素：观察指标 / 时间窗口 / 升级触发条件（黄色应给出，绿色可省）。
                     "observation", Map.of(
                             "type", "OBJECT",
@@ -177,6 +187,8 @@ public class GeminiDeveloperApiClient implements GeminiClient {
                     (String) parsed.get("medicationRef"),
                     (String) parsed.get("disclaimer"),
                     parseObservation((Map<String, Object>) parsed.get("observation")),
+                    (List<String>) parsed.get("emergencySteps"),
+                    (List<String>) parsed.get("emergencyAvoid"),
                     response);
         } catch (RuntimeException | com.fasterxml.jackson.core.JsonProcessingException e) {
             log.warn("Gemini 响应解析失败，将重试: {}", e.getClass().getSimpleName());

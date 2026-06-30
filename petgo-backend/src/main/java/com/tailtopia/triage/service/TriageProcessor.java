@@ -140,6 +140,13 @@ public class TriageProcessor {
             obs.put("escalationTriggers", r.observation().escalationTriggers());
             m.put("observation", obs);
         }
+        // 红色态对症院前应急（仅模型在 RED 时产出；安全层升红但模型未产出时为空 → 前端回退通用步骤）。
+        if (r.emergencySteps() != null && !r.emergencySteps().isEmpty()) {
+            m.put("emergencySteps", r.emergencySteps());
+        }
+        if (r.emergencyAvoid() != null && !r.emergencyAvoid().isEmpty()) {
+            m.put("emergencyAvoid", r.emergencyAvoid());
+        }
         // 审计标识（非健康数据）：是否因规则层升红 + 命中规则 id。
         m.put("escalatedBySafetyRule", decision.escalatedBySafetyRule());
         if (!decision.matchedRuleIds().isEmpty()) {
