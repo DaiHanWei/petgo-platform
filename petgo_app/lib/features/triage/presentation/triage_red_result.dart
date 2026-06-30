@@ -7,6 +7,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/red_alert_overlay.dart';
 import '../../profile/data/profile_repository.dart';
 import '../data/triage_repository.dart';
+import '../domain/triage_result_controller.dart';
 import '../domain/triage_upload_controller.dart';
 
 /// 红色结果（Story 4.5）。进入即自底滑起 [RedAlertOverlay] 半屏强提醒；
@@ -60,8 +61,10 @@ class _TriageRedResultState extends ConsumerState<TriageRedResult> {
         onAcknowledge: () => Navigator.of(dialogCtx).pop(),
       ),
     );
-    // 「我已知晓」关闭 overlay 后直接退出 AI 问诊（不再保留红色摘要页 / 存档入口）。
+    // 「我已知晓」关闭 overlay 后：先同步清分诊结果态——否则重进上传页时首帧会用残留的旧 RED 结果
+    // 渲染 TriageResultView，红色态再次注册 postFrame 弹出 overlay（重进分诊闪一次红色页的 bug）。
     if (!mounted) return;
+    ref.read(triageResultProvider.notifier).reset();
     context.canPop() ? context.pop() : context.go('/triage');
   }
 

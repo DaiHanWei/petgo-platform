@@ -6,6 +6,8 @@ import 'package:tailtopia/core/theme/colors.dart';
 import 'package:tailtopia/features/triage/data/triage_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/triage/domain/triage_archive.dart';
+import 'package:tailtopia/features/triage/domain/triage_result_controller.dart';
+import 'package:tailtopia/features/triage/domain/triage_result_state.dart';
 import 'package:tailtopia/features/triage/presentation/triage_result_view.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/widgets/red_alert_overlay.dart';
@@ -151,6 +153,9 @@ void main() {
     // 点「我已知晓」→ 退出 AI 问诊：overlay 消失 + 离开结果页回到 triage 首页。
     expect(find.byType(RedAlertOverlay), findsNothing);
     expect(find.text('triage-home'), findsOneWidget);
+    // 回归（bug：重进上传页旧 RED 残留 → 又闪一次红色结果页）：退出时已同步清结果态，
+    // 确保 reset 路径可达且退出后结果 provider 回到 idle（重进上传页首帧即为填写态）。
+    expect(container.read(triageResultProvider).phase, TriagePhase.idle);
   });
 
   testWidgets('AC3: 点「存入档案」→ 调起存档回调（FR-16 触发）', (tester) async {
