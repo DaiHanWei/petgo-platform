@@ -11,7 +11,6 @@ import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/case_image_viewer.dart';
-import '../../../shared/widgets/confirm_sheet.dart';
 import 'consult_refresh.dart';
 import '../../notify/data/push_permission_providers.dart';
 import '../../notify/domain/push_suppression.dart';
@@ -179,19 +178,6 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
     context.go('/triage');
   }
 
-  /// 用户侧「Akhiri」：确认后离开会话（会话状态由服务端权威；本页不发起结束端点）。
-  Future<void> _confirmLeave() async {
-    final l10n = AppLocalizations.of(context);
-    final ok = await showConfirmSheet(
-      context,
-      title: l10n.vetEndConfirmTitle,
-      confirmLabel: l10n.vetEndConfirmYes,
-      cancelLabel: l10n.vetEndConfirmNo,
-      icon: Icons.logout_rounded,
-    );
-    if (ok && mounted) _leave();
-  }
-
   /// 查看会诊结果：拉本次最终诊断 → 只读弹层；未出诊断则提示。
   Future<void> _openDiagnosis() async {
     final l10n = AppLocalizations.of(context);
@@ -272,7 +258,7 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
       backgroundColor: AppColors.base,
       body: Column(
         children: [
-          _topBar(l10n, terminalLabel: terminalLabel, showEnd: active),
+          _topBar(l10n, terminalLabel: terminalLabel),
           // 免责提示常驻（NFR-9 / UX-DR14：克制、双语、显著位）。TailTopia Prototype 金色条。
           Container(
             key: const ValueKey('consultDisclaimerBanner'),
@@ -363,8 +349,9 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
     );
   }
 
-  /// 浅色顶栏（原型 chat.html）：返回钮 + 薄荷头像（在线点）+ 兽医名 + 「● Online · 诊所」/终态副行 + Akhiri。
-  Widget _topBar(AppLocalizations l10n, {required String? terminalLabel, required bool showEnd}) {
+  /// 浅色顶栏（原型 chat.html）：返回钮 + 薄荷头像（在线点）+ 兽医名 + 「● Online · 诊所」/终态副行。
+  /// 用户侧无「结束会话」入口——会话结束由兽医发起（Story 5.6），用户只能离开/评分。
+  Widget _topBar(AppLocalizations l10n, {required String? terminalLabel}) {
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.surface,
@@ -447,23 +434,6 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
                   ],
                 ),
               ),
-              if (showEnd) ...[
-                const SizedBox(width: 8),
-                OutlinedButton(
-                  key: const ValueKey('consultEndSession'),
-                  onPressed: _confirmLeave,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.coral,
-                    side: const BorderSide(color: AppColors.coral, width: 1.5),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  child: Text(l10n.vetEndConfirmYes,
-                      style: const TextStyle(fontSize: 12, color: AppColors.coral)),
-                ),
-              ],
             ],
           ),
         ),
