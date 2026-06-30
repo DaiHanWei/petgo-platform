@@ -10,9 +10,12 @@ import com.tailtopia.shared.error.AppException;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.List;
-import org.springframework.context.event.EventListener;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
  * 失败问诊请求落库与跟进（Story 2.9，AB-2G）。监听 consult 的 {@link ConsultRequestFailedEvent} 落自有表
@@ -20,6 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class FailedConsultRequestService {
+
+    private static final Logger log = LoggerFactory.getLogger(FailedConsultRequestService.class);
 
     private static final char[] BASE62 =
             "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".toCharArray();
@@ -34,12 +39,22 @@ public class FailedConsultRequestService {
         this.auditService = auditService;
     }
 
-    /** 监听失败事件 → 落库（生成不可枚举 token，followed_up=false）。 */
-    @EventListener
-    @Transactional
+    /**
+     * 监听失败事件 → 落库（生成不可枚举 token，followed_up=false）。
+     * <p>{@code @TransactionalEventListener}(AFTER_COMMIT) + 自有 {@code @Transactional}：仅在 {@code cancel()}
+     * 等发布方事务**提交后**、于独立事务落库——本表插入失败**绝不**回滚发布方事务（用户取消问诊不会因 admin 侧
+     * 记录失败而 500/卡 WAITING）。同步执行（提交回调内），故落库在 cancel() 返回前完成；失败再经 try/catch
+     * 兜底为结构化日志（不含 PII），双保险不外泄。
+     */
+    @TransactionalEventListener
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onConsultRequestFailed(ConsultRequestFailedEvent e) {
-        repo.save(FailedConsultRequest.of(generateToken(), e.userId(), e.sessionId(),
-                e.submittedAt(), Instant.now(), CancelReason.fromOrDefault(e.reason()), e.onlineVetCount()));
+        try {
+            repo.save(FailedConsultRequest.of(generateToken(), e.userId(), e.sessionId(),
+                    e.submittedAt(), Instant.now(), CancelReason.fromOrDefault(e.reason()), e.onlineVetCount()));
+        } catch (RuntimeException ex) {
+            log.warn("失败问诊请求落库失败 sessionId={} cause={}", e.sessionId(), ex.getClass().getSimpleName());
+        }
     }
 
     @Transactional(readOnly = true)
