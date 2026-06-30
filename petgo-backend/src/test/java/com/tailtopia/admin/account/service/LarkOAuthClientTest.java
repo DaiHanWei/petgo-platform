@@ -11,7 +11,7 @@ class LarkOAuthClientTest {
 
     private LarkOAuthClient client() {
         return new LarkOAuthClient("appid-1", "secret-1",
-                "https://admin.tailtopia.id/admin/oauth/lark/callback", "https://open.larksuite.com");
+                "https://ops.tailtopia.id/admin/oauth/lark/callback", "https://open.larksuite.com");
     }
 
     @Test
@@ -23,7 +23,7 @@ class LarkOAuthClientTest {
         assertThat(url).contains("state=st8");
         assertThat(url).contains("response_type=code");
         // redirect_uri 经 URL 编码
-        assertThat(url).contains("redirect_uri=https%3A%2F%2Fadmin.tailtopia.id%2Fadmin%2Foauth%2Flark%2Fcallback");
+        assertThat(url).contains("redirect_uri=https%3A%2F%2Fops.tailtopia.id%2Fadmin%2Foauth%2Flark%2Fcallback");
     }
 
     @Test
