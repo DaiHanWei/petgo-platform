@@ -17,6 +17,8 @@ class LarkOAuthClientTest {
     @Test
     void authorizeUrlContainsAppIdStateAndEncodedRedirect() {
         String url = client().authorizeUrl("st8");
+        // 必须是绝对地址(带 base-url)——浏览器 redirect 跳 Lark 授权页，相对路径会被解析成本站 host 而打不到 Lark。
+        assertThat(url).startsWith("https://open.larksuite.com/open-apis/authen/v1/authorize?");
         assertThat(url).contains("app_id=appid-1");
         assertThat(url).contains("state=st8");
         assertThat(url).contains("response_type=code");

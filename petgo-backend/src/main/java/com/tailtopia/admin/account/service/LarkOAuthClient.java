@@ -33,6 +33,7 @@ public class LarkOAuthClient {
     private final String appId;
     private final String appSecret;
     private final String redirectUri;
+    private final String baseUrl;
     private final RestClient rest;
 
     public LarkOAuthClient(
@@ -43,13 +44,17 @@ public class LarkOAuthClient {
         this.appId = appId;
         this.appSecret = appSecret;
         this.redirectUri = redirectUri;
+        this.baseUrl = baseUrl;
         this.rest = RestClient.builder().baseUrl(baseUrl).build();
     }
 
-    /** 拼授权页 URL（带 state CSRF）。 */
+    /**
+     * 拼授权页**绝对** URL（带 baseUrl + state CSRF）。控制器用 {@code redirect:} 让浏览器跳到 Lark
+     * 授权页——必须是绝对地址（open.larksuite.com），否则浏览器会按本站 host 解析成 /open-apis/... 而打不到 Lark。
+     */
     public String authorizeUrl(String state) {
         String enc = URLEncoder.encode(redirectUri, StandardCharsets.UTF_8);
-        return "/open-apis/authen/v1/authorize?app_id=" + appId
+        return baseUrl + "/open-apis/authen/v1/authorize?app_id=" + appId
                 + "&redirect_uri=" + enc + "&response_type=code&state=" + state;
     }
 
