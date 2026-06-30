@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<!-- 兽医评分总览（Story 6.1，AB-6A）。纯只读：所有兽医均分/已评/未评 + 排序 + 日期筛选。
+     仅运营可见，不对 App 公开。门控 rating.view。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.ratingOverview.title}">兽医评分总览 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script th:src="@{/admin/vendor/htmx.min.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1 th:text="#{admin.ratingOverview.title}">兽医评分总览</h1>
+        <p class="muted" th:text="#{admin.ratingOverview.note}">评分仅运营可见，不对外公开。零评分兽医也列出。</p>
+
+        <!-- 日期范围 + 排序 -->
+        <form class="filter-bar" th:action="@{/admin/ratings}" method="get"
+              hx-get="/admin/ratings" hx-target="#rating-rows" hx-swap="outerHTML">
+            <label><input type="date" name="from" th:value="${from}"/></label>
+            <label><input type="date" name="to" th:value="${to}"/></label>
+            <label>
+                <select name="sort">
+                    <option value="avg_desc" th:selected="${sort == null or sort == 'avg_desc'}"
+                            th:text="#{admin.ratingOverview.sort.avgDesc}">均分高→低</option>
+                    <option value="avg_asc" th:selected="${sort == 'avg_asc'}"
+                            th:text="#{admin.ratingOverview.sort.avgAsc}">均分低→高</option>
+                    <option value="volume_desc" th:selected="${sort == 'volume_desc'}"
+                            th:text="#{admin.ratingOverview.sort.volumeDesc}">问诊量高→低</option>
+                </select>
+            </label>
+            <button type="submit" class="btn btn-primary" th:text="#{admin.ratingOverview.apply}">应用</button>
+        </form>
+
+        <table>
+            <thead>
+            <tr>
+                <th th:text="#{admin.ratingOverview.col.vet}">兽医</th>
+                <th th:text="#{admin.ratingOverview.col.average}">均分</th>
+                <th th:text="#{admin.ratingOverview.col.rated}">已评</th>
+                <th th:text="#{admin.ratingOverview.col.unrated}">未评</th>
+                <th th:text="#{admin.ratingOverview.col.volume}">总问诊量</th>
+                <th th:text="#{admin.ratingOverview.col.action}">操作</th>
+            </tr>
+            </thead>
+            <tbody id="rating-rows" th:fragment="rows">
+            <tr th:each="r : ${items}">
+                <td>#<span th:text="${r.vetId()}">0</span> <span th:text="${r.displayName()}">兽医</span></td>
+                <td th:text="${r.ratedCount() > 0} ? ${#numbers.formatDecimal(r.average(), 1, 1)} : '—'">—</td>
+                <td th:text="${r.ratedCount()}">0</td>
+                <td th:text="${r.unratedCount()}">0</td>
+                <td th:text="${r.totalVolume()}">0</td>
+                <td>
+                    <a class="btn btn-neutral btn-sm" th:href="@{'/admin/vets/' + ${r.vetId()} + '/ratings'}"
+                       th:text="#{admin.ratingOverview.detail}">明细</a>
+                </td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(items)}">
+                <td colspan="6" class="empty" th:text="#{admin.ratingOverview.empty}">暂无兽医。</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

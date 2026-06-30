@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<!-- 问诊会话元数据查询（Story 5.2，AB-4B）。纯只读：按用户/兽医/日期查会话元数据 + 评分。
+     NFR5：仅元数据，绝不含 IM 正文/AI 分诊/用户媒体。门控 consult.view_sessions。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.sessions.title}">问诊会话查询 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script th:src="@{/admin/vendor/htmx.min.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1 th:text="#{admin.sessions.title}">问诊会话查询</h1>
+        <p class="muted" th:text="#{admin.sessions.note}">仅展示系统内会话元数据 + 评分；不触达第三方消息正文/AI/媒体。</p>
+
+        <form class="filter-bar" th:action="@{/admin/consult-sessions}" method="get"
+              hx-get="/admin/consult-sessions" hx-target="#session-rows" hx-swap="outerHTML">
+            <label>
+                <input type="number" name="userId" th:value="${userId}" min="1"
+                       th:placeholder="#{admin.sessions.userId}" style="width:120px"/>
+            </label>
+            <label>
+                <input type="number" name="vetId" th:value="${vetId}" min="1"
+                       th:placeholder="#{admin.sessions.vetId}" style="width:120px"/>
+            </label>
+            <label><input type="date" name="from" th:value="${from}"/></label>
+            <label><input type="date" name="to" th:value="${to}"/></label>
+            <button type="submit" class="btn btn-primary" th:text="#{admin.sessions.search}">查询</button>
+        </form>
+
+        <table>
+            <thead>
+            <tr>
+                <th th:text="#{admin.sessions.col.session}">会话</th>
+                <th th:text="#{admin.sessions.col.user}">用户</th>
+                <th th:text="#{admin.sessions.col.vet}">兽医</th>
+                <th th:text="#{admin.sessions.col.started}">开始</th>
+                <th th:text="#{admin.sessions.col.ended}">结束</th>
+                <th th:text="#{admin.sessions.col.status}">状态</th>
+                <th th:text="#{admin.sessions.col.rating}">评分</th>
+            </tr>
+            </thead>
+            <tbody id="session-rows" th:fragment="rows">
+            <tr th:each="s : ${items}">
+                <td th:text="${s.sessionId()}">1</td>
+                <td th:text="${s.userId() != null} ? ${s.userId()} : #{admin.sessions.anonymized}">-</td>
+                <td th:text="${s.vetId()}">-</td>
+                <td th:text="${#temporals.format(s.startedAt(), 'yyyy-MM-dd HH:mm')}">-</td>
+                <td th:text="${s.endedAt() != null} ? ${#temporals.format(s.endedAt(), 'yyyy-MM-dd HH:mm')} : '-'">-</td>
+                <td th:text="${s.status()}">CLOSED</td>
+                <td>
+                    <span th:if="${s.stars() != null}">
+                        <span th:text="${s.stars()} + '★'">5★</span>
+                        <span class="muted" th:if="${s.comment()}" th:text="${s.comment()}">…</span>
+                    </span>
+                    <span th:unless="${s.stars() != null}" class="muted" th:text="#{admin.sessions.noRating}">未评分</span>
+                </td>
+            </tr>
+            <tr th:if="${searched and #lists.isEmpty(items)}">
+                <td colspan="7" class="empty" th:text="#{admin.sessions.empty}">无匹配会话。</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

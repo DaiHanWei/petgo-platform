@@ -56,6 +56,12 @@ public class ReportService {
         return reports.findByStatusOrderByCreatedAtDesc(ReportStatus.PENDING, PageRequest.of(0, limit));
     }
 
+    /** Story 4.1：按状态列工单（PENDING/RESOLVED/DISMISSED），时间倒序。 */
+    @Transactional(readOnly = true)
+    public List<ContentReport> byStatus(ReportStatus status, int limit) {
+        return reports.findByStatusOrderByCreatedAtDesc(status, PageRequest.of(0, limit));
+    }
+
     @Transactional(readOnly = true)
     public Optional<ContentReport> find(long reportId) {
         return reports.findById(reportId);

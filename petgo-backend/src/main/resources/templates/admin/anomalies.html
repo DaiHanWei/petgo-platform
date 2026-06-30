@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!-- 问诊异常工单队列（Story 5.1，AB-4A）。仅会话元数据（NFR5：绝不含 IM 正文/AI 上下文/媒体）。
+     状态筛选（OPEN/RESOLVED）HTMX 片段；工单不可删；双入口（模块4 + 兽医分组）指向本页。门控 consult.view_anomalies。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.anomalies.title}">问诊异常工单 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script th:src="@{/admin/vendor/htmx.min.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1 th:text="#{admin.anomalies.title}">问诊异常工单</h1>
+        <p class="muted" th:text="#{admin.anomalies.note}">兽医被封禁自动生成；仅系统内会话元数据，不触达第三方消息正文。</p>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+
+        <!-- 状态筛选 -->
+        <div class="filter-bar">
+            <a class="btn btn-sm" th:classappend="${status == null or status == ''} ? 'btn-primary' : 'btn-neutral'"
+               th:href="@{/admin/anomalies}" th:text="#{admin.anomalies.filter.all}">全部</a>
+            <a class="btn btn-sm" th:classappend="${status == 'OPEN'} ? 'btn-primary' : 'btn-neutral'"
+               th:href="@{/admin/anomalies(status='OPEN')}" th:text="#{admin.anomalies.filter.open}">待处理</a>
+            <a class="btn btn-sm" th:classappend="${status == 'RESOLVED'} ? 'btn-primary' : 'btn-neutral'"
+               th:href="@{/admin/anomalies(status='RESOLVED')}" th:text="#{admin.anomalies.filter.resolved}">已归档</a>
+        </div>
+
+        <table>
+            <thead>
+            <tr>
+                <th th:text="#{admin.anomalies.col.id}">工单</th>
+                <th th:text="#{admin.anomalies.col.session}">会话</th>
+                <th th:text="#{admin.anomalies.col.user}">用户</th>
+                <th th:text="#{admin.anomalies.col.vet}">兽医</th>
+                <th th:text="#{admin.anomalies.col.type}">类型</th>
+                <th th:text="#{admin.anomalies.col.created}">生成时间</th>
+                <th th:text="#{admin.anomalies.col.status}">状态</th>
+                <th th:text="#{admin.anomalies.col.action}">操作</th>
+            </tr>
+            </thead>
+            <tbody id="anomaly-rows" th:fragment="rows">
+            <tr th:each="a : ${items}">
+                <td th:text="${a.id}">1</td>
+                <td th:text="${a.sessionId}">-</td>
+                <td th:text="${a.userId != null} ? ${a.userId} : #{admin.anomalies.anonymized}">-</td>
+                <td th:text="${a.vetId}">-</td>
+                <td th:text="${a.anomalyType}">VET_BANNED</td>
+                <td th:text="${#temporals.format(a.createdAt, 'yyyy-MM-dd HH:mm')}">-</td>
+                <td>
+                    <span class="badge"
+                          th:classappend="${a.status.name() == 'OPEN'} ? 'badge-danger' : 'badge-ok'"
+                          th:text="${a.status.name() == 'OPEN'} ? #{admin.anomalies.status.open} : #{admin.anomalies.status.resolved}">待处理</span>
+                </td>
+                <td>
+                    <a class="btn btn-neutral btn-sm" th:href="@{'/admin/anomalies/' + ${a.id}}"
+                       th:text="#{admin.anomalies.view}">查看</a>
+                </td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(items)}">
+                <td colspan="8" class="empty" th:text="#{admin.anomalies.empty}">暂无工单。</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

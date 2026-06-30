@@ -1,5 +1,8 @@
 package com.tailtopia.support;
 
+import com.tailtopia.admin.vetqual.domain.QualificationStatus;
+import com.tailtopia.admin.vetqual.domain.VetQualification;
+import com.tailtopia.admin.vetqual.repository.VetQualificationRepository;
 import com.tailtopia.consult.domain.ConsultSession;
 import com.tailtopia.consult.domain.ConsultSource;
 import com.tailtopia.consult.repository.ConsultSessionRepository;
@@ -10,6 +13,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * vet / consult 集成测试数据工厂。用 repository 直接造 active/banned 兽医账号与各状态会话，
@@ -26,16 +30,31 @@ public class VetTestSupport {
     private final VetAccountRepository vetAccounts;
     private final ConsultSessionRepository sessions;
     private final PasswordEncoder passwordEncoder;
+    private final VetQualificationRepository vetQualifications;
 
     public VetTestSupport(VetAccountRepository vetAccounts, ConsultSessionRepository sessions,
-            PasswordEncoder passwordEncoder) {
+            PasswordEncoder passwordEncoder, VetQualificationRepository vetQualifications) {
         this.vetAccounts = vetAccounts;
         this.sessions = sessions;
         this.passwordEncoder = passwordEncoder;
+        this.vetQualifications = vetQualifications;
     }
 
-    /** active 兽医（可通过 BannedVetFilter），唯一 username，BCrypt 哈希。 */
+    /**
+     * active 兽医（可通过 BannedVetFilter），唯一 username，BCrypt 哈希。
+     * Story 2.1 起：同时建 CERTIFIED 资质（语义=可正常接单的在职兽医），使接单端点测试通过资质门控。
+     * 需测「资质未过不可接单」的用例请用 {@link #newActiveVetWithoutQualification}。
+     */
     public VetAccount newActiveVet(String displayName) {
+        VetAccount v = newActiveVetWithoutQualification(displayName);
+        VetQualification q = VetQualification.pendingFor(v.getId());
+        ReflectionTestUtils.setField(q, "status", QualificationStatus.CERTIFIED);
+        vetQualifications.save(q);
+        return v;
+    }
+
+    /** active 兽医，但**不建资质行**（默认视同 PENDING_COMPLETION → 不可接单）。 */
+    public VetAccount newActiveVetWithoutQualification(String displayName) {
         long n = VET_SEQ.incrementAndGet();
         VetAccount v = VetAccount.create("it-vet-" + n, passwordEncoder.encode("secret-pass"), displayName);
         return vetAccounts.save(v);

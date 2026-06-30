@@ -29,6 +29,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AuthService {
 
+    /** Story 3.2：停用账号登录/刷新被拒的用户文案（App 据此引导外部联系渠道；用户已无法进入 App 工单）。 */
+    static final String DEACTIVATED_MESSAGE =
+            "账号已被停用，如有疑问请联系客服：WhatsApp 081290906953 / 邮箱 cs@tailtopia.id";
+
     private final UserRepository users;
     private final RefreshTokenRepository refreshTokens;
     private final GoogleTokenVerifier googleVerifier;
@@ -53,6 +57,11 @@ public class AuthService {
             isNew[0] = true;
             return users.save(User.newGoogleUser(id.sub(), id.email(), id.displayName(), id.avatarUrl()));
         });
+
+        // Story 3.2：停用账号即时不可登录（即便是已存在用户）。
+        if (!user.isActiveStatus()) {
+            throw AppException.forbidden(DEACTIVATED_MESSAGE);
+        }
 
         String access = jwt.issueAccessToken(user);
         String refresh = issueRefresh(user);
@@ -117,10 +126,33 @@ public class AuthService {
 
         User user = users.findById(token.getUserId())
                 .orElseThrow(() -> AppException.unauthorized("登录已过期，请重新登录"));
+        // Story 3.2：停用账号刷新被拒（带停用语义，App 据此展示外部联系渠道）。
+        if (!user.isActiveStatus()) {
+            throw AppException.forbidden(DEACTIVATED_MESSAGE);
+        }
 
         String access = jwt.issueAccessToken(user);
         String refresh = issueRefresh(user.getId(), SubjectType.USER);
         return new TokenResponse(access, refresh);
+    }
+
+    /** Story 3.2：停用普通用户——置 DEACTIVATED + 撤销其全部 refresh 句柄（既有令牌不可续期）。 */
+    @Transactional
+    public void deactivateUser(long userId) {
+        User user = users.findById(userId)
+                .orElseThrow(() -> AppException.notFound("用户不存在"));
+        user.deactivate();
+        users.save(user);
+        refreshTokens.deleteByUserIdAndSubjectType(userId, SubjectType.USER);
+    }
+
+    /** Story 3.2：重新激活普通用户——恢复登录权（不恢复已撤销令牌，用户重新登录即可）。 */
+    @Transactional
+    public void reactivateUser(long userId) {
+        User user = users.findById(userId)
+                .orElseThrow(() -> AppException.notFound("用户不存在"));
+        user.reactivate();
+        users.save(user);
     }
 
     private String issueRefresh(User user) {

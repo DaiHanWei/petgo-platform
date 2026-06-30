@@ -1,10 +1,15 @@
 package com.tailtopia.admin.service;
 
 import com.tailtopia.admin.account.domain.AdminAccount;
+import com.tailtopia.admin.account.domain.AdminAccountPermission;
 import com.tailtopia.admin.account.domain.AdminAccountStatus;
+import com.tailtopia.admin.account.domain.AdminAccountType;
+import com.tailtopia.admin.account.repository.AdminAccountPermissionRepository;
 import com.tailtopia.admin.account.repository.AdminAccountRepository;
 import com.tailtopia.auth.domain.Role;
 import com.tailtopia.auth.repository.UserRepository;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -26,10 +31,13 @@ public class AdminUserDetailsService implements UserDetailsService {
 
     private final AdminAccountRepository adminAccounts;
     private final UserRepository users;
+    private final AdminAccountPermissionRepository permissions;
 
-    public AdminUserDetailsService(AdminAccountRepository adminAccounts, UserRepository users) {
+    public AdminUserDetailsService(AdminAccountRepository adminAccounts, UserRepository users,
+            AdminAccountPermissionRepository permissions) {
         this.adminAccounts = adminAccounts;
         this.users = users;
+        this.permissions = permissions;
     }
 
     /** 紧急账密表单登录入口（Story 1.1）：要求账号已设密码。 */
@@ -55,7 +63,14 @@ public class AdminUserDetailsService implements UserDetailsService {
         Long operatorUserId = users.findByEmailAndRole(a.getLarkEmail(), Role.ADMIN)
                 .map(u -> u.getId())
                 .orElse(null);
+        // Story 1.5：STAFF 装载其模块权限码为 authority；SUPER_ADMIN 隐式全权（经 hasRole('SUPER_ADMIN')
+        // 表达式判定，不注入全集——新增权限码无需同步，抗遗漏），故此处不为其查权限表。
+        Set<String> permissionCodes = a.getAccountType() == AdminAccountType.SUPER_ADMIN
+                ? Set.of()
+                : permissions.findByAccountId(a.getId()).stream()
+                        .map(AdminAccountPermission::getPermissionCode)
+                        .collect(Collectors.toSet());
         return new AdminUserDetails(a.getId(), operatorUserId, a.getLarkEmail(),
-                a.getPasswordHash(), a.getAccountType());
+                a.getPasswordHash(), a.getAccountType(), permissionCodes);
     }
 }

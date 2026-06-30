@@ -1,33 +1,30 @@
 <!DOCTYPE html>
 <html lang="zh" xmlns:th="http://www.thymeleaf.org">
-<!-- 兽医评分查看（Story 5.6，AC4）。仅运营可见，普通用户/兽医 API 不暴露。-->
+<!-- 兽医评分查看（Story 5.6，AC4；1.6 外化 + 换肤）。仅运营可见，普通用户/兽医 API 不暴露。-->
 <head>
     <meta charset="UTF-8"/>
-    <title>兽医评分 · TailTopia 运营</title>
-    <style>
-        table { border-collapse: collapse; width: 100%; background: #fff; font-size: 14px; }
-        th, td { border: 1px solid #e1e4e8; padding: 8px 10px; text-align: left; }
-        th { background: #f0f2f5; }
-        .summary { background: #fff; padding: 16px; border: 1px solid #e1e4e8; margin-bottom: 18px; max-width: 480px; }
-        .avg { font-size: 28px; font-weight: 700; color: #2d6cdf; }
-        a.back { font-size: 13px; color: #2d6cdf; }
-    </style>
+    <title th:text="#{admin.ratings.title}">兽医评分 · TailTopia 运营</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content">
-        <a class="back" th:href="@{/admin/vets}">← 返回兽医账号</a>
-        <h2>兽医评分 · <span th:text="${vet.displayName()}">王医生</span></h2>
+        <p><a th:href="@{/admin/vets}" th:text="#{admin.ratings.back}">← 返回兽医账号</a></p>
+        <h1><span th:text="#{admin.ratings.title}">兽医评分</span> · <span th:text="${vet.displayName()}">王医生</span></h1>
 
         <div class="summary">
-            <div>平均分</div>
+            <div th:text="#{admin.ratings.avg}">平均分</div>
             <div class="avg"><span th:text="${ratings.average()}">0.0</span> ★</div>
-            <div>共 <span th:text="${ratings.count()}">0</span> 条评分</div>
+            <div th:text="#{admin.ratings.count(${ratings.count()})}">共 0 条评分</div>
         </div>
 
         <table>
             <thead>
-            <tr><th>星级</th><th>评价</th><th>时间</th></tr>
+            <tr>
+                <th th:text="#{admin.ratings.col.stars}">星级</th>
+                <th th:text="#{admin.ratings.col.comment}">评价</th>
+                <th th:text="#{admin.ratings.col.time}">时间</th>
+            </tr>
             </thead>
             <tbody>
             <tr th:each="r : ${ratings.items()}">
@@ -36,7 +33,29 @@
                 <td th:text="${r.createdAt()}">2026-06-02</td>
             </tr>
             <tr th:if="${#lists.isEmpty(ratings.items())}">
-                <td colspan="3">暂无评分</td>
+                <td colspan="3" th:text="#{admin.ratings.empty}">暂无评分</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <!-- Story 6.2：未评问诊单列 + 原因标注（纯只读，无写控件）。 -->
+        <h2 th:text="#{admin.ratings.unrated.title}">未评问诊</h2>
+        <table>
+            <thead>
+            <tr>
+                <th th:text="#{admin.ratings.unrated.col.session}">会话</th>
+                <th th:text="#{admin.ratings.unrated.col.time}">时间</th>
+                <th th:text="#{admin.ratings.unrated.col.reason}">原因</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="u : ${unrated}">
+                <td>#<span th:text="${u.sessionId()}">0</span></td>
+                <td th:text="${u.terminalAt() != null} ? ${#temporals.format(u.terminalAt(), 'yyyy-MM-dd HH:mm')} : '-'">-</td>
+                <td th:text="${u.reason().name() == 'INTERRUPTED'} ? #{admin.ratings.unrated.reason.interrupted} : #{admin.ratings.unrated.reason.timeout}">—</td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(unrated)}">
+                <td colspan="3" th:text="#{admin.ratings.unrated.empty}">暂无未评问诊</td>
             </tr>
             </tbody>
         </table>

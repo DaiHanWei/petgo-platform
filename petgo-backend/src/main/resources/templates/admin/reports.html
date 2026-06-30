@@ -1,51 +1,105 @@
 <!DOCTYPE html>
 <html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<!-- 举报队列（Story 3.7 + 4.1：状态筛选 + 批量 + 双向通知 + 审计）。HTMX 片段刷新；门控 content.view_reports/takedown。 -->
 <head>
     <meta charset="UTF-8"/>
-    <title>举报队列 · TailTopia 运营后台</title>
-    <style>
-        table { width:100%; border-collapse:collapse; background:#fff; }
-        th, td { padding:10px 12px; border-bottom:1px solid #eee; font-size:13px; text-align:left; vertical-align:top; }
-        th { background:#f0f2f5; color:#555; }
-        .empty { color:#888; padding:24px; }
-        .gone { color:#c0392b; font-size:12px; }
-        form { display:inline; margin:0; }
-        button { padding:5px 10px; border:0; border-radius:4px; cursor:pointer; font-size:12px; }
-        .takedown { background:#c0392b; color:#fff; }
-        .dismiss { background:#ddd; color:#333; margin-left:6px; }
-    </style>
+    <title th:text="#{admin.reports.title}">举报队列 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script th:src="@{/admin/vendor/htmx.min.js}"></script>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1>举报队列（待处理）</h1>
-        <p style="color:#888;font-size:13px">所有下架/驳回均由运营人工决定——平台无自动下架。</p>
-        <p class="empty" th:if="${#lists.isEmpty(reports)}">暂无待处理举报。</p>
-        <table th:unless="${#lists.isEmpty(reports)}">
+        <h1 th:text="#{admin.reports.title}">举报队列</h1>
+        <p class="muted" th:text="#{admin.reports.note}">所有下架/驳回均由运营人工决定——平台无自动下架。</p>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+
+        <!-- 状态筛选 -->
+        <div class="filter-bar">
+            <a class="btn btn-sm" th:classappend="${status == 'PENDING'} ? 'btn-primary' : 'btn-neutral'"
+               th:href="@{/admin/reports(status='PENDING')}" th:text="#{admin.reports.filter.pending}">待处理</a>
+            <a class="btn btn-sm" th:classappend="${status == 'RESOLVED'} ? 'btn-primary' : 'btn-neutral'"
+               th:href="@{/admin/reports(status='RESOLVED')}" th:text="#{admin.reports.filter.resolved}">已下架</a>
+            <a class="btn btn-sm" th:classappend="${status == 'DISMISSED'} ? 'btn-primary' : 'btn-neutral'"
+               th:href="@{/admin/reports(status='DISMISSED')}" th:text="#{admin.reports.filter.dismissed}">已驳回</a>
+        </div>
+
+        <!-- 批量表单（仅待处理可批量）-->
+        <form th:if="${status == 'PENDING'}" th:action="@{/admin/reports/batch}" method="post" id="batch-form">
+            <p>
+                <button type="submit" class="btn btn-danger btn-sm" name="action" value="takedown"
+                        th:text="#{admin.reports.batch.takedown}">批量下架</button>
+                <button type="submit" class="btn btn-neutral btn-sm" name="action" value="dismiss"
+                        th:text="#{admin.reports.batch.dismiss}">批量驳回</button>
+            </p>
+            <table>
+                <thead>
+                <tr>
+                    <th th:text="#{admin.reports.select}">选择</th>
+                    <th th:text="#{admin.reports.col.ticket}">工单</th>
+                    <th th:text="#{admin.reports.col.content}">内容</th>
+                    <th th:text="#{admin.reports.col.author}">作者</th>
+                    <th th:text="#{admin.reports.col.reporter}">举报人</th>
+                    <th th:text="#{admin.reports.col.type}">类型</th>
+                    <th th:text="#{admin.reports.col.count}">举报数</th>
+                    <th th:text="#{admin.reports.col.time}">时间</th>
+                    <th th:text="#{admin.reports.col.action}">操作</th>
+                </tr>
+                </thead>
+                <tbody id="report-rows" th:fragment="rows">
+                <tr th:each="r : ${reports}">
+                    <td><input type="checkbox" name="reportIds" th:value="${r.reportId}"/></td>
+                    <td th:text="${r.reportId}">1</td>
+                    <td>
+                        #<span th:text="${r.postId}">0</span>
+                        <span class="badge badge-danger" th:if="${r.postDeleted}" th:text="#{admin.reports.removed}">（已下架）</span>
+                        <div class="muted cell-wide" th:text="${r.postTextPreview}">…</div>
+                    </td>
+                    <td th:text="${r.authorId}">-</td>
+                    <td th:text="${r.reporterId}">-</td>
+                    <td th:text="${r.reasonType}">OTHER</td>
+                    <td th:text="${r.reportCount}">1</td>
+                    <td th:text="${#temporals.format(r.createdAt, 'yyyy-MM-dd HH:mm')}">-</td>
+                    <td>
+                        <button type="submit" form="batch-form" formaction="" class="btn btn-danger btn-sm"
+                                th:formaction="@{/admin/reports/{id}/takedown(id=${r.reportId})}"
+                                th:text="#{admin.reports.takedown}">下架</button>
+                        <button type="submit" form="batch-form" class="btn btn-neutral btn-sm"
+                                th:formaction="@{/admin/reports/{id}/dismiss(id=${r.reportId})}"
+                                th:text="#{admin.reports.dismiss}">驳回</button>
+                    </td>
+                </tr>
+                <tr th:if="${#lists.isEmpty(reports)}">
+                    <td colspan="9" class="empty" th:text="#{admin.reports.empty}">暂无待处理举报。</td>
+                </tr>
+                </tbody>
+            </table>
+        </form>
+
+        <!-- 已处理视图（RESOLVED/DISMISSED，只读 + 处理人/时间）-->
+        <table th:unless="${status == 'PENDING'}">
             <thead>
             <tr>
-                <th>工单</th><th>内容</th><th>类型</th><th>举报数</th><th>时间</th><th>操作</th>
+                <th th:text="#{admin.reports.col.ticket}">工单</th>
+                <th th:text="#{admin.reports.col.content}">内容</th>
+                <th th:text="#{admin.reports.col.author}">作者</th>
+                <th th:text="#{admin.reports.col.type}">类型</th>
+                <th th:text="#{admin.reports.col.handledBy}">处理人</th>
+                <th th:text="#{admin.reports.col.handledAt}">处理时间</th>
             </tr>
             </thead>
             <tbody>
             <tr th:each="r : ${reports}">
                 <td th:text="${r.reportId}">1</td>
-                <td>
-                    #<span th:text="${r.postId}">0</span>
-                    <span class="gone" th:if="${r.postDeleted}">（已下架）</span>
-                    <div th:text="${r.postTextPreview}" style="color:#666;max-width:280px">…</div>
-                </td>
+                <td>#<span th:text="${r.postId}">0</span>
+                    <span class="badge badge-danger" th:if="${r.postDeleted}" th:text="#{admin.reports.removed}">（已下架）</span></td>
+                <td th:text="${r.authorId}">-</td>
                 <td th:text="${r.reasonType}">OTHER</td>
-                <td th:text="${r.reportCount}">1</td>
-                <td th:text="${#temporals.format(r.createdAt, 'yyyy-MM-dd HH:mm')}">-</td>
-                <td>
-                    <form th:action="@{/admin/reports/{id}/takedown(id=${r.reportId})}" method="post">
-                        <button type="submit" class="takedown">下架</button>
-                    </form>
-                    <form th:action="@{/admin/reports/{id}/dismiss(id=${r.reportId})}" method="post">
-                        <button type="submit" class="dismiss">驳回</button>
-                    </form>
-                </td>
+                <td th:text="${r.handledBy}">-</td>
+                <td th:text="${r.handledAt != null} ? ${#temporals.format(r.handledAt, 'yyyy-MM-dd HH:mm')} : '-'">-</td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(reports)}">
+                <td colspan="6" class="empty" th:text="#{admin.reports.empty}">暂无记录。</td>
             </tr>
             </tbody>
         </table>

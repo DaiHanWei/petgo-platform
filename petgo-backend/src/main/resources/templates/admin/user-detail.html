@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!-- 用户详情聚合（Story 3.1 只读五块 + 3.2 停用/激活处置）。问诊仅元数据。门控 user.view；处置 user.deactivate。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.userdetail.title}">用户详情 · TailTopia 运营</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <p><a th:href="@{/admin/users}" th:text="#{admin.userdetail.back}">← 返回用户搜索</a></p>
+        <h1><span th:text="#{admin.userdetail.title}">用户详情</span> · <span th:text="${user.displayName()}">用户</span></h1>
+
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+
+        <!-- 账号处置（停用/激活，user.deactivate 门控）-->
+        <div class="card" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.deactivate')">
+            <h3 th:text="#{admin.userdetail.actions}">账号处置</h3>
+            <form class="inline" th:if="${!user.deactivated()}"
+                  th:action="@{/admin/users/{id}/deactivate(id=${user.id()})}" method="post"
+                  th:data-confirm="#{admin.userdetail.deactivateConfirm}">
+                <input type="text" name="reason" th:placeholder="#{admin.userdetail.deactivateReason}" required/>
+                <button type="submit" class="btn btn-danger" th:text="#{admin.userdetail.deactivate}">停用账号</button>
+            </form>
+            <form class="inline" th:if="${user.deactivated()}"
+                  th:action="@{/admin/users/{id}/reactivate(id=${user.id()})}" method="post">
+                <button type="submit" class="btn btn-neutral" th:text="#{admin.userdetail.reactivate}">重新激活</button>
+            </form>
+        </div>
+
+        <!-- 删除账号（不可逆，user.delete 门控）-->
+        <div class="card" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.delete')"
+             style="border-color:var(--danger)">
+            <h3 th:text="#{admin.userdetail.delete}">删除账号</h3>
+            <p class="err" th:text="#{admin.userdetail.deleteIrreversible}">此操作不可撤销</p>
+            <form th:action="@{/admin/users/{id}/delete(id=${user.id()})}" method="post"
+                  th:data-confirm="#{admin.userdetail.deleteConfirm}">
+                <label class="field" th:text="#{admin.userdetail.deleteType}">删除类型</label>
+                <label><input type="radio" name="type" value="USER_REQUEST" checked/>
+                    <span th:text="#{admin.userdetail.deleteType.userRequest}">用户申请注销</span></label>
+                <label><input type="radio" name="type" value="VIOLATION"/>
+                    <span th:text="#{admin.userdetail.deleteType.violation}">违规处置</span></label>
+                <label class="field" th:text="#{admin.userdetail.deleteNote}">删除备注（必填）</label>
+                <input type="text" name="note" class="field-full" required/>
+                <p><button type="submit" class="btn btn-danger" th:text="#{admin.userdetail.delete}">删除账号</button></p>
+            </form>
+        </div>
+
+        <!-- ① 基本信息 + ⑤ 状态 -->
+        <div class="card">
+            <h3 th:text="#{admin.userdetail.basic}">基本信息</h3>
+            <p>ID: <span th:text="${user.id()}">1</span></p>
+            <p><span th:text="#{admin.userdetail.nickname}">昵称</span>: <span th:text="${user.nickname()}">-</span></p>
+            <p><span th:text="#{admin.userdetail.email}">注册邮箱</span>: <span th:text="${user.email()}">a@x</span></p>
+            <p><span th:text="#{admin.userdetail.created}">注册时间</span>:
+                <span th:text="${#temporals.format(user.createdAt(), 'yyyy-MM-dd HH:mm')}">-</span></p>
+            <p><span th:text="#{admin.userdetail.status}">账号状态</span>:
+                <span class="badge" th:classappend="${user.deactivated()} ? 'badge-danger' : 'badge-ok'"
+                      th:text="${user.deactivated()} ? #{admin.users.status.deactivated} : #{admin.users.status.active}">正常</span></p>
+        </div>
+
+        <!-- ② 宠物档案 -->
+        <div class="card">
+            <h3 th:text="#{admin.userdetail.pets}">宠物档案</h3>
+            <p class="muted" th:if="${#lists.isEmpty(user.pets())}" th:text="#{admin.userdetail.none}">无</p>
+            <table th:unless="${#lists.isEmpty(user.pets())}">
+                <thead><tr>
+                    <th th:text="#{admin.userdetail.col.petName}">宠物</th>
+                    <th th:text="#{admin.userdetail.col.petType}">类型</th>
+                    <th th:text="#{admin.userdetail.col.breed}">品种</th>
+                </tr></thead>
+                <tbody>
+                <tr th:each="p : ${user.pets()}">
+                    <td th:text="${p.name()}">旺财</td>
+                    <td th:text="${p.petType()}">DOG</td>
+                    <td th:text="${p.breed()}">-</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- ④ 发布内容 -->
+        <div class="card">
+            <h3 th:text="#{admin.userdetail.posts}">发布内容</h3>
+            <p class="muted" th:if="${#lists.isEmpty(user.posts())}" th:text="#{admin.userdetail.none}">无</p>
+            <table th:unless="${#lists.isEmpty(user.posts())}">
+                <thead><tr>
+                    <th>ID</th>
+                    <th th:text="#{admin.userdetail.col.type}">类型</th>
+                    <th th:text="#{admin.userdetail.col.post}">内容</th>
+                    <th th:text="#{admin.userdetail.col.deleted}">状态</th>
+                </tr></thead>
+                <tbody>
+                <tr th:each="post : ${user.posts()}">
+                    <td th:text="${post.id()}">1</td>
+                    <td th:text="${post.type()}">DAILY</td>
+                    <td class="cell-wide" th:text="${post.textPreview()}">…</td>
+                    <td>
+                        <span class="badge" th:classappend="${post.deleted()} ? 'badge-danger' : 'badge-ok'"
+                              th:text="${post.deleted()} ? #{admin.userdetail.deleted} : #{admin.userdetail.published}">正常</span>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- ③ 历史问诊（仅元数据）-->
+        <div class="card">
+            <h3 th:text="#{admin.userdetail.consults}">历史问诊</h3>
+            <p class="banner err" th:text="#{admin.userdetail.metaOnly}">仅元数据，不含对话内容</p>
+            <p class="muted" th:if="${#lists.isEmpty(user.sessions())}" th:text="#{admin.userdetail.none}">无</p>
+            <table th:unless="${#lists.isEmpty(user.sessions())}">
+                <thead><tr>
+                    <th th:text="#{admin.userdetail.col.session}">会话</th>
+                    <th th:text="#{admin.userdetail.col.vet}">兽医</th>
+                    <th th:text="#{admin.userdetail.col.time}">时间</th>
+                    <th th:text="#{admin.userdetail.col.cstatus}">状态</th>
+                    <th th:text="#{admin.userdetail.col.rating}">评分</th>
+                </tr></thead>
+                <tbody>
+                <tr th:each="s : ${user.sessions()}">
+                    <td th:text="${s.sessionId()}">1</td>
+                    <td th:text="${s.vetId()}">-</td>
+                    <td th:text="${#temporals.format(s.createdAt(), 'yyyy-MM-dd HH:mm')}">-</td>
+                    <td><code th:text="${s.status()}">CLOSED</code></td>
+                    <td th:text="${s.stars() != null} ? ${s.stars()} + ' ★' : '—'">—</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+</body>
+</html>

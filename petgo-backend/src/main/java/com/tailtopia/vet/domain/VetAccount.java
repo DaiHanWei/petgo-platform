@@ -41,6 +41,10 @@ public class VetAccount {
     @Column(name = "status", nullable = false, length = 16)
     private VetStatus status = VetStatus.ACTIVE;
 
+    /** 运营私下联系用手机号（Story 2.3）；非登录凭证、不参与认证/唯一、不入 JWT/日志。存量为 NULL。 */
+    @Column(name = "contact_phone", length = 32)
+    private String contactPhone;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -68,6 +72,25 @@ public class VetAccount {
     /** 封禁/解封（5.7 复用；本故事落 ACTIVE↔BANNED 切换 + BANNED 不可登录）。 */
     public void setStatus(VetStatus status) {
         this.status = status;
+    }
+
+    /** 运营联系手机号（Story 2.3，建号/编辑时设置）。 */
+    public void setContactPhone(String contactPhone) {
+        this.contactPhone = contactPhone;
+    }
+
+    public String getContactPhone() {
+        return contactPhone;
+    }
+
+    /** 编辑显示名（Story 2.4）。 */
+    public void setDisplayName(String displayName) {
+        this.displayName = displayName;
+    }
+
+    /** 编辑登录邮箱（Story 2.4，沿用 username 列）。唯一校验由 service 负责。 */
+    public void setUsername(String username) {
+        this.username = username;
     }
 
     public boolean isActive() {

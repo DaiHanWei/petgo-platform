@@ -2,17 +2,18 @@
 <html lang="zh" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8"/>
-    <title>概览 · TailTopia 运营后台</title>
+    <title th:text="#{admin.dashboard.title}">概览 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1>运营后台</h1>
-        <p>平台上线前可在此发布种子内容，让首页 Feed 不为空。</p>
+        <h1 th:text="#{admin.dashboard.title}">运营后台</h1>
+        <p th:text="#{admin.dashboard.intro}">平台上线前可在此发布种子内容，让首页 Feed 不为空。</p>
         <ul>
-            <li><a th:href="@{/admin/seed-post}">发布种子内容</a></li>
+            <li><a th:href="@{/admin/seed-post}" th:text="#{admin.dashboard.seedLink}">发布种子内容</a></li>
         </ul>
-        <p style="color:#888;font-size:13px">举报审核（Story 3.7）、兽医账号与评分查看（Epic 5）将挂入同一后台。</p>
+        <p class="muted" th:text="#{admin.dashboard.note}">举报审核、兽医账号与评分查看已挂入同一后台。</p>
     </div>
 </div>
 </body>

@@ -5,9 +5,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import static org.mockito.ArgumentMatchers.anyLong;
+
 import com.tailtopia.admin.account.domain.AdminAccount;
+import com.tailtopia.admin.account.domain.AdminAccountPermission;
 import com.tailtopia.admin.account.domain.AdminAccountStatus;
 import com.tailtopia.admin.account.domain.AdminAccountType;
+import com.tailtopia.admin.account.repository.AdminAccountPermissionRepository;
 import com.tailtopia.admin.account.repository.AdminAccountRepository;
 import com.tailtopia.auth.domain.Role;
 import com.tailtopia.auth.domain.User;
@@ -27,13 +31,16 @@ class AdminUserDetailsServiceTest {
 
     private AdminAccountRepository adminAccounts;
     private UserRepository users;
+    private AdminAccountPermissionRepository permissions;
     private AdminUserDetailsService service;
 
     @BeforeEach
     void setUp() {
         adminAccounts = mock(AdminAccountRepository.class);
         users = mock(UserRepository.class);
-        service = new AdminUserDetailsService(adminAccounts, users);
+        permissions = mock(AdminAccountPermissionRepository.class);
+        when(permissions.findByAccountId(anyLong())).thenReturn(List.of());
+        service = new AdminUserDetailsService(adminAccounts, users, permissions);
     }
 
     /** 用真实实体 + 反射设字段（避免 mock JPA 实体的不稳）。 */
@@ -79,6 +86,34 @@ class AdminUserDetailsServiceTest {
 
         assertThat(authorities(ud)).contains("ROLE_ADMIN").doesNotContain("ROLE_SUPER_ADMIN");
         assertThat(((AdminUserDetails) ud).hasOperatorUserId()).isFalse();
+    }
+
+    @Test
+    void staffLoadsModulePermissionAuthorities() {
+        when(adminAccounts.findByLarkEmail("staff@tailtopia.id")).thenReturn(Optional.of(
+                account(8L, "staff@tailtopia.id", AdminAccountStatus.ACTIVE, "{bcrypt}s", AdminAccountType.STAFF)));
+        when(users.findByEmailAndRole("staff@tailtopia.id", Role.ADMIN)).thenReturn(Optional.empty());
+        when(permissions.findByAccountId(8L)).thenReturn(List.of(
+                new AdminAccountPermission(8L, "vet.view"),
+                new AdminAccountPermission(8L, "admin.view_logs")));
+
+        UserDetails ud = service.loadUserByUsername("staff@tailtopia.id");
+
+        assertThat(authorities(ud)).contains("ROLE_ADMIN", "vet.view", "admin.view_logs")
+                .doesNotContain("ROLE_SUPER_ADMIN");
+    }
+
+    @Test
+    void superAdminDoesNotLoadPermissionTableImplicitFullAccess() {
+        when(adminAccounts.findByLarkEmail("ops@tailtopia.id")).thenReturn(Optional.of(
+                account(7L, "ops@tailtopia.id", AdminAccountStatus.ACTIVE, "{bcrypt}h", AdminAccountType.SUPER_ADMIN)));
+        when(users.findByEmailAndRole("ops@tailtopia.id", Role.ADMIN)).thenReturn(Optional.empty());
+
+        UserDetails ud = service.loadUserByUsername("ops@tailtopia.id");
+
+        assertThat(authorities(ud)).contains("ROLE_ADMIN", "ROLE_SUPER_ADMIN");
+        // 隐式全权：不查权限表（经表达式判定，不注入全集）。
+        org.mockito.Mockito.verify(permissions, org.mockito.Mockito.never()).findByAccountId(7L);
     }
 
     @Test

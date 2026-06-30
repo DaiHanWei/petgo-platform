@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!-- 人工审核队列（Story 4.3，预建未激活）。仅超管可见/可达；激活开关 + PENDING 队列处置（通过/拒绝）。
+     24h 未处理高亮（AC7）。V1.0.0 默认开关关 = 现网行为，队列恒空。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.review.title}">人工审核队列 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script th:src="@{/admin/vendor/htmx.min.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1 th:text="#{admin.review.title}">人工审核队列</h1>
+        <p class="muted" th:text="#{admin.review.note}">预建能力：默认未激活时维持现网「自动审核拦截即发布失败」；开启后未过审内容入队挂起。</p>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+
+        <!-- 激活开关（仅超管）-->
+        <div class="filter-bar" sec:authorize="hasRole('SUPER_ADMIN')">
+            <span th:text="#{admin.review.switch.label}">人工审核：</span>
+            <span class="badge" th:classappend="${manualReviewEnabled} ? 'badge-ok' : 'badge-neutral'"
+                  th:text="${manualReviewEnabled} ? #{admin.review.switch.on} : #{admin.review.switch.off}">未激活</span>
+            <form th:action="@{/admin/settings/manual-review}" method="post" class="inline-form">
+                <input type="hidden" name="enabled" th:value="${!manualReviewEnabled}"/>
+                <button type="submit" class="btn btn-sm"
+                        th:classappend="${manualReviewEnabled} ? 'btn-neutral' : 'btn-primary'"
+                        th:text="${manualReviewEnabled} ? #{admin.review.switch.disable} : #{admin.review.switch.enable}">开启</button>
+            </form>
+        </div>
+
+        <table>
+            <thead>
+            <tr>
+                <th th:text="#{admin.review.col.item}">队列项</th>
+                <th th:text="#{admin.review.col.content}">内容</th>
+                <th th:text="#{admin.review.col.type}">类型</th>
+                <th th:text="#{admin.review.col.author}">作者</th>
+                <th th:text="#{admin.review.col.submitted}">提交时间</th>
+                <th th:text="#{admin.review.col.action}">操作</th>
+            </tr>
+            </thead>
+            <tbody id="review-rows" th:fragment="rows">
+            <tr th:each="r : ${items}" th:classappend="${r.overdue()} ? 'row-overdue'">
+                <td th:text="${r.itemId()}">1</td>
+                <td>
+                    #<span th:text="${r.contentId()}">0</span>
+                    <span class="badge badge-danger" th:if="${r.overdue()}" th:text="#{admin.review.overdue}">超 24h</span>
+                    <div class="muted cell-wide" th:text="${#strings.abbreviate(r.textPreview(), 60)}">…</div>
+                </td>
+                <td th:text="${r.type()}">DAILY</td>
+                <td th:text="${r.authorId()}">-</td>
+                <td th:text="${#temporals.format(r.submittedAt(), 'yyyy-MM-dd HH:mm')}">-</td>
+                <td sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')">
+                    <form th:action="@{/admin/manual-review/{id}/approve(id=${r.itemId()})}" method="post"
+                          class="inline-form">
+                        <button type="submit" class="btn btn-primary btn-sm"
+                                th:text="#{admin.review.approve}">通过</button>
+                    </form>
+                    <form th:action="@{/admin/manual-review/{id}/reject(id=${r.itemId()})}" method="post"
+                          class="inline-form">
+                        <button type="submit" class="btn btn-danger btn-sm"
+                                th:text="#{admin.review.reject}">拒绝</button>
+                    </form>
+                </td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(items)}">
+                <td colspan="6" class="empty" th:text="#{admin.review.empty}">队列为空。</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

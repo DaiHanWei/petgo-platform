@@ -45,11 +45,12 @@ public class ContentService {
     private final IdempotencyService idempotency;
     private final ContentModerationService moderation;
     private final ApplicationEventPublisher events;
+    private final ManualReviewGate manualReviewGate;
 
     public ContentService(ContentPostRepository posts, CommentRepository comments,
             ContentLikeRepository likes, ProfileService profileService,
             IdempotencyService idempotency, ContentModerationService moderation,
-            ApplicationEventPublisher events) {
+            ApplicationEventPublisher events, ManualReviewGate manualReviewGate) {
         this.posts = posts;
         this.comments = comments;
         this.likes = likes;
@@ -57,6 +58,7 @@ public class ContentService {
         this.idempotency = idempotency;
         this.moderation = moderation;
         this.events = events;
+        this.manualReviewGate = manualReviewGate;
     }
 
     /**
@@ -114,15 +116,92 @@ public class ContentService {
         return posts.findById(postId).map(p -> p.getDeletedAt() == null).orElse(false);
     }
 
-    /** 内容摘要（Story 3.7：Admin 举报队列快照，含已删态供运营核对）。 */
+    /** 内容摘要（Story 3.7：Admin 举报队列快照，含已删态供运营核对；4.1 加 authorId）。 */
     @Transactional(readOnly = true)
     public Optional<PostSummary> findSummary(long postId) {
         return posts.findById(postId).map(p -> new PostSummary(
-                p.getId(), p.getType(), p.getText(), p.getDeletedAt() != null));
+                p.getId(), p.getType(), p.getText(), p.getDeletedAt() != null, p.getAuthorId()));
     }
 
     /** 举报队列快照投影。 */
-    public record PostSummary(long id, ContentType type, String textPreview, boolean deleted) {
+    public record PostSummary(long id, ContentType type, String textPreview, boolean deleted, Long authorId) {
+    }
+
+    /** 后台用户详情（Story 3.1）：某作者全部内容摘要（含已下架，运营视角，createdAt 倒序）。 */
+    @Transactional(readOnly = true)
+    public List<PostSummary> listByAuthorForAdmin(long authorId) {
+        return posts.findByAuthorIdOrderByCreatedAtDesc(authorId).stream()
+                .map(p -> new PostSummary(p.getId(), p.getType(), p.getText(), p.getDeletedAt() != null,
+                        p.getAuthorId()))
+                .toList();
+    }
+
+    /** 后台全量内容浏览/筛选/搜索（Story 4.2）：跨作者，含已下架。经 Criteria 动态条件。 */
+    @Transactional(readOnly = true)
+    public List<com.tailtopia.content.dto.AdminContentRow> adminSearch(ContentType type, Long authorId,
+            java.time.Instant from, java.time.Instant to, Boolean deleted, String keyword,
+            int limit, int offset) {
+        return posts.adminSearch(type, authorId, from, to, deleted, keyword, limit, offset);
+    }
+
+    /** 后台恢复已下架内容（Story 4.2）：清 deletedAt（幂等：未删 no-op）。评论保持软删、点赞不还原（V1 接受）。 */
+    @Transactional
+    public void restore(long postId) {
+        posts.findById(postId).ifPresent(p -> {
+            if (p.getDeletedAt() != null) {
+                p.restore();
+                posts.save(p);
+            }
+        });
+    }
+
+    /**
+     * 人工审核通过（Story 4.3）：{@code UNDER_REVIEW → PUBLISHED} + 发 {@link ContentPublishedEvent}
+     * （进 Feed、触发既有里程碑等副作用）。幂等：非挂起态 no-op。content 拥有表，admin 经此方法变更。
+     */
+    @Transactional
+    public void approveReview(long postId) {
+        posts.findById(postId).ifPresent(p -> {
+            if (p.getStatus() == PostStatus.UNDER_REVIEW && p.getDeletedAt() == null) {
+                p.approveReview();
+                posts.save(p);
+                long growthCount = p.getType() == ContentType.GROWTH_MOMENT
+                        ? posts.countByAuthorIdAndTypeAndDeletedAtIsNullAndStatus(
+                                p.getAuthorId(), ContentType.GROWTH_MOMENT, PostStatus.PUBLISHED)
+                        : 0L;
+                events.publishEvent(new ContentPublishedEvent(p.getId(), p.getAuthorId(), p.getType(),
+                        p.getPetId(), growthCount, p.getCreatedAt()));
+            }
+        });
+    }
+
+    /**
+     * 人工审核拒绝/超时丢弃（Story 4.3）：挂起内容软删丢弃（不发布、不进公开口径）。幂等：仅处置 UNDER_REVIEW 未删项。
+     */
+    @Transactional
+    public void discardReview(long postId) {
+        posts.findById(postId).ifPresent(p -> {
+            if (p.getStatus() == PostStatus.UNDER_REVIEW && p.getDeletedAt() == null) {
+                p.softDelete();
+                posts.save(p);
+            }
+        });
+    }
+
+    /**
+     * 违规处置 D2（Story 3.3）：下架某作者全部未删内容（{@code ADMIN_TAKEDOWN}），Feed/我的发布/成长档案移除。
+     * 幂等（已软删跳过）。经既有 {@link #softDelete} 复用关联清理。返回本次下架数。
+     */
+    @Transactional
+    public int takedownAllByAuthor(long authorId) {
+        int count = 0;
+        for (var p : posts.findByAuthorIdOrderByCreatedAtDesc(authorId)) {
+            if (p.getDeletedAt() == null) {
+                softDelete(p.getId(), DeleteReason.ADMIN_TAKEDOWN);
+                count++;
+            }
+        }
+        return count;
     }
 
     @Transactional
@@ -166,11 +245,24 @@ public class ContentService {
             petId = null;
         }
 
-        // AC8（R2 · F10）：发布写库前三方自动审核——文字关键词 + 图像识别；任一拦截即失败、不落库。
-        switch (moderation.moderate(text, imageUrls)) {
-            case TEXT_BLOCKED -> throw AppException.contentTextBlocked("内容包含不当词汇，请修改后重试");
-            case IMAGE_BLOCKED -> throw AppException.contentImageBlocked("图片包含违规内容，请替换后重试");
-            case PASS -> { /* 通过，继续落库 */ }
+        // AC8（R2 · F10）：发布写库前三方自动审核——文字关键词 + 图像识别。
+        ContentModerationService.Verdict verdict = moderation.moderate(text, imageUrls);
+        if (verdict != ContentModerationService.Verdict.PASS) {
+            // Story 4.3：未过自动审核——分支取决于人工审核开关（默认关 = 现网 FR-12 行为）。
+            if (!manualReviewGate.enabled()) {
+                // 默认路径：直接发布失败、不落库、不进队列（现网行为，AC2 必须保持不变）。
+                switch (verdict) {
+                    case TEXT_BLOCKED -> throw AppException.contentTextBlocked("内容包含不当词汇，请修改后重试");
+                    case IMAGE_BLOCKED -> throw AppException.contentImageBlocked("图片包含违规内容，请替换后重试");
+                    default -> { /* 不可达：已确保非 PASS 即 TEXT/IMAGE_BLOCKED */ }
+                }
+            }
+            // 人工审核已激活：落 UNDER_REVIEW + 入队挂起，不发 ContentPublishedEvent（不进 Feed）。
+            ContentPost pending = posts.save(ContentPost.pendingReview(
+                    authorId, req.type(), petId, text, imageUrls, eventDate));
+            idempotency.store(idempotencyKey, pending.getId());
+            manualReviewGate.enqueue(pending.getId());
+            return ContentPostResponse.from(pending);
         }
 
         ContentPost saved = posts.save(ContentPost.publish(

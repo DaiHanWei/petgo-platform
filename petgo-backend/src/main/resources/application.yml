@@ -87,6 +87,8 @@ spring:
   jackson:
     default-property-inclusion: non_null
     time-zone: UTC
+  # 管理后台双语 i18n（Story 1.6）：messageSource 由 AdminLocaleConfig 显式定义（basename classpath:i18n/messages，
+  # UTF-8，缺键回退 code）。不用 spring.messages.* 自动配置——其条件要求基底 messages.properties，本项目仅 zh_CN/en 变体。
 
 server:
   port: ${SERVER_PORT:8080}

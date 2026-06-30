@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<!-- 兽医在线状态快照（Story 2.6，AB-2F）。只读、手动刷新、不自动轮询。门控 @PreAuthorize(vet.view)。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.online.title}">兽医在线状态 · TailTopia 运营</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script th:src="@{/admin/vendor/htmx.min.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1 th:text="#{admin.online.title}">兽医在线状态</h1>
+        <p class="muted" th:text="#{admin.online.subtitle}">快照，非实时。</p>
+
+        <!-- 结果区（含最后查询时间 + 表）；刷新整体替换以更新时间。 -->
+        <div id="online-results" th:fragment="results" th:remove="tag">
+            <div class="filter-bar">
+                <span class="muted">
+                    <span th:text="#{admin.online.lastQuery}">最后查询时间</span>:
+                    <strong th:text="${queriedAtLabel}">2026-06-29 10:00:00 WIB</strong>
+                </span>
+                <button type="button" class="btn btn-primary"
+                        hx-get="/admin/vets/online" hx-target="#online-results" hx-swap="outerHTML"
+                        th:text="#{admin.online.refresh}">刷新</button>
+            </div>
+            <table>
+                <thead>
+                <tr>
+                    <th th:text="#{admin.online.col.id}">ID</th>
+                    <th th:text="#{admin.online.col.name}">昵称</th>
+                    <th th:text="#{admin.online.col.status}">在线态</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="r : ${snapshot.rows()}">
+                    <td th:text="${r.id()}">1</td>
+                    <td th:text="${r.displayName()}">王医生</td>
+                    <td>
+                        <span class="badge"
+                              th:classappend="${r.presence() == 'ONLINE'} ? 'badge-ok'
+                                  : (${r.presence() == 'BUSY'} ? 'badge-warn' : 'badge-info')"
+                              th:text="#{'admin.vets.presence.' + ${r.presence()}}">在线</span>
+                    </td>
+                </tr>
+                <tr th:if="${#lists.isEmpty(snapshot.rows())}">
+                    <td colspan="3" class="empty" th:text="#{admin.online.empty}">暂无兽医</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+</body>
+</html>

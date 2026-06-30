@@ -69,6 +69,21 @@ public class AdminAccount {
         return a;
     }
 
+    /**
+     * 超管在后台创建账号（Story 1.5）：ACTIVE、无密码（STAFF/SUPER_ADMIN 均走 Lark OAuth 登录；
+     * 紧急账密仅 bootstrap 预置的超管有）。{@code createdBy} = 操作的超管账号 id。
+     */
+    public static AdminAccount create(String larkEmail, String displayName,
+            AdminAccountType accountType, Long createdBy) {
+        AdminAccount a = new AdminAccount();
+        a.larkEmail = larkEmail;
+        a.displayName = displayName;
+        a.accountType = accountType;
+        a.status = AdminAccountStatus.ACTIVE;
+        a.createdBy = createdBy;
+        return a;
+    }
+
     @PrePersist
     void onCreate() {
         Instant now = Instant.now();

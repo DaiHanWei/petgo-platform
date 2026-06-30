@@ -14,6 +14,7 @@ import com.tailtopia.consult.domain.ConsultSource;
 import com.tailtopia.consult.domain.SessionStatus;
 import com.tailtopia.consult.event.ConsultAcceptedEvent;
 import com.tailtopia.consult.event.ConsultRequestQueuedEvent;
+import com.tailtopia.admin.vetqual.service.VetQualificationService;
 import com.tailtopia.consult.repository.ConsultSessionRepository;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.im.TencentImClient;
@@ -43,9 +44,11 @@ class ConsultAcceptServiceTest {
     TencentImClient imClient;
     @Mock
     ApplicationEventPublisher events;
+    @Mock
+    VetQualificationService vetQualificationService;
 
     private ConsultAcceptService service() {
-        return new ConsultAcceptService(repo, queue, presence, imClient, events);
+        return new ConsultAcceptService(repo, queue, presence, imClient, events, vetQualificationService);
     }
 
     private ConsultSession waiting(long id) {
@@ -58,6 +61,7 @@ class ConsultAcceptServiceTest {
     void acceptTransitionsBuildsConversationDequeuesAndGoesBusy() {
         ConsultSession s = waiting(11L);
         when(repo.findById(11L)).thenReturn(Optional.of(s));
+        when(vetQualificationService.canTakeConsult(3L)).thenReturn(true);
         when(repo.saveAndFlush(s)).thenReturn(s);
         when(imClient.createConversation(anyString(), anyString())).thenReturn("conv-1");
         when(repo.save(s)).thenReturn(s);
@@ -95,11 +99,43 @@ class ConsultAcceptServiceTest {
     void acceptLosesConcurrentRaceOnOptimisticLock() {
         ConsultSession s = waiting(11L);
         when(repo.findById(11L)).thenReturn(Optional.of(s));
+        when(vetQualificationService.canTakeConsult(3L)).thenReturn(true);
         when(repo.saveAndFlush(s)).thenThrow(new ObjectOptimisticLockingFailureException(ConsultSession.class, 11L));
 
         assertThatThrownBy(() -> service().accept(3L, 11L)).isInstanceOf(AppException.class);
         verify(imClient, never()).createConversation(anyString(), anyString());
         verify(presence, never()).goBusy(anyLong());
+    }
+
+    // ===== Story 2.1：资质接单门控 =====
+
+    @Test
+    void acceptRejectedWhenQualificationNotCertified() {
+        ConsultSession s = waiting(11L);
+        when(repo.findById(11L)).thenReturn(Optional.of(s));
+        when(vetQualificationService.canTakeConsult(3L)).thenReturn(false);
+
+        assertThatThrownBy(() -> service().accept(3L, 11L)).isInstanceOf(AppException.class);
+        // 未过资质：不进 IN_PROGRESS、不建会话、不消队列、不置忙。
+        assertThat(s.getStatus()).isEqualTo(SessionStatus.WAITING);
+        verify(imClient, never()).createConversation(anyString(), anyString());
+        verify(queue, never()).dequeue(anyLong());
+        verify(presence, never()).goBusy(anyLong());
+    }
+
+    @Test
+    void acceptAllowedWhenQualificationCertified() {
+        ConsultSession s = waiting(11L);
+        when(repo.findById(11L)).thenReturn(Optional.of(s));
+        when(vetQualificationService.canTakeConsult(3L)).thenReturn(true);
+        when(repo.saveAndFlush(s)).thenReturn(s);
+        when(imClient.createConversation(anyString(), anyString())).thenReturn("conv-9");
+        when(repo.save(s)).thenReturn(s);
+
+        ConsultSession result = service().accept(3L, 11L);
+
+        assertThat(result.getStatus()).isEqualTo(SessionStatus.IN_PROGRESS);
+        verify(queue).dequeue(11L);
     }
 
     // ===== Story 5.3 R2（F11）退单 =====

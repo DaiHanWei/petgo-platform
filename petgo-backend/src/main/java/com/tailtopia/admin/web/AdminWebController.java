@@ -1,7 +1,11 @@
 package com.tailtopia.admin.web;
 
 import com.tailtopia.admin.dto.CreateVetForm;
+import com.tailtopia.admin.dto.EditVetForm;
 import com.tailtopia.admin.dto.SeedPostForm;
+import com.tailtopia.admin.dto.VetListFilter;
+import com.tailtopia.admin.vetqual.domain.QualificationStatus;
+import com.tailtopia.vet.domain.VetStatus;
 import com.tailtopia.admin.service.AdminContentService;
 import com.tailtopia.admin.service.AdminModerationService;
 import com.tailtopia.admin.service.AdminUserDetails;
@@ -10,6 +14,7 @@ import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.dto.ContentPostResponse;
 import com.tailtopia.shared.error.AppException;
 import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -18,7 +23,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 /**
  * 运营后台页面控制器（Story 3.1）。Thymeleaf 服务端渲染，走 {@code /admin/**}（与 {@code /api/v1} JSON 隔离）。
@@ -63,79 +70,201 @@ public class AdminWebController {
         return "admin/seed-post";
     }
 
-    // ===== Story 3.7：举报审核队列（复用本 shell）=====
+    // ===== Story 3.7 + 4.1：举报审核队列（状态筛选 + 批量 + 双向通知 + 审计）=====
 
     @GetMapping("/admin/reports")
-    public String reports(Model model) {
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('content.view_reports')")
+    public String reports(@RequestParam(value = "status", required = false) String status,
+            @RequestHeader(value = "HX-Request", required = false) String hxRequest, Model model) {
+        com.tailtopia.moderation.domain.ReportStatus st = parseReportStatus(status);
         model.addAttribute("active", "reports");
-        model.addAttribute("reports", adminModerationService.pendingQueue());
-        return "admin/reports";
+        model.addAttribute("status", st.name());
+        model.addAttribute("reports", adminModerationService.queue(st));
+        return hxRequest != null ? "admin/reports :: rows" : "admin/reports";
+    }
+
+    private com.tailtopia.moderation.domain.ReportStatus parseReportStatus(String s) {
+        if (s == null || s.isBlank()) {
+            return com.tailtopia.moderation.domain.ReportStatus.PENDING;
+        }
+        try {
+            return com.tailtopia.moderation.domain.ReportStatus.valueOf(s);
+        } catch (IllegalArgumentException e) {
+            return com.tailtopia.moderation.domain.ReportStatus.PENDING;
+        }
     }
 
     @PostMapping("/admin/reports/{id}/takedown")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')")
     public String takedown(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id) {
-        adminModerationService.takedown(id, admin.getUserId());
+        adminModerationService.takedown(id, admin);
         return "redirect:/admin/reports";
     }
 
     @PostMapping("/admin/reports/{id}/dismiss")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('content.view_reports')")
     public String dismiss(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id) {
-        adminModerationService.dismiss(id, admin.getUserId());
+        adminModerationService.dismiss(id, admin);
+        return "redirect:/admin/reports";
+    }
+
+    @PostMapping("/admin/reports/batch")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')")
+    public String batchReports(@AuthenticationPrincipal AdminUserDetails admin,
+            @RequestParam("action") String action,
+            @RequestParam(value = "reportIds", required = false) java.util.List<Long> reportIds,
+            org.springframework.web.servlet.mvc.support.RedirectAttributes flash) {
+        boolean takedown = "takedown".equals(action);
+        AdminModerationService.BatchResult result = adminModerationService.batch(reportIds, takedown, admin);
+        flash.addFlashAttribute("notice",
+                "批量完成：成功 " + result.ok() + " 条，失败 " + result.failedCount() + " 条");
         return "redirect:/admin/reports";
     }
 
     // ===== Story 5.1：兽医账号 CRUD（复用本 shell）=====
 
     @GetMapping("/admin/vets")
-    public String vets(Model model) {
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('vet.view')")
+    public String vets(@RequestParam(value = "accountStatus", required = false) String accountStatus,
+            @RequestParam(value = "qualStatus", required = false) String qualStatus,
+            @RequestParam(value = "online", required = false) String online,
+            @RequestParam(value = "q", required = false) String q,
+            @RequestHeader(value = "HX-Request", required = false) String hxRequest,
+            Model model) {
         model.addAttribute("active", "vets");
-        model.addAttribute("vets", adminVetService.list());
+        model.addAttribute("vets",
+                adminVetService.list(new VetListFilter(accountStatus, qualStatus, online, q)));
+        // 回显筛选 + 下拉候选。
+        model.addAttribute("accountStatus", accountStatus);
+        model.addAttribute("qualStatus", qualStatus);
+        model.addAttribute("online", online);
+        model.addAttribute("q", q);
+        model.addAttribute("vetStatuses", VetStatus.values());
+        model.addAttribute("qualStatuses", QualificationStatus.values());
+        model.addAttribute("expiryStats", adminVetService.qualificationExpiryStats());
         if (!model.containsAttribute("createVetForm")) {
             model.addAttribute("createVetForm", new CreateVetForm());
         }
-        return "admin/vets";
+        // HTMX 局部刷新返结果行片段；整页请求返完整视图。
+        return hxRequest != null ? "admin/vets :: rows" : "admin/vets";
     }
 
     @PostMapping("/admin/vets")
-    public String createVet(@Valid @ModelAttribute("createVetForm") CreateVetForm form,
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('vet.create')")
+    public String createVet(@AuthenticationPrincipal AdminUserDetails admin,
+            @Valid @ModelAttribute("createVetForm") CreateVetForm form,
             BindingResult binding, Model model) {
-        model.addAttribute("active", "vets");
-        model.addAttribute("vets", adminVetService.list());
         if (binding.hasErrors()) {
+            populateVetList(model);
             return "admin/vets";
         }
         try {
-            long id = adminVetService.create(form.getDisplayName(), form.getUsername(), form.getPassword());
+            long id = adminVetService.create(form.getDisplayName(), form.getUsername(),
+                    form.getPassword(), form.getContactPhone(), admin.getAdminAccountId());
             model.addAttribute("createVetForm", new CreateVetForm());
             model.addAttribute("createdVetId", id);
-            // 列表已变更，重查（含新账号）。
-            model.addAttribute("vets", adminVetService.list());
+            populateVetList(model); // 列表已变更，重查（含新账号 + 资质/在线/均分列）
             return "admin/vets";
         } catch (AppException e) {
             binding.reject("create.failed", e.getMessage());
+            populateVetList(model);
             return "admin/vets";
+        }
+    }
+
+    /** 兽医整页（非 HTMX）渲染所需 model：完整列表 + 下拉候选。 */
+    private void populateVetList(Model model) {
+        model.addAttribute("active", "vets");
+        model.addAttribute("vets", adminVetService.list(VetListFilter.none()));
+        model.addAttribute("vetStatuses", VetStatus.values());
+        model.addAttribute("qualStatuses", QualificationStatus.values());
+        model.addAttribute("expiryStats", adminVetService.qualificationExpiryStats());
+    }
+
+    // ===== Story 2.4：编辑兽医资料（不中断会话）=====
+
+    @GetMapping("/admin/vets/{id}/edit")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('vet.create')")
+    public String editVetForm(@PathVariable long id, Model model) {
+        model.addAttribute("active", "vets");
+        model.addAttribute("vetId", id);
+        if (!model.containsAttribute("editVetForm")) {
+            model.addAttribute("editVetForm", adminVetService.editForm(id));
+        }
+        return "admin/vet-edit";
+    }
+
+    @PostMapping("/admin/vets/{id}")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('vet.create')")
+    public String updateVet(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id,
+            @Valid @ModelAttribute("editVetForm") EditVetForm form, BindingResult binding,
+            Model model, RedirectAttributes flash) {
+        if (binding.hasErrors()) {
+            model.addAttribute("active", "vets");
+            model.addAttribute("vetId", id);
+            return "admin/vet-edit";
+        }
+        try {
+            adminVetService.updateProfile(id, form.getDisplayName(), form.getUsername(),
+                    form.getContactPhone(), admin.getAdminAccountId());
+            flash.addFlashAttribute("notice", "已保存兽医资料");
+            return "redirect:/admin/vets";
+        } catch (AppException e) {
+            binding.reject("update.failed", e.getMessage());
+            model.addAttribute("active", "vets");
+            model.addAttribute("vetId", id);
+            return "admin/vet-edit";
         }
     }
 
     @PostMapping("/admin/vets/{id}/password")
-    public String resetVetPassword(@PathVariable long id, @RequestParam("newPassword") String newPassword) {
-        adminVetService.resetPassword(id, newPassword);
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('vet.reset_password')")
+    public String resetVetPassword(@AuthenticationPrincipal AdminUserDetails admin,
+            @PathVariable long id, @RequestParam("newPassword") String newPassword,
+            RedirectAttributes flash) {
+        try {
+            adminVetService.resetPassword(id, newPassword, admin.getAdminAccountId());
+            flash.addFlashAttribute("notice", "已重置该兽医密码（请将新密码线下交付）");
+        } catch (AppException e) {
+            flash.addFlashAttribute("error", e.getMessage());
+        }
         return "redirect:/admin/vets";
     }
 
     @PostMapping("/admin/vets/{id}/status")
-    public String setVetStatus(@PathVariable long id, @RequestParam("banned") boolean banned) {
-        adminVetService.setBanned(id, banned);
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('vet.ban')")
+    public String setVetStatus(@AuthenticationPrincipal AdminUserDetails admin,
+            @PathVariable long id, @RequestParam("banned") boolean banned, RedirectAttributes flash) {
+        adminVetService.setBanned(id, banned, admin.getAdminAccountId());
+        flash.addFlashAttribute("notice", banned ? "已封禁该兽医（进行中问诊已中断并通知用户）" : "已解封该兽医");
         return "redirect:/admin/vets";
+    }
+
+    // ===== Story 2.6：兽医在线状态快照（只读，手动刷新）=====
+
+    @GetMapping("/admin/vets/online")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('vet.view')")
+    public String vetOnline(@RequestHeader(value = "HX-Request", required = false) String hxRequest,
+            Model model) {
+        java.time.Instant now = java.time.Instant.now();
+        model.addAttribute("active", "online");
+        model.addAttribute("snapshot", adminVetService.onlineSnapshot(now));
+        // 最后查询时间按运营时区（Asia/Jakarta = WIB）格式化展示，逻辑仍 UTC。
+        model.addAttribute("queriedAtLabel", java.time.format.DateTimeFormatter
+                .ofPattern("yyyy-MM-dd HH:mm:ss")
+                .withZone(java.time.ZoneId.of("Asia/Jakarta")).format(now) + " WIB");
+        return hxRequest != null ? "admin/vet-online :: results" : "admin/vet-online";
     }
 
     // ===== Story 5.6：兽医评分查看（仅运营可见）=====
 
     @GetMapping("/admin/vets/{id}/ratings")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('rating.view')")
     public String vetRatings(@PathVariable long id, Model model) {
         model.addAttribute("active", "vets");
         model.addAttribute("vet", adminVetService.view(id));
         model.addAttribute("ratings", adminVetService.ratings(id));
+        model.addAttribute("unrated", adminVetService.unratedConsults(id)); // Story 6.2：未评问诊单列
         return "admin/vet-ratings";
     }
 

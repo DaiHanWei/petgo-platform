@@ -33,6 +33,7 @@ class ContentServiceTest {
     private ProfileService profileService;
     private IdempotencyService idempotency;
     private org.springframework.context.ApplicationEventPublisher events;
+    private ManualReviewGate manualReviewGate;
     private ContentService service;
 
     @BeforeEach
@@ -51,9 +52,12 @@ class ContentServiceTest {
             return p;
         });
         events = Mockito.mock(org.springframework.context.ApplicationEventPublisher.class);
+        manualReviewGate = Mockito.mock(ManualReviewGate.class);
+        // 默认开关关（现网行为）；按需在用例内 stub enabled()=true。
+        when(manualReviewGate.enabled()).thenReturn(false);
         // 审核用真实 stub：既有用例文本均良性 → PASS；R2 用例显式触发拦截标记。
         service = new ContentService(posts, comments, likes, profileService, idempotency,
-                new ContentModerationService(), events);
+                new ContentModerationService(), events, manualReviewGate);
     }
 
     private static void setId(ContentPost p, long id) {
@@ -201,6 +205,35 @@ class ContentServiceTest {
         assertThat(resp.id()).isNotNull();
     }
 
+    // ===== Story 4.3：人工审核开关分支 =====
+
+    @Test
+    void blockedContentEnqueuedAsUnderReviewWhenManualReviewEnabled() {
+        when(manualReviewGate.enabled()).thenReturn(true);
+        var captor = org.mockito.ArgumentCaptor.forClass(ContentPost.class);
+
+        ContentPostResponse resp = service.publish(1L,
+                new ContentPostCreateRequest(ContentType.DAILY, null, "ayo main judi online", null), null);
+
+        verify(posts).save(captor.capture()); // 落库（未过审 → 挂起，不再 throw）
+        assertThat(captor.getValue().getStatus())
+                .isEqualTo(com.tailtopia.content.domain.PostStatus.UNDER_REVIEW);
+        verify(manualReviewGate).enqueue(anyLong()); // 入队挂起
+        verify(events, never()).publishEvent(any( // 不进 Feed
+                com.tailtopia.content.event.ContentPublishedEvent.class));
+        assertThat(resp.id()).isNotNull();
+    }
+
+    @Test
+    void blockedContentStillThrowsWhenManualReviewDisabled() {
+        // 默认 enabled()=false（现网行为）：拦截即 throw、不落库、不入队。
+        assertThatThrownBy(() -> service.publish(1L,
+                new ContentPostCreateRequest(ContentType.DAILY, null, "ayo main judi online", null), null))
+                .isInstanceOf(AppException.class);
+        verify(posts, never()).save(any());
+        verify(manualReviewGate, never()).enqueue(anyLong());
+    }
+
     // ===== Story 3.6 删除 =====
 
     private ContentPost ownedPost(long id, long authorId) {
@@ -279,6 +312,32 @@ class ContentServiceTest {
 
         verify(events, never()).publishEvent(any(
                 com.tailtopia.content.event.ContentRemovedEvent.class));
+    }
+
+    // ===== Story 4.2：运营恢复已下架内容 =====
+
+    @Test
+    void restoreClearsDeletedAtAndSaves() {
+        ContentPost p = ownedPost(11L, 1L);
+        p.softDelete(); // 先置为已下架
+        assertThat(p.getDeletedAt()).isNotNull();
+        when(posts.findById(11L)).thenReturn(Optional.of(p));
+
+        service.restore(11L);
+
+        assertThat(p.getDeletedAt()).isNull(); // 重回公开口径
+        verify(posts).save(p);
+    }
+
+    @Test
+    void restoreIsNoOpWhenNotDeleted() {
+        ContentPost p = ownedPost(12L, 1L); // 未删
+        when(posts.findById(12L)).thenReturn(Optional.of(p));
+
+        service.restore(12L); // 幂等：未删不写库
+
+        assertThat(p.getDeletedAt()).isNull();
+        verify(posts, never()).save(any(ContentPost.class));
     }
 
     private static com.tailtopia.content.domain.Comment newComment(long id) {

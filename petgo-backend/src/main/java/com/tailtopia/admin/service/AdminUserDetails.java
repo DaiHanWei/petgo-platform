@@ -4,6 +4,7 @@ import com.tailtopia.admin.account.domain.AdminAccountType;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -27,14 +28,24 @@ public class AdminUserDetails implements UserDetails {
     private final String email;
     private final String passwordHash;
     private final AdminAccountType accountType;
+    /** STAFF 的模块权限码（Story 1.5，装载为 authority）；SUPER_ADMIN 隐式全权、此处为空集。 */
+    private final Set<String> permissionCodes;
 
+    /** 兼容旧调用（无细粒度权限，permission 空集）：Story 1.5 前的构造形态。 */
     public AdminUserDetails(long adminAccountId, Long operatorUserId, String email,
             String passwordHash, AdminAccountType accountType) {
+        this(adminAccountId, operatorUserId, email, passwordHash, accountType, Set.of());
+    }
+
+    /** Story 1.5：携带 STAFF 模块权限码（注入为 {@code hasAuthority('<code>')} 可命中的 authority）。 */
+    public AdminUserDetails(long adminAccountId, Long operatorUserId, String email,
+            String passwordHash, AdminAccountType accountType, Set<String> permissionCodes) {
         this.adminAccountId = adminAccountId;
         this.operatorUserId = operatorUserId;
         this.email = email;
         this.passwordHash = passwordHash;
         this.accountType = accountType;
+        this.permissionCodes = permissionCodes == null ? Set.of() : Set.copyOf(permissionCodes);
     }
 
     public long getAdminAccountId() {
@@ -67,6 +78,10 @@ public class AdminUserDetails implements UserDetails {
         authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
         if (accountType == AdminAccountType.SUPER_ADMIN) {
             authorities.add(new SimpleGrantedAuthority("ROLE_SUPER_ADMIN"));
+        }
+        // STAFF 细粒度模块权限（Story 1.5）；SUPER_ADMIN 隐式全权经表达式 hasRole('SUPER_ADMIN') 命中，不依赖此。
+        for (String code : permissionCodes) {
+            authorities.add(new SimpleGrantedAuthority(code));
         }
         return authorities;
     }

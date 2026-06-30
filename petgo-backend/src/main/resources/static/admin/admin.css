@@ -1,0 +1,219 @@
+/*
+ * TailTopia 运营后台统一样式（Story 1.6）。单一共享 admin.css：:root 设计令牌 + 组件类。
+ * 视觉源真相 = UX_DESIGN.md（淡紫品牌 #845EC9 + 中性高密度底）。桌面 only、仅亮色、无 App 俏皮元素。
+ * 本地静态托管（不走 CDN）。所有 admin 模板引用此文件，不再内联 <style>。
+ */
+:root {
+    /* 品牌（淡紫，对齐 App colors.dart 的 violet 实值） */
+    --brand: #845EC9;
+    --brand-strong: #6C48AE;
+    --brand-tint: #F8F2FF;
+    --brand-line: #DCD2F7;
+    /* 中性 */
+    --bg: #F5F6F8;
+    --surface: #FFFFFF;
+    --sidebar: #2E2A45;
+    --ink: #1F2330;
+    --ink-2: #444A57;
+    --muted: #8A91A0;
+    --line: #E6E8EC;
+    /* 状态 */
+    --ok: #1E7E45;
+    --ok-bg: #E7F6EC;
+    --warn: #9A6B00;
+    --warn-bg: #FBF1D9;
+    --danger: #C0392B;
+    --danger-bg: #FDE8E8;
+    --info: #2D6CDF;
+    --info-bg: #E8F0FE;
+    /* 排版 / 半径 / 间距 */
+    --radius: 8px;
+    --radius-sm: 6px;
+    --fs: 14px;
+    --fs-sm: 13px;
+    --fs-xs: 12px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    font-family: system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    margin: 0;
+    color: var(--ink);
+    background: var(--bg);
+    font-size: var(--fs);
+}
+
+h1 { font-size: 19px; margin: 0 0 12px; }
+h2 { font-size: 16px; margin: 0 0 10px; }
+h3 { font-size: 14px; margin: 0 0 8px; }
+a { color: var(--brand-strong); }
+
+/* ===== 布局：侧栏 + 主区 ===== */
+.layout { display: flex; min-height: 100vh; }
+
+nav {
+    width: 210px;
+    background: var(--sidebar);
+    color: #CFCAE0;
+    padding: 18px 0;
+    flex-shrink: 0;
+}
+nav .brand { font-weight: 600; color: #fff; padding: 0 18px 14px; }
+nav a {
+    display: block;
+    padding: 10px 18px;
+    color: #CFCAE0;
+    text-decoration: none;
+    font-size: var(--fs-sm);
+    border-left: 3px solid transparent;
+}
+nav a:hover { background: rgba(255, 255, 255, .06); }
+nav a.active { background: var(--brand); color: #fff; border-left-color: #fff; }
+nav a.disabled { color: #6E6883; pointer-events: none; }
+nav .group {
+    font-size: 11px; color: #807A96; padding: 14px 18px 4px; text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+main { flex: 1; padding: 24px 32px; }
+.topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+.topbar form { margin: 0; }
+.topbar .lang { font-size: var(--fs-xs); color: var(--muted); }
+.topbar .lang a { color: var(--brand-strong); text-decoration: none; margin: 0 2px; }
+.topbar .lang a.on { font-weight: 700; color: var(--ink); }
+.topbar .logout { background: none; border: 0; color: var(--brand-strong); cursor: pointer; font-size: var(--fs-sm); }
+
+/* ===== 卡片 / 容器 ===== */
+.card {
+    background: var(--surface);
+    padding: 18px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    margin-bottom: 18px;
+    max-width: 680px;
+}
+.muted { color: var(--muted); font-size: var(--fs-sm); }
+.hint { color: var(--muted); font-size: var(--fs-xs); margin-top: 4px; }
+.empty { color: var(--muted); padding: 24px; }
+
+/* ===== 表单 ===== */
+label.field, .card label { display: block; font-size: var(--fs-sm); color: var(--ink-2); margin: 12px 0 4px; }
+input, select, textarea {
+    font-family: inherit;
+    font-size: var(--fs-sm);
+    padding: 7px 9px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--ink);
+}
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand-line); border-color: var(--brand); }
+textarea { min-height: 96px; resize: vertical; width: 100%; }
+.field-full { width: 100%; }
+
+/* ===== 按钮 ===== */
+.btn {
+    display: inline-block;
+    padding: 7px 14px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: var(--fs-sm);
+    text-decoration: none;
+    line-height: 1.3;
+}
+.btn-primary { background: var(--brand); color: #fff; }
+.btn-primary:hover { background: var(--brand-strong); }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-neutral { background: #E4E6EB; color: var(--ink); }
+.btn-sm { padding: 4px 10px; font-size: var(--fs-xs); }
+
+/* ===== 徽章 / 标签 ===== */
+.badge { padding: 2px 9px; border-radius: 10px; font-size: var(--fs-xs); font-weight: 600; }
+.badge-ok { background: var(--ok-bg); color: var(--ok); }
+.badge-danger { background: var(--danger-bg); color: var(--danger); }
+.badge-warn { background: var(--warn-bg); color: var(--warn); }
+.badge-info { background: var(--info-bg); color: var(--info); }
+.tag { background: var(--brand-tint); color: var(--brand-strong); border: 1px solid var(--brand-line);
+    padding: 1px 6px; border-radius: 4px; font-size: 11px; margin: 1px; display: inline-block; }
+
+/* ===== 状态文本 ===== */
+.status-active { color: var(--ok); font-weight: 600; }
+.status-disabled { color: var(--danger); font-weight: 600; }
+
+/* ===== 横幅 ===== */
+.banner { padding: 10px 14px; border-radius: var(--radius-sm); margin-bottom: 14px; font-size: var(--fs-sm); }
+.banner.ok { background: var(--ok-bg); color: var(--ok); }
+.banner.err { background: var(--danger-bg); color: var(--danger); }
+.err { color: var(--danger); font-size: var(--fs-sm); margin: 6px 0; }
+.ok { color: var(--ok); font-size: var(--fs-sm); margin: 6px 0; }
+
+/* ===== 表格（高密度） ===== */
+table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--line); }
+th, td { padding: 9px 12px; border-bottom: 1px solid var(--line); font-size: var(--fs-sm);
+    text-align: left; vertical-align: top; }
+th { background: #F0F1F5; color: var(--ink-2); font-weight: 600; }
+tbody tr:hover { background: var(--brand-tint); }
+
+/* ===== 筛选条 ===== */
+.filter-bar {
+    background: var(--surface);
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    margin-bottom: 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    align-items: flex-end;
+}
+.filter-bar label { font-size: var(--fs-xs); color: var(--ink-2); display: flex; flex-direction: column; gap: 4px; }
+
+/* ===== 权限勾选区 ===== */
+.perms { display: flex; flex-wrap: wrap; gap: 4px 16px; max-width: 660px; }
+.perms label { font-size: var(--fs-xs); color: var(--ink-2); white-space: nowrap; display: inline; margin: 0; }
+
+/* ===== 分页 ===== */
+.pager { margin-top: 14px; display: flex; gap: 12px; align-items: center; font-size: var(--fs-sm); }
+.pager a { color: var(--brand-strong); text-decoration: none; }
+.pager span { color: var(--muted); }
+
+/* ===== 哈希等 mono 文本 ===== */
+.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; color: var(--muted); }
+code { background: var(--brand-tint); color: var(--brand-strong); padding: 1px 5px; border-radius: 3px; font-size: var(--fs-xs); }
+
+/* ===== 行内表单 ===== */
+form.inline { display: inline; margin: 0; }
+
+/* ===== 工具类（替代零散内联 style） ===== */
+.cell-wide { max-width: 300px; }
+.mt-sm { margin: 8px 0; }
+/* 系统故障行预警高亮（Story 2.9）。 */
+.row-alert td { background: var(--danger-bg); }
+
+/* ===== 登录页（居中卡片） ===== */
+.login-box {
+    max-width: 340px;
+    margin: 12vh auto;
+    background: var(--surface);
+    padding: 28px;
+    border-radius: var(--radius);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .08);
+    border: 1px solid var(--line);
+}
+.login-box h1 { font-size: 18px; margin: 0 0 18px; }
+.login-box .lang { text-align: right; font-size: var(--fs-xs); color: var(--muted); margin-bottom: 6px; }
+.login-box .lang a { color: var(--brand-strong); text-decoration: none; margin: 0 2px; }
+.login-box input { width: 100%; margin-top: 4px; }
+.login-box .btn-primary { width: 100%; margin-top: 18px; }
+.login-box .lark { display: block; text-align: center; margin-top: 8px; padding: 10px;
+    background: var(--brand); color: #fff; border-radius: var(--radius-sm); text-decoration: none; }
+.login-box .lark:hover { background: var(--brand-strong); }
+.login-box details { margin-top: 18px; }
+.login-box details summary { color: var(--muted); font-size: var(--fs-xs); cursor: pointer; }
+
+/* ===== 评分概览 ===== */
+.summary { background: var(--surface); padding: 16px; border: 1px solid var(--line);
+    border-radius: var(--radius-sm); margin-bottom: 18px; max-width: 480px; }
+.summary .avg { font-size: 28px; font-weight: 700; color: var(--brand); }

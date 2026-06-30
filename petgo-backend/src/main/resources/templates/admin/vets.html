@@ -1,83 +1,146 @@
 <!DOCTYPE html>
 <html lang="zh" xmlns:th="http://www.thymeleaf.org">
 <!--
-  兽医账号管理（Story 5.1）。复用 3.1 Admin shell。运营开户 / 重置密码 / 封禁开关。
-  护栏：明文密码仅提交一次，绝不回显；列表绝不含 passwordHash。
+  兽医账号管理（Story 5.1 + 2.2 列表扩列/筛选/搜索；1.6 外化 + 换肤）。复用 admin shell。
+  护栏：明文密码仅提交一次，绝不回显；列表绝不含 passwordHash。门控 @PreAuthorize(vet.view)。
 -->
 <head>
     <meta charset="UTF-8"/>
-    <title>兽医账号 · TailTopia 运营</title>
-    <style>
-        table { border-collapse: collapse; width: 100%; background: #fff; font-size: 14px; }
-        th, td { border: 1px solid #e1e4e8; padding: 8px 10px; text-align: left; }
-        th { background: #f0f2f5; }
-        .card { background: #fff; padding: 18px; border: 1px solid #e1e4e8; margin-bottom: 20px; max-width: 480px; }
-        .card label { display: block; margin: 8px 0 4px; font-size: 13px; color: #444; }
-        .card input { width: 100%; padding: 6px 8px; box-sizing: border-box; }
-        .card button { margin-top: 12px; padding: 8px 16px; background: #2d6cdf; color: #fff; border: 0; cursor: pointer; }
-        .err { color: #c0392b; font-size: 13px; }
-        .ok { color: #1e7e34; font-size: 13px; }
-        .badge { padding: 2px 8px; border-radius: 10px; font-size: 12px; }
-        .badge.active { background: #d4edda; color: #1e7e34; }
-        .badge.banned { background: #f8d7da; color: #c0392b; }
-        .inline { display: inline; margin: 0; }
-        .inline input[type=text] { width: 130px; padding: 4px 6px; }
-        .inline button { padding: 4px 10px; cursor: pointer; }
-    </style>
+    <title th:text="#{admin.vets.title}">兽医账号 · TailTopia 运营</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin.js}"></script>
+    <script th:src="@{/admin/vendor/htmx.min.js}"></script>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content">
-        <h2>兽医账号</h2>
+        <h1 th:text="#{admin.vets.title}">兽医账号</h1>
+
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+        <div class="banner err" th:if="${expiryStats != null and (expiryStats.expiringSoon() > 0 or expiryStats.expired() > 0)}"
+             th:text="#{admin.vets.expiryWarn(${expiryStats.expiringSoon()}, ${expiryStats.expired()})}">资质预警</div>
 
         <div class="card">
-            <h3>开户</h3>
+            <h3 th:text="#{admin.vets.create}">开户</h3>
             <p class="ok" th:if="${createdVetId != null}">
-                已创建兽医账号（id=<span th:text="${createdVetId}">0</span>）。请将初始密码线下交付兽医，系统不再保存明文。
+                <span th:text="#{admin.vets.created.prefix}">已创建兽医账号（id=</span><span th:text="${createdVetId}">0</span><span th:text="#{admin.vets.created.suffix}">）。请将初始密码线下交付兽医。</span>
             </p>
             <form th:action="@{/admin/vets}" th:object="${createVetForm}" method="post">
                 <p class="err" th:if="${#fields.hasErrors('*')}" th:errors="*{username}">校验错误</p>
                 <p class="err" th:each="e : ${#fields.globalErrors()}" th:text="${e}">错误</p>
-                <label>兽医昵称</label>
-                <input type="text" th:field="*{displayName}"/>
-                <label>登录账号</label>
-                <input type="text" th:field="*{username}"/>
-                <label>初始密码（≥8 位，仅本次可见）</label>
-                <input type="password" th:field="*{password}"/>
-                <button type="submit">创建</button>
+                <label class="field" th:text="#{admin.vets.displayName}">兽医昵称</label>
+                <input type="text" th:field="*{displayName}" class="field-full"/>
+                <label class="field" th:text="#{admin.vets.loginEmail}">登录邮箱</label>
+                <input type="email" th:field="*{username}" class="field-full"/>
+                <label class="field" th:text="#{admin.vets.contactPhone}">联系手机号</label>
+                <input type="text" th:field="*{contactPhone}" class="field-full"/>
+                <label class="field" th:text="#{admin.vets.password}">初始密码（≥8 位，仅本次可见）</label>
+                <input type="password" th:field="*{password}" class="field-full"/>
+                <button type="submit" class="btn btn-primary" th:text="#{admin.vets.submit.create}">创建</button>
             </form>
         </div>
 
+        <!-- 筛选条（HTMX 局部刷新 #vet-rows）-->
+        <form class="filter-bar" th:action="@{/admin/vets}" method="get"
+              hx-get="/admin/vets" hx-target="#vet-rows" hx-swap="outerHTML">
+            <label><span th:text="#{admin.vets.filter.account}">账号状态</span>
+                <select name="accountStatus" hx-get="/admin/vets" hx-target="#vet-rows" hx-swap="outerHTML" hx-include="closest form">
+                    <option value="" th:text="#{admin.vets.filter.all}">全部</option>
+                    <option th:each="s : ${vetStatuses}" th:value="${s}" th:text="${s}"
+                            th:selected="${s.name() == accountStatus}">ACTIVE</option>
+                </select>
+            </label>
+            <label><span th:text="#{admin.vets.filter.qual}">资质状态</span>
+                <select name="qualStatus" hx-get="/admin/vets" hx-target="#vet-rows" hx-swap="outerHTML" hx-include="closest form">
+                    <option value="" th:text="#{admin.vets.filter.all}">全部</option>
+                    <option th:each="s : ${qualStatuses}" th:value="${s}"
+                            th:text="#{'admin.qual.' + ${s.name()}}"
+                            th:selected="${s.name() == qualStatus}">CERTIFIED</option>
+                </select>
+            </label>
+            <label><span th:text="#{admin.vets.filter.online}">在线</span>
+                <select name="online" hx-get="/admin/vets" hx-target="#vet-rows" hx-swap="outerHTML" hx-include="closest form">
+                    <option value="" th:text="#{admin.vets.filter.all}">全部</option>
+                    <option value="ONLINE" th:text="#{admin.vets.online.ONLINE}" th:selected="${online == 'ONLINE'}">在线</option>
+                    <option value="OFFLINE" th:text="#{admin.vets.online.OFFLINE}" th:selected="${online == 'OFFLINE'}">离线</option>
+                </select>
+            </label>
+            <label><span th:text="#{admin.vets.filter.search}">搜索姓名/邮箱</span>
+                <input type="search" name="q" th:value="${q}"
+                       hx-get="/admin/vets" hx-target="#vet-rows" hx-swap="outerHTML"
+                       hx-trigger="keyup changed delay:300ms, search" hx-include="closest form"/>
+            </label>
+        </form>
+
         <table>
             <thead>
-            <tr><th>ID</th><th>昵称</th><th>账号</th><th>状态</th><th>评分</th><th>重置密码</th><th>封禁</th></tr>
+            <tr>
+                <th th:text="#{admin.vets.col.id}">ID</th>
+                <th th:text="#{admin.vets.col.name}">昵称</th>
+                <th th:text="#{admin.vets.col.username}">账号</th>
+                <th th:text="#{admin.vets.col.status}">状态</th>
+                <th th:text="#{admin.vets.col.qual}">资质</th>
+                <th th:text="#{admin.vets.col.online}">在线</th>
+                <th th:text="#{admin.vets.col.rating}">评分</th>
+                <th th:text="#{admin.vets.col.created}">创建日期</th>
+                <th th:text="#{admin.vets.col.edit}">编辑</th>
+                <th th:text="#{admin.vets.col.resetPwd}">重置密码</th>
+                <th th:text="#{admin.vets.col.ban}">封禁</th>
+            </tr>
             </thead>
-            <tbody>
+            <tbody id="vet-rows" th:fragment="rows">
             <tr th:each="v : ${vets}">
                 <td th:text="${v.id()}">1</td>
                 <td th:text="${v.displayName()}">王医生</td>
                 <td th:text="${v.username()}">vet001</td>
                 <td>
-                    <span class="badge" th:classappend="${v.status() == 'ACTIVE'} ? 'active' : 'banned'"
+                    <span class="badge" th:classappend="${v.status() == 'ACTIVE'} ? 'badge-ok' : 'badge-danger'"
                           th:text="${v.status()}">ACTIVE</span>
                 </td>
-                <td><a th:href="@{'/admin/vets/' + ${v.id()} + '/ratings'}">查看</a></td>
+                <td>
+                    <a th:href="@{'/admin/vets/' + ${v.id()} + '/qualification'}">
+                        <span class="badge" th:if="${v.qualStatus() != null}"
+                              th:classappend="${v.qualStatus() == 'CERTIFIED'} ? 'badge-ok'
+                                  : (${v.qualStatus() == 'EXPIRING_SOON'} ? 'badge-warn'
+                                  : ((${v.qualStatus() == 'EXPIRED'} or ${v.qualStatus() == 'REJECTED'}) ? 'badge-danger' : 'badge-info'))"
+                              th:text="#{'admin.qual.' + ${v.qualStatus()}}">资质</span>
+                    </a>
+                </td>
+                <td>
+                    <span class="badge" th:if="${v.presence() != null}"
+                          th:classappend="${v.presence() == 'ONLINE'} ? 'badge-ok'
+                              : (${v.presence() == 'BUSY'} ? 'badge-warn' : 'badge-info')"
+                          th:text="#{'admin.vets.presence.' + ${v.presence()}}">在线</span>
+                </td>
+                <td>
+                    <a th:href="@{'/admin/vets/' + ${v.id()} + '/ratings'}">
+                        <span th:if="${v.ratingAvg() != null}" th:text="${v.ratingAvg()} + ' ★'">4.8 ★</span>
+                        <span th:unless="${v.ratingAvg() != null}" class="muted">—</span>
+                    </a>
+                </td>
+                <td th:text="${#temporals.format(v.createdAt(), 'yyyy-MM-dd')}">2026-06-01</td>
+                <td>
+                    <a class="btn btn-neutral btn-sm" th:href="@{'/admin/vets/' + ${v.id()} + '/edit'}"
+                       th:text="#{admin.vets.edit}">编辑</a>
+                </td>
                 <td>
                     <form class="inline" th:action="@{'/admin/vets/' + ${v.id()} + '/password'}" method="post">
-                        <input type="text" name="newPassword" placeholder="新密码 ≥8 位"/>
-                        <button type="submit">重置</button>
+                        <input type="text" name="newPassword" th:placeholder="#{admin.vets.newPassword}"/>
+                        <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.vets.reset}">重置</button>
                     </form>
                 </td>
                 <td>
                     <form class="inline" th:action="@{'/admin/vets/' + ${v.id()} + '/status'}" method="post"
-                          onsubmit="return confirm('确认变更该兽医封禁状态？封禁将立即踢下线并中断其进行中会话（不可恢复）。');">
+                          th:data-confirm="#{admin.vets.ban.confirm}">
                         <input type="hidden" name="banned" th:value="${v.status() == 'ACTIVE'}"/>
-                        <button type="submit" th:text="${v.status() == 'ACTIVE'} ? '封禁' : '解封'">封禁</button>
+                        <button type="submit" class="btn btn-danger btn-sm"
+                                th:text="${v.status() == 'ACTIVE'} ? #{admin.vets.ban} : #{admin.vets.unban}">封禁</button>
                     </form>
                 </td>
             </tr>
             <tr th:if="${#lists.isEmpty(vets)}">
-                <td colspan="7">暂无兽医账号</td>
+                <td colspan="11" class="empty" th:text="#{admin.vets.empty}">暂无兽医账号</td>
             </tr>
             </tbody>
         </table>
