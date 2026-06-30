@@ -4,8 +4,11 @@ import com.tailtopia.profile.dto.MilestoneCheckinCandidateResponse;
 import com.tailtopia.profile.dto.MilestoneCheckinRequest;
 import com.tailtopia.profile.dto.MilestoneItemResponse;
 import com.tailtopia.profile.dto.MilestoneListResponse;
+import com.tailtopia.profile.dto.MilestoneShareRequest;
+import com.tailtopia.profile.dto.MilestoneShareResponse;
 import com.tailtopia.profile.service.MilestoneCheckInService;
 import com.tailtopia.profile.service.MilestoneService;
+import com.tailtopia.profile.service.MilestoneShareService;
 import com.tailtopia.shared.error.AppException;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -29,11 +32,13 @@ public class MilestoneController {
 
     private final MilestoneService milestoneService;
     private final MilestoneCheckInService checkInService;
+    private final MilestoneShareService shareService;
 
     public MilestoneController(MilestoneService milestoneService,
-            MilestoneCheckInService checkInService) {
+            MilestoneCheckInService checkInService, MilestoneShareService shareService) {
         this.milestoneService = milestoneService;
         this.checkInService = checkInService;
+        this.shareService = shareService;
     }
 
     /** 当前用户里程碑列表（L/M/S 分区 + 完成状态 + 进度）。无档案 → 404。 */
@@ -58,6 +63,17 @@ public class MilestoneController {
     public MilestoneItemResponse checkIn(@AuthenticationPrincipal Jwt jwt,
             @PathVariable String code, @Valid @RequestBody MilestoneCheckinRequest req) {
         return checkInService.checkIn(currentUserId(jwt), code, req.contentId());
+    }
+
+    /**
+     * 创建 / 刷新某已完成里程碑的对外分享（P-35 分享链接），返回不可枚举 {@code shareToken}
+     * （URL 由客户端拼，公开页 {@code GET /m/{shareToken}} 直出）。无档案 / 无里程碑 → 404；未完成 → 422。
+     * 按 {@code (pet, code)} 幂等：重复分享复用同一 token，仅刷新本地化文案。
+     */
+    @PostMapping("/{code}/shares")
+    public MilestoneShareResponse createShare(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable String code, @Valid @RequestBody MilestoneShareRequest req) {
+        return shareService.createOrRefresh(currentUserId(jwt), code, req);
     }
 
     private static long currentUserId(Jwt jwt) {

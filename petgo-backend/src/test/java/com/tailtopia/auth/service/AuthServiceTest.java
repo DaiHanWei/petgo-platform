@@ -14,7 +14,10 @@ import com.tailtopia.auth.dto.LoginResponse;
 import com.tailtopia.auth.dto.TokenResponse;
 import com.tailtopia.auth.repository.RefreshTokenRepository;
 import com.tailtopia.auth.repository.UserRepository;
+import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.security.AppleIdentity;
+import com.tailtopia.shared.security.AppleTokenVerifier;
 import com.tailtopia.shared.security.GoogleIdentity;
 import com.tailtopia.shared.security.GoogleTokenVerifier;
 import com.tailtopia.shared.security.JwtService;
@@ -26,6 +29,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * L0 单元测试（无 DB/容器）：登录建号/取号分流（AC1/AC4）+ refresh 轮换（AC3）。
@@ -41,9 +45,13 @@ class AuthServiceTest {
     @Mock
     GoogleTokenVerifier googleVerifier;
     @Mock
+    AppleTokenVerifier appleVerifier;
+    @Mock
     JwtService jwt;
     @Mock
     VetAccountService vetAccounts;
+    @Mock
+    PetProfileRepository petProfiles;
 
     @InjectMocks
     AuthService authService;
@@ -70,7 +78,25 @@ class AuthServiceTest {
         assertThat(resp.accessToken()).isEqualTo("access-token");
         assertThat(resp.refreshToken()).isEqualTo("raw-refresh");
         assertThat(resp.onboardingCompleted()).isFalse();
+        assertThat(resp.profile().hasPetProfile()).isFalse(); // 新建号必无档案（短路免查）
         verify(users).save(any(User.class));
+    }
+
+    @Test
+    void returningGoogleUserWithPetProfileReportsHasPet() {
+        // 用户反馈根治：老用户登录响应须按真实档案返回 hasPetProfile，而非恒 false。
+        User existing = User.newGoogleUser("sub-1", "a@b.com", "Alice", "http://pic");
+        ReflectionTestUtils.setField(existing, "id", 7L);
+        when(googleVerifier.verify("idtok"))
+                .thenReturn(new GoogleIdentity("sub-1", "a@b.com", "Alice", "http://pic"));
+        when(users.findByGoogleSub("sub-1")).thenReturn(Optional.of(existing));
+        when(petProfiles.existsByOwnerId(7L)).thenReturn(true);
+        stubIssue();
+
+        LoginResponse resp = authService.loginWithGoogle("idtok");
+
+        assertThat(resp.isNewUser()).isFalse();
+        assertThat(resp.profile().hasPetProfile()).isTrue();
     }
 
     @Test
@@ -92,6 +118,49 @@ class AuthServiceTest {
         stubIssue();
 
         LoginResponse resp = authService.loginWithGoogle("idtok");
+
+        assertThat(resp.isNewUser()).isFalse();
+    }
+
+    // ===== FR-44：Apple 登录（与 Google 同构）=====
+
+    @Test
+    void firstAppleLoginCreatesUserAndFlagsNew() {
+        when(appleVerifier.verify("apple-tok"))
+                .thenReturn(new AppleIdentity("apple-sub-1", "a@privaterelay.appleid.com"));
+        when(users.findByAppleSub("apple-sub-1")).thenReturn(Optional.empty());
+        when(users.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        stubIssue();
+
+        LoginResponse resp = authService.loginWithApple("apple-tok");
+
+        assertThat(resp.isNewUser()).isTrue();
+        assertThat(resp.role()).isEqualTo("USER");
+        assertThat(resp.accessToken()).isEqualTo("access-token");
+        assertThat(resp.refreshToken()).isEqualTo("raw-refresh");
+        assertThat(resp.onboardingCompleted()).isFalse();
+        verify(users).save(any(User.class));
+    }
+
+    @Test
+    void appleVerifyFailureCreatesNoAccount() {
+        // 与 Google 同口径：校验失败短路抛异常，绝不建号/不签发。
+        when(appleVerifier.verify("bad")).thenThrow(AppException.unauthorized("无效的 Apple 凭证"));
+
+        assertThatThrownBy(() -> authService.loginWithApple("bad")).isInstanceOf(AppException.class);
+        verify(users, never()).save(any(User.class));
+        verify(refreshTokens, never()).save(any(RefreshToken.class));
+    }
+
+    @Test
+    void secondAppleLoginReturnsExistingUserNotNew() {
+        User existing = User.newAppleUser("apple-sub-1", "a@privaterelay.appleid.com");
+        when(appleVerifier.verify("apple-tok"))
+                .thenReturn(new AppleIdentity("apple-sub-1", "a@privaterelay.appleid.com"));
+        when(users.findByAppleSub("apple-sub-1")).thenReturn(Optional.of(existing));
+        stubIssue();
+
+        LoginResponse resp = authService.loginWithApple("apple-tok");
 
         assertThat(resp.isNewUser()).isFalse();
     }

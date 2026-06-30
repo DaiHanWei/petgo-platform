@@ -12,3 +12,10 @@ String petCardShareUrl(String cardToken, {String baseUrl = kH5BaseUrl}) {
   final trimmed = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
   return '$trimmed/p/$cardToken';
 }
+
+/// 由不可枚举 shareToken 拼出 P-35 里程碑庆祝对外分享 URL（后端 `GET /m/{shareToken}` 直出 H5）。
+/// 与 [petCardShareUrl] 同 H5 子域；非用户明确指令不得改默认值。
+String milestoneShareUrl(String shareToken, {String baseUrl = kH5BaseUrl}) {
+  final trimmed = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+  return '$trimmed/m/$shareToken';
+}

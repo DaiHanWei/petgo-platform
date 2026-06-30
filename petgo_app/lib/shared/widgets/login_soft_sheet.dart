@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 
 import '../../core/theme/colors.dart';
@@ -17,10 +18,17 @@ import 'login_guide_outcome.dart';
 /// 成功由协调器关闭浮层。失败/取消均不清空 pendingAction（仅「关闭」清）。
 class LoginSoftSheet extends StatefulWidget {
   const LoginSoftSheet(
-      {super.key, required this.onLogin, required this.onClose, this.onVet});
+      {super.key,
+      required this.onLogin,
+      required this.onClose,
+      this.onAppleLogin,
+      this.onVet});
 
   /// 主 CTA 回调（调用 Story 1.3 登录流程，由协调器注入）；返回本次尝试结果。
   final Future<LoginGuideOutcome> Function() onLogin;
+
+  /// Apple 登录入口（FR-44）：非空且当前为 iOS 时，在 Google 上方多显示一个 Apple 按钮。
+  final Future<LoginGuideOutcome> Function()? onAppleLogin;
   final VoidCallback onClose;
 
   /// 兽医登录入口（可选）：游客直接进 /vet/login（单 App 双角色）。
@@ -34,12 +42,12 @@ class _LoginSoftSheetState extends State<LoginSoftSheet> {
   bool _loading = false;
   bool _failed = false;
 
-  Future<void> _handleLogin() async {
+  Future<void> _run(Future<LoginGuideOutcome> Function() runner) async {
     setState(() {
       _loading = true;
       _failed = false; // 重试时先清失败态
     });
-    final outcome = await widget.onLogin();
+    final outcome = await runner();
     if (!mounted) return; // 成功 → 协调器已关闭浮层
     setState(() {
       _loading = false;
@@ -87,10 +95,27 @@ class _LoginSoftSheetState extends State<LoginSoftSheet> {
             ),
           ],
           const SizedBox(height: AppSpacing.xl),
+          // Apple 登录（FR-44）：仅 iOS 且协调器注入了 Apple 入口时显示，置于 Google 上方
+          // （App Store 4.8：与 Google 同级且置顶）。黑底白字。
+          if (widget.onAppleLogin != null &&
+              defaultTargetPlatform == TargetPlatform.iOS) ...[
+            FilledButton.icon(
+              key: const ValueKey('softSheetAppleCta'),
+              onPressed: _loading ? null : () => _run(widget.onAppleLogin!),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF000000),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+              ),
+              icon: const Icon(Icons.apple),
+              label: Text(l10n.loginApple, style: AppTypography.button),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
           // 主 CTA：显著（失败后即重试入口）
           FilledButton.icon(
             key: const ValueKey('softSheetGoogleCta'),
-            onPressed: _loading ? null : _handleLogin,
+            onPressed: _loading ? null : () => _run(widget.onLogin),
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.accentGrowth,
               foregroundColor: AppColors.onAccent,

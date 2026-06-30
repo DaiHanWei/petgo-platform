@@ -88,6 +88,18 @@ void main() {
     expect(find.byKey(const ValueKey('mePetCard')), findsNothing);
   });
 
+  testWidgets('回归: hasPetProfile=false 但真实档案存在 → 宠物卡片（不误显引导卡）', (tester) async {
+    // 用户反馈：老用户登录后已有档案，/me 仍显示「创建宠物档案」引导卡。
+    // 根因：登录响应 hasPetProfile 恒 false（stale）。修复：以真实 petProfileProvider 为准。
+    await _pump(
+      tester,
+      profile: const UserProfile(nickname: '小明', petStatus: 'HAS_PET', hasPetProfile: false),
+      pet: const PetProfile(id: 1, name: 'Momo', cardToken: 'tok'),
+    );
+    expect(find.byKey(const ValueKey('mePetCard')), findsOneWidget);
+    expect(find.byKey(const ValueKey('mePetGuideCard')), findsNothing);
+  });
+
   testWidgets('AC5: 状态 B/C → 宠物卡片与引导卡均不显示', (tester) async {
     await _pump(
       tester,

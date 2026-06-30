@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -98,9 +99,7 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
   }
 
   void _toast(String msg) {
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(msg), duration: const Duration(seconds: 3)));
+    showAppToast(context, msg, duration: const Duration(seconds: 3));
   }
 
   static String? _emptyToNull(String s) => s.trim().isEmpty ? null : s.trim();

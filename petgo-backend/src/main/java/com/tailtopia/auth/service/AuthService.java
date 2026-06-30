@@ -10,7 +10,10 @@ import com.tailtopia.auth.dto.UserProfileResponse;
 import com.tailtopia.auth.dto.VetLoginResponse;
 import com.tailtopia.auth.repository.RefreshTokenRepository;
 import com.tailtopia.auth.repository.UserRepository;
+import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.security.AppleIdentity;
+import com.tailtopia.shared.security.AppleTokenVerifier;
 import com.tailtopia.shared.security.GoogleIdentity;
 import com.tailtopia.shared.security.GoogleTokenVerifier;
 import com.tailtopia.shared.security.JwtService;
@@ -36,16 +39,21 @@ public class AuthService {
     private final UserRepository users;
     private final RefreshTokenRepository refreshTokens;
     private final GoogleTokenVerifier googleVerifier;
+    private final AppleTokenVerifier appleVerifier;
     private final JwtService jwt;
     private final VetAccountService vetAccounts;
+    private final PetProfileRepository petProfiles;
 
     public AuthService(UserRepository users, RefreshTokenRepository refreshTokens,
-            GoogleTokenVerifier googleVerifier, JwtService jwt, VetAccountService vetAccounts) {
+            GoogleTokenVerifier googleVerifier, AppleTokenVerifier appleVerifier,
+            JwtService jwt, VetAccountService vetAccounts, PetProfileRepository petProfiles) {
         this.users = users;
         this.refreshTokens = refreshTokens;
         this.googleVerifier = googleVerifier;
+        this.appleVerifier = appleVerifier;
         this.jwt = jwt;
         this.vetAccounts = vetAccounts;
+        this.petProfiles = petProfiles;
     }
 
     @Transactional
@@ -66,10 +74,41 @@ public class AuthService {
         String access = jwt.issueAccessToken(user);
         String refresh = issueRefresh(user);
 
-        // hasPetProfile：本 Story 期恒 false（pet_profiles 表在 Epic 2）。
-        UserProfileResponse profile = UserProfileResponse.from(user, false);
+        // hasPetProfile 返回真实值：首授权建号的新用户必无档案；老用户按 pet_profiles 查询
+        // （与 /me 同源 MeService.hasPetProfile，避免登录响应 stale=false 误导前端「去建档」引导）。
+        UserProfileResponse profile = UserProfileResponse.from(user, hasPetProfile(user, isNew[0]));
         return new LoginResponse(access, refresh, user.getRole().name(),
                 isNew[0], user.isOnboardingCompleted(), profile);
+    }
+
+    /**
+     * Apple 登录（FR-44）：校验 identity token → 按 apple_sub 取号/首登建号 → 签发自签 JWT。
+     * 与 {@link #loginWithGoogle} 同构；校验失败短路抛异常，绝不建号/不签发。
+     */
+    @Transactional
+    public LoginResponse loginWithApple(String identityToken) {
+        AppleIdentity id = appleVerifier.verify(identityToken);
+
+        boolean[] isNew = {false};
+        User user = users.findByAppleSub(id.sub()).orElseGet(() -> {
+            isNew[0] = true;
+            return users.save(User.newAppleUser(id.sub(), id.email()));
+        });
+
+        String access = jwt.issueAccessToken(user);
+        String refresh = issueRefresh(user);
+
+        UserProfileResponse profile = UserProfileResponse.from(user, hasPetProfile(user, isNew[0]));
+        return new LoginResponse(access, refresh, user.getRole().name(),
+                isNew[0], user.isOnboardingCompleted(), profile);
+    }
+
+    /**
+     * 登录响应的 hasPetProfile：首授权建号的新用户必无档案（短路免查）；老用户按 pet_profiles 实查。
+     * 与 {@link MeService#hasPetProfile} 同源（owner_id 维度），保证登录/刷新/{@code /me} 三处一致。
+     */
+    private boolean hasPetProfile(User user, boolean isNew) {
+        return !isNew && user.getId() != null && petProfiles.existsByOwnerId(user.getId());
     }
 
     /**

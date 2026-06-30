@@ -26,8 +26,12 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "google_sub", nullable = false, length = 255)
+    @Column(name = "google_sub", length = 255)
     private String googleSub;
+
+    /** Apple Sign-In 身份（FR-44，1.1.0）。Apple-only 用户的 googleSub 为 null，二者至少其一非空。 */
+    @Column(name = "apple_sub", length = 255)
+    private String appleSub;
 
     @Column(name = "email", length = 320)
     private String email;
@@ -80,6 +84,19 @@ public class User {
         u.displayName = displayName;
         u.avatarUrl = avatarUrl;
         u.nickname = displayName; // 初始可同 display_name，Story 1.6 确认
+        u.role = Role.USER;
+        u.onboardingCompleted = false;
+        return u;
+    }
+
+    /**
+     * Apple 首授权建号（FR-44，1.1.0）。Apple identity token 不含姓名（仅 sub/email），
+     * 故 displayName/nickname 留空，由新用户引导（Story 1.6）补昵称；Apple 不提供头像。
+     */
+    public static User newAppleUser(String appleSub, String email) {
+        User u = new User();
+        u.appleSub = appleSub;
+        u.email = email;
         u.role = Role.USER;
         u.onboardingCompleted = false;
         return u;
@@ -143,6 +160,10 @@ public class User {
 
     public String getGoogleSub() {
         return googleSub;
+    }
+
+    public String getAppleSub() {
+        return appleSub;
     }
 
     public String getEmail() {

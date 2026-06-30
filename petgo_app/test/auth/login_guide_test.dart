@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -240,6 +241,59 @@ void main() {
     expect(find.byKey(const ValueKey('softSheetGoogleCta')), findsOneWidget); // 重试入口
     expect(controller.hasPending, isTrue);
     expect(find.text('TRIAGE PAGE'), findsNothing);
+  });
+
+  // ===== FR-44：iOS 强弹窗多显示 Apple 登录按钮 =====
+
+  testWidgets('FR-44: iOS 强弹窗在 Google 上方多显示 Apple 按钮，点击走 Apple 链路（老用户回跳）',
+      (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    try {
+      final controller = LoginGuideController(
+        () async => null, // Google 不参与本例
+        () async => _resp(onboardingCompleted: true), // Apple 成功（老用户）
+      );
+      await _pump(tester, _router(controller, pending: const RouteIntent(location: '/triage')));
+
+      await tester.tap(find.byKey(const ValueKey('trigger')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('hardDialogAppleCta')), findsOneWidget);
+      expect(find.byKey(const ValueKey('hardDialogGoogleCta')), findsOneWidget); // Google 仍在
+
+      await tester.tap(find.byKey(const ValueKey('hardDialogAppleCta')));
+      await tester.pumpAndSettle();
+      expect(find.text('TRIAGE PAGE'), findsOneWidget);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('FR-44: 非 iOS 强弹窗不显示 Apple 按钮', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    try {
+      final controller = LoginGuideController(() async => null, () async => null);
+      await _pump(tester, _router(controller, soft: false));
+
+      await tester.tap(find.byKey(const ValueKey('trigger')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('hardDialogAppleCta')), findsNothing);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('FR-44: 未注入 Apple 入口时 iOS 也不显示 Apple 按钮', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    try {
+      final controller = LoginGuideController(() async => null); // 仅 Google runner
+      await _pump(tester, _router(controller, soft: false));
+
+      await tester.tap(find.byKey(const ValueKey('trigger')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('hardDialogAppleCta')), findsNothing);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 
   // 回归测试：用【真实】loginGuideControllerProvider（含 applyLogin wiring），

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -11,8 +12,8 @@ import '../../../shared/widgets/app_image.dart';
 import '../data/milestone_repository.dart';
 import '../domain/milestone.dart';
 import '../domain/milestone_checkin_prompt_copy.dart';
+import '../domain/milestone_share.dart';
 import '../domain/milestone_titles.dart';
-import '../domain/share_service.dart';
 import 'widgets/milestone_celebration.dart';
 
 /// 里程碑列表页（Story 8.2 · FR-42）。壳→真页：顶部宠物信息 + 总进度 + L/M/S 三级分区徽章
@@ -301,7 +302,8 @@ void _showCelebration(BuildContext context, WidgetRef ref, MilestoneItem item) {
     item,
     petName: petName,
     collection: collection,
-    onShare: () => ref.read(shareServiceProvider)(shareText),
+    onShare: () => shareMilestoneWithLink(ref,
+        item: item, locale: locale, petName: petName, shareText: shareText, collection: collection),
     onSeeAll: router == null ? null : () => router.go(DeepLinkRoutes.milestoneList),
   );
 }
@@ -605,7 +607,7 @@ class _CandidateTile extends ConsumerWidget {
   Future<void> _confirm(BuildContext context, WidgetRef ref) async {
     final l10n = AppLocalizations.of(context);
     final locale = Localizations.localeOf(context);
-    final messenger = ScaffoldMessenger.of(context);
+    final overlay = Overlay.of(context, rootOverlay: true);
     final navigator = Navigator.of(context);
     final router = GoRouter.maybeOf(context);
     try {
@@ -632,11 +634,16 @@ class _CandidateTile extends ConsumerWidget {
         completed,
         petName: petName,
         collection: collection,
-        onShare: () => ref.read(shareServiceProvider)(shareText),
+        onShare: () => shareMilestoneWithLink(ref,
+            item: completed,
+            locale: locale,
+            petName: petName,
+            shareText: shareText,
+            collection: collection),
         onSeeAll: router == null ? null : () => router.go(DeepLinkRoutes.milestoneList),
       );
     } catch (_) {
-      messenger.showSnackBar(SnackBar(content: Text(l10n.milestoneCheckinFailed)));
+      showAppToastOnOverlay(overlay, l10n.milestoneCheckinFailed);
     }
   }
 }

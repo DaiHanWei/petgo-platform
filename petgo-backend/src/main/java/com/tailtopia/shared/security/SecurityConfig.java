@@ -130,9 +130,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // 登录/刷新放行（换取自签 JWT 的入口）
                         .requestMatchers("/api/v1/auth/**").permitAll()
-                        // 运维/文档/公开 H5 名片放行
+                        // 运维/文档/公开 H5（名片 /p、里程碑庆祝分享 /m）放行
                         .requestMatchers("/actuator/**", "/v3/api-docs/**", "/swagger-ui/**",
-                                "/swagger-ui.html", "/p/**").permitAll()
+                                "/swagger-ui.html", "/p/**", "/m/**").permitAll()
                         // 法律政策 H5（隐私政策 / 服务条款 / 账号删除 / 儿童安全标准 / 支持页）公开放行（商店上架 + App WebView 引用）
                         .requestMatchers(HttpMethod.GET, "/privacy", "/terms",
                                 "/account-deletion", "/child-safety", "/support").permitAll()

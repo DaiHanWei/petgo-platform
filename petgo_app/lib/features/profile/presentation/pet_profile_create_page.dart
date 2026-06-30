@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -9,6 +10,7 @@ import '../../../core/network/problem_detail.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../auth/domain/auth_state.dart';
 import '../../media/domain/media_upload_use_case.dart';
 import '../../../shared/utils/date_format.dart';
 import '../../../shared/utils/media_permission.dart';
@@ -18,6 +20,7 @@ import '../data/profile_repository.dart';
 import '../data/timeline_repository.dart';
 import '../domain/pending_archive.dart';
 import '../domain/profile_created_flow.dart';
+import '../domain/profile_prompt_controller.dart';
 import 'widgets/pet_form_fields.dart';
 
 /// 宠物档案创建表单（Story 2.2 · F1）。
@@ -98,6 +101,7 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
             idempotencyKey: 'create-${DateTime.now().microsecondsSinceEpoch}',
           );
       ref.invalidate(petProfileProvider);
+      _markProfileCreated();
       if (!mounted) return;
       // 建档来源（路由 query `?origin=`）：FR-0G 正常建档 → 庆祝页（AC4/F15）；
       // FR-16 问诊存档 / FR-12 灰选发布 → 跳过庆祝页，直接回原流程（Story 2.5/2.3 接管）。
@@ -121,7 +125,8 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
     } on DioException catch (e) {
       final pd = ProblemDetail.fromDioException(e);
       if (pd?.typeSlug == 'profile-exists' || pd?.status == 409) {
-        // 并发双开窗：已存在 → 提示并直达档案。
+        // 并发双开窗：已存在 → 同步登录态后提示并直达档案（避免提示条残留）。
+        _markProfileCreated();
         _toast(l10n.petProfileExists);
         if (mounted) context.go('/profile');
       } else {
@@ -156,11 +161,23 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
     }
   }
 
+  /// 建档成功后同步本地登录态与提示条：
+  /// 1) 回填 `auth.profile.hasPetProfile = true`（首页"先建档"提示条等多处的权威源；
+  ///    否则要等下次冷启动重拉 `/me` 才更新，导致建完档提示条仍在）；
+  /// 2) `markCompleted()` 永久关闭档案提示条。
+  void _markProfileCreated() {
+    final profile = ref.read(authControllerProvider).profile;
+    if (profile != null && !profile.hasPetProfile) {
+      ref
+          .read(authControllerProvider.notifier)
+          .applyProfile(profile.copyWith(hasPetProfile: true));
+    }
+    ref.read(profilePromptProvider.notifier).markCompleted();
+  }
+
   void _toast(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(msg), duration: const Duration(seconds: 3)));
+    showAppToast(context, msg, duration: const Duration(seconds: 3));
   }
 
   static String? _emptyToNull(String s) => s.trim().isEmpty ? null : s.trim();

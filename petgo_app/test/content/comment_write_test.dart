@@ -8,6 +8,7 @@ import 'package:tailtopia/features/content/domain/comment.dart';
 import 'package:tailtopia/features/content/domain/content_detail.dart';
 import 'package:tailtopia/features/content/presentation/comment_composer.dart';
 import 'package:tailtopia/features/content/presentation/comment_section.dart';
+import 'package:tailtopia/features/content/presentation/detail_providers.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/widgets/login_hard_dialog.dart';
 
@@ -134,6 +135,7 @@ void main() {
     final field2 = tester.widget<TextField>(find.byKey(const ValueKey('detailCommentInput')));
     expect(field2.controller!.text, isEmpty);
     expect(repo.postCommentCalls, 2); // 首次失败 + 重试成功
+    await tester.pump(const Duration(seconds: 3)); // 走完失败 toast 定时器
   });
 
   testWidgets('AC2: 游客点评论框 → FR-0C 强登录弹窗', (tester) async {
@@ -177,6 +179,36 @@ void main() {
 
     expect(find.byKey(const ValueKey('deleteComment_10')), findsOneWidget); // 本人评论可删
     expect(find.byKey(const ValueKey('deleteComment_11')), findsNothing); // 他人评论不可删
+  });
+
+  testWidgets('FR-24: 点别人的评论项 → 进入回复态（弹出评论框带 @）', (tester) async {
+    // 用户反馈：点别人的评论应弹出评论框。复用「回复」入口：设 ReplyTarget(parentId, @name)。
+    final repo = _RecordingRepo(comments: [_c(11, 2)]);
+    final container = ProviderContainer(overrides: [detailRepositoryProvider.overrideWithValue(repo)]);
+    addTearDown(container.dispose);
+    container.read(authControllerProvider.notifier).applyLogin(_user(1));
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: CommentSection(postId: 5, currentUserId: 1, isContentAuthor: false),
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(container.read(replyTargetProvider), isNull); // 前置：无回复态
+    await tester.tap(find.byKey(const ValueKey('commentItem_11')));
+    await tester.pumpAndSettle();
+    final rt = container.read(replyTargetProvider);
+    expect(rt, isNotNull);
+    expect(rt!.parentId, 11); // 回复该评论（二级由后端归并到一级父，不产生三级）
+    expect(rt.toName, 'U2');
   });
 
   testWidgets('AC2: 内容主可删其内容下任意评论', (tester) async {

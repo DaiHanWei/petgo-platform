@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="id" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+    <!-- 分享页对外但不进搜索引擎索引（与名片同范式，强制 noindex） -->
+    <meta name="robots" content="noindex,nofollow"/>
+    <title th:text="${ogTitle}">TailTopia</title>
+
+    <!-- Open Graph（IM 链接预览：仅标题/描述，无图——不外露宠物图，隐私边界） -->
+    <meta property="og:type" content="website"/>
+    <meta property="og:title" th:content="${ogTitle}"/>
+    <meta property="og:description" th:content="${body}"/>
+    <meta name="twitter:card" content="summary"/>
+    <meta name="twitter:title" th:content="${ogTitle}"/>
+    <meta name="twitter:description" th:content="${body}"/>
+
+    <style>
+        :root { --ink: #141019; --violet: #845EC9; --violet2: #9E83DA; }
+        * { box-sizing: border-box; }
+        html, body { margin: 0; min-height: 100%; }
+        body {
+            font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+            background: var(--ink); color: #fff;
+            min-height: 100vh; min-height: 100dvh;
+            display: flex; flex-direction: column;
+        }
+        /* 彩纸覆盖层（自绘 canvas，不挡交互） */
+        #confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+        .wrap {
+            position: relative; z-index: 1;
+            flex: 1; width: 100%; max-width: 480px; margin: 0 auto;
+            padding: 40px 28px calc(28px + env(safe-area-inset-bottom));
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            text-align: center;
+        }
+        /* 渐变大徽章 + 辉光（紫渐变圆 + 白奖杯） */
+        .badge-box { position: relative; width: 140px; height: 130px; display: flex;
+            align-items: center; justify-content: center; }
+        .badge {
+            width: 120px; height: 120px; border-radius: 50%;
+            background: linear-gradient(135deg, var(--violet), var(--violet2));
+            box-shadow: 0 8px 30px rgba(132, 94, 201, 0.45);
+            display: flex; align-items: center; justify-content: center; font-size: 56px;
+        }
+        .level-chip {
+            position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+            padding: 3px 12px; border-radius: 9999px; border: 2px solid var(--ink);
+            font-size: 10px; font-weight: 700; letter-spacing: 0.6px; color: #fff; white-space: nowrap;
+        }
+        .unlocked { margin-top: 26px; font-size: 13px; font-weight: 700; letter-spacing: 0.6px;
+            color: rgba(255,255,255,0.5); }
+        .title { margin: 8px 0 0; font-size: 26px; line-height: 1.2; font-weight: 700; }
+        .body { margin: 10px 0 0; font-size: 13px; line-height: 1.6; color: rgba(255,255,255,0.6); }
+        .capsule {
+            margin-top: 20px; display: inline-flex; align-items: center; gap: 8px;
+            padding: 7px 14px; border-radius: 9999px; background: rgba(255,255,255,0.07);
+            font-size: 12px; color: rgba(255,255,255,0.7);
+        }
+        .capsule .emoji { font-size: 16px; }
+        /* 「已解锁合集」卡（与 P-35 KOLEKSI 区对齐） */
+        .collection { margin-top: 24px; width: 100%; max-width: 360px;
+            padding: 14px 16px 16px; border-radius: 16px; background: rgba(255,255,255,0.06); }
+        .collection .ch-head { font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+            color: rgba(255,255,255,0.4); }
+        .collection .ch-grid { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px;
+            justify-content: center; }
+        .ch-cell { width: 44px; height: 44px; border-radius: 50%; display: flex;
+            align-items: center; justify-content: center; font-size: 20px; }
+        .ch-more { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.6);
+            font-size: 14px; font-weight: 700; }
+        .cta {
+            margin-top: 28px; width: 100%; max-width: 360px; display: block;
+            padding: 16px; border-radius: 14px; border: none;
+            background: linear-gradient(135deg, var(--violet), var(--violet2)); color: #fff;
+            font-size: 14px; font-weight: 700; text-decoration: none; cursor: pointer;
+            box-shadow: 0 8px 24px rgba(132, 94, 201, 0.4);
+        }
+        .footnote { margin-top: 14px; font-size: 12px; color: rgba(255,255,255,0.4); }
+    </style>
+</head>
+<body>
+<canvas id="confetti"></canvas>
+<div class="wrap">
+    <div class="badge-box">
+        <div class="badge">🏆</div>
+        <span class="level-chip" th:style="'background:' + ${levelColor}" th:text="${levelLabel}">M · MAJOR</span>
+    </div>
+    <div class="unlocked" th:text="${unlockedHeader}">MILESTONE UNLOCKED!</div>
+    <h1 class="title" th:text="${title}">Milestone</h1>
+    <p class="body" th:if="${hasBody}" th:text="${body}">body</p>
+    <div class="capsule">
+        <span class="emoji" th:text="${speciesEmoji}">🐾</span>
+        <span th:text="${dateLabel}">Pet · date</span>
+    </div>
+
+    <!-- 「已解锁合集」预览（与 P-35 KOLEKSI 对齐；圆点 / 「+N」由下方 JS 复刻 2 排容量逻辑） -->
+    <div class="collection" th:if="${hasCollection}">
+        <div class="ch-head" th:text="${collectionHeading}">PET'S COLLECTION · 0</div>
+        <div class="ch-grid" id="chGrid" th:attr="data-levels=${collectionLevels}"></div>
+    </div>
+
+    <!-- 底部唯一差异：下载 App，直接跳应用商店（iOS App Store / Android Google Play；桌面落下载页） -->
+    <a class="cta" id="downloadCta" th:href="${downloadUrl}"
+       th:attr="data-ios=${iosUrl},data-android=${androidUrl}"
+       th:text="${downloadCta}">Download</a>
+    <div class="footnote">TailTopia</div>
+</div>
+
+<script th:inline="none">
+  // 彩纸：连续掉落（自绘 canvas，无第三方）。每片独立相位铺满整屏 → 无空档。
+  (function () {
+    var c = document.getElementById('confetti');
+    if (!c || !c.getContext) return;
+    var ctx = c.getContext('2d');
+    var palette = ['#845EC9', '#F6A609', '#F0425A', '#1F9E6A', '#9E83DA'];
+    var pieces = [], W, H, dpr;
+    function resize() {
+      dpr = window.devicePixelRatio || 1;
+      W = c.clientWidth; H = c.clientHeight;
+      c.width = W * dpr; c.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    function init() {
+      pieces = [];
+      for (var i = 0; i < 44; i++) {
+        pieces.push({
+          x: Math.random() * W, y: Math.random() * H,
+          s: 5 + Math.random() * 7, color: palette[i % palette.length],
+          vy: 40 + Math.random() * 60, sway: 10 + Math.random() * 30,
+          swaySpeed: 0.6 + Math.random() * 1.2, phase: Math.random() * Math.PI * 2,
+          rot: Math.random() * Math.PI * 2, vr: (Math.random() < 0.5 ? -1 : 1) * (1 + Math.random() * 2)
+        });
+      }
+    }
+    var last = null;
+    function frame(t) {
+      if (last === null) last = t;
+      var dt = Math.min(0.05, (t - last) / 1000); last = t;
+      ctx.clearRect(0, 0, W, H);
+      for (var i = 0; i < pieces.length; i++) {
+        var p = pieces[i];
+        p.y += p.vy * dt;
+        p.phase += p.swaySpeed * dt;
+        p.rot += p.vr * dt;
+        if (p.y - 20 > H) { p.y = -10; p.x = Math.random() * W; }
+        var x = p.x + Math.sin(p.phase) * p.sway;
+        ctx.save();
+        ctx.translate(x, p.y); ctx.rotate(p.rot);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.s / 2, -p.s * 0.3, p.s, p.s * 0.6);
+        ctx.restore();
+      }
+      requestAnimationFrame(frame);
+    }
+    resize(); init();
+    window.addEventListener('resize', function () { resize(); init(); });
+    requestAnimationFrame(frame);
+  })();
+
+  // 「已解锁合集」圆点渲染：复刻 App P-35 KOLEKSI 的 2 排容量 + 「+N」折叠逻辑。
+  (function () {
+    var grid = document.getElementById('chGrid');
+    if (!grid) return;
+    var levels = (grid.dataset.levels || '').split('').filter(Boolean);
+    if (!levels.length) return;
+    var COLOR = { S: '#1F9E6A', M: '#845EC9', L: '#F6A609' };
+    function lighten(hex) { // 向白混 25%，与 App _collectionCircle 渐变一致
+      var r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+      r = Math.round(r + (255 - r) * 0.25); g = Math.round(g + (255 - g) * 0.25); b = Math.round(b + (255 - b) * 0.25);
+      return 'rgb(' + r + ',' + g + ',' + b + ')';
+    }
+    function circle(color) {
+      var d = document.createElement('div'); d.className = 'ch-cell';
+      d.style.background = 'linear-gradient(135deg,' + color + ',' + lighten(color) + ')';
+      d.style.boxShadow = '0 3px 8px ' + color + '66'; d.textContent = '🏆'; return d;
+    }
+    function more(n) {
+      var d = document.createElement('div'); d.className = 'ch-cell ch-more'; d.textContent = '+' + n; return d;
+    }
+    var cell = 44, gap = 8;
+    var perRow = Math.max(1, Math.floor((grid.clientWidth + gap) / (cell + gap)));
+    var capacity = perRow * 2;
+    if (levels.length <= capacity) {
+      levels.forEach(function (l) { grid.appendChild(circle(COLOR[l] || COLOR.S)); });
+    } else {
+      var showN = capacity - 1;
+      for (var i = 0; i < showN; i++) grid.appendChild(circle(COLOR[levels[i]] || COLOR.S));
+      grid.appendChild(more(levels.length - showN));
+    }
+  })();
+
+  // 下载 CTA：直接跳应用商店下载（不尝试深链）。Android→Play / iOS→App Store / 桌面→下载页。
+  (function () {
+    var ua = navigator.userAgent || '';
+    var isIOS = /iPad|iPhone|iPod/.test(ua);
+    var isAndroid = /Android/.test(ua);
+    var el = document.getElementById('downloadCta');
+    if (!el) return;
+    el.addEventListener('click', function (e) {
+      e.preventDefault();
+      if (isAndroid) window.location.href = el.dataset.android;
+      else if (isIOS) window.location.href = el.dataset.ios;
+      else window.location.href = el.href;
+    });
+  })();
+</script>
+</body>
+</html>

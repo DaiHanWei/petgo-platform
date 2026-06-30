@@ -193,6 +193,9 @@ class AddTabButton extends StatelessWidget {
         child: InkResponse(
           onTap: onPressed,
           radius: kAddButtonSize,
+          // 把点击墨纹裁成圆形：否则 Android 默认 InkSparkle 在矩形包围盒内绘制，
+          // 表现为按下时一闪的「方形阴影」（用户反馈）。customBorder 只裁墨水，不影响下方柔阴影。
+          customBorder: const CircleBorder(),
           child: Container(
             width: kAddButtonSize,
             height: kAddButtonSize,

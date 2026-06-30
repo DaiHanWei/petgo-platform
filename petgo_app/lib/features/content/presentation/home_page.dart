@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
@@ -277,7 +278,8 @@ const String _kAppleLogo =
 Future<void> _guestLogin(
     WidgetRef ref, BuildContext context, Future<LoginResponse> Function() runner) async {
   final l10n = AppLocalizations.of(context);
-  final messenger = ScaffoldMessenger.of(context);
+  // 捕获 root overlay（而非 context），登录失败/取消在 await 后用它弹 toast，免受组件卸载影响。
+  final overlay = Overlay.of(context, rootOverlay: true);
   try {
     final resp = await runner();
     ref.read(authControllerProvider.notifier).applyLogin(resp);
@@ -289,13 +291,9 @@ Future<void> _guestLogin(
         context.go('/onboarding');
     }
   } on LoginCancelled {
-    messenger
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(l10n.loginCancelled)));
+    showAppToastOnOverlay(overlay, l10n.loginCancelled);
   } catch (_) {
-    messenger
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(l10n.loginFailed)));
+    showAppToastOnOverlay(overlay, l10n.loginFailed);
   }
 }
 

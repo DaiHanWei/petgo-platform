@@ -111,6 +111,10 @@ class ApiPaths {
   static String petProfileMilestoneCheckIn(String code) =>
       '$base/pet-profiles/me/milestones/$code/check-in';
 
+  /// P-35 里程碑庆祝对外分享：创建 / 刷新分享，返回不可枚举 shareToken（H5 `GET /m/{token}`）。
+  static String petProfileMilestoneShares(String code) =>
+      '$base/pet-profiles/me/milestones/$code/shares';
+
   /// 内容发布 + Feed 列表（Story 2.3 / 3.2）。
   static const String contentPosts = '$base/content-posts';
 
