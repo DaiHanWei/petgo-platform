@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!-- 异常工单详情（Story 5.1）。仅会话元数据 + 内部备注 + 处理图现签 URL（NFR5：不读第三方正文）。
+     备注/标记已处理门控 consult.handle；工单不可删。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.anomalies.detail.title}">异常工单详情 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1 th:text="#{admin.anomalies.detail.title}">异常工单详情</h1>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+        <p><a class="btn btn-neutral btn-sm" th:href="@{/admin/anomalies}" th:text="#{admin.anomalies.back}">返回队列</a></p>
+
+        <!-- 会话元数据（只读）-->
+        <table>
+            <tr><th th:text="#{admin.anomalies.col.id}">工单</th><td th:text="${anomaly.id}">1</td></tr>
+            <tr><th th:text="#{admin.anomalies.col.session}">会话</th><td th:text="${anomaly.sessionId}">-</td></tr>
+            <tr><th th:text="#{admin.anomalies.col.user}">用户</th>
+                <td th:text="${anomaly.userId != null} ? ${anomaly.userId} : #{admin.anomalies.anonymized}">-</td></tr>
+            <tr><th th:text="#{admin.anomalies.col.vet}">兽医</th><td th:text="${anomaly.vetId}">-</td></tr>
+            <tr><th th:text="#{admin.anomalies.col.sessionStatus}">会话状态</th><td th:text="${anomaly.sessionStatus}">-</td></tr>
+            <tr><th th:text="#{admin.anomalies.col.started}">开始</th>
+                <td th:text="${anomaly.sessionStartedAt != null} ? ${#temporals.format(anomaly.sessionStartedAt, 'yyyy-MM-dd HH:mm')} : '-'">-</td></tr>
+            <tr><th th:text="#{admin.anomalies.col.ended}">结束</th>
+                <td th:text="${anomaly.sessionEndedAt != null} ? ${#temporals.format(anomaly.sessionEndedAt, 'yyyy-MM-dd HH:mm')} : '-'">-</td></tr>
+            <tr><th th:text="#{admin.anomalies.col.status}">状态</th>
+                <td th:text="${anomaly.status.name() == 'OPEN'} ? #{admin.anomalies.status.open} : #{admin.anomalies.status.resolved}">待处理</td></tr>
+            <tr><th th:text="#{admin.anomalies.internalNote}">内部备注</th>
+                <td th:text="${anomaly.internalNote} ?: '—'">—</td></tr>
+        </table>
+
+        <!-- 处理图（现签 URL；仅已归档可能有）-->
+        <p th:if="${resolutionImageUrl}">
+            <a th:href="${resolutionImageUrl}" target="_blank" th:text="#{admin.anomalies.image}">查看处理图</a>
+        </p>
+
+        <!-- 处理动作（consult.handle）-->
+        <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('consult.handle')">
+            <form th:action="@{'/admin/anomalies/' + ${anomaly.id} + '/note'}" method="post" class="filter-bar">
+                <input type="text" name="note" required th:placeholder="#{admin.anomalies.notePlaceholder}"
+                       style="width:320px"/>
+                <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.anomalies.addNote}">加备注</button>
+            </form>
+            <form th:if="${anomaly.status.name() == 'OPEN'}"
+                  th:action="@{'/admin/anomalies/' + ${anomaly.id} + '/resolve'}" method="post" class="filter-bar">
+                <input type="text" name="resolutionImageKey" th:placeholder="#{admin.anomalies.imageKeyPlaceholder}"
+                       style="width:320px"/>
+                <button type="submit" class="btn btn-danger btn-sm" th:text="#{admin.anomalies.resolve}">标记已处理</button>
+            </form>
+        </div>
+    </div>
+</div>
+</body>
+</html>

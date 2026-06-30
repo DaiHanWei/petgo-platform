@@ -212,6 +212,44 @@ class AuthServiceTest {
                 .isInstanceOf(AppException.class);
     }
 
+    // ===== Story 3.2：停用账号登录/刷新阻断 + 撤令牌 =====
+
+    @Test
+    void deactivatedUserCannotLogin() {
+        User existing = User.newGoogleUser("sub-1", "a@b.com", "Alice", "http://pic");
+        existing.deactivate();
+        when(googleVerifier.verify("idtok"))
+                .thenReturn(new GoogleIdentity("sub-1", "a@b.com", "Alice", "http://pic"));
+        when(users.findByGoogleSub("sub-1")).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> authService.loginWithGoogle("idtok")).isInstanceOf(AppException.class);
+        verify(refreshTokens, never()).save(any(RefreshToken.class));
+    }
+
+    @Test
+    void deactivatedUserCannotRefresh() {
+        RefreshToken token = new RefreshToken(7L, "old-hash", Instant.now().plusSeconds(3600));
+        User user = User.newGoogleUser("sub-1", "a@b.com", "Alice", "http://pic");
+        user.deactivate();
+        when(jwt.hashRefresh("old-raw")).thenReturn("old-hash");
+        when(refreshTokens.findByTokenHash("old-hash")).thenReturn(Optional.of(token));
+        when(users.findById(7L)).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> authService.rotateRefresh("old-raw")).isInstanceOf(AppException.class);
+    }
+
+    @Test
+    void deactivateUserSetsStatusAndRevokesRefresh() {
+        User user = User.newGoogleUser("sub-1", "a@b.com", "Alice", "http://pic");
+        when(users.findById(7L)).thenReturn(Optional.of(user));
+
+        authService.deactivateUser(7L);
+
+        assertThat(user.isActiveStatus()).isFalse();
+        verify(refreshTokens).deleteByUserIdAndSubjectType(7L,
+                com.tailtopia.auth.domain.SubjectType.USER);
+    }
+
     @Test
     void refreshWithRevokedTokenIsUnauthorized() {
         RefreshToken token = new RefreshToken(7L, "h", Instant.now().plusSeconds(3600));

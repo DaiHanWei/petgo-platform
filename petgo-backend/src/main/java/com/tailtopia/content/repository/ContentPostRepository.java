@@ -11,10 +11,13 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface ContentPostRepository extends JpaRepository<ContentPost, Long> {
+public interface ContentPostRepository extends JpaRepository<ContentPost, Long>, ContentPostAdminSearch {
 
     /** 迷你主页发布数（Story 3.8）：某作者未软删的已发布内容数。 */
     long countByAuthorIdAndDeletedAtIsNullAndStatus(long authorId, PostStatus status);
+
+    /** 后台用户详情（Story 3.1）：某作者全部内容（含已软删，运营视角），createdAt 倒序。 */
+    List<ContentPost> findByAuthorIdOrderByCreatedAtDesc(long authorId);
 
     /** 成长时间线读：某作者某类型未删内容，createdAt 倒序游标分页（Story 2.4）。 */
     List<ContentPost> findByAuthorIdAndTypeAndDeletedAtIsNullAndCreatedAtLessThanOrderByCreatedAtDesc(

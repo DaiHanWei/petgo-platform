@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<!--
+  兽医资质审核（Story 2.7，AB-2H）。直录/续期/通过/驳回；证件图私密桶现签短 TTL URL 展示。
+  门控 @PreAuthorize(vet.qualify)。证件 key/签名 URL 绝不落日志。
+-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.qualpage.title}">兽医资质 · TailTopia 运营</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <p><a th:href="@{/admin/vets}" th:text="#{admin.qualpage.back}">← 返回兽医列表</a></p>
+        <h1><span th:text="#{admin.qualpage.title}">兽医资质</span> · <span th:text="${vet.displayName()}">王医生</span></h1>
+
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+
+        <!-- 当前状态 + 证件图 -->
+        <div class="card" th:if="${qual != null}">
+            <p>
+                <span th:text="#{admin.qualpage.current}">当前状态</span>:
+                <span class="badge"
+                      th:classappend="${qual.status.name() == 'CERTIFIED'} ? 'badge-ok'
+                          : (${qual.status.name() == 'EXPIRING_SOON'} ? 'badge-warn'
+                          : ((${qual.status.name() == 'EXPIRED'} or ${qual.status.name() == 'REJECTED'}) ? 'badge-danger' : 'badge-info'))"
+                      th:text="#{'admin.qual.' + ${qual.status.name()}}">状态</span>
+            </p>
+            <p th:if="${qual.rejectReason != null}">
+                <span th:text="#{admin.qualpage.rejectReason}">驳回原因</span>:
+                <span th:text="${qual.rejectReason}">…</span>
+            </p>
+            <p>
+                <a th:if="${ktpUrl}" th:href="${ktpUrl}" target="_blank" th:text="#{admin.qualpage.ktpPhoto} + ' · ' + #{admin.qualpage.viewPhoto}">KTP</a><br/>
+                <a th:if="${sipdhUrl}" th:href="${sipdhUrl}" target="_blank" th:text="#{admin.qualpage.sipdhPhoto} + ' · ' + #{admin.qualpage.viewPhoto}">SIPDH</a><br/>
+                <a th:if="${degreeUrl}" th:href="${degreeUrl}" target="_blank" th:text="#{admin.qualpage.degreePhoto} + ' · ' + #{admin.qualpage.viewPhoto}">Degree</a><br/>
+                <a th:if="${profileUrl}" th:href="${profileUrl}" target="_blank" th:text="#{admin.qualpage.profilePhoto} + ' · ' + #{admin.qualpage.viewPhoto}">Profile</a><br/>
+                <a th:if="${pdhiUrl}" th:href="${pdhiUrl}" target="_blank" th:text="#{admin.qualpage.pdhiPhoto} + ' · ' + #{admin.qualpage.viewPhoto}">PDHI</a>
+            </p>
+        </div>
+        <p class="muted" th:if="${qual == null}" th:text="#{admin.qualpage.noQual}">尚无资质记录</p>
+
+        <!-- 审核操作：仅审核中态显示 -->
+        <div class="card" th:if="${qual != null and qual.status.name() == 'UNDER_REVIEW'}">
+            <h3 th:text="#{admin.qualpage.reviewActions}">审核操作</h3>
+            <form class="inline" th:action="@{/admin/vets/{id}/qualification/approve(id=${vetId})}" method="post">
+                <button type="submit" class="btn btn-primary" th:text="#{admin.qualpage.approve}">通过</button>
+            </form>
+            <form class="inline" th:action="@{/admin/vets/{id}/qualification/reject(id=${vetId})}" method="post">
+                <input type="text" name="reason" th:placeholder="#{admin.qualpage.reasonPlaceholder}" required/>
+                <button type="submit" class="btn btn-danger" th:text="#{admin.qualpage.reject}">驳回</button>
+            </form>
+        </div>
+
+        <!-- 直录 / 续期表单 -->
+        <div class="card">
+            <h3 th:text="#{admin.qualpage.recordTitle}">直录资质</h3>
+            <form th:action="@{/admin/vets/{id}/qualification(id=${vetId})}" th:object="${qualificationForm}" method="post">
+                <input type="hidden" name="mode" value="record"/>
+                <label class="field" th:text="#{admin.qualpage.ktpNo}">KTP 编号</label>
+                <input type="text" th:field="*{ktpNo}" class="field-full"/>
+                <label class="field" th:text="#{admin.qualpage.ktpPhoto}">KTP 图 key</label>
+                <input type="text" th:field="*{ktpPhotoKey}" class="field-full"/>
+                <label class="field" th:text="#{admin.qualpage.sipdhNo}">SIPDH 编号</label>
+                <input type="text" th:field="*{sipdhNo}" class="field-full"/>
+                <label class="field" th:text="#{admin.qualpage.sipdhIssuer}">SIPDH 机构</label>
+                <input type="text" th:field="*{sipdhIssuer}" class="field-full"/>
+                <label class="field" th:text="#{admin.qualpage.sipdhExpiry}">SIPDH 有效期</label>
+                <input type="date" th:field="*{sipdhExpiry}"/>
+                <label class="field" th:text="#{admin.qualpage.sipdhPhoto}">SIPDH 图 key</label>
+                <input type="text" th:field="*{sipdhPhotoKey}" class="field-full"/>
+                <label class="field" th:text="#{admin.qualpage.degreePhoto}">学位证图 key</label>
+                <input type="text" th:field="*{degreePhotoKey}" class="field-full"/>
+                <label class="field" th:text="#{admin.qualpage.profilePhoto}">头像图 key</label>
+                <input type="text" th:field="*{profilePhotoKey}" class="field-full"/>
+                <label class="field" th:text="#{admin.qualpage.pdhiPhoto}">PDHI 图 key</label>
+                <input type="text" th:field="*{pdhiPhotoKey}" class="field-full"/>
+                <label class="field" th:text="#{admin.qualpage.specialties}">专长</label>
+                <input type="text" th:field="*{specialtiesRaw}" class="field-full"/>
+                <p><button type="submit" class="btn btn-primary" th:text="#{admin.qualpage.submitRecord}">提交直录</button></p>
+            </form>
+        </div>
+
+        <!-- 续期（已认证/即将到期/已过期） -->
+        <div class="card" th:if="${qual != null and (qual.status.name() == 'CERTIFIED' or qual.status.name() == 'EXPIRING_SOON' or qual.status.name() == 'EXPIRED')}">
+            <h3 th:text="#{admin.qualpage.renewTitle}">续期</h3>
+            <form th:action="@{/admin/vets/{id}/qualification(id=${vetId})}" method="post">
+                <input type="hidden" name="mode" value="renew"/>
+                <label class="field" th:text="#{admin.qualpage.sipdhExpiry}">新有效期</label>
+                <input type="date" name="sipdhExpiry"/>
+                <label class="field" th:text="#{admin.qualpage.sipdhPhoto}">新 SIPDH 图 key</label>
+                <input type="text" name="sipdhPhotoKey" class="field-full"/>
+                <p><button type="submit" class="btn btn-neutral" th:text="#{admin.qualpage.submitRenew}">提交续期</button></p>
+            </form>
+        </div>
+    </div>
+</div>
+</body>
+</html>

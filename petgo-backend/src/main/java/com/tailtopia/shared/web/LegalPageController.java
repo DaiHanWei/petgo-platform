@@ -17,6 +17,7 @@ import java.time.Duration;
  *   <li>{@code GET /terms} → 服务条款（Syarat &amp; Ketentuan）</li>
  *   <li>{@code GET /account-deletion} → 账号删除说明（Google Play 数据删除 URL 要求）</li>
  *   <li>{@code GET /child-safety} → 儿童安全标准（Google Play CSAE 标准 URL 要求）</li>
+ *   <li>{@code GET /support} → 支持/帮助页（App Store Support URL 必填项要求）</li>
  * </ul>
  *
  * <p>内容为运营定稿的静态 H5（{@code classpath:/legal/*.html}），自包含内联样式，无外部资源依赖，
@@ -46,6 +47,11 @@ public class LegalPageController {
     @GetMapping("/child-safety")
     public ResponseEntity<Resource> childSafety() {
         return html("legal/child-safety.html");
+    }
+
+    @GetMapping("/support")
+    public ResponseEntity<Resource> support() {
+        return html("legal/support.html");
     }
 
     private ResponseEntity<Resource> html(String classpathLocation) {

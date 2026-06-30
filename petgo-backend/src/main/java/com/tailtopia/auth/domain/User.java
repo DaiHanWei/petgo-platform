@@ -56,6 +56,11 @@ public class User {
     @Column(name = "role", nullable = false, length = 16)
     private Role role = Role.USER;
 
+    /** 账号状态（Story 3.2，停用/激活；与物理删除/注销正交）。 */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 16)
+    private UserStatus status = UserStatus.ACTIVE;
+
     /** 仅 ADMIN 账密登录用（BCrypt 哈希）；OAuth 用户为 null。Story 3.1。 */
     @Column(name = "password_hash", length = 255)
     private String passwordHash;
@@ -128,6 +133,25 @@ public class User {
     @PreUpdate
     void onUpdate() {
         this.updatedAt = Instant.now();
+    }
+
+    /** Story 3.2：运营停用（即时不可登录，可逆）。 */
+    public void deactivate() {
+        this.status = UserStatus.DEACTIVATED;
+    }
+
+    /** Story 3.2：重新激活，恢复登录权。 */
+    public void reactivate() {
+        this.status = UserStatus.ACTIVE;
+    }
+
+    public UserStatus getStatus() {
+        return status;
+    }
+
+    /** 账号是否处于激活状态（Story 3.2 登录/刷新门控用）。 */
+    public boolean isActiveStatus() {
+        return status == UserStatus.ACTIVE;
     }
 
     public Long getId() {

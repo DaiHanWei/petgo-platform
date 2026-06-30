@@ -3,12 +3,14 @@ package com.tailtopia.consult.service;
 import com.tailtopia.consult.domain.ConsultSession;
 import com.tailtopia.consult.domain.ConsultSource;
 import com.tailtopia.consult.domain.SessionStatus;
+import com.tailtopia.consult.event.ConsultRequestFailedEvent;
 import com.tailtopia.consult.event.ConsultRequestQueuedEvent;
 import com.tailtopia.consult.repository.ConsultSessionRepository;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.triage.domain.DangerLevel;
 import com.tailtopia.triage.dto.TriageUpgradeContext;
 import com.tailtopia.triage.service.TriageService;
+import com.tailtopia.vet.service.VetPresenceService;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.context.ApplicationEventPublisher;
@@ -31,13 +33,16 @@ public class ConsultSessionService {
     private final ConsultQueueService queue;
     private final TriageService triageService;
     private final ApplicationEventPublisher events;
+    private final VetPresenceService presence;
 
     public ConsultSessionService(ConsultSessionRepository repo, ConsultQueueService queue,
-            TriageService triageService, ApplicationEventPublisher events) {
+            TriageService triageService, ApplicationEventPublisher events,
+            VetPresenceService presence) {
         this.repo = repo;
         this.queue = queue;
         this.triageService = triageService;
         this.events = events;
+        this.presence = presence;
     }
 
     /** 发起结果：新建会话 or 命中已有占用态会话（alreadyActive=true，前端跳「查看进行中 →」）。 */
@@ -131,13 +136,25 @@ public class ConsultSessionService {
         return repo.save(s);
     }
 
-    /** 用户主动取消：WAITING → CANCELLED + 出队。取消后可再次发起。 */
+    /** 用户主动取消：WAITING → CANCELLED + 出队。取消后可再次发起。默认原因 USER_CANCEL。 */
     @Transactional
     public ConsultSession cancel(long userId, long sessionId) {
+        return cancel(userId, sessionId, "USER_CANCEL");
+    }
+
+    /**
+     * 取消（Story 2.9 重载）：附失败原因（USER_CANCEL/TIMEOUT；App 在超时弹层放弃时传 TIMEOUT——跨产品后续）。
+     * 取消后发 {@link ConsultRequestFailedEvent}（admin 落失败请求队列）；onlineVetCount 取失败时刻在线兽医数。
+     */
+    @Transactional
+    public ConsultSession cancel(long userId, long sessionId, String reason) {
         ConsultSession s = loadOwned(userId, sessionId);
         s.cancel();
         ConsultSession saved = repo.save(s);
         queue.dequeue(sessionId);
+        String r = (reason == null || reason.isBlank()) ? "USER_CANCEL" : reason;
+        events.publishEvent(new ConsultRequestFailedEvent(
+                r, userId, sessionId, s.getCreatedAt(), presence.onlineVetIds().size()));
         return saved;
     }
 

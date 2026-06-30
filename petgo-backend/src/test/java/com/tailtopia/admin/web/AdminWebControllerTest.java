@@ -40,7 +40,9 @@ class AdminWebControllerTest {
     }
 
     private AdminUserDetails admin() {
-        return new AdminUserDetails(99L, "ops@petgo", "{bcrypt}x");
+        // Story 1.1：(adminAccountId, operatorUserId=官方内容作者 users.id, email, passwordHash, accountType)
+        return new AdminUserDetails(7L, 99L, "ops@petgo", "{bcrypt}x",
+                com.tailtopia.admin.account.domain.AdminAccountType.SUPER_ADMIN);
     }
 
     private SeedPostForm form(ContentType type, String text) {
@@ -110,5 +112,23 @@ class AdminWebControllerTest {
 
         assertThat(view).isEqualTo("admin/seed-post");
         assertThat(binding.hasGlobalErrors()).isTrue();
+    }
+
+    /** 回归：无关联内容作者身份的账号（operatorUserId=null，如 STAFF/纯 Lark）发种子内容
+     *  应内联报错而非 500（getUserId() 会抛 IllegalStateException）。 */
+    @Test
+    void publishSeedWithoutOperatorUserIdRendersErrorNot500() {
+        AdminUserDetails noOperator = new AdminUserDetails(7L, null, "staff@petgo", "{bcrypt}x",
+                com.tailtopia.admin.account.domain.AdminAccountType.STAFF);
+        SeedPostForm f = form(ContentType.DAILY, "hello");
+        BindingResult binding = new BeanPropertyBindingResult(f, "seedPostForm");
+        Model model = new ConcurrentModel();
+
+        String view = controller.publishSeed(noOperator, f, binding, model);
+
+        assertThat(view).isEqualTo("admin/seed-post");
+        assertThat(binding.hasGlobalErrors()).isTrue();
+        verify(adminContentService, org.mockito.Mockito.never())
+                .publishSeed(anyLong(), any(), any(), any(), any()); // 守卫拦在调用前
     }
 }

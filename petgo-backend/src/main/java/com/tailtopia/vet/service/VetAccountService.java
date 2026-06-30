@@ -30,11 +30,19 @@ public class VetAccountService {
     /** 运营开户：username 唯一校验 → BCrypt encode → 落库。返回新建账号（不含明文）。 */
     @Transactional
     public VetAccount create(String displayName, String username, String rawPassword) {
+        return create(displayName, username, rawPassword, null);
+    }
+
+    /** 运营开户（Story 2.3 重载）：附运营联系手机号（非登录凭证，可空）。 */
+    @Transactional
+    public VetAccount create(String displayName, String username, String rawPassword, String contactPhone) {
         validateInputs(displayName, username, rawPassword);
         if (repo.existsByUsername(username)) {
-            throw AppException.conflict("该登录账号已存在");
+            throw AppException.conflict("该登录邮箱已被占用");
         }
-        return repo.save(VetAccount.create(username, passwordEncoder.encode(rawPassword), displayName));
+        VetAccount v = VetAccount.create(username, passwordEncoder.encode(rawPassword), displayName);
+        v.setContactPhone(contactPhone);
+        return repo.save(v);
     }
 
     /** 运营重置密码：重算 BCrypt hash（旧凭证随即失效）。 */
@@ -46,6 +54,30 @@ public class VetAccountService {
         VetAccount vet = repo.findById(vetId)
                 .orElseThrow(() -> AppException.notFound("兽医账号不存在"));
         vet.resetPassword(passwordEncoder.encode(newRawPassword));
+        repo.save(vet);
+    }
+
+    /**
+     * 编辑账号资料（Story 2.4）：改显示名/登录邮箱/联系手机号。**不触碰 status/会话**（编辑不中断进行中会话）。
+     * 邮箱改动时唯一校验排除自身。
+     */
+    @Transactional
+    public void updateProfile(long vetId, String displayName, String email, String contactPhone) {
+        if (displayName == null || displayName.isBlank()) {
+            throw AppException.validation("兽医昵称不能为空");
+        }
+        if (email == null || email.isBlank()) {
+            throw AppException.validation("登录邮箱不能为空");
+        }
+        VetAccount vet = repo.findById(vetId)
+                .orElseThrow(() -> AppException.notFound("兽医账号不存在"));
+        // 邮箱改动 → 唯一校验排除自身。
+        if (!email.equals(vet.getUsername()) && repo.existsByUsername(email)) {
+            throw AppException.conflict("该登录邮箱已被占用");
+        }
+        vet.setDisplayName(displayName);
+        vet.setUsername(email);
+        vet.setContactPhone(contactPhone);
         repo.save(vet);
     }
 

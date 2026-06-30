@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  后台账号管理（Story 1.5；1.6 外化 i18n + 换肤）。两级权限：SUPER_ADMIN 隐式全权；STAFF 按勾选 permission_code。
+  门控在控制器 @PreAuthorize；页面 sec:authorize 隐藏入口仅体验。redirect-PRG。
+-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.accounts.title}">后台账号 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1 th:text="#{admin.accounts.title}">后台账号</h1>
+        <p class="muted" th:text="#{admin.accounts.subtitle}">两级权限：超级管理员隐式全权；普通账号按勾选模块权限授权。</p>
+
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+
+        <!-- 创建账号 -->
+        <div class="card" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.create_account')">
+            <h2 th:text="#{admin.accounts.create}">创建账号</h2>
+            <form th:action="@{/admin/accounts}" th:object="${createAdminAccountForm}" method="post">
+                <label class="field" th:text="#{admin.accounts.email}">Lark 邮箱</label>
+                <input type="email" th:field="*{larkEmail}" class="field-full" placeholder="member@company.com"/>
+                <span class="err" th:if="${#fields.hasErrors('larkEmail')}" th:errors="*{larkEmail}">邮箱错误</span>
+                <label class="field" th:text="#{admin.accounts.displayName}">显示名</label>
+                <input type="text" th:field="*{displayName}" class="field-full"/>
+                <span class="err" th:if="${#fields.hasErrors('displayName')}" th:errors="*{displayName}">名字错误</span>
+                <label class="field" th:text="#{admin.accounts.type}">账号类型</label>
+                <select th:field="*{accountType}">
+                    <option th:each="t : ${accountTypes}" th:value="${t}" th:text="${t}">STAFF</option>
+                </select>
+                <p class="hint" th:text="#{admin.accounts.perms.note}">模块权限（仅 STAFF 生效）：</p>
+                <div class="perms">
+                    <label th:each="p : ${allPermissions}">
+                        <input type="checkbox" th:field="*{permissionCodes}" th:value="${p}"/>
+                        <span th:text="${p}">code</span>
+                    </label>
+                </div>
+                <p><button type="submit" class="btn btn-primary" th:text="#{admin.accounts.submit.create}">创建账号</button></p>
+            </form>
+        </div>
+
+        <!-- 账号列表 -->
+        <table>
+            <thead>
+            <tr>
+                <th th:text="#{admin.accounts.col.id}">id</th>
+                <th th:text="#{admin.accounts.col.email}">邮箱</th>
+                <th th:text="#{admin.accounts.col.name}">显示名</th>
+                <th th:text="#{admin.accounts.col.type}">类型</th>
+                <th th:text="#{admin.accounts.col.status}">状态</th>
+                <th th:text="#{admin.accounts.col.perms}">权限</th>
+                <th th:text="#{admin.accounts.col.action}">操作</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="a : ${accounts}">
+                <td th:text="${a.id}">1</td>
+                <td th:text="${a.larkEmail}">x@y</td>
+                <td th:text="${a.displayName}">名</td>
+                <td th:text="${a.accountType}">STAFF</td>
+                <td>
+                    <span th:if="${a.status.name() == 'ACTIVE'}" class="status-active">ACTIVE</span>
+                    <span th:if="${a.status.name() == 'DISABLED'}" class="status-disabled">DISABLED</span>
+                </td>
+                <td class="cell-wide">
+                    <span th:if="${a.accountType.name() == 'SUPER_ADMIN'}" class="muted" th:text="#{admin.accounts.implicitAll}">隐式全权</span>
+                    <span th:unless="${a.accountType.name() == 'SUPER_ADMIN'}">
+                        <span th:if="${#lists.isEmpty(a.permissionCodes)}" class="muted" th:text="#{admin.accounts.none}">（无）</span>
+                        <span th:each="c : ${a.permissionCodes}" class="tag" th:text="${c}">code</span>
+                    </span>
+                </td>
+                <td>
+                    <!-- 改权限（仅 STAFF）：勾选 + 保存 -->
+                    <form class="inline" th:if="${a.accountType.name() != 'SUPER_ADMIN'}"
+                          th:action="@{/admin/accounts/{id}/permissions(id=${a.id})}" method="post"
+                          sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.create_account')">
+                        <details>
+                            <summary class="muted" th:text="#{admin.accounts.editPerms}">改权限</summary>
+                            <div class="perms mt-sm">
+                                <label th:each="p : ${allPermissions}">
+                                    <input type="checkbox" name="permissionCodes" th:value="${p}"
+                                           th:checked="${#lists.contains(a.permissionCodes, p)}"/>
+                                    <span th:text="${p}">code</span>
+                                </label>
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.accounts.savePerms}">保存权限</button>
+                        </details>
+                    </form>
+                    <!-- 停用 / 激活 -->
+                    <span sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.deactivate')">
+                        <form class="inline" th:if="${a.status.name() == 'ACTIVE'}"
+                              th:action="@{/admin/accounts/{id}/deactivate(id=${a.id})}" method="post"
+                              th:data-confirm="#{admin.accounts.deactivate.confirm}">
+                            <button type="submit" class="btn btn-danger btn-sm" th:text="#{admin.accounts.deactivate}">停用</button>
+                        </form>
+                        <form class="inline" th:if="${a.status.name() == 'DISABLED'}"
+                              th:action="@{/admin/accounts/{id}/reactivate(id=${a.id})}" method="post">
+                            <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.accounts.reactivate}">重新激活</button>
+                        </form>
+                    </span>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

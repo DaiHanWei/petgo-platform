@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<!-- 编辑兽医资料（Story 2.4）。不含密码（重置走列表内独立端点）。门控 @PreAuthorize(vet.create)。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.vets.edit.title}">编辑兽医资料 · TailTopia 运营</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <p><a th:href="@{/admin/vets}" th:text="#{admin.vets.back}">← 返回兽医列表</a></p>
+        <h1 th:text="#{admin.vets.edit.title}">编辑兽医资料</h1>
+        <div class="card">
+            <form th:action="@{/admin/vets/{id}(id=${vetId})}" th:object="${editVetForm}" method="post">
+                <p class="err" th:each="e : ${#fields.globalErrors()}" th:text="${e}">错误</p>
+                <label class="field" th:text="#{admin.vets.displayName}">兽医昵称</label>
+                <input type="text" th:field="*{displayName}" class="field-full"/>
+                <span class="err" th:if="${#fields.hasErrors('displayName')}" th:errors="*{displayName}">err</span>
+                <label class="field" th:text="#{admin.vets.loginEmail}">登录邮箱</label>
+                <input type="email" th:field="*{username}" class="field-full"/>
+                <span class="err" th:if="${#fields.hasErrors('username')}" th:errors="*{username}">err</span>
+                <label class="field" th:text="#{admin.vets.contactPhone}">联系手机号</label>
+                <input type="text" th:field="*{contactPhone}" class="field-full"/>
+                <span class="err" th:if="${#fields.hasErrors('contactPhone')}" th:errors="*{contactPhone}">err</span>
+                <p><button type="submit" class="btn btn-primary" th:text="#{admin.vets.save}">保存</button></p>
+            </form>
+        </div>
+    </div>
+</div>
+</body>
+</html>
