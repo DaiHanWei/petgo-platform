@@ -65,19 +65,20 @@ public class AdminBootstrap implements ApplicationRunner {
             existing.setPasswordHash(hash);
             existing.setStatus(AdminAccountStatus.ACTIVE);
             adminAccounts.save(existing);
-            log.info("ADMIN bootstrap：已重置超管密码（admin_accounts）email={}", bootstrapEmail);
+            // 不记 bootstrapEmail（PII）。
+            log.info("ADMIN bootstrap：已重置超管密码（admin_accounts）");
         }, () -> {
             adminAccounts.save(AdminAccount.newSuperAdmin(bootstrapEmail, "TailTopia 运营", hash));
-            log.info("ADMIN bootstrap：已创建超管（admin_accounts）email={}", bootstrapEmail);
+            log.info("ADMIN bootstrap：已创建超管（admin_accounts）");
         });
 
         // 2) users(role=ADMIN) 官方内容作者 shim（AC5；不再作登录依据）
         users.findByEmailAndRole(bootstrapEmail, Role.ADMIN).ifPresentOrElse(existing -> {
             // 已存在则不动（其 password_hash 旧列保留停用，无需重置）
-            log.info("ADMIN bootstrap：官方内容作者 users 行已存在 email={}", bootstrapEmail);
+            log.info("ADMIN bootstrap：官方内容作者 users 行已存在");
         }, () -> {
             users.save(User.newAdmin(bootstrapEmail, "TailTopia 运营", hash));
-            log.info("ADMIN bootstrap：已创建官方内容作者 users 行 email={}", bootstrapEmail);
+            log.info("ADMIN bootstrap：已创建官方内容作者 users 行");
         });
     }
 }

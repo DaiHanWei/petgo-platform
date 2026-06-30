@@ -43,7 +43,10 @@ public class ContentPostAdminSearchImpl implements ContentPostAdminSearch {
             ps.add(deleted ? cb.isNotNull(root.get("deletedAt")) : cb.isNull(root.get("deletedAt")));
         }
         if (keyword != null && !keyword.isBlank()) {
-            ps.add(cb.like(cb.lower(root.get("text")), "%" + keyword.trim().toLowerCase() + "%"));
+            // 转义 LIKE 元字符（\ 先转，再 % 与 _），避免 "100%"/"a_b" 之类被当通配符过度匹配。
+            String esc = keyword.trim().toLowerCase()
+                    .replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+            ps.add(cb.like(cb.lower(root.get("text")), "%" + esc + "%", '\\'));
         }
         cq.where(ps.toArray(Predicate[]::new));
         cq.orderBy(cb.desc(root.get("createdAt")));

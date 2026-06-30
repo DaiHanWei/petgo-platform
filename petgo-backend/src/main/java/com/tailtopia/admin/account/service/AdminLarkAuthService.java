@@ -56,7 +56,8 @@ public class AdminLarkAuthService {
             // OAuth 路径不要求密码（requirePassword=false）；status=ACTIVE 即白名单命中。
             return Optional.of(adminUserDetailsService.loadByEmail(email, false));
         } catch (UsernameNotFoundException e) {
-            log.warn("Lark 登录拒绝：邮箱不在白名单或已停用 email={}", email);
+            // 不记邮箱（PII）；用不透明 openId 排查，与上方各拒绝分支一致。
+            log.warn("Lark 登录拒绝：邮箱不在白名单或已停用 openId={}", id.openId());
             return Optional.empty();
         }
     }

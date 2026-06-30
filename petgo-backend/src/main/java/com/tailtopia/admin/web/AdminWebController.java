@@ -277,6 +277,13 @@ public class AdminWebController {
         if (binding.hasErrors()) {
             return "admin/seed-post";
         }
+        // 种子内容 author_id 须为合法 users.id（FK→users）；仅关联官方内容作者行的账号可发，
+        // 否则友好内联提示（勿用 admin_account_id 兜底——非 users.id 会破坏 FK）。避免对 STAFF/纯 Lark 账号 500。
+        if (!admin.hasOperatorUserId()) {
+            binding.reject("publish.failed", "当前后台账号未关联官方内容作者身份，无法发布种子内容（请用官方作者账号发布）。");
+            model.addAttribute("seedPostForm", form);
+            return "admin/seed-post";
+        }
         try {
             ContentPostResponse saved = adminContentService.publishSeed(
                     admin.getUserId(), form.getType(), form.getPetId(), form.getText(), form.imageUrls());

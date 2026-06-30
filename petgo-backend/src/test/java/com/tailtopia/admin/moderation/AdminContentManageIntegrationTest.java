@@ -51,6 +51,19 @@ class AdminContentManageIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
+    void browseSearchTreatsLikeMetacharsLiterally() {
+        String token = "ZxqPct" + SEQ.incrementAndGet();
+        long literal = newPost(ContentType.DAILY, token + "50% off");   // 含字面 %
+        long wildcardTrap = newPost(ContentType.DAILY, token + "5000"); // 若 % 当通配符会被误命中
+
+        // 搜 "<token>50%"：转义后 % 为字面 → 仅命中 literal，不命中 token+"5000"。
+        List<AdminContentRow> hits = contentManage.browse(null, null, null, null, null,
+                token + "50%", 0);
+
+        assertThat(hits).extracting(AdminContentRow::id).contains(literal).doesNotContain(wildcardTrap);
+    }
+
+    @Test
     void takedownSoftDeletesAndAudits() {
         long actor = 421000L + SEQ.incrementAndGet();
         long postId = newPost(ContentType.DAILY, "待下架内容");
