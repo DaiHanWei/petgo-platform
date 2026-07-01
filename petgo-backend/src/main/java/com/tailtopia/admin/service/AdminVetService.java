@@ -190,9 +190,13 @@ public class AdminVetService {
      */
     @Transactional(readOnly = true)
     public com.tailtopia.admin.dto.VetOnlineSnapshot onlineSnapshot(java.time.Instant queriedAt) {
+        // 最后在线时间按运营时区（WIB）格式化；离线兽医无 lastSeen（ZSET 已移除）→ 「—」（Bug 168）。
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter
+                .ofPattern("yyyy-MM-dd HH:mm").withZone(java.time.ZoneId.of("Asia/Jakarta"));
         java.util.List<com.tailtopia.admin.dto.VetOnlineSnapshot.Row> rows = vetAccounts.listAll().stream()
                 .map(v -> new com.tailtopia.admin.dto.VetOnlineSnapshot.Row(
-                        v.getId(), v.getDisplayName(), presence.statusOf(v.getId()).name()))
+                        v.getId(), v.getDisplayName(), presence.statusOf(v.getId()).name(),
+                        presence.lastSeenAt(v.getId()).map(fmt::format).orElse("—")))
                 .toList();
         return new com.tailtopia.admin.dto.VetOnlineSnapshot(rows, queriedAt);
     }

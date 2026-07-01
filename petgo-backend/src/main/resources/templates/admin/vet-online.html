@@ -30,6 +30,7 @@
                     <th th:text="#{admin.online.col.id}">ID</th>
                     <th th:text="#{admin.online.col.name}">昵称</th>
                     <th th:text="#{admin.online.col.status}">在线态</th>
+                    <th th:text="#{admin.online.col.lastSeen}">最后在线</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -42,9 +43,10 @@
                                   : (${r.presence() == 'BUSY'} ? 'badge-warn' : 'badge-info')"
                               th:text="#{'admin.vets.presence.' + ${r.presence()}}">在线</span>
                     </td>
+                    <td class="muted" th:text="${r.lastSeenLabel()}">—</td>
                 </tr>
                 <tr th:if="${#lists.isEmpty(snapshot.rows())}">
-                    <td colspan="3" class="empty" th:text="#{admin.online.empty}">暂无兽医</td>
+                    <td colspan="4" class="empty" th:text="#{admin.online.empty}">暂无兽医</td>
                 </tr>
                 </tbody>
             </table>

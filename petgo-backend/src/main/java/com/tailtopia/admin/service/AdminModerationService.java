@@ -60,6 +60,10 @@ public class AdminModerationService {
         List<ReportQueueItem> items = new ArrayList<>();
         for (ContentReport r : reportService.byStatus(status, QUEUE_LIMIT)) {
             var summary = contentService.findSummary(r.getPostId());
+            // Bug 169：仅「已下架(RESOLVED)」工单补下架原因/摘要（查审计），其它态不查。
+            String takedownSummary = status == ReportStatus.RESOLVED
+                    ? auditService.takedownSummary(r.getPostId(), r.getId()).orElse(null)
+                    : null;
             items.add(new ReportQueueItem(
                     r.getId(),
                     r.getPostId(),
@@ -72,7 +76,8 @@ public class AdminModerationService {
                     summary.map(ContentService.PostSummary::textPreview).orElse(null),
                     summary.map(ContentService.PostSummary::deleted).orElse(true),
                     r.getHandledBy(),
-                    r.getHandledAt()));
+                    r.getHandledAt(),
+                    takedownSummary));
         }
         return items;
     }

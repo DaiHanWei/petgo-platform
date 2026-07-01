@@ -19,10 +19,11 @@ public class ReportQueueItem {
     private final boolean postDeleted;
     private final Long handledBy;
     private final Instant handledAt;
+    private final String takedownSummary; // Bug 169：已下架工单的下架原因/摘要（来自审计），其它态为 null
 
     public ReportQueueItem(long reportId, long postId, Long reporterId, Long authorId, String reasonType,
             String status, Instant createdAt, long reportCount, String postTextPreview,
-            boolean postDeleted, Long handledBy, Instant handledAt) {
+            boolean postDeleted, Long handledBy, Instant handledAt, String takedownSummary) {
         this.reportId = reportId;
         this.postId = postId;
         this.reporterId = reporterId;
@@ -35,6 +36,7 @@ public class ReportQueueItem {
         this.postDeleted = postDeleted;
         this.handledBy = handledBy;
         this.handledAt = handledAt;
+        this.takedownSummary = takedownSummary;
     }
 
     public long getReportId() {
@@ -83,5 +85,9 @@ public class ReportQueueItem {
 
     public Instant getHandledAt() {
         return handledAt;
+    }
+
+    public String getTakedownSummary() {
+        return takedownSummary;
     }
 }

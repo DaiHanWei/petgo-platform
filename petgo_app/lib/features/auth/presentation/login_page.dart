@@ -57,7 +57,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           context.go('/onboarding');
       }
     } on LoginCancelled {
-      _showBanner(l10n.loginCancelled);
+      // Bug 20260701-179：取消也提示「登录失败，请重试」（印尼语 Gagal masuk, silakan coba lagi），
+      // 不再显示独立的「已取消」文案。
+      _showBanner(l10n.loginFailed);
     } catch (_) {
       _showBanner(l10n.loginFailed);
     } finally {

@@ -64,4 +64,12 @@ public class AdminAuditService {
             Pageable pageable) {
         return repository.search(from, to, actor, action, pageable);
     }
+
+    /**
+     * 某内容/工单最新下架审计摘要（Bug 20260701-169，举报队列「已下架」展示下架原因/摘要）。只读、不改链。
+     */
+    @Transactional(readOnly = true)
+    public java.util.Optional<String> takedownSummary(long postId, long reportId) {
+        return repository.latestTakedownSummary(postId, reportId);
+    }
 }

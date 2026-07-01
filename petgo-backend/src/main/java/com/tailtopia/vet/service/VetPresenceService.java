@@ -2,7 +2,9 @@ package com.tailtopia.vet.service;
 
 import com.tailtopia.vet.domain.VetPresenceStatus;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -81,6 +83,15 @@ public class VetPresenceService {
     public boolean isOnline(long vetId) {
         Double score = redis.opsForZSet().score(ONLINE_ZSET, String.valueOf(vetId));
         return score != null && score >= staleThreshold();
+    }
+
+    /**
+     * 兽医最后在线（lastSeen = 最后心跳）时刻；离线/已移出在线集合 → 空（Bug 20260701-168 后台展示用）。
+     * 注：score 是最后心跳时间（heartbeat 每次覆盖），非「上线起始」；离线兽医已被移除故无值。
+     */
+    public Optional<Instant> lastSeenAt(long vetId) {
+        Double score = redis.opsForZSet().score(ONLINE_ZSET, String.valueOf(vetId));
+        return score == null ? Optional.empty() : Optional.of(Instant.ofEpochMilli(score.longValue()));
     }
 
     /** 当前在线态：BUSY 优先（占用中），否则 ONLINE/OFFLINE。 */

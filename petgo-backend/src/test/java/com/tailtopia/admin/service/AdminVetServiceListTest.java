@@ -136,6 +136,23 @@ class AdminVetServiceListTest {
     }
 
     @Test
+    void onlineSnapshotIncludesLastSeenLabel() {
+        // Bug 20260701-168：每行补最后在线时间（WIB）；离线/无 lastSeen → 「—」。
+        scenario();
+        when(presence.lastSeenAt(1L))
+                .thenReturn(java.util.Optional.of(java.time.Instant.parse("2026-06-29T03:25:00Z")));
+        when(presence.lastSeenAt(2L)).thenReturn(java.util.Optional.empty());
+
+        var snap = service.onlineSnapshot(java.time.Instant.parse("2026-06-29T03:30:00Z"));
+        var byId = snap.rows().stream().collect(java.util.stream.Collectors.toMap(
+                com.tailtopia.admin.dto.VetOnlineSnapshot.Row::id,
+                com.tailtopia.admin.dto.VetOnlineSnapshot.Row::lastSeenLabel));
+        // WIB = UTC+7：03:25Z → 10:25 WIB。
+        assertThat(byId.get(1L)).isEqualTo("2026-06-29 10:25");
+        assertThat(byId.get(2L)).isEqualTo("—");
+    }
+
+    @Test
     void filtersCombine() {
         scenario();
         // ACTIVE + online(含BUSY) → anna(ACTIVE/ONLINE) + carol(ACTIVE/BUSY)，排除 bob(BANNED)。

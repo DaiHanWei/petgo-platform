@@ -165,22 +165,29 @@ class _ImChatPlaceholderState extends ConsumerState<ImChatPlaceholder> {
       child: Column(
         children: [
           Expanded(
-            child: _msgs.isEmpty
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Text(l10n.imChatPlaceholderHint,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 12.5, color: AppColors.muted, height: 1.5)),
+            // Bug 20260701-173：点消息区空白/下拉收起键盘（iOS 无系统返回键，否则键盘收不起）。
+            // translucent 不吞子节点点击(图片气泡)；共享组件内修复一处覆盖兽医端+用户端。
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: () => FocusScope.of(context).unfocus(),
+              child: _msgs.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(l10n.imChatPlaceholderHint,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 12.5, color: AppColors.muted, height: 1.5)),
+                      ),
+                    )
+                  : ListView(
+                      controller: _scroll,
+                      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                      padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
+                      children: [
+                        for (final m in _msgs) _Bubble(msg: m, accent: widget.accent, selfIsVet: widget.selfIsVet),
+                      ],
                     ),
-                  )
-                : ListView(
-                    controller: _scroll,
-                    padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
-                    children: [
-                      for (final m in _msgs) _Bubble(msg: m, accent: widget.accent, selfIsVet: widget.selfIsVet),
-                    ],
-                  ),
+            ),
           ),
           _InputBar(
             controller: _input,

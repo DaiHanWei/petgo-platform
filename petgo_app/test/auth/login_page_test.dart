@@ -118,12 +118,13 @@ void main() {
     await tester.pump(const Duration(seconds: 3)); // 走完 toast 自动消失定时器，避免 pending timer
   });
 
-  testWidgets('AC5(R2/F13): 用户取消 → 取消提示 + 不创建账号（仍游客）', (tester) async {
+  testWidgets('AC5(R2/F13): 用户取消 → 失败提示（Bug 179：取消也提示"失败请重试"）+ 不创建账号（仍游客）', (tester) async {
     final c = await _pumpWith(tester, () async => throw const LoginCancelled());
     await tester.tap(find.byKey(const ValueKey('googleLoginButton')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
-    expect(find.text('Sign-in cancelled'), findsOneWidget);
+    // Bug 20260701-179：取消分支复用 loginFailed 文案（不再显示独立"已取消"）。
+    expect(find.text('Sign-in failed, please try again'), findsOneWidget);
     expect(c.read(authControllerProvider).isLoggedIn, isFalse);
     await tester.pump(const Duration(seconds: 3)); // 走完 toast 定时器
   });

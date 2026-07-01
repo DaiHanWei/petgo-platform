@@ -8,7 +8,9 @@ import java.util.List;
  */
 public record VetOnlineSnapshot(List<Row> rows, Instant queriedAt) {
 
-    /** 单行：id / 显示名 / 在线态（ONLINE/BUSY/OFFLINE）。 */
-    public record Row(long id, String displayName, String presence) {
+    /**
+     * 单行：id / 显示名 / 在线态（ONLINE/BUSY/OFFLINE）/ 最后在线时间标签（WIB，离线无值显「—」，Bug 168）。
+     */
+    public record Row(long id, String displayName, String presence, String lastSeenLabel) {
     }
 }

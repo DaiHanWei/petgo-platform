@@ -86,6 +86,7 @@
                 <th th:text="#{admin.reports.col.type}">类型</th>
                 <th th:text="#{admin.reports.col.handledBy}">处理人</th>
                 <th th:text="#{admin.reports.col.handledAt}">处理时间</th>
+                <th th:text="#{admin.reports.col.reason}">原因</th>
             </tr>
             </thead>
             <tbody>
@@ -97,9 +98,10 @@
                 <td th:text="${r.reasonType}">OTHER</td>
                 <td th:text="${r.handledBy}">-</td>
                 <td th:text="${r.handledAt != null} ? ${#temporals.format(r.handledAt, 'yyyy-MM-dd HH:mm')} : '-'">-</td>
+                <td class="muted" th:text="${r.takedownSummary != null} ? ${r.takedownSummary} : '-'">-</td>
             </tr>
             <tr th:if="${#lists.isEmpty(reports)}">
-                <td colspan="6" class="empty" th:text="#{admin.reports.empty}">暂无记录。</td>
+                <td colspan="7" class="empty" th:text="#{admin.reports.empty}">暂无记录。</td>
             </tr>
             </tbody>
         </table>

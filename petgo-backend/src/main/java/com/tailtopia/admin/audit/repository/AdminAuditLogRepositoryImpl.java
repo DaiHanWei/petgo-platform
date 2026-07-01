@@ -7,9 +7,11 @@ import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
+import com.tailtopia.admin.audit.service.AuditActions;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -46,6 +48,27 @@ public class AdminAuditLogRepositoryImpl implements AdminAuditLogRepositoryCusto
         long total = em.createQuery(countQuery).getSingleResult();
 
         return new PageImpl<>(content, pageable, total);
+    }
+
+    @Override
+    public Optional<String> latestTakedownSummary(long postId, long reportId) {
+        // 优先内容级下架审计（含「原因：…」文本），回退工单级（仅「工单X/帖Y」）。
+        return latest("CONTENT_POST", String.valueOf(postId))
+                .or(() -> latest("CONTENT_REPORT", String.valueOf(reportId)));
+    }
+
+    /** 取某 target 最新一条 CONTENT_TAKEN_DOWN 审计的 summary（只读）。 */
+    private Optional<String> latest(String targetType, String targetId) {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<String> cq = cb.createQuery(String.class);
+        Root<AdminAuditLog> root = cq.from(AdminAuditLog.class);
+        cq.select(root.get("summary"));
+        cq.where(
+                cb.equal(root.get("actionType"), AuditActions.CONTENT_TAKEN_DOWN),
+                cb.equal(root.get("targetType"), targetType),
+                cb.equal(root.get("targetId"), targetId));
+        cq.orderBy(cb.desc(root.get("createdAt")));
+        return em.createQuery(cq).setMaxResults(1).getResultList().stream().findFirst();
     }
 
     private List<Predicate> predicates(CriteriaBuilder cb, Root<AdminAuditLog> root,

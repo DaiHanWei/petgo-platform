@@ -99,5 +99,27 @@ class AdminModerationServiceTest {
         assertThat(items.get(0).getReporterId()).isEqualTo(88L);
         assertThat(items.get(0).getAuthorId()).isEqualTo(77L);
         assertThat(items.get(0).getReportCount()).isEqualTo(2L);
+        // PENDING 不查审计原因 → takedownSummary 为空。
+        assertThat(items.get(0).getTakedownSummary()).isNull();
+    }
+
+    @Test
+    void queueResolvedIncludesTakedownSummaryFromAudit() {
+        // Bug 20260701-169：已下架队列补下架原因/摘要（来自审计）。
+        ContentReport r = report(4L, 60L, 88L);
+        when(r.getReasonType()).thenReturn(ReportReason.INAPPROPRIATE);
+        when(r.getStatus()).thenReturn(ReportStatus.RESOLVED);
+        when(r.getCreatedAt()).thenReturn(Instant.now());
+        when(reportService.byStatus(ReportStatus.RESOLVED, 50)).thenReturn(List.of(r));
+        when(reportService.countForPost(60L)).thenReturn(1L);
+        when(contentService.findSummary(60L)).thenReturn(Optional.of(
+                new ContentService.PostSummary(60L, ContentType.DAILY, "preview", true, 77L)));
+        when(auditService.takedownSummary(60L, 4L))
+                .thenReturn(Optional.of("主动下架内容（原因：Irrelevant content）"));
+
+        List<ReportQueueItem> items = service.queue(ReportStatus.RESOLVED);
+
+        assertThat(items).hasSize(1);
+        assertThat(items.get(0).getTakedownSummary()).isEqualTo("主动下架内容（原因：Irrelevant content）");
     }
 }
