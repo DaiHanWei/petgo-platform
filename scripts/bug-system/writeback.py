@@ -126,6 +126,29 @@ def over_batch_limit(n, cfg):
     return n > cfg.get("writeback_max_batch", 5)
 
 
+def build_claim_changes(developer, cfg):
+    """认领：写 开发人员=developer（认领锁）。developer 空则拒绝（不匿名占坑）。"""
+    if developer is None or not str(developer).strip():
+        raise ValueError("WRITEBACK_DEVELOPER 未配置，无法认领")
+    return {cfg.get("developer_field", "开发人员"): str(developer).strip()}
+
+
+def build_release_changes(cfg):
+    """释放：清空 开发人员（放回可领池）。"""
+    return {cfg.get("developer_field", "开发人员"): ""}
+
+
+def owns(current_fields, developer, cfg):
+    """当前记录是否由 developer 认领（释放前归属校验）。富文本/纯文本同判。"""
+    field = cfg.get("developer_field", "开发人员")
+    return _norm((current_fields or {}).get(field)) == _norm(str(developer).strip())
+
+
+def over_analyze_warn(n, cfg):
+    """一次 /bug-analyze 认领数是否超软上限（预警 token/时间，非硬拦）。"""
+    return n > cfg.get("analyze_batch_warn", 10)
+
+
 def restricted_update(client, app_token, table_id, record_id, changes, cfg,
                       token, baseline):
     """受限写回：FR9 白名单 → NFR8 重读比对 → 写。任一关卡不过则不写。

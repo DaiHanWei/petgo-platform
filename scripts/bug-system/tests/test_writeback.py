@@ -186,5 +186,46 @@ class TestInjectionCannotWrite(unittest.TestCase):
         self.assertEqual(client.writes, [])
 
 
+class TestClaim(unittest.TestCase):
+    CFG = {
+        "developer_field": "开发人员",
+        "analyze_batch_warn": 10,
+        "writeback_whitelist": ["开发人员"],
+        "field_ids": {"开发人员": "fldDEV"},
+    }
+
+    def test_build_claim_changes_writes_developer(self):
+        self.assertEqual(writeback.build_claim_changes("dai", self.CFG), {"开发人员": "dai"})
+
+    def test_build_claim_changes_empty_developer_raises(self):
+        with self.assertRaises(ValueError):
+            writeback.build_claim_changes("  ", self.CFG)
+
+    def test_build_release_changes_clears(self):
+        self.assertEqual(writeback.build_release_changes(self.CFG), {"开发人员": ""})
+
+    def test_owns_true_plain_and_richtext(self):
+        self.assertTrue(writeback.owns({"开发人员": "dai"}, "dai", self.CFG))
+        self.assertTrue(writeback.owns({"开发人员": [{"text": "dai"}]}, "dai", self.CFG))
+
+    def test_owns_false_other_or_empty(self):
+        self.assertFalse(writeback.owns({"开发人员": "someone"}, "dai", self.CFG))
+        self.assertFalse(writeback.owns({}, "dai", self.CFG))
+
+    def test_over_analyze_warn(self):
+        self.assertFalse(writeback.over_analyze_warn(10, self.CFG))
+        self.assertTrue(writeback.over_analyze_warn(11, self.CFG))
+
+    def test_claim_conflict_is_drift_zero_write(self):
+        # 别人在我 pull 后已认领（current=someone），基线为空 → 认领写触发 DriftError，零写。
+        client = FakeClient({"开发人员": "someone"})
+        changes = writeback.build_claim_changes("dai", self.CFG)
+        baseline = {"开发人员": None}
+        with self.assertRaises(writeback.DriftError):
+            writeback.restricted_update(client, "app", "tbl", "rec1", changes,
+                                        self.CFG, "tok", baseline)
+        self.assertEqual(len(client.writes), 0)
+
+
 if __name__ == "__main__":
     unittest.main()
