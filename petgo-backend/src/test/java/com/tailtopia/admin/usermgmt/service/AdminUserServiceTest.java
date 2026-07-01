@@ -78,6 +78,18 @@ class AdminUserServiceTest {
         verify(accountQuery, never()).findUserById(anyLong());
     }
 
+    /** bug 20260701-164：列表页分页列出全部普通用户，逐条映射为行。 */
+    @Test
+    void listPagesAllUsers() {
+        var pageable = org.springframework.data.domain.PageRequest.of(0, 50);
+        User u = user();
+        when(accountQuery.listUsers(pageable))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(u), pageable, 1));
+        var page = service.list(pageable);
+        assertThat(page.getTotalElements()).isEqualTo(1);
+        assertThat(page.getContent().get(0).email()).isEqualTo("ming@x.com");
+    }
+
     @Test
     void searchMissReturnsEmpty() {
         when(accountQuery.findUserByEmail("none@x.com")).thenReturn(Optional.empty());

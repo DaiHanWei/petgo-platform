@@ -47,11 +47,21 @@
                        th:text="#{admin.users.view}">查看详情</a>
                 </td>
             </tr>
-            <tr th:if="${searched and #lists.isEmpty(results)}">
-                <td colspan="6" class="empty" th:text="#{admin.users.empty}">无匹配用户</td>
+            <tr th:if="${#lists.isEmpty(results)}">
+                <td colspan="6" class="empty"
+                    th:text="${searched} ? #{admin.users.empty} : #{admin.users.emptyAll}">无匹配用户</td>
             </tr>
             </tbody>
         </table>
+
+        <!-- bug 20260701-164：浏览态分页（搜索态无分页）。整页导航刷新，页码文案随之更新。 -->
+        <div class="pager" th:if="${page != null and page.totalElements > 0}">
+            <a th:if="${page.hasPrevious()}" th:href="@{/admin/users(page=${page.number - 1})}"
+               th:text="#{admin.audit.prev}">← 上一页</a>
+            <span th:text="#{admin.audit.page(${page.number + 1}, ${page.totalPages}, ${page.totalElements})}">分页</span>
+            <a th:if="${page.hasNext()}" th:href="@{/admin/users(page=${page.number + 1})}"
+               th:text="#{admin.audit.next}">下一页 →</a>
+        </div>
     </div>
 </div>
 </body>

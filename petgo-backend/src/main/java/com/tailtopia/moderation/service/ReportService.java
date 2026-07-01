@@ -80,4 +80,18 @@ public class ReportService {
         r.resolveBy(adminId, decision);
         reports.save(r);
     }
+
+    /**
+     * 内容被下架时，把该帖所有 PENDING 举报单一并置 RESOLVED，避免已下架内容仍残留在待处理队列
+     * （bug 20260630-155；同时解决同帖多举报单只关一条的隐患）。返回本次处理条数。
+     */
+    @Transactional
+    public int resolvePendingForPost(long postId, long adminId) {
+        List<ContentReport> pending = reports.findByPostIdAndStatus(postId, ReportStatus.PENDING);
+        for (ContentReport r : pending) {
+            r.resolveBy(adminId, ReportStatus.RESOLVED);
+        }
+        reports.saveAll(pending);
+        return pending.size();
+    }
 }

@@ -9,6 +9,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -66,6 +68,12 @@ public class AccountQueryService {
     @Transactional(readOnly = true)
     public Optional<User> findUserByEmail(String email) {
         return users.findByEmailAndRole(email, Role.USER);
+    }
+
+    /** bug 20260701-164：后台用户管理分页列出全部普通用户（role=USER），供列表浏览。 */
+    @Transactional(readOnly = true)
+    public Page<User> listUsers(Pageable pageable) {
+        return users.findByRole(Role.USER, pageable);
     }
 
     private static AuthorView toAuthorView(User u) {

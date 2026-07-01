@@ -1,8 +1,12 @@
 package com.tailtopia.admin.usermgmt.web;
 
 import com.tailtopia.admin.service.AdminUserDetails;
+import com.tailtopia.admin.usermgmt.dto.AdminUserRow;
 import com.tailtopia.admin.usermgmt.service.AdminUserService;
 import com.tailtopia.shared.error.AppException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
@@ -25,6 +29,7 @@ public class AdminUserController {
     private static final String DEACTIVATE_AUTH =
             "hasRole('SUPER_ADMIN') or hasAuthority('user.deactivate')";
     private static final String DELETE_AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('user.delete')";
+    private static final int PAGE_SIZE = 50;
 
     private final AdminUserService adminUserService;
 
@@ -35,11 +40,23 @@ public class AdminUserController {
     @GetMapping("/admin/users")
     @PreAuthorize(AUTH)
     public String users(@RequestParam(value = "q", required = false) String q,
+            @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestHeader(value = "HX-Request", required = false) String hxRequest, Model model) {
         model.addAttribute("active", "users");
         model.addAttribute("q", q);
-        model.addAttribute("searched", q != null && !q.isBlank());
-        model.addAttribute("results", adminUserService.search(q));
+        boolean searched = q != null && !q.isBlank();
+        model.addAttribute("searched", searched);
+        if (searched) {
+            // 精确搜索：按 ID / 注册邮箱命中 0 或 1 条，不分页。
+            model.addAttribute("results", adminUserService.search(q));
+            model.addAttribute("page", null);
+        } else {
+            // bug 20260701-164：默认分页列出全部普通用户（id 倒序），顶部搜索框保留。
+            Page<AdminUserRow> pageResult = adminUserService.list(
+                    PageRequest.of(Math.max(page, 0), PAGE_SIZE, Sort.by(Sort.Direction.DESC, "id")));
+            model.addAttribute("results", pageResult.getContent());
+            model.addAttribute("page", pageResult);
+        }
         return hxRequest != null ? "admin/users :: rows" : "admin/users";
     }
 

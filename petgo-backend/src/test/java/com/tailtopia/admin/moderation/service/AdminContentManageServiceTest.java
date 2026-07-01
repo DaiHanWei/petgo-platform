@@ -17,6 +17,7 @@ import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.domain.DeleteReason;
 import com.tailtopia.content.service.ContentService;
+import com.tailtopia.moderation.service.ReportService;
 import com.tailtopia.shared.error.AppException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,13 +27,15 @@ class AdminContentManageServiceTest {
 
     private ContentService contentService;
     private AdminAuditService auditService;
+    private ReportService reportService;
     private AdminContentManageService service;
 
     @BeforeEach
     void setUp() {
         contentService = mock(ContentService.class);
         auditService = mock(AdminAuditService.class);
-        service = new AdminContentManageService(contentService, auditService);
+        reportService = mock(ReportService.class);
+        service = new AdminContentManageService(contentService, auditService, reportService);
     }
 
     @Test
@@ -53,6 +56,8 @@ class AdminContentManageServiceTest {
     void takedownSoftDeletesAndAudits() {
         service.takedown(5L, "垃圾广告", 1L);
         verify(contentService).softDelete(5L, DeleteReason.ADMIN_TAKEDOWN);
+        // bug 20260630-155：下架同时关闭该帖 PENDING 举报单。
+        verify(reportService).resolvePendingForPost(5L, 1L);
         verify(auditService).record(eq(1L), eq(AuditActions.CONTENT_TAKEN_DOWN), eq("CONTENT_POST"),
                 eq("5"), contains("垃圾广告"));
     }

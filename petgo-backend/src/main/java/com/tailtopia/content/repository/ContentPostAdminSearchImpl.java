@@ -54,7 +54,7 @@ public class ContentPostAdminSearchImpl implements ContentPostAdminSearch {
         return em.createQuery(cq).setFirstResult(Math.max(offset, 0)).setMaxResults(limit)
                 .getResultList().stream()
                 .map(p -> new AdminContentRow(p.getId(), p.getType(), p.getAuthorId(),
-                        p.getText(), p.getDeletedAt() != null, p.getCreatedAt()))
+                        p.getText(), p.getDeletedAt() != null, p.getCreatedAt(), p.getImageUrls()))
                 .toList();
     }
 }

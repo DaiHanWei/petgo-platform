@@ -6,6 +6,7 @@ import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.domain.DeleteReason;
 import com.tailtopia.content.dto.AdminContentRow;
 import com.tailtopia.content.service.ContentService;
+import com.tailtopia.moderation.service.ReportService;
 import com.tailtopia.shared.error.AppException;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -25,10 +26,13 @@ public class AdminContentManageService {
 
     private final ContentService contentService;
     private final AdminAuditService auditService;
+    private final ReportService reportService;
 
-    public AdminContentManageService(ContentService contentService, AdminAuditService auditService) {
+    public AdminContentManageService(ContentService contentService, AdminAuditService auditService,
+            ReportService reportService) {
         this.contentService = contentService;
         this.auditService = auditService;
+        this.reportService = reportService;
     }
 
     /** 全量浏览/筛选/搜索。status: ONLINE / DELETED / null=全部；type/authorId/q 任一空忽略。 */
@@ -45,13 +49,15 @@ public class AdminContentManageService {
                 PAGE_SIZE, Math.max(page, 0) * PAGE_SIZE);
     }
 
-    /** 主动下架（必填原因）：软删 + 作者通知（既有事件）+ 审计。 */
+    /** 主动下架（必填原因）：软删 + 关闭该帖待处理举报单 + 作者通知（既有事件）+ 审计。 */
     @Transactional
     public void takedown(long postId, String reason, long actorAccountId) {
         if (reason == null || reason.isBlank()) {
             throw AppException.validation("下架原因不能为空");
         }
         contentService.softDelete(postId, DeleteReason.ADMIN_TAKEDOWN);
+        // bug 20260630-155：内容管理主动下架时同步关闭该帖 PENDING 举报单，避免残留在举报待处理队列。
+        reportService.resolvePendingForPost(postId, actorAccountId);
         auditService.record(actorAccountId, AuditActions.CONTENT_TAKEN_DOWN, "CONTENT_POST",
                 String.valueOf(postId), "主动下架内容（原因：" + reason.trim() + "）");
     }

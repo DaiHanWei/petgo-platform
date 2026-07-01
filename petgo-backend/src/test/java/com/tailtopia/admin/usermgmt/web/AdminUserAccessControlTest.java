@@ -69,7 +69,8 @@ class AdminUserAccessControlTest {
     }
 
     private void search() {
-        controller.users(null, null, new ConcurrentModel());
+        // 传非空 q 走搜索分支（stub 了 search()）；页码参数为新签名所需。
+        controller.users("42", 0, null, new ConcurrentModel());
     }
 
     @Test

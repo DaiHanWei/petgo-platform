@@ -63,6 +63,7 @@
                 <th th:text="#{admin.content.col.type}">类型</th>
                 <th th:text="#{admin.content.col.author}">作者</th>
                 <th th:text="#{admin.content.col.preview}">正文预览</th>
+                <th th:text="#{admin.content.col.images}">图片</th>
                 <th th:text="#{admin.content.col.created}">创建时间</th>
                 <th th:text="#{admin.content.col.status}">状态</th>
                 <th th:text="#{admin.content.col.action}">操作</th>
@@ -74,6 +75,13 @@
                 <td th:text="${c.type()}">DAILY</td>
                 <td th:text="${c.authorId()}">-</td>
                 <td class="muted cell-wide" th:text="${#strings.abbreviate(c.textPreview(), 60)}">…</td>
+                <td>
+                    <span th:if="${c.imageUrls() == null or #lists.isEmpty(c.imageUrls())}" class="muted">—</span>
+                    <a th:each="img : ${c.imageUrls()}" th:href="${img}" target="_blank" rel="noopener">
+                        <img th:src="${img}" alt="" loading="lazy"
+                             style="width:48px;height:48px;object-fit:cover;border-radius:4px;margin:2px;vertical-align:middle"/>
+                    </a>
+                </td>
                 <td th:text="${#temporals.format(c.createdAt(), 'yyyy-MM-dd HH:mm')}">-</td>
                 <td>
                     <span class="badge" th:classappend="${c.deleted()} ? 'badge-danger' : 'badge-ok'"
@@ -99,7 +107,7 @@
                 </td>
             </tr>
             <tr th:if="${#lists.isEmpty(items)}">
-                <td colspan="7" class="empty" th:text="#{admin.content.empty}">无匹配内容。</td>
+                <td colspan="8" class="empty" th:text="#{admin.content.empty}">无匹配内容。</td>
             </tr>
             </tbody>
         </table>

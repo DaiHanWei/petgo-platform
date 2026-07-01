@@ -18,6 +18,8 @@ import com.tailtopia.profile.service.ProfileService;
 import com.tailtopia.shared.error.AppException;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -103,6 +105,12 @@ public class AdminUserService {
         authService.reactivateUser(userId);
         auditService.record(actorAccountId, AuditActions.USER_REACTIVATED, "USER",
                 String.valueOf(userId), "重新激活用户");
+    }
+
+    /** bug 20260701-164：后台用户管理分页列出全部普通用户（id 倒序，最近注册在前），供列表浏览。 */
+    @Transactional(readOnly = true)
+    public Page<AdminUserRow> list(Pageable pageable) {
+        return accountQuery.listUsers(pageable).map(this::toRow);
     }
 
     /** 按用户 id 或注册邮箱搜索普通用户（USER）。命中 0 或 1 条。 */

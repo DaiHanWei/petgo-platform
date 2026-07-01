@@ -3,6 +3,8 @@ package com.tailtopia.auth.repository;
 import com.tailtopia.auth.domain.Role;
 import com.tailtopia.auth.domain.User;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface UserRepository extends JpaRepository<User, Long> {
@@ -14,4 +16,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     /** Story 3.1：ADMIN 账密登录按 email + role 精确匹配。 */
     Optional<User> findByEmailAndRole(String email, Role role);
+
+    /** bug 20260701-164：后台用户管理按角色分页列举（只列普通用户 USER）。 */
+    Page<User> findByRole(Role role, Pageable pageable);
 }

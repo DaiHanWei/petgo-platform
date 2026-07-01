@@ -16,6 +16,9 @@ public interface ContentReportRepository extends JpaRepository<ContentReport, Lo
     /** Admin 队列：按状态列举（PENDING 优先），created_at 倒序分页。 */
     List<ContentReport> findByStatusOrderByCreatedAtDesc(ReportStatus status, Pageable pageable);
 
+    /** 某帖指定状态的举报单：内容下架时把该帖 PENDING 举报单批量置 RESOLVED 用（bug 20260630-155）。 */
+    List<ContentReport> findByPostIdAndStatus(long postId, ReportStatus status);
+
     /** 某帖的举报次数（队列详情展示）。 */
     long countByPostId(long postId);
 }
