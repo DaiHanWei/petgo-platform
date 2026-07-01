@@ -75,11 +75,11 @@ FilledButton _submitBtn(WidgetTester tester) =>
 GoRouter _router() => GoRouter(
       initialLocation: '/',
       routes: [
-        GoRoute(path: '/', builder: (_, __) => const PetProfileCreatePage()),
+        GoRoute(path: '/', builder: (_, _) => const PetProfileCreatePage()),
         GoRoute(
             path: '/profile/created',
-            builder: (_, __) => const Scaffold(body: Text('created'))),
-        GoRoute(path: '/profile', builder: (_, __) => const Scaffold(body: Text('profile'))),
+            builder: (_, _) => const Scaffold(body: Text('created'))),
+        GoRoute(path: '/profile', builder: (_, _) => const Scaffold(body: Text('profile'))),
       ],
     );
 

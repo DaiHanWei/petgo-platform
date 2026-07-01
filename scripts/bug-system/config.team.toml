@@ -1,0 +1,77 @@
+# 团队共用配置模板（入库、无密钥）——映射到【现有 Bug 表】+ 只拉「技术视图」。
+# 同事用法：cp config.team.toml config.toml （config.toml 被 gitignore，各自本地用）。
+# 现有表扁平结构；只取技术视图(已定级未关闭)的工程师队列。凭证在 .env，不在此。
+
+region = "global"
+page_size = 100
+
+# 只拉「技术视图」：已定级(Urgent Level 非空) 且 未关闭(fixed？/Closed？=false)
+view_id = "vewzn1aAz7"
+
+severity_order = ["P0", "P1", "P2", "P3", "P4", "P5"]
+
+# 关键字段名（映射现有表真实字段名）
+bug_id_field      = "Items"
+severity_field    = "Urgent Level"
+module_field      = "Which part (Pages)"
+reported_on_field = "Which end"
+steps_field       = "Describe（what u did）"
+screenshots_field = "Screenshot"
+# 现有表无 Status 单选/Platform/Bug Type：留默认名（表中不存在→解析为空，不影响）
+status_field      = "fixed？/Closed？"   # 复选框，仅作展示（过滤已由技术视图完成）
+platform_field    = "Platform"
+bug_type_field    = "Bug Type"
+title_field       = "Describe（what u did）"
+
+# 现有表用复选框标关闭，且技术视图已过滤未关闭；本地不再用于过滤，留空
+closed_statuses = []
+
+# ── 反向同步（第二期 Epic 3）────────────────────────────────────────
+# 写回白名单（字段名；FR9 实际按 [field_ids] 里的字段 ID 校验）。
+# 零改表：只写 状态 / 开发人员 / 开发说明(承载 AI 定位+归因+置信度)。
+# 负责人写「开发人员」文本字段（非 tech 人员字段，tech 不动）。
+writeback_whitelist = ["fixed？/Closed？", "开发人员", "开发说明"]
+# 单批次写回记录数上限，超则须二次确认（NFR2）
+writeback_max_batch = 5
+
+# B 组提报人字段（一律裹 <<<UNTRUSTED_REPORT…>>>，NFR3）
+reporter_fields = [
+  "Describe（what u did）",
+  "Expect to see",
+  "Which end",
+  "Which part (Pages)",
+  "Urgent Level",
+]
+
+# 字段类型（决定渲染方式）
+[field_types]
+"Items"                   = "auto_number"
+"Which end"               = "select"
+"Which part (Pages)"      = "select"
+"Describe（what u did）"  = "text"
+"Screenshot"              = "attachment"
+"Expect to see"           = "text"
+"UI Design/Attachment"    = "attachment"
+"Urgent Level"            = "select"
+"fixed？/Closed？"        = "checkbox"
+"tech"                    = "person"
+"开发说明"                = "text"
+"开发人员"                = "text"
+"Raise the issue"         = "person"
+"创建时间"                = "datetime"
+"update time by engineer" = "datetime"
+
+# 字段名 ↔ 字段 ID（现有表真实 ID，NFR6）。反向同步白名单按这里的 ID 校验(FR9)。
+[field_ids]
+"Urgent Level"            = "fldhAzsm5u"
+"fixed？/Closed？"        = "fld9MTjCpe"
+"tech"                    = "fldFxOlz9J"
+"开发说明"                = "fldqy7v4CR"
+"开发人员"                = "fldoPsin2T"
+# 以下为提报/自动字段，故意不列入 writeback_whitelist（写它们会被代码层拒绝）
+"Items"                   = "fldmX9H2Nl"
+"Which end"               = "fldj2WCXOE"
+"Which part (Pages)"      = "fldIFVxLIr"
+"Describe（what u did）"  = "fldDZ6UUAn"
+"Screenshot"              = "fldPvEdpY9"
+"Expect to see"           = "fldSMvPGuQ"

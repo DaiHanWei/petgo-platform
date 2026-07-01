@@ -58,17 +58,46 @@ public class LarkOAuthClient {
                 + "&redirect_uri=" + enc + "&response_type=code&state=" + state;
     }
 
-    /** 用 code 换用户身份（app_access_token → user_access_token + 身份）。失败抛 {@link AppException}。 */
+    /**
+     * 用 code 换用户身份。三步：app_access_token → user_access_token → user_info。
+     *
+     * <p><b>关键</b>：{@code oidc/access_token} 端点「不再返回用户信息，只返回 token 相关字段」（Lark 官方），
+     * 故必须再以 user_access_token 调 {@code GET /open-apis/authen/v1/user_info} 才能拿到
+     * open_id / tenant_key / email。失败抛 {@link AppException}。
+     */
     public LarkIdentity exchangeCode(String code) {
         String appAccessToken = fetchAppAccessToken();
         @SuppressWarnings("unchecked")
-        Map<String, Object> resp = rest.post()
+        Map<String, Object> tokenResp = rest.post()
                 .uri("/open-apis/authen/v1/oidc/access_token")
                 .header("Authorization", "Bearer " + appAccessToken)
                 .body(Map.of("grant_type", "authorization_code", "code", code))
                 .retrieve()
                 .body(Map.class);
-        return mapIdentity(resp);
+        String userAccessToken = extractUserAccessToken(tokenResp);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> infoResp = rest.get()
+                .uri("/open-apis/authen/v1/user_info")
+                .header("Authorization", "Bearer " + userAccessToken)
+                .retrieve()
+                .body(Map.class);
+        return mapIdentity(infoResp);
+    }
+
+    /** 从 oidc/access_token 响应取 user_access_token（容错 data 包裹层）。缺失抛异常。 */
+    @SuppressWarnings("unchecked")
+    private String extractUserAccessToken(Map<String, Object> resp) {
+        if (resp == null) {
+            throw AppException.validation("Lark 登录失败");
+        }
+        Map<String, Object> data = resp.get("data") instanceof Map
+                ? (Map<String, Object>) resp.get("data") : resp;
+        Object token = data.get("access_token");
+        if (token == null) {
+            log.warn("Lark user_access_token 获取失败 code={}", resp.get("code"));
+            throw AppException.validation("Lark 鉴权失败");
+        }
+        return token.toString();
     }
 
     private String fetchAppAccessToken() {
@@ -98,9 +127,11 @@ public class LarkOAuthClient {
         String enterpriseEmail = asStr(data.get("enterprise_email"));
         String tenantKey = asStr(data.get("tenant_key"));
         String openId = asStr(data.get("open_id"));
-        // 企业邮箱存在即视为租户内已验证；无企业邮箱时按 Lark 返回的 email_verified（缺省 false）。
-        boolean verified = (enterpriseEmail != null && !enterpriseEmail.isBlank())
-                || Boolean.TRUE.equals(data.get("email_verified"));
+        // user_info 不返回 email_verified；能从租户内 user_info 读到目录邮箱（email/enterprise_email）
+        // 即视为公司已验证邮箱。真正门控由 AdminLarkAuthService 的 tenant_key 校验 + admin_accounts 白名单负责。
+        // 注：enterprise_email 需 contact:user.employee:readonly，未授予则为空——故不能仅依赖企业邮箱判定。
+        boolean verified = (email != null && !email.isBlank())
+                || (enterpriseEmail != null && !enterpriseEmail.isBlank());
         return new LarkIdentity(email, enterpriseEmail, tenantKey, openId, verified);
     }
 

@@ -86,3 +86,16 @@
 - **自由文本值含 PII（Edge#8）**：`scrub` 仅按键剥离，不查值；`{'query':'我的狗吐血'}` 这类值里的健康/联系文本仍会上报。约定：埋点时 query/note 等自由文本不入 props，或入前在调用点脱敏。
 - **A→B 直切 / reset↔identify 抖动竞态（Edge#3/#13）**：已用「id 变化才触发 + 换人先 reset」缓解；极端快速 guest↔authenticated 交错下 method channel 保序但无序号保护，需端到端核实（低）。
 - **USER 态 profile.id 为 null（Edge#4）**：后端某响应未回 id 时该用户既不 identify 也不 reset。属后端不变量，监听器 `id != null` 守卫有意为之。
+
+## 2026-06-30 · bug-system 第一期评审延后项（spec-bug-system-pull-and-analyze）
+
+来源：quick-dev step-04 三路评审（盲审/边界/验收）。均非阻断，已修的为 patch，下列 defer：
+
+- **token 中途过期无刷新**：全流程复用一个 tenant_access_token，无过期重取；大表多图/慢网下，下载侧过期点之后截图全进 `_failures.json`，`list_records` 翻页中途过期会丢已累积记录。V1 表小、token ~2h 足够，暂不做 token 刷新/分页容错。表规模变大或拉取耗时拉长时再补。
+- **download_media 对 Bitable 附件可能需 `extra` 参数**：`/drive/v1/medias/{file_token}/download` 个别场景需附 extra 定位信息。L2 不可离线验证，已在 `larkapi.py:download_media` 留注释；L2 实跑若截图全数失败优先查此处。
+
+## 2026-07-01 · bug-system 第二期（反向同步）评审延后项
+
+来源：spec-bug-system-reverse-sync step-04 三路评审。均非阻断，已修的为 patch，下列 defer：
+
+- **写按名 / 校验按 ID 的维度错配**：`_update_record` 写 body 按字段名下发，FR9 白名单校验按字段 ID；二者一致性依赖 config 的 name↔id 与线上保持同步。`validate_writeback_config` 只保证白名单名在 [field_ids] 有映射，未校验该 ID 与线上真实字段一致。缓解：写前可加「拉取线上字段列表比对 config name↔id」的自检；或若 Lark 支持按 field_id 写则改按 ID 下发。正常运营（config 准确）下不触发。

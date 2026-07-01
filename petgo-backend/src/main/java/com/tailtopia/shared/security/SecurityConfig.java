@@ -76,6 +76,9 @@ public class SecurityConfig {
                 .addFilterBefore(new AdminSessionGuardFilter(adminAccounts),
                         AuthorizationFilter.class)
                 .authorizeHttpRequests(auth -> auth
+                        // 静态资源放行（登录页未登录即需加载 CSS/JS，否则登录页裸奔无样式）
+                        .requestMatchers("/admin/admin.css", "/admin/admin.js",
+                                "/admin/vendor/**").permitAll()
                         // 登录页 + Lark OAuth 登录/回调放行（未登录可访问以建会话）
                         .requestMatchers("/admin/login", "/admin/oauth/**").permitAll()
                         // 其余后台页面一律要求 ADMIN（user/vet → 403 越权）

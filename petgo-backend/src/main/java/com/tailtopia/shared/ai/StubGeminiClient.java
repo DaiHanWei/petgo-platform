@@ -24,6 +24,8 @@ public class StubGeminiClient implements GeminiClient {
                 null,
                 "AI 分诊仅供参考，不替代专业兽医诊断；情况加重请尽快线下就医。",
                 null, // 绿色无条件倒计时协议；黄色三要素由真实模型结构化产出（L2）
+                null, // 红色态对症应急步骤——桩固定 GREEN，不产出（L2 真实模型覆盖）
+                null,
                 raw);
     }
 }

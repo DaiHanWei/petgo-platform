@@ -23,12 +23,14 @@ public record TriageResultResponse(
         String advice,
         String medicationRef,
         String disclaimer,
-        TriageObservation observation) {
+        TriageObservation observation,
+        List<String> emergencySteps,
+        List<String> emergencyAvoid) {
 
     public static TriageResultResponse from(TriageTask t) {
         if (t.getStatus() != TriageStatus.DONE) {
             // 处理中 / 失败：仅回 status，不泄露未定级别。
-            return new TriageResultResponse(t.getStatus(), null, null, null, null, null);
+            return new TriageResultResponse(t.getStatus(), null, null, null, null, null, null, null);
         }
         Map<String, Object> p = t.getParsedResult();
         return new TriageResultResponse(
@@ -37,7 +39,17 @@ public record TriageResultResponse(
                 str(p, "advice"),
                 str(p, "medicationRef"),
                 str(p, "disclaimer"),
-                observation(p));
+                observation(p),
+                strList(p, "emergencySteps"),
+                strList(p, "emergencyAvoid"));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<String> strList(Map<String, Object> map, String key) {
+        if (map == null || !(map.get(key) instanceof List<?> list)) {
+            return null;
+        }
+        return (List<String>) list;
     }
 
     private static String str(Map<String, Object> map, String key) {

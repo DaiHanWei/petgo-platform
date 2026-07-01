@@ -11,7 +11,7 @@ class LarkOAuthClientTest {
 
     private LarkOAuthClient client() {
         return new LarkOAuthClient("appid-1", "secret-1",
-                "https://admin.tailtopia.id/admin/oauth/lark/callback", "https://open.larksuite.com");
+                "https://ops.tailtopia.id/admin/oauth/lark/callback", "https://open.larksuite.com");
     }
 
     @Test
@@ -23,7 +23,7 @@ class LarkOAuthClientTest {
         assertThat(url).contains("state=st8");
         assertThat(url).contains("response_type=code");
         // redirect_uri 经 URL 编码
-        assertThat(url).contains("redirect_uri=https%3A%2F%2Fadmin.tailtopia.id%2Fadmin%2Foauth%2Flark%2Fcallback");
+        assertThat(url).contains("redirect_uri=https%3A%2F%2Fops.tailtopia.id%2Fadmin%2Foauth%2Flark%2Fcallback");
     }
 
     @Test
@@ -40,20 +40,23 @@ class LarkOAuthClientTest {
     }
 
     @Test
-    void mapsIdentityFlatWithEmailVerifiedFlag() {
+    void verifiedWhenOnlyPersonalEmailPresent() {
+        // user_info 不返回 email_verified（且 enterprise_email 需 employee scope，常缺失）；
+        // 能从租户内 user_info 读到目录邮箱即视为公司已验证。
         LarkIdentity id = client().mapIdentity(Map.of(
-                "email", "personal@x.com",
+                "email", "shawn@corp.com",
                 "tenant_key", "t1",
-                "open_id", "ou_2",
-                "email_verified", true));
-        assertThat(id.resolvedEmail()).isEqualTo("personal@x.com");
+                "open_id", "ou_2"));
+        assertThat(id.resolvedEmail()).isEqualTo("shawn@corp.com");
         assertThat(id.emailVerified()).isTrue();
     }
 
     @Test
-    void unverifiedWhenNoEnterpriseEmailAndNoFlag() {
+    void unverifiedWhenNoEmailAtAll() {
+        // 既无个人邮箱也无企业邮箱（如 email scope 缺失）→ 无可用身份键，拒绝。
         LarkIdentity id = client().mapIdentity(Map.of(
-                "email", "personal@x.com", "tenant_key", "t1", "open_id", "ou_3"));
+                "tenant_key", "t1", "open_id", "ou_3"));
         assertThat(id.emailVerified()).isFalse();
+        assertThat(id.resolvedEmail()).isNull();
     }
 }

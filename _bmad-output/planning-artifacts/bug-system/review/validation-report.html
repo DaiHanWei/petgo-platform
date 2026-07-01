@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>PRD Validation: Bug 管理与分析闭环系统</title>
+<style>
+  :root {
+    --bg: #fafaf9;
+    --surface: #ffffff;
+    --border: #e7e5e4;
+    --text: #1c1917;
+    --muted: #78716c;
+
+    --verdict-strong: #16a34a;
+    --verdict-adequate: #65a30d;
+    --verdict-thin: #d97706;
+    --verdict-broken: #dc2626;
+
+    --sev-low: #64748b;
+    --sev-medium: #ca8a04;
+    --sev-high: #ea580c;
+    --sev-critical: #dc2626;
+
+    --grade-exc: #16a34a;
+    --grade-good: #65a30d;
+    --grade-fair: #d97706;
+    --grade-poor: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    font-size: 15px;
+  }
+  .container { max-width: 960px; margin: 0 auto; padding: 32px 24px 64px; }
+
+  header.report-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+  }
+  .title h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  .title .subtitle { color: var(--muted); font-size: 13px; margin-top: 4px; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .grade {
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-weight: 600;
+    color: white;
+    font-size: 15px;
+    white-space: nowrap;
+  }
+  .grade-excellent { background: var(--grade-exc); }
+  .grade-good { background: var(--grade-good); }
+  .grade-fair { background: var(--grade-fair); }
+  .grade-poor { background: var(--grade-poor); }
+
+  .synthesis {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--sev-critical);
+    border-radius: 8px;
+    padding: 18px 22px;
+    margin-bottom: 24px;
+    font-size: 15.5px;
+  }
+  .synthesis p { margin: 0 0 10px; }
+  .synthesis p:last-child { margin-bottom: 0; }
+
+  .dimension-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .dim-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .dim-card .dim-name { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .dim-card .dim-verdict { font-size: 14px; font-weight: 600; }
+
+  section.dimension, section.reviewer-section { margin-bottom: 14px; }
+  section.dimension details, section.reviewer-section details {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  section summary {
+    padding: 14px 20px;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  section summary::-webkit-details-marker { display: none; }
+  section summary::before {
+    content: "▸";
+    display: inline-block;
+    color: var(--muted);
+    transition: transform 0.15s ease;
+  }
+  section details[open] summary::before { transform: rotate(90deg); }
+  section summary h2 {
+    display: inline;
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    flex: 1;
+  }
+  .verdict-pill {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: white;
+  }
+  .verdict-strong { background: var(--verdict-strong); }
+  .verdict-adequate { background: var(--verdict-adequate); }
+  .verdict-thin { background: var(--verdict-thin); }
+  .verdict-broken { background: var(--verdict-broken); }
+
+  .dim-body { padding: 4px 20px 18px; }
+  .dim-judgment { color: var(--text); font-size: 14.5px; }
+  .dim-judgment p { margin: 0 0 10px; }
+
+  .findings-list { padding: 0 20px 4px; }
+  article.finding {
+    padding: 14px 0;
+    border-top: 1px solid var(--border);
+  }
+  article.finding:first-child { border-top: none; }
+  article.finding header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .badge {
+    font-size: 10.5px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    line-height: 1.4;
+  }
+  .badge-sev-low { background: rgba(100, 116, 139, 0.12); color: var(--sev-low); }
+  .badge-sev-medium { background: rgba(202, 138, 4, 0.14); color: var(--sev-medium); }
+  .badge-sev-high { background: rgba(234, 88, 12, 0.14); color: var(--sev-high); }
+  .badge-sev-critical { background: rgba(220, 38, 38, 0.14); color: var(--sev-critical); }
+  .finding-title { margin: 0; font-size: 15px; font-weight: 500; flex: 1; min-width: 200px; }
+  .finding-location { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; color: var(--muted); }
+  .finding-note, .finding-fix { margin-top: 6px; font-size: 14px; }
+  .finding-fix strong { color: var(--muted); font-weight: 500; }
+
+  .reviewer-source {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  .mechanical {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-top: 24px;
+    font-size: 14px;
+  }
+  .mechanical h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .mechanical ul { margin: 0; padding-left: 20px; }
+  .mechanical li { margin-bottom: 4px; color: var(--text); }
+
+  footer.report-footer {
+    margin-top: 40px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  footer .meta { display: flex; gap: 24px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+  <div class="container">
+
+    <header class="report-header">
+      <div class="title">
+        <h1>Bug 管理与分析闭环系统 — Validation Report</h1>
+        <div class="subtitle">_bmad-output/planning-artifacts/bug-system/PRD.md</div>
+      </div>
+      <div class="grade grade-fair">Fair</div>
+    </header>
+
+    <div class="synthesis">
+      <p>这是一份与自身形态高度契合、克制得当的内部工具 PRD：三期分阶段论点清晰、数据模型即事实源、字段命名贯穿全文，且正确地未塞入消费级套件（人物画像 / 市场差异化 / 具名 UJ 均属正确缺席）。作为"做什么"的纲领，它够用、可读、可抽取给 story。</p>
+      <p>但对抗式评审显著改变了画面：整套<strong>安全保证目前几乎全停在"行为愿望"层，没有落到可执行的机制层</strong>——而安全恰恰是本系统自立的卖点。两条 Critical 直指命门：① "文档内容视为数据而非指令"（NFR3）不可实现/不可验证，且截图喂视觉模型是更大的注入面，PRD 只字未提；② 字段白名单（FR9）只是"声明"，Lark 无字段级写授权，白名单必须在代码层强制，否则提报人能借提示注入把自己那条验收结论翻成 Pass。再叠加状态机死角（Verified 无法重开）、读—确认—写回的丢失更新竞态、iOS 交付在第四期整个缺席等 High 项。结论：<strong>骨架可放行，但 Epic 3（反向同步）上线前必须把安全脊柱从愿望补成机制</strong>，否则确认环节一旦批量化就垮成剧场。</p>
+    </div>
+
+    <div class="dimension-summary">
+      <div class="dim-card"><div class="dim-name">Decision-readiness 决策就绪</div><div class="dim-verdict" style="color: var(--verdict-adequate)">adequate</div></div>
+      <div class="dim-card"><div class="dim-name">Substance over theater 实质而非摆设</div><div class="dim-verdict" style="color: var(--verdict-strong)">strong</div></div>
+      <div class="dim-card"><div class="dim-name">Strategic coherence 战略连贯</div><div class="dim-verdict" style="color: var(--verdict-adequate)">adequate</div></div>
+      <div class="dim-card"><div class="dim-name">Done-ness clarity 完成度判据</div><div class="dim-verdict" style="color: var(--verdict-strong)">strong</div></div>
+      <div class="dim-card"><div class="dim-name">Scope honesty 范围诚实</div><div class="dim-verdict" style="color: var(--verdict-adequate)">adequate</div></div>
+      <div class="dim-card"><div class="dim-name">Downstream usability 下游可用性</div><div class="dim-verdict" style="color: var(--verdict-adequate)">adequate</div></div>
+      <div class="dim-card"><div class="dim-name">Shape fit 形态契合</div><div class="dim-verdict" style="color: var(--verdict-strong)">strong</div></div>
+    </div>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>Decision-readiness 决策就绪</h2><span class="verdict-pill verdict-adequate">adequate</span></summary>
+        <div class="dim-body"><div class="dim-judgment">
+          <p>决策大多以决策形式出现而非藏在"考量"里：§8.1 给了明确推进顺序与并行项，§1.2／§6 把"先只读验证 AI 价值、满意后再投入写回"立为显式闸门——真正由论点驱动的排序。§8.2 风险表逐条"风险 → 缓解"，且诚实承认 .env 方案是权宜之计。扣分点：决策闸门本身没有判据——整个二期的启动系在"效果满意"一个纯主观词上，决策者无从据此拍板。</p>
+        </div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">决策闸门"效果满意"无判据</h3><span class="finding-location">§8.1, §9 第3步</span></header>
+            <div class="finding-note">二期启动系于"验证分析效果满意后""效果满意后推进 Epic 3"，但"满意"无任何可判定口径（定位命中率？置信度阈值？人工复核通过比例？）。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 给 Epic 2 一句可度量退出标准（如"对 N 条历史 Bug，AI 给出文件级定位且人工复核认可 ≥X%"），作为进入 Epic 3 的 gate。</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>Substance over theater 实质而非摆设</h2><span class="verdict-pill verdict-strong">strong</span></summary>
+        <div class="dim-body"><div class="dim-judgment">
+          <p>几乎没有家具。正确地没有人物画像、没有市场差异化、没有创新性叙事——单操作者内部工具本就不需要。NFR 全部是产品特定约束而非"系统应可扩展/安全/可靠"式样板：NFR1 凭证三不、NFR2 写操作必经人工确认、NFR3 把"内容当数据不当指令"明确成需求。无需补充。</p>
+        </div></div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>Strategic coherence 战略连贯</h2><span class="verdict-pill verdict-adequate">adequate</span></summary>
+        <div class="dim-body"><div class="dim-judgment">
+          <p>论点明确且贯穿：把杂乱自由文本的 Bug 表重构为机器友好结构 → 让 Claude 对照代码定位 → 人工确认式写回闭环 → APK 交付验收。四个 Epic 是这条弧线的顺序展开，优先级由论点推出。唯一结构性短板：完全没有成功指标章节，导致"这套闭环到底有没有奏效"无法事后判定。</p>
+        </div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">无成功指标</h3><span class="finding-location">§1.1</span></header>
+            <div class="finding-note">Goals 全为定性（"减少人工搬运""全程可追溯"），无 SM 亦无反向指标，闭环成效无法事后验证。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 加一节轻量运营指标（如 Bug 平均流转天数、AI 定位采纳率、人工搬运动作削减量），哪怕 2–3 条。</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>Done-ness clarity 完成度判据</h2><span class="verdict-pill verdict-strong">strong</span></summary>
+        <div class="dim-body"><div class="dim-judgment">
+          <p>对内部工具而言完成度判据相当扎实。数据模型 §5 把每个字段的类型/选项/填写方/用途钉死，是最硬的部分；各 Story AC 大多可机械检验（Story 2.2 按编号命名附件、.gitignore；Story 3.2 写回前展示拟改记录/字段/新值、写回后回读校验）。两处措辞偏松：Story 3.3 AC3"阻止或提示"二义；另见对抗式评审对一批不可测 AC 的指摘。</p>
+        </div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">非法流转处置二义</h3><span class="finding-location">Story 3.3 AC3</span></header>
+            <div class="finding-note">"应被阻止或提示"未定哪种；在写回安全语境下"只提示不阻止"可能形同虚设。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 明确非法流转一律 hard block，如需放行须再次人工确认。</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>Scope honesty 范围诚实</h2><span class="verdict-pill verdict-adequate">adequate</span></summary>
+        <div class="dim-body"><div class="dim-judgment">
+          <p>分期范围非常显式（三期 + §8.1 顺序 + §6 Epic 边界），"按实际调整"是诚实占位。两处隐性边界没点出：① 没有 Non-Goals 集中章节（不做自动写回/不做实时同步散落在 NFR）；② iOS 交付路径静默缺失（Platform 含 iOS，但交付字段只有 APK）。后者被对抗式评审拔到 High（见下方 H5）。</p>
+        </div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-low">low</span><h3 class="finding-title">无 Non-Goals 集中声明</h3><span class="finding-location">全文</span></header>
+            <div class="finding-note">不做实时自动写回、不做实时同步等边界散落在 NFR 中，读者需自行推断。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 加一节"本期不做"，把 NFR2/NFR7 隐含的非目标显式化。</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>Downstream usability 下游可用性</h2><span class="verdict-pill verdict-adequate">adequate</span></summary>
+        <div class="dim-body"><div class="dim-judgment">
+          <p>本 PRD 自身下接 story 创建，可抽取性整体良好：§5 数据模型充当规范词表，字段名跨 FR/Story 用法一致；FR/NFR/Epic/Story 编号连续无缺号；跨节引用可解析。但写回字段白名单存在踩在安全命门上的内部矛盾：FR9/Story 3.2 AC3 限定"只写 C 组"，Story 4.1 却要写回 D 组的 APK 字段——PRD 未调和。Assignee 是否可写回也悬空。</p>
+        </div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">写回字段白名单自相矛盾（C组 vs D组）</h3><span class="finding-location">FR9, Story 3.2 AC3 vs Story 4.1 AC2</span></header>
+            <div class="finding-note">二期定"只写 C 组、不碰 D 组"，三期却要写回 D 组的 APK Link / APK Version；写回边界是安全命门，此矛盾必须调和。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 把白名单显式定义为"C 组 + D 组中工程师填写的 APK Link / APK Version"，并明确排除 D 组验收人字段（Verification Result / Notes / Verifier）。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-low">low</span><h3 class="finding-title">Assignee 是否可写回悬空</h3><span class="finding-location">§5 C组, Story 3.2 AC3</span></header>
+            <div class="finding-note">C 组含 Assignee，但 AC3 白名单未列它，可写性不明。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 在白名单中显式纳入或排除 Assignee。</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>Shape fit 形态契合</h2><span class="verdict-pill verdict-strong">strong</span></summary>
+        <div class="dim-body"><div class="dim-judgment">
+          <p>形态拿捏准确。整份按"能力规格 + 数据模型 + 分期 Epic"组织，正是单操作者内部工具该有的形状；§3 开门见山"不涉及独立 UI 开发"。Story 用轻量"作为 X 我希望 Y"但不设具名主角——对 IT 角色而言属正确省略。消费级套件的缺席都与产品形态相符，不应扣分。无需改动。</p>
+        </div></div>
+      </details>
+    </section>
+
+    <section class="reviewer-section">
+      <details open>
+        <summary><h2>对抗式评审（敌意阅读）</h2><span class="reviewer-source">review/review-adversarial-general.md</span></summary>
+        <div class="dim-body"><div class="dim-judgment">
+          <p>整套安全保证建立在一句行为愿望上（"内容当数据""只改 C 组""每次确认"），没有一处落到可执行机制层；第三期里读不可信内容的主体与持写权限的主体是同一个 Claude，唯一真护栏是人工逐条确认 diff——一旦批量化就垮成剧场。发现 Critical 2 · High 6 · Medium 7 · Low 4。</p>
+        </div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-critical">critical</span><h3 class="finding-title">"内容当数据而非指令"是愿望不是规约——注入面完全敞开</h3><span class="finding-location">NFR3, Story 3.2 AC4, FR6</span></header>
+            <div class="finding-note">读不可信内容（Bug 描述、截图文字）与做写决策的是同一个 Claude，数据与指令间无架构边界。AC4"原样呈现不执行"把防线压在"模型每次都能正确自我分类每句话"上，不可测。截图喂视觉模型是更大的、PRD 只字未提的注入面。</div>
+            <div class="finding-fix"><strong>Fix:</strong> ① 提报字段一律包进显式定界块并在系统提示声明块内祈使句不构成指令；② 真护栏在代码层——写回是受限工具只接受 (record_id, C组白名单字段, 新值) 三元组；③ 补 FR 声明视觉读图结果同为不可信数据；④ NFR3 补可测断言：注入语料集（含图片）回归"呈现而不执行"。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-critical">critical</span><h3 class="finding-title">字段白名单只"声明"未"强制"——提报人可借注入翻自己的验收结论</h3><span class="finding-location">FR9, Story 3.2 AC3</span></header>
+            <div class="finding-note">Lark Bitable 无字段级写授权，有写权限即全表可写。白名单只能在脚本代码里硬编码字段 ID，绝不能依赖 Claude 判断。攻击链：提报人在 Steps to Reproduce 诱导 Claude 把自己这条 Verification Result 改成 Pass。</div>
+            <div class="finding-fix"><strong>Fix:</strong> FR9 改写为机制要求——写回经由受限写入函数，代码层维护 C 组字段 ID 白名单，非白名单字段直接抛错拒绝。Story 3.2 加 AC：构造试图写 Verifier/Verification Result 的请求，断言被代码层拒绝。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">确认闸门被过载、实操中可被绕过</h3><span class="finding-location">NFR2, Story 3.2 AC1/AC2</span></header>
+            <div class="finding-note">确认粒度未定（逐条/批次/全部确认？）、"明确确认"未定义（对话里早先一句"你看着办"可能被当概括授权）、diff 格式未要求旧值→新值对照。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 以"一次写批次"为确认单位，逐字段展示 record_id|字段|旧值→新值；禁止跨对话概括授权；明确"全部确认"是否允许及记录数上限+二次确认。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">状态机死角：Verified 之后无法重开</h3><span class="finding-location">FR2, §5 状态流转图, FR11</span></header>
+            <div class="finding-note">Reopened 只有"验收 Fail"一个入口；已 Verified 的 Bug 生产复发后没有任何合法迁移能拉出来，§3.3 还把 Verified 当终态。复发只能新建（丢历史）或违规手改。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 补 Verified──复发──>Reopened（或 →In Progress），写明触发条件与操作人；修正"已关闭视图"语义为"可重开的关闭"。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">Won't Fix / Duplicate 是只进不出的黑洞，且缺 Duplicate Of 字段</h3><span class="finding-location">FR2, §5</span></header>
+            <div class="finding-note">能否从其它态判 Duplicate、能否把误判改回 Open 都没规定；判重却无"重复于哪条"字段，丢失追溯信息；Won't Fix 是工程师单方决策，提报方无异议回路。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 补 Duplicate Of（关联记录指向主 Bug）字段；明确 Won't Fix/Duplicate 可逆性；给 Won't Fix 加轻量复核/申诉约定。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">并发：读—确认—写回是经典丢失更新竞态，NFR8 并未解决</h3><span class="finding-location">FR12, NFR8, Story 3.2, §8.2</span></header>
+            <div class="finding-note">两人先后基于各自旧快照写回会互相覆盖；AC5"写回后回读校验"恰会把覆盖确认为成功。"唯一可信源在线上"解决的是本地vs线上方向，不是两个写者间的竞态。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 写回前重读目标记录与拉取基线比对 C 组字段，漂移即中止并提示（乐观锁/last-modified）；补轻量"认领"约定。写进 NFR8 与 Story 3.2 AC。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">iOS 修复在第四期闭环里整个缺席</h3><span class="finding-location">FR3, Epic 4, §3.3</span></header>
+            <div class="finding-note">Platform 允许 iOS、Affected Service 含 App，但第四期交付验收全程是 APK（Android-only）。一个 iOS Bug 修复后无任何交付/验收路径，闭环对它们是断的，与 Platform 字段自相矛盾。（rubric 也以 medium 标了此项）</div>
+            <div class="finding-fix"><strong>Fix:</strong> 二选一并写明——(a) 第四期显式限定 Android-only 并说明 iOS 临时关闭约定；或 (b) 把交付字段泛化为"构建产物"（APK / TestFlight / Ad-hoc IPA），Story 4.1/4.2 覆盖 iOS。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">APK 交付链路：访问权限 / 失效 / 版本全是挥手带过</h3><span class="finding-location">FR10, Story 4.1 AC1/AC2</span></header>
+            <div class="finding-note">"约定的云盘位置"不是规约：谁有读权限（验收人可能非 IT）？APK Link 是分享链接还是附件（§5 两可）？链接过期后已关闭 Bug 的可追溯性就断了。Fixed in Version 与 APK Version 强制"一致"是设计味道。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 规定固定云盘目录与权限模型；统一 APK Link 类型（建议附件避免链接失效）；明确两个版本字段差异语义或合并。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">Bug ID 用"自动编号"做反向同步主键不可靠</h3><span class="finding-location">A组, FR8, §5</span></header>
+            <div class="finding-note">Lark"自动编号"是展示字段非 API record_id；用它 join 在重排/重建时可能错位。PRD 把展示编号与 API 身份混为一谈。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 明确 join key 是 record_id，Bug ID 仅作人类可读展示，JSON 里两者都带。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">Reopened 二轮不清场：旧 APK / 验收结果残留、历史被覆盖</h3><span class="finding-location">Story 4.2, §5 D组</span></header>
+            <div class="finding-note">Fail→Reopened→再修后，旧 APK/Verification Result=Fail 残留；单选字段第二轮覆盖第一轮，验收历史丢失、无多轮审计痕迹。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 规定 Reopened 时哪些交付字段清空/更新；验收备注改追加式（带轮次/时间戳）或单列"验收历史"多行字段。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">本地散落的 Bug 数据含用户 PII，缺留存/清理策略</h3><span class="finding-location">NFR1, Story 2.2 AC5, FR4/FR5</span></header>
+            <div class="finding-note">NFR1 只保证不进 git，但含真实用户/宠物健康数据的截图会下载到每台 IT 笔记本、多机各存全量，无留存期/清理要求。与 CLAUDE.md 安全合规地基对 PII 的在意冲突。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 补 NFR——本地拉取数据（尤其截图）设留存期与清理约定（用完即删/定期清空脚本）、不得二次外传、可对截图做最小化处理。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">"置信度"未定义，低置信度结论是否回写未规定</h3><span class="finding-location">Story 2.3 AC3, FR7, Epic 3</span></header>
+            <div class="finding-note">"标注置信度"无刻度，不可测；更要紧的是低置信度 Root Cause 是否在三期自动写回线上文档——会污染文档（人会把 AI 猜测当结论）。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 定义刻度（高/中/低 + 判据）；规定回写门槛——低于某档不自动进入回写候选，或显式标注"AI 推测，未确认"。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">Suggestion（产品建议）走不通 Bug 形状的状态机</h3><span class="finding-location">B组 Bug Type, §5, Epic 4</span></header>
+            <div class="finding-note">建议不会被"修复"和"验收"，却套用 Bug 的修复→APK→验收闭环，会卡在状态机里无合适归宿。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 明确 Suggestion 流转（独立 Accepted/Declined/Planned，或复用现有态但说明语义），别让它套 Bug 验收闭环。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">Epic 3 上线后，Epic 2 的"只读约束"退化为纯约定</h3><span class="finding-location">Story 2.3 AC5, NFR4, Story 3.1</span></header>
+            <div class="finding-note">一期"只读"靠应用无写权限技术性成立；三期加读写权限后同一 token 全程可写，只读从此只能靠行为约定，PRD 未点破此降级。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 要么为"只分析不回写"保留独立只读应用/凭证（双应用），让只读始终技术性；要么明确承认三期后只读是约定并纳入 C1/C2 代码层护栏。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">缺对劣质/缺失提报输入的处理需求</h3><span class="finding-location">FR6, Story 2.2/2.3</span></header>
+            <div class="finding-note">现实里 Steps 可能空、Screenshots 可能缺、Module=Other、Platform 漏填；无 FR 覆盖"输入退化"时脚本与分析行为（跳过？标记？降级？）。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 补 FR——拉取/分析对缺失或不可解析字段稳健降级（不崩、标"信息不足"、列入需补充清单），而非默默产出空洞分析。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-low">low</span><h3 class="finding-title">服务→仓库映射是"示例，按实际调整"——让 FR6 核心输入悬空</h3><span class="finding-location">§4.3, §4.1</span></header>
+            <div class="finding-note">让 AI 能定位的最关键输入就是这张 Service→repo 映射表，却标着"示例，按实际调整"。一期价值锚点被挥手带过。</div>
+            <div class="finding-fix"><strong>Fix:</strong> Epic 1/2 启动前把真实 Service→仓库路径、Module 取值定稿，作为前置交付物。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-low">low</span><h3 class="finding-title">一批不可测的验收标准</h3><span class="finding-location">Story 2.3 AC1/AC4</span></header>
+            <div class="finding-note">"理解每条 Bug""优先检查平台分支"无法客观断言通过/失败。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 改写为可观察产物（每条未关闭 Bug 输出含 文件:函数 + 归因 + 置信度 的结构化结论），用产物存在性与字段完整性验收。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-low">low</span><h3 class="finding-title">变更记录作者是"IT"而非具体人</h3><span class="finding-location">§1.3</span></header>
+            <div class="finding-note">所有权/问责不清；谁拍板字段、谁批准权限升级（Story 3.1"管理员知情审核"的"管理员"是谁）都没落到人。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 指名负责人与审核人。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-low">low</span><h3 class="finding-title">拉取脚本缺限流/分页失败处理需求</h3><span class="finding-location">Story 2.2 AC1</span></header>
+            <div class="finding-note">只说"分页拉取全部记录"，没提 Lark API 限流、分页中断、附件下载失败的重试/续传。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 补稳健性要求（限流退避、失败重试、断点续传或失败清单），哪怕轻量。</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <div class="mechanical">
+      <h3>Mechanical notes</h3>
+      <ul>
+        <li><strong>词表</strong>：无独立 Glossary，由 §5 数据模型代偿，字段名跨节用法一致；若后续喂架构/自动化，建议把状态枚举与服务名单独提一个小词表。</li>
+        <li><strong>ID 连续性</strong>：FR1–12、NFR1–8、Epic 1–4、Story 1.1–4.3 均连续无缺号/重号；跨节引用可解析。</li>
+        <li><strong>假设索引</strong>：无 [ASSUMPTION] / [NOTE FOR PM] 标签；"Module 按实际调整""服务→仓库映射示例按实际调整"实为未确认假设，建议统一加标 + 文末建轻量假设索引。</li>
+        <li><strong>UJ 主角</strong>：Story 无具名主角——对本工具形态属正确取舍，非缺陷。</li>
+        <li><strong>必备章节</strong>：对内部工具量级，缺 Success Metrics 与 Non-Goals 两节（已在对应维度计入）；其余齐备。</li>
+        <li><strong>字段白名单一致性</strong>：C 组/D 组写回范围需统一定义（见 Downstream usability high 项 + 对抗式 C2），避免 story 落地时各取一说。</li>
+      </ul>
+    </div>
+
+    <footer class="report-footer">
+      <div class="meta">
+        <span>Rubric: .claude/skills/bmad-prd/assets/prd-validation-checklist.md</span>
+        <span>Generated: 2026-06-30T11:36:53Z</span>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

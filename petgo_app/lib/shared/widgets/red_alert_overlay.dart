@@ -22,6 +22,8 @@ class RedAlertOverlay extends ConsumerStatefulWidget {
     required this.title,
     required this.onAcknowledge,
     this.symptom,
+    this.emergencySteps = const <String>[],
+    this.emergencyAvoid = const <String>[],
     this.lockSeconds = 5,
   });
 
@@ -33,6 +35,12 @@ class RedAlertOverlay extends ConsumerStatefulWidget {
 
   /// 症状摘要（上游经 sanitize；为空时不渲染症状框，不臆造）。
   final String? symptom;
+
+  /// 红色态对症「现在该做」院前应急步骤（AI 产出）；为空时回退通用步骤。
+  final List<String> emergencySteps;
+
+  /// 红色态对症「切勿」禁忌（AI 产出）；为空时不渲染该区块。
+  final List<String> emergencyAvoid;
 
   /// 锁定秒数（默认 5；测试可注入更短）。
   final int lockSeconds;
@@ -69,6 +77,14 @@ class _RedAlertOverlayState extends ConsumerState<RedAlertOverlay>
     _timer?.cancel();
     _breath.dispose();
     super.dispose();
+  }
+
+  /// 对症步骤优先（AI 产出）；安全层升红 / AI 失败 / 未产出 → 回退通用兜底步骤（永远有保底内容）。
+  List<String> _resolveSteps(AppLocalizations l10n) {
+    if (widget.emergencySteps.isNotEmpty) {
+      return widget.emergencySteps;
+    }
+    return <String>[l10n.triageRedStep1, l10n.triageRedStep2, l10n.triageRedStep3];
   }
 
   @override
@@ -172,16 +188,34 @@ class _RedAlertOverlayState extends ConsumerState<RedAlertOverlay>
                         ),
                         const SizedBox(height: 18),
                       ],
-                      // 立即步骤（3 步圆 badge）。
+                      // 立即步骤：AI 对症「现在该做」，缺省回退通用步骤。
                       Text(l10n.triageRedStepsHeader.toUpperCase(),
                           style: const TextStyle(
                               fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                      const SizedBox(height: 6),
+                      // 应急仅为就医前辅助，绝不替代立即就医（防紧迫性被稀释）。
+                      Text(l10n.triageRedPreCareNote,
+                          style: const TextStyle(
+                              fontSize: 11, height: 1.5, color: AppColors.muted)),
                       const SizedBox(height: 10),
-                      _StepLine(n: '1', text: l10n.triageRedStep1),
-                      const SizedBox(height: 8),
-                      _StepLine(n: '2', text: l10n.triageRedStep2),
-                      const SizedBox(height: 8),
-                      _StepLine(n: '3', text: l10n.triageRedStep3),
+                      for (final (int i, String step) in _resolveSteps(l10n).indexed) ...[
+                        if (i > 0) const SizedBox(height: 8),
+                        _StepLine(n: '${i + 1}', text: step),
+                      ],
+                      // 切勿区（仅当 AI 给出对症禁忌；急症「别做错」常是救命关键）。
+                      if (widget.emergencyAvoid.isNotEmpty) ...[
+                        const SizedBox(height: 18),
+                        Text(l10n.triageRedAvoidHeader.toUpperCase(),
+                            style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.triageRed)),
+                        const SizedBox(height: 10),
+                        for (final (int i, String item) in widget.emergencyAvoid.indexed) ...[
+                          if (i > 0) const SizedBox(height: 8),
+                          _AvoidLine(text: item),
+                        ],
+                      ],
                       const SizedBox(height: 22),
                       // 倒计时锁 CTA（解锁后单一「我已知晓」）。
                       FilledButton(
@@ -247,6 +281,36 @@ class _StepLine extends StatelessWidget {
           child: Text(n,
               style: const TextStyle(
                   fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(text,
+              style: const TextStyle(fontSize: 13, height: 1.5, color: AppColors.ink)),
+        ),
+      ],
+    );
+  }
+}
+
+/// 「切勿」禁忌行（红 ✕ badge + 文案）：急症下做了会加重伤害的动作。
+class _AvoidLine extends StatelessWidget {
+  const _AvoidLine({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 22,
+          height: 22,
+          margin: const EdgeInsets.only(top: 1),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+              color: AppColors.triageRed.withValues(alpha: 0.12), shape: BoxShape.circle),
+          child: const Icon(Icons.close_rounded, size: 14, color: AppColors.triageRed),
         ),
         const SizedBox(width: 10),
         Expanded(

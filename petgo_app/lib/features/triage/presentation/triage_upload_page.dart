@@ -37,6 +37,8 @@ class _TriageUploadPageState extends ConsumerState<TriageUploadPage> {
   void initState() {
     super.initState();
     // 每次进入上传页都从空闲态重开：清上次结果 + 草稿，避免「重进分诊直接看到旧结果」。
+    // 绿/黄结果靠此 postFrame 清即可（无 overlay）；红色结果由 TriageRedResult 退出时同步清
+    // （否则首帧旧 RED 会先渲染并把 overlay 重新弹出，本 postFrame 来不及拦截）。
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ref.read(triageResultProvider.notifier).reset();

@@ -9,18 +9,24 @@ Future<void> _pump(
   WidgetTester tester, {
   required VoidCallback onAcknowledge,
   int lockSeconds = 5,
+  List<String> emergencySteps = const <String>[],
+  List<String> emergencyAvoid = const <String>[],
+  Locale locale = const Locale('en'),
 }) async {
   final container = ProviderContainer();
   addTearDown(container.dispose);
   await tester.pumpWidget(UncontrolledProviderScope(
     container: container,
     child: MaterialApp(
+      locale: locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: RedAlertOverlay(
           title: '请立即带 Momo 去宠物医院就诊',
           lockSeconds: lockSeconds,
+          emergencySteps: emergencySteps,
+          emergencyAvoid: emergencyAvoid,
           onAcknowledge: onAcknowledge,
         ),
       ),
@@ -92,6 +98,31 @@ void main() {
       findsOneWidget,
     );
     expect(semantics, isNotNull);
+    await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('对症应急：有 AI 步骤时渲染 AI「现在该做 + 切勿」，不出现通用兜底', (tester) async {
+    await _pump(tester,
+        onAcknowledge: () {},
+        emergencySteps: <String>['移到阴凉通风处', '常温水浸湿身体辅助降温'],
+        emergencyAvoid: <String>['切勿强行喂食或灌水']);
+    expect(find.text('移到阴凉通风处'), findsOneWidget);
+    expect(find.text('常温水浸湿身体辅助降温'), findsOneWidget);
+    // 切勿区（仅 AI 有禁忌时出现）
+    expect(find.text('切勿强行喂食或灌水'), findsOneWidget);
+    expect(find.text('DO NOT'), findsOneWidget); // triageRedAvoidHeader 大写
+    // 通用兜底步骤不应出现（有对症内容时不回退）
+    expect(find.text('Minimize movement and handling during transport'), findsNothing);
+    await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('对症应急：AI 步骤为空时回退通用步骤（修订后中性文案，无切勿区）', (tester) async {
+    await _pump(tester, onAcknowledge: () {}); // emergencySteps/avoid 默认空
+    // 回退到通用三步；修订后 step2 不再是有害的「裹暖布」
+    expect(find.text('Minimize movement and handling during transport'), findsOneWidget);
+    expect(find.textContaining('warm cloth'), findsNothing);
+    // 切勿区仅 AI 有禁忌时渲染，回退态不出现
+    expect(find.text('DO NOT'), findsNothing);
     await tester.pump(const Duration(seconds: 5));
   });
 }
