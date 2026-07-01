@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
@@ -171,10 +172,18 @@ class _HistoryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final nameLine = entry.ownerHandle != null ? '${entry.petName} · @${entry.ownerHandle}' : entry.petName;
-    return Container(
+    // 整卡可点 → 只读问诊结果页（Bug 20260701-196：原「View →」是裸 Text 无手势，点击无反应）。
+    // 底色移到 Material，InkWell 水波纹才可见；boxShadow 留在内层 Container。
+    return Material(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        key: ValueKey('vetHistoryView_${entry.sessionId}'),
+        onTap: () => context.push('/vet/history/${entry.sessionId}', extra: entry),
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(color: AppColors.ink.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, 2)),
@@ -254,6 +263,8 @@ class _HistoryCard extends StatelessWidget {
             ],
           ),
         ],
+      ),
+        ),
       ),
     );
   }

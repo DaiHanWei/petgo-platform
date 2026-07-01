@@ -37,7 +37,9 @@ import '../../features/consult/presentation/consult_waiting_page.dart';
 import '../../features/notify/presentation/notification_center_page.dart';
 import '../../features/gath/presentation/gath_page.dart';
 import '../../features/profile/presentation/pet_card_page.dart';
+import '../../features/vet/domain/vet_workbench_lists.dart';
 import '../../features/vet/presentation/vet_conversation_page.dart';
+import '../../features/vet/presentation/vet_history_detail_page.dart';
 import '../../features/triage/presentation/dev_triage_page.dart';
 import '../../features/triage/presentation/triage_page.dart';
 import '../../features/triage/presentation/triage_upload_page.dart';
@@ -214,6 +216,15 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/vet/conversation/:id',
         builder: (c, s) => _vetScoped(VetConversationPage(sessionId: int.parse(s.pathParameters['id']!))),
+      ),
+      // 兽医「历史」卡 View → 只读问诊结果页（Bug 20260701-196）。列表带入 VetHistoryEntry(extra)
+      // 供顶栏宠物名；深链无 extra 时降级为 null，仅按 sessionId 拉诊断。
+      GoRoute(
+        path: '/vet/history/:id',
+        builder: (c, s) => _vetScoped(VetHistoryDetailPage(
+          sessionId: int.parse(s.pathParameters['id']!),
+          entry: s.extra as VetHistoryEntry?,
+        )),
       ),
       // 抢单请求详情/预览页（Story 5.2 AC5 · F11）：3 分钟预览计时 + 三态返回。
       GoRoute(

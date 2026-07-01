@@ -10,6 +10,7 @@ import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
 import '../data/consult_repository.dart';
+import '../domain/consult_case.dart';
 
 /// 等待界面（Story 5.3 F2/F3/F4）：「正在为你匹配兽医…」+ 轮询 + 1min 超时整页 + 取消二次确认。
 ///
@@ -37,6 +38,10 @@ class _ConsultWaitingPageState extends ConsumerState<ConsultWaitingPage>
   bool _timedOut = false; // 超时态：整页切到 P-21b（match-timeout），非弹层
   bool _navigating = false;
 
+  /// 本次已提交病例（症状文本 + 私密图签名 URL），供「SUMMARY SENT」摘要卡渲染真实内容。
+  /// null = 尚未拉到（先不渲染，拉到再 setState）；空病例（DIRECT 无自填）同样不渲染。
+  ConsultCase? _case;
+
   /// AC7（F12）：退出取消的抑制位。接单成功 / 「先用 AI」保留请求 / 主动取消 时置真，
   /// 避免在这些已决态下因生命周期 detached 误触发取消。
   bool _exitCancelDisabled = false;
@@ -45,6 +50,7 @@ class _ConsultWaitingPageState extends ConsumerState<ConsultWaitingPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _loadCase();
     _startPolling();
     // 显示用本地倒计时（逐秒驱动 UI）；并兜底：归零仍 WAITING → 直接弹超时（不等服务端 timedOut）。
     _display = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -79,6 +85,17 @@ class _ConsultWaitingPageState extends ConsumerState<ConsultWaitingPage>
       await ref.read(consultRepositoryProvider).cancel(widget.sessionId);
     } catch (_) {
       // 进程终止中无法保证送达；硬 kill 兜底依赖后端（见 Dev Notes）。
+    }
+  }
+
+  /// 拉取本次会话的已提交病例（症状 + 照片数），填充摘要卡。失败/无病例按空处理（卡片不渲染）。
+  Future<void> _loadCase() async {
+    try {
+      final c = await ref.read(consultRepositoryProvider).caseContext(widget.sessionId);
+      if (!mounted) return;
+      setState(() => _case = c);
+    } catch (_) {
+      // 拉取失败静默：摘要卡不渲染，不影响匹配主流程。
     }
   }
 
@@ -405,8 +422,15 @@ class _ConsultWaitingPageState extends ConsumerState<ConsultWaitingPage>
     );
   }
 
-  /// 症状摘要卡（原型 match-wait）：白底圆角14 + 阴影 + 大写灰小标题 + 占位摘要正文。
+  /// 症状摘要卡（原型 match-wait）：白底圆角14 + 阴影 + 大写灰小标题 + **用户真实提交的**症状/照片数。
+  /// 病例未拉到或为空（DIRECT 未自填症状/图）时不渲染——避免展示与本次会话无关的占位内容。
   Widget _summaryCard(AppLocalizations l10n) {
+    final c = _case;
+    if (c == null || c.isEmpty) return const SizedBox.shrink();
+    final summary = [
+      if (c.symptomText != null && c.symptomText!.trim().isNotEmpty) c.symptomText!.trim(),
+      if (c.imageUrls.isNotEmpty) l10n.vetQueuePhotosAttached(c.imageUrls.length),
+    ].join(' · ');
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
@@ -424,8 +448,9 @@ class _ConsultWaitingPageState extends ConsumerState<ConsultWaitingPage>
               style: const TextStyle(
                   fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.5, color: AppColors.muted)),
           const SizedBox(height: 6),
-          const Text('Mochi — muntah busa putih 2x · 2 foto dilampirkan',
-              style: TextStyle(fontSize: 13, height: 1.5, color: AppColors.ink)),
+          Text(summary,
+              key: const ValueKey('consultSummaryBody'),
+              style: const TextStyle(fontSize: 13, height: 1.5, color: AppColors.ink)),
         ],
       ),
     );

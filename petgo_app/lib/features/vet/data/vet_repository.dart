@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/storage/secure_storage.dart';
+import '../../consult/domain/consult_diagnosis.dart';
 import '../domain/consult_ai_context.dart';
 import '../domain/vet_diagnosis_draft.dart';
 import '../domain/vet_inbox_item.dart';
@@ -112,6 +113,18 @@ class VetRepository {
       data: diagnosis.toJson(),
     );
     return VetSession.fromJson(resp.data!);
+  }
+
+  /// 兽医查看自己接诊会话的最终诊断（工作台「历史」卡 View 入口）。
+  /// 后端做 vetId 归属校验；未出诊断(204)/失败 → null（页面转空态，不崩）。
+  Future<ConsultDiagnosis?> diagnosis(int sessionId) async {
+    try {
+      final resp = await dio.get<Map<String, dynamic>>(ApiPaths.vetConsultDiagnosis(sessionId));
+      if (resp.statusCode == 204 || resp.data == null) return null;
+      return ConsultDiagnosis.fromJson(resp.data!);
+    } on DioException {
+      return null;
+    }
   }
 
   /// 兽医发完回复后通知用户（Story 6.2）：触发「有新回复」推送。失败静默（不阻塞对话）。

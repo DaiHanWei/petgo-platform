@@ -5,6 +5,7 @@ import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.consult.domain.ConsultRating;
 import com.tailtopia.consult.domain.ConsultSession;
 import com.tailtopia.consult.domain.SessionStatus;
+import com.tailtopia.consult.domain.VetDiagnosis;
 import com.tailtopia.consult.dto.ConsultAssistResponse;
 import com.tailtopia.consult.dto.VetActiveItem;
 import com.tailtopia.consult.dto.VetHistoryItem;
@@ -133,6 +134,22 @@ public class VetConsultService {
     @Transactional(readOnly = true)
     public VetSessionView sessionView(long sessionId) {
         return toSessionView(load(sessionId));
+    }
+
+    /**
+     * 兽医查看自己接诊会话的最终诊断（Story C 收尾 · 工作台「历史」卡 View 入口）。
+     *
+     * <p>归属校验套兽医侧现成模式（参照 {@link #notifyReply}）：仅本会话接诊兽医可查，
+     * 非归属 → 403（不越权看他人病例）。未出诊断（如 INTERRUPTED 未提交）→ null，controller 转 204。
+     * 诊断为健康数据：仅按需返回，绝不进日志（访问日志层已对 {@code diagnosis} 字段脱敏）。
+     */
+    @Transactional(readOnly = true)
+    public VetDiagnosis diagnosisForVet(long vetId, long sessionId) {
+        ConsultSession s = load(sessionId);
+        if (s.getVetId() == null || !s.getVetId().equals(vetId)) {
+            throw AppException.forbidden("无权查看该会话");
+        }
+        return s.getVetDiagnosis();
     }
 
     /** 富化单条会话视图（读路径 sessionView 用）：补宠物身份 + 机主昵称。 */

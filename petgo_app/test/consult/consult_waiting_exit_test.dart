@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/consult/data/consult_repository.dart';
+import 'package:tailtopia/features/consult/domain/consult_case.dart';
 import 'package:tailtopia/features/consult/domain/consult_session.dart';
 import 'package:tailtopia/features/consult/presentation/consult_waiting_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
@@ -25,6 +26,9 @@ class _FakeConsultRepository extends ConsultRepository {
 
   @override
   Future<ConsultSession> get(int id) async => _waiting(id);
+
+  @override
+  Future<ConsultCase> caseContext(int id) async => const ConsultCase(hasCase: false);
 
   @override
   Future<ConsultSession> cancel(int id) async {

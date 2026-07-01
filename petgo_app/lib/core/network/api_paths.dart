@@ -62,6 +62,10 @@ class ApiPaths {
   /// 兽医结束会话（Story 5.6）。
   static String vetConsultEnd(int sessionId) => '$base/vet/consult-sessions/$sessionId/end';
 
+  /// 兽医查看自己接诊会话的最终诊断（历史卡 View 入口）。归属校验在后端；无诊断 → 204。
+  static String vetConsultDiagnosis(int sessionId) =>
+      '$base/vet/consult-sessions/$sessionId/diagnosis';
+
   /// 兽医回复后通知用户（Story 6.2，FR-22A）。发完 IM 消息 ping 触发用户推送。
   static String vetConsultNotifyReply(int sessionId) =>
       '$base/vet/consult-sessions/$sessionId/notify-reply';

@@ -502,4 +502,73 @@ class VetConsultControllerEndpointTest extends ApiIntegrationTest {
         mvc.perform(get("/api/v1/vet/consult-sessions/history"))
                 .andExpect(status().isUnauthorized());
     }
+
+    // ===== GET /{id}/diagnosis（Bug 20260701-196：历史卡 View 只读诊断入口）=====
+
+    /** 归属兽医结束后可读回自己定格的最终诊断（走真实写路径：先 /end 落诊断，再 GET）。 */
+    @Test
+    void diagnosis_ownerVetAfterEnd_returnsRecordedDiagnosis() throws Exception {
+        VetAccount vet = vets.newActiveVet("回看医生");
+        User user = newUser();
+        ConsultSession s = vets.newInProgressSession(user.getId(), vet.getId());
+        mvc.perform(post("/api/v1/vet/consult-sessions/" + s.getId() + "/end")
+                        .header("Authorization", vetBearer(vet.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(END_BODY))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/v1/vet/consult-sessions/" + s.getId() + "/diagnosis")
+                        .header("Authorization", vetBearer(vet.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.diagnosis").value("Gastritis ringan"))
+                .andExpect(jsonPath("$.followUp").value("Kontrol 3 hari"))
+                .andExpect(jsonPath("$.clinicWithin").value("24 jam"));
+    }
+
+    /** 未出诊断（会话进行中、尚未结束）→ 204 No Content（前端转空态）。 */
+    @Test
+    void diagnosis_noDiagnosisYet_returns204() throws Exception {
+        VetAccount vet = vets.newActiveVet("无诊断医生");
+        User user = newUser();
+        ConsultSession s = vets.newInProgressSession(user.getId(), vet.getId());
+
+        mvc.perform(get("/api/v1/vet/consult-sessions/" + s.getId() + "/diagnosis")
+                        .header("Authorization", vetBearer(vet.getId())))
+                .andExpect(status().isNoContent());
+    }
+
+    /** 非本会话接诊兽医查诊断 → 403（不越权看他人病例）。 */
+    @Test
+    void diagnosis_byNonOwnerVet_isForbidden403() throws Exception {
+        VetAccount owner = vets.newActiveVet("诊断主人");
+        VetAccount other = vets.newActiveVet("诊断路人");
+        User user = newUser();
+        ConsultSession s = vets.newInProgressSession(user.getId(), owner.getId());
+
+        mvc.perform(get("/api/v1/vet/consult-sessions/" + s.getId() + "/diagnosis")
+                        .header("Authorization", vetBearer(other.getId())))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void diagnosis_unknownSession_isNotFound404() throws Exception {
+        VetAccount vet = vets.newActiveVet("查空诊断医生");
+        mvc.perform(get("/api/v1/vet/consult-sessions/99000000003/diagnosis")
+                        .header("Authorization", vetBearer(vet.getId())))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void diagnosis_userToken_isForbidden403() throws Exception {
+        var user = newUser();
+        mvc.perform(get("/api/v1/vet/consult-sessions/1/diagnosis")
+                        .header("Authorization", userBearer(user.getId())))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void diagnosis_missingToken_isUnauthorized401() throws Exception {
+        mvc.perform(get("/api/v1/vet/consult-sessions/1/diagnosis"))
+                .andExpect(status().isUnauthorized());
+    }
 }

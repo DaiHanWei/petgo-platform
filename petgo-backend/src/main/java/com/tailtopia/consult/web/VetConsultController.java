@@ -5,6 +5,7 @@ import com.tailtopia.consult.dto.VetActiveItem;
 import com.tailtopia.consult.dto.VetEndRequest;
 import com.tailtopia.consult.dto.VetHistoryItem;
 import com.tailtopia.consult.dto.VetInboxItem;
+import com.tailtopia.consult.domain.VetDiagnosis;
 import com.tailtopia.consult.dto.VetSessionView;
 import com.tailtopia.consult.service.ConsultAcceptService;
 import com.tailtopia.consult.service.ConsultCloseService;
@@ -13,6 +14,7 @@ import com.tailtopia.shared.error.AppException;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -31,6 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
  *   <li>{@code POST /api/v1/vet/consult-sessions/{id}/accept}：接单（CAS WAITING→IN_PROGRESS + IM 建会话）。</li>
  *   <li>{@code GET /api/v1/vet/consult-sessions/{id}}：进行中会话视图（含 im_conversation_id + 宠物身份）。</li>
  *   <li>{@code GET /api/v1/vet/consult-sessions/{id}/assist}：FR-5 辅助（AI 参考回复 + 冷启动空历史）。</li>
+ *   <li>{@code GET /api/v1/vet/consult-sessions/{id}/diagnosis}：历史卡「View」只读最终诊断（归属校验 + 无诊断 204）。</li>
  * </ul>
  */
 @RestController
@@ -104,6 +107,17 @@ public class VetConsultController {
     @GetMapping("/{id}/assist")
     public ConsultAssistResponse assist(@PathVariable long id) {
         return vetConsultService.assist(id);
+    }
+
+    /**
+     * 兽医查看自己接诊会话的最终诊断（Story C 收尾 · 历史卡 View 入口）。
+     * 归属校验在 service（非本会话接诊兽医 → 403）；未出诊断（如 INTERRUPTED 未提交）→ 204。
+     * 诊断为健康数据：绝不进日志（访问日志层已对 {@code diagnosis} 字段脱敏），与用户侧同源同结构。
+     */
+    @GetMapping("/{id}/diagnosis")
+    public ResponseEntity<VetDiagnosis> diagnosis(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
+        VetDiagnosis d = vetConsultService.diagnosisForVet(currentVetId(jwt), id);
+        return d == null ? ResponseEntity.noContent().build() : ResponseEntity.ok(d);
     }
 
     private static long currentVetId(Jwt jwt) {
