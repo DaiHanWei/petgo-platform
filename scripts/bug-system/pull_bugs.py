@@ -157,7 +157,7 @@ def download_screenshots(client, records, token, out_dir, screenshots_field, tab
 
 # ── 编排 ──────────────────────────────────────────────────────────────
 
-def run(config_path="config.toml", env_path=".env", out_dir="data"):
+def run(config_path="config.toml", env_path=".env", out_dir="data", with_media=False):
     """拉取主流程。返回退出码（0=成功）。供 CLI 与定时调用共用（NFR7）。"""
     cfg = load_config(config_path)
     env = load_env(env_path)
@@ -193,9 +193,11 @@ def run(config_path="config.toml", env_path=".env", out_dir="data"):
     write_markdown(records, out)
     write_baseline(raw_records, cfg, out)
 
-    failures = download_screenshots(
-        client, records, token, out, cfg.get("screenshots_field", "Screenshots"),
-        env["TABLE_ID"])
+    failures = []
+    if with_media:
+        failures = download_screenshots(
+            client, records, token, out, cfg.get("screenshots_field", "Screenshots"),
+            env["TABLE_ID"])
 
     needs = [
         {"record_id": r["record_id"], "bug_id": r["bug_id"], "missing": r["_missing"]}
@@ -221,9 +223,11 @@ def main(argv=None):
     ap.add_argument("--config", default="config.toml", help="配置文件路径（默认 config.toml）")
     ap.add_argument("--env", default=".env", help=".env 凭证文件路径（默认 .env）")
     ap.add_argument("--out", default="data", help="产物输出目录（默认 data）")
+    ap.add_argument("--with-media", action="store_true",
+                    help="同时下载截图/视频（默认不下，深挖阶段按需下）")
     args = ap.parse_args(argv)
     try:
-        return run(config_path=args.config, env_path=args.env, out_dir=args.out)
+        return run(config_path=args.config, env_path=args.env, out_dir=args.out, with_media=args.with_media)
     except FileNotFoundError as exc:
         sys.stderr.write(f"❌ {exc}\n")
         return 2
