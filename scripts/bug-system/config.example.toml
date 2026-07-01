@@ -47,6 +47,9 @@ writeback_whitelist = [
 ]
 # 单批次写回记录数上限，超则须二次确认（NFR2）
 writeback_max_batch = 5
+# 认领/深挖并发（bug-system 重构，2026-07-01 spec）。
+developer_field    = "开发人员"   # 认领锁 + 完成人 复用列（零改表）；解析进 bugs.json 的 claimed_by
+analyze_batch_warn = 10           # 一次 /bug-analyze 认领超此数 → 预警 token/时间（软提醒，非硬拦）
 
 # ── B 组提报人字段（一律裹进 <<<UNTRUSTED_REPORT … >>> 定界块，NFR3）────
 # 提报人填写的内容视为不可信数据。自由文本字段是注入向量，必须定界。
