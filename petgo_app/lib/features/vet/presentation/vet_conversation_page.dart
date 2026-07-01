@@ -32,9 +32,6 @@ class VetConversationPage extends ConsumerStatefulWidget {
   ConsumerState<VetConversationPage> createState() => _VetConversationPageState();
 }
 
-/// FR-5 工具条当前激活项。
-enum _Tool { template, history }
-
 class _VetConversationPageState extends ConsumerState<VetConversationPage> {
   late Future<_VetConvData> _data;
 
@@ -45,8 +42,8 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
   // 聊天输入框控制器由本页持有（供 Template「Pakai」预填），传给 ImChatPlaceholder。
   final TextEditingController _chatInput = TextEditingController();
 
-  // 默认展开「Template Saran」辅助参考（原型默认激活态）。
-  _Tool _activeTool = _Tool.template;
+  // Bug 20260701-194：点「Use」采用参考回复后收起该 Assist 卡（再点 Template chip 可重新展开）。
+  bool _assistDismissed = false;
 
   // 病例区（症状+照片）默认折叠：薄条常驻,点开看完整病例 + 真图(签名 URL)。
   bool _caseExpanded = false;
@@ -123,11 +120,6 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
     }
   }
 
-  void _onToolUnavailable() {
-    final l10n = AppLocalizations.of(context);
-    showAppToast(context, l10n.vetChatToolUnavailable);
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -145,10 +137,7 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
             children: [
               _topBar(d),
               _toolsBar(),
-              if (_activeTool == _Tool.template)
-                _templatePanel(d.assist)
-              else
-                _historyPanel(d.assist),
+              _templatePanel(d.assist),
               // 病例区(症状+照片):有 AI 上下文时显薄条,点开看完整病例 + 真图。
               if (d.aiContext.hasAiContext) _caseSection(d.aiContext),
               // 消息区 + 输入栏（已对齐原型；气泡/发送色随兽医薄荷主题）。Expanded 贴底。
@@ -301,15 +290,10 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
               style: AppTypography.micro.copyWith(color: Colors.white.withValues(alpha: 0.4), letterSpacing: 0.5),
             ),
             const SizedBox(width: AppSpacing.sm),
-            _toolChip(l10n.vetChatToolTemplate, active: _activeTool == _Tool.template,
-                onTap: () => setState(() => _activeTool = _Tool.template)),
-            const SizedBox(width: 6),
-            _toolChip(l10n.vetChatToolDrugs, active: false, onTap: _onToolUnavailable),
-            const SizedBox(width: 6),
-            _toolChip(l10n.vetChatToolHistory, active: _activeTool == _Tool.history,
-                onTap: () => setState(() => _activeTool = _Tool.history)),
-            const SizedBox(width: 6),
-            _toolChip(l10n.vetChatToolEmergency, active: false, onTap: _onToolUnavailable),
+            // Bug 20260701-195：Drug list / History / Emergency 尚未实现（点击无实质反应），
+            // 按需求先隐藏，只保留已实现的 Advice template。点 chip 同时重新展开被收起的 Assist 卡。
+            _toolChip(l10n.vetChatToolTemplate, active: true,
+                onTap: () => setState(() => _assistDismissed = false)),
           ],
         ),
       ),
@@ -345,6 +329,8 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
   Widget _templatePanel(ConsultAssist assist) {
     final l10n = AppLocalizations.of(context);
     if (assist.aiReferenceReply.isEmpty) return const SizedBox.shrink();
+    // Bug 20260701-194：点 Use 采用后收起（_assistDismissed），再点 Template chip 可重新展开。
+    if (_assistDismissed) return const SizedBox.shrink();
     return Container(
       key: const ValueKey('vetAssistPanel'),
       width: double.infinity,
@@ -366,11 +352,12 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
             alignment: Alignment.centerRight,
             child: FilledButton(
               key: const ValueKey('vetAssistAdopt'),
-              // 「采用」填入输入框供编辑后发送（不自动发，NFR-9）。
+              // 「采用」填入输入框供编辑后发送（不自动发，NFR-9），并收起本卡（Bug 194）。
               onPressed: () {
                 _chatInput.text = assist.aiReferenceReply;
                 _chatInput.selection =
                     TextSelection.collapsed(offset: _chatInput.text.length);
+                setState(() => _assistDismissed = true);
               },
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.mint,
@@ -426,32 +413,6 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
             child: SingleChildScrollView(child: VetAiContextCard(context_: ctx)),
           ),
       ],
-    );
-  }
-
-  /// Riwayat 面板：历史摘要（冷启动空）。
-  Widget _historyPanel(ConsultAssist assist) {
-    final l10n = AppLocalizations.of(context);
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.md, 0),
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.skyTint, // 紫浅底，与 Template 辅助区一致
-        borderRadius: BorderRadius.circular(12),
-        border: const Border(left: BorderSide(color: AppColors.mint, width: 3)),
-      ),
-      child: assist.historySummaries.isEmpty
-          ? Text(l10n.vetAssistHistoryEmpty, style: AppTypography.body.copyWith(color: AppColors.textTertiary))
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final h in assist.historySummaries) ...[
-                  Text('• $h', style: AppTypography.body.copyWith(color: AppColors.ink, height: 1.5)),
-                  const SizedBox(height: 6),
-                ],
-              ],
-            ),
     );
   }
 }

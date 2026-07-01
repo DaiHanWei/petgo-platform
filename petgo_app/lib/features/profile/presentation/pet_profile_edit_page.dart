@@ -11,7 +11,6 @@ import '../../media/domain/media_upload_use_case.dart';
 import '../../../shared/utils/date_format.dart';
 import '../../../shared/utils/media_permission.dart';
 import '../../../shared/widgets/app_image.dart';
-import '../../../shared/widgets/confirm_sheet.dart';
 import '../data/profile_repository.dart';
 import '../domain/pet_profile.dart';
 import 'widgets/pet_form_fields.dart';
@@ -329,28 +328,10 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
           ),
           const SizedBox(height: AppSpacing.sm),
           // 保存按钮在右上角 AppBar（原型 P-32），此处不再放底部按钮。
-          // 危险区：删除档案（原型 pet-edit）。⚠️ 仅前端 UI + 二次确认；DELETE 端点待后端（D1/D2 级联/匿名化）。
-          const Divider(color: Color(0xFFF3F3F3), thickness: 1, height: 32),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              key: const ValueKey('petProfileDeleteButton'),
-              onPressed: _submitting ? null : () => _confirmDelete(l10n),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.popRed,
-                side: const BorderSide(color: Color(0xFFFDE7EB), width: 1.5),
-                padding: const EdgeInsets.symmetric(vertical: 13),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              child: Text('🗑 ${l10n.petProfileDeleteButton(_nameController.text.trim())}',
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Center(
-            child: Text(l10n.petProfileDeleteIrreversible,
-                style: const TextStyle(fontSize: 11, color: AppColors.textTertiary)),
-          ),
+          // Bug 20260701-187 / 决策 F18：删除档案暂隐藏——真删除的数据生命周期语义（物理删 vs 软删
+          // 冷静期、关联 UGC 去留、名片 token 失效）待产品拍板；先隐藏按钮避免「点删除只弹 Coming soon」
+          // 的误导。删除交互（_confirmDelete + petProfileDelete* 文案）已随此改移除，恢复时按 F18 接
+          // DELETE /pet-profiles/me 一并补回。
         ],
       ),
     );
@@ -440,25 +421,6 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
       ),
     );
     if (picked != null) setState(() => _sex = picked);
-  }
-
-  /// 删除档案二次确认（原型 pet-edit）。⚠️ 端点待后端：当前确认后仅占位提示，不真正删除。
-  Future<void> _confirmDelete(AppLocalizations l10n) async {
-    final name = _nameController.text.trim();
-    final ok = await showConfirmSheet(
-      context,
-      title: l10n.petProfileDeleteConfirmTitle,
-      message: l10n.petProfileDeleteConfirmBody(name),
-      confirmLabel: l10n.petProfileDeleteConfirmYes,
-      cancelLabel: l10n.commonCancel,
-      icon: Icons.delete_outline_rounded,
-      danger: true,
-      confirmKey: const ValueKey('petProfileDeleteConfirmYes'),
-      cancelKey: const ValueKey('petProfileDeleteCancel'),
-    );
-    if (!ok || !mounted) return;
-    // TODO(backend): 接 DELETE /pet-profiles/me（级联删除/匿名化按 D1/D2）。当前仅占位提示。
-    _toast(l10n.placeholderComingSoon);
   }
 
   Future<void> _pickBirthday() async {

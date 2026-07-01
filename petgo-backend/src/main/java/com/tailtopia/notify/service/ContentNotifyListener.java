@@ -41,12 +41,19 @@ public class ContentNotifyListener {
 
     @TransactionalEventListener
     public void onContentCommented(ContentCommentedEvent event) {
-        if (event.commenterId() == event.contentAuthorId()) {
-            return; // 自评不推
+        String ref = String.valueOf(event.postId());
+        // 通知内容作者（自评不推）。
+        if (event.commenterId() != event.contentAuthorId()) {
+            notificationService.send(event.contentAuthorId(), NotificationType.CONTENT_COMMENTED,
+                    "有人评论了你的内容", "点击查看", NotificationType.CONTENT_COMMENTED.name(), ref);
         }
-        notificationService.send(event.contentAuthorId(), NotificationType.CONTENT_COMMENTED,
-                "有人评论了你的内容", "点击查看",
-                NotificationType.CONTENT_COMMENTED.name(), String.valueOf(event.postId()));
+        // Bug 20260625-088：回复二级评论时，另行通知被回复的一级评论作者（parentAuthorId）。
+        // 去重：排除自回复（== commenter）、以及与内容作者重复（上面已推，避免双推）。
+        Long parent = event.parentAuthorId();
+        if (parent != null && parent != event.commenterId() && parent != event.contentAuthorId()) {
+            notificationService.send(parent, NotificationType.CONTENT_COMMENTED,
+                    "有人回复了你的评论", "点击查看", NotificationType.CONTENT_COMMENTED.name(), ref);
+        }
     }
 
     /**

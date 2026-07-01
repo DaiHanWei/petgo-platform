@@ -12,6 +12,8 @@ import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.im.TencentImClient;
 import com.tailtopia.vet.service.VetPresenceService;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.context.ApplicationEventPublisher;
@@ -178,8 +180,15 @@ public class ConsultCloseService {
     }
 
     private void publishClosed(ConsultSession s, boolean rated) {
+        // petId 会话不持有 → 传 null，由 profile 侧按 userId 反查（V1 单宠物）。
+        // 携带事件日期(结束时点)+症状/等级/诊断摘要，供 profile 归档成 VET_CONSULT 健康事件（Bug 139）。
+        VetDiagnosis d = s.getVetDiagnosis();
+        Instant at = s.terminalAt();
+        LocalDate eventDate =
+                at != null ? LocalDate.ofInstant(at, ZoneOffset.UTC) : LocalDate.now(ZoneOffset.UTC);
         events.publishEvent(new ConsultClosedEvent(
                 s.getId(), s.getUserId(), s.getVetId(), null,
-                s.getImConversationId(), s.getAiImageRefs(), rated));
+                s.getImConversationId(), s.getAiImageRefs(), rated,
+                eventDate, s.getAiSymptomText(), s.getAiDangerLevel(), d == null ? null : d.diagnosis()));
     }
 }
