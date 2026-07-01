@@ -1,0 +1,129 @@
+# Bug 系统拉取脚本配置模板（第一期 / 只读）
+#
+# 用法：复制本文件为同目录的 config.toml，按 SETUP.md 在 Lark 建表后，
+#       把占位的 FLD_* 字段 ID 替换为真实 ID。config.toml 已 gitignore，不入库。
+#
+# 设计说明：
+# - 读取记录时 Lark 按【字段名】返回值，故本期拉取实际只用到字段名；
+#   field_ids 表为第二期反向同步（按字段 ID 写回，FR9 白名单）预留，集中维护（NFR6）。
+# - 表结构变更时，原则上只改本文件，不改 .py 代码。
+
+# 版本切换：cn = 飞书国内版(open.feishu.cn)；global = 海外版(open.larksuite.com)（NFR5）
+region = "cn"
+
+# 单页拉取条数（Lark Bitable list records 上限 500）
+page_size = 100
+
+# 可选：只拉某个视图的记录（留空=拉全表）。
+# 填视图 view_id（表 URL 里 &view=<view_id> 那段）即只取该视图筛选/排序后的子集，
+# 例如「技术视图」= 已定级且未关闭，表再大也只取工程师队列那批，无需本地过滤。
+view_id = ""
+
+# 严重级别从高到低排序（分析命令据此排序输出）
+severity_order = ["P0", "P1", "P2", "P3", "P4"]
+
+# ── 关键字段名（逻辑不写死英文字段名，改名只改这里）────────────────────
+# 若 Lark 建表时用了不同字段名，改这里即可，无需动代码。
+bug_id_field      = "Bug ID"
+status_field      = "Status"
+severity_field    = "Severity"
+platform_field    = "Platform"
+module_field      = "Module"
+bug_type_field    = "Bug Type"
+reported_on_field = "Reported On"
+title_field       = "Title"
+steps_field       = "Steps to Reproduce"
+screenshots_field = "Screenshots"
+
+# 视为「已关闭」的状态（分析命令默认过滤这些）
+closed_statuses = ["Verified", "Won't Fix", "Duplicate", "Declined"]
+
+# ── 反向同步（第二期 Epic 3）写回白名单 ─────────────────────────────
+# 只有这些字段可被写回；FR9 实际按 [field_ids] 的字段 ID 校验，非白名单 ID 一律拒绝。
+# 设计 schema：C 组全部 + D 组工程师交付字段；【排除】验收人字段与全部提报人字段。
+writeback_whitelist = [
+  "Status", "Assignee", "Affected Service", "Root Cause / Code Location",
+  "Dev Notes", "Fixed in Version", "Artifact Type", "Build Version",
+]
+# 单批次写回记录数上限，超则须二次确认（NFR2）
+writeback_max_batch = 5
+
+# ── B 组提报人字段（一律裹进 <<<UNTRUSTED_REPORT … >>> 定界块，NFR3）────
+# 提报人填写的内容视为不可信数据。自由文本字段是注入向量，必须定界。
+reporter_fields = [
+  "Title",
+  "Steps to Reproduce",
+  "Actual Result",
+  "Expected Result",
+  "Reported On",
+  "Platform",
+  "Module",
+  "Severity",
+  "Bug Type",
+]
+
+# ── 字段类型（决定如何渲染为可读文本）────────────────────────────────
+# 取值：text | select | multi_select | person | datetime | attachment | auto_number
+[field_types]
+"Bug ID"                    = "auto_number"
+"Title"                     = "text"
+"Created Time"              = "datetime"
+"Reporter"                  = "person"
+"Steps to Reproduce"        = "text"
+"Actual Result"             = "text"
+"Expected Result"           = "text"
+"Screenshots"               = "attachment"
+"Recording"                 = "attachment"
+"Reported On"               = "multi_select"
+"Platform"                  = "multi_select"
+"Module"                    = "select"
+"Severity"                  = "select"
+"Bug Type"                  = "select"
+"Status"                    = "select"
+"Assignee"                  = "person"
+"Affected Service"          = "multi_select"
+"Root Cause / Code Location" = "text"
+"Dev Notes"                 = "text"
+"Fixed in Version"          = "text"
+"Duplicate Of"              = "text"
+"Confidence"                = "select"
+"Updated by Engineer"       = "datetime"
+"Artifact Type"             = "select"
+"Artifact Link"             = "attachment"
+"Build Version"             = "text"
+"Verification Result"       = "select"
+"Verification Notes"        = "text"
+"Verifier"                  = "person"
+
+# ── 字段名 ↔ Lark 字段 ID（建表后从 Lark「字段管理」拷真实 ID 填入）──────
+# 占位 FLD_* 仅作模板；本期只读拉取不依赖它，留给第二期写回白名单用（FR9/NFR6）。
+[field_ids]
+"Bug ID"                    = "FLD_bug_id"
+"Title"                     = "FLD_title"
+"Created Time"              = "FLD_created_time"
+"Reporter"                  = "FLD_reporter"
+"Steps to Reproduce"        = "FLD_steps"
+"Actual Result"             = "FLD_actual"
+"Expected Result"           = "FLD_expected"
+"Screenshots"               = "FLD_screenshots"
+"Recording"                 = "FLD_recording"
+"Reported On"               = "FLD_reported_on"
+"Platform"                  = "FLD_platform"
+"Module"                    = "FLD_module"
+"Severity"                  = "FLD_severity"
+"Bug Type"                  = "FLD_bug_type"
+"Status"                    = "FLD_status"
+"Assignee"                  = "FLD_assignee"
+"Affected Service"          = "FLD_affected_service"
+"Root Cause / Code Location" = "FLD_root_cause"
+"Dev Notes"                 = "FLD_dev_notes"
+"Fixed in Version"          = "FLD_fixed_in_version"
+"Duplicate Of"              = "FLD_duplicate_of"
+"Confidence"                = "FLD_confidence"
+"Updated by Engineer"       = "FLD_updated_by_engineer"
+"Artifact Type"             = "FLD_artifact_type"
+"Artifact Link"             = "FLD_artifact_link"
+"Build Version"             = "FLD_build_version"
+"Verification Result"       = "FLD_verification_result"
+"Verification Notes"        = "FLD_verification_notes"
+"Verifier"                  = "FLD_verifier"

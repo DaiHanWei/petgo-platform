@@ -11,6 +11,7 @@
 .claude/*
 !.claude/settings.json
 !.claude/hooks/
+!.claude/commands/
 
 # Logs & temp
 *.log
@@ -29,3 +30,8 @@ dist/
 scripts/local/
 .agents/
 skills-lock.json
+
+# Bug 系统：拉取产物（含真实用户/宠物 PII 截图）与真实配置，绝不入库（NFR1/NFR9）
+# 注：.env 已由上方根规则全局忽略；此处补 config.toml 与 data/
+scripts/bug-system/data/
+scripts/bug-system/config.toml
