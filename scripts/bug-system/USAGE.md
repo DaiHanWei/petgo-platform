@@ -27,35 +27,40 @@
 
 ---
 
-## 1. 拉取：把待办 Bug 拉到本地
+## 1. 轻览拉取：把待办 Bug 拉到本地（不下媒体）
+
+在 Claude Code 里输入 `/bug-pull`，或直接：
 
 ```bash
 python3 pull_bugs.py
 ```
 
 - 只拉 Lark **「技术视图」**的记录（= 已定级 + 未关闭，工程师队列），表再大也不拉别的。
+- **默认不下载截图/视频**——pull 变廉价，全量铺开也快；媒体留到深挖阶段按需下。（`--with-media` 可强制在此就下全部媒体，一般用不到。）
 - 产出到 `data/`：
-  - `bugs.json` —— 结构化数据（给 Claude 读）
+  - `bugs.json` —— 结构化数据（含每条 `claimed_by` 认领人 + 附件**元数据**，供后续按需下载）
   - `bugs.md` —— 人读版
-  - `attachments/` —— 截图/录屏（按 `<BugID>-序号` 命名）
   - `_needs_supplement.json` —— 信息不足（缺复现/截图）的清单
-  - `_baseline.json` —— 写回用的漂移基线（别手改）
-  - `_failures.json` —— 截图下载失败清单（有才生成）
-- 退出码：`0` 成功 / `1` 拉取失败 / `2` 配置或凭证错 / `3` 部分截图下载失败。
+  - `_baseline.json` —— 写回 / 认领用的漂移基线（别手改）
+- `/bug-pull` 命令还会出一张**类型 + 认领人清单**供你选片；`认领人` 非空的（别人在做）请避开。
+- 退出码：`0` 成功 / `1` 拉取失败 / `2` 配置或凭证错。
 
 ---
 
-## 2. 分析：Claude 对照代码定位
+## 2. 深挖：认领 + 下媒体 + 对照代码定位
 
-在 Claude Code 里输入：
+选定这轮要修的几条后，在 Claude Code 里输入（**带 BugID**）：
 
 ```
-/bug-analyze
+/bug-analyze 20260630-155 20260630-157
 ```
 
-- 读 `data/bugs.json` + 截图，对每条**未关闭** Bug 给：**文件:函数定位 + 归因 + 修复建议 + 置信度(高/中/低)**。
-- 按严重级排序；低置信度会标「AI 推测，未确认」；信息不足的列进「需补充清单」不硬编。
-- **只读**，不改任何东西。
+对选中的每条依次：
+- **认领**：把 `开发人员` 写成你（`.env` 的 `WRITEBACK_DEVELOPER`），经白名单 + 乐观锁写回。别人抢先认领的 → 自动**跳过**报「已被 X 认领」，不覆盖、其它继续。
+- **下媒体**：只下这几条的截图/视频到 `data/attachments/`（缺图不阻断定位）。
+- **定位**：读媒体 + 对照代码给 **文件:函数定位 + 归因 + 修复建议 + 置信度(高/中/低)**；低置信度标「AI 推测，未确认」；信息不足的列进「需补充清单」不硬编。
+- 一次选**超过 10 条**会先预警 token/时间，让你确认或缩减（软提醒，不硬拦）。
+- 没配 `WRITEBACK_DEVELOPER` 会**拒绝认领**（不能匿名占坑）。
 
 ---
 
@@ -90,10 +95,11 @@ python3 clean_data.py --yes
 
 ```bash
 cd scripts/bug-system
-python3 pull_bugs.py            # 1) 拉技术视图
-# 2) Claude Code 里： /bug-analyze          → 看定位
+# 1) Claude Code： /bug-pull                  → 轻览全量（不下媒体）+ 认领人清单，选片
+# 2) Claude Code： /bug-analyze <BugID...>    → 认领 + 下这几条媒体 + 定位
 # 3) 修代码…改好后
-# 4) Claude Code 里： /bug-sync <编号> <说明> → 确认 diff → 写回+关闭
+# 4) Claude Code： /bug-sync <编号> <说明>    → 确认 diff → 写回 + 关闭
+# 认错放手： /bug-claim <BugID> --release（仅本人认领可释放）
 python3 clean_data.py --yes    # 5) 清本地
 ```
 
