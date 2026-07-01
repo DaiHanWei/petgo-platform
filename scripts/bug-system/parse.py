@@ -215,6 +215,7 @@ def parse_record(raw, cfg):
     module = _render_select(raw_fields.get(module_field)).strip()
     platform = _multi_select_list(raw_fields.get(cfg.get("platform_field", "Platform")))
     reported_on = _multi_select_list(raw_fields.get(cfg.get("reported_on_field", "Reported On")))
+    claimed_by = _render_text(raw_fields.get(cfg.get("developer_field", "开发人员"))).strip()
 
     # 质量降级判定（FR13）：缺复现 / 缺截图 / Module=Other 或空
     missing = []
@@ -235,6 +236,7 @@ def parse_record(raw, cfg):
         "module": module,
         "platform": platform,
         "reported_on": reported_on,
+        "claimed_by": claimed_by,
         "fields": rendered,
         "attachments": attachments,
         "_quality": "insufficient" if missing else "ok",

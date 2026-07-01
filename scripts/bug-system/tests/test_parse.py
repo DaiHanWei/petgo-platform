@@ -120,6 +120,17 @@ class TestParse(unittest.TestCase):
         self.assertTrue(parse.is_closed(self.by_record("recINJECT003"), self.cfg))  # Verified
         self.assertFalse(parse.is_closed(self.by_record("recNORMAL001"), self.cfg))  # Open
 
+    # ── claimed_by 认领人 ────────────────────────────────────────────────
+    def test_claimed_by_present_when_developer_set(self):
+        raw = {"record_id": "recCLAIMED", "fields": {"开发人员": "dai"}}
+        rec = parse.parse_record(raw, self.cfg)
+        self.assertEqual(rec["claimed_by"], "dai")
+
+    def test_claimed_by_empty_when_developer_unset(self):
+        raw = {"record_id": "recFREE", "fields": {}}
+        rec = parse.parse_record(raw, self.cfg)
+        self.assertEqual(rec["claimed_by"], "")
+
 
 class TestDelimiterBreakout(unittest.TestCase):
     """提报人在正文里塞字面定界符，不得突破定界块（NFR3 安全攸关）。"""
