@@ -111,8 +111,13 @@ class GrowthArchivePage extends ConsumerWidget {
                 onPressed: selected == null
                     ? null
                     : () async {
-                        await _saveStatus(context, ref, selected!);
+                        final chosen = selected!;
+                        final ok = await _saveStatus(context, ref, chosen);
+                        if (!ok) return; // 失败留在 sheet 供重试
                         if (ctx.mounted) Navigator.of(ctx).pop();
+                        // 非有宠（PLANNING/ENTHUSIAST）成长档案无内容 → 回首页；
+                        // HAS_PET 留在本 tab 走建档引导（页面 rebuild 到 _EmptyProfileView）。
+                        if (chosen != 'HAS_PET' && context.mounted) context.go('/home');
                       },
                 child: Text(l10n.commonSave),
               ),
@@ -123,7 +128,7 @@ class GrowthArchivePage extends ConsumerWidget {
     );
   }
 
-  Future<void> _saveStatus(BuildContext context, WidgetRef ref, String status) async {
+  Future<bool> _saveStatus(BuildContext context, WidgetRef ref, String status) async {
     final l10n = AppLocalizations.of(context);
     try {
       final updated = await ref.read(meRepositoryProvider).updatePetStatus(status);
@@ -133,10 +138,12 @@ class GrowthArchivePage extends ConsumerWidget {
       ref.invalidate(petProfileProvider);
       ref.invalidate(timelineFirstPageProvider);
       ref.invalidate(archiveStatsProvider);
+      return true;
     } catch (_) {
       if (context.mounted) {
         showAppToast(context, l10n.growthStatusSaveFailed);
       }
+      return false;
     }
   }
 }

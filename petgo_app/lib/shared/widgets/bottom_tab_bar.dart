@@ -73,9 +73,67 @@ class BottomTabBar extends StatelessWidget {
   Widget _item(AppTab tab, _TabIcon icon, String label) {
     final bool active = currentIndex == tab.index;
     return Expanded(
-      child: InkResponse(
+      child: _PressableTab(
         onTap: () => onTabSelected(tab.index),
         child: _TabItem(icon: icon, label: label, active: active),
+      ),
+    );
+  }
+}
+
+/// Tab 按压反馈：点击/长按按住时缩小，松开带弹性回弹（pop-art 调性；比水波纹更贴合）。
+/// tab 上层无 Material 祖先，InkResponse 涟漪画不出 → 改用 scale 反馈。长按松开等同点击（切 tab）。
+class _PressableTab extends StatefulWidget {
+  const _PressableTab({required this.child, required this.onTap});
+
+  final Widget child;
+  final VoidCallback onTap;
+
+  @override
+  State<_PressableTab> createState() => _PressableTabState();
+}
+
+class _PressableTabState extends State<_PressableTab> {
+  bool _pressed = false;
+
+  void _set(bool v) {
+    if (_pressed != v) setState(() => _pressed = v);
+  }
+
+  /// 延迟回弹：快速点击时手指瞬间抬起，若立刻复位动画来不及展开 → 保底 120ms 让按压可见。
+  void _release() {
+    Future<void>.delayed(const Duration(milliseconds: 120), () {
+      if (mounted) _set(false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => _set(true),
+      onTapUp: (_) => _release(),
+      onTapCancel: _release,
+      onTap: widget.onTap,
+      onLongPressStart: (_) => _set(true),
+      onLongPressEnd: (_) {
+        _release();
+        widget.onTap();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOut,
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: _pressed ? AppColors.accentGrowth.withValues(alpha: 0.10) : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: AnimatedScale(
+          scale: _pressed ? 0.82 : 1.0,
+          duration: const Duration(milliseconds: 140),
+          curve: Curves.easeOutBack,
+          child: widget.child,
+        ),
       ),
     );
   }
