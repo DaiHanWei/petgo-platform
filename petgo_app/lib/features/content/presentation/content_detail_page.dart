@@ -9,9 +9,10 @@ import '../../../core/theme/typography.dart';
 import '../../../features/auth/domain/auth_state.dart';
 import '../../../features/me/data/my_posts_repository.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../../shared/widgets/app_image.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/app_image.dart';
+import '../../../shared/widgets/letter_avatar.dart';
 import '../../../shared/widgets/mini_profile_sheet.dart';
 import '../../profile/data/timeline_repository.dart';
 import '../data/detail_repository.dart';
@@ -172,24 +173,15 @@ class _DetailScaffold extends ConsumerWidget {
 
   Widget _authorRow(BuildContext context, WidgetRef ref, AppLocalizations l10n) {
     final name = detail.authorDeleted ? l10n.feedDeletedUser : (detail.authorNickname ?? l10n.feedDeletedUser);
-    final avatar = detail.authorDeleted ? null : detail.authorAvatarUrl;
-    final hasImg = avatar != null && avatar.isNotEmpty;
-    final initial = name.trim().isEmpty ? '?' : name.trim().characters.first.toUpperCase();
     final (badgeLabel, badgeFg, badgeBg) = _typeBadge(detail.type, l10n);
     final row = Row(
       children: [
-        // 紫圆头像（有图用图，否则紫底首字母）。
-        CircleAvatar(
-          radius: 18,
-          backgroundColor: AppColors.mint,
-          backgroundImage: hasImg ? AppImage.provider(avatar, thumbWidth: 160) : null,
-          child: hasImg
-              ? null
-              : (detail.authorDeleted
-                  ? const Icon(Icons.person_rounded, size: 18, color: AppColors.onAccent)
-                  : Text(initial,
-                      style: const TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.onAccent))),
+        // 头像着色与列表卡片共用同一算法（LetterAvatar），保证同一用户两处颜色一致。
+        LetterAvatar(
+          url: detail.authorDeleted ? null : detail.authorAvatarUrl,
+          name: name,
+          deleted: detail.authorDeleted,
+          size: 36,
         ),
         const SizedBox(width: AppSpacing.sm),
         Expanded(

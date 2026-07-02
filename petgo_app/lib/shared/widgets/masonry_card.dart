@@ -7,12 +7,13 @@ import '../../core/theme/typography.dart';
 import '../../features/content/domain/feed_item.dart';
 import '../../l10n/app_localizations.dart';
 import 'app_image.dart';
+import 'letter_avatar.dart';
 import 'post_cover.dart';
 
 /// Feed 单列卡片（原型 feed.html `.card`）。
 ///
 /// 头部行：作者头像（彩色首字母圆）+ 昵称 / 相对时间 + 类型彩徽章；
-/// 其下正文（前 3 行）+ 全宽首图（无图 → 类型彩块）。注销作者 → 本地化「已注销用户」+ 默认头像，
+/// 其下正文（前 2 行）+ 全宽首图（无图 → 类型彩块）。注销作者 → 本地化「已注销用户」+ 默认头像，
 /// 头像不可点（Story 3.8）。
 class MasonryCard extends StatelessWidget {
   const MasonryCard({
@@ -90,7 +91,7 @@ class MasonryCard extends StatelessWidget {
                       onTap: (item.authorDeleted || onAuthorTap == null) ? null : onAuthorTap,
                       child: Row(
                         children: [
-                          _Avatar(
+                          LetterAvatar(
                               url: item.authorDeleted ? null : item.authorAvatarUrl,
                               name: name,
                               deleted: item.authorDeleted),
@@ -125,7 +126,7 @@ class MasonryCard extends StatelessWidget {
                     if (item.body != null && item.body!.isNotEmpty) ...[
                       const SizedBox(height: AppSpacing.sm),
                       Text(item.body!,
-                          style: AppTypography.body, maxLines: 3, overflow: TextOverflow.ellipsis),
+                          style: AppTypography.body, maxLines: 2, overflow: TextOverflow.ellipsis),
                     ],
                     SizedBox(height: item.hasImage ? AppSpacing.sm : AppSpacing.md),
                   ],
@@ -150,50 +151,6 @@ class MasonryCard extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-
-/// 作者头像（原型 .av）：有图用网络图，否则彩色圆 + 昵称首字母。
-class _Avatar extends StatelessWidget {
-  const _Avatar({this.url, required this.name, this.deleted = false});
-
-  final String? url;
-  final String name;
-  final bool deleted;
-
-  static const List<Color> _palette = [
-    AppColors.mint,
-    AppColors.mint500,
-    AppColors.triageGreen,
-    AppColors.gold,
-    AppColors.coral,
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    const double size = 34;
-    if (url != null && url!.isNotEmpty) {
-      return CircleAvatar(
-          radius: size / 2, backgroundImage: AppImage.provider(url, thumbWidth: 120));
-    }
-    final trimmed = name.trim();
-    // 注销作者 → 默认 person 头像（Story 3.8），不用昵称首字母。
-    if (deleted || trimmed.isEmpty) {
-      return const CircleAvatar(
-        radius: size / 2,
-        backgroundColor: AppColors.border,
-        child: Icon(Icons.person_rounded, size: 18, color: AppColors.textTertiary),
-      );
-    }
-    final color = _palette[trimmed.codeUnits.fold<int>(0, (a, b) => a + b) % _palette.length];
-    return CircleAvatar(
-      radius: size / 2,
-      backgroundColor: color,
-      child: Text(trimmed.characters.first.toUpperCase(),
-          style: const TextStyle(
-              fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.onAccent)),
     );
   }
 }
