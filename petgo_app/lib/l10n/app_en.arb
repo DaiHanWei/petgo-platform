@@ -620,7 +620,7 @@
   "@deleteAccountWarnBody": {"placeholders": {"word": {"type": "String"}}},
   "deleteAccountContinue": "Continue",
   "deleteAccountConfirmTitle": "Confirm deletion",
-  "deleteAccountConfirmHint": "Type your email exactly as shown to enable the delete button.",
+  "deleteAccountConfirmHint": "Type 确认注销 exactly as shown to enable the delete button.",
   "deleteAccountConfirmPhrase": "DELETE",
   "deleteAccountConfirmYes": "Delete my account forever",
   "deleteAccountFailed": "Could not delete, please try again",

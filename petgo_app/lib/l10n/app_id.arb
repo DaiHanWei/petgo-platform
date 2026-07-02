@@ -546,7 +546,7 @@
   "deleteAccountWarnBody": "Tindakan ini {word} dan tidak dapat dibatalkan.",
   "deleteAccountContinue": "Lanjut",
   "deleteAccountConfirmTitle": "Konfirmasi penghapusan",
-  "deleteAccountConfirmHint": "Ketik emailmu persis seperti di atas untuk mengaktifkan tombol hapus.",
+  "deleteAccountConfirmHint": "Ketik 确认注销 persis seperti di atas untuk mengaktifkan tombol hapus.",
   "deleteAccountConfirmPhrase": "HAPUS",
   "deleteAccountConfirmYes": "Hapus Akunmu Selamanya",
   "deleteAccountFailed": "Gagal menghapus, coba lagi",

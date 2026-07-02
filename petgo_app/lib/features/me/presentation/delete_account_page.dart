@@ -27,6 +27,9 @@ class _DeleteAccountPageState extends ConsumerState<DeleteAccountPage> {
   static const Color _dangerTint = Color(0xFFFDE7EB);
   static const Color _dangerText = Color(0xFFC4263C);
 
+  /// 注销确认短语——须与后端 DeleteAccountRequest.CONFIRM_PHRASE 完全一致（固定串，不本地化）。
+  static const String _confirmPhrase = '确认注销';
+
   @override
   void dispose() {
     _controller.dispose();
@@ -50,9 +53,8 @@ class _DeleteAccountPageState extends ConsumerState<DeleteAccountPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    // P-43：输入本人邮箱确认（须与账号邮箱完全一致才激活删除）。
-    final email = ref.watch(authControllerProvider).profile?.email ?? '';
-    final matched = email.isNotEmpty && _controller.text.trim() == email;
+    // P-43：输入注销确认短语「确认注销」（须与后端 CONFIRM_PHRASE 完全一致才激活删除）。
+    final matched = _controller.text.trim() == _confirmPhrase;
 
     return Scaffold(
       backgroundColor: AppColors.base,
@@ -117,8 +119,8 @@ class _DeleteAccountPageState extends ConsumerState<DeleteAccountPage> {
             ),
             // 注销为「立即级联删除/匿名化」（D1/D2），不展示 30 天冷静期，避免与不可撤销实现矛盾。
             const SizedBox(height: 22),
-            // 输入本人邮箱确认（红边框 + 红光晕）。
-            Text(l10n.deleteAccountEmailLabel,
+            // 输入确认短语「确认注销」（红边框 + 红光晕）。
+            Text(l10n.deleteAccountPhraseLabel,
                 style: const TextStyle(
                     fontSize: 10.5,
                     fontWeight: FontWeight.w700,
@@ -139,16 +141,15 @@ class _DeleteAccountPageState extends ConsumerState<DeleteAccountPage> {
               child: TextField(
                 key: const ValueKey('deleteConfirmField'),
                 controller: _controller,
-                keyboardType: TextInputType.emailAddress,
                 autocorrect: false,
                 onChanged: (_) => setState(() {}),
                 style: const TextStyle(fontSize: 14, color: AppColors.ink),
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   isCollapsed: true,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 11),
+                  contentPadding: EdgeInsets.symmetric(vertical: 11),
                   border: InputBorder.none,
-                  hintText: email,
-                  hintStyle: const TextStyle(color: AppColors.muted, fontSize: 14),
+                  hintText: _confirmPhrase,
+                  hintStyle: TextStyle(color: AppColors.muted, fontSize: 14),
                 ),
               ),
             ),
@@ -161,7 +162,7 @@ class _DeleteAccountPageState extends ConsumerState<DeleteAccountPage> {
               width: double.infinity,
               child: FilledButton(
                 key: const ValueKey('deleteAccountConfirmYes'),
-                onPressed: (matched && !_deleting) ? () => _delete(email) : null,
+                onPressed: (matched && !_deleting) ? () => _delete(_confirmPhrase) : null,
                 style: FilledButton.styleFrom(
                   backgroundColor: _danger,
                   disabledBackgroundColor: const Color(0xFFB6B6B6),
