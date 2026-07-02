@@ -508,7 +508,7 @@ class _DoneState extends State<_Done> with TickerProviderStateMixin {
                         const Icon(Icons.public, size: 16, color: AppColors.mint700),
                         const SizedBox(width: 7),
                         Text(
-                          'petgo.id/m/${widget.name.toLowerCase()}',
+                          'tailtopia.id/m/${widget.name.toLowerCase()}',
                           style: const TextStyle(
                             color: AppColors.mint700,
                             fontSize: 13,
