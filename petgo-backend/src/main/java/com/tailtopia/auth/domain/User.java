@@ -226,4 +226,20 @@ public class User {
     public Instant getDeletedAt() {
         return deletedAt;
     }
+
+    /**
+     * 注销「就地匿名化」（Story 7.3，决策 D1/A）：软删标记 + 擦除 PII，<b>不物理删行</b>——避免
+     * content_posts/comments/likes/reports 的 NOT NULL + RESTRICT 外键阻断（DataIntegrityViolationException）。
+     * UGC 保留、由 {@code AccountQueryService} 解析为「已注销用户」。{@code googleSub}/{@code appleSub} 置墓碑：
+     * 满足非空+唯一约束、且同账号再次登录只会新建账号（不复活旧号）。幂等（重跑安全）。健康/个人数据在其它服务另删。
+     */
+    public void anonymizeForDeletion(Instant now) {
+        this.deletedAt = now;
+        this.email = null;
+        this.displayName = null;
+        this.avatarUrl = null;
+        this.nickname = null;
+        this.googleSub = "deleted:" + this.id; // 非空 + 唯一（每行 id 唯一），防复登 + 防唯一冲突
+        this.appleSub = null;
+    }
 }
