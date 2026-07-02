@@ -18,7 +18,7 @@ import org.springframework.http.MediaType;
 /**
  * {@link AccountController} 端点集成测试：{@code DELETE /api/v1/me}（双重确认 → 202 异步注销）。
  *
- * <p>仅作用于 JWT {@code sub} 本人。确认短语须等于 {@code "确认注销"}（{@link DeleteAccountRequest}），
+ * <p>仅作用于 JWT {@code sub} 本人。确认短语须等于 {@code "DELETE"}（{@link DeleteAccountRequest}），
  * 缺失/不匹配 → 422。受理后登记 PENDING 注销作业（断言落库），异步级联在事务提交后执行。
  */
 class AccountControllerEndpointTest extends ApiIntegrationTest {
@@ -34,7 +34,7 @@ class AccountControllerEndpointTest extends ApiIntegrationTest {
         mvc.perform(delete("/api/v1/me")
                         .header(HttpHeaders.AUTHORIZATION, userBearer(u.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(json.writeValueAsString(Map.of("confirmation", "确认注销"))))
+                        .content(json.writeValueAsString(Map.of("confirmation", "DELETE"))))
                 .andExpect(status().isAccepted());
 
         Assertions.assertTrue(deletions.findByUserId(u.getId()).isPresent(),
@@ -74,7 +74,7 @@ class AccountControllerEndpointTest extends ApiIntegrationTest {
     void deleteMe_withoutToken_is401() throws Exception {
         mvc.perform(delete("/api/v1/me")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(json.writeValueAsString(Map.of("confirmation", "确认注销"))))
+                        .content(json.writeValueAsString(Map.of("confirmation", "DELETE"))))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -90,7 +90,7 @@ class AccountControllerEndpointTest extends ApiIntegrationTest {
         mvc.perform(delete("/api/v1/me")
                         .header(HttpHeaders.AUTHORIZATION, userBearer(a.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(json.writeValueAsString(Map.of("confirmation", "确认注销"))))
+                        .content(json.writeValueAsString(Map.of("confirmation", "DELETE"))))
                 .andExpect(status().isAccepted());
 
         Assertions.assertTrue(deletions.findByUserId(a.getId()).isPresent(), "A 应被受理注销");

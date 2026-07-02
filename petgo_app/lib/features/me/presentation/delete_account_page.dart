@@ -27,8 +27,8 @@ class _DeleteAccountPageState extends ConsumerState<DeleteAccountPage> {
   static const Color _dangerTint = Color(0xFFFDE7EB);
   static const Color _dangerText = Color(0xFFC4263C);
 
-  /// 注销确认短语——须与后端 DeleteAccountRequest.CONFIRM_PHRASE 完全一致（固定串，不本地化）。
-  static const String _confirmPhrase = '确认注销';
+  /// 注销确认短语——须与后端 DeleteAccountRequest.CONFIRM_PHRASE 完全一致（固定英文串，locale 无关）。
+  static const String _confirmPhrase = 'DELETE';
 
   @override
   void dispose() {
@@ -53,7 +53,7 @@ class _DeleteAccountPageState extends ConsumerState<DeleteAccountPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    // P-43：输入注销确认短语「确认注销」（须与后端 CONFIRM_PHRASE 完全一致才激活删除）。
+    // P-43：输入注销确认短语「DELETE」（须与后端 CONFIRM_PHRASE 完全一致才激活删除）。
     final matched = _controller.text.trim() == _confirmPhrase;
 
     return Scaffold(
@@ -119,7 +119,7 @@ class _DeleteAccountPageState extends ConsumerState<DeleteAccountPage> {
             ),
             // 注销为「立即级联删除/匿名化」（D1/D2），不展示 30 天冷静期，避免与不可撤销实现矛盾。
             const SizedBox(height: 22),
-            // 输入确认短语「确认注销」（红边框 + 红光晕）。
+            // 输入确认短语「DELETE」（红边框 + 红光晕）。
             Text(l10n.deleteAccountPhraseLabel,
                 style: const TextStyle(
                     fontSize: 10.5,
