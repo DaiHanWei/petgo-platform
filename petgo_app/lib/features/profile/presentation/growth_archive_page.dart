@@ -54,7 +54,12 @@ class GrowthArchivePage extends ConsumerWidget {
         error: (err, stack) => _EmptyProfileView(onCreate: () => context.push('/profile/create')),
         data: (profile) {
           if (profile == null) {
-            return _EmptyProfileView(onCreate: () => context.push('/profile/create'));
+            // 状态 A 但无档案（多为删档后）：除「立即创建」外，给切换状态入口——
+            // 否则用户被困在 A 无法回 B/C（bug 20260702-237）。
+            return _EmptyProfileView(
+              onCreate: () => context.push('/profile/create'),
+              onChangeStatus: () => _openStatusEditor(context, ref),
+            );
           }
           return _ArchiveBody(
             profile: profile,
@@ -470,9 +475,10 @@ class _TimelineView extends ConsumerWidget {
 }
 
 class _EmptyProfileView extends StatelessWidget {
-  const _EmptyProfileView({required this.onCreate});
+  const _EmptyProfileView({required this.onCreate, this.onChangeStatus});
 
   final VoidCallback onCreate;
+  final VoidCallback? onChangeStatus;
 
   @override
   Widget build(BuildContext context) {
@@ -487,6 +493,12 @@ class _EmptyProfileView extends StatelessWidget {
             onPressed: onCreate,
             child: Text(l10n.growthArchiveEmptyCreate),
           ),
+          if (onChangeStatus != null)
+            TextButton(
+              key: const ValueKey('growthChangeStatusButton'),
+              onPressed: onChangeStatus,
+              child: Text(l10n.growthArchiveChangeStatus),
+            ),
         ],
       ),
     );
