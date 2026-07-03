@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +7,7 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/app_toast.dart';
 import '../data/consult_repository.dart';
 import '../domain/consult_session.dart';
 import 'consult_refresh.dart';
@@ -20,7 +22,11 @@ import 'consult_rating_dialog.dart';
 /// **推迟补弹评分**——不在用户正处理活跃会话时打断；仅当无活跃会话时才补弹一次（后端 `pendingRating`
 /// 同样以「有活跃会话则空」双重兜底）。
 class ConsultEntryPage extends ConsumerStatefulWidget {
-  const ConsultEntryPage({super.key});
+  const ConsultEntryPage({super.key, this.triageTaskId});
+
+  /// 非空 = 从 AI 分诊结果页升级而来：发起时走 AI_UPGRADE（后端从该 triage 任务拉 AI
+  /// 描述/图片/危险等级绑定到兽医会话），跳过病例填写页（bug 20260702-235）。
+  final int? triageTaskId;
 
   @override
   ConsumerState<ConsultEntryPage> createState() => _ConsultEntryPageState();
@@ -102,11 +108,28 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
     // 点击即时查后台在线态（loading 在按钮上）。有兽医 → 去病例填写页（Story F：提交才发起 DIRECT
     // 会话 → 等待页）；无兽医 → 切到离线引导（AI 分诊 + 营业时间），不进发起流程。
     setState(() => _starting = true);
+    final l10n = AppLocalizations.of(context);
     try {
       final online = await ref.read(consultRepositoryProvider).vetOnline();
       if (!mounted) return;
       if (!online) {
         setState(() => _noVetOnline = true);
+        return;
+      }
+      // AI 分诊升级：带 triageTaskId → 直接发起 AI_UPGRADE 会话（AI 描述/图片/危险等级由后端从
+      // triage 拉取绑定），跳过病例填写页（bug 20260702-235）。红色态后端兜底拒绝 → toast。
+      final upgradeId = widget.triageTaskId;
+      if (upgradeId != null) {
+        try {
+          final session = await ref.read(consultRepositoryProvider).createFromUpgrade(upgradeId);
+          if (!mounted) return;
+          final target = session.isWaiting
+              ? '/consult/waiting/${session.id}'
+              : '/consult/conversation/${session.id}';
+          context.pushReplacement(target);
+        } on DioException {
+          if (mounted) showAppToast(context, l10n.consultStartFailed);
+        }
         return;
       }
       await context.push('/consult/case');

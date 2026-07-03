@@ -133,7 +133,7 @@ class TriageResultView extends ConsumerWidget {
                   color: AppColors.mint,
                   onTap: () {
                     Analytics.capture('consult_started');
-                    context.push('/consult');
+                    context.push(_consultRoute());
                   },
                 ),
                 _outlineBtn(
@@ -158,7 +158,7 @@ class TriageResultView extends ConsumerWidget {
                   text: AppColors.triageGreen,
                   onTap: () {
                     Analytics.capture('consult_started');
-                    context.push('/consult');
+                    context.push(_consultRoute());
                   },
                 ),
                 _outlineBtn(
@@ -175,6 +175,11 @@ class TriageResultView extends ConsumerWidget {
       ],
     );
   }
+
+  /// 咨询兽医路由：带 triageId → AI_UPGRADE 升级（后端拉 AI 描述/图片/危险等级绑定兽医会话，
+  /// bug 20260702-235）；无 triageId 退回普通直连入口。
+  String _consultRoute() =>
+      triageId == null ? '/consult' : '/consult?triageTaskId=$triageId';
 
   void _archive(BuildContext context, WidgetRef ref, DangerLevel level, String summary) =>
       ref.read(triageArchiveHandlerProvider)(context, ref,

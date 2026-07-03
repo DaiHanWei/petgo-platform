@@ -201,7 +201,13 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // AI 分诊上传页（Story 4.3）。受控路由（/triage/ 前缀，游客被门控）；shell 外 push 隐藏 Tab Bar。
       GoRoute(path: '/triage/upload', builder: (c, s) => const TriageUploadPage()),
       // 兽医咨询入口 + 等待界面（Story 5.3）。受控路由（/consult 前缀，游客被门控）。
-      GoRoute(path: '/consult', builder: (c, s) => const ConsultEntryPage()),
+      // triageTaskId：从 AI 分诊结果页升级而来时带入，走 AI_UPGRADE 发起（bug 20260702-235）。
+      GoRoute(
+        path: '/consult',
+        builder: (c, s) => ConsultEntryPage(
+          triageTaskId: int.tryParse(s.uri.queryParameters['triageTaskId'] ?? ''),
+        ),
+      ),
       // 直连问诊病例填写页（Story F）：症状 + 照片，提交才发起 DIRECT 会话。
       GoRoute(path: '/consult/case', builder: (c, s) => const ConsultCaseFormPage()),
       GoRoute(
