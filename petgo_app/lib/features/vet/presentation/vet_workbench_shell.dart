@@ -37,8 +37,8 @@ class _VetWorkbenchShellState extends ConsumerState<VetWorkbenchShell>
     VetMePage(),
   ];
 
-  /// 在线态保活心跳（< 后端 TTL=3min，留掉线宽限）。工作台壳常驻——与当前 Tab 无关,
-  /// 故兽医停在任意 Tab(收件箱/进行中…)都保活,不再依赖「我的」页是否激活。
+  /// 在线态「最后活跃」刷新心跳。在线态是纯显式的（bug 20260702-216：后端不再靠心跳续命、
+  /// 不 TTL 过期），心跳仅让后台展示的 lastSeen 跟随前台活动；停心跳/退后台不会使兽医离线。
   static const Duration _heartbeatInterval = Duration(seconds: 60);
   Timer? _heartbeat;
 
@@ -60,12 +60,12 @@ class _VetWorkbenchShellState extends ConsumerState<VetWorkbenchShell>
     if (state == AppLifecycleState.resumed) {
       _onResume();
     } else {
-      _stopHeartbeat(); // 退后台停心跳 → TTL 兜底离线(防幽灵在线)
+      _stopHeartbeat(); // 退后台停心跳（在线态不受影响，兽医仍在线；仅 lastSeen 暂停刷新）
     }
   }
 
-  /// 回前台:在线则立即补一次心跳(消除解锁后的撒谎窗口)+ 续上定时心跳;
-  /// 再以服务端真值兜底纠偏显示态(保活失败则如实翻 offline)。
+  /// 回前台:在线则补一次心跳刷新 lastSeen + 续上定时心跳;再以服务端真值同步显示态
+  /// （在线态纯显式，服务端返回的即兽医上次的选择，不会被误翻 offline）。
   Future<void> _onResume() async {
     if (ref.read(vetOnlineStatusProvider)) {
       await _beat();
@@ -91,7 +91,7 @@ class _VetWorkbenchShellState extends ConsumerState<VetWorkbenchShell>
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     // 在线态变化即跟随心跳（顶栏/「我的」任一处切换均经 vetOnlineStatusProvider 单一源）：
-    // 上线 → 立即心跳 + 续期定时；离线 → 停心跳(TTL 自然过期)。
+    // 上线 → 立即刷新 lastSeen + 续期定时；离线（显式 goOffline 已置态）→ 停心跳。
     ref.listen<bool>(vetOnlineStatusProvider, (prev, next) {
       if (next) {
         _beat();

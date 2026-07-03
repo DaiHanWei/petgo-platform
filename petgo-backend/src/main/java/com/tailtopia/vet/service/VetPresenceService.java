@@ -1,7 +1,6 @@
 package com.tailtopia.vet.service;
 
 import com.tailtopia.vet.domain.VetPresenceStatus;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -12,25 +11,25 @@ import org.springframework.stereotype.Service;
 /**
  * 兽医 Redis 在线态（Story 5.2，FR-32）。Redis 收窄用途之一：只存在线态，绝不塞业务对象。
  *
- * <p>数据结构（单一 sorted-set，惰性清理，避免「幽灵在线」）：
+ * <p>数据结构（单一 sorted-set）：
  * <pre>
  *   ZSET vet:online  member=vetId  score=lastSeen(epochMillis)
  * </pre>
- * 「在线」= 成员的 lastSeen 在 TTL 窗口（{@link #TTL}）内；过期成员靠 {@link #pruneStale} 惰性移除，
- * 即便兽医不显式点离线（退出/掉线/杀 App），TTL 兜底自动离线。
+ * <b>在线态纯显式（bug 20260702-216）</b>：成员在集合内即「在线」，与 lastSeen 新旧无关。一旦兽医
+ * 显式上线（{@link #goOnline}），保持在线直到显式离线/登出/封禁（{@link #goOffline}）——退后台、掉线、
+ * 杀 App 都不改变在线态（来单靠推送触达）。<b>不设 TTL、不做心跳兜底、不惰性过期</b>；score 仅供后台
+ * 展示「最后活跃」。这是产品决策：完全信赖兽医手动选择，不加可达性兜底（Redis 重启清空可接受，重上线即恢复）。
  *
- * <p>{@code BUSY} 子态（进行中会话占用）由 Story 5.5 接，本故事只读写 ONLINE/OFFLINE。
+ * <p>{@code BUSY} 子态（进行中会话占用）由 Story 5.5 接：ONLINE ↔ BUSY 显式切换，不影响在线存活。
  * <b>不引入 Redisson 等额外中间件</b>——用 Spring Data Redis 原生 ZSet 操作（架构护栏）。
  */
 @Service
 public class VetPresenceService {
 
-    /** 在线集合键（ZSET，score=lastSeen）。 */
+    /** 在线集合键（ZSET，score=lastSeen 仅供展示）。成员存在 = 在线。 */
     static final String ONLINE_ZSET = "vet:online";
     /** 忙碌集合键（SET，进行中会话占用，Story 5.5）。 */
     static final String BUSY_SET = "vet:busy";
-    /** 在线态有效窗口：超过此时长未心跳即视为离线（>心跳间隔，留掉线宽限）。 */
-    static final Duration TTL = Duration.ofMinutes(3);
 
     private final StringRedisTemplate redis;
 
@@ -38,24 +37,23 @@ public class VetPresenceService {
         this.redis = redis;
     }
 
-    /** 上线 / 心跳续期：刷新 lastSeen 为当前时刻。 */
+    /** 显式上线：加入在线集合（score=lastSeen）。此后保持在线直到显式离线，不随心跳/前后台自动离线。 */
     public void goOnline(long vetId) {
         redis.opsForZSet().add(ONLINE_ZSET, String.valueOf(vetId), now());
     }
 
-    /** 心跳续期（语义同 goOnline，命名区分调用意图）。 */
+    /** 心跳：仅刷新 lastSeen（后台「最后活跃」展示），不影响在线判定（在线态纯显式，不靠心跳续命）。 */
     public void heartbeat(long vetId) {
-        goOnline(vetId);
+        refreshIfOnline(vetId);
     }
 
     /**
-     * 活动续期（兜底）：兽医<b>已在线</b>时，凭工作台任意请求续期在线 TTL；<b>已离线则不复活</b>
-     * （显式 goOffline / 退后台停轮询后不被活动重新拉起）。解决「工作台在用但客户端心跳缺失 → 误判离线」
-     * （见 ApiAccessLoggingFilter 实证：兽医狂轮询 waiting 却 0 心跳）。
+     * 活动续期：兽医<b>已在线</b>时刷新 lastSeen（后台展示更准）；<b>已离线不复活</b>——只有显式 {@link #goOnline}
+     * 才能上线。在线存活不再依赖此调用（保留仅为让后台「最后活跃」跟随工作台活动，而非拉起在线态）。
      */
     public void refreshIfOnline(long vetId) {
         if (isOnline(vetId)) {
-            goOnline(vetId);
+            redis.opsForZSet().add(ONLINE_ZSET, String.valueOf(vetId), now());
         }
     }
 
@@ -79,15 +77,15 @@ public class VetPresenceService {
         return Boolean.TRUE.equals(redis.opsForSet().isMember(BUSY_SET, String.valueOf(vetId)));
     }
 
-    /** 某兽医是否在线（lastSeen 在 TTL 窗口内）。 */
+    /** 某兽医是否在线：在在线集合内即在线（显式态，无 TTL 过期）。 */
     public boolean isOnline(long vetId) {
         Double score = redis.opsForZSet().score(ONLINE_ZSET, String.valueOf(vetId));
-        return score != null && score >= staleThreshold();
+        return score != null;
     }
 
     /**
-     * 兽医最后在线（lastSeen = 最后心跳）时刻；离线/已移出在线集合 → 空（Bug 20260701-168 后台展示用）。
-     * 注：score 是最后心跳时间（heartbeat 每次覆盖），非「上线起始」；离线兽医已被移除故无值。
+     * 兽医最后活跃（lastSeen = score）时刻；离线/已移出在线集合 → 空（Bug 20260701-168 后台展示用）。
+     * 注：score 是最后活跃时间（上线/心跳/活动续期覆盖），非「上线起始」；离线兽医已被移除故无值。
      */
     public Optional<Instant> lastSeenAt(long vetId) {
         Double score = redis.opsForZSet().score(ONLINE_ZSET, String.valueOf(vetId));
@@ -104,32 +102,19 @@ public class VetPresenceService {
 
     /**
      * 是否有任意兽医在线（用户侧入口用，<b>只回 bool，不回精确人数</b>——架构：概率性展示）。
-     * 顺带惰性清理过期成员。
      */
     public boolean anyOnline() {
-        pruneStale();
-        Long count = redis.opsForZSet().count(ONLINE_ZSET, staleThreshold(), Double.POSITIVE_INFINITY);
-        return count != null && count > 0;
+        Long size = redis.opsForZSet().zCard(ONLINE_ZSET);
+        return size != null && size > 0;
     }
 
     /** 当前在线兽医 id 列表（5.3 队列匹配用；不对用户侧透传）。 */
     public List<Long> onlineVetIds() {
-        pruneStale();
-        Set<String> members = redis.opsForZSet()
-                .rangeByScore(ONLINE_ZSET, staleThreshold(), Double.POSITIVE_INFINITY);
+        Set<String> members = redis.opsForZSet().range(ONLINE_ZSET, 0, -1);
         if (members == null || members.isEmpty()) {
             return List.of();
         }
         return members.stream().map(Long::parseLong).toList();
-    }
-
-    /** 惰性清理：移除 lastSeen 早于阈值的过期成员（防幽灵在线）。 */
-    void pruneStale() {
-        redis.opsForZSet().removeRangeByScore(ONLINE_ZSET, Double.NEGATIVE_INFINITY, staleThreshold() - 1);
-    }
-
-    private double staleThreshold() {
-        return now() - TTL.toMillis();
     }
 
     private static double now() {

@@ -16,7 +16,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;
 
 /**
- * L0 单元测试（无真实 Redis，mock ZSetOperations）：在线/离线读写、TTL 窗口判定、anyOnline 只回 bool。
+ * L0 单元测试（无真实 Redis，mock ZSetOperations）：在线/离线读写、显式态判定（在集合内即在线，
+ * 无 TTL 过期，bug 20260702-216）、anyOnline 只回 bool。
  */
 @ExtendWith(MockitoExtension.class)
 class VetPresenceServiceTest {
@@ -64,7 +65,7 @@ class VetPresenceServiceTest {
     }
 
     @Test
-    void isOnlineTrueWhenScoreWithinWindow() {
+    void isOnlineTrueWhenMemberPresent() {
         when(zset.score(VetPresenceService.ONLINE_ZSET, "7"))
                 .thenReturn((double) System.currentTimeMillis());
         stubNotBusy();
@@ -73,12 +74,13 @@ class VetPresenceServiceTest {
     }
 
     @Test
-    void isOnlineFalseWhenScoreStale() {
+    void isOnlineStaysTrueEvenWhenLastSeenOld() {
+        // 显式态（bug 20260702-216）：只要成员在集合内即在线，lastSeen 再老也不自动离线。
         when(zset.score(VetPresenceService.ONLINE_ZSET, "7"))
-                .thenReturn((double) (System.currentTimeMillis() - VetPresenceService.TTL.toMillis() - 1000));
-        // 离线时 statusOf 直接返回 OFFLINE，不查忙碌集合。
-        assertThat(service().isOnline(7L)).isFalse();
-        assertThat(service().statusOf(7L)).isEqualTo(VetPresenceStatus.OFFLINE);
+                .thenReturn((double) (System.currentTimeMillis() - 86_400_000L)); // 一天前
+        stubNotBusy();
+        assertThat(service().isOnline(7L)).isTrue();
+        assertThat(service().statusOf(7L)).isEqualTo(VetPresenceStatus.ONLINE);
     }
 
     @Test
@@ -97,18 +99,14 @@ class VetPresenceServiceTest {
     }
 
     @Test
-    void anyOnlinePrunesStaleThenCountsLiveMembers() {
-        when(zset.count(eq(VetPresenceService.ONLINE_ZSET), anyDouble(), eq(Double.POSITIVE_INFINITY)))
-                .thenReturn(2L);
+    void anyOnlineTrueWhenMembersPresent() {
+        when(zset.zCard(VetPresenceService.ONLINE_ZSET)).thenReturn(2L);
         assertThat(service().anyOnline()).isTrue();
-        // 惰性清理过期成员
-        verify(zset).removeRangeByScore(eq(VetPresenceService.ONLINE_ZSET), eq(Double.NEGATIVE_INFINITY), anyDouble());
     }
 
     @Test
-    void anyOnlineFalseWhenNoLiveMembers() {
-        when(zset.count(eq(VetPresenceService.ONLINE_ZSET), anyDouble(), eq(Double.POSITIVE_INFINITY)))
-                .thenReturn(0L);
+    void anyOnlineFalseWhenNoMembers() {
+        when(zset.zCard(VetPresenceService.ONLINE_ZSET)).thenReturn(0L);
         assertThat(service().anyOnline()).isFalse();
     }
 }
