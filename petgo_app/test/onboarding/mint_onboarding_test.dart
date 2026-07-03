@@ -42,7 +42,7 @@ void main() {
     // —— Step 2 完成 ——
     expect(find.text('Masuk ke TailTopia'), findsOneWidget);
     expect(find.textContaining('Halo, Mochi'), findsOneWidget);
-    expect(find.textContaining('petgo.id/m/mochi'), findsOneWidget);
+    expect(find.textContaining('tailtopia.id/m/mochi'), findsOneWidget);
   });
 
   testWidgets('未填名称/品种时 Lanjut 禁用，不进入下一步', (tester) async {
