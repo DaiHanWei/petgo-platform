@@ -12,6 +12,7 @@ class TimelineItem {
     this.text,
     this.aiLevel,
     this.symptomSummary,
+    this.sourceType,
   });
 
   final TimelineKind kind;
@@ -31,6 +32,12 @@ class TimelineItem {
   final String? aiLevel;
   final String? symptomSummary;
 
+  /// 健康事件来源：`AI_TRIAGE` / `VET_CONSULT`（区分 AI 分诊与兽医问诊，bug 20260702-231）。
+  final String? sourceType;
+
+  /// 健康事件是否为兽医问诊（否则按 AI 分诊显示）。
+  bool get isVetConsult => sourceType == 'VET_CONSULT';
+
   /// 时间线显示日期：快乐时刻取事件日期（F9），健康事件取发生时刻。
   DateTime get displayDate => eventDate ?? date;
 
@@ -46,6 +53,7 @@ class TimelineItem {
       text: json['text'] as String?,
       aiLevel: json['aiLevel'] as String?,
       symptomSummary: json['symptomSummary'] as String?,
+      sourceType: json['sourceType'] as String?,
     );
   }
 

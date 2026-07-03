@@ -3,8 +3,11 @@ package com.tailtopia.profile.service;
 import com.tailtopia.consult.event.ConsultClosedEvent;
 import com.tailtopia.profile.domain.HealthEvent;
 import com.tailtopia.profile.domain.HealthSourceType;
+import com.tailtopia.profile.event.HealthArchivedEvent;
 import com.tailtopia.profile.repository.HealthEventRepository;
 import com.tailtopia.profile.repository.PetProfileRepository;
+import java.time.Instant;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -29,11 +32,13 @@ public class ConsultGrowthArchiveListener {
 
     private final HealthEventRepository healthEvents;
     private final PetProfileRepository petProfiles;
+    private final ApplicationEventPublisher events;
 
     public ConsultGrowthArchiveListener(HealthEventRepository healthEvents,
-            PetProfileRepository petProfiles) {
+            PetProfileRepository petProfiles, ApplicationEventPublisher events) {
         this.healthEvents = healthEvents;
         this.petProfiles = petProfiles;
+        this.events = events;
     }
 
     @Async
@@ -51,7 +56,12 @@ public class ConsultGrowthArchiveListener {
                         e.eventDate(), e.symptomSummary(), e.aiLevel(), e.adviceSummary(), null));
             } catch (DataIntegrityViolationException ignored) {
                 // 并发同 sourceRef：唯一约束兜底，归一为幂等已归档。
+                return;
             }
+            // 首次归档兽医问诊 → 里程碑 S4「第一次保存兽医问诊结论」自动完成（幂等）。
+            // 与 AI 分诊存档（HealthEventService.recordDecision）同事件，任一先触发即解锁
+            // （bug 20260702-231：此前兽医问诊完成漏发该事件，S4 永不解锁）。
+            events.publishEvent(new HealthArchivedEvent(e.userId(), pet.getId(), Instant.now()));
         });
     }
 }

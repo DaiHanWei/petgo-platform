@@ -89,6 +89,9 @@ class HealthEventTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final d = item.date;
+    // 来源区分（bug 20260702-231）：兽医问诊 🩺「Vet Consultation」/ AI 分诊 🏥「AI Consultation」。
+    final isVet = item.isVetConsult;
+    final title = isVet ? l10n.timelineVetConsult : l10n.timelineAiConsult;
     return Padding(
       key: const ValueKey('healthEventTile'),
       padding: const EdgeInsets.only(bottom: 9),
@@ -100,13 +103,13 @@ class HealthEventTile extends StatelessWidget {
         ),
         child: Row(
           children: [
-            const Text('🏥', style: TextStyle(fontSize: 18)),
+            Text(isVet ? '🩺' : '🏥', style: const TextStyle(fontSize: 18)),
             const SizedBox(width: 9),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('${l10n.timelineAiConsult} — ${formatDayMonth(context, d)}',
+                  Text('$title — ${formatDayMonth(context, d)}',
                       style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,

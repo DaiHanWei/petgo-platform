@@ -14,8 +14,10 @@ import java.util.List;
  */
 public interface HealthEventTimelineSource {
 
-    /** 健康事件时间线视图（剥离症状细节，仅摘要 + AI 评级，日志不落明文）。 */
-    record HealthEventView(Instant createdAt, String aiLevel, String symptomSummary) {
+    /** 健康事件时间线视图（剥离症状细节，仅摘要 + AI 评级 + 来源，日志不落明文）。
+     * {@code sourceType} = {@link com.tailtopia.profile.domain.HealthSourceType} 枚举名（AI_TRIAGE/VET_CONSULT），
+     * 供前端区分 AI 分诊 vs 兽医问诊条目（bug 20260702-231：此前丢失 → 兽医问诊被误显为「AI Consultation」）。 */
+    record HealthEventView(Instant createdAt, String aiLevel, String symptomSummary, String sourceType) {
     }
 
     /**

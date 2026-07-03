@@ -11,6 +11,7 @@ import com.tailtopia.profile.domain.ArchiveDecision;
 import com.tailtopia.profile.domain.HealthEvent;
 import com.tailtopia.profile.domain.HealthSourceType;
 import com.tailtopia.profile.domain.PetProfile;
+import com.tailtopia.profile.event.HealthArchivedEvent;
 import com.tailtopia.profile.repository.HealthEventRepository;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import java.time.LocalDate;
@@ -21,6 +22,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 /**
  * L0：问诊结束 → 归档 VET_CONSULT 健康事件（Bug 20260701-139）。幂等 + 无档案跳过。
@@ -34,8 +36,11 @@ class ConsultGrowthArchiveListenerTest {
     @Mock
     PetProfileRepository petProfiles;
 
+    @Mock
+    ApplicationEventPublisher events;
+
     private ConsultGrowthArchiveListener listener() {
-        return new ConsultGrowthArchiveListener(healthEvents, petProfiles);
+        return new ConsultGrowthArchiveListener(healthEvents, petProfiles, events);
     }
 
     private static ConsultClosedEvent closed(long sessionId, long userId) {
@@ -60,6 +65,12 @@ class ConsultGrowthArchiveListenerTest {
         assertThat(ev.getSourceRef()).isEqualTo("consult:7");
         assertThat(ev.getEventDate()).isEqualTo(LocalDate.of(2026, 6, 29));
         assertThat(ev.getArchiveDecision()).isEqualTo(ArchiveDecision.ARCHIVED);
+
+        // 首次归档兽医问诊 → 发 HealthArchivedEvent 驱动里程碑 S4（bug 20260702-231）。
+        ArgumentCaptor<HealthArchivedEvent> evtCap = ArgumentCaptor.forClass(HealthArchivedEvent.class);
+        verify(events).publishEvent(evtCap.capture());
+        assertThat(evtCap.getValue().ownerId()).isEqualTo(3L);
+        assertThat(evtCap.getValue().petProfileId()).isEqualTo(42L);
     }
 
     @Test
@@ -70,6 +81,7 @@ class ConsultGrowthArchiveListenerTest {
 
         verify(petProfiles, never()).findByOwnerId(org.mockito.ArgumentMatchers.anyLong());
         verify(healthEvents, never()).save(any());
+        verify(events, never()).publishEvent(any());
     }
 
     @Test
@@ -80,5 +92,6 @@ class ConsultGrowthArchiveListenerTest {
         listener().onConsultClosed(closed(7L, 3L));
 
         verify(healthEvents, never()).save(any());
+        verify(events, never()).publishEvent(any());
     }
 }

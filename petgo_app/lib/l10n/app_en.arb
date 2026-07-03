@@ -890,6 +890,8 @@
   "@timelineDebutPhoto": {"description": "Timeline tile: first happy moment subtitle prefix"},
   "timelineAiConsult": "AI Consultation",
   "@timelineAiConsult": {"description": "Timeline tile: health event title"},
+  "timelineVetConsult": "Vet Consultation",
+  "@timelineVetConsult": {"description": "Timeline tile: vet consultation health event title"},
   "petInfoStatHappyMoments": "Happy Moments",
   "@petInfoStatHappyMoments": {"description": "Pet info card: stat column label"},
   "petInfoStatConsult": "Consultations",

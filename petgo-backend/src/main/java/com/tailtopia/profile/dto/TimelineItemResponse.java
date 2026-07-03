@@ -21,18 +21,22 @@ public record TimelineItemResponse(
         List<String> imageUrls,
         String text,
         String aiLevel,
-        String symptomSummary) {
+        String symptomSummary,
+        String sourceType) {
 
     public static final String HAPPY_MOMENT = "HAPPY_MOMENT";
     public static final String HEALTH_EVENT = "HEALTH_EVENT";
 
     public static TimelineItemResponse happyMoment(Long postId, Instant date, LocalDate eventDate,
             List<String> imageUrls, String text) {
-        return new TimelineItemResponse(HAPPY_MOMENT, date, eventDate, postId, imageUrls, text, null, null);
+        return new TimelineItemResponse(HAPPY_MOMENT, date, eventDate, postId, imageUrls, text, null, null, null);
     }
 
-    public static TimelineItemResponse healthEvent(Instant date, String aiLevel, String symptomSummary) {
-        return new TimelineItemResponse(HEALTH_EVENT, date, null, null, null, null, aiLevel, symptomSummary);
+    /** 健康事件条目。{@code sourceType} = AI_TRIAGE / VET_CONSULT，前端据此区分 AI/兽医（bug 20260702-231）。 */
+    public static TimelineItemResponse healthEvent(Instant date, String aiLevel, String symptomSummary,
+            String sourceType) {
+        return new TimelineItemResponse(HEALTH_EVENT, date, null, null, null, null, aiLevel, symptomSummary,
+                sourceType);
     }
 
     /** 排序/显示有效日期（快乐时刻取 eventDate，缺省回退 date 的 UTC 日；健康事件取 date 的 UTC 日）。 */
