@@ -35,6 +35,7 @@
             <p>
                 <a th:if="${ktpUrl}" th:href="${ktpUrl}" target="_blank" th:text="#{admin.qualpage.ktpPhoto} + ' · ' + #{admin.qualpage.viewPhoto}">KTP</a><br/>
                 <a th:if="${sipdhUrl}" th:href="${sipdhUrl}" target="_blank" th:text="#{admin.qualpage.sipdhPhoto} + ' · ' + #{admin.qualpage.viewPhoto}">SIPDH</a><br/>
+                <a th:if="${strvUrl}" th:href="${strvUrl}" target="_blank" th:text="#{admin.qualpage.strvPhoto} + ' · ' + #{admin.qualpage.viewPhoto}">STRV</a><br/>
                 <a th:if="${degreeUrl}" th:href="${degreeUrl}" target="_blank" th:text="#{admin.qualpage.degreePhoto} + ' · ' + #{admin.qualpage.viewPhoto}">Degree</a><br/>
                 <!-- 头像改内嵌缩略图（点开原图）+ 无图占位，运营可直接看到（修 20260701-158）。 -->
                 <span th:text="#{admin.qualpage.profilePhoto}">Profile</span>:
@@ -77,6 +78,14 @@
                 <input type="date" th:field="*{sipdhExpiry}"/>
                 <label class="field" th:text="#{admin.qualpage.sipdhPhoto}">SIPDH 图 key</label>
                 <input type="text" th:field="*{sipdhPhotoKey}" class="field-full"/>
+                <label class="field" th:text="#{admin.qualpage.strvNo}">STRV 编号</label>
+                <input type="text" th:field="*{strvNo}" class="field-full"/>
+                <label class="field" th:text="#{admin.qualpage.strvIssuer}">STRV 机构</label>
+                <input type="text" th:field="*{strvIssuer}" class="field-full"/>
+                <label class="field" th:text="#{admin.qualpage.strvExpiry}">STRV 有效期</label>
+                <input type="date" th:field="*{strvExpiry}"/>
+                <label class="field" th:text="#{admin.qualpage.strvPhoto}">STRV 图 key</label>
+                <input type="text" th:field="*{strvPhotoKey}" class="field-full"/>
                 <label class="field" th:text="#{admin.qualpage.degreePhoto}">学位证图 key</label>
                 <input type="text" th:field="*{degreePhotoKey}" class="field-full"/>
                 <label class="field" th:text="#{admin.qualpage.profilePhoto}">头像图 key</label>

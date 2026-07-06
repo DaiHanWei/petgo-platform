@@ -81,4 +81,54 @@ class VetQualificationServiceTest {
         assertThat(QualificationStatus.PENDING_COMPLETION.canTakeConsult()).isFalse();
         assertThat(QualificationStatus.EXPIRED.canTakeConsult()).isFalse();
     }
+
+    /** Bug 166：STRV 为可选留档字段——直录时若填了则持久化，且不在 requireFullInput 必填集内。 */
+    @Test
+    void recordPersistsOptionalStrvFields() {
+        when(repo.findByVetAccountId(5L)).thenReturn(Optional.of(VetQualification.pendingFor(5L)));
+        var form = new com.tailtopia.admin.vetqual.dto.QualificationForm();
+        // 必填（不含 STRV）
+        form.setKtpNo("KTP1");
+        form.setKtpPhotoKey("k/ktp");
+        form.setSipdhNo("SIPDH1");
+        form.setSipdhIssuer("PDHI Jakarta");
+        form.setSipdhExpiry(java.time.LocalDate.of(2030, 1, 1));
+        form.setSipdhPhotoKey("k/sipdh");
+        form.setDegreePhotoKey("k/degree");
+        // 可选 STRV
+        form.setStrvNo("STRV-9");
+        form.setStrvIssuer("KKH");
+        form.setStrvExpiry(java.time.LocalDate.of(2031, 6, 30));
+        form.setStrvPhotoKey("k/strv");
+
+        var captor = org.mockito.ArgumentCaptor.forClass(VetQualification.class);
+        service.recordByOps(5L, form, 1L);
+        verify(repo).save(captor.capture());
+        VetQualification saved = captor.getValue();
+        assertThat(saved.getStrvNo()).isEqualTo("STRV-9");
+        assertThat(saved.getStrvIssuer()).isEqualTo("KKH");
+        assertThat(saved.getStrvExpiry()).isEqualTo(java.time.LocalDate.of(2031, 6, 30));
+        assertThat(saved.getStrvPhotoKey()).isEqualTo("k/strv");
+        assertThat(saved.getStatus()).isEqualTo(QualificationStatus.CERTIFIED);
+    }
+
+    /** STRV 全空也能直录成功（可选，不进 requireFullInput）。 */
+    @Test
+    void recordSucceedsWithoutStrv() {
+        when(repo.findByVetAccountId(5L)).thenReturn(Optional.of(VetQualification.pendingFor(5L)));
+        var form = new com.tailtopia.admin.vetqual.dto.QualificationForm();
+        form.setKtpNo("KTP1");
+        form.setKtpPhotoKey("k/ktp");
+        form.setSipdhNo("SIPDH1");
+        form.setSipdhIssuer("PDHI Jakarta");
+        form.setSipdhExpiry(java.time.LocalDate.of(2030, 1, 1));
+        form.setSipdhPhotoKey("k/sipdh");
+        form.setDegreePhotoKey("k/degree");
+
+        var captor = org.mockito.ArgumentCaptor.forClass(VetQualification.class);
+        service.recordByOps(5L, form, 1L);
+        verify(repo).save(captor.capture());
+        assertThat(captor.getValue().getStrvNo()).isNull();
+        assertThat(captor.getValue().getStatus()).isEqualTo(QualificationStatus.CERTIFIED);
+    }
 }

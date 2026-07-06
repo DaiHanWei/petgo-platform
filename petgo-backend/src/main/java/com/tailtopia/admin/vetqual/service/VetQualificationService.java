@@ -175,6 +175,10 @@ public class VetQualificationService {
         q.setSipdhIssuer(f.getSipdhIssuer());
         q.setSipdhExpiry(f.getSipdhExpiry());
         q.setSipdhPhotoKey(f.getSipdhPhotoKey());
+        q.setStrvNo(f.getStrvNo());
+        q.setStrvIssuer(f.getStrvIssuer());
+        q.setStrvExpiry(f.getStrvExpiry());
+        q.setStrvPhotoKey(f.getStrvPhotoKey());
         q.setDegreePhotoKey(f.getDegreePhotoKey());
         q.setProfilePhotoKey(f.getProfilePhotoKey());
         q.setPdhiPhotoKey(f.getPdhiPhotoKey());

@@ -50,6 +50,7 @@ public class AdminVetQualificationController {
         if (q != null) {
             model.addAttribute("ktpUrl", sign(q.getKtpPhotoKey()));
             model.addAttribute("sipdhUrl", sign(q.getSipdhPhotoKey()));
+            model.addAttribute("strvUrl", sign(q.getStrvPhotoKey()));
             model.addAttribute("degreeUrl", sign(q.getDegreePhotoKey()));
             model.addAttribute("profileUrl", sign(q.getProfilePhotoKey()));
             model.addAttribute("pdhiUrl", sign(q.getPdhiPhotoKey()));

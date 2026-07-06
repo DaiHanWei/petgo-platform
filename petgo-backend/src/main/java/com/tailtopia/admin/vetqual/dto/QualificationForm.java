@@ -18,6 +18,12 @@ public class QualificationForm {
     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
     private LocalDate sipdhExpiry;
     private String sipdhPhotoKey;
+    // STRV（兽医注册证）可选字段（Bug 166）。
+    private String strvNo;
+    private String strvIssuer;
+    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+    private LocalDate strvExpiry;
+    private String strvPhotoKey;
     private String degreePhotoKey;
     private String profilePhotoKey;
     private String pdhiPhotoKey;
@@ -44,6 +50,14 @@ public class QualificationForm {
     public void setSipdhExpiry(LocalDate v) { this.sipdhExpiry = v; }
     public String getSipdhPhotoKey() { return sipdhPhotoKey; }
     public void setSipdhPhotoKey(String v) { this.sipdhPhotoKey = v; }
+    public String getStrvNo() { return strvNo; }
+    public void setStrvNo(String v) { this.strvNo = v; }
+    public String getStrvIssuer() { return strvIssuer; }
+    public void setStrvIssuer(String v) { this.strvIssuer = v; }
+    public LocalDate getStrvExpiry() { return strvExpiry; }
+    public void setStrvExpiry(LocalDate v) { this.strvExpiry = v; }
+    public String getStrvPhotoKey() { return strvPhotoKey; }
+    public void setStrvPhotoKey(String v) { this.strvPhotoKey = v; }
     public String getDegreePhotoKey() { return degreePhotoKey; }
     public void setDegreePhotoKey(String v) { this.degreePhotoKey = v; }
     public String getProfilePhotoKey() { return profilePhotoKey; }

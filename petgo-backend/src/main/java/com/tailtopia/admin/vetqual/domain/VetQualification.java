@@ -53,6 +53,19 @@ public class VetQualification {
     @Column(name = "sipdh_photo_key", length = 255)
     private String sipdhPhotoKey;
 
+    // STRV（兽医注册证，独立于 SIPDH 执业许可）：可选留档，不阻断接单、不做到期扫描（Bug 166）。
+    @Column(name = "strv_no", length = 64)
+    private String strvNo;
+
+    @Column(name = "strv_issuer", length = 128)
+    private String strvIssuer;
+
+    @Column(name = "strv_expiry")
+    private LocalDate strvExpiry;
+
+    @Column(name = "strv_photo_key", length = 255)
+    private String strvPhotoKey;
+
     @Column(name = "degree_photo_key", length = 255)
     private String degreePhotoKey;
 
@@ -117,6 +130,14 @@ public class VetQualification {
     public void setSipdhExpiry(LocalDate v) { this.sipdhExpiry = v; }
 
     public void setSipdhPhotoKey(String v) { this.sipdhPhotoKey = v; }
+
+    public void setStrvNo(String v) { this.strvNo = v; }
+
+    public void setStrvIssuer(String v) { this.strvIssuer = v; }
+
+    public void setStrvExpiry(LocalDate v) { this.strvExpiry = v; }
+
+    public void setStrvPhotoKey(String v) { this.strvPhotoKey = v; }
 
     public void setDegreePhotoKey(String v) { this.degreePhotoKey = v; }
 
@@ -201,6 +222,22 @@ public class VetQualification {
 
     public String getSipdhPhotoKey() {
         return sipdhPhotoKey;
+    }
+
+    public String getStrvNo() {
+        return strvNo;
+    }
+
+    public String getStrvIssuer() {
+        return strvIssuer;
+    }
+
+    public LocalDate getStrvExpiry() {
+        return strvExpiry;
+    }
+
+    public String getStrvPhotoKey() {
+        return strvPhotoKey;
     }
 
     public String getDegreePhotoKey() {
