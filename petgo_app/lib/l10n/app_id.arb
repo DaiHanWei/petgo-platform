@@ -191,7 +191,7 @@
   "commentSendFailed": "Gagal mengirim, silakan coba lagi",
   "commentLimitReached": "Komentar maksimal 200 karakter",
   "detailCommentsTitle": "Komentar",
-  "detailNoComments": "Belum ada komentar",
+  "detailNoComments": "Yuk tulis sesuatu",
   "detailViewMoreComments": "Lihat komentar lainnya",
   "timeJustNow": "baru saja",
   "timeMinutesAgo": "{count} mnt lalu",

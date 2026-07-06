@@ -251,7 +251,7 @@
   "commentLimitReached": "Comment can be at most 200 characters",
   "@commentLimitReached": {"description": "Toast when comment input reaches the 200-char limit"},
   "detailCommentsTitle": "Comments",
-  "detailNoComments": "No comments yet",
+  "detailNoComments": "Be the first to comment",
   "detailViewMoreComments": "View more comments",
   "timeJustNow": "just now",
   "timeMinutesAgo": "{count} min ago",
