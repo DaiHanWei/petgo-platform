@@ -98,6 +98,27 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
       ),
     );
     if (draft == null || !mounted) return;
+    // 结束会话不可逆 → 提交诊断后再要一次显式确认，避免误结束（修 20260702-212）。
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => Theme(
+        data: AppTheme.vet,
+        child: AlertDialog(
+          title: Text(l10n.vetEndConfirmTitle),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(false),
+              child: Text(l10n.vetEndConfirmNo),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(true),
+              child: Text(l10n.vetEndConfirmYes),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
     try {
       await ref.read(vetRepositoryProvider).endSession(widget.sessionId, draft);
     } catch (_) {
