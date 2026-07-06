@@ -89,7 +89,6 @@ class _VetMePageState extends ConsumerState<VetMePage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final online = ref.watch(vetOnlineStatusProvider);
     final availability = ref.watch(vetAvailabilityProvider);
     return Scaffold(
       backgroundColor: AppColors.vetSurface2,
@@ -102,7 +101,7 @@ class _VetMePageState extends ConsumerState<VetMePage> {
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.md, AppSpacing.md, AppSpacing.xl),
                     children: [
-                      _infoCard(l10n, online),
+                      _infoCard(l10n, availability),
                       const SizedBox(height: AppSpacing.md),
                       _availabilityCard(l10n, availability),
                       const SizedBox(height: AppSpacing.md),
@@ -135,8 +134,20 @@ class _VetMePageState extends ConsumerState<VetMePage> {
     );
   }
 
+  /// 三态在线态 → 头像角标颜色（与 [_availabilityCard] 分段配色同源，修 20260702-234）。
+  Color _availabilityColor(VetAvailability availability) {
+    switch (availability) {
+      case VetAvailability.online:
+        return AppColors.vetPrimary;
+      case VetAvailability.busy:
+        return AppColors.triageYellow;
+      case VetAvailability.offline:
+        return AppColors.textTertiary;
+    }
+  }
+
   /// 个人信息卡：薄荷头像(首字母+在线点) + 名 + PDHI 认证标 + 3 统计卡。
-  Widget _infoCard(AppLocalizations l10n, bool online) {
+  Widget _infoCard(AppLocalizations l10n, VetAvailability availability) {
     final trimmed = _displayName.trim();
     final initial = trimmed.isNotEmpty ? trimmed.substring(0, 1).toUpperCase() : '?';
     return Container(
@@ -159,20 +170,21 @@ class _VetMePageState extends ConsumerState<VetMePage> {
                       child: Text(initial,
                           style: AppTypography.headline.copyWith(color: AppColors.vetOnAccent)),
                     ),
-                    if (online)
-                      Positioned(
-                        right: 1,
-                        bottom: 1,
-                        child: Container(
-                          width: 16,
-                          height: 16,
-                          decoration: BoxDecoration(
-                            color: AppColors.vetPrimary,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: AppColors.surface, width: 2),
-                          ),
+                    // 角标恒显示，颜色跟随三态在线态（online 绿 / busy 黄 / offline 灰，修 20260702-234）。
+                    Positioned(
+                      right: 1,
+                      bottom: 1,
+                      child: Container(
+                        key: const ValueKey('vetPresenceBadge'),
+                        width: 16,
+                        height: 16,
+                        decoration: BoxDecoration(
+                          color: _availabilityColor(availability),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.surface, width: 2),
                         ),
                       ),
+                    ),
                   ],
                 ),
               ),
