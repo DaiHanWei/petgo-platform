@@ -168,12 +168,20 @@ class _VetLoginPageState extends ConsumerState<VetLoginPage> {
               ),
             ),
             const SizedBox(height: 8),
-            // 无自助「忘记密码」流程——仅提示联系运营（FR-29 / NFR-12，spec F3）。
-            Text(
-              l10n.vetForgotHint,
-              style: const TextStyle(
-                  fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.vetPrimary),
-              textAlign: TextAlign.end,
+            // 无自助「忘记密码」流程——点提示弹客服抽屉联系运营（FR-29 / NFR-12，spec F3；bug 20260702-230）。
+            Align(
+              alignment: Alignment.centerRight,
+              child: GestureDetector(
+                key: const ValueKey('vetForgotHint'),
+                onTap: () => showCustomerServiceSheet(context),
+                behavior: HitTestBehavior.opaque,
+                child: Text(
+                  l10n.vetForgotHint,
+                  style: const TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.vetPrimary),
+                  textAlign: TextAlign.end,
+                ),
+              ),
             ),
             const SizedBox(height: 18),
             // 薄荷大钮「Masuk sebagai Dokter」。
