@@ -36,7 +36,13 @@
                 <a th:if="${ktpUrl}" th:href="${ktpUrl}" target="_blank" th:text="#{admin.qualpage.ktpPhoto} + ' · ' + #{admin.qualpage.viewPhoto}">KTP</a><br/>
                 <a th:if="${sipdhUrl}" th:href="${sipdhUrl}" target="_blank" th:text="#{admin.qualpage.sipdhPhoto} + ' · ' + #{admin.qualpage.viewPhoto}">SIPDH</a><br/>
                 <a th:if="${degreeUrl}" th:href="${degreeUrl}" target="_blank" th:text="#{admin.qualpage.degreePhoto} + ' · ' + #{admin.qualpage.viewPhoto}">Degree</a><br/>
-                <a th:if="${profileUrl}" th:href="${profileUrl}" target="_blank" th:text="#{admin.qualpage.profilePhoto} + ' · ' + #{admin.qualpage.viewPhoto}">Profile</a><br/>
+                <!-- 头像改内嵌缩略图（点开原图）+ 无图占位，运营可直接看到（修 20260701-158）。 -->
+                <span th:text="#{admin.qualpage.profilePhoto}">Profile</span>:
+                <a th:if="${profileUrl}" th:href="${profileUrl}" target="_blank">
+                    <img th:src="${profileUrl}" alt="profile"
+                         style="height:64px;width:64px;object-fit:cover;border-radius:50%;vertical-align:middle;border:1px solid #ddd;"/>
+                </a>
+                <span th:unless="${profileUrl}" class="muted" th:text="#{admin.qualpage.noPhoto}">No photo</span><br/>
                 <a th:if="${pdhiUrl}" th:href="${pdhiUrl}" target="_blank" th:text="#{admin.qualpage.pdhiPhoto} + ' · ' + #{admin.qualpage.viewPhoto}">PDHI</a>
             </p>
         </div>
