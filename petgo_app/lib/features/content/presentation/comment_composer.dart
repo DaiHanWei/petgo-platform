@@ -28,6 +28,8 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
   final FocusNode _focusNode = FocusNode();
   static const int _maxLen = 200;
   bool _sending = false;
+  // 触达字数上限只提示一次（回落到 <上限再复位），避免满字后每敲一键连弹（bug 20260702-218）。
+  bool _limitToasted = false;
 
   @override
   void dispose() {
@@ -50,6 +52,7 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
       if (!mounted) return;
       // 仅成功后清空输入 + 收起键盘 + 退出回复态 + 刷新评论区（AC3）。
       _controller.clear();
+      _limitToasted = false;
       FocusScope.of(context).unfocus();
       ref.read(replyTargetProvider.notifier).clear();
       ref.read(commentsRefreshProvider.notifier).bump();
@@ -124,6 +127,17 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
                   controller: _controller,
                   focusNode: _focusNode,
                   maxLength: _maxLen,
+                  // 触达 200 字上限给一次 toast（maxLength 静默硬截断本身无反馈，bug 20260702-218）。
+                  // 用 characters（字素）计数，与 maxLength 的截断口径一致。
+                  onChanged: (v) {
+                    final atLimit = v.characters.length >= _maxLen;
+                    if (atLimit && !_limitToasted) {
+                      _limitToasted = true;
+                      showAppToast(context, l10n.commentLimitReached);
+                    } else if (!atLimit && _limitToasted) {
+                      _limitToasted = false;
+                    }
+                  },
                   minLines: 1,
                   maxLines: 3,
                   style: AppTypography.body,

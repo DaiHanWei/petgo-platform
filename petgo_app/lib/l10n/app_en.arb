@@ -248,6 +248,8 @@
   "detailNetworkError": "Could not load, please try again",
   "detailCommentHint": "Write a comment...",
   "commentSendFailed": "Failed to send, please retry",
+  "commentLimitReached": "Comment can be at most 200 characters",
+  "@commentLimitReached": {"description": "Toast when comment input reaches the 200-char limit"},
   "detailCommentsTitle": "Comments",
   "detailNoComments": "No comments yet",
   "detailViewMoreComments": "View more comments",
