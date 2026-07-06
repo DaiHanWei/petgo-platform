@@ -22,6 +22,8 @@ class ProfileServiceTest {
     private PetProfileRepository profiles;
     private CardTokenGenerator tokenGenerator;
     private MilestoneService milestoneService;
+    private ProfileDeletionService profileDeletion;
+    private com.tailtopia.shared.media.MediaDeletionService mediaDeletion;
     private ProfileService service;
 
     @BeforeEach
@@ -29,9 +31,11 @@ class ProfileServiceTest {
         profiles = Mockito.mock(PetProfileRepository.class);
         tokenGenerator = Mockito.mock(CardTokenGenerator.class);
         milestoneService = Mockito.mock(MilestoneService.class);
+        profileDeletion = Mockito.mock(ProfileDeletionService.class);
+        mediaDeletion = Mockito.mock(com.tailtopia.shared.media.MediaDeletionService.class);
         when(tokenGenerator.generate()).thenReturn("TOKEN_ABC");
-        service = new ProfileService(profiles, tokenGenerator, milestoneService,
-                Mockito.mock(org.springframework.context.ApplicationEventPublisher.class));
+        service = new ProfileService(profiles, tokenGenerator, milestoneService, profileDeletion,
+                mediaDeletion, Mockito.mock(org.springframework.context.ApplicationEventPublisher.class));
     }
 
     private PetProfileCreateRequest req() {
@@ -134,6 +138,26 @@ class ProfileServiceTest {
         assertThatThrownBy(() -> service.update(1L,
                 new com.tailtopia.profile.dto.PetProfileUpdateRequest(null, "   ", null, null, null)))
                 .isInstanceOf(AppException.class);
+    }
+
+    @Test
+    void deleteMyProfileCascadesAndCleansMedia() {
+        when(profiles.existsByOwnerId(1L)).thenReturn(true);
+        when(profileDeletion.deleteByUserId(1L)).thenReturn(new com.tailtopia.shared.media.PersonalMedia(
+                java.util.List.of("k1", "k2"), java.util.List.of("https://cdn/avatar.jpg")));
+
+        service.deleteMyProfile(1L);
+
+        Mockito.verify(profileDeletion).deleteByUserId(1L);
+        Mockito.verify(mediaDeletion).deletePrivateKeys(java.util.List.of("k1", "k2"));
+        Mockito.verify(mediaDeletion).deletePublicByUrls(java.util.List.of("https://cdn/avatar.jpg"));
+    }
+
+    @Test
+    void deleteMyProfileWithoutProfileThrows404() {
+        when(profiles.existsByOwnerId(9L)).thenReturn(false);
+        assertThatThrownBy(() -> service.deleteMyProfile(9L)).isInstanceOf(AppException.class);
+        Mockito.verify(profileDeletion, Mockito.never()).deleteByUserId(Mockito.anyLong());
     }
 
     @Test

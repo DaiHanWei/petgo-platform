@@ -12,6 +12,9 @@ import 'package:tailtopia/features/profile/presentation/pet_profile_create_page.
 import 'package:tailtopia/l10n/app_localizations.dart';
 
 class _FakeRepo implements ProfileRepository {
+  @override
+  Future<void> deleteMyProfile() async {}
+
   PetProfile? existing;
   bool createCalled = false;
   bool failExists = false; // true → 模拟并发 409（档案已存在）

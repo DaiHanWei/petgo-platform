@@ -99,3 +99,14 @@
 来源：spec-bug-system-reverse-sync step-04 三路评审。均非阻断，已修的为 patch，下列 defer：
 
 - **写按名 / 校验按 ID 的维度错配**：`_update_record` 写 body 按字段名下发，FR9 白名单校验按字段 ID；二者一致性依赖 config 的 name↔id 与线上保持同步。`validate_writeback_config` 只保证白名单名在 [field_ids] 有映射，未校验该 ID 与线上真实字段一致。缓解：写前可加「拉取线上字段列表比对 config name↔id」的自检；或若 Lark 支持按 field_id 写则改按 ID 下发。正常运营（config 准确）下不触发。
+
+## 2026-07-06 · 里程碑「点赞/评论」语义 —— 待产品拍板（bug 20260706-253）
+
+来源：bug 20260706-253「首次喜欢和评论对应的里程碑没解锁」深挖定位。**非代码缺陷，是里程碑目标语义与提报期望不一致，需产品定口径后再决定是否改码。**
+
+- **现状（代码事实）**：里程碑只定义**「接收方」语义** —— `MilestoneCatalog.java` 的 `C/D-S14「第一次被评论」`、`C/D-S15「第一次收到点赞」`、`G-S7/S8`（均 SYSTEM_AUTO），解锁目标是**内容作者（被点赞/被评论的人）**：`MilestoneAutoCompleteListener.onContentLiked` → `completeForOwner(authorId,"S15")`、`onContentCommented` → `completeForOwner(contentAuthorId,"S14")`。**全仓不存在「行为者本人首次点赞/评论」这一类里程碑。**
+- **为何单账号测必不解锁（叠加抑制）**：`LikeService.like` 自赞不发事件（`post.authorId==userId` 直接 return）、`MilestoneAutoCompleteListener.onContentCommented` 自评 `commenterId==contentAuthorId` 直接 return。故用**同一账号**给自己内容点赞/评论，S14/S15 双重抑制、永不解锁；而 S1/S2/S5（行为者本人触发）正常，正好造成「只有这两个不解锁」的观感。
+- **待产品选口径（二选一）**：
+  1. **维持「接收方」语义** → 当前实现基本正确，属**测试方式问题**：需用**两个不同账号**互相点赞/评论验证（A 给 B 的内容点赞 → B 解锁「收到点赞」）。若确认，此 bug 关闭为「非缺陷/需正确复现」。
+  2. **改为「行为者」语义（我首次点赞/评论就解锁）** → 需 `MilestoneCatalog` 新增行为者版里程碑节点 + `MilestoneAutoCompleteListener` 改用 `likerId`/`commenterId` 作为 `completeForOwner` 目标、且不排除自互动。属跨 catalog + 监听器的功能新增，需重新排期。
+- **建议**：先与产品确认里程碑文案本意（"被评论/收到点赞" vs "首次评论/点赞"），再决定走 1 还是 2。定位置信度：高。

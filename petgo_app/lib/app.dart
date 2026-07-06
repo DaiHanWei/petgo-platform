@@ -9,6 +9,12 @@ import 'package:tailtopia/core/l10n/locale_controller.dart';
 import 'package:tailtopia/core/router/app_router.dart';
 import 'package:tailtopia/core/theme/app_theme.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
+import 'package:tailtopia/features/consult/presentation/consult_refresh.dart';
+import 'package:tailtopia/features/content/presentation/feed_controller.dart';
+import 'package:tailtopia/features/me/data/my_posts_repository.dart';
+import 'package:tailtopia/features/profile/data/milestone_repository.dart';
+import 'package:tailtopia/features/profile/data/profile_repository.dart';
+import 'package:tailtopia/features/profile/data/timeline_repository.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// 成长档案分享页深链 → go_router location 的纯映射（L0 可测）。
@@ -71,6 +77,7 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> {
     super.dispose();
   }
 
+
   @override
   Widget build(BuildContext context) {
     // 分析身份绑定：登录(含待引导新用户,有 id)→ identify(哈希 distinctId)；登出 → reset。
@@ -88,6 +95,15 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> {
       } else if (next.status == AuthStatus.guest && prevId != null) {
         // 仅在此前确有身份时 reset，避免纯游客态抖动平白重置匿名 id（破坏匿名漏斗连续性）。
         Analytics.reset();
+      }
+
+      // 账号切换（首次登录 / 直切另一用户 / 冷启动恢复）→ 失效上一用户维度缓存，
+      // 新用户进各 Tab 时按新 token 重新拉取（修：同设备换账号后档案/时间线/我的发布/问诊列表仍显上一用户）。
+      // 只在「变为某个非游客用户」时失效；退出登录（转 guest）**不**在此失效——游客态无 token，
+      // 失效会立即触发 /me 等重拉 → 401 → 强制登录弹窗。清除靠受控 Tab 对游客不可见 + 下次登录重拉达成。
+      // 兽医登录 profile=null（nextId=null）自动跳过，不误刷用户维度缓存。
+      if (next.status != AuthStatus.guest && nextId != null && nextId != prevId) {
+        resetUserScopedCaches(ref);
       }
     });
     // Story 7.2：用户手动选择优先（localeController）；null → 跟随设备（resolutionCallback 回退英语）。
@@ -119,4 +135,18 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> {
       },
     );
   }
+}
+
+/// 失效所有「当前用户维度」的缓存（provider + 问诊本地列表刷新信号），使切换账号后各 Tab 重拉。
+/// 收口于 app.dart 组合根：跨 feature 的缓存协调放在根部，AuthController 保持纯净。
+/// 仅在「变为某个非游客用户」时调用（见上方 authControllerProvider 监听）——退出登录不调，
+/// 游客态无 token，失效会立即触发 /me 重拉 → 401 → 强制登录弹窗。
+void resetUserScopedCaches(WidgetRef ref) {
+  ref.invalidate(petProfileProvider); // 成长档案 / 我的：宠物档案
+  ref.invalidate(timelineFirstPageProvider); // 成长档案：时间线首页
+  ref.invalidate(archiveStatsProvider); // 成长档案 / 我的：统计栏
+  ref.invalidate(milestoneListProvider); // 成长档案：里程碑
+  ref.invalidate(myPostsProvider); // 我的：我的发布
+  ref.invalidate(feedProvider); // 首页 Feed（按新用户宠物状态重过滤）
+  ref.read(consultRefreshProvider.notifier).bump(); // 问诊页 _active/_history 重拉
 }

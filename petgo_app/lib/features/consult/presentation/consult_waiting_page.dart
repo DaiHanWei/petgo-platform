@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/case_image_viewer.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
 import '../data/consult_repository.dart';
 import '../domain/consult_case.dart';
@@ -451,6 +452,37 @@ class _ConsultWaitingPageState extends ConsumerState<ConsultWaitingPage>
           Text(summary,
               key: const ValueKey('consultSummaryBody'),
               style: const TextStyle(fontSize: 13, height: 1.5, color: AppColors.ink)),
+          // AI 升级/自填照片缩略图（bug 20260702-237→235：升级带入的图不再只显数量，直接可见+点击放大）。
+          if (c.imageUrls.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              key: const ValueKey('consultSummaryPhotos'),
+              height: 64,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: c.imageUrls.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
+                itemBuilder: (ictx, i) => GestureDetector(
+                  onTap: () => showCaseImageFullScreen(ictx, c.imageUrls[i]),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      c.imageUrls[i],
+                      width: 64,
+                      height: 64,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => Container(
+                        width: 64,
+                        height: 64,
+                        color: AppColors.cream2,
+                        child: const Icon(Icons.image_outlined, size: 22, color: AppColors.muted),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

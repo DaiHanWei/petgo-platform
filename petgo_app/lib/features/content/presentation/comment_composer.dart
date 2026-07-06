@@ -1,7 +1,9 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/problem_detail.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/rounded.dart';
 import '../../../core/theme/spacing.dart';
@@ -56,11 +58,20 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
       FocusScope.of(context).unfocus();
       ref.read(replyTargetProvider.notifier).clear();
       ref.read(commentsRefreshProvider.notifier).bump();
-    } catch (_) {
-      // AC3（F13）：发送失败（网络/服务器/422）→ 提示重试，**保留输入与回复态**，可直接重试。
+    } catch (e) {
       if (!mounted) return;
       final l10n = AppLocalizations.of(context);
-      showAppToast(context, l10n.commentSendFailed);
+      // 回复态遇 404 → 父评论已被删除（评论从列表点出，加载后被删才会 404）：给专属提示，别再吞成通用「重试」。
+      final status = e is DioException ? ProblemDetail.fromDioException(e)?.status : null;
+      if (parentId != null && status == 404) {
+        _controller.clear();
+        ref.read(replyTargetProvider.notifier).clear(); // 退出回复态（父已不存在，重试无意义）
+        ref.read(commentsRefreshProvider.notifier).bump(); // 刷新评论区，让已删除的父评论从列表消失
+        showAppToast(context, l10n.commentReplyTargetDeleted);
+      } else {
+        // AC3（F13）：发送失败（网络/服务器/422）→ 提示重试，**保留输入与回复态**，可直接重试。
+        showAppToast(context, l10n.commentSendFailed);
+      }
     } finally {
       if (mounted) setState(() => _sending = false);
     }

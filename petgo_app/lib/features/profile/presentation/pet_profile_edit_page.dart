@@ -38,6 +38,7 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
   String? _sex;
   bool _uploading = false;
   bool _submitting = false;
+  bool _deleting = false;
   bool _prefilled = false;
 
   @override
@@ -94,6 +95,48 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
       if (mounted) _toast(l10n.petProfileSaveFailed);
     } finally {
       if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  /// 删除档案（bug 20260702-237 / 决策 F18）：二次确认 → DELETE /pet-profiles/me →
+  /// 失效档案 provider → 回档案 Tab（无档案落空态，可重建或切换宠物状态）。
+  Future<void> _confirmDelete() async {
+    final l10n = AppLocalizations.of(context);
+    final petName = _nameController.text.trim();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: Text(l10n.petProfileDeleteConfirmTitle),
+        content: Text(l10n.petProfileDeleteConfirmBody(petName)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: Text(l10n.commonCancel),
+          ),
+          TextButton(
+            key: const ValueKey('petProfileDeleteConfirm'),
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.popRed),
+            child: Text(l10n.petProfileDeleteConfirmYes),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await _deleteProfile();
+  }
+
+  Future<void> _deleteProfile() async {
+    final l10n = AppLocalizations.of(context);
+    setState(() => _deleting = true);
+    try {
+      await ref.read(profileRepositoryProvider).deleteMyProfile();
+      ref.invalidate(petProfileProvider);
+      if (mounted) context.go('/profile');
+    } catch (_) {
+      if (mounted) _toast(l10n.petProfileDeleteFailed);
+    } finally {
+      if (mounted) setState(() => _deleting = false);
     }
   }
 
@@ -326,12 +369,26 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
             child: Text('${_introController.text.characters.length} / $_kBioMax',
                 style: const TextStyle(fontSize: 11, color: AppColors.textTertiary)),
           ),
-          const SizedBox(height: AppSpacing.sm),
-          // 保存按钮在右上角 AppBar（原型 P-32），此处不再放底部按钮。
-          // Bug 20260701-187 / 决策 F18：删除档案暂隐藏——真删除的数据生命周期语义（物理删 vs 软删
-          // 冷静期、关联 UGC 去留、名片 token 失效）待产品拍板；先隐藏按钮避免「点删除只弹 Coming soon」
-          // 的误导。删除交互（_confirmDelete + petProfileDelete* 文案）已随此改移除，恢复时按 F18 接
-          // DELETE /pet-profiles/me 一并补回。
+          const SizedBox(height: AppSpacing.lg),
+          // 危险区：删除档案（bug 20260702-237 / 决策 F18）。保存按钮在右上角 AppBar（原型 P-32）。
+          // 真删除：后端 DELETE /pet-profiles/me 级联删派生数据 + 名片失效 + 清理个人图，保留 UGC；
+          // petStatus 不变，删后回档案 Tab 落空态可重建或切换宠物状态（闭合被困死问题）。
+          TextButton.icon(
+            key: const ValueKey('petProfileDeleteButton'),
+            onPressed: _deleting ? null : _confirmDelete,
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.popRed,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+            icon: _deleting
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.popRed))
+                : const Icon(Icons.delete_outline, size: 20),
+            label: Text(l10n.petProfileDeleteButton(_nameController.text.trim()),
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+          ),
         ],
       ),
     );

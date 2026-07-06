@@ -30,6 +30,10 @@ abstract class ProfileRepository {
     DateTime? birthday,
     String? intro,
   });
+
+  /// 删除当前用户档案（bug 20260702-237 / 决策 F18）。后端级联删派生数据 + 名片失效 + 清理个人图，
+  /// 保留 UGC；petStatus 不变（删后落空档案态可重建/切换）。成功 204。
+  Future<void> deleteMyProfile();
 }
 
 class DioProfileRepository implements ProfileRepository {
@@ -81,6 +85,11 @@ class DioProfileRepository implements ProfileRepository {
     if (intro != null) data['intro'] = intro;
     final resp = await dio.patch<Map<String, dynamic>>(ApiPaths.petProfileMe, data: data);
     return PetProfile.fromJson(resp.data!);
+  }
+
+  @override
+  Future<void> deleteMyProfile() async {
+    await dio.delete<void>(ApiPaths.petProfileMe);
   }
 
   @override

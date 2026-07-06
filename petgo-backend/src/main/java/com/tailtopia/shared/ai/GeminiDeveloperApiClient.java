@@ -73,7 +73,9 @@ public class GeminiDeveloperApiClient implements GeminiClient {
     private static String languageDirective(String responseLocale) {
         boolean indonesian = "id".equalsIgnoreCase(responseLocale);
         String localeLang = indonesian ? "Bahasa Indonesia（印尼语）" : "English（英语）";
-        return "\n【作答语言】所有面向用户的字段（advice / medicationRef / disclaimer / observation 各项）"
+        return "\n【作答语言】所有面向用户的输出字符串字段——advice、medicationRef、disclaimer、"
+                + "observation.indicators、observation.timeWindow、observation.escalationTriggers、"
+                + "emergencySteps、emergencyAvoid（含每个数组里的每一项）——"
                 + "只能用 English（英语）或 Bahasa Indonesia（印尼语）二者之一，绝不使用中文或任何其它语言。"
                 + "按以下优先级选定输出语言：（1）若能从主人的症状描述判断出其使用的是英语或印尼语，"
                 + "就用同一种语言作答（用户写英语→回英语，写印尼语→回印尼语）；"

@@ -61,6 +61,9 @@ class _TestAuthController extends AuthController {
 
 class _FakeProfileRepo implements ProfileRepository {
   @override
+  Future<void> deleteMyProfile() async {}
+
+  @override
   Future<PetProfile> create({
     required String petType,
     required String name,

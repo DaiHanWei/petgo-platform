@@ -49,6 +49,18 @@ class _TriagePageState extends ConsumerState<TriagePage> {
     _history = repo.history();
   }
 
+  /// 下拉刷新：重拉进行中会话 + 问诊历史（聊天列表）。等两条 future 落定再收起刷新圈。
+  /// 受控 Tab 已保证登录态；游客兜底直接返回不打接口。
+  Future<void> _refresh() async {
+    if (!ref.read(authControllerProvider).isLoggedIn) return;
+    setState(_load);
+    final a = _active, h = _history;
+    await Future.wait<void>([
+      if (a != null) a.then((_) {}).catchError((_) {}),
+      if (h != null) h.then((_) {}).catchError((_) {}),
+    ]);
+  }
+
   /// 兽医卡：登录态读 [consultAvailabilityProvider] 的在线 bool 驱动绿点（在线→脉冲「Dokter tersedia」，
   /// 否则静态营业时段提示）；游客不打 availability 请求，显示默认营业时段（不造假具名医生）。
   Widget _vetCard(BuildContext context, WidgetRef ref, AppLocalizations l10n, bool loggedIn) {
@@ -102,9 +114,13 @@ class _TriagePageState extends ConsumerState<TriagePage> {
       backgroundColor: AppColors.cream,
       body: SafeArea(
         bottom: false,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
-          children: <Widget>[
+        child: RefreshIndicator(
+          onRefresh: _refresh,
+          color: AppColors.mint, // 品牌主色 #845EC9
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(), // 内容不足一屏也可下拉
+            padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
+            children: <Widget>[
             // ① 文案 Hero（原型 khero）。
             Text(l10n.triageHeroTitle,
                 style: const TextStyle(
@@ -195,6 +211,7 @@ class _TriagePageState extends ConsumerState<TriagePage> {
               ),
             ],
           ],
+          ),
         ),
       ),
     );

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/im/im_service.dart';
 import '../../../core/network/dio_client.dart';
 import 'auth_routing.dart';
 import 'login_response.dart';
@@ -98,7 +99,15 @@ class AuthController extends Notifier<AuthState> {
   }
 
   /// 续期失败 / 注销 → 落游客态。
-  void toGuest() => state = const AuthState.guest();
+  ///
+  /// 同时解绑 IM 登录：这是登出 / 账号注销 / 强制 401 / 引导中止的唯一收口。
+  /// 不解绑则腾讯 IM SDK 仍以上一用户身份登录（app 级 [imServiceProvider] + SDK 登录态跨账号存活），
+  /// 同设备下一用户 loginIfNeeded 幂等空转 → 拉到上一用户的兽医聊天历史（跨用户隐私泄漏）。
+  /// best-effort fire-and-forget：不阻塞游客态切换，失败静默（页面已离场）。
+  void toGuest() {
+    state = const AuthState.guest();
+    ref.read(imServiceProvider).logout().catchError((_) {});
+  }
 }
 
 final authControllerProvider =

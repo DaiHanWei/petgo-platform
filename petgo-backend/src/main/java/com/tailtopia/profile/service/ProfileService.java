@@ -8,6 +8,8 @@ import com.tailtopia.profile.dto.PetProfileUpdateRequest;
 import com.tailtopia.profile.event.ProfileCreatedEvent;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.media.MediaDeletionService;
+import com.tailtopia.shared.media.PersonalMedia;
 import java.time.Instant;
 import java.util.Optional;
 import org.springframework.context.ApplicationEventPublisher;
@@ -26,13 +28,18 @@ public class ProfileService {
     private final PetProfileRepository profiles;
     private final CardTokenGenerator tokenGenerator;
     private final MilestoneService milestoneService;
+    private final ProfileDeletionService profileDeletion;
+    private final MediaDeletionService mediaDeletion;
     private final ApplicationEventPublisher events;
 
     public ProfileService(PetProfileRepository profiles, CardTokenGenerator tokenGenerator,
-            MilestoneService milestoneService, ApplicationEventPublisher events) {
+            MilestoneService milestoneService, ProfileDeletionService profileDeletion,
+            MediaDeletionService mediaDeletion, ApplicationEventPublisher events) {
         this.profiles = profiles;
         this.tokenGenerator = tokenGenerator;
         this.milestoneService = milestoneService;
+        this.profileDeletion = profileDeletion;
+        this.mediaDeletion = mediaDeletion;
         this.events = events;
     }
 
@@ -69,6 +76,27 @@ public class ProfileService {
             // 并发双开窗：唯一约束兜底（owner_id / card_token），归一为 409。
             throw AppException.profileExists("已有宠物档案，V1 暂仅支持单只宠物");
         }
+    }
+
+    /**
+     * 删除当前用户宠物档案（bug 20260702-237 / 决策 F18）。走 {@code /me}（C1），单账号单宠物。
+     *
+     * <p>级联物理删派生数据（health_events / pet_milestones / milestone_completions / milestone_shares，
+     * 随之名片 card_token 因档案行消失自然失效）—— 复用 {@link ProfileDeletionService} 与注销 7.3 同一套级联，
+     * 并清理档案个人 OSS 图（头像 / 名片 OG / 健康图）。<b>UGC（content_posts 成长日历条目）保留</b>，
+     * 与注销 7.3「匿名化保留 UGC」一致。<b>petStatus 不改</b>：删后用户仍为 HAS_PET 但无档案，
+     * 前端据 GET /me 的 404 落「空档案态」，可重建档案或切换宠物状态（闭合 bug 20260702-237 的困死）。
+     *
+     * <p>DB 级联由内层 {@code ProfileDeletionService#deleteByUserId} 原子提交；OSS 清理在提交后 best-effort
+     * （OSS 故障不回滚已删档案，孤儿对象非正确性问题）。无档案 → 404。
+     */
+    public void deleteMyProfile(long ownerId) {
+        if (!profiles.existsByOwnerId(ownerId)) {
+            throw AppException.notFound("尚未创建宠物档案");
+        }
+        PersonalMedia media = profileDeletion.deleteByUserId(ownerId);
+        mediaDeletion.deletePrivateKeys(media.privateKeys());
+        mediaDeletion.deletePublicByUrls(media.publicUrls());
     }
 
     /**

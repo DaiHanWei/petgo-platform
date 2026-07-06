@@ -11,6 +11,12 @@ class _FakeRepo implements ProfileRepository {
   _FakeRepo(this.profile);
   final PetProfile profile;
   String? updatedName;
+  bool deleted = false;
+
+  @override
+  Future<void> deleteMyProfile() async {
+    deleted = true;
+  }
 
   @override
   Future<PetProfile> create({
@@ -89,6 +95,29 @@ void main() {
     // 直接触发提交逻辑（避免依赖 go_router 导航）
     final submit = tester.widget<FilledButton>(find.byKey(const ValueKey('petProfileEditSubmit')));
     expect(submit.onPressed, isNotNull);
+  });
+
+  testWidgets('删除档案：按钮存在，点击弹二次确认，取消不删（bug 20260702-237）', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(440, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repo = _FakeRepo(const PetProfile(id: 1, name: 'Momo', cardToken: 'TOK'));
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+
+    // 危险区删除按钮存在（不再是隐藏/桩）。
+    final deleteBtn = find.byKey(const ValueKey('petProfileDeleteButton'));
+    expect(deleteBtn, findsOneWidget);
+
+    // 点击 → 弹二次确认（标题 + 危险确认项）。
+    await tester.ensureVisible(deleteBtn);
+    await tester.tap(deleteBtn);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('petProfileDeleteConfirm')), findsOneWidget);
+
+    // 取消 → 不删除（deleteMyProfile 零调用）。
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(repo.deleted, isFalse);
   });
 
   testWidgets('F6: pet_type 置灰只读，展示既有类型不可改', (tester) async {

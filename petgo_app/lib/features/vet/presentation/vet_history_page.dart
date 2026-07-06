@@ -45,8 +45,15 @@ class _VetHistoryPageState extends ConsumerState<VetHistoryPage> {
   }
 
   /// 重拉历史（切到本 Tab / 下拉刷新触发）。
+  ///
+  /// 用块体 `setState`：箭头体 `() => _items = future` 的返回值是被赋的 Future，
+  /// 会触发 Flutter「setState 回调返回 Future」断言，在 debug 下于 markNeedsBuild 前抛出 →
+  /// _items 虽赋新值但界面不重建，历史永不刷新（结束会话后新会话不出现）。
   void _reload() {
-    setState(() => _items = ref.read(vetRepositoryProvider).history());
+    final f = ref.read(vetRepositoryProvider).history();
+    setState(() {
+      _items = f;
+    });
   }
 
   List<VetHistoryEntry> _apply(List<VetHistoryEntry> all) {
@@ -90,7 +97,9 @@ class _VetHistoryPageState extends ConsumerState<VetHistoryPage> {
                                 color: AppColors.vetPrimary,
                                 onRefresh: () async {
                                   final f = ref.read(vetRepositoryProvider).history();
-                                  setState(() => _items = f);
+                                  setState(() {
+                                    _items = f;
+                                  });
                                   await f;
                                 },
                                 child: ListView.separated(

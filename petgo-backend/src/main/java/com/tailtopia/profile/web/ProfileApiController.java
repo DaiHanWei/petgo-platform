@@ -19,6 +19,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -68,6 +69,17 @@ public class ProfileApiController {
     @GetMapping("/me")
     public PetProfileResponse myProfile(@AuthenticationPrincipal Jwt jwt) {
         return profileService.getMyProfile(currentUserId(jwt));
+    }
+
+    /**
+     * 删除当前用户宠物档案（bug 20260702-237 / 决策 F18）。owner 取自 JWT，仅删自己档案。
+     * 级联物理删派生数据 + 名片失效 + 清理个人 OSS 图，保留 UGC；petStatus 不改（删后落空档案态可重建/切换）。
+     * 无档案 → 404。响应 204。
+     */
+    @DeleteMapping("/me")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteMyProfile(@AuthenticationPrincipal Jwt jwt) {
+        profileService.deleteMyProfile(currentUserId(jwt));
     }
 
     /**
