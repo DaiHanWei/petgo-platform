@@ -10,6 +10,19 @@ import '../data/vet_repository.dart';
 import '../domain/vet_workbench_lists.dart';
 import 'vet_empty_state.dart';
 
+/// 兽医历史列表刷新信号：切到历史 Tab（工作台 `_select(2)`）时 bump，页面据此重拉。
+/// bug 20260702-219：历史页挂 IndexedStack 保活、`initState` 只拉一次（且早于兽医结束会话），
+/// 之后切 Tab 只切可见性 → 刚结束的会话当 app 生命周期内永不出现在历史。
+class VetHistoryRefreshNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void bump() => state = state + 1;
+}
+
+final NotifierProvider<VetHistoryRefreshNotifier, int> vetHistoryRefreshProvider =
+    NotifierProvider<VetHistoryRefreshNotifier, int>(VetHistoryRefreshNotifier.new);
+
 /// 历史记录 Tab（原型 vet-history.html 1:1）：深色顶栏 + 今日总数 + 筛选 Chip + 记录卡（只读）。
 class VetHistoryPage extends ConsumerStatefulWidget {
   const VetHistoryPage({super.key});
@@ -31,6 +44,11 @@ class _VetHistoryPageState extends ConsumerState<VetHistoryPage> {
     _items = ref.read(vetRepositoryProvider).history();
   }
 
+  /// 重拉历史（切到本 Tab / 下拉刷新触发）。
+  void _reload() {
+    setState(() => _items = ref.read(vetRepositoryProvider).history());
+  }
+
   List<VetHistoryEntry> _apply(List<VetHistoryEntry> all) {
     switch (_filter) {
       case _HistoryFilter.all:
@@ -47,6 +65,8 @@ class _VetHistoryPageState extends ConsumerState<VetHistoryPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    // 切到历史 Tab（或结束会话后）bump → 重拉，绕过 IndexedStack 保活的一次性 initState（bug 20260702-219）。
+    ref.listen<int>(vetHistoryRefreshProvider, (_, _) => _reload());
     return Scaffold(
       backgroundColor: AppColors.vetSurface2,
       body: FutureBuilder<List<VetHistoryEntry>>(
@@ -66,12 +86,20 @@ class _VetHistoryPageState extends ConsumerState<VetHistoryPage> {
                         ? VetEmptyState(icon: Icons.history, message: l10n.vetHistoryEmpty)
                         : filtered.isEmpty
                             ? VetEmptyState(icon: Icons.filter_alt_off_outlined, message: l10n.vetHistoryFilterEmpty)
-                            : ListView.separated(
-                                padding: const EdgeInsets.fromLTRB(
-                                    AppSpacing.md, AppSpacing.sm, AppSpacing.md, AppSpacing.xl),
-                                itemCount: filtered.length,
-                                separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
-                                itemBuilder: (ctx, i) => _HistoryCard(entry: filtered[i]),
+                            : RefreshIndicator(
+                                color: AppColors.vetPrimary,
+                                onRefresh: () async {
+                                  final f = ref.read(vetRepositoryProvider).history();
+                                  setState(() => _items = f);
+                                  await f;
+                                },
+                                child: ListView.separated(
+                                  padding: const EdgeInsets.fromLTRB(
+                                      AppSpacing.md, AppSpacing.sm, AppSpacing.md, AppSpacing.xl),
+                                  itemCount: filtered.length,
+                                  separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
+                                  itemBuilder: (ctx, i) => _HistoryCard(entry: filtered[i]),
+                                ),
                               ),
               ),
             ],

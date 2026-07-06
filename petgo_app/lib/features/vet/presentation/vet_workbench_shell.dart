@@ -133,7 +133,11 @@ class _VetWorkbenchShellState extends ConsumerState<VetWorkbenchShell>
     );
   }
 
-  void _select(int i) => setState(() => _index = i);
+  void _select(int i) {
+    setState(() => _index = i);
+    // 切到历史 Tab → 重拉，让刚结束的会话即时出现（bug 20260702-219：历史页 IndexedStack 保活不自动刷新）。
+    if (i == 2) ref.read(vetHistoryRefreshProvider.notifier).bump();
+  }
 }
 
 /// 兽医底栏单项（原型列式）：图标 + 标签，选中紫高亮 + 标签加粗。
