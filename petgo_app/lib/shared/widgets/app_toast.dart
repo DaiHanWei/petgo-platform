@@ -75,7 +75,10 @@ class _ToastWidgetState extends State<_ToastWidget> with SingleTickerProviderSta
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).padding.bottom + 90;
+    // 底距 = 安全区 + 键盘高度(viewInsets) + 90。键盘弹起时(如评论区)必须叠加 viewInsets.bottom，
+    // 否则 toast 停在固定低位被键盘/输入框盖住看不见（bug 20260702-232）；键盘收起时 viewInsets=0，行为不变。
+    final mq = MediaQuery.of(context);
+    final bottom = mq.padding.bottom + mq.viewInsets.bottom + 90;
     return Positioned(
       left: 24,
       right: 24,
