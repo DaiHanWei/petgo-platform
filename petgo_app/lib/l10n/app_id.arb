@@ -684,6 +684,8 @@
   "petProfileBirthdayLabel": "TANGGAL LAHIR",
   "petProfileBioLabel": "BIO (OPSIONAL)",
   "petProfileBioHint": "Ceritakan tentang hewan peliharaanmu...",
+  "petProfileNameLimitReached": "Nama maksimal 20 karakter",
+  "petProfileBioLimitReached": "Bio maksimal 30 karakter",
   "petProfileCreateSubmit": "Buat Profil",
   "petProfileUploadPhoto": "Upload Foto",
   "petCardYears": "{years} tahun",

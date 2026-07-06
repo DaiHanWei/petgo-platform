@@ -43,6 +43,12 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
   String? _petType; // F6 必选：CAT/DOG/OTHER
   bool _uploading = false;
   bool _submitting = false;
+  // 名字/简介触达上限各给一次 toast（maxLength 静默硬截断本身无反馈，参照评论 bug 20260702-218）。
+  bool _nameLimitToasted = false;
+  bool _bioLimitToasted = false;
+
+  static const int _nameMaxLen = 20;
+  static const int _bioMaxLen = 30;
 
   @override
   void dispose() {
@@ -180,6 +186,18 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
     showAppToast(context, msg, duration: const Duration(seconds: 3));
   }
 
+  /// 输入触达 maxLength 时给一次 toast；退回上限下复位。用字素(characters)计数，
+  /// 与 maxLength 的截断口径一致。返回新的「已提示」标志。
+  bool _maybeLimitToast(String value, int maxLen, bool toasted, String msg) {
+    final atLimit = value.characters.length >= maxLen;
+    if (atLimit && !toasted) {
+      showAppToast(context, msg);
+      return true;
+    }
+    if (!atLimit && toasted) return false;
+    return toasted;
+  }
+
   static String? _emptyToNull(String s) => s.trim().isEmpty ? null : s.trim();
 
   @override
@@ -230,8 +248,12 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
               child: TextField(
                 key: const ValueKey('petProfileNameField'),
                 controller: _nameController,
-                maxLength: 20,
-                onChanged: (_) => setState(() {}),
+                maxLength: _nameMaxLen,
+                onChanged: (v) {
+                  _nameLimitToasted = _maybeLimitToast(
+                      v, _nameMaxLen, _nameLimitToasted, l10n.petProfileNameLimitReached);
+                  setState(() {});
+                },
                 decoration: _inputDeco(hint: l10n.petProfileNameHint),
               ),
             ),
@@ -309,8 +331,12 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
               child: TextField(
                 key: const ValueKey('petProfileIntroField'),
                 controller: _introController,
-                maxLength: 30,
+                maxLength: _bioMaxLen,
                 maxLines: 3,
+                onChanged: (v) {
+                  _bioLimitToasted = _maybeLimitToast(
+                      v, _bioMaxLen, _bioLimitToasted, l10n.petProfileBioLimitReached);
+                },
                 decoration: _inputDeco(hint: l10n.petProfileBioHint),
               ),
             ),
