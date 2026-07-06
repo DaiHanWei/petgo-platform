@@ -70,6 +70,20 @@ class TriageResult {
   bool get isTerminal =>
       status == TriageStatus.done || status == TriageStatus.failed;
 
+  /// 覆盖部分字段（历史快照回看时用历史条目的 [symptomSummary] 补齐——后端
+  /// `GET /triage/{id}` 的 TriageResultResponse 不回传该字段，避免结果视图回退串味）。
+  TriageResult copyWith({String? symptomSummary}) => TriageResult(
+        status: status,
+        dangerLevel: dangerLevel,
+        advice: advice,
+        medicationRef: medicationRef,
+        disclaimer: disclaimer,
+        observation: observation,
+        symptomSummary: symptomSummary ?? this.symptomSummary,
+        emergencySteps: emergencySteps,
+        emergencyAvoid: emergencyAvoid,
+      );
+
   factory TriageResult.fromJson(Map<String, dynamic> json) => TriageResult(
         status: _status(json['status'] as String?),
         dangerLevel: _danger(json['dangerLevel'] as String?),

@@ -42,6 +42,7 @@ import '../../features/vet/presentation/vet_conversation_page.dart';
 import '../../features/vet/presentation/vet_history_detail_page.dart';
 import '../../features/triage/presentation/dev_triage_page.dart';
 import '../../features/triage/presentation/triage_page.dart';
+import '../../features/triage/presentation/triage_snapshot_page.dart';
 import '../../features/triage/presentation/triage_upload_page.dart';
 import '../../features/vet/domain/vet_inbox_item.dart';
 import '../../features/vet/presentation/vet_login_page.dart';
@@ -200,6 +201,14 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/dev/triage', builder: (c, s) => const DevTriagePage()),
       // AI 分诊上传页（Story 4.3）。受控路由（/triage/ 前缀，游客被门控）；shell 外 push 隐藏 Tab Bar。
       GoRoute(path: '/triage/upload', builder: (c, s) => const TriageUploadPage()),
+      // AI 分诊历史结果快照（bug 20260702-238/228）：按 triageId 只读回看，extra 带历史症状摘要。
+      GoRoute(
+        path: '/triage/result/:id',
+        builder: (c, s) => TriageSnapshotPage(
+          triageId: int.parse(s.pathParameters['id']!),
+          symptomSummary: s.extra as String?,
+        ),
+      ),
       // 兽医咨询入口 + 等待界面（Story 5.3）。受控路由（/consult 前缀，游客被门控）。
       // triageTaskId：从 AI 分诊结果页升级而来时带入，走 AI_UPGRADE 发起（bug 20260702-235）。
       GoRoute(

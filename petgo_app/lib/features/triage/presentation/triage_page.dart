@@ -390,6 +390,10 @@ class _HistoryTile extends StatelessWidget {
             : Text(summary, maxLines: 2, overflow: TextOverflow.ellipsis),
         onTap: () {
           if (isAi) {
+            // AI 分诊历史 → 只读结果快照（bug 20260702-238/228）。带症状摘要避免结果视图回退串味。
+            if (item.triageId != null) {
+              context.push('/triage/result/${item.triageId}', extra: item.symptomSummary);
+            }
             return;
           }
           if (item.sessionId != null) {
