@@ -238,7 +238,8 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
         if (!mounted) return;
         // 里程碑路径：庆祝即成功反馈 → 关闭发布 sheet → 跳回里程碑列表（不叠加通用「发布成功」页）。
         Navigator.of(context).pop();
-        router?.go(DeepLinkRoutes.milestoneList);
+        // push 而非 go：保留发布前页作前驱，里程碑页 canPop→iOS 边缘侧滑可返回（修 20260701-190）。
+        router?.push(DeepLinkRoutes.milestoneList);
         return;
       }
       Navigator.of(context).pop(); // 关闭发布 sheet
