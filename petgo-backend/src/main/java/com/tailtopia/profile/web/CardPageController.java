@@ -102,13 +102,17 @@ public class CardPageController {
         model.addAttribute("moments", moments);
         model.addAttribute("hasMoments", !moments.isEmpty());
 
-        // OG / Twitter：标题「[宠物名] 的成长故事」。
-        String ogTitle = profile.getName() + " 的成长故事";
+        // OG / Twitter：标题本地化为印尼语（页面 lang=id；修 20260702-208 原硬编码中文「…的成长故事」）。
+        String ogTitle = "Kisah tumbuh kembang " + profile.getName();
         model.addAttribute("ogTitle", ogTitle);
-        String ogImage = profile.getOgImageUrl() != null
+        // og:image 优先用预渲染 1200×630 PNG（WhatsApp 等严格抓取器可靠出图）；无则回退头像。
+        boolean ogImageWide = profile.getOgImageUrl() != null;
+        String ogImage = ogImageWide
                 ? profile.getOgImageUrl()
                 : AliyunOssClient.exifStrippedDeliveryUrl(profile.getAvatarUrl());
         model.addAttribute("ogImageUrl", ogImage);
+        // 仅预渲染大图有确定的 1200×630 尺寸；回退头像尺寸未知，不输出 width/height 以免误导抓取器。
+        model.addAttribute("ogImageWide", ogImageWide);
         model.addAttribute("pageUrl", publicBaseUrl + "/p/" + cardToken);
 
         // ⑥ 双 CTA 平台分流（已装 App 经深链直开档案，未装跳商店；真机分流见模板 JS）。
