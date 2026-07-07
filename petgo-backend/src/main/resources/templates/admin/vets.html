@@ -93,6 +93,10 @@
                        hx-get="/admin/vets" hx-target="#vet-rows" hx-swap="outerHTML"
                        hx-trigger="keyup changed delay:300ms, search" hx-include="closest form"/>
             </label>
+            <!-- 刷新：带当前筛选重拉列表（HTMX 局部刷新 #vet-rows）。放在搜索之后。 -->
+            <button type="button" class="btn btn-neutral"
+                    hx-get="/admin/vets" hx-target="#vet-rows" hx-swap="outerHTML" hx-include="closest form"
+                    th:text="#{admin.vets.refresh}">刷新</button>
         </form>
 
         <table>
