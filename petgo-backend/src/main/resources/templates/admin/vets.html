@@ -21,29 +21,47 @@
         <div class="banner err" th:if="${expiryStats != null and (expiryStats.expiringSoon() > 0 or expiryStats.expired() > 0)}"
              th:text="#{admin.vets.expiryWarn(${expiryStats.expiringSoon()}, ${expiryStats.expired()})}">资质预警</div>
 
-        <div class="card">
-            <h3 th:text="#{admin.vets.create}">开户</h3>
-            <p class="ok" th:if="${createdVetId != null}">
-                <span th:text="#{admin.vets.created.prefix}">已创建兽医账号（id=</span><span th:text="${createdVetId}">0</span><span th:text="#{admin.vets.created.suffix}">）。请将初始密码线下交付兽医。</span>
-            </p>
-            <form th:action="@{/admin/vets}" th:object="${createVetForm}" method="post">
-                <!-- 全局/业务错误（如邮箱已被占用，来自 AppException → binding.reject） -->
-                <p class="err" th:each="e : ${#fields.globalErrors()}" th:text="${e}">错误</p>
-                <label class="field" th:text="#{admin.vets.displayName}">兽医昵称</label>
-                <input type="text" th:field="*{displayName}" class="field-full"/>
-                <p class="err" th:if="${#fields.hasErrors('displayName')}" th:errors="*{displayName}">昵称错误</p>
-                <label class="field" th:text="#{admin.vets.loginEmail}">登录邮箱</label>
-                <input type="email" th:field="*{username}" class="field-full"/>
-                <p class="err" th:if="${#fields.hasErrors('username')}" th:errors="*{username}">邮箱错误</p>
-                <label class="field" th:text="#{admin.vets.contactPhone}">联系手机号</label>
-                <input type="text" th:field="*{contactPhone}" class="field-full"/>
-                <p class="err" th:if="${#fields.hasErrors('contactPhone')}" th:errors="*{contactPhone}">手机号错误</p>
-                <label class="field" th:text="#{admin.vets.password}">初始密码（≥8 位，仅本次可见）</label>
-                <input type="password" th:field="*{password}" class="field-full"/>
-                <p class="err" th:if="${#fields.hasErrors('password')}" th:errors="*{password}">密码错误</p>
-                <button type="submit" class="btn btn-primary" th:text="#{admin.vets.submit.create}">创建</button>
-            </form>
+        <!-- 开户成功提示（提交后整页重渲染，弹窗已关闭，横幅在此可见）。 -->
+        <p class="banner ok" th:if="${createdVetId != null}">
+            <span th:text="#{admin.vets.created.prefix}">已创建兽医账号（id=</span><span th:text="${createdVetId}">0</span><span th:text="#{admin.vets.created.suffix}">）。请将初始密码线下交付兽医。</span>
+        </p>
+
+        <!-- 开户入口：点击弹出弹窗（Story 5.1；创建表单改弹窗形式）。 -->
+        <div class="toolbar">
+            <button type="button" class="btn btn-primary" data-open-dialog="createVetDialog"
+                    th:text="#{admin.vets.create}">开户</button>
         </div>
+
+        <!-- 兽医开户弹窗。校验失败时后端置 createVetModalOpen → data-autoopen 载入即重开、回显错误。 -->
+        <dialog id="createVetDialog" class="modal" th:attr="data-autoopen=${createVetModalOpen}">
+            <div class="modal-head">
+                <h3 th:text="#{admin.vets.create}">开户</h3>
+                <button type="button" class="modal-close" data-close-dialog aria-label="Close">&times;</button>
+            </div>
+            <form th:action="@{/admin/vets}" th:object="${createVetForm}" method="post">
+                <div class="modal-body">
+                    <!-- 全局/业务错误（如邮箱已被占用，来自 AppException → binding.reject） -->
+                    <p class="err" th:each="e : ${#fields.globalErrors()}" th:text="${e}">错误</p>
+                    <label class="field" th:text="#{admin.vets.displayName}">兽医昵称</label>
+                    <input type="text" th:field="*{displayName}" class="field-full"/>
+                    <p class="err" th:if="${#fields.hasErrors('displayName')}" th:errors="*{displayName}">昵称错误</p>
+                    <label class="field" th:text="#{admin.vets.loginEmail}">登录邮箱</label>
+                    <input type="email" th:field="*{username}" class="field-full"/>
+                    <p class="err" th:if="${#fields.hasErrors('username')}" th:errors="*{username}">邮箱错误</p>
+                    <label class="field" th:text="#{admin.vets.contactPhone}">联系手机号</label>
+                    <input type="text" th:field="*{contactPhone}" class="field-full"/>
+                    <p class="err" th:if="${#fields.hasErrors('contactPhone')}" th:errors="*{contactPhone}">手机号错误</p>
+                    <label class="field" th:text="#{admin.vets.password}">初始密码（≥8 位，仅本次可见）</label>
+                    <input type="password" th:field="*{password}" class="field-full"/>
+                    <p class="err" th:if="${#fields.hasErrors('password')}" th:errors="*{password}">密码错误</p>
+                </div>
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-neutral" data-close-dialog
+                            th:text="#{admin.vets.cancel}">取消</button>
+                    <button type="submit" class="btn btn-primary" th:text="#{admin.vets.submit.create}">创建</button>
+                </div>
+            </form>
+        </dialog>
 
         <!-- 筛选条（HTMX 局部刷新 #vet-rows）-->
         <form class="filter-bar" th:action="@{/admin/vets}" method="get"

@@ -155,6 +155,8 @@ public class AdminWebController {
             @Valid @ModelAttribute("createVetForm") CreateVetForm form,
             BindingResult binding, Model model) {
         if (binding.hasErrors()) {
+            // 创建表单为弹窗（vets.html）：校验失败置标志 → 整页重渲染时弹窗自动重开并回显错误。
+            model.addAttribute("createVetModalOpen", true);
             populateVetList(model);
             return "admin/vets";
         }
@@ -167,6 +169,7 @@ public class AdminWebController {
             return "admin/vets";
         } catch (AppException e) {
             binding.reject("create.failed", e.getMessage());
+            model.addAttribute("createVetModalOpen", true); // 业务失败同样重开弹窗回显
             populateVetList(model);
             return "admin/vets";
         }

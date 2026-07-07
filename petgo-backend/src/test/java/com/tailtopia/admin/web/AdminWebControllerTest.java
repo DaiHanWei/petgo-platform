@@ -8,6 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.tailtopia.admin.dto.CreateVetForm;
 import com.tailtopia.admin.dto.SeedPostForm;
 import com.tailtopia.admin.service.AdminContentService;
 import com.tailtopia.admin.service.AdminUserDetails;
@@ -112,6 +113,62 @@ class AdminWebControllerTest {
 
         assertThat(view).isEqualTo("admin/seed-post");
         assertThat(binding.hasGlobalErrors()).isTrue();
+    }
+
+    // ===== 兽医开户弹窗：校验失败/业务失败 → 置 createVetModalOpen（整页重渲染时弹窗自动重开回显）=====
+
+    private CreateVetForm vetForm() {
+        CreateVetForm f = new CreateVetForm();
+        f.setDisplayName("建号医生");
+        f.setUsername("v@vet.test");
+        f.setPassword("Secret#1");
+        f.setContactPhone("+62-811");
+        return f;
+    }
+
+    @Test
+    void createVetBindingErrorReopensModal() {
+        CreateVetForm f = vetForm();
+        BindingResult binding = new BeanPropertyBindingResult(f, "createVetForm");
+        binding.rejectValue("username", "NotBlank");
+        Model model = new ConcurrentModel();
+
+        String view = controller.createVet(admin(), f, binding, model);
+
+        assertThat(view).isEqualTo("admin/vets");
+        assertThat(model.getAttribute("createVetModalOpen")).isEqualTo(true);
+        verify(adminVetService, org.mockito.Mockito.never())
+                .create(any(), any(), any(), any(), anyLong());
+    }
+
+    @Test
+    void createVetServiceFailureReopensModalWithGlobalError() {
+        CreateVetForm f = vetForm();
+        BindingResult binding = new BeanPropertyBindingResult(f, "createVetForm");
+        when(adminVetService.create(any(), any(), any(), any(), anyLong()))
+                .thenThrow(AppException.validation("邮箱已被占用"));
+        Model model = new ConcurrentModel();
+
+        String view = controller.createVet(admin(), f, binding, model);
+
+        assertThat(view).isEqualTo("admin/vets");
+        assertThat(model.getAttribute("createVetModalOpen")).isEqualTo(true);
+        assertThat(binding.hasGlobalErrors()).isTrue();
+    }
+
+    @Test
+    void createVetSuccessExposesIdAndKeepsModalClosed() {
+        CreateVetForm f = vetForm();
+        BindingResult binding = new BeanPropertyBindingResult(f, "createVetForm");
+        when(adminVetService.create(eq("建号医生"), eq("v@vet.test"), eq("Secret#1"),
+                eq("+62-811"), anyLong())).thenReturn(42L);
+        Model model = new ConcurrentModel();
+
+        String view = controller.createVet(admin(), f, binding, model);
+
+        assertThat(view).isEqualTo("admin/vets");
+        assertThat(model.getAttribute("createdVetId")).isEqualTo(42L);
+        assertThat(model.getAttribute("createVetModalOpen")).isNull(); // 成功不重开弹窗
     }
 
     /** 回归：无关联内容作者身份的账号（operatorUserId=null，如 STAFF/纯 Lark）发种子内容

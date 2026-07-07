@@ -129,6 +129,34 @@ textarea { min-height: 96px; resize: vertical; width: 100%; }
 .btn-neutral { background: #E4E6EB; color: var(--ink); }
 .btn-sm { padding: 4px 10px; font-size: var(--fs-xs); }
 
+/* ===== 弹窗（原生 <dialog>，如兽医开户）===== */
+dialog.modal {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 0;
+    width: min(480px, calc(100vw - 32px));
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: 0 12px 40px rgba(31, 35, 48, 0.18);
+}
+dialog.modal::backdrop { background: rgba(31, 35, 48, 0.45); }
+dialog.modal .modal-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 18px; border-bottom: 1px solid var(--line);
+}
+dialog.modal .modal-head h3 { margin: 0; font-size: var(--fs); color: var(--ink); }
+dialog.modal .modal-close {
+    background: none; border: 0; cursor: pointer; font-size: 20px; line-height: 1;
+    color: var(--muted); padding: 0 4px;
+}
+dialog.modal .modal-close:hover { color: var(--ink); }
+dialog.modal .modal-body { padding: 16px 18px; }
+dialog.modal .modal-foot {
+    display: flex; justify-content: flex-end; gap: 8px;
+    padding: 12px 18px 16px;
+}
+.toolbar { margin-bottom: 16px; }
+
 /* ===== 徽章 / 标签 ===== */
 .badge { padding: 2px 9px; border-radius: 10px; font-size: var(--fs-xs); font-weight: 600; }
 .badge-ok { background: var(--ok-bg); color: var(--ok); }
