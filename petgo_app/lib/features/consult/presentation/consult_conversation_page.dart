@@ -14,6 +14,9 @@ import '../../../shared/widgets/case_image_viewer.dart';
 import 'consult_refresh.dart';
 import '../../notify/data/push_permission_providers.dart';
 import '../../notify/domain/push_suppression.dart';
+import '../../profile/data/health_event_repository.dart';
+import '../../profile/data/timeline_repository.dart';
+import '../../profile/presentation/archive_prompt_dialog.dart';
 import '../data/consult_repository.dart';
 import '../domain/consult_case.dart';
 import '../domain/consult_diagnosis.dart';
@@ -187,7 +190,53 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
       showAppToast(context, l10n.consultResultEmpty);
       return;
     }
-    await showConsultDiagnosisSheet(context, d);
+    await showConsultDiagnosisSheet(
+      context,
+      d,
+      // 结果弹窗底部「存入宠物档案」（bug 20260707）：先关弹窗再走存档流程。
+      footerBuilder: (sheetCtx) => _saveButton(
+        l10n,
+        onTap: () {
+          Navigator.of(sheetCtx).pop();
+          _saveToArchive();
+        },
+      ),
+    );
+  }
+
+  /// 存入宠物档案（bug 20260706-258·乙 / 20260707）：兽医问诊用户主动存档（去掉自动归档），
+  /// 入口从聊天室顶部横幅移到**问诊结果底部**（结果弹窗 + CLOSED 内联结果区）。复用 Story 2.5 三态存档流程。
+  /// sourceRef=`consult:<sessionId>` 与档案幂等键、时间线深链一致。存档后刷新成长档案，使 diary 当场可见。
+  Future<void> _saveToArchive() async {
+    final d = _diagnosis;
+    await showArchivePrompt(
+      context,
+      ref,
+      ArchivePromptArgs(
+        sourceRef: 'consult:${widget.sessionId}',
+        sourceType: HealthSourceType.vetConsult,
+        symptomSummary: d?.diagnosis,
+        adviceSummary: d?.generalAdvice,
+      ),
+    );
+    if (!mounted) return;
+    // 存档（ARCHIVED）后使成长档案时间线 / 统计失效 → 进档案页即见 diary（bug 20260707）。
+    ref.invalidate(timelineFirstPageProvider);
+    ref.invalidate(archiveStatsProvider);
+  }
+
+  /// 「存入宠物档案」按钮（问诊结果底部 opt-in）。[onTap] 由调用处决定是否先关结果弹窗再走存档流程。
+  Widget _saveButton(AppLocalizations l10n, {required VoidCallback onTap}) {
+    return SizedBox(
+      width: double.infinity,
+      child: FilledButton.icon(
+        key: const ValueKey('consultSaveToArchive'),
+        style: FilledButton.styleFrom(backgroundColor: AppColors.mint),
+        onPressed: onTap,
+        icon: const Text('📁', style: TextStyle(fontSize: 15)),
+        label: Text(l10n.triageSaveToArchive),
+      ),
+    );
   }
 
   /// 「查看会诊结果」入口横幅（兽医结束后常驻）。
@@ -219,7 +268,18 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
   /// CLOSED 正文区：平铺只读会诊结果。诊断在途显加载圈；确无诊断（异常/极早期）显温和空态。
   Widget _closedResultArea(AppLocalizations l10n) {
     final d = _diagnosis;
-    if (d != null) return ConsultDiagnosisView(diagnosis: d);
+    if (d != null) {
+      // 结果平铺 + 底部「存入宠物档案」（bug 20260707：保存移到结果底部，非聊天室顶部）。
+      return Column(
+        children: [
+          Expanded(child: ConsultDiagnosisView(diagnosis: d)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+            child: _saveButton(l10n, onTap: _saveToArchive),
+          ),
+        ],
+      );
+    }
     if (!_diagnosisFetched) return const Center(child: CircularProgressIndicator());
     return Center(
       child: Padding(

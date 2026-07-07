@@ -10,7 +10,7 @@ void main() {
         floatingActionButton: ShareFab(
           semanticLabel: 'Share',
           animate: false,
-          onPressed: () => tapped = true,
+          onPressed: (_) => tapped = true,
         ),
       ),
     ));
@@ -27,7 +27,7 @@ void main() {
           semanticLabel: 'Share',
           animate: true,
           onAnimationShown: () => shown = true,
-          onPressed: () {},
+          onPressed: (_) {},
         ),
       ),
     ));
@@ -45,7 +45,7 @@ void main() {
           semanticLabel: 'Share',
           animate: false,
           onAnimationShown: () => shown = true,
-          onPressed: () {},
+          onPressed: (_) {},
         ),
       ),
     ));

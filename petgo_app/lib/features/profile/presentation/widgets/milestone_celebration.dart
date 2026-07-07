@@ -123,10 +123,28 @@ class _MilestoneCelebrationViewState extends State<_MilestoneCelebrationView>
     // 整页纯深色（#141019），非半透明遮罩——与原型一致。
     return Material(
       color: AppColors.splashInk,
-      child: Stack(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        // 左右滑动即关闭（bug 20260707：庆祝全屏页此前无关闭/返回入口，dialog 不吃 iOS 边缘返回手势）。
+        onHorizontalDragEnd: (d) {
+          if ((d.primaryVelocity ?? 0).abs() > 300) _close();
+        },
+        child: Stack(
         children: [
           // 掉落彩纸（纯自绘，不挡交互）。
           const Positioned.fill(child: IgnorePointer(child: _Confetti())),
+          // 右上角关闭按钮（始终有明确出口，配合滑动关闭）。
+          Positioned(
+            top: 4,
+            right: 4,
+            child: SafeArea(
+              child: IconButton(
+                key: const ValueKey('milestoneCelebrationClose'),
+                icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 26),
+                onPressed: _close,
+              ),
+            ),
+          ),
           SafeArea(
             child: Center(
               key: const ValueKey('milestoneCelebration'),
@@ -230,6 +248,7 @@ class _MilestoneCelebrationViewState extends State<_MilestoneCelebrationView>
         ),
       ),
         ],
+      ),
       ),
     );
   }

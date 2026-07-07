@@ -20,6 +20,7 @@ class NotificationDeepLink {
     WidgetRef ref, {
     required String? type,
     required String? token,
+    String? targetRef,
     bool commentAnchor = false,
   }) async {
     if (token != null && token.isNotEmpty) {
@@ -30,6 +31,7 @@ class NotificationDeepLink {
         // 标记失败不阻断跳转。
       }
     }
-    return DeepLinkRoutes.pushPayloadToLocation(type, token, commentAnchor: commentAnchor);
+    // 标记已读用 token；跳转用 targetRef（id 寻址类目标页按数字 id 解析，不能用随机 token）。
+    return DeepLinkRoutes.pushPayloadToLocation(type, targetRef, commentAnchor: commentAnchor);
   }
 }

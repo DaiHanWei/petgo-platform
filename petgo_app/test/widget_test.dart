@@ -30,10 +30,10 @@ void main() {
     expect(find.byType(BottomTabBar), findsOneWidget);
     expect(find.byType(AddTabButton), findsOneWidget);
     // 4 个 Tab 标签（active 的首页显示圆而非标签，其余 3 个显示标签）。
-    // 'Growth' 同时出现在底部导航(tabProfile)与 Feed 分类 tab(feedTabGrowth=GROWTH_MOMENT)，
-    // 故 findsWidgets（与 id 'Tumbuh' 同理）。
-    expect(find.text('Growth'), findsWidgets);
-    expect(find.text('Consult'), findsOneWidget);
+    // 'Diary' 同时出现在底部导航(tabProfile)与 Feed 分类 tab(feedTabGrowth=GROWTH_MOMENT)，
+    // 故 findsWidgets（与 id 'Diary' 同理）。bug 20260706-248：Growth→Diary、Consult→Health。
+    expect(find.text('Diary'), findsWidgets);
+    expect(find.text('Health'), findsOneWidget);
     expect(find.text('Me'), findsOneWidget);
   });
 
@@ -56,17 +56,17 @@ void main() {
   // AC2 — 点击 Tab 切换目的地。
   testWidgets('AC2: tapping a tab switches destination', (tester) async {
     await _pumpApp(tester);
-    await tester.tap(find.text('Consult'));
+    await tester.tap(find.text('Health'));
     await tester.pumpAndSettle();
-    // 问诊页占位标题出现（active 时标题由 body 渲染）。
-    expect(find.text('Consult'), findsWidgets);
+    // 问诊页占位标题出现（active 时标题由 body 渲染）。bug 20260706-248：Consult→Health。
+    expect(find.text('Health'), findsWidgets);
   });
 
   // AC3 — i18n 默认英语。
   testWidgets('AC3: default locale renders English tab labels', (tester) async {
     await _pumpApp(tester);
-    // 'Growth' = tabProfile + feedTabGrowth 两处（en），故 findsWidgets。
-    expect(find.text('Growth'), findsWidgets);
+    // 'Diary' = tabProfile + feedTabGrowth 两处（en），故 findsWidgets（bug 20260706-248）。
+    expect(find.text('Diary'), findsWidgets);
     expect(find.text('Beranda'), findsNothing);
   });
 
@@ -75,9 +75,9 @@ void main() {
     tester.platformDispatcher.localesTestValue = const <Locale>[Locale('id')];
     addTearDown(tester.platformDispatcher.clearLocalesTestValue);
     await _pumpApp(tester);
-    // 'Tumbuh' 同时出现在底部导航(tabProfile)与 Feed 分类 tab(feedTabGrowth)——
-    // 对齐设计稿 S03(两处皆 Tumbuh),故 findsWidgets 而非 findsOneWidget。
-    expect(find.text('Tumbuh'), findsWidgets); // tabProfile + feedTabGrowth id
-    expect(find.text('Konsultasi'), findsOneWidget); // tabTriage id（唯一，确证 id locale）
+    // 'Diary' 同时出现在底部导航(tabProfile)与 Feed 分类 tab(feedTabGrowth)——两处皆 Diary，
+    // 故 findsWidgets（bug 20260706-248：Tumbuh→Diary、Konsultasi→Kesehatan）。
+    expect(find.text('Diary'), findsWidgets); // tabProfile + feedTabGrowth id
+    expect(find.text('Kesehatan'), findsOneWidget); // tabTriage id（唯一，确证 id locale）
   });
 }

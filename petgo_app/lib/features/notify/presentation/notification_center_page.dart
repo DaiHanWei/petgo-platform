@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/router/deep_link_routes.dart';
 import '../../../core/theme/colors.dart';
@@ -35,12 +36,23 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
     });
   }
 
+  /// 重拉列表（bug 20260625-088：加载失败态的重试）。
+  void _reload() {
+    setState(() {
+      _page = ref.read(notificationRepositoryProvider).list();
+      _page.whenComplete(() {
+        if (mounted) ref.invalidate(unreadCountProvider);
+      });
+    });
+  }
+
   Future<void> _onTap(NotificationItem item) async {
     // 列表点击与系统推送直跳共用 NotificationDeepLink.open（标记已读 + 角标重算 + 算 location）。
     final location = await NotificationDeepLink.open(
       ref,
       type: item.deepLinkType,
       token: item.deepLinkToken,
+      targetRef: item.targetRef,
       commentAnchor: item.deepLinkType == 'CONTENT_COMMENTED',
     );
     if (!mounted) return;
@@ -68,6 +80,11 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
+          // bug 20260625-088：加载失败必须显式报错 + 重试，**绝不**把请求错误静默画成空态
+          // （401/500/超时都会走到这里；此前无此分支 → 一律显示「暂无通知」误导用户）。
+          if (snapshot.hasError) {
+            return _errorState(l10n);
+          }
           final items = snapshot.data?.items ?? const <NotificationItem>[];
           if (items.isEmpty) {
             return EmptyState(
@@ -91,12 +108,12 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
             children: [
               if (today.isNotEmpty) ...[
-                _groupLabel('HARI INI'),
+                _groupLabel(l10n.notifyGroupToday),
                 for (final it in today) _NotificationTile(item: it, onTap: () => _onTap(it)),
               ],
               if (earlier.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                _groupLabel('KEMARIN'),
+                _groupLabel(l10n.notifyGroupEarlier),
                 for (final it in earlier) _NotificationTile(item: it, onTap: () => _onTap(it)),
               ],
             ],
@@ -105,6 +122,26 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
       ),
     );
   }
+
+  /// 加载失败态（bug 20260625-088）：显式错误 + 重试按钮，区别于真·空态。
+  Widget _errorState(AppLocalizations l10n) => Center(
+        child: Column(
+          key: const ValueKey('notificationError'),
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off_outlined, size: 48, color: AppColors.textTertiary),
+            const SizedBox(height: 12),
+            Text(l10n.notificationLoadFailed,
+                style: const TextStyle(fontSize: 14, color: AppColors.ink2)),
+            const SizedBox(height: 16),
+            FilledButton(
+              key: const ValueKey('notificationRetry'),
+              onPressed: _reload,
+              child: Text(l10n.notificationLoadRetry),
+            ),
+          ],
+        ),
+      );
 
   Widget _groupLabel(String text) => Padding(
         padding: const EdgeInsets.fromLTRB(4, 10, 4, 8),
@@ -151,19 +188,32 @@ class _NotificationTile extends StatelessWidget {
         _ => l10n.notificationCenterTitle,
       };
 
-  /// 印尼语相对时间（notif.html：5 menit lalu / 1 jam lalu / Kemarin HH:mm）。
-  String _relativeTime() {
+  /// 副标题（按 type 本地化，随 App 语言）。
+  String _typeBody(AppLocalizations l10n) => switch (item.type) {
+        'VET_REPLY' => l10n.notifyBodyVetReply,
+        'CONSULT_CLOSED' => l10n.notifyBodyConsultClosed,
+        'CONTENT_LIKED' => l10n.notifyBodyContentLiked,
+        'CONTENT_COMMENTED' => l10n.notifyBodyContentCommented,
+        'NEW_CONSULT_REQUEST' => l10n.notifyBodyNewRequest,
+        'PET_BIRTHDAY' => l10n.notifyBodyPetBirthday,
+        'COMPANION_ANNIVERSARY' => l10n.notifyBodyCompanionAnniversary,
+        'MILESTONE_NODE' => l10n.notifyBodyMilestoneNode,
+        _ => l10n.notificationEmptyHint,
+      };
+
+  /// 相对时间，随 App 语言本地化（今天：刚刚 / N 分钟前 / N 小时前；更早：本地化日期）。
+  String _relativeTime(AppLocalizations l10n, String locale) {
     final d = item.createdAt;
     if (d == null) return '';
     final now = DateTime.now();
     final diff = now.difference(d);
     final isToday = d.year == now.year && d.month == now.month && d.day == now.day;
     if (!isToday) {
-      return 'Kemarin ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+      return DateFormat('d MMM, HH:mm', locale).format(d);
     }
-    if (diff.inMinutes < 1) return 'Baru saja';
-    if (diff.inHours < 1) return '${diff.inMinutes} menit lalu';
-    return '${diff.inHours} jam lalu';
+    if (diff.inMinutes < 1) return l10n.notifyTimeJustNow;
+    if (diff.inHours < 1) return l10n.notifyTimeMinutesAgo(diff.inMinutes);
+    return l10n.notifyTimeHoursAgo(diff.inHours);
   }
 
   @override
@@ -198,21 +248,20 @@ class _NotificationTile extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(item.title ?? _typeLabel(l10n),
-                          style: TextStyle(
+                      // 文案按 type 本地化，随 App 语言渲染；**不渲染后端 title/body**（后端串为服务端语言）。
+                      Text(_typeLabel(l10n),
+                          style: const TextStyle(
                               fontSize: 13.5,
                               fontWeight: FontWeight.w700,
                               color: AppColors.ink)),
-                      if (item.body != null) ...[
-                        const SizedBox(height: 3),
-                        Text(item.body!,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                fontSize: 12, height: 1.45, color: AppColors.ink2)),
-                      ],
+                      const SizedBox(height: 3),
+                      Text(_typeBody(l10n),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 12, height: 1.45, color: AppColors.ink2)),
                       const SizedBox(height: 5),
-                      Text(_relativeTime(),
+                      Text(_relativeTime(l10n, Localizations.localeOf(context).toString()),
                           style: const TextStyle(fontSize: 11, color: AppColors.muted)),
                     ],
                   ),

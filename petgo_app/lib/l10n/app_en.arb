@@ -8,7 +8,7 @@
   "@tabHome": {
     "description": "Bottom tab label: Home (Feed)."
   },
-  "tabProfile": "Growth",
+  "tabProfile": "Diary",
   "@tabProfile": {
     "description": "Bottom tab label: Growth archive."
   },
@@ -16,7 +16,7 @@
   "@tabAdd": {
     "description": "Bottom tab center plus button (publish)."
   },
-  "tabTriage": "Consult",
+  "tabTriage": "Health",
   "@tabTriage": {
     "description": "Bottom tab label: Triage / consult."
   },
@@ -117,7 +117,7 @@
   "petProfileCreateFailed": "Could not create profile, please try again",
   "publishComposeTitle": "New post",
   "publishSegmentDaily": "Moment",
-  "publishSegmentGrowth": "Growth",
+  "publishSegmentGrowth": "Diary",
   "publishSegmentKnowledge": "Knowledge & Tips",
   "publishTextHint": "Share something...",
   "publishRemainingChars": "{count} characters left",
@@ -194,7 +194,7 @@
   "milestoneCheckinPickerTitle": "Link a growth-calendar moment",
   "milestoneCheckinEmpty": "No growth-calendar moments yet. Tap \"Post now\" to add one.",
   "milestoneCheckinLinked": "Linked",
-  "milestoneCheckinUntitled": "Growth moment",
+  "milestoneCheckinUntitled": "Diary moment",
   "milestoneCheckinDone": "Milestone unlocked!",
   "milestoneCheckinFailed": "Could not check in, please try again",
   "milestoneCelebrateUnlocked": "Milestone unlocked!",
@@ -227,12 +227,13 @@
   "archivePromptSwitchTitle": "Switch to pet owner and create a profile to save this record",
   "archivePromptSwitchCta": "Create",
   "shareFabLabel": "Share pet card",
+  "shareFailed": "Couldn't open sharing. Please try again.",
   "petProfileEditTitle": "Edit pet profile",
   "petProfileEditEntry": "Edit",
   "petProfileSaveFailed": "Could not save, please try again",
   "feedTabAll": "All",
   "feedTabDaily": "Moment",
-  "feedTabGrowth": "Growth",
+  "feedTabGrowth": "Diary",
   "feedTabKnowledge": "Knowledge & Tips",
   "feedEmptyTitle": "Show off your furry friend! 🐾",
   "feedEmptyBody": "Be the first to share a pet moment",
@@ -579,6 +580,8 @@
   "notificationCenterTitle": "Notifications",
   "notificationEmpty": "No notifications yet",
   "notificationEmptyHint": "You'll get notified about likes, comments, and consultation updates.",
+  "notificationLoadFailed": "Couldn't load notifications",
+  "notificationLoadRetry": "Retry",
   "notifyTypeVetReply": "Vet replied",
   "notifyTypeConsultClosed": "Consultation ended",
   "notifyTypeContentLiked": "New like",
@@ -587,6 +590,25 @@
   "notifyTypePetBirthday": "Pet birthday",
   "notifyTypeCompanionAnniversary": "Companion anniversary",
   "notifyTypeMilestoneNode": "Milestone reached",
+  "notifyBodyVetReply": "Tap to view the reply",
+  "notifyBodyConsultClosed": "Rate your consultation",
+  "notifyBodyContentLiked": "Someone liked your post",
+  "notifyBodyContentCommented": "Someone commented on your post",
+  "notifyBodyNewRequest": "Tap to view the request",
+  "notifyBodyPetBirthday": "Celebrate your pet's birthday",
+  "notifyBodyCompanionAnniversary": "Celebrate your journey together",
+  "notifyBodyMilestoneNode": "A new milestone is unlocked",
+  "notifyGroupToday": "Today",
+  "notifyGroupEarlier": "Earlier",
+  "notifyTimeJustNow": "Just now",
+  "notifyTimeMinutesAgo": "{count}m ago",
+  "@notifyTimeMinutesAgo": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "notifyTimeHoursAgo": "{count}h ago",
+  "@notifyTimeHoursAgo": {
+    "placeholders": { "count": { "type": "int" } }
+  },
   "meEditNickname": "Edit nickname",
   "meEditButton": "Edit",
   "meViewArchive": "View",
@@ -598,7 +620,7 @@
   "meEditCancel": "Cancel",
   "meMomenCount": "{count} moments",
   "@meMomenCount": { "placeholders": { "count": { "type": "int" } } },
-  "mePostTypeMomen": "Growth",
+  "mePostTypeMomen": "Diary",
   "mePostTypeTips": "Knowledge & Tips",
   "mePostTypeCerita": "Moment",
   "mePetStatusTitle": "Pet status",
@@ -708,7 +730,7 @@
     }
   },
 
-  "triageHeroTitle": "Quick consultation",
+  "triageHeroTitle": "Health",
   "triageHeroSubtitle": "Relax, we'll help check your fur baby 💚",
   "triageAiCardTitle": "Symptom Check",
   "triageAiSpeedBadge": "≤ 15 sec",
@@ -862,7 +884,7 @@
   "@petCardBadgeFirstBath": {"description": "Pet card badge label"},
   "petCardBadgeSleepTogether": "Slept Together",
   "@petCardBadgeSleepTogether": {"description": "Pet card badge label"},
-  "growthArchivePassportTitle": "{name}'s Growth",
+  "growthArchivePassportTitle": "{name}'s Diary",
   "@growthArchivePassportTitle": {"description": "Growth archive: app bar passport title", "placeholders": {"name": {"type": "String"}}},
   "growthArchiveViewTimeline": "Timeline",
   "@growthArchiveViewTimeline": {"description": "Growth archive: timeline view toggle"},

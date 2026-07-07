@@ -16,7 +16,8 @@ class ShareFab extends StatefulWidget {
     this.onAnimationShown,
   });
 
-  final VoidCallback onPressed;
+  /// 点击回调，携按钮全局矩形作 iOS 分享面板锚点（[sharePositionOrigin]，bug 20260707）。
+  final void Function(Rect origin) onPressed;
   final String semanticLabel;
   final bool animate;
   final VoidCallback? onAnimationShown;
@@ -106,7 +107,14 @@ class _ShareFabState extends State<ShareFab> with SingleTickerProviderStateMixin
             shape: const CircleBorder(),
             clipBehavior: Clip.antiAlias,
             child: InkWell(
-              onTap: widget.onPressed,
+              onTap: () {
+                // 按 FAB 的全局矩形作 iOS 分享面板锚点（缺失会导致 iOS 不弹/崩，bug 20260707）。
+                final box = context.findRenderObject() as RenderBox?;
+                final origin = (box != null && box.hasSize)
+                    ? box.localToGlobal(Offset.zero) & box.size
+                    : Rect.zero;
+                widget.onPressed(origin);
+              },
               child: Center(
                 child: SvgPicture.asset(
                   'assets/brand/ic_link.svg',

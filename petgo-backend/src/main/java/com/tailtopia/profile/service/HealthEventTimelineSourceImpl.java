@@ -63,6 +63,6 @@ public class HealthEventTimelineSourceImpl implements HealthEventTimelineSource 
 
     private static HealthEventView toView(com.tailtopia.profile.domain.HealthEvent e) {
         return new HealthEventView(e.getCreatedAt(), e.getAiLevel(), e.getSymptomSummary(),
-                e.getSourceType() == null ? null : e.getSourceType().name());
+                e.getSourceType() == null ? null : e.getSourceType().name(), e.getSourceRef());
     }
 }

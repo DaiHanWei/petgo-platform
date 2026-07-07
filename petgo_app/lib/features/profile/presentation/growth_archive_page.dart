@@ -82,8 +82,16 @@ class GrowthArchivePage extends ConsumerWidget {
         markShareFabAnimated();
         ref.invalidate(shareFabAnimatedShownProvider);
       },
-      onPressed: () {
-        ref.read(shareServiceProvider)(petCardShareUrl(profile.cardToken));
+      onPressed: (origin) async {
+        // 传按钮矩形作 iOS 分享面板锚点 + await + 兜错（bug 20260707：iOS 点了没反应）。
+        try {
+          await ref.read(shareServiceProvider)(
+            petCardShareUrl(profile.cardToken),
+            sharePositionOrigin: origin,
+          );
+        } catch (_) {
+          if (context.mounted) showAppToast(context, l10n.shareFailed);
+        }
         // 名片分享信号 → 里程碑 C-S3 自动完成（Story 8.3，fire-and-forget，失败静默）。
         ref.read(milestoneRepositoryProvider).signalCardShared().catchError((_) {});
         ref.invalidate(milestoneListProvider);
@@ -452,8 +460,18 @@ class _TimelineView extends ConsumerWidget {
             lastMonthKey = monthKey;
           }
           if (item.kind == TimelineKind.healthEvent) {
-            tiles.add(HealthEventTile(
-                item: item, firstLabel: i == debutHealth ? l10n.growthFirstHealthEvent : null));
+            // bug 20260706-259：点击健康事件跳到对应问诊结果页（AI 分诊 / 兽医问诊），与「我的问诊」
+            // 列表点进去一致。无 sourceRef（旧数据）则不可点。
+            final route = item.healthEventRoute;
+            final tile = HealthEventTile(
+                item: item, firstLabel: i == debutHealth ? l10n.growthFirstHealthEvent : null);
+            tiles.add(route == null
+                ? tile
+                : GestureDetector(
+                    key: ValueKey('timelineHealth_${item.sourceRef}'),
+                    onTap: () => context.push(route),
+                    child: tile,
+                  ));
           } else {
             // 快乐时刻 → FR-28 内容详情（与 day_detail 一致：postId 为空不可点）。
             tiles.add(GestureDetector(

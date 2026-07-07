@@ -53,7 +53,7 @@ Future<String?> _runShare(WidgetTester tester, _FakeRepo repo) async {
   await tester.pumpWidget(ProviderScope(
     overrides: [
       milestoneRepositoryProvider.overrideWithValue(repo),
-      shareServiceProvider.overrideWithValue((text) async => captured = text),
+      shareServiceProvider.overrideWithValue((text, {sharePositionOrigin}) async => captured = text),
     ],
     child: MaterialApp(
       home: Consumer(builder: (context, ref, _) {

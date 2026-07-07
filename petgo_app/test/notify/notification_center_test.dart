@@ -59,8 +59,9 @@ void main() {
         const NotificationItem(type: 'CONTENT_LIKED', title: '收到点赞', deepLinkToken: 't2', read: true),
       ]),
     );
-    expect(find.text('兽医已回复'), findsOneWidget);
-    expect(find.text('收到点赞'), findsOneWidget);
+    // 文案按 type 本地化（en locale）：不再渲染后端 title 串。
+    expect(find.text('Vet replied'), findsOneWidget);
+    expect(find.text('New like'), findsOneWidget);
     expect(find.byKey(const ValueKey('notification_t1')), findsOneWidget);
   });
 
@@ -77,9 +78,9 @@ void main() {
             type: 'MILESTONE_NODE', title: '里程碑达成', deepLinkToken: 'm1', read: true),
       ]),
     );
-    expect(find.text('生日快乐'), findsOneWidget);
-    expect(find.text('陪伴纪念'), findsOneWidget);
-    expect(find.text('里程碑达成'), findsOneWidget);
+    expect(find.text('Pet birthday'), findsOneWidget);
+    expect(find.text('Companion anniversary'), findsOneWidget);
+    expect(find.text('Milestone reached'), findsOneWidget);
     // 三类专属图标（notif.html 重做：圆角方形彩色图标块用 rounded 图标）。
     expect(find.byIcon(Icons.cake_rounded), findsOneWidget);
     expect(find.byIcon(Icons.celebration_rounded), findsOneWidget);
@@ -110,7 +111,7 @@ void main() {
       ]),
     );
     // 列表正常渲染既有条目，但无 MILESTONE_NODE 数据时绝不出现里程碑图标/空壳。
-    expect(find.text('兽医已回复'), findsOneWidget);
+    expect(find.text('Vet replied'), findsOneWidget);
     expect(find.byIcon(Icons.flag_outlined), findsNothing);
   });
 

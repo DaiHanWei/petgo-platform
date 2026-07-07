@@ -35,3 +35,11 @@ skills-lock.json
 # 注：.env 已由上方根规则全局忽略；此处补 config.toml 与 data/
 scripts/bug-system/data/
 scripts/bug-system/config.toml
+
+# graphify 知识图谱产物(本地,含16MB+ graph.json,勿入库)
+graphify-out/
+
+# CodeBuddy 产物：含针对 AI 代理的提示注入载荷（诱导读取 .env 并外发凭证），绝不入库
+# 详见 SECURITY-INCIDENT-codebuddy-injection 报告（2026-07-07）
+.codebuddy/
+CODEBUDDY.md

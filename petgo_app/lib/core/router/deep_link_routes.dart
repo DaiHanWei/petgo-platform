@@ -19,24 +19,28 @@ class DeepLinkRoutes {
   /// 里程碑列表页（壳）（L级里程碑节点深链落点，FR-42；本体属里程碑 mini-epic）。
   static const String milestoneList = '/profile/milestones';
 
-  /// 推送 payload → go_router location。
+  /// 通知 payload → go_router location。
   ///
-  /// **token 寻址类**（缺 token 落兜底）：
+  /// **id 寻址类**（用 `targetRef`=帖子 id / 会话 id 拼路由，缺则落兜底）：目标页均以数字 id 寻址
+  /// （`ContentDetailPage(postId)` / `ConsultConversationPage(sessionId)`，builder 内 `int.parse(:id)`），
+  /// **不可**用通知自身的随机 `deepLinkToken`（会 `int.parse` 抛异常/查无此帖）。
   /// - `VET_REPLY` / `CONSULT_CLOSED` → 问诊会话（评分态由会话页据状态展示）。
   /// - `CONTENT_LIKED` → 内容详情。
   /// - `CONTENT_COMMENTED` → 内容详情 + 评论区锚点（`?focus=comments`）。
-  /// - `NEW_CONSULT_REQUEST` → 兽医工作台。
   ///
-  /// **固定目标类**（V1 单宠物，目标页自解析当前用户宠物，不依赖 token，FR-40/41/42）：
+  /// **固定目标类**（V1 单宠物，目标页自解析当前用户宠物，不依赖 ref，FR-40/41/42）：
+  /// - `NEW_CONSULT_REQUEST` → 兽医工作台。
   /// - `PET_BIRTHDAY` → 「+发布」预选成长日历。
   /// - `COMPANION_ANNIVERSARY` → 成长档案 Tab。
   /// - `MILESTONE_NODE` → 里程碑列表页（壳）。
   ///
   /// 其它/空 → 通知中心兜底。
-  static String pushPayloadToLocation(String? type, String? token, {bool commentAnchor = false}) {
+  static String pushPayloadToLocation(String? type, String? targetRef, {bool commentAnchor = false}) {
     if (type == null) return notificationsCenter;
-    // 固定目标类：不依赖 token（生日/纪念日/里程碑节点，决策 F2/F5）。
+    // 固定目标类：不依赖 targetRef（生日/纪念日/里程碑节点/兽医新请求，决策 F2/F5）。
     switch (type) {
+      case 'NEW_CONSULT_REQUEST':
+        return '/vet/workbench';
       case 'PET_BIRTHDAY':
         return publishGrowthCalendar;
       case 'COMPANION_ANNIVERSARY':
@@ -44,18 +48,16 @@ class DeepLinkRoutes {
       case 'MILESTONE_NODE':
         return milestoneList;
     }
-    // token 寻址类：缺 token 落兜底。
-    if (token == null || token.isEmpty) return notificationsCenter;
+    // id 寻址类：缺 targetRef 落兜底（避免拼出非法路由）。
+    if (targetRef == null || targetRef.isEmpty) return notificationsCenter;
     switch (type) {
       case 'VET_REPLY':
       case 'CONSULT_CLOSED':
-        return '/consult/conversation/$token';
+        return '/consult/conversation/$targetRef';
       case 'CONTENT_LIKED':
-        return '/content/$token';
+        return '/content/$targetRef';
       case 'CONTENT_COMMENTED':
-        return commentAnchor ? '/content/$token?focus=comments' : '/content/$token';
-      case 'NEW_CONSULT_REQUEST':
-        return '/vet/workbench';
+        return commentAnchor ? '/content/$targetRef?focus=comments' : '/content/$targetRef';
       default:
         return notificationsCenter;
     }

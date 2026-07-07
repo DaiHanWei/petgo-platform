@@ -68,7 +68,7 @@ public class TimelineService {
         HealthEventTimelineSource health = healthSource.getIfAvailable();
         if (health != null) {
             for (HealthEventView h : health.recentHealthEvents(ownerId, before, fetch)) {
-                merged.add(TimelineItemResponse.healthEvent(h.createdAt(), h.aiLevel(), h.symptomSummary(), h.sourceType()));
+                merged.add(TimelineItemResponse.healthEvent(h.createdAt(), h.aiLevel(), h.symptomSummary(), h.sourceType(), h.sourceRef()));
             }
         }
 
@@ -145,7 +145,7 @@ public class TimelineService {
             Instant dayStart = date.atStartOfDay(ZoneOffset.UTC).toInstant();
             Instant dayEnd = date.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
             for (HealthEventView h : health.healthEventsOnDay(ownerId, dayStart, dayEnd)) {
-                items.add(TimelineItemResponse.healthEvent(h.createdAt(), h.aiLevel(), h.symptomSummary(), h.sourceType()));
+                items.add(TimelineItemResponse.healthEvent(h.createdAt(), h.aiLevel(), h.symptomSummary(), h.sourceType(), h.sourceRef()));
             }
         }
         items.sort(Comparator.comparing(TimelineItemResponse::date)); // created_at 正序

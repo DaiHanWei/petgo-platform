@@ -6,6 +6,7 @@ class NotificationItem {
     this.body,
     this.deepLinkType,
     this.deepLinkToken,
+    this.targetRef,
     required this.read,
     this.createdAt,
   });
@@ -16,6 +17,8 @@ class NotificationItem {
   final String? body;
   final String? deepLinkType;
   final String? deepLinkToken;
+  /// id 寻址类跳转标识（帖子 id / 会话 id）。token 用于标记已读；targetRef 用于算目标 location。
+  final String? targetRef;
   final bool read;
   final DateTime? createdAt;
 
@@ -25,6 +28,7 @@ class NotificationItem {
         body: json['body'] as String?,
         deepLinkType: json['deepLinkType'] as String?,
         deepLinkToken: json['deepLinkToken'] as String?,
+        targetRef: json['targetRef'] as String?,
         read: (json['read'] ?? false) as bool,
         createdAt: json['createdAt'] == null ? null : DateTime.tryParse(json['createdAt'] as String),
       );

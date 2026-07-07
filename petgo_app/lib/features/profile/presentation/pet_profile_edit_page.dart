@@ -11,6 +11,7 @@ import '../../media/domain/media_upload_use_case.dart';
 import '../../../shared/utils/date_format.dart';
 import '../../../shared/utils/media_permission.dart';
 import '../../../shared/widgets/app_image.dart';
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../data/profile_repository.dart';
 import '../domain/pet_profile.dart';
 import 'widgets/pet_form_fields.dart';
@@ -103,26 +104,18 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
   Future<void> _confirmDelete() async {
     final l10n = AppLocalizations.of(context);
     final petName = _nameController.text.trim();
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogCtx) => AlertDialog(
-        title: Text(l10n.petProfileDeleteConfirmTitle),
-        content: Text(l10n.petProfileDeleteConfirmBody(petName)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogCtx).pop(false),
-            child: Text(l10n.commonCancel),
-          ),
-          TextButton(
-            key: const ValueKey('petProfileDeleteConfirm'),
-            onPressed: () => Navigator.of(dialogCtx).pop(true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.popRed),
-            child: Text(l10n.petProfileDeleteConfirmYes),
-          ),
-        ],
-      ),
+    // 二次确认改用底部抽屉（P-02 统一样式，替换原中间 AlertDialog；bug 20260707）。
+    final confirmed = await showConfirmSheet(
+      context,
+      title: l10n.petProfileDeleteConfirmTitle,
+      message: l10n.petProfileDeleteConfirmBody(petName),
+      confirmLabel: l10n.petProfileDeleteConfirmYes,
+      cancelLabel: l10n.commonCancel,
+      icon: Icons.delete_outline_rounded,
+      danger: true,
+      confirmKey: const ValueKey('petProfileDeleteConfirm'),
     );
-    if (confirmed != true) return;
+    if (!confirmed) return;
     await _deleteProfile();
   }
 

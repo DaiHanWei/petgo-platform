@@ -6,7 +6,11 @@ import '../domain/consult_diagnosis.dart';
 
 /// 用户侧「会诊结果」只读弹层（Story C 收尾）。展示兽医结束时定格的最终诊断。
 /// 复用 vetDiag* 文案；空字段跳过。健康数据：仅展示，不落日志。
-Future<void> showConsultDiagnosisSheet(BuildContext context, ConsultDiagnosis d) {
+///
+/// [footerBuilder]（可选）：结果**底部**的操作区（如「存入宠物档案」，bug 20260707）。收到 sheet 内的
+/// context，便于按钮内先关 sheet 再走后续流程。放 ListView 下方常驻，不随内容滚动。
+Future<void> showConsultDiagnosisSheet(BuildContext context, ConsultDiagnosis d,
+    {Widget Function(BuildContext sheetContext)? footerBuilder}) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -14,14 +18,15 @@ Future<void> showConsultDiagnosisSheet(BuildContext context, ConsultDiagnosis d)
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
-    builder: (ctx) => _DiagnosisSheet(d: d),
+    builder: (ctx) => _DiagnosisSheet(d: d, footerBuilder: footerBuilder),
   );
 }
 
 class _DiagnosisSheet extends StatelessWidget {
-  const _DiagnosisSheet({required this.d});
+  const _DiagnosisSheet({required this.d, this.footerBuilder});
 
   final ConsultDiagnosis d;
+  final Widget Function(BuildContext sheetContext)? footerBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -69,6 +74,12 @@ class _DiagnosisSheet extends StatelessWidget {
                 ],
               ),
             ),
+            // 结果底部操作区（如「存入宠物档案」）：常驻，不随结果滚动（bug 20260707）。
+            if (footerBuilder != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+                child: footerBuilder!(context),
+              ),
           ],
         ),
       ),

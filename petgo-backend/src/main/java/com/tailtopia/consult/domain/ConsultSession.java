@@ -269,13 +269,22 @@ public class ConsultSession {
     }
 
     /**
-     * 终态时间（历史展示 + 排序的单一口径）：中断取 {@code interruptedAt}，否则取 {@code updatedAt}
-     * 兜底 {@code createdAt}。用户侧 {@code ConsultHistoryService} 与兽医侧 {@code VetConsultService}
-     * 共用此口径，避免两份重复定义静默漂移。
+     * 终态时间（历史展示 + 排序的单一口径）：一律取**结束那一刻的冻结时间戳**——中断取
+     * {@code interruptedAt}，兽医结束（PENDING_CLOSE 及其后 CLOSED）取 {@code pendingCloseStartedAt}，
+     * 二者皆为一次性写入、后续不变。仅在未走结束流程的非终态（WAITING/IN_PROGRESS，不进历史）才回退
+     * {@code updatedAt}/{@code createdAt}。
+     *
+     * <p>Bug 20260706-264：原实现回退 {@code updatedAt}，而 {@code updatedAt} 会被后续动作 bump
+     * （30min 窗口到期 closeUnrated、补评分等），导致同一条问诊的显示时间与排序位置「漂移」。改用
+     * 冻结的 {@code pendingCloseStartedAt} 后，兽医点结束即定格，之后 IM 新消息/自动关闭均不改时间、不重排。
+     * 用户侧 {@code ConsultHistoryService} 与兽医侧 {@code VetConsultService} 共用此口径。
      */
     public Instant terminalAt() {
         if (interruptedAt != null) {
             return interruptedAt;
+        }
+        if (pendingCloseStartedAt != null) {
+            return pendingCloseStartedAt;
         }
         return updatedAt != null ? updatedAt : createdAt;
     }

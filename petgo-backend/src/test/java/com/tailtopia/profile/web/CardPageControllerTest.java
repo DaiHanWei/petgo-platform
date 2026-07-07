@@ -73,7 +73,8 @@ class CardPageControllerTest {
         assertThat(view).isEqualTo("card");
         assertThat(model.getAttribute("name")).isEqualTo("Momo");
         assertThat(model.getAttribute("ownerNickname")).isEqualTo("Aurel");
-        assertThat(model.getAttribute("ogTitle").toString()).contains("成长故事");
+        // OG 标题已印尼语化（修 20260702-208：原硬编码中文「成长故事」→「Kisah tumbuh kembang」）。
+        assertThat(model.getAttribute("ogTitle").toString()).contains("Kisah tumbuh kembang");
         assertThat(model.getAttribute("happyCount")).isEqualTo(2L);
         assertThat(model.getAttribute("consultCount")).isEqualTo(1L);
         assertThat(model.getAttribute("hasMilestones")).isEqualTo(false); // 里程碑零态

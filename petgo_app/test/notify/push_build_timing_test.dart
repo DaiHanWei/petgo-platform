@@ -53,7 +53,7 @@ void main() {
 
     await tester.pumpWidget(ProviderScope(
       overrides: [
-        shareServiceProvider.overrideWithValue((_) async {}),
+        shareServiceProvider.overrideWithValue((_, {sharePositionOrigin}) async {}),
         pushPermissionGateProvider.overrideWith((ref) async => gate),
       ],
       child: MaterialApp.router(

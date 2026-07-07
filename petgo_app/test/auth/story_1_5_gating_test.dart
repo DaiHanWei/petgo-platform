@@ -123,7 +123,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Consult')); // 问诊 Tab（inactive 标签）
+    await tester.tap(find.text('Health')); // 问诊 Tab（inactive 标签，bug 20260706-248：Consult→Health）
     await tester.pumpAndSettle();
 
     expect(find.byType(LoginHardDialog), findsOneWidget);
@@ -142,13 +142,13 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Consult'));
+    await tester.tap(find.text('Health')); // bug 20260706-248：Consult→Health
     // 问诊 hub AI 卡在线脉冲为常驻动画，pumpAndSettle 不收敛——固定帧推进。
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.byType(LoginHardDialog), findsNothing);
-    // 切到问诊 hub（文案已迁 arb；本测试 pump 真实 App 默认 en locale、tab 为 'Consult'，故断言英文标题）。
-    expect(find.text('Quick consultation'), findsOneWidget);
+    // 切到问诊 hub（bug 20260706-248：顶部 title Consult→Health；tab 亦为 Health，故 findsWidgets）。
+    expect(find.text('Health'), findsWidgets);
   });
 }

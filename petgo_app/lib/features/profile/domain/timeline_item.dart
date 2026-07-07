@@ -13,6 +13,7 @@ class TimelineItem {
     this.aiLevel,
     this.symptomSummary,
     this.sourceType,
+    this.sourceRef,
   });
 
   final TimelineKind kind;
@@ -35,8 +36,25 @@ class TimelineItem {
   /// 健康事件来源：`AI_TRIAGE` / `VET_CONSULT`（区分 AI 分诊与兽医问诊，bug 20260702-231）。
   final String? sourceType;
 
+  /// 健康事件来源引用（问诊/会话 token，幂等键）；据此深链到对应结果页（bug 20260706-259）。
+  /// 后端形如 `<前缀>:<数字 id>`——AI 分诊 `triage:<triageId>`、兽医问诊 `consult:<sessionId>`。
+  final String? sourceRef;
+
   /// 健康事件是否为兽医问诊（否则按 AI 分诊显示）。
   bool get isVetConsult => sourceType == 'VET_CONSULT';
+
+  /// 点击健康事件应跳转的路由（bug 20260706-259）；无 [sourceRef]、未知来源或 id 非法则返回 null（不可点）。
+  /// 兽医问诊 → `/consult/conversation/<sessionId>`；AI 分诊 → `/triage/result/<triageId>`。
+  /// 两条目标路由都对 id 做 `int.parse`，故须剥掉 `triage:`/`consult:` 前缀、取纯数字段。
+  String? get healthEventRoute {
+    final ref = sourceRef;
+    if (ref == null || ref.isEmpty) return null;
+    final id = ref.contains(':') ? ref.substring(ref.lastIndexOf(':') + 1) : ref;
+    if (id.isEmpty || int.tryParse(id) == null) return null;
+    if (sourceType == 'VET_CONSULT') return '/consult/conversation/$id';
+    if (sourceType == 'AI_TRIAGE') return '/triage/result/$id';
+    return null;
+  }
 
   /// 时间线显示日期：快乐时刻取事件日期（F9），健康事件取发生时刻。
   DateTime get displayDate => eventDate ?? date;
@@ -54,6 +72,7 @@ class TimelineItem {
       aiLevel: json['aiLevel'] as String?,
       symptomSummary: json['symptomSummary'] as String?,
       sourceType: json['sourceType'] as String?,
+      sourceRef: json['sourceRef'] as String?,
     );
   }
 
