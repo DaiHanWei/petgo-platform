@@ -6,6 +6,7 @@ import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.repository.HealthEventRepository;
 import com.tailtopia.profile.repository.MilestoneCompletionRepository;
 import com.tailtopia.profile.repository.MilestoneShareRepository;
+import com.tailtopia.content.repository.ContentPostRepository;
 import com.tailtopia.profile.repository.PetMilestoneRepository;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.shared.media.PersonalMedia;
@@ -28,15 +29,17 @@ public class ProfileDeletionService {
     private final PetMilestoneRepository petMilestones;
     private final MilestoneCompletionRepository milestoneCompletions;
     private final MilestoneShareRepository milestoneShares;
+    private final ContentPostRepository contentPosts;
 
     public ProfileDeletionService(PetProfileRepository petProfiles, HealthEventRepository healthEvents,
             PetMilestoneRepository petMilestones, MilestoneCompletionRepository milestoneCompletions,
-            MilestoneShareRepository milestoneShares) {
+            MilestoneShareRepository milestoneShares, ContentPostRepository contentPosts) {
         this.petProfiles = petProfiles;
         this.healthEvents = healthEvents;
         this.petMilestones = petMilestones;
         this.milestoneCompletions = milestoneCompletions;
         this.milestoneShares = milestoneShares;
+        this.contentPosts = contentPosts;
     }
 
     @Transactional
@@ -65,6 +68,11 @@ public class ProfileDeletionService {
         petMilestones.deleteByPetProfileId(petId);
         // 里程碑对外分享（P-35 分享链接）：随档案删除，token 立即失效（防注销后仍可访问 H5）。
         milestoneShares.deleteByPetProfileId(petId);
+
+        // 解绑成长帖（bug 20260702-237 / F18）：FK fk_content_posts_pet 无 ON DELETE，删 pet 前须先把
+        // 引用它的 content_posts.pet_id 置 NULL，否则外键阻断（历史账号注销 deletionId=1 即栽在此）。
+        // 帖子本体保留（UGC 保留），仅解除与已删宠物的绑定。
+        contentPosts.detachPet(petId);
 
         List<String> publicUrls = new ArrayList<>();
         if (pet.getAvatarUrl() != null) {

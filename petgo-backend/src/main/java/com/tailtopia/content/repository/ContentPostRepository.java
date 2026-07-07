@@ -8,6 +8,7 @@ import java.time.LocalDate;
 import java.util.List;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -15,6 +16,15 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
 
     /** 迷你主页发布数（Story 3.8）：某作者未软删的已发布内容数。 */
     long countByAuthorIdAndDeletedAtIsNullAndStatus(long authorId, PostStatus status);
+
+    /**
+     * 删除宠物档案前解绑其成长帖（bug 20260702-237 / 决策 F18）：把引用该 pet 的 content_posts.pet_id 置 NULL。
+     * FK fk_content_posts_pet 无 ON DELETE，直接删 pet 会被引用阻断；置空保留帖子本体（UGC 保留），
+     * 仅解除与已删宠物的绑定（pet_id 可空，仅 GROWTH_MOMENT 曾绑定）。返回受影响行数。
+     */
+    @Modifying
+    @Query("update ContentPost p set p.petId = null where p.petId = :petId")
+    int detachPet(@Param("petId") long petId);
 
     /** 后台用户详情（Story 3.1）：某作者全部内容（含已软删，运营视角），createdAt 倒序。 */
     List<ContentPost> findByAuthorIdOrderByCreatedAtDesc(long authorId);
