@@ -100,6 +100,29 @@ public class ContentModerationService {
     }
 
     /**
+     * 评论文字审核（内容审核补充规范 story 3，§5.1）。纯文字、无图审——内部复用 {@link #evaluate(String, List)}
+     * （传空图列表）并映射为 {@link CommentVerdict} 四态：
+     * <ul>
+     *   <li>{@code TEXT_BLOCKED} → {@link CommentVerdict#L1_BLOCKED}（命中 L1 硬拦截词库）</li>
+     *   <li>{@code RISKY}（评分 ≥0.8）→ {@link CommentVerdict#HIGH_RISK}</li>
+     *   <li>{@code DEGRADED} 或 {@code degraded()} → {@link CommentVerdict#DEGRADED}（fail-closed，绝不放行）</li>
+     *   <li>其余（{@code PASS}，纯文字下 {@code IMAGE_BLOCKED} 不会出现）→ {@link CommentVerdict#PASS}</li>
+     * </ul>
+     * 真实三方接入仅替换 {@code evaluate} 内部，本方法契约（四态）不变。
+     */
+    public CommentVerdict moderateComment(String text) {
+        ModerationOutcome outcome = evaluate(text, List.of());
+        if (outcome.degraded() || outcome.verdict() == Verdict.DEGRADED) {
+            return CommentVerdict.DEGRADED; // fail-closed 优先
+        }
+        return switch (outcome.verdict()) {
+            case TEXT_BLOCKED -> CommentVerdict.L1_BLOCKED;
+            case RISKY -> CommentVerdict.HIGH_RISK;
+            default -> CommentVerdict.PASS; // PASS（IMAGE_BLOCKED 对纯文字不可达）
+        };
+    }
+
+    /**
      * 富审核（§5.2）。判定顺序：L1 词库硬拦截 → 图像高置信违规 → 三方评分（+L2 加权）RISKY/PASS；
      * 任何三方降级 → DEGRADED（fail-closed，绝不 PASS）。方法无状态、可重入（供 story 4/5 复用）。
      */

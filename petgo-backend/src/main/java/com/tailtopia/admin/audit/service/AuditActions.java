@@ -46,6 +46,10 @@ public final class AuditActions {
     public static final String REPORT_DISMISSED = "REPORT_DISMISSED";
     /** 内容被恢复（Story 4.2）。 */
     public static final String CONTENT_RESTORED = "CONTENT_RESTORED";
+    /** 评论被运营主动下架（内容审核 story 3，FR-55A，objectType=COMMENT，含原因）。 */
+    public static final String COMMENT_TAKEN_DOWN = "COMMENT_TAKEN_DOWN";
+    /** 下架评论被恢复（内容审核 story 3，FR-55A，objectType=COMMENT）。 */
+    public static final String COMMENT_RESTORED = "COMMENT_RESTORED";
     /** 用户账号被停用。 */
     public static final String USER_DEACTIVATED = "USER_DEACTIVATED";
     /** 用户账号被重新激活（Story 3.2）。 */

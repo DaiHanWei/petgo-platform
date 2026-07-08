@@ -39,8 +39,8 @@ class ContentDetailServiceTest {
         likes = mock(ContentLikeRepository.class);
         accounts = mock(AccountQueryService.class);
         service = new ContentDetailService(posts, comments, likes, accounts);
-        when(comments.countByPostIdAndDeletedAtIsNull(org.mockito.ArgumentMatchers.anyLong()))
-                .thenReturn(5L);
+        when(comments.countVisibleForViewer(org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.any())).thenReturn(5L);
         when(likes.countByPostId(org.mockito.ArgumentMatchers.anyLong())).thenReturn(2L);
     }
 

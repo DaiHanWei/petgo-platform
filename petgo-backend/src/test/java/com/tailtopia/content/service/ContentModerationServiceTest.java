@@ -168,6 +168,29 @@ class ContentModerationServiceTest {
         assertDegraded(svc.evaluate("teks bersih tanpa masalah", null), "CIRCUIT_OPEN");
     }
 
+    // ---------- story 3：moderateComment 四态映射（AC-B2；纯文字、复用 evaluate） ----------
+
+    @Test
+    void moderateComment_l1HitMapsToL1Blocked() {
+        assertThat(service().moderateComment("ayo main judi online")).isEqualTo(CommentVerdict.L1_BLOCKED);
+    }
+
+    @Test
+    void moderateComment_highScoreMapsToHighRisk() {
+        assertThat(service().moderateComment("stub-high promo")).isEqualTo(CommentVerdict.HIGH_RISK);
+    }
+
+    @Test
+    void moderateComment_degradeMapsToDegradedNeverPass() {
+        assertThat(service().moderateComment("stub-timeout here")).isEqualTo(CommentVerdict.DEGRADED);
+        assertThat(service().moderateComment("stub-5xx here")).isEqualTo(CommentVerdict.DEGRADED);
+    }
+
+    @Test
+    void moderateComment_cleanMapsToPass() {
+        assertThat(service().moderateComment("cerita santai soal kucing")).isEqualTo(CommentVerdict.PASS);
+    }
+
     private void assertDegraded(ModerationOutcome o, String reason) {
         assertThat(o.verdict()).isEqualTo(Verdict.DEGRADED);
         assertThat(o.verdict()).isNotEqualTo(Verdict.PASS);

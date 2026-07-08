@@ -33,4 +33,14 @@ public class ManualReviewGateImpl implements ManualReviewGate {
     public void enqueue(long contentId) {
         queue.save(ManualReviewItem.pending(contentId, Instant.now()));
     }
+
+    /**
+     * 评论降级入队（story 3）。<b>不读开关</b>——评论 fail-closed 入队无条件生效（安全属性）。
+     * 落 {@code content_type=COMMENT} + 捕获 {@code contentVersion}。
+     */
+    @Override
+    @Transactional
+    public void enqueueComment(long commentId, int contentVersion) {
+        queue.save(ManualReviewItem.pendingComment(commentId, contentVersion, Instant.now()));
+    }
 }

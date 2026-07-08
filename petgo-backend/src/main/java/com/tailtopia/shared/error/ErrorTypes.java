@@ -30,6 +30,9 @@ public final class ErrorTypes {
     /** Story 2.3 R2（F10）：发布时三方自动审核——图像识别命中违规（422，不落库）。 */
     public static final URI CONTENT_IMAGE_BLOCKED = URI.create(BASE + "content-image-blocked");
 
+    /** 内容审核 story 3：评论发送同步过滤命中（L1 硬拦截 / 风险 ≥0.8，422，从未落库/不发事件/不入队）。 */
+    public static final URI COMMENT_BLOCKED = URI.create(BASE + "comment-blocked");
+
     private ErrorTypes() {
     }
 }

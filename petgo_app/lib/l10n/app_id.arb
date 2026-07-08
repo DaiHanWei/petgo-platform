@@ -192,6 +192,8 @@
   "commentSendFailed": "Gagal mengirim, silakan coba lagi",
   "commentReplyTargetDeleted": "Komentar yang kamu balas sudah dihapus",
   "commentLimitReached": "Komentar maksimal 200 karakter",
+  "commentModerationBlocked": "Komentar ini tidak sesuai pedoman komunitas, silakan ubah dan coba lagi",
+  "commentTakenDownSelfOnly": "Komentar ini dihapus karena melanggar pedoman; hanya kamu yang bisa melihatnya",
   "detailCommentsTitle": "Komentar",
   "detailNoComments": "Yuk tulis sesuatu",
   "detailViewMoreComments": "Lihat komentar lainnya",
