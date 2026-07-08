@@ -20,4 +20,7 @@ public interface PetProfileRepository extends JpaRepository<PetProfile, Long> {
 
     /** 建档满阈值天数的档案（陪伴里程碑定时扫描，Story 8.3 C-M8 陪伴满 30 天）。 */
     List<PetProfile> findByCreatedAtLessThanEqual(Instant threshold);
+
+    /** 内容审核 story 4：违规重置默认宠物名唯一性查重（DefaultNameGenerator）。 */
+    boolean existsByName(String name);
 }

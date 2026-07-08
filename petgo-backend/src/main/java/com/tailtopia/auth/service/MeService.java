@@ -5,8 +5,12 @@ import com.tailtopia.auth.domain.User;
 import com.tailtopia.auth.dto.UpdateMeRequest;
 import com.tailtopia.auth.dto.UserProfileResponse;
 import com.tailtopia.auth.repository.UserRepository;
+import com.tailtopia.namemoderation.domain.NameTargetType;
+import com.tailtopia.namemoderation.event.NameSubmittedEvent;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.shared.error.AppException;
+import java.util.Objects;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,10 +25,13 @@ public class MeService {
 
     private final UserRepository users;
     private final PetProfileRepository petProfiles;
+    private final ApplicationEventPublisher events;
 
-    public MeService(UserRepository users, PetProfileRepository petProfiles) {
+    public MeService(UserRepository users, PetProfileRepository petProfiles,
+            ApplicationEventPublisher events) {
         this.users = users;
         this.petProfiles = petProfiles;
+        this.events = events;
     }
 
     @Transactional(readOnly = true)
@@ -44,7 +51,16 @@ public class MeService {
             if (nn.length() > 20) { // 与 @Size 双保险
                 throw AppException.validation("昵称不能超过 20 字");
             }
+            // 内容审核 story 4：仅昵称实际变化时先放行立即生效 + 事务提交后异步送审（§5.3，编辑重审 D-CM3）。
+            boolean changed = !Objects.equals(nn, user.getNickname());
             user.setNickname(nn);
+            if (changed) {
+                // 用户主动改新名 → 脱离违规重置默认名标记。
+                if (user.isSystemDefaultName()) {
+                    user.setSystemDefaultName(false);
+                }
+                events.publishEvent(new NameSubmittedEvent(NameTargetType.NICKNAME, userId, nn));
+            }
         }
 
         if (req.petStatus() != null) {

@@ -12,11 +12,15 @@ class PetProfile {
     this.birthday,
     this.intro,
     this.createdAt,
+    this.isSystemDefaultName = false,
   });
 
   final int id;
   final String name;
   final String cardToken;
+
+  /// 宠物名当前是否为违规重置的系统默认编码名（内容审核 cm-4，D-CM4）。后端下发即解析；无 UI 强制。
+  final bool isSystemDefaultName;
 
   /// 宠物类型（F6：CAT/DOG/OTHER）。创建后不可改——copyWith 不暴露此字段。
   final String? petType;
@@ -36,6 +40,7 @@ class PetProfile {
         birthday: _parseDate(json['birthday']),
         intro: json['intro'] as String?,
         createdAt: _parseDate(json['createdAt']),
+        isSystemDefaultName: (json['isSystemDefaultName'] ?? false) as bool,
       );
 
   PetProfile copyWith({
@@ -44,6 +49,7 @@ class PetProfile {
     String? breed,
     DateTime? birthday,
     String? intro,
+    bool? isSystemDefaultName,
   }) =>
       PetProfile(
         id: id,
@@ -55,6 +61,7 @@ class PetProfile {
         birthday: birthday ?? this.birthday,
         intro: intro ?? this.intro,
         createdAt: createdAt,
+        isSystemDefaultName: isSystemDefaultName ?? this.isSystemDefaultName,
       );
 
   static DateTime? _parseDate(Object? raw) {

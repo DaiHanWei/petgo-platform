@@ -1,5 +1,7 @@
 package com.tailtopia.profile.service;
 
+import com.tailtopia.namemoderation.domain.NameTargetType;
+import com.tailtopia.namemoderation.event.NameSubmittedEvent;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.domain.PetType;
 import com.tailtopia.profile.dto.PetProfileCreateRequest;
@@ -71,6 +73,8 @@ public class ProfileService {
             milestoneService.assignRoster(saved.getId(), saved.getPetType());
             // 里程碑 C-S1「档案创建完成」自动完成（Story 8.3，AFTER_COMMIT 异步订阅，幂等）。
             events.publishEvent(new ProfileCreatedEvent(ownerId, saved.getId(), Instant.now()));
+            // 内容审核 story 4：宠物名首次提交先放行立即生效 + 事务提交后异步送审（§5.3）。
+            events.publishEvent(new NameSubmittedEvent(NameTargetType.PET_NAME, saved.getId(), saved.getName()));
             return PetProfileResponse.from(saved);
         } catch (DataIntegrityViolationException e) {
             // 并发双开窗：唯一约束兜底（owner_id / card_token），归一为 409。
@@ -107,12 +111,18 @@ public class ProfileService {
         PetProfile profile = profiles.findByOwnerId(ownerId)
                 .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
 
+        boolean nameChanged = false;
         if (req.name() != null) {
             String n = req.name().trim();
             if (n.isEmpty()) {
                 throw AppException.validation("宠物名不能为空");
             }
+            // 内容审核 story 4：仅宠物名实际变化时先放行立即生效 + 提交后异步送审（§5.3，编辑重审 D-CM3）。
+            nameChanged = !n.equals(profile.getName());
             profile.setName(n);
+            if (nameChanged && profile.isSystemDefaultName()) {
+                profile.setSystemDefaultName(false); // 用户主动改新名 → 脱离违规重置默认名标记
+            }
         }
         if (req.avatarUrl() != null) {
             profile.setAvatarUrl(blankToNull(req.avatarUrl()));
@@ -127,6 +137,9 @@ public class ProfileService {
             profile.setIntro(blankToNull(req.intro()));
         }
         profiles.save(profile);
+        if (nameChanged) {
+            events.publishEvent(new NameSubmittedEvent(NameTargetType.PET_NAME, profile.getId(), profile.getName()));
+        }
         return PetProfileResponse.from(profile);
     }
 

@@ -36,6 +36,15 @@ void main() {
     expect(DeepLinkRoutes.pushPayloadToLocation('MILESTONE_NODE', null), '/profile/milestones');
   });
 
+  test('NAME_RESET（内容审核 cm-4）→ targetRef 区分昵称 vs 宠物名', () {
+    // 昵称重置：targetRef="NICKNAME" → 我的页（昵称编辑底抽屉入口）
+    expect(DeepLinkRoutes.pushPayloadToLocation('NAME_RESET', 'NICKNAME'), '/me');
+    // 宠物名重置：targetRef=cardToken → 宠物档案编辑页（V1 单宠物自解析，不拼 token 入路径）
+    expect(DeepLinkRoutes.pushPayloadToLocation('NAME_RESET', 'card_abc123'), '/profile/edit');
+    // 缺 targetRef 安全兜底到昵称页（不崩溃）
+    expect(DeepLinkRoutes.pushPayloadToLocation('NAME_RESET', null), '/me');
+  });
+
   test('未知 type / 空 token → 通知中心兜底（不崩溃）', () {
     expect(DeepLinkRoutes.pushPayloadToLocation('SOMETHING_NEW', 'x'),
         DeepLinkRoutes.notificationsCenter);

@@ -17,6 +17,7 @@ public record PetProfileResponse(
         LocalDate birthday,
         String intro,
         String cardToken,
+        boolean isSystemDefaultName,
         Instant createdAt) {
 
     public static PetProfileResponse from(PetProfile p) {
@@ -29,6 +30,8 @@ public record PetProfileResponse(
                 p.getBirthday(),
                 p.getIntro(),
                 p.getCardToken(),
+                // 内容审核 story 4：宠物名是否为违规重置的系统默认编码名。
+                p.isSystemDefaultName(),
                 p.getCreatedAt());
     }
 }

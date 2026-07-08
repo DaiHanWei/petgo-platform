@@ -17,7 +17,8 @@ public record UserProfileResponse(
         String avatarUrl,
         PetStatus petStatus,
         boolean onboardingCompleted,
-        boolean hasPetProfile) {
+        boolean hasPetProfile,
+        boolean isSystemDefaultName) {
 
     public static UserProfileResponse from(User u, boolean hasPetProfile) {
         return new UserProfileResponse(
@@ -29,6 +30,8 @@ public record UserProfileResponse(
                 u.getAvatarUrl(),
                 u.getPetStatus(),
                 u.isOnboardingCompleted(),
-                hasPetProfile);
+                hasPetProfile,
+                // 内容审核 story 4：昵称是否为违规重置的系统默认编码名（App 可据此轻量引导去改名，非必需）。
+                u.isSystemDefaultName());
     }
 }

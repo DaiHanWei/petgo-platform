@@ -19,4 +19,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     /** bug 20260701-164：后台用户管理按角色分页列举（只列普通用户 USER）。 */
     Page<User> findByRole(Role role, Pageable pageable);
+
+    /** 内容审核 story 4：违规重置默认昵称唯一性查重（DefaultNameGenerator）。 */
+    boolean existsByNickname(String nickname);
 }
