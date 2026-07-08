@@ -290,6 +290,10 @@
   "reportSubtitle": "Choose the most relevant reason",
   "reportDoneTitle": "Report received",
   "reportDoneBody": "We'll process it shortly.",
+  "reportHiddenToast": "You won't see this content anymore",
+  "@reportHiddenToast": {
+    "description": "cm-6 举报成功后本人视角内容消失提示（临时占位，story7 复核 i18n）"
+  },
   "detailMoreReportContent": "Report content",
   "detailMoreDeleteContent": "Delete content",
   "commonClose": "Close",

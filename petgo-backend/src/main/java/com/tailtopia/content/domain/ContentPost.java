@@ -80,6 +80,13 @@ public class ContentPost {
     @Column(name = "content_version", nullable = false)
     private int contentVersion = 1;
 
+    /**
+     * 举报驱动 P0 自动预处置（内容审核 cm-6）：已发布帖被翻回「仅作者可见待判」挂起态的时刻(UTC)。
+     * NULL = 未因举报预处置。兼作 2h SLA 起点 + 区分 cm-2 发布时挂起（reviewReason=REPORT_P0 亦标来源）。
+     */
+    @Column(name = "report_hidden_at")
+    private Instant reportHiddenAt;
+
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
@@ -135,6 +142,35 @@ public class ContentPost {
     /** Story 4.3：运营审核通过——UNDER_REVIEW → PUBLISHED，重回公开口径。 */
     public void approveReview() {
         this.status = PostStatus.PUBLISHED;
+    }
+
+    /** P0 举报预处置来源标记（cm-6）：review_reason=REPORT_P0，配合 report_hidden_at 供后台队列区分来源。 */
+    static final String REVIEW_REASON_REPORT_P0 = "REPORT_P0";
+
+    /**
+     * 举报驱动 P0 自动预处置（cm-6 §5.2）：已发布帖翻回「仅作者可见待判」挂起态。
+     * PUBLISHED → UNDER_REVIEW + 记 reportHiddenAt(now, UTC) + reviewReason=REPORT_P0（内容不删，deletedAt 保持 NULL）。
+     * 调用方须先保证 status==PUBLISHED && reportHiddenAt==NULL（幂等守卫，见 ContentService）。
+     */
+    public void applyReportHold() {
+        this.status = PostStatus.UNDER_REVIEW;
+        this.reportHiddenAt = Instant.now();
+        this.reviewReason = REVIEW_REASON_REPORT_P0;
+    }
+
+    /**
+     * P0 举报预处置误报恢复（cm-6 §5.2 判误报）：UNDER_REVIEW → PUBLISHED + 清 reportHiddenAt/reviewReason。
+     * 领域层仅改状态；**恢复不得触发 ContentPublishedEvent**（内容原已发布过，里程碑等已 fire）——由 service 层保证不发事件。
+     */
+    public void releaseReportHold() {
+        this.status = PostStatus.PUBLISHED;
+        this.reportHiddenAt = null;
+        this.reviewReason = null;
+    }
+
+    /** 是否处于举报驱动 P0 预处置挂起（cm-6：reportHiddenAt 非空即已预处置）。 */
+    public boolean isUnderReportHold() {
+        return reportHiddenAt != null;
     }
 
     /**
@@ -215,6 +251,10 @@ public class ContentPost {
 
     public int getContentVersion() {
         return contentVersion;
+    }
+
+    public Instant getReportHiddenAt() {
+        return reportHiddenAt;
     }
 
     public Instant getDeletedAt() {

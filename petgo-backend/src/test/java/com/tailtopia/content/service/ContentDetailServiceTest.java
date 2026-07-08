@@ -15,6 +15,7 @@ import com.tailtopia.content.dto.ContentDetailResponse;
 import com.tailtopia.content.repository.CommentRepository;
 import com.tailtopia.content.repository.ContentLikeRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
+import com.tailtopia.moderation.service.ReportService;
 import com.tailtopia.shared.error.AppException;
 import java.time.Instant;
 import java.util.List;
@@ -30,6 +31,7 @@ class ContentDetailServiceTest {
     private CommentRepository comments;
     private ContentLikeRepository likes;
     private AccountQueryService accounts;
+    private ReportService reportService;
     private ContentDetailService service;
 
     @BeforeEach
@@ -38,7 +40,8 @@ class ContentDetailServiceTest {
         comments = mock(CommentRepository.class);
         likes = mock(ContentLikeRepository.class);
         accounts = mock(AccountQueryService.class);
-        service = new ContentDetailService(posts, comments, likes, accounts);
+        reportService = mock(ReportService.class); // 默认 hasReported → false（未举报）
+        service = new ContentDetailService(posts, comments, likes, accounts, reportService);
         when(comments.countVisibleForViewer(org.mockito.ArgumentMatchers.anyLong(),
                 org.mockito.ArgumentMatchers.any())).thenReturn(5L);
         when(likes.countByPostId(org.mockito.ArgumentMatchers.anyLong())).thenReturn(2L);
@@ -96,6 +99,14 @@ class ContentDetailServiceTest {
     void softDeletedPostIsNotFound() {
         when(posts.findById(2L)).thenReturn(Optional.of(post(2L, 7L, Instant.now())));
         assertThatThrownBy(() -> service.getDetail(2L, null)).isInstanceOf(AppException.class);
+    }
+
+    @Test
+    void reporterSeesNotFoundForReportedPost() {
+        // 内容审核 cm-6 §5.4：举报者对该帖视同不可见 → 404（即使帖仍 PUBLISHED）。
+        when(posts.findById(4L)).thenReturn(Optional.of(post(4L, 7L, null)));
+        when(reportService.hasReported(4L, 88L)).thenReturn(true);
+        assertThatThrownBy(() -> service.getDetail(4L, 88L)).isInstanceOf(AppException.class);
     }
 
     @Test

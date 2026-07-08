@@ -177,6 +177,47 @@ public class ContentService {
     }
 
     /**
+     * 举报驱动 P0 自动预处置（内容审核 cm-6 §5.2）：把**已发布**帖翻回「仅作者可见待判」挂起态。
+     * 阈值判定在 moderation 侧（{@link com.tailtopia.moderation.service.ReportService}）算好后调用本方法。
+     *
+     * <p><b>幂等守卫</b>：仅当 {@code status==PUBLISHED && deletedAt==NULL && reportHiddenAt==NULL} 才处置——
+     * 已预处置（reportHiddenAt 非空）/ 已挂起 / 已删 一律 no-op，避免重复入队（AC-B6 幂等）。
+     * <p><b>不发任何事件、不推送通知</b>（预处置是中间态，非最终判定；D-CM6）。内容不删（deletedAt 保持 NULL）。
+     */
+    @Transactional
+    public void applyReportHoldIfPublished(long postId) {
+        posts.findById(postId).ifPresent(p -> {
+            if (p.getStatus() == PostStatus.PUBLISHED && p.getDeletedAt() == null
+                    && p.getReportHiddenAt() == null) {
+                p.applyReportHold();
+                posts.save(p);
+                log.info("举报驱动 P0 自动预处置转挂起 postId={}", postId);
+            }
+        });
+    }
+
+    /**
+     * 举报驱动 P0 误报恢复（内容审核 cm-6 §5.2 判误报 · D-CM6）：把 P0 预处置挂起帖恢复为 PUBLISHED。
+     * UNDER_REVIEW → PUBLISHED + 清 reportHiddenAt/reviewReason。
+     *
+     * <p><b>关键——不得双 fire 事件</b>：内容原本已 PUBLISHED（发布时已触发过里程碑等 {@link ContentPublishedEvent}），
+     * P0 只是把它暂时翻回挂起；误报恢复是「翻回公开」，**绝不再 fire {@link ContentPublishedEvent}、绝不通知作者**
+     * （区别于 {@link #approveReview}「发布前首次挂起通过」——那才 fire）。故本方法只改状态、不发事件。
+     * <p>幂等守卫：仅处置 {@code reportHiddenAt!=NULL && status==UNDER_REVIEW && deletedAt==NULL}；非 P0 挂起 no-op。
+     */
+    @Transactional
+    public void releaseReportHold(long postId) {
+        posts.findById(postId).ifPresent(p -> {
+            if (p.getReportHiddenAt() != null && p.getStatus() == PostStatus.UNDER_REVIEW
+                    && p.getDeletedAt() == null) {
+                p.releaseReportHold();
+                posts.save(p);
+                log.info("举报驱动 P0 误报恢复转公开 postId={}", postId);
+            }
+        });
+    }
+
+    /**
      * 人工审核拒绝/超时丢弃（Story 4.3）：挂起内容软删丢弃（不发布、不进公开口径）。幂等：仅处置 UNDER_REVIEW 未删项。
      */
     @Transactional

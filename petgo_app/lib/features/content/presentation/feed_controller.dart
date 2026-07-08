@@ -111,6 +111,16 @@ class FeedController extends AsyncNotifier<FeedState> {
     }
   }
 
+  /// 举报成功后本地乐观移除该卡片（内容审核 cm-6 §6.1）：从当前列表剔除，无需等下次刷新即消失。
+  /// 不维护本地举报名单（§6.2 前端不做本地过滤维护）；下次刷新以后端过滤（§5.4）为权威。
+  void removeItem(int postId) {
+    final current = state.value;
+    if (current == null) return;
+    final filtered = current.items.where((i) => i.id != postId).toList();
+    if (filtered.length == current.items.length) return; // 不在当前列表：无操作
+    state = AsyncData(current.copyWith(items: filtered));
+  }
+
   /// 下拉刷新：重建首屏（重置游标）。
   Future<void> refresh() async {
     ref.invalidateSelf();

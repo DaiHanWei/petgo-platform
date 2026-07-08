@@ -219,6 +219,7 @@
   "reportSubtitle": "Pilih alasan yang paling sesuai",
   "reportDoneTitle": "Laporan diterima",
   "reportDoneBody": "Kami akan segera memprosesnya.",
+  "reportHiddenToast": "Kamu tidak akan melihat konten ini lagi",
   "detailMoreReportContent": "Laporkan Konten",
   "detailMoreDeleteContent": "Hapus Konten",
   "commonClose": "Tutup",

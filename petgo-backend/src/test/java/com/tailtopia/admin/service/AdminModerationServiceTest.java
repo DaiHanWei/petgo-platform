@@ -63,7 +63,8 @@ class AdminModerationServiceTest {
         service.takedown(1L, admin());
 
         verify(contentService).softDelete(50L, DeleteReason.ADMIN_TAKEDOWN);
-        verify(reportService).mark(1L, 99L, ReportStatus.RESOLVED);
+        // cm-6：判违规关该帖全部 PENDING 举报单（含本单），不再仅 mark 单条。
+        verify(reportService).resolvePendingForPost(50L, 99L);
         verify(auditService).record(eq(7L), eq(AuditActions.CONTENT_TAKEN_DOWN), eq("CONTENT_REPORT"),
                 eq("1"), any());
         verify(events).publishEvent(any(ReportResolvedEvent.class));
@@ -77,6 +78,8 @@ class AdminModerationServiceTest {
         service.dismiss(2L, admin());
 
         verify(reportService).mark(2L, 99L, ReportStatus.DISMISSED);
+        // cm-6：判误报尝试恢复 P0 预处置挂起（非 P0 held 为幂等 no-op）；不发 ContentPublishedEvent。
+        verify(contentService).releaseReportHold(51L);
         verify(auditService).record(eq(7L), eq(AuditActions.REPORT_DISMISSED), eq("CONTENT_REPORT"),
                 eq("2"), any());
         verify(events).publishEvent(any(ReportResolvedEvent.class));

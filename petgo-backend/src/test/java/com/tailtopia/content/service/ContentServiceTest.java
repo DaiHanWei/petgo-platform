@@ -408,6 +408,64 @@ class ContentServiceTest {
         verify(posts, never()).save(any(ContentPost.class));
     }
 
+    // ---- 内容审核 cm-6：P0 举报预处置 hold / 误报恢复（关键：恢复不得双 fire ContentPublishedEvent） ----
+
+    @Test
+    void applyReportHoldFlipsPublishedToUnderReviewAndFiresNoEvent() {
+        ContentPost p = ContentPost.publish(1L, ContentType.DAILY, null, "x", List.of());
+        setId(p, 55L);
+        when(posts.findById(55L)).thenReturn(Optional.of(p));
+
+        service.applyReportHoldIfPublished(55L);
+
+        assertThat(p.getStatus()).isEqualTo(com.tailtopia.content.domain.PostStatus.UNDER_REVIEW);
+        assertThat(p.getReportHiddenAt()).isNotNull();
+        assertThat(p.getReviewReason()).isEqualTo("REPORT_P0");
+        verify(posts).save(p);
+        verify(events, never()).publishEvent(any()); // 预处置中间态：不发任何事件、不通知
+    }
+
+    @Test
+    void applyReportHoldIsIdempotentWhenAlreadyHeld() {
+        ContentPost p = ContentPost.publish(1L, ContentType.DAILY, null, "x", List.of());
+        setId(p, 56L);
+        p.applyReportHold(); // 已预处置（reportHiddenAt 非空）
+        when(posts.findById(56L)).thenReturn(Optional.of(p));
+
+        service.applyReportHoldIfPublished(56L);
+
+        verify(posts, never()).save(any(ContentPost.class)); // 幂等：不重复处置/入队
+    }
+
+    @Test
+    void releaseReportHoldRestoresPublishedWithoutRepublishEvent() {
+        ContentPost p = ContentPost.publish(1L, ContentType.DAILY, null, "x", List.of());
+        setId(p, 57L);
+        p.applyReportHold(); // UNDER_REVIEW + reportHiddenAt + REPORT_P0
+        when(posts.findById(57L)).thenReturn(Optional.of(p));
+
+        service.releaseReportHold(57L);
+
+        assertThat(p.getStatus()).isEqualTo(com.tailtopia.content.domain.PostStatus.PUBLISHED);
+        assertThat(p.getReportHiddenAt()).isNull();
+        assertThat(p.getReviewReason()).isNull();
+        verify(posts).save(p);
+        // 关键（D-CM6）：误报恢复绝不重复 fire ContentPublishedEvent → 里程碑不双触发、作者不通知。
+        verify(events, never()).publishEvent(any());
+    }
+
+    @Test
+    void releaseReportHoldNoOpWhenNotUnderReportHold() {
+        ContentPost p = ContentPost.publish(1L, ContentType.DAILY, null, "x", List.of()); // 普通 PUBLISHED，未 hold
+        setId(p, 58L);
+        when(posts.findById(58L)).thenReturn(Optional.of(p));
+
+        service.releaseReportHold(58L);
+
+        verify(posts, never()).save(any(ContentPost.class));
+        verify(events, never()).publishEvent(any());
+    }
+
     private static com.tailtopia.content.domain.Comment newComment(long id) {
         try {
             var ctor = com.tailtopia.content.domain.Comment.class.getDeclaredConstructor();

@@ -82,14 +82,22 @@ public class AdminModerationService {
         return items;
     }
 
-    /** 人工下架（单条）：软删内容 + 工单 RESOLVED + 审计 + 举报人模糊通知。 */
+    /**
+     * 人工下架（判违规，单条入口）：软删内容 + **关闭该帖全部 PENDING 举报单**（{@code resolvePendingForPost}）
+     * + 审计 + 举报人模糊通知。作者「内容已被隐藏」通知复用既有 {@link ContentService#softDelete} 的
+     * {@code ContentRemovedEvent}（CONTENT_REMOVED，§8.9）。
+     *
+     * <p>内容审核 cm-6：P0 挂起帖（可能多条 PENDING）判违规走此路径——软删（内容不再对外）+ 全单结单
+     * （避免残留在队列，AC-B8）。挂起态帖软删同样生效（softDelete 仅看 deletedAt）。
+     */
     @Transactional
     public void takedown(long reportId, AdminUserDetails admin) {
         ContentReport r = reportService.find(reportId)
                 .orElseThrow(() -> AppException.notFound("举报工单不存在"));
         long handler = handlerId(admin);
         contentService.softDelete(r.getPostId(), DeleteReason.ADMIN_TAKEDOWN); // 作者通知经既有 ContentRemovedEvent
-        reportService.mark(reportId, handler, ReportStatus.RESOLVED);
+        // 该帖全部 PENDING 举报单一并 RESOLVED（含本单；P0 多单场景避免残留，bug 20260630-155 同源）。
+        reportService.resolvePendingForPost(r.getPostId(), handler);
         auditService.record(admin.getAdminAccountId(), AuditActions.CONTENT_TAKEN_DOWN, "CONTENT_REPORT",
                 String.valueOf(reportId), "下架被举报内容（工单 " + reportId + " / 帖 " + r.getPostId() + "）");
         notifyReporter(r);
@@ -97,12 +105,21 @@ public class AdminModerationService {
                 admin.getAdminAccountId());
     }
 
-    /** 驳回举报（单条）：工单 DISMISSED（内容不动）+ 审计 + 举报人模糊通知。 */
+    /**
+     * 驳回举报（判误报，单条入口）：工单 DISMISSED + 审计 + 举报人模糊通知。
+     *
+     * <p>内容审核 cm-6（§5.2 判误报 · D-CM6）：若该帖处于举报驱动 P0 预处置挂起
+     * （{@code reportHiddenAt} 非空）→ {@link ContentService#releaseReportHold} 恢复对外可见
+     * （UNDER_REVIEW → PUBLISHED + 清 reportHiddenAt）；**恢复不发 ContentPublishedEvent、不通知作者**
+     * （避免里程碑等副作用双 fire）。非 P0 挂起帖此调用为幂等 no-op（P1/P2 从未改可见性）。
+     * 原举报者仍对其隐藏（举报记录不撤，R5）。
+     */
     @Transactional
     public void dismiss(long reportId, AdminUserDetails admin) {
         ContentReport r = reportService.find(reportId)
                 .orElseThrow(() -> AppException.notFound("举报工单不存在"));
         reportService.mark(reportId, handlerId(admin), ReportStatus.DISMISSED);
+        contentService.releaseReportHold(r.getPostId()); // P0 误报恢复；非 P0 held no-op；不发事件/不通知
         auditService.record(admin.getAdminAccountId(), AuditActions.REPORT_DISMISSED, "CONTENT_REPORT",
                 String.valueOf(reportId), "驳回举报（工单 " + reportId + "）");
         notifyReporter(r);

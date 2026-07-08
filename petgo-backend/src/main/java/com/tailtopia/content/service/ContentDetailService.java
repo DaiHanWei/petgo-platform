@@ -8,6 +8,7 @@ import com.tailtopia.content.dto.ContentDetailResponse;
 import com.tailtopia.content.repository.CommentRepository;
 import com.tailtopia.content.repository.ContentLikeRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
+import com.tailtopia.moderation.service.ReportService;
 import com.tailtopia.shared.error.AppException;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -29,13 +30,16 @@ public class ContentDetailService {
     private final CommentRepository comments;
     private final ContentLikeRepository likes;
     private final AccountQueryService accountQueryService;
+    private final ReportService reportService;
 
     public ContentDetailService(ContentPostRepository posts, CommentRepository comments,
-            ContentLikeRepository likes, AccountQueryService accountQueryService) {
+            ContentLikeRepository likes, AccountQueryService accountQueryService,
+            ReportService reportService) {
         this.posts = posts;
         this.comments = comments;
         this.likes = likes;
         this.accountQueryService = accountQueryService;
+        this.reportService = reportService;
     }
 
     /**
@@ -50,6 +54,11 @@ public class ContentDetailService {
                 .filter(p -> p.getDeletedAt() == null)
                 .filter(p -> p.getStatus() == PostStatus.PUBLISHED)
                 .orElseThrow(() -> AppException.notFound(GONE_DETAIL));
+
+        // 内容审核 cm-6 §5.4：举报者对该帖视同不可见——返回统一 404（与 ReportService.isVisible 语义一致，防枚举）。
+        if (viewerId != null && reportService.hasReported(postId, viewerId)) {
+            throw AppException.notFound(GONE_DETAIL);
+        }
 
         AuthorView author = accountQueryService.findAuthorViews(List.of(post.getAuthorId()))
                 .get(post.getAuthorId());
