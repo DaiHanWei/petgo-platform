@@ -55,6 +55,14 @@ class DeepLinkRoutes {
         return (targetRef == null || targetRef.isEmpty || targetRef == 'NICKNAME')
             ? '/me'
             : '/profile/edit';
+      case 'AVATAR_RESET':
+        // 头像违规重置（内容审核 cm-5）：单一 AVATAR_RESET 类型，targetRef 区分用户头像 vs 宠物头像。
+        // 用户头像 "USER_AVATAR" 或缺失 → 我的页（编辑资料底抽屉「Ganti Foto」换头像入口，安全兜底）；
+        // 宠物头像 targetRef=cardToken → 宠物档案编辑页（换头像入口，V1 单宠物自解析，不拼 token 入路径）。
+        // 走 targetRef 而非随机 token（[notify 跳转改用 targetRef] 教训）。通知文案本地化 arb 归 cm-7（TODO）。
+        return (targetRef == null || targetRef.isEmpty || targetRef == 'USER_AVATAR')
+            ? '/me'
+            : '/profile/edit';
     }
     // id 寻址类：缺 targetRef 落兜底（避免拼出非法路由）。
     if (targetRef == null || targetRef.isEmpty) return notificationsCenter;

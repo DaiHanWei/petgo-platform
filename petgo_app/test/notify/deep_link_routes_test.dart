@@ -45,6 +45,15 @@ void main() {
     expect(DeepLinkRoutes.pushPayloadToLocation('NAME_RESET', null), '/me');
   });
 
+  test('AVATAR_RESET（内容审核 cm-5）→ targetRef 区分用户头像 vs 宠物头像', () {
+    // 用户头像重置：targetRef="USER_AVATAR" → 我的页（编辑资料底抽屉换头像入口）
+    expect(DeepLinkRoutes.pushPayloadToLocation('AVATAR_RESET', 'USER_AVATAR'), '/me');
+    // 宠物头像重置：targetRef=cardToken → 宠物档案编辑页（换头像入口，V1 单宠物自解析，不拼 token 入路径）
+    expect(DeepLinkRoutes.pushPayloadToLocation('AVATAR_RESET', 'card_abc123'), '/profile/edit');
+    // 缺 targetRef 安全兜底到我的页（不崩溃）
+    expect(DeepLinkRoutes.pushPayloadToLocation('AVATAR_RESET', null), '/me');
+  });
+
   test('未知 type / 空 token → 通知中心兜底（不崩溃）', () {
     expect(DeepLinkRoutes.pushPayloadToLocation('SOMETHING_NEW', 'x'),
         DeepLinkRoutes.notificationsCenter);

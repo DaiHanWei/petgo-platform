@@ -39,5 +39,11 @@ public enum NotificationType {
      * "NICKNAME" → 跳「设置昵称」页；否则为宠物 cardToken → 跳该宠物改名页。
      * 显示串由 App 按 type 本地化（arb 文案归 cm-7），后端只发结构化通知。
      */
-    NAME_RESET
+    NAME_RESET,
+    /**
+     * 用户/宠物头像违规重置 → 通知本人（内容审核 story 5，D-CM6/§5.5）。单一类型，{@code targetRef} 区分：
+     * "USER_AVATAR" → 跳我的页换头像入口；否则为宠物 cardToken → 跳该宠物档案编辑页换头像。
+     * 显示串由 App 按 type 本地化（arb 文案归 cm-7），后端只发结构化通知。
+     */
+    AVATAR_RESET
 }

@@ -5,6 +5,9 @@ import com.tailtopia.auth.domain.User;
 import com.tailtopia.auth.dto.UpdateMeRequest;
 import com.tailtopia.auth.dto.UserProfileResponse;
 import com.tailtopia.auth.repository.UserRepository;
+import com.tailtopia.avatarmoderation.domain.AvatarDefaults;
+import com.tailtopia.avatarmoderation.domain.AvatarSubjectType;
+import com.tailtopia.avatarmoderation.event.AvatarReviewRequestedEvent;
 import com.tailtopia.namemoderation.domain.NameTargetType;
 import com.tailtopia.namemoderation.event.NameSubmittedEvent;
 import com.tailtopia.profile.repository.PetProfileRepository;
@@ -75,7 +78,16 @@ public class MeService {
         if (req.avatarUrl() != null) {
             // 头像替换（Story 7.1）：客户端 STS 直传①公开桶后回填，仅存应用自有 URL（不存第三方临时 URL）。
             String url = req.avatarUrl().trim();
-            user.setAvatarUrl(url.isEmpty() ? null : url);
+            String newAvatar = url.isEmpty() ? null : url;
+            // 内容审核 story 5：头像「先放行」立即生效 + 事务提交后异步图像送审（§5.1，编辑重审 D-CM3）。
+            // 可见窗口期（D-CM2 / 方案 §3.4）：违规头像在异步审核完成前对所有人可见——有意权衡，靠异步 + 举报兜底，
+            // 不做「先审后显」。仅当头像实际变化且非平台默认常量时送审（重置为默认本身不再送审，防自审循环 B12）。
+            boolean avatarChanged = !Objects.equals(newAvatar, user.getAvatarUrl());
+            user.setAvatarUrl(newAvatar);
+            if (avatarChanged && newAvatar != null && !AvatarDefaults.isDefault(newAvatar)) {
+                events.publishEvent(new AvatarReviewRequestedEvent(
+                        AvatarSubjectType.USER_AVATAR, userId, newAvatar));
+            }
         }
 
         users.save(user);

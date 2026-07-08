@@ -1,5 +1,8 @@
 package com.tailtopia.profile.service;
 
+import com.tailtopia.avatarmoderation.domain.AvatarDefaults;
+import com.tailtopia.avatarmoderation.domain.AvatarSubjectType;
+import com.tailtopia.avatarmoderation.event.AvatarReviewRequestedEvent;
 import com.tailtopia.namemoderation.domain.NameTargetType;
 import com.tailtopia.namemoderation.event.NameSubmittedEvent;
 import com.tailtopia.profile.domain.PetProfile;
@@ -75,6 +78,13 @@ public class ProfileService {
             events.publishEvent(new ProfileCreatedEvent(ownerId, saved.getId(), Instant.now()));
             // 内容审核 story 4：宠物名首次提交先放行立即生效 + 事务提交后异步送审（§5.3）。
             events.publishEvent(new NameSubmittedEvent(NameTargetType.PET_NAME, saved.getId(), saved.getName()));
+            // 内容审核 story 5：宠物头像「先放行」立即生效 + 提交后异步图像送审（§5.1）。可见窗口期为有意权衡
+            // （D-CM2 / 方案 §3.4）：违规头像异步审核完成前对所有人可见，靠异步 + 举报兜底，不做「先审后显」。
+            // 仅当有头像且非平台默认常量时送审（防自审循环 B12）。
+            if (saved.getAvatarUrl() != null && !AvatarDefaults.isDefault(saved.getAvatarUrl())) {
+                events.publishEvent(new AvatarReviewRequestedEvent(
+                        AvatarSubjectType.PET_AVATAR, saved.getId(), saved.getAvatarUrl()));
+            }
             return PetProfileResponse.from(saved);
         } catch (DataIntegrityViolationException e) {
             // 并发双开窗：唯一约束兜底（owner_id / card_token），归一为 409。
@@ -124,8 +134,13 @@ public class ProfileService {
                 profile.setSystemDefaultName(false); // 用户主动改新名 → 脱离违规重置默认名标记
             }
         }
+        boolean avatarChanged = false;
+        String newAvatar = null;
         if (req.avatarUrl() != null) {
-            profile.setAvatarUrl(blankToNull(req.avatarUrl()));
+            newAvatar = blankToNull(req.avatarUrl());
+            // 内容审核 story 5：仅头像实际变化时先放行立即生效 + 提交后异步图像送审（§5.1，编辑重审 D-CM3）。
+            avatarChanged = !java.util.Objects.equals(newAvatar, profile.getAvatarUrl());
+            profile.setAvatarUrl(newAvatar);
         }
         if (req.breed() != null) {
             profile.setBreed(blankToNull(req.breed()));
@@ -139,6 +154,11 @@ public class ProfileService {
         profiles.save(profile);
         if (nameChanged) {
             events.publishEvent(new NameSubmittedEvent(NameTargetType.PET_NAME, profile.getId(), profile.getName()));
+        }
+        // 可见窗口期 D-CM2（有意权衡）：非默认头像先放行、异步审核，违规前对所有人可见；重置为默认不再送审（B12）。
+        if (avatarChanged && newAvatar != null && !AvatarDefaults.isDefault(newAvatar)) {
+            events.publishEvent(new AvatarReviewRequestedEvent(
+                    AvatarSubjectType.PET_AVATAR, profile.getId(), newAvatar));
         }
         return PetProfileResponse.from(profile);
     }
