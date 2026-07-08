@@ -41,9 +41,12 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
     List<ContentPost> findByAuthorIdAndTypeAndDeletedAtIsNullAndEventDateOrderByCreatedAtAsc(
             long authorId, ContentType type, LocalDate eventDate);
 
-    /** 名片快乐时刻流（Story 2.6 AC7 · F9）：某作者某类型未删内容，按 event_date 倒序取最近 N。 */
-    List<ContentPost> findByAuthorIdAndTypeAndDeletedAtIsNullOrderByEventDateDescCreatedAtDesc(
-            long authorId, ContentType type, Pageable pageable);
+    /**
+     * 名片快乐时刻流（Story 2.6 AC7 · F9）：某作者某类型未删内容，按 event_date 倒序取最近 N。
+     * 内容审核 story 2（§5.4）：叠加 {@code status} 过滤——公开/名片路径传 {@code PUBLISHED}，挂起零泄漏。
+     */
+    List<ContentPost> findByAuthorIdAndTypeAndDeletedAtIsNullAndStatusOrderByEventDateDescCreatedAtDesc(
+            long authorId, ContentType type, PostStatus status, Pageable pageable);
 
     /** 统计：某作者某类型未删且已发布内容数（Story 2.4 AC5 统计栏快乐时刻数）。 */
     long countByAuthorIdAndTypeAndDeletedAtIsNullAndStatus(
@@ -51,12 +54,17 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
 
     /**
      * 「我的发布」（Story 7.1，FR-36）：当前作者未软删的全部内容（三类混合），keyset 游标倒序。
+     *
+     * <p><b>可见性（内容审核 story 2 · D-CM2 核心）</b>：放行作者本人的 {@code PUBLISHED} + {@code UNDER_REVIEW}
+     * ——挂起帖仅作者本人可见（本查询已按 {@code authorId} 收口 + {@code deletedAt IS NULL}，加入 UNDER_REVIEW
+     * 不泄漏）。Feed（{@link #findFeed}）保持仅 PUBLISHED，他人零可见。
      */
     @Query("""
             SELECT p FROM ContentPost p
             WHERE p.authorId = :authorId
               AND p.deletedAt IS NULL
-              AND p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
+              AND (p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
+                   OR p.status = com.tailtopia.content.domain.PostStatus.UNDER_REVIEW)
               AND (:hasCursor = false
                    OR p.createdAt < :cursorTs
                    OR (p.createdAt = :cursorTs AND p.id < :cursorId))

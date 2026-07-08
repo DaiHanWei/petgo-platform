@@ -205,33 +205,101 @@ class ContentServiceTest {
         assertThat(resp.id()).isNotNull();
     }
 
-    // ===== Story 4.3：人工审核开关分支 =====
+    // ===== 内容审核 story 2：分级路由 + 开关分支（AC-B2/B3/B4/G1） =====
 
+    /** AC-B3：开关打开 + 风险 ≥0.8（RISKY，stub-high）→ 落 UNDER_REVIEW + RISK_HIGH + 风险分 + 入队 + 不发事件。 */
     @Test
-    void blockedContentEnqueuedAsUnderReviewWhenManualReviewEnabled() {
+    void riskyContentEnqueuedAsUnderReviewWhenManualReviewEnabled() {
         when(manualReviewGate.enabled()).thenReturn(true);
         var captor = org.mockito.ArgumentCaptor.forClass(ContentPost.class);
 
         ContentPostResponse resp = service.publish(1L,
-                new ContentPostCreateRequest(ContentType.DAILY, null, "ayo main judi online", null), null);
+                new ContentPostCreateRequest(ContentType.DAILY, null, "stub-high borderline text", null), null);
 
-        verify(posts).save(captor.capture()); // 落库（未过审 → 挂起，不再 throw）
-        assertThat(captor.getValue().getStatus())
-                .isEqualTo(com.tailtopia.content.domain.PostStatus.UNDER_REVIEW);
+        verify(posts).save(captor.capture()); // 落库（RISKY → 挂起，不 throw）
+        ContentPost pending = captor.getValue();
+        assertThat(pending.getStatus()).isEqualTo(com.tailtopia.content.domain.PostStatus.UNDER_REVIEW);
+        assertThat(pending.getReviewReason()).isEqualTo("RISK_HIGH");
+        assertThat(pending.getModerationRiskScore()).isNotNull(); // 风险分落库
         verify(manualReviewGate).enqueue(anyLong()); // 入队挂起
-        verify(events, never()).publishEvent(any( // 不进 Feed
+        verify(events, never()).publishEvent(any( // 不进 Feed / 不触发里程碑
                 com.tailtopia.content.event.ContentPublishedEvent.class));
         assertThat(resp.id()).isNotNull();
     }
 
+    /** AC-B3（降级）：开关打开 + 三方降级（stub-timeout）→ 落 UNDER_REVIEW + DEGRADED_FAILCLOSED + 入队。 */
     @Test
-    void blockedContentStillThrowsWhenManualReviewDisabled() {
-        // 默认 enabled()=false（现网行为）：拦截即 throw、不落库、不入队。
+    void degradedContentEnqueuedAsUnderReviewWhenManualReviewEnabled() {
+        when(manualReviewGate.enabled()).thenReturn(true);
+        var captor = org.mockito.ArgumentCaptor.forClass(ContentPost.class);
+
+        ContentPostResponse resp = service.publish(1L,
+                new ContentPostCreateRequest(ContentType.DAILY, null, "stub-timeout content", null), null);
+
+        verify(posts).save(captor.capture());
+        ContentPost pending = captor.getValue();
+        assertThat(pending.getStatus()).isEqualTo(com.tailtopia.content.domain.PostStatus.UNDER_REVIEW);
+        assertThat(pending.getReviewReason()).isEqualTo("DEGRADED_FAILCLOSED");
+        assertThat(pending.getModerationRiskScore()).isNull(); // 降级评分未知 → 不落
+        verify(manualReviewGate).enqueue(anyLong());
+        verify(events, never()).publishEvent(any(
+                com.tailtopia.content.event.ContentPublishedEvent.class));
+        assertThat(resp.id()).isNotNull();
+    }
+
+    /** AC-B2：开关打开时命中 L1 硬拦截仍即时 throw、不落挂起态、不入队（硬拦截不进中间态）。 */
+    @Test
+    void hardBlockedStillThrowsEvenWhenManualReviewEnabled() {
+        when(manualReviewGate.enabled()).thenReturn(true);
         assertThatThrownBy(() -> service.publish(1L,
                 new ContentPostCreateRequest(ContentType.DAILY, null, "ayo main judi online", null), null))
                 .isInstanceOf(AppException.class);
         verify(posts, never()).save(any());
         verify(manualReviewGate, never()).enqueue(anyLong());
+    }
+
+    /** G1：开关关闭时命中 L1 硬拦截即 throw、不落库、不入队（现网 FR-12 行为逐字节不变）。 */
+    @Test
+    void hardBlockedThrowsWhenManualReviewDisabled() {
+        // 默认 enabled()=false（现网行为）。
+        assertThatThrownBy(() -> service.publish(1L,
+                new ContentPostCreateRequest(ContentType.DAILY, null, "ayo main judi online", null), null))
+                .isInstanceOf(AppException.class);
+        verify(posts, never()).save(any());
+        verify(manualReviewGate, never()).enqueue(anyLong());
+    }
+
+    /** G1：开关关闭时风险 ≥0.8（RISKY）按放行发布（PUBLISHED + 发事件），不入队——关态只有硬拦截失败。 */
+    @Test
+    void riskyContentPublishedWhenManualReviewDisabled() {
+        // 默认 enabled()=false。
+        var captor = org.mockito.ArgumentCaptor.forClass(ContentPost.class);
+
+        ContentPostResponse resp = service.publish(1L,
+                new ContentPostCreateRequest(ContentType.DAILY, null, "stub-high borderline text", null), null);
+
+        verify(posts).save(captor.capture());
+        assertThat(captor.getValue().getStatus())
+                .isEqualTo(com.tailtopia.content.domain.PostStatus.PUBLISHED); // 放行发布
+        verify(manualReviewGate, never()).enqueue(anyLong()); // 不入队
+        verify(events).publishEvent(any( // 正常进 Feed / 触发里程碑
+                com.tailtopia.content.event.ContentPublishedEvent.class));
+        assertThat(resp.id()).isNotNull();
+    }
+
+    // ===== 内容审核 story 2：版本键 + 守卫（AC-B8 · D-CM3） =====
+
+    /** AC-B8：新发布内容 content_version 默认 1；审核期版本守卫恒等（当前 dormant no-op 安全）。 */
+    @Test
+    void contentVersionDefaultsToOneAndGuardMatches() {
+        ContentPostResponse resp = service.publish(1L,
+                new ContentPostCreateRequest(ContentType.DAILY, null, "cuaca cerah hari ini", List.of("u1")), null);
+        var captor = org.mockito.ArgumentCaptor.forClass(ContentPost.class);
+        verify(posts).save(captor.capture());
+        ContentPost saved = captor.getValue();
+        assertThat(saved.getContentVersion()).isEqualTo(1);
+        assertThat(saved.matchesContentVersion(1)).isTrue();  // 入队时刻版本一致 → 处置放行
+        assertThat(saved.matchesContentVersion(2)).isFalse(); // 内容已改（未来编辑 +1）→ 旧结果作废
     }
 
     // ===== Story 3.6 删除 =====

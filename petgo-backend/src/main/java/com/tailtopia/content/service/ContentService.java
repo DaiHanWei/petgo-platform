@@ -9,6 +9,7 @@ import com.tailtopia.content.dto.ContentPostCreateRequest;
 import com.tailtopia.content.dto.ContentPostResponse;
 import com.tailtopia.content.event.ContentPublishedEvent;
 import com.tailtopia.content.event.ContentRemovedEvent;
+import com.tailtopia.content.moderation.ModerationOutcome;
 import com.tailtopia.content.repository.CommentRepository;
 import com.tailtopia.content.repository.ContentLikeRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
@@ -245,24 +246,36 @@ public class ContentService {
             petId = null;
         }
 
-        // AC8（R2 · F10）：发布写库前三方自动审核——文字关键词 + 图像识别。
-        ContentModerationService.Verdict verdict = moderation.moderate(text, imageUrls);
-        if (verdict != ContentModerationService.Verdict.PASS) {
-            // Story 4.3：未过自动审核——分支取决于人工审核开关（默认关 = 现网 FR-12 行为）。
-            if (!manualReviewGate.enabled()) {
-                // 默认路径：直接发布失败、不落库、不进队列（现网行为，AC2 必须保持不变）。
-                switch (verdict) {
-                    case TEXT_BLOCKED -> throw AppException.contentTextBlocked("内容包含不当词汇，请修改后重试");
-                    case IMAGE_BLOCKED -> throw AppException.contentImageBlocked("图片包含违规内容，请替换后重试");
-                    default -> { /* 不可达：已确保非 PASS 即 TEXT/IMAGE_BLOCKED */ }
-                }
+        // 发布写库前三方自动审核（内容审核 story 2 · 修订 F10 时序模型，消费 story 1 富评分 evaluate）。
+        // 判定优先级：L1 硬拦截 > 降级 fail-closed > 风险 ≥0.8 > 放行。
+        ModerationOutcome outcome = moderation.evaluate(text, imageUrls);
+        switch (outcome.verdict()) {
+            // ① L1 硬拦截：无论人工审核开关开关，一律即时 throw、不落库、不进挂起态（D-CM2）。
+            case TEXT_BLOCKED -> throw AppException.contentTextBlocked("内容包含不当词汇，请修改后重试");
+            case IMAGE_BLOCKED -> throw AppException.contentImageBlocked("图片包含违规内容，请替换后重试");
+            default -> { /* PASS / RISKY / DEGRADED 走下方分级路由 */ }
+        }
+
+        // ② 需人工挂起的条件：三方降级（fail-closed）或风险 ≥0.8（RISKY）。
+        boolean degraded = outcome.verdict() == ContentModerationService.Verdict.DEGRADED || outcome.degraded();
+        boolean riskHigh = outcome.verdict() == ContentModerationService.Verdict.RISKY;
+        if (degraded || riskHigh) {
+            if (manualReviewGate.enabled()) {
+                // 开关打开：落 UNDER_REVIEW + 审核元数据 + 入队挂起，不发 ContentPublishedEvent
+                // （不进 Feed、不触发里程碑）。返回 200 挂起帖（作者视角=已提交成功，无「审核中」标签）。
+                String reviewReason = degraded ? "DEGRADED_FAILCLOSED" : "RISK_HIGH";
+                java.math.BigDecimal riskScore = outcome.riskScore() >= 0
+                        ? java.math.BigDecimal.valueOf(outcome.riskScore())
+                                .setScale(3, java.math.RoundingMode.HALF_UP)
+                        : null; // 降级评分未知（-1）→ 不落
+                ContentPost pending = posts.save(ContentPost.pendingReview(
+                        authorId, req.type(), petId, text, imageUrls, eventDate, riskScore, reviewReason));
+                idempotency.store(idempotencyKey, pending.getId());
+                manualReviewGate.enqueue(pending.getId());
+                return ContentPostResponse.from(pending);
             }
-            // 人工审核已激活：落 UNDER_REVIEW + 入队挂起，不发 ContentPublishedEvent（不进 Feed）。
-            ContentPost pending = posts.save(ContentPost.pendingReview(
-                    authorId, req.type(), petId, text, imageUrls, eventDate));
-            idempotency.store(idempotencyKey, pending.getId());
-            manualReviewGate.enqueue(pending.getId());
-            return ContentPostResponse.from(pending);
+            // 开关关闭（现网默认）：无队列可挂，按放行发布（G1 关态行为逐字节不变，只有硬拦截失败）。
+            // fall-through 至下方正常发布路径。
         }
 
         ContentPost saved = posts.save(ContentPost.publish(
@@ -325,12 +338,16 @@ public class ContentService {
 
     /**
      * 名片快乐时刻流（Story 2.6 AC7 · F9）：按 {@code event_date} 倒序取最近 limit 条 GROWTH_MOMENT。
-     * 经 service 接口供 H5 名片取数（禁 join）。
+     * 经 service 接口供 H5 名片 / 里程碑打卡候选取数（禁 join）。
+     *
+     * <p><b>可见性（内容审核 story 2 · §5.4 补泄漏口）</b>：仅 {@code PUBLISHED}——名片是他人/公开视角，
+     * 挂起（UNDER_REVIEW）成长时刻零泄漏；里程碑打卡候选亦不含挂起帖（挂起帖不可被打卡关联）。
+     * 作者本人自看时间线（{@link #findGrowthMoments} 等）含挂起帖，口径不同。
      */
     @Transactional(readOnly = true)
     public List<GrowthMomentView> findRecentGrowthMomentsByEventDate(long authorId, int limit) {
-        return posts.findByAuthorIdAndTypeAndDeletedAtIsNullOrderByEventDateDescCreatedAtDesc(
-                        authorId, ContentType.GROWTH_MOMENT, PageRequest.of(0, limit))
+        return posts.findByAuthorIdAndTypeAndDeletedAtIsNullAndStatusOrderByEventDateDescCreatedAtDesc(
+                        authorId, ContentType.GROWTH_MOMENT, PostStatus.PUBLISHED, PageRequest.of(0, limit))
                 .stream()
                 .map(ContentService::toGrowthMomentView)
                 .toList();
