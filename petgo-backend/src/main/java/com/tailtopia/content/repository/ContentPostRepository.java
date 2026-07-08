@@ -119,4 +119,19 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             @Param("cursorTs") Instant cursorTs,
             @Param("cursorId") Long cursorId,
             Pageable pageable);
+
+    /**
+     * 注销联动（内容审核 story 9，§5.5.1）：把注销用户仍在公开/挂起口径的帖子置 {@code AUTHOR_DEACTIVATED}
+     * （对他人隐藏；内容保留 {@code deletedAt IS NULL}，与匿名化并存）。仅动 PUBLISHED/UNDER_REVIEW（幂等）。
+     */
+    @Modifying
+    @Query("""
+            UPDATE ContentPost p
+               SET p.status = com.tailtopia.content.domain.PostStatus.AUTHOR_DEACTIVATED, p.updatedAt = :now
+             WHERE p.authorId = :authorId
+               AND p.deletedAt IS NULL
+               AND p.status IN (com.tailtopia.content.domain.PostStatus.PUBLISHED,
+                                com.tailtopia.content.domain.PostStatus.UNDER_REVIEW)
+            """)
+    int deactivateByAuthor(@Param("authorId") long authorId, @Param("now") Instant now);
 }

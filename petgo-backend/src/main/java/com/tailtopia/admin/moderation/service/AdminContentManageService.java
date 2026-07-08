@@ -2,11 +2,13 @@ package com.tailtopia.admin.moderation.service;
 
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
+import com.tailtopia.admin.moderation.read.ViolationType;
 import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.domain.DeleteReason;
 import com.tailtopia.content.dto.AdminContentRow;
 import com.tailtopia.content.service.ContentService;
 import com.tailtopia.moderation.service.ReportService;
+import com.tailtopia.moderation.violation.service.ViolationCountService;
 import com.tailtopia.shared.error.AppException;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -27,12 +29,14 @@ public class AdminContentManageService {
     private final ContentService contentService;
     private final AdminAuditService auditService;
     private final ReportService reportService;
+    private final ViolationCountService violationCountService;
 
     public AdminContentManageService(ContentService contentService, AdminAuditService auditService,
-            ReportService reportService) {
+            ReportService reportService, ViolationCountService violationCountService) {
         this.contentService = contentService;
         this.auditService = auditService;
         this.reportService = reportService;
+        this.violationCountService = violationCountService;
     }
 
     /** 全量浏览/筛选/搜索。status: ONLINE / DELETED / null=全部；type/authorId/q 任一空忽略。 */
@@ -55,11 +59,19 @@ public class AdminContentManageService {
         if (reason == null || reason.isBlank()) {
             throw AppException.validation("下架原因不能为空");
         }
+        // story 9 幂等（AC-8）：仅当帖当前【未删】时本次下架才是真实迁移 → 计一次。
+        var summary = contentService.findSummary(postId);
+        Long postAuthorId = summary.map(ContentService.PostSummary::authorId).orElse(null);
+        boolean firstTakedown = summary.map(s -> !s.deleted()).orElse(false);
         contentService.softDelete(postId, DeleteReason.ADMIN_TAKEDOWN);
         // bug 20260630-155：内容管理主动下架时同步关闭该帖 PENDING 举报单，避免残留在举报待处理队列。
         reportService.resolvePendingForPost(postId, actorAccountId);
         auditService.record(actorAccountId, AuditActions.CONTENT_TAKEN_DOWN, "CONTENT_POST",
                 String.valueOf(postId), "主动下架内容（原因：" + reason.trim() + "）");
+        // story 9 §5.1：后台巡查下架 = 人工判定违规 → 同事务累加 POST 计数（仅真实下架，幂等）。
+        if (postAuthorId != null && firstTakedown) {
+            violationCountService.record(postAuthorId, ViolationType.POST);
+        }
     }
 
     /** 恢复已下架内容 + 审计。 */

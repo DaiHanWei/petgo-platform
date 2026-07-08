@@ -17,12 +17,14 @@ import com.tailtopia.admin.moderation.domain.ReviewPriority;
 import com.tailtopia.admin.moderation.domain.ReviewStatus;
 import com.tailtopia.admin.moderation.dto.ManualReviewRow;
 import com.tailtopia.admin.moderation.read.ViolationCountReader;
+import com.tailtopia.admin.moderation.read.ViolationType;
 import com.tailtopia.content.domain.CommentModerationStatus;
 import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.moderation.ModerationDecision;
 import com.tailtopia.content.service.CommentService;
 import com.tailtopia.content.service.CommentService.CommentModerationSummary;
 import com.tailtopia.content.service.ContentService;
+import com.tailtopia.moderation.violation.service.ViolationCountService;
 import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.notify.service.NotificationService;
 import com.tailtopia.shared.error.AppException;
@@ -45,6 +47,7 @@ class ManualReviewServiceTest {
     private AdminAuditService auditService;
     private AdminSettingsService settingsService;
     private ViolationCountReader violationCounts;
+    private ViolationCountService violationCountService;
     private ManualReviewService service;
 
     @BeforeEach
@@ -56,8 +59,9 @@ class ManualReviewServiceTest {
         auditService = mock(AdminAuditService.class);
         settingsService = mock(AdminSettingsService.class);
         violationCounts = mock(ViolationCountReader.class);
+        violationCountService = mock(ViolationCountService.class);
         service = new ManualReviewService(queue, contentService, commentService, notifications,
-                auditService, settingsService, violationCounts);
+                auditService, settingsService, violationCounts, violationCountService);
     }
 
     private void stubSummary(long contentId, long authorId) {
@@ -101,6 +105,8 @@ class ManualReviewServiceTest {
         assertThat(item.getStatus()).isEqualTo(ReviewStatus.REJECTED);
         verify(auditService).record(eq(7L), eq(AuditActions.CONTENT_REVIEW_REJECTED), eq("CONTENT_POST"),
                 eq("501"), any());
+        // story 9 §5.1：帖子人工判定拒绝 → 累加作者 POST 计数（同事务）。
+        verify(violationCountService).record(43L, ViolationType.POST);
     }
 
     @Test
@@ -145,6 +151,8 @@ class ManualReviewServiceTest {
         verify(notifications).send(eq(44L), eq(NotificationType.CONTENT_REVIEW_TIMED_OUT), any(), any(), any(), any());
         verify(auditService).record(eq(null), eq(AuditActions.CONTENT_REVIEW_TIMED_OUT), eq("CONTENT_POST"),
                 eq("600"), any());
+        // story 9 §5.1：帖子队列超时丢弃 → 累加作者 POST 计数。
+        verify(violationCountService).record(44L, ViolationType.POST);
     }
 
     // ===== story 3：评论多态分派（AC-B4/B5/B8） =====
@@ -179,6 +187,8 @@ class ManualReviewServiceTest {
         verify(notifications).send(eq(56L), eq(NotificationType.CONTENT_REMOVED), any(), any(), any(), eq("9"));
         verify(auditService).record(eq(7L), eq(AuditActions.CONTENT_REVIEW_REJECTED), eq("COMMENT"),
                 eq("701"), any());
+        // story 9 §5.1：评论人工审核拒绝【不计入】违规计数（COMMENT 仅 FR-55A 巡查下架计，非此路径）。
+        verify(violationCountService, never()).record(anyLong(), any());
     }
 
     @Test

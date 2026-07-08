@@ -4,8 +4,11 @@ import com.tailtopia.account.domain.AccountDeletion;
 import com.tailtopia.account.domain.DeletionStatus;
 import com.tailtopia.account.event.AccountDeletionRequestedEvent;
 import com.tailtopia.account.repository.AccountDeletionRepository;
+import com.tailtopia.admin.moderation.service.ManualReviewService;
 import com.tailtopia.auth.service.AuthAccountDeletionService;
 import com.tailtopia.consult.service.ConsultAnonymizationService;
+import com.tailtopia.content.service.ContentService;
+import com.tailtopia.moderation.violation.service.ViolationCountService;
 import com.tailtopia.notify.service.NotificationDeletionService;
 import com.tailtopia.profile.service.ProfileDeletionService;
 import com.tailtopia.shared.im.ImAccountMapper;
@@ -46,13 +49,18 @@ public class AccountDeletionService {
     private final MediaDeletionService mediaDeletion;
     private final TencentImClient imClient;
     private final ApplicationEventPublisher events;
+    // 内容审核 story 9 注销联动：内容隐藏 + 队列移除 + 违规计数删除。
+    private final ContentService contentService;
+    private final ManualReviewService reviewService;
+    private final ViolationCountService violationCountService;
 
     public AccountDeletionService(AccountDeletionRepository deletions,
             ProfileDeletionService profileDeletion, TriageDeletionService triageDeletion,
             ConsultAnonymizationService consultAnonymization,
             NotificationDeletionService notificationDeletion, AuthAccountDeletionService authDeletion,
             MediaDeletionService mediaDeletion, TencentImClient imClient,
-            ApplicationEventPublisher events) {
+            ApplicationEventPublisher events, ContentService contentService,
+            ManualReviewService reviewService, ViolationCountService violationCountService) {
         this.deletions = deletions;
         this.profileDeletion = profileDeletion;
         this.triageDeletion = triageDeletion;
@@ -62,6 +70,9 @@ public class AccountDeletionService {
         this.mediaDeletion = mediaDeletion;
         this.imClient = imClient;
         this.events = events;
+        this.contentService = contentService;
+        this.reviewService = reviewService;
+        this.violationCountService = violationCountService;
     }
 
     /** 受理注销（双重确认在 web 层校验）：登记 PENDING（幂等）+ 发事件触发异步作业（AFTER_COMMIT）。 */
@@ -98,6 +109,15 @@ public class AccountDeletionService {
                 .merge(triageDeletion.deleteByUserId(userId))
                 .merge(consultAnonymization.anonymizeByUserId(userId));
         notificationDeletion.deleteByUserId(userId);
+
+        // 内容审核 story 9 注销联动（§5.5）：必须在 user 行删除【前】完成——此时 author_id 仍可识别其内容。
+        //  ① 帖子/评论对他人隐藏（AUTHOR_DEACTIVATED，保留匿名化，可见性层≠7-3显示层匿名化，D-CM4）；
+        //  ② 人工审核队列 PENDING 条目移出（不再发布，内容随注销对所有人不可见）；
+        //  ③ 违规计数行随注销删除（D1/D2；处置审计证据留 admin_audit_logs，§5.5 R2）。各自事务、幂等可重跑。
+        contentService.deactivateAuthorContent(userId);
+        reviewService.removePendingForAuthor(userId);
+        violationCountService.deleteByAccount(userId);
+
         // auth 最后删（用户行删除后 UGC 即匿名）；收头像图。
         media = media.merge(authDeletion.deleteByUserId(userId));
 

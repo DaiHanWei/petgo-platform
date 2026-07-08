@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.List;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -94,4 +95,20 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
             """)
     List<Comment> findRepliesForParents(@Param("parentIds") List<Long> parentIds,
             @Param("viewerId") Long viewerId);
+
+    /**
+     * 注销联动（内容审核 story 9，§5.5.1）：把注销用户仍对他人可见/挂起的评论置 {@code AUTHOR_DEACTIVATED}
+     * （非 VISIBLE 即对他人不可见；内容保留 {@code deletedAt IS NULL}）。仅动 VISIBLE/UNDER_REVIEW（幂等）。
+     */
+    @Modifying
+    @Query("""
+            UPDATE Comment c
+               SET c.moderationStatus = com.tailtopia.content.domain.CommentModerationStatus.AUTHOR_DEACTIVATED,
+                   c.updatedAt = :now
+             WHERE c.authorId = :authorId
+               AND c.deletedAt IS NULL
+               AND c.moderationStatus IN (com.tailtopia.content.domain.CommentModerationStatus.VISIBLE,
+                                          com.tailtopia.content.domain.CommentModerationStatus.UNDER_REVIEW)
+            """)
+    int deactivateByAuthor(@Param("authorId") long authorId, @Param("now") Instant now);
 }

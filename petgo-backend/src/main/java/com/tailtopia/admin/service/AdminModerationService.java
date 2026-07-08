@@ -2,8 +2,10 @@ package com.tailtopia.admin.service;
 
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
+import com.tailtopia.admin.moderation.read.ViolationType;
 import com.tailtopia.content.domain.DeleteReason;
 import com.tailtopia.content.service.ContentService;
+import com.tailtopia.moderation.violation.service.ViolationCountService;
 import com.tailtopia.moderation.domain.ContentReport;
 import com.tailtopia.moderation.domain.ReportStatus;
 import com.tailtopia.moderation.event.ReportResolvedEvent;
@@ -35,16 +37,19 @@ public class AdminModerationService {
     private final ContentService contentService;
     private final AdminAuditService auditService;
     private final ApplicationEventPublisher events;
+    private final ViolationCountService violationCountService;
     /** 自引用（经代理）：批量逐条调用以让每条走独立事务（避免自调用绕过事务代理）。 */
     private final org.springframework.beans.factory.ObjectProvider<AdminModerationService> selfProvider;
 
     public AdminModerationService(ReportService reportService, ContentService contentService,
             AdminAuditService auditService, ApplicationEventPublisher events,
+            ViolationCountService violationCountService,
             org.springframework.beans.factory.ObjectProvider<AdminModerationService> selfProvider) {
         this.reportService = reportService;
         this.contentService = contentService;
         this.auditService = auditService;
         this.events = events;
+        this.violationCountService = violationCountService;
         this.selfProvider = selfProvider;
     }
 
@@ -95,11 +100,19 @@ public class AdminModerationService {
         ContentReport r = reportService.find(reportId)
                 .orElseThrow(() -> AppException.notFound("举报工单不存在"));
         long handler = handlerId(admin);
+        // story 9 幂等（AC-8）：仅当帖当前【未删】时本次下架才是真实迁移 → 计一次；已删再下架为 no-op 不重复计数。
+        var summary = contentService.findSummary(r.getPostId());
+        Long postAuthorId = summary.map(ContentService.PostSummary::authorId).orElse(null);
+        boolean firstTakedown = summary.map(s -> !s.deleted()).orElse(false);
         contentService.softDelete(r.getPostId(), DeleteReason.ADMIN_TAKEDOWN); // 作者通知经既有 ContentRemovedEvent
         // 该帖全部 PENDING 举报单一并 RESOLVED（含本单；P0 多单场景避免残留，bug 20260630-155 同源）。
         reportService.resolvePendingForPost(r.getPostId(), handler);
         auditService.record(admin.getAdminAccountId(), AuditActions.CONTENT_TAKEN_DOWN, "CONTENT_REPORT",
                 String.valueOf(reportId), "下架被举报内容（工单 " + reportId + " / 帖 " + r.getPostId() + "）");
+        // story 9 §5.1：举报人工判定下架 = 人工判定违规 → 同事务累加 POST 计数（仅真实下架，幂等）。
+        if (postAuthorId != null && firstTakedown) {
+            violationCountService.record(postAuthorId, ViolationType.POST);
+        }
         notifyReporter(r);
         log.info("运营下架内容 reportId={} postId={} adminAccountId={}", reportId, r.getPostId(),
                 admin.getAdminAccountId());

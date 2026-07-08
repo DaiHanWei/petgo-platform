@@ -32,6 +32,7 @@ class AdminModerationServiceTest {
     private ContentService contentService;
     private AdminAuditService auditService;
     private ApplicationEventPublisher events;
+    private com.tailtopia.moderation.violation.service.ViolationCountService violationCountService;
     private AdminModerationService service;
 
     @BeforeEach
@@ -40,7 +41,9 @@ class AdminModerationServiceTest {
         contentService = mock(ContentService.class);
         auditService = mock(AdminAuditService.class);
         events = mock(ApplicationEventPublisher.class);
-        service = new AdminModerationService(reportService, contentService, auditService, events, null);
+        violationCountService = mock(com.tailtopia.moderation.violation.service.ViolationCountService.class);
+        service = new AdminModerationService(reportService, contentService, auditService, events,
+                violationCountService, null);
     }
 
     private AdminUserDetails admin() {

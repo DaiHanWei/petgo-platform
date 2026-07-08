@@ -2,8 +2,10 @@ package com.tailtopia.admin.moderation.service;
 
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
+import com.tailtopia.admin.moderation.read.ViolationType;
 import com.tailtopia.content.service.CommentService;
 import com.tailtopia.content.service.CommentService.CommentModerationSummary;
+import com.tailtopia.moderation.violation.service.ViolationCountService;
 import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.notify.service.NotificationService;
 import com.tailtopia.shared.error.AppException;
@@ -26,12 +28,14 @@ public class AdminCommentManageService {
     private final CommentService commentService;
     private final NotificationService notifications;
     private final AdminAuditService auditService;
+    private final ViolationCountService violationCountService;
 
     public AdminCommentManageService(CommentService commentService, NotificationService notifications,
-            AdminAuditService auditService) {
+            AdminAuditService auditService, ViolationCountService violationCountService) {
         this.commentService = commentService;
         this.notifications = notifications;
         this.auditService = auditService;
+        this.violationCountService = violationCountService;
     }
 
     /**
@@ -51,6 +55,8 @@ public class AdminCommentManageService {
             // 原因进审计（不进作者通知，与帖子下架一致）。
             auditService.record(actorAccountId, AuditActions.COMMENT_TAKEN_DOWN, "COMMENT",
                     String.valueOf(commentId), "主动下架评论（原因：" + reason.trim() + "）");
+            // story 9 §5.1：评论 FR-55A 巡查下架 = 人工判定违规 → 同事务累加 COMMENT 计数（仅真实迁移时，幂等）。
+            violationCountService.record(s.authorId(), ViolationType.COMMENT);
         });
     }
 

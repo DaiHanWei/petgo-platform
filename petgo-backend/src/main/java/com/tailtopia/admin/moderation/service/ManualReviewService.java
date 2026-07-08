@@ -9,11 +9,13 @@ import com.tailtopia.admin.moderation.domain.ReviewStatus;
 import com.tailtopia.admin.moderation.dto.ManualReviewRow;
 import com.tailtopia.admin.moderation.dto.ViolationCounts;
 import com.tailtopia.admin.moderation.read.ViolationCountReader;
+import com.tailtopia.admin.moderation.read.ViolationType;
 import com.tailtopia.admin.moderation.repository.ManualReviewItemRepository;
 import com.tailtopia.content.moderation.ModerationDecision;
 import com.tailtopia.content.service.CommentService;
 import com.tailtopia.content.service.CommentService.CommentModerationSummary;
 import com.tailtopia.content.service.ContentService;
+import com.tailtopia.moderation.violation.service.ViolationCountService;
 import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.notify.service.NotificationService;
 import com.tailtopia.shared.error.AppException;
@@ -50,11 +52,12 @@ public class ManualReviewService {
     private final AdminAuditService auditService;
     private final AdminSettingsService settingsService;
     private final ViolationCountReader violationCounts;
+    private final ViolationCountService violationCountService;
 
     public ManualReviewService(ManualReviewItemRepository queue, ContentService contentService,
             CommentService commentService, NotificationService notifications,
             AdminAuditService auditService, AdminSettingsService settingsService,
-            ViolationCountReader violationCounts) {
+            ViolationCountReader violationCounts, ViolationCountService violationCountService) {
         this.queue = queue;
         this.contentService = contentService;
         this.commentService = commentService;
@@ -62,6 +65,7 @@ public class ManualReviewService {
         this.auditService = auditService;
         this.settingsService = settingsService;
         this.violationCounts = violationCounts;
+        this.violationCountService = violationCountService;
     }
 
     /**
@@ -146,6 +150,7 @@ public class ManualReviewService {
                     "评论人工审核拒绝（队列项 #" + itemId + "）；" + d.auditFragment());
             return;
         }
+        Long authorId = postAuthorId(it.getContentId());
         contentService.discardReview(it.getContentId());
         notifyPostAuthor(it.getContentId(), NotificationType.CONTENT_REVIEW_REJECTED,
                 "内容未通过审核", "您的内容未通过人工审核，未予发布。");
@@ -153,6 +158,8 @@ public class ManualReviewService {
         queue.save(it);
         auditService.record(actorAccountId, AuditActions.CONTENT_REVIEW_REJECTED, "CONTENT_POST",
                 String.valueOf(it.getContentId()), "人工审核拒绝（队列项 #" + itemId + "）；" + d.auditFragment());
+        // story 9 §5.1：帖子 FR-12A 人工判定拒绝 = 人工判定违规 → 同事务累加 POST 计数。
+        recordPostViolation(authorId);
     }
 
     /**
@@ -189,6 +196,7 @@ public class ManualReviewService {
                         "评论人工审核超时自动丢弃（队列项 #" + it.getId() + "）");
                 processed++;
             } else if (postGateEnabled) {
+                Long authorId = postAuthorId(it.getContentId());
                 contentService.discardReview(it.getContentId());
                 notifyPostAuthor(it.getContentId(), NotificationType.CONTENT_REVIEW_TIMED_OUT,
                         "内容未通过审核", "您的内容超过审核时限未处理，未予发布。");
@@ -196,6 +204,8 @@ public class ManualReviewService {
                 queue.save(it);
                 auditService.record(null, AuditActions.CONTENT_REVIEW_TIMED_OUT, "CONTENT_POST",
                         String.valueOf(it.getContentId()), "人工审核超时自动丢弃（队列项 #" + it.getId() + "）");
+                // story 9 §5.1：帖子 FR-12A 队列超时丢弃 = 人工判定违规 → 同事务累加 POST 计数。
+                recordPostViolation(authorId);
                 processed++;
             }
         }
@@ -237,6 +247,27 @@ public class ManualReviewService {
             return true;
         }
         return false;
+    }
+
+    /**
+     * 注销联动（story 9，§5.5.2）：把注销用户在队列中的 PENDING 条目移出队列（置 TIMED_OUT 终态），对应内容
+     * 不再发布（内容已由注销隐藏，作者已注销即对所有人不可见）。native 批量按内容作者子查询，幂等。
+     */
+    @Transactional
+    public int removePendingForAuthor(long authorId) {
+        return queue.deactivatePendingByAuthor(authorId);
+    }
+
+    /** 帖子作者 id（累加违规计数用）；内容不可解析则 null。 */
+    private Long postAuthorId(long contentId) {
+        return contentService.findSummary(contentId).map(ContentService.PostSummary::authorId).orElse(null);
+    }
+
+    /** 帖子人工判定违规 → 累加 POST 计数（§5.1；作者不可解析则跳过）。 */
+    private void recordPostViolation(Long authorId) {
+        if (authorId != null) {
+            violationCountService.record(authorId, ViolationType.POST);
+        }
     }
 
     private ManualReviewItem requirePending(long itemId) {

@@ -105,6 +105,19 @@ public class ContentService {
         }
     }
 
+    /**
+     * 注销联动（内容审核 story 9，§5.5.1）：把注销用户的帖子 + 评论置「作者已注销隐藏」态——对他人不可见、
+     * 内容保留（{@code deletedAt IS NULL}，与「已注销用户」匿名化并存；可见性层 ≠ 显示层，D-CM4 三机制之一）。
+     * 经门面批量收口（禁 admin/account 直读 content repo）。幂等（仅动仍可见/挂起态）。在 user 行删除前调用。
+     */
+    @Transactional
+    public void deactivateAuthorContent(long userId) {
+        Instant now = Instant.now();
+        int posted = posts.deactivateByAuthor(userId, now);
+        int commented = comments.deactivateByAuthor(userId, now);
+        log.info("注销联动内容隐藏 userId(agent) posts={} comments={}", posted, commented);
+    }
+
     /** 迷你主页发布数（Story 3.8）：某作者未软删的已发布内容数。经 service 暴露，不让 auth 直读 content 表。 */
     @Transactional(readOnly = true)
     public long countPublishedByAuthor(long authorId) {
