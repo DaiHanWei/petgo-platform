@@ -50,7 +50,7 @@
 # - 跨 story 决策清单见 implementation-artifacts/CROSS-STORY-DECISIONS.md
 
 generated: 2026-06-01
-last_updated: 2026-06-09  # 2.3/2.4/2.5 R2 完成
+last_updated: 2026-07-08  # 登记内容审核补充规范 cm-1~cm-9 (spec-*, Flyway V47→V55, PR #29)
 project: petgo-platform
 # epic-1 -> in-progress (首个 story 1.1 已 contexted)
 #
@@ -164,6 +164,27 @@ development_status:
   8-4-里程碑用户打卡两路径: review            # 后端打卡 API(关联成长日历内容, 一内容一里程碑不可重复) + 前端内容关联选择器(置灰已关联) + 去发布跳转预选成长日历 + 发布成功自动完成回填 ·完成(L0 绿: 后端 MilestoneCheckInService(candidates+linked标记/checkIn校验打卡类·未完成·本人成长日历·未被关联→USER_CHECKIN+linkedContentId)+ContentService.isOwnGrowthMoment+GET candidates/POST {code}/check-in; 前端 picker bottom sheet(置灰已关联/选择→checkIn刷新)替占位+去发布?milestoneCode线程进PublishComposePage发布成功回填+mock candidates/check-in; MilestoneCheckInServiceTest6例+picker widget test+候选契约金标; L1真打卡落库/去发布回填待本地)
   8-5-里程碑三级庆祝动效: review              # 前端: S 半屏弹层1-2s / M 全屏3s+徽章解锁 / L Duolingo开宝箱; 完成后按级触发; mint 风格
   8-6-l级里程碑达成推送与分享卡: review        # 后端 L级完成→MILESTONE_NODE 推送(接 6-1 NotificationService, 复用 6-7 切片) + 前端 L级分享卡生成 + 分享 WhatsApp/Instagram; 连带 6-6 铃铛里程碑条改真数据
+
+  # ===== 内容审核补充规范 (CM1-CM8, 2026-07-08 拆解 spec-*) =====
+  # 来源: planning-artifacts/content-moderation-plan-v1.0.1.md → 9 份 spec-content-moderation-*.md
+  #   (总览 spec-content-moderation-overview.md)。跨-story 决策见 CROSS-STORY-DECISIONS CM1-CM8。PR #29。
+  # 性质: 在【已实现基建】(举报 content_reports/V11 + 人工队列 V41 + 后台处置 + 审核通知 V40/V43)
+  #   上补增量, 多为 delta; 全新面仅评论审核/名称头像审核/违规计数。已实现部分标注复用勿重建。
+  # 执行序 = 依赖序 cm-1→cm-9; Flyway 占位 V47→V55 单调 (实际号 CI 落地按合并顺序顺延, E2; 当前 main 冻结 V46)。
+  # 前置阻断: cm-1 阿里云印尼语实测(D-CM8, 不足则词库硬匹配兜底); cm-2 修订 F10(CM1)建议架构复核(非阻塞)。
+  # 排序依赖: cm-7 通知类型 CHECK(V53)须先于 cm-4/cm-5 合并(CM3), 否则通知 INSERT 撞 CHECK。
+  # 状态 ready-for-dev = spec 定稿待 dev; 走 spec-* 增量惯例(不 create 编号 story)。后端→前端→联调; 云端 L0/L1-L2 留本地。
+  内容审核补充规范: ready-for-dev
+  cm-1-阿里云内容安全接入与词库: ready-for-dev        # spec-content-moderation-aliyun-provider.md · 替换 ContentModerationService stub→阿里云green(文字+图像)+风险评分+L1/L2/L3词库(白名单优先)+fail-closed降级; shim保ContentService零改动; Flyway V47(moderation_keyword_rules); 12 AC; ⚠️前置:印尼语实测(D-CM8); L0云端/三方真连+印尼语L2待本地
+  cm-2-帖子审核可见性模型与激活FR-12A: ready-for-dev  # spec-...-post-review.md · 激活manual_review_enabled+≥0.8入队+「仅作者可见」挂起态(修订F10=CM1,追加F10-CM行)+编辑重审版本键(帖子create-only暂dormant)+改findMyPosts/成长时间线status过滤(堵泄漏口); Flyway V48(ALTER content_posts); 16 AC; 依赖cm-1评分; ⚠️CM1建议架构复核
+  cm-3-评论审核与巡查下架: ready-for-dev              # spec-...-comment-review.md · 评论创建同步拦截(L1+≥0.8)+失败降级入队(扩manual_review_queue.content_type=队列owner,CM2)+FR-55A巡查下架/恢复+「新评论」通知仅审核通过后发+编辑重审; Flyway V49(ALTER comments+queue content_type); 14 AC; 依赖cm-1
+  cm-4-昵称宠物名异步审核与重置默认编码名: ready-for-dev  # spec-...-name-review.md · 先放行→@Async审核→违规重置user_/Pet_不可枚举编码名(无7天/无限权/无***,CM8)+编辑重审版本键+通知§8.1/8.2; 独立表name_moderation_records(CM2); Flyway V50; 14 AC; 依赖cm-1文字审核+cm-7通知类型(CM3先落); ⚠️与注销匿名化区分(D-CM4)
+  cm-5-头像异步图像审核与重置默认头像: ready-for-dev  # spec-...-avatar-review.md · 先放行(可见窗口期为已知权衡)→@Async图像审核(§4.2阈值)→违规重置默认头像+编辑重审+通知§8.10; 独立表avatar_reviews(CM2); Flyway V51; 22 AC; 依赖cm-1图像+复用cm-4重置模式
+  cm-6-举报处置增强P0P1P2: ready-for-dev             # spec-...-report-triage.md · 复用content_reports; 唯一举报用户数≥10→P0自动挂起(复用cm-2挂起态)/3-9→P1/单次→P2+单ILLEGAL即P0(CM4)+举报者隐藏(读路径findFeed NOT EXISTS→计数天然去重)+下架通知§8.9(复用CONTENT_REMOVED); Flyway V52(ALTER content_posts report_hidden_at); 15 AC; 依赖cm-2挂起态
+  cm-7-通知文案i18n与隐藏才通知收口: ready-for-dev    # spec-...-notifications-i18n.md · §8全部模板落app_id/en.arb(后端只发type+targetRef不下发显示串)+隐藏才通知(删CONTENT_REVIEW_APPROVED发送/§8.4/§8.6,CM7)+新增NAME_RESET/AVATAR_RESET/CONTENT_REVIEW_TIMED_OUT(单型+targetRef派生,CM3); Flyway V53(notifications.type CHECK扩展); 13 AC; ⚠️须先于cm-4/cm-5合并
+  cm-8-运营后台审核增强: ready-for-dev               # spec-...-admin-console.md · 增量不重建; manual_review_queue加priority(≠举报P0P1P2轴,CM6)+名称/头像处置SSR入口(委托cm-4/5)+违规计数展示(ViolationCountReader读cm-9,端口占位化解8↔9倒置)+§5.2处置记录折叠审计+§5.5留存无限期/审核证据日志分列/申诉不提供; Flyway V54(ALTER queue priority); 15 AC
+  cm-9-账号违规计数与注销默认隐藏联动: ready-for-dev  # spec-...-account-strikes.md · violation_counts(账号+类型POST/COMMENT/NAME/AVATAR)仅计人工判定(评论自动拦截不计)+仅记录不处置(为V2预留)+注销默认内容隐藏(可见性层≠7-3匿名化显示层)+队列条目随注销移除+计数注销级联(CM5); Flyway V55(新表violation_counts); 13 AC; 处置点接线cm-2/3/4/5/6+注销7-3
+  内容审核补充规范-retrospective: optional
 
   # ===== Backlog 登记 (非 V1.0.0, 不实现) =====
   # 1.1.0: Apple 登录 (iOS App Store 要求, 靠 1-3 多 IdP 预留); 支付基建 (GoPay/OVO)。
