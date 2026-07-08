@@ -66,7 +66,7 @@ class ManualReviewServiceTest {
     }
 
     @Test
-    void approvePublishesNotifiesAndAudits() {
+    void approvePublishesSilentlyAndAudits() {
         ManualReviewItem item = ManualReviewItem.pending(500L, Instant.now());
         when(queue.findById(9L)).thenReturn(Optional.of(item));
         stubSummary(500L, 42L);
@@ -74,7 +74,8 @@ class ManualReviewServiceTest {
         service.approve(9L, 7L);
 
         verify(contentService).approveReview(500L);
-        verify(notifications).send(eq(42L), eq(NotificationType.CONTENT_REVIEW_APPROVED), any(), any(), any(), any());
+        // D-CM6（cm-7）：审核通过静默转正，不再给帖子作者发通知；审计仍记（解耦）。
+        verify(notifications, never()).send(anyLong(), any(), any(), any(), any(), any());
         assertThat(item.getStatus()).isEqualTo(ReviewStatus.APPROVED);
         verify(queue).save(item);
         verify(auditService).record(eq(7L), eq(AuditActions.CONTENT_REVIEW_APPROVED), eq("CONTENT_POST"),
@@ -134,7 +135,8 @@ class ManualReviewServiceTest {
         assertThat(n).isEqualTo(1);
         verify(contentService).discardReview(600L);
         assertThat(expired.getStatus()).isEqualTo(ReviewStatus.TIMED_OUT);
-        verify(notifications).send(eq(44L), eq(NotificationType.CONTENT_REVIEW_REJECTED), any(), any(), any(), any());
+        // cm-7：超时丢弃发新 CONTENT_REVIEW_TIMED_OUT（§8.8 文案不同），不再复用 REJECTED。
+        verify(notifications).send(eq(44L), eq(NotificationType.CONTENT_REVIEW_TIMED_OUT), any(), any(), any(), any());
         verify(auditService).record(eq(null), eq(AuditActions.CONTENT_REVIEW_TIMED_OUT), eq("CONTENT_POST"),
                 eq("600"), any());
     }

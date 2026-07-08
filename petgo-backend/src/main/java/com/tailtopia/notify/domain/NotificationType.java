@@ -45,5 +45,11 @@ public enum NotificationType {
      * "USER_AVATAR" → 跳我的页换头像入口；否则为宠物 cardToken → 跳该宠物档案编辑页换头像。
      * 显示串由 App 按 type 本地化（arb 文案归 cm-7），后端只发结构化通知。
      */
-    AVATAR_RESET
+    AVATAR_RESET,
+    /**
+     * 帖子人工审核队列超过 3 天未处理、自动超时丢弃 → 通知作者（内容审核 story 7，§8.8）。
+     * 与 {@link #CONTENT_REVIEW_REJECTED}（人工拒绝，§8.7）文案不同故拆型；App 只能按 type 本地化。
+     * {@code targetRef=null}（内容已丢弃、无深链，提示重发）。
+     */
+    CONTENT_REVIEW_TIMED_OUT
 }

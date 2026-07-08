@@ -74,7 +74,13 @@ class DeepLinkRoutes {
         return '/content/$targetRef';
       case 'CONTENT_COMMENTED':
         return commentAnchor ? '/content/$targetRef?focus=comments' : '/content/$targetRef';
+      case 'CONTENT_REMOVED':
+        // 内容下架（内容审核 cm-3 评论 / cm-6 举报下架 / 既有帖子下架）：targetRef=postId → 作者本人可见的内容详情。
+        // 帖子/评论都用 postId，App 无法区分 → 统一落帖子详情（评论仍在该帖内可见）。
+        return '/content/$targetRef';
       default:
+        // CONTENT_REVIEW_REJECTED / CONTENT_REVIEW_TIMED_OUT / REPORT_REVIEWED：
+        // targetRef=null 已在上方短路兜底（无深链，点击不跳）；此处为其它未知类兜底。
         return notificationsCenter;
     }
   }

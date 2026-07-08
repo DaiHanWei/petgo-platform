@@ -54,6 +54,22 @@ void main() {
     expect(DeepLinkRoutes.pushPayloadToLocation('AVATAR_RESET', null), '/me');
   });
 
+  test('CONTENT_REMOVED（内容审核 cm-3/6）→ targetRef=postId 落内容详情（帖子/评论共用）', () {
+    expect(DeepLinkRoutes.pushPayloadToLocation('CONTENT_REMOVED', '42'), '/content/42');
+    // 空/缺 targetRef → 无深链兜底（不拼非法路由）
+    expect(DeepLinkRoutes.pushPayloadToLocation('CONTENT_REMOVED', null),
+        DeepLinkRoutes.notificationsCenter);
+  });
+
+  test('REJECTED / TIMED_OUT / REPORT_REVIEWED（targetRef=null）→ 无深链，点击不跳（落兜底）', () {
+    expect(DeepLinkRoutes.pushPayloadToLocation('CONTENT_REVIEW_REJECTED', null),
+        DeepLinkRoutes.notificationsCenter);
+    expect(DeepLinkRoutes.pushPayloadToLocation('CONTENT_REVIEW_TIMED_OUT', null),
+        DeepLinkRoutes.notificationsCenter);
+    expect(DeepLinkRoutes.pushPayloadToLocation('REPORT_REVIEWED', null),
+        DeepLinkRoutes.notificationsCenter);
+  });
+
   test('未知 type / 空 token → 通知中心兜底（不崩溃）', () {
     expect(DeepLinkRoutes.pushPayloadToLocation('SOMETHING_NEW', 'x'),
         DeepLinkRoutes.notificationsCenter);

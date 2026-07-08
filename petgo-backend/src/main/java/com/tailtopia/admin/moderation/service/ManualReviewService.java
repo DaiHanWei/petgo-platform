@@ -101,8 +101,7 @@ public class ManualReviewService {
             return;
         }
         contentService.approveReview(it.getContentId());
-        notifyPostAuthor(it.getContentId(), NotificationType.CONTENT_REVIEW_APPROVED,
-                "内容已通过审核", "您的内容已通过人工审核，现已发布。");
+        // D-CM6：正向静默——审核通过不给帖子作者发通知（作者本就在「我的发布」可见）。审计仍记（解耦）。
         it.decide(ReviewStatus.APPROVED, actorAccountId, Instant.now());
         queue.save(it);
         auditService.record(actorAccountId, AuditActions.CONTENT_REVIEW_APPROVED, "CONTENT_POST",
@@ -148,7 +147,7 @@ public class ManualReviewService {
                 processed++;
             } else if (postGateEnabled) {
                 contentService.discardReview(it.getContentId());
-                notifyPostAuthor(it.getContentId(), NotificationType.CONTENT_REVIEW_REJECTED,
+                notifyPostAuthor(it.getContentId(), NotificationType.CONTENT_REVIEW_TIMED_OUT,
                         "内容未通过审核", "您的内容超过审核时限未处理，未予发布。");
                 it.decide(ReviewStatus.TIMED_OUT, null, now);
                 queue.save(it);
