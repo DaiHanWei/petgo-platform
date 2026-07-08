@@ -75,6 +75,14 @@ public final class AuditActions {
     /** 异常工单标记已处理/归档（Story 5.1）。 */
     public static final String ANOMALY_RESOLVED = "ANOMALY_RESOLVED";
 
+    // ===== 内容审核补充规范 story 8（后台审核增强）=====
+    /** 调整人工审核队列项优先级（story 8，§5.1，含旧→新优先级）。 */
+    public static final String REVIEW_PRIORITY_CHANGED = "REVIEW_PRIORITY_CHANGED";
+    /** 名称违规重置为系统默认编码名（story 4 处置，story 8 后台入口触发；summary 含判定依据/备注，无名称原文）。 */
+    public static final String NAME_RESET = "NAME_RESET";
+    /** 头像违规重置为平台默认头像（story 5 处置，story 8 后台入口触发；summary 含判定依据/备注，无图片 URL）。 */
+    public static final String AVATAR_RESET = "AVATAR_RESET";
+
     private AuditActions() {
     }
 }

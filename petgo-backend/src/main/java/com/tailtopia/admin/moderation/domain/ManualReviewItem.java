@@ -43,6 +43,14 @@ public class ManualReviewItem {
     @Column(name = "status", nullable = false, length = 16)
     private ReviewStatus status = ReviewStatus.PENDING;
 
+    /**
+     * 处理优先级（story 8，§5.1；通用「处理紧急度」轴，≠ 举报 P0/P1/P2）。生产者入队时可覆写；
+     * 未显式标注默认 {@link ReviewPriority#P1}（不沉底）。队列按 priority 升序 + submitted_at 升序展示。
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "priority", nullable = false, length = 8)
+    private ReviewPriority priority = ReviewPriority.P1;
+
     /** 处置人 admin_accounts.id（PENDING 时空）。 */
     @Column(name = "decided_by")
     private Long decidedBy;
@@ -59,13 +67,22 @@ public class ManualReviewItem {
     protected ManualReviewItem() {
     }
 
-    /** 新建帖子挂起项（PENDING，{@code content_type=CONTENT_POST}）。 */
+    /** 新建帖子挂起项（PENDING，{@code content_type=CONTENT_POST}，默认优先级 P1）。 */
     public static ManualReviewItem pending(long contentId, Instant submittedAt) {
+        return pending(contentId, submittedAt, ReviewPriority.P1);
+    }
+
+    /**
+     * 新建帖子挂起项并指定优先级（story 8，§5.1）。生产者（story 2/3）入队时可据风险来源标 P0/P1/P2；
+     * null 归默认 P1。
+     */
+    public static ManualReviewItem pending(long contentId, Instant submittedAt, ReviewPriority priority) {
         ManualReviewItem it = new ManualReviewItem();
         it.contentId = contentId;
         it.contentType = ReviewContentType.CONTENT_POST;
         it.submittedAt = submittedAt;
         it.status = ReviewStatus.PENDING;
+        it.priority = priority == null ? ReviewPriority.P1 : priority;
         return it;
     }
 
@@ -85,6 +102,11 @@ public class ManualReviewItem {
         this.status = terminal;
         this.decidedBy = decidedBy;
         this.decidedAt = decidedAt;
+    }
+
+    /** 运营调整优先级（story 8，§5.1；仅 PENDING 项，门控在 service 层）。null 归默认 P1。 */
+    public void changePriority(ReviewPriority priority) {
+        this.priority = priority == null ? ReviewPriority.P1 : priority;
     }
 
     @PrePersist
@@ -121,6 +143,10 @@ public class ManualReviewItem {
 
     public ReviewStatus getStatus() {
         return status;
+    }
+
+    public ReviewPriority getPriority() {
+        return priority;
     }
 
     public Long getDecidedBy() {

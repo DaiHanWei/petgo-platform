@@ -33,6 +33,7 @@
             <thead>
             <tr>
                 <th th:text="#{admin.review.col.item}">队列项</th>
+                <th th:text="#{admin.review.col.priority}">优先级</th>
                 <th th:text="#{admin.review.col.content}">内容</th>
                 <th th:text="#{admin.review.col.type}">类型</th>
                 <th th:text="#{admin.review.col.author}">作者</th>
@@ -41,15 +42,38 @@
             </tr>
             </thead>
             <tbody id="review-rows" th:fragment="rows">
+            <!-- 行按 priority 升序 + submitted_at 升序渲染（后端已排序，§5.1）；24h 高亮不变。 -->
             <tr th:each="r : ${items}" th:classappend="${r.overdue()} ? 'row-overdue'">
                 <td th:text="${r.itemId()}">1</td>
+                <td>
+                    <span class="badge"
+                          th:classappend="${r.priority().name() == 'P0'} ? 'badge-danger' : (${r.priority().name() == 'P1'} ? 'badge-warn' : 'badge-info')"
+                          th:text="${r.priority()}">P1</span>
+                    <!-- 运营改优先级（写操作 → 审计）。仅 PENDING 项；处置权门控。 -->
+                    <form th:action="@{/admin/manual-review/{id}/priority(id=${r.itemId()})}" method="post"
+                          class="inline-form" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')">
+                        <select name="priority" aria-label="priority">
+                            <option value="P0">P0</option>
+                            <option value="P1">P1</option>
+                            <option value="P2">P2</option>
+                        </select>
+                        <button type="submit" class="btn btn-neutral btn-sm"
+                                th:text="#{admin.review.priority.change}">改</button>
+                    </form>
+                </td>
                 <td>
                     #<span th:text="${r.contentId()}">0</span>
                     <span class="badge badge-danger" th:if="${r.overdue()}" th:text="#{admin.review.overdue}">超 24h</span>
                     <div class="muted cell-wide" th:text="${#strings.abbreviate(r.textPreview(), 60)}">…</div>
                 </td>
                 <td th:text="${r.type()}">DAILY</td>
-                <td th:text="${r.authorId()}">-</td>
+                <td>
+                    <span th:text="${r.authorId()}">-</span>
+                    <!-- 作者累计违规（§5.4，只读展示；story 9 未接入 → total=0 不显示）。 -->
+                    <span class="badge badge-warn" th:if="${r.strikes().total() > 0}"
+                          th:title="|帖子 ${r.strikes().post()} / 评论 ${r.strikes().comment()} / 名称 ${r.strikes().name()} / 头像 ${r.strikes().avatar()}|"
+                          th:text="|#{admin.moderation.strikes.label} ${r.strikes().total()}|">累计违规</span>
+                </td>
                 <td th:text="${#temporals.format(r.submittedAt(), 'yyyy-MM-dd HH:mm')}">-</td>
                 <td sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')">
                     <form th:action="@{/admin/manual-review/{id}/approve(id=${r.itemId()})}" method="post"
@@ -57,15 +81,26 @@
                         <button type="submit" class="btn btn-primary btn-sm"
                                 th:text="#{admin.review.approve}">通过</button>
                     </form>
+                    <!-- 拒绝：采集判定依据（违规类别）+ 备注（§5.2，折叠进审计，无原文）。 -->
                     <form th:action="@{/admin/manual-review/{id}/reject(id=${r.itemId()})}" method="post"
                           class="inline-form">
+                        <select name="category" aria-label="category">
+                            <option value="ILLEGAL" th:text="#{admin.review.cat.illegal}">违法</option>
+                            <option value="HATE" th:text="#{admin.review.cat.hate}">仇恨</option>
+                            <option value="PORN" th:text="#{admin.review.cat.porn}">色情</option>
+                            <option value="POLITICAL" th:text="#{admin.review.cat.political}">政治敏感</option>
+                            <option value="AD" th:text="#{admin.review.cat.ad}">广告引流</option>
+                            <option value="HARASSMENT" th:text="#{admin.review.cat.harassment}">骚扰</option>
+                            <option value="OTHER" selected th:text="#{admin.review.cat.other}">其他</option>
+                        </select>
+                        <input type="text" name="note" class="input-sm" th:placeholder="#{admin.review.reject.note}"/>
                         <button type="submit" class="btn btn-danger btn-sm"
                                 th:text="#{admin.review.reject}">拒绝</button>
                     </form>
                 </td>
             </tr>
             <tr th:if="${#lists.isEmpty(items)}">
-                <td colspan="6" class="empty" th:text="#{admin.review.empty}">队列为空。</td>
+                <td colspan="7" class="empty" th:text="#{admin.review.empty}">队列为空。</td>
             </tr>
             </tbody>
         </table>

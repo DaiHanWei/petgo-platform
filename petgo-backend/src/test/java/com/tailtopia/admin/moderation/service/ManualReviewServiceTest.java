@@ -13,9 +13,13 @@ import static org.mockito.Mockito.when;
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.admin.moderation.domain.ManualReviewItem;
+import com.tailtopia.admin.moderation.domain.ReviewPriority;
 import com.tailtopia.admin.moderation.domain.ReviewStatus;
+import com.tailtopia.admin.moderation.dto.ManualReviewRow;
+import com.tailtopia.admin.moderation.read.ViolationCountReader;
 import com.tailtopia.content.domain.CommentModerationStatus;
 import com.tailtopia.content.domain.ContentType;
+import com.tailtopia.content.moderation.ModerationDecision;
 import com.tailtopia.content.service.CommentService;
 import com.tailtopia.content.service.CommentService.CommentModerationSummary;
 import com.tailtopia.content.service.ContentService;
@@ -40,6 +44,7 @@ class ManualReviewServiceTest {
     private NotificationService notifications;
     private AdminAuditService auditService;
     private AdminSettingsService settingsService;
+    private ViolationCountReader violationCounts;
     private ManualReviewService service;
 
     @BeforeEach
@@ -50,8 +55,9 @@ class ManualReviewServiceTest {
         notifications = mock(NotificationService.class);
         auditService = mock(AdminAuditService.class);
         settingsService = mock(AdminSettingsService.class);
+        violationCounts = mock(ViolationCountReader.class);
         service = new ManualReviewService(queue, contentService, commentService, notifications,
-                auditService, settingsService);
+                auditService, settingsService, violationCounts);
     }
 
     private void stubSummary(long contentId, long authorId) {
@@ -88,7 +94,7 @@ class ManualReviewServiceTest {
         when(queue.findById(10L)).thenReturn(Optional.of(item));
         stubSummary(501L, 43L);
 
-        service.reject(10L, 7L);
+        service.reject(10L, 7L, new ModerationDecision("AD_SPAM", "广告引流"));
 
         verify(contentService).discardReview(501L);
         verify(notifications).send(eq(43L), eq(NotificationType.CONTENT_REVIEW_REJECTED), any(), any(), any(), any());
@@ -165,7 +171,7 @@ class ManualReviewServiceTest {
         when(queue.findById(21L)).thenReturn(Optional.of(it));
         stubCommentSummary(701L, 9L, 56L, 1);
 
-        service.reject(21L, 7L);
+        service.reject(21L, 7L, new ModerationDecision("HARASSMENT", null));
 
         verify(commentService).rejectComment(701L);
         assertThat(it.getStatus()).isEqualTo(ReviewStatus.REJECTED);
@@ -205,5 +211,67 @@ class ManualReviewServiceTest {
         verify(commentService, never()).approveComment(anyLong());
         verify(notifications, never()).send(anyLong(), any(), any(), any(), any(), any());
         verify(auditService, never()).record(anyLong(), any(), any(), any(), any());
+    }
+
+    // ===== story 8：队列优先级排序 + 运营改优先级（§5.1，AC2/AC4） =====
+
+    /** 工厂不设 id（DB 生成）；行投影要拆箱 getId()，故测试用反射补一个 id。 */
+    private static ManualReviewItem itemWithId(long id, long contentId, ReviewPriority p) {
+        ManualReviewItem it = ManualReviewItem.pending(contentId, Instant.now(), p);
+        try {
+            var f = ManualReviewItem.class.getDeclaredField("id");
+            f.setAccessible(true);
+            f.set(it, id);
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(e);
+        }
+        return it;
+    }
+
+    @Test
+    void pendingQueueUsesPriorityOrderedRepoAndPassesPriorityThrough() {
+        // 仓储按 priority 升序 + submitted_at 升序返回（DB 排序）；service 透传顺序 + 填 priority 到行。
+        ManualReviewItem p0 = itemWithId(1L, 800L, ReviewPriority.P0);
+        ManualReviewItem p1 = itemWithId(2L, 801L, ReviewPriority.P1);
+        ManualReviewItem p2 = itemWithId(3L, 802L, ReviewPriority.P2);
+        when(queue.findByStatusOrderByPriorityAscSubmittedAtAsc(ReviewStatus.PENDING))
+                .thenReturn(List.of(p0, p1, p2));
+        stubSummary(800L, 61L);
+        stubSummary(801L, 62L);
+        stubSummary(802L, 63L);
+
+        List<ManualReviewRow> rows = service.pendingQueue();
+
+        // 用 priority 排序仓储方法（非旧的 submittedAt-only）。
+        verify(queue).findByStatusOrderByPriorityAscSubmittedAtAsc(ReviewStatus.PENDING);
+        assertThat(rows).extracting(ManualReviewRow::priority)
+                .containsExactly(ReviewPriority.P0, ReviewPriority.P1, ReviewPriority.P2);
+        // 违规计数端口被查询（story 9 未接入 → 展示空）。
+        assertThat(rows).allSatisfy(r -> assertThat(r.strikes()).isNotNull());
+    }
+
+    @Test
+    void changePriorityUpdatesAndAudits() {
+        ManualReviewItem item = ManualReviewItem.pending(810L, Instant.now(), ReviewPriority.P2);
+        when(queue.findById(30L)).thenReturn(Optional.of(item));
+
+        service.changePriority(30L, ReviewPriority.P0, 7L);
+
+        assertThat(item.getPriority()).isEqualTo(ReviewPriority.P0);
+        verify(queue).save(item);
+        verify(auditService).record(eq(7L), eq(AuditActions.REVIEW_PRIORITY_CHANGED),
+                eq("MANUAL_REVIEW_ITEM"), eq("30"), any());
+    }
+
+    @Test
+    void changePriorityRejectedOnNonPending() {
+        ManualReviewItem item = ManualReviewItem.pending(811L, Instant.now(), ReviewPriority.P1);
+        item.decide(ReviewStatus.APPROVED, 1L, Instant.now()); // 已终态
+        when(queue.findById(31L)).thenReturn(Optional.of(item));
+
+        assertThatThrownBy(() -> service.changePriority(31L, ReviewPriority.P0, 7L))
+                .isInstanceOf(AppException.class);
+        verify(auditService, never()).record(anyLong(), eq(AuditActions.REVIEW_PRIORITY_CHANGED),
+                any(), any(), any());
     }
 }

@@ -76,7 +76,8 @@ class NameModerationIntegrationTest extends ApiIntegrationTest {
         assertThat(users.findById(uid).orElseThrow().getNickname()).isEqualTo("stub-high");
 
         // 运营判违规 → 重置默认编码名 + is_system_default_name=true + NAME_RESET 通知。
-        nameModeration.decide(rec.getId(), NameDecision.VIOLATION, 1L, "test-violation");
+        nameModeration.decide(rec.getId(), NameDecision.VIOLATION, 1L,
+                new com.tailtopia.content.moderation.ModerationDecision("test-violation", null));
 
         User reset = users.findById(uid).orElseThrow();
         assertThat(reset.getNickname()).startsWith("user_");

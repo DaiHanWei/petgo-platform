@@ -27,6 +27,9 @@
         <a sec:authorize="hasRole('SUPER_ADMIN')"
            th:href="@{/admin/manual-review}" th:classappend="${active == 'manual-review'} ? 'active'"
            th:text="#{admin.nav.review}">人工审核</a>
+        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')"
+           th:href="@{/admin/name-avatar-review}" th:classappend="${active == 'name-avatar-review'} ? 'active'"
+           th:text="#{admin.nav.nameAvatar}">名称/头像审核</a>
         <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.view')"
            th:href="@{/admin/users}" th:classappend="${active == 'users'} ? 'active'"
            th:text="#{admin.nav.users}">用户</a>

@@ -4,9 +4,13 @@ import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.admin.moderation.domain.ManualReviewItem;
 import com.tailtopia.admin.moderation.domain.ReviewContentType;
+import com.tailtopia.admin.moderation.domain.ReviewPriority;
 import com.tailtopia.admin.moderation.domain.ReviewStatus;
 import com.tailtopia.admin.moderation.dto.ManualReviewRow;
+import com.tailtopia.admin.moderation.dto.ViolationCounts;
+import com.tailtopia.admin.moderation.read.ViolationCountReader;
 import com.tailtopia.admin.moderation.repository.ManualReviewItemRepository;
+import com.tailtopia.content.moderation.ModerationDecision;
 import com.tailtopia.content.service.CommentService;
 import com.tailtopia.content.service.CommentService.CommentModerationSummary;
 import com.tailtopia.content.service.ContentService;
@@ -45,23 +49,29 @@ public class ManualReviewService {
     private final NotificationService notifications;
     private final AdminAuditService auditService;
     private final AdminSettingsService settingsService;
+    private final ViolationCountReader violationCounts;
 
     public ManualReviewService(ManualReviewItemRepository queue, ContentService contentService,
             CommentService commentService, NotificationService notifications,
-            AdminAuditService auditService, AdminSettingsService settingsService) {
+            AdminAuditService auditService, AdminSettingsService settingsService,
+            ViolationCountReader violationCounts) {
         this.queue = queue;
         this.contentService = contentService;
         this.commentService = commentService;
         this.notifications = notifications;
         this.auditService = auditService;
         this.settingsService = settingsService;
+        this.violationCounts = violationCounts;
     }
 
-    /** PENDING 队列（提交时间升序），含内容/评论预览 + 24h 超期高亮标记（AC4/AC7）。 */
+    /**
+     * PENDING 队列（story 8 §5.1：优先级升序 + 同级提交时间升序），含内容/评论预览 + 24h 超期高亮标记（AC7）
+     * + 作者累计违规计数（§5.4，读 {@link ViolationCountReader}，只读展示不触发限制）。
+     */
     @Transactional(readOnly = true)
     public List<ManualReviewRow> pendingQueue() {
         Instant overdueCutoff = Instant.now().minus(OVERDUE_THRESHOLD);
-        return queue.findByStatusOrderBySubmittedAtAsc(ReviewStatus.PENDING).stream()
+        return queue.findByStatusOrderByPriorityAscSubmittedAtAsc(ReviewStatus.PENDING).stream()
                 .map(it -> toRow(it, overdueCutoff))
                 .toList();
     }
@@ -70,18 +80,28 @@ public class ManualReviewService {
         boolean overdue = it.getSubmittedAt().isBefore(overdueCutoff);
         if (it.getContentType() == ReviewContentType.COMMENT) {
             var summary = commentService.findModerationSummary(it.getContentId()).orElse(null);
+            Long authorId = summary == null ? null : summary.authorId();
             return new ManualReviewRow(it.getId(), it.getContentId(), ReviewContentType.COMMENT,
                     null,
                     summary == null ? "(评论不存在)" : summary.textPreview(),
-                    summary == null ? null : summary.authorId(),
-                    it.getSubmittedAt(), overdue);
+                    authorId,
+                    it.getSubmittedAt(), overdue, it.getPriority(), strikesFor(authorId));
         }
         var summary = contentService.findSummary(it.getContentId()).orElse(null);
+        Long authorId = summary == null ? null : summary.authorId();
         return new ManualReviewRow(it.getId(), it.getContentId(), ReviewContentType.CONTENT_POST,
                 summary == null ? null : summary.type(),
                 summary == null ? "(内容不存在)" : summary.textPreview(),
-                summary == null ? null : summary.authorId(),
-                it.getSubmittedAt(), overdue);
+                authorId,
+                it.getSubmittedAt(), overdue, it.getPriority(), strikesFor(authorId));
+    }
+
+    /** 作者累计违规计数快照（§5.4）；作者不可解析时空计数（展示「—」）。 */
+    private ViolationCounts strikesFor(Long authorId) {
+        if (authorId == null) {
+            return ViolationCounts.empty();
+        }
+        return ViolationCounts.fromMap(violationCounts.countsFor(authorId));
     }
 
     /** 通过：帖子转 PUBLISHED / 评论转 VISIBLE（此刻发新评论事件）+ 审计。仅 PENDING 可处置。 */
@@ -108,16 +128,22 @@ public class ManualReviewService {
                 String.valueOf(it.getContentId()), "人工审核通过（队列项 #" + itemId + "）");
     }
 
-    /** 拒绝：帖子丢弃 / 评论转 REJECTED（永不发新评论事件）+ 通知作者 + 审计。仅 PENDING 可处置。 */
+    /**
+     * 拒绝：帖子丢弃 / 评论转 REJECTED（永不发新评论事件）+ 通知作者 + 审计。仅 PENDING 可处置。
+     *
+     * <p>story 8 §5.2：{@code decision}（判定依据/备注）由处置表单采集，折叠进 append-only 审计 summary
+     * （无内容正文原文）；作者拒绝通知文案不变（本版本不提供具体驳回原因/申诉，§5.5）。{@code decision} 可空。
+     */
     @Transactional
-    public void reject(long itemId, long actorAccountId) {
+    public void reject(long itemId, long actorAccountId, ModerationDecision decision) {
+        ModerationDecision d = decision == null ? ModerationDecision.none() : decision;
         ManualReviewItem it = requirePending(itemId);
         if (it.getContentType() == ReviewContentType.COMMENT) {
             if (staleDiscard(it, actorAccountId)) {
                 return;
             }
             rejectComment(it, actorAccountId, AuditActions.CONTENT_REVIEW_REJECTED, ReviewStatus.REJECTED,
-                    "评论人工审核拒绝（队列项 #" + itemId + "）");
+                    "评论人工审核拒绝（队列项 #" + itemId + "）；" + d.auditFragment());
             return;
         }
         contentService.discardReview(it.getContentId());
@@ -126,7 +152,24 @@ public class ManualReviewService {
         it.decide(ReviewStatus.REJECTED, actorAccountId, Instant.now());
         queue.save(it);
         auditService.record(actorAccountId, AuditActions.CONTENT_REVIEW_REJECTED, "CONTENT_POST",
-                String.valueOf(it.getContentId()), "人工审核拒绝（队列项 #" + itemId + "）");
+                String.valueOf(it.getContentId()), "人工审核拒绝（队列项 #" + itemId + "）；" + d.auditFragment());
+    }
+
+    /**
+     * 调整队列项优先级（story 8，§5.1）。仅 {@code PENDING} 可改（复用 {@link #requirePending}）→ set → save →
+     * 审计 {@code REVIEW_PRIORITY_CHANGED}（同事务，AC14）。
+     */
+    @Transactional
+    public void changePriority(long itemId, ReviewPriority priority, long actorAccountId) {
+        if (priority == null) {
+            throw AppException.validation("优先级必填（P0 / P1 / P2）");
+        }
+        ManualReviewItem it = requirePending(itemId);
+        ReviewPriority old = it.getPriority();
+        it.changePriority(priority);
+        queue.save(it);
+        auditService.record(actorAccountId, AuditActions.REVIEW_PRIORITY_CHANGED, "MANUAL_REVIEW_ITEM",
+                String.valueOf(itemId), "调整审核优先级 " + old + " → " + priority);
     }
 
     /**

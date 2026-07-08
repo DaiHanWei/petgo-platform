@@ -1,6 +1,7 @@
 package com.tailtopia.namemoderation.web;
 
 import com.tailtopia.admin.service.AdminUserDetails;
+import com.tailtopia.content.moderation.ModerationDecision;
 import com.tailtopia.namemoderation.domain.NameDecision;
 import com.tailtopia.namemoderation.service.NameModerationService;
 import com.tailtopia.shared.error.AppException;
@@ -32,8 +33,9 @@ public class NameModerationAdminController {
     }
 
     /**
-     * 处置一条名称审核队列项。{@code decision} ∈ {PASS, VIOLATION}；VIOLATION → 重置默认编码名 + 推送本人。
-     * {@code reason} 为违规类别（仅运营记录，不外泄用户）。
+     * 处置一条名称审核队列项。{@code decision} ∈ {PASS, VIOLATION}；VIOLATION → 重置默认编码名 + 推送本人 + 审计。
+     * {@code category}（违规类别/判定依据）+ {@code note}（备注）为运营处置记录（story 8 §5.2，折叠进审计，
+     * 不外泄用户）。兼容旧字段 {@code reason}（映射到 category）。
      */
     @PostMapping("/admin/name-moderation/{recordId}/decide")
     @PreAuthorize(DECIDE_AUTH)
@@ -41,9 +43,12 @@ public class NameModerationAdminController {
     public ResponseEntity<String> decide(@AuthenticationPrincipal AdminUserDetails admin,
             @PathVariable long recordId,
             @RequestParam("decision") String decision,
+            @RequestParam(value = "category", required = false) String category,
+            @RequestParam(value = "note", required = false) String note,
             @RequestParam(value = "reason", required = false) String reason) {
         NameDecision parsed = parseDecision(decision);
-        service.decide(recordId, parsed, admin.getAdminAccountId(), reason);
+        String cat = category != null && !category.isBlank() ? category : reason;
+        service.decide(recordId, parsed, admin.getAdminAccountId(), new ModerationDecision(cat, note));
         return ResponseEntity.ok(parsed == NameDecision.VIOLATION
                 ? "已判违规：名称已重置为系统默认编码名并通知用户"
                 : "已判通过：名称保留");

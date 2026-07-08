@@ -98,7 +98,8 @@ class AvatarModerationIntegrationTest extends ApiIntegrationTest {
         assertThat(users.findById(uid).orElseThrow().getAvatarUrl()).isEqualTo(VIOLATION_AVATAR);
 
         // 运营判违规 → 重置平台默认头像常量 + AVATAR_RESET 通知（B9）。
-        avatarModeration.decide(rec.getId(), AvatarDecision.VIOLATION);
+        avatarModeration.decide(rec.getId(), AvatarDecision.VIOLATION, 1L,
+                new com.tailtopia.content.moderation.ModerationDecision("test-violation", null));
 
         User reset = users.findById(uid).orElseThrow();
         assertThat(reset.getAvatarUrl()).isEqualTo(AvatarDefaults.DEFAULT_USER_AVATAR_URL);
@@ -165,7 +166,8 @@ class AvatarModerationIntegrationTest extends ApiIntegrationTest {
         assertThat(rec.getStatus()).isEqualTo(AvatarReviewStatus.MANUAL_PENDING);
         assertThat(pet.getAvatarUrl()).isEqualTo(VIOLATION_AVATAR); // 先放行
 
-        avatarModeration.decide(rec.getId(), AvatarDecision.VIOLATION);
+        avatarModeration.decide(rec.getId(), AvatarDecision.VIOLATION, 1L,
+                new com.tailtopia.content.moderation.ModerationDecision("test-violation", null));
 
         assertThat(petProfiles.findById(petId).orElseThrow().getAvatarUrl())
                 .isEqualTo(AvatarDefaults.DEFAULT_PET_AVATAR_URL);

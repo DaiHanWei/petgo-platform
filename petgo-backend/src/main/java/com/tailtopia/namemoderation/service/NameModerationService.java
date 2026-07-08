@@ -1,7 +1,10 @@
 package com.tailtopia.namemoderation.service;
 
+import com.tailtopia.admin.audit.service.AdminAuditService;
+import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.auth.domain.User;
 import com.tailtopia.auth.repository.UserRepository;
+import com.tailtopia.content.moderation.ModerationDecision;
 import com.tailtopia.content.moderation.ModerationOutcome;
 import com.tailtopia.content.service.ContentModerationService;
 import com.tailtopia.namemoderation.domain.NameDecision;
@@ -50,16 +53,19 @@ public class NameModerationService {
     private final UserRepository users;
     private final PetProfileRepository petProfiles;
     private final ApplicationEventPublisher events;
+    private final AdminAuditService auditService;
 
     public NameModerationService(NameModerationRecordRepository records,
             ContentModerationService moderation, DefaultNameGenerator nameGenerator,
-            UserRepository users, PetProfileRepository petProfiles, ApplicationEventPublisher events) {
+            UserRepository users, PetProfileRepository petProfiles, ApplicationEventPublisher events,
+            AdminAuditService auditService) {
         this.records = records;
         this.moderation = moderation;
         this.nameGenerator = nameGenerator;
         this.users = users;
         this.petProfiles = petProfiles;
         this.events = events;
+        this.auditService = auditService;
     }
 
     // ---------- 送审开局：建记录 + 陈旧作废旧记录 ----------
@@ -137,10 +143,14 @@ public class NameModerationService {
 
     /**
      * 运营处置一条人工队列项（§5.8）。仅 {@code MANUAL_PENDING} 可处置（幂等 + 陈旧防御）；
-     * {@code PASS} → {@code RESOLVED_PASS}（名称保留、不推送）；{@code VIOLATION} → 重置默认编码名 + 推送。
+     * {@code PASS} → {@code RESOLVED_PASS}（名称保留、不推送）；{@code VIOLATION} → 重置默认编码名 + 推送 + 审计。
+     *
+     * <p>story 8 §5.2：{@code disposition}（判定依据类别 + 备注）由后台处置表单采集——类别落 {@code decision_reason}
+     * 列，重置动作同事务落 append-only {@code NAME_RESET} 审计（含依据/备注，<b>无名称原文明文</b>，§5.6）。可空。
      */
     @Transactional
-    public void decide(long recordId, NameDecision decision, long adminId, String reason) {
+    public void decide(long recordId, NameDecision decision, long adminId, ModerationDecision disposition) {
+        ModerationDecision d = disposition == null ? ModerationDecision.none() : disposition;
         NameModerationRecord record = records.findById(recordId)
                 .orElseThrow(() -> AppException.notFound("审核记录不存在"));
         if (record.getStatus() != NameModerationStatus.MANUAL_PENDING) {
@@ -148,20 +158,26 @@ public class NameModerationService {
         }
         Instant now = Instant.now();
         if (decision == NameDecision.PASS) {
-            record.resolve(NameModerationStatus.RESOLVED_PASS, adminId, now, reason);
+            record.resolve(NameModerationStatus.RESOLVED_PASS, adminId, now, d.categoryOrDefault());
             return;
         }
-        resetToDefault(record, adminId, now, reason);
+        resetToDefault(record, adminId, now, d);
     }
 
-    /** 违规重置（§5.5）：生成唯一默认编码名 → 写真实列 + {@code is_system_default_name=true} → 终态 + 发事件。 */
-    private void resetToDefault(NameModerationRecord record, long adminId, Instant now, String reason) {
+    /**
+     * 违规重置（§5.5）：生成唯一默认编码名 → 写真实列 + {@code is_system_default_name=true} → 终态 + 审计 + 发事件。
+     * 审计与状态迁移同事务（AC14）：业务回滚则审计一并回滚，无悬挂审计。
+     */
+    private void resetToDefault(NameModerationRecord record, long adminId, Instant now, ModerationDecision d) {
         NameTargetType type = record.getTargetType();
         long refId = record.getTargetRefId();
         NameResetEvent event = type == NameTargetType.NICKNAME
                 ? resetNickname(refId)
                 : resetPetName(refId);
-        record.resolve(NameModerationStatus.RESOLVED_VIOLATION, adminId, now, reason);
+        record.resolve(NameModerationStatus.RESOLVED_VIOLATION, adminId, now, d.categoryOrDefault());
+        // story 8 §5.6：违规重置落 append-only 审计（NAME_RESET；目标经记录 id 引用，summary 无名称原文/证据）。
+        auditService.record(adminId, AuditActions.NAME_RESET, "NAME_MODERATION_RECORD",
+                String.valueOf(record.getId()), "名称违规重置默认编码名（" + type + "）；" + d.auditFragment());
         if (event != null) {
             // 负向结果 → 推送（D-CM6）；供 notify NAME_RESET + story 9 违规计数订阅。
             events.publishEvent(event);

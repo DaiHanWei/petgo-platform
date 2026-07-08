@@ -1,5 +1,7 @@
 package com.tailtopia.avatarmoderation.service;
 
+import com.tailtopia.admin.audit.service.AdminAuditService;
+import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.auth.domain.User;
 import com.tailtopia.auth.repository.UserRepository;
 import com.tailtopia.avatarmoderation.domain.AvatarDecision;
@@ -10,6 +12,7 @@ import com.tailtopia.avatarmoderation.domain.AvatarSubjectType;
 import com.tailtopia.avatarmoderation.event.AvatarResetEvent;
 import com.tailtopia.avatarmoderation.repository.AvatarReviewRepository;
 import com.tailtopia.avatarmoderation.service.AvatarReviewRouter.RoutingDecision;
+import com.tailtopia.content.moderation.ModerationDecision;
 import com.tailtopia.content.moderation.ModerationOutcome;
 import com.tailtopia.content.service.ContentModerationService;
 import com.tailtopia.profile.domain.PetProfile;
@@ -54,14 +57,17 @@ public class AvatarModerationService {
     private final UserRepository users;
     private final PetProfileRepository petProfiles;
     private final ApplicationEventPublisher events;
+    private final AdminAuditService auditService;
 
     public AvatarModerationService(AvatarReviewRepository reviews, ContentModerationService moderation,
-            UserRepository users, PetProfileRepository petProfiles, ApplicationEventPublisher events) {
+            UserRepository users, PetProfileRepository petProfiles, ApplicationEventPublisher events,
+            AdminAuditService auditService) {
         this.reviews = reviews;
         this.moderation = moderation;
         this.users = users;
         this.petProfiles = petProfiles;
         this.events = events;
+        this.auditService = auditService;
     }
 
     // ---------- 送审开局：建记录 + 陈旧作废旧记录 ----------
@@ -142,11 +148,15 @@ public class AvatarModerationService {
 
     /**
      * 运营处置一条人工队列项（§5.3）。仅 {@code MANUAL_PENDING} 可处置（幂等 + 陈旧防御）；
-     * {@code PASS} → {@code RESOLVED/PASS}（头像保留、不推送）；{@code VIOLATION} → 重置默认头像 + 推送。
-     * 供 story 8 后台调用（后台 UI/审计归 story 8）。
+     * {@code PASS} → {@code RESOLVED/PASS}（头像保留、不推送）；{@code VIOLATION} → 重置默认头像 + 推送 + 审计。
+     *
+     * <p>story 8 §5.2 回补（CM8）：本 story 定稿前 cm-5 的 {@code decide} 缺运营决策字段与审计——现补 {@code adminId}
+     * + {@code disposition}（判定依据/备注），违规重置同事务落 append-only {@code AVATAR_RESET} 审计（含依据/备注，
+     * <b>无图片 URL</b>，§5.6）。{@code avatar_reviews} 表不加决策列（V51 冻结），决策字段只入审计。{@code disposition} 可空。
      */
     @Transactional
-    public void decide(long reviewId, AvatarDecision decision) {
+    public void decide(long reviewId, AvatarDecision decision, long adminId, ModerationDecision disposition) {
+        ModerationDecision d = disposition == null ? ModerationDecision.none() : disposition;
         AvatarReview review = reviews.findById(reviewId)
                 .orElseThrow(() -> AppException.notFound("审核记录不存在"));
         if (review.getStatus() != AvatarReviewStatus.MANUAL_PENDING) {
@@ -165,6 +175,10 @@ public class AvatarModerationService {
         }
         AvatarResetEvent event = resetToDefault(review.getSubjectType(), review.getSubjectId());
         review.resolveViolation();
+        // story 8 §5.6：违规重置落 append-only 审计（AVATAR_RESET；目标经记录 id 引用，summary 无图片 URL/证据）。
+        auditService.record(adminId, AuditActions.AVATAR_RESET, "AVATAR_REVIEW",
+                String.valueOf(review.getId()),
+                "头像违规重置默认头像（" + review.getSubjectType() + "）；" + d.auditFragment());
         if (event != null) {
             // 负向结果 → 推送（D-CM6）；供 notify AVATAR_RESET。PASS/STALE/自动过不发事件故不推送。
             events.publishEvent(event);

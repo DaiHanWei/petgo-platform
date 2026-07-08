@@ -84,7 +84,8 @@ class ManualReviewIntegrationTest extends ApiIntegrationTest {
         long postId = contentService.publish(author, highRisk(), null).id();
         ManualReviewItem item = pendingFor(postId);
 
-        reviewService.reject(item.getId(), 430000L + SEQ.incrementAndGet());
+        reviewService.reject(item.getId(), 430000L + SEQ.incrementAndGet(),
+                new com.tailtopia.content.moderation.ModerationDecision("SPAM", "集成测试"));
 
         assertThat(contentService.findSummary(postId).orElseThrow().deleted()).isTrue();
         assertThat(queue.findById(item.getId()).orElseThrow().getStatus()).isEqualTo(ReviewStatus.REJECTED);

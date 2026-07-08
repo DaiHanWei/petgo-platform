@@ -4,13 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.tailtopia.admin.audit.service.AdminAuditService;
+import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.auth.domain.User;
 import com.tailtopia.auth.repository.UserRepository;
+import com.tailtopia.content.moderation.ModerationDecision;
 import com.tailtopia.content.service.ContentModerationService;
 import com.tailtopia.namemoderation.domain.NameDecision;
 import com.tailtopia.namemoderation.domain.NameModerationRecord;
@@ -39,9 +43,10 @@ class NameModerationServiceTest {
     private final UserRepository users = mock(UserRepository.class);
     private final PetProfileRepository petProfiles = mock(PetProfileRepository.class);
     private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
+    private final AdminAuditService auditService = mock(AdminAuditService.class);
 
     private final NameModerationService service = new NameModerationService(
-            records, moderation, nameGenerator, users, petProfiles, events);
+            records, moderation, nameGenerator, users, petProfiles, events, auditService);
 
     private static NameModerationRecord scoringRecord(NameTargetType type, long refId, long revision) {
         return NameModerationRecord.scoring(type, refId, revision, "some-name", Instant.now());
@@ -90,7 +95,7 @@ class NameModerationServiceTest {
         when(users.findById(42L)).thenReturn(Optional.of(user));
         when(nameGenerator.generate(any(), any())).thenReturn("user_ab12cd34");
 
-        service.decide(200L, NameDecision.VIOLATION, 9L, "AD_SPAM");
+        service.decide(200L, NameDecision.VIOLATION, 9L, new ModerationDecision("AD_SPAM", "机器巡查"));
 
         assertThat(user.getNickname()).isEqualTo("user_ab12cd34");
         assertThat(user.isSystemDefaultName()).isTrue();
@@ -98,6 +103,9 @@ class NameModerationServiceTest {
         assertThat(pending.getDecidedBy()).isEqualTo(9L);
         verify(users).save(user);
         verify(events).publishEvent(any(NameResetEvent.class));
+        // story 8 §5.6：违规重置同事务落 NAME_RESET 审计（含依据/备注，无名称原文）。
+        verify(auditService).record(eq(9L), eq(AuditActions.NAME_RESET), eq("NAME_MODERATION_RECORD"),
+                any(), any());
     }
 
     @Test
@@ -106,11 +114,13 @@ class NameModerationServiceTest {
         pending.applyScore(NameModerationStatus.MANUAL_PENDING, NamePriority.NORMAL, BigDecimal.valueOf(0.7), 0);
         when(records.findById(201L)).thenReturn(Optional.of(pending));
 
-        service.decide(201L, NameDecision.PASS, 9L, null);
+        service.decide(201L, NameDecision.PASS, 9L, ModerationDecision.none());
 
         assertThat(pending.getStatus()).isEqualTo(NameModerationStatus.RESOLVED_PASS);
         verify(events, never()).publishEvent(any());
         verify(petProfiles, never()).save(any());
+        // PASS 保留名称、无重置动作 → 不落 NAME_RESET 审计。
+        verify(auditService, never()).record(any(), eq(AuditActions.NAME_RESET), any(), any(), any());
     }
 
     @Test
@@ -119,7 +129,8 @@ class NameModerationServiceTest {
         autoPassed.applyScore(NameModerationStatus.AUTO_PASSED, NamePriority.NORMAL, BigDecimal.valueOf(0.1), 0);
         when(records.findById(202L)).thenReturn(Optional.of(autoPassed));
 
-        assertThatThrownBy(() -> service.decide(202L, NameDecision.VIOLATION, 9L, "X"))
+        assertThatThrownBy(() -> service.decide(202L, NameDecision.VIOLATION, 9L,
+                new ModerationDecision("X", null)))
                 .isInstanceOf(AppException.class);
         verify(events, never()).publishEvent(any());
     }
