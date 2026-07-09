@@ -127,6 +127,15 @@ public class ContentModerationService {
     }
 
     /**
+     * L1 硬黑名单同步预检（内容审核 story 3 · 异步化）：仅跑本地分层词库（无网络、毫秒级），命中 L1 即
+     * {@code true}。供评论创建时同步即时拒绝（明显违规词秒拒、给反馈、不落库），阿里云评分留给异步审核。
+     * 白名单优先豁免在引擎内处理；不含 L2/三方，故绝不阻塞。
+     */
+    public boolean isL1Blocked(String text) {
+        return keywordEngine.classify(text).l1Blocked();
+    }
+
+    /**
      * 富审核（§5.2）。判定顺序：L1 词库硬拦截 → 图像高置信违规 → 三方评分（+L2 加权）RISKY/PASS；
      * 任何三方降级 → DEGRADED（fail-closed，绝不 PASS）。方法无状态、可重入（供 story 4/5 复用）。
      */
