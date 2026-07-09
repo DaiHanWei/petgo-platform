@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import com.tailtopia.shared.media.AliyunOssClient;
+import com.tailtopia.shared.media.MediaProperties;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import javax.imageio.ImageIO;
@@ -13,7 +14,8 @@ import org.junit.jupiter.api.Test;
 class OgImageServiceTest {
 
     private final OgImageService service =
-            new OgImageService(mock(AliyunOssClient.class), mock(ProfileService.class));
+            new OgImageService(
+                    mock(AliyunOssClient.class), mock(ProfileService.class), new MediaProperties());
 
     @Test
     void rendersValidPngOfExpectedSize() throws IOException {

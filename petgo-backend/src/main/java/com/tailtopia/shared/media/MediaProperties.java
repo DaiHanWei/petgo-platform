@@ -54,6 +54,11 @@ public class MediaProperties {
         private String privateBucket = "";
         /** 公开桶对外 CDN base URL（无尾斜杠），如 {@code https://cdn.petgo.example}。 */
         private String cdnBaseUrl = "";
+        /**
+         * 对象 key 全局前缀。默认空 =生产行为不变；staging 与生产共用同一桶时，
+         * 设为如 {@code stag/} 让 staging 新上传落到独立命名空间，与生产对象区分（换库不换地址同理，桶亦如此）。
+         */
+        private String keyPrefix = "";
 
         public String getEndpoint() {
             return endpoint;
@@ -93,6 +98,32 @@ public class MediaProperties {
 
         public void setCdnBaseUrl(String cdnBaseUrl) {
             this.cdnBaseUrl = cdnBaseUrl;
+        }
+
+        public String getKeyPrefix() {
+            return keyPrefix;
+        }
+
+        public void setKeyPrefix(String keyPrefix) {
+            this.keyPrefix = keyPrefix;
+        }
+
+        /**
+         * 归一化前缀：空/空白 → {@code ""}；否则去前导 {@code /}、补尾部 {@code /}。
+         * 供 key 构造处统一前置，保证生产（空）零行为变化。
+         */
+        public String normalizedKeyPrefix() {
+            if (keyPrefix == null || keyPrefix.isBlank()) {
+                return "";
+            }
+            String p = keyPrefix.strip();
+            while (p.startsWith("/")) {
+                p = p.substring(1);
+            }
+            if (!p.endsWith("/")) {
+                p = p + "/";
+            }
+            return p;
         }
     }
 
