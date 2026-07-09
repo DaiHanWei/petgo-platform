@@ -70,14 +70,14 @@ precheck() {
   fi
 
   ssh -o ConnectTimeout=5 -o BatchMode=yes "$DEPLOY_HOST" 'true' \
-    || die "无法 SSH 到 $DEPLOY_HOST（检查公钥 / 网络）"
+    || die "无法 SSH 到 ${DEPLOY_HOST}（检查公钥 / 网络）"
 }
 
 # ============================================================================
 # 部署 petgo-server-stag
 # ============================================================================
 deploy_server() {
-  log "▶ 部署 $CONTAINER（staging，端口 $HOST_PORT）"
+  log "▶ 部署 ${CONTAINER}（staging，端口 ${HOST_PORT}）"
   cd "$BACKEND_DIR"
 
   # 本地构建 jar（服务器不装 maven）。
