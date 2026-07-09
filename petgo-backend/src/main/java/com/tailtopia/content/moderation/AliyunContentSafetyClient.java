@@ -101,8 +101,6 @@ public class AliyunContentSafetyClient implements ContentSafetyClient {
             var data = body.getData();
             String labels = data == null ? null : data.getLabels();
             String reason = data == null ? null : data.getReason();
-            // 【临时诊断】打阿里云原始 labels + reason（含 customizedWords/customizedLibs），定位自定义词库命中结构；确认后删。
-            log.info("moderation raw: labels=[{}] reason={}", labels, reason);
             // 运营自定义词库命中：不依赖 AI riskLevel，强制高危 → 进人工审核（宠物语境靠人判）。
             String customLib = customLibHit(reason);
             if (customLib != null) {
@@ -141,6 +139,10 @@ public class AliyunContentSafetyClient implements ContentSafetyClient {
         try {
             JsonNode n = JSON.readTree(reason);
             JsonNode libs = n.path("customizedLibs");
+            // 实测阿里云回 customizedLibs 为库名字符串（如「印尼俚语」）；兼容数组对象形式。
+            if (libs.isTextual() && !libs.asText().isBlank()) {
+                return libs.asText().trim();
+            }
             if (libs.isArray() && !libs.isEmpty()) {
                 JsonNode first = libs.get(0);
                 String name = first.path("libName").asText(null);
