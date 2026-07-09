@@ -65,6 +65,25 @@ media:
     ttl-seconds: ${SIGNED_URL_TTL_SECONDS:300}
     upload-ttl-seconds: ${UPLOAD_URL_TTL_SECONDS:600}
 
+# 内容审核（内容审核 Story 1）：阿里云内容安全 green20220302 + 分层词库 + fail-closed 降级。
+# 凭证全部 env 注入，绝不入库 / 不落日志。mode=stub（默认，无凭证）走打桩客户端验评分/降级状态机（L0/L1）；
+# mode=live 才打真实阿里云内容安全（L2，需真实 AK + 印尼语实测）。AK 可复用 OSS 段 ALIYUN_ACCESS_KEY_*。
+app:
+  moderation:
+    mode: ${MODERATION_MODE:stub}
+    risk-threshold: ${MODERATION_RISK_THRESHOLD:0.8}
+    text-timeout-ms: ${MODERATION_TEXT_TIMEOUT_MS:1000}
+    image-timeout-ms: ${MODERATION_IMAGE_TIMEOUT_MS:2000}
+    aliyun:
+      region: ${MODERATION_ALIYUN_REGION:ap-southeast-1}
+      endpoint: ${MODERATION_ALIYUN_ENDPOINT:green-cip.ap-southeast-1.aliyuncs.com}
+      access-key-id: ${MODERATION_ALIYUN_AK_ID:${ALIYUN_ACCESS_KEY_ID:}}
+      access-key-secret: ${MODERATION_ALIYUN_AK_SECRET:${ALIYUN_ACCESS_KEY_SECRET:}}
+    image-threshold:
+      porn: ${MODERATION_IMG_PORN:0.85}
+      violence: ${MODERATION_IMG_VIOLENCE:0.80}
+      contraband: ${MODERATION_IMG_CONTRABAND:0.75}
+
 spring:
   application:
     name: petgo-backend

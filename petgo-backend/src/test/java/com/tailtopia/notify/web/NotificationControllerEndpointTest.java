@@ -43,7 +43,11 @@ class NotificationControllerEndpointTest extends ApiIntegrationTest {
 
     // ---------- 列表 ----------
 
-    /** 列表正常路径：只返回本人通知，不含他人；结构含 token/deepLinkType，不外泄顺序 id/targetRef。 */
+    /**
+     * 列表正常路径：只返回本人通知，不含他人；结构含 token/deepLinkType；不外泄顺序主键 id。
+     * targetRef 有意下发（客户端用 deepLinkType + targetRef 算跳转 location，见 NotificationItem javadoc；
+     * 仅下发给通知本人）——2026-07-08 修正过时断言（原断言 targetRef 不存在，与已上线的「跳转改用 targetRef」不符）。
+     */
     @Test
     void list_returnsOnlyOwnNotifications() throws Exception {
         User me = newUser();
@@ -61,9 +65,10 @@ class NotificationControllerEndpointTest extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.items[0].deepLinkToken").value(mine))
                 .andExpect(jsonPath("$.items[0].type").value("VET_REPLY"))
                 .andExpect(jsonPath("$.items[0].read").value(false))
-                // 不外泄内部字段
+                // 不外泄顺序主键 id
                 .andExpect(jsonPath("$.items[0].id").doesNotExist())
-                .andExpect(jsonPath("$.items[0].targetRef").doesNotExist());
+                // targetRef 有意下发（deep-link 目标，仅本人），值为持久化的 "ref-" + token
+                .andExpect(jsonPath("$.items[0].targetRef").value("ref-" + mine));
     }
 
     /** 空态：无通知用户拿到空 items + hasMore=false + nextCursor 为 null。 */

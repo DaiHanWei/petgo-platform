@@ -293,6 +293,11 @@ class MePage extends ConsumerWidget {
   ///
   /// 失败不再静默吞：按「上传 / 保存」两段分别捕获，提示**具体失败原因**(含状态码)，
   /// 便于真机现场定位「没报错却不生效」类问题。成功给一次确认提示。
+  ///
+  /// 内容审核 cm-5（D-CM2 / 方案 §3.4，有意权衡）：头像更换后**立即对所有人（含本人）可见**，
+  /// **不加任何「审核中」标签/遮挡**——审核是后端「先放行、后异步图像审核」，可见窗口期为本版本有意接受的取舍
+  /// （靠异步 + 举报兜底，不做「先审后显」）。若判违规，后端把 avatarUrl 重置为平台默认头像常量并推 AVATAR_RESET
+  /// 通知，前端照常渲染该 URL 即可（无需分支判断是否被重置）。切勿在此新增审核态 UI。
   Future<void> _changeAvatar(BuildContext context, WidgetRef ref) async {
     final l10n = AppLocalizations.of(context);
     final useCase = ref.read(mediaUploadUseCaseProvider);

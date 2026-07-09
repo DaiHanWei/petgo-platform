@@ -207,7 +207,15 @@ class HomePage extends ConsumerWidget {
           onLoadMore: () => ref.read(feedProvider.notifier).loadMore(),
           onRefresh: () => ref.read(feedProvider.notifier).refresh(),
           onTapItem: (item) => context.push('/content/${item.id}'),
-          onLongPressItem: (item) => openReport(context, ref, item.id),
+          onLongPressItem: (item) => openReport(context, ref, item.id, onReported: () {
+            // cm-6 §6.1：举报成功 → 乐观移除卡片 +「不再向你展示」提示（后端 §5.4 已过滤，刷新亦不复现）。
+            ref.read(feedProvider.notifier).removeItem(item.id);
+            if (context.mounted) {
+              ScaffoldMessenger.of(context)
+                ..hideCurrentSnackBar()
+                ..showSnackBar(SnackBar(content: Text(l10n.reportHiddenToast)));
+            }
+          }),
           onAuthorTap: (item) => showMiniProfile(context, ref, item.authorId),
         );
       },

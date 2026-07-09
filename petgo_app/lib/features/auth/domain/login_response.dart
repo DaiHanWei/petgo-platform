@@ -40,6 +40,7 @@ class UserProfile {
     this.petStatus,
     this.onboardingCompleted = false,
     this.hasPetProfile = false,
+    this.isSystemDefaultName = false,
   });
 
   /// 当前用户 id（Story 3.5：评论删除入口可见性判定）。
@@ -54,6 +55,10 @@ class UserProfile {
   final bool onboardingCompleted;
   final bool hasPetProfile;
 
+  /// 昵称当前是否为违规重置的系统默认编码名（内容审核 cm-4，D-CM4）。
+  /// 后端下发即解析；V1 可选用于轻量「去改名」引导（非必需，无 UI 强制）。
+  final bool isSystemDefaultName;
+
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
         id: json['id'] as int?,
         nickname: json['nickname'] as String?,
@@ -63,6 +68,7 @@ class UserProfile {
         petStatus: json['petStatus'] as String?,
         onboardingCompleted: (json['onboardingCompleted'] ?? false) as bool,
         hasPetProfile: (json['hasPetProfile'] ?? false) as bool,
+        isSystemDefaultName: (json['isSystemDefaultName'] ?? false) as bool,
       );
 
   UserProfile copyWith({
@@ -74,6 +80,7 @@ class UserProfile {
     String? petStatus,
     bool? onboardingCompleted,
     bool? hasPetProfile,
+    bool? isSystemDefaultName,
   }) =>
       UserProfile(
         id: id ?? this.id,
@@ -84,5 +91,6 @@ class UserProfile {
         petStatus: petStatus ?? this.petStatus,
         onboardingCompleted: onboardingCompleted ?? this.onboardingCompleted,
         hasPetProfile: hasPetProfile ?? this.hasPetProfile,
+        isSystemDefaultName: isSystemDefaultName ?? this.isSystemDefaultName,
       );
 }

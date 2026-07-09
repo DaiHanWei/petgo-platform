@@ -39,8 +39,14 @@ class ManualReviewIntegrationTest extends ApiIntegrationTest {
     private ContentPostRepository posts;
 
     private ContentPostCreateRequest blocked() {
-        // "judi" 命中 ContentModerationService 关键词黑名单 → 未过自动审核。
+        // "judi" 命中 L1 强制拦截词库 → L1 硬拦截（内容审核 cm-2/D-CM2：即时判定恒失败、不进挂起态）。
         return new ContentPostCreateRequest(ContentType.DAILY, null, "ayo main judi online", null);
+    }
+
+    private ContentPostCreateRequest highRisk() {
+        // "stub-high" 触发 stub 评分 0.9（≥0.8，未命中 L1）→ RISKY → 开关开时入队挂起（cm-2 路由）。
+        // L1 硬拦截不再入队（见 blocked()），高风险中间档才是「发布前待审」的入队路径。
+        return new ContentPostCreateRequest(ContentType.DAILY, null, "konten stub-high biasa", null);
     }
 
     @Test
@@ -58,7 +64,7 @@ class ManualReviewIntegrationTest extends ApiIntegrationTest {
         settingsService.setManualReviewEnabled(true, 430000L + SEQ.incrementAndGet());
         long author = newUser().getId();
 
-        long postId = contentService.publish(author, blocked(), null).id();
+        long postId = contentService.publish(author, highRisk(), null).id();
 
         // 落 UNDER_REVIEW（不进公开口径）+ 队列 PENDING。
         assertThat(posts.findById(postId).orElseThrow().getStatus()).isEqualTo(PostStatus.UNDER_REVIEW);
@@ -75,10 +81,11 @@ class ManualReviewIntegrationTest extends ApiIntegrationTest {
     void enabledRejectDiscardsContent() {
         settingsService.setManualReviewEnabled(true, 430000L + SEQ.incrementAndGet());
         long author = newUser().getId();
-        long postId = contentService.publish(author, blocked(), null).id();
+        long postId = contentService.publish(author, highRisk(), null).id();
         ManualReviewItem item = pendingFor(postId);
 
-        reviewService.reject(item.getId(), 430000L + SEQ.incrementAndGet());
+        reviewService.reject(item.getId(), 430000L + SEQ.incrementAndGet(),
+                new com.tailtopia.content.moderation.ModerationDecision("SPAM", "集成测试"));
 
         assertThat(contentService.findSummary(postId).orElseThrow().deleted()).isTrue();
         assertThat(queue.findById(item.getId()).orElseThrow().getStatus()).isEqualTo(ReviewStatus.REJECTED);

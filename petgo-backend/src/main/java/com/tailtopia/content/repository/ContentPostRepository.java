@@ -41,9 +41,12 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
     List<ContentPost> findByAuthorIdAndTypeAndDeletedAtIsNullAndEventDateOrderByCreatedAtAsc(
             long authorId, ContentType type, LocalDate eventDate);
 
-    /** 名片快乐时刻流（Story 2.6 AC7 · F9）：某作者某类型未删内容，按 event_date 倒序取最近 N。 */
-    List<ContentPost> findByAuthorIdAndTypeAndDeletedAtIsNullOrderByEventDateDescCreatedAtDesc(
-            long authorId, ContentType type, Pageable pageable);
+    /**
+     * 名片快乐时刻流（Story 2.6 AC7 · F9）：某作者某类型未删内容，按 event_date 倒序取最近 N。
+     * 内容审核 story 2（§5.4）：叠加 {@code status} 过滤——公开/名片路径传 {@code PUBLISHED}，挂起零泄漏。
+     */
+    List<ContentPost> findByAuthorIdAndTypeAndDeletedAtIsNullAndStatusOrderByEventDateDescCreatedAtDesc(
+            long authorId, ContentType type, PostStatus status, Pageable pageable);
 
     /** 统计：某作者某类型未删且已发布内容数（Story 2.4 AC5 统计栏快乐时刻数）。 */
     long countByAuthorIdAndTypeAndDeletedAtIsNullAndStatus(
@@ -51,12 +54,17 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
 
     /**
      * 「我的发布」（Story 7.1，FR-36）：当前作者未软删的全部内容（三类混合），keyset 游标倒序。
+     *
+     * <p><b>可见性（内容审核 story 2 · D-CM2 核心）</b>：放行作者本人的 {@code PUBLISHED} + {@code UNDER_REVIEW}
+     * ——挂起帖仅作者本人可见（本查询已按 {@code authorId} 收口 + {@code deletedAt IS NULL}，加入 UNDER_REVIEW
+     * 不泄漏）。Feed（{@link #findFeed}）保持仅 PUBLISHED，他人零可见。
      */
     @Query("""
             SELECT p FROM ContentPost p
             WHERE p.authorId = :authorId
               AND p.deletedAt IS NULL
-              AND p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
+              AND (p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
+                   OR p.status = com.tailtopia.content.domain.PostStatus.UNDER_REVIEW)
               AND (:hasCursor = false
                    OR p.createdAt < :cursorTs
                    OR (p.createdAt = :cursorTs AND p.id < :cursorId))
@@ -79,6 +87,10 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
      *   <li>游标：{@code (createdAt,id) < (cursorTs,cursorId)}（{@code hasCursor=false} = 首批）。
      *       用布尔标志而非裸 {@code :cursorTs IS NULL}：后者令 PG 无法推断 NULL 参数类型
      *       （42P18 could not determine data type）；此式下 cursorTs 仅与 createdAt 比较即可定型。</li>
+     *   <li>举报者隐藏（内容审核 cm-6 §5.4）：{@code hasViewer=true}（登录）→ 排除「当前查看者已举报的帖」
+     *       （相关子查询命中 {@code uq_content_reports_reporter_post}）；{@code hasViewer=false}（游客）→ 不过滤。
+     *       同样用布尔标志门控，避免游客传 NULL viewerId 触发 42P18（{@code :viewerId} 虽与 bigint 列比较可定型，
+     *       仍沿用 findFeed 既有判空惯例保持一致）。</li>
      *   <li>排序：{@code created_at DESC, id DESC}（id tie-breaker 保证游标稳定）。</li>
      * </ul>
      */
@@ -89,6 +101,9 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
               AND (:excludeGrowth = false OR p.type <> com.tailtopia.content.domain.ContentType.GROWTH_MOMENT)
               AND (:type IS NULL OR p.type = :type)
               AND (:requirePet = false OR p.petId IS NOT NULL)
+              AND (:hasViewer = false
+                   OR NOT EXISTS (SELECT 1 FROM ContentReport r
+                                  WHERE r.postId = p.id AND r.reporterId = :viewerId))
               AND (:hasCursor = false
                    OR p.createdAt < :cursorTs
                    OR (p.createdAt = :cursorTs AND p.id < :cursorId))
@@ -98,8 +113,25 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             @Param("excludeGrowth") boolean excludeGrowth,
             @Param("type") ContentType type,
             @Param("requirePet") boolean requirePet,
+            @Param("hasViewer") boolean hasViewer,
+            @Param("viewerId") Long viewerId,
             @Param("hasCursor") boolean hasCursor,
             @Param("cursorTs") Instant cursorTs,
             @Param("cursorId") Long cursorId,
             Pageable pageable);
+
+    /**
+     * 注销联动（内容审核 story 9，§5.5.1）：把注销用户仍在公开/挂起口径的帖子置 {@code AUTHOR_DEACTIVATED}
+     * （对他人隐藏；内容保留 {@code deletedAt IS NULL}，与匿名化并存）。仅动 PUBLISHED/UNDER_REVIEW（幂等）。
+     */
+    @Modifying
+    @Query("""
+            UPDATE ContentPost p
+               SET p.status = com.tailtopia.content.domain.PostStatus.AUTHOR_DEACTIVATED, p.updatedAt = :now
+             WHERE p.authorId = :authorId
+               AND p.deletedAt IS NULL
+               AND p.status IN (com.tailtopia.content.domain.PostStatus.PUBLISHED,
+                                com.tailtopia.content.domain.PostStatus.UNDER_REVIEW)
+            """)
+    int deactivateByAuthor(@Param("authorId") long authorId, @Param("now") Instant now);
 }

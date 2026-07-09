@@ -36,6 +36,40 @@ void main() {
     expect(DeepLinkRoutes.pushPayloadToLocation('MILESTONE_NODE', null), '/profile/milestones');
   });
 
+  test('NAME_RESET（内容审核 cm-4）→ targetRef 区分昵称 vs 宠物名', () {
+    // 昵称重置：targetRef="NICKNAME" → 我的页（昵称编辑底抽屉入口）
+    expect(DeepLinkRoutes.pushPayloadToLocation('NAME_RESET', 'NICKNAME'), '/me');
+    // 宠物名重置：targetRef=cardToken → 宠物档案编辑页（V1 单宠物自解析，不拼 token 入路径）
+    expect(DeepLinkRoutes.pushPayloadToLocation('NAME_RESET', 'card_abc123'), '/profile/edit');
+    // 缺 targetRef 安全兜底到昵称页（不崩溃）
+    expect(DeepLinkRoutes.pushPayloadToLocation('NAME_RESET', null), '/me');
+  });
+
+  test('AVATAR_RESET（内容审核 cm-5）→ targetRef 区分用户头像 vs 宠物头像', () {
+    // 用户头像重置：targetRef="USER_AVATAR" → 我的页（编辑资料底抽屉换头像入口）
+    expect(DeepLinkRoutes.pushPayloadToLocation('AVATAR_RESET', 'USER_AVATAR'), '/me');
+    // 宠物头像重置：targetRef=cardToken → 宠物档案编辑页（换头像入口，V1 单宠物自解析，不拼 token 入路径）
+    expect(DeepLinkRoutes.pushPayloadToLocation('AVATAR_RESET', 'card_abc123'), '/profile/edit');
+    // 缺 targetRef 安全兜底到我的页（不崩溃）
+    expect(DeepLinkRoutes.pushPayloadToLocation('AVATAR_RESET', null), '/me');
+  });
+
+  test('CONTENT_REMOVED（内容审核 cm-3/6）→ targetRef=postId 落内容详情（帖子/评论共用）', () {
+    expect(DeepLinkRoutes.pushPayloadToLocation('CONTENT_REMOVED', '42'), '/content/42');
+    // 空/缺 targetRef → 无深链兜底（不拼非法路由）
+    expect(DeepLinkRoutes.pushPayloadToLocation('CONTENT_REMOVED', null),
+        DeepLinkRoutes.notificationsCenter);
+  });
+
+  test('REJECTED / TIMED_OUT / REPORT_REVIEWED（targetRef=null）→ 无深链，点击不跳（落兜底）', () {
+    expect(DeepLinkRoutes.pushPayloadToLocation('CONTENT_REVIEW_REJECTED', null),
+        DeepLinkRoutes.notificationsCenter);
+    expect(DeepLinkRoutes.pushPayloadToLocation('CONTENT_REVIEW_TIMED_OUT', null),
+        DeepLinkRoutes.notificationsCenter);
+    expect(DeepLinkRoutes.pushPayloadToLocation('REPORT_REVIEWED', null),
+        DeepLinkRoutes.notificationsCenter);
+  });
+
   test('未知 type / 空 token → 通知中心兜底（不崩溃）', () {
     expect(DeepLinkRoutes.pushPayloadToLocation('SOMETHING_NEW', 'x'),
         DeepLinkRoutes.notificationsCenter);

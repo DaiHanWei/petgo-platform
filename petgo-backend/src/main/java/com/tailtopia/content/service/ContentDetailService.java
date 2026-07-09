@@ -8,6 +8,7 @@ import com.tailtopia.content.dto.ContentDetailResponse;
 import com.tailtopia.content.repository.CommentRepository;
 import com.tailtopia.content.repository.ContentLikeRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
+import com.tailtopia.moderation.service.ReportService;
 import com.tailtopia.shared.error.AppException;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -29,13 +30,16 @@ public class ContentDetailService {
     private final CommentRepository comments;
     private final ContentLikeRepository likes;
     private final AccountQueryService accountQueryService;
+    private final ReportService reportService;
 
     public ContentDetailService(ContentPostRepository posts, CommentRepository comments,
-            ContentLikeRepository likes, AccountQueryService accountQueryService) {
+            ContentLikeRepository likes, AccountQueryService accountQueryService,
+            ReportService reportService) {
         this.posts = posts;
         this.comments = comments;
         this.likes = likes;
         this.accountQueryService = accountQueryService;
+        this.reportService = reportService;
     }
 
     /**
@@ -51,9 +55,15 @@ public class ContentDetailService {
                 .filter(p -> p.getStatus() == PostStatus.PUBLISHED)
                 .orElseThrow(() -> AppException.notFound(GONE_DETAIL));
 
+        // 内容审核 cm-6 §5.4：举报者对该帖视同不可见——返回统一 404（与 ReportService.isVisible 语义一致，防枚举）。
+        if (viewerId != null && reportService.hasReported(postId, viewerId)) {
+            throw AppException.notFound(GONE_DETAIL);
+        }
+
         AuthorView author = accountQueryService.findAuthorViews(List.of(post.getAuthorId()))
                 .get(post.getAuthorId());
-        long commentCount = comments.countByPostIdAndDeletedAtIsNull(postId);
+        // viewer 维度可见性计数（story 3 §5.5）：公开可见 + viewer 自己的非可见评论，与渲染列表一致。
+        long commentCount = comments.countVisibleForViewer(postId, viewerId);
         // 用 equals 而非 ==：两者均为装箱 Long，== 是引用比较，id>127（越过 Long 缓存）会误判 false。
         boolean isAuthor = viewerId != null && viewerId.equals(post.getAuthorId());
         // Story 3.4：真实点赞计数 + 当前用户是否已赞（游客 false）。

@@ -97,10 +97,11 @@ class CommentQueryServiceTest {
         List<Comment> rows = IntStream.range(0, 11)
                 .mapToObj(i -> comment(i + 1, null, 100 + i, base.plusSeconds(i)))
                 .toList();
-        when(comments.findTopLevel(eq(1L), anyBoolean(), any(), any(), any(Pageable.class))).thenReturn(rows);
-        when(comments.findRepliesForParents(anyList())).thenReturn(List.of());
+        when(comments.findTopLevel(eq(1L), anyBoolean(), any(), any(), any(), any(Pageable.class)))
+                .thenReturn(rows);
+        when(comments.findRepliesForParents(anyList(), any())).thenReturn(List.of());
 
-        CommentPageResponse page = service.topLevel(1L, null);
+        CommentPageResponse page = service.topLevel(1L, null, null);
         assertThat(page.items()).hasSize(10);
         assertThat(page.hasMore()).isTrue();
         assertThat(page.nextCursor()).isNotNull();
@@ -113,15 +114,15 @@ class CommentQueryServiceTest {
     void topLevelInlinesFirstThreeRepliesWithCount() {
         Instant base = Instant.parse("2026-06-02T00:00:00Z");
         Comment top = comment(1, null, 50, base);
-        when(comments.findTopLevel(eq(1L), anyBoolean(), any(), any(), any(Pageable.class)))
+        when(comments.findTopLevel(eq(1L), anyBoolean(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(List.of(top));
         // 该一级有 8 条二级回复。
         List<Comment> replies = IntStream.range(0, 8)
                 .mapToObj(i -> comment(100 + i, 1L, 200 + i, base.plusSeconds(i + 1)))
                 .toList();
-        when(comments.findRepliesForParents(anyList())).thenReturn(replies);
+        when(comments.findRepliesForParents(anyList(), any())).thenReturn(replies);
 
-        CommentPageResponse page = service.topLevel(1L, null);
+        CommentPageResponse page = service.topLevel(1L, null, null);
         assertThat(page.items()).hasSize(1);
         assertThat(page.items().get(0).replyCount()).isEqualTo(8); // 总数
         assertThat(page.items().get(0).replies()).hasSize(3); // 内嵌前 3
@@ -134,9 +135,10 @@ class CommentQueryServiceTest {
         List<Comment> rows = IntStream.range(0, 11)
                 .mapToObj(i -> comment(100 + i, 1L, 200 + i, base.plusSeconds(i)))
                 .toList();
-        when(comments.findReplies(eq(1L), anyBoolean(), any(), any(), any(Pageable.class))).thenReturn(rows);
+        when(comments.findReplies(eq(1L), anyBoolean(), any(), any(), any(), any(Pageable.class)))
+                .thenReturn(rows);
 
-        CommentPageResponse page = service.replies(1L, null);
+        CommentPageResponse page = service.replies(1L, null, null);
         assertThat(page.items()).hasSize(10);
         assertThat(page.hasMore()).isTrue();
         // 二级回复 replyCount/replies 为 null。
@@ -147,6 +149,6 @@ class CommentQueryServiceTest {
     @Test
     void commentsOnInvisiblePostAreNotFound() {
         when(posts.findById(99L)).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> service.topLevel(99L, null)).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.topLevel(99L, null, null)).isInstanceOf(AppException.class);
     }
 }

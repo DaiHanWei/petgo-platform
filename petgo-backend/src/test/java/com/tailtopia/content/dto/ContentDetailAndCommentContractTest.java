@@ -49,25 +49,27 @@ class ContentDetailAndCommentContractTest {
     }
 
     @Test
-    void topLevelCommentHasNineFields() {
+    void topLevelCommentHasModerationStatusField() {
+        // story 3：新增 moderationStatus 字段（VISIBLE 无标签；TAKEN_DOWN 前端渲染「仅你可见」）。
         CommentResponse top = new CommentResponse(
                 10L, 7L, "小明", "https://cdn/a.jpg", false, "评论正文",
-                Instant.parse("2026-06-05T00:00:00Z"), 3, List.of());
+                Instant.parse("2026-06-05T00:00:00Z"), 3, List.of(), "VISIBLE");
 
         assertThat(wire(top).keySet()).isEqualTo(Set.of(
                 "id", "authorId", "authorNickname", "authorAvatarUrl", "authorDeleted",
-                "body", "createdAt", "replyCount", "replies"));
+                "body", "createdAt", "replyCount", "replies", "moderationStatus"));
     }
 
     @Test
     void replyCommentOmitsReplyCountAndReplies() {
-        // 二级回复无嵌套：replyCount/replies 为 null → NON_NULL 省略。
+        // 二级回复无嵌套：replyCount/replies 为 null → NON_NULL 省略；moderationStatus 始终下发。
         CommentResponse reply = new CommentResponse(
                 11L, 8L, "小红", null, false, "回复正文",
-                Instant.parse("2026-06-05T00:00:00Z"), null, null);
+                Instant.parse("2026-06-05T00:00:00Z"), null, null, "VISIBLE");
 
         assertThat(wire(reply).keySet()).isEqualTo(Set.of(
-                "id", "authorId", "authorNickname", "authorDeleted", "body", "createdAt"));
+                "id", "authorId", "authorNickname", "authorDeleted", "body", "createdAt",
+                "moderationStatus"));
         assertThat(wire(reply)).doesNotContainKey("replyCount");
     }
 

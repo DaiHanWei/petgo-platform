@@ -27,6 +27,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ReportService {
 
+    /**
+     * P0 阈值（内容审核 cm-6 §5.1）：同一内容去重唯一举报用户数 ≥ 此值即 P0 自动预处置。
+     * 计数天然 = 唯一用户数（唯一约束 + 举报即隐藏，D-CM7），无需额外 DISTINCT。
+     */
+    static final long P0_REPORT_COUNT_THRESHOLD = 10;
+
     private final ContentReportRepository reports;
     private final ContentService contentService;
 
@@ -35,20 +41,54 @@ public class ReportService {
         this.contentService = contentService;
     }
 
-    /** 提交举报。重复举报（同 reporter 同 post）幂等；**不触发任何自动下架**。 */
+    /**
+     * 提交举报。重复举报（同 reporter 同 post）幂等。
+     *
+     * <p>写工单本身即完成「对举报者隐藏」的数据落地（隐藏判据=该 reporter 对该 post 存在举报记录，见 §4.1/§5.3；
+     * 读路径过滤在 {@code findFeed} / 详情）——零新增写。
+     *
+     * <p>写入后**同事务同步**算 P0 阈值并按需自动预处置（cm-6 §5.2，R3：QPS 极低、O(1)、需强一致，禁 @Async/MQ）。
+     * P1/P2 不改内容可见性（仅工单累积，按计数派生优先级由后台读时映射）。
+     */
     @Transactional
     public void submit(long postId, long reporterId, ReportReason reason) {
         if (!contentService.isVisible(postId)) {
             throw AppException.notFound("内容不存在");
         }
         if (reports.existsByPostIdAndReporterId(postId, reporterId)) {
-            return; // 幂等：已举报过
+            return; // 幂等：已举报过（隐藏已成立，计数/预处置状态不变）
         }
         try {
             reports.save(ContentReport.create(postId, reporterId, reason));
         } catch (DataIntegrityViolationException e) {
-            // 并发撞唯一约束：幂等吞掉。
+            return; // 并发撞唯一约束：本次未新增，预处置交由胜出线程处理，幂等吞掉。
         }
+        maybeApplyP0PreDisposal(postId, reason);
+    }
+
+    /**
+     * P0 阈值判定 + 自动预处置（cm-6 §5.2）。P0 = 含 {@code ILLEGAL} 原因（CM4：单次即触发，R2 取「是」）
+     * 或去重唯一举报用户数 ≥ {@link #P0_REPORT_COUNT_THRESHOLD}。命中则把**已发布**帖翻回挂起
+     * （{@link ContentService#applyReportHoldIfPublished}，幂等 + 不通知）。P1/P2 不在此触发任何动作。
+     *
+     * <p><b>不含</b>「三方高风险 ≥0.8」路径——该情形已由 cm-2 提交时（FR-12A）拦截，帖子从未公开发布（§5.1）。
+     */
+    private void maybeApplyP0PreDisposal(long postId, ReportReason justReported) {
+        boolean legalReport = justReported == ReportReason.ILLEGAL
+                || reports.existsByPostIdAndReasonType(postId, ReportReason.ILLEGAL);
+        long count = reports.countByPostId(postId); // 唯一约束 + 举报即隐藏 → 天然 = 唯一用户数（D-CM7）
+        if (legalReport || count >= P0_REPORT_COUNT_THRESHOLD) {
+            contentService.applyReportHoldIfPublished(postId);
+        }
+    }
+
+    /**
+     * 该用户是否已举报该帖（内容审核 cm-6 §5.4）：供内容详情读路径判「对举报者视同不可见 → 404」。
+     * 经 service 暴露给 content 侧，避免 content 直读 moderation repo（模块边界）。
+     */
+    @Transactional(readOnly = true)
+    public boolean hasReported(long postId, long reporterId) {
+        return reports.existsByPostIdAndReporterId(postId, reporterId);
     }
 
     @Transactional(readOnly = true)

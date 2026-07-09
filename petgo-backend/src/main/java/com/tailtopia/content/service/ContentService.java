@@ -9,6 +9,7 @@ import com.tailtopia.content.dto.ContentPostCreateRequest;
 import com.tailtopia.content.dto.ContentPostResponse;
 import com.tailtopia.content.event.ContentPublishedEvent;
 import com.tailtopia.content.event.ContentRemovedEvent;
+import com.tailtopia.content.moderation.ModerationOutcome;
 import com.tailtopia.content.repository.CommentRepository;
 import com.tailtopia.content.repository.ContentLikeRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
@@ -104,6 +105,19 @@ public class ContentService {
         }
     }
 
+    /**
+     * 注销联动（内容审核 story 9，§5.5.1）：把注销用户的帖子 + 评论置「作者已注销隐藏」态——对他人不可见、
+     * 内容保留（{@code deletedAt IS NULL}，与「已注销用户」匿名化并存；可见性层 ≠ 显示层，D-CM4 三机制之一）。
+     * 经门面批量收口（禁 admin/account 直读 content repo）。幂等（仅动仍可见/挂起态）。在 user 行删除前调用。
+     */
+    @Transactional
+    public void deactivateAuthorContent(long userId) {
+        Instant now = Instant.now();
+        int posted = posts.deactivateByAuthor(userId, now);
+        int commented = comments.deactivateByAuthor(userId, now);
+        log.info("注销联动内容隐藏 userId(agent) posts={} comments={}", posted, commented);
+    }
+
     /** 迷你主页发布数（Story 3.8）：某作者未软删的已发布内容数。经 service 暴露，不让 auth 直读 content 表。 */
     @Transactional(readOnly = true)
     public long countPublishedByAuthor(long authorId) {
@@ -171,6 +185,47 @@ public class ContentService {
                         : 0L;
                 events.publishEvent(new ContentPublishedEvent(p.getId(), p.getAuthorId(), p.getType(),
                         p.getPetId(), growthCount, p.getCreatedAt()));
+            }
+        });
+    }
+
+    /**
+     * 举报驱动 P0 自动预处置（内容审核 cm-6 §5.2）：把**已发布**帖翻回「仅作者可见待判」挂起态。
+     * 阈值判定在 moderation 侧（{@link com.tailtopia.moderation.service.ReportService}）算好后调用本方法。
+     *
+     * <p><b>幂等守卫</b>：仅当 {@code status==PUBLISHED && deletedAt==NULL && reportHiddenAt==NULL} 才处置——
+     * 已预处置（reportHiddenAt 非空）/ 已挂起 / 已删 一律 no-op，避免重复入队（AC-B6 幂等）。
+     * <p><b>不发任何事件、不推送通知</b>（预处置是中间态，非最终判定；D-CM6）。内容不删（deletedAt 保持 NULL）。
+     */
+    @Transactional
+    public void applyReportHoldIfPublished(long postId) {
+        posts.findById(postId).ifPresent(p -> {
+            if (p.getStatus() == PostStatus.PUBLISHED && p.getDeletedAt() == null
+                    && p.getReportHiddenAt() == null) {
+                p.applyReportHold();
+                posts.save(p);
+                log.info("举报驱动 P0 自动预处置转挂起 postId={}", postId);
+            }
+        });
+    }
+
+    /**
+     * 举报驱动 P0 误报恢复（内容审核 cm-6 §5.2 判误报 · D-CM6）：把 P0 预处置挂起帖恢复为 PUBLISHED。
+     * UNDER_REVIEW → PUBLISHED + 清 reportHiddenAt/reviewReason。
+     *
+     * <p><b>关键——不得双 fire 事件</b>：内容原本已 PUBLISHED（发布时已触发过里程碑等 {@link ContentPublishedEvent}），
+     * P0 只是把它暂时翻回挂起；误报恢复是「翻回公开」，**绝不再 fire {@link ContentPublishedEvent}、绝不通知作者**
+     * （区别于 {@link #approveReview}「发布前首次挂起通过」——那才 fire）。故本方法只改状态、不发事件。
+     * <p>幂等守卫：仅处置 {@code reportHiddenAt!=NULL && status==UNDER_REVIEW && deletedAt==NULL}；非 P0 挂起 no-op。
+     */
+    @Transactional
+    public void releaseReportHold(long postId) {
+        posts.findById(postId).ifPresent(p -> {
+            if (p.getReportHiddenAt() != null && p.getStatus() == PostStatus.UNDER_REVIEW
+                    && p.getDeletedAt() == null) {
+                p.releaseReportHold();
+                posts.save(p);
+                log.info("举报驱动 P0 误报恢复转公开 postId={}", postId);
             }
         });
     }
@@ -245,24 +300,36 @@ public class ContentService {
             petId = null;
         }
 
-        // AC8（R2 · F10）：发布写库前三方自动审核——文字关键词 + 图像识别。
-        ContentModerationService.Verdict verdict = moderation.moderate(text, imageUrls);
-        if (verdict != ContentModerationService.Verdict.PASS) {
-            // Story 4.3：未过自动审核——分支取决于人工审核开关（默认关 = 现网 FR-12 行为）。
-            if (!manualReviewGate.enabled()) {
-                // 默认路径：直接发布失败、不落库、不进队列（现网行为，AC2 必须保持不变）。
-                switch (verdict) {
-                    case TEXT_BLOCKED -> throw AppException.contentTextBlocked("内容包含不当词汇，请修改后重试");
-                    case IMAGE_BLOCKED -> throw AppException.contentImageBlocked("图片包含违规内容，请替换后重试");
-                    default -> { /* 不可达：已确保非 PASS 即 TEXT/IMAGE_BLOCKED */ }
-                }
+        // 发布写库前三方自动审核（内容审核 story 2 · 修订 F10 时序模型，消费 story 1 富评分 evaluate）。
+        // 判定优先级：L1 硬拦截 > 降级 fail-closed > 风险 ≥0.8 > 放行。
+        ModerationOutcome outcome = moderation.evaluate(text, imageUrls);
+        switch (outcome.verdict()) {
+            // ① L1 硬拦截：无论人工审核开关开关，一律即时 throw、不落库、不进挂起态（D-CM2）。
+            case TEXT_BLOCKED -> throw AppException.contentTextBlocked("内容包含不当词汇，请修改后重试");
+            case IMAGE_BLOCKED -> throw AppException.contentImageBlocked("图片包含违规内容，请替换后重试");
+            default -> { /* PASS / RISKY / DEGRADED 走下方分级路由 */ }
+        }
+
+        // ② 需人工挂起的条件：三方降级（fail-closed）或风险 ≥0.8（RISKY）。
+        boolean degraded = outcome.verdict() == ContentModerationService.Verdict.DEGRADED || outcome.degraded();
+        boolean riskHigh = outcome.verdict() == ContentModerationService.Verdict.RISKY;
+        if (degraded || riskHigh) {
+            if (manualReviewGate.enabled()) {
+                // 开关打开：落 UNDER_REVIEW + 审核元数据 + 入队挂起，不发 ContentPublishedEvent
+                // （不进 Feed、不触发里程碑）。返回 200 挂起帖（作者视角=已提交成功，无「审核中」标签）。
+                String reviewReason = degraded ? "DEGRADED_FAILCLOSED" : "RISK_HIGH";
+                java.math.BigDecimal riskScore = outcome.riskScore() >= 0
+                        ? java.math.BigDecimal.valueOf(outcome.riskScore())
+                                .setScale(3, java.math.RoundingMode.HALF_UP)
+                        : null; // 降级评分未知（-1）→ 不落
+                ContentPost pending = posts.save(ContentPost.pendingReview(
+                        authorId, req.type(), petId, text, imageUrls, eventDate, riskScore, reviewReason));
+                idempotency.store(idempotencyKey, pending.getId());
+                manualReviewGate.enqueue(pending.getId());
+                return ContentPostResponse.from(pending);
             }
-            // 人工审核已激活：落 UNDER_REVIEW + 入队挂起，不发 ContentPublishedEvent（不进 Feed）。
-            ContentPost pending = posts.save(ContentPost.pendingReview(
-                    authorId, req.type(), petId, text, imageUrls, eventDate));
-            idempotency.store(idempotencyKey, pending.getId());
-            manualReviewGate.enqueue(pending.getId());
-            return ContentPostResponse.from(pending);
+            // 开关关闭（现网默认）：无队列可挂，按放行发布（G1 关态行为逐字节不变，只有硬拦截失败）。
+            // fall-through 至下方正常发布路径。
         }
 
         ContentPost saved = posts.save(ContentPost.publish(
@@ -325,12 +392,16 @@ public class ContentService {
 
     /**
      * 名片快乐时刻流（Story 2.6 AC7 · F9）：按 {@code event_date} 倒序取最近 limit 条 GROWTH_MOMENT。
-     * 经 service 接口供 H5 名片取数（禁 join）。
+     * 经 service 接口供 H5 名片 / 里程碑打卡候选取数（禁 join）。
+     *
+     * <p><b>可见性（内容审核 story 2 · §5.4 补泄漏口）</b>：仅 {@code PUBLISHED}——名片是他人/公开视角，
+     * 挂起（UNDER_REVIEW）成长时刻零泄漏；里程碑打卡候选亦不含挂起帖（挂起帖不可被打卡关联）。
+     * 作者本人自看时间线（{@link #findGrowthMoments} 等）含挂起帖，口径不同。
      */
     @Transactional(readOnly = true)
     public List<GrowthMomentView> findRecentGrowthMomentsByEventDate(long authorId, int limit) {
-        return posts.findByAuthorIdAndTypeAndDeletedAtIsNullOrderByEventDateDescCreatedAtDesc(
-                        authorId, ContentType.GROWTH_MOMENT, PageRequest.of(0, limit))
+        return posts.findByAuthorIdAndTypeAndDeletedAtIsNullAndStatusOrderByEventDateDescCreatedAtDesc(
+                        authorId, ContentType.GROWTH_MOMENT, PostStatus.PUBLISHED, PageRequest.of(0, limit))
                 .stream()
                 .map(ContentService::toGrowthMomentView)
                 .toList();

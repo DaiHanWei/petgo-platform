@@ -33,5 +33,23 @@ public enum NotificationType {
     /** 人工审核通过 → 通知作者「已通过」（Story 4.3，仅开关激活后产生）。 */
     CONTENT_REVIEW_APPROVED,
     /** 人工审核未通过/超时丢弃 → 通知作者「未通过」（Story 4.3，仅开关激活后产生）。 */
-    CONTENT_REVIEW_REJECTED
+    CONTENT_REVIEW_REJECTED,
+    /**
+     * 昵称/宠物名违规重置 → 通知本人（内容审核 story 4，D-CM6/CM3）。单一类型，{@code targetRef} 区分：
+     * "NICKNAME" → 跳「设置昵称」页；否则为宠物 cardToken → 跳该宠物改名页。
+     * 显示串由 App 按 type 本地化（arb 文案归 cm-7），后端只发结构化通知。
+     */
+    NAME_RESET,
+    /**
+     * 用户/宠物头像违规重置 → 通知本人（内容审核 story 5，D-CM6/§5.5）。单一类型，{@code targetRef} 区分：
+     * "USER_AVATAR" → 跳我的页换头像入口；否则为宠物 cardToken → 跳该宠物档案编辑页换头像。
+     * 显示串由 App 按 type 本地化（arb 文案归 cm-7），后端只发结构化通知。
+     */
+    AVATAR_RESET,
+    /**
+     * 帖子人工审核队列超过 3 天未处理、自动超时丢弃 → 通知作者（内容审核 story 7，§8.8）。
+     * 与 {@link #CONTENT_REVIEW_REJECTED}（人工拒绝，§8.7）文案不同故拆型；App 只能按 type 本地化。
+     * {@code targetRef=null}（内容已丢弃、无深链，提示重发）。
+     */
+    CONTENT_REVIEW_TIMED_OUT
 }

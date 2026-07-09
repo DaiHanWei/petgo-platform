@@ -45,6 +45,14 @@ public class User {
     @Column(name = "nickname", length = 20)
     private String nickname;
 
+    /**
+     * 昵称当前是否为违规重置生成的系统默认编码名（{@code user_<hex>}，内容审核 story 4，D-CM4）。
+     * 违规重置 ≠ 注销匿名化：此标记只随违规重置写入的真实昵称，与 7.3「已注销用户」展示层无关。
+     * 用户主动改新昵称时清 false。
+     */
+    @Column(name = "is_system_default_name", nullable = false)
+    private boolean systemDefaultName = false;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "pet_status", length = 8)
     private PetStatus petStatus;
@@ -189,6 +197,16 @@ public class User {
 
     public void setNickname(String nickname) {
         this.nickname = nickname;
+    }
+
+    /** 昵称是否为违规重置的系统默认编码名（内容审核 story 4）。 */
+    public boolean isSystemDefaultName() {
+        return systemDefaultName;
+    }
+
+    /** 违规重置置 true；用户主动改新昵称时清 false。 */
+    public void setSystemDefaultName(boolean systemDefaultName) {
+        this.systemDefaultName = systemDefaultName;
     }
 
     public PetStatus getPetStatus() {

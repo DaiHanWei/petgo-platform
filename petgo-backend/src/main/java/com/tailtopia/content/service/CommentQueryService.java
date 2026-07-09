@@ -42,9 +42,12 @@ public class CommentQueryService {
         this.accountQueryService = accountQueryService;
     }
 
-    /** 一级评论分页（时间正序），每条内嵌前 3 条二级回复 + replyCount。 */
+    /**
+     * 一级评论分页（时间正序），每条内嵌前 3 条二级回复 + replyCount。
+     * viewer 维度可见性过滤（§5.5）：非 VISIBLE 评论仅作者本人可见，游客（viewerId=null）仅见 VISIBLE。
+     */
     @Transactional(readOnly = true)
-    public CommentPageResponse topLevel(long postId, String cursor) {
+    public CommentPageResponse topLevel(long postId, String cursor, Long viewerId) {
         requireVisiblePost(postId);
         FeedCursor decoded = decode(cursor);
 
@@ -52,16 +55,17 @@ public class CommentQueryService {
                 decoded != null,
                 decoded == null ? null : decoded.createdAt(),
                 decoded == null ? null : decoded.id(),
+                viewerId,
                 PageRequest.of(0, TOP_LEVEL_PAGE_SIZE + 1));
 
         boolean hasMore = rows.size() > TOP_LEVEL_PAGE_SIZE;
         List<Comment> page = hasMore ? rows.subList(0, TOP_LEVEL_PAGE_SIZE) : rows;
 
-        // 这一页一级评论的全部二级回复（用于取前 3 + 计数）。
+        // 这一页一级评论的 viewer 可见二级回复（用于取前 3 + 计数）。
         List<Long> parentIds = page.stream().map(Comment::getId).toList();
         Map<Long, List<Comment>> repliesByParent = new LinkedHashMap<>();
         if (!parentIds.isEmpty()) {
-            for (Comment r : comments.findRepliesForParents(parentIds)) {
+            for (Comment r : comments.findRepliesForParents(parentIds, viewerId)) {
                 repliesByParent.computeIfAbsent(r.getParentId(), k -> new ArrayList<>()).add(r);
             }
         }
@@ -87,14 +91,15 @@ public class CommentQueryService {
         return new CommentPageResponse(items, nextCursor(hasMore, page), hasMore);
     }
 
-    /** 展开某一级评论的全部二级回复（时间正序游标分页）。 */
+    /** 展开某一级评论的全部二级回复（时间正序游标分页），viewer 维度可见性过滤（§5.5）。 */
     @Transactional(readOnly = true)
-    public CommentPageResponse replies(long parentId, String cursor) {
+    public CommentPageResponse replies(long parentId, String cursor, Long viewerId) {
         FeedCursor decoded = decode(cursor);
         List<Comment> rows = comments.findReplies(parentId,
                 decoded != null,
                 decoded == null ? null : decoded.createdAt(),
                 decoded == null ? null : decoded.id(),
+                viewerId,
                 PageRequest.of(0, REPLY_PAGE_SIZE + 1));
 
         boolean hasMore = rows.size() > REPLY_PAGE_SIZE;

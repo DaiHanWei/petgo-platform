@@ -10,6 +10,8 @@ import com.tailtopia.auth.dto.UserProfileResponse;
 import com.tailtopia.auth.dto.VetLoginResponse;
 import com.tailtopia.auth.repository.RefreshTokenRepository;
 import com.tailtopia.auth.repository.UserRepository;
+import com.tailtopia.namemoderation.domain.NameTargetType;
+import com.tailtopia.namemoderation.event.NameSubmittedEvent;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.security.AppleIdentity;
@@ -20,6 +22,7 @@ import com.tailtopia.shared.security.JwtService;
 import com.tailtopia.vet.domain.VetAccount;
 import com.tailtopia.vet.service.VetAccountService;
 import java.time.Instant;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,10 +46,12 @@ public class AuthService {
     private final JwtService jwt;
     private final VetAccountService vetAccounts;
     private final PetProfileRepository petProfiles;
+    private final ApplicationEventPublisher events;
 
     public AuthService(UserRepository users, RefreshTokenRepository refreshTokens,
             GoogleTokenVerifier googleVerifier, AppleTokenVerifier appleVerifier,
-            JwtService jwt, VetAccountService vetAccounts, PetProfileRepository petProfiles) {
+            JwtService jwt, VetAccountService vetAccounts, PetProfileRepository petProfiles,
+            ApplicationEventPublisher events) {
         this.users = users;
         this.refreshTokens = refreshTokens;
         this.googleVerifier = googleVerifier;
@@ -54,6 +59,7 @@ public class AuthService {
         this.jwt = jwt;
         this.vetAccounts = vetAccounts;
         this.petProfiles = petProfiles;
+        this.events = events;
     }
 
     @Transactional
@@ -69,6 +75,14 @@ public class AuthService {
         // Story 3.2：停用账号即时不可登录（即便是已存在用户）。
         if (!user.isActiveStatus()) {
             throw AppException.forbidden(DEACTIVATED_MESSAGE);
+        }
+
+        // 内容审核 story 4（§10.2）：Google displayName→nickname 自动初值也送审（防第三方脏昵称绕过），
+        // 仅首建号且初值非空时；事务提交后异步评分（AFTER_COMMIT），不阻塞登录。
+        if (isNew[0] && user.getId() != null
+                && user.getNickname() != null && !user.getNickname().isBlank()) {
+            events.publishEvent(new NameSubmittedEvent(
+                    NameTargetType.NICKNAME, user.getId(), user.getNickname()));
         }
 
         String access = jwt.issueAccessToken(user);
