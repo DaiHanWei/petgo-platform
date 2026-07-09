@@ -81,7 +81,9 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
      * Feed 读取（Story 3.2）：全平台公开内容时间倒序游标分页，叠加宠物状态硬过滤 + 分类过滤。
      *
      * <ul>
-     *   <li>公开口径：{@code deleted_at IS NULL AND status=PUBLISHED}。</li>
+     *   <li>可见性：{@code deleted_at IS NULL} 且（{@code status=PUBLISHED} <b>或</b> 作者本人的 {@code UNDER_REVIEW}
+     *       挂起帖，即 {@code hasViewer=true AND authorId=viewerId}）。挂起帖对作者无感知（照常出现在首页），
+     *       对他人零泄漏（仅 PUBLISHED）；拒绝即软删（{@code deletedAt}），对所有人（含作者）隐藏。</li>
      *   <li>硬过滤（B 状态）：{@code excludeGrowth=true} → 排除 GROWTH_MOMENT（后端权威 WHERE）。</li>
      *   <li>分类：{@code type} 非空则精确过滤；{@code requirePet=true}（成长日历分类）→ pet_id 非空。</li>
      *   <li>游标：{@code (createdAt,id) < (cursorTs,cursorId)}（{@code hasCursor=false} = 首批）。
@@ -97,7 +99,9 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
     @Query("""
             SELECT p FROM ContentPost p
             WHERE p.deletedAt IS NULL
-              AND p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
+              AND (p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
+                   OR (p.status = com.tailtopia.content.domain.PostStatus.UNDER_REVIEW
+                       AND :hasViewer = true AND p.authorId = :viewerId))
               AND (:excludeGrowth = false OR p.type <> com.tailtopia.content.domain.ContentType.GROWTH_MOMENT)
               AND (:type IS NULL OR p.type = :type)
               AND (:requirePet = false OR p.petId IS NOT NULL)
