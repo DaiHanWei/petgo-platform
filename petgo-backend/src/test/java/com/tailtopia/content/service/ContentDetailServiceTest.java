@@ -109,6 +109,30 @@ class ContentDetailServiceTest {
         assertThatThrownBy(() -> service.getDetail(4L, 88L)).isInstanceOf(AppException.class);
     }
 
+    private static ContentPost underReview(long id, long authorId) {
+        ContentPost p = post(id, authorId, null);
+        set(p, "status", com.tailtopia.content.domain.PostStatus.UNDER_REVIEW);
+        return p;
+    }
+
+    @Test
+    void authorSeesOwnUnderReviewPost() {
+        // 内容审核 D-CM2：审核中作者无感知——本人可正常点入自己的挂起帖详情。
+        when(posts.findById(5L)).thenReturn(Optional.of(underReview(5L, 7L)));
+        when(accounts.findAuthorViews(anyList()))
+                .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", null, false)));
+        ContentDetailResponse d = service.getDetail(5L, 7L);
+        assertThat(d.isAuthor()).isTrue();
+    }
+
+    @Test
+    void othersGetNotFoundForUnderReviewPost() {
+        // 挂起帖对他人（含游客）零泄漏 → 统一 404 防枚举。
+        when(posts.findById(5L)).thenReturn(Optional.of(underReview(5L, 7L)));
+        assertThatThrownBy(() -> service.getDetail(5L, 88L)).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.getDetail(5L, null)).isInstanceOf(AppException.class);
+    }
+
     @Test
     void deletedAuthorStillReturns200Anonymized() {
         when(posts.findById(3L)).thenReturn(Optional.of(post(3L, 8L, null)));

@@ -50,9 +50,13 @@ public class ContentDetailService {
      */
     @Transactional(readOnly = true)
     public ContentDetailResponse getDetail(long postId, Long viewerId) {
+        // 可见性（内容审核 story 2 · D-CM2）：PUBLISHED 对所有人可见；UNDER_REVIEW 挂起帖仅作者本人可见
+        // （审核中作者无感知，可正常点入详情），对他人 404 防枚举；拒绝即软删（deletedAt），对所有人隐藏。
         ContentPost post = posts.findById(postId)
                 .filter(p -> p.getDeletedAt() == null)
-                .filter(p -> p.getStatus() == PostStatus.PUBLISHED)
+                .filter(p -> p.getStatus() == PostStatus.PUBLISHED
+                        || (p.getStatus() == PostStatus.UNDER_REVIEW
+                                && viewerId != null && viewerId.equals(p.getAuthorId())))
                 .orElseThrow(() -> AppException.notFound(GONE_DETAIL));
 
         // 内容审核 cm-6 §5.4：举报者对该帖视同不可见——返回统一 404（与 ReportService.isVisible 语义一致，防枚举）。
