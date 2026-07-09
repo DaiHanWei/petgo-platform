@@ -52,6 +52,10 @@ public class ContentModerationService {
     private final ModerationProperties props;
     private final ModerationCircuitBreaker circuitBreaker;
 
+    // @Autowired 显式指定 DI 构造器：本类另有一个无参（仅测试用）构造器，Spring 面对多构造器且无
+    // @Autowired 时会回退到无参构造 → 注入内部 StubContentSafetyClient，导致 mode=live 时真实
+    // 阿里云客户端 bean 被建却从不使用（评分恒为 stub 的 0.1）。标注后 Spring 走真实 DI（live 生效）。
+    @org.springframework.beans.factory.annotation.Autowired
     public ContentModerationService(KeywordRuleEngine keywordEngine, ContentSafetyClient safetyClient,
             ModerationProperties props, ModerationCircuitBreaker circuitBreaker) {
         this.keywordEngine = keywordEngine;
