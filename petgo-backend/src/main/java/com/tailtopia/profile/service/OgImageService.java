@@ -2,6 +2,7 @@ package com.tailtopia.profile.service;
 
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.shared.media.AliyunOssClient;
+import com.tailtopia.shared.media.MediaProperties;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics2D;
@@ -28,10 +29,13 @@ public class OgImageService {
 
     private final AliyunOssClient ossClient;
     private final ProfileService profileService;
+    private final MediaProperties props;
 
-    public OgImageService(AliyunOssClient ossClient, ProfileService profileService) {
+    public OgImageService(
+            AliyunOssClient ossClient, ProfileService profileService, MediaProperties props) {
         this.ossClient = ossClient;
         this.profileService = profileService;
+        this.props = props;
     }
 
     /** 渲染 OG 卡片 PNG 字节（名字 + 品种）。纯函数，L0 可测。 */
@@ -70,7 +74,8 @@ public class OgImageService {
      */
     public String regenerate(PetProfile profile) {
         byte[] png = render(profile.getName(), profile.getBreed());
-        String key = "public/og/" + profile.getId() + "/" + profile.getCardToken() + ".png";
+        String key = props.getOss().normalizedKeyPrefix()
+                + "public/og/" + profile.getId() + "/" + profile.getCardToken() + ".png";
         String url = ossClient.putPublicObject(key, png, "image/png");
         profileService.updateOgImageUrl(profile.getId(), url);
         return url;

@@ -24,7 +24,7 @@ class ImToOssArchiverTest {
     @BeforeEach
     void setUp() {
         oss = Mockito.mock(AliyunOssClient.class);
-        archiver = new ImToOssArchiver(oss, fetcherProvider);
+        archiver = new ImToOssArchiver(oss, fetcherProvider, new MediaProperties());
     }
 
     @Test

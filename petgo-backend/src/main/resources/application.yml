@@ -59,6 +59,8 @@ media:
     public-bucket: ${OSS_PUBLIC_BUCKET:}
     private-bucket: ${OSS_PRIVATE_BUCKET:}
     cdn-base-url: ${OSS_CDN_BASE_URL:}
+    # 对象 key 全局前缀。默认空=生产行为不变；staging 与生产共用同一桶时设为如 `stag/` 区分新上传对象。
+    key-prefix: ${MEDIA_OSS_KEY_PREFIX:}
   signed-url:
     ttl-seconds: ${SIGNED_URL_TTL_SECONDS:300}
     upload-ttl-seconds: ${UPLOAD_URL_TTL_SECONDS:600}
