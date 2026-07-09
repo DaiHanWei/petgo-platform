@@ -92,6 +92,9 @@ public class AliyunContentSafetyClient implements ContentSafetyClient {
             }
             Integer code = body.getCode();
             if (code == null || code != 200) {
+                // 诊断：阿里云 HTTP 200 外壳 + 业务错误码（如 service 码不存在/未开通）。仅记码/描述/requestId，非用户内容。
+                log.warn("Aliyun text moderation 业务错误：code={}, msg={}, requestId={}, service={}",
+                        code, body.getMessage(), body.getRequestId(), props.getAliyun().getTextService());
                 throw new ModerationDegradedException(classify(code == null ? 500 : code),
                         "aliyun biz code " + code);
             }
