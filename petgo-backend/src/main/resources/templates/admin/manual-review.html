@@ -6,6 +6,8 @@
     <meta charset="UTF-8"/>
     <title th:text="#{admin.review.title}">人工审核队列 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <!-- admin.js：原生 <dialog> 的 data-open/close-dialog 委托（拒绝弹框依赖），此前本页漏引致拒绝按钮无反应。 -->
+    <script defer th:src="@{/admin/admin.js}"></script>
     <script th:src="@{/admin/vendor/htmx.min.js}"></script>
 </head>
 <body>
@@ -76,16 +78,19 @@
                 </td>
                 <td th:text="${#temporals.format(r.submittedAt(), 'yyyy-MM-dd HH:mm')}">-</td>
                 <td sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')">
-                    <form th:action="@{/admin/manual-review/{id}/approve(id=${r.itemId()})}" method="post"
-                          class="inline-form">
-                        <button type="submit" class="btn btn-primary btn-sm"
-                                th:text="#{admin.review.approve}">通过</button>
-                    </form>
-                    <!-- 拒绝：点按钮弹框采集判定依据（违规类别）+ 选填备注（§5.2，折叠进审计，无原文）。
-                         data-open-dialog / data-close-dialog 由 admin.js 委托，无内联 JS。 -->
-                    <button type="button" class="btn btn-danger btn-sm"
-                            th:attr="data-open-dialog=|reject-dlg-${r.itemId()}|"
-                            th:text="#{admin.review.reject}">拒绝</button>
+                    <!-- 通过 / 拒绝 左右并排。 -->
+                    <div class="row-actions">
+                        <form th:action="@{/admin/manual-review/{id}/approve(id=${r.itemId()})}" method="post"
+                              class="inline">
+                            <button type="submit" class="btn btn-primary btn-sm"
+                                    th:text="#{admin.review.approve}">通过</button>
+                        </form>
+                        <!-- 拒绝：点按钮弹框采集判定依据（违规类别）+ 选填备注（§5.2，折叠进审计，无原文）。
+                             data-open-dialog / data-close-dialog 由 admin.js 委托，无内联 JS。 -->
+                        <button type="button" class="btn btn-danger btn-sm"
+                                th:attr="data-open-dialog=|reject-dlg-${r.itemId()}|"
+                                th:text="#{admin.review.reject}">拒绝</button>
+                    </div>
                     <dialog th:id="|reject-dlg-${r.itemId()}|" class="modal">
                         <div class="modal-head">
                             <h3 th:text="#{admin.review.reject.title}">拒绝并记录原因</h3>
