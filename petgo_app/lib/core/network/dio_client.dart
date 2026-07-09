@@ -14,10 +14,16 @@ import '../storage/secure_storage.dart';
 import 'api_log_interceptor.dart';
 import 'auth_interceptor.dart';
 
-/// 后端基址（运行时配置；env/--dart-define 注入，默认线上正式服）。
-/// 默认值为用户明确指令固定：非用户明确要求，不得改动此默认值。
-const String kApiBaseUrl =
-    String.fromEnvironment('PETGO_API_BASE_URL', defaultValue: 'https://api.tailtopia.id');
+/// 后端基址（运行时配置；env/--dart-define 注入）。
+/// - release / profile 包：默认线上正式服 [kApiBaseUrlProd]（用户明确指令固定，非明确要求不得改）。
+/// - debug 包：默认指向 staging [kApiBaseUrlStag]（内部联调，2026-07-09 用户指令）。
+/// 两者均可经 `--dart-define=PETGO_API_BASE_URL` 覆盖。
+const String kApiBaseUrlProd = 'https://api.tailtopia.id';
+const String kApiBaseUrlStag = 'https://api-stag.tailtopia.id';
+const String kApiBaseUrl = String.fromEnvironment(
+  'PETGO_API_BASE_URL',
+  defaultValue: kDebugMode ? kApiBaseUrlStag : kApiBaseUrlProd,
+);
 
 /// Google OAuth serverClientId（web client；公开值/非密钥，与 iOS Info.plist 的 GIDServerClientID 同一串）。
 /// 默认硬编码生产 web client：确保任何构建（含同事 pull 后漏传 dart-define 的 Android 包）拿到的
