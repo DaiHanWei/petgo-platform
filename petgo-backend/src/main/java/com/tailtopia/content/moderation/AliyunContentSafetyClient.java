@@ -150,12 +150,16 @@ public class AliyunContentSafetyClient implements ContentSafetyClient {
         } else {
             r = DegradeReason.HTTP_5XX;
         }
+        // 诊断：仅记阿里云 API 错误码 / httpStatus / 错误描述（非用户内容、非 AK），供排查 4xx（权限/service 码）。
+        log.warn("Aliyun text moderation 失败：errCode={}, httpStatus={}, apiMsg={}",
+                e.getCode(), e.statusCode, e.getMessage());
         return new ModerationDegradedException(r, "aliyun tea error");
     }
 
     private static ModerationDegradedException degradeFromGeneric(Exception e) {
         String n = e.getClass().getName().toLowerCase(Locale.ROOT);
         DegradeReason r = n.contains("timeout") ? DegradeReason.TIMEOUT : DegradeReason.HTTP_5XX;
+        log.warn("Aliyun text moderation 异常：{}: {}", e.getClass().getSimpleName(), e.getMessage());
         return new ModerationDegradedException(r, "aliyun call failed");
     }
 
