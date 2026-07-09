@@ -214,6 +214,9 @@ code { background: var(--brand-tint); color: var(--brand-strong); padding: 1px 5
 /* ===== 行内表单 ===== */
 form.inline { display: inline; margin: 0; }
 
+/* 队列操作列：通过 / 拒绝 左右并排。 */
+.row-actions { display: flex; gap: 8px; align-items: center; }
+
 /* ===== 工具类（替代零散内联 style） ===== */
 .cell-wide { max-width: 300px; }
 .mt-sm { margin: 8px 0; }
