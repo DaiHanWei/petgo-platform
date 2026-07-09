@@ -100,11 +100,19 @@ public class AliyunContentSafetyClient implements ContentSafetyClient {
             }
             var data = body.getData();
             String labels = data == null ? null : data.getLabels();
+            String reason = data == null ? null : data.getReason();
+            // 【临时诊断】打阿里云原始 labels + reason（含 customizedWords/customizedLibs），定位自定义词库命中结构；确认后删。
+            log.info("moderation raw: labels=[{}] reason={}", labels, reason);
+            // 运营自定义词库命中：不依赖 AI riskLevel，强制高危 → 进人工审核（宠物语境靠人判）。
+            String customLib = customLibHit(reason);
+            if (customLib != null) {
+                return new TextScore(0.9, "CUSTOM:" + customLib);
+            }
             if (labels == null || labels.isBlank()) {
-                return new TextScore(0.0, null); // 无风险标签 → PASS
+                return new TextScore(0.0, null); // 无风险标签且未命中自定义库 → PASS
             }
             String topLabel = labels.split(",")[0].trim().toUpperCase(Locale.ROOT);
-            double score = scoreFromReason(data.getReason());
+            double score = scoreFromReason(reason);
             return new TextScore(score, topLabel);
         } catch (ModerationDegradedException e) {
             throw e;
@@ -120,6 +128,36 @@ public class AliyunContentSafetyClient implements ContentSafetyClient {
         // 图像审核服务（ImageModeration）本期未开通（仅上文本）。fail-closed：转人工，绝不误 PASS/BLOCK。
         throw new ModerationDegradedException(DegradeReason.HTTP_4XX,
                 "aliyun image moderation not enabled (text-only rollout)");
+    }
+
+    /**
+     * 运营自定义词库命中检测：解析 Reason JSON 的 {@code customizedLibs} / {@code customizedWords}
+     * （阿里云自定义库命中回填）。命中返回库名（供 topLabel 展示），否则 null。结构容错：数组对象或字符串均判命中。
+     */
+    private static String customLibHit(String reason) {
+        if (reason == null || reason.isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode n = JSON.readTree(reason);
+            JsonNode libs = n.path("customizedLibs");
+            if (libs.isArray() && !libs.isEmpty()) {
+                JsonNode first = libs.get(0);
+                String name = first.path("libName").asText(null);
+                if (name == null) {
+                    name = first.path("name").asText(null);
+                }
+                return name != null ? name : "custom";
+            }
+            JsonNode words = n.path("customizedWords");
+            if ((words.isArray() && !words.isEmpty())
+                    || (words.isTextual() && !words.asText().isBlank())) {
+                return "custom";
+            }
+            return null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /** Reason JSON 的 {@code riskLevel} → 归一风险分；缺失/解析失败按「有标签即偏高」兜底 0.9（fail toward review）。 */
