@@ -75,6 +75,8 @@ public class ModerationProperties {
         /** env 注入，绝不入库/落日志；留空则复用 OSS 的 ALIYUN_ACCESS_KEY_ID。 */
         private String accessKeyId = "";
         private String accessKeySecret = "";
+        /** 文本审核 service 码（默认国际多语言标准版 text_standard；控制台命名以实际为准，可 env 覆盖）。 */
+        private String textService = "text_standard";
 
         public String getRegion() {
             return region;
@@ -106,6 +108,14 @@ public class ModerationProperties {
 
         public void setAccessKeySecret(String accessKeySecret) {
             this.accessKeySecret = accessKeySecret;
+        }
+
+        public String getTextService() {
+            return textService;
+        }
+
+        public void setTextService(String textService) {
+            this.textService = textService;
         }
     }
 

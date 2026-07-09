@@ -79,6 +79,8 @@ app:
       endpoint: ${MODERATION_ALIYUN_ENDPOINT:green-cip.ap-southeast-1.aliyuncs.com}
       access-key-id: ${MODERATION_ALIYUN_AK_ID:${ALIYUN_ACCESS_KEY_ID:}}
       access-key-secret: ${MODERATION_ALIYUN_AK_SECRET:${ALIYUN_ACCESS_KEY_SECRET:}}
+      # 文本审核 service 码。默认国际多语言标准版 text_standard；各账号控制台命名以实际为准，可 env 覆盖。
+      text-service: ${MODERATION_ALIYUN_TEXT_SERVICE:text_standard}
     image-threshold:
       porn: ${MODERATION_IMG_PORN:0.85}
       violence: ${MODERATION_IMG_VIOLENCE:0.80}

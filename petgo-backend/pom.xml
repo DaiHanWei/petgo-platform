@@ -106,6 +106,14 @@
 			</exclusions>
 		</dependency>
 
+		<!-- 内容审核（内容审核 Story 1，L2 接线）：阿里云内容安全 green20220302 typed SDK。
+		     文本审核走国际站多语言服务（ap-southeast-1，覆盖印尼语）。凭证 env 注入，绝不入库。 -->
+		<dependency>
+			<groupId>com.aliyun</groupId>
+			<artifactId>green20220302</artifactId>
+			<version>3.3.3</version>
+		</dependency>
+
 		<dependency>
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>
