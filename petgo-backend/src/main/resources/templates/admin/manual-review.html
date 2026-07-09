@@ -81,22 +81,39 @@
                         <button type="submit" class="btn btn-primary btn-sm"
                                 th:text="#{admin.review.approve}">通过</button>
                     </form>
-                    <!-- 拒绝：采集判定依据（违规类别）+ 备注（§5.2，折叠进审计，无原文）。 -->
-                    <form th:action="@{/admin/manual-review/{id}/reject(id=${r.itemId()})}" method="post"
-                          class="inline-form">
-                        <select name="category" aria-label="category">
-                            <option value="ILLEGAL" th:text="#{admin.review.cat.illegal}">违法</option>
-                            <option value="HATE" th:text="#{admin.review.cat.hate}">仇恨</option>
-                            <option value="PORN" th:text="#{admin.review.cat.porn}">色情</option>
-                            <option value="POLITICAL" th:text="#{admin.review.cat.political}">政治敏感</option>
-                            <option value="AD" th:text="#{admin.review.cat.ad}">广告引流</option>
-                            <option value="HARASSMENT" th:text="#{admin.review.cat.harassment}">骚扰</option>
-                            <option value="OTHER" selected th:text="#{admin.review.cat.other}">其他</option>
-                        </select>
-                        <input type="text" name="note" class="input-sm" th:placeholder="#{admin.review.reject.note}"/>
-                        <button type="submit" class="btn btn-danger btn-sm"
-                                th:text="#{admin.review.reject}">拒绝</button>
-                    </form>
+                    <!-- 拒绝：点按钮弹框采集判定依据（违规类别）+ 选填备注（§5.2，折叠进审计，无原文）。
+                         data-open-dialog / data-close-dialog 由 admin.js 委托，无内联 JS。 -->
+                    <button type="button" class="btn btn-danger btn-sm"
+                            th:attr="data-open-dialog=|reject-dlg-${r.itemId()}|"
+                            th:text="#{admin.review.reject}">拒绝</button>
+                    <dialog th:id="|reject-dlg-${r.itemId()}|" class="modal">
+                        <div class="modal-head">
+                            <h3 th:text="#{admin.review.reject.title}">拒绝并记录原因</h3>
+                            <button type="button" class="modal-close" data-close-dialog aria-label="Close">&times;</button>
+                        </div>
+                        <form th:action="@{/admin/manual-review/{id}/reject(id=${r.itemId()})}" method="post">
+                            <div class="modal-body">
+                                <label class="field" th:text="#{admin.review.reject.category}">原因</label>
+                                <select name="category" class="field-full" aria-label="category">
+                                    <option value="ILLEGAL" th:text="#{admin.review.cat.illegal}">违法</option>
+                                    <option value="HATE" th:text="#{admin.review.cat.hate}">仇恨</option>
+                                    <option value="PORN" th:text="#{admin.review.cat.porn}">色情</option>
+                                    <option value="POLITICAL" th:text="#{admin.review.cat.political}">政治敏感</option>
+                                    <option value="AD" th:text="#{admin.review.cat.ad}">广告引流</option>
+                                    <option value="HARASSMENT" th:text="#{admin.review.cat.harassment}">骚扰</option>
+                                    <option value="OTHER" selected th:text="#{admin.review.cat.other}">其他</option>
+                                </select>
+                                <label class="field" th:text="#{admin.review.reject.note}">备注（选填）</label>
+                                <textarea name="note" rows="2" class="field-full"></textarea>
+                            </div>
+                            <div class="modal-foot">
+                                <button type="button" class="btn btn-neutral" data-close-dialog
+                                        th:text="#{admin.review.cancel}">取消</button>
+                                <button type="submit" class="btn btn-danger"
+                                        th:text="#{admin.review.reject.confirm}">确认拒绝</button>
+                            </div>
+                        </form>
+                    </dialog>
                 </td>
             </tr>
             <tr th:if="${#lists.isEmpty(items)}">
