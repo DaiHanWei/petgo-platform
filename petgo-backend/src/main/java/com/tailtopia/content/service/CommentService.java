@@ -7,6 +7,7 @@ import com.tailtopia.content.domain.CommentModerationStatus;
 import com.tailtopia.content.domain.ContentPost;
 import com.tailtopia.content.domain.PostStatus;
 import com.tailtopia.content.dto.CommentResponse;
+import com.tailtopia.content.event.CommentSubmittedEvent;
 import com.tailtopia.content.event.ContentCommentedEvent;
 import com.tailtopia.content.repository.CommentRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
@@ -54,21 +55,18 @@ public class CommentService {
         this.reviewGate = reviewGate;
     }
 
-    /** 发表一级评论（含同步审核过滤）。 */
+    /**
+     * 发表一级评论（异步无感知审核）。L1 硬黑名单同步即时 422（明显违规秒拒、给反馈、不落库）；否则落
+     * {@code UNDER_REVIEW} 秒回（评论人自己即可见），阿里云评分交异步——通过才转 VISIBLE + 通知楼主。
+     */
     @Transactional
     public CommentResponse createTopLevel(long postId, long authorId, String body) {
-        ContentPost post = requireVisible(postId);
-        boolean degraded = applyModeration(body); // L1/HIGH_RISK 在此 throw 422（从未落库）
-        Comment saved = comments.save(degraded
-                ? Comment.createUnderReview(postId, null, authorId, body)
-                : Comment.create(postId, null, authorId, body));
-        if (degraded) {
-            // G2：挂起 → 入队（不受开关门控），不发新评论事件（G4）。
-            reviewGate.enqueueComment(saved.getId(), saved.getContentVersion());
-        } else {
-            events.publishEvent(new ContentCommentedEvent(
-                    postId, saved.getId(), authorId, post.getAuthorId(), null, Instant.now()));
+        requireVisible(postId);
+        if (moderation.isL1Blocked(body)) {
+            throw AppException.commentBlocked(L1_BLOCKED_MESSAGE);
         }
+        Comment saved = comments.save(Comment.createUnderReview(postId, null, authorId, body));
+        events.publishEvent(new CommentSubmittedEvent(saved.getId(), body, saved.getContentVersion()));
         return CommentResponse.topLevel(saved, authorView(authorId), 0, List.of());
     }
 
@@ -80,33 +78,27 @@ public class CommentService {
                 .orElseThrow(() -> AppException.notFound("评论不存在"));
         ContentPost post = requireVisible(parent.getPostId());
 
-        boolean degraded = applyModeration(body); // L1/HIGH_RISK 在此 throw 422（从未落库）
+        if (moderation.isL1Blocked(body)) {
+            throw AppException.commentBlocked(L1_BLOCKED_MESSAGE);
+        }
 
         // 两级约束：若被回复者本身是二级，则归并到它的一级父。
         long topLevelParentId = parent.isTopLevel() ? parent.getId() : parent.getParentId();
 
-        Comment saved = comments.save(degraded
-                ? Comment.createUnderReview(post.getId(), topLevelParentId, authorId, body)
-                : Comment.create(post.getId(), topLevelParentId, authorId, body));
-        if (degraded) {
-            reviewGate.enqueueComment(saved.getId(), saved.getContentVersion());
-        } else {
-            publishCommented(saved, post.getAuthorId());
-        }
+        Comment saved = comments.save(
+                Comment.createUnderReview(post.getId(), topLevelParentId, authorId, body));
+        events.publishEvent(new CommentSubmittedEvent(saved.getId(), body, saved.getContentVersion()));
         return CommentResponse.reply(saved, authorView(authorId));
     }
 
     /**
-     * 同步审核分派（§5.2）。L1_BLOCKED/HIGH_RISK → throw 422（从未落库/不发事件/不入队）；
-     * DEGRADED → 返回 true（挂起入队）；PASS → 返回 false（正常落库发事件）。
+     * 异步审核路由入队（内容审核 story 3 · 异步化）：高危 / 三方降级 / 审核异常 → 入人工队列
+     * （fail-closed，绝不自动放行）。{@code @Transactional} 供 {@code CommentModerationListener}（@Async）
+     * 跨 bean 调用，AFTER_COMMIT 后起新事务。
      */
-    private boolean applyModeration(String body) {
-        return switch (moderation.moderateComment(body)) {
-            case L1_BLOCKED -> throw AppException.commentBlocked(L1_BLOCKED_MESSAGE);
-            case HIGH_RISK -> throw AppException.commentBlocked(HIGH_RISK_MESSAGE);
-            case DEGRADED -> true;
-            case PASS -> false;
-        };
+    @Transactional
+    public void queueForReview(long commentId, int contentVersion) {
+        reviewGate.enqueueComment(commentId, contentVersion);
     }
 
     /**

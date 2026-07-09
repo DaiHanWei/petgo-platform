@@ -21,6 +21,7 @@ import com.tailtopia.content.domain.Comment;
 import com.tailtopia.content.domain.CommentModerationStatus;
 import com.tailtopia.content.domain.ContentPost;
 import com.tailtopia.content.domain.ContentType;
+import com.tailtopia.content.event.CommentSubmittedEvent;
 import com.tailtopia.content.event.ContentCommentedEvent;
 import com.tailtopia.content.repository.CommentRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
@@ -112,17 +113,20 @@ class CommentServiceTest {
     }
 
     @Test
-    void topLevelCommentSavedAndEventPublished() {
+    void topLevelCommentSavedUnderReviewPublishesSubmittedEvent() {
+        // 异步无感知：提交即落 UNDER_REVIEW（评论人自己可见）+ 发 CommentSubmittedEvent（触发异步审核），
+        // 不发 ContentCommentedEvent（通过才通知楼主）、不在创建时入队。
         postBy(1L, 7L);
         service.createTopLevel(1L, 9L, "nice");
         ArgumentCaptor<Comment> cap = ArgumentCaptor.forClass(Comment.class);
         verify(comments).save(cap.capture());
         assertThat(cap.getValue().getParentId()).isNull(); // 一级
-        ArgumentCaptor<ContentCommentedEvent> ev = ArgumentCaptor.forClass(ContentCommentedEvent.class);
+        assertThat(cap.getValue().getModerationStatus()).isEqualTo(CommentModerationStatus.UNDER_REVIEW);
+        ArgumentCaptor<Object> ev = ArgumentCaptor.forClass(Object.class);
         verify(events).publishEvent(ev.capture());
-        assertThat(ev.getValue().commenterId()).isEqualTo(9L);
-        assertThat(ev.getValue().contentAuthorId()).isEqualTo(7L);
-        assertThat(ev.getValue().parentAuthorId()).isNull();
+        assertThat(ev.getValue()).isInstanceOf(CommentSubmittedEvent.class);
+        assertThat(((CommentSubmittedEvent) ev.getValue()).commentId()).isEqualTo(500L);
+        verify(reviewGate, never()).enqueueComment(anyLong(), anyInt());
     }
 
     @Test
@@ -194,65 +198,41 @@ class CommentServiceTest {
         verify(comments, never()).findByParentIdAndDeletedAtIsNull(org.mockito.ArgumentMatchers.anyLong());
     }
 
-    // ===== story 3：创建同步过滤路由（AC-B3） =====
+    // ===== story 3 异步化：创建路由（L1 同步即拒 / 其余落挂起走异步） =====
 
     @Test
-    void l1BlockedNeverPersistsNoEventNoEnqueue() {
+    void l1BlockedRejectsImmediatelyNeverPersists() {
+        // L1 硬黑名单：同步即时 422（明显违规秒拒），从未落库/不发事件/不入队。
         postBy(1L, 7L);
-        when(moderation.moderateComment(anyString())).thenReturn(CommentVerdict.L1_BLOCKED);
+        when(moderation.isL1Blocked(anyString())).thenReturn(true);
         assertThatThrownBy(() -> service.createTopLevel(1L, 9L, "judi"))
                 .isInstanceOf(AppException.class);
         verify(comments, never()).save(any());
         verify(events, never()).publishEvent(any());
         verify(reviewGate, never()).enqueueComment(anyLong(), anyInt());
+        // L1 预检不打三方（无网络）。
+        verify(moderation, never()).moderateComment(anyString());
     }
 
     @Test
-    void highRiskNeverPersistsNoEventNoEnqueue() {
-        postBy(1L, 7L);
-        when(moderation.moderateComment(anyString())).thenReturn(CommentVerdict.HIGH_RISK);
-        assertThatThrownBy(() -> service.createTopLevel(1L, 9L, "risky"))
-                .isInstanceOf(AppException.class);
-        verify(comments, never()).save(any());
-        verify(events, never()).publishEvent(any());
-        verify(reviewGate, never()).enqueueComment(anyLong(), anyInt());
-    }
-
-    @Test
-    void degradedTopLevelPersistsUnderReviewEnqueuesNoEvent() {
-        postBy(1L, 7L);
-        when(moderation.moderateComment(anyString())).thenReturn(CommentVerdict.DEGRADED);
-        service.createTopLevel(1L, 9L, "stub-timeout");
-        ArgumentCaptor<Comment> cap = ArgumentCaptor.forClass(Comment.class);
-        verify(comments).save(cap.capture());
-        assertThat(cap.getValue().getModerationStatus()).isEqualTo(CommentModerationStatus.UNDER_REVIEW);
-        verify(reviewGate).enqueueComment(eq(500L), eq(1)); // 捕获入队版本
-        verify(events, never()).publishEvent(any()); // G4：挂起期不发新评论通知
-    }
-
-    @Test
-    void degradedReplyPersistsUnderReviewEnqueuesNoEvent() {
+    void cleanReplySavedUnderReviewPublishesSubmittedEvent() {
         when(comments.findById(10L)).thenReturn(Optional.of(existingComment(10L, null, 3L, 1L)));
         postBy(1L, 7L);
-        when(moderation.moderateComment(anyString())).thenReturn(CommentVerdict.DEGRADED);
-        service.createReply(10L, 9L, "stub-5xx");
+        service.createReply(10L, 9L, "reply");
         ArgumentCaptor<Comment> cap = ArgumentCaptor.forClass(Comment.class);
         verify(comments).save(cap.capture());
         assertThat(cap.getValue().getModerationStatus()).isEqualTo(CommentModerationStatus.UNDER_REVIEW);
         assertThat(cap.getValue().getParentId()).isEqualTo(10L);
-        verify(reviewGate).enqueueComment(eq(500L), eq(1));
-        verify(events, never()).publishEvent(any());
+        ArgumentCaptor<Object> ev = ArgumentCaptor.forClass(Object.class);
+        verify(events).publishEvent(ev.capture());
+        assertThat(ev.getValue()).isInstanceOf(CommentSubmittedEvent.class);
+        verify(reviewGate, never()).enqueueComment(anyLong(), anyInt()); // 创建时不入队
     }
 
     @Test
-    void passPersistsVisibleAndPublishesEvent() {
-        postBy(1L, 7L);
-        service.createTopLevel(1L, 9L, "nice");
-        ArgumentCaptor<Comment> cap = ArgumentCaptor.forClass(Comment.class);
-        verify(comments).save(cap.capture());
-        assertThat(cap.getValue().getModerationStatus()).isEqualTo(CommentModerationStatus.VISIBLE);
-        verify(events).publishEvent(any(ContentCommentedEvent.class));
-        verify(reviewGate, never()).enqueueComment(anyLong(), anyInt());
+    void queueForReviewDelegatesToGate() {
+        service.queueForReview(500L, 3);
+        verify(reviewGate).enqueueComment(500L, 3);
     }
 
     // ===== story 3：队列处置门面（AC-B4/B6） =====
