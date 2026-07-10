@@ -21,4 +21,7 @@ public interface ContentPostAdminSearch {
      */
     List<AdminContentRow> adminSearch(ContentType type, Long authorId, Instant from, Instant to,
             Boolean deleted, String keyword, int limit, int offset);
+
+    /** 按 id 取单条后台行投影（HTMX 局部刷新用）；不存在返回 {@code null}。 */
+    AdminContentRow adminRowById(long postId);
 }

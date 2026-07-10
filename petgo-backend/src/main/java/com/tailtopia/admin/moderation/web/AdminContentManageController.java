@@ -62,22 +62,35 @@ public class AdminContentManageController {
     @PostMapping("/admin/content/{postId}/takedown")
     @PreAuthorize(BROWSE_AUTH)
     public String takedown(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long postId,
-            @RequestParam("reason") String reason, RedirectAttributes flash) {
+            @RequestParam("reason") String reason,
+            @RequestHeader(value = "HX-Request", required = false) String hxRequest,
+            Model model, RedirectAttributes flash) {
         try {
             contentManage.takedown(postId, reason, admin.getAdminAccountId());
             flash.addFlashAttribute("notice", "已下架该内容（已通知作者，操作留审计）");
         } catch (AppException e) {
             flash.addFlashAttribute("error", e.getMessage());
         }
-        return "redirect:/admin/content";
+        // HTMX：只回该行片段（原地替换、不整页刷新、不回顶）；非 HTMX 退回 PRG 整页。
+        return rowOrRedirect(hxRequest, postId, model);
     }
 
     @PostMapping("/admin/content/{postId}/restore")
     @PreAuthorize(RESTORE_AUTH)
     public String restore(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long postId,
-            RedirectAttributes flash) {
+            @RequestHeader(value = "HX-Request", required = false) String hxRequest,
+            Model model, RedirectAttributes flash) {
         contentManage.restore(postId, admin.getAdminAccountId());
         flash.addFlashAttribute("notice", "已恢复该内容（重新进入公开口径；评论/点赞不随恢复）");
+        return rowOrRedirect(hxRequest, postId, model);
+    }
+
+    /** HTMX 请求 → 回单行片段（原地替换当前行）；否则 PRG 整页重定向。 */
+    private String rowOrRedirect(String hxRequest, long postId, Model model) {
+        if (hxRequest != null) {
+            model.addAttribute("c", contentManage.row(postId));
+            return "admin/content :: row";
+        }
         return "redirect:/admin/content";
     }
 }

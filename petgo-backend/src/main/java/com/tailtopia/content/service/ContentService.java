@@ -158,6 +158,12 @@ public class ContentService {
         return posts.adminSearch(type, authorId, from, to, deleted, keyword, limit, offset);
     }
 
+    /** 后台按 id 取单条内容行（HTMX 局部刷新用）；不存在返回 null。 */
+    @Transactional(readOnly = true)
+    public com.tailtopia.content.dto.AdminContentRow adminRow(long postId) {
+        return posts.adminRowById(postId);
+    }
+
     /** 后台恢复已下架内容（Story 4.2）：清 deletedAt（幂等：未删 no-op）。评论保持软删、点赞不还原（V1 接受）。 */
     @Transactional
     public void restore(long postId) {

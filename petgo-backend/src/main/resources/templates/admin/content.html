@@ -70,48 +70,60 @@
             </tr>
             </thead>
             <tbody id="content-rows" th:fragment="rows">
-            <tr th:each="c : ${items}">
-                <td th:text="${c.id()}">1</td>
-                <td th:text="${c.type()}">DAILY</td>
-                <td th:text="${c.authorId()}">-</td>
-                <td class="muted cell-wide" th:text="${#strings.abbreviate(c.textPreview(), 60)}">…</td>
-                <td>
-                    <span th:if="${c.imageUrls() == null or #lists.isEmpty(c.imageUrls())}" class="muted">—</span>
-                    <a th:each="img : ${c.imageUrls()}" th:href="${img}" target="_blank" rel="noopener">
-                        <img th:src="${img}" alt="" loading="lazy"
-                             style="width:48px;height:48px;object-fit:cover;border-radius:4px;margin:2px;vertical-align:middle"/>
-                    </a>
-                </td>
-                <td th:text="${#temporals.format(c.createdAt(), 'yyyy-MM-dd HH:mm')}">-</td>
-                <td>
-                    <span class="badge" th:classappend="${c.deleted()} ? 'badge-danger' : 'badge-ok'"
-                          th:text="${c.deleted()} ? #{admin.content.status.deleted} : #{admin.content.status.online}">上线中</span>
-                </td>
-                <td>
-                    <!-- 上线中 → 主动下架（必填原因）-->
-                    <form th:unless="${c.deleted()}" th:action="@{/admin/content/{id}/takedown(id=${c.id()})}"
-                          method="post" class="inline-form"
-                          sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.proactive_takedown')">
-                        <input type="text" name="reason" required th:placeholder="#{admin.content.reason}"
-                               style="width:160px"/>
-                        <button type="submit" class="btn btn-danger btn-sm"
-                                th:text="#{admin.content.takedown}">下架</button>
-                    </form>
-                    <!-- 已下架 → 恢复 -->
-                    <form th:if="${c.deleted()}" th:action="@{/admin/content/{id}/restore(id=${c.id()})}"
-                          method="post" class="inline-form"
-                          sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.restore')">
-                        <button type="submit" class="btn btn-neutral btn-sm"
-                                th:text="#{admin.content.restore}">恢复</button>
-                    </form>
-                </td>
-            </tr>
+            <th:block th:each="c : ${items}">
+                <tr th:replace="~{admin/content :: row}"></tr>
+            </th:block>
             <tr th:if="${#lists.isEmpty(items)}">
                 <td colspan="8" class="empty" th:text="#{admin.content.empty}">无匹配内容。</td>
             </tr>
             </tbody>
         </table>
     </div>
+
+    <!-- 单行片段：takedown/restore 用 HTMX 原地替换当前行（不整页刷新、不回顶）。
+         置于 content 片段之外 → 整页渲染只取 content 片段，本片段不会输出为游离行。 -->
+    <table hidden><tbody>
+        <tr th:fragment="row" th:id="'content-row-' + ${c.id()}">
+            <td th:text="${c.id()}">1</td>
+            <td th:text="${c.type()}">DAILY</td>
+            <td th:text="${c.authorId()}">-</td>
+            <td class="muted cell-wide" th:text="${#strings.abbreviate(c.textPreview(), 60)}">…</td>
+            <td>
+                <span th:if="${c.imageUrls() == null or #lists.isEmpty(c.imageUrls())}" class="muted">—</span>
+                <a th:each="img : ${c.imageUrls()}" th:href="${img}" target="_blank" rel="noopener">
+                    <img th:src="${img}" alt="" loading="lazy"
+                         style="width:48px;height:48px;object-fit:cover;border-radius:4px;margin:2px;vertical-align:middle"/>
+                </a>
+            </td>
+            <td th:text="${#temporals.format(c.createdAt(), 'yyyy-MM-dd HH:mm')}">-</td>
+            <td>
+                <span class="badge" th:classappend="${c.deleted()} ? 'badge-danger' : 'badge-ok'"
+                      th:text="${c.deleted()} ? #{admin.content.status.deleted} : #{admin.content.status.online}">上线中</span>
+            </td>
+            <td>
+                <!-- 上线中 → 主动下架（必填原因）。HTMX 只替换本行。 -->
+                <form th:unless="${c.deleted()}" th:action="@{/admin/content/{id}/takedown(id=${c.id()})}"
+                      method="post" class="inline-form"
+                      th:attr="hx-post=@{/admin/content/{id}/takedown(id=${c.id()})}"
+                      hx-target="closest tr" hx-swap="outerHTML"
+                      sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.proactive_takedown')">
+                    <input type="text" name="reason" required th:placeholder="#{admin.content.reason}"
+                           style="width:160px"/>
+                    <button type="submit" class="btn btn-danger btn-sm"
+                            th:text="#{admin.content.takedown}">下架</button>
+                </form>
+                <!-- 已下架 → 恢复。HTMX 只替换本行。 -->
+                <form th:if="${c.deleted()}" th:action="@{/admin/content/{id}/restore(id=${c.id()})}"
+                      method="post" class="inline-form"
+                      th:attr="hx-post=@{/admin/content/{id}/restore(id=${c.id()})}"
+                      hx-target="closest tr" hx-swap="outerHTML"
+                      sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.restore')">
+                    <button type="submit" class="btn btn-neutral btn-sm"
+                            th:text="#{admin.content.restore}">恢复</button>
+                </form>
+            </td>
+        </tr>
+    </tbody></table>
 </div>
 </body>
 </html>
