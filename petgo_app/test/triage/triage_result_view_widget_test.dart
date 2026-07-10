@@ -158,6 +158,43 @@ void main() {
     expect(container.read(triageResultProvider).phase, TriagePhase.idle);
   });
 
+  testWidgets('bug: 历史回看红色态跳过倒计时 → 「我已知晓」立即可点（无 3s 硬控）', (tester) async {
+    final container = ProviderContainer(
+        overrides: [petProfileProvider.overrideWith((ref) => null)]);
+    addTearDown(container.dispose);
+    final router = GoRouter(
+      initialLocation: '/triage/result/7',
+      routes: [
+        GoRoute(path: '/triage', builder: (c, s) => const Scaffold(body: Text('triage-home'))),
+        GoRoute(
+            path: '/triage/result/:id',
+            builder: (c, s) => const Scaffold(
+                body: TriageResultView(
+                    result: TriageResult(
+                        status: TriageStatus.done, dangerLevel: DangerLevel.red, advice: 'x'),
+                    triageId: 7,
+                    fromHistory: true))),
+      ],
+    );
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp.router(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        routerConfig: router,
+      ),
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+
+    // 无倒计时数字，且「我已知晓」立刻可点（不 pump 5s）。
+    expect(find.byKey(const ValueKey('triageRedCountdown')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('triageRedAcknowledge')));
+    await tester.pumpAndSettle();
+    expect(find.byType(RedAlertOverlay), findsNothing);
+    expect(find.text('triage-home'), findsOneWidget);
+  });
+
   testWidgets('AC3: 点「存入档案」→ 调起存档回调（FR-16 触发）', (tester) async {
     var called = false;
     await _pump(

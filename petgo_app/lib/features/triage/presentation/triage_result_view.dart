@@ -27,10 +27,14 @@ const Color _greenSummaryLabel = Color(0xFF136B41);
 /// RINGKASAN GEJALA 症状摘要 + 居家护理建议 + 黄色观察协议三要素 + 前置免责 + 分级 CTA。
 /// 红色一律交棒 4.5 全屏强提醒（[TriageRedResult]），本视图不软化渲染。
 class TriageResultView extends ConsumerWidget {
-  const TriageResultView({super.key, required this.result, this.triageId});
+  const TriageResultView(
+      {super.key, required this.result, this.triageId, this.fromHistory = false});
 
   final TriageResult result;
   final int? triageId;
+
+  /// 从历史记录回看：红色态跳过强制阅读倒计时（历史不该再等）。首次生成保持锁定。
+  final bool fromHistory;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -39,7 +43,7 @@ class TriageResultView extends ConsumerWidget {
 
     // 🔒 红色走 4.5 全屏强提醒（自底滑起 overlay）+ 关闭后保留零兽医/零变现红色摘要。
     if (level == DangerLevel.red || level == null) {
-      return TriageRedResult(result: result, triageId: triageId);
+      return TriageRedResult(result: result, triageId: triageId, fromHistory: fromHistory);
     }
 
     final isYellow = level == DangerLevel.yellow;
