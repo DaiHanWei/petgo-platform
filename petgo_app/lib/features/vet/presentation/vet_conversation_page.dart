@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/im/im_service.dart';
+import '../../../core/storage/prefs.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
@@ -74,6 +75,17 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
       results[1] as ConsultAiContext,
       results[2] as ConsultAssist,
     );
+    // AI 参考回复「每会话只自动弹一次」（bug）：已展示过则默认收起，避免退出重进反复遮挡页面。
+    // 仅在真会弹（aiReferenceReply 非空）时才标记「已展示」，顶部 Template chip 仍可手动重新展开。
+    if (data.assist.aiReferenceReply.isNotEmpty) {
+      final prefs = await AppPrefs.create();
+      final seenKey = 'petgo.vet_assist_seen_${widget.sessionId}';
+      if (prefs.getBool(seenKey)) {
+        _assistDismissed = true; // 之前已自动弹过 → 本次不再自动展开
+      } else {
+        await prefs.setBool(seenKey, true); // 本次自动展开并记住，之后重进不再弹
+      }
+    }
     // 兽医进入进行中会话即登录 IM（UserSig 后端恒签兽医）。失败不崩，保留占位演示。
     if (!_imLoginStarted && data.session.status == 'IN_PROGRESS') {
       _imLoginStarted = true;
