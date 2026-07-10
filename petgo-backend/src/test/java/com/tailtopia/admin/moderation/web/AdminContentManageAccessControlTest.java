@@ -79,11 +79,11 @@ class AdminContentManageAccessControlTest {
     }
 
     private void takedown() {
-        controller.takedown(admin(), 5L, "违规", new RedirectAttributesModelMap());
+        controller.takedown(admin(), 5L, "违规", null, new ConcurrentModel(), new RedirectAttributesModelMap());
     }
 
     private void restore() {
-        controller.restore(admin(), 5L, new RedirectAttributesModelMap());
+        controller.restore(admin(), 5L, null, new ConcurrentModel(), new RedirectAttributesModelMap());
     }
 
     @Test
