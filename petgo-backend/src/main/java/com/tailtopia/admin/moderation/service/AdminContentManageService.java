@@ -53,6 +53,12 @@ public class AdminContentManageService {
                 PAGE_SIZE, Math.max(page, 0) * PAGE_SIZE);
     }
 
+    /** 按 id 取单条后台行（HTMX 局部刷新用）；不存在返回 null。 */
+    @Transactional(readOnly = true)
+    public AdminContentRow row(long postId) {
+        return contentService.adminRow(postId);
+    }
+
     /** 主动下架（必填原因）：软删 + 关闭该帖待处理举报单 + 作者通知（既有事件）+ 审计。 */
     @Transactional
     public void takedown(long postId, String reason, long actorAccountId) {

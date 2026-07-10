@@ -53,8 +53,18 @@ public class ContentPostAdminSearchImpl implements ContentPostAdminSearch {
 
         return em.createQuery(cq).setFirstResult(Math.max(offset, 0)).setMaxResults(limit)
                 .getResultList().stream()
-                .map(p -> new AdminContentRow(p.getId(), p.getType(), p.getAuthorId(),
-                        p.getText(), p.getDeletedAt() != null, p.getCreatedAt(), p.getImageUrls()))
+                .map(ContentPostAdminSearchImpl::toRow)
                 .toList();
+    }
+
+    @Override
+    public AdminContentRow adminRowById(long postId) {
+        ContentPost p = em.find(ContentPost.class, postId);
+        return p == null ? null : toRow(p);
+    }
+
+    private static AdminContentRow toRow(ContentPost p) {
+        return new AdminContentRow(p.getId(), p.getType(), p.getAuthorId(),
+                p.getText(), p.getDeletedAt() != null, p.getCreatedAt(), p.getImageUrls());
     }
 }
