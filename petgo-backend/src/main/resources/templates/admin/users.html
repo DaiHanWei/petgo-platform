@@ -39,7 +39,10 @@
                 <td th:text="${u.email()}">a@x</td>
                 <td th:text="${#temporals.format(u.createdAt(), 'yyyy-MM-dd')}">-</td>
                 <td>
-                    <span class="badge" th:classappend="${u.deactivated()} ? 'badge-danger' : 'badge-ok'"
+                    <span th:if="${u.deleted()}" class="badge badge-neutral"
+                          th:text="#{admin.users.status.deleted}">已注销</span>
+                    <span th:unless="${u.deleted()}" class="badge"
+                          th:classappend="${u.deactivated()} ? 'badge-danger' : 'badge-ok'"
                           th:text="${u.deactivated()} ? #{admin.users.status.deactivated} : #{admin.users.status.active}">正常</span>
                 </td>
                 <td>

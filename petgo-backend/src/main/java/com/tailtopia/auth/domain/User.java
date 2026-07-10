@@ -82,6 +82,14 @@ public class User {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
+    /** 注销前 email 快照，仅运营后台展示（原 {@code email} 注销后置空）。业务/公开/vet 侧不读。 */
+    @Column(name = "deleted_email", length = 320)
+    private String deletedEmail;
+
+    /** 注销前 displayName 快照，仅运营后台展示（原 {@code displayName} 注销后置空）。业务/公开/vet 侧不读。 */
+    @Column(name = "deleted_display_name", length = 255)
+    private String deletedDisplayName;
+
     protected User() {
     }
 
@@ -245,6 +253,16 @@ public class User {
         return deletedAt;
     }
 
+    /** 注销前 email 快照（仅后台展示）。 */
+    public String getDeletedEmail() {
+        return deletedEmail;
+    }
+
+    /** 注销前 displayName 快照（仅后台展示）。 */
+    public String getDeletedDisplayName() {
+        return deletedDisplayName;
+    }
+
     /**
      * 注销「就地匿名化」（Story 7.3，决策 D1/A）：软删标记 + 擦除 PII，<b>不物理删行</b>——避免
      * content_posts/comments/likes/reports 的 NOT NULL + RESTRICT 外键阻断（DataIntegrityViolationException）。
@@ -252,6 +270,11 @@ public class User {
      * 满足非空+唯一约束、且同账号再次登录只会新建账号（不复活旧号）。幂等（重跑安全）。健康/个人数据在其它服务另删。
      */
     public void anonymizeForDeletion(Instant now) {
+        // 首次注销才快照展示用 PII 到专用列（幂等：重跑时 deletedAt 已非空，不覆盖快照）。
+        if (this.deletedAt == null) {
+            this.deletedEmail = this.email;
+            this.deletedDisplayName = this.displayName;
+        }
         this.deletedAt = now;
         this.email = null;
         this.displayName = null;
