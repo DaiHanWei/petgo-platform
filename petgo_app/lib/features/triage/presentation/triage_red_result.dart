@@ -17,10 +17,14 @@ import '../domain/triage_upload_controller.dart';
 /// 点「我已知晓」即**退出 AI 问诊**（与绿/黄结果页「完成」一致），不再停留任何红色摘要页。
 /// overlay 之下/退出过渡时仅纯红占位，无摘要内容。
 class TriageRedResult extends ConsumerStatefulWidget {
-  const TriageRedResult({super.key, required this.result, this.triageId});
+  const TriageRedResult(
+      {super.key, required this.result, this.triageId, this.fromHistory = false});
 
   final TriageResult result;
   final int? triageId;
+
+  /// 从历史记录回看（bug）：跳过强制阅读倒计时（历史不该再等），首次生成仍锁定。
+  final bool fromHistory;
 
   @override
   ConsumerState<TriageRedResult> createState() => _TriageRedResultState();
@@ -58,6 +62,7 @@ class _TriageRedResultState extends ConsumerState<TriageRedResult> {
         symptom: symptom,
         emergencySteps: widget.result.emergencySteps,
         emergencyAvoid: widget.result.emergencyAvoid,
+        lockSeconds: widget.fromHistory ? 0 : 5,
         onAcknowledge: () => Navigator.of(dialogCtx).pop(),
       ),
     );
