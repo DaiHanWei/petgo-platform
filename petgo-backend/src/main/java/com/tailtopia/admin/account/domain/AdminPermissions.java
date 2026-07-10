@@ -30,6 +30,8 @@ public final class AdminPermissions {
     public static final String CONTENT_TAKEDOWN = "content.takedown";
     public static final String CONTENT_RESTORE = "content.restore";
     public static final String CONTENT_PROACTIVE_TAKEDOWN = "content.proactive_takedown";
+    /** 人工审核队列：查看 + 通过/拒绝（Story 4.3；开关仍限 SUPER_ADMIN）。 */
+    public static final String CONTENT_MANUAL_REVIEW = "content.manual_review";
 
     // 问诊异常与会话（Epic 5）
     public static final String CONSULT_VIEW_ANOMALIES = "consult.view_anomalies";
@@ -49,6 +51,7 @@ public final class AdminPermissions {
             VET_VIEW, VET_CREATE, VET_BAN, VET_RESET_PASSWORD, VET_QUALIFY,
             USER_VIEW, USER_DEACTIVATE, USER_DELETE,
             CONTENT_VIEW_REPORTS, CONTENT_TAKEDOWN, CONTENT_RESTORE, CONTENT_PROACTIVE_TAKEDOWN,
+            CONTENT_MANUAL_REVIEW,
             CONSULT_VIEW_ANOMALIES, CONSULT_HANDLE, CONSULT_VIEW_SESSIONS,
             RATING_VIEW,
             ADMIN_CREATE_ACCOUNT, ADMIN_DEACTIVATE, ADMIN_VIEW_LOGS);

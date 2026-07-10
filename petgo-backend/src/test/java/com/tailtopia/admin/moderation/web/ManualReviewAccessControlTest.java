@@ -25,8 +25,9 @@ import org.springframework.ui.ConcurrentModel;
 import org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap;
 
 /**
- * L0：人工审核门控分层（Story 4.3 AC3/AC8）——队列入口 + 开关仅 {@code SUPER_ADMIN}；
- * 处置（通过/拒绝）{@code content.takedown}（超管隐式覆盖）。
+ * L0：人工审核门控分层（Story 4.3 AC3/AC8）——激活开关仅 {@code SUPER_ADMIN}；
+ * 队列入口 + 处置（通过/拒绝）{@code SUPER_ADMIN} 或 {@code content.manual_review}
+ * （处置额外接受历史 {@code content.takedown}；超管隐式覆盖）。
  */
 class ManualReviewAccessControlTest {
 
@@ -109,6 +110,12 @@ class ManualReviewAccessControlTest {
     }
 
     @Test
+    void queueAllowedWithManualReview() {
+        auth("ROLE_ADMIN", "content.manual_review"); // 授予人工审核权的 STAFF → 入口放行
+        assertThatCode(this::queue).doesNotThrowAnyException();
+    }
+
+    @Test
     void toggleDeniedForNonSuperAdmin() {
         auth("ROLE_ADMIN", "content.takedown");
         assertThatThrownBy(this::toggle).isInstanceOf(AccessDeniedException.class);
@@ -149,5 +156,11 @@ class ManualReviewAccessControlTest {
     void changePriorityAllowedWithTakedown() {
         auth("ROLE_ADMIN", "content.takedown");
         assertThatCode(this::changePriority).doesNotThrowAnyException();
+    }
+
+    @Test
+    void approveAllowedWithManualReview() {
+        auth("ROLE_ADMIN", "content.manual_review"); // 人工审核权同样可处置
+        assertThatCode(this::approve).doesNotThrowAnyException();
     }
 }

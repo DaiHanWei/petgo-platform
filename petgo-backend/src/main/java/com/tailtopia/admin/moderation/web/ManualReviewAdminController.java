@@ -19,14 +19,17 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 /**
  * 人工审核队列（Story 4.3，AB-3C，预建未激活）。SSR + HTMX，{@code /admin/manual-review}，不返 JSON。
- * 门控分层（Dev Notes）：**队列入口 + 激活开关仅 {@code SUPER_ADMIN}**；处置（通过/拒绝）{@code content.takedown}。
+ * 门控分层（Dev Notes）：**激活开关仅 {@code SUPER_ADMIN}**；队列入口 + 处置（通过/拒绝）
+ * {@code SUPER_ADMIN} 或 {@code content.manual_review}（处置额外接受历史 {@code content.takedown}）。
  * 内容状态变更经 {@link ManualReviewService} → {@code ContentService}（禁直读 content repo）。
  */
 @Controller
 public class ManualReviewAdminController {
 
-    private static final String ENTRY_AUTH = "hasRole('SUPER_ADMIN')";
-    private static final String DECIDE_AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')";
+    private static final String QUEUE_AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('content.manual_review')";
+    private static final String TOGGLE_AUTH = "hasRole('SUPER_ADMIN')";
+    private static final String DECIDE_AUTH =
+            "hasRole('SUPER_ADMIN') or hasAuthority('content.takedown') or hasAuthority('content.manual_review')";
 
     private final ManualReviewService reviewService;
     private final AdminSettingsService settingsService;
@@ -38,7 +41,7 @@ public class ManualReviewAdminController {
     }
 
     @GetMapping("/admin/manual-review")
-    @PreAuthorize(ENTRY_AUTH)
+    @PreAuthorize(QUEUE_AUTH)
     public String queue(@RequestHeader(value = "HX-Request", required = false) String hxRequest,
             Model model) {
         model.addAttribute("active", "manual-review");
@@ -48,7 +51,7 @@ public class ManualReviewAdminController {
     }
 
     @PostMapping("/admin/settings/manual-review")
-    @PreAuthorize(ENTRY_AUTH)
+    @PreAuthorize(TOGGLE_AUTH)
     public String toggle(@AuthenticationPrincipal AdminUserDetails admin,
             @RequestParam("enabled") boolean enabled, RedirectAttributes flash) {
         settingsService.setManualReviewEnabled(enabled, admin.getAdminAccountId());

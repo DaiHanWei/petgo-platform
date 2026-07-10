@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
-<!-- 人工审核队列（Story 4.3，预建未激活）。仅超管可见/可达；激活开关 + PENDING 队列处置（通过/拒绝）。
+<!-- 人工审核队列（Story 4.3，预建未激活）。超管或 content.manual_review 可见/可达；激活开关仅超管；PENDING 队列处置（通过/拒绝）。
      24h 未处理高亮（AC7）。V1.0.0 默认开关关 = 现网行为，队列恒空。 -->
 <head>
     <meta charset="UTF-8"/>
@@ -77,7 +77,7 @@
                           th:text="|#{admin.moderation.strikes.label} ${r.strikes().total()}|">累计违规</span>
                 </td>
                 <td th:text="${#temporals.format(r.submittedAt(), 'yyyy-MM-dd HH:mm')}">-</td>
-                <td sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')">
+                <td sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown') or hasAuthority('content.manual_review')">
                     <!-- 通过 / 拒绝 左右并排。 -->
                     <div class="row-actions">
                         <form th:action="@{/admin/manual-review/{id}/approve(id=${r.itemId()})}" method="post"

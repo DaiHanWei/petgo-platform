@@ -24,7 +24,7 @@
         <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.proactive_takedown')"
            th:href="@{/admin/content}" th:classappend="${active == 'content'} ? 'active'"
            th:text="#{admin.nav.content}">内容管理</a>
-        <a sec:authorize="hasRole('SUPER_ADMIN')"
+        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.manual_review')"
            th:href="@{/admin/manual-review}" th:classappend="${active == 'manual-review'} ? 'active'"
            th:text="#{admin.nav.review}">人工审核</a>
         <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')"
