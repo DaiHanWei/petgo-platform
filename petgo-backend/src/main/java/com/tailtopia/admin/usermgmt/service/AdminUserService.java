@@ -67,7 +67,11 @@ public class AdminUserService {
         if (note == null || note.isBlank()) {
             throw AppException.validation("删除备注不能为空");
         }
-        accountQuery.findUserById(userId).orElseThrow(() -> AppException.notFound("用户不存在"));
+        User target = accountQuery.findUserById(userId).orElseThrow(() -> AppException.notFound("用户不存在"));
+        // 已注销账号仅展示，禁止重复删除（否则重写审计 + 重触发级联）。
+        if (target.getDeletedAt() != null) {
+            throw AppException.validation("该账号已注销，无需重复删除");
+        }
 
         // 永久记录（append-only）：类型 + 备注 + 操作人；不落 PII。
         auditService.record(actorAccountId, AuditActions.USER_DELETED, "USER", String.valueOf(userId),
@@ -137,9 +141,13 @@ public class AdminUserService {
                 .map(List::of)
                 .orElseGet(List::of);
 
+        boolean deleted = u.getDeletedAt() != null;
+        // 已注销：显示名/邮箱取注销前快照列（仅后台展示）。
+        String name = deleted ? u.getDeletedDisplayName() : u.getDisplayName();
+        String email = deleted ? u.getDeletedEmail() : u.getEmail();
         return new AdminUserDetailView(
-                u.getId(), u.getDisplayName(), u.getNickname(), u.getEmail(), u.getCreatedAt(),
-                deactivated(u), pets,
+                u.getId(), name, u.getNickname(), email, u.getCreatedAt(),
+                deactivated(u), deleted, pets,
                 contentService.listByAuthorForAdmin(userId),
                 consultHistory.adminSessionMetadata(userId));
     }
@@ -153,7 +161,11 @@ public class AdminUserService {
     }
 
     private AdminUserRow toRow(User u) {
-        return new AdminUserRow(u.getId(), u.getDisplayName(), u.getEmail(), u.getCreatedAt(), deactivated(u));
+        boolean deleted = u.getDeletedAt() != null;
+        // 已注销：读注销前快照列展示「谁注销了」；未注销：读原列。
+        String name = deleted ? u.getDeletedDisplayName() : u.getDisplayName();
+        String email = deleted ? u.getDeletedEmail() : u.getEmail();
+        return new AdminUserRow(u.getId(), name, email, u.getCreatedAt(), deactivated(u), deleted);
     }
 
     private static AdminUserDetailView.PetRow toPetRow(PetProfile p) {

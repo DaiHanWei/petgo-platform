@@ -15,6 +15,7 @@ public record AdminUserDetailView(
         String email,
         Instant createdAt,
         boolean deactivated,
+        boolean deleted,
         List<PetRow> pets,
         List<PostSummary> posts,
         List<SessionMeta> sessions) {

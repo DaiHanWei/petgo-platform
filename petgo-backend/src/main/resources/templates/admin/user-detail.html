@@ -17,8 +17,9 @@
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
 
-        <!-- 账号处置（停用/激活，user.deactivate 门控）-->
-        <div class="card" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.deactivate')">
+        <!-- 账号处置（停用/激活，user.deactivate 门控）。已注销账号仅展示，不提供处置。 -->
+        <div class="card" th:unless="${user.deleted()}"
+             sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.deactivate')">
             <h3 th:text="#{admin.userdetail.actions}">账号处置</h3>
             <form class="inline" th:if="${!user.deactivated()}"
                   th:action="@{/admin/users/{id}/deactivate(id=${user.id()})}" method="post"
@@ -32,8 +33,9 @@
             </form>
         </div>
 
-        <!-- 删除账号（不可逆，user.delete 门控）-->
-        <div class="card" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.delete')"
+        <!-- 删除账号（不可逆，user.delete 门控）。已注销账号仅展示，不再提供删除。 -->
+        <div class="card" th:unless="${user.deleted()}"
+             sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.delete')"
              style="border-color:var(--danger)">
             <h3 th:text="#{admin.userdetail.delete}">删除账号</h3>
             <p class="err" th:text="#{admin.userdetail.deleteIrreversible}">此操作不可撤销</p>
@@ -59,7 +61,10 @@
             <p><span th:text="#{admin.userdetail.created}">注册时间</span>:
                 <span th:text="${#temporals.format(user.createdAt(), 'yyyy-MM-dd HH:mm')}">-</span></p>
             <p><span th:text="#{admin.userdetail.status}">账号状态</span>:
-                <span class="badge" th:classappend="${user.deactivated()} ? 'badge-danger' : 'badge-ok'"
+                <span th:if="${user.deleted()}" class="badge badge-neutral"
+                      th:text="#{admin.users.status.deleted}">已注销</span>
+                <span th:unless="${user.deleted()}" class="badge"
+                      th:classappend="${user.deactivated()} ? 'badge-danger' : 'badge-ok'"
                       th:text="${user.deactivated()} ? #{admin.users.status.deactivated} : #{admin.users.status.active}">正常</span></p>
         </div>
 
