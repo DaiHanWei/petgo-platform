@@ -39,6 +39,8 @@ public final class AdminPermissions {
     public static final String CONTENT_EXPORT = "content.export";
     /** 举报者清单查看（V1.1 Epic 9，运营内部可见，不违 FR-51 对外匿名）。 */
     public static final String CONTENT_VIEW_REPORTERS = "content.view_reporters";
+    /** 人工审核队列：查看 + 通过/拒绝（内容审核 Story 4.3；开关仍限 SUPER_ADMIN）。 */
+    public static final String CONTENT_MANUAL_REVIEW = "content.manual_review";
 
     // 问诊异常与会话（Epic 5）
     public static final String CONSULT_VIEW_ANOMALIES = "consult.view_anomalies";
@@ -112,6 +114,7 @@ public final class AdminPermissions {
                     ADMIN_VIEW_ACCOUNTS, ADMIN_VIEW_LOGS)),
             new PermissionGroup("perm.group.edit", List.of(
                     CONTENT_TAKEDOWN, CONTENT_RESTORE, CONTENT_PROACTIVE_TAKEDOWN,
+                    CONTENT_MANUAL_REVIEW,
                     USER_DEACTIVATE, USER_DELETE,
                     VET_CREATE, VET_EDIT, VET_BAN, VET_RESET_PASSWORD, VET_QUALIFY,
                     CONSULT_HANDLE, CONSULT_EDIT_SESSIONS,
