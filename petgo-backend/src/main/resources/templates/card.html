@@ -28,6 +28,8 @@
     <style>
         body { font-family: -apple-system, system-ui, sans-serif; background: #F2FBF8; color: #2B2B2B; margin: 0; }
         .wrap { max-width: 640px; margin: 0 auto; padding: 24px; }
+        .brand { margin-bottom: 16px; }
+        .brand img { height: 26px; display: block; }
         .hero { text-align: center; }
         .avatar { width: 130px; height: 130px; border-radius: 50%; object-fit: cover; }
         .name { font-size: 28px; font-weight: 800; margin: 12px 0 4px; }
@@ -53,6 +55,8 @@
 </head>
 <body>
 <div class="wrap">
+    <!-- 左上角品牌标（bug 20260701-182）：与 App 同一 Tailtopia wordmark。 -->
+    <div class="brand"><img src="/brand/logo.svg" alt="TailTopia"/></div>
     <!-- ① Hero：头像 + 名字 + 陪伴天数 -->
     <section class="hero">
         <img class="avatar" th:if="${avatarUrl}" th:src="${avatarUrl}" alt="avatar"/>
