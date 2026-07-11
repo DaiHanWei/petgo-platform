@@ -3,7 +3,7 @@ baseline_commit: 1cc0252808da76d991dff2bd68881a3255c845db
 ---
 # Story 1.2: 双分录总账与 PawCoin 钱包
 
-Status: review
+Status: done
 
 > V1.1 Epic 1（资金地基）第 2 story，接 **1.1 支付网关基础设施与幂等地基**。**brownfield**：Flyway 停在 V46，1.1 占 V60，本 story 用 **V61**。
 > 源：`epics-v1.1.md` Story 1.2 · 架构 `architecture-v1.1-delta.md` §3.1/§4 · 排期 `sprint-status-v1.1.yaml`（V61=init_ledger_and_pawcoin）。

@@ -68,7 +68,7 @@
 # - 红色超额/接单未支付限速阈值(9-6，仅埋点，上线后定)
 
 generated: 2026-07-11
-last_updated: 2026-07-11  # 1-1/1-2/1-3 已 create-story → ready-for-dev；epic-1 → in-progress
+last_updated: 2026-07-11  # 1-1/1-2/1-3 done(L0+L1绿,必修已修);epic-1 in-progress
 project: petgo-platform-v1.1
 project_key: NOKEY
 tracking_system: file-system
@@ -77,10 +77,10 @@ story_location: "{project-root}/_bmad-output/implementation-artifacts"
 development_status:
   # ---- Epic 1: PawCoin 钱包与充值(资金地基) ----
   epic-1: in-progress
-  1-1-支付网关基础设施与幂等地基: review
-  1-2-双分录总账与pawcoin钱包: review
-  1-3-pawcoin充值下单与到账: review
-  1-4-pawcoin余额与流水页: backlog
+  1-1-支付网关基础设施与幂等地基: done
+  1-2-双分录总账与pawcoin钱包: done
+  1-3-pawcoin充值下单与到账: done
+  1-4-pawcoin余额与流水页: ready-for-dev
   1-5-充值失败取消与暂停态: backlog
   1-6-注销时pawcoin余额作废: backlog
   epic-1-retrospective: optional

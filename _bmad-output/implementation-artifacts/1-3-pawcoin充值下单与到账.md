@@ -3,7 +3,7 @@ baseline_commit: 1a08e5a
 ---
 # Story 1.3: PawCoin 充值下单与到账
 
-Status: review
+Status: done
 
 > V1.1 Epic 1（资金地基）第 3 story。**接 1.1（支付网关/payment_intents/回调）+ 1.2（LedgerService/PawCoinWalletService）**，把两者接成充值闭环。**brownfield**：Flyway V46 冻结，1.1=V60、1.2=V61；**本 story 无新迁移**（复用 V60/V61 表）。
 > 源：`epics-v1.1.md` Story 1.3 · 架构 §2/§3.1/§4 · 排期 `sprint-status-v1.1.yaml`。
