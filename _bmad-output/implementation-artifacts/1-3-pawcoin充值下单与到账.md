@@ -148,6 +148,8 @@ claude-opus-4-8（bmad-dev-story 流程，本地 darwin）。
 
 ### Completion Notes List
 
+- **L1 已本地清账（2026-07-11）**：干净库 `petgo_l1` + `mvn clean` 跑通。`PawCoinTopupIntegrationTest` 2/2 —— 下单→settlement 回调**同事务原子入账**（余额+流水+总账平）、回调重放**不双入账**、deny 回调**不入账**（余额不变）。回调事务边界与幂等在真 postgres 验证。L2（Midtrans sandbox）待凭证。
+
 - **接线 story，零新迁移**（复用 V60/V61）。重活在 1.1（支付/回调/幂等）+ 1.2（钱包/总账）已完成，本 story 把两者接成充值闭环。**L0 全绿**；`mvn -B compile` 通过。
 - **AC1 下单**：`POST /api/v1/me/pawcoin/topups`（JWT，仅作用当前 `sub` 防越权，照 MeController/C1）→ `createIntent(PAWCOIN_TOPUP)`（1.1 幂等 + rl:pay:create 写限流）→ `gateway.createCharge` 取 QRIS/DANA 载荷 + `attachCharge` 回填网关订单号（幂等，同 Idempotency-Key 重放不重复 charge）→ 回 `TopupResponse`（对外 token + 载荷，**无自增 id**）。非法档位/渠道 → 422，未登录 → 401。
 - **AC2 固定档位**：`TopupTier`（10k/25k/50k/100k，coins=amount 1:1）内置于 pay 模块；`TopupTierProvider` 接口 + `Default` 实现——**后台可配是 9.2**，届时换 DB 实现不动其余代码。

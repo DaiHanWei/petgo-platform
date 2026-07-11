@@ -188,6 +188,8 @@ claude-opus-4-8（bmad-dev-story 流程，本地 darwin）。
 
 ### Completion Notes List
 
+- **L1 已本地清账（2026-07-11）**：干净库 `petgo_l1` + `mvn clean` 跑通。`PawCoinWalletConcurrencyIntegrationTest` 1/1 —— **20 线程并发 debit 至边界，真 postgres 上不越负、总账平、`reconcile` 一致**（此前 scratch 库只证 SQL 层，并发时序在此真验）。schema V61 三表↔实体契约 `validate` 一致。
+
 - **L0 全绿**：双分录不变式（不平/空/负拒绝不落库、Redis+DB 双路幂等复用）、钱包 service（余额不足拒、成功三写、幂等短路）、append-only 静态守卫（仓储无 delete/remove）。`mvn -B compile` 通过。
 - **FR-NFR-1（单一双分录总账）**：`LedgerService.post` 强制 Σ(DEBIT)==Σ(CREDIT) 且金额>0，否则不落库；`ledger_entries` **append-only**——实体无 `@PreUpdate`/无改金额 setter，仓储 `extends Repository`（非 JpaRepository）故意不暴露 delete，更正走反向补偿分录。`(idempotency_key,account,direction)` 唯一 = 幂等/并发去重库级权威。
 - **FR-NFR-3（PawCoin 并发非负）**：**原子条件 UPDATE**（`applyDelta` = `SET balance=balance+:delta WHERE user_id=:uid AND balance+:delta>=0`，返回 0 行=余额不足→`AppException.conflict`）——单行原子 UPDATE 自带行锁天然串行化并发扣减；`CHECK(balance>=0)` 库级兜底。**严格未用应用层「读-改-写」**（决策 Dev Notes：并发丢更新）。首次充值 `insertIfAbsent` ON CONFLICT DO NOTHING 并发安全建号。DB 层 scratch 已证：20 并发扣至边界恰 10 成功、不越负、CHECK 拦负。
