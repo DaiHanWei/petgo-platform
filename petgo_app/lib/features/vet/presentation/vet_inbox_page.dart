@@ -44,6 +44,7 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> with WidgetsBinding
   Timer? _poll; // 拉队列
   Timer? _display; // 1s 心跳刷新倒计时显示
   String _displayName = '';
+  String? _avatarUrl; // 运营后台上传的头像；null → 首字母占位
   int? _doneCount; // 完成数（history 列表长度）；null=加载中/失败 → 占位「—」
   Set<String>? _prevAwaitingTokens; // 上一轮待支付 token 集（侦测「某接单已结束」跃迁，FR-53B）；null=未建基线
   int _knownActiveCount = 0; // 已知进行中会话数（判成交：待支付消失 + 会话数增加 = 已支付）
@@ -213,6 +214,7 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> with WidgetsBinding
       if (!mounted) return;
       setState(() {
         _displayName = (results[0] as dynamic).displayName as String;
+        _avatarUrl = (results[0] as dynamic).avatarUrl as String?;
         _doneCount = (results[1] as List).length;
       });
     } catch (_) {
@@ -233,7 +235,7 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> with WidgetsBinding
       backgroundColor: AppColors.base,
       body: Column(
         children: [
-          VetTopBar(greetingName: _displayName, showOnlineToggle: true),
+          VetTopBar(greetingName: _displayName, avatarUrl: _avatarUrl, showOnlineToggle: true),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(AppSpacing.md),
