@@ -1,4 +1,5 @@
--- Story 1.1（V1.1 资金地基）：payment_intents 支付意图表。实测最大号 V46 + 1 = V47（决策 E2 单调分配）。
+-- Story 1.1（V1.1 资金地基）：payment_intents 支付意图表。
+-- 原占 V47，因 feat/content-moderation 已在 stag 占 V47-V56、stag 全局到 V59，本版让号从 V60 起（决策 E2 跨分支撞号重排 2026-07-11）。
 -- 凭证/网关正文绝不入库；金额用最小币种单位整型(IDR 无小数)；status 枚举 varchar + CHECK；
 -- gateway_ref 唯一 = 回调/轮询双通道去重的库级权威兜底（Redis 仅前置）。
 CREATE TABLE payment_intents (

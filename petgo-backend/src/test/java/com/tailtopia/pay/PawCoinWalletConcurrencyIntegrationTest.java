@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 /**
- * L1（需 Docker postgres+redis）。上下文启动即验 Flyway V48 + {@code validate}（三表↔实体契约一致）。
+ * L1（需 Docker postgres+redis）。上下文启动即验 Flyway V61 + {@code validate}（三表↔实体契约一致）。
  * 核心：N 线程并发 {@code debit} 至边界断言<b>无越负、总账平、reconcile 一致</b>（FR-NFR-1/3）；
  * 并静态断言总账仓储<b>无 delete 路径</b>（append-only）。
  */

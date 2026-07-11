@@ -5,7 +5,7 @@ baseline_commit: 1a08e5a
 
 Status: review
 
-> V1.1 Epic 1（资金地基）第 3 story。**接 1.1（支付网关/payment_intents/回调）+ 1.2（LedgerService/PawCoinWalletService）**，把两者接成充值闭环。**brownfield**：Flyway V46 冻结，1.1=V47、1.2=V48；**本 story 无新迁移**（复用 V47/V48 表）。
+> V1.1 Epic 1（资金地基）第 3 story。**接 1.1（支付网关/payment_intents/回调）+ 1.2（LedgerService/PawCoinWalletService）**，把两者接成充值闭环。**brownfield**：Flyway V46 冻结，1.1=V60、1.2=V61；**本 story 无新迁移**（复用 V60/V61 表）。
 > 源：`epics-v1.1.md` Story 1.3 · 架构 §2/§3.1/§4 · 排期 `sprint-status-v1.1.yaml`。
 > **范围边界**：用户下单充值 → 网关支付 → 回调**原子入账**。**不做**余额/流水页 UI（1.4）、失败/暂停态前端（1.5）、后台档位配置（9.2，本 story 用内置默认档位）。
 
@@ -148,7 +148,7 @@ claude-opus-4-8（bmad-dev-story 流程，本地 darwin）。
 
 ### Completion Notes List
 
-- **接线 story，零新迁移**（复用 V47/V48）。重活在 1.1（支付/回调/幂等）+ 1.2（钱包/总账）已完成，本 story 把两者接成充值闭环。**L0 全绿**；`mvn -B compile` 通过。
+- **接线 story，零新迁移**（复用 V60/V61）。重活在 1.1（支付/回调/幂等）+ 1.2（钱包/总账）已完成，本 story 把两者接成充值闭环。**L0 全绿**；`mvn -B compile` 通过。
 - **AC1 下单**：`POST /api/v1/me/pawcoin/topups`（JWT，仅作用当前 `sub` 防越权，照 MeController/C1）→ `createIntent(PAWCOIN_TOPUP)`（1.1 幂等 + rl:pay:create 写限流）→ `gateway.createCharge` 取 QRIS/DANA 载荷 + `attachCharge` 回填网关订单号（幂等，同 Idempotency-Key 重放不重复 charge）→ 回 `TopupResponse`（对外 token + 载荷，**无自增 id**）。非法档位/渠道 → 422，未登录 → 401。
 - **AC2 固定档位**：`TopupTier`（10k/25k/50k/100k，coins=amount 1:1）内置于 pay 模块；`TopupTierProvider` 接口 + `Default` 实现——**后台可配是 9.2**，届时换 DB 实现不动其余代码。
 - **AC3 回调原子入账（最高风险，血泪护栏）**：`TopupPaidHandler` 用**同步 `@EventListener` + `@Transactional(Propagation.MANDATORY)`** 监听 1.1 在 `applyCallback` 内（markPaid 后、同一 `@Transactional`）发布的 `PaymentIntentPaidEvent`——`publishEvent` 同线程内联触发，handler **强制加入同一事务**（MANDATORY：无活动事务即抛，杜绝脱事务/异步误用），`markPaid` 与 `credit`（原子改钱包 + 平衡分录 + 写流水）**要么一起提交要么一起回滚**。**绝不用 `@TransactionalEventListener(AFTER_COMMIT)`**（记忆库血泪：notify AFTER_COMMIT+默认 REQUIRED 静默吞写；资金重蹈将丢账）——已在 handler 类注释显式钉死。

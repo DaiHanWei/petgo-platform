@@ -18,7 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 
 /**
- * L1（需 Docker postgres+redis，dev profile stub 网关）。上下文启动即验 Flyway V47 + {@code ddl-auto=validate}
+ * L1（需 Docker postgres+redis，dev profile stub 网关）。上下文启动即验 Flyway V60 + {@code ddl-auto=validate}
  * （实体↔schema 契约一致）；验建单幂等、回调双通道去重（只推进一次）、终态守卫（PAID 不被后到 deny 翻转）。
  */
 class PaymentIntentIntegrationTest extends ApiIntegrationTest {

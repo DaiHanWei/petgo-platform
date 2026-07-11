@@ -35,29 +35,31 @@
 # - 4-5 bonus 仅"未交付+转 PawCoin"单一分支(反现金泵套利 C-1)
 # - 1-6/注销 PawCoin 余额作废级联
 #
-# ===== FLYWAY 号固化(V47 起，决策 E2 单调分配；基线冻结在 V46) =====
-# 下表把 epics-v1.1.md / architecture-v1.1-delta.md §11 的占位号固化为实号。
-# 实际 merge 时若顺序微调，号继续单调顺延；加列一律 ALTER，勿动旧迁移。
-# 长度=1 的列禁建 VARCHAR(1)(Hibernate6 映 CHAR(1)->validate 全红)。
-#   V47  1-1  init_payment_intents
-#   V48  1-2  init_ledger_and_pawcoin (ledger_entries + pawcoin_wallets[CHECK>=0] + pawcoin_transactions)
-#   V49  2-1  init_user_monthly_free_quota
-#   V50  2-2  alter_triage_records_unlock (unlock_source / unlock_channel)
-#   V51  2-3  init_ai_consult_orders (独立命名空间)
-#   V52  3-1  init_consult_billing (consult_requests + consult_orders + consult_order_stage_events)
-#   V53  3-7  init_vet_settlements
-#   V54  4-1  alter_feedback_tickets (+ ticket_attachments / ticket_labels / ticket_internal_notes; cs_rating 预留)
-#   V55  4-3  init_refund_requests (两段字段 + net_amount + 加密 payout PII)
-#   V56  4-4  extend_notification_types_v11 (REFUND_REJECTED / TICKET_RESOLVED / CSAT_SURVEY / IDENTITY_REQUIRE_MODIFY)
-#   V57  6-1  alter_pet_profiles_serial (serial_id 唯一 + 号池回收)
-#   V58  6-3  init_id_card_hd_purchases
-#   V59  7-1  init_health_records
-#   V60  7-3  alter_milestone_newbie_tasks (6 新手任务 + Lulus Pemula S 级 15->16)
-#   V61  9-2  init_admin_pay_config (pricing_config + pawcoin_config + pawcoin_topup_tiers + config_change_logs)
-#   V62  9-7  init_identity_moderation (identity_moderation_tickets + 屏蔽态列)
-#   V63  9-8  alter_users_account_type (REAL/VIRTUAL + 虚拟账号列)
-#   (9-1 若需 admin 权限点 seed 迁移，接 V64 顺延)
-# 无迁移的 story: 1-3/1-4/1-5(复用 V47/V48)、2-4、3-2~3-6/3-8、4-2/4-5~4-8、5-*、6-2/6-4、7-2、8-1、9-1/9-3~9-6/9-9/9-10。
+# ===== FLYWAY 号（V60 起，2026-07-11 跨分支撞号重排；决策 E2） =====
+# ⚠️ 撞号重排：原定 V47 起，但 feat/content-moderation 已在 stag 占 V47-V56、stag 全局到 V59
+#    (V57 user_deletion_display / V58 vet_avatar_url / V59 user_locale)。content-moderation 走在 V1.1 前
+#    (已进预发)，故 V1.1 让号，从 V60 起顺延。1-1/1-2 迁移文件已实体重命名 V60/V61。
+# ⚠️ 移动靶警告：stag/content-moderation 仍在长，V62+ 为规划号，非最终；每个 story 合并时按当时全局 max 再顺延
+#    (E2「实际 merge 时号继续单调顺延」)。加列一律 ALTER，勿动旧迁移；长度=1 列禁 VARCHAR(1)(CHAR(1)坑)。
+#   V60  1-1  init_payment_intents                 ✅ 已落文件
+#   V61  1-2  init_ledger_and_pawcoin              ✅ 已落文件 (ledger_entries + pawcoin_wallets[CHECK>=0] + pawcoin_transactions)
+#   V62  2-1  init_user_monthly_free_quota         (规划)
+#   V63  2-2  alter_triage_records_unlock (unlock_source / unlock_channel)
+#   V64  2-3  init_ai_consult_orders (独立命名空间)
+#   V65  3-1  init_consult_billing (consult_requests + consult_orders + consult_order_stage_events)
+#   V66  3-7  init_vet_settlements
+#   V67  4-1  alter_feedback_tickets (+ ticket_attachments / ticket_labels / ticket_internal_notes; cs_rating 预留)
+#   V68  4-3  init_refund_requests (两段字段 + net_amount + 加密 payout PII)
+#   V69  4-4  extend_notification_types_v11 (REFUND_REJECTED / TICKET_RESOLVED / CSAT_SURVEY / IDENTITY_REQUIRE_MODIFY)
+#   V70  6-1  alter_pet_profiles_serial (serial_id 唯一 + 号池回收)
+#   V71  6-3  init_id_card_hd_purchases
+#   V72  7-1  init_health_records
+#   V73  7-3  alter_milestone_newbie_tasks (6 新手任务 + Lulus Pemula S 级 15->16)
+#   V74  9-2  init_admin_pay_config (pricing_config + pawcoin_config + pawcoin_topup_tiers + config_change_logs)
+#   V75  9-7  init_identity_moderation (identity_moderation_tickets + 屏蔽态列)
+#   V76  9-8  alter_users_account_type (REAL/VIRTUAL + 虚拟账号列)
+#   (9-1 若需 admin 权限点 seed 迁移，接 V77 顺延)
+# 无迁移的 story: 1-3/1-4/1-5(复用 V60/V61)、2-4、3-2~3-6/3-8、4-2/4-5~4-8、5-*、6-2/6-4、7-2、8-1、9-1/9-3~9-6/9-9/9-10。
 #
 # ===== 待收敛 [OPEN](不阻塞 L0/L1，L2 前需定) =====
 # - Midtrans 商务合同 + QRIS 轮询超时(整条资金脊柱 E1-E4 的 L2 验收前置，有 lead time，建议即刻并行推进)

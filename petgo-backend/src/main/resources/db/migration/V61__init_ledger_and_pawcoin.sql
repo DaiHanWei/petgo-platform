@@ -1,4 +1,5 @@
--- Story 1.2（V1.1 资金地基）：双分录总账 + PawCoin 钱包 + 用户流水。实测最大号 V47(1.1) + 1 = V48（决策 E2）。
+-- Story 1.2（V1.1 资金地基）：双分录总账 + PawCoin 钱包 + 用户流水。
+-- 接 1.1 的 V60，本表 V61（原占 V48，因跨分支撞号 stag 已到 V59，V1.1 让号从 V60 起重排，决策 E2 2026-07-11）。
 -- ledger_entries append-only(无 updated_at)；金额 BIGINT 最小币种单位；PawCoin 1 koin=Rp1 同单位。
 -- 钱包并发非负 = 原子条件 UPDATE + CHECK 兜底；补偿走反向分录不改旧行。
 CREATE TABLE ledger_entries (
