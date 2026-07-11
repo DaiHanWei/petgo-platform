@@ -1,0 +1,157 @@
+# generated: 2026-07-11
+# last_updated: 2026-07-11
+# project: petgo-platform (V1.1.0 增量)
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts
+# source_epics: {project-root}/_bmad-output/planning-artifacts/epics-v1.1.md (9 Epic / 46 Story)
+# NOTE: 本文件是 V1.1 增量 sprint 跟踪，与 V1.0 的 sprint-status.yaml 并存，不覆盖。
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:   backlog -> in-progress -> done
+# Story Status:  backlog -> ready-for-dev -> in-progress -> review -> done
+# Retrospective: optional <-> done
+#
+# WORKFLOW NOTES:
+# - Epic 首个 story 创建(create-story)时自动 -> in-progress
+# - 严格按 Epic 1->9、Story 编号升序推进；每个 story 内先后端/建表基建、后前端/交互、最后联调
+# - 每 story 三段(后端->前端->联调)；每条 AC 已标 L0(静态)/L1(集成)/L2(端到端)层级
+#
+# ===== V1.1 依赖链(全后向，无前向依赖) =====
+# E1 资金地基 -> E2/E3/E6 用它 -> E4 依赖 E3(有订单才退款) -> E5 聚合前序
+#   -> E7/E8 无资金依赖(可并行穿插) -> E9 建于全部之上(退款审批已在 E4)
+#
+# ===== 推荐夜间/批跑执行顺序 =====
+# E1(1.1->1.6) -> E2(2.1->2.4) -> E3(3.1->3.8) -> E4(4.1->4.8) -> E5(5.1->5.3)
+#   -> E6(6.1->6.4) -> E7(7.1->7.3) -> E8(8.1) -> E9(9.1->9.10)
+# E8 纯前端零依赖，可提前/穿插做快速见效；E7 无资金依赖，可与 E5/E6 并行。
+#
+# ===== 安全攸关节点(AC 含硬约束，不可被无监管流程降级/跳过) =====
+# - 2-2 红色评级 unlock_source 恒免费、永不锁(即使额度耗尽)
+# - 3-8 封禁挂起 15min 强制结束 + 逃生入口(H-5)
+# - 4-3 退款职责分离同单互斥(SUPER_ADMIN 不豁免)
+# - 4-4 驳回退款订单诚实回落 COMPLETED+refund_rejected(A-2)
+# - 4-5 bonus 仅"未交付+转 PawCoin"单一分支(反现金泵套利 C-1)
+# - 1-6/注销 PawCoin 余额作废级联
+#
+# ===== FLYWAY 号固化(V47 起，决策 E2 单调分配；基线冻结在 V46) =====
+# 下表把 epics-v1.1.md / architecture-v1.1-delta.md §11 的占位号固化为实号。
+# 实际 merge 时若顺序微调，号继续单调顺延；加列一律 ALTER，勿动旧迁移。
+# 长度=1 的列禁建 VARCHAR(1)(Hibernate6 映 CHAR(1)->validate 全红)。
+#   V47  1-1  init_payment_intents
+#   V48  1-2  init_ledger_and_pawcoin (ledger_entries + pawcoin_wallets[CHECK>=0] + pawcoin_transactions)
+#   V49  2-1  init_user_monthly_free_quota
+#   V50  2-2  alter_triage_records_unlock (unlock_source / unlock_channel)
+#   V51  2-3  init_ai_consult_orders (独立命名空间)
+#   V52  3-1  init_consult_billing (consult_requests + consult_orders + consult_order_stage_events)
+#   V53  3-7  init_vet_settlements
+#   V54  4-1  alter_feedback_tickets (+ ticket_attachments / ticket_labels / ticket_internal_notes; cs_rating 预留)
+#   V55  4-3  init_refund_requests (两段字段 + net_amount + 加密 payout PII)
+#   V56  4-4  extend_notification_types_v11 (REFUND_REJECTED / TICKET_RESOLVED / CSAT_SURVEY / IDENTITY_REQUIRE_MODIFY)
+#   V57  6-1  alter_pet_profiles_serial (serial_id 唯一 + 号池回收)
+#   V58  6-3  init_id_card_hd_purchases
+#   V59  7-1  init_health_records
+#   V60  7-3  alter_milestone_newbie_tasks (6 新手任务 + Lulus Pemula S 级 15->16)
+#   V61  9-2  init_admin_pay_config (pricing_config + pawcoin_config + pawcoin_topup_tiers + config_change_logs)
+#   V62  9-7  init_identity_moderation (identity_moderation_tickets + 屏蔽态列)
+#   V63  9-8  alter_users_account_type (REAL/VIRTUAL + 虚拟账号列)
+#   (9-1 若需 admin 权限点 seed 迁移，接 V64 顺延)
+# 无迁移的 story: 1-3/1-4/1-5(复用 V47/V48)、2-4、3-2~3-6/3-8、4-2/4-5~4-8、5-*、6-2/6-4、7-2、8-1、9-1/9-3~9-6/9-9/9-10。
+#
+# ===== 待收敛 [OPEN](不阻塞 L0/L1，L2 前需定) =====
+# - Midtrans 商务合同 + QRIS 轮询超时(整条资金脊柱 E1-E4 的 L2 验收前置，有 lead time，建议即刻并行推进)
+# - Deferred Deep Link 服务选型(6-4 拉新，可后置)
+# - 方式B 驳回后能否 App 内重提(4-4/4-5 UX 待定)
+# - 红色超额/接单未支付限速阈值(9-6，仅埋点，上线后定)
+
+generated: 2026-07-11
+last_updated: 2026-07-11  # 1-1/1-2/1-3 已 create-story → ready-for-dev；epic-1 → in-progress
+project: petgo-platform-v1.1
+project_key: NOKEY
+tracking_system: file-system
+story_location: "{project-root}/_bmad-output/implementation-artifacts"
+
+development_status:
+  # ---- Epic 1: PawCoin 钱包与充值(资金地基) ----
+  epic-1: in-progress
+  1-1-支付网关基础设施与幂等地基: ready-for-dev
+  1-2-双分录总账与pawcoin钱包: ready-for-dev
+  1-3-pawcoin充值下单与到账: ready-for-dev
+  1-4-pawcoin余额与流水页: backlog
+  1-5-充值失败取消与暂停态: backlog
+  1-6-注销时pawcoin余额作废: backlog
+  epic-1-retrospective: optional
+
+  # ---- Epic 2: AI 问诊付费解锁 ----
+  epic-2: backlog
+  2-1-每月免费额度模型与判定: backlog
+  2-2-ai结果分字段下发与锁定态: backlog
+  2-3-付费额度解锁流: backlog
+  2-4-解锁前端与paywall-ui: backlog
+  epic-2-retrospective: optional
+
+  # ---- Epic 3: 兽医咨询计费流(含兽医端) ----
+  epic-3: backlog
+  3-1-咨询请求两表与状态机: backlog
+  3-2-免费入队与广播: backlog
+  3-3-兽医接单与限时支付窗: backlog
+  3-4-限时支付建会话与超时重播: backlog
+  3-5-用户端下单链路ui: backlog
+  3-6-兽医端队列进行中会话与toast: backlog
+  3-7-兽医到手金额与月度收入: backlog
+  3-8-konsultasi-ui定稿与封禁挂起逃生: backlog
+  epic-3-retrospective: optional
+
+  # ---- Epic 4: 退款与客服工单 ----
+  epic-4: backlog
+  4-1-客服工单模型升级: backlog
+  4-2-用户端投诉工单升级: backlog
+  4-3-退款申请与两段审批模型: backlog
+  4-4-客服判定与订单解锁回落: backlog
+  4-5-用户选退款方式与填收款: backlog
+  4-6-主管审批与财务打款: backlog
+  4-7-工单结案通知与csat: backlog
+  4-8-举报处理结果回告举报人: backlog
+  epic-4-retrospective: optional
+
+  # ---- Epic 5: 订单中心 ----
+  epic-5: backlog
+  5-1-订单聚合接口: backlog
+  5-2-订单卡片与列表页: backlog
+  5-3-订单详情各态与失效态: backlog
+  epic-5-retrospective: optional
+
+  # ---- Epic 6: 宠物身份证与分享拉新 ----
+  epic-6: backlog
+  6-1-流水号与身份证数据: backlog
+  6-2-三风格证件卡渲染: backlog
+  6-3-高清图付费下载: backlog
+  6-4-分享落地页与拉新: backlog
+  epic-6-retrospective: optional
+
+  # ---- Epic 7: 成长档案健康记录与里程碑 ----
+  epic-7: backlog
+  7-1-健康记录模型与crud: backlog
+  7-2-健康记录列表与混排: backlog
+  7-3-新手任务与聚合里程碑: backlog
+  epic-7-retrospective: optional
+
+  # ---- Epic 8: 首页情绪彩蛋(纯前端) ----
+  epic-8: backlog
+  8-1-情绪彩蛋气泡: backlog
+  epic-8-retrospective: optional
+
+  # ---- Epic 9: 后台资金与运营治理 ----
+  epic-9: backlog
+  9-1-后台权限点扩充与导航整改: backlog
+  9-2-定价与pawcoin配置: backlog
+  9-3-兽医咨询订单只读管理: backlog
+  9-4-ai问诊收入统计与订单查询: backlog
+  9-5-兽医分成月结对账: backlog
+  9-6-支付记录查询与红色超额监控: backlog
+  9-7-昵称宠物名异步审核: backlog
+  9-8-虚拟账号与种子批量上传: backlog
+  9-9-评论内容管理与封禁挂起处置: backlog
+  9-10-运营概览看板: backlog
+  epic-9-retrospective: optional
