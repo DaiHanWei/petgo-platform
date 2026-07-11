@@ -44,7 +44,9 @@ class AdminVetServiceListTest {
         com.tailtopia.admin.audit.service.AdminAuditService audit =
                 mock(com.tailtopia.admin.audit.service.AdminAuditService.class);
         service = new AdminVetService(vetAccounts, ratingQuery, presence, interrupt, im, vetQual, audit,
-                mock(com.tailtopia.consult.service.ConsultQualityQueryService.class));
+                mock(com.tailtopia.consult.service.ConsultQualityQueryService.class),
+                mock(com.tailtopia.shared.media.AliyunOssClient.class),
+                mock(com.tailtopia.shared.media.MediaProperties.class));
         // 默认均分空（count 0）。
         when(ratingQuery.forVet(anyLong())).thenReturn(new VetRatingsView(0L, 0.0, 0, List.of()));
     }

@@ -40,12 +40,16 @@ public class AdminVetService {
     private final VetQualificationService vetQualifications;
     private final AdminAuditService auditService;
     private final com.tailtopia.consult.service.ConsultQualityQueryService qualityQuery;
+    private final com.tailtopia.shared.media.AliyunOssClient ossClient;
+    private final com.tailtopia.shared.media.MediaProperties mediaProps;
 
     public AdminVetService(VetAccountService vetAccounts, ConsultRatingQueryService ratingQuery,
             VetPresenceService presence, ConsultInterruptService interruptService,
             TencentImClient imClient, VetQualificationService vetQualifications,
             AdminAuditService auditService,
-            com.tailtopia.consult.service.ConsultQualityQueryService qualityQuery) {
+            com.tailtopia.consult.service.ConsultQualityQueryService qualityQuery,
+            com.tailtopia.shared.media.AliyunOssClient ossClient,
+            com.tailtopia.shared.media.MediaProperties mediaProps) {
         this.vetAccounts = vetAccounts;
         this.ratingQuery = ratingQuery;
         this.presence = presence;
@@ -54,6 +58,8 @@ public class AdminVetService {
         this.vetQualifications = vetQualifications;
         this.auditService = auditService;
         this.qualityQuery = qualityQuery;
+        this.ossClient = ossClient;
+        this.mediaProps = mediaProps;
     }
 
     /** 全量列表（简单视图，无附加列）——保留向后兼容。 */
@@ -133,6 +139,25 @@ public class AdminVetService {
         vetAccounts.updateProfile(vetId, displayName, email, contactPhone);
         auditService.record(actorAccountId, AuditActions.VET_UPDATED, "VET_ACCOUNT",
                 String.valueOf(vetId), "编辑兽医资料 " + displayName + "（" + email + "）");
+    }
+
+    /**
+     * 更换兽医头像：字节上传公开桶① → 回填 CDN URL → 同事务写审计 VET_UPDATED。
+     * 运营为可信主体，头像不走内容审核（与用户头像 D-CM3 异步送审区别对待）。
+     */
+    @Transactional
+    public void updateAvatar(long vetId, byte[] bytes, String contentType, long actorAccountId) {
+        String ext = switch (contentType == null ? "" : contentType) {
+            case "image/png" -> "png";
+            case "image/webp" -> "webp";
+            default -> "jpg";
+        };
+        String key = mediaProps.getOss().normalizedKeyPrefix()
+                + "public/vet-avatar/" + vetId + "/" + java.util.UUID.randomUUID() + "." + ext;
+        String url = ossClient.putPublicObject(key, bytes, contentType);
+        vetAccounts.updateAvatar(vetId, url);
+        auditService.record(actorAccountId, AuditActions.VET_UPDATED, "VET_ACCOUNT",
+                String.valueOf(vetId), "更换兽医头像");
     }
 
     /**

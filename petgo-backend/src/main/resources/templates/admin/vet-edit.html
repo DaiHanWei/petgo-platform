@@ -26,6 +26,21 @@
                 <p><button type="submit" class="btn btn-primary" th:text="#{admin.vets.save}">保存</button></p>
             </form>
         </div>
+        <div class="card">
+            <h2 th:text="#{admin.vets.avatar}">头像</h2>
+            <p th:if="${notice}" th:text="${notice}" style="color:green">ok</p>
+            <p th:if="${error}" th:text="${error}" class="err">err</p>
+            <p>
+                <img th:if="${currentAvatarUrl}" th:src="${currentAvatarUrl}" alt="avatar"
+                     style="width:72px;height:72px;border-radius:50%;object-fit:cover"/>
+                <span th:unless="${currentAvatarUrl}" th:text="#{admin.vets.avatar.none}">暂无头像</span>
+            </p>
+            <form th:action="@{/admin/vets/{id}/avatar(id=${vetId})}" method="post"
+                  enctype="multipart/form-data">
+                <input type="file" name="avatar" accept="image/*" required/>
+                <button type="submit" class="btn btn-primary" th:text="#{admin.vets.avatar.upload}">上传头像</button>
+            </form>
+        </div>
     </div>
 </div>
 </body>

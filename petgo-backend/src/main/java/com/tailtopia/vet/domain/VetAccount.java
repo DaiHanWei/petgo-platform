@@ -45,6 +45,10 @@ public class VetAccount {
     @Column(name = "contact_phone", length = 32)
     private String contactPhone;
 
+    /** 兽医头像（运营后台上传，公开桶① CDN URL）；存量为 NULL → App 回退首字母占位。 */
+    @Column(name = "avatar_url", length = 1024)
+    private String avatarUrl;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -81,6 +85,15 @@ public class VetAccount {
 
     public String getContactPhone() {
         return contactPhone;
+    }
+
+    /** 运营后台设置/更换头像（存对外 CDN URL）。 */
+    public void setAvatarUrl(String avatarUrl) {
+        this.avatarUrl = avatarUrl;
+    }
+
+    public String getAvatarUrl() {
+        return avatarUrl;
     }
 
     /** 编辑显示名（Story 2.4）。 */

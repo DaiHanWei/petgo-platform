@@ -10,17 +10,17 @@ import java.time.Instant;
  * {@code presence} 为 ONLINE/BUSY/OFFLINE；{@code ratingAvg} 均分（无评分为 null，显示「—」）。
  */
 public record VetAdminView(long id, String username, String displayName, String status,
-        Instant createdAt, String qualStatus, String presence, Double ratingAvg) {
+        Instant createdAt, String qualStatus, String presence, Double ratingAvg, String avatarUrl) {
 
     /** 简单视图（仅账号字段，资质/在线/均分留空）——供单兽医详情/评分页导航等无需附加列处。 */
     public static VetAdminView from(VetAccount v) {
         return new VetAdminView(v.getId(), v.getUsername(), v.getDisplayName(),
-                v.getStatus().name(), v.getCreatedAt(), null, null, null);
+                v.getStatus().name(), v.getCreatedAt(), null, null, null, v.getAvatarUrl());
     }
 
     /** 列表完整视图（2.2）：由 service 组装资质 + 在线 + 均分。 */
     public static VetAdminView of(VetAccount v, String qualStatus, String presence, Double ratingAvg) {
         return new VetAdminView(v.getId(), v.getUsername(), v.getDisplayName(),
-                v.getStatus().name(), v.getCreatedAt(), qualStatus, presence, ratingAvg);
+                v.getStatus().name(), v.getCreatedAt(), qualStatus, presence, ratingAvg, v.getAvatarUrl());
     }
 }

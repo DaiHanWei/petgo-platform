@@ -14,10 +14,14 @@ import 'vet_status_sheet.dart';
 /// - dashboard：传 [greetingName] → 渲染时段问候 + 医生名 + 在线开关。
 /// - 普通：传 [title] → 渲染标题（可选在线开关）。
 class VetTopBar extends ConsumerWidget {
-  const VetTopBar({super.key, this.greetingName, this.title, this.showOnlineToggle = false});
+  const VetTopBar(
+      {super.key, this.greetingName, this.avatarUrl, this.title, this.showOnlineToggle = false});
 
   /// dashboard 模式医生名（非空即问候模式，优先于 [title]）。
   final String? greetingName;
+
+  /// dashboard 模式头像 CDN URL（运营后台上传）；null/加载失败 → 首字母占位。
+  final String? avatarUrl;
 
   /// 普通模式标题。
   final String? title;
@@ -38,6 +42,20 @@ class VetTopBar extends ConsumerWidget {
     final cleaned = name.replaceFirst(RegExp(r'^\s*drh?\.\s*', caseSensitive: false), '').trim();
     final base = cleaned.isNotEmpty ? cleaned : name.trim();
     return base.isEmpty ? '?' : base.substring(0, 1).toUpperCase();
+  }
+
+  /// 首字母圆（改动前的原占位；无上传头像 / 图片加载失败时回退）。
+  Widget _avatarInitialCircle() {
+    return Container(
+      width: 36,
+      height: 36,
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(color: AppColors.vetPrimary, shape: BoxShape.circle),
+      child: Text(
+        _avatarInitial(greetingName!),
+        style: AppTypography.title.copyWith(color: AppColors.vetOnAccent, fontSize: 14),
+      ),
+    );
   }
 
   @override
@@ -94,18 +112,17 @@ class VetTopBar extends ConsumerWidget {
                 const SizedBox(width: AppSpacing.sm),
                 _OnlinePill(availability: availability, onTap: () => showVetStatusSheet(context)),
               ],
-              // 医生头像圆（仅问候模式；首字母）。
+              // 医生头像圆（仅问候模式；有上传头像用真图，否则/加载失败回退首字母）。
               if (isGreeting) ...[
                 const SizedBox(width: AppSpacing.sm),
-                Container(
-                  width: 36,
-                  height: 36,
-                  alignment: Alignment.center,
-                  decoration: const BoxDecoration(color: AppColors.vetPrimary, shape: BoxShape.circle),
-                  child: Text(
-                    _avatarInitial(greetingName!),
-                    style: AppTypography.title.copyWith(color: AppColors.vetOnAccent, fontSize: 14),
-                  ),
+                ClipOval(
+                  child: (avatarUrl != null && avatarUrl!.isNotEmpty)
+                      ? Image.network(avatarUrl!,
+                          width: 36,
+                          height: 36,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => _avatarInitialCircle())
+                      : _avatarInitialCircle(),
                 ),
               ],
             ],

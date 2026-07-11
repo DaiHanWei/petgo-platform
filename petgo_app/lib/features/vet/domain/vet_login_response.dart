@@ -25,15 +25,19 @@ class VetLoginResponse {
 
 /// 兽医自身视图（对应后端 `VetMeResponse`）。
 class VetMe {
-  const VetMe({required this.id, required this.displayName, required this.status});
+  const VetMe({required this.id, required this.displayName, required this.status, this.avatarUrl});
 
   final int id;
   final String displayName;
   final String status;
 
+  /// 运营在后台上传的头像 CDN URL；null → 首字母占位。
+  final String? avatarUrl;
+
   factory VetMe.fromJson(Map<String, dynamic> json) => VetMe(
         id: (json['id'] as num).toInt(),
         displayName: (json['displayName'] ?? '') as String,
         status: (json['status'] ?? 'ACTIVE') as String,
+        avatarUrl: json['avatarUrl'] as String?,
       );
 }

@@ -81,6 +81,15 @@ public class VetAccountService {
         repo.save(vet);
     }
 
+    /** 运营后台更换头像：仅回填已上传的公开桶 CDN URL（上传落桶由调用方负责）。 */
+    @Transactional
+    public void updateAvatar(long vetId, String avatarUrl) {
+        VetAccount vet = repo.findById(vetId)
+                .orElseThrow(() -> AppException.notFound("兽医账号不存在"));
+        vet.setAvatarUrl(avatarUrl);
+        repo.save(vet);
+    }
+
     /** 封禁/解封（5.7 复用）。本故事落 ACTIVE↔BANNED 切换。 */
     @Transactional
     public void setStatus(long vetId, VetStatus status) {

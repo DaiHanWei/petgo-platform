@@ -194,7 +194,33 @@ public class AdminWebController {
         if (!model.containsAttribute("editVetForm")) {
             model.addAttribute("editVetForm", adminVetService.editForm(id));
         }
+        model.addAttribute("currentAvatarUrl", adminVetService.view(id).avatarUrl());
         return "admin/vet-edit";
+    }
+
+    /** 上传/更换兽医头像（服务端落公开桶① → 回填 CDN URL）。仅图片、≤5MB。 */
+    @PostMapping("/admin/vets/{id}/avatar")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('vet.create')")
+    public String uploadVetAvatar(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id,
+            @RequestParam("avatar") org.springframework.web.multipart.MultipartFile avatar,
+            RedirectAttributes flash) {
+        String ct = avatar.getContentType();
+        if (avatar.isEmpty() || ct == null || !ct.startsWith("image/")) {
+            flash.addFlashAttribute("error", "请选择图片文件");
+            return "redirect:/admin/vets/" + id + "/edit";
+        }
+        if (avatar.getSize() > 5L * 1024 * 1024) {
+            flash.addFlashAttribute("error", "头像不能超过 5MB");
+            return "redirect:/admin/vets/" + id + "/edit";
+        }
+        try {
+            adminVetService.updateAvatar(id, avatar.getBytes(), ct, admin.getAdminAccountId());
+            flash.addFlashAttribute("notice", "已更新兽医头像");
+        } catch (Exception e) {
+            // 读文件 IO / OSS 未配置或上传失败（含凭证异常）均优雅回显，不抛 500。
+            flash.addFlashAttribute("error", "头像上传失败，请重试");
+        }
+        return "redirect:/admin/vets/" + id + "/edit";
     }
 
     @PostMapping("/admin/vets/{id}")

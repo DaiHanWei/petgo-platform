@@ -32,6 +32,7 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> with WidgetsBinding
   List<VetInboxItem>? _items; // null = 首次加载中
   Timer? _poll;
   String _displayName = '';
+  String? _avatarUrl; // 运营后台上传的头像；null → 首字母占位
   int? _doneCount; // 完成数（history 列表长度，全量非仅今日）；null=加载中/失败 → 占位
   final Set<int> _skipped = {}; // Lewati 客户端本地跳过的 sessionId（不调后端；刷新后可重现）
 
@@ -94,6 +95,7 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> with WidgetsBinding
       if (!mounted) return;
       setState(() {
         _displayName = (results[0] as dynamic).displayName as String;
+        _avatarUrl = (results[0] as dynamic).avatarUrl as String?;
         _doneCount = (results[1] as List).length;
       });
     } catch (_) {
@@ -114,7 +116,7 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> with WidgetsBinding
       backgroundColor: AppColors.base,
       body: Column(
         children: [
-          VetTopBar(greetingName: _displayName, showOnlineToggle: true),
+          VetTopBar(greetingName: _displayName, avatarUrl: _avatarUrl, showOnlineToggle: true),
           Expanded(
             child: Builder(
               builder: (context) {

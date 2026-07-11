@@ -29,6 +29,7 @@ class _VetMePageState extends ConsumerState<VetMePage> {
   bool _loading = true;
   bool _updating = false;
   String _displayName = '';
+  String? _avatarUrl; // 运营后台上传的头像；null → 首字母占位
   int? _doneCount; // 完成数（history 列表长度）；null=加载中/失败 → 占位「—」
 
   @override
@@ -44,6 +45,7 @@ class _VetMePageState extends ConsumerState<VetMePage> {
       if (!mounted) return;
       setState(() {
         _displayName = me.displayName;
+        _avatarUrl = me.avatarUrl;
         _loading = false;
       });
     } catch (_) {
@@ -162,13 +164,14 @@ class _VetMePageState extends ConsumerState<VetMePage> {
                 height: 60,
                 child: Stack(
                   children: [
-                    Container(
-                      width: 60,
-                      height: 60,
-                      alignment: Alignment.center,
-                      decoration: const BoxDecoration(color: AppColors.vetPrimary, shape: BoxShape.circle),
-                      child: Text(initial,
-                          style: AppTypography.headline.copyWith(color: AppColors.vetOnAccent)),
+                    ClipOval(
+                      child: (_avatarUrl != null && _avatarUrl!.isNotEmpty)
+                          ? Image.network(_avatarUrl!,
+                              width: 60,
+                              height: 60,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) => _avatarFallback(initial))
+                          : _avatarFallback(initial),
                     ),
                     // 角标恒显示，颜色跟随三态在线态（online 绿 / busy 黄 / offline 灰，修 20260702-234）。
                     Positioned(
@@ -233,6 +236,17 @@ class _VetMePageState extends ConsumerState<VetMePage> {
           ),
         ],
       ),
+    );
+  }
+
+  /// 首字母占位头像（无上传头像 / 图片加载失败时）。
+  Widget _avatarFallback(String initial) {
+    return Container(
+      width: 60,
+      height: 60,
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(color: AppColors.vetPrimary, shape: BoxShape.circle),
+      child: Text(initial, style: AppTypography.headline.copyWith(color: AppColors.vetOnAccent)),
     );
   }
 
