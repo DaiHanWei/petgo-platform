@@ -29,16 +29,32 @@ public class NotificationService {
     private static final char[] BASE62 =
             "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".toCharArray();
 
+    /** 兽医推送默认语言（V1 兽医无语言偏好字段，统一印尼语）。 */
+    private static final java.util.Locale INDONESIAN = java.util.Locale.forLanguageTag("id");
+
     private final NotificationRepository repo;
     private final StringRedisTemplate redis;
     private final NotificationPusher pusher;
+    private final org.springframework.context.MessageSource messageSource;
+    private final com.tailtopia.auth.service.AccountQueryService accountQuery;
     private final SecureRandom random = new SecureRandom();
 
     public NotificationService(NotificationRepository repo, StringRedisTemplate redis,
-            NotificationPusher pusher) {
+            NotificationPusher pusher, org.springframework.context.MessageSource messageSource,
+            com.tailtopia.auth.service.AccountQueryService accountQuery) {
         this.repo = repo;
         this.redis = redis;
         this.pusher = pusher;
+        this.messageSource = messageSource;
+        this.accountQuery = accountQuery;
+    }
+
+    /**
+     * 按 type + 收件人语言渲染 push 文案（bug 20260625-105）。键 {@code notify.<TYPE>.title/body}；
+     * 缺键回退调用方传入的原文案。仅用于系统推送——站内通知中心由 App 端按 type 自行本地化。
+     */
+    private String pushText(NotificationType type, String suffix, java.util.Locale locale, String fallback) {
+        return messageSource.getMessage("notify." + type.name() + "." + suffix, null, fallback, locale);
     }
 
     /**
@@ -60,8 +76,12 @@ public class NotificationService {
         // 未读角标自增（用户侧通知中心 6.6）。bug 20260625-088：Redis 抖动/不可用**不得**回滚通知落库
         // 或阻断推送——角标是派生数据，稍后由通知中心首页 / unreadCount 回库自愈。
         bumpUnreadBadge(recipientUserId);
-        // 离线推送异步投递（失败不阻塞）。
-        pusher.pushToUser(recipientUserId, title, body, deepLinkType, token);
+        // 离线推送异步投递（失败不阻塞）。push 文案按收件人语言渲染（bug 20260625-105）；
+        // 站内通知中心不用这里的文本（App 端按 type 自行本地化），故落库 title/body 保持不变。
+        java.util.Locale locale = accountQuery.localeOf(recipientUserId);
+        pusher.pushToUser(recipientUserId,
+                pushText(type, "title", locale, title), pushText(type, "body", locale, body),
+                deepLinkType, token);
         return saved;
     }
 
@@ -70,7 +90,10 @@ public class NotificationService {
      * 故仅离线推送 + 工作台深链，不写用户通知中心行 / 不增用户角标。
      */
     public void sendToVet(long vetId, NotificationType type, String title, String body, String deepLinkType) {
-        pusher.pushToVet(vetId, title, body, deepLinkType, null);
+        // 兽医侧 V1 无语言偏好，统一印尼语渲染（bug 20260625-105）。
+        pusher.pushToVet(vetId,
+                pushText(type, "title", INDONESIAN, title), pushText(type, "body", INDONESIAN, body),
+                deepLinkType, null);
     }
 
     /**
