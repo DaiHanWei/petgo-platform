@@ -136,6 +136,8 @@ public class SecurityConfig {
                         // 运维/文档/公开 H5（名片 /p、里程碑庆祝分享 /m）放行
                         .requestMatchers("/actuator/**", "/v3/api-docs/**", "/swagger-ui/**",
                                 "/swagger-ui.html", "/p/**", "/m/**").permitAll()
+                        // 品牌静态资源（H5 名片/分享页左上角 wordmark，bug 20260701-182）公开放行。
+                        .requestMatchers(HttpMethod.GET, "/brand/**").permitAll()
                         // 法律政策 H5（隐私政策 / 服务条款 / 账号删除 / 儿童安全标准 / 支持页）公开放行（商店上架 + App WebView 引用）
                         .requestMatchers(HttpMethod.GET, "/privacy", "/terms",
                                 "/account-deletion", "/child-safety", "/support").permitAll()
