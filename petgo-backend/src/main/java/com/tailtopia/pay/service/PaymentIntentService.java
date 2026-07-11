@@ -137,6 +137,27 @@ public class PaymentIntentService {
         }
     }
 
+    /** 按对外 token 读意图（供同模块下单/查询用；跨模块请走 DTO）。 */
+    @Transactional(readOnly = true)
+    public Optional<PaymentIntent> findByToken(String publicToken) {
+        return intents.findByPublicToken(publicToken);
+    }
+
+    /**
+     * 收款创建成功后回填网关订单号 + 脱敏快照（Story 1.3 下单时调）。幂等：已回填则直接返回，
+     * 避免同 {@code Idempotency-Key} 重放二次下单重复 charge。
+     */
+    @Transactional
+    public void attachCharge(String publicToken, String gatewayRef, java.util.Map<String, Object> meta) {
+        PaymentIntent intent = intents.findByPublicToken(publicToken)
+                .orElseThrow(() -> AppException.notFound("支付意图不存在"));
+        if (intent.getGatewayRef() != null) {
+            return; // 已下单，幂等短路
+        }
+        intent.attachGatewayRef(gatewayRef, meta);
+        intents.saveAndFlush(intent);
+    }
+
     /** 先按 {@code gateway_ref}（唯一去重键）定位，回退 {@code public_token}（order_id）。 */
     private PaymentIntent resolve(PaymentCallback cb) {
         if (cb.gatewayRef() != null) {

@@ -1,6 +1,9 @@
+---
+baseline_commit: 1a08e5a
+---
 # Story 1.3: PawCoin 充值下单与到账
 
-Status: ready-for-dev
+Status: review
 
 > V1.1 Epic 1（资金地基）第 3 story。**接 1.1（支付网关/payment_intents/回调）+ 1.2（LedgerService/PawCoinWalletService）**，把两者接成充值闭环。**brownfield**：Flyway V46 冻结，1.1=V47、1.2=V48；**本 story 无新迁移**（复用 V47/V48 表）。
 > 源：`epics-v1.1.md` Story 1.3 · 架构 §2/§3.1/§4 · 排期 `sprint-status-v1.1.yaml`。
@@ -45,20 +48,20 @@ so that 我能获得可消费的 PawCoin 余额（FR-50 / FR-50A）。
 
 > 纯后端 story，无迁移。核心是「回调→入账」的同事务原子性与幂等（AC3）。
 
-- [ ] **T1 档位**（AC2）
-  - [ ] `pay/domain/TopupTier.java`（枚举或常量：10k/25k/50k/100k，`amountIdr`=`coins`）+ `pay/service/TopupTierProvider.java`（接口，本 story 内置实现；9.2 换 DB）。**L0**
-- [ ] **T2 充值下单**（AC1）
-  - [ ] `pay/dto/CreateTopupRequest.java`（record：`tierId`/`channel`，Bean Validation）+ `TopupResponse.java`（record：`intentToken` + 支付载荷；**不含自增 id**）。**L0**
-  - [ ] `pay/web/PawCoinTopupController.java`（`@RestController @RequestMapping("/api/v1/me")`，`@AuthenticationPrincipal Jwt jwt` + `currentUserId(jwt)`，`POST /pawcoin/topups`）。照 `auth/web/MeController`（决策 C1）。**L1**
-  - [ ] `pay/service/PawCoinTopupService.java`：校验档位 → `PaymentIntentService.createIntent(PAWCOIN_TOPUP,...)` → 返回载荷。写端点限流 `RedisRateLimiter` + `Idempotency-Key`。**L1**
-- [ ] **T3 回调入账接线**（AC3/4 — 最高风险）
-  - [ ] 在 1.1 `PayCallbackController`/`PaymentIntentService.markPaid` 的**按 purpose 分派**点，为 `PAWCOIN_TOPUP` 注册处理器 `TopupPaidHandler`。**L0**
-  - [ ] `pay/service/TopupPaidHandler.java`：**同一 `@Transactional`** 内 `markPaid(intent)` + `PawCoinWalletService.credit(intent.userId, intent.amount, TOPUP, refType=PAYMENT_INTENT, refId=intent.id, idempotencyKey=intent.publicToken)`。幂等：已 PAID 直接返回。**L1**
-  - [ ] `FAILED/EXPIRED` 分支：只 `markFailed`，**不调 credit**。**L1**
-- [ ] **T4 测试**（AC1-5）
-  - [ ] L0 单测：`PawCoinTopupServiceTest`（非法档位拒绝、下单调 createIntent）、`TopupPaidHandlerTest`（mock：PAID→credit 一次、重放→不再 credit、FAILED→不 credit）。**L0**
-  - [ ] L1 集成：`PawCoinTopupIntegrationTest extends ApiIntegrationTest`（stub gateway：下单→模拟回调→断言余额+流水+总账平；回调重放断言不双入账；失败回调断言余额不变）。**L1**
-  - [ ] 云端只跑 **L0 绿灯**；L1/L2 留本地，Completion Notes 标注「L1 docker pg+redis / L2 Midtrans sandbox 待本地」。
+- [x] **T1 档位**（AC2）
+  - [x] `pay/domain/TopupTier.java`（枚举 10k/25k/50k/100k，`amountIdr`=`coins` 1:1）+ `pay/service/TopupTierProvider.java`（接口 + 内置 `Default` 实现；9.2 换 DB）。**L0** ✅
+- [x] **T2 充值下单**（AC1）
+  - [x] `pay/dto/CreateTopupRequest.java`（record：`tierId`/`channel` + `@NotBlank`）+ `TopupResponse.java`（record：`intentToken` + 载荷；**不含自增 id**）。**L0** ✅
+  - [x] `pay/web/PawCoinTopupController.java`（`@RequestMapping("/api/v1/me")`，`@AuthenticationPrincipal Jwt` + `currentUserId(jwt)`，`POST /pawcoin/topups`，`Idempotency-Key` 头）。照 `auth/web/MeController`（C1，仅作用当前 sub 防越权）。**L1** ✅
+  - [x] `pay/service/PawCoinTopupService.java`：校验档位/渠道(QRIS/DANA) → `createIntent(PAWCOIN_TOPUP,...)`(幂等+写限流在其内) → `gateway.createCharge` 取载荷 + `attachCharge` 回填(幂等，重放不重复 charge) → 返回 `TopupResponse`。**L1** ✅
+- [x] **T3 回调入账接线**（AC3/4 — 最高风险）
+  - [x] 分派点：复用 1.1 `applyCallback` 在 `markPaid` 后于**同 `@Transactional`** 内 `publishEvent(PaymentIntentPaidEvent)`；`TopupPaidHandler` 以**同步 `@EventListener` + `Propagation.MANDATORY`** 按 `purpose` 分派（非充值意图忽略，未接 purpose 不 crash）。**L0** ✅
+  - [x] `pay/service/TopupPaidHandler.java`：**同一事务**内 `PawCoinWalletService.credit(userId, amount, TOPUP, refType=PAYMENT_INTENT, refId=intentId, idempotencyKey=publicToken)`。幂等：1.1 对已 PAID 意图 applyCallback 早返回不再发事件 + credit 幂等键=publicToken。**禁 AFTER_COMMIT**（记忆库血泪，代码注释显式钉死）。**L1** ✅
+  - [x] `FAILED/EXPIRED` 分支：1.1 只 `markFailed/markExpired`、**不发 PaymentIntentPaidEvent**，故 handler 不触发、**不 credit**。**L1** ✅
+- [x] **T4 测试**（AC1-5）
+  - [x] L0 单测：`PawCoinTopupServiceTest`（非法档位/渠道拒绝、下单调 createIntent+charge+attachCharge、幂等重放不重复 charge）、`TopupPaidHandlerTest`（PAWCOIN_TOPUP→credit 一次、其余 purpose 不 credit）。**L0** ✅ 6/6 绿
+  - [x] L1 集成：`PawCoinTopupIntegrationTest extends ApiIntegrationTest`（stub gateway：下单→settlement 回调→断言余额+流水+`reconcile` 平；回调重放断言不双入账；deny 回调断言余额不变）。**L1**（已编译；本地 dev 库污染阻断 context，见 Completion Notes）
+  - [x] 云端只跑 **L0 绿灯**；L1/L2 留本地，Completion Notes 标注「L1 docker pg+redis / L2 Midtrans sandbox 待本地」。
 
 ## Dev Notes
 
@@ -128,8 +131,45 @@ NFR-1/2/3 由 1.1（幂等）+1.2（总账/非负）已保证，本 story 复用
 
 ### Agent Model Used
 
+claude-opus-4-8（bmad-dev-story 流程，本地 darwin）。
+
 ### Debug Log References
+
+- `mvnw -B test -Dtest=PawCoinTopupServiceTest,TopupPaidHandlerTest` → **6/6 绿**（L0）。
+- 回调→到账全链路逐步推演（无迁移，无 scratch DDL 可验）：resolve(by gatewayRef `stub-<token>`) → markPaid → 同步同事务 `credit(key=publicToken)` → 提交；重放 applyCallback 早返回（已终态）不再发事件；deny 只 markFailed 不发事件 → 不 credit。
+- L1 `PawCoinTopupIntegrationTest` 已编译；运行时因本地 dev 库污染（同 1.1/1.2）阻断 context。
 
 ### Completion Notes List
 
+- **接线 story，零新迁移**（复用 V47/V48）。重活在 1.1（支付/回调/幂等）+ 1.2（钱包/总账）已完成，本 story 把两者接成充值闭环。**L0 全绿**；`mvn -B compile` 通过。
+- **AC1 下单**：`POST /api/v1/me/pawcoin/topups`（JWT，仅作用当前 `sub` 防越权，照 MeController/C1）→ `createIntent(PAWCOIN_TOPUP)`（1.1 幂等 + rl:pay:create 写限流）→ `gateway.createCharge` 取 QRIS/DANA 载荷 + `attachCharge` 回填网关订单号（幂等，同 Idempotency-Key 重放不重复 charge）→ 回 `TopupResponse`（对外 token + 载荷，**无自增 id**）。非法档位/渠道 → 422，未登录 → 401。
+- **AC2 固定档位**：`TopupTier`（10k/25k/50k/100k，coins=amount 1:1）内置于 pay 模块；`TopupTierProvider` 接口 + `Default` 实现——**后台可配是 9.2**，届时换 DB 实现不动其余代码。
+- **AC3 回调原子入账（最高风险，血泪护栏）**：`TopupPaidHandler` 用**同步 `@EventListener` + `@Transactional(Propagation.MANDATORY)`** 监听 1.1 在 `applyCallback` 内（markPaid 后、同一 `@Transactional`）发布的 `PaymentIntentPaidEvent`——`publishEvent` 同线程内联触发，handler **强制加入同一事务**（MANDATORY：无活动事务即抛，杜绝脱事务/异步误用），`markPaid` 与 `credit`（原子改钱包 + 平衡分录 + 写流水）**要么一起提交要么一起回滚**。**绝不用 `@TransactionalEventListener(AFTER_COMMIT)`**（记忆库血泪：notify AFTER_COMMIT+默认 REQUIRED 静默吞写；资金重蹈将丢账）——已在 handler 类注释显式钉死。
+- **AC3 幂等（双通道/重放绝不重复入账）**：① 1.1 `applyCallback` 对已 PAID 意图早返回、**不再发事件** → handler 不重触发；② credit 幂等键 = `intent.publicToken`（1.2 IdempotencyService + 总账 `(idempotency_key,account,direction)` 唯一约束）双保险。
+- **AC4 失败/取消不入账**：1.1 仅在 PAID 发 `PaymentIntentPaidEvent`；`FAILED/EXPIRED` 只 `markFailed/markExpired` 不发事件 → handler 不触发 → **不 credit、不写流水、余额不变**。
+- **AC3 记账语义（1:1）**：充值 `Rp{amount}` → `coins=amount`；1.2 credit(TOPUP) 落 `DEBIT CASH_IN / CREDIT FLOAT_LIABILITY` 平衡分录 + `pawcoin_wallets(+amount)` + `pawcoin_transactions(TOPUP)`，同事务；对账见 1.2 `reconcile`。
+- **对 1.1 的最小增量**：`PaymentIntentService` 新增 `findByToken`（读）+ `attachCharge`（下单回填网关订单号，幂等）——**新增方法、不改既有 applyCallback/markPaid 语义**（回调分派沿用已有 `PaymentIntentPaidEvent` hook，未动 1.1 收口）。
+- **⚠️ L1（docker pg+redis）/ L2（Midtrans sandbox）待本地验收**：完整 `PawCoinTopupIntegrationTest`（stub gateway 下单→回调→到账/重放/失败三态）被本地 dev 库污染阻断（同 1.1/1.2，用户决策仅 L0）；同事务原子性属标准 Spring 同步事件语义，逻辑已推演验证。L2：`mode=live` + Midtrans sandbox 凭证跑通真实 QRIS 充值到账（`TopupResponse.payload` 形态随 Snap/Core API 定型，接口已容纳）。
+
 ### File List
+
+**新增（后端 main）**
+- `petgo-backend/src/main/java/com/tailtopia/pay/domain/TopupTier.java`
+- `petgo-backend/src/main/java/com/tailtopia/pay/service/TopupTierProvider.java`
+- `petgo-backend/src/main/java/com/tailtopia/pay/dto/CreateTopupRequest.java`
+- `petgo-backend/src/main/java/com/tailtopia/pay/dto/TopupResponse.java`
+- `petgo-backend/src/main/java/com/tailtopia/pay/service/PawCoinTopupService.java`
+- `petgo-backend/src/main/java/com/tailtopia/pay/web/PawCoinTopupController.java`
+- `petgo-backend/src/main/java/com/tailtopia/pay/service/TopupPaidHandler.java`
+
+**修改（后端 main）**
+- `petgo-backend/src/main/java/com/tailtopia/pay/service/PaymentIntentService.java`（新增 `findByToken` + `attachCharge`，供 1.3 下单；不改既有语义）
+
+**新增（后端 test）**
+- `petgo-backend/src/test/java/com/tailtopia/pay/service/PawCoinTopupServiceTest.java`
+- `petgo-backend/src/test/java/com/tailtopia/pay/service/TopupPaidHandlerTest.java`
+- `petgo-backend/src/test/java/com/tailtopia/pay/PawCoinTopupIntegrationTest.java`
+
+### Change Log
+
+- 2026-07-11：实现 Story 1.3 PawCoin 充值下单与到账（下单端点 + 固定档位 + 回调同事务原子到账 handler）。接 1.1/1.2 成闭环，零新迁移。L0 6/6 绿；同事务/幂等/失败不入账逻辑推演验证；L1/L2 待本地（dev 库污染，用户决策仅 L0）。
