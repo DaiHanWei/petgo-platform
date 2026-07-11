@@ -846,5 +846,19 @@
   "triageConsultNow": "Konsultasi Dokter Hewan Sekarang",
   "triageConsultStill": "Tetap Mau Konsultasi Dokter?",
   "triageDone": "Selesai",
-  "triageSaveHealthNote": "Simpan ke Catatan Kesehatan"
+  "triageSaveHealthNote": "Simpan ke Catatan Kesehatan",
+  "pawcoinBalanceLabel": "Saldo PawCoin",
+  "pawcoinRateHint": "= Rp{amount} · 1 koin = Rp1",
+  "@pawcoinRateHint": { "placeholders": { "amount": { "type": "String" } } },
+  "pawcoinIsiSaldo": "Isi Saldo",
+  "pawcoinTxnListTitle": "Riwayat transaksi",
+  "pawcoinEmpty": "Belum ada transaksi",
+  "pawcoinEmptyHint": "Isi saldo dan pengeluaranmu akan muncul di sini.",
+  "pawcoinLoadFailed": "Gagal memuat saldo",
+  "pawcoinLoadRetry": "Coba lagi",
+  "pawcoinLoadMore": "Muat lagi",
+  "pawcoinTxnTopup": "Isi saldo",
+  "pawcoinTxnSpend": "Pengeluaran",
+  "pawcoinTxnRefund": "Pengembalian",
+  "pawcoinTxnBonus": "Bonus"
 }

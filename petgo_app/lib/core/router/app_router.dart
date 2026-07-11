@@ -20,6 +20,7 @@ import '../../features/me/presentation/delete_account_page.dart';
 import '../../features/me/presentation/language_settings_page.dart';
 import '../../features/me/presentation/me_page.dart';
 import '../../features/me/presentation/settings_page.dart';
+import '../../features/pawcoin/presentation/pawcoin_page.dart';
 import '../../features/profile/presentation/growth_archive_page.dart';
 import '../../features/profile/presentation/milestone_list_page.dart';
 import '../../features/profile/domain/pet_profile.dart';
@@ -267,6 +268,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/notifications', builder: (c, s) => const NotificationCenterPage()),
       // 二级设置页（Story 7.1 · F8）：语言/退出/注销。受控（/me 前缀，需登录）。
       GoRoute(path: '/me/settings', builder: (c, s) => const SettingsPage()),
+      // PawCoin 余额与流水页（Story 1.4）。受控（/me 前缀已被 _controlledLocations 守卫）；shell 外顶层隐 Tab Bar。
+      GoRoute(path: '/me/pawcoin', builder: (c, s) => const PawCoinPage()),
       // 语言设置（Story 7.2）。
       GoRoute(path: '/me/language', builder: (c, s) => const LanguageSettingsPage()),
       // 账号注销整页（P-43 · Story 7.3）。受控（/me 前缀，需登录）。

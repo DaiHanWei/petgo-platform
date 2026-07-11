@@ -1,6 +1,6 @@
 # Story 1.4: PawCoin 余额与流水页
 
-Status: ready-for-dev
+Status: review
 
 > V1.1 Epic 1（资金地基）第 4 story，接已 done 的 1.1/1.2/1.3。**本批第一个前端(Flutter)story**（全栈：后端只读 GET + Flutter 页）。**brownfield**：**无新 Flyway**（复用 1.2 的 `pawcoin_wallets`/`pawcoin_transactions`）。
 > 源：`epics-v1.1.md` Story 1.4 + UX-DR3 · UX `DESIGN.delta.md §3`（PawCoin 余额块）+ `EXPERIENCE.delta.md`（`p-pawcoin-balance`）· 架构 §3.1/§8。
@@ -59,28 +59,28 @@ so that 我清楚自己有多少 koin、花在哪、充了多少（FR-50）。
 
 > 全栈 story：先后端只读端点 → 前端页 → 联调。后端无迁移。
 
-- [ ] **T1 后端：DTO + query service**（AC1）
-  - [ ] `pay/dto/PawCoinTxnItem.java`（record：`delta/type/refType/createdAt` + 静态 `from(PawCoinTransaction)`；**不含 id/refId/entryGroup**）。**L0**
-  - [ ] `pay/dto/PawCoinWalletView.java`（record：`balance/items/nextCursor/hasMore`）。**L0**
-  - [ ] `pay/service/PawCoinQueryService.java`（`@Transactional(readOnly)`：`balanceOf` + 游标分页组合，limit+1 探 hasMore，cursor=epochMillis；照 `NotificationCenterService.list`）。复用 `PawCoinTransactionRepository.findByUserIdAndCreatedAtLessThanOrderByCreatedAtDesc`（**已存在**）。**L0/L1**
-- [ ] **T2 后端：GET controller**（AC1）
-  - [ ] `pay/web/PawCoinController.java`（`@RequestMapping("/api/v1/me")` + `@GetMapping("/pawcoin")` + `@AuthenticationPrincipal Jwt` + `currentUserId(jwt)`；`?cursor=&limit=` 夹取 [1,50]）。照 `PawCoinTopupController`/`MeController`。**不动 SecurityConfig**（`/api/v1/me/**` 已需 JWT）。**L1**
-- [ ] **T3 前端：features/pawcoin/**（AC2-5）
-  - [ ] `domain/pawcoin_transaction.dart`（`PawCoinTxnItem` + `PawCoinWalletPage` + `fromJson`）。**L0**
-  - [ ] `data/pawcoin_repository.dart`（`fetch({cursor,limit})` 用 `dioProvider` GET `ApiPaths.mePawcoin` + `Provider`）。**L0**
-  - [ ] （可选无限滚动）`domain/pawcoin_controller.dart`（`AsyncNotifier<PawCoinState>` + `loadMore/refresh`，照 `feed_controller.dart`）。**L0**
-  - [ ] `presentation/pawcoin_page.dart`（渐变余额头卡 + Isi Saldo + 只读流水列表 + 空/错/加载态；行不可点；token 引用）。**L0**
-- [ ] **T4 前端接线**（AC2/6/7）
-  - [ ] `core/network/api_paths.dart` 加 `mePawcoin = '$base/me/pawcoin'`。**L0**
-  - [ ] `core/router/app_router.dart` 加 `GoRoute('/me/pawcoin', PawCoinPage)`（shell 外顶层）。**L0**
-  - [ ] `features/me/presentation/me_page.dart` 加 PawCoin 入口行 `context.push('/me/pawcoin')`。**L0**
-  - [ ] `lib/l10n/app_en.arb` + `app_id.arb` 加文案键 → `flutter gen-l10n`。**L0**
-  - [ ] 正负色/渐变用 `core/theme/colors.dart` token（见 Dev Notes 色表），**禁硬编码**。**L0**
-- [ ] **T5 测试**（AC1-7）
-  - [ ] 后端 L0：`PawCoinQueryServiceTest`（mock repo/wallet：余额+游标 hasMore/nextCursor、空、DTO 不暴露内部字段）。**L0**
-  - [ ] 后端 L1：`PawCoinReadIntegrationTest extends ApiIntegrationTest`（干净库：credit 几条后 GET 断言 balance+items+游标；越权：别人 token 拿不到本人流水）。**L1**（留本地净库，见记忆库清库法）
-  - [ ] 前端 L0：`test/pawcoin/pawcoin_page_test.dart`（Fake repo `overrideWithValue`：余额渲染、正负色/符号、**流水行不可点**、空态、错误态+重试）。照 `test/notify/notification_center_test.dart`。**L0**
-  - [ ] `flutter analyze`（零警告）+ `flutter test` 绿；后端 `mvn -B package`。云端只跑 L0；L1 留本地净库、L2 留模拟器。
+- [x] **T1 后端：DTO + query service**（AC1）
+  - [x] `pay/dto/PawCoinTxnItem.java`（record：`delta/type/refType/createdAt` + 静态 `from(PawCoinTransaction)`；**不含 id/refId/entryGroup**）。**L0**
+  - [x] `pay/dto/PawCoinWalletView.java`（record：`balance/items/nextCursor/hasMore`）。**L0**
+  - [x] `pay/service/PawCoinQueryService.java`（`@Transactional(readOnly)`：`balanceOf` + 游标分页组合，limit+1 探 hasMore，cursor=epochMillis；照 `NotificationCenterService.list`）。复用 `PawCoinTransactionRepository.findByUserIdAndCreatedAtLessThanOrderByCreatedAtDesc`（**已存在**）。**L0/L1**
+- [x] **T2 后端：GET controller**（AC1）
+  - [x] `pay/web/PawCoinController.java`（`@RequestMapping("/api/v1/me")` + `@GetMapping("/pawcoin")` + `@AuthenticationPrincipal Jwt` + `currentUserId(jwt)`；`?cursor=&limit=` 夹取 [1,50]）。照 `PawCoinTopupController`/`MeController`。**不动 SecurityConfig**（`/api/v1/me/**` 已需 JWT）。**L1**
+- [x] **T3 前端：features/pawcoin/**（AC2-5）
+  - [x] `domain/pawcoin_transaction.dart`（`PawCoinTxnItem` + `PawCoinWalletPage` + `fromJson`）。**L0**
+  - [x] `data/pawcoin_repository.dart`（`fetch({cursor,limit})` 用 `dioProvider` GET `ApiPaths.mePawcoin` + `Provider`）。**L0**
+  - [x] （可选无限滚动）`domain/pawcoin_controller.dart`（`AsyncNotifier<PawCoinState>` + `loadMore/refresh`，照 `feed_controller.dart`）。**L0**
+  - [x] `presentation/pawcoin_page.dart`（渐变余额头卡 + Isi Saldo + 只读流水列表 + 空/错/加载态；行不可点；token 引用）。**L0**
+- [x] **T4 前端接线**（AC2/6/7）
+  - [x] `core/network/api_paths.dart` 加 `mePawcoin = '$base/me/pawcoin'`。**L0**
+  - [x] `core/router/app_router.dart` 加 `GoRoute('/me/pawcoin', PawCoinPage)`（shell 外顶层）。**L0**
+  - [x] `features/me/presentation/me_page.dart` 加 PawCoin 入口行 `context.push('/me/pawcoin')`。**L0**
+  - [x] `lib/l10n/app_en.arb` + `app_id.arb` 加文案键 → `flutter gen-l10n`。**L0**
+  - [x] 正负色/渐变用 `core/theme/colors.dart` token（见 Dev Notes 色表），**禁硬编码**。**L0**
+- [x] **T5 测试**（AC1-7）
+  - [x] 后端 L0：`PawCoinQueryServiceTest`（mock repo/wallet：余额+游标 hasMore/nextCursor、空、DTO 不暴露内部字段）。**L0**
+  - [x] 后端 L1：`PawCoinReadIntegrationTest extends ApiIntegrationTest`（干净库：credit 几条后 GET 断言 balance+items+游标；越权：别人 token 拿不到本人流水）。**L1**（留本地净库，见记忆库清库法）
+  - [x] 前端 L0：`test/pawcoin/pawcoin_page_test.dart`（Fake repo `overrideWithValue`：余额渲染、正负色/符号、**流水行不可点**、空态、错误态+重试）。照 `test/notify/notification_center_test.dart`。**L0**
+  - [x] `flutter analyze`（零警告）+ `flutter test` 绿；后端 `mvn -B package`。云端只跑 L0；L1 留本地净库、L2 留模拟器。
 
 ## Dev Notes
 
@@ -176,8 +176,44 @@ final pawCoinRepositoryProvider = Provider((ref) => PawCoinRepository(dio: ref.r
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]（bmad-dev-story，2026-07-11）
+
 ### Debug Log References
+
+- 全量 `flutter test` 有 1 个失败 `test/auth/story_1_5_gating_test.dart::AC2 已登录点受控Tab`（"Timer still pending"）——**stash 全部本 story 改动后纯 HEAD 复现，确认为既有 flaky（问诊 hub AI 脉冲常驻动画），非本 story 引起**。
 
 ### Completion Notes List
 
+- **全栈实现完成，全绿**：后端薄只读 GET `/api/v1/me/pawcoin`（复用 1.2 预埋的 `balanceOf` + `findByUserIdAndCreatedAtLessThanOrderByCreatedAtDesc`，无新 Flyway）+ Flutter 首个 `features/pawcoin/`（渐变余额头卡 + 只读流水）。
+- **后端 L0** `PawCoinQueryServiceTest` 3/3；**后端 L1** `PawCoinReadIntegrationTest` 3/3（净库 petgo_l1：余额+流水、游标分页、**越权隔离**别人 token 拿不到本人流水）。
+- **前端 L0**：`flutter analyze` 0 问题；`pawcoin_page_test` 3/3（余额渲染、+绿/−红符号、空态、错误态+重试不静默画空态）；`test/l10n` 契约 4/4（en/id 键对齐）。
+- **护栏全落实**：流水行 `_LedgerRow` 无 InkWell/onTap（禁转账 UI）；错误态显式（bug 20260625-088）；类型按 code 本地化 `_typeLabel`；色值全引用 `AppColors` token；DTO 只回 `delta/type/refType/createdAt`（不暴露 id/refId/entryGroup，L1 断言）。
+- **范围边界**：「Isi Saldo」→ `/me/pawcoin/recharge`（充值页属 Story 1.5，本 story 只接线）。
+- **L2 待本地**：Android 模拟器视觉验收（AC8）留本地手动。
+
 ### File List
+
+**后端（新增）**
+- `petgo-backend/src/main/java/com/tailtopia/pay/dto/PawCoinTxnItem.java`
+- `petgo-backend/src/main/java/com/tailtopia/pay/dto/PawCoinWalletView.java`
+- `petgo-backend/src/main/java/com/tailtopia/pay/service/PawCoinQueryService.java`
+- `petgo-backend/src/main/java/com/tailtopia/pay/web/PawCoinController.java`
+- `petgo-backend/src/test/java/com/tailtopia/pay/service/PawCoinQueryServiceTest.java`
+- `petgo-backend/src/test/java/com/tailtopia/pay/PawCoinReadIntegrationTest.java`
+
+**前端（新增）**
+- `petgo_app/lib/features/pawcoin/domain/pawcoin_transaction.dart`
+- `petgo_app/lib/features/pawcoin/data/pawcoin_repository.dart`
+- `petgo_app/lib/features/pawcoin/presentation/pawcoin_controller.dart`
+- `petgo_app/lib/features/pawcoin/presentation/pawcoin_page.dart`
+- `petgo_app/test/pawcoin/pawcoin_page_test.dart`
+
+**前端（修改·接线）**
+- `petgo_app/lib/core/network/api_paths.dart`（+`mePawcoin`）
+- `petgo_app/lib/core/router/app_router.dart`（+`/me/pawcoin` GoRoute + import）
+- `petgo_app/lib/features/me/presentation/me_page.dart`（+PawCoin 入口行 `_PawCoinEntry`）
+- `petgo_app/lib/l10n/app_en.arb` + `app_id.arb`（+PawCoin 文案键；`flutter gen-l10n` 已重生成）
+
+### Change Log
+
+- 2026-07-11：Story 1.4 全栈实现完成（后端只读 GET + Flutter 余额与流水页），L0/L1 全绿，Status → review。

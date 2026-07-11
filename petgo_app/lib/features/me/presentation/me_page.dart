@@ -73,6 +73,9 @@ class MePage extends ConsumerWidget {
             onAvatarTap: () => _changeAvatar(context, ref),
           ),
           const SizedBox(height: AppSpacing.lg),
+          // PawCoin 钱包入口（Story 1.4）→ 余额与流水页。
+          _PawCoinEntry(onTap: () => context.push('/me/pawcoin')),
+          const SizedBox(height: AppSpacing.lg),
           // ② 我的发布（原型 Postinganku）：小标题 + 裸 2 列网格（无卡边框）。
           // 注：宠物状态/改状态/编辑档案区块已按设计（原型 p-profil 无此块）移除。
           Padding(
@@ -544,6 +547,51 @@ class _IconBtn extends StatelessWidget {
             ],
           ),
           child: Icon(icon, size: 18, color: AppColors.ink2),
+        ),
+      ),
+    );
+  }
+}
+
+/// PawCoin 钱包入口行（Story 1.4）：图标 + 标题 + chevron → 余额与流水页。
+class _PawCoinEntry extends StatelessWidget {
+  const _PawCoinEntry({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Material(
+      color: AppColors.card,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        key: const ValueKey('mePawcoinEntry'),
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.mintTint,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.savings_outlined, size: 20, color: AppColors.mint),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Text(l10n.pawcoinBalanceLabel,
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink)),
+              ),
+              const Icon(Icons.chevron_right, color: AppColors.muted),
+            ],
+          ),
         ),
       ),
     );

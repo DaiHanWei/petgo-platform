@@ -1085,5 +1085,19 @@
   "triageConsultNow": "Consult a vet now",
   "triageConsultStill": "Still want to consult a vet?",
   "triageDone": "Done",
-  "triageSaveHealthNote": "Save to health notes"
+  "triageSaveHealthNote": "Save to health notes",
+  "pawcoinBalanceLabel": "PawCoin Balance",
+  "pawcoinRateHint": "= Rp{amount} · 1 koin = Rp1",
+  "@pawcoinRateHint": { "placeholders": { "amount": { "type": "String" } } },
+  "pawcoinIsiSaldo": "Top Up",
+  "pawcoinTxnListTitle": "Transaction history",
+  "pawcoinEmpty": "No transactions yet",
+  "pawcoinEmptyHint": "Your top-ups and spending will show up here.",
+  "pawcoinLoadFailed": "Couldn't load your balance",
+  "pawcoinLoadRetry": "Retry",
+  "pawcoinLoadMore": "Load more",
+  "pawcoinTxnTopup": "Top-up",
+  "pawcoinTxnSpend": "Spent",
+  "pawcoinTxnRefund": "Refund",
+  "pawcoinTxnBonus": "Bonus"
 }

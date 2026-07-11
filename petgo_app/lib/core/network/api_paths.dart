@@ -88,6 +88,9 @@ class ApiPaths {
   /// 「我的发布」三类混合时间线（Story 7.1，FR-36）。
   static const String mePosts = '$base/me/posts';
 
+  /// PawCoin 余额 + 流水游标分页（Story 1.4）。
+  static const String mePawcoin = '$base/me/pawcoin';
+
   /// 媒体 STS 上传凭证（Story 2.1）。
   static const String mediaUploadUrl = '$base/media/upload-url';
 
