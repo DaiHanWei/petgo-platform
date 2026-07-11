@@ -23,8 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>写一条 {@code pawcoin_transactions} 用户流水。</li>
  * </ol>
  *
- * <p>幂等：同 {@code idempotencyKey} 重放前置短路（Redis）+ 总账唯一约束原子兜底（并发同键只成一次）。
- * 稳定签名供 1.3 充值 / 2.x 消费 / 4.x 退款调用（本 story 不接支付回调）。
+ * <p>幂等（Review P2 加固）：改钱包<b>之前</b>先判重放——Redis 前置 + <b>总账 DB 兜底</b>
+ * （{@code findFirstByIdempotencyKey}，覆盖 Redis TTL 过期后的跨 TTL 重放）；并发同键由总账唯一约束
+ * + 同事务回滚只成一次。稳定签名供 1.3 充值 / 2.x 消费 / 4.x 退款调用。
  */
 @Service
 public class PawCoinWalletService {
@@ -52,8 +53,8 @@ public class PawCoinWalletService {
     public void credit(long userId, long coins, PawCoinTxnType type, String refType, Long refId,
             String idempotencyKey) {
         requirePositive(coins);
-        if (idempotency.findResourceId(idempotencyKey).isPresent()) {
-            return; // 已入账，幂等短路
+        if (isReplay(idempotencyKey)) {
+            return; // 已入账，幂等短路（Redis 前置 + 跨 TTL 的 DB 兜底，须在改钱包之前）
         }
         wallets.insertIfAbsent(userId); // 幂等建钱包（ON CONFLICT DO NOTHING）
         if (wallets.applyDelta(userId, coins) == 0) {
@@ -79,8 +80,8 @@ public class PawCoinWalletService {
     public void debit(long userId, long coins, PawCoinTxnType type, String refType, Long refId,
             String idempotencyKey) {
         requirePositive(coins);
-        if (idempotency.findResourceId(idempotencyKey).isPresent()) {
-            return; // 已扣减，幂等短路
+        if (isReplay(idempotencyKey)) {
+            return; // 已扣减，幂等短路（Redis 前置 + 跨 TTL 的 DB 兜底，须在改钱包之前）
         }
         if (wallets.applyDelta(userId, -coins) == 0) {
             throw AppException.conflict("PawCoin 余额不足");
@@ -129,6 +130,16 @@ public class PawCoinWalletService {
         if (coins <= 0) {
             throw AppException.validation("金额必须为正");
         }
+    }
+
+    /**
+     * 幂等重放判定（Review P2）：Redis 前置 + <b>总账 DB 兜底</b>。必须在改钱包（{@code applyDelta}）之前调用——
+     * 否则 Redis TTL(24h) 过期后同键重放会二次改钱包（钱包翻倍/双扣）而总账被唯一约束去重，两者背离。
+     * credit/debit 与其 {@code LedgerService.post} 共用同一 {@code idempotencyKey}，故 DB 侧查总账即权威。
+     */
+    private boolean isReplay(String idempotencyKey) {
+        return idempotency.findResourceId(idempotencyKey).isPresent()
+                || ledger.findFirstByIdempotencyKey(idempotencyKey).isPresent();
     }
 
     /**

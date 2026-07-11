@@ -32,6 +32,10 @@ public class PawCoinTopupController {
     public TopupResponse topup(@AuthenticationPrincipal Jwt jwt,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody CreateTopupRequest req) {
+        // 资金创建端点强制幂等键（Review P3）：缺失/空则拒，杜绝双击/重试造成重复下单 + 重复网关 charge。
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            throw AppException.validation("资金下单必须携带 Idempotency-Key 头");
+        }
         return topupService.create(currentUserId(jwt), req, idempotencyKey);
     }
 

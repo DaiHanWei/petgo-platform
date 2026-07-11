@@ -110,3 +110,6 @@
   1. **维持「接收方」语义** → 当前实现基本正确，属**测试方式问题**：需用**两个不同账号**互相点赞/评论验证（A 给 B 的内容点赞 → B 解锁「收到点赞」）。若确认，此 bug 关闭为「非缺陷/需正确复现」。
   2. **改为「行为者」语义（我首次点赞/评论就解锁）** → 需 `MilestoneCatalog` 新增行为者版里程碑节点 + `MilestoneAutoCompleteListener` 改用 `likerId`/`commenterId` 作为 `completeForOwner` 目标、且不排除自互动。属跨 catalog + 监听器的功能新增，需重新排期。
 - **建议**：先与产品确认里程碑文案本意（"被评论/收到点赞" vs "首次评论/点赞"），再决定走 1 还是 2。定位置信度：高。
+
+## Deferred from: code review of story 1.1-1.3 联审 (2026-07-11)
+- PENDING 支付意图无本地过期扫描 → 僵尸意图堆积 + 极晚 settlement 仍入账。超出 1.3 AC，留未来 story（建议并入 Epic 3 限时支付的 @Scheduled 扫描范式统一做）。[PaymentIntentService]

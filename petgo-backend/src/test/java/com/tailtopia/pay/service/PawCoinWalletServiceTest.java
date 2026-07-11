@@ -109,4 +109,21 @@ class PawCoinWalletServiceTest {
         assertThatThrownBy(() -> service().credit(1L, 0L, PawCoinTxnType.TOPUP, "x", 1L, "k"))
                 .isInstanceOf(AppException.class);
     }
+
+    @Test
+    void crossTtlReplayShortCircuitsViaLedgerDbFallback() {
+        // Review P2：Redis 键已过期(空)，但总账 DB 仍有该幂等键 → 必须在改钱包之前短路，
+        // 杜绝跨 TTL 二次入账（钱包翻倍/双扣）。
+        when(idempotency.findResourceId("k")).thenReturn(Optional.empty());
+        when(ledger.findFirstByIdempotencyKey("k"))
+                .thenReturn(Optional.of(org.mockito.Mockito.mock(
+                        com.tailtopia.pay.domain.LedgerEntry.class)));
+
+        service().credit(1L, 10000L, PawCoinTxnType.TOPUP, "TOPUP_ORDER", 7L, "k");
+
+        verify(wallets, never()).insertIfAbsent(anyLong());
+        verify(wallets, never()).applyDelta(anyLong(), anyLong());
+        verify(ledgerService, never()).post(anyString(), any(), anyString());
+        verify(txns, never()).save(any());
+    }
 }

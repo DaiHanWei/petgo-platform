@@ -101,6 +101,11 @@ public class MidtransGateway implements PaymentGateway {
         if (body == null) {
             return false;
         }
+        // fail-closed（Review P1）：serverKey 缺失时期望签名会退化为可被外部算出的值 → 一律拒。
+        if (props.getServerKey() == null || props.getServerKey().isBlank()) {
+            log.warn("支付回调验签被拒：serverKey 未配置");
+            return false;
+        }
         String orderId = str(body.get("order_id"));
         String statusCode = str(body.get("status_code"));
         String grossAmount = str(body.get("gross_amount"));

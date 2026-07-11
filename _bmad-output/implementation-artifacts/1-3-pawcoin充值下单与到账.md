@@ -63,6 +63,13 @@ so that 我能获得可消费的 PawCoin 余额（FR-50 / FR-50A）。
   - [x] L1 集成：`PawCoinTopupIntegrationTest extends ApiIntegrationTest`（stub gateway：下单→settlement 回调→断言余额+流水+`reconcile` 平；回调重放断言不双入账；deny 回调断言余额不变）。**L1**（已编译；本地 dev 库污染阻断 context，见 Completion Notes）
   - [x] 云端只跑 **L0 绿灯**；L1/L2 留本地，Completion Notes 标注「L1 docker pg+redis / L2 Midtrans sandbox 待本地」。
 
+### Review Findings（跨 1.1-1.3 联审 2026-07-11，三层对抗式）
+
+- [x] [Review][Patch] ✅已修 **【必修】资金下单端点 `Idempotency-Key` 可缺失 → 重复下单/charge** [PawCoinTopupController.java]：端点强制该头，缺失/空 → `AppException.validation`(拒，不触达 service)。回归测试 `PawCoinTopupControllerTest`(2) 锁死。（L1 集成测试已带该头，不受影响。）
+- [ ] [Review][Patch] charge 成功但 attachCharge 失败（DB 抖动）→ 孤儿 charge + gateway_ref 未回填；同键重放取回 PENDING 意图再 createCharge → Midtrans duplicate order_id 拒 → 该 topup 永久卡死 [PawCoinTopupService.java:60-69]
+- [ ] [Review][Patch] 【低·L2】`MidtransGateway.createCharge` 硬编码 `payment_type=qris` 忽略 `channel` → 选 DANA 实发 QRIS，意图记 DANA 载荷却是 QRIS（被 Midtrans [OPEN] 兜，L2 生效）[MidtransGateway.java:51-56]
+- [x] [Review][Defer] PENDING 意图无过期扫描 → 僵尸堆积 + 极晚 settlement 仍入账 [PaymentIntentService.java] — 超出 1.3 AC，留未来 story（可并入 3.x 限时支付 @Scheduled 扫描范式）
+
 ## Dev Notes
 
 > 本 story 是**接线 story**，几乎不新建原语——重活在 1.1（支付/回调/幂等）与 1.2（钱包/总账）已完成。风险集中在 AC3「回调→入账」的**同事务原子性**。
