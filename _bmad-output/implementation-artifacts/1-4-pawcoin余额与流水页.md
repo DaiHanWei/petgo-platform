@@ -189,7 +189,7 @@ claude-opus-4-8[1m]（bmad-dev-story，2026-07-11）
 - **前端 L0**：`flutter analyze` 0 问题；`pawcoin_page_test` 3/3（余额渲染、+绿/−红符号、空态、错误态+重试不静默画空态）；`test/l10n` 契约 4/4（en/id 键对齐）。
 - **护栏全落实**：流水行 `_LedgerRow` 无 InkWell/onTap（禁转账 UI）；错误态显式（bug 20260625-088）；类型按 code 本地化 `_typeLabel`；色值全引用 `AppColors` token；DTO 只回 `delta/type/refType/createdAt`（不暴露 id/refId/entryGroup，L1 断言）。
 - **范围边界**：「Isi Saldo」→ `/me/pawcoin/recharge`（充值页属 Story 1.5，本 story 只接线）。
-- **L2 待本地**：Android 模拟器视觉验收（AC8）留本地手动。
+- **L2 已本地视觉验收（2026-07-11，Android emulator-5554）**：真机连本地后端（petgo_l1，seed 演示数据）走 桩会话 → 我的 → PawCoin Balance，页面完美渲染——紫色渐变余额头卡「120.000 = Rp120.000 · 1 koin=Rp1」+ Top Up + 只读流水（Refund +5.000 绿 / Spent −5.000 红 / Top-up +100.000 绿 …倒序、类型本地化、千分位、行不可点），与 UX-DR3 一致；「我的」页 PawCoin 入口行正确渲染。
 
 ### File List
 
