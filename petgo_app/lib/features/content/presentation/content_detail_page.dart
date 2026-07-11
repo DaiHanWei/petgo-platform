@@ -379,11 +379,16 @@ class _ImageCarouselState extends State<_ImageCarousel> {
 
   void _openLightbox(int index) {
     Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => Scaffold(
+      builder: (ctx) => Scaffold(
         backgroundColor: Colors.black,
         appBar: AppBar(backgroundColor: Colors.black),
-        body: Center(
-          child: InteractiveViewer(child: AppImage.widget(widget.urls[index], fit: BoxFit.contain)),
+        // 点击图片（或黑边）关闭大图（bug 20260701-192，对齐主流看图 App 交互）。
+        body: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => Navigator.of(ctx).pop(),
+          child: Center(
+            child: InteractiveViewer(child: AppImage.widget(widget.urls[index], fit: BoxFit.contain)),
+          ),
         ),
       ),
     ));
