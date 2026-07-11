@@ -8,7 +8,9 @@ import '../../core/router/route_intent.dart';
 import '../../core/theme/colors.dart';
 import '../../core/theme/motion.dart';
 import '../../features/auth/domain/auth_guard.dart';
+import '../../features/auth/domain/auth_state.dart';
 import '../../features/content/domain/home_refresh_provider.dart';
+import '../../features/content/domain/content_type.dart';
 import '../../features/content/presentation/feed_controller.dart';
 import '../../features/content/presentation/publish_compose_page.dart';
 import 'bottom_tab_bar.dart';
@@ -87,7 +89,15 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
       ref,
       context,
       pendingAction: const RouteIntent(location: '/home'),
-      onAllowed: () => PublishComposePage.open(context),
+      // bug 20260703-244：在「成长档案（Diary）」Tab（底部第 2 个）点创建 → 编辑页默认选「成长日历（Growth）」；
+      // 其余 Tab 保持默认第一个 tag（Momen）。Growth 需宠物档案（否则 segment 灰置），无档案则不预选、回落 Momen。
+      onAllowed: () {
+        final onGrowthTab = widget.navigationShell.currentIndex == AppTab.profile.index;
+        final p = ref.read(authControllerProvider).profile;
+        final canGrowth = p?.petStatus == 'HAS_PET' && (p?.hasPetProfile ?? false);
+        PublishComposePage.open(
+            context, preset: (onGrowthTab && canGrowth) ? ContentType.growthMoment : null);
+      },
     );
   }
 
