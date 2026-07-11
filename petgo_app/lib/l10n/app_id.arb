@@ -190,7 +190,7 @@
   "detailNetworkError": "Gagal memuat, silakan coba lagi",
   "detailCommentHint": "Tulis komentar...",
   "commentSendFailed": "Gagal mengirim, silakan coba lagi",
-  "commentReplyTargetDeleted": "Komentar yang kamu balas sudah dihapus",
+  "commentReplyTargetDeleted": "Komentar yang kamu balas sudah dihapus, silakan berkomentar lagi",
   "commentLimitReached": "Komentar maksimal 200 karakter",
   "commentModerationBlocked": "Komentar ini tidak sesuai pedoman komunitas, silakan ubah dan coba lagi",
   "commentTakenDownSelfOnly": "Komentar ini dihapus karena melanggar pedoman; hanya kamu yang bisa melihatnya",

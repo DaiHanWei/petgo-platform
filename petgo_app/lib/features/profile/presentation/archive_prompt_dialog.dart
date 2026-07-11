@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/theme/colors.dart';
+import '../../../core/theme/spacing.dart';
+import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/data/me_repository.dart';
 import '../../auth/domain/auth_state.dart';
@@ -48,7 +51,6 @@ Future<void> showArchivePrompt(
   if (!await guard.needsPrompt(args.sourceRef)) return;
   if (!context.mounted) return;
 
-  final l10n = AppLocalizations.of(context);
   final auth = ref.read(authControllerProvider);
   final status = auth.profile?.petStatus;
   final hasProfile = auth.profile?.hasPetProfile ?? false;
@@ -65,24 +67,8 @@ Future<void> showArchivePrompt(
         await _record(ref, args, pet.id, ArchiveDecision.archived);
         return;
       }
-      final decision = await showDialog<ArchiveDecision>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          content: Text(l10n.archivePromptTitle(pet.name)),
-          actions: [
-            TextButton(
-              key: const ValueKey('archiveSkip'),
-              onPressed: () => Navigator.of(ctx).pop(ArchiveDecision.skipped),
-              child: Text(l10n.archivePromptSkip),
-            ),
-            FilledButton(
-              key: const ValueKey('archiveSave'),
-              onPressed: () => Navigator.of(ctx).pop(ArchiveDecision.archived),
-              child: Text(l10n.archivePromptSave),
-            ),
-          ],
-        ),
-      );
+      // 存入档案确认改用底部抽屉（原 AlertDialog 居中弹窗），与病例/诊断结果等底部弹层交互统一。
+      final decision = await showArchiveSaveSheet(context, petName: pet.name);
       if (decision == null) return; // 关闭未选 → 不记录，下次仍可弹
       guard.markHandled(args.sourceRef);
       await _record(ref, args, pet.id, decision);
@@ -91,26 +77,9 @@ Future<void> showArchivePrompt(
     // hasProfile 但拉取为空（异常）→ 落到建档引导分支。
   }
 
-  // ② A 未建档 / ③ B/C：弹建档引导。
+  // ② A 未建档 / ③ B/C：弹建档引导，同样用底部抽屉（与存入确认统一）。
   final isBc = !isOwner; // PLANNING / ENTHUSIAST
-  final create = await showDialog<bool>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      content: Text(isBc ? l10n.archivePromptSwitchTitle : l10n.archivePromptCreateTitle),
-      actions: [
-        TextButton(
-          key: const ValueKey('archiveSkip'),
-          onPressed: () => Navigator.of(ctx).pop(false),
-          child: Text(l10n.archivePromptSkip),
-        ),
-        FilledButton(
-          key: const ValueKey('archiveCreate'),
-          onPressed: () => Navigator.of(ctx).pop(true),
-          child: Text(isBc ? l10n.archivePromptSwitchCta : l10n.archivePromptCreateCta),
-        ),
-      ],
-    ),
-  );
+  final create = await showArchiveCreateGuideSheet(context, isBc: isBc);
   if (create != true) {
     guard.markHandled(args.sourceRef); // 跳过：本 session 不再弹
     return;
@@ -139,6 +108,79 @@ Future<void> showArchivePrompt(
   if (!context.mounted) return;
   // 跳 FR-11 建档；origin=triageArchive → 建档完成跳过庆祝页并回灌（pet_profile_create_page 接管）。
   context.push('/profile/create?origin=triageArchive');
+}
+
+/// ① 存入档案确认底部抽屉（状态 A 已建档）。返回用户决定；下滑关闭未选返回 null。
+Future<ArchiveDecision?> showArchiveSaveSheet(BuildContext context, {required String petName}) {
+  final l10n = AppLocalizations.of(context);
+  return showModalBottomSheet<ArchiveDecision>(
+    context: context,
+    backgroundColor: AppColors.surface,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+    builder: (ctx) => _archiveSheet(
+      title: l10n.archivePromptTitle(petName),
+      primaryKey: 'archiveSave',
+      primaryLabel: l10n.archivePromptSave,
+      onPrimary: () => Navigator.of(ctx).pop(ArchiveDecision.archived),
+      skipLabel: l10n.archivePromptSkip,
+      onSkip: () => Navigator.of(ctx).pop(ArchiveDecision.skipped),
+    ),
+  );
+}
+
+/// ②③ 建档引导底部抽屉（A 未建档 / B·C 待切状态）。返回是否去创建；下滑关闭返回 null。
+Future<bool?> showArchiveCreateGuideSheet(BuildContext context, {required bool isBc}) {
+  final l10n = AppLocalizations.of(context);
+  return showModalBottomSheet<bool>(
+    context: context,
+    backgroundColor: AppColors.surface,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+    builder: (ctx) => _archiveSheet(
+      title: isBc ? l10n.archivePromptSwitchTitle : l10n.archivePromptCreateTitle,
+      primaryKey: 'archiveCreate',
+      primaryLabel: isBc ? l10n.archivePromptSwitchCta : l10n.archivePromptCreateCta,
+      onPrimary: () => Navigator.of(ctx).pop(true),
+      skipLabel: l10n.archivePromptSkip,
+      onSkip: () => Navigator.of(ctx).pop(false),
+    ),
+  );
+}
+
+/// 存档相关底部抽屉的统一版式：拖拽条 + 居中标题 + 主按钮 + 跳过文字按钮。
+Widget _archiveSheet({
+  required String title,
+  required String primaryKey,
+  required String primaryLabel,
+  required VoidCallback onPrimary,
+  required String skipLabel,
+  required VoidCallback onSkip,
+}) {
+  return SafeArea(
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(AppSpacing.xl, AppSpacing.lg, AppSpacing.xl, AppSpacing.xl),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(999)),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text(title, style: AppTypography.title, textAlign: TextAlign.center),
+          const SizedBox(height: AppSpacing.xl),
+          FilledButton(key: ValueKey(primaryKey), onPressed: onPrimary, child: Text(primaryLabel)),
+          const SizedBox(height: AppSpacing.sm),
+          TextButton(key: const ValueKey('archiveSkip'), onPressed: onSkip, child: Text(skipLabel)),
+        ],
+      ),
+    ),
+  );
 }
 
 Future<void> _record(

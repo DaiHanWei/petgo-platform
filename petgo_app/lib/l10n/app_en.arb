@@ -249,7 +249,7 @@
   "detailNetworkError": "Could not load, please try again",
   "detailCommentHint": "Write a comment...",
   "commentSendFailed": "Failed to send, please retry",
-  "commentReplyTargetDeleted": "The comment you replied to has been deleted",
+  "commentReplyTargetDeleted": "The comment you replied to has been deleted, please comment again",
   "@commentReplyTargetDeleted": {"description": "Toast when replying to a comment that was deleted (parent 404)"},
   "commentLimitReached": "Comment can be at most 200 characters",
   "@commentLimitReached": {"description": "Toast when comment input reaches the 200-char limit"},
