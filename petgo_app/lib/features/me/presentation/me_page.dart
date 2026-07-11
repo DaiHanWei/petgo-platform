@@ -44,6 +44,11 @@ class MePage extends ConsumerWidget {
         backgroundColor: AppColors.base,
         scrolledUnderElevation: 0,
         automaticallyImplyLeading: false,
+        // 左上固定标题「Saya」(bug 20260702-206)；与正文同屏边距对齐。
+        centerTitle: false,
+        titleSpacing: AppSpacing.screenEdge,
+        title: Text(l10n.tabMe,
+            style: AppTypography.title.copyWith(color: AppColors.ink)),
         actions: [
           // 帮助反馈图标（PDP 数据主体权利可达路径承载之一）。
           _IconBtn(
