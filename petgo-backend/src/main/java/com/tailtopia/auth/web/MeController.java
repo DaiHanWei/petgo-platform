@@ -33,8 +33,13 @@ public class MeController {
     }
 
     @GetMapping
-    public UserProfileResponse me(@AuthenticationPrincipal Jwt jwt) {
-        return meService.getMe(currentUserId(jwt));
+    public UserProfileResponse me(@AuthenticationPrincipal Jwt jwt,
+            @org.springframework.web.bind.annotation.RequestHeader(
+                    value = "Accept-Language", required = false) String acceptLanguage) {
+        long userId = currentUserId(jwt);
+        // 捕获语言偏好（bug 20260625-105）：供系统推送按 id/en 渲染。best-effort，失败不影响 /me。
+        meService.captureLocale(userId, acceptLanguage);
+        return meService.getMe(userId);
     }
 
     @PatchMapping

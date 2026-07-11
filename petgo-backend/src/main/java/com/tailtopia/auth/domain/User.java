@@ -53,6 +53,10 @@ public class User {
     @Column(name = "is_system_default_name", nullable = false)
     private boolean systemDefaultName = false;
 
+    /** 语言偏好（bug 20260625-105）：由 App 请求 Accept-Language 捕获，'id'/'en'；空=默认 id。供系统推送文案本地化。 */
+    @Column(name = "locale", length = 8)
+    private String locale;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "pet_status", length = 8)
     private PetStatus petStatus;
@@ -197,6 +201,15 @@ public class User {
     /** 头像替换（Story 7.1）：仅存应用自有 OSS URL。 */
     public void setAvatarUrl(String avatarUrl) {
         this.avatarUrl = avatarUrl;
+    }
+
+    public String getLocale() {
+        return locale;
+    }
+
+    /** 语言偏好（bug 20260625-105）：'id'/'en'，由 Accept-Language 捕获。 */
+    public void setLocale(String locale) {
+        this.locale = locale;
     }
 
     public String getNickname() {

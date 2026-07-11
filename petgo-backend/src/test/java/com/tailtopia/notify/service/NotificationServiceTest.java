@@ -31,9 +31,18 @@ class NotificationServiceTest {
     ValueOperations<String, String> valueOps;
     @Mock
     NotificationPusher pusher;
+    @Mock
+    org.springframework.context.MessageSource messageSource;
+    @Mock
+    com.tailtopia.auth.service.AccountQueryService accountQuery;
 
     private NotificationService service() {
-        return new NotificationService(repo, redis, pusher);
+        // push 文案本地化（bug 20260625-105）：mock MessageSource 回退到传入原文案，保持既有推送文本断言。
+        when(messageSource.getMessage(any(), any(), anyString(), any()))
+                .thenAnswer(inv -> inv.getArgument(2));
+        when(accountQuery.localeOf(org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(java.util.Locale.forLanguageTag("id"));
+        return new NotificationService(repo, redis, pusher, messageSource, accountQuery);
     }
 
     @Test

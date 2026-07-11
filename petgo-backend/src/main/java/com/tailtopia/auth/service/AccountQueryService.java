@@ -35,6 +35,16 @@ public class AccountQueryService {
                 .orElse(false);
     }
 
+    /** 取用户语言偏好（bug 20260625-105）：'en' 或 'id'（默认/未设=id）。供系统推送文案本地化。 */
+    @Transactional(readOnly = true)
+    public java.util.Locale localeOf(long userId) {
+        return users.findById(userId)
+                .map(u -> "en".equalsIgnoreCase(u.getLocale()) ? java.util.Locale.ENGLISH : INDONESIAN)
+                .orElse(INDONESIAN);
+    }
+
+    private static final java.util.Locale INDONESIAN = java.util.Locale.forLanguageTag("id");
+
     /** Story 3.2：取用户宠物状态（A/B/C），供 Feed 硬过滤；不存在/未设返回 empty。 */
     @Transactional(readOnly = true)
     public Optional<String> petStatusOf(long userId) {
