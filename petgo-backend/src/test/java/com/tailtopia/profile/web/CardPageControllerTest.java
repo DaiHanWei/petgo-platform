@@ -42,7 +42,8 @@ class CardPageControllerTest {
         accountQueryService = mock(AccountQueryService.class);
         timelineService = mock(TimelineService.class);
         controller = new CardPageController(profileService, contentService, accountQueryService,
-                timelineService, "https://dl", "https://ios", "https://android", "https://h5.petgo");
+                timelineService, mock(com.tailtopia.profile.service.OgImageService.class),
+                "https://dl", "https://ios", "https://android", "https://h5.petgo");
     }
 
     private PetProfile profile() {
