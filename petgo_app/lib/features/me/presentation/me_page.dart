@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/media/media_scope.dart';
@@ -44,11 +45,14 @@ class MePage extends ConsumerWidget {
         backgroundColor: AppColors.base,
         scrolledUnderElevation: 0,
         automaticallyImplyLeading: false,
-        // 左上固定标题「Saya」(bug 20260702-206)；与正文同屏边距对齐。
+        // 左上角品牌标：与首页同一 Tailtopia wordmark（bug 20260702-206：用 logo 替代文字标题）。
         centerTitle: false,
-        titleSpacing: AppSpacing.screenEdge,
-        title: Text(l10n.tabMe,
-            style: AppTypography.title.copyWith(color: AppColors.ink)),
+        titleSpacing: 20,
+        title: SvgPicture.asset(
+          'assets/brand/logo.svg',
+          height: 28,
+          semanticsLabel: l10n.appTitle,
+        ),
         actions: [
           // 帮助反馈图标（PDP 数据主体权利可达路径承载之一）。
           _IconBtn(
