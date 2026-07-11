@@ -143,6 +143,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/_ping-error", "/error").permitAll()
                         // 腾讯 IM 服务端回调（外部来源，内部 token/签名校验，Story 5.5）
                         .requestMatchers("/im/callback").permitAll()
+                        // 支付网关回调（Midtrans 外部来源，内部 SHA-512 签名校验，Story 1.1）
+                        .requestMatchers("/pay/callback").permitAll()
                         // IM UserSig 签发（Story 5.5）：显式要求已认证；用户态 MAU 闸门（非 VET 须有活跃会话）
                         // 在 ImUserSigController 内做（403），此处仅收口鉴权（401）。
                         .requestMatchers(HttpMethod.GET, "/api/v1/im/usersig").authenticated()

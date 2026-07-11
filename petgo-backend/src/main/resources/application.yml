@@ -35,6 +35,15 @@ petgo:
     # live REST 域名（按数据中心选德国/欧洲，与后端同区）+ 管理员 IM 标识（REST 鉴权身份，不计 MAU）。
     rest-base-url: ${IM_REST_BASE_URL:https://adminapiger.im.qcloud.com}
     admin-identifier: ${IM_ADMIN_IDENTIFIER:administrator}
+  # 支付网关（Story 1.1，V1.1 资金地基）：Midtrans 收款 + 幂等 + 回调/轮询双通道去重。
+  # mode=stub（默认）走桩网关，无凭证即可启动并验意图状态机/去重（L0/L1）；mode=live 才打真实 Midtrans（L2）。
+  # server-key / callback-token 全部 env 注入，绝不入库 / 不落日志（.env.example 仅占位）。
+  pay:
+    mode: ${PAY_MODE:stub}
+    server-key: ${MIDTRANS_SERVER_KEY:}
+    base-url: ${MIDTRANS_BASE_URL:https://api.sandbox.midtrans.com}
+    callback-token: ${MIDTRANS_CALLBACK_TOKEN:}
+    timeout-seconds: ${PAY_TIMEOUT_SECONDS:10}
   # App 版本更新提醒（Story 6.5，App 内提示，外部化配置运营可调，不走推送）。
   app-version:
     latest: ${APP_LATEST_VERSION:1.0.0}
