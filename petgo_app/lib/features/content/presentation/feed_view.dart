@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../shared/widgets/masonry_card.dart';
 import '../domain/feed_item.dart';
+import '../domain/home_refresh_provider.dart';
 
 /// Feed 单列视图（原型 feed.html：单列全宽卡片，非 2 列瀑布）。
 ///
 /// 12px 卡间距、16px 屏边距；距底自动 [onLoadMore]；[onRefresh] 下拉刷新；底部 [loadingMore] 转圈。
-class FeedMasonryView extends StatefulWidget {
+class FeedMasonryView extends ConsumerStatefulWidget {
   const FeedMasonryView({
     super.key,
     required this.items,
@@ -51,11 +53,18 @@ class FeedMasonryView extends StatefulWidget {
   final bool autoLoadMore;
 
   @override
-  State<FeedMasonryView> createState() => _FeedMasonryViewState();
+  ConsumerState<FeedMasonryView> createState() => _FeedMasonryViewState();
 }
 
-class _FeedMasonryViewState extends State<FeedMasonryView> {
+class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
   final ScrollController _controller = ScrollController();
+
+  /// 回到顶部（bug 20260709-278）：已在首页再点 Home → 信号 +1 → 动画滚回顶。
+  void _scrollToTop() {
+    if (!_controller.hasClients) return;
+    _controller.animateTo(0,
+        duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+  }
 
   /// 距底预加载阈值（≈3~5 卡）。
   static const double _preloadThreshold = 600;
@@ -86,6 +95,8 @@ class _FeedMasonryViewState extends State<FeedMasonryView> {
 
   @override
   Widget build(BuildContext context) {
+    // 已在首页再次点击 Home Tab → 回到顶部（bug 20260709-278）。
+    ref.listen<int>(homeScrollTopProvider, (_, _) => _scrollToTop());
     final cards = <Widget>[
       for (var i = 0; i < widget.items.length; i++)
         Padding(

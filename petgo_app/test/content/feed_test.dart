@@ -205,19 +205,21 @@ void main() {
 
   testWidgets('AC5: FeedMasonryView loadMoreFailed → 底部重试按钮可点', (tester) async {
     var retried = false;
-    await tester.pumpWidget(MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: Scaffold(
-        body: FeedMasonryView(
-          items: [_item(id: 1, body: 'kept')],
-          hasMore: true,
-          loadingMore: false,
-          loadMoreFailed: true,
-          loadMoreErrorLabel: 'tap retry',
-          deletedUserLabel: 'x',
-          onLoadMore: () async => retried = true,
-          onRefresh: () async {},
+    await tester.pumpWidget(ProviderScope(
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: FeedMasonryView(
+            items: [_item(id: 1, body: 'kept')],
+            hasMore: true,
+            loadingMore: false,
+            loadMoreFailed: true,
+            loadMoreErrorLabel: 'tap retry',
+            deletedUserLabel: 'x',
+            onLoadMore: () async => retried = true,
+            onRefresh: () async {},
+          ),
         ),
       ),
     ));
@@ -230,18 +232,20 @@ void main() {
 
   testWidgets('autoLoadMore=false：滚动到底不自动翻页（访客闸门）', (tester) async {
     var loaded = false;
-    await tester.pumpWidget(MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: Scaffold(
-        body: FeedMasonryView(
-          items: List.generate(8, (i) => _item(id: i + 1, body: 'post $i')),
-          hasMore: true,
-          loadingMore: false,
-          autoLoadMore: false,
-          deletedUserLabel: 'x',
-          onLoadMore: () async => loaded = true,
-          onRefresh: () async {},
+    await tester.pumpWidget(ProviderScope(
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: FeedMasonryView(
+            items: List.generate(8, (i) => _item(id: i + 1, body: 'post $i')),
+            hasMore: true,
+            loadingMore: false,
+            autoLoadMore: false,
+            deletedUserLabel: 'x',
+            onLoadMore: () async => loaded = true,
+            onRefresh: () async {},
+          ),
         ),
       ),
     ));
