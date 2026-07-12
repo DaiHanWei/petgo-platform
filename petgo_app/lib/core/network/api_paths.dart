@@ -91,6 +91,11 @@ class ApiPaths {
   /// PawCoin 余额 + 流水游标分页（Story 1.4）。
   static const String mePawcoin = '$base/me/pawcoin';
 
+  /// 充值选项（档位 + 暂停 flag）/ 下单 / 状态轮询（Story 1.5）。
+  static const String mePawcoinTopupOptions = '$mePawcoin/topup-options';
+  static const String mePawcoinTopups = '$mePawcoin/topups';
+  static String mePawcoinTopupStatus(String token) => '$mePawcoin/topups/$token/status';
+
   /// 媒体 STS 上传凭证（Story 2.1）。
   static const String mediaUploadUrl = '$base/media/upload-url';
 

@@ -1,6 +1,7 @@
 package com.tailtopia.pay.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -15,6 +16,7 @@ import com.tailtopia.pay.domain.PaymentIntent;
 import com.tailtopia.pay.domain.PaymentPurpose;
 import com.tailtopia.pay.dto.PaymentIntentResponse;
 import com.tailtopia.pay.event.PaymentIntentPaidEvent;
+import com.tailtopia.shared.error.AppException;
 import com.tailtopia.pay.repository.PaymentIntentRepository;
 import com.tailtopia.profile.service.CardTokenGenerator;
 import com.tailtopia.shared.pay.GatewayStatus;
@@ -63,6 +65,26 @@ class PaymentIntentServiceTest {
         PaymentIntent p = PaymentIntent.create(7L, purpose, PayChannel.QRIS, 10000L, "IDR", token);
         ReflectionTestUtils.setField(p, "id", id);
         return p;
+    }
+
+    @Test
+    void statusOfReturnsStatusForOwner() {
+        // persisted 的 userId=7（PaymentIntent.create(7L,...)），初始 PENDING。
+        when(intents.findByPublicToken("tok-s")).thenReturn(
+                Optional.of(persisted(9L, PaymentPurpose.PAWCOIN_TOPUP, "tok-s")));
+        assertThat(service().statusOf(7L, "tok-s")).isEqualTo(
+                com.tailtopia.pay.domain.PaymentStatus.PENDING);
+    }
+
+    @Test
+    void statusOfRejectsNonOwnerAndMissingWithNotFound() {
+        when(intents.findByPublicToken("tok-s")).thenReturn(
+                Optional.of(persisted(9L, PaymentPurpose.PAWCOIN_TOPUP, "tok-s")));
+        // 越权：非本人 token → notFound（不泄漏存在性）
+        assertThatThrownBy(() -> service().statusOf(8L, "tok-s")).isInstanceOf(AppException.class);
+        // 不存在 → notFound
+        when(intents.findByPublicToken("nope")).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service().statusOf(7L, "nope")).isInstanceOf(AppException.class);
     }
 
     @Test

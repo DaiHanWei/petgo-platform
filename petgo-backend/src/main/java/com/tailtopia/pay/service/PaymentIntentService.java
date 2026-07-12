@@ -3,6 +3,7 @@ package com.tailtopia.pay.service;
 import com.tailtopia.pay.domain.PayChannel;
 import com.tailtopia.pay.domain.PaymentIntent;
 import com.tailtopia.pay.domain.PaymentPurpose;
+import com.tailtopia.pay.domain.PaymentStatus;
 import com.tailtopia.pay.dto.PaymentIntentResponse;
 import com.tailtopia.pay.event.PaymentIntentPaidEvent;
 import com.tailtopia.pay.repository.PaymentIntentRepository;
@@ -141,6 +142,19 @@ public class PaymentIntentService {
     @Transactional(readOnly = true)
     public Optional<PaymentIntent> findByToken(String publicToken) {
         return intents.findByPublicToken(publicToken);
+    }
+
+    /**
+     * 支付状态轮询（Story 1.5）。<b>仅本人意图</b>——token 归属校验（{@code userId} 不符或不存在均
+     * {@link AppException#notFound}，用 404 不用 403 以免泄漏他人 token 存在性）。只读、无副作用
+     * （到账靠 1.3 回调，不主动向网关刷状态）。
+     */
+    @Transactional(readOnly = true)
+    public PaymentStatus statusOf(long userId, String publicToken) {
+        return intents.findByPublicToken(publicToken)
+                .filter(i -> i.getUserId() != null && i.getUserId() == userId)
+                .map(PaymentIntent::getStatus)
+                .orElseThrow(() -> AppException.notFound("支付意图不存在"));
     }
 
     /**

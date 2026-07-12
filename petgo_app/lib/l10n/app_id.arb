@@ -860,5 +860,21 @@
   "pawcoinTxnTopup": "Isi saldo",
   "pawcoinTxnSpend": "Pengeluaran",
   "pawcoinTxnRefund": "Pengembalian",
-  "pawcoinTxnBonus": "Bonus"
+  "pawcoinTxnBonus": "Bonus",
+  "rechargeTitle": "Isi Saldo PawCoin",
+  "rechargeSelectAmount": "Pilih nominal",
+  "rechargeChannel": "Metode pembayaran",
+  "rechargePay": "Lanjutkan",
+  "rechargePayingTitle": "Selesaikan pembayaran",
+  "rechargeScanHint": "Pindai QR ini untuk membayar",
+  "rechargeOpenDana": "Buka DANA",
+  "rechargeStubHint": "Mode uji — tanpa pembayaran nyata",
+  "rechargeWaiting": "Menunggu pembayaran…",
+  "rechargeSuccess": "Isi saldo berhasil",
+  "rechargeFailTitle": "Pembayaran tidak selesai",
+  "rechargeFailHint": "Saldo tidak berubah, tidak ada catatan.",
+  "rechargeRetry": "Coba lagi",
+  "rechargeLoadFailed": "Gagal memuat opsi isi saldo",
+  "rechargePauseTitle": "Isi Saldo Sementara Tidak Tersedia",
+  "rechargePauseHint": "Saldo yang sudah ada tetap aman."
 }

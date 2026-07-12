@@ -6,12 +6,16 @@ import com.tailtopia.pay.domain.PaymentPurpose;
 import com.tailtopia.pay.domain.TopupTier;
 import com.tailtopia.pay.dto.CreateTopupRequest;
 import com.tailtopia.pay.dto.PaymentIntentResponse;
+import com.tailtopia.pay.dto.TopupOptions;
 import com.tailtopia.pay.dto.TopupResponse;
+import com.tailtopia.pay.dto.TopupTierDto;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.pay.ChargeRequest;
 import com.tailtopia.shared.pay.ChargeResult;
 import com.tailtopia.shared.pay.PaymentGateway;
+import com.tailtopia.shared.pay.PayProperties;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Service;
 
@@ -35,12 +39,23 @@ public class PawCoinTopupService {
     private final TopupTierProvider tierProvider;
     private final PaymentIntentService paymentIntentService;
     private final PaymentGateway gateway;
+    private final PayProperties payProperties;
 
     public PawCoinTopupService(TopupTierProvider tierProvider, PaymentIntentService paymentIntentService,
-            PaymentGateway gateway) {
+            PaymentGateway gateway, PayProperties payProperties) {
         this.tierProvider = tierProvider;
         this.paymentIntentService = paymentIntentService;
         this.gateway = gateway;
+        this.payProperties = payProperties;
+    }
+
+    /**
+     * 充值选项（Story 1.5）：可选档位 + 是否暂停。档位来自 {@link TopupTierProvider}（9.2 换 DB）；
+     * {@code paused} 来自 {@code petgo.pay.topup-paused}（env {@code PAWCOIN_TOPUP_PAUSED}，AB-6C）。
+     */
+    public TopupOptions options() {
+        List<TopupTierDto> tiers = tierProvider.tiers().stream().map(TopupTierDto::from).toList();
+        return new TopupOptions(tiers, payProperties.isTopupPaused());
     }
 
     public TopupResponse create(long userId, CreateTopupRequest req, String idempotencyKey) {

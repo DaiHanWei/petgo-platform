@@ -16,10 +16,13 @@ import com.tailtopia.pay.domain.PaymentPurpose;
 import com.tailtopia.pay.domain.TopupTier;
 import com.tailtopia.pay.dto.CreateTopupRequest;
 import com.tailtopia.pay.dto.PaymentIntentResponse;
+import com.tailtopia.pay.dto.TopupOptions;
 import com.tailtopia.pay.dto.TopupResponse;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.pay.ChargeResult;
 import com.tailtopia.shared.pay.PaymentGateway;
+import com.tailtopia.shared.pay.PayProperties;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -41,8 +44,10 @@ class PawCoinTopupServiceTest {
     @Mock
     PaymentGateway gateway;
 
+    private final PayProperties props = new PayProperties(); // 默认 topupPaused=false
+
     private PawCoinTopupService service() {
-        return new PawCoinTopupService(tierProvider, paymentIntentService, gateway);
+        return new PawCoinTopupService(tierProvider, paymentIntentService, gateway, props);
     }
 
     private PaymentIntentResponse intentResp(String token) {
@@ -101,5 +106,19 @@ class PawCoinTopupServiceTest {
         assertThat(resp.payload()).isEqualTo("qr://old");
         verify(gateway, never()).createCharge(any());
         verify(paymentIntentService, never()).attachCharge(anyString(), anyString(), any());
+    }
+
+    @Test
+    void optionsReturnsTiersAndPausedFlag() {
+        when(tierProvider.tiers()).thenReturn(List.of(TopupTier.TIER_10K, TopupTier.TIER_100K));
+        props.setTopupPaused(true);
+
+        TopupOptions o = service().options();
+
+        assertThat(o.paused()).isTrue();
+        assertThat(o.tiers()).hasSize(2);
+        assertThat(o.tiers().get(0).id()).isEqualTo("10k");
+        assertThat(o.tiers().get(0).amount()).isEqualTo(10_000L);
+        assertThat(o.tiers().get(0).coins()).isEqualTo(10_000L);
     }
 }

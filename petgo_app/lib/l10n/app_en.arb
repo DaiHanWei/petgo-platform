@@ -1099,5 +1099,21 @@
   "pawcoinTxnTopup": "Top-up",
   "pawcoinTxnSpend": "Spent",
   "pawcoinTxnRefund": "Refund",
-  "pawcoinTxnBonus": "Bonus"
+  "pawcoinTxnBonus": "Bonus",
+  "rechargeTitle": "Top Up PawCoin",
+  "rechargeSelectAmount": "Select amount",
+  "rechargeChannel": "Payment method",
+  "rechargePay": "Continue",
+  "rechargePayingTitle": "Complete your payment",
+  "rechargeScanHint": "Scan this QR to pay",
+  "rechargeOpenDana": "Open DANA",
+  "rechargeStubHint": "Test mode — no real payment",
+  "rechargeWaiting": "Waiting for payment…",
+  "rechargeSuccess": "Top-up successful",
+  "rechargeFailTitle": "Payment not completed",
+  "rechargeFailHint": "Your balance is unchanged — nothing was recorded.",
+  "rechargeRetry": "Try again",
+  "rechargeLoadFailed": "Couldn't load top-up options",
+  "rechargePauseTitle": "Top-up temporarily unavailable",
+  "rechargePauseHint": "Your existing balance is safe."
 }

@@ -31,6 +31,12 @@ public class PayProperties {
     /** 单次网关调用超时（秒）。 */
     private int timeoutSeconds = 10;
 
+    /**
+     * PawCoin 充值是否暂停（Story 1.5，env {@code PAWCOIN_TOPUP_PAUSED}，默认 false）。浮存门槛触发时由
+     * <b>运营/工程手动置 true 重启</b>（AB-6C：V1.1 后端不做一键硬暂停，仅暴露此 flag 供前端渲染暂停态）。
+     */
+    private boolean topupPaused = false;
+
     public String getMode() {
         return mode;
     }
@@ -69,5 +75,13 @@ public class PayProperties {
 
     public void setTimeoutSeconds(int timeoutSeconds) {
         this.timeoutSeconds = timeoutSeconds;
+    }
+
+    public boolean isTopupPaused() {
+        return topupPaused;
+    }
+
+    public void setTopupPaused(boolean topupPaused) {
+        this.topupPaused = topupPaused;
     }
 }

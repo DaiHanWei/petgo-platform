@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import com.tailtopia.pay.domain.PayChannel;
 import com.tailtopia.pay.dto.CreateTopupRequest;
 import com.tailtopia.pay.service.PawCoinTopupService;
+import com.tailtopia.pay.service.PaymentIntentService;
 import com.tailtopia.shared.error.AppException;
 import org.junit.jupiter.api.Test;
 
@@ -16,7 +17,9 @@ import org.junit.jupiter.api.Test;
 class PawCoinTopupControllerTest {
 
     private final PawCoinTopupService service = mock(PawCoinTopupService.class);
-    private final PawCoinTopupController controller = new PawCoinTopupController(service);
+    private final PaymentIntentService paymentIntentService = mock(PaymentIntentService.class);
+    private final PawCoinTopupController controller =
+            new PawCoinTopupController(service, paymentIntentService);
     private final CreateTopupRequest req = new CreateTopupRequest("T25K", PayChannel.QRIS.name());
 
     @Test
