@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -55,8 +56,10 @@ class _ArchiveCalendarState extends ConsumerState<ArchiveCalendar> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _monthHeader(),
-        const SizedBox(height: 10),
+        _monthHeader(context),
+        const SizedBox(height: 6),
+        _weekdayRow(context),
+        const SizedBox(height: 6),
         monthAsync.when(
           loading: () => const Padding(
               padding: EdgeInsets.all(28), child: Center(child: CircularProgressIndicator())),
@@ -69,24 +72,46 @@ class _ArchiveCalendarState extends ConsumerState<ArchiveCalendar> {
     );
   }
 
-  Widget _monthHeader() {
+  /// 表头（bug 20260623-047 统一风格）：月份名紫色标题（本地化「July 2026」）+ 右侧紫色左右切月箭头，
+  /// 对齐 date_picker_plus 观感。
+  Widget _monthHeader(BuildContext context) {
+    final locale = Localizations.localeOf(context).toString();
+    final title = DateFormat.yMMMM(locale).format(DateTime(_year, _month));
     return Row(
       children: [
         IconButton(
           key: const ValueKey('calPrevMonth'),
           onPressed: () => _shiftMonth(-1),
-          icon: const Icon(Icons.chevron_left_rounded),
+          icon: const Icon(Icons.chevron_left_rounded, color: AppColors.mint),
         ),
         Expanded(
-          child: Text('$_year-${_month.toString().padLeft(2, '0')}',
+          child: Text(title,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.mint)),
         ),
         IconButton(
           key: const ValueKey('calNextMonth'),
           onPressed: () => _shiftMonth(1),
-          icon: const Icon(Icons.chevron_right_rounded),
+          icon: const Icon(Icons.chevron_right_rounded, color: AppColors.mint),
         ),
+      ],
+    );
+  }
+
+  /// 周头行（周日起始，与 date_picker_plus 一致）：本地化短名大写。
+  Widget _weekdayRow(BuildContext context) {
+    final locale = Localizations.localeOf(context).toString();
+    final sunday = DateTime(2024, 1, 7); // 已知周日
+    return Row(
+      children: [
+        for (var i = 0; i < 7; i++)
+          Expanded(
+            child: Text(
+              DateFormat.E(locale).format(sunday.add(Duration(days: i))).toUpperCase(),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.muted),
+            ),
+          ),
       ],
     );
   }
@@ -95,7 +120,7 @@ class _ArchiveCalendarState extends ConsumerState<ArchiveCalendar> {
     final byDay = month.byDay;
     final first = DateTime(_year, _month, 1);
     final daysInMonth = DateTime(_year, _month + 1, 0).day;
-    final leadingBlanks = first.weekday - 1; // Mon-first
+    final leadingBlanks = first.weekday % 7; // Sun-first（与周头行 + date_picker_plus 一致）
     final today = DateTime.now();
     final todayDate = DateTime(today.year, today.month, today.day);
 
@@ -130,7 +155,7 @@ class _ArchiveCalendarState extends ConsumerState<ArchiveCalendar> {
           decoration: BoxDecoration(
               color: AppColors.card, borderRadius: BorderRadius.circular(10)),
           child: Text('$day',
-              style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.muted)),
         ),
       );
     }
@@ -167,7 +192,7 @@ class _ArchiveCalendarState extends ConsumerState<ArchiveCalendar> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text('$day', style: const TextStyle(fontSize: 12, color: AppColors.ink2)),
+            Text('$day', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink2)),
             const Text('+', style: TextStyle(fontSize: 13, color: AppColors.line)),
           ],
         ),

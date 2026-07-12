@@ -70,6 +70,7 @@ dependencies:
   # 前端行为分析（PostHog Cloud US）。Project Token 走 dart-define 注入（POSTHOG_KEY），
   # 不外露 PII / 不传自增 id（identify 用哈希 distinctId，见 core/analytics/analytics.dart）。
   posthog_flutter: ^4.0.0
+  date_picker_plus: ^7.0.1
 
 dev_dependencies:
   flutter_test:

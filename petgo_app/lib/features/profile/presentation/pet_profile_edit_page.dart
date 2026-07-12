@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:date_picker_plus/date_picker_plus.dart';
 import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -480,12 +481,14 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
 
   Future<void> _pickBirthday() async {
     final now = DateTime.now();
-    final picked = await showDatePicker(
+    // bug 20260623-047：统一 date_picker_plus 干净日历风格（点某天即选中并关闭）。
+    final picked = await showDatePickerDialog(
       context: context,
-      initialDate: _birthday ?? now,
-      firstDate: DateTime(now.year - 40),
-      lastDate: now,
+      minDate: DateTime(now.year - 40),
+      maxDate: now,
+      selectedDate: _birthday,
+      displayedDate: _birthday ?? now,
     );
-    if (picked != null) setState(() => _birthday = picked);
+    if (picked != null && mounted) setState(() => _birthday = picked);
   }
 }

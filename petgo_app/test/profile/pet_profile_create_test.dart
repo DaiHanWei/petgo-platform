@@ -110,7 +110,8 @@ Future<void> _fillAndSubmit(WidgetTester tester) async {
   await tester.pump();
   await tester.tap(find.byKey(const ValueKey('petProfileBirthdayTile')));
   await tester.pumpAndSettle();
-  await tester.tap(find.text('OK'));
+  // date_picker_plus：点某天即选中并关闭（无 OK 按钮）。限定 Dialog 内避免与页面文本冲突。
+  await tester.tap(find.descendant(of: find.byType(Dialog), matching: find.text('1')).first);
   await tester.pumpAndSettle();
   await tester.tap(find.byKey(const ValueKey('petProfileSubmit')));
   await tester.pumpAndSettle();
@@ -145,7 +146,7 @@ void main() {
     // 补完整生日（date picker 产出完整年月日）→ 启用
     await tester.tap(find.byKey(const ValueKey('petProfileBirthdayTile')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('OK'));
+    await tester.tap(find.descendant(of: find.byType(Dialog), matching: find.text('1')).first);
     await tester.pumpAndSettle();
     expect(_submitBtn(tester).onPressed, isNotNull);
   });

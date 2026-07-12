@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:date_picker_plus/date_picker_plus.dart';
 import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -610,12 +611,13 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
 
   Future<void> _pickEventDate(PublishController controller) async {
     final today = DateTime.now();
-    final initial = controller.eventDate ?? today;
-    final picked = await showDatePicker(
+    // bug 20260623-047：统一 date_picker_plus 干净日历风格（点某天即选中并关闭）。
+    final picked = await showDatePickerDialog(
       context: context,
-      initialDate: initial,
-      firstDate: DateTime(today.year - 30),
-      lastDate: DateTime(today.year, today.month, today.day), // 禁选未来（F9）
+      minDate: DateTime(today.year - 30),
+      maxDate: DateTime(today.year, today.month, today.day), // 禁选未来（F9）
+      selectedDate: controller.eventDate,
+      displayedDate: controller.eventDate ?? today,
     );
     if (picked != null) controller.setEventDate(picked);
   }

@@ -287,7 +287,7 @@ void main() {
     await tester.ensureVisible(find.byKey(const ValueKey('petProfileBirthdayTile')));
     await tester.tap(find.byKey(const ValueKey('petProfileBirthdayTile')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('OK'));
+    await tester.tap(find.descendant(of: find.byType(Dialog), matching: find.text('1')).first);
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.byKey(const ValueKey('petProfileSubmit')));
     await tester.tap(find.byKey(const ValueKey('petProfileSubmit')));
