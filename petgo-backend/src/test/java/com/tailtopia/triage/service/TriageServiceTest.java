@@ -75,13 +75,22 @@ class TriageServiceTest {
         TriageTestSupport.set(done, "dangerLevel", com.tailtopia.triage.domain.DangerLevel.YELLOW);
         TriageTestSupport.set(done, "parsedResult",
                 java.util.Map.of("advice", "尽快就医", "disclaimer", "仅供参考"));
+        // Story 2.2：未解锁的黄色 → 详建 advice 锁定不下发（locked=true），安全免费部分 disclaimer 仍下发。
+        TriageTestSupport.set(done, "unlockSource", com.tailtopia.triage.domain.UnlockSource.LOCKED);
         when(tasks.findById(5L)).thenReturn(Optional.of(done));
 
-        TriageResultResponse resp = service.getResult(7L, 5L);
+        TriageResultResponse locked = service.getResult(7L, 5L);
+        assertThat(locked.status()).isEqualTo(TriageStatus.DONE);
+        assertThat(locked.dangerLevel()).isEqualTo(com.tailtopia.triage.domain.DangerLevel.YELLOW);
+        assertThat(locked.advice()).isNull();                 // 详建锁定不下发
+        assertThat(locked.disclaimer()).isEqualTo("仅供参考");   // 安全免费部分仍下发
+        assertThat(locked.locked()).isTrue();
 
-        assertThat(resp.status()).isEqualTo(TriageStatus.DONE);
-        assertThat(resp.dangerLevel()).isEqualTo(com.tailtopia.triage.domain.DangerLevel.YELLOW);
-        assertThat(resp.advice()).isEqualTo("尽快就医");
+        // 解锁后（免费额度）→ 详建下发、locked=false。
+        TriageTestSupport.set(done, "unlockSource", com.tailtopia.triage.domain.UnlockSource.FREE_QUOTA);
+        TriageResultResponse unlocked = service.getResult(7L, 5L);
+        assertThat(unlocked.advice()).isEqualTo("尽快就医");
+        assertThat(unlocked.locked()).isFalse();
     }
 
     @Test

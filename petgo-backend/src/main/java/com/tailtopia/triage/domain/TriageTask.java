@@ -73,6 +73,20 @@ public class TriageTask {
     @Column(name = "response_locale", length = 8)
     private String responseLocale;
 
+    /**
+     * 详建解锁来源（Story 2.2）。{@code markDone}（成功生成）时初始化为 {@link UnlockSource#LOCKED}；
+     * PENDING/FAILED 恒 null（无可解锁详建，「生成失败不建记录」）。跃迁见 {@link #unlock}（不可覆盖）。
+     * 红色详建永不锁在响应层单点判定，与本字段无关。
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "unlock_source", length = 16)
+    private UnlockSource unlockSource;
+
+    /** 付费解锁渠道（Story 2.2）。仅 {@link UnlockSource#PAID} 有值，其余恒 null。 */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "unlock_channel", length = 16)
+    private UnlockChannel unlockChannel;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -108,6 +122,9 @@ public class TriageTask {
         this.geminiRaw = geminiRaw;
         this.parsedResult = parsedResult;
         this.status = TriageStatus.DONE;
+        // Story 2.2：详建默认锁定，待 2-3 解锁。仅成功生成才置——失败走 markFailed 不经此，unlock_source 恒 null
+        // （「生成失败不建记录」）。红色详建永不锁在响应层判定，与此无关（此处一律 LOCKED）。
+        this.unlockSource = UnlockSource.LOCKED;
     }
 
     /** 失败回退：retry_count++ 并置回 PENDING 供重试。 */
@@ -119,6 +136,29 @@ public class TriageTask {
     /** 重试超限：置 FAILED 供前端降级。 */
     public void markFailed() {
         this.status = TriageStatus.FAILED;
+    }
+
+    /**
+     * 解锁详建（Story 2.2，供 Story 2.3 在其解锁事务内调）。仅允许 {@code LOCKED/NULL → FREE_QUOTA/PAID}
+     * 一次性跃迁——<b>一经写入不可覆盖</b>（架构 L105）：已是 {@code FREE_QUOTA/PAID} 时抛
+     * {@link IllegalStateException}（2-3 视作幂等冲突）。{@code PAID} 必带 {@code channel}、
+     * {@code FREE_QUOTA} 的 {@code channel} 必为 null。本 story 不接调用点，仅建方法 + 单测覆盖。
+     */
+    public void unlock(UnlockSource source, UnlockChannel channel) {
+        if (source != UnlockSource.FREE_QUOTA && source != UnlockSource.PAID) {
+            throw new IllegalArgumentException("unlock 目标只能是 FREE_QUOTA 或 PAID，实际=" + source);
+        }
+        if (this.unlockSource == UnlockSource.FREE_QUOTA || this.unlockSource == UnlockSource.PAID) {
+            throw new IllegalStateException("unlock_source 一经写入不可覆盖，当前=" + this.unlockSource);
+        }
+        if (source == UnlockSource.PAID && channel == null) {
+            throw new IllegalArgumentException("PAID 解锁必须带 channel");
+        }
+        if (source == UnlockSource.FREE_QUOTA && channel != null) {
+            throw new IllegalArgumentException("FREE_QUOTA 解锁 channel 必须为空");
+        }
+        this.unlockSource = source;
+        this.unlockChannel = channel;
     }
 
     public Long getId() {
@@ -167,6 +207,14 @@ public class TriageTask {
 
     public String getResponseLocale() {
         return responseLocale;
+    }
+
+    public UnlockSource getUnlockSource() {
+        return unlockSource;
+    }
+
+    public UnlockChannel getUnlockChannel() {
+        return unlockChannel;
     }
 
     public Instant getCreatedAt() {

@@ -46,7 +46,7 @@
 #   V62  1-6  extend_ledger_forfeiture             ✅ 占号 (作废科目 ALTER ck_ledger_entries_account +FORFEITURE；1-6 create-story 2026-07-12)
 #   ── ↓ 以下 V63+ 规划号因 1-6 占 V62 整体 +1，merge 时按当时全局 max 顺延（决策 E2）──
 #   V63  2-1  init_user_monthly_free_quota         ✅ 已落文件 (user_monthly_free_quota[唯一 user_id,period] +CHECK used_count>=0；WIB period)
-#   V64  2-2  alter_triage_tasks_unlock (unlock_source / unlock_channel)  ← 表名纠偏:真实表 triage_tasks 非 triage_records;2-1 占 V63 故 2-2 顺延 V64,下游整体 +1（决策 E2 单调顺延）
+#   V64  2-2  alter_triage_tasks_unlock            ✅ 已落文件 (triage_tasks 加 unlock_source[LOCKED/FREE_QUOTA/PAID]/unlock_channel[QRIS/DANA/PAWCOIN];表名纠偏 非triage_records;下游整体+1)
 #   V65  2-3  init_ai_consult_orders (独立命名空间)
 #   V65  3-1  init_consult_billing (consult_requests + consult_orders + consult_order_stage_events)
 #   V66  3-7  init_vet_settlements
@@ -70,7 +70,7 @@
 # - 红色超额/接单未支付限速阈值(9-6，仅埋点，上线后定)
 
 generated: 2026-07-11
-last_updated: 2026-07-13  # 2-1->review;2-2 create-story->ready-for-dev(triage_tasks加解锁态+红色永不锁,Flyway V64,纠偏triage_records);epic-2 in-progress
+last_updated: 2026-07-13  # 2-2 dev L0全绿(33 tests,含红色永不锁)->review(L1锁态端点待本地);epic-2 in-progress
 project: petgo-platform-v1.1
 project_key: NOKEY
 tracking_system: file-system
@@ -90,7 +90,7 @@ development_status:
   # ---- Epic 2: AI 问诊付费解锁 ----
   epic-2: in-progress
   2-1-每月免费额度模型与判定: review
-  2-2-ai结果分字段下发与锁定态: ready-for-dev
+  2-2-ai结果分字段下发与锁定态: review
   2-3-付费额度解锁流: backlog
   2-4-解锁前端与paywall-ui: backlog
   epic-2-retrospective: optional
