@@ -802,6 +802,8 @@
   "deletionItemPosts": "Semua postingan dan komentar di komunitas",
   "deletionItemConsults": "Riwayat konsultasi dokter hewan",
   "deletionItemGoogle": "Data akun Google yang terhubung",
+  "deletionItemPawcoin": "Saldo PawCoin ({coins} koin) akan hangus permanen",
+  "deletionItemPawcoinGeneric": "Saldo PawCoin kamu akan hangus permanen",
   "deleteAccountPhraseLabel": "KETIK FRASA UNTUK KONFIRMASI",
   "deleteAccountCancel": "Batalkan",
   "deleteAccountPermanentWord": "permanen",

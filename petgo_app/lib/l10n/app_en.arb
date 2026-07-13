@@ -1034,6 +1034,13 @@
   "@deletionItemConsults": {"description": "Delete list item"},
   "deletionItemGoogle": "Linked Google account data",
   "@deletionItemGoogle": {"description": "Delete list item"},
+  "deletionItemPawcoin": "Your PawCoin balance ({coins} koin) will be permanently forfeited",
+  "@deletionItemPawcoin": {
+    "description": "Delete list item - PawCoin forfeit with balance",
+    "placeholders": {"coins": {"type": "int"}}
+  },
+  "deletionItemPawcoinGeneric": "Your PawCoin balance will be permanently forfeited",
+  "@deletionItemPawcoinGeneric": {"description": "Delete list item - PawCoin forfeit, generic (no balance)"},
   "deleteAccountPhraseLabel": "TYPE THE PHRASE TO CONFIRM",
   "@deleteAccountPhraseLabel": {"description": "Delete-account page: phrase input label"},
   "deleteAccountCancel": "Cancel",

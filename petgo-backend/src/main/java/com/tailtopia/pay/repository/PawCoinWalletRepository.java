@@ -34,4 +34,12 @@ public interface PawCoinWalletRepository extends JpaRepository<PawCoinWallet, Lo
     @Query(value = "INSERT INTO pawcoin_wallets (user_id, balance, version, updated_at) "
             + "VALUES (:userId, 0, 0, now()) ON CONFLICT (user_id) DO NOTHING", nativeQuery = true)
     int insertIfAbsent(@Param("userId") long userId);
+
+    /**
+     * 注销级联（Story 1.6）：物理删该用户钱包行。返回删除行数（0=无钱包，幂等）。
+     * 调用前须已写终结分录归零 + 作废（{@code PawCoinAccountDeletionService}），总账 append-only 保留。
+     */
+    @Modifying
+    @Query("delete from PawCoinWallet w where w.userId = :userId")
+    int deleteByUserId(@Param("userId") long userId);
 }
