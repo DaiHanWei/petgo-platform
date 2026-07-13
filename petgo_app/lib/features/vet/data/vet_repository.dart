@@ -8,7 +8,9 @@ import '../../consult/domain/consult_diagnosis.dart';
 import '../domain/consult_ai_context.dart';
 import '../domain/vet_diagnosis_draft.dart';
 import '../domain/vet_inbox_item.dart';
+import '../domain/vet_income.dart';
 import '../domain/vet_login_response.dart';
+import '../domain/vet_queue.dart';
 import '../domain/vet_workbench_lists.dart';
 
 /// 兽医数据层（Story 5.1）：账密登录换取 role=VET JWT；GET /vet/me 探活。
@@ -87,6 +89,26 @@ class VetRepository {
   Future<ConsultAssist> assist(int sessionId) async {
     final resp = await dio.get<Map<String, dynamic>>(ApiPaths.vetConsultAssist(sessionId));
     return ConsultAssist.fromJson(resp.data!);
+  }
+
+  // ===== Story 3.6：兽医计费队列 =====
+
+  /// 兽医计费队列（待接单 Tab 轮询）：本人「等待支付」中间态 + 可接单 QUEUEING 池（忙则空）。
+  Future<VetQueue> vetQueue() async {
+    final resp = await dio.get<Map<String, dynamic>>(ApiPaths.vetConsultationsQueue);
+    return VetQueue.fromJson(resp.data ?? const {});
+  }
+
+  /// 接计费流请求（CAS QUEUEING→ACCEPTED_AWAIT_PAY + 开 1.5min 支付窗 + goBusy）。
+  /// 被抢/已过期/占用 → 抛 409 [DioException]（调用方映射 Toast）。
+  Future<void> acceptConsultRequest(String requestToken) async {
+    await dio.post<void>(ApiPaths.vetConsultationsAccept(requestToken));
+  }
+
+  /// 兽医收入（Story 3.7）：当月待结算 + 历史月结倒序。
+  Future<VetIncome> income() async {
+    final resp = await dio.get<Map<String, dynamic>>(ApiPaths.vetIncome);
+    return VetIncome.fromJson(resp.data ?? const {});
   }
 
   /// 「进行中」会话列表（工作台 Active Tab）。
