@@ -165,6 +165,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/consult/**",
                                 "/api/v1/consult-sessions", "/api/v1/consult-sessions/**",
                                 "/api/v1/consultations", "/api/v1/consultations/**").hasRole("USER")
+                        // 客服工单端点（Story 4.1，FR-52）：用户建单/查单，仅 role=USER（vet/guest → 403）
+                        .requestMatchers("/api/v1/support-tickets", "/api/v1/support-tickets/**").hasRole("USER")
                         // 其余 /api/v1 默认需 JWT（写一律拒绝未登录）；user 写端点对 vet token → 403
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth
