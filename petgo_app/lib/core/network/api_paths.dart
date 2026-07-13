@@ -152,4 +152,10 @@ class ApiPaths {
   /// AI 智能分诊（Story 4.1）。POST 受理（202+triageId）/ GET 短轮询取结果。
   static const String triage = '$base/triage';
   static String triageResult(int id) => '$base/triage/$id';
+
+  /// AI 详建付费/额度解锁（Story 2.3/2.4）。POST body `{method}` → UnlockResponse。
+  static String triageUnlock(int id) => '$base/triage/$id/unlock';
+
+  /// 本月免费额度（Story 2.1/2.4）→ {period, limit, used, remaining}。
+  static const String freeQuota = '$base/me/free-quota';
 }

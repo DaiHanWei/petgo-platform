@@ -51,6 +51,8 @@ class TriageResult {
     this.symptomSummary,
     this.emergencySteps = const <String>[],
     this.emergencyAvoid = const <String>[],
+    this.locked,
+    this.unlockSource,
   });
 
   final TriageStatus status;
@@ -59,6 +61,13 @@ class TriageResult {
   final String? medicationRef;
   final String? disclaimer;
   final TriageObservation? observation;
+
+  /// 详建（SARAN PERAWATAN）是否锁定（Story 2.2/2.4）。DONE 时后端下发；null=非 DONE/未知。
+  /// 仅 `status==done && locked==true && dangerLevel!=red` 时渲染 paywall（红色永不锁）。
+  final bool? locked;
+
+  /// 解锁来源（LOCKED/FREE_QUOTA/PAID，Story 2.2）。展示/调试用；渲染以 [locked] 为准。
+  final String? unlockSource;
 
   /// 红色态对症院前应急（仅红色态后端产出；安全层升红/AI 失败时为空 → UI 回退通用步骤）。
   final List<String> emergencySteps;
@@ -82,7 +91,13 @@ class TriageResult {
         symptomSummary: symptomSummary ?? this.symptomSummary,
         emergencySteps: emergencySteps,
         emergencyAvoid: emergencyAvoid,
+        locked: locked,
+        unlockSource: unlockSource,
       );
+
+  /// 详建是否应显示 paywall（Story 2.4）：仅 DONE + 后端标 locked + 非红色（红色永不锁，前端双保险）。
+  bool get isDetailLocked =>
+      status == TriageStatus.done && locked == true && dangerLevel != DangerLevel.red;
 
   factory TriageResult.fromJson(Map<String, dynamic> json) => TriageResult(
         status: _status(json['status'] as String?),
@@ -96,6 +111,8 @@ class TriageResult {
         symptomSummary: json['symptomSummary'] as String?,
         emergencySteps: _emergencyList(json['emergencySteps']),
         emergencyAvoid: _emergencyList(json['emergencyAvoid']),
+        locked: json['locked'] as bool?,
+        unlockSource: json['unlockSource'] as String?,
       );
 
   static List<String> _emergencyList(Object? raw) =>
@@ -130,7 +147,75 @@ class TriageResult {
   }
 }
 
-/// 分诊契约客户端（Story 4.1 · F1）。
+/// 解锁方式（Story 2.4，对齐后端 `UnlockMethod`）。免费额度 / PawCoin 同步；QRIS/DANA 现金异步。
+enum UnlockMethod {
+  freeQuota('FREE_QUOTA'),
+  pawcoin('PAWCOIN'),
+  qris('QRIS'),
+  dana('DANA');
+
+  const UnlockMethod(this.wire);
+
+  final String wire;
+}
+
+/// 现金支付信息（Story 2.4，对齐后端 `PaymentIntentResponse`）。QR/deeplink 呈现字段暂缺（stub 无真付，L2 前定）。
+class PaymentInfo {
+  const PaymentInfo({
+    required this.token,
+    required this.channel,
+    required this.amount,
+    required this.status,
+  });
+
+  final String token;
+  final String channel;
+  final int amount;
+  final String status;
+
+  factory PaymentInfo.fromJson(Map<String, dynamic> json) => PaymentInfo(
+        token: json['token'] as String? ?? '',
+        channel: json['channel'] as String? ?? '',
+        amount: (json['amount'] as num?)?.toInt() ?? 0,
+        status: json['status'] as String? ?? '',
+      );
+}
+
+/// 解锁响应（Story 2.4，对齐后端 `UnlockResponse`）。同步：[unlocked]=true+[result]；现金：false+[payment]。
+class UnlockResult {
+  const UnlockResult({required this.unlocked, this.result, this.payment});
+
+  final bool unlocked;
+  final TriageResult? result;
+  final PaymentInfo? payment;
+
+  factory UnlockResult.fromJson(Map<String, dynamic> json) => UnlockResult(
+        unlocked: json['unlocked'] as bool? ?? false,
+        result: json['result'] is Map<String, dynamic>
+            ? TriageResult.fromJson(json['result'] as Map<String, dynamic>)
+            : null,
+        payment: json['payment'] is Map<String, dynamic>
+            ? PaymentInfo.fromJson(json['payment'] as Map<String, dynamic>)
+            : null,
+      );
+}
+
+/// 本月免费额度（Story 2.1/2.4，对齐后端 `FreeQuotaView`）。[remaining]>0 → 免费方式可选。
+class FreeQuotaView {
+  const FreeQuotaView({required this.limit, required this.used, required this.remaining});
+
+  final int limit;
+  final int used;
+  final int remaining;
+
+  factory FreeQuotaView.fromJson(Map<String, dynamic> json) => FreeQuotaView(
+        limit: (json['limit'] as num?)?.toInt() ?? 0,
+        used: (json['used'] as num?)?.toInt() ?? 0,
+        remaining: (json['remaining'] as num?)?.toInt() ?? 0,
+      );
+}
+
+/// 分诊契约客户端（Story 4.1 · F1；Story 2.4 加解锁）。
 abstract class TriageRepository {
   /// 提交分诊（202 异步受理）。返回 triageId。[idempotencyKey] 去重重复提交。
   Future<int> submitTriage({
@@ -142,6 +227,13 @@ abstract class TriageRepository {
 
   /// 短轮询取结果（处理中 / 就绪 / 失败三态映射）。
   Future<TriageResult> pollTriage(int triageId);
+
+  /// 解锁 AI 详建（Story 2.4）。免费/PawCoin 同步返回已解锁结果；现金返回支付信息。
+  /// 额度/余额不足后端 409（ProblemDetail），由拦截器/调用方处理。
+  Future<UnlockResult> unlockTriage(int triageId, UnlockMethod method);
+
+  /// 本月免费额度（Story 2.4，供解锁方式面板判「免费可选 + 剩余」）。
+  Future<FreeQuotaView> fetchFreeQuota();
 }
 
 class DioTriageRepository implements TriageRepository {
@@ -175,6 +267,21 @@ class DioTriageRepository implements TriageRepository {
   Future<TriageResult> pollTriage(int triageId) async {
     final resp = await dio.get<Map<String, dynamic>>(ApiPaths.triageResult(triageId));
     return TriageResult.fromJson(resp.data!);
+  }
+
+  @override
+  Future<UnlockResult> unlockTriage(int triageId, UnlockMethod method) async {
+    final resp = await dio.post<Map<String, dynamic>>(
+      ApiPaths.triageUnlock(triageId),
+      data: <String, dynamic>{'method': method.wire},
+    );
+    return UnlockResult.fromJson(resp.data!);
+  }
+
+  @override
+  Future<FreeQuotaView> fetchFreeQuota() async {
+    final resp = await dio.get<Map<String, dynamic>>(ApiPaths.freeQuota);
+    return FreeQuotaView.fromJson(resp.data!);
   }
 }
 

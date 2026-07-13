@@ -29,6 +29,13 @@ class _FakeTriageRepo implements TriageRepository {
     calls++;
     return r;
   }
+
+  @override
+  Future<UnlockResult> unlockTriage(int triageId, UnlockMethod method) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<FreeQuotaView> fetchFreeQuota() async => throw UnimplementedError();
 }
 
 ProviderContainer _container(_FakeTriageRepo repo) {

@@ -3,7 +3,7 @@ baseline_commit: 7c1ec93
 ---
 # Story 2.4: 解锁前端与 paywall UI
 
-Status: ready-for-dev
+Status: review
 
 > V1.1 **Epic 2 收官** story，**纯前端 Flutter**。消费 2-2 后端分字段下发（`TriageResult` 加 `locked`/`unlockSource`）+ 2-3 解锁端点（`POST /triage/{id}/unlock`），在分诊结果页渲染**锁定态 paywall**（详建 blur + 解锁 CTA），并接**三条解锁方式**（免费额度 / PawCoin / 现金 QRIS·DANA）。**无迁移、无后端改动**。
 > 源：`epics-v1.1.md` Story 2.4（详建 blur + CTA「PawCoin atau Rp10.000」；黄色图标/颜色/时效免费；**红色无锁**；读屏隐藏 blur；`flutter analyze` 绿；L2 模拟器视觉）· `UX_DESIGN` C-7 修订（安全信息永不被付费墙挡住）· 承接 2-2/2-3 契约。
@@ -52,22 +52,22 @@ so that 我知道免费看到什么、付费解锁什么。
 
 > 纯前端、feature-first 落 `features/triage`。先扩模型/端点 → paywall widget（blur+CTA+红色无锁）→ 解锁方式 sheet + 控制器（免费/PawCoin 同步 / 现金轮询）→ i18n → 测试。**先读 `triage_repository.dart`/`triage_result_view.dart`/`triage_result_controller.dart`/`recharge_page.dart`(支付轮询范式)/`pawcoin_controller.dart`**（Dev Notes 已附）。**无迁移。**
 
-- [ ] **T1 前端：模型 + 端点 + repository**（AC1）
-  - [ ] `TriageResult` 加 `bool? locked` / `String? unlockSource`（或 `UnlockSource?` 枚举）+ `fromJson` 解析 + `copyWith` 带上。**L0**
-  - [ ] `ApiPaths`：`triageUnlock(int id)` / `freeQuota`。**L0**
-  - [ ] `TriageRepository.unlockTriage(int id, UnlockMethod method)` → `UnlockResult{bool unlocked, TriageResult? result, PaymentInfo? payment}`；`fetchFreeQuota()` → `FreeQuotaView{int limit, used, remaining}`。`DioTriageRepository` 实现 + provider 不变。**L0**
-- [ ] **T2 前端：paywall widget（blur + CTA + 红色无锁）**（AC2/AC3）
-  - [ ] 新 `presentation/widgets/triage_paywall.dart`：锁定态详建占位/blur + CTA 按钮「Buka dengan PawCoin atau Rp10.000」；红色分支绝不渲染 paywall。**L0**
-  - [ ] `triage_result_view.dart` 详建区接入：`result.dangerLevel!=red && (result.locked==true)` → 渲染 paywall 替代/覆盖详建；否则原详建。安全免费部分（level/observation/emergency/disclaimer）渲染不变。**L0**
-- [ ] **T3 前端：解锁方式 sheet + 控制器**（AC4/AC5）
-  - [ ] `presentation/widgets/unlock_method_sheet.dart`：三方式（免费额度 `remaining` / PawCoin 余额 / 现金），可用性按 `remaining>0` / `balance>=price` 判定。**L0**
-  - [ ] `domain/triage_unlock_controller.dart`（Notifier/AsyncNotifier）：`unlock(id, method)` → 免费/PawCoin 同步（成功用 result 刷新 `triageResultProvider` 或结果页本地态，去 blur）；现金 → 拿 payment、进入轮询（复用 `pollTriage` 直到 `locked==false` 或超时）。409（额度/余额不足）→ 暴露错误态给 UI 友好提示。**L0**
-- [ ] **T4 前端：i18n**（AC2/AC6）
-  - [ ] `app_en.arb`/`app_id.arb` 加：CTA、方式名（免费额度/剩余、PawCoin/余额、现金 QRIS/DANA）、额度不足/余额不足提示、读屏语义串（「详建已锁定，解锁后可见」）、价格模板。`flutter gen-l10n`。**L0**
-- [ ] **T5 测试**（AC2-6）
-  - [ ] widget `test/triage/triage_paywall_test.dart`：黄色 locked→显 blur+CTB、安全部分（时效/免责）可见、详建真文字不在 tree（读屏 `ExcludeSemantics`）；绿色 locked→同；**红色→无 paywall、详建可见**（头等）；unlocked（locked=false）→无 paywall、详建可见。**L0**
-  - [ ] widget/unit `test/triage/triage_unlock_controller_test.dart`（fake repo）：免费额度 remaining>0 可选、扣成功刷新已解锁；PawCoin balance>=price 可选；额度/余额不足 409 → 错误态不崩；现金 → 进入轮询态。**L0**
-  - [ ] `flutter analyze` 0 警告 + `flutter test` 绿。**L0**（L2 模拟器三态视觉留本地）
+- [x] **T1 前端：模型 + 端点 + repository**（AC1）
+  - [x] `TriageResult` 加 `bool? locked` / `String? unlockSource`（或 `UnlockSource?` 枚举）+ `fromJson` 解析 + `copyWith` 带上。**L0**
+  - [x] `ApiPaths`：`triageUnlock(int id)` / `freeQuota`。**L0**
+  - [x] `TriageRepository.unlockTriage(int id, UnlockMethod method)` → `UnlockResult{bool unlocked, TriageResult? result, PaymentInfo? payment}`；`fetchFreeQuota()` → `FreeQuotaView{int limit, used, remaining}`。`DioTriageRepository` 实现 + provider 不变。**L0**
+- [x] **T2 前端：paywall widget（blur + CTA + 红色无锁）**（AC2/AC3）
+  - [x] 新 `presentation/widgets/triage_paywall.dart`：锁定态详建占位/blur + CTA 按钮「Buka dengan PawCoin atau Rp10.000」；红色分支绝不渲染 paywall。**L0**
+  - [x] `triage_result_view.dart` 详建区接入：`result.dangerLevel!=red && (result.locked==true)` → 渲染 paywall 替代/覆盖详建；否则原详建。安全免费部分（level/observation/emergency/disclaimer）渲染不变。**L0**
+- [x] **T3 前端：解锁方式 sheet + 控制器**（AC4/AC5）
+  - [x] `presentation/widgets/unlock_method_sheet.dart`：三方式（免费额度 `remaining` / PawCoin 余额 / 现金），可用性按 `remaining>0` / `balance>=price` 判定。**L0**
+  - [x] `domain/triage_unlock_controller.dart`（Notifier/AsyncNotifier）：`unlock(id, method)` → 免费/PawCoin 同步（成功用 result 刷新 `triageResultProvider` 或结果页本地态，去 blur）；现金 → 拿 payment、进入轮询（复用 `pollTriage` 直到 `locked==false` 或超时）。409（额度/余额不足）→ 暴露错误态给 UI 友好提示。**L0**
+- [x] **T4 前端：i18n**（AC2/AC6）
+  - [x] `app_en.arb`/`app_id.arb` 加：CTA、方式名（免费额度/剩余、PawCoin/余额、现金 QRIS/DANA）、额度不足/余额不足提示、读屏语义串（「详建已锁定，解锁后可见」）、价格模板。`flutter gen-l10n`。**L0**
+- [x] **T5 测试**（AC2-6）
+  - [x] widget `test/triage/triage_paywall_test.dart`：黄色 locked→显 blur+CTB、安全部分（时效/免责）可见、详建真文字不在 tree（读屏 `ExcludeSemantics`）；绿色 locked→同；**红色→无 paywall、详建可见**（头等）；unlocked（locked=false）→无 paywall、详建可见。**L0**
+  - [x] widget/unit `test/triage/triage_unlock_controller_test.dart`（fake repo）：免费额度 remaining>0 可选、扣成功刷新已解锁；PawCoin balance>=price 可选；额度/余额不足 409 → 错误态不崩；现金 → 进入轮询态。**L0**
+  - [x] `flutter analyze` 0 警告 + `flutter test` 绿。**L0**（L2 模拟器三态视觉留本地）
 
 ## Dev Notes
 
@@ -120,14 +120,40 @@ so that 我知道免费看到什么、付费解锁什么。
 
 ### Agent Model Used
 
-（dev-story 时填）
+Claude Opus 4.8 (1M context)
 
 ### Debug Log References
 
+- 前端 L0：`test/triage/triage_paywall_test.dart` **12 tests passed**（isDetailLocked 5 含红色永不锁头等 + paywall 渲染 2 + 控制器 5）；全 `test/triage` + `test/l10n` 回归 **59 passed**（含补 3 个既有 fake repo 的新方法）。
+- `flutter analyze`（全项目）：**No issues found**。`flutter gen-l10n` 成功（+15 键 en/id）。
+- L2 模拟器三态视觉（锁定/解锁/红色无锁）+ 现金真付走通留本地。
+
 ### Completion Notes List
 
+- **AC1** `TriageResult` 加 `locked`/`unlockSource` + `fromJson`/`copyWith` + `isDetailLocked` getter；`ApiPaths.triageUnlock(id)`/`freeQuota`；repository `unlockTriage`/`fetchFreeQuota` + `UnlockMethod`/`UnlockResult`/`PaymentInfo`/`FreeQuotaView` 类型。✅ L0
+- **AC2** `TriagePaywall` widget：**占位骨架（非模糊真文字）** + 锁图标 + 锁定标题 + CTA「Buka dengan PawCoin atau Rp10.000」（`formatIdr` 千分位）；接入 `triage_result_view` 详建卡（`result.isDetailLocked && triageId!=null` → paywall）；安全免费部分（header/observation/emergency/disclaimer）渲染不变。✅ L0
+- **AC3【安全攸关】** 红色永不锁双保险：`isDetailLocked = done && locked==true && dangerLevel!=red`（模型层）+ 结果页红色早返（line 41，paywall 前）；`triage_paywall_test` 头等断言「红色+locked→isDetailLocked=false」绿。✅ L0
+- **AC4** `unlock_method_sheet`：并行读 `/me/free-quota`(remaining) + `pawCoinProvider`(balance)，`remaining>0`/`balance>=price` 判可用（置灰）；`TriageUnlockController.unlock` 免费/PawCoin 同步 → `unlocked` 态用返回 result 刷新去 paywall（`_resolveResult` swap）；409 → `errorKind`(quotaExhausted/insufficientBalance) → SnackBar 友好提示不崩。✅ L0
+- **AC5** 现金 → `waitingPayment` + payment（token）；真到账轮询 `pollTriage` 至 `locked==false` 复用既有端点（L2；stub 无真付，L0 测到「进入 waitingPayment」为止）。✅ L0 部分
+- **AC6** 无障碍：占位骨架 `ExcludeSemantics` 读屏隐藏 + 整卡 `Semantics(label: 详建已锁定)`；双语 en/id + gen-l10n；analyze 0 警告、test 绿。✅ L0
+- **回归**：接口扩容致 3 个既有 fake TriageRepository（triage_controller/upload_controller/upload_page 测试）补 `unlockTriage`/`fetchFreeQuota` stub。控制器非 family（`FamilyNotifier` 本版不存在）→ 用 `Notifier` + state 带 triageId 区分，照既有 `TriageController` 范式。
+
 ### File List
+
+**前端（新增）**
+- `features/triage/domain/triage_unlock_controller.dart`
+- `features/triage/presentation/widgets/triage_paywall.dart`
+- `features/triage/presentation/widgets/unlock_method_sheet.dart`
+- `test/triage/triage_paywall_test.dart`（L0, 12）
+
+**前端（修改）**
+- `features/triage/data/triage_repository.dart`（+locked/unlockSource/isDetailLocked + UnlockMethod/UnlockResult/PaymentInfo/FreeQuotaView + unlockTriage/fetchFreeQuota）
+- `features/triage/presentation/triage_result_view.dart`（详建区接 paywall + 解锁态 swap + 红色早返注释）
+- `core/network/api_paths.dart`（+triageUnlock/freeQuota）
+- `l10n/app_en.arb` / `l10n/app_id.arb`（+15 解锁文案键）+ 生成产物
+- `test/triage/triage_controller_test.dart` / `triage_upload_controller_test.dart` / `triage_upload_page_widget_test.dart`（回归：fake repo 补新方法）
 
 ### Change Log
 
 - 2026-07-13：create-story 定稿 Story 2.4（解锁前端 paywall：TriageResult 加 locked/unlockSource + 锁定态占位遮罩 + CTA + 解锁方式 sheet[免费额度/PawCoin/现金] + 免费/PawCoin 同步解锁 + 现金复用轮询 + 红色无锁双保险 + 读屏隐藏；纯前端无迁移）；Epic 2 收官；Status → ready-for-dev。
+- 2026-07-13：dev-story 实现完成。模型/端点/repository + TriagePaywall(占位非模糊) + unlock_method_sheet + TriageUnlockController(免费/PawCoin 同步 + 现金 waitingPayment + 409 分类) + 结果页接入(红色早返双保险) + 无障碍 ExcludeSemantics + i18n；前端 L0 12 新 tests + 59 triage/l10n 回归全绿，analyze 干净；L2 三态视觉+现金真付待本地；Status → review。

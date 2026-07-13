@@ -8,9 +8,11 @@ import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../data/triage_repository.dart';
 import '../domain/triage_archive.dart';
+import '../domain/triage_unlock_controller.dart';
 import '../domain/triage_upload_controller.dart';
 import '../domain/triage_wording_guard.dart';
 import 'triage_red_result.dart';
+import 'widgets/triage_paywall.dart';
 
 /// Debug 截图钩子一次性 guard（DEV_ARCHIVE_PROMPT 在结果就绪后自动弹存档确认，截 archive-confirm 用）。
 bool _devArchiveShown = false;
@@ -32,12 +34,21 @@ class TriageResultView extends ConsumerWidget {
   final TriageResult result;
   final int? triageId;
 
+  /// 解锁后用已解锁结果覆盖（Story 2.4）：现金/同步解锁成功 → 结果页去 paywall、显详建。
+  TriageResult _resolveResult(WidgetRef ref) {
+    final int? id = triageId;
+    if (id == null) return result;
+    final TriageUnlockState st = ref.watch(triageUnlockControllerProvider);
+    return st.isUnlockedFor(id) ? st.result! : result;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    final TriageResult result = _resolveResult(ref);
     final level = result.dangerLevel;
 
-    // 🔒 红色走 4.5 全屏强提醒（自底滑起 overlay）+ 关闭后保留零兽医/零变现红色摘要。
+    // 🔒 红色走 4.5 全屏强提醒（自底滑起 overlay）+ 关闭后保留零兽医/零变现红色摘要。红色永不锁（不接 paywall）。
     if (level == DangerLevel.red || level == null) {
       return TriageRedResult(result: result, triageId: triageId);
     }
@@ -93,24 +104,30 @@ class TriageResultView extends ConsumerWidget {
                 ),
                 const SizedBox(height: 12),
               ],
-              // 居家护理建议（按行/「•」拆为要点）。
+              // 居家护理建议（SARAN PERAWATAN）。Story 2.4：锁定态（非红 + 后端 locked）→ paywall 占位 + CTA；
+              // 否则原详建要点。安全免费部分（摘要/观察/免责/CTA）不受影响。
               _SectionCard(
                 label: isYellow ? l10n.triageCareLabel : l10n.triageHomeCareLabel,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (final line in _bullets(advice)) _Bullet(line, accent: accent),
-                    if (isYellow && result.medicationRef != null) ...<Widget>[
-                      const SizedBox(height: 10),
-                      Text(l10n.triageMedicationRefLabel,
-                          style: const TextStyle(
-                              fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.muted)),
-                      const SizedBox(height: 3),
-                      Text(result.medicationRef!,
-                          style: const TextStyle(fontSize: 13, height: 1.5, color: AppColors.ink)),
-                    ],
-                  ],
-                ),
+                child: (result.isDetailLocked && triageId != null)
+                    ? TriagePaywall(triageId: triageId!)
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (final line in _bullets(advice)) _Bullet(line, accent: accent),
+                          if (isYellow && result.medicationRef != null) ...<Widget>[
+                            const SizedBox(height: 10),
+                            Text(l10n.triageMedicationRefLabel,
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.muted)),
+                            const SizedBox(height: 3),
+                            Text(result.medicationRef!,
+                                style: const TextStyle(
+                                    fontSize: 13, height: 1.5, color: AppColors.ink)),
+                          ],
+                        ],
+                      ),
               ),
               // 黄色：观察协议三要素（指标 chips + 时间窗口卡 + 升级触发卡）。
               if (isYellow && (result.observation?.hasContent ?? false)) ...<Widget>[

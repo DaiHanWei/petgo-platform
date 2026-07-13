@@ -70,7 +70,7 @@
 # - 红色超额/接单未支付限速阈值(9-6，仅埋点，上线后定)
 
 generated: 2026-07-11
-last_updated: 2026-07-13  # 2-4 create-story->ready-for-dev(前端paywall/锁定态/三方式解锁/红色无锁,纯前端无迁移);epic-2 收官 story;epic-2 in-progress
+last_updated: 2026-07-13  # 2-4 dev L0全绿(12新+59回归)->review;Epic2 全4 story review(L1/L2待本地);epic-2 in-progress
 project: petgo-platform-v1.1
 project_key: NOKEY
 tracking_system: file-system
@@ -92,7 +92,7 @@ development_status:
   2-1-每月免费额度模型与判定: review
   2-2-ai结果分字段下发与锁定态: review
   2-3-付费额度解锁流: review
-  2-4-解锁前端与paywall-ui: ready-for-dev
+  2-4-解锁前端与paywall-ui: review
   epic-2-retrospective: optional
 
   # ---- Epic 3: 兽医咨询计费流(含兽医端) ----
