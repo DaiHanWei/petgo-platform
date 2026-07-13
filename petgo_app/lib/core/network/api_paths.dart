@@ -93,6 +93,10 @@ class ApiPaths {
   static String consultationResume(String token) => '$base/consultations/$token/resume';
   static String consultationCancel(String token) => '$base/consultations/$token/cancel';
 
+  /// 客服工单（Story 4.2，消费 4-1 后端）。建单 POST / 我的工单列表 GET / 详情 GET（owner 404）。
+  static const String supportTickets = '$base/support-tickets';
+  static String supportTicketDetail(String token) => '$base/support-tickets/$token';
+
   /// App 版本信息（Story 6.5，公开可读，App 内更新提醒）。
   static const String appVersion = '$base/app-version';
 

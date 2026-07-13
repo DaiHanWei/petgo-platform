@@ -20,6 +20,9 @@ import '../../features/me/presentation/delete_account_page.dart';
 import '../../features/me/presentation/language_settings_page.dart';
 import '../../features/me/presentation/me_page.dart';
 import '../../features/me/presentation/settings_page.dart';
+import '../../features/support/presentation/my_tickets_page.dart';
+import '../../features/support/presentation/ticket_compose_page.dart';
+import '../../features/support/presentation/ticket_detail_page.dart';
 import '../../features/pawcoin/presentation/pawcoin_page.dart';
 import '../../features/pawcoin/presentation/recharge_page.dart';
 import '../../features/profile/presentation/growth_archive_page.dart';
@@ -225,6 +228,13 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       ),
       // 直连问诊病例填写页（Story F）：症状 + 照片，提交才发起 DIRECT 会话。
       GoRoute(path: '/consult/case', builder: (c, s) => const ConsultCaseFormPage()),
+      // 客服工单（Story 4.2，/me 受控前缀）。/new 必须在 /:token 之前注册，否则 token 段会吞 'new'。
+      GoRoute(path: '/me/support-tickets', builder: (c, s) => const MyTicketsPage()),
+      GoRoute(path: '/me/support-tickets/new', builder: (c, s) => const TicketComposePage()),
+      GoRoute(
+        path: '/me/support-tickets/:token',
+        builder: (c, s) => TicketDetailPage(token: s.pathParameters['token']!),
+      ),
       GoRoute(
         path: '/consult/waiting/:id',
         builder: (c, s) => ConsultWaitingPage(sessionId: int.parse(s.pathParameters['id']!)),

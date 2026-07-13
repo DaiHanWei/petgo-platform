@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'app_toast.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -50,7 +51,46 @@ Future<void> showCustomerServiceSheet(BuildContext context) {
               l10n.csSheetTitle,
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
+            const SizedBox(height: 16),
+            // 在线提交投诉工单（Story 4.2）：主 CTA + 我的工单入口，保留下方 WhatsApp/邮箱直连。
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                key: const ValueKey('csSubmitComplaint'),
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  context.push('/me/support-tickets/new');
+                },
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.mint,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                icon: const Icon(Icons.edit_note_outlined, size: 20),
+                label: Text(l10n.csSubmitComplaint),
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                key: const ValueKey('csMyTickets'),
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  context.push('/me/support-tickets');
+                },
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.mint,
+                  side: const BorderSide(color: AppColors.lineViolet),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                icon: const Icon(Icons.list_alt_outlined, size: 20),
+                label: Text(l10n.csMyTickets),
+              ),
+            ),
             const SizedBox(height: 18),
+            const Divider(height: 1, thickness: 1, color: AppColors.line2),
+            const SizedBox(height: 14),
             // WhatsApp：绿底 + 真 WhatsApp logo，号码可复制。
             _CsContactRow(
               glyph: SvgPicture.asset(
