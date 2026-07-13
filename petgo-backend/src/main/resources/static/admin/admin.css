@@ -248,3 +248,9 @@ form.inline { display: inline; margin: 0; }
 .summary { background: var(--surface); padding: 16px; border: 1px solid var(--line);
     border-radius: var(--radius-sm); margin-bottom: 18px; max-width: 480px; }
 .summary .avg { font-size: 28px; font-weight: 700; color: var(--brand); }
+
+/* ===== 图片灯箱 ===== */
+/* 透明背板 + 居中大图，点任意处关闭（admin.js 动态注入 dialog.lightbox）。 */
+dialog.lightbox { border: none; padding: 0; background: transparent; max-width: 92vw; max-height: 92vh; }
+dialog.lightbox::backdrop { background: rgba(0, 0, 0, .8); }
+dialog.lightbox img { display: block; max-width: 92vw; max-height: 92vh; object-fit: contain; cursor: zoom-out; }

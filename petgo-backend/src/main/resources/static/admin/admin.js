@@ -31,6 +31,24 @@ document.addEventListener('click', function (e) {
     }
 });
 
+// 图片灯箱（内容管理等）：点带 data-lightbox 的缩略图 → 原生 <dialog> 全屏看大图（非下载）。
+// 惰性建一个通用 dialog，全后台复用；点任意处关闭。HTMX 换行后仍生效（事件委托在 document）。
+document.addEventListener('click', function (e) {
+    var thumb = e.target.closest && e.target.closest('img[data-lightbox]');
+    if (!thumb) return;
+    var dlg = document.getElementById('admin-lightbox');
+    if (!dlg) {
+        dlg = document.createElement('dialog');
+        dlg.id = 'admin-lightbox';
+        dlg.className = 'lightbox';
+        dlg.innerHTML = '<img alt=""/>';
+        dlg.addEventListener('click', function () { dlg.close(); });
+        document.body.appendChild(dlg);
+    }
+    dlg.querySelector('img').src = thumb.src;
+    if (typeof dlg.showModal === 'function') dlg.showModal();
+});
+
 document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('dialog[data-autoopen="true"]').forEach(function (d) {
         if (typeof d.showModal === 'function') d.showModal();

@@ -7,6 +7,7 @@
     <title th:text="#{admin.content.title}">内容管理 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <script th:src="@{/admin/vendor/htmx.min.js}"></script>
+    <script th:src="@{/admin/admin.js}"></script>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
@@ -90,10 +91,8 @@
             <td class="muted cell-wide" th:text="${#strings.abbreviate(c.textPreview(), 60)}">…</td>
             <td>
                 <span th:if="${c.imageUrls() == null or #lists.isEmpty(c.imageUrls())}" class="muted">—</span>
-                <a th:each="img : ${c.imageUrls()}" th:href="${img}" target="_blank" rel="noopener">
-                    <img th:src="${img}" alt="" loading="lazy"
-                         style="width:48px;height:48px;object-fit:cover;border-radius:4px;margin:2px;vertical-align:middle"/>
-                </a>
+                <img th:each="img : ${c.imageUrls()}" th:src="${img}" alt="" loading="lazy" data-lightbox
+                     style="width:48px;height:48px;object-fit:cover;border-radius:4px;margin:2px;vertical-align:middle;cursor:zoom-in"/>
             </td>
             <td th:text="${#temporals.format(c.createdAt(), 'yyyy-MM-dd HH:mm')}">-</td>
             <td>
