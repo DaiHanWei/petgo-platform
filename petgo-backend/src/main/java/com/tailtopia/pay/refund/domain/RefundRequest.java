@@ -82,6 +82,26 @@ public class RefundRequest {
     @Column(name = "account_holder_name", length = 512)
     private String accountHolderName;
 
+    // 第二段审批留痕（Story 4.6）
+    @Column(name = "approval_note", length = 500)
+    private String approvalNote;
+
+    @Column(name = "reject_reason", length = 500)
+    private String rejectReason;
+
+    /** Iris 出款凭证（disbursementRef，非 PII，可留痕）。 */
+    @Column(name = "payment_proof", length = 128)
+    private String paymentProof;
+
+    @Column(name = "approved_at")
+    private Instant approvedAt;
+
+    @Column(name = "rejected_at")
+    private Instant rejectedAt;
+
+    @Column(name = "paid_at")
+    private Instant paidAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -141,6 +161,35 @@ public class RefundRequest {
      */
     public void markInstantPawCoinRefunded() {
         this.approvalStatus = ApprovalStatus.DONE;
+    }
+
+    /** ②主管审批通过（Story 4.6，approver 角色 + 必填备注 + 时间戳）。{@code PENDING_APPROVAL→APPROVED}。 */
+    public void approveBySupervisor(long approverAdminId, String note) {
+        this.approvalStatus = ApprovalStatus.APPROVED;
+        this.approverAdminId = approverAdminId;
+        this.approvalNote = note;
+        this.approvedAt = Instant.now();
+    }
+
+    /** ②主管驳回（Story 4.6，+ 必填理由 + 时间戳）。{@code PENDING_APPROVAL→REJECTED}。订单回落由 service 编排。 */
+    public void rejectBySupervisor(long approverAdminId, String reason) {
+        this.approvalStatus = ApprovalStatus.REJECTED;
+        this.approverAdminId = approverAdminId;
+        this.rejectReason = reason;
+        this.rejectedAt = Instant.now();
+    }
+
+    /** ②财务发起打款（Story 4.6）：{@code APPROVED→PROCESSING}（disburse 调用前置，防重复出款窗口）。 */
+    public void markProcessing() {
+        this.approvalStatus = ApprovalStatus.PROCESSING;
+    }
+
+    /** ②财务打款完成（Story 4.6，payer 角色 + Iris 凭证 + 时间戳）。{@code →DONE}。 */
+    public void completePayout(long payerAdminId, String paymentProof) {
+        this.approvalStatus = ApprovalStatus.DONE;
+        this.payerAdminId = payerAdminId;
+        this.paymentProof = paymentProof;
+        this.paidAt = Instant.now();
     }
 
     @PrePersist
@@ -217,6 +266,30 @@ public class RefundRequest {
 
     public String getAccountHolderName() {
         return accountHolderName;
+    }
+
+    public String getApprovalNote() {
+        return approvalNote;
+    }
+
+    public String getRejectReason() {
+        return rejectReason;
+    }
+
+    public String getPaymentProof() {
+        return paymentProof;
+    }
+
+    public Instant getApprovedAt() {
+        return approvedAt;
+    }
+
+    public Instant getRejectedAt() {
+        return rejectedAt;
+    }
+
+    public Instant getPaidAt() {
+        return paidAt;
     }
 
     public Instant getCreatedAt() {

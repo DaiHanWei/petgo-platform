@@ -15,11 +15,18 @@ import com.tailtopia.pay.refund.domain.PayoutChannel;
 import com.tailtopia.pay.refund.domain.RefundRequest;
 import com.tailtopia.pay.refund.dto.MyRefundView;
 import com.tailtopia.pay.refund.repository.RefundRequestRepository;
+import com.tailtopia.pay.domain.LedgerAccount;
+import com.tailtopia.pay.service.LedgerLine;
+import com.tailtopia.pay.service.LedgerService;
 import com.tailtopia.pay.service.PawCoinWalletService;
 import com.tailtopia.profile.service.CardTokenGenerator;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.pay.DisburseRequest;
+import com.tailtopia.shared.pay.DisburseResult;
+import com.tailtopia.shared.pay.PaymentGateway;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,10 +50,13 @@ public class RefundService {
     private final RefundAuditRecorder auditRecorder;
     private final NotificationService notifications;
     private final PawCoinWalletService wallet;
+    private final PaymentGateway gateway;
+    private final LedgerService ledger;
 
     public RefundService(RefundRequestRepository refunds, ConsultOrderRepository orders,
             CardTokenGenerator tokenGenerator, AdminAuditService audit, RefundAuditRecorder auditRecorder,
-            NotificationService notifications, PawCoinWalletService wallet) {
+            NotificationService notifications, PawCoinWalletService wallet, PaymentGateway gateway,
+            LedgerService ledger) {
         this.refunds = refunds;
         this.orders = orders;
         this.tokenGenerator = tokenGenerator;
@@ -54,6 +64,8 @@ public class RefundService {
         this.auditRecorder = auditRecorder;
         this.notifications = notifications;
         this.wallet = wallet;
+        this.gateway = gateway;
+        this.ledger = ledger;
     }
 
     /**
@@ -232,6 +244,97 @@ public class RefundService {
             throw AppException.conflict("该订单非 QRIS 支付，无需填真钱收款账户");
         }
         fillPayout(refundToken, channel, payoutAccount, accountHolderName);
+    }
+
+    // ========== 退款第二段审批闭环（Story 4.6，主管 + 财务）==========
+
+    /**
+     * ②主管<b>审批通过</b>（Story 4.6，approver 角色，AB-5E）。职责分离 {@code approver≠submitter}（含 SUPER_ADMIN 不豁免）；
+     * 仅 {@code approval_status=PENDING_APPROVAL} 可（重复 409）；{@code approval_note} 必填。{@code →APPROVED}，
+     * 订单仍 REFUNDING 等财务打款。不发通知（用户在退款列表见进度）。
+     */
+    @Transactional
+    public void approveRefund(String refundToken, long approverAdminId, String note) {
+        if (note == null || note.isBlank()) {
+            throw AppException.validation("审批备注必填");
+        }
+        RefundRequest r = require(refundToken);
+        guardDutySeparation(approverAdminId, r.getSubmitterAdminId(), "提交人(客服)", refundToken);
+        requirePendingApproval(r);
+        r.approveBySupervisor(approverAdminId, note);
+        audit.record(approverAdminId, AuditActions.REFUND_APPROVED, "refund_request", refundToken,
+                "退款申请审批通过");
+    }
+
+    /**
+     * ②主管<b>驳回</b>（Story 4.6，A-2 UX 不撒谎）。仅 PENDING_APPROVAL 可；{@code reject_reason} 必填。
+     * {@code →REJECTED} + 订单 CAS {@code REFUNDING→COMPLETED} 置 {@code refund_rejected} + 发 {@code REFUND_REJECTED}
+     * 通知给用户（REQUIRES_NEW，无 PII）+ 审计。
+     */
+    @Transactional
+    public void rejectRefund(String refundToken, long approverAdminId, String reason) {
+        if (reason == null || reason.isBlank()) {
+            throw AppException.validation("驳回理由必填");
+        }
+        RefundRequest r = require(refundToken);
+        guardDutySeparation(approverAdminId, r.getSubmitterAdminId(), "提交人(客服)", refundToken);
+        requirePendingApproval(r);
+        r.rejectBySupervisor(approverAdminId, reason);
+        orders.markRefundRejectedFromRefunding(r.getOrderId()); // CAS REFUNDING→COMPLETED+refund_rejected
+        notifications.send(r.getUserId(), NotificationType.REFUND_REJECTED,
+                "退款申请未通过", "你的退款申请未通过审核，如有疑问可在工单中联系客服。",
+                NotificationType.REFUND_REJECTED.name(), refundToken);
+        audit.record(approverAdminId, AuditActions.REFUND_APPROVAL_REJECTED, "refund_request", refundToken,
+                "退款申请主管驳回（订单回落 COMPLETED+refund_rejected，已通知用户）");
+    }
+
+    /**
+     * ②财务<b>Iris 打款</b>（Story 4.6，payer 角色）。职责分离 {@code payer≠submitter 且 payer≠approver}（含 SUPER_ADMIN 不豁免）；
+     * 仅 {@code approval_status=APPROVED} 可（已 DONE 幂等短路）；订单渠道须 QRIS（PawCoin 4-5 已即时退，防御）。
+     * {@code →PROCESSING} → 解密 payout PII 调 {@code gateway.disburse}（幂等键）→ 成功：{@code →DONE} + payment_proof +
+     * 订单 CAS {@code markRefunded} + {@code REFUND_OUT} 双分录（DEBIT REFUND_OUT / CREDIT CASH_IN，net）+ 审计。
+     * <b>三闸幂等</b>：disburse 键 + 订单 CAS + ledger 键。
+     */
+    @Transactional
+    public void payoutRefund(String refundToken, long payerAdminId) {
+        RefundRequest r = require(refundToken);
+        if (r.getApprovalStatus() == ApprovalStatus.DONE) {
+            return; // 已打款，幂等短路
+        }
+        guardDutySeparation(payerAdminId, r.getSubmitterAdminId(), "提交人(客服)", refundToken);
+        guardDutySeparation(payerAdminId, r.getApproverAdminId(), "审批人(主管)", refundToken);
+        if (r.getApprovalStatus() != ApprovalStatus.APPROVED) {
+            throw AppException.conflict("退款申请未经主管审批通过，不能打款");
+        }
+        ConsultOrder order = orders.findById(r.getOrderId())
+                .orElseThrow(() -> AppException.notFound("订单不存在"));
+        if (order.getPayChannel() != PayChannel.QRIS) {
+            throw AppException.conflict("非 QRIS 订单不走财务打款（PawCoin 已即时退）");
+        }
+        r.markProcessing();
+        // 解密 payout PII（converter 透明）调 Iris 出款——PII 绝不入日志/审计。幂等键防重复出款。
+        DisburseResult res = gateway.disburse(new DisburseRequest(
+                refundToken, r.getNetAmount(), "IDR", r.getPayoutChannel().name(),
+                r.getPayoutAccount(), r.getAccountHolderName()));
+        if (!res.isCompleted()) {
+            // 未即时完成（异步/失败）→ 抛出令事务回滚（保持 APPROVED，可重试）。OPEN-5：V1 sandbox 按同步处理。
+            throw AppException.serviceUnavailable("退款出款未即时完成，请稍后重试");
+        }
+        r.completePayout(payerAdminId, res.disbursementRef());
+        orders.markRefunded(order.getId()); // CAS REFUNDING→REFUNDED（返 0=已退，跳过）
+        // REFUND_OUT 双分录（真钱退款流出）：DEBIT REFUND_OUT net / CREDIT CASH_IN net。借贷平 + 幂等键。
+        ledger.post(UUID.randomUUID().toString(), List.of(
+                LedgerLine.debit(LedgerAccount.REFUND_OUT, r.getNetAmount(), null, "refund_request", r.getId()),
+                LedgerLine.credit(LedgerAccount.CASH_IN, r.getNetAmount(), null, "refund_request", r.getId())),
+                "refund-out-" + refundToken);
+        audit.record(payerAdminId, AuditActions.REFUND_PAYOUT_RECORDED, "refund_request", refundToken,
+                "退款打款完成（Iris ref=" + res.disbursementRef() + "）");
+    }
+
+    private void requirePendingApproval(RefundRequest r) {
+        if (r.getApprovalStatus() != ApprovalStatus.PENDING_APPROVAL) {
+            throw AppException.conflict("退款申请不在待审批态，不可重复处理");
+        }
     }
 
     // ---- 用户端门控守卫 ----

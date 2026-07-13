@@ -16,4 +16,7 @@ public interface RefundRequestRepository extends JpaRepository<RefundRequest, Lo
 
     /** 用户端「我的退款」列表（Story 4.5，仅本人，倒序）。 */
     List<RefundRequest> findByUserIdOrderByCreatedAtDesc(long userId);
+
+    /** 后台退款管理列表（Story 4.6，全量倒序）。 */
+    List<RefundRequest> findAllByOrderByCreatedAtDesc();
 }

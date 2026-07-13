@@ -31,6 +31,18 @@ public class StubPaymentGateway implements PaymentGateway {
     }
 
     @Override
+    public DisburseResult disburse(DisburseRequest request) {
+        // 确定性伪出款单号（由 refundRef 派生）；同步返 COMPLETED（sandbox/L1 状态机可验）。
+        // rawMeta 明示为桩，**绝不含 PII（账号/户名）** —— 出款 PII 只进真实网关，桩不回显。
+        String disbursementRef = "stub-payout-" + request.refundRef();
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("stub", true);
+        meta.put("channel", request.channel());
+        meta.put("amount", request.amount());
+        return new DisburseResult(disbursementRef, "COMPLETED", meta);
+    }
+
+    @Override
     public boolean verifyCallback(Map<String, Object> body) {
         String expected = props.getCallbackToken();
         if (expected == null || expected.isBlank()) {

@@ -55,6 +55,20 @@ public interface ConsultOrderRepository extends JpaRepository<ConsultOrder, Long
     int markRefundRejected(@Param("id") long id);
 
     /**
+     * 主管驳回退款回落 CAS（Story 4.6，A-2 UX 不撒谎）：{@code REFUNDING→COMPLETED} 并置 {@code refund_rejected=true}
+     * （用户已填收款进第二段，主管驳回 → 订单退回已完成态、标记申请过但未通过）。返回行数（1=已回落；0=订单非 REFUNDING，跳过）。
+     * <b>与 4-4 的 {@link #markRefundRejected}(COMPLETED→COMPLETED) 是不同源态两条 CAS</b>：4-4 客服驳回时订单还是 COMPLETED；本条主管驳回时订单已 REFUNDING。
+     */
+    @Modifying
+    @Query("update ConsultOrder o "
+            + "set o.status = com.tailtopia.consult.domain.ConsultOrderStatus.COMPLETED, "
+            + "o.refundRejected = true, "
+            + "o.updatedAt = CURRENT_TIMESTAMP "
+            + "where o.id = :id "
+            + "and o.status = com.tailtopia.consult.domain.ConsultOrderStatus.REFUNDING")
+    int markRefundRejectedFromRefunding(@Param("id") long id);
+
+    /**
      * 退款完成 CAS（Story 3.8，PawCoin 立即到账后）：{@code REFUNDING→REFUNDED}。返回行数（1=完成）。
      * QRIS 留 REFUNDING（实际 Midtrans 打款由 Epic 4 完成 → REFUNDED）。
      */

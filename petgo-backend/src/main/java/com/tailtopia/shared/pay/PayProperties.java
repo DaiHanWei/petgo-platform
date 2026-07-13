@@ -32,6 +32,15 @@ public class PayProperties {
     private int timeoutSeconds = 10;
 
     /**
+     * Midtrans Iris/Disbursement API Key（Story 4.6 退款出款；env {@code MIDTRANS_IRIS_API_KEY} 注入，
+     * 绝不入库/落日志）。与收款侧 {@link #serverKey} 独立（Iris 是独立产品）。mode=live 出款时必需（缺则出款拒）。
+     */
+    private String irisApiKey = "";
+
+    /** Midtrans Iris API base（默认 sandbox）。 */
+    private String irisBaseUrl = "https://app.sandbox.midtrans.com/iris";
+
+    /**
      * PawCoin 充值是否暂停（Story 1.5，env {@code PAWCOIN_TOPUP_PAUSED}，默认 false）。浮存门槛触发时由
      * <b>运营/工程手动置 true 重启</b>（AB-6C：V1.1 后端不做一键硬暂停，仅暴露此 flag 供前端渲染暂停态）。
      */
@@ -75,6 +84,22 @@ public class PayProperties {
 
     public void setTimeoutSeconds(int timeoutSeconds) {
         this.timeoutSeconds = timeoutSeconds;
+    }
+
+    public String getIrisApiKey() {
+        return irisApiKey;
+    }
+
+    public void setIrisApiKey(String irisApiKey) {
+        this.irisApiKey = irisApiKey;
+    }
+
+    public String getIrisBaseUrl() {
+        return irisBaseUrl;
+    }
+
+    public void setIrisBaseUrl(String irisBaseUrl) {
+        this.irisBaseUrl = irisBaseUrl;
     }
 
     public boolean isTopupPaused() {

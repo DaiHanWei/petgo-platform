@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 import com.tailtopia.admin.account.domain.AdminAccountType;
+import com.tailtopia.admin.refund.service.AdminRefundQueryService;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.pay.refund.service.RefundService;
 import java.util.Arrays;
@@ -23,8 +24,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap;
 
 /**
- * L0：客服退款判定门控（Story 4.4 AC4）——批准/驳回均需 {@code refund.submit}；{@code SUPER_ADMIN} 隐式全权。
- * 无权 → 403（{@link AccessDeniedException}）。service 被 mock，仅验方法级安全表达式。
+ * L0：退款三段职责分离门控（A-1）——客服 need 判定 {@code refund.submit}（Story 4.4）/ 主管审批
+ * {@code refund.approve}（Story 4.6）/ 财务打款 {@code refund.payout}（Story 4.6）；{@code SUPER_ADMIN} 隐式全权。
+ * 无对应权限 → 403（{@link AccessDeniedException}）。service 被 mock，仅验方法级安全表达式。
  */
 class AdminRefundAccessControlTest {
 
@@ -40,8 +42,13 @@ class AdminRefundAccessControlTest {
         }
 
         @Bean
-        AdminRefundController controller(RefundService s) {
-            return new AdminRefundController(s);
+        AdminRefundQueryService adminRefundQueryService() {
+            return mock(AdminRefundQueryService.class);
+        }
+
+        @Bean
+        AdminRefundController controller(RefundService s, AdminRefundQueryService q) {
+            return new AdminRefundController(s, q);
         }
     }
 
@@ -73,41 +80,77 @@ class AdminRefundAccessControlTest {
         return new AdminUserDetails(1L, null, "a@x", null, AdminAccountType.SUPER_ADMIN);
     }
 
-    private void approve() {
-        controller.approve(admin(), "tok-approve", new RedirectAttributesModelMap());
+    private void approveNeed() {
+        controller.approveNeed(admin(), "tok", new RedirectAttributesModelMap());
     }
 
-    private void reject() {
-        controller.reject(admin(), "tok-reject", new RedirectAttributesModelMap());
+    private void rejectNeed() {
+        controller.rejectNeed(admin(), "tok", new RedirectAttributesModelMap());
     }
+
+    private void approveRefund() {
+        controller.approveRefund(admin(), "tok", "note", new RedirectAttributesModelMap());
+    }
+
+    private void rejectRefund() {
+        controller.rejectRefund(admin(), "tok", "reason", new RedirectAttributesModelMap());
+    }
+
+    private void payout() {
+        controller.payout(admin(), "tok", new RedirectAttributesModelMap());
+    }
+
+    // ---- 客服 need 判定：refund.submit（4-4）----
 
     @Test
-    void approveDeniedWithoutRefundSubmit() {
+    void needDecisionRequiresRefundSubmit() {
         auth("ROLE_ADMIN", "refund.approve"); // 有审批权但无提交权
-        assertThatThrownBy(this::approve).isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(this::approveNeed).isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(this::rejectNeed).isInstanceOf(AccessDeniedException.class);
     }
 
     @Test
-    void approveAllowedWithRefundSubmit() {
+    void needDecisionAllowedWithRefundSubmit() {
         auth("ROLE_ADMIN", "refund.submit");
-        assertThatCode(this::approve).doesNotThrowAnyException();
+        assertThatCode(this::approveNeed).doesNotThrowAnyException();
+        assertThatCode(this::rejectNeed).doesNotThrowAnyException();
+    }
+
+    // ---- 主管审批：refund.approve（4-6）----
+
+    @Test
+    void approvalRequiresRefundApprove() {
+        auth("ROLE_ADMIN", "refund.submit"); // 有提交权但无审批权
+        assertThatThrownBy(this::approveRefund).isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(this::rejectRefund).isInstanceOf(AccessDeniedException.class);
     }
 
     @Test
-    void approveAllowedForSuperAdmin() {
+    void approvalAllowedWithRefundApprove() {
+        auth("ROLE_ADMIN", "refund.approve");
+        assertThatCode(this::approveRefund).doesNotThrowAnyException();
+        assertThatCode(this::rejectRefund).doesNotThrowAnyException();
+    }
+
+    // ---- 财务打款：refund.payout（4-6）----
+
+    @Test
+    void payoutRequiresRefundPayout() {
+        auth("ROLE_ADMIN", "refund.approve"); // 有审批权但无打款权
+        assertThatThrownBy(this::payout).isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void payoutAllowedWithRefundPayout() {
+        auth("ROLE_ADMIN", "refund.payout");
+        assertThatCode(this::payout).doesNotThrowAnyException();
+    }
+
+    @Test
+    void superAdminAllowedForAll() {
         auth("ROLE_ADMIN", "ROLE_SUPER_ADMIN");
-        assertThatCode(this::approve).doesNotThrowAnyException();
-    }
-
-    @Test
-    void rejectDeniedWithoutRefundSubmit() {
-        auth("ROLE_ADMIN", "refund.payout"); // 有打款权但无提交权
-        assertThatThrownBy(this::reject).isInstanceOf(AccessDeniedException.class);
-    }
-
-    @Test
-    void rejectAllowedWithRefundSubmit() {
-        auth("ROLE_ADMIN", "refund.submit");
-        assertThatCode(this::reject).doesNotThrowAnyException();
+        assertThatCode(this::approveNeed).doesNotThrowAnyException();
+        assertThatCode(this::approveRefund).doesNotThrowAnyException();
+        assertThatCode(this::payout).doesNotThrowAnyException();
     }
 }

@@ -21,6 +21,13 @@ public interface PaymentGateway {
     /** 发起收款（QRIS / e-wallet）。失败抛 {@link PayException}（仅携安全文案）。 */
     ChargeResult createCharge(ChargeRequest request);
 
+    /**
+     * 发起出款（Story 4.6，退款真钱打款，Midtrans Iris/Disbursement，与收款侧独立）。返回网关出款单号 + 归一化状态。
+     * 失败抛 {@link PayException}（仅携安全文案）。实现<b>绝不 log body / 凭证 / PII（账号/户名）</b>。
+     * 桩实现（{@code mode=stub}）返确定性 ref 供 L0/L1；真实 Iris（{@code mode=live}）属 L2（sandbox 真出款）。
+     */
+    DisburseResult disburse(DisburseRequest request);
+
     /** 验签回调正文；非法（签名不匹配 / 缺字段）返回 {@code false}，调用方转 403。 */
     boolean verifyCallback(Map<String, Object> body);
 

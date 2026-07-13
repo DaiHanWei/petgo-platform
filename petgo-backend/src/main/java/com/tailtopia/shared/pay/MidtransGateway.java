@@ -97,6 +97,98 @@ public class MidtransGateway implements PaymentGateway {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
+    public DisburseResult disburse(DisburseRequest request) {
+        // Iris/Disbursement（独立于收款 Core API）：POST {irisBaseUrl}/api/v1/payouts。
+        // Basic base64(irisApiKey:) 鉴权。beneficiary_account/name 为 PII —— 仅进请求体，绝不 log。
+        if (props.getIrisApiKey() == null || props.getIrisApiKey().isBlank()) {
+            log.warn("退款出款被拒：irisApiKey 未配置");
+            throw new PayException("退款出款网关未配置");
+        }
+        Duration timeout = Duration.ofSeconds(props.getTimeoutSeconds());
+        SimpleClientHttpRequestFactory rf = new SimpleClientHttpRequestFactory();
+        rf.setConnectTimeout(timeout);
+        rf.setReadTimeout(timeout);
+        RestClient iris = RestClient.builder()
+                .baseUrl(props.getIrisBaseUrl())
+                .requestFactory(rf)
+                .build();
+        Map<String, Object> payout = Map.of(
+                "beneficiary_name", request.accountHolderName(),
+                "beneficiary_account", request.payoutAccount(),
+                "beneficiary_bank", request.channel().toLowerCase(),
+                "amount", String.valueOf(request.amount()),
+                "notes", "refund " + request.refundRef());
+        Map<String, Object> body = Map.of("payouts", List.of(payout));
+        Map<String, Object> response;
+        try {
+            response = iris.post()
+                    .uri("/api/v1/payouts")
+                    .header("Authorization", irisBasicAuth())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .body(body)
+                    .retrieve()
+                    .body(Map.class);
+        } catch (RuntimeException e) {
+            // 仅记异常类名，绝不外泄 body/凭证/PII/堆栈。
+            log.warn("退款出款失败: {}", e.getClass().getSimpleName());
+            throw new PayException("退款出款失败");
+        }
+        return toDisburseResult(response);
+    }
+
+    @SuppressWarnings("unchecked")
+    private DisburseResult toDisburseResult(Map<String, Object> response) {
+        if (response == null) {
+            throw new PayException("退款出款响应为空");
+        }
+        // Iris payouts 响应 payouts[].reference_no + status（queued/processed/completed）。
+        String ref = null;
+        String status = null;
+        Object payouts = response.get("payouts");
+        if (payouts instanceof List<?> list && !list.isEmpty()
+                && list.get(0) instanceof Map<?, ?> p) {
+            ref = str(p.get("reference_no"));
+            status = str(p.get("status"));
+        }
+        return new DisburseResult(ref, normalizeDisburseStatus(status), sanitizeDisburse(response));
+    }
+
+    /** Iris 出款状态归一化：completed/processed→COMPLETED；queued/processing→PROCESSING；其余→FAILED。 */
+    private static String normalizeDisburseStatus(String raw) {
+        if (raw == null) {
+            return "FAILED";
+        }
+        return switch (raw.toLowerCase()) {
+            case "completed", "processed" -> "COMPLETED";
+            case "queued", "processing", "pending" -> "PROCESSING";
+            default -> "FAILED";
+        };
+    }
+
+    private String irisBasicAuth() {
+        String token = Base64.getEncoder()
+                .encodeToString((props.getIrisApiKey() + ":").getBytes(StandardCharsets.UTF_8));
+        return "Basic " + token;
+    }
+
+    private static Map<String, Object> sanitizeDisburse(Map<String, Object> response) {
+        // 出款响应不回显 PII（账号/户名）；保守只留 reference_no/status 层，不落原始 beneficiary。
+        java.util.Map<String, Object> meta = new java.util.LinkedHashMap<>();
+        Object payouts = response.get("payouts");
+        if (payouts instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof Map<?, ?> p) {
+            if (p.get("reference_no") != null) {
+                meta.put("reference_no", p.get("reference_no"));
+            }
+            if (p.get("status") != null) {
+                meta.put("status", p.get("status"));
+            }
+        }
+        return meta;
+    }
+
+    @Override
     public boolean verifyCallback(Map<String, Object> body) {
         if (body == null) {
             return false;

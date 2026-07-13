@@ -82,6 +82,8 @@ public final class AuditActions {
     public static final String REFUND_NEED_REJECTED = "REFUND_NEED_REJECTED";
     /** 主管审批通过退款申请。 */
     public static final String REFUND_APPROVED = "REFUND_APPROVED";
+    /** 主管驳回退款申请（Story 4.6，第二段审批，订单回落 COMPLETED+refund_rejected + 通知用户）。 */
+    public static final String REFUND_APPROVAL_REJECTED = "REFUND_APPROVAL_REJECTED";
     /** 财务记录打款完成。 */
     public static final String REFUND_PAYOUT_RECORDED = "REFUND_PAYOUT_RECORDED";
     /** 职责分离拦截：同一 admin 试图兼任两职（含 SUPER_ADMIN 不豁免，A-1）。 */
