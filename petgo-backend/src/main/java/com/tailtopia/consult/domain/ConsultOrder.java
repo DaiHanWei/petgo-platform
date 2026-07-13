@@ -109,6 +109,24 @@ public class ConsultOrder {
         return o;
     }
 
+    /** 支付成功建 IM 会话后记会话起始（Story 3.4，3-1 建 {@code session_started_at} 列即为此填）。 */
+    public void markSessionStarted(Instant at) {
+        this.sessionStartedAt = at;
+    }
+
+    /**
+     * 会话完成（Story 3.7）：{@code IN_PROGRESS→COMPLETED} + 记 {@code session_ended_at}（会话终态时刻）。
+     * <b>仅 IN_PROGRESS 可转</b>（幂等守卫：重复 CLOSED/重扫不重复完成；退款中/已退款不被误置）。返回是否发生转换。
+     */
+    public boolean markCompleted(Instant endedAt) {
+        if (this.status != ConsultOrderStatus.IN_PROGRESS) {
+            return false;
+        }
+        this.status = ConsultOrderStatus.COMPLETED;
+        this.sessionEndedAt = endedAt;
+        return true;
+    }
+
     @PrePersist
     void onCreate() {
         Instant now = Instant.now();

@@ -36,11 +36,15 @@ import '../../features/consult/presentation/consult_case_form_page.dart';
 import '../../features/consult/presentation/consult_conversation_page.dart';
 import '../../features/consult/presentation/consult_entry_page.dart';
 import '../../features/consult/presentation/consult_waiting_page.dart';
+import '../../features/consult/presentation/vet_request_confirm_page.dart';
+import '../../features/consult/presentation/vet_timed_pay_page.dart';
+import '../../features/consult/presentation/vet_waiting_page.dart';
 import '../../features/notify/presentation/notification_center_page.dart';
 import '../../features/gath/presentation/gath_page.dart';
 import '../../features/profile/presentation/pet_card_page.dart';
 import '../../features/vet/domain/vet_workbench_lists.dart';
 import '../../features/vet/presentation/vet_conversation_page.dart';
+import '../../features/vet/presentation/vet_income_page.dart';
 import '../../features/vet/presentation/vet_history_detail_page.dart';
 import '../../features/triage/presentation/dev_triage_page.dart';
 import '../../features/triage/presentation/triage_page.dart';
@@ -225,6 +229,16 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         path: '/consult/waiting/:id',
         builder: (c, s) => ConsultWaitingPage(sessionId: int.parse(s.pathParameters['id']!)),
       ),
+      // 计费流下单三屏（Story 3.5）：确认 → 等待接单(1min) → 限时支付(1.5min)。token 走 path param。
+      GoRoute(path: '/consult/vet-request', builder: (c, s) => const VetRequestConfirmPage()),
+      GoRoute(
+        path: '/consult/vet-request/waiting/:token',
+        builder: (c, s) => VetWaitingPage(requestToken: s.pathParameters['token']!),
+      ),
+      GoRoute(
+        path: '/consult/vet-request/pay/:token',
+        builder: (c, s) => VetTimedPayPage(requestToken: s.pathParameters['token']!),
+      ),
       // 进行中会话界面（Story 5.5）。用户侧 /consult/conversation、兽医侧 /vet/conversation（各自 role 守卫）。
       GoRoute(
         path: '/consult/conversation/:id',
@@ -234,6 +248,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         path: '/vet/conversation/:id',
         builder: (c, s) => _vetScoped(VetConversationPage(sessionId: int.parse(s.pathParameters['id']!))),
       ),
+      // 兽医收入页（Story 3.7）：当月待结算 + 历史月结倒序（从「我的」进）。
+      GoRoute(path: '/vet/income', builder: (c, s) => _vetScoped(const VetIncomePage())),
       // 兽医「历史」卡 View → 只读问诊结果页（Bug 20260701-196）。列表带入 VetHistoryEntry(extra)
       // 供顶栏宠物名；深链无 extra 时降级为 null，仅按 sessionId 拉诊断。
       GoRoute(

@@ -161,9 +161,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/users/*/mini-profile").permitAll()
                         // 兽医工作台端点（Story 5.1+）：仅 role=VET 可达；user/guest → 403（双向门控）
                         .requestMatchers("/api/v1/vet/**").hasRole("VET")
-                        // 用户侧问诊端点（Story 5.2+）：仅 role=USER 可达（vet/guest → 403）
+                        // 用户侧问诊端点（Story 5.2+ / 计费流 3-2~3-4）：仅 role=USER 可达（vet/guest → 403）
                         .requestMatchers("/api/v1/consult/**",
-                                "/api/v1/consult-sessions", "/api/v1/consult-sessions/**").hasRole("USER")
+                                "/api/v1/consult-sessions", "/api/v1/consult-sessions/**",
+                                "/api/v1/consultations", "/api/v1/consultations/**").hasRole("USER")
                         // 其余 /api/v1 默认需 JWT（写一律拒绝未登录）；user 写端点对 vet token → 403
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth

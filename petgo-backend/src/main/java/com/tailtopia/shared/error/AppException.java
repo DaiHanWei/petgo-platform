@@ -51,6 +51,11 @@ public class AppException extends RuntimeException {
         return new AppException(HttpStatus.TOO_MANY_REQUESTS, ErrorTypes.RATE_LIMITED, detail);
     }
 
+    /** Story 3.4：下游/上游（如腾讯 IM 建会话）暂不可用（503，事务已回滚，用户可安全重试）。 */
+    public static AppException serviceUnavailable(String detail) {
+        return new AppException(HttpStatus.SERVICE_UNAVAILABLE, ErrorTypes.INTERNAL, detail);
+    }
+
     /** Story 2.1：媒体凭证/签名 URL 签发失败（上游 OSS/STS 异常），对外 502，绝不外泄原始错误。 */
     public static AppException mediaCredential(String detail) {
         return new AppException(HttpStatus.BAD_GATEWAY, ErrorTypes.MEDIA_CREDENTIAL, detail);

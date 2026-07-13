@@ -33,6 +33,14 @@ class ApiPaths {
   static const String vetConsultInProgress = '$base/vet/consult-sessions/in-progress';
   static const String vetConsultHistory = '$base/vet/consult-sessions/history';
 
+  /// 兽医计费队列（Story 3.6）：待接单池 + 本人「等待支付」中间态；接单（计费流，token 寻址）。
+  static const String vetConsultationsQueue = '$base/vet/consultations/queue';
+  static String vetConsultationsAccept(String requestToken) =>
+      '$base/vet/consultations/$requestToken/accept';
+
+  /// 兽医收入（Story 3.7）：当月待结算 + 历史月结倒序。
+  static const String vetIncome = '$base/vet/income';
+
   /// IM UserSig 签发（Story 5.5，客户端 SDK 登录用）。
   static const String imUserSig = '$base/im/usersig';
 
@@ -54,6 +62,9 @@ class ApiPaths {
   static String consultSessionContinueWaiting(int id) =>
       '$base/consult-sessions/$id/continue-waiting';
 
+  /// 封禁挂起逃生（Story 3.8，H-5）：用户「立即结束」挂起会话 → 强制结束+退款。
+  static String consultSessionEscape(int id) => '$base/consult-sessions/$id/escape';
+
   /// 评分门（Story 5.6）。POST 评分 / PATCH 补弹已展示 / GET 待补弹。
   static String consultSessionRating(int id) => '$base/consult-sessions/$id/rating';
   static String consultSessionRatingPrompted(int id) => '$base/consult-sessions/$id/rating-prompted';
@@ -72,6 +83,15 @@ class ApiPaths {
 
   /// 问诊历史聚合（Story 5.8，AI + 兽医两类，游标分页）。
   static const String consultHistory = '$base/consult/history';
+
+  /// 计费流下单（Story 3.2~3.5，consult_requests 两表流）。token 为不可枚举请求号。
+  /// POST 发起入队 / GET 状态轮询 / POST 支付·暂停·续·取消。
+  static const String consultations = '$base/consultations';
+  static String consultationStatus(String token) => '$base/consultations/$token';
+  static String consultationPay(String token) => '$base/consultations/$token/pay';
+  static String consultationPause(String token) => '$base/consultations/$token/pause';
+  static String consultationResume(String token) => '$base/consultations/$token/resume';
+  static String consultationCancel(String token) => '$base/consultations/$token/cancel';
 
   /// App 版本信息（Story 6.5，公开可读，App 内更新提醒）。
   static const String appVersion = '$base/app-version';

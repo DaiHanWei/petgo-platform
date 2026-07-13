@@ -116,6 +116,12 @@ public class ConsultSession {
     @Column(name = "interrupted_at")
     private Instant interruptedAt;
 
+    // ===== 封禁挂起（Story 3.8，H-5）=====
+
+    /** 挂起截止（付费会话被封禁挂起时置，服务端权威 15min；非空=挂起中，仍 IN_PROGRESS）。 */
+    @Column(name = "suspend_deadline_at")
+    private Instant suspendDeadlineAt;
+
     protected ConsultSession() {
     }
 
@@ -261,6 +267,16 @@ public class ConsultSession {
         this.interruptedReason = reason;
         this.interruptedAt = Instant.now();
         this.ratingPromptState = RatingPromptState.NONE; // 中断不评分
+        this.suspendDeadlineAt = null; // 终态清挂起锚
+    }
+
+    /**
+     * 封禁挂起（Story 3.8，H-5）：付费会话被封禁时置 15min 挂起截止，<b>保持 IN_PROGRESS</b>（不改状态机、IM 仍可用、
+     * 用户在控制、不被劫持）。到期/用户逃生 → {@link #interrupt}(VET_BANNED) + 退款。仅 IN_PROGRESS 可挂起。
+     */
+    public void suspend(Instant deadline) {
+        requireStatus(SessionStatus.IN_PROGRESS, "仅进行中的会话可挂起");
+        this.suspendDeadlineAt = deadline;
     }
 
     /** 补弹后用户补评分（会话已 CLOSED，仅消除补弹标记，不改 closed_reason 的历史事实）。 */
@@ -391,6 +407,10 @@ public class ConsultSession {
 
     public Instant getInterruptedAt() {
         return interruptedAt;
+    }
+
+    public Instant getSuspendDeadlineAt() {
+        return suspendDeadlineAt;
     }
 
     public Instant getCreatedAt() {

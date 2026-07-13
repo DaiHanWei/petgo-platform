@@ -49,9 +49,10 @@
 #   V64  2-2  alter_triage_tasks_unlock            ✅ 已落文件 (triage_tasks 加 unlock_source[LOCKED/FREE_QUOTA/PAID]/unlock_channel[QRIS/DANA/PAWCOIN];表名纠偏 非triage_records;下游整体+1)
 #   V65  2-3  init_ai_consult_orders               ✅ 已落文件 (独立命名空间;order_token/triage_task_id/pay_channel/payment_intent_token/status[+PENDING_PAYMENT]/paid_at)  ← 下游 3-1+ 顺延 +1
 #   V66  3-1  init_consult_billing                  ✅ 已落文件 (consult_requests[付费前CAS,无CANCELLED] + consult_orders[无CANCELLED] + consult_order_stage_events[append-only])  ← 下游整体+1
-#   V66  3-7  init_vet_settlements
-#   V67  4-1  alter_feedback_tickets (+ ticket_attachments / ticket_labels / ticket_internal_notes; cs_rating 预留)
-#   V68  4-3  init_refund_requests (两段字段 + net_amount + 加密 payout PII)
+#   V67  ---  tighten_pay_channel_drop_dana         ✅ 已落文件 (2026-07-13 取消DANA:收紧4处CHECK[payment_intents.channel/triage_tasks.unlock_channel/ai_consult_orders.pay_channel/consult_orders.pay_channel]从('QRIS','DANA','PAWCOIN')→('QRIS','PAWCOIN');新起ALTER不改旧迁移,决策E2)  ← 下游整体再+1
+#   V68  3-7  init_vet_settlements
+#   V69  4-1  alter_feedback_tickets (+ ticket_attachments / ticket_labels / ticket_internal_notes; cs_rating 预留)
+#   V70  4-3  init_refund_requests (两段字段 + net_amount + 加密 payout PII)
 #   V69  4-4  extend_notification_types_v11 (REFUND_REJECTED / TICKET_RESOLVED / CSAT_SURVEY / IDENTITY_REQUIRE_MODIFY)
 #   V70  6-1  alter_pet_profiles_serial (serial_id 唯一 + 号池回收)
 #   V71  6-3  init_id_card_hd_purchases
@@ -61,7 +62,8 @@
 #   V75  9-7  init_identity_moderation (identity_moderation_tickets + 屏蔽态列)
 #   V76  9-8  alter_users_account_type (REAL/VIRTUAL + 虚拟账号列)
 #   (9-1 若需 admin 权限点 seed 迁移，接 V77 顺延)
-# 无迁移的 story: 1-3/1-4/1-5(复用 V60/V61)、2-4、3-2~3-6/3-8、4-2/4-5~4-8、5-*、6-2/6-4、7-2、8-1、9-1/9-3~9-6/9-9/9-10。
+# 无迁移的 story: 1-3/1-4/1-5(复用 V60/V61)、2-4、3-2~3-6、4-2/4-5~4-8、5-*、6-2/6-4、7-2、8-1、9-1/9-3~9-6/9-9/9-10。
+#   ⚠️ 3-8 原列「无迁移」，create-story 核实需 V69(ALTER consult_sessions ADD suspend_deadline_at 挂起截止)——规划误判，Epic 4 起顺延 +1(移动靶按当时全局 max)。
 #
 # ===== 待收敛 [OPEN](不阻塞 L0/L1，L2 前需定) =====
 # - Midtrans 商务合同 + QRIS 轮询超时(整条资金脊柱 E1-E4 的 L2 验收前置，有 lead time，建议即刻并行推进)
@@ -70,7 +72,7 @@
 # - 红色超额/接单未支付限速阈值(9-6，仅埋点，上线后定)
 
 generated: 2026-07-11
-last_updated: 2026-07-13  # 3-3 create-story->ready-for-dev(兽医接单CAS+限时支付窗+超时回退重播,无迁移);epic-3 in-progress
+last_updated: 2026-07-13  # ★Epic4开篇 4-1 create-story->ready-for-dev(客服工单模型升级,纯后端建模无前端;核心发现=无既有客服工单表[V1.0仅表单/WhatsApp]故feedback_tickets全新建非ALTER;同构范式moderation.ContentReport;OSS预签名已具备附件只存objectKey复用不新建端点;方案=V70建feedback_tickets+3子表[attachments/labels/internal_notes]+CSAT/cs_rating预留列避免二次迁移+建工单原语[≤5图校验+标签+自填联系方式+relatedOrder解析]+用户视图DTO排除内部备注[隐私契约红线]+加内部备注admin原语;新support模块;CSAT发放/结案/通知/admin处理UI留4-4/4-7,前端投诉UI留4-2;L0迁移/DTO+L1建单/附件/标签/内部备注不可见/owner404) | 3-8 dev-story->review(安全攸关H-5全落地:V69加suspend_deadline_at;interruptByVetBan封禁分流[付费→挂起15min+IM告知不即时中断/免费→即时中断5.7不变];ConsultSuspensionService.forceEndSuspended[订单CAS IN_PROGRESS→REFUNDING幂等唯一闸绝不双退+PawCoin wallet.credit REFUND全额退回+REFUNDED/QRIS留REFUNDING实际打款留Epic4+会话INTERRUPTED];15min @Scheduled scanner;POST /consult-sessions/{id}/escape用户逃生;会话DTO暴露suspendDeadlineAt;前端会话页挂起横幅[服务端权威MM:SS倒计时+全额退款+立即结束→escape→INTERRUPTED+Toast+上报],无结束会话按钮早已完成;QRIS不记ledger避免与Epic4双记[落地决策];L0+L1 8+3+3+consult196绿[全量唯一失败notify targetRef baseline flake],analyze零警告+test413绿;⚠️MEMORY:scratch重建前flush Redis否则退款幂等键撞号假回归;5个OPEN留Epic4/后续;L2真机逃生留本地) | ★Epic3全8story实现完毕(3-1~3-8均review) | 3-8 create-story->ready-for-dev(Konsultasi UI定稿与封禁挂起逃生,安全攸关H-5;核心发现=移除结束会话按钮早已完成[前端主体=逃生横幅]+免费会话封禁即时无退款[5.7]付费须挂起+退款+退款原语已具备[PawCoin credit REFUND/ledger REFUND_OUT]QRIS实际打款属Epic4;用户已拍板①15min挂起+逃生入口+scanner[挂session级不新增VetStatus,V69小迁移加suspend_deadline_at]②PawCoin立即全退+订单REFUNDED,QRIS记REFUNDING+REFUND_OUT负债实际打款留Epic4;方案=封禁分流[付费挂起/免费即时中断不变]+forceEndSuspended[订单CAS IN_PROGRESS→REFUNDING幂等单点+按渠道退款+会话INTERRUPTED]+15min @Scheduled scanner+用户escape端点+会话DTO暴露suspendDeadlineAt+前端挂起横幅/逃生CTA/文案定稿;幂等/事务安全红线绝不双退;⚠️非无迁移[规划误判]需V69;L0迁移/DTO+L1分流/退款/scanner/escape/幂等,L2真机逃生留本地;⚠️注意MEMORY:scratch重建前先flush Redis否则退款幂等假回归) | 3-7 dev-story->review(后端:补订单完成wiring[会话CLOSED→consult_orders IN_PROGRESS→COMPLETED+session_ended_at+SESSION_ENDED,收尾事务原子/免费流跳过/幂等,绑CLOSED]+vet_settlements[V68唯一vet_id+period]+每月1日WIB @Scheduled生成PENDING月结[generateSettlements聚合COMPLETED订单排除退款可直测]+GET /vet/income[当月待结算实时聚合+历史倒序,到手读vet_payout快照];前端:收入页p-vet-income[当月待结算卡+历史倒序formatIdr]+VetMePage入口+model/repo/route/i18n;L0 3+L1 11+consult/vet259绿[全量唯一失败notify targetRef为baseline flake],analyze零警告+test410绿;打款/SETTLED属9-5;L2留本地) | 3-7 create-story->ready-for-dev(兽医到手金额与月度收入:核心发现=分成快照vet_payout已在consult_orders勿重算+订单完成态是3-4缺口[ConsultCloseService从不置COMPLETED]→本story补CLOSED→COMPLETED wiring[收尾事务内原子/免费流跳过/幂等]+无兽医收入页全新p-vet-income;方案=vet_settlements[V68唯一vet_id+period]+每月1日WIB @Scheduled生成PENDING月结[聚合COMPLETED订单by session_ended_at排除退款,generateSettlements可直测]+GET /vet/income[当月待结算实时聚合+历史月结倒序]+收入页UI+VetMePage入口;到手恒读快照;打款/SETTLED属9-5;WIB照2-1·@Scheduled照ScheduledPushJob;L0迁移/DTO+L1完成/月结/收入,L2留本地);epic-3 in-progress | 3-6 dev-story->review(后端补只读 GET /vet/consultations/queue[awaitingPay本人待支付倒计时项+available QUEUEING池忙则空FIFO,富化复用PetProfileQueryService/AccountQueryService,无病例字段,无迁移;L0 4/4+L1 3/3绿];前端改造待接单Tab走计费队列[_QueueCard接单CTA调3-3accept+409Toast]+FR-53A _AwaitingPayCard服务端权威MM:SS倒计时[pausedAt暂停A-4]+FR-53B前端轮询推断3s Toast[成交跳会话/未成交合并D-4];进行中会话复用既有VetActivePage不新建/vet/active[D-2];4tab无死链;analyze零警告+test404绿[唯一失败story_1_5_gating为baseline既有flake];免费流代码保留过渡期;L2双端留本地[端点仅本分支]) | 3-6 create-story->ready-for-dev(兽医端计费队列:后端补只读 GET /vet/consultations/queue[awaitingPay本人待支付倒计时项+available QUEUEING池忙则空,富化复用PetProfileQueryService,无迁移];前端改造待接单Tab走计费队列+接单CTA调3-3既有accept+FR-53A等待支付倒计时中间态+FR-53B前端轮询推断3s Toast[成交vs未成交];进行中会话复用既有VetActivePage不新建/vet/active[D-2避免重复造轮子];核4tab无死链;用户已定:改造Inbox Tab+Toast前端轮询推断;L0 analyze/test+mvn test,L2双端留本地);epic-3 in-progress | 取消DANA支付渠道(全栈:PayChannel/UnlockMethod/UnlockChannel枚举+switch+前端3处渠道UI+arb+规划/story文档+V67收紧4处CHECK;仅留QRIS现金+PawCoin;后端42+23L1绿·前端92绿·analyze零警告) | 3-5 create-story->ready-for-dev(用户端下单三屏:确认/等待1min可丢弃无痕/限时支付1.5min支付按钮全程可用+服务端权威中断即重播+跳充值暂停顺延A-4;后端补GET /consultations/{token}状态轮询端点[3-2~3-4只建写端点缺读端点];复用waiting/recharge/unlock范式,付款后复用/consult-sessions/active导航;无迁移;L0 analyze/test+L2模拟器);epic-3 in-progress
 project: petgo-platform-v1.1
 project_key: NOKEY
 tracking_system: file-system
@@ -99,17 +101,17 @@ development_status:
   epic-3: in-progress
   3-1-咨询请求两表与状态机: review
   3-2-免费入队与广播: review
-  3-3-兽医接单与限时支付窗: ready-for-dev
-  3-4-限时支付建会话与超时重播: backlog
-  3-5-用户端下单链路ui: backlog
-  3-6-兽医端队列进行中会话与toast: backlog
-  3-7-兽医到手金额与月度收入: backlog
-  3-8-konsultasi-ui定稿与封禁挂起逃生: backlog
+  3-3-兽医接单与限时支付窗: review
+  3-4-限时支付建会话与超时重播: review
+  3-5-用户端下单链路ui: review
+  3-6-兽医端队列进行中会话与toast: review
+  3-7-兽医到手金额与月度收入: review
+  3-8-konsultasi-ui定稿与封禁挂起逃生: review
   epic-3-retrospective: optional
 
   # ---- Epic 4: 退款与客服工单 ----
-  epic-4: backlog
-  4-1-客服工单模型升级: backlog
+  epic-4: in-progress
+  4-1-客服工单模型升级: ready-for-dev
   4-2-用户端投诉工单升级: backlog
   4-3-退款申请与两段审批模型: backlog
   4-4-客服判定与订单解锁回落: backlog

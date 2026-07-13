@@ -11,6 +11,7 @@ class ConsultSession {
     this.closedReason,
     this.interruptedReason,
     this.rated = false,
+    this.suspendDeadlineAt,
   });
 
   final int id;
@@ -25,9 +26,12 @@ class ConsultSession {
   // 本次会话是否已评分（后端权威）。已评分则关闭评分入口，避免重复评分被 409。
   // 注意:不能只看 closedReason —— 补评分只清补弹标记、不改 UNRATED。
   final bool rated;
+  // Story 3.8（H-5）：非 null = 兽医被封禁、本付费会话挂起中（服务端权威 15min 截止）→ 显逃生入口 + 倒计时。
+  final DateTime? suspendDeadlineAt;
 
   bool get isWaiting => status == 'WAITING';
   bool get isInProgress => status == 'IN_PROGRESS';
+  bool get isSuspended => suspendDeadlineAt != null && status == 'IN_PROGRESS';
 
   factory ConsultSession.fromJson(Map<String, dynamic> json) => ConsultSession(
         id: (json['id'] as num).toInt(),
@@ -40,6 +44,9 @@ class ConsultSession {
         closedReason: json['closedReason'] as String?,
         interruptedReason: json['interruptedReason'] as String?,
         rated: (json['rated'] ?? false) as bool,
+        suspendDeadlineAt: json['suspendDeadlineAt'] == null
+            ? null
+            : DateTime.parse(json['suspendDeadlineAt'] as String).toUtc(),
       );
 }
 
