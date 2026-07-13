@@ -52,6 +52,14 @@ petgo:
     default-free-quota: ${TRIAGE_DEFAULT_FREE_QUOTA:1}
     # AI 详建付费解锁价（Story 2.3）：默认 Rp10,000。PawCoin 花费同值(1 koin=Rp1)，现金同额 IDR。成交价落订单快照。
     ai-unlock-price: ${TRIAGE_AI_UNLOCK_PRICE:10000}
+  # 兽医咨询计费（Story 3.4）。unit-price=单次咨询价（默认 Rp50,000），vet-share-rate=兽医分成%（默认60→到手30000）。
+  # 成交价/分成落 consult_orders 快照；9-2 后台 pricing_config.vet_consult_price/vet_share_rate 落地后换 DB 读。
+  # max-rebroadcast/request-max-age-minutes=支付窗超时回队重播上限（达到→彻底失败落 failed_consult_requests）。
+  consult:
+    unit-price: ${CONSULT_UNIT_PRICE:50000}
+    vet-share-rate: ${CONSULT_VET_SHARE_RATE:60}
+    max-rebroadcast: ${CONSULT_MAX_REBROADCAST:5}
+    request-max-age-minutes: ${CONSULT_REQUEST_MAX_AGE_MIN:30}
   # App 版本更新提醒（Story 6.5，App 内提示，外部化配置运营可调，不走推送）。
   app-version:
     latest: ${APP_LATEST_VERSION:1.0.0}

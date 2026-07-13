@@ -53,4 +53,15 @@ public class ConsultBillingService {
             Instant occurredAt, String note) {
         return stageEvents.save(ConsultOrderStageEvent.of(consultOrderId, type, occurredAt, note));
     }
+
+    /**
+     * 支付成功建 IM 会话后记会话起始（Story 3.4）：置订单 {@code session_started_at} + 追加 {@code SESSION_STARTED}
+     * 节点。{@code note} 可存 IM 会话标识（对账用；会话实体在 {@code consult_sessions}，本表记时间戳）。
+     */
+    @Transactional
+    public void markSessionStarted(ConsultOrder order, Instant startedAt, String note) {
+        order.markSessionStarted(startedAt);
+        orders.save(order);
+        appendStageEvent(order.getId(), ConsultStageEvent.SESSION_STARTED, startedAt, note);
+    }
 }
