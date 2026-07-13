@@ -70,7 +70,7 @@
 # - 红色超额/接单未支付限速阈值(9-6，仅埋点，上线后定)
 
 generated: 2026-07-11
-last_updated: 2026-07-13  # 3-1 dev L0全绿(6 domain)->review(L1 CAS并发/validate待本地);epic-3 in-progress
+last_updated: 2026-07-13  # 3-2 create-story->ready-for-dev(免费入队consult_requests+复用广播+超时删无痕,无迁移);epic-3 in-progress
 project: petgo-platform-v1.1
 project_key: NOKEY
 tracking_system: file-system
@@ -98,7 +98,7 @@ development_status:
   # ---- Epic 3: 兽医咨询计费流(含兽医端) ----
   epic-3: in-progress
   3-1-咨询请求两表与状态机: review
-  3-2-免费入队与广播: backlog
+  3-2-免费入队与广播: ready-for-dev
   3-3-兽医接单与限时支付窗: backlog
   3-4-限时支付建会话与超时重播: backlog
   3-5-用户端下单链路ui: backlog
