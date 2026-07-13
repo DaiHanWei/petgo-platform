@@ -1,6 +1,7 @@
 package com.tailtopia.notify.service;
 
 import com.tailtopia.consult.event.ConsultRequestQueuedEvent;
+import com.tailtopia.consult.event.ConsultRequestQueuedForBillingEvent;
 import com.tailtopia.consult.event.VetRepliedEvent;
 import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.vet.service.VetPresenceService;
@@ -35,6 +36,19 @@ public class ConsultNotifyListener {
 
     @TransactionalEventListener
     public void onConsultRequestQueued(ConsultRequestQueuedEvent event) {
+        broadcastNewRequest();
+    }
+
+    /**
+     * Story 3.2 计费流入队 → 广播在线兽医（FR-22E，离线不推）。与 V1.0 {@link ConsultRequestQueuedEvent} 同样广播，
+     * 事件来源不同（consult_requests 计费流 vs consult_sessions 免费流），推送文案一致。
+     */
+    @TransactionalEventListener
+    public void onConsultRequestQueuedForBilling(ConsultRequestQueuedForBillingEvent event) {
+        broadcastNewRequest();
+    }
+
+    private void broadcastNewRequest() {
         for (Long vetId : presence.onlineVetIds()) {
             notificationService.sendToVet(vetId, NotificationType.NEW_CONSULT_REQUEST,
                     "有新的问诊请求", "点击查看", NotificationType.NEW_CONSULT_REQUEST.name());

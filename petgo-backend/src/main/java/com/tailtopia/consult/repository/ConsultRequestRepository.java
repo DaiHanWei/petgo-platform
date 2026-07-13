@@ -19,6 +19,22 @@ public interface ConsultRequestRepository extends JpaRepository<ConsultRequest, 
 
     Optional<ConsultRequest> findByRequestToken(String requestToken);
 
+    /** 占用校验（FR-4B 同时仅 1 个）：consult_requests 内「存在即 live」（取消/超时已物理删）。 */
+    boolean existsByUserId(long userId);
+
+    /** 该用户现有 live 请求（占用命中时返回，供 alreadyActive 语义）。 */
+    Optional<ConsultRequest> findFirstByUserIdOrderByCreatedAtAsc(long userId);
+
+    /**
+     * 入队超时静默删除（Story 3.2，@Scheduled 调）：物理删 {@code state=QUEUEING AND queue_deadline_at < now}
+     * 的行（无痕、不建订单）。<b>state 谓词保护</b>：已接单（ACCEPTED_AWAIT_PAY）不被队列扫描删。返回删除行数。
+     */
+    @Modifying
+    @Query("delete from ConsultRequest r "
+            + "where r.state = com.tailtopia.consult.domain.ConsultRequestState.QUEUEING "
+            + "and r.queueDeadlineAt < :now")
+    int deleteExpiredQueueing(@Param("now") java.time.Instant now);
+
     /**
      * 兽医接单（CAS）：{@code QUEUEING → ACCEPTED_AWAIT_PAY} + 填 vet_id/pay_deadline。返回受影响行数：
      * 1=接单成功 / 0=已被他人抢或已删（先到先得）。
