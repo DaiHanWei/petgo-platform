@@ -48,7 +48,7 @@
 #   V63  2-1  init_user_monthly_free_quota         ✅ 已落文件 (user_monthly_free_quota[唯一 user_id,period] +CHECK used_count>=0；WIB period)
 #   V64  2-2  alter_triage_tasks_unlock            ✅ 已落文件 (triage_tasks 加 unlock_source[LOCKED/FREE_QUOTA/PAID]/unlock_channel[QRIS/DANA/PAWCOIN];表名纠偏 非triage_records;下游整体+1)
 #   V65  2-3  init_ai_consult_orders               ✅ 已落文件 (独立命名空间;order_token/triage_task_id/pay_channel/payment_intent_token/status[+PENDING_PAYMENT]/paid_at)  ← 下游 3-1+ 顺延 +1
-#   V66  3-1  init_consult_billing                  (consult_requests[付费前CAS,无CANCELLED] + consult_orders[无CANCELLED] + consult_order_stage_events[append-only];ai_consult_orders 已由2-3占V65拆出)  ← 下游整体+1
+#   V66  3-1  init_consult_billing                  ✅ 已落文件 (consult_requests[付费前CAS,无CANCELLED] + consult_orders[无CANCELLED] + consult_order_stage_events[append-only])  ← 下游整体+1
 #   V66  3-7  init_vet_settlements
 #   V67  4-1  alter_feedback_tickets (+ ticket_attachments / ticket_labels / ticket_internal_notes; cs_rating 预留)
 #   V68  4-3  init_refund_requests (两段字段 + net_amount + 加密 payout PII)
@@ -70,7 +70,7 @@
 # - 红色超额/接单未支付限速阈值(9-6，仅埋点，上线后定)
 
 generated: 2026-07-11
-last_updated: 2026-07-13  # Epic2 全4 story review;3-1 create-story->ready-for-dev(consult计费两表+CAS状态机,Flyway V66);epic-3 in-progress
+last_updated: 2026-07-13  # 3-1 dev L0全绿(6 domain)->review(L1 CAS并发/validate待本地);epic-3 in-progress
 project: petgo-platform-v1.1
 project_key: NOKEY
 tracking_system: file-system
@@ -97,7 +97,7 @@ development_status:
 
   # ---- Epic 3: 兽医咨询计费流(含兽医端) ----
   epic-3: in-progress
-  3-1-咨询请求两表与状态机: ready-for-dev
+  3-1-咨询请求两表与状态机: review
   3-2-免费入队与广播: backlog
   3-3-兽医接单与限时支付窗: backlog
   3-4-限时支付建会话与超时重播: backlog
