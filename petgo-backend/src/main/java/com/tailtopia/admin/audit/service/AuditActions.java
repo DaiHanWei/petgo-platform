@@ -74,8 +74,12 @@ public final class AuditActions {
     // ===== 退款两段审批（V1.1 Story 4.3，最高危 A-1）=====
     /** 退款请求创建（绑订单/工单）。 */
     public static final String REFUND_REQUEST_CREATED = "REFUND_REQUEST_CREATED";
-    /** 客服判定退款需求（APPROVED/REJECTED）。 */
+    /** 客服判定退款需求（APPROVED/REJECTED，Story 4.3 底层原语）。 */
     public static final String REFUND_NEED_SUBMITTED = "REFUND_NEED_SUBMITTED";
+    /** 客服批准退款需求（Story 4.4，订单 COMPLETED→REFUNDING，不发通知 AB-5B）。 */
+    public static final String REFUND_NEED_APPROVED = "REFUND_NEED_APPROVED";
+    /** 客服驳回退款需求（Story 4.4，订单回落 COMPLETED+refund_rejected，发 REFUND_REJECTED 通知 A-2）。 */
+    public static final String REFUND_NEED_REJECTED = "REFUND_NEED_REJECTED";
     /** 主管审批通过退款申请。 */
     public static final String REFUND_APPROVED = "REFUND_APPROVED";
     /** 财务记录打款完成。 */

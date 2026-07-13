@@ -4,6 +4,8 @@ import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.consult.domain.ConsultOrder;
 import com.tailtopia.consult.repository.ConsultOrderRepository;
+import com.tailtopia.notify.domain.NotificationType;
+import com.tailtopia.notify.service.NotificationService;
 import com.tailtopia.pay.refund.domain.NeedDecision;
 import com.tailtopia.pay.refund.domain.PayoutChannel;
 import com.tailtopia.pay.refund.domain.RefundRequest;
@@ -31,14 +33,17 @@ public class RefundService {
     private final CardTokenGenerator tokenGenerator;
     private final AdminAuditService audit;
     private final RefundAuditRecorder auditRecorder;
+    private final NotificationService notifications;
 
     public RefundService(RefundRequestRepository refunds, ConsultOrderRepository orders,
-            CardTokenGenerator tokenGenerator, AdminAuditService audit, RefundAuditRecorder auditRecorder) {
+            CardTokenGenerator tokenGenerator, AdminAuditService audit, RefundAuditRecorder auditRecorder,
+            NotificationService notifications) {
         this.refunds = refunds;
         this.orders = orders;
         this.tokenGenerator = tokenGenerator;
         this.audit = audit;
         this.auditRecorder = auditRecorder;
+        this.notifications = notifications;
     }
 
     /**
@@ -60,13 +65,47 @@ public class RefundService {
         return r.getRefundToken();
     }
 
-    /** ①客服判定退款需求（submitter 角色）。APPROVED→解锁选方式 / REJECTED→订单回落（行为 4-4）。 */
+    /** ①客服判定退款需求（submitter 角色，Story 4.3 底层原语）。APPROVED→解锁选方式 / REJECTED→订单回落（行为在 4-4 的 {@link #approveNeed}/{@link #rejectNeed}）。 */
     @Transactional
     public void submitNeed(String refundToken, long submitterAdminId, NeedDecision decision) {
         RefundRequest r = require(refundToken);
         r.markNeedDecision(decision, submitterAdminId);
         audit.record(submitterAdminId, AuditActions.REFUND_NEED_SUBMITTED, "refund_request", refundToken,
                 "退款需求判定=" + decision);
+    }
+
+    /**
+     * ①客服<b>批准</b>退款需求（Story 4.4，submitter 角色，AB-5B）。仅 {@code need_decision=PENDING} 可判定
+     * （重复判定 → 409 拒绝，OPEN-1）。need→APPROVED + 订单 <b>CAS {@code COMPLETED→REFUNDING}</b>
+     * （{@code markRefundingFromCompleted}，幂等：非 COMPLETED 时返 0 跳过不报错）。
+     * <b>不发任何通知</b>（解锁「选方式」经 need=APPROVED，App 4-5 据此暴露入口）+ 审计。
+     */
+    @Transactional
+    public void approveNeed(String refundToken, long submitterAdminId) {
+        RefundRequest r = requirePending(refundToken);
+        r.markNeedDecision(NeedDecision.APPROVED, submitterAdminId);
+        orders.markRefundingFromCompleted(r.getOrderId()); // CAS 幂等：0=订单已非 COMPLETED，跳过
+        audit.record(submitterAdminId, AuditActions.REFUND_NEED_APPROVED, "refund_request", refundToken,
+                "退款需求批准（订单进 REFUNDING，解锁选方式）");
+    }
+
+    /**
+     * ①客服<b>驳回</b>退款需求（Story 4.4，submitter 角色，A-2 UX 不撒谎）。仅 PENDING 可判定。
+     * need→REJECTED + 订单 <b>置 {@code refund_rejected=true}（保持/回落 COMPLETED）</b>
+     * （{@code markRefundRejected} CAS，不新增订单终态）+ 发 {@code REFUND_REJECTED} 通知给发起用户
+     * （{@link NotificationService#send} 自带 REQUIRES_NEW；<b>不含金额/账号 PII</b>，targetRef=refundToken 非随机）+ 审计。
+     */
+    @Transactional
+    public void rejectNeed(String refundToken, long submitterAdminId) {
+        RefundRequest r = requirePending(refundToken);
+        r.markNeedDecision(NeedDecision.REJECTED, submitterAdminId);
+        orders.markRefundRejected(r.getOrderId()); // CAS 幂等：0=订单已非 COMPLETED，跳过
+        // 驳回通知（AB-5B：仅驳回发，批准不发）。护栏：文案不含金额/账号；targetRef 为稳定 refundToken（非随机）。
+        notifications.send(r.getUserId(), NotificationType.REFUND_REJECTED,
+                "退款申请未通过", "你的退款申请未通过审核，如有疑问可在工单中联系客服。",
+                NotificationType.REFUND_REJECTED.name(), refundToken);
+        audit.record(submitterAdminId, AuditActions.REFUND_NEED_REJECTED, "refund_request", refundToken,
+                "退款需求驳回（订单回落 COMPLETED+refund_rejected，已通知用户）");
     }
 
     /**
@@ -123,5 +162,14 @@ public class RefundService {
     private RefundRequest require(String refundToken) {
         return refunds.findByRefundToken(refundToken)
                 .orElseThrow(() -> AppException.notFound("退款请求不存在"));
+    }
+
+    /** 客服判定前置：仅 {@code need_decision=PENDING} 可判定（防重复判定，OPEN-1）。 */
+    private RefundRequest requirePending(String refundToken) {
+        RefundRequest r = require(refundToken);
+        if (r.getNeedDecision() != NeedDecision.PENDING) {
+            throw AppException.conflict("该退款需求已判定，不可重复处理");
+        }
+        return r;
     }
 }

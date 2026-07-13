@@ -33,5 +33,15 @@ public enum NotificationType {
     /** 人工审核通过 → 通知作者「已通过」（Story 4.3，仅开关激活后产生）。 */
     CONTENT_REVIEW_APPROVED,
     /** 人工审核未通过/超时丢弃 → 通知作者「未通过」（Story 4.3，仅开关激活后产生）。 */
-    CONTENT_REVIEW_REJECTED
+    CONTENT_REVIEW_REJECTED,
+
+    // ===== V1.1 Epic 4 退款/工单/身份（extend_notification_types_v11，V72 一次加全，避免二次迁移）=====
+    /** 退款申请未通过 → 通知发起用户（Story 4.4，客服驳回退款需求；不含金额/账号 PII）。本 story 唯一新发的类型。 */
+    REFUND_REJECTED,
+    /** 工单已结案 → 通知用户（Story 4.7，枚举先行占位，本 story 不发）。 */
+    TICKET_RESOLVED,
+    /** CSAT 满意度问卷 → 通知用户（Story 4.7，枚举先行占位，本 story 不发）。 */
+    CSAT_SURVEY,
+    /** 身份信息需修改 → 通知用户（Epic 9 身份核验，枚举先行占位，本 story 不发）。 */
+    IDENTITY_REQUIRE_MODIFY
 }

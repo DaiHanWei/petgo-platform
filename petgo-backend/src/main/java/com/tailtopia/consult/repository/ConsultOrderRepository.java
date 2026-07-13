@@ -29,6 +29,32 @@ public interface ConsultOrderRepository extends JpaRepository<ConsultOrder, Long
     int markRefunding(@Param("id") long id);
 
     /**
+     * 客服批准退款需求 CAS（Story 4.4，AB-5B）：{@code COMPLETED→REFUNDING}。返回行数（1=已转、可进选方式；
+     * 0=订单已非 COMPLETED，幂等跳过不报错）。<b>与 3-8 的 {@link #markRefunding}(IN_PROGRESS→REFUNDING) 两条独立 CAS，
+     * 互不影响</b>：退款工单针对已交付完成订单，批准后进 REFUNDING 等用户填收款（4-5）→ 主管审批 + 财务打款（4-6）→ REFUNDED。
+     */
+    @Modifying
+    @Query("update ConsultOrder o "
+            + "set o.status = com.tailtopia.consult.domain.ConsultOrderStatus.REFUNDING, "
+            + "o.updatedAt = CURRENT_TIMESTAMP "
+            + "where o.id = :id "
+            + "and o.status = com.tailtopia.consult.domain.ConsultOrderStatus.COMPLETED")
+    int markRefundingFromCompleted(@Param("id") long id);
+
+    /**
+     * 客服驳回退款需求 CAS（Story 4.4，A-2 UX 不撒谎）：订单<b>保持/回落 {@code COMPLETED}</b> 并置
+     * {@code refund_rejected=true}（标记「申请过但未通过」，不再假装在退款）。返回行数（1=已标记；0=订单非 COMPLETED，跳过）。
+     * <b>不新增订单终态枚举</b>（架构 A-2）。
+     */
+    @Modifying
+    @Query("update ConsultOrder o "
+            + "set o.refundRejected = true, "
+            + "o.updatedAt = CURRENT_TIMESTAMP "
+            + "where o.id = :id "
+            + "and o.status = com.tailtopia.consult.domain.ConsultOrderStatus.COMPLETED")
+    int markRefundRejected(@Param("id") long id);
+
+    /**
      * 退款完成 CAS（Story 3.8，PawCoin 立即到账后）：{@code REFUNDING→REFUNDED}。返回行数（1=完成）。
      * QRIS 留 REFUNDING（实际 Midtrans 打款由 Epic 4 完成 → REFUNDED）。
      */
