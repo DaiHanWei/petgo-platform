@@ -1,10 +1,13 @@
 package com.tailtopia.consult.web;
 
+import com.tailtopia.consult.dto.ConsultRequestStatusResponse;
 import com.tailtopia.consult.dto.ConsultationResponse;
 import com.tailtopia.consult.service.ConsultRequestService;
 import com.tailtopia.shared.error.AppException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -29,6 +32,17 @@ public class ConsultRequestController {
     @PostMapping
     public ConsultationResponse create(@AuthenticationPrincipal Jwt jwt) {
         return ConsultationResponse.of(service.createRequest(currentUserId(jwt)));
+    }
+
+    /**
+     * 请求状态轮询（Story 3.5）：前端下单三屏据此驱动 待接单→待支付 跃迁 + 服务端权威倒计时。
+     * 仅本人；请求已消失（超时删/转单删）或非本人 → 404（前端据 404 + {@code GET /consult-sessions/active}
+     * 区分「已转单进会话」vs「超时无兽医」）。
+     */
+    @GetMapping("/{requestToken}")
+    public ConsultRequestStatusResponse status(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable String requestToken) {
+        return ConsultRequestStatusResponse.of(service.statusOf(currentUserId(jwt), requestToken));
     }
 
     private static long currentUserId(Jwt jwt) {
