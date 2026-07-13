@@ -26,7 +26,7 @@ scope: 'V1.1 增量；brownfield；Flyway V47 起顺延'
 ### Functional Requirements（客户端，FR-43 起延续 V1.0 的 FR-42）
 
 **资金 / 支付主线**
-- FR-43：统一支付组件（QRIS 二维码轮询 + DANA，App 内嵌入式，承载三收费场景）
+- FR-43：统一支付组件（QRIS 二维码轮询，App 内嵌入式，承载三收费场景）
 - FR-43A：AI 问诊「先出结果、后付费解锁详情」（Rp10,000）；等级图标/颜色/黄色时效提示/红色强提醒**始终免费**
 - FR-43B：每月免费额度（默认 1 次/账号，WIB 每月 1 日重置，后台可调 0-35）
 - FR-43C：红色评级安全护栏（零变现、始终免费、仅埋点不限速，「只升不降」不可绕过）
@@ -36,7 +36,7 @@ scope: 'V1.1 增量；brownfield；Flyway V47 起顺延'
 
 **PawCoin 虚拟币**
 - FR-50：PawCoin 体系（1 koin=Rp1，「我的」页余额/获取/消费明细）
-- FR-50A：充值（QRIS/DANA，档位 10k/25k/50k/100k，浮存门槛监控）
+- FR-50A：充值（QRIS，档位 10k/25k/50k/100k，浮存门槛监控）
 - FR-50C：消费范围 + 退款方向跟随支付方式
 - FR-50D：不提现/不转赠/注销余额作废
 
@@ -73,7 +73,7 @@ scope: 'V1.1 增量；brownfield；Flyway V47 起顺延'
 ### Additional Requirements（架构 delta）
 
 - **新增 `pay` 后端模块 + `shared/pay` 基础设施**（`PaymentGateway` 接口抽象）
-- **Midtrans 网关集成**：收款 Snap/Core API（QRIS+DANA）+ 出款 Iris/Disbursement；聚合商**无 Cancel/Void**（免费入队后付费设计根因）；回调验签 + 双通道幂等
+- **Midtrans 网关集成**：收款 Snap/Core API（QRIS）+ 出款 Iris/Disbursement；聚合商**无 Cancel/Void**（免费入队后付费设计根因）；回调验签 + 双通道幂等
 - **`ledger_entries` 双分录总账**（append-only）+ `pawcoin_wallets`（非负 CHECK）+ `payment_intents`（幂等锚）
 - **兽医咨询两表 CAS 状态机**：`consult_requests`（付费前临时、单列 CAS、取消/超时即删）+ `consult_orders`（支付成功才建、进订单中心）
 - **`@Scheduled` 限时支付倒计时扫描**（DB `pay_deadline_at` + 每 5-10s 扫描 + 暂停顺延，**无延迟队列/调度中间件**）
@@ -152,7 +152,7 @@ scope: 'V1.1 增量；brownfield；Flyway V47 起顺延'
 ## Epic List
 
 ### Epic 1: PawCoin 钱包与充值（资金地基）
-用户能通过 QRIS/DANA 充值获得 PawCoin、查看余额与消费明细。本 epic 建起整个资金地基（PaymentGateway/Midtrans 网关、双分录总账、payment_intents 幂等锚、PawCoin 非负钱包），以「充值」为用户价值载体。
+用户能通过 QRIS 充值获得 PawCoin、查看余额与消费明细。本 epic 建起整个资金地基（PaymentGateway/Midtrans 网关、双分录总账、payment_intents 幂等锚、PawCoin 非负钱包），以「充值」为用户价值载体。
 **FRs covered:** FR-43(支付组件基础), FR-50, FR-50A, FR-50D, FR-NFR-1, FR-NFR-2, FR-NFR-3, FR-NFR-4
 
 ### Epic 2: AI 问诊付费解锁
@@ -233,7 +233,7 @@ So that 所有资金变动可勾稽对账、PawCoin 余额并发不双花（FR-N
 ### Story 1.3: PawCoin 充值下单与到账
 
 As a 用户,
-I want 选固定档位用 QRIS/DANA 充值 PawCoin,
+I want 选固定档位用 QRIS 充值 PawCoin,
 So that 我能获得可消费的 PawCoin 余额。
 
 **Acceptance Criteria:**
@@ -393,7 +393,7 @@ So that 付费即得服务、没付上也不吃亏（FR-43D）。
 
 **Acceptance Criteria:**
 
-**Given** `POST /consultations/{token}/pay`（QRIS/DANA/PawCoin）
+**Given** `POST /consultations/{token}/pay`（QRIS/PawCoin）
 **When** 支付成功
 **Then** 建 `consult_orders`(IN_PROGRESS) + 建腾讯 IM 会话 + 记 `paid_at`（**L1**）
 
@@ -527,7 +527,7 @@ So that 我按支付方式拿回钱（UX-DR4/8，C-1）。
 **When** PawCoin 订单
 **Then** 即时退币、无手续费、跳过选账户（**L1**）
 
-**Given** QRIS/DANA 订单
+**Given** QRIS 订单
 **When** 选真钱退
 **Then** 填收款账户、显示净额（与后端一致）、**不加 bonus**；仅「系统故障未交付+转 PawCoin」才加 bonus（**L1**）
 **And** 提交后不可逆、提交前可退回 rs-choose（UX-DR14）（**L0**）；模拟器验收（**L2**）

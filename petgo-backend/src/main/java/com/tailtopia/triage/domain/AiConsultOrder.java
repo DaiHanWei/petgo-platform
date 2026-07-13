@@ -18,7 +18,7 @@ import java.time.Instant;
  * <ul>
  *   <li><b>PawCoin</b>（同步）：直接 {@link AiConsultOrderStatus#COMPLETED}，{@code paymentIntentToken=null}、
  *       {@code paidAt=now}（见 {@link #completedPawCoin}）。</li>
- *   <li><b>现金 QRIS/DANA</b>（异步）：先 {@link AiConsultOrderStatus#PENDING_PAYMENT} + 存 {@code paymentIntentToken}
+ *   <li><b>现金 QRIS</b>（异步）：先 {@link AiConsultOrderStatus#PENDING_PAYMENT} + 存 {@code paymentIntentToken}
  *       作 intent↔triage 关联锚（见 {@link #pendingCash}）；Midtrans 到账后 {@link #markCompleted}。</li>
  * </ul>
  * 免费额度解锁<b>不建订单</b>（{@code triage_tasks.unlock_source=FREE_QUOTA} 即记录）。{@code amount} 落成交价快照。

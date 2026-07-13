@@ -7,7 +7,7 @@ package com.tailtopia.shared.pay;
  * @param orderId  对外订单号（= payment_intents.public_token）
  * @param amount   金额（最小币种单位整型）
  * @param currency 币种（如 {@code IDR}）
- * @param channel  渠道（{@code QRIS} / {@code DANA} …），供网关选 payment_type
+ * @param channel  渠道（{@code QRIS} …），供网关选 payment_type
  * @param purpose  用途（审计/网关备注用，绝不含 PII）
  */
 public record ChargeRequest(String orderId, long amount, String currency, String channel, String purpose) {

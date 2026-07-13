@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
@@ -167,8 +166,6 @@ class _RechargePageState extends ConsumerState<RechargePage> {
         const SizedBox(height: AppSpacing.md),
         Row(children: [
           _channelChip('QRIS'),
-          const SizedBox(width: AppSpacing.md),
-          _channelChip('DANA'),
         ]),
         const SizedBox(height: AppSpacing.section),
         SizedBox(
@@ -241,29 +238,14 @@ class _RechargePageState extends ConsumerState<RechargePage> {
         Text(l10n.rechargePayingTitle,
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink)),
         const SizedBox(height: AppSpacing.lg),
-        if (_channel == 'QRIS') ...[
-          Center(
-            child: isHttp
-                ? Image.network(payload, width: 220, height: 220, fit: BoxFit.contain,
-                    errorBuilder: (_, _, _) => _stubQrBox(l10n))
-                : _stubQrBox(l10n),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Center(child: Text(l10n.rechargeScanHint, style: const TextStyle(fontSize: 13, color: AppColors.ink2))),
-        ] else ...[
-          Center(
-            child: FilledButton(
-              key: const ValueKey('rechargeOpenDana'),
-              onPressed: (payload != null && isHttp) ? () => launchUrl(Uri.parse(payload)) : null,
-              child: Text(l10n.rechargeOpenDana),
-            ),
-          ),
-          if (!isHttp)
-            Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.sm),
-              child: Center(child: Text(l10n.rechargeStubHint, style: const TextStyle(fontSize: 12, color: AppColors.muted))),
-            ),
-        ],
+        Center(
+          child: isHttp
+              ? Image.network(payload, width: 220, height: 220, fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) => _stubQrBox(l10n))
+              : _stubQrBox(l10n),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Center(child: Text(l10n.rechargeScanHint, style: const TextStyle(fontSize: 13, color: AppColors.ink2))),
         const SizedBox(height: AppSpacing.xl),
         Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),

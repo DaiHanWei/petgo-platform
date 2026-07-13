@@ -22,7 +22,7 @@ import org.springframework.stereotype.Service;
 /**
  * PawCoin 充值下单编排（Story 1.3）。把 1.1（意图/网关）接成下单闭环：
  * <ol>
- *   <li>校验档位（{@link TopupTierProvider}）+ 渠道（QRIS/DANA）；</li>
+ *   <li>校验档位（{@link TopupTierProvider}）+ 渠道（QRIS）；</li>
  *   <li>{@code PaymentIntentService.createIntent(PAWCOIN_TOPUP,...)} 建意图（幂等，写限流在其内）；</li>
  *   <li>{@code PaymentGateway.createCharge} 取付款载荷 + 网关订单号，回填意图（{@code attachCharge} 幂等）；</li>
  *   <li>回 {@link TopupResponse}（对外 token + 付款载荷，绝不含自增 id）。</li>
@@ -92,12 +92,12 @@ public class PawCoinTopupService {
         return new TopupResponse(intent.token(), channel.name(), amount, tier.getCoins(), payload);
     }
 
-    /** 仅允许外部收款渠道 QRIS/DANA；PAWCOIN（站内余额）/非法值 → 422。 */
+    /** 仅允许外部收款渠道 QRIS；PAWCOIN（站内余额）/非法值 → 422。 */
     private static PayChannel parsePayChannel(String raw) {
         if (raw != null) {
             try {
                 PayChannel ch = PayChannel.valueOf(raw.trim().toUpperCase());
-                if (ch == PayChannel.QRIS || ch == PayChannel.DANA) {
+                if (ch == PayChannel.QRIS) {
                     return ch;
                 }
             } catch (IllegalArgumentException ignored) {

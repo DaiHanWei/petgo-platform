@@ -6,6 +6,5 @@ package com.tailtopia.triage.domain;
  */
 public enum UnlockChannel {
     QRIS,
-    DANA,
     PAWCOIN
 }

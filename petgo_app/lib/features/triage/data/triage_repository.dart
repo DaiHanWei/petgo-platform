@@ -147,12 +147,11 @@ class TriageResult {
   }
 }
 
-/// 解锁方式（Story 2.4，对齐后端 `UnlockMethod`）。免费额度 / PawCoin 同步；QRIS/DANA 现金异步。
+/// 解锁方式（Story 2.4，对齐后端 `UnlockMethod`）。免费额度 / PawCoin 同步；QRIS 现金异步。
 enum UnlockMethod {
   freeQuota('FREE_QUOTA'),
   pawcoin('PAWCOIN'),
-  qris('QRIS'),
-  dana('DANA');
+  qris('QRIS');
 
   const UnlockMethod(this.wire);
 

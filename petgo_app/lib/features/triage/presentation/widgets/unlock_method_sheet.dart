@@ -8,7 +8,7 @@ import '../../data/triage_repository.dart';
 import 'triage_paywall.dart';
 
 /// 解锁方式面板（Story 2.4）。并行读免费额度（`/me/free-quota`）+ PawCoin 余额（provider），
-/// 按 `remaining>0` / `balance>=price` 判可用性；现金（QRIS/DANA）恒可选。返回所选 [UnlockMethod]（取消=null）。
+/// 按 `remaining>0` / `balance>=price` 判可用性；现金（QRIS）恒可选。返回所选 [UnlockMethod]（取消=null）。
 Future<UnlockMethod?> showUnlockMethodSheet(
   BuildContext context,
   WidgetRef ref, {
@@ -64,14 +64,6 @@ Future<UnlockMethod?> showUnlockMethodSheet(
                 subtitle: formatIdr(priceIdr),
                 enabled: true,
                 onTap: () => Navigator.pop(ctx, UnlockMethod.qris),
-              ),
-              _MethodTile(
-                keyValue: 'unlockMethodDana',
-                icon: Icons.account_balance_wallet_outlined,
-                title: l10n.triageUnlockMethodDana,
-                subtitle: formatIdr(priceIdr),
-                enabled: true,
-                onTap: () => Navigator.pop(ctx, UnlockMethod.dana),
               ),
             ],
           ),

@@ -31,7 +31,7 @@ class TopupOptions {
       );
 }
 
-/// 下单响应：意图 token（轮询用）+ 渠道 + 付款载荷（QRIS 二维码图 URL / DANA deeplink）。
+/// 下单响应：意图 token（轮询用）+ 渠道 + 付款载荷（QRIS 二维码图 URL）。
 class TopupResult {
   const TopupResult({
     required this.intentToken,
@@ -42,7 +42,7 @@ class TopupResult {
   });
 
   final String intentToken;
-  final String channel; // QRIS | DANA
+  final String channel; // QRIS
   final int amount;
   final int coins;
   final String? payload;

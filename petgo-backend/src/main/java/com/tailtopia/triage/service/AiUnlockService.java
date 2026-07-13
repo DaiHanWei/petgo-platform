@@ -35,7 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <ul>
  *   <li>{@code FREE_QUOTA}：{@link FreeQuotaService#tryConsume} → {@link TriageTask#unlock}(FREE_QUOTA)，同事务；额度不足抛 409。</li>
  *   <li>{@code PAWCOIN}：{@link PawCoinWalletService#debit} → unlock(PAID,PAWCOIN) → 建 COMPLETED 订单，同事务；余额不足回滚。</li>
- *   <li>{@code QRIS}/{@code DANA}：{@link PaymentIntentService#createIntent} + PENDING_PAYMENT 订单，返回支付信息；到账由
+ *   <li>{@code QRIS}：{@link PaymentIntentService#createIntent} + PENDING_PAYMENT 订单，返回支付信息；到账由
  *       {@link #completeCashUnlock} 解锁（{@code AiUnlockPaidHandler} 在回调同事务内调）。</li>
  * </ul>
  *
@@ -95,7 +95,6 @@ public class AiUnlockService {
             case FREE_QUOTA -> unlockByFreeQuota(userId, task);
             case PAWCOIN -> unlockByPawCoin(userId, task, price);
             case QRIS -> createCashUnlock(userId, task, price, PayChannel.QRIS);
-            case DANA -> createCashUnlock(userId, task, price, PayChannel.DANA);
         };
     }
 

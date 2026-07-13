@@ -7,7 +7,7 @@ package com.tailtopia.triage.domain;
  *   <li>{@code LOCKED}：详建（SARAN PERAWATAN = advice/medicationRef）默认锁定，待解锁。生成成功
  *       （{@code markDone}）时初始化为此；PENDING/FAILED 任务 {@code unlock_source} 恒 NULL（无可解锁详建）。</li>
  *   <li>{@code FREE_QUOTA}：用每月免费额度解锁（Story 2.1/2.3）。{@code unlock_channel} 恒 NULL。</li>
- *   <li>{@code PAID}：付费解锁（Story 2.3）。{@code unlock_channel} 必有值（QRIS/DANA/PAWCOIN）。</li>
+ *   <li>{@code PAID}：付费解锁（Story 2.3）。{@code unlock_channel} 必有值（QRIS/PAWCOIN）。</li>
  * </ul>
  *
  * <p><b>一经写入不可覆盖</b>（架构 L105）：仅允许 {@code LOCKED/NULL → FREE_QUOTA/PAID} 一次性跃迁

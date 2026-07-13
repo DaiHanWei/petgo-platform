@@ -78,7 +78,7 @@ public class TriageController {
     }
 
     /**
-     * 解锁 AI 详建（Story 2.3）：免费额度 / PawCoin（同步，返回已解锁结果）或 QRIS/DANA（现金，返回支付信息）。
+     * 解锁 AI 详建（Story 2.3）：免费额度 / PawCoin（同步，返回已解锁结果）或 QRIS（现金，返回支付信息）。
      * 仅本人（非 owner/不存在 403）；红色/已解锁短路不扣费。写端点限流。
      */
     @PostMapping("/{id}/unlock")

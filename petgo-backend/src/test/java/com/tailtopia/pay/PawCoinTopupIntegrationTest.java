@@ -65,7 +65,7 @@ class PawCoinTopupIntegrationTest extends ApiIntegrationTest {
     @Test
     void failedCallbackDoesNotCredit() throws Exception {
         long userId = newUser().getId();
-        String token = placeTopup(userId, "25k", "DANA", "topup-" + SEQ.incrementAndGet());
+        String token = placeTopup(userId, "25k", "QRIS", "topup-" + SEQ.incrementAndGet());
 
         fireCallback(token, "deny"); // 失败态
         assertThat(walletService.balanceOf(userId)).isEqualTo(0L);

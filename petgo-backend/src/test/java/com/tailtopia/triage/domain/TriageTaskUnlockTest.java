@@ -62,7 +62,7 @@ class TriageTaskUnlockTest {
         t.unlock(UnlockSource.FREE_QUOTA, null);
         // 已解锁再 unlock → 幂等拒绝（不可覆盖）。
         assertThatIllegalStateException()
-                .isThrownBy(() -> t.unlock(UnlockSource.PAID, UnlockChannel.DANA));
+                .isThrownBy(() -> t.unlock(UnlockSource.PAID, UnlockChannel.QRIS));
         assertThat(t.getUnlockSource()).isEqualTo(UnlockSource.FREE_QUOTA); // 未被覆盖
     }
 

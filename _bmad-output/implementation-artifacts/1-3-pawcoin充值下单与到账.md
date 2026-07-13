@@ -12,15 +12,15 @@ Status: done
 ## Story
 
 As a 用户,
-I want 选固定档位用 QRIS/DANA 充值 PawCoin，支付成功后自动到账,
+I want 选固定档位用 QRIS 充值 PawCoin，支付成功后自动到账,
 so that 我能获得可消费的 PawCoin 余额（FR-50 / FR-50A）。
 
 ## Acceptance Criteria
 
 1. **充值下单端点（L0/L1）**
    **Given** `POST /api/v1/me/pawcoin/topups`（JWT `role=user`，`Idempotency-Key` 头 + 写端点限流）
-   **When** 用户选一个合法档位（QRIS/DANA）下单
-   **Then** 经 1.1 `PaymentIntentService.createIntent(PAWCOIN_TOPUP, amount, channel, idemKey)` 建意图，返回**支付载荷**（QRIS 二维码串/DANA deeplink）+ `intentToken`（对外 token，非自增 id）（**L1**）
+   **When** 用户选一个合法档位（QRIS）下单
+   **Then** 经 1.1 `PaymentIntentService.createIntent(PAWCOIN_TOPUP, amount, channel, idemKey)` 建意图，返回**支付载荷**（QRIS 二维码串）+ `intentToken`（对外 token，非自增 id）（**L1**）
    **And** 非法档位/金额 → `AppException.validation`（422）；未登录 → 401（**L0/L1**）
 
 2. **固定档位（L0）**
@@ -53,7 +53,7 @@ so that 我能获得可消费的 PawCoin 余额（FR-50 / FR-50A）。
 - [x] **T2 充值下单**（AC1）
   - [x] `pay/dto/CreateTopupRequest.java`（record：`tierId`/`channel` + `@NotBlank`）+ `TopupResponse.java`（record：`intentToken` + 载荷；**不含自增 id**）。**L0** ✅
   - [x] `pay/web/PawCoinTopupController.java`（`@RequestMapping("/api/v1/me")`，`@AuthenticationPrincipal Jwt` + `currentUserId(jwt)`，`POST /pawcoin/topups`，`Idempotency-Key` 头）。照 `auth/web/MeController`（C1，仅作用当前 sub 防越权）。**L1** ✅
-  - [x] `pay/service/PawCoinTopupService.java`：校验档位/渠道(QRIS/DANA) → `createIntent(PAWCOIN_TOPUP,...)`(幂等+写限流在其内) → `gateway.createCharge` 取载荷 + `attachCharge` 回填(幂等，重放不重复 charge) → 返回 `TopupResponse`。**L1** ✅
+  - [x] `pay/service/PawCoinTopupService.java`：校验档位/渠道(QRIS) → `createIntent(PAWCOIN_TOPUP,...)`(幂等+写限流在其内) → `gateway.createCharge` 取载荷 + `attachCharge` 回填(幂等，重放不重复 charge) → 返回 `TopupResponse`。**L1** ✅
 - [x] **T3 回调入账接线**（AC3/4 — 最高风险）
   - [x] 分派点：复用 1.1 `applyCallback` 在 `markPaid` 后于**同 `@Transactional`** 内 `publishEvent(PaymentIntentPaidEvent)`；`TopupPaidHandler` 以**同步 `@EventListener` + `Propagation.MANDATORY`** 按 `purpose` 分派（非充值意图忽略，未接 purpose 不 crash）。**L0** ✅
   - [x] `pay/service/TopupPaidHandler.java`：**同一事务**内 `PawCoinWalletService.credit(userId, amount, TOPUP, refType=PAYMENT_INTENT, refId=intentId, idempotencyKey=publicToken)`。幂等：1.1 对已 PAID 意图 applyCallback 早返回不再发事件 + credit 幂等键=publicToken。**禁 AFTER_COMMIT**（记忆库血泪，代码注释显式钉死）。**L1** ✅

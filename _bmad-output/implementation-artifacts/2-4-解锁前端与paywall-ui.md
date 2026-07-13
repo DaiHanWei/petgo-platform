@@ -5,10 +5,10 @@ baseline_commit: 7c1ec93
 
 Status: review
 
-> V1.1 **Epic 2 收官** story，**纯前端 Flutter**。消费 2-2 后端分字段下发（`TriageResult` 加 `locked`/`unlockSource`）+ 2-3 解锁端点（`POST /triage/{id}/unlock`），在分诊结果页渲染**锁定态 paywall**（详建 blur + 解锁 CTA），并接**三条解锁方式**（免费额度 / PawCoin / 现金 QRIS·DANA）。**无迁移、无后端改动**。
+> V1.1 **Epic 2 收官** story，**纯前端 Flutter**。消费 2-2 后端分字段下发（`TriageResult` 加 `locked`/`unlockSource`）+ 2-3 解锁端点（`POST /triage/{id}/unlock`），在分诊结果页渲染**锁定态 paywall**（详建 blur + 解锁 CTA），并接**三条解锁方式**（免费额度 / PawCoin / 现金 QRIS）。**无迁移、无后端改动**。
 > 源：`epics-v1.1.md` Story 2.4（详建 blur + CTA「PawCoin atau Rp10.000」；黄色图标/颜色/时效免费；**红色无锁**；读屏隐藏 blur；`flutter analyze` 绿；L2 模拟器视觉）· `UX_DESIGN` C-7 修订（安全信息永不被付费墙挡住）· 承接 2-2/2-3 契约。
 > **范围边界**：结果页锁定态渲染 + 解锁方式选择 + 调解锁端点 + 同步（免费/PawCoin）即时解锁 + 现金发起支付并轮询解锁。**不做**：后端逻辑（2-2/2-3 已完成）、真实 Midtrans QR/支付页（复用 1.3/1.5 支付呈现，现金完成属 L2）、后台改价（9-2）。
-> **承接契约（后端已 review）**：`GET /triage/{id}` 的 `TriageResultResponse` 现含 `locked`(bool)/`unlockSource`(LOCKED/FREE_QUOTA/PAID)；DONE 时安全字段（dangerLevel/disclaimer/observation/emergency*）恒下发，详建 `advice`/`medicationRef` 仅解锁下发（**红色 locked 恒 false，详建恒下发**）。`POST /triage/{id}/unlock` body `{method: FREE_QUOTA|PAWCOIN|QRIS|DANA}` → `UnlockResponse{unlocked, result, payment}`（同步：unlocked=true+result；现金：unlocked=false+payment{token,...}）。`GET /me/free-quota` → `{period, limit, used, remaining}`。
+> **承接契约（后端已 review）**：`GET /triage/{id}` 的 `TriageResultResponse` 现含 `locked`(bool)/`unlockSource`(LOCKED/FREE_QUOTA/PAID)；DONE 时安全字段（dangerLevel/disclaimer/observation/emergency*）恒下发，详建 `advice`/`medicationRef` 仅解锁下发（**红色 locked 恒 false，详建恒下发**）。`POST /triage/{id}/unlock` body `{method: FREE_QUOTA|PAWCOIN|QRIS}` → `UnlockResponse{unlocked, result, payment}`（同步：unlocked=true+result；现金：unlocked=false+payment{token,...}）。`GET /me/free-quota` → `{period, limit, used, remaining}`。
 
 ## Story
 
@@ -36,11 +36,11 @@ so that 我知道免费看到什么、付费解锁什么。
 4. **前端：解锁方式选择 + 同步解锁（免费额度 / PawCoin）（L0/L2）**
    **Given** 点击解锁 CTA
    **When** 弹解锁方式面板（bottom sheet）
-   **Then** 列三方式：**免费额度**（读 `/me/free-quota`，`remaining>0` 才可选，展示「Kuota gratis (sisa X)」，`remaining==0` 置灰/隐藏）；**PawCoin**（读 `pawCoinProvider` 余额，`balance>=price` 才可选，展示余额）；**现金**（QRIS/DANA）；选免费/PawCoin → 调 `unlockTriage(id, FREE_QUOTA|PAWCOIN)` → `unlocked=true` → 用返回 `result` 刷新结果页为已解锁（详建下发、去 blur）；额度不足/余额不足后端 409 → 友好提示引导换方式（不崩）（**L0** 逻辑 + widget / **L2** 真机走通）
+   **Then** 列三方式：**免费额度**（读 `/me/free-quota`，`remaining>0` 才可选，展示「Kuota gratis (sisa X)」，`remaining==0` 置灰/隐藏）；**PawCoin**（读 `pawCoinProvider` 余额，`balance>=price` 才可选，展示余额）；**现金**（QRIS）；选免费/PawCoin → 调 `unlockTriage(id, FREE_QUOTA|PAWCOIN)` → `unlocked=true` → 用返回 `result` 刷新结果页为已解锁（详建下发、去 blur）；额度不足/余额不足后端 409 → 友好提示引导换方式（不崩）（**L0** 逻辑 + widget / **L2** 真机走通）
 
-5. **前端：现金解锁（QRIS/DANA，发起支付 + 轮询解锁）（L2）**
+5. **前端：现金解锁（QRIS，发起支付 + 轮询解锁）（L2）**
    **Given** 选现金方式
-   **When** 调 `unlockTriage(id, QRIS|DANA)` → `unlocked=false`+`payment{token}`
+   **When** 调 `unlockTriage(id, QRIS)` → `unlocked=false`+`payment{token}`
    **Then** 呈现支付（**复用 1.3/1.5 topup 支付呈现范式**：展示支付渠道/引导 + 轮询）；**轮询 `pollTriage(id)` 直到 `locked==false`**（AiUnlockPaidHandler 到账后置，复用既有轮询，无需新端点）或超时按未完成回退；到账后结果页转已解锁（**L2**，需 sandbox 真付；stub 模式无真实 QR，故本路径 L0 仅测「发起→拿到 payment token→进入轮询态」不测真到账）
 
 6. **前端：无障碍 + 静态门槛（L0）**
@@ -63,7 +63,7 @@ so that 我知道免费看到什么、付费解锁什么。
   - [x] `presentation/widgets/unlock_method_sheet.dart`：三方式（免费额度 `remaining` / PawCoin 余额 / 现金），可用性按 `remaining>0` / `balance>=price` 判定。**L0**
   - [x] `domain/triage_unlock_controller.dart`（Notifier/AsyncNotifier）：`unlock(id, method)` → 免费/PawCoin 同步（成功用 result 刷新 `triageResultProvider` 或结果页本地态，去 blur）；现金 → 拿 payment、进入轮询（复用 `pollTriage` 直到 `locked==false` 或超时）。409（额度/余额不足）→ 暴露错误态给 UI 友好提示。**L0**
 - [x] **T4 前端：i18n**（AC2/AC6）
-  - [x] `app_en.arb`/`app_id.arb` 加：CTA、方式名（免费额度/剩余、PawCoin/余额、现金 QRIS/DANA）、额度不足/余额不足提示、读屏语义串（「详建已锁定，解锁后可见」）、价格模板。`flutter gen-l10n`。**L0**
+  - [x] `app_en.arb`/`app_id.arb` 加：CTA、方式名（免费额度/剩余、PawCoin/余额、现金 QRIS）、额度不足/余额不足提示、读屏语义串（「详建已锁定，解锁后可见」）、价格模板。`flutter gen-l10n`。**L0**
 - [x] **T5 测试**（AC2-6）
   - [x] widget `test/triage/triage_paywall_test.dart`：黄色 locked→显 blur+CTB、安全部分（时效/免责）可见、详建真文字不在 tree（读屏 `ExcludeSemantics`）；绿色 locked→同；**红色→无 paywall、详建可见**（头等）；unlocked（locked=false）→无 paywall、详建可见。**L0**
   - [x] widget/unit `test/triage/triage_unlock_controller_test.dart`（fake repo）：免费额度 remaining>0 可选、扣成功刷新已解锁；PawCoin balance>=price 可选；额度/余额不足 409 → 错误态不崩；现金 → 进入轮询态。**L0**
@@ -75,7 +75,7 @@ so that 我知道免费看到什么、付费解锁什么。
 
 ### 承接契约（后端 2-2/2-3 已 review，前端照此消费）
 - **`GET /triage/{id}` → TriageResultResponse**（2-2）：DONE 时新增 `locked`(bool)/`unlockSource`(LOCKED/FREE_QUOTA/PAID)；安全字段 `dangerLevel`/`disclaimer`/`observation`(含 timeWindow)/`emergencySteps`/`emergencyAvoid` 恒下发；详建 `advice`/`medicationRef` **仅解锁时非 null**（锁定时后端置 null → 前端拿不到真文字，paywall 用占位不是模糊真文字）。**红色 `locked` 恒 false**。非 DONE 仅回 status（`locked`/`unlockSource` 为 null）。
-- **`POST /triage/{id}/unlock`**（2-3）：body `{"method":"FREE_QUOTA|PAWCOIN|QRIS|DANA"}` → `UnlockResponse{unlocked(bool), result(TriageResultResponse?), payment(PaymentIntentResponse?)}`。同步（免费/PawCoin）：`unlocked=true`+`result`（已解锁，含详建）。现金：`unlocked=false`+`payment{token,purpose,channel,amount,currency,status}`（**无真实 QR 字段**，stub 模式）。额度不足/余额不足 → 后端 409 ProblemDetail（前端映射友好文案，勿显 detail 原文）。红色/已解锁 → 后端短路返回 `unlocked=true`+result（不扣费）。
+- **`POST /triage/{id}/unlock`**（2-3）：body `{"method":"FREE_QUOTA|PAWCOIN|QRIS"}` → `UnlockResponse{unlocked(bool), result(TriageResultResponse?), payment(PaymentIntentResponse?)}`。同步（免费/PawCoin）：`unlocked=true`+`result`（已解锁，含详建）。现金：`unlocked=false`+`payment{token,purpose,channel,amount,currency,status}`（**无真实 QR 字段**，stub 模式）。额度不足/余额不足 → 后端 409 ProblemDetail（前端映射友好文案，勿显 detail 原文）。红色/已解锁 → 后端短路返回 `unlocked=true`+result（不扣费）。
 - **`GET /me/free-quota`**（2-1）：`{period, limit, used, remaining}`。`remaining` 供 sheet 判「免费额度可选 + 剩余数」。
 
 ### 既有前端现状（已读，dev 照此，勿臆测）
@@ -95,7 +95,7 @@ so that 我知道免费看到什么、付费解锁什么。
 
 ### 解锁编排要点（AC4/AC5）
 - **免费/PawCoin 同步**：`unlockTriage` 返回 `unlocked=true`+`result` → 直接用该 result 更新结果视图态（无需再 poll），去 paywall。
-- **现金异步**：`unlockTriage(QRIS/DANA)` 返回 payment → 进入「等待支付」态 + 轮询 `pollTriage(id)`（复用 recharge 的 Timer 范式，`dispose` 取消防泄漏）直到 `locked==false` → 转已解锁；超时/取消 → 回锁定态。**stub 模式无真到账**，故 L0 只测「发起→拿 payment token→进入轮询态」，真到账走 L2 sandbox。
+- **现金异步**：`unlockTriage(QRIS)` 返回 payment → 进入「等待支付」态 + 轮询 `pollTriage(id)`（复用 recharge 的 Timer 范式，`dispose` 取消防泄漏）直到 `locked==false` → 转已解锁；超时/取消 → 回锁定态。**stub 模式无真到账**，故 L0 只测「发起→拿 payment token→进入轮询态」，真到账走 L2 sandbox。
 - **可用性判定**：sheet 打开时并行读 `/me/free-quota`（remaining）+ `pawCoinProvider`（balance）；`remaining<=0` 免费置灰、`balance<price` PawCoin 置灰（仍可选现金）。
 - **409 友好提示**：额度/余额不足（后端 409）映射本地化文案「本月免费额度已用完，试试 PawCoin 或现金」/「PawCoin 余额不足，去充值或用现金」，不崩、不显 ProblemDetail detail 原文。
 
