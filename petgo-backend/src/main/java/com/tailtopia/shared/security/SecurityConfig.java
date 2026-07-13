@@ -167,6 +167,9 @@ public class SecurityConfig {
                                 "/api/v1/consultations", "/api/v1/consultations/**").hasRole("USER")
                         // 客服工单端点（Story 4.1，FR-52）：用户建单/查单，仅 role=USER（vet/guest → 403）
                         .requestMatchers("/api/v1/support-tickets", "/api/v1/support-tickets/**").hasRole("USER")
+                        // 用户端退款方式选择/填收款（Story 4.5）：列表 + PawCoin 即时退 + QRIS 填账户，仅 role=USER
+                        .requestMatchers("/api/v1/me/refund-requests",
+                                "/api/v1/refund-requests/**").hasRole("USER")
                         // 其余 /api/v1 默认需 JWT（写一律拒绝未登录）；user 写端点对 vet token → 403
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth

@@ -135,6 +135,14 @@ public class RefundRequest {
         this.payerAdminId = payerAdminId;
     }
 
+    /**
+     * PawCoin 订单即时退币终态（Story 4.5）：<b>系统执行、不经 4-6 主管/财务</b>（PawCoin 站内币无真钱打款风险）。
+     * 置 {@code approval_status=DONE}，{@code payer_admin_id} 保持空（非人工打款）。幂等由调用方（credit 幂等键 + 订单 CAS）保证。
+     */
+    public void markInstantPawCoinRefunded() {
+        this.approvalStatus = ApprovalStatus.DONE;
+    }
+
     @PrePersist
     void onCreate() {
         Instant now = Instant.now();

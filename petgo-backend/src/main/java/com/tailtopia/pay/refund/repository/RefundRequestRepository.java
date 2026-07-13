@@ -1,6 +1,7 @@
 package com.tailtopia.pay.refund.repository;
 
 import com.tailtopia.pay.refund.domain.RefundRequest;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -12,4 +13,7 @@ public interface RefundRequestRepository extends JpaRepository<RefundRequest, Lo
     Optional<RefundRequest> findByRefundToken(String refundToken);
 
     boolean existsByOrderId(long orderId);
+
+    /** 用户端「我的退款」列表（Story 4.5，仅本人，倒序）。 */
+    List<RefundRequest> findByUserIdOrderByCreatedAtDesc(long userId);
 }

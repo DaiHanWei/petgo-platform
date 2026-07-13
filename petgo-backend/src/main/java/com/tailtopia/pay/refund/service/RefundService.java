@@ -4,14 +4,22 @@ import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.consult.domain.ConsultOrder;
 import com.tailtopia.consult.repository.ConsultOrderRepository;
+import com.tailtopia.consult.domain.ConsultOrderStatus;
 import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.notify.service.NotificationService;
+import com.tailtopia.pay.domain.PawCoinTxnType;
+import com.tailtopia.pay.domain.PayChannel;
+import com.tailtopia.pay.refund.domain.ApprovalStatus;
 import com.tailtopia.pay.refund.domain.NeedDecision;
 import com.tailtopia.pay.refund.domain.PayoutChannel;
 import com.tailtopia.pay.refund.domain.RefundRequest;
+import com.tailtopia.pay.refund.dto.MyRefundView;
 import com.tailtopia.pay.refund.repository.RefundRequestRepository;
+import com.tailtopia.pay.service.PawCoinWalletService;
 import com.tailtopia.profile.service.CardTokenGenerator;
 import com.tailtopia.shared.error.AppException;
+import java.util.ArrayList;
+import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,16 +42,18 @@ public class RefundService {
     private final AdminAuditService audit;
     private final RefundAuditRecorder auditRecorder;
     private final NotificationService notifications;
+    private final PawCoinWalletService wallet;
 
     public RefundService(RefundRequestRepository refunds, ConsultOrderRepository orders,
             CardTokenGenerator tokenGenerator, AdminAuditService audit, RefundAuditRecorder auditRecorder,
-            NotificationService notifications) {
+            NotificationService notifications, PawCoinWalletService wallet) {
         this.refunds = refunds;
         this.orders = orders;
         this.tokenGenerator = tokenGenerator;
         this.audit = audit;
         this.auditRecorder = auditRecorder;
         this.notifications = notifications;
+        this.wallet = wallet;
     }
 
     /**
@@ -143,6 +153,113 @@ public class RefundService {
         r.recordPayout(payerAdminId);
         audit.record(payerAdminId, AuditActions.REFUND_PAYOUT_RECORDED, "refund_request", refundToken,
                 "退款打款完成");
+    }
+
+    // ========== 用户端退款方式选择与填收款（Story 4.5，App 行为）==========
+
+    /**
+     * 用户端「我的退款」列表（Story 4.5，仅本人）。退款方式由订单原支付渠道决定；<b>零 PII 回显</b>
+     * （不解密 payout_account/holder，只回 payoutFilled）。QRIS 附出款渠道费预览（后端权威净额）。
+     */
+    @Transactional(readOnly = true)
+    public List<MyRefundView> listMyRefunds(long userId) {
+        List<MyRefundView> views = new ArrayList<>();
+        for (RefundRequest r : refunds.findByUserIdOrderByCreatedAtDesc(userId)) {
+            ConsultOrder order = orders.findById(r.getOrderId()).orElse(null);
+            if (order == null) {
+                continue; // 订单不存在（理论不会，防御）
+            }
+            boolean pawcoin = order.getPayChannel() == PayChannel.PAWCOIN;
+            boolean actionable = r.getNeedDecision() == NeedDecision.APPROVED && r.getApprovalStatus() == null;
+            List<MyRefundView.PayoutOption> options = pawcoin ? List.of() : payoutOptions(r.getOrderAmount());
+            views.add(new MyRefundView(
+                    r.getRefundToken(), order.getOrderToken(), order.getPayChannel().name(),
+                    pawcoin ? "INSTANT_PAWCOIN" : "REAL_MONEY",
+                    r.getNeedDecision().name(),
+                    r.getApprovalStatus() == null ? null : r.getApprovalStatus().name(),
+                    r.getOrderAmount(), actionable, r.getApprovalStatus() != null, options));
+        }
+        return views;
+    }
+
+    /** QRIS 出款渠道费预览（后端权威 net = order − fee，前端仅展示）。 */
+    private List<MyRefundView.PayoutOption> payoutOptions(long orderAmount) {
+        List<MyRefundView.PayoutOption> options = new ArrayList<>();
+        for (PayoutChannel ch : PayoutChannel.values()) {
+            options.add(new MyRefundView.PayoutOption(ch.name(), ch.fee(),
+                    Math.max(0, orderAmount - ch.fee())));
+        }
+        return options;
+    }
+
+    /**
+     * PawCoin 订单即时退币（Story 4.5，用户确认，<b>不经 4-6</b>）。owner + need=APPROVED + 订单渠道=PAWCOIN 门控。
+     * 全额 {@code credit(REFUND)}（无手续费、幂等键）+ 订单 CAS {@code markRefunded}（REFUNDING→REFUNDED，返 0 幂等跳过）
+     * + {@code approval_status=DONE}。<b>双闸幂等</b>（credit 键 + 订单 CAS）绝不双退。不发通知（AB-5B）。
+     */
+    @Transactional
+    public void refundToPawCoin(String refundToken, long userId) {
+        RefundRequest r = requireOwned(refundToken, userId);
+        if (r.getApprovalStatus() == ApprovalStatus.DONE) {
+            return; // 已退，幂等短路
+        }
+        requireApproved(r);
+        ConsultOrder order = requireOrder(r);
+        if (order.getPayChannel() != PayChannel.PAWCOIN) {
+            throw AppException.conflict("该订单非 PawCoin 支付，不能即时退币");
+        }
+        // 全额退回 PawCoin（credit 幂等：稳定键，重复确认短路，内部记 FLOAT_LIABILITY ledger）。
+        wallet.credit(userId, order.getAmount(), PawCoinTxnType.REFUND,
+                "refund_request", r.getId(), "refund-pawcoin-" + refundToken);
+        orders.markRefunded(order.getId()); // CAS REFUNDING→REFUNDED（返 0=已退，跳过）
+        r.markInstantPawCoinRefunded();
+    }
+
+    /**
+     * QRIS 订单用户填真钱收款账户（Story 4.5，<b>不可逆边界</b>）。owner + need=APPROVED + 订单渠道=QRIS +
+     * approval 未提交 门控。委托 4-3 {@link #fillPayout}（净额后端权威 + PII 加密 + PENDING_APPROVAL，等 4-6）。
+     */
+    @Transactional
+    public void fillPayoutByUser(String refundToken, long userId, PayoutChannel channel,
+            String payoutAccount, String accountHolderName) {
+        RefundRequest r = requireOwned(refundToken, userId);
+        requireApproved(r);
+        if (r.getApprovalStatus() != null) {
+            throw AppException.conflict("收款账户已提交，不可修改"); // 不可逆边界（UX-DR14）
+        }
+        ConsultOrder order = requireOrder(r);
+        if (order.getPayChannel() != PayChannel.QRIS) {
+            throw AppException.conflict("该订单非 QRIS 支付，无需填真钱收款账户");
+        }
+        fillPayout(refundToken, channel, payoutAccount, accountHolderName);
+    }
+
+    // ---- 用户端门控守卫 ----
+
+    /** owner 门控：按 token 取，user 不符 → 403（区分 404 不存在 / 403 越权）。 */
+    private RefundRequest requireOwned(String refundToken, long userId) {
+        RefundRequest r = require(refundToken);
+        if (r.getUserId() == null || r.getUserId() != userId) {
+            throw AppException.forbidden("无权操作该退款请求");
+        }
+        return r;
+    }
+
+    private void requireApproved(RefundRequest r) {
+        if (r.getNeedDecision() != NeedDecision.APPROVED) {
+            throw AppException.conflict("退款需求尚未通过客服判定");
+        }
+    }
+
+    private ConsultOrder requireOrder(RefundRequest r) {
+        ConsultOrder order = orders.findById(r.getOrderId())
+                .orElseThrow(() -> AppException.notFound("订单不存在"));
+        // 订单须已进退款流程（4-4 批准置 REFUNDING）——防越过判定直接退款。
+        if (order.getStatus() != ConsultOrderStatus.REFUNDING
+                && order.getStatus() != ConsultOrderStatus.REFUNDED) {
+            throw AppException.conflict("订单未进入退款流程");
+        }
+        return order;
     }
 
     // ---- 职责分离守卫（A-1，最高危）----

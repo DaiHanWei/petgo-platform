@@ -25,6 +25,11 @@ import '../../features/support/presentation/ticket_compose_page.dart';
 import '../../features/support/presentation/ticket_detail_page.dart';
 import '../../features/pawcoin/presentation/pawcoin_page.dart';
 import '../../features/pawcoin/presentation/recharge_page.dart';
+import '../../features/refund/domain/refund_request.dart';
+import '../../features/refund/presentation/refund_list_page.dart';
+import '../../features/refund/presentation/refund_choose_page.dart';
+import '../../features/refund/presentation/refund_account_page.dart';
+import '../../features/refund/presentation/refund_review_page.dart';
 import '../../features/profile/presentation/growth_archive_page.dart';
 import '../../features/profile/presentation/milestone_list_page.dart';
 import '../../features/profile/domain/pet_profile.dart';
@@ -299,6 +304,17 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/me/pawcoin', builder: (c, s) => const PawCoinPage()),
       // PawCoin 充值页（Story 1.5）。余额页「Isi Saldo」入口；同样 /me 门控 + shell 外隐 Tab。
       GoRoute(path: '/me/pawcoin/recharge', builder: (c, s) => const RechargePage()),
+      // 用户端退款方式选择/填收款 3 屏（Story 4.5）。受控（/me 前缀，需登录）；shell 外顶层隐 Tab。
+      GoRoute(path: '/me/refunds', builder: (c, s) => const RefundListPage()),
+      GoRoute(
+          path: '/me/refunds/choose',
+          builder: (c, s) => RefundChoosePage(refund: s.extra as MyRefund)),
+      GoRoute(
+          path: '/me/refunds/account',
+          builder: (c, s) => RefundAccountPage(refund: s.extra as MyRefund)),
+      GoRoute(
+          path: '/me/refunds/review',
+          builder: (c, s) => RefundReviewPage(draft: s.extra as RefundPayoutDraft)),
       // 语言设置（Story 7.2）。
       GoRoute(path: '/me/language', builder: (c, s) => const LanguageSettingsPage()),
       // 账号注销整页（P-43 · Story 7.3）。受控（/me 前缀，需登录）。
