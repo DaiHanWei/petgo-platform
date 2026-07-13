@@ -71,6 +71,18 @@ public final class AuditActions {
     /** 异常工单标记已处理/归档（Story 5.1）。 */
     public static final String ANOMALY_RESOLVED = "ANOMALY_RESOLVED";
 
+    // ===== 退款两段审批（V1.1 Story 4.3，最高危 A-1）=====
+    /** 退款请求创建（绑订单/工单）。 */
+    public static final String REFUND_REQUEST_CREATED = "REFUND_REQUEST_CREATED";
+    /** 客服判定退款需求（APPROVED/REJECTED）。 */
+    public static final String REFUND_NEED_SUBMITTED = "REFUND_NEED_SUBMITTED";
+    /** 主管审批通过退款申请。 */
+    public static final String REFUND_APPROVED = "REFUND_APPROVED";
+    /** 财务记录打款完成。 */
+    public static final String REFUND_PAYOUT_RECORDED = "REFUND_PAYOUT_RECORDED";
+    /** 职责分离拦截：同一 admin 试图兼任两职（含 SUPER_ADMIN 不豁免，A-1）。 */
+    public static final String REFUND_DUTY_VIOLATION_BLOCKED = "REFUND_DUTY_VIOLATION_BLOCKED";
+
     private AuditActions() {
     }
 }

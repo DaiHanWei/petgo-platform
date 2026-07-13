@@ -9,3 +9,6 @@ management:
 logging:
   level:
     com.tailtopia: DEBUG
+# 退款 PII 加密 dev/test 占位密钥（Story 4.3，非真实密钥；生产走 env REFUND_PII_KEY）。base64 的 32 字节。
+refund:
+  pii-key: cGV0Z28tcmVmdW5kLXBpaS1kZXZrZXktMzJieXRlcyE=

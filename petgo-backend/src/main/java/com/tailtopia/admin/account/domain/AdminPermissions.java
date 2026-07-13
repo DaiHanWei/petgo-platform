@@ -39,6 +39,14 @@ public final class AdminPermissions {
     // 评分（Epic 6）
     public static final String RATING_VIEW = "rating.view";
 
+    // 退款两段审批（V1.1 Epic 4，Story 4.3，三级职责分离 A-1）
+    /** 提交退款需求判定（客服）。 */
+    public static final String REFUND_SUBMIT = "refund.submit";
+    /** 审批退款申请（主管）。 */
+    public static final String REFUND_APPROVE = "refund.approve";
+    /** 执行退款打款（财务）。 */
+    public static final String REFUND_PAYOUT = "refund.payout";
+
     // 后台账号 / 审计（Epic 1）
     public static final String ADMIN_CREATE_ACCOUNT = "admin.create_account";
     public static final String ADMIN_DEACTIVATE = "admin.deactivate";
@@ -51,6 +59,7 @@ public final class AdminPermissions {
             CONTENT_VIEW_REPORTS, CONTENT_TAKEDOWN, CONTENT_RESTORE, CONTENT_PROACTIVE_TAKEDOWN,
             CONSULT_VIEW_ANOMALIES, CONSULT_HANDLE, CONSULT_VIEW_SESSIONS,
             RATING_VIEW,
+            REFUND_SUBMIT, REFUND_APPROVE, REFUND_PAYOUT,
             ADMIN_CREATE_ACCOUNT, ADMIN_DEACTIVATE, ADMIN_VIEW_LOGS);
 
     private AdminPermissions() {

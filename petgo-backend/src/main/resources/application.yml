@@ -73,6 +73,11 @@ petgo:
     ios-url: ${CARD_IOS_URL:https://play.google.com/store/apps/details?id=com.tailtopia.app}
     app-download-url: ${CARD_APP_DOWNLOAD_URL:https://play.google.com/store/apps/details?id=com.tailtopia.app}
 
+# 退款收款账户 PII 加密（Story 4.3，A-1/FR-NFR-4）。AES-256-GCM 密钥（base64 的 32 字节）。
+# 凭证 env 注入红线，绝不入库；缺失时加/解密抛异常（不静默存明文）。dev/test 用 application-dev.yml 的占位密钥。
+refund:
+  pii-key: ${REFUND_PII_KEY:}
+
 # 媒体基建（Story 2.1）：阿里云 OSS 雅加达双桶 + STS 直传 + 签名 URL。
 # 凭证全部 env 注入，绝不入库；下方仅占位/默认。
 media:
