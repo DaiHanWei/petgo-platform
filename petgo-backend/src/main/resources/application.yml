@@ -46,6 +46,10 @@ petgo:
     timeout-seconds: ${PAY_TIMEOUT_SECONDS:10}
     # PawCoin 充值暂停（Story 1.5，浮存门槛 AB-6C）：运营/工程手动置 true 重启即暂停充值；前端渲染暂停态。
     topup-paused: ${PAWCOIN_TOPUP_PAUSED:false}
+  # AI 问诊（Story 2.1）。default-free-quota=每月免费解锁 AI 详情次数，读取处 clamp[0,35]（0=全付费）。
+  # 9-2 后台 pricing_config.monthly_free_quota 落地后换 DB 读；本 story 先 env（渐进范式同 topup-paused）。
+  triage:
+    default-free-quota: ${TRIAGE_DEFAULT_FREE_QUOTA:1}
   # App 版本更新提醒（Story 6.5，App 内提示，外部化配置运营可调，不走推送）。
   app-version:
     latest: ${APP_LATEST_VERSION:1.0.0}
