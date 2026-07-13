@@ -14,6 +14,7 @@ import com.tailtopia.shared.ratelimit.RedisRateLimiter;
 import com.tailtopia.triage.domain.TriageStatus;
 import com.tailtopia.triage.dto.TriageAcceptedResponse;
 import com.tailtopia.triage.dto.TriageSubmitRequest;
+import com.tailtopia.triage.service.AiUnlockService;
 import com.tailtopia.triage.service.TriageService;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -24,8 +25,10 @@ import org.springframework.security.oauth2.jwt.Jwt;
 class TriageControllerTest {
 
     private final TriageService triageService = mock(TriageService.class);
+    private final AiUnlockService aiUnlockService = mock(AiUnlockService.class);
     private final RedisRateLimiter rateLimiter = mock(RedisRateLimiter.class);
-    private final TriageController controller = new TriageController(triageService, rateLimiter);
+    private final TriageController controller =
+            new TriageController(triageService, aiUnlockService, rateLimiter);
 
     private static Jwt jwt(String sub) {
         return Jwt.withTokenValue("t").header("alg", "HS256").subject(sub).claim("x", "y").build();
