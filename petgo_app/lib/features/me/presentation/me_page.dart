@@ -76,10 +76,18 @@ class MePage extends ConsumerWidget {
           // PawCoin 钱包入口（Story 1.4）→ 余额与流水页。
           _PawCoinEntry(onTap: () => context.push('/me/pawcoin')),
           const SizedBox(height: AppSpacing.sm),
+          // 我的订单入口（Story 5.2）→ 订单中心（兽医/AI/充值 4 类支付凭证）。
+          _MeNavRow(
+            valueKey: 'meOrders',
+            icon: Icons.receipt_long_outlined,
+            label: l10n.orderMyTitle,
+            onTap: () => context.push('/me/orders'),
+          ),
+          const SizedBox(height: AppSpacing.sm),
           // 我的退款入口（Story 4.5）→ 退款方式选择/进度。AB-5B 不发通知，用户在此发现可操作退款。
           _MeNavRow(
             valueKey: 'meRefunds',
-            icon: Icons.receipt_long_outlined,
+            icon: Icons.assignment_return_outlined,
             label: l10n.refundMyTitle,
             onTap: () => context.push('/me/refunds'),
           ),

@@ -124,7 +124,7 @@ development_status:
   # ---- Epic 5: 订单中心 ----
   epic-5: in-progress
   5-1-订单聚合接口: review
-  5-2-订单卡片与列表页: backlog
+  5-2-订单卡片与列表页: review
   5-3-订单详情各态与失效态: backlog
   epic-5-retrospective: optional
 

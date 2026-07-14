@@ -123,6 +123,9 @@ class ApiPaths {
   static const String mePawcoinTopups = '$mePawcoin/topups';
   static String mePawcoinTopupStatus(String token) => '$mePawcoin/topups/$token/status';
 
+  /// 订单中心聚合（Story 5.1/5.2）：泛化兽医/AI/充值 3 类订单 + 游标分页 + 类型筛选 + PawCoin 汇总。
+  static const String orders = '$base/orders';
+
   /// 用户端退款（Story 4.5）：我的退款列表 / PawCoin 即时退 / QRIS 填真钱收款账户。
   static const String meRefundRequests = '$base/me/refund-requests';
   static String refundPawcoin(String refundToken) =>

@@ -26,6 +26,7 @@ import '../../features/support/presentation/ticket_detail_page.dart';
 import '../../features/support/presentation/csat_page.dart';
 import '../../features/pawcoin/presentation/pawcoin_page.dart';
 import '../../features/pawcoin/presentation/recharge_page.dart';
+import '../../features/order/presentation/order_list_page.dart';
 import '../../features/refund/domain/refund_request.dart';
 import '../../features/refund/presentation/refund_list_page.dart';
 import '../../features/refund/presentation/refund_choose_page.dart';
@@ -310,6 +311,16 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/me/pawcoin', builder: (c, s) => const PawCoinPage()),
       // PawCoin 充值页（Story 1.5）。余额页「Isi Saldo」入口；同样 /me 门控 + shell 外隐 Tab。
       GoRoute(path: '/me/pawcoin/recharge', builder: (c, s) => const RechargePage()),
+      // 订单中心列表（Story 5.2）。受控（/me 前缀，需登录）；shell 外顶层隐 Tab。
+      GoRoute(path: '/me/orders', builder: (c, s) => const OrderListPage()),
+      // 订单详情占位（Story 5.3 替换为各态详情/失效态）。本 story 先兜住卡片点击不死链。
+      GoRoute(
+        path: '/me/orders/:token',
+        builder: (c, s) => Scaffold(
+          appBar: AppBar(),
+          body: Center(child: Text('订单 ${s.pathParameters['token']}（详情 5-3）')),
+        ),
+      ),
       // 用户端退款方式选择/填收款 3 屏（Story 4.5）。受控（/me 前缀，需登录）；shell 外顶层隐 Tab。
       GoRoute(path: '/me/refunds', builder: (c, s) => const RefundListPage()),
       GoRoute(
