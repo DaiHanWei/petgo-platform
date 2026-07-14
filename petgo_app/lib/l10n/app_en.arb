@@ -1302,5 +1302,20 @@
   "orderStatusRefunding": "Refund in progress",
   "orderStatusRefunded": "Refunded",
   "orderStatusRefundRejected": "Refund not approved",
-  "orderStatusPaid": "Paid"
+  "orderStatusPaid": "Paid",
+  "orderDetailTitle": "Order details",
+  "orderAmountLabel": "Amount",
+  "orderCoinsLabel": "Coins received",
+  "orderChannelLabel": "Payment method",
+  "orderPaidAtLabel": "Paid at",
+  "orderCreatedAtLabel": "Created at",
+  "orderSessionEndedLabel": "Session ended",
+  "orderPetDeleted": "This pet has been deleted",
+  "orderRefundProgressLabel": "Refund progress",
+  "orderRefundAwaitingMethod": "Waiting for you to choose a refund method",
+  "orderRefundAwaitingApproval": "Waiting for supervisor approval",
+  "orderRefundAwaitingPayout": "Waiting for finance to pay out",
+  "orderRefundProcessing": "Payout in progress",
+  "orderRefundRejected": "Refund request was not approved",
+  "orderNotFound": "Order not found"
 }

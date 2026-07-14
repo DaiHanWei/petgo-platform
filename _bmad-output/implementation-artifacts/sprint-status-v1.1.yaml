@@ -125,7 +125,7 @@ development_status:
   epic-5: in-progress
   5-1-订单聚合接口: review
   5-2-订单卡片与列表页: review
-  5-3-订单详情各态与失效态: backlog
+  5-3-订单详情各态与失效态: review
   epic-5-retrospective: optional
 
   # ---- Epic 6: 宠物身份证与分享拉新 ----

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../domain/order_detail.dart';
 import '../domain/order_summary.dart';
 
 /// 订单枚举 → 本地化文案 + 图标 + 徽章配色（Story 5.2）。按 code 本地化，勿渲染后端串。
@@ -41,6 +42,16 @@ String orderStatusLabel(AppLocalizations l10n, String statusCode) => switch (sta
       OrderStatusColor.warn => (bg: AppColors.goldTint, fg: AppColors.tipsBadgeText),
       OrderStatusColor.info => (bg: AppColors.mintTint, fg: AppColors.mint600),
       OrderStatusColor.unknown => (bg: AppColors.line2, fg: AppColors.muted),
+    };
+
+/// 退款子阶段文案（Story 5.3，兽医订单退款进度）。
+String refundStageLabel(AppLocalizations l10n, RefundStage stage) => switch (stage) {
+      RefundStage.awaitingMethod => l10n.orderRefundAwaitingMethod,
+      RefundStage.awaitingApproval => l10n.orderRefundAwaitingApproval,
+      RefundStage.awaitingPayout => l10n.orderRefundAwaitingPayout,
+      RefundStage.processing => l10n.orderRefundProcessing,
+      RefundStage.rejected => l10n.orderRefundRejected,
+      RefundStage.unknown => l10n.orderStatusRefunding,
     };
 
 /// 金额展示：非 null 千分位 `Rp...`，null → "Belum ada pembayaran"（待接单/HD 预留）。

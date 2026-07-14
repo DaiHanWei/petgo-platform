@@ -16,6 +16,9 @@ public interface AiConsultOrderRepository extends JpaRepository<AiConsultOrder, 
 
     Optional<AiConsultOrder> findByPaymentIntentToken(String paymentIntentToken);
 
+    /** 订单详情按 token 定位（Story 5.3）。 */
+    Optional<AiConsultOrder> findByOrderToken(String orderToken);
+
     /** 订单中心游标分页（Story 5.1）：本人 COMPLETED 订单 created_at < cursor 倒序（PENDING/ABNORMAL 过程态不入）。 */
     List<AiConsultOrder> findByUserIdAndStatusAndCreatedAtLessThanOrderByCreatedAtDesc(
             long userId, AiConsultOrderStatus status, Instant cursor, Pageable pageable);

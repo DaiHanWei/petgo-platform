@@ -1,11 +1,13 @@
 package com.tailtopia.order.web;
 
+import com.tailtopia.order.dto.OrderDetailView;
 import com.tailtopia.order.dto.OrderPage;
 import com.tailtopia.order.service.OrderCenterService;
 import com.tailtopia.shared.error.AppException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -33,6 +35,12 @@ public class OrderController {
             @RequestParam(required = false) Integer limit) {
         int size = limit == null ? DEFAULT_LIMIT : Math.min(Math.max(limit, 1), MAX_LIMIT);
         return orderCenter.listOrders(currentUserId(jwt), type, cursor, size);
+    }
+
+    /** 订单详情（Story 5.3，按 token 跨 3 源；仅 owner；宠物已删→占位 200 非 500）。 */
+    @GetMapping("/api/v1/orders/{orderToken}")
+    public OrderDetailView detail(@AuthenticationPrincipal Jwt jwt, @PathVariable String orderToken) {
+        return orderCenter.getDetail(currentUserId(jwt), orderToken);
     }
 
     private static long currentUserId(Jwt jwt) {

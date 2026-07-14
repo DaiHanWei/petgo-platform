@@ -3,15 +3,22 @@ package com.tailtopia.order.service;
 import com.tailtopia.consult.domain.ConsultOrder;
 import com.tailtopia.consult.domain.ConsultOrderStatus;
 import com.tailtopia.consult.repository.ConsultOrderRepository;
+import com.tailtopia.order.dto.OrderDetailView;
 import com.tailtopia.order.dto.OrderPage;
+import com.tailtopia.order.dto.OrderRefundStage;
 import com.tailtopia.order.dto.OrderStatusColor;
 import com.tailtopia.order.dto.OrderSummaryView;
 import com.tailtopia.order.dto.OrderType;
 import com.tailtopia.pay.domain.PaymentIntent;
 import com.tailtopia.pay.domain.PaymentPurpose;
 import com.tailtopia.pay.domain.PaymentStatus;
+import com.tailtopia.pay.refund.domain.ApprovalStatus;
+import com.tailtopia.pay.refund.domain.RefundRequest;
+import com.tailtopia.pay.refund.repository.RefundRequestRepository;
 import com.tailtopia.pay.repository.PaymentIntentRepository;
 import com.tailtopia.pay.service.PawCoinWalletService;
+import com.tailtopia.profile.domain.PetProfile;
+import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.triage.domain.AiConsultOrder;
 import com.tailtopia.triage.domain.AiConsultOrderStatus;
@@ -20,6 +27,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,13 +46,18 @@ public class OrderCenterService {
     private final AiConsultOrderRepository aiOrders;
     private final PaymentIntentRepository intents;
     private final PawCoinWalletService wallet;
+    private final RefundRequestRepository refunds;
+    private final PetProfileRepository pets;
 
     public OrderCenterService(ConsultOrderRepository consultOrders, AiConsultOrderRepository aiOrders,
-            PaymentIntentRepository intents, PawCoinWalletService wallet) {
+            PaymentIntentRepository intents, PawCoinWalletService wallet,
+            RefundRequestRepository refunds, PetProfileRepository pets) {
         this.consultOrders = consultOrders;
         this.aiOrders = aiOrders;
         this.intents = intents;
         this.wallet = wallet;
+        this.refunds = refunds;
+        this.pets = pets;
     }
 
     /**
@@ -92,36 +105,113 @@ public class OrderCenterService {
         return new OrderPage(List.copyOf(pageItems), nextCursor, hasMore, wallet.balanceOf(userId));
     }
 
+    /**
+     * 订单详情（Story 5.3）。按 token 跨 3 源定位（token 全局唯一无源前缀，依次试）+ owner 校验（非 owner/不存在→404 防枚举）。
+     * 兽医富化 pet（已删→petDeleted 占位 FR-54D）+ session + 退款子阶段；AI 附 triageTaskId；充值附 coins。
+     */
+    @Transactional(readOnly = true)
+    public OrderDetailView getDetail(long userId, String orderToken) {
+        Optional<ConsultOrder> vet = consultOrders.findByOrderToken(orderToken);
+        if (vet.isPresent() && vet.get().getUserId() == userId) {
+            return vetDetail(vet.get());
+        }
+        Optional<AiConsultOrder> ai = aiOrders.findByOrderToken(orderToken);
+        if (ai.isPresent() && ai.get().getUserId() == userId
+                && ai.get().getStatus() == AiConsultOrderStatus.COMPLETED) {
+            return aiDetail(ai.get());
+        }
+        Optional<PaymentIntent> top = intents.findByPublicToken(orderToken);
+        if (top.isPresent() && top.get().getUserId() == userId
+                && top.get().getPurpose() == PaymentPurpose.PAWCOIN_TOPUP
+                && top.get().getStatus() == PaymentStatus.PAID) {
+            return topupDetail(top.get());
+        }
+        throw AppException.notFound("订单不存在");
+    }
+
+    private OrderDetailView vetDetail(ConsultOrder o) {
+        String statusCode = vetStatusCode(o);
+        OrderStatusColor color = vetStatusColor(o.getStatus());
+        // 宠物已删（FR-54D）：硬删后 findById 空 → petDeleted 占位，订单仍返 200。
+        PetProfile pet = pets.findById(o.getPetProfileId()).orElse(null);
+        boolean petDeleted = pet == null;
+        // 退款子阶段（REFUNDING/refund_rejected 时派生）。
+        OrderRefundStage stage = null;
+        Long refundNet = null;
+        if ("COMPLETED_REFUND_REJECTED".equals(statusCode)) {
+            stage = OrderRefundStage.REJECTED;
+        } else if (o.getStatus() == ConsultOrderStatus.REFUNDING) {
+            RefundRequest r = refunds.findByOrderId(o.getId()).orElse(null);
+            stage = refundStageOf(r);
+            if (r != null && r.getNetAmount() > 0) {
+                refundNet = r.getNetAmount();
+            }
+        }
+        return new OrderDetailView(OrderType.VET_CONSULT.name(), o.getOrderToken(), statusCode, color.name(),
+                o.getAmount(), o.getPayChannel() == null ? null : o.getPayChannel().name(),
+                o.getCreatedAt(), o.getPaidAt(),
+                petDeleted ? null : pet.getName(),
+                petDeleted || pet.getPetType() == null ? null : pet.getPetType().name(),
+                petDeleted ? null : pet.getAvatarUrl(),
+                petDeleted,
+                o.getSessionStartedAt(), o.getSessionEndedAt(),
+                stage == null ? null : stage.name(), refundNet, null, null);
+    }
+
+    private OrderDetailView aiDetail(AiConsultOrder o) {
+        return new OrderDetailView(OrderType.AI_UNLOCK.name(), o.getOrderToken(), "COMPLETED",
+                OrderStatusColor.SUCCESS.name(), o.getAmount(),
+                o.getPayChannel() == null ? null : o.getPayChannel().name(),
+                o.getCreatedAt(), o.getPaidAt(),
+                null, null, null, false, null, null, null, null, null, o.getTriageTaskId());
+    }
+
+    private OrderDetailView topupDetail(PaymentIntent i) {
+        return new OrderDetailView(OrderType.PAWCOIN_TOPUP.name(), i.getPublicToken(), "PAID",
+                OrderStatusColor.SUCCESS.name(), i.getAmount(),
+                i.getChannel() == null ? null : i.getChannel().name(),
+                i.getCreatedAt(), null,
+                null, null, null, false, null, null, null, null, i.getAmount(), null);
+    }
+
+    /** 退款子阶段派生（by approval_status）。 */
+    private static OrderRefundStage refundStageOf(RefundRequest r) {
+        if (r == null || r.getApprovalStatus() == null) {
+            return OrderRefundStage.AWAITING_METHOD; // 未填收款
+        }
+        return switch (r.getApprovalStatus()) {
+            case PENDING_APPROVAL -> OrderRefundStage.AWAITING_APPROVAL;
+            case APPROVED -> OrderRefundStage.AWAITING_PAYOUT;
+            case PROCESSING -> OrderRefundStage.PROCESSING;
+            case DONE, REJECTED -> OrderRefundStage.PROCESSING; // 理论不在 REFUNDING 出现，防御
+        };
+    }
+
     // ---- 映射（statusColor 后端权威；退款中 REFUNDING→INFO 蓝非红）----
 
     private OrderSummaryView mapVet(ConsultOrder o) {
-        String statusCode;
-        OrderStatusColor color;
-        switch (o.getStatus()) {
-            case IN_PROGRESS -> {
-                statusCode = "IN_PROGRESS";
-                color = OrderStatusColor.INFO;
-            }
-            case COMPLETED -> {
-                statusCode = o.isRefundRejected() ? "COMPLETED_REFUND_REJECTED" : "COMPLETED";
-                color = OrderStatusColor.SUCCESS;
-            }
-            case REFUNDING -> {
-                statusCode = "REFUNDING";
-                color = OrderStatusColor.INFO; // 退款处理中 → info 蓝，非 error 红（UX-DR2）
-            }
-            case REFUNDED -> {
-                statusCode = "REFUNDED";
-                color = OrderStatusColor.SUCCESS;
-            }
-            default -> {
-                statusCode = o.getStatus().name();
-                color = OrderStatusColor.INFO;
-            }
-        }
+        String statusCode = vetStatusCode(o);
         return new OrderSummaryView(OrderType.VET_CONSULT.name(), o.getOrderToken(), statusCode,
-                color.name(), o.getAmount(), o.getPayChannel() == null ? null : o.getPayChannel().name(),
-                o.getCreatedAt());
+                vetStatusColor(o.getStatus()).name(), o.getAmount(),
+                o.getPayChannel() == null ? null : o.getPayChannel().name(), o.getCreatedAt());
+    }
+
+    /** 兽医订单 statusCode（含 refund_rejected 子变体）。 */
+    private static String vetStatusCode(ConsultOrder o) {
+        return switch (o.getStatus()) {
+            case IN_PROGRESS -> "IN_PROGRESS";
+            case COMPLETED -> o.isRefundRejected() ? "COMPLETED_REFUND_REJECTED" : "COMPLETED";
+            case REFUNDING -> "REFUNDING";
+            case REFUNDED -> "REFUNDED";
+        };
+    }
+
+    /** 兽医 statusColor：进行中/退款中→INFO（蓝非红 UX-DR2）；完成/已退款→SUCCESS。 */
+    private static OrderStatusColor vetStatusColor(ConsultOrderStatus status) {
+        return switch (status) {
+            case IN_PROGRESS, REFUNDING -> OrderStatusColor.INFO;
+            case COMPLETED, REFUNDED -> OrderStatusColor.SUCCESS;
+        };
     }
 
     private OrderSummaryView mapAi(AiConsultOrder o) {

@@ -14,6 +14,9 @@ public interface RefundRequestRepository extends JpaRepository<RefundRequest, Lo
 
     boolean existsByOrderId(long orderId);
 
+    /** 订单详情退款子阶段派生（Story 5.3，一订单一退款）。 */
+    Optional<RefundRequest> findByOrderId(long orderId);
+
     /** 用户端「我的退款」列表（Story 4.5，仅本人，倒序）。 */
     List<RefundRequest> findByUserIdOrderByCreatedAtDesc(long userId);
 
