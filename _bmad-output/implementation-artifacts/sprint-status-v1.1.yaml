@@ -118,7 +118,7 @@ development_status:
   4-5-用户选退款方式与填收款: review
   4-6-主管审批与财务打款: review
   4-7-工单结案通知与csat: review
-  4-8-举报处理结果回告举报人: backlog
+  4-8-举报处理结果回告举报人: review
   epic-4-retrospective: optional
 
   # ---- Epic 5: 订单中心 ----
