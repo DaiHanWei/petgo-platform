@@ -140,8 +140,17 @@ class ApiPaths {
   static const String petProfiles = '$base/pet-profiles';
   static const String petProfileMe = '$base/pet-profiles/me';
 
+  /// 宠物身份证数据 / 生成（Story 6.1 后端 · 6.2 前端）。GET 取数据+generated 标志；POST 生成分配流水号（幂等）。
+  static const String petProfileIdCard = '$base/pet-profiles/me/id-card';
+
+  /// 身份证高清图付费下载（Story 6.3）。POST 一次性永久解锁（QRIS/PawCoin）；幂等不重复扣费。
+  static const String petProfileIdCardHdDownload = '$base/pet-profiles/me/id-card/hd-download';
+
   /// 成长时间线（Story 2.4）。
   static const String petProfileTimeline = '$base/pet-profiles/me/timeline';
+
+  /// 结构化健康记录 CRUD + 问诊存档只读混排（Story 7.1/7.2）。GET 返混排；POST/PATCH/{id}/DELETE/{id} 仅结构化。
+  static const String healthRecords = '$base/pet-profiles/me/health-records';
 
   /// 成长档案日历月视图 / 当天详情 / 统计栏（Story 2.4 AC5/AC6 · F9）。
   static const String petProfileCalendar = '$base/pet-profiles/me/calendar';

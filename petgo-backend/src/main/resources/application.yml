@@ -52,6 +52,10 @@ petgo:
     default-free-quota: ${TRIAGE_DEFAULT_FREE_QUOTA:1}
     # AI 详建付费解锁价（Story 2.3）：默认 Rp10,000。PawCoin 花费同值(1 koin=Rp1)，现金同额 IDR。成交价落订单快照。
     ai-unlock-price: ${TRIAGE_AI_UNLOCK_PRICE:10000}
+  # 身份证高清图付费下载（Story 6.3）：一次性永久解锁价，默认 Rp5,000。PawCoin 同值/QRIS 同额 IDR。
+  # 9-2 后台 pricing_config.id_hd_download_price 落地后换 DB 读；本 story 先 env（渐进范式同 ai-unlock-price）。
+  id-hd:
+    download-price: ${ID_HD_DOWNLOAD_PRICE:5000}
   # 兽医咨询计费（Story 3.4）。unit-price=单次咨询价（默认 Rp50,000），vet-share-rate=兽医分成%（默认60→到手30000）。
   # 成交价/分成落 consult_orders 快照；9-2 后台 pricing_config.vet_consult_price/vet_share_rate 落地后换 DB 读。
   # max-rebroadcast/request-max-age-minutes=支付窗超时回队重播上限（达到→彻底失败落 failed_consult_requests）。
