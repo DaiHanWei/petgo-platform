@@ -1,7 +1,11 @@
 package com.tailtopia.support.service;
 
+import com.tailtopia.admin.audit.service.AdminAuditService;
+import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.consult.domain.ConsultOrder;
 import com.tailtopia.consult.repository.ConsultOrderRepository;
+import com.tailtopia.notify.domain.NotificationType;
+import com.tailtopia.notify.service.NotificationService;
 import com.tailtopia.profile.service.CardTokenGenerator;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.support.domain.ContactType;
@@ -10,17 +14,21 @@ import com.tailtopia.support.domain.TicketAttachment;
 import com.tailtopia.support.domain.TicketInternalNote;
 import com.tailtopia.support.domain.TicketLabel;
 import com.tailtopia.support.domain.TicketLabelType;
+import com.tailtopia.support.domain.TicketStatus;
 import com.tailtopia.support.dto.SupportTicketView;
 import com.tailtopia.support.repository.FeedbackTicketRepository;
 import com.tailtopia.support.repository.TicketAttachmentRepository;
 import com.tailtopia.support.repository.TicketInternalNoteRepository;
 import com.tailtopia.support.repository.TicketLabelRepository;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -44,16 +52,25 @@ public class SupportTicketService {
     private final TicketInternalNoteRepository internalNotes;
     private final CardTokenGenerator tokenGenerator;
     private final ConsultOrderRepository orders;
+    private final NotificationService notifications;
+    private final AdminAuditService audit;
+
+    /** CSAT 评价窗口（天，Story 4.7）；结案后 {@code csat_deadline=resolved_at+N天}，超期未评 scanner 静默关闭。 */
+    @Value("${petgo.support.csat-window-days:7}")
+    private int csatWindowDays;
 
     public SupportTicketService(FeedbackTicketRepository tickets, TicketAttachmentRepository attachments,
             TicketLabelRepository labels, TicketInternalNoteRepository internalNotes,
-            CardTokenGenerator tokenGenerator, ConsultOrderRepository orders) {
+            CardTokenGenerator tokenGenerator, ConsultOrderRepository orders,
+            NotificationService notifications, AdminAuditService audit) {
         this.tickets = tickets;
         this.attachments = attachments;
         this.labels = labels;
         this.internalNotes = internalNotes;
         this.tokenGenerator = tokenGenerator;
         this.orders = orders;
+        this.notifications = notifications;
+        this.audit = audit;
     }
 
     /**
@@ -121,6 +138,47 @@ public class SupportTicketService {
             throw AppException.notFound("工单不存在");
         }
         internalNotes.save(TicketInternalNote.of(ticketId, adminId, note));
+    }
+
+    /**
+     * 客服结案（Story 4.7，「已联系+已解决」，{@code support.handle} 权限在控制器门控）。仅 OPEN/IN_PROGRESS 可
+     * （已 RESOLVED/CLOSED → 409）。置 RESOLVED + csat_deadline(+N天) + 发 {@code TICKET_RESOLVED}（结案）+
+     * {@code CSAT_SURVEY}（邀评）通知（deep link 工单详情，targetRef=ticketToken，非随机）+ 审计。
+     */
+    @Transactional
+    public void resolveTicket(String ticketToken, long adminId) {
+        FeedbackTicket ticket = tickets.findByTicketToken(ticketToken)
+                .orElseThrow(() -> AppException.notFound("工单不存在"));
+        if (ticket.getStatus() != TicketStatus.OPEN && ticket.getStatus() != TicketStatus.IN_PROGRESS) {
+            throw AppException.conflict("工单已结案，不可重复处理");
+        }
+        Instant deadline = Instant.now().plus(csatWindowDays, ChronoUnit.DAYS);
+        ticket.markResolved(adminId, deadline);
+        long userId = ticket.getUserId();
+        // 结案通知 + CSAT 邀评（均 REQUIRES_NEW，无 PII，targetRef=ticketToken 供 App 定位工单详情）。
+        notifications.send(userId, NotificationType.TICKET_RESOLVED,
+                "工单已处理", "你的客服工单已处理完成，点击查看结果。",
+                NotificationType.TICKET_RESOLVED.name(), ticketToken);
+        notifications.send(userId, NotificationType.CSAT_SURVEY,
+                "为本次服务打分", "花几秒评价客服服务，帮助我们做得更好。",
+                NotificationType.CSAT_SURVEY.name(), ticketToken);
+        audit.record(adminId, AuditActions.TICKET_RESOLVED, "feedback_ticket", ticketToken,
+                "客服工单结案（已联系+已解决，已发结案/CSAT 通知）");
+    }
+
+    /**
+     * 用户提交 CSAT（Story 4.7）。owner（非本人 404）+ 仅 RESOLVED 未评窗口内可（否则 409）。
+     * 落 csat_score/comment + {@code CLOSED}（评价即闭环）。
+     */
+    @Transactional
+    public void submitCsat(long userId, String ticketToken, int score, String comment) {
+        FeedbackTicket ticket = tickets.findByTicketToken(ticketToken)
+                .filter(t -> t.getUserId() == userId)
+                .orElseThrow(() -> AppException.notFound("工单不存在"));
+        if (ticket.getStatus() != TicketStatus.RESOLVED) {
+            throw AppException.conflict("工单当前不可评价");
+        }
+        ticket.submitCsat((short) score, comment);
     }
 
     // ---- 内部辅助 ----

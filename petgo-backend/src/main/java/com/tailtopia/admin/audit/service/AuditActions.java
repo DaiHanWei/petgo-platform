@@ -66,6 +66,8 @@ public final class AuditActions {
     public static final String CONTENT_REVIEW_REJECTED = "CONTENT_REVIEW_REJECTED";
     /** 人工审核超时自动丢弃（Story 4.3）。 */
     public static final String CONTENT_REVIEW_TIMED_OUT = "CONTENT_REVIEW_TIMED_OUT";
+    /** 客服工单结案（Story 4.7，「已联系+已解决」→ RESOLVED + 发结案/CSAT 通知）。 */
+    public static final String TICKET_RESOLVED = "TICKET_RESOLVED";
     /** 异常工单加内部备注（Story 5.1）。 */
     public static final String ANOMALY_NOTE_ADDED = "ANOMALY_NOTE_ADDED";
     /** 异常工单标记已处理/归档（Story 5.1）。 */

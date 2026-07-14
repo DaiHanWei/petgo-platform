@@ -109,6 +109,30 @@ public class FeedbackTicket {
         return t;
     }
 
+    /**
+     * 客服结案（Story 4.7，「已联系+已解决」单动作）：{@code contacted_customer=true} + {@code RESOLVED} +
+     * {@code resolved_at}(now) + {@code handled_by} + {@code csat_deadline}（+7d，CSAT 窗口）。
+     */
+    public void markResolved(long handledBy, Instant csatDeadline) {
+        this.contactedCustomer = true;
+        this.status = TicketStatus.RESOLVED;
+        this.resolvedAt = Instant.now();
+        this.handledBy = handledBy;
+        this.csatDeadline = csatDeadline;
+    }
+
+    /** 用户提交 CSAT（Story 4.7，1-5 分 + 评论）：落 csat + {@code CLOSED}（评价即闭环）。 */
+    public void submitCsat(short score, String comment) {
+        this.csatScore = score;
+        this.csatComment = comment;
+        this.status = TicketStatus.CLOSED;
+    }
+
+    /** 7 天未评自动关闭（Story 4.7 scanner）：{@code RESOLVED→CLOSED}（无 CSAT，静默）。 */
+    public void autoClose() {
+        this.status = TicketStatus.CLOSED;
+    }
+
     @PrePersist
     void onCreate() {
         Instant now = Instant.now();

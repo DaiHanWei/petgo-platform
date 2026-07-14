@@ -2,6 +2,7 @@ package com.tailtopia.support.web;
 
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.support.dto.CreateTicketRequest;
+import com.tailtopia.support.dto.SubmitCsatRequest;
 import com.tailtopia.support.dto.SupportTicketView;
 import com.tailtopia.support.service.SupportTicketService;
 import jakarta.validation.Valid;
@@ -50,6 +51,15 @@ public class SupportTicketController {
     @GetMapping("/api/v1/support-tickets/{ticketToken}")
     public SupportTicketView detail(@AuthenticationPrincipal Jwt jwt, @PathVariable String ticketToken) {
         return service.viewForUser(currentUserId(jwt), ticketToken);
+    }
+
+    /** 提交 CSAT（Story 4.7，owner + 仅 RESOLVED 未评窗口内；提交即 CLOSED）。返回更新后视图。 */
+    @PostMapping("/api/v1/support-tickets/{ticketToken}/csat")
+    public SupportTicketView submitCsat(@AuthenticationPrincipal Jwt jwt, @PathVariable String ticketToken,
+            @Valid @RequestBody SubmitCsatRequest req) {
+        long userId = currentUserId(jwt);
+        service.submitCsat(userId, ticketToken, req.score(), req.comment());
+        return service.viewForUser(userId, ticketToken);
     }
 
     private static long currentUserId(Jwt jwt) {

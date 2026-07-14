@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
@@ -92,8 +93,49 @@ class TicketDetailPage extends ConsumerWidget {
             child: Text(l10n.ticketContactedNote,
                 style: AppTypography.caption.copyWith(color: AppColors.momenBadgeText)),
           ),
+        _csatSection(context, l10n, t),
       ],
     );
+  }
+
+  /// CSAT 区块（Story 4.7）：RESOLVED 未评 → 「评价服务」CTA 进问卷；已评 → 只读展示分数+评论。
+  Widget _csatSection(BuildContext context, AppLocalizations l10n, SupportTicket t) {
+    if (t.csatScore != null) {
+      return Padding(
+        padding: const EdgeInsets.only(top: AppSpacing.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(l10n.csatYourRating,
+                style: AppTypography.micro.copyWith(color: AppColors.textTertiary, letterSpacing: 0.5)),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                for (int i = 1; i <= 5; i++)
+                  Icon(i <= t.csatScore! ? Icons.star_rounded : Icons.star_outline_rounded,
+                      size: 20, color: i <= t.csatScore! ? AppColors.gold : AppColors.textTertiary),
+              ],
+            ),
+            if (t.csatComment != null && t.csatComment!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(t.csatComment!,
+                    style: AppTypography.body.copyWith(color: AppColors.textSecondary)),
+              ),
+          ],
+        ),
+      );
+    }
+    if (t.status == TicketStatus.resolved) {
+      return Padding(
+        padding: const EdgeInsets.only(top: AppSpacing.lg),
+        child: FilledButton(
+          onPressed: () => context.push('/me/support-tickets/${t.ticketToken}/csat'),
+          child: Text(l10n.csatRateCta),
+        ),
+      );
+    }
+    return const SizedBox.shrink();
   }
 
   Widget _section(String label, String value) {

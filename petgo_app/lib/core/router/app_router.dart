@@ -23,6 +23,7 @@ import '../../features/me/presentation/settings_page.dart';
 import '../../features/support/presentation/my_tickets_page.dart';
 import '../../features/support/presentation/ticket_compose_page.dart';
 import '../../features/support/presentation/ticket_detail_page.dart';
+import '../../features/support/presentation/csat_page.dart';
 import '../../features/pawcoin/presentation/pawcoin_page.dart';
 import '../../features/pawcoin/presentation/recharge_page.dart';
 import '../../features/refund/domain/refund_request.dart';
@@ -239,6 +240,11 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/me/support-tickets/:token',
         builder: (c, s) => TicketDetailPage(token: s.pathParameters['token']!),
+      ),
+      // CSAT 满意度问卷（Story 4.7）。受控（/me 前缀）；从工单详情「评价服务」进。
+      GoRoute(
+        path: '/me/support-tickets/:token/csat',
+        builder: (c, s) => CsatPage(token: s.pathParameters['token']!),
       ),
       GoRoute(
         path: '/consult/waiting/:id',

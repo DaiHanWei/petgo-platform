@@ -97,6 +97,9 @@ class ApiPaths {
   static const String supportTickets = '$base/support-tickets';
   static String supportTicketDetail(String token) => '$base/support-tickets/$token';
 
+  /// 提交 CSAT（Story 4.7，仅 RESOLVED 未评窗口内）。
+  static String supportTicketCsat(String token) => '$base/support-tickets/$token/csat';
+
   /// App 版本信息（Story 6.5，公开可读，App 内更新提醒）。
   static const String appVersion = '$base/app-version';
 

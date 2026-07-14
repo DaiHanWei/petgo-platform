@@ -1021,5 +1021,13 @@
   "refundSubmitFailed": "Terjadi kesalahan, coba lagi",
   "refundChannelBca": "Transfer BCA",
   "refundChannelOvo": "OVO",
-  "refundChannelGopay": "GoPay"
+  "refundChannelGopay": "GoPay",
+  "csatTitle": "Beri nilai layanan",
+  "csatPrompt": "Bagaimana layanan pelanggan kami?",
+  "csatCommentHint": "Tambah komentar (opsional)",
+  "csatSubmit": "Kirim penilaian",
+  "csatThanks": "Terima kasih atas masukanmu",
+  "csatSubmitFailed": "Terjadi kesalahan, coba lagi",
+  "csatYourRating": "Penilaianmu",
+  "csatRateCta": "Beri nilai layanan"
 }

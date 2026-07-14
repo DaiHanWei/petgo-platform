@@ -57,6 +57,12 @@
         <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('consult.view_sessions')"
            th:href="@{/admin/consult-sessions}" th:classappend="${active == 'consult-sessions'} ? 'active'"
            th:text="#{admin.nav.sessions}">会话查询</a>
+        <!-- Story 4.7：客服工单（结案 + CSAT；support.handle）-->
+        <div class="group" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('support.handle')"
+             th:text="#{admin.nav.group.support}">客服</div>
+        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('support.handle')"
+           th:href="@{/admin/support-tickets}" th:classappend="${active == 'support-tickets'} ? 'active'"
+           th:text="#{admin.nav.supportTickets}">客服工单</a>
         <!-- Story 4.4/4.6：退款管理（客服判定 / 主管审批 / 财务打款；任一退款权限点可见）-->
         <div class="group"
              sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('refund.submit') or hasAuthority('refund.approve') or hasAuthority('refund.payout')"

@@ -56,6 +56,16 @@ class SupportRepository {
     final resp = await dio.get<Map<String, dynamic>>(ApiPaths.supportTicketDetail(token));
     return SupportTicket.fromJson(resp.data!);
   }
+
+  /// 提交 CSAT（Story 4.7，`POST /support-tickets/{token}/csat`；仅 RESOLVED 未评窗口内，提交即 CLOSED）。
+  /// 非法态 409 / score 越界 400 → DioException 抛给调用方。返回更新后视图。
+  Future<SupportTicket> submitCsat(String token, {required int score, String? comment}) async {
+    final data = <String, dynamic>{'score': score};
+    final c = comment?.trim();
+    if (c != null && c.isNotEmpty) data['comment'] = c;
+    final resp = await dio.post<Map<String, dynamic>>(ApiPaths.supportTicketCsat(token), data: data);
+    return SupportTicket.fromJson(resp.data!);
+  }
 }
 
 final supportRepositoryProvider =

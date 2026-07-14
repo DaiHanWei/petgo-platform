@@ -1274,5 +1274,13 @@
   "refundSubmitFailed": "Something went wrong, please try again",
   "refundChannelBca": "BCA transfer",
   "refundChannelOvo": "OVO",
-  "refundChannelGopay": "GoPay"
+  "refundChannelGopay": "GoPay",
+  "csatTitle": "Rate our service",
+  "csatPrompt": "How was our customer service?",
+  "csatCommentHint": "Add a comment (optional)",
+  "csatSubmit": "Submit rating",
+  "csatThanks": "Thanks for your feedback",
+  "csatSubmitFailed": "Something went wrong, please try again",
+  "csatYourRating": "Your rating",
+  "csatRateCta": "Rate our service"
 }
