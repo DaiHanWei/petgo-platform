@@ -153,4 +153,8 @@ public class AiConsultOrder {
     public Instant getPaidAt() {
         return paidAt;
     }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
 }

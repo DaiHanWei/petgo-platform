@@ -1,7 +1,11 @@
 package com.tailtopia.triage.repository;
 
 import com.tailtopia.triage.domain.AiConsultOrder;
+import com.tailtopia.triage.domain.AiConsultOrderStatus;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 /**
@@ -11,4 +15,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface AiConsultOrderRepository extends JpaRepository<AiConsultOrder, Long> {
 
     Optional<AiConsultOrder> findByPaymentIntentToken(String paymentIntentToken);
+
+    /** 订单中心游标分页（Story 5.1）：本人 COMPLETED 订单 created_at < cursor 倒序（PENDING/ABNORMAL 过程态不入）。 */
+    List<AiConsultOrder> findByUserIdAndStatusAndCreatedAtLessThanOrderByCreatedAtDesc(
+            long userId, AiConsultOrderStatus status, Instant cursor, Pageable pageable);
 }

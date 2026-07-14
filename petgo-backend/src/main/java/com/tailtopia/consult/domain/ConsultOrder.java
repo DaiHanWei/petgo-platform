@@ -202,4 +202,8 @@ public class ConsultOrder {
     public Instant getPaidAt() {
         return paidAt;
     }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
 }

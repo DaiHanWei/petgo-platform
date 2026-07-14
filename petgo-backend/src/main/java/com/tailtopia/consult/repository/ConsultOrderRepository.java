@@ -16,6 +16,10 @@ public interface ConsultOrderRepository extends JpaRepository<ConsultOrder, Long
 
     Optional<ConsultOrder> findByOrderToken(String orderToken);
 
+    /** 订单中心游标分页（Story 5.1）：本人订单 created_at < cursor 倒序（全 4 态入订单中心）。 */
+    List<ConsultOrder> findByUserIdAndCreatedAtLessThanOrderByCreatedAtDesc(
+            long userId, Instant cursor, org.springframework.data.domain.Pageable pageable);
+
     /**
      * 退款起步 CAS（Story 3.8，H-5 退款幂等唯一闸）：{@code IN_PROGRESS→REFUNDING}。返回行数（1=本路胜、可退款；
      * 0=已被另一路处理，<b>不重复退</b>）。scanner 与用户逃生并发只一方拿到 1（行锁串行化）。

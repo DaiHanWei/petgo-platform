@@ -170,6 +170,8 @@ public class SecurityConfig {
                         // 用户端退款方式选择/填收款（Story 4.5）：列表 + PawCoin 即时退 + QRIS 填账户，仅 role=USER
                         .requestMatchers("/api/v1/me/refund-requests",
                                 "/api/v1/refund-requests/**").hasRole("USER")
+                        // 订单中心聚合读接口（Story 5.1）：泛化 3 类订单，仅 role=USER
+                        .requestMatchers(HttpMethod.GET, "/api/v1/orders").hasRole("USER")
                         // 其余 /api/v1 默认需 JWT（写一律拒绝未登录）；user 写端点对 vet token → 403
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth
