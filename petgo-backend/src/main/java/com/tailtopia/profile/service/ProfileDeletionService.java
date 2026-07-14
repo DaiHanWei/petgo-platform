@@ -4,6 +4,7 @@ import com.tailtopia.profile.domain.HealthEvent;
 import com.tailtopia.profile.domain.PetMilestone;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.repository.HealthEventRepository;
+import com.tailtopia.profile.repository.HealthRecordRepository;
 import com.tailtopia.profile.repository.MilestoneCompletionRepository;
 import com.tailtopia.profile.repository.MilestoneShareRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
@@ -26,20 +27,26 @@ public class ProfileDeletionService {
 
     private final PetProfileRepository petProfiles;
     private final HealthEventRepository healthEvents;
+    private final HealthRecordRepository healthRecords;
     private final PetMilestoneRepository petMilestones;
     private final MilestoneCompletionRepository milestoneCompletions;
     private final MilestoneShareRepository milestoneShares;
     private final ContentPostRepository contentPosts;
+    private final SerialAllocationService serialAllocation;
 
     public ProfileDeletionService(PetProfileRepository petProfiles, HealthEventRepository healthEvents,
-            PetMilestoneRepository petMilestones, MilestoneCompletionRepository milestoneCompletions,
-            MilestoneShareRepository milestoneShares, ContentPostRepository contentPosts) {
+            HealthRecordRepository healthRecords, PetMilestoneRepository petMilestones,
+            MilestoneCompletionRepository milestoneCompletions,
+            MilestoneShareRepository milestoneShares, ContentPostRepository contentPosts,
+            SerialAllocationService serialAllocation) {
         this.petProfiles = petProfiles;
         this.healthEvents = healthEvents;
+        this.healthRecords = healthRecords;
         this.petMilestones = petMilestones;
         this.milestoneCompletions = milestoneCompletions;
         this.milestoneShares = milestoneShares;
         this.contentPosts = contentPosts;
+        this.serialAllocation = serialAllocation;
     }
 
     @Transactional
@@ -58,6 +65,9 @@ public class ProfileDeletionService {
             }
         }
         healthEvents.deleteByPetId(petId);
+
+        // 结构化健康记录硬删（Story 7.1 · PDP，个人健康数据不保留）。DB FK ON DELETE CASCADE 兜底，显式删更清晰。
+        healthRecords.deleteByPetProfileId(petId);
 
         // 里程碑级联删除（Story 8.1，归 profile 域）：先删完成记录（FK→roster）→ 再删 roster。
         List<Long> milestoneIds = petMilestones.findByPetProfileIdOrderBySortOrderAsc(petId).stream()
@@ -80,6 +90,11 @@ public class ProfileDeletionService {
         }
         if (pet.getOgImageUrl() != null) {
             publicUrls.add(pet.getOgImageUrl());
+        }
+        // 流水号回收（Story 6.1，FR-49A）：删除档案前把已分配的号释放回池，供后续档案复用。
+        // 与级联删除同一 @Transactional → 原子（档案删了号必回池，不半途丢号 / 不撞号）。
+        if (pet.getSerialId() != null) {
+            serialAllocation.release(pet.getSerialId());
         }
         petProfiles.delete(pet);
 

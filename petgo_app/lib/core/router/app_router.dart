@@ -34,6 +34,8 @@ import '../../features/refund/presentation/refund_choose_page.dart';
 import '../../features/refund/presentation/refund_account_page.dart';
 import '../../features/refund/presentation/refund_review_page.dart';
 import '../../features/profile/presentation/growth_archive_page.dart';
+import '../../features/profile/presentation/health_list_page.dart';
+import '../../features/profile/presentation/id_card_page.dart';
 import '../../features/profile/presentation/milestone_list_page.dart';
 import '../../features/profile/domain/pet_profile.dart';
 import '../../features/notify/data/push_permission_providers.dart';
@@ -198,6 +200,10 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       ),
       // 宠物档案编辑（Story 2.8）。两入口（档案 Tab 信息卡 /「我的」Tab）复用同一页。
       GoRoute(path: '/profile/edit', builder: (c, s) => const PetProfileEditPage()),
+      // 宠物身份证详情（Story 6.2 · FR-49B）。受控（/profile/ 前缀，游客被门控）。
+      GoRoute(path: '/profile/id-card', builder: (c, s) => const IdCardPage()),
+      // 健康记录列表（Story 7.2 · FR-45B）。受控（/profile/ 前缀，游客被门控）。
+      GoRoute(path: '/profile/health', builder: (c, s) => const HealthListPage()),
       // 成长档案当天详情（Story 2.4 AC6 · F9）。?date=yyyy-MM-dd；受控（/profile/ 前缀）。
       GoRoute(
         path: '/profile/day',
