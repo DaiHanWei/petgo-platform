@@ -37,7 +37,7 @@ class AdminWebControllerTest {
         adminContentService = mock(AdminContentService.class);
         adminModerationService = mock(com.tailtopia.admin.service.AdminModerationService.class);
         adminVetService = mock(com.tailtopia.admin.service.AdminVetService.class);
-        controller = new AdminWebController(adminContentService, adminModerationService, adminVetService);
+        controller = new AdminWebController(adminContentService, adminModerationService, adminVetService, mock(com.tailtopia.admin.dashboard.service.AdminDashboardService.class));
     }
 
     private AdminUserDetails admin() {

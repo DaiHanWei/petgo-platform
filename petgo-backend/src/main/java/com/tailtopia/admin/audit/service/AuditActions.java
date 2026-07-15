@@ -70,6 +70,8 @@ public final class AuditActions {
     public static final String CONTENT_REVIEW_REJECTED = "CONTENT_REVIEW_REJECTED";
     /** 人工审核超时自动丢弃（Story 4.3）。 */
     public static final String CONTENT_REVIEW_TIMED_OUT = "CONTENT_REVIEW_TIMED_OUT";
+    /** 客服工单结案（Story 4.7，「已联系+已解决」→ RESOLVED + 发结案/CSAT 通知）。 */
+    public static final String TICKET_RESOLVED = "TICKET_RESOLVED";
     /** 异常工单加内部备注（Story 5.1）。 */
     public static final String ANOMALY_NOTE_ADDED = "ANOMALY_NOTE_ADDED";
     /** 异常工单标记已处理/归档（Story 5.1）。 */
@@ -82,6 +84,23 @@ public final class AuditActions {
     public static final String NAME_RESET = "NAME_RESET";
     /** 头像违规重置为平台默认头像（story 5 处置，story 8 后台入口触发；summary 含判定依据/备注，无图片 URL）。 */
     public static final String AVATAR_RESET = "AVATAR_RESET";
+    // ===== 退款两段审批（V1.1 Story 4.3，最高危 A-1）=====
+    /** 退款请求创建（绑订单/工单）。 */
+    public static final String REFUND_REQUEST_CREATED = "REFUND_REQUEST_CREATED";
+    /** 客服判定退款需求（APPROVED/REJECTED，Story 4.3 底层原语）。 */
+    public static final String REFUND_NEED_SUBMITTED = "REFUND_NEED_SUBMITTED";
+    /** 客服批准退款需求（Story 4.4，订单 COMPLETED→REFUNDING，不发通知 AB-5B）。 */
+    public static final String REFUND_NEED_APPROVED = "REFUND_NEED_APPROVED";
+    /** 客服驳回退款需求（Story 4.4，订单回落 COMPLETED+refund_rejected，发 REFUND_REJECTED 通知 A-2）。 */
+    public static final String REFUND_NEED_REJECTED = "REFUND_NEED_REJECTED";
+    /** 主管审批通过退款申请。 */
+    public static final String REFUND_APPROVED = "REFUND_APPROVED";
+    /** 主管驳回退款申请（Story 4.6，第二段审批，订单回落 COMPLETED+refund_rejected + 通知用户）。 */
+    public static final String REFUND_APPROVAL_REJECTED = "REFUND_APPROVAL_REJECTED";
+    /** 财务记录打款完成。 */
+    public static final String REFUND_PAYOUT_RECORDED = "REFUND_PAYOUT_RECORDED";
+    /** 职责分离拦截：同一 admin 试图兼任两职（含 SUPER_ADMIN 不豁免，A-1）。 */
+    public static final String REFUND_DUTY_VIOLATION_BLOCKED = "REFUND_DUTY_VIOLATION_BLOCKED";
 
     private AuditActions() {
     }

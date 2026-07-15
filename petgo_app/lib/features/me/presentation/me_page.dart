@@ -82,6 +82,25 @@ class MePage extends ConsumerWidget {
             onAvatarTap: () => _changeAvatar(context, ref),
           ),
           const SizedBox(height: AppSpacing.lg),
+          // PawCoin 钱包入口（Story 1.4）→ 余额与流水页。
+          _PawCoinEntry(onTap: () => context.push('/me/pawcoin')),
+          const SizedBox(height: AppSpacing.sm),
+          // 我的订单入口（Story 5.2）→ 订单中心（兽医/AI/充值 4 类支付凭证）。
+          _MeNavRow(
+            valueKey: 'meOrders',
+            icon: Icons.receipt_long_outlined,
+            label: l10n.orderMyTitle,
+            onTap: () => context.push('/me/orders'),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          // 我的退款入口（Story 4.5）→ 退款方式选择/进度。AB-5B 不发通知，用户在此发现可操作退款。
+          _MeNavRow(
+            valueKey: 'meRefunds',
+            icon: Icons.assignment_return_outlined,
+            label: l10n.refundMyTitle,
+            onTap: () => context.push('/me/refunds'),
+          ),
+          const SizedBox(height: AppSpacing.lg),
           // ② 我的发布（原型 Postinganku）：小标题 + 裸 2 列网格（无卡边框）。
           // 注：宠物状态/改状态/编辑档案区块已按设计（原型 p-profil 无此块）移除。
           Padding(
@@ -558,6 +577,103 @@ class _IconBtn extends StatelessWidget {
             ],
           ),
           child: Icon(icon, size: 18, color: AppColors.ink2),
+        ),
+      ),
+    );
+  }
+}
+
+/// PawCoin 钱包入口行（Story 1.4）：图标 + 标题 + chevron → 余额与流水页。
+class _PawCoinEntry extends StatelessWidget {
+  const _PawCoinEntry({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Material(
+      color: AppColors.card,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        key: const ValueKey('mePawcoinEntry'),
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.mintTint,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.savings_outlined, size: 20, color: AppColors.mint),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Text(l10n.pawcoinBalanceLabel,
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink)),
+              ),
+              const Icon(Icons.chevron_right, color: AppColors.muted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 通用导航行（图标 + 文案 + chevron）。Story 4.5 我的退款入口复用；样式对齐 [_PawCoinEntry]。
+class _MeNavRow extends StatelessWidget {
+  const _MeNavRow({
+    required this.valueKey,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final String valueKey;
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.card,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        key: ValueKey(valueKey),
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.mintTint,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, size: 20, color: AppColors.mint),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Text(label,
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink)),
+              ),
+              const Icon(Icons.chevron_right, color: AppColors.muted),
+            ],
+          ),
         ),
       ),
     );

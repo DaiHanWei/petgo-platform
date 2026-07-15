@@ -1,12 +1,16 @@
 package com.tailtopia.consult.service;
 
+import com.tailtopia.consult.domain.ConsultOrderStatus;
 import com.tailtopia.consult.domain.ConsultSession;
 import com.tailtopia.consult.domain.InterruptReason;
 import com.tailtopia.consult.domain.SessionStatus;
 import com.tailtopia.consult.event.ConsultAnomalyRaisedEvent;
 import com.tailtopia.consult.event.ConsultInterruptedEvent;
+import com.tailtopia.consult.repository.ConsultOrderRepository;
 import com.tailtopia.consult.repository.ConsultSessionRepository;
 import com.tailtopia.shared.im.TencentImClient;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -22,34 +26,57 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ConsultInterruptService {
 
+    /** 封禁挂起宽限（秒，15min，服务端权威计时，H-5）。付费会话被封禁不即时中断，挂起此窗供逃生/退款。 */
+    public static final long SUSPEND_SECONDS = 15 * 60;
+
     private final ConsultSessionRepository sessions;
+    private final ConsultOrderRepository orders;
     private final TencentImClient imClient;
     private final ApplicationEventPublisher events;
 
-    public ConsultInterruptService(ConsultSessionRepository sessions, TencentImClient imClient,
-            ApplicationEventPublisher events) {
+    public ConsultInterruptService(ConsultSessionRepository sessions, ConsultOrderRepository orders,
+            TencentImClient imClient, ApplicationEventPublisher events) {
         this.sessions = sessions;
+        this.orders = orders;
         this.imClient = imClient;
         this.events = events;
     }
 
-    /** 中断某兽医所有进行中（含待关闭）会话。返回中断数量。封禁与中断同事务保证一致。 */
+    /**
+     * 封禁兽医 → 分流处理进行中（含待关闭）会话（Story 5.7 + 3.8 分流）。封禁与处理同事务保证一致。
+     *
+     * <p><b>付费会话</b>（有 {@code consult_orders (user_id,vet_id,IN_PROGRESS)}，Story 3.8）→ <b>挂起</b>
+     * （{@code session.suspend(+15min)} + IM 告知全额退款 + 逃生，<b>不即时中断</b>）——到期/用户逃生由
+     * {@code ConsultSuspensionService} 强制结束+退款。<b>免费直连流会话</b>（无订单）→ 保持既有即时
+     * {@code INTERRUPTED} + 无退款 IM（5.7 不变）。返回处理会话数（挂起+中断合计）。
+     */
     @Transactional
     public int interruptByVetBan(long vetId) {
         List<ConsultSession> active = sessions.findByVetIdAndStatusIn(
                 vetId, List.of(SessionStatus.IN_PROGRESS, SessionStatus.PENDING_CLOSE));
         for (ConsultSession s : active) {
+            boolean paid = s.getStatus() == SessionStatus.IN_PROGRESS
+                    && orders.findFirstByUserIdAndVetIdAndStatus(
+                            s.getUserId(), vetId, ConsultOrderStatus.IN_PROGRESS).isPresent();
+            if (paid) {
+                // Story 3.8（H-5）：付费会话挂起 15min，不即时中断（用户可逃生/等超时强制结束+退款）。
+                s.suspend(Instant.now().plus(Duration.ofSeconds(SUSPEND_SECONDS)));
+                sessions.save(s);
+                if (s.getImConversationId() != null) {
+                    imClient.sendSystemMessage(s.getImConversationId(),
+                            "兽医已被封禁，本次问诊将在 15 分钟内结束并全额退款。你可以立即结束或上报。");
+                }
+                continue; // 不发中断/异常事件——挂起未终结，强制结束时再发
+            }
+            // 免费直连流会话（5.7 不变）：即时中断、无退款。
             s.interrupt(InterruptReason.VET_BANNED);
             sessions.save(s);
             if (s.getImConversationId() != null) {
-                // Story 2.5（AB-2E V1.0.0 免费阶段）：告知中断 + 提供「重新匹配/结束」选项（无退款）。
                 imClient.sendSystemMessage(s.getImConversationId(),
                         "兽医已临时下线，本次问诊已中断。你可以重新匹配一位兽医继续，或结束本次问诊。");
             }
-            // 推送/历史（Epic 6）。
             events.publishEvent(new ConsultInterruptedEvent(
                     s.getId(), s.getUserId(), vetId, InterruptReason.VET_BANNED.name()));
-            // 运营工单（Epic 5）：同一中断另发异常事件。
             events.publishEvent(new ConsultAnomalyRaisedEvent(
                     s.getId(), s.getUserId(), vetId, s.getCreatedAt(), s.terminalAt(), "VET_BANNED"));
         }

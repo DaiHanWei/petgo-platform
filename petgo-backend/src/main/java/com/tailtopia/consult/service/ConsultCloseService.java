@@ -1,11 +1,15 @@
 package com.tailtopia.consult.service;
 
+import com.tailtopia.consult.domain.ConsultOrder;
+import com.tailtopia.consult.domain.ConsultOrderStatus;
 import com.tailtopia.consult.domain.ConsultRating;
 import com.tailtopia.consult.domain.ConsultSession;
+import com.tailtopia.consult.domain.ConsultStageEvent;
 import com.tailtopia.consult.domain.RatingPromptState;
 import com.tailtopia.consult.domain.SessionStatus;
 import com.tailtopia.consult.domain.VetDiagnosis;
 import com.tailtopia.consult.event.ConsultClosedEvent;
+import com.tailtopia.consult.repository.ConsultOrderRepository;
 import com.tailtopia.consult.repository.ConsultRatingRepository;
 import com.tailtopia.consult.repository.ConsultSessionRepository;
 import com.tailtopia.shared.error.AppException;
@@ -37,14 +41,19 @@ public class ConsultCloseService {
     private final VetPresenceService presence;
     private final TencentImClient imClient;
     private final ApplicationEventPublisher events;
+    private final ConsultOrderRepository orders;
+    private final ConsultBillingService billing;
 
     public ConsultCloseService(ConsultSessionRepository sessions, ConsultRatingRepository ratings,
-            VetPresenceService presence, TencentImClient imClient, ApplicationEventPublisher events) {
+            VetPresenceService presence, TencentImClient imClient, ApplicationEventPublisher events,
+            ConsultOrderRepository orders, ConsultBillingService billing) {
         this.sessions = sessions;
         this.ratings = ratings;
         this.presence = presence;
         this.imClient = imClient;
         this.events = events;
+        this.orders = orders;
+        this.billing = billing;
     }
 
     /**
@@ -125,6 +134,7 @@ public class ConsultCloseService {
         if (status == SessionStatus.PENDING_CLOSE) {
             s.closeRated();
             sessions.save(s);
+            completeBillingOrder(s); // Story 3.7：付费订单 IN_PROGRESS→COMPLETED（同事务，免费流跳过）
             publishClosed(s, true);
         } else {
             // 补弹后补评分：会话已关闭/已存档，仅清补弹标记，不重复发存档事件。
@@ -174,9 +184,33 @@ public class ConsultCloseService {
         for (ConsultSession s : expired) {
             s.closeUnrated();
             sessions.save(s);
+            completeBillingOrder(s); // Story 3.7：付费订单 IN_PROGRESS→COMPLETED（同事务，免费流跳过）
             publishClosed(s, false);
         }
         return expired.size();
+    }
+
+    /**
+     * 会话完成 → 付费订单完成（Story 3.7，D-1）：查该会话 {@code (userId, vetId, IN_PROGRESS)} 付费订单，
+     * 有则 {@code IN_PROGRESS→COMPLETED} + 记 {@code session_ended_at}（会话终态时刻）+ 追加 {@code SESSION_ENDED}
+     * 节点（append-only）。**免费直连流会话无订单 → 跳过**（不报错）。收尾事务内原子；幂等（{@code markCompleted}
+     * 仅 IN_PROGRESS 生效，REFUNDING/REFUNDED 天然不匹配谓词）。
+     */
+    private void completeBillingOrder(ConsultSession s) {
+        if (s.getVetId() == null) {
+            return; // 无兽医（CLOSED 前应已接单，防御性守卫）
+        }
+        Optional<ConsultOrder> found = orders.findFirstByUserIdAndVetIdAndStatus(
+                s.getUserId(), s.getVetId(), ConsultOrderStatus.IN_PROGRESS);
+        if (found.isEmpty()) {
+            return; // 免费直连流会话无 consult_orders → 跳过
+        }
+        ConsultOrder order = found.get();
+        Instant endedAt = s.terminalAt() != null ? s.terminalAt() : Instant.now();
+        if (order.markCompleted(endedAt)) {
+            orders.save(order);
+            billing.appendStageEvent(order.getId(), ConsultStageEvent.SESSION_ENDED, endedAt, null);
+        }
     }
 
     private void publishClosed(ConsultSession s, boolean rated) {

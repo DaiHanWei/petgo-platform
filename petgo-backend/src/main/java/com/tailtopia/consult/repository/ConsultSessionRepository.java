@@ -24,6 +24,9 @@ public interface ConsultSessionRepository extends JpaRepository<ConsultSession, 
     /** 30min 评分门超时扫描（Story 5.6）：PENDING_CLOSE 且计时早于阈值。 */
     List<ConsultSession> findByStatusAndPendingCloseStartedAtBefore(SessionStatus status, Instant threshold);
 
+    /** 封禁挂起超时扫描（Story 3.8，H-5）：仍 IN_PROGRESS 且挂起截止早于 now → 强制结束+退款。 */
+    List<ConsultSession> findByStatusAndSuspendDeadlineAtBefore(SessionStatus status, Instant threshold);
+
     /** 某用户待补弹评分的已关闭会话（Story 5.6，进问诊页补弹一次）。 */
     Optional<ConsultSession> findFirstByUserIdAndStatusAndRatingPromptState(
             long userId, SessionStatus status, RatingPromptState ratingPromptState);

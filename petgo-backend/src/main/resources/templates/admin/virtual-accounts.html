@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!-- 虚拟账号管理（Story 9.8，A-6）。无登录，复用 content_posts.author_id 发种子。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title>虚拟账号 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1>虚拟账号</h1>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+        <p class="hint">虚拟账号用于冷启动种子内容运营：无登录能力、无密码，复用作者身份发布。</p>
+
+        <h2>新建虚拟账号</h2>
+        <form method="post" th:action="@{/admin/virtual-accounts}">
+            <label>昵称（≤20）<input type="text" name="nickname" maxlength="20" required/></label>
+            <label>头像 URL（选填）<input type="text" name="avatarUrl" maxlength="1024"/></label>
+            <button type="submit" class="btn btn-primary btn-sm">创建</button>
+        </form>
+
+        <h2>虚拟账号列表</h2>
+        <table>
+            <thead>
+            <tr><th>ID</th><th>昵称</th><th>头像</th><th>状态</th><th>已发布</th><th>建号人</th><th>操作</th></tr>
+            </thead>
+            <tbody>
+            <tr th:each="a : ${accounts}">
+                <td th:text="${a.id}">0</td>
+                <td th:text="${a.nickname}">名</td>
+                <td th:text="${a.avatarUrl} ?: '—'">—</td>
+                <td th:text="${a.enabled} ? '启用' : '停用'">启用</td>
+                <td th:text="${a.publishedCount}">0</td>
+                <td th:text="${a.createdBy} ?: '—'">—</td>
+                <td>
+                    <form method="post" th:action="@{/admin/virtual-accounts/{id}/enabled(id=${a.id})}"
+                          style="display:inline">
+                        <input type="hidden" name="enabled" th:value="${!a.enabled}"/>
+                        <button type="submit" class="btn btn-neutral btn-sm"
+                                th:text="${a.enabled} ? '停用' : '启用'">切换</button>
+                    </form>
+                </td>
+            </tr>
+            <tr th:if="${accounts.isEmpty()}"><td colspan="7">暂无虚拟账号</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

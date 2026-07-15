@@ -33,6 +33,14 @@ class ApiPaths {
   static const String vetConsultInProgress = '$base/vet/consult-sessions/in-progress';
   static const String vetConsultHistory = '$base/vet/consult-sessions/history';
 
+  /// 兽医计费队列（Story 3.6）：待接单池 + 本人「等待支付」中间态；接单（计费流，token 寻址）。
+  static const String vetConsultationsQueue = '$base/vet/consultations/queue';
+  static String vetConsultationsAccept(String requestToken) =>
+      '$base/vet/consultations/$requestToken/accept';
+
+  /// 兽医收入（Story 3.7）：当月待结算 + 历史月结倒序。
+  static const String vetIncome = '$base/vet/income';
+
   /// IM UserSig 签发（Story 5.5，客户端 SDK 登录用）。
   static const String imUserSig = '$base/im/usersig';
 
@@ -54,6 +62,9 @@ class ApiPaths {
   static String consultSessionContinueWaiting(int id) =>
       '$base/consult-sessions/$id/continue-waiting';
 
+  /// 封禁挂起逃生（Story 3.8，H-5）：用户「立即结束」挂起会话 → 强制结束+退款。
+  static String consultSessionEscape(int id) => '$base/consult-sessions/$id/escape';
+
   /// 评分门（Story 5.6）。POST 评分 / PATCH 补弹已展示 / GET 待补弹。
   static String consultSessionRating(int id) => '$base/consult-sessions/$id/rating';
   static String consultSessionRatingPrompted(int id) => '$base/consult-sessions/$id/rating-prompted';
@@ -73,6 +84,22 @@ class ApiPaths {
   /// 问诊历史聚合（Story 5.8，AI + 兽医两类，游标分页）。
   static const String consultHistory = '$base/consult/history';
 
+  /// 计费流下单（Story 3.2~3.5，consult_requests 两表流）。token 为不可枚举请求号。
+  /// POST 发起入队 / GET 状态轮询 / POST 支付·暂停·续·取消。
+  static const String consultations = '$base/consultations';
+  static String consultationStatus(String token) => '$base/consultations/$token';
+  static String consultationPay(String token) => '$base/consultations/$token/pay';
+  static String consultationPause(String token) => '$base/consultations/$token/pause';
+  static String consultationResume(String token) => '$base/consultations/$token/resume';
+  static String consultationCancel(String token) => '$base/consultations/$token/cancel';
+
+  /// 客服工单（Story 4.2，消费 4-1 后端）。建单 POST / 我的工单列表 GET / 详情 GET（owner 404）。
+  static const String supportTickets = '$base/support-tickets';
+  static String supportTicketDetail(String token) => '$base/support-tickets/$token';
+
+  /// 提交 CSAT（Story 4.7，仅 RESOLVED 未评窗口内）。
+  static String supportTicketCsat(String token) => '$base/support-tickets/$token/csat';
+
   /// App 版本信息（Story 6.5，公开可读，App 内更新提醒）。
   static const String appVersion = '$base/app-version';
 
@@ -88,6 +115,27 @@ class ApiPaths {
   /// 「我的发布」三类混合时间线（Story 7.1，FR-36）。
   static const String mePosts = '$base/me/posts';
 
+  /// 6 个新手任务进度 + Lulus Pemula 解锁态（Story 7.3，FR-47）。
+  static const String meNewbieTasks = '$base/me/newbie-tasks';
+
+  /// PawCoin 余额 + 流水游标分页（Story 1.4）。
+  static const String mePawcoin = '$base/me/pawcoin';
+
+  /// 充值选项（档位 + 暂停 flag）/ 下单 / 状态轮询（Story 1.5）。
+  static const String mePawcoinTopupOptions = '$mePawcoin/topup-options';
+  static const String mePawcoinTopups = '$mePawcoin/topups';
+  static String mePawcoinTopupStatus(String token) => '$mePawcoin/topups/$token/status';
+
+  /// 订单中心聚合（Story 5.1/5.2）：泛化兽医/AI/充值 3 类订单 + 游标分页 + 类型筛选 + PawCoin 汇总。
+  static const String orders = '$base/orders';
+
+  /// 用户端退款（Story 4.5）：我的退款列表 / PawCoin 即时退 / QRIS 填真钱收款账户。
+  static const String meRefundRequests = '$base/me/refund-requests';
+  static String refundPawcoin(String refundToken) =>
+      '$base/refund-requests/$refundToken/refund-pawcoin';
+  static String refundPayoutInfo(String refundToken) =>
+      '$base/refund-requests/$refundToken/payout-info';
+
   /// 媒体 STS 上传凭证（Story 2.1）。
   static const String mediaUploadUrl = '$base/media/upload-url';
 
@@ -95,8 +143,17 @@ class ApiPaths {
   static const String petProfiles = '$base/pet-profiles';
   static const String petProfileMe = '$base/pet-profiles/me';
 
+  /// 宠物身份证数据 / 生成（Story 6.1 后端 · 6.2 前端）。GET 取数据+generated 标志；POST 生成分配流水号（幂等）。
+  static const String petProfileIdCard = '$base/pet-profiles/me/id-card';
+
+  /// 身份证高清图付费下载（Story 6.3）。POST 一次性永久解锁（QRIS/PawCoin）；幂等不重复扣费。
+  static const String petProfileIdCardHdDownload = '$base/pet-profiles/me/id-card/hd-download';
+
   /// 成长时间线（Story 2.4）。
   static const String petProfileTimeline = '$base/pet-profiles/me/timeline';
+
+  /// 结构化健康记录 CRUD + 问诊存档只读混排（Story 7.1/7.2）。GET 返混排；POST/PATCH/{id}/DELETE/{id} 仅结构化。
+  static const String healthRecords = '$base/pet-profiles/me/health-records';
 
   /// 成长档案日历月视图 / 当天详情 / 统计栏（Story 2.4 AC5/AC6 · F9）。
   static const String petProfileCalendar = '$base/pet-profiles/me/calendar';
@@ -144,4 +201,10 @@ class ApiPaths {
   /// AI 智能分诊（Story 4.1）。POST 受理（202+triageId）/ GET 短轮询取结果。
   static const String triage = '$base/triage';
   static String triageResult(int id) => '$base/triage/$id';
+
+  /// AI 详建付费/额度解锁（Story 2.3/2.4）。POST body `{method}` → UnlockResponse。
+  static String triageUnlock(int id) => '$base/triage/$id/unlock';
+
+  /// 本月免费额度（Story 2.1/2.4）→ {period, limit, used, remaining}。
+  static const String freeQuota = '$base/me/free-quota';
 }

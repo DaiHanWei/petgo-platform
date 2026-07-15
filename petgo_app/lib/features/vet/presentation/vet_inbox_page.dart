@@ -2,22 +2,25 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/app_toast.dart';
 import '../data/vet_repository.dart';
-import '../domain/vet_inbox_item.dart';
+import '../domain/vet_queue.dart';
 import 'vet_empty_state.dart';
 import 'widgets/vet_top_bar.dart';
 
 /// 兽医工作台首页（dashboard，原型 V-01）：深色顶栏（问候 + 在线开关）+ 今日 3 统计卡
-/// （队列/完成/评分）+「ANTRIAN SEKARANG (n)」当前队列。
+/// （队列/完成/评分）+ 计费流接单队列。
 ///
-/// 队列即 Story 5.2 抢单列表（决策 F11）：多在线兽医并发可见同批 WAITING 请求。点卡进
-/// 请求详情/预览页（`/vet/request/:id`，进入即 3 分钟预览计时），接单走 5.3 DB 原子写。
+/// Story 3.6：数据源从 V1.0 免费直连流（`consult_sessions` waitingList）**改为计费流** `vetQueue()`
+/// （`consult_requests`）。承接 3-2 广播 → 3-3 接单 CAS → 3-4 限时支付。三态：
+/// ① `awaitingPay != null` → 顶部「等待用户支付」倒计时中间态（FR-53A），兽医忙不显池；
+/// ② 否则 → 可接单 QUEUEING 池（宠物身份 + 等待时长 + 接单 CTA）；
+/// ③ `awaitingPay` 由非空→空（轮询侦测）→ 判成交（跳会话在 Active Tab）/ 未成交（取消/超时/未支付）→ 3s Toast（FR-53B）。
 class VetInboxPage extends ConsumerStatefulWidget {
   const VetInboxPage({super.key});
 
@@ -26,67 +29,111 @@ class VetInboxPage extends ConsumerStatefulWidget {
 }
 
 class _VetInboxPageState extends ConsumerState<VetInboxPage> with WidgetsBindingObserver {
-  /// 队列轮询间隔（抢单列表实时性；退后台暂停）。
-  static const Duration _pollInterval = Duration(seconds: 8);
+  /// 队列轮询间隔（比免费流 8s 更密：FR-53A 倒计时 + 尽快侦测支付/取消跃迁）。
+  static const Duration _pollInterval = Duration(seconds: 4);
 
-  List<VetInboxItem>? _items; // null = 首次加载中
-  Timer? _poll;
+  /// 支付窗（服务端权威 90s，仅用于倒计时显示 clamp）。
+  static const int _payWindowSeconds = 90;
+
+  VetQueue? _queue; // null = 首次加载中
+  Timer? _poll; // 拉队列
+  Timer? _display; // 1s 心跳刷新倒计时显示
   String _displayName = '';
   String? _avatarUrl; // 运营后台上传的头像；null → 首字母占位
   int? _doneCount; // 完成数（history 列表长度，全量非仅今日）；null=加载中/失败 → 占位
-  final Set<int> _skipped = {}; // Lewati 客户端本地跳过的 sessionId（不调后端；刷新后可重现）
+  String? _prevAwaitingToken; // 上一轮待支付项 token（侦测「接单已结束」跃迁，FR-53B）
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _reload();
+    _reloadQueue();
     _loadHeaderStats();
-    _startPoll();
+    _startTimers();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _poll?.cancel();
+    _display?.cancel();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // 退后台停轮询省流量/电；回前台立即拉一次再恢复轮询。
+    // 退后台停轮询省流量/电；回前台立即拉一次再恢复。
     if (state == AppLifecycleState.resumed) {
-      _reload();
-      _startPoll();
+      _reloadQueue();
+      _startTimers();
     } else {
       _poll?.cancel();
+      _display?.cancel();
     }
   }
 
-  void _startPoll() {
+  void _startTimers() {
     _poll?.cancel();
-    _poll = Timer.periodic(_pollInterval, (_) => _reload());
+    _display?.cancel();
+    _poll = Timer.periodic(_pollInterval, (_) => _reloadQueue());
+    // 倒计时仅在待支付态需要 1s 刷新显示（纯客户端显示，跃迁靠轮询服务端）。
+    _display = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && _queue?.awaitingPay != null) setState(() {});
+    });
   }
 
-  /// 拉抢单列表（轮询 / 手动共用）：静默刷新，保留旧数据避免闪烁。
-  /// 失败时：已有数据则保留（不闪空态）；首次加载就失败则落空态（不卡死在 spinner）。
-  Future<void> _reload() async {
+  /// 拉计费队列（轮询/手动共用）：静默刷新保留旧数据避免闪烁；侦测待支付跃迁触发 Toast（FR-53B）。
+  Future<void> _reloadQueue() async {
+    VetQueue queue;
     try {
-      final list = await ref.read(vetRepositoryProvider).waitingList();
-      if (mounted) setState(() => _items = list);
+      queue = await ref.read(vetRepositoryProvider).vetQueue();
     } catch (_) {
-      if (mounted && _items == null) setState(() => _items = const []);
+      if (mounted && _queue == null) setState(() => _queue = const VetQueue());
+      return;
+    }
+    await _detectAwaitingTransition(queue);
+    if (mounted) setState(() => _queue = queue);
+  }
+
+  /// 侦测「本兽医待支付项消失」→ 判成交/未成交（FR-53B，决策 D-4 前端轮询推断）。
+  Future<void> _detectAwaitingTransition(VetQueue next) async {
+    final prev = _prevAwaitingToken;
+    final now = next.awaitingPay?.requestToken;
+    if (prev != null && now == null) {
+      // 上一轮在等待支付、本轮消失：支付成功转单删 / 用户取消删 / 支付窗超时回退或彻底失败。
+      bool paid = false;
+      try {
+        // 接单中恒仅 1 单（goBusy 互斥）：出现进行中会话即已支付；否则未成交。
+        paid = (await ref.read(vetRepositoryProvider).activeSessions()).isNotEmpty;
+      } catch (_) {
+        paid = false; // 拉取失败按未成交提示（不误报成功）
+      }
+      if (mounted) {
+        final l10n = AppLocalizations.of(context);
+        showAppToast(context, paid ? l10n.vetQueuePaidStarted : l10n.vetQueueOrderFellThrough,
+            duration: const Duration(seconds: 3));
+      }
+    }
+    _prevAwaitingToken = now;
+  }
+
+  /// 显式刷新（右上角）：重拉队列。
+  void _refresh() => _reloadQueue();
+
+  /// 接单：CAS 接计费流请求 → 成功刷新（进等待支付态）；409（被抢/占用）→ 3s Toast + 刷新。
+  Future<void> _accept(VetQueueItem item) async {
+    final l10n = AppLocalizations.of(context);
+    try {
+      await ref.read(vetRepositoryProvider).acceptConsultRequest(item.requestToken);
+      // 接单成功 → 立即刷新拉 awaitingPay（进等待支付态）。跃迁基线由 _reloadQueue 的侦测器据服务端
+      // 返回的 awaitingPay 建立——不在此乐观预置 _prevAwaitingToken（否则 reload 前误判「未成交」误报 Toast）。
+      await _reloadQueue();
+    } catch (_) {
+      if (!mounted) return;
+      showAppToast(context, l10n.vetQueueAcceptFailed, duration: const Duration(seconds: 3));
+      _reloadQueue();
     }
   }
-
-  /// 显式刷新：重拉列表并清空本地跳过（详情返回的隐式刷新不清，跳过本会话内保留）。
-  void _refresh() {
-    setState(() => _skipped.clear());
-    _reload();
-  }
-
-  /// Lewati：客户端本地移除该卡（抢单模式，不发起后端调用）。
-  void _skip(VetInboxItem item) => setState(() => _skipped.add(item.sessionId));
 
   Future<void> _loadHeaderStats() async {
     final repo = ref.read(vetRepositoryProvider);
@@ -103,73 +150,64 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> with WidgetsBinding
     }
   }
 
-  /// 点卡片 → 请求详情/预览页；返回后刷新列表（被抢/取消/超时的项已不再 WAITING）。
-  Future<void> _openDetail(VetInboxItem item) async {
-    await context.push('/vet/request/${item.sessionId}', extra: item);
-    _reload();
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final queue = _queue;
+    final loading = queue == null;
+    final awaiting = queue?.awaitingPay;
+    final available = queue?.available ?? const <VetQueueItem>[];
     return Scaffold(
       backgroundColor: AppColors.base,
       body: Column(
         children: [
           VetTopBar(greetingName: _displayName, avatarUrl: _avatarUrl, showOnlineToggle: true),
           Expanded(
-            child: Builder(
-              builder: (context) {
-                final loading = _items == null; // 仅首次加载显 spinner；轮询保留旧数据不闪
-                final items = (_items ?? const <VetInboxItem>[])
-                    .where((it) => !_skipped.contains(it.sessionId))
-                    .toList();
-                return ListView(
-                  padding: const EdgeInsets.all(AppSpacing.md),
+            child: ListView(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              children: [
+                _StatRow(queue: loading ? null : available.length, done: _doneCount),
+                const SizedBox(height: AppSpacing.lg),
+                // FR-53A：本人待支付倒计时中间态（有则置顶，忙时池为空）。
+                if (awaiting != null) ...[
+                  _AwaitingPayCard(item: awaiting, payWindowSeconds: _payWindowSeconds),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
+                Row(
                   children: [
-                    _StatRow(
-                      queue: loading ? null : items.length,
-                      done: _doneCount,
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            l10n.vetDashboardQueueSection(loading ? 0 : items.length),
-                            style: AppTypography.caption.copyWith(
-                              color: AppColors.textSecondary,
-                              letterSpacing: 0.6,
-                            ),
-                          ),
+                    Expanded(
+                      child: Text(
+                        l10n.vetDashboardQueueSection(loading ? 0 : available.length),
+                        style: AppTypography.caption.copyWith(
+                          color: AppColors.textSecondary,
+                          letterSpacing: 0.6,
                         ),
-                        IconButton(
-                          key: const ValueKey('vetInboxRefresh'),
-                          icon: const Icon(Icons.refresh, size: 20),
-                          onPressed: _refresh,
-                        ),
-                      ],
+                      ),
                     ),
-                    const SizedBox(height: AppSpacing.sm),
-                    if (loading)
-                      const Padding(
-                        padding: EdgeInsets.only(top: AppSpacing.xl),
-                        child: Center(child: CircularProgressIndicator()),
-                      )
-                    else if (items.isEmpty)
-                      VetEmptyState(icon: Icons.inbox_outlined, message: l10n.vetInboxEmpty)
-                    else
-                      ...items.map((it) => Padding(
-                            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                            child: _InboxCard(
-                              item: it,
-                              onDetail: () => _openDetail(it),
-                              onSkip: () => _skip(it),
-                            ),
-                          )),
+                    IconButton(
+                      key: const ValueKey('vetInboxRefresh'),
+                      icon: const Icon(Icons.refresh, size: 20),
+                      onPressed: _refresh,
+                    ),
                   ],
-                );
-              },
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                if (loading)
+                  const Padding(
+                    padding: EdgeInsets.only(top: AppSpacing.xl),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (available.isEmpty)
+                  // 忙时（等待支付/会话中）池为空——引导语随待支付态区分（等待支付时不显「暂无请求」）。
+                  awaiting != null
+                      ? const SizedBox.shrink()
+                      : VetEmptyState(icon: Icons.inbox_outlined, message: l10n.vetInboxEmpty)
+                else
+                  ...available.map((it) => Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                        child: _QueueCard(item: it, onAccept: () => _accept(it)),
+                      )),
+              ],
             ),
           ),
         ],
@@ -190,7 +228,6 @@ class _StatRow extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     return Row(
       children: [
-        // 原型 vet-dashboard.html：三卡各异色（Antrian 紫 / Selesai 薄荷 / Rating 金），无边框。
         _StatCard(
             value: queue?.toString() ?? '—',
             label: l10n.vetDashboardStatQueue,
@@ -203,7 +240,6 @@ class _StatRow extends StatelessWidget {
             bg: AppColors.vetSurface,
             valueColor: AppColors.vetPrimary),
         const SizedBox(width: AppSpacing.sm),
-        // 评分：暂无后端端点 → 占位「—」（见 spec / deferred）。
         _StatCard(
             value: '—',
             label: l10n.vetDashboardStatRating,
@@ -227,10 +263,7 @@ class _StatCard extends StatelessWidget {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-        decoration: BoxDecoration(
-          color: bg, // 原型三卡各异 tint，无边框
-          borderRadius: BorderRadius.circular(14),
-        ),
+        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14)),
         child: Column(
           children: [
             Text(value, style: AppTypography.display.copyWith(color: valueColor)),
@@ -243,28 +276,96 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-/// 抢单请求卡片（原型 vet-queue.html）：宠物身份块（头像+名+meta）+ 等级徽章(绿/黄/红)
-/// + 等待时间 + RINGKASAN AI 摘要框(按等级配色) + Lewati/Lihat Detail 双按钮；RED 加 ⚠️ 紧急横幅。
-/// 身份字段全 nullable：`petName==null`（真后端未下发）→ 优雅降级不显身份块。
-class _InboxCard extends StatelessWidget {
-  const _InboxCard({required this.item, required this.onDetail, required this.onSkip});
+/// FR-53A 待支付中间态卡：本兽医接单后「等待用户支付 剩余 MM:SS」。服务端权威倒计时（纯显示，
+/// 跃迁靠轮询）；`pausedAt != null`（用户跳充值，A-4）→ 暂停显示计时，改显「用户正在充值…」。
+class _AwaitingPayCard extends StatelessWidget {
+  const _AwaitingPayCard({required this.item, required this.payWindowSeconds});
 
-  final VetInboxItem item;
-  final VoidCallback onDetail;
-  final VoidCallback onSkip;
+  final VetAwaitingPay item;
+  final int payWindowSeconds;
 
-  bool get _isRed => item.aiDangerLevel == 'RED';
-
-  Color _levelColor() {
-    switch (item.aiDangerLevel) {
-      case 'RED':
-        return AppColors.triageRed;
-      case 'YELLOW':
-        return AppColors.triageYellow;
-      default:
-        return AppColors.triageGreen;
-    }
+  String get _mmss {
+    final deadline = item.payDeadlineAt;
+    if (deadline == null) return '--:--';
+    final remaining = deadline.difference(DateTime.now().toUtc()).inSeconds.clamp(0, payWindowSeconds);
+    final m = (remaining ~/ 60).toString().padLeft(2, '0');
+    final s = (remaining % 60).toString().padLeft(2, '0');
+    return '$m:$s';
   }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final petName = (item.petName?.isNotEmpty ?? false) ? item.petName! : null;
+    return Container(
+      key: const ValueKey('vetAwaitingPayCard'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.vetSurface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.vetPrimary.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.hourglass_top, size: 18, color: AppColors.vetPrimary),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  l10n.vetQueueAwaitingPayTitle,
+                  style: AppTypography.title.copyWith(color: AppColors.vetPrimary),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            petName != null
+                ? l10n.vetQueueAwaitingPaySubtitleNamed(petName)
+                : l10n.vetQueueAwaitingPaySubtitle,
+            style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 12),
+          if (item.isPaused)
+            Row(
+              children: [
+                const Icon(Icons.pause_circle_outline, size: 20, color: AppColors.textSecondary),
+                const SizedBox(width: 8),
+                Text(l10n.vetQueuePausedHint,
+                    style: AppTypography.body.copyWith(color: AppColors.textSecondary)),
+              ],
+            )
+          else
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(l10n.vetQueueAwaitingPayRemaining,
+                    style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+                const SizedBox(width: 8),
+                Text(
+                  _mmss,
+                  key: const ValueKey('vetAwaitingPayCountdown'),
+                  style: AppTypography.display.copyWith(color: AppColors.vetPrimary),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 计费流接单队列卡（Story 3.6）：宠物身份块（头像 emoji + 名 + meta）+ 等待时长 + 接单 CTA。
+/// **无 AI 危险等级/症状/照片**（`consult_requests` 不存病例，区别于免费流 `_InboxCard` 富卡）。
+class _QueueCard extends StatelessWidget {
+  const _QueueCard({required this.item, required this.onAccept});
+
+  final VetQueueItem item;
+  final VoidCallback onAccept;
 
   String _speciesEmoji() {
     switch (item.petSpecies) {
@@ -277,7 +378,7 @@ class _InboxCard extends StatelessWidget {
     }
   }
 
-  /// meta 行：「种类 · 年龄 · @主人」，缺项跳过（无性别——后端不下发 petSex）。
+  /// meta 行：「种类 · 年龄 · @主人」，缺项跳过。
   String _metaLine(AppLocalizations l10n) {
     final parts = <String>[];
     switch (item.petSpecies) {
@@ -292,64 +393,17 @@ class _InboxCard extends StatelessWidget {
     return parts.join(' · ');
   }
 
-  /// 等级徽章配色（文字/底）：黄→琥珀、红→珊瑚、绿/DIRECT→薄荷。
-  (Color, Color) _badgeColors() {
-    switch (item.aiDangerLevel) {
-      case 'RED':
-        return (AppColors.healthEventText, AppColors.coralTint);
-      case 'YELLOW':
-        return (AppColors.tipsBadgeText, AppColors.goldTint);
-      default:
-        return (AppColors.vetPrimary, AppColors.vetSurface);
-    }
-  }
-
-  /// 等级徽章 emoji（前缀，对齐原型 vet-queue.html）；标签走 l10n。
-  String _badgeEmoji() {
-    switch (item.aiDangerLevel) {
-      case 'RED':
-        return '🔴';
-      case 'YELLOW':
-        return '🟡';
-      default:
-        return '🟢';
-    }
-  }
-
-  String _badgeLabel(AppLocalizations l10n) {
-    switch (item.aiDangerLevel) {
-      case 'RED':
-        return l10n.vetQueueLevelRed;
-      case 'YELLOW':
-        return l10n.vetQueueLevelYellow;
-      default:
-        return l10n.vetQueueLevelGreen;
-    }
-  }
-
-  /// 顶部色条颜色（4px）：按等级；DIRECT→薄荷。
-  Color _stripColor() {
-    switch (item.aiDangerLevel) {
-      case 'RED':
-        return AppColors.triageRed;
-      case 'YELLOW':
-        return AppColors.triageYellow;
-      default:
-        return AppColors.vetPrimary;
-    }
-  }
-
   String _waitingShort(AppLocalizations l10n) {
-    final s = item.waitingElapsedSeconds;
+    final s = item.waitingSeconds;
     return s < 60 ? l10n.vetQueueWaitJustNow : l10n.vetQueueWaitMinutesAgo(s ~/ 60);
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final (badgeFg, badgeBg) = _badgeColors();
+    final meta = _metaLine(l10n);
     return Container(
-      key: ValueKey('vetRequestCard_${item.sessionId}'),
+      key: ValueKey('vetQueueCard_${item.requestToken}'),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
@@ -361,198 +415,66 @@ class _InboxCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 顶部 4px 等级色条
-          Container(height: 4, color: _stripColor()),
+          Container(height: 4, color: AppColors.vetPrimary),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 头行：头像+名/meta（左） · 等级徽章+时间（右）
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AppColors.vetPrimary.withValues(alpha: 0.14),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(_speciesEmoji(), style: const TextStyle(fontSize: 18)),
+                    ),
+                    const SizedBox(width: 10),
                     Expanded(
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: (item.isAiUpgrade ? _levelColor() : AppColors.vetPrimary)
-                                  .withValues(alpha: 0.14),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Text(_speciesEmoji(), style: const TextStyle(fontSize: 18)),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(item.petName ?? l10n.vetInboxDirect,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: AppTypography.title.copyWith(color: AppColors.ink)),
-                                if (_metaLine(l10n).isNotEmpty)
-                                  Text(_metaLine(l10n),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: AppTypography.caption
-                                          .copyWith(color: AppColors.textSecondary)),
-                              ],
-                            ),
-                          ),
+                          Text(item.petName ?? l10n.vetInboxDirect,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.title.copyWith(color: AppColors.ink)),
+                          if (meta.isNotEmpty)
+                            Text(meta,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
                         ],
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: badgeBg,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(_badgeEmoji(), style: AppTypography.micro),
-                              const SizedBox(width: 4),
-                              Text(_badgeLabel(l10n),
-                                  style: AppTypography.micro
-                                      .copyWith(color: badgeFg, fontWeight: FontWeight.w700)),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(_waitingShort(l10n),
-                            style: AppTypography.micro.copyWith(color: AppColors.textTertiary)),
-                      ],
-                    ),
+                    Text(_waitingShort(l10n),
+                        style: AppTypography.micro.copyWith(color: AppColors.textTertiary)),
                   ],
                 ),
-                const SizedBox(height: 10),
-                // 摘要：RED→PERHATIAN SEGERA 框 / YELLOW→RINGKASAN AI 框 / 其余→纯文本行
-                _summary(l10n),
                 const SizedBox(height: 12),
-                // CTA：RED→单个红色「Tangani Sekarang」；其余→Lewati + Lihat Detail
-                _isRed
-                    ? SizedBox(
-                        width: double.infinity,
-                        child: FilledButton(
-                          key: ValueKey('vetDetail_${item.sessionId}'),
-                          onPressed: onDetail,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: AppColors.triageRed,
-                            foregroundColor: AppColors.onAccent,
-                            padding: const EdgeInsets.symmetric(vertical: 11),
-                          ),
-                          child: Text('⚠ ${l10n.vetQueueHandleNow}'),
-                        ),
-                      )
-                    : Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              key: ValueKey('vetSkip_${item.sessionId}'),
-                              onPressed: onSkip,
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: AppColors.textSecondary,
-                                side: BorderSide(color: AppColors.border, width: 1.5),
-                                padding: const EdgeInsets.symmetric(vertical: 11),
-                              ),
-                              child: Text(l10n.vetQueueSkip),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            flex: 2,
-                            child: FilledButton(
-                              key: ValueKey('vetDetail_${item.sessionId}'),
-                              onPressed: onDetail,
-                              style: FilledButton.styleFrom(
-                                backgroundColor: AppColors.vetPrimary,
-                                foregroundColor: AppColors.onAccent,
-                                padding: const EdgeInsets.symmetric(vertical: 11),
-                              ),
-                              child: Text('${l10n.vetQueueViewDetail} →'),
-                            ),
-                          ),
-                        ],
-                      ),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    key: ValueKey('vetAccept_${item.requestToken}'),
+                    onPressed: onAccept,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.vetPrimary,
+                      foregroundColor: AppColors.onAccent,
+                      padding: const EdgeInsets.symmetric(vertical: 11),
+                    ),
+                    child: Text(l10n.vetQueueAccept),
+                  ),
+                ),
               ],
             ),
           ),
         ],
       ),
     );
-  }
-
-  /// 摘要区：RED/YELLOW 标签框；GREEN/DIRECT 纯文本行（含照片状态后缀）。
-  Widget _summary(AppLocalizations l10n) {
-    if (_isRed || item.aiDangerLevel == 'YELLOW') {
-      final box = _isRed ? AppColors.coralTint : AppColors.goldTint;
-      final titleColor = _isRed ? AppColors.healthEventText : AppColors.tipsBadgeText;
-      final title = _isRed ? l10n.vetQueueUrgentBanner : l10n.vetQueueAiSummaryTitle;
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(color: box, borderRadius: BorderRadius.circular(10)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title,
-                    style: AppTypography.caption
-                        .copyWith(color: titleColor, fontWeight: FontWeight.w700)),
-                if (item.symptomPreview != null) ...[
-                  const SizedBox(height: 4),
-                  Text(item.symptomPreview!,
-                      style: AppTypography.body.copyWith(height: 1.5)),
-                ],
-              ],
-            ),
-          ),
-          if (item.imageCount > 0) ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Icon(Icons.grid_view_rounded, size: 13, color: AppColors.textTertiary),
-                const SizedBox(width: 6),
-                Text(l10n.vetQueuePhotosAttached(item.imageCount),
-                    style: AppTypography.caption.copyWith(color: AppColors.textTertiary)),
-                const SizedBox(width: 8),
-                for (var i = 0; i < item.imageCount.clamp(0, 3); i++) ...[
-                  if (i > 0) const SizedBox(width: 4),
-                  Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: i.isEven ? AppColors.skyTint : AppColors.goldTint,
-                      borderRadius: BorderRadius.circular(7),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(_speciesEmoji(), style: const TextStyle(fontSize: 13)),
-                  ),
-                ],
-              ],
-            ),
-          ],
-        ],
-      );
-    }
-    // GREEN / DIRECT：纯文本行 + 照片状态后缀
-    final base = item.symptomPreview ?? l10n.vetRequestNoDetail;
-    final photoSuffix = item.imageCount > 0
-        ? ' · ${l10n.vetQueuePhotosAttached(item.imageCount)}'
-        : ' · ${l10n.vetQueueNoPhoto}';
-    return Text('$base$photoSuffix',
-        style: AppTypography.body.copyWith(color: AppColors.textSecondary, height: 1.5));
   }
 }

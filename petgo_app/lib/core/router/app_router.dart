@@ -20,7 +20,22 @@ import '../../features/me/presentation/delete_account_page.dart';
 import '../../features/me/presentation/language_settings_page.dart';
 import '../../features/me/presentation/me_page.dart';
 import '../../features/me/presentation/settings_page.dart';
+import '../../features/support/presentation/my_tickets_page.dart';
+import '../../features/support/presentation/ticket_compose_page.dart';
+import '../../features/support/presentation/ticket_detail_page.dart';
+import '../../features/support/presentation/csat_page.dart';
+import '../../features/pawcoin/presentation/pawcoin_page.dart';
+import '../../features/pawcoin/presentation/recharge_page.dart';
+import '../../features/order/presentation/order_list_page.dart';
+import '../../features/order/presentation/order_detail_page.dart';
+import '../../features/refund/domain/refund_request.dart';
+import '../../features/refund/presentation/refund_list_page.dart';
+import '../../features/refund/presentation/refund_choose_page.dart';
+import '../../features/refund/presentation/refund_account_page.dart';
+import '../../features/refund/presentation/refund_review_page.dart';
 import '../../features/profile/presentation/growth_archive_page.dart';
+import '../../features/profile/presentation/health_list_page.dart';
+import '../../features/profile/presentation/id_card_page.dart';
 import '../../features/profile/presentation/milestone_list_page.dart';
 import '../../features/profile/domain/pet_profile.dart';
 import '../../features/notify/data/push_permission_providers.dart';
@@ -34,11 +49,15 @@ import '../../features/consult/presentation/consult_case_form_page.dart';
 import '../../features/consult/presentation/consult_conversation_page.dart';
 import '../../features/consult/presentation/consult_entry_page.dart';
 import '../../features/consult/presentation/consult_waiting_page.dart';
+import '../../features/consult/presentation/vet_request_confirm_page.dart';
+import '../../features/consult/presentation/vet_timed_pay_page.dart';
+import '../../features/consult/presentation/vet_waiting_page.dart';
 import '../../features/notify/presentation/notification_center_page.dart';
 import '../../features/gath/presentation/gath_page.dart';
 import '../../features/profile/presentation/pet_card_page.dart';
 import '../../features/vet/domain/vet_workbench_lists.dart';
 import '../../features/vet/presentation/vet_conversation_page.dart';
+import '../../features/vet/presentation/vet_income_page.dart';
 import '../../features/vet/presentation/vet_history_detail_page.dart';
 import '../../features/triage/presentation/dev_triage_page.dart';
 import '../../features/triage/presentation/triage_page.dart';
@@ -181,6 +200,10 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       ),
       // 宠物档案编辑（Story 2.8）。两入口（档案 Tab 信息卡 /「我的」Tab）复用同一页。
       GoRoute(path: '/profile/edit', builder: (c, s) => const PetProfileEditPage()),
+      // 宠物身份证详情（Story 6.2 · FR-49B）。受控（/profile/ 前缀，游客被门控）。
+      GoRoute(path: '/profile/id-card', builder: (c, s) => const IdCardPage()),
+      // 健康记录列表（Story 7.2 · FR-45B）。受控（/profile/ 前缀，游客被门控）。
+      GoRoute(path: '/profile/health', builder: (c, s) => const HealthListPage()),
       // 成长档案当天详情（Story 2.4 AC6 · F9）。?date=yyyy-MM-dd；受控（/profile/ 前缀）。
       GoRoute(
         path: '/profile/day',
@@ -219,9 +242,31 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       ),
       // 直连问诊病例填写页（Story F）：症状 + 照片，提交才发起 DIRECT 会话。
       GoRoute(path: '/consult/case', builder: (c, s) => const ConsultCaseFormPage()),
+      // 客服工单（Story 4.2，/me 受控前缀）。/new 必须在 /:token 之前注册，否则 token 段会吞 'new'。
+      GoRoute(path: '/me/support-tickets', builder: (c, s) => const MyTicketsPage()),
+      GoRoute(path: '/me/support-tickets/new', builder: (c, s) => const TicketComposePage()),
+      GoRoute(
+        path: '/me/support-tickets/:token',
+        builder: (c, s) => TicketDetailPage(token: s.pathParameters['token']!),
+      ),
+      // CSAT 满意度问卷（Story 4.7）。受控（/me 前缀）；从工单详情「评价服务」进。
+      GoRoute(
+        path: '/me/support-tickets/:token/csat',
+        builder: (c, s) => CsatPage(token: s.pathParameters['token']!),
+      ),
       GoRoute(
         path: '/consult/waiting/:id',
         builder: (c, s) => ConsultWaitingPage(sessionId: int.parse(s.pathParameters['id']!)),
+      ),
+      // 计费流下单三屏（Story 3.5）：确认 → 等待接单(1min) → 限时支付(1.5min)。token 走 path param。
+      GoRoute(path: '/consult/vet-request', builder: (c, s) => const VetRequestConfirmPage()),
+      GoRoute(
+        path: '/consult/vet-request/waiting/:token',
+        builder: (c, s) => VetWaitingPage(requestToken: s.pathParameters['token']!),
+      ),
+      GoRoute(
+        path: '/consult/vet-request/pay/:token',
+        builder: (c, s) => VetTimedPayPage(requestToken: s.pathParameters['token']!),
       ),
       // 进行中会话界面（Story 5.5）。用户侧 /consult/conversation、兽医侧 /vet/conversation（各自 role 守卫）。
       GoRoute(
@@ -232,6 +277,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         path: '/vet/conversation/:id',
         builder: (c, s) => _vetScoped(VetConversationPage(sessionId: int.parse(s.pathParameters['id']!))),
       ),
+      // 兽医收入页（Story 3.7）：当月待结算 + 历史月结倒序（从「我的」进）。
+      GoRoute(path: '/vet/income', builder: (c, s) => _vetScoped(const VetIncomePage())),
       // 兽医「历史」卡 View → 只读问诊结果页（Bug 20260701-196）。列表带入 VetHistoryEntry(extra)
       // 供顶栏宠物名；深链无 extra 时降级为 null，仅按 sessionId 拉诊断。
       GoRoute(
@@ -267,6 +314,28 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/notifications', builder: (c, s) => const NotificationCenterPage()),
       // 二级设置页（Story 7.1 · F8）：语言/退出/注销。受控（/me 前缀，需登录）。
       GoRoute(path: '/me/settings', builder: (c, s) => const SettingsPage()),
+      // PawCoin 余额与流水页（Story 1.4）。受控（/me 前缀已被 _controlledLocations 守卫）；shell 外顶层隐 Tab Bar。
+      GoRoute(path: '/me/pawcoin', builder: (c, s) => const PawCoinPage()),
+      // PawCoin 充值页（Story 1.5）。余额页「Isi Saldo」入口；同样 /me 门控 + shell 外隐 Tab。
+      GoRoute(path: '/me/pawcoin/recharge', builder: (c, s) => const RechargePage()),
+      // 订单中心列表（Story 5.2）。受控（/me 前缀，需登录）；shell 外顶层隐 Tab。
+      GoRoute(path: '/me/orders', builder: (c, s) => const OrderListPage()),
+      // 订单详情（Story 5.3）：各态 + 退款进度 + 宠物已删失效占位。受控（/me 前缀）。
+      GoRoute(
+        path: '/me/orders/:token',
+        builder: (c, s) => OrderDetailPage(token: s.pathParameters['token']!),
+      ),
+      // 用户端退款方式选择/填收款 3 屏（Story 4.5）。受控（/me 前缀，需登录）；shell 外顶层隐 Tab。
+      GoRoute(path: '/me/refunds', builder: (c, s) => const RefundListPage()),
+      GoRoute(
+          path: '/me/refunds/choose',
+          builder: (c, s) => RefundChoosePage(refund: s.extra as MyRefund)),
+      GoRoute(
+          path: '/me/refunds/account',
+          builder: (c, s) => RefundAccountPage(refund: s.extra as MyRefund)),
+      GoRoute(
+          path: '/me/refunds/review',
+          builder: (c, s) => RefundReviewPage(draft: s.extra as RefundPayoutDraft)),
       // 语言设置（Story 7.2）。
       GoRoute(path: '/me/language', builder: (c, s) => const LanguageSettingsPage()),
       // 账号注销整页（P-43 · Story 7.3）。受控（/me 前缀，需登录）。

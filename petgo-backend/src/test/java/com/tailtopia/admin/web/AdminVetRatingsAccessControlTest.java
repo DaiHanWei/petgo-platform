@@ -48,7 +48,7 @@ class AdminVetRatingsAccessControlTest {
 
         @Bean
         AdminWebController controller(AdminContentService c, AdminModerationService m, AdminVetService v) {
-            return new AdminWebController(c, m, v);
+            return new AdminWebController(c, m, v, mock(com.tailtopia.admin.dashboard.service.AdminDashboardService.class));
         }
     }
 

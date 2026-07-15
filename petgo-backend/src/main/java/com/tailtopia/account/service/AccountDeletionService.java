@@ -10,6 +10,7 @@ import com.tailtopia.consult.service.ConsultAnonymizationService;
 import com.tailtopia.content.service.ContentService;
 import com.tailtopia.moderation.violation.service.ViolationCountService;
 import com.tailtopia.notify.service.NotificationDeletionService;
+import com.tailtopia.pay.service.PawCoinAccountDeletionService;
 import com.tailtopia.profile.service.ProfileDeletionService;
 import com.tailtopia.shared.im.ImAccountMapper;
 import com.tailtopia.shared.im.TencentImClient;
@@ -45,6 +46,7 @@ public class AccountDeletionService {
     private final TriageDeletionService triageDeletion;
     private final ConsultAnonymizationService consultAnonymization;
     private final NotificationDeletionService notificationDeletion;
+    private final PawCoinAccountDeletionService pawCoinDeletion;
     private final AuthAccountDeletionService authDeletion;
     private final MediaDeletionService mediaDeletion;
     private final TencentImClient imClient;
@@ -57,7 +59,8 @@ public class AccountDeletionService {
     public AccountDeletionService(AccountDeletionRepository deletions,
             ProfileDeletionService profileDeletion, TriageDeletionService triageDeletion,
             ConsultAnonymizationService consultAnonymization,
-            NotificationDeletionService notificationDeletion, AuthAccountDeletionService authDeletion,
+            NotificationDeletionService notificationDeletion,
+            PawCoinAccountDeletionService pawCoinDeletion, AuthAccountDeletionService authDeletion,
             MediaDeletionService mediaDeletion, TencentImClient imClient,
             ApplicationEventPublisher events, ContentService contentService,
             ManualReviewService reviewService, ViolationCountService violationCountService) {
@@ -66,6 +69,7 @@ public class AccountDeletionService {
         this.triageDeletion = triageDeletion;
         this.consultAnonymization = consultAnonymization;
         this.notificationDeletion = notificationDeletion;
+        this.pawCoinDeletion = pawCoinDeletion;
         this.authDeletion = authDeletion;
         this.mediaDeletion = mediaDeletion;
         this.imClient = imClient;
@@ -118,6 +122,8 @@ public class AccountDeletionService {
         reviewService.removePendingForAuthor(userId);
         violationCountService.deleteByAccount(userId);
 
+        // PawCoin 余额作废（Story 1.6，FR-50D）：写 FORFEITURE 终结分录归零 + 物理删钱包/流水；在删 user 行前。
+        pawCoinDeletion.voidBalanceAndPurge(userId);
         // auth 最后删（用户行删除后 UGC 即匿名）；收头像图。
         media = media.merge(authDeletion.deleteByUserId(userId));
 

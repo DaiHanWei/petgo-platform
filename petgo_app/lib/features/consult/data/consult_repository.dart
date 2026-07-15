@@ -6,6 +6,8 @@ import '../../../core/network/dio_client.dart';
 import '../domain/consult_case.dart';
 import '../domain/consult_diagnosis.dart';
 import '../domain/consult_history_item.dart';
+import '../domain/consult_pay_result.dart';
+import '../domain/consult_request.dart';
 import '../domain/consult_session.dart';
 
 /// 用户侧问诊数据层（Story 5.2 起）。可用性查询 + 会话发起/轮询/继续等待/取消（Story 5.3）。
@@ -93,6 +95,12 @@ class ConsultRepository {
     return ConsultSession.fromJson(resp.data!);
   }
 
+  /// 封禁挂起逃生（Story 3.8，H-5）：立即结束挂起会话 + 按支付方式退款（INTERRUPTED 终态）。
+  Future<ConsultSession> escapeSuspended(int id) async {
+    final resp = await dio.post<Map<String, dynamic>>(ApiPaths.consultSessionEscape(id));
+    return ConsultSession.fromJson(resp.data!);
+  }
+
   /// 提交评分（1-5 星必填 + ≤100 字选填）→ CLOSED(RATED)（Story 5.6）。
   Future<ConsultSession> rate(int id, int stars, String? comment) async {
     final resp = await dio.post<Map<String, dynamic>>(
@@ -112,6 +120,40 @@ class ConsultRepository {
   /// 补弹已展示 → 不再弹。
   Future<void> markRatingPrompted(int id) =>
       dio.patch<void>(ApiPaths.consultSessionRatingPrompted(id));
+
+  // ===== 计费流下单链路（Story 3.5，consult_requests 两表流）=====
+
+  /// 发起付费问诊入队（`POST /consultations`）。占用命中返现有（alreadyActive=true）。
+  /// 无宠物档案 → 后端 409（调用方映射 l10n）。
+  Future<ConsultRequest> createRequest() async {
+    final resp = await dio.post<Map<String, dynamic>>(ApiPaths.consultations);
+    return ConsultRequest.fromJson(resp.data!);
+  }
+
+  /// 轮询请求状态（`GET /consultations/{token}`）。请求已消失（超时删/转单删）→ 404（DioException 抛给调用方）。
+  Future<ConsultRequestStatus> requestStatus(String token) async {
+    final resp = await dio.get<Map<String, dynamic>>(ApiPaths.consultationStatus(token));
+    return ConsultRequestStatus.fromJson(resp.data!);
+  }
+
+  /// 限时支付（`POST /pay {channel}`）。DONE=PawCoin 即时成功 / PAYMENT_REQUIRED=现金待付。
+  /// 余额不足/支付窗过期/守卫不符 → 后端 409；IM 建会话失败 → 503（调用方映射 l10n）。
+  Future<ConsultPayResult> payRequest(String token, String channel) async {
+    final resp = await dio.post<Map<String, dynamic>>(
+      ApiPaths.consultationPay(token),
+      data: {'channel': channel},
+    );
+    return ConsultPayResult.fromJson(resp.data!);
+  }
+
+  /// 跳充值暂停支付计时（A-4，`POST /pause`，服务端记 paused_at）。
+  Future<void> pauseRequest(String token) => dio.post<void>(ApiPaths.consultationPause(token));
+
+  /// 跳充值返回续（A-4，`POST /resume`，服务端按剩余顺延 pay_deadline）。
+  Future<void> resumeRequest(String token) => dio.post<void>(ApiPaths.consultationResume(token));
+
+  /// 用户主动取消（`POST /cancel`，物理删无痕）。
+  Future<void> cancelRequest(String token) => dio.post<void>(ApiPaths.consultationCancel(token));
 
   /// 问诊历史（Story 5.8，AI + 兽医两类，游标分页）。
   Future<ConsultHistoryPage> history({String? cursor, int limit = 20}) async {

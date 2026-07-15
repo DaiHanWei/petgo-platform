@@ -53,7 +53,7 @@ class AdminVetsAccessControlTest {
         @Bean
         AdminWebController adminWebController(AdminVetService vet) {
             return new AdminWebController(mock(AdminContentService.class),
-                    mock(AdminModerationService.class), vet);
+                    mock(AdminModerationService.class), vet, mock(com.tailtopia.admin.dashboard.service.AdminDashboardService.class));
         }
     }
 

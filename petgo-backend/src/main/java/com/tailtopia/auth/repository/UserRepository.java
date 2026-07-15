@@ -1,6 +1,7 @@
 package com.tailtopia.auth.repository;
 
 import com.tailtopia.auth.domain.Role;
+import com.tailtopia.auth.domain.AccountType;
 import com.tailtopia.auth.domain.User;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -22,4 +23,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     /** 内容审核 story 4：违规重置默认昵称唯一性查重（DefaultNameGenerator）。 */
     boolean existsByNickname(String nickname);
+    /** 虚拟账号列表（Story 9.8，A-6），近建在前。 */
+    java.util.List<User> findByAccountTypeOrderByIdDesc(AccountType accountType);
+
+
+    /** 概览看板（Story 9.10）：按账号类型计数（如虚拟账号数）。 */
+    long countByAccountType(AccountType accountType);
+
 }

@@ -145,6 +145,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/_ping-error", "/error").permitAll()
                         // 腾讯 IM 服务端回调（外部来源，内部 token/签名校验，Story 5.5）
                         .requestMatchers("/im/callback").permitAll()
+                        // 支付网关回调（Midtrans 外部来源，内部 SHA-512 签名校验，Story 1.1）
+                        .requestMatchers("/pay/callback").permitAll()
                         // IM UserSig 签发（Story 5.5）：显式要求已认证；用户态 MAU 闸门（非 VET 须有活跃会话）
                         // 在 ImUserSigController 内做（403），此处仅收口鉴权（401）。
                         .requestMatchers(HttpMethod.GET, "/api/v1/im/usersig").authenticated()
@@ -161,9 +163,17 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/users/*/mini-profile").permitAll()
                         // 兽医工作台端点（Story 5.1+）：仅 role=VET 可达；user/guest → 403（双向门控）
                         .requestMatchers("/api/v1/vet/**").hasRole("VET")
-                        // 用户侧问诊端点（Story 5.2+）：仅 role=USER 可达（vet/guest → 403）
+                        // 用户侧问诊端点（Story 5.2+ / 计费流 3-2~3-4）：仅 role=USER 可达（vet/guest → 403）
                         .requestMatchers("/api/v1/consult/**",
-                                "/api/v1/consult-sessions", "/api/v1/consult-sessions/**").hasRole("USER")
+                                "/api/v1/consult-sessions", "/api/v1/consult-sessions/**",
+                                "/api/v1/consultations", "/api/v1/consultations/**").hasRole("USER")
+                        // 客服工单端点（Story 4.1，FR-52）：用户建单/查单，仅 role=USER（vet/guest → 403）
+                        .requestMatchers("/api/v1/support-tickets", "/api/v1/support-tickets/**").hasRole("USER")
+                        // 用户端退款方式选择/填收款（Story 4.5）：列表 + PawCoin 即时退 + QRIS 填账户，仅 role=USER
+                        .requestMatchers("/api/v1/me/refund-requests",
+                                "/api/v1/refund-requests/**").hasRole("USER")
+                        // 订单中心聚合读接口（Story 5.1 列表 / 5.3 详情）：泛化 3 类订单，仅 role=USER
+                        .requestMatchers(HttpMethod.GET, "/api/v1/orders", "/api/v1/orders/**").hasRole("USER")
                         // 其余 /api/v1 默认需 JWT（写一律拒绝未登录）；user 写端点对 vet token → 403
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth

@@ -111,4 +111,8 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
                                           com.tailtopia.content.domain.CommentModerationStatus.UNDER_REVIEW)
             """)
     int deactivateByAuthor(@Param("authorId") long authorId, @Param("now") Instant now);
+
+    /** 后台内容管理近评论列表（Story 9.9，含已删软删项）。 */
+    java.util.List<Comment> findTop200ByOrderByIdDesc();
+
 }

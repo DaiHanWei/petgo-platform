@@ -42,6 +42,9 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
   static const Duration _pollInterval = Duration(seconds: 5);
 
   Timer? _poll;
+  Timer? _suspendTicker; // Story 3.8：挂起倒计时 1s 显示刷新（仅挂起态启用）
+  DateTime? _suspendDeadlineAt; // 非 null = 封禁挂起中（H-5），显逃生横幅 + 倒计时
+  bool _escaping = false; // 逃生请求进行中，防重复点
   String _status = 'IN_PROGRESS';
   String? _closedReason;
   bool _rated = false;
@@ -99,6 +102,7 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
   @override
   void dispose() {
     _poll?.cancel();
+    _suspendTicker?.cancel();
     // 离开会话页 → 清激活标记（用 initState 捕获的 notifier，避免 dispose 期 ref 失效）。
     _activeNotifier?.set(null);
     // 离开即登出 IM（不留长连接 / 控 MAU）。
@@ -113,10 +117,12 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
       setState(() {
         _status = s.status;
         _closedReason = s.closedReason;
+        _suspendDeadlineAt = s.suspendDeadlineAt; // Story 3.8：封禁挂起态（H-5）
         // 后端报已评分即锁死评分入口（含补评分后 closedReason 仍 UNRATED 的情形）。
         if (s.rated) _rated = true;
         if (s.vetId != null) _peerId = 'v_${s.vetId}';
       });
+      _syncSuspendTicker(); // 挂起态启用 1s 倒计时刷新，退出挂起则停
       // 进行中（已接单）才登录 IM：取 UserSig 经后端 MAU 闸门（用户须有活跃会话）。
       if (!_imLoginStarted && s.status == 'IN_PROGRESS' && s.vetId != null) {
         _imLoginStarted = true;
@@ -179,6 +185,54 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
   /// 保留 /triage 既有状态，go 回去等价于回到记录页）。
   void _leave() {
     context.go('/triage');
+  }
+
+  /// 挂起态启用 1s 倒计时显示刷新；退出挂起（结束/退出）即停（Story 3.8）。
+  void _syncSuspendTicker() {
+    if (_suspendDeadlineAt != null && _suspendTicker == null) {
+      _suspendTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() {});
+      });
+    } else if (_suspendDeadlineAt == null) {
+      _suspendTicker?.cancel();
+      _suspendTicker = null;
+    }
+  }
+
+  /// 封禁挂起逃生「立即结束」（Story 3.8，H-5）：强制结束+按支付方式退款 → INTERRUPTED 终态。
+  Future<void> _escape() async {
+    if (_escaping) return;
+    final l10n = AppLocalizations.of(context);
+    setState(() => _escaping = true);
+    try {
+      final s = await ref.read(consultRepositoryProvider).escapeSuspended(widget.sessionId);
+      if (!mounted) return;
+      setState(() {
+        _status = s.status; // INTERRUPTED
+        _suspendDeadlineAt = null;
+      });
+      _syncSuspendTicker();
+      _poll?.cancel();
+      showAppToast(context, l10n.consultSuspendEscaped);
+    } catch (_) {
+      if (mounted) showAppToast(context, l10n.consultSuspendEscapeFailed);
+    } finally {
+      if (mounted) setState(() => _escaping = false);
+    }
+  }
+
+  /// 「上报」封禁事件（Story 3.8）：主逃生（立即结束+退款）已自动处理，此为附加投诉入口（最简提示）。
+  void _report() {
+    showAppToast(context, AppLocalizations.of(context).consultSuspendReported);
+  }
+
+  String _suspendMmss() {
+    final d = _suspendDeadlineAt;
+    if (d == null) return '00:00';
+    final remaining = d.difference(DateTime.now().toUtc()).inSeconds.clamp(0, 15 * 60);
+    final m = (remaining ~/ 60).toString().padLeft(2, '0');
+    final sec = (remaining % 60).toString().padLeft(2, '0');
+    return '$m:$sec';
   }
 
   /// 查看会诊结果：拉本次最终诊断 → 只读弹层；未出诊断则提示。
@@ -339,6 +393,8 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
               ],
             ),
           ),
+          // 封禁挂起逃生横幅（Story 3.8，H-5）：兽医被封禁、本付费会话挂起中 → 醒目告知 + 倒计时 + 逃生 CTA。
+          if (active && _suspendDeadlineAt != null) _suspendBanner(l10n),
           // 30min 续聊期 → 「查看会诊结果」入口（弹层）；CLOSED 后改正文平铺，不再显示此条。
           if (showResultEntry) _resultEntry(l10n),
           // 原始症状摘要条（原型紫浅底折叠条）。占位内容；仅活跃会话显示。
@@ -405,6 +461,69 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
           ),
         ],
       ),
+      ),
+    );
+  }
+
+  /// 封禁挂起逃生横幅（Story 3.8，H-5）：醒目告知兽医被封禁 + 15min 倒计时全额退款 + 逃生 CTA。
+  /// 「立即结束」→ 强制结束+退款（不等超时）；「上报」→ 附加投诉。会话不被劫持、用户在控制。
+  Widget _suspendBanner(AppLocalizations l10n) {
+    return Container(
+      key: const ValueKey('consultSuspendBanner'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      color: AppColors.coralTint,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.gpp_maybe_outlined, size: 18, color: AppColors.danger),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(l10n.consultSuspendTitle,
+                    style: AppTypography.title.copyWith(color: AppColors.healthEventText)),
+              ),
+              Text(_suspendMmss(),
+                  key: const ValueKey('consultSuspendCountdown'),
+                  style: AppTypography.title.copyWith(color: AppColors.danger)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(l10n.consultSuspendBody,
+              style: AppTypography.caption.copyWith(color: AppColors.healthEventText, height: 1.4)),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: FilledButton(
+                  key: const ValueKey('consultSuspendEndNow'),
+                  onPressed: _escaping ? null : _escape,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.danger,
+                    foregroundColor: AppColors.onAccent,
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                  ),
+                  child: Text(l10n.consultSuspendEndNow),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton(
+                  key: const ValueKey('consultSuspendReport'),
+                  onPressed: _report,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.healthEventText,
+                    side: BorderSide(color: AppColors.danger.withValues(alpha: 0.4), width: 1.5),
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                  ),
+                  child: Text(l10n.consultSuspendReport),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

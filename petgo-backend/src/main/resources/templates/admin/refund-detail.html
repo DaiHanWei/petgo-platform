@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!-- 退款详情（Story 4.6）。各段操作按钮按权限显隐（A-1 职责分离）：
+     客服 refund.submit（need 判定）/ 主管 refund.approve（审批通过/驳回）/ 财务 refund.payout（Iris 打款）。
+     PII 脱敏：账号仅末 4 位，户名不回显。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title>退款详情 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1>退款详情</h1>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+        <p><a class="btn btn-neutral btn-sm" th:href="@{/admin/refunds}">返回列表</a></p>
+
+        <table>
+            <tr><th>退款单</th><td th:text="${refund.refundToken}">tok</td></tr>
+            <tr><th>订单</th><td th:text="${refund.orderToken}">ord</td></tr>
+            <tr><th>支付渠道</th><td th:text="${refund.payChannel}">QRIS</td></tr>
+            <tr><th>客服判定</th><td th:text="${refund.needDecision}">PENDING</td></tr>
+            <tr><th>审批态</th><td th:text="${refund.approvalStatus} ?: '—'">—</td></tr>
+            <tr><th>订单金额</th><td th:text="${refund.orderAmount}">0</td></tr>
+            <tr><th>净额</th><td th:text="${refund.netAmount}">0</td></tr>
+            <tr><th>出款渠道</th><td th:text="${refund.payoutChannel} ?: '—'">—</td></tr>
+            <tr><th>收款账号（脱敏）</th><td th:text="${refund.payoutAccountMasked} ?: '—'">—</td></tr>
+            <tr><th>审批备注</th><td th:text="${refund.approvalNote} ?: '—'">—</td></tr>
+            <tr><th>驳回理由</th><td th:text="${refund.rejectReason} ?: '—'">—</td></tr>
+            <tr><th>出款凭证</th><td th:text="${refund.paymentProof} ?: '—'">—</td></tr>
+        </table>
+
+        <!-- ① 客服 need 判定（4-4，仅 need_decision=PENDING 时可判）-->
+        <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('refund.submit')"
+             th:if="${refund.needDecision == 'PENDING'}">
+            <h3>客服判定</h3>
+            <form method="post" th:action="@{/admin/refunds/{t}/approve(t=${refund.refundToken})}" style="display:inline">
+                <button class="btn btn-sm" type="submit">批准退款需求</button>
+            </form>
+            <form method="post" th:action="@{/admin/refunds/{t}/reject(t=${refund.refundToken})}" style="display:inline">
+                <button class="btn btn-neutral btn-sm" type="submit">驳回退款需求</button>
+            </form>
+        </div>
+
+        <!-- ② 主管审批（4-6，仅 approval_status=PENDING_APPROVAL 时可）-->
+        <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('refund.approve')"
+             th:if="${refund.approvalStatus == 'PENDING_APPROVAL'}">
+            <h3>主管审批</h3>
+            <form method="post" th:action="@{/admin/refunds/{t}/approval(t=${refund.refundToken})}">
+                <input type="text" name="note" placeholder="审批备注（必填）" required/>
+                <button class="btn btn-sm" type="submit">审批通过</button>
+            </form>
+            <form method="post" th:action="@{/admin/refunds/{t}/approval-reject(t=${refund.refundToken})}">
+                <input type="text" name="reason" placeholder="驳回理由（必填）" required/>
+                <button class="btn btn-neutral btn-sm" type="submit">驳回申请</button>
+            </form>
+        </div>
+
+        <!-- ③ 财务 Iris 打款（4-6，仅 approval_status=APPROVED 时可）-->
+        <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('refund.payout')"
+             th:if="${refund.approvalStatus == 'APPROVED'}">
+            <h3>财务打款</h3>
+            <form method="post" th:action="@{/admin/refunds/{t}/payout(t=${refund.refundToken})}">
+                <button class="btn btn-sm" type="submit">确认 Iris 打款</button>
+            </form>
+        </div>
+    </div>
+</div>
+</body>
+</html>

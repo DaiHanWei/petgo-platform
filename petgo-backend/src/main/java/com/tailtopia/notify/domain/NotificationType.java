@@ -51,5 +51,15 @@ public enum NotificationType {
      * 与 {@link #CONTENT_REVIEW_REJECTED}（人工拒绝，§8.7）文案不同故拆型；App 只能按 type 本地化。
      * {@code targetRef=null}（内容已丢弃、无深链，提示重发）。
      */
-    CONTENT_REVIEW_TIMED_OUT
+    CONTENT_REVIEW_TIMED_OUT,
+
+    // ===== V1.1 Epic 4 退款/工单/身份（extend_notification_types_v11，V72 一次加全，避免二次迁移）=====
+    /** 退款申请未通过 → 通知发起用户（Story 4.4，客服驳回退款需求；不含金额/账号 PII）。本 story 唯一新发的类型。 */
+    REFUND_REJECTED,
+    /** 工单已结案 → 通知用户（Story 4.7，枚举先行占位，本 story 不发）。 */
+    TICKET_RESOLVED,
+    /** CSAT 满意度问卷 → 通知用户（Story 4.7，枚举先行占位，本 story 不发）。 */
+    CSAT_SURVEY,
+    /** 身份信息需修改 → 通知用户（Epic 9 身份核验，枚举先行占位，本 story 不发）。 */
+    IDENTITY_REQUIRE_MODIFY
 }

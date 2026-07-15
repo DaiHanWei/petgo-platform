@@ -14,6 +14,7 @@ import com.tailtopia.account.repository.AccountDeletionRepository;
 import com.tailtopia.auth.service.AuthAccountDeletionService;
 import com.tailtopia.consult.service.ConsultAnonymizationService;
 import com.tailtopia.notify.service.NotificationDeletionService;
+import com.tailtopia.pay.service.PawCoinAccountDeletionService;
 import com.tailtopia.profile.service.ProfileDeletionService;
 import com.tailtopia.shared.im.TencentImClient;
 import com.tailtopia.shared.media.MediaDeletionService;
@@ -39,6 +40,7 @@ class AccountDeletionServiceTest {
     @Mock TriageDeletionService triageDeletion;
     @Mock ConsultAnonymizationService consultAnonymization;
     @Mock NotificationDeletionService notificationDeletion;
+    @Mock PawCoinAccountDeletionService pawCoinDeletion;
     @Mock AuthAccountDeletionService authDeletion;
     @Mock MediaDeletionService mediaDeletion;
     @Mock TencentImClient imClient;
@@ -49,8 +51,8 @@ class AccountDeletionServiceTest {
 
     private AccountDeletionService service() {
         return new AccountDeletionService(deletions, profileDeletion, triageDeletion,
-                consultAnonymization, notificationDeletion, authDeletion, mediaDeletion, imClient, events,
-                contentService, reviewService, violationCountService);
+                consultAnonymization, notificationDeletion, pawCoinDeletion, authDeletion,
+                mediaDeletion, imClient, events, contentService, reviewService, violationCountService);
     }
 
     private AccountDeletion pending(long id, long userId) {
@@ -76,6 +78,8 @@ class AccountDeletionServiceTest {
         verify(triageDeletion).deleteByUserId(7L);
         verify(consultAnonymization).anonymizeByUserId(7L);
         verify(notificationDeletion).deleteByUserId(7L);
+        // PawCoin 余额作废纳入级联（Story 1.6），且在删 user 行前。
+        verify(pawCoinDeletion).voidBalanceAndPurge(7L);
         verify(authDeletion).deleteByUserId(7L);
         // OSS 私密图（h1+t1+t2+c1）+ 公开头像 + IM 媒体
         verify(mediaDeletion).deletePrivateKeys(anyList());

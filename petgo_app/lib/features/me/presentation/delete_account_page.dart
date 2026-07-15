@@ -7,6 +7,7 @@ import '../../../core/network/dio_client.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/domain/auth_state.dart';
+import '../../pawcoin/presentation/pawcoin_controller.dart';
 
 /// 账号注销整页（P-43 · Story 7.3 AC2）。原型 delete-account 1:1：
 /// 红圈⚠️ 警示 → 「将被永久删除」清单 → 输确认短语激活红钮 → DELETE /me（级联删除/匿名化，D1/D2）→ 回游客。
@@ -55,6 +56,15 @@ class _DeleteAccountPageState extends ConsumerState<DeleteAccountPage> {
     final l10n = AppLocalizations.of(context);
     // P-43：输入注销确认短语「DELETE」（须与后端 CONFIRM_PHRASE 完全一致才激活删除）。
     final matched = _controller.text.trim() == _confirmPhrase;
+    // Story 1.6：注销前二次告知 PawCoin 余额作废（FR-50D）。读余额展示具体 koin 数；
+    // 加载中/失败/为 0 时回落通用作废串——告知是既定事实，不可因余额加载失败而消失。
+    final int? pawcoinBalance = ref.watch(pawCoinProvider).maybeWhen(
+          data: (s) => s.balance,
+          orElse: () => null,
+        );
+    final String pawcoinForfeitText = (pawcoinBalance != null && pawcoinBalance > 0)
+        ? l10n.deletionItemPawcoin(pawcoinBalance)
+        : l10n.deletionItemPawcoinGeneric;
 
     return Scaffold(
       backgroundColor: AppColors.base,
@@ -114,6 +124,7 @@ class _DeleteAccountPageState extends ConsumerState<DeleteAccountPage> {
                   _item(l10n.deletionItemPosts),
                   _item(l10n.deletionItemConsults),
                   _item(l10n.deletionItemGoogle),
+                  _item(pawcoinForfeitText),
                 ],
               ),
             ),
