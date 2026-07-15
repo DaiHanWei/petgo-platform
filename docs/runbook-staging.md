@@ -238,6 +238,11 @@ cd ../petgo_app && flutter gen-l10n && flutter analyze lib   # arb 变了要先 
 ```
 > 关注「死码 warning」——可能是某侧功能被另一侧重写覆盖的**语义损失**（如某功能字段成 unused）。要么重新集成，要么移除并**在 commit 里显式标注该功能被覆盖**。
 
+> ⚠️ **编译过 ≠ 能启动！** 两条分支各自新增的 Controller / Bean 可能在**运行时**撞车——最典型是**路由重复**（两个 Controller 映射同一 `METHOD 路径` → Spring `Ambiguous mapping` 启动即崩），`test-compile` / `analyze` **查不出**。合并后**必须做一次上下文加载检查**：
+> - 快扫路由重复（无需 DB）：`grep` 全部 `*Controller.java` 的 `@(Get|Post|Put|Delete)Mapping` 路径找重复；
+> - 或部署到 staging 后**立即查 `/actuator/health` + `docker logs` 里 `Application run failed` / `Ambiguous mapping`**（本环境 2026-07-15 GemPay 部署即因两侧各建「后台评论下架/恢复」Controller 撞 `/admin/comments/{id}/restore` 崩过一次）。
+> - 功能重复（两条线各造同一后台功能）应由团队**协调合并成一个**；stag 上先禁用其一解冲突（该禁用只在 stag，不随功能上 main），并记 backlog。
+
 ### H5 · 提交合并 + push
 ```bash
 git add <解决的冲突文件>
