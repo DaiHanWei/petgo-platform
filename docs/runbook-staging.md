@@ -60,6 +60,46 @@
 
 ---
 
+## 0.6 分支与 push 流程 / 边界（务必遵守）
+
+> §0.5 是「什么进 stag」，本节是「**怎么进 + push 边界**」。
+
+### 0.6.1 一条改动先判类型（决定它去哪个分支）
+
+| 改动类型 | 落哪 | 说明 |
+|---|---|---|
+| **功能代码 / 修复** —— **含 staging 调试期发现的热修** | **先 `v1.1-dev`（主线），再 merge 到 `stag`** | ⚠️ 绝不直接提交 stag。上 main 从 `v1.1-dev` 选择性合，只在 stag 的功能修复**会丢** |
+| **stag 专属集成补丁** —— 仅为让多功能在 stag 并存而做（去重/适配，如两功能路由撞车删其一） | **只提交 `stag`，不回 `v1.1-dev`** | 上 main 时单个功能不带这补丁；回 v1.1-dev 反而错 |
+| **文档** | 随所属改动走 `v1.1-dev`；纯 staging 运维文档可留 stag | 本 runbook 属主线（v1.1-dev/main 也应有） |
+
+> ⚠️ **最易犯（2026-07-15 已犯并纠正）**：在 stag 上调试时顺手把功能修复提交到 stag。**调试期的功能修复也必须回 `v1.1-dev`**，再 merge 过来。
+
+### 0.6.2 push 流程（每次 push shared 分支都需用户明确同意）
+
+```bash
+# —— 功能改动 / 热修 ——
+git checkout v1.1-dev
+#   提交改动 / cherry-pick / ff-merge 功能分支
+git push origin v1.1-dev              # ← 需明确同意
+git checkout stag && git merge --no-ff v1.1-dev
+git push origin stag                 # ← 需明确同意
+./scripts/deploy-backend-stag.sh     # 部署 staging（§D/§G）
+
+# —— stag 专属集成补丁 ——
+git checkout stag   # 直接在 stag 提交（不回 v1.1-dev）
+git push origin stag                 # ← 需明确同意
+```
+
+### 0.6.3 边界红线
+
+- **push 到 shared 分支（`v1.1-dev` / `stag` / `main`）一律需用户明确同意** —— 不擅自 push。
+- **绝不 `force-push` shared 分支。**
+- **绝不直接向 `stag` / `main` 提交功能代码** —— 功能代码经 `v1.1-dev`，`main` 由 `v1.1-dev` 选择性合入。
+- 删功能分支前：确认已合入 `v1.1-dev` **且已 push**（否则提交只在本地/远端分支被删即丢）。
+- 合并/部署前的验证见 §H4（编译过≠能启动：合并后必做上下文加载/路由撞车检查）。
+
+---
+
 ## A. 决策（已定稿）
 
 - [x] **A1 · Profile** = `prod`（真 Google 登录、安全规则同生产，保真最高）。
