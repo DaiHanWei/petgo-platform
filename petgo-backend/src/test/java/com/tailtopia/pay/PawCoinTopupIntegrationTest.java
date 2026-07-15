@@ -36,9 +36,13 @@ class PawCoinTopupIntegrationTest extends ApiIntegrationTest {
     }
 
     private void fireCallback(String orderToken, String status) throws Exception {
-        String body = "{\"order_id\":\"" + orderToken + "\",\"transaction_id\":\"stub-" + orderToken
-                + "\",\"transaction_status\":\"" + status + "\",\"status_code\":\"200\"}";
-        mvc.perform(post("/pay/callback").contentType(MediaType.APPLICATION_JSON).content(body))
+        // GemPay 回调走 form-urlencoded；stub 网关仍读 Midtrans 字段名（Controller 网关无关）。
+        mvc.perform(post("/pay/callback")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("order_id", orderToken)
+                        .param("transaction_id", "stub-" + orderToken)
+                        .param("transaction_status", status)
+                        .param("status_code", "200"))
                 .andExpect(status().isOk());
     }
 

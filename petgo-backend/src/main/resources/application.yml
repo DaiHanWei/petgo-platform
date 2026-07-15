@@ -40,10 +40,20 @@ petgo:
   # server-key / callback-token 全部 env 注入，绝不入库 / 不落日志（.env.example 仅占位）。
   pay:
     mode: ${PAY_MODE:stub}
+    # live 时选收款实现：gempay（默认，印尼实际落地）| midtrans（保留旧路径，未启用）。
+    provider: ${PAY_PROVIDER:gempay}
     server-key: ${MIDTRANS_SERVER_KEY:}
     base-url: ${MIDTRANS_BASE_URL:https://api.sandbox.midtrans.com}
     callback-token: ${MIDTRANS_CALLBACK_TOKEN:}
     timeout-seconds: ${PAY_TIMEOUT_SECONDS:10}
+    # GemPay 收款（form-urlencoded + md5 逐接口签名）。凭证 env 注入，绝不入库/落日志；merchant-secret 只进 md5。
+    gempay:
+      base-url: ${GEMPAY_BASE_URL:https://sandbox-api.gempay.online/v1}
+      disburse-url: ${GEMPAY_DISBURSE_URL:https://sandbox-api.gempay.online/api}
+      merchant-id: ${GEMPAY_MERCHANT_ID:}
+      project-no: ${GEMPAY_PROJECT_NO:}
+      merchant-secret: ${GEMPAY_MERCHANT_SECRET:}
+      callback-url: ${GEMPAY_CALLBACK_URL:https://api.tailtopia.id/pay/callback}
     # ⚠️ Story 9.2 起 topup-paused 运行时读 DB（pawcoin_config.topup_paused），本 env 仅为 V78 迁移种子默认，运行时不再读。
     topup-paused: ${PAWCOIN_TOPUP_PAUSED:false}
   # ⚠️ Story 9.2 起 triage/id-hd/consult 下列定价运行时**读 DB**（pricing_config，后台可配），本 env 仅为 V78 种子默认。

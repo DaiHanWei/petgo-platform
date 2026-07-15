@@ -28,9 +28,15 @@ class PaymentIntentIntegrationTest extends ApiIntegrationTest {
     @Autowired
     private PaymentIntentRepository intents;
 
-    private String callbackBody(String orderId, String txId, String status) {
-        return "{\"order_id\":\"" + orderId + "\",\"transaction_id\":\"" + txId
-                + "\",\"transaction_status\":\"" + status + "\",\"status_code\":\"200\"}";
+    /** 回调走 form-urlencoded（GemPay 现实；stub 网关仍读 Midtrans 字段名——Controller 网关无关）。 */
+    private org.springframework.test.web.servlet.ResultActions postCallback(
+            String orderId, String txId, String status) throws Exception {
+        return mvc.perform(post("/pay/callback")
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .param("order_id", orderId)
+                .param("transaction_id", txId)
+                .param("transaction_status", status)
+                .param("status_code", "200"));
     }
 
     @Test
@@ -57,18 +63,15 @@ class PaymentIntentIntegrationTest extends ApiIntegrationTest {
         String txId = "tx-" + SEQ.incrementAndGet();
 
         // 回调 + 轮询双通道各到一次（同 settlement）→ 只推进一次到 PAID。
-        mvc.perform(post("/pay/callback").contentType(MediaType.APPLICATION_JSON)
-                .content(callbackBody(token, txId, "settlement"))).andExpect(status().isOk());
-        mvc.perform(post("/pay/callback").contentType(MediaType.APPLICATION_JSON)
-                .content(callbackBody(token, txId, "settlement"))).andExpect(status().isOk());
+        postCallback(token, txId, "settlement").andExpect(status().isOk());
+        postCallback(token, txId, "settlement").andExpect(status().isOk());
 
         PaymentIntent afterPaid = intents.findByPublicToken(token).orElseThrow();
         assertThat(afterPaid.getStatus()).isEqualTo(PaymentStatus.PAID);
         assertThat(afterPaid.getGatewayRef()).isEqualTo(txId);
 
         // 终态守卫：PAID 之后再到 deny 回调，不翻转为 FAILED（幂等 no-op）。
-        mvc.perform(post("/pay/callback").contentType(MediaType.APPLICATION_JSON)
-                .content(callbackBody(token, txId, "deny"))).andExpect(status().isOk());
+        postCallback(token, txId, "deny").andExpect(status().isOk());
         assertThat(intents.findByPublicToken(token).orElseThrow().getStatus())
                 .isEqualTo(PaymentStatus.PAID);
     }
@@ -76,8 +79,6 @@ class PaymentIntentIntegrationTest extends ApiIntegrationTest {
     @Test
     void callbackWithUnknownOrderIsIgnored() throws Exception {
         // 无匹配意图不改任何状态、不 500（controller ack 200）。
-        mvc.perform(post("/pay/callback").contentType(MediaType.APPLICATION_JSON)
-                .content(callbackBody("nonexistent-token", "tx-none", "settlement")))
-                .andExpect(status().isOk());
+        postCallback("nonexistent-token", "tx-none", "settlement").andExpect(status().isOk());
     }
 }

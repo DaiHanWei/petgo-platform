@@ -29,4 +29,20 @@ public enum GatewayStatus {
             default -> PENDING; // pending / authorize / 未知 → 不终态
         };
     }
+
+    /**
+     * 映射 GemPay {@code status}（大小写不敏感）。GemPay 收款回调仅 {@code success}/{@code failure} 两态；
+     * {@code expired}（仅轮询 {@code /history} 才有）单列；未知一律保守判 PENDING，不推进意图。
+     */
+    public static GatewayStatus fromGemPay(String status) {
+        if (status == null) {
+            return PENDING;
+        }
+        return switch (status.trim().toLowerCase()) {
+            case "success" -> PAID;
+            case "failure" -> FAILED;
+            case "expired" -> EXPIRED;
+            default -> PENDING; // pending / 未知 → 不终态
+        };
+    }
 }

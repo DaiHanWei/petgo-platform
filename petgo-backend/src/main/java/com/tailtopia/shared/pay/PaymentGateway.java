@@ -1,6 +1,7 @@
 package com.tailtopia.shared.pay;
 
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * 支付网关抽象（Story 1.1 / V1.1 资金地基）。收款聚合商（Midtrans）的可替换契约——一切收费场景
@@ -33,4 +34,15 @@ public interface PaymentGateway {
 
     /** 归一化回调/轮询正文为内部结果（已假定 {@link #verifyCallback} 通过）。 */
     PaymentCallback parseCallback(Map<String, Object> body);
+
+    /**
+     * 主动查询收款结果（GemPay {@code /history}，<b>轮询通道</b>）。回调缺失时对账用：按网关订单号
+     * {@code gatewayRef} 查最新状态，归一化为 {@link PaymentCallback} 交同一 {@code applyCallback} 单一收口
+     * （与回调双通道去重、只推进一次）。查无结果 / 尚未终态由调用方按 {@code status} 处理。
+     *
+     * <p>默认 {@link Optional#empty()}（不支持主动查询）；仅 {@link GemPayGateway} 覆盖。<b>只查收款，不涉及 payout。</b>
+     */
+    default Optional<PaymentCallback> queryCharge(String gatewayRef) {
+        return Optional.empty();
+    }
 }

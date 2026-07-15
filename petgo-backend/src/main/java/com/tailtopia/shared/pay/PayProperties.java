@@ -16,6 +16,15 @@ public class PayProperties {
     /** {@code stub} | {@code live}。默认 stub，应用无凭证也能装配启动。 */
     private String mode = "stub";
 
+    /**
+     * {@code live} 时选哪家收款实现：{@code gempay}（默认，印尼实际落地）| {@code midtrans}（保留旧路径，未启用）。
+     * {@code mode} 继续承担 prod fail-closed 启动护栏，本字段只在 {@code live} 下决定网关实现（决策 D-1）。
+     */
+    private String provider = "gempay";
+
+    /** GemPay 收款接入配置（{@code petgo.pay.gempay.*}）。凭证 env 注入，绝不入库/落日志。 */
+    private final Gempay gempay = new Gempay();
+
     /** Midtrans Server Key（env 注入，绝不入库/落日志）；Basic base64(serverKey:) 鉴权用。 */
     private String serverKey = "";
 
@@ -52,6 +61,91 @@ public class PayProperties {
 
     public void setMode(String mode) {
         this.mode = mode;
+    }
+
+    public String getProvider() {
+        return provider;
+    }
+
+    public void setProvider(String provider) {
+        this.provider = provider;
+    }
+
+    public Gempay getGempay() {
+        return gempay;
+    }
+
+    /**
+     * GemPay 收款接入配置。{@code merchantSecret} 只进 md5 签名，绝不作为字段上送、绝不入库/落日志；
+     * {@code .env.example} 仅放占位。
+     */
+    public static class Gempay {
+
+        /** 收款 API base（默认 sandbox）；正式 {@code https://api.gempay.online/v1}。 */
+        private String baseUrl = "https://sandbox-api.gempay.online/v1";
+
+        /** 放款 API base（Story 4.6 两步 inquiry→transfer 用）；默认 sandbox。 */
+        private String disburseUrl = "https://sandbox-api.gempay.online/api";
+
+        /** 商户号（env {@code GEMPAY_MERCHANT_ID}）。 */
+        private String merchantId = "";
+
+        /** 项目号（env {@code GEMPAY_PROJECT_NO}）。 */
+        private String projectNo = "";
+
+        /** 商户密钥（env {@code GEMPAY_MERCHANT_SECRET}，只进 md5，绝不入库/落日志）。 */
+        private String merchantSecret = "";
+
+        /** 收款回调地址（每次 /direct 请求上送）；默认线上 {@code https://api.tailtopia.id/pay/callback}。 */
+        private String callbackUrl = "https://api.tailtopia.id/pay/callback";
+
+        public String getBaseUrl() {
+            return baseUrl;
+        }
+
+        public void setBaseUrl(String baseUrl) {
+            this.baseUrl = baseUrl;
+        }
+
+        public String getDisburseUrl() {
+            return disburseUrl;
+        }
+
+        public void setDisburseUrl(String disburseUrl) {
+            this.disburseUrl = disburseUrl;
+        }
+
+        public String getMerchantId() {
+            return merchantId;
+        }
+
+        public void setMerchantId(String merchantId) {
+            this.merchantId = merchantId;
+        }
+
+        public String getProjectNo() {
+            return projectNo;
+        }
+
+        public void setProjectNo(String projectNo) {
+            this.projectNo = projectNo;
+        }
+
+        public String getMerchantSecret() {
+            return merchantSecret;
+        }
+
+        public void setMerchantSecret(String merchantSecret) {
+            this.merchantSecret = merchantSecret;
+        }
+
+        public String getCallbackUrl() {
+            return callbackUrl;
+        }
+
+        public void setCallbackUrl(String callbackUrl) {
+            this.callbackUrl = callbackUrl;
+        }
     }
 
     public String getServerKey() {

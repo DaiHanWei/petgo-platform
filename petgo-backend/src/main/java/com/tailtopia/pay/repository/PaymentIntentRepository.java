@@ -19,6 +19,9 @@ public interface PaymentIntentRepository extends JpaRepository<PaymentIntent, Lo
 
     Optional<PaymentIntent> findByGatewayRef(String gatewayRef);
 
+    /** 收款对账（轮询通道）：按状态取一批（未终态意图对账用）。 */
+    List<PaymentIntent> findByStatus(PaymentStatus status, Pageable pageable);
+
     /** 后台支付记录通用查询（Story 9.6，AB-8E）：某用户全部支付意图倒序（四类 purpose 统一）。 */
     List<PaymentIntent> findByUserIdOrderByCreatedAtDesc(long userId);
 

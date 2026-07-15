@@ -25,10 +25,20 @@ public class PayConfig {
     public PaymentGateway paymentGateway(PayProperties props, Environment env) {
         boolean prod = env.matchesProfiles("prod");
         if ("live".equalsIgnoreCase(props.getMode())) {
-            // live 必须有 serverKey + callbackToken，否则验签形同虚设（可被伪造）。启动即拒。
+            // GemPay（默认 provider，印尼实际落地）：merchantId/projectNo/merchantSecret 缺任一即拒启动。
+            if ("gempay".equalsIgnoreCase(props.getProvider())) {
+                PayProperties.Gempay g = props.getGempay();
+                if (isBlank(g.getMerchantId()) || isBlank(g.getProjectNo()) || isBlank(g.getMerchantSecret())) {
+                    throw new IllegalStateException(
+                            "petgo.pay.provider=gempay 需配置 GEMPAY_MERCHANT_ID / GEMPAY_PROJECT_NO / "
+                                    + "GEMPAY_MERCHANT_SECRET，缺失即拒启动");
+                }
+                return new GemPayGateway(props);
+            }
+            // Midtrans（保留旧路径）：serverKey + callbackToken 缺失即拒（验签形同虚设可被伪造）。
             if (isBlank(props.getServerKey()) || isBlank(props.getCallbackToken())) {
                 throw new IllegalStateException(
-                        "petgo.pay.mode=live 需配置 MIDTRANS_SERVER_KEY 与 MIDTRANS_CALLBACK_TOKEN，缺失即拒启动");
+                        "petgo.pay.provider=midtrans 需配置 MIDTRANS_SERVER_KEY 与 MIDTRANS_CALLBACK_TOKEN，缺失即拒启动");
             }
             return new MidtransGateway(props);
         }
