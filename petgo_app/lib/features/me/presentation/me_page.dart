@@ -13,6 +13,8 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/media_permission.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../../../shared/widgets/customer_service_sheet.dart';
+import '../../../shared/widgets/dashed_rect.dart';
+import '../../../shared/widgets/design/baru_badge.dart';
 import '../../../shared/widgets/post_cover.dart';
 import '../../auth/data/me_repository.dart';
 import '../../auth/domain/auth_state.dart';
@@ -73,24 +75,9 @@ class MePage extends ConsumerWidget {
             onAvatarTap: () => _changeAvatar(context, ref),
           ),
           const SizedBox(height: AppSpacing.lg),
-          // PawCoin 钱包入口（Story 1.4）→ 余额与流水页。
-          _PawCoinEntry(onTap: () => context.push('/me/pawcoin')),
-          const SizedBox(height: AppSpacing.sm),
-          // 我的订单入口（Story 5.2）→ 订单中心（兽医/AI/充值 4 类支付凭证）。
-          _MeNavRow(
-            valueKey: 'meOrders',
-            icon: Icons.receipt_long_outlined,
-            label: l10n.orderMyTitle,
-            onTap: () => context.push('/me/orders'),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          // 我的退款入口（Story 4.5）→ 退款方式选择/进度。AB-5B 不发通知，用户在此发现可操作退款。
-          _MeNavRow(
-            valueKey: 'meRefunds',
-            icon: Icons.assignment_return_outlined,
-            label: l10n.refundMyTitle,
-            onTap: () => context.push('/me/refunds'),
-          ),
+          // AKTIVITAS 入口组（0711 profil-entries）：订单为主入口（PawCoin 已并入订单列表 header
+          // 余额格，退款经订单详情可达），紫虚线卡 + BARU 徽章突出 V1.1 新增。
+          _ActivitySection(onOrders: () => context.push('/me/orders')),
           const SizedBox(height: AppSpacing.lg),
           // ② 我的发布（原型 Postinganku）：小标题 + 裸 2 列网格（无卡边框）。
           // 注：宠物状态/改状态/编辑档案区块已按设计（原型 p-profil 无此块）移除。
@@ -569,99 +556,93 @@ class _IconBtn extends StatelessWidget {
   }
 }
 
-/// PawCoin 钱包入口行（Story 1.4）：图标 + 标题 + chevron → 余额与流水页。
-class _PawCoinEntry extends StatelessWidget {
-  const _PawCoinEntry({required this.onTap});
+/// AKTIVITAS 入口组（0711 profil-entries）：section label + BARU 徽章 + 紫虚线卡「Pesanan Saya」。
+/// PawCoin 入口已迁至订单列表 header 余额格；退款经订单详情可达 —— 故本组仅一张订单主入口卡。
+class _ActivitySection extends StatelessWidget {
+  const _ActivitySection({required this.onOrders});
 
-  final VoidCallback onTap;
+  final VoidCallback onOrders;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Material(
-      color: AppColors.card,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        key: const ValueKey('mePawcoinEntry'),
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 分组标题 + BARU 红徽章（并排）。
+        Padding(
+          padding: const EdgeInsets.only(left: AppSpacing.xs, bottom: AppSpacing.sm),
           child: Row(
             children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: AppColors.mintTint,
-                  borderRadius: BorderRadius.circular(10),
+              Text(
+                l10n.meActivitySection,
+                style: AppTypography.caption.copyWith(
+                  letterSpacing: 0.6,
+                  fontWeight: FontWeight.w600,
                 ),
-                child: const Icon(Icons.savings_outlined, size: 20, color: AppColors.mint),
               ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Text(l10n.pawcoinBalanceLabel,
-                    style: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink)),
-              ),
-              const Icon(Icons.chevron_right, color: AppColors.muted),
+              const SizedBox(width: 6),
+              const BaruBadge(),
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// 通用导航行（图标 + 文案 + chevron）。Story 4.5 我的退款入口复用；样式对齐 [_PawCoinEntry]。
-class _MeNavRow extends StatelessWidget {
-  const _MeNavRow({
-    required this.valueKey,
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final String valueKey;
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.card,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        key: ValueKey(valueKey),
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-          child: Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: AppColors.mintTint,
-                  borderRadius: BorderRadius.circular(10),
+        // 紫虚线卡「Pesanan Saya · Termasuk saldo PawCoin」→ 订单中心。
+        CustomPaint(
+          foregroundPainter: DashedRRectPainter(
+            color: AppColors.mint,
+            radius: 14,
+            dash: 5,
+            gap: 4,
+            strokeWidth: 2,
+          ),
+          child: Material(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(14),
+            child: InkWell(
+              key: const ValueKey('meOrders'),
+              borderRadius: BorderRadius.circular(14),
+              onTap: onOrders,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AppColors.mintTint,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.credit_card_outlined,
+                          size: 20, color: AppColors.mint),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(l10n.orderMyTitle,
+                              style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.ink)),
+                          const SizedBox(height: 2),
+                          Text(l10n.meOrdersEntrySub,
+                              style: AppTypography.caption
+                                  .copyWith(color: AppColors.textSecondary)),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right, color: AppColors.muted),
+                  ],
                 ),
-                child: Icon(icon, size: 20, color: AppColors.mint),
               ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Text(label,
-                    style: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink)),
-              ),
-              const Icon(Icons.chevron_right, color: AppColors.muted),
-            ],
+            ),
           ),
         ),
-      ),
+      ],
     );
   }
 }

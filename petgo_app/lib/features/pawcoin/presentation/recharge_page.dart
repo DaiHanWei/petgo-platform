@@ -158,7 +158,7 @@ class _RechargePageState extends ConsumerState<RechargePage> {
           physics: const NeverScrollableScrollPhysics(),
           mainAxisSpacing: AppSpacing.md,
           crossAxisSpacing: AppSpacing.md,
-          childAspectRatio: 2.4,
+          childAspectRatio: 1.9,
           children: tiers.map((t) => _tierCard(t)).toList(),
         ),
         const SizedBox(height: AppSpacing.xl),
@@ -194,11 +194,21 @@ class _RechargePageState extends ConsumerState<RechargePage> {
           border: Border.all(color: selected ? AppColors.mint : AppColors.line, width: selected ? 2 : 1),
         ),
         alignment: Alignment.center,
-        child: Text('Rp${_grouped(t.amount)}',
-            style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-                color: selected ? AppColors.mint : AppColors.ink)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text('Rp${_grouped(t.amount)}',
+                style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: selected ? AppColors.mint : AppColors.ink)),
+            const SizedBox(height: 2),
+            // 换算副行（原型每档价格下的「= X koin」，1 koin = Rp1）。
+            Text('= ${_grouped(t.coins)} koin',
+                style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+          ],
+        ),
       ),
     );
   }

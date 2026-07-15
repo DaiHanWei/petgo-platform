@@ -21,6 +21,9 @@ class AppTheme {
       seedColor: seed,
       brightness: Brightness.light,
     ).copyWith(
+      // primary 精确取种子本色（原型主色 #845EC9 / 兽医薄荷）；fromSeed 会把 primary
+      // 派生成偏暗的哑色，导致 FilledButton 等比设计稿主色暗一档，故显式回填 seed。
+      primary: seed,
       surface: AppColors.surface,
       onSurface: AppColors.textPrimary,
     );

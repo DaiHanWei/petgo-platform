@@ -9,6 +9,8 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_image.dart';
+import '../../../shared/widgets/dashed_rect.dart';
+import '../../../shared/widgets/design/baru_badge.dart';
 import '../data/milestone_repository.dart';
 import '../data/newbie_task_repository.dart';
 import '../domain/milestone.dart';
@@ -33,6 +35,9 @@ class MilestoneListPage extends ConsumerStatefulWidget {
 
 class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
   bool _devShown = false;
+
+  /// 筛选（0711）：false=「Belum Semua Selesai」显示未全完成级别；true=「Semua Sudah Selesai」显示已全完成级别。
+  bool _showCompleted = false;
 
   /// Debug 截图钩子（仅 debug + flag）：数据就绪后自动弹 milestone-sheet / milestone-unlock。
   void _maybeDevShow(MilestoneList data) {
@@ -70,6 +75,45 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
         completedAt: DateTime(2026, 6, 18),
       );
 
+  /// 筛选 chips（0711）：未全完成级别 / 已全完成级别 双段切换。
+  Widget _filterChips(AppLocalizations l10n) {
+    return Row(
+      children: [
+        Expanded(
+          child: _filterChip(l10n.milestoneFilterIncomplete, !_showCompleted,
+              () => setState(() => _showCompleted = false), const ValueKey('milestoneFilterIncomplete')),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: _filterChip(l10n.milestoneFilterComplete, _showCompleted,
+              () => setState(() => _showCompleted = true), const ValueKey('milestoneFilterComplete')),
+        ),
+      ],
+    );
+  }
+
+  Widget _filterChip(String label, bool selected, VoidCallback onTap, Key key) {
+    return InkWell(
+      key: key,
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 13),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? AppColors.mint : AppColors.card,
+          borderRadius: BorderRadius.circular(12),
+          border: selected ? null : Border.all(color: AppColors.line, width: 1.5),
+        ),
+        child: Text(label,
+            style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: selected ? Colors.white : AppColors.mint)),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -84,7 +128,11 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
           icon: const Icon(Icons.arrow_back, color: AppColors.ink),
           onPressed: () => context.canPop() ? context.pop() : context.go('/profile'),
         ),
-        title: Text(l10n.milestoneListTitle,
+        // 标题带宠名（0711「Milestone Mochi」）；数据未就绪时回退通用词。
+        title: Text(
+            async.asData?.value.petName != null
+                ? l10n.milestoneListTitleNamed(async.asData!.value.petName)
+                : l10n.milestoneListTitle,
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink)),
       ),
       body: async.when(
@@ -101,11 +149,16 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
             padding: const EdgeInsets.fromLTRB(
                 AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.xl),
             children: [
-              const _NewbieCard(),
-              const SizedBox(height: AppSpacing.lg),
+              // 0711 milestone-with-starter 顺序：宠物卡 → 筛选chips → 新手任务卡 → 分级徽章。
               _Header(data: data),
               const SizedBox(height: AppSpacing.lg),
-              for (final group in data.groups) ...[
+              _filterChips(l10n),
+              const SizedBox(height: AppSpacing.lg),
+              const _NewbieCard(),
+              const SizedBox(height: AppSpacing.lg),
+              for (final group in data.groups.where((g) => _showCompleted
+                  ? g.completedCount == g.totalCount
+                  : g.completedCount < g.totalCount)) ...[
                 _GroupSection(group: group),
                 const SizedBox(height: AppSpacing.lg),
               ],
@@ -188,11 +241,18 @@ class _Header extends StatelessWidget {
 
 /// 新手任务卡（Story 7.3 · FR-47）：里程碑页顶部 6 任务勾选进度；全完成显 Lulus Pemula 达成态。
 /// 独立 AsyncValue（不阻塞里程碑列表）；loading 骨架 / error 可重试——离线不留白。
-class _NewbieCard extends ConsumerWidget {
+class _NewbieCard extends ConsumerStatefulWidget {
   const _NewbieCard();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_NewbieCard> createState() => _NewbieCardState();
+}
+
+class _NewbieCardState extends ConsumerState<_NewbieCard> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final async = ref.watch(newbieTasksProvider);
     return async.when(
@@ -255,11 +315,13 @@ class _NewbieCard extends ConsumerWidget {
         ),
       );
 
-  /// 进行中：标题 + 进度 + 6 行勾选。
+  /// 进行中（0711 Tugas Pemula）：紫虚线卡 + BARU 角标 + 右上圆形计数 + 副文案 + 折叠（默认露 4 项）。
   Widget _newbieChecklist(BuildContext context, AppLocalizations l10n, NewbieTasks tasks) {
     final locale = Localizations.localeOf(context);
-    final ratio = tasks.total == 0 ? 0.0 : tasks.completedCount / tasks.total;
-    return Container(
+    final items = tasks.items;
+    final visible = _expanded ? items : items.take(4).toList();
+    final hidden = items.length - visible.length;
+    final card = Container(
       key: const ValueKey('newbieCard'),
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
@@ -269,37 +331,52 @@ class _NewbieCard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 标题 + 副文案 | 右上圆形计数徽章。
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Text(l10n.newbieCardTitle,
-                    style: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(l10n.newbieCardTitle,
+                        style: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${l10n.newbieCardProgress(tasks.completedCount, tasks.total)} · ${l10n.newbieCardSubtitle}',
+                      style: const TextStyle(fontSize: 12, height: 1.4, color: AppColors.muted),
+                    ),
+                  ],
+                ),
               ),
-              Text(l10n.newbieCardProgress(tasks.completedCount, tasks.total),
-                  style: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.mint)),
+              const SizedBox(width: AppSpacing.md),
+              Container(
+                width: 54,
+                height: 54,
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(
+                  color: AppColors.mintTint,
+                  shape: BoxShape.circle,
+                ),
+                child: Text('${tasks.completedCount}/${tasks.total}',
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.mint)),
+              ),
             ],
           ),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: ratio,
-              minHeight: 6,
-              backgroundColor: AppColors.cream2,
-              color: AppColors.mint,
-            ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+            child: Divider(height: 1, color: AppColors.line),
           ),
-          const SizedBox(height: AppSpacing.md),
-          for (final item in tasks.items)
+          for (final item in visible)
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 5),
+              padding: const EdgeInsets.symmetric(vertical: 6),
               child: Row(
                 children: [
                   Icon(
                     item.done ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
-                    size: 20,
+                    size: 22,
                     color: item.done ? AppColors.mint : AppColors.muted,
                   ),
                   const SizedBox(width: AppSpacing.md),
@@ -307,7 +384,7 @@ class _NewbieCard extends ConsumerWidget {
                     child: Text(
                       localizedNewbieTaskLabel(item.key, locale),
                       style: TextStyle(
-                        fontSize: 13,
+                        fontSize: 14,
                         color: item.done ? AppColors.ink2 : AppColors.ink,
                         decoration: item.done ? TextDecoration.lineThrough : null,
                         decorationColor: AppColors.muted,
@@ -317,8 +394,55 @@ class _NewbieCard extends ConsumerWidget {
                 ],
               ),
             ),
+          // 折叠链接（>4 项时）：收起「+N tugas lainnya ↓」/ 展开「Lihat lebih sedikit ↑」。
+          if (hidden > 0 || _expanded) ...[
+            const Padding(
+              padding: EdgeInsets.only(top: AppSpacing.sm),
+              child: Divider(height: 1, color: AppColors.line),
+            ),
+            InkWell(
+              key: const ValueKey('newbieCardToggle'),
+              onTap: () => setState(() => _expanded = !_expanded),
+              child: Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.md),
+                child: Row(
+                  children: [
+                    Text(
+                      _expanded ? l10n.newbieCardShowLess : '+${l10n.newbieCardShowMore(hidden)}',
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.mint),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                        _expanded
+                            ? Icons.keyboard_arrow_up_rounded
+                            : Icons.keyboard_arrow_down_rounded,
+                        size: 18,
+                        color: AppColors.mint),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ],
       ),
+    );
+    // 紫虚线描边 + 右上 BARU 徽章（0711 Tugas Pemula 专区，独立于 L/M/S 里程碑计数）。
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        CustomPaint(
+          foregroundPainter: DashedRRectPainter(
+            color: AppColors.mint,
+            radius: 16,
+            dash: 6,
+            gap: 4,
+            strokeWidth: 2,
+          ),
+          child: card,
+        ),
+        const Positioned(top: -7, right: 14, child: BaruBadge()),
+      ],
     );
   }
 }

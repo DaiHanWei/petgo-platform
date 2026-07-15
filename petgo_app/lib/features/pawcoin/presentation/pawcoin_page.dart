@@ -78,44 +78,46 @@ class _BalanceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.mint, AppColors.mint500], // brand-primary → secondary
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(l10n.pawcoinBalanceLabel,
-              style: const TextStyle(fontSize: 13, color: Colors.white70)),
-          const SizedBox(height: AppSpacing.xs),
-          Text(_grouped(balance),
-              key: const ValueKey('pawcoinBalance'),
-              style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: Colors.white)),
-          const SizedBox(height: AppSpacing.xxs),
-          Text(l10n.pawcoinRateHint(_grouped(balance)),
-              style: const TextStyle(fontSize: 12, color: Colors.white70)),
-          const SizedBox(height: AppSpacing.lg),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              key: const ValueKey('pawcoinIsiSaldo'),
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: AppColors.mint,
-              ),
-              onPressed: () => context.push('/me/pawcoin/recharge'), // 充值页属 Story 1.5
-              child: Text(l10n.pawcoinIsiSaldo),
+    // 0711 pawcoin-balance：余额卡文字居中、卡内不含按钮；「Isi Saldo」为卡下方独立全宽紫按钮。
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [AppColors.mint, AppColors.mint500], // brand-primary → secondary
             ),
           ),
-        ],
-      ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(l10n.pawcoinBalanceLabel,
+                  style: const TextStyle(fontSize: 13, color: Colors.white70)),
+              const SizedBox(height: AppSpacing.xs),
+              Text(_grouped(balance),
+                  key: const ValueKey('pawcoinBalance'),
+                  style: const TextStyle(
+                      fontSize: 34, fontWeight: FontWeight.w800, color: Colors.white)),
+              const SizedBox(height: AppSpacing.xxs),
+              Text(l10n.pawcoinRateHint(_grouped(balance)),
+                  style: const TextStyle(fontSize: 12, color: Colors.white70)),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            key: const ValueKey('pawcoinIsiSaldo'),
+            onPressed: () => context.push('/me/pawcoin/recharge'), // 充值页属 Story 1.5
+            child: Text(l10n.pawcoinIsiSaldo),
+          ),
+        ),
+      ],
     );
   }
 }

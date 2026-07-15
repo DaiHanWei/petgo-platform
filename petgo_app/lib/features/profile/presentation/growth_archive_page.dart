@@ -9,6 +9,8 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/date_format.dart';
+import '../../../shared/widgets/dashed_rect.dart';
+import '../../../shared/widgets/design/baru_badge.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/pet_status_selector.dart';
 import '../../auth/data/me_repository.dart';
@@ -206,6 +208,8 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
                     style: const TextStyle(
                         fontSize: 19, fontWeight: FontWeight.w700, color: AppColors.ink)),
               ),
+              _idCardBtn(context),
+              const SizedBox(width: 8),
               _appbarBtn(),
             ],
           ),
@@ -216,6 +220,9 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
             consultCount: stats?.consultCount,
             milestoneCount: stats?.milestoneCompleted,
           ),
+          const SizedBox(height: 11),
+          // 健康记录入口卡（BARU · 0711 paspor-entries）：紫虚线 → /profile/health
+          _healthEntryCard(context, l10n),
           const SizedBox(height: 11),
           _MilestoneBar(petName: name),
           const SizedBox(height: 12),
@@ -253,6 +260,99 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
               width: 18,
               height: 18,
               colorFilter: const ColorFilter.mode(AppColors.ink, BlendMode.srcIn),
+            ),
+          ),
+        ),
+      );
+
+  /// appbar 身份证按钮（BARU · 0711 paspor-entries）：ibtn + 右上 BARU 徽章 → /profile/id-card。
+  /// 编辑铅笔仍保留（宠物档案编辑入口不迁移，避免可达性丢失）。
+  Widget _idCardBtn(BuildContext context) => Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Material(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(11),
+            child: InkWell(
+              key: const ValueKey('diaryIdCardButton'),
+              borderRadius: BorderRadius.circular(11),
+              onTap: () => context.push('/profile/id-card'),
+              child: Container(
+                width: 38,
+                height: 38,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.card,
+                  borderRadius: BorderRadius.circular(11),
+                  boxShadow: const [
+                    BoxShadow(color: Color(0x12162233), offset: Offset(0, 2), blurRadius: 8),
+                  ],
+                ),
+                child: const Icon(Icons.badge_outlined, size: 20, color: AppColors.ink),
+              ),
+            ),
+          ),
+          const Positioned(top: -7, right: -6, child: BaruBadge()),
+        ],
+      );
+
+  /// 健康记录入口卡（BARU · 0711 paspor-entries）：紫虚线卡 → /profile/health。
+  Widget _healthEntryCard(BuildContext context, AppLocalizations l10n) => CustomPaint(
+        foregroundPainter: DashedRRectPainter(
+          color: AppColors.mint,
+          radius: 14,
+          dash: 5,
+          gap: 4,
+          strokeWidth: 2,
+        ),
+        child: Material(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            key: const ValueKey('diaryHealthEntry'),
+            borderRadius: BorderRadius.circular(14),
+            onTap: () => context.push('/profile/health'),
+            child: Stack(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: AppColors.mintTint,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.health_and_safety_outlined,
+                            size: 20, color: AppColors.mint),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(l10n.diaryHealthEntryTitle,
+                                style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.ink)),
+                            const SizedBox(height: 2),
+                            Text(l10n.diaryHealthEntrySub,
+                                style: const TextStyle(
+                                    fontSize: 12, color: AppColors.textSecondary)),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right, color: AppColors.muted),
+                    ],
+                  ),
+                ),
+                const Positioned(top: 8, right: 10, child: BaruBadge()),
+              ],
             ),
           ),
         ),
