@@ -62,9 +62,18 @@ public class Comment {
         return parentId == null;
     }
 
-    /** 软删（Story 3.5 删除 / 级联）。 */
+    /** 软删（Story 3.5 删除 / 级联 / 9.9 admin 下架）。 */
     public void softDelete() {
         this.deletedAt = Instant.now();
+    }
+
+    /** 恢复（Story 9.9 admin 误下架恢复）：清软删标记，重回公开口径。 */
+    public void restore() {
+        this.deletedAt = null;
+    }
+
+    public boolean isDeleted() {
+        return deletedAt != null;
     }
 
     @PrePersist

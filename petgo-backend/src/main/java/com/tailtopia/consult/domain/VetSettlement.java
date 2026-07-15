@@ -15,11 +15,17 @@ import java.time.Instant;
  * {@code vet_payout} 快照生成一行（唯一 {@code (vet_id, period)}，幂等）。
  *
  * <p>{@code period} 为 {@code YYYY-MM}（<b>WIB</b>，Asia/Jakarta，刻意偏离全局 UTC，照 2-1）。金额 bigint IDR。
- * {@code status} {@code PENDING}（生成即待结算）→ {@code SETTLED}（管理端 9-5 对账打款后标记；本 story 只产 PENDING）。
+ * <p><b>财务对账状态（Story 9.5，AB-8D）</b>：{@code PENDING_FINANCE}（生成即待财务打款）→ {@code PAID}
+ * （确认打款 + 凭证）→ {@code ARCHIVED}（归档）。兽医侧经 {@code VetIncomeResponse.ofSettlement} 映射为
+ * PENDING/SETTLED 2 态（App 零改）。
  */
 @Entity
 @Table(name = "vet_settlements")
 public class VetSettlement {
+
+    public static final String PENDING_FINANCE = "PENDING_FINANCE";
+    public static final String PAID = "PAID";
+    public static final String ARCHIVED = "ARCHIVED";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -49,6 +55,18 @@ public class VetSettlement {
     @Column(name = "generated_at", nullable = false)
     private Instant generatedAt;
 
+    @Column(name = "payment_proof", length = 512)
+    private String paymentProof;
+
+    @Column(name = "paid_at")
+    private Instant paidAt;
+
+    @Column(name = "archived_at")
+    private Instant archivedAt;
+
+    @Column(name = "settled_by")
+    private Long settledBy;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -58,7 +76,7 @@ public class VetSettlement {
     protected VetSettlement() {
     }
 
-    /** 生成月结（PENDING）：聚合值 + 生成时刻。 */
+    /** 生成月结（PENDING_FINANCE 待财务打款）：聚合值 + 生成时刻。 */
     public static VetSettlement of(long vetId, String period, int orderCount, long grossAmount,
             long payoutAmount, Instant generatedAt) {
         VetSettlement s = new VetSettlement();
@@ -67,9 +85,30 @@ public class VetSettlement {
         s.orderCount = orderCount;
         s.grossAmount = grossAmount;
         s.payoutAmount = payoutAmount;
-        s.status = "PENDING";
+        s.status = PENDING_FINANCE;
         s.generatedAt = generatedAt;
         return s;
+    }
+
+    /** 财务确认打款（Story 9.5）：仅 {@code PENDING_FINANCE}→{@code PAID}，记凭证/时刻/操作人。非法态抛。 */
+    public void markPaid(String proof, long adminId) {
+        if (!PENDING_FINANCE.equals(status)) {
+            throw com.tailtopia.shared.error.AppException.validation("仅待打款月结可确认打款");
+        }
+        this.status = PAID;
+        this.paymentProof = proof;
+        this.paidAt = Instant.now();
+        this.settledBy = adminId;
+    }
+
+    /** 归档（Story 9.5）：仅 {@code PAID}→{@code ARCHIVED}。非法态抛。 */
+    public void archive(long adminId) {
+        if (!PAID.equals(status)) {
+            throw com.tailtopia.shared.error.AppException.validation("仅已打款月结可归档");
+        }
+        this.status = ARCHIVED;
+        this.archivedAt = Instant.now();
+        this.settledBy = adminId;
     }
 
     @PrePersist
@@ -114,5 +153,21 @@ public class VetSettlement {
 
     public Instant getGeneratedAt() {
         return generatedAt;
+    }
+
+    public String getPaymentProof() {
+        return paymentProof;
+    }
+
+    public Instant getPaidAt() {
+        return paidAt;
+    }
+
+    public Instant getArchivedAt() {
+        return archivedAt;
+    }
+
+    public Long getSettledBy() {
+        return settledBy;
     }
 }

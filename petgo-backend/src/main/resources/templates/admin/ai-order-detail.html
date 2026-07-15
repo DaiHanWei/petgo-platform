@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<!-- AI 问诊订单详情（Story 9.4）。只读。无退款/分成/待核查。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title>AI 订单详情 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <p><a th:href="@{/admin/ai-orders}">← 返回 AI 订单列表</a></p>
+        <h1>AI 订单详情</h1>
+        <table>
+            <tr><th>订单号</th><td th:text="${order.orderToken}">tok</td></tr>
+            <tr><th>用户 ID</th><td th:text="${order.userId}">0</td></tr>
+            <tr><th>分诊任务 ID</th><td th:text="${order.triageTaskId}">0</td></tr>
+            <tr><th>金额</th><td th:text="${order.amount}">0</td></tr>
+            <tr><th>渠道</th><td th:text="${order.payChannel}">QRIS</td></tr>
+            <tr><th>支付意图</th><td th:text="${order.paymentIntentToken} ?: '—'">—</td></tr>
+            <tr><th>状态</th><td th:text="${order.status}">COMPLETED</td></tr>
+            <tr><th>成交时间</th><td th:text="${order.paidAt} ?: '—'">—</td></tr>
+            <tr><th>创建时间</th><td th:text="${order.createdAt}">t</td></tr>
+        </table>
+        <p class="hint">AI 一次性解锁，无退款/分成入口。</p>
+    </div>
+</div>
+</body>
+</html>

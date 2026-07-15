@@ -10,18 +10,19 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.tailtopia.config.domain.PawCoinConfig;
+import com.tailtopia.config.service.PlatformConfigService;
 import com.tailtopia.pay.domain.PayChannel;
 import com.tailtopia.pay.domain.PaymentIntent;
 import com.tailtopia.pay.domain.PaymentPurpose;
-import com.tailtopia.pay.domain.TopupTier;
 import com.tailtopia.pay.dto.CreateTopupRequest;
 import com.tailtopia.pay.dto.PaymentIntentResponse;
 import com.tailtopia.pay.dto.TopupOptions;
 import com.tailtopia.pay.dto.TopupResponse;
+import com.tailtopia.pay.dto.TopupTierDto;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.pay.ChargeResult;
 import com.tailtopia.shared.pay.PaymentGateway;
-import com.tailtopia.shared.pay.PayProperties;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -31,11 +32,14 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
- * L0：充值下单编排（mock 档位/意图 service/网关）。非法档位/渠道拒绝；合法下单调 createIntent + charge +
- * attachCharge；幂等重放不重复 charge。
+ * L0：充值下单编排（mock 档位/意图 service/网关/配置）。非法档位/渠道拒绝；合法下单调 createIntent + charge +
+ * attachCharge；幂等重放不重复 charge。档位为 {@link TopupTierDto}（9.2 起 DB 可配），暂停态读 PawCoin 配置。
  */
 @ExtendWith(MockitoExtension.class)
 class PawCoinTopupServiceTest {
+
+    private static final TopupTierDto TIER_10K = new TopupTierDto("10k", 10_000L, 10_000L);
+    private static final TopupTierDto TIER_100K = new TopupTierDto("100k", 100_000L, 100_000L);
 
     @Mock
     TopupTierProvider tierProvider;
@@ -43,11 +47,13 @@ class PawCoinTopupServiceTest {
     PaymentIntentService paymentIntentService;
     @Mock
     PaymentGateway gateway;
-
-    private final PayProperties props = new PayProperties(); // 默认 topupPaused=false
+    @Mock
+    PlatformConfigService platformConfig;
+    @Mock
+    PawCoinConfig pawcoinConfig;
 
     private PawCoinTopupService service() {
-        return new PawCoinTopupService(tierProvider, paymentIntentService, gateway, props);
+        return new PawCoinTopupService(tierProvider, paymentIntentService, gateway, platformConfig);
     }
 
     private PaymentIntentResponse intentResp(String token) {
@@ -64,7 +70,7 @@ class PawCoinTopupServiceTest {
 
     @Test
     void rejectsInvalidChannel() {
-        when(tierProvider.byId("10k")).thenReturn(TopupTier.TIER_10K);
+        when(tierProvider.byId("10k")).thenReturn(TIER_10K);
         assertThatThrownBy(() -> service().create(1L, new CreateTopupRequest("10k", "PAWCOIN"), "k"))
                 .isInstanceOf(AppException.class);
         assertThatThrownBy(() -> service().create(1L, new CreateTopupRequest("10k", "BOGUS"), "k"))
@@ -73,7 +79,7 @@ class PawCoinTopupServiceTest {
 
     @Test
     void createsIntentChargesAndReturnsPayload() {
-        when(tierProvider.byId("10k")).thenReturn(TopupTier.TIER_10K);
+        when(tierProvider.byId("10k")).thenReturn(TIER_10K);
         when(paymentIntentService.createIntent(1L, PaymentPurpose.PAWCOIN_TOPUP, PayChannel.QRIS,
                 10_000L, "IDR", "k")).thenReturn(intentResp("tok-1"));
         PaymentIntent fresh = PaymentIntent.create(1L, PaymentPurpose.PAWCOIN_TOPUP, PayChannel.QRIS,
@@ -93,7 +99,7 @@ class PawCoinTopupServiceTest {
 
     @Test
     void idempotentReplayReturnsExistingPayloadWithoutRecharge() {
-        when(tierProvider.byId("10k")).thenReturn(TopupTier.TIER_10K);
+        when(tierProvider.byId("10k")).thenReturn(TIER_10K);
         when(paymentIntentService.createIntent(anyLong(), any(), any(), anyLong(), anyString(), anyString()))
                 .thenReturn(intentResp("tok-1"));
         PaymentIntent charged = PaymentIntent.create(1L, PaymentPurpose.PAWCOIN_TOPUP, PayChannel.QRIS,
@@ -110,8 +116,9 @@ class PawCoinTopupServiceTest {
 
     @Test
     void optionsReturnsTiersAndPausedFlag() {
-        when(tierProvider.tiers()).thenReturn(List.of(TopupTier.TIER_10K, TopupTier.TIER_100K));
-        props.setTopupPaused(true);
+        when(tierProvider.tiers()).thenReturn(List.of(TIER_10K, TIER_100K));
+        when(platformConfig.pawcoin()).thenReturn(pawcoinConfig);
+        when(pawcoinConfig.isTopupPaused()).thenReturn(true);
 
         TopupOptions o = service().options();
 

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<!-- 运营概览看板（Story 9.10，AB-1.1-01）。四模块指标聚合；种子发布降为链接入口。 -->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.dashboard.title}">概览 · TailTopia 运营后台</title>
@@ -8,12 +9,35 @@
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1 th:text="#{admin.dashboard.title}">运营后台</h1>
-        <p th:text="#{admin.dashboard.intro}">平台上线前可在此发布种子内容，让首页 Feed 不为空。</p>
-        <ul>
-            <li><a th:href="@{/admin/seed-post}" th:text="#{admin.dashboard.seedLink}">发布种子内容</a></li>
-        </ul>
-        <p class="muted" th:text="#{admin.dashboard.note}">举报审核、兽医账号与评分查看已挂入同一后台。</p>
+        <h1 th:text="#{admin.dashboard.title}">运营概览</h1>
+        <p class="hint" th:text="#{admin.dashboard.overviewNote}">四模块运营态势（实时聚合）。</p>
+
+        <h2 th:text="#{admin.dashboard.mod.users}">用户</h2>
+        <table>
+            <tr><th th:text="#{admin.dashboard.m.totalUsers}">总用户</th><td th:text="${metrics.totalUsers}">0</td></tr>
+            <tr><th th:text="#{admin.dashboard.m.virtualAccounts}">虚拟账号</th><td th:text="${metrics.virtualAccounts}">0</td></tr>
+        </table>
+
+        <h2 th:text="#{admin.dashboard.mod.orders}">订单</h2>
+        <table>
+            <tr><th th:text="#{admin.dashboard.m.vetConsultOrders}">兽医咨询单</th><td th:text="${metrics.vetConsultOrders}">0</td></tr>
+            <tr><th th:text="#{admin.dashboard.m.aiCompletedOrders}">AI 完成单</th><td th:text="${metrics.aiCompletedOrders}">0</td></tr>
+            <tr><th th:text="#{admin.dashboard.m.aiRevenue}">AI 收入（IDR）</th><td th:text="${metrics.aiRevenue}">0</td></tr>
+        </table>
+
+        <h2 th:text="#{admin.dashboard.mod.content}">内容</h2>
+        <table>
+            <tr><th th:text="#{admin.dashboard.m.posts}">帖子数</th><td th:text="${metrics.posts}">0</td></tr>
+            <tr><th th:text="#{admin.dashboard.m.comments}">评论数</th><td th:text="${metrics.comments}">0</td></tr>
+        </table>
+
+        <h2 th:text="#{admin.dashboard.mod.vets}">兽医</h2>
+        <table>
+            <tr><th th:text="#{admin.dashboard.m.totalVets}">兽医总数</th><td th:text="${metrics.totalVets}">0</td></tr>
+            <tr><th th:text="#{admin.dashboard.m.pendingSettlements}">待打款月结</th><td th:text="${metrics.pendingSettlements}">0</td></tr>
+        </table>
+
+        <p><a th:href="@{/admin/seed-post}" th:text="#{admin.dashboard.seedLink}">发布种子内容</a></p>
     </div>
 </div>
 </body>

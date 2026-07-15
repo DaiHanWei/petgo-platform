@@ -15,7 +15,6 @@ import com.tailtopia.pay.domain.PaymentPurpose;
 import com.tailtopia.pay.dto.PaymentIntentResponse;
 import com.tailtopia.pay.service.PawCoinWalletService;
 import com.tailtopia.pay.service.PaymentIntentService;
-import com.tailtopia.shared.consult.ConsultProperties;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.im.ImAccountMapper;
 import com.tailtopia.shared.im.TencentImClient;
@@ -60,13 +59,15 @@ public class ConsultPayService {
     private final PaymentIntentService paymentIntents;
     private final PawCoinWalletService wallet;
     private final VetPresenceService presence;
-    private final ConsultProperties props;
+    private final com.tailtopia.config.service.PlatformConfigService platformConfig;
     private final ApplicationEventPublisher events;
 
     public ConsultPayService(ConsultRequestRepository requests, ConsultBillingService billing,
             ConsultSessionRepository sessions, TencentImClient imClient,
             PaymentIntentService paymentIntents, PawCoinWalletService wallet,
-            VetPresenceService presence, ConsultProperties props, ApplicationEventPublisher events) {
+            VetPresenceService presence,
+            com.tailtopia.config.service.PlatformConfigService platformConfig,
+            ApplicationEventPublisher events) {
         this.requests = requests;
         this.billing = billing;
         this.sessions = sessions;
@@ -74,7 +75,7 @@ public class ConsultPayService {
         this.paymentIntents = paymentIntents;
         this.wallet = wallet;
         this.presence = presence;
-        this.props = props;
+        this.platformConfig = platformConfig;
         this.events = events;
     }
 
@@ -96,7 +97,7 @@ public class ConsultPayService {
         if (req.getPayDeadlineAt() == null || req.getPayDeadlineAt().isBefore(Instant.now())) {
             throw AppException.conflict("支付窗已过期"); // 交扫描器回队重播
         }
-        long price = props.getUnitPrice();
+        long price = platformConfig.pricing().getVetConsultPrice();
         return switch (channel) {
             case PAWCOIN -> payByPawCoin(req, price);
             case QRIS -> createCashPay(req, price, PayChannel.QRIS);
@@ -177,10 +178,14 @@ public class ConsultPayService {
         session.markInProgress(vetId);
         session.attachImConversation(conv);
         sessions.save(session);
-        // 建订单（成交快照）+ 记会话起始节点。金额/分成/单价成交时落快照（后台改价不影响历史）。
+        // 建订单（成交快照）+ 记会话起始节点。金额/分成/单价成交时落快照（后台改价不影响历史，Story 9.2）。
+        // 读一次定价行，三项由同一快照派生保证内部一致。
+        com.tailtopia.config.domain.PricingConfig pc = platformConfig.pricing();
         ConsultOrder order = billing.createOrder(userId, vetId, req.getPetProfileId(),
-                props.getUnitPrice(), channel, paymentIntentId, props.vetPayout(),
-                props.getVetShareRate(), props.getUnitPrice(), now);
+                pc.getVetConsultPrice(), channel, paymentIntentId, pc.vetPayout(),
+                pc.getVetShareRate(), pc.getVetConsultPrice(), now);
+        // 重播次数快照（Story 9.3）：建单即删 request，故此刻从 request 落订单（managed 实体提交 flush）。
+        order.snapshotRebroadcast(req.getRebroadcastCount());
         billing.markSessionStarted(order, now, "im:" + conv);
         return order;
     }

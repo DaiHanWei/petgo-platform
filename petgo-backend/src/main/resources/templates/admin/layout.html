@@ -24,6 +24,9 @@
         <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.proactive_takedown')"
            th:href="@{/admin/content}" th:classappend="${active == 'content'} ? 'active'"
            th:text="#{admin.nav.content}">内容管理</a>
+        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.proactive_takedown')"
+           th:href="@{/admin/comments}" th:classappend="${active == 'comments'} ? 'active'"
+           th:text="#{admin.nav.comments}">评论管理</a>
         <a sec:authorize="hasRole('SUPER_ADMIN')"
            th:href="@{/admin/manual-review}" th:classappend="${active == 'manual-review'} ? 'active'"
            th:text="#{admin.nav.review}">人工审核</a>
@@ -43,20 +46,17 @@
         <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('rating.view')"
            th:href="@{/admin/ratings}" th:classappend="${active == 'ratings'} ? 'active'"
            th:text="#{admin.nav.ratings}">兽医评分</a>
-        <!-- Story 5.1：异常工单双入口①——兽医分组下也可达（指向同一 /admin/anomalies）。 -->
-        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('consult.view_anomalies')"
-           th:href="@{/admin/anomalies}" th:classappend="${active == 'anomalies'} ? 'active'"
-           th:text="#{admin.nav.anomalies}">问诊异常</a>
-        <!-- Story 5.1：异常工单双入口②——模块 4「问诊异常」分组。 -->
+        <!-- Story 9.1：导航去重——移除兽医分组下的「问诊异常」重复入口，仅保留下方独立「问诊异常」分组。 -->
+        <!-- 问诊异常分组（Story 5.1；9.1 去重后的唯一入口）。 -->
         <div class="group" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('consult.view_anomalies')"
              th:text="#{admin.nav.group.consult}">问诊异常</div>
         <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('consult.view_anomalies')"
            th:href="@{/admin/anomalies}" th:classappend="${active == 'anomalies'} ? 'active'"
            th:text="#{admin.nav.anomalies}">异常工单</a>
-        <!-- Story 5.2：会话元数据查询（问诊异常分组下）。 -->
+        <!-- Story 5.2：会话元数据查询（问诊异常分组下）；9.1 改称「历史会话查询」。 -->
         <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('consult.view_sessions')"
            th:href="@{/admin/consult-sessions}" th:classappend="${active == 'consult-sessions'} ? 'active'"
-           th:text="#{admin.nav.sessions}">会话查询</a>
+           th:text="#{admin.nav.sessions}">历史会话查询</a>
         <!-- Story 4.7：客服工单（结案 + CSAT；support.handle）-->
         <div class="group" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('support.handle')"
              th:text="#{admin.nav.group.support}">客服</div>
@@ -70,6 +70,33 @@
         <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('refund.submit') or hasAuthority('refund.approve') or hasAuthority('refund.payout')"
            th:href="@{/admin/refunds}" th:classappend="${active == 'refunds'} ? 'active'"
            th:text="#{admin.nav.refunds}">退款管理</a>
+        <!-- Story 9.2：运营配置（定价/PawCoin/档位；config.view 门控）-->
+        <div class="group" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view')"
+             th:text="#{admin.nav.group.ops}">运营</div>
+        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view')"
+           th:href="@{/admin/config}" th:classappend="${active == 'config'} ? 'active'"
+           th:text="#{admin.nav.config}">运营配置</a>
+        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('order.view')"
+           th:href="@{/admin/consult-orders}" th:classappend="${active == 'consult-orders'} ? 'active'"
+           th:text="#{admin.nav.consultOrders}">兽医订单</a>
+        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('order.view')"
+           th:href="@{/admin/ai-orders}" th:classappend="${active == 'ai-orders'} ? 'active'"
+           th:text="#{admin.nav.aiOrders}">AI 订单</a>
+        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('settlement.view')"
+           th:href="@{/admin/settlements}" th:classappend="${active == 'settlements'} ? 'active'"
+           th:text="#{admin.nav.settlements}">兽医月结</a>
+        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('payment.view')"
+           th:href="@{/admin/payments}" th:classappend="${active == 'payments'} ? 'active'"
+           th:text="#{admin.nav.payments}">支付记录</a>
+        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('risk.view')"
+           th:href="@{/admin/red-overage}" th:classappend="${active == 'red-overage'} ? 'active'"
+           th:text="#{admin.nav.redOverage}">红色超额</a>
+        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')"
+           th:href="@{/admin/virtual-accounts}" th:classappend="${active == 'virtual-accounts'} ? 'active'"
+           th:text="#{admin.nav.virtualAccounts}">虚拟账号</a>
+        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')"
+           th:href="@{/admin/seed-batch}" th:classappend="${active == 'seed-batch'} ? 'active'"
+           th:text="#{admin.nav.seedBatch}">批量种子</a>
         <!-- Story 1.3/1.5：安全（操作审计 / 后台账号；按权限显示）-->
         <div class="group"
              sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.view_logs') or hasAuthority('admin.create_account')"

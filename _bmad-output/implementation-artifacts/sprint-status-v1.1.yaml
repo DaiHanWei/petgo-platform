@@ -56,8 +56,14 @@
 #   V69  4-4  extend_notification_types_v11 (REFUND_REJECTED / TICKET_RESOLVED / CSAT_SURVEY / IDENTITY_REQUIRE_MODIFY)
 #   V70  6-1  alter_pet_profiles_serial (serial_id 唯一 + 号池回收)
 #   V71  6-3  init_id_card_hd_purchases
-#   V72  7-1  init_health_records
-#   V73  7-3  alter_milestone_newbie_tasks (6 新手任务 + Lulus Pemula S 级 15->16)
+#   V76  7-1  init_health_records                  ✅ 已落文件 (实际号 V76,非旧稿 V72;当时全局 max 顺延)
+#   V77  7-3  alter_milestone_newbie_tasks         ✅ 已落文件 (实际号 V77,非旧稿 V73;仅数据回溯不改 schema:补 Lulus Pemula C-S16/D-S16/G-S9 roster 行 + S1-S5全完成&health_records≥1 者静默补完成不发通知)
+#   V78  9-2  init_platform_config                 ✅ 已落文件 (实际号 V78,非旧稿 V51;pricing_config/pawcoin_config单行+pawcoin_topup_tiers 4档+config_change_logs;种子=现网env默认;运行时读切DB[consult/ai/id-hd/free-quota/topup];档位保底≥1;变更日志+审计哈希链)
+#   V79  9-3  alter_consult_orders_admin           ✅ 已落文件 (实际号 V79;consult_orders加rebroadcast_count快照+admin_verify_status[NULL/TO_VERIFY/VERIFIED]+note/by/at;只读管理无退款入口AB-8B)
+#   V80  9-5  alter_vet_settlements_finance        ✅ 已落文件 (实际号 V80;vet_settlements状态PENDING/SETTLED→PENDING_FINANCE/PAID/ARCHIVED[值迁移+CHECK]+payment_proof/paid_at/archived_at/settled_by;vet端经ofSettlement映射回2态零改;权限settlement.view/payout无迁移)
+#   V81  9-6  init_red_overage_reviews             ✅ 已落文件 (实际号 V81;红色超额人工复核标记 user维度单行 status[TO_VERIFY/RESOLVED];Part1支付记录查询无迁移;AB-7A纯观测无自动拦截;权限payment.view/risk.view)
+#   V82  9-8  alter_users_account_type             ✅ 已落文件 (实际号 V82;users加account_type[REAL/VIRTUAL]+created_by/enabled/published_count;回填seed-tailtopia-%→VIRTUAL;虚拟账号无登录[合成google_sub+无密码];⚠️9-7在其他分支merge时复核撞号)
+#   V83  9-8P2 init_seed_content_hashes            ✅ 已落文件 (实际号 V83;轻量批量种子内容hash去重;复用seed-post+虚拟账号逐条发DAILY;用户2026-07-14定选轻量方案b非zip+Excel)
 #   V74  9-2  init_admin_pay_config (pricing_config + pawcoin_config + pawcoin_topup_tiers + config_change_logs)
 #   V75  9-7  init_identity_moderation (identity_moderation_tickets + 屏蔽态列)
 #   V76  9-8  alter_users_account_type (REAL/VIRTUAL + 虚拟账号列)
@@ -137,10 +143,10 @@ development_status:
   epic-6-retrospective: optional
 
   # ---- Epic 7: 成长档案健康记录与里程碑 ----
-  epic-7: backlog
+  epic-7: in-progress
   7-1-健康记录模型与crud: review
   7-2-健康记录列表与混排: review
-  7-3-新手任务与聚合里程碑: backlog
+  7-3-新手任务与聚合里程碑: review
   epic-7-retrospective: optional
 
   # ---- Epic 8: 首页情绪彩蛋(纯前端) —— ❌ 已取消 2026-07-14(用户决策,整体不实现,无代码) ----
@@ -149,15 +155,15 @@ development_status:
   epic-8-retrospective: optional
 
   # ---- Epic 9: 后台资金与运营治理 ----
-  epic-9: backlog
-  9-1-后台权限点扩充与导航整改: backlog
-  9-2-定价与pawcoin配置: backlog
-  9-3-兽医咨询订单只读管理: backlog
-  9-4-ai问诊收入统计与订单查询: backlog
-  9-5-兽医分成月结对账: backlog
-  9-6-支付记录查询与红色超额监控: backlog
-  9-7-昵称宠物名异步审核: backlog
-  9-8-虚拟账号与种子批量上传: backlog
-  9-9-评论内容管理与封禁挂起处置: backlog
-  9-10-运营概览看板: backlog
+  epic-9: in-progress  # 9-1~9-6/9-8~9-10 done(review);9-7他分支;9-8 Part2轻量done
+  9-1-后台权限点扩充与导航整改: review
+  9-2-定价与pawcoin配置: review
+  9-3-兽医咨询订单只读管理: review
+  9-4-ai问诊收入统计与订单查询: review
+  9-5-兽医分成月结对账: review
+  9-6-支付记录查询与红色超额监控: review
+  9-7-昵称宠物名异步审核: backlog  # ⚠️其他分支实现,本分支不做(2026-07-14用户告知)
+  9-8-虚拟账号与种子批量上传: review  # Part1虚拟账号+Part2轻量批量(seed-post复用)均done
+  9-9-评论内容管理与封禁挂起处置: review  # 评论下架新增;帖子拦截(2-3)+封禁挂起(3-8)前序已落,无迁移
+  9-10-运营概览看板: review  # 收官Epic9=收官V1.1;四模块聚合无迁移
   epic-9-retrospective: optional

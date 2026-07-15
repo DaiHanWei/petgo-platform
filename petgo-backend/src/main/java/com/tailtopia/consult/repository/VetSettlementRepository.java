@@ -12,4 +12,8 @@ public interface VetSettlementRepository extends JpaRepository<VetSettlement, Lo
 
     /** 收入页历史：某兽医全部月结按 period 倒序（近月在前）。 */
     List<VetSettlement> findByVetIdOrderByPeriodDesc(long vetId);
+
+    /** 概览看板（Story 9.10）：某状态月结数（如待打款 PENDING_FINANCE）。 */
+    long countByStatus(String status);
+
 }

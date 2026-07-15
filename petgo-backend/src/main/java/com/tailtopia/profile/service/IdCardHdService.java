@@ -14,7 +14,6 @@ import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.shared.error.AppException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,16 +36,16 @@ public class IdCardHdService {
     private final IdCardHdPurchaseRepository purchases;
     private final PawCoinWalletService wallet;
     private final PaymentIntentService paymentIntents;
-    private final long price;
+    private final com.tailtopia.config.service.PlatformConfigService platformConfig;
 
     public IdCardHdService(PetProfileRepository profiles, IdCardHdPurchaseRepository purchases,
             PawCoinWalletService wallet, PaymentIntentService paymentIntents,
-            @Value("${petgo.id-hd.download-price:5000}") long price) {
+            com.tailtopia.config.service.PlatformConfigService platformConfig) {
         this.profiles = profiles;
         this.purchases = purchases;
         this.wallet = wallet;
         this.paymentIntents = paymentIntents;
-        this.price = price;
+        this.platformConfig = platformConfig;
     }
 
     /** 当前用户是否已购买高清图（=已永久解锁）。 */
@@ -68,6 +67,8 @@ public class IdCardHdService {
             return HdPurchaseResponse.granted();
         }
         long petProfileId = pet.getId();
+        // 成交价读后台可配定价（Story 9.2）；成交后不再变（一次性永久解锁）。
+        long price = platformConfig.pricing().getIdHdDownloadPrice();
         return switch (channel) {
             case PAWCOIN -> {
                 // 余额不足 → debit 抛冲突 → 整事务回滚（建行不发生）。幂等键稳定可重放。

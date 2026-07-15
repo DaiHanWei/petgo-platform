@@ -76,7 +76,7 @@ class VetSettlementIntegrationTest extends ApiIntegrationTest {
         assertThat(a.getOrderCount()).isEqualTo(2);        // 界外单不计
         assertThat(a.getPayoutAmount()).isEqualTo(60000L); // 2×30000
         assertThat(a.getGrossAmount()).isEqualTo(100000L); // 2×50000
-        assertThat(a.getStatus()).isEqualTo("PENDING");
+        assertThat(a.getStatus()).isEqualTo("PENDING_FINANCE"); // 9.5: 生成态改名
         VetSettlement b = settlements.findByVetIdOrderByPeriodDesc(vetB).get(0);
         assertThat(b.getOrderCount()).isEqualTo(1);        // 退款单不计
         assertThat(b.getPayoutAmount()).isEqualTo(30000L);

@@ -26,10 +26,16 @@ public record VetIncomeResponse(VetIncomePeriodItem currentMonth, List<VetIncome
                             agg.payoutAmount(), "PENDING");
         }
 
-        /** 历史月结（已生成行）。 */
+        /**
+         * 历史月结（已生成行）。**兽医侧映射**（Story 9.5）：finance 3 态 → vet 友好 2 态
+         * （{@code PENDING_FINANCE}→{@code PENDING}、{@code PAID}/{@code ARCHIVED}→{@code SETTLED}），
+         * 兽医只关心「已否打款给我」，App 零改。
+         */
         public static VetIncomePeriodItem ofSettlement(VetSettlement s) {
+            String vetFacing = VetSettlement.PENDING_FINANCE.equals(s.getStatus())
+                    ? "PENDING" : "SETTLED";
             return new VetIncomePeriodItem(s.getPeriod(), s.getOrderCount(), s.getGrossAmount(),
-                    s.getPayoutAmount(), s.getStatus());
+                    s.getPayoutAmount(), vetFacing);
         }
     }
 }

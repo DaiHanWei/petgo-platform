@@ -1,9 +1,9 @@
 package com.tailtopia.pay.service;
 
+import com.tailtopia.config.service.PlatformConfigService;
 import com.tailtopia.pay.domain.PayChannel;
 import com.tailtopia.pay.domain.PaymentIntent;
 import com.tailtopia.pay.domain.PaymentPurpose;
-import com.tailtopia.pay.domain.TopupTier;
 import com.tailtopia.pay.dto.CreateTopupRequest;
 import com.tailtopia.pay.dto.PaymentIntentResponse;
 import com.tailtopia.pay.dto.TopupOptions;
@@ -13,7 +13,6 @@ import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.pay.ChargeRequest;
 import com.tailtopia.shared.pay.ChargeResult;
 import com.tailtopia.shared.pay.PaymentGateway;
-import com.tailtopia.shared.pay.PayProperties;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,29 +38,29 @@ public class PawCoinTopupService {
     private final TopupTierProvider tierProvider;
     private final PaymentIntentService paymentIntentService;
     private final PaymentGateway gateway;
-    private final PayProperties payProperties;
+    private final PlatformConfigService platformConfig;
 
     public PawCoinTopupService(TopupTierProvider tierProvider, PaymentIntentService paymentIntentService,
-            PaymentGateway gateway, PayProperties payProperties) {
+            PaymentGateway gateway, PlatformConfigService platformConfig) {
         this.tierProvider = tierProvider;
         this.paymentIntentService = paymentIntentService;
         this.gateway = gateway;
-        this.payProperties = payProperties;
+        this.platformConfig = platformConfig;
     }
 
     /**
-     * 充值选项（Story 1.5）：可选档位 + 是否暂停。档位来自 {@link TopupTierProvider}（9.2 换 DB）；
-     * {@code paused} 来自 {@code petgo.pay.topup-paused}（env {@code PAWCOIN_TOPUP_PAUSED}，AB-6C）。
+     * 充值选项（Story 1.5）：可选档位 + 是否暂停。档位与暂停态均来自后台可配（Story 9.2，
+     * {@link TopupTierProvider} DB 实现 + {@code pawcoin_config.topup_paused}）。
      */
     public TopupOptions options() {
-        List<TopupTierDto> tiers = tierProvider.tiers().stream().map(TopupTierDto::from).toList();
-        return new TopupOptions(tiers, payProperties.isTopupPaused());
+        List<TopupTierDto> tiers = tierProvider.tiers();
+        return new TopupOptions(tiers, platformConfig.pawcoin().isTopupPaused());
     }
 
     public TopupResponse create(long userId, CreateTopupRequest req, String idempotencyKey) {
-        TopupTier tier = tierProvider.byId(req.tierId());
+        TopupTierDto tier = tierProvider.byId(req.tierId());
         PayChannel channel = parsePayChannel(req.channel());
-        long amount = tier.getAmountIdr();
+        long amount = tier.amount();
 
         PaymentIntentResponse intent = paymentIntentService.createIntent(
                 userId, PaymentPurpose.PAWCOIN_TOPUP, channel, amount, CURRENCY, idempotencyKey);
@@ -89,7 +88,7 @@ public class PawCoinTopupService {
             payload = meta == null ? null : (String) meta.get("payload");
         }
 
-        return new TopupResponse(intent.token(), channel.name(), amount, tier.getCoins(), payload);
+        return new TopupResponse(intent.token(), channel.name(), amount, tier.coins(), payload);
     }
 
     /** 仅允许外部收款渠道 QRIS；PAWCOIN（站内余额）/非法值 → 422。 */

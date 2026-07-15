@@ -8,7 +8,6 @@ import com.tailtopia.pay.service.PawCoinWalletService;
 import com.tailtopia.pay.service.PaymentIntentService;
 import com.tailtopia.profile.service.CardTokenGenerator;
 import com.tailtopia.shared.error.AppException;
-import com.tailtopia.shared.triage.TriageProperties;
 import com.tailtopia.triage.domain.AiConsultOrder;
 import com.tailtopia.triage.domain.AiConsultOrderStatus;
 import com.tailtopia.triage.domain.DangerLevel;
@@ -58,18 +57,19 @@ public class AiUnlockService {
     private final PaymentIntentService paymentIntents;
     private final AiConsultOrderRepository orders;
     private final CardTokenGenerator tokenGenerator;
-    private final TriageProperties props;
+    private final com.tailtopia.config.service.PlatformConfigService platformConfig;
 
     public AiUnlockService(TriageTaskRepository tasks, FreeQuotaService freeQuota,
             PawCoinWalletService wallet, PaymentIntentService paymentIntents,
-            AiConsultOrderRepository orders, CardTokenGenerator tokenGenerator, TriageProperties props) {
+            AiConsultOrderRepository orders, CardTokenGenerator tokenGenerator,
+            com.tailtopia.config.service.PlatformConfigService platformConfig) {
         this.tasks = tasks;
         this.freeQuota = freeQuota;
         this.wallet = wallet;
         this.paymentIntents = paymentIntents;
         this.orders = orders;
         this.tokenGenerator = tokenGenerator;
-        this.props = props;
+        this.platformConfig = platformConfig;
     }
 
     /**
@@ -90,7 +90,7 @@ public class AiUnlockService {
             return UnlockResponse.unlocked(TriageResultResponse.from(task));
         }
 
-        long price = props.getAiUnlockPrice();
+        long price = platformConfig.pricing().getAiUnlockPrice();
         return switch (method) {
             case FREE_QUOTA -> unlockByFreeQuota(userId, task);
             case PAWCOIN -> unlockByPawCoin(userId, task, price);

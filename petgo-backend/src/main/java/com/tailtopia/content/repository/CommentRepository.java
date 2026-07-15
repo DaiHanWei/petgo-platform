@@ -66,4 +66,8 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
             ORDER BY c.createdAt ASC, c.id ASC
             """)
     List<Comment> findRepliesForParents(@Param("parentIds") List<Long> parentIds);
+
+    /** 后台内容管理近评论列表（Story 9.9，含已删软删项）。 */
+    java.util.List<Comment> findTop200ByOrderByIdDesc();
+
 }

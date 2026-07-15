@@ -1,6 +1,5 @@
 package com.tailtopia.triage.service;
 
-import com.tailtopia.shared.triage.TriageProperties;
 import com.tailtopia.triage.domain.UserMonthlyFreeQuota;
 import com.tailtopia.triage.dto.FreeQuotaView;
 import com.tailtopia.triage.repository.UserMonthlyFreeQuotaRepository;
@@ -34,11 +33,12 @@ public class FreeQuotaService {
     private static final int MAX_QUOTA = 35;
 
     private final UserMonthlyFreeQuotaRepository quotas;
-    private final TriageProperties props;
+    private final com.tailtopia.config.service.PlatformConfigService platformConfig;
 
-    public FreeQuotaService(UserMonthlyFreeQuotaRepository quotas, TriageProperties props) {
+    public FreeQuotaService(UserMonthlyFreeQuotaRepository quotas,
+            com.tailtopia.config.service.PlatformConfigService platformConfig) {
         this.quotas = quotas;
-        this.props = props;
+        this.platformConfig = platformConfig;
     }
 
     /** 当前月度 period = {@code YYYY-MM}（WIB）。 */
@@ -46,9 +46,9 @@ public class FreeQuotaService {
         return YearMonth.now(WIB).toString();
     }
 
-    /** 本月免费额度上限：配置值 clamp 到 {@code [0,35]}（越界夹取，不抛异常）。 */
+    /** 本月免费额度上限：后台可配值（Story 9.2）clamp 到 {@code [0,35]}（越界夹取，不抛异常）。 */
     int limit() {
-        return Math.max(0, Math.min(props.getDefaultFreeQuota(), MAX_QUOTA));
+        return Math.max(0, Math.min(platformConfig.pricing().getMonthlyFreeQuota(), MAX_QUOTA));
     }
 
     /** 本月是否还有免费额度（只读，不建行）。 */

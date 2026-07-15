@@ -1,6 +1,7 @@
 package com.tailtopia.auth.repository;
 
 import com.tailtopia.auth.domain.Role;
+import com.tailtopia.auth.domain.AccountType;
 import com.tailtopia.auth.domain.User;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -19,4 +20,12 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     /** bug 20260701-164：后台用户管理按角色分页列举（只列普通用户 USER）。 */
     Page<User> findByRole(Role role, Pageable pageable);
+
+    /** 虚拟账号列表（Story 9.8，A-6），近建在前。 */
+    java.util.List<User> findByAccountTypeOrderByIdDesc(AccountType accountType);
+
+
+    /** 概览看板（Story 9.10）：按账号类型计数（如虚拟账号数）。 */
+    long countByAccountType(AccountType accountType);
+
 }

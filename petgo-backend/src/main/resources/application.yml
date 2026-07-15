@@ -44,21 +44,19 @@ petgo:
     base-url: ${MIDTRANS_BASE_URL:https://api.sandbox.midtrans.com}
     callback-token: ${MIDTRANS_CALLBACK_TOKEN:}
     timeout-seconds: ${PAY_TIMEOUT_SECONDS:10}
-    # PawCoin 充值暂停（Story 1.5，浮存门槛 AB-6C）：运营/工程手动置 true 重启即暂停充值；前端渲染暂停态。
+    # ⚠️ Story 9.2 起 topup-paused 运行时读 DB（pawcoin_config.topup_paused），本 env 仅为 V78 迁移种子默认，运行时不再读。
     topup-paused: ${PAWCOIN_TOPUP_PAUSED:false}
-  # AI 问诊（Story 2.1）。default-free-quota=每月免费解锁 AI 详情次数，读取处 clamp[0,35]（0=全付费）。
-  # 9-2 后台 pricing_config.monthly_free_quota 落地后换 DB 读；本 story 先 env（渐进范式同 topup-paused）。
+  # ⚠️ Story 9.2 起 triage/id-hd/consult 下列定价运行时**读 DB**（pricing_config，后台可配），本 env 仅为 V78 种子默认。
+  # 若 prod 曾用自定义 env，部署后由运营在后台改回。成交价仍落各订单快照（改配置只影响后续）。
+  # AI 问诊（Story 2.1）。default-free-quota 读取处 clamp[0,35]（0=全付费）→ 9.2 后由 pricing_config.monthly_free_quota。
   triage:
     default-free-quota: ${TRIAGE_DEFAULT_FREE_QUOTA:1}
-    # AI 详建付费解锁价（Story 2.3）：默认 Rp10,000。PawCoin 花费同值(1 koin=Rp1)，现金同额 IDR。成交价落订单快照。
     ai-unlock-price: ${TRIAGE_AI_UNLOCK_PRICE:10000}
-  # 身份证高清图付费下载（Story 6.3）：一次性永久解锁价，默认 Rp5,000。PawCoin 同值/QRIS 同额 IDR。
-  # 9-2 后台 pricing_config.id_hd_download_price 落地后换 DB 读；本 story 先 env（渐进范式同 ai-unlock-price）。
+  # 身份证高清图付费下载（Story 6.3）→ 9.2 后由 pricing_config.id_hd_download_price。
   id-hd:
     download-price: ${ID_HD_DOWNLOAD_PRICE:5000}
-  # 兽医咨询计费（Story 3.4）。unit-price=单次咨询价（默认 Rp50,000），vet-share-rate=兽医分成%（默认60→到手30000）。
-  # 成交价/分成落 consult_orders 快照；9-2 后台 pricing_config.vet_consult_price/vet_share_rate 落地后换 DB 读。
-  # max-rebroadcast/request-max-age-minutes=支付窗超时回队重播上限（达到→彻底失败落 failed_consult_requests）。
+  # 兽医咨询计费（Story 3.4）→ 9.2 后 unit-price/vet-share-rate 由 pricing_config；
+  # max-rebroadcast/request-max-age-minutes 仍为 env（运营超时，非定价，9.2 不迁）。
   consult:
     unit-price: ${CONSULT_UNIT_PRICE:50000}
     vet-share-rate: ${CONSULT_VET_SHARE_RATE:60}

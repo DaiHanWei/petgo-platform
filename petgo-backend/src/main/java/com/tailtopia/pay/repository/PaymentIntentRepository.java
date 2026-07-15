@@ -19,6 +19,9 @@ public interface PaymentIntentRepository extends JpaRepository<PaymentIntent, Lo
 
     Optional<PaymentIntent> findByGatewayRef(String gatewayRef);
 
+    /** 后台支付记录通用查询（Story 9.6，AB-8E）：某用户全部支付意图倒序（四类 purpose 统一）。 */
+    List<PaymentIntent> findByUserIdOrderByCreatedAtDesc(long userId);
+
     /** 订单中心游标分页（Story 5.1）：本人 充值(PAWCOIN_TOPUP) PAID 意图 created_at < cursor 倒序（充值凭证）。 */
     List<PaymentIntent> findByUserIdAndPurposeAndStatusAndCreatedAtLessThanOrderByCreatedAtDesc(
             long userId, PaymentPurpose purpose, PaymentStatus status, Instant cursor, Pageable pageable);

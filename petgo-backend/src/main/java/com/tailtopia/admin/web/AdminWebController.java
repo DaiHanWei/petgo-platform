@@ -39,13 +39,16 @@ public class AdminWebController {
     private final AdminContentService adminContentService;
     private final AdminModerationService adminModerationService;
     private final AdminVetService adminVetService;
+    private final com.tailtopia.admin.dashboard.service.AdminDashboardService dashboardService;
 
     public AdminWebController(AdminContentService adminContentService,
             AdminModerationService adminModerationService,
-            AdminVetService adminVetService) {
+            AdminVetService adminVetService,
+            com.tailtopia.admin.dashboard.service.AdminDashboardService dashboardService) {
         this.adminContentService = adminContentService;
         this.adminModerationService = adminModerationService;
         this.adminVetService = adminVetService;
+        this.dashboardService = dashboardService;
     }
 
     /** 登录页（未认证可访问；认证失败回显 error，登出回显 logout）。 */
@@ -54,9 +57,11 @@ public class AdminWebController {
         return "admin/login";
     }
 
+    /** 运营概览看板（Story 9.10，AB-1.1-01）：四模块指标聚合（原种子发布引导页升级为概览）。 */
     @GetMapping({"/admin", "/admin/dashboard"})
     public String dashboard(Model model) {
         model.addAttribute("active", "dashboard");
+        model.addAttribute("metrics", dashboardService.overview());
         return "admin/dashboard";
     }
 

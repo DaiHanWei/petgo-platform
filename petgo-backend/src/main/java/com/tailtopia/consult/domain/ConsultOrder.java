@@ -85,7 +85,37 @@ public class ConsultOrder {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    // ── Story 9.3（AB-8B）：建单重播快照 + 运营待核查标记（纯注记，不改业务状态）──
+    @Column(name = "rebroadcast_count", nullable = false)
+    private int rebroadcastCount;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "admin_verify_status", length = 12)
+    private ConsultOrderVerifyStatus adminVerifyStatus;
+
+    @Column(name = "admin_verify_note", length = 255)
+    private String adminVerifyNote;
+
+    @Column(name = "admin_verify_by")
+    private Long adminVerifyBy;
+
+    @Column(name = "admin_verify_at")
+    private Instant adminVerifyAt;
+
     protected ConsultOrder() {
+    }
+
+    /** 建单时从 request 快照重播次数（Story 9.3）。managed 实体，提交时 flush。 */
+    public void snapshotRebroadcast(int count) {
+        this.rebroadcastCount = count;
+    }
+
+    /** 运营标记待核查/已核查（Story 9.3）。纯注记，不改 {@link #status}。 */
+    public void applyVerify(ConsultOrderVerifyStatus verifyStatus, String note, long adminId) {
+        this.adminVerifyStatus = verifyStatus;
+        this.adminVerifyNote = note;
+        this.adminVerifyBy = adminId;
+        this.adminVerifyAt = Instant.now();
     }
 
     /** 支付成功建单（3-4 调）：IN_PROGRESS + 成交快照 + paid_at。 */
@@ -205,5 +235,25 @@ public class ConsultOrder {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public int getRebroadcastCount() {
+        return rebroadcastCount;
+    }
+
+    public ConsultOrderVerifyStatus getAdminVerifyStatus() {
+        return adminVerifyStatus;
+    }
+
+    public String getAdminVerifyNote() {
+        return adminVerifyNote;
+    }
+
+    public Long getAdminVerifyBy() {
+        return adminVerifyBy;
+    }
+
+    public Instant getAdminVerifyAt() {
+        return adminVerifyAt;
     }
 }

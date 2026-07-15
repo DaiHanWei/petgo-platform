@@ -19,7 +19,8 @@ import com.tailtopia.pay.service.PawCoinWalletService;
 import com.tailtopia.pay.service.PaymentIntentService;
 import com.tailtopia.profile.service.CardTokenGenerator;
 import com.tailtopia.shared.error.AppException;
-import com.tailtopia.shared.triage.TriageProperties;
+import com.tailtopia.config.domain.PricingConfig;
+import com.tailtopia.config.service.PlatformConfigService;
 import com.tailtopia.triage.TriageTestSupport;
 import com.tailtopia.triage.domain.AiConsultOrder;
 import com.tailtopia.triage.domain.AiConsultOrderStatus;
@@ -64,10 +65,19 @@ class AiUnlockServiceTest {
     @Mock
     private CardTokenGenerator tokenGenerator;
     @Mock
-    private TriageProperties props;
+    private PlatformConfigService platformConfig;
+    @Mock
+    private PricingConfig pricing;
+
+    @org.junit.jupiter.api.BeforeEach
+    void stubPricing() {
+        // 定价读走 PlatformConfigService（9.2）：lenient 默认桩，短路路径（RED/已解锁/非 DONE）不用亦不报未用。
+        lenient().when(platformConfig.pricing()).thenReturn(pricing);
+        lenient().when(pricing.getAiUnlockPrice()).thenReturn(PRICE);
+    }
 
     private AiUnlockService svc() {
-        return new AiUnlockService(tasks, freeQuota, wallet, paymentIntents, orders, tokenGenerator, props);
+        return new AiUnlockService(tasks, freeQuota, wallet, paymentIntents, orders, tokenGenerator, platformConfig);
     }
 
     private TriageTask doneTask(DangerLevel level, UnlockSource unlockSource) {
@@ -109,7 +119,6 @@ class AiUnlockServiceTest {
     @Test
     void pawCoinSuccessDebitsUnlocksAndBuildsCompletedOrder() {
         TriageTask t = doneTask(DangerLevel.GREEN, UnlockSource.LOCKED);
-        when(props.getAiUnlockPrice()).thenReturn(PRICE);
         when(tokenGenerator.generate()).thenReturn("ordtok");
 
         UnlockResponse r = svc().unlock(USER, TRIAGE, UnlockMethod.PAWCOIN);
@@ -127,7 +136,6 @@ class AiUnlockServiceTest {
     @Test
     void pawCoinInsufficientPropagatesAndDoesNotUnlockOrOrder() {
         TriageTask t = doneTask(DangerLevel.GREEN, UnlockSource.LOCKED);
-        when(props.getAiUnlockPrice()).thenReturn(PRICE);
         // debit 余额不足抛冲突 → 整事务回滚（此处验证不 unlock、不建单）。
         org.mockito.Mockito.doThrow(AppException.conflict("余额不足"))
                 .when(wallet).debit(anyLong(), anyLong(), any(), any(), any(), any());
@@ -143,7 +151,6 @@ class AiUnlockServiceTest {
     @Test
     void cashCreatesIntentAndPendingOrderWithoutUnlocking() {
         TriageTask t = doneTask(DangerLevel.YELLOW, UnlockSource.LOCKED);
-        when(props.getAiUnlockPrice()).thenReturn(PRICE);
         when(tokenGenerator.generate()).thenReturn("ordtok");
         when(paymentIntents.createIntent(eq(USER), eq(PaymentPurpose.AI_UNLOCK), eq(PayChannel.QRIS),
                 eq(PRICE), eq("IDR"), eq("ai-unlock:" + TRIAGE)))
@@ -207,7 +214,6 @@ class AiUnlockServiceTest {
     void notDoneConflict() {
         TriageTask proc = TriageTestSupport.task(TRIAGE, USER, TriageStatus.PROCESSING, "x", null);
         when(tasks.findById(TRIAGE)).thenReturn(Optional.of(proc));
-        lenient().when(props.getAiUnlockPrice()).thenReturn(PRICE);
         assertThatThrownBy(() -> svc().unlock(USER, TRIAGE, UnlockMethod.FREE_QUOTA))
                 .isInstanceOf(AppException.class);
     }

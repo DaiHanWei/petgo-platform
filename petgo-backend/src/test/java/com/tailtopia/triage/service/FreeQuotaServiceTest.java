@@ -9,7 +9,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.tailtopia.shared.triage.TriageProperties;
+import com.tailtopia.config.domain.PricingConfig;
+import com.tailtopia.config.service.PlatformConfigService;
 import com.tailtopia.triage.domain.UserMonthlyFreeQuota;
 import com.tailtopia.triage.dto.FreeQuotaView;
 import com.tailtopia.triage.repository.UserMonthlyFreeQuotaRepository;
@@ -32,29 +33,31 @@ class FreeQuotaServiceTest {
     @Mock
     private UserMonthlyFreeQuotaRepository quotas;
     @Mock
-    private TriageProperties props;
+    private PlatformConfigService platformConfig;
+    @Mock
+    private PricingConfig pricing;
 
     private FreeQuotaService svc() {
-        return new FreeQuotaService(quotas, props);
+        return new FreeQuotaService(quotas, platformConfig);
     }
 
     // ---- AC4：clamp [0,35] ----
 
     @Test
     void limitClampsBelowZeroToZero() {
-        when(props.getDefaultFreeQuota()).thenReturn(-1);
+        stubQuota(-1);
         assertThat(svc().limit()).isEqualTo(0);
     }
 
     @Test
     void limitPassesThroughInRange() {
-        when(props.getDefaultFreeQuota()).thenReturn(1);
+        stubQuota(1);
         assertThat(svc().limit()).isEqualTo(1);
     }
 
     @Test
     void limitClampsAboveMaxTo35() {
-        when(props.getDefaultFreeQuota()).thenReturn(99);
+        stubQuota(99);
         assertThat(svc().limit()).isEqualTo(35);
     }
 
@@ -70,14 +73,14 @@ class FreeQuotaServiceTest {
 
     @Test
     void tryConsumeShortCircuitsWhenLimitZeroAndTouchesNoRepo() {
-        when(props.getDefaultFreeQuota()).thenReturn(0);
+        stubQuota(0);
         assertThat(svc().tryConsume(42L)).isFalse();
         verifyNoInteractions(quotas);
     }
 
     @Test
     void tryConsumeInsertsThenAtomicIncrementAndReturnsTrueOnSuccess() {
-        when(props.getDefaultFreeQuota()).thenReturn(1);
+        stubQuota(1);
         when(quotas.tryConsume(eq(42L), anyString(), eq(1))).thenReturn(1);
         assertThat(svc().tryConsume(42L)).isTrue();
         verify(quotas).insertIfAbsent(eq(42L), anyString());
@@ -86,7 +89,7 @@ class FreeQuotaServiceTest {
 
     @Test
     void tryConsumeReturnsFalseWhenAtomicUpdateHitsZeroRows() {
-        when(props.getDefaultFreeQuota()).thenReturn(1);
+        stubQuota(1);
         when(quotas.tryConsume(eq(42L), anyString(), eq(1))).thenReturn(0);
         assertThat(svc().tryConsume(42L)).isFalse();
         verify(quotas).insertIfAbsent(eq(42L), anyString());
@@ -96,7 +99,7 @@ class FreeQuotaServiceTest {
 
     @Test
     void statusReflectsRemainingWhenPartiallyUsed() {
-        when(props.getDefaultFreeQuota()).thenReturn(3);
+        stubQuota(3);
         UserMonthlyFreeQuota row = usedRow(2);
         when(quotas.findByUserIdAndPeriod(eq(42L), anyString())).thenReturn(Optional.of(row));
         FreeQuotaView v = svc().status(42L);
@@ -110,14 +113,14 @@ class FreeQuotaServiceTest {
     @Test
     void statusRemainingNeverNegativeWhenUsedExceedsLimit() {
         // 例如后台把 limit 从 3 调到 1 后，历史 used=2 > limit：remaining 夹到 0 不为负。
-        when(props.getDefaultFreeQuota()).thenReturn(1);
+        stubQuota(1);
         when(quotas.findByUserIdAndPeriod(eq(42L), anyString())).thenReturn(Optional.of(usedRow(2)));
         assertThat(svc().status(42L).remaining()).isEqualTo(0);
     }
 
     @Test
     void statusUsesZeroWhenNoRowThisPeriod() {
-        when(props.getDefaultFreeQuota()).thenReturn(1);
+        stubQuota(1);
         when(quotas.findByUserIdAndPeriod(eq(42L), anyString())).thenReturn(Optional.empty());
         FreeQuotaView v = svc().status(42L);
         assertThat(v.used()).isEqualTo(0);
@@ -128,16 +131,21 @@ class FreeQuotaServiceTest {
 
     @Test
     void hasFreeQuotaTrueWhenUsedBelowLimit() {
-        when(props.getDefaultFreeQuota()).thenReturn(1);
+        stubQuota(1);
         when(quotas.findByUserIdAndPeriod(eq(42L), anyString())).thenReturn(Optional.empty());
         assertThat(svc().hasFreeQuota(42L)).isTrue();
     }
 
     @Test
     void hasFreeQuotaFalseWhenExhausted() {
-        when(props.getDefaultFreeQuota()).thenReturn(1);
+        stubQuota(1);
         when(quotas.findByUserIdAndPeriod(eq(42L), anyString())).thenReturn(Optional.of(usedRow(1)));
         assertThat(svc().hasFreeQuota(42L)).isFalse();
+    }
+
+    private void stubQuota(int n) {
+        when(platformConfig.pricing()).thenReturn(pricing);
+        when(pricing.getMonthlyFreeQuota()).thenReturn(n);
     }
 
     /** 造一个 used_count=n 的只读行（实体无 setter，用反射填字段）。 */

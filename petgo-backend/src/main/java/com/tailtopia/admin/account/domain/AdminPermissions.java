@@ -30,6 +30,10 @@ public final class AdminPermissions {
     public static final String CONTENT_TAKEDOWN = "content.takedown";
     public static final String CONTENT_RESTORE = "content.restore";
     public static final String CONTENT_PROACTIVE_TAKEDOWN = "content.proactive_takedown";
+    /** 内容导出（V1.1 Epic 9）。 */
+    public static final String CONTENT_EXPORT = "content.export";
+    /** 举报者清单查看（V1.1 Epic 9，运营内部可见，不违 FR-51 对外匿名）。 */
+    public static final String CONTENT_VIEW_REPORTERS = "content.view_reporters";
 
     // 问诊异常与会话（Epic 5）
     public static final String CONSULT_VIEW_ANOMALIES = "consult.view_anomalies";
@@ -50,6 +54,34 @@ public final class AdminPermissions {
     /** 执行退款打款（财务）。 */
     public static final String REFUND_PAYOUT = "refund.payout";
 
+    // 咨询订单 / 收入（V1.1 Epic 9，Story 9-3/9-4）
+    /** 兽医·AI 咨询订单只读查看。 */
+    public static final String ORDER_VIEW = "order.view";
+    /** 订单 / 收入统计导出。 */
+    public static final String ORDER_EXPORT = "order.export";
+
+    // 虚拟账号（V1.1 Epic 9，Story 9-8）
+    /** 虚拟账号与种子批量上传管理。 */
+    public static final String VIRTUAL_ACCOUNT_MANAGE = "virtual_account.manage";
+
+    // 运营配置（V1.1 Epic 9，Story 9-2/9-6）——定价 / PawCoin / 红色超额阈值等
+    /** 配置查看。 */
+    public static final String CONFIG_VIEW = "config.view";
+    /** 配置编辑（定价 / PawCoin / 阈值）。 */
+    public static final String CONFIG_EDIT = "config.edit";
+
+    // 兽医分成月结对账（V1.1 Epic 9，Story 9-5）
+    /** 月结对账查看。 */
+    public static final String SETTLEMENT_VIEW = "settlement.view";
+    /** 月结确认打款 / 归档（财务）。 */
+    public static final String SETTLEMENT_PAYOUT = "settlement.payout";
+
+    // 支付记录查询 / 风险观测（V1.1 Epic 9，Story 9-6）
+    /** 支付记录通用查询。 */
+    public static final String PAYMENT_VIEW = "payment.view";
+    /** 红色超额只读监控 + 人工标记（无自动拦截，AB-7A）。 */
+    public static final String RISK_VIEW = "risk.view";
+
     // 后台账号 / 审计（Epic 1）
     public static final String ADMIN_CREATE_ACCOUNT = "admin.create_account";
     public static final String ADMIN_DEACTIVATE = "admin.deactivate";
@@ -60,10 +92,16 @@ public final class AdminPermissions {
             VET_VIEW, VET_CREATE, VET_BAN, VET_RESET_PASSWORD, VET_QUALIFY,
             USER_VIEW, USER_DEACTIVATE, USER_DELETE,
             CONTENT_VIEW_REPORTS, CONTENT_TAKEDOWN, CONTENT_RESTORE, CONTENT_PROACTIVE_TAKEDOWN,
+            CONTENT_EXPORT, CONTENT_VIEW_REPORTERS,
             CONSULT_VIEW_ANOMALIES, CONSULT_HANDLE, CONSULT_VIEW_SESSIONS,
             RATING_VIEW,
             SUPPORT_HANDLE,
             REFUND_SUBMIT, REFUND_APPROVE, REFUND_PAYOUT,
+            ORDER_VIEW, ORDER_EXPORT,
+            VIRTUAL_ACCOUNT_MANAGE,
+            CONFIG_VIEW, CONFIG_EDIT,
+            SETTLEMENT_VIEW, SETTLEMENT_PAYOUT,
+            PAYMENT_VIEW, RISK_VIEW,
             ADMIN_CREATE_ACCOUNT, ADMIN_DEACTIVATE, ADMIN_VIEW_LOGS);
 
     private AdminPermissions() {

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!-- 运营配置（Story 9.2）：定价 / PawCoin / 充值档位。改值只影响后续（历史落快照）；变更留审计。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title>运营配置 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1>运营配置</h1>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+        <p class="hint">改动仅影响后续新成交；历史订单按成交快照不变。每次修改记入变更日志与审计哈希链。</p>
+
+        <!-- 定价（AB-8A/8F）——仅 config.edit 可改；否则只读 -->
+        <h2>定价</h2>
+        <form method="post" th:action="@{/admin/config/pricing}"
+              sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.edit')">
+            <label>兽医单次咨询价（IDR）
+                <input type="number" name="vetConsultPrice" min="0" th:value="${pricing.vetConsultPrice}"/></label>
+            <label>兽医分成（%，0–100）
+                <input type="number" name="vetShareRate" min="0" max="100" th:value="${pricing.vetShareRate}"/></label>
+            <label>AI 详情解锁价（IDR）
+                <input type="number" name="aiUnlockPrice" min="0" th:value="${pricing.aiUnlockPrice}"/></label>
+            <label>身份证高清图下载价（IDR）
+                <input type="number" name="idHdDownloadPrice" min="0" th:value="${pricing.idHdDownloadPrice}"/></label>
+            <label>每月免费额度（0–35）
+                <input type="number" name="monthlyFreeQuota" min="0" max="35" th:value="${pricing.monthlyFreeQuota}"/></label>
+            <button type="submit" class="btn btn-primary btn-sm">保存定价</button>
+        </form>
+        <p class="hint" sec:authorize="!hasRole('SUPER_ADMIN') and !hasAuthority('config.edit')">
+            当前兽医单价 <span th:text="${pricing.vetConsultPrice}">0</span> / 分成
+            <span th:text="${pricing.vetShareRate}">0</span>% / AI
+            <span th:text="${pricing.aiUnlockPrice}">0</span> / HD
+            <span th:text="${pricing.idHdDownloadPrice}">0</span> / 免费额度
+            <span th:text="${pricing.monthlyFreeQuota}">0</span>（只读，需 config.edit 权限修改）
+        </p>
+
+        <!-- PawCoin（AB-6A/6C）-->
+        <h2>PawCoin</h2>
+        <form method="post" th:action="@{/admin/config/pawcoin}"
+              sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.edit')">
+            <label>退款转币溢价（%，0–50）
+                <input type="number" name="premiumRate" min="0" max="50" th:value="${pawcoin.premiumRate}"/></label>
+            <label>暂停充值
+                <input type="checkbox" name="topupPaused" value="true" th:checked="${pawcoin.topupPaused}"/></label>
+            <button type="submit" class="btn btn-primary btn-sm">保存 PawCoin 配置</button>
+        </form>
+
+        <!-- 充值档位（AB-6B）——保底 ≥1 启用 -->
+        <h2>充值档位</h2>
+        <p class="hint">至少保留 1 个启用档位；停用不影响历史订单。</p>
+        <table>
+            <thead>
+            <tr><th>档位</th><th>金额（IDR）</th><th>状态</th><th>操作</th></tr>
+            </thead>
+            <tbody>
+            <tr th:each="t : ${tiers}">
+                <td th:text="${t.tierKey}">10k</td>
+                <td th:text="${t.amountIdr}">10000</td>
+                <td th:text="${t.enabled} ? '启用' : '停用'">启用</td>
+                <td sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.edit')">
+                    <form method="post" th:action="@{/admin/config/tiers/{id}/enabled(id=${t.id})}" style="display:inline">
+                        <input type="hidden" name="enabled" th:value="${!t.enabled}"/>
+                        <button type="submit" class="btn btn-neutral btn-sm"
+                                th:text="${t.enabled} ? '停用' : '启用'">切换</button>
+                    </form>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>
