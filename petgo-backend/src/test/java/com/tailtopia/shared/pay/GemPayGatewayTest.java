@@ -30,19 +30,25 @@ class GemPayGatewayTest {
 
     // ===== 验签 =====
 
+    /** 构造一个签名正确的回调正文（用与 gateway 同配置：merchantId + projectNo=PROJECT001）。 */
+    private Map<String, Object> signedCallback(String merchantId, String secret,
+            String requestId, String amount, String channel) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("request_id", requestId);
+        body.put("amount", amount);
+        body.put("channel", channel);
+        body.put("status", "success");
+        body.put("ref_id", "GP-REF-1");
+        body.put("signature",
+                GemPaySignature.callback(requestId, amount, merchantId, channel, secret, "PROJECT001"));
+        return body;
+    }
+
     @Test
     void verifyCallbackAcceptsCorrectSignature() {
         String merchantId = "KMB0000";
         String secret = "f3c53530fc444b3afa63d2c406dd7438";
-        String requestId = "R19K251220_DE4DA303A8AD";
-        // 与生产同一 UNCONFIRMED 公式生成期望签名。
-        String sig = GemPaySignature.callback(requestId, merchantId, secret);
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("request_id", requestId);
-        body.put("ref_id", "GP-REF-1");
-        body.put("status", "success");
-        body.put("signature", sig);
-
+        Map<String, Object> body = signedCallback(merchantId, secret, "R19K251220", "10000", "MBayar_QR");
         assertThat(gateway(merchantId, secret).verifyCallback(body)).isTrue();
     }
 
@@ -50,36 +56,30 @@ class GemPayGatewayTest {
     void verifyCallbackAcceptsUppercaseSignature() {
         String merchantId = "KMB0000";
         String secret = "sekret";
-        String requestId = "R-2";
-        String sig = GemPaySignature.callback(requestId, merchantId, secret).toUpperCase();
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("request_id", requestId);
-        body.put("signature", sig); // 大小写不敏感（比对前 toLowerCase）
+        Map<String, Object> body = signedCallback(merchantId, secret, "R-2", "20000", "MBayar_QR");
+        body.put("signature", body.get("signature").toString().toUpperCase()); // 大小写不敏感
         assertThat(gateway(merchantId, secret).verifyCallback(body)).isTrue();
     }
 
     @Test
     void verifyCallbackRejectsTamperedSignature() {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("request_id", "R-3");
-        body.put("signature", "deadbeefdeadbeefdeadbeefdeadbeef");
+        Map<String, Object> body = signedCallback("KMB0000", "sekret", "R-3", "10000", "MBayar_QR");
+        body.put("signature", "deadbeefdeadbeefdeadbeefdeadbeef"); // 篡改
         assertThat(gateway("KMB0000", "sekret").verifyCallback(body)).isFalse();
     }
 
     @Test
     void verifyCallbackRejectsMissingFields() {
         Map<String, Object> noSig = new LinkedHashMap<>();
-        noSig.put("request_id", "R-4");
+        noSig.put("request_id", "R-4"); // 缺 amount/channel/signature
         assertThat(gateway("KMB0000", "sekret").verifyCallback(noSig)).isFalse();
         assertThat(gateway("KMB0000", "sekret").verifyCallback(null)).isFalse();
     }
 
     @Test
     void verifyCallbackFailsClosedWhenSecretMissing() {
-        // secret 未配置 → 一律拒（fail-closed），即便签名字段存在。
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("request_id", "R-5");
-        body.put("signature", "whatever");
+        // secret 未配置 → 一律拒（fail-closed），即便签名字段齐全。
+        Map<String, Object> body = signedCallback("KMB0000", "sekret", "R-5", "10000", "MBayar_QR");
         assertThat(gateway("KMB0000", "").verifyCallback(body)).isFalse();
     }
 

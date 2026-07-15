@@ -167,13 +167,18 @@ public static GatewayStatus fromGemPay(String s) {
 }
 ```
 
-### 6.3 ⛔ 验签公式缺失的临时策略
+### 6.3 ✅ 验签公式已确认（2026-07-15 sandbox 实测反推）
 
-文档未给收款回调签名公式。**上 live 前必须问 GemPay 补齐**。在拿到之前：
+文档未给收款回调签名公式，经真实 sandbox 回调反推确认：**收款回调 = `/direct` 完全同式**
 
-- **默认 fail-closed**：`GemPayGateway.verifyCallback` 在收款回调场景，若未配置/未知公式 → 返回 `false`（拒），沿用 `PayConfig` 「资金入口配置错误绝不静默放行」的既定护栏（记忆库「prod 收假 idToken」事故防线）。
-- **L0/L1 用 `mode=stub`**：桩网关 `verifyCallback` 只比固定 `callbackToken`，状态机/去重照常可验，不依赖真实公式。
-- **合理猜测（待 GemPay 确认，勿凭此上 live）**：多半是 `md5(request_id + merchant_id + merchant_secret + 'callback')`（对齐放款回调 `md5(partner_ref_id + merchant_id + merchant_secret + 'callback')` 的构造）。**确认后写一条 L0 向量锁死**。
+```
+md5(request_id + amount + merchant_id + channel + merchant_secret + project_no)
+```
+
+实测向量：`STAGCB1784102287 + 10000 + KMB0064 + MBayar_QR + <secret> + NO8989 → 808e13c586ef44893c9d86d98a08e00e`（已写进 `GemPaySignatureTest.callbackMatchesRealSandboxVector` L0 锁死）。
+
+- `verifyCallback` 用配置的 `merchant_id`/`project_no`（权威，不信正文）+ 回调正文的 `request_id`/`amount`/`channel` + 配置 `secret` 计算，常量时间比对。
+- 反推方法留档：一笔 `/direct` 的 `callback_url` 指向抓包端点（webhook.site），浏览器完成 sandbox mock 付款 → 抓到真实回调字段 + `signature` → 暴力比对各字段拼接的 md5 命中。
 
 ### 6.4 金额核对（补 Story 1.1 Review 遗留 P2）
 
@@ -295,7 +300,7 @@ GemPay 放款是**两步**，与 Midtrans Iris 单步 `disburse()` 不同：
 
 ## 13. 开放问题 / 待 GemPay 确认（上 live 前收敛）
 
-1. ⛔ **收款回调 `paymentCallback` 的 `signature` 验签公式**（文档缺失，最高优先，阻塞 L2 与安全上线）。
+1. ✅ **收款回调 `signature` 验签公式**（已 2026-07-15 sandbox 实测反推确认 = `/direct` 同式，见 §6.3；已锁 L0 向量并部署）。
 2. **Sandbox 凭证**：`merchant_id` / `project_no` / `merchant_secret`（整条资金脊柱 lead time，建议即刻并行催）。
 3. **回调重试与超时**：GemPay 回调失败重试策略？收款有无 pending/expired 回调，还是只能靠 `/history` 轮询判过期？（影响意图 EXPIRED 兜底）。
 4. **`admin_fee` 承担方**：`total_amount = amount − admin_fee`（商户实收）。PawCoin 充值按 `amount`（用户支付额）发币还是按 `total_amount`？admin_fee 计入平台成本/浮存 → 关联 Story 9-2 定价与浮存门槛。
