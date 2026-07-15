@@ -35,6 +35,31 @@
 
 ---
 
+## 0.5 集成分支模型（发布边界 · 长期有效）
+
+物理隔离见上表；这里是**分支 / 发布边界**——staging 在研发流里扮演什么角色。
+
+**`stag` = 长期集成线（integration branch），不是某个功能分支。** 多个功能分支在此汇流做集成测试，测好的**选择性**合入 `main` 上线。
+
+```
+  功能分支            汇总分支           集成线(=staging)      生产
+  feat/content-mod ─┐
+  v1.1-epic1..9 ────┼─→  v1.1-dev  ─────→   stag   ──选择性──→  main
+  feat/X ───────────┘   (功能测好谁先上 main，其余留 stag 继续)
+        merge              merge            merge        merge
+```
+
+**边界规则：**
+- **不直接向 `stag` 提交代码**——一切经**合并**进入（保持 stag 可追溯为各功能分支之和）。
+- **功能分支 → 汇总分支（如 `v1.1-dev`）→ `stag`**。同系列多 epic 先在 `v1.1-dev` 汇总，再整体合 `stag`。
+- **`stag` → `main` 是选择性的**：某功能在 staging 验好了就单独合 `main` 上线，其它功能继续留 `stag` 迭代。
+- **承重假设：功能之间 DB 不交叉**（各占独立表 / 迁移号段）。一旦两个功能改同一张表，选择性上线会很难——设计时保持功能间 schema 互不相干。
+- **staging 库 = 所有在飞功能迁移的并集**（例：`petgo_stag` 同时有内容审核 `V47–V56` 与 v1.1 `V60–V83`）。这决定了 Flyway 的处理方式，见 §H。
+
+> 具体一次合并 + 部署的实例留档见 `docs/deploy-record-2026-07-15-gempay-staging.md`（GemPay 收款接入那次）。
+
+---
+
 ## A. 决策（已定稿）
 
 - [x] **A1 · Profile** = `prod`（真 Google 登录、安全规则同生产，保真最高）。
@@ -174,3 +199,57 @@
   ssh dai@62.146.239.156 'docker exec petgo-postgres pg_dump -U petgo petgo_stag' > petgo_stag-backup-$(date +%Y%m%d-%H%M%S).sql
   ```
 - 生产资源（`petgo-server` 容器、`:latest` 镜像、`petgo` 库、Redis DB2）一概不动。
+
+---
+
+## H. 把一个功能分支合并进 stag（含 Flyway 并存）
+
+> 场景：某功能分支开发完，要进 staging 做集成验证。这是 §0.5 模型的**执行步骤**。
+> 实例参考：2026-07-15 把整条 v1.1（epic1-9）合入 stag（14 个并集式冲突，详见该次 commit）。
+
+### H1 · 先汇总（若属某系列）
+同系列多 epic 先合到汇总分支再整体入 stag，避免零散合并：
+```bash
+git checkout v1.1-dev && git merge --ff-only <feature-branch>   # 通常快进
+```
+
+### H2 · 合并进 stag
+```bash
+git checkout stag
+git merge --ff-only origin/stag            # 先把本地 stag 同步到最新
+git merge --no-ff --no-commit v1.1-dev     # 发起合并，先不提交，看冲突
+git diff --name-only --diff-filter=U       # 冲突文件清单
+```
+
+### H3 · 解冲突（经验：绝大多数是并集）
+两个功能往同一批**共享文件**各加各的，多数**保留两侧**即可：
+- **枚举 / 权限码 / 审计动作 / i18n / 仓库方法 / getter**：并集保留（如 `NotificationType`、`AdminPermissions`、`AuditActions`、`messages_*.properties`、`UserRepository`、`User` getters、注销联动多块并存）。
+- ⚠️ **真冲突要按语义定夺**（非简单并集）：
+  - **方法签名分叉**（如 `CommentRepository.findRepliesForParents` 一侧带 `viewerId` 一侧不带）→ 看 `@Query` 引用的参数 + 调用点，取能自洽的那个签名，另一侧的**新方法**照常并入。
+  - **构造器参数**（如 `AccountDeletionService` 测试）→ 取**两侧并集**、按目标构造器**字段顺序**排列。
+  - **枚举末值补逗号**：一侧原是最后一个值（无逗号），并入另一侧后要补 `,`。
+  - **重复字段去重**：两侧都加了同名字段（如 `_doneCount`）→ 只留一个。
+  - **模板导航**：并入新链接 + 保留正确的 `sec:authorize` 授权。
+
+### H4 · 验证（提交前必过）
+```bash
+cd petgo-backend && ./mvnw -B -o test-compile     # 期望 EXIT=0
+cd ../petgo_app && flutter gen-l10n && flutter analyze lib   # arb 变了要先 gen-l10n；期望 No issues
+```
+> 关注「死码 warning」——可能是某侧功能被另一侧重写覆盖的**语义损失**（如某功能字段成 unused）。要么重新集成，要么移除并**在 commit 里显式标注该功能被覆盖**。
+
+### H5 · 提交合并 + push
+```bash
+git add <解决的冲突文件>
+git commit                              # 完成合并（消息里记冲突解决要点 + 任何语义损失）
+git push origin stag                    # ⚠️ 需你明确同意；shared 分支
+```
+
+### H6 · Flyway 并存铁律（关键，别踩）
+- **stag 库 = 各功能迁移的并集**。只要**迁移文件都在 stag 分支上**，`validate` 就不会报「已应用但找不到」。
+- ⚠️ **绝不要把裸功能分支直接部署到 `petgo_stag`**：功能分支缺其它功能的迁移文件 → Flyway 报 missing migration、容器起不来。**一律先合进 `stag`，再部署 `stag`**（部署走 §D/§G）。
+- **`out-of-order=true` 已开**（`application.yml` `spring.flyway.out-of-order`）：功能按「谁测好谁先上」顺序合 `main`，生产 apply 顺序**非单调**（如先上 V60-83、后补 V47-56 的低号），必须开此开关，否则后上的功能在生产 `validate` 失败。
+- **号段纪律（决策 E2）**：新功能迁移号取**当前全局 max 之后**顺延；已提交迁移**冻结**，改动一律**新起 `ALTER`**，绝不改旧文件（改旧文件会破坏已部署环境的 checksum 校验）。
+
+### H7 · 部署到 staging
+合并 + push 后，按 §D / §G 用 `scripts/deploy-backend-stag.sh` 部署（构建 stag → 8085 → Flyway 在 `petgo_stag` 上顺延应用新迁移）。
