@@ -126,6 +126,9 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+    # 集成分支模型（stag 汇流 + 选择性上 main）下，功能按"谁测好谁先上"顺序上生产，迁移号无法保证单调
+    # 应用顺序（如先上 V60-83、后补 V47-56）→ 必须允许乱序补应用低号迁移，否则后上的功能在生产 validate 失败。
+    out-of-order: true
   data:
     redis:
       host: ${REDIS_HOST:localhost}
