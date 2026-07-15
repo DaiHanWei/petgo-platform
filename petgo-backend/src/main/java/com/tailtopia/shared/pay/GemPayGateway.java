@@ -69,9 +69,8 @@ public class GemPayGateway implements PaymentGateway {
         form.add("signature", signature);
         form.add("description", safeDescription(request.purpose())); // 无 PII / 无特殊字符（避 WAF 拦）
         form.add("callback_url", g.getCallbackUrl());
-        if (QRIS_CODE.equals(channelCode)) {
-            form.add("response_qr", "url"); // QRIS 返回二维码图片链接（qrcode_url）
-        }
+        // 不请求 response_qr=url：qrcode_url 是 GemPay 托管网页（text/html，非图片），App 无法直接当图渲染。
+        // 改用 qrcode（QRIS/EMVCo 串）由 App 本地生成二维码——这才是真 QRIS 能被银行 App 扫的正确载荷。
 
         Map<String, Object> response;
         try {
@@ -104,9 +103,9 @@ public class GemPayGateway implements PaymentGateway {
         if (gatewayRef == null) {
             throw new PayException("支付网关收款响应缺 ref_id");
         }
-        // 付款载荷按渠道取：QRIS→qrcode_url/qrcode；E-Wallet→ewallet_url；VA→virtual_account。
+        // 付款载荷按渠道取：QRIS→qrcode（QRIS/EMVCo 串，App 本地生成二维码，不用 qrcode_url 网页）；
+        // E-Wallet→ewallet_url（deeplink）；VA→virtual_account（账号）。
         String payload = firstNonBlank(
-                str(response.get("qrcode_url")),
                 str(response.get("qrcode")),
                 str(response.get("ewallet_url")),
                 str(response.get("virtual_account")));

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
@@ -230,7 +231,10 @@ class _RechargePageState extends ConsumerState<RechargePage> {
   // ---- 支付中（载荷 + 轮询）----
   Widget _payingView(AppLocalizations l10n) {
     final payload = _topup?.payload;
-    final isHttp = payload != null && (payload.startsWith('http://') || payload.startsWith('https://'));
+    // GemPay 返回 QRIS/EMVCo 串（qrcode），本地生成二维码渲染（不是图片 URL）。
+    // 兼容历史：若 payload 恰是 http(s) 图片链接则回退 Image.network；空则占位框。
+    final hasPayload = payload != null && payload.isNotEmpty;
+    final isHttp = hasPayload && (payload.startsWith('http://') || payload.startsWith('https://'));
     return ListView(
       key: const ValueKey('rechargePaying'),
       padding: const EdgeInsets.all(AppSpacing.screenEdge),
@@ -239,10 +243,27 @@ class _RechargePageState extends ConsumerState<RechargePage> {
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink)),
         const SizedBox(height: AppSpacing.lg),
         Center(
-          child: isHttp
-              ? Image.network(payload, width: 220, height: 220, fit: BoxFit.contain,
-                  errorBuilder: (_, _, _) => _stubQrBox(l10n))
-              : _stubQrBox(l10n),
+          child: !hasPayload
+              ? _stubQrBox(l10n)
+              : isHttp
+                  ? Image.network(payload, width: 220, height: 220, fit: BoxFit.contain,
+                      errorBuilder: (_, _, _) => _stubQrBox(l10n))
+                  : Container(
+                      width: 220,
+                      height: 220,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.line),
+                      ),
+                      child: QrImageView(
+                        data: payload,
+                        version: QrVersions.auto,
+                        backgroundColor: Colors.white,
+                        errorStateBuilder: (_, _) => _stubQrBox(l10n),
+                      ),
+                    ),
         ),
         const SizedBox(height: AppSpacing.md),
         Center(child: Text(l10n.rechargeScanHint, style: const TextStyle(fontSize: 13, color: AppColors.ink2))),
