@@ -201,12 +201,16 @@ public class GemPayGateway implements PaymentGateway {
             return false;
         }
         String requestId = str(body.get("request_id"));
+        String amount = str(body.get("amount"));
+        String channel = str(body.get("channel"));
         String signature = str(body.get("signature"));
-        if (requestId == null || signature == null) {
+        if (requestId == null || amount == null || channel == null || signature == null) {
             return false;
         }
-        // ⚠️ UNCONFIRMED 公式（GemPay 文档缺失，见 GEMPAY-INTEGRATION-DESIGN §6.3）。猜错只会 fail-closed 拒合法回调，不放行伪造。
-        String expected = GemPaySignature.callback(requestId, g.getMerchantId(), g.getMerchantSecret());
+        // 与 /direct 同式（2026-07-15 sandbox 实测确认）：request_id+amount+merchant_id+channel+secret+project_no。
+        // merchant_id/project_no 用配置（权威，不信正文）；request_id/amount/channel 取回调正文。
+        String expected = GemPaySignature.callback(
+                requestId, amount, g.getMerchantId(), channel, g.getMerchantSecret(), g.getProjectNo());
         return MessageDigest.isEqual(
                 expected.getBytes(StandardCharsets.UTF_8),
                 signature.toLowerCase().getBytes(StandardCharsets.UTF_8));

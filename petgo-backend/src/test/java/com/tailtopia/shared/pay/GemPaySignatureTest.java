@@ -42,10 +42,19 @@ class GemPaySignatureTest {
     }
 
     @Test
-    void callbackFormulaIsDeterministic() {
-        // ⚠️ UNCONFIRMED 公式（文档缺失，见 §6.3）——仅锁「机制确定性」，非「公式正确」。
-        String a = GemPaySignature.callback("R1", "M1", "SEC");
-        String b = GemPaySignature.md5Hex("R1" + "M1" + "SEC" + "callback");
-        assertThat(a).isEqualTo(b).hasSize(32).matches("[0-9a-f]+");
+    void callbackMatchesRealSandboxVector() {
+        // 2026-07-15 真实 sandbox 回调反推确认：收款回调 = /direct 同式。
+        String sig = GemPaySignature.callback(
+                "STAGCB1784102287", "10000", "KMB0064", "MBayar_QR",
+                "2dbe52f2ae7bf285eff585e9291f60ee", "NO8989");
+        assertThat(sig).isEqualTo("808e13c586ef44893c9d86d98a08e00e");
+    }
+
+    @Test
+    void callbackEqualsChargeFormula() {
+        // 回调与 /direct 同式：同参应产出同签名。
+        String cb = GemPaySignature.callback("R1", "50000", "M1", "MBayar_QR", "SEC", "P1");
+        String ch = GemPaySignature.charge("R1", 50000L, "M1", "MBayar_QR", "SEC", "P1");
+        assertThat(cb).isEqualTo(ch);
     }
 }

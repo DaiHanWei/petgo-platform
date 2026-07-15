@@ -30,14 +30,15 @@ final class GemPaySignature {
     }
 
     /**
-     * 收款回调验签。<b>⚠️ UNCONFIRMED</b>——GemPay 文档<b>未给收款回调签名公式</b>（其余接口/放款回调都给了）。
-     * 此处对齐放款回调 {@code md5(partner_ref_id + merchant_id + merchant_secret + 'callback')} 的构造做**合理猜测**：
-     * {@code md5(request_id + merchant_id + merchant_secret + 'callback')}。
-     * <b>上 live 前必须找 GemPay 确认真实公式</b>（见 {@code GEMPAY-INTEGRATION-DESIGN.md §6.3}）。
-     * 猜错只会导致合法回调被拒（fail-closed），不会放行伪造——因公式含 {@code merchantSecret}，攻击者无法伪造。
+     * 收款回调验签。<b>2026-07-15 sandbox 实测反推确认</b>：与 {@link #charge} <b>完全同式</b>——
+     * {@code md5(request_id + amount + merchant_id + channel + merchant_secret + project_no)}。
+     * （文档未给此公式，经真实 sandbox 回调 signature 比对反推：向量 {@code STAGCB1784102287 + 10000 +
+     * KMB0064 + MBayar_QR + <secret> + NO8989 → 808e13c586ef44893c9d86d98a08e00e}。）
+     * {@code amount} 用回调正文原样字符串；{@code merchantId}/{@code projectNo} 用配置（权威）。
      */
-    static String callback(String requestId, String merchantId, String merchantSecret) {
-        return md5Hex(requestId + merchantId + merchantSecret + "callback");
+    static String callback(String requestId, String amount, String merchantId, String channel,
+            String merchantSecret, String projectNo) {
+        return md5Hex(requestId + amount + merchantId + channel + merchantSecret + projectNo);
     }
 
     /** md5 十六进制小写（确定性，L0 可断言）。纯 JDK。 */
