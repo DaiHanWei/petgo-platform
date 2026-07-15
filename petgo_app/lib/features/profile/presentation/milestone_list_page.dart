@@ -10,10 +10,13 @@ import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../data/milestone_repository.dart';
+import '../data/newbie_task_repository.dart';
 import '../domain/milestone.dart';
 import '../domain/milestone_checkin_prompt_copy.dart';
 import '../domain/milestone_share.dart';
 import '../domain/milestone_titles.dart';
+import '../domain/newbie_task_labels.dart';
+import '../domain/newbie_tasks.dart';
 import 'widgets/milestone_celebration.dart';
 
 /// 里程碑列表页（Story 8.2 · FR-42）。壳→真页：顶部宠物信息 + 总进度 + L/M/S 三级分区徽章
@@ -90,11 +93,16 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
           onRetry: () => ref.invalidate(milestoneListProvider),
         ),
         data: (data) => RefreshIndicator(
-          onRefresh: () async => ref.invalidate(milestoneListProvider),
+          onRefresh: () async {
+            ref.invalidate(milestoneListProvider);
+            ref.invalidate(newbieTasksProvider);
+          },
           child: ListView(
             padding: const EdgeInsets.fromLTRB(
                 AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.xl),
             children: [
+              const _NewbieCard(),
+              const SizedBox(height: AppSpacing.lg),
               _Header(data: data),
               const SizedBox(height: AppSpacing.lg),
               for (final group in data.groups) ...[
@@ -172,6 +180,143 @@ class _Header extends StatelessWidget {
               color: AppColors.mint,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 新手任务卡（Story 7.3 · FR-47）：里程碑页顶部 6 任务勾选进度；全完成显 Lulus Pemula 达成态。
+/// 独立 AsyncValue（不阻塞里程碑列表）；loading 骨架 / error 可重试——离线不留白。
+class _NewbieCard extends ConsumerWidget {
+  const _NewbieCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final async = ref.watch(newbieTasksProvider);
+    return async.when(
+      loading: () => Container(
+        key: const ValueKey('newbieCardSkeleton'),
+        height: 96,
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: const Center(
+          child: SizedBox(
+              width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+        ),
+      ),
+      error: (_, _) => Container(
+        key: const ValueKey('newbieCardError'),
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(l10n.newbieCardError,
+                  style: const TextStyle(fontSize: 13, color: AppColors.muted)),
+            ),
+            TextButton(
+              onPressed: () => ref.invalidate(newbieTasksProvider),
+              child: Text(l10n.newbieCardRetry,
+                  style: const TextStyle(color: AppColors.mint, fontWeight: FontWeight.w600)),
+            ),
+          ],
+        ),
+      ),
+      data: (tasks) => tasks.allDone ? _newbieDoneBanner(l10n) : _newbieChecklist(context, l10n, tasks),
+    );
+  }
+
+  /// 全完成：紧凑达成横幅（不再铺开清单，减少长期噪音）。
+  Widget _newbieDoneBanner(AppLocalizations l10n) => Container(
+        key: const ValueKey('newbieCardDone'),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.mintTint,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.lineViolet),
+        ),
+        child: Row(
+          children: [
+            const Text('🎓', style: TextStyle(fontSize: 20)),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Text(l10n.newbieCardAllDone,
+                  style: const TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.mint700)),
+            ),
+          ],
+        ),
+      );
+
+  /// 进行中：标题 + 进度 + 6 行勾选。
+  Widget _newbieChecklist(BuildContext context, AppLocalizations l10n, NewbieTasks tasks) {
+    final locale = Localizations.localeOf(context);
+    final ratio = tasks.total == 0 ? 0.0 : tasks.completedCount / tasks.total;
+    return Container(
+      key: const ValueKey('newbieCard'),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(l10n.newbieCardTitle,
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink)),
+              ),
+              Text(l10n.newbieCardProgress(tasks.completedCount, tasks.total),
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.mint)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: ratio,
+              minHeight: 6,
+              backgroundColor: AppColors.cream2,
+              color: AppColors.mint,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          for (final item in tasks.items)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: Row(
+                children: [
+                  Icon(
+                    item.done ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
+                    size: 20,
+                    color: item.done ? AppColors.mint : AppColors.muted,
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Text(
+                      localizedNewbieTaskLabel(item.key, locale),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: item.done ? AppColors.ink2 : AppColors.ink,
+                        decoration: item.done ? TextDecoration.lineThrough : null,
+                        decorationColor: AppColors.muted,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );

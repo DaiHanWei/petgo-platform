@@ -14,6 +14,9 @@ public interface HealthRecordRepository extends JpaRepository<HealthRecord, Long
     /** 归属校验取单条（记录须归属该宠物，否则空 → 调用方 404 防枚举）。 */
     Optional<HealthRecord> findByIdAndPetProfileId(long id, long petProfileId);
 
+    /** 该宠物是否有 ≥1 条健康记录（Story 7.3 第 6 新手任务判定）。 */
+    boolean existsByPetProfileId(long petProfileId);
+
     /** 档案删除级联硬删（Story 7.1 · PDP）。 */
     @Transactional
     void deleteByPetProfileId(long petProfileId);

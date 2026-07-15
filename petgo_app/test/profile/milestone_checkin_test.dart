@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/profile/data/milestone_repository.dart';
+import 'package:tailtopia/features/profile/data/newbie_task_repository.dart';
 import 'package:tailtopia/features/profile/domain/milestone.dart';
+import 'package:tailtopia/features/profile/domain/newbie_tasks.dart';
 import 'package:tailtopia/features/profile/presentation/milestone_list_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
@@ -50,7 +52,12 @@ class _FakeRepo implements MilestoneRepository {
 }
 
 Widget _wrap(_FakeRepo repo) => ProviderScope(
-      overrides: [milestoneRepositoryProvider.overrideWithValue(repo)],
+      overrides: [
+        milestoneRepositoryProvider.overrideWithValue(repo),
+        // 顶部新手卡不参与本用例：达成态渲染紧凑横幅，避免真网络调用致 pumpAndSettle 超时。
+        newbieTasksProvider.overrideWith((ref) async => const NewbieTasks(
+              items: [], completedCount: 6, total: 6, lulusPemulaUnlocked: true)),
+      ],
       child: const MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/profile/data/milestone_repository.dart';
+import 'package:tailtopia/features/profile/data/newbie_task_repository.dart';
 import 'package:tailtopia/features/profile/domain/milestone.dart';
+import 'package:tailtopia/features/profile/domain/newbie_tasks.dart';
 import 'package:tailtopia/features/profile/presentation/milestone_list_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
@@ -39,6 +41,9 @@ Widget _wrap({MilestoneList? data, Object? error}) => ProviderScope(
           if (error != null) throw error;
           return data ?? _sample();
         }),
+        // 新手卡：这些用例不关心，用达成态渲染紧凑横幅，避免真网络调用干扰。
+        newbieTasksProvider.overrideWith((ref) async => const NewbieTasks(
+              items: [], completedCount: 6, total: 6, lulusPemulaUnlocked: true)),
       ],
       child: const MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -85,7 +90,9 @@ void main() {
     await tester.pumpWidget(_wrap());
     await tester.pumpAndSettle();
 
-    // C-S1：已完成 → 重温 P-35 统一庆祝。
+    // C-S1：已完成 → 重温 P-35 统一庆祝。（顶部新手卡下移 S 分区，先滚入可视区。）
+    await tester.ensureVisible(find.byKey(const ValueKey('milestoneBadge_C-S1')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('milestoneBadge_C-S1')));
     await tester.pump(); // 打开
     await tester.pump(const Duration(milliseconds: 300));
@@ -98,6 +105,8 @@ void main() {
     await tester.pumpWidget(_wrap());
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.byKey(const ValueKey('milestoneBadge_C-S6')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('milestoneBadge_C-S6')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('milestoneCheckedIn')), findsOneWidget);

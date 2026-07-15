@@ -14,18 +14,47 @@ import org.junit.jupiter.api.Test;
 class MilestoneCatalogTest {
 
     @Test
-    void catHasThirtyMilestonesSplit15_10_5() {
-        assertLevels(PetType.CAT, 15, 10, 5, 30);
+    void catHasThirtyOneMilestonesSplit16_10_5() {
+        // 7.3：聚合里程碑 Lulus Pemula（C-S16）令 S 级 15→16、总 30→31。
+        assertLevels(PetType.CAT, 16, 10, 5, 31);
     }
 
     @Test
-    void dogHasThirtyMilestonesSplit15_10_5() {
-        assertLevels(PetType.DOG, 15, 10, 5, 30);
+    void dogHasThirtyOneMilestonesSplit16_10_5() {
+        assertLevels(PetType.DOG, 16, 10, 5, 31);
     }
 
     @Test
-    void otherHasFifteenMilestonesSplit8_4_3() {
-        assertLevels(PetType.OTHER, 8, 4, 3, 15);
+    void otherHasSixteenMilestonesSplit9_4_3() {
+        // 7.3：OTHER 的 Lulus Pemula 是 G-S9，S 级 8→9、总 15→16。
+        assertLevels(PetType.OTHER, 9, 4, 3, 16);
+    }
+
+    @Test
+    void lulusPemulaIsLastSystemAutoSNodePerType() {
+        for (PetType type : PetType.values()) {
+            String code = MilestoneCatalog.lulusPemulaCode(type);
+            List<MilestoneDefinition> list = MilestoneCatalog.forType(type);
+            MilestoneDefinition lp = MilestoneCatalog.byCode(code);
+            assertThat(MilestoneCatalog.isLulusPemula(code)).isTrue();
+            assertThat(lp.level()).as("%s Lulus Pemula is S level", type).isEqualTo(MilestoneLevel.S);
+            assertThat(lp.trigger()).isEqualTo(MilestoneTriggerType.SYSTEM_AUTO);
+            // 末位 sortOrder（不扰动既有 S1–S15/M/L 序）。
+            assertThat(lp.sortOrder()).isEqualTo(list.get(list.size() - 1).sortOrder());
+        }
+        assertThat(MilestoneCatalog.lulusPemulaCode(PetType.CAT)).isEqualTo("C-S16");
+        assertThat(MilestoneCatalog.lulusPemulaCode(PetType.DOG)).isEqualTo("D-S16");
+        assertThat(MilestoneCatalog.lulusPemulaCode(PetType.OTHER)).isEqualTo("G-S9");
+    }
+
+    @Test
+    void newbiePrereqSuffixesAreS1ThroughS5() {
+        assertThat(MilestoneCatalog.NEWBIE_PREREQ_SUFFIXES)
+                .containsExactlyInAnyOrder("S1", "S2", "S3", "S4", "S5");
+        // 三清单 S1–S5 语义一致（统一后缀可判定）。
+        for (String prefix : List.of("C", "D", "G")) {
+            assertThat(MilestoneCatalog.byCode(prefix + "-S1").titleZh()).isEqualTo("宠物档案创建完成");
+        }
     }
 
     private void assertLevels(PetType type, int s, int m, int l, int total) {

@@ -84,6 +84,8 @@ public class MilestoneAutoCompleteListener {
         if (suffix != null) {
             completion.completeForOwner(e.ownerId(), suffix, MilestoneCompletionSource.SYSTEM_AUTO);
         }
+        // Lulus Pemula 新手任务⑥（录入健康记录，任一 type）：可能是最后一块 → 尝试聚合解锁（7.3）。
+        completion.maybeUnlockLulusPemulaForOwner(e.ownerId());
     }
 
     private static String suffixFor(HealthRecordType type) {

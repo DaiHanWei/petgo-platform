@@ -115,6 +115,9 @@ class ApiPaths {
   /// 「我的发布」三类混合时间线（Story 7.1，FR-36）。
   static const String mePosts = '$base/me/posts';
 
+  /// 6 个新手任务进度 + Lulus Pemula 解锁态（Story 7.3，FR-47）。
+  static const String meNewbieTasks = '$base/me/newbie-tasks';
+
   /// PawCoin 余额 + 流水游标分页（Story 1.4）。
   static const String mePawcoin = '$base/me/pawcoin';
 

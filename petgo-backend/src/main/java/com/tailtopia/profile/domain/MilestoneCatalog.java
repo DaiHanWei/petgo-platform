@@ -13,7 +13,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 里程碑清单后端固定常量（FR-42 / 决策 F16）。**清单的唯一事实源**——猫 30 / 狗 30 / 通用 15。
+ * 里程碑清单后端固定常量（FR-42 / 决策 F16；7.3 聚合里程碑 +1）。**清单的唯一事实源**——猫 31 / 狗 31 / 通用 16。
  *
  * <p>V1 不做运营可编辑清单（护栏）：清单为编译期常量；DB 的 {@code pet_milestones} roster 仅是建档时
  * 按本常量物化的 per-pet 副本（承载结构位供查询自包含），标题/级别/触发/组合依赖一律以本类为准。
@@ -39,6 +39,28 @@ public final class MilestoneCatalog {
             "C-L4", Set.of("C-M3", "C-M4", "C-M5"),
             "D-L4", Set.of("D-M3", "D-M4", "D-M5"));
 
+    /**
+     * 聚合里程碑「Lulus Pemula」（新手毕业，Story 7.3 / FR-47）的 5 个里程碑前置**语义后缀**。
+     * S1–S5 在 CAT/DOG/OTHER 三清单语义一致、后缀统一（G-S1..G-S5 同义），故可用统一 suffix 判定。
+     * 第 6 任务「录入一条健康记录」非里程碑节点，取 {@code health_records} 存在性，判定在
+     * {@code MilestoneCompletionService.maybeUnlockLulusPemula} 内联（不塞进本目录）。
+     */
+    public static final Set<String> NEWBIE_PREREQ_SUFFIXES = Set.of("S1", "S2", "S3", "S4", "S5");
+
+    /** Lulus Pemula 按 pet_type 的 code（catalog 末位 S 节点：CAT/DOG=S16、OTHER=S9）。 */
+    public static String lulusPemulaCode(PetType petType) {
+        return switch (petType) {
+            case CAT -> "C-S16";
+            case DOG -> "D-S16";
+            case OTHER -> "G-S9";
+        };
+    }
+
+    /** 某 code 是否 Lulus Pemula 聚合节点。 */
+    public static boolean isLulusPemula(String code) {
+        return "C-S16".equals(code) || "D-S16".equals(code) || "G-S9".equals(code);
+    }
+
     /** 按宠物类型返回有序固定清单（不可变）。 */
     public static List<MilestoneDefinition> forType(PetType petType) {
         return switch (petType) {
@@ -54,7 +76,7 @@ public final class MilestoneCatalog {
     }
 
     // ----------------------------------------------------------------------------------------
-    // 🐱 猫咪里程碑清单（共 30：S15 / M10 / L5）
+    // 🐱 猫咪里程碑清单（共 31：S16(含 Lulus Pemula) / M10 / L5）
     // ----------------------------------------------------------------------------------------
     private static List<MilestoneDefinition> buildCat() {
         Seq q = new Seq("C");
@@ -91,11 +113,13 @@ public final class MilestoneCatalog {
                 q.l(PUSH_PUBLISH, "陪伴满 100 天"),            // C-L2
                 q.l(PUSH_PUBLISH, "陪伴满 365 天"),            // C-L3
                 q.l(SYSTEM_AUTO, "完成全部健康里程碑"),         // C-L4
-                q.l(SYSTEM_AUTO, "成长日历记录满 30 条"));      // C-L5
+                q.l(SYSTEM_AUTO, "成长日历记录满 30 条"),       // C-L5
+                // 聚合里程碑（S 级 +1，末位 sortOrder，7.3）：6 新手任务全完成自动解锁。
+                q.s(SYSTEM_AUTO, "新手毕业 · Lulus Pemula"));  // C-S16
     }
 
     // ----------------------------------------------------------------------------------------
-    // 🐶 狗狗里程碑清单（共 30：S15 / M10 / L5）
+    // 🐶 狗狗里程碑清单（共 31：S16(含 Lulus Pemula) / M10 / L5）
     // ----------------------------------------------------------------------------------------
     private static List<MilestoneDefinition> buildDog() {
         Seq q = new Seq("D");
@@ -132,11 +156,13 @@ public final class MilestoneCatalog {
                 q.l(PUSH_PUBLISH, "陪伴满 100 天"),            // D-L2
                 q.l(PUSH_PUBLISH, "陪伴满 365 天"),            // D-L3
                 q.l(SYSTEM_AUTO, "完成全部健康里程碑"),         // D-L4
-                q.l(SYSTEM_AUTO, "成长日历记录满 30 条"));      // D-L5
+                q.l(SYSTEM_AUTO, "成长日历记录满 30 条"),       // D-L5
+                // 聚合里程碑（S 级 +1，末位 sortOrder，7.3）：6 新手任务全完成自动解锁。
+                q.s(SYSTEM_AUTO, "新手毕业 · Lulus Pemula"));  // D-S16
     }
 
     // ----------------------------------------------------------------------------------------
-    // 🐾 通用里程碑清单（其他宠物，共 15：S8 / M4 / L3）
+    // 🐾 通用里程碑清单（其他宠物，共 16：S9(含 Lulus Pemula) / M4 / L3）
     // ----------------------------------------------------------------------------------------
     private static List<MilestoneDefinition> buildOther() {
         Seq q = new Seq("G");
@@ -158,7 +184,9 @@ public final class MilestoneCatalog {
                 // L 级（3）
                 q.l(PUSH_PUBLISH, "第一个生日 🎂"),            // G-L1
                 q.l(PUSH_PUBLISH, "陪伴满 100 天"),            // G-L2
-                q.l(PUSH_PUBLISH, "陪伴满 365 天"));           // G-L3
+                q.l(PUSH_PUBLISH, "陪伴满 365 天"),            // G-L3
+                // 聚合里程碑（S 级 +1，末位 sortOrder，7.3）：6 新手任务全完成自动解锁。
+                q.s(SYSTEM_AUTO, "新手毕业 · Lulus Pemula"));  // G-S9
     }
 
     /** 清单构造辅助：按级别自增编号生成 code（C-S1…），并维护全局 sortOrder。 */
