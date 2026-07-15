@@ -26,13 +26,17 @@ class HealthListPage extends ConsumerWidget {
     final async = ref.watch(healthListProvider);
     return Scaffold(
       backgroundColor: AppColors.cream2,
-      appBar: AppBar(title: Text(l10n.healthListTitle)),
-      floatingActionButton: FloatingActionButton.extended(
-        key: const ValueKey('healthAddFab'),
-        onPressed: () => _openForm(context, ref),
-        backgroundColor: AppColors.mint,
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: Text(l10n.healthAddTitle, style: const TextStyle(color: Colors.white)),
+      // 0711：AppBar 右上「+」入口（与底部整宽按钮双入口，取代原 FAB）。
+      appBar: AppBar(
+        title: Text(l10n.healthListTitle),
+        actions: [
+          IconButton(
+            key: const ValueKey('healthAddTop'),
+            icon: const Icon(Icons.add, color: AppColors.ink),
+            onPressed: () => _openForm(context, ref),
+          ),
+          const SizedBox(width: 4),
+        ],
       ),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -42,17 +46,160 @@ class HealthListPage extends ConsumerWidget {
           }
           return _empty(l10n.healthLoadError);
         },
-        data: (items) => items.isEmpty
-            ? _empty(l10n.healthListEmpty)
-            : ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-                itemCount: items.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 10),
-                itemBuilder: (_, i) => _tile(context, ref, l10n, items[i]),
-              ),
+        data: (items) => _dataView(context, ref, l10n, items),
       ),
     );
   }
+
+  /// 0711 health-list：KATEGORI 分类网格 + SEMUA CATATAN 列表 + 底部整宽「Tambah Catatan」。
+  Widget _dataView(
+      BuildContext context, WidgetRef ref, AppLocalizations l10n, List<HealthListItem> items) {
+    return Column(
+      children: [
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            children: [
+              _sectionLabel(l10n.healthCategorySection),
+              const SizedBox(height: 8),
+              _categoryGrid(context, ref, l10n, items),
+              const SizedBox(height: 20),
+              _sectionLabel(l10n.healthAllSection),
+              const SizedBox(height: 8),
+              if (items.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Center(
+                    child: Text(l10n.healthListEmpty,
+                        textAlign: TextAlign.center,
+                        style:
+                            const TextStyle(color: AppColors.ink2, fontSize: 13, height: 1.4)),
+                  ),
+                )
+              else
+                for (final item in items) ...[
+                  _tile(context, ref, l10n, item),
+                  const SizedBox(height: 10),
+                ],
+            ],
+          ),
+        ),
+        _bottomAddBar(context, ref, l10n),
+      ],
+    );
+  }
+
+  Widget _sectionLabel(String text) => Padding(
+        padding: const EdgeInsets.only(left: 2, top: 4),
+        child: Text(text,
+            style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.5,
+                color: AppColors.muted)),
+      );
+
+  /// 6 类分类卡网格（app 六 type 一一对应；最近日期前端按 items 聚合，无则「Belum ada」）。
+  Widget _categoryGrid(
+      BuildContext context, WidgetRef ref, AppLocalizations l10n, List<HealthListItem> items) {
+    final cats = <_HealthCat>[
+      _HealthCat('VACCINE', l10n.healthTypeVaccine, Icons.vaccines_outlined, AppColors.coral, false),
+      _HealthCat('DEWORM', l10n.healthTypeDeworm, Icons.medication_outlined, AppColors.triageGreen, false),
+      _HealthCat('NEUTER', l10n.healthTypeNeuter, Icons.healing_outlined, AppColors.mint, false),
+      _HealthCat('MENSTRUATION', l10n.healthTypeMenstruation, Icons.water_drop_outlined,
+          const Color(0xFF5B9BD5), false),
+      _HealthCat('CUSTOM', l10n.healthTypeCustom, Icons.description_outlined, AppColors.muted, false),
+      _HealthCat('CONSULT', l10n.healthTypeConsult, Icons.local_hospital_outlined, AppColors.coral, true),
+    ];
+    return GridView.count(
+      crossAxisCount: 3,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 10,
+      crossAxisSpacing: 10,
+      childAspectRatio: 0.82,
+      children: [for (final c in cats) _categoryCard(context, ref, l10n, c, items)],
+    );
+  }
+
+  Widget _categoryCard(BuildContext context, WidgetRef ref, AppLocalizations l10n, _HealthCat c,
+      List<HealthListItem> items) {
+    final latest = _latestDate(items, consult: c.consult, type: c.type);
+    final dateStr = latest == null ? l10n.healthCategoryEmpty : _fmtDate(latest);
+    return Material(
+      color: AppColors.card,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        key: ValueKey('healthCat_${c.type}'),
+        borderRadius: BorderRadius.circular(14),
+        // FR-45C：点分类卡预选类型直接呼出添加弹层（问诊类不可手动添加）。
+        onTap: c.consult ? null : () => _openForm(context, ref, presetType: c.type),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.line),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 12),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: c.color.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(c.icon, size: 22, color: c.color),
+              ),
+              const SizedBox(height: 8),
+              Text(c.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
+              const SizedBox(height: 2),
+              Text(dateStr, style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  DateTime? _latestDate(List<HealthListItem> items, {required bool consult, required String type}) {
+    DateTime? latest;
+    for (final i in items) {
+      final match = consult ? i.isConsult : (!i.isConsult && i.type == type);
+      if (match && i.eventDate != null && (latest == null || i.eventDate!.isAfter(latest))) {
+        latest = i.eventDate;
+      }
+    }
+    return latest;
+  }
+
+  String _fmtDate(DateTime d) =>
+      '${d.day} ${_monthId(d.month)} ${d.year}';
+
+  static const List<String> _monthsId = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+  ];
+  String _monthId(int m) => _monthsId[(m - 1).clamp(0, 11)];
+
+  Widget _bottomAddBar(BuildContext context, WidgetRef ref, AppLocalizations l10n) => Container(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+        color: AppColors.cream2,
+        child: SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            key: const ValueKey('healthAddBottom'),
+            onPressed: () => _openForm(context, ref),
+            icon: const Icon(Icons.add),
+            label: Text(l10n.healthAddTitle),
+          ),
+        ),
+      );
 
   Widget _empty(String text) => Center(
         child: Padding(
@@ -165,7 +312,8 @@ class HealthListPage extends ConsumerWidget {
     };
   }
 
-  Future<void> _openForm(BuildContext context, WidgetRef ref, {HealthListItem? existing}) async {
+  Future<void> _openForm(BuildContext context, WidgetRef ref,
+      {HealthListItem? existing, String? presetType}) async {
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -173,7 +321,7 @@ class HealthListPage extends ConsumerWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (_) => _HealthRecordForm(existing: existing),
+      builder: (_) => _HealthRecordForm(existing: existing, presetType: presetType),
     );
     if (saved == true) {
       ref.invalidate(healthListProvider);
@@ -183,9 +331,10 @@ class HealthListPage extends ConsumerWidget {
 
 /// 新增/编辑结构化健康记录表单（Story 7.2）。type 下拉 + 日期（不可未来）+ 条件名 + 备注。返回 true=已保存。
 class _HealthRecordForm extends ConsumerStatefulWidget {
-  const _HealthRecordForm({this.existing});
+  const _HealthRecordForm({this.existing, this.presetType});
 
   final HealthListItem? existing;
+  final String? presetType;
 
   @override
   ConsumerState<_HealthRecordForm> createState() => _HealthRecordFormState();
@@ -202,7 +351,7 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
   void initState() {
     super.initState();
     final e = widget.existing;
-    _type = e?.type ?? 'VACCINE';
+    _type = e?.type ?? widget.presetType ?? 'VACCINE';
     _date = e?.eventDate ?? DateTime.now();
     _name = TextEditingController(text: e?.customName ?? e?.vaccineName ?? '');
     _note = TextEditingController(text: e?.note ?? '');
@@ -366,4 +515,15 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
         'NEUTER' => l10n.healthTypeNeuter,
         _ => l10n.healthTypeCustom,
       };
+}
+
+/// 健康记录分类卡的静态定义（0711 KATEGORI 网格：类型 + 标签 + 图标 + 主色 + 是否问诊类）。
+class _HealthCat {
+  const _HealthCat(this.type, this.label, this.icon, this.color, this.consult);
+
+  final String type;
+  final String label;
+  final IconData icon;
+  final Color color;
+  final bool consult;
 }
