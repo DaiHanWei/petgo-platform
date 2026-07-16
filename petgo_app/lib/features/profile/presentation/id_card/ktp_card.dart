@@ -83,7 +83,7 @@ class KtpCardFront extends StatelessWidget {
             ),
             // 斜向品牌水印（三级水印之一/二：品牌 + 安全底纹）
             Positioned.fill(
-              child: CustomPaint(painter: _KtpWatermarkPainter()),
+              child: CustomPaint(painter: KtpWatermarkPainter()),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(58, 30, 54, 30),
@@ -281,7 +281,7 @@ class KtpCardFront extends StatelessWidget {
 }
 
 /// 斜向重复品牌水印 painter（`KARTU TANDA PENDUDUK TAILTOPIA` 铺满）。
-class _KtpWatermarkPainter extends CustomPainter {
+class KtpWatermarkPainter extends CustomPainter {
   static const String _text = 'KARTU TANDA PENDUDUK TAILTOPIA    ';
 
   @override
