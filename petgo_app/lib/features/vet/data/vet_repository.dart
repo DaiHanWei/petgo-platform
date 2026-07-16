@@ -101,6 +101,13 @@ class VetRepository {
 
   /// 接计费流请求（CAS QUEUEING→ACCEPTED_AWAIT_PAY + 开 1.5min 支付窗 + goBusy）。
   /// 被抢/已过期/占用 → 抛 409 [DioException]（调用方映射 Toast）。
+  /// 队列请求病例（D1）：接单前展开看完整症状 + 私密图（现签短 TTL URL）。
+  /// 请求已消失（超时删/被抢）→ 404（DioException 抛给调用方）。
+  Future<ConsultAiContext> consultationCase(String requestToken) async {
+    final resp = await dio.get<Map<String, dynamic>>(ApiPaths.vetConsultationCase(requestToken));
+    return ConsultAiContext.fromJson(resp.data!);
+  }
+
   Future<void> acceptConsultRequest(String requestToken) async {
     await dio.post<void>(ApiPaths.vetConsultationsAccept(requestToken));
   }

@@ -23,6 +23,10 @@ class ApiPaths {
   static String vetConsultAiContext(int sessionId) =>
       '$base/vet/consult-sessions/$sessionId/ai-context';
 
+  /// 兽医侧队列请求病例（D1，含私密图签名 URL）：接单前展开看完整症状 + 图。token 寻址（不可枚举）。
+  static String vetConsultationCase(String requestToken) =>
+      '$base/vet/consultations/$requestToken/case';
+
   /// 兽医侧待接单/接单/会话/辅助（Story 5.5）。
   static const String vetConsultWaiting = '$base/vet/consult-sessions/waiting';
   static String vetConsultAccept(int sessionId) => '$base/vet/consult-sessions/$sessionId/accept';

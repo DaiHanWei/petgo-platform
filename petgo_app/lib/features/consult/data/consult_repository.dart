@@ -125,8 +125,23 @@ class ConsultRepository {
 
   /// 发起付费问诊入队（`POST /consultations`）。占用命中返现有（alreadyActive=true）。
   /// 无宠物档案 → 后端 409（调用方映射 l10n）。
-  Future<ConsultRequest> createRequest() async {
-    final resp = await dio.post<Map<String, dynamic>>(ApiPaths.consultations);
+  ///
+  /// 病例（兽医接单前据此判断，D1）：[symptomText] 症状 + [imageObjectKeys] 私密桶对象 key（前端已直传）。
+  Future<ConsultRequest> createRequest({String? symptomText, List<String>? imageObjectKeys}) async {
+    final body = <String, dynamic>{};
+    if (symptomText != null && symptomText.trim().isNotEmpty) body['symptomText'] = symptomText.trim();
+    if (imageObjectKeys != null && imageObjectKeys.isNotEmpty) body['imageObjectKeys'] = imageObjectKeys;
+    final resp = await dio.post<Map<String, dynamic>>(ApiPaths.consultations, data: body);
+    return ConsultRequest.fromJson(resp.data!);
+  }
+
+  /// 从 AI 分诊升级发起付费问诊（D2）：只传 triageTaskId，评级/描述/图片由后端从 triage 拉取（前端不重传）。
+  /// 红色态后端兜底拒绝（前端绿/黄才暴露入口）。
+  Future<ConsultRequest> createRequestFromUpgrade(int triageTaskId) async {
+    final resp = await dio.post<Map<String, dynamic>>(
+      ApiPaths.consultations,
+      data: {'source': 'AI_UPGRADE', 'triageTaskId': triageTaskId},
+    );
     return ConsultRequest.fromJson(resp.data!);
   }
 
