@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/colors.dart';
@@ -68,7 +69,7 @@ class OrderDetailPage extends ConsumerWidget {
         // 退款进度
         if (d.refundStage != null) ...[
           const Divider(height: AppSpacing.xl),
-          _refundBlock(l10n, d),
+          _refundBlock(context, l10n, d),
         ],
       ],
     );
@@ -108,25 +109,45 @@ class OrderDetailPage extends ConsumerWidget {
     );
   }
 
-  Widget _refundBlock(AppLocalizations l10n, OrderDetail d) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(color: AppColors.mintTint, borderRadius: BorderRadius.circular(10)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(l10n.orderRefundProgressLabel,
-              style: AppTypography.micro.copyWith(color: AppColors.textTertiary, letterSpacing: 0.5)),
-          const SizedBox(height: 4),
-          Text(refundStageLabel(l10n, d.refundStage!),
-              style: AppTypography.body.copyWith(color: AppColors.mint600, fontWeight: FontWeight.w600)),
-          if (d.refundNetAmount != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text('${l10n.refundNetLabel}: ${orderAmountText(l10n, d.refundNetAmount)}',
-                  style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
-            ),
-        ],
+  // 退款进度块（可点 → 我的退款列表，用户在那里可选退款方式/查看进度）。
+  // 退款入口已从「我的」页移除、统一并入订单流程，故此块必须可达 /me/refunds，否则退款不可达。
+  Widget _refundBlock(BuildContext context, AppLocalizations l10n, OrderDetail d) {
+    return Material(
+      color: AppColors.mintTint,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        key: const ValueKey('orderRefundEntry'),
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => context.push('/me/refunds'),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(l10n.orderRefundProgressLabel,
+                        style: AppTypography.micro
+                            .copyWith(color: AppColors.textTertiary, letterSpacing: 0.5)),
+                    const SizedBox(height: 4),
+                    Text(refundStageLabel(l10n, d.refundStage!),
+                        style: AppTypography.body
+                            .copyWith(color: AppColors.mint600, fontWeight: FontWeight.w600)),
+                    if (d.refundNetAmount != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                            '${l10n.refundNetLabel}: ${orderAmountText(l10n, d.refundNetAmount)}',
+                            style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+                      ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: AppColors.mint600),
+            ],
+          ),
+        ),
       ),
     );
   }

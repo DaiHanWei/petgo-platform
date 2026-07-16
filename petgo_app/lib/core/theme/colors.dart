@@ -72,6 +72,7 @@ class AppColors {
 
   /// Google 品牌蓝（第三方品牌色，仅 Google 登录按钮 G 字标用）。
   static const Color brandGoogleBlue = Color(0xFF4285F4);
+  static const Color infoBlue = Color(0xFF5B9BD5); // 次要信息蓝（健康分类·发情周期等）
 
   // —— 兽医端独立主题 token（原型 H5 pages/vet-*.html 权威色值）——
   // 用户侧紫体系不动；vet 子树用这套薄荷绿。深顶栏/工具栏本步仅落 token，

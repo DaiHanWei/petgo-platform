@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/utils/date_format.dart';
 import '../data/health_record_repository.dart';
 import '../domain/health_list_item.dart';
 
@@ -107,7 +108,7 @@ class HealthListPage extends ConsumerWidget {
       _HealthCat('DEWORM', l10n.healthTypeDeworm, Icons.medication_outlined, AppColors.triageGreen, false),
       _HealthCat('NEUTER', l10n.healthTypeNeuter, Icons.healing_outlined, AppColors.mint, false),
       _HealthCat('MENSTRUATION', l10n.healthTypeMenstruation, Icons.water_drop_outlined,
-          const Color(0xFF5B9BD5), false),
+          AppColors.infoBlue, false),
       _HealthCat('CUSTOM', l10n.healthTypeCustom, Icons.description_outlined, AppColors.muted, false),
       _HealthCat('CONSULT', l10n.healthTypeConsult, Icons.local_hospital_outlined, AppColors.coral, true),
     ];
@@ -125,7 +126,8 @@ class HealthListPage extends ConsumerWidget {
   Widget _categoryCard(BuildContext context, WidgetRef ref, AppLocalizations l10n, _HealthCat c,
       List<HealthListItem> items) {
     final latest = _latestDate(items, consult: c.consult, type: c.type);
-    final dateStr = latest == null ? l10n.healthCategoryEmpty : _fmtDate(latest);
+    final dateStr =
+        latest == null ? l10n.healthCategoryEmpty : formatDayMonthYear(context, latest);
     return Material(
       color: AppColors.card,
       borderRadius: BorderRadius.circular(14),
@@ -179,24 +181,19 @@ class HealthListPage extends ConsumerWidget {
     return latest;
   }
 
-  String _fmtDate(DateTime d) =>
-      '${d.day} ${_monthId(d.month)} ${d.year}';
-
-  static const List<String> _monthsId = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
-  ];
-  String _monthId(int m) => _monthsId[(m - 1).clamp(0, 11)];
-
-  Widget _bottomAddBar(BuildContext context, WidgetRef ref, AppLocalizations l10n) => Container(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-        color: AppColors.cream2,
-        child: SizedBox(
-          width: double.infinity,
-          child: FilledButton.icon(
-            key: const ValueKey('healthAddBottom'),
-            onPressed: () => _openForm(context, ref),
-            icon: const Icon(Icons.add),
-            label: Text(l10n.healthAddTitle),
+  Widget _bottomAddBar(BuildContext context, WidgetRef ref, AppLocalizations l10n) => SafeArea(
+        top: false,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+          color: AppColors.cream2,
+          child: SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              key: const ValueKey('healthAddBottom'),
+              onPressed: () => _openForm(context, ref),
+              icon: const Icon(Icons.add),
+              label: Text(l10n.healthAddTitle),
+            ),
           ),
         ),
       );
