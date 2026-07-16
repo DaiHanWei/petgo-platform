@@ -174,7 +174,10 @@ public class ConsultPayService {
         }
         Instant now = Instant.now();
         // 建 consult_sessions（复用 Epic 5 会话机器：付费问诊可结束/评分/进历史，[已定-6]）。
-        ConsultSession session = ConsultSession.startWaiting(userId, ConsultSource.DIRECT);
+        // source 读 request（D2）：AI_UPGRADE 与 DIRECT 走同一条付费路径，勿硬编码——
+        // 否则分诊升级付款后会话被错标 DIRECT、丢 triageTaskId 与 AI 评级。
+        ConsultSession session = ConsultSession.startWaiting(userId, req.getSource());
+        carryCase(req, session);
         session.markInProgress(vetId);
         session.attachImConversation(conv);
         sessions.save(session);
@@ -188,6 +191,23 @@ public class ConsultPayService {
         order.snapshotRebroadcast(req.getRebroadcastCount());
         billing.markSessionStarted(order, now, "im:" + conv);
         return order;
+    }
+
+    /**
+     * 病例随转单结转到会话（D1/D2）：request 落的病例（自填 或 AI 快照）带进 consult_sessions 同语义列，
+     * 使兽医在会话内经既有 {@code /vet/consult-sessions/{id}/ai-context} 仍看得到病例。
+     * request 行随即被删（转单原语），不结转即永久丢失。
+     */
+    private static void carryCase(ConsultRequest req, ConsultSession session) {
+        if (!req.hasCase()) {
+            return;
+        }
+        if (req.getSource() == ConsultSource.AI_UPGRADE && req.getTriageTaskId() != null) {
+            session.bindAiContext(req.getTriageTaskId(), req.getAiDangerLevel(),
+                    req.getSymptomText(), req.getImageObjectKeys());
+        } else {
+            session.bindDirectCase(req.getSymptomText(), req.getImageObjectKeys());
+        }
     }
 
     /** 幂等确保 IM 账号 + 建 C2C 会话，返回 conversationId（纯 IM，无 DB 副作用）。 */

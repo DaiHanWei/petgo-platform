@@ -11,6 +11,9 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.List;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * 兽医咨询请求（Story 3.1，{@code consult_requests} 付费前临时态）。A-5 两表拆分的「付费前」半。
@@ -59,6 +62,30 @@ public class ConsultRequest {
     @Column(name = "rebroadcast_count", nullable = false)
     private int rebroadcastCount;
 
+    // ===== 病例（V84 / Story 3.2 [OPEN] 收口）：兽医接单前据此判断是否接单 =====
+
+    /** 来源：DIRECT（用户自填病例）| AI_UPGRADE（分诊升级，AI 上下文由后端从 triage 拉取快照）。 */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "source", nullable = false, length = 16, updatable = false)
+    private ConsultSource source = ConsultSource.DIRECT;
+
+    /** 来源分诊任务（source=AI_UPGRADE 时填）。 */
+    @Column(name = "triage_task_id", updatable = false)
+    private Long triageTaskId;
+
+    /** AI 危险等级快照：GREEN|YELLOW，DIRECT 为 null。<b>绝不含 RED</b>（红色态零兽医引流）。 */
+    @Column(name = "ai_danger_level", length = 8, updatable = false)
+    private String aiDangerLevel;
+
+    /** 症状描述（健康数据，日志严禁明文）。 */
+    @Column(name = "symptom_text", updatable = false)
+    private String symptomText;
+
+    /** 私密桶对象 key 列表（引用，取用时现签 URL；绝不存签名 URL）。 */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "image_object_keys", updatable = false)
+    private List<String> imageObjectKeys;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -79,6 +106,37 @@ public class ConsultRequest {
         r.queueDeadlineAt = queueDeadlineAt;
         r.rebroadcastCount = 0;
         return r;
+    }
+
+    /**
+     * 自填病例（DIRECT）：用户提交的症状 + 私密图 key，无 AI 评级。
+     * 照 {@link ConsultSession#bindDirectCase}，{@code aiDangerLevel} 留空。
+     */
+    public void bindDirectCase(String symptomText, List<String> imageObjectKeys) {
+        this.source = ConsultSource.DIRECT;
+        this.symptomText = symptomText;
+        this.imageObjectKeys = imageObjectKeys;
+    }
+
+    /**
+     * 分诊升级上下文（AI_UPGRADE，D2）：升级当下把 AI 评级/症状/图定格为快照，
+     * triage 后续变更不影响已入队请求（照 V15「快照定格」语义）。
+     *
+     * <p><b>调用方须已兜底拒绝 RED</b>——本方法不校验（库 CHECK 是最后一道，不是第一道）。
+     */
+    public void bindAiContext(long triageTaskId, String aiDangerLevel, String symptomText,
+            List<String> imageObjectKeys) {
+        this.source = ConsultSource.AI_UPGRADE;
+        this.triageTaskId = triageTaskId;
+        this.aiDangerLevel = aiDangerLevel;
+        this.symptomText = symptomText;
+        this.imageObjectKeys = imageObjectKeys;
+    }
+
+    /** 是否有可展示给兽医的病例（自填症状/图 或 AI 上下文）。照 {@link ConsultSession#hasCase}。 */
+    public boolean hasCase() {
+        return (symptomText != null && !symptomText.isBlank())
+                || (imageObjectKeys != null && !imageObjectKeys.isEmpty());
     }
 
     @PrePersist
@@ -135,5 +193,25 @@ public class ConsultRequest {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public ConsultSource getSource() {
+        return source;
+    }
+
+    public Long getTriageTaskId() {
+        return triageTaskId;
+    }
+
+    public String getAiDangerLevel() {
+        return aiDangerLevel;
+    }
+
+    public String getSymptomText() {
+        return symptomText;
+    }
+
+    public List<String> getImageObjectKeys() {
+        return imageObjectKeys;
     }
 }
