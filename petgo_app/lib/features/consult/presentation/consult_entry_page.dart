@@ -235,11 +235,15 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
                 letterSpacing: 0.4,
                 color: AppColors.ink)),
         const SizedBox(height: 14),
+        // 四步须与实际付费链路一致：填病例 → 兽医看病例接单 → 接单后付款 → 进聊天室。
+        // 付款是流程的一环，必须显式列出（此前三步说明是 V1.0 免费流残留，说「gratis」且无付款步）。
         _StepRow(n: '1', color: AppColors.mint, title: l10n.consultStep1Title, desc: l10n.consultStep1Desc),
         const SizedBox(height: 12),
         _StepRow(n: '2', color: AppColors.mint500, title: l10n.consultStep2Title, desc: l10n.consultStep2Desc),
         const SizedBox(height: 12),
         _StepRow(n: '3', color: AppColors.violetSoft, title: l10n.consultStep3Title, desc: l10n.consultStep3Desc),
+        const SizedBox(height: 12),
+        _StepRow(n: '4', color: AppColors.violetSoft, title: l10n.consultStep4Title, desc: l10n.consultStep4Desc),
         const SizedBox(height: 22),
         // 责任声明。
         Text(l10n.consultEntryDisclaimer,
