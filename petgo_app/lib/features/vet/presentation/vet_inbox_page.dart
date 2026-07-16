@@ -9,7 +9,9 @@ import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../data/vet_repository.dart';
+import '../domain/consult_ai_context.dart';
 import '../domain/vet_queue.dart';
+import 'vet_ai_context_card.dart';
 import 'vet_empty_state.dart';
 import 'widgets/vet_top_bar.dart';
 
@@ -135,6 +137,36 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> with WidgetsBinding
     }
   }
 
+  /// 看病例（D1）：接单前展开完整症状 + 现签私密图。请求已消失（超时删/被抢）→ Toast + 刷新队列。
+  Future<void> _viewCase(VetQueueItem item) async {
+    final l10n = AppLocalizations.of(context);
+    ConsultAiContext ctx;
+    try {
+      ctx = await ref.read(vetRepositoryProvider).consultationCase(item.requestToken);
+    } catch (_) {
+      if (!mounted) return;
+      showAppToast(context, l10n.vetQueueCaseGone, duration: const Duration(seconds: 3));
+      _reloadQueue();
+      return;
+    }
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.base,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (c) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.md),
+          child: SingleChildScrollView(
+            key: const ValueKey('vetQueueCaseSheet'),
+            child: VetAiContextCard(context_: ctx),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _loadHeaderStats() async {
     final repo = ref.read(vetRepositoryProvider);
     try {
@@ -205,7 +237,8 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> with WidgetsBinding
                 else
                   ...available.map((it) => Padding(
                         padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                        child: _QueueCard(item: it, onAccept: () => _accept(it)),
+                        child: _QueueCard(
+                            item: it, onAccept: () => _accept(it), onViewCase: () => _viewCase(it)),
                       )),
               ],
             ),
@@ -362,10 +395,26 @@ class _AwaitingPayCard extends StatelessWidget {
 /// 计费流接单队列卡（Story 3.6）：宠物身份块（头像 emoji + 名 + meta）+ 等待时长 + 接单 CTA。
 /// **无 AI 危险等级/症状/照片**（`consult_requests` 不存病例，区别于免费流 `_InboxCard` 富卡）。
 class _QueueCard extends StatelessWidget {
-  const _QueueCard({required this.item, required this.onAccept});
+  const _QueueCard({required this.item, required this.onAccept, required this.onViewCase});
 
   final VetQueueItem item;
   final VoidCallback onAccept;
+
+  /// 展开完整病例（D1）：拉现签图 + 全文症状。
+  final VoidCallback onViewCase;
+
+  /// 等级色条（与 `vet_request_detail_page` 同源）。DIRECT 自填病例无 AI 评级 → 兽医主题色。
+  /// **RED 不会出现**（后端 + 库 CHECK 双重兜底，红色态零兽医引流）。
+  Color _levelColor() {
+    switch (item.aiDangerLevel) {
+      case 'YELLOW':
+        return AppColors.triageYellow;
+      case 'GREEN':
+        return AppColors.triageGreen;
+      default:
+        return AppColors.vetPrimary;
+    }
+  }
 
   String _speciesEmoji() {
     switch (item.petSpecies) {
@@ -415,7 +464,7 @@ class _QueueCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(height: 4, color: AppColors.vetPrimary),
+          Container(height: 4, color: _levelColor()),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
             child: Column(
@@ -456,6 +505,41 @@ class _QueueCard extends StatelessWidget {
                         style: AppTypography.micro.copyWith(color: AppColors.textTertiary)),
                   ],
                 ),
+                // 病例摘要（D1）：兽医据此判断是否接单。无病例则整块省略。
+                if (item.hasCase) ...[
+                  const SizedBox(height: 10),
+                  if (item.symptomPreview != null && item.symptomPreview!.isNotEmpty)
+                    Text(
+                      item.symptomPreview!,
+                      key: ValueKey('vetQueueSymptom_${item.requestToken}'),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.body.copyWith(color: AppColors.textSecondary),
+                    ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      if (item.imageCount > 0) ...[
+                        Icon(Icons.photo_outlined, size: 14, color: AppColors.textTertiary),
+                        const SizedBox(width: 4),
+                        Text('${item.imageCount}',
+                            style: AppTypography.micro.copyWith(color: AppColors.textTertiary)),
+                        const SizedBox(width: 12),
+                      ],
+                      TextButton(
+                        key: ValueKey('vetQueueViewCase_${item.requestToken}'),
+                        onPressed: onViewCase,
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: const Size(0, 0),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          foregroundColor: AppColors.vetPrimary,
+                        ),
+                        child: Text(l10n.vetQueueViewCase),
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,

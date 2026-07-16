@@ -1,6 +1,7 @@
 package com.tailtopia.consult.web;
 
 import com.tailtopia.consult.dto.ConsultAcceptResponse;
+import com.tailtopia.consult.dto.ConsultAiContextResponse;
 import com.tailtopia.consult.dto.VetQueueResponse;
 import com.tailtopia.consult.service.ConsultRequestService;
 import com.tailtopia.shared.error.AppException;
@@ -40,6 +41,17 @@ public class VetConsultRequestController {
     @GetMapping("/queue")
     public VetQueueResponse queue(@AuthenticationPrincipal Jwt jwt) {
         return service.vetQueue(currentVetId(jwt));
+    }
+
+    /**
+     * 请求病例（D1，2026-07-16）：兽医<b>接单前</b>展开看完整症状 + 私密图（现签短 TTL URL）。
+     * token 寻址（不可枚举）；不存在/已结束 → 404（防枚举）。无病例 → {@code hasAiContext=false}。
+     */
+    @GetMapping("/{requestToken}/case")
+    public ConsultAiContextResponse requestCase(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable String requestToken) {
+        currentVetId(jwt); // 触发 JWT 校验（队列池对所有在线兽医开放，接单前无 vet 归属可校验）
+        return service.caseOf(requestToken);
     }
 
     @PostMapping("/{requestToken}/accept")

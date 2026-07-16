@@ -23,6 +23,9 @@ public interface ConsultRequestRepository extends JpaRepository<ConsultRequest, 
     /** 占用校验（FR-4B 同时仅 1 个）：consult_requests 内「存在即 live」（取消/超时已物理删）。 */
     boolean existsByUserId(long userId);
 
+    /** 注销清理（Story 7.3 / 决策 D1）：取该用户全部 live 请求，供收集私密图 key 后删行。 */
+    List<ConsultRequest> findByUserId(long userId);
+
     /**
      * 兽医计费队列池（Story 3.6，只读）：处于给定 {@code state}（QUEUEING）的请求按建单时间 FIFO 升序。
      * 过期 QUEUEING 行由 3-2 {@code @Scheduled} 物理删兜底，故通常已无过期行（决策 D-3：读端点不加时间谓词，

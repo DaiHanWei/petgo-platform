@@ -4,6 +4,8 @@ import com.tailtopia.auth.dto.AuthorView;
 import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.consult.domain.ConsultRequest;
 import com.tailtopia.consult.domain.ConsultRequestState;
+import com.tailtopia.consult.dto.ConsultAiContextResponse;
+import com.tailtopia.consult.dto.CreateConsultationRequest;
 import com.tailtopia.consult.dto.VetQueueResponse;
 import com.tailtopia.consult.event.ConsultRequestFailedEvent;
 import com.tailtopia.consult.event.ConsultRequestQueuedForBillingEvent;
@@ -15,6 +17,10 @@ import com.tailtopia.profile.service.CardTokenGenerator;
 import com.tailtopia.profile.service.PetProfileQueryService;
 import com.tailtopia.shared.consult.ConsultProperties;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.media.SignedUrlService;
+import com.tailtopia.triage.domain.DangerLevel;
+import com.tailtopia.triage.dto.TriageUpgradeContext;
+import com.tailtopia.triage.service.TriageService;
 import com.tailtopia.vet.service.VetPresenceService;
 import java.time.Duration;
 import java.time.Instant;
@@ -52,11 +58,16 @@ public class ConsultRequestService {
     private final ConsultProperties props;
     private final PetProfileQueryService petQuery;
     private final AccountQueryService accounts;
+    private final TriageService triageService;
+    private final SignedUrlService signedUrlService;
 
     public ConsultRequestService(ConsultRequestRepository requests, PetProfileRepository petProfiles,
             CardTokenGenerator tokenGenerator, ApplicationEventPublisher events,
             VetPresenceService presence, ConsultProperties props,
-            PetProfileQueryService petQuery, AccountQueryService accounts) {
+            PetProfileQueryService petQuery, AccountQueryService accounts,
+            TriageService triageService, SignedUrlService signedUrlService) {
+        this.triageService = triageService;
+        this.signedUrlService = signedUrlService;
         this.requests = requests;
         this.petProfiles = petProfiles;
         this.tokenGenerator = tokenGenerator;
@@ -80,11 +91,30 @@ public class ConsultRequestService {
     }
 
     /**
-     * 免费发起咨询入队。占用命中（FR-4B 同时仅 1 个）返回现有；否则建 QUEUEING（token/deadline=+1min）+ 发广播。
-     * <b>绝不扣费、绝不建 consult_orders</b>。
+     * 免费发起咨询入队（无病例，兼容既有调用方/测试）。
+     *
+     * @deprecated 病例是兽医接单判断依据（D1），新调用方一律走
+     *     {@link #createRequest(long, CreateConsultationRequest)}。
      */
+    @Deprecated
     @Transactional
     public CreateResult createRequest(long userId) {
+        return createRequest(userId, new CreateConsultationRequest(null, null, null, null));
+    }
+
+    /**
+     * 免费发起咨询入队（Story 3.2 + [OPEN] 收口 D1/D2）。占用命中（FR-4B 同时仅 1 个）返回现有；
+     * 否则建 QUEUEING（token/deadline=+1min）+ <b>落病例</b> + 发广播。<b>绝不扣费、绝不建 consult_orders</b>。
+     *
+     * <p>病例两来源（D2，与 {@link ConsultSessionService#createWaiting}/{@code createWaitingFromUpgrade} 对齐）：
+     * <ul>
+     *   <li>{@code DIRECT}：用户自填症状 + 私密图 key（前端已直传，后端不收签名 URL）；</li>
+     *   <li>{@code AI_UPGRADE}：经 {@link TriageService} 拉评级/症状/图定格快照（禁直读 triage repo），
+     *       <b>红线兜底：RED 一律拒绝入队</b>（即便前端误放入口）。</li>
+     * </ul>
+     */
+    @Transactional
+    public CreateResult createRequest(long userId, CreateConsultationRequest body) {
         // 占用校验：consult_requests 内存在即 live（取消/超时已删）。
         if (requests.existsByUserId(userId)) {
             return new CreateResult(requests.findFirstByUserIdOrderByCreatedAtAsc(userId).orElseThrow(),
@@ -94,11 +124,38 @@ public class ConsultRequestService {
         PetProfile pet = petProfiles.findByOwnerId(userId)
                 .orElseThrow(() -> AppException.conflict("需先建立宠物档案后再发起问诊"));
         Instant queueDeadline = Instant.now().plus(Duration.ofSeconds(QUEUE_TIMEOUT_SECONDS));
-        ConsultRequest saved = requests.save(ConsultRequest.queue(
-                userId, pet.getId(), tokenGenerator.generate(), queueDeadline));
+        ConsultRequest req = ConsultRequest.queue(
+                userId, pet.getId(), tokenGenerator.generate(), queueDeadline);
+        bindCase(userId, req, body);
+        ConsultRequest saved = requests.save(req);
         // AFTER_COMMIT 广播在线兽医（notify 侧监听）：请求已落库才推，不吞资金写（此处非资金）。
         events.publishEvent(new ConsultRequestQueuedForBillingEvent(saved.getId()));
         return new CreateResult(saved, false);
+    }
+
+    /** 绑病例：AI_UPGRADE 拉 triage 快照（RED 兜底拒绝）；否则绑自填病例（都为空则不绑）。 */
+    private void bindCase(long userId, ConsultRequest req, CreateConsultationRequest body) {
+        if (body != null && body.isAiUpgrade()) {
+            if (body.triageTaskId() == null) {
+                throw AppException.validation("升级发起需带分诊任务");
+            }
+            TriageUpgradeContext ctx = triageService.getResultForUpgrade(userId, body.triageTaskId());
+            if (ctx.dangerLevel() == DangerLevel.RED) {
+                // 架构不可协商：红色态零兽医引流。
+                throw AppException.forbidden("高危情况请立即就医，本通道不提供升级");
+            }
+            req.bindAiContext(ctx.triageTaskId(), ctx.dangerLevel().name(),
+                    ctx.symptomText(), ctx.imageObjectKeys());
+            return;
+        }
+        if (body == null) {
+            return;
+        }
+        boolean hasText = body.symptomText() != null && !body.symptomText().isBlank();
+        boolean hasImages = body.imageObjectKeys() != null && !body.imageObjectKeys().isEmpty();
+        if (hasText || hasImages) {
+            req.bindDirectCase(body.symptomText(), body.imageObjectKeys());
+        }
     }
 
     /** 入队超时静默物理删（@Scheduled 调）。返回删除行数。不建订单、不留痕（A-5）。 */
@@ -130,7 +187,10 @@ public class ConsultRequestService {
      *       机主昵称；忙（接单中/会话中）则空——不能再接。</li>
      * </ul>
      * 身份富化复用 {@link PetProfileQueryService}/{@link AccountQueryService} 只读端口（不直访 profile/auth repo，
-     * 保模块边界，照 {@code VetConsultService.waitingList} 范式）。{@code consult_requests} 不存病例，故无 symptom/AI 字段。
+     * 保模块边界，照 {@code VetConsultService.waitingList} 范式）。
+     *
+     * <p><b>V84 起含病例摘要</b>（D1）：卡片带等级/症状摘要/图数量供接单判断；完整病例（含现签图）
+     * 走 {@code GET /vet/consultations/{requestToken}/case}，<b>本端点不下发签名 URL</b>。
      */
     @Transactional(readOnly = true)
     public VetQueueResponse vetQueue(long vetId) {
@@ -154,6 +214,29 @@ public class ConsultRequestService {
             }
         }
         return new VetQueueResponse(awaitingPay, available);
+    }
+
+    /**
+     * 兽医查看请求病例（D1，只读，接单前判断依据）。{@code requestToken} 寻址（不可枚举）；
+     * 请求不存在/已超时删/已转单删 → 404（与「无权限」同码，防枚举）。
+     *
+     * <p>私密图经 {@link SignedUrlService} <b>现签短 TTL URL</b>（绝不入库/落日志）。
+     * 无病例 → {@code hasAiContext=false} 空响应（前端不渲染，照 {@code ConsultAiContextService} 语义）。
+     *
+     * <p><b>不校验兽医归属</b>——QUEUEING 池对所有不忙的在线兽医开放（抢单模型），接单前无 vet_id 可校验；
+     * 与既有 {@code /vet/consult-sessions/{id}/ai-context} 的差别是本端点用不可枚举 token，无法遍历。
+     */
+    @Transactional(readOnly = true)
+    public ConsultAiContextResponse caseOf(String requestToken) {
+        ConsultRequest req = requests.findByRequestToken(requestToken)
+                .orElseThrow(() -> AppException.notFound("该请求不存在或已结束"));
+        if (!req.hasCase()) {
+            return ConsultAiContextResponse.empty();
+        }
+        List<String> refs = req.getImageObjectKeys();
+        List<String> urls = (refs == null || refs.isEmpty()) ? List.of() : signedUrlService.signAll(refs);
+        // aiDangerLevel 对 DIRECT 为 null（无 AI 评级），前端据此显「病例」而非「AI 上下文」标题。
+        return new ConsultAiContextResponse(true, req.getAiDangerLevel(), req.getSymptomText(), urls);
     }
 
     /** 单条宠物身份（awaitingPay 用）：缺失/注销 → null（前端降级）。 */

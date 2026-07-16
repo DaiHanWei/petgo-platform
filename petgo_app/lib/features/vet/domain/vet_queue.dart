@@ -1,8 +1,8 @@
-/// 兽医计费队列（Story 3.6，后端 `GET /vet/consultations/queue`）。
+/// 兽医付费队列（Story 3.6 + V84/D1，后端 `GET /vet/consultations/queue`）。
 ///
-/// 与 V1.0 免费直连流 [VetInboxItem]（`consult_sessions`，`sessionId` 寻址）**并存不混用**：本模型对应计费流
-/// `consult_requests`（`requestToken` 寻址）。`consult_requests` 不存病例，故队列卡**无 AI 危险等级/症状/照片**，
-/// 仅宠物身份 + 等待时长（区别于免费流富卡）。身份字段全 nullable（注销/无档案兜底 null → 前端降级）。
+/// 对应 `consult_requests`（`requestToken` 寻址，不可枚举）。**V84 起含病例摘要**——兽医接单前据此判断
+/// 是否接单。完整病例（含现签图）走 `GET /vet/consultations/{requestToken}/case`，列表**不下发签名 URL**。
+/// 身份字段全 nullable（注销/无档案兜底 null → 前端降级）。
 class VetQueue {
   const VetQueue({this.awaitingPay, this.available = const []});
 
@@ -22,7 +22,7 @@ class VetQueue {
       );
 }
 
-/// 队列池项：可接单请求（宠物身份 + 等待时长 + 入队截止），无病例字段。
+/// 队列池项：可接单请求（宠物身份 + 等待时长 + 入队截止 + 病例摘要）。
 class VetQueueItem {
   const VetQueueItem({
     required this.requestToken,
@@ -32,6 +32,10 @@ class VetQueueItem {
     this.ownerHandle,
     this.waitingSeconds = 0,
     this.queueDeadlineAt,
+    this.source,
+    this.aiDangerLevel,
+    this.symptomPreview,
+    this.imageCount = 0,
   });
 
   final String requestToken;
@@ -41,6 +45,25 @@ class VetQueueItem {
   final String? ownerHandle; // 不含 @，渲染时前置
   final int waitingSeconds; // 入队至今秒数（服务端算）
   final DateTime? queueDeadlineAt; // 入队截止（服务端权威，UTC）
+
+  // ===== 病例摘要（V84/D1）：接单判断依据 =====
+
+  /// DIRECT（用户自填病例）| AI_UPGRADE（分诊升级）。
+  final String? source;
+
+  /// AI 危险等级：GREEN|YELLOW，DIRECT 为 null（自填病例无 AI 评级）。**绝不含 RED**（红色态零引流）。
+  final String? aiDangerLevel;
+
+  /// 症状摘要（服务端已截断 40 字），无则 null。
+  final String? symptomPreview;
+
+  /// 私密图数量（列表不下发 URL；看图走 `/vet/consultations/{token}/case`）。
+  final int imageCount;
+
+  bool get isAiUpgrade => source == 'AI_UPGRADE';
+
+  /// 是否有可展开的病例（有摘要或有图）。
+  bool get hasCase => (symptomPreview != null && symptomPreview!.isNotEmpty) || imageCount > 0;
 
   factory VetQueueItem.fromJson(Map<String, dynamic> json) => VetQueueItem(
         requestToken: (json['requestToken'] ?? '') as String,
@@ -52,6 +75,10 @@ class VetQueueItem {
         queueDeadlineAt: json['queueDeadlineAt'] == null
             ? null
             : DateTime.parse(json['queueDeadlineAt'] as String).toUtc(),
+        source: json['source'] as String?,
+        aiDangerLevel: json['aiDangerLevel'] as String?,
+        symptomPreview: json['symptomPreview'] as String?,
+        imageCount: (json['imageCount'] as num?)?.toInt() ?? 0,
       );
 }
 

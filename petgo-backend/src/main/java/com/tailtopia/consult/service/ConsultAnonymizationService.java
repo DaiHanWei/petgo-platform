@@ -1,8 +1,10 @@
 package com.tailtopia.consult.service;
 
 import com.tailtopia.consult.domain.ConsultRating;
+import com.tailtopia.consult.domain.ConsultRequest;
 import com.tailtopia.consult.domain.ConsultSession;
 import com.tailtopia.consult.repository.ConsultRatingRepository;
+import com.tailtopia.consult.repository.ConsultRequestRepository;
 import com.tailtopia.consult.repository.ConsultSessionRepository;
 import com.tailtopia.shared.media.PersonalMedia;
 import java.util.ArrayList;
@@ -22,10 +24,13 @@ public class ConsultAnonymizationService {
 
     private final ConsultSessionRepository sessions;
     private final ConsultRatingRepository ratings;
+    private final ConsultRequestRepository requests;
 
-    public ConsultAnonymizationService(ConsultSessionRepository sessions, ConsultRatingRepository ratings) {
+    public ConsultAnonymizationService(ConsultSessionRepository sessions, ConsultRatingRepository ratings,
+            ConsultRequestRepository requests) {
         this.sessions = sessions;
         this.ratings = ratings;
+        this.requests = requests;
     }
 
     @Transactional
@@ -41,6 +46,15 @@ public class ConsultAnonymizationService {
         for (ConsultRating r : ratings.findByUserId(userId)) {
             r.anonymize(); // 剥 user_id，保留 stars/comment/vet_id
             ratings.save(r);
+        }
+        // consult_requests（V84 起存病例）：付费前临时态、未成交、无订单 → 无运营/历史价值，
+        // 且 user_id NOT NULL 无法解关联 → 直接删行（照「取消/超时物理删」既有语义）。
+        // 私密图 key 先收集，随 account 级联删除。
+        for (ConsultRequest req : requests.findByUserId(userId)) {
+            if (req.getImageObjectKeys() != null) {
+                privateKeys.addAll(req.getImageObjectKeys());
+            }
+            requests.delete(req);
         }
         return PersonalMedia.ofPrivate(privateKeys);
     }

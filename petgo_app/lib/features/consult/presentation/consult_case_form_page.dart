@@ -15,6 +15,8 @@ import '../../../shared/utils/media_permission.dart';
 import '../../media/data/oss_uploader.dart';
 import '../../media/domain/media_upload_use_case.dart';
 import '../data/consult_repository.dart';
+import '../domain/consult_request.dart';
+import 'vet_request_confirm_page.dart' show kVetConsultPriceIdr, formatVetConsultIdr;
 
 /// 直连问诊病例填写页（Story F）。
 ///
@@ -98,20 +100,27 @@ class _ConsultCaseFormPageState extends ConsumerState<ConsultCaseFormPage> {
     );
   }
 
+  /// 提交即入队付费问诊（D1/D2）：病例随入队落库，兽医据此判断是否接单。
+  /// 兽医接单后用户才付款（本步不扣费），故本页 CTA 只显单价告知、不收款。
   Future<void> _submit() async {
     if (_submitting) return;
     setState(() => _submitting = true);
     final l10n = AppLocalizations.of(context);
     try {
-      final session = await ref.read(consultRepositoryProvider).create(
+      final req = await ref.read(consultRepositoryProvider).createRequest(
             symptomText: _symptom.text,
             imageObjectKeys: _photos.map((p) => p.objectKey).toList(),
           );
       if (!mounted) return;
-      // 替换本页 → 等待页(返回不回到空病例页)。
-      context.pushReplacement('/consult/waiting/${session.id}');
-    } on DioException {
-      _toast(l10n.consultStartFailed);
+      // 占用命中（alreadyActive）已在支付态 → 直跳支付屏；否则入队等待屏。
+      // 替换本页 → 返回不回到已提交的病例页。
+      final path = req.state == ConsultRequestState.acceptedAwaitPay
+          ? '/consult/vet-request/pay/${req.requestToken}'
+          : '/consult/vet-request/waiting/${req.requestToken}';
+      context.pushReplacement(path);
+    } on DioException catch (e) {
+      // 无宠物档案 → 409（引导先建档）；其余 → 通用失败（不显后端 detail 原文）。
+      _toast(e.response?.statusCode == 409 ? l10n.vetRequestNoPet : l10n.consultStartFailed);
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -232,21 +241,36 @@ class _ConsultCaseFormPageState extends ConsumerState<ConsultCaseFormPage> {
   Widget _submitBar(AppLocalizations l10n) {
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.md),
-      child: SizedBox(
-        width: double.infinity,
-        child: FilledButton(
-          key: const ValueKey('consultCaseSubmit'),
-          onPressed: _submitting || _uploading ? null : _submit,
-          style: FilledButton.styleFrom(
-            backgroundColor: AppColors.mint,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 14),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 价格告知（D1 方案）：接单后才付款，本步不扣费——文案须说清，避免误以为提交即扣款。
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: Text(
+              l10n.vetRequestPayAfterAccept(formatVetConsultIdr(kVetConsultPriceIdr)),
+              key: const ValueKey('consultCasePriceHint'),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
           ),
-          child: _submitting
-              ? const SizedBox(
-                  width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-              : Text(l10n.consultCaseSubmit),
-        ),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              key: const ValueKey('consultCaseSubmit'),
+              onPressed: _submitting || _uploading ? null : _submit,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.mint,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              child: _submitting
+                  ? const SizedBox(
+                      width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : Text(l10n.consultCaseSubmit),
+            ),
+          ),
+        ],
       ),
     );
   }
