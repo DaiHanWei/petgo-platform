@@ -19,7 +19,9 @@ MilestoneList _sample() => const MilestoneList(
               code: 'C-L1', title: '第一个生日', level: MilestoneLevel.l,
               trigger: MilestoneTrigger.pushPublish, completed: false),
         ]),
-        MilestoneGroup(level: MilestoneLevel.m, completedCount: 1, totalCount: 1, items: [
+        // totalCount 2>completedCount 1：M 级「未全完成」，默认「Belum Semua Selesai」筛选下可见
+        // （0711 新增分级筛选：默认隐藏已全完成的级别）。
+        MilestoneGroup(level: MilestoneLevel.m, completedCount: 1, totalCount: 2, items: [
           MilestoneItem(
               code: 'C-M8', title: '陪伴满 30 天', level: MilestoneLevel.m,
               trigger: MilestoneTrigger.systemAuto, completed: true),
@@ -54,6 +56,8 @@ Widget _wrap({MilestoneList? data, Object? error}) => ProviderScope(
 
 void main() {
   testWidgets('header + 三级分区 + 各级进度渲染', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(500, 2600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(_wrap());
     await tester.pumpAndSettle();
 
@@ -66,6 +70,8 @@ void main() {
   });
 
   testWidgets('徽章彩色（已完成）/灰锁（未完成）', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(500, 2600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(_wrap());
     await tester.pumpAndSettle();
 
@@ -76,6 +82,8 @@ void main() {
   });
 
   testWidgets('点击未完成非打卡徽章 → P-33b 只读说明（无打卡按钮）', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(500, 2600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(_wrap());
     await tester.pumpAndSettle();
 
@@ -87,6 +95,8 @@ void main() {
   });
 
   testWidgets('点击已完成徽章 → P-35 解锁庆祝（而非 P-33b 详情）', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(500, 2600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(_wrap());
     await tester.pumpAndSettle();
 
@@ -102,6 +112,8 @@ void main() {
   });
 
   testWidgets('点击用户打卡未完成徽章 → 「已打卡 / 去发布」两入口', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(500, 2600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(_wrap());
     await tester.pumpAndSettle();
 

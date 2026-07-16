@@ -30,6 +30,10 @@ class _FakeHealthRepo implements HealthRecordRepository {
 }
 
 Future<_FakeHealthRepo> _pump(WidgetTester tester, List<HealthListItem> items) async {
+  // 0711 改版后本页含 KATEGORI 网格 + 列表 + 底部按钮，纵向内容变高；
+  // ListView 懒 layout 会让 fold 外 widget 不构建 → 用高视口让全部内容在视口内可被 finder 命中。
+  await tester.binding.setSurfaceSize(const Size(500, 2000));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
   final repo = _FakeHealthRepo(items);
   await tester.pumpWidget(ProviderScope(
     overrides: [healthRecordRepositoryProvider.overrideWithValue(repo)],
@@ -75,7 +79,8 @@ void main() {
 
   testWidgets('点 Add → 表单弹出 → 保存调 create', (tester) async {
     final repo = await _pump(tester, const []);
-    await tester.tap(find.byKey(const ValueKey('healthAddFab')));
+    // FAB 已改为底部整宽「Tambah catatan」按钮（0711）。
+    await tester.tap(find.byKey(const ValueKey('healthAddBottom')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('healthTypeDropdown')), findsOneWidget);
 

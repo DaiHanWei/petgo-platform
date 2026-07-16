@@ -12,6 +12,7 @@ import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/media_permission.dart';
 import '../../../shared/widgets/app_toast.dart';
+import '../../../shared/widgets/dashed_rect.dart';
 import '../../media/data/oss_uploader.dart';
 import '../../media/domain/media_upload_use_case.dart';
 import '../data/support_repository.dart';
@@ -41,7 +42,7 @@ class _TicketComposePageState extends ConsumerState<TicketComposePage> {
   final TextEditingController _contactValue = TextEditingController();
   final List<_PickedPhoto> _photos = [];
   final Set<TicketLabelType> _labels = {};
-  ContactType _contactType = ContactType.whatsapp;
+  ContactType _contactType = ContactType.email; // 0711：默认 Email
   bool _needContact = true;
   bool _uploading = false;
   bool _submitting = false;
@@ -143,7 +144,7 @@ class _TicketComposePageState extends ConsumerState<TicketComposePage> {
               child: ListView(
                 padding: const EdgeInsets.all(AppSpacing.md),
                 children: [
-                  _label(l10n.ticketBodyLabel),
+                  _label(l10n.ticketBodyLabel, required: true),
                   _boxedField(_body, hint: l10n.ticketBodyHint, maxLines: 4),
                   const SizedBox(height: AppSpacing.md),
                   _label(l10n.ticketSubjectLabel),
@@ -154,6 +155,10 @@ class _TicketComposePageState extends ConsumerState<TicketComposePage> {
                   _contactTypeSelector(l10n),
                   const SizedBox(height: AppSpacing.sm),
                   _boxedField(_contactValue, hint: l10n.ticketContactValueHint, maxLines: 1),
+                  const SizedBox(height: 6),
+                  // 联系方式隐私说明（0711）。
+                  Text(l10n.ticketContactPrivacy,
+                      style: const TextStyle(fontSize: 11, color: AppColors.muted, height: 1.4)),
                   const SizedBox(height: AppSpacing.md),
                   _label(l10n.ticketLabelsLabel),
                   const SizedBox(height: AppSpacing.sm),
@@ -161,7 +166,7 @@ class _TicketComposePageState extends ConsumerState<TicketComposePage> {
                   const SizedBox(height: AppSpacing.md),
                   _label(l10n.ticketPhotosLabel),
                   const SizedBox(height: AppSpacing.sm),
-                  _photoRow(),
+                  _photoRow(l10n),
                   const SizedBox(height: AppSpacing.md),
                   SwitchListTile(
                     key: const ValueKey('ticketNeedContact'),
@@ -170,6 +175,12 @@ class _TicketComposePageState extends ConsumerState<TicketComposePage> {
                     activeThumbColor: AppColors.mint,
                     title: Text(l10n.ticketNeedContact, style: AppTypography.body),
                     onChanged: (v) => setState(() => _needContact = v),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  // 响应时效说明（0711）。
+                  Center(
+                    child: Text(l10n.ticketResponseTime,
+                        style: const TextStyle(fontSize: 11, color: AppColors.muted)),
                   ),
                 ],
               ),
@@ -181,8 +192,20 @@ class _TicketComposePageState extends ConsumerState<TicketComposePage> {
     );
   }
 
-  Widget _label(String text) => Text(text,
-      style: AppTypography.micro.copyWith(color: AppColors.textTertiary, letterSpacing: 0.5));
+  // 0711：字段标签改深色粗体 + 必填红星（原为大写小灰字 caption）。
+  Widget _label(String text, {bool required = false}) => Padding(
+        padding: const EdgeInsets.only(bottom: 2),
+        child: RichText(
+          text: TextSpan(
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink),
+            children: [
+              TextSpan(text: text),
+              if (required)
+                const TextSpan(text: ' *', style: TextStyle(color: AppColors.popRed)),
+            ],
+          ),
+        ),
+      );
 
   Widget _boxedField(TextEditingController c, {required String hint, required int maxLines}) {
     return Container(
@@ -207,14 +230,38 @@ class _TicketComposePageState extends ConsumerState<TicketComposePage> {
   }
 
   Widget _contactTypeSelector(AppLocalizations l10n) {
-    return SegmentedButton<ContactType>(
-      segments: [
-        ButtonSegment(value: ContactType.whatsapp, label: Text(contactTypeLabel(l10n, ContactType.whatsapp))),
-        ButtonSegment(value: ContactType.email, label: Text(contactTypeLabel(l10n, ContactType.email))),
+    // 0711：连体 SegmentedButton → 两个独立圆角框并排（Email | WhatsApp）。
+    return Row(
+      children: [
+        Expanded(child: _contactChip(contactTypeLabel(l10n, ContactType.email), ContactType.email)),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+            child: _contactChip(contactTypeLabel(l10n, ContactType.whatsapp), ContactType.whatsapp)),
       ],
-      selected: {_contactType},
-      showSelectedIcon: false,
-      onSelectionChanged: (s) => setState(() => _contactType = s.first),
+    );
+  }
+
+  Widget _contactChip(String label, ContactType type) {
+    final selected = _contactType == type;
+    return InkWell(
+      key: ValueKey('ticketContact_${type.name}'),
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => setState(() => _contactType = type),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 13),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? AppColors.mintTint : AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+              color: selected ? AppColors.mint : AppColors.border, width: selected ? 1.5 : 1),
+        ),
+        child: Text(label,
+            style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: selected ? AppColors.mint : AppColors.ink)),
+      ),
     );
   }
 
@@ -235,7 +282,7 @@ class _TicketComposePageState extends ConsumerState<TicketComposePage> {
     );
   }
 
-  Widget _photoRow() {
+  Widget _photoRow(AppLocalizations l10n) {
     return Wrap(
       spacing: AppSpacing.sm,
       runSpacing: AppSpacing.sm,
@@ -265,18 +312,34 @@ class _TicketComposePageState extends ConsumerState<TicketComposePage> {
           GestureDetector(
             key: const ValueKey('ticketAddPhoto'),
             onTap: _addPhoto,
-            child: Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border),
+            // 0711：加图占位改虚线框 + 加号 + Tambah 文字。
+            child: CustomPaint(
+              foregroundPainter: DashedRRectPainter(
+                  color: AppColors.dashedViolet, radius: 12, dash: 5, gap: 4, strokeWidth: 1.5),
+              child: Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: AppColors.mintTint2,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: _uploading
+                    ? const Center(
+                        child: SizedBox(
+                            width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
+                    : Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.add, color: AppColors.mint, size: 22),
+                          const SizedBox(height: 2),
+                          Text(l10n.ticketPhotoAddLabel,
+                              style: const TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.mint,
+                                  fontWeight: FontWeight.w600)),
+                        ],
+                      ),
               ),
-              child: _uploading
-                  ? const Center(
-                      child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
-                  : const Icon(Icons.add_a_photo_outlined, color: AppColors.textTertiary),
             ),
           ),
       ],

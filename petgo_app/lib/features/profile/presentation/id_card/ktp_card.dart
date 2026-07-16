@@ -57,7 +57,7 @@ class KtpCardFront extends StatelessWidget {
   static const Color _ink = Color(0xFF14202E); // 标题/值 近黑
   static const Color _label = Color(0xFF23303F); // 字段 label
   static const Color _batch = Color(0xFF6A7A88); // 右上趣味批次标
-  static const Color _photo = Color(0xFFFF1D1D); // 照片占位红（无头像时）
+  static const Color _photo = Color(0xFFEAE4F5); // 照片占位淡紫（无头像时；原为刺眼纯红，语义像报错）
   static const Color _stamp = Color(0xFF171717); // 爪印戳
 
   @override
@@ -252,6 +252,7 @@ class KtpCardFront extends StatelessWidget {
           Container(
             width: 300,
             height: 320,
+            alignment: Alignment.center,
             decoration: BoxDecoration(
               color: _photo,
               borderRadius: BorderRadius.circular(16),
@@ -260,6 +261,10 @@ class KtpCardFront extends StatelessWidget {
                       image: NetworkImage(fields.avatarUrl!), fit: BoxFit.cover)
                   : null,
             ),
+            // 无头像时给占位框放宠物图标（避免裸露纯色空框）。
+            child: (fields.avatarUrl != null && fields.avatarUrl!.isNotEmpty)
+                ? null
+                : const Icon(Icons.pets, size: 140, color: Color(0x80845EC9)),
           ),
           const SizedBox(height: 10),
           Text(fields.placeLine.toUpperCase(),

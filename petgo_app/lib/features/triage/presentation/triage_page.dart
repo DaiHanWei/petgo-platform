@@ -9,6 +9,8 @@ import '../../../core/theme/shadows.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/dashed_rect.dart';
+import '../../../shared/widgets/design/baru_badge.dart';
 import '../../../shared/widgets/design/online_pulse_dot.dart';
 import '../../auth/domain/auth_guard.dart';
 import '../../auth/domain/auth_state.dart';
@@ -247,7 +249,7 @@ class _KCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final onCard = ai ? AppColors.onAccent : AppColors.ink;
     final subColor = ai ? AppColors.onAccent.withValues(alpha: 0.85) : AppColors.ink2;
-    return Container(
+    final card = Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         gradient: ai
@@ -259,11 +261,13 @@ class _KCard extends StatelessWidget {
             : null,
         color: ai ? null : AppColors.card,
         borderRadius: BorderRadius.circular(20),
-        border: ai ? null : Border.all(color: AppColors.line, width: 1.5),
+        // 兽医卡描边改由外层 CustomPaint 画紫虚线（0711），故此处不设实线 border。
         boxShadow: AppShadows.md,
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        // start 对齐：否则 stretch 会用 tight 约束把宽 46 的图标盒撑满整卡宽（呈满宽横条）。
+        // CTA 按钮自带 SizedBox(width: double.infinity) 仍能撑满，不受影响。
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             width: 46,
@@ -298,6 +302,24 @@ class _KCard extends StatelessWidget {
           _CtaButton(ctaKey: ctaKey, label: cta, ai: ai, onTap: onTap),
         ],
       ),
+    );
+    if (ai) return card;
+    // 兽医卡（0711 konsultasi-entries）：紫虚线描边 + 右上 BARU 徽章，突出「免费入队」。
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        CustomPaint(
+          foregroundPainter: DashedRRectPainter(
+            color: AppColors.mint,
+            radius: 20,
+            dash: 6,
+            gap: 4,
+            strokeWidth: 1.5,
+          ),
+          child: card,
+        ),
+        const Positioned(top: -7, right: 14, child: BaruBadge()),
+      ],
     );
   }
 }
