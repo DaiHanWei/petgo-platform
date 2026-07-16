@@ -105,11 +105,17 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
           borderRadius: BorderRadius.circular(12),
           border: selected ? null : Border.all(color: AppColors.line, width: 1.5),
         ),
-        child: Text(label,
-            style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: selected ? Colors.white : AppColors.mint)),
+        // 单行 + 按宽自适应缩放：印尼语标签较长，双段等宽下避免其中一段换行导致高度错位、按钮变形。
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(label,
+              maxLines: 1,
+              softWrap: false,
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: selected ? Colors.white : AppColors.mint)),
+        ),
       ),
     );
   }
