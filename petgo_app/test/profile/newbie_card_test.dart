@@ -51,12 +51,16 @@ Widget _wrap({NewbieTasks? tasks, Object? error}) => ProviderScope(
     );
 
 void main() {
-  testWidgets('半完成态：进度 3/6 + 6 行清单 + 标签本地化', (tester) async {
+  testWidgets('半完成态：圆形计数 3/6 + 展开后 6 行清单 + 标签本地化', (tester) async {
     await tester.pumpWidget(_wrap(tasks: _tasks(done: 3)));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('newbieCard')), findsOneWidget);
-    expect(find.text('3/6 done'), findsOneWidget);
+    // 0711：进度移到右上圆形计数徽章「3/6」。
+    expect(find.text('3/6'), findsOneWidget);
+    // 折叠默认只露 4 行，展开看全部 6 行。
+    await tester.tap(find.byKey(const ValueKey('newbieCardToggle')));
+    await tester.pumpAndSettle();
     // 6 行任务标签（英文本地化）。
     expect(find.text('Create pet profile'), findsOneWidget);
     expect(find.text('Add a health record'), findsOneWidget);
