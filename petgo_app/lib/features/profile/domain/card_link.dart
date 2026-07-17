@@ -13,6 +13,12 @@ String petCardShareUrl(String cardToken, {String baseUrl = kH5BaseUrl}) {
   return '$trimmed/p/$cardToken';
 }
 
+/// 下载引导落地页 URL（KTP 背面二维码目标）：后端直出 `GET /get`，扫码平台判断跳商店/唤起 app。
+String get petDownloadUrl {
+  final trimmed = kH5BaseUrl.endsWith('/') ? kH5BaseUrl.substring(0, kH5BaseUrl.length - 1) : kH5BaseUrl;
+  return '$trimmed/get';
+}
+
 /// 由不可枚举 shareToken 拼出 P-35 里程碑庆祝对外分享 URL（后端 `GET /m/{shareToken}` 直出 H5）。
 /// 与 [petCardShareUrl] 同 H5 子域；非用户明确指令不得改默认值。
 String milestoneShareUrl(String shareToken, {String baseUrl = kH5BaseUrl}) {

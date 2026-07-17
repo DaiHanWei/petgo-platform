@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../../core/theme/colors.dart';
 import 'ktp_card.dart';
@@ -13,11 +14,17 @@ class KtpCardBack extends StatelessWidget {
     required this.serialLine,
     required this.disclaimerTitle,
     required this.disclaimerBody,
+    required this.downloadUrl,
+    required this.scanCaption,
   });
 
   final String serialLine;
   final String disclaimerTitle;
   final String disclaimerBody;
+
+  /// 二维码目标（下载引导落地页 URL）+ 扫码文案（i18n）。
+  final String downloadUrl;
+  final String scanCaption;
 
   static const Color _bg1 = Color(0xFFDDEEF8);
   static const Color _bg2 = Color(0xFFC6E1F1);
@@ -75,10 +82,10 @@ class KtpCardBack extends StatelessWidget {
                     ],
                   ),
                   const Spacer(),
-                  // 中央白卡：承载娱乐仿制免责声明（合规必做，AC2/AC4）。
+                  // 中央白卡：二维码（扫码下载/唤起 app）+ 娱乐仿制免责声明（合规必做，AC2/AC4，缩小并存）。
                   Container(
                     width: 760,
-                    padding: const EdgeInsets.symmetric(horizontal: 52, vertical: 44),
+                    padding: const EdgeInsets.symmetric(horizontal: 52, vertical: 40),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.92),
                       borderRadius: BorderRadius.circular(28),
@@ -86,25 +93,54 @@ class KtpCardBack extends StatelessWidget {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        // 二维码：白底 + 圆角边框，扫码跳落地页（平台判断跳商店/唤起 app）。
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFE0E7EC), width: 2),
+                          ),
+                          child: QrImageView(
+                            data: downloadUrl,
+                            version: QrVersions.auto,
+                            size: 208,
+                            backgroundColor: Colors.white,
+                            padding: EdgeInsets.zero,
+                          ),
+                        ),
+                        const SizedBox(height: 18),
                         Text(
-                          disclaimerTitle,
+                          scanCaption,
                           textAlign: TextAlign.center,
                           style: const TextStyle(
                             color: _ink,
                             fontWeight: FontWeight.w800,
-                            fontSize: 40,
-                            letterSpacing: 0.5,
+                            fontSize: 32,
+                            letterSpacing: 0.3,
                           ),
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 22),
+                        // 免责声明缩为小字并存（合规不可删）。
+                        Text(
+                          disclaimerTitle,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: _sub,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 22,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
                         Text(
                           disclaimerBody,
                           textAlign: TextAlign.center,
                           style: const TextStyle(
                             color: _sub,
                             fontWeight: FontWeight.w500,
-                            fontSize: 26,
-                            height: 1.4,
+                            fontSize: 19,
+                            height: 1.35,
                           ),
                         ),
                       ],

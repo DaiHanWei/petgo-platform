@@ -136,9 +136,9 @@ public class SecurityConfig {
                         // 运维/文档/公开 H5（名片 /p、里程碑庆祝分享 /m）放行
                         .requestMatchers("/actuator/**", "/v3/api-docs/**", "/swagger-ui/**",
                                 "/swagger-ui.html", "/p/**", "/m/**").permitAll()
-                        // 法律政策 H5（隐私政策 / 服务条款 / 账号删除 / 儿童安全标准 / 支持页）公开放行（商店上架 + App WebView 引用）
+                        // 法律政策 H5（隐私政策 / 服务条款 / 账号删除 / 儿童安全标准 / 支持页）+ 下载引导落地页公开放行
                         .requestMatchers(HttpMethod.GET, "/privacy", "/terms",
-                                "/account-deletion", "/child-safety", "/support").permitAll()
+                                "/account-deletion", "/child-safety", "/support", "/get").permitAll()
                         // dev 诊断端点（仅 dev profile 存在）+ 错误转发
                         .requestMatchers("/api/v1/_ping-error", "/error").permitAll()
                         // 腾讯 IM 服务端回调（外部来源，内部 token/签名校验，Story 5.5）

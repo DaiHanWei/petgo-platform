@@ -7,8 +7,11 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../core/media/media_scope.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/utils/media_permission.dart';
+import '../../media/domain/media_upload_use_case.dart';
 import '../data/id_card_repository.dart';
 import '../data/profile_repository.dart';
 import '../domain/card_link.dart';
@@ -35,6 +38,7 @@ class _IdCardPageState extends ConsumerState<IdCardPage> {
   KtpEdits _edits = KtpEdits.empty;
   bool _generating = false;
   bool _hdBusy = false;
+  bool _uploadingPhoto = false;
 
   /// 1600×900 导出边界（HD 下载/分享在 6-3/6-4 用；本 Story 保证画布尺寸 + 截图能力）。
   final GlobalKey idCardBoundaryKey = GlobalKey();
@@ -108,6 +112,8 @@ class _IdCardPageState extends ConsumerState<IdCardPage> {
             serialLine: '${l10n.idCardSerialLabel}: ${card.serialId ?? '-'}',
             disclaimerTitle: l10n.idCardDisclaimerTitle,
             disclaimerBody: l10n.idCardDisclaimerBody,
+            downloadUrl: petDownloadUrl,
+            scanCaption: l10n.idCardScanToDownload,
           );
         }
         return KtpCardFront(fields: buildKtpFields(card, _edits));
@@ -188,6 +194,19 @@ class _IdCardPageState extends ConsumerState<IdCardPage> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 10),
+          // 换正面照片（前面时可用；持久落档案头像）。
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: (_showBack || _uploadingPhoto) ? null : _changePhoto,
+              icon: _uploadingPhoto
+                  ? const SizedBox(
+                      width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.add_a_photo_outlined),
+              label: Text(l10n.idCardChangePhoto),
+            ),
           ),
           const SizedBox(height: 10),
           SizedBox(
@@ -289,6 +308,28 @@ class _IdCardPageState extends ConsumerState<IdCardPage> {
     final origin = box != null ? box.localToGlobal(Offset.zero) & box.size : null;
     final text = '${l10n.idCardShareCaption}\n${petCardShareUrl(cardToken)}';
     await ref.read(shareServiceProvider)(text, sharePositionOrigin: origin);
+  }
+
+  /// 换正面照片（D1，2026-07-17）：**持久落宠物档案头像**——区别于会话级文字编辑（_edits）。
+  /// 上传公开桶 → PATCH /me avatarUrl → invalidate 让 KTP 正面 + 宠物档案头像同步刷新。
+  Future<void> _changePhoto() async {
+    setState(() => _uploadingPhoto = true);
+    final l10n = AppLocalizations.of(context);
+    try {
+      final result = await ref.read(mediaUploadUseCaseProvider).pickAndUploadOne(
+            scope: MediaScope.public,
+            source: MediaSource.gallery,
+            context: context,
+          );
+      if (result?.publicUrl == null) return; // 取消/无结果
+      await ref.read(profileRepositoryProvider).update(avatarUrl: result!.publicUrl);
+      ref.invalidate(idCardProvider); // KTP 正面 avatarUrl 刷新
+      ref.invalidate(petProfileProvider); // 「我的宠物」头像同步
+    } catch (_) {
+      if (mounted) _toast(l10n.mediaUploadFailed);
+    } finally {
+      if (mounted) setState(() => _uploadingPhoto = false);
+    }
   }
 
   // —— 会话级编辑（AC3）：仅改本地 _edits，绝不调 ProfileRepository / 任何档案写端点 ——

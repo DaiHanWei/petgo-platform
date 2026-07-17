@@ -49,6 +49,13 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="tailtopia" android:host="card"/>
             </intent-filter>
+            <!-- 下载引导落地页深链：tailtopia://open → 打开 App 落首页（s.tailtopia.id/get 唤起）。 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="tailtopia" android:host="open"/>
+            </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

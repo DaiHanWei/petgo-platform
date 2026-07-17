@@ -1102,6 +1102,8 @@
   "idCardStylePelajar": "Pelajar",
   "idCardComingSoon": "Dalam desain",
   "idCardSerialLabel": "No. Seri",
+  "idCardChangePhoto": "Ganti foto",
+  "idCardScanToDownload": "Pindai untuk unduh TailTopia",
   "idCardDisclaimerTitle": "Hanya Untuk Hiburan",
   "idCardDisclaimerBody": "Kartu ini bukan dokumen resmi dan tidak memiliki kekuatan hukum. Dibuat oleh TailTopia semata untuk hiburan.",
   "idCardFlip": "Balik",

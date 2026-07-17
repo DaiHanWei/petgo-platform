@@ -20,10 +20,14 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// 成长档案分享页深链 → go_router location 的纯映射（L0 可测）。
 /// `tailtopia://card/{token}` → `/profile`（成长档案 Tab，分享页 CTA 第①级）。
+/// `tailtopia://open` → `/home`（下载引导落地页 `s.tailtopia.id/get` 唤起已装 app 的通用深链）。
 /// 其它 scheme/host 暂不识别（返回 null，调用方忽略）。
 String? deepLinkToLocation(Uri uri) {
   if (uri.scheme == 'tailtopia' && uri.host == 'card') {
     return '/profile';
+  }
+  if (uri.scheme == 'tailtopia' && uri.host == 'open') {
+    return '/home';
   }
   return null;
 }
