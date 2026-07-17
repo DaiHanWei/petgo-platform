@@ -29,7 +29,7 @@ class VetTimedPayPage extends ConsumerStatefulWidget {
 
 class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
   static const Duration _pollInterval = Duration(seconds: 3);
-  static const int _windowSeconds = 90; // 1.5min
+  static const int _windowSeconds = 300; // 5min（服务端 PAY_WINDOW_SECONDS 对齐）
 
   Timer? _poll;
   Timer? _display;
