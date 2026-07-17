@@ -47,8 +47,8 @@ public class ConsultRequestService {
     /** 入队无接单超时（秒，服务端权威计时）。 */
     public static final long QUEUE_TIMEOUT_SECONDS = 60;
 
-    /** 接单后限时支付窗（秒，1.5min，服务端权威计时，FR-53A）。不信客户端计时。 */
-    public static final long PAY_WINDOW_SECONDS = 90;
+    /** 接单后限时支付窗（秒，5min，服务端权威计时，FR-53A）。不信客户端计时。 */
+    public static final long PAY_WINDOW_SECONDS = 300;
 
     private final ConsultRequestRepository requests;
     private final PetProfileRepository petProfiles;

@@ -34,8 +34,8 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> with WidgetsBinding
   /// 队列轮询间隔（比免费流 8s 更密：FR-53A 倒计时 + 尽快侦测支付/取消跃迁）。
   static const Duration _pollInterval = Duration(seconds: 4);
 
-  /// 支付窗（服务端权威 90s，仅用于倒计时显示 clamp）。
-  static const int _payWindowSeconds = 90;
+  /// 支付窗（服务端权威 300s=5min，仅用于倒计时显示 clamp）。
+  static const int _payWindowSeconds = 300;
 
   VetQueue? _queue; // null = 首次加载中
   Timer? _poll; // 拉队列

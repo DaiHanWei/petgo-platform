@@ -65,7 +65,8 @@ class PawCoinTopupServiceTest {
         when(tierProvider.byId("999")).thenThrow(AppException.validation("非法充值档位"));
         assertThatThrownBy(() -> service().create(1L, new CreateTopupRequest("999", "QRIS"), "k"))
                 .isInstanceOf(AppException.class);
-        verify(paymentIntentService, never()).createIntent(anyLong(), any(), any(), anyLong(), anyString(), anyString());
+        verify(paymentIntentService, never())
+                .createIntent(anyLong(), any(), any(), anyLong(), anyString(), anyString(), any());
     }
 
     @Test
@@ -80,8 +81,8 @@ class PawCoinTopupServiceTest {
     @Test
     void createsIntentChargesAndReturnsPayload() {
         when(tierProvider.byId("10k")).thenReturn(TIER_10K);
-        when(paymentIntentService.createIntent(1L, PaymentPurpose.PAWCOIN_TOPUP, PayChannel.QRIS,
-                10_000L, "IDR", "k")).thenReturn(intentResp("tok-1"));
+        when(paymentIntentService.createIntent(eq(1L), eq(PaymentPurpose.PAWCOIN_TOPUP), eq(PayChannel.QRIS),
+                eq(10_000L), eq("IDR"), eq("k"), any())).thenReturn(intentResp("tok-1"));
         PaymentIntent fresh = PaymentIntent.create(1L, PaymentPurpose.PAWCOIN_TOPUP, PayChannel.QRIS,
                 10_000L, "IDR", "tok-1"); // gatewayRef 为 null → 走首次 charge
         when(paymentIntentService.findByToken("tok-1")).thenReturn(Optional.of(fresh));
@@ -100,7 +101,7 @@ class PawCoinTopupServiceTest {
     @Test
     void idempotentReplayReturnsExistingPayloadWithoutRecharge() {
         when(tierProvider.byId("10k")).thenReturn(TIER_10K);
-        when(paymentIntentService.createIntent(anyLong(), any(), any(), anyLong(), anyString(), anyString()))
+        when(paymentIntentService.createIntent(anyLong(), any(), any(), anyLong(), anyString(), anyString(), any()))
                 .thenReturn(intentResp("tok-1"));
         PaymentIntent charged = PaymentIntent.create(1L, PaymentPurpose.PAWCOIN_TOPUP, PayChannel.QRIS,
                 10_000L, "IDR", "tok-1");
@@ -111,6 +112,26 @@ class PawCoinTopupServiceTest {
 
         assertThat(resp.payload()).isEqualTo("qr://old");
         verify(gateway, never()).createCharge(any());
+        verify(paymentIntentService, never()).attachCharge(anyString(), anyString(), any());
+    }
+
+    /** V85 / D-b：同档位未过期 PENDING 充值重开 → 复用同一 QR，不重复下单、不重调 GemPay。 */
+    @Test
+    void reuseSameTierPendingReturnsSameQrWithoutRecharge() {
+        when(tierProvider.byId("10k")).thenReturn(TIER_10K);
+        PaymentIntent pending = PaymentIntent.create(1L, PaymentPurpose.PAWCOIN_TOPUP, PayChannel.QRIS,
+                10_000L, "IDR", "tok-reuse", java.time.Instant.now().plusSeconds(3600));
+        pending.attachGatewayRef("gw-r", Map.of("payload", "qr://reuse"));
+        when(paymentIntentService.findReusablePending(1L, PaymentPurpose.PAWCOIN_TOPUP, PayChannel.QRIS, 10_000L))
+                .thenReturn(Optional.of(pending));
+
+        TopupResponse resp = service().create(1L, new CreateTopupRequest("10k", "QRIS"), "k-new");
+
+        assertThat(resp.intentToken()).isEqualTo("tok-reuse");
+        assertThat(resp.payload()).isEqualTo("qr://reuse");
+        verify(gateway, never()).createCharge(any());
+        verify(paymentIntentService, never())
+                .createIntent(anyLong(), any(), any(), anyLong(), anyString(), anyString(), any());
         verify(paymentIntentService, never()).attachCharge(anyString(), anyString(), any());
     }
 

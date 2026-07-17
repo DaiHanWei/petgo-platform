@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
  * L0（无 DB/Redis）。Story 3.3 接单响应契约 + 支付窗常量。
  *
  * <p>契约字段 {@code requestToken}/{@code state}/{@code payDeadlineAt}（服务端权威时间，兽医侧倒计时 FR-53A）；
- * state 由枚举 {@code name()} 落 UPPER_SNAKE；支付窗常量 90s（1.5min）不信客户端计时。
+ * state 由枚举 {@code name()} 落 UPPER_SNAKE；支付窗常量 300s（5min）不信客户端计时。
  */
 class ConsultAcceptResponseTest {
 
@@ -29,8 +29,8 @@ class ConsultAcceptResponseTest {
     }
 
     @Test
-    void payWindowIsNinetySeconds() {
-        // 1.5min 限时支付窗，服务端权威计时（不信客户端）。
-        assertThat(ConsultRequestService.PAY_WINDOW_SECONDS).isEqualTo(90L);
+    void payWindowIsFiveMinutes() {
+        // 5min 限时支付窗，服务端权威计时（不信客户端）。
+        assertThat(ConsultRequestService.PAY_WINDOW_SECONDS).isEqualTo(300L);
     }
 }

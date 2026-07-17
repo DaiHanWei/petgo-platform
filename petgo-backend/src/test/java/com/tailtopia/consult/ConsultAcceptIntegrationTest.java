@@ -29,7 +29,7 @@ import org.springframework.http.HttpHeaders;
 /**
  * L1（需 Docker postgres+redis）。Story 3.3 兽医接单与限时支付窗。启动即验 V66 契约（validate）。
  *
- * <p>核心：接单 CAS（H-4 单列 state，并发恰 1 兽医胜）+ 开 1.5min 支付窗（pay_deadline=+90s，服务端权威）+
+ * <p>核心：接单 CAS（H-4 单列 state，并发恰 1 兽医胜）+ 开 5min 支付窗（pay_deadline=+300s，服务端权威）+
  * goBusy 占用互斥；<b>接单不建 consult_orders</b>（A-5 红线）；支付窗超时 → 回退 QUEUEING 重播 + 释放兽医。
  */
 class ConsultAcceptIntegrationTest extends ApiIntegrationTest {
@@ -70,9 +70,9 @@ class ConsultAcceptIntegrationTest extends ApiIntegrationTest {
         ConsultRequest after = requests.findById(req.getId()).orElseThrow();
         assertThat(after.getState()).isEqualTo(ConsultRequestState.ACCEPTED_AWAIT_PAY);
         assertThat(after.getVetId()).isEqualTo(vet.getId());
-        // 支付窗服务端权威：pay_deadline ≈ 接单时刻 + 90s。
+        // 支付窗服务端权威：pay_deadline ≈ 接单时刻 + 300s（5min）。
         assertThat(after.getPayDeadlineAt()).isBetween(
-                before.plus(Duration.ofSeconds(80)), before.plus(Duration.ofSeconds(100)));
+                before.plus(Duration.ofSeconds(290)), before.plus(Duration.ofSeconds(310)));
         assertThat(presence.isBusy(vet.getId())).isTrue();     // 接单占用兽医
         assertThat(orders.count()).isEqualTo(ordersBefore);    // 接单绝不建订单（A-5 红线）
     }

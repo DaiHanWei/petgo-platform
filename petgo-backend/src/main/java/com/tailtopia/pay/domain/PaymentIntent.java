@@ -69,6 +69,13 @@ public class PaymentIntent {
     @Column(name = "gateway_meta")
     private Map<String, Object> gatewayMeta;
 
+    /**
+     * 付款窗过期时刻（V85）。仅 PAWCOIN_TOPUP 建单时填 now+60min；其余 purpose 留 null=无时间过期。
+     * 服务端权威：懒过期（statusOf/复用查询）+ 定时扫描据此置 EXPIRED。
+     */
+    @Column(name = "expires_at")
+    private Instant expiresAt;
+
     @Version
     @Column(name = "version", nullable = false)
     private long version;
@@ -85,6 +92,15 @@ public class PaymentIntent {
     /** 建单：PENDING 起步。{@code publicToken} 由 service 用 {@code CardTokenGenerator} 现生成传入。 */
     public static PaymentIntent create(long userId, PaymentPurpose purpose, PayChannel channel,
             long amount, String currency, String publicToken) {
+        return create(userId, purpose, channel, amount, currency, publicToken, null);
+    }
+
+    /**
+     * 建单（含付款窗，V85）。{@code expiresAt} 非空即设过期时刻（PAWCOIN_TOPUP 传 now+60min）；
+     * null = 无时间过期（其余 purpose，保持既有行为）。
+     */
+    public static PaymentIntent create(long userId, PaymentPurpose purpose, PayChannel channel,
+            long amount, String currency, String publicToken, Instant expiresAt) {
         if (amount <= 0) {
             throw AppException.validation("支付金额必须为正");
         }
@@ -96,7 +112,13 @@ public class PaymentIntent {
         p.currency = currency == null || currency.isBlank() ? "IDR" : currency;
         p.publicToken = publicToken;
         p.status = PaymentStatus.PENDING;
+        p.expiresAt = expiresAt;
         return p;
+    }
+
+    /** 是否已过窗（仅对有 expiresAt 的意图有意义；null → 永不过期，恒 false）。 */
+    public boolean isExpiredAt(Instant now) {
+        return expiresAt != null && now.isAfter(expiresAt);
     }
 
     /** 收款创建成功后回填网关订单号 + 脱敏快照（仅 PENDING 可回填）。 */
@@ -203,5 +225,9 @@ public class PaymentIntent {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public Instant getExpiresAt() {
+        return expiresAt;
     }
 }
