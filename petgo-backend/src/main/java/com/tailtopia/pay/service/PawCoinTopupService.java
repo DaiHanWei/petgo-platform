@@ -35,6 +35,9 @@ public class PawCoinTopupService {
 
     private static final String CURRENCY = "IDR";
 
+    /** 充值付款窗（V85）：60min。GemPay QR 有效期 65min > 此窗，窗内码始终存活，且早死 5min 留安全余量。 */
+    public static final java.time.Duration TOPUP_WINDOW = java.time.Duration.ofMinutes(60);
+
     private final TopupTierProvider tierProvider;
     private final PaymentIntentService paymentIntentService;
     private final PaymentGateway gateway;
@@ -62,8 +65,18 @@ public class PawCoinTopupService {
         PayChannel channel = parsePayChannel(req.channel());
         long amount = tier.amount();
 
+        // 复用同档位未过期 PENDING 充值（V85 / D-b）：同 amount+channel 重开 → 返回既有意图 + 同一 QR，
+        // 不重复下单、不重调 GemPay。换档位（amount/channel 不同）→ 无匹配 → 走下方新建。
+        PaymentIntent reusable = paymentIntentService
+                .findReusablePending(userId, PaymentPurpose.PAWCOIN_TOPUP, channel, amount)
+                .orElse(null);
+        if (reusable != null) {
+            return toResponse(reusable, channel, amount, tier.coins(), payloadOf(reusable));
+        }
+
+        // 新建：60min 窗口意图（幂等键仍写，limit 在意图层）。
         PaymentIntentResponse intent = paymentIntentService.createIntent(
-                userId, PaymentPurpose.PAWCOIN_TOPUP, channel, amount, CURRENCY, idempotencyKey);
+                userId, PaymentPurpose.PAWCOIN_TOPUP, channel, amount, CURRENCY, idempotencyKey, TOPUP_WINDOW);
 
         PaymentIntent entity = paymentIntentService.findByToken(intent.token())
                 .orElseThrow(() -> AppException.notFound("支付意图不存在"));
@@ -83,12 +96,23 @@ public class PawCoinTopupService {
             paymentIntentService.attachCharge(entity.getPublicToken(), charge.gatewayRef(), meta);
             payload = charge.payload();
         } else {
-            // 幂等重放：返回既有载荷（下单时存入 gateway_meta.payload）。
-            Map<String, Object> meta = entity.getGatewayMeta();
-            payload = meta == null ? null : (String) meta.get("payload");
+            // 幂等重放（同 Idempotency-Key）：返回既有载荷（下单时存入 gateway_meta.payload）。
+            payload = payloadOf(entity);
         }
 
-        return new TopupResponse(intent.token(), channel.name(), amount, tier.coins(), payload);
+        return toResponse(entity, channel, amount, tier.coins(), payload);
+    }
+
+    /** 从 gateway_meta 取二维码/deeplink 载荷（下单时存入）。 */
+    private static String payloadOf(PaymentIntent intent) {
+        Map<String, Object> meta = intent.getGatewayMeta();
+        return meta == null ? null : (String) meta.get("payload");
+    }
+
+    private static TopupResponse toResponse(PaymentIntent intent, PayChannel channel, long amount,
+            long coins, String payload) {
+        return new TopupResponse(intent.getPublicToken(), channel.name(), amount, coins, payload,
+                intent.getExpiresAt());
     }
 
     /** 仅允许外部收款渠道 QRIS；PAWCOIN（站内余额）/非法值 → 422。 */

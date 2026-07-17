@@ -14,6 +14,7 @@ import com.tailtopia.shared.pay.PaymentCallback;
 import com.tailtopia.shared.ratelimit.IdempotencyService;
 import com.tailtopia.shared.ratelimit.RedisRateLimiter;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,11 +64,21 @@ public class PaymentIntentService {
     }
 
     /**
-     * 幂等建意图（PENDING）。同 {@code idempotencyKey} 重放取回既有意图。收款/扣费在下游 story 接。
+     * 幂等建意图（PENDING，无时间过期）。同 {@code idempotencyKey} 重放取回既有意图。
      */
     @Transactional
     public PaymentIntentResponse createIntent(long userId, PaymentPurpose purpose, PayChannel channel,
             long amount, String currency, String idempotencyKey) {
+        return createIntent(userId, purpose, channel, amount, currency, idempotencyKey, null);
+    }
+
+    /**
+     * 幂等建意图（PENDING）。同 {@code idempotencyKey} 重放取回既有意图。
+     * {@code ttl} 非空即设付款窗过期（PAWCOIN_TOPUP 传 60min，V85）；null = 无时间过期。
+     */
+    @Transactional
+    public PaymentIntentResponse createIntent(long userId, PaymentPurpose purpose, PayChannel channel,
+            long amount, String currency, String idempotencyKey, Duration ttl) {
         rateLimiter.check("rl:pay:create:" + userId, 20, Duration.ofMinutes(1));
 
         Optional<Long> existing = idempotency.findResourceId(idempotencyKey);
@@ -77,11 +88,53 @@ public class PaymentIntentService {
                     .orElseThrow(() -> AppException.notFound("支付意图不存在"));
         }
 
+        Instant expiresAt = ttl == null ? null : Instant.now().plus(ttl);
         PaymentIntent intent = PaymentIntent.create(
-                userId, purpose, channel, amount, currency, tokenGenerator.generate());
+                userId, purpose, channel, amount, currency, tokenGenerator.generate(), expiresAt);
         PaymentIntent saved = intents.save(intent);
         idempotency.store(idempotencyKey, saved.getId());
         return PaymentIntentResponse.of(saved);
+    }
+
+    /**
+     * 复用同档位未过期 PENDING 充值意图（V85，D-b）：同 {@code (user, purpose, channel, amount)} 且 PENDING、
+     * 未过窗 → 返回它（供 topup 复用同一 QR，不重复下单）。命中但已过窗 → 懒过期置 EXPIRED 后返回空（触发新建）。
+     */
+    @Transactional
+    public Optional<PaymentIntent> findReusablePending(long userId, PaymentPurpose purpose,
+            PayChannel channel, long amount) {
+        Optional<PaymentIntent> found = intents
+                .findFirstByUserIdAndPurposeAndChannelAndAmountAndStatusOrderByCreatedAtDesc(
+                        userId, purpose, channel, amount, PaymentStatus.PENDING);
+        if (found.isEmpty()) {
+            return Optional.empty();
+        }
+        PaymentIntent intent = found.get();
+        if (intent.isExpiredAt(Instant.now())) {
+            intent.markExpired(null); // 懒过期：超窗即置 EXPIRED，不复用
+            intents.saveAndFlush(intent);
+            return Optional.empty();
+        }
+        return Optional.of(intent);
+    }
+
+    /**
+     * 定时过期扫描（V85）：一批 PENDING 且 {@code expires_at < now} 的意图置 EXPIRED（懒过期的兜底，
+     * 清理无人轮询的过窗充值）。逐笔独立、单笔失败不阻断。返回置 EXPIRED 的笔数。
+     */
+    @Transactional
+    public int expireOverduePending(int limit) {
+        int expired = 0;
+        for (PaymentIntent intent : intents.findByStatusAndExpiresAtBefore(PaymentStatus.PENDING,
+                Instant.now(), org.springframework.data.domain.PageRequest.of(0, Math.max(1, limit)))) {
+            if (intent.getStatus() != PaymentStatus.PENDING) {
+                continue; // 并发已推进
+            }
+            intent.markExpired(null);
+            intents.save(intent);
+            expired++;
+        }
+        return expired;
     }
 
     /**
@@ -146,15 +199,21 @@ public class PaymentIntentService {
 
     /**
      * 支付状态轮询（Story 1.5）。<b>仅本人意图</b>——token 归属校验（{@code userId} 不符或不存在均
-     * {@link AppException#notFound}，用 404 不用 403 以免泄漏他人 token 存在性）。只读、无副作用
-     * （到账靠 1.3 回调，不主动向网关刷状态）。
+     * {@link AppException#notFound}，用 404 不用 403 以免泄漏他人 token 存在性）。
+     *
+     * <p><b>懒过期（V85）</b>：PENDING 且已过窗 → 就地置 EXPIRED 返回（轮询即见过期，不等定时扫描）。
+     * 到账仍靠 1.3 回调，不主动向网关刷状态。
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public PaymentStatus statusOf(long userId, String publicToken) {
-        return intents.findByPublicToken(publicToken)
+        PaymentIntent intent = intents.findByPublicToken(publicToken)
                 .filter(i -> i.getUserId() != null && i.getUserId() == userId)
-                .map(PaymentIntent::getStatus)
                 .orElseThrow(() -> AppException.notFound("支付意图不存在"));
+        if (intent.getStatus() == PaymentStatus.PENDING && intent.isExpiredAt(Instant.now())) {
+            intent.markExpired(null);
+            intents.saveAndFlush(intent);
+        }
+        return intent.getStatus();
     }
 
     /**

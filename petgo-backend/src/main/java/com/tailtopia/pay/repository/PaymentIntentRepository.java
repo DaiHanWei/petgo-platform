@@ -28,4 +28,12 @@ public interface PaymentIntentRepository extends JpaRepository<PaymentIntent, Lo
     /** 订单中心游标分页（Story 5.1）：本人 充值(PAWCOIN_TOPUP) PAID 意图 created_at < cursor 倒序（充值凭证）。 */
     List<PaymentIntent> findByUserIdAndPurposeAndStatusAndCreatedAtLessThanOrderByCreatedAtDesc(
             long userId, PaymentPurpose purpose, PaymentStatus status, Instant cursor, Pageable pageable);
+
+    /** 复用同档位未过期 PENDING 充值（V85，D-b）：同 (user, purpose, channel, amount) 最新一笔 PENDING。 */
+    Optional<PaymentIntent> findFirstByUserIdAndPurposeAndChannelAndAmountAndStatusOrderByCreatedAtDesc(
+            long userId, PaymentPurpose purpose,
+            com.tailtopia.pay.domain.PayChannel channel, long amount, PaymentStatus status);
+
+    /** 定时过期扫描（V85）：PENDING 且 expires_at < now 的一批（充值 60min 窗超时置 EXPIRED）。 */
+    List<PaymentIntent> findByStatusAndExpiresAtBefore(PaymentStatus status, Instant now, Pageable pageable);
 }
