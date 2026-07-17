@@ -19,12 +19,15 @@ import '../domain/id_card.dart';
 import '../domain/share_service.dart';
 import 'id_card/id_card_placeholder.dart';
 import 'id_card/ktp_card.dart';
-import 'id_card/ktp_card_back.dart';
 import 'id_card/ktp_fields.dart';
 
 /// 宠物身份证详情页（Story 6.2 · FR-49B/UX-DR5）。三风格切换（KTP 完整 / Paspor·Pelajar 占位）、
-/// KTP 正反翻面、会话级编辑（不写档案 AC3）、老用户「尚未生成」引导态 + 生成动作（6-1 POST，幂等）。
+/// 会话级编辑（不写档案 AC3）、老用户「尚未生成」引导态 + 生成动作（6-1 POST，幂等）。
 /// HD 付费下载留 6-3、分享落地留 6-4。
+///
+/// 2026-07-17（用户决策）：**取消背面**——证件只剩正面，背面的下载二维码随之下线（后端 `/get`
+/// 落地页保留，外部渠道仍可用）。背面原承载的娱乐仿制免责声明改在本页 UI 呈现（见 [_disclaimer]），
+/// 故不进导出图。
 class IdCardPage extends ConsumerStatefulWidget {
   const IdCardPage({super.key});
 
@@ -34,7 +37,6 @@ class IdCardPage extends ConsumerStatefulWidget {
 
 class _IdCardPageState extends ConsumerState<IdCardPage> {
   int _styleIndex = 0; // 0=KTP, 1=Paspor, 2=Pelajar
-  bool _showBack = false;
   KtpEdits _edits = KtpEdits.empty;
   bool _generating = false;
   bool _hdBusy = false;
@@ -107,15 +109,6 @@ class _IdCardPageState extends ConsumerState<IdCardPage> {
   Widget _cardForStyle(AppLocalizations l10n, IdCardData card) {
     switch (_styleIndex) {
       case 0:
-        if (_showBack) {
-          return KtpCardBack(
-            serialLine: '${l10n.idCardSerialLabel}: ${card.serialId ?? '-'}',
-            disclaimerTitle: l10n.idCardDisclaimerTitle,
-            disclaimerBody: l10n.idCardDisclaimerBody,
-            downloadUrl: petDownloadUrl,
-            scanCaption: l10n.idCardScanToDownload,
-          );
-        }
         return KtpCardFront(fields: buildKtpFields(card, _edits));
       case 1:
         return IdCardComingSoon(
@@ -147,10 +140,7 @@ class _IdCardPageState extends ConsumerState<IdCardPage> {
   Widget _styleTab(String label, int index) {
     final selected = _styleIndex == index;
     return GestureDetector(
-      onTap: () => setState(() {
-        _styleIndex = index;
-        _showBack = false;
-      }),
+      onTap: () => setState(() => _styleIndex = index),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
         alignment: Alignment.center,
@@ -176,31 +166,22 @@ class _IdCardPageState extends ConsumerState<IdCardPage> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => setState(() => _showBack = !_showBack),
-                  icon: const Icon(Icons.flip_to_back),
-                  label: Text(_showBack ? l10n.idCardShowFront : l10n.idCardFlip),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _showBack ? null : _openEditSheet,
-                  icon: const Icon(Icons.edit),
-                  label: Text(l10n.idCardEdit),
-                ),
-              ),
-            ],
-          ),
+          _disclaimer(l10n),
           const SizedBox(height: 10),
-          // 换正面照片（前面时可用；持久落档案头像）。
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
-              onPressed: (_showBack || _uploadingPhoto) ? null : _changePhoto,
+              onPressed: _openEditSheet,
+              icon: const Icon(Icons.edit),
+              label: Text(l10n.idCardEdit),
+            ),
+          ),
+          const SizedBox(height: 10),
+          // 换正面照片（持久落档案头像）。
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _uploadingPhoto ? null : _changePhoto,
               icon: _uploadingPhoto
                   ? const SizedBox(
                       width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
@@ -221,6 +202,18 @@ class _IdCardPageState extends ConsumerState<IdCardPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// 娱乐仿制免责声明（合规必做）。背面取消后移到页面 UI：用户看得到，但不随卡面导出/分享出去。
+  Widget _disclaimer(AppLocalizations l10n) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Text(
+        '${l10n.idCardDisclaimerTitle} · ${l10n.idCardDisclaimerBody}',
+        textAlign: TextAlign.center,
+        style: const TextStyle(color: AppColors.ink2, fontSize: 11, height: 1.35),
       ),
     );
   }

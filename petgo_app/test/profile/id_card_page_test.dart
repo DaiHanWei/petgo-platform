@@ -8,7 +8,6 @@ import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/features/profile/domain/share_service.dart';
 import 'package:tailtopia/features/profile/presentation/id_card/id_card_placeholder.dart';
 import 'package:tailtopia/features/profile/presentation/id_card/ktp_card.dart';
-import 'package:tailtopia/features/profile/presentation/id_card/ktp_card_back.dart';
 import 'package:tailtopia/features/profile/presentation/id_card_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
@@ -108,12 +107,13 @@ void main() {
     expect(find.byType(KtpCardFront), findsNothing);
   });
 
-  testWidgets('翻面 → KTP 背面含娱乐仿制免责', (tester) async {
+  // 背面 2026-07-17 已按用户决策取消：证件只剩正面，无翻面入口；娱乐仿制免责改在页面 UI 呈现
+  // （不进卡面 → 不进导出图）。
+  testWidgets('无翻面入口 + 免责声明在页面 UI', (tester) async {
     await _pump(tester, _generatedCat);
-    await tester.tap(find.text('Flip'));
-    await tester.pumpAndSettle();
-    expect(find.byType(KtpCardBack), findsOneWidget);
-    expect(find.text('For Entertainment Only'), findsOneWidget);
+    expect(find.byType(KtpCardFront), findsOneWidget);
+    expect(find.text('Flip'), findsNothing);
+    expect(find.textContaining('For Entertainment Only'), findsOneWidget);
   });
 
   testWidgets('未解锁 HD → 点解锁弹 paywall → 选 PawCoin 调 purchaseHd', (tester) async {

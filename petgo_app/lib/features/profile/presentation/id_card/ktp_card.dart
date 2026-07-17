@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/theme/colors.dart';
+import '../../../../shared/widgets/app_image.dart';
 
-/// KTP 证件卡逻辑画布尺寸（导出恒 1600×900，FR-49B）。所有内部布局按此绝对尺寸编排，
-/// 页面用 [FittedBox] 缩放到可用宽度；导出用同尺寸 RepaintBoundary 保证像素精度。
-const Size kIdCardCanvas = Size(1600, 900);
+/// KTP 证件卡逻辑画布尺寸。设计稿 `KTP Tailtopia-01.png` 为 994×600，本画布取其 2×，
+/// 故所有设计坐标 ×2 即本文件常量（[_KtpLayout]）。页面用 [FittedBox] 缩放到可用宽度；
+/// 导出用同尺寸 RepaintBoundary 保证像素精度。
+const Size kIdCardCanvas = Size(1988, 1200);
 
 /// KTP 证件卡展示字段（会话级：来自 6-1 档案数据 + 预览可编辑覆盖 + 趣味默认，**不写档案**）。
 @immutable
@@ -42,23 +43,78 @@ class KtpFields {
   final String? avatarUrl;
 }
 
-/// KTP 风格证件卡（正面，Story 6.2 · FR-49B）。1:1 还原用户给定 KTP 参考图（`KTP Tailtopia.png`）：
-/// 浅蓝底 + 斜向品牌水印 + TailTopia logo + `KARTU TANDA PENDUDUK TAILTOPIA` 标题 + NIK + 字段列
-/// + 照片框 + 爪印戳。**娱乐仿制**：品牌化 + 水印 + 爪印（替代指纹）+ 宠物字段 → 明确区分真实政府证件。
+/// 设计稿反解出的绝对布局（画布 1988×1200 坐标系 = 设计稿 994×600 的 2×）。
+///
+/// 取值方法：成品图与 `Asset/Background.png` 做像素差分得各叠加元素 bbox；字号由 cap height 定、
+/// 字距由实测字宽反推（渲染端套同一 AA 阈值校准）。改动前请回设计稿复测，勿凭手感调。
+abstract final class _KtpLayout {
+  /// 卡片圆角（背景图 alpha 已自带圆角；此半径供裁剪与页面显示对齐）。
+  static const double radius = 80;
+
+  // —— 左上 logo ——
+  static const Rect logo = Rect.fromLTWH(48, 46, 220, 220);
+
+  // —— 标题（两行居中；中心 x=1005 略偏卡片中线右，照设计稿）——
+  static const double titleCenterX = 1005;
+  static const double titleBaseline = 154; // 第一行基线
+  static const double titleSize = 88.7;
+  static const double titleLineHeight = 91 / titleSize;
+
+  // —— NIK 行（X 为文字盒左缘：已扣掉字形左边距，使墨迹落在设计稿实测位）——
+  static const double nikBaseline = 392;
+  static const double nikLabelX = 113;
+  static const double nikColonX = 424;
+  static const double nikValueX = 494;
+  static const double nikSize = 88.2;
+  static const double nikTracking = -2.0;
+
+  // —— 字段列（10 行等距）——
+  static const double fieldLabelX = 90;
+  static const double fieldColonX = 596;
+  static const double fieldValueX = 639;
+  static const double fieldFirstBaseline = 508;
+  static const double fieldPitch = 64;
+  static const double fieldSize = 50.8;
+  static const double fieldValueTracking = -0.5;
+
+  /// 字段值最大宽度：右侧须给照片框留空（照片左缘 1526）。超出以省略号截断。
+  static const double fieldValueMaxWidth = 860;
+
+  // —— 右侧照片框（白描边 + 内圆角照片）——
+  static const Rect photo = Rect.fromLTWH(1526, 340, 402, 480);
+  static const double photoBorder = 9;
+  static const double photoOuterRadius = 38;
+  static const double photoInnerRadius = 29;
+
+  // —— 照片下方地点/日期（居中于照片中轴 x=1726）——
+  static const double stampCenterX = 1726;
+  static const double placeBaseline = 866;
+  static const double dateBaseline = 906;
+  static const double placeSize = 39.2;
+  static const double placeTracking = -2.0;
+
+  // —— 爪印戳（替代真证件指纹 → 娱乐仿制标记）——
+  // 尺寸含素材自带的透明边（墨迹只占 128×139 画布的 (5,3)-(124,133)），故框比墨迹略大。
+  static const Rect paw = Rect.fromLTWH(1601, 912, 256, 279);
+}
+
+/// 全卡统一墨色（设计稿取样：整卡文字仅此一色）。
+const Color _kInk = Color(0xFF1A1A1A);
+
+const String _kFontFamily = 'Rubik';
+const List<FontVariation> _kMedium = [FontVariation('wght', 500)];
+const List<FontVariation> _kSemiBold = [FontVariation('wght', 600)];
+
+/// KTP 风格证件卡（正面，Story 6.2 · FR-49B）。2026-07-17 按设计师交付的 `Front/` 资产 1:1 还原：
+/// 底纹（浅蓝底 + 地球仪 + 猫剪影 + 斜向水印）整张来自 `Background.png`，代码只叠 logo / 标题 /
+/// NIK / 字段列 / 照片 / 地点日期 / 爪印戳。**娱乐仿制**：品牌化 + 水印 + 爪印（替代指纹）+ 宠物字段
+/// → 明确区分真实政府证件；免责声明改在页面 UI 呈现（不入卡面，故不进导出图）。
+///
+/// 设计稿上的 `*customable` / `*pet profile batch` 是给开发看的批注，**不印在卡上**。
 class KtpCardFront extends StatelessWidget {
   const KtpCardFront({super.key, required this.fields});
 
   final KtpFields fields;
-
-  // —— KTP 专属配色（保真页局部常量，照 pet_card_page 范式；非全局主题色）——
-  static const Color _bg1 = Color(0xFFDDEEF8);
-  static const Color _bg2 = Color(0xFFC6E1F1);
-  static const Color _wm = Color(0x3388B8D8); // 斜向水印文字
-  static const Color _ink = Color(0xFF14202E); // 标题/值 近黑
-  static const Color _label = Color(0xFF23303F); // 字段 label
-  static const Color _batch = Color(0xFF6A7A88); // 右上趣味批次标
-  static const Color _photo = Color(0xFFEAE4F5); // 照片占位淡紫（无头像时；原为刺眼纯红，语义像报错）
-  static const Color _stamp = Color(0xFF171717); // 爪印戳
 
   @override
   Widget build(BuildContext context) {
@@ -66,46 +122,31 @@ class KtpCardFront extends StatelessWidget {
       width: kIdCardCanvas.width,
       height: kIdCardCanvas.height,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(36),
+        borderRadius: BorderRadius.circular(_KtpLayout.radius),
         child: Stack(
           children: [
-            // 底：浅蓝渐变
+            // 底纹整张来自设计资产（水印/地球仪/猫剪影已烘焙其中，代码不再手绘）。
             const Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [_bg1, _bg2],
-                  ),
-                ),
+              child: Image(
+                image: AssetImage('assets/ktp/ktp_front_bg.png'),
+                fit: BoxFit.fill,
               ),
             ),
-            // 斜向品牌水印（三级水印之一/二：品牌 + 安全底纹）
-            Positioned.fill(
-              child: CustomPaint(painter: KtpWatermarkPainter()),
+            // fit 必填：Image 不给 fit 时按图片原始像素居中绘制、不缩放（logo 素材仅 110×110，
+            // 落进 220 的框会缩水一半）。
+            _positioned(
+              _KtpLayout.logo,
+              const Image(image: AssetImage('assets/ktp/ktp_logo.png'), fit: BoxFit.fill),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(58, 30, 54, 30),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _header(),
-                  const SizedBox(height: 16),
-                  _nikRow(),
-                  const SizedBox(height: 18),
-                  Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(child: _fields()),
-                        const SizedBox(width: 24),
-                        _rightColumn(),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+            _title(),
+            ..._nikRow(),
+            ..._fieldRows(),
+            _photo(),
+            _centeredLine(fields.placeLine.toUpperCase(), _KtpLayout.placeBaseline),
+            _centeredLine(fields.dateLine, _KtpLayout.dateBaseline),
+            _positioned(
+              _KtpLayout.paw,
+              const Image(image: AssetImage('assets/ktp/ktp_paw_stamp.png'), fit: BoxFit.fill),
             ),
           ],
         ),
@@ -113,204 +154,186 @@ class KtpCardFront extends StatelessWidget {
     );
   }
 
-  Widget _header() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _logo(),
-        const SizedBox(width: 20),
-        const Expanded(
-          child: Text(
-            'KARTU TANDA\nPENDUDUK TAILTOPIA',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: _ink,
-              fontWeight: FontWeight.w800,
-              fontSize: 46,
-              height: 1.05,
-              letterSpacing: 0.5,
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        const Padding(
-          padding: EdgeInsets.only(top: 8),
-          child: Text(
-            '*pet profile batch',
-            style: TextStyle(
-              color: _batch,
-              fontStyle: FontStyle.italic,
-              fontSize: 24,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-      ],
+  static Widget _positioned(Rect r, Widget child) =>
+      Positioned(left: r.left, top: r.top, width: r.width, height: r.height, child: child);
+
+  /// 按基线绝对定位一段文字：[Baseline] 让子文字基线落在距容器顶 [baseline] 处，容器顶固定在
+  /// 画布 y=0 → 基线即画布绝对 y。这样定位不受字体 ascent / 行高实现差异影响（设计稿量的正是基线）。
+  ///
+  /// [width] 必须由内层 [SizedBox] 施加，**不能**写在 [Positioned] 上：[Baseline] 会 loosen 约束再按
+  /// 子件固有尺寸定尺寸，Positioned 的宽度传不到 Text → 居中容器塌成文字自身宽度、`textAlign` 失效。
+  static Widget _atBaseline({
+    required double left,
+    required double baseline,
+    double? width,
+    required Widget child,
+  }) {
+    return Positioned(
+      left: left,
+      top: 0,
+      child: Baseline(
+        baseline: baseline,
+        baselineType: TextBaseline.alphabetic,
+        child: width == null ? child : SizedBox(width: width, child: child),
+      ),
     );
   }
 
-  Widget _logo() {
-    return Container(
-      width: 108,
-      height: 108,
-      padding: const EdgeInsets.all(5),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(26),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.mint500, AppColors.mint, AppColors.gold],
+  static TextStyle _style({
+    required double size,
+    required List<FontVariation> weight,
+    double? tracking,
+    double? height,
+  }) {
+    return TextStyle(
+      fontFamily: _kFontFamily,
+      fontVariations: weight,
+      // fontWeight 与可变轴同步：轴负责实际字重，此值供度量与 fallback。
+      fontWeight: identical(weight, _kSemiBold) ? FontWeight.w600 : FontWeight.w500,
+      color: _kInk,
+      fontSize: size,
+      letterSpacing: tracking,
+      height: height,
+    );
+  }
+
+  Widget _title() {
+    const half = 700.0; // 居中容器半宽（够容下最长一行 944）
+    return _atBaseline(
+      left: _KtpLayout.titleCenterX - half,
+      baseline: _KtpLayout.titleBaseline,
+      width: half * 2,
+      child: Text(
+        'KARTU TANDA\nPENDUDUK TAILTOPIA',
+        textAlign: TextAlign.center,
+        style: _style(
+          size: _KtpLayout.titleSize,
+          weight: _kSemiBold,
+          height: _KtpLayout.titleLineHeight,
         ),
       ),
-      child: Container(
+    );
+  }
+
+  List<Widget> _nikRow() {
+    final style = _style(size: _KtpLayout.nikSize, weight: _kSemiBold);
+    return [
+      _atBaseline(
+        left: _KtpLayout.nikLabelX,
+        baseline: _KtpLayout.nikBaseline,
+        child: Text('NIK', style: style),
+      ),
+      _atBaseline(
+        left: _KtpLayout.nikColonX,
+        baseline: _KtpLayout.nikBaseline,
+        child: Text(':', style: style),
+      ),
+      _atBaseline(
+        left: _KtpLayout.nikValueX,
+        baseline: _KtpLayout.nikBaseline,
+        child: Text(
+          fields.nik,
+          maxLines: 1,
+          style: _style(
+            size: _KtpLayout.nikSize,
+            weight: _kSemiBold,
+            tracking: _KtpLayout.nikTracking,
+          ),
+        ),
+      ),
+    ];
+  }
+
+  List<Widget> _fieldRows() {
+    final rows = <(String, String)>[
+      ('Nama', fields.nama),
+      ('Tempat/Tgl Lahir', fields.tempatTglLahir),
+      ('Spesies', fields.spesies),
+      ('Ras', fields.ras),
+      ('Jenis Kelamin', fields.jenisKelamin),
+      ('Alamat', fields.alamat),
+      ('Status Perkawinan', fields.statusPerkawinan),
+      ('Pekerjaan', fields.pekerjaan),
+      ('Kewarganegaraan', fields.kewarganegaraan),
+      ('Berlaku Hingga', fields.berlakuHingga),
+    ];
+    final labelStyle = _style(size: _KtpLayout.fieldSize, weight: _kMedium);
+    final valueStyle = _style(
+      size: _KtpLayout.fieldSize,
+      weight: _kSemiBold,
+      tracking: _KtpLayout.fieldValueTracking,
+    );
+
+    final out = <Widget>[];
+    for (var i = 0; i < rows.length; i++) {
+      final baseline = _KtpLayout.fieldFirstBaseline + _KtpLayout.fieldPitch * i;
+      out.add(_atBaseline(
+        left: _KtpLayout.fieldLabelX,
+        baseline: baseline,
+        child: Text(rows[i].$1, maxLines: 1, style: labelStyle),
+      ));
+      out.add(_atBaseline(
+        left: _KtpLayout.fieldColonX,
+        baseline: baseline,
+        child: Text(':', style: labelStyle),
+      ));
+      out.add(_atBaseline(
+        left: _KtpLayout.fieldValueX,
+        baseline: baseline,
+        width: _KtpLayout.fieldValueMaxWidth,
+        child: Text(
+          rows[i].$2.toUpperCase(),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: valueStyle,
+        ),
+      ));
+    }
+    return out;
+  }
+
+  /// 照片框：白描边 + 内圆角。设计稿里的纯红块是「此处由用户上传照片」的占位标记，不是配色；
+  /// 无照片时退回品牌浅底 + 宠物图标，绝不渲染成红块（会像报错）。
+  Widget _photo() {
+    final url = fields.avatarUrl;
+    final hasPhoto = url != null && url.isNotEmpty;
+    return _positioned(
+      _KtpLayout.photo,
+      Container(
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(_KtpLayout.photoOuterRadius),
         ),
-        alignment: Alignment.center,
-        child: const Icon(Icons.pets, color: AppColors.mint, size: 62),
+        padding: const EdgeInsets.all(_KtpLayout.photoBorder),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(_KtpLayout.photoInnerRadius),
+          child: hasPhoto
+              ? AppImage.widget(url, fit: BoxFit.cover)
+              : const ColoredBox(
+                  color: Color(0xFFEAE4F5),
+                  child: Center(child: Icon(Icons.pets, size: 160, color: Color(0x80845EC9))),
+                ),
+        ),
+      ),
+    );
+  }
+
+  Widget _centeredLine(String text, double baseline) {
+    const half = 300.0;
+    return _atBaseline(
+      left: _KtpLayout.stampCenterX - half,
+      baseline: baseline,
+      width: half * 2,
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        maxLines: 1,
+        style: _style(
+          size: _KtpLayout.placeSize,
+          weight: _kSemiBold,
+          tracking: _KtpLayout.placeTracking,
+        ),
       ),
     );
   }
-
-  Widget _nikRow() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.baseline,
-      textBaseline: TextBaseline.alphabetic,
-      children: [
-        const SizedBox(
-          width: 200,
-          child: Text('NIK',
-              style: TextStyle(color: _ink, fontWeight: FontWeight.w700, fontSize: 44)),
-        ),
-        const Text(':  ',
-            style: TextStyle(color: _ink, fontWeight: FontWeight.w700, fontSize: 44)),
-        Text(fields.nik,
-            style: const TextStyle(
-                color: _ink, fontWeight: FontWeight.w800, fontSize: 44, letterSpacing: 1.5)),
-      ],
-    );
-  }
-
-  Widget _fields() {
-    final rows = <List<String>>[
-      ['Nama', fields.nama],
-      ['Tempat/Tgl Lahir', fields.tempatTglLahir],
-      ['Spesies', fields.spesies],
-      ['Ras', fields.ras],
-      ['Jenis Kelamin', fields.jenisKelamin],
-      ['Alamat', fields.alamat],
-      ['Status Perkawinan', fields.statusPerkawinan],
-      ['Pekerjaan', fields.pekerjaan],
-      ['Kewarganegaraan', fields.kewarganegaraan],
-      ['Berlaku Hingga', fields.berlakuHingga],
-    ];
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (var i = 0; i < rows.length; i++) ...[
-          if (i > 0) const SizedBox(height: 12),
-          _fieldRow(rows[i][0], rows[i][1]),
-        ],
-      ],
-    );
-  }
-
-  Widget _fieldRow(String label, String value) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.baseline,
-      textBaseline: TextBaseline.alphabetic,
-      children: [
-        SizedBox(
-          width: 288,
-          child: Text(label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: _label, fontWeight: FontWeight.w600, fontSize: 26)),
-        ),
-        const Text(':  ',
-            style: TextStyle(color: _label, fontWeight: FontWeight.w600, fontSize: 26)),
-        Expanded(
-          child: Text(
-            value.toUpperCase(),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: _ink, fontWeight: FontWeight.w700, fontSize: 26),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _rightColumn() {
-    return SizedBox(
-      width: 320,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Container(
-            width: 300,
-            height: 320,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: _photo,
-              borderRadius: BorderRadius.circular(16),
-              image: (fields.avatarUrl != null && fields.avatarUrl!.isNotEmpty)
-                  ? DecorationImage(
-                      image: NetworkImage(fields.avatarUrl!), fit: BoxFit.cover)
-                  : null,
-            ),
-            // 无头像时给占位框放宠物图标（避免裸露纯色空框）。
-            child: (fields.avatarUrl != null && fields.avatarUrl!.isNotEmpty)
-                ? null
-                : const Icon(Icons.pets, size: 140, color: Color(0x80845EC9)),
-          ),
-          const SizedBox(height: 10),
-          Text(fields.placeLine.toUpperCase(),
-              style: const TextStyle(color: _ink, fontWeight: FontWeight.w600, fontSize: 24)),
-          Text(fields.dateLine,
-              style: const TextStyle(color: _ink, fontWeight: FontWeight.w600, fontSize: 24)),
-          const SizedBox(height: 6),
-          // 爪印戳（替代真证件指纹 → 娱乐仿制标记，三级水印/戳记之三）
-          const Icon(Icons.pets, color: _stamp, size: 96),
-        ],
-      ),
-    );
-  }
-}
-
-/// 斜向重复品牌水印 painter（`KARTU TANDA PENDUDUK TAILTOPIA` 铺满）。
-class KtpWatermarkPainter extends CustomPainter {
-  static const String _text = 'KARTU TANDA PENDUDUK TAILTOPIA    ';
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final tp = TextPainter(
-      text: const TextSpan(
-        text: _text,
-        style: TextStyle(
-          color: KtpCardFront._wm,
-          fontSize: 44,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 3,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-
-    canvas.save();
-    canvas.clipRect(Offset.zero & size);
-    canvas.rotate(-0.35); // ≈ -20°
-    const double lineHeight = 110;
-    for (double y = -size.height; y < size.height * 1.6; y += lineHeight) {
-      for (double x = -size.width * 0.6; x < size.width * 1.6; x += tp.width) {
-        tp.paint(canvas, Offset(x, y));
-      }
-    }
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

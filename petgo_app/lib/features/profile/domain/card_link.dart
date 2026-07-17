@@ -13,11 +13,9 @@ String petCardShareUrl(String cardToken, {String baseUrl = kH5BaseUrl}) {
   return '$trimmed/p/$cardToken';
 }
 
-/// 下载引导落地页 URL（KTP 背面二维码目标）：后端直出 `GET /get`，扫码平台判断跳商店/唤起 app。
-String get petDownloadUrl {
-  final trimmed = kH5BaseUrl.endsWith('/') ? kH5BaseUrl.substring(0, kH5BaseUrl.length - 1) : kH5BaseUrl;
-  return '$trimmed/get';
-}
+// 下载引导落地页（后端直出 `GET /get`，扫码平台判断跳商店/唤起 app）**仍在线**，外部渠道可直接用；
+// 但 App 内已无引用点——它原本只被 KTP 背面二维码调用，背面于 2026-07-17 按用户决策取消。
+// 若日后 App 内再需要拉新二维码/链接，在此重建 petDownloadUrl 即可。
 
 /// 由不可枚举 shareToken 拼出 P-35 里程碑庆祝对外分享 URL（后端 `GET /m/{shareToken}` 直出 H5）。
 /// 与 [petCardShareUrl] 同 H5 子域；非用户明确指令不得改默认值。
