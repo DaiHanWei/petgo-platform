@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Unduh TailTopia</title>
+<style>
+  :root{ --violet:#845EC9; --violet-d:#6f4cb0; --ink:#1f2a30; --muted:#5d6b73;
+    --line:#e7ece9; --bg:#f6f4fb; --card:#ffffff; }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"PingFang SC","Noto Sans",sans-serif;
+    color:var(--ink);background:var(--bg);line-height:1.6;font-size:16px;min-height:100vh;
+    display:flex;flex-direction:column;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+  .top{background:linear-gradient(135deg,var(--violet),var(--violet-d));color:#fff;padding:36px 20px 30px;text-align:center}
+  .top .brand{font-weight:700;letter-spacing:.3px;font-size:26px}
+  .top .sub{font-size:14px;opacity:.92;margin-top:8px}
+  .wrap{max-width:460px;width:100%;margin:0 auto;padding:24px 18px 40px;flex:1}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px 18px;
+    box-shadow:0 2px 8px rgba(60,40,110,.06);text-align:center}
+  .card h1{font-size:19px;margin:0 0 6px}
+  .card p{font-size:14px;color:var(--muted);margin:0 0 20px}
+  .btn{display:block;width:100%;padding:15px 18px;border-radius:14px;font-size:16px;font-weight:700;
+    text-decoration:none;margin:10px 0;border:0;cursor:pointer}
+  .btn-primary{background:var(--violet);color:#fff}
+  .btn-secondary{background:#fff;color:var(--violet);border:1.5px solid var(--violet)}
+  .hint{font-size:12px;color:var(--muted);margin-top:16px}
+  .foot{text-align:center;font-size:11px;color:var(--muted);padding:0 18px 22px}
+</style>
+</head>
+<body>
+  <div class="top">
+    <div class="brand">🐾 TailTopia</div>
+    <div class="sub">Rekam tumbuh kembang &amp; konsultasi dokter hewan</div>
+  </div>
+  <div class="wrap">
+    <div class="card">
+      <h1>Buka di aplikasi TailTopia</h1>
+      <p>Sudah punya aplikasinya? Kami coba membukanya. Belum punya? Unduh gratis di bawah.</p>
+      <a id="playBtn" class="btn btn-primary" href="#">Unduh di Google Play</a>
+      <a id="appstoreBtn" class="btn btn-secondary" href="#">Unduh di App Store</a>
+      <div class="hint" id="hint">Memuat…</div>
+    </div>
+  </div>
+  <div class="foot">© TailTopia</div>
+
+<script>
+(function(){
+  // 商店链接（iOS 待上架：占位官网/敬请期待，Android 正式跳 Play）。
+  var PLAY_URL = "https://play.google.com/store/apps/details?id=com.tailtopia.app";
+  var APPSTORE_URL = ""; // TODO 上架后填 App Store 链接；空 = iOS 分支占位
+  var DEEPLINK = "tailtopia://open"; // 已装 app 唤起（通用 host，落 /home）
+
+  var ua = navigator.userAgent || "";
+  var isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+  var isAndroid = /Android/i.test(ua);
+
+  var playBtn = document.getElementById("playBtn");
+  var appstoreBtn = document.getElementById("appstoreBtn");
+  var hint = document.getElementById("hint");
+
+  playBtn.href = PLAY_URL;
+  appstoreBtn.href = APPSTORE_URL || "#";
+
+  // 平台不匹配的按钮弱化/隐藏，主按钮置顶。
+  if(isAndroid){
+    appstoreBtn.style.display="none";
+    playBtn.textContent="Unduh di Google Play";
+  } else if(isIOS){
+    if(APPSTORE_URL){
+      playBtn.style.display="none";
+      appstoreBtn.className="btn btn-primary";
+      appstoreBtn.textContent="Unduh di App Store";
+    } else {
+      // 未上架占位：iOS 用户暂显「敬请期待」，仍给 Play 作参考不跳。
+      appstoreBtn.textContent="App Store · segera hadir";
+      appstoreBtn.style.opacity="0.6";
+      appstoreBtn.removeAttribute("href");
+    }
+  }
+
+  // 尝试唤起已装 app：不可见 iframe + 超时 fallback 到商店。
+  // 未装/唤起失败 → 停留本页由用户点按钮下载。
+  var storeUrl = isIOS ? (APPSTORE_URL || "") : (isAndroid ? PLAY_URL : "");
+  function tryOpenApp(){
+    hint.textContent = "Membuka aplikasi…";
+    var start = Date.now();
+    var timer = setTimeout(function(){
+      // 仍在本页（未被 app 接管）→ 提示手动下载；有商店链接则自动跳一次。
+      if(Date.now() - start < 2500 && storeUrl){
+        // 页面未隐藏说明未唤起成功
+        if(!document.hidden){ window.location.href = storeUrl; }
+      }
+      hint.textContent = "Belum terpasang? Unduh lewat tombol di atas.";
+    }, 1600);
+    // 页面被 app 接管会触发 visibilitychange → 取消 fallback
+    document.addEventListener("visibilitychange", function(){
+      if(document.hidden){ clearTimeout(timer); }
+    });
+    window.location.href = DEEPLINK;
+  }
+
+  // 自动尝试唤起（用户从二维码扫入，多为已装或想装）。
+  tryOpenApp();
+})();
+</script>
+</body>
+</html>

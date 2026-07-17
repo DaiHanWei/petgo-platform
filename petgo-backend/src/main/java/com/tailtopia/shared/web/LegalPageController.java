@@ -54,6 +54,15 @@ public class LegalPageController {
         return html("legal/support.html");
     }
 
+    /**
+     * 下载引导落地页（KTP 背面二维码目标）：UA 判平台跳 Play/App Store，尝试 {@code tailtopia://open}
+     * 唤起已装 app。自包含静态 HTML，无 DB/数据依赖。公网经 CF 把 {@code s.tailtopia.id/get} 映射到本服务。
+     */
+    @GetMapping("/get")
+    public ResponseEntity<Resource> get() {
+        return html("legal/get.html");
+    }
+
     private ResponseEntity<Resource> html(String classpathLocation) {
         Resource body = new ClassPathResource(classpathLocation);
         return ResponseEntity.ok()
