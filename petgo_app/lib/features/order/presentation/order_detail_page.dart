@@ -7,6 +7,7 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/utils/date_format.dart';
 import '../data/order_repository.dart';
 import '../domain/order_detail.dart';
 import '../domain/order_summary.dart';
@@ -40,40 +41,81 @@ class OrderDetailPage extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.screenEdge),
       children: [
-        // 头部：类型 + 状态徽章 + 金额
-        Row(
-          children: [
-            Icon(orderTypeIcon(d.orderType), color: AppColors.mint),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Text(orderTypeLabel(l10n, d.orderType),
-                  style: AppTypography.title.copyWith(fontWeight: FontWeight.w700)),
-            ),
-            OrderStatusBadge(statusCode: d.statusCode, statusColor: d.statusColor),
-          ],
+        // 主信息卡（0718 保真：白卡包裹 · 标题+徽章 · 内联行）。
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4)),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(orderTypeLabel(l10n, d.orderType),
+                        style: AppTypography.title.copyWith(fontWeight: FontWeight.w700)),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  OrderStatusBadge(statusCode: d.statusCode, statusColor: d.statusColor),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              if (d.payChannel != null) _infoLine(l10n.orderChannelLabel, orderChannelText(d.payChannel)),
+              _infoLine(l10n.orderAmountLabel, orderAmountText(l10n, d.amount)),
+              if (d.coins != null) _infoLine(l10n.orderCoinsLabel, '${orderThousands(d.coins!)} koin'),
+              ..._dateLines(context, l10n, d),
+              // 兽医：宠物区块（已删占位 FR-54D）。
+              if (d.orderType == OrderType.vetConsult && (d.petDeleted || d.petName != null)) ...[
+                const SizedBox(height: AppSpacing.sm),
+                _petBlock(context, l10n, d),
+              ],
+            ],
+          ),
         ),
-        const SizedBox(height: AppSpacing.lg),
-        _row(l10n.orderAmountLabel, orderAmountText(l10n, d.amount)),
-        if (d.coins != null) _row(l10n.orderCoinsLabel, '${d.coins} koin'),
-        if (d.payChannel != null) _row(l10n.orderChannelLabel, d.payChannel!),
-        if (d.paidAt != null) _row(l10n.orderPaidAtLabel, _fmtDate(d.paidAt!)),
-        if (d.createdAt != null) _row(l10n.orderCreatedAtLabel, _fmtDate(d.createdAt!)),
-
-        // 兽医：宠物区块（已删占位）+ 会话
-        if (d.orderType == OrderType.vetConsult) ...[
-          const Divider(height: AppSpacing.xl),
-          _petBlock(context, l10n, d),
-          if (d.sessionEndedAt != null) _row(l10n.orderSessionEndedLabel, _fmtDate(d.sessionEndedAt!)),
-        ],
 
         // 退款进度
         if (d.refundStage != null) ...[
-          const Divider(height: AppSpacing.xl),
+          const SizedBox(height: AppSpacing.md),
           _refundBlock(context, l10n, d),
         ],
       ],
     );
   }
+
+  /// 日期行（按状态择一）：兽医会话开始/结束 · 支付时间 · 建单时间；均带时分。
+  List<Widget> _dateLines(BuildContext context, AppLocalizations l10n, OrderDetail d) {
+    if (d.orderType == OrderType.vetConsult) {
+      if (d.sessionStartedAt != null && d.sessionEndedAt == null) {
+        return [_infoLine(l10n.orderSessionStartedLabel, formatDayMonthYearTime(context, d.sessionStartedAt!))];
+      }
+      if (d.sessionEndedAt != null) {
+        return [_infoLine(l10n.orderSessionEndedLabel, formatDayMonthYearTime(context, d.sessionEndedAt!))];
+      }
+    }
+    if (d.paidAt != null) {
+      return [_infoLine(l10n.orderPaidAtLabel, formatDayMonthYearTime(context, d.paidAt!))];
+    }
+    if (d.createdAt != null) {
+      return [_infoLine(l10n.orderCreatedAtLabel, formatDayMonthYearTime(context, d.createdAt!))];
+    }
+    return const [];
+  }
+
+  /// 内联信息行「Label: value」（参考 0718 详情卡样式）。
+  Widget _infoLine(String label, String value) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Text('$label: $value', style: AppTypography.body),
+      );
 
   Widget _petBlock(BuildContext context, AppLocalizations l10n, OrderDetail d) {
     if (d.petDeleted) {
@@ -152,17 +194,6 @@ class OrderDetailPage extends ConsumerWidget {
     );
   }
 
-  Widget _row(String label, String value) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(label, style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
-            Text(value, style: AppTypography.body),
-          ],
-        ),
-      );
-
   Widget _error(BuildContext context, AppLocalizations l10n, WidgetRef ref, Object e) {
     final notFound = e is DioException && e.response?.statusCode == 404;
     return ListView(
@@ -184,7 +215,4 @@ class OrderDetailPage extends ConsumerWidget {
       ],
     );
   }
-
-  String _fmtDate(DateTime d) =>
-      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 }

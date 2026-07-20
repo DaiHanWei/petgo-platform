@@ -30,6 +30,20 @@ enum OrderType {
       };
 }
 
+/// 订单状态分组（前端筛选 + 头卡统计）。**只覆盖后端订单中心真实能出的 6 个状态码**
+/// （待接单/待支付/失败等不进订单中心 A-5 → 不设 Menunggu 组，避免恒空筛选）。
+/// - [ongoing] Berlangsung：IN_PROGRESS / REFUNDING（退款处理中仍算进行中）
+/// - [done] Selesai：COMPLETED / COMPLETED_REFUND_REJECTED / REFUNDED / PAID
+enum OrderStatusGroup {
+  ongoing,
+  done;
+
+  static OrderStatusGroup fromStatus(String statusCode) => switch (statusCode) {
+        'IN_PROGRESS' || 'REFUNDING' => OrderStatusGroup.ongoing,
+        _ => OrderStatusGroup.done,
+      };
+}
+
 /// 状态色语义（后端权威 WARN/INFO/SUCCESS）。前端映射实际徽章色。
 enum OrderStatusColor {
   warn,
