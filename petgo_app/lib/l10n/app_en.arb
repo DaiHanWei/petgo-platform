@@ -177,7 +177,7 @@
   "newbieCardSubtitle": "Not counted in milestone progress above",
   "newbieCardShowMore": "{count} more tasks",
   "newbieCardShowLess": "Show less",
-  "newbieCardTitle": "New-pet checklist",
+  "newbieCardTitle": "Beginner Tasks",
   "newbieCardProgress": "{done}/{total} done",
   "@newbieCardProgress": { "placeholders": { "done": { "type": "int" }, "total": { "type": "int" } } },
   "newbieCardAllDone": "🎓 Lulus Pemula unlocked!",

@@ -131,7 +131,7 @@
   "newbieCardSubtitle": "Tidak dihitung di progres milestone atas",
   "newbieCardShowMore": "{count} tugas lainnya",
   "newbieCardShowLess": "Lihat lebih sedikit",
-  "newbieCardTitle": "Daftar tugas anak baru",
+  "newbieCardTitle": "Tugas Pemula",
   "newbieCardProgress": "{done}/{total} selesai",
   "@newbieCardProgress": { "placeholders": { "done": { "type": "int" }, "total": { "type": "int" } } },
   "newbieCardAllDone": "🎓 Lulus Pemula terbuka!",
