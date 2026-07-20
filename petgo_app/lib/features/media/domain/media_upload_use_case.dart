@@ -19,9 +19,10 @@ class MediaUploadUseCase {
     ImagePicker? picker,
     this.processor = const ImageProcessor(),
     OssUploader? uploader,
-  })  : permissionGateway = permissionGateway ?? const PermissionHandlerGateway(),
-        picker = picker ?? ImagePicker(),
-        uploader = uploader ?? OssUploader();
+  }) : permissionGateway =
+           permissionGateway ?? const PermissionHandlerGateway(),
+       picker = picker ?? ImagePicker(),
+       uploader = uploader ?? OssUploader();
 
   final MediaRepository repository;
   final PermissionGateway permissionGateway;
@@ -72,18 +73,47 @@ class MediaUploadUseCase {
     return processor.process(raw);
   }
 
+  Future<List<Uint8List>> pickMultiAndProcess({
+    required int limit,
+    BuildContext? context,
+  }) async {
+    final outcome = await permissionGateway.request(MediaSource.gallery);
+    if (outcome != MediaPermissionOutcome.granted) {
+      if (context != null && context.mounted) {
+        await showMediaPermissionDeniedDialog(context, permissionGateway);
+      }
+      return const [];
+    }
+    final picked = await picker.pickMultiImage(
+      maxWidth: 2048,
+      maxHeight: 2048,
+      imageQuality: 85,
+    );
+    final files = picked.take(limit);
+    final result = <Uint8List>[];
+    for (final file in files) {
+      result.add(processor.process(await file.readAsBytes()));
+    }
+    return result;
+  }
+
   /// 上传已处理好的字节（请求预签名票据 → 直传）。抽出便于单测后半段与复用。
   Future<OssUploadResult> uploadBytes({
     required MediaScope scope,
     required Uint8List bytes,
   }) async {
-    final ticket = await repository.requestUploadTicket(scope, contentType: 'image/jpeg');
+    final ticket = await repository.requestUploadTicket(
+      scope,
+      contentType: 'image/jpeg',
+    );
     return uploader.put(ticket, bytes: bytes);
   }
 
   Future<XFile?> _pick(MediaSource source) {
     return picker.pickImage(
-      source: source == MediaSource.camera ? ImageSource.camera : ImageSource.gallery,
+      source: source == MediaSource.camera
+          ? ImageSource.camera
+          : ImageSource.gallery,
       // 原生层降采样（不占主 isolate）：相机原图常 4000×3000/十几 MB，会让后续纯 Dart
       // 解码/压缩同步卡死主线程、预览迟迟不出。先压到 ≤2048px + 质量 85 再交给 process 剥 EXIF。
       maxWidth: 2048,
@@ -93,6 +123,8 @@ class MediaUploadUseCase {
   }
 }
 
-final Provider<MediaUploadUseCase> mediaUploadUseCaseProvider = Provider<MediaUploadUseCase>(
-  (ref) => MediaUploadUseCase(repository: ref.read(mediaRepositoryProvider)),
-);
+final Provider<MediaUploadUseCase> mediaUploadUseCaseProvider =
+    Provider<MediaUploadUseCase>(
+      (ref) =>
+          MediaUploadUseCase(repository: ref.read(mediaRepositoryProvider)),
+    );
