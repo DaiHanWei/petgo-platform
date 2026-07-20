@@ -9,7 +9,6 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/date_format.dart';
-import '../../../shared/widgets/dashed_rect.dart';
 import '../../../shared/widgets/design/baru_badge.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/pet_status_selector.dart';
@@ -296,63 +295,48 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
         ],
       );
 
-  /// 健康记录入口卡（BARU · 0711 paspor-entries）：紫虚线卡 → /profile/health。
-  Widget _healthEntryCard(BuildContext context, AppLocalizations l10n) => CustomPaint(
-        foregroundPainter: DashedRRectPainter(
-          color: AppColors.mint,
-          radius: 14,
-          dash: 5,
-          gap: 4,
-          strokeWidth: 2,
+  /// 健康记录入口卡（0718：普通实心卡，去 0711 的紫虚线+BARU）→ /profile/health。
+  /// 图标改参考的圆环对勾（check_circle_outline），无 tinted 方块底。
+  Widget _healthEntryCard(BuildContext context, AppLocalizations l10n) => Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: const [
+            BoxShadow(color: Color(0x0D2B2A27), offset: Offset(0, 2), blurRadius: 8),
+          ],
         ),
         child: Material(
           color: AppColors.card,
           borderRadius: BorderRadius.circular(14),
+          clipBehavior: Clip.antiAlias,
           child: InkWell(
             key: const ValueKey('diaryHealthEntry'),
-            borderRadius: BorderRadius.circular(14),
             onTap: () => context.push('/profile/health'),
-            child: Stack(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: AppColors.mintTint,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(Icons.health_and_safety_outlined,
-                            size: 20, color: AppColors.mint),
-                      ),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(l10n.diaryHealthEntryTitle,
-                                style: const TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.ink)),
-                            const SizedBox(height: 2),
-                            Text(l10n.diaryHealthEntrySub,
-                                style: const TextStyle(
-                                    fontSize: 12, color: AppColors.textSecondary)),
-                          ],
-                        ),
-                      ),
-                      const Icon(Icons.chevron_right, color: AppColors.muted),
-                    ],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
+                children: [
+                  const Icon(Icons.check_circle_outline, size: 26, color: AppColors.mint),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(l10n.diaryHealthEntryTitle,
+                            style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.ink)),
+                        const SizedBox(height: 2),
+                        Text(l10n.diaryHealthEntrySub,
+                            style: const TextStyle(
+                                fontSize: 12, color: AppColors.textSecondary)),
+                      ],
+                    ),
                   ),
-                ),
-                const Positioned(top: 8, right: 10, child: BaruBadge()),
-              ],
+                  const Icon(Icons.chevron_right, color: AppColors.muted),
+                ],
+              ),
             ),
           ),
         ),

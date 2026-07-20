@@ -9,8 +9,6 @@ import '../../../core/theme/shadows.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../../shared/widgets/dashed_rect.dart';
-import '../../../shared/widgets/design/baru_badge.dart';
 import '../../../shared/widgets/design/online_pulse_dot.dart';
 import '../../auth/domain/auth_guard.dart';
 import '../../auth/domain/auth_state.dart';
@@ -261,7 +259,6 @@ class _KCard extends StatelessWidget {
             : null,
         color: ai ? null : AppColors.card,
         borderRadius: BorderRadius.circular(20),
-        // 兽医卡描边改由外层 CustomPaint 画紫虚线（0711），故此处不设实线 border。
         boxShadow: AppShadows.md,
       ),
       child: Column(
@@ -303,24 +300,8 @@ class _KCard extends StatelessWidget {
         ],
       ),
     );
-    if (ai) return card;
-    // 兽医卡（0711 konsultasi-entries）：紫虚线描边 + 右上 BARU 徽章，突出「免费入队」。
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        CustomPaint(
-          foregroundPainter: DashedRRectPainter(
-            color: AppColors.mint,
-            radius: 20,
-            dash: 6,
-            gap: 4,
-            strokeWidth: 1.5,
-          ),
-          child: card,
-        ),
-        const Positioned(top: -7, right: 14, child: BaruBadge()),
-      ],
-    );
+    // 0718：兽医卡与 AI 卡一样直接返回实心卡（去 0711 的紫虚线描边+BARU 徽章）。
+    return card;
   }
 }
 
