@@ -22,39 +22,51 @@ class OrderCard extends StatelessWidget {
     return Material(
       color: AppColors.surface,
       borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
         onTap: () => context.push('/me/orders/${order.orderToken}'),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: AppColors.mintTint,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(orderTypeIcon(order.orderType), size: 22, color: AppColors.mint),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // 顶部状态色条（DESIGN 0718：金=待/进行 · 绿=完成 · 蓝=退款中）。
+            Container(height: 4, color: orderStatusStripe(order.statusColor)),
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppColors.mintTint,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(orderTypeIcon(order.orderType), size: 22, color: AppColors.mint),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(orderTypeLabel(l10n, order.orderType),
+                            style: AppTypography.body.copyWith(fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 3),
+                        Text(orderCardSubtitle(context, l10n, order),
+                            style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: OrderStatusBadge(
+                        statusCode: order.statusCode, statusColor: order.statusColor),
+                  ),
+                ],
               ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(orderTypeLabel(l10n, order.orderType),
-                        style: AppTypography.body.copyWith(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 2),
-                    Text(orderAmountText(l10n, order.amount),
-                        style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
-                  ],
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              OrderStatusBadge(statusCode: order.statusCode, statusColor: order.statusColor),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

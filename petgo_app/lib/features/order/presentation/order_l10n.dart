@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/utils/date_format.dart';
 import '../domain/order_detail.dart';
 import '../domain/order_summary.dart';
 
@@ -54,14 +55,43 @@ String refundStageLabel(AppLocalizations l10n, RefundStage stage) => switch (sta
       RefundStage.unknown => l10n.orderStatusRefunding,
     };
 
-/// 金额展示：非 null 千分位 `Rp...`，null → "Belum ada pembayaran"（待接单/HD 预留）。
-String orderAmountText(AppLocalizations l10n, int? amount) {
-  if (amount == null) return l10n.orderNoPayment;
-  final s = amount.abs().toString();
+/// 千分位（点分隔，印尼格式）。
+String orderThousands(int n) {
+  final s = n.abs().toString();
   final buf = StringBuffer();
   for (int i = 0; i < s.length; i++) {
     if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
     buf.write(s[i]);
   }
-  return 'Rp$buf';
+  return buf.toString();
+}
+
+/// 金额展示：非 null 千分位 `Rp...`，null → "Belum ada pembayaran"（待接单/HD 预留）。
+String orderAmountText(AppLocalizations l10n, int? amount) {
+  if (amount == null) return l10n.orderNoPayment;
+  return 'Rp${orderThousands(amount)}';
+}
+
+/// 订单卡顶部状态色条颜色（复用徽章前景强调色：WARN=金 / INFO=薄荷 / SUCCESS=绿）。
+Color orderStatusStripe(OrderStatusColor c) => orderStatusColors(c).fg;
+
+/// 支付渠道展示（品牌名不本地化；PAWCOIN→PawCoin，其余大写原样如 QRIS/DANA）。
+String orderChannelText(String? channel) {
+  if (channel == null || channel.isEmpty) return '';
+  if (channel.toUpperCase() == 'PAWCOIN') return 'PawCoin';
+  return channel.toUpperCase();
+}
+
+/// 订单卡副行：`渠道 · 金额 [→ N koin] · 日期`（缺渠道省渠道段，充值附币量换算）。
+String orderCardSubtitle(BuildContext context, AppLocalizations l10n, OrderSummary order) {
+  final segs = <String>[];
+  final ch = orderChannelText(order.payChannel);
+  if (ch.isNotEmpty) segs.add(ch);
+  if (order.orderType == OrderType.pawcoinTopup && order.amount != null) {
+    segs.add('${orderAmountText(l10n, order.amount)} → ${orderThousands(order.amount!)} ${l10n.orderCoinsSuffix}');
+  } else {
+    segs.add(orderAmountText(l10n, order.amount));
+  }
+  if (order.createdAt != null) segs.add(formatDayMonthTime(context, order.createdAt!));
+  return segs.join(' · ');
 }
