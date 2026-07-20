@@ -94,7 +94,7 @@ void main() {
   });
 
   group('paywall 渲染', () {
-    testWidgets('黄色锁定 → 显 CTA + 锁定标题 + 骨架读屏隐藏；安全免责仍在', (tester) async {
+    testWidgets('黄色锁定（0718 FR-43C）→ 等级也锁(琥珀「Risk level locked」不泄露黄) + 底部 Buka Detail Lengkap + 骨架读屏隐藏；免责仍在', (tester) async {
       await _pump(
           tester,
           const TriageResult(
@@ -102,8 +102,13 @@ void main() {
               dangerLevel: DangerLevel.yellow,
               locked: true,
               disclaimer: 'AI 仅供参考'));
-      expect(find.byKey(const ValueKey('triageUnlockCta')), findsOneWidget);
-      expect(find.text('Detailed care advice is locked'), findsOneWidget);
+      // 0718：等级图标本身也锁——显锁定 header「Risk level locked」，不泄露「黄」等级。
+      expect(find.text('Risk level locked'), findsOneWidget);
+      expect(find.text('🟡'), findsNothing);
+      // 解锁 CTA 从卡内内联移到页面底部「Open Full Detail」（卡内 triageUnlockCta 不再渲染）。
+      expect(find.byKey(const ValueKey('triageUnlockOpenFull')), findsOneWidget);
+      expect(find.byKey(const ValueKey('triageUnlockCta')), findsNothing);
+      expect(find.text('Detailed care advice is locked'), findsOneWidget); // 详建卡锁文案仍在
       expect(find.byType(ExcludeSemantics), findsWidgets); // 骨架占位读屏隐藏
       expect(find.text('AI 仅供参考'), findsOneWidget); // 安全免费部分（免责）仍下发
     });

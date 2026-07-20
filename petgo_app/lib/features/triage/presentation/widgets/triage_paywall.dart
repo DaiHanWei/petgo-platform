@@ -23,9 +23,12 @@ String formatIdr(int amount) {
 /// 无障碍：装饰性占位骨架 [ExcludeSemantics] 对读屏隐藏；整卡一条 [Semantics] 提示「详建已锁定，可解锁」，
 /// CTA 按钮自带可读标签。红色永不锁——本 widget 仅在 `result.isDetailLocked`（非红）时被结果页渲染。
 class TriagePaywall extends ConsumerWidget {
-  const TriagePaywall({super.key, required this.triageId});
+  const TriagePaywall({super.key, required this.triageId, this.showCta = true});
 
   final int triageId;
+
+  /// 0718：等级+详建捆绑锁时，解锁 CTA 移到页面底部栏，此处只留骨架+锁文案（[showCta]=false）。
+  final bool showCta;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -80,25 +83,27 @@ class TriagePaywall extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          FilledButton(
-            key: const ValueKey('triageUnlockCta'),
-            onPressed: busy
-                ? null
-                : () async {
-                    final method = await showUnlockMethodSheet(context, ref,
-                        priceIdr: kAiUnlockPriceIdr);
-                    if (method == null) return;
-                    await ref
-                        .read(triageUnlockControllerProvider.notifier)
-                        .unlock(triageId, method);
-                  },
-            style: FilledButton.styleFrom(backgroundColor: AppColors.mint),
-            child: busy
-                ? const SizedBox(
-                    height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : Text(l10n.triageUnlockCta(price)),
-          ),
+          if (showCta) ...[
+            const SizedBox(height: 12),
+            FilledButton(
+              key: const ValueKey('triageUnlockCta'),
+              onPressed: busy
+                  ? null
+                  : () async {
+                      final method = await showUnlockMethodSheet(context, ref,
+                          priceIdr: kAiUnlockPriceIdr);
+                      if (method == null) return;
+                      await ref
+                          .read(triageUnlockControllerProvider.notifier)
+                          .unlock(triageId, method);
+                    },
+              style: FilledButton.styleFrom(backgroundColor: AppColors.mint),
+              child: busy
+                  ? const SizedBox(
+                      height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : Text(l10n.triageUnlockCta(price)),
+            ),
+          ],
         ],
       ),
     );
