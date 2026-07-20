@@ -6,6 +6,7 @@ import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/domain/id_card.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/features/profile/domain/share_service.dart';
+import 'package:tailtopia/features/pawcoin/presentation/pawcoin_controller.dart';
 import 'package:tailtopia/features/profile/presentation/id_card/id_card_placeholder.dart';
 import 'package:tailtopia/features/profile/presentation/id_card/ktp_card.dart';
 import 'package:tailtopia/features/profile/presentation/id_card_page.dart';
@@ -45,12 +46,21 @@ class _FakeIdCardRepo implements IdCardRepository {
   }
 }
 
+/// 假 PawCoin 控制器（HD paywall 读余额判 PawCoin 可选性；避免真网络）。
+class _FakePawCoin extends PawCoinController {
+  _FakePawCoin(this._balance);
+  final int _balance;
+  @override
+  Future<PawCoinState> build() async => PawCoinState(balance: _balance, items: const []);
+}
+
 Future<_FakeIdCardRepo> _pump(WidgetTester tester, IdCardData? initial,
-    {PetProfile? profile, void Function(String)? onShare}) async {
+    {PetProfile? profile, void Function(String)? onShare, int pawCoinBalance = 0}) async {
   final repo = _FakeIdCardRepo(initial);
   await tester.pumpWidget(ProviderScope(
     overrides: [
       idCardRepositoryProvider.overrideWithValue(repo),
+      pawCoinProvider.overrideWith(() => _FakePawCoin(pawCoinBalance)),
       // 默认无档案 → 无分享按钮、不触网络（页面 build 会 watch petProfileProvider）。
       petProfileProvider.overrideWith((ref) async => profile),
       shareServiceProvider.overrideWithValue(
@@ -116,21 +126,25 @@ void main() {
     expect(find.textContaining('For Entertainment Only'), findsOneWidget);
   });
 
-  testWidgets('未解锁 HD → 点解锁弹 paywall → 选 PawCoin 调 purchaseHd', (tester) async {
-    final repo = await _pump(tester, _generatedCat); // hdUnlocked 默认 false
+  testWidgets('未解锁 HD → 点解锁弹 paywall（0718：预览卡+方式卡+确认）→ 余额足默认 PawCoin → 确认调 purchaseHd', (tester) async {
+    // 余额 10000 ≥ HD 价 5000 → PawCoin 可选且默认选中。
+    final repo = await _pump(tester, _generatedCat, pawCoinBalance: 10000);
     expect(find.text('Unlock HD download'), findsOneWidget);
 
     await tester.tap(find.text('Unlock HD download'));
     await tester.pumpAndSettle();
-    expect(find.text('Pay with PawCoin'), findsOneWidget); // paywall 弹出
+    // 新弹层：PawCoin + QRIS/DANA 方式卡 + 底部确认钮。
+    expect(find.text('PawCoin'), findsOneWidget);
+    expect(find.text('QRIS / DANA'), findsOneWidget);
+    expect(find.byKey(const ValueKey('hdPayConfirm')), findsOneWidget);
 
-    await tester.tap(find.text('Pay with PawCoin'));
+    await tester.tap(find.byKey(const ValueKey('hdPayConfirm')));
     // 不 pumpAndSettle：购买成功后自动导出的 toImage 在测试无 runAsync 不结算；
     // purchaseHd 在导出前已完成，pump 一帧即可断言其被调用。
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
     expect(repo.purchaseCalls, 1);
-    expect(repo.lastChannel, HdPayChannel.pawcoin);
+    expect(repo.lastChannel, HdPayChannel.pawcoin); // 余额足默认 PawCoin
   });
 
   testWidgets('已解锁 HD → 按钮显「下载」直接导出（不弹 paywall）', (tester) async {
