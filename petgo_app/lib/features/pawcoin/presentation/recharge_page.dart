@@ -430,7 +430,7 @@ class _RechargePageState extends ConsumerState<RechargePage> {
             key: const ValueKey('rechargePause'),
             title: l10n.rechargePauseTitle,
             message: l10n.rechargePauseHint,
-            icon: Icons.pause_circle_outline,
+            icon: Icons.settings_outlined,
             iconBackground: AppColors.cream2,
           ),
         ),
