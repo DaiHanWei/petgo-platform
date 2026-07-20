@@ -33,7 +33,7 @@ import '../../features/refund/presentation/refund_list_page.dart';
 import '../../features/refund/presentation/refund_choose_page.dart';
 import '../../features/refund/presentation/refund_pawcoin_success_page.dart';
 import '../../features/refund/presentation/refund_account_page.dart';
-import '../../features/refund/presentation/refund_review_page.dart';
+import '../../features/refund/presentation/refund_status_page.dart';
 import '../../features/profile/presentation/growth_archive_page.dart';
 import '../../features/profile/presentation/health_list_page.dart';
 import '../../features/profile/presentation/id_card_page.dart';
@@ -335,8 +335,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
           path: '/me/refunds/account',
           builder: (c, s) => RefundAccountPage(refund: s.extra as MyRefund)),
       GoRoute(
-          path: '/me/refunds/review',
-          builder: (c, s) => RefundReviewPage(draft: s.extra as RefundPayoutDraft)),
+          path: '/me/refunds/status',
+          builder: (c, s) => RefundStatusPage(refund: s.extra as MyRefund)),
       GoRoute(
           path: '/me/refunds/pawcoin-success',
           builder: (c, s) => RefundPawcoinSuccessPage(result: s.extra as RefundPawcoinResult)),
