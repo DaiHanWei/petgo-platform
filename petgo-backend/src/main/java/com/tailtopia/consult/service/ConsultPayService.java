@@ -11,6 +11,7 @@ import com.tailtopia.consult.repository.ConsultRequestRepository;
 import com.tailtopia.consult.repository.ConsultSessionRepository;
 import com.tailtopia.pay.domain.PayChannel;
 import com.tailtopia.pay.domain.PawCoinTxnType;
+import com.tailtopia.pay.domain.PaymentIntent;
 import com.tailtopia.pay.domain.PaymentPurpose;
 import com.tailtopia.pay.dto.PaymentIntentResponse;
 import com.tailtopia.pay.service.PawCoinWalletService;
@@ -18,8 +19,14 @@ import com.tailtopia.pay.service.PaymentIntentService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.im.ImAccountMapper;
 import com.tailtopia.shared.im.TencentImClient;
+import com.tailtopia.shared.pay.ChargeRequest;
+import com.tailtopia.shared.pay.ChargeResult;
+import com.tailtopia.shared.pay.PaymentGateway;
 import com.tailtopia.vet.service.VetPresenceService;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -52,6 +59,9 @@ public class ConsultPayService {
     private static final String REF_TYPE = "VET_CONSULT";
     private static final String CURRENCY = "IDR";
 
+    /** 现金支付窗（与 consult_request pay_deadline 对齐）：超时由 PaymentIntentExpiryScanner 置 EXPIRED，不残留。 */
+    private static final Duration PAY_WINDOW = Duration.ofMinutes(5);
+
     private final ConsultRequestRepository requests;
     private final ConsultBillingService billing;
     private final ConsultSessionRepository sessions;
@@ -61,13 +71,14 @@ public class ConsultPayService {
     private final VetPresenceService presence;
     private final com.tailtopia.config.service.PlatformConfigService platformConfig;
     private final ApplicationEventPublisher events;
+    private final PaymentGateway gateway;
 
     public ConsultPayService(ConsultRequestRepository requests, ConsultBillingService billing,
             ConsultSessionRepository sessions, TencentImClient imClient,
             PaymentIntentService paymentIntents, PawCoinWalletService wallet,
             VetPresenceService presence,
             com.tailtopia.config.service.PlatformConfigService platformConfig,
-            ApplicationEventPublisher events) {
+            ApplicationEventPublisher events, PaymentGateway gateway) {
         this.requests = requests;
         this.billing = billing;
         this.sessions = sessions;
@@ -77,6 +88,7 @@ public class ConsultPayService {
         this.presence = presence;
         this.platformConfig = platformConfig;
         this.events = events;
+        this.gateway = gateway;
     }
 
     /**
@@ -123,12 +135,37 @@ public class ConsultPayService {
         return ConsultPayResponse.done(order);
     }
 
-    /** 现金异步发起（AC4）：建 VET_CONSULT 支付意图返回支付信息，<b>不建单</b>；到账由 handler 转单。 */
+    /**
+     * 现金异步发起（AC4）：建 VET_CONSULT 支付意图（5min 窗）+ 向网关发起收款拿二维码载荷返回前端，
+     * <b>不建单</b>；到账由 handler 转单。照 {@code PawCoinTopupService.create} 范式。
+     * 幂等：同 requestToken 重复 pay → createIntent 取回既有意图，{@code gatewayRef!=null} 走 else 返回既有载荷。
+     */
     private ConsultPayResponse createCashPay(ConsultRequest req, long price, PayChannel channel) {
         PaymentIntentResponse intent = paymentIntents.createIntent(req.getUserId(),
                 PaymentPurpose.VET_CONSULT, channel, price, CURRENCY,
-                "vet-consult:" + req.getRequestToken());
-        return ConsultPayResponse.paymentRequired(intent);
+                "vet-consult:" + req.getRequestToken(), PAY_WINDOW);
+        PaymentIntent entity = paymentIntents.findByToken(intent.token())
+                .orElseThrow(() -> AppException.notFound("支付意图不存在"));
+        String payload;
+        if (entity.getGatewayRef() == null) {
+            // 首次下单：向网关发起收款，回填订单号 + 二维码载荷（QRIS EMVCo 串）。
+            ChargeResult charge = gateway.createCharge(new ChargeRequest(
+                    entity.getPublicToken(), price, CURRENCY, channel.name(), PaymentPurpose.VET_CONSULT.name()));
+            Map<String, Object> meta = new LinkedHashMap<>();
+            if (charge.rawMeta() != null) {
+                meta.putAll(charge.rawMeta());
+            }
+            if (charge.payload() != null) {
+                meta.put("payload", charge.payload());
+            }
+            paymentIntents.attachCharge(entity.getPublicToken(), charge.gatewayRef(), meta);
+            payload = charge.payload();
+        } else {
+            // 幂等重放（同 requestToken）：返回既有载荷（下单时存入 gateway_meta.payload）。
+            Map<String, Object> savedMeta = entity.getGatewayMeta();
+            payload = savedMeta == null ? null : (String) savedMeta.get("payload");
+        }
+        return ConsultPayResponse.paymentRequired(intent, payload);
     }
 
     /**

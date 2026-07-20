@@ -10,13 +10,13 @@ import com.tailtopia.pay.dto.PaymentIntentResponse;
  *       解锁，前端再 {@code GET /id-card} 复看 {@code hdUnlocked}。</li>
  * </ul>
  */
-public record HdPurchaseResponse(boolean unlocked, PaymentIntentResponse payment) {
+public record HdPurchaseResponse(boolean unlocked, PaymentIntentResponse payment, String payload) {
 
     public static HdPurchaseResponse granted() {
-        return new HdPurchaseResponse(true, null);
+        return new HdPurchaseResponse(true, null, null);
     }
 
-    public static HdPurchaseResponse paymentRequired(PaymentIntentResponse payment) {
-        return new HdPurchaseResponse(false, payment);
+    public static HdPurchaseResponse paymentRequired(PaymentIntentResponse payment, String payload) {
+        return new HdPurchaseResponse(false, payment, payload);
     }
 }

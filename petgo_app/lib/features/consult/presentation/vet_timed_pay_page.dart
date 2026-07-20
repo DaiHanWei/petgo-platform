@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
@@ -39,6 +40,7 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
   bool _paying = false;
   bool _navigating = false;
   bool _awaitingCash = false; // PAYMENT_REQUIRED 后进「等待到账」态
+  String? _qrPayload; // QRIS 二维码载荷（现金态本地生成二维码）
 
   @override
   void initState() {
@@ -130,10 +132,11 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
         _display?.cancel();
         await _gotoActiveOrExit();
       } else {
-        // 现金 → 进等待到账态，轮询 status 侦测转单（404）。
+        // 现金（QRIS）→ 展示二维码等待到账，轮询 status 侦测转单（404）。
         setState(() {
           _paying = false;
           _awaitingCash = true;
+          _qrPayload = result.payload;
         });
       }
     } on DioException catch (e) {
@@ -159,6 +162,21 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
     // 刷新余额 + 重拉状态续倒计时。
     ref.invalidate(pawCoinProvider);
     unawaited(_tick());
+  }
+
+  /// 用户主动取消支付（问题2）：后端删 request + 释放兽医 + 置在途 intent 为 FAILED（不残留），随即离开。
+  Future<void> _cancelPay() async {
+    if (_navigating) return;
+    _navigating = true;
+    try {
+      await ref.read(consultRepositoryProvider).cancelRequest(widget.requestToken);
+    } catch (_) {
+      // 取消失败也离开：服务端支付窗超时会兜底作废（扫描器置 EXPIRED）。
+    }
+    if (!mounted) return;
+    _poll?.cancel();
+    _display?.cancel();
+    context.go('/triage');
   }
 
   String get _mmss {
@@ -310,18 +328,59 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
   }
 
   Widget _buildAwaitingCash(AppLocalizations l10n) {
-    return Center(
-      key: const ValueKey('vetPayAwaitingCash'),
+    final payload = _qrPayload;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        key: const ValueKey('vetPayAwaitingCash'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const CircularProgressIndicator(color: AppColors.mint),
-          const SizedBox(height: 20),
           Text(l10n.vetPayProcessing,
+              textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink)),
           const SizedBox(height: 8),
           Text(l10n.vetPayScanHint,
+              textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+          const SizedBox(height: 24),
+          // QRIS 二维码：后端返回的 EMVCo 串本地生成（照 recharge_page 范式）；无载荷时兜底 spinner。
+          Center(
+            child: (payload != null && payload.isNotEmpty)
+                ? Container(
+                    width: 240,
+                    height: 240,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.line),
+                    ),
+                    child: QrImageView(
+                      key: const ValueKey('vetPayQr'),
+                      data: payload,
+                      version: QrVersions.auto,
+                      backgroundColor: Colors.white,
+                    ),
+                  )
+                : const Padding(
+                    padding: EdgeInsets.all(40),
+                    child: CircularProgressIndicator(color: AppColors.mint),
+                  ),
+          ),
+          const SizedBox(height: 28),
+          // 主动取消 → 后端删 request + 置 intent FAILED（彻底结束，不残留后台列表）。
+          OutlinedButton(
+            key: const ValueKey('vetPayCancel'),
+            onPressed: _navigating ? null : _cancelPay,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.danger,
+              side: const BorderSide(color: AppColors.danger),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+            child: Text(l10n.vetPayCancel,
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+          ),
         ],
       ),
     );

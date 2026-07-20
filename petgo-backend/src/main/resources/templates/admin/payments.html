@@ -32,7 +32,7 @@
                 <td th:text="${p.amount}">0</td>
                 <td th:text="${p.currency}">IDR</td>
                 <td th:text="${p.status}">PAID</td>
-                <td th:text="${p.createdAt}">t</td>
+                <td th:text="${p.createdAtLabel}">t</td>
                 <td>
                     <!-- ⚠️ stag 专用：仅 simulatorEnabled(stag env flag) 开 + PENDING 订单才渲染操作按钮 -->
                     <div th:if="${simulatorEnabled and p.status == 'PENDING'}" class="sim-actions">

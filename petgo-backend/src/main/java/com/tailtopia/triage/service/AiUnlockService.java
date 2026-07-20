@@ -2,12 +2,16 @@ package com.tailtopia.triage.service;
 
 import com.tailtopia.pay.domain.PayChannel;
 import com.tailtopia.pay.domain.PawCoinTxnType;
+import com.tailtopia.pay.domain.PaymentIntent;
 import com.tailtopia.pay.domain.PaymentPurpose;
 import com.tailtopia.pay.dto.PaymentIntentResponse;
 import com.tailtopia.pay.service.PawCoinWalletService;
 import com.tailtopia.pay.service.PaymentIntentService;
 import com.tailtopia.profile.service.CardTokenGenerator;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.pay.ChargeRequest;
+import com.tailtopia.shared.pay.ChargeResult;
+import com.tailtopia.shared.pay.PaymentGateway;
 import com.tailtopia.triage.domain.AiConsultOrder;
 import com.tailtopia.triage.domain.AiConsultOrderStatus;
 import com.tailtopia.triage.domain.DangerLevel;
@@ -21,6 +25,8 @@ import com.tailtopia.triage.dto.UnlockResponse;
 import com.tailtopia.triage.repository.AiConsultOrderRepository;
 import com.tailtopia.triage.repository.TriageTaskRepository;
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -58,11 +64,12 @@ public class AiUnlockService {
     private final AiConsultOrderRepository orders;
     private final CardTokenGenerator tokenGenerator;
     private final com.tailtopia.config.service.PlatformConfigService platformConfig;
+    private final PaymentGateway gateway;
 
     public AiUnlockService(TriageTaskRepository tasks, FreeQuotaService freeQuota,
             PawCoinWalletService wallet, PaymentIntentService paymentIntents,
             AiConsultOrderRepository orders, CardTokenGenerator tokenGenerator,
-            com.tailtopia.config.service.PlatformConfigService platformConfig) {
+            com.tailtopia.config.service.PlatformConfigService platformConfig, PaymentGateway gateway) {
         this.tasks = tasks;
         this.freeQuota = freeQuota;
         this.wallet = wallet;
@@ -70,6 +77,7 @@ public class AiUnlockService {
         this.orders = orders;
         this.tokenGenerator = tokenGenerator;
         this.platformConfig = platformConfig;
+        this.gateway = gateway;
     }
 
     /**
@@ -119,14 +127,37 @@ public class AiUnlockService {
     }
 
     private UnlockResponse createCashUnlock(long userId, TriageTask task, long price, PayChannel channel) {
-        // 幂等键 ai-unlock:{triageId}：重复发起取回既有 intent（不双建单）。
+        // 幂等键 ai-unlock:{triageId}：重复发起取回既有 intent（不双建单）。不设短窗 → PENDING 可长期复用重复支付（同充值）。
         PaymentIntentResponse intent = paymentIntents.createIntent(
                 userId, PaymentPurpose.AI_UNLOCK, channel, price, CURRENCY, "ai-unlock:" + task.getId());
         // 订单幂等：同 intent token 已建则复用（唯一约束兜底）。
         orders.findByPaymentIntentToken(intent.token()).orElseGet(() -> orders.save(
                 AiConsultOrder.pendingCash(tokenGenerator.generate(), userId, task.getId(), price,
                         channel, intent.token())));
-        return UnlockResponse.paymentRequired(intent);
+        String payload = ensureCharge(intent, price, channel, PaymentPurpose.AI_UNLOCK);
+        return UnlockResponse.paymentRequired(intent, payload);
+    }
+
+    /** 首次下单向网关取二维码载荷（照 PawCoinTopupService 范式）；幂等重放返回既有载荷（可重复支付复用）。 */
+    private String ensureCharge(PaymentIntentResponse intent, long price, PayChannel channel,
+            PaymentPurpose purpose) {
+        PaymentIntent entity = paymentIntents.findByToken(intent.token())
+                .orElseThrow(() -> AppException.notFound("支付意图不存在"));
+        if (entity.getGatewayRef() == null) {
+            ChargeResult charge = gateway.createCharge(new ChargeRequest(
+                    entity.getPublicToken(), price, CURRENCY, channel.name(), purpose.name()));
+            Map<String, Object> meta = new LinkedHashMap<>();
+            if (charge.rawMeta() != null) {
+                meta.putAll(charge.rawMeta());
+            }
+            if (charge.payload() != null) {
+                meta.put("payload", charge.payload());
+            }
+            paymentIntents.attachCharge(entity.getPublicToken(), charge.gatewayRef(), meta);
+            return charge.payload();
+        }
+        Map<String, Object> savedMeta = entity.getGatewayMeta();
+        return savedMeta == null ? null : (String) savedMeta.get("payload");
     }
 
     /**

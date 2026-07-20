@@ -1019,6 +1019,7 @@
   "vetPayInterruptHint": "Jika kamu keluar, sistem akan memproses ulang permintaan secara otomatis.",
   "vetPayProcessing": "Menunggu pembayaran…",
   "vetPayScanHint": "Pindai QR untuk membayar",
+  "vetPayCancel": "Batalkan Pembayaran",
   "vetPayExpired": "Waktu pembayaran habis",
   "vetPayFailed": "Pembayaran gagal, coba lagi",
 

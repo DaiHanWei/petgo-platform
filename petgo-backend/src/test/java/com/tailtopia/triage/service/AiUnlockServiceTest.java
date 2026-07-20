@@ -13,6 +13,10 @@ import static org.mockito.Mockito.when;
 
 import com.tailtopia.pay.domain.PawCoinTxnType;
 import com.tailtopia.pay.domain.PayChannel;
+import com.tailtopia.pay.domain.PaymentIntent;
+import com.tailtopia.shared.pay.ChargeResult;
+import com.tailtopia.shared.pay.PaymentGateway;
+import java.util.Map;
 import com.tailtopia.pay.domain.PaymentPurpose;
 import com.tailtopia.pay.dto.PaymentIntentResponse;
 import com.tailtopia.pay.service.PawCoinWalletService;
@@ -68,6 +72,8 @@ class AiUnlockServiceTest {
     private PlatformConfigService platformConfig;
     @Mock
     private PricingConfig pricing;
+    @Mock
+    private PaymentGateway gateway;
 
     @org.junit.jupiter.api.BeforeEach
     void stubPricing() {
@@ -77,7 +83,8 @@ class AiUnlockServiceTest {
     }
 
     private AiUnlockService svc() {
-        return new AiUnlockService(tasks, freeQuota, wallet, paymentIntents, orders, tokenGenerator, platformConfig);
+        return new AiUnlockService(tasks, freeQuota, wallet, paymentIntents, orders, tokenGenerator,
+                platformConfig, gateway);
     }
 
     private TriageTask doneTask(DangerLevel level, UnlockSource unlockSource) {
@@ -156,12 +163,17 @@ class AiUnlockServiceTest {
                 eq(PRICE), eq("IDR"), eq("ai-unlock:" + TRIAGE)))
                 .thenReturn(new PaymentIntentResponse("inttok", "AI_UNLOCK", "QRIS", PRICE, "IDR", "PENDING"));
         when(orders.findByPaymentIntentToken("inttok")).thenReturn(Optional.empty());
+        PaymentIntent entity = PaymentIntent.create(USER, PaymentPurpose.AI_UNLOCK, PayChannel.QRIS,
+                PRICE, "IDR", "inttok");
+        when(paymentIntents.findByToken("inttok")).thenReturn(Optional.of(entity));
+        when(gateway.createCharge(any())).thenReturn(new ChargeResult("gwref", "QR-PAYLOAD", Map.of()));
 
         UnlockResponse r = svc().unlock(USER, TRIAGE, UnlockMethod.QRIS);
 
         assertThat(r.unlocked()).isFalse();
         assertThat(r.payment()).isNotNull();
         assertThat(r.payment().token()).isEqualTo("inttok");
+        assertThat(r.payload()).isEqualTo("QR-PAYLOAD");
         assertThat(t.getUnlockSource()).isEqualTo(UnlockSource.LOCKED); // 未解锁（待到账）
         ArgumentCaptor<AiConsultOrder> cap = ArgumentCaptor.forClass(AiConsultOrder.class);
         verify(orders).save(cap.capture());

@@ -8,7 +8,6 @@ import 'package:tailtopia/features/content/data/detail_repository.dart';
 import 'package:tailtopia/features/content/domain/comment.dart';
 import 'package:tailtopia/features/content/domain/content_detail.dart';
 import 'package:tailtopia/features/content/presentation/comment_composer.dart';
-import 'package:tailtopia/features/content/presentation/detail_providers.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// story 3（AC-F1）：发一级评论遇审核拦截（422 COMMENT_BLOCKED）→ 保留输入 + 专属 toast

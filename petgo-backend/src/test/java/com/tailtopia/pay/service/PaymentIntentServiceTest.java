@@ -157,4 +157,30 @@ class PaymentIntentServiceTest {
         verify(intents, never()).findByGatewayRef(anyString());
         verify(intents, never()).saveAndFlush(any());
     }
+
+    @Test
+    void failPendingMarksLatestPendingFailed() {
+        // 用户取消问诊 → 联动置该用户最新 PENDING VET_CONSULT 意图为 FAILED（不残留后台列表）。
+        PaymentIntent intent = persisted(200L, PaymentPurpose.VET_CONSULT, "tok-200");
+        when(intents.findFirstByUserIdAndPurposeAndStatusOrderByCreatedAtDesc(
+                7L, PaymentPurpose.VET_CONSULT, com.tailtopia.pay.domain.PaymentStatus.PENDING))
+                .thenReturn(Optional.of(intent));
+        when(intents.saveAndFlush(any(PaymentIntent.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service().failPending(7L, PaymentPurpose.VET_CONSULT);
+
+        assertThat(intent.getStatus().name()).isEqualTo("FAILED");
+        verify(intents).saveAndFlush(intent);
+    }
+
+    @Test
+    void failPendingNoopWhenNoPending() {
+        when(intents.findFirstByUserIdAndPurposeAndStatusOrderByCreatedAtDesc(
+                7L, PaymentPurpose.VET_CONSULT, com.tailtopia.pay.domain.PaymentStatus.PENDING))
+                .thenReturn(Optional.empty());
+
+        service().failPending(7L, PaymentPurpose.VET_CONSULT);
+
+        verify(intents, never()).saveAndFlush(any());
+    }
 }

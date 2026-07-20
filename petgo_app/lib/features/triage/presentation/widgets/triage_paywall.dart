@@ -89,14 +89,7 @@ class TriagePaywall extends ConsumerWidget {
               key: const ValueKey('triageUnlockCta'),
               onPressed: busy
                   ? null
-                  : () async {
-                      final method = await showUnlockMethodSheet(context, ref,
-                          priceIdr: kAiUnlockPriceIdr);
-                      if (method == null) return;
-                      await ref
-                          .read(triageUnlockControllerProvider.notifier)
-                          .unlock(triageId, method);
-                    },
+                  : () => runAiUnlockFlow(context, ref, triageId),
               style: FilledButton.styleFrom(backgroundColor: AppColors.mint),
               child: busy
                   ? const SizedBox(

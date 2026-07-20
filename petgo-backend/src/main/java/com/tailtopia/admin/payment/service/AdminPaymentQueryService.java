@@ -3,6 +3,8 @@ package com.tailtopia.admin.payment.service;
 import com.tailtopia.admin.payment.dto.AdminPaymentRow;
 import com.tailtopia.pay.domain.PaymentIntent;
 import com.tailtopia.pay.repository.PaymentIntentRepository;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -36,8 +38,14 @@ public class AdminPaymentQueryService {
                 .map(AdminPaymentQueryService::toRow);
     }
 
+    /** 后台时间统一显示印尼时间（WIB，Asia/Jakarta，UTC+7）。 */
+    private static final DateTimeFormatter WIB_FMT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneId.of("Asia/Jakarta"));
+
     private static AdminPaymentRow toRow(PaymentIntent p) {
+        String label = p.getCreatedAt() == null ? null : WIB_FMT.format(p.getCreatedAt()) + " WIB";
         return new AdminPaymentRow(p.getUserId(), p.getPublicToken(), p.getPurpose().name(),
-                p.getChannel().name(), p.getAmount(), p.getCurrency(), p.getStatus().name(), p.getCreatedAt());
+                p.getChannel().name(), p.getAmount(), p.getCurrency(), p.getStatus().name(),
+                p.getCreatedAt(), label);
     }
 }

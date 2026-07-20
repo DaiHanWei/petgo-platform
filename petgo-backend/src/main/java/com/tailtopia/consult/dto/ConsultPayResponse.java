@@ -15,8 +15,9 @@ import java.time.Instant;
  * @param mode    DONE | PAYMENT_REQUIRED
  * @param order   同步支付成功的订单视图（现金态为 null）
  * @param payment 现金待支付信息（同步态为 null）
+ * @param payload 现金二维码载荷（QRIS EMVCo 串，前端本地生成二维码；同步态为 null）
  */
-public record ConsultPayResponse(String mode, OrderView order, PaymentIntentResponse payment) {
+public record ConsultPayResponse(String mode, OrderView order, PaymentIntentResponse payment, String payload) {
 
     /** 订单精简视图（不外泄内部 id / 快照金额明细，仅前端跳转所需）。 */
     public record OrderView(String orderToken, String status, Instant paidAt, Instant sessionStartedAt) {
@@ -27,10 +28,10 @@ public record ConsultPayResponse(String mode, OrderView order, PaymentIntentResp
     }
 
     public static ConsultPayResponse done(ConsultOrder order) {
-        return new ConsultPayResponse("DONE", OrderView.of(order), null);
+        return new ConsultPayResponse("DONE", OrderView.of(order), null, null);
     }
 
-    public static ConsultPayResponse paymentRequired(PaymentIntentResponse payment) {
-        return new ConsultPayResponse("PAYMENT_REQUIRED", null, payment);
+    public static ConsultPayResponse paymentRequired(PaymentIntentResponse payment, String payload) {
+        return new ConsultPayResponse("PAYMENT_REQUIRED", null, payment, payload);
     }
 }

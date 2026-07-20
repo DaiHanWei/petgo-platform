@@ -10,13 +10,14 @@ import com.tailtopia.pay.dto.PaymentIntentResponse;
  *       到账后详建由 {@code AiUnlockPaidHandler} 解锁，用户再 {@code GET /triage/{id}} 复看。</li>
  * </ul>
  */
-public record UnlockResponse(boolean unlocked, TriageResultResponse result, PaymentIntentResponse payment) {
+public record UnlockResponse(boolean unlocked, TriageResultResponse result, PaymentIntentResponse payment,
+        String payload) {
 
     public static UnlockResponse unlocked(TriageResultResponse result) {
-        return new UnlockResponse(true, result, null);
+        return new UnlockResponse(true, result, null, null);
     }
 
-    public static UnlockResponse paymentRequired(PaymentIntentResponse payment) {
-        return new UnlockResponse(false, null, payment);
+    public static UnlockResponse paymentRequired(PaymentIntentResponse payment, String payload) {
+        return new UnlockResponse(false, null, payment, payload);
     }
 }
