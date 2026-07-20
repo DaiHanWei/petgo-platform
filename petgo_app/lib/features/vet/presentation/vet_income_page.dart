@@ -9,6 +9,7 @@ import '../../triage/presentation/widgets/triage_paywall.dart' show formatIdr;
 import '../data/vet_repository.dart';
 import '../domain/vet_income.dart';
 import 'vet_empty_state.dart';
+import 'widgets/vet_top_bar.dart';
 
 /// 兽医收入页（Story 3.7，`p-vet-income`，UX-DR12）。当月待结算卡（到手合计 + 单数）+ 历史月结倒序。
 /// 到手金额恒为订单 `vet_payout` 快照（后台改价不影响历史）。无轮询（一次拉取 + 下拉刷新）。
@@ -59,16 +60,20 @@ class _VetIncomePageState extends ConsumerState<VetIncomePage> {
     final income = _income;
     return Scaffold(
       backgroundColor: AppColors.base,
-      appBar: AppBar(title: Text(l10n.vetIncomeTitle)),
-      body: _loading && income == null
-          ? const Center(child: CircularProgressIndicator())
-          : _failed && income == null
-              ? VetEmptyState(icon: Icons.cloud_off_outlined, message: l10n.vetIncomeLoadFailed)
-              : RefreshIndicator(
-                  onRefresh: _load,
-                  child: ListView(
-                    padding: const EdgeInsets.all(AppSpacing.md),
-                    children: [
+      // 0718：作为底部 Tab（无 AppBar/返回键），用兽医端共享深色顶栏（原型 ref37「Pendapatan Saya」）。
+      body: Column(
+        children: [
+          VetTopBar(title: l10n.vetIncomeTitle),
+          Expanded(
+            child: _loading && income == null
+                ? const Center(child: CircularProgressIndicator())
+                : _failed && income == null
+                    ? VetEmptyState(icon: Icons.cloud_off_outlined, message: l10n.vetIncomeLoadFailed)
+                    : RefreshIndicator(
+                        onRefresh: _load,
+                        child: ListView(
+                          padding: const EdgeInsets.all(AppSpacing.md),
+                          children: [
                       _CurrentMonthCard(item: income!.currentMonth),
                       const SizedBox(height: AppSpacing.lg),
                       Text(
@@ -86,9 +91,12 @@ class _VetIncomePageState extends ConsumerState<VetIncomePage> {
                               padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                               child: _HistoryRow(item: p),
                             )),
-                    ],
-                  ),
-                ),
+                          ],
+                        ),
+                      ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -102,14 +110,18 @@ class _CurrentMonthCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    // 0718 ref37：当月待结算=品牌紫渐变卡 + 白字（区别于历史白卡）。
     return Container(
       key: const ValueKey('vetIncomeCurrentCard'),
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: AppColors.vetSurface,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.mint, AppColors.mint600],
+        ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.vetPrimary.withValues(alpha: 0.25)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -118,20 +130,31 @@ class _CurrentMonthCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(l10n.vetIncomeCurrentMonth,
-                    style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+                    style: AppTypography.caption
+                        .copyWith(color: Colors.white.withValues(alpha: 0.8))),
               ),
-              _StatusBadge(status: 'PENDING'),
+              // 待结算药丸：白半透底 + 白字（紫卡之上）。
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(l10n.vetIncomePending,
+                    style: AppTypography.micro
+                        .copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
+              ),
             ],
           ),
           const SizedBox(height: 8),
           Text(
             formatIdr(item.payoutAmount),
             key: const ValueKey('vetIncomeCurrentPayout'),
-            style: AppTypography.display.copyWith(color: AppColors.vetPrimary, fontSize: 32),
+            style: AppTypography.display.copyWith(color: Colors.white, fontSize: 32),
           ),
           const SizedBox(height: 4),
           Text(l10n.vetIncomeOrders(item.orderCount),
-              style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+              style: AppTypography.caption.copyWith(color: Colors.white.withValues(alpha: 0.8))),
         ],
       ),
     );
@@ -194,8 +217,9 @@ class _StatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final settled = status == 'SETTLED';
-    final bg = settled ? AppColors.vetSurface : AppColors.goldTint;
-    final fg = settled ? AppColors.vetPrimary : AppColors.tipsBadgeText;
+    // ref37：已结算=绿药丸；待结算=琥珀。
+    final bg = settled ? AppColors.triageGreen.withValues(alpha: 0.14) : AppColors.goldTint;
+    final fg = settled ? AppColors.onlineDeepGreen : AppColors.tipsBadgeText;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
