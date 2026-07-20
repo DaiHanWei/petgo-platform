@@ -66,6 +66,9 @@ class VetHistoryEntry {
     this.ownerHandle,
     this.petSpecies,
     this.reviewText,
+    this.source,
+    this.payoutAmount,
+    this.refunded = false,
   });
 
   final int sessionId;
@@ -82,6 +85,12 @@ class VetHistoryEntry {
   final String? petSpecies; // CAT | DOG
   final String? reviewText; // 用户评价引用文案
 
+  // V88（ref36 到手金额）：source=会话来源（DIRECT/AI_UPGRADE，类型徽章）；
+  // payoutAmount=兽医到手 IDR（无关联订单/老历史→null，显「—」）；refunded=已退款（显 Rp0 删除线）。
+  final String? source; // DIRECT | AI_UPGRADE
+  final int? payoutAmount;
+  final bool refunded;
+
   /// 仅取日期段（yyyy-MM-dd）供卡片展示，避免引 intl。
   String get dateLabel => date.length >= 10 ? date.substring(0, 10) : date;
 
@@ -96,5 +105,8 @@ class VetHistoryEntry {
         ownerHandle: json['ownerHandle'] as String?,
         petSpecies: json['petSpecies'] as String?,
         reviewText: json['reviewText'] as String?,
+        source: json['source'] as String?,
+        payoutAmount: (json['payoutAmount'] as num?)?.toInt(),
+        refunded: (json['refunded'] as bool?) ?? false,
       );
 }

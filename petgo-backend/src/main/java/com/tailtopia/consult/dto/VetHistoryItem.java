@@ -20,5 +20,10 @@ public record VetHistoryItem(
         String reviewText,
         String terminalState,
         String summary,
-        String dangerLevel) {
+        String dangerLevel,
+        // V88（ref36 工作台历史「到手金额」）：source=会话来源（DIRECT/AI_UPGRADE，类型徽章）；
+        // payoutAmount=兽医到手快照 IDR（无关联订单→null，老历史显「—」）；refunded=订单已退款（显 Rp0 删除线）。
+        String source,
+        Long payoutAmount,
+        boolean refunded) {
 }

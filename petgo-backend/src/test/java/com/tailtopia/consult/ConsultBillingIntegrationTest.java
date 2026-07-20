@@ -42,6 +42,26 @@ class ConsultBillingIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
+    void markSessionStartedLinksConsultSessionForHistoryPayout() {
+        long userId = newUser().getId();
+        long vetId = 9L;
+        long sessionId = 987654L;
+        ConsultOrder o = billing.createOrder(userId, vetId, 1L, 50_000L, PayChannel.QRIS, null,
+                30_000L, 60, 50_000L, Instant.now());
+        // V88：付费建 IM 会话后回填 consult_session_id（历史「到手金额」按会话取）。
+        billing.markSessionStarted(o, Instant.now(), "im:conv-x", sessionId);
+
+        ConsultOrder saved = orders.findByOrderToken(o.getOrderToken()).orElseThrow();
+        assertThat(saved.getConsultSessionId()).isEqualTo(sessionId);
+
+        // 批查命中：兽医历史按 (vetId, 会话 id 批) 取该单到手金额快照。
+        var byVetSession = orders.findByVetIdAndConsultSessionIdIn(vetId, java.util.List.of(sessionId));
+        assertThat(byVetSession).extracting(ConsultOrder::getVetPayout).containsExactly(30_000L);
+        // 隔离性：他人会话 id 不误命中。
+        assertThat(orders.findByVetIdAndConsultSessionIdIn(vetId, java.util.List.of(sessionId + 1))).isEmpty();
+    }
+
+    @Test
     void stageEventsAreAppendOnlyHistory() {
         long userId = newUser().getId();
         ConsultOrder o = billing.createOrder(userId, 9L, 1L, 50_000L, PayChannel.PAWCOIN, null,

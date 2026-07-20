@@ -73,6 +73,10 @@ public class ConsultOrder {
     @Column(name = "session_started_at")
     private Instant sessionStartedAt;
 
+    /** 关联的付费问诊会话 id（V88，付费建单后 markSessionStarted 回填）。迁移前订单为 null。 */
+    @Column(name = "consult_session_id")
+    private Long consultSessionId;
+
     @Column(name = "session_ended_at")
     private Instant sessionEndedAt;
 
@@ -139,9 +143,10 @@ public class ConsultOrder {
         return o;
     }
 
-    /** 支付成功建 IM 会话后记会话起始（Story 3.4，3-1 建 {@code session_started_at} 列即为此填）。 */
-    public void markSessionStarted(Instant at) {
+    /** 支付成功建 IM 会话后记会话起始（Story 3.4）+ 回填会话 id（V88，历史到手金额按会话取）。 */
+    public void markSessionStarted(Instant at, long consultSessionId) {
         this.sessionStartedAt = at;
+        this.consultSessionId = consultSessionId;
     }
 
     /**
@@ -223,6 +228,10 @@ public class ConsultOrder {
 
     public Instant getSessionStartedAt() {
         return sessionStartedAt;
+    }
+
+    public Long getConsultSessionId() {
+        return consultSessionId;
     }
 
     public Instant getSessionEndedAt() {
