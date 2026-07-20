@@ -44,6 +44,8 @@
               sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.edit')">
             <label>退款转币溢价（%，0–50）
                 <input type="number" name="premiumRate" min="0" max="50" th:value="${pawcoin.premiumRate}"/></label>
+            <label>退款转币固定溢价（koin，≥0）
+                <input type="number" name="premiumFixed" min="0" th:value="${pawcoin.premiumFixed}"/></label>
             <label>暂停充值
                 <input type="checkbox" name="topupPaused" value="true" th:checked="${pawcoin.topupPaused}"/></label>
             <button type="submit" class="btn btn-primary btn-sm">保存 PawCoin 配置</button>

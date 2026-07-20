@@ -114,7 +114,7 @@ class AdminConfigServiceTest {
         set(c, "premiumRate", 0);
         set(c, "topupPaused", false);
         when(pawcoinRepo.findById(1L)).thenReturn(Optional.of(c));
-        assertThatThrownBy(() -> svc.updatePawCoin(new PawCoinForm(51, false), 7L))
+        assertThatThrownBy(() -> svc.updatePawCoin(new PawCoinForm(51, 0, false), 7L))
                 .isInstanceOf(AppException.class);
     }
 

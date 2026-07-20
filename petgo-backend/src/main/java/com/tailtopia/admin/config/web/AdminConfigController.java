@@ -65,9 +65,10 @@ public class AdminConfigController {
     @PreAuthorize(EDIT_AUTH)
     public String updatePawCoin(@AuthenticationPrincipal AdminUserDetails admin,
             @RequestParam int premiumRate,
+            @RequestParam(defaultValue = "0") long premiumFixed,
             @RequestParam(defaultValue = "false") boolean topupPaused, RedirectAttributes flash) {
         try {
-            write.updatePawCoin(new PawCoinForm(premiumRate, topupPaused), admin.getAdminAccountId());
+            write.updatePawCoin(new PawCoinForm(premiumRate, premiumFixed, topupPaused), admin.getAdminAccountId());
             flash.addFlashAttribute("notice", "PawCoin 配置已更新（操作留审计）");
         } catch (AppException e) {
             flash.addFlashAttribute("error", e.getMessage());

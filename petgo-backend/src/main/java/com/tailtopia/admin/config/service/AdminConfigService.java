@@ -75,17 +75,20 @@ public class AdminConfigService {
     // ── PawCoin ───────────────────────────────────────────────────────────────
     @Transactional
     public void updatePawCoin(PawCoinForm form, long adminId) {
-        require(form.premiumRate() >= 0 && form.premiumRate() <= 50, "溢价须在 0–50");
+        require(form.premiumRate() >= 0 && form.premiumRate() <= 50, "溢价百分比须在 0–50");
+        require(form.premiumFixed() >= 0, "固定溢价须 ≥ 0");
 
         PawCoinConfig c = pawcoinRepo.findById(PawCoinConfig.SINGLETON_ID)
                 .orElseThrow(() -> new IllegalStateException("pawcoin_config 缺失"));
         List<ConfigChangeLog> logs = new ArrayList<>();
         diff(logs, ConfigType.PAWCOIN, "premium_rate", c.getPremiumRate(), form.premiumRate(), adminId);
+        diff(logs, ConfigType.PAWCOIN, "premium_fixed", c.getPremiumFixed(), form.premiumFixed(), adminId);
         diff(logs, ConfigType.PAWCOIN, "topup_paused", c.isTopupPaused(), form.topupPaused(), adminId);
         if (logs.isEmpty()) {
             return;
         }
         c.setPremiumRate(form.premiumRate());
+        c.setPremiumFixed(form.premiumFixed());
         c.setTopupPaused(form.topupPaused());
         pawcoinRepo.save(c);
         commit(logs, adminId, "PAWCOIN", "pawcoin_config");

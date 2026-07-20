@@ -2,6 +2,7 @@ package com.tailtopia.pay.refund.service;
 
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
+import com.tailtopia.config.service.PlatformConfigService;
 import com.tailtopia.consult.domain.ConsultOrder;
 import com.tailtopia.consult.repository.ConsultOrderRepository;
 import com.tailtopia.consult.domain.ConsultOrderStatus;
@@ -52,11 +53,12 @@ public class RefundService {
     private final PawCoinWalletService wallet;
     private final PaymentGateway gateway;
     private final LedgerService ledger;
+    private final PlatformConfigService platformConfig;
 
     public RefundService(RefundRequestRepository refunds, ConsultOrderRepository orders,
             CardTokenGenerator tokenGenerator, AdminAuditService audit, RefundAuditRecorder auditRecorder,
             NotificationService notifications, PawCoinWalletService wallet, PaymentGateway gateway,
-            LedgerService ledger) {
+            LedgerService ledger, PlatformConfigService platformConfig) {
         this.refunds = refunds;
         this.orders = orders;
         this.tokenGenerator = tokenGenerator;
@@ -66,6 +68,7 @@ public class RefundService {
         this.wallet = wallet;
         this.gateway = gateway;
         this.ledger = ledger;
+        this.platformConfig = platformConfig;
     }
 
     /**
@@ -184,12 +187,16 @@ public class RefundService {
             boolean pawcoin = order.getPayChannel() == PayChannel.PAWCOIN;
             boolean actionable = r.getNeedDecision() == NeedDecision.APPROVED && r.getApprovalStatus() == null;
             List<MyRefundView.PayoutOption> options = pawcoin ? List.of() : payoutOptions(r.getOrderAmount());
+            // 转 PawCoin 到账预览：QRIS/DANA 含 bonus 溢价（0718，鼓励留站内）；PawCoin 原路等值。
+            long premium = pawcoin ? 0 : platformConfig.pawcoin().refundPawcoinPremium(r.getOrderAmount());
+            long pawcoinCreditPreview = r.getOrderAmount() + premium;
             views.add(new MyRefundView(
                     r.getRefundToken(), order.getOrderToken(), order.getPayChannel().name(),
                     pawcoin ? "INSTANT_PAWCOIN" : "REAL_MONEY",
                     r.getNeedDecision().name(),
                     r.getApprovalStatus() == null ? null : r.getApprovalStatus().name(),
-                    r.getOrderAmount(), actionable, r.getApprovalStatus() != null, options));
+                    r.getOrderAmount(), actionable, r.getApprovalStatus() != null, options,
+                    pawcoinCreditPreview));
         }
         return views;
     }
@@ -205,9 +212,16 @@ public class RefundService {
     }
 
     /**
-     * PawCoin 订单即时退币（Story 4.5，用户确认，<b>不经 4-6</b>）。owner + need=APPROVED + 订单渠道=PAWCOIN 门控。
-     * 全额 {@code credit(REFUND)}（无手续费、幂等键）+ 订单 CAS {@code markRefunded}（REFUNDING→REFUNDED，返 0 幂等跳过）
-     * + {@code approval_status=DONE}。<b>双闸幂等</b>（credit 键 + 订单 CAS）绝不双退。不发通知（AB-5B）。
+     * 即时退币到 PawCoin（Story 4.5 + 0718 退款流改版，用户确认，<b>不经 4-6 主管/财务</b>）。
+     * owner + need=APPROVED + 未选定其它方式 门控。<b>两类来源都走这里</b>：
+     * <ul>
+     *   <li>PawCoin 原路退：全额 {@code credit(REFUND)}，无溢价（原样退回站内币）。</li>
+     *   <li>QRIS/DANA 转币退（0718 新增）：基础额 {@code credit(REFUND)} + <b>溢价 bonus</b>
+     *       {@code credit(BONUS)}（后台可配 {@code premium_rate% + premium_fixed}；BONUS 记 PLATFORM_REVENUE
+     *       冲减，反套利仅未交付+转币分支 C-1）。平台留 QRIS 现金、发币负债，无真钱打款风险故即时。</li>
+     * </ul>
+     * 订单 CAS {@code markRefunded}（REFUNDING→REFUNDED，返 0 幂等跳过）+ {@code approval_status=DONE}。
+     * <b>幂等/互斥</b>：DONE 短路；非空 approvalStatus（真钱路径已启动）拒绝，防双退。credit 稳定键防重复入账。不发通知（AB-5B）。
      */
     @Transactional
     public void refundToPawCoin(String refundToken, long userId) {
@@ -215,14 +229,24 @@ public class RefundService {
         if (r.getApprovalStatus() == ApprovalStatus.DONE) {
             return; // 已退，幂等短路
         }
+        if (r.getApprovalStatus() != null) {
+            // 已选真钱路径（PENDING_APPROVAL/APPROVED/…）→ 不可再转币，防双退（不可逆边界，UX-DR14）。
+            throw AppException.conflict("退款方式已选定，不可更改");
+        }
         requireApproved(r);
         ConsultOrder order = requireOrder(r);
-        if (order.getPayChannel() != PayChannel.PAWCOIN) {
-            throw AppException.conflict("该订单非 PawCoin 支付，不能即时退币");
-        }
-        // 全额退回 PawCoin（credit 幂等：稳定键，重复确认短路，内部记 FLOAT_LIABILITY ledger）。
-        wallet.credit(userId, order.getAmount(), PawCoinTxnType.REFUND,
+        long base = order.getAmount();
+        // 基础退款额记 REFUND（原路等值退回站内币，credit 幂等稳定键，内部记 FLOAT_LIABILITY ledger）。
+        wallet.credit(userId, base, PawCoinTxnType.REFUND,
                 "refund_request", r.getId(), "refund-pawcoin-" + refundToken);
+        // 非 PawCoin 原渠道（QRIS/DANA）转币 → 溢价 bonus（BONUS 记 PLATFORM_REVENUE 冲减，反套利仅此分支）。
+        if (order.getPayChannel() != PayChannel.PAWCOIN) {
+            long premium = platformConfig.pawcoin().refundPawcoinPremium(base);
+            if (premium > 0) {
+                wallet.credit(userId, premium, PawCoinTxnType.BONUS,
+                        "refund_request", r.getId(), "refund-pawcoin-bonus-" + refundToken);
+            }
+        }
         orders.markRefunded(order.getId()); // CAS REFUNDING→REFUNDED（返 0=已退，跳过）
         r.markInstantPawCoinRefunded();
     }
