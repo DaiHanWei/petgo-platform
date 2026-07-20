@@ -43,6 +43,7 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> with WidgetsBinding
   String _displayName = '';
   int? _doneCount; // 完成数（history 列表长度）；null=加载中/失败 → 占位「—」
   String? _prevAwaitingToken; // 上一轮待支付项 token（侦测「接单已结束」跃迁，FR-53B）
+  final Set<String> _skipped = <String>{}; // 「Lewati」本地跳过的 token（会话内隐藏，请求对他人仍可见）
 
   @override
   void initState() {
@@ -118,8 +119,14 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> with WidgetsBinding
     _prevAwaitingToken = now;
   }
 
-  /// 显式刷新（右上角）：重拉队列。
-  void _refresh() => _reloadQueue();
+  /// 显式刷新（右上角）：重拉队列，并清空本地跳过（让跳过的项可重新出现）。
+  void _refresh() {
+    setState(() => _skipped.clear());
+    _reloadQueue();
+  }
+
+  /// 「Lewati」跳过：本地隐藏此请求（不接单；请求对其他兽医仍可见，刷新后可重现）。
+  void _skip(VetQueueItem item) => setState(() => _skipped.add(item.requestToken));
 
   /// 接单：CAS 接计费流请求 → 成功刷新（进等待支付态）；409（被抢/占用）→ 3s Toast + 刷新。
   Future<void> _accept(VetQueueItem item) async {
@@ -157,9 +164,34 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> with WidgetsBinding
       builder: (c) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.md),
-          child: SingleChildScrollView(
-            key: const ValueKey('vetQueueCaseSheet'),
-            child: VetAiContextCard(context_: ctx),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: SingleChildScrollView(
+                  key: const ValueKey('vetQueueCaseSheet'),
+                  child: VetAiContextCard(context_: ctx),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              // 0718 FR-53A：接单从卡片移到「Lihat Detail」弹层内（看完病例再接）。
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  key: ValueKey('vetAccept_${item.requestToken}'),
+                  onPressed: () {
+                    Navigator.of(c).pop();
+                    _accept(item);
+                  },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.vetPrimary,
+                    foregroundColor: AppColors.onAccent,
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                  ),
+                  child: Text(l10n.vetQueueAccept),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -186,7 +218,9 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> with WidgetsBinding
     final queue = _queue;
     final loading = queue == null;
     final awaiting = queue?.awaitingPay;
-    final available = queue?.available ?? const <VetQueueItem>[];
+    final all = queue?.available ?? const <VetQueueItem>[];
+    // 「Lewati」本地跳过后从视图剔除（刷新清空跳过集恢复）。
+    final available = all.where((it) => !_skipped.contains(it.requestToken)).toList();
     return Scaffold(
       backgroundColor: AppColors.base,
       body: Column(
@@ -236,7 +270,7 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> with WidgetsBinding
                   ...available.map((it) => Padding(
                         padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                         child: _QueueCard(
-                            item: it, onAccept: () => _accept(it), onViewCase: () => _viewCase(it)),
+                            item: it, onSkip: () => _skip(it), onViewCase: () => _viewCase(it)),
                       )),
               ],
             ),
@@ -393,12 +427,14 @@ class _AwaitingPayCard extends StatelessWidget {
 /// 计费流接单队列卡（Story 3.6）：宠物身份块（头像 emoji + 名 + meta）+ 等待时长 + 接单 CTA。
 /// **无 AI 危险等级/症状/照片**（`consult_requests` 不存病例，区别于免费流 `_InboxCard` 富卡）。
 class _QueueCard extends StatelessWidget {
-  const _QueueCard({required this.item, required this.onAccept, required this.onViewCase});
+  const _QueueCard({required this.item, required this.onSkip, required this.onViewCase});
 
   final VetQueueItem item;
-  final VoidCallback onAccept;
 
-  /// 展开完整病例（D1）：拉现签图 + 全文症状。
+  /// 「Lewati」跳过：本地隐藏此卡（请求对其他兽医仍可见）。
+  final VoidCallback onSkip;
+
+  /// 「Lihat Detail」展开完整病例（D1）：拉现签图 + 全文症状（接单在弹层内完成）。
   final VoidCallback onViewCase;
 
   /// 等级色条（与 `vet_request_detail_page` 同源）。DIRECT 自填病例无 AI 评级 → 兽医主题色。
@@ -541,43 +577,49 @@ class _QueueCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.body.copyWith(color: AppColors.textSecondary),
                     ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      if (item.imageCount > 0) ...[
+                  if (item.imageCount > 0) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
                         Icon(Icons.photo_outlined, size: 14, color: AppColors.textTertiary),
                         const SizedBox(width: 4),
                         Text('${item.imageCount}',
                             style: AppTypography.micro.copyWith(color: AppColors.textTertiary)),
-                        const SizedBox(width: 12),
                       ],
-                      TextButton(
-                        key: ValueKey('vetQueueViewCase_${item.requestToken}'),
+                    ),
+                  ],
+                ],
+                const SizedBox(height: 12),
+                // 0718 FR-53A（ref33/34）：卡片双按钮 Lewati（跳过·本地隐藏）+ Lihat Detail（开病例，接单在弹层内）。
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        key: ValueKey('vetSkip_${item.requestToken}'),
+                        onPressed: onSkip,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.ink2,
+                          side: const BorderSide(color: AppColors.line, width: 1.5),
+                          padding: const EdgeInsets.symmetric(vertical: 11),
+                        ),
+                        child: Text(l10n.vetQueueSkip),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: 2,
+                      child: FilledButton(
+                        key: ValueKey('vetViewDetail_${item.requestToken}'),
                         onPressed: onViewCase,
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          minimumSize: const Size(0, 0),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          foregroundColor: AppColors.vetPrimary,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.vetPrimary,
+                          foregroundColor: AppColors.onAccent,
+                          padding: const EdgeInsets.symmetric(vertical: 11),
                         ),
                         child: Text(l10n.vetQueueViewCase),
                       ),
-                    ],
-                  ),
-                ],
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    key: ValueKey('vetAccept_${item.requestToken}'),
-                    onPressed: onAccept,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.vetPrimary,
-                      foregroundColor: AppColors.onAccent,
-                      padding: const EdgeInsets.symmetric(vertical: 11),
                     ),
-                    child: Text(l10n.vetQueueAccept),
-                  ),
+                  ],
                 ),
               ],
             ),
