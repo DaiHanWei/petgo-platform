@@ -3,16 +3,19 @@ import '../domain/refund_request.dart';
 
 /// 退款 UI 本地化/格式化辅助（Story 4.5）。按 code 本地化，勿渲染后端串。
 
-/// 千分位金额（`Rp1.234.500`）。
-String rpFmt(int n) {
+/// 千分位（不带 Rp，如 `1.234.500`）。
+String thousandsFmt(int n) {
   final s = n.abs().toString();
   final buf = StringBuffer();
   for (int i = 0; i < s.length; i++) {
     if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
     buf.write(s[i]);
   }
-  return 'Rp$buf';
+  return buf.toString();
 }
+
+/// 千分位金额（`Rp1.234.500`）。
+String rpFmt(int n) => 'Rp${thousandsFmt(n)}';
 
 /// 出款渠道本地化（BCA/OVO/GOPAY）。
 String channelLabel(AppLocalizations l10n, String code) => switch (code) {

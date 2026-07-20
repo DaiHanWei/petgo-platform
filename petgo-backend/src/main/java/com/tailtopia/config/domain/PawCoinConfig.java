@@ -24,6 +24,9 @@ public class PawCoinConfig {
     @Column(name = "premium_rate", nullable = false)
     private int premiumRate;
 
+    @Column(name = "premium_fixed", nullable = false)
+    private long premiumFixed;
+
     @Column(name = "topup_paused", nullable = false)
     private boolean topupPaused;
 
@@ -51,6 +54,22 @@ public class PawCoinConfig {
 
     public void setPremiumRate(int premiumRate) {
         this.premiumRate = premiumRate;
+    }
+
+    public long getPremiumFixed() {
+        return premiumFixed;
+    }
+
+    public void setPremiumFixed(long premiumFixed) {
+        this.premiumFixed = premiumFixed;
+    }
+
+    /**
+     * 退款转 PawCoin 溢价（bonus）= 基础退款额 × premiumRate% + premiumFixed。
+     * 仅「未交付 + 转币」分支给（反套利 C-1，由 RefundService 门控）；两参数均后台可配。
+     */
+    public long refundPawcoinPremium(long baseAmount) {
+        return baseAmount * premiumRate / 100 + premiumFixed;
     }
 
     public boolean isTopupPaused() {

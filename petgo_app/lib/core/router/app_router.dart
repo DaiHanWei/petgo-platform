@@ -31,6 +31,7 @@ import '../../features/order/presentation/order_detail_page.dart';
 import '../../features/refund/domain/refund_request.dart';
 import '../../features/refund/presentation/refund_list_page.dart';
 import '../../features/refund/presentation/refund_choose_page.dart';
+import '../../features/refund/presentation/refund_pawcoin_success_page.dart';
 import '../../features/refund/presentation/refund_account_page.dart';
 import '../../features/refund/presentation/refund_review_page.dart';
 import '../../features/profile/presentation/growth_archive_page.dart';
@@ -336,6 +337,9 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
           path: '/me/refunds/review',
           builder: (c, s) => RefundReviewPage(draft: s.extra as RefundPayoutDraft)),
+      GoRoute(
+          path: '/me/refunds/pawcoin-success',
+          builder: (c, s) => RefundPawcoinSuccessPage(result: s.extra as RefundPawcoinResult)),
       // 语言设置（Story 7.2）。
       GoRoute(path: '/me/language', builder: (c, s) => const LanguageSettingsPage()),
       // 账号注销整页（P-43 · Story 7.3）。受控（/me 前缀，需登录）。

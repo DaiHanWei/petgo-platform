@@ -38,6 +38,35 @@ class PayoutOption {
       );
 }
 
+/// 转 PawCoin 退款结果（0718 成功页）。对齐后端 `RefundPawcoinResult`。
+class RefundPawcoinResult {
+  const RefundPawcoinResult({
+    required this.baseAmount,
+    required this.bonusAmount,
+    required this.totalCredited,
+    required this.newBalance,
+  });
+
+  /// 基础退款额（= 订单金额，koin）。
+  final int baseAmount;
+
+  /// 转币溢价 bonus（koin；PawCoin 原路退为 0）。
+  final int bonusAmount;
+
+  /// 实际到账（base + bonus，koin）。
+  final int totalCredited;
+
+  /// 退款后 PawCoin 余额（koin）。
+  final int newBalance;
+
+  factory RefundPawcoinResult.fromJson(Map<String, dynamic> j) => RefundPawcoinResult(
+        baseAmount: (j['baseAmount'] as num?)?.toInt() ?? 0,
+        bonusAmount: (j['bonusAmount'] as num?)?.toInt() ?? 0,
+        totalCredited: (j['totalCredited'] as num?)?.toInt() ?? 0,
+        newBalance: (j['newBalance'] as num?)?.toInt() ?? 0,
+      );
+}
+
 /// 一条「我的退款」。
 class MyRefund {
   const MyRefund({
@@ -51,6 +80,7 @@ class MyRefund {
     required this.actionable,
     required this.payoutFilled,
     required this.payoutOptions,
+    required this.pawcoinCreditPreview,
   });
 
   final String refundToken;
@@ -78,6 +108,9 @@ class MyRefund {
   /// QRIS 出款渠道费预览（PawCoin 为空）。
   final List<PayoutOption> payoutOptions;
 
+  /// 转 PawCoin 到账预览（koin）：QRIS/DANA=退款额+bonus 溢价；PawCoin 原路=退款额（后端权威，0718）。
+  final int pawcoinCreditPreview;
+
   factory MyRefund.fromJson(Map<String, dynamic> j) => MyRefund(
         refundToken: (j['refundToken'] ?? '') as String,
         orderToken: (j['orderToken'] ?? '') as String,
@@ -91,5 +124,6 @@ class MyRefund {
         payoutOptions: ((j['payoutOptions'] as List?) ?? const [])
             .map((e) => PayoutOption.fromJson((e as Map).cast<String, dynamic>()))
             .toList(),
+        pawcoinCreditPreview: (j['pawcoinCreditPreview'] as num?)?.toInt() ?? 0,
       );
 }

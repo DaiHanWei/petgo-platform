@@ -2,6 +2,7 @@ package com.tailtopia.pay.refund.web;
 
 import com.tailtopia.pay.refund.dto.FillPayoutRequest;
 import com.tailtopia.pay.refund.dto.MyRefundView;
+import com.tailtopia.pay.refund.dto.RefundPawcoinResult;
 import com.tailtopia.pay.refund.service.RefundService;
 import com.tailtopia.shared.error.AppException;
 import jakarta.validation.Valid;
@@ -36,10 +37,11 @@ public class MeRefundController {
         return refundService.listMyRefunds(currentUserId(jwt));
     }
 
-    /** PawCoin 订单即时退币（原路、无手续费、幂等；订单→REFUNDED）。 */
+    /** 即时退币到 PawCoin（原路 or QRIS/DANA 转币+bonus；幂等；订单→REFUNDED）。返回金额明细供成功页。 */
     @PostMapping("/refund-requests/{refundToken}/refund-pawcoin")
-    public void refundPawCoin(@AuthenticationPrincipal Jwt jwt, @PathVariable String refundToken) {
-        refundService.refundToPawCoin(refundToken, currentUserId(jwt));
+    public RefundPawcoinResult refundPawCoin(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable String refundToken) {
+        return refundService.refundToPawCoin(refundToken, currentUserId(jwt));
     }
 
     /** QRIS 订单填真钱收款账户（不可逆；净额后端权威；进 PENDING_APPROVAL 等 4-6）。 */

@@ -16,6 +16,7 @@ import java.util.List;
  * @param actionable     可选退款方式（{@code needDecision=APPROVED} 且未提交/未退）
  * @param payoutFilled   是否已填收款/已退（{@code approvalStatus} 非空）
  * @param payoutOptions  QRIS 出款渠道费预览（BCA/OVO/GoPay + fee + net；PawCoin 为空列表）
+ * @param pawcoinCreditPreview 转 PawCoin 到账预览（koin）：QRIS/DANA=退款额+bonus溢价；PawCoin 原路=退款额
  */
 public record MyRefundView(
         String refundToken,
@@ -27,7 +28,8 @@ public record MyRefundView(
         long orderAmount,
         boolean actionable,
         boolean payoutFilled,
-        List<PayoutOption> payoutOptions) {
+        List<PayoutOption> payoutOptions,
+        long pawcoinCreditPreview) {
 
     /**
      * 出款渠道净额预览（后端权威 {@code net = orderAmount − fee}，前端仅展示不回传，FR-NFR-5）。
