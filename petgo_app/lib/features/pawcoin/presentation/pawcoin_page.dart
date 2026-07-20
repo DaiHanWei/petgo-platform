@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../domain/pawcoin_transaction.dart';
 import 'pawcoin_controller.dart';
@@ -140,23 +141,37 @@ class _LedgerRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
       child: Row(
         children: [
+          // 彩色图标（0718：入账绿底 / 消费红底）。
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: positive ? AppColors.momenBadgeBg : AppColors.coralTint,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(_txnIcon(item.type),
+                size: 22, color: positive ? AppColors.triageGreen : AppColors.coral),
+          ),
+          const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(_typeLabel(l10n, item.type),
-                    style: const TextStyle(fontSize: 14, color: AppColors.ink)),
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink)),
                 if (item.createdAt != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
-                    child: Text(_date(item.createdAt!),
+                    child: Text(formatDayMonthYearTime(context, item.createdAt!.toLocal()),
                         style: const TextStyle(fontSize: 12, color: AppColors.muted)),
                   ),
               ],
             ),
           ),
+          const SizedBox(width: AppSpacing.sm),
           Text('$sign${_grouped(item.delta.abs())}',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: amountColor)),
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: amountColor)),
         ],
       ),
     );
@@ -243,6 +258,15 @@ String _typeLabel(AppLocalizations l10n, String type) => switch (type) {
       _ => type,
     };
 
+/// 流水图标（按类型；0718 流水行左侧彩色图标）。
+IconData _txnIcon(String type) => switch (type) {
+      'TOPUP' => Icons.add,
+      'REFUND' => Icons.replay,
+      'BONUS' => Icons.card_giftcard_outlined,
+      'SPEND' => Icons.receipt_long_outlined,
+      _ => Icons.circle_outlined,
+    };
+
 /// 千分位分组（印尼语 '.' 分隔），如 120000 → 120.000。
 String _grouped(int n) {
   final s = n.abs().toString();
@@ -254,8 +278,3 @@ String _grouped(int n) {
   return buf.toString();
 }
 
-String _date(DateTime d) {
-  final local = d.toLocal();
-  String two(int v) => v.toString().padLeft(2, '0');
-  return '${local.year}-${two(local.month)}-${two(local.day)}';
-}
