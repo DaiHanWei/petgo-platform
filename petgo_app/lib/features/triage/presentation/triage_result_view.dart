@@ -13,12 +13,15 @@ import '../domain/triage_upload_controller.dart';
 import '../domain/triage_wording_guard.dart';
 import 'triage_red_result.dart';
 import 'widgets/triage_paywall.dart';
+import 'widgets/unlock_method_sheet.dart';
 
 /// Debug 截图钩子一次性 guard（DEV_ARCHIVE_PROMPT 在结果就绪后自动弹存档确认，截 archive-confirm 用）。
 bool _devArchiveShown = false;
 
 const Color _greenLight = Color(0xFF56D4A0);
 const Color _yellowLight = Color(0xFFFFD166);
+// 锁定态 header（0718 FR-43C：等级+详建捆绑锁）→ 琥珀渐变（premium-locked 观感，不泄露绿/黄）。
+const Color _lockedGoldLight = Color(0xFFF9C55A);
 // RINGKASAN GEJALA 卡按等级取浅色底 + 深色标题（原型 ai-result #FEF3DE/#8A5A00、ai-result-green #EDFBF4/#136B41）。
 const Color _yellowSummaryBg = Color(0xFFFEF3DE);
 const Color _yellowSummaryLabel = Color(0xFF8A5A00);
@@ -58,6 +61,8 @@ class TriageResultView extends ConsumerWidget {
 
     final isYellow = level == DangerLevel.yellow;
     final accent = isYellow ? AppColors.triageYellow : AppColors.triageGreen;
+    // 0718 FR-43C：非红 + 后端 locked → 等级图标本身与详建捆绑锁定（隐藏绿/黄，解锁前不泄露等级）。
+    final locked = result.isDetailLocked && triageId != null;
     // 终结性表述守卫：模型若吐出「不严重/可以放心」等，拦截降级为中性提示。
     final advice = TriageWordingGuard.sanitize(result.advice, fallback: l10n.triageNeutralAdvice);
     // RINGKASAN GEJALA：优先 AI 摘要，回退用户输入的症状文本。
@@ -81,16 +86,26 @@ class TriageResultView extends ConsumerWidget {
       key: ValueKey(isYellow ? 'triageYellowPage' : 'triageGreenPage'),
       padding: EdgeInsets.zero,
       children: <Widget>[
-        // —— 实色渐变等级 Header（原型 P-19/P-19b：白字居中，52px emoji 无圈）——
-        _LevelHeader(
-          emoji: isYellow ? '🟡' : '🟢',
-          gradient: isYellow
-              ? const [AppColors.triageYellow, _yellowLight]
-              : const [AppColors.triageGreen, _greenLight],
-          title: isYellow ? l10n.triageYellowHeadline : l10n.triageGreenHeadline,
-          subtitle: isYellow ? l10n.triageYellowSubhead : l10n.triageGreenSubhead,
-          onBack: done,
-        ),
+        // —— 等级 Header：锁定态=琥珀+锁图标+「Tingkat risiko terkunci」（藏绿/黄）；否则实色渐变等级 ——
+        if (locked)
+          _LevelHeader(
+            emoji: '',
+            locked: true,
+            gradient: const [AppColors.gold, _lockedGoldLight],
+            title: l10n.triageLockedRiskTitle,
+            subtitle: '',
+            onBack: done,
+          )
+        else
+          _LevelHeader(
+            emoji: isYellow ? '🟡' : '🟢',
+            gradient: isYellow
+                ? const [AppColors.triageYellow, _yellowLight]
+                : const [AppColors.triageGreen, _greenLight],
+            title: isYellow ? l10n.triageYellowHeadline : l10n.triageGreenHeadline,
+            subtitle: isYellow ? l10n.triageYellowSubhead : l10n.triageGreenSubhead,
+            onBack: done,
+          ),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
           child: Column(
@@ -99,9 +114,10 @@ class TriageResultView extends ConsumerWidget {
               // RINGKASAN GEJALA（症状摘要）。
               if (summary.isNotEmpty) ...<Widget>[
                 _SectionCard(
+                  // 锁定态用中性底/标题，避免摘要卡颜色泄露绿/黄等级。
                   label: l10n.triageSummaryLabel,
-                  background: isYellow ? _yellowSummaryBg : _greenSummaryBg,
-                  labelColor: isYellow ? _yellowSummaryLabel : _greenSummaryLabel,
+                  background: locked ? AppColors.cream2 : (isYellow ? _yellowSummaryBg : _greenSummaryBg),
+                  labelColor: locked ? AppColors.ink2 : (isYellow ? _yellowSummaryLabel : _greenSummaryLabel),
                   child: Text(summary,
                       style: const TextStyle(fontSize: 13, height: 1.6, color: AppColors.ink)),
                 ),
@@ -110,9 +126,12 @@ class TriageResultView extends ConsumerWidget {
               // 居家护理建议（SARAN PERAWATAN）。Story 2.4：锁定态（非红 + 后端 locked）→ paywall 占位 + CTA；
               // 否则原详建要点。安全免费部分（摘要/观察/免责/CTA）不受影响。
               _SectionCard(
-                label: isYellow ? l10n.triageCareLabel : l10n.triageHomeCareLabel,
-                child: (result.isDetailLocked && triageId != null)
-                    ? TriagePaywall(triageId: triageId!)
+                // 锁定态用通用「居家护理」标题，不用黄/绿差异化标题泄露等级。
+                label: locked
+                    ? l10n.triageHomeCareLabel
+                    : (isYellow ? l10n.triageCareLabel : l10n.triageHomeCareLabel),
+                child: locked
+                    ? TriagePaywall(triageId: triageId!, showCta: false)
                     : Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -132,8 +151,8 @@ class TriageResultView extends ConsumerWidget {
                         ],
                       ),
               ),
-              // 黄色：观察协议三要素（指标 chips + 时间窗口卡 + 升级触发卡）。
-              if (isYellow && (result.observation?.hasContent ?? false)) ...<Widget>[
+              // 黄色：观察协议三要素（锁定态隐藏，否则会泄露「黄」等级）。
+              if (!locked && isYellow && (result.observation?.hasContent ?? false)) ...<Widget>[
                 const SizedBox(height: 12),
                 _ProtocolBlock(observation: result.observation!),
               ],
@@ -143,10 +162,31 @@ class TriageResultView extends ConsumerWidget {
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 11, height: 1.55, color: AppColors.muted)),
               const SizedBox(height: 18),
-              // —— 分级 CTA ——
+              // —— CTA ——
+              // 锁定态（0718 ref15）：底部说明文 + 「Buka Detail Lengkap」（开解锁弹层）；解锁后再显分级 CTA。
               // 黄（原型 ai-result 仅 2 钮）：Konsultasi → 咨询入口 P-20；Selesai → 先弹存档确认 P-25 再退出。
               // 绿（原型 ai-result-green 3 钮）：Simpan 存档 / Tetap Konsultasi → P-20 / Selesai 退出。
-              if (isYellow) ...<Widget>[
+              if (locked) ...<Widget>[
+                Text(
+                  l10n.triageUnlockFooter(formatIdr(kAiUnlockPriceIdr)),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 13, height: 1.5, color: AppColors.ink2),
+                ),
+                const SizedBox(height: 12),
+                _filledBtn(
+                  btnKey: const ValueKey('triageUnlockOpenFull'),
+                  label: l10n.triageUnlockOpenFull,
+                  color: AppColors.mint,
+                  onTap: () async {
+                    final method =
+                        await showUnlockMethodSheet(context, ref, priceIdr: kAiUnlockPriceIdr);
+                    if (method == null) return;
+                    await ref
+                        .read(triageUnlockControllerProvider.notifier)
+                        .unlock(triageId!, method);
+                  },
+                ),
+              ] else if (isYellow) ...<Widget>[
                 _filledBtn(
                   btnKey: const ValueKey('triageConsultVet'),
                   label: '💬 ${l10n.triageConsultNow}',
@@ -291,6 +331,7 @@ class _LevelHeader extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onBack,
+    this.locked = false,
   });
 
   final String emoji;
@@ -298,6 +339,9 @@ class _LevelHeader extends StatelessWidget {
   final String title;
   final String subtitle;
   final VoidCallback onBack;
+
+  /// 锁定态（0718 FR-43C）：等级图标本身也锁——渲染锁图标替代 emoji，隐藏等级/副文。
+  final bool locked;
 
   @override
   Widget build(BuildContext context) {
@@ -349,17 +393,22 @@ class _LevelHeader extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Text(emoji, textAlign: TextAlign.center, style: const TextStyle(fontSize: 52)),
+                    locked
+                        ? const Icon(Icons.lock_outline, size: 46, color: Colors.white)
+                        : Text(emoji,
+                            textAlign: TextAlign.center, style: const TextStyle(fontSize: 52)),
                     const SizedBox(height: 6),
                     Text(title,
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                             fontSize: 21, fontWeight: FontWeight.w700, height: 1.25, color: Colors.white)),
-                    const SizedBox(height: 6),
-                    Text(subtitle,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            fontSize: 13, height: 1.6, color: Colors.white.withValues(alpha: 0.9))),
+                    if (subtitle.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(subtitle,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              fontSize: 13, height: 1.6, color: Colors.white.withValues(alpha: 0.9))),
+                    ],
                   ],
                 ),
               ),
