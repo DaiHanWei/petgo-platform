@@ -16,97 +16,124 @@
         <div class="brand" th:text="#{admin.brand}">🐾 TailTopia 运营</div>
         <a th:href="@{/admin/dashboard}" th:classappend="${active == 'dashboard'} ? 'active'"
            th:text="#{admin.nav.dashboard}">概览</a>
-        <div class="group" th:text="#{admin.nav.group.content}">内容</div>
-        <a th:href="@{/admin/seed-post}" th:classappend="${active == 'seed'} ? 'active'"
-           th:text="#{admin.nav.seed}">种子内容发布</a>
-        <a th:href="@{/admin/reports}" th:classappend="${active == 'reports'} ? 'active'"
-           th:text="#{admin.nav.reports}">举报队列</a>
-        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.proactive_takedown')"
-           th:href="@{/admin/content}" th:classappend="${active == 'content'} ? 'active'"
-           th:text="#{admin.nav.content}">内容管理</a>
-        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.proactive_takedown')"
-           th:href="@{/admin/comments}" th:classappend="${active == 'comments'} ? 'active'"
-           th:text="#{admin.nav.comments}">评论管理</a>
-        <a sec:authorize="hasRole('SUPER_ADMIN')"
-           th:href="@{/admin/manual-review}" th:classappend="${active == 'manual-review'} ? 'active'"
-           th:text="#{admin.nav.review}">人工审核</a>
-        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.view')"
-           th:href="@{/admin/users}" th:classappend="${active == 'users'} ? 'active'"
-           th:text="#{admin.nav.users}">用户</a>
-        <div class="group" th:text="#{admin.nav.group.vet}">兽医（Epic 5）</div>
-        <a th:href="@{/admin/vets}" th:classappend="${active == 'vets'} ? 'active'"
-           th:text="#{admin.nav.vets}">兽医账号</a>
-        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('vet.view')"
-           th:href="@{/admin/vets/online}" th:classappend="${active == 'online'} ? 'active'"
-           th:text="#{admin.nav.online}">在线状态</a>
-        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('vet.view')"
-           th:href="@{/admin/failed-requests}" th:classappend="${active == 'failed-requests'} ? 'active'"
-           th:text="#{admin.nav.failedRequests}">未成功请求</a>
-        <!-- Story 6.1：兽医评分总览（仅运营，rating.view）。 -->
-        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('rating.view')"
-           th:href="@{/admin/ratings}" th:classappend="${active == 'ratings'} ? 'active'"
-           th:text="#{admin.nav.ratings}">兽医评分</a>
-        <!-- Story 9.1：导航去重——移除兽医分组下的「问诊异常」重复入口，仅保留下方独立「问诊异常」分组。 -->
-        <!-- 问诊异常分组（Story 5.1；9.1 去重后的唯一入口）。 -->
-        <div class="group" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('consult.view_anomalies')"
-             th:text="#{admin.nav.group.consult}">问诊异常</div>
-        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('consult.view_anomalies')"
-           th:href="@{/admin/anomalies}" th:classappend="${active == 'anomalies'} ? 'active'"
-           th:text="#{admin.nav.anomalies}">异常工单</a>
-        <!-- Story 5.2：会话元数据查询（问诊异常分组下）；9.1 改称「历史会话查询」。 -->
-        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('consult.view_sessions')"
-           th:href="@{/admin/consult-sessions}" th:classappend="${active == 'consult-sessions'} ? 'active'"
-           th:text="#{admin.nav.sessions}">历史会话查询</a>
-        <!-- Story 4.7：客服工单（结案 + CSAT；support.handle）-->
-        <div class="group" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('support.handle')"
-             th:text="#{admin.nav.group.support}">客服</div>
-        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('support.handle')"
-           th:href="@{/admin/support-tickets}" th:classappend="${active == 'support-tickets'} ? 'active'"
-           th:text="#{admin.nav.supportTickets}">客服工单</a>
-        <!-- Story 4.4/4.6：退款管理（客服判定 / 主管审批 / 财务打款；任一退款权限点可见）-->
-        <div class="group"
-             sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('refund.submit') or hasAuthority('refund.approve') or hasAuthority('refund.payout')"
-             th:text="#{admin.nav.group.refund}">退款</div>
-        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('refund.submit') or hasAuthority('refund.approve') or hasAuthority('refund.payout')"
-           th:href="@{/admin/refunds}" th:classappend="${active == 'refunds'} ? 'active'"
-           th:text="#{admin.nav.refunds}">退款管理</a>
-        <!-- Story 9.2：运营配置（定价/PawCoin/档位；config.view 门控）-->
-        <div class="group" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view')"
-             th:text="#{admin.nav.group.ops}">运营</div>
-        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view')"
-           th:href="@{/admin/config}" th:classappend="${active == 'config'} ? 'active'"
-           th:text="#{admin.nav.config}">运营配置</a>
-        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('order.view')"
-           th:href="@{/admin/consult-orders}" th:classappend="${active == 'consult-orders'} ? 'active'"
-           th:text="#{admin.nav.consultOrders}">兽医订单</a>
-        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('order.view')"
-           th:href="@{/admin/ai-orders}" th:classappend="${active == 'ai-orders'} ? 'active'"
-           th:text="#{admin.nav.aiOrders}">AI 订单</a>
-        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('settlement.view')"
-           th:href="@{/admin/settlements}" th:classappend="${active == 'settlements'} ? 'active'"
-           th:text="#{admin.nav.settlements}">兽医月结</a>
-        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('payment.view')"
-           th:href="@{/admin/payments}" th:classappend="${active == 'payments'} ? 'active'"
-           th:text="#{admin.nav.payments}">支付记录</a>
-        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('risk.view')"
-           th:href="@{/admin/red-overage}" th:classappend="${active == 'red-overage'} ? 'active'"
-           th:text="#{admin.nav.redOverage}">红色超额</a>
-        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')"
-           th:href="@{/admin/virtual-accounts}" th:classappend="${active == 'virtual-accounts'} ? 'active'"
-           th:text="#{admin.nav.virtualAccounts}">虚拟账号</a>
-        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')"
-           th:href="@{/admin/seed-batch}" th:classappend="${active == 'seed-batch'} ? 'active'"
-           th:text="#{admin.nav.seedBatch}">批量种子</a>
-        <!-- Story 1.3/1.5：安全（操作审计 / 后台账号；按权限显示）-->
-        <div class="group"
-             sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.view_logs') or hasAuthority('admin.create_account')"
-             th:text="#{admin.nav.group.security}">安全</div>
-        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.view_logs')"
-           th:href="@{/admin/audit-logs}" th:classappend="${active == 'audit-logs'} ? 'active'"
-           th:text="#{admin.nav.audit}">操作审计</a>
-        <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.create_account')"
-           th:href="@{/admin/accounts}" th:classappend="${active == 'accounts'} ? 'active'"
-           th:text="#{admin.nav.accounts}">后台账号</a>
+        <details class="nav-section"
+                 th:attr="open=${active == 'seed' or active == 'reports' or active == 'content' or active == 'comments' or active == 'manual-review' or active == 'users'} ? 'open' : null">
+            <summary th:classappend="${active == 'seed' or active == 'reports' or active == 'content' or active == 'comments' or active == 'manual-review' or active == 'users'} ? 'active'"
+                     th:text="#{admin.nav.group.content}">内容</summary>
+            <div class="nav-sub">
+                <a th:href="@{/admin/seed-post}" th:classappend="${active == 'seed'} ? 'active'"
+                   th:text="#{admin.nav.seed}">种子内容发布</a>
+                <a th:href="@{/admin/reports}" th:classappend="${active == 'reports'} ? 'active'"
+                   th:text="#{admin.nav.reports}">举报队列</a>
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.proactive_takedown')"
+                   th:href="@{/admin/content}" th:classappend="${active == 'content'} ? 'active'"
+                   th:text="#{admin.nav.content}">内容管理</a>
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.proactive_takedown')"
+                   th:href="@{/admin/comments}" th:classappend="${active == 'comments'} ? 'active'"
+                   th:text="#{admin.nav.comments}">评论管理</a>
+                <a sec:authorize="hasRole('SUPER_ADMIN')"
+                   th:href="@{/admin/manual-review}" th:classappend="${active == 'manual-review'} ? 'active'"
+                   th:text="#{admin.nav.review}">人工审核</a>
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.view')"
+                   th:href="@{/admin/users}" th:classappend="${active == 'users'} ? 'active'"
+                   th:text="#{admin.nav.users}">用户</a>
+            </div>
+        </details>
+        <details class="nav-section"
+                 th:attr="open=${active == 'vets' or active == 'online' or active == 'failed-requests' or active == 'ratings'} ? 'open' : null">
+            <summary th:classappend="${active == 'vets' or active == 'online' or active == 'failed-requests' or active == 'ratings'} ? 'active'"
+                     th:text="#{admin.nav.group.vet}">兽医（Epic 5）</summary>
+            <div class="nav-sub">
+                <a th:href="@{/admin/vets}" th:classappend="${active == 'vets'} ? 'active'"
+                   th:text="#{admin.nav.vets}">兽医账号</a>
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('vet.view')"
+                   th:href="@{/admin/vets/online}" th:classappend="${active == 'online'} ? 'active'"
+                   th:text="#{admin.nav.online}">在线状态</a>
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('vet.view')"
+                   th:href="@{/admin/failed-requests}" th:classappend="${active == 'failed-requests'} ? 'active'"
+                   th:text="#{admin.nav.failedRequests}">未成功请求</a>
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('rating.view')"
+                   th:href="@{/admin/ratings}" th:classappend="${active == 'ratings'} ? 'active'"
+                   th:text="#{admin.nav.ratings}">兽医评分</a>
+            </div>
+        </details>
+        <details class="nav-section" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('consult.view_anomalies') or hasAuthority('consult.view_sessions')"
+                 th:attr="open=${active == 'anomalies' or active == 'consult-sessions'} ? 'open' : null">
+            <summary th:classappend="${active == 'anomalies' or active == 'consult-sessions'} ? 'active'"
+                     th:text="#{admin.nav.group.consult}">问诊异常</summary>
+            <div class="nav-sub">
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('consult.view_anomalies')"
+                   th:href="@{/admin/anomalies}" th:classappend="${active == 'anomalies'} ? 'active'"
+                   th:text="#{admin.nav.anomalies}">异常工单</a>
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('consult.view_sessions')"
+                   th:href="@{/admin/consult-sessions}" th:classappend="${active == 'consult-sessions'} ? 'active'"
+                   th:text="#{admin.nav.sessions}">历史会话查询</a>
+            </div>
+        </details>
+        <details class="nav-section" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('support.handle')"
+                 th:attr="open=${active == 'support-tickets'} ? 'open' : null">
+            <summary th:classappend="${active == 'support-tickets'} ? 'active'"
+                     th:text="#{admin.nav.group.support}">客服</summary>
+            <div class="nav-sub">
+                <a th:href="@{/admin/support-tickets}" th:classappend="${active == 'support-tickets'} ? 'active'"
+                   th:text="#{admin.nav.supportTickets}">客服工单</a>
+            </div>
+        </details>
+        <details class="nav-section"
+                 sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('refund.submit') or hasAuthority('refund.approve') or hasAuthority('refund.payout')"
+                 th:attr="open=${active == 'refunds'} ? 'open' : null">
+            <summary th:classappend="${active == 'refunds'} ? 'active'"
+                     th:text="#{admin.nav.group.refund}">退款</summary>
+            <div class="nav-sub">
+                <a th:href="@{/admin/refunds}" th:classappend="${active == 'refunds'} ? 'active'"
+                   th:text="#{admin.nav.refunds}">退款管理</a>
+            </div>
+        </details>
+        <details class="nav-section" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view') or hasAuthority('order.view') or hasAuthority('settlement.view') or hasAuthority('payment.view') or hasAuthority('risk.view') or hasAuthority('virtual_account.manage')"
+                 th:attr="open=${active == 'config' or active == 'consult-orders' or active == 'ai-orders' or active == 'settlements' or active == 'payments' or active == 'red-overage' or active == 'virtual-accounts' or active == 'seed-batch'} ? 'open' : null">
+            <summary th:classappend="${active == 'config' or active == 'consult-orders' or active == 'ai-orders' or active == 'settlements' or active == 'payments' or active == 'red-overage' or active == 'virtual-accounts' or active == 'seed-batch'} ? 'active'"
+                     th:text="#{admin.nav.group.ops}">运营</summary>
+            <div class="nav-sub">
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view')"
+                   th:href="@{/admin/config}" th:classappend="${active == 'config'} ? 'active'"
+                   th:text="#{admin.nav.config}">运营配置</a>
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('order.view')"
+                   th:href="@{/admin/consult-orders}" th:classappend="${active == 'consult-orders'} ? 'active'"
+                   th:text="#{admin.nav.consultOrders}">兽医订单</a>
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('order.view')"
+                   th:href="@{/admin/ai-orders}" th:classappend="${active == 'ai-orders'} ? 'active'"
+                   th:text="#{admin.nav.aiOrders}">AI 订单</a>
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('settlement.view')"
+                   th:href="@{/admin/settlements}" th:classappend="${active == 'settlements'} ? 'active'"
+                   th:text="#{admin.nav.settlements}">兽医月结</a>
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('payment.view')"
+                   th:href="@{/admin/payments}" th:classappend="${active == 'payments'} ? 'active'"
+                   th:text="#{admin.nav.payments}">支付记录</a>
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('risk.view')"
+                   th:href="@{/admin/red-overage}" th:classappend="${active == 'red-overage'} ? 'active'"
+                   th:text="#{admin.nav.redOverage}">红色超额</a>
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')"
+                   th:href="@{/admin/virtual-accounts}" th:classappend="${active == 'virtual-accounts'} ? 'active'"
+                   th:text="#{admin.nav.virtualAccounts}">虚拟账号</a>
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')"
+                   th:href="@{/admin/seed-batch}" th:classappend="${active == 'seed-batch'} ? 'active'"
+                   th:text="#{admin.nav.seedBatch}">批量种子</a>
+            </div>
+        </details>
+        <details class="nav-section"
+                 sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.view_logs') or hasAuthority('admin.create_account')"
+                 th:attr="open=${active == 'audit-logs' or active == 'accounts'} ? 'open' : null">
+            <summary th:classappend="${active == 'audit-logs' or active == 'accounts'} ? 'active'"
+                     th:text="#{admin.nav.group.security}">安全</summary>
+            <div class="nav-sub">
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.view_logs')"
+                   th:href="@{/admin/audit-logs}" th:classappend="${active == 'audit-logs'} ? 'active'"
+                   th:text="#{admin.nav.audit}">操作审计</a>
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.create_account')"
+                   th:href="@{/admin/accounts}" th:classappend="${active == 'accounts'} ? 'active'"
+                   th:text="#{admin.nav.accounts}">后台账号</a>
+            </div>
+        </details>
     </nav>
     <main>
         <div class="topbar">

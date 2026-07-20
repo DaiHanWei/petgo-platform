@@ -15,26 +15,31 @@
         <p class="hint">改动仅影响后续新成交；历史订单按成交快照不变。每次修改记入变更日志与审计哈希链。</p>
 
         <!-- 定价（AB-8A/8F）——仅 config.edit 可改；否则只读 -->
-        <h2>定价</h2>
-        <form method="post" th:action="@{/admin/config/pricing}"
+        <h2>定价配置</h2>
+        <form class="card" method="post" th:action="@{/admin/config/pricing}"
               sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.edit')">
-            <label>兽医单次咨询价（IDR）
-                <input type="number" name="vetConsultPrice" min="0" th:value="${pricing.vetConsultPrice}"/></label>
-            <label>兽医分成（%，0–100）
-                <input type="number" name="vetShareRate" min="0" max="100" th:value="${pricing.vetShareRate}"/></label>
-            <label>AI 详情解锁价（IDR）
-                <input type="number" name="aiUnlockPrice" min="0" th:value="${pricing.aiUnlockPrice}"/></label>
-            <label>身份证高清图下载价（IDR）
-                <input type="number" name="idHdDownloadPrice" min="0" th:value="${pricing.idHdDownloadPrice}"/></label>
-            <label>每月免费额度（0–35）
-                <input type="number" name="monthlyFreeQuota" min="0" max="35" th:value="${pricing.monthlyFreeQuota}"/></label>
-            <button type="submit" class="btn btn-primary btn-sm">保存定价</button>
+            <label class="field">兽医单次咨询价（IDR）
+                <input class="field-full" type="number" name="vetConsultPrice" min="0" th:value="${pricing.vetConsultPrice}"/>
+            </label>
+            <label class="field">兽医分成（%，0–100）
+                <input class="field-full" type="number" name="vetShareRate" min="0" max="100" th:value="${pricing.vetShareRate}"/>
+            </label>
+            <label class="field">AI 详情解锁价（IDR）
+                <input class="field-full" type="number" name="aiUnlockPrice" min="0" th:value="${pricing.aiUnlockPrice}"/>
+            </label>
+            <label class="field">身份证高清图下载价（IDR）
+                <input class="field-full" type="number" name="idHdDownloadPrice" min="0" th:value="${pricing.idHdDownloadPrice}"/>
+            </label>
+            <label class="field">每月AI问诊免费额度（0–35）
+                <input class="field-full" type="number" name="monthlyFreeQuota" min="0" max="35" th:value="${pricing.monthlyFreeQuota}"/>
+            </label>
+            <button type="submit" class="btn btn-primary btn-sm mt-sm">保存定价</button>
         </form>
         <p class="hint" sec:authorize="!hasRole('SUPER_ADMIN') and !hasAuthority('config.edit')">
             当前兽医单价 <span th:text="${pricing.vetConsultPrice}">0</span> / 分成
             <span th:text="${pricing.vetShareRate}">0</span>% / AI
             <span th:text="${pricing.aiUnlockPrice}">0</span> / HD
-            <span th:text="${pricing.idHdDownloadPrice}">0</span> / 免费额度
+            <span th:text="${pricing.idHdDownloadPrice}">0</span> / 每月AI问诊免费额度
             <span th:text="${pricing.monthlyFreeQuota}">0</span>（只读，需 config.edit 权限修改）
         </p>
 
