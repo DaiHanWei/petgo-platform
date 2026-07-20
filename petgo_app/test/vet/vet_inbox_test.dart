@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/core/storage/secure_storage.dart';
 import 'package:tailtopia/features/vet/data/vet_repository.dart';
+import 'package:tailtopia/features/vet/domain/consult_ai_context.dart';
 import 'package:tailtopia/features/vet/domain/vet_login_response.dart';
 import 'package:tailtopia/features/vet/domain/vet_queue.dart';
 import 'package:tailtopia/features/vet/domain/vet_workbench_lists.dart';
@@ -49,6 +50,11 @@ class _FakeVetRepository extends VetRepository {
     }
     acceptedToken = requestToken;
   }
+
+  // 0718：接单在「Lihat Detail」病例弹层内，故弹层要能打开（返回最小 AI 上下文）。
+  @override
+  Future<ConsultAiContext> consultationCase(String requestToken) async =>
+      const ConsultAiContext(hasAiContext: true, symptomText: 'test');
 }
 
 Future<void> _pump(WidgetTester tester, _FakeVetRepository repo) async {
@@ -89,7 +95,7 @@ void main() {
     expect(find.text('No incoming requests'), findsOneWidget);
   });
 
-  testWidgets('available 渲染计费队列卡（身份 + meta）+ 接单 CTA', (tester) async {
+  testWidgets('available 渲染计费队列卡（身份 + meta）+ Lewati/Lihat Detail 双按钮（0718 FR-53A）', (tester) async {
     final repo = _FakeVetRepository(
       queue: VetQueue(available: [_item('req-5', petName: 'Oyen', species: 'CAT', age: 24, owner: 'rani')]),
     );
@@ -98,26 +104,48 @@ void main() {
     expect(find.byKey(const ValueKey('vetQueueCard_req-5')), findsOneWidget);
     expect(find.text('Oyen'), findsOneWidget);
     expect(find.text('Cat · 2 yr · @rani'), findsOneWidget);
-    expect(find.byKey(const ValueKey('vetAccept_req-5')), findsOneWidget);
-    expect(find.text('Accept'), findsOneWidget);
+    // 0718：卡片双按钮 Lewati（跳过）+ Lihat Detail（View detail）；接单钮不再在卡片上。
+    expect(find.byKey(const ValueKey('vetSkip_req-5')), findsOneWidget);
+    expect(find.byKey(const ValueKey('vetViewDetail_req-5')), findsOneWidget);
+    expect(find.text('Skip'), findsOneWidget);
+    expect(find.text('View detail'), findsOneWidget);
+    expect(find.byKey(const ValueKey('vetAccept_req-5')), findsNothing); // 接单已移入弹层
     // 计费流无 AI 摘要/危险徽章
     expect(find.text('AI SUMMARY'), findsNothing);
   });
 
-  testWidgets('点接单成功 → 调 acceptConsultRequest', (tester) async {
+  testWidgets('Lewati → 本地隐藏该请求（不接单）', (tester) async {
+    final repo = _FakeVetRepository(queue: VetQueue(available: [_item('req-6')]));
+    await _pump(tester, repo);
+
+    expect(find.byKey(const ValueKey('vetQueueCard_req-6')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('vetSkip_req-6')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('vetQueueCard_req-6')), findsNothing);
+    expect(find.text('No incoming requests'), findsOneWidget);
+    expect(repo.acceptedToken, isNull);
+  });
+
+  testWidgets('Lihat Detail → 弹层内接单 → 调 acceptConsultRequest', (tester) async {
     final repo = _FakeVetRepository(queue: VetQueue(available: [_item('req-7')]));
     await _pump(tester, repo);
 
+    await tester.tap(find.byKey(const ValueKey('vetViewDetail_req-7')));
+    await tester.pump(); // consultationCase future
+    await tester.pump(const Duration(milliseconds: 300)); // 弹层滑入
     await tester.tap(find.byKey(const ValueKey('vetAccept_req-7')));
     await tester.pump(); // acceptConsultRequest future
     await tester.pump(); // 后续 _reloadQueue
     expect(repo.acceptedToken, 'req-7');
   });
 
-  testWidgets('接单 409 → 3s Toast（被抢/占用）', (tester) async {
+  testWidgets('弹层接单 409 → 3s Toast（被抢/占用）', (tester) async {
     final repo = _FakeVetRepository(queue: VetQueue(available: [_item('req-8')]))..acceptThrows = true;
     await _pump(tester, repo);
 
+    await tester.tap(find.byKey(const ValueKey('vetViewDetail_req-8')));
+    await tester.pump(); // consultationCase future
+    await tester.pump(const Duration(milliseconds: 300)); // 弹层滑入
     await tester.tap(find.byKey(const ValueKey('vetAccept_req-8')));
     await tester.pump(); // acceptConsultRequest 抛错
     await tester.pump(); // Toast overlay 插入
