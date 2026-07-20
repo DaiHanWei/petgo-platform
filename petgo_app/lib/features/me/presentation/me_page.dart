@@ -13,8 +13,6 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/media_permission.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../../../shared/widgets/customer_service_sheet.dart';
-import '../../../shared/widgets/dashed_rect.dart';
-import '../../../shared/widgets/design/baru_badge.dart';
 import '../../../shared/widgets/post_cover.dart';
 import '../../auth/data/me_repository.dart';
 import '../../auth/domain/auth_state.dart';
@@ -556,7 +554,7 @@ class _IconBtn extends StatelessWidget {
   }
 }
 
-/// AKTIVITAS 入口组（0711 profil-entries）：section label + BARU 徽章 + 紫虚线卡「Pesanan Saya」。
+/// AKTIVITAS 入口组（0718：普通实心卡，去 0711 的紫虚线+BARU）：section label + 实心卡「Pesanan Saya」。
 /// PawCoin 入口已迁至订单列表 header 余额格；退款经订单详情可达 —— 故本组仅一张订单主入口卡。
 class _ActivitySection extends StatelessWidget {
   const _ActivitySection({required this.onOrders});
@@ -569,54 +567,37 @@ class _ActivitySection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 分组标题 + BARU 红徽章（并排）。
+        // 分组标题（0718 去 BARU 徽章）。
         Padding(
           padding: const EdgeInsets.only(left: AppSpacing.xs, bottom: AppSpacing.sm),
-          child: Row(
-            children: [
-              Text(
-                l10n.meActivitySection,
-                style: AppTypography.caption.copyWith(
-                  letterSpacing: 0.6,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(width: 6),
-              const BaruBadge(),
-            ],
+          child: Text(
+            l10n.meActivitySection,
+            style: AppTypography.caption.copyWith(
+              letterSpacing: 0.6,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
-        // 紫虚线卡「Pesanan Saya · Termasuk saldo PawCoin」→ 订单中心。
-        CustomPaint(
-          foregroundPainter: DashedRRectPainter(
-            color: AppColors.mint,
-            radius: 14,
-            dash: 5,
-            gap: 4,
-            strokeWidth: 2,
+        // 实心卡「Pesanan Saya · Termasuk saldo PawCoin」→ 订单中心（图标去 tinted 方块底）。
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: const [
+              BoxShadow(color: Color(0x0D2B2A27), offset: Offset(0, 2), blurRadius: 8),
+            ],
           ),
           child: Material(
             color: AppColors.card,
             borderRadius: BorderRadius.circular(14),
+            clipBehavior: Clip.antiAlias,
             child: InkWell(
               key: const ValueKey('meOrders'),
-              borderRadius: BorderRadius.circular(14),
               onTap: onOrders,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 child: Row(
                   children: [
-                    Container(
-                      width: 36,
-                      height: 36,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: AppColors.mintTint,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(Icons.credit_card_outlined,
-                          size: 20, color: AppColors.mint),
-                    ),
+                    const Icon(Icons.credit_card_outlined, size: 26, color: AppColors.mint),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(
                       child: Column(
