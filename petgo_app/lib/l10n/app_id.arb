@@ -849,6 +849,8 @@
   "vetQueueAccept": "Terima",
   "vetQueueAcceptFailed": "Permintaan sudah diambil atau kedaluwarsa",
   "vetQueueViewCase": "Lihat kasus",
+  "vetQueueBadgeConsult": "Perlu Konsul",
+  "vetQueueBadgeNormal": "Normal",
   "vetQueueCaseGone": "Permintaan sudah diambil atau kedaluwarsa",
   "vetQueueAwaitingPayTitle": "Menunggu pembayaran",
   "vetQueueAwaitingPaySubtitle": "Pesanan diterima, menunggu pengguna membayar",

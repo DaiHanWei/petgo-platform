@@ -447,10 +447,31 @@ class _QueueCard extends StatelessWidget {
     return s < 60 ? l10n.vetQueueWaitJustNow : l10n.vetQueueWaitMinutesAgo(s ~/ 60);
   }
 
+  /// 状态徽章（ref33/34）：YELLOW→「Perlu Konsul」琥珀，GREEN→「Normal」绿；DIRECT 无 AI 级别不显。
+  Widget? _levelBadge(AppLocalizations l10n) {
+    final (String label, Color bg, Color fg) = switch (item.aiDangerLevel) {
+      'YELLOW' => (l10n.vetQueueBadgeConsult, AppColors.goldTint, AppColors.tipsBadgeText),
+      'GREEN' => (
+          l10n.vetQueueBadgeNormal,
+          AppColors.triageGreen.withValues(alpha: 0.14),
+          AppColors.onlineDeepGreen,
+        ),
+      _ => ('', Colors.transparent, Colors.transparent),
+    };
+    if (label.isEmpty) return null;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
+      child: Text(label,
+          style: AppTypography.micro.copyWith(color: fg, fontWeight: FontWeight.w700)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final meta = _metaLine(l10n);
+    final badge = _levelBadge(l10n);
     return Container(
       key: ValueKey('vetQueueCard_${item.requestToken}'),
       decoration: BoxDecoration(
@@ -501,8 +522,14 @@ class _QueueCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Text(_waitingShort(l10n),
-                        style: AppTypography.micro.copyWith(color: AppColors.textTertiary)),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        if (badge != null) ...[badge, const SizedBox(height: 4)],
+                        Text(_waitingShort(l10n),
+                            style: AppTypography.micro.copyWith(color: AppColors.textTertiary)),
+                      ],
+                    ),
                   ],
                 ),
                 // 病例摘要（D1）：兽医据此判断是否接单。无病例则整块省略。

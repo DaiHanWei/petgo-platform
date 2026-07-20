@@ -1037,6 +1037,8 @@
   "@vetQueueAccept": {"description": "Vet billing queue card accept button (Story 3.6)"},
   "vetQueueAcceptFailed": "This request was already taken or has expired",
   "vetQueueViewCase": "View case",
+  "vetQueueBadgeConsult": "Needs Consult",
+  "vetQueueBadgeNormal": "Normal",
   "vetQueueCaseGone": "This request was already taken or has expired",
   "@vetQueueAcceptFailed": {"description": "Toast when accept fails with 409 (taken/expired/busy)"},
   "vetQueueAwaitingPayTitle": "Waiting for payment",
