@@ -357,9 +357,7 @@ class _VetMePageState extends ConsumerState<VetMePage> {
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
-          _settingsRow(l10n.vetProfileIncome,
-              onTap: () => context.push('/vet/income'), valueKey: 'vetIncomeEntry'),
-          const Divider(height: 1, color: AppColors.line2),
+          // 收入入口已提升为底部「Pendapatan」Tab（0718 FR-53D），此处不再重复。
           _settingsRow(l10n.vetProfileEditProfile, onTap: _onUnavailable),
           const Divider(height: 1, color: AppColors.line2),
           _settingsRow(l10n.vetProfileNotif, onTap: _onUnavailable),
