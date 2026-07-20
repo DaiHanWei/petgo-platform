@@ -9,8 +9,6 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_image.dart';
-import '../../../shared/widgets/dashed_rect.dart';
-import '../../../shared/widgets/design/baru_badge.dart';
 import '../data/milestone_repository.dart';
 import '../data/newbie_task_repository.dart';
 import '../domain/milestone.dart';
@@ -333,6 +331,10 @@ class _NewbieCardState extends ConsumerState<_NewbieCard> {
       decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.circular(16),
+        // 0718：普通实心卡（去 0711 紫虚线+BARU），柔阴影界定边界。
+        boxShadow: const [
+          BoxShadow(color: Color(0x0D2B2A27), offset: Offset(0, 2), blurRadius: 8),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -433,23 +435,8 @@ class _NewbieCardState extends ConsumerState<_NewbieCard> {
         ],
       ),
     );
-    // 紫虚线描边 + 右上 BARU 徽章（0711 Tugas Pemula 专区，独立于 L/M/S 里程碑计数）。
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        CustomPaint(
-          foregroundPainter: DashedRRectPainter(
-            color: AppColors.mint,
-            radius: 16,
-            dash: 6,
-            gap: 4,
-            strokeWidth: 2,
-          ),
-          child: card,
-        ),
-        const Positioned(top: -7, right: 14, child: BaruBadge()),
-      ],
-    );
+    // 0718：Tugas Pemula 专区直接用实心卡（去 0711 紫虚线描边+BARU 徽章），仍独立于 L/M/S 里程碑计数。
+    return card;
   }
 }
 
