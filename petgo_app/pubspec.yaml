@@ -109,6 +109,7 @@ flutter:
     - assets/seed/
     - assets/icons/
     - assets/brand/
+    - assets/ktp/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
@@ -150,6 +151,11 @@ flutter:
     - family: Quicksand
       fonts:
         - asset: assets/fonts/Quicksand-VariableFont_wght.ttf
+    # Rubik：KTP 证件卡专用（设计稿 FONT.txt 指定 SemiBold/Medium）。可变字体(300–900)，
+    # 按 fontVariations 取字重。仅证件卡用，不进全局主题。
+    - family: Rubik
+      fonts:
+        - asset: assets/fonts/Rubik-VariableFont_wght.ttf
 
 # App 图标（紫色猫狗 logo）。重生成：dart run flutter_launcher_icons
 flutter_launcher_icons:
