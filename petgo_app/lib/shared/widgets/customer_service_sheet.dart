@@ -51,46 +51,7 @@ Future<void> showCustomerServiceSheet(BuildContext context) {
               l10n.csSheetTitle,
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
-            const SizedBox(height: 16),
-            // 在线提交投诉工单（Story 4.2）：主 CTA + 我的工单入口，保留下方 WhatsApp/邮箱直连。
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                key: const ValueKey('csSubmitComplaint'),
-                onPressed: () {
-                  Navigator.of(ctx).pop();
-                  context.push('/me/support-tickets/new');
-                },
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.mint,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-                icon: const Icon(Icons.edit_note_outlined, size: 20),
-                label: Text(l10n.csSubmitComplaint),
-              ),
-            ),
             const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                key: const ValueKey('csMyTickets'),
-                onPressed: () {
-                  Navigator.of(ctx).pop();
-                  context.push('/me/support-tickets');
-                },
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.mint,
-                  side: const BorderSide(color: AppColors.lineViolet),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-                icon: const Icon(Icons.list_alt_outlined, size: 20),
-                label: Text(l10n.csMyTickets),
-              ),
-            ),
-            const SizedBox(height: 18),
-            const Divider(height: 1, thickness: 1, color: AppColors.line2),
-            const SizedBox(height: 14),
             // WhatsApp：绿底 + 真 WhatsApp logo，号码可复制。
             _CsContactRow(
               glyph: SvgPicture.asset(
@@ -113,8 +74,20 @@ Future<void> showCustomerServiceSheet(BuildContext context) {
               sub: '${l10n.csEmailLabel} · ${l10n.csEmailNote}',
               copyText: _kCsEmail,
             ),
+            const Divider(height: 1, thickness: 1, color: AppColors.line2),
+            // 站内工单行（0718 新增，原两个按钮合并成一行）：→ 工单列表（提交+追踪 hub）。
+            _CsContactRow(
+              glyph: const Icon(Icons.chat_bubble_outline, size: 22, color: AppColors.mint),
+              iconBg: AppColors.mintTint2,
+              value: l10n.csTicketRowTitle,
+              sub: l10n.csTicketRowSub,
+              onTap: () {
+                Navigator.of(ctx).pop();
+                context.push('/me/support-tickets');
+              },
+            ),
             const SizedBox(height: 16),
-            // 取消：灰色填充（非描边），对齐原型 .cancel-btn。
+            // 关闭：灰色填充（非描边），对齐原型 .cancel-btn，文案「Tutup」。
             FilledButton(
               key: const ValueKey('csCancel'),
               onPressed: () => Navigator.of(ctx).pop(),
@@ -128,7 +101,7 @@ Future<void> showCustomerServiceSheet(BuildContext context) {
                 ),
               ),
               child: Text(
-                l10n.commonCancel,
+                l10n.csClose,
                 style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
               ),
             ),
@@ -146,19 +119,25 @@ class _CsContactRow extends StatelessWidget {
     required this.iconBg,
     required this.value,
     required this.sub,
-    required this.copyText,
-  });
+    this.copyText,
+    this.onTap,
+  }) : assert(copyText != null || onTap != null);
 
   final Widget glyph;
   final Color iconBg;
   final String value;
   final String sub;
-  final String copyText;
+
+  /// 复制型行（WhatsApp/邮箱）：右侧灰色复制键，点击复制 [copyText]。
+  final String? copyText;
+
+  /// 导航型行（站内工单）：右侧 chevron，整行可点触发 [onTap]。
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Padding(
+    final row = Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
@@ -195,27 +174,37 @@ class _CsContactRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          // 独立灰色复制键（36×36）。
-          Material(
-            color: _kCsMuted,
-            borderRadius: BorderRadius.circular(10),
-            child: InkWell(
-              key: ValueKey('csCopy_$copyText'),
+          // 右侧：复制键（复制型）或 chevron（导航型）。
+          if (copyText != null)
+            Material(
+              color: _kCsMuted,
               borderRadius: BorderRadius.circular(10),
-              onTap: () async {
-                await Clipboard.setData(ClipboardData(text: copyText));
-                if (!context.mounted) return;
-                showAppToast(context, l10n.csCopied);
-              },
-              child: const SizedBox(
-                width: 36,
-                height: 36,
-                child: Icon(Icons.content_copy_rounded, size: 16, color: AppColors.textSecondary),
+              child: InkWell(
+                key: ValueKey('csCopy_$copyText'),
+                borderRadius: BorderRadius.circular(10),
+                onTap: () async {
+                  await Clipboard.setData(ClipboardData(text: copyText!));
+                  if (!context.mounted) return;
+                  showAppToast(context, l10n.csCopied);
+                },
+                child: const SizedBox(
+                  width: 36,
+                  height: 36,
+                  child: Icon(Icons.content_copy_rounded, size: 16, color: AppColors.textSecondary),
+                ),
               ),
-            ),
-          ),
+            )
+          else
+            const Icon(Icons.chevron_right, color: AppColors.muted),
         ],
       ),
+    );
+    if (onTap == null) return row;
+    return InkWell(
+      key: ValueKey('csTicketRow_$value'),
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: row,
     );
   }
 }

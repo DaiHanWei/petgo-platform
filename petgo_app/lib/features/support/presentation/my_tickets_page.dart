@@ -6,6 +6,7 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/utils/date_format.dart';
 import '../data/support_repository.dart';
 import '../domain/support_ticket.dart';
 import 'support_l10n.dart';
@@ -22,6 +23,27 @@ class MyTicketsPage extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.base,
       appBar: AppBar(backgroundColor: AppColors.surface, title: Text(l10n.ticketMyTitle)),
+      // 底部提交入口（0718：抽屉合并成单行后，提交路径落在列表页 CTA）。
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(AppSpacing.md, 8, AppSpacing.md, 12),
+          child: SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              key: const ValueKey('ticketComposeCta'),
+              onPressed: () => context.push('/me/support-tickets/new'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.mint,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              icon: const Icon(Icons.edit_note_outlined, size: 20),
+              label: Text(l10n.ticketComposeTitle),
+            ),
+          ),
+        ),
+      ),
       body: RefreshIndicator(
         onRefresh: () async => ref.refresh(myTicketsProvider.future),
         child: async.when(
@@ -64,16 +86,14 @@ class _TicketCard extends StatelessWidget {
 
   final SupportTicket ticket;
 
-  String _fmtDate(DateTime? d) {
-    if (d == null) return '';
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '${d.year}/${two(d.month)}/${two(d.day)}';
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final title = (ticket.subject != null && ticket.subject!.isNotEmpty) ? ticket.subject! : ticket.body;
+    // 「Diajukan {DD Mon YYYY}」（原型 masukan：提交日期带前缀）。
+    final submitted = ticket.createdAt == null
+        ? ''
+        : '${l10n.ticketSubmittedPrefix} ${formatDayMonthYear(context, ticket.createdAt!)}';
     return InkWell(
       key: ValueKey('ticketCard_${ticket.ticketToken}'),
       borderRadius: BorderRadius.circular(14),
@@ -120,7 +140,7 @@ class _TicketCard extends StatelessWidget {
               ),
             ],
             const SizedBox(height: AppSpacing.sm),
-            Text(_fmtDate(ticket.createdAt),
+            Text(submitted,
                 style: AppTypography.micro.copyWith(color: AppColors.textTertiary)),
           ],
         ),
