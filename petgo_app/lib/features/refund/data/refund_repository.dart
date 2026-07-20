@@ -20,9 +20,10 @@ class RefundRepository {
         .toList();
   }
 
-  /// PawCoin 订单即时退币（原路、无手续费、后端幂等）。
-  Future<void> refundToPawCoin(String refundToken) async {
-    await dio.post<void>(ApiPaths.refundPawcoin(refundToken));
+  /// 即时退币到 PawCoin（原路 or QRIS/DANA 转币+bonus；后端幂等）。返回金额明细供成功页。
+  Future<RefundPawcoinResult> refundToPawCoin(String refundToken) async {
+    final resp = await dio.post<Map<String, dynamic>>(ApiPaths.refundPawcoin(refundToken));
+    return RefundPawcoinResult.fromJson(resp.data ?? const {});
   }
 
   /// QRIS 订单填真钱收款账户（不可逆；净额后端权威，只传渠道/账号/户名）。

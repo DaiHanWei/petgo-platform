@@ -15,6 +15,7 @@ import com.tailtopia.pay.refund.domain.NeedDecision;
 import com.tailtopia.pay.refund.domain.PayoutChannel;
 import com.tailtopia.pay.refund.domain.RefundRequest;
 import com.tailtopia.pay.refund.dto.MyRefundView;
+import com.tailtopia.pay.refund.dto.RefundPawcoinResult;
 import com.tailtopia.pay.refund.repository.RefundRequestRepository;
 import com.tailtopia.pay.domain.LedgerAccount;
 import com.tailtopia.pay.service.LedgerLine;
@@ -224,31 +225,33 @@ public class RefundService {
      * <b>幂等/互斥</b>：DONE 短路；非空 approvalStatus（真钱路径已启动）拒绝，防双退。credit 稳定键防重复入账。不发通知（AB-5B）。
      */
     @Transactional
-    public void refundToPawCoin(String refundToken, long userId) {
+    public RefundPawcoinResult refundToPawCoin(String refundToken, long userId) {
         RefundRequest r = requireOwned(refundToken, userId);
+        requireApproved(r);
+        ConsultOrder order = requireOrder(r);
+        long base = order.getAmount();
+        // 非 PawCoin 原渠道（QRIS/DANA）转币 → 溢价 bonus（后台可配 rate%+fixed；反套利仅未交付+转币分支）。
+        long bonus = order.getPayChannel() != PayChannel.PAWCOIN
+                ? platformConfig.pawcoin().refundPawcoinPremium(base) : 0;
         if (r.getApprovalStatus() == ApprovalStatus.DONE) {
-            return; // 已退，幂等短路
+            // 已退，幂等短路：返回明细（bonus 按当前配置重算，best-effort）。
+            return new RefundPawcoinResult(base, bonus, base + bonus, wallet.balanceOf(userId));
         }
         if (r.getApprovalStatus() != null) {
             // 已选真钱路径（PENDING_APPROVAL/APPROVED/…）→ 不可再转币，防双退（不可逆边界，UX-DR14）。
             throw AppException.conflict("退款方式已选定，不可更改");
         }
-        requireApproved(r);
-        ConsultOrder order = requireOrder(r);
-        long base = order.getAmount();
         // 基础退款额记 REFUND（原路等值退回站内币，credit 幂等稳定键，内部记 FLOAT_LIABILITY ledger）。
         wallet.credit(userId, base, PawCoinTxnType.REFUND,
                 "refund_request", r.getId(), "refund-pawcoin-" + refundToken);
-        // 非 PawCoin 原渠道（QRIS/DANA）转币 → 溢价 bonus（BONUS 记 PLATFORM_REVENUE 冲减，反套利仅此分支）。
-        if (order.getPayChannel() != PayChannel.PAWCOIN) {
-            long premium = platformConfig.pawcoin().refundPawcoinPremium(base);
-            if (premium > 0) {
-                wallet.credit(userId, premium, PawCoinTxnType.BONUS,
-                        "refund_request", r.getId(), "refund-pawcoin-bonus-" + refundToken);
-            }
+        // 溢价 bonus 记 BONUS（counter=PLATFORM_REVENUE 冲减）。
+        if (bonus > 0) {
+            wallet.credit(userId, bonus, PawCoinTxnType.BONUS,
+                    "refund_request", r.getId(), "refund-pawcoin-bonus-" + refundToken);
         }
         orders.markRefunded(order.getId()); // CAS REFUNDING→REFUNDED（返 0=已退，跳过）
         r.markInstantPawCoinRefunded();
+        return new RefundPawcoinResult(base, bonus, base + bonus, wallet.balanceOf(userId));
     }
 
     /**

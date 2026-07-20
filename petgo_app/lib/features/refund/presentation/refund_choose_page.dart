@@ -36,12 +36,12 @@ class _RefundChoosePageState extends ConsumerState<RefundChoosePage> {
     final l10n = AppLocalizations.of(context);
     setState(() => _submitting = true);
     try {
-      await ref.read(refundRepositoryProvider).refundToPawCoin(widget.refund.refundToken);
+      final result =
+          await ref.read(refundRepositoryProvider).refundToPawCoin(widget.refund.refundToken);
       ref.invalidate(myRefundsProvider);
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(l10n.refundPawcoinDoneToast)));
-      context.go('/me/refunds');
+      // 转 PawCoin 成功页（含 bonus 明细 + 新余额，0718 屏6）。
+      context.pushReplacement('/me/refunds/pawcoin-success', extra: result);
     } catch (_) {
       if (!mounted) return;
       setState(() => _submitting = false);

@@ -38,6 +38,35 @@ class PayoutOption {
       );
 }
 
+/// 转 PawCoin 退款结果（0718 成功页）。对齐后端 `RefundPawcoinResult`。
+class RefundPawcoinResult {
+  const RefundPawcoinResult({
+    required this.baseAmount,
+    required this.bonusAmount,
+    required this.totalCredited,
+    required this.newBalance,
+  });
+
+  /// 基础退款额（= 订单金额，koin）。
+  final int baseAmount;
+
+  /// 转币溢价 bonus（koin；PawCoin 原路退为 0）。
+  final int bonusAmount;
+
+  /// 实际到账（base + bonus，koin）。
+  final int totalCredited;
+
+  /// 退款后 PawCoin 余额（koin）。
+  final int newBalance;
+
+  factory RefundPawcoinResult.fromJson(Map<String, dynamic> j) => RefundPawcoinResult(
+        baseAmount: (j['baseAmount'] as num?)?.toInt() ?? 0,
+        bonusAmount: (j['bonusAmount'] as num?)?.toInt() ?? 0,
+        totalCredited: (j['totalCredited'] as num?)?.toInt() ?? 0,
+        newBalance: (j['newBalance'] as num?)?.toInt() ?? 0,
+      );
+}
+
 /// 一条「我的退款」。
 class MyRefund {
   const MyRefund({
