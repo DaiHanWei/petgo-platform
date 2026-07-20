@@ -189,7 +189,7 @@ public class ConsultPayService {
                 pc.getVetShareRate(), pc.getVetConsultPrice(), now);
         // 重播次数快照（Story 9.3）：建单即删 request，故此刻从 request 落订单（managed 实体提交 flush）。
         order.snapshotRebroadcast(req.getRebroadcastCount());
-        billing.markSessionStarted(order, now, "im:" + conv);
+        billing.markSessionStarted(order, now, "im:" + conv, session.getId());
         return order;
     }
 

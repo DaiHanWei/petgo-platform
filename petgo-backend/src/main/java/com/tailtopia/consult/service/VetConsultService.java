@@ -2,6 +2,8 @@ package com.tailtopia.consult.service;
 
 import com.tailtopia.auth.dto.AuthorView;
 import com.tailtopia.auth.service.AccountQueryService;
+import com.tailtopia.consult.domain.ConsultOrder;
+import com.tailtopia.consult.domain.ConsultOrderStatus;
 import com.tailtopia.consult.domain.ConsultRating;
 import com.tailtopia.consult.domain.ConsultSession;
 import com.tailtopia.consult.domain.SessionStatus;
@@ -12,6 +14,7 @@ import com.tailtopia.consult.dto.VetHistoryItem;
 import com.tailtopia.consult.dto.VetInboxItem;
 import com.tailtopia.consult.dto.VetSessionView;
 import com.tailtopia.consult.event.VetRepliedEvent;
+import com.tailtopia.consult.repository.ConsultOrderRepository;
 import com.tailtopia.consult.repository.ConsultRatingRepository;
 import com.tailtopia.consult.repository.ConsultSessionRepository;
 import com.tailtopia.profile.dto.PetIdentityView;
@@ -44,16 +47,18 @@ public class VetConsultService {
     private final PetProfileQueryService petProfiles;
     private final AccountQueryService accounts;
     private final ApplicationEventPublisher events;
+    private final ConsultOrderRepository orders;
 
     public VetConsultService(ConsultSessionRepository repo, ConsultRatingRepository ratings,
             ConsultQueueService queue, PetProfileQueryService petProfiles, AccountQueryService accounts,
-            ApplicationEventPublisher events) {
+            ApplicationEventPublisher events, ConsultOrderRepository orders) {
         this.repo = repo;
         this.ratings = ratings;
         this.queue = queue;
         this.petProfiles = petProfiles;
         this.accounts = accounts;
         this.events = events;
+        this.orders = orders;
     }
 
     /**
@@ -124,8 +129,16 @@ public class VetConsultService {
         Map<Long, ConsultRating> ratingBySession = ratings.findByVetIdOrderByCreatedAtDesc(vetId).stream()
                 .collect(java.util.stream.Collectors.toMap(
                         ConsultRating::getSessionId, r -> r, (a, b) -> a));
+        // V88（ref36 到手金额）：按 (vetId, 会话 id 批) 批量取订单，建 sessionId→order Map（避免 N+1）。
+        // 迁移前订单 consult_session_id 为 null → 不入 Map，老历史到手金额为 null（前端显「—」）。
+        List<Long> sessionIds = sessions.stream().map(ConsultSession::getId).toList();
+        Map<Long, ConsultOrder> orderBySession = sessionIds.isEmpty()
+                ? Map.of()
+                : orders.findByVetIdAndConsultSessionIdIn(vetId, sessionIds).stream()
+                        .collect(java.util.stream.Collectors.toMap(
+                                ConsultOrder::getConsultSessionId, o -> o, (a, b) -> a));
         return sessions.stream()
-                .map(s -> toHistoryItem(s, ids, ratingBySession.get(s.getId())))
+                .map(s -> toHistoryItem(s, ids, ratingBySession.get(s.getId()), orderBySession.get(s.getId())))
                 // 排序键与展示键统一为 terminalAt，避免列表顺序与卡片日期打架。
                 .sorted(Comparator.comparing(VetHistoryItem::date).reversed())
                 .toList();
@@ -159,14 +172,21 @@ public class VetConsultService {
         return VetSessionView.of(s, pet.name(), pet.species(), pet.ageMonths(), handle(s.getUserId()));
     }
 
-    private VetHistoryItem toHistoryItem(ConsultSession s, Identities ids, ConsultRating rating) {
+    private VetHistoryItem toHistoryItem(ConsultSession s, Identities ids, ConsultRating rating,
+            ConsultOrder order) {
         PetIdentityView pet = ids.pet(s.getUserId());
         Integer stars = rating == null ? null : rating.getStars();
         String reviewText = rating == null ? null : rating.getComment();
+        // V88：到手金额取订单 vet_payout 快照（无关联订单→null）；退款态（REFUNDING/REFUNDED）前端显 Rp0 删除线。
+        Long payoutAmount = order == null ? null : order.getVetPayout();
+        boolean refunded = order != null
+                && (order.getStatus() == ConsultOrderStatus.REFUNDED
+                        || order.getStatus() == ConsultOrderStatus.REFUNDING);
         return new VetHistoryItem(
                 s.getId(), pet.name(), pet.species(), ids.handle(s.getUserId()),
                 s.terminalAt(), stars, reviewText, s.getStatus().name(),
-                s.getAiSymptomText(), s.getAiDangerLevel());
+                s.getAiSymptomText(), s.getAiDangerLevel(),
+                s.getSource().name(), payoutAmount, refunded);
     }
 
     /** 批量解析一组会话的宠物身份 + 机主昵称（去重 userId 各查一次，杜绝逐条 N+1）。 */

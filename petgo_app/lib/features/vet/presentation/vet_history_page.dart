@@ -6,6 +6,7 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../triage/presentation/widgets/triage_paywall.dart' show formatIdr;
 import '../data/vet_repository.dart';
 import '../domain/vet_workbench_lists.dart';
 import 'vet_empty_state.dart';
@@ -299,10 +300,54 @@ class _HistoryCard extends StatelessWidget {
                   style: AppTypography.caption.copyWith(color: AppColors.vetPrimary, fontWeight: FontWeight.w600)),
             ],
           ),
+          // V88（ref36）：类型徽章（Konsultasi Dasar/Upgrade dari AI/Refund）+ 到手金额 Diterima。
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _typeBadge(l10n),
+              const Spacer(),
+              _payoutLabel(l10n),
+            ],
+          ),
         ],
       ),
         ),
       ),
+    );
+  }
+
+  /// 类型徽章：退款→Refund(珊瑚)；AI_UPGRADE→Upgrade dari AI(紫)；否则→Konsultasi Dasar(琥珀)。
+  Widget _typeBadge(AppLocalizations l10n) {
+    if (entry.refunded) {
+      return _badge(l10n.vetHistoryTypeRefund, AppColors.coralTint, AppColors.coral);
+    }
+    if (entry.source == null) return const SizedBox.shrink();
+    final upgrade = entry.source == 'AI_UPGRADE';
+    return _badge(
+      upgrade ? l10n.vetHistoryTypeUpgrade : l10n.vetHistoryTypeBasic,
+      upgrade ? AppColors.mintTint2 : AppColors.goldTint,
+      upgrade ? AppColors.mint : AppColors.tipsBadgeText,
+    );
+  }
+
+  /// 到手金额：退款→Diterima Rp0 删除线(muted)；有额→绿字 Diterima Rp…；老数据无额→「—」。
+  Widget _payoutLabel(AppLocalizations l10n) {
+    if (entry.refunded) {
+      return Text(
+        l10n.vetHistoryPayout(formatIdr(0)),
+        style: AppTypography.body.copyWith(
+          color: AppColors.textTertiary,
+          fontWeight: FontWeight.w700,
+          decoration: TextDecoration.lineThrough,
+        ),
+      );
+    }
+    if (entry.payoutAmount == null) {
+      return Text('—', style: AppTypography.body.copyWith(color: AppColors.textTertiary));
+    }
+    return Text(
+      l10n.vetHistoryPayout(formatIdr(entry.payoutAmount!)),
+      style: AppTypography.body.copyWith(color: AppColors.onlineDeepGreen, fontWeight: FontWeight.w700),
     );
   }
 

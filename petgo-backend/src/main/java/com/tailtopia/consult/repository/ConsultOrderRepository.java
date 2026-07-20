@@ -16,6 +16,9 @@ public interface ConsultOrderRepository extends JpaRepository<ConsultOrder, Long
 
     Optional<ConsultOrder> findByOrderToken(String orderToken);
 
+    /** 兽医历史「到手金额」（V88）：按 (vetId, 会话 id 批) 批量取订单，service 建 sessionId→order Map 避免 N+1。 */
+    List<ConsultOrder> findByVetIdAndConsultSessionIdIn(long vetId, java.util.Collection<Long> consultSessionIds);
+
     /** 订单中心游标分页（Story 5.1）：本人订单 created_at < cursor 倒序（全 4 态入订单中心）。 */
     List<ConsultOrder> findByUserIdAndCreatedAtLessThanOrderByCreatedAtDesc(
             long userId, Instant cursor, org.springframework.data.domain.Pageable pageable);

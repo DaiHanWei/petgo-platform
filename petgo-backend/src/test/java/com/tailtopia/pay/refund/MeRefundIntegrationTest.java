@@ -84,6 +84,8 @@ class MeRefundIntegrationTest extends ApiIntegrationTest {
                 .filter(o -> o.channel().equals("OVO")).findFirst().orElseThrow();
         assertThat(ovo.fee()).isEqualTo(2500);
         assertThat(ovo.net()).isEqualTo(47500);
+        // 转 PawCoin 预览：默认 premium=0 → = 订单额
+        assertThat(v.pawcoinCreditPreview()).isEqualTo(50000);
 
         // userB 看不到 A 的退款
         assertThat(refundService.listMyRefunds(userB)).isEmpty();
@@ -149,19 +151,54 @@ class MeRefundIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
-    void channelMismatch_rejected() {
+    void pawcoinOrder_fillRealMoney_rejected() {
+        // PawCoin 订单走填真钱账户 → 409（原路退币，无需真钱账户）
         long userId = newUser().getId();
-        // QRIS 订单走 PawCoin 即时退 → 409
-        ConsultOrder qris = seedCompletedOrder(userId, 50000, PayChannel.QRIS);
-        String qrisToken = approvedRefund(qris);
-        assertThatThrownBy(() -> refundService.refundToPawCoin(qrisToken, userId))
-                .isInstanceOf(AppException.class);
-
-        // PawCoin 订单走填真钱账户 → 409
         ConsultOrder paw = seedCompletedOrder(userId, 50000, PayChannel.PAWCOIN);
         String pawToken = approvedRefund(paw);
         assertThatThrownBy(() -> refundService.fillPayoutByUser(pawToken, userId,
                 PayoutChannel.BCA, "1", "X")).isInstanceOf(AppException.class);
+    }
+
+    @Test
+    void qrisOrder_convertToPawCoin_creditsBasePlusBonus_returnsResult_idempotent() {
+        long userId = newUser().getId();
+        ConsultOrder order = seedCompletedOrder(userId, 50000, PayChannel.QRIS);
+        String token = approvedRefund(order);
+        long before = walletBalance(userId);
+        // 配置 bonus：10% + 固定 2000 → bonus = 50000×10/100 + 2000 = 7000；到账 57000
+        jdbc.update("UPDATE pawcoin_config SET premium_rate = 10, premium_fixed = 2000 WHERE id = 1");
+        try {
+            var result = refundService.refundToPawCoin(token, userId);
+
+            assertThat(result.baseAmount()).isEqualTo(50000);
+            assertThat(result.bonusAmount()).isEqualTo(7000);
+            assertThat(result.totalCredited()).isEqualTo(57000);
+            assertThat(result.newBalance()).isEqualTo(before + 57000);
+            assertThat(walletBalance(userId)).isEqualTo(before + 57000);
+            assertThat(orders.findById(order.getId()).orElseThrow().getStatus())
+                    .isEqualTo(ConsultOrderStatus.REFUNDED);
+            assertThat(refunds.findByRefundToken(token).orElseThrow().getApprovalStatus())
+                    .isEqualTo(ApprovalStatus.DONE);
+
+            // 幂等：重复确认不重复入账
+            var again = refundService.refundToPawCoin(token, userId);
+            assertThat(walletBalance(userId)).isEqualTo(before + 57000);
+            assertThat(again.totalCredited()).isEqualTo(57000);
+        } finally {
+            jdbc.update("UPDATE pawcoin_config SET premium_rate = 0, premium_fixed = 0 WHERE id = 1");
+        }
+    }
+
+    @Test
+    void qrisOrder_afterFillPayout_cannotConvertToPawCoin() {
+        // 真钱路径已启动（PENDING_APPROVAL）→ 再转币被拒（防双退）
+        long userId = newUser().getId();
+        ConsultOrder order = seedCompletedOrder(userId, 50000, PayChannel.QRIS);
+        String token = approvedRefund(order);
+        refundService.fillPayoutByUser(token, userId, PayoutChannel.BCA, "123", "X");
+        assertThatThrownBy(() -> refundService.refundToPawCoin(token, userId))
+                .isInstanceOf(AppException.class);
     }
 
     @Test

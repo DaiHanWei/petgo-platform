@@ -59,8 +59,8 @@ public class ConsultBillingService {
      * 节点。{@code note} 可存 IM 会话标识（对账用；会话实体在 {@code consult_sessions}，本表记时间戳）。
      */
     @Transactional
-    public void markSessionStarted(ConsultOrder order, Instant startedAt, String note) {
-        order.markSessionStarted(startedAt);
+    public void markSessionStarted(ConsultOrder order, Instant startedAt, String note, long consultSessionId) {
+        order.markSessionStarted(startedAt, consultSessionId);
         orders.save(order);
         appendStageEvent(order.getId(), ConsultStageEvent.SESSION_STARTED, startedAt, note);
     }
