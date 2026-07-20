@@ -19,11 +19,15 @@ class TriageUnlockState {
     this.triageId,
     this.result,
     this.payment,
+    this.payload,
     this.errorKind,
   });
 
   final UnlockPhase phase;
   final int? triageId;
+
+  /// 现金路径二维码串（EMVCo，本地生成二维码；进入 [UnlockPhase.waitingPayment] 后有值）。
+  final String? payload;
 
   /// 同步解锁成功后的已解锁结果（详建下发）。结果页据此去 paywall。
   final TriageResult? result;
@@ -55,9 +59,10 @@ class TriageUnlockController extends Notifier<TriageUnlockState> {
         state = TriageUnlockState(
             phase: UnlockPhase.unlocked, triageId: triageId, result: res.result);
       } else {
-        // 现金：待支付。真到账后由等待页轮询 pollTriage 至 locked==false → markUnlocked。
+        // 现金：待支付。真到账后由二维码面板轮询 pollTriage 至 locked==false → markUnlocked。
         state = TriageUnlockState(
-            phase: UnlockPhase.waitingPayment, triageId: triageId, payment: res.payment);
+            phase: UnlockPhase.waitingPayment, triageId: triageId,
+            payment: res.payment, payload: res.payload);
       }
     } on DioException catch (e) {
       state = TriageUnlockState(

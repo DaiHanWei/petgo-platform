@@ -11,5 +11,6 @@ public record AdminPaymentRow(
         long amount,
         String currency,
         String status,
-        Instant createdAt) {
+        Instant createdAt,
+        String createdAtLabel) {
 }

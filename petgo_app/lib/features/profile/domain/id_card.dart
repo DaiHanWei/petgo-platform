@@ -62,16 +62,18 @@ enum HdPayChannel {
 
 /// HD 购买结果（Story 6.3）。[unlocked] 同步已解锁（PawCoin/已购买）；否则 [paymentToken] 为 QRIS 待支付订单号。
 class HdPurchaseResult {
-  const HdPurchaseResult({required this.unlocked, this.paymentToken});
+  const HdPurchaseResult({required this.unlocked, this.paymentToken, this.payload});
 
   final bool unlocked;
   final String? paymentToken;
+  final String? payload; // QRIS 二维码串（EMVCo，本地生成二维码；对齐后端 HdPurchaseResponse.payload）
 
   factory HdPurchaseResult.fromJson(Map<String, dynamic> json) {
     final payment = json['payment'] as Map<String, dynamic>?;
     return HdPurchaseResult(
       unlocked: json['unlocked'] as bool? ?? false,
       paymentToken: payment?['token'] as String?,
+      payload: json['payload'] as String?,
     );
   }
 }

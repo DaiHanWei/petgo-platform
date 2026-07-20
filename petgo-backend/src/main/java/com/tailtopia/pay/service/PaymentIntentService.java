@@ -231,6 +231,19 @@ public class PaymentIntentService {
         intents.saveAndFlush(intent);
     }
 
+    /**
+     * 用户主动取消联动（问诊 QRIS，Story 3.4 补丁）：该用户该 {@code purpose} 最新 PENDING 意图置 FAILED
+     * （无则 no-op）。避免 cancel 后 PENDING 意图残留在后台支付列表。
+     */
+    @Transactional
+    public void failPending(long userId, PaymentPurpose purpose) {
+        intents.findFirstByUserIdAndPurposeAndStatusOrderByCreatedAtDesc(userId, purpose, PaymentStatus.PENDING)
+                .ifPresent(intent -> {
+                    intent.markFailed(java.util.Map.of("reason", "USER_CANCEL"));
+                    intents.saveAndFlush(intent);
+                });
+    }
+
     /** 先按 {@code gateway_ref}（唯一去重键）定位，回退 {@code public_token}（order_id）。 */
     private PaymentIntent resolve(PaymentCallback cb) {
         if (cb.gatewayRef() != null) {

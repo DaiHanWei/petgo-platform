@@ -29,6 +29,10 @@ public interface PaymentIntentRepository extends JpaRepository<PaymentIntent, Lo
     List<PaymentIntent> findByUserIdAndPurposeAndStatusAndCreatedAtLessThanOrderByCreatedAtDesc(
             long userId, PaymentPurpose purpose, PaymentStatus status, Instant cursor, Pageable pageable);
 
+    /** 用户主动取消联动（问诊 QRIS）：某用户某 purpose 最新一笔指定状态意图（置 FAILED 用）。 */
+    Optional<PaymentIntent> findFirstByUserIdAndPurposeAndStatusOrderByCreatedAtDesc(
+            long userId, PaymentPurpose purpose, PaymentStatus status);
+
     /** 复用同档位未过期 PENDING 充值（V85，D-b）：同 (user, purpose, channel, amount) 最新一笔 PENDING。 */
     Optional<PaymentIntent> findFirstByUserIdAndPurposeAndChannelAndAmountAndStatusOrderByCreatedAtDesc(
             long userId, PaymentPurpose purpose,

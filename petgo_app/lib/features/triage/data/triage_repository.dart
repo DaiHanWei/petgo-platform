@@ -182,11 +182,12 @@ class PaymentInfo {
 
 /// 解锁响应（Story 2.4，对齐后端 `UnlockResponse`）。同步：[unlocked]=true+[result]；现金：false+[payment]。
 class UnlockResult {
-  const UnlockResult({required this.unlocked, this.result, this.payment});
+  const UnlockResult({required this.unlocked, this.result, this.payment, this.payload});
 
   final bool unlocked;
   final TriageResult? result;
   final PaymentInfo? payment;
+  final String? payload; // QRIS 二维码串（顶层，对齐后端 UnlockResponse.payload）
 
   factory UnlockResult.fromJson(Map<String, dynamic> json) => UnlockResult(
         unlocked: json['unlocked'] as bool? ?? false,
@@ -196,6 +197,7 @@ class UnlockResult {
         payment: json['payment'] is Map<String, dynamic>
             ? PaymentInfo.fromJson(json['payment'] as Map<String, dynamic>)
             : null,
+        payload: json['payload'] as String?,
       );
 }
 

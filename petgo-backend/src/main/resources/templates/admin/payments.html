@@ -30,7 +30,7 @@
                 <td th:text="${p.amount}">0</td>
                 <td th:text="${p.currency}">IDR</td>
                 <td th:text="${p.status}">PAID</td>
-                <td th:text="${p.createdAt}">t</td>
+                <td th:text="${p.createdAtLabel}">t</td>
             </tr>
             <tr th:if="${payments.isEmpty()}"><td colspan="8" th:text="${userId == null} ? '暂无支付记录' : '该用户暂无支付记录'">暂无支付记录</td></tr>
             </tbody>

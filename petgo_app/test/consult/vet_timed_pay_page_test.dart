@@ -29,6 +29,20 @@ class _FakePawController extends PawCoinController {
   Future<PawCoinState> build() async => const PawCoinState(balance: 0, items: []);
 }
 
+/// 假 repo：QRIS 支付返回 PAYMENT_REQUIRED + 二维码载荷（验证展示二维码 + 取消按钮）。
+class _QrisPayRepo extends ConsultRepository {
+  _QrisPayRepo() : super(dio: Dio());
+
+  @override
+  Future<ConsultRequestStatus> requestStatus(String token) async =>
+      ConsultRequestStatus(state: ConsultRequestState.acceptedAwaitPay,
+          payDeadlineAt: DateTime.now().add(const Duration(seconds: 90)));
+
+  @override
+  Future<ConsultPayResult> payRequest(String token, String channel) async =>
+      const ConsultPayResult(mode: 'PAYMENT_REQUIRED', payload: 'STUB-QR-PAYLOAD');
+}
+
 void main() {
   /// L0 widget。Story 3.5 限时支付屏渲染：倒计时盒 + 3 渠道 + 支付按钮全程可用。
   /// 余额默认 0（未 override pawCoinProvider，AsyncError→balance 0）→ PawCoin 不足行 + 去充值可见。
@@ -71,6 +85,42 @@ void main() {
     expect(find.byKey(const ValueKey('vetPayInsufficient')), findsNothing);
 
     // 卸载以取消周期 timer（避免 pending timer 报错）。
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  /// L0 widget（问题1/2）：选 QRIS 支付 → 展示二维码（本地生成）+ 主动取消按钮。
+  testWidgets('QRIS 支付后展示二维码 + 取消按钮', (tester) async {
+    tester.platformDispatcher.localesTestValue = const [Locale('id')];
+    final container = ProviderContainer(overrides: [
+      consultRepositoryProvider.overrideWithValue(_QrisPayRepo()),
+      pawCoinProvider.overrideWith(_FakePawController.new),
+    ]);
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: VetTimedPayPage(
+          requestToken: 'req-1',
+          payDeadlineAt: DateTime.now().add(const Duration(seconds: 90)),
+        ),
+      ),
+    ));
+    await tester.pump();
+
+    // 选 QRIS → 点支付 → 进现金二维码态。
+    await tester.tap(find.byKey(const ValueKey('vetPayChannel_QRIS')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('vetPayButton')));
+    await tester.pump(); // payRequest microtask
+    await tester.pump();
+
+    // 二维码 + 取消按钮出现（不再是纯 spinner）。
+    expect(find.byKey(const ValueKey('vetPayQr')), findsOneWidget);
+    expect(find.byKey(const ValueKey('vetPayCancel')), findsOneWidget);
+
     await tester.pumpWidget(const SizedBox());
   });
 }

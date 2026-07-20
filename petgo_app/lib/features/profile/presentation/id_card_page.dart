@@ -13,6 +13,7 @@ import '../../pawcoin/presentation/pawcoin_controller.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/media_permission.dart';
+import '../../../shared/widgets/qr_payment_sheet.dart';
 import '../../media/domain/media_upload_use_case.dart';
 import '../data/id_card_repository.dart';
 import '../data/profile_repository.dart';
@@ -268,9 +269,23 @@ class _IdCardPageState extends ConsumerState<IdCardPage> {
         ref.invalidate(idCardProvider);
         _toast(l10n.idCardHdUnlockedToast);
         await _exportHd();
+      } else if ((res.payload?.isNotEmpty ?? false) && mounted) {
+        // QRIS：展示二维码 + 轮询到账（刷新 idCard 看 hdUnlocked），到账后自动导出。
+        final bool paid = await showQrPaymentSheet(
+          context,
+          payload: res.payload!,
+          pollPaid: () async {
+            final IdCardData? card = await ref.refresh(idCardProvider.future);
+            return card?.hdUnlocked ?? false;
+          },
+        );
+        if (paid && mounted) {
+          ref.invalidate(idCardProvider);
+          _toast(l10n.idCardHdUnlockedToast);
+          await _exportHd();
+        }
       } else {
-        // QRIS 待支付：真 QR/Midtrans 属 L2。提示去支付 + 支付后回来点下载即导出。
-        _toast(l10n.idCardHdQrisPending);
+        _toast(l10n.idCardHdQrisPending); // 兜底：无二维码载荷
       }
     } on DioException catch (e) {
       _toast(e.response?.statusCode == 409

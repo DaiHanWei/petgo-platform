@@ -174,14 +174,7 @@ class TriageResultView extends ConsumerWidget {
                   btnKey: const ValueKey('triageUnlockOpenFull'),
                   label: l10n.triageUnlockOpenFull,
                   color: AppColors.mint,
-                  onTap: () async {
-                    final method =
-                        await showUnlockMethodSheet(context, ref, priceIdr: kAiUnlockPriceIdr);
-                    if (method == null) return;
-                    await ref
-                        .read(triageUnlockControllerProvider.notifier)
-                        .unlock(triageId!, method);
-                  },
+                  onTap: () => runAiUnlockFlow(context, ref, triageId!),
                 ),
               ] else if (isYellow) ...<Widget>[
                 _filledBtn(

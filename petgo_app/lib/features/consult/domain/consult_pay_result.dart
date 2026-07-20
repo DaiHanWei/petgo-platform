@@ -42,11 +42,12 @@ class ConsultOrderView {
 }
 
 class ConsultPayResult {
-  const ConsultPayResult({required this.mode, this.order, this.payment});
+  const ConsultPayResult({required this.mode, this.order, this.payment, this.payload});
 
   final String mode; // DONE | PAYMENT_REQUIRED
   final ConsultOrderView? order;
   final PaymentInfo? payment;
+  final String? payload; // QRIS 二维码载荷（EMVCo 串，现金态本地生成二维码；同步态为 null）
 
   bool get isDone => mode == 'DONE';
   bool get isPaymentRequired => mode == 'PAYMENT_REQUIRED';
@@ -59,5 +60,6 @@ class ConsultPayResult {
         payment: json['payment'] == null
             ? null
             : PaymentInfo.fromJson(json['payment'] as Map<String, dynamic>),
+        payload: json['payload'] as String?,
       );
 }

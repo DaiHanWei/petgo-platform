@@ -10,6 +10,8 @@ import com.tailtopia.consult.dto.VetQueueResponse;
 import com.tailtopia.consult.event.ConsultRequestFailedEvent;
 import com.tailtopia.consult.event.ConsultRequestQueuedForBillingEvent;
 import com.tailtopia.consult.repository.ConsultRequestRepository;
+import com.tailtopia.pay.domain.PaymentPurpose;
+import com.tailtopia.pay.service.PaymentIntentService;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.dto.PetIdentityView;
 import com.tailtopia.profile.repository.PetProfileRepository;
@@ -60,12 +62,14 @@ public class ConsultRequestService {
     private final AccountQueryService accounts;
     private final TriageService triageService;
     private final SignedUrlService signedUrlService;
+    private final PaymentIntentService paymentIntents;
 
     public ConsultRequestService(ConsultRequestRepository requests, PetProfileRepository petProfiles,
             CardTokenGenerator tokenGenerator, ApplicationEventPublisher events,
             VetPresenceService presence, ConsultProperties props,
             PetProfileQueryService petQuery, AccountQueryService accounts,
-            TriageService triageService, SignedUrlService signedUrlService) {
+            TriageService triageService, SignedUrlService signedUrlService,
+            PaymentIntentService paymentIntents) {
         this.triageService = triageService;
         this.signedUrlService = signedUrlService;
         this.requests = requests;
@@ -76,6 +80,7 @@ public class ConsultRequestService {
         this.props = props;
         this.petQuery = petQuery;
         this.accounts = accounts;
+        this.paymentIntents = paymentIntents;
     }
 
     /** 发起结果：新建请求 or 命中已有 live 请求（alreadyActive=true，前端跳「进行中」）。 */
@@ -376,6 +381,8 @@ public class ConsultRequestService {
         int onlineVets = presence.onlineVetIds().size();
         // 按当前 state CAS 删（并发变态则 0 行、无操作）。
         if (requests.deleteIfState(req.getId(), req.getState()) == 1) {
+            // 联动作废该用户在途 VET_CONSULT 支付意图（置 FAILED），避免 cancel 后 PENDING 残留后台支付列表。
+            paymentIntents.failPending(userId, PaymentPurpose.VET_CONSULT);
             if (vetId != null) {
                 afterCommit(() -> presence.goAvailable(vetId)); // 曾接单 → 释放兽医
             }

@@ -2,6 +2,7 @@ package com.tailtopia.profile.service;
 
 import com.tailtopia.pay.domain.PawCoinTxnType;
 import com.tailtopia.pay.domain.PayChannel;
+import com.tailtopia.pay.domain.PaymentIntent;
 import com.tailtopia.pay.domain.PaymentPurpose;
 import com.tailtopia.pay.dto.PaymentIntentResponse;
 import com.tailtopia.pay.service.PawCoinWalletService;
@@ -12,6 +13,11 @@ import com.tailtopia.profile.dto.HdPurchaseResponse;
 import com.tailtopia.profile.repository.IdCardHdPurchaseRepository;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.pay.ChargeRequest;
+import com.tailtopia.shared.pay.ChargeResult;
+import com.tailtopia.shared.pay.PaymentGateway;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -37,15 +43,17 @@ public class IdCardHdService {
     private final PawCoinWalletService wallet;
     private final PaymentIntentService paymentIntents;
     private final com.tailtopia.config.service.PlatformConfigService platformConfig;
+    private final PaymentGateway gateway;
 
     public IdCardHdService(PetProfileRepository profiles, IdCardHdPurchaseRepository purchases,
             PawCoinWalletService wallet, PaymentIntentService paymentIntents,
-            com.tailtopia.config.service.PlatformConfigService platformConfig) {
+            com.tailtopia.config.service.PlatformConfigService platformConfig, PaymentGateway gateway) {
         this.profiles = profiles;
         this.purchases = purchases;
         this.wallet = wallet;
         this.paymentIntents = paymentIntents;
         this.platformConfig = platformConfig;
+        this.gateway = gateway;
     }
 
     /** 当前用户是否已购买高清图（=已永久解锁）。 */
@@ -78,13 +86,36 @@ public class IdCardHdService {
                 yield HdPurchaseResponse.granted();
             }
             case QRIS -> {
-                // 幂等键 id-hd:{petProfileId}：重复发起取回既有 intent（不双建）。
+                // 幂等键 id-hd:{petProfileId}：重复发起取回既有 intent（不双建）。不设短窗 → PENDING 可长期复用重复支付。
                 PaymentIntentResponse intent = paymentIntents.createIntent(
                         userId, PaymentPurpose.ID_HD, PayChannel.QRIS, price, CURRENCY,
                         "id-hd:" + petProfileId);
-                yield HdPurchaseResponse.paymentRequired(intent);
+                String payload = ensureCharge(intent, price, PayChannel.QRIS, PaymentPurpose.ID_HD);
+                yield HdPurchaseResponse.paymentRequired(intent, payload);
             }
         };
+    }
+
+    /** 首次下单向网关取二维码载荷（照 PawCoinTopupService 范式）；幂等重放返回既有载荷（可重复支付复用）。 */
+    private String ensureCharge(PaymentIntentResponse intent, long price, PayChannel channel,
+            PaymentPurpose purpose) {
+        PaymentIntent entity = paymentIntents.findByToken(intent.token())
+                .orElseThrow(() -> AppException.notFound("支付意图不存在"));
+        if (entity.getGatewayRef() == null) {
+            ChargeResult charge = gateway.createCharge(new ChargeRequest(
+                    entity.getPublicToken(), price, CURRENCY, channel.name(), purpose.name()));
+            Map<String, Object> meta = new LinkedHashMap<>();
+            if (charge.rawMeta() != null) {
+                meta.putAll(charge.rawMeta());
+            }
+            if (charge.payload() != null) {
+                meta.put("payload", charge.payload());
+            }
+            paymentIntents.attachCharge(entity.getPublicToken(), charge.gatewayRef(), meta);
+            return charge.payload();
+        }
+        Map<String, Object> savedMeta = entity.getGatewayMeta();
+        return savedMeta == null ? null : (String) savedMeta.get("payload");
     }
 
     /**

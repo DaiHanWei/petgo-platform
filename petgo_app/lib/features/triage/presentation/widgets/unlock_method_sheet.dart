@@ -4,8 +4,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../../shared/widgets/qr_payment_sheet.dart';
 import '../../../pawcoin/presentation/pawcoin_controller.dart';
 import '../../data/triage_repository.dart';
+import '../../domain/triage_unlock_controller.dart';
 import 'triage_paywall.dart';
 
 /// 解锁方式面板（Story 2.4 · 0718 ref21 改版）。并行读免费额度 + PawCoin 余额，
@@ -110,6 +112,32 @@ Future<UnlockMethod?> showUnlockMethodSheet(
       );
     },
   );
+}
+
+/// AI 解锁完整流程（两入口复用：结果页 CTA / paywall）：选方式 → 发起解锁 → 现金(QRIS)则弹二维码面板
+/// 轮询到账（`pollTriage` 至 `locked==false` → `markUnlocked`）。取消=纯关闭（pending 可复用重复支付）。
+Future<void> runAiUnlockFlow(BuildContext context, WidgetRef ref, int triageId) async {
+  final UnlockMethod? method =
+      await showUnlockMethodSheet(context, ref, priceIdr: kAiUnlockPriceIdr);
+  if (method == null || !context.mounted) return;
+  final TriageUnlockController notifier = ref.read(triageUnlockControllerProvider.notifier);
+  await notifier.unlock(triageId, method);
+  if (!context.mounted) return;
+  final TriageUnlockState st = ref.read(triageUnlockControllerProvider);
+  if (st.phase == UnlockPhase.waitingPayment && (st.payload?.isNotEmpty ?? false)) {
+    await showQrPaymentSheet(
+      context,
+      payload: st.payload!,
+      pollPaid: () async {
+        final TriageResult r = await ref.read(triageRepositoryProvider).pollTriage(triageId);
+        if (r.locked == false) {
+          notifier.markUnlocked(triageId, r);
+          return true;
+        }
+        return false;
+      },
+    );
+  }
 }
 
 String _methodName(UnlockMethod m, AppLocalizations l10n) => switch (m) {

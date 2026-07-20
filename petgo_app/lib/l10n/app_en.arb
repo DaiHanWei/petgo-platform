@@ -1241,6 +1241,7 @@
   "vetPayInterruptHint": "If you leave, the system will automatically reprocess your request.",
   "vetPayProcessing": "Waiting for payment…",
   "vetPayScanHint": "Scan the QR to pay",
+  "vetPayCancel": "Cancel Payment",
   "vetPayExpired": "Payment time is up",
   "vetPayFailed": "Payment failed, please try again",
 
