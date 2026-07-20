@@ -11,6 +11,10 @@ import com.tailtopia.pay.repository.PaymentIntentRepository;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 /** L0（Story 9.6，AB-8E）：支付记录跨类型行映射。纯 Mockito。 */
 class AdminPaymentQueryServiceTest {
@@ -30,5 +34,23 @@ class AdminPaymentQueryServiceTest {
                 .containsExactly("VET_CONSULT", "PAWCOIN_TOPUP");
         assertThat(rows.get(0).amount()).isEqualTo(50000L);
         assertThat(rows.get(0).publicToken()).isEqualTo("t1");
+        assertThat(rows.get(0).userId()).isEqualTo(100L);
+    }
+
+    @Test
+    void recentReturnsPagedGlobalLatestByCreatedAtDesc() {
+        PaymentIntentRepository repo = Mockito.mock(PaymentIntentRepository.class);
+        AdminPaymentQueryService svc = new AdminPaymentQueryService(repo);
+        PageRequest pr = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"));
+        when(repo.findAll(pr)).thenReturn(new PageImpl<>(List.of(
+                PaymentIntent.create(7L, PaymentPurpose.ID_HD, PayChannel.QRIS, 20000L, "IDR", "a"),
+                PaymentIntent.create(9L, PaymentPurpose.AI_UNLOCK, PayChannel.QRIS, 15000L, "IDR", "b")),
+                pr, 2));
+
+        Page<AdminPaymentRow> result = svc.recent(0, 20);
+
+        assertThat(result.getContent()).extracting(AdminPaymentRow::userId).containsExactly(7L, 9L);
+        assertThat(result.getContent().get(0).purpose()).isEqualTo("ID_HD");
+        assertThat(result.getTotalElements()).isEqualTo(2);
     }
 }

@@ -1,6 +1,8 @@
 package com.tailtopia.admin.payment.web;
 
+import com.tailtopia.admin.payment.dto.AdminPaymentRow;
 import com.tailtopia.admin.payment.service.AdminPaymentQueryService;
+import org.springframework.data.domain.Page;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -16,6 +18,9 @@ public class AdminPaymentController {
 
     private static final String VIEW_AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('payment.view')";
 
+    /** 默认视图每页条数。 */
+    private static final int PAGE_SIZE = 20;
+
     private final AdminPaymentQueryService service;
 
     public AdminPaymentController(AdminPaymentQueryService service) {
@@ -24,10 +29,21 @@ public class AdminPaymentController {
 
     @GetMapping("/admin/payments")
     @PreAuthorize(VIEW_AUTH)
-    public String search(@RequestParam(required = false) Long userId, Model model) {
+    public String search(@RequestParam(required = false) Long userId,
+                         @RequestParam(defaultValue = "0") int page, Model model) {
         model.addAttribute("active", "payments");
         model.addAttribute("userId", userId);
-        model.addAttribute("payments", userId == null ? null : service.byUser(userId));
+        if (userId == null) {
+            Page<AdminPaymentRow> result = service.recent(Math.max(page, 0), PAGE_SIZE);
+            model.addAttribute("payments", result.getContent());
+            model.addAttribute("page", result.getNumber());
+            model.addAttribute("totalPages", result.getTotalPages());
+            model.addAttribute("totalElements", result.getTotalElements());
+            model.addAttribute("hasPrev", result.hasPrevious());
+            model.addAttribute("hasNext", result.hasNext());
+        } else {
+            model.addAttribute("payments", service.byUser(userId));
+        }
         return "admin/payments";
     }
 }
