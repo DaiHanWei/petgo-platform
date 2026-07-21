@@ -158,13 +158,15 @@ class ContentServiceTest {
         when(profileService.ownsPet(1L, 5L)).thenReturn(true);
         ContentPostResponse resp = service.publish(1L,
                 new ContentPostCreateRequest(ContentType.GROWTH_MOMENT, 5L, "m", null, null), null);
-        assertThat(resp.eventDate()).isEqualTo(LocalDate.now(ZoneOffset.UTC));
+        // 缺省事件日期按印尼业务时区 WIB 判定（Asia/Jakarta），勿用 UTC（prod 事故 2026-07-20）。
+        assertThat(resp.eventDate()).isEqualTo(LocalDate.now(java.time.ZoneId.of("Asia/Jakarta")));
     }
 
     @Test
     void growthMomentFutureEventDateRejected() {
         when(profileService.ownsPet(1L, 5L)).thenReturn(true);
-        LocalDate future = LocalDate.now(ZoneOffset.UTC).plusDays(1);
+        // WIB 今天 +1 天：无论服务器 UTC 处于一天中哪个时刻，都严格晚于 WIB 今天。
+        LocalDate future = LocalDate.now(java.time.ZoneId.of("Asia/Jakarta")).plusDays(1);
         assertThatThrownBy(() -> service.publish(1L,
                 new ContentPostCreateRequest(ContentType.GROWTH_MOMENT, 5L, "m", null, future), null))
                 .isInstanceOf(AppException.class);

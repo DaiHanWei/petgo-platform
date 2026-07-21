@@ -296,9 +296,12 @@ public class ContentService {
             if (!profileService.ownsPet(authorId, petId)) {
                 throw AppException.validation("无法绑定该宠物档案");
             }
-            // AC5（R2 · F9）：事件日期仅 GROWTH_MOMENT 有值；缺省取今天（UTC）；不可未来。
-            eventDate = req.eventDate() != null ? req.eventDate() : LocalDate.now(java.time.ZoneOffset.UTC);
-            if (eventDate.isAfter(LocalDate.now(java.time.ZoneOffset.UTC))) {
+            // AC5（R2 · F9）：事件日期仅 GROWTH_MOMENT 有值；缺省取今天；不可未来。
+            // 「今天」按印尼业务时区 WIB（Asia/Jakarta, UTC+7）判定，勿用 UTC——否则 WIB 00:00~07:00
+            // 用户本地已是新一天、App 默认取本地今天，会被 UTC 的昨天误判为「未来」而拒发（prod 事故 2026-07-20）。
+            LocalDate todayWib = LocalDate.now(java.time.ZoneId.of("Asia/Jakarta"));
+            eventDate = req.eventDate() != null ? req.eventDate() : todayWib;
+            if (eventDate.isAfter(todayWib)) {
                 throw AppException.validation("事件日期不能晚于今天");
             }
         } else {
