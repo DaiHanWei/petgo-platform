@@ -134,8 +134,14 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> {
         final mq = MediaQuery.of(context);
         return MediaQuery(
           data: mq.copyWith(textScaler: mq.textScaler.clamp(maxScaleFactor: TailTopiaApp.maxTextScale)),
-          // 全局点击 autocapture：根部旁路监听所有 tap → button_tapped（不影响正常点击）。
-          child: AnalyticsAutocapture(child: child ?? const SizedBox.shrink()),
+          // 全局「点非输入区收起键盘」：translucent 使按钮/输入框仍在手势竞技场胜出正常响应，
+          // 仅点到非交互空白处才触发 unfocus 收起软键盘（键盘避让标准的补充，见 CLAUDE.md）。
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+            // 全局点击 autocapture：根部旁路监听所有 tap → button_tapped（不影响正常点击）。
+            child: AnalyticsAutocapture(child: child ?? const SizedBox.shrink()),
+          ),
         );
       },
     );
