@@ -19,11 +19,14 @@ class NotificationCenterPage extends ConsumerStatefulWidget {
   const NotificationCenterPage({super.key});
 
   @override
-  ConsumerState<NotificationCenterPage> createState() => _NotificationCenterPageState();
+  ConsumerState<NotificationCenterPage> createState() =>
+      _NotificationCenterPageState();
 }
 
-class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage> {
+class _NotificationCenterPageState
+    extends ConsumerState<NotificationCenterPage> {
   late Future<NotificationPage> _page;
+  final Set<String> _locallyReadTokens = <String>{};
 
   @override
   void initState() {
@@ -47,11 +50,17 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
   }
 
   Future<void> _onTap(NotificationItem item) async {
+    final token = item.deepLinkToken;
+    if (token != null && token.isNotEmpty && !item.read) {
+      setState(() {
+        _locallyReadTokens.add(token);
+      });
+    }
     // 列表点击与系统推送直跳共用 NotificationDeepLink.open（标记已读 + 角标重算 + 算 location）。
     final location = await NotificationDeepLink.open(
       ref,
       type: item.deepLinkType,
-      token: item.deepLinkToken,
+      token: token,
       targetRef: item.targetRef,
       commentAnchor: item.deepLinkType == 'CONTENT_COMMENTED',
     );
@@ -60,6 +69,11 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
     if (location != DeepLinkRoutes.notificationsCenter) {
       context.push(location);
     }
+  }
+
+  bool _isRead(NotificationItem item) {
+    final token = item.deepLinkToken;
+    return item.read || (token != null && _locallyReadTokens.contains(token));
   }
 
   @override
@@ -71,8 +85,14 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
         backgroundColor: AppColors.base,
         scrolledUnderElevation: 0,
         titleSpacing: 20,
-        title: Text(l10n.notificationCenterTitle,
-            style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: AppColors.ink)),
+        title: Text(
+          l10n.notificationCenterTitle,
+          style: const TextStyle(
+            fontSize: 19,
+            fontWeight: FontWeight.w700,
+            color: AppColors.ink,
+          ),
+        ),
       ),
       body: FutureBuilder<NotificationPage>(
         future: _page,
@@ -95,119 +115,179 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
               message: l10n.notificationEmptyHint,
             );
           }
-          // 按时间分组：今天 → HARI INI；其余 → KEMARIN（notif.html）。
-          final now = DateTime.now();
-          bool isToday(NotificationItem it) {
-            final d = it.createdAt;
-            if (d == null) return true;
-            return d.year == now.year && d.month == now.month && d.day == now.day;
-          }
-          final today = items.where(isToday).toList();
-          final earlier = items.where((it) => !isToday(it)).toList();
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
-            children: [
-              if (today.isNotEmpty) ...[
-                _groupLabel(l10n.notifyGroupToday),
-                for (final it in today) _NotificationTile(item: it, onTap: () => _onTap(it)),
-              ],
-              if (earlier.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                _groupLabel(l10n.notifyGroupEarlier),
-                for (final it in earlier) _NotificationTile(item: it, onTap: () => _onTap(it)),
-              ],
-            ],
-          );
+          return _notificationList(l10n, items);
         },
       ),
     );
   }
 
+  Widget _notificationList(
+    AppLocalizations l10n,
+    List<NotificationItem> items,
+  ) {
+    // 按时间分组：今天 → HARI INI；其余 → KEMARIN（notif.html）。
+    final now = DateTime.now();
+    bool isToday(NotificationItem it) {
+      final d = it.createdAt;
+      if (d == null) return true;
+      return d.year == now.year && d.month == now.month && d.day == now.day;
+    }
+
+    final today = items.where(isToday).toList();
+    final earlier = items.where((it) => !isToday(it)).toList();
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+      children: [
+        if (today.isNotEmpty) ...[
+          _groupLabel(l10n.notifyGroupToday),
+          for (final it in today)
+            _NotificationTile(
+              item: it,
+              read: _isRead(it),
+              onTap: () => _onTap(it),
+            ),
+        ],
+        if (earlier.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          _groupLabel(l10n.notifyGroupEarlier),
+          for (final it in earlier)
+            _NotificationTile(
+              item: it,
+              read: _isRead(it),
+              onTap: () => _onTap(it),
+            ),
+        ],
+      ],
+    );
+  }
+
   /// 加载失败态（bug 20260625-088）：显式错误 + 重试按钮，区别于真·空态。
   Widget _errorState(AppLocalizations l10n) => Center(
-        child: Column(
-          key: const ValueKey('notificationError'),
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.cloud_off_outlined, size: 48, color: AppColors.textTertiary),
-            const SizedBox(height: 12),
-            Text(l10n.notificationLoadFailed,
-                style: const TextStyle(fontSize: 14, color: AppColors.ink2)),
-            const SizedBox(height: 16),
-            FilledButton(
-              key: const ValueKey('notificationRetry'),
-              onPressed: _reload,
-              child: Text(l10n.notificationLoadRetry),
-            ),
-          ],
+    child: Column(
+      key: const ValueKey('notificationError'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(
+          Icons.cloud_off_outlined,
+          size: 48,
+          color: AppColors.textTertiary,
         ),
-      );
+        const SizedBox(height: 12),
+        Text(
+          l10n.notificationLoadFailed,
+          style: const TextStyle(fontSize: 14, color: AppColors.ink2),
+        ),
+        const SizedBox(height: 16),
+        FilledButton(
+          key: const ValueKey('notificationRetry'),
+          onPressed: _reload,
+          child: Text(l10n.notificationLoadRetry),
+        ),
+      ],
+    ),
+  );
 
   Widget _groupLabel(String text) => Padding(
-        padding: const EdgeInsets.fromLTRB(4, 10, 4, 8),
-        child: Text(text,
-            style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.6,
-                color: AppColors.muted)),
-      );
+    padding: const EdgeInsets.fromLTRB(4, 10, 4, 8),
+    child: Text(
+      text,
+      style: const TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.6,
+        color: AppColors.muted,
+      ),
+    ),
+  );
 }
 
-class _NotificationTile extends StatelessWidget {
-  const _NotificationTile({required this.item, required this.onTap});
+class _NotificationTile extends StatefulWidget {
+  const _NotificationTile({
+    required this.item,
+    required this.read,
+    required this.onTap,
+  });
 
   final NotificationItem item;
+  final bool read;
   final VoidCallback onTap;
 
-  /// 圆角方形彩色图标块配色（按 type）：兽医薄荷 / 点赞红 / 评论紫 / 里程碑绿 / 生日金。
-  (IconData, Color, Color) get _iconStyle => switch (item.type) {
-        'VET_REPLY' || 'CONSULT_CLOSED' =>
-          (Icons.medical_services_rounded, AppColors.mint, AppColors.cream2),
-        'CONTENT_LIKED' => (Icons.favorite_rounded, AppColors.coral, AppColors.coralTint),
-        'CONTENT_COMMENTED' =>
-          (Icons.mode_comment_rounded, AppColors.mint, AppColors.cream2),
-        'NEW_CONSULT_REQUEST' => (Icons.inbox_rounded, AppColors.mint, AppColors.cream2),
-        'PET_BIRTHDAY' => (Icons.cake_rounded, AppColors.gold, AppColors.goldTint),
-        'COMPANION_ANNIVERSARY' =>
-          (Icons.celebration_rounded, AppColors.gold, AppColors.goldTint),
-        'MILESTONE_NODE' =>
-          (Icons.emoji_events_rounded, AppColors.triageGreen, AppColors.momenBadgeBg),
-        _ => (Icons.notifications_rounded, AppColors.mint, AppColors.cream2),
-      };
+  @override
+  State<_NotificationTile> createState() => _NotificationTileState();
+}
 
-  String _typeLabel(AppLocalizations l10n) => switch (item.type) {
-        'VET_REPLY' => l10n.notifyTypeVetReply,
-        'CONSULT_CLOSED' => l10n.notifyTypeConsultClosed,
-        'CONTENT_LIKED' => l10n.notifyTypeContentLiked,
-        'CONTENT_COMMENTED' => l10n.notifyTypeContentCommented,
-        'NEW_CONSULT_REQUEST' => l10n.notifyTypeNewRequest,
-        'PET_BIRTHDAY' => l10n.notifyTypePetBirthday,
-        'COMPANION_ANNIVERSARY' => l10n.notifyTypeCompanionAnniversary,
-        'MILESTONE_NODE' => l10n.notifyTypeMilestoneNode,
-        _ => l10n.notificationCenterTitle,
-      };
+class _NotificationTileState extends State<_NotificationTile> {
+  bool _expanded = false;
+
+  /// 圆角方形彩色图标块配色（按 type）：兽医薄荷 / 点赞红 / 评论紫 / 里程碑绿 / 生日金。
+  (IconData, Color, Color) get _iconStyle => switch (widget.item.type) {
+    'VET_REPLY' || 'CONSULT_CLOSED' => (
+      Icons.medical_services_rounded,
+      AppColors.mint,
+      AppColors.cream2,
+    ),
+    'CONTENT_LIKED' => (
+      Icons.favorite_rounded,
+      AppColors.coral,
+      AppColors.coralTint,
+    ),
+    'CONTENT_COMMENTED' => (
+      Icons.mode_comment_rounded,
+      AppColors.mint,
+      AppColors.cream2,
+    ),
+    'NEW_CONSULT_REQUEST' => (
+      Icons.inbox_rounded,
+      AppColors.mint,
+      AppColors.cream2,
+    ),
+    'PET_BIRTHDAY' => (Icons.cake_rounded, AppColors.gold, AppColors.goldTint),
+    'COMPANION_ANNIVERSARY' => (
+      Icons.celebration_rounded,
+      AppColors.gold,
+      AppColors.goldTint,
+    ),
+    'MILESTONE_NODE' => (
+      Icons.emoji_events_rounded,
+      AppColors.triageGreen,
+      AppColors.momenBadgeBg,
+    ),
+    _ => (Icons.notifications_rounded, AppColors.mint, AppColors.cream2),
+  };
+
+  String _typeLabel(AppLocalizations l10n) => switch (widget.item.type) {
+    'VET_REPLY' => l10n.notifyTypeVetReply,
+    'CONSULT_CLOSED' => l10n.notifyTypeConsultClosed,
+    'CONTENT_LIKED' => l10n.notifyTypeContentLiked,
+    'CONTENT_COMMENTED' => l10n.notifyTypeContentCommented,
+    'NEW_CONSULT_REQUEST' => l10n.notifyTypeNewRequest,
+    'PET_BIRTHDAY' => l10n.notifyTypePetBirthday,
+    'COMPANION_ANNIVERSARY' => l10n.notifyTypeCompanionAnniversary,
+    'MILESTONE_NODE' => l10n.notifyTypeMilestoneNode,
+    _ => l10n.notificationCenterTitle,
+  };
 
   /// 副标题（按 type 本地化，随 App 语言）。
-  String _typeBody(AppLocalizations l10n) => switch (item.type) {
-        'VET_REPLY' => l10n.notifyBodyVetReply,
-        'CONSULT_CLOSED' => l10n.notifyBodyConsultClosed,
-        'CONTENT_LIKED' => l10n.notifyBodyContentLiked,
-        'CONTENT_COMMENTED' => l10n.notifyBodyContentCommented,
-        'NEW_CONSULT_REQUEST' => l10n.notifyBodyNewRequest,
-        'PET_BIRTHDAY' => l10n.notifyBodyPetBirthday,
-        'COMPANION_ANNIVERSARY' => l10n.notifyBodyCompanionAnniversary,
-        'MILESTONE_NODE' => l10n.notifyBodyMilestoneNode,
-        _ => l10n.notificationEmptyHint,
-      };
+  String _typeBody(AppLocalizations l10n) => switch (widget.item.type) {
+    'VET_REPLY' => l10n.notifyBodyVetReply,
+    'CONSULT_CLOSED' => l10n.notifyBodyConsultClosed,
+    'CONTENT_LIKED' => l10n.notifyBodyContentLiked,
+    'CONTENT_COMMENTED' => l10n.notifyBodyContentCommented,
+    'NEW_CONSULT_REQUEST' => l10n.notifyBodyNewRequest,
+    'PET_BIRTHDAY' => l10n.notifyBodyPetBirthday,
+    'COMPANION_ANNIVERSARY' => l10n.notifyBodyCompanionAnniversary,
+    'MILESTONE_NODE' => l10n.notifyBodyMilestoneNode,
+    _ => l10n.notificationEmptyHint,
+  };
 
   /// 相对时间，随 App 语言本地化（今天：刚刚 / N 分钟前 / N 小时前；更早：本地化日期）。
   String _relativeTime(AppLocalizations l10n, String locale) {
-    final d = item.createdAt;
+    final d = widget.item.createdAt;
     if (d == null) return '';
     final now = DateTime.now();
     final diff = now.difference(d);
-    final isToday = d.year == now.year && d.month == now.month && d.day == now.day;
+    final isToday =
+        d.year == now.year && d.month == now.month && d.day == now.day;
     if (!isToday) {
       return DateFormat('d MMM, HH:mm', locale).format(d);
     }
@@ -220,16 +300,18 @@ class _NotificationTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final (icon, fg, bg) = _iconStyle;
-    final unread = !item.read;
+    final unread = !widget.read;
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Material(
         color: unread ? AppColors.cream2 : AppColors.card,
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
-          key: ValueKey('notification_${item.deepLinkToken ?? item.type}'),
+          key: ValueKey(
+            'notification_${widget.item.deepLinkToken ?? widget.item.type}',
+          ),
           borderRadius: BorderRadius.circular(14),
-          onTap: onTap,
+          onTap: widget.onTap,
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: Row(
@@ -240,7 +322,10 @@ class _NotificationTile extends StatelessWidget {
                   width: 40,
                   height: 40,
                   alignment: Alignment.center,
-                  decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(11)),
+                  decoration: BoxDecoration(
+                    color: bg,
+                    borderRadius: BorderRadius.circular(11),
+                  ),
                   child: Icon(icon, size: 20, color: fg),
                 ),
                 const SizedBox(width: 12),
@@ -249,20 +334,70 @@ class _NotificationTile extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // 文案按 type 本地化，随 App 语言渲染；**不渲染后端 title/body**（后端串为服务端语言）。
-                      Text(_typeLabel(l10n),
-                          style: const TextStyle(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.ink)),
+                      Text(
+                        _typeLabel(l10n),
+                        style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.ink,
+                        ),
+                      ),
                       const SizedBox(height: 3),
-                      Text(_typeBody(l10n),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontSize: 12, height: 1.45, color: AppColors.ink2)),
-                      const SizedBox(height: 5),
-                      Text(_relativeTime(l10n, Localizations.localeOf(context).toString()),
-                          style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+                      Text(
+                        _typeBody(l10n),
+                        maxLines: _expanded ? null : 2,
+                        overflow: _expanded
+                            ? TextOverflow.visible
+                            : TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          height: 1.45,
+                          color: AppColors.ink2,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _relativeTime(
+                                l10n,
+                                Localizations.localeOf(context).toString(),
+                              ),
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: AppColors.muted,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            style: TextButton.styleFrom(
+                              minimumSize: Size.zero,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              visualDensity: VisualDensity.compact,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _expanded = !_expanded;
+                              });
+                            },
+                            child: Text(
+                              _expanded
+                                  ? l10n.notificationCollapse
+                                  : l10n.notificationExpand,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -273,7 +408,10 @@ class _NotificationTile extends StatelessWidget {
                     width: 8,
                     height: 8,
                     margin: const EdgeInsets.only(top: 4),
-                    decoration: const BoxDecoration(color: AppColors.mint, shape: BoxShape.circle),
+                    decoration: const BoxDecoration(
+                      color: AppColors.mint,
+                      shape: BoxShape.circle,
+                    ),
                   ),
                 ],
               ],

@@ -11,14 +11,18 @@ import java.util.List;
  * 属后续版本，V1.0.0 不纳入。
  */
 public final class AdminPermissions {
+    public record PermissionGroup(String titleCode, List<String> permissionCodes) {
+    }
 
     // 兽医（Epic 2）
     public static final String VET_VIEW = "vet.view";
     public static final String VET_CREATE = "vet.create";
+    public static final String VET_EDIT = "vet.edit";
     public static final String VET_BAN = "vet.ban";
     public static final String VET_RESET_PASSWORD = "vet.reset_password";
     /** 资质录入/审核/续期（Story 2.7 新增，附录 B 扩展）。 */
     public static final String VET_QUALIFY = "vet.qualify";
+    public static final String VET_QUALIFY_VIEW = "vet.qualify_view";
 
     // 用户账号治理（Epic 3）
     public static final String USER_VIEW = "user.view";
@@ -27,6 +31,7 @@ public final class AdminPermissions {
 
     // 内容审核（Epic 4）
     public static final String CONTENT_VIEW_REPORTS = "content.view_reports";
+    public static final String CONTENT_VIEW = "content.view";
     public static final String CONTENT_TAKEDOWN = "content.takedown";
     public static final String CONTENT_RESTORE = "content.restore";
     public static final String CONTENT_PROACTIVE_TAKEDOWN = "content.proactive_takedown";
@@ -39,12 +44,14 @@ public final class AdminPermissions {
     public static final String CONSULT_VIEW_ANOMALIES = "consult.view_anomalies";
     public static final String CONSULT_HANDLE = "consult.handle";
     public static final String CONSULT_VIEW_SESSIONS = "consult.view_sessions";
+    public static final String CONSULT_EDIT_SESSIONS = "consult.edit_sessions";
 
     // 评分（Epic 6）
     public static final String RATING_VIEW = "rating.view";
 
     // 客服工单（V1.1 Epic 4，Story 4.7）——处理/结案客服工单（FR-52）。
     public static final String SUPPORT_HANDLE = "support.handle";
+    public static final String SUPPORT_VIEW = "support.view";
 
     // 退款两段审批（V1.1 Epic 4，Story 4.3，三级职责分离 A-1）
     /** 提交退款需求判定（客服）。 */
@@ -53,16 +60,19 @@ public final class AdminPermissions {
     public static final String REFUND_APPROVE = "refund.approve";
     /** 执行退款打款（财务）。 */
     public static final String REFUND_PAYOUT = "refund.payout";
+    public static final String REFUND_VIEW = "refund.view";
 
     // 咨询订单 / 收入（V1.1 Epic 9，Story 9-3/9-4）
     /** 兽医·AI 咨询订单只读查看。 */
     public static final String ORDER_VIEW = "order.view";
+    public static final String ORDER_EDIT = "order.edit";
     /** 订单 / 收入统计导出。 */
     public static final String ORDER_EXPORT = "order.export";
 
     // 虚拟账号（V1.1 Epic 9，Story 9-8）
     /** 虚拟账号与种子批量上传管理。 */
     public static final String VIRTUAL_ACCOUNT_MANAGE = "virtual_account.manage";
+    public static final String VIRTUAL_ACCOUNT_VIEW = "virtual_account.view";
 
     // 运营配置（V1.1 Epic 9，Story 9-2/9-6）——定价 / PawCoin / 红色超额阈值等
     /** 配置查看。 */
@@ -81,28 +91,39 @@ public final class AdminPermissions {
     public static final String PAYMENT_VIEW = "payment.view";
     /** 红色超额只读监控 + 人工标记（无自动拦截，AB-7A）。 */
     public static final String RISK_VIEW = "risk.view";
+    public static final String RISK_EDIT = "risk.edit";
 
     // 后台账号 / 审计（Epic 1）
     public static final String ADMIN_CREATE_ACCOUNT = "admin.create_account";
+    public static final String ADMIN_VIEW_ACCOUNTS = "admin.view_accounts";
     public static final String ADMIN_DEACTIVATE = "admin.deactivate";
     public static final String ADMIN_VIEW_LOGS = "admin.view_logs";
 
+    /** 按查看/编辑分组，供账号页勾选区展示。 */
+    public static final List<PermissionGroup> GROUPS = List.of(
+            new PermissionGroup("perm.group.view", List.of(
+                    CONTENT_VIEW_REPORTS, CONTENT_VIEW, CONTENT_EXPORT, CONTENT_VIEW_REPORTERS,
+                    USER_VIEW,
+                    VET_VIEW, VET_QUALIFY_VIEW, RATING_VIEW,
+                    CONSULT_VIEW_ANOMALIES, CONSULT_VIEW_SESSIONS,
+                    SUPPORT_VIEW, REFUND_VIEW,
+                    CONFIG_VIEW, ORDER_VIEW, ORDER_EXPORT, SETTLEMENT_VIEW, PAYMENT_VIEW, RISK_VIEW,
+                    VIRTUAL_ACCOUNT_VIEW,
+                    ADMIN_VIEW_ACCOUNTS, ADMIN_VIEW_LOGS)),
+            new PermissionGroup("perm.group.edit", List.of(
+                    CONTENT_TAKEDOWN, CONTENT_RESTORE, CONTENT_PROACTIVE_TAKEDOWN,
+                    USER_DEACTIVATE, USER_DELETE,
+                    VET_CREATE, VET_EDIT, VET_BAN, VET_RESET_PASSWORD, VET_QUALIFY,
+                    CONSULT_HANDLE, CONSULT_EDIT_SESSIONS,
+                    SUPPORT_HANDLE, REFUND_SUBMIT, REFUND_APPROVE, REFUND_PAYOUT,
+                    CONFIG_EDIT, ORDER_EDIT, SETTLEMENT_PAYOUT, RISK_EDIT,
+                    VIRTUAL_ACCOUNT_MANAGE,
+                    ADMIN_CREATE_ACCOUNT, ADMIN_DEACTIVATE)));
+
     /** 全部合法权限码（UI 勾选项 + 校验白名单），保持模块分组顺序。 */
-    public static final List<String> ALL = List.of(
-            VET_VIEW, VET_CREATE, VET_BAN, VET_RESET_PASSWORD, VET_QUALIFY,
-            USER_VIEW, USER_DEACTIVATE, USER_DELETE,
-            CONTENT_VIEW_REPORTS, CONTENT_TAKEDOWN, CONTENT_RESTORE, CONTENT_PROACTIVE_TAKEDOWN,
-            CONTENT_EXPORT, CONTENT_VIEW_REPORTERS,
-            CONSULT_VIEW_ANOMALIES, CONSULT_HANDLE, CONSULT_VIEW_SESSIONS,
-            RATING_VIEW,
-            SUPPORT_HANDLE,
-            REFUND_SUBMIT, REFUND_APPROVE, REFUND_PAYOUT,
-            ORDER_VIEW, ORDER_EXPORT,
-            VIRTUAL_ACCOUNT_MANAGE,
-            CONFIG_VIEW, CONFIG_EDIT,
-            SETTLEMENT_VIEW, SETTLEMENT_PAYOUT,
-            PAYMENT_VIEW, RISK_VIEW,
-            ADMIN_CREATE_ACCOUNT, ADMIN_DEACTIVATE, ADMIN_VIEW_LOGS);
+    public static final List<String> ALL = GROUPS.stream()
+            .flatMap(group -> group.permissionCodes().stream())
+            .toList();
 
     private AdminPermissions() {
     }

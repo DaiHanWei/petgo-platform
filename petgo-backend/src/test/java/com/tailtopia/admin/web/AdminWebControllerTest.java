@@ -12,6 +12,7 @@ import com.tailtopia.admin.dto.CreateVetForm;
 import com.tailtopia.admin.dto.SeedPostForm;
 import com.tailtopia.admin.service.AdminContentService;
 import com.tailtopia.admin.service.AdminUserDetails;
+import com.tailtopia.admin.virtual.service.AdminVirtualAccountService;
 import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.dto.ContentPostResponse;
 import com.tailtopia.shared.error.AppException;
@@ -30,6 +31,7 @@ class AdminWebControllerTest {
     private AdminContentService adminContentService;
     private com.tailtopia.admin.service.AdminModerationService adminModerationService;
     private com.tailtopia.admin.service.AdminVetService adminVetService;
+    private AdminVirtualAccountService virtualAccountService;
     private AdminWebController controller;
 
     @BeforeEach
@@ -37,7 +39,10 @@ class AdminWebControllerTest {
         adminContentService = mock(AdminContentService.class);
         adminModerationService = mock(com.tailtopia.admin.service.AdminModerationService.class);
         adminVetService = mock(com.tailtopia.admin.service.AdminVetService.class);
-        controller = new AdminWebController(adminContentService, adminModerationService, adminVetService, mock(com.tailtopia.admin.dashboard.service.AdminDashboardService.class));
+        virtualAccountService = mock(AdminVirtualAccountService.class);
+        when(virtualAccountService.list()).thenReturn(List.of());
+        controller = new AdminWebController(adminContentService, adminModerationService, adminVetService,
+                mock(com.tailtopia.admin.dashboard.service.AdminDashboardService.class), virtualAccountService);
     }
 
     private AdminUserDetails admin() {

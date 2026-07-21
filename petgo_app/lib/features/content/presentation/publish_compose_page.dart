@@ -33,12 +33,17 @@ import 'feed_controller.dart';
 import 'publish_result_page.dart';
 
 /// 发布控制器 provider（autoDispose：sheet 关闭即 dispose，清空内存草稿，NFR-10 无持久草稿）。
-final publishControllerProvider = Provider.autoDispose<PublishController>((ref) {
+final publishControllerProvider = Provider.autoDispose<PublishController>((
+  ref,
+) {
   final useCase = ref.read(mediaUploadUseCaseProvider);
   final controller = PublishController(
     repository: ref.read(contentRepositoryProvider),
     uploadOne: (bytes) async {
-      final result = await useCase.uploadBytes(scope: MediaScope.public, bytes: bytes);
+      final result = await useCase.uploadBytes(
+        scope: MediaScope.public,
+        bytes: bytes,
+      );
       return result.publicUrl!;
     },
   );
@@ -49,8 +54,12 @@ final publishControllerProvider = Provider.autoDispose<PublishController>((ref) 
 /// 统一发布 Compose 全屏 bottom sheet（Story 2.3 · TailTopia Prototype 换肤）。
 /// 类型标签（Cerita / Momen / Edukasi）→ 作者+关联宠物 → 文字 → 图片 → 发布。
 class PublishComposePage extends ConsumerStatefulWidget {
-  const PublishComposePage(
-      {super.key, this.preset, this.presetEventDate, this.milestoneCode});
+  const PublishComposePage({
+    super.key,
+    this.preset,
+    this.presetEventDate,
+    this.milestoneCode,
+  });
 
   /// 预选发布类型（如生日深链预选成长日历，Story 6.1 FR-40 / 灰选建档返回，AC7）；为空时默认 daily。
   final ContentType? preset;
@@ -62,8 +71,12 @@ class PublishComposePage extends ConsumerStatefulWidget {
   final String? milestoneCode;
 
   /// 以全屏 bottom sheet 形式打开（供「＋」入口 / 深链着陆页 / 灰选建档返回 / 里程碑去发布调用）。
-  static Future<void> open(BuildContext context,
-      {ContentType? preset, DateTime? presetEventDate, String? milestoneCode}) {
+  static Future<void> open(
+    BuildContext context, {
+    ContentType? preset,
+    DateTime? presetEventDate,
+    String? milestoneCode,
+  }) {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -75,7 +88,10 @@ class PublishComposePage extends ConsumerStatefulWidget {
       builder: (_) => FractionallySizedBox(
         heightFactor: 0.95,
         child: PublishComposePage(
-            preset: preset, presetEventDate: presetEventDate, milestoneCode: milestoneCode),
+          preset: preset,
+          presetEventDate: presetEventDate,
+          milestoneCode: milestoneCode,
+        ),
       ),
     );
   }
@@ -133,8 +149,10 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     if (mounted) setState(() => _linkedPet = pet);
   }
 
-  Future<void> _addImage(PublishController controller,
-      {MediaSource source = MediaSource.gallery}) async {
+  Future<void> _addImage(
+    PublishController controller, {
+    MediaSource source = MediaSource.gallery,
+  }) async {
     setState(() => _addingImage = true);
     Uint8List? bytes;
     try {
@@ -151,8 +169,32 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     }
   }
 
-  Future<void> _publish(PublishController controller, AppLocalizations l10n) async {
-    Analytics.capture('content_publish_submitted', {'type': controller.type.name});
+  Future<void> _addGalleryImages(PublishController controller) async {
+    final remaining = kMaxImages - controller.items.length;
+    if (remaining <= 0) return;
+    setState(() => _addingImage = true);
+    List<Uint8List> images;
+    try {
+      images = await ref
+          .read(mediaUploadUseCaseProvider)
+          .pickMultiAndProcess(limit: remaining, context: context);
+    } finally {
+      if (mounted) setState(() => _addingImage = false);
+    }
+    if (images.isEmpty) return;
+    for (final bytes in images) {
+      controller.addImage(bytes);
+    }
+    await controller.uploadAll();
+  }
+
+  Future<void> _publish(
+    PublishController controller,
+    AppLocalizations l10n,
+  ) async {
+    Analytics.capture('content_publish_submitted', {
+      'type': controller.type.name,
+    });
     // 成长日历必带 pet_id（否则后端 422）；V1 单宠物 → 取当前用户唯一档案。
     if (controller.type == ContentType.growthMoment) {
       await _ensurePetLoaded();
@@ -163,7 +205,9 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       }
     }
     final key = 'post-${DateTime.now().microsecondsSinceEpoch}';
-    final petId = controller.type == ContentType.growthMoment ? _linkedPet?.id : null;
+    final petId = controller.type == ContentType.growthMoment
+        ? _linkedPet?.id
+        : null;
     final args = _buildArgs(controller, l10n);
     // 进入「审核中」覆盖层（P-39b）。
     setState(() {
@@ -198,10 +242,12 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       }
       // 里程碑「去发布」回填（Story 8.4）：仍为成长日历类型 → 以新内容 id 自动打卡完成（best-effort）。
       MilestoneItem? completedMilestone;
-      if (widget.milestoneCode != null && controller.type == ContentType.growthMoment) {
+      if (widget.milestoneCode != null &&
+          controller.type == ContentType.growthMoment) {
         try {
-          completedMilestone =
-              await ref.read(milestoneRepositoryProvider).checkIn(widget.milestoneCode!, id);
+          completedMilestone = await ref
+              .read(milestoneRepositoryProvider)
+              .checkIn(widget.milestoneCode!, id);
         } catch (_) {
           // 回填失败静默：用户可回里程碑页手动「已打卡」关联该内容。
         }
@@ -220,19 +266,23 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                 for (final g in listData.groups)
                   for (final it in g.items) it.code == done.code ? done : it,
               ];
-        final shareText = l10n.milestoneShareText(localizedMilestoneTitle(done.code, locale));
+        final shareText = l10n.milestoneShareText(
+          localizedMilestoneTitle(done.code, locale),
+        );
         final router = GoRouter.maybeOf(context);
         await showMilestoneCelebration(
           context,
           done,
           petName: petName,
           collection: collection,
-          onShare: () => shareMilestoneWithLink(ref,
-              item: done,
-              locale: locale,
-              petName: petName,
-              shareText: shareText,
-              collection: collection),
+          onShare: () => shareMilestoneWithLink(
+            ref,
+            item: done,
+            locale: locale,
+            petName: petName,
+            shareText: shareText,
+            collection: collection,
+          ),
           // onSeeAll 省略：庆祝关闭后统一在下方先关 sheet 再跳列表（否则 sheet 挡住跳转）。
         );
         if (!mounted) return;
@@ -248,10 +298,14 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       // AC8（F10）：审核拦截 → P-39c 内容被拒（整页 + 拒因）。
       final reasons = <String>[
         if (blockSlug == 'content-text-blocked') l10n.publishRejectedReasonText,
-        if (blockSlug == 'content-image-blocked') l10n.publishRejectedReasonImage,
+        if (blockSlug == 'content-image-blocked')
+          l10n.publishRejectedReasonImage,
       ];
       Navigator.of(context).pop();
-      context.push('/publish/rejected', extra: args.withReasons(reasons)); // → P-39c 被拒
+      context.push(
+        '/publish/rejected',
+        extra: args.withReasons(reasons),
+      ); // → P-39c 被拒
     } else {
       // 其它失败（网络/图片上传）：退出审核中覆盖层，留在编辑页保留草稿，提示重试。
       setState(() => _reviewing = false);
@@ -261,13 +315,16 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
 
   /// 类型展示文案（与发布 segment 一致）。
   String _typeLabel(ContentType t, AppLocalizations l10n) => switch (t) {
-        ContentType.daily => l10n.publishSegmentDaily,
-        ContentType.growthMoment => l10n.publishSegmentGrowth,
-        ContentType.knowledge => l10n.publishSegmentKnowledge,
-      };
+    ContentType.daily => l10n.publishSegmentDaily,
+    ContentType.growthMoment => l10n.publishSegmentGrowth,
+    ContentType.knowledge => l10n.publishSegmentKnowledge,
+  };
 
   /// 构建结果三屏预览参数（文本截断 + 类型 + 图片数 + 宠物 emoji）。
-  PublishResultArgs _buildArgs(PublishController controller, AppLocalizations l10n) {
+  PublishResultArgs _buildArgs(
+    PublishController controller,
+    AppLocalizations l10n,
+  ) {
     final text = controller.text.trim();
     final excerpt = text.length > 48 ? '${text.substring(0, 48)}…' : text;
     return PublishResultArgs(
@@ -295,157 +352,216 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     );
   }
 
-  Widget _body(BuildContext context, AppLocalizations l10n, PublishController controller) {
+  Widget _body(
+    BuildContext context,
+    AppLocalizations l10n,
+    PublishController controller,
+  ) {
     // 提交期间：整屏「审核中」覆盖层（P-39b），覆盖编辑表单。
     if (_reviewing && _reviewingArgs != null) {
       return PublishReviewingView(args: _reviewingArgs!);
     }
     final growthSelected = controller.type == ContentType.growthMoment;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // —— 顶部：把手 + Batal / 标题 / Bagikan ——
-        Container(
-          padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
-          child: Column(
-            children: [
-              Container(
-                width: 40,
-                height: 5,
-                margin: const EdgeInsets.only(bottom: 14),
-                decoration:
-                    BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(3)),
-              ),
-              Row(
-                children: [
-                  // 原型 closebtn：34px 圆钮 + × 图标。
-                  Semantics(
-                    button: true,
-                    label: l10n.publishCancel,
-                    child: InkWell(
-                      key: const ValueKey('publishClose'),
-                      onTap: () => Navigator.of(context).pop(),
-                      customBorder: const CircleBorder(),
-                      child: Container(
-                        width: 34,
-                        height: 34,
-                        alignment: Alignment.center,
-                        // 原型 closebtn：中性浅灰底 bg-muted #EFEDF3。
-                        decoration:
-                            const BoxDecoration(color: Color(0xFFEFEDF3), shape: BoxShape.circle),
-                        child: const Icon(Icons.close_rounded, size: 18, color: AppColors.ink2),
-                      ),
-                    ),
+    // 键盘弹出时把整个内容区上推键盘高度，使滚动视口底边落在键盘之上 →
+    // 被键盘遮住的输入框被判定为「视口外」，EditableText 自动 ensureVisible 滚上来。
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // —— 顶部：把手 + Batal / 标题 / Bagikan ——
+          Container(
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
+            child: Column(
+              children: [
+                Container(
+                  width: 40,
+                  height: 5,
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(
+                    color: AppColors.line,
+                    borderRadius: BorderRadius.circular(3),
                   ),
-                  Expanded(
-                    child: Text(l10n.publishComposeTitle,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-                  ),
-                  // 原型 pubbtn：扁平紫钮（启用 #845EC9）/ off=中性灰 #B6B6B6。
-                  FilledButton(
-                    key: const ValueKey('publishSubmit'),
-                    onPressed: controller.canPublish ? () => _publish(controller, l10n) : null,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.mint,
-                      disabledBackgroundColor: const Color(0xFFB6B6B6),
-                      foregroundColor: AppColors.onAccent,
-                      // 原型 .pubbtn 始终白字（.off 只改底色不改字色）。
-                      disabledForegroundColor: AppColors.onAccent,
-                      // 原型 pubbtn 启用：紫色柔阴影 0 4px 12px rgba(132,94,201,.30)；off 无阴影。
-                      elevation: controller.canPublish ? 4 : 0,
-                      shadowColor: AppColors.mint.withValues(alpha: 0.30),
-                      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 9),
-                      minimumSize: const Size(0, 0),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                    ),
-                    child: controller.publishing
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : Text(l10n.publishButton),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 36),
-            children: [
-              // 原型 p-create 顺序：类型 chips → petsel(成长) → 照片 → 文字 → 事件日期 → 公开提示。
-              _segments(controller, l10n),
-              if (growthSelected) ...[
-                const SizedBox(height: 14),
-                _petTargetRow(l10n),
-              ],
-              const SizedBox(height: 16),
-              _imageRow(controller, l10n),
-              const SizedBox(height: 14),
-              // —— 文字 ——（原型 textarea-wrap：1.5px #E6E6E6 外框 + 圆角11 + 内部右下字数）
-              Container(
-                decoration: BoxDecoration(
-                  color: AppColors.card,
-                  borderRadius: BorderRadius.circular(11),
-                  border: Border.all(color: AppColors.line, width: 1.5),
                 ),
-                padding: const EdgeInsets.all(11),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                Row(
                   children: [
-                    TextField(
-                      key: const ValueKey('publishText'),
-                      controller: _textController,
-                      minLines: 3,
-                      maxLines: 6,
-                      maxLength: kMaxPostTextLength,
-                      onChanged: controller.setText,
-                      style: const TextStyle(fontSize: 14, color: AppColors.ink, height: 1.6),
-                      decoration: InputDecoration(
-                        isCollapsed: true,
-                        hintText: _hint(controller, l10n),
-                        hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 14, height: 1.6),
-                        border: InputBorder.none,
-                        counterText: '', // 隐藏默认计数器，改放容器内右下
+                    // 原型 closebtn：34px 圆钮 + × 图标。
+                    Semantics(
+                      button: true,
+                      label: l10n.publishCancel,
+                      child: InkWell(
+                        key: const ValueKey('publishClose'),
+                        onTap: () => Navigator.of(context).pop(),
+                        customBorder: const CircleBorder(),
+                        child: Container(
+                          width: 34,
+                          height: 34,
+                          alignment: Alignment.center,
+                          // 原型 closebtn：中性浅灰底 bg-muted #EFEDF3。
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFEFEDF3),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.close_rounded,
+                            size: 18,
+                            color: AppColors.ink2,
+                          ),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 7),
-                    // 原型 charcount：框内右下「已用 / 总数」，弱色 11px。
-                    Text('${_textController.text.length} / $kMaxPostTextLength',
-                        textAlign: TextAlign.right,
-                        style: const TextStyle(fontSize: 11, color: AppColors.textTertiary)),
+                    Expanded(
+                      child: Text(
+                        l10n.publishComposeTitle,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    // 原型 pubbtn：扁平紫钮（启用 #845EC9）/ off=中性灰 #B6B6B6。
+                    FilledButton(
+                      key: const ValueKey('publishSubmit'),
+                      onPressed: controller.canPublish
+                          ? () => _publish(controller, l10n)
+                          : null,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.mint,
+                        disabledBackgroundColor: const Color(0xFFB6B6B6),
+                        foregroundColor: AppColors.onAccent,
+                        // 原型 .pubbtn 始终白字（.off 只改底色不改字色）。
+                        disabledForegroundColor: AppColors.onAccent,
+                        // 原型 pubbtn 启用：紫色柔阴影 0 4px 12px rgba(132,94,201,.30)；off 无阴影。
+                        elevation: controller.canPublish ? 4 : 0,
+                        shadowColor: AppColors.mint.withValues(alpha: 0.30),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 15,
+                          vertical: 9,
+                        ),
+                        minimumSize: const Size(0, 0),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        textStyle: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      child: controller.publishing
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(l10n.publishButton),
+                    ),
                   ],
                 ),
-              ),
-              if (growthSelected) ...[
-                const SizedBox(height: 12),
-                _eventDateRow(controller, l10n),
               ],
-              if (controller.hasFailed) ...[
-                const SizedBox(height: 12),
-                TextButton.icon(
-                  key: const ValueKey('publishRetry'),
-                  icon: const Icon(Icons.refresh, color: AppColors.mint700),
-                  label: Text(l10n.publishRetry, style: const TextStyle(color: AppColors.mint700)),
-                  onPressed: () => controller.retryFailed(),
+            ),
+          ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 36),
+              children: [
+                // 原型 p-create 顺序：类型 chips → petsel(成长) → 照片 → 文字 → 事件日期 → 公开提示。
+                _segments(controller, l10n),
+                if (growthSelected) ...[
+                  const SizedBox(height: 14),
+                  _petTargetRow(l10n),
+                ],
+                const SizedBox(height: 16),
+                _imageRow(controller, l10n),
+                const SizedBox(height: 14),
+                // —— 文字 ——（原型 textarea-wrap：1.5px #E6E6E6 外框 + 圆角11 + 内部右下字数）
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.card,
+                    borderRadius: BorderRadius.circular(11),
+                    border: Border.all(color: AppColors.line, width: 1.5),
+                  ),
+                  padding: const EdgeInsets.all(11),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextField(
+                        key: const ValueKey('publishText'),
+                        controller: _textController,
+                        minLines: 3,
+                        maxLines: 6,
+                        maxLength: kMaxPostTextLength,
+                        onChanged: controller.setText,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: AppColors.ink,
+                          height: 1.6,
+                        ),
+                        decoration: InputDecoration(
+                          isCollapsed: true,
+                          hintText: _hint(controller, l10n),
+                          hintStyle: const TextStyle(
+                            color: AppColors.textTertiary,
+                            fontSize: 14,
+                            height: 1.6,
+                          ),
+                          border: InputBorder.none,
+                          counterText: '', // 隐藏默认计数器，改放容器内右下
+                        ),
+                      ),
+                      const SizedBox(height: 7),
+                      // 原型 charcount：框内右下「已用 / 总数」，弱色 11px。
+                      Text(
+                        '${_textController.text.length} / $kMaxPostTextLength',
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textTertiary,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ],
-              const SizedBox(height: 16),
-              // 原型底部：居中公开提示。
-              Center(
-                child: Text(l10n.publishPublicNotice,
+                if (growthSelected) ...[
+                  const SizedBox(height: 12),
+                  _eventDateRow(controller, l10n),
+                ],
+                if (controller.hasFailed) ...[
+                  const SizedBox(height: 12),
+                  TextButton.icon(
+                    key: const ValueKey('publishRetry'),
+                    icon: const Icon(Icons.refresh, color: AppColors.mint700),
+                    label: Text(
+                      l10n.publishRetry,
+                      style: const TextStyle(color: AppColors.mint700),
+                    ),
+                    onPressed: () => controller.retryFailed(),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                // 原型底部：居中公开提示。
+                Center(
+                  child: Text(
+                    l10n.publishPublicNotice,
                     textAlign: TextAlign.center,
                     style: const TextStyle(
-                        color: AppColors.textTertiary, fontSize: 12, height: 1.6)),
-              ),
-            ],
+                      color: AppColors.textTertiary,
+                      fontSize: 12,
+                      height: 1.6,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -453,7 +569,9 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     switch (c.type) {
       case ContentType.growthMoment:
         // 原型 fake-ta：「Ceritakan momen spesial {宠物名}...」。
-        return l10n.publishHintGrowth(_linkedPet?.name ?? l10n.publishPetFallback);
+        return l10n.publishHintGrowth(
+          _linkedPet?.name ?? l10n.publishPetFallback,
+        );
       case ContentType.knowledge:
         return l10n.publishHintKnowledge;
       default:
@@ -469,11 +587,19 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
         scrollDirection: Axis.horizontal,
         children: [
           // 原型 typechips 顺序：Cerita Harian / Tips & Info / Momen Bahagia🌟（成长末位）。
-          _segChip(l10n.publishSegmentDaily, ContentType.daily, controller,
-              'seg_${ContentType.daily.wire}'),
+          _segChip(
+            l10n.publishSegmentDaily,
+            ContentType.daily,
+            controller,
+            'seg_${ContentType.daily.wire}',
+          ),
           const SizedBox(width: 7),
-          _segChip(l10n.publishSegmentKnowledge, ContentType.knowledge, controller,
-              'seg_${ContentType.knowledge.wire}'),
+          _segChip(
+            l10n.publishSegmentKnowledge,
+            ContentType.knowledge,
+            controller,
+            'seg_${ContentType.knowledge.wire}',
+          ),
           const SizedBox(width: 7),
           _growthChip(l10n, controller),
         ],
@@ -481,7 +607,12 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     );
   }
 
-  Widget _segChip(String label, ContentType type, PublishController controller, String key) {
+  Widget _segChip(
+    String label,
+    ContentType type,
+    PublishController controller,
+    String key,
+  ) {
     return _TypeChip(
       keyValue: key,
       label: label,
@@ -502,7 +633,9 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
           ? () {
               controller.setType(ContentType.growthMoment);
               if (controller.eventDate == null) {
-                controller.setEventDate(widget.presetEventDate ?? DateTime.now()); // F9 默认
+                controller.setEventDate(
+                  widget.presetEventDate ?? DateTime.now(),
+                ); // F9 默认
               }
               _ensurePetLoaded();
             }
@@ -527,19 +660,32 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       ),
       child: Row(
         children: [
-          Text(l10n.publishForLabel,
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          Text(
+            l10n.publishForLabel,
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+            ),
+          ),
           const SizedBox(width: 6),
-          Text('$emoji $petName',
-              style: const TextStyle(
-                  fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.mint)),
+          Text(
+            '$emoji $petName',
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.mint,
+            ),
+          ),
         ],
       ),
     );
   }
 
   /// 图片来源选择（原型「Tambah」单入口 → 相机 / 相册）。
-  Future<void> _pickImageSource(PublishController controller, AppLocalizations l10n) async {
+  Future<void> _pickImageSource(
+    PublishController controller,
+    AppLocalizations l10n,
+  ) async {
     final source = await showModalBottomSheet<MediaSource>(
       context: context,
       backgroundColor: AppColors.surface,
@@ -551,12 +697,18 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.photo_camera_outlined, color: AppColors.mint),
+              leading: const Icon(
+                Icons.photo_camera_outlined,
+                color: AppColors.mint,
+              ),
               title: Text(l10n.publishCamera),
               onTap: () => Navigator.of(ctx).pop(MediaSource.camera),
             ),
             ListTile(
-              leading: const Icon(Icons.photo_library_outlined, color: AppColors.mint),
+              leading: const Icon(
+                Icons.photo_library_outlined,
+                color: AppColors.mint,
+              ),
               title: Text(l10n.publishGallery),
               onTap: () => Navigator.of(ctx).pop(MediaSource.gallery),
             ),
@@ -564,7 +716,11 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
         ),
       ),
     );
-    if (source != null) await _addImage(controller, source: source);
+    if (source == MediaSource.gallery) {
+      await _addGalleryImages(controller);
+    } else if (source != null) {
+      await _addImage(controller, source: source);
+    }
   }
 
   /// 成长日历事件日期字段（F9）：禁选未来，默认今天/格子日期。点击开日期选择器。
@@ -595,13 +751,19 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                     TextSpan(
                       text: formatDayMonthYear(context, date),
                       style: const TextStyle(
-                          fontWeight: FontWeight.w700, color: AppColors.mint),
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.mint,
+                      ),
                     ),
                   ],
                 ),
               ),
             ),
-            const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.mint700),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 18,
+              color: AppColors.mint700,
+            ),
           ],
         ),
       ),
@@ -627,9 +789,14 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(l10n.publishPhotoLabel,
-            style: const TextStyle(
-                fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+        Text(
+          l10n.publishPhotoLabel,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textSecondary,
+          ),
+        ),
         const SizedBox(height: 8),
         GridView.count(
           crossAxisCount: 3,
@@ -658,7 +825,10 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       child: const SizedBox(
         width: 22,
         height: 22,
-        child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.mint),
+        child: CircularProgressIndicator(
+          strokeWidth: 2.5,
+          color: AppColors.mint,
+        ),
       ),
     );
   }
@@ -670,7 +840,12 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       // 处理中禁用，避免连点触发多次 _addImage 提前撤占位/闪烁。
       onTap: _addingImage ? null : () => _pickImageSource(controller, l10n),
       child: CustomPaint(
-        painter: DashedRRectPainter(color: AppColors.dashedViolet, radius: 9, dash: 5, gap: 4),
+        painter: DashedRRectPainter(
+          color: AppColors.dashedViolet,
+          radius: 9,
+          dash: 5,
+          gap: 4,
+        ),
         child: Container(
           decoration: BoxDecoration(
             color: AppColors.cream2,
@@ -682,9 +857,14 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
             children: [
               const Icon(Icons.add_rounded, size: 22, color: AppColors.mint),
               const SizedBox(height: 3),
-              Text(l10n.tabAdd,
-                  style: const TextStyle(
-                      fontSize: 10, fontWeight: FontWeight.w500, color: AppColors.mint)),
+              Text(
+                l10n.tabAdd,
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.mint,
+                ),
+              ),
             ],
           ),
         ),
@@ -715,21 +895,30 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                 child: SizedBox(
                   width: 22,
                   height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ),
           ),
         if (item.status == ImageUploadStatus.failed)
           const Positioned(
-              right: 4, top: 4, child: Icon(Icons.error, color: Colors.red, size: 18)),
+            right: 4,
+            top: 4,
+            child: Icon(Icons.error, color: Colors.red, size: 18),
+          ),
         Positioned(
           right: 3,
           top: 3,
           child: GestureDetector(
             onTap: () => controller.removeImage(index),
             child: Container(
-              decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+              decoration: const BoxDecoration(
+                color: Colors.black54,
+                shape: BoxShape.circle,
+              ),
               child: const Icon(Icons.close, size: 16, color: Colors.white),
             ),
           ),
@@ -769,17 +958,21 @@ class _TypeChip extends StatelessWidget {
             color: selected ? AppColors.mint : AppColors.card,
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
-                color: selected ? AppColors.mint : AppColors.line, width: 1.5),
+              color: selected ? AppColors.mint : AppColors.line,
+              width: 1.5,
+            ),
           ),
-          child: Text(label,
-              maxLines: 1,
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: selected ? Colors.white : AppColors.ink2)),
+          child: Text(
+            label,
+            maxLines: 1,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: selected ? Colors.white : AppColors.ink2,
+            ),
+          ),
         ),
       ),
     );
   }
 }
-

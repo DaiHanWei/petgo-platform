@@ -37,7 +37,9 @@ Future<UnlockMethod?> showUnlockMethodSheet(
     builder: (BuildContext ctx) {
       final l10n = AppLocalizations.of(ctx);
       // 默认选中：有免费额度选免费，否则选 QRIS（恒可用）。
-      UnlockMethod selected = freeAvailable ? UnlockMethod.freeQuota : UnlockMethod.qris;
+      UnlockMethod selected = freeAvailable
+          ? UnlockMethod.freeQuota
+          : UnlockMethod.qris;
       return StatefulBuilder(
         builder: (ctx, setSheet) {
           String payLabel() => selected == UnlockMethod.freeQuota
@@ -50,11 +52,22 @@ Future<UnlockMethod?> showUnlockMethodSheet(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  Text(l10n.triageUnlockSheetTitle,
-                      style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700)),
+                  Text(
+                    l10n.triageUnlockSheetTitle,
+                    style: const TextStyle(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   const SizedBox(height: 6),
-                  Text(l10n.triageUnlockSheetBody,
-                      style: const TextStyle(fontSize: 13, height: 1.5, color: AppColors.ink2)),
+                  Text(
+                    l10n.triageUnlockSheetBody,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      height: 1.5,
+                      color: AppColors.ink2,
+                    ),
+                  ),
                   const SizedBox(height: 18),
                   if (freeAvailable) ...[
                     _MethodTile(
@@ -63,7 +76,8 @@ Future<UnlockMethod?> showUnlockMethodSheet(
                       title: l10n.triageUnlockMethodFree,
                       subtitle: l10n.triageUnlockFreeRemaining(remaining),
                       selected: selected == UnlockMethod.freeQuota,
-                      onTap: () => setSheet(() => selected = UnlockMethod.freeQuota),
+                      onTap: () =>
+                          setSheet(() => selected = UnlockMethod.freeQuota),
                     ),
                     const SizedBox(height: 10),
                   ],
@@ -80,11 +94,15 @@ Future<UnlockMethod?> showUnlockMethodSheet(
                     keyValue: 'unlockMethodPawcoin',
                     icon: Icons.savings_outlined,
                     title: l10n.triageUnlockMethodPawcoin,
-                    subtitle: l10n.triageUnlockPawcoinBalance(balance),
+                    subtitle: l10n.triageUnlockPawcoinBalance(
+                      formatKoin(balance),
+                    ),
                     selected: pawcoinEnough && selected == UnlockMethod.pawcoin,
                     enabled: pawcoinEnough,
                     // 余额不足：不可选，右侧「Isi saldo dulu →」跳充值页。
-                    trailingAction: pawcoinEnough ? null : l10n.triageUnlockTopupFirst,
+                    trailingAction: pawcoinEnough
+                        ? null
+                        : l10n.triageUnlockTopupFirst,
                     onTap: pawcoinEnough
                         ? () => setSheet(() => selected = UnlockMethod.pawcoin)
                         : () {
@@ -101,8 +119,13 @@ Future<UnlockMethod?> showUnlockMethodSheet(
                       foregroundColor: AppColors.onAccent,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    child: Text(payLabel(),
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                    child: Text(
+                      payLabel(),
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -116,20 +139,32 @@ Future<UnlockMethod?> showUnlockMethodSheet(
 
 /// AI 解锁完整流程（两入口复用：结果页 CTA / paywall）：选方式 → 发起解锁 → 现金(QRIS)则弹二维码面板
 /// 轮询到账（`pollTriage` 至 `locked==false` → `markUnlocked`）。取消=纯关闭（pending 可复用重复支付）。
-Future<void> runAiUnlockFlow(BuildContext context, WidgetRef ref, int triageId) async {
-  final UnlockMethod? method =
-      await showUnlockMethodSheet(context, ref, priceIdr: kAiUnlockPriceIdr);
+Future<void> runAiUnlockFlow(
+  BuildContext context,
+  WidgetRef ref,
+  int triageId,
+) async {
+  final UnlockMethod? method = await showUnlockMethodSheet(
+    context,
+    ref,
+    priceIdr: kAiUnlockPriceIdr,
+  );
   if (method == null || !context.mounted) return;
-  final TriageUnlockController notifier = ref.read(triageUnlockControllerProvider.notifier);
+  final TriageUnlockController notifier = ref.read(
+    triageUnlockControllerProvider.notifier,
+  );
   await notifier.unlock(triageId, method);
   if (!context.mounted) return;
   final TriageUnlockState st = ref.read(triageUnlockControllerProvider);
-  if (st.phase == UnlockPhase.waitingPayment && (st.payload?.isNotEmpty ?? false)) {
+  if (st.phase == UnlockPhase.waitingPayment &&
+      (st.payload?.isNotEmpty ?? false)) {
     await showQrPaymentSheet(
       context,
       payload: st.payload!,
       pollPaid: () async {
-        final TriageResult r = await ref.read(triageRepositoryProvider).pollTriage(triageId);
+        final TriageResult r = await ref
+            .read(triageRepositoryProvider)
+            .pollTriage(triageId);
         if (r.locked == false) {
           notifier.markUnlocked(triageId, r);
           return true;
@@ -141,10 +176,10 @@ Future<void> runAiUnlockFlow(BuildContext context, WidgetRef ref, int triageId) 
 }
 
 String _methodName(UnlockMethod m, AppLocalizations l10n) => switch (m) {
-      UnlockMethod.freeQuota => l10n.triageUnlockMethodFree,
-      UnlockMethod.pawcoin => l10n.triageUnlockMethodPawcoin,
-      UnlockMethod.qris => l10n.triageUnlockMethodQris,
-    };
+  UnlockMethod.freeQuota => l10n.triageUnlockMethodFree,
+  UnlockMethod.pawcoin => l10n.triageUnlockMethodPawcoin,
+  UnlockMethod.qris => l10n.triageUnlockMethodQris,
+};
 
 /// 支付方式卡（ref21）：色块圆角图标 + 标题 + 副行 + 选中紫描边；不可选态右侧显充值链接。
 class _MethodTile extends StatelessWidget {
@@ -192,7 +227,11 @@ class _MethodTile extends StatelessWidget {
                 color: enabled ? AppColors.mintTint : AppColors.cream2,
                 borderRadius: BorderRadius.circular(11),
               ),
-              child: Icon(icon, size: 20, color: enabled ? AppColors.mint : AppColors.muted),
+              child: Icon(
+                icon,
+                size: 20,
+                color: enabled ? AppColors.mint : AppColors.muted,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -200,26 +239,43 @@ class _MethodTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(title,
-                      style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: enabled ? AppColors.ink : AppColors.textTertiary)),
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: enabled ? AppColors.ink : AppColors.textTertiary,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text(subtitle,
-                      style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.muted,
+                    ),
+                  ),
                 ],
               ),
             ),
             if (trailingAction != null) ...[
               const SizedBox(width: 8),
-              Text(trailingAction!,
-                  style: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.mint)),
+              Text(
+                trailingAction!,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.mint,
+                ),
+              ),
             ] else if (selected)
               const Icon(Icons.check_circle, size: 22, color: AppColors.mint)
             else
-              Icon(Icons.radio_button_unchecked, size: 22, color: AppColors.line),
+              Icon(
+                Icons.radio_button_unchecked,
+                size: 22,
+                color: AppColors.line,
+              ),
           ],
         ),
       ),

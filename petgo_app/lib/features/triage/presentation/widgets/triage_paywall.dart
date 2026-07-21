@@ -7,15 +7,17 @@ import '../../domain/triage_unlock_controller.dart';
 import 'unlock_method_sheet.dart';
 
 /// 千分位格式化印尼盾（Story 2.4）：10000 → `Rp10.000`。避免引 intl locale 分歧，手工插点。
-String formatIdr(int amount) {
+String formatKoin(int amount) {
   final digits = amount.toString();
   final buf = StringBuffer();
   for (var i = 0; i < digits.length; i++) {
     if (i > 0 && (digits.length - i) % 3 == 0) buf.write('.');
     buf.write(digits[i]);
   }
-  return 'Rp$buf';
+  return buf.toString();
 }
+
+String formatIdr(int amount) => 'Rp${formatKoin(amount)}';
 
 /// 详建锁定态 paywall（Story 2.4）。替代「居家护理建议」卡内容：占位遮罩（**非模糊真文字**——
 /// 后端锁定时 advice 本为 null，用骨架占位防截图还原）+ 解锁 CTA。
@@ -40,7 +42,8 @@ class TriagePaywall extends ConsumerWidget {
       if (next.phase == UnlockPhase.error && next.triageId == triageId) {
         final msg = switch (next.errorKind) {
           UnlockErrorKind.quotaExhausted => l10n.triageUnlockQuotaExhausted,
-          UnlockErrorKind.insufficientBalance => l10n.triageUnlockInsufficientBalance,
+          UnlockErrorKind.insufficientBalance =>
+            l10n.triageUnlockInsufficientBalance,
           _ => l10n.triageUnlockFailed,
         };
         ScaffoldMessenger.of(context)
@@ -50,7 +53,8 @@ class TriagePaywall extends ConsumerWidget {
     });
 
     final state = ref.watch(triageUnlockControllerProvider);
-    final busy = state.phase == UnlockPhase.submitting && state.triageId == triageId;
+    final busy =
+        state.phase == UnlockPhase.submitting && state.triageId == triageId;
 
     return Semantics(
       label: l10n.triageUnlockLockedSemantics,
@@ -77,9 +81,14 @@ class TriagePaywall extends ConsumerWidget {
               const Icon(Icons.lock_outline, size: 18, color: AppColors.muted),
               const SizedBox(width: 6),
               Expanded(
-                child: Text(l10n.triageUnlockLockedTitle,
-                    style: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                child: Text(
+                  l10n.triageUnlockLockedTitle,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.ink,
+                  ),
+                ),
               ),
             ],
           ),
@@ -93,7 +102,10 @@ class TriagePaywall extends ConsumerWidget {
               style: FilledButton.styleFrom(backgroundColor: AppColors.mint),
               child: busy
                   ? const SizedBox(
-                      height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
                   : Text(l10n.triageUnlockCta(price)),
             ),
           ],
@@ -103,17 +115,17 @@ class TriagePaywall extends ConsumerWidget {
   }
 
   Widget _skeletonLine({required double widthFactor}) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: FractionallySizedBox(
-          alignment: Alignment.centerLeft,
-          widthFactor: widthFactor,
-          child: Container(
-            height: 11,
-            decoration: BoxDecoration(
-              color: AppColors.line,
-              borderRadius: BorderRadius.circular(6),
-            ),
-          ),
+    padding: const EdgeInsets.only(bottom: 8),
+    child: FractionallySizedBox(
+      alignment: Alignment.centerLeft,
+      widthFactor: widthFactor,
+      child: Container(
+        height: 11,
+        decoration: BoxDecoration(
+          color: AppColors.line,
+          borderRadius: BorderRadius.circular(6),
         ),
-      );
+      ),
+    ),
+  );
 }

@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker_android/image_picker_android.dart';
+import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:tailtopia/app.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
@@ -14,6 +16,12 @@ import 'package:tailtopia/features/profile/domain/profile_prompt_state.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Android：改用系统 Photo Picker（纯图片选择 UI）。否则默认 ACTION_GET_CONTENT 在无 GMS
+  // 华为 EMUI 上会弹成文档选择器（「最近」文件）而非相册。不支持时插件自动回退，无副作用。
+  final picker = ImagePickerPlatform.instance;
+  if (picker is ImagePickerAndroid) {
+    picker.useAndroidPhotoPicker = true;
+  }
   // 本地化日期格式化的 locale 数据（id 非默认 locale，DateFormat 用前必须初始化）。
   await initializeDateFormatting();
   // 前端行为分析（PostHog）：runApp 前初始化，失败不阻断启动。
