@@ -64,6 +64,7 @@ dependencies:
   # 相册权限需按 Android SDK 分流（≤12 用 READ_EXTERNAL_STORAGE，13+ 用 READ_MEDIA_IMAGES），
   # 取 androidInfo.version.sdkInt 判定；否则 Android 12 设备请求 photos 恒 permanentlyDenied（死循环）。
   device_info_plus: ^11.1.0
+  package_info_plus: ^8.1.0
   image: ^4.3.0
   crypto: ^3.0.3
   # Story 2.7：系统分享菜单（名片链接）。
