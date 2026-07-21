@@ -18,7 +18,15 @@ Future<UnlockMethod?> showUnlockMethodSheet(
   WidgetRef ref, {
   required int priceIdr,
 }) async {
-  final int balance = ref.read(pawCoinProvider).value?.balance ?? 0;
+  // bug 20260721-322：await pawCoinProvider.future 拿加载完成的真实余额。
+  // 旧写法 `.value?.balance ?? 0` 在用户未进过钱包页（provider 仍 AsyncLoading）时恒读到 0，
+  // 误判余额不足显「Top up first」。与 id_card_page 的 `await ...future` 正例一致。
+  int balance;
+  try {
+    balance = (await ref.read(pawCoinProvider.future)).balance;
+  } catch (_) {
+    balance = 0; // 余额拉取失败 → 按不足降级（仍可免费/现金）
+  }
   FreeQuotaView? quota;
   try {
     quota = await ref.read(triageRepositoryProvider).fetchFreeQuota();
@@ -161,6 +169,7 @@ Future<void> runAiUnlockFlow(
     await showQrPaymentSheet(
       context,
       payload: st.payload!,
+      orderRef: st.payment?.token, // bug 326：支付号（客服对账）
       pollPaid: () async {
         final TriageResult r = await ref
             .read(triageRepositoryProvider)

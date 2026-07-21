@@ -5,6 +5,7 @@ import java.time.Instant;
 /** 兽医咨询订单列表行（Story 9.3，只读）。 */
 public record AdminConsultOrderRow(
         String orderToken,
+        String displayNo,
         long userId,
         long vetId,
         long amount,

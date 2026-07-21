@@ -17,6 +17,7 @@ import java.time.Instant;
 public record OrderSummaryView(
         String orderType,
         String orderToken,
+        String displayNo,
         String statusCode,
         String statusColor,
         Long amount,

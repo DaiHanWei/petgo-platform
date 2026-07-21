@@ -15,22 +15,27 @@ Future<bool> showQrPaymentSheet(
   BuildContext context, {
   required String payload,
   required Future<bool> Function() pollPaid,
+  String? orderRef,
 }) async {
   final bool? result = await showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
     isDismissible: false,
     showDragHandle: true,
-    builder: (BuildContext ctx) => _QrPaymentSheet(payload: payload, pollPaid: pollPaid),
+    builder: (BuildContext ctx) =>
+        _QrPaymentSheet(payload: payload, pollPaid: pollPaid, orderRef: orderRef),
   );
   return result ?? false;
 }
 
 class _QrPaymentSheet extends StatefulWidget {
-  const _QrPaymentSheet({required this.payload, required this.pollPaid});
+  const _QrPaymentSheet({required this.payload, required this.pollPaid, this.orderRef});
 
   final String payload;
   final Future<bool> Function() pollPaid;
+
+  /// 支付号（bug 326）：客服对账用，展示在二维码下方（可空）。
+  final String? orderRef;
 
   @override
   State<_QrPaymentSheet> createState() => _QrPaymentSheetState();
@@ -105,6 +110,14 @@ class _QrPaymentSheetState extends State<_QrPaymentSheet> {
                 backgroundColor: Colors.white,
               ),
             ),
+            // 支付号（bug 326）：客服对账用，可长按复制。
+            if ((widget.orderRef ?? '').isNotEmpty) ...[
+              const SizedBox(height: 12),
+              SelectableText('${l10n.orderNumberLabel}: ${widget.orderRef}',
+                  key: const ValueKey('qrPayOrderRef'),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+            ],
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,

@@ -70,6 +70,8 @@ class OrderDetailPage extends ConsumerWidget {
                 ],
               ),
               const SizedBox(height: AppSpacing.md),
+              // 人类可读订单号（bug 299），客服对账用；可长按选中复制。
+              if (d.displayNo.isNotEmpty) _infoLine(l10n.orderNumberLabel, d.displayNo, selectable: true),
               if (d.payChannel != null) _infoLine(l10n.orderChannelLabel, orderChannelText(d.payChannel)),
               _infoLine(l10n.orderAmountLabel, orderAmountText(l10n, d.amount)),
               if (d.coins != null) _infoLine(l10n.orderCoinsLabel, '${orderThousands(d.coins!)} koin'),
@@ -217,9 +219,11 @@ class OrderDetailPage extends ConsumerWidget {
   }
 
   /// 内联信息行「Label: value」（参考 0718 详情卡样式）。
-  Widget _infoLine(String label, String value) => Padding(
+  Widget _infoLine(String label, String value, {bool selectable = false}) => Padding(
         padding: const EdgeInsets.only(bottom: 8),
-        child: Text('$label: $value', style: AppTypography.body),
+        child: selectable
+            ? SelectableText('$label: $value', style: AppTypography.body)
+            : Text('$label: $value', style: AppTypography.body),
       );
 
   Widget _petBlock(BuildContext context, AppLocalizations l10n, OrderDetail d) {

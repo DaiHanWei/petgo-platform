@@ -274,6 +274,7 @@ class _IdCardPageState extends ConsumerState<IdCardPage> {
         final bool paid = await showQrPaymentSheet(
           context,
           payload: res.payload!,
+          orderRef: res.paymentToken, // bug 326：支付号（客服对账）
           pollPaid: () async {
             final IdCardData? card = await ref.refresh(idCardProvider.future);
             return card?.hdUnlocked ?? false;
@@ -557,7 +558,7 @@ class _HdPaywallSheetState extends State<_HdPaywallSheet> {
             const SizedBox(height: 10),
             _HdMethodTile(
               icon: Icons.qr_code_2,
-              title: 'QRIS / DANA',
+              title: 'QRIS',
               subtitle: 'Rp${_fmt(_priceIdr)}',
               selected: _selected == HdPayChannel.qris,
               onTap: () => setState(() => _selected = HdPayChannel.qris),

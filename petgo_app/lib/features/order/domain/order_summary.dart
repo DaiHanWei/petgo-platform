@@ -65,6 +65,7 @@ class OrderSummary {
   const OrderSummary({
     required this.orderType,
     required this.orderToken,
+    required this.displayNo,
     required this.statusCode,
     required this.statusColor,
     this.amount,
@@ -74,6 +75,8 @@ class OrderSummary {
 
   final OrderType orderType;
   final String orderToken;
+  /// 人类可读订单号（bug 299，PREFIX-yyyyMMdd-序号）。
+  final String displayNo;
 
   /// 状态码（前端本地化 + 图标/文案分支；如 IN_PROGRESS/COMPLETED/REFUNDING/COMPLETED_REFUND_REJECTED/PAID）。
   final String statusCode;
@@ -87,6 +90,7 @@ class OrderSummary {
   factory OrderSummary.fromJson(Map<String, dynamic> j) => OrderSummary(
         orderType: OrderType.fromCode(j['orderType'] as String?),
         orderToken: (j['orderToken'] ?? '') as String,
+        displayNo: (j['displayNo'] ?? '') as String,
         statusCode: (j['statusCode'] ?? '') as String,
         statusColor: OrderStatusColor.fromCode(j['statusColor'] as String?),
         amount: (j['amount'] as num?)?.toInt(),

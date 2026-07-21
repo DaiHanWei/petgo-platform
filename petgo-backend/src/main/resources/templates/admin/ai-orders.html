@@ -35,7 +35,7 @@
             </thead>
             <tbody>
             <tr th:each="o : ${orders}">
-                <td th:text="${o.orderToken}">tok</td>
+                <td th:text="${o.displayNo}">no</td>
                 <td th:text="${o.userId}">0</td>
                 <td th:text="${o.triageTaskId}">0</td>
                 <td th:text="${o.amount}">0</td>
