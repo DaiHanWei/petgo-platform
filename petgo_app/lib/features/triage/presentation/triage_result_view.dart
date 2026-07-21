@@ -20,8 +20,6 @@ bool _devArchiveShown = false;
 
 const Color _greenLight = Color(0xFF56D4A0);
 const Color _yellowLight = Color(0xFFFFD166);
-// 锁定态 header（0718 FR-43C：等级+详建捆绑锁）→ 琥珀渐变（premium-locked 观感，不泄露绿/黄）。
-const Color _lockedGoldLight = Color(0xFFF9C55A);
 // RINGKASAN GEJALA 卡按等级取浅色底 + 深色标题（原型 ai-result #FEF3DE/#8A5A00、ai-result-green #EDFBF4/#136B41）。
 const Color _yellowSummaryBg = Color(0xFFFEF3DE);
 const Color _yellowSummaryLabel = Color(0xFF8A5A00);
@@ -83,26 +81,17 @@ class TriageResultView extends ConsumerWidget {
       key: ValueKey(isYellow ? 'triageYellowPage' : 'triageGreenPage'),
       padding: EdgeInsets.zero,
       children: <Widget>[
-        // —— 等级 Header：锁定态=琥珀+锁图标+「Tingkat risiko terkunci」（藏绿/黄）；否则实色渐变等级 ——
-        if (locked)
-          _LevelHeader(
-            emoji: '',
-            locked: true,
-            gradient: const [AppColors.gold, _lockedGoldLight],
-            title: l10n.triageLockedRiskTitle,
-            subtitle: '',
-            onBack: done,
-          )
-        else
-          _LevelHeader(
-            emoji: isYellow ? '🟡' : '🟢',
-            gradient: isYellow
-                ? const [AppColors.triageYellow, _yellowLight]
-                : const [AppColors.triageGreen, _greenLight],
-            title: isYellow ? l10n.triageYellowHeadline : l10n.triageGreenHeadline,
-            subtitle: isYellow ? l10n.triageYellowSubhead : l10n.triageGreenSubhead,
-            onBack: done,
-          ),
+        // —— 等级 Header：始终用真实风险色 + 等级词（bug 20260720-308：风险等级免费展示，
+        // 只锁「详细护理建议」；不再用琥珀+锁图标隐藏绿/黄）。红色一律交棒 4.5，不入本视图。——
+        _LevelHeader(
+          emoji: isYellow ? '🟡' : '🟢',
+          gradient: isYellow
+              ? const [AppColors.triageYellow, _yellowLight]
+              : const [AppColors.triageGreen, _greenLight],
+          title: isYellow ? l10n.triageYellowHeadline : l10n.triageGreenHeadline,
+          subtitle: isYellow ? l10n.triageYellowSubhead : l10n.triageGreenSubhead,
+          onBack: done,
+        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
           child: Column(
@@ -111,10 +100,10 @@ class TriageResultView extends ConsumerWidget {
               // RINGKASAN GEJALA（症状摘要）。
               if (summary.isNotEmpty) ...<Widget>[
                 _SectionCard(
-                  // 锁定态用中性底/标题，避免摘要卡颜色泄露绿/黄等级。
+                  // 等级已在 header 免费展示（308），摘要卡随等级取色，无需再中性化避免泄露。
                   label: l10n.triageSummaryLabel,
-                  background: locked ? AppColors.cream2 : (isYellow ? _yellowSummaryBg : _greenSummaryBg),
-                  labelColor: locked ? AppColors.ink2 : (isYellow ? _yellowSummaryLabel : _greenSummaryLabel),
+                  background: isYellow ? _yellowSummaryBg : _greenSummaryBg,
+                  labelColor: isYellow ? _yellowSummaryLabel : _greenSummaryLabel,
                   child: Text(summary,
                       style: const TextStyle(fontSize: 13, height: 1.6, color: AppColors.ink)),
                 ),
@@ -321,7 +310,6 @@ class _LevelHeader extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onBack,
-    this.locked = false,
   });
 
   final String emoji;
@@ -329,9 +317,6 @@ class _LevelHeader extends StatelessWidget {
   final String title;
   final String subtitle;
   final VoidCallback onBack;
-
-  /// 锁定态（0718 FR-43C）：等级图标本身也锁——渲染锁图标替代 emoji，隐藏等级/副文。
-  final bool locked;
 
   @override
   Widget build(BuildContext context) {
@@ -383,10 +368,8 @@ class _LevelHeader extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    locked
-                        ? const Icon(Icons.lock_outline, size: 46, color: Colors.white)
-                        : Text(emoji,
-                            textAlign: TextAlign.center, style: const TextStyle(fontSize: 52)),
+                    Text(emoji,
+                        textAlign: TextAlign.center, style: const TextStyle(fontSize: 52)),
                     const SizedBox(height: 6),
                     Text(title,
                         textAlign: TextAlign.center,

@@ -21,7 +21,7 @@ class VetActivePage extends ConsumerStatefulWidget {
   ConsumerState<VetActivePage> createState() => _VetActivePageState();
 }
 
-class _VetActivePageState extends ConsumerState<VetActivePage> {
+class _VetActivePageState extends ConsumerState<VetActivePage> with WidgetsBindingObserver {
   List<VetActiveItem>? _items; // null = 首屏加载中
   bool _loading = true;
 
@@ -30,22 +30,51 @@ class _VetActivePageState extends ConsumerState<VetActivePage> {
   bool _refreshing = false;
   Timer? _reloadDebounce;
 
+  // 定时轮询兜底：用户刚支付成功生成的新会话此刻还没有任何 IM 消息进来，
+  // inboundSignals 不触发，列表会静默不动，直到 App 重启才拉到（bug 20260720-305）。
+  // 轮询保证兽医不必「杀后台重进」即可看到新会话。退后台停轮询省电。
+  static const Duration _pollInterval = Duration(seconds: 5);
+  Timer? _poll;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _reloadAll();
     // 工作台 IndexedStack 下本页常驻：跨 Tab 也能在收到消息时后台刷新角标。
     _inboundSub = ref.read(imServiceProvider).inboundSignals.listen((_) {
       _refreshUnread(); // 即时刷未读角标
       _scheduleReload(); // 节流重拉列表：捕获新会话进入 / 排序变化
     });
+    _startPoll();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _inboundSub?.cancel();
     _reloadDebounce?.cancel();
+    _poll?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 退后台停轮询省电；回前台立即静默拉一次再恢复轮询。
+    if (state == AppLifecycleState.resumed) {
+      _reloadAll(silent: true);
+      _startPoll();
+    } else {
+      _poll?.cancel();
+    }
+  }
+
+  /// 定时静默重拉进行中列表（不闪首屏加载圈），兜底捕获新支付成功的会话。
+  void _startPoll() {
+    _poll?.cancel();
+    _poll = Timer.periodic(_pollInterval, (_) {
+      if (mounted) _reloadAll(silent: true);
+    });
   }
 
   /// 入站消息节流重拉：连续消息只在停顿 2s 后打一次后端，静默更新（不闪首屏加载圈）。

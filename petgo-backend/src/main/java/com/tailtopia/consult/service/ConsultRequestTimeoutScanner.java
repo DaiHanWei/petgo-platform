@@ -40,13 +40,13 @@ public class ConsultRequestTimeoutScanner {
         }
     }
 
-    /** 支付窗超时作废接单回队重播（Story 3.3）。用户未在 1.5min 内支付 → 释放兽医、请求回 QUEUEING 再广播。 */
+    /** 支付窗超时 → 结束请求（bug 20260720-311）。用户未在支付窗内付款 → 释放兽医、删请求、落 failed(TIMEOUT)，不再回队重播。 */
     @Scheduled(fixedDelayString = "${petgo.consult.pay-window-scan-ms:30000}")
     public void scanPayWindow() {
         try {
-            int reverted = requestService.revertExpiredAcceptances();
-            if (reverted > 0) {
-                log.info("支付窗超时作废接单回队重播 count={}", reverted);
+            int ended = requestService.endExpiredAcceptances();
+            if (ended > 0) {
+                log.info("支付窗超时结束请求 count={}", ended);
             }
         } catch (RuntimeException e) {
             log.warn("支付窗超时扫描失败 cause={}", e.getClass().getSimpleName());

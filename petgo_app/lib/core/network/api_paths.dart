@@ -96,6 +96,9 @@ class ApiPaths {
   static String consultationPause(String token) => '$base/consultations/$token/pause';
   static String consultationResume(String token) => '$base/consultations/$token/resume';
   static String consultationCancel(String token) => '$base/consultations/$token/cancel';
+  // 排队超时「继续排队」延长 queue_deadline（bug 20260720-311）。
+  static String consultationExtendQueue(String token) =>
+      '$base/consultations/$token/extend-queue';
 
   /// 客服工单（Story 4.2，消费 4-1 后端）。建单 POST / 我的工单列表 GET / 详情 GET（owner 404）。
   static const String supportTickets = '$base/support-tickets';

@@ -37,6 +37,10 @@ class _VetWaitingPageState extends ConsumerState<VetWaitingPage> with WidgetsBin
   bool _navigating = false;
   bool _exitCancelDisabled = false;
 
+  // 排队超时「继续排队?」弹框（bug 20260720-311）：剩余 ≤20s 弹一次，用户选继续(延长)/取消。
+  static const int _queuePromptThreshold = 20;
+  bool _queuePromptOpen = false;
+
   @override
   void initState() {
     super.initState();
@@ -47,6 +51,7 @@ class _VetWaitingPageState extends ConsumerState<VetWaitingPage> with WidgetsBin
     _display = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       setState(_recomputeRemaining);
+      _maybePromptContinueQueue();
     });
   }
 
@@ -115,6 +120,57 @@ class _VetWaitingPageState extends ConsumerState<VetWaitingPage> with WidgetsBin
     _poll?.cancel();
     _display?.cancel();
     setState(() => _noVet = true);
+  }
+
+  /// 排队超时（剩余 ≤20s）→ 弹一次「是否继续排队」（bug 20260720-311）。继续=延长；取消=退。
+  void _maybePromptContinueQueue() {
+    if (_queuePromptOpen || _noVet || _navigating || !mounted) return;
+    if (_deadline == null || _remaining > _queuePromptThreshold) return;
+    _queuePromptOpen = true;
+    _showContinueQueuePrompt();
+  }
+
+  Future<void> _showContinueQueuePrompt() async {
+    final l10n = AppLocalizations.of(context);
+    final cont = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false, // 必须选一个，避免误关=取消
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.vetQueueTimeoutTitle),
+        content: Text(l10n.vetQueueTimeoutBody),
+        actions: [
+          TextButton(
+            key: const ValueKey('vetQueueTimeoutCancel'),
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(l10n.vetQueueTimeoutCancel),
+          ),
+          FilledButton(
+            key: const ValueKey('vetQueueTimeoutContinue'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(l10n.vetQueueTimeoutContinue),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (cont == true) {
+      await _extendQueue();
+    } else {
+      await _doCancel();
+    }
+  }
+
+  /// 继续排队：调延长端点顺延 deadline；已被 purge/接单（404）→ 转「暂无兽医」。
+  Future<void> _extendQueue() async {
+    try {
+      final s = await ref.read(consultRepositoryProvider).extendQueue(widget.requestToken);
+      if (!mounted) return;
+      if (s.queueDeadlineAt != null) _deadline = s.queueDeadlineAt;
+      _queuePromptOpen = false; // 复位：下轮逼近 deadline 再问
+      setState(_recomputeRemaining);
+    } catch (_) {
+      if (mounted) _triggerNoVet();
+    }
   }
 
   Future<void> _confirmCancel() async {

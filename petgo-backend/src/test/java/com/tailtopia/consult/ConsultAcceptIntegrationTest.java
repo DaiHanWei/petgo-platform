@@ -154,43 +154,37 @@ class ConsultAcceptIntegrationTest extends ApiIntegrationTest {
                 .andExpect(status().isUnauthorized());
     }
 
-    // ---- AC3：支付窗超时作废接单、回 QUEUEING 重播、释放兽医 ----
+    // ---- AC3：支付窗超时 → 结束请求（删）+ 释放兽医（bug 20260720-311，反转原回队重播 UX-DR14）----
 
     @Test
-    void expiredPayWindowRevertsToQueueingAndReleasesVet() {
+    void expiredPayWindowEndsRequestAndReleasesVet() {
         long vetId = vets.newActiveVet("超时释放医生").getId();
         // seed 已接单且支付窗已过期的行：先接单，再把 pay_deadline 拨回过去。
         ConsultRequest req = seedQueueing();
         requestService.acceptRequest(vetId, req.getRequestToken());
         // 直接 CAS 造过期支付窗（pay_deadline < now），并保持 BUSY。
         expirePayWindow(req.getId());
-        int rebroadcastBefore = requests.findById(req.getId()).orElseThrow().getRebroadcastCount();
 
-        int reverted = requestService.revertExpiredAcceptances();
+        int ended = requestService.endExpiredAcceptances();
 
-        assertThat(reverted).isGreaterThanOrEqualTo(1);
-        ConsultRequest after = requests.findById(req.getId()).orElseThrow();
-        assertThat(after.getState()).isEqualTo(ConsultRequestState.QUEUEING); // 回队
-        assertThat(after.getVetId()).isNull();                                 // 清 vet
-        assertThat(after.getPayDeadlineAt()).isNull();                         // 清支付窗
-        assertThat(after.getRebroadcastCount()).isEqualTo(rebroadcastBefore + 1); // 重播计数++
-        assertThat(after.getQueueDeadlineAt()).isAfter(Instant.now());         // 重开入队窗
-        assertThat(presence.isBusy(vetId)).isFalse();                          // 兽医已释放
+        assertThat(ended).isGreaterThanOrEqualTo(1);
+        assertThat(requests.findById(req.getId())).isEmpty(); // 请求已删（结束，不回队；落 failed(TIMEOUT)）
+        assertThat(presence.isBusy(vetId)).isFalse();          // 兽医已释放
     }
 
     @Test
-    void unexpiredAcceptanceAndQueueingUnaffectedByRevert() {
+    void unexpiredAcceptanceAndQueueingUnaffectedByEnd() {
         long vetId = vets.newActiveVet("未过期医生").getId();
-        // 未过期 ACCEPTED_AWAIT_PAY（pay_deadline 在未来）→ 不回退。
+        // 未过期 ACCEPTED_AWAIT_PAY（pay_deadline 在未来）→ 不结束。
         ConsultRequest accepted = seedQueueing();
         requestService.acceptRequest(vetId, accepted.getRequestToken());
         // 独立 QUEUEING 行 → 不受支付窗扫描影响（state 谓词）。
         ConsultRequest queueing = seedQueueing();
 
-        requestService.revertExpiredAcceptances();
+        requestService.endExpiredAcceptances();
 
         assertThat(requests.findById(accepted.getId()).orElseThrow().getState())
-                .isEqualTo(ConsultRequestState.ACCEPTED_AWAIT_PAY); // 未过期不回退
+                .isEqualTo(ConsultRequestState.ACCEPTED_AWAIT_PAY); // 未过期不结束
         assertThat(presence.isBusy(vetId)).isTrue();                // 兽医仍占用
         assertThat(requests.findById(queueing.getId()).orElseThrow().getState())
                 .isEqualTo(ConsultRequestState.QUEUEING);           // QUEUEING 不受影响

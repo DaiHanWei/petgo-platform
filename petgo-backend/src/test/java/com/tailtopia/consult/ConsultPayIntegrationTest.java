@@ -225,39 +225,23 @@ class ConsultPayIntegrationTest extends ApiIntegrationTest {
         assertThat(failedRequests.count()).isEqualTo(failedBefore + 1);     // 落 failed(SYSTEM_FAILURE)
     }
 
-    // ---- AC6：重播上限封顶 ----
+    // ---- AC6：支付窗超时 → 结束请求（bug 20260720-311，反转原回队重播；不论 rebroadcast_count 恒结束）----
 
     @Test
-    void rebroadcastCapDeletesAndRecordsTimeout() {
+    void payTimeoutEndsRequestAndRecordsTimeout() {
         long userId = newUser().getId();
         long vetId = uniqueVetId();
-        ConsultRequest req = seedAccepted(userId, vetId);
-        // 造「已重播 5 次 + 支付窗过期」——达上限，应彻底失败不回队。
-        ReflectionTestUtils.setField(req, "rebroadcastCount", 5);
+        ConsultRequest req = seedAccepted(userId, vetId); // rebroadcast 0
+        // 支付窗过期 → 应结束（删）、不回队。
         ReflectionTestUtils.setField(req, "payDeadlineAt", Instant.now().minus(Duration.ofSeconds(10)));
         requests.save(req);
         long failedBefore = failedRequests.count();
 
-        requestService.revertExpiredAcceptances();
+        requestService.endExpiredAcceptances();
 
-        assertThat(requests.findById(req.getId())).isEmpty();               // 删（不回队）
+        assertThat(requests.findById(req.getId())).isEmpty();               // 删（结束，不回队）
         assertThat(failedRequests.count()).isEqualTo(failedBefore + 1);     // failed(TIMEOUT)
         assertThat(presence.isBusy(vetId)).isFalse();                       // 释放兽医
-    }
-
-    @Test
-    void underCapRequeues(/* 3-3 回归 */) {
-        long userId = newUser().getId();
-        long vetId = uniqueVetId();
-        ConsultRequest req = seedAccepted(userId, vetId); // rebroadcast 0
-        ReflectionTestUtils.setField(req, "payDeadlineAt", Instant.now().minus(Duration.ofSeconds(10)));
-        requests.save(req);
-
-        requestService.revertExpiredAcceptances();
-
-        ConsultRequest after = requests.findById(req.getId()).orElseThrow();
-        assertThat(after.getState()).isEqualTo(ConsultRequestState.QUEUEING); // 回队
-        assertThat(after.getRebroadcastCount()).isEqualTo(1);                 // ++
     }
 
     // ---- AC7：暂停顺延（A-4）----
@@ -273,7 +257,7 @@ class ConsultPayIntegrationTest extends ApiIntegrationTest {
         ReflectionTestUtils.setField(paused, "payDeadlineAt", Instant.now().minus(Duration.ofSeconds(10)));
         requests.save(paused);
 
-        requestService.revertExpiredAcceptances();
+        requestService.endExpiredAcceptances();
 
         assertThat(requests.findById(req.getId()).orElseThrow().getState())
                 .isEqualTo(ConsultRequestState.ACCEPTED_AWAIT_PAY);          // 未被扫走

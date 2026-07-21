@@ -170,6 +170,14 @@ class ConsultRepository {
   /// 用户主动取消（`POST /cancel`，物理删无痕）。
   Future<void> cancelRequest(String token) => dio.post<void>(ApiPaths.consultationCancel(token));
 
+  /// 排队超时「继续排队」（`POST /extend-queue`，bug 20260720-311）：顺延 queue_deadline，返回新状态。
+  /// 请求已被 purge/接单 → 后端 404（调用方据此退出）。
+  Future<ConsultRequestStatus> extendQueue(String token) async {
+    final resp =
+        await dio.post<Map<String, dynamic>>(ApiPaths.consultationExtendQueue(token));
+    return ConsultRequestStatus.fromJson(resp.data!);
+  }
+
   /// 问诊历史（Story 5.8，AI + 兽医两类，游标分页）。
   Future<ConsultHistoryPage> history({String? cursor, int limit = 20}) async {
     final resp = await dio.get<Map<String, dynamic>>(

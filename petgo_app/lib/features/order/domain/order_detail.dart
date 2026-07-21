@@ -44,6 +44,7 @@ class OrderDetail {
     this.refundNetAmount,
     this.coins,
     this.triageTaskId,
+    this.consultSessionId,
   });
 
   final OrderType orderType;
@@ -71,6 +72,9 @@ class OrderDetail {
   final int? coins;
   final int? triageTaskId;
 
+  // 兽医：问诊会话 id（打开只读问诊确认单，bug 20260720-312；无会话→null）
+  final int? consultSessionId;
+
   static DateTime? _dt(dynamic v) => v == null ? null : DateTime.tryParse(v as String)?.toLocal();
 
   factory OrderDetail.fromJson(Map<String, dynamic> j) => OrderDetail(
@@ -92,5 +96,6 @@ class OrderDetail {
         refundNetAmount: (j['refundNetAmount'] as num?)?.toInt(),
         coins: (j['coins'] as num?)?.toInt(),
         triageTaskId: (j['triageTaskId'] as num?)?.toInt(),
+        consultSessionId: (j['consultSessionId'] as num?)?.toInt(),
       );
 }

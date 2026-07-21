@@ -87,6 +87,16 @@ public interface ConsultRequestRepository extends JpaRepository<ConsultRequest, 
     int deleteIfState(@Param("id") long id, @Param("state") ConsultRequestState state);
 
     /**
+     * 延长排队 deadline（CAS，bug 20260720-311）：仅当仍 {@code QUEUEING} 时把 {@code queue_deadline_at} 顺延。
+     * 返回行数（1=延成 / 0=已变态/已删，防延到已接单/已删的行）。
+     */
+    @Modifying
+    @Query("update ConsultRequest r set r.queueDeadlineAt = :newDeadline, r.updatedAt = CURRENT_TIMESTAMP "
+            + "where r.id = :id "
+            + "and r.state = com.tailtopia.consult.domain.ConsultRequestState.QUEUEING")
+    int extendQueueDeadlineIfQueueing(@Param("id") long id, @Param("newDeadline") Instant newDeadline);
+
+    /**
      * 支付窗过期接单扫描（Story 3.3，@Scheduled 调）：查处于给定 {@code state} 且 {@code pay_deadline_at} 已过期
      * <b>且未暂停</b>（Story 3.4：跳充值暂停中 {@code paused_at IS NOT NULL} 不判超时，防暂停被扫走）的行，
      * 供逐条 CAS 回退（需先读出以拿 {@code vet_id} 释放兽医）。返回 List（数量少，通常个位数）。
