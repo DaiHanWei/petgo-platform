@@ -45,6 +45,10 @@ public class User {
     @Column(name = "nickname", length = 20)
     private String nickname;
 
+    /** 一句话个性签名（bug 20260721-327，用户级，区别于宠物档案 intro）；≤60，可空。 */
+    @Column(name = "signature", length = 60)
+    private String signature;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "pet_status", length = 8)
     private PetStatus petStatus;
@@ -214,6 +218,14 @@ public class User {
     /** 头像替换（Story 7.1）：仅存应用自有 OSS URL。 */
     public void setAvatarUrl(String avatarUrl) {
         this.avatarUrl = avatarUrl;
+    }
+
+    public String getSignature() {
+        return signature;
+    }
+
+    public void setSignature(String signature) {
+        this.signature = signature;
     }
 
     public String getNickname() {

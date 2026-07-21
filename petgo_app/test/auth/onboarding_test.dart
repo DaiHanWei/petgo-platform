@@ -28,6 +28,9 @@ class _FakeMeRepository implements MeRepository {
       UserProfile(petStatus: petStatus, onboardingCompleted: true);
   @override
   Future<UserProfile> updateAvatar(String avatarUrl) async => UserProfile(avatarUrl: avatarUrl);
+  @override
+  Future<UserProfile> updateProfile({String? nickname, String? signature}) async =>
+      UserProfile(nickname: nickname, signature: signature);
 }
 
 /// 记录写端点调用，用于断言「返回键不建账号」（AC4）。
@@ -51,6 +54,12 @@ class _RecordingMeRepository implements MeRepository {
   Future<UserProfile> updateAvatar(String avatarUrl) async {
     writeCalls.add('avatar');
     return UserProfile(avatarUrl: avatarUrl);
+  }
+
+  @override
+  Future<UserProfile> updateProfile({String? nickname, String? signature}) async {
+    writeCalls.add('profile');
+    return UserProfile(nickname: nickname, signature: signature);
   }
 }
 

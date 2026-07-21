@@ -10,5 +10,5 @@ import jakarta.validation.constraints.Size;
  * </ul>
  */
 public record UpdateMeRequest(@Size(max = 20) String nickname, String petStatus,
-        @Size(max = 1024) String avatarUrl) {
+        @Size(max = 1024) String avatarUrl, @Size(max = 60) String signature) {
 }

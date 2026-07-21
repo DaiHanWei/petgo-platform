@@ -62,6 +62,12 @@ public class MeService {
             user.setAvatarUrl(url.isEmpty() ? null : url);
         }
 
+        if (req.signature() != null) {
+            // 一句话签名（bug 20260721-327）：空串 → 清空；≤60（@Size 双保险）。
+            String sig = req.signature().trim();
+            user.setSignature(sig.isEmpty() ? null : sig);
+        }
+
         users.save(user);
         return UserProfileResponse.from(user, hasPetProfile(userId));
     }
