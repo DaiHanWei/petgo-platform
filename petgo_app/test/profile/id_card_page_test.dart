@@ -133,9 +133,9 @@ void main() {
 
     await tester.tap(find.text('Unlock HD download'));
     await tester.pumpAndSettle();
-    // 新弹层：PawCoin + QRIS/DANA 方式卡 + 底部确认钮。
+    // 新弹层：PawCoin + QRIS 方式卡（bug 323 删 DANA 文字） + 底部确认钮。
     expect(find.text('PawCoin'), findsOneWidget);
-    expect(find.text('QRIS / DANA'), findsOneWidget);
+    expect(find.text('QRIS'), findsWidgets);
     expect(find.byKey(const ValueKey('hdPayConfirm')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('hdPayConfirm')));

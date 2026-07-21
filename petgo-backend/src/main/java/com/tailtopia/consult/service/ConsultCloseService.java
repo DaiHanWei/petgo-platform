@@ -200,8 +200,10 @@ public class ConsultCloseService {
         if (s.getVetId() == null) {
             return; // 无兽医（CLOSED 前应已接单，防御性守卫）
         }
-        Optional<ConsultOrder> found = orders.findFirstByUserIdAndVetIdAndStatus(
-                s.getUserId(), s.getVetId(), ConsultOrderStatus.IN_PROGRESS);
+        // bug 20260721-324：按本会话自身 consult_session_id 精确取，避免松匹配把另一场会话的收尾
+        // 误算到滞留的已付款单头上。免费直连流会话无订单 → empty（跳过）。
+        Optional<ConsultOrder> found = orders.findByConsultSessionIdAndStatus(
+                s.getId(), ConsultOrderStatus.IN_PROGRESS);
         if (found.isEmpty()) {
             return; // 免费直连流会话无 consult_orders → 跳过
         }

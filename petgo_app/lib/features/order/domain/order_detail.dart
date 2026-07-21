@@ -28,6 +28,7 @@ class OrderDetail {
   const OrderDetail({
     required this.orderType,
     required this.orderToken,
+    required this.displayNo,
     required this.statusCode,
     required this.statusColor,
     this.amount,
@@ -49,6 +50,8 @@ class OrderDetail {
 
   final OrderType orderType;
   final String orderToken;
+  /// 人类可读订单号（bug 299，PREFIX-yyyyMMdd-序号）。
+  final String displayNo;
   final String statusCode;
   final OrderStatusColor statusColor;
   final int? amount;
@@ -80,6 +83,7 @@ class OrderDetail {
   factory OrderDetail.fromJson(Map<String, dynamic> j) => OrderDetail(
         orderType: OrderType.fromCode(j['orderType'] as String?),
         orderToken: (j['orderToken'] ?? '') as String,
+        displayNo: (j['displayNo'] ?? '') as String,
         statusCode: (j['statusCode'] ?? '') as String,
         statusColor: OrderStatusColor.fromCode(j['statusColor'] as String?),
         amount: (j['amount'] as num?)?.toInt(),

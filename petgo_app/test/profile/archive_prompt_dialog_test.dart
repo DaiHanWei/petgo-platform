@@ -50,6 +50,9 @@ class _FakeMeRepo implements MeRepository {
 
   @override
   Future<UserProfile> updateAvatar(String avatarUrl) async => UserProfile(avatarUrl: avatarUrl);
+  @override
+  Future<UserProfile> updateProfile({String? nickname, String? signature}) async =>
+      UserProfile(nickname: nickname, signature: signature);
 }
 
 class _TestAuthController extends AuthController {

@@ -11,6 +11,9 @@ abstract class MeRepository {
   Future<UserProfile> updateNickname(String nickname);
   Future<UserProfile> updatePetStatus(String petStatus);
   Future<UserProfile> updateAvatar(String avatarUrl);
+
+  /// 一次保存昵称 + 一句话签名（bug 20260721-327，编辑资料抽屉用）。
+  Future<UserProfile> updateProfile({String? nickname, String? signature});
 }
 
 class DioMeRepository implements MeRepository {
@@ -32,6 +35,14 @@ class DioMeRepository implements MeRepository {
 
   @override
   Future<UserProfile> updateAvatar(String avatarUrl) => _patch({'avatarUrl': avatarUrl});
+
+  @override
+  Future<UserProfile> updateProfile({String? nickname, String? signature}) {
+    final body = <String, dynamic>{};
+    if (nickname != null) body['nickname'] = nickname;
+    if (signature != null) body['signature'] = signature;
+    return _patch(body);
+  }
 
   Future<UserProfile> _patch(Map<String, dynamic> body) async {
     final resp = await dio.patch<Map<String, dynamic>>(ApiPaths.me, data: body);

@@ -282,6 +282,13 @@ class _TriageUploadPageState extends ConsumerState<TriageUploadPage> {
             ],
           ),
         ),
+        const SizedBox(height: AppSpacing.sm),
+        // bug 20260721-289：症状页明确提示「每月首次免费」。
+        Center(
+          child: Text(l10n.triageFirstFreeHint,
+              style: const TextStyle(
+                  fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.mint)),
+        ),
         const SizedBox(height: AppSpacing.lg),
         SizedBox(
           width: double.infinity,

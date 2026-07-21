@@ -92,9 +92,10 @@ public class ConsultSuspensionService {
             return; // 已被处理（幂等）
         }
         Long vetId = s.getVetId();
+        // bug 20260721-324：按本会话 consult_session_id 精确取待退款订单，不用 (user,vet) 松匹配。
         ConsultOrder order = vetId == null ? null
-                : orders.findFirstByUserIdAndVetIdAndStatus(
-                        s.getUserId(), vetId, ConsultOrderStatus.IN_PROGRESS).orElse(null);
+                : orders.findByConsultSessionIdAndStatus(
+                        s.getId(), ConsultOrderStatus.IN_PROGRESS).orElse(null);
         if (order != null && orders.markRefunding(order.getId()) == 1) {
             // 本路拿到退款闸（另一路并发拿 0 → 不重复退）。
             refundByChannel(order);

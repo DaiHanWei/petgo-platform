@@ -26,7 +26,7 @@
             </thead>
             <tbody>
             <tr th:each="o : ${orders}">
-                <td th:text="${o.orderToken}">tok</td>
+                <td th:text="${o.displayNo}">no</td>
                 <td th:text="${o.userId}">0</td>
                 <td th:text="${o.vetId}">0</td>
                 <td th:text="${#numbers.formatInteger(o.amount, 1, 'COMMA')}">0</td>

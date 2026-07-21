@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.tailtopia.content.service.ContentService;
@@ -43,6 +44,7 @@ class TimelineServiceTest {
         contentService = Mockito.mock(ContentService.class);
         milestoneService = Mockito.mock(MilestoneService.class);
         when(profileService.hasProfile(1L)).thenReturn(true);
+        when(profileService.findByOwnerId(1L)).thenReturn(Optional.of(pet(PetType.DOG)));
         service = new TimelineService(profileService, contentService, healthProvider, milestoneService);
     }
 
@@ -67,6 +69,30 @@ class TimelineServiceTest {
         return p;
     }
 
+    private static PetProfile petWithId(PetType type, long id) {
+        PetProfile p = PetProfile.create(1L, type, "Rocky", null, "Shiba", null, null, "TOK");
+        try {
+            java.lang.reflect.Field f = PetProfile.class.getDeclaredField("id");
+            f.setAccessible(true);
+            f.set(p, id);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(e);
+        }
+        return p;
+    }
+
+    /** bug 20260721-271：成长时间线按当前宠物 petId 过滤（删档后旧帖 pet_id=NULL 不串入新宠物档案）。 */
+    @Test
+    void timelineFiltersGrowthByCurrentPetId() {
+        when(profileService.findByOwnerId(1L)).thenReturn(Optional.of(petWithId(PetType.DOG, 42L)));
+        when(healthProvider.getIfAvailable()).thenReturn(null);
+        when(contentService.findGrowthMoments(eq(1L), eq(42L), Mockito.any(), anyInt()))
+                .thenReturn(List.of());
+        service.getTimeline(1L, null, 20);
+        // 传的是 petId(42) 而非又传 ownerId(1) —— 证明成长帖已按当前宠物过滤。
+        verify(contentService).findGrowthMoments(eq(1L), eq(42L), Mockito.any(), anyInt());
+    }
+
     @Test
     void noProfileThrows404() {
         when(profileService.hasProfile(9L)).thenReturn(false);
@@ -76,7 +102,7 @@ class TimelineServiceTest {
     @Test
     void happyMomentsOnlyWhenHealthSourceAbsent() {
         when(healthProvider.getIfAvailable()).thenReturn(null); // 2.4 期无健康源
-        when(contentService.findGrowthMoments(eq(1L), Mockito.any(), anyInt()))
+        when(contentService.findGrowthMoments(eq(1L), anyLong(), Mockito.any(), anyInt()))
                 .thenReturn(List.of(moment(2, "2026-06-02T10:00:00Z"), moment(1, "2026-06-01T10:00:00Z")));
 
         TimelinePageResponse resp = service.getTimeline(1L, null, 20);
@@ -91,7 +117,7 @@ class TimelineServiceTest {
     void mergesAndSortsHappyAndHealthDesc() {
         HealthEventTimelineSource health = Mockito.mock(HealthEventTimelineSource.class);
         when(healthProvider.getIfAvailable()).thenReturn(health);
-        when(contentService.findGrowthMoments(eq(1L), Mockito.any(), anyInt()))
+        when(contentService.findGrowthMoments(eq(1L), anyLong(), Mockito.any(), anyInt()))
                 .thenReturn(List.of(moment(1, "2026-06-01T10:00:00Z")));
         when(health.recentHealthEvents(anyLong(), Mockito.any(), anyInt()))
                 .thenReturn(List.of(new HealthEventView(Instant.parse("2026-06-03T10:00:00Z"), "YELLOW", "咳嗽", "AI_TRIAGE", "triage-1")));
@@ -108,7 +134,7 @@ class TimelineServiceTest {
     @Test
     void hasMoreAndNextCursorWhenOverLimit() {
         when(healthProvider.getIfAvailable()).thenReturn(null);
-        when(contentService.findGrowthMoments(eq(1L), Mockito.any(), anyInt()))
+        when(contentService.findGrowthMoments(eq(1L), anyLong(), Mockito.any(), anyInt()))
                 .thenReturn(List.of(
                         moment(3, "2026-06-03T10:00:00Z"),
                         moment(2, "2026-06-02T10:00:00Z"),
@@ -133,7 +159,7 @@ class TimelineServiceTest {
     void timelineSortsByEventDateNotCreatedAt() {
         when(healthProvider.getIfAvailable()).thenReturn(null);
         // id=1 较晚创建但事件日期更早；id=2 较早创建但事件日期更晚 → 应按 event_date 倒序：2 在前。
-        when(contentService.findGrowthMoments(eq(1L), Mockito.any(), anyInt())).thenReturn(List.of(
+        when(contentService.findGrowthMoments(eq(1L), anyLong(), Mockito.any(), anyInt())).thenReturn(List.of(
                 momentEv(1, "2026-06-05T10:00:00Z", "2024-01-01", "a"),
                 momentEv(2, "2026-06-04T10:00:00Z", "2024-12-31", "b")));
 
@@ -152,7 +178,7 @@ class TimelineServiceTest {
         HealthEventTimelineSource health = Mockito.mock(HealthEventTimelineSource.class);
         when(healthProvider.getIfAvailable()).thenReturn(health);
         // 同一天 6/2 两条：先 created 的 img2a 应为格子首图；6/10 一条。
-        when(contentService.findGrowthMomentsInMonth(eq(1L), Mockito.any(), Mockito.any())).thenReturn(List.of(
+        when(contentService.findGrowthMomentsInMonth(eq(1L), anyLong(), Mockito.any(), Mockito.any())).thenReturn(List.of(
                 momentEv(10, "2026-06-02T08:00:00Z", "2026-06-02", "img2a"),
                 momentEv(11, "2026-06-02T09:00:00Z", "2026-06-02", "img2b"),
                 momentEv(12, "2026-06-10T09:00:00Z", "2026-06-10", "img10")));
@@ -182,7 +208,7 @@ class TimelineServiceTest {
         when(profileService.findByOwnerId(1L)).thenReturn(Optional.of(pet(PetType.CAT)));
         HealthEventTimelineSource health = Mockito.mock(HealthEventTimelineSource.class);
         when(healthProvider.getIfAvailable()).thenReturn(health);
-        when(contentService.findGrowthMomentsOnDate(eq(1L), eq(LocalDate.parse("2026-06-02"))))
+        when(contentService.findGrowthMomentsOnDate(eq(1L), anyLong(), eq(LocalDate.parse("2026-06-02"))))
                 .thenReturn(List.of(momentEv(10, "2026-06-02T08:00:00Z", "2026-06-02", "a")));
         when(health.healthEventsOnDay(eq(1L), Mockito.any(), Mockito.any()))
                 .thenReturn(List.of(new HealthEventView(Instant.parse("2026-06-02T07:00:00Z"), "GREEN", "z", "AI_TRIAGE", "triage-z")));
@@ -202,7 +228,7 @@ class TimelineServiceTest {
         when(profileService.findByOwnerId(1L)).thenReturn(Optional.of(pet(PetType.DOG)));
         HealthEventTimelineSource health = Mockito.mock(HealthEventTimelineSource.class);
         when(healthProvider.getIfAvailable()).thenReturn(health);
-        when(contentService.countGrowthMoments(1L)).thenReturn(7L);
+        when(contentService.countGrowthMoments(eq(1L), anyLong())).thenReturn(7L);
         when(health.countHealthEvents(1L)).thenReturn(3L);
         // 8.2 连带：里程碑改真供数（接 8.1 roster + completions）。
         when(milestoneService.getProgress(anyLong(), eq(PetType.DOG)))
@@ -220,7 +246,7 @@ class TimelineServiceTest {
     void statsMilestoneTotalForOtherPetIs15() {
         when(profileService.findByOwnerId(1L)).thenReturn(Optional.of(pet(PetType.OTHER)));
         when(healthProvider.getIfAvailable()).thenReturn(null);
-        when(contentService.countGrowthMoments(1L)).thenReturn(0L);
+        when(contentService.countGrowthMoments(eq(1L), anyLong())).thenReturn(0L);
         when(milestoneService.getProgress(anyLong(), eq(PetType.OTHER)))
                 .thenReturn(new MilestoneService.MilestoneProgress(0L, 15));
 

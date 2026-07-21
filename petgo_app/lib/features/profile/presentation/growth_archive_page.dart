@@ -9,7 +9,6 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/date_format.dart';
-import '../../../shared/widgets/design/baru_badge.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/pet_status_selector.dart';
 import '../../auth/data/me_repository.dart';
@@ -291,7 +290,6 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
               ),
             ),
           ),
-          const Positioned(top: -7, right: -6, child: BaruBadge()),
         ],
       );
 

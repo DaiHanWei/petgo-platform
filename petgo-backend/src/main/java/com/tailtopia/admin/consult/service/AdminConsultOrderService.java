@@ -88,7 +88,9 @@ public class AdminConsultOrderService {
     }
 
     private static AdminConsultOrderRow toRow(ConsultOrder o) {
-        return new AdminConsultOrderRow(o.getOrderToken(), o.getUserId(), o.getVetId(), o.getAmount(),
+        return new AdminConsultOrderRow(o.getOrderToken(),
+                com.tailtopia.order.dto.OrderDisplayNo.of(com.tailtopia.order.dto.OrderDisplayNo.VET_CONSULT, o.getId(), o.getCreatedAt()),
+                o.getUserId(), o.getVetId(), o.getAmount(),
                 o.getVetPayout(), statusCode(o), o.getRebroadcastCount(),
                 verifyStr(o.getAdminVerifyStatus()), o.getPaidAt(), o.getCreatedAt());
     }

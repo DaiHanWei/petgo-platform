@@ -90,8 +90,20 @@ public interface ConsultOrderRepository extends JpaRepository<ConsultOrder, Long
     /**
      * 会话完成定位待完成订单（Story 3.7）：按 {@code (user_id, vet_id, status)} 取。占用不变量（一人一时仅 1
      * 活跃 consult）保证 IN_PROGRESS 至多 1 单。免费直连流会话无订单 → empty（调用方跳过）。
+     *
+     * @deprecated bug 20260721-324：该「一人一时一活跃」不变量不成立（V1.0 免费直连流会话不进 consult_requests
+     *     占用校验），松匹配会把滞留的已付款单被同一 (user,vet) 的另一场会话收尾误标完成。改用
+     *     {@link #findByConsultSessionIdAndStatus} 按会话自身精确定位。
      */
+    @Deprecated
     Optional<ConsultOrder> findFirstByUserIdAndVetIdAndStatus(long userId, long vetId,
+            ConsultOrderStatus status);
+
+    /**
+     * 会话完成/中断/退款定位订单（bug 20260721-324）：按订单自身的 {@code consult_session_id} 精确取，
+     * 彻底解耦「哪场会话收尾」与「完成哪笔订单」。会话开始时 {@code markSessionStarted} 已回填该列。
+     */
+    Optional<ConsultOrder> findByConsultSessionIdAndStatus(long consultSessionId,
             ConsultOrderStatus status);
 
     /**

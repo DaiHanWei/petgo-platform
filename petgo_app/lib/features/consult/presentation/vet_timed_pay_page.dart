@@ -47,6 +47,7 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
   bool _navigating = false;
   bool _awaitingCash = false; // PAYMENT_REQUIRED 后进「等待到账」态
   String? _qrPayload; // QRIS 二维码载荷（现金态本地生成二维码）
+  String? _payRef; // 支付号（bug 326，客服对账）
 
   @override
   void initState() {
@@ -128,9 +129,20 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
   Future<void> _pay() async {
     if (_paying) return;
     final l10n = AppLocalizations.of(context);
-    if (_pawInsufficient) {
-      await _topUp(); // PawCoin 不足 → 跳充值（暂停顺延）
-      return;
+    // bug 20260721-322 同类：付款前 await 真实余额，避免 pawCoinProvider 未加载完时
+    // 同步读到 0 → 误判 PawCoin 不足 → 把有钱用户错误地跳去充值页。
+    if (_channel == 'PAWCOIN') {
+      int balance;
+      try {
+        balance = (await ref.read(pawCoinProvider.future)).balance;
+      } catch (_) {
+        balance = 0; // 余额拉取失败 → 按不足降级跳充值
+      }
+      if (!mounted) return;
+      if (balance < kVetConsultPriceIdr) {
+        await _topUp(); // PawCoin 不足 → 跳充值（暂停顺延）
+        return;
+      }
     }
     setState(() => _paying = true);
     try {
@@ -149,6 +161,7 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
           _paying = false;
           _awaitingCash = true;
           _qrPayload = result.payload;
+          _payRef = result.payment?.token;
         });
       }
     } on DioException catch (e) {
@@ -504,6 +517,15 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
                     child: CircularProgressIndicator(color: AppColors.mint),
                   ),
           ),
+          if ((_payRef ?? '').isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Center(
+              child: SelectableText(
+                  '${AppLocalizations.of(context).orderNumberLabel}: $_payRef',
+                  key: const ValueKey('vetPayOrderRef'),
+                  style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+            ),
+          ],
           const SizedBox(height: 28),
           // 主动取消 → 后端删 request + 置 intent FAILED（彻底结束，不残留后台列表）。
           OutlinedButton(

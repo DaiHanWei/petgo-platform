@@ -88,7 +88,7 @@ class AvatarModerationIntegrationTest extends ApiIntegrationTest {
         long uid = u.getId();
 
         // 换头像为违规图（stub-porn → IMAGE_BLOCKED）→ 先放行立即生效 + 异步送审入队标 HIGH（B3/B7）。
-        meService.updateMe(uid, new UpdateMeRequest(null, null, VIOLATION_AVATAR));
+        meService.updateMe(uid, new UpdateMeRequest(null, null, VIOLATION_AVATAR, null));
 
         AvatarReview rec = onlyReview(AvatarSubjectType.USER_AVATAR, uid);
         assertThat(rec.getStatus()).isEqualTo(AvatarReviewStatus.MANUAL_PENDING);
@@ -120,7 +120,7 @@ class AvatarModerationIntegrationTest extends ApiIntegrationTest {
         User u = newUser();
         long uid = u.getId();
 
-        meService.updateMe(uid, new UpdateMeRequest(null, null, NORMAL_AVATAR));
+        meService.updateMe(uid, new UpdateMeRequest(null, null, NORMAL_AVATAR, null));
 
         AvatarReview rec = onlyReview(AvatarSubjectType.USER_AVATAR, uid);
         assertThat(rec.getStatus()).isEqualTo(AvatarReviewStatus.AUTO_PASSED); // B5
@@ -135,12 +135,12 @@ class AvatarModerationIntegrationTest extends ApiIntegrationTest {
         User u = newUser();
         long uid = u.getId();
 
-        meService.updateMe(uid, new UpdateMeRequest(null, null, VIOLATION_AVATAR));
+        meService.updateMe(uid, new UpdateMeRequest(null, null, VIOLATION_AVATAR, null));
         AvatarReview first = onlyReview(AvatarSubjectType.USER_AVATAR, uid);
         assertThat(first.getStatus()).isEqualTo(AvatarReviewStatus.MANUAL_PENDING);
 
         // 重传新头像 → 旧在途记录陈旧作废（RESOLVED/STALE_DISCARDED、移出队列），新记录重新送审（B10/B11）。
-        meService.updateMe(uid, new UpdateMeRequest(null, null, NORMAL_AVATAR));
+        meService.updateMe(uid, new UpdateMeRequest(null, null, NORMAL_AVATAR, null));
 
         AvatarReview reloadedFirst = reviews.findById(first.getId()).orElseThrow();
         assertThat(reloadedFirst.getStatus()).isEqualTo(AvatarReviewStatus.RESOLVED);

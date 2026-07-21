@@ -73,7 +73,9 @@ public class AdminAiOrderService {
     }
 
     private static AdminAiOrderRow toRow(AiConsultOrder o) {
-        return new AdminAiOrderRow(o.getOrderToken(), o.getUserId(), o.getTriageTaskId(),
+        return new AdminAiOrderRow(o.getOrderToken(),
+                com.tailtopia.order.dto.OrderDisplayNo.of(com.tailtopia.order.dto.OrderDisplayNo.AI_UNLOCK, o.getId(), o.getCreatedAt()),
+                o.getUserId(), o.getTriageTaskId(),
                 o.getAmount(), o.getPayChannel().name(), o.getStatus().name(),
                 o.getPaidAt(), o.getCreatedAt());
     }

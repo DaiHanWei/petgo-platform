@@ -4,6 +4,7 @@ import com.tailtopia.consult.domain.ConsultOrder;
 import com.tailtopia.consult.domain.ConsultOrderStatus;
 import com.tailtopia.consult.repository.ConsultOrderRepository;
 import com.tailtopia.order.dto.OrderDetailView;
+import com.tailtopia.order.dto.OrderDisplayNo;
 import com.tailtopia.order.dto.OrderPage;
 import com.tailtopia.order.dto.OrderRefundStage;
 import com.tailtopia.order.dto.OrderStatusColor;
@@ -154,7 +155,8 @@ public class OrderCenterService {
                 refundNet = r.getNetAmount();
             }
         }
-        return new OrderDetailView(OrderType.VET_CONSULT.name(), o.getOrderToken(), statusCode, color.name(),
+        return new OrderDetailView(OrderType.VET_CONSULT.name(), o.getOrderToken(),
+                OrderDisplayNo.of(OrderDisplayNo.VET_CONSULT, o.getId(), o.getCreatedAt()), statusCode, color.name(),
                 o.getAmount(), o.getPayChannel() == null ? null : o.getPayChannel().name(),
                 o.getCreatedAt(), o.getPaidAt(),
                 petDeleted ? null : pet.getName(),
@@ -166,7 +168,8 @@ public class OrderCenterService {
     }
 
     private OrderDetailView aiDetail(AiConsultOrder o) {
-        return new OrderDetailView(OrderType.AI_UNLOCK.name(), o.getOrderToken(), "COMPLETED",
+        return new OrderDetailView(OrderType.AI_UNLOCK.name(), o.getOrderToken(),
+                OrderDisplayNo.of(OrderDisplayNo.AI_UNLOCK, o.getId(), o.getCreatedAt()), "COMPLETED",
                 OrderStatusColor.SUCCESS.name(), o.getAmount(),
                 o.getPayChannel() == null ? null : o.getPayChannel().name(),
                 o.getCreatedAt(), o.getPaidAt(),
@@ -178,7 +181,8 @@ public class OrderCenterService {
         boolean paid = i.getStatus() == PaymentStatus.PAID;
         String statusCode = paid ? "PAID" : "PENDING";
         String color = (paid ? OrderStatusColor.SUCCESS : OrderStatusColor.WARN).name();
-        return new OrderDetailView(OrderType.PAWCOIN_TOPUP.name(), i.getPublicToken(), statusCode,
+        return new OrderDetailView(OrderType.PAWCOIN_TOPUP.name(), i.getPublicToken(),
+                OrderDisplayNo.of(OrderDisplayNo.TOPUP, i.getId(), i.getCreatedAt()), statusCode,
                 color, i.getAmount(),
                 i.getChannel() == null ? null : i.getChannel().name(),
                 i.getCreatedAt(), null,
@@ -202,7 +206,8 @@ public class OrderCenterService {
 
     private OrderSummaryView mapVet(ConsultOrder o) {
         String statusCode = vetStatusCode(o);
-        return new OrderSummaryView(OrderType.VET_CONSULT.name(), o.getOrderToken(), statusCode,
+        return new OrderSummaryView(OrderType.VET_CONSULT.name(), o.getOrderToken(),
+                OrderDisplayNo.of(OrderDisplayNo.VET_CONSULT, o.getId(), o.getCreatedAt()), statusCode,
                 vetStatusColor(o.getStatus()).name(), o.getAmount(),
                 o.getPayChannel() == null ? null : o.getPayChannel().name(), o.getCreatedAt());
     }
@@ -227,21 +232,24 @@ public class OrderCenterService {
 
     private OrderSummaryView mapAi(AiConsultOrder o) {
         // 仅 COMPLETED 入订单中心。
-        return new OrderSummaryView(OrderType.AI_UNLOCK.name(), o.getOrderToken(), "COMPLETED",
+        return new OrderSummaryView(OrderType.AI_UNLOCK.name(), o.getOrderToken(),
+                OrderDisplayNo.of(OrderDisplayNo.AI_UNLOCK, o.getId(), o.getCreatedAt()), "COMPLETED",
                 OrderStatusColor.SUCCESS.name(), o.getAmount(),
                 o.getPayChannel() == null ? null : o.getPayChannel().name(), o.getCreatedAt());
     }
 
     private OrderSummaryView mapTopup(PaymentIntent i) {
         // 仅 PAID 入订单中心（充值凭证）。对外 token 用 public_token。
-        return new OrderSummaryView(OrderType.PAWCOIN_TOPUP.name(), i.getPublicToken(), "PAID",
+        return new OrderSummaryView(OrderType.PAWCOIN_TOPUP.name(), i.getPublicToken(),
+                OrderDisplayNo.of(OrderDisplayNo.TOPUP, i.getId(), i.getCreatedAt()), "PAID",
                 OrderStatusColor.SUCCESS.name(), i.getAmount(),
                 i.getChannel() == null ? null : i.getChannel().name(), i.getCreatedAt());
     }
 
     private OrderSummaryView mapTopupPending(PaymentIntent i) {
         // 待支付充值（bug 20260720-313）：WARN 徽章 + PENDING 状态，前端据此展示「继续充值」入口。
-        return new OrderSummaryView(OrderType.PAWCOIN_TOPUP.name(), i.getPublicToken(), "PENDING",
+        return new OrderSummaryView(OrderType.PAWCOIN_TOPUP.name(), i.getPublicToken(),
+                OrderDisplayNo.of(OrderDisplayNo.TOPUP, i.getId(), i.getCreatedAt()), "PENDING",
                 OrderStatusColor.WARN.name(), i.getAmount(),
                 i.getChannel() == null ? null : i.getChannel().name(), i.getCreatedAt());
     }

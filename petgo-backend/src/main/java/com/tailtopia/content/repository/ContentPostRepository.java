@@ -29,17 +29,21 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
     /** 后台用户详情（Story 3.1）：某作者全部内容（含已软删，运营视角），createdAt 倒序。 */
     List<ContentPost> findByAuthorIdOrderByCreatedAtDesc(long authorId);
 
-    /** 成长时间线读：某作者某类型未删内容，createdAt 倒序游标分页（Story 2.4）。 */
-    List<ContentPost> findByAuthorIdAndTypeAndDeletedAtIsNullAndCreatedAtLessThanOrderByCreatedAtDesc(
-            long authorId, ContentType type, Instant before, Pageable pageable);
+    /**
+     * 成长时间线读：某作者某宠物某类型未删内容，createdAt 倒序游标分页（Story 2.4）。
+     * bug 20260721-271：按 petId 过滤——删宠档后 detachPet 把旧帖 pet_id 置 NULL，
+     * 不加 petId 会让 NULL 旧帖漏进新宠物档案（串档）。
+     */
+    List<ContentPost> findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndCreatedAtLessThanOrderByCreatedAtDesc(
+            long authorId, long petId, ContentType type, Instant before, Pageable pageable);
 
-    /** 日历月度聚合（Story 2.4 R2 · F9）：某作者某类型未删内容，event_date 落 [from,to]，按 event_date 升、created_at 升。 */
-    List<ContentPost> findByAuthorIdAndTypeAndDeletedAtIsNullAndEventDateBetweenOrderByEventDateAscCreatedAtAsc(
-            long authorId, ContentType type, LocalDate from, LocalDate to);
+    /** 日历月度聚合（Story 2.4 R2 · F9）：某作者某宠物某类型未删内容，event_date 落 [from,to]，按 event_date 升、created_at 升（bug 271 加 petId）。 */
+    List<ContentPost> findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndEventDateBetweenOrderByEventDateAscCreatedAtAsc(
+            long authorId, long petId, ContentType type, LocalDate from, LocalDate to);
 
-    /** 当天详情（Story 2.4 R2 · F9）：某作者某类型未删内容，指定 event_date，按 created_at 升序（正序）。 */
-    List<ContentPost> findByAuthorIdAndTypeAndDeletedAtIsNullAndEventDateOrderByCreatedAtAsc(
-            long authorId, ContentType type, LocalDate eventDate);
+    /** 当天详情（Story 2.4 R2 · F9）：某作者某宠物某类型未删内容，指定 event_date，按 created_at 升序（bug 271 加 petId）。 */
+    List<ContentPost> findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndEventDateOrderByCreatedAtAsc(
+            long authorId, long petId, ContentType type, LocalDate eventDate);
 
     /**
      * 名片快乐时刻流（Story 2.6 AC7 · F9）：某作者某类型未删内容，按 event_date 倒序取最近 N。
@@ -48,9 +52,13 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
     List<ContentPost> findByAuthorIdAndTypeAndDeletedAtIsNullAndStatusOrderByEventDateDescCreatedAtDesc(
             long authorId, ContentType type, PostStatus status, Pageable pageable);
 
-    /** 统计：某作者某类型未删且已发布内容数（Story 2.4 AC5 统计栏快乐时刻数）。 */
+    /** 统计：某作者某类型未删且已发布内容数（里程碑计数 Story 8.3，按作者跨宠计）。 */
     long countByAuthorIdAndTypeAndDeletedAtIsNullAndStatus(
             long authorId, ContentType type, PostStatus status);
+
+    /** 统计：某作者某宠物某类型未删且已发布内容数（Story 2.4 AC5 档案统计栏；bug 271 按 petId 计，删档后不含 NULL 旧帖）。 */
+    long countByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndStatus(
+            long authorId, long petId, ContentType type, PostStatus status);
 
     /**
      * 「我的发布」（Story 7.1，FR-36）：当前作者未软删的全部内容（三类混合），keyset 游标倒序。

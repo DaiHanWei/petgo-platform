@@ -55,9 +55,10 @@ public class ConsultInterruptService {
         List<ConsultSession> active = sessions.findByVetIdAndStatusIn(
                 vetId, List.of(SessionStatus.IN_PROGRESS, SessionStatus.PENDING_CLOSE));
         for (ConsultSession s : active) {
+            // bug 20260721-324：按本会话 consult_session_id 精确判是否付费单，不用松匹配。
             boolean paid = s.getStatus() == SessionStatus.IN_PROGRESS
-                    && orders.findFirstByUserIdAndVetIdAndStatus(
-                            s.getUserId(), vetId, ConsultOrderStatus.IN_PROGRESS).isPresent();
+                    && orders.findByConsultSessionIdAndStatus(
+                            s.getId(), ConsultOrderStatus.IN_PROGRESS).isPresent();
             if (paid) {
                 // Story 3.8（H-5）：付费会话挂起 15min，不即时中断（用户可逃生/等超时强制结束+退款）。
                 s.suspend(Instant.now().plus(Duration.ofSeconds(SUSPEND_SECONDS)));

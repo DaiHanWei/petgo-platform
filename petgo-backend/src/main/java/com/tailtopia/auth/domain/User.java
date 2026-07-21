@@ -56,6 +56,9 @@ public class User {
     /** 语言偏好（bug 20260625-105）：由 App 请求 Accept-Language 捕获，'id'/'en'；空=默认 id。供系统推送文案本地化。 */
     @Column(name = "locale", length = 8)
     private String locale;
+    /** 一句话个性签名（bug 20260721-327，用户级，区别于宠物档案 intro）；≤60，可空。 */
+    @Column(name = "signature", length = 60)
+    private String signature;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "pet_status", length = 8)
@@ -243,6 +246,14 @@ public class User {
     /** 语言偏好（bug 20260625-105）：'id'/'en'，由 Accept-Language 捕获。 */
     public void setLocale(String locale) {
         this.locale = locale;
+    }
+
+    public String getSignature() {
+        return signature;
+    }
+
+    public void setSignature(String signature) {
+        this.signature = signature;
     }
 
     public String getNickname() {

@@ -117,7 +117,9 @@ class MePage extends ConsumerWidget {
     final controller = TextEditingController(
       text: profile?.nickname ?? profile?.displayName ?? '',
     );
-    final newName = await showModalBottomSheet<String>(
+    // bug 20260721-327：一句话个性签名（用户级）。
+    final sigController = TextEditingController(text: profile?.signature ?? '');
+    final result = await showModalBottomSheet<({String nickname, String signature})>(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.surface,
@@ -154,30 +156,35 @@ class MePage extends ConsumerWidget {
               style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 20),
-            // 头像区（展示 + Ganti Foto 占位，头像上传本期降级）。
+            // 头像区（展示 + Ganti Foto 换头像）。bug 20260721-287：接真实换头像流程
+            // （原为「待接入」假 toast，但 _changeAvatar 上传流程本已实现，点头像本体即用）。
             Center(
-              child: Column(
-                children: [
-                  _InitialAvatar(
-                    avatarUrl: profile?.avatarUrl,
-                    nickname: profile?.nickname ?? '',
-                    radius: 38,
-                  ),
-                  const SizedBox(height: 8),
-                  TextButton(
-                    key: const ValueKey('meEditPhoto'),
-                    onPressed: () {
-                      showAppToast(ctx, l10n.helpComingSoon);
-                    },
-                    child: Text(
-                      l10n.meEditPhotoChange,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.mint,
+              child: Consumer(
+                builder: (ctx, ref, _) {
+                  // 实时头像：换成功后 applyProfile 更新 authController，预览随之刷新。
+                  final p = ref.watch(authControllerProvider).profile;
+                  return Column(
+                    children: [
+                      _InitialAvatar(
+                        avatarUrl: p?.avatarUrl,
+                        nickname: p?.nickname ?? '',
+                        radius: 38,
                       ),
-                    ),
-                  ),
-                ],
+                      const SizedBox(height: 8),
+                      TextButton(
+                        key: const ValueKey('meEditPhoto'),
+                        onPressed: () => _changeAvatar(ctx, ref),
+                        child: Text(
+                          l10n.meEditPhotoChange,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.mint,
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
             const SizedBox(height: 14),
@@ -222,6 +229,40 @@ class MePage extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 14),
+            // 一句话个性签名（bug 20260721-327）。
+            Text(
+              l10n.meEditSignatureLabel.toUpperCase(),
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.4,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            TextField(
+              key: const ValueKey('signatureField'),
+              controller: sigController,
+              maxLength: 60,
+              maxLines: 2,
+              minLines: 1,
+              decoration: InputDecoration(
+                counterText: '',
+                hintText: l10n.meEditSignatureHint,
+                filled: true,
+                fillColor: AppColors.surface,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppColors.mint, width: 1.5),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppColors.mint, width: 1.5),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
             // 邮箱（只读）。
             Text(
               l10n.meEditEmailLabel.toUpperCase(),
@@ -252,7 +293,8 @@ class MePage extends ConsumerWidget {
             const SizedBox(height: 22),
             FilledButton(
               key: const ValueKey('meEditSaveButton'),
-              onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+              onPressed: () => Navigator.of(ctx).pop(
+                  (nickname: controller.text.trim(), signature: sigController.text.trim())),
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.mint,
                 foregroundColor: AppColors.onAccent,
@@ -289,11 +331,11 @@ class MePage extends ConsumerWidget {
         ),
       ),
     );
-    if (newName == null || newName.isEmpty || !context.mounted) return;
+    if (result == null || result.nickname.isEmpty || !context.mounted) return;
     try {
       final updated = await ref
           .read(meRepositoryProvider)
-          .updateNickname(newName);
+          .updateProfile(nickname: result.nickname, signature: result.signature);
       ref.read(authControllerProvider.notifier).applyProfile(updated);
     } catch (_) {
       if (context.mounted) {
@@ -699,6 +741,17 @@ class _ProfileHeadCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  // 一句话个性签名（bug 20260721-327）。
+                  if ((profile?.signature ?? '').isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      profile!.signature!,
+                      key: const ValueKey('meSignature'),
+                      style: AppTypography.caption,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                   if (email.isNotEmpty) ...[
                     const SizedBox(height: 2),
                     Text(
