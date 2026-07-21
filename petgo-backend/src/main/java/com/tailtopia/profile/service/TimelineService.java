@@ -51,17 +51,15 @@ public class TimelineService {
 
     @Transactional(readOnly = true)
     public TimelinePageResponse getTimeline(long ownerId, String cursor, int limit) {
-        // 需有档案；无则 404（前端据此渲染空态）。
-        if (!profileService.hasProfile(ownerId)) {
-            throw AppException.notFound("尚未创建宠物档案");
-        }
+        // 需有档案；无则 404（前端据此渲染空态）。取 petId 供成长帖按当前宠物过滤（bug 271）。
+        PetProfile profile = requireProfile(ownerId);
         int pageSize = Math.min(Math.max(limit, 1), MAX_LIMIT);
         Instant before = parseCursor(cursor);
         // 各源多取一条用于跨源合并的稳健性（取 pageSize+1）。
         int fetch = pageSize + 1;
 
         List<TimelineItemResponse> merged = new ArrayList<>();
-        for (GrowthMomentView g : contentService.findGrowthMoments(ownerId, before, fetch)) {
+        for (GrowthMomentView g : contentService.findGrowthMoments(ownerId, profile.getId(), before, fetch)) {
             merged.add(TimelineItemResponse.happyMoment(
                     g.id(), g.createdAt(), g.eventDate(), g.imageUrls(), g.text()));
         }
@@ -90,7 +88,7 @@ public class TimelineService {
      */
     @Transactional(readOnly = true)
     public CalendarMonthResponse getCalendarMonth(long ownerId, int year, int month) {
-        requireProfile(ownerId);
+        PetProfile profile = requireProfile(ownerId);
         YearMonth ym = YearMonth.of(year, month);
         LocalDate from = ym.atDay(1);
         LocalDate to = ym.atEndOfMonth();
@@ -98,7 +96,7 @@ public class TimelineService {
         // day -> cell（TreeMap 保证 day 升序）。
         Map<Integer, CalendarMonthResponse.DayCell> byDay = new TreeMap<>();
         // 快乐时刻已按 event_date 升、created_at 升排序 → 每日首次出现即最早 created_at。
-        for (GrowthMomentView g : contentService.findGrowthMomentsInMonth(ownerId, from, to)) {
+        for (GrowthMomentView g : contentService.findGrowthMomentsInMonth(ownerId, profile.getId(), from, to)) {
             if (g.eventDate() == null) {
                 continue; // 防御：非 GROWTH_MOMENT 不应出现，但 eventDate 必非空
             }
@@ -134,9 +132,9 @@ public class TimelineService {
      */
     @Transactional(readOnly = true)
     public DayDetailResponse getDayDetail(long ownerId, LocalDate date) {
-        requireProfile(ownerId);
+        PetProfile profile = requireProfile(ownerId);
         List<TimelineItemResponse> items = new ArrayList<>();
-        for (GrowthMomentView g : contentService.findGrowthMomentsOnDate(ownerId, date)) {
+        for (GrowthMomentView g : contentService.findGrowthMomentsOnDate(ownerId, profile.getId(), date)) {
             items.add(TimelineItemResponse.happyMoment(
                     g.id(), g.createdAt(), g.eventDate(), g.imageUrls(), g.text()));
         }
@@ -159,7 +157,7 @@ public class TimelineService {
     @Transactional(readOnly = true)
     public ArchiveStatsResponse getStats(long ownerId) {
         PetProfile profile = requireProfile(ownerId);
-        long happy = contentService.countGrowthMoments(ownerId);
+        long happy = contentService.countGrowthMoments(ownerId, profile.getId());
         HealthEventTimelineSource health = healthSource.getIfAvailable();
         long consult = health == null ? 0L : health.countHealthEvents(ownerId);
         MilestoneService.MilestoneProgress progress =
