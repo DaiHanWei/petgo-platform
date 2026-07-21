@@ -645,6 +645,8 @@
   "notificationEmptyHint": "You'll get notified about likes, comments, and consultation updates.",
   "notificationLoadFailed": "Couldn't load notifications",
   "notificationLoadRetry": "Retry",
+  "notificationExpand": "Expand",
+  "notificationCollapse": "Collapse",
   "notifyTypeVetReply": "Vet replied",
   "notifyTypeConsultClosed": "Consultation ended",
   "notifyTypeContentLiked": "New like",

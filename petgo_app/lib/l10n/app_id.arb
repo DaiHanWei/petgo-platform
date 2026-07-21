@@ -568,6 +568,8 @@
   "notificationEmptyHint": "Kamu akan menerima notifikasi tentang suka, komentar, dan pembaruan konsultasi.",
   "notificationLoadFailed": "Gagal memuat notifikasi",
   "notificationLoadRetry": "Coba lagi",
+  "notificationExpand": "Lihat semua",
+  "notificationCollapse": "Ringkas",
   "notifyTypeVetReply": "Dokter hewan membalas",
   "notifyTypeConsultClosed": "Konsultasi selesai",
   "notifyTypeContentLiked": "Suka baru",
