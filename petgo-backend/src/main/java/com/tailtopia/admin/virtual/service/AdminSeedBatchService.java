@@ -17,8 +17,13 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * 轻量批量种子发布（Story 9.8 Part 2，AB-1.1-02；用户 2026-07-14 定「复用 seed-post + 虚拟账号」轻量方案）。
@@ -46,6 +51,37 @@ public class AdminSeedBatchService {
 
     /** 批量结果。 */
     public record BatchResult(int published, int skipped) {
+    }
+
+    public String readLines(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw AppException.validation("请选择要导入的 Excel 文件");
+        }
+        String name = file.getOriginalFilename() == null ? "" : file.getOriginalFilename().toLowerCase();
+        try {
+            if (name.endsWith(".csv") || name.endsWith(".tsv") || name.endsWith(".txt")) {
+                return new String(file.getBytes(), StandardCharsets.UTF_8);
+            }
+            try (Workbook wb = WorkbookFactory.create(file.getInputStream())) {
+                DataFormatter fmt = new DataFormatter();
+                StringBuilder out = new StringBuilder();
+                for (Row row : wb.getSheetAt(0)) {
+                    String text = fmt.formatCellValue(row.getCell(0)).trim();
+                    String images = fmt.formatCellValue(row.getCell(1)).trim();
+                    if (text.isEmpty() || isHeader(text)) {
+                        continue;
+                    }
+                    out.append(text);
+                    if (!images.isEmpty()) {
+                        out.append(' ').append(IMG_DELIM).append(' ').append(images);
+                    }
+                    out.append('\n');
+                }
+                return out.toString();
+            }
+        } catch (Exception e) {
+            throw AppException.validation("Excel 导入失败，请检查文件格式");
+        }
     }
 
     /**
@@ -116,6 +152,11 @@ public class AdminSeedBatchService {
             throw AppException.validation("单条最多 " + MAX_IMAGES + " 张图片");
         }
         return out;
+    }
+
+    private static boolean isHeader(String text) {
+        String t = text.toLowerCase();
+        return t.equals("文本") || t.equals("正文") || t.equals("text") || t.equals("content");
     }
 
     /** sha256(type|text|sorted images) 十六进制。图排序保证顺序无关的稳定去重。 */

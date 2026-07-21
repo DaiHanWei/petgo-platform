@@ -20,10 +20,12 @@ import com.tailtopia.content.dto.ContentPostResponse;
 import com.tailtopia.content.service.ContentService;
 import com.tailtopia.shared.error.AppException;
 import java.util.Optional;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.springframework.mock.web.MockMultipartFile;
 
 /** L0（Story 9.8 Part 2）：批量逐条发 + 内容 hash 去重 + 虚拟账号校验。纯 Mockito。 */
 class AdminSeedBatchServiceTest {
@@ -105,6 +107,26 @@ class AdminSeedBatchServiceTest {
     void rejectsEmptyBatch() {
         virtual(50L);
         assertThatThrownBy(() -> svc.publishBatch(50L, "   ", 7L)).isInstanceOf(AppException.class);
+    }
+
+    @Test
+    void readsExcelRowsAsBatchLines() throws Exception {
+        try (var wb = new XSSFWorkbook()) {
+            var sheet = wb.createSheet();
+            var header = sheet.createRow(0);
+            header.createCell(0).setCellValue("文本");
+            header.createCell(1).setCellValue("图片");
+            var row = sheet.createRow(1);
+            row.createCell(0).setCellValue("第一条");
+            row.createCell(1).setCellValue("https://x/a.jpg, https://x/b.jpg");
+            var out = new java.io.ByteArrayOutputStream();
+            wb.write(out);
+
+            String lines = svc.readLines(new MockMultipartFile("file", "seed.xlsx",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", out.toByteArray()));
+
+            assertThat(lines).isEqualTo("第一条 ||| https://x/a.jpg, https://x/b.jpg\n");
+        }
     }
 
     private static void setId(User u, long id) {

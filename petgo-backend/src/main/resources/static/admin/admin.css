@@ -121,9 +121,34 @@ main { flex: 1; padding: 24px 32px; }
     margin-bottom: 18px;
     max-width: 680px;
 }
+.card-wide { max-width: 920px; }
 .muted { color: var(--muted); font-size: var(--fs-sm); }
 .hint { color: var(--muted); font-size: var(--fs-xs); margin-top: 4px; }
 .empty { color: var(--muted); padding: 24px; }
+.tabs {
+    display: flex;
+    gap: 8px;
+    border-bottom: 1px solid var(--line);
+    margin: 4px 0 16px;
+}
+.tab {
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 10px 12px;
+    font-weight: 700;
+    border-bottom: 2px solid transparent;
+}
+.tab.active {
+    color: var(--brand-strong);
+    border-bottom-color: var(--brand);
+}
+.section-line {
+    border: 0;
+    border-top: 1px solid var(--line);
+    margin: 18px 0;
+}
 
 /* ===== 表单 ===== */
 label.field, .card label { display: block; font-size: var(--fs-sm); color: var(--ink-2); margin: 12px 0 4px; }
@@ -157,6 +182,7 @@ label.field .field-full { display: block; margin-top: 4px; }
 .btn-danger { background: var(--danger); color: #fff; }
 .btn-neutral { background: #E4E6EB; color: var(--ink); }
 .btn-sm { padding: 4px 10px; font-size: var(--fs-xs); }
+.form-submit { margin-top: 14px; }
 
 /* ===== 弹窗（原生 <dialog>，如兽医开户）===== */
 dialog.modal {

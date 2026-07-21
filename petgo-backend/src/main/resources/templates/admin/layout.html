@@ -90,8 +90,8 @@
             </div>
         </details>
         <details class="nav-section" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view') or hasAuthority('order.view') or hasAuthority('settlement.view') or hasAuthority('payment.view') or hasAuthority('risk.view') or hasAuthority('virtual_account.manage')"
-                 th:attr="open=${active == 'config' or active == 'consult-orders' or active == 'ai-orders' or active == 'settlements' or active == 'payments' or active == 'red-overage' or active == 'virtual-accounts' or active == 'seed-batch'} ? 'open' : null">
-            <summary th:classappend="${active == 'config' or active == 'consult-orders' or active == 'ai-orders' or active == 'settlements' or active == 'payments' or active == 'red-overage' or active == 'virtual-accounts' or active == 'seed-batch'} ? 'active'"
+                 th:attr="open=${active == 'config' or active == 'consult-orders' or active == 'ai-orders' or active == 'settlements' or active == 'payments' or active == 'red-overage' or active == 'virtual-accounts'} ? 'open' : null">
+            <summary th:classappend="${active == 'config' or active == 'consult-orders' or active == 'ai-orders' or active == 'settlements' or active == 'payments' or active == 'red-overage' or active == 'virtual-accounts'} ? 'active'"
                      th:text="#{admin.nav.group.ops}">运营</summary>
             <div class="nav-sub">
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view')"
@@ -115,9 +115,6 @@
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')"
                    th:href="@{/admin/virtual-accounts}" th:classappend="${active == 'virtual-accounts'} ? 'active'"
                    th:text="#{admin.nav.virtualAccounts}">虚拟账号</a>
-                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')"
-                   th:href="@{/admin/seed-batch}" th:classappend="${active == 'seed-batch'} ? 'active'"
-                   th:text="#{admin.nav.seedBatch}">批量种子</a>
             </div>
         </details>
         <details class="nav-section"

@@ -290,7 +290,7 @@
   "@triageUnlockFreeRemaining": { "placeholders": { "count": { "type": "int" } } },
   "triageUnlockMethodPawcoin": "PawCoin",
   "triageUnlockPawcoinBalance": "Saldo: {balance} koin",
-  "@triageUnlockPawcoinBalance": { "placeholders": { "balance": { "type": "int" } } },
+  "@triageUnlockPawcoinBalance": { "placeholders": { "balance": { "type": "String" } } },
   "triageUnlockMethodQris": "QRIS / DANA",
   "triageUnlockQuotaExhausted": "Kuota gratis bulan ini sudah habis. Coba PawCoin atau bayar.",
   "triageUnlockInsufficientBalance": "Saldo PawCoin kurang. Isi ulang atau bayar tunai.",

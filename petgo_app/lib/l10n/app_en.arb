@@ -364,7 +364,7 @@
   "@triageUnlockFreeRemaining": { "placeholders": { "count": { "type": "int" } } },
   "triageUnlockMethodPawcoin": "PawCoin",
   "triageUnlockPawcoinBalance": "Balance: {balance} koin",
-  "@triageUnlockPawcoinBalance": { "placeholders": { "balance": { "type": "int" } } },
+  "@triageUnlockPawcoinBalance": { "placeholders": { "balance": { "type": "String" } } },
   "triageUnlockMethodQris": "QRIS / DANA",
   "triageUnlockQuotaExhausted": "You've used this month's free quota. Try PawCoin or pay.",
   "triageUnlockInsufficientBalance": "Not enough PawCoin. Top up or pay with cash.",
