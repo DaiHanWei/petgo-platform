@@ -12,30 +12,40 @@
         <h1 th:text="#{admin.dashboard.title}">运营概览</h1>
         <p class="hint" th:text="#{admin.dashboard.overviewNote}">四模块运营态势（实时聚合）。</p>
 
-        <h2 th:text="#{admin.dashboard.mod.users}">用户</h2>
-        <table>
-            <tr><th th:text="#{admin.dashboard.m.totalUsers}">总用户</th><td th:text="${metrics.totalUsers}">0</td></tr>
-            <tr><th th:text="#{admin.dashboard.m.virtualAccounts}">虚拟账号</th><td th:text="${metrics.virtualAccounts}">0</td></tr>
-        </table>
+        <div class="metric-grid">
+            <section class="metric-card">
+                <h2 th:text="#{admin.dashboard.mod.users}">用户</h2>
+                <table class="param-table">
+                    <tr><th th:text="#{admin.dashboard.m.totalUsers}">总用户</th><td th:text="${metrics.totalUsers}">0</td></tr>
+                    <tr><th th:text="#{admin.dashboard.m.virtualAccounts}">虚拟账号</th><td th:text="${metrics.virtualAccounts}">0</td></tr>
+                </table>
+            </section>
 
-        <h2 th:text="#{admin.dashboard.mod.orders}">订单</h2>
-        <table>
-            <tr><th th:text="#{admin.dashboard.m.vetConsultOrders}">兽医咨询单</th><td th:text="${metrics.vetConsultOrders}">0</td></tr>
-            <tr><th th:text="#{admin.dashboard.m.aiCompletedOrders}">AI 完成单</th><td th:text="${metrics.aiCompletedOrders}">0</td></tr>
-            <tr><th th:text="#{admin.dashboard.m.aiRevenue}">AI 收入（IDR）</th><td th:text="${metrics.aiRevenue}">0</td></tr>
-        </table>
+            <section class="metric-card">
+                <h2 th:text="#{admin.dashboard.mod.orders}">订单</h2>
+                <table class="param-table">
+                    <tr><th th:text="#{admin.dashboard.m.vetConsultOrders}">兽医咨询单</th><td th:text="${metrics.vetConsultOrders}">0</td></tr>
+                    <tr><th th:text="#{admin.dashboard.m.aiCompletedOrders}">AI 完成单</th><td th:text="${metrics.aiCompletedOrders}">0</td></tr>
+                    <tr><th th:text="#{admin.dashboard.m.aiRevenue}">AI 收入（IDR）</th><td th:text="${#numbers.formatInteger(metrics.aiRevenue, 1, 'COMMA')}">0</td></tr>
+                </table>
+            </section>
 
-        <h2 th:text="#{admin.dashboard.mod.content}">内容</h2>
-        <table>
-            <tr><th th:text="#{admin.dashboard.m.posts}">帖子数</th><td th:text="${metrics.posts}">0</td></tr>
-            <tr><th th:text="#{admin.dashboard.m.comments}">评论数</th><td th:text="${metrics.comments}">0</td></tr>
-        </table>
+            <section class="metric-card">
+                <h2 th:text="#{admin.dashboard.mod.content}">内容</h2>
+                <table class="param-table">
+                    <tr><th th:text="#{admin.dashboard.m.posts}">帖子数</th><td th:text="${metrics.posts}">0</td></tr>
+                    <tr><th th:text="#{admin.dashboard.m.comments}">评论数</th><td th:text="${metrics.comments}">0</td></tr>
+                </table>
+            </section>
 
-        <h2 th:text="#{admin.dashboard.mod.vets}">兽医</h2>
-        <table>
-            <tr><th th:text="#{admin.dashboard.m.totalVets}">兽医总数</th><td th:text="${metrics.totalVets}">0</td></tr>
-            <tr><th th:text="#{admin.dashboard.m.pendingSettlements}">待打款月结</th><td th:text="${metrics.pendingSettlements}">0</td></tr>
-        </table>
+            <section class="metric-card">
+                <h2 th:text="#{admin.dashboard.mod.vets}">兽医</h2>
+                <table class="param-table">
+                    <tr><th th:text="#{admin.dashboard.m.totalVets}">兽医总数</th><td th:text="${metrics.totalVets}">0</td></tr>
+                    <tr><th th:text="#{admin.dashboard.m.pendingSettlements}">待打款月结</th><td th:text="${metrics.pendingSettlements}">0</td></tr>
+                </table>
+            </section>
+        </div>
 
         <p><a th:href="@{/admin/seed-post}" th:text="#{admin.dashboard.seedLink}">发布种子内容</a></p>
     </div>

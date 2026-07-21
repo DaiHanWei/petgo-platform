@@ -39,7 +39,8 @@ enum OrderStatusGroup {
   done;
 
   static OrderStatusGroup fromStatus(String statusCode) => switch (statusCode) {
-        'IN_PROGRESS' || 'REFUNDING' => OrderStatusGroup.ongoing,
+        // PENDING = 待支付充值（bug 20260720-313），归「进行中」组（可继续支付）。
+        'IN_PROGRESS' || 'REFUNDING' || 'PENDING' => OrderStatusGroup.ongoing,
         _ => OrderStatusGroup.done,
       };
 }

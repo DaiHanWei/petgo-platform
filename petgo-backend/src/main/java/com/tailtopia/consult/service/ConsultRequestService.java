@@ -184,6 +184,26 @@ public class ConsultRequestService {
     }
 
     /**
+     * 延长排队（bug 20260720-311）：排队超时前用户点「继续排队」→ 仅本人 + {@code QUEUEING} + 未暂停 →
+     * CAS 顺延 {@code queue_deadline_at = now + QUEUE_TIMEOUT_SECONDS}。归属/状态不符（含已被 purge 删/已接单）
+     * → 404（防枚举，前端据此退出）。返回新 deadline。
+     */
+    @Transactional
+    public Instant extendQueue(long userId, String requestToken) {
+        ConsultRequest req = requests.findByRequestToken(requestToken)
+                .orElseThrow(() -> AppException.notFound("该请求不存在或已结束"));
+        if (req.getUserId() == null || req.getUserId() != userId
+                || req.getState() != ConsultRequestState.QUEUEING) {
+            throw AppException.notFound("该请求不存在或已结束");
+        }
+        Instant newQueueDeadline = Instant.now().plus(Duration.ofSeconds(QUEUE_TIMEOUT_SECONDS));
+        if (requests.extendQueueDeadlineIfQueueing(req.getId(), newQueueDeadline) != 1) {
+            throw AppException.notFound("该请求不存在或已结束"); // 竞态：刚被 purge/接单
+        }
+        return newQueueDeadline;
+    }
+
+    /**
      * 兽医计费队列（Story 3.6，只读，工作台待接单 Tab 轮询）。返回：
      * <ul>
      *   <li>{@code awaitingPay}：本兽医当前 {@code ACCEPTED_AWAIT_PAY} 请求（FR-53A 待支付倒计时中间态），
@@ -284,51 +304,31 @@ public class ConsultRequestService {
     }
 
     /**
-     * 支付窗超时作废接单、回 QUEUEING 重播（Story 3.3，@Scheduled 调，<b>禁 MQ</b>）。逐条：
-     * 读过期 {@code ACCEPTED_AWAIT_PAY}（拿 vet_id）→ {@code revertExpiredAcceptance}（CAS 回退 QUEUEING +
-     * 清 vet + rebroadcast_count++ + 新 queue_deadline）→ 回退成功则释放兽医（{@code goAvailable}，提交后）+
-     * 重播广播事件（AFTER_COMMIT 监听推在线兽医）。回退幂等可重扫；已支付/已被处理行 CAS 0 行不受影响。
+     * 支付窗超时 → <b>结束请求</b>（bug 20260720-311，@Scheduled 调，<b>禁 MQ</b>）。逐条：
+     * 读过期 {@code ACCEPTED_AWAIT_PAY}（拿 vet_id）→ {@code deleteIfState} 删 request（CAS，防已支付/已处理行）→
+     * 删成功则释放兽医（{@code goAvailable}，提交后）+ 落 {@code failed_consult_requests}(TIMEOUT)。未扣费不建订单（A-5）。
      *
-     * <p><b>重播上限封顶（Story 3.4 补 3-3 缺口）</b>：回退前判上限——{@code rebroadcast_count} 达
-     * {@code props.maxRebroadcast}(默认 5) 或 请求存活超 {@code props.requestMaxAgeMinutes}(默认 30min) →
-     * <b>不再回队</b>：删 request + 释放兽医 + 落 {@code failed_consult_requests}(TIMEOUT)，防没人付时无限重播。
-     * 暂停中（{@code paused_at IS NOT NULL}）请求由查询排除、不判超时（A-4）。返回处理行数。
+     * <p><b>反转 UX-DR14（原 Story 3.3/3.4 回队重播）</b>：付款超时不再回 QUEUEING 重新广播，直接终结本次请求；
+     * 用户想再问诊须重新发起。因此不再读 {@code rebroadcast_count}/{@code maxRebroadcast}/{@code requestMaxAgeMinutes}。
+     * 暂停中（{@code paused_at IS NOT NULL}，跳充值 A-4）请求由查询排除、不判超时。幂等可重扫。返回处理行数。
      */
     @Transactional
-    public int revertExpiredAcceptances() {
+    public int endExpiredAcceptances() {
         // Story 3.4：排除暂停中请求（paused_at IS NOT NULL 不判超时，防跳充值暂停被扫走，A-4）。
         List<ConsultRequest> expired = requests.findByStateAndPayDeadlineAtBeforeAndPausedAtIsNull(
                 ConsultRequestState.ACCEPTED_AWAIT_PAY, Instant.now());
         int handled = 0;
         for (ConsultRequest req : expired) {
-            final Long vetId = req.getVetId(); // 回退前捕获（CAS 会清 vet_id）
-            Instant now = Instant.now();
-            // Story 3.4：重播上限封顶——达次数上限 或 存活超龄 → 彻底失败，不再回队（防没人付时无限重播）。
-            boolean capHit = req.getRebroadcastCount() >= props.getMaxRebroadcast()
-                    || req.getCreatedAt()
-                            .plus(Duration.ofMinutes(props.getRequestMaxAgeMinutes())).isBefore(now);
-            if (capHit) {
-                int onlineVets = presence.onlineVetIds().size(); // 失败时刻在线兽医数（落库前取）
-                if (requests.deleteIfState(req.getId(),
-                        ConsultRequestState.ACCEPTED_AWAIT_PAY) == 1) {
-                    handled++;
-                    if (vetId != null) {
-                        afterCommit(() -> presence.goAvailable(vetId)); // 释放兽医
-                    }
-                    // 彻底失败落 failed_consult_requests(TIMEOUT)；不建订单（未扣费，A-5）。sessionId=0（无会话）。
-                    events.publishEvent(new ConsultRequestFailedEvent(
-                            "TIMEOUT", req.getUserId(), 0L, req.getCreatedAt(), onlineVets));
-                }
-                continue;
-            }
-            Instant newQueueDeadline = now.plus(Duration.ofSeconds(QUEUE_TIMEOUT_SECONDS));
-            if (requests.revertExpiredAcceptance(req.getId(), now, newQueueDeadline) == 1) {
+            final Long vetId = req.getVetId(); // 删前捕获（删后取不到）
+            int onlineVets = presence.onlineVetIds().size(); // 失败时刻在线兽医数（落库前取）
+            if (requests.deleteIfState(req.getId(), ConsultRequestState.ACCEPTED_AWAIT_PAY) == 1) {
                 handled++;
                 if (vetId != null) {
                     afterCommit(() -> presence.goAvailable(vetId)); // 释放兽医（提交后）
                 }
-                // 重播：再次通知在线兽医（AFTER_COMMIT 监听，与入队同事件）。
-                events.publishEvent(new ConsultRequestQueuedForBillingEvent(req.getId()));
+                // 结束落 failed_consult_requests(TIMEOUT)；不建订单（未扣费，A-5）。sessionId=0（无会话）。
+                events.publishEvent(new ConsultRequestFailedEvent(
+                        "TIMEOUT", req.getUserId(), 0L, req.getCreatedAt(), onlineVets));
             }
         }
         return handled;

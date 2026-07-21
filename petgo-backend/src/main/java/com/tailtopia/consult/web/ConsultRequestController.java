@@ -57,6 +57,18 @@ public class ConsultRequestController {
         return ConsultRequestStatusResponse.of(service.statusOf(currentUserId(jwt), requestToken));
     }
 
+    /**
+     * 延长排队（bug 20260720-311）：排队超时前用户点「继续排队」→ 顺延 queue_deadline 一个排队窗。
+     * 仅本人 + {@code QUEUEING} + 未暂停；不符（含已被 purge 删/已接单）→ 404。返回顺延后的最新状态（含新 deadline）。
+     */
+    @PostMapping("/{requestToken}/extend-queue")
+    public ConsultRequestStatusResponse extendQueue(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable String requestToken) {
+        long userId = currentUserId(jwt);
+        service.extendQueue(userId, requestToken); // tx1：CAS 顺延并提交
+        return ConsultRequestStatusResponse.of(service.statusOf(userId, requestToken)); // tx2：读已提交的新 deadline
+    }
+
     private static long currentUserId(Jwt jwt) {
         if (jwt == null || jwt.getSubject() == null) {
             throw AppException.unauthorized("需要登录后访问");

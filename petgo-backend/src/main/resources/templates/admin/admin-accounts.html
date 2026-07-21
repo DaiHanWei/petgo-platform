@@ -35,11 +35,16 @@
                     <option th:each="t : ${accountTypes}" th:value="${t}" th:text="${t}">STAFF</option>
                 </select>
                 <p class="hint" th:text="#{admin.accounts.perms.note}">模块权限（仅 STAFF 生效）：</p>
-                <div class="perms">
-                    <label th:each="p : ${allPermissions}">
-                        <input type="checkbox" th:field="*{permissionCodes}" th:value="${p}"/>
-                        <span th:text="#{'perm.' + ${p}}" th:title="${p}">code</span>
-                    </label>
+                <div class="perm-groups">
+                    <section class="perm-group" th:each="g : ${permissionGroups}">
+                        <h3 th:text="${#messages.msg(g.titleCode())}">权限分组</h3>
+                        <div class="perms">
+                            <label th:each="p : ${g.permissionCodes()}">
+                                <input type="checkbox" th:field="*{permissionCodes}" th:value="${p}"/>
+                                <span th:text="#{'perm.' + ${p}}" th:title="${p}">code</span>
+                            </label>
+                        </div>
+                    </section>
                 </div>
                 <p><button type="submit" class="btn btn-primary" th:text="#{admin.accounts.submit.create}">创建账号</button></p>
             </form>
@@ -75,35 +80,47 @@
                         <span th:each="c : ${a.permissionCodes}" class="tag" th:text="#{'perm.' + ${c}}" th:title="${c}">code</span>
                     </span>
                 </td>
-                <td>
-                    <!-- 改权限（仅 STAFF）：勾选 + 保存 -->
-                    <form class="inline" th:if="${a.accountType.name() != 'SUPER_ADMIN'}"
-                          th:action="@{/admin/accounts/{id}/permissions(id=${a.id})}" method="post"
-                          sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.create_account')">
-                        <details>
-                            <summary class="muted" th:text="#{admin.accounts.editPerms}">改权限</summary>
-                            <div class="perms mt-sm">
-                                <label th:each="p : ${allPermissions}">
-                                    <input type="checkbox" name="permissionCodes" th:value="${p}"
-                                           th:checked="${#lists.contains(a.permissionCodes, p)}"/>
-                                    <span th:text="#{'perm.' + ${p}}" th:title="${p}">code</span>
-                                </label>
-                            </div>
-                            <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.accounts.savePerms}">保存权限</button>
-                        </details>
-                    </form>
-                    <!-- 停用 / 激活 -->
-                    <span sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.deactivate')">
-                        <form class="inline" th:if="${a.status.name() == 'ACTIVE'}"
-                              th:action="@{/admin/accounts/{id}/deactivate(id=${a.id})}" method="post"
-                              th:data-confirm="#{admin.accounts.deactivate.confirm}">
-                            <button type="submit" class="btn btn-danger btn-sm" th:text="#{admin.accounts.deactivate}">停用</button>
+                <td class="account-actions-cell">
+                    <div class="account-actions">
+                        <!-- 改权限（仅 STAFF）：勾选 + 保存 -->
+                        <form class="inline account-perm-form" th:if="${a.accountType.name() != 'SUPER_ADMIN'}"
+                              th:action="@{/admin/accounts/{id}/permissions(id=${a.id})}" method="post"
+                              sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.create_account')">
+                            <details class="perm-details">
+                                <summary class="btn btn-neutral btn-sm" th:text="#{admin.accounts.editPerms}">改权限</summary>
+                                <div class="perm-panel">
+                                    <div class="perm-groups">
+                                        <section class="perm-group" th:each="g : ${permissionGroups}">
+                                            <h3 th:text="${#messages.msg(g.titleCode())}">权限分组</h3>
+                                            <div class="perms">
+                                                <label th:each="p : ${g.permissionCodes()}">
+                                                    <input type="checkbox" name="permissionCodes" th:value="${p}"
+                                                           th:checked="${#lists.contains(a.permissionCodes, p)}"/>
+                                                    <span th:text="#{'perm.' + ${p}}" th:title="${p}">code</span>
+                                                </label>
+                                            </div>
+                                        </section>
+                                    </div>
+                                    <div class="perm-panel-actions">
+                                        <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.accounts.savePerms}">保存权限</button>
+                                    </div>
+                                </div>
+                            </details>
                         </form>
-                        <form class="inline" th:if="${a.status.name() == 'DISABLED'}"
-                              th:action="@{/admin/accounts/{id}/reactivate(id=${a.id})}" method="post">
-                            <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.accounts.reactivate}">重新激活</button>
-                        </form>
-                    </span>
+                        <!-- 停用 / 激活 -->
+                        <span class="account-status-actions"
+                              sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.deactivate')">
+                            <form class="inline" th:if="${a.status.name() == 'ACTIVE'}"
+                                  th:action="@{/admin/accounts/{id}/deactivate(id=${a.id})}" method="post"
+                                  th:data-confirm="#{admin.accounts.deactivate.confirm}">
+                                <button type="submit" class="btn btn-danger btn-sm" th:text="#{admin.accounts.deactivate}">停用</button>
+                            </form>
+                            <form class="inline" th:if="${a.status.name() == 'DISABLED'}"
+                                  th:action="@{/admin/accounts/{id}/reactivate(id=${a.id})}" method="post">
+                                <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.accounts.reactivate}">重新激活</button>
+                            </form>
+                        </span>
+                    </div>
                 </td>
             </tr>
             </tbody>

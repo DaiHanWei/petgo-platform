@@ -83,12 +83,117 @@ class OrderDetailPage extends ConsumerWidget {
           ),
         ),
 
+        // AI 问诊订单：详情下方给「查看诊断结果」入口 → 只读回看分诊结果快照
+        // （bug 20260720-312；triageTaskId 后端已下发）。
+        if (d.orderType == OrderType.aiUnlock && d.triageTaskId != null) ...[
+          const SizedBox(height: AppSpacing.md),
+          _aiResultEntry(context, l10n, d.triageTaskId!),
+        ],
+
+        // 兽医问诊订单：给「查看问诊记录」入口 → 打开会话页（CLOSED 会话正文平铺只读问诊确认单）
+        // （bug 20260720-312；consultSessionId 后端已下发）。身份证订单暂无源（Epic6 未接订单中心）。
+        if (d.orderType == OrderType.vetConsult && d.consultSessionId != null) ...[
+          const SizedBox(height: AppSpacing.md),
+          _consultResultEntry(context, l10n, d.consultSessionId!),
+        ],
+
+        // 待支付充值订单：给「继续充值」入口 → 充值页复用未过期 PENDING 意图重发 QRIS
+        // （bug 20260720-313；60min 窗内可继续付款，超时后 scanner 置 EXPIRED 自然移出列表）。
+        if (d.orderType == OrderType.pawcoinTopup && d.statusCode == 'PENDING') ...[
+          const SizedBox(height: AppSpacing.md),
+          _continueTopupEntry(context, l10n),
+        ],
+
         // 退款进度
         if (d.refundStage != null) ...[
           const SizedBox(height: AppSpacing.md),
           _refundBlock(context, l10n, d),
         ],
       ],
+    );
+  }
+
+  /// 兽医问诊结果入口卡（点 → 会话页；CLOSED 会话正文平铺只读问诊确认单/诊断）。
+  Widget _consultResultEntry(BuildContext context, AppLocalizations l10n, int sessionId) {
+    return Material(
+      color: AppColors.mintTint,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        key: const ValueKey('orderConsultResultEntry'),
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => context.push('/consult/conversation/$sessionId'),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Row(
+            children: [
+              const Icon(Icons.medical_information_outlined, color: AppColors.mint600),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(l10n.orderViewConsultResult,
+                    style: AppTypography.body
+                        .copyWith(color: AppColors.mint600, fontWeight: FontWeight.w600)),
+              ),
+              const Icon(Icons.chevron_right, color: AppColors.mint600),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 继续充值入口卡（待支付充值 → 充值页复用 PENDING 意图重发 QRIS）。
+  Widget _continueTopupEntry(BuildContext context, AppLocalizations l10n) {
+    return Material(
+      color: AppColors.goldTint,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        key: const ValueKey('orderContinueTopupEntry'),
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => context.push('/me/pawcoin/recharge'),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Row(
+            children: [
+              const Icon(Icons.savings_outlined, color: AppColors.tipsBadgeText),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(l10n.orderTopupContinue,
+                    style: AppTypography.body
+                        .copyWith(color: AppColors.tipsBadgeText, fontWeight: FontWeight.w600)),
+              ),
+              const Icon(Icons.chevron_right, color: AppColors.tipsBadgeText),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// AI 诊断结果入口卡（点 → `/triage/result/:id` 只读快照回看）。
+  Widget _aiResultEntry(BuildContext context, AppLocalizations l10n, int triageId) {
+    return Material(
+      color: AppColors.mintTint,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        key: const ValueKey('orderAiResultEntry'),
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => context.push('/triage/result/$triageId'),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Row(
+            children: [
+              const Icon(Icons.description_outlined, color: AppColors.mint600),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(l10n.orderViewAiResult,
+                    style: AppTypography.body
+                        .copyWith(color: AppColors.mint600, fontWeight: FontWeight.w600)),
+              ),
+              const Icon(Icons.chevron_right, color: AppColors.mint600),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

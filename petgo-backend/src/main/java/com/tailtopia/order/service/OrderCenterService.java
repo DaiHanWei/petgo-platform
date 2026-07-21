@@ -90,6 +90,12 @@ public class OrderCenterService {
                     userId, PaymentPurpose.PAWCOIN_TOPUP, PaymentStatus.PAID, before, page)) {
                 merged.add(mapTopup(i));
             }
+            // 待支付充值（未过期 PENDING）也入订单中心，供用户「继续充值」（bug 20260720-313）。
+            // 60min 窗口超时后 scanner 置 EXPIRED → 自然移出列表；终态 FAILED/EXPIRED 不入。
+            for (PaymentIntent i : intents.findByUserIdAndPurposeAndStatusAndCreatedAtLessThanOrderByCreatedAtDesc(
+                    userId, PaymentPurpose.PAWCOIN_TOPUP, PaymentStatus.PENDING, before, page)) {
+                merged.add(mapTopupPending(i));
+            }
         }
         // ID_HD：无源，Epic 6 接入（filter==ID_HD → merged 为空）。
 
@@ -123,7 +129,8 @@ public class OrderCenterService {
         Optional<PaymentIntent> top = intents.findByPublicToken(orderToken);
         if (top.isPresent() && top.get().getUserId() == userId
                 && top.get().getPurpose() == PaymentPurpose.PAWCOIN_TOPUP
-                && top.get().getStatus() == PaymentStatus.PAID) {
+                && (top.get().getStatus() == PaymentStatus.PAID
+                        || top.get().getStatus() == PaymentStatus.PENDING)) {
             return topupDetail(top.get());
         }
         throw AppException.notFound("订单不存在");
@@ -155,7 +162,7 @@ public class OrderCenterService {
                 petDeleted ? null : pet.getAvatarUrl(),
                 petDeleted,
                 o.getSessionStartedAt(), o.getSessionEndedAt(),
-                stage == null ? null : stage.name(), refundNet, null, null);
+                stage == null ? null : stage.name(), refundNet, null, null, o.getConsultSessionId());
     }
 
     private OrderDetailView aiDetail(AiConsultOrder o) {
@@ -163,15 +170,19 @@ public class OrderCenterService {
                 OrderStatusColor.SUCCESS.name(), o.getAmount(),
                 o.getPayChannel() == null ? null : o.getPayChannel().name(),
                 o.getCreatedAt(), o.getPaidAt(),
-                null, null, null, false, null, null, null, null, null, o.getTriageTaskId());
+                null, null, null, false, null, null, null, null, null, o.getTriageTaskId(), null);
     }
 
     private OrderDetailView topupDetail(PaymentIntent i) {
-        return new OrderDetailView(OrderType.PAWCOIN_TOPUP.name(), i.getPublicToken(), "PAID",
-                OrderStatusColor.SUCCESS.name(), i.getAmount(),
+        // 待支付充值（bug 20260720-313）：PENDING + WARN；币未到账 → coins 不显（仅 PAID 显）。
+        boolean paid = i.getStatus() == PaymentStatus.PAID;
+        String statusCode = paid ? "PAID" : "PENDING";
+        String color = (paid ? OrderStatusColor.SUCCESS : OrderStatusColor.WARN).name();
+        return new OrderDetailView(OrderType.PAWCOIN_TOPUP.name(), i.getPublicToken(), statusCode,
+                color, i.getAmount(),
                 i.getChannel() == null ? null : i.getChannel().name(),
                 i.getCreatedAt(), null,
-                null, null, null, false, null, null, null, null, i.getAmount(), null);
+                null, null, null, false, null, null, null, null, paid ? i.getAmount() : null, null, null);
     }
 
     /** 退款子阶段派生（by approval_status）。 */
@@ -225,6 +236,13 @@ public class OrderCenterService {
         // 仅 PAID 入订单中心（充值凭证）。对外 token 用 public_token。
         return new OrderSummaryView(OrderType.PAWCOIN_TOPUP.name(), i.getPublicToken(), "PAID",
                 OrderStatusColor.SUCCESS.name(), i.getAmount(),
+                i.getChannel() == null ? null : i.getChannel().name(), i.getCreatedAt());
+    }
+
+    private OrderSummaryView mapTopupPending(PaymentIntent i) {
+        // 待支付充值（bug 20260720-313）：WARN 徽章 + PENDING 状态，前端据此展示「继续充值」入口。
+        return new OrderSummaryView(OrderType.PAWCOIN_TOPUP.name(), i.getPublicToken(), "PENDING",
+                OrderStatusColor.WARN.name(), i.getAmount(),
                 i.getChannel() == null ? null : i.getChannel().name(), i.getCreatedAt());
     }
 

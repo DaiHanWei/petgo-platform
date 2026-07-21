@@ -21,13 +21,13 @@
             <tr><th>兽医 ID</th><td th:text="${order.vetId}">0</td></tr>
             <tr><th>宠物档案 ID</th><td th:text="${order.petProfileId}">0</td></tr>
             <tr><th>状态</th><td th:text="${order.statusCode}">IN_PROGRESS</td></tr>
-            <tr><th>金额</th><td th:text="${order.amount}">0</td></tr>
+            <tr><th>金额</th><td th:text="${#numbers.formatInteger(order.amount, 1, 'COMMA')}">0</td></tr>
             <tr><th>渠道</th><td th:text="${order.payChannel} ?: '—'">—</td></tr>
-            <tr><th>兽医到手</th><td th:text="${order.vetPayout} ?: '—'">—</td></tr>
+            <tr><th>兽医到手</th><td th:text="${order.vetPayout == null} ? '—' : ${#numbers.formatInteger(order.vetPayout, 1, 'COMMA')}">—</td></tr>
             <tr><th>分成比例</th><td th:text="${order.vetShareRateSnapshot} ?: '—'">—</td></tr>
-            <tr><th>单价快照</th><td th:text="${order.unitPriceSnapshot} ?: '—'">—</td></tr>
+            <tr><th>单价快照</th><td th:text="${order.unitPriceSnapshot == null} ? '—' : ${#numbers.formatInteger(order.unitPriceSnapshot, 1, 'COMMA')}">—</td></tr>
             <tr><th>重播次数</th><td th:text="${order.rebroadcastCount}">0</td></tr>
-            <tr><th>成交时间</th><td th:text="${order.paidAt} ?: '—'">—</td></tr>
+            <tr><th>成交时间</th><td th:text="${@adminTime.wib(order.paidAt)}">—</td></tr>
             <tr><th>会话起</th><td th:text="${order.sessionStartedAt} ?: '—'">—</td></tr>
             <tr><th>会话止</th><td th:text="${order.sessionEndedAt} ?: '—'">—</td></tr>
         </table>
@@ -38,7 +38,7 @@
             <tbody>
             <tr th:each="s : ${order.stages}">
                 <td th:text="${s.eventType}">PAID</td>
-                <td th:text="${s.occurredAt}">t</td>
+                <td th:text="${@adminTime.wib(s.occurredAt)}">t</td>
                 <td th:text="${s.note} ?: '—'">—</td>
             </tr>
             <tr th:if="${order.stages.isEmpty()}"><td colspan="3">暂无阶段事件</td></tr>

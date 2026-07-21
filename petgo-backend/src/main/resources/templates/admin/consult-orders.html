@@ -29,12 +29,12 @@
                 <td th:text="${o.orderToken}">tok</td>
                 <td th:text="${o.userId}">0</td>
                 <td th:text="${o.vetId}">0</td>
-                <td th:text="${o.amount}">0</td>
-                <td th:text="${o.vetPayout} ?: '—'">—</td>
+                <td th:text="${#numbers.formatInteger(o.amount, 1, 'COMMA')}">0</td>
+                <td th:text="${o.vetPayout == null} ? '—' : ${#numbers.formatInteger(o.vetPayout, 1, 'COMMA')}">—</td>
                 <td th:text="${o.statusCode}">IN_PROGRESS</td>
                 <td th:text="${o.rebroadcastCount}">0</td>
                 <td th:text="${o.verifyStatus == ''} ? '—' : ${o.verifyStatus}">—</td>
-                <td th:text="${o.paidAt} ?: '—'">—</td>
+                <td th:text="${@adminTime.wib(o.paidAt)}">—</td>
                 <td><a class="btn btn-neutral btn-sm"
                        th:href="@{/admin/consult-orders/{t}(t=${o.orderToken})}">详情</a></td>
             </tr>

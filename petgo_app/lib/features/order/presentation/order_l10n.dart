@@ -34,6 +34,7 @@ String orderStatusLabel(AppLocalizations l10n, String statusCode) => switch (sta
       'REFUNDING' => l10n.orderStatusRefunding,
       'REFUNDED' => l10n.orderStatusRefunded,
       'PAID' => l10n.orderStatusPaid,
+      'PENDING' => l10n.orderStatusPending,
       _ => statusCode,
     };
 

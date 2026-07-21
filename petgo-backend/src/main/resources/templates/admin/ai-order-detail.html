@@ -19,8 +19,8 @@
             <tr><th>渠道</th><td th:text="${order.payChannel}">QRIS</td></tr>
             <tr><th>支付意图</th><td th:text="${order.paymentIntentToken} ?: '—'">—</td></tr>
             <tr><th>状态</th><td th:text="${order.status}">COMPLETED</td></tr>
-            <tr><th>成交时间</th><td th:text="${order.paidAt} ?: '—'">—</td></tr>
-            <tr><th>创建时间</th><td th:text="${order.createdAt}">t</td></tr>
+            <tr><th>成交时间</th><td th:text="${@adminTime.wib(order.paidAt)}">—</td></tr>
+            <tr><th>创建时间</th><td th:text="${@adminTime.wib(order.createdAt)}">t</td></tr>
         </table>
         <p class="hint">AI 一次性解锁，无退款/分成入口。</p>
     </div>

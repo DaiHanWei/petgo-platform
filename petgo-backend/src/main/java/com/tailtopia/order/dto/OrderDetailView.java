@@ -24,6 +24,7 @@ import java.time.Instant;
  * @param refundNetAmount   退款到手净额（填收款后有值，可空）
  * @param coins             到账 koin（充值 = amount；非充值→null）
  * @param triageTaskId      分诊任务 id（AI，深链预留，可空）
+ * @param consultSessionId  兽医问诊会话 id（前端据此打开只读问诊确认单，bug 20260720-312；非兽医/无会话→null）
  */
 public record OrderDetailView(
         String orderType,
@@ -43,5 +44,6 @@ public record OrderDetailView(
         String refundStage,
         Long refundNetAmount,
         Long coins,
-        Long triageTaskId) {
+        Long triageTaskId,
+        Long consultSessionId) {
 }

@@ -10,6 +10,7 @@ import com.tailtopia.admin.service.AdminContentService;
 import com.tailtopia.admin.service.AdminModerationService;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.admin.service.AdminVetService;
+import com.tailtopia.admin.virtual.service.AdminVirtualAccountService;
 import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.dto.ContentPostResponse;
 import com.tailtopia.shared.error.AppException;
@@ -40,15 +41,18 @@ public class AdminWebController {
     private final AdminModerationService adminModerationService;
     private final AdminVetService adminVetService;
     private final com.tailtopia.admin.dashboard.service.AdminDashboardService dashboardService;
+    private final AdminVirtualAccountService virtualAccountService;
 
     public AdminWebController(AdminContentService adminContentService,
             AdminModerationService adminModerationService,
             AdminVetService adminVetService,
-            com.tailtopia.admin.dashboard.service.AdminDashboardService dashboardService) {
+            com.tailtopia.admin.dashboard.service.AdminDashboardService dashboardService,
+            AdminVirtualAccountService virtualAccountService) {
         this.adminContentService = adminContentService;
         this.adminModerationService = adminModerationService;
         this.adminVetService = adminVetService;
         this.dashboardService = dashboardService;
+        this.virtualAccountService = virtualAccountService;
     }
 
     /** 登录页（未认证可访问；认证失败回显 error，登出回显 logout）。 */
@@ -71,8 +75,13 @@ public class AdminWebController {
         if (!model.containsAttribute("seedPostForm")) {
             model.addAttribute("seedPostForm", new SeedPostForm());
         }
-        model.addAttribute("types", ContentType.values());
+        seedPostModel(model);
         return "admin/seed-post";
+    }
+
+    private void seedPostModel(Model model) {
+        model.addAttribute("types", ContentType.values());
+        model.addAttribute("accounts", virtualAccountService.list());
     }
 
     // ===== Story 3.7 + 4.1：举报审核队列（状态筛选 + 批量 + 双向通知 + 审计）=====
@@ -307,7 +316,7 @@ public class AdminWebController {
             @Valid @ModelAttribute("seedPostForm") SeedPostForm form, BindingResult binding,
             Model model) {
         model.addAttribute("active", "seed");
-        model.addAttribute("types", ContentType.values());
+        seedPostModel(model);
         if (binding.hasErrors()) {
             return "admin/seed-post";
         }

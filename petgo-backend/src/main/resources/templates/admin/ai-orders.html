@@ -41,7 +41,7 @@
                 <td th:text="${o.amount}">0</td>
                 <td th:text="${o.payChannel}">QRIS</td>
                 <td th:text="${o.status}">COMPLETED</td>
-                <td th:text="${o.paidAt} ?: '—'">—</td>
+                <td th:text="${@adminTime.wib(o.paidAt)}">—</td>
                 <td><a class="btn btn-neutral btn-sm"
                        th:href="@{/admin/ai-orders/{t}(t=${o.orderToken})}">详情</a></td>
             </tr>

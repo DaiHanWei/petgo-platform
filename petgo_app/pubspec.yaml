@@ -57,6 +57,9 @@ dependencies:
   # 处理用纯 Dart 的 `image`（解码重编码即丢弃 EXIF/GPS，headless 可单测），
   # 选图/权限用原生插件（仅运行期路径）。
   image_picker: ^1.1.2
+  # 直接依赖 Android 实现包，用于开启 Android Photo Picker（否则无 GMS 华为机相册会弹成文档选择器）。
+  image_picker_android: ^0.8.13
+  image_picker_platform_interface: ^2.10.0
   permission_handler: ^11.3.1
   # 相册权限需按 Android SDK 分流（≤12 用 READ_EXTERNAL_STORAGE，13+ 用 READ_MEDIA_IMAGES），
   # 取 androidInfo.version.sdkInt 判定；否则 Android 12 设备请求 photos 恒 permanentlyDenied（死循环）。

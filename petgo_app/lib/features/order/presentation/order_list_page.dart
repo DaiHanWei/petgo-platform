@@ -78,13 +78,18 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
   /// 紫渐变汇总头卡：本月总支出 + 三宫格（进行中 / 完成 / PawCoin 余额）。
   Widget _summaryHeader(BuildContext context, AppLocalizations l10n, OrderListState state) {
     final now = DateTime.now();
+    // 本月总支出＝真实现金支出：只计 QRIS 等现金渠道（充值 + 直接现金消费）。
+    // PAWCOIN 渠道的消费（用充值来的币付问诊/解锁）不计——那笔钱已在充值时计过，
+    // 两头都加会重复（bug 20260720-306）。PENDING（待支付充值，bug 313）未付，也不计。
     final monthSpent = state.items
         .where((o) =>
             o.amount != null &&
             o.createdAt != null &&
             o.createdAt!.year == now.year &&
             o.createdAt!.month == now.month &&
-            o.statusCode != 'REFUNDED')
+            o.statusCode != 'REFUNDED' &&
+            o.statusCode != 'PENDING' &&
+            o.payChannel != 'PAWCOIN')
         .fold<int>(0, (sum, o) => sum + o.amount!);
     final ongoing = state.items
         .where((o) => OrderStatusGroup.fromStatus(o.statusCode) == OrderStatusGroup.ongoing)
