@@ -22,8 +22,8 @@ class IdHdPaidHandlerTest {
 
     @Test
     void handlesIdHd() {
-        handler.onPaid(event(PaymentPurpose.ID_HD));
-        verify(service).completePurchase(42L, PayChannel.QRIS, 7L);
+        handler.onPaid(event(PaymentPurpose.ID_HD)); // intentId=7L
+        verify(service).completeCardByIntent(7L);
     }
 
     @Test
@@ -31,7 +31,6 @@ class IdHdPaidHandlerTest {
         handler.onPaid(event(PaymentPurpose.PAWCOIN_TOPUP));
         handler.onPaid(event(PaymentPurpose.AI_UNLOCK));
         handler.onPaid(event(PaymentPurpose.VET_CONSULT));
-        verify(service, never()).completePurchase(
-                ArgumentMatchers.anyLong(), ArgumentMatchers.any(), ArgumentMatchers.anyLong());
+        verify(service, never()).completeCardByIntent(ArgumentMatchers.anyLong());
     }
 }

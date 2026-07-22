@@ -12,6 +12,7 @@ import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.domain.PetType;
 import com.tailtopia.profile.dto.IdCardDataResponse;
 import com.tailtopia.profile.repository.IdCardHdPurchaseRepository;
+import com.tailtopia.profile.repository.IdCardRepository;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.shared.error.AppException;
 import java.time.LocalDate;
@@ -27,7 +28,9 @@ class IdCardServiceTest {
     private final PetProfileRepository profiles = mock(PetProfileRepository.class);
     private final SerialAllocationService serialAllocation = mock(SerialAllocationService.class);
     private final IdCardHdPurchaseRepository hdPurchases = mock(IdCardHdPurchaseRepository.class);
-    private final IdCardService service = new IdCardService(profiles, serialAllocation, hdPurchases);
+    private final IdCardRepository idCards = mock(IdCardRepository.class);
+    private final IdCardService service =
+            new IdCardService(profiles, serialAllocation, hdPurchases, idCards);
 
     private static PetProfile pet() {
         return PetProfile.create(7L, PetType.CAT, "Momo", null, "英短", LocalDate.of(2022, 1, 1), "乖", "TOK");

@@ -36,6 +36,8 @@ import '../../features/refund/presentation/refund_account_page.dart';
 import '../../features/refund/presentation/refund_status_page.dart';
 import '../../features/profile/presentation/growth_archive_page.dart';
 import '../../features/profile/presentation/health_list_page.dart';
+import '../../features/profile/presentation/id_card_create_page.dart';
+import '../../features/profile/presentation/id_card_detail_page.dart';
 import '../../features/profile/presentation/id_card_page.dart';
 import '../../features/profile/presentation/milestone_list_page.dart';
 import '../../features/profile/domain/pet_profile.dart';
@@ -203,6 +205,12 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/profile/edit', builder: (c, s) => const PetProfileEditPage()),
       // 宠物身份证详情（Story 6.2 · FR-49B）。受控（/profile/ 前缀，游客被门控）。
       GoRoute(path: '/profile/id-card', builder: (c, s) => const IdCardPage()),
+      // Story 6-7 多卡：建卡器（字面量在前，避免被 :id 吞）+ 单卡详情。
+      GoRoute(path: '/profile/id-cards/create', builder: (c, s) => const IdCardCreatePage()),
+      GoRoute(
+        path: '/profile/id-cards/:id',
+        builder: (c, s) => IdCardDetailPage(cardId: int.parse(s.pathParameters['id']!)),
+      ),
       // 健康记录列表（Story 7.2 · FR-45B）。受控（/profile/ 前缀，游客被门控）。
       GoRoute(path: '/profile/health', builder: (c, s) => const HealthListPage()),
       // 成长档案当天详情（Story 2.4 AC6 · F9）。?date=yyyy-MM-dd；受控（/profile/ 前缀）。

@@ -1,10 +1,15 @@
 package com.tailtopia.profile.service;
 
+import com.tailtopia.profile.domain.IdCard;
 import com.tailtopia.profile.domain.PetProfile;
+import com.tailtopia.profile.dto.CreateIdCardRequest;
 import com.tailtopia.profile.dto.IdCardDataResponse;
+import com.tailtopia.profile.dto.IdCardResponse;
 import com.tailtopia.profile.repository.IdCardHdPurchaseRepository;
+import com.tailtopia.profile.repository.IdCardRepository;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.shared.error.AppException;
+import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,12 +26,43 @@ public class IdCardService {
     private final PetProfileRepository profiles;
     private final SerialAllocationService serialAllocation;
     private final IdCardHdPurchaseRepository hdPurchases;
+    private final IdCardRepository idCards;
 
     public IdCardService(PetProfileRepository profiles, SerialAllocationService serialAllocation,
-            IdCardHdPurchaseRepository hdPurchases) {
+            IdCardHdPurchaseRepository hdPurchases, IdCardRepository idCards) {
         this.profiles = profiles;
         this.serialAllocation = serialAllocation;
         this.hdPurchases = hdPurchases;
+        this.idCards = idCards;
+    }
+
+    // ---- Story 6-7：多卡快照 + 历史列表 + 独立建卡器 ----
+
+    /** 历史卡列表（建卡时刻倒序）。 */
+    @Transactional(readOnly = true)
+    public List<IdCardResponse> listMyCards(long ownerId) {
+        return idCards.findByUserIdOrderByCreatedAtDesc(ownerId).stream()
+                .map(IdCardResponse::from).toList();
+    }
+
+    /** 单卡详情（归属校验，非本人 404 防枚举）。 */
+    @Transactional(readOnly = true)
+    public IdCardResponse getMyCard(long ownerId, long cardId) {
+        return idCards.findByIdAndUserId(cardId, ownerId)
+                .map(IdCardResponse::from)
+                .orElseThrow(() -> AppException.notFound("身份证卡不存在"));
+    }
+
+    /**
+     * 独立建卡器（决策④）：把入参信息冻结成一张新卡快照，分配新 serial（每卡新号，决策②）。初始未解锁。
+     * 卡信息与档案解耦——不要求已有档案，也不改档案。ownerId 由 JWT 取。
+     */
+    @Transactional
+    public IdCardResponse createCard(long ownerId, CreateIdCardRequest req) {
+        long serial = serialAllocation.allocate();
+        IdCard card = idCards.save(IdCard.snapshot(ownerId, serial, req.name(), req.petType(),
+                req.breed(), req.birthday(), req.avatarUrl(), req.intro()));
+        return IdCardResponse.from(card);
     }
 
     /** 当前用户身份证数据（只读，不分配号）。无档案 → 404。老用户 serial=null → {@code generated=false}。 */

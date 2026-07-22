@@ -31,6 +31,7 @@ public class IdHdPaidHandler {
         if (event.purpose() != PaymentPurpose.ID_HD) {
             return; // 非身份证高清意图，交各自 story 的监听器
         }
-        idCardHdService.completePurchase(event.userId(), event.channel(), event.intentId());
+        // Story 6-7：按 intentId 反查 attempt 行取 cardId，置该卡解锁（多卡）。
+        idCardHdService.completeCardByIntent(event.intentId());
     }
 }

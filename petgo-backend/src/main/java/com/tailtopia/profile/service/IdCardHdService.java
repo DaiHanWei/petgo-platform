@@ -7,10 +7,12 @@ import com.tailtopia.pay.domain.PaymentPurpose;
 import com.tailtopia.pay.dto.PaymentIntentResponse;
 import com.tailtopia.pay.service.PawCoinWalletService;
 import com.tailtopia.pay.service.PaymentIntentService;
+import com.tailtopia.profile.domain.IdCard;
 import com.tailtopia.profile.domain.IdCardHdPurchase;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.dto.HdPurchaseResponse;
 import com.tailtopia.profile.repository.IdCardHdPurchaseRepository;
+import com.tailtopia.profile.repository.IdCardRepository;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.pay.ChargeRequest;
@@ -42,20 +44,84 @@ public class IdCardHdService {
 
     private final PetProfileRepository profiles;
     private final IdCardHdPurchaseRepository purchases;
+    private final IdCardRepository idCards;
     private final PawCoinWalletService wallet;
     private final PaymentIntentService paymentIntents;
     private final com.tailtopia.config.service.PlatformConfigService platformConfig;
     private final PaymentGateway gateway;
 
     public IdCardHdService(PetProfileRepository profiles, IdCardHdPurchaseRepository purchases,
-            PawCoinWalletService wallet, PaymentIntentService paymentIntents,
+            IdCardRepository idCards, PawCoinWalletService wallet, PaymentIntentService paymentIntents,
             com.tailtopia.config.service.PlatformConfigService platformConfig, PaymentGateway gateway) {
         this.profiles = profiles;
         this.purchases = purchases;
+        this.idCards = idCards;
         this.wallet = wallet;
         this.paymentIntents = paymentIntents;
         this.platformConfig = platformConfig;
         this.gateway = gateway;
+    }
+
+    // ---- Story 6-7：按【卡】解锁（多卡快照）。解锁真相 = IdCard.hdUnlocked。 ----
+
+    /** 某卡 HD 是否已解锁。 */
+    @Transactional(readOnly = true)
+    public boolean isUnlockedCard(long userId, long cardId) {
+        return idCards.findByIdAndUserId(cardId, userId).map(IdCard::isHdUnlocked).orElse(false);
+    }
+
+    /**
+     * 购买某卡 HD（决策①按卡）。已解锁 → 短路 granted。PawCoin 同步扣费+置卡解锁+记 attempt；
+     * QRIS 建 60min 窗意图 + attempt 行（存 cardId+intentId 供回调反查），返回支付信息。非本人卡 → 404。
+     */
+    @Transactional
+    public HdPurchaseResponse purchaseCard(long userId, long cardId, PayChannel channel) {
+        IdCard card = idCards.findByIdAndUserId(cardId, userId)
+                .orElseThrow(() -> AppException.notFound("身份证卡不存在"));
+        if (card.isHdUnlocked()) {
+            return HdPurchaseResponse.granted();
+        }
+        long price = platformConfig.pricing().getIdHdDownloadPrice();
+        return switch (channel) {
+            case PAWCOIN -> {
+                wallet.debit(userId, price, PawCoinTxnType.SPEND, REF_TYPE, cardId,
+                        "id-hd-card:" + cardId);
+                card.markHdUnlocked();
+                idCards.save(card);
+                purchases.save(IdCardHdPurchase.of(userId, null, cardId, PayChannel.PAWCOIN, null));
+                yield HdPurchaseResponse.granted();
+            }
+            case QRIS -> {
+                PaymentIntentResponse intent = paymentIntents.createIntent(
+                        userId, PaymentPurpose.ID_HD, PayChannel.QRIS, price, CURRENCY,
+                        "id-hd-card:" + cardId, PAY_WINDOW);
+                long intentId = paymentIntents.findByToken(intent.token())
+                        .orElseThrow(() -> AppException.notFound("支付意图不存在")).getId();
+                if (!purchases.existsByPaymentIntentId(intentId)) {
+                    purchases.save(IdCardHdPurchase.of(userId, null, cardId, PayChannel.QRIS, intentId));
+                }
+                String payload = ensureCharge(intent, price, PayChannel.QRIS, PaymentPurpose.ID_HD);
+                yield HdPurchaseResponse.paymentRequired(intent, payload);
+            }
+        };
+    }
+
+    /**
+     * QRIS 到账后置对应卡为已解锁（Story 6-7）。供 {@code IdHdPaidHandler} 同事务内调（MANDATORY，禁 AFTER_COMMIT）。
+     * 按 intentId 反查 attempt 行取 cardId。幂等：markHdUnlocked 对已解锁卡无副作用。
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void completeCardByIntent(long paymentIntentId) {
+        IdCardHdPurchase attempt = purchases.findFirstByPaymentIntentId(paymentIntentId).orElse(null);
+        if (attempt == null || attempt.getCardId() == null) {
+            log.warn("身份证HD到账但无 attempt 行 intent={}", paymentIntentId);
+            return;
+        }
+        idCards.findById(attempt.getCardId()).ifPresent(card -> {
+            card.markHdUnlocked();
+            idCards.save(card);
+            log.info("身份证HD到账解锁 card={} intent={}", attempt.getCardId(), paymentIntentId);
+        });
     }
 
     /** 当前用户是否已购买高清图（=已永久解锁）。 */
@@ -84,7 +150,7 @@ public class IdCardHdService {
                 // 余额不足 → debit 抛冲突 → 整事务回滚（建行不发生）。幂等键稳定可重放。
                 wallet.debit(userId, price, PawCoinTxnType.SPEND, REF_TYPE, petProfileId,
                         "id-hd:" + petProfileId);
-                purchases.save(IdCardHdPurchase.of(userId, petProfileId, PayChannel.PAWCOIN, null));
+                purchases.save(IdCardHdPurchase.of(userId, petProfileId, null, PayChannel.PAWCOIN, null));
                 yield HdPurchaseResponse.granted();
             }
             case QRIS -> {
@@ -132,7 +198,7 @@ public class IdCardHdService {
             return; // 幂等：回调/轮询重放
         }
         Long petProfileId = profiles.findByOwnerId(userId).map(PetProfile::getId).orElse(null);
-        purchases.save(IdCardHdPurchase.of(userId, petProfileId, channel, paymentIntentId));
+        purchases.save(IdCardHdPurchase.of(userId, petProfileId, null, channel, paymentIntentId));
         log.info("身份证高清图现金到账解锁 user={} intent={}", userId, paymentIntentId);
     }
 }
