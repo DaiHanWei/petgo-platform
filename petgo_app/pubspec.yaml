@@ -69,6 +69,8 @@ dependencies:
   crypto: ^3.0.3
   # Story 2.7：系统分享菜单（名片链接）。
   share_plus: ^10.1.4
+  # bug 20260721-334：身份证卡保存到相册（Android 10+/iOS 无需存储权限，SDK≤28 走 storage）。
+  gal: ^2.3.0
   # 高保真还原：原型内联 SVG 图标 1:1 渲染（禁止 Material Icons 近似替代）。
   flutter_svg: ^2.0.10+1
   # Story 5.5 L2：腾讯 IM Flutter SDK（兽医↔用户实时 C2C 收发）。

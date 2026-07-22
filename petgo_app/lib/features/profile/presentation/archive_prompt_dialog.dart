@@ -42,14 +42,16 @@ class ArchivePromptArgs {
 /// - ① 状态 A + 已建档：弹「存入/跳过」（redState 时直接存入无弹窗）。
 /// - ② 状态 A + 未建档：弹「立即创建/跳过」→ 立即创建挂起 pending + 跳 FR-11 建档（回灌见 create 页）。
 /// - ③ 状态 B/C：弹「去创建/跳过」→ 去创建先 FR-0G 切状态为 A，再挂起 pending + 跳 FR-11 建档。
-Future<void> showArchivePrompt(
+/// 返回 true 当且仅当本次调用【当场持久化了一条 ARCHIVED 记录】（供调用方 toast「已存入 diary」，
+/// bug 20260721-338）。跳过 / 已处理过 / 弹窗关闭 / 转去建档（异步回灌）均返回 false。
+Future<bool> showArchivePrompt(
   BuildContext context,
   WidgetRef ref,
   ArchivePromptArgs args,
 ) async {
   final guard = ref.read(archivePromptGuardProvider);
-  if (!await guard.needsPrompt(args.sourceRef)) return;
-  if (!context.mounted) return;
+  if (!await guard.needsPrompt(args.sourceRef)) return false;
+  if (!context.mounted) return false;
 
   final auth = ref.read(authControllerProvider);
   final status = auth.profile?.petStatus;
@@ -59,20 +61,20 @@ Future<void> showArchivePrompt(
   // ① 状态 A + 已建档。
   if (isOwner && hasProfile) {
     final pet = await ref.read(petProfileProvider.future);
-    if (!context.mounted) return;
+    if (!context.mounted) return false;
     if (pet != null) {
       if (args.redState) {
         // AC4：红色态 A 已建档 → 直接存入，无弹窗确认。
         guard.markHandled(args.sourceRef);
         await _record(ref, args, pet.id, ArchiveDecision.archived);
-        return;
+        return true;
       }
-      // 存入档案确认改用底部抽屉（原 AlertDialog 居中弹窗），与病例/诊断结果等底部弹层交互统一。
+      // 存入档案确认用底部抽屉（stag：与病例/诊断结果等底部弹层交互统一）。
       final decision = await showArchiveSaveSheet(context, petName: pet.name);
-      if (decision == null) return; // 关闭未选 → 不记录，下次仍可弹
+      if (decision == null) return false; // 关闭未选 → 不记录，下次仍可弹（bug 20260721-338 返回 bool）
       guard.markHandled(args.sourceRef);
       await _record(ref, args, pet.id, decision);
-      return;
+      return decision == ArchiveDecision.archived;
     }
     // hasProfile 但拉取为空（异常）→ 落到建档引导分支。
   }
@@ -82,7 +84,7 @@ Future<void> showArchivePrompt(
   final create = await showArchiveCreateGuideSheet(context, isBc: isBc);
   if (create != true) {
     guard.markHandled(args.sourceRef); // 跳过：本 session 不再弹
-    return;
+    return false;
   }
 
   // 挂起存档意图，待建档成功回灌（AC3/AC4）。
@@ -105,9 +107,11 @@ Future<void> showArchivePrompt(
       // 切换失败不阻断——建档页仍可继续；幂等回灌不受影响。
     }
   }
-  if (!context.mounted) return;
+  if (!context.mounted) return false;
   // 跳 FR-11 建档；origin=triageArchive → 建档完成跳过庆祝页并回灌（pet_profile_create_page 接管）。
+  // 存档在建档成功后异步回灌，非本次当场完成 → 返回 false（不在此 toast）。
   context.push('/profile/create?origin=triageArchive');
+  return false;
 }
 
 /// ① 存入档案确认底部抽屉（状态 A 已建档）。返回用户决定；下滑关闭未选返回 null。

@@ -99,6 +99,13 @@ public class AiUnlockService {
         }
 
         long price = platformConfig.pricing().getAiUnlockPrice();
+        // bug 20260721-343：后台把 AI 解锁价配成 0 = 全员免费解锁。免费短路——不建 charge/不扣费/不建单，
+        // 直接解锁。否则 price<=0 进 PaymentIntent.create 触发 amount>0 校验抛 422，前端只见「Couldn't unlock」。
+        if (price <= 0) {
+            task.unlock(UnlockSource.FREE_QUOTA, null);
+            tasks.save(task);
+            return UnlockResponse.unlocked(TriageResultResponse.from(task));
+        }
         return switch (method) {
             case FREE_QUOTA -> unlockByFreeQuota(userId, task);
             case PAWCOIN -> unlockByPawCoin(userId, task, price);

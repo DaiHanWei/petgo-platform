@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gal/gal.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -299,7 +300,8 @@ class _IdCardPageState extends ConsumerState<IdCardPage> {
     }
   }
 
-  /// 导出当前证件卡为 1600×900 PNG 并经系统分享面板保存/分享（Story 6.3 · F3/F4）。
+  /// 导出当前证件卡为 1600×900 PNG。渲染成字节后弹底部选单：保存到相册 / 分享（bug 20260721-334：
+  /// 原先只有系统分享面板、无「保存到相册」选项）。Story 6.3 · F3/F4。
   Future<void> _exportHd() async {
     final l10n = AppLocalizations.of(context);
     try {
@@ -314,13 +316,63 @@ class _IdCardPageState extends ConsumerState<IdCardPage> {
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) return;
       final bytes = byteData.buffer.asUint8List();
-      await Share.shareXFiles(
-        [XFile.fromData(Uint8List.fromList(bytes), name: 'tailtopia_id_card.png', mimeType: 'image/png')],
-        sharePositionOrigin: origin,
-      );
+      if (!mounted) return;
+      await _showExportSheet(bytes, origin);
     } catch (_) {
       if (mounted) _toast(l10n.idCardHdExportError);
     }
+  }
+
+  /// 导出选单：保存到相册 / 分享（bug 20260721-334）。
+  Future<void> _showExportSheet(Uint8List bytes, Rect? shareOrigin) async {
+    final l10n = AppLocalizations.of(context);
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetCtx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              key: const ValueKey('idCardSaveToGallery'),
+              leading: const Icon(Icons.download_rounded),
+              title: Text(l10n.idCardSaveToGallery),
+              onTap: () {
+                Navigator.of(sheetCtx).pop();
+                _saveToGallery(bytes);
+              },
+            ),
+            ListTile(
+              key: const ValueKey('idCardShareImage'),
+              leading: const Icon(Icons.ios_share_rounded),
+              title: Text(l10n.idCardShareImage),
+              onTap: () {
+                Navigator.of(sheetCtx).pop();
+                _shareImageBytes(bytes, shareOrigin);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 保存身份证图片到系统相册（bug 20260721-334）。gal 在 Android 10+/iOS 无需存储权限；
+  /// 失败（含权限拒绝）提示去开启相册权限。
+  Future<void> _saveToGallery(Uint8List bytes) async {
+    final l10n = AppLocalizations.of(context);
+    try {
+      await Gal.putImageBytes(bytes, name: 'tailtopia_id_card');
+      if (mounted) _toast(l10n.idCardSavedToGallery);
+    } catch (_) {
+      if (mounted) _toast(l10n.idCardSaveError);
+    }
+  }
+
+  Future<void> _shareImageBytes(Uint8List bytes, Rect? origin) async {
+    await Share.shareXFiles(
+      [XFile.fromData(bytes, name: 'tailtopia_id_card.png', mimeType: 'image/png')],
+      sharePositionOrigin: origin,
+    );
   }
 
   void _toast(String msg) {

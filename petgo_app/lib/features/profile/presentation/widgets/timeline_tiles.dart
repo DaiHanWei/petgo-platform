@@ -123,8 +123,10 @@ class _HealthEventTileState extends State<HealthEventTile> {
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                           color: AppColors.healthEventText)),
-                  if (item.symptomSummary != null && item.symptomSummary!.isNotEmpty) ...[
-                    const SizedBox(height: 1),
+                  // 副标题恒渲染，保证同类条目高度/样式一致（bug 20260721-341）；有摘要则可点展开
+                  // 看全（stag：长症状被折叠看不全），无摘要回退「点击查看结果」提示。
+                  const SizedBox(height: 1),
+                  if (item.symptomSummary != null && item.symptomSummary!.isNotEmpty)
                     GestureDetector(
                       key: const ValueKey('healthEventSymptom'),
                       behavior: HitTestBehavior.opaque,
@@ -135,8 +137,14 @@ class _HealthEventTileState extends State<HealthEventTile> {
                           style: TextStyle(
                               fontSize: 11,
                               color: AppColors.healthEventText.withValues(alpha: 0.8))),
-                    ),
-                  ],
+                    )
+                  else
+                    Text(l10n.timelineConsultTapToView,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.healthEventText.withValues(alpha: 0.8))),
                 ],
               ),
             ),

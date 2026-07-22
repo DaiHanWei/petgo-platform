@@ -5,6 +5,8 @@
     <!-- Android 13+ 分区媒体；≤12 回退 READ_EXTERNAL_STORAGE。 -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
+    <!-- bug 20260721-334：身份证保存到相册；Android ≤9(SDK28) 写相册需此权限，10+ 分区存储无需。 -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28"/>
     <!-- 推送通知（Story 6.4/6.7，Android 13+ 运行时权限）。 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <!-- 里程碑解锁庆祝振动（直接驱动 Vibrator，绕过系统触感反馈开关）。 -->

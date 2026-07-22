@@ -44,6 +44,12 @@ public class HealthEventService {
         return healthEvents.existsBySourceRef(sourceRef);
     }
 
+    /** 该 sourceRef 是否【已存档】(ARCHIVED)：问诊结果页据此隐藏保存按钮（bug 20260721-333）。 */
+    @Transactional(readOnly = true)
+    public boolean isArchived(String sourceRef) {
+        return healthEvents.existsBySourceRefAndArchiveDecision(sourceRef, ArchiveDecision.ARCHIVED);
+    }
+
     @Transactional
     public ArchiveDecisionResponse recordDecision(long ownerId, ArchiveDecisionRequest req) {
         // 归属校验：petId 必须属当前用户（防越权写他人档案）。
