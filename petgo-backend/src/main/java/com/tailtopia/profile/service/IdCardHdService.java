@@ -37,6 +37,8 @@ public class IdCardHdService {
     private static final Logger log = LoggerFactory.getLogger(IdCardHdService.class);
     private static final String REF_TYPE = "ID_HD";
     private static final String CURRENCY = "IDR";
+    // 付款窗 60min（与充值一致，< GemPay QR 有效期）：超窗二维码过期，重开出新码（bug 20260722）。
+    private static final java.time.Duration PAY_WINDOW = java.time.Duration.ofMinutes(60);
 
     private final PetProfileRepository profiles;
     private final IdCardHdPurchaseRepository purchases;
@@ -86,10 +88,11 @@ public class IdCardHdService {
                 yield HdPurchaseResponse.granted();
             }
             case QRIS -> {
-                // 幂等键 id-hd:{petProfileId}：重复发起取回既有 intent（不双建）。不设短窗 → PENDING 可长期复用重复支付。
+                // 幂等键 id-hd:{petProfileId}：60min 付款窗内重复发起取回既有 intent（不双建）；超窗则懒过期建新码
+                // （bug：过期后重开支付页应出新二维码而非旧的）。窗口 < GemPay QR 有效期，窗口内码始终存活。
                 PaymentIntentResponse intent = paymentIntents.createIntent(
                         userId, PaymentPurpose.ID_HD, PayChannel.QRIS, price, CURRENCY,
-                        "id-hd:" + petProfileId);
+                        "id-hd:" + petProfileId, PAY_WINDOW);
                 String payload = ensureCharge(intent, price, PayChannel.QRIS, PaymentPurpose.ID_HD);
                 yield HdPurchaseResponse.paymentRequired(intent, payload);
             }
