@@ -156,6 +156,15 @@ class ApiPaths {
   /// 身份证高清图付费下载（Story 6.3）。POST 一次性永久解锁（QRIS/PawCoin）；幂等不重复扣费。
   static const String petProfileIdCardHdDownload = '$base/pet-profiles/me/id-card/hd-download';
 
+  /// 身份证多卡快照（Story 6.7）。POST 建新卡（分配新 serial）/ GET 历史列表（createdAt 倒序）。
+  static const String meIdCards = '$base/me/id-cards';
+
+  /// 单卡快照详情（Story 6.7）。非本人 404。
+  static String meIdCard(int cardId) => '$base/me/id-cards/$cardId';
+
+  /// 单卡高清图付费下载（Story 6.7）。POST body `{channel}` → HdPurchaseResponse；每卡独立解锁。
+  static String meIdCardHd(int cardId) => '$base/me/id-cards/$cardId/hd-download';
+
   /// 成长时间线（Story 2.4）。
   static const String petProfileTimeline = '$base/pet-profiles/me/timeline';
 

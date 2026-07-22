@@ -3,7 +3,11 @@ package com.tailtopia.profile.web;
 import com.tailtopia.profile.dto.ArchiveStatsResponse;
 import com.tailtopia.profile.dto.CalendarMonthResponse;
 import com.tailtopia.profile.dto.DayDetailResponse;
+import com.tailtopia.profile.dto.CreateIdCardRequest;
 import com.tailtopia.profile.dto.HdPurchaseRequest;
+import com.tailtopia.profile.dto.IdCardResponse;
+import java.util.List;
+import org.springframework.web.bind.annotation.PathVariable;
 import com.tailtopia.profile.dto.HdPurchaseResponse;
 import com.tailtopia.profile.dto.IdCardDataResponse;
 import com.tailtopia.profile.dto.PetProfileCreateRequest;
@@ -185,6 +189,38 @@ public class ProfileApiController {
         long ownerId = currentUserId(jwt);
         rateLimiter.check("rl:profile:idhd:" + ownerId, CREATE_LIMIT, CREATE_WINDOW);
         return idCardHdService.purchase(ownerId, req.channel());
+    }
+
+    // ---- Story 6-7：身份证多卡（快照历史列表 + 独立建卡器 + 按卡解锁） ----
+
+    /** 历史卡列表（建卡时刻倒序）。点进 KTP 先看这个 + 建卡入口。 */
+    @GetMapping("/me/id-cards")
+    public List<IdCardResponse> myIdCards(@AuthenticationPrincipal Jwt jwt) {
+        return idCardService.listMyCards(currentUserId(jwt));
+    }
+
+    /** 单卡详情（归属校验，非本人 404 防枚举）。 */
+    @GetMapping("/me/id-cards/{cardId}")
+    public IdCardResponse myIdCardById(@AuthenticationPrincipal Jwt jwt, @PathVariable long cardId) {
+        return idCardService.getMyCard(currentUserId(jwt), cardId);
+    }
+
+    /** 独立建卡器：把当前填写的信息冻结成一张新卡快照（分配新 serial）。 */
+    @PostMapping("/me/id-cards")
+    public IdCardResponse createIdCard(@AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody CreateIdCardRequest req) {
+        long ownerId = currentUserId(jwt);
+        rateLimiter.check("rl:profile:idcard:" + ownerId, CREATE_LIMIT, CREATE_WINDOW);
+        return idCardService.createCard(ownerId, req);
+    }
+
+    /** 购买某卡 HD（按卡解锁）。 */
+    @PostMapping("/me/id-cards/{cardId}/hd-download")
+    public HdPurchaseResponse purchaseCardHd(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable long cardId, @Valid @RequestBody HdPurchaseRequest req) {
+        long ownerId = currentUserId(jwt);
+        rateLimiter.check("rl:profile:idhd:" + ownerId, CREATE_LIMIT, CREATE_WINDOW);
+        return idCardHdService.purchaseCard(ownerId, cardId, req.channel());
     }
 
     private static long currentUserId(Jwt jwt) {

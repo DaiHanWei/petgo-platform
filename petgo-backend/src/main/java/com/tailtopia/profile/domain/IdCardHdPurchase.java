@@ -30,6 +30,10 @@ public class IdCardHdPurchase {
     @Column(name = "pet_profile_id")
     private Long petProfileId;
 
+    /** 购买绑定的卡快照 id（Story 6-7，决策①）：一卡一次购买。老数据回填后非空。 */
+    @Column(name = "card_id")
+    private Long cardId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "pay_channel", nullable = false, length = 16)
     private PayChannel payChannel;
@@ -43,11 +47,12 @@ public class IdCardHdPurchase {
     protected IdCardHdPurchase() {
     }
 
-    public static IdCardHdPurchase of(long userId, Long petProfileId, PayChannel payChannel,
-            Long paymentIntentId) {
+    public static IdCardHdPurchase of(long userId, Long petProfileId, Long cardId,
+            PayChannel payChannel, Long paymentIntentId) {
         IdCardHdPurchase p = new IdCardHdPurchase();
         p.userId = userId;
         p.petProfileId = petProfileId;
+        p.cardId = cardId;
         p.payChannel = payChannel;
         p.paymentIntentId = paymentIntentId;
         return p;
@@ -68,6 +73,10 @@ public class IdCardHdPurchase {
 
     public Long getPetProfileId() {
         return petProfileId;
+    }
+
+    public Long getCardId() {
+        return cardId;
     }
 
     public PayChannel getPayChannel() {
