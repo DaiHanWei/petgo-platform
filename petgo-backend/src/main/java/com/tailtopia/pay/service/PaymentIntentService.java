@@ -83,9 +83,15 @@ public class PaymentIntentService {
 
         Optional<Long> existing = idempotency.findResourceId(idempotencyKey);
         if (existing.isPresent()) {
-            return intents.findById(existing.get())
-                    .map(PaymentIntentResponse::of)
+            PaymentIntent ex = intents.findById(existing.get())
                     .orElseThrow(() -> AppException.notFound("支付意图不存在"));
+            // 过期的 PENDING 意图不再复用（bug：超付款窗后重开支付页应出【新】码而非旧码）。
+            // 懒过期后落到下方新建，末尾 idempotency.store 覆盖映射到新意图（Redis SET 覆盖，非 NX）。
+            if (!(ex.getStatus() == PaymentStatus.PENDING && ex.isExpiredAt(Instant.now()))) {
+                return PaymentIntentResponse.of(ex);
+            }
+            ex.markExpired(null);
+            intents.saveAndFlush(ex);
         }
 
         Instant expiresAt = ttl == null ? null : Instant.now().plus(ttl);

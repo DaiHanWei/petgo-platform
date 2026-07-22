@@ -56,6 +56,8 @@ public class AiUnlockService {
     private static final Logger log = LoggerFactory.getLogger(AiUnlockService.class);
     private static final String REF_TYPE = "AI_UNLOCK";
     private static final String CURRENCY = "IDR";
+    // 付款窗 60min（与充值一致，< GemPay QR 有效期）：超窗二维码过期，重开出新码（bug 20260722）。
+    private static final java.time.Duration PAY_WINDOW = java.time.Duration.ofMinutes(60);
 
     private final TriageTaskRepository tasks;
     private final FreeQuotaService freeQuota;
@@ -134,9 +136,11 @@ public class AiUnlockService {
     }
 
     private UnlockResponse createCashUnlock(long userId, TriageTask task, long price, PayChannel channel) {
-        // 幂等键 ai-unlock:{triageId}：重复发起取回既有 intent（不双建单）。不设短窗 → PENDING 可长期复用重复支付（同充值）。
+        // 幂等键 ai-unlock:{triageId}：60min 付款窗内重复发起取回既有 intent（不双建单）；超窗则懒过期建新码
+        // （bug：过期后重开支付页应出新二维码而非旧的）。窗口 < GemPay QR 有效期，窗口内码始终存活。
         PaymentIntentResponse intent = paymentIntents.createIntent(
-                userId, PaymentPurpose.AI_UNLOCK, channel, price, CURRENCY, "ai-unlock:" + task.getId());
+                userId, PaymentPurpose.AI_UNLOCK, channel, price, CURRENCY, "ai-unlock:" + task.getId(),
+                PAY_WINDOW);
         // 订单幂等：同 intent token 已建则复用（唯一约束兜底）。
         orders.findByPaymentIntentToken(intent.token()).orElseGet(() -> orders.save(
                 AiConsultOrder.pendingCash(tokenGenerator.generate(), userId, task.getId(), price,
