@@ -85,13 +85,18 @@ public class PaymentIntentService {
         if (existing.isPresent()) {
             PaymentIntent ex = intents.findById(existing.get())
                     .orElseThrow(() -> AppException.notFound("支付意图不存在"));
-            // 过期的 PENDING 意图不再复用（bug：超付款窗后重开支付页应出【新】码而非旧码）。
-            // 懒过期后落到下方新建，末尾 idempotency.store 覆盖映射到新意图（Redis SET 覆盖，非 NX）。
-            if (!(ex.getStatus() == PaymentStatus.PENDING && ex.isExpiredAt(Instant.now()))) {
+            // 仅【PAID】(已付幂等) 或【PENDING 且未过窗】(复用同一 QR) 才返回既有意图；
+            // 其余（已 EXPIRED / PENDING 已过窗 / 失败）→ 落到下方新建，出新码（bug：超付款窗后重开应出新码非旧码）。
+            // 末尾 idempotency.store 覆盖映射到新意图（Redis SET 覆盖，非 NX）。
+            boolean reusable = ex.getStatus() == PaymentStatus.PAID
+                    || (ex.getStatus() == PaymentStatus.PENDING && !ex.isExpiredAt(Instant.now()));
+            if (reusable) {
                 return PaymentIntentResponse.of(ex);
             }
-            ex.markExpired(null);
-            intents.saveAndFlush(ex);
+            if (ex.getStatus() == PaymentStatus.PENDING) {
+                ex.markExpired(null); // 仍 PENDING 但已过窗 → 懒过期（已 EXPIRED 则无需再置）
+                intents.saveAndFlush(ex);
+            }
         }
 
         Instant expiresAt = ttl == null ? null : Instant.now().plus(ttl);
