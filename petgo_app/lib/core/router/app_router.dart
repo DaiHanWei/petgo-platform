@@ -272,7 +272,9 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // 进行中会话界面（Story 5.5）。用户侧 /consult/conversation、兽医侧 /vet/conversation（各自 role 守卫）。
       GoRoute(
         path: '/consult/conversation/:id',
-        builder: (c, s) => ConsultConversationPage(sessionId: int.parse(s.pathParameters['id']!)),
+        builder: (c, s) => ConsultConversationPage(
+            sessionId: int.parse(s.pathParameters['id']!),
+            from: s.uri.queryParameters['from']),
       ),
       GoRoute(
         path: '/vet/conversation/:id',

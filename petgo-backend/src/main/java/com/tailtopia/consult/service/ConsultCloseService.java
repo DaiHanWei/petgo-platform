@@ -70,6 +70,10 @@ public class ConsultCloseService {
         s.recordDiagnosis(diagnosis); // Story C：先定格诊断，再转 PENDING_CLOSE
         s.endByVet();
         sessions.save(s);
+        // bug 20260721-348：诊断交付即完成订单（IN_PROGRESS→COMPLETED），不再等评分门/30min 超时才补完成，
+        // 否则「已发诊断」到「会话真正 CLOSED」的窗口内订单一直显示 In progress。幂等 + 按本会话精确取单，
+        // 与 bug 324（防误标他单）不冲突；免费直连流无订单则静默跳过。
+        completeBillingOrder(s);
         presence.goAvailable(vetId); // 结束后回在线可接新单（解除 5.5 BUSY）
         if (s.getImConversationId() != null) {
             // 诊断作为系统消息推给用户（聊天里直接可见）。含健康数据：仅经 IM 投递，绝不进日志。

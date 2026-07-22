@@ -12,6 +12,9 @@ public interface HealthEventRepository extends JpaRepository<HealthEvent, Long> 
 
     boolean existsBySourceRef(String sourceRef);
 
+    /** 是否【已存档】(ARCHIVED，非 SKIPPED)：结果页据此隐藏保存按钮（bug 20260721-333）。 */
+    boolean existsBySourceRefAndArchiveDecision(String sourceRef, ArchiveDecision decision);
+
     Optional<HealthEvent> findBySourceRef(String sourceRef);
 
     /** 时间线读：某宠物已存档的健康事件，createdAt 倒序游标分页（Story 2.5 → 2.4 聚合）。 */

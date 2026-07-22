@@ -93,6 +93,29 @@ class ConsultOrderCompletionIntegrationTest extends ApiIntegrationTest {
                 .isEqualTo(ConsultOrderStatus.COMPLETED);
     }
 
+    // ---- bug 20260721-348：兽医结束会话（交付诊断）即完成订单，不等评分门/30min 超时 ----
+
+    @Test
+    void endByVetCompletesPaidOrderImmediately() {
+        long userId = newUser().getId();
+        long vetId = 5000L + SEQ.incrementAndGet();
+        ConsultSession s = ConsultSession.startWaiting(userId, ConsultSource.DIRECT);
+        s.markInProgress(vetId);
+        s = sessions.save(s); // 不 attach IM → endByVet 跳过系统消息（避开 IM 依赖）
+        ConsultOrder o = ConsultOrder.inProgress("ord-" + SEQ.incrementAndGet(), userId,
+                vetId, 1L, 50000L, PayChannel.PAWCOIN, null, 30000L, 60, 50000L, Instant.now());
+        o.markSessionStarted(Instant.now(), s.getId());
+        o = orders.save(o);
+
+        closeService.endByVet(vetId, s.getId(), DIAGNOSIS); // IN_PROGRESS → PENDING_CLOSE + 订单完成
+
+        ConsultOrder after = orders.findById(o.getId()).orElseThrow();
+        assertThat(after.getStatus()).isEqualTo(ConsultOrderStatus.COMPLETED);
+        assertThat(after.getSessionEndedAt()).isNotNull();
+        assertThat(stageEvents.findByConsultOrderIdOrderByOccurredAtAsc(o.getId()))
+                .anyMatch(e -> e.getEventType() == ConsultStageEvent.SESSION_ENDED);
+    }
+
     // ---- AC1：免费直连流会话（无订单）关闭 → 不报错、不建单 ----
 
     @Test

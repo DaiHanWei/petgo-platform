@@ -40,14 +40,17 @@ public class ConsultSessionController {
     private final ConsultCloseService closeService;
     private final ConsultAiContextService aiContextService;
     private final com.tailtopia.consult.service.ConsultSuspensionService suspensionService;
+    private final com.tailtopia.profile.service.HealthEventService healthEventService;
 
     public ConsultSessionController(ConsultSessionService service, ConsultCloseService closeService,
             ConsultAiContextService aiContextService,
-            com.tailtopia.consult.service.ConsultSuspensionService suspensionService) {
+            com.tailtopia.consult.service.ConsultSuspensionService suspensionService,
+            com.tailtopia.profile.service.HealthEventService healthEventService) {
         this.service = service;
         this.closeService = closeService;
         this.aiContextService = aiContextService;
         this.suspensionService = suspensionService;
+        this.healthEventService = healthEventService;
     }
 
     @PostMapping
@@ -104,12 +107,16 @@ public class ConsultSessionController {
      * <p>诊断为健康数据：仅按需返回，绝不进日志（访问日志层已对 {@code diagnosis} 字段脱敏）。
      */
     @GetMapping("/{id}/diagnosis")
-    public org.springframework.http.ResponseEntity<com.tailtopia.consult.domain.VetDiagnosis> diagnosis(
+    public org.springframework.http.ResponseEntity<com.tailtopia.consult.dto.ConsultDiagnosisResponse> diagnosis(
             @AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
         var d = service.getForUser(currentUserId(jwt), id).getVetDiagnosis();
-        return d == null
-                ? org.springframework.http.ResponseEntity.noContent().build()
-                : org.springframework.http.ResponseEntity.ok(d);
+        if (d == null) {
+            return org.springframework.http.ResponseEntity.noContent().build();
+        }
+        // archived=该会诊是否已存入宠物 diary（sourceRef=consult:<id>），供结果页隐藏保存按钮（bug 20260721-333）。
+        boolean archived = healthEventService.isArchived("consult:" + id);
+        return org.springframework.http.ResponseEntity.ok(
+                com.tailtopia.consult.dto.ConsultDiagnosisResponse.of(d, archived));
     }
 
     @PatchMapping("/{id}/continue-waiting")

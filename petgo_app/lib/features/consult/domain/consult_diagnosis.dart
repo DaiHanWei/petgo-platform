@@ -12,6 +12,7 @@ class ConsultDiagnosis {
     this.followUp = '',
     this.worseningSigns = '',
     this.clinicWithin = '',
+    this.isArchived = false,
   });
 
   final String diagnosis;
@@ -23,6 +24,9 @@ class ConsultDiagnosis {
   final String worseningSigns;
   final String clinicWithin;
 
+  /// 本次会诊是否已存入宠物 diary（后端 `archived`）：结果页据此隐藏「保存」按钮（bug 20260721-333）。
+  final bool isArchived;
+
   factory ConsultDiagnosis.fromJson(Map<String, dynamic> json) => ConsultDiagnosis(
         diagnosis: (json['diagnosis'] ?? '') as String,
         generalAdvice: (json['generalAdvice'] ?? '') as String,
@@ -32,5 +36,18 @@ class ConsultDiagnosis {
         followUp: (json['followUp'] ?? '') as String,
         worseningSigns: (json['worseningSigns'] ?? '') as String,
         clinicWithin: (json['clinicWithin'] ?? '') as String,
+        isArchived: (json['archived'] ?? false) as bool,
+      );
+
+  ConsultDiagnosis copyWith({bool? isArchived}) => ConsultDiagnosis(
+        diagnosis: diagnosis,
+        generalAdvice: generalAdvice,
+        needsMedication: needsMedication,
+        medName: medName,
+        medFrequency: medFrequency,
+        followUp: followUp,
+        worseningSigns: worseningSigns,
+        clinicWithin: clinicWithin,
+        isArchived: isArchived ?? this.isArchived,
       );
 }

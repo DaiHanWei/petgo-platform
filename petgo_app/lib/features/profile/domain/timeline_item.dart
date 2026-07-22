@@ -51,7 +51,8 @@ class TimelineItem {
     if (ref == null || ref.isEmpty) return null;
     final id = ref.contains(':') ? ref.substring(ref.lastIndexOf(':') + 1) : ref;
     if (id.isEmpty || int.tryParse(id) == null) return null;
-    if (sourceType == 'VET_CONSULT') return '/consult/conversation/$id';
+    // from=diary：从 diary 进入，会话页返回应回 diary 而非 /triage(Health) Tab（bug 20260721-336）。
+    if (sourceType == 'VET_CONSULT') return '/consult/conversation/$id?from=diary';
     if (sourceType == 'AI_TRIAGE') return '/triage/result/$id';
     return null;
   }

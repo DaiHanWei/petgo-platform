@@ -114,15 +114,18 @@ class HealthEventTile extends StatelessWidget {
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                           color: AppColors.healthEventText)),
-                  if (item.symptomSummary != null && item.symptomSummary!.isNotEmpty) ...[
-                    const SizedBox(height: 1),
-                    Text(item.symptomSummary!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: AppColors.healthEventText.withValues(alpha: 0.8))),
-                  ],
+                  // 副标题恒渲染，保证同类条目高度/样式一致（bug 20260721-341）：
+                  // 有摘要显摘要，无摘要回退「点击查看结果」提示，避免一条两行一条一行。
+                  const SizedBox(height: 1),
+                  Text(
+                      (item.symptomSummary != null && item.symptomSummary!.isNotEmpty)
+                          ? item.symptomSummary!
+                          : l10n.timelineConsultTapToView,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.healthEventText.withValues(alpha: 0.8))),
                 ],
               ),
             ),

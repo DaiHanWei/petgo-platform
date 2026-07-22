@@ -30,6 +30,8 @@
 		<string>TailTopia needs camera access so you can take photos of your pet for profiles, posts, and AI triage.</string>
 		<key>NSPhotoLibraryUsageDescription</key>
 		<string>TailTopia needs photo library access so you can choose pet photos for profiles, posts, and AI triage.</string>
+		<key>NSPhotoLibraryAddUsageDescription</key>
+		<string>TailTopia needs permission to save your pet's ID card image to your photo library.</string>
 		<!-- Google Sign-In (google_sign_in 7.x)。client ID 非机密，随客户端分发。 -->
 		<key>GIDClientID</key>
 		<string>952015467016-rip06l8hh1mn4ppi4t3f758b0ah1nb8d.apps.googleusercontent.com</string>
