@@ -109,25 +109,9 @@ class _LoginHardDialogState extends State<LoginHardDialog> {
               ),
               const SizedBox(height: 10),
             ],
-            // 主按钮：Google 登录（白底 + 描边 + Google G）。
+            // 主按钮：Google 登录（白底 + 描边 + Google G）。V1 无独立注册流（Google 即建号），
+            // 原「Daftar Gratis」次按钮与 Google 同源、纯冗余，2026-07-23 按产品要求移除。
             _GoogleButton(loading: _loading, onTap: _loading ? null : () => _run(widget.onLogin)),
-            const SizedBox(height: 10),
-            // 次按钮：Daftar Gratis（实心紫）——决策 #4：V1 无独立注册流，与 Google 同源建号。
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                key: const ValueKey('hardDialogRegisterCta'),
-                onPressed: _loading ? null : () => _run(widget.onLogin),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.mint,
-                  foregroundColor: AppColors.onAccent,
-                  padding: const EdgeInsets.symmetric(vertical: 13),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
-                ),
-                child: Text(l10n.loginGateRegister,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-              ),
-            ),
             const SizedBox(height: 16),
             // 继续看（文字链）。
             TextButton(
