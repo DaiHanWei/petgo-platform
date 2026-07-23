@@ -42,13 +42,18 @@ public record TriageResultResponse(
         List<String> emergencySteps,
         List<String> emergencyAvoid,
         UnlockSource unlockSource,
-        Boolean locked) {
+        Boolean locked,
+        Long unlockPriceIdr) {
 
-    public static TriageResultResponse from(TriageTask t) {
+    /**
+     * @param unlockPriceIdr AI 详建解锁价（后台可配，与扣费同源）：供锁定态前端 paywall/sheet 展示，
+     *     避免前端硬编码旧价（bug 20260721-342）。非 DONE 置 null（保「未就绪仅回 status」契约）。
+     */
+    public static TriageResultResponse from(TriageTask t, long unlockPriceIdr) {
         if (t.getStatus() != TriageStatus.DONE) {
             // 处理中 / 失败：仅回 status，不泄露未定级别/锁态。
             return new TriageResultResponse(
-                    t.getStatus(), null, null, null, null, null, null, null, null, null);
+                    t.getStatus(), null, null, null, null, null, null, null, null, null, null);
         }
         Map<String, Object> p = t.getParsedResult();
         boolean unlocked = isUnlocked(t);
@@ -62,7 +67,8 @@ public record TriageResultResponse(
                 strList(p, "emergencySteps"),                 // 安全免费：红色强提醒
                 strList(p, "emergencyAvoid"),                 // 安全免费：红色强提醒
                 t.getUnlockSource(),                          // 当前锁态来源（null 按 LOCKED 语义）
-                !unlocked);                                   // 前端 paywall 渲染依据
+                !unlocked,                                    // 前端 paywall 渲染依据
+                unlockPriceIdr);                              // 解锁价（后台可配，展示价=扣费价）
     }
 
     /**

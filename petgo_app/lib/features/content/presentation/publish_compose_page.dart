@@ -25,6 +25,7 @@ import '../../profile/domain/pet_profile.dart';
 import '../../profile/presentation/widgets/milestone_celebration.dart';
 import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/dashed_rect.dart';
+import '../../../shared/widgets/keyboard_safe_area.dart';
 import '../../../shared/utils/media_permission.dart';
 import '../../me/data/my_posts_repository.dart';
 import '../data/content_repository.dart';
@@ -363,12 +364,10 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       return PublishReviewingView(args: _reviewingArgs!);
     }
     final growthSelected = controller.type == ContentType.growthMoment;
-    // 键盘弹出时把整个内容区上推键盘高度，使滚动视口底边落在键盘之上 →
+    // 键盘弹出时把整个内容区上推键盘高度（固定高度 sheet 走标准件 KeyboardInset，带 120ms 动画 +
+    // 纳入 keyboard_safe_area 契约测试，bug 20260721-321），使滚动视口底边落在键盘之上 →
     // 被键盘遮住的输入框被判定为「视口外」，EditableText 自动 ensureVisible 滚上来。
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
+    return KeyboardInset(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

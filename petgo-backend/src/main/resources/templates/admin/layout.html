@@ -148,6 +148,8 @@
                 <button type="submit" class="logout" th:text="#{admin.topbar.logout}">退出登录</button>
             </form>
         </div>
+        <!-- 全站 toast（仅有 ${toast} flash 时出现，admin.js 定时自动消失，bug 346）。 -->
+        <div class="toast" role="status" th:if="${toast}" th:text="${toast}">toast</div>
         <div th:replace="${content}">页面内容占位</div>
     </main>
 </div>

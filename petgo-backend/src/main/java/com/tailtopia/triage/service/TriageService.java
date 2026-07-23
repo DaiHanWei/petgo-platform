@@ -28,10 +28,13 @@ public class TriageService {
 
     private final TriageTaskRepository tasks;
     private final ApplicationEventPublisher events;
+    private final com.tailtopia.config.service.PlatformConfigService platformConfig;
 
-    public TriageService(TriageTaskRepository tasks, ApplicationEventPublisher events) {
+    public TriageService(TriageTaskRepository tasks, ApplicationEventPublisher events,
+            com.tailtopia.config.service.PlatformConfigService platformConfig) {
         this.tasks = tasks;
         this.events = events;
+        this.platformConfig = platformConfig;
     }
 
     /**
@@ -66,7 +69,8 @@ public class TriageService {
         if (task == null || task.getUserId() != userId) {
             throw AppException.forbidden("无权访问该分诊任务");
         }
-        return TriageResultResponse.from(task);
+        // 带上后台可配的 AI 解锁价（展示价=扣费价，bug 342：前端不再硬编码旧价）。
+        return TriageResultResponse.from(task, platformConfig.pricing().getAiUnlockPrice());
     }
 
     /**

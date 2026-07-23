@@ -150,12 +150,13 @@ Future<UnlockMethod?> showUnlockMethodSheet(
 Future<void> runAiUnlockFlow(
   BuildContext context,
   WidgetRef ref,
-  int triageId,
-) async {
+  int triageId, {
+  int? priceIdr,
+}) async {
   final UnlockMethod? method = await showUnlockMethodSheet(
     context,
     ref,
-    priceIdr: kAiUnlockPriceIdr,
+    priceIdr: priceIdr ?? kAiUnlockPriceIdr, // 后端下发价优先，回退硬编码默认（bug 342）
   );
   if (method == null || !context.mounted) return;
   final TriageUnlockController notifier = ref.read(

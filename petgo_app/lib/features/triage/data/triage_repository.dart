@@ -53,6 +53,7 @@ class TriageResult {
     this.emergencyAvoid = const <String>[],
     this.locked,
     this.unlockSource,
+    this.priceIdr,
   });
 
   final TriageStatus status;
@@ -68,6 +69,9 @@ class TriageResult {
 
   /// 解锁来源（LOCKED/FREE_QUOTA/PAID，Story 2.2）。展示/调试用；渲染以 [locked] 为准。
   final String? unlockSource;
+
+  /// AI 详建解锁价（IDR，后台可配，与扣费同源，bug 20260721-342）。null=后端未下发 → 前端回退 kAiUnlockPriceIdr。
+  final int? priceIdr;
 
   /// 红色态对症院前应急（仅红色态后端产出；安全层升红/AI 失败时为空 → UI 回退通用步骤）。
   final List<String> emergencySteps;
@@ -93,6 +97,7 @@ class TriageResult {
         emergencyAvoid: emergencyAvoid,
         locked: locked,
         unlockSource: unlockSource,
+        priceIdr: priceIdr,
       );
 
   /// 详建是否应显示 paywall（Story 2.4）：仅 DONE + 后端标 locked + 非红色（红色永不锁，前端双保险）。
@@ -113,6 +118,7 @@ class TriageResult {
         emergencyAvoid: _emergencyList(json['emergencyAvoid']),
         locked: json['locked'] as bool?,
         unlockSource: json['unlockSource'] as String?,
+        priceIdr: (json['unlockPriceIdr'] as num?)?.toInt(),
       );
 
   static List<String> _emergencyList(Object? raw) =>

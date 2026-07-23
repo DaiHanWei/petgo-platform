@@ -54,7 +54,8 @@ public class AdminConfigController {
         try {
             write.updatePricing(new PricingForm(vetConsultPrice, vetShareRate, aiUnlockPrice,
                     idHdDownloadPrice, monthlyFreeQuota), admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "定价已更新（仅影响后续新成交；操作留审计）");
+            // bug 20260721-346：定价保存成功提示改用 toast（短暂自动消失），区别于常驻 notice 横幅。
+            flash.addFlashAttribute("toast", "定价已更新（仅影响后续新成交；操作留审计）");
         } catch (AppException e) {
             flash.addFlashAttribute("error", e.getMessage());
         }
