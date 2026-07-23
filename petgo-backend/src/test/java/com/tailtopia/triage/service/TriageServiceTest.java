@@ -35,7 +35,11 @@ class TriageServiceTest {
     void setUp() {
         tasks = mock(TriageTaskRepository.class);
         events = mock(ApplicationEventPublisher.class);
-        service = new TriageService(tasks, events);
+        var platformConfig = mock(com.tailtopia.config.service.PlatformConfigService.class);
+        var pricing = mock(com.tailtopia.config.domain.PricingConfig.class);
+        when(pricing.getAiUnlockPrice()).thenReturn(10000L);
+        when(platformConfig.pricing()).thenReturn(pricing);
+        service = new TriageService(tasks, events, platformConfig);
     }
 
     @Test

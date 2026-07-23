@@ -25,9 +25,12 @@ String formatIdr(int amount) => 'Rp${formatKoin(amount)}';
 /// 无障碍：装饰性占位骨架 [ExcludeSemantics] 对读屏隐藏；整卡一条 [Semantics] 提示「详建已锁定，可解锁」，
 /// CTA 按钮自带可读标签。红色永不锁——本 widget 仅在 `result.isDetailLocked`（非红）时被结果页渲染。
 class TriagePaywall extends ConsumerWidget {
-  const TriagePaywall({super.key, required this.triageId, this.showCta = true});
+  const TriagePaywall({super.key, required this.triageId, this.showCta = true, this.priceIdr});
 
   final int triageId;
+
+  /// 后端下发的解锁价（bug 342）；null → 回退 [kAiUnlockPriceIdr]。
+  final int? priceIdr;
 
   /// 0718：等级+详建捆绑锁时，解锁 CTA 移到页面底部栏，此处只留骨架+锁文案（[showCta]=false）。
   final bool showCta;
@@ -35,7 +38,7 @@ class TriagePaywall extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final price = formatIdr(kAiUnlockPriceIdr);
+    final price = formatIdr(priceIdr ?? kAiUnlockPriceIdr);
 
     // 额度/余额不足错误 → SnackBar 友好提示（不显 ProblemDetail 原文）。
     ref.listen<TriageUnlockState>(triageUnlockControllerProvider, (prev, next) {
@@ -98,7 +101,7 @@ class TriagePaywall extends ConsumerWidget {
               key: const ValueKey('triageUnlockCta'),
               onPressed: busy
                   ? null
-                  : () => runAiUnlockFlow(context, ref, triageId),
+                  : () => runAiUnlockFlow(context, ref, triageId, priceIdr: priceIdr),
               style: FilledButton.styleFrom(backgroundColor: AppColors.mint),
               child: busy
                   ? const SizedBox(

@@ -117,7 +117,7 @@ class TriageResultView extends ConsumerWidget {
                     ? l10n.triageHomeCareLabel
                     : (isYellow ? l10n.triageCareLabel : l10n.triageHomeCareLabel),
                 child: locked
-                    ? TriagePaywall(triageId: triageId!, showCta: false)
+                    ? TriagePaywall(triageId: triageId!, showCta: false, priceIdr: result.priceIdr)
                     : Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -154,7 +154,7 @@ class TriageResultView extends ConsumerWidget {
               // 绿（原型 ai-result-green 3 钮）：Simpan 存档 / Tetap Konsultasi → P-20 / Selesai 退出。
               if (locked) ...<Widget>[
                 Text(
-                  l10n.triageUnlockFooter(formatIdr(kAiUnlockPriceIdr)),
+                  l10n.triageUnlockFooter(formatIdr(result.priceIdr ?? kAiUnlockPriceIdr)),
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 13, height: 1.5, color: AppColors.ink2),
                 ),
@@ -163,7 +163,7 @@ class TriageResultView extends ConsumerWidget {
                   btnKey: const ValueKey('triageUnlockOpenFull'),
                   label: l10n.triageUnlockOpenFull,
                   color: AppColors.mint,
-                  onTap: () => runAiUnlockFlow(context, ref, triageId!),
+                  onTap: () => runAiUnlockFlow(context, ref, triageId!, priceIdr: result.priceIdr),
                 ),
               ] else if (isYellow) ...<Widget>[
                 _filledBtn(

@@ -97,7 +97,7 @@ public class AiUnlockService {
         }
         // 🔒 入口短路（在任何扣费之前）：红色永不锁不扣费（AC6）+ 已解锁不重复扣费（AC5）。
         if (task.getDangerLevel() == DangerLevel.RED || isUnlocked(task)) {
-            return UnlockResponse.unlocked(TriageResultResponse.from(task));
+            return UnlockResponse.unlocked(TriageResultResponse.from(task, platformConfig.pricing().getAiUnlockPrice()));
         }
 
         long price = platformConfig.pricing().getAiUnlockPrice();
@@ -106,7 +106,7 @@ public class AiUnlockService {
         if (price <= 0) {
             task.unlock(UnlockSource.FREE_QUOTA, null);
             tasks.save(task);
-            return UnlockResponse.unlocked(TriageResultResponse.from(task));
+            return UnlockResponse.unlocked(TriageResultResponse.from(task, platformConfig.pricing().getAiUnlockPrice()));
         }
         return switch (method) {
             case FREE_QUOTA -> unlockByFreeQuota(userId, task);
@@ -121,7 +121,7 @@ public class AiUnlockService {
         }
         task.unlock(UnlockSource.FREE_QUOTA, null);
         tasks.save(task);
-        return UnlockResponse.unlocked(TriageResultResponse.from(task));
+        return UnlockResponse.unlocked(TriageResultResponse.from(task, platformConfig.pricing().getAiUnlockPrice()));
     }
 
     private UnlockResponse unlockByPawCoin(long userId, TriageTask task, long price) {
@@ -132,7 +132,7 @@ public class AiUnlockService {
         tasks.save(task);
         orders.save(AiConsultOrder.completedPawCoin(
                 tokenGenerator.generate(), userId, task.getId(), price));
-        return UnlockResponse.unlocked(TriageResultResponse.from(task));
+        return UnlockResponse.unlocked(TriageResultResponse.from(task, platformConfig.pricing().getAiUnlockPrice()));
     }
 
     private UnlockResponse createCashUnlock(long userId, TriageTask task, long price, PayChannel channel) {

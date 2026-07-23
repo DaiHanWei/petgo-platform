@@ -52,7 +52,7 @@ class TriageResultResponseTest {
     @Test
     void redLockedStillDeliversDetailedAdvice() {
         // RED + unlock_source=LOCKED（未解锁、额度耗尽语义）→ 详建仍下发、locked=false。
-        TriageResultResponse r = TriageResultResponse.from(done(DangerLevel.RED, UnlockSource.LOCKED));
+        TriageResultResponse r = TriageResultResponse.from(done(DangerLevel.RED, UnlockSource.LOCKED), 10000L);
         assertThat(r.advice()).isEqualTo("多喝水观察");
         assertThat(r.medicationRef()).isEqualTo("参考用药 X");
         assertThat(r.locked()).isFalse();
@@ -62,7 +62,7 @@ class TriageResultResponseTest {
     @Test
     void redWithNullUnlockSourceStillDeliversDetailedAdvice() {
         // RED + unlock_source=null（历史/未置）→ 仍红色永不锁。
-        TriageResultResponse r = TriageResultResponse.from(done(DangerLevel.RED, null));
+        TriageResultResponse r = TriageResultResponse.from(done(DangerLevel.RED, null), 10000L);
         assertThat(r.advice()).isEqualTo("多喝水观察");
         assertThat(r.locked()).isFalse();
     }
@@ -71,7 +71,7 @@ class TriageResultResponseTest {
 
     @Test
     void yellowLockedHidesDetailButKeepsSafetyFields() {
-        TriageResultResponse r = TriageResultResponse.from(done(DangerLevel.YELLOW, UnlockSource.LOCKED));
+        TriageResultResponse r = TriageResultResponse.from(done(DangerLevel.YELLOW, UnlockSource.LOCKED), 10000L);
         assertThat(r.advice()).isNull();
         assertThat(r.medicationRef()).isNull();
         assertThat(r.locked()).isTrue();
@@ -81,14 +81,14 @@ class TriageResultResponseTest {
 
     @Test
     void greenLockedHidesDetail() {
-        TriageResultResponse r = TriageResultResponse.from(done(DangerLevel.GREEN, UnlockSource.LOCKED));
+        TriageResultResponse r = TriageResultResponse.from(done(DangerLevel.GREEN, UnlockSource.LOCKED), 10000L);
         assertThat(r.advice()).isNull();
         assertThat(r.locked()).isTrue();
     }
 
     @Test
     void yellowNullUnlockSourceTreatedAsLocked() {
-        TriageResultResponse r = TriageResultResponse.from(done(DangerLevel.YELLOW, null));
+        TriageResultResponse r = TriageResultResponse.from(done(DangerLevel.YELLOW, null), 10000L);
         assertThat(r.advice()).isNull();
         assertThat(r.locked()).isTrue();
     }
@@ -97,7 +97,7 @@ class TriageResultResponseTest {
 
     @Test
     void yellowFreeQuotaUnlocksDetail() {
-        TriageResultResponse r = TriageResultResponse.from(done(DangerLevel.YELLOW, UnlockSource.FREE_QUOTA));
+        TriageResultResponse r = TriageResultResponse.from(done(DangerLevel.YELLOW, UnlockSource.FREE_QUOTA), 10000L);
         assertThat(r.advice()).isEqualTo("多喝水观察");
         assertThat(r.medicationRef()).isEqualTo("参考用药 X");
         assertThat(r.locked()).isFalse();
@@ -105,7 +105,7 @@ class TriageResultResponseTest {
 
     @Test
     void greenPaidUnlocksDetail() {
-        TriageResultResponse r = TriageResultResponse.from(done(DangerLevel.GREEN, UnlockSource.PAID));
+        TriageResultResponse r = TriageResultResponse.from(done(DangerLevel.GREEN, UnlockSource.PAID), 10000L);
         assertThat(r.advice()).isEqualTo("多喝水观察");
         assertThat(r.locked()).isFalse();
     }
@@ -115,7 +115,7 @@ class TriageResultResponseTest {
     @Test
     void notDoneReturnsStatusOnly() {
         TriageTask proc = TriageTestSupport.task(1L, 7L, TriageStatus.PROCESSING, "x", null);
-        TriageResultResponse r = TriageResultResponse.from(proc);
+        TriageResultResponse r = TriageResultResponse.from(proc, 10000L);
         assertThat(r.status()).isEqualTo(TriageStatus.PROCESSING);
         assertThat(r.dangerLevel()).isNull();
         assertThat(r.advice()).isNull();
