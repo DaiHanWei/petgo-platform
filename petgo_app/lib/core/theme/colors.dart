@@ -70,8 +70,11 @@ class AppColors {
   // —— Status ——
   static const Color danger = Color(0xFFE5604D);
 
-  /// Google 品牌蓝（第三方品牌色，仅 Google 登录按钮 G 字标用）。
+  /// Google 品牌四色（第三方品牌色，仅 Google 登录按钮 G 字标用；多色渐变让 G 五彩）。
   static const Color brandGoogleBlue = Color(0xFF4285F4);
+  static const Color brandGoogleRed = Color(0xFFEA4335);
+  static const Color brandGoogleYellow = Color(0xFFFBBC05);
+  static const Color brandGoogleGreen = Color(0xFF34A853);
   static const Color infoBlue = Color(0xFF5B9BD5); // 次要信息蓝（健康分类·发情周期等）
 
   // —— 兽医端独立主题 token（原型 H5 pages/vet-*.html 权威色值）——

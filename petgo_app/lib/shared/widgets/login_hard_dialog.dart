@@ -151,9 +151,9 @@ class _GoogleButton extends StatelessWidget {
         key: const ValueKey('hardDialogGoogleCta'),
         onPressed: onTap,
         style: OutlinedButton.styleFrom(
-          backgroundColor: AppColors.surface,
+          backgroundColor: AppColors.mintTint, // 淡紫底（violet-50）
           foregroundColor: AppColors.ink,
-          side: const BorderSide(color: AppColors.line, width: 1.5),
+          side: const BorderSide(color: AppColors.lineViolet, width: 1.5),
           padding: const EdgeInsets.symmetric(vertical: 13),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
         ),
@@ -164,12 +164,23 @@ class _GoogleButton extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // 多色「G」字标（避免引入 Google 图标资源）。
-                  const Text('G',
-                      style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.brandGoogleBlue)),
+                  // 五彩「G」字标（避免引入 Google 图标资源）：ShaderMask 把 Google 四色
+                  // 横向渐变刷到字上 → 蓝/红/黄/绿一字排开。
+                  ShaderMask(
+                    shaderCallback: (Rect bounds) => const LinearGradient(
+                      colors: <Color>[
+                        AppColors.brandGoogleBlue,
+                        AppColors.brandGoogleRed,
+                        AppColors.brandGoogleYellow,
+                        AppColors.brandGoogleGreen,
+                      ],
+                    ).createShader(bounds),
+                    child: const Text('G',
+                        style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white)), // ShaderMask 需非透明底色承接渐变
+                  ),
                   const SizedBox(width: 10),
                   Text(l10n.loginGoogle,
                       style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
