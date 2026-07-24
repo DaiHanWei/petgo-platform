@@ -1263,6 +1263,8 @@
   "idCardCreateEntry": "Kartu Baru",
   "idCardCreateTitle": "Buat Kartu Identitas",
   "idCardCreateSubmit": "Buat Kartu",
+  "idCardEditInfo": "Ubah info",
+  "idCardEditPhoto": "Ganti foto",
   "idCardCreateHint": "Info kartu terisi otomatis dari profilmu, tapi bisa kamu ubah bebas sebelum disimpan.",
   "idCardCreateError": "Gagal membuat kartu. Coba lagi.",
   "idCardHdUnlockedBadge": "HD",
