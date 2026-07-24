@@ -2,8 +2,6 @@ package com.tailtopia.profile.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -33,11 +31,6 @@ public class IdCard {
     @Column(name = "serial_id", nullable = false)
     private Long serialId;
 
-    /** 卡种（Story 6-8）：KTP/PASSPORT/STUDENT，落库 UPPER_SNAKE；存量卡默认 KTP。 */
-    @Enumerated(EnumType.STRING)
-    @Column(name = "card_type", nullable = false, length = 16)
-    private CardType cardType = CardType.KTP;
-
     @Column(name = "name", nullable = false, length = 60)
     private String name;
 
@@ -66,13 +59,12 @@ public class IdCard {
     protected IdCard() {
     }
 
-    /** 建卡快照（独立建卡器传入的字段 + 分配好的 serial + 卡种）。初始未解锁。 */
-    public static IdCard snapshot(long userId, long serialId, CardType cardType, String name,
-            String petType, String breed, LocalDate birthday, String avatarUrl, String intro) {
+    /** 建卡快照（独立建卡器传入的字段 + 分配好的 serial）。初始未解锁。 */
+    public static IdCard snapshot(long userId, long serialId, String name, String petType,
+            String breed, LocalDate birthday, String avatarUrl, String intro) {
         IdCard c = new IdCard();
         c.userId = userId;
         c.serialId = serialId;
-        c.cardType = cardType == null ? CardType.KTP : cardType;
         c.name = name;
         c.petType = petType;
         c.breed = breed;
@@ -105,10 +97,6 @@ public class IdCard {
 
     public Long getSerialId() {
         return serialId;
-    }
-
-    public CardType getCardType() {
-        return cardType;
     }
 
     public String getName() {

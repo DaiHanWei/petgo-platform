@@ -58,7 +58,6 @@ class IdCard {
   const IdCard({
     required this.id,
     this.serialId,
-    this.cardType = 'KTP',
     this.name,
     this.petType,
     this.breed,
@@ -72,9 +71,6 @@ class IdCard {
   /// 卡自身主键（授权态内部用；详情端点 `GET /me/id-cards/{id}` 寻址）。
   final int id;
   final int? serialId;
-
-  /// 卡种（Story 6-8）：KTP/PASSPORT/STUDENT，决定详情页渲染哪套卡面。缺省 KTP（存量卡）。
-  final String cardType;
   final String? name;
 
   /// 宠物类型枚举原始值（CAT/DOG/OTHER）——展示前本地化，App 绝不渲染后端显示串。
@@ -94,7 +90,6 @@ class IdCard {
     return IdCard(
       id: (json['id'] as num).toInt(),
       serialId: (json['serialId'] as num?)?.toInt(),
-      cardType: json['cardType'] as String? ?? 'KTP',
       name: json['name'] as String?,
       petType: json['petType'] as String?,
       breed: json['breed'] as String?,
@@ -125,7 +120,6 @@ class IdCard {
 class CreateIdCardRequest {
   const CreateIdCardRequest({
     required this.name,
-    this.cardType = 'KTP',
     this.petType,
     this.breed,
     this.birthday,
@@ -134,9 +128,6 @@ class CreateIdCardRequest {
   });
 
   final String name;
-
-  /// 卡种（Story 6-8）：KTP/PASSPORT/STUDENT。缺省 KTP。
-  final String cardType;
   final String? petType;
   final String? breed;
   final DateTime? birthday;
@@ -145,7 +136,6 @@ class CreateIdCardRequest {
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'name': name,
-        'cardType': cardType,
         if (petType != null) 'petType': petType,
         if (breed != null) 'breed': breed,
         if (birthday != null) 'birthday': _isoDate(birthday!),
