@@ -35,7 +35,6 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
   bool _devShown = false;
 
   /// 筛选（0711）：false=「Belum Semua Selesai」显示未全完成级别；true=「Semua Sudah Selesai」显示已全完成级别。
-  bool _showCompleted = false;
 
   /// Debug 截图钩子（仅 debug + flag）：数据就绪后自动弹 milestone-sheet / milestone-unlock。
   void _maybeDevShow(MilestoneList data) {
@@ -74,50 +73,6 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
       );
 
   /// 筛选 chips（0711）：未全完成级别 / 已全完成级别 双段切换。
-  Widget _filterChips(AppLocalizations l10n) {
-    return Row(
-      children: [
-        Expanded(
-          child: _filterChip(l10n.milestoneFilterIncomplete, !_showCompleted,
-              () => setState(() => _showCompleted = false), const ValueKey('milestoneFilterIncomplete')),
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        Expanded(
-          child: _filterChip(l10n.milestoneFilterComplete, _showCompleted,
-              () => setState(() => _showCompleted = true), const ValueKey('milestoneFilterComplete')),
-        ),
-      ],
-    );
-  }
-
-  Widget _filterChip(String label, bool selected, VoidCallback onTap, Key key) {
-    return InkWell(
-      key: key,
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 13),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: selected ? AppColors.mint : AppColors.card,
-          borderRadius: BorderRadius.circular(12),
-          border: selected ? null : Border.all(color: AppColors.line, width: 1.5),
-        ),
-        // 单行 + 按宽自适应缩放：印尼语标签较长，双段等宽下避免其中一段换行导致高度错位、按钮变形。
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(label,
-              maxLines: 1,
-              softWrap: false,
-              style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: selected ? Colors.white : AppColors.mint)),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -153,16 +108,13 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
             padding: const EdgeInsets.fromLTRB(
                 AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.xl),
             children: [
-              // 0711 milestone-with-starter 顺序：宠物卡 → 筛选chips → 新手任务卡 → 分级徽章。
+              // 0711 milestone-with-starter 顺序：宠物卡 → 新手任务卡 → 分级徽章。
+              // bug 20260722-351：移除「全部完成/未全部完成」筛选切换钮，直接展示全部分组。
               _Header(data: data),
-              const SizedBox(height: AppSpacing.lg),
-              _filterChips(l10n),
               const SizedBox(height: AppSpacing.lg),
               const _NewbieCard(),
               const SizedBox(height: AppSpacing.lg),
-              for (final group in data.groups.where((g) => _showCompleted
-                  ? g.completedCount == g.totalCount
-                  : g.completedCount < g.totalCount)) ...[
+              for (final group in data.groups) ...[
                 _GroupSection(group: group),
                 const SizedBox(height: AppSpacing.lg),
               ],

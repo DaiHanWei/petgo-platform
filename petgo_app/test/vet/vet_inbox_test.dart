@@ -110,8 +110,8 @@ void main() {
     expect(find.text('Skip'), findsOneWidget);
     expect(find.text('View detail'), findsOneWidget);
     expect(find.byKey(const ValueKey('vetAccept_req-5')), findsNothing); // 接单已移入弹层
-    // 计费流无 AI 摘要/危险徽章
-    expect(find.text('AI SUMMARY'), findsNothing);
+    // 计费流无 Quick Check 摘要/危险徽章（bug 359：原 AI SUMMARY 已改名）
+    expect(find.text('QUICK CHECK SUMMARY'), findsNothing);
   });
 
   testWidgets('Lewati → 本地隐藏该请求（不接单）', (tester) async {

@@ -2,12 +2,14 @@ package com.tailtopia.profile.service;
 
 import com.tailtopia.content.service.ContentService;
 import com.tailtopia.content.service.GrowthMomentView;
+import com.tailtopia.profile.domain.HealthRecord;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.dto.ArchiveStatsResponse;
 import com.tailtopia.profile.dto.CalendarMonthResponse;
 import com.tailtopia.profile.dto.DayDetailResponse;
 import com.tailtopia.profile.dto.TimelineItemResponse;
 import com.tailtopia.profile.dto.TimelinePageResponse;
+import com.tailtopia.profile.repository.HealthRecordRepository;
 import com.tailtopia.profile.service.HealthEventTimelineSource.HealthEventView;
 import com.tailtopia.shared.error.AppException;
 import java.time.Instant;
@@ -39,14 +41,16 @@ public class TimelineService {
     private final ContentService contentService;
     private final ObjectProvider<HealthEventTimelineSource> healthSource;
     private final MilestoneService milestoneService;
+    private final HealthRecordRepository healthRecords;
 
     public TimelineService(ProfileService profileService, ContentService contentService,
             ObjectProvider<HealthEventTimelineSource> healthSource,
-            MilestoneService milestoneService) {
+            MilestoneService milestoneService, HealthRecordRepository healthRecords) {
         this.profileService = profileService;
         this.contentService = contentService;
         this.healthSource = healthSource;
         this.milestoneService = milestoneService;
+        this.healthRecords = healthRecords;
     }
 
     @Transactional(readOnly = true)
@@ -103,7 +107,7 @@ public class TimelineService {
             int day = g.eventDate().getDayOfMonth();
             CalendarMonthResponse.DayCell existing = byDay.get(day);
             if (existing == null) {
-                byDay.put(day, new CalendarMonthResponse.DayCell(day, g.firstImageUrl(), true, false));
+                byDay.put(day, new CalendarMonthResponse.DayCell(day, g.firstImageUrl(), true, false, null));
             }
             // 同日后续记录不覆盖首图（已是最早 created_at）。
         }
@@ -116,11 +120,29 @@ public class TimelineService {
                 int day = h.createdAt().atZone(ZoneOffset.UTC).toLocalDate().getDayOfMonth();
                 CalendarMonthResponse.DayCell c = byDay.get(day);
                 if (c == null) {
-                    byDay.put(day, new CalendarMonthResponse.DayCell(day, null, false, true));
+                    byDay.put(day, new CalendarMonthResponse.DayCell(day, null, false, true, null));
                 } else if (!c.hasHealthEvent()) {
                     byDay.put(day, new CalendarMonthResponse.DayCell(
-                            day, c.firstImageUrl(), c.hasHappyMoment(), true));
+                            day, c.firstImageUrl(), c.hasHappyMoment(), true, c.healthRecordType()));
                 }
+            }
+        }
+
+        // 健康记录（疫苗/驱虫/绝育…）按 event_date 并入分类角标（bug 20260722-352）。
+        // 只补分类类型，不覆盖已有 diary 图 / 问诊态；渲染优先级（图>问诊>健康记录）交前端。
+        for (HealthRecord r : healthRecords.findByPetProfileIdAndEventDateBetweenOrderByEventDateAscIdAsc(
+                profile.getId(), from, to)) {
+            if (r.getEventDate() == null) {
+                continue;
+            }
+            int day = r.getEventDate().getDayOfMonth();
+            CalendarMonthResponse.DayCell c = byDay.get(day);
+            String type = r.getType() == null ? null : r.getType().name();
+            if (c == null) {
+                byDay.put(day, new CalendarMonthResponse.DayCell(day, null, false, false, type));
+            } else if (c.healthRecordType() == null) {
+                byDay.put(day, new CalendarMonthResponse.DayCell(
+                        day, c.firstImageUrl(), c.hasHappyMoment(), c.hasHealthEvent(), type));
             }
         }
 

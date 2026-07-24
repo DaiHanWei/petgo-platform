@@ -561,7 +561,9 @@ class _PetCard extends ConsumerWidget {
     return [
       ?species,
       if (pet.birthday != null) l10n.growthArchiveAge(age.years, age.months),
-      if (momen != null) l10n.meMomenCount(momen),
+      // bug 20260722-355：GROWTH_MOMENT 帖即「Diary」（与档案头部/网格徽章同口径），
+      // 文案由「moments」改「diary」，>99 显示「99+」，跟随实际记录数变化。
+      if (momen != null) l10n.meDiaryCount(momen > 99 ? '99+' : '$momen'),
     ].join(' · ');
   }
 }
