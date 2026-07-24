@@ -67,11 +67,13 @@ PassportFields buildPassportFields(IdCardData data) {
   );
 }
 
+/// NIKIM 12 位（微芯片号，仿制）：生日 DDMMYY + serial 补零 6 位。设计稿为 12 位，勿加区域码前缀
+/// （否则过长压到 Reg.No 列，bug 20260721-330 首版返工）。
 String _nikim(int serial, DateTime? birthday) {
   final ddmmyy = birthday == null
       ? '000000'
       : '${_p2(birthday.day)}${_p2(birthday.month)}${_p2(birthday.year % 100)}';
-  return '3276$ddmmyy${serial.toString().padLeft(6, '0')}';
+  return '$ddmmyy${serial.toString().padLeft(6, '0')}';
 }
 
 /// MRZ 行（**装饰性仿真**，非真 ICAO 校验）：非字母数字转 `<`，右侧补 `<` 到 44 位。
@@ -92,23 +94,23 @@ String _p2(int n) => n.toString().padLeft(2, '0');
 /// ⚠️ 首版坐标按成图比例估算，须回 `docs/design/id-cards/passport-mockup.png` 差分复测精调（L2）。
 abstract final class _PL {
   static const double radius = 44;
-  static const Rect logo = Rect.fromLTWH(50, 50, 200, 200);
+  static const Rect logo = Rect.fromLTWH(44, 44, 216, 216);
 
-  static const double titleCenterX = 1120;
-  static const double titleBaseline = 130;
+  static const double titleCenterX = 1092;
+  static const double titleBaseline = 132;
   static const double titleSize = 76;
-  static const double subtitleBaseline = 208;
+  static const double subtitleBaseline = 206;
   static const double subtitleSize = 40;
 
-  static const Rect photo = Rect.fromLTWH(70, 370, 560, 700);
+  static const Rect photo = Rect.fromLTWH(60, 360, 580, 720);
   static const double photoRadius = 36;
 
   // 字段字号。
   static const double labelSize = 34;
   static const double valueSize = 48;
 
-  // NIKIM（照片下左）。
-  static const double nikimBaseline = 1150;
+  // NIKIM（照片下方，与 Reg.No 值同底线，值 12 位不越到 Reg.No 列 x=650）。
+  static const double nikimBaseline = 1176;
   static const double nikimLabelLeft = 76;
 }
 
