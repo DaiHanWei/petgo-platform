@@ -157,13 +157,15 @@ class ApiPaths {
   static const String petProfileIdCardHdDownload = '$base/pet-profiles/me/id-card/hd-download';
 
   /// 身份证多卡快照（Story 6.7）。POST 建新卡（分配新 serial）/ GET 历史列表（createdAt 倒序）。
-  static const String meIdCards = '$base/me/id-cards';
+  /// ⚠️ bug 20260721-344 根因：后端端点在 ProfileApiController(类级 `/api/v1/pet-profiles`)下，
+  /// 完整路径含 `/pet-profiles/me/id-cards`；旧路径漏前缀致列表恒 404（历史列表打不开）。已补齐。
+  static const String meIdCards = '$base/pet-profiles/me/id-cards';
 
   /// 单卡快照详情（Story 6.7）。非本人 404。
-  static String meIdCard(int cardId) => '$base/me/id-cards/$cardId';
+  static String meIdCard(int cardId) => '$base/pet-profiles/me/id-cards/$cardId';
 
   /// 单卡高清图付费下载（Story 6.7）。POST body `{channel}` → HdPurchaseResponse；每卡独立解锁。
-  static String meIdCardHd(int cardId) => '$base/me/id-cards/$cardId/hd-download';
+  static String meIdCardHd(int cardId) => '$base/pet-profiles/me/id-cards/$cardId/hd-download';
 
   /// 成长时间线（Story 2.4）。
   static const String petProfileTimeline = '$base/pet-profiles/me/timeline';
