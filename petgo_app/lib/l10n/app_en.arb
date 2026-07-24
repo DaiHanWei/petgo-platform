@@ -1485,6 +1485,8 @@
   "idCardCreateEntry": "New ID Card",
   "idCardCreateTitle": "Create ID Card",
   "idCardCreateSubmit": "Create Card",
+  "idCardEditInfo": "Edit info",
+  "idCardEditPhoto": "Change photo",
   "idCardCreateHint": "Card info is prefilled from your profile but you can edit it freely before saving.",
   "idCardCreateError": "Could not create the card. Please try again.",
   "idCardHdUnlockedBadge": "HD",
