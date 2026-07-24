@@ -63,6 +63,16 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(pd);
     }
 
+    /**
+     * 方法级 {@code @PreAuthorize} 拒绝（{@code AuthorizationDeniedException} 亦为其子类）：
+     * 原样重抛，交还 Spring Security 的 ExceptionTranslationFilter 按各链 accessDeniedHandler 处理为 403
+     * （api 链 → ProblemDetail；admin 链 → 「权限不足」页）。否则会落入下方 catch-all 被误报成 500。
+     */
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public void handleAccessDenied(org.springframework.security.access.AccessDeniedException ex) {
+        throw ex;
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ProblemDetail> handleUnexpected(Exception ex, HttpServletRequest req) {
         // 5xx：服务端记录完整堆栈，对外仅给通用文案 + traceId，绝不外泄内部细节

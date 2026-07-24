@@ -115,9 +115,19 @@ public class SecurityConfig {
                         .permitAll())
                 .logout(logout -> logout
                         .logoutUrl("/admin/logout")
-                        .logoutSuccessUrl("/admin/login?logout"));
+                        .logoutSuccessUrl("/admin/login?logout"))
+                // 权限不足（URL 级门控 + @PreAuthorize 方法级拒绝，经 GlobalExceptionHandler 重抛回到本链）：
+                // 403 + forward 到「权限不足」提示页，而非裸 Whitelabel/500。
+                .exceptionHandling(ex -> ex.accessDeniedHandler(adminAccessDeniedHandler()));
         // CSRF 保持开启（表单链默认即开）；会话按需创建（表单登录态）。
         return http.build();
+    }
+
+    /** admin 链 403 落点：置 403 状态并 forward 至 /admin/denied 友好提示页（保留登录会话与侧栏）。 */
+    private static org.springframework.security.web.access.AccessDeniedHandlerImpl adminAccessDeniedHandler() {
+        var handler = new org.springframework.security.web.access.AccessDeniedHandlerImpl();
+        handler.setErrorPage("/admin/denied");
+        return handler;
     }
 
     /** 业务 API 链（无状态 JWT）。 */

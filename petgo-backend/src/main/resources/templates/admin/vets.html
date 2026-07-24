@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<html lang="zh" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <!--
   兽医账号管理（Story 5.1 + 2.2 列表扩列/筛选/搜索；1.6 外化 + 换肤）。复用 admin shell。
   护栏：明文密码仅提交一次，绝不回显；列表绝不含 passwordHash。门控 @PreAuthorize(vet.view)。
@@ -28,7 +29,9 @@
 
         <!-- 开户入口：点击弹出弹窗（Story 5.1；创建表单改弹窗形式）。 -->
         <div class="toolbar">
+            <!-- 开户入口与 POST /admin/vets 的 @PreAuthorize 同款门控：无 vet.create 的 STAFF 不见此按钮。 -->
             <button type="button" class="btn btn-primary" data-open-dialog="createVetDialog"
+                    sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('vet.create')"
                     th:text="#{admin.vets.create}">开户</button>
         </div>
 

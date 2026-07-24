@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<!--
+  权限不足提示页（403 统一落点）。admin 链 accessDeniedHandler forward 至此：
+  URL 级门控与 @PreAuthorize 方法级拒绝（如 STAFF 无 vet.create 提交开户）都在这里友好提示，
+  不再暴露 500/Whitelabel。仅提示 + 返回入口，不泄露所缺权限点细节。
+-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.denied.title}">权限不足 · TailTopia 运营</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1 th:text="#{admin.denied.title}">权限不足</h1>
+        <div class="banner err" th:text="#{admin.denied.message}">您没有执行该操作的权限。如需开通，请联系超级管理员在「后台账号」中为您授权。</div>
+        <p>
+            <a class="btn" th:href="@{/admin/dashboard}" th:text="#{admin.denied.back}">返回概览</a>
+        </p>
+    </div>
+</div>
+</body>
+</html>

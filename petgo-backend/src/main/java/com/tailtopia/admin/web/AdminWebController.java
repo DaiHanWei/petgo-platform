@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
@@ -59,6 +60,16 @@ public class AdminWebController {
     @GetMapping("/admin/login")
     public String login() {
         return "admin/login";
+    }
+
+    /**
+     * 权限不足统一落点（403）：admin 链 accessDeniedHandler forward 至此（URL 级门控与
+     * {@code @PreAuthorize} 方法级拒绝均收口于此）。forward 保留原请求方法（POST 提交被拒也会到达），
+     * 故不限 method。仅提示 + 返回入口，不泄露权限点细节。
+     */
+    @RequestMapping("/admin/denied")
+    public String denied() {
+        return "admin/denied";
     }
 
     /** 运营概览看板（Story 9.10，AB-1.1-01）：四模块指标聚合（原种子发布引导页升级为概览）。 */
