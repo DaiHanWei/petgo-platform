@@ -11,7 +11,6 @@ import java.time.LocalDate;
 public record IdCardResponse(
         long id,
         Long serialId,
-        String cardType,
         String name,
         String petType,
         String breed,
@@ -22,8 +21,8 @@ public record IdCardResponse(
         Instant createdAt) {
 
     public static IdCardResponse from(IdCard c) {
-        return new IdCardResponse(c.getId(), c.getSerialId(), c.getCardType().name(), c.getName(),
-                c.getPetType(), c.getBreed(), c.getBirthday(), c.getAvatarUrl(), c.getIntro(),
-                c.isHdUnlocked(), c.getCreatedAt());
+        return new IdCardResponse(c.getId(), c.getSerialId(), c.getName(), c.getPetType(),
+                c.getBreed(), c.getBirthday(), c.getAvatarUrl(), c.getIntro(), c.isHdUnlocked(),
+                c.getCreatedAt());
     }
 }

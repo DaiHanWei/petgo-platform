@@ -33,6 +33,7 @@ class IdCardDetailPage extends ConsumerStatefulWidget {
 
 class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
   bool _hdBusy = false;
+  int _styleIndex = 0; // 视图样式：0=KTP, 1=Paspor, 2=Pelajar（同一快照三种卡面）。
   final GlobalKey idCardBoundaryKey = GlobalKey();
 
   @override
@@ -55,15 +56,16 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
 
   Widget _view(AppLocalizations l10n, IdCard card) {
     final data = card.toIdCardData();
-    // 按卡种分发卡面 + 画布尺寸（Story 6-8）。
-    final (Size canvas, Widget cardFront) = switch (card.cardType) {
-      'PASSPORT' => (kPassportCardCanvas, PassportCardFront(fields: buildPassportFields(data))),
-      'STUDENT' => (kStudentCardCanvas, StudentCardFront(fields: buildStudentFields(data))),
+    // 视图级样式切换（恢复 6-1~6-4 三 Tab）：同一快照渲染 KTP / Paspor / Pelajar 三种卡面。
+    final (Size canvas, Widget cardFront) = switch (_styleIndex) {
+      1 => (kPassportCardCanvas, PassportCardFront(fields: buildPassportFields(data))),
+      2 => (kStudentCardCanvas, StudentCardFront(fields: buildStudentFields(data))),
       _ => (kIdCardCanvas, KtpCardFront(fields: buildKtpFields(data, KtpEdits.empty))),
     };
     return SafeArea(
       child: Column(
         children: [
+          _styleSwitcher(l10n),
           Expanded(
             child: Center(
               child: Padding(
@@ -127,6 +129,50 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
           ),
           const SizedBox(height: 12),
         ],
+      ),
+    );
+  }
+
+  /// KTP / Paspor / Pelajar 三 Tab 样式切换（视图级，不改快照数据）。
+  Widget _styleSwitcher(AppLocalizations l10n) {
+    final labels = [l10n.idCardStyleKtp, l10n.idCardStylePaspor, l10n.idCardStylePelajar];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Row(
+        children: [
+          for (var i = 0; i < labels.length; i++)
+            Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(right: i < labels.length - 1 ? 8 : 0),
+                child: _styleTab(labels[i], i),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _styleTab(String label, int index) {
+    final selected = _styleIndex == index;
+    return GestureDetector(
+      key: ValueKey('idCardStyleTab_$index'),
+      onTap: () => setState(() => _styleIndex = index),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? AppColors.mint : AppColors.card,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: selected ? AppColors.mint : AppColors.line, width: 1.5),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? Colors.white : AppColors.ink2,
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+          ),
+        ),
       ),
     );
   }
