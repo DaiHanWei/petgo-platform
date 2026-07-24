@@ -55,7 +55,8 @@ public class ContentPost {
     private LocalDate eventDate;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 16)
+    // length=32：V94 加宽（容纳 cm-9 的 AUTHOR_DEACTIVATED=18 字符，bug 20260724-360）。
+    @Column(name = "status", nullable = false, length = 32)
     private PostStatus status = PostStatus.PUBLISHED;
 
     @Column(name = "deleted_at")
