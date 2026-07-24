@@ -60,8 +60,9 @@ public class IdCardService {
     @Transactional
     public IdCardResponse createCard(long ownerId, CreateIdCardRequest req) {
         long serial = serialAllocation.allocate();
-        IdCard card = idCards.save(IdCard.snapshot(ownerId, serial, req.name(), req.petType(),
-                req.breed(), req.birthday(), req.avatarUrl(), req.intro()));
+        IdCard card = idCards.save(IdCard.snapshot(ownerId, serial,
+                com.tailtopia.profile.domain.CardType.fromNullable(req.cardType()), req.name(),
+                req.petType(), req.breed(), req.birthday(), req.avatarUrl(), req.intro()));
         return IdCardResponse.from(card);
     }
 

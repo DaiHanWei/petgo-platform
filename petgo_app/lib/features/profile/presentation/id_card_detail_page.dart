@@ -17,6 +17,8 @@ import '../domain/id_card.dart';
 import 'id_card/hd_paywall_sheet.dart';
 import 'id_card/ktp_card.dart';
 import 'id_card/ktp_fields.dart';
+import 'id_card/passport_card.dart';
+import 'id_card/student_card.dart';
 
 /// 单张身份证卡详情（Story 6-7）。渲染冻结快照卡面 + 按卡付费解锁 HD + 保存到相册/分享。
 /// 快照不可编辑（建卡时定格）；下载/解锁按本卡 [cardId] 走多卡端点。
@@ -53,6 +55,12 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
 
   Widget _view(AppLocalizations l10n, IdCard card) {
     final data = card.toIdCardData();
+    // 按卡种分发卡面 + 画布尺寸（Story 6-8）。
+    final (Size canvas, Widget cardFront) = switch (card.cardType) {
+      'PASSPORT' => (kPassportCardCanvas, PassportCardFront(fields: buildPassportFields(data))),
+      'STUDENT' => (kStudentCardCanvas, StudentCardFront(fields: buildStudentFields(data))),
+      _ => (kIdCardCanvas, KtpCardFront(fields: buildKtpFields(data, KtpEdits.empty))),
+    };
     return SafeArea(
       child: Column(
         children: [
@@ -61,12 +69,12 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: AspectRatio(
-                  aspectRatio: kIdCardCanvas.width / kIdCardCanvas.height,
+                  aspectRatio: canvas.width / canvas.height,
                   child: RepaintBoundary(
                     key: idCardBoundaryKey,
                     child: FittedBox(
                       fit: BoxFit.contain,
-                      child: KtpCardFront(fields: buildKtpFields(data, KtpEdits.empty)),
+                      child: cardFront,
                     ),
                   ),
                 ),

@@ -26,6 +26,7 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
   String? _petType;
   DateTime? _birthday;
   String? _avatarUrl;
+  String _cardType = 'KTP'; // 卡种（Story 6-8）：KTP/PASSPORT/STUDENT。
   bool _prefilled = false;
   bool _submitting = false;
 
@@ -64,6 +65,7 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
     try {
       final card = await ref.read(idCardRepositoryProvider).createCard(CreateIdCardRequest(
             name: _name.text.trim(),
+            cardType: _cardType,
             petType: _petType,
             breed: _breed.text.trim().isEmpty ? null : _breed.text.trim(),
             birthday: _birthday,
@@ -95,6 +97,24 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
             Text(l10n.idCardCreateHint,
                 style: const TextStyle(fontSize: 13, color: AppColors.ink2, height: 1.5)),
             const SizedBox(height: 20),
+            // 卡种选择（Story 6-8）：KTP / Passport / Student。
+            _label(l10n.idCardTypeLabel),
+            const SizedBox(height: 6),
+            SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<String>(
+                key: const ValueKey('idCardTypeSelector'),
+                segments: <ButtonSegment<String>>[
+                  ButtonSegment(value: 'KTP', label: Text(l10n.idCardTypeKtp)),
+                  ButtonSegment(value: 'PASSPORT', label: Text(l10n.idCardTypePassport)),
+                  ButtonSegment(value: 'STUDENT', label: Text(l10n.idCardTypeStudent)),
+                ],
+                selected: <String>{_cardType},
+                showSelectedIcon: false,
+                onSelectionChanged: (s) => setState(() => _cardType = s.first),
+              ),
+            ),
+            const SizedBox(height: 16),
             _label(l10n.petProfileNameLabel),
             const SizedBox(height: 6),
             TextField(

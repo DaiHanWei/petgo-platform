@@ -34,6 +34,7 @@ class TimelineServiceTest {
     private ProfileService profileService;
     private ContentService contentService;
     private MilestoneService milestoneService;
+    private com.tailtopia.profile.repository.HealthRecordRepository healthRecords;
     @SuppressWarnings("unchecked")
     private final ObjectProvider<HealthEventTimelineSource> healthProvider = Mockito.mock(ObjectProvider.class);
     private TimelineService service;
@@ -43,9 +44,10 @@ class TimelineServiceTest {
         profileService = Mockito.mock(ProfileService.class);
         contentService = Mockito.mock(ContentService.class);
         milestoneService = Mockito.mock(MilestoneService.class);
+        healthRecords = Mockito.mock(com.tailtopia.profile.repository.HealthRecordRepository.class);
         when(profileService.hasProfile(1L)).thenReturn(true);
         when(profileService.findByOwnerId(1L)).thenReturn(Optional.of(pet(PetType.DOG)));
-        service = new TimelineService(profileService, contentService, healthProvider, milestoneService);
+        service = new TimelineService(profileService, contentService, healthProvider, milestoneService, healthRecords);
     }
 
     private GrowthMomentView moment(long id, String iso) {

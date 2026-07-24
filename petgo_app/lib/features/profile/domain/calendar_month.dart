@@ -28,6 +28,7 @@ class CalendarDayCell {
     this.firstImageUrl,
     this.hasHappyMoment = false,
     this.hasHealthEvent = false,
+    this.healthRecordType,
   });
 
   final int day;
@@ -37,10 +38,15 @@ class CalendarDayCell {
   final bool hasHappyMoment;
   final bool hasHealthEvent;
 
+  /// 当日健康记录分类枚举名（VACCINE/DEWORM/MENSTRUATION/NEUTER/CUSTOM），无则 null（bug 20260722-352）。
+  /// 角标渲染优先级：firstImageUrl（diary 图）> hasHealthEvent（问诊）> healthRecordType（分类图标）。
+  final String? healthRecordType;
+
   factory CalendarDayCell.fromJson(Map<String, dynamic> json) => CalendarDayCell(
         day: json['day'] as int,
         firstImageUrl: json['firstImageUrl'] as String?,
         hasHappyMoment: (json['hasHappyMoment'] ?? false) as bool,
         hasHealthEvent: (json['hasHealthEvent'] ?? false) as bool,
+        healthRecordType: json['healthRecordType'] as String?,
       );
 }
