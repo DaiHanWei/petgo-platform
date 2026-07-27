@@ -720,6 +720,9 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     } else if (source != null) {
       await _addImage(controller, source: source);
     }
+    // 选图/拍照返回后不自动弹键盘：系统会把焦点还给此前持焦的文本框（Android 从相册
+    // Activity 回来尤甚），这里显式收掉——键盘只在用户自己点输入框时出现。
+    if (mounted) FocusManager.instance.primaryFocus?.unfocus();
   }
 
   /// 成长日历事件日期字段（F9）：禁选未来，默认今天/格子日期。点击开日期选择器。
