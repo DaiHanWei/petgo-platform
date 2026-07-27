@@ -30,6 +30,17 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
   OrderStatusGroup? _group;
 
   @override
+  void initState() {
+    super.initState();
+    // 进入页面默认刷新一次：订单状态在页外会变（支付回调/后台改状态/超时取消），
+    // 不能沿用上次进页的缓存。microtask 避开 initState 期改 provider 的限制。
+    // 失败不在此处理：错误呈现走 build 的 error 分支（refresh 内部若 await future 会重抛，须吞掉）。
+    Future.microtask(() {
+      if (mounted) ref.read(orderListProvider.notifier).refresh().catchError((_) {});
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final async = ref.watch(orderListProvider);

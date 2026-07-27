@@ -12,11 +12,27 @@ import 'pawcoin_controller.dart';
 
 /// PawCoin 余额与流水页（Story 1.4 · `p-pawcoin-balance`）。品牌渐变余额头卡 + 只读流水列表。
 /// <b>流水行绝不可点</b>（禁转账 UI）；错误态显式报错+重试（不静默画空态）；类型按 code 本地化。
-class PawCoinPage extends ConsumerWidget {
+class PawCoinPage extends ConsumerStatefulWidget {
   const PawCoinPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PawCoinPage> createState() => _PawCoinPageState();
+}
+
+class _PawCoinPageState extends ConsumerState<PawCoinPage> {
+  @override
+  void initState() {
+    super.initState();
+    // 进入页面默认刷新一次：余额/流水在页外会变（充值回调、AI 解锁扣费等），
+    // 不能沿用其他消费方（解锁弹层/充值页）留下的缓存。
+    // 失败不在此处理：错误呈现走 build 的 error 分支（refresh 内部 await future 会重抛，须吞掉）。
+    Future.microtask(() {
+      if (mounted) ref.read(pawCoinProvider.notifier).refresh().catchError((_) {});
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final async = ref.watch(pawCoinProvider);
     return Scaffold(
