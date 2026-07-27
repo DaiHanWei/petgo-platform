@@ -1,6 +1,6 @@
 package com.tailtopia.profile.dto;
 
-import jakarta.validation.constraints.Past;
+import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 
@@ -14,6 +14,7 @@ public record PetProfileUpdateRequest(
         @Size(max = 1024) String avatarUrl,
         @Size(max = 20, message = "宠物名不能超过 20 字") String name,
         @Size(max = 60) String breed,
-        @Past(message = "生日须早于今天") LocalDate birthday,
+        // 与创建端一致：允许生日=今天（@PastOrPresent），只拒未来。
+        @PastOrPresent(message = "生日不能是未来") LocalDate birthday,
         @Size(max = 30, message = "介绍不能超过 30 字") String intro) {
 }
