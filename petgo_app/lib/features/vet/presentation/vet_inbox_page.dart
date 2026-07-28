@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/analytics/analytics.dart';
+import '../../../core/analytics/button_ids.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
@@ -19,10 +21,11 @@ import 'widgets/vet_top_bar.dart';
 /// （队列/完成/评分）+ 计费流接单队列。
 ///
 /// Story 3.6：数据源从 V1.0 免费直连流（`consult_sessions` waitingList）**改为计费流** `vetQueue()`
-/// （`consult_requests`）。承接 3-2 广播 → 3-3 接单 CAS → 3-4 限时支付。三态：
-/// ① `awaitingPay != null` → 顶部「等待用户支付」倒计时中间态（FR-53A），兽医忙不显池；
-/// ② 否则 → 可接单 QUEUEING 池（宠物身份 + 等待时长 + 接单 CTA）；
-/// ③ `awaitingPay` 由非空→空（轮询侦测）→ 判成交（跳会话在 Active Tab）/ 未成交（取消/超时/未支付）→ 3s Toast（FR-53B）。
+/// （`consult_requests`）。承接 3-2 广播 → 3-3 接单 CAS → 3-4 限时支付。
+/// **2026-07-27 起取消「一兽医一单」（bug 20260727-364）**：
+/// ① `awaitingPays` 列表 → 顶部逐单「等待用户支付」倒计时卡（FR-53A，可多张）；
+/// ② 可接单 QUEUEING 池恒显示（接单中/会话中不再屏蔽，可继续接，数量兽医自控）；
+/// ③ 某待支付项消失（轮询侦测）→ 判成交（进行中会话数增加）/ 未成交（取消/超时）→ 3s Toast（FR-53B）。
 class VetInboxPage extends ConsumerStatefulWidget {
   const VetInboxPage({super.key});
 
@@ -42,7 +45,8 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> with WidgetsBinding
   Timer? _display; // 1s 心跳刷新倒计时显示
   String _displayName = '';
   int? _doneCount; // 完成数（history 列表长度）；null=加载中/失败 → 占位「—」
-  String? _prevAwaitingToken; // 上一轮待支付项 token（侦测「接单已结束」跃迁，FR-53B）
+  Set<String>? _prevAwaitingTokens; // 上一轮待支付 token 集（侦测「某接单已结束」跃迁，FR-53B）；null=未建基线
+  int _knownActiveCount = 0; // 已知进行中会话数（判成交：待支付消失 + 会话数增加 = 已支付）
   final Set<String> _skipped = <String>{}; // 「Lewati」本地跳过的 token（会话内隐藏，请求对他人仍可见）
 
   @override
@@ -78,9 +82,9 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> with WidgetsBinding
     _poll?.cancel();
     _display?.cancel();
     _poll = Timer.periodic(_pollInterval, (_) => _reloadQueue());
-    // 倒计时仅在待支付态需要 1s 刷新显示（纯客户端显示，跃迁靠轮询服务端）。
+    // 倒计时仅在有待支付项时需要 1s 刷新显示（纯客户端显示，跃迁靠轮询服务端）。
     _display = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted && _queue?.awaitingPay != null) setState(() {});
+      if (mounted && (_queue?.awaitingPays.isNotEmpty ?? false)) setState(() {});
     });
   }
 
@@ -97,16 +101,19 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> with WidgetsBinding
     if (mounted) setState(() => _queue = queue);
   }
 
-  /// 侦测「本兽医待支付项消失」→ 判成交/未成交（FR-53B，决策 D-4 前端轮询推断）。
+  /// 侦测「本兽医某待支付项消失」→ 判成交/未成交（FR-53B，决策 D-4 前端轮询推断）。
+  ///
+  /// 364 多单模型：对 token 集合做差；有消失项时拉进行中会话数——较上次已知值**增加**即判成交
+  /// （消失 = 支付成功转单删 / 用户取消删 / 支付窗超时删，三者只有支付成功会多出会话）。
   Future<void> _detectAwaitingTransition(VetQueue next) async {
-    final prev = _prevAwaitingToken;
-    final now = next.awaitingPay?.requestToken;
-    if (prev != null && now == null) {
-      // 上一轮在等待支付、本轮消失：支付成功转单删 / 用户取消删 / 支付窗超时回退或彻底失败。
+    final prev = _prevAwaitingTokens;
+    final now = next.awaitingPays.map((e) => e.requestToken).toSet();
+    if (prev != null && prev.difference(now).isNotEmpty) {
       bool paid = false;
       try {
-        // 接单中恒仅 1 单（goBusy 互斥）：出现进行中会话即已支付；否则未成交。
-        paid = (await ref.read(vetRepositoryProvider).activeSessions()).isNotEmpty;
+        final active = (await ref.read(vetRepositoryProvider).activeSessions()).length;
+        paid = active > _knownActiveCount;
+        _knownActiveCount = active;
       } catch (_) {
         paid = false; // 拉取失败按未成交提示（不误报成功）
       }
@@ -116,7 +123,7 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> with WidgetsBinding
             duration: const Duration(seconds: 3));
       }
     }
-    _prevAwaitingToken = now;
+    _prevAwaitingTokens = now;
   }
 
   /// 显式刷新（右上角）：重拉队列，并清空本地跳过（让跳过的项可重新出现）。
@@ -130,6 +137,7 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> with WidgetsBinding
 
   /// 接单：CAS 接计费流请求 → 成功刷新（进等待支付态）；409（被抢/占用）→ 3s Toast + 刷新。
   Future<void> _accept(VetQueueItem item) async {
+    Analytics.buttonTapped(ButtonId.vetAcceptQueue);
     final l10n = AppLocalizations.of(context);
     try {
       await ref.read(vetRepositoryProvider).acceptConsultRequest(item.requestToken);
@@ -217,7 +225,7 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> with WidgetsBinding
     final l10n = AppLocalizations.of(context);
     final queue = _queue;
     final loading = queue == null;
-    final awaiting = queue?.awaitingPay;
+    final awaitings = queue?.awaitingPays ?? const <VetAwaitingPay>[];
     final all = queue?.available ?? const <VetQueueItem>[];
     // 「Lewati」本地跳过后从视图剔除（刷新清空跳过集恢复）。
     final available = all.where((it) => !_skipped.contains(it.requestToken)).toList();
@@ -232,8 +240,8 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> with WidgetsBinding
               children: [
                 _StatRow(queue: loading ? null : available.length, done: _doneCount),
                 const SizedBox(height: AppSpacing.lg),
-                // FR-53A：本人待支付倒计时中间态（有则置顶，忙时池为空）。
-                if (awaiting != null) ...[
+                // FR-53A：本人待支付倒计时中间态（364 多单：逐单一卡置顶，池仍在下方可继续接）。
+                for (final awaiting in awaitings) ...[
                   _AwaitingPayCard(item: awaiting, payWindowSeconds: _payWindowSeconds),
                   const SizedBox(height: AppSpacing.lg),
                 ],
@@ -262,8 +270,8 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> with WidgetsBinding
                     child: Center(child: CircularProgressIndicator()),
                   )
                 else if (available.isEmpty)
-                  // 忙时（等待支付/会话中）池为空——引导语随待支付态区分（等待支付时不显「暂无请求」）。
-                  awaiting != null
+                  // 池空——有待支付卡时不再叠「暂无请求」空态（视觉降噪）。
+                  awaitings.isNotEmpty
                       ? const SizedBox.shrink()
                       : VetEmptyState(icon: Icons.inbox_outlined, message: l10n.vetInboxEmpty)
                 else
@@ -363,7 +371,7 @@ class _AwaitingPayCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final petName = (item.petName?.isNotEmpty ?? false) ? item.petName! : null;
     return Container(
-      key: const ValueKey('vetAwaitingPayCard'),
+      key: ValueKey('vetAwaitingPayCard_${item.requestToken}'),
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -413,7 +421,7 @@ class _AwaitingPayCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(
                   _mmss,
-                  key: const ValueKey('vetAwaitingPayCountdown'),
+                  key: ValueKey('vetAwaitingPayCountdown_${item.requestToken}'),
                   style: AppTypography.display.copyWith(color: AppColors.vetPrimary),
                 ),
               ],

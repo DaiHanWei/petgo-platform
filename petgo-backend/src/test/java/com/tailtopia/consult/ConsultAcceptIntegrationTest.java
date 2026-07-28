@@ -29,8 +29,9 @@ import org.springframework.http.HttpHeaders;
 /**
  * L1（需 Docker postgres+redis）。Story 3.3 兽医接单与限时支付窗。启动即验 V66 契约（validate）。
  *
- * <p>核心：接单 CAS（H-4 单列 state，并发恰 1 兽医胜）+ 开 5min 支付窗（pay_deadline=+300s，服务端权威）+
- * goBusy 占用互斥；<b>接单不建 consult_orders</b>（A-5 红线）；支付窗超时 → 回退 QUEUEING 重播 + 释放兽医。
+ * <p>核心：接单 CAS（H-4 单列 state，并发恰 1 兽医胜）+ 开 5min 支付窗（pay_deadline=+300s，服务端权威）；
+ * <b>2026-07-27 起无占用互斥（bug 364）</b>：兽医可并发接多单，计费流不动在线态；
+ * <b>接单不建 consult_orders</b>（A-5 红线）；支付窗超时 → 终结请求（bug 311，不回队）。
  */
 class ConsultAcceptIntegrationTest extends ApiIntegrationTest {
 
@@ -51,7 +52,7 @@ class ConsultAcceptIntegrationTest extends ApiIntegrationTest {
                 "req-" + SEQ.incrementAndGet(), Instant.now().plus(Duration.ofMinutes(1))));
     }
 
-    // ---- AC1/AC2：接单成功（CAS + 支付窗 + goBusy），接单不建订单 ----
+    // ---- AC1/AC2：接单成功（CAS + 支付窗），接单不建订单、不动在线态 ----
 
     @Test
     void vetAcceptTransitionsToAwaitPayAndOpensPayWindow() throws Exception {
@@ -73,7 +74,7 @@ class ConsultAcceptIntegrationTest extends ApiIntegrationTest {
         // 支付窗服务端权威：pay_deadline ≈ 接单时刻 + 300s（5min）。
         assertThat(after.getPayDeadlineAt()).isBetween(
                 before.plus(Duration.ofSeconds(290)), before.plus(Duration.ofSeconds(310)));
-        assertThat(presence.isBusy(vet.getId())).isTrue();     // 接单占用兽医
+        assertThat(presence.isBusy(vet.getId())).isFalse();    // 364：接单不再置 BUSY（无占用互斥）
         assertThat(orders.count()).isEqualTo(ordersBefore);    // 接单绝不建订单（A-5 红线）
     }
 
@@ -113,22 +114,25 @@ class ConsultAcceptIntegrationTest extends ApiIntegrationTest {
         assertThat(conflicts.get()).isEqualTo(1);  // 另一 409
         ConsultRequest after = requests.findById(req.getId()).orElseThrow();
         assertThat(after.getState()).isEqualTo(ConsultRequestState.ACCEPTED_AWAIT_PAY);
-        // 仅胜者被置 BUSY。
-        assertThat(presence.isBusy(after.getVetId())).isTrue();
     }
 
-    // ---- AC1：占用互斥（BUSY 兽医不能接新单）----
+    // ---- 364：无占用互斥——同一兽医可并发接多单（数量自控、系统不限）----
 
     @Test
-    void busyVetCannotAcceptAnotherRequest() {
-        long vetId = vets.newActiveVet("占用医生").getId();
-        presence.goBusy(vetId); // 模拟已在进行中的接单
-        ConsultRequest req = seedQueueing();
+    void vetCanAcceptMultipleRequestsConcurrently() {
+        long vetId = vets.newActiveVet("多单医生").getId();
+        ConsultRequest first = seedQueueing();
+        ConsultRequest second = seedQueueing();
 
-        assertThatConflict(() -> requestService.acceptRequest(vetId, req.getRequestToken()));
-        // 请求仍 QUEUEING（未被 BUSY 兽医接走）。
-        assertThat(requests.findById(req.getId()).orElseThrow().getState())
-                .isEqualTo(ConsultRequestState.QUEUEING);
+        requestService.acceptRequest(vetId, first.getRequestToken());
+        requestService.acceptRequest(vetId, second.getRequestToken()); // 第二单不再 409
+
+        for (long id : new long[] {first.getId(), second.getId()}) {
+            ConsultRequest after = requests.findById(id).orElseThrow();
+            assertThat(after.getState()).isEqualTo(ConsultRequestState.ACCEPTED_AWAIT_PAY);
+            assertThat(after.getVetId()).isEqualTo(vetId);
+        }
+        assertThat(presence.isBusy(vetId)).isFalse(); // 全程不触碰在线态
     }
 
     // ---- AC1/AC4：token 不存在 → 409（与「已被接单」同码防枚举）----
@@ -154,10 +158,10 @@ class ConsultAcceptIntegrationTest extends ApiIntegrationTest {
                 .andExpect(status().isUnauthorized());
     }
 
-    // ---- AC3：支付窗超时 → 结束请求（删）+ 释放兽医（bug 20260720-311，反转原回队重播 UX-DR14）----
+    // ---- AC3：支付窗超时 → 结束请求（删）（bug 20260720-311，反转原回队重播 UX-DR14）----
 
     @Test
-    void expiredPayWindowEndsRequestAndReleasesVet() {
+    void expiredPayWindowEndsRequest() {
         long vetId = vets.newActiveVet("超时释放医生").getId();
         // seed 已接单且支付窗已过期的行：先接单，再把 pay_deadline 拨回过去。
         ConsultRequest req = seedQueueing();
@@ -169,7 +173,6 @@ class ConsultAcceptIntegrationTest extends ApiIntegrationTest {
 
         assertThat(ended).isGreaterThanOrEqualTo(1);
         assertThat(requests.findById(req.getId())).isEmpty(); // 请求已删（结束，不回队；落 failed(TIMEOUT)）
-        assertThat(presence.isBusy(vetId)).isFalse();          // 兽医已释放
     }
 
     @Test
@@ -185,7 +188,6 @@ class ConsultAcceptIntegrationTest extends ApiIntegrationTest {
 
         assertThat(requests.findById(accepted.getId()).orElseThrow().getState())
                 .isEqualTo(ConsultRequestState.ACCEPTED_AWAIT_PAY); // 未过期不结束
-        assertThat(presence.isBusy(vetId)).isTrue();                // 兽医仍占用
         assertThat(requests.findById(queueing.getId()).orElseThrow().getState())
                 .isEqualTo(ConsultRequestState.QUEUEING);           // QUEUEING 不受影响
     }

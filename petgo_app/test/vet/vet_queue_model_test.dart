@@ -18,7 +18,7 @@ void main() {
       ],
     });
 
-    expect(q.awaitingPay, isNull); // 缺省 → null
+    expect(q.awaitingPays, isEmpty); // 缺省 → 空列表（364 多单模型）
     expect(q.available, hasLength(1));
     final item = q.available.first;
     expect(item.requestToken, 'req-1');
@@ -46,33 +46,40 @@ void main() {
     expect(item.queueDeadlineAt, isNull);
   });
 
-  test('VetQueue.fromJson: awaitingPay 待支付项 + 服务端权威 payDeadline', () {
+  test('VetQueue.fromJson: awaitingPays 多单列表 + 服务端权威 payDeadline（364）', () {
     final q = VetQueue.fromJson({
-      'awaitingPay': {
-        'requestToken': 'req-pay',
-        'petName': '阿黄',
-        'payDeadlineAt': '2026-07-13T10:02:30Z',
-      },
+      'awaitingPays': [
+        {
+          'requestToken': 'req-pay',
+          'petName': '阿黄',
+          'payDeadlineAt': '2026-07-13T10:02:30Z',
+        },
+        {'requestToken': 'req-pay-2'},
+      ],
       'available': const [],
     });
 
     expect(q.available, isEmpty);
-    final a = q.awaitingPay!;
+    expect(q.awaitingPays, hasLength(2));
+    final a = q.awaitingPays.first;
     expect(a.requestToken, 'req-pay');
     expect(a.petName, '阿黄');
     expect(a.payDeadlineAt, DateTime.utc(2026, 7, 13, 10, 2, 30));
     expect(a.isPaused, isFalse); // pausedAt 缺 → 未暂停
+    expect(q.awaitingPays[1].requestToken, 'req-pay-2');
   });
 
   test('VetAwaitingPay.isPaused: pausedAt 非空 → 暂停中（A-4）', () {
     final q = VetQueue.fromJson({
-      'awaitingPay': {
-        'requestToken': 'req-paused',
-        'payDeadlineAt': '2026-07-13T10:02:30Z',
-        'pausedAt': '2026-07-13T10:01:40Z',
-      },
+      'awaitingPays': [
+        {
+          'requestToken': 'req-paused',
+          'payDeadlineAt': '2026-07-13T10:02:30Z',
+          'pausedAt': '2026-07-13T10:01:40Z',
+        },
+      ],
     });
-    expect(q.awaitingPay!.isPaused, isTrue);
+    expect(q.awaitingPays.single.isPaused, isTrue);
     expect(q.available, isEmpty); // available 缺省 → 空列表
   });
 }
