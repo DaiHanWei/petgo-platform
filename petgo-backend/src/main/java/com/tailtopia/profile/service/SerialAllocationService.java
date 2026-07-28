@@ -31,6 +31,9 @@ public class SerialAllocationService {
 
     /**
      * 分配一个流水号。优先复用池中最小回收号（原子取出）；池空则取序列下一个。返回分配到的号（≥1）。
+     *
+     * <p>Story 6-7 后号可能被卡快照 {@code id_cards} 永久冻结（决策③旧卡保留）：复用时跳过这类号
+     * （防御历史污染数据，如 V92 双持有期入池的号），避免撞 {@code uq_id_cards_serial}。
      */
     @Transactional
     public long allocate() {
@@ -38,10 +41,11 @@ public class SerialAllocationService {
                 .setParameter("key", SERIAL_ALLOC_LOCK_KEY)
                 .getSingleResult();
 
-        // 优先复用池中最小回收号（原子取出：DELETE ... RETURNING）。
+        // 优先复用池中最小「未被卡快照冻结」的回收号（原子取出：DELETE ... RETURNING）。
         List<?> reused = entityManager.createNativeQuery(
                         "DELETE FROM pet_serial_pool "
-                                + "WHERE serial_id = (SELECT min(serial_id) FROM pet_serial_pool) "
+                                + "WHERE serial_id = (SELECT min(p.serial_id) FROM pet_serial_pool p "
+                                + "  WHERE NOT EXISTS (SELECT 1 FROM id_cards c WHERE c.serial_id = p.serial_id)) "
                                 + "RETURNING serial_id")
                 .getResultList();
         if (!reused.isEmpty()) {
@@ -56,11 +60,16 @@ public class SerialAllocationService {
 
     /**
      * 释放流水号回池（档案删除时调用，须在删除同一事务内保证原子）。幂等：重复释放 {@code ON CONFLICT DO NOTHING}。
+     *
+     * <p>被卡快照 {@code id_cards} 持有的号不回池（决策③旧卡保留=号永久冻结）：V92 回填把档案号复制进卡后
+     * 档案与卡双持有，删档案若把号放回池会被再分配、撞 {@code uq_id_cards_serial}（stag 2026-07-27 建卡恒 500 事故）。
      */
     @Transactional
     public void release(long serial) {
         entityManager.createNativeQuery(
-                        "INSERT INTO pet_serial_pool (serial_id) VALUES (:serial) ON CONFLICT DO NOTHING")
+                        "INSERT INTO pet_serial_pool (serial_id) SELECT :serial "
+                                + "WHERE NOT EXISTS (SELECT 1 FROM id_cards WHERE serial_id = :serial) "
+                                + "ON CONFLICT DO NOTHING")
                 .setParameter("serial", serial)
                 .executeUpdate();
     }
