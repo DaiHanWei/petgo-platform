@@ -81,6 +81,19 @@ public class HealthEvent {
         return base(petId, sourceType, sourceRef, eventDate, ArchiveDecision.SKIPPED);
     }
 
+    /**
+     * 跳过后显式补存（bug 20260727 保存静默无效）：SKIPPED → ARCHIVED 就地升级并回填存档载荷。
+     * 唯一升级方向（ARCHIVED 不可降级回 SKIPPED）；sourceRef 幂等键不变。
+     */
+    public void upgradeToArchived(String symptomSummary, String aiLevel, String adviceSummary,
+            List<String> imageKeys) {
+        this.archiveDecision = ArchiveDecision.ARCHIVED;
+        this.symptomSummary = symptomSummary;
+        this.aiLevel = aiLevel;
+        this.adviceSummary = adviceSummary;
+        this.imageKeys = imageKeys;
+    }
+
     private static HealthEvent base(Long petId, HealthSourceType sourceType, String sourceRef,
             LocalDate eventDate, ArchiveDecision decision) {
         HealthEvent e = new HealthEvent();

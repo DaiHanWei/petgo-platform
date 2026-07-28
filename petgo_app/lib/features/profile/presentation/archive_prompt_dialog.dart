@@ -20,6 +20,7 @@ class ArchivePromptArgs {
     this.adviceSummary,
     this.imImageRefs = const [],
     this.redState = false,
+    this.explicitSave = false,
   });
 
   final String sourceRef;
@@ -31,6 +32,10 @@ class ArchivePromptArgs {
 
   /// 红色态结果页触发（AC4）：状态 A 已建档直接存入无弹窗；建档完成回灌后语义返回结果页。
   final bool redState;
+
+  /// 用户显式点「存入宠物档案」按钮触发（bug 20260727 保存静默无效）：绕过「只问一次」守卫——
+  /// FR-16 只约束结束时的自动弹窗，之前选过「跳过」不应让显式保存永久静默失效（后端支持 SKIPPED→ARCHIVED 升级）。
+  final bool explicitSave;
 }
 
 /// 一次性存档弹窗（Story 2.5 · AC1 三态 / AC3 回灌 / AC4 红色态）。供 Epic4/5 结束页与红色态结果页调用。
@@ -47,7 +52,8 @@ Future<bool> showArchivePrompt(
   ArchivePromptArgs args,
 ) async {
   final guard = ref.read(archivePromptGuardProvider);
-  if (!await guard.needsPrompt(args.sourceRef)) return false;
+  // 显式保存绕过「只问一次」守卫（守卫只管自动弹窗场景）；自动场景照旧一次为限。
+  if (!args.explicitSave && !await guard.needsPrompt(args.sourceRef)) return false;
   if (!context.mounted) return false;
 
   final l10n = AppLocalizations.of(context);
