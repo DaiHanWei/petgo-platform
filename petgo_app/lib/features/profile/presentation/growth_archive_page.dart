@@ -192,6 +192,9 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
       onRefresh: () async {
         ref.invalidate(timelineFirstPageProvider);
         ref.invalidate(archiveStatsProvider);
+        // bug 20260727-365：日历视图的数据在 calendarMonthProvider（按年月分族），漏失效会导致
+        // 日历 tab 下拉刷新只走动画不刷数据；整族失效（含非当前月缓存），照 pet_profile_edit_page 先例。
+        ref.invalidate(calendarMonthProvider);
       },
       child: ListView(
         padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 50, AppSpacing.lg, AppSpacing.section),
