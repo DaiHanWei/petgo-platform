@@ -82,7 +82,48 @@ class KtpDefaults {
         return 'HEWAN';
     }
   }
+
+  /// gender wire 值 → KTP 卡面 Jenis Kelamin（印尼语设计常量，非 app-locale）。
+  /// null（旧卡/无字段）→ 维持旧默认 [jenisKelamin]，旧卡展示零变化。
+  static String jenisKelaminFor(String? gender) {
+    switch (gender) {
+      case 'MALE':
+        return 'JANTAN';
+      case 'FEMALE':
+        return 'BETINA';
+      case 'UNKNOWN':
+        return '-';
+      default:
+        return jenisKelamin;
+    }
+  }
 }
+
+/// petType → 新编码规则物种段 SP（狗 01 / 猫 02 / 其他与未选 00）。
+String speciesCodeFor(String? petType) => switch (petType) {
+      'DOG' => '01',
+      'CAT' => '02',
+      _ => '00',
+    };
+
+/// 建卡预览用**客户端占位身份码**（未落库无序号，末四位占位 `0000`；创建后以后端 cardNo 为准）。
+/// 规则：`TT` + DD(日+性别加码：母50/公10/未知0) + MMYY + SP + `0000`。生日缺失 → null（走旧占位 NIK）。
+String? buildPreviewCardNo({DateTime? birthday, String? gender, String? petType}) {
+  if (birthday == null) return null;
+  final offset = switch (gender) {
+    'FEMALE' => 50,
+    'MALE' => 10,
+    _ => 0,
+  };
+  final dd = (birthday.day + offset).toString().padLeft(2, '0');
+  final mmyy = '${_p2(birthday.month)}${_p2(birthday.year % 100)}';
+  return 'TT$dd$mmyy${speciesCodeFor(petType)}0000';
+}
+
+/// 建卡预览用**客户端占位护照号**（当年顺序号占位 `00000`；创建后以后端 passportNo 为准）。
+/// 规则：`TT` + SP + `P` + 签发年后两位 + `00000`。
+String buildPreviewPassportNo({String? petType, required int year}) =>
+    'TT${speciesCodeFor(petType)}P${_p2(year % 100)}00000';
 
 /// 纯函数：合并 6-1 档案数据 + 会话编辑覆盖 + 趣味默认 → KTP 展示字段。
 /// **不触碰档案真值**（AC3）；相同 [data] + 空 [edits] 恒得档案态（可 L0 断言）。
@@ -91,12 +132,13 @@ KtpFields buildKtpFields(IdCardData data, KtpEdits edits) {
   final dob = birthday == null ? '01-01-2020' : _dmy(birthday);
   final tempatTgl = edits.tempatTglLahir ?? '${KtpDefaults.tempatKota}, $dob';
   return KtpFields(
-    nik: _buildNik(data.serialId, birthday),
+    // 新编码卡直显后端 cardNo；旧卡（cardNo=null）维持旧拼号，展示零变化。
+    nik: (data.cardNo?.isNotEmpty == true) ? data.cardNo! : _buildNik(data.serialId, birthday),
     nama: edits.nama ?? data.name ?? KtpDefaults.namaFallback,
     tempatTglLahir: tempatTgl,
     spesies: edits.spesies ?? KtpDefaults.spesies(data.petType),
     ras: edits.ras ?? (data.breed?.isNotEmpty == true ? data.breed! : '-'),
-    jenisKelamin: edits.jenisKelamin ?? KtpDefaults.jenisKelamin,
+    jenisKelamin: edits.jenisKelamin ?? KtpDefaults.jenisKelaminFor(data.gender),
     alamat: edits.alamat ?? KtpDefaults.alamat,
     statusPerkawinan: edits.statusPerkawinan ?? KtpDefaults.statusPerkawinan,
     pekerjaan: edits.pekerjaan ?? KtpDefaults.pekerjaan,

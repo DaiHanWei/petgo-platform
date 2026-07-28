@@ -11,10 +11,14 @@ const int kIdCardHdPriceIdr = 5000;
 /// HD 付费方式选择底部抽屉（Story 6.3；6-7 多卡详情页复用）。返回选中的 [HdPayChannel]，下滑关闭 → null。
 /// PawCoin 余额足则默认选；不足 → 显充值链接跳 /me/pawcoin/recharge。
 class HdPaywallSheet extends StatefulWidget {
-  const HdPaywallSheet({super.key, this.petName, this.serialId, this.avatarUrl, required this.balance});
+  const HdPaywallSheet(
+      {super.key, this.petName, this.serialId, this.cardNo, this.avatarUrl, required this.balance});
 
   final String? petName;
   final int? serialId;
+
+  /// 新编码身份码（TT 开头 14 位）。非空时展示优先于 [serialId]；旧卡为 null 走旧展示。
+  final String? cardNo;
   final String? avatarUrl;
   final int balance;
 
@@ -31,7 +35,9 @@ class _HdPaywallSheetState extends State<HdPaywallSheet> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final enoughCoin = widget.balance >= _priceIdr;
-    final no = widget.serialId == null ? '----' : widget.serialId!.toString().padLeft(4, '0');
+    final no = (widget.cardNo?.isNotEmpty == true)
+        ? widget.cardNo!
+        : (widget.serialId == null ? '----' : widget.serialId!.toString().padLeft(4, '0'));
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 6, 20, 20),
@@ -63,6 +69,9 @@ class _HdPaywallSheetState extends State<HdPaywallSheet> {
                   const Text('🐾', style: TextStyle(fontSize: 30)),
                   const SizedBox(height: 8),
                   Text('${widget.petName ?? 'Pet'} · No. $no',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
                       style: const TextStyle(
                           color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 4),

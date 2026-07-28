@@ -9,6 +9,9 @@ class IdCardData {
   const IdCardData({
     required this.generated,
     this.serialId,
+    this.cardNo,
+    this.passportNo,
+    this.gender,
     this.name,
     this.petType,
     this.breed,
@@ -20,6 +23,15 @@ class IdCardData {
 
   final bool generated;
   final int? serialId;
+
+  /// TT 开头 14 位身份码（新编码规则，spec ktp-pet-idcode-numbering）。旧卡为 null → 卡面走旧拼号。
+  final String? cardNo;
+
+  /// TT 开头 12 位护照号（新编码规则）。旧卡为 null → 护照面走旧拼号。
+  final String? passportNo;
+
+  /// 性别 wire 原始值（MALE/FEMALE/UNKNOWN）。旧卡为 null → 卡面维持旧默认展示。
+  final String? gender;
   final String? name;
 
   /// 宠物类型枚举原始值（CAT/DOG/OTHER）——展示前本地化，App 绝不渲染后端显示串。
@@ -36,6 +48,9 @@ class IdCardData {
     return IdCardData(
       generated: json['generated'] as bool? ?? false,
       serialId: (json['serialId'] as num?)?.toInt(),
+      cardNo: json['cardNo'] as String?,
+      passportNo: json['passportNo'] as String?,
+      gender: json['gender'] as String?,
       name: json['name'] as String?,
       petType: json['petType'] as String?,
       breed: json['breed'] as String?,
@@ -52,12 +67,15 @@ class IdCardData {
 /// 身份证「快照卡」（Story 6.7）。区别于 [IdCardData]（单卡实时从档案渲染），[IdCard] 是一次建卡的
 /// **信息快照**：卡信息与档案解耦，独立 [serialId]、独立 [hdUnlocked]、独立 [createdAt]。旧卡保留可看可下载。
 ///
-/// 承接后端多卡端点 `GET/POST /api/v1/me/id-cards`。[serialId] 仅作展示编号，绝不作分享/深链定位键。
+/// 承接后端多卡端点 `GET/POST /api/v1/pet-profiles/me/id-cards`。[serialId] 仅作展示编号，绝不作分享/深链定位键。
 @immutable
 class IdCard {
   const IdCard({
     required this.id,
     this.serialId,
+    this.cardNo,
+    this.passportNo,
+    this.gender,
     this.name,
     this.petType,
     this.breed,
@@ -68,9 +86,18 @@ class IdCard {
     this.createdAt,
   });
 
-  /// 卡自身主键（授权态内部用；详情端点 `GET /me/id-cards/{id}` 寻址）。
+  /// 卡自身主键（授权态内部用；详情端点 `GET /pet-profiles/me/id-cards/{id}` 寻址）。
   final int id;
   final int? serialId;
+
+  /// TT 开头 14 位身份码（新编码规则）。旧卡为 null → 展示走旧拼号。仅展示，不作定位键。
+  final String? cardNo;
+
+  /// TT 开头 12 位护照号（新编码规则）。旧卡为 null。仅展示，不作定位键。
+  final String? passportNo;
+
+  /// 性别 wire 原始值（MALE/FEMALE/UNKNOWN）。旧卡为 null。
+  final String? gender;
   final String? name;
 
   /// 宠物类型枚举原始值（CAT/DOG/OTHER）——展示前本地化，App 绝不渲染后端显示串。
@@ -90,6 +117,9 @@ class IdCard {
     return IdCard(
       id: (json['id'] as num).toInt(),
       serialId: (json['serialId'] as num?)?.toInt(),
+      cardNo: json['cardNo'] as String?,
+      passportNo: json['passportNo'] as String?,
+      gender: json['gender'] as String?,
       name: json['name'] as String?,
       petType: json['petType'] as String?,
       breed: json['breed'] as String?,
@@ -105,6 +135,9 @@ class IdCard {
   IdCardData toIdCardData() => IdCardData(
         generated: true,
         serialId: serialId,
+        cardNo: cardNo,
+        passportNo: passportNo,
+        gender: gender,
         name: name,
         petType: petType,
         breed: breed,
@@ -115,7 +148,8 @@ class IdCard {
       );
 }
 
-/// 建卡请求（Story 6.7）。`POST /api/v1/me/id-cards`。[name] 必填，其余可空。生日格式 `yyyy-MM-dd`。
+/// 建卡请求（Story 6.7）。`POST /api/v1/pet-profiles/me/id-cards`。[name] 必填，其余可空。生日格式 `yyyy-MM-dd`
+/// （后端已改必填，表单层保证非空）。[gender] wire 值 MALE/FEMALE/UNKNOWN，空视同 UNKNOWN。
 @immutable
 class CreateIdCardRequest {
   const CreateIdCardRequest({
@@ -123,6 +157,7 @@ class CreateIdCardRequest {
     this.petType,
     this.breed,
     this.birthday,
+    this.gender,
     this.avatarUrl,
     this.intro,
   });
@@ -131,6 +166,7 @@ class CreateIdCardRequest {
   final String? petType;
   final String? breed;
   final DateTime? birthday;
+  final String? gender;
   final String? avatarUrl;
   final String? intro;
 
@@ -139,6 +175,7 @@ class CreateIdCardRequest {
         if (petType != null) 'petType': petType,
         if (breed != null) 'breed': breed,
         if (birthday != null) 'birthday': _isoDate(birthday!),
+        if (gender != null) 'gender': gender,
         if (avatarUrl != null) 'avatarUrl': avatarUrl,
         if (intro != null) 'intro': intro,
       };
