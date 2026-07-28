@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/analytics/analytics.dart';
+import '../../../core/analytics/button_ids.dart';
 import '../../../core/router/route_intent.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/rounded.dart';
@@ -79,7 +81,10 @@ class _TriagePageState extends ConsumerState<TriagePage> {
         ref,
         context,
         pendingAction: const RouteIntent(location: '/consult'),
-        onAllowed: () => context.push('/consult'),
+        onAllowed: () {
+          Analytics.buttonTapped(ButtonId.consultStart);
+          context.push('/consult');
+        },
       ),
     );
   }
@@ -147,7 +152,10 @@ class _TriagePageState extends ConsumerState<TriagePage> {
                 ref,
                 context,
                 pendingAction: const RouteIntent(location: '/triage/upload'),
-                onAllowed: () => context.push('/triage/upload'),
+                onAllowed: () {
+                  Analytics.buttonTapped(ButtonId.triageStart);
+                  context.push('/triage/upload');
+                },
               ),
             ),
             const SizedBox(height: 14),

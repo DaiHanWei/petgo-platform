@@ -5,6 +5,8 @@ import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/analytics/analytics.dart';
+import '../../../core/analytics/button_ids.dart';
 import '../../../core/im/im_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/colors.dart';
@@ -313,8 +315,10 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
             const SizedBox(width: AppSpacing.sm),
             // Bug 20260701-195：Drug list / History / Emergency 尚未实现（点击无实质反应），
             // 按需求先隐藏，只保留已实现的 Advice template。点 chip 同时重新展开被收起的 Assist 卡。
-            _toolChip(l10n.vetChatToolTemplate, active: true,
-                onTap: () => setState(() => _assistDismissed = false)),
+            _toolChip(l10n.vetChatToolTemplate, active: true, onTap: () {
+              Analytics.buttonTapped(ButtonId.vetAdviceTemplate);
+              setState(() => _assistDismissed = false);
+            }),
           ],
         ),
       ),
