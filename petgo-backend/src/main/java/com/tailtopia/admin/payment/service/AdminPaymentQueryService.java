@@ -2,6 +2,7 @@ package com.tailtopia.admin.payment.service;
 
 import com.tailtopia.admin.payment.dto.AdminPaymentRow;
 import com.tailtopia.pay.domain.PaymentIntent;
+import com.tailtopia.pay.dto.PaymentDisplayNo;
 import com.tailtopia.pay.repository.PaymentIntentRepository;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -44,7 +45,8 @@ public class AdminPaymentQueryService {
 
     private static AdminPaymentRow toRow(PaymentIntent p) {
         String label = p.getCreatedAt() == null ? null : WIB_FMT.format(p.getCreatedAt()) + " WIB";
-        return new AdminPaymentRow(p.getUserId(), p.getPublicToken(), p.getPurpose().name(),
+        return new AdminPaymentRow(p.getUserId(), p.getPublicToken(),
+                PaymentDisplayNo.of(p), p.getPurpose().name(),
                 p.getChannel().name(), p.getAmount(), p.getCurrency(), p.getStatus().name(),
                 p.getCreatedAt(), label);
     }

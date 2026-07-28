@@ -161,7 +161,7 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
           _paying = false;
           _awaitingCash = true;
           _qrPayload = result.payload;
-          _payRef = result.payment?.token;
+          _payRef = result.payment?.displayNo ?? result.payment?.token;
         });
       }
     } on DioException catch (e) {

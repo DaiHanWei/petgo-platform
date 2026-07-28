@@ -171,18 +171,21 @@ class PaymentInfo {
     required this.channel,
     required this.amount,
     required this.status,
+    this.displayNo,
   });
 
   final String token;
   final String channel;
   final int amount;
   final String status;
+  final String? displayNo; // 可读支付号（bug 326，PAYAI-日期-序号；旧后端为 null 退 token）
 
   factory PaymentInfo.fromJson(Map<String, dynamic> json) => PaymentInfo(
         token: json['token'] as String? ?? '',
         channel: json['channel'] as String? ?? '',
         amount: (json['amount'] as num?)?.toInt() ?? 0,
         status: json['status'] as String? ?? '',
+        displayNo: json['displayNo'] as String?,
       );
 }
 

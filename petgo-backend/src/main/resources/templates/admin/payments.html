@@ -24,7 +24,7 @@
             <tbody>
             <tr th:each="p : ${payments}">
                 <td th:text="${p.userId}">0</td>
-                <td th:text="${p.publicToken}">tok</td>
+                <td th:text="${p.displayNo != null ? p.displayNo : p.publicToken}" th:title="${p.publicToken}">no</td>
                 <td th:text="${p.purpose}">VET_CONSULT</td>
                 <td th:text="${p.channel}">QRIS</td>
                 <td th:text="${p.amount}">0</td>

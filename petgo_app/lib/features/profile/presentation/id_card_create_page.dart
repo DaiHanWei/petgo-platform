@@ -292,7 +292,7 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
         await showQrPaymentSheet(
           context,
           payload: res.payload!,
-          orderRef: res.paymentToken,
+          orderRef: res.paymentRef,
           pollPaid: () async {
             final c = await ref.refresh(idCardDetailProvider(card.id).future);
             return c.hdUnlocked;

@@ -161,7 +161,8 @@ class AiUnlockServiceTest {
         when(tokenGenerator.generate()).thenReturn("ordtok");
         when(paymentIntents.createIntent(eq(USER), eq(PaymentPurpose.AI_UNLOCK), eq(PayChannel.QRIS),
                 eq(PRICE), eq("IDR"), eq("ai-unlock:" + TRIAGE), eq(java.time.Duration.ofMinutes(60))))
-                .thenReturn(new PaymentIntentResponse("inttok", "AI_UNLOCK", "QRIS", PRICE, "IDR", "PENDING"));
+                .thenReturn(new PaymentIntentResponse("inttok", "AI_UNLOCK", "QRIS", PRICE, "IDR",
+                        "PENDING", "PAYAI-20260727-000001"));
         when(orders.findByPaymentIntentToken("inttok")).thenReturn(Optional.empty());
         PaymentIntent entity = PaymentIntent.create(USER, PaymentPurpose.AI_UNLOCK, PayChannel.QRIS,
                 PRICE, "IDR", "inttok");
