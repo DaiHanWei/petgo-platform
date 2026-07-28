@@ -11,6 +11,7 @@ class PaymentInfo {
     required this.amount,
     required this.currency,
     required this.status,
+    this.displayNo,
   });
 
   final String token; // 不可枚举支付意图号（轮询到账用）
@@ -18,6 +19,7 @@ class PaymentInfo {
   final int amount; // IDR 最小单位
   final String currency;
   final String status; // PENDING | PAID | ...
+  final String? displayNo; // 可读支付号（bug 326，PAYVET-日期-序号；旧后端为 null 退 token）
 
   factory PaymentInfo.fromJson(Map<String, dynamic> json) => PaymentInfo(
         token: json['token'] as String,
@@ -25,6 +27,7 @@ class PaymentInfo {
         amount: (json['amount'] as num).toInt(),
         currency: json['currency'] as String? ?? 'IDR',
         status: json['status'] as String? ?? 'PENDING',
+        displayNo: json['displayNo'] as String?,
       );
 }
 

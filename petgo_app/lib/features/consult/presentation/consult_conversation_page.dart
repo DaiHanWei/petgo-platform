@@ -291,6 +291,8 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
           sourceType: HealthSourceType.vetConsult,
           symptomSummary: d?.diagnosis,
           adviceSummary: d?.generalAdvice,
+          // 显式点保存：绕过「只问一次」守卫——此前选过「跳过」也能补存（bug 20260727 保存静默无效）。
+          explicitSave: true,
         ),
       );
       if (!mounted) return;

@@ -91,6 +91,27 @@ class SerialAllocationIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
+    void cardFrozenSerialIsNeverRecycled() {
+        jdbc.update("DELETE FROM pet_serial_pool");
+        User owner = newUser();
+        long serial = serialAllocation.allocate();
+        jdbc.update("INSERT INTO id_cards (user_id, serial_id, name) VALUES (?, ?, 'Haha')",
+                owner.getId(), serial);
+
+        // 释放守卫：卡快照持有的号不入池（V92 双持有 + 删档场景，stag 2026-07-27 事故回归）。
+        serialAllocation.release(serial);
+        assertThat(jdbc.queryForList("SELECT serial_id FROM pet_serial_pool", Long.class))
+                .doesNotContain(serial);
+
+        // 分配防御：号已在池中（历史污染数据）也跳过、落到序列，不撞 uq_id_cards_serial。
+        jdbc.update("INSERT INTO pet_serial_pool (serial_id) VALUES (?)", serial);
+        long next = serialAllocation.allocate();
+        assertThat(next).isNotEqualTo(serial);
+        jdbc.update("DELETE FROM pet_serial_pool WHERE serial_id = ?", serial);
+        jdbc.update("DELETE FROM id_cards WHERE serial_id = ?", serial);
+    }
+
+    @Test
     void deletingProfileReleasesSerialBackToPool() {
         jdbc.update("DELETE FROM pet_serial_pool");
         User owner = newUser();

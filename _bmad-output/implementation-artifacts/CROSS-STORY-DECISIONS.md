@@ -82,3 +82,11 @@
 - **`NotificationService`**：6.1 建 → 6.2/6.3/6.4 用。
 - **会话状态机**：5.3 入口(WAITING/CANCELLED) → 5.5 接单(IN_PROGRESS) → 5.6 收尾(PENDING_CLOSE/CLOSED) → 5.7 中断(INTERRUPTED) → 5.8 视图收口。
 - **`AccountDeletionJob`**：7.3 建（消费各模块 `deleteByUserId`/`anonymizeByUserId`）。
+
+## 2026-07-27 追加决策（bug 20260727-364 拍板）
+
+- **M-1 取消「一兽医一单」占用互斥**：兽医可并发接多单（付费计费流），**数量兽医自控、系统不设上限**。
+  - 由来：占用互斥源于 V1.0 Story 5.5（2026-06-02，goBusy）、被 V1.1 story 3-3 明文继承；单兽医供给下退化为「B 盲等 + 兽医盲忙」（bug 364），2026-07-27 用户拍板取消。
+  - 落地：`acceptRequest` 去 `isBusy` 409 守卫；**计费流全程不再触碰 `vet:busy`**（接单不置 BUSY，超时/取消/现金故障不再 goAvailable）；`vetQueue` 池恒可见、`awaitingPay`(单条) → `awaitingPays`(列表)（**API 契约变更**，App `VetQueue` 模型同步）。
+  - 不动：V1.0 免费直连流（`ConsultAcceptService`）与 `ConsultCloseService.goAvailable`（对计费流是 no-op，兼容遗留）；在线态显式模型（vet-presence-explicit-only）不变；广播本就发全部在线兽医，无需改。
+  - FR-53B 前端判成交改为「待支付 token 集合差 + 进行中会话数增量」。

@@ -264,10 +264,8 @@ public class ConsultPayService {
     private void recordCashSystemFault(long userId, ConsultRequest req) {
         int onlineVets = presence.onlineVetIds().size();
         if (req != null) {
-            if (requests.deleteIfState(req.getId(), ConsultRequestState.ACCEPTED_AWAIT_PAY) == 1
-                    && req.getVetId() != null) {
-                presence.goAvailable(req.getVetId()); // 释放兽医（handler 无外层请求事务，直接置）
-            }
+            // 清 request 防再超时；无占用互斥（364）：不动兽医在线态。
+            requests.deleteIfState(req.getId(), ConsultRequestState.ACCEPTED_AWAIT_PAY);
             events.publishEvent(new ConsultRequestFailedEvent(
                     "SYSTEM_FAILURE", userId, 0L, req.getCreatedAt(), onlineVets));
         } else {

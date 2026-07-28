@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/analytics/analytics.dart';
+import '../../../core/analytics/button_ids.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
@@ -85,6 +86,7 @@ class _TriageUploadPageState extends ConsumerState<TriageUploadPage> {
   }
 
   Future<void> _pickSource() async {
+    Analytics.buttonTapped(ButtonId.triageUpload);
     final l10n = AppLocalizations.of(context);
     final source = await showModalBottomSheet<MediaSource>(
       context: context,

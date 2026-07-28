@@ -91,27 +91,33 @@ String _dmyUpper(DateTime d) => '${_p2(d.day)} ${_months[d.month - 1]} ${d.year}
 String _p2(int n) => n.toString().padLeft(2, '0');
 
 /// 设计稿反解布局（画布 1990×1548 = 设计稿 995×774 的 2×）。
-/// ⚠️ 首版坐标按成图比例估算，须回 `docs/design/id-cards/passport-mockup.png` 差分复测精调（L2）。
+/// 2026-07-27（bug 20260727-370）：对 `docs/design/id-cards/passport-mockup.png` 逐像素差分复测后
+/// 校准——标题/字段字号放大到设计值、行基线按测量值对齐、照片框右下移、MRZ 上移放大。
 abstract final class _PL {
   static const double radius = 44;
   static const Rect logo = Rect.fromLTWH(44, 44, 216, 216);
 
-  static const double titleCenterX = 1092;
-  static const double titleBaseline = 132;
-  static const double titleSize = 76;
-  static const double subtitleBaseline = 206;
-  static const double subtitleSize = 40;
+  static const double titleCenterX = 1084;
+  static const double titleBaseline = 142;
+  static const double titleSize = 90;
+  static const double subtitleBaseline = 210;
+  static const double subtitleSize = 52;
 
-  static const Rect photo = Rect.fromLTWH(60, 360, 580, 720);
+  static const Rect photo = Rect.fromLTWH(78, 384, 540, 680);
   static const double photoRadius = 36;
 
-  // 字段字号。
-  static const double labelSize = 34;
-  static const double valueSize = 48;
+  // 字段字号（差分：按设计稿逐像素校准，标签 36 / 值 56）。
+  static const double labelSize = 36;
+  static const double valueSize = 56;
 
-  // NIKIM（照片下方，与 Reg.No 值同底线，值 12 位不越到 Reg.No 列 x=650）。
-  static const double nikimBaseline = 1176;
+  // NIKIM（照片下方，与 Reg.No 值同底线，值 12 位不越到 Reg.No 列 x=660）。
+  static const double nikimBaseline = 1170;
   static const double nikimLabelLeft = 76;
+
+  // Kantor Yang Mengeluarkan / Issuing Office：设计稿折两行右对齐，值 TAILTOPIA 再低一行。
+  static const double kantorLine1Baseline = 1126;
+  static const double kantorLine2Baseline = 1168;
+  static const double kantorValueBaseline = 1232;
 }
 
 const Color _kInk = Color(0xFF1A1A1A);
@@ -139,22 +145,21 @@ class PassportCardFront extends StatelessWidget {
   final PassportFields fields;
 
   List<_Field> _fields() => <_Field>[
-        // 左列。
-        _Field('Jenis / Type', PassportFields.type, 300, 360, left: 650),
-        _Field('Name / Name', fields.name, 470, 530, left: 650),
-        _Field('Kewarganegaraan / Nationality', PassportFields.nationality, 640, 700, left: 650),
-        _Field('Tgl.Lahir / Date of Birth', fields.dateOfBirth, 800, 860, left: 650),
-        _Field('Tgl.Pengeluaran / Date of Issue', fields.dateOfIssue, 960, 1020, left: 650),
-        _Field('Reg.No', fields.regNo, 1120, 1180, left: 650),
+        // 左列（基线为设计稿差分测量值 ×2）。
+        _Field('Jenis / Type', PassportFields.type, 306, 378, left: 660),
+        _Field('Name / Name', fields.name, 480, 550, left: 660),
+        _Field('Kewarganegaraan / Nationality', PassportFields.nationality, 644, 710, left: 660),
+        _Field('Tgl.Lahir / Date of Birth', fields.dateOfBirth, 804, 872, left: 660),
+        _Field('Tgl.Pengeluaran / Date of Issue', fields.dateOfIssue, 966, 1032, left: 660),
+        _Field('Reg.No', fields.regNo, 1126, 1192, left: 660),
         // 中列。
-        _Field('Kode Negara / Country Code', PassportFields.countryCode, 300, 360, left: 980),
+        _Field('Kode Negara / Country Code', PassportFields.countryCode, 306, 378, left: 955),
         // 右列（右对齐到卡右缘）。
-        _Field('No.Paspor / Passport.No', fields.passportNo, 300, 360, rightX: 1920),
-        _Field('Kelamin / Sex', fields.sex, 470, 530, rightX: 1920),
-        _Field('Tempat Lahir / Place of Birth', fields.placeOfBirth, 800, 860, rightX: 1920),
-        _Field('Tgl.Habis Berlaku / Date of Expiry', fields.dateOfExpiry, 960, 1020, rightX: 1920),
-        _Field('Kantor Yang Mengeluarkan / Issuing Office', PassportFields.issuingOffice, 1120, 1200,
-            rightX: 1920),
+        _Field('No.Paspor / Passport.No', fields.passportNo, 306, 378, rightX: 1920),
+        _Field('Kelamin / Sex', fields.sex, 480, 550, rightX: 1920),
+        // 设计稿此行只有印尼语（无英文后缀，空间留给左列 Date of Birth）。
+        _Field('Tempat Lahir', fields.placeOfBirth, 804, 872, rightX: 1920),
+        _Field('Tgl.Habis Berlaku / Date of Expiry', fields.dateOfExpiry, 966, 1032, rightX: 1920),
       ];
 
   @override
@@ -179,13 +184,20 @@ class PassportCardFront extends StatelessWidget {
                 _style(size: _PL.subtitleSize, weight: _kReg, italic: true)),
             _photo(),
             for (final f in _fields()) ..._fieldWidgets(f),
+            // Kantor / Issuing Office（bug 370）：照设计稿折两行右对齐，基线各自钉死（不靠自动换行）。
+            _right('Kantor Yang Mengeluarkan /', 1920, _PL.kantorLine1Baseline,
+                _style(size: _PL.labelSize, weight: _kReg)),
+            _right('Issuing Office', 1920, _PL.kantorLine2Baseline,
+                _style(size: _PL.labelSize, weight: _kReg)),
+            _right(PassportFields.issuingOffice, 1920, _PL.kantorValueBaseline,
+                _style(size: _PL.valueSize, weight: _kBold)),
             // NIKIM（照片下方）。
             _left('NIKIM', _PL.nikimLabelLeft, _PL.nikimBaseline, _style(size: _PL.labelSize, weight: _kReg)),
             _left(fields.nikim, _PL.nikimLabelLeft + 190, _PL.nikimBaseline,
-                _style(size: _PL.valueSize * 0.85, weight: _kBold)),
-            // MRZ 双行（底部灰条）。
-            _left(fields.mrz1, 76, 1416, _style(size: 46, weight: _kBold, tracking: 6)),
-            _left(fields.mrz2, 76, 1486, _style(size: 46, weight: _kBold, tracking: 6)),
+                _style(size: _PL.valueSize * 0.75, weight: _kBold)),
+            // MRZ 双行（底部灰条，差分：设计稿更大更靠上）。
+            _left(fields.mrz1, 72, 1382, _style(size: 56, weight: _kBold, tracking: 13)),
+            _left(fields.mrz2, 72, 1468, _style(size: 56, weight: _kBold, tracking: 13)),
           ],
         ),
       ),

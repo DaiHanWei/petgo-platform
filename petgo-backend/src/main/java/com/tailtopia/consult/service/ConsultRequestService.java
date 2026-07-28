@@ -32,8 +32,6 @@ import java.util.Objects;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 免费入队业务（Story 3.2，Epic 3 计费流入口）。用户免费发起咨询 → 建 {@code consult_requests}(QUEUEING)
@@ -206,10 +204,11 @@ public class ConsultRequestService {
     /**
      * 兽医计费队列（Story 3.6，只读，工作台待接单 Tab 轮询）。返回：
      * <ul>
-     *   <li>{@code awaitingPay}：本兽医当前 {@code ACCEPTED_AWAIT_PAY} 请求（FR-53A 待支付倒计时中间态），
-     *       占用互斥保证恒仅 1 单，无则 null；</li>
-     *   <li>{@code available}：<b>仅兽医不忙时</b>（{@code !isBusy}）的 {@code QUEUEING} 池（FIFO），批量富化宠物身份 +
-     *       机主昵称；忙（接单中/会话中）则空——不能再接。</li>
+     *   <li>{@code awaitingPays}：本兽医当前全部 {@code ACCEPTED_AWAIT_PAY} 请求（FR-53A 待支付倒计时
+     *       中间态，接单时间升序）——<b>2026-07-27 起取消「一兽医一单」（bug 20260727-364 拍板）</b>，
+     *       可并发多单（数量兽医自控、系统不限），故为列表；</li>
+     *   <li>{@code available}：{@code QUEUEING} 池（FIFO），批量富化宠物身份 + 机主昵称。
+     *       接单中/会话中<b>不再屏蔽</b>——池对全部兽医恒可见。</li>
      * </ul>
      * 身份富化复用 {@link PetProfileQueryService}/{@link AccountQueryService} 只读端口（不直访 profile/auth repo，
      * 保模块边界，照 {@code VetConsultService.waitingList} 范式）。
@@ -219,26 +218,25 @@ public class ConsultRequestService {
      */
     @Transactional(readOnly = true)
     public VetQueueResponse vetQueue(long vetId) {
-        VetQueueResponse.VetAwaitingPayItem awaitingPay = requests
-                .findFirstByVetIdAndState(vetId, ConsultRequestState.ACCEPTED_AWAIT_PAY)
+        List<VetQueueResponse.VetAwaitingPayItem> awaitingPays = requests
+                .findByVetIdAndStateOrderByCreatedAtAsc(vetId, ConsultRequestState.ACCEPTED_AWAIT_PAY)
+                .stream()
                 .map(r -> VetQueueResponse.VetAwaitingPayItem.of(r, petIdentityOf(r.getUserId())))
-                .orElse(null);
+                .toList();
         List<VetQueueResponse.VetQueueItem> available = List.of();
-        if (!presence.isBusy(vetId)) {
-            List<ConsultRequest> pool =
-                    requests.findByStateOrderByCreatedAtAsc(ConsultRequestState.QUEUEING);
-            if (!pool.isEmpty()) {
-                List<Long> userIds = pool.stream().map(ConsultRequest::getUserId)
-                        .filter(Objects::nonNull).distinct().toList();
-                Map<Long, PetIdentityView> pets = petQuery.findIdentitiesByOwners(userIds);
-                Map<Long, AuthorView> authors = accounts.findAuthorViews(userIds);
-                available = pool.stream()
-                        .map(r -> VetQueueResponse.VetQueueItem.of(r, pets.get(r.getUserId()),
-                                handleOf(authors, r.getUserId())))
-                        .toList();
-            }
+        List<ConsultRequest> pool =
+                requests.findByStateOrderByCreatedAtAsc(ConsultRequestState.QUEUEING);
+        if (!pool.isEmpty()) {
+            List<Long> userIds = pool.stream().map(ConsultRequest::getUserId)
+                    .filter(Objects::nonNull).distinct().toList();
+            Map<Long, PetIdentityView> pets = petQuery.findIdentitiesByOwners(userIds);
+            Map<Long, AuthorView> authors = accounts.findAuthorViews(userIds);
+            available = pool.stream()
+                    .map(r -> VetQueueResponse.VetQueueItem.of(r, pets.get(r.getUserId()),
+                            handleOf(authors, r.getUserId())))
+                    .toList();
         }
-        return new VetQueueResponse(awaitingPay, available);
+        return new VetQueueResponse(awaitingPays, available);
     }
 
     /**
@@ -278,19 +276,16 @@ public class ConsultRequestService {
     /**
      * 兽医接单（Story 3.3，CAS，接单<b>不建会话/订单</b>）：
      * <ol>
-     *   <li>占用互斥：{@code isBusy(vetId)} → 409（一兽医不占多单）；</li>
      *   <li>token 寻址：不存在 → 409（与「已被接单」同码防枚举）；</li>
      *   <li>{@code tryAccept}（H-4 单列 state CAS）：1 行=接单成功（{@code QUEUEING→ACCEPTED_AWAIT_PAY} +
-     *       填 vet_id + 开 {@code pay_deadline=now+90s} 支付窗）；0 行=已被抢/已过期删 → 409。</li>
+     *       填 vet_id + 开 {@code pay_deadline=now+5min} 支付窗）；0 行=已被抢/已过期删 → 409。</li>
      * </ol>
-     * <b>IM 会话、consult_orders 都不在此建</b>（3-4 支付成功才建）。goBusy 挂事务<b>提交后</b>
-     * （{@link #afterCommit}）——CAS 回滚则 Redis 不误置 BUSY（在线态显式、最终一致，vet-presence-explicit-only）。
+     * <b>2026-07-27 起无占用互斥</b>（bug 20260727-364 拍板）：兽医可并发接多单（数量自控、系统不限），
+     * 接单不再置 BUSY、结束/超时/取消也不再翻转在线态——计费流全程不动 {@code vet:busy}。
+     * <b>IM 会话、consult_orders 都不在此建</b>（3-4 支付成功才建）。
      */
     @Transactional
     public AcceptResult acceptRequest(long vetId, String requestToken) {
-        if (presence.isBusy(vetId)) {
-            throw AppException.conflict("您有进行中的接单");
-        }
         // token 不存在与「已被接单」返同一 409（防枚举）。
         ConsultRequest req = requests.findByRequestToken(requestToken)
                 .orElseThrow(() -> AppException.conflict("该请求已被接单或已过期"));
@@ -298,15 +293,15 @@ public class ConsultRequestService {
         if (requests.tryAccept(req.getId(), vetId, payDeadline) != 1) {
             throw AppException.conflict("该请求已被接单或已过期"); // 先到先得（H-4），已被抢或已删
         }
-        afterCommit(() -> presence.goBusy(vetId)); // 占用兽医，提交后置 BUSY
         // 不 reload（bulk update 绕过持久化上下文，reload 读 stale）；权威值即刚写入的 state/payDeadline。
         return new AcceptResult(req.getRequestToken(), ConsultRequestState.ACCEPTED_AWAIT_PAY, payDeadline);
     }
 
     /**
      * 支付窗超时 → <b>结束请求</b>（bug 20260720-311，@Scheduled 调，<b>禁 MQ</b>）。逐条：
-     * 读过期 {@code ACCEPTED_AWAIT_PAY}（拿 vet_id）→ {@code deleteIfState} 删 request（CAS，防已支付/已处理行）→
-     * 删成功则释放兽医（{@code goAvailable}，提交后）+ 落 {@code failed_consult_requests}(TIMEOUT)。未扣费不建订单（A-5）。
+     * 读过期 {@code ACCEPTED_AWAIT_PAY} → {@code deleteIfState} 删 request（CAS，防已支付/已处理行）→
+     * 删成功落 {@code failed_consult_requests}(TIMEOUT)。未扣费不建订单（A-5）。
+     * 无占用互斥（364）：不再翻转兽医在线态。
      *
      * <p><b>反转 UX-DR14（原 Story 3.3/3.4 回队重播）</b>：付款超时不再回 QUEUEING 重新广播，直接终结本次请求；
      * 用户想再问诊须重新发起。因此不再读 {@code rebroadcast_count}/{@code maxRebroadcast}/{@code requestMaxAgeMinutes}。
@@ -319,13 +314,9 @@ public class ConsultRequestService {
                 ConsultRequestState.ACCEPTED_AWAIT_PAY, Instant.now());
         int handled = 0;
         for (ConsultRequest req : expired) {
-            final Long vetId = req.getVetId(); // 删前捕获（删后取不到）
             int onlineVets = presence.onlineVetIds().size(); // 失败时刻在线兽医数（落库前取）
             if (requests.deleteIfState(req.getId(), ConsultRequestState.ACCEPTED_AWAIT_PAY) == 1) {
                 handled++;
-                if (vetId != null) {
-                    afterCommit(() -> presence.goAvailable(vetId)); // 释放兽医（提交后）
-                }
                 // 结束落 failed_consult_requests(TIMEOUT)；不建订单（未扣费，A-5）。sessionId=0（无会话）。
                 events.publishEvent(new ConsultRequestFailedEvent(
                         "TIMEOUT", req.getUserId(), 0L, req.getCreatedAt(), onlineVets));
@@ -368,7 +359,7 @@ public class ConsultRequestService {
 
     /**
      * 用户主动取消（Story 3.4，AC6）：QUEUEING 或 ACCEPTED_AWAIT_PAY 均可，物理删 request（无痕不建单，A-5）+
-     * 若曾接单则释放兽医 + 落 {@code failed_consult_requests}(USER_CANCEL)。归属不符统一 409 防枚举。
+     * 落 {@code failed_consult_requests}(USER_CANCEL)。归属不符统一 409 防枚举。无占用互斥（364）：不动在线态。
      */
     @Transactional
     public void cancelRequest(long userId, String requestToken) {
@@ -377,15 +368,11 @@ public class ConsultRequestService {
         if (req.getUserId() == null || req.getUserId() != userId) {
             throw AppException.conflict("该请求不存在或已处理");
         }
-        final Long vetId = req.getVetId();
         int onlineVets = presence.onlineVetIds().size();
         // 按当前 state CAS 删（并发变态则 0 行、无操作）。
         if (requests.deleteIfState(req.getId(), req.getState()) == 1) {
             // 联动作废该用户在途 VET_CONSULT 支付意图（置 FAILED），避免 cancel 后 PENDING 残留后台支付列表。
             paymentIntents.failPending(userId, PaymentPurpose.VET_CONSULT);
-            if (vetId != null) {
-                afterCommit(() -> presence.goAvailable(vetId)); // 曾接单 → 释放兽医
-            }
             events.publishEvent(new ConsultRequestFailedEvent(
                     "USER_CANCEL", userId, 0L, req.getCreatedAt(), onlineVets));
         }
@@ -402,20 +389,4 @@ public class ConsultRequestService {
         return req;
     }
 
-    /**
-     * 在当前事务<b>提交后</b>执行 Redis 副作用（goBusy/goAvailable）；无活动事务时立即执行。
-     * 保证：DB 状态机（权威）先落定，Redis 在线态再跟随——回滚不残留、崩溃残留由兽医重上线兜底。
-     */
-    private void afterCommit(Runnable action) {
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    action.run();
-                }
-            });
-        } else {
-            action.run();
-        }
-    }
 }

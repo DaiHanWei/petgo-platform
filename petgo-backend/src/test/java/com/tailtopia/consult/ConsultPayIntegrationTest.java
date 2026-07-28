@@ -123,7 +123,7 @@ class ConsultPayIntegrationTest extends ApiIntegrationTest {
                 userId, List.of(SessionStatus.IN_PROGRESS)).orElseThrow();
         assertThat(session.getImConversationId()).isEqualTo("conv-it-stub");
         assertThat(session.getVetId()).isEqualTo(vetId);
-        assertThat(presence.isBusy(vetId)).isTrue();                        // 兽医仍占用（进行中会话）
+        assertThat(presence.isBusy(vetId)).isFalse();                       // 364：计费流不动在线态
     }
 
     @Test
@@ -241,7 +241,7 @@ class ConsultPayIntegrationTest extends ApiIntegrationTest {
 
         assertThat(requests.findById(req.getId())).isEmpty();               // 删（结束，不回队）
         assertThat(failedRequests.count()).isEqualTo(failedBefore + 1);     // failed(TIMEOUT)
-        assertThat(presence.isBusy(vetId)).isFalse();                       // 释放兽医
+        assertThat(presence.isBusy(vetId)).isFalse();                       // 364：计费流不动在线态
     }
 
     // ---- AC7：暂停顺延（A-4）----
@@ -307,6 +307,6 @@ class ConsultPayIntegrationTest extends ApiIntegrationTest {
 
         assertThat(requests.findById(req.getId())).isEmpty();               // 物理删
         assertThat(failedRequests.count()).isEqualTo(failedBefore + 1);     // failed(USER_CANCEL)
-        assertThat(presence.isBusy(vetId)).isFalse();                       // 释放兽医
+        assertThat(presence.isBusy(vetId)).isFalse();                       // 364：计费流不动在线态
     }
 }

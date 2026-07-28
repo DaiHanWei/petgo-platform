@@ -11,9 +11,10 @@ import java.util.List;
  * 兽医侧读投影，与 V1.0 免费直连流 {@link VetInboxItem}（{@code consult_sessions}）并存不混用。
  *
  * <ul>
- *   <li>{@code awaitingPay}：本兽医当前 {@code ACCEPTED_AWAIT_PAY} 请求（接单后「等待用户支付」中间态，FR-53A），
- *       无则 {@code null}（NON_NULL 省略）。前端据 {@code payDeadlineAt}（服务端权威 timestamptz）渲染倒计时。</li>
- *   <li>{@code available}：可接单的 {@code QUEUEING} 池（FIFO）。<b>兽医忙时（接单中/会话中）为空</b>（不能再接）。</li>
+ *   <li>{@code awaitingPays}：本兽医当前全部 {@code ACCEPTED_AWAIT_PAY} 请求（接单后「等待用户支付」中间态，
+ *       FR-53A，接单时间升序）。<b>2026-07-27 起取消「一兽医一单」（bug 20260727-364）</b>——可并发多单，
+ *       故为列表。前端据 {@code payDeadlineAt}（服务端权威 timestamptz）渲染倒计时。</li>
+ *   <li>{@code available}：可接单的 {@code QUEUEING} 池（FIFO），接单中/会话中不再屏蔽。</li>
  * </ul>
  *
  * <p><b>V84 起含病例摘要</b>（Story 3.2 [OPEN] 收口 + D1）：兽医接单前据病例判断是否接单，故队列卡为富卡
@@ -22,7 +23,7 @@ import java.util.List;
  * 身份经 {@code PetProfileQueryService} 批量富化，注销/缺失兜底 null（Jackson NON_NULL 省略）。
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public record VetQueueResponse(VetAwaitingPayItem awaitingPay, List<VetQueueItem> available) {
+public record VetQueueResponse(List<VetAwaitingPayItem> awaitingPays, List<VetQueueItem> available) {
 
     /** 待支付中间态项（FR-53A）：本兽医接单后等待用户支付，含服务端权威支付截止 + 暂停锚（A-4 跳充值）。 */
     @JsonInclude(JsonInclude.Include.NON_NULL)

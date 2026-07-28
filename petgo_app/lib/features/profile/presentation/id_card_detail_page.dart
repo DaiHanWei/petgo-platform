@@ -225,7 +225,7 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
         final bool paid = await showQrPaymentSheet(
           context,
           payload: res.payload!,
-          orderRef: res.paymentToken,
+          orderRef: res.paymentRef,
           pollPaid: () async {
             final card = await ref.refresh(idCardDetailProvider(widget.cardId).future);
             return card.hdUnlocked;

@@ -20,9 +20,10 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <ul>
  *   <li>{@code GET /api/v1/vet/consultations/queue}：兽医计费队列（Story 3.6）——本人「等待支付」中间态
- *       （FR-53A）+ 可接单 QUEUEING 池（忙则空）。工作台待接单 Tab 轮询。</li>
+ *       列表（FR-53A，可多单）+ 可接单 QUEUEING 池。工作台待接单 Tab 轮询。</li>
  *   <li>{@code POST /api/v1/vet/consultations/{requestToken}/accept}：接单（CAS QUEUEING→ACCEPTED_AWAIT_PAY
- *       + 开 1.5min 支付窗 + goBusy 占用）。<b>接单不建会话/订单</b>——会话/订单在 3-4 支付成功才建。</li>
+ *       + 开 5min 支付窗）。<b>2026-07-27 起无占用互斥（bug 364）</b>：兽医可并发接多单（数量自控、系统不限）。
+ *       <b>接单不建会话/订单</b>——会话/订单在 3-4 支付成功才建。</li>
  * </ul>
  *
  * <p>token 寻址（不可枚举）；vetId 取自 JWT（不信客户端）。不存在 token 与「已被接单」返同一 409（防枚举）。

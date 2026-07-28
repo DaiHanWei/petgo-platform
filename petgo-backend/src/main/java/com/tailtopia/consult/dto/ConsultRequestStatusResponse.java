@@ -9,7 +9,7 @@ import java.time.Instant;
  *
  * @param state           QUEUEING | ACCEPTED_AWAIT_PAY（服务端权威）
  * @param queueDeadlineAt 入队 1min 截止（QUEUEING 倒计时；ACCEPTED 后可为历史值）
- * @param payDeadlineAt   支付 1.5min 截止（ACCEPTED_AWAIT_PAY 倒计时，服务端权威）
+ * @param payDeadlineAt   支付窗截止（5min，ACCEPTED_AWAIT_PAY 倒计时，服务端权威）
  * @param pausedAt        跳充值暂停锚（A-4；非空=暂停中，前端暂停显示）
  */
 public record ConsultRequestStatusResponse(String state, Instant queueDeadlineAt,

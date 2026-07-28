@@ -153,40 +153,50 @@ void main() {
     await _drainToast(tester);
   });
 
-  testWidgets('FR-53A: awaitingPay → 顶部等待支付倒计时卡（无接单池）', (tester) async {
+  testWidgets('FR-53A+364: 多张待支付卡逐单渲染，池仍可见可继续接', (tester) async {
     final deadline = DateTime.now().toUtc().add(const Duration(seconds: 75));
     final repo = _FakeVetRepository(
-      queue: VetQueue(awaitingPay: VetAwaitingPay(requestToken: 'req-p', petName: '阿黄', payDeadlineAt: deadline)),
+      queue: VetQueue(
+        awaitingPays: [
+          VetAwaitingPay(requestToken: 'req-p', petName: '阿黄', payDeadlineAt: deadline),
+          VetAwaitingPay(requestToken: 'req-q', petName: '咪咪', payDeadlineAt: deadline),
+        ],
+        available: [_item('req-pool')],
+      ),
     );
     await _pump(tester, repo);
 
-    expect(find.byKey(const ValueKey('vetAwaitingPayCard')), findsOneWidget);
-    expect(find.text('Waiting for payment'), findsOneWidget);
-    final countdown = tester.widget<Text>(find.byKey(const ValueKey('vetAwaitingPayCountdown')));
+    expect(find.byKey(const ValueKey('vetAwaitingPayCard_req-p')), findsOneWidget);
+    expect(find.byKey(const ValueKey('vetAwaitingPayCard_req-q')), findsOneWidget);
+    expect(find.text('Waiting for payment'), findsNWidgets(2));
+    final countdown =
+        tester.widget<Text>(find.byKey(const ValueKey('vetAwaitingPayCountdown_req-p')));
     expect(countdown.data, matches(RegExp(r'^\d{2}:\d{2}$'))); // 服务端权威倒计时渲染 MM:SS
     expect(countdown.data, startsWith('01:1')); // ~75s 剩余（01:1x，含渲染耗时容差）
-    // 忙时不显空态占位
-    expect(find.text('No incoming requests'), findsNothing);
+    // 364：接单中池不再屏蔽——池卡仍在，可继续接。
+    expect(find.byKey(const ValueKey('vetQueueCard_req-pool')), findsOneWidget);
   });
 
   testWidgets('FR-53A: pausedAt → 暂停显示（A-4 跳充值）', (tester) async {
     final repo = _FakeVetRepository(
       queue: VetQueue(
-        awaitingPay: VetAwaitingPay(
-          requestToken: 'req-pz',
-          payDeadlineAt: DateTime.now().toUtc().add(const Duration(seconds: 60)),
-          pausedAt: DateTime.now().toUtc(),
-        ),
+        awaitingPays: [
+          VetAwaitingPay(
+            requestToken: 'req-pz',
+            payDeadlineAt: DateTime.now().toUtc().add(const Duration(seconds: 60)),
+            pausedAt: DateTime.now().toUtc(),
+          ),
+        ],
       ),
     );
     await _pump(tester, repo);
     expect(find.text('User is topping up…'), findsOneWidget);
-    expect(find.byKey(const ValueKey('vetAwaitingPayCountdown')), findsNothing); // 暂停不显倒计时
+    expect(find.byKey(const ValueKey('vetAwaitingPayCountdown_req-pz')), findsNothing); // 暂停不显倒计时
   });
 
   testWidgets('FR-53B: 待支付项消失 + 有新会话 → 成交 Toast', (tester) async {
     final repo = _FakeVetRepository(
-      queue: VetQueue(awaitingPay: VetAwaitingPay(requestToken: 'req-x', payDeadlineAt: DateTime.now().toUtc().add(const Duration(seconds: 60)))),
+      queue: VetQueue(awaitingPays: [VetAwaitingPay(requestToken: 'req-x', payDeadlineAt: DateTime.now().toUtc().add(const Duration(seconds: 60)))]),
     );
     await _pump(tester, repo);
     // 模拟支付成功：awaitingPay 消失 + 出现进行中会话。
@@ -202,7 +212,7 @@ void main() {
 
   testWidgets('FR-53B: 待支付项消失 + 无新会话 → 未成交 Toast（取消/超时/未支付）', (tester) async {
     final repo = _FakeVetRepository(
-      queue: VetQueue(awaitingPay: VetAwaitingPay(requestToken: 'req-y', payDeadlineAt: DateTime.now().toUtc().add(const Duration(seconds: 60)))),
+      queue: VetQueue(awaitingPays: [VetAwaitingPay(requestToken: 'req-y', payDeadlineAt: DateTime.now().toUtc().add(const Duration(seconds: 60)))]),
     );
     await _pump(tester, repo);
     repo.setQueue(const VetQueue()); // awaitingPay 消失，无新会话

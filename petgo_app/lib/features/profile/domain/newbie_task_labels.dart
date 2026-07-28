@@ -8,8 +8,9 @@ const Map<String, ({String en, String id})> kNewbieTaskLabels = {
   'CREATE_PROFILE': (en: 'Create pet profile', id: 'Buat profil hewan'),
   'FIRST_PHOTO': (en: 'Upload first growth photo', id: 'Unggah foto pertama'),
   'SHARE_CARD': (en: 'Share pet ID card', id: 'Bagikan kartu identitas'),
-  'SAVE_CONSULT': (en: 'Save a vet consult', id: 'Simpan konsultasi dokter'),
-  'FIRST_DAILY': (en: 'Post a daily update', id: 'Buat postingan harian'),
+  // bug 20260727-367 文案调整（en 为提报指定；id 随之对齐，仍待母语复核）。
+  'SAVE_CONSULT': (en: 'Save a consult result', id: 'Simpan hasil konsultasi'),
+  'FIRST_DAILY': (en: 'Post a moment', id: 'Posting momen'),
   'FIRST_HEALTH_RECORD': (en: 'Add a health record', id: 'Tambah catatan kesehatan'),
 };
 

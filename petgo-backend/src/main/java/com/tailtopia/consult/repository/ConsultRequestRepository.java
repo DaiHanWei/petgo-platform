@@ -34,10 +34,11 @@ public interface ConsultRequestRepository extends JpaRepository<ConsultRequest, 
     List<ConsultRequest> findByStateOrderByCreatedAtAsc(ConsultRequestState state);
 
     /**
-     * 本兽医当前接单中请求（Story 3.6，只读）：取该兽医处于给定 {@code state}（ACCEPTED_AWAIT_PAY）的请求。
-     * 兽医占用互斥（{@code goBusy}）保证接单中恒仅 1 单，故取首条即唯一。供 FR-53A「等待支付」倒计时中间态。
+     * 本兽医当前接单中请求列表（Story 3.6，只读）：该兽医处于给定 {@code state}（ACCEPTED_AWAIT_PAY）的请求
+     * 按接单时间升序。<b>2026-07-27 起取消「一兽医一单」占用互斥（bug 20260727-364 拍板）</b>——兽医可并发
+     * 接多单（数量自控、系统不限），故可能多条。供 FR-53A「等待支付」倒计时中间态列表。
      */
-    Optional<ConsultRequest> findFirstByVetIdAndState(long vetId, ConsultRequestState state);
+    List<ConsultRequest> findByVetIdAndStateOrderByCreatedAtAsc(long vetId, ConsultRequestState state);
 
     /** 该用户现有 live 请求（占用命中时返回，供 alreadyActive 语义）。 */
     Optional<ConsultRequest> findFirstByUserIdOrderByCreatedAtAsc(long userId);

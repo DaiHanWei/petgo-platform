@@ -57,7 +57,8 @@ class PawCoinTopupServiceTest {
     }
 
     private PaymentIntentResponse intentResp(String token) {
-        return new PaymentIntentResponse(token, "PAWCOIN_TOPUP", "QRIS", 10_000L, "IDR", "PENDING");
+        return new PaymentIntentResponse(token, "PAWCOIN_TOPUP", "QRIS", 10_000L, "IDR", "PENDING",
+                "PAYTOPUP-20260727-000001");
     }
 
     @Test

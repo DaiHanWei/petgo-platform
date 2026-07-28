@@ -170,7 +170,7 @@ Future<void> runAiUnlockFlow(
     await showQrPaymentSheet(
       context,
       payload: st.payload!,
-      orderRef: st.payment?.token, // bug 326：支付号（客服对账）
+      orderRef: st.payment?.displayNo ?? st.payment?.token, // bug 326：可读支付号（旧后端退 token）
       pollPaid: () async {
         final TriageResult r = await ref
             .read(triageRepositoryProvider)

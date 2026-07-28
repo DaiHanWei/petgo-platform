@@ -4,18 +4,19 @@
 /// 是否接单。完整病例（含现签图）走 `GET /vet/consultations/{requestToken}/case`，列表**不下发签名 URL**。
 /// 身份字段全 nullable（注销/无档案兜底 null → 前端降级）。
 class VetQueue {
-  const VetQueue({this.awaitingPay, this.available = const []});
+  const VetQueue({this.awaitingPays = const [], this.available = const []});
 
-  /// 本兽医接单后「等待用户支付」中间态（FR-53A），无则 null（未接单）。
-  final VetAwaitingPay? awaitingPay;
+  /// 本兽医接单后「等待用户支付」中间态列表（FR-53A，接单时间升序）。
+  /// **2026-07-27 起取消「一兽医一单」（bug 20260727-364）**——可并发多单，故为列表。
+  final List<VetAwaitingPay> awaitingPays;
 
-  /// 可接单 QUEUEING 池（FIFO）。**兽医忙时（接单中/会话中）后端返回空**（不能再接）。
+  /// 可接单 QUEUEING 池（FIFO）。364 起接单中/会话中不再屏蔽，池恒可见。
   final List<VetQueueItem> available;
 
   factory VetQueue.fromJson(Map<String, dynamic> json) => VetQueue(
-        awaitingPay: json['awaitingPay'] == null
-            ? null
-            : VetAwaitingPay.fromJson((json['awaitingPay'] as Map).cast<String, dynamic>()),
+        awaitingPays: ((json['awaitingPays'] as List?) ?? const [])
+            .map((e) => VetAwaitingPay.fromJson((e as Map).cast<String, dynamic>()))
+            .toList(),
         available: ((json['available'] as List?) ?? const [])
             .map((e) => VetQueueItem.fromJson((e as Map).cast<String, dynamic>()))
             .toList(),
