@@ -114,4 +114,37 @@ void main() {
       expect(buildPreviewPassportNo(petType: 'CAT', year: 2026).length, 12);
     });
   });
+
+  // bug 20260729-409：卡面趣味字段随快照——有值用快照（大写展示），null/空回落趣味默认。
+  group('buildKtpFields 趣味字段快照', () {
+    test('快照值优先：出生地/地址/职业/婚姻状态取快照并大写', () {
+      final f = buildKtpFields(
+        IdCardData(
+          generated: true,
+          birthday: DateTime(2024, 3, 10),
+          birthCity: 'jakarta',
+          address: 'Jl. Sudirman No. 1',
+          occupation: 'Nap Specialist',
+          maritalStatus: 'kawin',
+        ),
+        KtpEdits.empty,
+      );
+      expect(f.tempatTglLahir, 'JAKARTA, 10-03-2024');
+      expect(f.placeLine, 'JAKARTA');
+      expect(f.alamat, 'JL. SUDIRMAN NO. 1');
+      expect(f.pekerjaan, 'NAP SPECIALIST');
+      expect(f.statusPerkawinan, 'KAWIN');
+    });
+
+    test('null/空串回落趣味默认（旧卡展示零变化）', () {
+      final f = buildKtpFields(
+        IdCardData(generated: true, birthday: DateTime(2024, 3, 10), birthCity: '  '),
+        KtpEdits.empty,
+      );
+      expect(f.tempatTglLahir, '${KtpDefaults.tempatKota}, 10-03-2024');
+      expect(f.alamat, KtpDefaults.alamat);
+      expect(f.pekerjaan, KtpDefaults.pekerjaan);
+      expect(f.statusPerkawinan, KtpDefaults.statusPerkawinan);
+    });
+  });
 }

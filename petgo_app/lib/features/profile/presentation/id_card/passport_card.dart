@@ -6,6 +6,9 @@ import '../../domain/id_card.dart';
 /// 宠物护照（Story 6-8，bug 20260721-330）逻辑画布：底图 `passport_front_bg.png` 995×774 的 2×。
 const Size kPassportCardCanvas = Size(1990, 1548);
 
+/// 护照卡面圆角（画布坐标系）。供预览水印层（[IdCardWatermark]）裁剪对齐。
+const double kPassportCardCanvasRadius = _PL.radius;
+
 /// 护照展示字段（多为静态/派生，见 spec 6-8 §4.1；Sex/出生地走趣味默认）。
 @immutable
 class PassportFields {
@@ -59,7 +62,10 @@ PassportFields buildPassportFields(IdCardData data) {
     name: name,
     sex: _sexFor(data.gender),
     dateOfBirth: data.birthday == null ? '00 SEP 0000' : _dmyUpper(data.birthday!),
-    placeOfBirth: 'BANDUNG',
+    // 出生地优先卡快照（bug 20260729-409），null 回落趣味默认 BANDUNG。
+    placeOfBirth: (data.birthCity?.trim().isNotEmpty == true)
+        ? data.birthCity!.trim().toUpperCase()
+        : 'BANDUNG',
     dateOfIssue: _dmyUpper(issue),
     dateOfExpiry: _dmyUpper(expiry),
     regNo: serial.toString().padLeft(9, '0'),

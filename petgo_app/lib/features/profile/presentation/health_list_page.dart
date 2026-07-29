@@ -6,12 +6,22 @@ import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/date_format.dart';
 import '../data/health_record_repository.dart';
+import '../data/milestone_repository.dart';
 import '../domain/health_list_item.dart';
+import '../domain/milestone.dart';
+import '../domain/milestone_share.dart';
+import '../domain/milestone_titles.dart';
+import 'widgets/milestone_celebration.dart';
 
 /// 健康记录列表页 `p-health-list`（Story 7.2 · FR-45B/45C · UX-DR10）。结构化记录（可编辑）+ 问诊存档
 /// （🏥 只读）混排，`editable` 区分可点。新增/编辑结构化记录；创建 VACCINE/DEWORM 联动里程碑第四路径。
-class HealthListPage extends ConsumerWidget {
-  const HealthListPage({super.key});
+///
+/// [presetAddType]（bug 20260729-406）：进页即自动弹出预选该类型的添加表单——健康类里程碑
+/// （疫苗 M3/驱虫 M4）灰态徽章直跳本页用（`/profile/health?add=VACCINE`）。
+class HealthListPage extends ConsumerStatefulWidget {
+  const HealthListPage({super.key, this.presetAddType});
+
+  final String? presetAddType;
 
   static const List<String> recordTypes = [
     'VACCINE',
@@ -22,7 +32,25 @@ class HealthListPage extends ConsumerWidget {
   ];
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HealthListPage> createState() => _HealthListPageState();
+}
+
+class _HealthListPageState extends ConsumerState<HealthListPage> {
+  @override
+  void initState() {
+    super.initState();
+    final preset = widget.presetAddType;
+    if (preset != null && HealthListPage.recordTypes.contains(preset)) {
+      // 首帧后弹（build 完成才有合法 sheet 挂载点）。
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openForm(context, ref, presetType: preset);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ref = this.ref;
     final l10n = AppLocalizations.of(context);
     final async = ref.watch(healthListProvider);
     return Scaffold(
@@ -382,12 +410,27 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
       final repo = ref.read(healthRecordRepositoryProvider);
       if (widget.existing != null) {
         await repo.update(widget.existing!.id, draft);
-      } else {
-        await repo.create(draft);
+        if (!mounted) return;
+        Navigator.of(context).pop(true);
+        return;
       }
+      // 新记录：保存前先取里程碑完成集（provider 命中缓存即秒回；冷取限时 2s——
+      // 弱网/测试环境挂起时放弃庆祝检测，不拖慢保存主流程）。
+      MilestoneList? before;
+      try {
+        before = await ref
+            .read(milestoneListProvider.future)
+            .timeout(const Duration(seconds: 2));
+      } catch (_) {}
+      await repo.create(draft);
+      // bug 20260729-405：解锁瞬间自动弹庆祝层（此前只有 SnackBar 提示，用户需自己去里程碑页才看到）。
+      final unlocked = await _pollNewlyUnlocked(before);
       if (!mounted) return;
-      // 里程碑第四路径联动提示（F3，轻量非阻塞；真值后端异步完成）。
-      if (widget.existing == null && (_type == 'VACCINE' || _type == 'DEWORM')) {
+      if (unlocked != null) {
+        await _celebrate(unlocked);
+        if (!mounted) return;
+      } else if (_type == 'VACCINE' || _type == 'DEWORM') {
+        // 无新解锁（如非首次疫苗/驱虫）维持原提示（F3，轻量非阻塞）。
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(l10n.healthMilestoneHint)));
       }
@@ -398,6 +441,65 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.healthSaveError)));
       }
     }
+  }
+
+  /// 保存后短轮询检测本次新解锁的里程碑（VACCINE→M3 / DEWORM→M4 / 聚合 Lulus Pemula）。
+  ///
+  /// 后端完成是 AFTER_COMMIT + @Async（MilestoneAutoCompleteListener）——create 返回瞬间大概率
+  /// 尚未落库，须延时重拉。仅当存在解锁候选才轮询（否则每次保存都白等 ~2.5s）；
+  /// [before] 拉取失败（null）时无法可靠 diff，宁可不弹也不误弹旧里程碑。
+  Future<MilestoneItem?> _pollNewlyUnlocked(MilestoneList? before) async {
+    if (before == null || !_mayUnlockMilestone(before)) return null;
+    final beforeCodes = <String>{
+      for (final g in before.groups)
+        for (final it in g.items)
+          if (it.completed) it.code,
+    };
+    for (final ms in const [500, 800, 1200]) {
+      await Future<void>.delayed(Duration(milliseconds: ms));
+      ref.invalidate(milestoneListProvider);
+      try {
+        final now = await ref
+            .read(milestoneListProvider.future)
+            .timeout(const Duration(seconds: 2));
+        for (final g in now.groups) {
+          for (final it in g.items) {
+            if (it.completed && !beforeCodes.contains(it.code)) return it;
+          }
+        }
+      } catch (_) {
+        return null; // 拉取失败：放弃庆祝，不阻塞保存收尾。
+      }
+    }
+    return null;
+  }
+
+  bool _mayUnlockMilestone(MilestoneList list) => mayUnlockHealthMilestone(_type, list);
+
+  /// 弹 P-35 解锁庆祝（与发布「去发布」回填路径同 UX，见 publish_compose_page）。
+  Future<void> _celebrate(MilestoneItem done) async {
+    final l10n = AppLocalizations.of(context);
+    final locale = Localizations.localeOf(context);
+    final listData = ref.read(milestoneListProvider).asData?.value;
+    final petName = listData?.petName ?? '';
+    final collection = listData == null
+        ? const <MilestoneItem>[]
+        : [for (final g in listData.groups) ...g.items];
+    final shareText = l10n.milestoneShareText(localizedMilestoneTitle(done.code, locale));
+    await showMilestoneCelebration(
+      context,
+      done,
+      petName: petName,
+      collection: collection,
+      onShare: () => shareMilestoneWithLink(
+        ref,
+        item: done,
+        locale: locale,
+        petName: petName,
+        shareText: shareText,
+        collection: collection,
+      ),
+    );
   }
 
   Future<void> _delete() async {
@@ -523,4 +625,22 @@ class _HealthCat {
   final IconData icon;
   final Color color;
   final bool consult;
+}
+
+/// 本次保存健康记录是否存在可能解锁的里程碑候选（bug 20260729-405，纯函数 L0 可测）：
+/// 对应类型的 M3（疫苗）/M4（驱虫）未完成，或 S1–S5 已齐且聚合 Lulus Pemula
+/// （S16/S9，任一 pet_type 前缀）未完成——镜像后端 MilestoneAutoCompleteListener 判定前置。
+bool mayUnlockHealthMilestone(String type, MilestoneList list) {
+  final items = [for (final g in list.groups) ...g.items];
+  bool uncompleted(String suffix) =>
+      items.any((it) => !it.completed && it.code.endsWith('-$suffix'));
+  bool completed(String suffix) => items.any((it) => it.completed && it.code.endsWith('-$suffix'));
+  final direct = switch (type) {
+    'VACCINE' => uncompleted('M3'),
+    'DEWORM' => uncompleted('M4'),
+    _ => false,
+  };
+  final sPrereqsDone = ['S1', 'S2', 'S3', 'S4', 'S5'].every(completed);
+  final lulus = sPrereqsDone && (uncompleted('S16') || uncompleted('S9'));
+  return direct || lulus;
 }

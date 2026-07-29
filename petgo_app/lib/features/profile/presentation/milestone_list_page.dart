@@ -456,10 +456,21 @@ class _Badge extends ConsumerWidget {
     final completed = item.completed;
     return GestureDetector(
       key: ValueKey('milestoneBadge_${item.code}'),
-      // 已完成 → 重温 P-35 解锁庆祝；未完成 → P-33b 详情底抽屉。
-      onTap: () => completed
-          ? _showCelebration(context, ref, item)
-          : _showBadgeSheet(context, ref, item),
+      // 已完成 → 重温 P-35 解锁庆祝；未完成健康类（疫苗 M3/驱虫 M4）→ 直跳健康记录页并预选类型
+      // （bug 20260729-406：下线旧三选项打卡浮层，里程碑数据源受健康记录约束）；
+      // 其余未完成 → P-33b 详情底抽屉。
+      onTap: () {
+        if (completed) {
+          _showCelebration(context, ref, item);
+          return;
+        }
+        final healthPreset = healthPresetTypeFor(item.code);
+        if (healthPreset != null) {
+          GoRouter.of(context).push('/profile/health?add=$healthPreset');
+          return;
+        }
+        _showBadgeSheet(context, ref, item);
+      },
       child: SizedBox(
         width: _size,
         child: Column(
@@ -888,4 +899,13 @@ class _MilestoneError extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 健康类里程碑 → 健康记录预选类型（bug 20260729-406，纯函数 L0 可测）：
+/// 疫苗 `*-M3`→VACCINE、驱虫 `*-M4`→DEWORM（镜像后端 MilestoneAutoCompleteListener 映射）；
+/// 其余返回 null（维持 P-33b 徽章弹层）。
+String? healthPresetTypeFor(String code) {
+  if (code.endsWith('-M3')) return 'VACCINE';
+  if (code.endsWith('-M4')) return 'DEWORM';
+  return null;
 }

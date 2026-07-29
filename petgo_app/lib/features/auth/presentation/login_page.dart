@@ -32,22 +32,27 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
   void _onGoogleLogin() {
     Analytics.capture('login_tapped', {'method': 'google'});
-    _login(() => ref.read(authRepositoryProvider).loginWithGoogle());
+    _login('google', () => ref.read(authRepositoryProvider).loginWithGoogle());
   }
 
   void _onAppleLogin() {
     Analytics.capture('login_tapped', {'method': 'apple'});
-    _login(() => ref.read(authRepositoryProvider).loginWithApple());
+    _login('apple', () => ref.read(authRepositoryProvider).loginWithApple());
   }
 
   /// 统一登录链路（Google / Apple 共用）：成功落态 + 新老分流；取消/失败内联提示。
-  Future<void> _login(Future<LoginResponse> Function() runner) async {
+  /// [method] 为受控枚举（'google'/'apple'），仅用于注册归因事件，不传账号本身。
+  Future<void> _login(String method, Future<LoginResponse> Function() runner) async {
     if (_busy) return;
     setState(() => _busy = true);
     final l10n = AppLocalizations.of(context);
     try {
       final resp = await runner();
       ref.read(authControllerProvider.notifier).applyLogin(resp);
+      // 归因（AppsFlyer P0）：首次建号才算注册完成，af_ 标准名供投放渠道识别。
+      if (resp.isNewUser) {
+        Analytics.capture('af_complete_registration', {'af_registration_method': method});
+      }
       if (!mounted) return;
       // 新老分流：老用户进 App；新用户进引导占位（Story 1.6 本体）。
       switch (decidePostLoginRoute(resp)) {

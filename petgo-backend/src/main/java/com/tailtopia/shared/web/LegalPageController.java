@@ -39,6 +39,16 @@ public class LegalPageController {
         return html("legal/terms.html");
     }
 
+    /**
+     * 兽医合作条款（Syarat &amp; Ketentuan Mitra Dokter Hewan，v1.2.0 运营定稿）。
+     * App 兽医端「我的」页自 V1 起即链接 {@code legal.tailtopia.id/mitra-terms}，但本路由
+     * 此前不存在 → 404 空白页（bug 20260729-403）。
+     */
+    @GetMapping("/mitra-terms")
+    public ResponseEntity<Resource> mitraTerms() {
+        return html("legal/mitra-terms.html");
+    }
+
     @GetMapping("/account-deletion")
     public ResponseEntity<Resource> accountDeletion() {
         return html("legal/account-deletion.html");

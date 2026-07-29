@@ -21,12 +21,17 @@ public record IdCardResponse(
         String gender,
         String cardNo,
         String passportNo,
+        String birthCity,
+        String address,
+        String occupation,
+        String maritalStatus,
         boolean hdUnlocked,
         Instant createdAt) {
 
     public static IdCardResponse from(IdCard c) {
         return new IdCardResponse(c.getId(), c.getSerialId(), c.getName(), c.getPetType(),
                 c.getBreed(), c.getBirthday(), c.getAvatarUrl(), c.getIntro(), c.getGender(),
-                c.getCardNo(), c.getPassportNo(), c.isHdUnlocked(), c.getCreatedAt());
+                c.getCardNo(), c.getPassportNo(), c.getBirthCity(), c.getAddress(),
+                c.getOccupation(), c.getMaritalStatus(), c.isHdUnlocked(), c.getCreatedAt());
     }
 }

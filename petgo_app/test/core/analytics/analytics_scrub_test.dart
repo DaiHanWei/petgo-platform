@@ -108,4 +108,31 @@ void main() {
       expect(out.contains('12345'), isFalse);
     });
   });
+
+  group('Analytics.isAppsFlyerEvent（归因白名单，交付文档 §4.1）', () {
+    test('归因关键转化在白名单内', () {
+      for (final e in [
+        'af_complete_registration', 'af_purchase', 'af_initiated_checkout',
+        'pet_profile_create_submitted', 'triage_submitted', 'consult_started',
+      ]) {
+        expect(Analytics.isAppsFlyerEvent(e), isTrue, reason: e);
+      }
+    });
+
+    test('非白名单事件不分发 AppsFlyer（不复制 PostHog 全量）', () {
+      expect(Analytics.isAppsFlyerEvent('login_tapped'), isFalse);
+      expect(Analytics.isAppsFlyerEvent('button_tapped'), isFalse);
+      expect(Analytics.isAppsFlyerEvent(''), isFalse);
+    });
+
+    test('PawCoin 消耗类事件不得进收入白名单（防 ROAS 双倍虚报）', () {
+      expect(Analytics.isAppsFlyerEvent('consult_paid'), isFalse);
+    });
+
+    test('白名单事件名 ≤45 字符（超长 dashboard 不可见）', () {
+      for (final e in Analytics.appsflyerEvents) {
+        expect(e.length, lessThanOrEqualTo(45), reason: e);
+      }
+    });
+  });
 }

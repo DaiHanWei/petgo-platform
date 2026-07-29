@@ -7,6 +7,9 @@ import '../../domain/id_card.dart';
 /// 所有设计坐标 ×2 即本文件常量。页面用 [FittedBox] 缩放；导出用同尺寸 RepaintBoundary。
 const Size kStudentCardCanvas = Size(1988, 1200);
 
+/// 学生卡卡面圆角（画布坐标系）。供预览水印层（[IdCardWatermark]）裁剪对齐。
+const double kStudentCardCanvasRadius = _StudentLayout.radius;
+
 /// 学生卡展示字段（全部由快照派生，零新增采集，见 spec 6-8 §4.2）。
 /// spec ktp-pet-idcode-numbering：学生卡面**取消证号展示**，无 studentNo。
 @immutable

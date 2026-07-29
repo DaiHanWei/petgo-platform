@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
@@ -90,6 +91,12 @@ class _RechargePageState extends ConsumerState<RechargePage> {
         _topup = res;
         _phase = _Phase.paying;
       });
+      // 归因（AppsFlyer P1）：充值下单未支付。af_ 标准名供投放渠道识别。
+      Analytics.capture('af_initiated_checkout', {
+        'af_price': res.amount,
+        'af_currency': 'IDR',
+        'af_content_id': tier,
+      });
       _startPolling(res.intentToken);
     } catch (_) {
       if (mounted) setState(() => _phase = _Phase.fail);
@@ -140,6 +147,18 @@ class _RechargePageState extends ConsumerState<RechargePage> {
 
   void _onPaid() {
     _stopTimers();
+    // 归因（AppsFlyer P0）：**唯一的真实收入事件**——af_revenue 只计充值实付 IDR；
+    // PawCoin 消耗（问诊/解锁等）绝不能再计 af_purchase，否则收入/ROAS 双倍虚报。
+    final t = _topup;
+    if (t != null) {
+      Analytics.capture('af_purchase', {
+        'af_revenue': t.amount,
+        'af_currency': 'IDR',
+        'af_content_id': _selectedTier ?? '',
+        'af_quantity': 1,
+        'af_order_id': t.intentToken, // 对账去重用（不可枚举 token，非自增 id）
+      });
+    }
     if (!mounted) return;
     ref.invalidate(pawCoinProvider); // 刷新余额页
     Navigator.of(context).pop(); // 返回余额页（余额已更新）

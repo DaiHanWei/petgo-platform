@@ -4,6 +4,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:posthog_flutter/posthog_flutter.dart';
 
+import 'appsflyer_client.dart';
 import 'button_ids.dart';
 
 /// 前端行为分析门面（PostHog Cloud US）。
@@ -71,7 +72,10 @@ class Analytics {
   }
 
   /// 登录成功后关联用户。distinctId 取 `sha256('tailtopia-user-' + id)`，不传任何 userProperties。
+  /// 同一哈希值同时设为 AppsFlyer CUID（跨端归因 P0）：两端跑同一份 Dart 代码，
+  /// 天然逐字节一致；不用邮箱/手机号（PDP 合规红线）。
   static Future<void> identifyUser(int userId) async {
+    AppsFlyerClient.instance.setUserId(distinctIdFor(userId));
     try {
       await Posthog().identify(userId: distinctIdFor(userId));
     } catch (e) {
@@ -79,8 +83,9 @@ class Analytics {
     }
   }
 
-  /// 登出 / 续期失败 → 解除关联，回到匿名。
+  /// 登出 / 续期失败 → 解除关联，回到匿名。AppsFlyer CUID 同步清空（防换账号串数据）。
   static Future<void> reset() async {
+    AppsFlyerClient.instance.clearUserId();
     try {
       await Posthog().reset();
     } catch (e) {
@@ -88,13 +93,30 @@ class Analytics {
     }
   }
 
-  /// 自定义事件上报。properties 先经 [scrub] 剥离敏感键再上报。
+  /// 需要同步分发给 AppsFlyer 的事件白名单（仅归因/投放相关，非 PostHog 全量复制）。
+  /// `af_` 前缀 = AppsFlyer 预定义名（TikTok/Meta/Google 渠道可识别用于投放优化），
+  /// 其余为自定义名（仅内部分析）。新增事件先过合规评估再登记（交付文档 §4）。
+  static const Set<String> appsflyerEvents = {
+    'af_complete_registration', // 注册完成（P0）
+    'af_purchase', // PawCoin 充值成功——唯一真实收入事件；PawCoin 消耗**不得**计入（P0）
+    'af_initiated_checkout', // 充值下单未支付（P1）
+    'pet_profile_create_submitted', // 建档（P1，对应文档 profile_create）
+    'triage_submitted', // 自查提交（P1）
+    'consult_started', // 问诊开始（P1）
+  };
+
+  /// 事件是否分发 AppsFlyer（纯函数，L0 可测）。
+  static bool isAppsFlyerEvent(String event) => appsflyerEvents.contains(event);
+
+  /// 自定义事件上报。properties 先经 [scrub] 剥离敏感键再上报；
+  /// 白名单内事件用**同一份净化后属性**同步分发 AppsFlyer（单通路，无旁路）。
   static Future<void> capture(String event, [Map<String, Object>? properties]) async {
+    final clean = properties == null ? null : scrub(properties);
+    if (isAppsFlyerEvent(event)) {
+      AppsFlyerClient.instance.logEvent(event, clean);
+    }
     try {
-      await Posthog().capture(
-        eventName: event,
-        properties: properties == null ? null : scrub(properties),
-      );
+      await Posthog().capture(eventName: event, properties: clean);
     } catch (e) {
       debugPrint('[Analytics] capture failed: $e');
     }

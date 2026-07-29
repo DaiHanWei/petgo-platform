@@ -130,7 +130,9 @@ String buildPreviewPassportNo({String? petType, required int year}) =>
 KtpFields buildKtpFields(IdCardData data, KtpEdits edits) {
   final birthday = data.birthday;
   final dob = birthday == null ? '01-01-2020' : _dmy(birthday);
-  final tempatTgl = edits.tempatTglLahir ?? '${KtpDefaults.tempatKota}, $dob';
+  // 趣味字段快照（bug 20260729-409）：优先卡快照值（大写展示，与卡面设计一致），null 回落趣味默认。
+  final birthCity = _upperOrNull(data.birthCity) ?? KtpDefaults.tempatKota;
+  final tempatTgl = edits.tempatTglLahir ?? '$birthCity, $dob';
   return KtpFields(
     // 新编码卡直显后端 cardNo；旧卡（cardNo=null）维持旧拼号，展示零变化。
     nik: (data.cardNo?.isNotEmpty == true) ? data.cardNo! : _buildNik(data.serialId, birthday),
@@ -139,15 +141,22 @@ KtpFields buildKtpFields(IdCardData data, KtpEdits edits) {
     spesies: edits.spesies ?? KtpDefaults.spesies(data.petType),
     ras: edits.ras ?? (data.breed?.isNotEmpty == true ? data.breed! : '-'),
     jenisKelamin: edits.jenisKelamin ?? KtpDefaults.jenisKelaminFor(data.gender),
-    alamat: edits.alamat ?? KtpDefaults.alamat,
-    statusPerkawinan: edits.statusPerkawinan ?? KtpDefaults.statusPerkawinan,
-    pekerjaan: edits.pekerjaan ?? KtpDefaults.pekerjaan,
+    alamat: edits.alamat ?? _upperOrNull(data.address) ?? KtpDefaults.alamat,
+    statusPerkawinan:
+        edits.statusPerkawinan ?? _upperOrNull(data.maritalStatus) ?? KtpDefaults.statusPerkawinan,
+    pekerjaan: edits.pekerjaan ?? _upperOrNull(data.occupation) ?? KtpDefaults.pekerjaan,
     kewarganegaraan: edits.kewarganegaraan ?? KtpDefaults.kewarganegaraan,
     berlakuHingga: edits.berlakuHingga ?? KtpDefaults.berlakuHingga,
-    placeLine: KtpDefaults.tempatKota,
+    placeLine: birthCity,
     dateLine: dob,
     avatarUrl: data.avatarUrl,
   );
+}
+
+/// 趣味字段快照值 → 卡面大写展示；null/空串 → null（回落趣味默认）。
+String? _upperOrNull(String? v) {
+  final t = v?.trim();
+  return (t == null || t.isEmpty) ? null : t.toUpperCase();
 }
 
 /// KTP 风格 16 位 NIK：区域码(3276) + 生日 DDMMYY + serial 补零到 6 位。趣味且随 serial 唯一。

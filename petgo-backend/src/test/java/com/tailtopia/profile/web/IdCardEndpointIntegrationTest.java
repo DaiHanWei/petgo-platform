@@ -158,6 +158,37 @@ class IdCardEndpointIntegrationTest extends ApiIntegrationTest {
         assertThat(no2.substring(0, 10)).isEqualTo(no1.substring(0, 10));
     }
 
+    // ---- bug 20260729-409：卡面趣味字段（出生城市/地址/职业/婚姻状态）随快照冻结 ----
+
+    @Test
+    void createCardSnapshotsFunFieldsAndEchoesThem() throws Exception {
+        User owner = newUser();
+        String body = postCard(userBearer(owner.getId()), """
+                {"name":"Momo","petType":"CAT","breed":"英短","birthday":"2024-03-10","gender":"FEMALE",
+                 "birthCity":"JAKARTA","address":"JL. SUDIRMAN NO. 1","occupation":"NAP SPECIALIST",
+                 "maritalStatus":"KAWIN"}
+                """);
+        var node = json.readTree(body);
+        assertThat(node.get("birthCity").asString()).isEqualTo("JAKARTA");
+        assertThat(node.get("address").asString()).isEqualTo("JL. SUDIRMAN NO. 1");
+        assertThat(node.get("occupation").asString()).isEqualTo("NAP SPECIALIST");
+        assertThat(node.get("maritalStatus").asString()).isEqualTo("KAWIN");
+    }
+
+    @Test
+    void createCardWithoutFunFieldsKeepsThemNull() throws Exception {
+        // 未填/空串 → null 落库：前端据 null 渲染趣味默认，旧行为零变化。
+        User owner = newUser();
+        String body = postCard(userBearer(owner.getId()), """
+                {"name":"Momo","petType":"CAT","birthday":"2024-03-10","gender":"FEMALE","birthCity":"  "}
+                """);
+        var node = json.readTree(body);
+        assertThat(node.get("birthCity").isNull()).isTrue();
+        assertThat(node.get("address").isNull()).isTrue();
+        assertThat(node.get("occupation").isNull()).isTrue();
+        assertThat(node.get("maritalStatus").isNull()).isTrue();
+    }
+
     @Test
     void createCardWithoutBirthdayIsRejected() throws Exception {
         // birthday @NotNull：项目全局把 Bean 校验失败映射为 422 ProblemDetail（GlobalExceptionHandler）。
