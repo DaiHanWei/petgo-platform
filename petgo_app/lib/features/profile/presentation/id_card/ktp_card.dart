@@ -7,6 +7,9 @@ import '../../../../shared/widgets/app_image.dart';
 /// 导出用同尺寸 RepaintBoundary 保证像素精度。
 const Size kIdCardCanvas = Size(1988, 1200);
 
+/// KTP 卡面圆角（画布坐标系）。供预览水印层（[IdCardWatermark]）裁剪对齐。
+const double kIdCardCanvasRadius = _KtpLayout.radius;
+
 /// KTP 证件卡展示字段（会话级：来自 6-1 档案数据 + 预览可编辑覆盖 + 趣味默认，**不写档案**）。
 @immutable
 class KtpFields {

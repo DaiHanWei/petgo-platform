@@ -71,13 +71,19 @@ public class IdCardService {
         String passportNo = cardNumbers.allocatePassportNo(req.petType());
         IdCard card = idCards.save(IdCard.snapshot(ownerId, serial, req.name(), req.petType(),
                 req.breed(), req.birthday(), req.avatarUrl(), req.intro(), gender, cardNo,
-                passportNo));
+                passportNo, blankToNull(req.birthCity()), blankToNull(req.address()),
+                blankToNull(req.occupation()), blankToNull(req.maritalStatus())));
         return IdCardResponse.from(card);
     }
 
     /** gender 归一化：null 视同 UNKNOWN。白名单由 DTO 的 {@code @Pattern} 保证（非法值与其余字段统一 422）。 */
     private static String normalizeGender(String gender) {
         return gender == null ? "UNKNOWN" : gender;
+    }
+
+    /** 趣味字段空串折叠为 null（快照 null = 前端渲染趣味默认，避免空串盖掉默认展示）。 */
+    private static String blankToNull(String v) {
+        return (v == null || v.isBlank()) ? null : v.trim();
     }
 
     /** 当前用户身份证数据（只读，不分配号）。无档案 → 404。老用户 serial=null → {@code generated=false}。 */

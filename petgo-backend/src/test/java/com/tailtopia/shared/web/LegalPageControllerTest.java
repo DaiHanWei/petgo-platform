@@ -42,6 +42,17 @@ class LegalPageControllerTest {
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("BANI")));
     }
 
+    /** bug 20260729-403：/mitra-terms 此前不存在致兽医端 T&C 白屏；现直出 Mitra 条款定稿（v1.2.0）。 */
+    @Test
+    void mitraTerms_returnsHtmlPolicy() throws Exception {
+        mvc.perform(get("/mitra-terms"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith("text/html"))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Ketentuan Mitra Dokter Hewan")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("BIAYA KONSULTASI DAN BAGI HASIL")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("BANI")));
+    }
+
     @Test
     void accountDeletion_returnsHtmlPage() throws Exception {
         mvc.perform(get("/account-deletion"))

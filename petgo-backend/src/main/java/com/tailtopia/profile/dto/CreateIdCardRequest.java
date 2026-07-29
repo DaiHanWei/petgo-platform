@@ -13,6 +13,8 @@ import java.time.LocalDate;
  * 快照冻结不可改，未来日期会永久固化荒谬编号）；其余选填。
  * petType 传枚举名（DOG/CAT/...）字符串。birthday `yyyy-MM-dd`。
  * gender 传 MALE/FEMALE/UNKNOWN，可空（null 视同 UNKNOWN），非法值与其余字段校验统一 422。
+ * birthCity/address/occupation/maritalStatus（bug 20260729-409：Edit Info 与卡面字段对齐）
+ * 均选填；null → 前端渲染趣味默认。
  */
 public record CreateIdCardRequest(
         @NotBlank @Size(max = 60) String name,
@@ -21,5 +23,9 @@ public record CreateIdCardRequest(
         @NotNull @PastOrPresent LocalDate birthday,
         @Pattern(regexp = "MALE|FEMALE|UNKNOWN") String gender,
         @Size(max = 1024) String avatarUrl,
-        @Size(max = 30) String intro) {
+        @Size(max = 30) String intro,
+        @Size(max = 40) String birthCity,
+        @Size(max = 80) String address,
+        @Size(max = 40) String occupation,
+        @Size(max = 24) String maritalStatus) {
 }

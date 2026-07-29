@@ -19,6 +19,10 @@ class IdCardData {
     this.avatarUrl,
     this.intro,
     this.hdUnlocked = false,
+    this.birthCity,
+    this.address,
+    this.occupation,
+    this.maritalStatus,
   });
 
   final bool generated;
@@ -44,6 +48,13 @@ class IdCardData {
   /// 是否已付费解锁高清图（Story 6.3）。驱动前端 paywall vs 直接下载。
   final bool hdUnlocked;
 
+  /// 卡面趣味字段快照（bug 20260729-409：Edit Info 与卡面字段对齐）。
+  /// null = 渲染趣味默认（BANDUNG / JL. MELATI... / CHIEF HAPPINESS OFFICER / LAJANG）。
+  final String? birthCity;
+  final String? address;
+  final String? occupation;
+  final String? maritalStatus;
+
   factory IdCardData.fromJson(Map<String, dynamic> json) {
     return IdCardData(
       generated: json['generated'] as bool? ?? false,
@@ -60,6 +71,10 @@ class IdCardData {
       avatarUrl: json['avatarUrl'] as String?,
       intro: json['intro'] as String?,
       hdUnlocked: json['hdUnlocked'] as bool? ?? false,
+      birthCity: json['birthCity'] as String?,
+      address: json['address'] as String?,
+      occupation: json['occupation'] as String?,
+      maritalStatus: json['maritalStatus'] as String?,
     );
   }
 }
@@ -84,6 +99,10 @@ class IdCard {
     this.intro,
     this.hdUnlocked = false,
     this.createdAt,
+    this.birthCity,
+    this.address,
+    this.occupation,
+    this.maritalStatus,
   });
 
   /// 卡自身主键（授权态内部用；详情端点 `GET /pet-profiles/me/id-cards/{id}` 寻址）。
@@ -113,6 +132,12 @@ class IdCard {
   /// 建卡时间（UTC ISO8601）。历史列表按此倒序展示。
   final DateTime? createdAt;
 
+  /// 卡面趣味字段快照（bug 20260729-409）。null = 渲染趣味默认。
+  final String? birthCity;
+  final String? address;
+  final String? occupation;
+  final String? maritalStatus;
+
   factory IdCard.fromJson(Map<String, dynamic> json) {
     return IdCard(
       id: (json['id'] as num).toInt(),
@@ -128,6 +153,10 @@ class IdCard {
       intro: json['intro'] as String?,
       hdUnlocked: json['hdUnlocked'] as bool? ?? false,
       createdAt: json['createdAt'] == null ? null : DateTime.tryParse(json['createdAt'] as String),
+      birthCity: json['birthCity'] as String?,
+      address: json['address'] as String?,
+      occupation: json['occupation'] as String?,
+      maritalStatus: json['maritalStatus'] as String?,
     );
   }
 
@@ -145,6 +174,10 @@ class IdCard {
         avatarUrl: avatarUrl,
         intro: intro,
         hdUnlocked: hdUnlocked,
+        birthCity: birthCity,
+        address: address,
+        occupation: occupation,
+        maritalStatus: maritalStatus,
       );
 }
 
@@ -160,6 +193,10 @@ class CreateIdCardRequest {
     this.gender,
     this.avatarUrl,
     this.intro,
+    this.birthCity,
+    this.address,
+    this.occupation,
+    this.maritalStatus,
   });
 
   final String name;
@@ -170,6 +207,12 @@ class CreateIdCardRequest {
   final String? avatarUrl;
   final String? intro;
 
+  /// 卡面趣味字段（bug 20260729-409）。null/空 = 后端落 null → 渲染趣味默认。
+  final String? birthCity;
+  final String? address;
+  final String? occupation;
+  final String? maritalStatus;
+
   Map<String, dynamic> toJson() => <String, dynamic>{
         'name': name,
         if (petType != null) 'petType': petType,
@@ -178,6 +221,10 @@ class CreateIdCardRequest {
         if (gender != null) 'gender': gender,
         if (avatarUrl != null) 'avatarUrl': avatarUrl,
         if (intro != null) 'intro': intro,
+        if (birthCity != null) 'birthCity': birthCity,
+        if (address != null) 'address': address,
+        if (occupation != null) 'occupation': occupation,
+        if (maritalStatus != null) 'maritalStatus': maritalStatus,
       };
 
   static String _isoDate(DateTime d) =>

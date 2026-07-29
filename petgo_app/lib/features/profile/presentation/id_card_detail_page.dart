@@ -15,6 +15,7 @@ import '../../pawcoin/presentation/pawcoin_controller.dart';
 import '../data/id_card_repository.dart';
 import '../domain/id_card.dart';
 import 'id_card/hd_paywall_sheet.dart';
+import 'id_card/id_card_watermark.dart';
 import 'id_card/ktp_card.dart';
 import 'id_card/ktp_fields.dart';
 import 'id_card/passport_card.dart';
@@ -57,10 +58,22 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
   Widget _view(AppLocalizations l10n, IdCard card) {
     final data = card.toIdCardData();
     // 视图级样式切换（恢复 6-1~6-4 三 Tab）：同一快照渲染 KTP / Paspor / Pelajar 三种卡面。
-    final (Size canvas, Widget cardFront) = switch (_styleIndex) {
-      1 => (kPassportCardCanvas, PassportCardFront(fields: buildPassportFields(data))),
-      2 => (kStudentCardCanvas, StudentCardFront(fields: buildStudentFields(data))),
-      _ => (kIdCardCanvas, KtpCardFront(fields: buildKtpFields(data, KtpEdits.empty))),
+    final (Size canvas, double radius, Widget cardFront) = switch (_styleIndex) {
+      1 => (
+          kPassportCardCanvas,
+          kPassportCardCanvasRadius,
+          PassportCardFront(fields: buildPassportFields(data))
+        ),
+      2 => (
+          kStudentCardCanvas,
+          kStudentCardCanvasRadius,
+          StudentCardFront(fields: buildStudentFields(data))
+        ),
+      _ => (
+          kIdCardCanvas,
+          kIdCardCanvasRadius,
+          KtpCardFront(fields: buildKtpFields(data, KtpEdits.empty))
+        ),
     };
     return SafeArea(
       child: Column(
@@ -72,12 +85,20 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: AspectRatio(
                   aspectRatio: canvas.width / canvas.height,
-                  child: RepaintBoundary(
-                    key: idCardBoundaryKey,
-                    child: FittedBox(
-                      fit: BoxFit.contain,
-                      child: cardFront,
-                    ),
+                  // 防截图水印（bug 20260728-383）：水印是 RepaintBoundary 的 Stack 兄弟，
+                  // 预览/截图恒带水印；HD 导出 toImage 只截 boundary 子树 → 导出图无水印。
+                  child: Stack(
+                    fit: StackFit.expand, // 卡面保持 AspectRatio 紧约束（loose 会让 FittedBox 撑到画布原尺寸）
+                    children: [
+                      RepaintBoundary(
+                        key: idCardBoundaryKey,
+                        child: FittedBox(
+                          fit: BoxFit.contain,
+                          child: cardFront,
+                        ),
+                      ),
+                      IdCardWatermark(canvas: canvas, canvasRadius: radius),
+                    ],
                   ),
                 ),
               ),

@@ -65,6 +65,22 @@ public class IdCard {
     @Column(name = "passport_no", length = 12)
     private String passportNo;
 
+    // ---- 卡面趣味字段快照（bug 20260729-409：Edit Info 与卡面字段对齐）----
+    // 可空：null = 前端渲染趣味默认（BANDUNG / JL. MELATI... / CHIEF HAPPINESS OFFICER / LAJANG），
+    // 旧卡与未填写的新卡展示零变化。
+
+    @Column(name = "birth_city", length = 40)
+    private String birthCity;
+
+    @Column(name = "address", length = 80)
+    private String address;
+
+    @Column(name = "occupation", length = 40)
+    private String occupation;
+
+    @Column(name = "marital_status", length = 24)
+    private String maritalStatus;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -74,10 +90,12 @@ public class IdCard {
     /**
      * 建卡快照（独立建卡器传入的字段 + 分配好的 legacy serial + 新规则两号）。初始未解锁。
      * gender/cardNo/passportNo 为 spec-ktp-pet-idcode-numbering 新增：新卡三者皆非空，旧卡保持 null。
+     * birthCity/address/occupation/maritalStatus（bug 20260729-409）可空：null → 前端趣味默认。
      */
     public static IdCard snapshot(long userId, long serialId, String name, String petType,
             String breed, LocalDate birthday, String avatarUrl, String intro,
-            String gender, String cardNo, String passportNo) {
+            String gender, String cardNo, String passportNo,
+            String birthCity, String address, String occupation, String maritalStatus) {
         IdCard c = new IdCard();
         c.userId = userId;
         c.serialId = serialId;
@@ -91,6 +109,10 @@ public class IdCard {
         c.gender = gender;
         c.cardNo = cardNo;
         c.passportNo = passportNo;
+        c.birthCity = birthCity;
+        c.address = address;
+        c.occupation = occupation;
+        c.maritalStatus = maritalStatus;
         return c;
     }
 
@@ -156,6 +178,22 @@ public class IdCard {
 
     public String getPassportNo() {
         return passportNo;
+    }
+
+    public String getBirthCity() {
+        return birthCity;
+    }
+
+    public String getAddress() {
+        return address;
+    }
+
+    public String getOccupation() {
+        return occupation;
+    }
+
+    public String getMaritalStatus() {
+        return maritalStatus;
     }
 
     public Instant getCreatedAt() {

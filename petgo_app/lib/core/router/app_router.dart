@@ -212,7 +212,10 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         builder: (c, s) => IdCardDetailPage(cardId: int.parse(s.pathParameters['id']!)),
       ),
       // 健康记录列表（Story 7.2 · FR-45B）。受控（/profile/ 前缀，游客被门控）。
-      GoRoute(path: '/profile/health', builder: (c, s) => const HealthListPage()),
+      // ?add=VACCINE|DEWORM|...：进页自动弹预选类型的添加表单（bug 20260729-406，健康类里程碑直跳）。
+      GoRoute(
+          path: '/profile/health',
+          builder: (c, s) => HealthListPage(presetAddType: s.uri.queryParameters['add'])),
       // 成长档案当天详情（Story 2.4 AC6 · F9）。?date=yyyy-MM-dd；受控（/profile/ 前缀）。
       GoRoute(
         path: '/profile/day',

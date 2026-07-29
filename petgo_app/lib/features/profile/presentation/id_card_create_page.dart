@@ -15,6 +15,7 @@ import '../data/id_card_repository.dart';
 import '../data/profile_repository.dart';
 import '../domain/id_card.dart';
 import 'id_card/hd_paywall_sheet.dart';
+import 'id_card/id_card_watermark.dart';
 import 'id_card/ktp_card.dart';
 import 'id_card/ktp_fields.dart';
 import 'id_card/passport_card.dart';
@@ -40,6 +41,11 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
   String _gender = 'UNKNOWN'; // wire 值 MALE/FEMALE/UNKNOWN，默认未知
   String _intro = '';
   String? _avatarUrl;
+  // 卡面趣味字段（bug 20260729-409：Edit Info 与卡面字段对齐）。空 = 卡面渲染趣味默认。
+  String _birthCity = '';
+  String _address = '';
+  String _occupation = '';
+  String _maritalStatus = '';
   bool _prefilled = false;
   int _styleIndex = 0; // 0=KTP, 1=Paspor, 2=Pelajar
   bool _busy = false; // 上传/创建中
@@ -77,15 +83,33 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
             year: DateTime.now().toUtc().add(const Duration(hours: 7)).year),
         avatarUrl: _avatarUrl,
         intro: _intro.trim().isEmpty ? null : _intro.trim(),
+        birthCity: _emptyToNull(_birthCity),
+        address: _emptyToNull(_address),
+        occupation: _emptyToNull(_occupation),
+        maritalStatus: _emptyToNull(_maritalStatus),
       );
+
+  static String? _emptyToNull(String v) => v.trim().isEmpty ? null : v.trim();
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final (Size canvas, Widget cardFront) = switch (_styleIndex) {
-      1 => (kPassportCardCanvas, PassportCardFront(fields: buildPassportFields(_preview))),
-      2 => (kStudentCardCanvas, StudentCardFront(fields: buildStudentFields(_preview))),
-      _ => (kIdCardCanvas, KtpCardFront(fields: buildKtpFields(_preview, KtpEdits.empty))),
+    final (Size canvas, double radius, Widget cardFront) = switch (_styleIndex) {
+      1 => (
+          kPassportCardCanvas,
+          kPassportCardCanvasRadius,
+          PassportCardFront(fields: buildPassportFields(_preview))
+        ),
+      2 => (
+          kStudentCardCanvas,
+          kStudentCardCanvasRadius,
+          StudentCardFront(fields: buildStudentFields(_preview))
+        ),
+      _ => (
+          kIdCardCanvas,
+          kIdCardCanvasRadius,
+          KtpCardFront(fields: buildKtpFields(_preview, KtpEdits.empty))
+        ),
     };
     return Scaffold(
       backgroundColor: AppColors.cream2,
@@ -100,7 +124,14 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: AspectRatio(
                     aspectRatio: canvas.width / canvas.height,
-                    child: FittedBox(fit: BoxFit.contain, child: cardFront),
+                    // 防截图水印（bug 20260728-383）：建卡预览未付费即可见完整卡面，同样恒盖水印。
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        FittedBox(fit: BoxFit.contain, child: cardFront),
+                        IdCardWatermark(canvas: canvas, canvasRadius: radius),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -226,7 +257,11 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
             breed: _breed,
             birthday: _birthday,
             gender: _gender,
-            intro: _intro),
+            intro: _intro,
+            birthCity: _birthCity,
+            address: _address,
+            occupation: _occupation,
+            maritalStatus: _maritalStatus),
       ),
     );
     if (result != null) {
@@ -237,6 +272,10 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
         _birthday = result.birthday;
         _gender = result.gender;
         _intro = result.intro;
+        _birthCity = result.birthCity;
+        _address = result.address;
+        _occupation = result.occupation;
+        _maritalStatus = result.maritalStatus;
       });
     }
   }
@@ -272,6 +311,10 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
             gender: _gender,
             avatarUrl: _avatarUrl,
             intro: _intro.trim().isEmpty ? null : _intro.trim(),
+            birthCity: _emptyToNull(_birthCity),
+            address: _emptyToNull(_address),
+            occupation: _emptyToNull(_occupation),
+            maritalStatus: _emptyToNull(_maritalStatus),
           ));
       ref.invalidate(idCardListProvider);
     } catch (_) {
@@ -351,13 +394,23 @@ class _InfoDraft {
       required this.breed,
       required this.birthday,
       required this.gender,
-      required this.intro});
+      required this.intro,
+      this.birthCity = '',
+      this.address = '',
+      this.occupation = '',
+      this.maritalStatus = ''});
   final String name;
   final String? petType;
   final String breed;
   final DateTime? birthday;
   final String gender; // wire 值 MALE/FEMALE/UNKNOWN
   final String intro;
+
+  // 卡面趣味字段（bug 20260729-409）。空 = 卡面渲染趣味默认。
+  final String birthCity;
+  final String address;
+  final String occupation;
+  final String maritalStatus;
 }
 
 /// 修改信息底部表单（会话级；确认返回草稿，不触后端）。
@@ -373,6 +426,10 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
   late final TextEditingController _name;
   late final TextEditingController _breed;
   late final TextEditingController _intro;
+  late final TextEditingController _birthCity;
+  late final TextEditingController _address;
+  late final TextEditingController _occupation;
+  late final TextEditingController _maritalStatus;
   late String? _petType;
   late DateTime? _birthday;
   late String _gender;
@@ -383,6 +440,10 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
     _name = TextEditingController(text: widget.initial.name);
     _breed = TextEditingController(text: widget.initial.breed);
     _intro = TextEditingController(text: widget.initial.intro);
+    _birthCity = TextEditingController(text: widget.initial.birthCity);
+    _address = TextEditingController(text: widget.initial.address);
+    _occupation = TextEditingController(text: widget.initial.occupation);
+    _maritalStatus = TextEditingController(text: widget.initial.maritalStatus);
     _petType = widget.initial.petType;
     _birthday = widget.initial.birthday;
     _gender = widget.initial.gender;
@@ -393,6 +454,10 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
     _name.dispose();
     _breed.dispose();
     _intro.dispose();
+    _birthCity.dispose();
+    _address.dispose();
+    _occupation.dispose();
+    _maritalStatus.dispose();
     super.dispose();
   }
 
@@ -507,6 +572,24 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
               decoration:
                   InputDecoration(hintText: l10n.petProfileIntro, border: const OutlineInputBorder()),
             ),
+            // 卡面趣味字段（bug 20260729-409：与卡面展示字段对齐）。留空 = 卡面默认值，
+            // hint 直接展示各默认值（卡面设计常量，非 app-locale 文案）。
+            const SizedBox(height: 14),
+            _label(l10n.idCardBirthCityLabel),
+            const SizedBox(height: 6),
+            _funField('idCardEditBirthCity', _birthCity, KtpDefaults.tempatKota, 20),
+            const SizedBox(height: 14),
+            _label(l10n.idCardAddressLabel),
+            const SizedBox(height: 6),
+            _funField('idCardEditAddress', _address, KtpDefaults.alamat, 48),
+            const SizedBox(height: 14),
+            _label(l10n.idCardOccupationLabel),
+            const SizedBox(height: 6),
+            _funField('idCardEditOccupation', _occupation, KtpDefaults.pekerjaan, 30),
+            const SizedBox(height: 14),
+            _label(l10n.idCardMaritalLabel),
+            const SizedBox(height: 6),
+            _funField('idCardEditMarital', _maritalStatus, KtpDefaults.statusPerkawinan, 20),
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
@@ -521,7 +604,11 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
                     breed: _breed.text.trim(),
                     birthday: _birthday,
                     gender: _gender,
-                    intro: _intro.text.trim())),
+                    intro: _intro.text.trim(),
+                    birthCity: _birthCity.text.trim(),
+                    address: _address.text.trim(),
+                    occupation: _occupation.text.trim(),
+                    maritalStatus: _maritalStatus.text.trim())),
                 child: Text(l10n.idCardEditDone,
                     style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
               ),
@@ -556,6 +643,16 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
       ),
     );
   }
+
+  /// 趣味字段输入框：hint 展示卡面默认值（留空即用默认）。
+  Widget _funField(String key, TextEditingController controller, String hint, int maxLength) =>
+      TextField(
+        key: ValueKey(key),
+        controller: controller,
+        maxLength: maxLength,
+        decoration: InputDecoration(
+            hintText: hint, border: const OutlineInputBorder(), counterText: ''),
+      );
 
   Widget _label(String text) => Text(text,
       style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink2));

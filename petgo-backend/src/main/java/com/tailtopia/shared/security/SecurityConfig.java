@@ -147,7 +147,7 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/**", "/v3/api-docs/**", "/swagger-ui/**",
                                 "/swagger-ui.html", "/p/**", "/m/**").permitAll()
                         // 法律政策 H5（隐私政策 / 服务条款 / 账号删除 / 儿童安全标准 / 支持页）+ 下载引导落地页公开放行
-                        .requestMatchers(HttpMethod.GET, "/privacy", "/terms",
+                        .requestMatchers(HttpMethod.GET, "/privacy", "/terms", "/mitra-terms",
                                 "/account-deletion", "/child-safety", "/support", "/get").permitAll()
                         // dev 诊断端点（仅 dev profile 存在）+ 错误转发
                         .requestMatchers("/api/v1/_ping-error", "/error").permitAll()
