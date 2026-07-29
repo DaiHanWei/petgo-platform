@@ -165,7 +165,9 @@ public class ContentModerationService {
         }
 
         // 3) 图像三方审核（高置信违规 → 硬拦截；降级 → DEGRADED）。
-        if (imageUrls != null) {
+        // 图审开关（bug 20260729-404）：阿里云 ImageModeration 未开通期间 env 置 false → 跳过图审、
+        // 按文本结论路由（否则「未开通 → 恒降级」会把所有带图帖压进 UNDER_REVIEW 且无人能放行）。
+        if (props.isImageEnabled() && imageUrls != null) {
             for (String url : imageUrls) {
                 if (url == null || url.isBlank()) {
                     continue;
