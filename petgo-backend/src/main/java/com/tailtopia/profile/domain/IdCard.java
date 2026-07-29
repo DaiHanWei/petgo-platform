@@ -53,15 +53,31 @@ public class IdCard {
     @Column(name = "hd_unlocked", nullable = false)
     private boolean hdUnlocked;
 
+    /** 性别快照 MALE/FEMALE/UNKNOWN（与 pet_type 同为字符串快照）。旧卡（新规则前建）为 null。 */
+    @Column(name = "gender", length = 8)
+    private String gender;
+
+    /** 身份码 TT+DDMMYY+SP+XXXX（《宠物身份码护照编码规则》）。旧卡 null=保留旧号，前端旧拼号展示。 */
+    @Column(name = "card_no", length = 14)
+    private String cardNo;
+
+    /** 护照号 TT+SP+P+YY+XXXXX。旧卡 null 同上。仅展示，不作分享/深链/资源定位键。 */
+    @Column(name = "passport_no", length = 12)
+    private String passportNo;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
     protected IdCard() {
     }
 
-    /** 建卡快照（独立建卡器传入的字段 + 分配好的 serial）。初始未解锁。 */
+    /**
+     * 建卡快照（独立建卡器传入的字段 + 分配好的 legacy serial + 新规则两号）。初始未解锁。
+     * gender/cardNo/passportNo 为 spec-ktp-pet-idcode-numbering 新增：新卡三者皆非空，旧卡保持 null。
+     */
     public static IdCard snapshot(long userId, long serialId, String name, String petType,
-            String breed, LocalDate birthday, String avatarUrl, String intro) {
+            String breed, LocalDate birthday, String avatarUrl, String intro,
+            String gender, String cardNo, String passportNo) {
         IdCard c = new IdCard();
         c.userId = userId;
         c.serialId = serialId;
@@ -72,6 +88,9 @@ public class IdCard {
         c.avatarUrl = avatarUrl;
         c.intro = intro;
         c.hdUnlocked = false;
+        c.gender = gender;
+        c.cardNo = cardNo;
+        c.passportNo = passportNo;
         return c;
     }
 
@@ -125,6 +144,18 @@ public class IdCard {
 
     public boolean isHdUnlocked() {
         return hdUnlocked;
+    }
+
+    public String getGender() {
+        return gender;
+    }
+
+    public String getCardNo() {
+        return cardNo;
+    }
+
+    public String getPassportNo() {
+        return passportNo;
     }
 
     public Instant getCreatedAt() {

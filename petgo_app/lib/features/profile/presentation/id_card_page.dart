@@ -115,7 +115,10 @@ class IdCardPage extends ConsumerWidget {
   }
 
   Widget _cardTile(BuildContext context, AppLocalizations l10n, IdCard card) {
-    final serial = card.serialId == null ? '----' : card.serialId!.toString().padLeft(4, '0');
+    // 展示优先新编码 cardNo（TT 开头 14 位）；旧卡（cardNo=null）维持旧 serial 展示。
+    final serial = (card.cardNo?.isNotEmpty == true)
+        ? card.cardNo!
+        : (card.serialId == null ? '----' : card.serialId!.toString().padLeft(4, '0'));
     return Material(
       color: AppColors.surface,
       borderRadius: BorderRadius.circular(14),
@@ -145,6 +148,8 @@ class IdCardPage extends ConsumerWidget {
                         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink)),
                     const SizedBox(height: 3),
                     Text(l10n.idCardSerialLabel(serial),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontSize: 12, color: AppColors.ink2)),
                     if (card.createdAt != null) ...[
                       const SizedBox(height: 1),

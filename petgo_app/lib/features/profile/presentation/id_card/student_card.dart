@@ -8,40 +8,30 @@ import '../../domain/id_card.dart';
 const Size kStudentCardCanvas = Size(1988, 1200);
 
 /// 学生卡展示字段（全部由快照派生，零新增采集，见 spec 6-8 §4.2）。
+/// spec ktp-pet-idcode-numbering：学生卡面**取消证号展示**，无 studentNo。
 @immutable
 class StudentFields {
   const StudentFields({
-    required this.studentNo,
     required this.name,
     required this.birthday,
     required this.species,
     this.avatarUrl,
   });
 
-  final String studentNo;
   final String name;
   final String birthday;
   final String species;
   final String? avatarUrl;
 }
 
-/// 纯函数：快照 → 学生卡字段（无趣味默认外的采集；serial → 证号，pet_type → 物种本地化）。
+/// 纯函数：快照 → 学生卡字段（无趣味默认外的采集；pet_type → 物种本地化）。
 StudentFields buildStudentFields(IdCardData data) {
   return StudentFields(
-    studentNo: _studentNo(data.serialId, data.birthday),
     name: (data.name?.isNotEmpty == true ? data.name! : 'MOCHI').toUpperCase(),
     birthday: data.birthday == null ? '01-01-2022' : _dmy(data.birthday!),
     species: _species(data.petType),
     avatarUrl: data.avatarUrl,
   );
-}
-
-/// 16 位学生证号（与 KTP NIK 同区域码范式，随 serial 唯一）：`3276` + 生日 DDMMYY + serial 补零 6 位。
-String _studentNo(int? serialId, DateTime? birthday) {
-  final ddmmyy = birthday == null
-      ? '010122'
-      : '${_p2(birthday.day)}${_p2(birthday.month)}${_p2(birthday.year % 100)}';
-  return '3276$ddmmyy${(serialId ?? 0).toString().padLeft(6, '0')}';
 }
 
 String _species(String? petType) => switch (petType) {
@@ -72,14 +62,6 @@ abstract final class _StudentLayout {
   static const Rect photo = Rect.fromLTWH(72, 420, 380, 400);
   static const double photoBorder = 8;
   static const double photoRadius = 40;
-
-  // 大号证号 + 下划线（照片右）。
-  static const double numLeft = 640;
-  static const double numBaseline = 560;
-  static const double numSize = 92;
-  static const double numTracking = -1.0;
-  static const double underlineY = 600;
-  static const double underlineRight = 1860;
 
   // 字段三行（label : value）。
   static const double labelX = 640;
@@ -128,13 +110,6 @@ class StudentCardFront extends StatelessWidget {
             _centered('STUDENT CARD', _StudentLayout.titleCenterX, _StudentLayout.subtitleBaseline,
                 _style(size: _StudentLayout.subtitleSize, weight: _kMedium, color: Colors.white, italic: true)),
             _photo(),
-            _atBaseline(
-              left: _StudentLayout.numLeft,
-              baseline: _StudentLayout.numBaseline,
-              child: Text(fields.studentNo,
-                  style: _style(size: _StudentLayout.numSize, weight: _kBold, tracking: _StudentLayout.numTracking)),
-            ),
-            _underline(),
             ..._fieldRows(),
             _positioned(
               _StudentLayout.stamp,
@@ -173,16 +148,6 @@ class StudentCardFront extends StatelessWidget {
     }
     return out;
   }
-
-  Widget _underline() => Positioned(
-        left: _StudentLayout.numLeft,
-        top: _StudentLayout.underlineY,
-        child: Container(
-          width: _StudentLayout.underlineRight - _StudentLayout.numLeft,
-          height: 3,
-          color: _kInk.withValues(alpha: 0.3),
-        ),
-      );
 
   Widget _photo() {
     final r = _StudentLayout.photo;

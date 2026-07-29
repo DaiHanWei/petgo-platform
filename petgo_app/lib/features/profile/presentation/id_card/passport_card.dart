@@ -52,9 +52,12 @@ PassportFields buildPassportFields(IdCardData data) {
   final issue = DateTime.now();
   final expiry = DateTime(issue.year + 5, issue.month, issue.day);
   return PassportFields(
-    passportNo: 'A ${serial.toString().padLeft(6, '0').substring(0, 6)}',
+    // 新编码卡直显后端 passportNo；旧卡（passportNo=null）维持旧拼号，展示零变化。
+    passportNo: (data.passportNo?.isNotEmpty == true)
+        ? data.passportNo!
+        : 'A ${serial.toString().padLeft(6, '0').substring(0, 6)}',
     name: name,
-    sex: 'L/M',
+    sex: _sexFor(data.gender),
     dateOfBirth: data.birthday == null ? '00 SEP 0000' : _dmyUpper(data.birthday!),
     placeOfBirth: 'BANDUNG',
     dateOfIssue: _dmyUpper(issue),
@@ -66,6 +69,14 @@ PassportFields buildPassportFields(IdCardData data) {
     avatarUrl: data.avatarUrl,
   );
 }
+
+/// gender wire 值 → 护照面 Sex（设计常量）：公 J / 母 B / 未知 `-`；null（旧卡）维持旧默认 `L/M`。
+String _sexFor(String? gender) => switch (gender) {
+      'MALE' => 'J',
+      'FEMALE' => 'B',
+      'UNKNOWN' => '-',
+      _ => 'L/M',
+    };
 
 /// NIKIM 12 位（微芯片号，仿制）：生日 DDMMYY + serial 补零 6 位。设计稿为 12 位，勿加区域码前缀
 /// （否则过长压到 Reg.No 列，bug 20260721-330 首版返工）。

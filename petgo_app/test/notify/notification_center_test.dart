@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:tailtopia/core/router/deep_link_routes.dart';
 import 'package:tailtopia/features/notify/data/notification_repository.dart';
 import 'package:tailtopia/features/notify/domain/notification_deep_link.dart';
@@ -206,5 +207,64 @@ void main() {
     expect(find.text('2'), findsOneWidget);
     // 固定目标类深链直达（生日 → +发布预选成长日历）。
     expect(location, DeepLinkRoutes.publishGrowthCalendar);
+  });
+
+  testWidgets('回归 bug 20260729: 纪念日通知落 Diary 分支根须 go 不得 push（push 白屏+Tab 永久失效）',
+      (tester) async {
+    final repo = _FakeNotifyRepo(items: [
+      const NotificationItem(
+          type: 'COMPANION_ANNIVERSARY',
+          deepLinkType: 'COMPANION_ANNIVERSARY',
+          title: '3 个月纪念日',
+          deepLinkToken: 'annivTok',
+          read: false),
+    ]);
+    StatefulNavigationShell? shell;
+    final router = GoRouter(
+      initialLocation: '/notifications',
+      routes: [
+        GoRoute(path: '/notifications', builder: (c, s) => const NotificationCenterPage()),
+        StatefulShellRoute.indexedStack(
+          builder: (context, state, navigationShell) {
+            shell = navigationShell;
+            return Scaffold(body: navigationShell);
+          },
+          branches: [
+            StatefulShellBranch(routes: [
+              GoRoute(path: '/home', builder: (c, s) => const Text('HOME-PAGE')),
+            ]),
+            StatefulShellBranch(routes: [
+              GoRoute(path: '/profile', builder: (c, s) => const Text('DIARY-PAGE')),
+            ]),
+          ],
+        ),
+      ],
+    );
+    await tester.pumpWidget(ProviderScope(
+      overrides: [notificationRepositoryProvider.overrideWithValue(repo)],
+      child: MaterialApp.router(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
+        routerConfig: router,
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    // 点纪念日通知（标题按 type 本地化渲染）→ 必须落到 Diary 分支（go 切分支），无 GlobalKey 撞车。
+    await tester.tap(find.text('Companion anniversary'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(router.state.uri.toString(), DeepLinkRoutes.growthArchive);
+    expect(find.text('DIARY-PAGE'), findsOneWidget);
+
+    // 此后 Tab 切换保持健康：home ↔ diary 来回均可达（push 版会在此永久抛异常）。
+    shell!.goBranch(0, initialLocation: false);
+    await tester.pumpAndSettle();
+    expect(find.text('HOME-PAGE'), findsOneWidget);
+    shell!.goBranch(1, initialLocation: false);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('DIARY-PAGE'), findsOneWidget);
   });
 }

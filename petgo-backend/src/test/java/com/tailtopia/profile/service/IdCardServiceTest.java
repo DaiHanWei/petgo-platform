@@ -27,10 +27,11 @@ class IdCardServiceTest {
 
     private final PetProfileRepository profiles = mock(PetProfileRepository.class);
     private final SerialAllocationService serialAllocation = mock(SerialAllocationService.class);
+    private final CardNumberService cardNumbers = mock(CardNumberService.class);
     private final IdCardHdPurchaseRepository hdPurchases = mock(IdCardHdPurchaseRepository.class);
     private final IdCardRepository idCards = mock(IdCardRepository.class);
     private final IdCardService service =
-            new IdCardService(profiles, serialAllocation, hdPurchases, idCards);
+            new IdCardService(profiles, serialAllocation, cardNumbers, hdPurchases, idCards);
 
     private static PetProfile pet() {
         return PetProfile.create(7L, PetType.CAT, "Momo", null, "英短", LocalDate.of(2022, 1, 1), "乖", "TOK");

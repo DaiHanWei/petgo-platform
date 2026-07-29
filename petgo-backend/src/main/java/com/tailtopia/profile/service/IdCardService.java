@@ -25,13 +25,16 @@ public class IdCardService {
 
     private final PetProfileRepository profiles;
     private final SerialAllocationService serialAllocation;
+    private final CardNumberService cardNumbers;
     private final IdCardHdPurchaseRepository hdPurchases;
     private final IdCardRepository idCards;
 
     public IdCardService(PetProfileRepository profiles, SerialAllocationService serialAllocation,
-            IdCardHdPurchaseRepository hdPurchases, IdCardRepository idCards) {
+            CardNumberService cardNumbers, IdCardHdPurchaseRepository hdPurchases,
+            IdCardRepository idCards) {
         this.profiles = profiles;
         this.serialAllocation = serialAllocation;
+        this.cardNumbers = cardNumbers;
         this.hdPurchases = hdPurchases;
         this.idCards = idCards;
     }
@@ -56,13 +59,25 @@ public class IdCardService {
     /**
      * 独立建卡器（决策④）：把入参信息冻结成一张新卡快照，分配新 serial（每卡新号，决策②）。初始未解锁。
      * 卡信息与档案解耦——不要求已有档案，也不改档案。ownerId 由 JWT 取。
+     *
+     * <p>spec-ktp-pet-idcode-numbering：legacy serial 照旧分配（号池不动），再按《宠物身份码护照编码规则》
+     * 生成身份码 + 护照号一起落库；取号与落卡同事务（{@link CardNumberService} join 本事务，行锁保原子）。
      */
     @Transactional
     public IdCardResponse createCard(long ownerId, CreateIdCardRequest req) {
+        String gender = normalizeGender(req.gender());
         long serial = serialAllocation.allocate();
+        String cardNo = cardNumbers.allocateCardNo(req.birthday(), gender, req.petType());
+        String passportNo = cardNumbers.allocatePassportNo(req.petType());
         IdCard card = idCards.save(IdCard.snapshot(ownerId, serial, req.name(), req.petType(),
-                req.breed(), req.birthday(), req.avatarUrl(), req.intro()));
+                req.breed(), req.birthday(), req.avatarUrl(), req.intro(), gender, cardNo,
+                passportNo));
         return IdCardResponse.from(card);
+    }
+
+    /** gender 归一化：null 视同 UNKNOWN。白名单由 DTO 的 {@code @Pattern} 保证（非法值与其余字段统一 422）。 */
+    private static String normalizeGender(String gender) {
+        return gender == null ? "UNKNOWN" : gender;
     }
 
     /** 当前用户身份证数据（只读，不分配号）。无档案 → 404。老用户 serial=null → {@code generated=false}。 */

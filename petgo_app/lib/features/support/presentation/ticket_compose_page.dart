@@ -122,6 +122,9 @@ class _TicketComposePageState extends ConsumerState<TicketComposePage> {
             attachmentObjectKeys: _photos.map((p) => p.objectKey).toList(),
           );
       if (!mounted) return;
+      // bug 20260729-390：列表页常驻 watch，autoDispose 不触发重建——创建成功必须显式失效
+      // 让返回列表即见新单（同模块 csat_page 提交后同款处理）。
+      ref.invalidate(myTicketsProvider);
       _toast(l10n.ticketSubmitSuccess);
       context.pushReplacement('/me/support-tickets/${ticket.ticketToken}');
     } on DioException {

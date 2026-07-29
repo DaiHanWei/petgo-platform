@@ -203,6 +203,7 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
       builder: (_) => HdPaywallSheet(
         petName: card.name,
         serialId: card.serialId,
+        cardNo: card.cardNo,
         avatarUrl: card.avatarUrl,
         balance: balance,
       ),

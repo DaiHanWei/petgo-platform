@@ -37,6 +37,7 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
   String? _petType;
   String _breed = '';
   DateTime? _birthday;
+  String _gender = 'UNKNOWN'; // wire 值 MALE/FEMALE/UNKNOWN，默认未知
   String _intro = '';
   String? _avatarUrl;
   bool _prefilled = false;
@@ -61,13 +62,19 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
     }).catchError((_) {});
   }
 
-  /// 会话级预览数据（未落库，serialId 未分配 → 预览用占位号）。
+  /// 会话级预览数据（未落库，序号未分配 → 客户端拼占位号，创建后以后端号为准）。
   IdCardData get _preview => IdCardData(
         generated: true,
         name: _name.trim().isEmpty ? null : _name.trim(),
         petType: _petType,
         breed: _breed.trim().isEmpty ? null : _breed.trim(),
         birthday: _birthday,
+        gender: _gender,
+        cardNo: buildPreviewCardNo(birthday: _birthday, gender: _gender, petType: _petType),
+        // 年份按 WIB（UTC+7）折算，与后端签发年一致（跨年时刻本地时区差异不影响预览）。
+        passportNo: buildPreviewPassportNo(
+            petType: _petType,
+            year: DateTime.now().toUtc().add(const Duration(hours: 7)).year),
         avatarUrl: _avatarUrl,
         intro: _intro.trim().isEmpty ? null : _intro.trim(),
       );
@@ -130,6 +137,14 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
                 ],
               ),
             ),
+            // 缺生日时按钮禁用，主页面必须给出原因（提示不能只藏在编辑抽屉里，否则按钮「灰死」无解释）。
+            if (_birthday == null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+                child: Text(l10n.idCardBirthdayRequired,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 12, color: AppColors.danger)),
+              ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: SizedBox(
@@ -139,7 +154,7 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
                   style: FilledButton.styleFrom(
                       backgroundColor: AppColors.mint,
                       padding: const EdgeInsets.symmetric(vertical: 14)),
-                  onPressed: (_name.trim().isEmpty || _busy) ? null : _create,
+                  onPressed: (_name.trim().isEmpty || _birthday == null || _busy) ? null : _create,
                   child: _busy
                       ? const SizedBox(
                           width: 20,
@@ -206,7 +221,12 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (_) => _EditInfoSheet(
         initial: _InfoDraft(
-            name: _name, petType: _petType, breed: _breed, birthday: _birthday, intro: _intro),
+            name: _name,
+            petType: _petType,
+            breed: _breed,
+            birthday: _birthday,
+            gender: _gender,
+            intro: _intro),
       ),
     );
     if (result != null) {
@@ -215,6 +235,7 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
         _petType = result.petType;
         _breed = result.breed;
         _birthday = result.birthday;
+        _gender = result.gender;
         _intro = result.intro;
       });
     }
@@ -248,6 +269,7 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
             petType: _petType,
             breed: _breed.trim().isEmpty ? null : _breed.trim(),
             birthday: _birthday,
+            gender: _gender,
             avatarUrl: _avatarUrl,
             intro: _intro.trim().isEmpty ? null : _intro.trim(),
           ));
@@ -279,7 +301,11 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (_) => HdPaywallSheet(
-          petName: card.name, serialId: card.serialId, avatarUrl: card.avatarUrl, balance: balance),
+          petName: card.name,
+          serialId: card.serialId,
+          cardNo: card.cardNo,
+          avatarUrl: card.avatarUrl,
+          balance: balance),
     );
     if (channel == null || !mounted) return;
     final l10n = AppLocalizations.of(context);
@@ -324,11 +350,13 @@ class _InfoDraft {
       required this.petType,
       required this.breed,
       required this.birthday,
+      required this.gender,
       required this.intro});
   final String name;
   final String? petType;
   final String breed;
   final DateTime? birthday;
+  final String gender; // wire 值 MALE/FEMALE/UNKNOWN
   final String intro;
 }
 
@@ -347,6 +375,7 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
   late final TextEditingController _intro;
   late String? _petType;
   late DateTime? _birthday;
+  late String _gender;
 
   @override
   void initState() {
@@ -356,6 +385,7 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
     _intro = TextEditingController(text: widget.initial.intro);
     _petType = widget.initial.petType;
     _birthday = widget.initial.birthday;
+    _gender = widget.initial.gender;
   }
 
   @override
@@ -422,7 +452,23 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
             const SizedBox(height: 6),
             BreedField(petType: _petType, controller: _breed, onChanged: () => setState(() {})),
             const SizedBox(height: 14),
-            _label(l10n.petProfileBirthdayLabel),
+            _label(l10n.idCardGenderLabel),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                for (final (i, (wire, label)) in <(String, String)>[
+                  ('MALE', l10n.idCardGenderMale),
+                  ('FEMALE', l10n.idCardGenderFemale),
+                  ('UNKNOWN', l10n.idCardGenderUnknown),
+                ].indexed) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  Expanded(child: _genderChip(wire, label)),
+                ],
+              ],
+            ),
+            const SizedBox(height: 14),
+            // 生日必填（后端 422）：标签带 * 标记，未填时给必填提示。
+            _requiredLabel(l10n.petProfileBirthdayLabel),
             const SizedBox(height: 6),
             InkWell(
               key: const ValueKey('idCardEditBirthday'),
@@ -446,6 +492,11 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
                 ),
               ),
             ),
+            if (_birthday == null) ...[
+              const SizedBox(height: 4),
+              Text(l10n.idCardBirthdayRequired,
+                  style: const TextStyle(fontSize: 11, color: AppColors.danger)),
+            ],
             const SizedBox(height: 14),
             _label(l10n.petProfileBioLabel),
             const SizedBox(height: 6),
@@ -469,6 +520,7 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
                     petType: _petType,
                     breed: _breed.text.trim(),
                     birthday: _birthday,
+                    gender: _gender,
                     intro: _intro.text.trim())),
                 child: Text(l10n.idCardEditDone,
                     style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
@@ -480,6 +532,41 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
     );
   }
 
+  /// 性别单选 chip（随表单控件风格：选中紫底白字，未选卡底描边）。
+  Widget _genderChip(String wire, String label) {
+    final selected = _gender == wire;
+    return GestureDetector(
+      key: ValueKey('idCardGender_$wire'),
+      onTap: () => setState(() => _gender = wire),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? AppColors.mint : AppColors.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: selected ? AppColors.mint : AppColors.line, width: 1.5),
+        ),
+        child: Text(label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+                color: selected ? Colors.white : AppColors.ink2,
+                fontWeight: FontWeight.w600,
+                fontSize: 13)),
+      ),
+    );
+  }
+
   Widget _label(String text) => Text(text,
       style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink2));
+
+  /// 必填字段标签：`_label` + 红色 `*`（必填视觉标记，非文案）。
+  Widget _requiredLabel(String text) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _label(text),
+          const Text(' *',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.danger)),
+        ],
+      );
 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -51,6 +52,9 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
   // 病例区（症状+照片）默认折叠：薄条常驻,点开看完整病例 + 真图(签名 URL)。
   bool _caseExpanded = false;
 
+  /// 结束会话进行中守卫（bug 20260728-377：连点会叠开诊断页/二次 end 409）。
+  bool _ending = false;
+
   @override
   void initState() {
     super.initState();
@@ -101,6 +105,16 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
   /// Story C：结束会话前必须填最终诊断表单（原型 `#p-vet-final-diagnosis`）。
   /// 进诊断表单页 → 填完(Diagnosa 必填)提交才真正调 end；返回则取消结束。诊断推用户 + 存档。
   Future<void> _endSession(_VetConvData d) async {
+    if (_ending) return; // 连点守卫（bug 20260728-377）
+    setState(() => _ending = true);
+    try {
+      await _doEndSession(d);
+    } finally {
+      if (mounted) setState(() => _ending = false);
+    }
+  }
+
+  Future<void> _doEndSession(_VetConvData d) async {
     final l10n = AppLocalizations.of(context);
     final draft = await Navigator.of(context).push<VetDiagnosisDraft>(
       MaterialPageRoute(
@@ -135,12 +149,20 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
     if (confirmed != true || !mounted) return;
     try {
       await ref.read(vetRepositoryProvider).endSession(widget.sessionId, draft);
-    } catch (_) {
-      // 结束失败 → 留在会话页让兽医重试，不跳工作台。
-      // 否则服务端仍 IN_PROGRESS、用户端仍显「进行中」，而兽医已离开 = 两端状态撕裂。
-      if (mounted) {
-        showAppToast(context, l10n.consultStartFailed);
+    } on DioException catch (e) {
+      // 409 = 会话已非进行中（多为此前已结束成功但被连点）→ 视为幂等成功归工作台，
+      // 不再让兽医对着一个实际已结束的会话反复重试（bug 20260728-377 的「反复报错」态）。
+      if (e.response?.statusCode == 409) {
+        if (mounted) context.go('/vet/workbench');
+        return;
       }
+      // 其它失败 → 留在会话页让兽医重试，不跳工作台。
+      // 否则服务端仍 IN_PROGRESS、用户端仍显「进行中」，而兽医已离开 = 两端状态撕裂。
+      // 文案用专用 vetEndFailed——此前误用 consultStartFailed(「无法开始」)正是 377 认知混乱来源。
+      if (mounted) showAppToast(context, l10n.vetEndFailed);
+      return;
+    } catch (_) {
+      if (mounted) showAppToast(context, l10n.vetEndFailed);
       return;
     }
     // 仅 end 成功才归工作台。
@@ -257,7 +279,7 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
               if (d.session.status == 'IN_PROGRESS')
                 OutlinedButton(
                   key: const ValueKey('vetEndSession'),
-                  onPressed: () => _endSession(d),
+                  onPressed: _ending ? null : () => _endSession(d),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.coral,
                     side: const BorderSide(color: AppColors.coral, width: 1.5),
