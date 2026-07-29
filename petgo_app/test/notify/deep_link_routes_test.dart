@@ -36,6 +36,20 @@ void main() {
     expect(DeepLinkRoutes.pushPayloadToLocation('MILESTONE_NODE', null), '/profile/milestones');
   });
 
+  test('bug 20260729-391：工单结案/CSAT/退款驳回 → 各自落点（此前无映射=死点击）', () {
+    // TICKET_RESOLVED / CSAT_SURVEY：targetRef=ticketToken
+    expect(DeepLinkRoutes.pushPayloadToLocation('TICKET_RESOLVED', 'tk1'),
+        '/me/support-tickets/tk1');
+    expect(DeepLinkRoutes.pushPayloadToLocation('CSAT_SURVEY', 'tk1'),
+        '/me/support-tickets/tk1/csat');
+    // 缺 targetRef → 兜底（不拼非法路由）
+    expect(DeepLinkRoutes.pushPayloadToLocation('TICKET_RESOLVED', null),
+        DeepLinkRoutes.notificationsCenter);
+    // REFUND_REJECTED：详情页以 extra 寻址无 token 路由 → 固定落退款列表
+    expect(DeepLinkRoutes.pushPayloadToLocation('REFUND_REJECTED', 'rf1'), '/me/refunds');
+    expect(DeepLinkRoutes.pushPayloadToLocation('REFUND_REJECTED', null), '/me/refunds');
+  });
+
   test('未知 type / 空 token → 通知中心兜底（不崩溃）', () {
     expect(DeepLinkRoutes.pushPayloadToLocation('SOMETHING_NEW', 'x'),
         DeepLinkRoutes.notificationsCenter);

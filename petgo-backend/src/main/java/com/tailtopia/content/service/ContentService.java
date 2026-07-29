@@ -336,11 +336,18 @@ public class ContentService {
                 .toList();
     }
 
-    /** 某作者快乐时刻总数（Story 2.4 AC5 统计栏）。 */
+    /**
+     * 某作者快乐时刻总数（Story 2.4 AC5 统计栏）。
+     *
+     * <p>口径含审核中（bug 20260728-379）：timeline/日历不过滤 status，用户看得见 UNDER_REVIEW 的帖，
+     * 统计卡若只数 PUBLISHED 会与页面数不上（5 发 3 计）。审核拒绝走软删，自然回落。
+     * 里程碑计数（{@code countByAuthorIdAndType...} 单状态版）保持 PUBLISHED 口径不动。
+     */
     @Transactional(readOnly = true)
     public long countGrowthMoments(long authorId, long petId) {
-        return posts.countByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndStatus(
-                authorId, petId, ContentType.GROWTH_MOMENT, PostStatus.PUBLISHED);
+        return posts.countByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndStatusIn(
+                authorId, petId, ContentType.GROWTH_MOMENT,
+                List.of(PostStatus.PUBLISHED, PostStatus.UNDER_REVIEW));
     }
 
     /**

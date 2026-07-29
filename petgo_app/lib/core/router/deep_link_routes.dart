@@ -10,6 +10,14 @@ class DeepLinkRoutes {
   /// 通知中心（6.6）——未知/缺失映射的安全兜底落点。
   static const String notificationsCenter = '/notifications';
 
+  /// Shell 四 Tab 的分支根路由。**分支根只能 `go`（切分支），绝不能 `push`**：
+  /// push 会在同一匹配链里二次构建 StatefulShellRoute → GlobalKey 撞车 → release 白屏，
+  /// 且此后该分支 `goBranch` 持续抛异常、Tab 永久点不进去（bug 20260729-纪念日通知白屏）。
+  static const Set<String> shellTabRoots = {'/home', '/profile', '/triage', '/me'};
+
+  /// [location] 是否为 shell Tab 分支根（须用 `go` 导航）。
+  static bool isShellTabRoot(String location) => shellTabRoots.contains(location);
+
   /// 「+发布」预选成长日历（生日深链落点，FR-40）。
   static const String publishGrowthCalendar = '/publish?preset=growth-calendar';
 
@@ -48,6 +56,8 @@ class DeepLinkRoutes {
       case 'MILESTONE_NODE':
         return milestoneList;
     }
+    // 退款被驳回：refund 详情页以 extra 对象寻址、无 token 路由 → 落退款列表（安全落点）。
+    if (type == 'REFUND_REJECTED') return '/me/refunds';
     // id 寻址类：缺 targetRef 落兜底（避免拼出非法路由）。
     if (targetRef == null || targetRef.isEmpty) return notificationsCenter;
     switch (type) {
@@ -58,6 +68,11 @@ class DeepLinkRoutes {
         return '/content/$targetRef';
       case 'CONTENT_COMMENTED':
         return commentAnchor ? '/content/$targetRef?focus=comments' : '/content/$targetRef';
+      // 客服结案 / CSAT 邀评：targetRef=ticketToken（bug 20260729-391，此前未映射=死点击）。
+      case 'TICKET_RESOLVED':
+        return '/me/support-tickets/$targetRef';
+      case 'CSAT_SURVEY':
+        return '/me/support-tickets/$targetRef/csat';
       default:
         return notificationsCenter;
     }

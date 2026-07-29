@@ -65,8 +65,13 @@ class _NotificationCenterPageState
       commentAnchor: item.deepLinkType == 'CONTENT_COMMENTED',
     );
     if (!mounted) return;
-    // 兜底落点是本页自身时不重复 push。
-    if (location != DeepLinkRoutes.notificationsCenter) {
+    // 兜底落点是本页自身时不重复跳转。
+    if (location == DeepLinkRoutes.notificationsCenter) return;
+    if (DeepLinkRoutes.isShellTabRoot(location)) {
+      // Tab 分支根（如纪念日→/profile=Diary）只能 go 切分支：push 会二次构建 shell
+      // → GlobalKey 撞车白屏 + 此后该 Tab 永久失效（bug 20260729）。go 同时收掉本页栈。
+      context.go(location);
+    } else {
       context.push(location);
     }
   }
@@ -201,6 +206,9 @@ class _NotificationCenterPageState
   );
 }
 
+/// 通知正文样式——折叠溢出测量与渲染共用同一常量，防两处样式漂移（bug 20260727-368）。
+const TextStyle _kBodyStyle = TextStyle(fontSize: 12, height: 1.45, color: AppColors.ink2);
+
 class _NotificationTile extends StatefulWidget {
   const _NotificationTile({
     required this.item,
@@ -252,6 +260,33 @@ class _NotificationTileState extends State<_NotificationTile> {
       AppColors.triageGreen,
       AppColors.momenBadgeBg,
     ),
+    // bug 20260729-391：以下类型此前无映射 → 全落兜底渲染，同瞬两条(结案+邀评)看似「重复发送」。
+    'TICKET_RESOLVED' => (
+      Icons.support_agent_rounded,
+      AppColors.mint,
+      AppColors.cream2,
+    ),
+    'CSAT_SURVEY' => (Icons.star_rate_rounded, AppColors.gold, AppColors.goldTint),
+    'REFUND_REJECTED' => (
+      Icons.currency_exchange_rounded,
+      AppColors.coral,
+      AppColors.coralTint,
+    ),
+    'CONTENT_REVIEW_APPROVED' => (
+      Icons.check_circle_rounded,
+      AppColors.triageGreen,
+      AppColors.momenBadgeBg,
+    ),
+    'CONTENT_REVIEW_REJECTED' || 'CONTENT_REMOVED' => (
+      Icons.remove_circle_outline_rounded,
+      AppColors.coral,
+      AppColors.coralTint,
+    ),
+    'REPORT_REVIEWED' => (
+      Icons.verified_user_rounded,
+      AppColors.mint,
+      AppColors.cream2,
+    ),
     _ => (Icons.notifications_rounded, AppColors.mint, AppColors.cream2),
   };
 
@@ -264,7 +299,15 @@ class _NotificationTileState extends State<_NotificationTile> {
     'PET_BIRTHDAY' => l10n.notifyTypePetBirthday,
     'COMPANION_ANNIVERSARY' => l10n.notifyTypeCompanionAnniversary,
     'MILESTONE_NODE' => l10n.notifyTypeMilestoneNode,
-    _ => l10n.notificationCenterTitle,
+    'TICKET_RESOLVED' => l10n.notifyTypeTicketResolved,
+    'CSAT_SURVEY' => l10n.notifyTypeCsatSurvey,
+    'REFUND_REJECTED' => l10n.notifyTypeRefundRejected,
+    'CONTENT_REVIEW_APPROVED' => l10n.notifyTypeReviewApproved,
+    'CONTENT_REVIEW_REJECTED' => l10n.notifyTypeReviewRejected,
+    'CONTENT_REMOVED' => l10n.notifyTypeContentRemoved,
+    'REPORT_REVIEWED' => l10n.notifyTypeReportReviewed,
+    // 未知类型兜底：中性「系统通知」，不再复用页面标题（bug 20260729-391 的「克隆卡」观感来源）。
+    _ => l10n.notifyTypeSystem,
   };
 
   /// 副标题（按 type 本地化，随 App 语言）。
@@ -277,7 +320,15 @@ class _NotificationTileState extends State<_NotificationTile> {
     'PET_BIRTHDAY' => l10n.notifyBodyPetBirthday,
     'COMPANION_ANNIVERSARY' => l10n.notifyBodyCompanionAnniversary,
     'MILESTONE_NODE' => l10n.notifyBodyMilestoneNode,
-    _ => l10n.notificationEmptyHint,
+    'TICKET_RESOLVED' => l10n.notifyBodyTicketResolved,
+    'CSAT_SURVEY' => l10n.notifyBodyCsatSurvey,
+    'REFUND_REJECTED' => l10n.notifyBodyRefundRejected,
+    'CONTENT_REVIEW_APPROVED' => l10n.notifyBodyReviewApproved,
+    'CONTENT_REVIEW_REJECTED' => l10n.notifyBodyReviewRejected,
+    'CONTENT_REMOVED' => l10n.notifyBodyContentRemoved,
+    'REPORT_REVIEWED' => l10n.notifyBodyReportReviewed,
+    // 未知类型兜底：中性正文，不再复用空态提示串（那本身就是个 bug）。
+    _ => l10n.notifyBodySystem,
   };
 
   /// 相对时间，随 App 语言本地化（今天：刚刚 / N 分钟前 / N 小时前；更早：本地化日期）。
@@ -330,76 +381,84 @@ class _NotificationTileState extends State<_NotificationTile> {
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // 文案按 type 本地化，随 App 语言渲染；**不渲染后端 title/body**（后端串为服务端语言）。
-                      Text(
-                        _typeLabel(l10n),
-                        style: const TextStyle(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.ink,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        _typeBody(l10n),
-                        maxLines: _expanded ? null : 2,
-                        overflow: _expanded
-                            ? TextOverflow.visible
-                            : TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          height: 1.45,
-                          color: AppColors.ink2,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              _relativeTime(
-                                l10n,
-                                Localizations.localeOf(context).toString(),
-                              ),
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: AppColors.muted,
-                              ),
-                            ),
+                  child: LayoutBuilder(builder: (context, constraints) {
+                    // bug 20260727-368：只在正文折叠态(2 行)真溢出时才显示 展开/收起 按钮。
+                    // 测量必须与正文 Text 同 style、同可用宽、同 textScaler（clamp≤1.3 后的实际值）。
+                    final bodyPainter = TextPainter(
+                      text: TextSpan(text: _typeBody(l10n), style: _kBodyStyle),
+                      maxLines: 2,
+                      textDirection: Directionality.of(context),
+                      textScaler: MediaQuery.textScalerOf(context),
+                    )..layout(maxWidth: constraints.maxWidth);
+                    final needsToggle = bodyPainter.didExceedMaxLines;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 文案按 type 本地化，随 App 语言渲染；**不渲染后端 title/body**（后端串为服务端语言）。
+                        Text(
+                          _typeLabel(l10n),
+                          style: const TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.ink,
                           ),
-                          TextButton(
-                            style: TextButton.styleFrom(
-                              minimumSize: Size.zero,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          _typeBody(l10n),
+                          maxLines: _expanded ? null : 2,
+                          overflow: _expanded
+                              ? TextOverflow.visible
+                              : TextOverflow.ellipsis,
+                          style: _kBodyStyle,
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _relativeTime(
+                                  l10n,
+                                  Localizations.localeOf(context).toString(),
+                                ),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.muted,
+                                ),
                               ),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              visualDensity: VisualDensity.compact,
                             ),
-                            onPressed: () {
-                              setState(() {
-                                _expanded = !_expanded;
-                              });
-                            },
-                            child: Text(
-                              _expanded
-                                  ? l10n.notificationCollapse
-                                  : l10n.notificationExpand,
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
+                            if (needsToggle)
+                              TextButton(
+                                style: TextButton.styleFrom(
+                                  minimumSize: Size.zero,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _expanded = !_expanded;
+                                  });
+                                },
+                                child: Text(
+                                  _expanded
+                                      ? l10n.notificationCollapse
+                                      : l10n.notificationExpand,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                          ],
+                        ),
+                      ],
+                    );
+                  }),
                 ),
                 // 未读紫点。
                 if (unread) ...[

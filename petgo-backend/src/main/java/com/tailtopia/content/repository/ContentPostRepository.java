@@ -5,6 +5,7 @@ import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.domain.PostStatus;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -56,6 +57,10 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
     /** 统计：某作者某宠物某类型未删且已发布内容数（Story 2.4 AC5 档案统计栏；bug 271 按 petId 计，删档后不含 NULL 旧帖）。 */
     long countByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndStatus(
             long authorId, long petId, ContentType type, PostStatus status);
+
+    /** 统计（多状态版）：档案统计栏含审核中（bug 20260728-379，与 timeline 展示口径对齐）。 */
+    long countByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndStatusIn(
+            long authorId, long petId, ContentType type, Collection<PostStatus> statuses);
 
     /**
      * 「我的发布」（Story 7.1，FR-36）：当前作者未软删的全部内容（三类混合），keyset 游标倒序。

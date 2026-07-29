@@ -51,6 +51,7 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
   String _status = 'IN_PROGRESS';
   String? _closedReason;
   bool _rated = false;
+  bool _ratingOpen = false; // 评分入口连点守卫，防叠开评分页（bug 20260728-377 同族）
   bool _firstConsultPushTried = false; // 首次问诊推送闸门本页只触发一次（gate 另有持久化自守）
   ActiveConsultSession? _activeNotifier;
   ConsultCase? _case; // 用户自填病例（症状 + 私密图签名 URL）：摘要条展开用，异步拉
@@ -162,6 +163,16 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
   }
 
   Future<void> _openRating() async {
+    if (_ratingOpen) return;
+    _ratingOpen = true;
+    try {
+      await _doOpenRating();
+    } finally {
+      _ratingOpen = false;
+    }
+  }
+
+  Future<void> _doOpenRating() async {
     final l10n = AppLocalizations.of(context);
     final result = await ConsultRatingDialog.show(context);
     if (result == null || !mounted) return;
