@@ -1,13 +1,18 @@
 package com.tailtopia.content.moderation;
 
 import com.aliyun.green20220302.Client;
+import com.aliyun.green20220302.models.ImageModerationRequest;
+import com.aliyun.green20220302.models.ImageModerationResponse;
+import com.aliyun.green20220302.models.ImageModerationResponseBody;
 import com.aliyun.green20220302.models.TextModerationRequest;
 import com.aliyun.green20220302.models.TextModerationResponse;
 import com.aliyun.green20220302.models.TextModerationResponseBody;
 import com.aliyun.tea.TeaException;
 import com.aliyun.teaopenapi.models.Config;
+import com.aliyun.teautil.models.RuntimeOptions;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -115,17 +120,83 @@ public class AliyunContentSafetyClient implements ContentSafetyClient {
         } catch (ModerationDegradedException e) {
             throw e;
         } catch (TeaException e) {
-            throw degradeFromTea(e);
+            throw degradeFromTea(e, "text");
         } catch (Exception e) {
-            throw degradeFromGeneric(e);
+            throw degradeFromGeneric(e, "text");
         }
     }
 
     @Override
     public ImageScore scanImage(String imageUrl) {
-        // 图像审核服务（ImageModeration）本期未开通（仅上文本）。fail-closed：转人工，绝不误 PASS/BLOCK。
-        throw new ModerationDegradedException(DegradeReason.HTTP_4XX,
-                "aliyun image moderation not enabled (text-only rollout)");
+        // 大小模型融合图片审核（service 默认 postImageCheckByVL_global，产品拍板 2026-07-29）。
+        // fail-closed 不变量同文本：任何异常/非 200 业务码（含 service 未开通）→ DEGRADED 转人工。
+        if (client == null) {
+            throw new ModerationDegradedException(DegradeReason.HTTP_4XX,
+                    "aliyun client not initialized (credentials?)");
+        }
+        try {
+            String params = JSON.writeValueAsString(Map.of("imageUrl", imageUrl == null ? "" : imageUrl));
+            ImageModerationRequest req = new ImageModerationRequest()
+                    .setService(props.getAliyun().getImageService())
+                    .setServiceParameters(params);
+            // 图审单独超时（SLA ≤2s）：client 构造期的 readTimeout 是文本口径，这里按次覆盖。
+            RuntimeOptions runtime = new RuntimeOptions();
+            runtime.connectTimeout = CONNECT_TIMEOUT_MS;
+            runtime.readTimeout = props.getImageTimeoutMs();
+            ImageModerationResponse resp = client.imageModerationWithOptions(req, runtime);
+            ImageModerationResponseBody body = resp == null ? null : resp.getBody();
+            if (body == null) {
+                throw new ModerationDegradedException(DegradeReason.HTTP_5XX, "aliyun empty image response body");
+            }
+            Integer code = body.getCode();
+            if (code == null || code != 200) {
+                // 诊断：如 service 未开通/无权限会落在这里。仅记码/描述/requestId，不记图 URL。
+                log.warn("Aliyun image moderation 业务错误：code={}, msg={}, requestId={}, service={}",
+                        code, body.getMsg(), body.getRequestId(), props.getAliyun().getImageService());
+                throw new ModerationDegradedException(classify(code == null ? 500 : code),
+                        "aliyun image biz code " + code);
+            }
+            var data = body.getData();
+            List<ImageModerationResponseBody.ImageModerationResponseBodyDataResult> results =
+                    data == null ? null : data.getResult();
+            Map<String, Double> merged = new java.util.HashMap<>();
+            if (results != null) {
+                for (var r : results) {
+                    mergeImageLabel(merged, r.getLabel(),
+                            r.getConfidence() == null ? 0.0 : r.getConfidence() / 100.0);
+                }
+            }
+            return new ImageScore(merged);
+        } catch (ModerationDegradedException e) {
+            throw e;
+        } catch (TeaException e) {
+            throw degradeFromTea(e, "image");
+        } catch (Exception e) {
+            throw degradeFromGeneric(e, "image");
+        }
+    }
+
+    /**
+     * 阿里云图审标签 → 内部三分类（§4.2 阈值口径）：{@code pornographic_*}/{@code sexual_*} → porn、
+     * {@code violent_*} → violence、{@code contraband_*} → contraband；同分类取最大置信度。
+     * 其余标签（nonLabel/广告/政治等）不参与硬拦截判定（§4.2 只定义三类），忽略。包级可见供 L0 单测。
+     */
+    static void mergeImageLabel(Map<String, Double> merged, String label, double confidence01) {
+        if (label == null || label.isBlank()) {
+            return;
+        }
+        String l = label.toLowerCase(Locale.ROOT);
+        String category;
+        if (l.startsWith("pornographic") || l.startsWith("sexual") || l.startsWith("porn")) {
+            category = "porn";
+        } else if (l.startsWith("violent") || l.startsWith("violence")) {
+            category = "violence";
+        } else if (l.startsWith("contraband")) {
+            category = "contraband";
+        } else {
+            return;
+        }
+        merged.merge(category, confidence01, Math::max);
     }
 
     /**
@@ -181,7 +252,7 @@ public class AliyunContentSafetyClient implements ContentSafetyClient {
         }
     }
 
-    private static ModerationDegradedException degradeFromTea(TeaException e) {
+    private static ModerationDegradedException degradeFromTea(TeaException e, String scope) {
         String codeStr = e.getCode() == null ? "" : e.getCode().toLowerCase(Locale.ROOT);
         DegradeReason r;
         if (codeStr.contains("throttl") || codeStr.contains("limit") || codeStr.contains("quota")) {
@@ -194,15 +265,15 @@ public class AliyunContentSafetyClient implements ContentSafetyClient {
             r = DegradeReason.HTTP_5XX;
         }
         // 诊断：仅记阿里云 API 错误码 / httpStatus / 错误描述（非用户内容、非 AK），供排查 4xx（权限/service 码）。
-        log.warn("Aliyun text moderation 失败：errCode={}, httpStatus={}, apiMsg={}",
-                e.getCode(), e.statusCode, e.getMessage());
+        log.warn("Aliyun {} moderation 失败：errCode={}, httpStatus={}, apiMsg={}",
+                scope, e.getCode(), e.statusCode, e.getMessage());
         return new ModerationDegradedException(r, "aliyun tea error");
     }
 
-    private static ModerationDegradedException degradeFromGeneric(Exception e) {
+    private static ModerationDegradedException degradeFromGeneric(Exception e, String scope) {
         String n = e.getClass().getName().toLowerCase(Locale.ROOT);
         DegradeReason r = n.contains("timeout") ? DegradeReason.TIMEOUT : DegradeReason.HTTP_5XX;
-        log.warn("Aliyun text moderation 异常：{}: {}", e.getClass().getSimpleName(), e.getMessage());
+        log.warn("Aliyun {} moderation 异常：{}: {}", scope, e.getClass().getSimpleName(), e.getMessage());
         return new ModerationDegradedException(r, "aliyun call failed");
     }
 

@@ -155,6 +155,27 @@ class ContentModerationServiceTest {
     }
 
     @Test
+    void evaluate_imageDisabledSkipsScanAndDecidesByText() {
+        // bug 20260729-404：图审未开通期间 image-enabled=false → 跳过图审不降级，按文本结论路由。
+        // 同一 URL 在开关开着时会 TIMEOUT 降级（见上一用例），关着时干净文本应 PASS。
+        KeywordRuleEngine engine = new KeywordRuleEngine(null);
+        engine.apply(List.of(
+                ModerationKeywordRule.of("L1_BLOCK", "SUBSTRING", "judi", "GAMBLING", "id", true)));
+        ModerationProperties props = new ModerationProperties();
+        props.setImageEnabled(false);
+        ContentModerationService svc = new ContentModerationService(
+                engine, new StubContentSafetyClient(), props, new ModerationCircuitBreaker());
+        ModerationOutcome o = svc.evaluate("teks normal",
+                List.of("https://cdn.petgo.test/stub-img-timeout.jpg"));
+        assertThat(o.degraded()).isFalse();
+        assertThat(o.verdict()).isEqualTo(Verdict.PASS);
+        // 文本硬拦截不受开关影响：图审关着，L1 词仍拦。
+        ModerationOutcome blocked = svc.evaluate("ayo main judi online",
+                List.of("https://cdn.petgo.test/stub-img-timeout.jpg"));
+        assertThat(blocked.verdict()).isEqualTo(Verdict.TEXT_BLOCKED);
+    }
+
+    @Test
     void evaluate_circuitOpenDegradesNeverPass() {
         // 熔断器构造为「1 次失败即打开、窗口极长」，第二次调用短路为 CIRCUIT_OPEN。
         KeywordRuleEngine engine = new KeywordRuleEngine(null);

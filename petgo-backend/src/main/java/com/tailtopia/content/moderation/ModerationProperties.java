@@ -15,6 +15,14 @@ public class ModerationProperties {
     /** {@code stub}（默认）| {@code live}。 */
     private String mode = "stub";
 
+    /**
+     * 图像审核总开关（bug 20260729-404）。阿里云 ImageModeration 未开通期间由 env 置
+     * {@code false}（{@code APP_MODERATION_IMAGE_ENABLED=false}）→ {@code evaluate} 跳过图审、
+     * 按文本结论路由，带图帖不再被「未开通 → 恒降级 fail-closed」压进 UNDER_REVIEW。
+     * 默认 {@code true}（保持 fail-closed 规范不变量）：开着但服务未开通时，真实调用仍降级转人工。
+     */
+    private boolean imageEnabled = true;
+
     /** RISKY 阈值（评分 ≥ 此值且未命中 L1 → RISKY）。默认 0.8。 */
     private double riskThreshold = 0.8;
 
@@ -33,6 +41,14 @@ public class ModerationProperties {
 
     public void setMode(String mode) {
         this.mode = mode;
+    }
+
+    public boolean isImageEnabled() {
+        return imageEnabled;
+    }
+
+    public void setImageEnabled(boolean imageEnabled) {
+        this.imageEnabled = imageEnabled;
     }
 
     public double getRiskThreshold() {
@@ -78,6 +94,9 @@ public class ModerationProperties {
         /** 文本审核 service 码（默认国际多语言标准版 text_standard；控制台命名以实际为准，可 env 覆盖）。 */
         private String textService = "text_standard";
 
+        /** 图像审核 service 码（大小模型融合图片审核，国际站 global 版；产品拍板 2026-07-29）。 */
+        private String imageService = "postImageCheckByVL_global";
+
         public String getRegion() {
             return region;
         }
@@ -116,6 +135,14 @@ public class ModerationProperties {
 
         public void setTextService(String textService) {
             this.textService = textService;
+        }
+
+        public String getImageService() {
+            return imageService;
+        }
+
+        public void setImageService(String imageService) {
+            this.imageService = imageService;
         }
     }
 
