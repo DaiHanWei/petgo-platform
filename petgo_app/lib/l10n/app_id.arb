@@ -1012,7 +1012,7 @@
   "vetPayTopup": "Isi saldo",
   "vetPayButton": "Bayar {price}",
   "@vetPayButton": { "placeholders": { "price": { "type": "String" } } },
-  "vetPayInterruptHint": "Jika kamu keluar, sistem akan memproses ulang permintaan secara otomatis.",
+  "vetPayInterruptHint": "Permintaan dibatalkan. Kamu bisa mulai konsultasi baru kapan saja.",
   "vetPayProcessing": "Menunggu pembayaran…",
   "vetPayScanHint": "Pindai QR untuk membayar",
   "vetPayCancel": "Batalkan Pembayaran",

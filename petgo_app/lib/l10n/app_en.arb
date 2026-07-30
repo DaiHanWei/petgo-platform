@@ -1265,7 +1265,7 @@
   "vetPayTopup": "Top up",
   "vetPayButton": "Pay {price}",
   "@vetPayButton": { "placeholders": { "price": { "type": "String" } } },
-  "vetPayInterruptHint": "If you leave, the system will automatically reprocess your request.",
+  "vetPayInterruptHint": "Request canceled. You can start a new consultation anytime.",
   "vetPayProcessing": "Waiting for payment…",
   "vetPayScanHint": "Scan the QR to pay",
   "vetPayCancel": "Cancel Payment",

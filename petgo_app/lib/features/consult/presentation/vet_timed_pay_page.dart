@@ -18,8 +18,8 @@ import 'vet_request_confirm_page.dart'
 /// 限时支付屏（Story 3.5，`p-vet-timed-pay`，1.5min）。渠道选择（QRIS/PawCoin）+ 服务端权威倒计时 +
 /// **支付按钮全程可用**（倒计时中任意时刻可点）。DONE=PawCoin 即时成功跳会话 / PAYMENT_REQUIRED=现金轮询到账。
 ///
-/// 中断=**服务端权威即重播**（UX-DR14）：返回不本地删——退出后服务端支付窗超时扫描自动作废重播（3-4），
-/// 支付表单不丢。跳充值余额不足：`POST /pause` → 充值页 → 返回 `POST /resume` 顺延（A-4）。
+/// 中断=**主动取消**（0730 拍板，替代 UX-DR14 重播语义）：返回键即 cancel（删请求+释放兽医+
+/// 作废在途 intent），重新发起走全新排队。跳充值余额不足：`POST /pause` → 充值页 → 返回 `POST /resume` 顺延（A-4）。
 class VetTimedPayPage extends ConsumerStatefulWidget {
   const VetTimedPayPage({
     super.key,
@@ -242,10 +242,11 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop || _navigating) return;
-        // UX-DR14 待支付中断即重播：不本地删，提示后离开，服务端支付窗超时自动作废重播。
-        _navigating = true;
+        // 待支付按返回=主动取消（0730 拍板，UX-DR14 重播语义彻底退役）：删请求+释放兽医+
+        // 作废在途 intent——否则老请求残留 ACCEPTED_AWAIT_PAY 占用态，重新发起会命中
+        // alreadyActive 直跳付款页（跳过排队）。取消后重新发起即全新排队。
         showAppToast(context, l10n.vetPayInterruptHint);
-        context.go('/triage');
+        _cancelPay();
       },
       child: Scaffold(
         backgroundColor: AppColors.base,
