@@ -32,6 +32,10 @@ abstract class IdCardRepository {
 
   /// 为指定卡购买高清图下载（每卡独立，Story 6.7）。语义同 [purchaseHd]。
   Future<HdPurchaseResult> purchaseHdForCard(int cardId, HdPayChannel channel);
+
+  /// HD 下载当前定价（IDR，后台可配 → 实时下发，417 同类修复）。
+  /// 拉取失败/载荷异常**直接抛出**——UI 显示重试并禁用付款，不做本地兜底价。
+  Future<int> hdPrice();
 }
 
 class DioIdCardRepository implements IdCardRepository {
@@ -95,6 +99,16 @@ class DioIdCardRepository implements IdCardRepository {
     );
     return HdPurchaseResult.fromJson(res.data ?? const {});
   }
+
+  @override
+  Future<int> hdPrice() async {
+    final res = await dio.get<Map<String, dynamic>>(ApiPaths.meIdCardHdPricing);
+    final price = (res.data?['price'] as num?)?.toInt();
+    if (price == null || price <= 0) {
+      throw StateError('invalid id-card hd pricing payload');
+    }
+    return price;
+  }
 }
 
 final Provider<IdCardRepository> idCardRepositoryProvider =
@@ -104,6 +118,11 @@ final Provider<IdCardRepository> idCardRepositoryProvider =
 final FutureProvider<IdCardData?> idCardProvider = FutureProvider<IdCardData?>(
   (ref) => ref.read(idCardRepositoryProvider).getMyIdCard(),
 );
+
+/// HD 下载当前定价（后台可配实时下发，417 同类修复）。**无本地兜底价**：
+/// 失败为 AsyncError，付费抽屉显示重试并禁用付款按钮。
+final idCardHdPriceProvider = FutureProvider.autoDispose<int>(
+    (ref) => ref.read(idCardRepositoryProvider).hdPrice());
 
 /// 历史卡列表（Story 6.7，createdAt 倒序）。KTP 页进入即渲染此列表。
 final FutureProvider<List<IdCard>> idCardListProvider = FutureProvider<List<IdCard>>(

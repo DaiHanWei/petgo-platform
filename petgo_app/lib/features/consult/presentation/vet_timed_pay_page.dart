@@ -12,8 +12,8 @@ import '../../../shared/widgets/app_toast.dart';
 import '../../pawcoin/presentation/pawcoin_controller.dart';
 import '../../triage/presentation/widgets/triage_paywall.dart' show formatKoin;
 import '../data/consult_repository.dart';
-import 'vet_request_confirm_page.dart'
-    show ConsultPriceRetry, formatVetConsultIdr;
+import '../../../shared/widgets/price_load_retry.dart';
+import 'vet_request_confirm_page.dart' show formatVetConsultIdr;
 
 /// 限时支付屏（Story 3.5，`p-vet-timed-pay`，1.5min）。渠道选择（QRIS/PawCoin）+ 服务端权威倒计时 +
 /// **支付按钮全程可用**（倒计时中任意时刻可点）。DONE=PawCoin 即时成功跳会话 / PAYMENT_REQUIRED=现金轮询到账。
@@ -342,7 +342,7 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
                 if (priceAsync.hasError) ...[
                   const SizedBox(height: 14),
                   Center(
-                    child: ConsultPriceRetry(
+                    child: PriceLoadRetry(
                         key: const ValueKey('vetPayPriceRetry'),
                         onRetry: () => ref.invalidate(vetConsultPriceProvider)),
                   ),

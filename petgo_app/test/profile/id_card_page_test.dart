@@ -25,6 +25,9 @@ class _FakeIdCardRepo implements IdCardRepository {
   Future<HdPurchaseResult> purchaseHdForCard(int cardId, HdPayChannel channel) async =>
       const HdPurchaseResult(unlocked: true);
 
+  @override
+  Future<int> hdPrice() async => 5000; // 同步返回不碰 dio（避免 timer 残留）
+
   // 旧单卡端点（列表页不用，stub 兼容接口）。
   @override
   Future<IdCardData?> getMyIdCard() async => null;

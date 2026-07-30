@@ -164,6 +164,9 @@ class ApiPaths {
   /// 完整路径含 `/pet-profiles/me/id-cards`；旧路径漏前缀致列表恒 404（历史列表打不开）。已补齐。
   static const String meIdCards = '$base/pet-profiles/me/id-cards';
 
+  /// HD 下载当前定价（417 同类：展示价改后端实时下发，与扣费同源 pricing_config）。
+  static const String meIdCardHdPricing = '$base/pet-profiles/me/id-cards/pricing';
+
   /// 单卡快照详情（Story 6.7）。非本人 404。
   static String meIdCard(int cardId) => '$base/pet-profiles/me/id-cards/$cardId';
 

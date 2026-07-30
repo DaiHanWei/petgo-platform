@@ -16,7 +16,8 @@ import '../../media/data/oss_uploader.dart';
 import '../../media/domain/media_upload_use_case.dart';
 import '../data/consult_repository.dart';
 import '../domain/consult_request.dart';
-import 'vet_request_confirm_page.dart' show ConsultPriceRetry, formatVetConsultIdr;
+import '../../../shared/widgets/price_load_retry.dart';
+import 'vet_request_confirm_page.dart' show formatVetConsultIdr;
 
 /// 直连问诊病例填写页（Story F）。
 ///
@@ -261,7 +262,7 @@ class _ConsultCaseFormPageState extends ConsumerState<ConsultCaseFormPage> {
                       width: 14, height: 14,
                       child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.mint))),
               error: (_, _) => Center(
-                child: ConsultPriceRetry(
+                child: PriceLoadRetry(
                     key: const ValueKey('consultCasePriceRetry'),
                     onRetry: () => ref.invalidate(vetConsultPriceProvider)),
               ),
