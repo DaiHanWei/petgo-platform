@@ -12,6 +12,7 @@ import 'package:tailtopia/features/consult/presentation/consult_refresh.dart';
 import 'package:tailtopia/features/content/presentation/feed_controller.dart';
 import 'package:tailtopia/features/me/data/my_posts_repository.dart';
 import 'package:tailtopia/features/notify/data/notification_repository.dart';
+import 'package:tailtopia/features/profile/data/health_record_repository.dart';
 import 'package:tailtopia/features/profile/data/milestone_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/data/timeline_repository.dart';
@@ -158,6 +159,11 @@ void resetUserScopedCaches(WidgetRef ref) {
   ref.invalidate(timelineFirstPageProvider); // 成长档案：时间线首页
   ref.invalidate(archiveStatsProvider); // 成长档案 / 我的：统计栏
   ref.invalidate(milestoneListProvider); // 成长档案：里程碑
+  // bug 20260730-421 同类隐患：健康记录/日历/日详情是宠物维度缓存（非 autoDispose），
+  // 不登记则同设备换账号会看到上一用户的健康数据（隐私）。
+  ref.invalidate(healthListProvider); // 健康记录页
+  ref.invalidate(calendarMonthProvider); // 成长日记：日历（按月 family 整族失效）
+  ref.invalidate(dayDetailProvider); // 成长日记：日详情（按日 family 整族失效）
   ref.invalidate(myPostsProvider); // 我的：我的发布
   ref.invalidate(feedProvider); // 首页 Feed（按新用户宠物状态重过滤）
   ref.invalidate(unreadCountProvider); // 通知铃铛未读角标（bug 20260625-088：换账号防显示上个用户角标）

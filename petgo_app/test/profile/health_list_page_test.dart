@@ -96,4 +96,18 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('healthTypeDropdown')), findsNothing); // 未弹表单
   });
+
+  testWidgets('bug 428: 点问诊分类卡弹来源说明 toast（不再无响应）', (tester) async {
+    await _pump(tester, mixed);
+    await tester.tap(find.byKey(const ValueKey('healthCat_CONSULT')));
+    await tester.pump();
+    expect(
+        find.text(
+            'Consultation records are added automatically when you archive a consultation result'),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('healthTypeDropdown')), findsNothing); // 不弹添加表单
+    // toast 自动消退靠 Timer（2600ms）而非帧调度，显式推进时钟消费掉，避免残留 timer 判失败。
+    await tester.pump(const Duration(milliseconds: 2700));
+    await tester.pumpAndSettle();
+  });
 }
