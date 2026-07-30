@@ -28,4 +28,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     /** 概览看板（Story 9.10）：按账号类型计数（如虚拟账号数）。 */
     long countByAccountType(AccountType accountType);
 
+    /** 内容审核 story 4：违规重置默认昵称唯一性查重（DefaultNameGenerator）。 */
+    boolean existsByNickname(String nickname);
 }

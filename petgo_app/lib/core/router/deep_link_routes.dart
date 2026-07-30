@@ -55,6 +55,22 @@ class DeepLinkRoutes {
         return growthArchive;
       case 'MILESTONE_NODE':
         return milestoneList;
+      case 'NAME_RESET':
+        // 名称违规重置（内容审核 cm-4）：单一 NAME_RESET 类型，targetRef 区分昵称 vs 宠物名。
+        // 宠物名 targetRef=cardToken → 宠物档案编辑页（V1 单宠物自解析，不拼 token 入路径）；
+        // "NICKNAME" 或缺失 → 我的页（昵称编辑底抽屉入口，安全兜底）。
+        // 走 targetRef 而非随机 token（[notify 跳转改用 targetRef] 教训）。通知文案本地化 arb 归 cm-7（TODO）。
+        return (targetRef == null || targetRef.isEmpty || targetRef == 'NICKNAME')
+            ? '/me'
+            : '/profile/edit';
+      case 'AVATAR_RESET':
+        // 头像违规重置（内容审核 cm-5）：单一 AVATAR_RESET 类型，targetRef 区分用户头像 vs 宠物头像。
+        // 用户头像 "USER_AVATAR" 或缺失 → 我的页（编辑资料底抽屉「Ganti Foto」换头像入口，安全兜底）；
+        // 宠物头像 targetRef=cardToken → 宠物档案编辑页（换头像入口，V1 单宠物自解析，不拼 token 入路径）。
+        // 走 targetRef 而非随机 token（[notify 跳转改用 targetRef] 教训）。通知文案本地化 arb 归 cm-7（TODO）。
+        return (targetRef == null || targetRef.isEmpty || targetRef == 'USER_AVATAR')
+            ? '/me'
+            : '/profile/edit';
     }
     // 退款被驳回：refund 详情页以 extra 对象寻址、无 token 路由 → 落退款列表（安全落点）。
     if (type == 'REFUND_REJECTED') return '/me/refunds';
@@ -73,7 +89,13 @@ class DeepLinkRoutes {
         return '/me/support-tickets/$targetRef';
       case 'CSAT_SURVEY':
         return '/me/support-tickets/$targetRef/csat';
+      case 'CONTENT_REMOVED':
+        // 内容下架（内容审核 cm-3 评论 / cm-6 举报下架 / 既有帖子下架）：targetRef=postId → 作者本人可见的内容详情。
+        // 帖子/评论都用 postId，App 无法区分 → 统一落帖子详情（评论仍在该帖内可见）。
+        return '/content/$targetRef';
       default:
+        // CONTENT_REVIEW_REJECTED / CONTENT_REVIEW_TIMED_OUT / REPORT_REVIEWED：
+        // targetRef=null 已在上方短路兜底（无深链，点击不跳）；此处为其它未知类兜底。
         return notificationsCenter;
     }
   }

@@ -61,9 +61,10 @@ public class FeedService {
      * @param petStatus 调用者宠物状态（HAS_PET/PLANNING/ENTHUSIAST）；null = 游客（视作全显）
      * @param category  分类 Tab（ALL/DAILY/GROWTH_MOMENT/KNOWLEDGE）
      * @param cursor    上一批末尾游标 token；null = 首批
+     * @param viewerId  当前登录用户 id（游客为 null）；非空则排除「本人已举报的帖」（内容审核 cm-6 §5.4）
      */
     @Transactional(readOnly = true)
-    public FeedPageResponse loadFeed(String petStatus, String category, String cursor) {
+    public FeedPageResponse loadFeed(String petStatus, String category, String cursor, Long viewerId) {
         boolean excludeGrowth = STATUS_PLAN_TO_ADOPT.equals(petStatus);
         FeedCategory cat = FeedCategory.parse(category);
         ContentType type = cat.toContentType();
@@ -74,6 +75,7 @@ public class FeedService {
         // 多取一条以判定 hasMore（不漏不重）。
         List<ContentPost> rows = posts.findFeed(
                 excludeGrowth, type, requirePet,
+                viewerId != null, viewerId,
                 decoded != null,
                 decoded == null ? null : decoded.createdAt(),
                 decoded == null ? null : decoded.id(),

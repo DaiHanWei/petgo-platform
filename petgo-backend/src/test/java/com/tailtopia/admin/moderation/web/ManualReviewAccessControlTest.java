@@ -92,6 +92,10 @@ class ManualReviewAccessControlTest {
         controller.approve(admin(), 5L, new RedirectAttributesModelMap());
     }
 
+    private void changePriority() {
+        controller.changePriority(admin(), 5L, "P0", new RedirectAttributesModelMap());
+    }
+
     @Test
     void queueDeniedForNonSuperAdmin() {
         auth("ROLE_ADMIN", "content.takedown"); // 有处置权但非超管 → 入口仍拒
@@ -132,5 +136,18 @@ class ManualReviewAccessControlTest {
     void approveAllowedForSuperAdmin() {
         auth("ROLE_ADMIN", "ROLE_SUPER_ADMIN");
         assertThatCode(this::approve).doesNotThrowAnyException();
+    }
+
+    // story 8：改优先级为处置权（content.takedown / 超管），与通过/拒绝同级（AC4/AC13）。
+    @Test
+    void changePriorityDeniedWithoutTakedown() {
+        auth("ROLE_ADMIN", "content.restore");
+        assertThatThrownBy(this::changePriority).isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void changePriorityAllowedWithTakedown() {
+        auth("ROLE_ADMIN", "content.takedown");
+        assertThatCode(this::changePriority).doesNotThrowAnyException();
     }
 }

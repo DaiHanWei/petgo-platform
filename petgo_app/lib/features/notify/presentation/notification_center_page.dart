@@ -227,6 +227,12 @@ class _NotificationTile extends StatefulWidget {
 class _NotificationTileState extends State<_NotificationTile> {
   bool _expanded = false;
 
+  /// 变体派生（内容审核 cm-7）：NAME_RESET/AVATAR_RESET 按 targetRef 判别主体是用户还是宠物。
+  /// 后端约定 targetRef="NICKNAME"（昵称）/"USER_AVATAR"（用户头像）→ 用户变体；
+  /// 否则为宠物 cardToken → 宠物变体。App 据此选 body 键（不渲染后端串）。
+  bool get _isUserSubject =>
+      widget.item.targetRef == 'NICKNAME' || widget.item.targetRef == 'USER_AVATAR';
+
   /// 圆角方形彩色图标块配色（按 type）：兽医薄荷 / 点赞红 / 评论紫 / 里程碑绿 / 生日金。
   (IconData, Color, Color) get _iconStyle => switch (widget.item.type) {
     'VET_REPLY' || 'CONSULT_CLOSED' => (
@@ -287,6 +293,12 @@ class _NotificationTileState extends State<_NotificationTile> {
       AppColors.mint,
       AppColors.cream2,
     ),
+    // 审核类（cm-7）：名称/头像重置与审核超时用中性警示琥珀（盾牌+叹号）。
+    'NAME_RESET' || 'AVATAR_RESET' || 'CONTENT_REVIEW_TIMED_OUT' => (
+      Icons.gpp_maybe_rounded,
+      AppColors.gold,
+      AppColors.goldTint,
+    ),
     _ => (Icons.notifications_rounded, AppColors.mint, AppColors.cream2),
   };
 
@@ -306,6 +318,10 @@ class _NotificationTileState extends State<_NotificationTile> {
     'CONTENT_REVIEW_REJECTED' => l10n.notifyTypeReviewRejected,
     'CONTENT_REMOVED' => l10n.notifyTypeContentRemoved,
     'REPORT_REVIEWED' => l10n.notifyTypeReportReviewed,
+    // 审核类（cm-7）。
+    'NAME_RESET' => l10n.notifyTypeNameReset,
+    'AVATAR_RESET' => l10n.notifyTypeAvatarReset,
+    'CONTENT_REVIEW_TIMED_OUT' => l10n.notifyTypeReviewTimedOut,
     // 未知类型兜底：中性「系统通知」，不再复用页面标题（bug 20260729-391 的「克隆卡」观感来源）。
     _ => l10n.notifyTypeSystem,
   };
@@ -327,6 +343,12 @@ class _NotificationTileState extends State<_NotificationTile> {
     'CONTENT_REVIEW_REJECTED' => l10n.notifyBodyReviewRejected,
     'CONTENT_REMOVED' => l10n.notifyBodyContentRemoved,
     'REPORT_REVIEWED' => l10n.notifyBodyReportReviewed,
+    // 审核类（cm-7）：名称/头像按 targetRef 选 用户/宠物 变体。
+    'NAME_RESET' =>
+        _isUserSubject ? l10n.notifyBodyNameResetUser : l10n.notifyBodyNameResetPet,
+    'AVATAR_RESET' =>
+        _isUserSubject ? l10n.notifyBodyAvatarResetUser : l10n.notifyBodyAvatarResetPet,
+    'CONTENT_REVIEW_TIMED_OUT' => l10n.notifyBodyReviewTimedOut,
     // 未知类型兜底：中性正文，不再复用空态提示串（那本身就是个 bug）。
     _ => l10n.notifyBodySystem,
   };

@@ -45,11 +45,15 @@ class AccountDeletionServiceTest {
     @Mock MediaDeletionService mediaDeletion;
     @Mock TencentImClient imClient;
     @Mock ApplicationEventPublisher events;
+    @Mock com.tailtopia.content.service.ContentService contentService;
+    @Mock com.tailtopia.admin.moderation.service.ManualReviewService reviewService;
+    @Mock com.tailtopia.moderation.violation.service.ViolationCountService violationCountService;
 
     private AccountDeletionService service() {
         return new AccountDeletionService(deletions, profileDeletion, triageDeletion,
                 consultAnonymization, notificationDeletion, pawCoinDeletion, authDeletion,
-                mediaDeletion, imClient, events);
+                mediaDeletion, imClient, events,
+                contentService, reviewService, violationCountService);
     }
 
     private AccountDeletion pending(long id, long userId) {

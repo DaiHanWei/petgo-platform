@@ -62,14 +62,19 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
       if (!mounted) return;
       final l10n = AppLocalizations.of(context);
       // 回复态遇 404 → 父评论已被删除（评论从列表点出，加载后被删才会 404）：给专属提示，别再吞成通用「重试」。
-      final status = e is DioException ? ProblemDetail.fromDioException(e)?.status : null;
+      final problem = e is DioException ? ProblemDetail.fromDioException(e) : null;
+      final status = problem?.status;
       if (parentId != null && status == 404) {
         _controller.clear();
         ref.read(replyTargetProvider.notifier).clear(); // 退出回复态（父已不存在，重试无意义）
         ref.read(commentsRefreshProvider.notifier).bump(); // 刷新评论区，让已删除的父评论从列表消失
         showAppToast(context, l10n.commentReplyTargetDeleted);
+      } else if (problem?.typeSlug == 'comment-blocked') {
+        // story 3（G1/F13）：内容审核拦截（L1 或风险 ≥0.8，422 COMMENT_BLOCKED）→ **保留输入与回复态**，
+        // 提示修改后重试（区别于网络失败的 commentSendFailed；不区分 L1/≥0.8）。
+        showAppToast(context, l10n.commentModerationBlocked);
       } else {
-        // AC3（F13）：发送失败（网络/服务器/422）→ 提示重试，**保留输入与回复态**，可直接重试。
+        // AC3（F13）：发送失败（网络/服务器/其他 422）→ 提示重试，**保留输入与回复态**，可直接重试。
         showAppToast(context, l10n.commentSendFailed);
       }
     } finally {

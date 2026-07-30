@@ -11,23 +11,28 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
+import com.tailtopia.admin.moderation.read.ViolationType;
 import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.domain.DeleteReason;
 import com.tailtopia.content.service.ContentService;
 import com.tailtopia.moderation.service.ReportService;
+import com.tailtopia.moderation.violation.service.ViolationCountService;
 import com.tailtopia.shared.error.AppException;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-/** L0：内容管理 service（Story 4.2）——下架必填原因、下架/恢复委托 + 审计强制副作用。 */
+/** L0：内容管理 service（Story 4.2）——下架必填原因、下架/恢复委托 + 审计强制副作用 + 违规计数（story 9，幂等）。 */
 class AdminContentManageServiceTest {
 
     private ContentService contentService;
     private AdminAuditService auditService;
     private ReportService reportService;
+    private ViolationCountService violationCountService;
     private AdminContentManageService service;
 
     @BeforeEach
@@ -35,7 +40,14 @@ class AdminContentManageServiceTest {
         contentService = mock(ContentService.class);
         auditService = mock(AdminAuditService.class);
         reportService = mock(ReportService.class);
-        service = new AdminContentManageService(contentService, auditService, reportService);
+        violationCountService = mock(ViolationCountService.class);
+        service = new AdminContentManageService(contentService, auditService, reportService,
+                violationCountService);
+    }
+
+    private void stubSummary(long postId, long authorId, boolean deleted) {
+        when(contentService.findSummary(postId)).thenReturn(Optional.of(
+                new ContentService.PostSummary(postId, ContentType.DAILY, "x", deleted, authorId)));
     }
 
     @Test
@@ -60,6 +72,21 @@ class AdminContentManageServiceTest {
         verify(reportService).resolvePendingForPost(5L, 1L);
         verify(auditService).record(eq(1L), eq(AuditActions.CONTENT_TAKEN_DOWN), eq("CONTENT_POST"),
                 eq("5"), contains("垃圾广告"));
+    }
+
+    @Test
+    void takedownOfLivePostRecordsPostViolationOnce() {
+        stubSummary(5L, 42L, false); // 未删的活帖 → 真实下架
+        service.takedown(5L, "垃圾广告", 1L);
+        // story 9 §5.1：巡查下架 = 人工判定违规 → 累加作者 POST 计数一次。
+        verify(violationCountService).record(42L, ViolationType.POST);
+    }
+
+    @Test
+    void takedownOfAlreadyDeletedDoesNotRecord() {
+        stubSummary(5L, 42L, true); // 已删帖再下架 = no-op → 不重复计数（AC-8 幂等）。
+        service.takedown(5L, "垃圾广告", 1L);
+        verify(violationCountService, never()).record(anyLong(), any());
     }
 
     @Test

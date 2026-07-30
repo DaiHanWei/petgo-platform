@@ -39,15 +39,15 @@ public class ContentDetailController {
     }
 
     @GetMapping("/api/v1/content-posts/{id}/comments")
-    public CommentPageResponse comments(@PathVariable long id,
+    public CommentPageResponse comments(@AuthenticationPrincipal Jwt jwt, @PathVariable long id,
             @RequestParam(value = "cursor", required = false) String cursor) {
-        return commentQueryService.topLevel(id, cursor);
+        return commentQueryService.topLevel(id, cursor, viewerId(jwt));
     }
 
     @GetMapping("/api/v1/comments/{parentId}/replies")
-    public CommentPageResponse replies(@PathVariable long parentId,
+    public CommentPageResponse replies(@AuthenticationPrincipal Jwt jwt, @PathVariable long parentId,
             @RequestParam(value = "cursor", required = false) String cursor) {
-        return commentQueryService.replies(parentId, cursor);
+        return commentQueryService.replies(parentId, cursor, viewerId(jwt));
     }
 
     /** 登录用户 id（游客 null）。 */

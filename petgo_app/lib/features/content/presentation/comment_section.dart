@@ -230,6 +230,8 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
       comment: c,
       name: name,
       replyLabel: l10n.detailReply,
+      // story 3：仅作者会收到 TAKEN_DOWN/REJECTED 行 → 渲染「仅你可见」灰标签（VISIBLE/UNDER_REVIEW 无标签，D-CM2）。
+      takenDownLabel: c.isTakenDownForAuthor ? l10n.commentTakenDownSelfOnly : null,
       canDelete: _canDelete(c),
       onReply: () =>
           ref.read(replyTargetProvider.notifier).set(ReplyTarget(parentId: c.id, toName: name)),
@@ -246,6 +248,7 @@ class _CommentTile extends StatelessWidget {
     required this.canDelete,
     required this.onReply,
     required this.onDelete,
+    this.takenDownLabel,
   });
 
   final Comment comment;
@@ -254,6 +257,9 @@ class _CommentTile extends StatelessWidget {
   final bool canDelete;
   final VoidCallback onReply;
   final VoidCallback onDelete;
+
+  /// 非空 = 该评论被下架/移除、仅作者可见 → 渲染灰态提示标签（story 3）。
+  final String? takenDownLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -271,6 +277,15 @@ class _CommentTile extends StatelessWidget {
           Text(name, style: AppTypography.caption.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: AppSpacing.xxs),
           Text(comment.body, style: AppTypography.body),
+          if (takenDownLabel != null)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.xxs),
+              child: Text(
+                takenDownLabel!,
+                key: ValueKey('commentTakenDown_${comment.id}'),
+                style: AppTypography.micro.copyWith(color: AppColors.textTertiary),
+              ),
+            ),
           Row(
             children: [
               GestureDetector(

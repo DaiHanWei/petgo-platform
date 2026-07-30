@@ -30,20 +30,29 @@ public class ContentFeedController {
     public FeedPageResponse feed(@AuthenticationPrincipal Jwt jwt,
             @RequestParam(value = "cursor", required = false) String cursor,
             @RequestParam(value = "category", required = false) String category) {
-        String petStatus = resolvePetStatus(jwt);
-        return feedService.loadFeed(petStatus, category, cursor);
+        Long viewerId = viewerId(jwt);
+        String petStatus = resolvePetStatus(viewerId);
+        // 内容审核 cm-6 §5.4：登录用户传 viewerId → 后端权威排除本人已举报的帖；游客 null = 不过滤。
+        return feedService.loadFeed(petStatus, category, cursor, viewerId);
     }
 
-    /** 登录用户取宠物状态（HAS_PET/PLANNING/ENTHUSIAST）；游客（无 JWT / 无效）返回 null = 全显。 */
-    private String resolvePetStatus(Jwt jwt) {
+    /** 登录用户 id（游客 / 无效 JWT → null）。 */
+    private static Long viewerId(Jwt jwt) {
         if (jwt == null || jwt.getSubject() == null) {
             return null;
         }
         try {
-            long userId = Long.parseLong(jwt.getSubject());
-            return accountQueryService.petStatusOf(userId).orElse(null);
+            return Long.parseLong(jwt.getSubject());
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    /** 登录用户取宠物状态（HAS_PET/PLANNING/ENTHUSIAST）；游客（viewerId null）返回 null = 全显。 */
+    private String resolvePetStatus(Long viewerId) {
+        if (viewerId == null) {
+            return null;
+        }
+        return accountQueryService.petStatusOf(viewerId).orElse(null);
     }
 }

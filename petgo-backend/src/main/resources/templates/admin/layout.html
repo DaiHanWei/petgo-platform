@@ -17,8 +17,8 @@
         <a th:href="@{/admin/dashboard}" th:classappend="${active == 'dashboard'} ? 'active'"
            th:text="#{admin.nav.dashboard}">概览</a>
         <details class="nav-section"
-                 th:attr="open=${active == 'seed' or active == 'reports' or active == 'content' or active == 'comments' or active == 'manual-review' or active == 'users'} ? 'open' : null">
-            <summary th:classappend="${active == 'seed' or active == 'reports' or active == 'content' or active == 'comments' or active == 'manual-review' or active == 'users'} ? 'active'"
+                 th:attr="open=${active == 'seed' or active == 'reports' or active == 'content' or active == 'comments' or active == 'manual-review' or active == 'name-avatar-review' or active == 'users'} ? 'open' : null">
+            <summary th:classappend="${active == 'seed' or active == 'reports' or active == 'content' or active == 'comments' or active == 'manual-review' or active == 'name-avatar-review' or active == 'users'} ? 'active'"
                      th:text="#{admin.nav.group.content}">内容</summary>
             <div class="nav-sub">
                 <a th:href="@{/admin/seed-post}" th:classappend="${active == 'seed'} ? 'active'"
@@ -34,6 +34,9 @@
                 <a sec:authorize="hasRole('SUPER_ADMIN')"
                    th:href="@{/admin/manual-review}" th:classappend="${active == 'manual-review'} ? 'active'"
                    th:text="#{admin.nav.review}">人工审核</a>
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')"
+                   th:href="@{/admin/name-avatar-review}" th:classappend="${active == 'name-avatar-review'} ? 'active'"
+                   th:text="#{admin.nav.nameAvatar}">名称/头像审核</a>
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.view')"
                    th:href="@{/admin/users}" th:classappend="${active == 'users'} ? 'active'"
                    th:text="#{admin.nav.users}">用户</a>
