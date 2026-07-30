@@ -14,4 +14,12 @@ public interface ManualReviewGate {
 
     /** 将一条挂起内容入人工审核队列（PENDING）。仅在 {@link #enabled()} 为 true 的挂起路径调用。 */
     void enqueue(long contentId);
+
+    /**
+     * 将一条三方降级挂起评论入人工审核队列（PENDING，{@code content_type=COMMENT}，捕获 {@code contentVersion}）。
+     *
+     * <p><b>不受 {@link #enabled()} 开关门控</b>：评论降级入队是 fail-closed 安全属性，必须无条件生效
+     * （否则降级评论会静默永久挂起或错误放行）。开关仅是 story 2 帖子高风险自动路由的激活位。
+     */
+    void enqueueComment(long commentId, int contentVersion);
 }

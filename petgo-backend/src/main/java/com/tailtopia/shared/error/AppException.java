@@ -70,4 +70,12 @@ public class AppException extends RuntimeException {
     public static AppException contentImageBlocked(String detail) {
         return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.CONTENT_IMAGE_BLOCKED, detail);
     }
+
+    /**
+     * 内容审核 story 3：评论发送同步过滤命中（L1 硬拦截或风险 ≥0.8，422）。从未落库、不发事件、不入队；
+     * 前端按 error type 映射单一本地化 toast（不展示 detail 原文，RFC9457 护栏）。
+     */
+    public static AppException commentBlocked(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.COMMENT_BLOCKED, detail);
+    }
 }

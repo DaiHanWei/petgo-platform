@@ -61,6 +61,45 @@ class ReportServiceTest {
     }
 
     @Test
+    void singleIllegalReportTriggersP0PreDisposal() {
+        // CM4 / AC-B7：单个 ILLEGAL 原因即触发 P0（不必等 10 次）。
+        when(reports.existsByPostIdAndReporterId(1L, 9L)).thenReturn(false);
+        when(reports.countByPostId(1L)).thenReturn(1L);
+        service.submit(1L, 9L, ReportReason.ILLEGAL);
+        verify(contentService).applyReportHoldIfPublished(1L);
+    }
+
+    @Test
+    void tenDistinctReportersTriggersP0PreDisposal() {
+        // AC-B6：含本次达 10 → P0 自动预处置。
+        when(reports.existsByPostIdAndReporterId(1L, 9L)).thenReturn(false);
+        when(reports.existsByPostIdAndReasonType(1L, ReportReason.ILLEGAL)).thenReturn(false);
+        when(reports.countByPostId(1L)).thenReturn(10L);
+        service.submit(1L, 9L, ReportReason.HARASSMENT);
+        verify(contentService).applyReportHoldIfPublished(1L);
+    }
+
+    @Test
+    void p1RangeDoesNotTriggerPreDisposal() {
+        // AC-B5：3–9（P1）不自动预处置。
+        when(reports.existsByPostIdAndReporterId(1L, 9L)).thenReturn(false);
+        when(reports.existsByPostIdAndReasonType(1L, ReportReason.ILLEGAL)).thenReturn(false);
+        when(reports.countByPostId(1L)).thenReturn(5L);
+        service.submit(1L, 9L, ReportReason.INAPPROPRIATE);
+        verify(contentService, never()).applyReportHoldIfPublished(org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    void singleNonIllegalReportIsP2NoPreDisposal() {
+        // AC-B5：单次非 ILLEGAL（P2）不改可见性。
+        when(reports.existsByPostIdAndReporterId(1L, 9L)).thenReturn(false);
+        when(reports.existsByPostIdAndReasonType(1L, ReportReason.ILLEGAL)).thenReturn(false);
+        when(reports.countByPostId(1L)).thenReturn(1L);
+        service.submit(1L, 9L, ReportReason.MISINFO);
+        verify(contentService, never()).applyReportHoldIfPublished(org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
     void markUpdatesStatusAndHandler() {
         ContentReport r = ContentReport.create(1L, 9L, ReportReason.MISINFO);
         when(reports.findById(5L)).thenReturn(java.util.Optional.of(r));

@@ -20,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 /**
  * L0 单元测试（无 DB）：昵称/状态更新 + onboarding 完成 + 校验（AC1/AC2/AC3）。
@@ -32,6 +33,9 @@ class MeServiceTest {
 
     @Mock
     PetProfileRepository petProfiles;
+
+    @Mock
+    ApplicationEventPublisher events;
 
     @InjectMocks
     MeService meService;

@@ -7,18 +7,23 @@ import '../../../l10n/app_localizations.dart';
 import '../data/detail_repository.dart';
 import '../domain/report_reason.dart';
 
-/// 举报入口（Story 3.7，FR-25）。未登录先触发 FR-0C；登录态弹类型单选 sheet 提交。
-/// 详情「···」举报项与 Feed 卡片长按均复用此入口。提交成功 toast「已收到…」。
-void openReport(BuildContext context, WidgetRef ref, int postId) {
+/// 举报入口（Story 3.7，FR-25 · 内容审核 cm-6 §6）。未登录先触发 FR-0C；登录态弹类型单选 sheet 提交。
+/// 详情「···」举报项与 Feed 卡片长按均复用此入口。
+///
+/// [onReported]（cm-6）：举报成功且用户关闭成功态后回调——Feed 侧乐观移除卡片、详情侧 pop 回列表
+/// （该帖对本人已「不存在」，后端 §5.4 亦已过滤）。仅成功路径触发（成功态点关闭）；表单取消/未提交不触发。
+void openReport(BuildContext context, WidgetRef ref, int postId, {VoidCallback? onReported}) {
   // 门控：未登录 → FR-0C，不弹 sheet。
   final allowed = requireLogin(ref, context, onAllowed: () {});
   if (!allowed) return;
-  showModalBottomSheet<void>(
+  showModalBottomSheet<bool>(
     context: context,
     backgroundColor: AppColors.surface,
     isScrollControlled: true,
     builder: (_) => _ReportSheet(postId: postId, ref: ref),
-  );
+  ).then((submitted) {
+    if (submitted == true) onReported?.call();
+  });
 }
 
 class _ReportSheet extends StatefulWidget {
@@ -181,7 +186,8 @@ class _ReportSheetState extends State<_ReportSheet> {
                 padding: const EdgeInsets.symmetric(vertical: 13),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
-              onPressed: () => Navigator.of(context).pop(),
+              // cm-6：成功态关闭返回 true → openReport 触发 onReported（乐观移除 / pop + toast）。
+              onPressed: () => Navigator.of(context).pop(true),
               child: Text(l10n.commonClose),
             ),
           ),

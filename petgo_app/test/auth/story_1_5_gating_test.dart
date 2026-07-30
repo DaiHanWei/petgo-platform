@@ -150,5 +150,10 @@ void main() {
     expect(find.byType(LoginHardDialog), findsNothing);
     // 切到问诊 hub（bug 20260706-248：顶部 title Consult→Health；tab 亦为 Health，故 findsWidgets）。
     expect(find.text('Health'), findsWidgets);
+
+    // 卸载 widget 树：问诊 hub 常驻脉冲动画等在测试结束仍活跃会触发 !timersPending；
+    // 卸载令 AnimationController/Ticker/timer 随 dispose 取消，收敛后再结束。
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
   });
 }

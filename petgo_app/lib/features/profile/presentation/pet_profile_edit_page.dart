@@ -63,6 +63,11 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
 
   bool get _canSubmit => _nameController.text.trim().isNotEmpty && !_submitting && !_uploading;
 
+  /// 换宠物头像 —— 选图 → 公开桶直传 → 回填 _avatarUrl（保存时 PATCH）。
+  ///
+  /// 内容审核 cm-5（D-CM2 / 方案 §3.4，有意权衡）：头像更换后**立即对所有人可见，不加「审核中」标签/遮挡**——
+  /// 后端「先放行、后异步图像审核」，可见窗口期为本版本有意取舍（异步 + 举报兜底，不做「先审后显」）。
+  /// 判违规则后端重置为平台默认头像常量并推 AVATAR_RESET 通知，前端照常渲染。切勿在此新增审核态 UI。
   Future<void> _pickAvatar() async {
     setState(() => _uploading = true);
     try {

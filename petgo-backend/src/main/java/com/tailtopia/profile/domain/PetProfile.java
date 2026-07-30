@@ -41,6 +41,13 @@ public class PetProfile {
     @Column(name = "name", nullable = false, length = 20)
     private String name;
 
+    /**
+     * 宠物名当前是否为违规重置生成的系统默认编码名（{@code Pet_<hex>}，内容审核 story 4，D-CM4）。
+     * 用户主动改新名时清 false。与注销匿名化正交。
+     */
+    @Column(name = "is_system_default_name", nullable = false)
+    private boolean systemDefaultName = false;
+
     @Column(name = "breed", length = 60)
     private String breed;
 
@@ -119,6 +126,16 @@ public class PetProfile {
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    /** 宠物名是否为违规重置的系统默认编码名（内容审核 story 4）。 */
+    public boolean isSystemDefaultName() {
+        return systemDefaultName;
+    }
+
+    /** 违规重置置 true；用户主动改新名时清 false。 */
+    public void setSystemDefaultName(boolean systemDefaultName) {
+        this.systemDefaultName = systemDefaultName;
     }
 
     public String getBreed() {

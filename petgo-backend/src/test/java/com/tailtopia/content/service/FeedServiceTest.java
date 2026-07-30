@@ -68,35 +68,40 @@ class FeedServiceTest {
 
     @Test
     void planningExcludesGrowthMoment() {
-        when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(Boolean.class), any(), any(), any()))
+        when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(Boolean.class), any(),
+                any(Boolean.class), any(), any(), any()))
                 .thenReturn(List.of());
-        service.loadFeed("PLANNING", "ALL", null);
+        service.loadFeed("PLANNING", "ALL", null, null);
 
         ArgumentCaptor<Boolean> excludeGrowth = ArgumentCaptor.forClass(Boolean.class);
+        // 9 参：excludeGrowth, type, requirePet, hasViewer, viewerId, hasCursor, cursorTs, cursorId, pageable。
         org.mockito.Mockito.verify(posts).findFeed(excludeGrowth.capture(), isNull(),
-                eq(false), eq(false), isNull(), isNull(), any(Pageable.class));
+                eq(false), eq(false), isNull(), eq(false), isNull(), isNull(), any(Pageable.class));
         assertThat(excludeGrowth.getValue()).isTrue();
     }
 
     @Test
     void hasPetAndGuestDoNotExcludeGrowth() {
-        when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(Boolean.class), any(), any(), any()))
+        when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(Boolean.class), any(),
+                any(Boolean.class), any(), any(), any()))
                 .thenReturn(List.of());
-        service.loadFeed("HAS_PET", "ALL", null);
-        service.loadFeed(null, "ALL", null); // 游客
+        service.loadFeed("HAS_PET", "ALL", null, null);
+        service.loadFeed(null, "ALL", null, null); // 游客
 
         org.mockito.Mockito.verify(posts, org.mockito.Mockito.times(2))
-                .findFeed(eq(false), isNull(), eq(false), eq(false), isNull(), isNull(), any(Pageable.class));
+                .findFeed(eq(false), isNull(), eq(false), eq(false), isNull(), eq(false), isNull(), isNull(),
+                        any(Pageable.class));
     }
 
     @Test
     void growthCategoryRequiresPetAndTypeFilter() {
-        when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(Boolean.class), any(), any(), any()))
+        when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(Boolean.class), any(),
+                any(Boolean.class), any(), any(), any()))
                 .thenReturn(List.of());
-        service.loadFeed("HAS_PET", "GROWTH_MOMENT", null);
+        service.loadFeed("HAS_PET", "GROWTH_MOMENT", null, null);
 
         org.mockito.Mockito.verify(posts).findFeed(eq(false), eq(ContentType.GROWTH_MOMENT),
-                eq(true), eq(false), isNull(), isNull(), any(Pageable.class));
+                eq(true), eq(false), isNull(), eq(false), isNull(), isNull(), any(Pageable.class));
     }
 
     @Test
@@ -106,10 +111,11 @@ class FeedServiceTest {
         List<ContentPost> rows = IntStream.range(0, 21)
                 .mapToObj(i -> post(100 - i, ContentType.DAILY, 1L, base.minusSeconds(i), null))
                 .toList();
-        when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(Boolean.class), any(), any(), any()))
+        when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(Boolean.class), any(),
+                any(Boolean.class), any(), any(), any()))
                 .thenReturn(rows);
 
-        FeedPageResponse page = service.loadFeed("HAS_PET", "ALL", null);
+        FeedPageResponse page = service.loadFeed("HAS_PET", "ALL", null, null);
         assertThat(page.items()).hasSize(20);
         assertThat(page.hasMore()).isTrue();
         assertThat(page.nextCursor()).isNotNull();
@@ -122,10 +128,11 @@ class FeedServiceTest {
     void lastPageHasNoMoreAndNoCursor() {
         List<ContentPost> rows = List.of(
                 post(2L, ContentType.DAILY, 1L, Instant.now(), List.of("https://cdn/a.jpg")));
-        when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(Boolean.class), any(), any(), any()))
+        when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(Boolean.class), any(),
+                any(Boolean.class), any(), any(), any()))
                 .thenReturn(rows);
 
-        FeedPageResponse page = service.loadFeed("HAS_PET", "ALL", null);
+        FeedPageResponse page = service.loadFeed("HAS_PET", "ALL", null, null);
         assertThat(page.items()).hasSize(1);
         assertThat(page.hasMore()).isFalse();
         assertThat(page.nextCursor()).isNull();
@@ -136,12 +143,13 @@ class FeedServiceTest {
     @Test
     void deletedAuthorAnonymizedInProjection() {
         List<ContentPost> rows = List.of(post(5L, ContentType.DAILY, 9L, Instant.now(), null));
-        when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(Boolean.class), any(), any(), any()))
+        when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(Boolean.class), any(),
+                any(Boolean.class), any(), any(), any()))
                 .thenReturn(rows);
         when(accounts.findAuthorViews(anyList()))
                 .thenReturn(Map.of(9L, AuthorView.anonymized(9L)));
 
-        FeedPageResponse page = service.loadFeed(null, "ALL", null);
+        FeedPageResponse page = service.loadFeed(null, "ALL", null, null);
         assertThat(page.items().get(0).authorDeleted()).isTrue();
         assertThat(page.items().get(0).authorNickname()).isNull();
         assertThat(page.items().get(0).authorAvatarUrl()).isNull();
@@ -150,14 +158,28 @@ class FeedServiceTest {
 
     @Test
     void cursorDecodedAndPassedToRepo() {
-        when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(Boolean.class), any(), any(), any()))
+        when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(Boolean.class), any(),
+                any(Boolean.class), any(), any(), any()))
                 .thenReturn(List.of());
         Instant ts = Instant.parse("2026-06-01T12:00:00Z");
         String cursor = new FeedCursor(ts, 50L).encode();
 
-        service.loadFeed("ENTHUSIAST", "DAILY", cursor);
+        service.loadFeed("ENTHUSIAST", "DAILY", cursor, null);
 
         org.mockito.Mockito.verify(posts).findFeed(eq(false), eq(ContentType.DAILY), eq(false),
-                eq(true), eq(ts), eq(50L), any(Pageable.class));
+                eq(false), isNull(), eq(true), eq(ts), eq(50L), any(Pageable.class));
+    }
+
+    @Test
+    void loggedInViewerThreadsViewerIdForReporterFilter() {
+        // 内容审核 cm-6 §5.4：登录用户 → hasViewer=true + viewerId 透传（后端排除本人已举报的帖）。
+        when(posts.findFeed(any(Boolean.class), any(), any(Boolean.class), any(Boolean.class), any(),
+                any(Boolean.class), any(), any(), any()))
+                .thenReturn(List.of());
+
+        service.loadFeed("HAS_PET", "ALL", null, 42L);
+
+        org.mockito.Mockito.verify(posts).findFeed(eq(false), isNull(), eq(false),
+                eq(true), eq(42L), eq(false), isNull(), isNull(), any(Pageable.class));
     }
 }

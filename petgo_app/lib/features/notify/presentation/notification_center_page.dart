@@ -160,7 +160,12 @@ class _NotificationTile extends StatelessWidget {
   final NotificationItem item;
   final VoidCallback onTap;
 
-  /// 圆角方形彩色图标块配色（按 type）：兽医薄荷 / 点赞红 / 评论紫 / 里程碑绿 / 生日金。
+  /// 变体派生（内容审核 cm-7）：NAME_RESET/AVATAR_RESET 按 targetRef 判别主体是用户还是宠物。
+  /// 后端约定 targetRef="NICKNAME"（昵称）/"USER_AVATAR"（用户头像）→ 用户变体；
+  /// 否则为宠物 cardToken → 宠物变体。App 据此选 body 键（不渲染后端串）。
+  bool get _isUserSubject => item.targetRef == 'NICKNAME' || item.targetRef == 'USER_AVATAR';
+
+  /// 圆角方形彩色图标块配色（按 type）：兽医薄荷 / 点赞红 / 评论紫 / 里程碑绿 / 生日金 / 审核警示琥珀。
   (IconData, Color, Color) get _iconStyle => switch (item.type) {
         'VET_REPLY' || 'CONSULT_CLOSED' =>
           (Icons.medical_services_rounded, AppColors.mint, AppColors.cream2),
@@ -173,6 +178,10 @@ class _NotificationTile extends StatelessWidget {
           (Icons.celebration_rounded, AppColors.gold, AppColors.goldTint),
         'MILESTONE_NODE' =>
           (Icons.emoji_events_rounded, AppColors.triageGreen, AppColors.momenBadgeBg),
+        // 审核类（cm-7）：中性/警示琥珀配色（盾牌+叹号），与点赞红/评论紫区分；不滥用变现禁区告警红。
+        'NAME_RESET' || 'AVATAR_RESET' || 'CONTENT_REVIEW_REJECTED' ||
+            'CONTENT_REVIEW_TIMED_OUT' || 'CONTENT_REMOVED' || 'REPORT_REVIEWED' =>
+          (Icons.gpp_maybe_rounded, AppColors.gold, AppColors.goldTint),
         _ => (Icons.notifications_rounded, AppColors.mint, AppColors.cream2),
       };
 
@@ -185,6 +194,13 @@ class _NotificationTile extends StatelessWidget {
         'PET_BIRTHDAY' => l10n.notifyTypePetBirthday,
         'COMPANION_ANNIVERSARY' => l10n.notifyTypeCompanionAnniversary,
         'MILESTONE_NODE' => l10n.notifyTypeMilestoneNode,
+        // 审核类（cm-7）。CONTENT_REMOVED 通用（帖子/评论 targetRef 都是 postId，无法区分）。
+        'NAME_RESET' => l10n.notifyTypeNameReset,
+        'AVATAR_RESET' => l10n.notifyTypeAvatarReset,
+        'CONTENT_REVIEW_REJECTED' => l10n.notifyTypeReviewRejected,
+        'CONTENT_REVIEW_TIMED_OUT' => l10n.notifyTypeReviewTimedOut,
+        'CONTENT_REMOVED' => l10n.notifyTypeContentRemoved,
+        'REPORT_REVIEWED' => l10n.notifyTypeReportReviewed,
         _ => l10n.notificationCenterTitle,
       };
 
@@ -198,6 +214,15 @@ class _NotificationTile extends StatelessWidget {
         'PET_BIRTHDAY' => l10n.notifyBodyPetBirthday,
         'COMPANION_ANNIVERSARY' => l10n.notifyBodyCompanionAnniversary,
         'MILESTONE_NODE' => l10n.notifyBodyMilestoneNode,
+        // 审核类（cm-7）：名称/头像按 targetRef 选 用户/宠物 变体；CONTENT_REMOVED 用通用文案。
+        'NAME_RESET' =>
+          _isUserSubject ? l10n.notifyBodyNameResetUser : l10n.notifyBodyNameResetPet,
+        'AVATAR_RESET' =>
+          _isUserSubject ? l10n.notifyBodyAvatarResetUser : l10n.notifyBodyAvatarResetPet,
+        'CONTENT_REVIEW_REJECTED' => l10n.notifyBodyReviewRejected,
+        'CONTENT_REVIEW_TIMED_OUT' => l10n.notifyBodyReviewTimedOut,
+        'CONTENT_REMOVED' => l10n.notifyBodyContentRemoved,
+        'REPORT_REVIEWED' => l10n.notifyBodyReportReviewed,
         _ => l10n.notificationEmptyHint,
       };
 

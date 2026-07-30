@@ -63,6 +63,32 @@ media:
     ttl-seconds: ${SIGNED_URL_TTL_SECONDS:300}
     upload-ttl-seconds: ${UPLOAD_URL_TTL_SECONDS:600}
 
+# 内容审核（内容审核 Story 1）：阿里云内容安全 green20220302 + 分层词库 + fail-closed 降级。
+# 凭证全部 env 注入，绝不入库 / 不落日志。mode=stub（默认，无凭证）走打桩客户端验评分/降级状态机（L0/L1）；
+# mode=live 才打真实阿里云内容安全（L2，需真实 AK + 印尼语实测）。AK 可复用 OSS 段 ALIYUN_ACCESS_KEY_*。
+app:
+  moderation:
+    mode: ${MODERATION_MODE:stub}
+    # 图审总开关（bug 20260729-404）：阿里云 ImageModeration 未开通期间置 false → 跳过图审按文本
+    # 结论路由（否则带图帖恒降级 fail-closed 压进 UNDER_REVIEW）；开通后移除该 env 恢复默认 true。
+    image-enabled: ${MODERATION_IMAGE_ENABLED:true}
+    risk-threshold: ${MODERATION_RISK_THRESHOLD:0.8}
+    text-timeout-ms: ${MODERATION_TEXT_TIMEOUT_MS:1000}
+    image-timeout-ms: ${MODERATION_IMAGE_TIMEOUT_MS:2000}
+    aliyun:
+      region: ${MODERATION_ALIYUN_REGION:ap-southeast-1}
+      endpoint: ${MODERATION_ALIYUN_ENDPOINT:green-cip.ap-southeast-1.aliyuncs.com}
+      access-key-id: ${MODERATION_ALIYUN_AK_ID:${ALIYUN_ACCESS_KEY_ID:}}
+      access-key-secret: ${MODERATION_ALIYUN_AK_SECRET:${ALIYUN_ACCESS_KEY_SECRET:}}
+      # 图像审核 service 码：大小模型融合图片审核（国际站 global 版，产品拍板 2026-07-29）。
+      image-service: ${MODERATION_ALIYUN_IMAGE_SERVICE:postImageCheckByVL_global}
+      # 文本审核 service 码。默认国际多语言标准版 text_standard；各账号控制台命名以实际为准，可 env 覆盖。
+      text-service: ${MODERATION_ALIYUN_TEXT_SERVICE:text_standard}
+    image-threshold:
+      porn: ${MODERATION_IMG_PORN:0.85}
+      violence: ${MODERATION_IMG_VIOLENCE:0.80}
+      contraband: ${MODERATION_IMG_CONTRABAND:0.75}
+
 spring:
   application:
     name: petgo-backend

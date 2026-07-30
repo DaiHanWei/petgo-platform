@@ -87,6 +87,59 @@ void main() {
     expect(find.byIcon(Icons.emoji_events_rounded), findsOneWidget);
   });
 
+  testWidgets('cm-7: NAME_RESET/AVATAR_RESET 按 targetRef 选 用户/宠物 变体文案', (tester) async {
+    await _pump(
+      tester,
+      const NotificationCenterPage(),
+      _FakeNotifyRepo(items: [
+        // 用户变体：targetRef=NICKNAME/USER_AVATAR
+        const NotificationItem(
+            type: 'NAME_RESET', title: 'x', deepLinkToken: 'n1', targetRef: 'NICKNAME', read: false),
+        const NotificationItem(
+            type: 'AVATAR_RESET', title: 'x', deepLinkToken: 'a1', targetRef: 'USER_AVATAR', read: false),
+        // 宠物变体：targetRef=cardToken
+        const NotificationItem(
+            type: 'NAME_RESET', title: 'x', deepLinkToken: 'n2', targetRef: 'card_abc', read: true),
+        const NotificationItem(
+            type: 'AVATAR_RESET', title: 'x', deepLinkToken: 'a2', targetRef: 'card_xyz', read: true),
+      ]),
+    );
+    // 用户变体
+    expect(find.text('Your username was reset to a default name for violating the Community Guidelines. Set a new one anytime.'), findsOneWidget);
+    expect(find.text('Your profile photo was reset to the default for violating the Community Guidelines. Upload a new one anytime.'), findsOneWidget);
+    // 宠物变体
+    expect(find.text("Your pet's name was reset to a default name for violating the Community Guidelines. Set a new one anytime."), findsOneWidget);
+    expect(find.text("Your pet's photo was reset to the default for violating the Community Guidelines. Upload a new one anytime."), findsOneWidget);
+    // 审核类专属警示图标（多条 → 至少若干个）。
+    expect(find.byIcon(Icons.gpp_maybe_rounded), findsWidgets);
+    // 契约：不渲染后端 title 串。
+    expect(find.text('x'), findsNothing);
+  });
+
+  testWidgets('cm-7: CONTENT_REMOVED 用通用文案（帖子/评论 postId 无法区分）+ 审核类标题本地化', (tester) async {
+    await _pump(
+      tester,
+      const NotificationCenterPage(),
+      _FakeNotifyRepo(items: [
+        const NotificationItem(
+            type: 'CONTENT_REMOVED', title: 'x', deepLinkToken: 'c1', targetRef: '42', read: false),
+        const NotificationItem(
+            type: 'CONTENT_REVIEW_REJECTED', title: 'x', deepLinkToken: 'c2', read: true),
+        const NotificationItem(
+            type: 'CONTENT_REVIEW_TIMED_OUT', title: 'x', deepLinkToken: 'c3', read: true),
+        const NotificationItem(
+            type: 'REPORT_REVIEWED', title: 'x', deepLinkToken: 'c4', read: true),
+      ]),
+    );
+    // 标题本地化（en）——审核类不落兜底串。
+    expect(find.text('Content hidden'), findsOneWidget);
+    expect(find.text('Post not published'), findsOneWidget);
+    expect(find.text("Post couldn't be published"), findsOneWidget);
+    expect(find.text('Report reviewed'), findsOneWidget);
+    // 通用 CONTENT_REMOVED body。
+    expect(find.text('Your content was found to violate the Community Guidelines and has been hidden from others. You can still see it on your page.'), findsOneWidget);
+  });
+
   testWidgets('AC1: 铃铛角标 >0 显示 / 0 隐藏', (tester) async {
     await _pump(tester, const Scaffold(body: NotificationBell()), _FakeNotifyRepo(unread: 5));
     expect(find.byKey(const ValueKey('notificationBell')), findsOneWidget);
