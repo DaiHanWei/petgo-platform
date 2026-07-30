@@ -16,7 +16,7 @@ import '../../media/data/oss_uploader.dart';
 import '../../media/domain/media_upload_use_case.dart';
 import '../data/consult_repository.dart';
 import '../domain/consult_request.dart';
-import 'vet_request_confirm_page.dart' show kVetConsultPriceIdr, formatVetConsultIdr;
+import 'vet_request_confirm_page.dart' show ConsultPriceRetry, formatVetConsultIdr;
 
 /// 直连问诊病例填写页（Story F）。
 ///
@@ -239,6 +239,8 @@ class _ConsultCaseFormPageState extends ConsumerState<ConsultCaseFormPage> {
   }
 
   Widget _submitBar(AppLocalizations l10n) {
+    // 后台可配价实时下发（bug 20260729-417）；无本地兜底——失败显示重试，价格未取到禁提交。
+    final priceAsync = ref.watch(vetConsultPriceProvider);
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.md),
       child: Column(
@@ -247,18 +249,29 @@ class _ConsultCaseFormPageState extends ConsumerState<ConsultCaseFormPage> {
           // 价格告知（D1 方案）：接单后才付款，本步不扣费——文案须说清，避免误以为提交即扣款。
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-            child: Text(
-              l10n.vetRequestPayAfterAccept(formatVetConsultIdr(kVetConsultPriceIdr)),
-              key: const ValueKey('consultCasePriceHint'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            child: priceAsync.when(
+              data: (price) => Text(
+                l10n.vetRequestPayAfterAccept(formatVetConsultIdr(price)),
+                key: const ValueKey('consultCasePriceHint'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+              loading: () => const Center(
+                  child: SizedBox(
+                      width: 14, height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.mint))),
+              error: (_, _) => Center(
+                child: ConsultPriceRetry(
+                    key: const ValueKey('consultCasePriceRetry'),
+                    onRetry: () => ref.invalidate(vetConsultPriceProvider)),
+              ),
             ),
           ),
           SizedBox(
             width: double.infinity,
             child: FilledButton(
               key: const ValueKey('consultCaseSubmit'),
-              onPressed: _submitting || _uploading ? null : _submit,
+              onPressed: _submitting || _uploading || !priceAsync.hasValue ? null : _submit,
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.mint,
                 foregroundColor: Colors.white,

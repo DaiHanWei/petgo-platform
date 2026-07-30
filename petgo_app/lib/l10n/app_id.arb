@@ -993,6 +993,8 @@
   "vetRequestNoPet": "Buat profil hewan dulu sebelum konsultasi.",
   "vetRequestPayAfterAccept": "{price} · Bayar setelah dokter mengambil kasus",
   "@vetRequestPayAfterAccept": { "placeholders": { "price": { "type": "String" } } },
+  "vetPriceLoadFailed": "Gagal memuat biaya",
+  "vetPriceRetry": "Coba lagi",
   "vetWaitingTitle": "Mencari dokter hewan…",
   "vetWaitingSubtitle": "Biasanya tersedia dalam 1 menit.\nMohon tunggu sebentar 🙏",
   "vetWaitingSearchLimit": "batas waktu pencarian 1 menit",

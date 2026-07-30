@@ -9,9 +9,6 @@ import '../../../shared/widgets/app_toast.dart';
 import '../data/consult_repository.dart';
 import '../domain/consult_request.dart';
 
-/// 单次兽医咨询价（IDR，与后端 CONSULT_UNIT_PRICE 默认对齐；9-2 后台落地后改后端下发）。
-const int kVetConsultPriceIdr = 50000;
-
 /// IDR 千分位手工格式（不引 intl locale，照 triage_paywall / recharge 惯例）。
 String formatVetConsultIdr(int v) {
   final s = v.toString();
@@ -58,6 +55,8 @@ class _VetRequestConfirmPageState extends ConsumerState<VetRequestConfirmPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    // 后台可配价实时下发（bug 20260729-417）；无本地兜底——失败显示重试，价格未取到禁发起。
+    final priceAsync = ref.watch(vetConsultPriceProvider);
     return Scaffold(
       backgroundColor: AppColors.base,
       appBar: AppBar(
@@ -104,10 +103,18 @@ class _VetRequestConfirmPageState extends ConsumerState<VetRequestConfirmPage> {
                         children: [
                           Text(l10n.vetRequestPriceLabel,
                               style: const TextStyle(fontSize: 14, color: AppColors.ink2)),
-                          Text(formatVetConsultIdr(kVetConsultPriceIdr),
-                              key: const ValueKey('vetRequestPrice'),
-                              style: const TextStyle(
-                                  fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.mint)),
+                          priceAsync.when(
+                            data: (price) => Text(formatVetConsultIdr(price),
+                                key: const ValueKey('vetRequestPrice'),
+                                style: const TextStyle(
+                                    fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.mint)),
+                            loading: () => const SizedBox(
+                                width: 18, height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.mint)),
+                            error: (_, _) => ConsultPriceRetry(
+                                key: const ValueKey('vetRequestPriceRetry'),
+                                onRetry: () => ref.invalidate(vetConsultPriceProvider)),
+                          ),
                         ],
                       ),
                     ),
@@ -121,7 +128,8 @@ class _VetRequestConfirmPageState extends ConsumerState<VetRequestConfirmPage> {
                 width: double.infinity,
                 child: FilledButton(
                   key: const ValueKey('vetRequestStart'),
-                  onPressed: _busy ? null : _start,
+                  // 价格未取到（加载中/失败）禁发起：用户必须先看到本次费用（bug 20260729-417）。
+                  onPressed: _busy || !priceAsync.hasValue ? null : _start,
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.mint,
                     foregroundColor: Colors.white,
@@ -137,6 +145,39 @@ class _VetRequestConfirmPageState extends ConsumerState<VetRequestConfirmPage> {
                 ),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 咨询价拉取失败的行内重试件（bug 20260729-417）：「加载失败 · 重试」，点击重拉。
+/// 确认页价格卡 / 病例表单价格提示 / 支付页共用——价格取不到时替代价格文本出现。
+class ConsultPriceRetry extends StatelessWidget {
+  const ConsultPriceRetry({super.key, required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return InkWell(
+      onTap: onRetry,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(l10n.vetPriceLoadFailed,
+                style: const TextStyle(fontSize: 12, color: AppColors.danger)),
+            const SizedBox(width: 6),
+            const Icon(Icons.refresh, size: 15, color: AppColors.mint),
+            const SizedBox(width: 2),
+            Text(l10n.vetPriceRetry,
+                style: const TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.mint)),
           ],
         ),
       ),

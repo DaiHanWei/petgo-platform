@@ -54,6 +54,9 @@ class _FakeConsultRepo extends ConsultRepository {
 
   @override
   Future<ConsultSession?> active() async => null;
+
+  @override
+  Future<int> vetConsultPrice() async => 50000; // 同步返回不碰 dio（避免 timer 残留）
 }
 
 void main() {
