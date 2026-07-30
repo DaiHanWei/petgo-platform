@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/config/legal_urls.dart';
@@ -120,8 +121,20 @@ class _VetMePageState extends ConsumerState<VetMePage> {
                       _settingsCard(l10n),
                       const SizedBox(height: AppSpacing.md),
                       Center(
-                        child: Text(l10n.vetProfileVersion,
-                            style: AppTypography.caption.copyWith(color: AppColors.textTertiary)),
+                        // 与用户端 settings 同口径（bug 20260721-288）：按真实包版本动态显示，
+                        // 不再用 ARB 硬编码（原 v1.0.0 已随发版漂移）。
+                        child: FutureBuilder<PackageInfo>(
+                          future: PackageInfo.fromPlatform(),
+                          builder: (context, snap) {
+                            final info = snap.data;
+                            final label = info == null
+                                ? 'TailTopia Vet Portal'
+                                : 'TailTopia Vet Portal v${info.version} · Build ${info.buildNumber}';
+                            return Text(label,
+                                style: AppTypography.caption
+                                    .copyWith(color: AppColors.textTertiary));
+                          },
+                        ),
                       ),
                     ],
                   ),
