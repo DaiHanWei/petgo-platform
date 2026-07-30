@@ -40,7 +40,7 @@ public class AdminCommentManageController {
         } catch (AppException e) {
             flash.addFlashAttribute("error", e.getMessage());
         }
-        return "redirect:/admin/content";
+        return "redirect:/admin/comments";
     }
 
     @PostMapping("/admin/comments/{id}/restore")
@@ -49,6 +49,6 @@ public class AdminCommentManageController {
             RedirectAttributes flash) {
         commentManage.restoreComment(id, admin.getAdminAccountId());
         flash.addFlashAttribute("notice", "已恢复该评论（重新对他人可见）");
-        return "redirect:/admin/content";
+        return "redirect:/admin/comments";
     }
 }

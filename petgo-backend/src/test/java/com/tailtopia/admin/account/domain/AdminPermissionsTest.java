@@ -66,8 +66,9 @@ class AdminPermissionsTest {
 
     @Test
     void listStableSize() {
-        // 23 既有 + 7（9.1）+ 2（9.5）+ 2（9.6 payment/risk）= 34（防误删/误加漏更新测试）。
+        // 23 既有 + 7（9.1）+ 2（9.5）+ 2（9.6 payment/risk）+ 10（后续批：审核/评论/名称头像等）
+        // = 44（防误删/误加漏更新测试；两线合并后 L1 全量复核对齐实际清单）。
         List<String> all = AdminPermissions.ALL;
-        assertThat(all).hasSize(34);
+        assertThat(all).hasSize(44);
     }
 }

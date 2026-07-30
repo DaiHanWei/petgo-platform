@@ -124,6 +124,23 @@ public class IdCardHdService {
         });
     }
 
+    /**
+     * 到账统一收口（{@code IdHdPaidHandler} 调，MANDATORY 同事务）：
+     * 有 attempt 行（Story 6-7 多卡端点）→ 按卡解锁；无 attempt 行（旧版单卡端点
+     * {@code /me/id-card/hd-download}，v1.0.x 客户端仍在用）→ 回退 profile 级建购买行
+     * （{@link #completePurchase} 原语义）。两线合并 L1 全量复核发现：6-7 换 handler 后旧端点
+     * QRIS 到账走不到建行 → 旧客户端付款后永不解锁（钱收了货没发）。
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void completeHdPaid(long paymentIntentId, long userId, PayChannel channel) {
+        IdCardHdPurchase attempt = purchases.findFirstByPaymentIntentId(paymentIntentId).orElse(null);
+        if (attempt != null && attempt.getCardId() != null) {
+            completeCardByIntent(paymentIntentId);
+            return;
+        }
+        completePurchase(userId, channel, paymentIntentId);
+    }
+
     /** 当前用户是否已购买高清图（=已永久解锁）。 */
     @Transactional(readOnly = true)
     public boolean isUnlocked(long userId) {

@@ -50,6 +50,9 @@ class AdminAiOrderServiceTest {
     @Test
     void exportCsvHasHeaderAndRow() {
         AiConsultOrder o = AiConsultOrder.completedPawCoin("ai-tok", 100L, 5L, 10000L);
+        // bug 313 后 toRow 组 displayNo 需 id+createdAt（非持久化单测须手工设）。
+        org.springframework.test.util.ReflectionTestUtils.setField(o, "id", 1L);
+        org.springframework.test.util.ReflectionTestUtils.setField(o, "createdAt", java.time.Instant.now());
         when(orders.findAll(Mockito.any(Sort.class))).thenReturn(List.of(o));
 
         String csv = svc.exportCsv();

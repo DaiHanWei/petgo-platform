@@ -183,10 +183,11 @@ class IdCardEndpointIntegrationTest extends ApiIntegrationTest {
                 {"name":"Momo","petType":"CAT","birthday":"2024-03-10","gender":"FEMALE","birthCity":"  "}
                 """);
         var node = json.readTree(body);
-        assertThat(node.get("birthCity").isNull()).isTrue();
-        assertThat(node.get("address").isNull()).isTrue();
-        assertThat(node.get("occupation").isNull()).isTrue();
-        assertThat(node.get("maritalStatus").isNull()).isTrue();
+        // Jackson 全局 non_null：null 字段在响应中整键省略（前端 fromJson 缺键即 null，语义等价）。
+        assertThat(node.has("birthCity")).isFalse();
+        assertThat(node.has("address")).isFalse();
+        assertThat(node.has("occupation")).isFalse();
+        assertThat(node.has("maritalStatus")).isFalse();
     }
 
     @Test

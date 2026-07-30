@@ -12,7 +12,7 @@
         <h1>评论管理</h1>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
-        <p class="hint">近 200 条评论。下架后公开口径移除（软删）；误下架可恢复。操作留审计。</p>
+        <p class="hint">近 200 条评论。下架走审核线语义（必填原因；作者仍可见 + 收到通知 + 计违规）；误下架可恢复。操作留审计。</p>
         <table>
             <thead>
             <tr><th>ID</th><th>帖子</th><th>作者</th><th>内容</th><th>状态</th><th>时间</th><th>操作</th></tr>
@@ -23,15 +23,19 @@
                 <td th:text="${c.postId}">0</td>
                 <td th:text="${c.authorId}">0</td>
                 <td th:text="${c.body}">评论内容</td>
-                <td th:text="${c.deleted} ? '已下架' : '正常'">正常</td>
+                <td th:text="${c.deleted} ? '已删除' : ${c.moderationStatus}">VISIBLE</td>
                 <td th:text="${c.createdAt}">t</td>
                 <td>
-                    <form th:if="${!c.deleted}" method="post"
+                    <!-- 下架（审核线 FR-55A）：仅 VISIBLE 可下架，必填原因（进审计不进作者通知）。 -->
+                    <form th:if="${!c.deleted and c.moderationStatus == 'VISIBLE'}" method="post"
                           th:action="@{/admin/comments/{id}/takedown(id=${c.id})}" style="display:inline"
                           sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.proactive_takedown')">
+                        <input type="text" name="reason" required placeholder="下架原因（必填）" style="width:140px"/>
                         <button type="submit" class="btn btn-neutral btn-sm">下架</button>
                     </form>
-                    <form th:if="${c.deleted}" method="post"
+                    <!-- 恢复：TAKEN_DOWN / REJECTED → VISIBLE（不通知，D-CM6）。 -->
+                    <form th:if="${!c.deleted and (c.moderationStatus == 'TAKEN_DOWN' or c.moderationStatus == 'REJECTED')}"
+                          method="post"
                           th:action="@{/admin/comments/{id}/restore(id=${c.id})}" style="display:inline"
                           sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.restore')">
                         <button type="submit" class="btn btn-neutral btn-sm">恢复</button>
