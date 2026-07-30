@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/date_format.dart';
+import '../../../shared/widgets/app_toast.dart';
 import '../data/health_record_repository.dart';
 import '../data/milestone_repository.dart';
 import '../domain/health_list_item.dart';
@@ -162,8 +163,11 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
       child: InkWell(
         key: ValueKey('healthCat_${c.type}'),
         borderRadius: BorderRadius.circular(14),
-        // FR-45C：点分类卡预选类型直接呼出添加弹层（问诊类不可手动添加）。
-        onTap: c.consult ? null : () => _openForm(context, ref, presetType: c.type),
+        // FR-45C：点分类卡预选类型直接呼出添加弹层。问诊类不可手动添加——
+        // 点卡弹 toast 说明来源（bug 20260730-428：无响应会被当成死控件）。
+        onTap: c.consult
+            ? () => showAppToast(context, l10n.healthConsultAutoHint)
+            : () => _openForm(context, ref, presetType: c.type),
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),

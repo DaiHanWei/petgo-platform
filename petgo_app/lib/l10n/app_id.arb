@@ -1313,6 +1313,7 @@
   "healthTypeNeuter": "Sterilisasi",
   "healthTypeCustom": "Lainnya",
   "healthTypeConsult": "Konsultasi",
+  "healthConsultAutoHint": "Catatan konsultasi tersimpan otomatis saat kamu mengarsipkan hasil konsultasi",
   "healthReadOnlyBadge": "· dari konsultasi",
   "healthAddTitle": "Tambah catatan",
   "healthEditTitle": "Ubah catatan",

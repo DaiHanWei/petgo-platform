@@ -1557,6 +1557,7 @@
   "healthTypeNeuter": "Spay/Neuter",
   "healthTypeCustom": "Custom",
   "healthTypeConsult": "Consultation",
+  "healthConsultAutoHint": "Consultation records are added automatically when you archive a consultation result",
   "healthReadOnlyBadge": "· from consultation",
   "healthAddTitle": "Add record",
   "healthEditTitle": "Edit record",

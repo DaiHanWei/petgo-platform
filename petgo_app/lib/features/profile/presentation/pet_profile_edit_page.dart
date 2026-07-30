@@ -13,6 +13,7 @@ import '../../../shared/utils/date_format.dart';
 import '../../../shared/utils/media_permission.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
+import '../data/health_record_repository.dart';
 import '../data/milestone_repository.dart';
 import '../data/profile_repository.dart';
 import '../data/timeline_repository.dart';
@@ -141,6 +142,9 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
       ref.invalidate(calendarMonthProvider);
       ref.invalidate(dayDetailProvider);
       ref.invalidate(milestoneListProvider);
+      // bug 20260730-421：健康记录缓存同样要清（healthListProvider 非 autoDispose，
+      // 漏失效 → 删档重建后健康页仍显示上一只宠物的记录；后端级联删无漏，纯前端缓存问题）。
+      ref.invalidate(healthListProvider);
       if (mounted) context.go('/profile');
     } catch (_) {
       if (mounted) _toast(l10n.petProfileDeleteFailed);
