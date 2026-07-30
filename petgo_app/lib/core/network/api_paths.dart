@@ -56,6 +56,9 @@ class ApiPaths {
   /// 用户侧兽医咨询可用性（Story 5.2，只回 vetOnline bool）。
   static const String consultAvailability = '$base/consult/availability';
 
+  /// 用户侧兽医咨询当前定价（bug 20260729-417，实时读后台 pricing_config）。
+  static const String consultPricing = '$base/consult/pricing';
+
   /// 咨询会话（Story 5.3）。POST 发起 / GET 轮询 / DELETE 取消。
   static const String consultSessions = '$base/consult-sessions';
   static const String consultSessionActive = '$base/consult-sessions/active';

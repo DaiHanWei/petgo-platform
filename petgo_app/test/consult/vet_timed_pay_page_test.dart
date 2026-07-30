@@ -21,6 +21,9 @@ class _FakeConsultRepo extends ConsultRepository {
   @override
   Future<ConsultPayResult> payRequest(String token, String channel) async =>
       const ConsultPayResult(mode: 'DONE');
+
+  @override
+  Future<int> vetConsultPrice() async => 50000; // 同步返回不碰 dio（避免 timer 残留）
 }
 
 /// 假 PawCoin 控制器：余额 0（不足），同步返回不碰 dio（避免 HTTP 超时 timer 残留）。
@@ -41,6 +44,9 @@ class _QrisPayRepo extends ConsultRepository {
   @override
   Future<ConsultPayResult> payRequest(String token, String channel) async =>
       const ConsultPayResult(mode: 'PAYMENT_REQUIRED', payload: 'STUB-QR-PAYLOAD');
+
+  @override
+  Future<int> vetConsultPrice() async => 50000; // 同步返回不碰 dio（避免 timer 残留）
 }
 
 void main() {

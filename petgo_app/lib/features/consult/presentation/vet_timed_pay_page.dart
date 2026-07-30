@@ -13,7 +13,7 @@ import '../../pawcoin/presentation/pawcoin_controller.dart';
 import '../../triage/presentation/widgets/triage_paywall.dart' show formatKoin;
 import '../data/consult_repository.dart';
 import 'vet_request_confirm_page.dart'
-    show kVetConsultPriceIdr, formatVetConsultIdr;
+    show ConsultPriceRetry, formatVetConsultIdr;
 
 /// 限时支付屏（Story 3.5，`p-vet-timed-pay`，1.5min）。渠道选择（QRIS/PawCoin）+ 服务端权威倒计时 +
 /// **支付按钮全程可用**（倒计时中任意时刻可点）。DONE=PawCoin 即时成功跳会话 / PAYMENT_REQUIRED=现金轮询到账。
@@ -123,7 +123,9 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
 
   bool get _pawInsufficient {
     final balance = ref.read(pawCoinProvider).value?.balance ?? 0;
-    return _channel == 'PAWCOIN' && balance < kVetConsultPriceIdr;
+    // 价格未取到（null）时不判定不足——付款按钮此时本就禁用（bug 20260729-417 无兜底价）。
+    final price = ref.read(vetConsultPriceProvider).value;
+    return _channel == 'PAWCOIN' && price != null && balance < price;
   }
 
   Future<void> _pay() async {
@@ -138,8 +140,17 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
       } catch (_) {
         balance = 0; // 余额拉取失败 → 按不足降级跳充值
       }
+      // 价格同款处理（bug 322 模式）：await 真实价。无本地兜底——取不到价格不允许付款，
+      // 提示后由页面重试件重拉（bug 20260729-417）。
+      int price;
+      try {
+        price = await ref.read(vetConsultPriceProvider.future);
+      } catch (_) {
+        if (mounted) showAppToast(context, l10n.vetPriceLoadFailed);
+        return;
+      }
       if (!mounted) return;
-      if (balance < kVetConsultPriceIdr) {
+      if (balance < price) {
         await _topUp(); // PawCoin 不足 → 跳充值（暂停顺延）
         return;
       }
@@ -260,6 +271,8 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
 
   Widget _buildPay(AppLocalizations l10n) {
     final balance = ref.watch(pawCoinProvider).value?.balance ?? 0;
+    // 后台可配价实时下发（bug 20260729-417）；无本地兜底——失败显示重试行，价格未取到禁付款。
+    final priceAsync = ref.watch(vetConsultPriceProvider);
     return Column(
       children: [
         Expanded(
@@ -325,6 +338,14 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
                   'QRIS',
                   Icons.qr_code_2_rounded,
                 ),
+                if (priceAsync.hasError) ...[
+                  const SizedBox(height: 14),
+                  Center(
+                    child: ConsultPriceRetry(
+                        key: const ValueKey('vetPayPriceRetry'),
+                        onRetry: () => ref.invalidate(vetConsultPriceProvider)),
+                  ),
+                ],
                 if (_pawInsufficient) ...[
                   const SizedBox(height: 14),
                   Row(
@@ -371,7 +392,8 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
             width: double.infinity,
             child: FilledButton(
               key: const ValueKey('vetPayButton'),
-              onPressed: _paying ? null : _pay,
+              // 价格未取到（加载中/失败）禁付款：用户必须先看到本次费用（bug 20260729-417）。
+              onPressed: _paying || !priceAsync.hasValue ? null : _pay,
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.mint,
                 foregroundColor: Colors.white,
@@ -380,7 +402,7 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
                   borderRadius: BorderRadius.circular(14),
                 ),
               ),
-              child: _paying
+              child: _paying || priceAsync.isLoading
                   ? const SizedBox(
                       width: 20,
                       height: 20,
@@ -390,9 +412,10 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
                       ),
                     )
                   : Text(
-                      l10n.vetPayButton(
-                        formatVetConsultIdr(kVetConsultPriceIdr),
-                      ),
+                      priceAsync.hasValue
+                          ? l10n.vetPayButton(
+                              formatVetConsultIdr(priceAsync.value!))
+                          : l10n.vetPriceLoadFailed, // 失败：按钮禁用，重试走上方重试行
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,

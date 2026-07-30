@@ -29,6 +29,18 @@ class ConsultRepository {
   /// 是否有兽医在线（仅 bool，兼容旧 indicator）。
   Future<bool> vetOnline() async => (await availability()).vetOnline;
 
+  /// 当前单次兽医咨询价（IDR，后台可配 → 实时下发，bug 20260729-417）。
+  /// 拉取失败/载荷异常**直接抛出**——价格必须来自服务器，UI 侧显示重试，不做本地兜底价
+  /// （兜底价可能与后台改过的实际扣费价不一致，正是本 bug 根因）。
+  Future<int> vetConsultPrice() async {
+    final resp = await dio.get<Map<String, dynamic>>(ApiPaths.consultPricing);
+    final price = (resp.data?['price'] as num?)?.toInt();
+    if (price == null || price <= 0) {
+      throw StateError('invalid consult pricing payload');
+    }
+    return price;
+  }
+
   /// 本次会诊最终诊断（兽医结束时定格）。未出诊断(204)/失败 → null。「查看会诊结果」入口用。
   Future<ConsultDiagnosis?> diagnosis(int sessionId) async {
     try {
@@ -194,3 +206,8 @@ final consultRepositoryProvider =
 /// 兽医咨询可用性（FutureProvider，入口渲染前读取）。
 final consultAvailabilityProvider =
     FutureProvider.autoDispose<ConsultAvailability>((ref) => ref.read(consultRepositoryProvider).availability());
+
+/// 当前兽医咨询价（后台可配实时下发，bug 20260729-417）。**无本地兜底价**：
+/// 失败为 AsyncError，UI 侧显示重试（`ref.invalidate` 重拉），价格未取到时禁止发起/支付。
+final vetConsultPriceProvider = FutureProvider.autoDispose<int>(
+    (ref) => ref.read(consultRepositoryProvider).vetConsultPrice());

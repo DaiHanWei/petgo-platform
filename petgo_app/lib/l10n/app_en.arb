@@ -1262,6 +1262,8 @@
   "vetRequestNoPet": "Create a pet profile first before consulting.",
   "vetRequestPayAfterAccept": "{price} · Pay after a vet takes your case",
   "@vetRequestPayAfterAccept": { "placeholders": { "price": { "type": "String" } } },
+  "vetPriceLoadFailed": "Couldn't load the fee",
+  "vetPriceRetry": "Retry",
   "vetWaitingTitle": "Finding a vet…",
   "vetWaitingSubtitle": "Usually available within 1 minute.\nPlease wait a moment 🙏",
   "vetWaitingSearchLimit": "1-minute search limit",
