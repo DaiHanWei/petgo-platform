@@ -147,6 +147,12 @@ public class IdCardHdService {
         return purchases.existsByUserId(userId);
     }
 
+    /** HD 下载当前定价（前端展示用，与扣费同源实时读 pricing_config，417 同类修复）。 */
+    @Transactional(readOnly = true)
+    public long currentHdPrice() {
+        return platformConfig.pricing().getIdHdDownloadPrice();
+    }
+
     /**
      * 发起高清图购买。已购买 → 入口短路返回 UNLOCKED（不扣费不建行）。PawCoin 同步扣费+建购买行；
      * QRIS 建意图返回支付信息（到账由 {@link #completePurchase} 建行）。无档案 → 404。

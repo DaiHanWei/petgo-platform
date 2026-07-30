@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
+import '../../../shared/widgets/price_load_retry.dart';
 import '../data/consult_repository.dart';
 import '../domain/consult_request.dart';
 
@@ -111,7 +112,7 @@ class _VetRequestConfirmPageState extends ConsumerState<VetRequestConfirmPage> {
                             loading: () => const SizedBox(
                                 width: 18, height: 18,
                                 child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.mint)),
-                            error: (_, _) => ConsultPriceRetry(
+                            error: (_, _) => PriceLoadRetry(
                                 key: const ValueKey('vetRequestPriceRetry'),
                                 onRetry: () => ref.invalidate(vetConsultPriceProvider)),
                           ),
@@ -152,35 +153,3 @@ class _VetRequestConfirmPageState extends ConsumerState<VetRequestConfirmPage> {
   }
 }
 
-/// 咨询价拉取失败的行内重试件（bug 20260729-417）：「加载失败 · 重试」，点击重拉。
-/// 确认页价格卡 / 病例表单价格提示 / 支付页共用——价格取不到时替代价格文本出现。
-class ConsultPriceRetry extends StatelessWidget {
-  const ConsultPriceRetry({super.key, required this.onRetry});
-
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return InkWell(
-      onTap: onRetry,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(l10n.vetPriceLoadFailed,
-                style: const TextStyle(fontSize: 12, color: AppColors.danger)),
-            const SizedBox(width: 6),
-            const Icon(Icons.refresh, size: 15, color: AppColors.mint),
-            const SizedBox(width: 2),
-            Text(l10n.vetPriceRetry,
-                style: const TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.mint)),
-          ],
-        ),
-      ),
-    );
-  }
-}
