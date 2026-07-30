@@ -29,8 +29,11 @@ Future<void> showCustomerServiceSheet(BuildContext context) {
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
+    // 内容套滚动容器：非 isScrollControlled 的 modal sheet 高度上限=屏高×9/16，
+    // 英文/大字号下副标题折两行会把固定 Column 顶破上限（720 宽真机溢出 23px、Tutup 被截）。
+    // 可滚动后内容不超高时视觉零变化，超高时自动可滚，任何屏幕/字号都安全。
     builder: (ctx) => SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 10, 20, 28),
         child: Column(
           mainAxisSize: MainAxisSize.min,
