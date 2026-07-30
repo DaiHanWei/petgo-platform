@@ -26,11 +26,16 @@ public class ImToOssArchiver {
 
     private final AliyunOssClient ossClient;
     private final ObjectProvider<ImMediaFetcher> fetcherProvider;
+    private final MediaProperties props;
     private final SecureRandom random = new SecureRandom();
 
-    public ImToOssArchiver(AliyunOssClient ossClient, ObjectProvider<ImMediaFetcher> fetcherProvider) {
+    public ImToOssArchiver(
+            AliyunOssClient ossClient,
+            ObjectProvider<ImMediaFetcher> fetcherProvider,
+            MediaProperties props) {
         this.ossClient = ossClient;
         this.fetcherProvider = fetcherProvider;
+        this.props = props;
     }
 
     /**
@@ -63,6 +68,6 @@ public class ImToOssArchiver {
         for (int i = 0; i < 22; i++) {
             token.append(BASE62[random.nextInt(BASE62.length)]);
         }
-        return "private/health/" + petId + "/" + token + ".jpg";
+        return props.getOss().normalizedKeyPrefix() + "private/health/" + petId + "/" + token + ".jpg";
     }
 }

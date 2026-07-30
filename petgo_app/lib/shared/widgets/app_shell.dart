@@ -8,6 +8,9 @@ import '../../core/router/route_intent.dart';
 import '../../core/theme/colors.dart';
 import '../../core/theme/motion.dart';
 import '../../features/auth/domain/auth_guard.dart';
+import '../../features/auth/domain/auth_state.dart';
+import '../../features/content/domain/home_refresh_provider.dart';
+import '../../features/content/domain/content_type.dart';
 import '../../features/content/presentation/feed_controller.dart';
 import '../../features/content/presentation/publish_compose_page.dart';
 import 'bottom_tab_bar.dart';
@@ -62,7 +65,13 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
       // 从其它 Tab 切回首页：刷新 feed（keepAlive 缓存，否则看不到新内容/删帖/发布变更）。
       final fromElsewhere = widget.navigationShell.currentIndex != AppTab.home.index;
       _goBranch(index); // 首页：游客可进
-      if (fromElsewhere) ref.read(feedProvider.notifier).refresh();
+      if (fromElsewhere) {
+        ref.read(feedProvider.notifier).refresh();
+      } else {
+        // 已在首页再次点击 Home → 回到顶部 + 刷新（bug 20260709-278）。
+        ref.read(homeScrollTopProvider.notifier).bump();
+        ref.read(feedProvider.notifier).refresh();
+      }
       return;
     }
     // 受控 Tab：单一门控入口；未登录弹强弹窗 + 注入 pendingAction（登录后回到该 Tab）。
@@ -80,7 +89,15 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
       ref,
       context,
       pendingAction: const RouteIntent(location: '/home'),
-      onAllowed: () => PublishComposePage.open(context),
+      // bug 20260703-244：在「成长档案（Diary）」Tab（底部第 2 个）点创建 → 编辑页默认选「成长日历（Growth）」；
+      // 其余 Tab 保持默认第一个 tag（Momen）。Growth 需宠物档案（否则 segment 灰置），无档案则不预选、回落 Momen。
+      onAllowed: () {
+        final onGrowthTab = widget.navigationShell.currentIndex == AppTab.profile.index;
+        final p = ref.read(authControllerProvider).profile;
+        final canGrowth = p?.petStatus == 'HAS_PET' && (p?.hasPetProfile ?? false);
+        PublishComposePage.open(
+            context, preset: (onGrowthTab && canGrowth) ? ContentType.growthMoment : null);
+      },
     );
   }
 

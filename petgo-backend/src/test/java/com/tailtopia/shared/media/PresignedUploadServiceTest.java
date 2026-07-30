@@ -82,6 +82,23 @@ class PresignedUploadServiceTest {
     }
 
     @Test
+    void keyPrefixIsPrependedWhenConfigured() {
+        // staging 同桶命名区分：设 key-prefix 后新上传对象落到独立前缀下（生产留空则零变化）。
+        props.getOss().setKeyPrefix("stag/");
+        UploadUrlResponse r = service.issue(MediaScope.PUBLIC, 42L, "image/jpeg");
+        assertThat(r.objectKey()).startsWith("stag/public/42/").endsWith(".jpg");
+        assertThat(r.publicUrl()).isEqualTo("https://cdn.example/" + r.objectKey());
+    }
+
+    @Test
+    void keyPrefixIsNormalizedTolerantly() {
+        // 无前导/尾斜杠亦可：归一化为 "stag/"。
+        props.getOss().setKeyPrefix("stag");
+        assertThat(service.issue(MediaScope.PRIVATE, 7L, "image/jpeg").objectKey())
+                .startsWith("stag/private/7/");
+    }
+
+    @Test
     void missingBucketThrows() {
         props.getOss().setPublicBucket("");
         assertThatThrownBy(() -> service.issue(MediaScope.PUBLIC, 1L, "image/jpeg"))

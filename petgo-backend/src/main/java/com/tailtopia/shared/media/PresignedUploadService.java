@@ -53,7 +53,8 @@ public class PresignedUploadService {
         }
 
         String ct = blankToNull(contentType) == null ? "application/octet-stream" : contentType;
-        String objectKey = scope.prefix() + "/" + userId + "/" + randomToken() + "." + extFor(ct);
+        String objectKey = props.getOss().normalizedKeyPrefix()
+                + scope.prefix() + "/" + userId + "/" + randomToken() + "." + extFor(ct);
         String uploadUrl = ossClient.presignedPutUrl(
                 bucket, objectKey, ct, props.getSignedUrl().getUploadTtlSeconds(), isPublic);
 

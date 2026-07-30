@@ -79,15 +79,24 @@ class HappyMomentTile extends StatelessWidget {
 }
 
 /// 健康事件条目（hentry）：粉底 #FDE7EB 行 + 🏥 + 深红标题/副标题 + 等级徽章。
-class HealthEventTile extends StatelessWidget {
+class HealthEventTile extends StatefulWidget {
   const HealthEventTile({super.key, required this.item, this.firstLabel});
 
   final TimelineItem item;
   final String? firstLabel;
 
   @override
+  State<HealthEventTile> createState() => _HealthEventTileState();
+}
+
+class _HealthEventTileState extends State<HealthEventTile> {
+  // 症状摘要默认单行省略，点击展开显示全部（bug：长症状被折叠看不全）。
+  bool _symptomExpanded = false;
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final item = widget.item;
     final d = item.date;
     // 来源区分（bug 20260702-231）：兽医问诊 🩺「Vet Consultation」/ AI 分诊 🏥「AI Consultation」。
     final isVet = item.isVetConsult;
@@ -114,18 +123,28 @@ class HealthEventTile extends StatelessWidget {
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                           color: AppColors.healthEventText)),
-                  // 副标题恒渲染，保证同类条目高度/样式一致（bug 20260721-341）：
-                  // 有摘要显摘要，无摘要回退「点击查看结果」提示，避免一条两行一条一行。
+                  // 副标题恒渲染（bug 20260721-341 同高度一致性）：有摘要=可点展开/收起（stag 增强），
+                  // 无摘要回退「点击查看结果」提示，避免一条两行一条一行。
                   const SizedBox(height: 1),
-                  Text(
-                      (item.symptomSummary != null && item.symptomSummary!.isNotEmpty)
-                          ? item.symptomSummary!
-                          : l10n.timelineConsultTapToView,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          fontSize: 11,
-                          color: AppColors.healthEventText.withValues(alpha: 0.8))),
+                  if (item.symptomSummary != null && item.symptomSummary!.isNotEmpty)
+                    GestureDetector(
+                      key: const ValueKey('healthEventSymptom'),
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => setState(() => _symptomExpanded = !_symptomExpanded),
+                      child: Text(item.symptomSummary!,
+                          maxLines: _symptomExpanded ? null : 1,
+                          overflow: _symptomExpanded ? TextOverflow.clip : TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: AppColors.healthEventText.withValues(alpha: 0.8))),
+                    )
+                  else
+                    Text(l10n.timelineConsultTapToView,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.healthEventText.withValues(alpha: 0.8))),
                 ],
               ),
             ),

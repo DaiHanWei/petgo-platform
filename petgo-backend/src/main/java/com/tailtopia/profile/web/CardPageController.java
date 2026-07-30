@@ -5,6 +5,7 @@ import com.tailtopia.content.service.ContentService;
 import com.tailtopia.content.service.GrowthMomentView;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.dto.ArchiveStatsResponse;
+import com.tailtopia.profile.service.OgImageService;
 import com.tailtopia.profile.service.TimelineService;
 import com.tailtopia.shared.media.AliyunOssClient;
 import jakarta.servlet.http.HttpServletResponse;
@@ -40,6 +41,7 @@ public class CardPageController {
     private final ContentService contentService;
     private final AccountQueryService accountQueryService;
     private final TimelineService timelineService;
+    private final OgImageService ogImageService;
     private final String downloadUrl;
     private final String iosUrl;
     private final String androidUrl;
@@ -47,7 +49,7 @@ public class CardPageController {
 
     public CardPageController(com.tailtopia.profile.service.ProfileService profileService,
             ContentService contentService, AccountQueryService accountQueryService,
-            TimelineService timelineService,
+            TimelineService timelineService, OgImageService ogImageService,
             @Value("${petgo.card.app-download-url:https://petgo.example/download}") String downloadUrl,
             @Value("${petgo.card.ios-url:https://apps.apple.com/app/petgo}") String iosUrl,
             @Value("${petgo.card.android-url:https://play.google.com/store/apps/details?id=com.tailtopia.app}")
@@ -57,6 +59,7 @@ public class CardPageController {
         this.contentService = contentService;
         this.accountQueryService = accountQueryService;
         this.timelineService = timelineService;
+        this.ogImageService = ogImageService;
         this.downloadUrl = downloadUrl;
         this.iosUrl = iosUrl;
         this.androidUrl = androidUrl;
@@ -105,10 +108,21 @@ public class CardPageController {
         // OG / Twitter：标题本地化为印尼语（页面 lang=id；修 20260702-208 原硬编码中文「…的成长故事」）。
         String ogTitle = "Kisah tumbuh kembang " + profile.getName();
         model.addAttribute("ogTitle", ogTitle);
-        // og:image 优先用预渲染 1200×630 PNG（WhatsApp 等严格抓取器可靠出图）；无则回退头像。
-        boolean ogImageWide = profile.getOgImageUrl() != null;
+        // og:image 优先用预渲染 1200×630 PNG（WhatsApp 等严格抓取器缺尺寸会静默丢图）。
+        // 大图原仅在编辑档案时生成 → 从未编辑过的档案为 null，WhatsApp 遂丢图（Instagram 宽容照显头像）。
+        // 此处懒补生成一次（同时覆盖存量老档案 + 新建档案），使首次抓取即拿到带尺寸的图；
+        // 生成失败（如 OSS 未配置/抽风）静默回退头像，绝不阻断页面。
+        String wideUrl = profile.getOgImageUrl();
+        if (wideUrl == null) {
+            try {
+                wideUrl = ogImageService.regenerate(profile);
+            } catch (RuntimeException e) {
+                wideUrl = null; // 回退头像
+            }
+        }
+        boolean ogImageWide = wideUrl != null;
         String ogImage = ogImageWide
-                ? profile.getOgImageUrl()
+                ? wideUrl
                 : AliyunOssClient.exifStrippedDeliveryUrl(profile.getAvatarUrl());
         model.addAttribute("ogImageUrl", ogImage);
         // 仅预渲染大图有确定的 1200×630 尺寸；回退头像尺寸未知，不输出 width/height 以免误导抓取器。

@@ -37,7 +37,9 @@ class AdminVetServiceEditTest {
         service = new AdminVetService(vetAccounts, mock(ConsultRatingQueryService.class),
                 presence, interrupt, mock(TencentImClient.class),
                 mock(VetQualificationService.class), audit,
-                mock(com.tailtopia.consult.service.ConsultQualityQueryService.class));
+                mock(com.tailtopia.consult.service.ConsultQualityQueryService.class),
+                mock(com.tailtopia.shared.media.AliyunOssClient.class),
+                mock(com.tailtopia.shared.media.MediaProperties.class));
     }
 
     @Test

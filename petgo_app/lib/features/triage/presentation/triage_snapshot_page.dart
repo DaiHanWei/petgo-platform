@@ -57,6 +57,7 @@ class _TriageSnapshotPageState extends ConsumerState<TriageSnapshotPage> {
           return TriageResultView(
             result: result.copyWith(symptomSummary: widget.symptomSummary),
             triageId: widget.triageId,
+            fromHistory: true, // 历史回看：红色态跳过强制阅读倒计时。
           );
         },
       ),

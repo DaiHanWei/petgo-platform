@@ -469,8 +469,13 @@ class _LightboxState extends State<_Lightbox> {
         controller: _controller,
         itemCount: widget.urls.length,
         onPageChanged: (i) => setState(() => _current = i),
-        itemBuilder: (context, i) => Center(
-          child: InteractiveViewer(child: AppImage.widget(widget.urls[i], fit: BoxFit.contain)),
+        // 点击图片（或黑边）关闭大图（bug 20260701-192，对齐主流看图 App 交互）；缩放/翻页手势不受影响。
+        itemBuilder: (context, i) => GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => Navigator.of(context).pop(),
+          child: Center(
+            child: InteractiveViewer(child: AppImage.widget(widget.urls[i], fit: BoxFit.contain)),
+          ),
         ),
       ),
     );

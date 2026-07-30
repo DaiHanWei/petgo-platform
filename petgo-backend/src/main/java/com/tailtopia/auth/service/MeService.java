@@ -42,6 +42,22 @@ public class MeService {
         return UserProfileResponse.from(load(userId), hasPetProfile(userId));
     }
 
+    /**
+     * 捕获用户语言偏好（bug 20260625-105）：从 App 请求 Accept-Language 归一化为 'id'/'en'，仅在变化时落库。
+     * /me 每次冷启/前台会被调用，足以在下次系统语言变更后更新；不入请求管道、不每请求写。best-effort。
+     */
+    @Transactional
+    public void captureLocale(long userId, String acceptLanguage) {
+        String norm = (acceptLanguage != null && acceptLanguage.toLowerCase(java.util.Locale.ROOT).startsWith("en"))
+                ? "en" : "id";
+        users.findById(userId).ifPresent(u -> {
+            if (!norm.equals(u.getLocale())) {
+                u.setLocale(norm);
+                users.save(u);
+            }
+        });
+    }
+
     @Transactional
     public UserProfileResponse updateMe(long userId, UpdateMeRequest req) {
         User user = load(userId);
