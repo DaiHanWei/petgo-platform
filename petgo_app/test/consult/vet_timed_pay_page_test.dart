@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:tailtopia/features/consult/data/consult_repository.dart';
 import 'package:tailtopia/features/consult/domain/consult_pay_result.dart';
 import 'package:tailtopia/features/consult/domain/consult_request.dart';
@@ -24,6 +25,13 @@ class _FakeConsultRepo extends ConsultRepository {
 
   @override
   Future<int> vetConsultPrice() async => 50000; // 同步返回不碰 dio（避免 timer 残留）
+
+  bool cancelCalled = false;
+
+  @override
+  Future<void> cancelRequest(String token) async {
+    cancelCalled = true;
+  }
 }
 
 /// 假 PawCoin 控制器：余额 0（不足），同步返回不碰 dio（避免 HTTP 超时 timer 残留）。
@@ -128,5 +136,48 @@ void main() {
     expect(find.byKey(const ValueKey('vetPayCancel')), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());
+  });
+
+  /// 0730 拍板：待支付按系统返回键=主动取消老请求（删请求+释放兽医），
+  /// 重新发起走全新排队——不再是 UX-DR14「离开后服务端重播」（否则老请求
+  /// 残留占用态，重新发起命中 alreadyActive 直跳付款、跳过排队）。
+  testWidgets('待支付按返回键 → 调 cancelRequest 主动取消 → 回 /triage', (tester) async {
+    tester.platformDispatcher.localesTestValue = const [Locale('id')];
+    final repo = _FakeConsultRepo();
+    final router = GoRouter(
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (_, _) => VetTimedPayPage(
+            requestToken: 'req-1',
+            payDeadlineAt: DateTime.now().add(const Duration(seconds: 90)),
+          ),
+        ),
+        GoRoute(path: '/triage', builder: (_, _) => const Scaffold(body: Text('triage'))),
+      ],
+    );
+
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        consultRepositoryProvider.overrideWithValue(repo),
+        pawCoinProvider.overrideWith(_FakePawController.new),
+      ],
+      child: MaterialApp.router(
+        routerConfig: router,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+      ),
+    ));
+    await tester.pump();
+
+    // 模拟系统返回键（PopScope canPop:false → onPopInvokedWithResult）。
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(repo.cancelCalled, isTrue); // 老请求被主动取消
+    expect(find.text('triage'), findsOneWidget); // 已离开付款页
+    // 消费取消提示 toast 的自动消退 Timer（2600ms），避免残留 timer 判失败。
+    await tester.pump(const Duration(milliseconds: 2700));
+    await tester.pumpAndSettle();
   });
 }
