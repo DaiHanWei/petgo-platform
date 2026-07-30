@@ -10,6 +10,7 @@ import com.tailtopia.admin.service.AdminContentService;
 import com.tailtopia.admin.service.AdminModerationService;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.admin.service.AdminVetService;
+import com.tailtopia.admin.virtual.service.AdminVirtualAccountService;
 import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.dto.ContentPostResponse;
 import com.tailtopia.shared.error.AppException;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
@@ -39,13 +41,19 @@ public class AdminWebController {
     private final AdminContentService adminContentService;
     private final AdminModerationService adminModerationService;
     private final AdminVetService adminVetService;
+    private final com.tailtopia.admin.dashboard.service.AdminDashboardService dashboardService;
+    private final AdminVirtualAccountService virtualAccountService;
 
     public AdminWebController(AdminContentService adminContentService,
             AdminModerationService adminModerationService,
-            AdminVetService adminVetService) {
+            AdminVetService adminVetService,
+            com.tailtopia.admin.dashboard.service.AdminDashboardService dashboardService,
+            AdminVirtualAccountService virtualAccountService) {
         this.adminContentService = adminContentService;
         this.adminModerationService = adminModerationService;
         this.adminVetService = adminVetService;
+        this.dashboardService = dashboardService;
+        this.virtualAccountService = virtualAccountService;
     }
 
     /** 登录页（未认证可访问；认证失败回显 error，登出回显 logout）。 */
@@ -54,9 +62,21 @@ public class AdminWebController {
         return "admin/login";
     }
 
+    /**
+     * 权限不足统一落点（403）：admin 链 accessDeniedHandler forward 至此（URL 级门控与
+     * {@code @PreAuthorize} 方法级拒绝均收口于此）。forward 保留原请求方法（POST 提交被拒也会到达），
+     * 故不限 method。仅提示 + 返回入口，不泄露权限点细节。
+     */
+    @RequestMapping("/admin/denied")
+    public String denied() {
+        return "admin/denied";
+    }
+
+    /** 运营概览看板（Story 9.10，AB-1.1-01）：四模块指标聚合（原种子发布引导页升级为概览）。 */
     @GetMapping({"/admin", "/admin/dashboard"})
     public String dashboard(Model model) {
         model.addAttribute("active", "dashboard");
+        model.addAttribute("metrics", dashboardService.overview());
         return "admin/dashboard";
     }
 
@@ -66,8 +86,13 @@ public class AdminWebController {
         if (!model.containsAttribute("seedPostForm")) {
             model.addAttribute("seedPostForm", new SeedPostForm());
         }
-        model.addAttribute("types", ContentType.values());
+        seedPostModel(model);
         return "admin/seed-post";
+    }
+
+    private void seedPostModel(Model model) {
+        model.addAttribute("types", ContentType.values());
+        model.addAttribute("accounts", virtualAccountService.list());
     }
 
     // ===== Story 3.7 + 4.1：举报审核队列（状态筛选 + 批量 + 双向通知 + 审计）=====
@@ -276,7 +301,7 @@ public class AdminWebController {
             @Valid @ModelAttribute("seedPostForm") SeedPostForm form, BindingResult binding,
             Model model) {
         model.addAttribute("active", "seed");
-        model.addAttribute("types", ContentType.values());
+        seedPostModel(model);
         if (binding.hasErrors()) {
             return "admin/seed-post";
         }

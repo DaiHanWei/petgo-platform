@@ -67,7 +67,7 @@ class NameModerationIntegrationTest extends ApiIntegrationTest {
         long uid = u.getId();
 
         // 改名为高风险（stub 评分 0.9 ≥0.8）→ 先放行立即生效 + 异步送审入队标 HIGH。
-        meService.updateMe(uid, new UpdateMeRequest("stub-high", null, null));
+        meService.updateMe(uid, new UpdateMeRequest("stub-high", null, null, null));
 
         NameModerationRecord rec = latestNickname(uid);
         assertThat(rec.getStatus()).isEqualTo(NameModerationStatus.MANUAL_PENDING);
@@ -94,12 +94,12 @@ class NameModerationIntegrationTest extends ApiIntegrationTest {
         User u = newUser();
         long uid = u.getId();
 
-        meService.updateMe(uid, new UpdateMeRequest("stub-high", null, null));
+        meService.updateMe(uid, new UpdateMeRequest("stub-high", null, null, null));
         NameModerationRecord first = latestNickname(uid);
         assertThat(first.getStatus()).isEqualTo(NameModerationStatus.MANUAL_PENDING);
 
         // 再次改名 → 旧在途记录陈旧作废（SUPERSEDED、移出队列），新记录成为最新。
-        meService.updateMe(uid, new UpdateMeRequest("stub-high2", null, null));
+        meService.updateMe(uid, new UpdateMeRequest("stub-high2", null, null, null));
 
         assertThat(records.findById(first.getId()).orElseThrow().getStatus())
                 .isEqualTo(NameModerationStatus.SUPERSEDED);

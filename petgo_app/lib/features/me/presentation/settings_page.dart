@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/config/legal_urls.dart';
@@ -74,6 +75,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               _navRow(l10n.meEditProfileTitle, onTap: () => context.push('/profile/edit'),
                   key: const ValueKey('meEditProfile')),
               _divider(),
+              _navRow(l10n.idCardTitle, onTap: () => context.push('/profile/id-card'),
+                  key: const ValueKey('meIdCard')),
+              _divider(),
+              _navRow(l10n.healthListTitle, onTap: () => context.push('/profile/health'),
+                  key: const ValueKey('meHealthRecords')),
+              _divider(),
               _toggleRow(l10n.notificationCenterTitle, _notif, (v) => setState(() => _notif = v),
                   key: const ValueKey('meNotifToggle')),
               _divider(),
@@ -108,9 +115,19 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   key: const ValueKey('meDeleteAccount')),
             ]),
             const SizedBox(height: 24),
-            const Center(
-              child: Text('TailTopia v1.0.0 · Build 100',
-                  style: TextStyle(fontSize: 12, color: AppColors.muted)),
+            Center(
+              // bug 20260721-288：按真实 app 版本动态显示（原硬编码 v1.0.0·Build 100 会随版本漂移）。
+              child: FutureBuilder<PackageInfo>(
+                future: PackageInfo.fromPlatform(),
+                builder: (context, snap) {
+                  final info = snap.data;
+                  final label = info == null
+                      ? 'TailTopia'
+                      : 'TailTopia v${info.version} · Build ${info.buildNumber}';
+                  return Text(label,
+                      style: const TextStyle(fontSize: 12, color: AppColors.muted));
+                },
+              ),
             ),
           ],
         ),

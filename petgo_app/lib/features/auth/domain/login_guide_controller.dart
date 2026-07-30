@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/router/route_intent.dart';
 import '../../../core/theme/colors.dart';
@@ -154,6 +155,10 @@ final Provider<LoginGuideController> loginGuideControllerProvider =
         // 关键：登录浮层路径也必须把登录态写入 authController（与 LoginPage 一致），
         // 否则成功后仍是游客，受控 Tab/路由 redirect 会把用户弹回首页。
         ref.read(authControllerProvider.notifier).applyLogin(resp);
+        // 归因（AppsFlyer P0）：浮层路径的首次建号同样计注册完成（与 LoginPage 一致）。
+        if (resp.isNewUser) {
+          Analytics.capture('af_complete_registration', {'af_registration_method': 'google'});
+        }
         return resp;
       } on LoginCancelled {
         return null;
@@ -164,6 +169,9 @@ final Provider<LoginGuideController> loginGuideControllerProvider =
       try {
         final resp = await ref.read(authRepositoryProvider).loginWithApple();
         ref.read(authControllerProvider.notifier).applyLogin(resp);
+        if (resp.isNewUser) {
+          Analytics.capture('af_complete_registration', {'af_registration_method': 'apple'});
+        }
         return resp;
       } on LoginCancelled {
         return null;

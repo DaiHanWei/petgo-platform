@@ -94,7 +94,8 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
       _toast(l10n.petProfileNameRequired);
       return;
     }
-    Analytics.capture('pet_profile_create_submitted');
+    // species 为受控枚举（CAT/DOG/OTHER），供归因分发（AppsFlyer P1）；不传宠物名等自由文本。
+    Analytics.capture('pet_profile_create_submitted', {'species': petType});
     setState(() => _submitting = true);
     try {
       final created = await ref.read(profileRepositoryProvider).create(

@@ -147,11 +147,12 @@ class _ArchiveCalendarState extends ConsumerState<ArchiveCalendar> {
               child: cell.firstImageUrl != null
                   ? AppImage.widget(cell.firstImageUrl!,
                       fit: BoxFit.cover, thumbWidth: 200, // 日历格小图
-                      errorBuilder: (_, _, _) => _healthOnlyBox(day))
-                  : _healthOnlyBox(day),
+                      errorBuilder: (_, _, _) => _iconBox(cell))
+                  : _iconBox(cell),
             ),
-            if (cell.hasHealthEvent)
-              const Positioned(right: 2, bottom: 2, child: Text('🏥', style: TextStyle(fontSize: 11))),
+            // 有 diary 图时右下角叠角标（bug 20260722-352）：问诊优先，其次健康记录分类图标。
+            if (cell.firstImageUrl != null && (cell.hasHealthEvent || cell.healthRecordType != null))
+              Positioned(right: 2, bottom: 2, child: _cornerIcon(cell)),
           ],
         ),
       );
@@ -175,11 +176,56 @@ class _ArchiveCalendarState extends ConsumerState<ArchiveCalendar> {
     );
   }
 
-  Widget _healthOnlyBox(int day) => Container(
+  /// 无 diary 图时的整格图标（bug 20260722-352）：优先级 问诊 🏥 > 健康记录分类图标。
+  Widget _iconBox(CalendarDayCell cell) {
+    if (cell.hasHealthEvent) {
+      return Container(
         color: AppColors.skyTint,
         alignment: Alignment.center,
         child: const Text('🏥', style: TextStyle(fontSize: 16)),
       );
+    }
+    final ({IconData icon, Color color})? cat = _healthCatIcon(cell.healthRecordType);
+    if (cat != null) {
+      return Container(
+        color: cat.color.withValues(alpha: 0.12),
+        alignment: Alignment.center,
+        child: Icon(cat.icon, size: 16, color: cat.color),
+      );
+    }
+    // 兜底（快乐时刻无图）：淡底 🐾。
+    return Container(
+      color: AppColors.skyTint,
+      alignment: Alignment.center,
+      child: const Text('🐾', style: TextStyle(fontSize: 15)),
+    );
+  }
+
+  /// 有 diary 图时的右下角小角标：问诊 🏥 > 健康记录分类图标。
+  Widget _cornerIcon(CalendarDayCell cell) {
+    if (cell.hasHealthEvent) {
+      return const Text('🏥', style: TextStyle(fontSize: 11));
+    }
+    final ({IconData icon, Color color})? cat = _healthCatIcon(cell.healthRecordType);
+    if (cat != null) {
+      return Container(
+        padding: const EdgeInsets.all(1.5),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4)),
+        child: Icon(cat.icon, size: 11, color: cat.color),
+      );
+    }
+    return const SizedBox.shrink();
+  }
+
+  /// 健康记录分类 → 图标/色（与健康记录页 health_list_page 分类卡一致，bug 20260722-352）。
+  ({IconData icon, Color color})? _healthCatIcon(String? type) => switch (type) {
+        'VACCINE' => (icon: Icons.vaccines_outlined, color: AppColors.coral),
+        'DEWORM' => (icon: Icons.medication_outlined, color: AppColors.triageGreen),
+        'NEUTER' => (icon: Icons.healing_outlined, color: AppColors.mint),
+        'MENSTRUATION' => (icon: Icons.water_drop_outlined, color: AppColors.infoBlue),
+        'CUSTOM' => (icon: Icons.description_outlined, color: AppColors.muted),
+        _ => null,
+      };
 }
 
 class _CalendarError extends StatelessWidget {

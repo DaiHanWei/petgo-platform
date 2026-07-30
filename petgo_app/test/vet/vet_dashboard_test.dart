@@ -4,18 +4,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/core/storage/secure_storage.dart';
 import 'package:tailtopia/features/vet/data/vet_repository.dart';
-import 'package:tailtopia/features/vet/domain/vet_inbox_item.dart';
 import 'package:tailtopia/features/vet/domain/vet_login_response.dart';
+import 'package:tailtopia/features/vet/domain/vet_queue.dart';
 import 'package:tailtopia/features/vet/domain/vet_workbench_lists.dart';
 import 'package:tailtopia/features/vet/presentation/vet_inbox_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
-/// 假 VetRepository：dashboard 头部用 me/history/在线态，队列用 waitingList。
+/// 假 VetRepository：dashboard 头部用 me/history/在线态，队列用计费流 vetQueue（Story 3.6）。
 class _FakeVetRepository extends VetRepository {
-  _FakeVetRepository({this.items = const [], this.historyCount = 0})
+  _FakeVetRepository({this.queueCount = 0, this.historyCount = 0})
       : super(dio: Dio(), tokenStore: InMemoryTokenStore());
 
-  final List<VetInboxItem> items;
+  final int queueCount;
   final int historyCount;
   bool online = false;
 
@@ -23,7 +23,12 @@ class _FakeVetRepository extends VetRepository {
   Future<VetMe> me() async => const VetMe(id: 1, displayName: '王医生', status: 'ACTIVE');
 
   @override
-  Future<List<VetInboxItem>> waitingList() async => items;
+  Future<VetQueue> vetQueue() async => VetQueue(
+        available: List.generate(
+          queueCount,
+          (i) => VetQueueItem(requestToken: 'req-$i', waitingSeconds: 5),
+        ),
+      );
 
   @override
   Future<List<VetHistoryEntry>> history() async => List.generate(
@@ -72,13 +77,7 @@ void main() {
   });
 
   testWidgets('3 统计卡：队列=列表数、完成=今日 history 数、评分占位「—」', (tester) async {
-    final repo = _FakeVetRepository(
-      items: const [
-        VetInboxItem(sessionId: 1, source: 'DIRECT', imageCount: 0, waitingElapsedSeconds: 5),
-        VetInboxItem(sessionId: 2, source: 'DIRECT', imageCount: 0, waitingElapsedSeconds: 5),
-      ],
-      historyCount: 3,
-    );
+    final repo = _FakeVetRepository(queueCount: 2, historyCount: 3);
     await _pump(tester, repo);
 
     expect(find.text('Queue'), findsOneWidget);

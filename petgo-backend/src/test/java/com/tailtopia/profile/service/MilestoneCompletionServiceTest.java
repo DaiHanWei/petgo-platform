@@ -13,6 +13,7 @@ import com.tailtopia.profile.domain.MilestoneCompletionSource;
 import com.tailtopia.profile.domain.PetMilestone;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.domain.PetType;
+import com.tailtopia.profile.repository.HealthRecordRepository;
 import com.tailtopia.profile.repository.MilestoneCompletionRepository;
 import com.tailtopia.profile.repository.PetMilestoneRepository;
 import com.tailtopia.profile.repository.PetProfileRepository;
@@ -31,6 +32,7 @@ class MilestoneCompletionServiceTest {
     private PetProfileRepository profiles;
     private PetMilestoneRepository milestones;
     private MilestoneCompletionRepository completions;
+    private HealthRecordRepository healthRecords;
     private MilestoneCompletionService service;
 
     private long nextId = 1;
@@ -40,7 +42,8 @@ class MilestoneCompletionServiceTest {
         profiles = Mockito.mock(PetProfileRepository.class);
         milestones = Mockito.mock(PetMilestoneRepository.class);
         completions = Mockito.mock(MilestoneCompletionRepository.class);
-        service = new MilestoneCompletionService(profiles, milestones, completions,
+        healthRecords = Mockito.mock(HealthRecordRepository.class);
+        service = new MilestoneCompletionService(profiles, milestones, completions, healthRecords,
                 Mockito.mock(org.springframework.context.ApplicationEventPublisher.class));
     }
 
@@ -105,10 +108,11 @@ class MilestoneCompletionServiceTest {
 
         service.onGrowthMomentCount(7L, 10);
 
-        verify(milestones).findByPetProfileIdAndCode(10, "D-S2");
+        // S2 ∈ 新手前置：完成后会再被 Lulus Pemula 前置扫描查一次（7.3），故 atLeastOnce。
+        verify(milestones, org.mockito.Mockito.atLeastOnce()).findByPetProfileIdAndCode(10, "D-S2");
         verify(milestones).findByPetProfileIdAndCode(10, "D-M10");
         verify(milestones, never()).findByPetProfileIdAndCode(10, "D-L5");
-        verify(completions, times(2)).save(any());
+        verify(completions, times(2)).save(any()); // S2 + M10（无健康记录 → 不解锁 Lulus Pemula）
     }
 
     @Test
@@ -165,6 +169,80 @@ class MilestoneCompletionServiceTest {
         verify(completions, times(2)).save(cap.capture());
         assertThat(cap.getAllValues().stream().map(MilestoneCompletion::getPetMilestoneId))
                 .containsExactlyInAnyOrder(m5, l4);
+    }
+
+    // ── Lulus Pemula 聚合（Story 7.3）─────────────────────────────────────────────
+
+    /** S1–S4 已完成 + 本次完成 S5 + 有健康记录 → 解锁 Lulus Pemula（C-S16）。 */
+    @Test
+    void lulusPemulaUnlocksWhenAllFivePlusHealthRecord() {
+        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(profile(PetType.CAT, 10)));
+        long s1 = stubRoster(10, "C-S1");
+        long s2 = stubRoster(10, "C-S2");
+        long s3 = stubRoster(10, "C-S3");
+        long s4 = stubRoster(10, "C-S4");
+        long s5 = stubRoster(10, "C-S5");
+        long lp = stubRoster(10, "C-S16");
+        when(completions.existsByPetMilestoneId(s1)).thenReturn(true);
+        when(completions.existsByPetMilestoneId(s2)).thenReturn(true);
+        when(completions.existsByPetMilestoneId(s3)).thenReturn(true);
+        when(completions.existsByPetMilestoneId(s4)).thenReturn(true);
+        when(completions.existsByPetMilestoneId(s5)).thenReturn(false, true); // guard false → 本次存 → 复查 true
+        when(healthRecords.existsByPetProfileId(10)).thenReturn(true);
+
+        boolean done = service.completeForOwner(7L, "S5", MilestoneCompletionSource.SYSTEM_AUTO);
+
+        assertThat(done).isTrue();
+        ArgumentCaptor<MilestoneCompletion> cap = ArgumentCaptor.forClass(MilestoneCompletion.class);
+        verify(completions, times(2)).save(cap.capture());
+        assertThat(cap.getAllValues().stream().map(MilestoneCompletion::getPetMilestoneId))
+                .containsExactlyInAnyOrder(s5, lp); // S5 + Lulus Pemula
+    }
+
+    /** S1–S5 全完成但**无健康记录** → 不解锁 Lulus Pemula（仅存 S5）。 */
+    @Test
+    void lulusPemulaNotUnlockedWithoutHealthRecord() {
+        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(profile(PetType.CAT, 10)));
+        long s1 = stubRoster(10, "C-S1");
+        long s2 = stubRoster(10, "C-S2");
+        long s3 = stubRoster(10, "C-S3");
+        long s4 = stubRoster(10, "C-S4");
+        long s5 = stubRoster(10, "C-S5");
+        stubRoster(10, "C-S16");
+        when(completions.existsByPetMilestoneId(s1)).thenReturn(true);
+        when(completions.existsByPetMilestoneId(s2)).thenReturn(true);
+        when(completions.existsByPetMilestoneId(s3)).thenReturn(true);
+        when(completions.existsByPetMilestoneId(s4)).thenReturn(true);
+        when(completions.existsByPetMilestoneId(s5)).thenReturn(false, true);
+        when(healthRecords.existsByPetProfileId(10)).thenReturn(false); // 无健康记录
+
+        service.completeForOwner(7L, "S5", MilestoneCompletionSource.SYSTEM_AUTO);
+
+        // 仅 S5 落库，C-S16 不解锁。
+        verify(completions, times(1)).save(any());
+        verify(milestones, never()).findByPetProfileIdAndCode(10, "C-S16");
+    }
+
+    /** 健康记录事件路径：S1–S5 已全完成，创建健康记录后经 owner 入口解锁 Lulus Pemula。 */
+    @Test
+    void healthRecordPathUnlocksLulusPemulaWhenFiveAlreadyDone() {
+        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(profile(PetType.CAT, 10)));
+        long s1 = stubRoster(10, "C-S1");
+        long s2 = stubRoster(10, "C-S2");
+        long s3 = stubRoster(10, "C-S3");
+        long s4 = stubRoster(10, "C-S4");
+        long s5 = stubRoster(10, "C-S5");
+        long lp = stubRoster(10, "C-S16");
+        for (long id : new long[] {s1, s2, s3, s4, s5}) {
+            when(completions.existsByPetMilestoneId(id)).thenReturn(true);
+        }
+        when(healthRecords.existsByPetProfileId(10)).thenReturn(true);
+
+        service.maybeUnlockLulusPemulaForOwner(7L);
+
+        ArgumentCaptor<MilestoneCompletion> cap = ArgumentCaptor.forClass(MilestoneCompletion.class);
+        verify(completions).save(cap.capture());
+        assertThat(cap.getValue().getPetMilestoneId()).isEqualTo(lp);
     }
 
     private static void setField(Object o, String name, Object value) {

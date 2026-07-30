@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.2+6
+version: 1.1.0+7
 
 environment:
   sdk: ^3.12.1
@@ -50,18 +50,27 @@ dependencies:
   # FR-44：Apple Sign-In（仅 iOS 展示按钮；真机授权需 iOS「Sign in with Apple」能力，L2 节点）。
   sign_in_with_apple: ^8.0.0
   url_launcher: ^6.3.1
+  # Story 1.3：PawCoin 充值二维码本地生成。GemPay 返回 QRIS/EMVCo 串（qrcode），
+  # 由本地生成二维码渲染（qrcode_url 是托管网页非图片，不能 Image.network）。
+  qr_flutter: ^4.1.0
   # Story 2.1：媒体基建（选图 / 权限 / 客户端压缩 + EXIF 剥离）。
   # 处理用纯 Dart 的 `image`（解码重编码即丢弃 EXIF/GPS，headless 可单测），
   # 选图/权限用原生插件（仅运行期路径）。
   image_picker: ^1.1.2
+  # 直接依赖 Android 实现包，用于开启 Android Photo Picker（否则无 GMS 华为机相册会弹成文档选择器）。
+  image_picker_android: ^0.8.13
+  image_picker_platform_interface: ^2.10.0
   permission_handler: ^11.3.1
   # 相册权限需按 Android SDK 分流（≤12 用 READ_EXTERNAL_STORAGE，13+ 用 READ_MEDIA_IMAGES），
   # 取 androidInfo.version.sdkInt 判定；否则 Android 12 设备请求 photos 恒 permanentlyDenied（死循环）。
   device_info_plus: ^11.1.0
+  package_info_plus: ^8.1.0
   image: ^4.3.0
   crypto: ^3.0.3
   # Story 2.7：系统分享菜单（名片链接）。
   share_plus: ^10.1.4
+  # bug 20260721-334：身份证卡保存到相册（Android 10+/iOS 无需存储权限，SDK≤28 走 storage）。
+  gal: ^2.3.0
   # 高保真还原：原型内联 SVG 图标 1:1 渲染（禁止 Material Icons 近似替代）。
   flutter_svg: ^2.0.10+1
   # Story 5.5 L2：腾讯 IM Flutter SDK（兽医↔用户实时 C2C 收发）。
@@ -69,7 +78,13 @@ dependencies:
   tencent_cloud_chat_sdk: ^9.0.7652+1
   # 前端行为分析（PostHog Cloud US）。Project Token 走 dart-define 注入（POSTHOG_KEY），
   # 不外露 PII / 不传自增 id（identify 用哈希 distinctId，见 core/analytics/analytics.dart）。
-  posthog_flutter: ^4.0.0
+  posthog_flutter: ^5.33.0
+  # 移动归因（AppsFlyer，付费投放 ROAS）。Dev Key 走 dart-define 注入（APPSFLYER_DEV_KEY），
+  # 上报必须走 Analytics 门面白名单 + 同一 sanitizer（TT-DPR-2026-001 红线），
+  # 见 core/analytics/appsflyer_client.dart 与《TailTopia-AppsFlyer-SDK接入交付文档》。
+  appsflyer_sdk: ^6.18.1
+  # iOS 14.5+ ATT 授权弹窗（拿 IDFA 用；AppsFlyer 插件只等待不弹框）。Android 上无操作。
+  app_tracking_transparency: ^2.0.6
 
 dev_dependencies:
   flutter_test:
@@ -105,6 +120,9 @@ flutter:
     - assets/seed/
     - assets/icons/
     - assets/brand/
+    - assets/ktp/
+    - assets/passport/
+    - assets/student/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
@@ -146,6 +164,11 @@ flutter:
     - family: Quicksand
       fonts:
         - asset: assets/fonts/Quicksand-VariableFont_wght.ttf
+    # Rubik：KTP 证件卡专用（设计稿 FONT.txt 指定 SemiBold/Medium）。可变字体(300–900)，
+    # 按 fontVariations 取字重。仅证件卡用，不进全局主题。
+    - family: Rubik
+      fonts:
+        - asset: assets/fonts/Rubik-VariableFont_wght.ttf
 
 # App 图标（紫色猫狗 logo）。重生成：dart run flutter_launcher_icons
 flutter_launcher_icons:

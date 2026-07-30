@@ -405,7 +405,7 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.consultCount").value(0))
                 // 8-3 自动完成：2 条成长瞬间跨过 onGrowthMomentCount>=1 阈值，完成「首条成长记录」里程碑
                 .andExpect(jsonPath("$.milestoneCompleted").value(1))
-                .andExpect(jsonPath("$.milestoneTotal").value(30)); // DOG = 30
+                .andExpect(jsonPath("$.milestoneTotal").value(31)); // DOG = 31（7-3 加 D-S16 Lulus Pemula）
     }
 
     @Test

@@ -1,0 +1,20 @@
+package com.tailtopia.pay.dto;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import java.time.Instant;
+
+/**
+ * 充值下单响应（Story 1.3）。<b>只回对外 {@code intentToken}（非自增 id）</b> + 付款载荷
+ * （QRIS 二维码串）；前端据 payload 渲染付款，回调到账后余额自动增加。
+ *
+ * @param intentToken 支付意图对外 token（轮询/查询用）
+ * @param channel     支付渠道
+ * @param amount      充值金额（IDR 最小单位整型）
+ * @param coins       到账 koin（1:1）
+ * @param payload     付款载荷（二维码串 / deeplink；stub 为伪串）
+ * @param expiresAt   付款窗过期时刻（V85，60min；服务端权威，前端倒计时/过期判定据此。null=无过期）
+ */
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public record TopupResponse(String intentToken, String channel, long amount, long coins, String payload,
+        Instant expiresAt) {
+}

@@ -5,6 +5,9 @@ import com.tailtopia.shared.ratelimit.RedisRateLimiter;
 import com.tailtopia.triage.dto.TriageAcceptedResponse;
 import com.tailtopia.triage.dto.TriageResultResponse;
 import com.tailtopia.triage.dto.TriageSubmitRequest;
+import com.tailtopia.triage.dto.UnlockRequest;
+import com.tailtopia.triage.dto.UnlockResponse;
+import com.tailtopia.triage.service.AiUnlockService;
 import com.tailtopia.triage.service.TriageService;
 import jakarta.validation.Valid;
 import java.time.Duration;
@@ -35,10 +38,13 @@ public class TriageController {
     private static final Duration SUBMIT_WINDOW = Duration.ofMinutes(1);
 
     private final TriageService triageService;
+    private final AiUnlockService aiUnlockService;
     private final RedisRateLimiter rateLimiter;
 
-    public TriageController(TriageService triageService, RedisRateLimiter rateLimiter) {
+    public TriageController(TriageService triageService, AiUnlockService aiUnlockService,
+            RedisRateLimiter rateLimiter) {
         this.triageService = triageService;
+        this.aiUnlockService = aiUnlockService;
         this.rateLimiter = rateLimiter;
     }
 
@@ -69,6 +75,18 @@ public class TriageController {
     @GetMapping("/{id}")
     public TriageResultResponse get(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
         return triageService.getResult(currentUserId(jwt), id);
+    }
+
+    /**
+     * 解锁 AI 详建（Story 2.3）：免费额度 / PawCoin（同步，返回已解锁结果）或 QRIS（现金，返回支付信息）。
+     * 仅本人（非 owner/不存在 403）；红色/已解锁短路不扣费。写端点限流。
+     */
+    @PostMapping("/{id}/unlock")
+    public UnlockResponse unlock(@AuthenticationPrincipal Jwt jwt, @PathVariable long id,
+            @Valid @RequestBody UnlockRequest req) {
+        long userId = currentUserId(jwt);
+        rateLimiter.check("rl:triage:unlock:" + userId, SUBMIT_LIMIT, SUBMIT_WINDOW);
+        return aiUnlockService.unlock(userId, id, req.method());
     }
 
     private static long currentUserId(Jwt jwt) {

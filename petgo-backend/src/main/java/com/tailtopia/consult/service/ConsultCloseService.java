@@ -1,11 +1,15 @@
 package com.tailtopia.consult.service;
 
+import com.tailtopia.consult.domain.ConsultOrder;
+import com.tailtopia.consult.domain.ConsultOrderStatus;
 import com.tailtopia.consult.domain.ConsultRating;
 import com.tailtopia.consult.domain.ConsultSession;
+import com.tailtopia.consult.domain.ConsultStageEvent;
 import com.tailtopia.consult.domain.RatingPromptState;
 import com.tailtopia.consult.domain.SessionStatus;
 import com.tailtopia.consult.domain.VetDiagnosis;
 import com.tailtopia.consult.event.ConsultClosedEvent;
+import com.tailtopia.consult.repository.ConsultOrderRepository;
 import com.tailtopia.consult.repository.ConsultRatingRepository;
 import com.tailtopia.consult.repository.ConsultSessionRepository;
 import com.tailtopia.shared.error.AppException;
@@ -37,14 +41,19 @@ public class ConsultCloseService {
     private final VetPresenceService presence;
     private final TencentImClient imClient;
     private final ApplicationEventPublisher events;
+    private final ConsultOrderRepository orders;
+    private final ConsultBillingService billing;
 
     public ConsultCloseService(ConsultSessionRepository sessions, ConsultRatingRepository ratings,
-            VetPresenceService presence, TencentImClient imClient, ApplicationEventPublisher events) {
+            VetPresenceService presence, TencentImClient imClient, ApplicationEventPublisher events,
+            ConsultOrderRepository orders, ConsultBillingService billing) {
         this.sessions = sessions;
         this.ratings = ratings;
         this.presence = presence;
         this.imClient = imClient;
         this.events = events;
+        this.orders = orders;
+        this.billing = billing;
     }
 
     /**
@@ -61,6 +70,10 @@ public class ConsultCloseService {
         s.recordDiagnosis(diagnosis); // Story C：先定格诊断，再转 PENDING_CLOSE
         s.endByVet();
         sessions.save(s);
+        // bug 20260721-348：诊断交付即完成订单（IN_PROGRESS→COMPLETED），不再等评分门/30min 超时才补完成，
+        // 否则「已发诊断」到「会话真正 CLOSED」的窗口内订单一直显示 In progress。幂等 + 按本会话精确取单，
+        // 与 bug 324（防误标他单）不冲突；免费直连流无订单则静默跳过。
+        completeBillingOrder(s);
         presence.goAvailable(vetId); // 结束后回在线可接新单（解除 5.5 BUSY）
         if (s.getImConversationId() != null) {
             // 诊断作为系统消息推给用户（聊天里直接可见）。含健康数据：仅经 IM 投递，绝不进日志。
@@ -125,6 +138,7 @@ public class ConsultCloseService {
         if (status == SessionStatus.PENDING_CLOSE) {
             s.closeRated();
             sessions.save(s);
+            completeBillingOrder(s); // Story 3.7：付费订单 IN_PROGRESS→COMPLETED（同事务，免费流跳过）
             publishClosed(s, true);
         } else {
             // 补弹后补评分：会话已关闭/已存档，仅清补弹标记，不重复发存档事件。
@@ -174,9 +188,35 @@ public class ConsultCloseService {
         for (ConsultSession s : expired) {
             s.closeUnrated();
             sessions.save(s);
+            completeBillingOrder(s); // Story 3.7：付费订单 IN_PROGRESS→COMPLETED（同事务，免费流跳过）
             publishClosed(s, false);
         }
         return expired.size();
+    }
+
+    /**
+     * 会话完成 → 付费订单完成（Story 3.7，D-1）：查该会话 {@code (userId, vetId, IN_PROGRESS)} 付费订单，
+     * 有则 {@code IN_PROGRESS→COMPLETED} + 记 {@code session_ended_at}（会话终态时刻）+ 追加 {@code SESSION_ENDED}
+     * 节点（append-only）。**免费直连流会话无订单 → 跳过**（不报错）。收尾事务内原子；幂等（{@code markCompleted}
+     * 仅 IN_PROGRESS 生效，REFUNDING/REFUNDED 天然不匹配谓词）。
+     */
+    private void completeBillingOrder(ConsultSession s) {
+        if (s.getVetId() == null) {
+            return; // 无兽医（CLOSED 前应已接单，防御性守卫）
+        }
+        // bug 20260721-324：按本会话自身 consult_session_id 精确取，避免松匹配把另一场会话的收尾
+        // 误算到滞留的已付款单头上。免费直连流会话无订单 → empty（跳过）。
+        Optional<ConsultOrder> found = orders.findByConsultSessionIdAndStatus(
+                s.getId(), ConsultOrderStatus.IN_PROGRESS);
+        if (found.isEmpty()) {
+            return; // 免费直连流会话无 consult_orders → 跳过
+        }
+        ConsultOrder order = found.get();
+        Instant endedAt = s.terminalAt() != null ? s.terminalAt() : Instant.now();
+        if (order.markCompleted(endedAt)) {
+            orders.save(order);
+            billing.appendStageEvent(order.getId(), ConsultStageEvent.SESSION_ENDED, endedAt, null);
+        }
     }
 
     private void publishClosed(ConsultSession s, boolean rated) {

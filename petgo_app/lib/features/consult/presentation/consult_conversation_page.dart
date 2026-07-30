@@ -30,9 +30,12 @@ import 'im_chat_placeholder.dart';
 /// 常驻免责提示（NFR-9）+ IM 对话区（L2 占位）。轮询会话状态：兽医结束 → PENDING_CLOSE →
 /// 展示「请评分」+ 评分弹窗（30min 窗口内仍可继续发消息，输入框不锁）；评分提交 → CLOSED 只读。
 class ConsultConversationPage extends ConsumerStatefulWidget {
-  const ConsultConversationPage({super.key, required this.sessionId});
+  const ConsultConversationPage({super.key, required this.sessionId, this.from});
 
   final int sessionId;
+
+  /// 进入来源（bug 20260721-336）：`diary`=从宠物 diary 时间线点入，返回应回 diary；其余(默认)回 /triage。
+  final String? from;
 
   @override
   ConsumerState<ConsultConversationPage> createState() => _ConsultConversationPageState();
@@ -42,9 +45,13 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
   static const Duration _pollInterval = Duration(seconds: 5);
 
   Timer? _poll;
+  Timer? _suspendTicker; // Story 3.8：挂起倒计时 1s 显示刷新（仅挂起态启用）
+  DateTime? _suspendDeadlineAt; // 非 null = 封禁挂起中（H-5），显逃生横幅 + 倒计时
+  bool _escaping = false; // 逃生请求进行中，防重复点
   String _status = 'IN_PROGRESS';
   String? _closedReason;
   bool _rated = false;
+  bool _ratingOpen = false; // 评分入口连点守卫，防叠开评分页（bug 20260728-377 同族）
   bool _firstConsultPushTried = false; // 首次问诊推送闸门本页只触发一次（gate 另有持久化自守）
   ActiveConsultSession? _activeNotifier;
   ConsultCase? _case; // 用户自填病例（症状 + 私密图签名 URL）：摘要条展开用，异步拉
@@ -53,6 +60,7 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
   ConsultDiagnosis? _diagnosis;
   bool _diagnosisFetched = false; // 完成一次拉取（成功 / 确认无诊断）；失败保持 false 待重试
   bool _diagnosisLoading = false;
+  bool _savingToArchive = false; // 存档进行中：按钮 disable + spinner，防重复点（bug 20260721-332）
 
   // Story 5.5 live 增量：进行中会话登录 IM 收发；离开/结束登出（控 MAU + 不留连接）。
   ImService? _imService;
@@ -99,6 +107,7 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
   @override
   void dispose() {
     _poll?.cancel();
+    _suspendTicker?.cancel();
     // 离开会话页 → 清激活标记（用 initState 捕获的 notifier，避免 dispose 期 ref 失效）。
     _activeNotifier?.set(null);
     // 离开即登出 IM（不留长连接 / 控 MAU）。
@@ -113,10 +122,12 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
       setState(() {
         _status = s.status;
         _closedReason = s.closedReason;
+        _suspendDeadlineAt = s.suspendDeadlineAt; // Story 3.8：封禁挂起态（H-5）
         // 后端报已评分即锁死评分入口（含补评分后 closedReason 仍 UNRATED 的情形）。
         if (s.rated) _rated = true;
         if (s.vetId != null) _peerId = 'v_${s.vetId}';
       });
+      _syncSuspendTicker(); // 挂起态启用 1s 倒计时刷新，退出挂起则停
       // 进行中（已接单）才登录 IM：取 UserSig 经后端 MAU 闸门（用户须有活跃会话）。
       if (!_imLoginStarted && s.status == 'IN_PROGRESS' && s.vetId != null) {
         _imLoginStarted = true;
@@ -152,6 +163,16 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
   }
 
   Future<void> _openRating() async {
+    if (_ratingOpen) return;
+    _ratingOpen = true;
+    try {
+      await _doOpenRating();
+    } finally {
+      _ratingOpen = false;
+    }
+  }
+
+  Future<void> _doOpenRating() async {
     final l10n = AppLocalizations.of(context);
     final result = await ConsultRatingDialog.show(context);
     if (result == null || !mounted) return;
@@ -178,7 +199,64 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
   /// 用 go 而非 pop：新发起流程栈下是 /consult/case 表单，pop 会错误退回表单（indexedStack
   /// 保留 /triage 既有状态，go 回去等价于回到记录页）。
   void _leave() {
+    // 从 diary 进入 → 回 diary（bug 20260721-336）：栈内可 pop 直接回时间线，否则去 /profile Tab。
+    if (widget.from == 'diary') {
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go('/profile');
+      }
+      return;
+    }
     context.go('/triage');
+  }
+
+  /// 挂起态启用 1s 倒计时显示刷新；退出挂起（结束/退出）即停（Story 3.8）。
+  void _syncSuspendTicker() {
+    if (_suspendDeadlineAt != null && _suspendTicker == null) {
+      _suspendTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() {});
+      });
+    } else if (_suspendDeadlineAt == null) {
+      _suspendTicker?.cancel();
+      _suspendTicker = null;
+    }
+  }
+
+  /// 封禁挂起逃生「立即结束」（Story 3.8，H-5）：强制结束+按支付方式退款 → INTERRUPTED 终态。
+  Future<void> _escape() async {
+    if (_escaping) return;
+    final l10n = AppLocalizations.of(context);
+    setState(() => _escaping = true);
+    try {
+      final s = await ref.read(consultRepositoryProvider).escapeSuspended(widget.sessionId);
+      if (!mounted) return;
+      setState(() {
+        _status = s.status; // INTERRUPTED
+        _suspendDeadlineAt = null;
+      });
+      _syncSuspendTicker();
+      _poll?.cancel();
+      showAppToast(context, l10n.consultSuspendEscaped);
+    } catch (_) {
+      if (mounted) showAppToast(context, l10n.consultSuspendEscapeFailed);
+    } finally {
+      if (mounted) setState(() => _escaping = false);
+    }
+  }
+
+  /// 「上报」封禁事件（Story 3.8）：主逃生（立即结束+退款）已自动处理，此为附加投诉入口（最简提示）。
+  void _report() {
+    showAppToast(context, AppLocalizations.of(context).consultSuspendReported);
+  }
+
+  String _suspendMmss() {
+    final d = _suspendDeadlineAt;
+    if (d == null) return '00:00';
+    final remaining = d.difference(DateTime.now().toUtc()).inSeconds.clamp(0, 15 * 60);
+    final m = (remaining ~/ 60).toString().padLeft(2, '0');
+    final sec = (remaining % 60).toString().padLeft(2, '0');
+    return '$m:$sec';
   }
 
   /// 查看会诊结果：拉本次最终诊断 → 只读弹层；未出诊断则提示。
@@ -194,13 +272,16 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
       context,
       d,
       // 结果弹窗底部「存入宠物档案」（bug 20260707）：先关弹窗再走存档流程。
-      footerBuilder: (sheetCtx) => _saveButton(
-        l10n,
-        onTap: () {
-          Navigator.of(sheetCtx).pop();
-          _saveToArchive();
-        },
-      ),
+      // 已存档记录显被动标签不再显示保存按钮（bug 20260721-333）。
+      footerBuilder: (sheetCtx) => d.isArchived
+          ? _archivedBadge(l10n)
+          : _saveButton(
+              l10n,
+              onTap: () {
+                Navigator.of(sheetCtx).pop();
+                _saveToArchive();
+              },
+            ),
     );
   }
 
@@ -208,33 +289,77 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
   /// 入口从聊天室顶部横幅移到**问诊结果底部**（结果弹窗 + CLOSED 内联结果区）。复用 Story 2.5 三态存档流程。
   /// sourceRef=`consult:<sessionId>` 与档案幂等键、时间线深链一致。存档后刷新成长档案，使 diary 当场可见。
   Future<void> _saveToArchive() async {
+    if (_savingToArchive) return; // 防重复点（bug 20260721-332）
+    final l10n = AppLocalizations.of(context);
     final d = _diagnosis;
-    await showArchivePrompt(
-      context,
-      ref,
-      ArchivePromptArgs(
-        sourceRef: 'consult:${widget.sessionId}',
-        sourceType: HealthSourceType.vetConsult,
-        symptomSummary: d?.diagnosis,
-        adviceSummary: d?.generalAdvice,
-      ),
-    );
-    if (!mounted) return;
-    // 存档（ARCHIVED）后使成长档案时间线 / 统计失效 → 进档案页即见 diary（bug 20260707）。
-    ref.invalidate(timelineFirstPageProvider);
-    ref.invalidate(archiveStatsProvider);
+    setState(() => _savingToArchive = true); // 立即给按钮 loading 态，网络在途不再"无响应"
+    try {
+      final saved = await showArchivePrompt(
+        context,
+        ref,
+        ArchivePromptArgs(
+          sourceRef: 'consult:${widget.sessionId}',
+          sourceType: HealthSourceType.vetConsult,
+          symptomSummary: d?.diagnosis,
+          adviceSummary: d?.generalAdvice,
+          // 显式点保存：绕过「只问一次」守卫——此前选过「跳过」也能补存（bug 20260727 保存静默无效）。
+          explicitSave: true,
+        ),
+      );
+      if (!mounted) return;
+      // 存档（ARCHIVED）后使成长档案时间线 / 统计失效 → 进档案页即见 diary（bug 20260707）。
+      ref.invalidate(timelineFirstPageProvider);
+      ref.invalidate(archiveStatsProvider);
+      // 存档成功给用户明确反馈（bug 20260721-338）+ 本地翻转 isArchived 使按钮当场变「已存入」标签（bug 20260721-333）。
+      if (saved) {
+        setState(() => _diagnosis = _diagnosis?.copyWith(isArchived: true));
+        showAppToast(context, l10n.consultArchiveSavedToDiary);
+      }
+    } catch (_) {
+      // needsPrompt / 记录写入抛错不再被静默吞掉（bug 20260721-332）。
+      if (mounted) showAppToast(context, l10n.consultArchiveSaveFailed);
+    } finally {
+      if (mounted) setState(() => _savingToArchive = false);
+    }
   }
 
   /// 「存入宠物档案」按钮（问诊结果底部 opt-in）。[onTap] 由调用处决定是否先关结果弹窗再走存档流程。
-  Widget _saveButton(AppLocalizations l10n, {required VoidCallback onTap}) {
+  /// [busy]=true 时禁用并显 spinner（存档在途，bug 20260721-332）。
+  Widget _saveButton(AppLocalizations l10n, {required VoidCallback onTap, bool busy = false}) {
     return SizedBox(
       width: double.infinity,
       child: FilledButton.icon(
         key: const ValueKey('consultSaveToArchive'),
         style: FilledButton.styleFrom(backgroundColor: AppColors.mint),
-        onPressed: onTap,
-        icon: const Text('📁', style: TextStyle(fontSize: 15)),
+        onPressed: busy ? null : onTap,
+        icon: busy
+            ? const SizedBox(
+                width: 15,
+                height: 15,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              )
+            : const Text('📁', style: TextStyle(fontSize: 15)),
         label: Text(l10n.triageSaveToArchive),
+      ),
+    );
+  }
+
+  /// 已存档被动标签（替代已存记录的保存按钮，bug 20260721-333）。
+  Widget _archivedBadge(AppLocalizations l10n) {
+    return SizedBox(
+      width: double.infinity,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.check_circle_rounded, size: 18, color: AppColors.mint),
+            const SizedBox(width: 6),
+            Text(l10n.consultArchivedBadge,
+                style: const TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.mint)),
+          ],
+        ),
       ),
     );
   }
@@ -275,7 +400,9 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
           Expanded(child: ConsultDiagnosisView(diagnosis: d)),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: _saveButton(l10n, onTap: _saveToArchive),
+            child: d.isArchived
+                ? _archivedBadge(l10n)
+                : _saveButton(l10n, onTap: _saveToArchive, busy: _savingToArchive),
           ),
         ],
       );
@@ -339,6 +466,8 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
               ],
             ),
           ),
+          // 封禁挂起逃生横幅（Story 3.8，H-5）：兽医被封禁、本付费会话挂起中 → 醒目告知 + 倒计时 + 逃生 CTA。
+          if (active && _suspendDeadlineAt != null) _suspendBanner(l10n),
           // 30min 续聊期 → 「查看会诊结果」入口（弹层）；CLOSED 后改正文平铺，不再显示此条。
           if (showResultEntry) _resultEntry(l10n),
           // 原始症状摘要条（原型紫浅底折叠条）。占位内容；仅活跃会话显示。
@@ -405,6 +534,69 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
           ),
         ],
       ),
+      ),
+    );
+  }
+
+  /// 封禁挂起逃生横幅（Story 3.8，H-5）：醒目告知兽医被封禁 + 15min 倒计时全额退款 + 逃生 CTA。
+  /// 「立即结束」→ 强制结束+退款（不等超时）；「上报」→ 附加投诉。会话不被劫持、用户在控制。
+  Widget _suspendBanner(AppLocalizations l10n) {
+    return Container(
+      key: const ValueKey('consultSuspendBanner'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      color: AppColors.coralTint,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.gpp_maybe_outlined, size: 18, color: AppColors.danger),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(l10n.consultSuspendTitle,
+                    style: AppTypography.title.copyWith(color: AppColors.healthEventText)),
+              ),
+              Text(_suspendMmss(),
+                  key: const ValueKey('consultSuspendCountdown'),
+                  style: AppTypography.title.copyWith(color: AppColors.danger)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(l10n.consultSuspendBody,
+              style: AppTypography.caption.copyWith(color: AppColors.healthEventText, height: 1.4)),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: FilledButton(
+                  key: const ValueKey('consultSuspendEndNow'),
+                  onPressed: _escaping ? null : _escape,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.danger,
+                    foregroundColor: AppColors.onAccent,
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                  ),
+                  child: Text(l10n.consultSuspendEndNow),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton(
+                  key: const ValueKey('consultSuspendReport'),
+                  onPressed: _report,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.healthEventText,
+                    side: BorderSide(color: AppColors.danger.withValues(alpha: 0.4), width: 1.5),
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                  ),
+                  child: Text(l10n.consultSuspendReport),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

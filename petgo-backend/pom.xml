@@ -80,6 +80,11 @@
 			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
 			<version>3.0.3</version>
 		</dependency>
+		<dependency>
+			<groupId>org.apache.poi</groupId>
+			<artifactId>poi-ooxml</artifactId>
+			<version>5.4.1</version>
+		</dependency>
 
 		<!-- Story 2.1：阿里云 OSS（雅加达双桶直传 / 签名 URL / 服务端 EXIF 兜底）+ STS 临时凭证签发。
 		     凭证全部 env 注入，绝不入库。版本取与 Java 21 / Spring Boot 4 兼容的稳定线。 -->

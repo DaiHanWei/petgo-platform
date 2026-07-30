@@ -4,9 +4,11 @@ import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.event.ContentCommentedEvent;
 import com.tailtopia.content.event.ContentLikedEvent;
 import com.tailtopia.content.event.ContentPublishedEvent;
+import com.tailtopia.profile.domain.HealthRecordType;
 import com.tailtopia.profile.domain.MilestoneCompletionSource;
 import com.tailtopia.profile.event.CardSharedEvent;
 import com.tailtopia.profile.event.HealthArchivedEvent;
+import com.tailtopia.profile.event.HealthRecordCreatedEvent;
 import com.tailtopia.profile.event.ProfileCreatedEvent;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -69,6 +71,29 @@ public class MilestoneAutoCompleteListener {
     @TransactionalEventListener
     public void onHealthArchived(HealthArchivedEvent e) {
         completion.completeForOwner(e.ownerId(), "S4", MilestoneCompletionSource.SYSTEM_AUTO);
+    }
+
+    /**
+     * 里程碑第四触发路径（Story 7.2，FR-45C）：结构化健康记录创建 → 自动完成对应里程碑。
+     * VACCINE→M3（疫苗）/ DEWORM→M4（驱虫）；其它类型无对应节点，忽略。幂等（唯一约束），与打卡路径互不冲突。
+     */
+    @Async
+    @TransactionalEventListener
+    public void onHealthRecordCreated(HealthRecordCreatedEvent e) {
+        String suffix = suffixFor(e.type());
+        if (suffix != null) {
+            completion.completeForOwner(e.ownerId(), suffix, MilestoneCompletionSource.SYSTEM_AUTO);
+        }
+        // Lulus Pemula 新手任务⑥（录入健康记录，任一 type）：可能是最后一块 → 尝试聚合解锁（7.3）。
+        completion.maybeUnlockLulusPemulaForOwner(e.ownerId());
+    }
+
+    private static String suffixFor(HealthRecordType type) {
+        return switch (type) {
+            case VACCINE -> "M3";
+            case DEWORM -> "M4";
+            case MENSTRUATION, NEUTER, CUSTOM -> null;
+        };
     }
 
     @Async

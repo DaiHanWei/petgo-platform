@@ -192,6 +192,9 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
       onRefresh: () async {
         ref.invalidate(timelineFirstPageProvider);
         ref.invalidate(archiveStatsProvider);
+        // bug 20260727-365：日历视图的数据在 calendarMonthProvider（按年月分族），漏失效会导致
+        // 日历 tab 下拉刷新只走动画不刷数据；整族失效（含非当前月缓存），照 pet_profile_edit_page 先例。
+        ref.invalidate(calendarMonthProvider);
       },
       child: ListView(
         padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 50, AppSpacing.lg, AppSpacing.section),
@@ -206,6 +209,8 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
                     style: const TextStyle(
                         fontSize: 19, fontWeight: FontWeight.w700, color: AppColors.ink)),
               ),
+              _idCardBtn(context),
+              const SizedBox(width: 8),
               _appbarBtn(),
             ],
           ),
@@ -216,6 +221,9 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
             consultCount: stats?.consultCount,
             milestoneCount: stats?.milestoneCompleted,
           ),
+          const SizedBox(height: 11),
+          // 健康记录入口卡（BARU · 0711 paspor-entries）：紫虚线 → /profile/health
+          _healthEntryCard(context, l10n),
           const SizedBox(height: 11),
           _MilestoneBar(petName: name),
           const SizedBox(height: 12),
@@ -253,6 +261,83 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
               width: 18,
               height: 18,
               colorFilter: const ColorFilter.mode(AppColors.ink, BlendMode.srcIn),
+            ),
+          ),
+        ),
+      );
+
+  /// appbar 身份证按钮（BARU · 0711 paspor-entries）：ibtn + 右上 BARU 徽章 → /profile/id-card。
+  /// 编辑铅笔仍保留（宠物档案编辑入口不迁移，避免可达性丢失）。
+  Widget _idCardBtn(BuildContext context) => Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Material(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(11),
+            child: InkWell(
+              key: const ValueKey('diaryIdCardButton'),
+              borderRadius: BorderRadius.circular(11),
+              onTap: () => context.push('/profile/id-card'),
+              child: Container(
+                width: 38,
+                height: 38,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.card,
+                  borderRadius: BorderRadius.circular(11),
+                  boxShadow: const [
+                    BoxShadow(color: Color(0x12162233), offset: Offset(0, 2), blurRadius: 8),
+                  ],
+                ),
+                child: const Icon(Icons.badge_outlined, size: 20, color: AppColors.ink),
+              ),
+            ),
+          ),
+        ],
+      );
+
+  /// 健康记录入口卡（0718：普通实心卡，去 0711 的紫虚线+BARU）→ /profile/health。
+  /// 图标改参考的圆环对勾（check_circle_outline），无 tinted 方块底。
+  Widget _healthEntryCard(BuildContext context, AppLocalizations l10n) => Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: const [
+            BoxShadow(color: Color(0x0D2B2A27), offset: Offset(0, 2), blurRadius: 8),
+          ],
+        ),
+        child: Material(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(14),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            key: const ValueKey('diaryHealthEntry'),
+            onTap: () => context.push('/profile/health'),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
+                children: [
+                  const Icon(Icons.check_circle_outline, size: 26, color: AppColors.mint),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(l10n.diaryHealthEntryTitle,
+                            style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.ink)),
+                        const SizedBox(height: 2),
+                        Text(l10n.diaryHealthEntrySub,
+                            style: const TextStyle(
+                                fontSize: 12, color: AppColors.textSecondary)),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right, color: AppColors.muted),
+                ],
+              ),
             ),
           ),
         ),

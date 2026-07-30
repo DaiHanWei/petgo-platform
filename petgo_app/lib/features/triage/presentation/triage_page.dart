@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/analytics/analytics.dart';
+import '../../../core/analytics/button_ids.dart';
 import '../../../core/router/route_intent.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/rounded.dart';
@@ -79,7 +81,10 @@ class _TriagePageState extends ConsumerState<TriagePage> {
         ref,
         context,
         pendingAction: const RouteIntent(location: '/consult'),
-        onAllowed: () => context.push('/consult'),
+        onAllowed: () {
+          Analytics.buttonTapped(ButtonId.consultStart);
+          context.push('/consult');
+        },
       ),
     );
   }
@@ -147,7 +152,10 @@ class _TriagePageState extends ConsumerState<TriagePage> {
                 ref,
                 context,
                 pendingAction: const RouteIntent(location: '/triage/upload'),
-                onAllowed: () => context.push('/triage/upload'),
+                onAllowed: () {
+                  Analytics.buttonTapped(ButtonId.triageStart);
+                  context.push('/triage/upload');
+                },
               ),
             ),
             const SizedBox(height: 14),
@@ -247,7 +255,7 @@ class _KCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final onCard = ai ? AppColors.onAccent : AppColors.ink;
     final subColor = ai ? AppColors.onAccent.withValues(alpha: 0.85) : AppColors.ink2;
-    return Container(
+    final card = Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         gradient: ai
@@ -259,11 +267,12 @@ class _KCard extends StatelessWidget {
             : null,
         color: ai ? null : AppColors.card,
         borderRadius: BorderRadius.circular(20),
-        border: ai ? null : Border.all(color: AppColors.line, width: 1.5),
         boxShadow: AppShadows.md,
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        // start 对齐：否则 stretch 会用 tight 约束把宽 46 的图标盒撑满整卡宽（呈满宽横条）。
+        // CTA 按钮自带 SizedBox(width: double.infinity) 仍能撑满，不受影响。
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             width: 46,
@@ -299,6 +308,8 @@ class _KCard extends StatelessWidget {
         ],
       ),
     );
+    // 0718：兽医卡与 AI 卡一样直接返回实心卡（去 0711 的紫虚线描边+BARU 徽章）。
+    return card;
   }
 }
 

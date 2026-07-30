@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!-- 退款管理列表（Story 4.6）。三段职责分离：客服判定 / 主管审批 / 财务打款。PII 脱敏（账号末 4 位）。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title>退款管理 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1>退款管理</h1>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+        <table>
+            <thead>
+            <tr>
+                <th>退款单</th>
+                <th>订单</th>
+                <th>渠道</th>
+                <th>客服判定</th>
+                <th>审批态</th>
+                <th>金额</th>
+                <th>净额</th>
+                <th>操作</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="r : ${items}">
+                <td th:text="${r.refundToken}">tok</td>
+                <td th:text="${r.orderToken}">ord</td>
+                <td th:text="${r.payChannel}">QRIS</td>
+                <td th:text="${r.needDecision}">PENDING</td>
+                <td th:text="${r.approvalStatus} ?: '—'">—</td>
+                <td th:text="${r.orderAmount}">0</td>
+                <td th:text="${r.netAmount}">0</td>
+                <td><a class="btn btn-neutral btn-sm" th:href="@{/admin/refunds/{t}(t=${r.refundToken})}">详情</a></td>
+            </tr>
+            <tr th:if="${items.isEmpty()}">
+                <td colspan="8">暂无退款工单</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

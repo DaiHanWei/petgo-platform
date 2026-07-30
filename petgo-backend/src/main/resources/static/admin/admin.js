@@ -35,4 +35,9 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('dialog[data-autoopen="true"]').forEach(function (d) {
         if (typeof d.showModal === 'function') d.showModal();
     });
+    // Toast 自动消失（bug 346）：3s 淡出、3.4s 移除。
+    document.querySelectorAll('.toast').forEach(function (t) {
+        setTimeout(function () { t.classList.add('hide'); }, 3000);
+        setTimeout(function () { t.remove(); }, 3400);
+    });
 });

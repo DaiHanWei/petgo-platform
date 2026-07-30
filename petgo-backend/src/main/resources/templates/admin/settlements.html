@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!-- 兽医分成月结对账（Story 9.5，AB-8D）。财务流转 PENDING_FINANCE→PAID→ARCHIVED + 凭证 + 审计。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title>兽医月结对账 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1>兽医分成月结对账</h1>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+        <p class="hint">每月 1 日生成上月月结（待财务打款）。确认打款请回填凭证；打款后可归档。到手 = Σ 兽医分成快照。</p>
+        <table>
+            <thead>
+            <tr>
+                <th>兽医</th><th>月份</th><th>单数</th><th>成交额</th><th>到手</th>
+                <th>状态</th><th>凭证</th><th>打款时间</th><th>操作</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="s : ${settlements}">
+                <td th:text="${s.vetId}">0</td>
+                <td th:text="${s.period}">2026-06</td>
+                <td th:text="${s.orderCount}">0</td>
+                <td th:text="${s.grossAmount}">0</td>
+                <td th:text="${s.payoutAmount}">0</td>
+                <td th:text="${s.status}">PENDING_FINANCE</td>
+                <td th:text="${s.paymentProof} ?: '—'">—</td>
+                <td th:text="${s.paidAt} ?: '—'">—</td>
+                <td>
+                    <!-- 待打款：确认打款（填凭证）；已打款：归档；已归档：无操作 -->
+                    <form th:if="${s.status == 'PENDING_FINANCE'}" method="post"
+                          th:action="@{/admin/settlements/{id}/pay(id=${s.id})}" style="display:inline"
+                          sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('settlement.payout')">
+                        <input type="text" name="proof" placeholder="打款凭证/参考号" maxlength="512"/>
+                        <button type="submit" class="btn btn-primary btn-sm">确认打款</button>
+                    </form>
+                    <form th:if="${s.status == 'PAID'}" method="post"
+                          th:action="@{/admin/settlements/{id}/archive(id=${s.id})}" style="display:inline"
+                          sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('settlement.payout')">
+                        <button type="submit" class="btn btn-neutral btn-sm">归档</button>
+                    </form>
+                    <span th:if="${s.status == 'ARCHIVED'}" class="muted">—</span>
+                </td>
+            </tr>
+            <tr th:if="${settlements.isEmpty()}"><td colspan="9">暂无月结</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

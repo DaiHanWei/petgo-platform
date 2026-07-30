@@ -12,6 +12,7 @@ import '../domain/vet_online_status.dart';
 import 'vet_active_page.dart';
 import 'vet_history_page.dart';
 import 'vet_inbox_page.dart';
+import 'vet_income_page.dart';
 import 'vet_me_page.dart';
 
 /// 兽医工作台壳（Story 5.2）。**独立**底部 Tab Bar（待接单/进行中/历史/我的），
@@ -30,10 +31,12 @@ class _VetWorkbenchShellState extends ConsumerState<VetWorkbenchShell>
   // Debug-only：--dart-define=DEV_VET_TAB=3 启动即落对应 tab（逐屏视觉验收用）；release 恒 0。
   int _index = kDebugMode ? const int.fromEnvironment('DEV_VET_TAB') : 0;
 
+  // 0718：新增 Pendapatan（收入）Tab，位于 Riwayat 与 Saya 之间（Saya 顺延到 index 4）。
   static const List<Widget> _pages = [
     VetInboxPage(),
     VetActivePage(),
     VetHistoryPage(),
+    VetIncomePage(),
     VetMePage(),
   ];
 
@@ -124,7 +127,9 @@ class _VetWorkbenchShellState extends ConsumerState<VetWorkbenchShell>
                 _VetNavItem(
                     icon: Icons.history, label: l10n.vetTabHistory, selected: _index == 2, onTap: () => _select(2)),
                 _VetNavItem(
-                    icon: Icons.person_outline, label: l10n.vetTabMe, selected: _index == 3, onTap: () => _select(3)),
+                    icon: Icons.payments_outlined, label: l10n.vetTabIncome, selected: _index == 3, onTap: () => _select(3)),
+                _VetNavItem(
+                    icon: Icons.person_outline, label: l10n.vetTabMe, selected: _index == 4, onTap: () => _select(4)),
               ],
             ),
           ),

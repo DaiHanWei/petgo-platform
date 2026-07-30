@@ -359,10 +359,10 @@ public class ContentService {
      * @param limit  本批最多条数
      */
     @Transactional(readOnly = true)
-    public List<GrowthMomentView> findGrowthMoments(long authorId, Instant before, int limit) {
+    public List<GrowthMomentView> findGrowthMoments(long authorId, long petId, Instant before, int limit) {
         Instant cursor = before == null ? Instant.now() : before;
-        return posts.findByAuthorIdAndTypeAndDeletedAtIsNullAndCreatedAtLessThanOrderByCreatedAtDesc(
-                        authorId, ContentType.GROWTH_MOMENT, cursor, PageRequest.of(0, limit))
+        return posts.findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndCreatedAtLessThanOrderByCreatedAtDesc(
+                        authorId, petId, ContentType.GROWTH_MOMENT, cursor, PageRequest.of(0, limit))
                 .stream()
                 .map(ContentService::toGrowthMomentView)
                 .toList();
@@ -373,9 +373,9 @@ public class ContentService {
      * event_date 升序、同日 created_at 升序——供 profile 按日聚合时取「该日最早 created_at」首图。
      */
     @Transactional(readOnly = true)
-    public List<GrowthMomentView> findGrowthMomentsInMonth(long authorId, LocalDate from, LocalDate to) {
-        return posts.findByAuthorIdAndTypeAndDeletedAtIsNullAndEventDateBetweenOrderByEventDateAscCreatedAtAsc(
-                        authorId, ContentType.GROWTH_MOMENT, from, to)
+    public List<GrowthMomentView> findGrowthMomentsInMonth(long authorId, long petId, LocalDate from, LocalDate to) {
+        return posts.findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndEventDateBetweenOrderByEventDateAscCreatedAtAsc(
+                        authorId, petId, ContentType.GROWTH_MOMENT, from, to)
                 .stream()
                 .map(ContentService::toGrowthMomentView)
                 .toList();
@@ -385,9 +385,9 @@ public class ContentService {
      * 某作者在某 {@code event_date} 当天的快乐时刻（Story 2.4 R2 · F9 当天详情），created_at 正序。
      */
     @Transactional(readOnly = true)
-    public List<GrowthMomentView> findGrowthMomentsOnDate(long authorId, LocalDate eventDate) {
-        return posts.findByAuthorIdAndTypeAndDeletedAtIsNullAndEventDateOrderByCreatedAtAsc(
-                        authorId, ContentType.GROWTH_MOMENT, eventDate)
+    public List<GrowthMomentView> findGrowthMomentsOnDate(long authorId, long petId, LocalDate eventDate) {
+        return posts.findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndEventDateOrderByCreatedAtAsc(
+                        authorId, petId, ContentType.GROWTH_MOMENT, eventDate)
                 .stream()
                 .map(ContentService::toGrowthMomentView)
                 .toList();
@@ -410,11 +410,18 @@ public class ContentService {
                 .toList();
     }
 
-    /** 某作者快乐时刻总数（Story 2.4 AC5 统计栏）。 */
+    /**
+     * 某作者快乐时刻总数（Story 2.4 AC5 统计栏）。
+     *
+     * <p>口径含审核中（bug 20260728-379）：timeline/日历不过滤 status，用户看得见 UNDER_REVIEW 的帖，
+     * 统计卡若只数 PUBLISHED 会与页面数不上（5 发 3 计）。审核拒绝走软删，自然回落。
+     * 里程碑计数（{@code countByAuthorIdAndType...} 单状态版）保持 PUBLISHED 口径不动。
+     */
     @Transactional(readOnly = true)
-    public long countGrowthMoments(long authorId) {
-        return posts.countByAuthorIdAndTypeAndDeletedAtIsNullAndStatus(
-                authorId, ContentType.GROWTH_MOMENT, PostStatus.PUBLISHED);
+    public long countGrowthMoments(long authorId, long petId) {
+        return posts.countByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndStatusIn(
+                authorId, petId, ContentType.GROWTH_MOMENT,
+                List.of(PostStatus.PUBLISHED, PostStatus.UNDER_REVIEW));
     }
 
     /**

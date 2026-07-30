@@ -64,6 +64,13 @@ public class PetProfile {
     @Column(name = "og_image_url", length = 1024)
     private String ogImageUrl;
 
+    /**
+     * 宠物身份证全平台自增流水号（Story 6.1，FR-49A）。惰性分配：未生成为 null（老用户「尚未生成」引导态）。
+     * 仅作展示编号，绝不作对外资源标识（分享/深链/快照用 cardToken / 内部 id）。删除档案时经号池回收复用。
+     */
+    @Column(name = "serial_id")
+    private Long serialId;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -172,6 +179,21 @@ public class PetProfile {
 
     public void setOgImageUrl(String ogImageUrl) {
         this.ogImageUrl = ogImageUrl;
+    }
+
+    /** 流水号（Story 6.1；未生成为 null → 老用户「尚未生成」引导态）。 */
+    public Long getSerialId() {
+        return serialId;
+    }
+
+    /**
+     * 分配流水号（Story 6.1）：仅当尚未分配时赋值。已有则拒绝覆盖（幂等由 service 层判定，实体层防误改换号）。
+     */
+    public void assignSerial(long serial) {
+        if (this.serialId != null) {
+            throw new IllegalStateException("流水号已分配，不可覆盖：" + this.serialId);
+        }
+        this.serialId = serial;
     }
 
     public Instant getCreatedAt() {

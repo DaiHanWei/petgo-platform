@@ -27,3 +27,11 @@ String formatDayMonth(BuildContext context, DateTime d) =>
 /// "Jun"。仅缩写月份（日期列）。
 String formatMonthAbbr(BuildContext context, DateTime d) =>
     DateFormat('MMM', _ln(context)).format(d);
+
+/// "30 Jun 19:42"。缩写月份的日 + 月 + 时分（订单卡副行）。
+String formatDayMonthTime(BuildContext context, DateTime d) =>
+    DateFormat('d MMM HH:mm', _ln(context)).format(d);
+
+/// "28 Jun 2026, 22:09"。完整日期 + 时分（订单详情行）。
+String formatDayMonthYearTime(BuildContext context, DateTime d) =>
+    DateFormat('d MMM yyyy, HH:mm', _ln(context)).format(d);

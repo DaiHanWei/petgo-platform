@@ -2,7 +2,7 @@ package com.tailtopia.profile.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Past;
+import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 
@@ -31,6 +31,7 @@ public record PetProfileCreateRequest(
         @NotBlank(message = "宠物类型必选") String petType,
         @NotBlank(message = "宠物名不能为空") @Size(max = 20, message = "宠物名不能超过 20 字") String name,
         @Size(max = 60) String breed,
-        @NotNull(message = "生日必填且需完整年月日") @Past(message = "生日须早于今天") LocalDate birthday,
+        // 允许生日=今天（当天出生合法；前端选择器 maxDate=now，与此对齐——bug：选今天被 @Past 拒 422）。
+        @NotNull(message = "生日必填且需完整年月日") @PastOrPresent(message = "生日不能是未来") LocalDate birthday,
         @Size(max = 30, message = "介绍不能超过 30 字") String intro) {
 }

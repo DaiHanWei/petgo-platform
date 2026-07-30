@@ -242,4 +242,53 @@ class TriageControllerEndpointTest extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.status").value("DONE"))
                 .andExpect(jsonPath("$.dangerLevel").value("GREEN"));
     }
+
+    // ---------- Story 2.2：分字段下发与红色永不锁 ----------
+
+    /**
+     * 普通（GREEN）结果详建默认锁定：DONE 后 {@code unlock_source=LOCKED} 落库，响应 {@code locked=true}、
+     * 详建 {@code advice} 不下发（NON_NULL 省略），但安全免费部分（dangerLevel）仍在。
+     */
+    @Test
+    void greenResultLocksDetailedAdvice() throws Exception {
+        User u = newUser();
+        long id = triageIdOf(submit(u.getId(),
+                new TriageSubmitRequest("最近偶尔打喷嚏，精神食欲都正常", null, null)));
+        triageProcessor.process(id);
+
+        mvc.perform(get("/api/v1/triage/{id}", id)
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(u.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dangerLevel").value("GREEN"))
+                .andExpect(jsonPath("$.locked").value(true))
+                .andExpect(jsonPath("$.advice").doesNotExist())
+                .andExpect(jsonPath("$.medicationRef").doesNotExist());
+
+        TriageTask done = triageTasks.findById(id).orElseThrow();
+        org.assertj.core.api.Assertions.assertThat(done.getUnlockSource())
+                .isEqualTo(com.tailtopia.triage.domain.UnlockSource.LOCKED);
+    }
+
+    /**
+     * 【安全攸关】红色结果详建永不锁：即使 {@code unlock_source=LOCKED} 落库，响应 {@code locked=false}
+     * （FR-43C 红色永不锁，即使额度耗尽）。数据层仍是 LOCKED，放行判定在响应层单点。
+     */
+    @Test
+    void redResultNeverLocksDetailedAdvice() throws Exception {
+        User u = newUser();
+        long id = triageIdOf(submit(u.getId(),
+                new TriageSubmitRequest("我家狗误食巧克力了，怎么办", null, null)));
+        triageProcessor.process(id); // stub GREEN → 安全层强制升红 RED
+
+        mvc.perform(get("/api/v1/triage/{id}", id)
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(u.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dangerLevel").value("RED"))
+                .andExpect(jsonPath("$.locked").value(false)); // 红色永不锁
+
+        // 数据层 unlock_source 仍是 LOCKED（红色放行在响应层，不改数据）。
+        TriageTask done = triageTasks.findById(id).orElseThrow();
+        org.assertj.core.api.Assertions.assertThat(done.getUnlockSource())
+                .isEqualTo(com.tailtopia.triage.domain.UnlockSource.LOCKED);
+    }
 }

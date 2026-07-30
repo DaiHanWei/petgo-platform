@@ -37,6 +37,7 @@ class UserProfile {
     this.displayName,
     this.email,
     this.avatarUrl,
+    this.signature,
     this.petStatus,
     this.onboardingCompleted = false,
     this.hasPetProfile = false,
@@ -51,6 +52,9 @@ class UserProfile {
   /// 邮箱（PII）：仅 /me 本人聚合视图返回，绝不进 Feed/作者视图。
   final String? email;
   final String? avatarUrl;
+
+  /// 一句话个性签名（bug 20260721-327，用户级）。
+  final String? signature;
   final String? petStatus;
   final bool onboardingCompleted;
   final bool hasPetProfile;
@@ -65,6 +69,7 @@ class UserProfile {
         displayName: json['displayName'] as String?,
         email: json['email'] as String?,
         avatarUrl: json['avatarUrl'] as String?,
+        signature: json['signature'] as String?,
         petStatus: json['petStatus'] as String?,
         onboardingCompleted: (json['onboardingCompleted'] ?? false) as bool,
         hasPetProfile: (json['hasPetProfile'] ?? false) as bool,
@@ -77,6 +82,7 @@ class UserProfile {
     String? displayName,
     String? email,
     String? avatarUrl,
+    String? signature,
     String? petStatus,
     bool? onboardingCompleted,
     bool? hasPetProfile,
@@ -88,6 +94,7 @@ class UserProfile {
         displayName: displayName ?? this.displayName,
         email: email ?? this.email,
         avatarUrl: avatarUrl ?? this.avatarUrl,
+        signature: signature ?? this.signature,
         petStatus: petStatus ?? this.petStatus,
         onboardingCompleted: onboardingCompleted ?? this.onboardingCompleted,
         hasPetProfile: hasPetProfile ?? this.hasPetProfile,

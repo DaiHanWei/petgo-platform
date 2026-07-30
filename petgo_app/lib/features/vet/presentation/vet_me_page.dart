@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/config/legal_urls.dart';
 import '../../../core/im/im_service.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
@@ -61,6 +64,16 @@ class _VetMePageState extends ConsumerState<VetMePage> {
     showAppToast(context, l10n.vetChatToolUnavailable);
   }
 
+  /// 兽医合作方条款（bug 20260722-354）：外部浏览器打开法务 H5。
+  Future<void> _openVetTerms() async {
+    final Uri uri = Uri.parse(kVetTermsUrl);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else if (mounted) {
+      showAppToast(context, AppLocalizations.of(context).vetChatToolUnavailable);
+    }
+  }
+
   /// 三态可用状态切换（Online/Sibuk/Offline）：经 [vetAvailabilityProvider] 持久化二元在线态
   /// （Online=接单 / Sibuk·Offline=不接单），Sibuk 为前端占位态（见 CROSS-STORY-DECISIONS F19）。
   /// 失败时 provider 自愈回落权威态；若结果与所选不符则提示。
@@ -108,8 +121,20 @@ class _VetMePageState extends ConsumerState<VetMePage> {
                       _settingsCard(l10n),
                       const SizedBox(height: AppSpacing.md),
                       Center(
-                        child: Text(l10n.vetProfileVersion,
-                            style: AppTypography.caption.copyWith(color: AppColors.textTertiary)),
+                        // 与用户端 settings 同口径（bug 20260721-288）：按真实包版本动态显示，
+                        // 不再用 ARB 硬编码（原 v1.0.0 已随发版漂移）。
+                        child: FutureBuilder<PackageInfo>(
+                          future: PackageInfo.fromPlatform(),
+                          builder: (context, snap) {
+                            final info = snap.data;
+                            final label = info == null
+                                ? 'TailTopia Vet Portal'
+                                : 'TailTopia Vet Portal v${info.version} · Build ${info.buildNumber}';
+                            return Text(label,
+                                style: AppTypography.caption
+                                    .copyWith(color: AppColors.textTertiary));
+                          },
+                        ),
                       ),
                     ],
                   ),
@@ -343,9 +368,13 @@ class _VetMePageState extends ConsumerState<VetMePage> {
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
+          // 收入入口已提升为底部「Pendapatan」Tab（0718 FR-53D），此处不再重复。
           _settingsRow(l10n.vetProfileEditProfile, onTap: _onUnavailable),
           const Divider(height: 1, color: AppColors.line2),
           _settingsRow(l10n.vetProfileNotif, onTap: _onUnavailable),
+          const Divider(height: 1, color: AppColors.line2),
+          // 兽医合作方条款（bug 20260722-354）：跳法务 H5。
+          _settingsRow(l10n.vetMitraTerms, onTap: _openVetTerms, valueKey: 'vetMitraTermsRow'),
           const Divider(height: 1, color: AppColors.line2),
           _settingsRow(l10n.vetLogout, onTap: _logout, danger: true, valueKey: 'vetLogoutButton'),
         ],

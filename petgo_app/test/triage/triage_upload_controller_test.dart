@@ -48,6 +48,13 @@ class _FakeTriageRepo implements TriageRepository {
   @override
   Future<TriageResult> pollTriage(int triageId) async =>
       const TriageResult(status: TriageStatus.done, dangerLevel: DangerLevel.green);
+
+  @override
+  Future<UnlockResult> unlockTriage(int triageId, UnlockMethod method) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<FreeQuotaView> fetchFreeQuota() async => throw UnimplementedError();
 }
 
 ProviderContainer _container(_FakeMediaUseCase media, _FakeTriageRepo triage) {

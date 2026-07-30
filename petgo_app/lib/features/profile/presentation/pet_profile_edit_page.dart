@@ -12,7 +12,10 @@ import '../../../shared/utils/date_format.dart';
 import '../../../shared/utils/media_permission.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
+import '../data/health_record_repository.dart';
+import '../data/milestone_repository.dart';
 import '../data/profile_repository.dart';
+import '../data/timeline_repository.dart';
 import '../domain/pet_profile.dart';
 import 'widgets/pet_form_fields.dart';
 
@@ -130,6 +133,17 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
     try {
       await ref.read(profileRepositoryProvider).deleteMyProfile();
       ref.invalidate(petProfileProvider);
+      // 删除成功须同步清除成长日记的宠物维度缓存（时间线/统计/日历/日详情/里程碑），
+      // 否则删后重建新档案，成长日记仍显示上一只宠物的缓存内容、要手动刷新才消失。
+      // （family provider 整族失效：calendarMonth 按月、dayDetail 按日。）
+      ref.invalidate(timelineFirstPageProvider);
+      ref.invalidate(archiveStatsProvider);
+      ref.invalidate(calendarMonthProvider);
+      ref.invalidate(dayDetailProvider);
+      ref.invalidate(milestoneListProvider);
+      // bug 20260730-421：健康记录缓存同样要清（healthListProvider 非 autoDispose，
+      // 漏失效 → 删档重建后健康页仍显示上一只宠物的记录；后端级联删无漏，纯前端缓存问题）。
+      ref.invalidate(healthListProvider);
       if (mounted) context.go('/profile');
     } catch (_) {
       if (mounted) _toast(l10n.petProfileDeleteFailed);

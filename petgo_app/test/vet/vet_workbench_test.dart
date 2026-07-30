@@ -50,14 +50,15 @@ Future<void> _pump(WidgetTester tester, _FakeVetRepository repo) async {
 }
 
 void main() {
-  testWidgets('AC1: 独立四 Tab 工作台（待接单/进行中/历史/我的），无用户侧发布 FAB', (tester) async {
+  testWidgets('AC1: 独立五 Tab 工作台（待接单/进行中/历史/收入/我的），无用户侧发布 FAB', (tester) async {
     await _pump(tester, _FakeVetRepository());
 
     expect(find.byKey(const ValueKey('vetBottomNav')), findsOneWidget);
     expect(find.text('Queue'), findsWidgets);
     expect(find.text('Active'), findsWidgets);
     expect(find.text('History'), findsWidgets);
-    expect(find.text('Profile'), findsWidgets);
+    expect(find.text('Income'), findsWidgets);
+    expect(find.text('Me'), findsWidgets);
     // 默认在待接单 Tab：空态占位
     expect(find.text('No incoming requests'), findsOneWidget);
     // 无用户侧凸起「+」发布 FAB

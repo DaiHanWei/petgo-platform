@@ -45,6 +45,10 @@ public class User {
     @Column(name = "nickname", length = 20)
     private String nickname;
 
+    /** 一句话个性签名（bug 20260721-327，用户级，区别于宠物档案 intro）；≤60，可空。 */
+    @Column(name = "signature", length = 60)
+    private String signature;
+
     /**
      * 昵称当前是否为违规重置生成的系统默认编码名（{@code user_<hex>}，内容审核 story 4，D-CM4）。
      * 违规重置 ≠ 注销匿名化：此标记只随违规重置写入的真实昵称，与 7.3「已注销用户」展示层无关。
@@ -72,6 +76,20 @@ public class User {
     /** 仅 ADMIN 账密登录用（BCrypt 哈希）；OAuth 用户为 null。Story 3.1。 */
     @Column(name = "password_hash", length = 255)
     private String passwordHash;
+
+    // ── Story 9.8（A-6）：虚拟账号 ──
+    @Enumerated(EnumType.STRING)
+    @Column(name = "account_type", nullable = false, length = 16)
+    private AccountType accountType = AccountType.REAL;
+
+    @Column(name = "created_by")
+    private Long createdBy;
+
+    @Column(name = "enabled", nullable = false)
+    private boolean enabled = true;
+
+    @Column(name = "published_count", nullable = false)
+    private int publishedCount = 0;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -123,6 +141,25 @@ public class User {
         u.role = Role.ADMIN;
         u.onboardingCompleted = true;
         u.passwordHash = passwordHash;
+        return u;
+    }
+
+    /**
+     * 虚拟账号（Story 9.8，A-6）：运营建，**无 google 身份/无密码/无登录**。合成 {@code googleSub}
+     * （{@code virtual:<token>}）满足非空唯一约束；真实 Google idToken 不会验出合成 sub → 天然不可登录。
+     * 复用 {@code content_posts.author_id} 发种子。{@code nickname} ≤20 由调用方校验。
+     */
+    public static User newVirtual(String syntheticSub, String nickname, String avatarUrl, long createdByAdminId) {
+        User u = new User();
+        u.googleSub = syntheticSub;
+        u.displayName = nickname;
+        u.nickname = nickname;
+        u.avatarUrl = avatarUrl;
+        u.role = Role.USER;
+        u.onboardingCompleted = true;
+        u.accountType = AccountType.VIRTUAL;
+        u.createdBy = createdByAdminId;
+        u.enabled = true;
         return u;
     }
 
@@ -191,6 +228,14 @@ public class User {
         this.avatarUrl = avatarUrl;
     }
 
+    public String getSignature() {
+        return signature;
+    }
+
+    public void setSignature(String signature) {
+        this.signature = signature;
+    }
+
     public String getNickname() {
         return nickname;
     }
@@ -243,6 +288,31 @@ public class User {
 
     public Instant getDeletedAt() {
         return deletedAt;
+    }
+
+    public AccountType getAccountType() {
+        return accountType;
+    }
+
+    public Long getCreatedBy() {
+        return createdBy;
+    }
+
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+    }
+
+    public int getPublishedCount() {
+        return publishedCount;
+    }
+
+    /** 虚拟账号发布计数 +1（Story 9.8 Part 2 批量种子）。 */
+    public void incrementPublished() {
+        this.publishedCount++;
     }
 
     /**

@@ -75,8 +75,8 @@ void main() {
     expect(find.byKey(const ValueKey('petInfoCard')), findsOneWidget);
     expect(find.text('5'), findsWidgets); // happy 5
     expect(find.text('2'), findsWidgets); // consult 2
-    // 默认英文 locale：统计列标题走 l10n（不再硬编码印尼语）。
-    expect(find.text('Happy Moments'), findsOneWidget);
+    // 默认英文 locale：统计列标题走 l10n（0718 改版：首列标题「Happy Moments」→「Diary」）。
+    expect(find.text('Diary'), findsOneWidget);
     expect(find.text('Consultations'), findsOneWidget);
   });
 

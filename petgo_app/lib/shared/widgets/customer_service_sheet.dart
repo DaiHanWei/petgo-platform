@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'app_toast.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -28,8 +29,11 @@ Future<void> showCustomerServiceSheet(BuildContext context) {
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
+    // 内容套滚动容器：非 isScrollControlled 的 modal sheet 高度上限=屏高×9/16，
+    // 英文/大字号下副标题折两行会把固定 Column 顶破上限（720 宽真机溢出 23px、Tutup 被截）。
+    // 可滚动后内容不超高时视觉零变化，超高时自动可滚，任何屏幕/字号都安全。
     builder: (ctx) => SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 10, 20, 28),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -50,7 +54,7 @@ Future<void> showCustomerServiceSheet(BuildContext context) {
               l10n.csSheetTitle,
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 8),
             // WhatsApp：绿底 + 真 WhatsApp logo，号码可复制。
             _CsContactRow(
               glyph: SvgPicture.asset(
@@ -73,8 +77,20 @@ Future<void> showCustomerServiceSheet(BuildContext context) {
               sub: '${l10n.csEmailLabel} · ${l10n.csEmailNote}',
               copyText: _kCsEmail,
             ),
+            const Divider(height: 1, thickness: 1, color: AppColors.line2),
+            // 站内工单行（0718 新增，原两个按钮合并成一行）：→ 工单列表（提交+追踪 hub）。
+            _CsContactRow(
+              glyph: const Icon(Icons.chat_bubble_outline, size: 22, color: AppColors.mint),
+              iconBg: AppColors.mintTint2,
+              value: l10n.csTicketRowTitle,
+              sub: l10n.csTicketRowSub,
+              onTap: () {
+                Navigator.of(ctx).pop();
+                context.push('/me/support-tickets');
+              },
+            ),
             const SizedBox(height: 16),
-            // 取消：灰色填充（非描边），对齐原型 .cancel-btn。
+            // 关闭：灰色填充（非描边），对齐原型 .cancel-btn，文案「Tutup」。
             FilledButton(
               key: const ValueKey('csCancel'),
               onPressed: () => Navigator.of(ctx).pop(),
@@ -88,7 +104,7 @@ Future<void> showCustomerServiceSheet(BuildContext context) {
                 ),
               ),
               child: Text(
-                l10n.commonCancel,
+                l10n.csClose,
                 style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
               ),
             ),
@@ -106,19 +122,25 @@ class _CsContactRow extends StatelessWidget {
     required this.iconBg,
     required this.value,
     required this.sub,
-    required this.copyText,
-  });
+    this.copyText,
+    this.onTap,
+  }) : assert(copyText != null || onTap != null);
 
   final Widget glyph;
   final Color iconBg;
   final String value;
   final String sub;
-  final String copyText;
+
+  /// 复制型行（WhatsApp/邮箱）：右侧灰色复制键，点击复制 [copyText]。
+  final String? copyText;
+
+  /// 导航型行（站内工单）：右侧 chevron，整行可点触发 [onTap]。
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Padding(
+    final row = Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
@@ -155,27 +177,37 @@ class _CsContactRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          // 独立灰色复制键（36×36）。
-          Material(
-            color: _kCsMuted,
-            borderRadius: BorderRadius.circular(10),
-            child: InkWell(
-              key: ValueKey('csCopy_$copyText'),
+          // 右侧：复制键（复制型）或 chevron（导航型）。
+          if (copyText != null)
+            Material(
+              color: _kCsMuted,
               borderRadius: BorderRadius.circular(10),
-              onTap: () async {
-                await Clipboard.setData(ClipboardData(text: copyText));
-                if (!context.mounted) return;
-                showAppToast(context, l10n.csCopied);
-              },
-              child: const SizedBox(
-                width: 36,
-                height: 36,
-                child: Icon(Icons.content_copy_rounded, size: 16, color: AppColors.textSecondary),
+              child: InkWell(
+                key: ValueKey('csCopy_$copyText'),
+                borderRadius: BorderRadius.circular(10),
+                onTap: () async {
+                  await Clipboard.setData(ClipboardData(text: copyText!));
+                  if (!context.mounted) return;
+                  showAppToast(context, l10n.csCopied);
+                },
+                child: const SizedBox(
+                  width: 36,
+                  height: 36,
+                  child: Icon(Icons.content_copy_rounded, size: 16, color: AppColors.textSecondary),
+                ),
               ),
-            ),
-          ),
+            )
+          else
+            const Icon(Icons.chevron_right, color: AppColors.muted),
         ],
       ),
+    );
+    if (onTap == null) return row;
+    return InkWell(
+      key: ValueKey('csTicketRow_$value'),
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: row,
     );
   }
 }

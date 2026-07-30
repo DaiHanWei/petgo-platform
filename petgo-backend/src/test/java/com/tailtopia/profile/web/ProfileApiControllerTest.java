@@ -13,6 +13,8 @@ import com.tailtopia.profile.dto.PetProfileResponse;
 import com.tailtopia.profile.dto.PetProfileUpdateRequest;
 import com.tailtopia.profile.dto.TimelinePageResponse;
 import com.tailtopia.profile.service.CardRerenderService;
+import com.tailtopia.profile.service.IdCardHdService;
+import com.tailtopia.profile.service.IdCardService;
 import com.tailtopia.profile.service.ProfileService;
 import com.tailtopia.profile.service.TimelineService;
 import com.tailtopia.shared.error.AppException;
@@ -29,9 +31,11 @@ class ProfileApiControllerTest {
     private final ProfileService service = mock(ProfileService.class);
     private final TimelineService timelineService = mock(TimelineService.class);
     private final CardRerenderService cardRerenderService = mock(CardRerenderService.class);
+    private final IdCardService idCardService = mock(IdCardService.class);
+    private final IdCardHdService idCardHdService = mock(IdCardHdService.class);
     private final RedisRateLimiter rateLimiter = mock(RedisRateLimiter.class);
-    private final ProfileApiController controller =
-            new ProfileApiController(service, timelineService, cardRerenderService, rateLimiter);
+    private final ProfileApiController controller = new ProfileApiController(
+            service, timelineService, cardRerenderService, idCardService, idCardHdService, rateLimiter);
 
     private static Jwt jwt(String sub) {
         return Jwt.withTokenValue("t").header("alg", "HS256").subject(sub).claim("x", "y").build();

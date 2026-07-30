@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!-- 客服工单列表（Story 4.7）。support.handle 门控。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title>客服工单 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1>客服工单</h1>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+        <table>
+            <thead>
+            <tr>
+                <th>工单</th>
+                <th>标题</th>
+                <th>状态</th>
+                <th>需联系</th>
+                <th>已联系</th>
+                <th>CSAT</th>
+                <th>操作</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="t : ${items}">
+                <td th:text="${t.ticketToken}">tok</td>
+                <td th:text="${t.subject}">subject</td>
+                <td th:text="${t.status}">OPEN</td>
+                <td th:text="${t.needContact} ? '是' : '否'">是</td>
+                <td th:text="${t.contacted} ? '是' : '否'">否</td>
+                <td th:text="${t.csatScore} ?: '—'">—</td>
+                <td><a class="btn btn-neutral btn-sm" th:href="@{/admin/support-tickets/{t}(t=${t.ticketToken})}">详情</a></td>
+            </tr>
+            <tr th:if="${items.isEmpty()}">
+                <td colspan="7">暂无工单</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

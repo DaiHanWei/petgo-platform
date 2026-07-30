@@ -76,6 +76,23 @@ test/<feature>/        # 与 features/ 同名分目录；widget_test.dart = 根�
 - V1 **仅浅色 + portrait-only**（`main.dart` 锁向、`AppTheme.light` 直接传，**不要**加 dark/auto 分支）。
 - `app.dart` 的 `MediaQuery` builder 把 `textScaler` clamp 到 `maxTextScale = 1.3`（NFR-13），所有页面均受此约束 —— **不要在子树里重置 MediaQuery 把它放开**，否则超大字号会破布局。
 
+### 输入 / 键盘避让（强制标准）
+**任何获得焦点的输入框必须完整显示在软键盘上方，不被遮挡。** 新增含输入框的页面/弹层必须按其「形态」套用对应机制（共享件 `lib/shared/widgets/keyboard_safe_area.dart`）：
+
+| 形态 | 机制 |
+|---|---|
+| **可滑动表单页**（body 已是 `ListView`/`SingleChildScrollView`） | 零改动，聚焦自动 `ensureVisible`；仅核实 Scaffold `resizeToAvoidBottomInset` 未被设 `false` |
+| **不可滑动表单页**（`Column` + `Spacer`/`Expanded` 沉底按钮） | 用 `KeyboardSafeArea` 包 `Column`（`Spacer` 仍生效）；依赖 Scaffold `resizeToAvoidBottomInset: true`（默认） |
+| **不可滑动、输入在顶部** | 零动作：`resizeToAvoidBottomInset: true` 从底部压缩、顶部不动 → 顶部框天然在键盘上方 |
+| **底部弹层 bottom sheet** | `showModalBottomSheet(isScrollControlled: true)` + 内容套 `KeyboardInset`（或在滚动内容底部加 `viewInsets.bottom` padding）；**固定高度**（`FractionallySizedBox`）sheet 必须套 `KeyboardInset`，否则不随键盘自适应 |
+| **底部贴附输入栏**（评论/聊天） | 宿主 Scaffold `resizeToAvoidBottomInset: true`（body 内 `Column` 底栏自动上移）；浮层挂载则套 `KeyboardInset` |
+| **dialog** | Flutter 默认居中 + viewInsets 顶起，通常无需改，仅核实 |
+
+- **点非输入区收起键盘**：全局已在 `app.dart` 的 `builder` 套 `GestureDetector(translucent, onTap → FocusManager.instance.primaryFocus?.unfocus())`——点到非交互空白处自动收键盘，按钮/输入框不受影响。新页无需再各自处理，勿在子树重复叠加抢焦点逻辑。
+- 共享件二选一：`KeyboardSafeArea`（表单页体，填满视口 + 键盘弹出可上滚）／`KeyboardInset`（底部弹层 / 浮层贴附栏，动画补 `viewInsets.bottom` 内边距）。
+- ⚠️ `app_shell.dart` 有意设 `resizeToAvoidBottomInset: false`（底栏 + 「＋」不被键盘顶起）；Tab 根页因此**不得内联输入框**，文字编辑一律走 modal sheet 让位。
+- 标准只保证「焦点框」在键盘上方；输入框下方的非焦点按钮被挡属更强诉求，需按页单独提出。测试见 `test/shared/keyboard_safe_area_test.dart`。
+
 ### i18n
 - ARB → `flutter gen-l10n` → `lib/l10n/app_localizations*.dart`（已在 analyzer.exclude；改完别忘记跑 gen-l10n，否则编译失败）。
 - 语言决策优先级：`localeControllerProvider`（手动选择，持久化在 prefs）→ `localeResolutionCallback`（设备 `id` 直通，其余回退英语）。新增文案两份 ARB 同步写，**严禁源里硬编码用户可见字符串**。

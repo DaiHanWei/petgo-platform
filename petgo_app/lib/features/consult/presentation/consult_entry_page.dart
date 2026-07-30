@@ -9,6 +9,7 @@ import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../data/consult_repository.dart';
+import '../domain/consult_request.dart';
 import '../domain/consult_session.dart';
 import 'consult_refresh.dart';
 import 'consult_rating_dialog.dart';
@@ -116,19 +117,25 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
         setState(() => _noVetOnline = true);
         return;
       }
-      // AI 分诊升级：带 triageTaskId → 直接发起 AI_UPGRADE 会话（AI 描述/图片/危险等级由后端从
-      // triage 拉取绑定），跳过病例填写页（bug 20260702-235）。红色态后端兜底拒绝 → toast。
+      // AI 分诊升级（D2）：带 triageTaskId → 直接付费入队 AI_UPGRADE 请求（AI 描述/图片/危险等级由后端
+      // 从 triage 拉取绑定），跳过病例填写页（bug 20260702-235）。红色态后端兜底拒绝 → toast。
+      // 与自填病例走同一条付费路径，差别仅在病例来源。
       final upgradeId = widget.triageTaskId;
       if (upgradeId != null) {
         try {
-          final session = await ref.read(consultRepositoryProvider).createFromUpgrade(upgradeId);
+          final req = await ref.read(consultRepositoryProvider).createRequestFromUpgrade(upgradeId);
           if (!mounted) return;
-          final target = session.isWaiting
-              ? '/consult/waiting/${session.id}'
-              : '/consult/conversation/${session.id}';
+          // 占用命中（alreadyActive）已在支付态 → 直跳支付屏；否则入队等待屏。
+          final target = req.state == ConsultRequestState.acceptedAwaitPay
+              ? '/consult/vet-request/pay/${req.requestToken}'
+              : '/consult/vet-request/waiting/${req.requestToken}';
           context.pushReplacement(target);
-        } on DioException {
-          if (mounted) showAppToast(context, l10n.consultStartFailed);
+        } on DioException catch (e) {
+          // 无宠物档案 → 409；红色态 → 403（后端红线兜底）；其余通用失败。
+          if (mounted) {
+            showAppToast(context,
+                e.response?.statusCode == 409 ? l10n.vetRequestNoPet : l10n.consultStartFailed);
+          }
         }
         return;
       }
@@ -228,11 +235,15 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
                 letterSpacing: 0.4,
                 color: AppColors.ink)),
         const SizedBox(height: 14),
+        // 四步须与实际付费链路一致：填病例 → 兽医看病例接单 → 接单后付款 → 进聊天室。
+        // 付款是流程的一环，必须显式列出（此前三步说明是 V1.0 免费流残留，说「gratis」且无付款步）。
         _StepRow(n: '1', color: AppColors.mint, title: l10n.consultStep1Title, desc: l10n.consultStep1Desc),
         const SizedBox(height: 12),
         _StepRow(n: '2', color: AppColors.mint500, title: l10n.consultStep2Title, desc: l10n.consultStep2Desc),
         const SizedBox(height: 12),
         _StepRow(n: '3', color: AppColors.violetSoft, title: l10n.consultStep3Title, desc: l10n.consultStep3Desc),
+        const SizedBox(height: 12),
+        _StepRow(n: '4', color: AppColors.violetSoft, title: l10n.consultStep4Title, desc: l10n.consultStep4Desc),
         const SizedBox(height: 22),
         // 责任声明。
         Text(l10n.consultEntryDisclaimer,

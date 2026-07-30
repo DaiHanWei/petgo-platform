@@ -39,6 +39,16 @@ public class LegalPageController {
         return html("legal/terms.html");
     }
 
+    /**
+     * 兽医合作条款（Syarat &amp; Ketentuan Mitra Dokter Hewan，v1.2.0 运营定稿）。
+     * App 兽医端「我的」页自 V1 起即链接 {@code legal.tailtopia.id/mitra-terms}，但本路由
+     * 此前不存在 → 404 空白页（bug 20260729-403）。
+     */
+    @GetMapping("/mitra-terms")
+    public ResponseEntity<Resource> mitraTerms() {
+        return html("legal/mitra-terms.html");
+    }
+
     @GetMapping("/account-deletion")
     public ResponseEntity<Resource> accountDeletion() {
         return html("legal/account-deletion.html");
@@ -52,6 +62,15 @@ public class LegalPageController {
     @GetMapping("/support")
     public ResponseEntity<Resource> support() {
         return html("legal/support.html");
+    }
+
+    /**
+     * 下载引导落地页（KTP 背面二维码目标）：UA 判平台跳 Play/App Store，尝试 {@code tailtopia://open}
+     * 唤起已装 app。自包含静态 HTML，无 DB/数据依赖。公网经 CF 把 {@code s.tailtopia.id/get} 映射到本服务。
+     */
+    @GetMapping("/get")
+    public ResponseEntity<Resource> get() {
+        return html("legal/get.html");
     }
 
     private ResponseEntity<Resource> html(String classpathLocation) {

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<html lang="zh" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.seed.title}">种子内容发布 · TailTopia 运营后台</title>
@@ -8,35 +9,95 @@
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <div class="card">
+        <div class="card card-wide">
             <h1 th:text="#{admin.seed.title}">发布种子内容</h1>
+            <div class="tabs" data-tabs>
+                <button class="tab active" type="button" data-tab-target="single">单独发布</button>
+                <button class="tab" type="button" data-tab-target="batch"
+                        sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')">批量发布</button>
+            </div>
             <p class="ok" th:if="${publishedId}">
                 <span th:text="#{admin.seed.published.prefix}">已发布，内容 ID：</span><span th:text="${publishedId}">0</span><span th:text="#{admin.seed.published.suffix}">（与用户内容混排，无特殊标记）。</span>
             </p>
-            <form th:action="@{/admin/seed-post}" th:object="${seedPostForm}" method="post">
-                <div th:if="${#fields.hasGlobalErrors()}">
-                    <p class="err" th:each="e : ${#fields.globalErrors()}" th:text="${e}">错误</p>
-                </div>
-                <label class="field" for="type" th:text="#{admin.seed.type}">内容类型</label>
-                <select id="type" th:field="*{type}" class="field-full">
-                    <option th:each="t : ${types}" th:value="${t}" th:text="${t}">类型</option>
-                </select>
-                <p class="err" th:if="${#fields.hasErrors('type')}" th:errors="*{type}">类型错误</p>
+            <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+            <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+            <section class="tab-panel" data-tab-panel="single">
+                <form th:action="@{/admin/seed-post}" th:object="${seedPostForm}" method="post">
+                    <div th:if="${#fields.hasGlobalErrors()}">
+                        <p class="err" th:each="e : ${#fields.globalErrors()}" th:text="${e}">错误</p>
+                    </div>
+                    <label class="field" for="type" th:text="#{admin.seed.type}">内容类型</label>
+                    <select id="type" th:field="*{type}" class="field-full">
+                        <option th:each="t : ${types}" th:value="${t}" th:text="${t}">类型</option>
+                    </select>
+                    <p class="err" th:if="${#fields.hasErrors('type')}" th:errors="*{type}">类型错误</p>
 
-                <label class="field" for="text" th:text="#{admin.seed.text}">正文（≤1000 字）</label>
-                <textarea id="text" th:field="*{text}" maxlength="1000"></textarea>
-                <p class="err" th:if="${#fields.hasErrors('text')}" th:errors="*{text}">正文错误</p>
+                    <label class="field" for="text" th:text="#{admin.seed.text}">正文（≤1000 字）</label>
+                    <textarea id="text" th:field="*{text}" maxlength="1000"></textarea>
+                    <p class="err" th:if="${#fields.hasErrors('text')}" th:errors="*{text}">正文错误</p>
 
-                <label class="field" for="imageUrlsRaw" th:text="#{admin.seed.images}">图片 URL（每行一个，≤9 张，公开桶 CDN 链接）</label>
-                <textarea id="imageUrlsRaw" th:field="*{imageUrlsRaw}"></textarea>
-                <p class="hint" th:text="#{admin.seed.images.hint}">种子图须为已上传公开桶的 URL。</p>
+                    <label class="field" for="imageUrlsRaw" th:text="#{admin.seed.images}">图片 URL（每行一个，≤9 张，公开桶 CDN 链接）</label>
+                    <textarea id="imageUrlsRaw" th:field="*{imageUrlsRaw}"></textarea>
+                    <p class="hint" th:text="#{admin.seed.images.hint}">种子图须为已上传公开桶的 URL。</p>
 
-                <label class="field" for="petId" th:text="#{admin.seed.petId}">绑定宠物 ID</label>
-                <input type="number" id="petId" th:field="*{petId}" class="field-full"/>
+                    <label class="field" for="petId" th:text="#{admin.seed.petId}">绑定宠物 ID</label>
+                    <input type="number" id="petId" th:field="*{petId}" class="field-full"/>
 
-                <button type="submit" class="btn btn-primary" th:text="#{admin.seed.submit}">发布</button>
-            </form>
+                    <button type="submit" class="btn btn-primary form-submit" th:text="#{admin.seed.submit}">发布</button>
+                </form>
+            </section>
+            <section class="tab-panel" data-tab-panel="batch" hidden
+                     sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')">
+                <p class="hint">以选定虚拟账号为作者逐条发日常（DAILY）种子。每行一条，格式
+                    <code>文本</code> 或 <code>文本 ||| 图URL1, 图URL2</code>（≤9 图）。相同内容跨批自动去重跳过。</p>
+                <form method="post" th:action="@{/admin/seed-batch}">
+                    <label class="field" for="batchVirtualUserId">虚拟账号</label>
+                    <select id="batchVirtualUserId" name="virtualUserId" class="field-full" required>
+                        <option value="" disabled selected>选择虚拟账号</option>
+                        <option th:each="a : ${accounts}" th:value="${a.id}"
+                                th:disabled="${!a.enabled}"
+                                th:text="${a.nickname + ' (id=' + a.id + (a.enabled ? '' : ' · 停用') + ')'}">名</option>
+                    </select>
+                    <label class="field" for="batchLines">批量内容（每行一条）</label>
+                    <textarea id="batchLines" name="lines" rows="12" required
+                              placeholder="今天带喵星人晒太阳啦 ||| https://cdn/x.jpg&#10;第二条日常..."></textarea>
+                    <button type="submit" class="btn btn-primary form-submit">批量发布</button>
+                </form>
+                <hr class="section-line"/>
+                <form method="post" th:action="@{/admin/seed-batch/import}" enctype="multipart/form-data">
+                    <label class="field" for="importVirtualUserId">虚拟账号</label>
+                    <select id="importVirtualUserId" name="virtualUserId" class="field-full" required>
+                        <option value="" disabled selected>选择虚拟账号</option>
+                        <option th:each="a : ${accounts}" th:value="${a.id}"
+                                th:disabled="${!a.enabled}"
+                                th:text="${a.nickname + ' (id=' + a.id + (a.enabled ? '' : ' · 停用') + ')'}">名</option>
+                    </select>
+                    <label class="field" for="seedImportFile">Excel 导入</label>
+                    <input id="seedImportFile" name="file" type="file" class="field-full" required
+                           accept=".xlsx,.xls,.csv,.tsv,.txt"/>
+                    <p class="hint">Excel 第一张表：第 1 列正文，第 2 列图片 URL（多个 URL 用逗号分隔）。首行“文本 / 正文 / text / content”会自动跳过。</p>
+                    <p><a class="btn btn-neutral btn-sm" th:href="@{/admin/seed-batch/template}">下载 Excel 示例</a></p>
+                    <button type="submit" class="btn btn-primary">导入并发布</button>
+                </form>
+            </section>
         </div>
+        <script>
+            (() => {
+                const root = document.querySelector('[data-tabs]');
+                if (!root) return;
+                const buttons = [...document.querySelectorAll('[data-tab-target]')];
+                const panels = [...document.querySelectorAll('[data-tab-panel]')];
+                const show = (name) => {
+                    buttons.forEach(b => b.classList.toggle('active', b.dataset.tabTarget === name));
+                    panels.forEach(p => p.hidden = p.dataset.tabPanel !== name);
+                    history.replaceState(null, '', `${location.pathname}?tab=${name}`);
+                };
+                buttons.forEach(b => b.addEventListener('click', () => show(b.dataset.tabTarget)));
+                const wantsBatch = new URLSearchParams(location.search).get('tab') === 'batch';
+                const initial = wantsBatch && panels.some(p => p.dataset.tabPanel === 'batch') ? 'batch' : 'single';
+                show(initial);
+            })();
+        </script>
     </div>
 </div>
 </body>

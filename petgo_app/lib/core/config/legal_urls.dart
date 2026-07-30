@@ -12,3 +12,10 @@ const String kTermsUrl = String.fromEnvironment(
   'PETGO_TERMS_URL',
   defaultValue: 'https://legal.tailtopia.id/terms',
 );
+
+/// 兽医合作方（Mitra）条款（bug 20260722-354）。占位默认 `mitra-terms`，
+/// 待法务 H5 页就绪后由后端 [LegalPageController] 直出或用 dart-define 覆盖。
+const String kVetTermsUrl = String.fromEnvironment(
+  'PETGO_VET_TERMS_URL',
+  defaultValue: 'https://legal.tailtopia.id/mitra-terms',
+);

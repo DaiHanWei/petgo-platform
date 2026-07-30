@@ -12,6 +12,7 @@ import com.tailtopia.consult.domain.InterruptReason;
 import com.tailtopia.consult.domain.SessionStatus;
 import com.tailtopia.consult.event.ConsultAnomalyRaisedEvent;
 import com.tailtopia.consult.event.ConsultInterruptedEvent;
+import com.tailtopia.consult.repository.ConsultOrderRepository;
 import com.tailtopia.consult.repository.ConsultSessionRepository;
 import com.tailtopia.shared.im.TencentImClient;
 import java.util.List;
@@ -31,12 +32,15 @@ class ConsultInterruptServiceTest {
     @Mock
     ConsultSessionRepository sessions;
     @Mock
+    ConsultOrderRepository orders;
+    @Mock
     TencentImClient imClient;
     @Mock
     ApplicationEventPublisher events;
 
     private ConsultInterruptService service() {
-        return new ConsultInterruptService(sessions, imClient, events);
+        // orders 未 stub → findFirst...IN_PROGRESS 返回 Optional.empty()（免费流分支），既有断言不变。
+        return new ConsultInterruptService(sessions, orders, imClient, events);
     }
 
     private ConsultSession inProgress(long id, long vetId) {

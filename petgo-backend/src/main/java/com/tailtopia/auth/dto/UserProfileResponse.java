@@ -15,6 +15,7 @@ public record UserProfileResponse(
         String displayName,
         String email,
         String avatarUrl,
+        String signature,
         PetStatus petStatus,
         boolean onboardingCompleted,
         boolean hasPetProfile,
@@ -28,6 +29,7 @@ public record UserProfileResponse(
                 // email 为 PII：仅本人 /me 聚合视图返回，绝不进 Feed/作者视图，且日志已禁记。
                 u.getEmail(),
                 u.getAvatarUrl(),
+                u.getSignature(),
                 u.getPetStatus(),
                 u.isOnboardingCompleted(),
                 hasPetProfile,

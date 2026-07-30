@@ -71,17 +71,52 @@ class HealthEventServiceTest {
         verify(repo).save(any(HealthEvent.class));
     }
 
+    /** bug 20260727 保存静默无效：既有 SKIPPED + 显式再存 ARCHIVED → 就地升级补存（不再原样返回）。 */
     @Test
-    void alreadyDecidedIsIdempotentNoSave() {
+    void skippedUpgradesToArchivedOnExplicitResave() {
         HealthEvent existing = HealthEvent.skipped(5L, HealthSourceType.AI_TRIAGE, "ref-1", LocalDate.now());
+        when(repo.findBySourceRef("ref-1")).thenReturn(Optional.of(existing));
+        when(archiver.archiveImImagesToPrivate(5L, null)).thenReturn(List.of());
+
+        ArchiveDecisionResponse resp = service.recordDecision(1L, archivedReq());
+
+        assertThat(resp.alreadyDecided()).isFalse();
+        assertThat(resp.decision()).isEqualTo(ArchiveDecision.ARCHIVED);
+        // 就地升级：既有实体翻转为 ARCHIVED 并回填载荷（JPA dirty checking 持久化，无需再 save）。
+        assertThat(existing.getArchiveDecision()).isEqualTo(ArchiveDecision.ARCHIVED);
+        assertThat(existing.getSymptomSummary()).isEqualTo("咳嗽两天");
+        verify(repo, never()).save(any());
+    }
+
+    /** 已 ARCHIVED 重复提交仍幂等：原样返回，不重复存/不重复复制图。 */
+    @Test
+    void alreadyArchivedIsIdempotentNoSave() {
+        HealthEvent existing = HealthEvent.archived(5L, HealthSourceType.AI_TRIAGE, "ref-1",
+                LocalDate.now(), "s", "YELLOW", "a", null);
         when(repo.findBySourceRef("ref-1")).thenReturn(Optional.of(existing));
 
         ArchiveDecisionResponse resp = service.recordDecision(1L, archivedReq());
 
         assertThat(resp.alreadyDecided()).isTrue();
-        assertThat(resp.decision()).isEqualTo(ArchiveDecision.SKIPPED); // 返回既有决策
+        assertThat(resp.decision()).isEqualTo(ArchiveDecision.ARCHIVED);
         verify(repo, never()).save(any());
         verify(archiver, never()).archiveImImagesToPrivate(anyLong(), anyList());
+    }
+
+    /** 既有 SKIPPED + 再次 SKIPPED：仍幂等原样返回（升级仅限 SKIPPED→ARCHIVED 单向）。 */
+    @Test
+    void skippedStaysSkippedOnRepeatSkip() {
+        HealthEvent existing = HealthEvent.skipped(5L, HealthSourceType.AI_TRIAGE, "ref-1", LocalDate.now());
+        when(repo.findBySourceRef("ref-1")).thenReturn(Optional.of(existing));
+        var req = new ArchiveDecisionRequest(HealthSourceType.AI_TRIAGE, "ref-1", 5L, ArchiveDecision.SKIPPED,
+                null, null, null, null, null);
+
+        ArchiveDecisionResponse resp = service.recordDecision(1L, req);
+
+        assertThat(resp.alreadyDecided()).isTrue();
+        assertThat(resp.decision()).isEqualTo(ArchiveDecision.SKIPPED);
+        assertThat(existing.getArchiveDecision()).isEqualTo(ArchiveDecision.SKIPPED);
+        verify(repo, never()).save(any());
     }
 
     @Test

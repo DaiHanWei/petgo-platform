@@ -5,6 +5,7 @@ import com.tailtopia.triage.domain.TriageTask;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 /**
  * 分诊任务仓储（Story 4.1）。{@code findByStatusIn} 供启动重扫扫残留（PENDING/PROCESSING）；
@@ -26,4 +27,13 @@ public interface TriageTaskRepository extends JpaRepository<TriageTask, Long> {
 
     @org.springframework.transaction.annotation.Transactional
     void deleteByUserId(long userId);
+
+    /**
+     * 红色超额监控（Story 9.6 · AB-7A）：按用户聚合 RED 分诊计数，计数降序。纯观测（无自动拦截）。
+     */
+    @Query("select t.userId as userId, count(t) as redCount from TriageTask t "
+            + "where t.dangerLevel = com.tailtopia.triage.domain.DangerLevel.RED "
+            + "group by t.userId order by count(t) desc")
+    java.util.List<RedCountProjection> redCountsByUser();
+
 }

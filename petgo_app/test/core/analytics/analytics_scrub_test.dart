@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
+import 'package:tailtopia/core/analytics/button_ids.dart';
 
 void main() {
   group('Analytics.scrub', () {
@@ -49,26 +50,46 @@ void main() {
       Analytics.scrub(input);
       expect(input.containsKey('email'), isTrue);
     });
+
+    test('自由文本键整键丢弃（埋点治理 P0 兜底：button_name/title/label/text/content/caption）', () {
+      final out = Analytics.scrub({
+        'button_name': 'Haha Dog · 0y 0m',
+        'title': 'x',
+        'label': 'x',
+        'text': 'x',
+        'content': 'x',
+        'caption': 'x',
+        'button_id': 'triage.start',
+      });
+      expect(out.keys, ['button_id']);
+    });
+
+    test('超长字符串值(>64)整键丢弃——大概率是用户内容', () {
+      final out = Analytics.scrub({
+        'note': 'a' * 65,
+        'ok': 'a' * 64,
+        'count': 999,
+      });
+      expect(out.containsKey('note'), isFalse);
+      expect(out['ok'], 'a' * 64);
+      expect(out['count'], 999);
+    });
   });
 
-  group('Analytics.sanitizeTapLabel', () {
-    test('普通 CTA 文案原样保留(去多余空白)', () {
-      expect(Analytics.sanitizeTapLabel('  Lanjut  '), 'Lanjut');
-      expect(Analytics.sanitizeTapLabel('Masuk dengan Google'), 'Masuk dengan Google');
+  group('Analytics.buttonTapped 白名单（埋点治理 P0）', () {
+    test('ButtonId 全部常量均已登记', () {
+      for (final id in const [
+        ButtonId.triageStart, ButtonId.triageUpload, ButtonId.consultStart,
+        ButtonId.publishSubmit, ButtonId.profileCreate, ButtonId.milestoneShare,
+        ButtonId.vetAcceptQueue, ButtonId.vetAdviceTemplate,
+      ]) {
+        expect(Analytics.isRegisteredButtonId(id), isTrue, reason: id);
+      }
     });
 
-    test('空标签 → (unlabeled)', () {
-      expect(Analytics.sanitizeTapLabel(''), '(unlabeled)');
-      expect(Analytics.sanitizeTapLabel('   '), '(unlabeled)');
-    });
-
-    test('疑似 PII/自由文本 → (redacted)', () {
-      expect(Analytics.sanitizeTapLabel('aurel@tailtopia.id'), '(redacted)'); // 含 @
-      expect(Analytics.sanitizeTapLabel('0812345678'), '(redacted)'); // 长数字串
-      expect(
-        Analytics.sanitizeTapLabel('This is a long free-form note exceeding forty characters'),
-        '(redacted)',
-      ); // 过长自由文本(>40)
+    test('未登记 id 不在白名单（release 静默丢弃、debug 断言拦截）', () {
+      expect(Analytics.isRegisteredButtonId('free text from ui'), isFalse);
+      expect(Analytics.isRegisteredButtonId(''), isFalse);
     });
   });
 
@@ -85,6 +106,33 @@ void main() {
       final out = Analytics.distinctIdFor(12345);
       expect(out, matches(RegExp(r'^[0-9a-f]{64}$')));
       expect(out.contains('12345'), isFalse);
+    });
+  });
+
+  group('Analytics.isAppsFlyerEvent（归因白名单，交付文档 §4.1）', () {
+    test('归因关键转化在白名单内', () {
+      for (final e in [
+        'af_complete_registration', 'af_purchase', 'af_initiated_checkout',
+        'pet_profile_create_submitted', 'triage_submitted', 'consult_started',
+      ]) {
+        expect(Analytics.isAppsFlyerEvent(e), isTrue, reason: e);
+      }
+    });
+
+    test('非白名单事件不分发 AppsFlyer（不复制 PostHog 全量）', () {
+      expect(Analytics.isAppsFlyerEvent('login_tapped'), isFalse);
+      expect(Analytics.isAppsFlyerEvent('button_tapped'), isFalse);
+      expect(Analytics.isAppsFlyerEvent(''), isFalse);
+    });
+
+    test('PawCoin 消耗类事件不得进收入白名单（防 ROAS 双倍虚报）', () {
+      expect(Analytics.isAppsFlyerEvent('consult_paid'), isFalse);
+    });
+
+    test('白名单事件名 ≤45 字符（超长 dashboard 不可见）', () {
+      for (final e in Analytics.appsflyerEvents) {
+        expect(e.length, lessThanOrEqualTo(45), reason: e);
+      }
     });
   });
 }

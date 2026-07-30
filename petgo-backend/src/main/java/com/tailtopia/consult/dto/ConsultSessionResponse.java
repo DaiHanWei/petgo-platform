@@ -3,6 +3,7 @@ package com.tailtopia.consult.dto;
 import com.tailtopia.consult.domain.ClosedReason;
 import com.tailtopia.consult.domain.ConsultSession;
 import com.tailtopia.consult.domain.RatingPromptState;
+import java.time.Instant;
 
 /**
  * 咨询会话视图（Story 5.3）。
@@ -26,7 +27,8 @@ public record ConsultSessionResponse(
         String imConversationId,
         String closedReason,
         String interruptedReason,
-        boolean rated) {
+        boolean rated,
+        Instant suspendDeadlineAt) {
 
     public static ConsultSessionResponse of(ConsultSession s, long timeoutSeconds, boolean alreadyActive) {
         long elapsed = s.getWaitingStartedAt() == null
@@ -43,7 +45,8 @@ public record ConsultSessionResponse(
                 s.getImConversationId(),
                 s.getClosedReason() == null ? null : s.getClosedReason().name(),
                 s.getInterruptedReason() == null ? null : s.getInterruptedReason().name(),
-                isRated(s));
+                isRated(s),
+                s.getSuspendDeadlineAt()); // Story 3.8：非空=封禁挂起中，前端显逃生入口 + 倒计时
     }
 
     /**

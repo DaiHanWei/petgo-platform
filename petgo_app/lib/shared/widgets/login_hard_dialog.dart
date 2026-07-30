@@ -109,25 +109,9 @@ class _LoginHardDialogState extends State<LoginHardDialog> {
               ),
               const SizedBox(height: 10),
             ],
-            // 主按钮：Google 登录（白底 + 描边 + Google G）。
+            // 主按钮：Google 登录（白底 + 描边 + Google G）。V1 无独立注册流（Google 即建号），
+            // 原「Daftar Gratis」次按钮与 Google 同源、纯冗余，2026-07-23 按产品要求移除。
             _GoogleButton(loading: _loading, onTap: _loading ? null : () => _run(widget.onLogin)),
-            const SizedBox(height: 10),
-            // 次按钮：Daftar Gratis（实心紫）——决策 #4：V1 无独立注册流，与 Google 同源建号。
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                key: const ValueKey('hardDialogRegisterCta'),
-                onPressed: _loading ? null : () => _run(widget.onLogin),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.mint,
-                  foregroundColor: AppColors.onAccent,
-                  padding: const EdgeInsets.symmetric(vertical: 13),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
-                ),
-                child: Text(l10n.loginGateRegister,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-              ),
-            ),
             const SizedBox(height: 16),
             // 继续看（文字链）。
             TextButton(
@@ -167,9 +151,9 @@ class _GoogleButton extends StatelessWidget {
         key: const ValueKey('hardDialogGoogleCta'),
         onPressed: onTap,
         style: OutlinedButton.styleFrom(
-          backgroundColor: AppColors.surface,
+          backgroundColor: AppColors.mintTint, // 淡紫底（violet-50）
           foregroundColor: AppColors.ink,
-          side: const BorderSide(color: AppColors.line, width: 1.5),
+          side: const BorderSide(color: AppColors.lineViolet, width: 1.5),
           padding: const EdgeInsets.symmetric(vertical: 13),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
         ),
@@ -180,12 +164,23 @@ class _GoogleButton extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // 多色「G」字标（避免引入 Google 图标资源）。
-                  const Text('G',
-                      style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.brandGoogleBlue)),
+                  // 五彩「G」字标（避免引入 Google 图标资源）：ShaderMask 把 Google 四色
+                  // 横向渐变刷到字上 → 蓝/红/黄/绿一字排开。
+                  ShaderMask(
+                    shaderCallback: (Rect bounds) => const LinearGradient(
+                      colors: <Color>[
+                        AppColors.brandGoogleBlue,
+                        AppColors.brandGoogleRed,
+                        AppColors.brandGoogleYellow,
+                        AppColors.brandGoogleGreen,
+                      ],
+                    ).createShader(bounds),
+                    child: const Text('G',
+                        style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white)), // ShaderMask 需非透明底色承接渐变
+                  ),
                   const SizedBox(width: 10),
                   Text(l10n.loginGoogle,
                       style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),

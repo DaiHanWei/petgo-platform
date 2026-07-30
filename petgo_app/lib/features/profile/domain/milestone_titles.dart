@@ -39,6 +39,7 @@ const Map<String, ({String en, String id})> kMilestoneTitles = {
   'C-L3': (en: '365 days together', id: '365 hari bersama'),
   'C-L4': (en: 'All health milestones', id: 'Semua tonggak kesehatan'),
   'C-L5': (en: '30 growth entries', id: '30 catatan tumbuh kembang'),
+  'C-S16': (en: 'Beginner graduate 🎓', id: 'Lulus Pemula 🎓'),
 
   // ===== DOG (D) =====
   'D-S1': (en: 'Profile created', id: 'Profil dibuat'),
@@ -71,6 +72,7 @@ const Map<String, ({String en, String id})> kMilestoneTitles = {
   'D-L3': (en: '365 days together', id: '365 hari bersama'),
   'D-L4': (en: 'All health milestones', id: 'Semua tonggak kesehatan'),
   'D-L5': (en: '30 growth entries', id: '30 catatan tumbuh kembang'),
+  'D-S16': (en: 'Beginner graduate 🎓', id: 'Lulus Pemula 🎓'),
 
   // ===== OTHER (G) =====
   'G-S1': (en: 'Profile created', id: 'Profil dibuat'),
@@ -88,6 +90,7 @@ const Map<String, ({String en, String id})> kMilestoneTitles = {
   'G-L1': (en: 'First birthday 🎂', id: 'Ulang tahun pertama 🎂'),
   'G-L2': (en: '100 days together', id: '100 hari bersama'),
   'G-L3': (en: '365 days together', id: '365 hari bersama'),
+  'G-S9': (en: 'Beginner graduate 🎓', id: 'Lulus Pemula 🎓'),
 };
 
 /// 按 code + locale 返回本地化里程碑标题。未知 code 兜底返回 code（绝不显示中文）。

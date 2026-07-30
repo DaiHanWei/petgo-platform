@@ -15,6 +15,7 @@ import com.tailtopia.consult.domain.RatingPromptState;
 import com.tailtopia.consult.domain.SessionStatus;
 import com.tailtopia.consult.domain.VetDiagnosis;
 import com.tailtopia.consult.event.ConsultClosedEvent;
+import com.tailtopia.consult.repository.ConsultOrderRepository;
 import com.tailtopia.consult.repository.ConsultRatingRepository;
 import com.tailtopia.consult.repository.ConsultSessionRepository;
 import com.tailtopia.shared.error.AppException;
@@ -49,9 +50,13 @@ class ConsultCloseServiceTest {
     TencentImClient imClient;
     @Mock
     ApplicationEventPublisher events;
+    @Mock
+    ConsultOrderRepository orders;
+    @Mock
+    ConsultBillingService billing;
 
     private ConsultCloseService service() {
-        return new ConsultCloseService(sessions, ratings, presence, imClient, events);
+        return new ConsultCloseService(sessions, ratings, presence, imClient, events, orders, billing);
     }
 
     private ConsultSession inProgress(long id, long vetId) {

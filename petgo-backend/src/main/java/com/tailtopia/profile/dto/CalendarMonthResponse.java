@@ -17,11 +17,17 @@ public record CalendarMonthResponse(int year, int month, List<DayCell> days) {
     /**
      * 单日格子。
      *
+     * <p>前端角标优先级（bug 20260722-352）：diary 图（{@code firstImageUrl}）&gt; 问诊（{@code hasHealthEvent}）
+     * &gt; 健康记录分类图标（{@code healthRecordType}）。
+     *
      * @param day              日（1-31）
      * @param firstImageUrl    该日最早 created_at 快乐时刻的首图（无图/无快乐时刻为 null）
      * @param hasHappyMoment   当日有快乐时刻
-     * @param hasHealthEvent   当日有健康事件（右下角 🏥 角标）
+     * @param hasHealthEvent   当日有健康事件（问诊；🏥 角标）
+     * @param healthRecordType 当日健康记录分类枚举名（VACCINE/DEWORM/MENSTRUATION/NEUTER/CUSTOM），无则 null
+     *                         —— 前端映射为与健康记录页一致的分类小图标
      */
-    public record DayCell(int day, String firstImageUrl, boolean hasHappyMoment, boolean hasHealthEvent) {
+    public record DayCell(int day, String firstImageUrl, boolean hasHappyMoment, boolean hasHealthEvent,
+            String healthRecordType) {
     }
 }

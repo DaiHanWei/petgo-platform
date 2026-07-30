@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/profile/data/milestone_repository.dart';
+import 'package:tailtopia/features/profile/data/newbie_task_repository.dart';
 import 'package:tailtopia/features/profile/domain/milestone.dart';
+import 'package:tailtopia/features/profile/domain/newbie_tasks.dart';
 import 'package:tailtopia/features/profile/presentation/milestone_list_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
@@ -17,7 +19,9 @@ MilestoneList _sample() => const MilestoneList(
               code: 'C-L1', title: '第一个生日', level: MilestoneLevel.l,
               trigger: MilestoneTrigger.pushPublish, completed: false),
         ]),
-        MilestoneGroup(level: MilestoneLevel.m, completedCount: 1, totalCount: 1, items: [
+        // totalCount 2>completedCount 1：M 级「未全完成」，默认「Belum Semua Selesai」筛选下可见
+        // （0711 新增分级筛选：默认隐藏已全完成的级别）。
+        MilestoneGroup(level: MilestoneLevel.m, completedCount: 1, totalCount: 2, items: [
           MilestoneItem(
               code: 'C-M8', title: '陪伴满 30 天', level: MilestoneLevel.m,
               trigger: MilestoneTrigger.systemAuto, completed: true),
@@ -39,6 +43,9 @@ Widget _wrap({MilestoneList? data, Object? error}) => ProviderScope(
           if (error != null) throw error;
           return data ?? _sample();
         }),
+        // 新手卡：这些用例不关心，用达成态渲染紧凑横幅，避免真网络调用干扰。
+        newbieTasksProvider.overrideWith((ref) async => const NewbieTasks(
+              items: [], completedCount: 6, total: 6, lulusPemulaUnlocked: true)),
       ],
       child: const MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -49,6 +56,8 @@ Widget _wrap({MilestoneList? data, Object? error}) => ProviderScope(
 
 void main() {
   testWidgets('header + 三级分区 + 各级进度渲染', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(500, 2600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(_wrap());
     await tester.pumpAndSettle();
 
@@ -61,6 +70,8 @@ void main() {
   });
 
   testWidgets('徽章彩色（已完成）/灰锁（未完成）', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(500, 2600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(_wrap());
     await tester.pumpAndSettle();
 
@@ -71,6 +82,8 @@ void main() {
   });
 
   testWidgets('点击未完成非打卡徽章 → P-33b 只读说明（无打卡按钮）', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(500, 2600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(_wrap());
     await tester.pumpAndSettle();
 
@@ -82,10 +95,14 @@ void main() {
   });
 
   testWidgets('点击已完成徽章 → P-35 解锁庆祝（而非 P-33b 详情）', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(500, 2600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(_wrap());
     await tester.pumpAndSettle();
 
-    // C-S1：已完成 → 重温 P-35 统一庆祝。
+    // C-S1：已完成 → 重温 P-35 统一庆祝。（顶部新手卡下移 S 分区，先滚入可视区。）
+    await tester.ensureVisible(find.byKey(const ValueKey('milestoneBadge_C-S1')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('milestoneBadge_C-S1')));
     await tester.pump(); // 打开
     await tester.pump(const Duration(milliseconds: 300));
@@ -95,9 +112,13 @@ void main() {
   });
 
   testWidgets('点击用户打卡未完成徽章 → 「已打卡 / 去发布」两入口', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(500, 2600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(_wrap());
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.byKey(const ValueKey('milestoneBadge_C-S6')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('milestoneBadge_C-S6')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('milestoneCheckedIn')), findsOneWidget);

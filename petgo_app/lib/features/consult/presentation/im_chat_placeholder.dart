@@ -59,6 +59,9 @@ class _ImChatPlaceholderState extends ConsumerState<ImChatPlaceholder> {
   StreamSubscription<ImMessage>? _sub;
   bool _bootstrapped = false;
   final List<ImMessage> _msgs = [];
+  // 已上屏的 msgID（bug 20260721-347）：按 IM msgID 去重，防同一条消息被上屏两次
+  // （实时监听 × 拉历史窗口重叠、或极端下双份派发的兜底防线）。
+  final Set<String> _seenIds = {};
 
   @override
   void initState() {
@@ -84,6 +87,7 @@ class _ImChatPlaceholderState extends ConsumerState<ImChatPlaceholder> {
     // 入站流广播：登录前订阅亦无害，登录成功后开始有消息流入。
     _sub = _service!.onMessages(peer).listen((m) {
       if (!mounted) return;
+      if (m.id != null && !_seenIds.add(m.id!)) return; // 已收过同 msgID → 丢弃（bug 20260721-347）
       setState(() => _msgs.add(m));
       _scrollToEnd();
       // 会话打开期间收到对端消息即标已读 → 工作台列表角标不残留。
@@ -103,7 +107,10 @@ class _ImChatPlaceholderState extends ConsumerState<ImChatPlaceholder> {
     if (peer == null) return;
     final hist = await _service!.loadHistory(peer);
     if (!mounted || hist.isEmpty) return;
-    setState(() => _msgs.insertAll(0, hist));
+    // 与实时流按 msgID 去重，避开「历史一份 + 实时一份」的初始窗口重叠（bug 20260721-347）。
+    final fresh = hist.where((m) => m.id == null || _seenIds.add(m.id!)).toList();
+    if (fresh.isEmpty) return;
+    setState(() => _msgs.insertAll(0, fresh));
     _scrollToEnd();
   }
 

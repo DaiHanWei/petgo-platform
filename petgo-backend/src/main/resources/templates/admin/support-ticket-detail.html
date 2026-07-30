@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!-- 客服工单详情（Story 4.7）。support.handle 门控。结案「已联系+已解决」→ RESOLVED + 结案/CSAT 通知。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title>工单详情 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1>工单详情</h1>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+        <p><a class="btn btn-neutral btn-sm" th:href="@{/admin/support-tickets}">返回列表</a></p>
+
+        <table>
+            <tr><th>工单</th><td th:text="${ticket.ticketToken}">tok</td></tr>
+            <tr><th>标题</th><td th:text="${ticket.subject}">subject</td></tr>
+            <tr><th>正文</th><td th:text="${ticket.body}">body</td></tr>
+            <tr><th>联系方式</th><td><span th:text="${ticket.contactType}">EMAIL</span> · <span th:text="${ticket.contactValue}">x</span></td></tr>
+            <tr><th>需联系</th><td th:text="${ticket.needContact} ? '是' : '否'">是</td></tr>
+            <tr><th>已联系</th><td th:text="${ticket.contacted} ? '是' : '否'">否</td></tr>
+            <tr><th>状态</th><td th:text="${ticket.status}">OPEN</td></tr>
+            <tr><th>标签</th><td th:text="${#strings.listJoin(ticket.labels, ', ')} ?: '—'">—</td></tr>
+            <tr><th>附件数</th><td th:text="${ticket.attachmentCount}">0</td></tr>
+            <tr><th>CSAT</th><td><span th:text="${ticket.csatScore} ?: '—'">—</span> <span th:text="${ticket.csatComment} ?: ''"></span></td></tr>
+            <tr><th>结案时间</th>
+                <td th:text="${ticket.resolvedAt != null} ? ${#temporals.format(ticket.resolvedAt, 'yyyy-MM-dd HH:mm')} : '—'">—</td></tr>
+        </table>
+
+        <!-- 结案（仅 OPEN/IN_PROGRESS 可）：勾「已联系+已解决」-->
+        <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('support.handle')"
+             th:if="${ticket.status == 'OPEN' or ticket.status == 'IN_PROGRESS'}">
+            <h3>结案</h3>
+            <form method="post" th:action="@{/admin/support-tickets/{t}/resolve(t=${ticket.ticketToken})}">
+                <button class="btn btn-sm" type="submit">已联系 + 已解决（结案）</button>
+            </form>
+        </div>
+    </div>
+</div>
+</body>
+</html>

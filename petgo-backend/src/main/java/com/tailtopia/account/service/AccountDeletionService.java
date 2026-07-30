@@ -10,6 +10,7 @@ import com.tailtopia.consult.service.ConsultAnonymizationService;
 import com.tailtopia.content.service.ContentService;
 import com.tailtopia.moderation.violation.service.ViolationCountService;
 import com.tailtopia.notify.service.NotificationDeletionService;
+import com.tailtopia.pay.service.PawCoinAccountDeletionService;
 import com.tailtopia.profile.service.ProfileDeletionService;
 import com.tailtopia.shared.im.ImAccountMapper;
 import com.tailtopia.shared.im.TencentImClient;
@@ -45,6 +46,7 @@ public class AccountDeletionService {
     private final TriageDeletionService triageDeletion;
     private final ConsultAnonymizationService consultAnonymization;
     private final NotificationDeletionService notificationDeletion;
+    private final PawCoinAccountDeletionService pawCoinDeletion;
     private final AuthAccountDeletionService authDeletion;
     private final MediaDeletionService mediaDeletion;
     private final TencentImClient imClient;
@@ -57,7 +59,8 @@ public class AccountDeletionService {
     public AccountDeletionService(AccountDeletionRepository deletions,
             ProfileDeletionService profileDeletion, TriageDeletionService triageDeletion,
             ConsultAnonymizationService consultAnonymization,
-            NotificationDeletionService notificationDeletion, AuthAccountDeletionService authDeletion,
+            NotificationDeletionService notificationDeletion,
+            PawCoinAccountDeletionService pawCoinDeletion, AuthAccountDeletionService authDeletion,
             MediaDeletionService mediaDeletion, TencentImClient imClient,
             ApplicationEventPublisher events, ContentService contentService,
             ManualReviewService reviewService, ViolationCountService violationCountService) {
@@ -66,6 +69,7 @@ public class AccountDeletionService {
         this.triageDeletion = triageDeletion;
         this.consultAnonymization = consultAnonymization;
         this.notificationDeletion = notificationDeletion;
+        this.pawCoinDeletion = pawCoinDeletion;
         this.authDeletion = authDeletion;
         this.mediaDeletion = mediaDeletion;
         this.imClient = imClient;
@@ -109,6 +113,8 @@ public class AccountDeletionService {
                 .merge(triageDeletion.deleteByUserId(userId))
                 .merge(consultAnonymization.anonymizeByUserId(userId));
         notificationDeletion.deleteByUserId(userId);
+        // PawCoin 余额作废（Story 1.6，FR-50D）：写 FORFEITURE 终结分录归零 + 物理删钱包/流水；在删 user 行前。
+        pawCoinDeletion.voidBalanceAndPurge(userId);
 
         // 内容审核 story 9 注销联动（§5.5）：必须在 user 行删除【前】完成——此时 author_id 仍可识别其内容。
         //  ① 帖子/评论对他人隐藏（AUTHOR_DEACTIVATED，保留匿名化，可见性层≠7-3显示层匿名化，D-CM4）；

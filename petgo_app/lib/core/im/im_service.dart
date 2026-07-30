@@ -17,11 +17,14 @@ import '../network/dio_client.dart';
 /// 一条 IM 消息（Story 5.5）。`who` ∈ me / peer / system；文字与图片二选一。
 @immutable
 class ImMessage {
-  const ImMessage({required this.who, this.text, this.imageUrl});
+  const ImMessage({required this.who, this.text, this.imageUrl, this.id});
 
   final String who; // me | peer | system
   final String? text;
   final String? imageUrl;
+
+  /// 腾讯 IM msgID（bug 20260721-347）：渲染层按此去重，防同一条消息被上屏两次。
+  final String? id;
 
   bool get isMine => who == 'me';
   bool get isSystem => who == 'system';
@@ -104,6 +107,9 @@ class LiveImService implements ImService {
   ImCredential? _credential;
   bool _sdkInited = false;
   V2TimAdvancedMsgListener? _listener;
+  // 单飞登录（bug 20260721-347）：并发 loginIfNeeded 共享同一次登录，避免 initSDK/监听器被重复注册
+  // 导致入站消息双份派发（兽医每条消息用户端收到两条）。
+  Future<void>? _loginInFlight;
 
   /// 全量入站 C2C 消息广播（[onMessages] 按对端过滤）。服务随 Provider 贯穿 app 生命周期，不主动关闭。
   final StreamController<V2TimMessage> _incoming = StreamController<V2TimMessage>.broadcast();
@@ -115,6 +121,13 @@ class LiveImService implements ImService {
 
   Future<void> _ensureSdkInit(int sdkAppId) async {
     if (_sdkInited) return;
+    // 幂等保险：SDK 已初始化过监听器则先解绑再注册，杜绝任何路径下双挂载（bug 20260721-347）。
+    if (_listener != null) {
+      await TencentImSDKPlugin.v2TIMManager
+          .getMessageManager()
+          .removeAdvancedMsgListener(listener: _listener!);
+      _listener = null;
+    }
     final init = await TencentImSDKPlugin.v2TIMManager.initSDK(
       sdkAppID: sdkAppId,
       loglevel: LogLevelEnum.V2TIM_LOG_ERROR,
@@ -139,7 +152,14 @@ class LiveImService implements ImService {
   }
 
   @override
-  Future<void> loginIfNeeded() async {
+  Future<void> loginIfNeeded() {
+    if (_credential != null) return Future.value();
+    // 单飞（bug 20260721-347）：并发调用者共享同一次登录 Future，initSDK + addAdvancedMsgListener 只执行一次；
+    // 完成后清空以便下次（登出/被踢后）可重登。
+    return _loginInFlight ??= _doLogin().whenComplete(() => _loginInFlight = null);
+  }
+
+  Future<void> _doLogin() async {
     if (_credential != null) return;
     // 经后端 MAU 闸门取短时 UserSig（用户须有进行中会话，否则后端 403）。
     final cred = await _fetchUserSig();
@@ -280,9 +300,9 @@ class LiveImService implements ImService {
     if (m.elemType == MessageElemType.V2TIM_ELEM_TYPE_IMAGE) {
       final images = m.imageElem?.imageList;
       final url = (images != null && images.isNotEmpty) ? images.first?.url : null;
-      return ImMessage(who: who, imageUrl: url);
+      return ImMessage(who: who, imageUrl: url, id: m.msgID);
     }
-    return ImMessage(who: who, text: m.textElem?.text);
+    return ImMessage(who: who, text: m.textElem?.text, id: m.msgID);
   }
 }
 

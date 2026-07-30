@@ -144,8 +144,9 @@ void main() {
 
     await tester.tap(find.text('Health')); // bug 20260706-248：Consult→Health
     // 问诊 hub AI 卡在线脉冲为常驻动画，pumpAndSettle 不收敛——固定帧推进。
+    // 200ms 覆盖底部 Tab 按压释放的 120ms 动画 timer，避免 tearDown 报 pending timer。
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 200));
 
     expect(find.byType(LoginHardDialog), findsNothing);
     // 切到问诊 hub（bug 20260706-248：顶部 title Consult→Health；tab 亦为 Health，故 findsWidgets）。

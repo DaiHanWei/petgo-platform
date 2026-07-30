@@ -73,6 +73,10 @@ class MePage extends ConsumerWidget {
             onAvatarTap: () => _changeAvatar(context, ref),
           ),
           const SizedBox(height: AppSpacing.lg),
+          // AKTIVITAS 入口组（0711 profil-entries）：订单为主入口（PawCoin 已并入订单列表 header
+          // 余额格，退款经订单详情可达），紫虚线卡 + BARU 徽章突出 V1.1 新增。
+          _ActivitySection(onOrders: () => context.push('/me/orders')),
+          const SizedBox(height: AppSpacing.lg),
           // ② 我的发布（原型 Postinganku）：小标题 + 裸 2 列网格（无卡边框）。
           // 注：宠物状态/改状态/编辑档案区块已按设计（原型 p-profil 无此块）移除。
           Padding(
@@ -104,7 +108,9 @@ class MePage extends ConsumerWidget {
     final controller = TextEditingController(
       text: profile?.nickname ?? profile?.displayName ?? '',
     );
-    final newName = await showModalBottomSheet<String>(
+    // bug 20260721-327：一句话个性签名（用户级）。
+    final sigController = TextEditingController(text: profile?.signature ?? '');
+    final result = await showModalBottomSheet<({String nickname, String signature})>(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.surface,
@@ -141,30 +147,35 @@ class MePage extends ConsumerWidget {
               style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 20),
-            // 头像区（展示 + Ganti Foto 占位，头像上传本期降级）。
+            // 头像区（展示 + Ganti Foto 换头像）。bug 20260721-287：接真实换头像流程
+            // （原为「待接入」假 toast，但 _changeAvatar 上传流程本已实现，点头像本体即用）。
             Center(
-              child: Column(
-                children: [
-                  _InitialAvatar(
-                    avatarUrl: profile?.avatarUrl,
-                    nickname: profile?.nickname ?? '',
-                    radius: 38,
-                  ),
-                  const SizedBox(height: 8),
-                  TextButton(
-                    key: const ValueKey('meEditPhoto'),
-                    onPressed: () {
-                      showAppToast(ctx, l10n.helpComingSoon);
-                    },
-                    child: Text(
-                      l10n.meEditPhotoChange,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.mint,
+              child: Consumer(
+                builder: (ctx, ref, _) {
+                  // 实时头像：换成功后 applyProfile 更新 authController，预览随之刷新。
+                  final p = ref.watch(authControllerProvider).profile;
+                  return Column(
+                    children: [
+                      _InitialAvatar(
+                        avatarUrl: p?.avatarUrl,
+                        nickname: p?.nickname ?? '',
+                        radius: 38,
                       ),
-                    ),
-                  ),
-                ],
+                      const SizedBox(height: 8),
+                      TextButton(
+                        key: const ValueKey('meEditPhoto'),
+                        onPressed: () => _changeAvatar(ctx, ref),
+                        child: Text(
+                          l10n.meEditPhotoChange,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.mint,
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
             const SizedBox(height: 14),
@@ -209,6 +220,40 @@ class MePage extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 14),
+            // 一句话个性签名（bug 20260721-327）。
+            Text(
+              l10n.meEditSignatureLabel.toUpperCase(),
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.4,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            TextField(
+              key: const ValueKey('signatureField'),
+              controller: sigController,
+              maxLength: 60,
+              maxLines: 2,
+              minLines: 1,
+              decoration: InputDecoration(
+                counterText: '',
+                hintText: l10n.meEditSignatureHint,
+                filled: true,
+                fillColor: AppColors.surface,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppColors.mint, width: 1.5),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppColors.mint, width: 1.5),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
             // 邮箱（只读）。
             Text(
               l10n.meEditEmailLabel.toUpperCase(),
@@ -239,7 +284,8 @@ class MePage extends ConsumerWidget {
             const SizedBox(height: 22),
             FilledButton(
               key: const ValueKey('meEditSaveButton'),
-              onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+              onPressed: () => Navigator.of(ctx).pop(
+                  (nickname: controller.text.trim(), signature: sigController.text.trim())),
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.mint,
                 foregroundColor: AppColors.onAccent,
@@ -276,11 +322,11 @@ class MePage extends ConsumerWidget {
         ),
       ),
     );
-    if (newName == null || newName.isEmpty || !context.mounted) return;
+    if (result == null || result.nickname.isEmpty || !context.mounted) return;
     try {
       final updated = await ref
           .read(meRepositoryProvider)
-          .updateNickname(newName);
+          .updateProfile(nickname: result.nickname, signature: result.signature);
       ref.read(authControllerProvider.notifier).applyProfile(updated);
     } catch (_) {
       if (context.mounted) {
@@ -506,7 +552,9 @@ class _PetCard extends ConsumerWidget {
     return [
       ?species,
       if (pet.birthday != null) l10n.growthArchiveAge(age.years, age.months),
-      if (momen != null) l10n.meMomenCount(momen),
+      // bug 20260722-355：GROWTH_MOMENT 帖即「Diary」（与档案头部/网格徽章同口径），
+      // 文案由「moments」改「diary」，>99 显示「99+」，跟随实际记录数变化。
+      if (momen != null) l10n.meDiaryCount(momen > 99 ? '99+' : '$momen'),
     ].join(' · ');
   }
 }
@@ -551,6 +599,80 @@ class _IconBtn extends StatelessWidget {
           child: Icon(icon, size: 18, color: AppColors.ink2),
         ),
       ),
+    );
+  }
+}
+
+/// AKTIVITAS 入口组（0718：普通实心卡，去 0711 的紫虚线+BARU）：section label + 实心卡「Pesanan Saya」。
+/// PawCoin 入口已迁至订单列表 header 余额格；退款经订单详情可达 —— 故本组仅一张订单主入口卡。
+class _ActivitySection extends StatelessWidget {
+  const _ActivitySection({required this.onOrders});
+
+  final VoidCallback onOrders;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 分组标题（0718 去 BARU 徽章）。
+        Padding(
+          padding: const EdgeInsets.only(left: AppSpacing.xs, bottom: AppSpacing.sm),
+          child: Text(
+            l10n.meActivitySection,
+            style: AppTypography.caption.copyWith(
+              letterSpacing: 0.6,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        // 实心卡「Pesanan Saya · Termasuk saldo PawCoin」→ 订单中心（图标去 tinted 方块底）。
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: const [
+              BoxShadow(color: Color(0x0D2B2A27), offset: Offset(0, 2), blurRadius: 8),
+            ],
+          ),
+          child: Material(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(14),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              key: const ValueKey('meOrders'),
+              onTap: onOrders,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                child: Row(
+                  children: [
+                    const Icon(Icons.credit_card_outlined, size: 26, color: AppColors.mint),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(l10n.orderMyTitle,
+                              style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.ink)),
+                          const SizedBox(height: 2),
+                          Text(l10n.meOrdersEntrySub,
+                              style: AppTypography.caption
+                                  .copyWith(color: AppColors.textSecondary)),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right, color: AppColors.muted),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -612,6 +734,17 @@ class _ProfileHeadCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  // 一句话个性签名（bug 20260721-327）。
+                  if ((profile?.signature ?? '').isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      profile!.signature!,
+                      key: const ValueKey('meSignature'),
+                      style: AppTypography.caption,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                   if (email.isNotEmpty) ...[
                     const SizedBox(height: 2),
                     Text(

@@ -44,16 +44,33 @@ public class HealthEventService {
         return healthEvents.existsBySourceRef(sourceRef);
     }
 
+    /** 该 sourceRef 是否【已存档】(ARCHIVED)：问诊结果页据此隐藏保存按钮（bug 20260721-333）。 */
+    @Transactional(readOnly = true)
+    public boolean isArchived(String sourceRef) {
+        return healthEvents.existsBySourceRefAndArchiveDecision(sourceRef, ArchiveDecision.ARCHIVED);
+    }
+
     @Transactional
     public ArchiveDecisionResponse recordDecision(long ownerId, ArchiveDecisionRequest req) {
         // 归属校验：petId 必须属当前用户（防越权写他人档案）。
         if (!profileService.ownsPet(ownerId, req.petId())) {
             throw AppException.forbidden("无法操作该宠物档案");
         }
-        // 幂等：已决策 → 直接返回既有决策，不重复弹/重复存。
+        // 幂等：已决策 → 原则上返回既有决策。例外（bug 20260727 保存静默无效）：既有 SKIPPED、
+        // 本次显式 ARCHIVED → 就地升级补存。FR-16「只问一次」只约束自动弹窗，不锁死用户显式补存。
         var existing = healthEvents.findBySourceRef(req.sourceRef());
         if (existing.isPresent()) {
-            return new ArchiveDecisionResponse(req.sourceRef(), existing.get().getArchiveDecision(), true);
+            HealthEvent ev = existing.get();
+            if (ev.getArchiveDecision() == ArchiveDecision.SKIPPED
+                    && req.decision() == ArchiveDecision.ARCHIVED) {
+                List<String> imageKeys = imToOssArchiver.archiveImImagesToPrivate(req.petId(), req.imImageRefs());
+                ev.upgradeToArchived(blankToNull(req.symptomSummary()), blankToNull(req.aiLevel()),
+                        blankToNull(req.adviceSummary()), imageKeys.isEmpty() ? null : imageKeys);
+                // C-S4「第一次保存问诊结论」随首次真实存档触发（升级即首次 ARCHIVED，幂等由里程碑侧保证）。
+                events.publishEvent(new HealthArchivedEvent(ownerId, req.petId(), Instant.now()));
+                return new ArchiveDecisionResponse(req.sourceRef(), ArchiveDecision.ARCHIVED, false);
+            }
+            return new ArchiveDecisionResponse(req.sourceRef(), ev.getArchiveDecision(), true);
         }
 
         LocalDate eventDate = req.eventDate() == null ? LocalDate.now() : req.eventDate();

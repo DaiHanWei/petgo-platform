@@ -6,6 +6,8 @@ import '../../../core/network/dio_client.dart';
 import '../domain/consult_case.dart';
 import '../domain/consult_diagnosis.dart';
 import '../domain/consult_history_item.dart';
+import '../domain/consult_pay_result.dart';
+import '../domain/consult_request.dart';
 import '../domain/consult_session.dart';
 
 /// 用户侧问诊数据层（Story 5.2 起）。可用性查询 + 会话发起/轮询/继续等待/取消（Story 5.3）。
@@ -26,6 +28,18 @@ class ConsultRepository {
 
   /// 是否有兽医在线（仅 bool，兼容旧 indicator）。
   Future<bool> vetOnline() async => (await availability()).vetOnline;
+
+  /// 当前单次兽医咨询价（IDR，后台可配 → 实时下发，bug 20260729-417）。
+  /// 拉取失败/载荷异常**直接抛出**——价格必须来自服务器，UI 侧显示重试，不做本地兜底价
+  /// （兜底价可能与后台改过的实际扣费价不一致，正是本 bug 根因）。
+  Future<int> vetConsultPrice() async {
+    final resp = await dio.get<Map<String, dynamic>>(ApiPaths.consultPricing);
+    final price = (resp.data?['price'] as num?)?.toInt();
+    if (price == null || price <= 0) {
+      throw StateError('invalid consult pricing payload');
+    }
+    return price;
+  }
 
   /// 本次会诊最终诊断（兽医结束时定格）。未出诊断(204)/失败 → null。「查看会诊结果」入口用。
   Future<ConsultDiagnosis?> diagnosis(int sessionId) async {
@@ -93,6 +107,12 @@ class ConsultRepository {
     return ConsultSession.fromJson(resp.data!);
   }
 
+  /// 封禁挂起逃生（Story 3.8，H-5）：立即结束挂起会话 + 按支付方式退款（INTERRUPTED 终态）。
+  Future<ConsultSession> escapeSuspended(int id) async {
+    final resp = await dio.post<Map<String, dynamic>>(ApiPaths.consultSessionEscape(id));
+    return ConsultSession.fromJson(resp.data!);
+  }
+
   /// 提交评分（1-5 星必填 + ≤100 字选填）→ CLOSED(RATED)（Story 5.6）。
   Future<ConsultSession> rate(int id, int stars, String? comment) async {
     final resp = await dio.post<Map<String, dynamic>>(
@@ -113,6 +133,63 @@ class ConsultRepository {
   Future<void> markRatingPrompted(int id) =>
       dio.patch<void>(ApiPaths.consultSessionRatingPrompted(id));
 
+  // ===== 计费流下单链路（Story 3.5，consult_requests 两表流）=====
+
+  /// 发起付费问诊入队（`POST /consultations`）。占用命中返现有（alreadyActive=true）。
+  /// 无宠物档案 → 后端 409（调用方映射 l10n）。
+  ///
+  /// 病例（兽医接单前据此判断，D1）：[symptomText] 症状 + [imageObjectKeys] 私密桶对象 key（前端已直传）。
+  Future<ConsultRequest> createRequest({String? symptomText, List<String>? imageObjectKeys}) async {
+    final body = <String, dynamic>{};
+    if (symptomText != null && symptomText.trim().isNotEmpty) body['symptomText'] = symptomText.trim();
+    if (imageObjectKeys != null && imageObjectKeys.isNotEmpty) body['imageObjectKeys'] = imageObjectKeys;
+    final resp = await dio.post<Map<String, dynamic>>(ApiPaths.consultations, data: body);
+    return ConsultRequest.fromJson(resp.data!);
+  }
+
+  /// 从 AI 分诊升级发起付费问诊（D2）：只传 triageTaskId，评级/描述/图片由后端从 triage 拉取（前端不重传）。
+  /// 红色态后端兜底拒绝（前端绿/黄才暴露入口）。
+  Future<ConsultRequest> createRequestFromUpgrade(int triageTaskId) async {
+    final resp = await dio.post<Map<String, dynamic>>(
+      ApiPaths.consultations,
+      data: {'source': 'AI_UPGRADE', 'triageTaskId': triageTaskId},
+    );
+    return ConsultRequest.fromJson(resp.data!);
+  }
+
+  /// 轮询请求状态（`GET /consultations/{token}`）。请求已消失（超时删/转单删）→ 404（DioException 抛给调用方）。
+  Future<ConsultRequestStatus> requestStatus(String token) async {
+    final resp = await dio.get<Map<String, dynamic>>(ApiPaths.consultationStatus(token));
+    return ConsultRequestStatus.fromJson(resp.data!);
+  }
+
+  /// 限时支付（`POST /pay {channel}`）。DONE=PawCoin 即时成功 / PAYMENT_REQUIRED=现金待付。
+  /// 余额不足/支付窗过期/守卫不符 → 后端 409；IM 建会话失败 → 503（调用方映射 l10n）。
+  Future<ConsultPayResult> payRequest(String token, String channel) async {
+    final resp = await dio.post<Map<String, dynamic>>(
+      ApiPaths.consultationPay(token),
+      data: {'channel': channel},
+    );
+    return ConsultPayResult.fromJson(resp.data!);
+  }
+
+  /// 跳充值暂停支付计时（A-4，`POST /pause`，服务端记 paused_at）。
+  Future<void> pauseRequest(String token) => dio.post<void>(ApiPaths.consultationPause(token));
+
+  /// 跳充值返回续（A-4，`POST /resume`，服务端按剩余顺延 pay_deadline）。
+  Future<void> resumeRequest(String token) => dio.post<void>(ApiPaths.consultationResume(token));
+
+  /// 用户主动取消（`POST /cancel`，物理删无痕）。
+  Future<void> cancelRequest(String token) => dio.post<void>(ApiPaths.consultationCancel(token));
+
+  /// 排队超时「继续排队」（`POST /extend-queue`，bug 20260720-311）：顺延 queue_deadline，返回新状态。
+  /// 请求已被 purge/接单 → 后端 404（调用方据此退出）。
+  Future<ConsultRequestStatus> extendQueue(String token) async {
+    final resp =
+        await dio.post<Map<String, dynamic>>(ApiPaths.consultationExtendQueue(token));
+    return ConsultRequestStatus.fromJson(resp.data!);
+  }
+
   /// 问诊历史（Story 5.8，AI + 兽医两类，游标分页）。
   Future<ConsultHistoryPage> history({String? cursor, int limit = 20}) async {
     final resp = await dio.get<Map<String, dynamic>>(
@@ -129,3 +206,8 @@ final consultRepositoryProvider =
 /// 兽医咨询可用性（FutureProvider，入口渲染前读取）。
 final consultAvailabilityProvider =
     FutureProvider.autoDispose<ConsultAvailability>((ref) => ref.read(consultRepositoryProvider).availability());
+
+/// 当前兽医咨询价（后台可配实时下发，bug 20260729-417）。**无本地兜底价**：
+/// 失败为 AsyncError，UI 侧显示重试（`ref.invalidate` 重拉），价格未取到时禁止发起/支付。
+final vetConsultPriceProvider = FutureProvider.autoDispose<int>(
+    (ref) => ref.read(consultRepositoryProvider).vetConsultPrice());

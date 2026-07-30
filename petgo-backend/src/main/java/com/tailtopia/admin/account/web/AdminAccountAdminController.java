@@ -112,6 +112,7 @@ public class AdminAccountAdminController {
         model.addAttribute("active", "accounts");
         model.addAttribute("accounts", accountService.list());
         model.addAttribute("allPermissions", AdminPermissions.ALL);
+        model.addAttribute("permissionGroups", AdminPermissions.GROUPS);
         model.addAttribute("accountTypes", AdminAccountType.values());
     }
 }

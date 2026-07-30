@@ -8,6 +8,7 @@ import com.tailtopia.profile.domain.PetMilestone;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.domain.PetType;
 import com.tailtopia.profile.event.MilestoneCompletedEvent;
+import com.tailtopia.profile.repository.HealthRecordRepository;
 import com.tailtopia.profile.repository.MilestoneCompletionRepository;
 import com.tailtopia.profile.repository.PetMilestoneRepository;
 import com.tailtopia.profile.repository.PetProfileRepository;
@@ -42,13 +43,16 @@ public class MilestoneCompletionService {
     private final PetProfileRepository profiles;
     private final PetMilestoneRepository milestones;
     private final MilestoneCompletionRepository completions;
+    private final HealthRecordRepository healthRecords;
     private final ApplicationEventPublisher events;
 
     public MilestoneCompletionService(PetProfileRepository profiles, PetMilestoneRepository milestones,
-            MilestoneCompletionRepository completions, ApplicationEventPublisher events) {
+            MilestoneCompletionRepository completions, HealthRecordRepository healthRecords,
+            ApplicationEventPublisher events) {
         this.profiles = profiles;
         this.milestones = milestones;
         this.completions = completions;
+        this.healthRecords = healthRecords;
         this.events = events;
     }
 
@@ -96,7 +100,42 @@ public class MilestoneCompletionService {
                 resolveOwnerId(petProfileId), code, m.getLevel(),
                 def != null ? def.titleZh() : code));
         maybeUnlockHealthCombo(petProfileId, petType, code);
+        // Lulus Pemula 聚合（7.3）：S1–S5 任一新完成后，若 6 新手任务全达成则解锁。
+        if (MilestoneCatalog.NEWBIE_PREREQ_SUFFIXES.contains(suffix)) {
+            checkAndUnlockLulusPemula(petProfileId, petType);
+        }
         return true;
+    }
+
+    /**
+     * 聚合里程碑「Lulus Pemula」运行时解锁入口（Story 7.3）：由健康记录创建事件触发
+     * （{@link MilestoneAutoCompleteListener#onHealthRecordCreated}）——健康记录任务可能是最后一块。
+     * 单宠假设：owner→当前档案。幂等（{@link #complete} 唯一约束短路）。
+     */
+    @Transactional
+    public void maybeUnlockLulusPemulaForOwner(long ownerId) {
+        profiles.findByOwnerId(ownerId)
+                .ifPresent(p -> checkAndUnlockLulusPemula(p.getId(), p.getPetType()));
+    }
+
+    /**
+     * 6 新手任务全达成判定：S1–S5 里程碑全完成 **且** 该宠物有 ≥1 条健康记录 → 完成 Lulus Pemula。
+     * 未全达成 → no-op。第 6 任务（健康记录）非里程碑节点，故内联存在性判定（不入 combo map）。
+     */
+    private void checkAndUnlockLulusPemula(long petProfileId, PetType petType) {
+        boolean allMilestonePrereqs = MilestoneCatalog.NEWBIE_PREREQ_SUFFIXES.stream()
+                .allMatch(suffix -> milestones
+                        .findByPetProfileIdAndCode(petProfileId, prefixOf(petType) + "-" + suffix)
+                        .map(pm -> completions.existsByPetMilestoneId(pm.getId()))
+                        .orElse(false));
+        if (!allMilestonePrereqs) {
+            return;
+        }
+        if (!healthRecords.existsByPetProfileId(petProfileId)) {
+            return;
+        }
+        complete(petProfileId, petType, suffixOf(MilestoneCatalog.lulusPemulaCode(petType)),
+                MilestoneCompletionSource.SYSTEM_AUTO, null);
     }
 
     /**

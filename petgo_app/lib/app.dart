@@ -4,7 +4,6 @@ import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
-import 'package:tailtopia/core/analytics/analytics_autocapture.dart';
 import 'package:tailtopia/core/l10n/locale_controller.dart';
 import 'package:tailtopia/core/router/app_router.dart';
 import 'package:tailtopia/core/theme/app_theme.dart';
@@ -13,6 +12,7 @@ import 'package:tailtopia/features/consult/presentation/consult_refresh.dart';
 import 'package:tailtopia/features/content/presentation/feed_controller.dart';
 import 'package:tailtopia/features/me/data/my_posts_repository.dart';
 import 'package:tailtopia/features/notify/data/notification_repository.dart';
+import 'package:tailtopia/features/profile/data/health_record_repository.dart';
 import 'package:tailtopia/features/profile/data/milestone_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/data/timeline_repository.dart';
@@ -20,10 +20,14 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// 成长档案分享页深链 → go_router location 的纯映射（L0 可测）。
 /// `tailtopia://card/{token}` → `/profile`（成长档案 Tab，分享页 CTA 第①级）。
+/// `tailtopia://open` → `/home`（下载引导落地页 `s.tailtopia.id/get` 唤起已装 app 的通用深链）。
 /// 其它 scheme/host 暂不识别（返回 null，调用方忽略）。
 String? deepLinkToLocation(Uri uri) {
   if (uri.scheme == 'tailtopia' && uri.host == 'card') {
     return '/profile';
+  }
+  if (uri.scheme == 'tailtopia' && uri.host == 'open') {
+    return '/home';
   }
   return null;
 }
@@ -130,8 +134,16 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> {
         final mq = MediaQuery.of(context);
         return MediaQuery(
           data: mq.copyWith(textScaler: mq.textScaler.clamp(maxScaleFactor: TailTopiaApp.maxTextScale)),
-          // 全局点击 autocapture：根部旁路监听所有 tap → button_tapped（不影响正常点击）。
-          child: AnalyticsAutocapture(child: child ?? const SizedBox.shrink()),
+          // 全局「点非输入区收起键盘」：translucent 使按钮/输入框仍在手势竞技场胜出正常响应，
+          // 仅点到非交互空白处才触发 unfocus 收起软键盘（键盘避让标准的补充，见 CLAUDE.md）。
+          // 埋点治理 P0（2026-07-27）：已移除全局 AnalyticsAutocapture——从 semantics 树反推
+          // 按钮文本会把用户内容（昵称/宠物名/健康主诉）当标签上报。按钮上报一律走
+          // Analytics.buttonTapped(ButtonId.*) 白名单显式埋点。
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+            child: child ?? const SizedBox.shrink(),
+          ),
         );
       },
     );
@@ -147,6 +159,11 @@ void resetUserScopedCaches(WidgetRef ref) {
   ref.invalidate(timelineFirstPageProvider); // 成长档案：时间线首页
   ref.invalidate(archiveStatsProvider); // 成长档案 / 我的：统计栏
   ref.invalidate(milestoneListProvider); // 成长档案：里程碑
+  // bug 20260730-421 同类隐患：健康记录/日历/日详情是宠物维度缓存（非 autoDispose），
+  // 不登记则同设备换账号会看到上一用户的健康数据（隐私）。
+  ref.invalidate(healthListProvider); // 健康记录页
+  ref.invalidate(calendarMonthProvider); // 成长日记：日历（按月 family 整族失效）
+  ref.invalidate(dayDetailProvider); // 成长日记：日详情（按日 family 整族失效）
   ref.invalidate(myPostsProvider); // 我的：我的发布
   ref.invalidate(feedProvider); // 首页 Feed（按新用户宠物状态重过滤）
   ref.invalidate(unreadCountProvider); // 通知铃铛未读角标（bug 20260625-088：换账号防显示上个用户角标）

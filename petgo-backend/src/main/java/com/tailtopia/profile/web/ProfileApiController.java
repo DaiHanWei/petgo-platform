@@ -3,11 +3,20 @@ package com.tailtopia.profile.web;
 import com.tailtopia.profile.dto.ArchiveStatsResponse;
 import com.tailtopia.profile.dto.CalendarMonthResponse;
 import com.tailtopia.profile.dto.DayDetailResponse;
+import com.tailtopia.profile.dto.CreateIdCardRequest;
+import com.tailtopia.profile.dto.HdPurchaseRequest;
+import com.tailtopia.profile.dto.IdCardResponse;
+import java.util.List;
+import org.springframework.web.bind.annotation.PathVariable;
+import com.tailtopia.profile.dto.HdPurchaseResponse;
+import com.tailtopia.profile.dto.IdCardDataResponse;
 import com.tailtopia.profile.dto.PetProfileCreateRequest;
 import com.tailtopia.profile.dto.PetProfileResponse;
 import com.tailtopia.profile.dto.PetProfileUpdateRequest;
 import com.tailtopia.profile.dto.TimelinePageResponse;
 import com.tailtopia.profile.service.CardRerenderService;
+import com.tailtopia.profile.service.IdCardHdService;
+import com.tailtopia.profile.service.IdCardService;
 import com.tailtopia.profile.service.ProfileService;
 import com.tailtopia.profile.service.TimelineService;
 import com.tailtopia.shared.error.AppException;
@@ -47,13 +56,18 @@ public class ProfileApiController {
     private final ProfileService profileService;
     private final TimelineService timelineService;
     private final CardRerenderService cardRerenderService;
+    private final IdCardService idCardService;
+    private final IdCardHdService idCardHdService;
     private final RedisRateLimiter rateLimiter;
 
     public ProfileApiController(ProfileService profileService, TimelineService timelineService,
-            CardRerenderService cardRerenderService, RedisRateLimiter rateLimiter) {
+            CardRerenderService cardRerenderService, IdCardService idCardService,
+            IdCardHdService idCardHdService, RedisRateLimiter rateLimiter) {
         this.profileService = profileService;
         this.timelineService = timelineService;
         this.cardRerenderService = cardRerenderService;
+        this.idCardService = idCardService;
+        this.idCardHdService = idCardHdService;
         this.rateLimiter = rateLimiter;
     }
 
@@ -143,6 +157,70 @@ public class ProfileApiController {
     @GetMapping("/me/archive-stats")
     public ArchiveStatsResponse archiveStats(@AuthenticationPrincipal Jwt jwt) {
         return timelineService.getStats(currentUserId(jwt));
+    }
+
+    /**
+     * 身份证数据（Story 6.1，FR-49A）：当前用户证件卡渲染数据 + 流水号 + {@code generated} 标志。
+     * 只读，<b>不分配号</b>——老用户 {@code generated=false} → 前端渲染「尚未生成」引导态。无档案 → 404。
+     */
+    @GetMapping("/me/id-card")
+    public IdCardDataResponse myIdCard(@AuthenticationPrincipal Jwt jwt) {
+        return idCardService.getMyIdCard(currentUserId(jwt));
+    }
+
+    /**
+     * 生成身份证（Story 6.1，FR-49A）：分配全平台自增流水号。<b>幂等</b>——已生成则原样返回既有号（不换号）。
+     * 无档案 → 404。
+     */
+    @PostMapping("/me/id-card")
+    public IdCardDataResponse generateIdCard(@AuthenticationPrincipal Jwt jwt) {
+        long ownerId = currentUserId(jwt);
+        rateLimiter.check("rl:profile:idcard:" + ownerId, CREATE_LIMIT, CREATE_WINDOW);
+        return idCardService.generateSerial(ownerId);
+    }
+
+    /**
+     * 身份证高清图付费下载（Story 6.3，FR-49D）：一次性永久解锁 Rp5,000（QRIS/PawCoin）。已购买 → 直接 UNLOCKED；
+     * 否则 PawCoin 同步扣费解锁 / QRIS 返回支付信息（到账后解锁）。幂等不重复扣费。无档案 → 404。
+     */
+    @PostMapping("/me/id-card/hd-download")
+    public HdPurchaseResponse purchaseHd(@AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody HdPurchaseRequest req) {
+        long ownerId = currentUserId(jwt);
+        rateLimiter.check("rl:profile:idhd:" + ownerId, CREATE_LIMIT, CREATE_WINDOW);
+        return idCardHdService.purchase(ownerId, req.channel());
+    }
+
+    // ---- Story 6-7：身份证多卡（快照历史列表 + 独立建卡器 + 按卡解锁） ----
+
+    /** 历史卡列表（建卡时刻倒序）。点进 KTP 先看这个 + 建卡入口。 */
+    @GetMapping("/me/id-cards")
+    public List<IdCardResponse> myIdCards(@AuthenticationPrincipal Jwt jwt) {
+        return idCardService.listMyCards(currentUserId(jwt));
+    }
+
+    /** 单卡详情（归属校验，非本人 404 防枚举）。 */
+    @GetMapping("/me/id-cards/{cardId}")
+    public IdCardResponse myIdCardById(@AuthenticationPrincipal Jwt jwt, @PathVariable long cardId) {
+        return idCardService.getMyCard(currentUserId(jwt), cardId);
+    }
+
+    /** 独立建卡器：把当前填写的信息冻结成一张新卡快照（分配新 serial）。 */
+    @PostMapping("/me/id-cards")
+    public IdCardResponse createIdCard(@AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody CreateIdCardRequest req) {
+        long ownerId = currentUserId(jwt);
+        rateLimiter.check("rl:profile:idcard:" + ownerId, CREATE_LIMIT, CREATE_WINDOW);
+        return idCardService.createCard(ownerId, req);
+    }
+
+    /** 购买某卡 HD（按卡解锁）。 */
+    @PostMapping("/me/id-cards/{cardId}/hd-download")
+    public HdPurchaseResponse purchaseCardHd(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable long cardId, @Valid @RequestBody HdPurchaseRequest req) {
+        long ownerId = currentUserId(jwt);
+        rateLimiter.check("rl:profile:idhd:" + ownerId, CREATE_LIMIT, CREATE_WINDOW);
+        return idCardHdService.purchaseCard(ownerId, cardId, req.channel());
     }
 
     private static long currentUserId(Jwt jwt) {
