@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
@@ -21,8 +20,9 @@ import '../domain/card_link.dart';
 import '../domain/pet_profile.dart';
 import '../domain/share_service.dart';
 import '../domain/timeline_item.dart';
+import 'diary_guest_page.dart';
 import 'widgets/archive_calendar.dart';
-import 'widgets/pet_info_card.dart';
+import 'widgets/diary_header.dart';
 import 'widgets/share_fab.dart';
 import 'widgets/timeline_tiles.dart';
 
@@ -90,7 +90,7 @@ class GrowthArchivePage extends ConsumerWidget {
     );
 
     return switch (state) {
-      DiaryUserState.guest => const _GuestGuidePlaceholder(),
+      DiaryUserState.guest => const DiaryGuestPage(),
       DiaryUserState.nonOwner =>
         _NonOwnerView(onChangeStatus: () => _openStatusEditor(context, ref)),
       DiaryUserState.ownerWithoutProfile ||
@@ -251,7 +251,6 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final stats = ref.watch(archiveStatsProvider).asData?.value;
-    final name = widget.profile.name;
     return RefreshIndicator(
       color: AppColors.mint,
       onRefresh: () async {
@@ -264,34 +263,19 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 50, AppSpacing.lg, AppSpacing.section),
         children: [
-          // AppBar：Paspor {name} + 编辑铅笔（paspor.html appbar）
-          Row(
-            children: [
-              Expanded(
-                child: Text(l10n.growthArchivePassportTitle(name),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 19, fontWeight: FontWeight.w700, color: AppColors.ink)),
-              ),
-              _idCardBtn(context),
-              const SizedBox(width: 8),
-              _appbarBtn(),
-            ],
-          ),
-          const SizedBox(height: 14),
-          PetInfoCard(
+          // 页头（标题行 + 信息卡 + 健康记录入口 + 里程碑进度）走 Story 2.2 抽出的共用组件，
+          // 与游客态同一份实现（3.3 要求两态页头一致）。入口跳转由本页注入。
+          DiaryHeader(
             profile: widget.profile,
             happyCount: stats?.happyMomentCount,
             consultCount: stats?.consultCount,
-            milestoneCount: stats?.milestoneCompleted,
+            milestoneCompleted: stats?.milestoneCompleted,
+            milestoneTotal: stats?.milestoneTotal,
+            onEditProfile: widget.onEditProfile,
+            onOpenIdCard: () => context.push('/profile/id-card'),
+            onOpenHealth: () => context.push('/profile/health'),
+            onOpenMilestones: () => context.push('/profile/milestones'),
           ),
-          const SizedBox(height: 11),
-          // 健康记录入口卡（BARU · 0711 paspor-entries）：紫虚线 → /profile/health
-          _healthEntryCard(context, l10n),
-          const SizedBox(height: 11),
-          _MilestoneBar(petName: name),
-          const SizedBox(height: 12),
           _viewToggleRow(l10n),
           const SizedBox(height: 14),
           if (_view == _ArchiveView.timeline) const _TimelineView() else _calendarView(),
@@ -299,114 +283,6 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
       ),
     );
   }
-
-  /// appbar 编辑按钮（ibtn：白底 rounded-11 + 柔阴影 + 铅笔）。
-  Widget _appbarBtn() => Material(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(11),
-        elevation: 0,
-        child: InkWell(
-          key: const ValueKey('editProfileButton'),
-          borderRadius: BorderRadius.circular(11),
-          onTap: widget.onEditProfile,
-          child: Container(
-            width: 38,
-            height: 38,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: AppColors.card,
-              borderRadius: BorderRadius.circular(11),
-              // 原型 .ibtn 阴影：0 2px 8px rgba(22,34,51,.07)（蓝灰，非棕）。
-              boxShadow: const [
-                BoxShadow(color: Color(0x12162233), offset: Offset(0, 2), blurRadius: 8),
-              ],
-            ),
-            child: SvgPicture.asset(
-              'assets/brand/ic_edit.svg',
-              width: 18,
-              height: 18,
-              colorFilter: const ColorFilter.mode(AppColors.ink, BlendMode.srcIn),
-            ),
-          ),
-        ),
-      );
-
-  /// appbar 身份证按钮（BARU · 0711 paspor-entries）：ibtn + 右上 BARU 徽章 → /profile/id-card。
-  /// 编辑铅笔仍保留（宠物档案编辑入口不迁移，避免可达性丢失）。
-  Widget _idCardBtn(BuildContext context) => Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Material(
-            color: AppColors.card,
-            borderRadius: BorderRadius.circular(11),
-            child: InkWell(
-              key: const ValueKey('diaryIdCardButton'),
-              borderRadius: BorderRadius.circular(11),
-              onTap: () => context.push('/profile/id-card'),
-              child: Container(
-                width: 38,
-                height: 38,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.card,
-                  borderRadius: BorderRadius.circular(11),
-                  boxShadow: const [
-                    BoxShadow(color: Color(0x12162233), offset: Offset(0, 2), blurRadius: 8),
-                  ],
-                ),
-                child: const Icon(Icons.badge_outlined, size: 20, color: AppColors.ink),
-              ),
-            ),
-          ),
-        ],
-      );
-
-  /// 健康记录入口卡（0718：普通实心卡，去 0711 的紫虚线+BARU）→ /profile/health。
-  /// 图标改参考的圆环对勾（check_circle_outline），无 tinted 方块底。
-  Widget _healthEntryCard(BuildContext context, AppLocalizations l10n) => Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: const [
-            BoxShadow(color: Color(0x0D2B2A27), offset: Offset(0, 2), blurRadius: 8),
-          ],
-        ),
-        child: Material(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(14),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            key: const ValueKey('diaryHealthEntry'),
-            onTap: () => context.push('/profile/health'),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: Row(
-                children: [
-                  const Icon(Icons.check_circle_outline, size: 26, color: AppColors.mint),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(l10n.diaryHealthEntryTitle,
-                            style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.ink)),
-                        const SizedBox(height: 2),
-                        Text(l10n.diaryHealthEntrySub,
-                            style: const TextStyle(
-                                fontSize: 12, color: AppColors.textSecondary)),
-                      ],
-                    ),
-                  ),
-                  const Icon(Icons.chevron_right, color: AppColors.muted),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
 
   /// Timeline / Kalender 药丸切换（paspor.html 双按钮）。
   Widget _viewToggleRow(AppLocalizations l10n) {
@@ -450,69 +326,6 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
   }
 
   static String _two(int n) => n.toString().padLeft(2, '0');
-}
-
-/// 里程碑进度卡（msbar）：「🏆 Pencapaian {name}」+ "X / N" 紫色 + 进度槽（AC5）。
-class _MilestoneBar extends ConsumerWidget {
-  const _MilestoneBar({required this.petName});
-
-  final String petName;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
-    final stats = ref.watch(archiveStatsProvider);
-    return stats.maybeWhen(
-      data: (s) {
-        final ratio = s.milestoneTotal == 0 ? 0.0 : s.milestoneCompleted / s.milestoneTotal;
-        return GestureDetector(
-          key: const ValueKey('archiveMilestoneBar'),
-          onTap: () => context.push('/profile/milestones'),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
-            decoration: BoxDecoration(
-              color: AppColors.card,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: const [
-                BoxShadow(color: Color(0x0D2B2A27), offset: Offset(0, 2), blurRadius: 8),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text('🏆 ${l10n.growthArchiveAchievements(petName)}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w600, fontSize: 12, color: AppColors.ink)),
-                    ),
-                    Text('${s.milestoneCompleted} / ${s.milestoneTotal}',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 12, color: AppColors.mint)),
-                  ],
-                ),
-                const SizedBox(height: 7),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(999),
-                  child: LinearProgressIndicator(
-                    value: ratio,
-                    minHeight: 5,
-                    backgroundColor: AppColors.cream2,
-                    color: AppColors.mint,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-      orElse: () => const SizedBox.shrink(),
-    );
-  }
 }
 
 /// 时间线视图（倒序快乐时刻 + 健康事件；首条各显 🌟；加载失败可重试，AC7）。
@@ -671,22 +484,6 @@ class _EmptyProfileView extends StatelessWidget {
       ),
     );
   }
-}
-
-/// TODO(2-2): 替换为 FR-80 游客引导态真实实现（Milo 引导 + 五类条目渲染组件）。
-///
-/// Story 2.1 只负责立分支挂载点。刻意**不含用户可见文案**：登录门控到 Story 2.4 才解除，
-/// 本分支当前对真实用户不可达（游客深链被 redirect、点 Tab 弹强登录窗），
-/// 提前写 ARB 文案会与 2.2 的最终稿重复返工（OQ-1 印尼语文案 + Milo 配图亦未到）。
-class _GuestGuidePlaceholder extends StatelessWidget {
-  const _GuestGuidePlaceholder();
-
-  @override
-  Widget build(BuildContext context) => const Scaffold(
-        key: ValueKey('diaryGuestGuide'),
-        backgroundColor: AppColors.cream,
-        body: SizedBox.expand(),
-      );
 }
 
 class _NonOwnerView extends StatelessWidget {

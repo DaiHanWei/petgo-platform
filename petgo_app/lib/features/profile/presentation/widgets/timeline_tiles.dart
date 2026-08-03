@@ -8,6 +8,11 @@ import '../../domain/timeline_item.dart';
 
 /// 时间线条目（paspor.html tentry/hentry 1:1 还原）。
 /// 快乐时刻=紧凑横行（日期列+52缩略+标题/副标题）；健康事件=粉底行+等级徽章。
+///
+/// ⚠️ **本文件的两个 tile 是 V1.0.0 遗留实现，仅真实时间线还在用**。
+/// V1.1.2 起，五类条目的唯一渲染组件是 `widgets/timeline_item_tile.dart`（Story 2.2 建立，
+/// 游客示例本已在用）。**Story 3.3 把真实时间线迁到新组件后，本文件应整体删除**
+/// —— 两套 tile 长期并存正是 NFR-7 要防的样式漂移来源。新需求请改新组件，不要动这里。
 
 /// 快乐时刻条目（tentry）：日期列 + 52px 缩略 + 标题 + "Momen Bahagia · N foto"。
 class HappyMomentTile extends StatelessWidget {

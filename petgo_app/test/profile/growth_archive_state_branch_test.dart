@@ -13,6 +13,7 @@ import 'package:tailtopia/features/profile/domain/archive_stats.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/features/profile/domain/share_service.dart';
 import 'package:tailtopia/features/profile/domain/timeline_item.dart';
+import 'package:tailtopia/features/profile/presentation/diary_guest_page.dart';
 import 'package:tailtopia/features/profile/presentation/growth_archive_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/widgets/app_shell.dart';
@@ -128,18 +129,18 @@ void main() {
   });
 
   group('AC1/AC2 四分支布线', () {
-    testWidgets('游客 → 渲染 FR-80 占位，且不拉取宠物档案', (tester) async {
+    testWidgets('游客 → 渲染 FR-80 游客引导态，且不拉取宠物档案', (tester) async {
       var fetches = 0;
       await tester.pumpWidget(_wrap(auth: _guest, onProfileFetch: () => fetches++));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('diaryGuestGuide')), findsOneWidget);
+      // Story 2.2 起该分支渲染真实游客引导态（此前是空占位）。
+      expect(find.byType(DiaryGuestPage), findsOneWidget);
       // 游客路径不得订阅档案：否则 401 → 全局强登录引导（2.4 放行后会当场暴露）。
       expect(fetches, 0);
-      // 未误落其它分支
+      // 未误落其它分支（游客页自带示例宠物信息卡，故不以 petInfoCard 作区分依据）
       expect(find.byKey(const ValueKey('growthCreateButton')), findsNothing);
       expect(find.byKey(const ValueKey('changeStatusButton')), findsNothing);
-      expect(find.byKey(const ValueKey('petInfoCard')), findsNothing);
     });
 
     testWidgets('状态 A 未建档 → 建档引导占位（既有空状态，零回归）', (tester) async {
@@ -149,7 +150,7 @@ void main() {
       expect(find.byKey(const ValueKey('growthCreateButton')), findsOneWidget);
       // 删档后不被困在状态 A（bug 20260702-237）
       expect(find.byKey(const ValueKey('growthChangeStatusButton')), findsOneWidget);
-      expect(find.byKey(const ValueKey('diaryGuestGuide')), findsNothing);
+      expect(find.byType(DiaryGuestPage), findsNothing);
       expect(find.byKey(const ValueKey('petInfoCard')), findsNothing);
     });
 
@@ -160,7 +161,7 @@ void main() {
 
       expect(find.byKey(const ValueKey('petInfoCard')), findsOneWidget);
       expect(find.byKey(const ValueKey('shareFab')), findsOneWidget);
-      expect(find.byKey(const ValueKey('diaryGuestGuide')), findsNothing);
+      expect(find.byType(DiaryGuestPage), findsNothing);
       expect(find.byKey(const ValueKey('growthCreateButton')), findsNothing);
     });
 
@@ -172,7 +173,7 @@ void main() {
       // 不得出现建档引导 / 档案页 / 游客占位
       expect(find.byKey(const ValueKey('growthCreateButton')), findsNothing);
       expect(find.byKey(const ValueKey('petInfoCard')), findsNothing);
-      expect(find.byKey(const ValueKey('diaryGuestGuide')), findsNothing);
+      expect(find.byType(DiaryGuestPage), findsNothing);
     });
   });
 
@@ -200,7 +201,7 @@ void main() {
       expect(router.state.matchedLocation, '/home');
       // 落回 Discovery，而不是渲染出 Diary 页
       expect(find.byType(FeedTabRow), findsOneWidget);
-      expect(find.byKey(const ValueKey('diaryGuestGuide')), findsNothing);
+      expect(find.byType(DiaryGuestPage), findsNothing);
     });
 
     testWidgets('游客点 Diary Tab → 仍弹强登录窗，且不切换目的地', (tester) async {

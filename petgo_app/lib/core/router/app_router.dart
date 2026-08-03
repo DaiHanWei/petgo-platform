@@ -45,6 +45,7 @@ import '../../features/notify/data/push_permission_providers.dart';
 import '../../features/onboarding/presentation/splash_page.dart';
 import '../../features/profile/presentation/pet_profile_create_page.dart';
 import '../../features/profile/presentation/day_detail_page.dart';
+import '../../features/profile/presentation/diary_guest_page.dart';
 import '../../features/profile/presentation/pet_profile_edit_page.dart';
 import '../../features/profile/presentation/profile_created_celebration_page.dart';
 import '../../features/profile/presentation/profile_onboarding_page.dart';
@@ -243,6 +244,16 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/dev/login-guide', builder: (c, s) => const DevLoginGuidePage()),
       // @dev 自测入口（Story 4.1 F2）：仅供手动深链驱动分诊「提交 → 短轮询」契约（联调）。
       GoRoute(path: '/dev/triage', builder: (c, s) => const DevTriagePage()),
+      // @dev 自测入口（Story 2.2 AC7）：Diary 游客引导态直达，供 L2 视觉/飞行模式验收。
+      //
+      // 登录门控到 Story 2.4 才解除，游客走 Tab / 深链都进不了 `/profile`，故给验收留一个
+      // **不在受控前缀下**的直达入口 —— 这样既能看真实渲染，又不必为自测提前放行门控。
+      // release 恒 redirect 回首页（debug-only，与 /dev/* 其余入口同规格）。
+      GoRoute(
+        path: '/dev/diary-guest',
+        redirect: (c, s) => kDebugMode ? null : '/home',
+        builder: (c, s) => const DiaryGuestPage(),
+      ),
       // AI 分诊上传页（Story 4.3）。受控路由（/triage/ 前缀，游客被门控）；shell 外 push 隐藏 Tab Bar。
       GoRoute(path: '/triage/upload', builder: (c, s) => const TriageUploadPage()),
       // AI 分诊历史结果快照（bug 20260702-238/228）：按 triageId 只读回看，extra 带历史症状摘要。

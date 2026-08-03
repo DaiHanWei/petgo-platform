@@ -9,6 +9,7 @@ import '../../../shared/widgets/app_toast.dart';
 import '../data/health_record_repository.dart';
 import '../data/milestone_repository.dart';
 import '../domain/health_list_item.dart';
+import '../domain/health_record_icons.dart';
 import '../domain/milestone.dart';
 import '../domain/milestone_share.dart';
 import '../domain/milestone_titles.dart';
@@ -132,14 +133,15 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
   /// 6 类分类卡网格（app 六 type 一一对应；最近日期前端按 items 聚合，无则「Belum ada」）。
   Widget _categoryGrid(
       BuildContext context, WidgetRef ref, AppLocalizations l10n, List<HealthListItem> items) {
+    // 图标与主色取 FR-84 图标总表（`kHealthRecordIcons`，全项目一份）——本页曾是这套图标的
+    // 事实源，V1.1.2 Story 2.2 把它抽到 domain 常量表，日历格子与 Diary 时间线胶囊共用同一份。
     final cats = <_HealthCat>[
-      _HealthCat('VACCINE', l10n.healthTypeVaccine, Icons.vaccines_outlined, AppColors.coral, false),
-      _HealthCat('DEWORM', l10n.healthTypeDeworm, Icons.medication_outlined, AppColors.triageGreen, false),
-      _HealthCat('NEUTER', l10n.healthTypeNeuter, Icons.healing_outlined, AppColors.mint, false),
-      _HealthCat('MENSTRUATION', l10n.healthTypeMenstruation, Icons.water_drop_outlined,
-          AppColors.infoBlue, false),
-      _HealthCat('CUSTOM', l10n.healthTypeCustom, Icons.description_outlined, AppColors.muted, false),
-      _HealthCat('CONSULT', l10n.healthTypeConsult, Icons.local_hospital_outlined, AppColors.coral, true),
+      _HealthCat('VACCINE', l10n.healthTypeVaccine, false),
+      _HealthCat('DEWORM', l10n.healthTypeDeworm, false),
+      _HealthCat('NEUTER', l10n.healthTypeNeuter, false),
+      _HealthCat('MENSTRUATION', l10n.healthTypeMenstruation, false),
+      _HealthCat('CUSTOM', l10n.healthTypeCustom, false),
+      _HealthCat('CONSULT', l10n.healthTypeConsult, true),
     ];
     return GridView.count(
       crossAxisCount: 3,
@@ -620,15 +622,17 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
       };
 }
 
-/// 健康记录分类卡的静态定义（0711 KATEGORI 网格：类型 + 标签 + 图标 + 主色 + 是否问诊类）。
+/// 健康记录分类卡的静态定义（0711 KATEGORI 网格：类型 + 标签 + 是否问诊类）。
+/// 图标与主色不在此声明 —— 一律经 [healthRecordIconFor] 取 FR-84 图标总表，避免两份定义走歧。
 class _HealthCat {
-  const _HealthCat(this.type, this.label, this.icon, this.color, this.consult);
+  const _HealthCat(this.type, this.label, this.consult);
 
   final String type;
   final String label;
-  final IconData icon;
-  final Color color;
   final bool consult;
+
+  IconData get icon => healthRecordIconFor(type).icon;
+  Color get color => healthRecordIconFor(type).color;
 }
 
 /// 本次保存健康记录是否存在可能解锁的里程碑候选（bug 20260729-405，纯函数 L0 可测）：

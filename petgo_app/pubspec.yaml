@@ -118,6 +118,9 @@ flutter:
   # 演示/假数据宠物照片（mock 模式 Feed/详情/档案用，asset: 前缀经 app_image 解析）。
   assets:
     - assets/seed/
+    # Diary 游客引导态的内置示例配图（FR-80 · NFR-5 零网络）。
+    # 目前是 assets/seed 的缩图占位（OQ-1 未闭合）；素材到位后同名替换即可，不需改代码。
+    - assets/demo_diary/
     - assets/icons/
     - assets/brand/
     - assets/ktp/
