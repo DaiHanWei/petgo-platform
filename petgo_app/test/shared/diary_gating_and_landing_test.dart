@@ -177,6 +177,34 @@ void main() {
     });
   });
 
+  group('游客态的外壳与 CTA 行为（真路径，防「没底栏 / 直进建档表单」的误判复现）', () {
+    testWidgets('游客态渲染在 App 外壳内 —— **底部 Tab Bar 必须在**', (tester) async {
+      await _pumpGuestApp(tester);
+
+      expect(find.byType(DiaryGuestPage), findsOneWidget);
+      // ⚠️ 这条断言是为了锁住一类真实事故：曾用 shell 外的调试路由验收，看起来「没有底栏」。
+      // 真路径下游客态是 Tab 分支根页，底栏必须在（A1 稿亦有底栏）。
+      expect(find.byType(BottomTabBar), findsOneWidget);
+      expect(_tabButton('Diary'), findsOneWidget);
+      expect(_tabButton('Health'), findsOneWidget);
+      expect(_tabButton('Discovery'), findsOneWidget);
+      expect(_tabButton('Me'), findsOneWidget);
+    });
+
+    testWidgets('游客点主 CTA → **弹登录窗**，不是直接进建档表单', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(500, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final container = await _pumpGuestApp(tester);
+
+      await tester.tap(find.byKey(const ValueKey('diaryGuestPrimaryCta')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LoginHardDialog), findsOneWidget);
+      // 关键：**没有**跳到建档表单；登录成功后才由 pendingAction 续到 /profile/create。
+      expect(container.read(routerProvider).state.matchedLocation, '/profile');
+    });
+  });
+
   group('AC4 落地矩阵（端到端形态）', () {
     testWidgets('未登录冷启动 → 落 Diary 游客引导态，不落 Discovery', (tester) async {
       final container = await _pumpGuestApp(tester);

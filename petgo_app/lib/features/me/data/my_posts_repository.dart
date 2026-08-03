@@ -6,18 +6,30 @@ import '../../../core/network/dio_client.dart';
 
 /// 「我的发布」条目（对应后端 `GET /api/v1/me/posts` 的 FeedItemResponse 子集，Story 7.1）。
 class MyPost {
-  const MyPost({required this.id, required this.type, this.text, this.firstImageUrl});
+  const MyPost({
+    required this.id,
+    required this.type,
+    this.text,
+    this.firstImageUrl,
+    this.visibility = 'PUBLIC',
+  });
 
   final int id;
   final String type;
   final String? text;
   final String? firstImageUrl;
 
+  /// 可见范围线格式（Story 4.1 后端下发）：`PRIVATE` = 未同步到 Moment，仅自己可见。
+  final String visibility;
+
+  bool get isPrivate => visibility == 'PRIVATE';
+
   factory MyPost.fromJson(Map<String, dynamic> json) => MyPost(
         id: (json['id'] as num).toInt(),
         type: (json['type'] ?? '') as String,
         text: json['body'] as String?,
         firstImageUrl: json['firstImageUrl'] as String?,
+        visibility: (json['visibility'] ?? 'PUBLIC') as String,
       );
 }
 

@@ -345,8 +345,12 @@ public class ContentService {
             // fall-through 至下方正常发布路径。
         }
 
-        ContentPost saved = posts.save(ContentPost.publish(
-                authorId, req.type(), petId, text, imageUrls, eventDate));
+        ContentPost post = ContentPost.publish(
+                authorId, req.type(), petId, text, imageUrls, eventDate);
+        // Story 4.2 同步开关：关 → PRIVATE（仅作者自视）。省略/开 → PUBLIC。
+        // ⚠️ 审核流程不因私密而跳过（私密内容同样过审核，AC9）——这里只设可见范围，不动 status。
+        post.setVisibility(req.visibilityOrPublic());
+        ContentPost saved = posts.save(post);
 
         idempotency.store(idempotencyKey, saved.getId());
 

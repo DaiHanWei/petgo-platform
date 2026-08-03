@@ -1372,5 +1372,17 @@
   "diaryDemoCommentTeaser": "Buat profil dulu buat ikut ngobrol di sini.",
   "@diaryDemoCommentTeaser": {"description": "Diary guest state: sample detail comment teaser (tap goes to profile creation)"},
   "growthArchiveEmptyBody": "Buat profil si kecil dulu, yuk — biar semua momen, kesehatan, dan pencapaiannya punya rumah.",
-  "@growthArchiveEmptyBody": {"description": "Diary: state-A-no-profile guide body (UI spec A2)"}
+  "@growthArchiveEmptyBody": {"description": "Diary: state-A-no-profile guide body (UI spec A2)"},
+  "publishButtonSave": "Simpan",
+  "@publishButtonSave": {"description": "Publish page: main button when Moment sync is OFF (Diary saved privately)"},
+  "publishSyncTitle": "Bagikan juga ke Moment",
+  "@publishSyncTitle": {"description": "Publish page: Diary→Moment sync switch title"},
+  "publishSyncSub": "Disimpan di Diary dan tampil di Jelajah.",
+  "@publishSyncSub": {"description": "Publish page: sync switch subtitle (ON state)"},
+  "publishSyncOffSub": "Hanya disimpan di Diary-mu — orang lain tidak melihatnya.",
+  "@publishSyncOffSub": {"description": "Publish page: sync switch subtitle (OFF state)"},
+  "publishPublicHint": "Terbit publik, tampil di Jelajah",
+  "@publishPublicHint": {"description": "Publish page: hint for Moment/Tips (always public)"},
+  "mePostPrivateBadge": "Hanya kamu",
+  "@mePostPrivateBadge": {"description": "My posts: badge on private (unsynced) Diary content"}
 }

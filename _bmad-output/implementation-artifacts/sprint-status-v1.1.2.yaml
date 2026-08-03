@@ -102,7 +102,7 @@ development_status:
   # FR-83。本版本唯一 schema 变更所在。与 E1-E3 无依赖，可并行。
   epic-4: in-progress
   4-1-内容可见范围字段数据迁移与-feed-取数改造: review          # V98 已应用真库；作者自视 + 名片 H5 不过滤有查询源文本级回归防线
-  4-2-发布页同步开关与我的页私密标识: ready-for-dev      # 含关同步后主按钮 Bagikan→Simpan 的文案联动（PRD 未提，UI 稿 P2 独有）
+  4-2-发布页同步开关与我的页私密标识: review              # 含 Bagikan→Simpan 文案联动；顺带补上创建请求接受 visibility（4-1 漏）
   epic-4-retrospective: optional
 
   # ===== Epic 5: 健康里程碑改为只能自动点亮 =====

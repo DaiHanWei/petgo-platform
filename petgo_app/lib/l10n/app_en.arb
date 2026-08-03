@@ -1616,5 +1616,17 @@
   "diaryDemoCommentTeaser": "Create a profile to join the conversation.",
   "@diaryDemoCommentTeaser": {"description": "Diary guest state: sample detail comment teaser (tap goes to profile creation)"},
   "growthArchiveEmptyBody": "Set up your little one's profile first — so every moment, health record, and milestone has a home.",
-  "@growthArchiveEmptyBody": {"description": "Diary: state-A-no-profile guide body (UI spec A2)"}
+  "@growthArchiveEmptyBody": {"description": "Diary: state-A-no-profile guide body (UI spec A2)"},
+  "publishButtonSave": "Save",
+  "@publishButtonSave": {"description": "Publish page: main button when Moment sync is OFF (Diary saved privately)"},
+  "publishSyncTitle": "Also share to Moment",
+  "@publishSyncTitle": {"description": "Publish page: Diary→Moment sync switch title"},
+  "publishSyncSub": "Saved in Diary and shown in Discovery.",
+  "@publishSyncSub": {"description": "Publish page: sync switch subtitle (ON state)"},
+  "publishSyncOffSub": "Only saved in your Diary — no one else sees it.",
+  "@publishSyncOffSub": {"description": "Publish page: sync switch subtitle (OFF state)"},
+  "publishPublicHint": "Published publicly, shown in Discovery",
+  "@publishPublicHint": {"description": "Publish page: hint for Moment/Tips (always public)"},
+  "mePostPrivateBadge": "Only you",
+  "@mePostPrivateBadge": {"description": "My posts: badge on private (unsynced) Diary content"}
 }
