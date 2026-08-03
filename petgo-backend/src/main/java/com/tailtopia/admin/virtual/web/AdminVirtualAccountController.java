@@ -21,6 +21,8 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 public class AdminVirtualAccountController {
 
     private static final String AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')";
+    private static final String VIEW_AUTH =
+            "hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.view') or hasAuthority('virtual_account.manage')";
 
     private final AdminVirtualAccountService service;
 
@@ -29,7 +31,7 @@ public class AdminVirtualAccountController {
     }
 
     @GetMapping("/admin/virtual-accounts")
-    @PreAuthorize(AUTH)
+    @PreAuthorize(VIEW_AUTH)
     public String list(Model model) {
         model.addAttribute("active", "virtual-accounts");
         model.addAttribute("accounts", service.list());

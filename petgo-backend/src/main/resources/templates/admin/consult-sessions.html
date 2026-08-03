@@ -46,8 +46,8 @@
                 <td th:text="${s.sessionId()}">1</td>
                 <td th:text="${s.userId() != null} ? ${s.userId()} : #{admin.sessions.anonymized}">-</td>
                 <td th:text="${s.vetId()}">-</td>
-                <td th:text="${#temporals.format(s.startedAt(), 'yyyy-MM-dd HH:mm')}">-</td>
-                <td th:text="${s.endedAt() != null} ? ${#temporals.format(s.endedAt(), 'yyyy-MM-dd HH:mm')} : '-'">-</td>
+                <td th:text="${@adminTime.wib(s.startedAt())}">-</td>
+                <td th:text="${@adminTime.wib(s.endedAt())}">-</td>
                 <td th:text="${s.status()}">CLOSED</td>
                 <td>
                     <span th:if="${s.stars() != null}">

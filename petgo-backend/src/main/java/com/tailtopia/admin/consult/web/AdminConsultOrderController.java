@@ -26,6 +26,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 public class AdminConsultOrderController {
 
     private static final String VIEW_AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('order.view')";
+    private static final String EDIT_AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('order.edit')";
     private static final String EXPORT_AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('order.export')";
 
     private final AdminConsultOrderService service;
@@ -51,7 +52,7 @@ public class AdminConsultOrderController {
     }
 
     @PostMapping("/admin/consult-orders/{orderToken}/verify")
-    @PreAuthorize(VIEW_AUTH)
+    @PreAuthorize(EDIT_AUTH)
     public String verify(@AuthenticationPrincipal AdminUserDetails admin,
             @PathVariable String orderToken, @RequestParam(required = false) String status,
             @RequestParam(required = false) String note, RedirectAttributes flash) {

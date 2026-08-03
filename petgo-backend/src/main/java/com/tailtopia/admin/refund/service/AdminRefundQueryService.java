@@ -6,6 +6,8 @@ import com.tailtopia.consult.repository.ConsultOrderRepository;
 import com.tailtopia.pay.refund.domain.RefundRequest;
 import com.tailtopia.pay.refund.repository.RefundRequestRepository;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.support.domain.FeedbackTicket;
+import com.tailtopia.support.repository.FeedbackTicketRepository;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,10 +21,13 @@ public class AdminRefundQueryService {
 
     private final RefundRequestRepository refunds;
     private final ConsultOrderRepository orders;
+    private final FeedbackTicketRepository tickets;
 
-    public AdminRefundQueryService(RefundRequestRepository refunds, ConsultOrderRepository orders) {
+    public AdminRefundQueryService(RefundRequestRepository refunds, ConsultOrderRepository orders,
+            FeedbackTicketRepository tickets) {
         this.refunds = refunds;
         this.orders = orders;
+        this.tickets = tickets;
     }
 
     @Transactional(readOnly = true)
@@ -39,6 +44,9 @@ public class AdminRefundQueryService {
 
     private AdminRefundView toView(RefundRequest r) {
         ConsultOrder order = orders.findById(r.getOrderId()).orElse(null);
+        // 来源工单溯源（bug 20260728-384）：主管/财务审批时可回看客服判定依据。
+        String sourceTicketToken = r.getRelatedTicketId() == null ? null
+                : tickets.findById(r.getRelatedTicketId()).map(FeedbackTicket::getTicketToken).orElse(null);
         return new AdminRefundView(
                 r.getRefundToken(),
                 order == null ? null : order.getOrderToken(),
@@ -51,7 +59,8 @@ public class AdminRefundQueryService {
                 maskAccount(r.getPayoutAccount()),
                 r.getApprovalNote(),
                 r.getRejectReason(),
-                r.getPaymentProof());
+                r.getPaymentProof(),
+                sourceTicketToken);
     }
 
     /** 脱敏：仅保留末 4 位（PII 红线，全账号绝不进 UI）。 */

@@ -3,23 +3,23 @@
 <!-- 支付记录通用查询（Story 9.6，AB-8E）。按用户跨类型只读查 payment_intents。 -->
 <head>
     <meta charset="UTF-8"/>
-    <title>支付记录查询 · TailTopia 运营后台</title>
+    <title th:text="#{admin.payments.title}">支付记录查询 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1>支付记录查询</h1>
-        <p class="hint" th:if="${userId == null}">按时间倒序分页展示全部支付记录（跨类型：兽医咨询 / 充值 / AI 解锁 / 高清图）；如需精确排查可按用户 ID 过滤。</p>
-        <p class="hint" th:if="${userId != null}">当前按用户 ID <span th:text="${userId}">0</span> 过滤；清空用户 ID 再查询可返回最近记录列表。</p>
+        <h1 th:text="#{admin.payments.title}">支付记录查询</h1>
+        <p class="hint" th:if="${userId == null}" th:text="#{admin.payments.hint.all}">按时间倒序分页展示全部支付记录（跨类型：兽医咨询 / 充值 / AI 解锁 / 高清图）；如需精确排查可按用户 ID 过滤。</p>
+        <p class="hint" th:if="${userId != null}" th:text="#{admin.payments.hint.filtered(${userId})}">当前按用户 ID 过滤；清空用户 ID 再查询可返回最近记录列表。</p>
         <form method="get" th:action="@{/admin/payments}">
-            <label>用户 ID <input type="number" name="userId" th:value="${userId}"/></label>
-            <button type="submit" class="btn btn-primary btn-sm">查询</button>
-            <a th:if="${userId != null}" th:href="@{/admin/payments}" class="btn btn-sm">返回最近记录</a>
+            <label><span th:text="#{admin.common.userId}">用户 ID</span> <input type="number" name="userId" th:value="${userId}"/></label>
+            <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.payments.btn.search}">查询</button>
+            <a th:if="${userId != null}" th:href="@{/admin/payments}" class="btn btn-sm" th:text="#{admin.payments.btn.backRecent}">返回最近记录</a>
         </form>
         <table th:if="${payments != null}">
             <thead>
-            <tr><th>用户</th><th>支付号</th><th>用途</th><th>渠道</th><th>金额</th><th>币种</th><th>状态</th><th>时间</th></tr>
+            <tr><th th:text="#{admin.common.user}">用户</th><th th:text="#{admin.payments.col.paymentNo}">支付号</th><th th:text="#{admin.payments.col.purpose}">用途</th><th th:text="#{admin.common.channel}">渠道</th><th th:text="#{admin.common.amount}">金额</th><th th:text="#{admin.payments.col.currency}">币种</th><th th:text="#{admin.common.status}">状态</th><th th:text="#{admin.common.time}">时间</th></tr>
             </thead>
             <tbody>
             <tr th:each="p : ${payments}">
@@ -32,13 +32,13 @@
                 <td th:text="${p.status}">PAID</td>
                 <td th:text="${p.createdAtLabel}">t</td>
             </tr>
-            <tr th:if="${payments.isEmpty()}"><td colspan="8" th:text="${userId == null} ? '暂无支付记录' : '该用户暂无支付记录'">暂无支付记录</td></tr>
+            <tr th:if="${payments.isEmpty()}"><td colspan="8" th:text="${userId == null} ? #{admin.payments.empty} : #{admin.payments.emptyForUser}">暂无支付记录</td></tr>
             </tbody>
         </table>
         <div class="pager" th:if="${userId == null and payments != null and totalPages > 0}">
-            <a th:if="${hasPrev}" th:href="@{/admin/payments(page=${page - 1})}" class="btn btn-sm">上一页</a>
-            <span>第 <span th:text="${page + 1}">1</span> / <span th:text="${totalPages}">1</span> 页（共 <span th:text="${totalElements}">0</span> 条）</span>
-            <a th:if="${hasNext}" th:href="@{/admin/payments(page=${page + 1})}" class="btn btn-sm">下一页</a>
+            <a th:if="${hasPrev}" th:href="@{/admin/payments(page=${page - 1})}" class="btn btn-sm" th:text="#{admin.audit.prev}">上一页</a>
+            <span th:text="#{admin.audit.page(${page + 1}, ${totalPages}, ${totalElements})}">分页</span>
+            <a th:if="${hasNext}" th:href="@{/admin/payments(page=${page + 1})}" class="btn btn-sm" th:text="#{admin.audit.next}">下一页</a>
         </div>
     </div>
 </div>

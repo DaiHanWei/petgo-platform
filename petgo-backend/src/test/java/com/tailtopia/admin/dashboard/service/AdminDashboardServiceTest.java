@@ -30,12 +30,13 @@ class AdminDashboardServiceTest {
         VetAccountRepository vets = Mockito.mock(VetAccountRepository.class);
         VetSettlementRepository settlements = Mockito.mock(VetSettlementRepository.class);
 
-        when(users.count()).thenReturn(1000L);
+        // bug 20260731-442：口径=REAL 未注销用户 / 真实作者帖评（剔除虚拟/种子账号）。
+        when(users.countByAccountTypeAndDeletedAtIsNull(AccountType.REAL)).thenReturn(1000L);
         when(users.countByAccountType(AccountType.VIRTUAL)).thenReturn(20L);
         when(consultOrders.count()).thenReturn(300L);
         when(aiOrders.summary()).thenReturn(new AiRevenueSummary(500000L, 50L, 3L, 1L, 300000L, 200000L));
-        when(posts.count()).thenReturn(207L);
-        when(comments.count()).thenReturn(800L);
+        when(posts.countByRealAuthor()).thenReturn(207L);
+        when(comments.countByRealAuthor()).thenReturn(800L);
         when(vets.count()).thenReturn(12L);
         when(settlements.countByStatus(VetSettlement.PENDING_FINANCE)).thenReturn(4L);
 

@@ -30,7 +30,7 @@
             <tr th:each="r : ${ratings.items()}">
                 <td th:text="${r.stars()} + ' ★'">5 ★</td>
                 <td th:text="${r.comment()}">很专业</td>
-                <td th:text="${r.createdAt()}">2026-06-02</td>
+                <td th:text="${@adminTime.wib(r.createdAt())}">2026-06-02</td>
             </tr>
             <tr th:if="${#lists.isEmpty(ratings.items())}">
                 <td colspan="3" th:text="#{admin.ratings.empty}">暂无评分</td>
@@ -51,7 +51,7 @@
             <tbody>
             <tr th:each="u : ${unrated}">
                 <td>#<span th:text="${u.sessionId()}">0</span></td>
-                <td th:text="${u.terminalAt() != null} ? ${#temporals.format(u.terminalAt(), 'yyyy-MM-dd HH:mm')} : '-'">-</td>
+                <td th:text="${@adminTime.wib(u.terminalAt())}">-</td>
                 <td th:text="${u.reason().name() == 'INTERRUPTED'} ? #{admin.ratings.unrated.reason.interrupted} : #{admin.ratings.unrated.reason.timeout}">—</td>
             </tr>
             <tr th:if="${#lists.isEmpty(unrated)}">

@@ -37,7 +37,7 @@
                 <td th:text="${u.id()}">1</td>
                 <td th:text="${u.displayName()}">用户</td>
                 <td th:text="${u.email()}">a@x</td>
-                <td th:text="${#temporals.format(u.createdAt(), 'yyyy-MM-dd')}">-</td>
+                <td th:text="${@adminTime.wib(u.createdAt())}">-</td>
                 <td>
                     <span th:if="${u.deleted()}" class="badge badge-neutral"
                           th:text="#{admin.users.status.deleted}">已注销</span>

@@ -26,7 +26,7 @@ public class AdminRefundController {
     private static final String SUBMIT_AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('refund.submit')";
     private static final String APPROVE_AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('refund.approve')";
     private static final String PAYOUT_AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('refund.payout')";
-    private static final String VIEW_AUTH = "hasRole('SUPER_ADMIN') "
+    private static final String VIEW_AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('refund.view') "
             + "or hasAuthority('refund.submit') or hasAuthority('refund.approve') or hasAuthority('refund.payout')";
 
     private final RefundService refundService;

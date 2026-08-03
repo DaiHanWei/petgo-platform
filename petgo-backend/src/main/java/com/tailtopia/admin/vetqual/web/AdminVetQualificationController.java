@@ -26,6 +26,8 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 public class AdminVetQualificationController {
 
     private static final String AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('vet.qualify')";
+    private static final String VIEW_AUTH =
+            "hasRole('SUPER_ADMIN') or hasAuthority('vet.qualify_view') or hasAuthority('vet.qualify')";
 
     private final VetQualificationService qualService;
     private final AdminVetService adminVetService;
@@ -39,7 +41,7 @@ public class AdminVetQualificationController {
     }
 
     @GetMapping("/admin/vets/{id}/qualification")
-    @PreAuthorize(AUTH)
+    @PreAuthorize(VIEW_AUTH)
     public String qualification(@PathVariable long id, Model model) {
         model.addAttribute("active", "vets");
         model.addAttribute("vetId", id);

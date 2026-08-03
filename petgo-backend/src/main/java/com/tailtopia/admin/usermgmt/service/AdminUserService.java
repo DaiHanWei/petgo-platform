@@ -142,8 +142,8 @@ public class AdminUserService {
                 .orElseGet(List::of);
 
         boolean deleted = u.getDeletedAt() != null;
-        // 已注销：显示名/邮箱取注销前快照列（仅后台展示）。
-        String name = deleted ? u.getDeletedDisplayName() : u.getDisplayName();
+        // 已注销：显示名/邮箱取注销前快照列（仅后台展示）；未注销：昵称优先（同 toRow）。
+        String name = deleted ? u.getDeletedDisplayName() : currentName(u);
         String email = deleted ? u.getDeletedEmail() : u.getEmail();
         return new AdminUserDetailView(
                 u.getId(), name, u.getNickname(), email, u.getCreatedAt(),
@@ -162,10 +162,15 @@ public class AdminUserService {
 
     private AdminUserRow toRow(User u) {
         boolean deleted = u.getDeletedAt() != null;
-        // 已注销：读注销前快照列展示「谁注销了」；未注销：读原列。
-        String name = deleted ? u.getDeletedDisplayName() : u.getDisplayName();
+        // 已注销：读注销前快照列展示「谁注销了」；未注销：昵称优先（用户改名落 nickname，
+        // display_name 是注册时刻快照，与 AccountQueryService.toAuthorView 同一兜底约定）。
+        String name = deleted ? u.getDeletedDisplayName() : currentName(u);
         String email = deleted ? u.getDeletedEmail() : u.getEmail();
         return new AdminUserRow(u.getId(), name, email, u.getCreatedAt(), deactivated(u), deleted);
+    }
+
+    private static String currentName(User u) {
+        return u.getNickname() != null ? u.getNickname() : u.getDisplayName();
     }
 
     private static AdminUserDetailView.PetRow toPetRow(PetProfile p) {

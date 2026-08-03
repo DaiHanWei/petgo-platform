@@ -21,6 +21,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 public class AdminRedOverageController {
 
     private static final String AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('risk.view')";
+    private static final String EDIT_AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('risk.edit')";
 
     private final RedOverageMonitorService service;
 
@@ -37,7 +38,7 @@ public class AdminRedOverageController {
     }
 
     @PostMapping("/admin/red-overage/{userId}/review")
-    @PreAuthorize(AUTH)
+    @PreAuthorize(EDIT_AUTH)
     public String review(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long userId,
             @RequestParam String status, @RequestParam(required = false) String note,
             RedirectAttributes flash) {

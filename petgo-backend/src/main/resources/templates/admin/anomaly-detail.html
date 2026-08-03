@@ -24,9 +24,9 @@
             <tr><th th:text="#{admin.anomalies.col.vet}">兽医</th><td th:text="${anomaly.vetId}">-</td></tr>
             <tr><th th:text="#{admin.anomalies.col.sessionStatus}">会话状态</th><td th:text="${anomaly.sessionStatus}">-</td></tr>
             <tr><th th:text="#{admin.anomalies.col.started}">开始</th>
-                <td th:text="${anomaly.sessionStartedAt != null} ? ${#temporals.format(anomaly.sessionStartedAt, 'yyyy-MM-dd HH:mm')} : '-'">-</td></tr>
+                <td th:text="${@adminTime.wib(anomaly.sessionStartedAt)}">-</td></tr>
             <tr><th th:text="#{admin.anomalies.col.ended}">结束</th>
-                <td th:text="${anomaly.sessionEndedAt != null} ? ${#temporals.format(anomaly.sessionEndedAt, 'yyyy-MM-dd HH:mm')} : '-'">-</td></tr>
+                <td th:text="${@adminTime.wib(anomaly.sessionEndedAt)}">-</td></tr>
             <tr><th th:text="#{admin.anomalies.col.status}">状态</th>
                 <td th:text="${anomaly.status.name() == 'OPEN'} ? #{admin.anomalies.status.open} : #{admin.anomalies.status.resolved}">待处理</td></tr>
             <tr><th th:text="#{admin.anomalies.internalNote}">内部备注</th>

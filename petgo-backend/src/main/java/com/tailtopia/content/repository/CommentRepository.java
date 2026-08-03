@@ -21,6 +21,11 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
     /** 某帖未删评论总数（含一级+二级）。<b>已弃用于 detail commentCount</b>，改用 viewer 维度计数。 */
     long countByPostIdAndDeletedAtIsNull(long postId);
 
+    /** 概览看板（bug 20260731-442）：仅真实用户发的评论（剔除虚拟/种子账号）。 */
+    @Query("select count(c) from Comment c join User u on u.id = c.authorId "
+            + "where u.accountType = com.tailtopia.auth.domain.AccountType.REAL")
+    long countByRealAuthor();
+
     /**
      * 某帖 viewer 可见的未删评论总数（detail 的 commentCount，含一级+二级）。
      * 公开可见（VISIBLE）+ viewer 自己的非可见评论，使渲染列表与计数一致（§5.5，R3 接受轻微 viewer 差异）。

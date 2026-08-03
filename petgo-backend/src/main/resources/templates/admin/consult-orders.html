@@ -3,25 +3,25 @@
 <!-- 兽医咨询订单只读管理（Story 9.3，AB-8B）。只读 + 待核查标记 + 导出；无退款入口（退款走工单）。 -->
 <head>
     <meta charset="UTF-8"/>
-    <title>兽医咨询订单 · TailTopia 运营后台</title>
+    <title th:text="#{admin.consultOrders.title}">兽医咨询订单 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1>兽医咨询订单</h1>
+        <h1 th:text="#{admin.consultOrders.title}">兽医咨询订单</h1>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
-        <p class="hint">只读追踪订单全流程；退款不在此处理（走客服工单）。可标记待核查。</p>
+        <p class="hint" th:text="#{admin.consultOrders.hint}">只读追踪订单全流程；退款不在此处理（走客服工单）。可标记待核查。</p>
         <p>
             <a class="btn btn-neutral btn-sm" th:href="@{/admin/consult-orders/export}"
-               sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('order.export')">导出 CSV</a>
+               sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('order.export')" th:text="#{admin.common.exportCsv}">导出 CSV</a>
         </p>
         <table>
             <thead>
             <tr>
-                <th>订单</th><th>用户</th><th>兽医</th><th>金额</th><th>分成</th>
-                <th>状态</th><th>重播</th><th>待核查</th><th>成交时间</th><th>操作</th>
+                <th th:text="#{admin.common.order}">订单</th><th th:text="#{admin.common.user}">用户</th><th th:text="#{admin.consultOrders.col.vet}">兽医</th><th th:text="#{admin.common.amount}">金额</th><th th:text="#{admin.consultOrders.col.payout}">分成</th>
+                <th th:text="#{admin.common.status}">状态</th><th th:text="#{admin.consultOrders.col.rebroadcast}">重播</th><th th:text="#{admin.consultOrders.col.verify}">待核查</th><th th:text="#{admin.common.paidAt}">成交时间</th><th th:text="#{admin.common.actions}">操作</th>
             </tr>
             </thead>
             <tbody>
@@ -36,10 +36,10 @@
                 <td th:text="${o.verifyStatus == ''} ? '—' : ${o.verifyStatus}">—</td>
                 <td th:text="${@adminTime.wib(o.paidAt)}">—</td>
                 <td><a class="btn btn-neutral btn-sm"
-                       th:href="@{/admin/consult-orders/{t}(t=${o.orderToken})}">详情</a></td>
+                       th:href="@{/admin/consult-orders/{t}(t=${o.orderToken})}" th:text="#{admin.common.detail}">详情</a></td>
             </tr>
             <tr th:if="${orders.isEmpty()}">
-                <td colspan="10">暂无兽医咨询订单</td>
+                <td colspan="10" th:text="#{admin.consultOrders.empty}">暂无兽医咨询订单</td>
             </tr>
             </tbody>
         </table>
