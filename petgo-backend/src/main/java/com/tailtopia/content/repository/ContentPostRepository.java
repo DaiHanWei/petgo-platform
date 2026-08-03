@@ -38,6 +38,59 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
     List<ContentPost> findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndCreatedAtLessThanOrderByCreatedAtDesc(
             long authorId, long petId, ContentType type, Instant before, Pageable pageable);
 
+    /**
+     * 成长时间线读（Story 3.1 · AD-1）：按**统一游标锚点**（event_date + 同日 created_at）取一批。
+     * 取代上面按 created_at 单键的取数——排序键与游标键必须是同一把尺子，否则补记旧日期的日记
+     * （event_date 旧、created_at 新）会在翻页时丢失或重复。
+     *
+     * <p>本查询只覆盖 <b>event_date 非空</b>的行；V26 之前的存量行 event_date 为 NULL，
+     * 由 {@link #findGrowthMomentsBeforeAnchorLegacyNullEventDate} 单独取，两路在 service 层归并。
+     * 拆两路是为了避免在 JPQL 里对 timestamptz 做时区敏感的 date 转换。
+     */
+    @Query("""
+            SELECT p FROM ContentPost p
+            WHERE p.authorId = :authorId
+              AND p.petId = :petId
+              AND p.type = :type
+              AND p.deletedAt IS NULL
+              AND p.eventDate IS NOT NULL
+              AND (p.eventDate < :anchorDate
+                   OR (p.eventDate = :anchorDate AND p.createdAt < :anchorKey))
+            ORDER BY p.eventDate DESC, p.createdAt DESC
+            """)
+    List<ContentPost> findGrowthMomentsBeforeAnchor(
+            @Param("authorId") long authorId,
+            @Param("petId") long petId,
+            @Param("type") ContentType type,
+            @Param("anchorDate") LocalDate anchorDate,
+            @Param("anchorKey") Instant anchorKey,
+            Pageable pageable);
+
+    /**
+     * 成长时间线读·存量兜底（Story 3.1）：<b>event_date 为 NULL</b> 的历史行。
+     *
+     * <p>V26 加列时未回填，这批行的有效日期由 {@code created_at} 的 UTC 日推导（与
+     * {@code TimelineItemResponse.effectiveDate()} 的兜底一致）。因其有效日期与 created_at 单调同序，
+     * 锚点在此退化为单键上界（由 {@code TimelineAnchor.createdAtUpperBound()} 夹紧后传入）。
+     * <b>漏掉这一路会让这批老内容从时间线上整体消失。</b>
+     */
+    @Query("""
+            SELECT p FROM ContentPost p
+            WHERE p.authorId = :authorId
+              AND p.petId = :petId
+              AND p.type = :type
+              AND p.deletedAt IS NULL
+              AND p.eventDate IS NULL
+              AND p.createdAt < :createdAtUpperBound
+            ORDER BY p.createdAt DESC
+            """)
+    List<ContentPost> findGrowthMomentsBeforeAnchorLegacyNullEventDate(
+            @Param("authorId") long authorId,
+            @Param("petId") long petId,
+            @Param("type") ContentType type,
+            @Param("createdAtUpperBound") Instant createdAtUpperBound,
+            Pageable pageable);
+
     /** 日历月度聚合（Story 2.4 R2 · F9）：某作者某宠物某类型未删内容，event_date 落 [from,to]，按 event_date 升、created_at 升（bug 271 加 petId）。 */
     List<ContentPost> findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndEventDateBetweenOrderByEventDateAscCreatedAtAsc(
             long authorId, long petId, ContentType type, LocalDate from, LocalDate to);

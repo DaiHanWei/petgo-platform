@@ -18,12 +18,16 @@ import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.ratelimit.IdempotencyService;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -372,6 +376,52 @@ public class ContentService {
                 .stream()
                 .map(ContentService::toGrowthMomentView)
                 .toList();
+    }
+
+    /**
+     * 成长时间线取数（Story 3.1 · AD-1）：按**统一游标锚点**取一批快乐时刻，
+     * 排序 = {@code event_date} 倒序 → 同日 {@code created_at} 倒序（与聚合侧全局序一致）。
+     *
+     * <p>取代 {@link #findGrowthMoments}（按 created_at 单键）——排序键与游标键必须同一把尺子，
+     * 否则补记旧日期的日记会在翻页时丢失或重复（重构前的现网缺陷）。
+     *
+     * <p>内部**两路取数再归并**：event_date 非空走复合锚点；V26 之前 event_date 为 NULL 的存量行
+     * 走 created_at 单键上界（其有效日期由 created_at 推导，与之单调同序）。拆两路是为了避免在
+     * JPQL 里对 timestamptz 做时区敏感的 date 转换；漏掉第二路会让存量老内容整体消失。
+     *
+     * <p><b>不在本方法内截断到页大小</b>——归并后再截断由聚合侧统一负责（AD-1 Rule 2）。
+     *
+     * @param anchorDate          锚点事件日期（严格小于）
+     * @param anchorKey           锚点同日排序键（同日时严格小于）
+     * @param createdAtUpperBound 锚点在 created_at 单键上的等价上界（供 NULL event_date 存量行使用）
+     * @param limit               本批最多条数（调用方按需多取，用于归并稳健性）
+     */
+    @Transactional(readOnly = true)
+    public List<GrowthMomentView> findGrowthMomentsBeforeAnchor(long authorId, long petId,
+            LocalDate anchorDate, Instant anchorKey, Instant createdAtUpperBound, int limit) {
+        Pageable page = PageRequest.of(0, limit);
+        List<GrowthMomentView> dated = posts.findGrowthMomentsBeforeAnchor(
+                        authorId, petId, ContentType.GROWTH_MOMENT, anchorDate, anchorKey, page)
+                .stream().map(ContentService::toGrowthMomentView).toList();
+        List<GrowthMomentView> legacy = posts.findGrowthMomentsBeforeAnchorLegacyNullEventDate(
+                        authorId, petId, ContentType.GROWTH_MOMENT, createdAtUpperBound, page)
+                .stream().map(ContentService::toGrowthMomentView).toList();
+        if (legacy.isEmpty()) {
+            return dated; // 绝大多数账号无存量 NULL 行，直接返回避免多余拷贝
+        }
+        List<GrowthMomentView> merged = new ArrayList<>(dated.size() + legacy.size());
+        merged.addAll(dated);
+        merged.addAll(legacy);
+        merged.sort(Comparator
+                .comparing((GrowthMomentView g) -> effectiveDateOf(g))
+                .thenComparing(GrowthMomentView::createdAt)
+                .reversed());
+        return merged.size() > limit ? List.copyOf(merged.subList(0, limit)) : List.copyOf(merged);
+    }
+
+    /** 有效日期：event_date 为空时回退 created_at 的 UTC 日（与 TimelineItemResponse.effectiveDate 同口径）。 */
+    private static LocalDate effectiveDateOf(GrowthMomentView g) {
+        return g.eventDate() != null ? g.eventDate() : g.createdAt().atZone(ZoneOffset.UTC).toLocalDate();
     }
 
     /**

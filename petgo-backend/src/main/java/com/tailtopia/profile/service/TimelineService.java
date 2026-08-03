@@ -21,6 +21,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,7 +37,21 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class TimelineService {
 
+    private static final Logger log = LoggerFactory.getLogger(TimelineService.class);
+
     private static final int MAX_LIMIT = 50;
+
+    /** 同日不跨页时的取数上限（防病态数据无限放大；触顶会 warn，不静默截断）。 */
+    private static final int MAX_FETCH = 500;
+
+    /**
+     * 时间线全局序（AD-1）：事件日期倒序 → 同日发布/完成时刻倒序。
+     * 同日方向<b>沿用重构前行为</b>（AC6 零回归）；FR-82 的「同日正序」口径属 Story 3.2 排序规则范畴。
+     */
+    private static final Comparator<TimelineItemResponse> TIMELINE_ORDER =
+            Comparator.comparing(TimelineItemResponse::effectiveDate)
+                    .thenComparing(TimelineItemResponse::date)
+                    .reversed();
 
     private final ProfileService profileService;
     private final ContentService contentService;
@@ -53,37 +69,175 @@ public class TimelineService {
         this.healthRecords = healthRecords;
     }
 
+    /**
+     * 成长时间线分页（Story 3.1 重构 · AD-1）。
+     *
+     * <p><b>重构前的现网缺陷</b>：游标用 {@code createdAt} 取数、排序却用 {@code effectiveDate}
+     * （快乐时刻取 {@code eventDate}）——两把尺子。补记一篇旧日期的日记（{@code eventDate} 旧、
+     * {@code createdAt} 新）在排序上落到旧位置、在翻页上被当作新记录，跨页时丢失或重复。
+     *
+     * <p><b>重构后</b>：排序键与游标键统一为 {@link TimelineAnchor}（事件日期 + 同日排序键）。
+     * 流程严格为 <b>各源按同一锚点取数 → 归并排序 → 统一截断</b>（AD-1 Rule 2，禁止各源先截断再归并），
+     * 且<b>同日条目不跨页拆分</b>（Rule 3，必要时该页超出默认页大小）。
+     */
     @Transactional(readOnly = true)
     public TimelinePageResponse getTimeline(long ownerId, String cursor, int limit) {
         // 需有档案；无则 404（前端据此渲染空态）。取 petId 供成长帖按当前宠物过滤（bug 271）。
         PetProfile profile = requireProfile(ownerId);
         int pageSize = Math.min(Math.max(limit, 1), MAX_LIMIT);
-        Instant before = parseCursor(cursor);
-        // 各源多取一条用于跨源合并的稳健性（取 pageSize+1）。
-        int fetch = pageSize + 1;
+        TimelineAnchor anchor = TimelineAnchor.decode(cursor);
 
+        // 同日不跨页：若某日条目多到一批取不全，逐级放大批次重取（真实数据下单日极少超过个位数）。
+        int fetch = pageSize + 1;
+        Batch batch;
+        Cut cut;
+        while (true) {
+            batch = fetchMerged(ownerId, profile.getId(), anchor, fetch);
+            cut = cutOnDayBoundary(batch, pageSize);
+            if (cut.complete() || fetch >= MAX_FETCH) {
+                break;
+            }
+            fetch = Math.min(fetch * 4, MAX_FETCH);
+        }
+        if (!cut.complete()) {
+            // 兜底（不静默）：单日条目超过 MAX_FETCH，本页在日内截断，下一页从同日继续，不丢不重。
+            log.warn("时间线单日条目数超过取数上限，本页在日内截断 ownerId(agent) pageSize={} cap={}",
+                    pageSize, MAX_FETCH);
+            List<TimelineItemResponse> items = batch.items();
+            int end = Math.min(items.size(), pageSize);
+            cut = new Cut(List.copyOf(items.subList(0, end)), items.size() > end, true);
+        }
+
+        List<TimelineItemResponse> page = cut.page();
+        String nextCursor = null;
+        if (cut.hasMore() && !page.isEmpty()) {
+            TimelineItemResponse last = page.get(page.size() - 1);
+            nextCursor = new TimelineAnchor(last.effectiveDate(), last.date()).encode();
+        }
+        return new TimelinePageResponse(page, nextCursor, cut.hasMore());
+    }
+
+    /** 一次截断的结果。{@code complete=false} 表示本批未能把边界所在的那一天取全，需放大批次重取。 */
+    private record Cut(List<TimelineItemResponse> page, boolean hasMore, boolean complete) {
+    }
+
+    /**
+     * 一批取数的结果。{@code allKnown=false} 表示至少有一个源取满了本批上限——它在更早的位置可能还有条目，
+     * 因此只有比 {@code trustedFloor} 更新的那段才是**完整已知**的。
+     */
+    private record Batch(List<TimelineItemResponse> items, boolean allKnown, TimelineAnchor trustedFloor) {
+    }
+
+    /**
+     * 各源按同一锚点取数后归并排序（AD-1 Rule 2 的前半段：**不在源内截断到页大小**）。
+     *
+     * <p>健康事件无独立 event_date，其有效日期由 {@code createdAt} 推导、与之单调同序，
+     * 故锚点在该源上退化为夹紧后的单键上界（见 {@link TimelineAnchor#createdAtUpperBound()}）。
+     *
+     * <p><b>可信前缀</b>：若某源恰好返回了 {@code fetch} 条，说明它可能还有更早的条目没取回来。
+     * 此时以「取满的源中**最新的那条末尾**」为地板——只有比该地板更新的条目，才能断言本批已是完整集合。
+     * 不做这层区分，会把「批次边界」误判成「当天结束」，同日条目仍会被拆到两页（AC3 破）。
+     */
+    private Batch fetchMerged(long ownerId, long petId, TimelineAnchor anchor, int fetch) {
         List<TimelineItemResponse> merged = new ArrayList<>();
-        for (GrowthMomentView g : contentService.findGrowthMoments(ownerId, profile.getId(), before, fetch)) {
+        boolean allKnown = true;
+        TimelineAnchor floor = null;
+
+        List<GrowthMomentView> growth = contentService.findGrowthMomentsBeforeAnchor(
+                ownerId, petId, anchor.eventDate(), anchor.sameDayKey(), anchor.createdAtUpperBound(), fetch);
+        for (GrowthMomentView g : growth) {
             merged.add(TimelineItemResponse.happyMoment(
                     g.id(), g.createdAt(), g.eventDate(), g.imageUrls(), g.text()));
         }
+        if (growth.size() >= fetch) {
+            allKnown = false;
+            floor = newestFloor(floor, anchorOf(merged.get(merged.size() - 1)));
+        }
+
         HealthEventTimelineSource health = healthSource.getIfAvailable();
         if (health != null) {
-            for (HealthEventView h : health.recentHealthEvents(ownerId, before, fetch)) {
-                merged.add(TimelineItemResponse.healthEvent(h.createdAt(), h.aiLevel(), h.symptomSummary(), h.sourceType(), h.sourceRef()));
+            List<HealthEventView> events = health.recentHealthEvents(ownerId, anchor.createdAtUpperBound(), fetch);
+            for (HealthEventView h : events) {
+                merged.add(TimelineItemResponse.healthEvent(
+                        h.createdAt(), h.aiLevel(), h.symptomSummary(), h.sourceType(), h.sourceRef()));
+            }
+            if (events.size() >= fetch) {
+                allKnown = false;
+                HealthEventView last = events.get(events.size() - 1);
+                floor = newestFloor(floor, new TimelineAnchor(
+                        last.createdAt().atZone(ZoneOffset.UTC).toLocalDate(), last.createdAt()));
             }
         }
 
-        // AC6（F9）：时间线按 eventDate（快乐时刻）/createdAt 日（健康事件）倒序，同日 createdAt 倒序兜底。
-        merged.sort(Comparator.comparing(TimelineItemResponse::effectiveDate)
-                .thenComparing(TimelineItemResponse::date).reversed());
+        merged.sort(TIMELINE_ORDER);
+        return new Batch(merged, allKnown, floor);
+    }
 
-        boolean hasMore = merged.size() > pageSize;
-        List<TimelineItemResponse> page = hasMore ? merged.subList(0, pageSize) : merged;
-        // 游标仍以 createdAt（date）翻页，与各源 createdAt 拉取一致。
-        String nextCursor = hasMore ? page.get(page.size() - 1).date().toString() : null;
-        // subList 是视图，复制成独立 list。
-        return new TimelinePageResponse(List.copyOf(page), nextCursor, hasMore);
+    private static TimelineAnchor anchorOf(TimelineItemResponse item) {
+        return new TimelineAnchor(item.effectiveDate(), item.date());
+    }
+
+    /** 取两个地板中**较新**的那个（更严格）。 */
+    private static TimelineAnchor newestFloor(TimelineAnchor a, TimelineAnchor b) {
+        if (a == null) {
+            return b;
+        }
+        int cmp = a.eventDate().compareTo(b.eventDate());
+        if (cmp != 0) {
+            return cmp > 0 ? a : b;
+        }
+        return a.sameDayKey().isAfter(b.sameDayKey()) ? a : b;
+    }
+
+    /** 条目是否严格新于地板（地板为 null = 全部可信）。 */
+    private static boolean newerThanFloor(TimelineItemResponse item, TimelineAnchor floor) {
+        if (floor == null) {
+            return true;
+        }
+        int cmp = item.effectiveDate().compareTo(floor.eventDate());
+        if (cmp != 0) {
+            return cmp > 0;
+        }
+        return item.date().isAfter(floor.sameDayKey());
+    }
+
+    /**
+     * 归并后统一截断（AD-1 Rule 2 后半段 + Rule 3）：页边界必须落在日期分界上。
+     *
+     * <p>只在**完整已知**的前缀内做判定（见 {@link Batch}）。若边界所在的那一天在可信前缀里
+     * 没有出现「更早的一天」作为收尾标志，就不能断言这天已取全——返回 {@code complete=false}
+     * 让调用方放大批次重取。若判定为同日跨界，则**把这一天整体纳入本页**（允许超出默认页大小）：
+     * 宁可某页略大，也不能让同日条目被拆到两页后因排序键相同而重复或丢失。
+     */
+    private static Cut cutOnDayBoundary(Batch batch, int pageSize) {
+        List<TimelineItemResponse> items = batch.items();
+        // 可信前缀长度：批次全量已知则为全长，否则只算严格新于地板的那段。
+        int trusted = batch.allKnown() ? items.size() : 0;
+        if (!batch.allKnown()) {
+            while (trusted < items.size() && newerThanFloor(items.get(trusted), batch.trustedFloor())) {
+                trusted++;
+            }
+        }
+
+        if (batch.allKnown() && items.size() <= pageSize) {
+            return new Cut(List.copyOf(items), false, true);
+        }
+        if (trusted <= pageSize) {
+            return new Cut(List.of(), true, false); // 可信段不足一页，放大批次
+        }
+        LocalDate lastDay = items.get(pageSize - 1).effectiveDate();
+        if (!items.get(pageSize).effectiveDate().equals(lastDay)) {
+            return new Cut(List.copyOf(items.subList(0, pageSize)), true, true); // 边界恰好落在日界
+        }
+        for (int i = pageSize + 1; i < trusted; i++) {
+            if (!items.get(i).effectiveDate().equals(lastDay)) {
+                return new Cut(List.copyOf(items.subList(0, i)), true, true); // 延伸到该日末尾
+            }
+        }
+        if (batch.allKnown()) {
+            return new Cut(List.copyOf(items), false, true); // 剩下全是同一天，且已知无更多
+        }
+        return new Cut(List.of(), true, false); // 该日在可信段内未见收尾，放大批次
     }
 
     /**
@@ -192,14 +346,4 @@ public class TimelineService {
                 .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
     }
 
-    private static Instant parseCursor(String cursor) {
-        if (cursor == null || cursor.isBlank()) {
-            return Instant.now();
-        }
-        try {
-            return Instant.parse(cursor);
-        } catch (RuntimeException e) {
-            throw AppException.validation("无效的分页游标");
-        }
-    }
 }
