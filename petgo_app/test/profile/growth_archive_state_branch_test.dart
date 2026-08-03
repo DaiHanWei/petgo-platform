@@ -1,12 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tailtopia/app.dart';
-import 'package:tailtopia/core/router/app_router.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
-import 'package:tailtopia/features/content/data/feed_repository.dart';
-import 'package:tailtopia/features/content/presentation/feed_tab_row.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/data/timeline_repository.dart';
 import 'package:tailtopia/features/profile/domain/archive_stats.dart';
@@ -18,9 +14,6 @@ import 'package:tailtopia/features/profile/presentation/growth_archive_page.dart
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/widgets/app_shell.dart';
 import 'package:tailtopia/shared/widgets/bottom_tab_bar.dart';
-import 'package:tailtopia/shared/widgets/login_hard_dialog.dart';
-
-import '../support/fake_feed_repository.dart';
 
 /// Story 2.1 · L0：Diary 页状态分支单一入口（AD-15）。
 ///
@@ -177,46 +170,15 @@ void main() {
     });
   });
 
-  group('AC3 门控未解，行为零回归', () {
-    test('Diary 仍不在免门控白名单里（放行归 Story 2.4）', () {
-      expect(kUngatedTabs.contains(AppTab.profile), isFalse,
-          reason: '本 Story 不得为了自测而提前放行门控');
-      expect(kUngatedTabs, <AppTab>{AppTab.home});
-    });
-
-    testWidgets('游客深链 /profile → 仍 redirect 回 /home', (tester) async {
-      final container = ProviderContainer(
-        overrides: [feedRepositoryProvider.overrideWithValue(FakeFeedRepository())],
-      );
-      addTearDown(container.dispose);
-      await tester.pumpWidget(
-        UncontrolledProviderScope(container: container, child: const TailTopiaApp()),
-      );
-      await tester.pumpAndSettle();
-
-      final router = container.read(routerProvider);
-      router.go('/profile');
-      await tester.pumpAndSettle();
-
-      expect(router.state.matchedLocation, '/home');
-      // 落回 Discovery，而不是渲染出 Diary 页
-      expect(find.byType(FeedTabRow), findsOneWidget);
-      expect(find.byType(DiaryGuestPage), findsNothing);
-    });
-
-    testWidgets('游客点 Diary Tab → 仍弹强登录窗，且不切换目的地', (tester) async {
-      await tester.pumpWidget(ProviderScope(
-        overrides: [feedRepositoryProvider.overrideWithValue(FakeFeedRepository())],
-        child: const TailTopiaApp(),
-      ));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Diary'));
-      await tester.pumpAndSettle();
-
-      expect(find.byType(LoginHardDialog), findsOneWidget);
-      // 未切换：Discovery 的 Feed 分类 Tab 仍在
-      expect(find.byType(FeedTabRow), findsOneWidget);
+  group('AC3 门控（Story 2.4 起已放行 Diary 主页）', () {
+    // 本组原为「门控未解」的零回归断言（2.1 交付时游客进不来）。Story 2.4 正式放行 Diary 主页后
+    // 三条断言全部到期，改由 test/shared/diary_gating_and_landing_test.dart 双向守门
+    // （拦截方向：/profile/* 子页仍受控；放行方向：/profile 与示例详情对游客可达）。
+    // 这里只保留一条最小连接断言，确认本页的游客分支确实对游客可达。
+    test('Diary 主页已在免门控 Tab 白名单里，Health / Me 仍受控', () {
+      expect(kUngatedTabs.contains(AppTab.profile), isTrue);
+      expect(kUngatedTabs.contains(AppTab.triage), isFalse);
+      expect(kUngatedTabs.contains(AppTab.me), isFalse);
     });
   });
 }

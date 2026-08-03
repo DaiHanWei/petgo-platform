@@ -7,6 +7,7 @@ import 'package:posthog_flutter/posthog_flutter.dart';
 import '../theme/app_theme.dart';
 
 import '../../features/auth/domain/auth_state.dart';
+import '../../features/auth/domain/user_state.dart';
 import '../../features/auth/presentation/dev_login_guide_page.dart';
 import '../../features/auth/presentation/login_page.dart';
 import '../../features/auth/presentation/nickname_page.dart';
@@ -95,7 +96,22 @@ final NotifierProvider<PendingDeepLinkNotifier, String?> pendingDeepLinkProvider
 Widget _vetScoped(Widget child) => Theme(data: AppTheme.vet, child: child);
 
 /// 未登录游客**不可**直接进入的受控路由前缀（FR-19 门控）。
+///
+/// ⚠️ **安全默认是「拦」**：前缀匹配（`loc == p || loc.startsWith('$p/')`）保持默认拦截，
+/// 新增的任何 `/profile/*`、`/me/*` … 子页**自动受控，无需逐个登记**。
 const Set<String> _controlledLocations = {'/profile', '/triage', '/me', '/consult', '/notifications', '/publish'};
+
+/// 受控前缀里的**精确例外**（V1.1.2 Story 2.4 · AD-7 Rule 1）：游客可直接进入的完整路径。
+///
+/// 目前只有 Diary 主页 `/profile` —— 它是游客的冷启动落地页（FR-78/FR-80 种草页），
+/// 而**建档 / 编辑档案 / 当天详情 / 里程碑列表等子页仍受控**。
+///
+/// ⚠️ 三条硬约束（违反即为把安全默认反转）：
+/// 1. **只接受完整路径字面量**：判定用 `contains(loc)`，**不得**出现 `startsWith` 或通配；
+/// 2. **不得**为了放行某个子页而把 `/profile/xxx` 塞进来 —— 该子页应当自证不需要门控
+///    （如 Story 2.2 的示例内容详情走**页内推入**，根本不落在受控前缀下）；
+/// 3. 反向做法（改成「列举受控子页」）明确禁止：新增子页忘登记就会对游客敞开。
+const Set<String> _controlledExactExceptions = {'/profile'};
 
 /// 应用路由（provider 化：redirect 可读登录态做受控路由门控）。
 ///
@@ -139,7 +155,9 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       }
       // 非兽医（用户/游客）不可进兽医工作台等 vet 专属路由（/vet/login 允许，供登录）。
       if (isVetRoute && loc != '/vet/login') return '/home';
-      final controlled = _controlledLocations.any((p) => loc == p || loc.startsWith('$p/'));
+      // 默认受控 + 精确例外（AD-7 Rule 1）：先按前缀判定受控，再看是否命中精确例外。
+      final controlled = _controlledLocations.any((p) => loc == p || loc.startsWith('$p/')) &&
+          !_controlledExactExceptions.contains(loc);
       if (!auth.isLoggedIn && controlled) return '/home'; // 安全规则只升不降：游客不进受控路由
       return null;
     },
@@ -157,15 +175,23 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
                 .timeout(const Duration(seconds: 3), onTimeout: () {});
             final ctx = rootNavigatorKey.currentContext;
             if (ctx == null || !ctx.mounted) return;
-            // 冷启动若由分享页深链唤起 → 落该目标（成长档案）；否则按角色直达。
-            // 受控路由门控仍由 redirect 收口（游客 /profile → /home）。
+            // 分流顺序（AD-8）：pending 深链 > 按用户状态的落地矩阵。
+            // 冷启动若由分享页深链唤起 → 落该目标（游客点名片深链也落 Diary 游客态：
+            // `/profile` 已在门控精确例外集里，不再被 redirect 弹回 Discovery）。
             final pending = ref.read(pendingDeepLinkProvider);
             if (pending != null) {
               ref.read(pendingDeepLinkProvider.notifier).set(null);
               ctx.go(pending);
               return;
             }
-            ctx.go(ref.read(authControllerProvider).isVet ? '/vet/workbench' : '/home');
+            // 落地 Tab 按**当时状态实时判定**，不持久化「上次落在哪」（宠物状态会变，记住反而错）。
+            final auth = ref.read(authControllerProvider);
+            ctx.go(resolveAppUserState(
+              isLoggedIn: auth.isLoggedIn,
+              isVet: auth.isVet,
+              petStatus: auth.profile?.petStatus,
+              hasPetProfile: auth.profile?.hasPetProfile ?? false,
+            ).landingLocation);
           },
         ),
       ),

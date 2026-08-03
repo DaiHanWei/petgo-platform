@@ -12,6 +12,7 @@ import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/pet_status_selector.dart';
 import '../../auth/data/me_repository.dart';
 import '../../auth/domain/auth_state.dart';
+import '../../auth/domain/user_state.dart';
 import '../../content/domain/home_refresh_provider.dart';
 import '../data/milestone_repository.dart';
 import '../data/profile_repository.dart';
@@ -47,14 +48,30 @@ enum DiaryUserState {
 ///
 /// `petStatus` 未知（null，如 profile 尚未回填）按 HAS_PET 处理 —— 与改版前行为一致。
 /// 不新增字段：只吃 `isLoggedIn` / `petStatus` / 「有无档案」三个既有信号。
+///
+/// 判定顺序**不在本函数里重写一遍**，而是复用应用级的 [resolveAppUserState]（Story 2.4 · AD-8）
+/// 再折叠到本页的四个渲染分支 —— 落地 Tab 分流、埋点 `user_state`、本页分支三处共用一套顺序，
+/// 避免日后各改一处而口径分叉。
 DiaryUserState resolveDiaryUserState({
   required bool isLoggedIn,
   required String? petStatus,
   required bool hasPetProfile,
 }) {
-  if (!isLoggedIn) return DiaryUserState.guest;
-  if (petStatus != null && petStatus != 'HAS_PET') return DiaryUserState.nonOwner;
-  return hasPetProfile ? DiaryUserState.ownerWithProfile : DiaryUserState.ownerWithoutProfile;
+  final app = resolveAppUserState(
+    isLoggedIn: isLoggedIn,
+    // 兽医与用户侧路由互斥（router 层守卫），走不到本页 → 此处恒 false。
+    isVet: false,
+    petStatus: petStatus,
+    hasPetProfile: hasPetProfile,
+  );
+  return switch (app) {
+    AppUserState.guest => DiaryUserState.guest,
+    // B 与 C 在本页渲染同一张「有宠专属」页，故折叠为一个分支。
+    AppUserState.planning || AppUserState.enthusiast => DiaryUserState.nonOwner,
+    AppUserState.ownerWithoutProfile => DiaryUserState.ownerWithoutProfile,
+    AppUserState.ownerWithProfile => DiaryUserState.ownerWithProfile,
+    AppUserState.vet => DiaryUserState.guest, // 不可达；穷尽 switch 要求给个安全默认
+  };
 }
 
 /// Diary（成长档案）Tab 主屏。四态由 [resolveDiaryUserState] **单一入口**分发（AD-15）：

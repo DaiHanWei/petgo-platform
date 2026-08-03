@@ -12,16 +12,22 @@ import '../../features/auth/domain/auth_state.dart';
 import '../../features/content/domain/home_refresh_provider.dart';
 import '../../features/content/domain/content_type.dart';
 import '../../features/content/presentation/feed_controller.dart';
+import '../../features/profile/data/timeline_repository.dart';
 import '../../features/content/presentation/publish_compose_page.dart';
 import 'bottom_tab_bar.dart';
 
-/// **免门控 Tab 白名单**（Story 1.1 · AD-3 AC3① 去索引化）。
+/// **免门控 Tab 白名单**（Story 1.1 去索引化 · Story 2.4 放行 Diary）。
 ///
-/// 取代原先的 `index == AppTab.home.index` 裸索引比较——重排后裸索引会指向错误的 Tab。
-/// 本 Story **只做去索引化，集合内容不变**（仍只有 Discovery）；
-/// 扩为 `{home, profile}`（放行 Diary 给游客）归 **Story 2.4**——提前放行会造成
-/// 「游客能进 Diary 但游客引导页还没做」的破损中间态。
-const Set<AppTab> kUngatedTabs = {AppTab.home};
+/// 按 Tab 语义判定，不比较裸索引——重排后裸索引会指向错误的 Tab（AD-3 AC3①）。
+///
+/// ⚠️ 这是 **Tab 点击门控**（AD-7 Rule 2），与 `app_router.dart` 的**深链门控**是**两处独立机制**，
+/// 改法也不同（那边是「前缀默认受控 + 精确例外集」）。放行 Diary 必须两处同改 ——
+/// 只改深链那处，游客点 Diary 标签仍会被弹登录框（PRD 只覆盖了深链那处）。
+///
+/// `Diary` 在此白名单里指的**只是 Diary 主页**：其子页（建档 / 编辑 / 当天详情 / 里程碑列表）
+/// 由深链门控继续拦截，游客点进去仍会被 redirect。
+/// **Health / [+] / Me 对游客维持受控**，不得顺手加进来。
+const Set<AppTab> kUngatedTabs = {AppTab.home, AppTab.profile};
 
 /// App 主框架外壳（Story 1.2 外观 + Story 1.5 受控 Tab 门控）。
 ///
@@ -71,6 +77,14 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
     if (kUngatedTabs.contains(tab)) {
       final bool reTap = widget.navigationShell.currentIndex == index;
       _goBranch(index); // 免门控：游客可进
+      if (tab == AppTab.profile) {
+        // 切回 Diary → 刷新时间线 / 日历 / 统计（照 Discovery 的 feedProvider.refresh() 范式）。
+        // Story 3.2 起时间线会镜像里程碑 / 健康记录 / 身份证条目，它们在用户不在本页时也会变化；
+        // 不刷新会导致切回后看不到新条目。日历按年月分族，整族失效（含非当前月缓存）。
+        ref.invalidate(timelineFirstPageProvider);
+        ref.invalidate(archiveStatsProvider);
+        ref.invalidate(calendarMonthProvider);
+      }
       if (tab == AppTab.home) {
         // 切回 Discovery（原首页）：刷新 feed（keepAlive 缓存，否则看不到新内容/删帖/发布变更）。
         // 已在该 Tab 再次点击 → 额外回到顶部（bug 20260709-278）。
@@ -96,7 +110,8 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
     requireLogin(
       ref,
       context,
-      pendingAction: const RouteIntent(location: '/home'),
+      // 登录后回跳落 Diary（V1.1.2 FR-78 连带调整①：落地页由 Discovery 改为 Diary）。
+      pendingAction: const RouteIntent(location: '/profile'),
       // bug 20260703-244：在「成长档案（Diary）」Tab（底部第 2 个）点创建 → 编辑页默认选「成长日历（Growth）」；
       // 其余 Tab 保持默认第一个 tag（Momen）。Growth 需宠物档案（否则 segment 灰置），无档案则不预选、回落 Momen。
       onAllowed: () {

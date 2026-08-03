@@ -34,12 +34,12 @@ void main() {
       );
     });
 
-    test('AC3①：免门控判定语义化，且本 Story 不得提前放行 Diary', () {
+    test('AC3①：免门控判定语义化（Story 2.4 起含 Diary）', () {
       // 去索引化：白名单按 Tab 语义表达，不再比较裸索引。
-      expect(kUngatedTabs, <AppTab>{AppTab.home},
-          reason: '本 Story 只做去索引化；扩为 {Discovery, Diary} 归 Story 2.4');
-      expect(kUngatedTabs.contains(AppTab.profile), isFalse,
-          reason: 'Diary 此时仍受门控——提前放行会造成「游客能进但游客页还没做」的破损中间态');
+      // 集合内容的守门断言在 test/shared/diary_gating_and_landing_test.dart（Story 2.4，双向门控）；
+      // 这里只锁「判定是语义化的、且 Health/Me 不在其中」。
+      expect(kUngatedTabs, <AppTab>{AppTab.home, AppTab.profile},
+          reason: 'Story 2.4 放行 Diary 主页给游客（其子页仍受深链门控）');
       expect(kUngatedTabs.contains(AppTab.triage), isFalse);
       expect(kUngatedTabs.contains(AppTab.me), isFalse);
     });
