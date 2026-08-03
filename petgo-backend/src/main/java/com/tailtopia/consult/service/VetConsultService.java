@@ -84,6 +84,8 @@ public class VetConsultService {
                 .map(repo::findById)
                 .flatMap(java.util.Optional::stream)
                 .filter(s -> s.getStatus() == SessionStatus.WAITING)
+                // bug 20260803：弃单（用户超时离开未续期）不进收件箱，与接单守卫同口径。
+                .filter(s -> !s.isWaitingAbandoned(ConsultSessionService.WAITING_ABANDON_SECONDS))
                 .toList();
         Identities ids = resolveIdentities(sessions);
         return sessions.stream()
