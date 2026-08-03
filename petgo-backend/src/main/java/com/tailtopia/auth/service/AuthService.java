@@ -16,6 +16,8 @@ import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.security.AppleIdentity;
 import com.tailtopia.shared.security.AppleTokenVerifier;
+import com.tailtopia.shared.im.ImAccountMapper;
+import com.tailtopia.shared.im.TencentImClient;
 import com.tailtopia.shared.security.GoogleIdentity;
 import com.tailtopia.shared.security.GoogleTokenVerifier;
 import com.tailtopia.shared.security.JwtService;
@@ -47,11 +49,12 @@ public class AuthService {
     private final VetAccountService vetAccounts;
     private final PetProfileRepository petProfiles;
     private final ApplicationEventPublisher events;
+    private final TencentImClient imClient;
 
     public AuthService(UserRepository users, RefreshTokenRepository refreshTokens,
             GoogleTokenVerifier googleVerifier, AppleTokenVerifier appleVerifier,
             JwtService jwt, VetAccountService vetAccounts, PetProfileRepository petProfiles,
-            ApplicationEventPublisher events) {
+            ApplicationEventPublisher events, TencentImClient imClient) {
         this.users = users;
         this.refreshTokens = refreshTokens;
         this.googleVerifier = googleVerifier;
@@ -60,6 +63,21 @@ public class AuthService {
         this.vetAccounts = vetAccounts;
         this.petProfiles = petProfiles;
         this.events = events;
+        this.imClient = imClient;
+    }
+
+    /**
+     * 建号即注册 IM（2026-08-03 策略：不再等接单时导入/SDK 首登自动注册——两条旧路径都曾断过，
+     * 生产事故 u_96 不存在致兽医消息被拒收）。幂等（account_import 重复导入返回 OK）、
+     * 非阻断（{@code TencentImClient} 失败仅 WARN，绝不影响登录）。
+     */
+    private void registerImAccount(User user) {
+        if (user.getId() == null) {
+            return; // 无 id 无法映射 IM 账号（正常持久化路径必有 id；防御测试桩/异常路径）
+        }
+        String nick = user.getNickname() != null && !user.getNickname().isBlank()
+                ? user.getNickname() : "用户" + user.getId();
+        imClient.ensureAccount(ImAccountMapper.userImId(user.getId()), nick);
     }
 
     @Transactional
@@ -85,6 +103,10 @@ public class AuthService {
                     NameTargetType.NICKNAME, user.getId(), user.getNickname()));
         }
 
+        if (isNew[0]) {
+            registerImAccount(user); // 建号即注册 IM（幂等/非阻断）
+        }
+
         String access = jwt.issueAccessToken(user);
         String refresh = issueRefresh(user);
 
@@ -108,6 +130,10 @@ public class AuthService {
             isNew[0] = true;
             return users.save(User.newAppleUser(id.sub(), id.email()));
         });
+
+        if (isNew[0]) {
+            registerImAccount(user); // 建号即注册 IM（幂等/非阻断；Apple 无昵称用「用户<id>」占位）
+        }
 
         String access = jwt.issueAccessToken(user);
         String refresh = issueRefresh(user);
