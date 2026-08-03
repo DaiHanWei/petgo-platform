@@ -10,6 +10,7 @@ import '../data/health_record_repository.dart';
 import '../data/milestone_repository.dart';
 import '../domain/health_list_item.dart';
 import '../domain/health_record_icons.dart';
+import '../domain/health_milestones.dart';
 import '../domain/milestone.dart';
 import '../domain/milestone_share.dart';
 import '../domain/milestone_titles.dart';
@@ -468,10 +469,16 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
         final now = await ref
             .read(milestoneListProvider.future)
             .timeout(const Duration(seconds: 2));
-        for (final g in now.groups) {
-          for (final it in g.items) {
-            if (it.completed && !beforeCodes.contains(it.code)) return it;
-          }
+        // Story 5.2 · AC3：一次保存可能同时点亮多条（如首针疫苗 → M3 + 聚合「Lulus Pemula」）。
+        // 收集**全部**新解锁，取**级别最高**的一条去庆祝（只弹一次），其余由弹层底部的
+        // 「已解锁收藏」圆点带承载。此前是「遇到第一条就返回」，级别可能不是最高的。
+        final fresh = <MilestoneItem>[
+          for (final g in now.groups)
+            for (final it in g.items)
+              if (it.completed && !beforeCodes.contains(it.code)) it,
+        ];
+        if (fresh.isNotEmpty) {
+          return highestLevelMilestone(fresh);
         }
       } catch (_) {
         return null; // 拉取失败：放弃庆祝，不阻塞保存收尾。

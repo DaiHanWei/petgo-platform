@@ -1628,5 +1628,7 @@
   "publishPublicHint": "Published publicly, shown in Discovery",
   "@publishPublicHint": {"description": "Publish page: hint for Moment/Tips (always public)"},
   "mePostPrivateBadge": "Only you",
-  "@mePostPrivateBadge": {"description": "My posts: badge on private (unsynced) Diary content"}
+  "@mePostPrivateBadge": {"description": "My posts: badge on private (unsynced) Diary content"},
+  "milestoneHintAutoHealth": "Lights up automatically when you add a health record or finish a vet consultation — no check-in needed.",
+  "@milestoneHintAutoHealth": {"description": "Milestone sheet: hint for auto-only health milestones (M3/M4/M5/M9), replaces check-in copy"}
 }

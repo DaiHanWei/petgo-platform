@@ -1384,5 +1384,7 @@
   "publishPublicHint": "Terbit publik, tampil di Jelajah",
   "@publishPublicHint": {"description": "Publish page: hint for Moment/Tips (always public)"},
   "mePostPrivateBadge": "Hanya kamu",
-  "@mePostPrivateBadge": {"description": "My posts: badge on private (unsynced) Diary content"}
+  "@mePostPrivateBadge": {"description": "My posts: badge on private (unsynced) Diary content"},
+  "milestoneHintAutoHealth": "Menyala otomatis saat kamu menambah catatan kesehatan atau selesai konsultasi dokter — tanpa check-in.",
+  "@milestoneHintAutoHealth": {"description": "Milestone sheet: hint for auto-only health milestones (M3/M4/M5/M9), replaces check-in copy"}
 }
