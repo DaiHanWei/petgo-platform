@@ -13,7 +13,6 @@ import 'package:tailtopia/features/content/data/feed_repository.dart';
 import 'package:tailtopia/features/content/presentation/feed_tab_row.dart';
 import 'package:tailtopia/features/content/presentation/home_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
-import 'package:tailtopia/shared/widgets/profile_prompt_bar.dart';
 
 import '../support/fake_feed_repository.dart';
 
@@ -291,8 +290,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('petStatusComplete')));
     await tester.pumpAndSettle();
 
-    // 进首页（Story 3.2 Feed 已就位）+ B 状态不显示档案提示条。
+    // 进 Discovery（Story 3.2 Feed 已就位）。
+    // 原断言「B 状态不显示档案提示条」已随 FR-0H 整条废止而失效（V1.1.2 Story 2.3）：
+    // 提示条组件本身已删除，Discovery 顶部只有分类 Tab —— 由 story 2.3 的
+    // 「Discovery 顶部无建档提示」回归测试统一守门。
     expect(find.byType(FeedTabRow), findsOneWidget);
-    expect(find.byType(ProfilePromptBar), findsNothing);
   });
 }

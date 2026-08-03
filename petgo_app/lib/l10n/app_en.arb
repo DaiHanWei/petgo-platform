@@ -87,7 +87,6 @@
   "profileCreatedMilestoneDesc": "\"Pet profile completed\" — S Level",
   "profileCreatedRecordFirst": "Record First Moment 📸",
   "profileCreatedViewProfile": "View profile first",
-  "profilePromptMessage": "Create your pet's profile to start their diary 🐾",
   "commonCancel": "Cancel",
   "mediaPermissionDeniedTitle": "Permission needed",
   "@mediaPermissionDeniedTitle": {
@@ -151,7 +150,7 @@
     }
   },
   "growthArchiveEmptyTitle": "No pet profile yet",
-  "growthArchiveEmptyCreate": "Create now",
+  "growthArchiveEmptyCreate": "Create profile now",
   "growthArchiveNonOwnerTitle": "The diary is for pet owners. Change your pet status to unlock it.",
   "growthArchiveChangeStatus": "Change status",
   "growthArchiveTimelineEmpty": "No records yet",
@@ -1615,5 +1614,7 @@
   "diaryDemoBodyBalcony": "Found his favourite spot on the balcony. Same corner, same time, every morning.",
   "@diaryDemoBodyBalcony": {"description": "Diary guest state: sample detail body for the balcony item"},
   "diaryDemoCommentTeaser": "Create a profile to join the conversation.",
-  "@diaryDemoCommentTeaser": {"description": "Diary guest state: sample detail comment teaser (tap goes to profile creation)"}
+  "@diaryDemoCommentTeaser": {"description": "Diary guest state: sample detail comment teaser (tap goes to profile creation)"},
+  "growthArchiveEmptyBody": "Set up your little one's profile first — so every moment, health record, and milestone has a home.",
+  "@growthArchiveEmptyBody": {"description": "Diary: state-A-no-profile guide body (UI spec A2)"}
 }

@@ -123,9 +123,7 @@ class GrowthArchivePage extends ConsumerWidget {
               onEditProfile: () => context.push('/profile/edit'),
             );
           }
-          // TODO(2-3): 替换为 FR-0G 建档引导的新实现。
-          // 当前沿用 V1.0.0 既有空状态（零回归占位）：状态 A 但无档案（多为删档后）除
-          // 「立即创建」外给切换状态入口——否则用户被困在 A 无法回 B/C（bug 20260702-237）。
+          // 状态 A 未建档 → 建档引导态（Story 2.3 按 A2 稿补齐副文案；仍复用 FR-0G 既有引导）。
           return _EmptyProfileView(
             onCreate: () => context.push('/profile/create'),
             onChangeStatus: () => _openStatusEditor(context, ref),
@@ -455,10 +453,20 @@ class _TimelineView extends ConsumerWidget {
   }
 }
 
+/// 状态 A（已回答「我有宠物」）但未建档的**建档引导态**（Story 2.3 · FR-81 · UI 稿 A2）。
+///
+/// 复用 V1.0.0 既有建档引导（FR-0G，可跳过），**刻意不展示 FR-80 的游客种草内容** ——
+/// 这类用户已经过了注册决策点，再给他种一次草只会造成体验割裂（AC1）。
+///
+/// 与状态 B/C（[_NonOwnerView]）是两种完全不同的人：对 A 催建档是对的（他说了有宠物、只是没填），
+/// 对 B/C 催建档等于无视他刚在 onboarding 里给出的回答（UX-DR6）。
 class _EmptyProfileView extends StatelessWidget {
   const _EmptyProfileView({required this.onCreate, this.onChangeStatus});
 
   final VoidCallback onCreate;
+
+  /// 「改宠物状态」逃生入口：删档后仍留在状态 A 的用户靠它回 B/C（bug 20260702-237）。
+  /// 档案加载失败态不给该入口（无从判断用户想改什么），故为可空。
   final VoidCallback? onChangeStatus;
 
   @override
@@ -468,7 +476,11 @@ class _EmptyProfileView extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          EmptyState(title: l10n.growthArchiveEmptyTitle),
+          // A2 稿：🐾 + 标题 + 一句副文案（说明「为什么先建档」），再往下才是 CTA。
+          EmptyState(
+            title: l10n.growthArchiveEmptyTitle,
+            message: l10n.growthArchiveEmptyBody,
+          ),
           FilledButton(
             key: const ValueKey('growthCreateButton'),
             onPressed: onCreate,

@@ -21,9 +21,6 @@ class AppPrefs {
   Future<void> setPetStatus(String status) => _prefs.setString(_kPetStatus, status);
 
   // --- 档案提示条计数（Story 1.7）---
-  static const kProfilePromptRestartCount = 'petgo.profile_prompt_restart_count';
-  static const kProfilePromptDismissedPermanently = 'petgo.profile_prompt_dismissed';
-  static const kPetProfileCompleted = 'petgo.pet_profile_completed';
 
   // --- 推送权限是否已申请过（Story 6.4，拒绝后不再主动弹）---
   static const _kPushPermissionAsked = 'petgo.push_permission_asked';

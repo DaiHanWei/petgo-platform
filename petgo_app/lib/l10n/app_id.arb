@@ -60,7 +60,6 @@
   "profileCreatedMilestoneDesc": "\"Profil hewan dibuat lengkap\" — S Level",
   "profileCreatedRecordFirst": "Rekam Momen Pertama 📸",
   "profileCreatedViewProfile": "Lihat profil dulu",
-  "profilePromptMessage": "Buat profil hewan Anda untuk memulai diary 🐾",
   "commonCancel": "Batal",
   "mediaPermissionDeniedTitle": "Perlu izin",
   "mediaPermissionDeniedBody": "Akses foto diperlukan untuk mengunggah. Aktifkan di Pengaturan.",
@@ -105,7 +104,7 @@
   "publishImageBlocked": "Ada gambar dengan konten terlarang, silakan ganti lalu coba lagi",
   "growthArchiveAge": "{years}th {months}bln",
   "growthArchiveEmptyTitle": "Belum ada profil hewan",
-  "growthArchiveEmptyCreate": "Buat sekarang",
+  "growthArchiveEmptyCreate": "Buat Profil Sekarang",
   "growthArchiveNonOwnerTitle": "Diary khusus pemilik hewan. Ubah status hewan untuk membukanya.",
   "growthArchiveChangeStatus": "Ubah status",
   "growthArchiveTimelineEmpty": "Belum ada catatan",
@@ -1371,5 +1370,7 @@
   "diaryDemoBodyBalcony": "Ketemu tempat favoritnya di balkon. Sudut yang sama, jam yang sama, tiap pagi.",
   "@diaryDemoBodyBalcony": {"description": "Diary guest state: sample detail body for the balcony item"},
   "diaryDemoCommentTeaser": "Buat profil dulu buat ikut ngobrol di sini.",
-  "@diaryDemoCommentTeaser": {"description": "Diary guest state: sample detail comment teaser (tap goes to profile creation)"}
+  "@diaryDemoCommentTeaser": {"description": "Diary guest state: sample detail comment teaser (tap goes to profile creation)"},
+  "growthArchiveEmptyBody": "Buat profil si kecil dulu, yuk — biar semua momen, kesehatan, dan pencapaiannya punya rumah.",
+  "@growthArchiveEmptyBody": {"description": "Diary: state-A-no-profile guide body (UI spec A2)"}
 }
