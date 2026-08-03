@@ -4,7 +4,7 @@ baseline_commit: b324308a
 
 # Story 2.1: Diary 页状态分支单一入口
 
-Status: ready-for-dev
+Status: review
 
 > **所属**：V1.1.2 Epic 2 第一个 Story（**纯前端 · 薄但必须先立**）。交付：Diary 页（`/profile`）根节点的用户状态分支收敛为**单一判定入口**，四状态互斥分发。
 > ⚠️ **这是 AD-15 的基座**，Story 2.2（游客态）与 2.3（未建档态）的共同前置。若不先立，两条 story 会各自在同一个页面根上加判断，互相覆盖或漏掉状态组合。
@@ -58,19 +58,20 @@ so that **后续两条 story 各自往里加分支时不会互相覆盖或漏掉
 
 ### 🟩 前端子任务（petgo_app / Flutter）
 
-- [ ] **F1. 抽出状态分发入口** (AC: 1)
-  - [ ] `features/profile/presentation/growth_archive_page.dart`：在页面根抽出一处 `_resolveDiaryState()`（或等价命名）→ 返回四态枚举 → `switch` 分发到四个 widget。
-  - [ ] 状态判定输入：`authControllerProvider` 的 `isLoggedIn` / `profile.petStatus` / `profile.hasPetProfile`（沿用现有字段，不新增）。
-  - [ ] 清理页面内其它散落的用户状态判断，全部收敛到此处。
+- [x] **F1. 抽出状态分发入口** (AC: 1)
+  - [x] `features/profile/presentation/growth_archive_page.dart`：在页面根抽出一处 `resolveDiaryUserState()`（纯函数，顶层可测）→ 返回 `DiaryUserState` 四态枚举 → `switch` 分发到四个 widget。
+  - [x] 状态判定输入：`authControllerProvider` 的 `isLoggedIn` / `profile.petStatus` + 「有无档案」（沿用现有信号，不新增字段）。
+  - [x] 清理页面内其它散落的用户状态判断，全部收敛到此处。
 
-- [ ] **F2. 四分支布线** (AC: 1, 2)
-  - [ ] 已建档 → 现有档案页组件（原样引用，不改）。
-  - [ ] B/C → 既有「有宠专属」页组件（原样引用，不改）。
-  - [ ] 游客 / A 未建档 → 占位组件，标 `// TODO(2-2)` / `// TODO(2-3)`。
+- [x] **F2. 四分支布线** (AC: 1, 2)
+  - [x] 已建档 → 现有档案页组件（原样引用，不改）。
+  - [x] B/C → 既有「有宠专属」页组件（原样引用，不改）。
+  - [x] 游客 → 新增 `_GuestGuidePlaceholder`（标 `// TODO(2-2)`）；A 未建档 → 沿用既有 `_EmptyProfileView`（标 `// TODO(2-3)`）。
 
-- [ ] **F3. 测试** (AC: 1, 2, 3)
-  - [ ] widget test：四态各构造一次，断言渲染到正确分支（游客/未建档断言渲染占位）。
-  - [ ] 回归 test：门控未变——游客深链 `/profile` 仍 redirect；点 Tab 仍弹窗。
+- [x] **F3. 测试** (AC: 1, 2, 3)
+  - [x] widget test：四态各构造一次，断言渲染到正确分支（游客渲染占位、未建档渲染既有建档引导），并交叉断言未误落其它分支。
+  - [x] 纯函数 test：穷举 `isLoggedIn × petStatus × hasPetProfile` 组合，验互斥 + 穷尽 + 枚举恰好四态。
+  - [x] 回归 test：门控未变——`kUngatedTabs` 不含 Diary；游客深链 `/profile` 仍 redirect 回 `/home`；游客点 Diary Tab 仍弹强登录窗且不切换目的地。
 
 ### 🟨 联调验收子任务
 
@@ -113,22 +114,42 @@ so that **后续两条 story 各自往里加分支时不会互相覆盖或漏掉
 
 ### Agent Model Used
 
-_(待填)_
+claude-opus-5[1m]（本地 dev-story；L0 全绿 + L1 真后端验收 2/3 分支，第 3 条按用户决定留待验收）
 
 ### Debug Log References
 
-_(待填)_
+- **L0**：`flutter analyze` → **No issues found**；新增 `test/profile/growth_archive_state_branch_test.dart` **12 绿**；`flutter test` 全量 **521 绿 0 失败**（改前 509 → 零回归）。
+- **L1**（真后端：docker postgres+redis + `mvnw spring-boot:run`，`/actuator/health` = UP；模拟器 `petgo_phone` 装 `--dart-define=PETGO_API_BASE_URL=http://10.0.2.2:8080` 的 debug 包）：
+  - **状态 A · 未建档**（该账号真实态，后端 200 返回无档案）→ 渲染既有「No pet profile yet + Create now + Change status」，与改版前一致。截图 `l1-02-diary.png`。
+  - **状态 B/C**（经状态编辑器真实改为 PLANNING 落库）→ 渲染既有「有宠专属 + Change status」页，**不引导建档**（UX-DR6 回归基准）。截图 `l1-04-bc.png`。验完**已改回 HAS_PET**，账号恢复原状（`l1-05-restore.png`）。
+  - **状态 A · 已建档** → **未在真后端跑**：该模拟器账号刻意无档案（是 Story 2-3 的现成样本），建档会破坏样本、删档在后端是级联操作不可逆。**用户 2026-08-03 决定不建档、这条留待验收**。该分支渲染由 L0 widget test 覆盖（信息卡 + 分享 FAB 均在），且本 Story 对它是零改动引用。
+  - **游客分支**在 L1 不可达（门控未解，符合 AC3 预期）；其渲染 + 「不拉档案」由 widget test 覆盖。
 
 ### Completion Notes List
 
-_(待填)_
+**AD-15 落地方式**：页面根 `build()` 里只剩一次判定 —— 顶层纯函数 `resolveDiaryUserState(isLoggedIn, petStatus, hasPetProfile)` → `DiaryUserState` 四态枚举 → `switch` 分发。枚举 + 穷尽 switch 意味着 **2.2 / 2.3 想加状态必须改枚举，改了不布线就编译期报错**，不可能像原先那样各自在页面根塞 `if` 互相覆盖。
+
+- **「已建档」判定口径沿用真实档案，不用 `hasPetProfile` 字段**：登录响应里的 `hasPetProfile` 可能 stale（`me_page.dart` 早有同样注释），Dev Notes 提的两个信号里，这一个以 `petProfileProvider` 的真实结果代入 —— 既满足「不新增字段」，也保证 AC2 的零回归。加载中 / 失败态仍由原来的 `when(loading/error)` 承接，渲染逐字未动。
+- **顺带修掉一个真实隐患（游客不再拉档案）**：改版前游客进本页会订阅 `petProfileProvider`（游客 `petStatus` 为 null → 落入 HAS_PET 路径）。游客无令牌 → 401 → 拦截器弹全局强登录窗。现在游客分支短路，不订阅任何档案/时间线/统计 provider。门控未解时用户碰不到，但 **2.4 放行游客后这就是必现问题**，故在此一并封住，并用「fetch 次数 == 0」的断言常驻护栏。
+- **游客占位刻意不含文案**：门控在 2.4 才解除，本分支当前对真实用户不可达；提前写 ARB 会与 2.2 最终稿重复返工（OQ-1 的印尼语文案 + Milo 配图也未到）。占位只有 cream 底空屏 + `ValueKey('diaryGuestGuide')` 供测试寻址。
+- **未建档分支不写新占位**：直接沿用 V1.0.0 既有 `_EmptyProfileView`（含「删档后可切回 B/C」的逃生入口，bug 20260702-237），标 `// TODO(2-3)`。比塞一个 stub 更符合 AC2 的零回归要求。
+- **门控零改动已被机械化断言**：`kUngatedTabs` 仍为 `{Discovery}`、游客深链 `/profile` 仍 redirect 回 `/home`、游客点 Diary Tab 仍弹 `LoginHardDialog` 且不切换目的地 —— 三条断言常驻，2.4 改门控时会正面撞上它们（届时按 2.4 的 AC 更新，不得静默删除）。
+- **零后端改动、零迁移。**
 
 ### File List
 
-_(待填)_
+**前端（修改）：**
+- `petgo_app/lib/features/profile/presentation/growth_archive_page.dart`（新增 `DiaryUserState` 枚举 + `resolveDiaryUserState()` 单一判定入口 + switch 四分支布线 + `_ownerBranch` 抽出 + `_GuestGuidePlaceholder` 占位 + 类文档更新）
+
+**测试（新增）：**
+- `petgo_app/test/profile/growth_archive_state_branch_test.dart`（L0，12：纯函数穷举 5 + 四分支渲染 4 + 门控回归 3）
+
+**规划产物（修改）：**
+- `_bmad-output/implementation-artifacts/v1.1.2/2-1-diary-页状态分支单一入口.md`、`_bmad-output/implementation-artifacts/sprint-status-v1.1.2.yaml`
 
 ## Change Log
 
 | 日期 | 变更 | 说明 |
 |---|---|---|
 | 2026-08-02 | create-story | 依据 epics-v1.1.2 Story 2.1 + AD-15 生成。baseline=b324308a。 |
+| 2026-08-03 | dev-story | Diary 页四态收敛为单一判定入口：顶层纯函数 `resolveDiaryUserState` + `DiaryUserState` 枚举 + 穷尽 switch 分发；已建档 / B·C 两分支零改动引用，游客为新占位（TODO 2-2）、未建档沿用既有空态（TODO 2-3）。顺带封住「游客进本页会拉档案 → 401 弹强登录窗」的隐患（2.4 放行后必现），并以 fetch 次数断言常驻。L0：analyze 零问题 / 新测 12 / 全量 521 绿。L1：真后端验通未建档 + B·C（改 PLANNING 后已改回 HAS_PET）；「已建档」按用户决定不建测试档案，留待验收。门控未解（`kUngatedTabs` 不含 Diary，深链与 Tab 点击回归断言常驻）。 |

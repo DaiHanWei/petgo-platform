@@ -26,10 +26,45 @@ import 'widgets/pet_info_card.dart';
 import 'widgets/share_fab.dart';
 import 'widgets/timeline_tiles.dart';
 
-/// 成长档案 Tab 主屏（Story 2.4）。三态：
-/// - 状态 A + 有档案 → 信息卡 + FAB 占位 + 倒序时间线；
-/// - 状态 A + 无档案 → 空状态「立即创建」；
+/// Diary 页（`/profile`）的四种用户状态（V1.1.2 · AD-15）。
+///
+/// **互斥且穷尽**：新增状态需改本枚举 → 分发处 `switch` 编译期报错，不会静默漏分支。
+enum DiaryUserState {
+  /// 游客（未登录）→ FR-80 游客引导态（Story 2.2 填充）。
+  guest,
+
+  /// 状态 B / C（PLANNING / ENTHUSIAST）→ 既有「有宠专属 + 修改宠物状态入口」页。
+  nonOwner,
+
+  /// 状态 A（HAS_PET）但无宠物档案 → FR-0G 建档引导（Story 2.3 填充）。
+  ownerWithoutProfile,
+
+  /// 状态 A 且已建档 → 真实成长档案页。
+  ownerWithProfile,
+}
+
+/// AD-15 唯一状态判定：按序（游客 → 非有宠 → 有无档案）分发，不留隐式 fallback。
+///
+/// `petStatus` 未知（null，如 profile 尚未回填）按 HAS_PET 处理 —— 与改版前行为一致。
+/// 不新增字段：只吃 `isLoggedIn` / `petStatus` / 「有无档案」三个既有信号。
+DiaryUserState resolveDiaryUserState({
+  required bool isLoggedIn,
+  required String? petStatus,
+  required bool hasPetProfile,
+}) {
+  if (!isLoggedIn) return DiaryUserState.guest;
+  if (petStatus != null && petStatus != 'HAS_PET') return DiaryUserState.nonOwner;
+  return hasPetProfile ? DiaryUserState.ownerWithProfile : DiaryUserState.ownerWithoutProfile;
+}
+
+/// Diary（成长档案）Tab 主屏。四态由 [resolveDiaryUserState] **单一入口**分发（AD-15）：
+/// - 游客 → FR-80 游客引导态（本 Story 为占位，2.2 填充）；
+/// - 状态 A + 无档案 → FR-0G 建档引导（本 Story 沿用既有空状态，2.3 填充）；
+/// - 状态 A + 有档案 → 信息卡 + 分享 FAB + 倒序时间线；
 /// - 状态 B/C → 「有宠专属」+ 修改状态入口。
+///
+/// ⚠️ 本页**任何其它位置不得再判用户状态**（AD-15 核心约束）——要加状态相关分支，
+/// 一律扩 [DiaryUserState] 并在下面的 switch 里布线。
 class GrowthArchivePage extends ConsumerWidget {
   const GrowthArchivePage({super.key});
 
@@ -38,13 +73,40 @@ class GrowthArchivePage extends ConsumerWidget {
     final auth = ref.watch(authControllerProvider);
     final petStatus = auth.profile?.petStatus;
 
-    // PLANNING/ENTHUSIAST：非有宠态。
-    if (petStatus != null && petStatus != 'HAS_PET') {
-      return _NonOwnerView(onChangeStatus: () => _openStatusEditor(context, ref));
-    }
+    // 仅「有宠路径」订阅档案：游客无令牌，订阅会打出 401 → 全局强登录引导
+    // （门控在 2.4 放行游客进本页后即暴露）；非有宠态本就无档案可拉。
+    // 该条件与 resolveDiaryUserState 返回两个 owner 态的条件等价，故下面 `profileAsync!` 安全。
+    final ownerPath = auth.isLoggedIn && (petStatus == null || petStatus == 'HAS_PET');
+    final profileAsync = ownerPath ? ref.watch(petProfileProvider) : null;
 
-    // HAS_PET（或未知）：据是否有档案分支。
-    final profileAsync = ref.watch(petProfileProvider);
+    // ===== AD-15：全页唯一的用户状态判定 + 分发 =====
+    final state = resolveDiaryUserState(
+      isLoggedIn: auth.isLoggedIn,
+      petStatus: petStatus,
+      // 「已建档」以真实档案为准，不信任登录响应里可能 stale 的 hasPetProfile（与「我的」页同口径）。
+      // 加载中 / 失败先落 ownerWithoutProfile，两者的具体渲染由 _ownerBranch 内的
+      // when(loading/error) 承接 —— 行为与改版前完全一致。
+      hasPetProfile: profileAsync?.asData?.value != null,
+    );
+
+    return switch (state) {
+      DiaryUserState.guest => const _GuestGuidePlaceholder(),
+      DiaryUserState.nonOwner =>
+        _NonOwnerView(onChangeStatus: () => _openStatusEditor(context, ref)),
+      DiaryUserState.ownerWithoutProfile ||
+      DiaryUserState.ownerWithProfile =>
+        _ownerBranch(context, ref, profileAsync!, state),
+    };
+  }
+
+  /// 状态 A 外壳（已建档 / 未建档共用）：cream 底 + 分享 FAB + 档案加载态。
+  /// **零改动**沿用改版前实现（AC2 的回归基准）。
+  Widget _ownerBranch(
+    BuildContext context,
+    WidgetRef ref,
+    AsyncValue<PetProfile?> profileAsync,
+    DiaryUserState state,
+  ) {
     return Scaffold(
       backgroundColor: AppColors.cream,
       // 分享名片 FAB（Story 2.7）：仅 A + 有档案 + 有 cardToken 渲染；动效首访一次。
@@ -53,17 +115,20 @@ class GrowthArchivePage extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, stack) => _EmptyProfileView(onCreate: () => context.push('/profile/create')),
         data: (profile) {
-          if (profile == null) {
-            // 状态 A 但无档案（多为删档后）：除「立即创建」外，给切换状态入口——
-            // 否则用户被困在 A 无法回 B/C（bug 20260702-237）。
-            return _EmptyProfileView(
-              onCreate: () => context.push('/profile/create'),
-              onChangeStatus: () => _openStatusEditor(context, ref),
+          // state 与本次 build 的 asData 同源，故 ownerWithProfile ⟺ profile != null；
+          // 判空仅为空安全，不构成第二处状态判定。
+          if (state == DiaryUserState.ownerWithProfile && profile != null) {
+            return _ArchiveBody(
+              profile: profile,
+              onEditProfile: () => context.push('/profile/edit'),
             );
           }
-          return _ArchiveBody(
-            profile: profile,
-            onEditProfile: () => context.push('/profile/edit'),
+          // TODO(2-3): 替换为 FR-0G 建档引导的新实现。
+          // 当前沿用 V1.0.0 既有空状态（零回归占位）：状态 A 但无档案（多为删档后）除
+          // 「立即创建」外给切换状态入口——否则用户被困在 A 无法回 B/C（bug 20260702-237）。
+          return _EmptyProfileView(
+            onCreate: () => context.push('/profile/create'),
+            onChangeStatus: () => _openStatusEditor(context, ref),
           );
         },
       ),
@@ -606,6 +671,22 @@ class _EmptyProfileView extends StatelessWidget {
       ),
     );
   }
+}
+
+/// TODO(2-2): 替换为 FR-80 游客引导态真实实现（Milo 引导 + 五类条目渲染组件）。
+///
+/// Story 2.1 只负责立分支挂载点。刻意**不含用户可见文案**：登录门控到 Story 2.4 才解除，
+/// 本分支当前对真实用户不可达（游客深链被 redirect、点 Tab 弹强登录窗），
+/// 提前写 ARB 文案会与 2.2 的最终稿重复返工（OQ-1 印尼语文案 + Milo 配图亦未到）。
+class _GuestGuidePlaceholder extends StatelessWidget {
+  const _GuestGuidePlaceholder();
+
+  @override
+  Widget build(BuildContext context) => const Scaffold(
+        key: ValueKey('diaryGuestGuide'),
+        backgroundColor: AppColors.cream,
+        body: SizedBox.expand(),
+      );
 }
 
 class _NonOwnerView extends StatelessWidget {
