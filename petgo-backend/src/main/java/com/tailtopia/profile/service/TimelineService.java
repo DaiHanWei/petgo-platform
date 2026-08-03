@@ -9,7 +9,10 @@ import com.tailtopia.profile.dto.CalendarMonthResponse;
 import com.tailtopia.profile.dto.DayDetailResponse;
 import com.tailtopia.profile.dto.TimelineItemResponse;
 import com.tailtopia.profile.dto.TimelinePageResponse;
+import com.tailtopia.profile.domain.IdCard;
 import com.tailtopia.profile.repository.HealthRecordRepository;
+import com.tailtopia.profile.repository.IdCardRepository;
+import com.tailtopia.profile.repository.MilestoneCompletionRepository;
 import com.tailtopia.profile.service.HealthEventTimelineSource.HealthEventView;
 import com.tailtopia.shared.error.AppException;
 import java.time.Instant;
@@ -19,8 +22,10 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.TreeMap;
+import org.springframework.data.domain.PageRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -45,8 +50,12 @@ public class TimelineService {
     private static final int MAX_FETCH = 500;
 
     /**
-     * 时间线全局序（AD-1）：事件日期倒序 → 同日发布/完成时刻倒序。
-     * 同日方向<b>沿用重构前行为</b>（AC6 零回归）；FR-82 的「同日正序」口径属 Story 3.2 排序规则范畴。
+     * 时间线**取数/游标序**（AD-1）：事件日期倒序 → 同日发布/完成时刻倒序。
+     *
+     * <p>⚠️ 这是**内部序**，不等于对外展示序。FR-82 / Story 3.2 AC5 要求「整体按事件日期倒序、
+     * **同日按发布或完成时间正序**」，实现方式是**页内重排**（见 {@link #withinDayAscending}）而非改本比较器：
+     * 游标语义依赖「同日倒序 + 严格小于锚点」，若把比较器改成同日正序，取下一页时会把该日较晚的条目
+     * 再取一遍（重复）。同日条目不跨页（Rule 3）保证了页内重排绝对安全。
      */
     private static final Comparator<TimelineItemResponse> TIMELINE_ORDER =
             Comparator.comparing(TimelineItemResponse::effectiveDate)
@@ -58,15 +67,20 @@ public class TimelineService {
     private final ObjectProvider<HealthEventTimelineSource> healthSource;
     private final MilestoneService milestoneService;
     private final HealthRecordRepository healthRecords;
+    private final MilestoneCompletionRepository milestoneCompletions;
+    private final IdCardRepository idCards;
 
     public TimelineService(ProfileService profileService, ContentService contentService,
             ObjectProvider<HealthEventTimelineSource> healthSource,
-            MilestoneService milestoneService, HealthRecordRepository healthRecords) {
+            MilestoneService milestoneService, HealthRecordRepository healthRecords,
+            MilestoneCompletionRepository milestoneCompletions, IdCardRepository idCards) {
         this.profileService = profileService;
         this.contentService = contentService;
         this.healthSource = healthSource;
         this.milestoneService = milestoneService;
         this.healthRecords = healthRecords;
+        this.milestoneCompletions = milestoneCompletions;
+        this.idCards = idCards;
     }
 
     /**
@@ -109,12 +123,14 @@ public class TimelineService {
         }
 
         List<TimelineItemResponse> page = cut.page();
+        // 游标取**内部序**（同日倒序）的末条：它是本页最后一天里最早的一条，
+        // 「严格小于它」正好跳过整个已输出的日期区间（重排后再取会重复，见 withinDayAscending）。
         String nextCursor = null;
         if (cut.hasMore() && !page.isEmpty()) {
             TimelineItemResponse last = page.get(page.size() - 1);
             nextCursor = new TimelineAnchor(last.effectiveDate(), last.date()).encode();
         }
-        return new TimelinePageResponse(page, nextCursor, cut.hasMore());
+        return new TimelinePageResponse(withinDayAscending(page), nextCursor, cut.hasMore());
     }
 
     /** 一次截断的结果。{@code complete=false} 表示本批未能把边界所在的那一天取全，需放大批次重取。 */
@@ -139,26 +155,33 @@ public class TimelineService {
      * 不做这层区分，会把「批次边界」误判成「当天结束」，同日条目仍会被拆到两页（AC3 破）。
      */
     private Batch fetchMerged(long ownerId, long petId, TimelineAnchor anchor, int fetch) {
-        List<TimelineItemResponse> merged = new ArrayList<>();
         boolean allKnown = true;
         TimelineAnchor floor = null;
 
+        // ===== 源① Diary 内容（类①/② 候选：还不知道自己是普通照片卡还是带徽章的） =====
+        List<TimelineClassifier.ContentCandidate> contents = new ArrayList<>();
         List<GrowthMomentView> growth = contentService.findGrowthMomentsBeforeAnchor(
                 ownerId, petId, anchor.eventDate(), anchor.sameDayKey(), anchor.createdAtUpperBound(), fetch);
         for (GrowthMomentView g : growth) {
-            merged.add(TimelineItemResponse.happyMoment(
+            contents.add(new TimelineClassifier.ContentCandidate(
                     g.id(), g.createdAt(), g.eventDate(), g.imageUrls(), g.text()));
         }
         if (growth.size() >= fetch) {
             allKnown = false;
-            floor = newestFloor(floor, anchorOf(merged.get(merged.size() - 1)));
+            GrowthMomentView last = growth.get(growth.size() - 1);
+            LocalDate eff = last.eventDate() != null
+                    ? last.eventDate()
+                    : last.createdAt().atZone(ZoneOffset.UTC).toLocalDate();
+            floor = newestFloor(floor, new TimelineAnchor(eff, last.createdAt()));
         }
 
+        // ===== 源② 问诊存档（类④，V1.0.0 既有源）=====
+        List<TimelineItemResponse> healthItems = new ArrayList<>();
         HealthEventTimelineSource health = healthSource.getIfAvailable();
         if (health != null) {
             List<HealthEventView> events = health.recentHealthEvents(ownerId, anchor.createdAtUpperBound(), fetch);
             for (HealthEventView h : events) {
-                merged.add(TimelineItemResponse.healthEvent(
+                healthItems.add(TimelineItemResponse.healthEvent(
                         h.createdAt(), h.aiLevel(), h.symptomSummary(), h.sourceType(), h.sourceRef()));
             }
             if (events.size() >= fetch) {
@@ -169,8 +192,74 @@ public class TimelineService {
             }
         }
 
+        // ===== 源③ 结构化健康记录（类④，Story 3.2 新增；只读镜像，不提供编辑入口）=====
+        List<HealthRecord> records = healthRecords.findBeforeAnchor(
+                petId, anchor.eventDate(), anchor.sameDayKey(), PageRequest.ofSize(fetch));
+        for (HealthRecord r : records) {
+            healthItems.add(TimelineItemResponse.healthRecord(r.getId(), r.getCreatedAt(),
+                    r.getEventDate(), r.getType() == null ? null : r.getType().name(), r.getNote()));
+        }
+        if (records.size() >= fetch) {
+            allKnown = false;
+            HealthRecord last = records.get(records.size() - 1);
+            floor = newestFloor(floor, new TimelineAnchor(last.getEventDate(), last.getCreatedAt()));
+        }
+
+        // ===== 源④ 里程碑完成（类②/③，Story 3.2 新增；经域内只读视图取数）=====
+        List<MilestoneTimelineView> milestones = milestoneCompletions.findTimelineViewsBefore(
+                petId, anchor.createdAtUpperBound(), PageRequest.ofSize(fetch));
+        if (milestones.size() >= fetch) {
+            allKnown = false;
+            MilestoneTimelineView last = milestones.get(milestones.size() - 1);
+            floor = newestFloor(floor, new TimelineAnchor(
+                    last.completedAt().atZone(ZoneOffset.UTC).toLocalDate(), last.completedAt()));
+        }
+
+        // ===== 源⑤ 身份证首次生成（类⑤，Story 3.2 新增）=====
+        // 每用户卡片数量极少（V1 单宠物），全量取后在内存里挑「最早一张」作为首次生成事件，
+        // 无需为它加一条专用查询；锚点过滤同样在内存完成。
+        List<TimelineItemResponse> idCardIssues = new ArrayList<>();
+        List<IdCard> cards = idCards.findByUserIdOrderByCreatedAtDesc(ownerId);
+        if (!cards.isEmpty()) {
+            IdCard first = cards.get(cards.size() - 1); // 倒序列表的末尾 = 最早生成
+            Instant issuedAt = first.getCreatedAt();
+            if (issuedAt != null && issuedAt.isBefore(anchor.createdAtUpperBound())) {
+                idCardIssues.add(TimelineItemResponse.idCardIssued(issuedAt,
+                        first.getCardNo() == null || first.getCardNo().isBlank()
+                                ? null : first.getCardNo()));
+            }
+        }
+
+        // ===== 五步优先级实时分类（不落库；见 TimelineClassifier 的安全说明）=====
+        // 分类要用「当天有无健康条目」这一当天视角的事实，因此必须在**归并前**、拿到本批各源全量后做。
+        // 未进入可信前缀的那几天可能分类不完整，但它们同样不会进入本页（见 cutOnDayBoundary），不影响正确性。
+        List<TimelineItemResponse> merged =
+                new ArrayList<>(TimelineClassifier.classify(contents, healthItems, milestones, idCardIssues));
+
         merged.sort(TIMELINE_ORDER);
         return new Batch(merged, allKnown, floor);
+    }
+
+    /**
+     * 页内重排：日期倒序不变，**同日内改为发布/完成时间正序**（AC5）。
+     *
+     * <p>为什么放在最后做：游标与截断都依赖「同日倒序」的内部序（见 {@link #TIMELINE_ORDER}），
+     * 而同日条目不跨页（AD-1 Rule 3）意味着重排只发生在页内、绝不影响页边界与游标。
+     * ⚠️ 因此 {@code nextCursor} 必须在重排**之前**用内部序的末条算出（重排后末条是该日最早的一条，
+     * 拿它当锚点会把该日较晚的条目再取一遍）。
+     */
+    private static List<TimelineItemResponse> withinDayAscending(List<TimelineItemResponse> page) {
+        Map<LocalDate, List<TimelineItemResponse>> byDay = new LinkedHashMap<>();
+        for (TimelineItemResponse item : page) {
+            byDay.computeIfAbsent(item.effectiveDate(), d -> new ArrayList<>()).add(item);
+        }
+        List<TimelineItemResponse> out = new ArrayList<>(page.size());
+        for (List<TimelineItemResponse> sameDay : byDay.values()) {
+            List<TimelineItemResponse> asc = new ArrayList<>(sameDay);
+            asc.sort(Comparator.comparing(TimelineItemResponse::date));
+            out.addAll(asc);
+        }
+        return List.copyOf(out);
     }
 
     private static TimelineAnchor anchorOf(TimelineItemResponse item) {

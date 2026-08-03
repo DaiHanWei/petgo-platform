@@ -43,6 +43,8 @@ class TimelineCursorMergeTest {
     private HealthEventTimelineSource health;
     @SuppressWarnings("unchecked")
     private final ObjectProvider<HealthEventTimelineSource> healthProvider = Mockito.mock(ObjectProvider.class);
+    private com.tailtopia.profile.repository.MilestoneCompletionRepository milestoneCompletions;
+    private com.tailtopia.profile.repository.IdCardRepository idCards;
     private TimelineService service;
 
     /** 内存假数据集：模拟 DB 的锚点取数语义（严格小于锚点、按全局序倒排、源内不截断到页大小）。 */
@@ -91,7 +93,15 @@ class TimelineCursorMergeTest {
                     .toList();
         });
 
-        service = new TimelineService(profileService, contentService, healthProvider, milestoneService, healthRecords);
+                // Story 3.2 新增的两个源（本类不造它们的数据 → 返回空列表，等价于「只有内容 + 问诊存档」）。
+        milestoneCompletions =
+                Mockito.mock(com.tailtopia.profile.repository.MilestoneCompletionRepository.class);
+        idCards = Mockito.mock(com.tailtopia.profile.repository.IdCardRepository.class);
+        when(milestoneCompletions.findTimelineViewsBefore(anyLong(), Mockito.any(), Mockito.any()))
+                .thenReturn(List.of());
+        when(idCards.findByUserIdOrderByCreatedAtDesc(anyLong())).thenReturn(List.of());
+        service = new TimelineService(profileService, contentService, healthProvider, milestoneService,
+                healthRecords, milestoneCompletions, idCards);
     }
 
     // ===== 锚点编解码（AC1） =====
