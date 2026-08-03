@@ -350,7 +350,8 @@ public class TimelineService {
             int day = g.eventDate().getDayOfMonth();
             CalendarMonthResponse.DayCell existing = byDay.get(day);
             if (existing == null) {
-                byDay.put(day, new CalendarMonthResponse.DayCell(day, g.firstImageUrl(), true, false, null));
+                byDay.put(day,
+                        new CalendarMonthResponse.DayCell(day, g.firstImageUrl(), true, false, null, 0));
             }
             // 同日后续记录不覆盖首图（已是最早 created_at）。
         }
@@ -363,10 +364,11 @@ public class TimelineService {
                 int day = h.createdAt().atZone(ZoneOffset.UTC).toLocalDate().getDayOfMonth();
                 CalendarMonthResponse.DayCell c = byDay.get(day);
                 if (c == null) {
-                    byDay.put(day, new CalendarMonthResponse.DayCell(day, null, false, true, null));
+                    byDay.put(day,
+                            new CalendarMonthResponse.DayCell(day, null, false, true, null, 0));
                 } else if (!c.hasHealthEvent()) {
-                    byDay.put(day, new CalendarMonthResponse.DayCell(
-                            day, c.firstImageUrl(), c.hasHappyMoment(), true, c.healthRecordType()));
+                    byDay.put(day, new CalendarMonthResponse.DayCell(day, c.firstImageUrl(),
+                            c.hasHappyMoment(), true, c.healthRecordType(), c.healthRecordCount()));
                 }
             }
         }
@@ -382,10 +384,13 @@ public class TimelineService {
             CalendarMonthResponse.DayCell c = byDay.get(day);
             String type = r.getType() == null ? null : r.getType().name();
             if (c == null) {
-                byDay.put(day, new CalendarMonthResponse.DayCell(day, null, false, false, type));
-            } else if (c.healthRecordType() == null) {
-                byDay.put(day, new CalendarMonthResponse.DayCell(
-                        day, c.firstImageUrl(), c.hasHappyMoment(), c.hasHealthEvent(), type));
+                byDay.put(day, new CalendarMonthResponse.DayCell(day, null, false, false, type, 1));
+            } else {
+                // 首条决定 type（保持现状），条数累计 —— Story 3.4 只加这一维，不重建已有五维。
+                byDay.put(day, new CalendarMonthResponse.DayCell(day, c.firstImageUrl(),
+                        c.hasHappyMoment(), c.hasHealthEvent(),
+                        c.healthRecordType() == null ? type : c.healthRecordType(),
+                        c.healthRecordCount() + 1));
             }
         }
 
@@ -393,7 +398,11 @@ public class TimelineService {
     }
 
     /**
-     * 当天详情（Story 2.4 R2 · F9）：某 event_date 当天快乐时刻 + 健康事件，created_at **正序**。
+     * 当天详情（Story 2.4 R2 · F9 · Story 3.4 扩为三源）：某 event_date 当天的
+     * 快乐时刻 + 问诊健康事件 + **结构化健康记录**。
+     *
+     * <p>排序（AD-10 / UX-DR12，覆盖 FR-37 原「按发布时间正序」）：**先按大类** diary &gt; 问诊 &gt;
+     * 健康记录，**类内**再按时间正序。⚠️ 先补齐第三个数据源再改排序 —— 只改排序会漏掉整整一类条目。
      */
     @Transactional(readOnly = true)
     public DayDetailResponse getDayDetail(long ownerId, LocalDate date) {
@@ -411,7 +420,15 @@ public class TimelineService {
                 items.add(TimelineItemResponse.healthEvent(h.createdAt(), h.aiLevel(), h.symptomSummary(), h.sourceType(), h.sourceRef()));
             }
         }
-        items.sort(Comparator.comparing(TimelineItemResponse::date)); // created_at 正序
+        // 结构化健康记录（第三源，Story 3.4）：按 event_date 取当天。
+        for (HealthRecord r : healthRecords.findByPetProfileIdAndEventDateBetweenOrderByEventDateAscIdAsc(
+                profile.getId(), date, date)) {
+            items.add(TimelineItemResponse.healthRecord(r.getId(), r.getCreatedAt(), r.getEventDate(),
+                    r.getType() == null ? null : r.getType().name(), r.getNote()));
+        }
+        // 大类优先级：diary(0) > 问诊(1) > 健康记录(2)；类内按时间正序。
+        items.sort(Comparator.comparingInt(TimelineService::dayDetailCategory)
+                .thenComparing(TimelineItemResponse::date));
         return new DayDetailResponse(date, List.copyOf(items));
     }
 
@@ -428,6 +445,17 @@ public class TimelineService {
         MilestoneService.MilestoneProgress progress =
                 milestoneService.getProgress(profile.getId(), profile.getPetType());
         return new ArchiveStatsResponse(happy, consult, progress.completed(), progress.total());
+    }
+
+    /** 当天详情的大类序号（AD-10）：diary=0 &gt; 问诊=1 &gt; 结构化健康记录=2。 */
+    private static int dayDetailCategory(TimelineItemResponse item) {
+        if (TimelineItemResponse.HEALTH_EVENT.equals(item.kind())) {
+            return 1;
+        }
+        if (TimelineItemResponse.HEALTH_RECORD.equals(item.kind())) {
+            return 2;
+        }
+        return 0; // 快乐时刻（含类②）
     }
 
     private PetProfile requireProfile(long ownerId) {

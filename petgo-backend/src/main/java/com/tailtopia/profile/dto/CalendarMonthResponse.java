@@ -17,17 +17,25 @@ public record CalendarMonthResponse(int year, int month, List<DayCell> days) {
     /**
      * 单日格子。
      *
-     * <p>前端角标优先级（bug 20260722-352）：diary 图（{@code firstImageUrl}）&gt; 问诊（{@code hasHealthEvent}）
-     * &gt; 健康记录分类图标（{@code healthRecordType}）。
+     * <p>前端格子优先级（Story 3.4 · FR-84 · UX-DR11，**只显一个标记**）：
+     * ① diary 带图 → 首图铺满（不叠角标）→ ② 有 diary 但全无图 → 通用 diary 标记 →
+     * ③ 无 diary 有问诊 → 🏥 → ④ 只有结构化健康记录 → 单条用类型图标、**多条用通用医疗箱**
+     * → ⑤ 无记录 → 「+」/置灰。
      *
-     * @param day              日（1-31）
-     * @param firstImageUrl    该日最早 created_at 快乐时刻的首图（无图/无快乐时刻为 null）
-     * @param hasHappyMoment   当日有快乐时刻
-     * @param hasHealthEvent   当日有健康事件（问诊；🏥 角标）
-     * @param healthRecordType 当日健康记录分类枚举名（VACCINE/DEWORM/MENSTRUATION/NEUTER/CUSTOM），无则 null
-     *                         —— 前端映射为与健康记录页一致的分类小图标
+     * <p>⚠️ **与时间线的优先级方向相反，且刻意不对齐**（AD-16）：时间线是逐条分类（同一天既有带图日记
+     * 又有疫苗记录时出两条），日历是整天取一个代表标记（只显日记首图）。粒度不同所以规则不同 ——
+     * **不得为了「统一」而对齐**。
+     *
+     * @param day               日（1-31）
+     * @param firstImageUrl     该日最早 created_at 快乐时刻的首图（无图/无快乐时刻为 null）
+     * @param hasHappyMoment    当日有快乐时刻（**纯文字日记也为 true** —— 前端判定优先级② 用它，
+     *                          不能只看 firstImageUrl，否则纯文字日记会掉到问诊图标去，那正是要修的缺陷）
+     * @param hasHealthEvent    当日有健康事件（问诊；🏥）
+     * @param healthRecordType  当日**首条**结构化健康记录的分类枚举名，无则 null
+     * @param healthRecordCount 当日结构化健康记录**条数**（Story 3.4 新增的唯一一维）：
+     *                          多于一条时前端用通用医疗箱图标，具体各条进当天详情看
      */
     public record DayCell(int day, String firstImageUrl, boolean hasHappyMoment, boolean hasHealthEvent,
-            String healthRecordType) {
+            String healthRecordType, int healthRecordCount) {
     }
 }

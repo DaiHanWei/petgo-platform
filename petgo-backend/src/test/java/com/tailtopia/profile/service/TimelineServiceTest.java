@@ -216,10 +216,10 @@ class TimelineServiceTest {
         assertThat(d20.hasHealthEvent()).isTrue();
     }
 
-    // ===== R2 · AC6 当天详情（created_at 正序） =====
+    // ===== R2 · AC6 当天详情（Story 3.4 起：大类优先 diary > 问诊 > 健康记录，类内按时间） =====
 
     @Test
-    void dayDetailMergesAndSortsByCreatedAtAsc() {
+    void dayDetailSortsByCategoryThenTime() {
         when(profileService.findByOwnerId(1L)).thenReturn(Optional.of(pet(PetType.CAT)));
         HealthEventTimelineSource health = Mockito.mock(HealthEventTimelineSource.class);
         when(healthProvider.getIfAvailable()).thenReturn(health);
@@ -231,9 +231,10 @@ class TimelineServiceTest {
         DayDetailResponse resp = service.getDayDetail(1L, LocalDate.parse("2026-06-02"));
 
         assertThat(resp.items()).hasSize(2);
-        // created_at 正序：07:00 健康事件在前，08:00 快乐时刻在后。
-        assertThat(resp.items().get(0).kind()).isEqualTo(TimelineItemResponse.HEALTH_EVENT);
-        assertThat(resp.items().get(1).kind()).isEqualTo(TimelineItemResponse.HAPPY_MOMENT);
+        // Story 3.4 · AC5（覆盖 FR-37 原「纯按发布时间正序」）：**先按大类**排。
+        // 因此 08:00 的 diary 排在 07:00 的问诊之前 —— 时间不再是第一排序键。
+        assertThat(resp.items().get(0).kind()).isEqualTo(TimelineItemResponse.HAPPY_MOMENT);
+        assertThat(resp.items().get(1).kind()).isEqualTo(TimelineItemResponse.HEALTH_EVENT);
     }
 
     // ===== R2 · AC5 统计栏 =====
