@@ -39,9 +39,13 @@ class AdminConsultOrderServiceTest {
         svc = new AdminConsultOrderService(orders, stageEvents, audit);
     }
 
+    private long idSeq = 0;
+
     private ConsultOrder order(String token, ConsultOrderStatus status, boolean refundRejected) {
         ConsultOrder o = ConsultOrder.inProgress(token, 100L, 9L, 3L, 50000L, PayChannel.QRIS, null,
                 30000L, 60, 50000L, Instant.now());
+        set(o, "id", ++idSeq); // bug 313 后 toRow 组 displayNo 需 id+createdAt（非持久化单测须手工设）
+        set(o, "createdAt", Instant.now());
         set(o, "status", status);
         set(o, "refundRejected", refundRejected);
         return o;

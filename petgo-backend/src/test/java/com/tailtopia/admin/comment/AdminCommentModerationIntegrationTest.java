@@ -3,8 +3,10 @@ package com.tailtopia.admin.comment;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tailtopia.admin.comment.service.AdminCommentModerationService;
+import com.tailtopia.admin.moderation.service.AdminCommentManageService;
 import com.tailtopia.auth.domain.User;
 import com.tailtopia.content.domain.Comment;
+import com.tailtopia.content.domain.CommentModerationStatus;
 import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.dto.ContentPostCreateRequest;
 import com.tailtopia.content.repository.CommentRepository;
@@ -15,12 +17,15 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 /**
- * L1（Story 9.9）：真 pg——评论 admin 主动下架落 deletedAt + 公开过滤 + 恢复。
+ * L1（Story 9.9 · 两线合并后）：真 pg——评论后台下架走审核线语义
+ * （可见性态 TAKEN_DOWN、<b>不软删</b>、作者视角保留）+ 恢复回 VISIBLE + 列表读取。
  */
 class AdminCommentModerationIntegrationTest extends ApiIntegrationTest {
 
     @Autowired
     private AdminCommentModerationService service;
+    @Autowired
+    private AdminCommentManageService manage;
     @Autowired
     private ContentService contentService;
     @Autowired
@@ -39,15 +44,15 @@ class AdminCommentModerationIntegrationTest extends ApiIntegrationTest {
     void takedownThenRestore() {
         long cid = seedComment();
 
-        service.takedown(cid, 1L);
+        manage.takedownComment(cid, "违规测试", 1L);
         Comment down = comments.findById(cid).orElseThrow();
-        assertThat(down.isDeleted()).isTrue();
-        // 公开口径过滤：软删评论不入 findByPostIdAndDeletedAtIsNull。
-        assertThat(comments.findByPostIdAndDeletedAtIsNull(down.getPostId()))
-                .extracting(Comment::getId).doesNotContain(cid);
+        // 审核线语义：可见性态迁移（作者仍可见自己的评论），不软删。
+        assertThat(down.getModerationStatus()).isEqualTo(CommentModerationStatus.TAKEN_DOWN);
+        assertThat(down.isDeleted()).isFalse();
 
-        service.restore(cid, 1L);
-        assertThat(comments.findById(cid).orElseThrow().isDeleted()).isFalse();
+        manage.restoreComment(cid, 1L);
+        assertThat(comments.findById(cid).orElseThrow().getModerationStatus())
+                .isEqualTo(CommentModerationStatus.VISIBLE);
     }
 
     @Test

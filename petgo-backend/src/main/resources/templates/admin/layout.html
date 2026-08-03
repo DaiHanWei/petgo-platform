@@ -31,7 +31,7 @@
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.proactive_takedown')"
                    th:href="@{/admin/comments}" th:classappend="${active == 'comments'} ? 'active'"
                    th:text="#{admin.nav.comments}">评论管理</a>
-                <a sec:authorize="hasRole('SUPER_ADMIN')"
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.manual_review')"
                    th:href="@{/admin/manual-review}" th:classappend="${active == 'manual-review'} ? 'active'"
                    th:text="#{admin.nav.review}">人工审核</a>
                 <!-- stag 独有功能（名称/头像审核，content.takedown）：v1.1-dev 的导航重构未含此入口，合并时补回避免入口丢失。 -->

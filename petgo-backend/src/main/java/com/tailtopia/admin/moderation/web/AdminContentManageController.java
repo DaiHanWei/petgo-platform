@@ -26,6 +26,8 @@ public class AdminContentManageController {
 
     private static final String BROWSE_AUTH =
             "hasRole('SUPER_ADMIN') or hasAuthority('content.proactive_takedown')";
+    private static final String VIEW_AUTH =
+            "hasRole('SUPER_ADMIN') or hasAuthority('content.view') or hasAuthority('content.proactive_takedown')";
     private static final String RESTORE_AUTH =
             "hasRole('SUPER_ADMIN') or hasAuthority('content.restore')";
 
@@ -36,7 +38,7 @@ public class AdminContentManageController {
     }
 
     @GetMapping("/admin/content")
-    @PreAuthorize(BROWSE_AUTH)
+    @PreAuthorize(VIEW_AUTH)
     public String content(@RequestParam(value = "type", required = false) String type,
             @RequestParam(value = "authorId", required = false) Long authorId,
             @RequestParam(value = "from", required = false)

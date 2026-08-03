@@ -31,7 +31,8 @@ public class IdHdPaidHandler {
         if (event.purpose() != PaymentPurpose.ID_HD) {
             return; // 非身份证高清意图，交各自 story 的监听器
         }
-        // Story 6-7：按 intentId 反查 attempt 行取 cardId，置该卡解锁（多卡）。
-        idCardHdService.completeCardByIntent(event.intentId());
+        // Story 6-7 多卡按 attempt 行解锁；无 attempt 行 = 旧版单卡端点（v1.0.x 客户端）→
+        // 回退 profile 级建购买行（否则旧客户端 QRIS 付款后永不解锁）。
+        idCardHdService.completeHdPaid(event.intentId(), event.userId(), event.channel());
     }
 }

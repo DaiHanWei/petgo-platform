@@ -3,19 +3,19 @@
 <!-- 评论内容管理（Story 9.9）。评论纳入全量内容管理主动下架/恢复。 -->
 <head>
     <meta charset="UTF-8"/>
-    <title>评论管理 · TailTopia 运营后台</title>
+    <title th:text="#{admin.comments.title}">评论管理 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1>评论管理</h1>
+        <h1 th:text="#{admin.comments.title}">评论管理</h1>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
-        <p class="hint">近 200 条评论。下架后公开口径移除（软删）；误下架可恢复。操作留审计。</p>
+        <p class="hint" th:text="#{admin.comments.hint}">近 200 条评论。下架走审核线语义（必填原因；作者仍可见 + 收到通知 + 计违规）；误下架可恢复。操作留审计。</p>
         <table>
             <thead>
-            <tr><th>ID</th><th>帖子</th><th>作者</th><th>内容</th><th>状态</th><th>时间</th><th>操作</th></tr>
+            <tr><th>ID</th><th th:text="#{admin.comments.col.post}">帖子</th><th th:text="#{admin.comments.col.author}">作者</th><th th:text="#{admin.comments.col.body}">内容</th><th th:text="#{admin.common.status}">状态</th><th th:text="#{admin.common.time}">时间</th><th th:text="#{admin.common.actions}">操作</th></tr>
             </thead>
             <tbody>
             <tr th:each="c : ${comments}">
@@ -23,22 +23,26 @@
                 <td th:text="${c.postId}">0</td>
                 <td th:text="${c.authorId}">0</td>
                 <td th:text="${c.body}">评论内容</td>
-                <td th:text="${c.deleted} ? '已下架' : '正常'">正常</td>
-                <td th:text="${c.createdAt}">t</td>
+                <td th:text="${c.deleted} ? #{admin.comments.deleted} : ${c.moderationStatus}">VISIBLE</td>
+                <td th:text="${@adminTime.wib(c.createdAt)}">t</td>
                 <td>
-                    <form th:if="${!c.deleted}" method="post"
+                    <!-- 下架（审核线 FR-55A）：仅 VISIBLE 可下架，必填原因（进审计不进作者通知）。 -->
+                    <form th:if="${!c.deleted and c.moderationStatus == 'VISIBLE'}" method="post"
                           th:action="@{/admin/comments/{id}/takedown(id=${c.id})}" style="display:inline"
                           sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.proactive_takedown')">
-                        <button type="submit" class="btn btn-neutral btn-sm">下架</button>
+                        <input type="text" name="reason" required th:placeholder="#{admin.content.reason}" placeholder="下架原因（必填）" style="width:140px"/>
+                        <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.content.takedown}">下架</button>
                     </form>
-                    <form th:if="${c.deleted}" method="post"
+                    <!-- 恢复：TAKEN_DOWN / REJECTED → VISIBLE（不通知，D-CM6）。 -->
+                    <form th:if="${!c.deleted and (c.moderationStatus == 'TAKEN_DOWN' or c.moderationStatus == 'REJECTED')}"
+                          method="post"
                           th:action="@{/admin/comments/{id}/restore(id=${c.id})}" style="display:inline"
                           sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.restore')">
-                        <button type="submit" class="btn btn-neutral btn-sm">恢复</button>
+                        <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.content.restore}">恢复</button>
                     </form>
                 </td>
             </tr>
-            <tr th:if="${comments.isEmpty()}"><td colspan="7">暂无评论</td></tr>
+            <tr th:if="${comments.isEmpty()}"><td colspan="7" th:text="#{admin.comments.empty}">暂无评论</td></tr>
             </tbody>
         </table>
     </div>

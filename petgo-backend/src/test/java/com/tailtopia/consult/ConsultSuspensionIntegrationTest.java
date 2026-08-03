@@ -56,8 +56,12 @@ class ConsultSuspensionIntegrationTest extends ApiIntegrationTest {
         s.markInProgress(vetId);
         s.attachImConversation("conv-" + SEQ.incrementAndGet());
         s = sessions.save(s);
-        ConsultOrder o = orders.save(ConsultOrder.inProgress("ord-" + SEQ.incrementAndGet(), userId,
-                vetId, 1L, 50000L, channel, null, 30000L, 60, 50000L, Instant.now()));
+        ConsultOrder o = ConsultOrder.inProgress("ord-" + SEQ.incrementAndGet(), userId,
+                vetId, 1L, 50000L, channel, null, 30000L, 60, 50000L, Instant.now());
+        // bug 20260721-324 后挂起判定按 consult_session_id 精确匹配（不再松匹配 user+vet）——
+        // 种子订单必须绑定会话，否则 interruptByVetBan 判为免费会话即时中断，挂起系测试全挂。
+        o.markSessionStarted(Instant.now(), s.getId());
+        o = orders.save(o);
         return new long[] {userId, vetId, s.getId(), o.getId()};
     }
 

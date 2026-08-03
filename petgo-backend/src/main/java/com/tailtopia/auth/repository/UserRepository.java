@@ -21,8 +21,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     /** bug 20260701-164：后台用户管理按角色分页列举（只列普通用户 USER）。 */
     Page<User> findByRole(Role role, Pageable pageable);
 
-    /** 内容审核 story 4：违规重置默认昵称唯一性查重（DefaultNameGenerator）。 */
-    boolean existsByNickname(String nickname);
     /** 虚拟账号列表（Story 9.8，A-6），近建在前。 */
     java.util.List<User> findByAccountTypeOrderByIdDesc(AccountType accountType);
 
@@ -30,4 +28,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
     /** 概览看板（Story 9.10）：按账号类型计数（如虚拟账号数）。 */
     long countByAccountType(AccountType accountType);
 
+    /** 概览看板（bug 20260731-442）：真实且未注销的用户数（剔除虚拟/种子账号与已注销）。 */
+    long countByAccountTypeAndDeletedAtIsNull(AccountType accountType);
+
+    /** 内容审核 story 4：违规重置默认昵称唯一性查重（DefaultNameGenerator）。 */
+    boolean existsByNickname(String nickname);
 }

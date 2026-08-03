@@ -19,8 +19,6 @@ class AdminPermissionsTest {
     @Test
     void allContainsV11NewCodesWithoutDuplicates() {
         assertThat(AdminPermissions.ALL).contains(
-                AdminPermissions.CONTENT_EXPORT,
-                AdminPermissions.CONTENT_VIEW_REPORTERS,
                 AdminPermissions.ORDER_VIEW,
                 AdminPermissions.ORDER_EXPORT,
                 AdminPermissions.VIRTUAL_ACCOUNT_MANAGE,
@@ -42,6 +40,10 @@ class AdminPermissionsTest {
         assertThat(AdminPermissions.isValid(AdminPermissions.ORDER_EXPORT)).isTrue();
         assertThat(AdminPermissions.isValid("config.nuke")).isFalse();
         assertThat(AdminPermissions.isValid("")).isFalse();
+        // bug 20260731-440：三个从未有落点的死码已摘除，勾选页不再出现。
+        assertThat(AdminPermissions.isValid("content.export")).isFalse();
+        assertThat(AdminPermissions.isValid("content.view_reporters")).isFalse();
+        assertThat(AdminPermissions.isValid("consult.edit_sessions")).isFalse();
     }
 
     @Test
@@ -66,8 +68,10 @@ class AdminPermissionsTest {
 
     @Test
     void listStableSize() {
-        // 23 既有 + 7（9.1）+ 2（9.5）+ 2（9.6 payment/risk）= 34（防误删/误加漏更新测试）。
+        // 23 既有 + 7（9.1）+ 2（9.5）+ 2（9.6 payment/risk）+ 10（后续批：审核/评论/名称头像等）
+        // = 44 + 1（content.manual_review，stag 拣回）= 45
+        // − 3（bug 20260731-440 摘除无落点死码 content.export/content.view_reporters/consult.edit_sessions）= 42。
         List<String> all = AdminPermissions.ALL;
-        assertThat(all).hasSize(34);
+        assertThat(all).hasSize(42);
     }
 }

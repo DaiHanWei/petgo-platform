@@ -23,7 +23,8 @@ class IdHdPaidHandlerTest {
     @Test
     void handlesIdHd() {
         handler.onPaid(event(PaymentPurpose.ID_HD)); // intentId=7L
-        verify(service).completeCardByIntent(7L);
+        // 统一收口 completeHdPaid：有 attempt 行走多卡解锁，无则回退旧版 profile 级建行。
+        verify(service).completeHdPaid(7L, 42L, PayChannel.QRIS);
     }
 
     @Test
@@ -31,6 +32,7 @@ class IdHdPaidHandlerTest {
         handler.onPaid(event(PaymentPurpose.PAWCOIN_TOPUP));
         handler.onPaid(event(PaymentPurpose.AI_UNLOCK));
         handler.onPaid(event(PaymentPurpose.VET_CONSULT));
-        verify(service, never()).completeCardByIntent(ArgumentMatchers.anyLong());
+        verify(service, never()).completeHdPaid(
+                ArgumentMatchers.anyLong(), ArgumentMatchers.anyLong(), ArgumentMatchers.any());
     }
 }

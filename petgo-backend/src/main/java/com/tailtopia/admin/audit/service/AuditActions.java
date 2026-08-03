@@ -72,6 +72,8 @@ public final class AuditActions {
     public static final String CONTENT_REVIEW_TIMED_OUT = "CONTENT_REVIEW_TIMED_OUT";
     /** 客服工单结案（Story 4.7，「已联系+已解决」→ RESOLVED + 发结案/CSAT 通知）。 */
     public static final String TICKET_RESOLVED = "TICKET_RESOLVED";
+    /** 客服为工单补挂关联订单（AB-5B 退款判定前置，bug 20260728-384）。 */
+    public static final String TICKET_ORDER_LINKED = "TICKET_ORDER_LINKED";
     /** 异常工单加内部备注（Story 5.1）。 */
     public static final String ANOMALY_NOTE_ADDED = "ANOMALY_NOTE_ADDED";
     /** 异常工单标记已处理/归档（Story 5.1）。 */

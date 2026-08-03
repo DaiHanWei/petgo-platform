@@ -35,18 +35,13 @@ public final class AdminPermissions {
     public static final String CONTENT_TAKEDOWN = "content.takedown";
     public static final String CONTENT_RESTORE = "content.restore";
     public static final String CONTENT_PROACTIVE_TAKEDOWN = "content.proactive_takedown";
-    /** 人工审核队列：查看 + 通过/拒绝（Story 4.3；开关仍限 SUPER_ADMIN）。 */
+    /** 人工审核队列：查看 + 通过/拒绝（内容审核 Story 4.3；开关仍限 SUPER_ADMIN）。 */
     public static final String CONTENT_MANUAL_REVIEW = "content.manual_review";
-    /** 内容导出（V1.1 Epic 9）。 */
-    public static final String CONTENT_EXPORT = "content.export";
-    /** 举报者清单查看（V1.1 Epic 9，运营内部可见，不违 FR-51 对外匿名）。 */
-    public static final String CONTENT_VIEW_REPORTERS = "content.view_reporters";
 
     // 问诊异常与会话（Epic 5）
     public static final String CONSULT_VIEW_ANOMALIES = "consult.view_anomalies";
     public static final String CONSULT_HANDLE = "consult.handle";
     public static final String CONSULT_VIEW_SESSIONS = "consult.view_sessions";
-    public static final String CONSULT_EDIT_SESSIONS = "consult.edit_sessions";
 
     // 评分（Epic 6）
     public static final String RATING_VIEW = "rating.view";
@@ -104,7 +99,7 @@ public final class AdminPermissions {
     /** 按查看/编辑分组，供账号页勾选区展示。 */
     public static final List<PermissionGroup> GROUPS = List.of(
             new PermissionGroup("perm.group.view", List.of(
-                    CONTENT_VIEW_REPORTS, CONTENT_VIEW, CONTENT_EXPORT, CONTENT_VIEW_REPORTERS,
+                    CONTENT_VIEW_REPORTS, CONTENT_VIEW,
                     USER_VIEW,
                     VET_VIEW, VET_QUALIFY_VIEW, RATING_VIEW,
                     CONSULT_VIEW_ANOMALIES, CONSULT_VIEW_SESSIONS,
@@ -114,9 +109,10 @@ public final class AdminPermissions {
                     ADMIN_VIEW_ACCOUNTS, ADMIN_VIEW_LOGS)),
             new PermissionGroup("perm.group.edit", List.of(
                     CONTENT_TAKEDOWN, CONTENT_RESTORE, CONTENT_PROACTIVE_TAKEDOWN,
+                    CONTENT_MANUAL_REVIEW,
                     USER_DEACTIVATE, USER_DELETE,
                     VET_CREATE, VET_EDIT, VET_BAN, VET_RESET_PASSWORD, VET_QUALIFY,
-                    CONSULT_HANDLE, CONSULT_EDIT_SESSIONS,
+                    CONSULT_HANDLE,
                     SUPPORT_HANDLE, REFUND_SUBMIT, REFUND_APPROVE, REFUND_PAYOUT,
                     CONFIG_EDIT, ORDER_EDIT, SETTLEMENT_PAYOUT, RISK_EDIT,
                     VIRTUAL_ACCOUNT_MANAGE,

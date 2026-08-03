@@ -16,6 +16,7 @@ package com.tailtopia.admin.refund.dto;
  * @param approvalNote    审批备注（可空）
  * @param rejectReason    驳回理由（可空）
  * @param paymentProof    出款凭证 ref（可空，非 PII）
+ * @param sourceTicketToken 来源客服工单 token（可空；主管/财务溯源客服判定依据，bug 20260728-384）
  */
 public record AdminRefundView(
         String refundToken,
@@ -29,5 +30,6 @@ public record AdminRefundView(
         String payoutAccountMasked,
         String approvalNote,
         String rejectReason,
-        String paymentProof) {
+        String paymentProof,
+        String sourceTicketToken) {
 }

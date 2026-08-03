@@ -584,7 +584,6 @@
   "vetIncomeSettled": "Settled",
   "vetIncomeEmpty": "No monthly earnings yet",
   "vetIncomeLoadFailed": "Failed to load earnings",
-  "vetProfileVersion": "TailTopia Vet Portal v1.0.0",
   "vetHistoryTitle": "Consultation history",
   "vetHistoryTotalToday": "Total: {count} today",
   "@vetHistoryTotalToday": { "placeholders": { "count": { "type": "int" } } },

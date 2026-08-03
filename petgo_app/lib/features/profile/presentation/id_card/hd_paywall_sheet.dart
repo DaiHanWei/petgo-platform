@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../../shared/widgets/price_load_retry.dart';
+import '../../data/id_card_repository.dart';
 import '../../domain/id_card.dart';
-
-/// 身份证 HD 解锁价（IDR）。当前后台可配定价前端仍用固定值（bug 342 后端下发待落地）。
-const int kIdCardHdPriceIdr = 5000;
 
 /// HD 付费方式选择底部抽屉（Story 6.3；6-7 多卡详情页复用）。返回选中的 [HdPayChannel]，下滑关闭 → null。
 /// PawCoin 余额足则默认选；不足 → 显充值链接跳 /me/pawcoin/recharge。
-class HdPaywallSheet extends StatefulWidget {
+class HdPaywallSheet extends ConsumerStatefulWidget {
   const HdPaywallSheet(
       {super.key, this.petName, this.serialId, this.cardNo, this.avatarUrl, required this.balance});
 
@@ -23,18 +23,22 @@ class HdPaywallSheet extends StatefulWidget {
   final int balance;
 
   @override
-  State<HdPaywallSheet> createState() => _HdPaywallSheetState();
+  ConsumerState<HdPaywallSheet> createState() => _HdPaywallSheetState();
 }
 
-class _HdPaywallSheetState extends State<HdPaywallSheet> {
-  static const int _priceIdr = kIdCardHdPriceIdr;
-  late HdPayChannel _selected =
-      widget.balance >= _priceIdr ? HdPayChannel.pawcoin : HdPayChannel.qris;
+class _HdPaywallSheetState extends ConsumerState<HdPaywallSheet> {
+  /// 用户显式点选的渠道；null=按余额够不够自动定（价格加载完成后才有意义）。
+  HdPayChannel? _picked;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final enoughCoin = widget.balance >= _priceIdr;
+    // 展示价后端实时下发（417 同类修复）；无本地兜底——失败显示重试并禁付款。
+    final priceAsync = ref.watch(idCardHdPriceProvider);
+    final int? priceIdr = priceAsync.value;
+    final enoughCoin = priceIdr != null && widget.balance >= priceIdr;
+    final HdPayChannel selected =
+        _picked ?? (enoughCoin ? HdPayChannel.pawcoin : HdPayChannel.qris);
     final no = (widget.cardNo?.isNotEmpty == true)
         ? widget.cardNo!
         : (widget.serialId == null ? '----' : widget.serialId!.toString().padLeft(4, '0'));
@@ -87,32 +91,45 @@ class _HdPaywallSheetState extends State<HdPaywallSheet> {
             Text(l10n.idCardHdPaywallBody,
                 style: const TextStyle(color: AppColors.ink2, fontSize: 13, height: 1.5)),
             const SizedBox(height: 18),
+            if (priceAsync.hasError) ...[
+              Center(
+                child: PriceLoadRetry(
+                    key: const ValueKey('hdPriceRetry'),
+                    onRetry: () => ref.invalidate(idCardHdPriceProvider)),
+              ),
+              const SizedBox(height: 10),
+            ],
             _HdMethodTile(
               icon: Icons.savings_outlined,
               title: 'PawCoin',
-              subtitle: l10n.idCardHdPawcoinSub(_fmt(widget.balance), _fmt(_priceIdr)),
-              selected: enoughCoin && _selected == HdPayChannel.pawcoin,
+              subtitle: priceIdr == null
+                  ? l10n.idCardHdPawcoinSub(_fmt(widget.balance), '…')
+                  : l10n.idCardHdPawcoinSub(_fmt(widget.balance), _fmt(priceIdr)),
+              selected: enoughCoin && selected == HdPayChannel.pawcoin,
               enabled: enoughCoin,
-              trailingAction: enoughCoin ? null : l10n.triageUnlockTopupFirst,
+              trailingAction: priceIdr == null || enoughCoin ? null : l10n.triageUnlockTopupFirst,
               onTap: enoughCoin
-                  ? () => setState(() => _selected = HdPayChannel.pawcoin)
-                  : () {
-                      Navigator.of(context).pop();
-                      context.push('/me/pawcoin/recharge');
-                    },
+                  ? () => setState(() => _picked = HdPayChannel.pawcoin)
+                  : priceIdr == null
+                      ? () {}
+                      : () {
+                          Navigator.of(context).pop();
+                          context.push('/me/pawcoin/recharge');
+                        },
             ),
             const SizedBox(height: 10),
             _HdMethodTile(
               icon: Icons.qr_code_2,
               title: 'QRIS',
-              subtitle: 'Rp${_fmt(_priceIdr)}',
-              selected: _selected == HdPayChannel.qris,
-              onTap: () => setState(() => _selected = HdPayChannel.qris),
+              subtitle: priceIdr == null ? '…' : 'Rp${_fmt(priceIdr)}',
+              selected: selected == HdPayChannel.qris,
+              onTap: () => setState(() => _picked = HdPayChannel.qris),
             ),
             const SizedBox(height: 18),
             FilledButton(
               key: const ValueKey('hdPayConfirm'),
-              onPressed: () => Navigator.of(context).pop(_selected),
+              // 价格未取到（加载中/失败）禁付款：用户必须先看到本次费用（417 同类无兜底）。
+              onPressed: priceIdr == null ? null : () => Navigator.of(context).pop(selected),
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.mint,
                 foregroundColor: AppColors.onAccent,

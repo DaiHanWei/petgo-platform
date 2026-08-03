@@ -503,7 +503,6 @@
   "vetIncomeSettled": "Sudah dicairkan",
   "vetIncomeEmpty": "Belum ada penghasilan bulanan",
   "vetIncomeLoadFailed": "Gagal memuat penghasilan",
-  "vetProfileVersion": "TailTopia Vet Portal v1.0.0",
   "vetHistoryTitle": "Riwayat Konsultasi",
   "vetHistoryTotalToday": "Total: {count} hari ini",
   "@vetHistoryTotalToday": { "placeholders": { "count": { "type": "int" } } },

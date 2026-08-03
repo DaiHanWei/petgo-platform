@@ -81,6 +81,7 @@ public class AdminWebController {
     }
 
     @GetMapping("/admin/seed-post")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')")
     public String seedPostForm(Model model) {
         model.addAttribute("active", "seed");
         if (!model.containsAttribute("seedPostForm")) {
@@ -212,7 +213,7 @@ public class AdminWebController {
     // ===== Story 2.4：编辑兽医资料（不中断会话）=====
 
     @GetMapping("/admin/vets/{id}/edit")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('vet.create')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('vet.edit') or hasAuthority('vet.create')")
     public String editVetForm(@PathVariable long id, Model model) {
         model.addAttribute("active", "vets");
         model.addAttribute("vetId", id);
@@ -225,7 +226,7 @@ public class AdminWebController {
 
     /** 上传/更换兽医头像（服务端落公开桶① → 回填 CDN URL）。仅图片、≤5MB。 */
     @PostMapping("/admin/vets/{id}/avatar")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('vet.create')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('vet.edit') or hasAuthority('vet.create')")
     public String uploadVetAvatar(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id,
             @RequestParam("avatar") org.springframework.web.multipart.MultipartFile avatar,
             RedirectAttributes flash) {
@@ -249,7 +250,7 @@ public class AdminWebController {
     }
 
     @PostMapping("/admin/vets/{id}")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('vet.create')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('vet.edit') or hasAuthority('vet.create')")
     public String updateVet(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id,
             @Valid @ModelAttribute("editVetForm") EditVetForm form, BindingResult binding,
             Model model, RedirectAttributes flash) {
@@ -323,6 +324,7 @@ public class AdminWebController {
     }
 
     @PostMapping("/admin/seed-post")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')")
     public String publishSeed(@AuthenticationPrincipal AdminUserDetails admin,
             @Valid @ModelAttribute("seedPostForm") SeedPostForm form, BindingResult binding,
             Model model) {
