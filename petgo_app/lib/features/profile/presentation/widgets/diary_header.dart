@@ -2,15 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../core/theme/colors.dart';
-import '../../../../core/theme/spacing.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../domain/pet_profile.dart';
 import 'pet_info_card.dart';
 
 /// Diary 页头**共用组件**（V1.1.2 Story 2.2 · FR-80/82）。
 ///
-/// 自上而下：标题行（Paspor {name} + 身份证图标按钮 + 编辑铅笔）→ 宠物信息卡（含个性签名行与三列统计）
-/// → 健康记录入口卡 → 里程碑进度条。
+/// 自上而下：标题行（Paspor {name} + 编辑铅笔）→ 宠物信息卡（含个性签名行与三列统计）
+/// → 入口区两栏（健康记录 · 身份证）→ 里程碑进度条。
 ///
 /// ⚠️ **游客态与真实态复用同一份**：Story 3.3 要求真实时间线页头与游客态一致。写成页面内联布局
 /// 会迫使两处各实现一遍，随时间漂移 —— 与五类条目渲染组件（[TimelineItemTile]）同类问题。
@@ -18,9 +17,14 @@ import 'pet_info_card.dart';
 /// ⚠️ **入口可点性由调用方以参数控制**：真实态注入各页跳转；游客态注入建档引导
 /// （不得注入 `/profile/health`、`/profile/id-card` 等受控页 —— 游客点了会在种草页中间撞上登录框）。
 ///
-/// 结构以**现网实现为准**，不照 UI 稿 A1/A3 的入口卡画法：健康记录是实心卡（标题 + 副文案），
-/// 身份证是 38×38 纯图标按钮（无标题、无编号）。稿子里「Kartu Identitas #00842」那种带编号的卡片
-/// 不实现——现网无此形态，且编号可空（老档案未申请时为 null），照稿实现会多出未定义状态。
+/// 入口区按 **UI 稿 A3 的 `entry-grid`** 布局（2026-08-04 用户对稿反馈后修正）：
+/// **两栏等宽卡**（1fr 1fr，间距 10）—— 左「健康记录」、右「身份证」。
+/// - 身份证入口**从标题行挪到这里**（原先是标题行里的 38×38 图标按钮，位置与稿子不符）；
+///   **图标沿用现网的徽章图标**（`Icons.badge_outlined`），只按稿调整位置与尺寸。
+/// - 健康记录卡**样式不变**（白底 r14 + 柔阴影 + 圆环对勾 + 同一套文案），
+///   只把宽度改为半栏、内部改为稿子的纵向排布（图标 → 标题 → 副文案）。
+/// - ⚠️ **仍不渲染 `#00842` 编号**：编号可空（老档案未申请时为 null），照稿渲染会多出
+///   「没有编号时显示什么」的未定义状态。副文案改用「点击查看」，与时间线证件卡同一 key。
 class DiaryHeader extends StatelessWidget {
   const DiaryHeader({
     super.key,
@@ -67,12 +71,6 @@ class DiaryHeader extends StatelessWidget {
                       fontSize: 19, fontWeight: FontWeight.w700, color: AppColors.ink)),
             ),
             _iconBtn(
-              key: const ValueKey('diaryIdCardButton'),
-              onTap: onOpenIdCard,
-              child: const Icon(Icons.badge_outlined, size: 20, color: AppColors.ink),
-            ),
-            const SizedBox(width: 8),
-            _iconBtn(
               key: const ValueKey('editProfileButton'),
               onTap: onEditProfile,
               child: SvgPicture.asset(
@@ -92,7 +90,7 @@ class DiaryHeader extends StatelessWidget {
           milestoneCount: milestoneCompleted,
         ),
         const SizedBox(height: 11),
-        _healthEntryCard(l10n),
+        _entryGrid(l10n),
         const SizedBox(height: 11),
         if (milestoneCompleted != null && milestoneTotal != null)
           Padding(
@@ -130,8 +128,49 @@ class DiaryHeader extends StatelessWidget {
         ),
       );
 
-  /// 健康记录入口卡（0718：普通实心卡）。图标为圆环对勾，无 tinted 方块底。
-  Widget _healthEntryCard(AppLocalizations l10n) => Container(
+  /// 入口区两栏（A3 `entry-grid`：1fr 1fr、间距 10）。等高由 [IntrinsicHeight] 保证 ——
+  /// 两卡文案行数不同（健康记录副文案较长会折行），不拉等高会一高一低。
+  Widget _entryGrid(AppLocalizations l10n) => IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: _entryCard(
+                key: const ValueKey('diaryHealthEntry'),
+                onTap: onOpenHealth,
+                icon: Icons.check_circle_outline,
+                iconColor: AppColors.mint,
+                title: l10n.diaryHealthEntryTitle,
+                sub: l10n.diaryHealthEntrySub,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _entryCard(
+                // key 沿用（原为标题行的图标按钮）——入口语义未变，只是位置从标题行挪到入口区。
+                key: const ValueKey('diaryIdCardButton'),
+                onTap: onOpenIdCard,
+                icon: Icons.badge_outlined,
+                iconColor: AppColors.mint,
+                title: l10n.idCardTitle,
+                sub: l10n.timelineIdCardTapToView,
+              ),
+            ),
+          ],
+        ),
+      );
+
+  /// 入口卡（A3 `entry-card`）：白底 r14 + 柔阴影 + 纵向「图标 → 标题 → 副文案」。
+  /// 样式沿用现网健康记录卡（颜色 / 圆角 / 阴影 / 文案），只按稿改为半栏宽 + 纵向排布。
+  Widget _entryCard({
+    required Key key,
+    required VoidCallback? onTap,
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String sub,
+  }) =>
+      DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(14),
           boxShadow: const [
@@ -143,32 +182,28 @@ class DiaryHeader extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
-            key: const ValueKey('diaryHealthEntry'),
-            onTap: onOpenHealth,
+            key: key,
+            onTap: onTap,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: Row(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.check_circle_outline, size: 26, color: AppColors.mint),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(l10n.diaryHealthEntryTitle,
-                            style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.ink)),
-                        const SizedBox(height: 2),
-                        Text(l10n.diaryHealthEntrySub,
-                            style: const TextStyle(
-                                fontSize: 12, color: AppColors.textSecondary)),
-                      ],
-                    ),
-                  ),
-                  const Icon(Icons.chevron_right, color: AppColors.muted),
+                  Icon(icon, size: 26, color: iconColor),
+                  const SizedBox(height: 7),
+                  Text(title,
+                      style: const TextStyle(
+                          fontSize: 13,
+                          height: 1.25,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.ink)),
+                  const SizedBox(height: 3),
+                  Text(sub,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 10.5, height: 1.3, color: AppColors.textTertiary)),
                 ],
               ),
             ),
