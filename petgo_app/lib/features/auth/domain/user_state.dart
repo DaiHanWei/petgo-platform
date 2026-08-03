@@ -1,3 +1,5 @@
+import 'auth_state.dart';
+
 /// 应用级用户状态（V1.1.2 · AD-8 · FR-78）。**冷启动落地 Tab 与埋点 `user_state` 的唯一判定源**。
 ///
 /// ⚠️ Story 6.1 的埋点 `user_state` 属性直接取 [AppUserState.wire]。落地分流与埋点两处各写一份
@@ -46,6 +48,14 @@ enum AppUserState {
         AppUserState.enthusiast => '/home',
       };
 }
+
+/// 从登录态直接取六态（埋点与落地分流共用；Story 6.1 的 `user_state` 属性取它的 `wire`）。
+AppUserState appUserStateOf(AuthState auth) => resolveAppUserState(
+      isLoggedIn: auth.isLoggedIn,
+      isVet: auth.isVet,
+      petStatus: auth.profile?.petStatus,
+      hasPetProfile: auth.profile?.hasPetProfile ?? false,
+    );
 
 /// 六态判定（按序，互斥且穷尽）。未知 `petStatus`（如 profile 尚未回填）按状态 A 处理，
 /// 与 Diary 页判定同口径。

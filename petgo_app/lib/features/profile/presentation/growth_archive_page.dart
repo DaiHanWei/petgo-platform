@@ -4,6 +4,7 @@ import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
@@ -307,12 +308,19 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
     return Row(
       children: [
         Expanded(child: _toggleBtn('⏱ ${l10n.growthArchiveViewTimeline}', _view == _ArchiveView.timeline,
-            () => setState(() => _view = _ArchiveView.timeline), const ValueKey('archiveViewTimeline'))),
+            () => _switchView(_ArchiveView.timeline), const ValueKey('archiveViewTimeline'))),
         const SizedBox(width: 7),
         Expanded(child: _toggleBtn('📅 ${l10n.growthArchiveViewCalendar}', _view == _ArchiveView.calendar,
-            () => setState(() => _view = _ArchiveView.calendar), const ValueKey('archiveViewCalendar'))),
+            () => _switchView(_ArchiveView.calendar), const ValueKey('archiveViewCalendar'))),
       ],
     );
+  }
+
+  /// T-11 archive_view_switched（Story 6.1）：日历视图本版本接了健康记录，看看有多少人真的用它。
+  void _switchView(_ArchiveView to) {
+    if (_view == to) return;
+    Analytics.capture('archive_view_switched', {'to_view': to.name});
+    setState(() => _view = to);
   }
 
   Widget _toggleBtn(String label, bool on, VoidCallback onTap, Key key) => GestureDetector(
@@ -362,23 +370,44 @@ class _TimelineView extends ConsumerWidget {
   /// - 类④ → 问诊存档走既有结果页深链；结构化健康记录 → 健康记录列表页
   /// - 类⑤ → 身份证页
   static VoidCallback? _realTapFor(BuildContext context, TimelineItem item) {
+    // T-10 timeline_item_tapped（Story 6.1）：`item_type` **直取后端下发的 itemType**，
+    // 与服务端分类口径一致（前端不自行推断，AD-2）。
+    void report() => Analytics.capture(
+        'timeline_item_tapped', {'item_type': item.resolvedType.wire});
     switch (item.resolvedType) {
       case TimelineItemType.happyMoment:
       case TimelineItemType.happyMomentMilestone:
         final id = item.postId;
-        return id == null ? null : () => context.push('/content/$id');
+        return id == null
+            ? null
+            : () {
+                report();
+                context.push('/content/$id');
+              };
       case TimelineItemType.milestoneBanner:
-        return () => context.push('/profile/milestones');
+        return () {
+          report();
+          context.push('/profile/milestones');
+        };
       case TimelineItemType.healthRecord:
         // 问诊存档：跳对应问诊/分诊结果页（bug 20260706-259 的既有行为，不回退）。
         final route = item.healthEventRoute;
         if (route != null) {
-          return () => context.push(route);
+          return () {
+            report();
+            context.push(route);
+          };
         }
         // 结构化健康记录：跳健康记录列表页（FR-45B）。时间线内**不提供编辑入口**。
-        return () => context.push('/profile/health');
+        return () {
+          report();
+          context.push('/profile/health');
+        };
       case TimelineItemType.idCardIssued:
-        return () => context.push('/profile/id-card');
+        return () {
+          report();
+          context.push('/profile/id-card');
+        };
     }
   }
 

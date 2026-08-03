@@ -9,6 +9,7 @@ import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../../../shared/widgets/letter_avatar.dart';
+import '../../../core/analytics/analytics.dart';
 import '../../auth/domain/auth_guard.dart';
 import '../domain/diary_demo_data.dart';
 import '../domain/timeline_item.dart';
@@ -123,14 +124,14 @@ class DiaryDemoDetailPage extends ConsumerWidget {
             key: const ValueKey('demoDetailLike'),
             icon: Icons.favorite_border,
             count: DiaryDemoData.detailLikeCount,
-            onTap: () => _startCreateProfile(context, ref),
+            onTap: () => _startCreateProfile(context, ref, source: 'detail_interaction'),
           ),
           const SizedBox(width: AppSpacing.lg),
           _iconCount(
             key: const ValueKey('demoDetailComment'),
             icon: Icons.mode_comment_outlined,
             count: DiaryDemoData.detailCommentCount,
-            onTap: () => _startCreateProfile(context, ref),
+            onTap: () => _startCreateProfile(context, ref, source: 'detail_interaction'),
           ),
         ],
       );
@@ -158,7 +159,7 @@ class DiaryDemoDetailPage extends ConsumerWidget {
       GestureDetector(
         key: const ValueKey('demoDetailCommentTeaser'),
         behavior: HitTestBehavior.opaque,
-        onTap: () => _startCreateProfile(context, ref),
+        onTap: () => _startCreateProfile(context, ref, source: 'detail_interaction'),
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -198,7 +199,7 @@ class DiaryDemoDetailPage extends ConsumerWidget {
                 key: const ValueKey('demoDetailMenuReport'),
                 onTap: () {
                   Navigator.of(sheetCtx).pop();
-                  _startCreateProfile(context, ref);
+                  _startCreateProfile(context, ref, source: 'detail_interaction');
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 14),
@@ -234,12 +235,17 @@ class DiaryDemoDetailPage extends ConsumerWidget {
   }
 
   /// 与游客页同一个建档引导入口（单一门控入口 [requireLogin]），不另写一套跳转。
-  void _startCreateProfile(BuildContext context, WidgetRef ref) {
+  /// 与游客页同一个事件名（T-4，Story 6.1）。本页四个互动点同属 `detail_interaction`
+  /// —— 词表按 AC3 只到「入口类别」粒度，不细分到具体按钮。
+  void _startCreateProfile(BuildContext context, WidgetRef ref, {required String source}) {
+    Analytics.capture('diary_guest_cta_tapped', {'source': source});
     requireLogin(
       ref,
       context,
       pendingAction: const RouteIntent(location: '/profile/create'),
       onAllowed: () => context.push('/profile/create'),
+      entrySource: 'diary_cta',
+
     );
   }
 }

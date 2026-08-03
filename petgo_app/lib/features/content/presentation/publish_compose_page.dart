@@ -593,6 +593,17 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   }
 
   /// 类型标签：原型横向 pill chips（紫底圆角 9999 选中态，#E6E6E6 边框未选）。
+  /// T-8 `publish_type_selected`（Story 6.1）：类型选择的实际分布 + 是否等于默认值
+  /// —— 用来验证「默认 Diary」这个改动到底改变了多少发布构成。
+  void _reportTypeSelected(ContentType type) {
+    final defaultType = _hasPetProfile ? ContentType.growthMoment : ContentType.daily;
+    Analytics.capture('publish_type_selected', {
+      'type': type.wire,
+      'is_default': type == defaultType,
+      'has_pet_profile': _hasPetProfile,
+    });
+  }
+
   Widget _segments(PublishController controller, AppLocalizations l10n) {
     return SizedBox(
       height: 34,
@@ -632,7 +643,10 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       label: label,
       selected: controller.type == type,
       enabled: true,
-      onTap: () => controller.setType(type),
+      onTap: () {
+        _reportTypeSelected(type);
+        controller.setType(type);
+      },
     );
   }
 
@@ -645,6 +659,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       enabled: enabled,
       onTap: enabled
           ? () {
+              _reportTypeSelected(ContentType.growthMoment);
               controller.setType(ContentType.growthMoment);
               if (controller.eventDate == null) {
                 controller.setEventDate(
@@ -693,7 +708,12 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
             value: on,
             activeThumbColor: AppColors.onAccent,
             activeTrackColor: AppColors.mint,
-            onChanged: controller.setSyncToMoment,
+            onChanged: (value) {
+              // T-9 diary_sync_toggled：**本版本最关键的产品假设验证** —— 到底有多少人
+              // 真的想把 Diary 只留给自己。属性只记开关值，不记内容。
+              Analytics.capture('diary_sync_toggled', {'enabled': value});
+              controller.setSyncToMoment(value);
+            },
           ),
         ],
       ),

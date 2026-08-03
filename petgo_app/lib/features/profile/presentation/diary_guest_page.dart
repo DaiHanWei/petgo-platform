@@ -6,6 +6,7 @@ import '../../../core/router/route_intent.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../core/analytics/analytics.dart';
 import '../../auth/domain/auth_guard.dart';
 import '../domain/diary_demo_data.dart';
 import '../domain/timeline_item.dart';
@@ -26,11 +27,32 @@ import 'widgets/timeline_item_tile.dart';
 ///
 /// 门控：本 Story 完成时游客仍走不到这里（放行归 Story 2.4），验收走 widget test 与
 /// debug 路由 `/dev/diary-guest`。
-class DiaryGuestPage extends ConsumerWidget {
+class DiaryGuestPage extends ConsumerStatefulWidget {
   const DiaryGuestPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DiaryGuestPage> createState() => _DiaryGuestPageState();
+}
+
+/// session 内是否已上报过游客态曝光（T-3 的 `session_first` 属性靠它区分首次/重复曝光）。
+bool _guestViewReportedThisSession = false;
+
+/// 测试用：把「本 session 已曝光」标志复位。生产代码不调用 —— 真实 session 的边界是进程生命周期。
+@visibleForTesting
+void resetDiaryGuestViewSession() => _guestViewReportedThisSession = false;
+
+class _DiaryGuestPageState extends ConsumerState<DiaryGuestPage> {
+  @override
+  void initState() {
+    super.initState();
+    // T-3 diary_guest_view（Story 6.1）：游客态是本版本的核心新增门面，曝光量是所有
+    // 游客转化率的分母。session_first 用于区分「第一次看到」与「来回切 Tab 的重复曝光」。
+    Analytics.capture('diary_guest_view', {'session_first': !_guestViewReportedThisSession});
+    _guestViewReportedThisSession = true;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final profile = DiaryDemoData.profile(l10n);
     final items = DiaryDemoData.items(l10n);
@@ -57,10 +79,11 @@ class DiaryGuestPage extends ConsumerWidget {
                   consultCount: DiaryDemoData.consultCount,
                   milestoneCompleted: DiaryDemoData.milestoneCompleted,
                   milestoneTotal: DiaryDemoData.milestoneTotal,
-                  onEditProfile: () => _startCreateProfile(context, ref),
-                  onOpenIdCard: () => _startCreateProfile(context, ref),
-                  onOpenHealth: () => _startCreateProfile(context, ref),
-                  onOpenMilestones: () => _startCreateProfile(context, ref),
+                  onEditProfile: () => _startCreateProfile(context, ref, source: 'header_entry'),
+                  onOpenIdCard: () => _startCreateProfile(context, ref, source: 'header_entry'),
+                  onOpenHealth: () => _startCreateProfile(context, ref, source: 'header_entry'),
+                  onOpenMilestones: () =>
+                      _startCreateProfile(context, ref, source: 'header_entry'),
                 ),
                 for (var i = 0; i < items.length; i++)
                   TimelineItemTile(
@@ -71,9 +94,9 @@ class DiaryGuestPage extends ConsumerWidget {
                     // 带图内容 → 示例详情（无需登录，零网络）；其余 6 条 → 建档引导。
                     onTap: DiaryDemoData.hasDemoDetail(items[i])
                         ? () => _openDemoDetail(context, items[i])
-                        : () => _startCreateProfile(context, ref),
+                        : () => _startCreateProfile(context, ref, source: 'timeline_item'),
                     // 类② 金徽章：真实态跳里程碑列表（受控页），游客态一律建档引导。
-                    onBadgeTap: () => _startCreateProfile(context, ref),
+                    onBadgeTap: () => _startCreateProfile(context, ref, source: 'timeline_item'),
                   ),
                 const SizedBox(height: 10),
                 _emotionalBlock(l10n),
@@ -142,7 +165,7 @@ class DiaryGuestPage extends ConsumerWidget {
           width: double.infinity,
           child: FilledButton(
             key: const ValueKey('diaryGuestPrimaryCta'),
-            onPressed: () => _startCreateProfile(context, ref),
+            onPressed: () => _startCreateProfile(context, ref, source: 'main_cta'),
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.mint,
               foregroundColor: AppColors.onAccent,
@@ -158,12 +181,19 @@ class DiaryGuestPage extends ConsumerWidget {
   /// 建档引导（FR-0G）。走**单一门控入口** [requireLogin]：游客弹强登录引导并注入登录后回跳建档，
   /// 已登录（debug 路由直达时可能出现）直接进建档表单。页面内所有引导点都收口到这一个函数，
   /// 避免出现第二套跳转逻辑。
-  void _startCreateProfile(BuildContext context, WidgetRef ref) {
+  /// [source] 供 T-4 `diary_guest_cta_tapped` 区分入口，取值词表见 Story 6.1 AC3：
+  /// `main_cta` / `timeline_item` / `detail_interaction`，另加 `header_entry`
+  /// （页头四个入口 —— Story 2.2 列举三类时漏了它，但它确实是第四个引导点）。
+  /// ⚠️ **各入口统一上报同一事件 + source 属性**，不拆成多个事件 —— 拆了转化率分母口径会碎。
+  void _startCreateProfile(BuildContext context, WidgetRef ref, {required String source}) {
+    Analytics.capture('diary_guest_cta_tapped', {'source': source});
     requireLogin(
       ref,
       context,
       pendingAction: const RouteIntent(location: '/profile/create'),
       onAllowed: () => context.push('/profile/create'),
+      entrySource: 'diary_cta', // T-7 归因：游客态 Diary 引导来的注册
+
     );
   }
 

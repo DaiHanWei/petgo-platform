@@ -1,5 +1,5 @@
 # generated: 2026-07-31
-# last_updated: 2026-08-03
+# last_updated: 2026-08-04
 # project: TailTopia V1.1.2
 # project_key: NOKEY
 # tracking_system: file-system
@@ -115,5 +115,5 @@ development_status:
   # ===== Epic 6: 改版效果可度量 =====
   # PRD §3 埋点。依赖全部功能落地，排最后。
   epic-6: in-progress
-  6-1-v112-埋点收尾: ready-for-dev                       # 动手前先实测确认「Tab 切换不产生浏览事件」这一假设；须回写全局埋点文档
+  6-1-v112-埋点收尾: review                              # T-1~T-11 已上报；AC1 假设代码级确证成立（goBranch 不 push → observer 收不到）；T-12/AC5 待「后端埋点 SDK」决策；埋点文档回写 docs/analytics-posthog-tracking.md §8
   epic-6-retrospective: optional

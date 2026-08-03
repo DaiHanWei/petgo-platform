@@ -7,8 +7,10 @@ import 'package:go_router/go_router.dart';
 import '../../core/router/route_intent.dart';
 import '../../core/theme/colors.dart';
 import '../../core/theme/motion.dart';
+import '../../core/analytics/analytics.dart';
 import '../../features/auth/domain/auth_guard.dart';
 import '../../features/auth/domain/auth_state.dart';
+import '../../features/auth/domain/user_state.dart';
 import '../../features/content/domain/home_refresh_provider.dart';
 import '../../features/content/domain/content_type.dart';
 import '../../features/content/presentation/feed_controller.dart';
@@ -74,6 +76,16 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
   void _onTabSelected(int index) {
     // 按 Tab 语义判定，不比较裸索引（AD-3 AC3①）——重排后裸索引会指向错误的 Tab。
     final AppTab tab = AppTab.values[index];
+    // T-1 tab_switched（Story 6.1）：PostHog 的 $screen 由路由 observer 产生，而 Tab 切换走
+    // StatefulShellRoute.goBranch（不 push 根路由）→ **不产生 $screen**，所以必须自己埋。
+    // user_state 取 2.4 的落地矩阵同源判定，避免埋点口径与实际分流对不上。
+    // AC2：Tab 根页的浏览事件也在这里补（observer 收不到 goBranch）。
+    Analytics.screen('tab_${tab.name}');
+    Analytics.capture('tab_switched', {
+      'from_tab': AppTab.values[widget.navigationShell.currentIndex].name,
+      'to_tab': tab.name,
+      'user_state': appUserStateOf(ref.read(authControllerProvider)).wire,
+    });
     if (kUngatedTabs.contains(tab)) {
       final bool reTap = widget.navigationShell.currentIndex == index;
       _goBranch(index); // 免门控：游客可进

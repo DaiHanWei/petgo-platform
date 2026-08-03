@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:posthog_flutter/posthog_flutter.dart';
 
+import '../analytics/analytics.dart';
 import '../theme/app_theme.dart';
 
 import '../../features/auth/domain/auth_state.dart';
@@ -93,6 +94,15 @@ final NotifierProvider<PendingDeepLinkNotifier, String?> pendingDeepLinkProvider
 /// 兽医端主题作用域：给 `/vet/*` 子树注入薄荷主题（spec-vet-mint-theme.md），
 /// 与用户侧紫主题物理隔离。
 Widget _vetScoped(Widget child) => Theme(data: AppTheme.vet, child: child);
+
+/// 冷启动落地路径 → 浏览事件屏名（Story 6.1 AC2）。
+/// 与 `app_shell.dart` 里 Tab 切换用的 `tab_<AppTab.name>` **同一套字面量** ——
+/// 否则「冷启动落在 Diary」与「切到 Diary」在看板上会被算成两个不同页面。
+const Map<String, String> _landingScreenNames = {
+  '/profile': 'tab_profile',
+  '/home': 'tab_home',
+  '/vet/workbench': 'vet_workbench',
+};
 
 /// 未登录游客**不可**直接进入的受控路由前缀（FR-19 门控）。
 ///
@@ -185,12 +195,17 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
             }
             // 落地 Tab 按**当时状态实时判定**，不持久化「上次落在哪」（宠物状态会变，记住反而错）。
             final auth = ref.read(authControllerProvider);
-            ctx.go(resolveAppUserState(
-              isLoggedIn: auth.isLoggedIn,
-              isVet: auth.isVet,
-              petStatus: auth.profile?.petStatus,
-              hasPetProfile: auth.profile?.hasPetProfile ?? false,
-            ).landingLocation);
+            final state = appUserStateOf(auth);
+            final target = state.landingLocation;
+            // T-2 app_landing_tab（Story 6.1）：本版本改了落地页矩阵，需要度量各状态实际落在哪。
+            Analytics.capture('app_landing_tab', {
+              'tab': target,
+              'user_state': state.wire,
+            });
+            // 落地的那一屏同样要有浏览事件（AC2）：屏名与 Tab 切换用**同一套**字面量，
+            // 否则「冷启动落在 Diary」与「切到 Diary」在看板上会被算成两个不同页面。
+            Analytics.screen(_landingScreenNames[target] ?? 'landing_other');
+            ctx.go(target);
           },
         ),
       ),

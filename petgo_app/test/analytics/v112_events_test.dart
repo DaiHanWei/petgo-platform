@@ -1,0 +1,453 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:tailtopia/app.dart';
+import 'package:tailtopia/core/analytics/analytics.dart';
+import 'package:tailtopia/features/auth/domain/auth_state.dart';
+import 'package:tailtopia/features/auth/domain/login_guide_controller.dart';
+import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/features/auth/domain/user_state.dart';
+import 'package:tailtopia/features/content/data/feed_repository.dart';
+import 'package:tailtopia/features/content/domain/content_type.dart';
+import 'package:tailtopia/features/content/presentation/publish_compose_page.dart';
+import 'package:tailtopia/features/profile/data/profile_repository.dart';
+import 'package:tailtopia/features/profile/data/timeline_repository.dart';
+import 'package:tailtopia/features/profile/domain/archive_stats.dart';
+import 'package:tailtopia/features/profile/domain/calendar_month.dart';
+import 'package:tailtopia/features/profile/domain/pet_profile.dart';
+import 'package:tailtopia/features/profile/domain/share_service.dart';
+import 'package:tailtopia/features/profile/domain/timeline_item.dart';
+import 'package:tailtopia/features/profile/presentation/diary_guest_page.dart';
+import 'package:tailtopia/features/profile/presentation/growth_archive_page.dart';
+import 'package:tailtopia/features/profile/presentation/widgets/timeline_item_tile.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/shared/widgets/bottom_tab_bar.dart';
+
+import '../support/fake_feed_repository.dart';
+
+/// Story 6.1 · L0：V1.1.2 埋点清单（T-1~T-12）的事件名、属性名与取值词表。
+///
+/// **为什么值得写成测试**：埋点错了不会崩、不会报警，只会安静地产出错数据 —— 等到看板上
+/// 发现口径不对，往往已经攒了几周脏数据、无法回溯修复。所以这里锁死三件事：
+/// 1. **事件名/属性名全是 snake_case**（AC8）；
+/// 2. **取值来自受控词表**（`user_state` 取 [AppUserState.wire]、`item_type` 取后端 `itemType`）；
+/// 3. **多入口事件不被拆开**（T-4 只有一个事件名 + `source` 属性 —— 拆了转化率分母就碎了）。
+///
+/// 观察手段是 [Analytics.debugCaptureSink]（挂在 scrub 之后），断言看到的就是端上真正发出的形态。
+class Recorded {
+  const Recorded(this.event, this.props);
+  final String event;
+  final Map<String, Object>? props;
+  @override
+  String toString() => '$event $props';
+}
+
+class _TestAuthController extends AuthController {
+  _TestAuthController(this._initial);
+  final AuthState _initial;
+  @override
+  AuthState build() => _initial;
+}
+
+late List<Recorded> events;
+
+List<Recorded> _of(String name) => events.where((e) => e.event == name).toList();
+
+Recorded _one(String name) {
+  final hits = _of(name);
+  expect(hits, hasLength(1), reason: '$name 应恰好上报一次，实际：$events');
+  return hits.single;
+}
+
+PetProfile _pet() => PetProfile(
+      id: 7,
+      name: 'Mochi',
+      cardToken: 'TOKEN',
+      petType: 'CAT',
+      birthday: DateTime(2025, 1, 1),
+    );
+
+TimelineItem _post(int id) => TimelineItem(
+      kind: TimelineKind.happyMoment,
+      itemType: TimelineItemType.happyMoment,
+      date: DateTime(2026, 5, 1),
+      text: 'x',
+      postId: id,
+    );
+
+/// 真实 Diary 页（已建档态）+ 一个能承接 `context.push` 的路由表。
+Widget _archiveApp({List<TimelineItem> items = const []}) {
+  final router = GoRouter(
+    initialLocation: '/',
+    routes: [
+      GoRoute(path: '/', builder: (_, _) => const GrowthArchivePage()),
+      for (final p in const ['/content/:id', '/profile/health', '/profile/milestones', '/profile/id-card'])
+        GoRoute(path: p, builder: (_, _) => const Scaffold(body: Text('stub'))),
+    ],
+  );
+  return ProviderScope(
+    overrides: [
+      authControllerProvider.overrideWith(() => _TestAuthController(
+            AuthState(
+              status: AuthStatus.authenticated,
+              role: 'USER',
+              profile: UserProfile(petStatus: 'HAS_PET', hasPetProfile: true),
+            ),
+          )),
+      petProfileProvider.overrideWith((ref) async => _pet()),
+      timelineFirstPageProvider.overrideWith((ref) async => TimelinePage(items: items)),
+      archiveStatsProvider.overrideWith((ref) async => const ArchiveStats(
+          happyMomentCount: 1, consultCount: 0, milestoneCompleted: 0, milestoneTotal: 30)),
+      shareFabAnimatedShownProvider.overrideWith((ref) async => true),
+      // 日历也要桩化：不桩就走真 dio，切到日历视图后留下未完成的网络 timer，测试收不了尾。
+      calendarMonthProvider.overrideWith((ref, ym) async =>
+          CalendarMonth(year: ym.year, month: ym.month, days: const [])),
+    ],
+    child: MaterialApp.router(
+      routerConfig: router,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+    ),
+  );
+}
+
+Widget _guestApp() => ProviderScope(
+      child: MaterialApp(
+        locale: const Locale('id'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: const DiaryGuestPage(),
+      ),
+    );
+
+Widget _composeApp() => ProviderScope(
+      overrides: [
+        authControllerProvider.overrideWith(() => _TestAuthController(
+              AuthState(
+                status: AuthStatus.authenticated,
+                role: 'USER',
+                profile: UserProfile(petStatus: 'HAS_PET', hasPetProfile: true),
+              ),
+            )),
+      ],
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: const Scaffold(body: PublishComposePage()),
+      ),
+    );
+
+Finder _tabButton(String label) =>
+    find.descendant(of: find.byType(BottomTabBar), matching: find.text(label));
+
+void main() {
+  setUp(() {
+    events = <Recorded>[];
+    Analytics.debugCaptureSink = (e, p) => events.add(Recorded(e, p));
+    resetDiaryGuestViewSession();
+  });
+  tearDown(() => Analytics.debugCaptureSink = null);
+
+  group('AC8 命名规范（全部事件与属性 snake_case）', () {
+    test('本版本清单里的事件名与属性名均为 snake_case', () {
+      final naming = RegExp(r'^[a-z][a-z0-9_]*$');
+      const eventNames = <String>[
+        'app_landing_tab', 'tab_switched', 'diary_guest_view', 'diary_guest_cta_tapped',
+        'soft_login_prompt_shown', 'soft_login_prompt_tapped', 'signup_completed',
+        'publish_type_selected', 'diary_sync_toggled', 'timeline_item_tapped',
+        'archive_view_switched',
+      ];
+      const propNames = <String>[
+        'tab', 'user_state', 'from_tab', 'to_tab', 'session_first', 'source', 'method',
+        'entry_source', 'type', 'is_default', 'has_pet_profile', 'enabled', 'item_type',
+        'to_view',
+      ];
+      for (final n in [...eventNames, ...propNames]) {
+        expect(naming.hasMatch(n), isTrue, reason: '$n 不是 snake_case');
+      }
+      // T-5 已删且编号不重分配 —— 这里断言我们没有偷偷复用它。
+      expect(eventNames.length, 11, reason: 'T-1~T-12 去掉已删的 T-5，`_shown`/`_tapped` 合计为 11 项');
+    });
+  });
+
+  group('T-1/T-2 落地与 Tab 切换（AC2：此前完全无埋点的 P0 缺口）', () {
+    testWidgets(r'冷启动落地上报 app_landing_tab + 落地页 $screen（游客 → Diary）', (tester) async {
+      final container = ProviderContainer(
+        overrides: [feedRepositoryProvider.overrideWithValue(FakeFeedRepository())],
+      );
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(container: container, child: const TailTopiaApp()),
+      );
+      await tester.pumpAndSettle();
+
+      final landing = _one('app_landing_tab');
+      expect(landing.props!['tab'], '/profile');
+      expect(landing.props!['user_state'], AppUserState.guest.wire,
+          reason: 'user_state 必须取落地矩阵的同一枚举，不得另写一份判定');
+      expect(_of(r'$screen').map((e) => e.props![r'$screen_name']), contains('tab_profile'));
+    });
+
+    testWidgets(r'点 Tab 上报 tab_switched（from/to/user_state）并补一条 $screen', (tester) async {
+      final container = ProviderContainer(
+        overrides: [feedRepositoryProvider.overrideWithValue(FakeFeedRepository())],
+      );
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(container: container, child: const TailTopiaApp()),
+      );
+      await tester.pumpAndSettle();
+      events.clear();
+
+      await tester.tap(_tabButton('Discovery'));
+      await tester.pumpAndSettle();
+
+      final ev = _one('tab_switched');
+      expect(ev.props!['from_tab'], 'profile', reason: '游客落地在 Diary');
+      expect(ev.props!['to_tab'], 'home');
+      expect(ev.props!['user_state'], AppUserState.guest.wire);
+      // goBranch 不 push 根路由 → PosthogObserver 收不到；缺的这条浏览事件由我们自己补。
+      expect(_of(r'$screen').map((e) => e.props![r'$screen_name']), contains('tab_home'));
+    });
+  });
+
+  group('T-3/T-4 游客态（AC3）', () {
+    testWidgets('曝光上报 diary_guest_view，session 内第二次 session_first=false', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(500, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_guestApp());
+      await tester.pumpAndSettle();
+      expect(_one('diary_guest_view').props!['session_first'], isTrue);
+
+      events.clear();
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(_guestApp());
+      await tester.pumpAndSettle();
+      expect(_one('diary_guest_view').props!['session_first'], isFalse,
+          reason: '重复曝光要能与首次区分，否则算不出「看过一次就走」的比例');
+    });
+
+    testWidgets('主 CTA → 单一事件 diary_guest_cta_tapped，source=main_cta', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(500, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(_guestApp());
+      await tester.pumpAndSettle();
+      events.clear();
+
+      await tester.tap(find.byKey(const ValueKey('diaryGuestPrimaryCta')));
+      await tester.pump();
+
+      expect(_one('diary_guest_cta_tapped').props!['source'], 'main_cta');
+      // 反向断言：不得为不同入口另起事件名（分母会碎）。
+      expect(events.where((e) => e.event.startsWith('diary_guest_cta')), hasLength(1));
+    });
+
+    testWidgets('页头入口与时间线条目 → 同一事件，只靠 source 区分', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(500, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(_guestApp());
+      await tester.pumpAndSettle();
+      events.clear();
+
+      // 页头入口（Story 2.2 列举三类入口时漏掉的第四个引导点）。
+      await tester.tap(find.byKey(const ValueKey('diaryIdCardButton')));
+      await tester.pump();
+      expect(_one('diary_guest_cta_tapped').props!['source'], 'header_entry');
+
+      // 时间线上的非图条目（示例本里带图的 3 条走详情页、不弹引导）。
+      events.clear();
+      await tester.tapAt(const Offset(4, 4)); // 关掉上一步弹出的强登录引导
+      await tester.pumpAndSettle();
+      final tiles = find.byType(TimelineItemTile);
+      var tapped = false;
+      for (var i = 0; i < tester.widgetList(tiles).length && !tapped; i++) {
+        final item = tester.widget<TimelineItemTile>(tiles.at(i)).item;
+        if (item.imageUrls.isEmpty) {
+          await tester.tap(tiles.at(i));
+          await tester.pump();
+          tapped = true;
+        }
+      }
+      expect(tapped, isTrue, reason: '示例本里必须存在非图条目，否则 T-4 的 timeline_item 分支无从触发');
+      expect(_one('diary_guest_cta_tapped').props!['source'], 'timeline_item');
+    });
+  });
+
+  group('T-8/T-9 发布页（AC3）', () {
+    testWidgets('切换类型上报 publish_type_selected（type/is_default/has_pet_profile）', (tester) async {
+      tester.view.physicalSize = const Size(1200, 3200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_composeApp());
+      await tester.pumpAndSettle();
+      events.clear();
+
+      await tester.tap(find.byKey(const ValueKey('seg_DAILY')));
+      await tester.pumpAndSettle();
+
+      final ev = _one('publish_type_selected');
+      expect(ev.props!['type'], ContentType.daily.wire);
+      expect(ev.props!['is_default'], isFalse, reason: '已建档用户默认是 Diary，选 Moment 不是默认值');
+      expect(ev.props!['has_pet_profile'], isTrue);
+    });
+
+    testWidgets('关同步开关上报 diary_sync_toggled(enabled=false)——本版本最关键的假设验证', (tester) async {
+      tester.view.physicalSize = const Size(1200, 3200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_composeApp());
+      await tester.pumpAndSettle();
+      events.clear();
+
+      await tester.tap(find.byKey(const ValueKey('publishSyncToggle')));
+      await tester.pumpAndSettle();
+      expect(_one('diary_sync_toggled').props!['enabled'], isFalse);
+
+      events.clear();
+      await tester.tap(find.byKey(const ValueKey('publishSyncToggle')));
+      await tester.pumpAndSettle();
+      expect(_one('diary_sync_toggled').props!['enabled'], isTrue);
+    });
+  });
+
+  group('T-10/T-11 成长档案（AC3/AC4）', () {
+    testWidgets('AC4：timeline_item_tapped 的 item_type 直取后端 itemType 词表', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(500, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_archiveApp(items: [_post(42)]));
+      await tester.pumpAndSettle();
+      events.clear();
+
+      await tester.tap(find.byType(TimelineItemTile).first);
+      await tester.pumpAndSettle();
+
+      final ev = _one('timeline_item_tapped');
+      expect(ev.props!['item_type'], TimelineItemType.happyMoment.wire,
+          reason: 'item_type 必须与后端 itemType 逐字一致，不得在前端另行推断（AD-2）');
+    });
+
+    testWidgets('切日历视图上报 archive_view_switched(to_view)，重复点同一视图不重复上报', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(500, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_archiveApp());
+      await tester.pumpAndSettle();
+      events.clear();
+
+      await tester.tap(find.byKey(const ValueKey('archiveViewCalendar')));
+      await tester.pumpAndSettle();
+      expect(_one('archive_view_switched').props!['to_view'], 'calendar');
+
+      events.clear();
+      await tester.tap(find.byKey(const ValueKey('archiveViewCalendar')));
+      await tester.pumpAndSettle();
+      expect(_of('archive_view_switched'), isEmpty, reason: '点当前视图无状态变化，不应制造噪声事件');
+    });
+  });
+
+  group('T-6/T-7 软登录浮层与注册归因（AC3）', () {
+    LoginResponse newUser() => const LoginResponse(
+          accessToken: 'a',
+          refreshToken: 'r',
+          role: 'USER',
+          isNewUser: true,
+          onboardingCompleted: false,
+        );
+
+    Widget guideApp(LoginGuideController controller) {
+      final router = GoRouter(
+        initialLocation: '/',
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (ctx, _) => Scaffold(
+              body: Builder(
+                builder: (inner) => TextButton(
+                  onPressed: () => controller.showSoftSheet(inner),
+                  child: const Text('trigger'),
+                ),
+              ),
+            ),
+          ),
+          GoRoute(path: '/onboarding', builder: (_, _) => const Scaffold(body: Text('onboarding'))),
+        ],
+      );
+      return ProviderScope(
+        child: MaterialApp.router(
+          routerConfig: router,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+        ),
+      );
+    }
+
+    testWidgets('浮层曝光 → shown；点主 CTA → tapped；注册成功 → signup_completed(soft_login)',
+        (tester) async {
+      final controller = LoginGuideController(() async => newUser());
+      await tester.pumpWidget(guideApp(controller));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('trigger'));
+      await tester.pumpAndSettle();
+      expect(_of('soft_login_prompt_shown'), hasLength(1));
+
+      events.clear();
+      await tester.tap(find.byKey(const ValueKey('softSheetGoogleCta')));
+      await tester.pumpAndSettle();
+
+      expect(_one('soft_login_prompt_tapped').props!['method'], 'google');
+      expect(_one('signup_completed').props!['entry_source'], 'soft_login',
+          reason: 'T-7 的价值全在 entry_source —— 转化路径构成是本版本仅剩的两个可用指标之一');
+    });
+
+    testWidgets('session 内第二次触发浮层是 no-op → 不得重复上报曝光', (tester) async {
+      final controller = LoginGuideController(() async => newUser());
+      await tester.pumpWidget(guideApp(controller));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('trigger'));
+      await tester.pumpAndSettle();
+      await tester.tapAt(const Offset(4, 4)); // 关掉浮层
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('trigger'));
+      await tester.pumpAndSettle();
+
+      expect(_of('soft_login_prompt_shown'), hasLength(1),
+          reason: '曝光埋点必须在 session 去重之后 —— 否则曝光数会被没弹出的那次虚高');
+    });
+
+    testWidgets('登录被取消 → 不报 signup_completed（只有真正成功才算注册）', (tester) async {
+      final controller = LoginGuideController(() async => null); // 用户取消 Google 弹窗
+      await tester.pumpWidget(guideApp(controller));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('trigger'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('softSheetGoogleCta')));
+      await tester.pumpAndSettle();
+
+      expect(_of('signup_completed'), isEmpty);
+      expect(_of('soft_login_prompt_tapped'), hasLength(1), reason: '点击照记，成功与否是另一回事');
+    });
+  });
+
+  group('AC6 FR-0H 埋点已下线', () {
+    test('全前端不再有任何 FR-0H 提示条相关事件名', () {
+      // 提示条本体已在 Story 2.3 整条废止；这里锁住「事件也没留下」。
+      const banned = <String>[
+        'profile_prompt_shown', 'profile_prompt_tapped', 'profile_prompt_dismissed',
+        'profile_banner_shown', 'profile_banner_tapped', 'profile_banner_closed',
+      ];
+      for (final e in banned) {
+        expect(Analytics.isAppsFlyerEvent(e), isFalse);
+      }
+    });
+  });
+}
