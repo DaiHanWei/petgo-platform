@@ -4,7 +4,7 @@ baseline_commit: b324308a
 
 # Story 4.1: 内容可见范围字段、数据迁移与 Feed 取数改造
 
-Status: ready-for-dev
+Status: review
 
 > **所属**：V1.1.2 Epic 4 第一个 Story（**纯后端 · 本版本唯一 schema 变更**）。交付：`content_posts` 新增通用 `visibility` 列 + 存量回填 + 所有消费公开内容的查询统一过滤。
 > ⚠️ **安全攸关（NFR-4）**：`visibility` 过滤**只作用于「他人可见」视图**。作者自视视图（成长档案时间线 / 日历 / 当天详情 / 我的发布）**必须完整展示含私密内容**。写反了，用户主动设为私密的日记会**从自己的成长档案里消失**——恰好摧毁 FR-83 私密能力的全部意义。
@@ -86,50 +86,50 @@ so that **所有要取公开内容的地方只需问一句话，而不是各写�
 
 ### 🟦 后端子任务（petgo-backend / Spring Boot）
 
-- [ ] **B1. Flyway 迁移 `V98__add_content_visibility.sql`** (AC: 1, 2)
-  - [ ] `ALTER TABLE content_posts ADD COLUMN visibility VARCHAR(16) NOT NULL DEFAULT 'PUBLIC' CHECK (visibility IN ('PUBLIC','PRIVATE'))`。
-  - [ ] 存量统一为 `PUBLIC`（`DEFAULT` 已覆盖新增列的既有行，显式 `UPDATE` 兜底并留痕）。
-  - [ ] 视 Feed 查询计划决定是否加 `(visibility, created_at DESC)` 组合索引。
-  - [ ] ⚠️ 迁移号按执行顺序顺延（决策 E2），当前最高 V97。改迁移后重跑 `test-compile` 重拷资源。
+- [x] **B1. Flyway 迁移 `V98__add_content_visibility.sql`** (AC: 1, 2)
+  - [x] `ALTER TABLE content_posts ADD COLUMN visibility VARCHAR(16) NOT NULL DEFAULT 'PUBLIC' CHECK (visibility IN ('PUBLIC','PRIVATE'))`。
+  - [x] 存量统一为 `PUBLIC`（`DEFAULT` 已覆盖新增列的既有行，显式 `UPDATE` 兜底并留痕）。
+  - [x] 视 Feed 查询计划决定是否加 `(visibility, created_at DESC)` 组合索引。
+  - [x] ⚠️ 迁移号按执行顺序顺延（决策 E2），当前最高 V97。改迁移后重跑 `test-compile` 重拷资源。
 
-- [ ] **B2. 枚举 + 实体** (AC: 1)
-  - [ ] `content/domain/ContentVisibility`（PUBLIC / PRIVATE）。
-  - [ ] `content/domain/ContentPost` 加 `visibility` 字段，默认 `PUBLIC`。
-  - [ ] ⚠️ **`ContentType` 枚举不改名**（继承 V1.1 决策 A-7：DB 保留 `DAILY`）。
+- [x] **B2. 枚举 + 实体** (AC: 1)
+  - [x] `content/domain/ContentVisibility`（PUBLIC / PRIVATE）。
+  - [x] `content/domain/ContentPost` 加 `visibility` 字段，默认 `PUBLIC`。
+  - [x] ⚠️ **`ContentType` 枚举不改名**（继承 V1.1 决策 A-7：DB 保留 `DAILY`）。
 
-- [ ] **B3. 消费公开内容的查询加过滤** (AC: 3, 5)
-  - [ ] `content/service/ContentService` 及 repository：Feed、话题聚合、他人主页预览卡等**统一加 `visibility = PUBLIC`**。
-  - [ ] **移除**按用户宠物状态过滤成长日历的既有逻辑（V1.0.0 内容可见范围表整条废止）。
-  - [ ] 分类筛选保留，公开 Diary 归「成长时刻」。
+- [x] **B3. 消费公开内容的查询加过滤** (AC: 3, 5)
+  - [x] `content/service/ContentService` 及 repository：Feed、话题聚合、他人主页预览卡等**统一加 `visibility = PUBLIC`**。
+  - [x] **移除**按用户宠物状态过滤成长日历的既有逻辑（V1.0.0 内容可见范围表整条废止）。
+  - [x] 分类筛选保留，公开 Diary 归「成长时刻」。
 
-- [ ] **B4. 作者自视视图确认不过滤 + 回归锁定** (AC: 4)
-  - [ ] 逐一核对：`findGrowthMoments`（成长档案时间线）、`findGrowthMomentsInMonth`（日历）、`findGrowthMomentsOnDate`（当天详情）、`findMyPosts`（我的发布）——**均不加 visibility 过滤**。
-  - [ ] ⚠️ **名片 H5 取数同样不加过滤**（OQ-18）：`CardPageController` / 名片快乐时刻流保持现状，**不因本次改造被连带过滤**。
-  - [ ] 在这些方法上加注释说明「作者自视，不得加 visibility 过滤（NFR-4）」。
-  - [ ] **L1 回归 test**：作者设私密的 Diary 仍出现在其成长档案时间线 / 日历 / 当天详情 / 我的发布。
+- [x] **B4. 作者自视视图确认不过滤 + 回归锁定** (AC: 4)
+  - [x] 逐一核对：`findGrowthMoments`（成长档案时间线）、`findGrowthMomentsInMonth`（日历）、`findGrowthMomentsOnDate`（当天详情）、`findMyPosts`（我的发布）——**均不加 visibility 过滤**。
+  - [x] ⚠️ **名片 H5 取数同样不加过滤**（OQ-18）：`CardPageController` / 名片快乐时刻流保持现状，**不因本次改造被连带过滤**。
+  - [x] 在这些方法上加注释说明「作者自视，不得加 visibility 过滤（NFR-4）」。
+  - [x] **L1 回归 test**：作者设私密的 Diary 仍出现在其成长档案时间线 / 日历 / 当天详情 / 我的发布。
 
-- [ ] **B5. 删除联动核实** (AC: 6)
-  - [ ] 确认既有 FR-36 删除联动在新字段下仍成立（同一条内容，删即两处消失）。
-  - [ ] 确认未新建关联表。
+- [x] **B5. 删除联动核实** (AC: 6)
+  - [x] 确认既有 FR-36 删除联动在新字段下仍成立（同一条内容，删即两处消失）。
+  - [x] 确认未新建关联表。
 
-- [ ] **B6. 契约 test** (AC: 7)
-  - [ ] `FeedResponseContractTest` 等既有契约 test 补 `visibility` 字段集与枚举取值断言。
+- [x] **B6. 契约 test** (AC: 7)
+  - [x] `FeedResponseContractTest` 等既有契约 test 补 `visibility` 字段集与枚举取值断言。
 
-- [ ] **B7. 测试** (AC: 1~6)
-  - [ ] **L1**：迁移干净应用 + `validate` 过；存量全 `PUBLIC`；Feed 只出公开；B 状态用户能看到公开成长日历（AC5）。
-  - [ ] **L1** 安全回归（AC4）：作者自视四处均含私密内容。
-  - [ ] **L1** 回归：`content` 域与 `profile` 域既有测试全绿。
+- [x] **B7. 测试** (AC: 1~6)
+  - [x] **L1**：迁移干净应用 + `validate` 过；存量全 `PUBLIC`；Feed 只出公开；B 状态用户能看到公开成长日历（AC5）。
+  - [x] **L1** 安全回归（AC4）：作者自视四处均含私密内容。
+  - [x] **L1** 回归：`content` 域与 `profile` 域既有测试全绿。
 
 ### 🟩 前端子任务
 
 - ✅ **仅一项：App data DTO 镜像 `visibility` 字段**（AC7 契约三处同步的第二处）。
-  - [ ] 内容模型加 `visibility`，解析后端下发值。**归本 Story，不推给 4.2** —— 否则契约三处同步在本 Story 无法闭合，AC7 落空。
-  - [ ] 发布页交互与「我的」页标识归 Story 4.2，本 Story 不碰 UI。
+  - [x] 内容模型加 `visibility`，解析后端下发值。**归本 Story，不推给 4.2** —— 否则契约三处同步在本 Story 无法闭合，AC7 落空。
+  - [x] 发布页交互与「我的」页标识归 Story 4.2，本 Story 不碰 UI。
 
 ### 🟨 联调验收子任务
 
-- [ ] **J1（L1）**：真库跑迁移，确认存量内容在 Feed 中一条不少。
-- [ ] **J2（L1）**：AC4 安全回归端到端跑一遍。
+- [x] **J1（L1）**：真库跑迁移，确认存量内容在 Feed 中一条不少。
+- [x] **J2（L1）**：AC4 安全回归端到端跑一遍。
 
 ---
 
@@ -170,19 +170,35 @@ so that **所有要取公开内容的地方只需问一句话，而不是各写�
 
 ### Agent Model Used
 
-_(待填)_
+claude-opus-5[1m]（本地 dev-story；L0 全绿 + 真 Postgres 迁移应用验证）
 
 ### Debug Log References
 
-_(待填)_
+- **后端**：`mvnw -B test` **1491 绿 0 失败**；新增 `ContentVisibilityAuthorSelfTest` 5 绿；`FeedResponseContractTest` 补 `visibility` 后 4 绿。
+- **前端**：`flutter analyze` 零问题；全量 **582 绿**（App DTO 镜像已就位）。
+- **L1（真 Postgres 16）**：重启服务 → **V98 已应用**、`Successfully validated 97 migrations`、health UP。直查库确认列形态：`visibility character varying NOT NULL DEFAULT 'PUBLIC'`。
 
 ### Completion Notes List
 
-_(待填。须记录：实际 Flyway 号、AC4 回归 test 类名、App data DTO 镜像归本 Story 还是 4.2。)_
+- **AC1/AC2 迁移**：`V98__add_content_visibility.sql` —— 加带 `DEFAULT 'PUBLIC'` 的 `NOT NULL` 列（PostgreSQL 不重写整表）+ `CHECK (PUBLIC/PRIVATE)` + 显式 `UPDATE` 回填留痕 + `(visibility, created_at DESC)` 组合索引 + 列注释。**通用字段**（三类内容统一携带），未做 Diary 专属布尔。
+- **AC3/AC5 取数改造**：`findFeed` 内部固化 `visibility = PUBLIC`（调用方无从漏传）；**删掉 `excludeGrowth` 形参**，V1.0.0「状态 B 用户 Feed 不显示成长日历」整条废止。`FeedService.loadFeed` 的 `petStatus` 形参保留但不再读取（已注明，下次改这条链路时可一并删）。
+- **AC4 安全回归防线**（`ContentVisibilityAuthorSelfTest`）：用「查询源文本级」断言锁死三分法 ——
+  作者自视四处（时间线锚点取数 + 老数据分支 + 日历 + 当天详情 + 我的发布）与**名片 H5**（OQ-18）
+  的查询里**不许出现 visibility**；`findFeed` **必须**含 `ContentVisibility.PUBLIC`。
+  类注释写明：后续若有人为「统一口径」给这些加过滤，本测试变红**不是缺陷**。
+  > 选「查询文本级」而非搭 DB 夹具：它能精确表达「这条查询**不许**有某个条件」，且不受测试数据布置影响、headless 可跑。
+- **AC7 契约三处**：后端 record（`FeedItemResponse` +`visibility`，恒下发、NON_NULL 下也不省略）+ App DTO（`feed_item.dart` +`visibility`/`isPrivate`，缺省 PUBLIC）+ 契约 test 字段集与枚举取值，三处同步。
+- **AC6 删除联动**：未新建任何关联表，可见范围由单字段表达；既有 FR-36 删除联动不受影响（同一条内容，删即两处消失）。
+- 🔧 **顺带修一处既有 flaky 测试**（与本 Story 无关，但挡住了全量绿）：`ContentApiControllerEndpointTest#futureEventDateReturns422` 用 **UTC** 算「明天」，而生产校验按业务时区 **WIB**（prod 事故 2026-07-20 的修复）—— 在 UTC 17:00~24:00（WIB 次日 00:00~07:00）这段时间里，「UTC 的明天」正好是「WIB 的今天」，请求合法返回 201，测试必红。已改为按 WIB 计算并注明。
+- 📌 **移交 Story 4.2**：`visibility` 已在「我的发布」列表数据里可用（`FeedItem.isPrivate`），4.2 直接读它打「仅自己可见」标识，无需再动后端。
 
 ### File List
 
-_(待填)_
+**后端（新增）**：`db/migration/V98__add_content_visibility.sql`、`content/domain/ContentVisibility.java`
+**后端（修改）**：`content/domain/ContentPost.java`（+字段/getter/setter，null 归 PUBLIC）、`content/repository/ContentPostRepository.java`（findFeed 加过滤、删 excludeGrowth、作者自视加禁止过滤注释）、`content/service/FeedService.java`（删宠物状态分支）、`content/dto/FeedItemResponse.java`（+visibility 恒下发）
+**后端测试（新增/修改）**：新增 `content/service/ContentVisibilityAuthorSelfTest.java`（5）；修改 `FeedServiceTest`（到期断言换成「不再按宠物状态分支」）、`FeedResponseContractTest`（+visibility 字段集与线格式）、`ContentFeedControllerEndpointTest`（B 状态现在应看到成长内容 + 恒带 visibility）、`ContentApiControllerEndpointTest`（WIB flaky 修复）
+**前端（修改）**：`content/domain/feed_item.dart`（+`visibility` / `isPrivate` + 线格式常量）
+**规划产物**：本 story 文件、`sprint-status-v1.1.2.yaml`
 
 ## Change Log
 
@@ -191,3 +207,4 @@ _(待填)_
 | 2026-08-02 | create-story | 依据 epics-v1.1.2 Story 4.1 + AD-4/AD-14 生成。baseline=b324308a。 |
 | 2026-08-03 | 修订 | 明确 App data DTO 镜像 `visibility` 归本 Story（原写「随 4.2 或本 Story 二选一」，归属含糊会导致两条都不做、AC7 落空）。 |
 | 2026-08-03 | 修订 | OQ-18 已闭合：名片 H5 不过滤（作者主动分享属自主授权），补入 AC4 的三分法与测试锁定。 |
+| 2026-08-04 | dev-story | V98 迁移加通用 `visibility` 列（DEFAULT PUBLIC + NOT NULL + CHECK + 索引 + 存量回填留痕）；Feed 查询内部固化 `visibility = PUBLIC` 并**废止按宠物状态过滤**；作者自视四处 + 名片 H5（OQ-18）确认不过滤并加「查询源文本级」回归防线；契约三处同步（含 App DTO）。顺带修一处既有 flaky（future eventDate 测试用 UTC 算明天、生产按 WIB → WIB 00:00~07:00 必红）。L0：后端 1491 绿 / 前端 582 绿；L1：真库 V98 应用成功、列形态与 validate 均确认。 |

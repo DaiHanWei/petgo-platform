@@ -47,6 +47,8 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
      * 由 {@link #findGrowthMomentsBeforeAnchorLegacyNullEventDate} 单独取，两路在 service 层归并。
      * 拆两路是为了避免在 JPQL 里对 timestamptz 做时区敏感的 date 转换。
      */
+    // ⚠️ 作者自视视图（成长档案时间线 / 日历 / 当天详情）：**不得加 visibility 过滤**（NFR-4）。
+    // 作者设为私密的 Diary 必须仍出现在他自己的成长档案里 —— 加了过滤就是把用户自己的日记藏起来。
     @Query("""
             SELECT p FROM ContentPost p
             WHERE p.authorId = :authorId
@@ -125,6 +127,8 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
      * ——挂起帖仅作者本人可见（本查询已按 {@code authorId} 收口 + {@code deletedAt IS NULL}，加入 UNDER_REVIEW
      * 不泄漏）。Feed（{@link #findFeed}）保持仅 PUBLISHED，他人零可见。
      */
+    // ⚠️ 「我的发布」= 作者自视：**不得加 visibility 过滤**（NFR-4）。私密内容在这里照常出现，
+    // 由前端打「仅自己可见」标识（Story 4.2）。
     @Query("""
             SELECT p FROM ContentPost p
             WHERE p.authorId = :authorId
@@ -168,7 +172,7 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
               AND (p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
                    OR (p.status = com.tailtopia.content.domain.PostStatus.UNDER_REVIEW
                        AND :hasViewer = true AND p.authorId = :viewerId))
-              AND (:excludeGrowth = false OR p.type <> com.tailtopia.content.domain.ContentType.GROWTH_MOMENT)
+              AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
               AND (:type IS NULL OR p.type = :type)
               AND (:requirePet = false OR p.petId IS NOT NULL)
               AND (:hasViewer = false
@@ -180,7 +184,6 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             ORDER BY p.createdAt DESC, p.id DESC
             """)
     List<ContentPost> findFeed(
-            @Param("excludeGrowth") boolean excludeGrowth,
             @Param("type") ContentType type,
             @Param("requirePet") boolean requirePet,
             @Param("hasViewer") boolean hasViewer,

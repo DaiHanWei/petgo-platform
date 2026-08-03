@@ -101,7 +101,7 @@ development_status:
   # ===== Epic 4: 日记可以只留给自己 =====
   # FR-83。本版本唯一 schema 变更所在。与 E1-E3 无依赖，可并行。
   epic-4: in-progress
-  4-1-内容可见范围字段数据迁移与-feed-取数改造: ready-for-dev  # Flyway V98 起；⚠作者自视视图不得过滤（NFR-4）
+  4-1-内容可见范围字段数据迁移与-feed-取数改造: review          # V98 已应用真库；作者自视 + 名片 H5 不过滤有查询源文本级回归防线
   4-2-发布页同步开关与我的页私密标识: ready-for-dev      # 含关同步后主按钮 Bagikan→Simpan 的文案联动（PRD 未提，UI 稿 P2 独有）
   epic-4-retrospective: optional
 

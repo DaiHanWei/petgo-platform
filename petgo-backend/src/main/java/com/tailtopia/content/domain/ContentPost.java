@@ -51,6 +51,14 @@ public class ContentPost {
     @Column(name = "danger_level", length = 8)
     private String dangerLevel;
 
+    /**
+     * 可见范围（Story 4.1 · FR-83）。默认 {@link ContentVisibility#PUBLIC}——存量与新建内容
+     * 都是公开，私密只由用户主动关闭同步开关产生。
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "visibility", nullable = false, length = 16)
+    private ContentVisibility visibility = ContentVisibility.PUBLIC;
+
     /** 成长日历事件日期（F9）：仅 GROWTH_MOMENT 有值，决定档案侧显示位置；与 createdAt 排序解耦。 */
     @Column(name = "event_date")
     private LocalDate eventDate;
@@ -228,6 +236,15 @@ public class ContentPost {
 
     public List<String> getImageUrls() {
         return imageUrls;
+    }
+
+    public ContentVisibility getVisibility() {
+        return visibility == null ? ContentVisibility.PUBLIC : visibility;
+    }
+
+    /** 仅由「发布页同步开关」与作者本人的可见范围变更调用（Story 4.2）。 */
+    public void setVisibility(ContentVisibility visibility) {
+        this.visibility = visibility == null ? ContentVisibility.PUBLIC : visibility;
     }
 
     public String getDangerLevel() {
