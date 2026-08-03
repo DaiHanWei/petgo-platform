@@ -15,10 +15,18 @@ import '../../features/content/presentation/feed_controller.dart';
 import '../../features/content/presentation/publish_compose_page.dart';
 import 'bottom_tab_bar.dart';
 
+/// **免门控 Tab 白名单**（Story 1.1 · AD-3 AC3① 去索引化）。
+///
+/// 取代原先的 `index == AppTab.home.index` 裸索引比较——重排后裸索引会指向错误的 Tab。
+/// 本 Story **只做去索引化，集合内容不变**（仍只有 Discovery）；
+/// 扩为 `{home, profile}`（放行 Diary 给游客）归 **Story 2.4**——提前放行会造成
+/// 「游客能进 Diary 但游客引导页还没做」的破损中间态。
+const Set<AppTab> kUngatedTabs = {AppTab.home};
+
 /// App 主框架外壳（Story 1.2 外观 + Story 1.5 受控 Tab 门控）。
 ///
 /// 5 位底部 Tab Bar + 中间凸起「＋」；内容区切换 [AppMotion.tabFade]=120ms 淡入。
-/// 门控（Story 1.5）：仅首页游客可访问；成长档案/[+]/问诊/我的 未登录点击 → 经
+/// 门控（Story 1.5）：仅 Discovery 游客可访问；Diary/[+]/Health/我的 未登录点击 → 经
 /// **单一门控入口** [requireLogin] 弹强弹窗（注入 pendingAction），不切换目的地。
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key, required this.navigationShell});
@@ -35,9 +43,6 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
     duration: AppMotion.tabFade,
     value: 1,
   );
-
-  /// Tab index → 受控路由位置（首页 index 0 游客可达，不门控）。
-  static const List<String> _tabLocations = ['/home', '/profile', '/triage', '/me'];
 
   @override
   void didUpdateWidget(covariant AppShell oldWidget) {
@@ -61,24 +66,27 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
   }
 
   void _onTabSelected(int index) {
-    if (index == AppTab.home.index) {
-      // 从其它 Tab 切回首页：刷新 feed（keepAlive 缓存，否则看不到新内容/删帖/发布变更）。
-      final fromElsewhere = widget.navigationShell.currentIndex != AppTab.home.index;
-      _goBranch(index); // 首页：游客可进
-      if (fromElsewhere) {
-        ref.read(feedProvider.notifier).refresh();
-      } else {
-        // 已在首页再次点击 Home → 回到顶部 + 刷新（bug 20260709-278）。
-        ref.read(homeScrollTopProvider.notifier).bump();
+    // 按 Tab 语义判定，不比较裸索引（AD-3 AC3①）——重排后裸索引会指向错误的 Tab。
+    final AppTab tab = AppTab.values[index];
+    if (kUngatedTabs.contains(tab)) {
+      final bool reTap = widget.navigationShell.currentIndex == index;
+      _goBranch(index); // 免门控：游客可进
+      if (tab == AppTab.home) {
+        // 切回 Discovery（原首页）：刷新 feed（keepAlive 缓存，否则看不到新内容/删帖/发布变更）。
+        // 已在该 Tab 再次点击 → 额外回到顶部（bug 20260709-278）。
+        if (reTap) {
+          ref.read(homeScrollTopProvider.notifier).bump();
+        }
         ref.read(feedProvider.notifier).refresh();
       }
       return;
     }
     // 受控 Tab：单一门控入口；未登录弹强弹窗 + 注入 pendingAction（登录后回到该 Tab）。
+    // 目的地取自枚举内嵌的 location，不再依赖并行数组。
     requireLogin(
       ref,
       context,
-      pendingAction: RouteIntent(location: _tabLocations[index]),
+      pendingAction: RouteIntent(location: tab.location),
       onAllowed: () => _goBranch(index),
     );
   }
@@ -92,7 +100,7 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
       // bug 20260703-244：在「成长档案（Diary）」Tab（底部第 2 个）点创建 → 编辑页默认选「成长日历（Growth）」；
       // 其余 Tab 保持默认第一个 tag（Momen）。Growth 需宠物档案（否则 segment 灰置），无档案则不预选、回落 Momen。
       onAllowed: () {
-        final onGrowthTab = widget.navigationShell.currentIndex == AppTab.profile.index;
+        final onGrowthTab = AppTab.values[widget.navigationShell.currentIndex] == AppTab.profile;
         final p = ref.read(authControllerProvider).profile;
         final canGrowth = p?.petStatus == 'HAS_PET' && (p?.hasPetProfile ?? false);
         PublishComposePage.open(

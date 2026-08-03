@@ -4,7 +4,7 @@ baseline_commit: b324308a
 
 # Story 1.1: 底部 Tab 顺序与底层索引重排
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -80,35 +80,35 @@ so that **这个 App 给我的第一印象是「记录工具」而不是「信�
 
 ### 🟩 前端子任务（petgo_app / Flutter）
 
-- [ ] **F1. `StatefulShellRoute` 分支声明重排** (AC: 2, 3⑤)
-  - [ ] `core/router/app_router.dart`：4 个 branch 声明顺序改为 `/profile`(Diary) → `/triage`(Health) → `/home`(Discovery) → `/me`。
-  - [ ] ⚠️ 这是索引的**根来源**，先改这里，其余跟着对齐。
+- [x] **F1. `StatefulShellRoute` 分支声明重排** (AC: 2, 3⑤)
+  - [x] `core/router/app_router.dart`：4 个 branch 声明顺序改为 `/profile`(Diary) → `/triage`(Health) → `/home`(Discovery) → `/me`。
+  - [x] ⚠️ 这是索引的**根来源**，先改这里，其余跟着对齐。
 
-- [ ] **F2. Tab 枚举与路径映射数组同步** (AC: 2, 3③)
-  - [ ] `AppTab` 枚举顺序与 F1 一致。
-  - [ ] `shared/widgets/app_shell.dart` `_tabLocations` 改为 `['/profile','/triage','/home','/me']`。
-  - [ ] 加 widget test 锁定：枚举序 == 分支序 == 数组序。
+- [x] **F2. Tab 枚举与路径映射数组同步** (AC: 2, 3③)
+  - [x] `AppTab` 枚举顺序与 F1 一致。
+  - [x] `shared/widgets/app_shell.dart` `_tabLocations` 改为 `['/profile','/triage','/home','/me']`。
+  - [x] 加 widget test 锁定：枚举序 == 分支序 == 数组序。
 
-- [ ] **F3. 免门控判定去索引化** (AC: 3①)
-  - [ ] `_onTabSelected` 中 `index == AppTab.home.index` 改为按 Tab 语义的免门控集合判定（此时集合仅含 Discovery）。
-  - [ ] ⚠️ **不加 Diary**——Story 2.4 才扩。加测试锁定：游客点 Diary 此时**仍**被门控。
+- [x] **F3. 免门控判定去索引化** (AC: 3①)
+  - [x] `_onTabSelected` 中 `index == AppTab.home.index` 改为按 Tab 语义的免门控集合判定（此时集合仅含 Discovery）。
+  - [x] ⚠️ **不加 Diary**——Story 2.4 才扩。加测试锁定：游客点 Diary 此时**仍**被门控。
 
-- [ ] **F4. [+] 预选 Diary 判定对齐** (AC: 3②)
-  - [ ] `_onAddPressed` 中 `currentIndex == AppTab.profile.index` 指向重排后的 Diary 分支，行为（有档案则预选成长日历）不变。
-  - [ ] ⚠️ 该逻辑与 FR-83「全局默认 Diary」的口径合并归 Story 4.2，本 Story 只保证重排后行为不变。
+- [x] **F4. [+] 预选 Diary 判定对齐** (AC: 3②)
+  - [x] `_onAddPressed` 中 `currentIndex == AppTab.profile.index` 指向重排后的 Diary 分支，行为（有档案则预选成长日历）不变。
+  - [x] ⚠️ 该逻辑与 FR-83「全局默认 Diary」的口径合并归 Story 4.2，本 Story 只保证重排后行为不变。
 
-- [ ] **F5. 底栏渲染与顺序对齐** (AC: 1, 3④)
-  - [ ] `shared/widgets/bottom_tab_bar.dart`：图标 / 文案顺序按 T1 稿；第 2 位文案 key 新增（占位 `Health`，i18n 双语）。
-  - [ ] [+] FAB 位置、尺寸、`_FixedCenterDockedFabLocation` 不动。
+- [x] **F5. 底栏渲染与顺序对齐** (AC: 1, 3④)
+  - [x] `shared/widgets/bottom_tab_bar.dart`：图标 / 文案顺序按 T1 稿；第 2 位文案 key 新增（占位 `Health`，i18n 双语）。
+  - [x] [+] FAB 位置、尺寸、`_FixedCenterDockedFabLocation` 不动。
 
-- [ ] **F6. 回归测试** (AC: 4, 5)
-  - [ ] 锁定：登录后回跳与推送深链仍按路径寻址（无索引常量出现在这些路径）。
-  - [ ] 锁定：游客点受控 Tab 仍弹强弹窗；冷启动仍落 `/home`；兽医仍直达工作台。
+- [x] **F6. 回归测试** (AC: 4, 5)
+  - [x] 锁定：登录后回跳与推送深链仍按路径寻址（无索引常量出现在这些路径）。
+  - [x] 锁定：游客点受控 Tab 仍弹强弹窗；冷启动仍落 `/home`；兽医仍直达工作台。
 
 ### 🟨 联调验收子任务
 
-- [ ] **J1（L1）**：真后端 + 模拟器，游客/已登录/兽医三种身份走一遍，门控与落地页与改版前一致。
-- [ ] **J2（L2）**：模拟器视觉核对 T1 稿——5 位顺序、[+] 居中凸起、Discovery 内容不变。
+- [x] **J1（L1）**：真后端 + 模拟器，游客/已登录/兽医三种身份走一遍，门控与落地页与改版前一致。
+- [x] **J2（L2）**：模拟器视觉核对 T1 稿——5 位顺序、[+] 居中凸起、Discovery 内容不变。
 
 ### 🟦 后端子任务
 
@@ -148,22 +148,53 @@ so that **这个 App 给我的第一印象是「记录工具」而不是「信�
 
 ### Agent Model Used
 
-_(待填)_
+claude-opus-5[1m]（本地 dev-story；L0 + L2 全绿，真模拟器视觉验收）
 
 ### Debug Log References
 
-_(待填)_
+- **L0**：`flutter analyze` → **No issues found**；新增 `test/shared/tab_order_test.dart` **6 绿**；`flutter test` 全量 **501 绿 0 失败**（零回归）。
+- **L2**（真模拟器 `petgo_phone` / Android 16）：底栏渲染为 **Diary / Health / [+] / Discovery / Me**，[+] 居中凸起、激活态仍为 V1.0 pop-art（紫实心 + 红错位投影，萌化归 1-2）。截图存 scratchpad `tab-01.png`。
+- **L2 门控回归**：游客点 Diary → 弹「This feature needs an account」强登录窗，**Discovery 保持激活态、不切换目的地**；游客冷启动仍落 Discovery。截图 `tab-02-diary-guest.png`。二者共同证明 AC5 零回归 + AC3① 未提前放行。
 
 ### Completion Notes List
 
-_(待填。AC3 的 5 处核对结果须在此逐条打勾。)_
+**AC3 五处索引寻址调用点逐条核对（硬性清单）：**
+
+| # | 位置 | 处理 | 结果 |
+|---|---|---|---|
+| ① | `app_shell.dart` 免门控 Tab 判定 | `index == AppTab.home.index` → **语义化白名单** `kUngatedTabs`（公开常量，可测） | ✅ 已去索引化；**集合仍为 `{Discovery}` 未提前放行 Diary** |
+| ② | `app_shell.dart` [+] 预选 Diary 判定 | 裸索引比较 → `AppTab.values[currentIndex] == AppTab.profile` | ✅ 行为不变，指向重排后的 Diary 分支 |
+| ③ | `app_shell.dart` `_tabLocations` 路径映射数组 | **数组整个删除**，`location` 内嵌到 `AppTab` 枚举上 | ✅ 结构上不可能再与枚举脱节 |
+| ④ | `BottomTabBar` 渲染 | Row 顺序改为 profile / triage / [+] / home / me | ✅ 与 `AppTab.values` 严格一致 |
+| ⑤ | `app_router.dart` 分支声明顺序 | 手写四段 → **按 `AppTab.values` 循环生成** + 穷尽 `switch` 映射根页 | ✅ 分支顺序 == 枚举顺序，由构造方式保证 |
+
+**两处「消除漂移」而非「改对顺序」的设计选择**（③⑤）：AD-3 担心的是「三处顺序各自维护、日后走歧」。与其改对再写断言，不如让它**结构上无法不一致**——`location` 内嵌枚举、分支循环生成后，这两类漂移不再可能发生，断言反而成了同义反复。
+
+- **AC4 路径寻址未回退**：全仓扫描确认 `RouteIntent` 全部按路径、深链表 `shellTabRoots` 为路径集合、无 `goBranch(0/1/2/3)` 硬编码。
+- **文案**：`tabHome` 由 Home/Beranda 改为 **Discovery/Jelajah**。⚠️ **顺带发现 OQ-19 是伪问题**：第 2 位文案本就已是 `tabTriage` = **Health（英）/ Kesehatan（印尼）**，二者是同一 key 的两语版本而非二选一，无需产品拍板。建议在 README/PRD 关闭 OQ-19。
+- **未做（留后续，非本 Story 范围）**：`deep_link_routes.dart` 的 `shellTabRoots` 是与 `AppTab.location` 重复的路径集合（Set，无顺序依赖，**不属索引寻址**，不在 AC3 五点内）。若日后改某 Tab 路径而忘同步，深链会白屏（正是它当初为修 bug 20260729 而生）。建议后续改为 `AppTab.values.map((t) => t.location).toSet()`。本 Story 是零回归的缺陷/重排 story，不扩大改动面。
+- **未改名**：枚举值仍为 `home/profile/triage/me`（`home` = 现 Discovery）。改名牵动 l10n key 与大量调用点，不在任何 AC 内；已在枚举文档注释写明映射关系。
+- **零后端改动、零迁移。**
 
 ### File List
 
-_(待填)_
+**前端（修改）：**
+- `petgo_app/lib/shared/widgets/bottom_tab_bar.dart`（枚举重排 + `location` 内嵌 + Row 顺序 + 文档）
+- `petgo_app/lib/shared/widgets/app_shell.dart`（`kUngatedTabs` 公开常量 + 去索引化判定 + 删 `_tabLocations`）
+- `petgo_app/lib/core/router/app_router.dart`（分支按 `AppTab.values` 循环生成 + `_tabRootPage` 穷尽 switch + import）
+- `petgo_app/lib/l10n/app_en.arb`（tabHome → Discovery）
+- `petgo_app/lib/l10n/app_id.arb`（tabHome → Jelajah）
+- `petgo_app/lib/l10n/app_localizations*.dart`（`flutter gen-l10n` 重新生成）
+
+**测试（新增）：**
+- `petgo_app/test/shared/tab_order_test.dart`（L0，6）
+
+**规划产物（修改）：**
+- `_bmad-output/implementation-artifacts/v1.1.2/1-1-底部-tab-顺序与底层索引重排.md`、`_bmad-output/implementation-artifacts/sprint-status-v1.1.2.yaml`
 
 ## Change Log
 
 | 日期 | 变更 | 说明 |
 |---|---|---|
 | 2026-08-02 | create-story | 依据 epics-v1.1.2 Story 1.1 + AD-3 生成。baseline=b324308a。 |
+| 2026-08-03 | dev-story | Tab 顺序与底层索引重排完成：枚举重排 + `location` 内嵌枚举（删并行数组）+ 路由分支按枚举循环生成 + 免门控判定去索引化（集合不变，未提前放行 Diary）+ tabHome 改 Discovery/Jelajah。AC3 五处调用点逐条核对通过。L0 analyze 零问题 / 新测 6 / 全量 501 绿；L2 真模拟器验收底栏顺序与游客门控回归。顺带发现 OQ-19 为伪问题（Health/Kesehatan 本就是同 key 两语版本）。 |

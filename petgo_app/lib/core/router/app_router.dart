@@ -71,6 +71,7 @@ import '../../features/vet/presentation/vet_login_page.dart';
 import '../../features/vet/presentation/vet_request_detail_page.dart';
 import '../../features/vet/presentation/vet_workbench_shell.dart';
 import '../../shared/widgets/app_shell.dart';
+import '../../shared/widgets/bottom_tab_bar.dart';
 
 /// 根 Navigator key（供拦截器在 401 续期失败后于全局弹登录引导，Story 1.5 F3）。
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -102,6 +103,14 @@ const Set<String> _controlledLocations = {'/profile', '/triage', '/me', '/consul
 /// Debug-only 开发直达路由：`--dart-define=DEV_ROUTE=/vet/workbench` 启动即落该屏，
 /// 供本地逐屏视觉验收（配合 `DEV_VET=true` 种子兽医态）。release 恒走 /splash。
 const String _devRoute = String.fromEnvironment('DEV_ROUTE');
+
+/// Tab 分支根页（与 [AppTab] 一一对应；穷尽 switch，新增 Tab 时编译期报错，不会静默漏配）。
+Widget _tabRootPage(AppTab tab) => switch (tab) {
+      AppTab.profile => const GrowthArchivePage(),
+      AppTab.triage => const TriagePage(),
+      AppTab.home => const HomePage(),
+      AppTab.me => const MePage(),
+    };
 
 final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
   // 登录态变化(尤其冷启动异步恢复完成)后让 redirect 重跑——否则兽医会话恢复晚于
@@ -405,19 +414,13 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/profile/milestones', builder: (c, s) => const MilestoneListPage()),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) => AppShell(navigationShell: navigationShell),
+        // 分支顺序 **按 AppTab.values 循环生成**（Story 1.1 · AD-3 AC2/AC3⑤）：
+        // 分支声明顺序即索引来源，手写四段会与枚举顺序脱节；循环生成后结构上不可能漂移。
         branches: <StatefulShellBranch>[
-          StatefulShellBranch(routes: [
-            GoRoute(path: '/home', builder: (c, s) => const HomePage()),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(path: '/profile', builder: (c, s) => const GrowthArchivePage()),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(path: '/triage', builder: (c, s) => const TriagePage()),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(path: '/me', builder: (c, s) => const MePage()),
-          ]),
+          for (final AppTab tab in AppTab.values)
+            StatefulShellBranch(routes: [
+              GoRoute(path: tab.location, builder: (c, s) => _tabRootPage(tab)),
+            ]),
         ],
       ),
     ],

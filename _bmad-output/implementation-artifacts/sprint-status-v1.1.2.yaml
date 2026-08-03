@@ -1,5 +1,5 @@
 # generated: 2026-07-31
-# last_updated: 2026-08-02
+# last_updated: 2026-08-03
 # project: TailTopia V1.1.2
 # project_key: NOKEY
 # tracking_system: file-system
@@ -66,7 +66,7 @@
 # - OQ-11B 月经图标红色色值 —— 不阻塞 3-4，先用 coral 占位
 
 generated: 2026-07-31
-last_updated: 2026-08-02
+last_updated: 2026-08-03
 project: TailTopia V1.1.2
 project_key: NOKEY
 tracking_system: file-system
@@ -76,8 +76,8 @@ development_status:
   # ===== Epic 1: 底部 Tab 换新顺序与萌化激活态 =====
   # FR-78(顺序部分) / FR-78A。无后端改动。单独上线自洽（门控与落地页此时不动）。
   epic-1: in-progress
-  1-1-底部-tab-顺序与底层索引重排: ready-for-dev        # 含 AD-3 的 5 处索引寻址调用点硬性核对清单；风险在漏改不在代码量
-  1-2-tab-激活态萌化方案a: ready-for-dev                 # 视觉稿 T3 已定「方案A」；含回改 icon-system.md，闭合 OQ-13
+  1-1-底部-tab-顺序与底层索引重排: review        # 含 AD-3 的 5 处索引寻址调用点硬性核对清单；风险在漏改不在代码量
+  1-2-tab-激活态萌化方案a: review                 # 视觉稿 T3 已定「方案A」；含回改 icon-system.md，闭合 OQ-13
   epic-1-retrospective: optional
 
   # ===== Epic 2: Diary 成为所有人的门面 =====
@@ -92,7 +92,7 @@ development_status:
   # ===== Epic 3: 成长档案整合成一本完整的册子 =====
   # FR-82 / FR-84。本版本后端最重的一块，约等于其余五个 Epic 之和。
   epic-3: in-progress
-  3-1-时间线统一游标锚点重构: ready-for-dev              # 修现网缺陷，非新功能；须配「补记旧日期日记跨页无丢失无重复」回归断言
+  3-1-时间线统一游标锚点重构: review              # 修现网缺陷，非新功能；须配「补记旧日期日记跨页无丢失无重复」回归断言
   3-2-时间线四源接入与五类分类下发: ready-for-dev        # itemType 实时计算严禁落库；须采纳 2-2 定义的词表
   3-3-时间线前端五类渲染: ready-for-dev                  # 复用 2-2 组件，禁止另写一套
   3-4-日历联动结构化健康记录与当天详情排序: ready-for-dev  # 后端仅补一维；当天详情须先补第三个数据源再改排序；含纯文字日记错显🏥的纯前端修复

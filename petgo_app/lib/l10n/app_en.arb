@@ -4,7 +4,7 @@
   "@appTitle": {
     "description": "Application title."
   },
-  "tabHome": "Home",
+  "tabHome": "Discovery",
   "@tabHome": {
     "description": "Bottom tab label: Home (Feed)."
   },
