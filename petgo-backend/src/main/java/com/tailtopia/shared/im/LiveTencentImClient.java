@@ -204,12 +204,20 @@ public class LiveTencentImClient implements TencentImClient {
                     + "&usersig=" + adminSig
                     + "&random=" + ThreadLocalRandom.current().nextInt(Integer.MAX_VALUE)
                     + "&contenttype=json";
-            rest.post()
+            // 腾讯 REST 业务失败也回 HTTP 200，错误在响应体 ErrorCode——必须解析，否则静默失败
+            // （生产事故 2026-08-03：域名配错德国数据中心，60026 无任何日志，账号导入长期未生效）。
+            Map<?, ?> resp = rest.post()
                     .uri(uri)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(body)
                     .retrieve()
-                    .toBodilessEntity();
+                    .body(Map.class);
+            Object code = resp == null ? null : resp.get("ErrorCode");
+            if (code instanceof Number n && n.intValue() != 0) {
+                // ErrorCode/ErrorInfo 为腾讯侧诊断文本，无凭证/PII，可记（仍不打印请求正文/usersig）。
+                log.warn("[IM-live] {} 业务失败（不阻断业务）: ErrorCode={} ErrorInfo={}",
+                        op, n, resp.get("ErrorInfo"));
+            }
         } catch (RuntimeException e) {
             // 非敏感日志：仅 op + 异常类名（不打印 imUserId 外的 PII / 文本 / usersig）。
             log.warn("[IM-live] {} 失败（不阻断业务）: {}", op, e.getClass().getSimpleName());
