@@ -53,7 +53,8 @@ scope: 'V1.1.2 增量；brownfield；Flyway V98 起'
 - **NFR-5（可用性）**：FR-80 游客引导态**零网络依赖**，不得出现白屏或加载态。（AD-13）
 - **NFR-6（数据完整性）**：`visibility` 迁移必须在功能开关生效前完成，不接受「先上线再补回填」；存量统一回填 PUBLIC。（AD-4）
 - **NFR-7（一致性）**：游客示例时间线与真实时间线**共用同一套条目渲染组件**，禁止两套实现。（AD-13）
-- **NFR-8（契约一致性）**：新增/变更的每个对外字段必须**四处同步**（后端 record + App data DTO + App mock + 契约 test），四处不同步即视为契约破坏、PR 不绿。（CROSS-STORY C4/C5）
+- **NFR-8（契约一致性）**：新增/变更的每个对外字段必须**三处同步**（后端 record + App data DTO + 后端契约 test），不同步即视为契约破坏、PR 不绿。（CROSS-STORY C4/C5）
+  > ⚠️ **C5 原文写「四处」含 App mock，已过时**——提交 `8e85b40d`「删除全部 mock 子系统，L2 分支恒连真后端」已移除 App mock 层。本版本按**三处**执行；建议一并回写 CROSS-STORY-DECISIONS C5。
 - **NFR-9（可访问性 / 动效）**：FR-78A 入场动效 ≤150ms，遵循 icon-system.md 既有 reduced-motion 兜底。
 - **NFR-10（架构护栏）**：不引入 MQ / 调度中间件 / 通用缓存层 / 任何新中间件；异步只用 `@Async` + DB 状态机与 `@Scheduled`；`ddl-auto=validate`，schema 归 Flyway。（继承）
 - **NFR-11（幂等与护栏）**：里程碑自动完成幂等，重复触发不产生重复完成记录；**健康类四条的打卡请求须在后端被显式拒绝**——仅前端隐藏按钮不合格，接口仍可被直接调用。（AD-11）
@@ -90,7 +91,7 @@ scope: 'V1.1.2 增量；brownfield；Flyway V98 起'
 **来自 CROSS-STORY-DECISIONS（既有契约，不得违反）：**
 
 - **C1**：当前用户资源统一 `/api/v1/me`，不用 `/users/me`
-- **C4/C5**：接口契约后端主导；改任一对外 DTO 必须同步四处 + 契约 test（→ NFR-8）
+- **C4/C5**：接口契约后端主导；改任一对外 DTO 必须同步**三处**（后端 record + App data DTO + 后端契约 test）（→ NFR-8）。**C5 原文的第四处「App mock」已随 `8e85b40d` 删除 mock 子系统而失效**
 - **F9**：`event_date` 与 `created_at` 分离。**Feed / 「我的发布」按 `created_at` 倒序；成长档案时间线 / 日历 / H5 名片按 `event_date`** —— 与 AD-1 的游标选择一致，story 不得混用
 - **F13**：加载失败统一口径（重试入口 + 已加载内容保留），覆盖时间线 / 日历 / 当天详情失败态（→ UI 稿 A5 屏）
 - **F10**：发布走三方自动审核（文字关键词 + 图像识别 stub），FR-83 发布页改动不得绕过该流程
@@ -115,7 +116,7 @@ scope: 'V1.1.2 增量；brownfield；Flyway V98 起'
 
 **泳道 2 · 成长档案 Diary（A1–A9·A2b，对应 FR-80/81/82/84）**
 
-- **UX-DR4**（A1）：游客态 Diary（未登录默认落地）—— Hero 示例时间线 + 情感化标题 + 唯一主 CTA。**含真实 Diary 页头**：编辑入口 + 健康记录/身份证双入口卡 + 个性签名行。
+- **UX-DR4**（A1）：游客态 Diary（未登录默认落地）—— Hero 示例时间线 + 情感化标题 + 唯一主 CTA。**含真实 Diary 页头**：编辑入口 + 健康记录卡 + 身份证图标按钮 + 个性签名行（**结构以现网为准**：身份证是 38×38 纯图标按钮、无编号；UI 稿画的「Kartu Identitas #00842」卡片作废）。示例宠物为**猫 Mochi**；9 条中**仅 3 条带图**（#3 玩水 / #7 深夜 / #8 晒太阳），其余 6 条为默认卡片无需配图。3 条带图内容**游客可无登录查看详情**。
 - **UX-DR5**（A2）：状态 A 已登录未建档引导态。
 - **UX-DR6**（A2b）：状态 B/C 的 Diary 非落地态 —— 既有页面，**零改动**，本屏为回归基准。
 - **UX-DR7**（A3）：真实时间线正常态（已建档），含与 A1 一致的页头结构。
@@ -194,6 +195,25 @@ scope: 'V1.1.2 增量；brownfield；Flyway V98 起'
 
 补齐 11 项埋点（含 PRD 点名的 P0 缺口：底部 Tab 切换目前完全无埋点）。**面向产品团队的价值，非终端用户价值**；排在最后，依赖全部功能落地。
 **FRs covered:** PRD §3 数据埋点需求（T-1~T-4、T-6~T-12）
+
+### 共享件归属总表（2026-08-03 全量扫描结论）
+
+本版本有 7 处「多条 story 共用同一件东西」。**共享件必须有唯一定义方，其余 story 只采纳、不重造**——这是本轮 story 校验中反复出现的问题来源。
+
+| # | 共享件 | 定义方 | 采纳方 | 写歪了会怎样 |
+|---|---|---|---|---|
+| 1 | **五类条目 tile 组件** | 2-2 | 3-3 | 各写一套 → 游客看到的与注册后拿到的不是一个东西，FR-80 承诺落空（NFR-7） |
+| 2 | **tile 的点击回调接口** | 2-2（留口） | 3-3（注入真实跳转） | 跳转写死在组件里 → 游客态只能另写一套 tile，NFR-7 破功 |
+| 3 | **Diary 页头组件** | 2-2 | 3-3 | 同 #1：真实态页头要求与游客态一致，内联布局会迫使 3-3 再写一遍 |
+| 4 | **`itemType` 五值词表** | 2-2（前端定义） | 3-2（后端采纳）/ 3-3 / 6-1 | 前后端各定一套 → 契约对不上 |
+| 5 | **健康类里程碑 code 集合 {M3,M4,M5,M9}** | 5-1 | 5-2（护栏 + 候选过滤）/ 6-1（T-12 校验） | 三处各写一份 → 日后增减健康类里程碑漏改，护栏出洞 |
+| 6 | **健康类型图标常量表** | 先落地者建（2-2 类④ 或 3-4） | 3-4（权威落地：日历 + 健康记录列表页） | 两份表 → 改一处漏一处，日历与列表页图标不一致 |
+| 7 | **用户状态六态判定** | 2-4（落地矩阵） | 6-1（埋点 `user_state`） | 各写一份 → 埋点口径与实际分流不一致，数据不可信 |
+| 8 | **失败态组件（F13 口径）** | 3-3 | 3-4（日历 + 当天详情） | 各写一套失败态 → 体验不一致 |
+| 9 | **免门控 Tab 白名单** | 1-1（去索引化建立） | 2-4（扩容加 Diary） | 两条 story 重复认领 → 后做的那条以为已完成，无人负责 |
+| 10 | **Diary 页状态分发入口** | 2-1 | 2-2 / 2-3（各填一支） | 各自加判断 → 互相覆盖或漏状态组合（AD-15） |
+| 11 | **建档引导入口函数** | 2-2 | 2-2 AC8 的三个触发点 / 2-3 | 多套跳转逻辑 → 埋点来源统计碎裂 |
+| 12 | **`visibility` 的 App data DTO 镜像** | 4-1 | 4-2（直接使用） | 归属含糊 → 两条都不做，4-1 的契约同步 AC 落空 |
 
 ### Epic 依赖关系
 
@@ -344,7 +364,7 @@ So that 我会想「我也想给我家宠物记一篇」，而不是先被要求
 **AC1（L2 视觉 · UX-DR4）**
 **Given** UI 稿 A1 屏
 **When** 游客进入 Diary
-**Then** 页面自上而下为：真实 Diary 页头（编辑入口 + 健康记录/身份证双入口卡 + 个性签名行）、Hero 示例时间线、情感化标题与一句话说明、唯一主 CTA
+**Then** 页面自上而下为：真实 Diary 页头（编辑入口 + 健康记录卡 + 身份证图标按钮 + 个性签名行；**结构以现网为准**——身份证是 38×38 纯图标按钮、无标题无编号，UI 稿画的「Kartu Identitas #00842」卡片作废）、Hero 示例时间线、情感化标题与一句话说明、唯一主 CTA
 **And** 主 CTA 文案不出现「登录」字样，点击进入 V1.0.0 既有建档引导流程（FR-0G）
 **And** 页面不含「已有账号？登录」次要入口（2026-07-30 已删）
 
@@ -359,6 +379,7 @@ So that 我会想「我也想给我家宠物记一篇」，而不是先被要求
 **When** 实现完成
 **Then** 存在一套统一的五类条目渲染组件，按 UI 稿 A6 屏的样式基准实现：① 普通照片卡（无徽章）② 照片卡 + 右上角金色徽章角标 ③ 横向通栏庆祝 banner ④ 胶囊/标签式条目 ⑤ 独立证件卡样式
 **And** 该组件的输入为携带 `itemType` 标识的条目数据，不关心数据来源
+**And** ⚠️ **组件只渲染、不持有跳转**，点击回调由调用方注入——游客态点 banner 弹建档引导、真实态跳里程碑列表，语义不同；写死跳转会迫使游客态另写一套 tile，NFR-7 破功
 **And** ⚠️ **本 story 同时定义 `itemType` 的五个取值词表**（UPPER_SNAKE，与 PRD 五类一一对应），作为前后端共同契约；Story 3.2 的后端实现**必须采纳该词表，不得另立一套取值**
 **And** 游客态通过内置常量数据喂给该组件，**未另写一套渲染**
 **And** Epic 3 的真实时间线将复用同一组件
@@ -382,6 +403,16 @@ So that 我会想「我也想给我家宠物记一篇」，而不是先被要求
 **When** 验收本 story
 **Then** 通过 Story 2.1 的状态分发入口直接构造游客分支进行验收（widget test + debug 路由），不依赖门控解除
 **And** 真实游客可达性由 Story 2.4 交付，本 story 不得为了自测而提前放行门控
+
+**AC8（L2，2026-08-03 新增）**
+**Given** 游客在示例时间线上点击条目
+**When** 点击 3 条带图内容
+**Then** 直接进入示例内容详情，**无需登录**，内容全部来自内置常量、零网络请求
+**When** 点击其余 6 条（banner / 胶囊 / 证件卡）
+**Then** 触发主 CTA 的建档引导；**不得**跳转里程碑列表 / 健康记录列表 / 身份证页（均为受控页，会在种草页中间弹登录框）
+**When** 在示例详情页点击点赞 / 评论 / 举报
+**Then** 三者正常展示，点击任意一个均触发建档引导
+**And** ⚠️ 示例详情**不得**挂在 `/profile/...` 前缀下（AD-7 会拦截），**不得**复用 `/content/:id`（示例无后端 ID → 404）
 
 **AC6（占位允许）**
 **Given** OQ-1 印尼语文案与 Milo 配图素材尚未到位
@@ -438,11 +469,21 @@ So that 我能先看看这个 App 是干什么的，再决定要不要注册.
 **And** 游客点击 Diary 标签直接进入，不弹登录框
 **And** Health / [+] / Me 三者对游客维持受控不变
 
-**AC3（L0 安全回归 · NFR-3）**
-**Given** 安全默认不可反转
+**AC3（L0 安全回归 · NFR-3，双向）**
+**Given** 安全默认不可反转，且门控须双向正确
 **When** 新增任意 `/profile/*` 子页
 **Then** 其默认状态为受控
-**And** 存在测试锁定：游客访问 `/profile/create`、`/profile/edit`、当天详情、里程碑列表均被拦截
+**And** **拦截方向**存在测试锁定：游客访问 `/profile/create`、`/profile/edit`、当天详情、里程碑列表均被拦截
+**And** **放行方向**存在测试锁定（2026-08-03 新增）：`/profile` 主页放行；**Story 2.2 AC8 的示例内容详情对游客可达、不被任何门控拦截**
+**And** **不得**为放行示例详情而扩大 `/profile/` 例外集——那会连带放行真实子页
+
+**AC7（L1/L2，2026-08-03 新增 · Epic 2 收口验收）**
+**Given** 本 Story 是门控真正打开的那一刻
+**When** 用未登录设备走完整链路
+**Then** 冷启动 → 落地 Diary 游客态 → 浏览 9 条示例 → 点 3 条带图内容之一 → 看到示例详情 → 返回
+**And** 全程不出现任何登录框、不出现任何拦截重定向
+**And** 点其余 6 条 / 详情页互动按钮 → 正常触发建档引导（期望行为，不算拦截）
+**And** 示例详情零网络请求
 
 **AC4（L1 · AD-8）**
 **Given** 落地 Tab 按当前用户状态实时计算
@@ -550,8 +591,8 @@ So that 我不用在四个页面之间跳来跳去才能回顾我家宠物的成
 **AC6（L0 · NFR-8 · CROSS-STORY C4/C5）**
 **Given** 新增对外字段 `itemType`
 **When** 实现完成
-**Then** 后端 record、App data DTO、App mock、契约 test 四处已同步
-**And** 契约 test 钉住 `itemType` 的字段集与枚举取值（UPPER_SNAKE）
+**Then** 后端 record、App data DTO、后端契约 test **三处**已同步（App mock 层已随 `8e85b40d` 删除，不适用）
+**And** 契约 test 钉住 `itemType` 的字段集与枚举取值（UPPER_SNAKE），照 `MilestoneListResponseContractTest` 范式
 
 **AC7（L1）**
 **Given** 类④ 健康胶囊条
@@ -572,6 +613,13 @@ So that 我一眼能分清哪条是随手拍的、哪条是里程碑、哪条是
 **Then** 复用同一套组件，仅数据来源由内置常量改为后端下发
 **And** 未新写第二套渲染实现
 **And** 游客示例与真实时间线的同类条目视觉完全一致
+
+**AC6（L0，2026-08-03 新增）**
+**Given** 游客态与真实态共用同一套 tile 但点击语义不同（游客态：照片卡→示例详情、其余→建档引导；真实态：五类各跳各的）
+**When** 实现完成
+**Then** tile 组件**不得内置跳转**，点击回调由调用方按 `itemType` 注入
+**And** 类② 金色徽章角标为独立可点区域，回调同样注入
+**And** 存在测试锁定：同一组件在两套回调下产出相同视觉、触发不同行为
 
 **AC2（L2 视觉 · UX-DR7 · UX-DR8）**
 **Given** UI 稿 A3（正常态）与 A4（刚建档近空态）
@@ -640,7 +688,13 @@ So that 我翻月历时不用点进去才知道那天发生了什么.
 **AC7（L0 · NFR-8）**
 **Given** `DayCell` 新增一维
 **When** 实现完成
-**Then** 后端 record、App data DTO、App mock、契约 test 四处已同步
+**Then** 后端 record、App data DTO、后端契约 test **三处**已同步（App mock 层已删除，不适用）
+
+**AC8（L2 · CROSS-STORY F13，2026-08-03 新增）**
+**Given** F13 明确覆盖「日历 / 当天详情页」失败态，而 UI 稿 A5 只画了时间线
+**When** 日历月视图或当天详情加载失败
+**Then** 按 F13 同一口径：已加载内容保留、提供重试入口、不整页白屏
+**And** 与 Story 3.3 的时间线失败态复用同一套失败态组件
 
 ---
 
@@ -699,7 +753,7 @@ So that 所有要取公开内容的地方只需问一句话，而不是各写各
 **AC7（L0 · NFR-8）**
 **Given** 新增对外字段 `visibility`
 **When** 实现完成
-**Then** 后端 record、App data DTO、App mock、契约 test 四处已同步
+**Then** 后端 record、App data DTO、后端契约 test **三处**已同步（App mock 层已删除，不适用）
 
 ### Story 4.2: 发布页同步开关与「我的」页私密标识
 
@@ -830,6 +884,12 @@ So that 我不用再手动去打一次卡.
 **Then** 未新增任何 Flyway 迁移
 **And** 未引入任何新中间件（继承 NFR-10）
 
+**AC8（L0，2026-08-03 新增）**
+**Given** 「健康类四条」被 5.2 打卡护栏、6.1 埋点校验共同引用
+**When** 实现完成
+**Then** 存在**唯一一处**定义：健康类里程碑 code 集合 = {M3, M4, M5, M9}（含 C/D/G 系列前缀解析）
+**And** 下游 story 引用该定义，不得各写一份
+
 ### Story 5.2: 取消健康类打卡路径（前后端同批）与庆祝合并
 
 As a 用户,
@@ -902,7 +962,7 @@ So that 下一个版本的决策有数据依据.
 **AC3（L1 · PRD §3.2）**
 **Given** 本版本埋点清单（T-5 已删，编号不重分配）
 **When** 实现完成
-**Then** 以下 11 项全部上报且属性齐全：T-1 `app_landing_tab`（`tab`/`user_state`）、T-2 `tab_switched`（`from_tab`/`to_tab`/`user_state`）、T-3 `diary_guest_view`（`session_first`）、T-4 `diary_guest_cta_tapped`、T-6 `soft_login_prompt_shown`/`_tapped`、T-7 `signup_completed`（`entry_source`）、T-8 `publish_type_selected`（`type`/`is_default`/`has_pet_profile`）、T-9 `diary_sync_toggled`（`enabled`）、T-10 `timeline_item_tapped`（`item_type`）、T-11 `archive_view_switched`（`to_view`）、T-12 `milestone_completed`（`code`/`level`/`path`）
+**Then** 以下 11 项全部上报且属性齐全：T-1 `app_landing_tab`（`tab`/`user_state`）、T-2 `tab_switched`（`from_tab`/`to_tab`/`user_state`）、T-3 `diary_guest_view`（`session_first`）、T-4 `diary_guest_cta_tapped`（`source`：main_cta / timeline_item / detail_interaction —— 建档引导为三入口，见 Story 2.2 AC8）、T-6 `soft_login_prompt_shown`/`_tapped`、T-7 `signup_completed`（`entry_source`）、T-8 `publish_type_selected`（`type`/`is_default`/`has_pet_profile`）、T-9 `diary_sync_toggled`（`enabled`）、T-10 `timeline_item_tapped`（`item_type`）、T-11 `archive_view_switched`（`to_view`）、T-12 `milestone_completed`（`code`/`level`/`path`）
 
 **AC4（L0）**
 **Given** T-10 的 `item_type` 属性

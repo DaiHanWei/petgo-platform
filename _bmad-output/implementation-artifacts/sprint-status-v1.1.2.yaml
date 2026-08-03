@@ -1,0 +1,119 @@
+# generated: 2026-07-31
+# last_updated: 2026-08-02
+# project: TailTopia V1.1.2
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts/v1.1.2
+# source_epics: {project-root}/_bmad-output/planning-artifacts/epics-v1.1.2.md (6 Epic / 15 Story)
+# architecture: {project-root}/_bmad-output/planning-artifacts/architecture-v1.1.2-delta.md (16 AD, 权威)
+#
+# NOTE: 本文件是 V1.1.2 增量 sprint 跟踪，与 V1.0 的 sprint-status.yaml、
+#       V1.1 的 sprint-status-v1.1.yaml 并存，均不覆盖。
+#       story 文件另放子目录 v1.1.2/，避免与前两版的 1-1/2-1 编号混淆。
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:   backlog -> in-progress -> done
+# Story Status:  backlog -> ready-for-dev -> in-progress -> review -> done
+# Retrospective: optional <-> done
+# Action Item:   open -> in-progress -> done
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic 首个 story 创建(create-story)时自动 -> in-progress
+# - 每 story 三段推进：后端 -> 前端 -> 联调（CLAUDE.md 纪律）
+# - 每条 AC 已标 L0(静态) / L1(集成) / L2(端到端) 层级
+# - 云端 headless 只跑到 L0 绿灯；L1/L2 留本地，在 Completion Notes 标注
+# - Dev 完成后转 review，再跑 code-review（建议新开 context）
+#
+# ===== 依赖链（全后向，无前向依赖） =====
+# E1 Tab 顺序 -> E2 Diary 门面（E2 需 E1 的 Tab 重排落位）
+# E2 -> E3（E3 复用 E2 Story 2-2 建立的五类条目渲染组件）
+# E4 内容发布模型 / E5 里程碑：与 E1-E3 无依赖，可全程并行
+# E6 埋点：依赖全部功能落地，排最后（AD-5 用户决定）
+#
+# ===== Epic 内部顺序（刻意为之，勿调换） =====
+# E2: 2-1 建分支入口 -> 2-2 游客态 -> 2-3 未建档态 -> 2-4 最后解门控
+#     反过来先解门控会出现「游客能进 Diary 但游客页还没做」的破损中间态
+# E3: 3-1 游标重构 -> 3-2 四源接入（游标不修好，接新源等于在坏地基上盖楼）
+# E5: 5-1 只补自动路径（两条并存、系统自洽）-> 5-2 取消打卡（前端隐藏 + 后端护栏同批）
+#     反过来会出现「打卡按钮可见但点了报错」
+#
+# ===== 推荐执行顺序 =====
+# 风险前置：3-1（游标重构）是本版本最大技术风险且改的是现网缺陷，建议紧随 E1 提前做
+# 1) E1(1-1 -> 1-2)
+# 2) 3-1 提前插入
+# 3) E2(2-1 -> 2-2 -> 2-3 -> 2-4) / E3(3-2 -> 3-3 -> 3-4) / E4 / E5 并行铺开
+#    ⚠ 2-2 与 3-3 共用同一套条目渲染组件，排期上应相邻或指派同一人
+# 4) E6 收尾
+#
+# ===== FLYWAY 号 =====
+# 仓库现有迁移最高 V97，本版本从 V98 起单调顺延（占位 V<n>__，实际号按执行顺序分配 — 决策 E2）
+# 本版本唯一 schema 变更：4-1 给 content_posts 加 visibility 列 + 存量回填 PUBLIC
+# 其余 story 均无迁移
+#
+# ===== 安全攸关节点（AC 含硬约束，不可被无监管流程降级/跳过） =====
+# - 2-4  门控「默认受控 + 精确例外」，安全默认不可反转（NFR-3）
+# - 4-1  visibility 过滤只作用于他人可见视图，作者自视不过滤（NFR-4，写反即摧毁 FR-83）
+# - 4-1  迁移须在功能开关生效前完成，存量统一回填 PUBLIC（NFR-6）
+# - 5-2  后端须显式拒绝健康类打卡请求，仅前端隐藏按钮不合格（NFR-11）
+# - 3-1  跨页无丢失无重复的回归断言常驻，不得删除（NFR-1）
+#
+# ===== 开工前须闭合的开放问题 =====
+# - OQ-18 手动设私密的 Diary 是否仍出现在主动分享的名片 H5 —— 阻塞 4-1/4-2 一个分支
+# - OQ-19 第2位 Tab 显示文案取 Health 还是 Kesehatan —— 不阻塞，先用 Health 占位
+# - OQ-1  印尼语文案 + Milo 9 张配图 —— 阻塞 2-2 最终交付，不阻塞开发（占位实现）
+# - OQ-11B 月经图标红色色值 —— 不阻塞 3-4，先用 coral 占位
+
+generated: 2026-07-31
+last_updated: 2026-08-02
+project: TailTopia V1.1.2
+project_key: NOKEY
+tracking_system: file-system
+story_location: '{project-root}/_bmad-output/implementation-artifacts/v1.1.2'
+
+development_status:
+  # ===== Epic 1: 底部 Tab 换新顺序与萌化激活态 =====
+  # FR-78(顺序部分) / FR-78A。无后端改动。单独上线自洽（门控与落地页此时不动）。
+  epic-1: in-progress
+  1-1-底部-tab-顺序与底层索引重排: ready-for-dev        # 含 AD-3 的 5 处索引寻址调用点硬性核对清单；风险在漏改不在代码量
+  1-2-tab-激活态萌化方案a: ready-for-dev                 # 视觉稿 T3 已定「方案A」；含回改 icon-system.md，闭合 OQ-13
+  epic-1-retrospective: optional
+
+  # ===== Epic 2: Diary 成为所有人的门面 =====
+  # FR-78(门控/落地页) / FR-79 / FR-80 / FR-81。无后端改动。story 顺序刻意如此，勿调换。
+  epic-2: in-progress
+  2-1-diary-页状态分支单一入口: ready-for-dev            # AD-15 基座，2-2/2-3 的共同前置；本身很薄但必须先立
+  2-2-游客引导态与五类条目渲染组件: ready-for-dev        # 本 Epic 最重；建立五类渲染组件 + 定义 itemType 词表（3-2 须采纳）；OQ-1 素材未到可用占位
+  2-3-已登录未建档用户的建档引导态: ready-for-dev        # 含 V1.0.0 FR-0H 首页提示条整条废止 + 埋点下线
+  2-4-登录门控解除与落地-tab-矩阵: ready-for-dev         # 收尾；两处门控同改（深链前缀匹配 + Tab 点击判定）
+  epic-2-retrospective: optional
+
+  # ===== Epic 3: 成长档案整合成一本完整的册子 =====
+  # FR-82 / FR-84。本版本后端最重的一块，约等于其余五个 Epic 之和。
+  epic-3: in-progress
+  3-1-时间线统一游标锚点重构: ready-for-dev              # 修现网缺陷，非新功能；须配「补记旧日期日记跨页无丢失无重复」回归断言
+  3-2-时间线四源接入与五类分类下发: ready-for-dev        # itemType 实时计算严禁落库；须采纳 2-2 定义的词表
+  3-3-时间线前端五类渲染: ready-for-dev                  # 复用 2-2 组件，禁止另写一套
+  3-4-日历联动结构化健康记录与当天详情排序: ready-for-dev  # 后端仅补一维；当天详情须先补第三个数据源再改排序；含纯文字日记错显🏥的纯前端修复
+  epic-3-retrospective: optional
+
+  # ===== Epic 4: 日记可以只留给自己 =====
+  # FR-83。本版本唯一 schema 变更所在。与 E1-E3 无依赖，可并行。
+  epic-4: in-progress
+  4-1-内容可见范围字段数据迁移与-feed-取数改造: ready-for-dev  # Flyway V98 起；⚠作者自视视图不得过滤（NFR-4）
+  4-2-发布页同步开关与我的页私密标识: ready-for-dev      # 含关同步后主按钮 Bagikan→Simpan 的文案联动（PRD 未提，UI 稿 P2 独有）
+  epic-4-retrospective: optional
+
+  # ===== Epic 5: 健康里程碑改为只能自动点亮 =====
+  # FR-86。完全独立，可最先做也可最后做。无 schema 变更。
+  epic-5: in-progress
+  5-1-健康里程碑自动达成路径补全: ready-for-dev          # 映射加 NEUTER→M9 + 订阅既有 ConsultClosedEvent；本 story 不动打卡路径
+  5-2-取消健康类打卡路径与庆祝合并: ready-for-dev        # 前端隐藏四条入口 + 后端拒绝护栏，两者必须同批交付
+  epic-5-retrospective: optional
+
+  # ===== Epic 6: 改版效果可度量 =====
+  # PRD §3 埋点。依赖全部功能落地，排最后。
+  epic-6: in-progress
+  6-1-v112-埋点收尾: ready-for-dev                       # 动手前先实测确认「Tab 切换不产生浏览事件」这一假设；须回写全局埋点文档
+  epic-6-retrospective: optional
