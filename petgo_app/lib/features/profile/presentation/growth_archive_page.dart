@@ -25,7 +25,7 @@ import 'diary_guest_page.dart';
 import 'widgets/archive_calendar.dart';
 import 'widgets/diary_header.dart';
 import 'widgets/share_fab.dart';
-import 'widgets/timeline_tiles.dart';
+import 'widgets/timeline_item_tile.dart';
 
 /// Diary 页（`/profile`）的四种用户状态（V1.1.2 · AD-15）。
 ///
@@ -293,7 +293,10 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
           ),
           _viewToggleRow(l10n),
           const SizedBox(height: 14),
-          if (_view == _ArchiveView.timeline) const _TimelineView() else _calendarView(),
+          if (_view == _ArchiveView.timeline)
+            _TimelineView(petName: widget.profile.name)
+          else
+            _calendarView(),
         ],
       ),
     );
@@ -343,9 +346,41 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
   static String _two(int n) => n.toString().padLeft(2, '0');
 }
 
-/// 时间线视图（倒序快乐时刻 + 健康事件；首条各显 🌟；加载失败可重试，AC7）。
+/// 时间线视图（五类条目倒序；首条显 🌟；加载失败可重试）。
+///
+/// Story 3.3：条目渲染改走 **Story 2.2 建立的共用组件** [TimelineItemTile]，与游客示例本同一份实现
+/// （NFR-7）；本视图只负责**按 itemType 注入真实态的点击语义**——组件自身不持有任何跳转。
 class _TimelineView extends ConsumerWidget {
-  const _TimelineView();
+  const _TimelineView({required this.petName});
+
+  /// 宠物名（类③ 庆祝文案与类⑤ 证件卡标题需要）。
+  final String petName;
+
+  /// 真实态点击目标（AC5）：
+  /// - 类①/② → 内容详情页（postId 为空不可点，与当天详情一致）
+  /// - 类③ → 里程碑列表页
+  /// - 类④ → 问诊存档走既有结果页深链；结构化健康记录 → 健康记录列表页
+  /// - 类⑤ → 身份证页
+  static VoidCallback? _realTapFor(BuildContext context, TimelineItem item) {
+    switch (item.resolvedType) {
+      case TimelineItemType.happyMoment:
+      case TimelineItemType.happyMomentMilestone:
+        final id = item.postId;
+        return id == null ? null : () => context.push('/content/$id');
+      case TimelineItemType.milestoneBanner:
+        return () => context.push('/profile/milestones');
+      case TimelineItemType.healthRecord:
+        // 问诊存档：跳对应问诊/分诊结果页（bug 20260706-259 的既有行为，不回退）。
+        final route = item.healthEventRoute;
+        if (route != null) {
+          return () => context.push(route);
+        }
+        // 结构化健康记录：跳健康记录列表页（FR-45B）。时间线内**不提供编辑入口**。
+        return () => context.push('/profile/health');
+      case TimelineItemType.idCardIssued:
+        return () => context.push('/profile/id-card');
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -409,13 +444,14 @@ class _TimelineView extends ConsumerWidget {
         }
         final items = page.items;
         // 「Pertama」🌟 标在最旧的那条（debut，列表为倒序故取最后出现的索引）；
-        // 仅在已无更多分页时可断定为真正第一条（AC5）。
-        int debutHappy = -1, debutHealth = -1;
+        // 仅在已无更多分页时可断定为真正第一条。
+        // 只标「第一条快乐时刻」：debut 标记只在照片卡（类①/②）上渲染，
+        // 类④ 的「第一条健康事件」标记随共用组件一并取消（A6 稿的胶囊/粉底条都没有该标记）。
+        int debutHappy = -1;
         if (!page.hasMore) {
           for (var i = 0; i < items.length; i++) {
-            if (items[i].kind == TimelineKind.healthEvent) {
-              debutHealth = i;
-            } else if (items[i].kind != TimelineKind.unknown) {
+            final t = items[i].resolvedType;
+            if (t == TimelineItemType.happyMoment || t == TimelineItemType.happyMomentMilestone) {
               debutHappy = i;
             }
           }
@@ -423,10 +459,9 @@ class _TimelineView extends ConsumerWidget {
         // 按月分组：月份变化插入 "Juni 2026" 区标题。
         final tiles = <Widget>[];
         String? lastMonthKey;
-        var happyIdx = 0;
         for (var i = 0; i < items.length; i++) {
           final item = items[i];
-          final d = item.kind == TimelineKind.healthEvent ? item.date : item.displayDate;
+          final d = item.displayDate;
           final monthKey = '${d.year}-${d.month}';
           if (monthKey != lastMonthKey) {
             tiles.add(Padding(
@@ -437,32 +472,20 @@ class _TimelineView extends ConsumerWidget {
             ));
             lastMonthKey = monthKey;
           }
-          if (item.kind == TimelineKind.healthEvent) {
-            // bug 20260706-259：点击健康事件跳到对应问诊结果页（AI 分诊 / 兽医问诊），与「我的问诊」
-            // 列表点进去一致。无 sourceRef（旧数据）则不可点。
-            final route = item.healthEventRoute;
-            final tile = HealthEventTile(
-                item: item, firstLabel: i == debutHealth ? l10n.growthFirstHealthEvent : null);
-            tiles.add(route == null
-                ? tile
-                : GestureDetector(
-                    key: ValueKey('timelineHealth_${item.sourceRef}'),
-                    onTap: () => context.push(route),
-                    child: tile,
-                  ));
-          } else {
-            // 快乐时刻 → FR-28 内容详情（与 day_detail 一致：postId 为空不可点）。
-            tiles.add(GestureDetector(
-              key: ValueKey('timelineItem_${item.postId}'),
-              onTap: item.postId == null
-                  ? null
-                  : () => context.push('/content/${item.postId}'),
-              child: HappyMomentTile(
-                  item: item,
-                  index: happyIdx++,
-                  firstLabel: i == debutHappy ? l10n.growthFirstHappyMoment : null),
-            ));
-          }
+          final bool isHappy = item.resolvedType == TimelineItemType.happyMoment ||
+              item.resolvedType == TimelineItemType.happyMomentMilestone;
+          // ⚠️ 与游客态**同一个** TimelineItemTile（NFR-7）；差异只在这里注入的回调。
+          tiles.add(TimelineItemTile(
+            item: item,
+            petName: petName,
+            thumbIndex: i,
+            firstLabel: isHappy && i == debutHappy ? l10n.growthFirstHappyMoment : null,
+            onTap: _realTapFor(context, item),
+            // 类② 金徽章：真实态点它跳里程碑列表（游客态是建档引导，见 diary_guest_page）。
+            onBadgeTap: item.resolvedType == TimelineItemType.happyMomentMilestone
+                ? () => context.push('/profile/milestones')
+                : null,
+          ));
         }
         return Column(crossAxisAlignment: CrossAxisAlignment.start, children: tiles);
       },

@@ -64,6 +64,7 @@ class TimelineItem {
     this.milestoneCode,
     this.milestoneLevel,
     this.healthRecordType,
+    this.healthRecordId,
     this.idCardSerial,
   });
 
@@ -106,6 +107,10 @@ class TimelineItem {
   /// 健康记录类型（类 ④ 用）：`VACCINE` / `DEWORM` / `MENSTRUATION` / `NEUTER` / `CUSTOM` / `CONSULT`。
   /// 与 FR-45B 健康记录列表同一套取值；图标与配色取 `kHealthRecordIcons`（FR-84 图标总表，全项目一份）。
   final String? healthRecordType;
+
+  /// 结构化健康记录 id（类 ④ 点击跳健康记录列表**对应条目**用；Story 3.2 后端补下发）。
+  /// 问诊存档没有该 id（跳转走 [healthEventRoute]）。
+  final int? healthRecordId;
 
   /// 身份证编号（类 ⑤ 用，如 `#00842`）。**可为空**——老档案未申请时后端无编号，此时不渲染编号位。
   final String? idCardSerial;
@@ -162,6 +167,7 @@ class TimelineItem {
       milestoneCode: json['milestoneCode'] as String?,
       milestoneLevel: json['milestoneLevel'] as String?,
       healthRecordType: json['healthRecordType'] as String?,
+      healthRecordId: (json['healthRecordId'] as num?)?.toInt(),
       idCardSerial: json['idCardSerial'] as String?,
     );
   }

@@ -175,6 +175,10 @@ class TimelineItemTile extends StatelessWidget {
     return _emojiThumb();
   }
 
+  /// 无图时的 emoji 缩略占位（底色/emoji 按序轮换）。
+  ///
+  /// debut 条目**不再用 🌟 当缩略图**：🌟 已经前缀在标题里，缩略图再放一个就是同一张卡上两个
+  /// 相同 emoji（与 banner 那处「图标 + 标题尾 emoji」同类问题）。debut 只保留浅绿底作区分。
   Widget _emojiThumb() {
     const bgs = [AppColors.skyTint, AppColors.goldTint, AppColors.momenBadgeBg];
     const emojis = ['🐾', '🧶', '☀️'];
@@ -187,8 +191,7 @@ class TimelineItemTile extends StatelessWidget {
         color: isFirst ? AppColors.momenBadgeBg : bgs[thumbIndex % bgs.length],
         borderRadius: BorderRadius.circular(11),
       ),
-      child: Text(isFirst ? '🌟' : emojis[thumbIndex % emojis.length],
-          style: const TextStyle(fontSize: 22)),
+      child: Text(emojis[thumbIndex % emojis.length], style: const TextStyle(fontSize: 22)),
     );
   }
 
