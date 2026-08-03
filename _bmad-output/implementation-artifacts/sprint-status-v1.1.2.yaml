@@ -85,7 +85,7 @@ development_status:
   epic-2: in-progress   # 2-1~2-4 全部 review，待 code-review 后转 done
   2-1-diary-页状态分支单一入口: review                    # AD-15 基座已立：四态枚举 + 单一判定入口 + 穷尽 switch；2-2/2-3 往里填分支即可
   2-2-游客引导态与五类条目渲染组件: review                # 五类渲染组件 + 页头共用件已立；itemType 词表已定：HAPPY_MOMENT / HAPPY_MOMENT_MILESTONE / MILESTONE_BANNER / HEALTH_RECORD / ID_CARD_ISSUED（3-2 须采纳）；素材为 demo_diary_* 占位
-  2-3-已登录未建档用户的建档引导态: review                # FR-0H 已整条废止（组件/状态机/prefs 键/文案/测试全删，含源码级下线断言）；⚠看板侧指标下线需人工
+  2-3-已登录未建档用户的建档引导态: review                # FR-0H 已整条废止（组件/状态机/prefs 键/文案/测试全删，含源码级下线断言）；看板侧无遗留指标（该提示条从无埋点上报）
   2-4-登录门控解除与落地-tab-矩阵: review                 # 两处门控已同改（深链精确例外 {/profile} + Tab 白名单）；落地矩阵走 AppUserState 六态（6-1 埋点 user_state 同源）；游客端到端已收口
   epic-2-retrospective: optional
 
