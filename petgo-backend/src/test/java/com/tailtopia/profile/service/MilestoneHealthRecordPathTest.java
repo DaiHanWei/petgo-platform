@@ -34,17 +34,29 @@ class MilestoneHealthRecordPathTest {
         verify(completion).maybeUnlockLulusPemulaForOwner(7L);
     }
 
+    /**
+     * ⚠️ Story 5.1（FR-86）起 **NEUTER 已映射到 M9**，不再属于「不映射任何里程碑」的一档 ——
+     * 原断言把它和月经/自定义一起断言「不完成任何里程碑」，已到期。
+     * 现在只有**月经 / 自定义**刻意不映射（PRD：无对应节点）。
+     */
     @Test
-    void otherTypesSkipM3M4ButStillTryLulusPemula() {
+    void menstruationAndCustomSkipMilestonesButStillTryLulusPemula() {
         listener.onHealthRecordCreated(new HealthRecordCreatedEvent(7L, HealthRecordType.MENSTRUATION));
-        listener.onHealthRecordCreated(new HealthRecordCreatedEvent(7L, HealthRecordType.NEUTER));
         listener.onHealthRecordCreated(new HealthRecordCreatedEvent(7L, HealthRecordType.CUSTOM));
-        // 无 M3/M4 里程碑完成……
+        // 无任何里程碑完成……
         verify(completion, never()).completeForOwner(
                 org.mockito.ArgumentMatchers.eq(7L),
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.any());
         // ……但每次都尝试 Lulus Pemula 聚合解锁（健康记录=第 6 任务）。
-        verify(completion, times(3)).maybeUnlockLulusPemulaForOwner(7L);
+        verify(completion, times(2)).maybeUnlockLulusPemulaForOwner(7L);
+    }
+
+    /** Story 5.1 新增映射：录绝育 → M9（2026-07-29 产品确认）。 */
+    @Test
+    void neuterCompletesM9AndTriesLulusPemula() {
+        listener.onHealthRecordCreated(new HealthRecordCreatedEvent(7L, HealthRecordType.NEUTER));
+        verify(completion).completeForOwner(7L, "M9", MilestoneCompletionSource.SYSTEM_AUTO);
+        verify(completion).maybeUnlockLulusPemulaForOwner(7L);
     }
 }

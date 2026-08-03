@@ -108,7 +108,7 @@ development_status:
   # ===== Epic 5: 健康里程碑改为只能自动点亮 =====
   # FR-86。完全独立，可最先做也可最后做。无 schema 变更。
   epic-5: in-progress
-  5-1-健康里程碑自动达成路径补全: ready-for-dev          # 映射加 NEUTER→M9 + 订阅既有 ConsultClosedEvent；本 story 不动打卡路径
+  5-1-健康里程碑自动达成路径补全: review                  # NEUTER→M9 + ConsultClosedEvent→M5；HealthMilestones 为集合单一定义（5-2/6-1 引用）
   5-2-取消健康类打卡路径与庆祝合并: ready-for-dev        # 前端隐藏四条入口 + 后端拒绝护栏，两者必须同批交付
   epic-5-retrospective: optional
 
