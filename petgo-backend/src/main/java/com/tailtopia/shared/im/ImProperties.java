@@ -23,10 +23,12 @@ public class ImProperties {
     /** IM 服务端回调签名校验 token（/im/callback 白名单 + 签名）。 */
     private String callbackToken = "";
     /**
-     * 腾讯 IM REST API 基址（Story 5.5 live，按数据中心选德国/欧洲，与后端同区）。
-     * 形如 {@code https://adminapiger.im.qcloud.com}（德国）/ {@code https://console.tim.qq.com}（国内）。
+     * 腾讯 IM REST API 基址——**必须与 SDKAppID 创建时选的数据中心一致**，配错任何 REST 调用都回
+     * 60026（sdkappid not match domain）。本应用建在新加坡（2026-08-03 生产核实，此前误配德国致
+     * 账号导入/系统消息长期静默失败）。可选：{@code adminapisgp}（新加坡）/{@code adminapiger}（德国）/
+     * {@code console.tim.qq.com}（国内）。
      */
-    private String restBaseUrl = "https://adminapiger.im.qcloud.com";
+    private String restBaseUrl = "https://adminapisgp.im.qcloud.com";
     /**
      * REST 调用的管理员 IM 标识（{@code Identifier}，App 管理员账号，需在控制台配置为 App 管理员）。
      * 用其 UserSig 作为 REST 鉴权身份；不计 MAU（仅服务端用）。
