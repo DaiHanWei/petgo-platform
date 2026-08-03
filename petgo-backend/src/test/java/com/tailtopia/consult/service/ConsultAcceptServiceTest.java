@@ -84,6 +84,38 @@ class ConsultAcceptServiceTest {
         return org.mockito.ArgumentMatchers.eq("conv-1");
     }
 
+    /** bug 20260803（会话 81 事故）：用户排队超弃单线（60s+240s 宽限）未续期 → 拒单，零副作用。 */
+    @Test
+    void acceptRejectsAbandonedWaitingSession() {
+        ConsultSession s = waiting(11L);
+        ReflectionTestUtils.setField(s, "waitingStartedAt",
+                java.time.Instant.now().minusSeconds(ConsultSessionService.WAITING_ABANDON_SECONDS + 1));
+        when(repo.findById(11L)).thenReturn(Optional.of(s));
+
+        assertThatThrownBy(() -> service().accept(3L, 11L))
+                .isInstanceOf(AppException.class)
+                .hasMessageContaining("超时");
+        assertThat(s.getStatus()).isEqualTo(SessionStatus.WAITING);
+        verify(imClient, never()).createConversation(anyString(), anyString());
+        verify(queue, never()).dequeue(anyLong());
+        verify(presence, never()).goBusy(anyLong());
+    }
+
+    /** 超时线后、弃单线内（用户仍停留在「继续等待」弹层）仍可正常接单——其轮询会自动进聊天室。 */
+    @Test
+    void acceptAllowedAfterTimeoutButWithinGraceWindow() {
+        ConsultSession s = waiting(11L);
+        ReflectionTestUtils.setField(s, "waitingStartedAt",
+                java.time.Instant.now().minusSeconds(ConsultSessionService.WAITING_TIMEOUT_SECONDS + 30));
+        when(repo.findById(11L)).thenReturn(Optional.of(s));
+        when(vetQualificationService.canTakeConsult(3L)).thenReturn(true);
+        when(repo.saveAndFlush(s)).thenReturn(s);
+        when(imClient.createConversation(anyString(), anyString())).thenReturn("conv-1");
+        when(repo.save(s)).thenReturn(s);
+
+        assertThat(service().accept(3L, 11L).getStatus()).isEqualTo(SessionStatus.IN_PROGRESS);
+    }
+
     @Test
     void acceptRejectsAlreadyTakenSession() {
         ConsultSession s = waiting(11L);

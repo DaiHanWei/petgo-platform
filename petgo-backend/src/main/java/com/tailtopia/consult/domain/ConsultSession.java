@@ -182,6 +182,16 @@ public class ConsultSession {
         this.waitingStartedAt = Instant.now();
     }
 
+    /**
+     * 排队弃单判定（bug 20260803，会话 81 事故）：WAITING 且计时基准超过弃单线——超时弹层出现后
+     * 用户既未点「继续等待」（{@link #resetWaiting} 会重置计时）也未取消，视为已离开。
+     * 接单侧拒单 + 收件箱隐藏，避免兽医进对方永不回来的房间。
+     */
+    public boolean isWaitingAbandoned(long abandonSeconds) {
+        return status == SessionStatus.WAITING && waitingStartedAt != null
+                && Instant.now().isAfter(waitingStartedAt.plusSeconds(abandonSeconds));
+    }
+
     /** 用户主动取消：WAITING → CANCELLED（出队由 service 做）。 */
     public void cancel() {
         requireStatus(SessionStatus.WAITING, "仅等待中的咨询可取消");
