@@ -179,11 +179,22 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/splash',
         builder: (c, s) => SplashPage(
+          // 会话恢复（`/me`）**由 splash 在首帧即触发，与动效并行**（Story 7.3 / 决策 C-4）。
+          // 改前是在下面的 onComplete 里才发起 —— 动效播完才开始取数，白等一个动效时长。
+          // `ensureRestored()` 返回共享 future，故这里只是提早触发，不会打两次 `/me`。
+          prepareSession: () =>
+              ref.read(authControllerProvider.notifier).ensureRestored(),
           onComplete: () async {
+            // 等那条**已在跑**的恢复 future（splash 首帧就发起了），而非此时才发起。
+            // 超时 3s → 5s（决策 D-2）：splash 侧已按 5s 兜底放行，故此处通常已完成、立即返回；
+            // 保留兜底以防 splash 被绕过（如深链直达）。
+            // ⚠️ `.timeout()` **只停止等待、不取消底层请求** —— 恢复晚到仍会写回 AuthState。
+            //    这是刻意保留的既有行为：Story 7.4 的「超时兜底迟到纠正」正建立在它之上，
+            //    不要"顺手"改成可取消。
             await ref
                 .read(authControllerProvider.notifier)
                 .ensureRestored()
-                .timeout(const Duration(seconds: 3), onTimeout: () {});
+                .timeout(const Duration(seconds: 5), onTimeout: () {});
             final ctx = rootNavigatorKey.currentContext;
             if (ctx == null || !ctx.mounted) return;
             // 分流顺序（AD-8）：pending 深链 > 按用户状态的落地矩阵。

@@ -28,10 +28,6 @@ class AppPrefs {
   Future<void> setPushPermissionAsked(bool asked) => _prefs.setBool(_kPushPermissionAsked, asked);
 
   // --- Splash 当天是否已播放过完整动画（新 splash：当天首开播全程，之后只显静止终态）---
-  static const _kSplashLastShownDate = 'petgo.splash_last_shown_date';
-  String? get splashLastShownDate => _prefs.getString(_kSplashLastShownDate);
-  Future<void> setSplashLastShownDate(String date) =>
-      _prefs.setString(_kSplashLastShownDate, date);
 
   int getInt(String key, {int fallback = 0}) => _prefs.getInt(key) ?? fallback;
   Future<void> setInt(String key, int value) => _prefs.setInt(key, value);

@@ -790,6 +790,7 @@
   "terminalInterrupted": "Interrupted",
 
   "splashTagline": "A community for Indonesia's pet lovers",
+  "splashSlowNetworkHint": "Your connection is slow, hang on…",
 
   "pushPromptTitle": "Turn on notifications for your furry friend?",
   "pushPromptSubtitle": "Don't miss the important moments with them.",

@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/storage/prefs.dart';
 import '../../../l10n/app_localizations.dart';
 
 /// 启动屏（V1.1.2 Story 7.2 · FR-87/FR-88/FR-90 · 方案 B「写名字」）。
@@ -29,9 +28,18 @@ import '../../../l10n/app_localizations.dart';
 /// **视觉中心 43% 的口径**：`logo 中心`居中，**标语不参与居中计算**（设计侧挑战 X-2；改前
 /// 「整块含标语居中」会把字标推到光晕亮心之上）。
 class SplashPage extends StatefulWidget {
-  const SplashPage({super.key, this.onComplete});
+  const SplashPage({super.key, this.onComplete, this.prepareSession});
 
   final VoidCallback? onComplete;
+
+  /// 启动期会话恢复（`/me`）的触发口 —— **由本页在首帧即调用，与动效并行**（FR-89 / 决策 C-4）。
+  ///
+  /// 改前是串行：`app_router.dart` 的 `onComplete` 回调里才 `await ensureRestored()`，
+  /// 即动效播完（改前 4.32s）才发请求。现在首帧就发，动效与取数互不等待。
+  ///
+  /// ⚠️ 传进来的应当是**返回共享 future** 的函数（`ensureRestored()` 即是）——本页只负责
+  /// 「提早触发 + 观测何时完成」，**不新造第二条恢复路径**，否则会打两次 `/me`。
+  final Future<void> Function()? prepareSession;
 
   /// 品牌紫。原生启动屏底色（`pubspec.yaml` 的 `flutter_native_splash.color`）必须与此一致，
   /// 否则交接处会闪一下（缺陷 B-1/B-2）。
@@ -57,8 +65,26 @@ class SplashPage extends StatefulWidget {
   /// 「50% → 43%」的抬升是 B1 拍的动作，不可省（省了交接处会跳位）。
   static const double handoffYRatio = 0.50;
 
-  /// 底部容器起始位置（进度线与慢网提示共用，均由 Story 7.3 填充）。
+  /// 底部容器起始位置（进度线与慢网提示共用同一容器）。
   static const double bottomInset = 92;
+
+  /// 底部容器预留高度 —— 进度线与提示的出现/消失**不得引起布局位移**（AC4）。
+  static const double bottomSlotHeight = 56;
+
+  // ── 等待反馈的三个时点：全部由 [animatedTotal] 派生，勿各自硬编码 ──
+  //
+  // 动效结束 1540 → 进度线 1860（+320ms 缓冲）→ 慢网提示 2290（+430ms，决策 C-5）
+  // → 兜底跳转 5000（决策 D-2）⇒ 提示可读时间 5000 − 2290 = **2710ms**。
+  // ⚠️ 改了 animatedTotal 就要重算这一串，别只改一个。
+
+  /// 进度线出现：动效播完仍未就绪才出现 —— **它的出现本身就是信息**（设计侧挑战 X-4）。
+  static const Duration progressLineAt = Duration(milliseconds: 1860);
+
+  /// 慢网提示淡入：进度线之后再等 430ms 仍未就绪。
+  static const Duration slowHintAt = Duration(milliseconds: 2290);
+
+  /// 会话恢复的兜底上限（决策 D-2：3s → 5s）。到点无论就绪与否都交给 [onComplete]。
+  static const Duration readyDeadline = Duration(milliseconds: 5000);
 
   /// 字标资产的 viewBox 宽高比（`37.05 183.5 413.74 128.1`），用于按宽度算高度。
   static const double wordmarkAspect = 413.74 / 128.1;
@@ -76,10 +102,25 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
   late final AnimationController _halo =
       AnimationController(vsync: this, duration: const Duration(milliseconds: 3200));
 
-  Timer? _timer;
-  bool _decided = false;
+  Timer? _holdTimer;
+  Timer? _progressTimer;
+  Timer? _hintTimer;
+  Timer? _deadlineTimer;
   bool _reduceMotion = false;
   bool _started = false;
+
+  /// 会话恢复是否已完成（成功或失败都算完成）。
+  bool _ready = false;
+
+  /// 入场动效的停留时长是否已走完。
+  bool _holdDone = false;
+
+  /// 是否已把控制权交给 [SplashPage.onComplete]（只交一次）。
+  bool _completed = false;
+
+  /// 等待指示的可见性。**快网路径下两者恒为 false** —— 阈值设计的全部意义就在这（AC6）。
+  bool _showProgressLine = false;
+  bool _showSlowHint = false;
 
   /// 字标按拍分组后的 SVG 片段（每组一个独立 SVG 字符串，共用同一 viewBox 故可叠放对齐）。
   /// 从**单一资产文件**运行时切分 —— 不拆成 9 个资产文件（AC2）。
@@ -121,7 +162,7 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
     _reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     if (!_reduceMotion) _halo.repeat(reverse: true);
     _loadWordmark(DefaultAssetBundle.of(context));
-    _decide();
+    _start();
   }
 
   /// 载入字标资产并按 9 拍切分：`[T+猫尾+2 条动感短划]` 为第 1 拍，其后 `a i l t o p i a`
@@ -154,44 +195,81 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
     }
   }
 
-  Future<void> _decide() async {
-    bool animate;
-    try {
-      // 超时护栏：prefs 不可用/慢 → 不阻塞跳转，保守走静止终态。
-      // NOTE(Story 7.3)：「当天只播一次」门控将被取消，届时本段与 `_decided` 一并移除。
-      final prefs = await AppPrefs.create().timeout(const Duration(milliseconds: 300));
-      final today = _todayKey();
-      final shownToday = prefs.splashLastShownDate == today;
-      if (!shownToday) await prefs.setSplashLastShownDate(today);
-      animate = !shownToday && !_reduceMotion;
-    } catch (_) {
-      animate = false;
-    }
-    if (!mounted) return;
-    setState(() => _decided = true);
+  /// 启动：**并行**发起会话恢复 + 播动效 + 排三个等待反馈时点。
+  ///
+  /// 与改前的差异（Story 7.3 / FR-89）：
+  /// - **取消「当天只播一次」门控**（决策 C-3）：不再读 prefs 判断 `splashLastShownDate`，
+  ///   每次冷启动都播。`reduce-motion` 仍直落终态（那是无障碍要求，与门控无关）。
+  /// - ✅ **连带修掉缺陷 B-7**：改前 `_decided` 标志要等 `AppPrefs.create()`（超时 300ms）
+  ///   返回后才渲染 mark，造成首帧最多 300ms 空窗。现在 prefs 已不是启动依赖，空窗消失。
+  void _start() {
+    final animate = !_reduceMotion;
     if (animate) {
       _master.forward();
     } else {
-      _master.value = 1.0; // 直达终态（reduce-motion 亦走此路，AC7）
+      _master.value = 1.0; // reduce-motion 直落终态（AC7）
     }
+
+    // 并行发起会话恢复。失败也算「完成」—— 兜底分流由路由层按当时已知态处理。
+    (widget.prepareSession?.call() ?? Future<void>.value())
+        .then((_) => _onReady())
+        .catchError((_) => _onReady());
+
     // Debug-only：DEV_ROUTE=/splash 时定屏不跳转，供逐帧对稿。
     const devPin = kDebugMode && String.fromEnvironment('DEV_ROUTE') == '/splash';
-    if (!devPin) {
-      _timer = Timer(animate ? SplashPage.animatedHold : SplashPage.staticHold, () {
-        if (!mounted) return;
-        (widget.onComplete ?? () => context.go('/home'))();
-      });
-    }
+
+    final hold = animate ? SplashPage.animatedHold : SplashPage.staticHold;
+    _holdTimer = Timer(hold, () {
+      if (!mounted) return;
+      _holdDone = true;
+      if (!devPin) _maybeComplete();
+    });
+
+    // 进度线 / 慢网提示：到点时若仍未就绪才显示。快网路径下这两个回调什么也不做。
+    _progressTimer = Timer(SplashPage.progressLineAt, () {
+      if (!mounted || _ready) return;
+      setState(() => _showProgressLine = true);
+    });
+    _hintTimer = Timer(SplashPage.slowHintAt, () {
+      if (!mounted || _ready) return;
+      setState(() => _showSlowHint = true);
+    });
+
+    // 兜底：到 5s 无论就绪与否都放行（决策 D-2）。
+    _deadlineTimer = Timer(SplashPage.readyDeadline, () {
+      if (!mounted) return;
+      if (!devPin) _maybeComplete(force: true);
+    });
   }
 
-  String _todayKey() {
-    final n = DateTime.now();
-    return '${n.year}-${n.month}-${n.day}';
+  void _onReady() {
+    if (!mounted || _ready) return;
+    setState(() {
+      _ready = true;
+      // 已就绪 → 收掉等待指示（若曾出现）。
+      _showProgressLine = false;
+      _showSlowHint = false;
+    });
+    const devPin = kDebugMode && String.fromEnvironment('DEV_ROUTE') == '/splash';
+    if (!devPin) _maybeComplete();
+  }
+
+  /// 交棒条件：**动效停留走完** 且（**已就绪** 或 **到了 5s 兜底**）。
+  ///
+  /// ⚠️ 不改 [SplashPage.onComplete] 的调用契约 —— 路由层仍在其中做分流
+  /// （pending 深链 > 落地矩阵）。本 Story 只改「什么时候交棒、交棒前显示什么」。
+  void _maybeComplete({bool force = false}) {
+    if (_completed || !_holdDone || !(force || _ready)) return;
+    _completed = true;
+    (widget.onComplete ?? () => context.go('/home'))();
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _holdTimer?.cancel();
+    _progressTimer?.cancel();
+    _hintTimer?.cancel();
+    _deadlineTimer?.cancel();
     _master.dispose();
     _halo.dispose();
     super.dispose();
@@ -228,10 +306,9 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
         children: [
           _glow(centerY, glow),
           // B1 · mark：由交接位 50% 抬到 43%，同时缩小淡出。终态不出现（AC3）。
-          if (_decided) _markHandoff(size, centerY, handoffY),
+          _markHandoff(size, centerY, handoffY),
           // B2/B3 · 字标：logo 中心落 43%（标语不参与该计算，AC5/X-2）。
-          if (_decided)
-            Positioned(
+          Positioned(
               top: centerY - wordmarkH / 2,
               left: 0,
               right: 0,
@@ -241,8 +318,7 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
               child: Column(mainAxisSize: MainAxisSize.min, children: [_wordmark(wordmarkW)]),
             ),
           // B3 · 标语：挂在字标下方，不参与居中。
-          if (_decided)
-            Positioned(
+          Positioned(
               top: centerY + wordmarkH / 2 + _taglineGap,
               left: 0,
               right: 0,
@@ -251,8 +327,13 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
                 children: [_taglineWidget(l10n, size.width * SplashPage.taglineWidthRatio)],
               ),
             ),
-          // 底部容器：进度线与慢网提示由 Story 7.3 填充（本 Story 已移除常驻 spinner 与版本号）。
-          const Positioned(bottom: SplashPage.bottomInset, left: 0, right: 0, child: SizedBox.shrink()),
+          // 底部容器：进度线 + 慢网提示共用。**高度预留，出现/消失不引起布局位移**（AC4）。
+          Positioned(
+            bottom: SplashPage.bottomInset,
+            left: 0,
+            right: 0,
+            child: _waitingSlot(l10n, size.width * SplashPage.taglineWidthRatio),
+          ),
         ],
       ),
     );
@@ -366,6 +447,58 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
     );
   }
 
+  /// 等待反馈容器（进度线 + 慢网提示）。
+  ///
+  /// **「出现即信息」**（设计侧挑战 X-4）：改前是一条从头转到尾的常驻 spinner，不反映任何
+  /// 真实进度（真实等待由 `Timer` 控制），属假反馈 —— Story 7.2 已把它删掉。现在只有
+  /// 「动效播完（1.54s）仍未就绪」才出现进度线，故**它的出现本身就是信息**。
+  ///
+  /// 容器高度恒为 [SplashPage.bottomSlotHeight]，两个元素靠 opacity 显隐 ⇒ 无布局位移。
+  Widget _waitingSlot(AppLocalizations l10n, double w) {
+    return SizedBox(
+      height: SplashPage.bottomSlotHeight,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedOpacity(
+            opacity: _showProgressLine ? 1 : 0,
+            duration: const Duration(milliseconds: 200),
+            child: SizedBox(
+              width: w * 0.5,
+              height: 2,
+              child: const _IndeterminateLine(),
+            ),
+          ),
+          const SizedBox(height: 14),
+          AnimatedOpacity(
+            opacity: _showSlowHint ? 1 : 0,
+            duration: const Duration(milliseconds: 300),
+            child: SizedBox(
+              width: w,
+              child: Text(
+                l10n.splashSlowNetworkHint,
+                textAlign: TextAlign.center,
+                // 同族 Fraunces，比标语更小更淡（决策 C-9）：opsz 12 已烘入字体 ⇒ 只设 SOFT/WONK。
+                // splash 内只允许出现一款字体（NFR-16），故不另引字型。
+                style: TextStyle(
+                  fontFamily: 'Fraunces',
+                  fontVariations: const [
+                    FontVariation('SOFT', 100),
+                    FontVariation('WONK', 1),
+                  ],
+                  fontWeight: FontWeight.w500,
+                  fontSize: 12.5,
+                  height: 1.4,
+                  color: const Color(0xFFFFFFFF).withValues(alpha: 0.55),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _taglineWidget(AppLocalizations l10n, double w) {
     return AnimatedBuilder(
       animation: _tagline,
@@ -398,6 +531,66 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
             letterSpacing: 0,
             color: const Color(0xFFFFFFFF).withValues(alpha: 0.68),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 细长的不确定进度线（承载「正在加载」的真实语义，故 reduce-motion 下**保留**动画 ——
+/// 无限动画只允许用于 loading 指示，而它正是 loading 指示，不是装饰，见设计侧挑战 X-3）。
+class _IndeterminateLine extends StatefulWidget {
+  const _IndeterminateLine();
+
+  @override
+  State<_IndeterminateLine> createState() => _IndeterminateLineState();
+}
+
+class _IndeterminateLineState extends State<_IndeterminateLine>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))
+        ..repeat();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(1),
+      child: ColoredBox(
+        color: const Color(0xFFFFFFFF).withValues(alpha: 0.18),
+        child: AnimatedBuilder(
+          animation: _c,
+          builder: (context, _) {
+            return LayoutBuilder(
+              builder: (context, c) {
+                final w = c.maxWidth;
+                const frac = 0.38;
+                // 往复扫动：0→1 走一趟，1→0 再回来（用三角波，避免"跳回起点"的突变）。
+                final t = _c.value <= 0.5 ? _c.value * 2 : (1 - _c.value) * 2;
+                return Stack(
+                  children: [
+                    Positioned(
+                      left: (w * (1 - frac)) * t,
+                      child: Container(
+                        width: w * frac,
+                        height: 2,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFFFFF).withValues(alpha: 0.92),
+                          borderRadius: BorderRadius.circular(1),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
         ),
       ),
     );

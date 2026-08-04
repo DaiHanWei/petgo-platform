@@ -1,7 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tailtopia/features/onboarding/presentation/splash_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
@@ -18,6 +19,7 @@ void main() {
     WidgetTester tester, {
     required VoidCallback onComplete,
     bool disableAnimations = false,
+    Future<void> Function()? prepareSession,
   }) async {
     await tester.pumpWidget(MaterialApp(
       locale: const Locale('id'),
@@ -25,7 +27,7 @@ void main() {
       supportedLocales: AppLocalizations.supportedLocales,
       home: MediaQuery(
         data: MediaQueryData(disableAnimations: disableAnimations),
-        child: SplashPage(onComplete: onComplete),
+        child: SplashPage(onComplete: onComplete, prepareSession: prepareSession),
       ),
     ));
     // 让 didChangeDependencies → 异步 prefs 决策 → setState(_decided) 落地。
@@ -33,10 +35,11 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
   }
 
-  testWidgets('当天首开：播完整动效，渲染标语，~1.72s 后过场', (tester) async {
-    SharedPreferences.setMockInitialValues({}); // 无记录 → 首开 → 动画
+  testWidgets('播完整动效，就绪后过场（快网：会话恢复早于动效结束）', (tester) async {
     var done = false;
-    await pumpSplash(tester, onComplete: () => done = true);
+    await pumpSplash(tester,
+        onComplete: () => done = true,
+        prepareSession: () => Future<void>.delayed(const Duration(milliseconds: 900)));
 
     expect(find.textContaining('Komunitas Pecinta Hewan Peliharaan'), findsOneWidget);
     expect(done, isFalse); // 动效进行中，过场未触发
@@ -47,26 +50,9 @@ void main() {
     await tester.pumpWidget(const SizedBox()); // 触发 dispose，避免 ticker 残留
   });
 
-  testWidgets('当天已播过：静止终态，~1.4s 后过场', (tester) async {
-    final n = DateTime.now();
-    SharedPreferences.setMockInitialValues(
-        {'petgo.splash_last_shown_date': '${n.year}-${n.month}-${n.day}'});
-    var done = false;
-    await pumpSplash(tester, onComplete: () => done = true);
-
-    expect(find.textContaining('Komunitas Pecinta Hewan Peliharaan'), findsOneWidget);
-    expect(done, isFalse);
-
-    await tester.pump(const Duration(milliseconds: 1500)); // 越过 staticHold(1400ms)
-    expect(done, isTrue);
-
-    await tester.pumpWidget(const SizedBox());
-  });
-
   group('Story 7.2 · 整体替换旧效果的下线断言', () {
     testWidgets('AC5：版本号与常驻 spinner 均已移除', (tester) async {
-      SharedPreferences.setMockInitialValues({});
-      await pumpSplash(tester, onComplete: () {});
+      await pumpSplash(tester, onComplete: () {}, prepareSession: () => Future<void>.value());
 
       // 版本号（改前硬编码 'v 1.0.0'，而 pubspec 已是 1.1.0+7 —— 缺陷 B-6）
       expect(find.textContaining('v 1.0.0'), findsNothing);
@@ -78,13 +64,11 @@ void main() {
     });
 
     testWidgets('AC0/AC5：尺寸相对屏宽 —— 换屏宽后 mark 与字标等比跟随', (tester) async {
-      SharedPreferences.setMockInitialValues({});
-
       Future<double> markWidthAt(double screenW) async {
         tester.view.physicalSize = Size(screenW, 2400);
         tester.view.devicePixelRatio = 1.0;
         addTearDown(tester.view.reset);
-        await pumpSplash(tester, onComplete: () {});
+        await pumpSplash(tester, onComplete: () {}, prepareSession: () => Future<void>.value());
         // 首帧（B1 起点）mark 可见；取其渲染宽度
         final w = tester.getSize(find.byType(SplashPage)).width;
         await tester.pumpWidget(const SizedBox());
@@ -124,8 +108,7 @@ void main() {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 2.625;
       addTearDown(tester.view.reset);
-      SharedPreferences.setMockInitialValues({});
-      await pumpSplash(tester, onComplete: () {});
+      await pumpSplash(tester, onComplete: () {}, prepareSession: () => Future<void>.value());
 
       // 越过入场总时长（1540ms），进入终态
       await tester.pump(const Duration(milliseconds: 1600));
@@ -147,8 +130,7 @@ void main() {
 
 
     testWidgets('AC6：标语用 Fraunces + SOFT/WONK 两轴，9 项排版参数按 C-9 落定', (tester) async {
-      SharedPreferences.setMockInitialValues({});
-      await pumpSplash(tester, onComplete: () {});
+      await pumpSplash(tester, onComplete: () {}, prepareSession: () => Future<void>.value());
 
       final style = tester.widget<Text>(find.byType(Text).first).style!;
       expect(style.fontFamily, 'Fraunces', reason: 'splash 只依赖 Fraunces 一款字体（NFR-16）');
@@ -166,7 +148,6 @@ void main() {
 
     testWidgets('AC6/缺陷 B-9：两语言标语均无硬编码换行，靠 70% 屏宽自动换行', (tester) async {
       for (final loc in ['id', 'en']) {
-        SharedPreferences.setMockInitialValues({});
         await tester.pumpWidget(MaterialApp(
           locale: Locale(loc),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -182,10 +163,136 @@ void main() {
       }
     });
 
-    testWidgets('AC7：reduce-motion 直落终态，不播入场', (tester) async {
-      SharedPreferences.setMockInitialValues({}); // 首开，但 reduce-motion 应压过
+
+    testWidgets('AC3：取消「当天只播一次」门控 —— 连续两次冷启动都播动效', (tester) async {
+      // 决策 C-3。改前读 prefs 的 splashLastShownDate 判断当天是否已播；该键与其
+      // getter/setter 已随本 Story 从 AppPrefs 整体删除（AC3 要求不留死代码）。
+      for (var i = 0; i < 2; i++) {
+        var done = false;
+        await pumpSplash(tester,
+            onComplete: () => done = true,
+            prepareSession: () => Future<void>.delayed(const Duration(milliseconds: 900)));
+        // 若门控仍在，第二次会走 staticHold(1400) 直落终态；此处按 animatedHold(1720) 断言
+        await tester.pump(const Duration(milliseconds: 1500));
+        expect(done, isFalse, reason: '第 ${i + 1} 次：1.5s 时不应已过场（说明走的是 1720ms 动画档）');
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(done, isTrue, reason: '第 ${i + 1} 次：越过 1720ms 后应过场');
+        await tester.pumpWidget(const SizedBox());
+      }
+    });
+
+    testWidgets('AC3/缺陷 B-7：首帧无空窗 —— 不再等 prefs 才渲染内容', (tester) async {
+      // 改前 `_decided` 标志要等 AppPrefs.create()（超时 300ms）返回后才渲染 mark。
+      // 现在 prefs 已不是启动依赖，**第一帧就该有内容**。
+      await tester.pumpWidget(MaterialApp(
+        locale: const Locale('id'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: const SplashPage(),
+      ));
+      await tester.pump(); // 只推进一帧，不给任何异步机会
+      expect(find.byType(SvgPicture), findsWidgets,
+          reason: '首帧就应有 mark/字标，不得等 prefs（缺陷 B-7）');
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('AC6：快网路径全程无任何等待指示，且不闪现', (tester) async {
+      // 阈值设计的全部意义：快网用户永远看不到进度线与慢网提示。
+      // 最容易实现错的是「先显示再隐藏」—— 那样会看到一次闪现，故逐帧检查。
       var done = false;
-      await pumpSplash(tester, onComplete: () => done = true, disableAnimations: true);
+      await pumpSplash(tester,
+          onComplete: () => done = true,
+          prepareSession: () => Future<void>.delayed(const Duration(milliseconds: 900)));
+
+      // 注：提示的 Text 节点**恒在树中**（靠 opacity 显隐，以保证无布局位移 AC4），
+      // 故不能用 findsNothing 断言"没出现"—— 要看 opacity。
+      for (var t = 0; t < 2200; t += 100) {
+        await tester.pump(const Duration(milliseconds: 100));
+        for (final o in tester.widgetList<AnimatedOpacity>(find.byType(AnimatedOpacity))) {
+          expect(o.opacity, 0, reason: 't=${t}ms 处等待指示的 opacity 不为 0（疑似闪现）');
+        }
+      }
+      expect(done, isTrue);
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('AC4/AC5：慢网路径按 1860 / 2290 / 5000 三个时点依次发生', (tester) async {
+      var done = false;
+      // 永不完成的恢复 → 必然走到 5s 兜底。
+      // 用 Completer 而非 Future.delayed：后者会留下悬挂定时器，测试结束时 flutter_test 报错。
+      final never = Completer<void>();
+      addTearDown(() { if (!never.isCompleted) never.complete(); });
+      await pumpSplash(tester, onComplete: () => done = true, prepareSession: () => never.future);
+
+      Iterable<double> opacities() =>
+          tester.widgetList<AnimatedOpacity>(find.byType(AnimatedOpacity)).map((e) => e.opacity);
+
+      // 1500ms：动效未播完，两者都不该出现
+      await tester.pump(const Duration(milliseconds: 1450));
+      expect(opacities().every((o) => o == 0), isTrue, reason: '1.5s 时不应有任何等待指示');
+
+      // 1900ms：越过 progressLineAt(1860) → 进度线出现，提示仍无
+      await tester.pump(const Duration(milliseconds: 450));
+      expect(opacities().where((o) => o == 1).length, 1, reason: '1.9s 时应只有进度线可见');
+
+      // 2350ms：越过 slowHintAt(2290) → 提示也淡入
+      await tester.pump(const Duration(milliseconds: 450));
+      expect(opacities().where((o) => o == 1).length, 2, reason: '2.35s 时进度线与提示都应可见');
+
+      // 未就绪时不得提前过场
+      expect(done, isFalse, reason: '会话未就绪，不应在 5s 兜底前过场');
+
+      // 5100ms：越过 readyDeadline(5000) → 兜底放行
+      await tester.pump(const Duration(milliseconds: 2800));
+      expect(done, isTrue, reason: '到 5s 兜底应无条件放行（决策 D-2）');
+
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('AC5：慢网提示可读时间约 2.7s（5000 − 2290），且三时点由动效时长派生', (tester) async {
+      expect(SplashPage.progressLineAt, const Duration(milliseconds: 1860));
+      expect(SplashPage.slowHintAt, const Duration(milliseconds: 2290));
+      expect(SplashPage.readyDeadline, const Duration(milliseconds: 5000));
+      final readable = SplashPage.readyDeadline - SplashPage.slowHintAt;
+      expect(readable.inMilliseconds, 2710);
+      // 三时点必须晚于动效结束，否则「出现即信息」的语义不成立
+      expect(SplashPage.progressLineAt.inMilliseconds,
+          greaterThan(SplashPage.animatedTotal.inMilliseconds));
+    });
+
+    testWidgets('AC4：等待指示的容器高度恒定 —— 出现/消失不引起布局位移', (tester) async {
+      var done = false;
+      final never = Completer<void>();
+      addTearDown(() { if (!never.isCompleted) never.complete(); });
+      await pumpSplash(tester, onComplete: () => done = true, prepareSession: () => never.future);
+
+      final slot = find.byWidgetPredicate(
+          (w) => w is SizedBox && w.height == SplashPage.bottomSlotHeight);
+      final before = tester.getRect(slot.first);
+      await tester.pump(const Duration(milliseconds: 2400)); // 两个指示都已出现
+      final after = tester.getRect(slot.first);
+      expect(after, before, reason: '等待指示出现后底部容器位置/尺寸不得变化（AC4）');
+      expect(done, isFalse);
+      await tester.pump(const Duration(milliseconds: 2800)); // 越过 5s 兜底，清掉 splash 的定时器
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('AC8：未改落地分流与 onComplete 契约 —— 仅调用一次', (tester) async {
+      var calls = 0;
+      await pumpSplash(tester,
+          onComplete: () => calls++,
+          prepareSession: () => Future<void>.value());
+      await tester.pump(const Duration(milliseconds: 6000)); // 越过 hold 与 5s 兜底
+      expect(calls, 1, reason: 'onComplete 只能被调用一次（就绪与兜底两条路径不得重复触发）');
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('AC7：reduce-motion 直落终态，不播入场', (tester) async {
+      var done = false;
+      await pumpSplash(tester,
+          onComplete: () => done = true,
+          disableAnimations: true,
+          prepareSession: () => Future<void>.value());
 
       expect(find.textContaining('Komunitas Pecinta Hewan Peliharaan'), findsOneWidget);
       // 走 staticHold(1400) 而非 animatedHold(1720)
