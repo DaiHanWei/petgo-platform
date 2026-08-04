@@ -1,7 +1,7 @@
 ---
 stepsCompleted: [1, 2, 3, 4]
-epic7StepsCompleted: [1]        # Epic 7（Splash）增补：1=需求提取完成
-status: 'in-progress'           # 2026-08-04 起追加 Epic 7（Splash），Epic 1~6 部分已完成不变
+epic7StepsCompleted: [1, 2, 3, 4]   # Epic 7（Splash）增补：需求提取 / Epic 设计 / story 生成 / 最终校验 全部完成
+status: 'complete'                  # 2026-08-04 追加 Epic 7（Splash）后仍为完整：7 Epic / 19 Story
 docType: 'epics-delta'
 baseline:
   - _bmad-output/planning-artifacts/epics.md          # V1.0 冻结基线（46 story，只读不改）
@@ -579,12 +579,15 @@ So that 我能先看看这个 App 是干什么的，再决定要不要注册.
 **And** 点其余 6 条 / 详情页互动按钮 → 正常触发建档引导（期望行为，不算拦截）
 **And** 示例详情零网络请求
 
-**AC4（L1 · AD-8）**
+**AC4（L1 · AD-8）** ⚠️ **矩阵部分已于 2026-08-04 被 Story 7.4 取代**
 **Given** 落地 Tab 按当前用户状态实时计算
 **When** 冷启动完成
-**Then** 分流为：游客 → Diary 游客态；状态 A 已建档 → Diary；状态 A 未建档 → Diary 建档引导；状态 B/C → Discovery；兽医 → 工作台（不变）
+**Then** ~~分流为：游客 → Diary 游客态；状态 A 已建档 → Diary；**状态 A 未建档 → Diary 建档引导**；状态 B/C → Discovery；兽医 → 工作台~~
+**Then** `[订正 2026-08-04]` **状态 A · 未建档改为 → Discovery**（产品拍板，收敛为「只有真正建了档案的人才落 Diary，游客是唯一例外」）。**该两行代码改动（`user_state.dart:45` + `test/shared/diary_gating_and_landing_test.dart:247`）划归 Story 7.4，本 Story 不再动。**
 **And** 不持久化「上次落在哪」，每次冷启动按当时状态重新判定
-**And** 用户状态改变（B/C ↔ A）后落地 Tab 实时跟随
+**And** 用户状态改变（B/C ↔ A）后落地 Tab 实时跟随。`[订正 2026-08-04]` **切换时点澄清：改状态那一刻不变，须建档完成（转为 A·已建档）后落地 Tab 才变 Diary**
+
+> 🔎 **code-review 本 Story 时的处置**：按**上方 `~~删除线~~` 的旧矩阵**核对实现即可放行——现网代码就是旧矩阵，与本 Story 交付一致。新矩阵是 Story 7.4 的工作量，**不要因为矩阵不符而打回本 Story**。
 
 **AC5（L1）**
 **Given** 热启动行为不变
@@ -1086,3 +1089,269 @@ So that 下一个版本的决策有数据依据.
 **When** 实现完成
 **Then** 事件名与属性名均为 snake_case
 **And** 未引入任何新的埋点 SDK 或中间件
+
+---
+
+## Epic 7: 冷启动第一眼就是品牌，而不是一次白闪
+
+用户每次冷启动看到的第一屏：不再闪白，紫底上品牌名一笔一笔写出来，等待有真实反馈，最后落在**正确**的 Tab 上。
+
+**范围**：FR-87~FR-91 + FR-78 落地矩阵变更 · NFR-12~17 · UX-DR20~31。**零 schema 变更、零后端改动、零新依赖**——全部落在 Flutter 前端 + 原生启动屏配置 + 资产文件。
+
+**视觉稿**：`v1.1.2/ui-splash-v1.1.2.html`（14 屏 / 4 泳道，2026-08-04 归档）。逐屏 PNG 未归档，需要时回源目录 `.shots-splash/` 取。
+
+### Story 7.1: 品牌资产重导与原生启动屏无缝交接
+
+As a 每天打开 App 的用户,
+I want 冷启动第一眼不要闪一下白光,
+So that App 给我的第一印象是完整的，而不是像卡了一下.
+
+**Acceptance Criteria:**
+
+**AC1（L0 · FR-90 资产部分 / NFR-16 资产半 / UX-DR20 / 既有缺陷 B-4、B-5）**
+**Given** 现有两份品牌资产都不是母文件那一版，且 mark 的 `viewBox` 自带空白与偏心
+**When** 重导出资产
+**Then** mark 取 `V1.0.0/ICON SVG.svg` 的 `Layer_7`，导出使用紧贴 bbox 的 `viewBox 67.23 84.79 389.32 321.81`
+**And** 字标取 `V1.1.0/FULL LOGO -0624.svg` 的 `Layer_9`（猫尾为粗壮实心月牙、位置更高、动感短划更长）
+**And** ⚠️ **不得靠调大声明尺寸来解决「mark 显小」**——根因是 `viewBox 0 0 500 500` 而图形只占 `x67–456 / y85–407`（声明 108px 实际可见仅约 84×70，且右偏 12 / 上偏 4），调大尺寸会同时放大偏心
+
+**AC2（L0 · FR-87 / UX-DR23 / 既有缺陷 B-1、B-2、B-3）**
+**Given** 消白闪需要改 7 处，不是改一行配置
+**When** 实现完成
+**Then** 以下 7 处全部改到：① `pubspec.yaml` 的 `flutter_native_splash.color` → `#7D45F6` ② `values-v31/styles.xml` 的 `windowSplashScreenBackground` → `#7D45F6` ③ **`values-night-v31/styles.xml` 同一属性 → `#7D45F6`** ④ `drawable/background.png` 白填充 → 紫填充 ⑤ `android12splash.png` **200×200 → 288×288**（可视内容限 192×192）⑥ 图形由紫色 `app_icon.png` → **白色 mark**（AC1 的紧贴 bbox 版）⑦ iOS `LaunchScreen` 同步改底色 + 白 mark、视觉尺寸与 Android 对齐
+**And** 改完重跑 `dart run flutter_native_splash:create`
+
+**AC3（L0 · 本 Story 的边界）** 🔴 **2026-08-04 修订：原「Flutter 首帧落 50%」已移入 Story 7.2**
+**Given** 现状 `_markStage()` 是「带**猫形缺口**的狗底标 + 沿**绝对像素路径**跑的猫」两个 SVG 叠加，猫归位时翻紫正好填进缺口做出镂空效果；猫的落点按「底标 43% / 声明 108×108」算出
+**When** 本 Story 实现
+**Then** **`splash_page.dart` 一行不改**——不动 mark 尺寸、`centerY`、`_markStage()` 与任何动效切片
+**And** ⚠️ **原因（story 起草期核实代码后发现）：改首帧落位会同时改变猫的落点参照，使其对不上缺口，旧动效核心视觉效果损坏。** 在 7.2 重做动效前，动了底标的资产/尺寸/位置就会坏——故首帧对齐必须与动效重做同批，归 7.2
+**And** 连带修订：资产以**新增文件**落地，**不覆盖** `mark_dog.svg` / `mark_cat.svg` / `wordmark.svg`（三者仍被现状动效使用），旧资产下线由 7.2 执行
+**And** 遗留：交接处 mark 有一次尺寸/位置跳变（原生 42%@50% vs Flutter 108px@43%），**由 7.2 消除**；**白闪已消除**，跳位比白闪轻且不破坏既有效果，可接受地独立上线
+
+**AC4（L2 · NFR-12 · 必须本地真机）**
+**Given** 深色模式白闪（B-2）长期存在的原因正是只验了浅色
+**When** 真机冷启动
+**Then** **浅色模式**与**深色模式**各验一次，两种模式下**全程无底色闪白**（底色恒为 `#7D45F6`）
+**And** 📌 **允许**交接处一次 mark 尺寸/位置跳变（由 7.2 消除）——验收口径务必分清：「底色闪白」必须消除，「mark 跳位」允许遗留
+**And** 云端 headless 无法执行本条，须在 Completion Notes 标注「L2 待本地验收」
+
+**AC5（L2 · OQ-20 · 必须本地真机）**
+**Given** 系统 splash 图标的实际渲染尺寸由系统决定、无法在设计稿中验证
+**When** 真机测量
+**Then** 量出 Android 12+ 系统实际渲染的图标尺寸，**记录进 Completion Notes 并回写 PRD OQ-20**
+**And** 📌 本 Story 只负责测量与记录；「把 Flutter 首帧 mark 对齐实测值」归 **Story 7.2**（首帧落位归它）
+**And** 若实测值与「屏宽 42%」不一致，以**实测值**为准，并据此同步修正**原生源资产**的可视内容占比（原生侧属本 Story）
+**And** 这是「无缝交接」唯一无法在稿件里验证的环节，不得跳过
+
+**AC6（L0 · 本 Story 的边界）**
+**Given** 入场动效重做属 Story 7.2
+**When** 本 Story 实现
+**Then** **不改动现有入场动效逻辑**，仅改资产、原生配置与首帧落位
+**And** 已知遗留：旧动效**原样继续播**（现状总时长 **4320ms**，非设计稿的 1.54s），终态仍是旧竖排 lockup
+**And** 🔴 **越界判据：`git diff` 不应出现 `petgo_app/lib/` 下任何文件**——本 Story 只改 `pubspec.yaml`、新增 `assets/brand/` 资产、以及生成的 `android/`+`ios/` 产物
+**And** 📌 **本 Story 可独立上线**（白闪已消除、不破坏任何既有效果）；与 7.2 同批发布则更完整
+
+---
+
+### Story 7.2: Splash 视觉与入场动效整体重做
+
+As a 第一次打开 App 的用户,
+I want 开屏看到品牌名一笔一笔写出来,
+So that 我在第一秒就记住了这个 App 叫什么.
+
+**Acceptance Criteria:**
+
+**AC0（L0 · FR-87 / UX-DR21 · 2026-08-04 由 Story 7.1 移入）**
+**Given** Android 12+ 系统 splash 图标**不可定位**，只能落 50% 正中；而现状 Flutter 首帧是 108px 居中于 43%
+**When** 本 Story 重做动效
+**Then** Flutter 首帧改为落 **50% 正中**、可视宽 = **屏宽 42%**，与原生那一帧**同位同尺寸**（首帧仅比原生多一层呼吸光晕）
+**And** 尺寸须对齐 Story 7.1 AC5 的**真机实测值**（该值以 7.1 的 Completion Notes 为准）
+**And** ⚠️ **不得为省一个动作让首帧直接落 43%**——那会在交接处产生可见跳位；抬到 43% 是下方 AC1 的 B1 拍
+**And** 本 AC 与 AC1 必须同批：改首帧落位会改变猫的落点参照，而 AC1 正是删掉猫跑屏那套逻辑的地方
+**And** 同批**下线旧资产** `mark_dog.svg` / `mark_cat.svg` / `wordmark.svg`（7.1 已新增替代资产但刻意未覆盖，以免弄坏当时仍在用的旧动效）
+
+**AC1（L0 · FR-88 / UX-DR24）**
+**Given** mark 需要从原生的 50% 就位到设计位 43%，同时把舞台让给字标
+**When** 播 B1 拍
+**Then** `≈480ms` 内完成：位置 50% → 43%，同时 `scale 1→.70`、`opacity 1→0`
+**And** 这一段位移**同时**完成「就位」与「让位」两件事，不拆成两段
+
+**AC2（L0 · FR-88 / UX-DR25）**
+**Given** 字标母文件共 11 条可见路径（T 与猫尾合并为一条、2 条动感短划、`a i l t o p i a` 各一条）
+**When** 播 B2 拍
+**Then** 拆成 **9 拍**逐条写出，每拍 `+85ms`，每条 `blur 4→0` / `y 10→0`
+**And** **无需拆分资产文件**——按路径分组即可
+
+**AC3（L0 · FR-88 / UX-DR26 / 设计侧挑战 X-1）**
+**Given** 品牌母文件中**不存在**「mark 在上 / 字标在下」的竖排 lockup（现状那个组合属实现期自行拼装）
+**When** 到达终态
+**Then** `1540ms` 时字标可视宽 = 屏宽 60% + 标语，**终态不出现 mark**
+**And** 视觉重量全部给品牌名
+
+**AC4（L0 · NFR-13）**
+**Given** 入场时长上限 1.8s
+**When** 测量总时长
+**Then** 定稿 **1.54s**，不超过 1.8s
+**And** 爪印 pop 动效**已砍掉**（决策 D-4），不得自行加回
+
+**AC5（L0 · FR-90 尺寸部分 / UX-DR22 / NFR-17 / 既有缺陷 B-6、B-8）**
+**Given** 现状写死绝对像素导致小屏大屏构图漂移
+**When** 实现完成
+**Then** 全部尺寸改相对屏宽：mark **42%** / 字标 **60%** / 光晕直径 **66.7%** / 标语 **70%**；底部元素自 **92** 起，进度线与慢网提示同一容器
+**And** 视觉中心 Y 仍为 43%，但口径改为「**logo 中心**居中，标语不参与居中计算」（现状「整块含标语居中」把字标推到光晕亮心之上 43px）
+**And** **猫跑屏的 6 个绝对像素路点整段删除**（不是改成相对单位）
+**And** **版本号整体移除**（现状硬编码 `v 1.0.0`，`pubspec` 已是 `1.1.0+7`，该数字自上线起即为错值）
+
+**AC6（L0 · FR-90 字体部分 / UX-DR30 / NFR-16 / 既有缺陷 B-9）**
+**Given** 换字体与改字号连带原有全部数值需重调，不是两个独立参数
+**When** 实现完成
+**Then** 标语改 **Fraunces 500**，四个可变轴 `opsz` 16 · `SOFT` 100 · `WONK` 1（用 `fontVariations` 设置，本仓库 `splash_page.dart` 的 Quicksand `wght` 已验证该机制）
+**And** 连带 8 项同改：`font-size` 12.5→**16px**、`line-height` 1.65→**1.5**、`letter-spacing` .15→**0**、颜色 白62%→**白68%**、宽度 62%→**70%** 屏宽、与字标间距 20→**24px**、`.tagpad` 61→**72px**（= 24 + 2 行 × 16 × 1.5，保证 logo 中心仍落 43%）
+**And** 慢网提示同族 Fraunces 500 / `opsz` 12 / 12.5px / 白 55%
+**And** **删除 `app_id.arb:714` 硬编码的 `\n`**，改为按屏宽 70% 自动换行，**两语言排版一致**
+**And** 字体可重度子集化（标语仅 ID/EN 两条静态字符串，子集约 37KB 含大小写全集，无需打包完整可变字体约 120KB）
+**And** ✅ **验收口径：splash 最终只依赖 Fraunces 一款字体**（版本号移除后不再用 Poppins，标语换字体后不再用 Quicksand）
+
+**AC7（L0 · NFR-14 / UX-DR29 / 设计侧挑战 X-3）**
+**Given** 装饰性元素常驻无限动画属反模式（无限动画应只用于 loading 指示）
+**When** 系统「减弱动态效果」开启
+**Then** **直接落终态，不播入场**
+**And** **呼吸光晕停在中间值不呼吸**（现状光晕在 reduce-motion 下仍是常驻无限动画）
+**And** **进度线保留**——它承载真实语义，不是装饰
+
+**AC8（L2 · OQ-21 · 必须本地真机）**
+**Given** Fraunces 的 `WONK` 轴在不同渲染引擎下差异较明显
+**When** 真机确认
+**Then** iOS + Android 各一台确认字形手感
+**And** 若「歪」得过头，可退到 `WONK` 0（保留 `SOFT` 的圆润，去掉倾斜感）并回写 PRD OQ-21
+
+> 📌 **本 Story 是 Epic 7 中最大的一条。若实施时判断超出单次 dev 上下文，天然拆分点是 AC6（字体）** ——它有独立的子集 woff2 资产、独立的 ARB 改动与独立的真机验证项（AC8），可单独拆为 Story 7.2b。**AC1~AC5、AC7 必须同批**（终态与通往终态的动效不可分离）。
+
+---
+
+### Story 7.3: 启动期数据获取与等待反馈
+
+As a 网速不好的用户,
+I want 等待的时候能看出来 App 是真的在加载，而不是卡死了,
+So that 我不会以为 App 坏了就把它划掉.
+
+**Acceptance Criteria:**
+
+**AC1（L0 · FR-89 · 决策 C-4）**
+**Given** 现状 `/me` 与动效**串行**——`await ensureRestored()` 写在 `onComplete` 内，动效播完才发请求
+**When** 实现完成
+**Then** 改为**并行**：Flutter 首帧（`t≈320ms`）即发起 `/me`
+**And** 动效播放与数据获取互不等待
+
+**AC2（L0 · FR-89 · 决策 D-2）**
+**Given** 现状超时为 `timeout(const Duration(seconds: 3))`
+**When** 实现完成
+**Then** 改为 **5s**
+**And** 慢网提示因此有 2.7s 可读时间（见 AC5）
+
+**AC3（L0 · FR-89 · 决策 C-3 / 既有缺陷 B-7）**
+**Given** 现状动效受「一天一次」门控（`splashLastShownDate`）
+**When** 实现完成
+**Then** **取消门控**，每次冷启动都播；`splashLastShownDate` 的 prefs 键、读写逻辑与相关测试一并删除
+**And** ✅ **连带效果：`prefs` 不再是启动依赖，既有缺陷 B-7（首帧等 `prefs` 超时 300ms 才渲染 mark 的空窗）自然消失，无需单独修**
+**And** 须有测试锁定「连续两次冷启动都播动效」
+
+**AC4（L0 · FR-89 / UX-DR27 / 设计侧挑战 X-4）**
+**Given** 现状 spinner 从头转到尾、不反映任何真实进度（真实等待由 `Timer` 控制），属假反馈
+**When** 动效播完（1.54s）但 `/me` 未返回
+**Then** 进度线在 `1860ms+` **才出现**，使其出现本身成为信息
+**And** 容器高度**预留**，进度线出现/消失**不引起布局位移**
+**And** 删除现状常驻 spinner
+
+**AC5（L0 · FR-89 / UX-DR28 · 决策 C-5、D-3）**
+**Given** 慢网需要可见提示，但不能打扰快网用户
+**When** 进度线出现后**再等 430ms**（`2290ms+`）仍未就绪
+**Then** 慢网文字提示淡入，到 5s 兜底跳转，**有 2.7s 可读时间**
+**And** 文案为占位 `Koneksi kamu lambat, tunggu sebentar…`（OQ-22 待母语同事审核），两语言 ARB 均需登记
+**And** 字体同族 Fraunces（规格见 Story 7.2 AC6）
+
+**AC6（L0 · FR-89 验收关键）**
+**Given** 阈值设计的意义在于「快网用户永远看不到那行字」
+**When** `/me` 在 `≈0.9s` 返回（快网）
+**Then** **不出现进度线，也不出现慢网提示**，动效播完直接分流
+**And** 须有测试锁定该路径无任何等待指示
+
+**AC7（L0 · NFR-13）**
+**Given** splash 初始化不得阻塞首帧
+**When** 三方初始化（如 `Posthog().setup`）卡住
+**Then** 带超时上限、失败吞错，不得拖慢 `runApp`
+
+---
+
+### Story 7.4: 落地分流收口——矩阵变更与超时兜底的迟到纠正
+
+As a 用网络很慢的、还没建档的用户或计划养宠的用户,
+I want 就算开屏等超时了，最后也别把我丢在一个我用不了的页面上,
+So that 我不用自己去猜该点哪个标签.
+
+**Acceptance Criteria:**
+
+**AC1（L0 · FR-78 落地矩阵变更 · 明确划归本 Story）**
+**Given** 2026-08-04 产品拍板收敛口径为「只有真正建了宠物档案的人才落 Diary，游客是唯一例外」
+**When** 实现完成
+**Then** `petgo_app/lib/features/auth/domain/user_state.dart` 的 `landingLocation` 中 `AppUserState.ownerWithoutProfile` 由 `'/profile'` 改为 **`'/home'`**
+**And** `petgo_app/test/shared/diary_gating_and_landing_test.dart:247` 的断言由 `'/profile'` 同改为 `'/home'`
+**And** 同文件第 43 行的注释「状态 A 一律落 Diary」须同步改写，否则注释与代码矛盾
+**And** ⚠️ **这两处是 Story 2.4 已交付实现的返工，由本 Story 负责，Story 2.4 不再动**
+
+**AC2（L0 · FR-78 六态矩阵完整锁定）**
+**Given** 矩阵是落地分流的唯一判定源（埋点 `user_state` 同源取值）
+**When** 测试锁定
+**Then** 六态断言为：游客 → `/profile`（Diary 游客态）｜A·已建档 → `/profile`｜**A·未建档 → `/home`**｜B → `/home`｜C → `/home`｜兽医 → `/vet/workbench`
+**And** 不持久化「上次落在哪」（FR-78 明确禁止，亦为 D-2「最坏 5s」的根本成因）
+**And** 状态切换时点：改宠物状态那一刻**不变**，须**建档完成**（转为 A·已建档）后落地 Tab 才变 Diary
+
+**AC3（L0/L1 · FR-91 核心 · 七条硬约束逐条验收）**
+**Given** `ensureRestored()` 的 `.timeout()` **只停止等待、不取消底层请求**——恢复完成后会写回 `AuthState` 触发重渲染，故兜底态是会变化的**中间态**而非终态
+**When** 落地页由超时兜底产生、且会话恢复随后完成
+**Then** 按真实状态**重判一次**落地目标，与当前位置不一致则跳转
+**And** ① 仅当本次冷启动落地**由超时兜底产生**时启用；正常路径（`/me` 在动效结束前返回）不涉及本机制
+**And** ② 触发时机为**恢复 future 完成**（成功或失败均算完成），**不是固定延时**
+**And** ③ **仅当用户仍停在兜底送去的那个落地页上**才纠正
+**And** ④ **只纠正一次**，此后本次冷启动内不再干预
+**And** ⑤ 本次冷启动若由**深链唤起**，深链优先级最高，**不纠正**（与 FR-89 分流优先级 pending 深链 > 落地矩阵一致）
+**And** ⑥ 恢复失败（确实是游客）→ 重判结果仍为 Diary → **不产生跳转**
+**And** ⑦ **兽医角色隔离守卫（`if (auth.isVet)`）保留不动**，作为双保险——那是用户/兽医路由互斥的安全边界，不可因新增机制而弱化
+
+**AC4（L0 · NFR-15 · 优先级冲突的裁定）**
+**Given** 「把正在浏览的用户拽走」比「落错页」严重得多
+**When** 用户在纠正触发前已自行导航离开兜底落地页
+**Then** **一律不纠正**
+**And** ⚠️ 本约束**优先级高于**「纠正到正确页」——两者冲突时以本条为准
+**And** `[工程注意]` 判定「用户是否仍停在兜底落地页」须**记录兜底跳转时的目标路径并与当前路由比对**，**不得**使用「路由栈深度」之类的间接信号——用户在同一页内打开弹层/详情再返回，栈深会变但人没走
+
+**AC5（L0 · 纠正后终态逐类锁定 · UX-DR31）**
+**Given** 超时时用户被当作游客处理，一律落 Diary 且渲染 FR-80 游客种草页（`resolveDiaryUserState` 的输入是 `isLoggedIn`）
+**When** 纠正完成
+**Then** 游客 → 不跳｜A·已建档 → 不跳（位置已对，页面内容由种草页变为真实档案）｜**A·未建档 → 跳 `/home`**｜**B/C → 跳 `/home`**｜兽医 → 跳 `/vet/workbench`
+**And** 须有测试覆盖「B/C 慢网超时 → 最终落 Discovery」这一条主诉求路径
+**And** **过场表现（UX-DR31）：视觉稿未画此过渡**。产品已接受「一次可见跳变优于停在无效页」，本 Story 按**无特殊过场、等同普通路由跳转**实现；若后续 UX 认为需要过渡动画，另行提出，不在本 Story 范围
+
+**AC6（L0 · 埋点区分标记 · 关联 §3 T-1）**
+**Given** 超时兜底态与真实游客态在 T-1 里都上报 `user_state=guest`，混在一起则「兜底发生率」无法统计
+**When** 上报 T-1 `app_launch_landed_on_tab`
+**Then** 兜底落地与纠正后落地**各上报一次**
+**And** 兜底那次带 `restore_timeout: true`；纠正那次带 `corrected_from: <原目标>`
+**And** ✅ 该口径使「超时兜底实际发生率」成为可观测指标（原 OQ-23 因此闭合，不再作为开放问题）
+**And** 属性名 snake_case，不引入新 SDK
+
+**AC7（L2 · 必须本地真机 / 弱网）**
+**Given** 本 Story 的主诉求场景只在慢网出现
+**When** 用真机 + 弱网限速（`/me` 超过 5s）冷启动
+**Then** B/C 账号验证：先见 Diary 种草页 → 恢复完成 → **自动落到 Discovery**，不停留在「有宠专属」拒绝页
+**And** 兽医账号验证：最终落工作台
+**And** 快网回归：无任何多余跳转
+**And** 云端 headless 无法执行本条，须在 Completion Notes 标注「L2 待本地验收」
+
+**AC8（L0 · Epic 7 收尾 · 架构回写）**
+**Given** 架构 delta 产出于 2026-07-31，早于 splash 设计
+**When** 本 Story 完成
+**Then** 回写 `architecture-v1.1.2-delta.md` 的 **AD-8**——其第 2 条矩阵描述「状态 A 未建档 → Diary」已过期
+**And** **补一条 AD-17** 记录 FR-91 的架构口径：兜底标记的承载位置、「用户是否仍停在兜底落地页」的判定方式、以及 `onComplete` 与 redirect 的协作边界
+**And** ⚠️ 不回写会导致下个版本有人照旧 AD-8 实现而再次出错
