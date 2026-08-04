@@ -266,10 +266,31 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
     }
   }
 
+  /// 内容压根没撑出滚动余量时的兜底（code-review 2026-08-04）。
+  ///
+  /// 翻页信号全靠 [_maybeLoadMore] 的滚动通知。若首屏总高不超过视口（大屏 / 这一页全是矮胶囊与
+  /// banner / 某页返回空 items 但 `hasMore` 仍为 true），`maxScrollExtent` 恒为 0 →
+  /// **永远不会有滚动通知** → 第 21 条起又变成「App 里看不到」，与本次要修的缺口同形。
+  ///
+  /// 不会打转：tick 走的还是 `_TimelineView._onNearBottom` 同一条路径，
+  /// 没有下一页时 `_loadMore` 直接返回（不 setState → 不重建 → 不再触发）；
+  /// 失败态下 `_onNearBottom` 早退，所以也不会变成失败重试风暴。
+  void _bumpIfViewportNotScrollable() {
+    if (_view != _ArchiveView.timeline) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scroll.hasClients) return;
+      if (_view != _ArchiveView.timeline) return;
+      if (_scroll.position.maxScrollExtent <= 0) {
+        _loadMoreTick.value++;
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final stats = ref.watch(archiveStatsProvider).asData?.value;
+    _bumpIfViewportNotScrollable();
     return RefreshIndicator(
       color: AppColors.mint,
       onRefresh: () async {
@@ -302,10 +323,19 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
           ),
           _viewToggleRow(l10n),
           const SizedBox(height: 10),
-          if (_view == _ArchiveView.timeline)
-            _TimelineView(petName: widget.profile.name, loadMoreTick: _loadMoreTick)
-          else
-            _calendarView(),
+          // 时间线**始终挂载**、只在切到日历时 offstage（code-review 2026-08-04）：
+          // 原先是条件构建，切一次日历就把 _TimelineView 的 State 连同已翻的页、游标一起 dispose，
+          // 切回来列表退回 20 条、滚动位置还被 clamp 得跳一下。offstage 保住状态，
+          // 且不参与布局绘制；日历仍只在需要时才构建（避免白拉一次按月取数）。
+          Offstage(
+            offstage: _view != _ArchiveView.timeline,
+            child: _TimelineView(
+              petName: widget.profile.name,
+              loadMoreTick: _loadMoreTick,
+              onContentChanged: _bumpIfViewportNotScrollable,
+            ),
+          ),
+          if (_view == _ArchiveView.calendar) _calendarView(),
         ],
       ),
     );
@@ -401,13 +431,21 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
 /// Story 3.3：条目渲染改走 **Story 2.2 建立的共用组件** [TimelineItemTile]，与游客示例本同一份实现
 /// （NFR-7）；本视图只负责**按 itemType 注入真实态的点击语义**——组件自身不持有任何跳转。
 class _TimelineView extends ConsumerStatefulWidget {
-  const _TimelineView({required this.petName, required this.loadMoreTick});
+  const _TimelineView({
+    required this.petName,
+    required this.loadMoreTick,
+    this.onContentChanged,
+  });
 
   /// 宠物名（类③ 庆祝文案与类⑤ 证件卡标题需要）。
   final String petName;
 
   /// 宿主页滚到接近底部时自增（见 [_ArchiveBodyState._maybeLoadMore]）。
   final ValueNotifier<int> loadMoreTick;
+
+  /// 追加了新条目后回调宿主页 —— 让它再判一次「内容够不够撑出滚动余量」
+  /// （见 [_ArchiveBodyState._bumpIfViewportNotScrollable]）。滚动器归宿主页，只有它能判。
+  final VoidCallback? onContentChanged;
 
   @override
   ConsumerState<_TimelineView> createState() => _TimelineViewState();
@@ -440,6 +478,22 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
   /// 上一次见到的第一页实例，用于识别「provider 被 invalidate 了」。
   TimelinePage? _lastFirstPage;
 
+  /// 翻页请求代号（code-review 2026-08-04）。
+  ///
+  /// **为什么必须有**：`_loadMore` 是异步的，而第一页随时可能被 invalidate（下拉刷新、发布成功、
+  /// 切回 Diary Tab、详情页删帖 —— 全项目 9 处）。若只判 `mounted`，一次「翻页在飞时刷新」就会：
+  /// 旧响应回来把**刷新前**那一页 `addAll` 进已经清空的列表，并用**过期游标**覆盖新第一页的游标
+  /// → 刷新边界处的那条日记从此消失，且后续每一页都基于旧快照取数，再也翻不回来。
+  /// `_resetPages` 会自增本代号，resolve 时代号不匹配即整份丢弃。
+  int _loadGeneration = 0;
+
+  /// 「内容撑不满视口 → 自动多取一页」已经连续做了几轮。
+  ///
+  /// 有上限是必须的：若某页返回的条目高度很小、或后端一直 `hasMore=true`，
+  /// 无上限的自动填充会变成一串连锁请求。超过上限就交回给用户滚动触发。
+  int _autoFillRounds = 0;
+  static const int _kMaxAutoFillRounds = 5;
+
   @override
   void initState() {
     super.initState();
@@ -459,17 +513,24 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
   }
 
   /// 第一页发生变化（发布/删除/刷新）→ 已翻的页全部作废。
+  ///
+  /// ⚠️ 本方法在 build 路径里被调用，而此刻可能有一个翻页请求**还在飞**。在飞请求的收尾靠
+  /// [_loadGeneration] 判废（这里自增，旧响应回来整份丢弃），**不能**指望清 `_loadingMore`。
   void _resetPages(TimelinePage first) {
+    _loadGeneration++;
+    _autoFillRounds = 0;
     _extra.clear();
     _cursor = first.nextCursor;
     _hasMore = first.hasMore;
     _cursorInitialized = true;
+    // 旧请求已被上面的自增判废，这里放行的是「基于新第一页」的翻页。
     _loadingMore = false;
     _loadMoreFailed = false;
   }
 
   Future<void> _loadMore() async {
     if (_loadingMore || !_hasMore || _cursor == null) return;
+    final int generation = _loadGeneration;
     setState(() {
       _loadingMore = true;
       _loadMoreFailed = false;
@@ -477,14 +538,24 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
     try {
       final page = await ref.read(timelineRepositoryProvider).getTimeline(cursor: _cursor);
       if (!mounted) return;
+      // 期间第一页被 invalidate 过 → 这份响应是**旧快照**的下一页。接上去会漏掉刷新边界那条日记，
+      // 覆盖游标还会让它再也翻不回来。整份丢弃，一个字段都不改。
+      if (generation != _loadGeneration) return;
       setState(() {
         _extra.addAll(page.items);
         _cursor = page.nextCursor;
         _hasMore = page.hasMore;
         _loadingMore = false;
       });
+      // 这一页真加了东西、且还没到自动填充上限 → 请宿主页再判一次视口是否已可滚动。
+      // 空页不续（否则「hasMore 恒真 + 空页」会变成无休止的连锁请求）。
+      if (page.items.isNotEmpty && _autoFillRounds < _kMaxAutoFillRounds) {
+        _autoFillRounds++;
+        widget.onContentChanged?.call();
+      }
     } catch (_) {
       if (!mounted) return;
+      if (generation != _loadGeneration) return; // 旧代号的失败同样不该污染新状态
       // 失败只记状态，不弹 toast、不清列表（AC7）。
       setState(() {
         _loadingMore = false;
@@ -493,16 +564,29 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
     }
   }
 
+
   /// 真实态点击目标（AC5）：
   /// - 类①/② → 内容详情页（postId 为空不可点，与当天详情一致）
   /// - 类③ → 里程碑列表页
   /// - 类④ → 问诊存档走既有结果页深链；结构化健康记录 → 健康记录列表页
   /// - 类⑤ → 身份证页
+  /// `a` 是否比 `b` 更早：先比展示用的事件日期，同日再比创建时间。
+  /// 「第一条快乐时刻」认的是**最早那条**，而同日内后端是正序下发的，所以不能靠列表位置推。
+  static bool _isEarlier(TimelineItem a, TimelineItem b) {
+    final byDate = a.displayDate.compareTo(b.displayDate);
+    return byDate != 0 ? byDate < 0 : a.date.isBefore(b.date);
+  }
+
+  /// T-10 `diary_timeline_item_tapped`（Story 6.1 · AC4）。
+  ///
+  /// `item_type` **直取后端下发的 `itemType`**，前端不自行推断（AD-2）。老后端不下发该字段时
+  /// 报 `UNSPECIFIED` 而不是 `resolvedType` 的兜底推断值 —— 送推断值会让「后端真的这么分类」
+  /// 与「前端猜的」在看板上完全无法区分（code-review 2026-08-04）。
+  static void _reportItemTap(TimelineItem item) => Analytics.capture(
+      'diary_timeline_item_tapped', {'item_type': item.itemType?.wire ?? 'UNSPECIFIED'});
+
   static VoidCallback? _realTapFor(BuildContext context, TimelineItem item) {
-    // T-10 diary_timeline_item_tapped（Story 6.1）：`item_type` **直取后端下发的 itemType**，
-    // 与服务端分类口径一致（前端不自行推断，AD-2）。
-    void report() => Analytics.capture(
-        'diary_timeline_item_tapped', {'item_type': item.resolvedType.wire});
+    void report() => _reportItemTap(item);
     switch (item.resolvedType) {
       case TimelineItemType.happyMoment:
       case TimelineItemType.happyMomentMilestone:
@@ -589,11 +673,20 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
         // 仅在已无更多分页时可断定为真正第一条。
         // 只标「第一条快乐时刻」：debut 标记只在照片卡（类①/②）上渲染，
         // 类④ 的「第一条健康事件」标记随共用组件一并取消（A6 稿的胶囊/粉底条都没有该标记）。
+        // ⚠️ 不能简单「取最后一次命中的索引」（code-review 2026-08-04）：整条时间线是按日期倒序，
+        // **但后端刻意把同一天内改成创建时间正序下发**（TimelineService.withinDayAscending）。
+        // 于是最旧那天若有 2 条以上快乐时刻，取最后一个会把 🌟 标在那天**最晚**的一条上。
+        // 正确做法是显式比较：先比事件日期，同日再比创建时间，取最小的那条。
         int debutHappy = -1;
         if (!_hasMore) {
           for (var i = 0; i < items.length; i++) {
-            final t = items[i].resolvedType;
-            if (t == TimelineItemType.happyMoment || t == TimelineItemType.happyMomentMilestone) {
+            final item = items[i];
+            final t = item.resolvedType;
+            if (t != TimelineItemType.happyMoment &&
+                t != TimelineItemType.happyMomentMilestone) {
+              continue;
+            }
+            if (debutHappy < 0 || _isEarlier(item, items[debutHappy])) {
               debutHappy = i;
             }
           }
@@ -624,8 +717,13 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
             firstLabel: isHappy && i == debutHappy ? l10n.growthFirstHappyMoment : null,
             onTap: _realTapFor(context, item),
             // 类② 金徽章：真实态点它跳里程碑列表（游客态是建档引导，见 diary_guest_page）。
+            // 徽章是**独立可点区域**，也算「点了时间线上的一条」→ 同样上报 T-10
+            // （原先漏报，看板上徽章点击等于不存在；code-review 2026-08-04）。
             onBadgeTap: item.resolvedType == TimelineItemType.happyMomentMilestone
-                ? () => context.push('/profile/milestones')
+                ? () {
+                    _reportItemTap(item);
+                    context.push('/profile/milestones');
+                  }
                 : null,
           ));
         }

@@ -152,9 +152,17 @@ void main() {
     });
 
     testWidgets('还有后续页未加载 → 先不催（旧照片可能在后面几页）', (tester) async {
-      await _pump(tester,
-          firstPage: TimelinePage(
-              items: [_profileCreatedBanner], nextCursor: 'C-1', hasMore: true));
+      // ⚠️ 后续页必须**仍然 hasMore**（code-review 2026-08-04）：内容撑不出滚动余量时，
+      // 页面现在会自动多取一页把视口填满（否则「第 21 条起看不到」会以另一种形态复活）。
+      // 若这里让下一页就是最后一页，页面会当场翻到底、确认真没有快乐时刻，
+      // 于是引导卡**应该**出现 —— 那测的就不是本用例要守的「还没翻到底」了。
+      await _pump(
+        tester,
+        firstPage:
+            TimelinePage(items: [_profileCreatedBanner], nextCursor: 'C-1', hasMore: true),
+        nextPage:
+            TimelinePage(items: [_profileCreatedBanner], nextCursor: 'C-2', hasMore: true),
+      );
 
       expect(find.byKey(const ValueKey('timelineFirstMomentCard')), findsNothing,
           reason: '没翻到底就断言「一条都没有」会误催；等确认没有更多页再说');

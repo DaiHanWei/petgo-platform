@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -141,6 +143,31 @@ Widget _composeApp() => ProviderScope(
 Finder _tabButton(String label) =>
     find.descendant(of: find.byType(BottomTabBar), matching: find.text(label));
 
+/// 扫 `lib/` 下所有 dart 源，把 `Analytics.capture('…')` 的**事件名字面量**提出来。
+///
+/// 为什么要从源码提取而不是维护一份清单：清单会与代码脱节，而脱节时测试是绿的
+/// （code-review 2026-08-04）。只认字面量 —— 目前全部上报点都是字面量，
+/// 哪天有人改成变量，下面的「清单里的事件必须在源码里找得到」会红，正好逼他解释。
+Set<String> _literalsOf(RegExp pattern) {
+  final result = <String>{};
+  final dir = Directory('lib');
+  for (final entity in dir.listSync(recursive: true)) {
+    if (entity is! File || !entity.path.endsWith('.dart')) continue;
+    for (final m in pattern.allMatches(entity.readAsStringSync())) {
+      result.add(m.group(1)!);
+    }
+  }
+  return result;
+}
+
+@visibleForTesting
+Set<String> eventNamesInSource() =>
+    _literalsOf(RegExp(r"""Analytics\.capture\(\s*'([A-Za-z0-9_]+)'"""));
+
+@visibleForTesting
+Set<String> screenNamesInSource() =>
+    _literalsOf(RegExp(r"""Analytics\.screen\(\s*'([A-Za-z0-9_]+)'"""));
+
 void main() {
   setUp(() {
     events = <Recorded>[];
@@ -150,9 +177,65 @@ void main() {
   tearDown(() => Analytics.debugCaptureSink = null);
 
   group('AC8 命名规范（全部事件与属性 snake_case）', () {
-    test('本版本清单里的事件名与属性名均为 snake_case', () {
+    // ⚠️ 断言的对象是**从 `lib/` 真提取出来的字面量**，不是这里手抄的一份清单
+    // （code-review 2026-08-04）。原先遍历的是测试文件内的常量数组，于是
+    // 「起名不合规会红」根本不成立：新增或改名任何事件，只要没人同步手改那份数组，测试恒绿 ——
+    // 而那时它检查的也只是自己刚写下的字符串。
+
+    /// V1.0.x 遗留事件：埋点文档 §8.9 明确**不改名**（改了会断掉已有看板与历史数据）。
+    /// 新事件绝不允许加进这份名单 —— 往这里加东西本身就是评审信号。
+    const legacyEvents = <String>{
+      'login_tapped',
+      'signup_completed',
+      'onboarding_completed',
+      'onboarding_nickname_submitted',
+      'pet_profile_create_submitted',
+      'content_publish_submitted',
+      'post_like_tapped',
+      'triage_submitted',
+      'consult_started',
+      'milestone_share_created',
+      // AppsFlyer 约定名（af_ 前缀由第三方规定，不受本项目命名规范约束）
+      'af_complete_registration',
+      'af_initiated_checkout',
+      'af_purchase',
+    };
+
+    test('lib/ 里所有事件名都是 snake_case', () {
       final naming = RegExp(r'^[a-z][a-z0-9_]*$');
-      const eventNames = <String>[
+      final inSource = eventNamesInSource();
+      expect(inSource, isNotEmpty, reason: '一个事件都没提取到 —— 提取逻辑坏了，不是代码真没埋点');
+      for (final e in inSource) {
+        expect(naming.hasMatch(e), isTrue, reason: '$e 不是 snake_case');
+      }
+    });
+
+    test('lib/ 里每个非遗留事件都符合「模块前缀 + 对象 + 动作」', () {
+      // **命名可读性**（用户 2026-08-04 要求）：产品要能从事件名一眼看出「哪个页面的哪个
+      // 按钮/功能」。⚠️ 反例（本轮修掉的）：`tab_switched` 看不出是底部导航还是页内 Tab；
+      // `diary_sync_toggled` 听着像 Diary 页上的开关，其实在发布页。
+      const allowedPrefixes = <String>[
+        'app_', 'bottom_nav_', 'diary_', 'discovery_', 'health_', 'publish_', 'me_',
+        'signup_', 'milestone_',
+      ];
+      // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
+      const allowedSuffixes = <String>[
+        '_viewed', '_shown', '_tapped', '_selected', '_toggled', '_switched',
+        '_succeeded', '_completed', '_landed_on_tab', '_achieved',
+      ];
+      for (final e in eventNamesInSource()) {
+        if (legacyEvents.contains(e)) continue;
+        expect(allowedPrefixes.any(e.startsWith), isTrue,
+            reason: '$e 缺少可读的模块前缀 —— 产品看不出这是哪个页面的事件；'
+                '若它是 V1.0.x 遗留事件，请显式加入 legacyEvents 而不是放宽规则');
+        expect(allowedSuffixes.any(e.endsWith), isTrue,
+            reason: '$e 的动作词不明确（动作要落在词尾，如 _tapped / _viewed）');
+      }
+    });
+
+    test('本版本清单 T-1~T-12 的事件在源码里确实存在（声明与实现不许脱节）', () {
+      // 这一条守的是反方向：文档/story 说埋了，代码里却没有。
+      const v112Events = <String>[
         'app_launch_landed_on_tab',
         'bottom_nav_tab_switched',
         'diary_guest_page_viewed',
@@ -165,42 +248,38 @@ void main() {
         'diary_timeline_item_tapped',
         'diary_view_mode_switched',
       ];
+      // T-5 已删且编号不重分配 —— 这里断言我们没有偷偷复用它。
+      expect(v112Events.length, 11,
+          reason: 'T-1~T-12 去掉已删的 T-5，`_shown`/`_tapped` 合计为 11 项（T-12 在后端）');
+      final inSource = eventNamesInSource();
+      for (final e in v112Events) {
+        expect(inSource, contains(e), reason: '$e 在清单里但 lib/ 里找不到上报点');
+      }
+    });
+
+    test('属性名均为 snake_case', () {
+      final naming = RegExp(r'^[a-z][a-z0-9_]*$');
       const propNames = <String>[
         'tab', 'user_state', 'from_tab', 'to_tab', 'session_first', 'source', 'method',
         'entry_source', 'type', 'is_default', 'has_pet_profile', 'enabled', 'item_type',
         'to_view',
       ];
-      for (final n in [...eventNames, ...propNames]) {
+      for (final n in propNames) {
         expect(naming.hasMatch(n), isTrue, reason: '$n 不是 snake_case');
       }
-      // T-5 已删且编号不重分配 —— 这里断言我们没有偷偷复用它。
-      expect(eventNames.length, 11, reason: 'T-1~T-12 去掉已删的 T-5，`_shown`/`_tapped` 合计为 11 项');
+    });
 
-      // **命名可读性**（用户 2026-08-04 要求）：产品要能从事件名一眼看出「哪个页面的哪个
-      // 按钮/功能」。做法是强制「模块前缀 + 对象 + 动作」，前缀只能取下面这批产品叫法。
-      // ⚠️ 反例（本轮修掉的）：`tab_switched` 看不出是底部导航还是页内 Tab；
-      // `diary_sync_toggled` 听着像 Diary 页上的开关，其实在发布页。
-      const allowedPrefixes = <String>[
-        'app_', 'bottom_nav_', 'diary_', 'discovery_', 'health_', 'publish_', 'me_',
-        'signup_', 'milestone_',
-      ];
-      for (final e in eventNames) {
-        expect(allowedPrefixes.any(e.startsWith), isTrue,
-            reason: '$e 缺少可读的模块前缀 —— 产品看不出这是哪个页面的事件');
-      }
-      // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
-      const allowedSuffixes = <String>[
-        '_viewed', '_shown', '_tapped', '_selected', '_toggled', '_switched',
-        '_succeeded', '_completed', '_landed_on_tab', '_achieved',
-      ];
-      for (final e in eventNames) {
-        expect(allowedSuffixes.any(e.endsWith), isTrue, reason: '$e 的动作词不明确');
+    test('手工上报的屏名统一以 _page 结尾（与 Tab 根页同一套命名）', () {
+      for (final s in screenNamesInSource()) {
+        expect(s.endsWith('_page'), isTrue,
+            reason: '$s 不是 <产品叫法>_page —— 冷启动落地与切 Tab 必须用同一套屏名，'
+                '否则同一个页面会在看板上被算成两个');
       }
     });
   });
 
   group('T-1/T-2 落地与 Tab 切换（AC2：此前完全无埋点的 P0 缺口）', () {
-    testWidgets(r'冷启动落地上报 app_landing_tab + 落地页 $screen（游客 → Diary）', (tester) async {
+    testWidgets(r'冷启动落地上报 app_launch_landed_on_tab + 落地页 $screen（游客 → Diary）', (tester) async {
       final container = ProviderContainer(
         overrides: [feedRepositoryProvider.overrideWithValue(FakeFeedRepository())],
       );
@@ -217,7 +296,7 @@ void main() {
       expect(_of(r'$screen').map((e) => e.props![r'$screen_name']), contains('diary_page'));
     });
 
-    testWidgets(r'点 Tab 上报 tab_switched（from/to/user_state）并补一条 $screen', (tester) async {
+    testWidgets(r'点 Tab 上报 bottom_nav_tab_switched（from/to/user_state）并补一条 $screen', (tester) async {
       final container = ProviderContainer(
         overrides: [feedRepositoryProvider.overrideWithValue(FakeFeedRepository())],
       );
@@ -241,7 +320,7 @@ void main() {
   });
 
   group('T-3/T-4 游客态（AC3）', () {
-    testWidgets('曝光上报 diary_guest_view，session 内第二次 session_first=false', (tester) async {
+    testWidgets('曝光上报 diary_guest_page_viewed，session 内第二次 session_first=false', (tester) async {
       await tester.binding.setSurfaceSize(const Size(500, 2400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -257,7 +336,7 @@ void main() {
           reason: '重复曝光要能与首次区分，否则算不出「看过一次就走」的比例');
     });
 
-    testWidgets('主 CTA → 单一事件 diary_guest_cta_tapped，source=main_cta', (tester) async {
+    testWidgets('主 CTA → 单一事件 diary_guest_create_profile_cta_tapped，source=main_cta', (tester) async {
       await tester.binding.setSurfaceSize(const Size(500, 2400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       await tester.pumpWidget(_guestApp());
@@ -304,7 +383,7 @@ void main() {
   });
 
   group('T-8/T-9 发布页（AC3）', () {
-    testWidgets('切换类型上报 publish_type_selected（type/is_default/has_pet_profile）', (tester) async {
+    testWidgets('切换类型上报 publish_page_content_type_selected（type/is_default/has_pet_profile）', (tester) async {
       tester.view.physicalSize = const Size(1200, 3200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -323,7 +402,7 @@ void main() {
       expect(ev.props!['has_pet_profile'], isTrue);
     });
 
-    testWidgets('关同步开关上报 diary_sync_toggled(enabled=false)——本版本最关键的假设验证', (tester) async {
+    testWidgets('关同步开关上报 publish_page_sync_to_moment_toggled(enabled=false)——本版本最关键的假设验证', (tester) async {
       tester.view.physicalSize = const Size(1200, 3200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -345,7 +424,7 @@ void main() {
   });
 
   group('T-10/T-11 成长档案（AC3/AC4）', () {
-    testWidgets('AC4：timeline_item_tapped 的 item_type 直取后端 itemType 词表', (tester) async {
+    testWidgets('AC4：diary_timeline_item_tapped 的 item_type 直取后端 itemType 词表', (tester) async {
       await tester.binding.setSurfaceSize(const Size(500, 2400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -361,7 +440,7 @@ void main() {
           reason: 'item_type 必须与后端 itemType 逐字一致，不得在前端另行推断（AD-2）');
     });
 
-    testWidgets('切日历视图上报 archive_view_switched(to_view)，重复点同一视图不重复上报', (tester) async {
+    testWidgets('切日历视图上报 diary_view_mode_switched(to_view)，重复点同一视图不重复上报', (tester) async {
       await tester.binding.setSurfaceSize(const Size(500, 2400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -416,7 +495,7 @@ void main() {
       );
     }
 
-    testWidgets('浮层曝光 → shown；点主 CTA → tapped；注册成功 → signup_completed(soft_login)',
+    testWidgets('浮层曝光 → shown；点主 CTA → tapped；注册成功 → signup_succeeded(soft_login)',
         (tester) async {
       final controller = LoginGuideController(() async => newUser());
       await tester.pumpWidget(guideApp(controller));
@@ -451,7 +530,7 @@ void main() {
           reason: '曝光埋点必须在 session 去重之后 —— 否则曝光数会被没弹出的那次虚高');
     });
 
-    testWidgets('登录被取消 → 不报 signup_completed（只有真正成功才算注册）', (tester) async {
+    testWidgets('登录被取消 → 不报 signup_succeeded（只有真正成功才算注册）', (tester) async {
       final controller = LoginGuideController(() async => null); // 用户取消 Google 弹窗
       await tester.pumpWidget(guideApp(controller));
       await tester.pumpAndSettle();

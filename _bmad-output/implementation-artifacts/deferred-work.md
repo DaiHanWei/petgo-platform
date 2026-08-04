@@ -113,3 +113,10 @@
 
 ## Deferred from: code review of story 1.1-1.3 联审 (2026-07-11)
 - PENDING 支付意图无本地过期扫描 → 僵尸意图堆积 + 极晚 settlement 仍入账。超出 1.3 AC，留未来 story（建议并入 Epic 3 限时支付的 @Scheduled 扫描范式统一做）。[PaymentIntentService]
+
+## Deferred from: code review of story 6-1-v112-埋点收尾 (2026-08-04)
+
+靶子 commit `06462846`（埋点改名 + 后端里程碑埋点 + 三处遗留闭合）。三层并行评审 + 主审复核，共 5 决策 / 22 待修 / 2 延后。下列两项判定为既有问题、非本次引入：
+
+- **`LoginGuideController` 把调用方身份硬编码进自己**：类注释明确「组件本身不含触发条件，暴露供任意触发源注入」，但事件名 `discovery_soft_login_sheet_shown` 与 `entrySource` 默认值 `discovery_soft_login` 写死了 Discovery。当前唯一真实调用点确实是 Discovery（`home_page.dart:46`），故看板暂无错误数据；**下一个复用该浮层的页面会被记成 Discovery**。届时应把来源改为由调用方注入（与 `requireLogin(entrySource:)` 同范式）。[`petgo_app/lib/features/auth/domain/login_guide_controller.dart:37, 49`]
+- **时间线预取阈值 400px 可能连锁拉多页，且外层 `Column` 全量构建无上界**：单页新增内容高度 < 400px 时（某页全是矮胶囊/banner），一次惯性滑动可能把后续各页一口气拉完；时间线用全量 `Column` 渲染（非懒加载 sliver），条目累积后 build/layout 成本无上界。属本次分页方案的固有特性而非回归，重度用户（数百条）才会有体感。彻底解法是改 sliver + 预取节流 + `_extra` 总量上限。[`petgo_app/lib/features/profile/presentation/growth_archive_page.dart:274, 581`]

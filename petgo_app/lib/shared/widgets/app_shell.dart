@@ -73,21 +73,34 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
     );
   }
 
-  void _onTabSelected(int index) {
-    // 按 Tab 语义判定，不比较裸索引（AD-3 AC3①）——重排后裸索引会指向错误的 Tab。
-    final AppTab tab = AppTab.values[index];
-    // T-1 tab_switched（Story 6.1）：PostHog 的 $screen 由路由 observer 产生，而 Tab 切换走
-    // StatefulShellRoute.goBranch（不 push 根路由）→ **不产生 $screen**，所以必须自己埋。
-    // user_state 取 2.4 的落地矩阵同源判定，避免埋点口径与实际分流对不上。
-    // AC2：Tab 根页的浏览事件也在这里补（observer 收不到 goBranch）。
+  /// Tab 切换 + Tab 根页浏览埋点（Story 6.1 · T-1/T-2 · AC2）。
+  ///
+  /// PostHog 的 `$screen` 由路由 observer 产生，而 Tab 切换走 `StatefulShellRoute.goBranch`
+  /// （不 push 根路由）→ **不产生 `$screen`**，所以必须自己埋。
+  /// `user_state` 取 Story 2.4 落地矩阵的同源判定，避免埋点口径与实际分流对不上。
+  ///
+  /// ⚠️ **只在真的切过去了才上报**（code-review 2026-08-04）。两条曾经踩过的坑：
+  /// 1. 上报早于门控判定 → 游客点 Health/Me 只会弹强登录、页面根本没打开，看板却记了一条浏览
+  ///    → 落地页分流被系统性高估，而这正是 AC2 要度量的东西；
+  /// 2. 重复点当前 Tab 也报，且 `from_tab == to_tab` → 与 T-11（切视图）明确 no-op 的口径不一致。
+  void _reportTabEntered(AppTab from, AppTab tab) {
     Analytics.screen('${tab.analyticsName}_page');
     Analytics.capture('bottom_nav_tab_switched', {
-      'from_tab': AppTab.values[widget.navigationShell.currentIndex].analyticsName,
+      'from_tab': from.analyticsName,
       'to_tab': tab.analyticsName,
       'user_state': appUserStateOf(ref.read(authControllerProvider)).wire,
     });
+  }
+
+  void _onTabSelected(int index) {
+    // 按 Tab 语义判定，不比较裸索引（AD-3 AC3①）——重排后裸索引会指向错误的 Tab。
+    final AppTab tab = AppTab.values[index];
+    final AppTab from = AppTab.values[widget.navigationShell.currentIndex];
+    final bool reTap = widget.navigationShell.currentIndex == index;
     if (kUngatedTabs.contains(tab)) {
-      final bool reTap = widget.navigationShell.currentIndex == index;
+      if (!reTap) {
+        _reportTabEntered(from, tab);
+      }
       _goBranch(index); // 免门控：游客可进
       if (tab == AppTab.profile) {
         // 切回 Diary → 刷新时间线 / 日历 / 统计（照 Discovery 的 feedProvider.refresh() 范式）。
@@ -109,11 +122,17 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
     }
     // 受控 Tab：单一门控入口；未登录弹强弹窗 + 注入 pendingAction（登录后回到该 Tab）。
     // 目的地取自枚举内嵌的 location，不再依赖并行数组。
+    // 埋点放在 onAllowed 里 —— 被门控拦下时页面没打开，不该记一条浏览。
     requireLogin(
       ref,
       context,
       pendingAction: RouteIntent(location: tab.location),
-      onAllowed: () => _goBranch(index),
+      onAllowed: () {
+        if (!reTap) {
+          _reportTabEntered(from, tab);
+        }
+        _goBranch(index);
+      },
     );
   }
 

@@ -1,13 +1,13 @@
 package com.tailtopia.profile.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
 import com.tailtopia.profile.domain.MilestoneCompletionSource;
 import com.tailtopia.profile.domain.MilestoneLevel;
 import com.tailtopia.profile.event.MilestoneCompletedEvent;
 import com.tailtopia.shared.analytics.AnalyticsClient;
 import com.tailtopia.shared.analytics.AnalyticsDistinctId;
-import com.tailtopia.shared.analytics.PostHogAnalyticsClient;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -68,6 +68,15 @@ class MilestoneAnalyticsTest {
                     .isEqualTo("checkin");
             assertThat(MilestoneAnalyticsPath.of("C-S3", MilestoneCompletionSource.PUBLISH))
                     .isEqualTo("publish");
+        }
+
+        @Test
+        @DisplayName("source 为 null 直接抛，不再被静默当成健康类（code-review 2026-08-04）")
+        void nullSourceIsRejected() {
+            // 曾经的行为：null 落进健康类分支 → C-M3 被标成 health_record，
+            // 把 AC5「健康类 + checkin 即护栏失效」的告警现场洗白成正常值。
+            assertThatNullPointerException()
+                    .isThrownBy(() -> MilestoneAnalyticsPath.of("C-M3", null));
         }
 
         @Test
@@ -136,17 +145,8 @@ class MilestoneAnalyticsTest {
         }
     }
 
-    @Nested
-    @DisplayName("凭证缺省时不出网")
-    class Disabled {
-
-        @Test
-        @DisplayName("key 留空 → isEnabled=false，capture 直接返回（本地/测试默认状态）")
-        void noKeyMeansNoTraffic() {
-            PostHogAnalyticsClient client = new PostHogAnalyticsClient("", "https://example.invalid");
-            assertThat(client.isEnabled()).isFalse();
-            // 若这里真发了请求，host 是 .invalid 会抛异常 —— 不抛即证明短路生效。
-            client.capture("hash", "milestone_achieved", Map.of("code", "C-S1"));
-        }
-    }
+    // 「凭证缺省时不出网」与整条 HTTP 线路形态改由
+    // com.tailtopia.shared.analytics.PostHogAnalyticsClientTest 用 MockRestServiceServer 把守。
+    // 原先放在这里的那个用例是恒绿的：请求真发出去也会被 client 内部的 catch 吞掉
+    // （code-review 2026-08-04）。
 }

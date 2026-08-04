@@ -226,7 +226,10 @@ logging:
 analytics:
   posthog:
     key: ${POSTHOG_SERVER_KEY:}
-    host: ${POSTHOG_HOST:https://eu.i.posthog.com}
+    # 留空（含空串）→ 客户端回退到 https://eu.i.posthog.com，见 PostHogAnalyticsClient#resolveHost
+    host: ${POSTHOG_HOST:}
+    # 出网必须有超时：埋点走专用有界线程池，但没有超时仍会把那个池挂满、丢事件（code-review 2026-08-04）
+    timeout-seconds: ${POSTHOG_TIMEOUT_SECONDS:3}
 
 # OpenAPI 3.1 文档（springdoc）
 springdoc:

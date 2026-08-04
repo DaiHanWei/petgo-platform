@@ -64,6 +64,15 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
     super.dispose();
   }
 
+  /// 目标条目还没挂载时的重试次数上限。
+  ///
+  /// 定位依赖目标条目的 `GlobalKey` 已经有 context，而 `ListView` 是懒 layout 的：条目排得靠后时
+  /// 首帧拿不到。原先拿不到就静默 return、且已经把 `_focusHandled` 置了 true → **永不重试**，
+  /// 表现正是这次要修的「点进来还停在顶部」（code-review 2026-08-04）。
+  static const int _kFocusMaxAttempts = 6;
+
+  int _focusAttempts = 0;
+
   /// 数据到达后滚到目标条目并高亮一次。只做一次（列表因编辑刷新时不重复抖动）。
   void _handleFocusOnce(List<HealthListItem> items) {
     final target = widget.focusRecordId;
@@ -71,9 +80,20 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
     final exists = items.any((it) => !it.isConsult && it.id == target);
     if (!exists) return; // 记录已被删 / 不在本档案：静默按普通列表处理，不报错打扰用户
     _focusHandled = true;
+    _scheduleFocusAttempt();
+  }
+
+  /// 逐帧重试直到目标条目挂载（或放弃）。放弃时退化为「停在列表顶部」——与改动前同等表现，
+  /// 不会更糟，但绝大多数情况下重试几帧就能拿到 context。
+  void _scheduleFocusAttempt() {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
       final ctx = _focusKey.currentContext;
-      if (ctx == null || !mounted) return;
+      if (ctx == null) {
+        if (++_focusAttempts >= _kFocusMaxAttempts) return;
+        _scheduleFocusAttempt();
+        return;
+      }
       await Scrollable.ensureVisible(
         ctx,
         duration: const Duration(milliseconds: 320),
@@ -378,11 +398,17 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // ⚠️ 两个 Text 都必须可收缩（code-review 2026-08-04）：只读徽章原先既不
+                      // Flexible 也无 ellipsis，411dp 真机宽度下问诊条目会横向溢出 55px
+                      // （类型名 + 徽章 + 40 图标 + 两侧 14 内边距超过行宽）。本轮把用户从
+                      // Diary 时间线新引流进本页，这个溢出会被更多人看到。
                       Row(
                         children: [
                           Flexible(
                             child: Text(
                               _typeLabel(l10n, item.type),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 color: AppColors.mint,
                                 fontSize: 12,
@@ -392,9 +418,13 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
                           ),
                           if (item.isConsult) ...[
                             const SizedBox(width: 6),
-                            Text(
-                              l10n.healthReadOnlyBadge,
-                              style: const TextStyle(color: AppColors.muted, fontSize: 11),
+                            Flexible(
+                              child: Text(
+                                l10n.healthReadOnlyBadge,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(color: AppColors.muted, fontSize: 11),
+                              ),
                             ),
                           ],
                         ],

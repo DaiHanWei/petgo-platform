@@ -78,6 +78,11 @@ class PublishComposePage extends ConsumerStatefulWidget {
     DateTime? presetEventDate,
     String? milestoneCode,
   }) {
+    // AC2 的第 5 个底栏位（code-review 2026-08-04 决策 D1）：发布页是 modal sheet 而非
+    // `PageRoute`，PostHog 的 `defaultPostHogRouteFilter` 只跟踪 `PageRoute` → observer 收不到，
+    // 所以和 4 个 Tab 根页一样手工上报，屏名沿用同一套 `<产品叫法>_page` 命名。
+    // ⚠️ 它不是 Tab 根页，看板上按「底栏 5 个位置的曝光」统计时才把它算进来。
+    Analytics.screen('publish_page');
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,

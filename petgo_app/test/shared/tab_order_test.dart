@@ -65,9 +65,12 @@ void main() {
       expect(labels, <String>['Diary', 'Health', 'Discovery', 'Me']);
     });
 
-    testWidgets('印尼文：Diary / Kesehatan / Jelajah / Saya', (tester) async {
+    testWidgets('印尼文：Diary / Health / Jelajah / Saya', (tester) async {
       final labels = await renderLabels(tester, const Locale('id'));
-      expect(labels, <String>['Diary', 'Kesehatan', 'Jelajah', 'Saya']);
+      // 第 2 位印尼语侧也用 `Health`（OQ-19，2026-08-04 定稿）：底栏每格标签只有约 66px 宽，
+      // `Kesehatan` 在真机 411dp 的**默认字号**下就会被省略号截断成「Kesehata…」。
+      // 详见 tab_bar_max_text_scale_test.dart。
+      expect(labels, <String>['Diary', 'Health', 'Jelajah', 'Saya']);
     });
 
     testWidgets('点击第 1 位回传的索引指向 Diary 分支', (tester) async {

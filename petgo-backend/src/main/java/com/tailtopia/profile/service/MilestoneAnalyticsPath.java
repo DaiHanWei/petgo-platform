@@ -2,6 +2,7 @@ package com.tailtopia.profile.service;
 
 import com.tailtopia.profile.domain.HealthMilestones;
 import com.tailtopia.profile.domain.MilestoneCompletionSource;
+import java.util.Objects;
 
 /**
  * 里程碑达成路径 → 埋点 {@code path} 属性（V1.1.2 Story 6.1 · T-12）。**纯函数，L0 可测。**
@@ -33,13 +34,25 @@ public final class MilestoneAnalyticsPath {
     private MilestoneAnalyticsPath() {
     }
 
+    /**
+     * @param source 达成来源，不可为 null —— null 曾会静默落进健康类分支、被标成
+     *               {@code health_record}，把 AC5 那条「健康类 + checkin 即护栏失效」的告警洗白
+     *               （code-review 2026-08-04）
+     */
     public static String of(String code, MilestoneCompletionSource source) {
-        if (source == MilestoneCompletionSource.USER_CHECKIN) {
-            return "checkin";
-        }
-        if (source == MilestoneCompletionSource.PUBLISH) {
-            return "publish";
-        }
+        Objects.requireNonNull(source, "source");
+        // 穷尽 switch（**刻意不写 default**）：日后给 MilestoneCompletionSource 加第 4 个值
+        // （运营补发 / 数据迁移回填）时这里会编译失败，逼后来人显式决定它的 path，
+        // 而不是让新来源被静默归进 system_auto/health_record —— 误标方向恰好是把可疑组合洗白。
+        return switch (source) {
+            case USER_CHECKIN -> "checkin";
+            case PUBLISH -> "publish";
+            case SYSTEM_AUTO -> systemAutoPathOf(code);
+        };
+    }
+
+    /** SYSTEM_AUTO 再按 code 细分：健康类看是问诊还是健康记录，其余就是纯系统自动。 */
+    private static String systemAutoPathOf(String code) {
         if (HealthMilestones.isHealthMilestone(code)) {
             return suffixOf(code).equals(CONSULT_SUFFIX) ? "consult" : "health_record";
         }

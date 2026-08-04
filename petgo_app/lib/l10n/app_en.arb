@@ -18,7 +18,7 @@
   },
   "tabTriage": "Health",
   "@tabTriage": {
-    "description": "Bottom tab label: Triage / consult."
+    "description": "Bottom tab label: Triage / consult. OQ-11B 关联决策 OQ-19（2026-08-04 定稿）：印尼语侧也用 Health 而不是 Kesehatan —— 底栏是固定 66px 高、每格标签只有约 66px 宽，Kesehatan 在真机 411dp 的默认字号下就会被省略号截断。"
   },
   "tabMe": "Me",
   "@tabMe": {
