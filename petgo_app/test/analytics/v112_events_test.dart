@@ -153,10 +153,17 @@ void main() {
     test('本版本清单里的事件名与属性名均为 snake_case', () {
       final naming = RegExp(r'^[a-z][a-z0-9_]*$');
       const eventNames = <String>[
-        'app_landing_tab', 'tab_switched', 'diary_guest_view', 'diary_guest_cta_tapped',
-        'soft_login_prompt_shown', 'soft_login_prompt_tapped', 'signup_completed',
-        'publish_type_selected', 'diary_sync_toggled', 'timeline_item_tapped',
-        'archive_view_switched',
+        'app_launch_landed_on_tab',
+        'bottom_nav_tab_switched',
+        'diary_guest_page_viewed',
+        'diary_guest_create_profile_cta_tapped',
+        'discovery_soft_login_sheet_shown',
+        'discovery_soft_login_sheet_login_tapped',
+        'signup_succeeded',
+        'publish_page_content_type_selected',
+        'publish_page_sync_to_moment_toggled',
+        'diary_timeline_item_tapped',
+        'diary_view_mode_switched',
       ];
       const propNames = <String>[
         'tab', 'user_state', 'from_tab', 'to_tab', 'session_first', 'source', 'method',
@@ -168,6 +175,27 @@ void main() {
       }
       // T-5 已删且编号不重分配 —— 这里断言我们没有偷偷复用它。
       expect(eventNames.length, 11, reason: 'T-1~T-12 去掉已删的 T-5，`_shown`/`_tapped` 合计为 11 项');
+
+      // **命名可读性**（用户 2026-08-04 要求）：产品要能从事件名一眼看出「哪个页面的哪个
+      // 按钮/功能」。做法是强制「模块前缀 + 对象 + 动作」，前缀只能取下面这批产品叫法。
+      // ⚠️ 反例（本轮修掉的）：`tab_switched` 看不出是底部导航还是页内 Tab；
+      // `diary_sync_toggled` 听着像 Diary 页上的开关，其实在发布页。
+      const allowedPrefixes = <String>[
+        'app_', 'bottom_nav_', 'diary_', 'discovery_', 'health_', 'publish_', 'me_',
+        'signup_', 'milestone_',
+      ];
+      for (final e in eventNames) {
+        expect(allowedPrefixes.any(e.startsWith), isTrue,
+            reason: '$e 缺少可读的模块前缀 —— 产品看不出这是哪个页面的事件');
+      }
+      // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
+      const allowedSuffixes = <String>[
+        '_viewed', '_shown', '_tapped', '_selected', '_toggled', '_switched',
+        '_succeeded', '_completed', '_landed_on_tab', '_achieved',
+      ];
+      for (final e in eventNames) {
+        expect(allowedSuffixes.any(e.endsWith), isTrue, reason: '$e 的动作词不明确');
+      }
     });
   });
 
@@ -182,11 +210,11 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final landing = _one('app_landing_tab');
-      expect(landing.props!['tab'], '/profile');
+      final landing = _one('app_launch_landed_on_tab');
+      expect(landing.props!['tab'], 'diary');
       expect(landing.props!['user_state'], AppUserState.guest.wire,
           reason: 'user_state 必须取落地矩阵的同一枚举，不得另写一份判定');
-      expect(_of(r'$screen').map((e) => e.props![r'$screen_name']), contains('tab_profile'));
+      expect(_of(r'$screen').map((e) => e.props![r'$screen_name']), contains('diary_page'));
     });
 
     testWidgets(r'点 Tab 上报 tab_switched（from/to/user_state）并补一条 $screen', (tester) async {
@@ -203,12 +231,12 @@ void main() {
       await tester.tap(_tabButton('Discovery'));
       await tester.pumpAndSettle();
 
-      final ev = _one('tab_switched');
-      expect(ev.props!['from_tab'], 'profile', reason: '游客落地在 Diary');
-      expect(ev.props!['to_tab'], 'home');
+      final ev = _one('bottom_nav_tab_switched');
+      expect(ev.props!['from_tab'], 'diary', reason: '游客落地在 Diary');
+      expect(ev.props!['to_tab'], 'discovery');
       expect(ev.props!['user_state'], AppUserState.guest.wire);
       // goBranch 不 push 根路由 → PosthogObserver 收不到；缺的这条浏览事件由我们自己补。
-      expect(_of(r'$screen').map((e) => e.props![r'$screen_name']), contains('tab_home'));
+      expect(_of(r'$screen').map((e) => e.props![r'$screen_name']), contains('discovery_page'));
     });
   });
 
@@ -219,13 +247,13 @@ void main() {
 
       await tester.pumpWidget(_guestApp());
       await tester.pumpAndSettle();
-      expect(_one('diary_guest_view').props!['session_first'], isTrue);
+      expect(_one('diary_guest_page_viewed').props!['session_first'], isTrue);
 
       events.clear();
       await tester.pumpWidget(const SizedBox());
       await tester.pumpWidget(_guestApp());
       await tester.pumpAndSettle();
-      expect(_one('diary_guest_view').props!['session_first'], isFalse,
+      expect(_one('diary_guest_page_viewed').props!['session_first'], isFalse,
           reason: '重复曝光要能与首次区分，否则算不出「看过一次就走」的比例');
     });
 
@@ -239,9 +267,9 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('diaryGuestPrimaryCta')));
       await tester.pump();
 
-      expect(_one('diary_guest_cta_tapped').props!['source'], 'main_cta');
+      expect(_one('diary_guest_create_profile_cta_tapped').props!['source'], 'bottom_sticky_cta');
       // 反向断言：不得为不同入口另起事件名（分母会碎）。
-      expect(events.where((e) => e.event.startsWith('diary_guest_cta')), hasLength(1));
+      expect(events.where((e) => e.event.startsWith('diary_guest_create_profile')), hasLength(1));
     });
 
     testWidgets('页头入口与时间线条目 → 同一事件，只靠 source 区分', (tester) async {
@@ -254,7 +282,7 @@ void main() {
       // 页头入口（Story 2.2 列举三类入口时漏掉的第四个引导点）。
       await tester.tap(find.byKey(const ValueKey('diaryIdCardButton')));
       await tester.pump();
-      expect(_one('diary_guest_cta_tapped').props!['source'], 'header_entry');
+      expect(_one('diary_guest_create_profile_cta_tapped').props!['source'], 'header_entry');
 
       // 时间线上的非图条目（示例本里带图的 3 条走详情页、不弹引导）。
       events.clear();
@@ -271,7 +299,7 @@ void main() {
         }
       }
       expect(tapped, isTrue, reason: '示例本里必须存在非图条目，否则 T-4 的 timeline_item 分支无从触发');
-      expect(_one('diary_guest_cta_tapped').props!['source'], 'timeline_item');
+      expect(_one('diary_guest_create_profile_cta_tapped').props!['source'], 'timeline_item');
     });
   });
 
@@ -289,7 +317,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('seg_DAILY')));
       await tester.pumpAndSettle();
 
-      final ev = _one('publish_type_selected');
+      final ev = _one('publish_page_content_type_selected');
       expect(ev.props!['type'], ContentType.daily.wire);
       expect(ev.props!['is_default'], isFalse, reason: '已建档用户默认是 Diary，选 Moment 不是默认值');
       expect(ev.props!['has_pet_profile'], isTrue);
@@ -307,12 +335,12 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('publishSyncToggle')));
       await tester.pumpAndSettle();
-      expect(_one('diary_sync_toggled').props!['enabled'], isFalse);
+      expect(_one('publish_page_sync_to_moment_toggled').props!['enabled'], isFalse);
 
       events.clear();
       await tester.tap(find.byKey(const ValueKey('publishSyncToggle')));
       await tester.pumpAndSettle();
-      expect(_one('diary_sync_toggled').props!['enabled'], isTrue);
+      expect(_one('publish_page_sync_to_moment_toggled').props!['enabled'], isTrue);
     });
   });
 
@@ -328,7 +356,7 @@ void main() {
       await tester.tap(find.byType(TimelineItemTile).first);
       await tester.pumpAndSettle();
 
-      final ev = _one('timeline_item_tapped');
+      final ev = _one('diary_timeline_item_tapped');
       expect(ev.props!['item_type'], TimelineItemType.happyMoment.wire,
           reason: 'item_type 必须与后端 itemType 逐字一致，不得在前端另行推断（AD-2）');
     });
@@ -343,12 +371,12 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('archiveViewCalendar')));
       await tester.pumpAndSettle();
-      expect(_one('archive_view_switched').props!['to_view'], 'calendar');
+      expect(_one('diary_view_mode_switched').props!['to_view'], 'calendar');
 
       events.clear();
       await tester.tap(find.byKey(const ValueKey('archiveViewCalendar')));
       await tester.pumpAndSettle();
-      expect(_of('archive_view_switched'), isEmpty, reason: '点当前视图无状态变化，不应制造噪声事件');
+      expect(_of('diary_view_mode_switched'), isEmpty, reason: '点当前视图无状态变化，不应制造噪声事件');
     });
   });
 
@@ -396,14 +424,14 @@ void main() {
 
       await tester.tap(find.text('trigger'));
       await tester.pumpAndSettle();
-      expect(_of('soft_login_prompt_shown'), hasLength(1));
+      expect(_of('discovery_soft_login_sheet_shown'), hasLength(1));
 
       events.clear();
       await tester.tap(find.byKey(const ValueKey('softSheetGoogleCta')));
       await tester.pumpAndSettle();
 
-      expect(_one('soft_login_prompt_tapped').props!['method'], 'google');
-      expect(_one('signup_completed').props!['entry_source'], 'soft_login',
+      expect(_one('discovery_soft_login_sheet_login_tapped').props!['method'], 'google');
+      expect(_one('signup_succeeded').props!['entry_source'], 'discovery_soft_login',
           reason: 'T-7 的价值全在 entry_source —— 转化路径构成是本版本仅剩的两个可用指标之一');
     });
 
@@ -419,7 +447,7 @@ void main() {
       await tester.tap(find.text('trigger'));
       await tester.pumpAndSettle();
 
-      expect(_of('soft_login_prompt_shown'), hasLength(1),
+      expect(_of('discovery_soft_login_sheet_shown'), hasLength(1),
           reason: '曝光埋点必须在 session 去重之后 —— 否则曝光数会被没弹出的那次虚高');
     });
 
@@ -433,8 +461,17 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('softSheetGoogleCta')));
       await tester.pumpAndSettle();
 
-      expect(_of('signup_completed'), isEmpty);
-      expect(_of('soft_login_prompt_tapped'), hasLength(1), reason: '点击照记，成功与否是另一回事');
+      expect(_of('signup_succeeded'), isEmpty);
+      expect(_of('discovery_soft_login_sheet_login_tapped'), hasLength(1), reason: '点击照记，成功与否是另一回事');
+    });
+  });
+
+  group('T-12 前后端同一个人（跨语言契约）', () {
+    test('distinctIdFor 与后端 AnalyticsDistinctId 同一个已知向量', () {
+      // 后端 MilestoneAnalyticsTest 钉了同一个值。两端差一个字节，
+      // 「点了按钮」（前端）与「达成里程碑」（后端）就拼不到同一个人身上，漏斗白做。
+      expect(Analytics.distinctIdFor(42),
+          'f9514799a33d2a201721f3ffc7fa376a077e517c546e2692b45f9a778e3fb4b2');
     });
   });
 

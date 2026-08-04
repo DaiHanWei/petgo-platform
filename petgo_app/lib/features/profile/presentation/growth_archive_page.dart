@@ -263,6 +263,38 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
           ? _ArchiveView.calendar
           : _ArchiveView.timeline;
 
+  /// 页面唯一的滚动器。时间线是它的一个子节点（不是自己滚），所以「翻页」只能由这里判断触底。
+  final ScrollController _scroll = ScrollController();
+
+  /// 触底信号（自增计数）。用 tick 而不是 bool：连续触底要能反复触发下一页，
+  /// bool 会因值没变而收不到通知。
+  final ValueNotifier<int> _loadMoreTick = ValueNotifier<int>(0);
+
+  /// 提前 400px 预取：等真正到底再转圈，用户会先看到一段空白。
+  static const double _kPrefetchExtent = 400;
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_maybeLoadMore);
+  }
+
+  @override
+  void dispose() {
+    _scroll.removeListener(_maybeLoadMore);
+    _scroll.dispose();
+    _loadMoreTick.dispose();
+    super.dispose();
+  }
+
+  void _maybeLoadMore() {
+    if (_view != _ArchiveView.timeline) return; // 日历视图按月取数，与游标分页无关
+    final pos = _scroll.position;
+    if (pos.pixels >= pos.maxScrollExtent - _kPrefetchExtent) {
+      _loadMoreTick.value++;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -277,6 +309,7 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
         ref.invalidate(calendarMonthProvider);
       },
       child: ListView(
+        controller: _scroll,
         padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 50, AppSpacing.lg, AppSpacing.section),
         children: [
           // 页头（标题行 + 信息卡 + 健康记录入口 + 里程碑进度）走 Story 2.2 抽出的共用组件，
@@ -295,7 +328,7 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
           _viewToggleRow(l10n),
           const SizedBox(height: 14),
           if (_view == _ArchiveView.timeline)
-            _TimelineView(petName: widget.profile.name)
+            _TimelineView(petName: widget.profile.name, loadMoreTick: _loadMoreTick)
           else
             _calendarView(),
         ],
@@ -316,10 +349,10 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
     );
   }
 
-  /// T-11 archive_view_switched（Story 6.1）：日历视图本版本接了健康记录，看看有多少人真的用它。
+  /// T-11 diary_view_mode_switched（Story 6.1）：日历视图本版本接了健康记录，看看有多少人真的用它。
   void _switchView(_ArchiveView to) {
     if (_view == to) return;
-    Analytics.capture('archive_view_switched', {'to_view': to.name});
+    Analytics.capture('diary_view_mode_switched', {'to_view': to.name});
     setState(() => _view = to);
   }
 
@@ -358,11 +391,98 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
 ///
 /// Story 3.3：条目渲染改走 **Story 2.2 建立的共用组件** [TimelineItemTile]，与游客示例本同一份实现
 /// （NFR-7）；本视图只负责**按 itemType 注入真实态的点击语义**——组件自身不持有任何跳转。
-class _TimelineView extends ConsumerWidget {
-  const _TimelineView({required this.petName});
+class _TimelineView extends ConsumerStatefulWidget {
+  const _TimelineView({required this.petName, required this.loadMoreTick});
 
   /// 宠物名（类③ 庆祝文案与类⑤ 证件卡标题需要）。
   final String petName;
+
+  /// 宿主页滚到接近底部时自增（见 [_ArchiveBodyState._maybeLoadMore]）。
+  final ValueNotifier<int> loadMoreTick;
+
+  @override
+  ConsumerState<_TimelineView> createState() => _TimelineViewState();
+}
+
+/// 时间线视图 + **游标分页**（V1.1.2 · Story 3.3 遗留项补齐，2026-08-04）。
+///
+/// 之前只取第一页（20 条），记满 20 条以后的旧记录**在 App 里根本看不到** —— 后端早就支持
+/// `cursor`，缺的是前端这一段。顺带让 Story 3.3 写好却「无从触发」的
+/// 「增量失败 → 底部重试」有了真实入口。
+///
+/// **为什么翻页状态放在这里而不是 provider**：第一页仍走 [timelineFirstPageProvider]，
+/// 全项目已有 7 处 `invalidate(timelineFirstPageProvider)`（发布成功、删档、编辑档案、切 Tab…）。
+/// 若把整条时间线搬进新 provider，那 7 处都要跟着改，且容易漏一处导致「发了新日记但列表不刷」。
+/// 现在的做法是：第一页变了 → [_resetPages] 把已翻的页丢掉重来，那 7 处调用点一行都不用改。
+class _TimelineViewState extends ConsumerState<_TimelineView> {
+  /// 第 2 页起累积的条目（第一页始终来自 provider）。
+  final List<TimelineItem> _extra = <TimelineItem>[];
+
+  /// 下一页游标；null = 没有下一页。
+  String? _cursor;
+  bool _cursorInitialized = false;
+  bool _hasMore = false;
+  bool _loadingMore = false;
+
+  /// 增量失败态：**不清空已加载内容**（AC7 口径 —— 已经看到的东西不能因为翻页失败而消失），
+  /// 只在底部给一个重试入口。
+  bool _loadMoreFailed = false;
+
+  /// 上一次见到的第一页实例，用于识别「provider 被 invalidate 了」。
+  TimelinePage? _lastFirstPage;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.loadMoreTick.addListener(_onNearBottom);
+  }
+
+  @override
+  void dispose() {
+    widget.loadMoreTick.removeListener(_onNearBottom);
+    super.dispose();
+  }
+
+  void _onNearBottom() {
+    // 失败态下不自动重试：否则用户停在底部会被无限重试刷屏，且看不到那行提示。
+    if (_loadMoreFailed) return;
+    _loadMore();
+  }
+
+  /// 第一页发生变化（发布/删除/刷新）→ 已翻的页全部作废。
+  void _resetPages(TimelinePage first) {
+    _extra.clear();
+    _cursor = first.nextCursor;
+    _hasMore = first.hasMore;
+    _cursorInitialized = true;
+    _loadingMore = false;
+    _loadMoreFailed = false;
+  }
+
+  Future<void> _loadMore() async {
+    if (_loadingMore || !_hasMore || _cursor == null) return;
+    setState(() {
+      _loadingMore = true;
+      _loadMoreFailed = false;
+    });
+    try {
+      final page = await ref.read(timelineRepositoryProvider).getTimeline(cursor: _cursor);
+      if (!mounted) return;
+      setState(() {
+        _extra.addAll(page.items);
+        _cursor = page.nextCursor;
+        _hasMore = page.hasMore;
+        _loadingMore = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      // 失败只记状态，不弹 toast、不清列表（AC7）。
+      setState(() {
+        _loadingMore = false;
+        _loadMoreFailed = true;
+      });
+    }
+  }
 
   /// 真实态点击目标（AC5）：
   /// - 类①/② → 内容详情页（postId 为空不可点，与当天详情一致）
@@ -370,10 +490,10 @@ class _TimelineView extends ConsumerWidget {
   /// - 类④ → 问诊存档走既有结果页深链；结构化健康记录 → 健康记录列表页
   /// - 类⑤ → 身份证页
   static VoidCallback? _realTapFor(BuildContext context, TimelineItem item) {
-    // T-10 timeline_item_tapped（Story 6.1）：`item_type` **直取后端下发的 itemType**，
+    // T-10 diary_timeline_item_tapped（Story 6.1）：`item_type` **直取后端下发的 itemType**，
     // 与服务端分类口径一致（前端不自行推断，AD-2）。
     void report() => Analytics.capture(
-        'timeline_item_tapped', {'item_type': item.resolvedType.wire});
+        'diary_timeline_item_tapped', {'item_type': item.resolvedType.wire});
     switch (item.resolvedType) {
       case TimelineItemType.happyMoment:
       case TimelineItemType.happyMomentMilestone:
@@ -399,9 +519,14 @@ class _TimelineView extends ConsumerWidget {
           };
         }
         // 结构化健康记录：跳健康记录列表页（FR-45B）。时间线内**不提供编辑入口**。
+        // 带 `?focus=<id>` 定位到点的那一条（Story 3.3 遗留项，2026-08-04 补齐）——
+        // 只跳列表顶部等于让用户自己再找一遍，记录一多就找不到。
+        // 老后端不下发 healthRecordId 时退化为「跳列表顶部」，不报错。
+        final recordId = item.healthRecordId;
         return () {
           report();
-          context.push('/profile/health');
+          context.push(
+              recordId == null ? '/profile/health' : '/profile/health?focus=$recordId');
         };
       case TimelineItemType.idCardIssued:
         return () {
@@ -412,9 +537,15 @@ class _TimelineView extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final timelineAsync = ref.watch(timelineFirstPageProvider);
+    // 第一页的身份变了就重置分页状态（provider 被 invalidate → 新的 TimelinePage 实例）。
+    final firstPage = timelineAsync.asData?.value;
+    if (firstPage != null && (!_cursorInitialized || !identical(firstPage, _lastFirstPage))) {
+      _lastFirstPage = firstPage;
+      _resetPages(firstPage);
+    }
     return timelineAsync.when(
       loading: () => const Padding(
         padding: EdgeInsets.all(AppSpacing.xl),
@@ -438,7 +569,7 @@ class _TimelineView extends ConsumerWidget {
         ),
       ),
       data: (page) {
-        if (page.items.isEmpty) {
+        if (page.items.isEmpty && _extra.isEmpty) {
           // timeline-empty.html：居中空态引导（标题 + 副文 + 紫 CTA「+ Catat Momen Pertama」）。
           return Padding(
             padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 32, AppSpacing.lg, AppSpacing.xl),
@@ -471,13 +602,13 @@ class _TimelineView extends ConsumerWidget {
             ),
           );
         }
-        final items = page.items;
+        final items = <TimelineItem>[...page.items, ..._extra];
         // 「Pertama」🌟 标在最旧的那条（debut，列表为倒序故取最后出现的索引）；
         // 仅在已无更多分页时可断定为真正第一条。
         // 只标「第一条快乐时刻」：debut 标记只在照片卡（类①/②）上渲染，
         // 类④ 的「第一条健康事件」标记随共用组件一并取消（A6 稿的胶囊/粉底条都没有该标记）。
         int debutHappy = -1;
-        if (!page.hasMore) {
+        if (!_hasMore) {
           for (var i = 0; i < items.length; i++) {
             final t = items[i].resolvedType;
             if (t == TimelineItemType.happyMoment || t == TimelineItemType.happyMomentMilestone) {
@@ -506,7 +637,7 @@ class _TimelineView extends ConsumerWidget {
           // ⚠️ 与游客态**同一个** TimelineItemTile（NFR-7）；差异只在这里注入的回调。
           tiles.add(TimelineItemTile(
             item: item,
-            petName: petName,
+            petName: widget.petName,
             thumbIndex: i,
             firstLabel: isHappy && i == debutHappy ? l10n.growthFirstHappyMoment : null,
             onTap: _realTapFor(context, item),
@@ -516,10 +647,48 @@ class _TimelineView extends ConsumerWidget {
                 : null,
           ));
         }
+        // 底部翻页页脚：加载中转圈 / 失败给重试 / 没有更多则什么都不加。
+        if (_loadMoreFailed) {
+          tiles.add(_loadMoreRetry(l10n));
+        } else if (_loadingMore) {
+          tiles.add(const Padding(
+            key: ValueKey('timelineLoadMoreSpinner'),
+            padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
+            child: Center(child: SizedBox(
+                width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))),
+          ));
+        }
         return Column(crossAxisAlignment: CrossAxisAlignment.start, children: tiles);
       },
     );
   }
+
+  /// 增量加载失败的底部重试行（Story 3.3 AC7 写了、此前「无从触发」的那一条）。
+  ///
+  /// ⚠️ 与整页失败态（key `timelineError`）**刻意不同**：那个会替换掉整个内容区，
+  /// 这个只在已加载内容的末尾加一行 —— 翻页失败不该把用户已经看到的日记抹掉。
+  Widget _loadMoreRetry(AppLocalizations l10n) => Padding(
+        key: const ValueKey('timelineLoadMoreError'),
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Flexible(
+              child: Text(l10n.growthLoadFailed,
+                  style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+            ),
+            const SizedBox(width: 8),
+            TextButton(
+              key: const ValueKey('timelineLoadMoreRetry'),
+              onPressed: () {
+                setState(() => _loadMoreFailed = false);
+                _loadMore();
+              },
+              child: Text(l10n.growthLoadRetry),
+            ),
+          ],
+        ),
+      );
 }
 
 /// 状态 A（已回答「我有宠物」）但未建档的**建档引导态**（Story 2.3 · FR-81 · UI 稿 A2）。

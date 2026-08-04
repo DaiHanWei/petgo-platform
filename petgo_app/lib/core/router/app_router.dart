@@ -95,12 +95,14 @@ final NotifierProvider<PendingDeepLinkNotifier, String?> pendingDeepLinkProvider
 /// 与用户侧紫主题物理隔离。
 Widget _vetScoped(Widget child) => Theme(data: AppTheme.vet, child: child);
 
-/// 冷启动落地路径 → 浏览事件屏名（Story 6.1 AC2）。
-/// 与 `app_shell.dart` 里 Tab 切换用的 `tab_<AppTab.name>` **同一套字面量** ——
+/// 冷启动落地路径 → 埋点里的**页面产品名**（Story 6.1）。
+///
+/// 与 `app_shell.dart` 里 Tab 切换用的 `AppTab.analyticsName` **同一套字面量** ——
 /// 否则「冷启动落在 Diary」与「切到 Diary」在看板上会被算成两个不同页面。
-const Map<String, String> _landingScreenNames = {
-  '/profile': 'tab_profile',
-  '/home': 'tab_home',
+/// 路径本身（`/profile`）不适合直接送埋点：产品看不出它是 Diary。
+const Map<String, String> _landingTabNames = {
+  '/profile': 'diary',
+  '/home': 'discovery',
   '/vet/workbench': 'vet_workbench',
 };
 
@@ -197,14 +199,16 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
             final auth = ref.read(authControllerProvider);
             final state = appUserStateOf(auth);
             final target = state.landingLocation;
-            // T-2 app_landing_tab（Story 6.1）：本版本改了落地页矩阵，需要度量各状态实际落在哪。
-            Analytics.capture('app_landing_tab', {
-              'tab': target,
+            // T-1 app_launch_landed_on_tab（Story 6.1）：本版本改了落地页矩阵，
+            // 需要度量各状态实际落在哪。`tab` 用产品名（diary/discovery/vet_workbench），
+            // 不用路由路径 —— 产品看不出 `/profile` 是 Diary。
+            final tabName = _landingTabNames[target] ?? 'other';
+            Analytics.capture('app_launch_landed_on_tab', {
+              'tab': tabName,
               'user_state': state.wire,
             });
-            // 落地的那一屏同样要有浏览事件（AC2）：屏名与 Tab 切换用**同一套**字面量，
-            // 否则「冷启动落在 Diary」与「切到 Diary」在看板上会被算成两个不同页面。
-            Analytics.screen(_landingScreenNames[target] ?? 'landing_other');
+            // 落地的那一屏同样要有浏览事件：屏名与 Tab 切换用**同一套**字面量。
+            Analytics.screen('${tabName}_page');
             ctx.go(target);
           },
         ),
@@ -263,9 +267,13 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       ),
       // 健康记录列表（Story 7.2 · FR-45B）。受控（/profile/ 前缀，游客被门控）。
       // ?add=VACCINE|DEWORM|...：进页自动弹预选类型的添加表单（bug 20260729-406，健康类里程碑直跳）。
+      // ?focus=<记录 id>：进页滚到该条并短暂高亮（Diary 时间线类④ 点击 → 定位到对应条目）。
       GoRoute(
           path: '/profile/health',
-          builder: (c, s) => HealthListPage(presetAddType: s.uri.queryParameters['add'])),
+          builder: (c, s) => HealthListPage(
+                presetAddType: s.uri.queryParameters['add'],
+                focusRecordId: int.tryParse(s.uri.queryParameters['focus'] ?? ''),
+              )),
       // 成长档案当天详情（Story 2.4 AC6 · F9）。?date=yyyy-MM-dd；受控（/profile/ 前缀）。
       GoRoute(
         path: '/profile/day',

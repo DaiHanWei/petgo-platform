@@ -593,11 +593,11 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   }
 
   /// 类型标签：原型横向 pill chips（紫底圆角 9999 选中态，#E6E6E6 边框未选）。
-  /// T-8 `publish_type_selected`（Story 6.1）：类型选择的实际分布 + 是否等于默认值
+  /// T-8 `publish_page_content_type_selected`（Story 6.1）：类型选择的实际分布 + 是否等于默认值
   /// —— 用来验证「默认 Diary」这个改动到底改变了多少发布构成。
   void _reportTypeSelected(ContentType type) {
     final defaultType = _hasPetProfile ? ContentType.growthMoment : ContentType.daily;
-    Analytics.capture('publish_type_selected', {
+    Analytics.capture('publish_page_content_type_selected', {
       'type': type.wire,
       'is_default': type == defaultType,
       'has_pet_profile': _hasPetProfile,
@@ -709,9 +709,9 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
             activeThumbColor: AppColors.onAccent,
             activeTrackColor: AppColors.mint,
             onChanged: (value) {
-              // T-9 diary_sync_toggled：**本版本最关键的产品假设验证** —— 到底有多少人
-              // 真的想把 Diary 只留给自己。属性只记开关值，不记内容。
-              Analytics.capture('diary_sync_toggled', {'enabled': value});
+              // T-9 publish_page_sync_to_moment_toggled：**本版本最关键的产品假设验证** ——
+              // 到底有多少人真的想把 Diary 只留给自己。属性只记开关值，不记内容。
+              Analytics.capture('publish_page_sync_to_moment_toggled', {'enabled': value});
               controller.setSyncToMoment(value);
             },
           ),

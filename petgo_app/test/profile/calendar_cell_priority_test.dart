@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:tailtopia/core/theme/colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/profile/data/timeline_repository.dart';
@@ -113,6 +114,11 @@ void main() {
       final m = healthRecordIconFor('MENSTRUATION');
       expect(m.icon, Icons.water_drop, reason: 'FR-84：实心水滴，覆盖 V1.1.0 的描边版');
       expect(m.color, isNot(equals(const Color(0xFF5B9BD5))), reason: '不再是 infoBlue');
+      // OQ-11B 定稿色（2026-08-04）：深紫红 #B03060。
+      expect(m.color, const Color(0xFFB03060));
+      // 与 coral 拉开距离是这个色值存在的**唯一理由** —— 撞回去就没意义了。
+      expect(m.color, isNot(equals(AppColors.coral)),
+          reason: '生理期不能和危险/点赞/疫苗/问诊同色，否则日历格子里读不出区别');
     });
 
     test('两个通用标记就位，且未与既有图标撞车', () {

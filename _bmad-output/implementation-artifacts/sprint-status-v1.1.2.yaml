@@ -94,8 +94,8 @@ development_status:
   epic-3: in-progress
   3-1-时间线统一游标锚点重构: review              # 修现网缺陷，非新功能；须配「补记旧日期日记跨页无丢失无重复」回归断言
   3-2-时间线四源接入与五类分类下发: review                # 五源接入 + 纯函数分类器（零依赖=不可能落库）；已采纳 2-2 词表；真库逐类核对留与 3-3 联调同批
-  3-3-时间线前端五类渲染: review                          # 已复用 2-2 组件（未另写）；遗留：类④ 定位到对应条目、增量失败重试（前端未接分页）
-  3-4-日历联动结构化健康记录与当天详情排序: review          # 已完成（含纯文字日记错显🏥修复）；⚠月经红色值待 OQ-11B，当前 coral 占位
+  3-3-时间线前端五类渲染: review                          # 已复用 2-2 组件（未另写）；两处遗留 2026-08-04 已闭合：类④ ?focus= 定位高亮 + 时间线游标分页（含触底重试）
+  3-4-日历联动结构化健康记录与当天详情排序: review          # 已完成（含纯文字日记错显🏥修复）；OQ-11B 已定稿 #B03060（AppColors.menstruationRed）
   epic-3-retrospective: optional
 
   # ===== Epic 4: 日记可以只留给自己 =====
@@ -115,5 +115,5 @@ development_status:
   # ===== Epic 6: 改版效果可度量 =====
   # PRD §3 埋点。依赖全部功能落地，排最后。
   epic-6: in-progress
-  6-1-v112-埋点收尾: review                              # T-1~T-11 已上报；AC1 假设代码级确证成立（goBranch 不 push → observer 收不到）；T-12/AC5 待「后端埋点 SDK」决策；埋点文档回写 docs/analytics-posthog-tracking.md §8
+  6-1-v112-埋点收尾: review                              # T-1~T-12 全部上报（含后端里程碑，未引 SDK）；事件名已按产品可读规范重做；AC5 线上校验口径成立；文档双份（repo §8 + 产品空间 埋点清单v112.md）
   epic-6-retrospective: optional

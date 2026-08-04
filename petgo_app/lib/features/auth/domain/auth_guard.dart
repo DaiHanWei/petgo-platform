@@ -11,7 +11,7 @@ import 'login_guide_controller.dart';
 /// 返回 false（不进入目标）。受控 Tab 点击、受控入口（问诊/发布/创建档案）统一调此，
 /// 避免各页散落 `if (!loggedIn)` 判断（防 Epic 间不一致）。
 ///
-/// [entrySource] 透传给 Story 6.1 的 T-7 `signup_completed` 做转化归因（默认 `other`）。
+/// [entrySource] 透传给 Story 6.1 的 T-7 `signup_succeeded` 做转化归因（默认 `other`）。
 bool requireLogin(
   WidgetRef ref,
   BuildContext context, {

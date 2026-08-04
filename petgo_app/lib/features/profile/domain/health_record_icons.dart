@@ -30,8 +30,9 @@ const Map<String, HealthRecordIcon> kHealthRecordIcons = {
   'DEWORM': HealthRecordIcon(icon: Icons.medication_outlined, color: AppColors.triageGreen),
   'NEUTER': HealthRecordIcon(icon: Icons.healing_outlined, color: AppColors.mint),
   // FR-84：实心水滴 + 红色（覆盖 V1.1.0 FR-45B 的描边水滴 + infoBlue）。
-  // ⚠️ 色值待 OQ-11B 定稿（需与 coral #F0425A 拉开距离）；先用 coral 占位，出色值后只改这一行。
-  'MENSTRUATION': HealthRecordIcon(icon: Icons.water_drop, color: AppColors.coral),
+  // OQ-11B 已定稿（2026-08-04）：深紫红 #B03060 —— 与 coral #F0425A 拉开距离，
+  // 免得在日历格子里与「危险 / 点赞 / 疫苗 / 问诊」的红撞成一个意思。
+  'MENSTRUATION': HealthRecordIcon(icon: Icons.water_drop, color: AppColors.menstruationRed),
   'CUSTOM': HealthRecordIcon(icon: Icons.description_outlined, color: AppColors.muted),
   'CONSULT': HealthRecordIcon(icon: Icons.local_hospital_outlined, color: AppColors.coral),
 };

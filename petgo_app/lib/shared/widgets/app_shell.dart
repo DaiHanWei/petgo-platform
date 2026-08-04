@@ -80,10 +80,10 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
     // StatefulShellRoute.goBranch（不 push 根路由）→ **不产生 $screen**，所以必须自己埋。
     // user_state 取 2.4 的落地矩阵同源判定，避免埋点口径与实际分流对不上。
     // AC2：Tab 根页的浏览事件也在这里补（observer 收不到 goBranch）。
-    Analytics.screen('tab_${tab.name}');
-    Analytics.capture('tab_switched', {
-      'from_tab': AppTab.values[widget.navigationShell.currentIndex].name,
-      'to_tab': tab.name,
+    Analytics.screen('${tab.analyticsName}_page');
+    Analytics.capture('bottom_nav_tab_switched', {
+      'from_tab': AppTab.values[widget.navigationShell.currentIndex].analyticsName,
+      'to_tab': tab.analyticsName,
       'user_state': appUserStateOf(ref.read(authControllerProvider)).wire,
     });
     if (kUngatedTabs.contains(tab)) {

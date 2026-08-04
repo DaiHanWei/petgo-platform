@@ -31,7 +31,7 @@ class LoginGuideController {
   /// Apple 登录执行器（FR-44，仅 iOS）：为空则引导浮层不展示 Apple 入口。
   final LoginRunner? _loginApple;
 
-  /// 本次登录尝试的来源，供 T-7 `signup_completed` 的 `entry_source` 归因（Story 6.1）。
+  /// 本次登录尝试的来源，供 T-7 `signup_succeeded` 的 `entry_source` 归因（Story 6.1）。
   /// 由 [showSoftSheet] / [showHardDialog] 在弹出时写入 —— 一次只可能有一个引导在前台，
   /// 所以单个字段足够，不需要按弹层实例分别记。
   String _entrySource = 'other';
@@ -46,26 +46,26 @@ class LoginGuideController {
 
   /// 软浮层（每 session 最多一次；第 2 次起 no-op）。
   Future<void> showSoftSheet(BuildContext context,
-      {RouteIntent? pendingAction, String entrySource = 'soft_login'}) async {
+      {RouteIntent? pendingAction, String entrySource = 'discovery_soft_login'}) async {
     if (_softShownThisSession) return;
     _softShownThisSession = true;
     _pending = pendingAction;
     _entrySource = entrySource;
     // T-6（Story 6.1）：曝光埋在 session 去重**之后** —— 第 2 次起是 no-op，不该记曝光。
-    Analytics.capture('soft_login_prompt_shown');
+    Analytics.capture('discovery_soft_login_sheet_shown');
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetCtx) => LoginSoftSheet(
         onLogin: () {
-          Analytics.capture('soft_login_prompt_tapped', {'method': 'google'});
+          Analytics.capture('discovery_soft_login_sheet_login_tapped', {'method': 'google'});
           return _attemptLogin(context, sheetCtx, _login);
         },
         onAppleLogin: _loginApple == null
             ? null
             : () {
-                Analytics.capture('soft_login_prompt_tapped', {'method': 'apple'});
+                Analytics.capture('discovery_soft_login_sheet_login_tapped', {'method': 'apple'});
                 return _attemptLogin(context, sheetCtx, _loginApple);
               },
         onClose: () {
@@ -139,10 +139,10 @@ class LoginGuideController {
     if (overlayContext.mounted && Navigator.of(overlayContext).canPop()) {
       Navigator.of(overlayContext).pop();
     }
-    // T-7 signup_completed（Story 6.1）：**注册真正成功**才报（取消/失败都已在上面 return）。
+    // T-7 signup_succeeded（Story 6.1）：**注册真正成功**才报（取消/失败都已在上面 return）。
     // 现有埋点只有「点了登录按钮」，缺的就是这一环；`entry_source` 是转化路径构成的唯一来源。
     if (resp.isNewUser) {
-      Analytics.capture('signup_completed', {'entry_source': _entrySource});
+      Analytics.capture('signup_succeeded', {'entry_source': _entrySource});
     }
     if (!rootContext.mounted) return LoginGuideOutcome.success;
     _handleSuccess(rootContext, resp);

@@ -16,15 +16,22 @@ import '../../l10n/app_localizations.dart';
 /// `location` **内嵌在枚举上**，取代原先与枚举并行维护的 `_tabLocations` 数组：
 /// 并行数组会与枚举顺序脱节（AD-3 点名的漂移风险之一），内嵌后结构上不可能对不上。
 enum AppTab {
-  profile('/profile'),
-  triage('/triage'),
-  home('/home'),
-  me('/me');
+  profile('/profile', 'diary'),
+  triage('/triage', 'health'),
+  home('/home', 'discovery'),
+  me('/me', 'me');
 
-  const AppTab(this.location);
+  const AppTab(this.location, this.analyticsName);
 
   /// 该 Tab 分支的根路由路径。
   final String location;
+
+  /// 埋点用的**产品叫法**（Story 6.1 · 命名可读性要求）。
+  ///
+  /// ⚠️ 枚举名是历史包袱，与产品叫法**并不对应**：`profile` 其实是 Diary、`triage` 其实是
+  /// Health、`home` 其实是 Discovery。直接把枚举名送进埋点，看板上会出现「进入 home」
+  /// 却指的是 Discovery 这种读不懂的数据 —— 所以对外一律用这里的名字。
+  final String analyticsName;
 }
 
 /// 「＋」凸起按钮直径（px）。原型 feed.html `.plusinner` = 56。
@@ -389,11 +396,22 @@ class _TabItem extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 3),
-        Text(
-          label,
-          style: AppTypography.tabLabel.copyWith(
-            color: active ? AppColors.mint : AppColors.textTertiary,
-            fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+        // 标签**必须单行**（2026-08-04 模拟器实测）：底栏是固定 66px 高，
+        // 系统字号调大后 "Kesehatan" 这类长标签会折成两行，直接把栏体撑破
+        // （真机上表现为底栏冒出「BOTTOM OVERFLOWED BY 2.0 PIXELS」红条）。
+        // 全局 textScaler 已 clamp 到 1.3（NFR-13），即 1.3 是**受支持状态**、不是越界输入，
+        // 所以必须在这里兜住：标签额外收紧到 1.15（图标承担辨识，标签是辅助信息），
+        // 并强制单行 + 省略号，两道保险都不靠「把文字删掉」。
+        MediaQuery.withClampedTextScaling(
+          maxScaleFactor: 1.15,
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.tabLabel.copyWith(
+              color: active ? AppColors.mint : AppColors.textTertiary,
+              fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+            ),
           ),
         ),
       ],

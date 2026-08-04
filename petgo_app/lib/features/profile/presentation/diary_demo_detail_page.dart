@@ -124,14 +124,14 @@ class DiaryDemoDetailPage extends ConsumerWidget {
             key: const ValueKey('demoDetailLike'),
             icon: Icons.favorite_border,
             count: DiaryDemoData.detailLikeCount,
-            onTap: () => _startCreateProfile(context, ref, source: 'detail_interaction'),
+            onTap: () => _startCreateProfile(context, ref, source: 'demo_detail_interaction'),
           ),
           const SizedBox(width: AppSpacing.lg),
           _iconCount(
             key: const ValueKey('demoDetailComment'),
             icon: Icons.mode_comment_outlined,
             count: DiaryDemoData.detailCommentCount,
-            onTap: () => _startCreateProfile(context, ref, source: 'detail_interaction'),
+            onTap: () => _startCreateProfile(context, ref, source: 'demo_detail_interaction'),
           ),
         ],
       );
@@ -159,7 +159,7 @@ class DiaryDemoDetailPage extends ConsumerWidget {
       GestureDetector(
         key: const ValueKey('demoDetailCommentTeaser'),
         behavior: HitTestBehavior.opaque,
-        onTap: () => _startCreateProfile(context, ref, source: 'detail_interaction'),
+        onTap: () => _startCreateProfile(context, ref, source: 'demo_detail_interaction'),
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -199,7 +199,7 @@ class DiaryDemoDetailPage extends ConsumerWidget {
                 key: const ValueKey('demoDetailMenuReport'),
                 onTap: () {
                   Navigator.of(sheetCtx).pop();
-                  _startCreateProfile(context, ref, source: 'detail_interaction');
+                  _startCreateProfile(context, ref, source: 'demo_detail_interaction');
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 14),
@@ -238,7 +238,7 @@ class DiaryDemoDetailPage extends ConsumerWidget {
   /// 与游客页同一个事件名（T-4，Story 6.1）。本页四个互动点同属 `detail_interaction`
   /// —— 词表按 AC3 只到「入口类别」粒度，不细分到具体按钮。
   void _startCreateProfile(BuildContext context, WidgetRef ref, {required String source}) {
-    Analytics.capture('diary_guest_cta_tapped', {'source': source});
+    Analytics.capture('diary_guest_create_profile_cta_tapped', {'source': source});
     requireLogin(
       ref,
       context,

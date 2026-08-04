@@ -107,72 +107,105 @@
 
 ---
 
-## 8. V1.1.2 新增埋点（Story 6.1 · 2026-08）
+## 8. V1.1.2 新增埋点（Story 6.1 · 2026-08-04）
 
-> 回写依据：V1.1.2 Story 6.1（Epic 6 唯一 story）。代码位置见下表。
-> ⚠️ **产品文档同步**：Story 的 D1 要求把本节并入产品侧全局清单 `3.数据埋点/数据v100-v110.md`。
-> 那份文档**不在本仓库**（在产品文档空间），本节是工程侧的权威副本，需人工镜像过去。
+> 回写依据：V1.1.2 Story 6.1。**产品侧同一份内容**在
+> `3.数据埋点/埋点文件/埋点清单v112.md`（产品文档空间），两边内容须一致。
+> 本节是工程侧权威副本：事件名、属性名、代码位置以此为准。
 
-### 8.1 本版本修掉的 P0 缺口：Tab 切换此前完全无浏览事件
+### 8.1 命名约定（**新事件必须遵守**）
 
-底部 Tab 走 `StatefulShellRoute.goBranch` 切分支，**不 push 根路由** → §2 里那个 `PosthogObserver`
-收不到 `didPush`，**四个 Tab 根页此前一个 `$screen` 都没有**。后果是「落地页分流是否生效」
-无法验证 —— 而落地页矩阵正是 V1.1.2 的核心改动。
+`<模块前缀>_<对象>_<动作>`，**模块前缀用产品叫法**，动作用过去式落在词尾。
 
-修法：`Analytics.screen(name)` 显式补一条，屏名用受控字面量 `tab_<AppTab.name>`；
-冷启动落地页用**同一套字面量**（`_landingScreenNames`），否则「冷启动落在 Diary」与
-「切到 Diary」在看板上会被算成两个不同页面。详情页仍由 observer 自动上报，两者不重复。
+- 模块前缀：`app_` `bottom_nav_` `diary_` `discovery_` `health_` `publish_` `me_` `signup_` `milestone_`
+- 动作后缀：`_viewed` `_shown` `_tapped` `_selected` `_toggled` `_switched` `_succeeded` `_completed` `_achieved`
 
-### 8.2 事件清单（T-1~T-12，**T-5 已删且编号不重分配**）
+目的：产品在看板上**一眼看出这是哪个页面的哪个按钮**，不必回来问工程。
+反例（本轮改掉的）：`tab_switched` 分不清底部导航还是页内 Tab；`diary_sync_toggled`
+听着像 Diary 页上的开关、其实在发布页。约定由
+`petgo_app/test/analytics/v112_events_test.dart` 的断言守着，起名不合规会红。
 
-| # | 事件 | 属性 | 触发点 | 代码位置 |
+⚠️ **Tab 的枚举名与产品叫法不一致**，埋点一律用产品叫法（`AppTab.analyticsName`）：
+
+| 代码里的枚举 | 埋点/看板里的名字 | 产品叫法 |
+|---|---|---|
+| `AppTab.profile` | `diary` | Diary（成长日记） |
+| `AppTab.triage` | `health` | Health（健康/问诊） |
+| `AppTab.home` | `discovery` | Discovery（发现） |
+| `AppTab.me` | `me` | Me（我的） |
+
+### 8.2 本版本修掉的 P0 缺口：Tab 切换此前完全没有浏览事件
+
+底部 Tab 走 `StatefulShellRoute.goBranch` 切分支、**不 push 根路由** → §2 里的
+`PosthogObserver` 收不到 `didPush`，四个 Tab 根页一个 `$screen` 都没有。后果是
+「落地页分流是否生效」无法验证 —— 而落地页矩阵正是 V1.1.2 的核心改动。
+
+修法：`Analytics.screen()` 显式补一条，屏名 `<产品名>_page`（`diary_page` / `health_page` /
+`discovery_page` / `me_page` / `vet_workbench_page`）。冷启动落地页用**同一套字面量**，
+否则「冷启动落在 Diary」与「切到 Diary」会被算成两个不同页面。详情页仍由 observer 自动上报。
+
+### 8.3 事件清单（T-1~T-12，**T-5 已删且编号不重分配**）
+
+| # | 事件名 | 一句话（产品视角） | 属性 | 代码位置 |
 |---|---|---|---|---|
-| T-1 | `app_landing_tab` | `tab`（落地路径）、`user_state` | 冷启动 splash 完成、落地前 | `app_router.dart` splash 回调 |
-| T-2 | `tab_switched` | `from_tab`、`to_tab`、`user_state` | 点任一底部 Tab | `app_shell.dart _onTabSelected` |
-| T-3 | `diary_guest_view` | `session_first` | 游客态 Diary 曝光（`initState`） | `diary_guest_page.dart` |
-| T-4 | `diary_guest_cta_tapped` | `source` | 游客态四类引导入口 | `diary_guest_page.dart` / `diary_demo_detail_page.dart` |
-| T-6 | `soft_login_prompt_shown` / `soft_login_prompt_tapped` | 后者带 `method`（google/apple） | FR-0B 软登录浮层曝光 / 点主 CTA | `login_guide_controller.dart` |
-| T-7 | `signup_completed` | `entry_source` | **注册真正成功**（`isNewUser=true`） | `login_guide_controller.dart` / `login_page.dart` |
-| T-8 | `publish_type_selected` | `type`、`is_default`、`has_pet_profile` | 发布页切内容类型 | `publish_compose_page.dart` |
-| T-9 | `diary_sync_toggled` | `enabled` | 切「同步到 Moment」开关 | `publish_compose_page.dart` |
-| T-10 | `timeline_item_tapped` | `item_type` | 点时间线任一条目 | `growth_archive_page.dart _realTapFor` |
-| T-11 | `archive_view_switched` | `to_view`（timeline/calendar） | 时间线 ⇄ 日历 | `growth_archive_page.dart _switchView` |
-| T-12 | `milestone_completed` | `code`、`level`、`path` | 里程碑完成 | **未实现**，见 §8.5 |
+| T-1 | `app_launch_landed_on_tab` | 冷启动后落在了哪个 Tab | `tab`（diary/discovery/vet_workbench）、`user_state` | `app_router.dart` splash 回调 |
+| T-2 | `bottom_nav_tab_switched` | 点了底部导航切 Tab | `from_tab`、`to_tab`、`user_state` | `app_shell.dart` |
+| T-3 | `diary_guest_page_viewed` | 未登录用户看到了 Diary 游客种草页 | `session_first`（是否本次启动首次看到） | `diary_guest_page.dart` |
+| T-4 | `diary_guest_create_profile_cta_tapped` | 游客点了任一「建档引导」入口 | `source` | `diary_guest_page.dart` / `diary_demo_detail_page.dart` |
+| T-6 | `discovery_soft_login_sheet_shown` / `..._login_tapped` | Discovery 刷到第 3 页弹的软登录浮层：曝光 / 点了登录 | 后者带 `method`（google/apple） | `login_guide_controller.dart` |
+| T-7 | `signup_succeeded` | **注册真正成功**（不是点了按钮） | `entry_source` | `login_guide_controller.dart` / `login_page.dart` |
+| T-8 | `publish_page_content_type_selected` | 发布页选了内容类型 | `type`、`is_default`、`has_pet_profile` | `publish_compose_page.dart` |
+| T-9 | `publish_page_sync_to_moment_toggled` | 发布页拨了「同步到 Moment」开关 | `enabled` | `publish_compose_page.dart` |
+| T-10 | `diary_timeline_item_tapped` | 点了 Diary 时间线上的某条 | `item_type` | `growth_archive_page.dart` |
+| T-11 | `diary_view_mode_switched` | Diary 在时间线 ⇄ 日历之间切换 | `to_view`（timeline/calendar） | `growth_archive_page.dart` |
+| T-12 | `milestone_achieved` | 里程碑达成（**后端上报**） | `code`、`level`、`path` | `MilestoneAnalyticsListener.java` |
 
-外加两条 `$screen`（§8.1）：`tab_profile` / `tab_triage` / `tab_home` / `tab_me`、`vet_workbench`。
+属性取值词表：
 
-### 8.3 三条口径约定（改动前先读）
+- `user_state`：`guest` / `vet` / `owner_with_profile` / `owner_without_profile` / `planning` / `enthusiast`
+  （即 `AppUserState.wire`。⚠️ Story 6.1 AC3 原表写的是 `A_with_profile`/`B`/`C` —— 实现取了
+  枚举自述名：语义等价、可读性更好，且与落地矩阵同源。**看板以此为准**。）
+- `source`（T-4）：`bottom_sticky_cta`（底部常驻主按钮）/ `timeline_item`（示例时间线条目与金徽章）/
+  `demo_detail_interaction`（示例详情页点赞·评论·举报）/ `header_entry`（页头四个入口）
+- `entry_source`（T-7）：`diary_cta`（游客态 Diary 引导）/ `discovery_soft_login`（软登录浮层）/ `login_page`（登录页直登）
+- `item_type`（T-10）：`HAPPY_MOMENT` / `HAPPY_MOMENT_MILESTONE` / `MILESTONE_BANNER` / `HEALTH_EVENT` / `ID_CARD_ISSUED`
+  —— **直取后端下发的 `itemType`**（AD-2），前端不自行推断
+- `path`（T-12）：`health_record`（疫苗/驱虫/绝育记录触发）/ `consult`（真人兽医问诊结束触发）/
+  `checkin`（用户手动打卡）/ `publish`（发布内容回填）/ `system_auto`（计数、组合、档案创建等）
 
-1. **`user_state` 只有一个判定源**：`AppUserState`（`features/auth/domain/user_state.dart`）。
-   落地分流与埋点共用它，取值即 `AppUserState.wire`：
-   `guest` / `vet` / `owner_with_profile` / `owner_without_profile` / `planning` / `enthusiast`。
-   ⚠️ Story 6.1 AC3 原表写的是 `A_with_profile`/`A_no_profile`/`B`/`C` —— 实现取了枚举的自述名
-   （语义等价、可读性更好、且天然与落地矩阵同源）。**看板配置以本节为准**。
-2. **T-4 是「一个事件 + `source`」，不拆成多个事件**。拆了转化率的分母就碎了。
-   取值：`main_cta`（常驻主 CTA）、`timeline_item`（示例时间线非图条目 + 金徽章）、
-   `detail_interaction`（示例详情页点赞/评论/举报）、`header_entry`（页头四个入口 ——
-   Story 2.2 列举三类入口时漏了它，实际是第四个引导点）。
-3. **T-10 的 `item_type` 直取后端下发的 `itemType`**（Story 3.2 / AD-2，五值：
-   `HAPPY_MOMENT` / `HAPPY_MOMENT_MILESTONE` / `MILESTONE_BANNER` / `HEALTH_EVENT` / `ID_CARD_ISSUED`），
-   前端**不另行推断**，否则埋点口径与展示口径会飘。
+### 8.4 服务端埋点（本版本首次出现）
 
-### 8.4 已下线
+§7.6 记的「后端零埋点」这一条本版本**局部打通**：里程碑达成的判定全在服务端
+（健康记录事件、兽医问诊关闭、计数阈值、组合解锁），客户端看不到「这次是走哪条路径点亮的」，
+前端补不了这一环。
 
-- **FR-0H 首页建档提示条**的曝光 / 点击 / 关闭事件：提示条本体已在 Story 2.3 整条废止
-  （AD-15 Rule 3），相关看板指标一并下线。核查结论：代码里无残留事件。
+- 实现：`shared/analytics/AnalyticsClient`（接口）+ `PostHogAnalyticsClient`（HTTP `POST /i/v0/e/`）。
+  **没有引入第三方 SDK** —— capture 就是一个 HTTP POST，用既有 `RestClient` 十几行够了；
+  引 SDK 要多背一条供应链依赖 + 它自带的线程池，与「异步只用 `@Async`、不加中间件」的护栏也别扭。
+- 触发：订阅既有领域事件 `MilestoneCompletedEvent`（`@TransactionalEventListener` + `@Async`）。
+  **提交后才上报**：事务回滚了看板上却多一条达成，比没有更糟。
+- 配置：`POSTHOG_SERVER_KEY`（env，留空 = 整个上报静默关闭、不出网）、`POSTHOG_HOST`。
+  必须与 App 端同一个 project，否则前后端事件落在两个项目里、漏斗拼不起来。
+- `distinctId` = `sha256("tailtopia-user-" + 内部用户id)`，**与客户端逐字一致**，两端各有一条
+  已知向量断言（差一个字节，同一个人会被算成两个人）。
+- 失败即放弃，不重试：埋点是可损数据，为它加重试/补偿会引入状态机与新表，代价远大于收益。
 
-### 8.5 未实现 / 需决策
+### 8.5 已下线
 
-- **T-12 `milestone_completed`（`path` 区分 health_record / consult / checkin / system_auto）**：
-  里程碑达成判定全在后端（`MilestoneAutoCompleteListener` 等），而**后端至今零埋点 SDK**（见 §7.6）。
-  引入服务端 PostHog 客户端属于「新增依赖」，需产品/技术负责人拍板 —— 本 story 未做。
-  受影响的还有 Story 6.1 AC5 的线上校验（「健康类四条不应再出现 `path=checkin`」）：
-  该校验依赖 T-12，因此**暂时无法作为线上信号**，Epic 5 的护栏目前只由后端单测把守
-  （`HealthMilestoneCheckInRefusedTest`，那是更强的保证：请求直接被拒）。
-- **T-7 的 `entry_source` 由前端上报**（不是 story 里写的后端 B1，同上原因）。
-  取值：`diary_cta`（游客态 Diary 引导）、`soft_login`（FR-0B 浮层）、`other`（登录页直登）。
+**FR-0H 首页建档提示条**的曝光 / 点击 / 关闭事件：提示条本体已在 Story 2.3 整条废止
+（AD-15 Rule 3），相关看板指标一并下线。核查结论：代码里无残留事件。
 
-### 8.6 PRD §3 指标的失效标注（AD-6）
+### 8.6 AC5 的线上校验口径
+
+健康类四条（M3 疫苗 / M4 驱虫 / M5 第一次看兽医 / M9 绝育）已在 Story 5.2 取消打卡路径，
+且后端**在写库前直接拒绝**健康类打卡请求。因此线上若出现
+「健康类 code + `path=checkin`」的 `milestone_achieved`，说明那道护栏被绕过了 ——
+**可配成告警**。
+
+注意实现上刻意**不做改写**：`MilestoneAnalyticsPath` 遇到「健康类 + 打卡」照实上报 `checkin`，
+不会归一成 `health_record`。改写等于把护栏失效的现场擦掉。
+
+### 8.7 PRD §3 指标的失效标注（AD-6）
 
 不取改版前基线 → PRD §3.3 五项核心指标里**三项拿不到**，随之 §3.3「唯一裁决指标」与
 §3.4 处置原则**一并失效**：
@@ -183,14 +216,21 @@
 | FR-0B 曝光量变化 | ❌ 不可得（同上） |
 | B/C 用户留存（改版前后对比） | ❌ 不可得（同上） |
 | 转化路径构成（`entry_source` 占比） | ✅ 可用（绝对值） |
-| Diary 主动转私密率（`diary_sync_toggled` enabled=false 占比） | ✅ 可用（绝对值）——本版本最关键的产品假设验证 |
+| Diary 主动转私密率（`publish_page_sync_to_moment_toggled` 中 enabled=false 占比） | ✅ 可用（绝对值）——本版本最关键的产品假设验证 |
 
 埋点仍要做（为以后攒数据），但**别指望它回答「这次改版是对是错」**。
 
-### 8.7 补上了 §7.5 的缺口：埋点有单测了
+### 8.8 §7.5 的缺口已补：埋点有单测了
 
-`petgo_app/test/analytics/v112_events_test.dart`（14 例）。观察手段是
-`Analytics.debugCaptureSink`（`@visibleForTesting`，挂在 `scrub()` **之后**），
-所以断言看到的就是端上真正发出的形态。锁住：事件名/属性名 snake_case、
-`user_state` 取自枚举、`item_type` 与后端词表逐字一致、T-4 不被拆成多个事件、
-曝光埋点位于 session 去重之后、登录取消不算注册成功。
+- 前端 `petgo_app/test/analytics/v112_events_test.dart`（15 例）。观察手段是
+  `Analytics.debugCaptureSink`（`@visibleForTesting`，挂在 `scrub()` **之后**），
+  断言看到的就是端上真正发出的形态。
+- 后端 `MilestoneAnalyticsTest`（9 例）：path 映射、属性只含受控值、distinctId 是哈希、
+  凭证缺省时不出网。
+- 两端各钉一条同样的 `sha256("tailtopia-user-42")` 向量，跨语言防漂移。
+
+### 8.9 遗留：旧事件仍是旧命名
+
+§4 那 9 个 V1.0.0/V1.1.0 事件（`login_tapped`、`content_publish_submitted` …）**没有按 8.1 改名**：
+它们已经在线上产生了历史数据，改名会切断历史序列、也会让既有看板失效。
+建议口径：**新事件按 8.1 起名；旧事件维持原名**，等哪天决定重建看板时一起迁。

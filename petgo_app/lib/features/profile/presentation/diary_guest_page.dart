@@ -45,9 +45,10 @@ class _DiaryGuestPageState extends ConsumerState<DiaryGuestPage> {
   @override
   void initState() {
     super.initState();
-    // T-3 diary_guest_view（Story 6.1）：游客态是本版本的核心新增门面，曝光量是所有
-    // 游客转化率的分母。session_first 用于区分「第一次看到」与「来回切 Tab 的重复曝光」。
-    Analytics.capture('diary_guest_view', {'session_first': !_guestViewReportedThisSession});
+    // T-3 diary_guest_page_viewed（Story 6.1）：游客态是本版本的核心新增门面，曝光量是
+    // 所有游客转化率的分母。session_first 区分「第一次看到」与「来回切 Tab 的重复曝光」。
+    Analytics.capture('diary_guest_page_viewed',
+        {'session_first': !_guestViewReportedThisSession});
     _guestViewReportedThisSession = true;
   }
 
@@ -165,7 +166,7 @@ class _DiaryGuestPageState extends ConsumerState<DiaryGuestPage> {
           width: double.infinity,
           child: FilledButton(
             key: const ValueKey('diaryGuestPrimaryCta'),
-            onPressed: () => _startCreateProfile(context, ref, source: 'main_cta'),
+            onPressed: () => _startCreateProfile(context, ref, source: 'bottom_sticky_cta'),
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.mint,
               foregroundColor: AppColors.onAccent,
@@ -181,12 +182,13 @@ class _DiaryGuestPageState extends ConsumerState<DiaryGuestPage> {
   /// 建档引导（FR-0G）。走**单一门控入口** [requireLogin]：游客弹强登录引导并注入登录后回跳建档，
   /// 已登录（debug 路由直达时可能出现）直接进建档表单。页面内所有引导点都收口到这一个函数，
   /// 避免出现第二套跳转逻辑。
-  /// [source] 供 T-4 `diary_guest_cta_tapped` 区分入口，取值词表见 Story 6.1 AC3：
-  /// `main_cta` / `timeline_item` / `detail_interaction`，另加 `header_entry`
-  /// （页头四个入口 —— Story 2.2 列举三类时漏了它，但它确实是第四个引导点）。
+  /// [source] 供 T-4 `diary_guest_create_profile_cta_tapped` 区分入口。取值：
+  /// `bottom_sticky_cta`（底部常驻主按钮）/ `timeline_item`（示例时间线条目）/
+  /// `demo_detail_interaction`（示例详情页的点赞·评论·举报）/ `header_entry`（页头四个入口
+  /// —— Story 2.2 列举三类时漏了它，但它确实是第四个引导点）。
   /// ⚠️ **各入口统一上报同一事件 + source 属性**，不拆成多个事件 —— 拆了转化率分母口径会碎。
   void _startCreateProfile(BuildContext context, WidgetRef ref, {required String source}) {
-    Analytics.capture('diary_guest_cta_tapped', {'source': source});
+    Analytics.capture('diary_guest_create_profile_cta_tapped', {'source': source});
     requireLogin(
       ref,
       context,
