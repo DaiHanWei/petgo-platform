@@ -241,13 +241,25 @@ void main() {
       expect(AppUserState.values.length, 6);
     });
 
-    test('落地矩阵：游客 / A 两态 → Diary；B / C → Discovery；兽医 → 工作台', () {
-      expect(AppUserState.guest.landingLocation, '/profile');
+    test('落地矩阵六态（Story 7.4 · FR-78 订正 2026-08-04）', () {
+      // 收敛口径：**只有真正建了档案的人才落 Diary，游客是唯一例外**。
+      // ⚠️ `ownerWithoutProfile` 由 '/profile' 改 '/home' —— 这是 Story 2-4 交付实现的返工，
+      //    由 Story 7.4 负责（2-4 的 code-review 按旧矩阵放行即可）。
+      expect(AppUserState.guest.landingLocation, '/profile'); // FR-80 种草页，唯一例外
       expect(AppUserState.ownerWithProfile.landingLocation, '/profile');
-      expect(AppUserState.ownerWithoutProfile.landingLocation, '/profile');
+      expect(AppUserState.ownerWithoutProfile.landingLocation, '/home'); // 改前 '/profile'
       expect(AppUserState.planning.landingLocation, '/home');
       expect(AppUserState.enthusiast.landingLocation, '/home');
       expect(AppUserState.vet.landingLocation, '/vet/workbench');
+    });
+
+    test('落地矩阵：不持久化「上次落在哪」—— landingLocation 是纯函数，无任何状态', () {
+      // FR-78 硬约束。若引入持久化记忆，同一枚举值在不同时刻会给出不同结果。
+      for (final s in AppUserState.values) {
+        expect(s.landingLocation, s.landingLocation);
+      }
+      // 也不得为「修慢网」而引入记忆 —— 慢网正解是 FR-91 的迟到纠正，不是记住上次。
+      expect(AppUserState.values.length, 6, reason: '六态穷尽；新增态必须同时补落地目标');
     });
 
     test('埋点口径：wire 值稳定（Story 6.1 的 user_state 属性取它）', () {

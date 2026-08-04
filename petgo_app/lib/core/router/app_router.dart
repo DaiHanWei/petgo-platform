@@ -140,13 +140,125 @@ Widget _tabRootPage(AppTab tab) => switch (tab) {
       AppTab.me => const MePage(),
     };
 
+/// FR-91 迟到纠正的**判定结果**（纯数据，便于单测逐条锁 7 条约束）。
+enum LateCorrectionOutcome {
+  /// 未武装或额度已用完（约束①④）。
+  notArmed,
+
+  /// 🔴 用户已自行导航离开兜底落地页 —— **一律不纠正**（AC4 / NFR-15，优先级高于纠正）。
+  userMovedOn,
+
+  /// 重判结果与兜底目标相同（约束⑥：恢复失败=真游客 → 不打扰）。
+  targetUnchanged,
+
+  /// 应当纠正，跳向重判出的目标。
+  correct,
+}
+
+/// 迟到纠正的**纯判定**（无副作用，可单测）。
+///
+/// - [armed]：兜底送去的目标路径；null = 未武装 / 额度已用完
+/// - [currentPath]：**当前路由路径**。🔴 必须用路径比对，**不得**用路由栈深度等间接信号 ——
+///   用户在同页内开弹层 / 进详情再返回，栈深会变但人没走，会误判成"已离开"
+/// - [recomputedTarget]：按恢复完成后的真实状态重算出的落地目标
+LateCorrectionOutcome resolveLateCorrection({
+  required String? armed,
+  required String currentPath,
+  required String recomputedTarget,
+}) {
+  if (armed == null) return LateCorrectionOutcome.notArmed;
+  if (currentPath != armed) return LateCorrectionOutcome.userMovedOn;
+  if (recomputedTarget == armed) return LateCorrectionOutcome.targetUnchanged;
+  return LateCorrectionOutcome.correct;
+}
+
+/// FR-91「超时兜底的迟到纠正」状态（V1.1.2 Story 7.4）。**每次冷启动最多纠正一次。**
+///
+/// 公开而非私有，仅为让「只纠正一次」的额度机制可被单测锁定（见 late_landing_correction_test）。
+///
+/// 为什么需要它：`ensureRestored()` 的 `.timeout()` **只停止等待、不取消底层请求** ——
+/// 恢复请求继续跑，完成后写回 `AuthState`。所以超时兜底送去的落地页**是会变化的中间态，
+/// 不是终态**。兽医能自愈（redirect 里的角色隔离守卫会收口），但**已登录的 A·未建档与
+/// B/C 不能** —— 门控条件是 `!auth.isLoggedIn && controlled`，已登录不命中；redirect 里
+/// 没有任何分支会把已登录用户从 Diary 移到 Discovery。本机制补的就是这一环。
+class LateLandingCorrection {
+  /// 非 null = 本次冷启动的落地**由超时兜底产生**，且尚未纠正。值为兜底送去的目标路径。
+  String? _armed;
+  bool _used = false;
+
+  /// 记录「这次落地是兜底产物」。仅超时路径调用。
+  void arm(String fallbackTarget) {
+    if (_used) return;
+    _armed = fallbackTarget;
+  }
+
+  /// 本次冷启动内待纠正的目标；null = 未武装或已用掉（约束④：只纠正一次）。
+  String? get armed => _used ? null : _armed;
+
+  /// 放弃纠正（用户已离开 / 重判结果不变），但不消耗"只纠正一次"的额度。
+  void disarm() => _armed = null;
+
+  /// 消耗额度：此后本次冷启动内不再干预（约束④）。
+  void consume() {
+    _used = true;
+    _armed = null;
+  }
+}
+
 final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
   // 登录态变化(尤其冷启动异步恢复完成)后让 redirect 重跑——否则兽医会话恢复晚于
   // splash→home 跳转时不会被分流到工作台。
   final authRefresh = ValueNotifier<int>(0);
   ref.listen(authControllerProvider, (_, _) => authRefresh.value++);
   ref.onDispose(authRefresh.dispose);
-  return GoRouter(
+
+  // FR-91（Story 7.4）：超时兜底的迟到纠正。
+  final lateCorrection = LateLandingCorrection();
+  late final GoRouter router;
+
+  /// 恢复 future 真正完成后（成功或失败都算完成 —— 约束②，不是固定延时）重判一次落地目标。
+  void lateCorrect() {
+    final armed = lateCorrection.armed;
+    final ctx = rootNavigatorKey.currentContext;
+    if (ctx == null || !ctx.mounted) return;
+
+    final auth = ref.read(authControllerProvider);
+    final state = appUserStateOf(auth);
+    final corrected = state.landingLocation;
+    // 🔴 安全攸关（AC4 / NFR-15）：判定用**当前路由路径**比对，不得用路由栈深度等间接信号。
+    final outcome = resolveLateCorrection(
+      armed: armed,
+      currentPath: router.routerDelegate.currentConfiguration.uri.path,
+      recomputedTarget: corrected,
+    );
+    switch (outcome) {
+      case LateCorrectionOutcome.notArmed:
+        return;
+      case LateCorrectionOutcome.userMovedOn:
+      case LateCorrectionOutcome.targetUnchanged:
+        lateCorrection.disarm();
+        return;
+      case LateCorrectionOutcome.correct:
+        break;
+    }
+    // 走到这里 outcome 必为 correct ⇒ armed 非空（notArmed 已在上面 return）。
+    final from = armed!;
+
+    lateCorrection.consume();
+    // AC6：纠正后的落地**也报一次 T-1**，用 `corrected_from` 与兜底那次区分。
+    // 事件名沿用既有 `app_launch_landed_on_tab`，**不新造** —— 否则 Story 6.1 已交付的
+    // 看板口径会断。
+    final tabName = _landingTabNames[corrected] ?? 'other';
+    Analytics.capture('app_launch_landed_on_tab', {
+      'tab': tabName,
+      'user_state': state.wire,
+      'corrected_from': from,
+    });
+    Analytics.screen('${tabName}_page');
+    ctx.go(corrected);
+  }
+
+  router = GoRouter(
     navigatorKey: rootNavigatorKey,
     // PostHog 自动页面追踪：路由跳转 → $screen 事件（页面名取自路由 path）。
     observers: [PosthogObserver()],
@@ -191,10 +303,13 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
             // ⚠️ `.timeout()` **只停止等待、不取消底层请求** —— 恢复晚到仍会写回 AuthState。
             //    这是刻意保留的既有行为：Story 7.4 的「超时兜底迟到纠正」正建立在它之上，
             //    不要"顺手"改成可取消。
-            await ref
-                .read(authControllerProvider.notifier)
-                .ensureRestored()
-                .timeout(const Duration(seconds: 5), onTimeout: () {});
+            final restore =
+                ref.read(authControllerProvider.notifier).ensureRestored();
+            var timedOut = false;
+            await restore.timeout(
+              const Duration(seconds: 5),
+              onTimeout: () => timedOut = true,
+            );
             final ctx = rootNavigatorKey.currentContext;
             if (ctx == null || !ctx.mounted) return;
             // 分流顺序（AD-8）：pending 深链 > 按用户状态的落地矩阵。
@@ -203,6 +318,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
             final pending = ref.read(pendingDeepLinkProvider);
             if (pending != null) {
               ref.read(pendingDeepLinkProvider.notifier).set(null);
+              // 约束⑤：深链唤起的冷启动**不纠正** —— 深链优先级最高（与 AD-8 分流顺序一致）。
+              // 此处不武装 lateCorrection，故恢复晚到也不会把用户从深链目标拽走。
               ctx.go(pending);
               return;
             }
@@ -217,10 +334,19 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
             Analytics.capture('app_launch_landed_on_tab', {
               'tab': tabName,
               'user_state': state.wire,
+              // AC6：超时兜底态与真实游客态**都会上报 user_state=guest**，混在一起则
+              // 「兜底发生率」无法统计（PRD OQ-23 的口径要求）。故兜底那次带此标记。
+              if (timedOut) 'restore_timeout': true,
             });
             // 落地的那一屏同样要有浏览事件：屏名与 Tab 切换用**同一套**字面量。
             Analytics.screen('${tabName}_page');
             ctx.go(target);
+            // FR-91：仅超时路径武装迟到纠正（约束①：正常路径的落地已是正确结果，不需重判）。
+            if (timedOut) {
+              lateCorrection.arm(target);
+              // 约束②：以**恢复 future 完成**为时机（非固定延时）。失败也算完成 —— 走约束⑥。
+              restore.then((_) => lateCorrect()).catchError((_) => lateCorrect());
+            }
           },
         ),
       ),
@@ -489,4 +615,5 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       ),
     ],
   );
+  return router;
 });

@@ -40,9 +40,15 @@ enum AppUserState {
         // 游客落 Diary 游客引导态（FR-80 种草页）；门控例外集精确放行 `/profile` 本身。
         AppUserState.guest => '/profile',
         AppUserState.vet => '/vet/workbench',
-        // 状态 A 一律落 Diary：已建档看真实成长本，未建档看建档引导。
+        // ⚠️ 口径（V1.1.2 Story 7.4 · FR-78 订正 2026-08-04）：
+        // **只有真正建了宠物档案的人才落 Diary，游客是唯一例外**（仍落 Diary 看 FR-80 种草页）。
+        // A·已建档 → Diary 看真实成长本。
         AppUserState.ownerWithProfile => '/profile',
-        AppUserState.ownerWithoutProfile => '/profile',
+        // A·未建档 → **Discovery**（改前落 Diary 建档引导）。产品判断：档案未建时 Diary 里
+        // 没有属于他的真实内容，落地页是一张空引导页；内容流的即时价值更高。建档引导仍在
+        // Diary Tab 内等他（FR-81 页面不删不改，只是不再作为落地页）。
+        // 已知代价：建档转化率可能下降，上线后按 OQ-24 观测。
+        AppUserState.ownerWithoutProfile => '/home',
         // B/C 落 Discovery：Diary 对他们是功能拒绝页，开屏第一眼看到它比游客体验更差。
         AppUserState.planning => '/home',
         AppUserState.enthusiast => '/home',

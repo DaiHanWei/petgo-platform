@@ -25,7 +25,7 @@ scope: 'V1.1.2 增量；brownfield；Flyway V98 起。2026-08-04 追加 Epic 7 S
 
 ## Overview
 
-本文件是 V1.1.2 **增量** epic/story 分解，承接 PRD、架构 delta（16 条 AD，权威）、UI 视觉稿（18 屏 / 3 泳道）与跨 story 决策台账。
+本文件是 V1.1.2 **增量** epic/story 分解，承接 PRD、架构 delta（17 条 AD，权威）、UI 视觉稿（18 屏 / 3 泳道）与跨 story 决策台账。
 
 **V1.0 与 V1.1 已上线冻结；未提及处一律继承。** 冲突序：**架构 delta > 本文件 > PRD > CROSS-STORY-DECISIONS > V1.0/V1.1 基线**。
 
@@ -84,7 +84,7 @@ scope: 'V1.1.2 增量；brownfield；Flyway V98 起。2026-08-04 追加 Epic 7 S
 
 ### Additional Requirements
 
-**来自架构 delta（16 条 AD 为权威约束，story 须逐条引用）：**
+**来自架构 delta（17 条 AD 为权威约束，story 须逐条引用）：**
 
 - AD-1 时间线统一游标锚点（事件日期 + 同日排序键；归并后再截断；同日不跨页拆分）
 - AD-2 五类分类后端判定、下发 `itemType`、实时计算不落库
@@ -130,7 +130,8 @@ scope: 'V1.1.2 增量；brownfield；Flyway V98 起。2026-08-04 追加 Epic 7 S
 
 **2026-08-04 追加 · ⚠️ 架构 delta 对 Splash 的覆盖缺口（拆 story 前必须知道）：**
 
-> `architecture-v1.1.2-delta.md` 的 16 条 AD 产出于 2026-07-31，**早于 splash 设计**。核实结果：
+> `architecture-v1.1.2-delta.md` 原 16 条 AD 产出于 2026-07-31，**早于 splash 设计**。核实结果如下。
+> ✅ **2026-08-04 已由 Story 7-4 的 AC8 收尾**：AD-8 矩阵描述已订正，并补入 **AD-17** 记录 FR-91 口径（现 17 条 AD）。
 
 - **AD-8 的矩阵描述已过期**：第 2 条写「游客 / 状态 A 已建档 / 状态 A 未建档 → **Diary**」，与 2026-08-04 拍板的新矩阵（A·未建档 → Discovery）冲突。**须回写 AD-8**，否则 story 会照旧 AD 实现。
 - **FR-87 / FR-88 / FR-90 / FR-91 无对应 AD**：原生启动屏交接口径、动效分拍与资产导出规格、字体可变轴接入方式、**FR-91 迟到纠正的状态承载位置**（兜底标记存哪、如何判断"用户仍停在兜底落地页"）——这四类技术决策**在架构层没有落点**。
