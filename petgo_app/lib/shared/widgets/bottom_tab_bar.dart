@@ -18,7 +18,7 @@ import '../../l10n/app_localizations.dart';
 enum AppTab {
   profile('/profile', 'diary'),
   triage('/triage', 'health'),
-  home('/home', 'discovery'),
+  home('/home', 'social'),
   me('/me', 'me');
 
   const AppTab(this.location, this.analyticsName);

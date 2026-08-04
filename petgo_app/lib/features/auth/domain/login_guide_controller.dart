@@ -46,26 +46,26 @@ class LoginGuideController {
 
   /// 软浮层（每 session 最多一次；第 2 次起 no-op）。
   Future<void> showSoftSheet(BuildContext context,
-      {RouteIntent? pendingAction, String entrySource = 'discovery_soft_login'}) async {
+      {RouteIntent? pendingAction, String entrySource = 'social_soft_login'}) async {
     if (_softShownThisSession) return;
     _softShownThisSession = true;
     _pending = pendingAction;
     _entrySource = entrySource;
     // T-6（Story 6.1）：曝光埋在 session 去重**之后** —— 第 2 次起是 no-op，不该记曝光。
-    Analytics.capture('discovery_soft_login_sheet_shown');
+    Analytics.capture('social_soft_login_sheet_shown');
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetCtx) => LoginSoftSheet(
         onLogin: () {
-          Analytics.capture('discovery_soft_login_sheet_login_tapped', {'method': 'google'});
+          Analytics.capture('social_soft_login_sheet_login_tapped', {'method': 'google'});
           return _attemptLogin(context, sheetCtx, _login);
         },
         onAppleLogin: _loginApple == null
             ? null
             : () {
-                Analytics.capture('discovery_soft_login_sheet_login_tapped', {'method': 'apple'});
+                Analytics.capture('social_soft_login_sheet_login_tapped', {'method': 'apple'});
                 return _attemptLogin(context, sheetCtx, _loginApple);
               },
         onClose: () {

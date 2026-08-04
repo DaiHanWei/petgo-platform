@@ -117,7 +117,7 @@
 
 `<模块前缀>_<对象>_<动作>`，**模块前缀用产品叫法**，动作用过去式落在词尾。
 
-- 模块前缀：`app_` `bottom_nav_` `diary_` `discovery_` `health_` `publish_` `me_` `signup_` `milestone_`
+- 模块前缀：`app_` `bottom_nav_` `diary_` `social_` `health_` `publish_` `me_` `signup_` `milestone_`
 - 动作后缀：`_viewed` `_shown` `_tapped` `_selected` `_toggled` `_switched` `_succeeded` `_completed` `_achieved` `_landed_on_tab`
 
 目的：产品在看板上**一眼看出这是哪个页面的哪个按钮**，不必回来问工程。
@@ -127,13 +127,31 @@
 （2026-08-04 code-review 前，该断言遍历的是测试文件内手抄的一份数组 —— 那时这句话是不成立的）。
 V1.0.x 的 13 个遗留事件在测试里以 `legacyEvents` 显式豁免（见 §8.9），新事件不得加入该名单。
 
+⚠️ **2026-08-04 改名台账：`discovery_*` → `social_*`（用户决策）**
+
+第 1 位 Tab 的显示文案由 `Jelajah` / `Discovery` 改为 `Sosial` / `Social`（原因见 Story 6.1
+Review Findings：`Jelajah` 与 `Discovery` 在放大字号下都会被截断），埋点标识**同批跟着改**，
+避免代码里叫 discovery、界面上叫 Social 的长期错位。受影响的 5 处：
+
+| 类别 | 旧 | 新 |
+|---|---|---|
+| 模块前缀 | `discovery_` | `social_` |
+| 事件（T-6） | `discovery_soft_login_sheet_shown` | `social_soft_login_sheet_shown` |
+| 事件（T-6） | `discovery_soft_login_sheet_login_tapped` | `social_soft_login_sheet_login_tapped` |
+| 屏名 | `discovery_page` | `social_page` |
+| 属性值 | `tab` / `to_tab` / `from_tab` = `discovery`；`entry_source` = `discovery_soft_login` | 同名改 `social` / `social_soft_login` |
+
+**配看板的人必读**：PostHog 里**已经上报过的历史事件仍是旧名字**，改名不会追溯重写。
+凡是跨 2026-08-04 的图表，要么按「旧名 OR 新名」并集取数，要么明确只看改名之后。
+若此前已按 `discovery_*` 建过 insight，改名后它会变成 0 条 —— 那不是埋点坏了，是筛选条件要改。
+
 ⚠️ **Tab 的枚举名与产品叫法不一致**，埋点一律用产品叫法（`AppTab.analyticsName`）：
 
 | 代码里的枚举 | 埋点/看板里的名字 | 产品叫法 |
 |---|---|---|
 | `AppTab.profile` | `diary` | Diary（成长日记） |
 | `AppTab.triage` | `health` | Health（健康/问诊） |
-| `AppTab.home` | `discovery` | Discovery（发现） |
+| `AppTab.home` | `social` | Social（社区广场；文案原 Discovery / Jelajah，2026-08-04 改名） |
 | `AppTab.me` | `me` | Me（我的） |
 
 ### 8.2 本版本修掉的 P0 缺口：Tab 切换此前完全没有浏览事件
@@ -143,7 +161,7 @@ V1.0.x 的 13 个遗留事件在测试里以 `legacyEvents` 显式豁免（见 �
 「落地页分流是否生效」无法验证 —— 而落地页矩阵正是 V1.1.2 的核心改动。
 
 修法：`Analytics.screen()` 显式补一条，屏名 `<产品名>_page`（`diary_page` / `health_page` /
-`discovery_page` / `me_page` / `vet_workbench_page`）。冷启动落地页用**同一套字面量**，
+`social_page` / `me_page` / `vet_workbench_page`）。冷启动落地页用**同一套字面量**，
 否则「冷启动落在 Diary」与「切到 Diary」会被算成两个不同页面。详情页仍由 observer 自动上报。
 
 **底栏第 5 个位置（「＋」发布）**（2026-08-04 code-review 决策 D1 补齐）：发布页是
@@ -162,11 +180,11 @@ Tab 切换走 `goBranch` 不触发它，但**冷启动落地是 `ctx.go()`、是
 
 | # | 事件名 | 一句话（产品视角） | 属性 | 代码位置 |
 |---|---|---|---|---|
-| T-1 | `app_launch_landed_on_tab` | 冷启动后落在了哪个 Tab | `tab`（diary/discovery/vet_workbench）、`user_state` | `app_router.dart` splash 回调 |
+| T-1 | `app_launch_landed_on_tab` | 冷启动后落在了哪个 Tab | `tab`（diary/social/vet_workbench）、`user_state` | `app_router.dart` splash 回调 |
 | T-2 | `bottom_nav_tab_switched` | 点了底部导航切 Tab | `from_tab`、`to_tab`、`user_state` | `app_shell.dart` |
 | T-3 | `diary_guest_page_viewed` | 未登录用户看到了 Diary 游客种草页 | `session_first`（是否本次启动首次看到） | `diary_guest_page.dart` |
 | T-4 | `diary_guest_create_profile_cta_tapped` | 游客点了任一「建档引导」入口 | `source` | `diary_guest_page.dart` / `diary_demo_detail_page.dart` |
-| T-6 | `discovery_soft_login_sheet_shown` / `..._login_tapped` | Discovery 刷到第 3 页弹的软登录浮层：曝光 / 点了登录 | 后者带 `method`（google/apple） | `login_guide_controller.dart` |
+| T-6 | `social_soft_login_sheet_shown` / `..._login_tapped` | Social（社区广场）刷到第 3 页弹的软登录浮层：曝光 / 点了登录 | 后者带 `method`（google/apple） | `login_guide_controller.dart` |
 | T-7 | `signup_succeeded` | **注册真正成功**（不是点了按钮） | `entry_source` | `login_guide_controller.dart` / `login_page.dart` |
 | T-8 | `publish_page_content_type_selected` | 发布页选了内容类型 | `type`、`is_default`、`has_pet_profile` | `publish_compose_page.dart` |
 | T-9 | `publish_page_sync_to_moment_toggled` | 发布页拨了「同步到 Moment」开关 | `enabled` | `publish_compose_page.dart` |
@@ -181,7 +199,7 @@ Tab 切换走 `goBranch` 不触发它，但**冷启动落地是 `ctx.go()`、是
   枚举自述名：语义等价、可读性更好，且与落地矩阵同源。**看板以此为准**。）
 - `source`（T-4）：`bottom_sticky_cta`（底部常驻主按钮）/ `timeline_item`（示例时间线条目与金徽章）/
   `demo_detail_interaction`（示例详情页点赞·评论·举报）/ `header_entry`（页头四个入口）
-- `entry_source`（T-7）：`diary_cta`（游客态 Diary 引导）/ `discovery_soft_login`（软登录浮层）/ `login_page`（登录页直登）/ `other`
+- `entry_source`（T-7）：`diary_cta`（游客态 Diary 引导）/ `social_soft_login`（软登录浮层）/ `login_page`（登录页直登）/ `other`
   ⚠️ **`other` 占比不小，不是边角情况**（code-review 2026-08-04 补齐）：`requireLogin` 与
   `showHardDialog` 的默认值就是 `other`，因此**游客点「＋」发布、点受控 Tab（Health/Me）、
   401 续期失败的强弹窗**触发的注册全部落在这一档。看板配「转化路径构成」时必须显式列出它，

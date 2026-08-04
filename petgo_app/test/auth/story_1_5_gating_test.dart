@@ -118,7 +118,7 @@ void main() {
     await tester.pumpAndSettle();
     // V1.1.2 Story 2.4：游客冷启动落地页已由 Discovery 改为 Diary（落地矩阵 AD-8）。
     // 本条测的是 Discovery 的游客只读体验，先切过去。
-    await tester.tap(_tabButton('Discovery'));
+    await tester.tap(_tabButton('Social'));
     await tester.pumpAndSettle();
 
     // Story 3.2：首页 Feed 已就位，游客可见分类 Tab + 空状态（可下拉滚动容器）。

@@ -102,7 +102,7 @@ Widget _vetScoped(Widget child) => Theme(data: AppTheme.vet, child: child);
 /// 路径本身（`/profile`）不适合直接送埋点：产品看不出它是 Diary。
 const Map<String, String> _landingTabNames = {
   '/profile': 'diary',
-  '/home': 'discovery',
+  '/home': 'social',
   '/vet/workbench': 'vet_workbench',
 };
 
@@ -328,7 +328,7 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
             final state = appUserStateOf(auth);
             final target = state.landingLocation;
             // T-1 app_launch_landed_on_tab（Story 6.1）：本版本改了落地页矩阵，
-            // 需要度量各状态实际落在哪。`tab` 用产品名（diary/discovery/vet_workbench），
+            // 需要度量各状态实际落在哪。`tab` 用产品名（diary/social/vet_workbench），
             // 不用路由路径 —— 产品看不出 `/profile` 是 Diary。
             final tabName = _landingTabNames[target] ?? 'other';
             Analytics.capture('app_launch_landed_on_tab', {
