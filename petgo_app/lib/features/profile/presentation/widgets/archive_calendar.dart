@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../../shared/utils/date_format.dart';
 import '../../../../shared/widgets/app_image.dart';
 import '../../data/timeline_repository.dart';
 import '../../domain/calendar_month.dart';
@@ -57,7 +58,8 @@ class _ArchiveCalendarState extends ConsumerState<ArchiveCalendar> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _monthHeader(),
-        const SizedBox(height: 10),
+        _weekdayRow(),
+        const SizedBox(height: 6),
         monthAsync.when(
           loading: () => const Padding(
               padding: EdgeInsets.all(28), child: Center(child: CircularProgressIndicator())),
@@ -79,7 +81,10 @@ class _ArchiveCalendarState extends ConsumerState<ArchiveCalendar> {
           icon: const Icon(Icons.chevron_left_rounded),
         ),
         Expanded(
-          child: Text('$_year-${_month.toString().padLeft(2, '0')}',
+          // A7 稿的 `cal-title` 是「Agustus 2026」这样的本地化月名；此前直接拼 `2026-08`，
+          // 在一屏全是印尼语文案里显得像调试输出（2026-08-04 用户实机反馈）。
+          child: Text(formatMonthYear(context, DateTime(_year, _month)),
+              key: const ValueKey('calMonthTitle'),
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
         ),
@@ -92,11 +97,39 @@ class _ArchiveCalendarState extends ConsumerState<ArchiveCalendar> {
     );
   }
 
+  /// 星期表头（A7 稿 `cal-weekrow`）：**周日起头**的 7 个窄写星期名（M S S R K J S），
+  /// 与下方网格同列宽、同起始日。此前整行缺失，导致「1 号落在第几列」全靠数格子。
+  ///
+  /// ⚠️ 起始日与 [_grid] 的 `leadingBlanks` **必须同改**，否则表头与日期整列错位。
+  Widget _weekdayRow() {
+    // 2024-01-07 是周日 —— 只用来取本地化的星期名，与当前显示月份无关。
+    final sunday = DateTime(2024, 1, 7);
+    return Padding(
+      key: const ValueKey('calWeekdayRow'),
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Row(
+        children: List.generate(7, (i) {
+          return Expanded(
+            child: Text(
+              formatWeekdayNarrow(context, sunday.add(Duration(days: i))),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.muted),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
   Widget _grid(CalendarMonth month) {
     final byDay = month.byDay;
     final first = DateTime(_year, _month, 1);
     final daysInMonth = DateTime(_year, _month + 1, 0).day;
-    final leadingBlanks = first.weekday - 1; // Mon-first
+    // **周日起头**（2026-08-04 用户拍板，与 A7 稿的表头字母序一致）：
+    // Dart 的 weekday 是 Mon=1…Sun=7，取模 7 即得「周日为第 0 列」的列号。
+    // 与 [_weekdayRow] 的起始日绑定，改一处必须改另一处。
+    final leadingBlanks = first.weekday % 7;
     final today = DateTime.now();
     final todayDate = DateTime(today.year, today.month, today.day);
 

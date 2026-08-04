@@ -304,8 +304,11 @@ class _NewbieCardState extends ConsumerState<_NewbieCard> {
                         style: const TextStyle(
                             fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink)),
                     const SizedBox(height: 4),
+                    // 「不计入上面的里程碑进度」那句已删（2026-08-04 用户要求）：它与事实相反 ——
+                    // 6 个新手任务里有 5 个本身就是里程碑，做完就会让上面的进度条动，
+                    // 这句话只会让人以为自己白做了。
                     Text(
-                      '${l10n.newbieCardProgress(tasks.completedCount, tasks.total)} · ${l10n.newbieCardSubtitle}',
+                      l10n.newbieCardProgress(tasks.completedCount, tasks.total),
                       style: const TextStyle(fontSize: 12, height: 1.4, color: AppColors.muted),
                     ),
                   ],

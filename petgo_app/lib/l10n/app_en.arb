@@ -149,11 +149,22 @@
       "months": { "type": "int" }
     }
   },
+  "growthArchiveAgeDays": "{days, plural, =1{1 day} other{{days} days}}",
+  "@growthArchiveAgeDays": {
+    "description": "Pet age under one month — shown in days instead of 0y 0m",
+    "placeholders": {
+      "days": { "type": "int" }
+    }
+  },
   "growthArchiveEmptyTitle": "No pet profile yet",
   "growthArchiveEmptyCreate": "Create profile now",
   "growthArchiveNonOwnerTitle": "The diary is for pet owners. Change your pet status to unlock it.",
   "growthArchiveChangeStatus": "Change status",
-  "growthArchiveTimelineEmpty": "No records yet",
+  "growthArchiveTimelineEmpty": "Record {name}'s first moment",
+  "@growthArchiveTimelineEmpty": {
+    "description": "Diary timeline: first-moment guide card title",
+    "placeholders": { "name": { "type": "String" } }
+  },
   "growthEditStatusTitle": "Change pet status",
   "growthStatusSaveFailed": "Could not update status, please try again",
   "growthStatsHappy": "{count} happy moments",
@@ -171,7 +182,6 @@
   "growthDayDetailEmpty": "No records on this day",
   "milestoneListTitle": "Milestones",
   "milestoneListTitleNamed": "Milestone {name}",
-  "newbieCardSubtitle": "Not counted in milestone progress above",
   "newbieCardShowMore": "{count} more tasks",
   "newbieCardShowLess": "Show less",
   "newbieCardTitle": "Beginner Tasks",
@@ -997,9 +1007,9 @@
   "@growthArchiveViewCalendar": {"description": "Growth archive: calendar view toggle"},
   "growthArchiveAchievements": "{name}'s Achievements",
   "@growthArchiveAchievements": {"description": "Growth archive: milestone bar title", "placeholders": {"name": {"type": "String"}}},
-  "growthArchiveTimelineEmptyBody": "Start recording your pet's first moment!\nEvery photo and story is saved here.",
+  "growthArchiveTimelineEmptyBody": "A photo, a walk, or anything that made you happy today.",
   "@growthArchiveTimelineEmptyBody": {"description": "Growth archive: timeline empty-state body"},
-  "growthArchiveRecordFirstMoment": "Record First Moment",
+  "growthArchiveRecordFirstMoment": "Record a Moment",
   "@growthArchiveRecordFirstMoment": {"description": "Growth archive: timeline empty-state CTA"},
   "profileOnboardingPreviewName": "Your pet's name",
   "@profileOnboardingPreviewName": {"description": "Profile onboarding: preview card name placeholder"},
@@ -1474,6 +1484,8 @@
   "orderNotFound": "Order not found",
   "diaryHealthEntryTitle": "Health Records",
   "diaryHealthEntrySub": "Vaccines · deworming · medical history",
+  "diaryHealthEntrySubEmpty": "No records yet",
+  "@diaryHealthEntrySubEmpty": {"description": "Diary header health entry subtitle when the pet has zero health records"},
   "idCardTitle": "Pet ID Card",
   "idCardLoadError": "Failed to load ID card. Please try again.",
   "idCardStyleKtp": "KTP",

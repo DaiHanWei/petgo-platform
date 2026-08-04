@@ -444,7 +444,9 @@ public class TimelineService {
         long consult = health == null ? 0L : health.countHealthEvents(ownerId);
         MilestoneService.MilestoneProgress progress =
                 milestoneService.getProgress(profile.getId(), profile.getPetType());
-        return new ArchiveStatsResponse(happy, consult, progress.completed(), progress.total());
+        long healthRecordCount = healthRecords.countByPetProfileId(profile.getId());
+        return new ArchiveStatsResponse(happy, consult, progress.completed(), progress.total(),
+                healthRecordCount);
     }
 
     /** 当天详情的大类序号（AD-10）：diary=0 &gt; 问诊=1 &gt; 结构化健康记录=2。 */

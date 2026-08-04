@@ -117,8 +117,10 @@ class GrowthArchivePage extends ConsumerWidget {
     };
   }
 
-  /// 状态 A 外壳（已建档 / 未建档共用）：cream 底 + 分享 FAB + 档案加载态。
-  /// **零改动**沿用改版前实现（AC2 的回归基准）。
+  /// 状态 A 外壳（已建档 / 未建档共用）：cream 底 + 档案加载态。
+  ///
+  /// 分享名片按钮**不再是右下悬浮 FAB**（2026-08-04 用户要求）—— 它会盖住时间线与日历
+  /// 右下角的内容；改为页头标题行里编辑铅笔旁的小图标，由 [_ArchiveBody] 注入。
   Widget _ownerBranch(
     BuildContext context,
     WidgetRef ref,
@@ -127,8 +129,6 @@ class GrowthArchivePage extends ConsumerWidget {
   ) {
     return Scaffold(
       backgroundColor: AppColors.cream,
-      // 分享名片 FAB（Story 2.7）：仅 A + 有档案 + 有 cardToken 渲染；动效首访一次。
-      floatingActionButton: _shareFab(context, ref, profileAsync.asData?.value),
       body: profileAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, stack) => _EmptyProfileView(onCreate: () => context.push('/profile/create')),
@@ -148,35 +148,6 @@ class GrowthArchivePage extends ConsumerWidget {
           );
         },
       ),
-    );
-  }
-
-  /// 仅 (状态 A + 有档案 + 有 cardToken) 渲染分享 FAB；B/C 或无档案不渲染（AC3）。
-  Widget? _shareFab(BuildContext context, WidgetRef ref, PetProfile? profile) {
-    if (profile == null || profile.cardToken.isEmpty) return null;
-    final l10n = AppLocalizations.of(context);
-    final alreadyShown = ref.watch(shareFabAnimatedShownProvider).asData?.value ?? true;
-    return ShareFab(
-      semanticLabel: l10n.shareFabLabel,
-      animate: !alreadyShown,
-      onAnimationShown: () {
-        markShareFabAnimated();
-        ref.invalidate(shareFabAnimatedShownProvider);
-      },
-      onPressed: (origin) async {
-        // 传按钮矩形作 iOS 分享面板锚点 + await + 兜错（bug 20260707：iOS 点了没反应）。
-        try {
-          await ref.read(shareServiceProvider)(
-            petCardShareUrl(profile.cardToken),
-            sharePositionOrigin: origin,
-          );
-        } catch (_) {
-          if (context.mounted) showAppToast(context, l10n.shareFailed);
-        }
-        // 名片分享信号 → 里程碑 C-S3 自动完成（Story 8.3，fire-and-forget，失败静默）。
-        ref.read(milestoneRepositoryProvider).signalCardShared().catchError((_) {});
-        ref.invalidate(milestoneListProvider);
-      },
     );
   }
 
@@ -310,7 +281,9 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
       },
       child: ListView(
         controller: _scroll,
-        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 50, AppSpacing.lg, AppSpacing.section),
+        // 底部留白要**避开凸起的「＋」**：它比底栏高出一截，48 只够躲开底栏本身，
+        // 滚到底时最后一个元素（引导卡的 CTA 最明显）会被压住（2026-08-04 实机确认）。
+        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 38, AppSpacing.lg, 92),
         children: [
           // 页头（标题行 + 信息卡 + 健康记录入口 + 里程碑进度）走 Story 2.2 抽出的共用组件，
           // 与游客态同一份实现（3.3 要求两态页头一致）。入口跳转由本页注入。
@@ -320,19 +293,55 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
             consultCount: stats?.consultCount,
             milestoneCompleted: stats?.milestoneCompleted,
             milestoneTotal: stats?.milestoneTotal,
+            healthRecordCount: stats?.healthRecordCount,
+            titleAction: _shareButton(),
             onEditProfile: widget.onEditProfile,
             onOpenIdCard: () => context.push('/profile/id-card'),
             onOpenHealth: () => context.push('/profile/health'),
             onOpenMilestones: () => context.push('/profile/milestones'),
           ),
           _viewToggleRow(l10n),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           if (_view == _ArchiveView.timeline)
             _TimelineView(petName: widget.profile.name, loadMoreTick: _loadMoreTick)
           else
             _calendarView(),
         ],
       ),
+    );
+  }
+
+  /// 分享名片按钮（Story 2.7 的动效按钮，紧凑形态）。
+  ///
+  /// 位置从「右下悬浮 FAB」挪到页头标题行编辑铅笔旁（2026-08-04 用户要求）。
+  /// 仅在有 `cardToken` 时渲染 —— 老档案可能没有，没有就分不出去（AC3 的原有约束不变）。
+  Widget? _shareButton() {
+    final profile = widget.profile;
+    if (profile.cardToken.isEmpty) return null;
+    final l10n = AppLocalizations.of(context);
+    final alreadyShown = ref.watch(shareFabAnimatedShownProvider).asData?.value ?? true;
+    return ShareFab(
+      compact: true,
+      semanticLabel: l10n.shareFabLabel,
+      animate: !alreadyShown,
+      onAnimationShown: () {
+        markShareFabAnimated();
+        ref.invalidate(shareFabAnimatedShownProvider);
+      },
+      onPressed: (origin) async {
+        // 传按钮矩形作 iOS 分享面板锚点 + await + 兜错（bug 20260707：iOS 点了没反应）。
+        try {
+          await ref.read(shareServiceProvider)(
+            petCardShareUrl(profile.cardToken),
+            sharePositionOrigin: origin,
+          );
+        } catch (_) {
+          if (mounted) showAppToast(context, l10n.shareFailed);
+        }
+        // 名片分享信号 → 里程碑 C-S3 自动完成（Story 8.3，fire-and-forget，失败静默）。
+        ref.read(milestoneRepositoryProvider).signalCardShared().catchError((_) {});
+        ref.invalidate(milestoneListProvider);
+      },
     );
   }
 
@@ -570,36 +579,9 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
       ),
       data: (page) {
         if (page.items.isEmpty && _extra.isEmpty) {
-          // timeline-empty.html：居中空态引导（标题 + 副文 + 紫 CTA「+ Catat Momen Pertama」）。
           return Padding(
-            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 32, AppSpacing.lg, AppSpacing.xl),
-            child: Column(
-              children: [
-                Text(l10n.growthArchiveTimelineEmpty,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink)),
-                const SizedBox(height: 10),
-                Text(
-                  l10n.growthArchiveTimelineEmptyBody,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 13, height: 1.5, color: AppColors.ink2),
-                ),
-                const SizedBox(height: 22),
-                FilledButton(
-                  key: const ValueKey('timelineEmptyCta'),
-                  onPressed: () => context.push('/publish?preset=growth-calendar'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.mint,
-                    foregroundColor: AppColors.onAccent,
-                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                  child: Text('+ ${l10n.growthArchiveRecordFirstMoment}',
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-                ),
-              ],
-            ),
+            padding: const EdgeInsets.fromLTRB(0, 18, 0, AppSpacing.xl),
+            child: _FirstMomentGuideCard(petName: widget.petName),
           );
         }
         final items = <TimelineItem>[...page.items, ..._extra];
@@ -647,6 +629,17 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
                 : null,
           ));
         }
+        // A4 近空态（2026-08-04 用户实机反馈）：刚建档的时间线并**不是空的** ——
+        // 建档完成里程碑（D-S1）自动占着一条 banner，于是上面那个「整条为空」的分支
+        // 永远进不去，引导卡在真机上从未出现过，banner 下方是一大片空白。
+        // 判定改为「还没有任何快乐时刻」：banner 照常显示，引导卡追加在它下面。
+        // `!_hasMore` 保证只在确实翻到底时才断言「没有」，否则旧照片可能还在后面几页。
+        if (!_hasMore && debutHappy < 0) {
+          tiles.add(Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: _FirstMomentGuideCard(petName: widget.petName),
+          ));
+        }
         // 底部翻页页脚：加载中转圈 / 失败给重试 / 没有更多则什么都不加。
         if (_loadMoreFailed) {
           tiles.add(_loadMoreRetry(l10n));
@@ -689,6 +682,61 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
           ],
         ),
       );
+}
+
+/// 「记下第一条快乐时刻」引导卡（UI 稿 **A4 近空态** 的 `diary-guide-card`）。
+///
+/// 出现条件是「**还没有任何快乐时刻**」，不是「时间线为空」—— 建档完成里程碑 banner
+/// 会一直占着一条，按「为空」判定这张卡永远不出现（2026-08-04 实机确认）。
+/// 已建档真实态与整条为空两种情形共用本卡，不再各写一套。
+class _FirstMomentGuideCard extends StatelessWidget {
+  const _FirstMomentGuideCard({required this.petName});
+
+  final String petName;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Container(
+      key: const ValueKey('timelineFirstMomentCard'),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 16),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(color: Color(0x0D2B2A27), offset: Offset(0, 2), blurRadius: 8),
+        ],
+      ),
+      child: Column(
+        children: [
+          const Text('📸', style: TextStyle(fontSize: 26)),
+          const SizedBox(height: 8),
+          Text(l10n.growthArchiveTimelineEmpty(petName),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  fontSize: 14.5, fontWeight: FontWeight.w700, color: AppColors.ink)),
+          const SizedBox(height: 5),
+          Text(l10n.growthArchiveTimelineEmptyBody,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 12, height: 1.5, color: AppColors.ink2)),
+          const SizedBox(height: 14),
+          FilledButton(
+            key: const ValueKey('timelineEmptyCta'),
+            onPressed: () => context.push('/publish?preset=growth-calendar'),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.mint,
+              foregroundColor: AppColors.onAccent,
+              padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+            ),
+            child: Text('+ ${l10n.growthArchiveRecordFirstMoment}',
+                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// 状态 A（已回答「我有宠物」）但未建档的**建档引导态**（Story 2.3 · FR-81 · UI 稿 A2）。

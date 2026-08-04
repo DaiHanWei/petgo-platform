@@ -33,6 +33,8 @@ class DiaryHeader extends StatelessWidget {
     this.consultCount,
     this.milestoneCompleted,
     this.milestoneTotal,
+    this.healthRecordCount,
+    this.titleAction,
     this.onEditProfile,
     this.onOpenIdCard,
     this.onOpenHealth,
@@ -48,6 +50,14 @@ class DiaryHeader extends StatelessWidget {
   /// 里程碑进度；任一为 null → 不渲染进度条（沿用现状：统计未就绪时该条不出现）。
   final int? milestoneCompleted;
   final int? milestoneTotal;
+
+  /// 结构化健康记录条数。为 0 时健康入口副文案改「还没有记录」（A4 近空态）；
+  /// **null = 未知**（统计未就绪 / 游客示例态）→ 沿用固定副文案，不冒充空态。
+  final int? healthRecordCount;
+
+  /// 标题行里编辑按钮**左侧**的附加动作（真实态注入分享名片按钮；游客态传 null）。
+  /// 2026-08-04 用户要求把分享从右下悬浮 FAB 挪到这里 —— FAB 会盖住时间线 / 日历的内容。
+  final Widget? titleAction;
 
   final VoidCallback? onEditProfile;
   final VoidCallback? onOpenIdCard;
@@ -70,6 +80,10 @@ class DiaryHeader extends StatelessWidget {
                   style: const TextStyle(
                       fontSize: 19, fontWeight: FontWeight.w700, color: AppColors.ink)),
             ),
+            if (titleAction != null) ...[
+              titleAction!,
+              const SizedBox(width: 8),
+            ],
             _iconBtn(
               key: const ValueKey('editProfileButton'),
               onTap: onEditProfile,
@@ -141,7 +155,11 @@ class DiaryHeader extends StatelessWidget {
                 icon: Icons.check_circle_outline,
                 iconColor: AppColors.mint,
                 title: l10n.diaryHealthEntryTitle,
-                sub: l10n.diaryHealthEntrySub,
+                // A4 近空态：一条记录都没有时，别用「疫苗 · 驱虫 · 病历」这种
+                // 读起来像「里面已经有东西」的描述；顺带这条短文案不再折两行撑高整行。
+                sub: healthRecordCount == 0
+                    ? l10n.diaryHealthEntrySubEmpty
+                    : l10n.diaryHealthEntrySub,
               ),
             ),
             const SizedBox(width: 10),

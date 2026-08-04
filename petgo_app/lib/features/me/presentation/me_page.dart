@@ -557,10 +557,10 @@ class _PetCard extends ConsumerWidget {
         .asData
         ?.value
         .happyMomentCount;
-    final age = computePetAge(pet.birthday);
     return [
       ?species,
-      if (pet.birthday != null) l10n.growthArchiveAge(age.years, age.months),
+      // 与档案页同一出口：不满 1 个月按天表达，避免「0th 0bln」。
+      ?formatPetAge(l10n, pet.birthday),
       // bug 20260722-355：GROWTH_MOMENT 帖即「Diary」（与档案头部/网格徽章同口径），
       // 文案由「moments」改「diary」，>99 显示「99+」，跟随实际记录数变化。
       if (momen != null) l10n.meDiaryCount(momen > 99 ? '99+' : '$momen'),

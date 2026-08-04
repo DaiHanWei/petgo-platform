@@ -16,6 +16,14 @@ public interface HealthRecordRepository extends JpaRepository<HealthRecord, Long
     /** 某宠物的健康记录，按发生日期倒序（同日按 id 倒序稳定）。 */
     List<HealthRecord> findByPetProfileIdOrderByEventDateDescIdDesc(long petProfileId);
 
+    /**
+     * 某宠物的结构化健康记录条数（V1.1.2 · UI 稿 A4 近空态）。
+     *
+     * <p>Diary 页头「健康记录」入口的副文案按 0 / 非 0 切换（0 → 「还没有记录」），
+     * 避免刚建档的用户看到「疫苗 · 驱虫 · 病历」这种**像是已有内容**的固定描述。
+     */
+    long countByPetProfileId(long petProfileId);
+
     /** 某宠物在 [from, to] 内（按 event_date）的健康记录，日期升、同日 id 升——日历角标分类图标（bug 20260722-352）。 */
     List<HealthRecord> findByPetProfileIdAndEventDateBetweenOrderByEventDateAscIdAsc(
             long petProfileId, LocalDate from, LocalDate to);

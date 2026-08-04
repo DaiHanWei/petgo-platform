@@ -204,6 +204,9 @@ void main() {
     expect(find.byKey(const ValueKey('timelineLoadMoreError')), findsOneWidget);
 
     repo.failPage2 = false; // 网络恢复
+    // 重试行是**失败之后**才追加的，第一次拖拽结束时列表又长高了 → 再滚一次才真正到底。
+    // 不滚到底，这一行会停在贴近底边的位置、被分享 FAB 盖住，点击落不到它身上。
+    await _scrollToBottom(tester);
     await tester.tap(find.byKey(const ValueKey('timelineLoadMoreRetry')));
     await tester.pumpAndSettle();
 
