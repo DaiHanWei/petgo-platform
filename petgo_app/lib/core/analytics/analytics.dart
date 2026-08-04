@@ -7,7 +7,7 @@ import 'package:posthog_flutter/posthog_flutter.dart';
 import 'appsflyer_client.dart';
 import 'button_ids.dart';
 
-/// 前端行为分析门面（PostHog Cloud US）。
+/// 前端行为分析门面（PostHog Cloud EU · project 211847）。
 ///
 /// 设计约束（CLAUDE.md 护栏）：
 /// - Project Token / Host 走 dart-define 注入，带生产默认值，对齐 `dio_client.dart`。
