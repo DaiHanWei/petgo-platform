@@ -133,8 +133,8 @@ void main() {
       expect(find.byKey(const ValueKey('timelineFirstMomentCard')), findsOneWidget,
           reason: 'banner 占着一条不等于「已经有内容了」，引导卡必须照常出现');
       expect(find.byKey(const ValueKey('timelineEmptyCta')), findsOneWidget);
-      expect(find.textContaining("dada's first moment"), findsOneWidget,
-          reason: 'A4 稿的标题带宠物名');
+      expect(find.textContaining("dada's first diary entry"), findsOneWidget,
+          reason: 'A4 稿的标题带宠物名；Diary 内一律用 diary entry，不再说 moment');
     });
 
     testWidgets('时间线彻底为空 → 也是同一张卡（不再走另一套裸文案）', (tester) async {
