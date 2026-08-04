@@ -172,6 +172,25 @@ flutter:
     - family: Rubik
       fonts:
         - asset: assets/fonts/Rubik-VariableFont_wght.ttf
+    # Fraunces：splash 标语与慢网提示专用（V1.1.2 Story 7.2 · 决策 C-9）。仅 splash 用，不进全局主题。
+    #
+    # 来源：Google Fonts 的 Fraunces 可变字体（OFL-1.1，许可证随字体同目录 assets/fonts/OFL.txt ——
+    # OFL 要求随分发附带，勿删）。子集化后 38KB。
+    #
+    # ⚠️ 轴的处置（与设计稿 F1 的四轴写法有出入，理由如下，改前先读）：
+    #   - wght 500 与 opsz 16 已**烘死进字体**（instancer 固化）—— 这两个值设计上恒定，
+    #     保留可变会把体积从 38KB 抬到 121KB。视觉结果完全相同。
+    #   - SOFT 与 WONK **保留可变**，由代码 fontVariations 设 SOFT 100 / WONK 1。
+    #     WONK 必须留可变：PRD OQ-21 待真机确认手感，可能要退到 WONK 0 —— 留着就只改一个数字，
+    #     烘死则要重新产字体。
+    #
+    # 子集范围：基础拉丁可打印区（U+0020–U+007E）+ 省略号 + 弯引号，共 98 码位。
+    # **刻意比"当前三条文案所需"更宽** —— 设计稿原内联子集只有 35 码位、仅够印尼语标语，
+    # 英文标语缺 5 字、慢网提示缺 3 字（2026-08-04 踩坑）。放宽后改文案不会再被字体绊住。
+    - family: Fraunces
+      fonts:
+        - asset: assets/fonts/Fraunces-subset-SOFT-WONK.ttf
+          weight: 500
 
 # App 图标（紫色猫狗 logo）。重生成：dart run flutter_launcher_icons
 flutter_launcher_icons:
@@ -182,10 +201,30 @@ flutter_launcher_icons:
   adaptive_icon_background: "#FFFFFF"
   adaptive_icon_foreground: "assets/brand/app_icon_padded.png"
 
-# 原生启动屏（白底 + logo 居中，替换 Flutter 默认）。重生成：dart run flutter_native_splash:create
+# 原生启动屏（紫底 #7D45F6 + 白 mark 居中）—— Story 7.1 / FR-87。
+#
+# 设计口径：**让原生启动屏成为入场动画的第 0 帧**。原生显示紫底白 mark，Flutter 首帧接住
+# 同位同尺寸的 mark 再开始变化 —— 不可控的原生启动耗时被吸收进叙事，用户感知不到交接点。
+# 改前为白底 + 紫 logo，与 Flutter 的紫底形成落差，每次冷启动必闪一次白（缺陷 B-1）。
+#
+# ⚠️ 本块之外的 android/ 与 ios/ 启动屏文件**全是生成物**，手工改会在下次生成时被覆盖。
+#    唯一该手工编辑的是本块与 assets/brand/ 下的源资产。
+# ⚠️ 改完必须重跑：dart run flutter_native_splash:create
+#    并**真机分别验证浅色与深色两种模式**（缺陷 B-2 正是因为当初只验了浅色才长期存在）。
 flutter_native_splash:
-  color: "#FFFFFF"
-  image: "assets/brand/app_icon.png"
+  color: "#7D45F6"
+  # 缺陷 B-2：改前深色模式的 windowSplashScreenBackground 同样是 #FFFFFF，也白闪。
+  # 缺少 color_dark 时生成器不会改 values-night-v31，故必须显式声明。
+  color_dark: "#7D45F6"
+  # 白 mark（透明底），取自品牌母文件 ICON SVG.svg 的 Layer_7、viewBox 紧贴 bbox。
+  # 改前用的 app_icon.png 是紫色应用图标，在紫底上会看不见。
+  image: "assets/brand/splash_mark_white.png"
+  image_dark: "assets/brand/splash_mark_white.png"
   android_12:
-    image: "assets/brand/app_icon_padded.png"
-    color: "#FFFFFF"
+    # Android 12+ 规范：画布 288dp、可视内容限 192dp（= 占宽 66.7%）。
+    # 改前 android12splash.png 为 200×200 mdpi，超出可视上限会被系统裁切（缺陷 B-3）。
+    # 本资产画布 1152×1152（288dp @4x），可视内容 768×636（占宽 66.7%），居中。
+    image: "assets/brand/splash_mark_white.png"
+    color: "#7D45F6"
+    image_dark: "assets/brand/splash_mark_white.png"
+    color_dark: "#7D45F6"

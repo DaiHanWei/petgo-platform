@@ -4,7 +4,7 @@ baseline_commit: d9353457
 
 # Story 7.2: Splash 视觉与入场动效整体重做
 
-Status: ready-for-dev
+Status: in-progress
 
 > **所属**：V1.1.2 **Epic 7 第二个 Story** —— **纯前端 · 零 schema · 零后端改动 · 零新依赖**。
 > 交付：把 splash 的**视觉终态与入场动效整体换成新设计**（方案 B「写名字」），并收口尺寸、字体、资产。
@@ -118,50 +118,50 @@ so that **我在第一秒就记住了这个 App 叫什么（FR-88）**。
 
 ### 🟩 前端子任务（petgo_app / Flutter）
 
-- [ ] **T1 拆掉旧动效**（AC1 / AC4 / AC5）
-  - [ ] 删除 `_markStage()` 的狗+猫双 SVG 叠加结构
-  - [ ] 删除猫的 6 个绝对像素路点、脚步弹跳、归位翻紫 `colorFilter`
-  - [ ] 删除 4320ms 时间线的全部切片定义（`_t` / `_dog` / `_catT` / `_catPath` 等）
-  - [ ] 删除常驻 spinner（`bottom: 108`）与版本号（`SplashPage.version`）
-  - [ ] 移除 `mark_dog.svg` / `mark_cat.svg` / `wordmark.svg` 的引用
-- [ ] **T2 搭新时间线**（AC1 / AC2 / AC3 / AC4）
-  - [ ] 总时长 **1540ms**；三拍 B1(≈480ms) / B2(≈900ms，9 拍每拍 +85ms) / B3(终态)
-  - [ ] B1：位置 50%→43% + `scale 1→.70` + `opacity 1→0`
-  - [ ] B2：字标 11 条路径分 9 组，逐组 `blur 4→0` / `y 10→0`
-  - [ ] B3：字标可视宽 60% + 标语，**无 mark**
-  - [ ] 同步收敛 `animatedHold` / `staticHold`
-- [ ] **T3 首帧对齐**（AC0）
-  - [ ] 首帧 mark 落 **50% 正中**、可视宽 **屏宽 42%**（或 7.1 实测值）
-  - [ ] 自检：与原生那一帧同位同尺寸，仅多一层呼吸光晕
-- [ ] **T4 尺寸相对化**（AC5）
-  - [ ] mark 42% / 字标 60% / 光晕 66.7%（替换写死 260）/ 标语 70% / 底部元素 92 起
-  - [ ] 视觉中心口径改为「logo 中心居中，标语不参与计算」
-- [ ] **T5 字体接入**（AC6）
-  - [ ] 产出 Fraunces 子集 woff2（约 37KB，含大小写全集）→ 新增 `assets/fonts/`（若目录不存在则建）
-  - [ ] `pubspec.yaml` 的 `fonts:` 段登记该字体
-  - [ ] 用 `fontVariations` 设 4 个轴（本仓库先例：现状 Quicksand 用 `FontVariation('wght', 600)`）
-  - [ ] 按 AC6 表逐项改 8 个排版参数 + `.tagpad` 补偿
-  - [ ] 删 `app_id.arb:714` 的硬编码 `\n`；核对 `app_en.arb` 侧一致
-  - [ ] 改完 ARB 须重跑 `flutter gen-l10n`
-- [ ] **T6 reduce-motion**（AC7）
-  - [ ] 开启时直接落终态、不播入场
-  - [ ] **真正停掉**光晕的无限动画（不是只固定取值）
-- [ ] **T7 L0 绿灯**（AC9）
-  - [ ] `flutter analyze` 零警告
-  - [ ] `flutter test` 全绿（splash 相关断言按需改，逐条记录）
-  - [ ] `flutter build apk --debug` 通过
+- [x] **T1 拆掉旧动效**（AC1 / AC4 / AC5）
+  - [x] 删除 `_markStage()` 的狗+猫双 SVG 叠加结构
+  - [x] 删除猫的 6 个绝对像素路点、脚步弹跳、归位翻紫 `colorFilter`
+  - [x] 删除 4320ms 时间线的全部切片定义（`_t` / `_dog` / `_catT` / `_catPath` 等）
+  - [x] 删除常驻 spinner（`bottom: 108`）与版本号（`SplashPage.version`）
+  - [x] 移除 `mark_dog.svg` / `mark_cat.svg` / `wordmark.svg` 的引用
+- [x] **T2 搭新时间线**（AC1 / AC2 / AC3 / AC4）
+  - [x] 总时长 **1540ms**；三拍 B1(≈480ms) / B2(≈900ms，9 拍每拍 +85ms) / B3(终态)
+  - [x] B1：位置 50%→43% + `scale 1→.70` + `opacity 1→0`
+  - [x] B2：字标 11 条路径分 9 组，逐组 `blur 4→0` / `y 10→0`
+  - [x] B3：字标可视宽 60% + 标语，**无 mark**
+  - [x] 同步收敛 `animatedHold` / `staticHold`
+- [x] **T3 首帧对齐**（AC0）
+  - [x] 首帧 mark 落 **50% 正中**、可视宽 **屏宽 42%**（或 7.1 实测值）
+  - [x] 自检：与原生那一帧同位同尺寸，仅多一层呼吸光晕
+- [x] **T4 尺寸相对化**（AC5）
+  - [x] mark 42% / 字标 60% / 光晕 66.7%（替换写死 260）/ 标语 70% / 底部元素 92 起
+  - [x] 视觉中心口径改为「logo 中心居中，标语不参与计算」
+- [x] **T5 字体接入**（AC6）
+  - [x] 产出 Fraunces 子集 **TTF**（38KB，98 码位）→ `assets/fonts/Fraunces-subset-SOFT-WONK.ttf` + `OFL.txt`。**Flutter 不支持 woff2，只吃 TTF/OTF**，故用 fonttools 转换
+  - [x] `pubspec.yaml` 的 `fonts:` 段登记该字体
+  - [x] 用 `fontVariations` 设轴　**实际设 2 轴（SOFT/WONK）**：`wght 500` 与 `opsz 16` 已烘死进字体以省体积（121KB→38KB），视觉结果相同；`WONK` 保留可变以便 OQ-21 真机后可退 0
+  - [x] 按 AC6 表逐项改 8 个排版参数 + `.tagpad` 补偿
+  - [x] 删 `app_id.arb:714` 的硬编码 `\n`；核对 `app_en.arb` 侧一致
+  - [x] 改完 ARB 须重跑 `flutter gen-l10n`
+- [x] **T6 reduce-motion**（AC7）
+  - [x] 开启时直接落终态、不播入场
+  - [x] **真正停掉**光晕的无限动画（不是只固定取值）
+- [x] **T7 L0 绿灯**（AC9）
+  - [x] `flutter analyze` 零警告
+  - [x] `flutter test` 全绿（splash 相关断言按需改，逐条记录）
+  - [x] `flutter build apk --debug` 通过
 
 ### 🟨 联调验收子任务（**必须本地真机 / 模拟器视觉，云端无法执行**）
 
-- [ ] **T8 逐帧对稿**：`--dart-define=DEV_ROUTE=/splash` 定屏，对照 `ui-splash-v1.1.2.html` 的 B1 / B2 / B3 / BL 四屏逐帧核对（AC1~AC3）
-- [ ] **T9 交接验证**：真机冷启动，确认原生→Flutter **无底色闪变且无 mark 跳位**（AC0；7.1 遗留的跳位应在此消除）
-- [ ] **T10 字体真机确认**：iOS + Android 各一台看 `WONK` 手感，过头则退 `WONK` 0 并回写 OQ-21（AC8）
+- [~] **T8 逐帧对稿**：`--dart-define=DEV_ROUTE=/splash` 定屏，对照 `ui-splash-v1.1.2.html` 的 B1 / B2 / B3 / BL 四屏逐帧核对（AC1~AC3）　**部分完成**：B3 终态已在模拟器上逐项核对通过（字标 59.9% 屏宽、无 mark、无版本号、无 spinner）；**B1/B2 中间帧未逐帧核对** —— 动效仅 1.54s，`adb screencap` 单帧耗时约 300ms 抓不稳，需人工看或录屏
+- [ ] **T9 交接验证**：真机冷启动，确认原生→Flutter **无底色闪变且无 mark 跳位**（AC0；7.1 遗留的跳位应在此消除）　⚠️ **未完成**：交接窗口仅约 320ms，本会话的截图手段抓不到那一瞬，需人工肉眼看冷启动
+- [~] **T10 字体真机确认**：iOS + Android 各一台看 `WONK` 手感，过头则退 `WONK` 0 并回写 OQ-21（AC8）　**部分完成**：Android（模拟器 API 36）已看，字形正常、缺字已解决；**iOS 侧未验**（本机无 iOS 模拟器/真机可用），OQ-21 仍开放
 - [ ] **T11 reduce-motion 真机**：系统开启「减弱动态效果」后冷启动，确认直落终态且光晕不呼吸（AC7）
-- [ ] **T12 小屏/大屏构图**：至少两种屏宽验证相对尺寸无漂移（AC5 / NFR-17）
+- [x] **T12 小屏/大屏构图**：至少两种屏宽验证相对尺寸无漂移（AC5 / NFR-17）　**以 widget 测试覆盖**（390 与 1080 两种逻辑屏宽 + 四个比例常量断言），未另在两台真机上比对
 
 ### 🟦 后端子任务
 
-- [ ] **无。本 Story 零后端改动、零 schema 变更、零迁移。**
+- [x] **无。本 Story 零后端改动、零 schema 变更、零迁移。**
 
 ## Dev Notes
 
@@ -239,8 +239,130 @@ so that **我在第一秒就记住了这个 App 叫什么（FR-88）**。
 
 ### Agent Model Used
 
+Claude Opus 5 (1M context) · claude-opus-5[1m]
+
 ### Debug Log References
+
+- `flutter analyze` → `No issues found!`
+- `flutter test` → `All tests passed!`（**659 tests**，原 651 + 本 Story 新增 8）
+- `flutter build apk --debug` → 通过；已安装至模拟器（AVD `petgo_phone` · Android 16/API 36）
+- 视觉验收用既有开关定屏：`flutter build apk --debug --dart-define=DEV_ROUTE=/splash`
 
 ### Completion Notes List
 
+**AC0~AC7、AC9 已满足**（AC6 原被字体素材缺口阻塞，2026-08-04 用户拍板联网取完整版后已解决）。**AC8 部分完成**：Android 侧已验，iOS 侧本机无设备，OQ-21 仍开放。
+
+#### 🐛 本 Story 最重要的一条：真机空屏缺陷（已修，并补了守卫测试）
+
+**现象**：L0 全绿（analyze 0 / 651 测试通过 / APK 构建成功），但装到模拟器上 splash **一片纯紫、什么都不显示**。
+
+**排查过程**（记录下来，因为这类"测试全绿但真机全黑"最难查）：
+1. 先怀疑 `screencap` 抓不到 Impeller 画面 → 用 Diary 页验证：截到 939 种颜色，**screencap 能抓 Flutter**，假设排除
+2. 查 logcat：**无任何 Dart 异常**（只有 `FlutterRenderer: Width is zero. 0,0` 一条 engine 级 debug 日志）
+3. widget 测试里量各元件尺寸（按设备 1080×2400 @2.625）：mark 172.8×142.8、字标 246.9×76.4、标语 288×63 —— **全部正常**，无异常
+4. 临时把底色改红 + 加无条件绿方块 → **红底出现、绿块不出现** ⇒ Scaffold 在画，`body` 的 Stack 一个子元素都没画
+5. 二分：Stack 里只留绿块 → 显示；绿块 + 字标 → 都显示；绿块 + 光晕 → 都显示；**加回 mark → 全黑**
+
+**根因**：`_markHandoff` 在动效终态（`t >= 1.0`）时 `return const SizedBox.shrink()` —— 那是个**非定位（non-positioned）子元素**。
+`RenderStack` 的规则是：**只要出现任何非定位子元素，Stack 就把自身尺寸收缩为这些子元素的最大尺寸**；返回 0×0 的非定位子元素 ⇒ **整个 Stack 变 0×0 ⇒ 所有兄弟元素一起消失**。
+
+**为什么 L0 全绿却漏过**：旧测试只 `pump(60ms)`，此时 `t < 1`、`_markHandoff` 仍返回 `Positioned`，**恰好躲过**。真机上要等 1.54s 动效播完才触发 —— 而我的截图都在 3 秒后。
+
+**修复**：`_markHandoff` **恒定返回 `Positioned`**，终态改用 `opacity: 0` 隐藏，不再切换节点类型。「终态不出现 mark」（AC3）由透明度实现，语义不变。
+
+**守卫测试**（`splash_test.dart`「🐛 回归：动效播完后内容仍在」）：pump **越过** `animatedTotal` 后，断言每个 SVG 的 `RenderBox.size` 宽高均 > 0。
+✅ **已验证该测试有效**（红-绿都跑过）：把错误改法放回去 → 失败并报 `Expected: a value greater than <0> / Actual: <0.0>`；改回修复 → 通过。
+
+**顺带两处加固**（同一坑的邻近风险，非过度设计）：
+- `MediaQuery.of(context).size` → **`LayoutBuilder`**。冷启动瞬间画面可能是 0×0（见上 logcat），按 MediaQuery 算出的尺寸会全为 0；`LayoutBuilder` 拿本次布局的真实约束，且约束变化自动重建。并加了 `size <= 0` 时只铺底色的兜底。
+- **去掉 Stack 的 `clipBehavior: Clip.hardEdge`**。旧实现需要它是因为猫要跑出屏幕；新动效无越界元素，而留着它会在尺寸异常为 0 时把整块裁没（放大上述故障）。
+
+#### 已交付内容（逐 AC）
+
+| AC | 实现要点 |
+|---|---|
+| **AC0** | 首帧 mark 落 **50% 正中**、可视宽 **42% 屏宽**，与原生同位同尺寸；`handoffYRatio`/`centerYRatio` 提为常量并有测试锁定，防止把两者混为一谈 |
+| **AC1** | B1 拍 480ms：`50%→43%` + `scale 1→.70` + `opacity 1→0`；**旧猫跑屏逻辑整段删除**（双 SVG 叠加、6 个绝对像素路点、`abs sin` 脚步弹跳、归位翻紫 `colorFilter`） |
+| **AC2** | B2 拍：**单一资产运行时切分为 9 组**（前 3 条 T+尾+2 短划合为第 1 拍，其后 8 个字母各 1 拍），每拍 `+85ms` 错开、单拍 220ms、`blur 4→0` / `y 10→0`。**未拆成 9 个资产文件**，符合 AC2 |
+| **AC3** | B3 终态 1540ms：字标 60% 屏宽 + 标语，**无 mark**。模拟器实测内容宽 647px = **屏宽 59.9%** ✅ |
+| **AC4** | 总时长 **4320ms → 1540ms**（未超 1.8s 上限）；旧时间线四个切片全部删除；`animatedHold` 4500→**1720ms**、`staticHold` 保持 1400ms；爪印 pop 未加回 |
+| **AC5** | 尺寸全部相对屏宽（mark .42 / 字标 .60 / 光晕 .667 / 标语 .70，底部 92 起）；视觉中心改「logo 中心居中、标语不参与」；**版本号移除**（缺陷 B-6 随之消失）；**常驻 spinner 移除** |
+| **AC7** | reduce-motion 直落终态；**光晕控制器在 reduce-motion 下不启动**（改前只固定取值、动画仍在跑），值停在中间 0.5 |
+| **AC9** | 未动 `/me` 时序、未动当天门控、`onComplete` 契约不变；`splash_test.dart` 按 AC9 要求改断言而非绕过（详见下节） |
+
+#### 测试改动（AC9 要求逐条说明）
+
+`test/onboarding/splash_test.dart`：52 行 / 2 用例 → **161 行 / 8 用例**
+- 用例 1、2：删除 `SplashPage.version` 断言（该常量已随 AC5 移除，否则**不再编译**）；时序 4.5s → 1.8s、1.4s 保持
+- 用例 2「当天已播过」**按 AC9 保留**（其存废归 Story 7.3 取消门控时处理）
+- 新增 6 条：版本号与 spinner 下线断言 / 尺寸相对屏宽 + 四个比例常量 / 总时长与 hold 收敛 / 交接位 50% 与设计位 43% 不混淆 / **🐛 Stack 塌陷回归守卫** / reduce-motion 直落终态
+
+#### ✅ AC6 已解决（原阻塞）：改用 Google Fonts 完整版 Fraunces 重新子集化
+
+**story 与决策日志的「子集约 37KB，含大小写全集」描述不成立** —— 设计稿内联的 woff2 虽是 37KB，但 **cmap 只有 35 码位**，只覆盖印尼语标语：英文标语缺 `'` `f` `p` `v` `y`，Story 7.3 的慢网提示缺 `b` `g` `k`。已核查设计目录 / 仓库 / 系统字体库均无完整版。
+
+**2026-08-04 用户拍板：联网取完整版重做子集。** 执行结果：
+
+| 步骤 | 结果 |
+|---|---|
+| 下载 | Google Fonts `ofl/fraunces` 的 `Fraunces[SOFT,WONK,opsz,wght].ttf`（352KB）+ `OFL.txt` |
+| 许可 | **OFL-1.1**。许可证已随字体放入 `assets/fonts/OFL.txt`（OFL 要求随分发附带，**勿删**） |
+| 格式 | woff2 → TTF：**Flutter 不支持 woff2**（那是 Web 格式），只吃 TTF/OTF。用 `fonttools` 转换 |
+| 子集 | 基础拉丁可打印区 + `…` + `’`，共 **98 码位**。**刻意比"当前三条文案所需"更宽** —— 这次的坑正是子集太紧造成的，放宽后改文案不会再被字体绊住 |
+| 轴处置 | `wght 500` / `opsz 16` **烘死进字体**；`SOFT` / `WONK` **保留可变** |
+| 体积 | **38KB**（与 story 期望的 ~37KB 量级一致） |
+| 覆盖 | 三条文案（ID 标语 / EN 标语 / 慢网提示）**全部 ✅ 无缺字** |
+
+**轴处置为何与设计稿 F1 的「四轴 fontVariations」写法有出入**（一处有意偏离，理由充分）：
+
+实测体积对比 —— 四轴全可变 **121KB** / 钉死 wght **65KB** / 钉死 wght+opsz **38KB** / 全静态 23KB。
+`wght 500` 与 `opsz 16` 设计上恒定、永不变化，保留可变纯属浪费 83KB，**视觉结果完全相同**。
+而 `WONK` **必须留可变** —— PRD OQ-21 明确「真机确认手感，过头可退 WONK 0」，留着就只改一个数字，烘死则要重新产字体。`SOFT` 一并留作调校余量。
+
+**已在模拟器验证**：英文标语完整渲染（`'` `f` `p` `v` `y` 全部正常），衬线字形正确，按 70% 屏宽自动换两行 —— 与设计稿「62% 在 16px 下会挤成三行、故放宽到 70%」的预期一致。
+
+**顺带闭合缺陷 B-9**：删除 `app_id.arb` 的硬编码 `\n`，两语言现在都靠 70% 屏宽自动换行、排版一致。
+
+**AC6 验收口径通过**：`splash_page.dart` 内已无 `Quicksand` / `Poppins` 的实际使用（仅注释里说明"从什么改成什么"），**splash 只依赖 Fraunces 一款字体**。
+
+#### ⏳ 待人工验收（本会话手段不足）
+
+| 任务 | 原因 |
+|---|---|
+| **T10 的 iOS 侧**（AC8） | 本机无 iOS 模拟器/真机可用。Android 侧字形已确认正常；`WONK` 手感的 iOS 复核与 OQ-21 的最终定夺留待有 iOS 设备时 |
+| **T9 交接验证**（AC0） | 原生→Flutter 交接窗口约 320ms，`adb screencap` 单帧约 300ms 抓不到那一瞬，需**人工肉眼看冷启动**确认无底色闪变、无 mark 跳位 |
+| **T8 的 B1/B2 中间帧** | 动效仅 1.54s，同上抓不稳；**B3 终态已核对通过** |
+| **T11 reduce-motion 真机** | 需在系统设置里开「减弱动态效果」后冷启动观察（widget 测试已覆盖逻辑分支） |
+
+#### 模拟器实测结果（B3 终态）
+
+设备：AVD `petgo_phone` · Android 16/API 36 · 1080×2400 @420dpi（屏宽 411.4dp）
+
+- 内容横向范围 647px = **屏宽 59.9%**（字标目标 60% ✅）
+- 肉眼核对：完整「Tailtopia」（**粗壮实心月牙猫尾** = 7.1 新导的母文件版）+ 标语 + 呼吸光晕；**无 mark、无版本号、无 spinner** ✅
+
 ### File List
+
+**新增（2）**
+- `petgo_app/assets/fonts/Fraunces-subset-SOFT-WONK.ttf` —— 38KB / 98 码位 / SOFT+WONK 可变（wght 500、opsz 16 已烘死）
+- `petgo_app/assets/fonts/OFL.txt` —— Fraunces 的 OFL-1.1 许可证，**随分发附带的许可义务，勿删**
+
+**修改（4）**
+- `petgo_app/lib/features/onboarding/presentation/splash_page.dart` —— 整体重写：旧 4320ms 猫跑屏动效整段删除；新 B1/B2/B3 三拍共 1540ms；尺寸相对屏宽；移除版本号与 spinner；reduce-motion 真正停光晕；`LayoutBuilder` + 去 `Clip.hardEdge` 加固；`_markHandoff` 恒返回 `Positioned`
+- `petgo_app/test/onboarding/splash_test.dart` —— 52 行/2 用例 → **10 用例**（含 Stack 塌陷回归守卫 + Fraunces 九项参数断言 + 两语言无硬编码换行）
+- `petgo_app/pubspec.yaml` —— `fonts:` 段注册 Fraunces family（附轴处置与子集范围的理由注释）
+- `petgo_app/lib/l10n/app_id.arb` —— 删除 `splashTagline` 的硬编码 `\n`（缺陷 B-9）
+
+**未改动（本 Story 边界）**
+- `assets/brand/mark_dog.svg` / `mark_cat.svg` / `wordmark.svg` —— 引用已全部移除，**文件本身保留**（物理删除留 Epic 收尾统一处理，避免与 7.1 新增资产的命名整理冲突）
+- `lib/core/router/app_router.dart` / `lib/core/storage/prefs.dart` —— 属 Story 7.3
+- `lib/l10n/app_en.arb` —— 已核对无需改（本就无硬编码换行）；生成物 `app_localizations*.dart` 由 `flutter gen-l10n` 重生成，不手改
+
+### Change Log
+
+| 日期 | 内容 |
+|---|---|
+| 2026-08-04 | 实施 AC0~AC5/AC7/AC9：splash 视觉与入场动效整体替换（1540ms 三拍「写名字」、终态无 mark、尺寸相对屏宽、移除版本号与 spinner、reduce-motion 真正停光晕）。测试 52→161 行、651→657 通过。 |
+| 2026-08-04 | **修真机空屏缺陷**：`_markHandoff` 终态返回非定位子元素致 Stack 塌成 0×0、所有兄弟元素消失；改为恒返回 `Positioned` + `opacity 0`。补回归守卫测试并验证红-绿。顺带加固：改用 `LayoutBuilder`、去掉 `Clip.hardEdge`。 |
+| 2026-08-04 | **AC6 解除阻塞并交付**：联网取 Google Fonts 完整版 Fraunces（OFL-1.1，许可证随字体入库），woff2→TTF 转换，子集化至 98 码位/38KB，三条文案全覆盖。轴处置为 wght+opsz 烘死、SOFT+WONK 保留可变（体积 121→38KB，且保住 OQ-21 退 WONK 0 的余地）。标语落定 Fraunces 500/16px/1.5/ls 0/白 68%/屏宽 70%，间距 22→24。删 app_id.arb 硬编码 `\n`（缺陷 B-9），重跑 gen-l10n。测试 657→659 通过。 |
+| 2026-08-04 | ~~**AC6/AC8 阻塞并记录**~~（已于同日解除，见上一行）：设计稿内联的 Fraunces 子集仅 35 码位、只覆盖印尼语标语，英文标语缺 5 字、7.3 的慢网提示缺 3 字；本地无完整版 Fraunces。标语暂留 Quicksand，代码内留接入点标记。 |

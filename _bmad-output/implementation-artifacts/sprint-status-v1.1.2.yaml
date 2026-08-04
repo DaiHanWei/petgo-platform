@@ -93,7 +93,8 @@
 # - OQ-20 Android 12+ 系统启动屏图标的实际渲染尺寸 —— 不阻塞开发（先按屏宽 42%），
 #         7-1 负责真机量出实测值并记录（其 AC5）；7-2 负责把 Flutter 首帧对齐该值（其 AC0）。
 #         不量则 7-2 无从对齐，交接那帧会残留尺寸跳变
-# - OQ-21 Fraunces WONK 轴字形手感 —— 不阻塞；iOS+Android 各一台确认，过头可退 WONK 0
+# - OQ-21 Fraunces WONK 轴字形手感 —— 不阻塞；**Android 侧 2026-08-04 已确认字形正常**（模拟器 API 36），
+#         iOS 侧待有设备时复核；过头可退 WONK 0（字体已保留该轴可变，改一个数字即可）
 # - OQ-22 慢网提示印尼语文案（设计侧占位）—— 不阻塞，出稿后仅替换 ARB
 # - ~~OQ-23 慢网 B/C 落错页且不自愈~~ —— 已闭合（2026-08-04 拍板）：由 FR-91 迟到纠正解决，不新增重试屏
 # - OQ-24 A·未建档改落 Discovery 后的建档转化率 —— 上线后观测；需埋点侧准备
@@ -160,8 +161,8 @@ development_status:
   #    -> 7-3 依赖 7-2 的 1.54s 时长才能定进度线/慢网阈值
   #    -> 7-4 排最后，避开 Story 2-4 的 code-review
   epic-7: in-progress
-  7-1-品牌资产重导与原生启动屏无缝交接: ready-for-dev    # 6 AC。story 文件已生成。⚠️ 起草期核实代码后收窄范围：Flutter 首帧落位已移入 7-2（现状动效是「带猫形缺口的狗底标+按绝对像素跑的猫」叠加，动首帧会让猫对不上缺口而弄坏旧动效）。本 story 只改 pubspec + 新增 assets + 重生成原生产物，lib/ 一行不改；资产以新增文件落地不覆盖 mark_dog/mark_cat/wordmark。L2 验收口径：底色闪白必须消除，mark 跳位允许遗留（7-2 消除）
-  7-2-splash视觉与入场动效整体重做: ready-for-dev        # 10 AC（AC0~AC9）。story 文件已生成。🟢 用户 2026-08-04 明确：整体替换旧效果，不保留不兼容不做开关 —— 旧那套（狗标带猫形缺口+猫跑屏归位翻紫）代码与引用一次删净。含由 7-1 移入的 AC0 首帧落 50%/42%（须与 AC1 同批）+ 下线旧三份资产。Epic 7 最大一条；若超单次上下文，AC6（字体 Fraunces 4 轴 + 子集 woff2 + ARB）是天然拆分点 → 7-2b；AC0~AC5+AC7 必须同批。已知窗口：本 story 删旧 spinner、新进度线属 7-3，其间慢网无等待指示（Epic 整批发布故用户不遇到）
+  7-1-品牌资产重导与原生启动屏无缝交接: review           # 6 AC 全部满足。L0 全绿（analyze 0 / test 651 / apk ok），lib/ 零改动。B-1/B-2/B-3 已修：补 color_dark 后生成器才改写 night 变体（起草期推断被证实）；mdpi 200→288。资产改从设计稿 ui-splash-v1.1.2.html 提取成品（母文件 Layer_7 是紫色带白镂空 + 含 fill:none 切片框）。✅ AC4/AC5 已在模拟器(Android 16/API36)验证：浅色+深色冷启动均无白闪；系统图标实测可视 180dp = 屏宽 43.70%、中心固定 50%。→ 7-2 AC0 首帧对齐取设计稿的 42% 即可（实测 43.7%，差值在细梢测量误差内；已排除裁切）。⚠️ 遗留：iOS 固定 192pt 与 Android 180dp 差 6.7%，V1 不上 iOS 故待 iOS 上架前处理。建议 7-2 写死 42% 前在真机抽查一次（OEM 差异） 🐛2026-08-04 用户实机核对发现并修复：wordmark_brand.svg 初版误取设计稿 B2 动效中间帧（后 5 条字母 opacity:0）→ 只画出「Tail」；已改从 B3 终态提取，墨迹比 1.560→3.143 验证通过。mark 无此问题。⚠️ 7-2 从稿里取资产务必挑终态实例并检查 opacity 内联样式
+  7-2-splash视觉与入场动效整体重做: review                # AC0~AC7/AC9 已满足，AC8 部分（Android 已验/iOS 本机无设备）。L0 全绿（analyze 0 / test 659 / apk ok）。旧 4320ms 猫跑屏动效整段删除；新 B1/B2/B3 三拍 1540ms；终态无 mark；尺寸相对屏宽；移除版本号与常驻 spinner；reduce-motion 真正停光晕。模拟器实测终态内容宽 = 屏宽 59.9%（目标 60%）✅。🐛 修真机空屏缺陷：_markHandoff 终态返回非定位子元素致 Stack 塌成 0×0、兄弟元素全消失；改为恒返回 Positioned + opacity 0，补回归守卫测试（已验红-绿）。教训：Stack 内终态隐藏用 opacity 勿换节点类型；守卫测试必须 pump 越过 animatedTotal。🔤 字体：设计稿内联子集仅 35 码位（只够印尼语），用户拍板联网取 Google Fonts 完整版 Fraunces（OFL-1.1，许可证已入库），woff2→TTF，子集 98 码位/38KB，三条文案全覆盖含 7-3 慢网提示。轴：wght+opsz 烘死、SOFT+WONK 留可变（121→38KB 且保住 OQ-21 退 WONK 0 的余地）。缺陷 B-9 已闭合（删 app_id.arb 硬编码 \n）。⏳ 待人工：T9 交接那 320ms 与 B1/B2 中间帧截图抓不到需肉眼看；T11 reduce-motion 真机；T10 的 iOS 侧（OQ-21 仍开放）
   7-3-启动期数据获取与等待反馈: ready-for-dev            # 8 AC（AC1~AC8）。story 文件已生成。/me 改并行 + 超时 3s→5s + 取消 splashLastShownDate 门控（连带删 prefs 键/getter/setter 与 B-7 首帧空窗）。四个时点是一条链（1540 动效 → 1860 进度线 → 2290 慢网提示 → 5000 兜底，可读 2.7s），动 7-2 时长要全部重算。须处置 splash_test.dart 用例2「当天已播过」的存废
   7-4-落地分流收口与超时兜底迟到纠正: ready-for-dev      # 9 AC（AC1~AC9）。story 文件已生成。含 FR-78 矩阵变更两行（user_state.dart:45 + diary_gating_and_landing_test.dart:247，Story 2-4 不再动）+ FR-91 新行为 7 条硬约束 + AC6 埋点区分标记（沿用 T-1 事件名，勿新造）+ AC8 回写 AD-8/补 AD-17。🔴 两条安全攸关见上方「安全攸关节点」
   epic-7-retrospective: optional
