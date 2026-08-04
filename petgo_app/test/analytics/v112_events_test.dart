@@ -215,7 +215,7 @@ void main() {
       // 按钮/功能」。⚠️ 反例（本轮修掉的）：`tab_switched` 看不出是底部导航还是页内 Tab；
       // `diary_sync_toggled` 听着像 Diary 页上的开关，其实在发布页。
       const allowedPrefixes = <String>[
-        'app_', 'bottom_nav_', 'diary_', 'discovery_', 'health_', 'publish_', 'me_',
+        'app_', 'bottom_nav_', 'diary_', 'social_', 'health_', 'publish_', 'me_',
         'signup_', 'milestone_',
       ];
       // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
@@ -240,8 +240,8 @@ void main() {
         'bottom_nav_tab_switched',
         'diary_guest_page_viewed',
         'diary_guest_create_profile_cta_tapped',
-        'discovery_soft_login_sheet_shown',
-        'discovery_soft_login_sheet_login_tapped',
+        'social_soft_login_sheet_shown',
+        'social_soft_login_sheet_login_tapped',
         'signup_succeeded',
         'publish_page_content_type_selected',
         'publish_page_sync_to_moment_toggled',
@@ -312,10 +312,10 @@ void main() {
 
       final ev = _one('bottom_nav_tab_switched');
       expect(ev.props!['from_tab'], 'diary', reason: '游客落地在 Diary');
-      expect(ev.props!['to_tab'], 'discovery');
+      expect(ev.props!['to_tab'], 'social');
       expect(ev.props!['user_state'], AppUserState.guest.wire);
       // goBranch 不 push 根路由 → PosthogObserver 收不到；缺的这条浏览事件由我们自己补。
-      expect(_of(r'$screen').map((e) => e.props![r'$screen_name']), contains('discovery_page'));
+      expect(_of(r'$screen').map((e) => e.props![r'$screen_name']), contains('social_page'));
     });
   });
 
@@ -503,14 +503,14 @@ void main() {
 
       await tester.tap(find.text('trigger'));
       await tester.pumpAndSettle();
-      expect(_of('discovery_soft_login_sheet_shown'), hasLength(1));
+      expect(_of('social_soft_login_sheet_shown'), hasLength(1));
 
       events.clear();
       await tester.tap(find.byKey(const ValueKey('softSheetGoogleCta')));
       await tester.pumpAndSettle();
 
-      expect(_one('discovery_soft_login_sheet_login_tapped').props!['method'], 'google');
-      expect(_one('signup_succeeded').props!['entry_source'], 'discovery_soft_login',
+      expect(_one('social_soft_login_sheet_login_tapped').props!['method'], 'google');
+      expect(_one('signup_succeeded').props!['entry_source'], 'social_soft_login',
           reason: 'T-7 的价值全在 entry_source —— 转化路径构成是本版本仅剩的两个可用指标之一');
     });
 
@@ -526,7 +526,7 @@ void main() {
       await tester.tap(find.text('trigger'));
       await tester.pumpAndSettle();
 
-      expect(_of('discovery_soft_login_sheet_shown'), hasLength(1),
+      expect(_of('social_soft_login_sheet_shown'), hasLength(1),
           reason: '曝光埋点必须在 session 去重之后 —— 否则曝光数会被没弹出的那次虚高');
     });
 
@@ -541,7 +541,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(_of('signup_succeeded'), isEmpty);
-      expect(_of('discovery_soft_login_sheet_login_tapped'), hasLength(1), reason: '点击照记，成功与否是另一回事');
+      expect(_of('social_soft_login_sheet_login_tapped'), hasLength(1), reason: '点击照记，成功与否是另一回事');
     });
   });
 
