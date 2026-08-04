@@ -78,8 +78,8 @@ void main() {
     // 'Diary' 同时出现在底部导航(tabProfile)与 Feed 分类 tab(feedTabGrowth)——两处皆 Diary，
     // 故 findsWidgets（bug 20260706-248：Tumbuh→Diary、Konsultasi→Kesehatan）。
     expect(find.text('Diary'), findsWidgets); // tabProfile + feedTabGrowth id
-    // 确证 id locale 的锚点改用 `Jelajah`（tabHome id）：第 2 位 Tab 的印尼语文案已按 OQ-19
+    // 确证 id locale 的锚点改用 `Sosial`（tabHome id）：第 2 位 Tab 的印尼语文案已按 OQ-19
     // 定为 `Health`，与英文同字，拿它当 locale 证据已经证明不了任何事（2026-08-04）。
-    expect(find.text('Jelajah'), findsOneWidget); // tabHome id（唯一，确证 id locale）
+    expect(find.text('Sosial'), findsOneWidget); // tabHome id（唯一，确证 id locale）
   });
 }

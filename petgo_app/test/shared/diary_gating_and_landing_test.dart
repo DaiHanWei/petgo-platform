@@ -117,7 +117,7 @@ void main() {
     testWidgets('游客点 Diary 标签 → 直接进入，不弹登录框', (tester) async {
       await _pumpGuestApp(tester);
       // 冷启动后游客已落 Diary（AC4）；先切到 Discovery 再点回 Diary，才是真正在测这次点击。
-      await tester.tap(_tabButton('Discovery'));
+      await tester.tap(_tabButton('Social'));
       await tester.pumpAndSettle();
       expect(find.byType(FeedTabRow), findsOneWidget);
 
@@ -187,7 +187,7 @@ void main() {
       expect(find.byType(BottomTabBar), findsOneWidget);
       expect(_tabButton('Diary'), findsOneWidget);
       expect(_tabButton('Health'), findsOneWidget);
-      expect(_tabButton('Discovery'), findsOneWidget);
+      expect(_tabButton('Social'), findsOneWidget);
       expect(_tabButton('Me'), findsOneWidget);
     });
 

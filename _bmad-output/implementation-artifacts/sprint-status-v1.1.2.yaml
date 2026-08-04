@@ -119,5 +119,5 @@ development_status:
   # ===== Epic 6: 改版效果可度量 =====
   # PRD §3 埋点。依赖全部功能落地，排最后。
   epic-6: in-progress
-  6-1-v112-埋点收尾: in-progress                         # T-1~T-12 全部上报（含后端里程碑，未引 SDK）；AC5 线上校验口径成立；文档双份（repo §8 + 产品空间 埋点清单v112.md）。code-review 2026-08-04：5决策/27待修全部落地（回归 后端1515+前端651 绿），转 in-progress 因两件待人：① Jelajah 放大字号仍截断需产品定文案 ② AC1 的 PostHog 后台实测(F0)+J1/J2 属 L1 待本地
+  6-1-v112-埋点收尾: in-progress                         # T-1~T-12 全部上报（含后端里程碑，未引 SDK）；AC5 线上校验口径成立；文档双份（repo §8 + 产品空间 埋点清单v112.md）。code-review 2026-08-04：5决策/27待修全部落地（回归 后端1515+前端651 绿），转 in-progress 因两件待人：① ~~Jelajah 放大字号仍截断需产品定文案~~ 已闭合(2026-08-04 用户拍板 第1位Tab→Sosial/Social；同时查出 en 侧 Discovery 也截断——旧测试只跑 id locale；测试收紧为两语言×全档位不许截断，用例 651→661) ② AC1 的 PostHog 后台实测(F0)+J1/J2 属 L1 待本地
   epic-6-retrospective: optional

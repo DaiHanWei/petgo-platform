@@ -307,7 +307,7 @@ void main() {
       await tester.pumpAndSettle();
       events.clear();
 
-      await tester.tap(_tabButton('Discovery'));
+      await tester.tap(_tabButton('Social'));
       await tester.pumpAndSettle();
 
       final ev = _one('bottom_nav_tab_switched');

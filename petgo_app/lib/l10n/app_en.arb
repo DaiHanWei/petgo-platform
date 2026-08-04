@@ -4,7 +4,7 @@
   "@appTitle": {
     "description": "Application title."
   },
-  "tabHome": "Discovery",
+  "tabHome": "Social",
   "@tabHome": {
     "description": "Bottom tab label: Home (Feed)."
   },
@@ -253,7 +253,7 @@
   "feedEmptyTitle": "Show off your furry friend! 🐾",
   "feedEmptyBody": "Be the first to share a pet moment",
   "feedEmptyCta": "Post your first story",
-  "feedGrowthEmptyTitle": "No growth moments yet 🐾",
+  "feedGrowthEmptyTitle": "No diary entries yet 🐾",
   "feedLoadError": "Could not load the feed, pull to retry",
   "feedLoadMoreError": "Failed to load more, tap to retry",
   "feedRetry": "Retry",
@@ -821,13 +821,13 @@
       "name": { "type": "String" }
     }
   },
-  "onboardDoneBody": "Your Passport card is ready. Save their first moment and introduce them to friends.",
+  "onboardDoneBody": "Your Passport card is ready. Write their first diary entry and introduce them to friends.",
   "onboardDoneEnter": "Enter TailTopia",
 
   "publishCancel": "Cancel",
   "publishCamera": "Camera",
   "publishHintDaily": "What happened today?",
-  "publishHintGrowth": "Tell us about {name}'s special moment...",
+  "publishHintGrowth": "Write {name}'s diary entry...",
   "@publishHintGrowth": {"placeholders": {"name": {"type": "String"}}},
   "publishHintKnowledge": "Share a pet care tip...",
   "greetingMorning": "Good morning ☀️",
@@ -1626,11 +1626,11 @@
   "@publishButtonSave": {"description": "Publish page: main button when Moment sync is OFF (Diary saved privately)"},
   "publishSyncTitle": "Also share to Moment",
   "@publishSyncTitle": {"description": "Publish page: Diary→Moment sync switch title"},
-  "publishSyncSub": "Saved in Diary and shown in Discovery.",
+  "publishSyncSub": "Saved in Diary and shown in Social.",
   "@publishSyncSub": {"description": "Publish page: sync switch subtitle (ON state)"},
   "publishSyncOffSub": "Only saved in your Diary — no one else sees it.",
   "@publishSyncOffSub": {"description": "Publish page: sync switch subtitle (OFF state)"},
-  "publishPublicHint": "Published publicly, shown in Discovery",
+  "publishPublicHint": "Published publicly, shown in Social",
   "@publishPublicHint": {"description": "Publish page: hint for Moment/Tips (always public)"},
   "mePostPrivateBadge": "Only you",
   "@mePostPrivateBadge": {"description": "My posts: badge on private (unsynced) Diary content"},

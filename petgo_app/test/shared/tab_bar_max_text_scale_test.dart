@@ -18,11 +18,19 @@ import 'package:tailtopia/shared/widgets/bottom_tab_bar.dart';
 /// 文字被省略号截断时它照样能找到。原先那条断言因此是空的 —— 实测印尼语 `Kesehatan`
 /// 在 411dp 默认字号下就已经显示成「Kesehata…」而测试全绿。改用 `didExceedMaxLines`
 /// 直接问渲染对象「你有没有被截断」，这也是 OQ-19 把印尼语标签定为 `Health` 的直接原因。
+///
+/// 📌 2026-08-04 用户决策：第 1 位 Tab 由 `Jelajah` / `Discovery` 改为 **`Sosial` / `Social`**。
+/// 起因是 `Jelajah`（7 字符）从 ×1.15 起被省略号截断，此前作为「已知取舍」接受了；实测发现
+/// 英文侧 `Discovery`（9 字符）在 ×1.3 下同样被截断，而**当时这条测试只跑 id locale，
+/// 英文侧的同一个缺陷一直没被看见**。因此本轮同时做两件事：
+///   1. 换成实测放得下的词（每格约 66px，6 字符是天花板；`Beranda` 7 字符同样不行）；
+///   2. 把断言从「允许放大字号下截断」收紧为「**两种语言 × 全部受支持档位都不许截断**」，
+///      并补上 en locale 覆盖 —— 缺失的覆盖面本身就是上次漏判的原因。
 void main() {
-  Widget bar(double scale) => MaterialApp(
+  Widget bar(double scale, Locale locale) => MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        locale: const Locale('id'), // 印尼语标签最长（Jelajah / Health）
+        locale: locale,
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(scale)),
           child: child!,
@@ -35,84 +43,66 @@ void main() {
   /// 411dp：Pixel 类机型的实际逻辑宽度（1080px / 420dpi），也是本项目模拟器的宽度。
   const Size referenceDevice = Size(411, 900);
 
-  const labels = ['Diary', 'Health', 'Jelajah', 'Saya'];
+  /// 两种语言的四个标签全列出来 —— 只测一种语言正是上次放跑 `Discovery` 的原因。
+  const labelsByLocale = <String, List<String>>{
+    'id': ['Diary', 'Health', 'Sosial', 'Saya'],
+    'en': ['Diary', 'Health', 'Social', 'Me'],
+  };
 
-  for (final scale in <double>[1.0, 1.15, 1.3]) {
-    testWidgets('字号 ×$scale 下底栏不溢出', (tester) async {
-      await tester.binding.setSurfaceSize(referenceDevice);
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+  for (final entry in labelsByLocale.entries) {
+    final locale = Locale(entry.key);
+    final labels = entry.value;
 
-      await tester.pumpWidget(bar(scale));
-      await tester.pumpAndSettle();
+    for (final scale in <double>[1.0, 1.15, 1.3]) {
+      testWidgets('[${entry.key}] 字号 ×$scale 下底栏不溢出', (tester) async {
+        await tester.binding.setSurfaceSize(referenceDevice);
+        addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      // RenderFlex 溢出会以 FlutterError 形式抛出，被测试框架捕获 → 这里断言没有。
-      expect(tester.takeException(), isNull);
-    });
+        await tester.pumpWidget(bar(scale, locale));
+        await tester.pumpAndSettle();
 
-    testWidgets('字号 ×$scale 下四个标签一个都不少', (tester) async {
-      await tester.binding.setSurfaceSize(referenceDevice);
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+        // RenderFlex 溢出会以 FlutterError 形式抛出，被测试框架捕获 → 这里断言没有。
+        expect(tester.takeException(), isNull);
+      });
 
-      await tester.pumpWidget(bar(scale));
-      await tester.pumpAndSettle();
+      testWidgets('[${entry.key}] 字号 ×$scale 下四个标签一个都不少', (tester) async {
+        await tester.binding.setSurfaceSize(referenceDevice);
+        addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      for (final label in labels) {
-        expect(
-          find.descendant(of: find.byType(BottomTabBar), matching: find.text(label)),
-          findsOneWidget,
-          reason: '标签 $label 不该消失 —— 「把文字删掉」不是修溢出的正确姿势',
-        );
-      }
-    });
+        await tester.pumpWidget(bar(scale, locale));
+        await tester.pumpAndSettle();
+
+        for (final label in labels) {
+          expect(
+            find.descendant(of: find.byType(BottomTabBar), matching: find.text(label)),
+            findsOneWidget,
+            reason: '标签 $label 不该消失 —— 「把文字删掉」不是修溢出的正确姿势',
+          );
+        }
+      });
+
+      testWidgets('[${entry.key}] 字号 ×$scale 下没有一个标签被省略号截断', (tester) async {
+        // **这条是硬底线**：1.3 是 NFR-13 明确支持的档位，不是越界输入，所以「放大字号下
+        // 允许截断」不再被接受。任一标签在这里变红，只有两条出路：换更短的词（`Sosial` /
+        // `Social` 就是这么定的），或者给标签区更多横向空间 —— 不许再退回「已知取舍」。
+        await tester.binding.setSurfaceSize(referenceDevice);
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        await tester.pumpWidget(bar(scale, locale));
+        await tester.pumpAndSettle();
+
+        for (final label in labels) {
+          final finder = find.descendant(
+            of: find.byType(BottomTabBar),
+            matching: find.text(label),
+          );
+          expect(
+            tester.renderObject<RenderParagraph>(finder).didExceedMaxLines,
+            isFalse,
+            reason: '标签 $label（${entry.key}）在 ×$scale 下被省略号截断了',
+          );
+        }
+      });
+    }
   }
-
-  testWidgets('默认字号下四个标签都完整显示，没有一个被省略号截断', (tester) async {
-    // **默认字号是底线**：绝大多数用户就在这一档，标签被切在这里是产品缺陷而不是取舍。
-    // 这条断言是 OQ-19 把印尼语第 2 位 Tab 定为 `Health`（而非 `Kesehatan`）的直接依据 ——
-    // `Kesehatan` 在 411dp × 1.0 下就已经显示成「Kesehata…」。
-    await tester.binding.setSurfaceSize(referenceDevice);
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-
-    await tester.pumpWidget(bar(1.0));
-    await tester.pumpAndSettle();
-
-    for (final label in labels) {
-      final finder = find.descendant(
-        of: find.byType(BottomTabBar),
-        matching: find.text(label),
-      );
-      expect(
-        tester.renderObject<RenderParagraph>(finder).didExceedMaxLines,
-        isFalse,
-        reason: '标签 $label 在默认字号下被省略号截断了 —— '
-            '要么缩短文案（OQ-19 就是这么定的），要么给标签更多横向空间',
-      );
-    }
-  });
-
-  testWidgets('放大字号时允许标签截断，但必须是「截断」而不是「溢出」', (tester) async {
-    // 📌 已知取舍（code-review 2026-08-04）：底栏固定 66px 高、每格标签只有约 66px 宽，
-    // `Jelajah` 在 ×1.15 起会被省略号截断（`Health`/`Diary`/`Saya` 三档都放得下）。
-    // 之所以接受：图标承担辨识、标签是辅助信息，而另一条路（让栏体随字号变高）会破坏设计稿。
-    // 若要在放大字号下也完整显示，需产品先定更短的 Discovery 文案 —— 与 OQ-19 同类问题，
-    // 已记入 story 6-1 的 Review Findings 待定项。这条测试锁住的是「不许再回到溢出」。
-    await tester.binding.setSurfaceSize(referenceDevice);
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-
-    await tester.pumpWidget(bar(1.3));
-    await tester.pumpAndSettle();
-
-    expect(tester.takeException(), isNull, reason: '放大字号下也不许出现 RenderFlex 溢出');
-    for (final label in const ['Diary', 'Health', 'Saya']) {
-      final finder = find.descendant(
-        of: find.byType(BottomTabBar),
-        matching: find.text(label),
-      );
-      expect(
-        tester.renderObject<RenderParagraph>(finder).didExceedMaxLines,
-        isFalse,
-        reason: '$label 连放大字号都放得下，若这里变红说明标签区被谁改窄了',
-      );
-    }
-  });
 }
