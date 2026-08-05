@@ -3,6 +3,23 @@
 > 本文件随仓库 commit，**云端 session（claude.ai/code）clone 后会自动加载**。本地 / 云端 dev agent 都以此为准。
 > 与用户沟通用**中文**。
 
+## 🚧 staging 部署纪律（stag 分支专属小节，勿合回其它分支）
+
+生产与 staging 同在一台服务器（62.146.239.156），**本会话只允许操作 staging 资源**，`.claude/hooks/stag-guard.py` 会强制拦截生产命令。边界如下：
+
+| | staging（✅ 只能碰这些） | 生产（⛔ 一律禁止） |
+|---|---|---|
+| 容器 | `petgo-server-stag` | `petgo-server`、`petgo-postgres`/`redis` 的停删重启 |
+| 端口 | `127.0.0.1:8085` / `https://api-stag.tailtopia.id` | `8084` / `https://api.tailtopia.id` |
+| 数据库 | `petgo_stag` | `petgo` |
+| Redis | 逻辑库 `-n 3` | DB2；FLUSH 类命令全禁 |
+| env | `~/.env.petgo-stag` | `~/.env.petgo` |
+| 部署脚本 | `scripts/deploy-backend-stag.sh` | `scripts/deploy-backend.sh` **绝对禁止** |
+
+- 部署验证流程：stag 分支 → `./scripts/deploy-backend-stag.sh` → `curl -s https://api-stag.tailtopia.id/actuator/health` 应为 UP。
+- 分支纪律：**只在 stag 分支工作**；禁止 push main、禁止 force push、禁止 `ALLOW_BRANCH=1`。
+- 被 stag-guard 拦截时：不要想办法绕过（换写法/转义/写脚本间接执行都不行），改用 staging 等价物；确有需要联系 Dai。
+
 ## 这是什么项目
 
 **双产物 monorepo**，两套工程并列在仓库根下：
