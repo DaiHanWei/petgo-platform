@@ -44,6 +44,12 @@ class AppColors {
   static const Color sky = Color(0xFF845EC9); // 问诊强调 → 统一紫
   static const Color grape = Color(0xFF9E83DA); // 群聊 → violet-400
   static const Color coralTint = Color(0xFFFDE7EB); // 红浅底
+
+  /// 生理期（月经）记录专用红（V1.1.2 · FR-84 · OQ-11B 定稿 2026-08-04）。
+  ///
+  /// 刻意选**深紫红**而非 [coral]：coral 已被「危险 / 点赞 / 疫苗 / 问诊」占满，
+  /// 生理期图标若同色，用户在日历格子里分不出「今天是生理期记录」还是「今天有健康告警」。
+  static const Color menstruationRed = Color(0xFFB03060);
   static const Color healthEventText = Color(0xFFC4263C); // 健康事件深红文字（原型 hentry #C4263C）
   static const Color goldTint = Color(0xFFFEF3DE); // 黄浅底（badge tips）
   static const Color momenBadgeBg = Color(0xFFE7F8F0); // Momen 绿浅底（原型 b-happy）

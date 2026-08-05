@@ -23,6 +23,7 @@ class FeedItem {
     this.body,
     this.firstImageUrl,
     required this.createdAt,
+    this.visibility = kVisibilityPublic,
   });
 
   final int id;
@@ -38,6 +39,16 @@ class FeedItem {
 
   /// 正文全文（前端截前 2 行）；可空。
   final String? body;
+
+  /// 可见范围线格式（V1.1.2 Story 4.1 · FR-83）：`PUBLIC` / `PRIVATE`。
+  ///
+  /// Feed 里恒为 `PUBLIC`（后端按 `visibility = PUBLIC` 过滤平台分发）；
+  /// **「我的发布」复用同一 DTO**，私密内容会带 `PRIVATE` —— 我的页据此打「仅自己可见」标识
+  /// （Story 4.2）。缺省按 `PUBLIC`（老后端不下发该字段时不至于把内容误标成私密）。
+  final String visibility;
+
+  /// 是否仅作者自己可见。
+  bool get isPrivate => visibility == kVisibilityPrivate;
 
   /// 首图（无图 → 纯文字卡）。
   final String? firstImageUrl;
@@ -56,8 +67,13 @@ class FeedItem {
         body: json['body'] as String?,
         firstImageUrl: json['firstImageUrl'] as String?,
         createdAt: DateTime.parse(json['createdAt'] as String),
+        visibility: (json['visibility'] ?? kVisibilityPublic) as String,
       );
 }
+
+/// 可见范围线格式常量（与后端 `ContentVisibility` 同名同值；不新建枚举以免与既有 `type` 字符串风格分叉）。
+const String kVisibilityPublic = 'PUBLIC';
+const String kVisibilityPrivate = 'PRIVATE';
 
 /// Feed 游标分页（对应后端 `{items, nextCursor, hasMore}`）。
 class FeedPage {

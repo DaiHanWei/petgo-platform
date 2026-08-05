@@ -12,6 +12,7 @@ import '../../../shared/widgets/app_image.dart';
 import '../data/milestone_repository.dart';
 import '../data/newbie_task_repository.dart';
 import '../domain/milestone.dart';
+import '../domain/health_milestones.dart';
 import '../domain/milestone_checkin_prompt_copy.dart';
 import '../domain/milestone_share.dart';
 import '../domain/milestone_titles.dart';
@@ -303,8 +304,11 @@ class _NewbieCardState extends ConsumerState<_NewbieCard> {
                         style: const TextStyle(
                             fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink)),
                     const SizedBox(height: 4),
+                    // 「不计入上面的里程碑进度」那句已删（2026-08-04 用户要求）：它与事实相反 ——
+                    // 6 个新手任务里有 5 个本身就是里程碑，做完就会让上面的进度条动，
+                    // 这句话只会让人以为自己白做了。
                     Text(
-                      '${l10n.newbieCardProgress(tasks.completedCount, tasks.total)} · ${l10n.newbieCardSubtitle}',
+                      l10n.newbieCardProgress(tasks.completedCount, tasks.total),
                       style: const TextStyle(fontSize: 12, height: 1.4, color: AppColors.muted),
                     ),
                   ],
@@ -553,14 +557,21 @@ void _showBadgeSheet(BuildContext context, WidgetRef ref, MilestoneItem item) {
       // FR-43 文案：打卡类→提问 Header + 描述 Body；系统/推送类→仅说明（header 空）。
       // 未配文案的 code（如生日 *-L1）→ body 空 → 回退到通用 hint。
       final copy = localizedMilestoneCheckinPrompt(item.code, locale, petName);
+      // ⚠️ Story 5.2（FR-86）：健康类四条（M3/M4/M5/M9）取消打卡路径、只能自动点亮 ——
+      // 即使后端历史数据里 triggerType 仍是 USER_CHECKIN，也不渲染打卡入口、并改用自动点亮说明。
+      final autoOnlyHealth = isAutoOnlyHealthMilestone(item.code);
       final fallbackHint = switch (item.trigger) {
         MilestoneTrigger.systemAuto => l10n.milestoneHintSystemAuto,
         MilestoneTrigger.pushPublish => l10n.milestoneHintPushPublish,
         MilestoneTrigger.userCheckin => l10n.milestoneHintCheckin,
       };
-      final body = copy.body.isNotEmpty ? copy.body : fallbackHint;
+      // 健康类四条的打卡引导文案已下线，改为说明「怎样才会自动点亮」。
+      final body = autoOnlyHealth
+          ? l10n.milestoneHintAutoHealth
+          : (copy.body.isNotEmpty ? copy.body : fallbackHint);
       // 仅「用户打卡」且未完成才出两入口；系统/推送类、或已完成 → 只读说明。
-      final showCheckinActions = item.trigger.isCheckin && !completed;
+      // 后端另有显式拒绝护栏（NFR-11），前端隐藏只是其中一半。
+      final showCheckinActions = item.trigger.isCheckin && !completed && !autoOnlyHealth;
       // CTA 文案按级别取（FR-43）；S/M 之外（不会出现在打卡类）兜底用通用文案。
       final (checkedInLabel, goPublishLabel) = switch (item.level) {
         MilestoneLevel.m => (l10n.milestoneActionCheckedInM, l10n.milestoneActionGoPublishM),

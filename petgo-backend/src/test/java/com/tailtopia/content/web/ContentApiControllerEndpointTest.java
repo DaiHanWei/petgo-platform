@@ -184,7 +184,11 @@ class ContentApiControllerEndpointTest extends ApiIntegrationTest {
     void futureEventDateReturns422() throws Exception {
         User author = newUser();
         long pet = createPetFor(author);
-        String future = java.time.LocalDate.now(java.time.ZoneOffset.UTC).plusDays(1).toString();
+        // ⚠️ 必须按**业务时区 WIB** 算「明天」：生产校验用 Asia/Jakarta（UTC+7，prod 事故 2026-07-20
+        // 的修复），若这里用 UTC，在 UTC 17:00~24:00（= WIB 次日 00:00~07:00）这段时间里
+        // 「UTC 的明天」正好是「WIB 的今天」，请求会被合法接受（201）而非 422 —— 本条测试会周期性变红。
+        String future = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Jakarta"))
+                .plusDays(1).toString();
         String body = "{\"type\":\"GROWTH_MOMENT\",\"petId\":" + pet
                 + ",\"text\":\"hi\",\"eventDate\":\"" + future + "\"}";
 

@@ -32,7 +32,6 @@ public class FeedService {
 
     /** Feed 每批条数（FR-17）。 */
     public static final int PAGE_SIZE = 20;
-    private static final String STATUS_PLAN_TO_ADOPT = "PLANNING";
 
     private final ContentPostRepository posts;
     private final AccountQueryService accountQueryService;
@@ -58,14 +57,15 @@ public class FeedService {
     /**
      * 读取一批 Feed。
      *
-     * @param petStatus 调用者宠物状态（HAS_PET/PLANNING/ENTHUSIAST）；null = 游客（视作全显）
+     * @param petStatus 调用者宠物状态。⚠️ **Story 4.1 起不再参与过滤**（FR-83：V1.0.0「状态 B 用户
+     *                  Feed 不显示成长日历」整条废止，公开内容对所有用户一视同仁）。形参保留仅为
+     *                  兼容调用点，不读取；下一次改这条链路时可一并删除。
      * @param category  分类 Tab（ALL/DAILY/GROWTH_MOMENT/KNOWLEDGE）
      * @param cursor    上一批末尾游标 token；null = 首批
      * @param viewerId  当前登录用户 id（游客为 null）；非空则排除「本人已举报的帖」（内容审核 cm-6 §5.4）
      */
     @Transactional(readOnly = true)
     public FeedPageResponse loadFeed(String petStatus, String category, String cursor, Long viewerId) {
-        boolean excludeGrowth = STATUS_PLAN_TO_ADOPT.equals(petStatus);
         FeedCategory cat = FeedCategory.parse(category);
         ContentType type = cat.toContentType();
         boolean requirePet = cat.requiresPet();
@@ -73,8 +73,10 @@ public class FeedService {
         FeedCursor decoded = (cursor == null || cursor.isBlank()) ? null : FeedCursor.decode(cursor);
 
         // 多取一条以判定 hasMore（不漏不重）。
+        // 过滤口径（AD-4 Rule 2）：**一切消费公开内容的查询统一按 visibility = PUBLIC**，
+        // 不按内容类型分支。过滤在 findFeed 内部固化，避免调用方漏传。
         List<ContentPost> rows = posts.findFeed(
-                excludeGrowth, type, requirePet,
+                type, requirePet,
                 viewerId != null, viewerId,
                 decoded != null,
                 decoded == null ? null : decoded.createdAt(),

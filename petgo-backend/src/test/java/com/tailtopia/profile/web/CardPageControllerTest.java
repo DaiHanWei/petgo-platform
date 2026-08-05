@@ -56,7 +56,7 @@ class CardPageControllerTest {
         when(accountQueryService.findAuthorViews(any()))
                 .thenReturn(Map.of(7L, new AuthorView(7L, "Aurel", null, false)));
         when(timelineService.getStats(7L))
-                .thenReturn(new ArchiveStatsResponse(happy, consult, milestoneCompleted, 30));
+                .thenReturn(new ArchiveStatsResponse(happy, consult, milestoneCompleted, 30, 0));
     }
 
     @Test

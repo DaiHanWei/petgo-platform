@@ -27,6 +27,7 @@ class _ThrowRepo implements ContentRepository {
     List<String> imageUrls = const [],
     DateTime? eventDate,
     required String idempotencyKey,
+    bool syncToMoment = true,
   }) async {
     final ro = RequestOptions(path: '/api/v1/content-posts');
     throw DioException(
@@ -51,6 +52,7 @@ class _OkRepo implements ContentRepository {
     List<String> imageUrls = const [],
     DateTime? eventDate,
     required String idempotencyKey,
+    bool syncToMoment = true,
   }) async =>
       1;
 }

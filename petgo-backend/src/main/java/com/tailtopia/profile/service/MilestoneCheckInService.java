@@ -4,6 +4,7 @@ import com.tailtopia.content.service.ContentService;
 import com.tailtopia.content.service.GrowthMomentView;
 import com.tailtopia.profile.domain.MilestoneCompletionSource;
 import com.tailtopia.profile.domain.MilestoneTriggerType;
+import com.tailtopia.profile.domain.HealthMilestones;
 import com.tailtopia.profile.domain.PetMilestone;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.dto.MilestoneCheckinCandidateResponse;
@@ -64,6 +65,13 @@ public class MilestoneCheckInService {
      */
     @Transactional
     public MilestoneItemResponse checkIn(long ownerId, String code, long contentId) {
+        // ⚠️ 安全攸关护栏（Story 5.2 · NFR-11）：健康类里程碑（M3 疫苗 / M4 驱虫 / M5 第一次看兽医 /
+        // M9 绝育）**取消打卡路径，只能自动点亮**（FR-86，2026-07-31 产品拍板）。
+        // 后端必须**显式拒绝**——只在前端隐藏按钮不合格：绕过 UI 直接调接口仍能打卡就等于规则没落地。
+        // 集合定义在 HealthMilestones（Story 5.1 抽出），此处引用，不另写一份。
+        if (HealthMilestones.isHealthMilestone(code)) {
+            throw AppException.validation("该里程碑只能由健康记录或兽医问诊自动点亮，不支持打卡");
+        }
         PetProfile pet = requireProfile(ownerId);
         PetMilestone milestone = milestones.findByPetProfileIdAndCode(pet.getId(), code)
                 .orElseThrow(() -> AppException.notFound("里程碑不存在"));

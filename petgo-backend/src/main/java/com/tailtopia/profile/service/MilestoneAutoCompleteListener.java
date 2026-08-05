@@ -4,6 +4,7 @@ import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.event.ContentCommentedEvent;
 import com.tailtopia.content.event.ContentLikedEvent;
 import com.tailtopia.content.event.ContentPublishedEvent;
+import com.tailtopia.consult.event.ConsultClosedEvent;
 import com.tailtopia.profile.domain.HealthRecordType;
 import com.tailtopia.profile.domain.MilestoneCompletionSource;
 import com.tailtopia.profile.event.CardSharedEvent;
@@ -88,12 +89,38 @@ public class MilestoneAutoCompleteListener {
         completion.maybeUnlockLulusPemulaForOwner(e.ownerId());
     }
 
+    /**
+     * 健康记录类型 → 里程碑后缀（FR-86 映射表，Story 5.1 补全 NEUTER）。
+     *
+     * <p>⚠️ 月经 / 自定义**刻意不映射任何里程碑**（PRD 明确：无对应节点），别顺手补上去。
+     * M5「第一次看兽医」不在此表 —— 它由**兽医咨询结束**触发（见 {@link #onConsultClosed}），
+     * 不是录健康记录触发。
+     */
     private static String suffixFor(HealthRecordType type) {
         return switch (type) {
             case VACCINE -> "M3";
             case DEWORM -> "M4";
-            case MENSTRUATION, NEUTER, CUSTOM -> null;
+            case NEUTER -> "M9"; // Story 5.1 新增（2026-07-29 产品确认）
+            case MENSTRUATION, CUSTOM -> null;
         };
+    }
+
+    /**
+     * M5「第一次看兽医」：**真人兽医咨询结束**即自动完成（Story 5.1 · AC2）。
+     *
+     * <p>⚠️ <b>不需要、也不要加「排除 AI 问诊」的条件</b>：{@code ConsultClosedEvent} 只由
+     * consult 模块的**真人兽医会话**发布，AI 分诊走 triage 模块、不发这个事件 —— 模块隔离已经
+     * 天然满足「AI 问诊不解锁 M5」（OQ-17）。加一层 AI 判断只是冗余分支，反而让人以为可能漏。
+     *
+     * <p>与 S4「第一次保存兽医问诊结论」**分属两个独立订阅，不合并**：S4 订 {@code HealthArchivedEvent}
+     * （用户可跳过存档），M5 订本事件（只要看过兽医就算）。合并会让「跳过存档」把 M5 一起吃掉。
+     *
+     * <p>幂等：{@code completeForOwner} 依赖 {@code milestone_completions} 的唯一约束，重复关闭安全。
+     */
+    @Async
+    @TransactionalEventListener
+    public void onConsultClosed(ConsultClosedEvent e) {
+        completion.completeForOwner(e.userId(), "M5", MilestoneCompletionSource.SYSTEM_AUTO);
     }
 
     @Async

@@ -1,0 +1,169 @@
+# generated: 2026-07-31
+# last_updated: 2026-08-05
+# project: TailTopia V1.1.2
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts/v1.1.2
+# source_epics: {project-root}/_bmad-output/planning-artifacts/epics-v1.1.2.md (7 Epic / 19 Story)
+#               2026-08-04 追加 Epic 7 Splash（FR-87~91 + FR-78 落地矩阵变更）
+# architecture: {project-root}/_bmad-output/planning-artifacts/architecture-v1.1.2-delta.md (17 AD, 权威 —— AD-17 于 2026-08-04 由 Story 7-4 补入)
+#               ✅ 2026-08-04 由 Story 7-4 的 AC8 完成回写：AD-8 第 2 条矩阵已订正为
+#                  「只有已建档者落 Diary，游客例外」；新增 AD-17 记录 FR-91 迟到纠正口径
+#                  （含两条安全红线与"不得把 .timeout 改成可取消"的反向约束）。
+#
+# NOTE: 本文件是 V1.1.2 增量 sprint 跟踪，与 V1.0 的 sprint-status.yaml、
+#       V1.1 的 sprint-status-v1.1.yaml 并存，均不覆盖。
+#       story 文件另放子目录 v1.1.2/，避免与前两版的 1-1/2-1 编号混淆。
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:   backlog -> in-progress -> done
+# Story Status:  backlog -> ready-for-dev -> in-progress -> review -> done
+# Retrospective: optional <-> done
+# Action Item:   open -> in-progress -> done
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic 首个 story 创建(create-story)时自动 -> in-progress
+# - 每 story 三段推进：后端 -> 前端 -> 联调（CLAUDE.md 纪律）
+# - 每条 AC 已标 L0(静态) / L1(集成) / L2(端到端) 层级
+# - 云端 headless 只跑到 L0 绿灯；L1/L2 留本地，在 Completion Notes 标注
+# - Dev 完成后转 review，再跑 code-review（建议新开 context）
+#
+# ===== 依赖链（全后向，无前向依赖） =====
+# E1 Tab 顺序 -> E2 Diary 门面（E2 需 E1 的 Tab 重排落位）
+# E2 -> E3（E3 复用 E2 Story 2-2 建立的五类条目渲染组件）
+# E4 内容发布模型 / E5 里程碑：与 E1-E3 无依赖，可全程并行
+# E6 埋点：依赖全部功能落地，排最后（AD-5 用户决定）
+# E7 Splash（2026-08-04 追加）：与 E1-E6 双向无依赖，可完全并行。唯一交叉点是 FR-78
+#    落地矩阵变更，已明确划归 Story 7-4（Story 2-4 不再动那两行）——故 2-4 的 code-review
+#    可按旧矩阵放行，不必等 E7。
+#
+# ===== Epic 内部顺序（刻意为之，勿调换） =====
+# E2: 2-1 建分支入口 -> 2-2 游客态 -> 2-3 未建档态 -> 2-4 最后解门控
+#     反过来先解门控会出现「游客能进 Diary 但游客页还没做」的破损中间态
+# E3: 3-1 游标重构 -> 3-2 四源接入（游标不修好，接新源等于在坏地基上盖楼）
+# E5: 5-1 只补自动路径（两条并存、系统自洽）-> 5-2 取消打卡（前端隐藏 + 后端护栏同批）
+#     反过来会出现「打卡按钮可见但点了报错」
+# E7: 7-1 资产先行 -> 7-2 终态与动效同批 -> 7-3 时序 -> 7-4 分流收口
+#     7-1 在前：原生启动屏要用紧贴 bbox 的白 mark，且真机实测的系统图标尺寸是 7-2 首帧对齐的输入
+#            ⚠️ 7-1 已收窄为「只改 pubspec + 新增资产 + 重生成原生产物」，lib/ 一行不改；
+#               Flutter 首帧落位（50%/42%）已移入 7-2 —— 现状动效是「带猫形缺口的狗底标 +
+#               按绝对像素跑的猫」叠加，动首帧会让猫对不上缺口而弄坏旧动效
+#     7-2 必须同批：只改终态不改动效 = 旧动效以 mark 收尾、新终态无 mark，破损
+#     7-3 在 7-2 后：进度线(1860ms)/慢网(2290ms)阈值由 7-2 的 1.54s 动效时长推导
+#     7-4 最后：依赖 7-3 的 5s 兜底路径；且避开 2-4 的 code-review
+#
+# ===== 推荐执行顺序 =====
+# 风险前置：3-1（游标重构）是本版本最大技术风险且改的是现网缺陷，建议紧随 E1 提前做
+# 1) E1(1-1 -> 1-2)
+# 2) 3-1 提前插入
+# 3) E2(2-1 -> 2-2 -> 2-3 -> 2-4) / E3(3-2 -> 3-3 -> 3-4) / E4 / E5 并行铺开
+#    ⚠ 2-2 与 3-3 共用同一套条目渲染组件，排期上应相邻或指派同一人
+# 4) E6 收尾
+# 5) E7 Splash 可任意时点插入（双向无依赖）。7-1 收窄后**可放心独立上线**：白闪已消除、旧动效原样
+#    不受影响；唯一遗留是交接处 mark 有一次尺寸/位置跳变（原生 42%@50% vs Flutter 108px@43%），
+#    比白闪轻，由 7-2 消除。
+#
+# ===== FLYWAY 号 =====
+# 仓库现有迁移最高 V97，本版本从 V98 起单调顺延（占位 V<n>__，实际号按执行顺序分配 — 决策 E2）
+# 本版本唯一 schema 变更：4-1 给 content_posts 加 visibility 列 + 存量回填 PUBLIC
+# 其余 story 均无迁移
+#
+# ===== 安全攸关节点（AC 含硬约束，不可被无监管流程降级/跳过） =====
+# - 2-4  门控「默认受控 + 精确例外」，安全默认不可反转（NFR-3）
+# - 4-1  visibility 过滤只作用于他人可见视图，作者自视不过滤（NFR-4，写反即摧毁 FR-83）
+# - 4-1  迁移须在功能开关生效前完成，存量统一回填 PUBLIC（NFR-6）
+# - 5-2  后端须显式拒绝健康类打卡请求，仅前端隐藏按钮不合格（NFR-11）
+# - 3-1  跨页无丢失无重复的回归断言常驻，不得删除（NFR-1）
+# - 7-4  兽医角色隔离守卫（if auth.isVet）必须原样保留 —— 那是用户/兽医路由互斥的安全边界，
+#        FR-91 新增迟到纠正机制时不得以「统一处理」为名弱化或替换它（NFR-15 / 继承「安全规则只升不降」）
+# - 7-4  「不打扰已自行导航离开的用户」优先级高于「纠正到正确页」—— 把正在浏览的人拽走比落错页严重，
+#        两者冲突时以前者为准。判定须比对路径，不得用路由栈深度（NFR-15）
+#
+# ===== 开工前须闭合的开放问题 =====
+# - ~~OQ-18 手动设私密的 Diary 是否仍出现在主动分享的名片 H5~~ —— 已闭合（2026-08-03 产品拍板）。
+#   结论：**仍展示，H5 不按可见范围过滤**。同步开关约束的是「平台的自动分发」（Feed / 话题聚合 /
+#   公开位），不约束「用户自己按下分享键」—— H5 由作者主动生成并分享，属自主授权。
+#   工程口径三分法：作者自视→不过滤；平台自动分发→过滤；作者主动分享→不过滤（架构 delta AD-4 Rule 3）。
+#   已在 4-1/4-2 按此实现（见 4-1 备注的查询源文本级回归防线）。全文见 PRD §4 OQ-18。
+# - OQ-19 第2位 Tab 显示文案取 Health 还是 Kesehatan —— 不阻塞，先用 Health 占位
+# - OQ-1  印尼语文案 + Milo 9 张配图 —— 阻塞 2-2 最终交付，不阻塞开发（占位实现）
+# - OQ-11B 月经图标红色色值 —— 不阻塞 3-4，先用 coral 占位
+# --- Epic 7 Splash（2026-08-04 新增，全部不阻塞开发）---
+# - OQ-20 Android 12+ 系统启动屏图标的实际渲染尺寸 —— 不阻塞开发（先按屏宽 42%），
+#         7-1 负责真机量出实测值并记录（其 AC5）；7-2 负责把 Flutter 首帧对齐该值（其 AC0）。
+#         不量则 7-2 无从对齐，交接那帧会残留尺寸跳变
+# - OQ-21 Fraunces WONK 轴字形手感 —— 不阻塞；**Android 侧 2026-08-04 已确认字形正常**（模拟器 API 36），
+#         iOS 侧待有设备时复核；过头可退 WONK 0（字体已保留该轴可变，改一个数字即可）
+# - OQ-22 慢网提示印尼语文案（设计侧占位）—— 不阻塞，出稿后仅替换 ARB
+# - ~~OQ-23 慢网 B/C 落错页且不自愈~~ —— 已闭合（2026-08-04 拍板）：由 FR-91 迟到纠正解决，不新增重试屏
+# - OQ-24 A·未建档改落 Discovery 后的建档转化率 —— 上线后观测；需埋点侧准备
+#         user_state=owner_without_profile 的建档完成漏斗口径
+
+generated: 2026-07-31
+last_updated: 2026-08-04
+project: TailTopia V1.1.2
+project_key: NOKEY
+tracking_system: file-system
+story_location: '{project-root}/_bmad-output/implementation-artifacts/v1.1.2'
+
+development_status:
+  # ===== Epic 1: 底部 Tab 换新顺序与萌化激活态 =====
+  # FR-78(顺序部分) / FR-78A。无后端改动。单独上线自洽（门控与落地页此时不动）。
+  epic-1: in-progress
+  1-1-底部-tab-顺序与底层索引重排: review        # 含 AD-3 的 5 处索引寻址调用点硬性核对清单；风险在漏改不在代码量
+  1-2-tab-激活态萌化方案a: review                 # 视觉稿 T3 已定「方案A」；含回改 icon-system.md，闭合 OQ-13
+  epic-1-retrospective: optional
+
+  # ===== Epic 2: Diary 成为所有人的门面 =====
+  # FR-78(门控/落地页) / FR-79 / FR-80 / FR-81。无后端改动。story 顺序刻意如此，勿调换。
+  epic-2: in-progress   # 2-1~2-4 全部 review，待 code-review 后转 done
+  2-1-diary-页状态分支单一入口: review                    # AD-15 基座已立：四态枚举 + 单一判定入口 + 穷尽 switch；2-2/2-3 往里填分支即可
+  2-2-游客引导态与五类条目渲染组件: review                # 五类渲染组件 + 页头共用件已立；itemType 词表已定：HAPPY_MOMENT / HAPPY_MOMENT_MILESTONE / MILESTONE_BANNER / HEALTH_RECORD / ID_CARD_ISSUED（3-2 须采纳）；素材为 demo_diary_* 占位
+  2-3-已登录未建档用户的建档引导态: review                # FR-0H 已整条废止（组件/状态机/prefs 键/文案/测试全删，含源码级下线断言）；看板侧无遗留指标（该提示条从无埋点上报）
+  2-4-登录门控解除与落地-tab-矩阵: review                 # 两处门控已同改（深链精确例外 {/profile} + Tab 白名单）；落地矩阵走 AppUserState 六态（6-1 埋点 user_state 同源）；游客端到端已收口
+  epic-2-retrospective: optional
+
+  # ===== Epic 3: 成长档案整合成一本完整的册子 =====
+  # FR-82 / FR-84。本版本后端最重的一块，约等于其余五个 Epic 之和。
+  epic-3: in-progress
+  3-1-时间线统一游标锚点重构: review              # 修现网缺陷，非新功能；须配「补记旧日期日记跨页无丢失无重复」回归断言
+  3-2-时间线四源接入与五类分类下发: review                # 五源接入 + 纯函数分类器（零依赖=不可能落库）；已采纳 2-2 词表；真库逐类核对留与 3-3 联调同批
+  3-3-时间线前端五类渲染: review                          # 已复用 2-2 组件（未另写）；两处遗留 2026-08-04 已闭合：类④ ?focus= 定位高亮 + 时间线游标分页（含触底重试）。⚠️「定位到对应条目」仅类④ 支持，类②角标/类③ 跳里程碑列表顶部（code-review D3 拍板不扩展，AC5 措辞已改准确）
+  3-4-日历联动结构化健康记录与当天详情排序: review          # 已完成（含纯文字日记错显🏥修复）；OQ-11B 已定稿 #B03060（AppColors.menstruationRed）
+  epic-3-retrospective: optional
+
+  # ===== Epic 4: 日记可以只留给自己 =====
+  # FR-83。本版本唯一 schema 变更所在。与 E1-E3 无依赖，可并行。
+  epic-4: in-progress
+  4-1-内容可见范围字段数据迁移与-feed-取数改造: review          # V98 已应用真库；作者自视 + 名片 H5 不过滤有查询源文本级回归防线
+  4-2-发布页同步开关与我的页私密标识: review              # 含 Bagikan→Simpan 文案联动；顺带补上创建请求接受 visibility（4-1 漏）
+  epic-4-retrospective: optional
+
+  # ===== Epic 5: 健康里程碑改为只能自动点亮 =====
+  # FR-86。完全独立，可最先做也可最后做。无 schema 变更。
+  epic-5: in-progress
+  5-1-健康里程碑自动达成路径补全: review                  # NEUTER→M9 + ConsultClosedEvent→M5；HealthMilestones 为集合单一定义（5-2/6-1 引用）
+  5-2-取消健康类打卡路径与庆祝合并: review                # 前端隐藏 + 后端触库前拒绝护栏已同批交付；庆祝按最高级别合并
+  epic-5-retrospective: optional
+
+  # ===== Epic 6: 改版效果可度量 =====
+  # PRD §3 埋点。依赖全部功能落地，排最后。
+  epic-6: in-progress
+  6-1-v112-埋点收尾: in-progress                         # T-1~T-12 全部上报（含后端里程碑，未引 SDK）；AC5 线上校验口径成立；文档双份（repo §8 + 产品空间 埋点清单v112.md）。code-review 2026-08-04：5决策/27待修全部落地（回归 后端1515+前端651 绿），转 in-progress 因两件待人：① ~~Jelajah 放大字号仍截断需产品定文案~~ 已闭合(2026-08-04 用户拍板 第1位Tab→Sosial/Social；同时查出 en 侧 Discovery 也截断——旧测试只跑 id locale；测试收紧为两语言×全档位不许截断，用例 651→661) ② AC1 的 PostHog 后台实测(F0)+J1/J2 属 L1 待本地
+  epic-6-retrospective: optional
+
+  # ===== Epic 7: 冷启动第一眼就是品牌，而不是一次白闪（2026-08-04 追加） =====
+  # FR-87~91 + FR-78 落地矩阵变更。零 schema / 零后端改动 / 零新依赖。
+  # 视觉稿：planning-artifacts/v1.1.2/ui-splash-v1.1.2.html（14 屏 / 4 泳道）
+  # ⚠️ 内部顺序刻意如此，勿调换：7-1 资产先行（后两条都在它的资产上做）
+  #    -> 7-2 终态与动效必须同批（只改终态会出现「旧动效以 mark 收尾、新终态无 mark」的破损中间态）
+  #    -> 7-3 依赖 7-2 的 1.54s 时长才能定进度线/慢网阈值
+  #    -> 7-4 排最后，避开 Story 2-4 的 code-review
+  epic-7: in-progress
+  7-1-品牌资产重导与原生启动屏无缝交接: in-progress           # 6 AC 全部满足。L0 全绿（analyze 0 / test 651 / apk ok），lib/ 零改动。B-1/B-2/B-3 已修：补 color_dark 后生成器才改写 night 变体（起草期推断被证实）；mdpi 200→288。资产改从设计稿 ui-splash-v1.1.2.html 提取成品（母文件 Layer_7 是紫色带白镂空 + 含 fill:none 切片框）。✅ AC4/AC5 已在模拟器(Android 16/API36)验证：浅色+深色冷启动均无白闪；系统图标实测可视 180dp = 屏宽 43.70%、中心固定 50%。→ 7-2 AC0 首帧对齐取设计稿的 42% 即可（实测 43.7%，差值在细梢测量误差内；已排除裁切）。⚠️ 遗留：iOS 固定 192pt 与 Android 180dp 差 6.7%，V1 不上 iOS 故待 iOS 上架前处理。建议 7-2 写死 42% 前在真机抽查一次（OEM 差异） 🐛2026-08-04 用户实机核对发现并修复：wordmark_brand.svg 初版误取设计稿 B2 动效中间帧（后 5 条字母 opacity:0）→ 只画出「Tail」；已改从 B3 终态提取，墨迹比 1.560→3.143 验证通过。mark 无此问题。⚠️ 7-2 从稿里取资产务必挑终态实例并检查 opacity 内联样式 本轮修：PRD OQ-20 已回写实测值(180dp/43.70%/中心50%)；Android<12 的 NormalTheme 窗口底色改品牌紫(白闪残留形态，⏳需 A11 及以下真机验)。 🔎code-review 2026-08-04（靶子 07c70b9b..HEAD）：5决策/31待修**全部落地**，回归 analyze 0 / 前端 701 / 后端 1515 绿。转 in-progress，卡 L2 真机 + 3 条新待办；完整台账见 7-4 的 Review Findings。
+  7-2-splash视觉与入场动效整体重做: in-progress                # AC0~AC7/AC9 已满足，AC8 部分（Android 已验/iOS 本机无设备）。L0 全绿（analyze 0 / test 659 / apk ok）。旧 4320ms 猫跑屏动效整段删除；新 B1/B2/B3 三拍 1540ms；终态无 mark；尺寸相对屏宽；移除版本号与常驻 spinner；reduce-motion 真正停光晕。模拟器实测终态内容宽 = 屏宽 59.9%（目标 60%）✅。🐛 修真机空屏缺陷：_markHandoff 终态返回非定位子元素致 Stack 塌成 0×0、兄弟元素全消失；改为恒返回 Positioned + opacity 0，补回归守卫测试（已验红-绿）。教训：Stack 内终态隐藏用 opacity 勿换节点类型；守卫测试必须 pump 越过 animatedTotal。🔤 字体：设计稿内联子集仅 35 码位（只够印尼语），用户拍板联网取 Google Fonts 完整版 Fraunces（OFL-1.1，许可证已入库），woff2→TTF，子集 98 码位/38KB，三条文案全覆盖含 7-3 慢网提示。轴：wght+opsz 烘死、SOFT+WONK 留可变（121→38KB 且保住 OQ-21 退 WONK 0 的余地）。缺陷 B-9 已闭合（删 app_id.arb 硬编码 \n）。⏳ 待人工：T9 交接那 320ms 与 B1/B2 中间帧截图抓不到需肉眼看；T11 reduce-motion 真机；T10 的 iOS 侧（OQ-21 仍开放） 本轮修：🔴mark 居中用错宽/高致首帧高 15dp(交接跳位)已修+双向验证；首帧宽度改固定192与原生对齐(决策D2)；markWidthAt 恒真断言已换真测量；字标资产异常改为整块兜底(原先整场无品牌名)；File List 订正——mark_dog/mark_cat **仍被登录页引用不可删**。 🔎code-review 2026-08-04（靶子 07c70b9b..HEAD）：5决策/31待修**全部落地**，回归 analyze 0 / 前端 701 / 后端 1515 绿。转 in-progress，卡 L2 真机 + 3 条新待办；完整台账见 7-4 的 Review Findings。
+  7-3-启动期数据获取与等待反馈: in-progress                     # AC1~AC8 全部满足。L0 全绿（analyze 0 / test 665 / apk ok），设备端已确认 splash→分流链路通。/me 改并行（splash 新增 prepareSession，首帧即发起；ensureRestored 返回共享 future 故不会打两次）；超时 3s→5s；取消 splashLastShownDate 门控并把 prefs 的常量/getter/setter 清净（连带缺陷 B-7 首帧 300ms 空窗消失）；进度线 1860ms+、慢网提示 2290ms+（两语言 ARB，印尼语占位见 OQ-22），可读 2710ms；快网路径零指示零闪现。⚙️ 交棒口径：改为「动效停留走完 且（就绪 或 5s 兜底）」，使 5s 自启动起算而非自交棒起算（否则最坏 6720ms 与设计稿不符）；路由层的 await+timeout 保留不动，为深链绕过 splash 兜底；加 _completed 一次性标志（已断言 onComplete 仅调 1 次）。⚠️ AC7 核实时查出 AppsFlyerClient.initSdk 无超时（同样 runApp 前 await），已补 .timeout(3s)。📌 进度线在 reduce-motion 下仍动 —— 它是 loading 指示不是装饰（X-3/UX-DR29 明确保留），与 7-2 停光晕不矛盾。⏳ 待人工目视：T9 快网无闪现 / T10 弱网三时点 / T11 连播 / T12 首帧无空窗 —— 四条逻辑均已由 widget 测试覆盖，仅缺设备目视（debug 包启动慢 + 截图单帧 300ms 抓不到动效帧） 本轮修：🔴双5s串联致最坏停10s已修(等待预算收归 splash 单一时间源，路由层改读 isRestored)；🔴等待槽固定56px在360dp+印尼语+默认字号即溢出，已改 minHeight；opsz 12 确认不可达(决策D5接受偏差)；后台 timer 加生命周期门控。 🔎code-review 2026-08-04（靶子 07c70b9b..HEAD）：5决策/31待修**全部落地**，回归 analyze 0 / 前端 701 / 后端 1515 绿。转 in-progress，卡 L2 真机 + 3 条新待办；完整台账见 7-4 的 Review Findings。
+  7-4-落地分流收口与超时兜底迟到纠正: in-progress                 # AC1~AC6/AC8/AC9 已满足，AC7 弱网真机待人工（判定逻辑已由单测逐条锁定）。L0 全绿（analyze 0 / test 680 / apk ok）。① FR-78 矩阵变更：user_state.dart 的 ownerWithoutProfile '/profile'→'/home'（Story 2-4 的返工，2-4 无需再动）+ 注释改写 + 六态断言同改 + 新增「不持久化」锁定。② FR-91 迟到纠正：判定抽为纯函数 resolveLateCorrection() + 一次性额度 LateLandingCorrection，7 条约束逐条可断言。🔴 两条安全红线均有源码级锁定测试：兽医守卫 if(auth.isVet) 与正反向隔离、门控 !isLoggedIn && controlled 三者仍在（redirect 块一行未动，已 git diff 核实）；「用户已离开→不纠正」含'即便本该纠正也必须放手'的反例，判定入参根本没有栈深度信号（从签名上排除误用）。③ AC6 埋点：沿用既有 T-1 事件名（不新造，否则 6-1 看板口径断），兜底带 restore_timeout / 纠正带 corrected_from ⇒ OQ-23 闭合。④ AC8 收尾：AD-8 矩阵已回写 + 新增 AD-17（含「.timeout 不得改成可取消」的反向约束），三处「16 条 AD」引用同步为 17 条。Epic 7 架构缺口闭合。⏳ 待人工：T9~T13 弱网真机端到端（无弱网注入手段 + debug 包启动慢） 本轮修：🔴AC4 两条红线漏洞(切走又切回被拽走 / 弹层被强关)已修+双向验证；corrected_from 改送产品名；深链加位置守卫；两个新属性补进埋点文档与契约清单；3条 grep 式测试改行为断言。⚠️遗留：非根 Navigator 的弹层与页内推入仍未纳入免打扰判定(见 Open 项)。 🔎code-review 2026-08-04（靶子 07c70b9b..HEAD）：5决策/31待修**全部落地**，回归 analyze 0 / 前端 701 / 后端 1515 绿。转 in-progress，卡 L2 真机 + 3 条新待办；完整台账见 7-4 的 Review Findings。
+  epic-7-retrospective: optional

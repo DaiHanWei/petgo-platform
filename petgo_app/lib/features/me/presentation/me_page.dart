@@ -557,10 +557,10 @@ class _PetCard extends ConsumerWidget {
         .asData
         ?.value
         .happyMomentCount;
-    final age = computePetAge(pet.birthday);
     return [
       ?species,
-      if (pet.birthday != null) l10n.growthArchiveAge(age.years, age.months),
+      // 与档案页同一出口：不满 1 个月按天表达，避免「0th 0bln」。
+      ?formatPetAge(l10n, pet.birthday),
       // bug 20260722-355：GROWTH_MOMENT 帖即「Diary」（与档案头部/网格徽章同口径），
       // 文案由「moments」改「diary」，>99 显示「99+」，跟随实际记录数变化。
       if (momen != null) l10n.meDiaryCount(momen > 99 ? '99+' : '$momen'),
@@ -914,6 +914,36 @@ class _MyPostCard extends StatelessWidget {
                         PostCoverPlaceholder(type: post.type, emojiSize: 30),
                   )
                 : PostCoverPlaceholder(type: post.type, emojiSize: 30),
+            // 私密标识（Story 4.2 · AC8）：未同步到 Moment 的 Diary 打「仅自己可见」。
+            // 放右上角与左上角的类型 badge 分开，两者可同时出现（一条内容既是 Diary 又是私密）。
+            if (post.isPrivate)
+              Positioned(
+                top: 5,
+                right: 5,
+                child: Container(
+                  key: ValueKey('myPostPrivate_${post.id}'),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.ink.withValues(alpha: 0.62),
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.lock_outline, size: 9, color: AppColors.onAccent),
+                      const SizedBox(width: 2),
+                      Text(
+                        l10n.mePostPrivateBadge,
+                        style: const TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.onAccent,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             Positioned(
               top: 5,
               left: 5,

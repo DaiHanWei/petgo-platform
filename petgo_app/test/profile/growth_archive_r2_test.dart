@@ -94,8 +94,10 @@ void main() {
     await tester.pumpWidget(_wrapPage(page: page));
     await tester.pumpAndSettle();
     // 两条快乐时刻，但 🌟 仅出现一次（首条）。
-    expect(find.byKey(const ValueKey('firstHappyStar')), findsOneWidget);
-    expect(find.byKey(const ValueKey('happyMomentTile')), findsNWidgets(2));
+    // Story 3.3 起渲染改走共用组件 TimelineItemTile：debut 的 🌟 直接前缀在标题里
+    // （不再有独立的 firstHappyStar key），照片卡 key 为 timelineHappyCard。
+    expect(find.textContaining('🌟'), findsOneWidget);
+    expect(find.byKey(const ValueKey('timelineHappyCard')), findsNWidgets(2));
   });
 
   testWidgets('AC5: 视图切换到日历视图', (tester) async {

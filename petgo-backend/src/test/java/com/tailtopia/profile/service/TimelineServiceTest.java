@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.ObjectProvider;
 
-/** L0：聚合倒序 + 空健康源稳健 + 跨源合并 + 游标分页（AC1）。 */
+/** L0：聚合倒序 + 空健康源稳健 + 跨源合并 + 游标分页（AC1）。Story 3.1 起游标为统一复合锚点。 */
 class TimelineServiceTest {
 
     private ProfileService profileService;
@@ -37,6 +37,8 @@ class TimelineServiceTest {
     private com.tailtopia.profile.repository.HealthRecordRepository healthRecords;
     @SuppressWarnings("unchecked")
     private final ObjectProvider<HealthEventTimelineSource> healthProvider = Mockito.mock(ObjectProvider.class);
+    private com.tailtopia.profile.repository.MilestoneCompletionRepository milestoneCompletions;
+    private com.tailtopia.profile.repository.IdCardRepository idCards;
     private TimelineService service;
 
     @BeforeEach
@@ -47,7 +49,15 @@ class TimelineServiceTest {
         healthRecords = Mockito.mock(com.tailtopia.profile.repository.HealthRecordRepository.class);
         when(profileService.hasProfile(1L)).thenReturn(true);
         when(profileService.findByOwnerId(1L)).thenReturn(Optional.of(pet(PetType.DOG)));
-        service = new TimelineService(profileService, contentService, healthProvider, milestoneService, healthRecords);
+                // Story 3.2 新增的两个源（本类不造它们的数据 → 返回空列表，等价于「只有内容 + 问诊存档」）。
+        milestoneCompletions =
+                Mockito.mock(com.tailtopia.profile.repository.MilestoneCompletionRepository.class);
+        idCards = Mockito.mock(com.tailtopia.profile.repository.IdCardRepository.class);
+        when(milestoneCompletions.findTimelineViewsBefore(anyLong(), Mockito.any(), Mockito.any()))
+                .thenReturn(List.of());
+        when(idCards.findByUserIdOrderByCreatedAtDesc(anyLong())).thenReturn(List.of());
+        service = new TimelineService(profileService, contentService, healthProvider, milestoneService,
+                healthRecords, milestoneCompletions, idCards);
     }
 
     private GrowthMomentView moment(long id, String iso) {
@@ -88,11 +98,11 @@ class TimelineServiceTest {
     void timelineFiltersGrowthByCurrentPetId() {
         when(profileService.findByOwnerId(1L)).thenReturn(Optional.of(petWithId(PetType.DOG, 42L)));
         when(healthProvider.getIfAvailable()).thenReturn(null);
-        when(contentService.findGrowthMoments(eq(1L), eq(42L), Mockito.any(), anyInt()))
+        when(contentService.findGrowthMomentsBeforeAnchor(eq(1L), eq(42L), Mockito.any(), Mockito.any(), Mockito.any(), anyInt()))
                 .thenReturn(List.of());
         service.getTimeline(1L, null, 20);
         // 传的是 petId(42) 而非又传 ownerId(1) —— 证明成长帖已按当前宠物过滤。
-        verify(contentService).findGrowthMoments(eq(1L), eq(42L), Mockito.any(), anyInt());
+        verify(contentService).findGrowthMomentsBeforeAnchor(eq(1L), eq(42L), Mockito.any(), Mockito.any(), Mockito.any(), anyInt());
     }
 
     @Test
@@ -104,7 +114,7 @@ class TimelineServiceTest {
     @Test
     void happyMomentsOnlyWhenHealthSourceAbsent() {
         when(healthProvider.getIfAvailable()).thenReturn(null); // 2.4 期无健康源
-        when(contentService.findGrowthMoments(eq(1L), anyLong(), Mockito.any(), anyInt()))
+        when(contentService.findGrowthMomentsBeforeAnchor(eq(1L), anyLong(), Mockito.any(), Mockito.any(), Mockito.any(), anyInt()))
                 .thenReturn(List.of(moment(2, "2026-06-02T10:00:00Z"), moment(1, "2026-06-01T10:00:00Z")));
 
         TimelinePageResponse resp = service.getTimeline(1L, null, 20);
@@ -119,7 +129,7 @@ class TimelineServiceTest {
     void mergesAndSortsHappyAndHealthDesc() {
         HealthEventTimelineSource health = Mockito.mock(HealthEventTimelineSource.class);
         when(healthProvider.getIfAvailable()).thenReturn(health);
-        when(contentService.findGrowthMoments(eq(1L), anyLong(), Mockito.any(), anyInt()))
+        when(contentService.findGrowthMomentsBeforeAnchor(eq(1L), anyLong(), Mockito.any(), Mockito.any(), Mockito.any(), anyInt()))
                 .thenReturn(List.of(moment(1, "2026-06-01T10:00:00Z")));
         when(health.recentHealthEvents(anyLong(), Mockito.any(), anyInt()))
                 .thenReturn(List.of(new HealthEventView(Instant.parse("2026-06-03T10:00:00Z"), "YELLOW", "咳嗽", "AI_TRIAGE", "triage-1")));
@@ -136,7 +146,7 @@ class TimelineServiceTest {
     @Test
     void hasMoreAndNextCursorWhenOverLimit() {
         when(healthProvider.getIfAvailable()).thenReturn(null);
-        when(contentService.findGrowthMoments(eq(1L), anyLong(), Mockito.any(), anyInt()))
+        when(contentService.findGrowthMomentsBeforeAnchor(eq(1L), anyLong(), Mockito.any(), Mockito.any(), Mockito.any(), anyInt()))
                 .thenReturn(List.of(
                         moment(3, "2026-06-03T10:00:00Z"),
                         moment(2, "2026-06-02T10:00:00Z"),
@@ -146,7 +156,10 @@ class TimelineServiceTest {
 
         assertThat(resp.items()).hasSize(2);
         assertThat(resp.hasMore()).isTrue();
-        assertThat(resp.nextCursor()).isEqualTo("2026-06-02T10:00:00Z");
+        // 游标现为编码后的复合锚点（AD-1）：解码校验语义，而非比对字面量。
+        TimelineAnchor next = TimelineAnchor.decode(resp.nextCursor());
+        assertThat(next.eventDate()).isEqualTo(LocalDate.parse("2026-06-02"));
+        assertThat(next.sameDayKey()).isEqualTo(Instant.parse("2026-06-02T10:00:00Z"));
     }
 
     @Test
@@ -161,7 +174,7 @@ class TimelineServiceTest {
     void timelineSortsByEventDateNotCreatedAt() {
         when(healthProvider.getIfAvailable()).thenReturn(null);
         // id=1 较晚创建但事件日期更早；id=2 较早创建但事件日期更晚 → 应按 event_date 倒序：2 在前。
-        when(contentService.findGrowthMoments(eq(1L), anyLong(), Mockito.any(), anyInt())).thenReturn(List.of(
+        when(contentService.findGrowthMomentsBeforeAnchor(eq(1L), anyLong(), Mockito.any(), Mockito.any(), Mockito.any(), anyInt())).thenReturn(List.of(
                 momentEv(1, "2026-06-05T10:00:00Z", "2024-01-01", "a"),
                 momentEv(2, "2026-06-04T10:00:00Z", "2024-12-31", "b")));
 
@@ -203,10 +216,10 @@ class TimelineServiceTest {
         assertThat(d20.hasHealthEvent()).isTrue();
     }
 
-    // ===== R2 · AC6 当天详情（created_at 正序） =====
+    // ===== R2 · AC6 当天详情（Story 3.4 起：大类优先 diary > 问诊 > 健康记录，类内按时间） =====
 
     @Test
-    void dayDetailMergesAndSortsByCreatedAtAsc() {
+    void dayDetailSortsByCategoryThenTime() {
         when(profileService.findByOwnerId(1L)).thenReturn(Optional.of(pet(PetType.CAT)));
         HealthEventTimelineSource health = Mockito.mock(HealthEventTimelineSource.class);
         when(healthProvider.getIfAvailable()).thenReturn(health);
@@ -218,9 +231,10 @@ class TimelineServiceTest {
         DayDetailResponse resp = service.getDayDetail(1L, LocalDate.parse("2026-06-02"));
 
         assertThat(resp.items()).hasSize(2);
-        // created_at 正序：07:00 健康事件在前，08:00 快乐时刻在后。
-        assertThat(resp.items().get(0).kind()).isEqualTo(TimelineItemResponse.HEALTH_EVENT);
-        assertThat(resp.items().get(1).kind()).isEqualTo(TimelineItemResponse.HAPPY_MOMENT);
+        // Story 3.4 · AC5（覆盖 FR-37 原「纯按发布时间正序」）：**先按大类**排。
+        // 因此 08:00 的 diary 排在 07:00 的问诊之前 —— 时间不再是第一排序键。
+        assertThat(resp.items().get(0).kind()).isEqualTo(TimelineItemResponse.HAPPY_MOMENT);
+        assertThat(resp.items().get(1).kind()).isEqualTo(TimelineItemResponse.HEALTH_EVENT);
     }
 
     // ===== R2 · AC5 统计栏 =====

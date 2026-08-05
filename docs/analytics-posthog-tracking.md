@@ -104,3 +104,207 @@
 4. **兽医端零埋点** —— `/vet/*` 全流程（工作台、接单、回复）没有任何业务事件。
 5. **无埋点单测** —— `test/` 下没有 analytics 目录，`sanitizeTapLabel` / `scrub` / `distinctIdFor` 三个纯函数明确标注了「L0 可测」但实际没测。
 6. **后端零埋点** —— 服务端事件（订单状态流转、支付回调结果）不进 PostHog，漏斗只能看到前端一半。
+
+---
+
+## 8. V1.1.2 新增埋点（Story 6.1 · 2026-08-04）
+
+> 回写依据：V1.1.2 Story 6.1。**产品侧同一份内容**在
+> `3.数据埋点/埋点文件/埋点清单v112.md`（产品文档空间），两边内容须一致。
+> 本节是工程侧权威副本：事件名、属性名、代码位置以此为准。
+
+### 8.1 命名约定（**新事件必须遵守**）
+
+`<模块前缀>_<对象>_<动作>`，**模块前缀用产品叫法**，动作用过去式落在词尾。
+
+- 模块前缀：`app_` `bottom_nav_` `diary_` `social_` `health_` `publish_` `me_` `signup_` `milestone_`
+- 动作后缀：`_viewed` `_shown` `_tapped` `_selected` `_toggled` `_switched` `_succeeded` `_completed` `_achieved` `_landed_on_tab`
+
+目的：产品在看板上**一眼看出这是哪个页面的哪个按钮**，不必回来问工程。
+反例（本轮改掉的）：`tab_switched` 分不清底部导航还是页内 Tab；`diary_sync_toggled`
+听着像 Diary 页上的开关、其实在发布页。约定由 `petgo_app/test/analytics/v112_events_test.dart` 的断言守着：它**从 `lib/` 源码里
+真提取** `Analytics.capture('…')` 的字面量再逐个校验，所以新增或改名事件时起名不合规会红
+（2026-08-04 code-review 前，该断言遍历的是测试文件内手抄的一份数组 —— 那时这句话是不成立的）。
+V1.0.x 的 13 个遗留事件在测试里以 `legacyEvents` 显式豁免（见 §8.9），新事件不得加入该名单。
+
+⚠️ **2026-08-04 改名台账：`discovery_*` → `social_*`（用户决策）**
+
+第 1 位 Tab 的显示文案由 `Jelajah` / `Discovery` 改为 `Sosial` / `Social`（原因见 Story 6.1
+Review Findings：`Jelajah` 与 `Discovery` 在放大字号下都会被截断），埋点标识**同批跟着改**，
+避免代码里叫 discovery、界面上叫 Social 的长期错位。受影响的 5 处：
+
+| 类别 | 旧 | 新 |
+|---|---|---|
+| 模块前缀 | `discovery_` | `social_` |
+| 事件（T-6） | `discovery_soft_login_sheet_shown` | `social_soft_login_sheet_shown` |
+| 事件（T-6） | `discovery_soft_login_sheet_login_tapped` | `social_soft_login_sheet_login_tapped` |
+| 屏名 | `discovery_page` | `social_page` |
+| 属性值 | `tab` / `to_tab` / `from_tab` = `discovery`；`entry_source` = `discovery_soft_login` | 同名改 `social` / `social_soft_login` |
+
+**配看板的人必读**：PostHog 里**已经上报过的历史事件仍是旧名字**，改名不会追溯重写。
+凡是跨 2026-08-04 的图表，要么按「旧名 OR 新名」并集取数，要么明确只看改名之后。
+若此前已按 `discovery_*` 建过 insight，改名后它会变成 0 条 —— 那不是埋点坏了，是筛选条件要改。
+
+⚠️ **Tab 的枚举名与产品叫法不一致**，埋点一律用产品叫法（`AppTab.analyticsName`）：
+
+| 代码里的枚举 | 埋点/看板里的名字 | 产品叫法 |
+|---|---|---|
+| `AppTab.profile` | `diary` | Diary（成长日记） |
+| `AppTab.triage` | `health` | Health（健康/问诊） |
+| `AppTab.home` | `social` | Social（社区广场；文案原 Discovery / Jelajah，2026-08-04 改名） |
+| `AppTab.me` | `me` | Me（我的） |
+
+### 8.2 本版本修掉的 P0 缺口：Tab 切换此前完全没有浏览事件
+
+底部 Tab 走 `StatefulShellRoute.goBranch` 切分支、**不 push 根路由** → §2 里的
+`PosthogObserver` 收不到 `didPush`，四个 Tab 根页一个 `$screen` 都没有。后果是
+「落地页分流是否生效」无法验证 —— 而落地页矩阵正是 V1.1.2 的核心改动。
+
+修法：`Analytics.screen()` 显式补一条，屏名 `<产品名>_page`（`diary_page` / `health_page` /
+`social_page` / `me_page` / `vet_workbench_page`）。冷启动落地页用**同一套字面量**，
+否则「冷启动落在 Diary」与「切到 Diary」会被算成两个不同页面。详情页仍由 observer 自动上报。
+
+**底栏第 5 个位置（「＋」发布）**（2026-08-04 code-review 决策 D1 补齐）：发布页是
+`showModalBottomSheet` 而不是 `PageRoute`，PostHog 的 `defaultPostHogRouteFilter` 只跟踪
+`PageRoute` → observer 同样收不到。现由 `PublishComposePage.open()` 手工上报 `publish_page`，
+命名与四个 Tab 根页同一套。⚠️ 它**不是 Tab 根页**：统计「四个可导航 Tab 的曝光」时不要把它算进来，
+统计「底栏 5 个位置各被用了多少」时才算。
+
+⚠️ **`$screen` 表里有两套命名并存，看板一律用 `*_page` 那套**：`observers: [PosthogObserver()]`
+对所有真实路由跳转都会自报一条以**路由路径**为名的 `$screen`（`/profile`、`/content/123`…）。
+Tab 切换走 `goBranch` 不触发它，但**冷启动落地是 `ctx.go()`、是真跳转**，所以落地那一刻会同时有
+`diary_page`（手工，权威）与 `/profile`（observer）两条。这不影响按 `*_page` 取数的口径，
+但按「所有 $screen 汇总」看页面排行时会看到重复行 —— 已知现象，不是漏改（code-review 2026-08-04 核实）。
+
+### 8.3 事件清单（T-1~T-12，**T-5 已删且编号不重分配**）
+
+| # | 事件名 | 一句话（产品视角） | 属性 | 代码位置 |
+|---|---|---|---|---|
+| T-1 | `app_launch_landed_on_tab` | 冷启动后落在了哪个 Tab | `tab`（diary/social/vet_workbench）、`user_state`、`restore_timeout`（仅超时兜底那次）、`corrected_from`（仅迟到纠正那次） | `app_router.dart` splash 回调 |
+| T-2 | `bottom_nav_tab_switched` | 点了底部导航切 Tab | `from_tab`、`to_tab`、`user_state` | `app_shell.dart` |
+| T-3 | `diary_guest_page_viewed` | 未登录用户看到了 Diary 游客种草页 | `session_first`（是否本次启动首次看到） | `diary_guest_page.dart` |
+| T-4 | `diary_guest_create_profile_cta_tapped` | 游客点了任一「建档引导」入口 | `source` | `diary_guest_page.dart` / `diary_demo_detail_page.dart` |
+| T-6 | `social_soft_login_sheet_shown` / `..._login_tapped` | Social（社区广场）刷到第 3 页弹的软登录浮层：曝光 / 点了登录 | 后者带 `method`（google/apple） | `login_guide_controller.dart` |
+| T-7 | `signup_succeeded` | **注册真正成功**（不是点了按钮） | `entry_source` | `login_guide_controller.dart` / `login_page.dart` |
+| T-8 | `publish_page_content_type_selected` | 发布页选了内容类型 | `type`、`is_default`、`has_pet_profile` | `publish_compose_page.dart` |
+| T-9 | `publish_page_sync_to_moment_toggled` | 发布页拨了「同步到 Moment」开关 | `enabled` | `publish_compose_page.dart` |
+| T-10 | `diary_timeline_item_tapped` | 点了 Diary 时间线上的某条 | `item_type` | `growth_archive_page.dart` |
+| T-11 | `diary_view_mode_switched` | Diary 在时间线 ⇄ 日历之间切换 | `to_view`（timeline/calendar） | `growth_archive_page.dart` |
+| T-12 | `milestone_achieved` | 里程碑达成（**后端上报**） | `code`、`level`、`path` | `MilestoneAnalyticsListener.java` |
+
+属性取值词表：
+
+- `user_state`：`guest` / `vet` / `owner_with_profile` / `owner_without_profile` / `planning` / `enthusiast`
+  （即 `AppUserState.wire`。⚠️ Story 6.1 AC3 原表写的是 `A_with_profile`/`B`/`C` —— 实现取了
+  枚举自述名：语义等价、可读性更好，且与落地矩阵同源。**看板以此为准**。）
+- `source`（T-4）：`bottom_sticky_cta`（底部常驻主按钮）/ `timeline_item`（示例时间线条目与金徽章）/
+  `demo_detail_interaction`（示例详情页点赞·评论·举报）/ `header_entry`（页头四个入口）
+- `entry_source`（T-7）：`diary_cta`（游客态 Diary 引导）/ `social_soft_login`（软登录浮层）/ `login_page`（登录页直登）/ `other`
+  ⚠️ **`other` 占比不小，不是边角情况**（code-review 2026-08-04 补齐）：`requireLogin` 与
+  `showHardDialog` 的默认值就是 `other`，因此**游客点「＋」发布、点受控 Tab（Health/Me）、
+  401 续期失败的强弹窗**触发的注册全部落在这一档。看板配「转化路径构成」时必须显式列出它，
+  否则会出现一个占比可观的未标注桶 —— 而这正是本版本仅剩两个可用指标之一。
+- `item_type`（T-10）：`HAPPY_MOMENT` / `HAPPY_MOMENT_MILESTONE` / `MILESTONE_BANNER` / `HEALTH_RECORD` / `ID_CARD_ISSUED`，外加 `UNSPECIFIED`
+  —— **直取后端下发的 `itemType`**（AD-2），前端不自行推断。
+  ⚠️ 类④ 是 `HEALTH_RECORD`，**不是 `HEALTH_EVENT`**（后者是 `kind` 的取值，不是 `itemType`）——
+  本行曾写错，按错值配的看板筛选会恒为 0 条（code-review 2026-08-04 修正）。
+  `UNSPECIFIED` = 老后端没下发 `itemType` 的兜底：宁可标成「不知道」，也不送前端猜的分类值，
+  否则「后端真这么分」与「前端猜的」在看板上无法区分。
+- `restore_timeout`（T-1，**仅出现在超时兜底那一次**，V1.1.2 Story 7.4 · FR-91）：`true`
+  —— 会话恢复没在 5s 预算内回来、按当时已知态（游客）兜底落地。**这是「兜底发生率」的唯一口径**
+  （PRD OQ-23 靠它闭合）：超时兜底态与真实游客态都上报 `user_state=guest`，不靠这个标记分不开。
+  正常路径**不带**该属性（不是 `false`，是没有这个键）。
+- `corrected_from`（T-1，**仅出现在迟到纠正那一次**）：`diary` / `social` / `vet_workbench`
+  —— 恢复晚到后按真实身份重判、把用户从哪个兜底落地页纠正过来的。
+  ⚠️ 取值是**产品名**（与同一次上报的 `tab` 同一套词表），不是 `/profile` 这种路由路径原文
+  —— 送路径原文会让两个属性在看板上对不起来（code-review 2026-08-04 修正）。
+  一次冷启动最多出现一次（FR-91 只纠正一次）。
+
+- `path`（T-12）：`health_record`（疫苗/驱虫/绝育记录触发）/ `consult`（真人兽医问诊结束触发）/
+  `checkin`（用户手动打卡）/ `publish`（发布内容回填）/ `system_auto`（计数、组合、档案创建等）
+
+### 8.4 服务端埋点（本版本首次出现）
+
+§7.6 记的「后端零埋点」这一条本版本**局部打通**：里程碑达成的判定全在服务端
+（健康记录事件、兽医问诊关闭、计数阈值、组合解锁），客户端看不到「这次是走哪条路径点亮的」，
+前端补不了这一环。
+
+- 实现：`shared/analytics/AnalyticsClient`（接口）+ `PostHogAnalyticsClient`（HTTP `POST /i/v0/e/`）。
+  **没有引入第三方 SDK** —— capture 就是一个 HTTP POST，用既有 `RestClient` 十几行够了；
+  引 SDK 要多背一条供应链依赖 + 它自带的线程池，与「异步只用 `@Async`、不加中间件」的护栏也别扭。
+- 触发：订阅既有领域事件 `MilestoneCompletedEvent`（`@TransactionalEventListener`，
+  异步发生在 `capture` 那一层）。**提交后才上报**：事务回滚了看板上却多一条达成，比没有更糟。
+- 配置：`POSTHOG_SERVER_KEY`（env，留空 = 整个上报静默关闭、不出网）、`POSTHOG_HOST`
+  （**留空或空串都回退默认值**，不会变成非法 baseUrl）、`POSTHOG_TIMEOUT_SECONDS`（默认 3）。
+  必须与 App 端同一个 project，否则前后端事件落在两个项目里、漏斗拼不起来。
+  启动时会 `log.info` 一行 `enabled=? host=?`（不打 key）—— 「以为在报其实没报」只能靠它被发现。
+- **隔离与超时**（code-review 2026-08-04 补强）：上报走 `@Async("analyticsExecutor")` 的
+  **专用有界线程池**（core 1 / max 2 / 队列 200 / 满则丢弃），并设 3s connect+read 超时。
+  两者缺一不可 —— 与业务 `@Async` 共池且无超时时，PostHog 侧一个半开连接就能把里程碑自动完成、
+  达成通知、注销级联一起饿死。宁可丢事件，不能拖慢里程碑落库。
+- `distinctId` = `sha256("tailtopia-user-" + 内部用户id)`，**与客户端逐字一致**，两端各有一条
+  已知向量断言（差一个字节，同一个人会被算成两个人）。
+- 失败即放弃，不重试：埋点是可损数据，为它加重试/补偿会引入状态机与新表，代价远大于收益。
+  失败只留一行 `log.warn`（事件名 + 异常类名，**不打 properties**）。
+- 线路形态由 `PostHogAnalyticsClientTest` 用 `MockRestServiceServer` 真验（端点 / `api_key` /
+  `properties.distinct_id` / `timestamp` / 关闭态一个请求都不发）—— 这些一旦错一处，看板上会
+  一条都没有，而后端因为吞错只留一行 warn，很难发现。
+
+#### ⚠️ `distinctId` 的两条已知例外（2026-08-04 决策 D4：知情后维持现状）
+
+护栏原文是「对外暴露标识一律不可枚举 token」。当前做法是**无盐哈希内部自增 id**，
+因此严格说违反该条。用户判断 PostHog 属内部数据分析用途、外泄风险可接受，**维持现状不改**。
+下面两条与外泄无关，是维持现状连带接受的代价，**记录在此以免日后被反复重开或被误当成遗漏**：
+
+1. **注销后在第三方断不干净**。编号由自增 id 确定性推出 → 同一用户永远同一编号。用户注销、
+   本库按 D1/D2 删除或匿名化之后，PostHog 里他过去的行为事件**仍可被算回到他**，
+   等于注销在第三方平台上没有生效。彻底解法是给用户表加一列随机 `analytics_token`、
+   注销时一并删除（PostHog 里的编号随之成为孤儿）；那需要一次 Flyway 迁移 + 存量回填。
+2. **连号可推算注册总量与增速**。原始输入是 1、2、3 连续的小整数，拿到编号的人可以枚举
+   区间建对照表反查排号，从而算出注册用户总量与每周新增。加一把 env 密钥（HMAC）即可消除，
+   但**不能**解决上面第 1 条。
+
+### 8.5 已下线
+
+**FR-0H 首页建档提示条**的曝光 / 点击 / 关闭事件：提示条本体已在 Story 2.3 整条废止
+（AD-15 Rule 3），相关看板指标一并下线。核查结论：代码里无残留事件。
+
+### 8.6 AC5 的线上校验口径
+
+健康类四条（M3 疫苗 / M4 驱虫 / M5 第一次看兽医 / M9 绝育）已在 Story 5.2 取消打卡路径，
+且后端**在写库前直接拒绝**健康类打卡请求。因此线上若出现
+「健康类 code + `path=checkin`」的 `milestone_achieved`，说明那道护栏被绕过了 ——
+**可配成告警**。
+
+注意实现上刻意**不做改写**：`MilestoneAnalyticsPath` 遇到「健康类 + 打卡」照实上报 `checkin`，
+不会归一成 `health_record`。改写等于把护栏失效的现场擦掉。
+
+### 8.7 PRD §3 指标的失效标注（AD-6）
+
+不取改版前基线 → PRD §3.3 五项核心指标里**三项拿不到**，随之 §3.3「唯一裁决指标」与
+§3.4 处置原则**一并失效**：
+
+| 指标 | 状态 |
+|---|---|
+| 游客→注册总转化率（改版前后对比） | ❌ 不可得（无改版前基线） |
+| FR-0B 曝光量变化 | ❌ 不可得（同上） |
+| B/C 用户留存（改版前后对比） | ❌ 不可得（同上） |
+| 转化路径构成（`entry_source` 占比） | ✅ 可用（绝对值） |
+| Diary 主动转私密率（`publish_page_sync_to_moment_toggled` 中 enabled=false 占比） | ✅ 可用（绝对值）——本版本最关键的产品假设验证 |
+
+埋点仍要做（为以后攒数据），但**别指望它回答「这次改版是对是错」**。
+
+### 8.8 §7.5 的缺口已补：埋点有单测了
+
+- 前端 `petgo_app/test/analytics/v112_events_test.dart`（15 例）。观察手段是
+  `Analytics.debugCaptureSink`（`@visibleForTesting`，挂在 `scrub()` **之后**），
+  断言看到的就是端上真正发出的形态。
+- 后端 `MilestoneAnalyticsTest`（9 例）：path 映射、属性只含受控值、distinctId 是哈希、
+  凭证缺省时不出网。
+- 两端各钉一条同样的 `sha256("tailtopia-user-42")` 向量，跨语言防漂移。
+
+### 8.9 遗留：旧事件仍是旧命名
+
+§4 那 9 个 V1.0.0/V1.1.0 事件（`login_tapped`、`content_publish_submitted` …）**没有按 8.1 改名**：
+它们已经在线上产生了历史数据，改名会切断历史序列、也会让既有看板失效。
+建议口径：**新事件按 8.1 起名；旧事件维持原名**，等哪天决定重建看板时一起迁。

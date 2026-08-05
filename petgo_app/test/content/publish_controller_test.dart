@@ -26,6 +26,7 @@ class _FakeRepo implements ContentRepository {
     List<String> imageUrls = const [],
     DateTime? eventDate,
     required String idempotencyKey,
+    bool syncToMoment = true,
   }) async {
     publishCalls++;
     lastType = type;

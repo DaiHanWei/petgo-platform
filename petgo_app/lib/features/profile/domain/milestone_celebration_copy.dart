@@ -28,9 +28,9 @@ const Map<String, MilestoneCelebrationCopy> kMilestoneCelebrationCopy = {
   // ===== CAT (C) · S 级 =====
   'C-S1': MilestoneCelebrationCopy(
     titleId: 'Profil {name} sudah lengkap! 🎉',
-    bodyId: 'Sekarang semua momen {name} punya rumahnya sendiri.',
+    bodyId: 'Sekarang semua catatan Diary {name} punya rumahnya sendiri.',
     titleEn: "{name}'s profile is all set! 🎉",
-    bodyEn: 'Every moment {name} shares now has a home.',
+    bodyEn: 'Every diary entry {name} shares now has a home.',
   ),
   'C-S2': MilestoneCelebrationCopy(
     titleId: 'Foto pertama {name} tersimpan! 📸',
@@ -174,9 +174,9 @@ const Map<String, MilestoneCelebrationCopy> kMilestoneCelebrationCopy = {
   ),
   'C-M10': MilestoneCelebrationCopy(
     titleId: '10 kenangan {name} sudah terabadikan! 📖',
-    bodyId: 'Kamu sudah merekam 10 momen berharga yang akan selalu bisa kamu lihat kembali. Perjalanan ini baru saja dimulai — dan sudah indah.',
+    bodyId: 'Kamu sudah merekam 10 catatan Diary berharga yang akan selalu bisa kamu lihat kembali. Perjalanan ini baru saja dimulai — dan sudah indah.',
     titleEn: '10 memories of {name} are now saved! 📖',
-    bodyEn: "You've captured 10 precious moments you can always look back on. This journey has just begun — and it's already beautiful.",
+    bodyEn: "You've captured 10 precious diary entries you can always look back on. This journey has just begun — and it's already beautiful.",
   ),
 
   // ===== CAT (C) · L 级 =====
@@ -188,9 +188,9 @@ const Map<String, MilestoneCelebrationCopy> kMilestoneCelebrationCopy = {
   ),
   'C-L2': MilestoneCelebrationCopy(
     titleId: '100 hari bersama {name}! 🌟',
-    bodyId: 'Seratus hari perjalanan yang luar biasa — dari pertemuan pertama yang canggung hingga rutinitas yang penuh kehangatan. Setiap momen yang kamu rekam adalah bukti nyata betapa berartinya {name} bagimu. Kamu telah memberikan {name} sesuatu yang tak ternilai: sebuah rumah yang penuh cinta.',
+    bodyId: 'Seratus hari perjalanan yang luar biasa — dari pertemuan pertama yang canggung hingga rutinitas yang penuh kehangatan. Setiap catatan Diary yang kamu rekam adalah bukti nyata betapa berartinya {name} bagimu. Kamu telah memberikan {name} sesuatu yang tak ternilai: sebuah rumah yang penuh cinta.',
     titleEn: '100 days with {name}! 🌟',
-    bodyEn: "A hundred extraordinary days — from the first awkward meeting to a warm daily routine. Every moment you've recorded is real proof of how much {name} means to you. You've given {name} something priceless: a home full of love.",
+    bodyEn: "A hundred extraordinary days — from the first awkward meeting to a warm daily routine. Every diary entry you've recorded is real proof of how much {name} means to you. You've given {name} something priceless: a home full of love.",
   ),
   'C-L3': MilestoneCelebrationCopy(
     titleId: 'Satu tahun penuh bersama {name}! 🎊',
@@ -205,9 +205,9 @@ const Map<String, MilestoneCelebrationCopy> kMilestoneCelebrationCopy = {
     bodyEn: "Vaccines, deworming, vet checkup — you completed all of them without missing a single one. It's not easy, but you did it with full responsibility and love. {name} is healthy today because you're always there.",
   ),
   'C-L5': MilestoneCelebrationCopy(
-    titleId: '30 momen {name} telah terabadikan! ✨',
+    titleId: '30 catatan Diary {name} telah terabadikan! ✨',
     bodyId: 'Tiga puluh cerita yang akan selalu bisa kamu kenang — senang, lucu, haru, semuanya ada. Kamu sedang menulis buku kehidupan {name}, halaman demi halaman. Suatu hari nanti, kamu akan sangat bersyukur sudah merekam ini semua.',
-    titleEn: '30 moments of {name} are forever saved! ✨',
+    titleEn: '30 diary entries of {name} are forever saved! ✨',
     bodyEn: "Thirty stories you can always look back on — happy, funny, touching, all of it. You are writing {name}'s book of life, page by page. Someday, you'll be so glad you recorded all of this.",
   ),
 
@@ -360,9 +360,9 @@ const Map<String, MilestoneCelebrationCopy> kMilestoneCelebrationCopy = {
   ),
   'D-M10': MilestoneCelebrationCopy(
     titleId: '10 kenangan {name} sudah terabadikan! 📖',
-    bodyId: 'Sepuluh momen yang tidak akan pernah hilang — kamu sudah merekam awal perjalanan luar biasa ini. Dan cerita terbaik masih akan datang.',
+    bodyId: 'Sepuluh catatan Diary yang tidak akan pernah hilang — kamu sudah merekam awal perjalanan luar biasa ini. Dan cerita terbaik masih akan datang.',
     titleEn: '10 memories of {name} are now saved! 📖',
-    bodyEn: "Ten moments that will never disappear — you've captured the beginning of this amazing journey. And the best stories are still to come.",
+    bodyEn: "Ten diary entries that will never disappear — you've captured the beginning of this amazing journey. And the best stories are still to come.",
   ),
 
   // ===== DOG (D) · L 级 =====
@@ -391,18 +391,18 @@ const Map<String, MilestoneCelebrationCopy> kMilestoneCelebrationCopy = {
     bodyEn: "Vaccines, deworming, vet checkup — all three pillars of {name}'s health are complete. You don't just love {name}, you protect {name} with full responsibility. {name} is healthy today — and all of that is because of you.",
   ),
   'D-L5': MilestoneCelebrationCopy(
-    titleId: '30 momen {name} telah terabadikan! ✨',
+    titleId: '30 catatan Diary {name} telah terabadikan! ✨',
     bodyId: 'Tiga puluh halaman dari buku kehidupan {name} sudah tertulis oleh tanganmu. Setiap foto, setiap cerita — semua adalah bukti nyata perjalanan kalian bersama. Suatu hari nanti, kamu akan sangat bersyukur sudah merekam ini semua.',
-    titleEn: '30 moments of {name} are forever saved! ✨',
+    titleEn: '30 diary entries of {name} are forever saved! ✨',
     bodyEn: 'Thirty pages of {name}\'s life story, written by your hands. Every photo, every story — all real proof of the journey you share. Someday, you\'ll be so glad you recorded all of this.',
   ),
 
   // ===== OTHER (G) · S 级 =====
   'G-S1': MilestoneCelebrationCopy(
     titleId: 'Profil {name} sudah siap! 🎉',
-    bodyId: 'Setiap momen bersama {name} sekarang punya tempat yang aman untuk dikenang.',
+    bodyId: 'Setiap catatan Diary tentang {name} sekarang punya tempat yang aman untuk dikenang.',
     titleEn: "{name}'s profile is ready! 🎉",
-    bodyEn: 'Every moment with {name} now has a safe place to be remembered.',
+    bodyEn: 'Every diary entry about {name} now has a safe place to be remembered.',
   ),
   'G-S2': MilestoneCelebrationCopy(
     titleId: 'Foto pertama {name} tersimpan! 📸',
@@ -468,9 +468,9 @@ const Map<String, MilestoneCelebrationCopy> kMilestoneCelebrationCopy = {
   ),
   'G-M4': MilestoneCelebrationCopy(
     titleId: '10 kenangan {name} sudah terabadikan! 📖',
-    bodyId: 'Sepuluh momen yang tidak akan hilang — awal dari kisah yang panjang dan indah. Terus rekam, karena setiap momen itu berharga.',
+    bodyId: 'Sepuluh catatan Diary yang tidak akan hilang — awal dari kisah yang panjang dan indah. Terus rekam, karena setiap momen itu berharga.',
     titleEn: '10 memories of {name} are now saved! 📖',
-    bodyEn: 'Ten moments that won\'t disappear — the start of a long and beautiful story. Keep recording, because every moment is precious.',
+    bodyEn: 'Ten diary entries that won\'t disappear — the start of a long and beautiful story. Keep recording, because every moment is precious.',
   ),
 
   // ===== OTHER (G) · L 级 =====
