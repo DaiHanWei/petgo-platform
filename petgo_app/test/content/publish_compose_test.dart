@@ -317,4 +317,61 @@ void main() {
     expect(find.byType(PublishComposePage), findsOneWidget); // 重开发布页（跳过庆祝页）
     expect(find.byKey(const ValueKey('publishEventDate')), findsOneWidget); // 预选成长日历 → 事件日期字段在
   });
+
+  // ===== 底部可见性提示跟随实际可见范围（2026-08-05 用户实机反馈） =====
+  //
+  // 回归的缺陷：底部那句写死「所有人可见」，Diary 关掉同步开关后与开关副标题
+  //「没人看得到」同屏互相打脸。判定必须与 PublishController.isSharing 一致。
+
+  testWidgets('Diary 默认（开关开）→ 底部提示为公开态', (tester) async {
+    _tallView(tester);
+    final container = ProviderContainer(overrides: [
+      publishControllerProvider.overrideWithValue(_controller(_OkRepo())),
+      profileRepositoryProvider.overrideWithValue(_FakeProfileRepo()),
+    ]);
+    addTearDown(container.dispose);
+    final l10n = await _en();
+
+    await tester.pumpWidget(_composeApp(container, preset: ContentType.growthMoment));
+    await tester.pumpAndSettle();
+
+    expect(find.text(l10n.publishPublicNotice), findsOneWidget);
+    expect(find.text(l10n.publishPrivateNotice), findsNothing);
+  });
+
+  testWidgets('Diary 关掉同步开关 → 底部提示改私密态，且不再出现「所有人可见」', (tester) async {
+    _tallView(tester);
+    final container = ProviderContainer(overrides: [
+      publishControllerProvider.overrideWithValue(_controller(_OkRepo())),
+      profileRepositoryProvider.overrideWithValue(_FakeProfileRepo()),
+    ]);
+    addTearDown(container.dispose);
+    final l10n = await _en();
+
+    await tester.pumpWidget(_composeApp(container, preset: ContentType.growthMoment));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('publishSyncToggle')));
+    await tester.pumpAndSettle();
+
+    expect(find.text(l10n.publishPrivateNotice), findsOneWidget);
+    expect(find.text(l10n.publishPublicNotice), findsNothing,
+        reason: '开关已关闭，底部绝不能还说「所有人可见」——这正是本次修的缺陷');
+  });
+
+  testWidgets('Moment（无同步开关）恒公开 → 底部提示始终是公开态', (tester) async {
+    _tallView(tester);
+    final container = ProviderContainer(overrides: [
+      publishControllerProvider.overrideWithValue(_controller(_OkRepo())),
+      profileRepositoryProvider.overrideWithValue(_FakeProfileRepo()),
+    ]);
+    addTearDown(container.dispose);
+    final l10n = await _en();
+
+    await tester.pumpWidget(_composeApp(container, preset: ContentType.daily));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('publishSyncSwitch')), findsNothing); // Moment 不渲染开关
+    expect(find.text(l10n.publishPublicNotice), findsOneWidget);
+  });
 }

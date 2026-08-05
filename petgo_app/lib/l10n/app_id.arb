@@ -91,6 +91,7 @@
   "publishRemainingChars": "Sisa {count} karakter",
   "publishButton": "Bagikan",
   "publishPublicNotice": "Postingan Anda akan terlihat oleh semua pengguna.",
+  "publishPrivateNotice": "Hanya kamu yang bisa melihat Diary ini.",
   "publishGrowthNeedsProfile": "Buat profil hewan dulu",
   "publishLinkedToPet": "Tertaut ke {name}",
   "publishCreateProfile": "Buat",
