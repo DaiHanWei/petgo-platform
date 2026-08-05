@@ -1,6 +1,7 @@
 package com.tailtopia.profile.service;
 
 import com.tailtopia.content.domain.ContentType;
+import com.tailtopia.content.domain.ContentVisibility;
 import com.tailtopia.content.event.ContentCommentedEvent;
 import com.tailtopia.content.event.ContentLikedEvent;
 import com.tailtopia.content.event.ContentPublishedEvent;
@@ -24,7 +25,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * <p>覆盖系统自动类节点：
  * <ul>
  *   <li>{@link ProfileCreatedEvent} → S1 档案创建完成。</li>
- *   <li>{@link ContentPublishedEvent} → S2 首张成长日历照片 + 计数 M10/L5；S5 首条日常分享。</li>
+ *   <li>{@link ContentPublishedEvent} → S2 首张成长日历照片 + 计数 M10/L5；S5 首条**对外可见**帖子。</li>
  *   <li>{@link CardSharedEvent} → S3 首次分享名片。</li>
  *   <li>{@link HealthArchivedEvent} → S4 首次保存问诊结论。</li>
  *   <li>{@link ContentCommentedEvent} → S14 首次被评论（排除自评）。</li>
@@ -48,6 +49,18 @@ public class MilestoneAutoCompleteListener {
         completion.completeForOwner(e.ownerId(), "S1", MilestoneCompletionSource.SYSTEM_AUTO);
     }
 
+    /**
+     * 内容发布 → S2 / 计数类 / S5。
+     *
+     * <p><b>S5「首条平台帖子」的判定口径（2026-08-05 修）</b>：按**是否对外可见**判，不按内容类型判。
+     * 原实现只认 {@code DAILY}，但 V1.1.2 把 Diary（{@code GROWTH_MOMENT}）设成了有宠用户的**默认**
+     * 发布类型、并用「同步到 Moment」开关决定它是否进 Feed（Story 4.1/4.2 只改 visibility、
+     * **不改 type**）。结果是：顺着默认路径发帖、内容已出现在广场，S5 却永不解锁 —— 与节点文案
+     * 「发布你在平台上的第一条帖子」直接矛盾，且 S5 是新手任务六件套之一，连带聚合奖励也卡死。
+     *
+     * <p>⚠️ {@code PRIVATE} 一律不算：私密内容只进作者自己的档案，不进任何公开位，
+     * 「平台发帖」语义不成立。**别为了让节点更好解锁而放宽这一条。**
+     */
     @Async
     @TransactionalEventListener
     public void onContentPublished(ContentPublishedEvent e) {
@@ -56,10 +69,16 @@ public class MilestoneAutoCompleteListener {
             completion.onGrowthMomentCount(e.authorId(), e.authorGrowthMomentCount());
             // 「系统推送 + 当天发布」L 级节点回填：第一个生日 L1 / 满 100 天 L2 / 满 365 天 L3（8.6）。
             completion.completeDateGatedLNodesOnPublish(e.authorId());
-        } else if (e.type() == ContentType.DAILY) {
+        }
+        // S5：DAILY 恒算；GROWTH_MOMENT / KNOWLEDGE 需 PUBLIC（对外可见）才算。幂等，与上面互不影响。
+        if (isPlatformPost(e)) {
             completion.completeForOwner(e.authorId(), "S5", MilestoneCompletionSource.SYSTEM_AUTO);
         }
-        // KNOWLEDGE 不对应里程碑节点。
+    }
+
+    /** 是否构成「平台上的一条帖子」：Moment 恒是；Diary / Tips 仅在公开时是（私密不算）。 */
+    private static boolean isPlatformPost(ContentPublishedEvent e) {
+        return e.type() == ContentType.DAILY || e.visibility() == ContentVisibility.PUBLIC;
     }
 
     @Async
