@@ -1321,7 +1321,6 @@
   "healthFieldCustomName": "Nama catatan",
   "healthFieldNote": "Catatan",
   "healthCustomNameRequired": "Masukkan nama untuk catatan kustom.",
-  "healthMilestoneHint": "Progres milestone diperbarui 🏆",
   "healthSave": "Simpan",
   "healthDelete": "Hapus",
   "healthSaveError": "Gagal menyimpan. Coba lagi.",

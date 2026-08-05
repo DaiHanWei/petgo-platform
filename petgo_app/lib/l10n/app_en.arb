@@ -1574,7 +1574,6 @@
   "healthFieldCustomName": "Record name",
   "healthFieldNote": "Note",
   "healthCustomNameRequired": "Please enter a name for the custom record.",
-  "healthMilestoneHint": "Milestone progress updated 🏆",
   "healthSave": "Save",
   "healthDelete": "Delete",
   "healthSaveError": "Could not save. Please try again.",
