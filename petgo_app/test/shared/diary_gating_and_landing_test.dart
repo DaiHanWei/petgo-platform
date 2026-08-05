@@ -255,9 +255,26 @@ void main() {
 
     test('落地矩阵：不持久化「上次落在哪」—— landingLocation 是纯函数，无任何状态', () {
       // FR-78 硬约束。若引入持久化记忆，同一枚举值在不同时刻会给出不同结果。
-      for (final s in AppUserState.values) {
-        expect(s.landingLocation, s.landingLocation);
+      //
+      // ⚠️ 这里原本写的是 `expect(s.landingLocation, s.landingLocation)`
+      // （code-review 2026-08-04 指出）—— 那是**恒真断言**：哪怕有人把它改成读 prefs，
+      // 只要同一次调用返回同一个值就照样通过，AC2 的「不持久化」根本没被守住。
+      // 现在改为：同一枚举值在**任意次调用之间**都必须给出与「首次快照」完全一致的结果，
+      // 并且穿插一次会话/时间推进（用另一个态的读取来模拟外部状态变化）。
+      final firstSnapshot = {
+        for (final s in AppUserState.values) s: s.landingLocation,
+      };
+      for (var round = 0; round < 3; round++) {
+        // 交错读取其它态：若实现里塞了「记住上一次」的状态，交错顺序会把它暴露出来。
+        for (final s in AppUserState.values.reversed) {
+          expect(s.landingLocation, firstSnapshot[s],
+              reason: '$s 的落地目标在第 $round 轮变了 —— landingLocation 不再是纯函数，'
+                  '很可能被加了持久化记忆（违反 FR-78 / AC2）');
+        }
       }
+      // 真正的「不持久化」端到端覆盖在
+      // `test/shared/diary_gating_and_landing_test.dart` 的「同一用户 B → A 后落地目标随之改变」
+      // 与 `test/shared/splash_landing_budget_test.dart`（冷启动实时重判）两处。
       // 也不得为「修慢网」而引入记忆 —— 慢网正解是 FR-91 的迟到纠正，不是记住上次。
       expect(AppUserState.values.length, 6, reason: '六态穷尽；新增态必须同时补落地目标');
     });

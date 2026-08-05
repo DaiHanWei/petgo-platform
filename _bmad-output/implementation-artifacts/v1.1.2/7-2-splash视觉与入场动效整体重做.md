@@ -123,7 +123,10 @@ so that **我在第一秒就记住了这个 App 叫什么（FR-88）**。
   - [x] 删除猫的 6 个绝对像素路点、脚步弹跳、归位翻紫 `colorFilter`
   - [x] 删除 4320ms 时间线的全部切片定义（`_t` / `_dog` / `_catT` / `_catPath` 等）
   - [x] 删除常驻 spinner（`bottom: 108`）与版本号（`SplashPage.version`）
-  - [x] 移除 `mark_dog.svg` / `mark_cat.svg` / `wordmark.svg` 的引用
+  - [x] 移除 **splash 里**对 `mark_dog.svg` / `mark_cat.svg` / `wordmark.svg` 的引用
+  - ⚠️ **订正（code-review 2026-08-04）**：`mark_dog.svg` 与 `mark_cat.svg` **仍被登录页引用**
+    （`lib/features/auth/presentation/login_page.dart:348-350`），并非「全部移除」。
+    只有 `wordmark.svg` 确实已无引用。**照 File List 原描述去物理删除会让登录页缺资产。**
 - [x] **T2 搭新时间线**（AC1 / AC2 / AC3 / AC4）
   - [x] 总时长 **1540ms**；三拍 B1(≈480ms) / B2(≈900ms，9 拍每拍 +85ms) / B3(终态)
   - [x] B1：位置 50%→43% + `scale 1→.70` + `opacity 1→0`
@@ -162,6 +165,12 @@ so that **我在第一秒就记住了这个 App 叫什么（FR-88）**。
 ### 🟦 后端子任务
 
 - [x] **无。本 Story 零后端改动、零 schema 变更、零迁移。**
+
+### Review Findings
+
+> code-review 2026-08-04 第二轮（靶子 `07c70b9b..HEAD`）的 findings **统一记在 Epic 7 收尾 story**：
+> `7-4-落地分流收口与超时兜底迟到纠正.md#Review Findings`。本 Story 涉及的条目在那份台账里已按文件标注。
+> 本 Story 直接相关的高危项：① 🔴 首帧 mark 垂直居中用了宽度的一半、比 50% 线高约 15dp —— 交接跳位正是本 Epic 要消除的东西；② `markWidthAt` 测试是恒真断言（返回整页宽），T12 相对尺寸验证不成立；③ 旧资产 `mark_dog/mark_cat` 仍被登录页引用，File List 的「引用已全部移除」为事实错误，照它删会缺资产；④ 字体子集注释与实测不符（97 码位、无弯双引号与破折号）+ OFL 未随包分发。
 
 ## Dev Notes
 
@@ -354,7 +363,11 @@ Claude Opus 5 (1M context) · claude-opus-5[1m]
 - `petgo_app/lib/l10n/app_id.arb` —— 删除 `splashTagline` 的硬编码 `\n`（缺陷 B-9）
 
 **未改动（本 Story 边界）**
-- `assets/brand/mark_dog.svg` / `mark_cat.svg` / `wordmark.svg` —— 引用已全部移除，**文件本身保留**（物理删除留 Epic 收尾统一处理，避免与 7.1 新增资产的命名整理冲突）
+- `assets/brand/wordmark.svg` —— 引用已全部移除，**文件本身保留**（物理删除留 Epic 收尾统一处理，避免与 7.1 新增资产的命名整理冲突）
+- 🔴 `assets/brand/mark_dog.svg` / `mark_cat.svg` —— **不可删！仍被登录页在用**
+  （`login_page.dart:348-350`）。本行原写「引用已全部移除」是**事实错误**
+  （code-review 2026-08-04 核实并订正）：splash 里确实移除了，但登录页那两处一直在用。
+  Epic 收尾若照原描述统一物理删除，登录页会缺资产。要真下线得先替换登录页的用法。
 - `lib/core/router/app_router.dart` / `lib/core/storage/prefs.dart` —— 属 Story 7.3
 - `lib/l10n/app_en.arb` —— 已核对无需改（本就无硬编码换行）；生成物 `app_localizations*.dart` 由 `flutter gen-l10n` 重生成，不手改
 

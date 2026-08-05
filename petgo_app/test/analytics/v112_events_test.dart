@@ -263,6 +263,10 @@ void main() {
         'tab', 'user_state', 'from_tab', 'to_tab', 'session_first', 'source', 'method',
         'entry_source', 'type', 'is_default', 'has_pet_profile', 'enabled', 'item_type',
         'to_view',
+        // V1.1.2 Story 7.4 · FR-91（code-review 2026-08-04 补入契约清单）：
+        // 兜底那次带 restore_timeout、纠正那次带 corrected_from。实际上报形态由
+        // test/shared/splash_landing_budget_test.dart 行为级断言把守。
+        'restore_timeout', 'corrected_from',
       ];
       for (final n in propNames) {
         expect(naming.hasMatch(n), isTrue, reason: '$n 不是 snake_case');

@@ -9,8 +9,8 @@ import '../../l10n/app_localizations.dart';
 /// 底部 Tab 的 4 个可导航位（中间「＋」是独立凸起按钮，不占导航分支）。
 ///
 /// **枚举顺序 == 视觉顺序 == 路由分支顺序**（Story 1.1 · AD-3）：
-/// Diary(profile) → Health(triage) → [+] → Discovery(home) → Me。
-/// 枚举值名沿用历史语义（`home` = 原首页 Feed，现称 Discovery；`profile` = 成长档案 Diary），
+/// Diary(profile) → Health(triage) → [+] → Social(home) → Me。
+/// 枚举值名沿用历史语义（`home` = 原首页 Feed，现称 Social；`profile` = 成长档案 Diary），
 /// 本 Story 只重排顺序不改名——改名会牵动 l10n key 与大量调用点，不在范围内。
 ///
 /// `location` **内嵌在枚举上**，取代原先与枚举并行维护的 `_tabLocations` 数组：
@@ -29,8 +29,8 @@ enum AppTab {
   /// 埋点用的**产品叫法**（Story 6.1 · 命名可读性要求）。
   ///
   /// ⚠️ 枚举名是历史包袱，与产品叫法**并不对应**：`profile` 其实是 Diary、`triage` 其实是
-  /// Health、`home` 其实是 Discovery。直接把枚举名送进埋点，看板上会出现「进入 home」
-  /// 却指的是 Discovery 这种读不懂的数据 —— 所以对外一律用这里的名字。
+  /// Health、`home` 其实是 Social。直接把枚举名送进埋点，看板上会出现「进入 home」
+  /// 却指的是 Social 这种读不懂的数据 —— 所以对外一律用这里的名字。
   final String analyticsName;
 }
 
@@ -56,7 +56,7 @@ const double _kActiveHighlightRadius = 13;
 
 /// 底部 Tab Bar 外壳（FR-19 / UX-DR2，1:1 还原 feed.html `.tabbar`）。
 ///
-/// 白底、**顶部 32 圆角 + 上沿柔阴影**；5 位：Diary / Health / [+] / Discovery / 我的（Story 1.1 重排）。
+/// 白底、**顶部 32 圆角 + 上沿柔阴影**；5 位：Diary / Health / [+] / Social / 我的（Story 1.1 重排）。
 /// 中间「＋」为凸起悬浮按钮（[AddTabButton]，Scaffold centerDocked + [kAddButtonDip] 下压，仅露上沿）。
 /// **选中态（FR-78A 方案A 萌化）**：紫 glyph + **44×44 violet-tint 实底圆角高亮**（r13）+
 /// **一处宠物特征装饰** + 一次 ≤150ms 轻弹跳 + 紫色加粗标签。
@@ -69,10 +69,10 @@ const double _kActiveHighlightRadius = 13;
 /// |---|---|---|---|---|
 /// | Diary | 猫耳 | **顶部居中**（长在书上沿） | 23×11 | 紫外耳 + **粉内耳** |
 /// | Health | 爪印 | 右上 (-3,-3) | 16×16 | 紫 + 白描边发光 |
-/// | Discovery | 尾巴 | **右下** (-4,-1) | 18×18 | 紫**描边**弧线 + 白发光 |
+/// | Social | 尾巴 | **右下** (-4,-1) | 18×18 | 紫**描边**弧线 + 白发光 |
 /// | Me | 项圈铃铛 | **居中盖在人像上** | 26×26 | **金色** + 白点铃铛 |
 ///
-/// glyph 激活态填充方式也随稿：Diary / Discovery / Me 用实心，**Health 保持描边**
+/// glyph 激活态填充方式也随稿：Diary / Social / Me 用实心，**Health 保持描边**
 /// （听诊器实心会糊成一团）。
 class BottomTabBar extends StatelessWidget {
   const BottomTabBar({
@@ -107,7 +107,7 @@ class BottomTabBar extends StatelessWidget {
           height: _kBarHeight,
           child: Row(
             children: [
-              // 顺序与 AppTab.values 严格一致（AD-3）：Diary / Health / [+] / Discovery / Me
+              // 顺序与 AppTab.values 严格一致（AD-3）：Diary / Health / [+] / Socialy / Me
               _item(AppTab.profile, l10n.tabProfile),
               _item(AppTab.triage, l10n.tabTriage),
               const Expanded(child: SizedBox()), // 「＋」凸起按钮的缺口占位
@@ -208,7 +208,7 @@ class _TabIcon {
 }
 
 // 原型 feed.html 各 tab 的 iout(描边)/ifill(实心) path。
-// Discovery（原首页）：房子 → **罗盘**（Story 1.2；T3 稿与 PRD FR-78A 均作「探索=罗盘」，
+// Social（原首页）：房子 → **罗盘**（Story 1.2；T3 稿与 PRD FR-78A 均作「探索=罗盘」，
 // 首页改名探索后房子语义不再成立）。简笔近似，待设计精修图标到位后整批替换。
 const _kIconCompass = _TabIcon(
   '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5 5-2z"/>',

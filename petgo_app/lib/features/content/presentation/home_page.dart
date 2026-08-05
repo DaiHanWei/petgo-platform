@@ -27,7 +27,7 @@ import '../../../shared/widgets/mini_profile_sheet.dart';
 /// 数据接线：feedProvider 三态、分类过滤、游客第 3 页软登录（FR-0B）、门控发布（Story 1.5）。
 ///
 /// ⚠️ **V1.1.2 Story 2.3 起本页不再有建档提示条**：FR-0H 整条废止（AD-15 Rule 3）——
-/// 首页改名 Discovery 并挪到第 4 位后，状态 A 未建档用户的落地页是 Diary，这条提示曝光趋近于零；
+/// 首页改名 Social（V1.1.2 起；曾短暂叫 Discovery）并挪到第 4 位后，状态 A 未建档用户的落地页是 Diary，这条提示曝光趋近于零；
 /// 建档引导渠道**收敛为唯一一条** = Diary 的未建档分支。勿在此重新加回任何建档提示。
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
@@ -201,7 +201,7 @@ class HomePage extends ConsumerWidget {
       };
 }
 
-/// Discovery 滚动头部（原型 feed.html）：分类 Chips。
+/// Social 滚动头部（原型 feed.html）：分类 Chips。
 /// 已移除 Momo 问候头 / 快捷入口卡 / 每日提示卡 / 「Untukmu」区头（推倒重做决策 #6），
 /// 以及建档提示条（V1.1.2 Story 2.3：FR-0H 整条废止，**顶部不再预留该区域**）。
 class _BerandaTop extends StatelessWidget {

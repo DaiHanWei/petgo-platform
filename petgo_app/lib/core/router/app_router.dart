@@ -110,7 +110,14 @@ const Map<String, String> _landingTabNames = {
 ///
 /// ⚠️ **安全默认是「拦」**：前缀匹配（`loc == p || loc.startsWith('$p/')`）保持默认拦截，
 /// 新增的任何 `/profile/*`、`/me/*` … 子页**自动受控，无需逐个登记**。
-const Set<String> _controlledLocations = {'/profile', '/triage', '/me', '/consult', '/notifications', '/publish'};
+const Set<String> _controlledLocations = {
+  '/profile',
+  '/triage',
+  '/me',
+  '/consult',
+  '/notifications',
+  '/publish',
+};
 
 /// 受控前缀里的**精确例外**（V1.1.2 Story 2.4 · AD-7 Rule 1）：游客可直接进入的完整路径。
 ///
@@ -134,11 +141,11 @@ const String _devRoute = String.fromEnvironment('DEV_ROUTE');
 
 /// Tab 分支根页（与 [AppTab] 一一对应；穷尽 switch，新增 Tab 时编译期报错，不会静默漏配）。
 Widget _tabRootPage(AppTab tab) => switch (tab) {
-      AppTab.profile => const GrowthArchivePage(),
-      AppTab.triage => const TriagePage(),
-      AppTab.home => const HomePage(),
-      AppTab.me => const MePage(),
-    };
+  AppTab.profile => const GrowthArchivePage(),
+  AppTab.triage => const TriagePage(),
+  AppTab.home => const HomePage(),
+  AppTab.me => const MePage(),
+};
 
 /// FR-91 迟到纠正的**判定结果**（纯数据，便于单测逐条锁 7 条约束）。
 enum LateCorrectionOutcome {
@@ -180,7 +187,7 @@ LateCorrectionOutcome resolveLateCorrection({
 /// 恢复请求继续跑，完成后写回 `AuthState`。所以超时兜底送去的落地页**是会变化的中间态，
 /// 不是终态**。兽医能自愈（redirect 里的角色隔离守卫会收口），但**已登录的 A·未建档与
 /// B/C 不能** —— 门控条件是 `!auth.isLoggedIn && controlled`，已登录不命中；redirect 里
-/// 没有任何分支会把已登录用户从 Diary 移到 Discovery。本机制补的就是这一环。
+/// 没有任何分支会把已登录用户从 Diary 移到 Social。本机制补的就是这一环。
 class LateLandingCorrection {
   /// 非 null = 本次冷启动的落地**由超时兜底产生**，且尚未纠正。值为兜底送去的目标路径。
   String? _armed;
@@ -216,11 +223,41 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
   final lateCorrection = LateLandingCorrection();
   late final GoRouter router;
 
+  /// 🔴 AC4 补强（code-review 2026-08-04）：**只要用户离开过兜底落地页，就永久放弃纠正。**
+  ///
+  /// 改前只在恢复完成的那一刻比对一次当前路径，于是分不清「一直没走」和「走了又回来」：
+  /// 兜底落 `/profile` → 用户点 Social → 再点回 Diary（`goBranch` 会把 path 真的改回 `/profile`）
+  /// → 恢复完成 → 判定「他还在原地」→ 把他从**自己刚刚主动选定的 Diary** 拽到 Social。
+  ///
+  /// 现在改为监听路由变化：一旦当前路径偏离过 armed 目标就 `disarm()` —— 走过就不回头。
+  /// 兜底那次 `ctx.go(target)` 自身落点**等于** armed，所以不会自我误伤。
+  void onNavigationAwayFromFallback() {
+    final armed = lateCorrection.armed;
+    if (armed == null) return;
+    if (router.routerDelegate.currentConfiguration.uri.path != armed) {
+      lateCorrection.disarm();
+    }
+  }
+
   /// 恢复 future 真正完成后（成功或失败都算完成 —— 约束②，不是固定延时）重判一次落地目标。
   void lateCorrect() {
     final armed = lateCorrection.armed;
     final ctx = rootNavigatorKey.currentContext;
     if (ctx == null || !ctx.mounted) return;
+
+    // 🔴 AC4 补强（code-review 2026-08-04）：**用户正在做别的事时一律放手。**
+    //
+    // 根 Navigator 还能 pop ⇒ 上面压着一层用户自己打开的东西（`showDialog` 默认
+    // `useRootNavigator: true`，强登录弹窗、软登录浮层都在这一层）。此时纠正会**无声关掉**
+    // 它 —— 比落错页严重得多，正是 AC4 要防的伤害。
+    //
+    // ⚠️ 这不是 AC4 禁止的「用路由栈深度判断用户是否离开」：身份判定仍然是**路径比对**
+    // （见 [resolveLateCorrection]）。这里只是额外加一个「人是否正忙」的免打扰条件 ——
+    // 方向恰好相反：栈上有东西 ⇒ 更不该动他。
+    if (rootNavigatorKey.currentState?.canPop() ?? false) {
+      lateCorrection.disarm();
+      return;
+    }
 
     final auth = ref.read(authControllerProvider);
     final state = appUserStateOf(auth);
@@ -252,7 +289,11 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
     Analytics.capture('app_launch_landed_on_tab', {
       'tab': tabName,
       'user_state': state.wire,
-      'corrected_from': from,
+      // ⚠️ 送**产品名**而不是路由路径原文（code-review 2026-08-04）：同一次上报里的 `tab`
+      // 已经经 [_landingTabNames] 转过（产品看不出 `/profile` 是 Diary），`corrected_from`
+      // 若回退成 `/profile`，看板上两个属性根本对不起来；7-4 的强制护栏也写明
+      // 「不得把路径原文塞进属性」。
+      'corrected_from': _landingTabNames[from] ?? 'other',
     });
     Analytics.screen('${tabName}_page');
     ctx.go(corrected);
@@ -279,7 +320,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // 非兽医（用户/游客）不可进兽医工作台等 vet 专属路由（/vet/login 允许，供登录）。
       if (isVetRoute && loc != '/vet/login') return '/home';
       // 默认受控 + 精确例外（AD-7 Rule 1）：先按前缀判定受控，再看是否命中精确例外。
-      final controlled = _controlledLocations.any((p) => loc == p || loc.startsWith('$p/')) &&
+      final controlled =
+          _controlledLocations.any((p) => loc == p || loc.startsWith('$p/')) &&
           !_controlledExactExceptions.contains(loc);
       if (!auth.isLoggedIn && controlled) return '/home'; // 安全规则只升不降：游客不进受控路由
       return null;
@@ -294,27 +336,42 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
           // 会话恢复（`/me`）**由 splash 在首帧即触发，与动效并行**（Story 7.3 / 决策 C-4）。
           // 改前是在下面的 onComplete 里才发起 —— 动效播完才开始取数，白等一个动效时长。
           // `ensureRestored()` 返回共享 future，故这里只是提早触发，不会打两次 `/me`。
-          prepareSession: () =>
-              ref.read(authControllerProvider.notifier).ensureRestored(),
+          prepareSession: () => ref.read(authControllerProvider.notifier).ensureRestored(),
           onComplete: () async {
-            // 等那条**已在跑**的恢复 future（splash 首帧就发起了），而非此时才发起。
-            // 超时 3s → 5s（决策 D-2）：splash 侧已按 5s 兜底放行，故此处通常已完成、立即返回；
-            // 保留兜底以防 splash 被绕过（如深链直达）。
-            // ⚠️ `.timeout()` **只停止等待、不取消底层请求** —— 恢复晚到仍会写回 AuthState。
-            //    这是刻意保留的既有行为：Story 7.4 的「超时兜底迟到纠正」正建立在它之上，
-            //    不要"顺手"改成可取消。
-            final restore =
-                ref.read(authControllerProvider.notifier).ensureRestored();
-            var timedOut = false;
-            await restore.timeout(
-              const Duration(seconds: 5),
-              onTimeout: () => timedOut = true,
-            );
+            // 🔴 **这里不再二次等待**（code-review 2026-08-04）。
+            //
+            // 改前是 `await restore.timeout(const Duration(seconds: 5))`，而 splash 自己已经
+            // 有一个 5s 兜底（`readyDeadline`）—— 两段**串联**成最坏 **10s**：用户在紫屏上停
+            // 10 秒、慢网提示可读 7.7s，而决策 D-2 的口径是「从冷启动起算 5s」、可读 2.7s。
+            // 更隐蔽的连带：恢复若在 5~10s 之间完成，`timedOut` 会保持 false ⇒ 既不打
+            // `restore_timeout` 标记（AC6 的兜底发生率不可观测），也不武装 FR-91 迟到纠正
+            // ⇒ **7-4 的核心机制在最常见的慢网区间形同死代码**。
+            //
+            // 现在等待预算**只由 splash 持有**（单一时间源）：本回调被调到时，要么 splash 已
+            // 就绪（`isRestored == true`），要么 splash 用尽 5s 预算 force 放行
+            // （`isRestored == false` ⇒ 即超时兜底态）。同步读一个标志即可，一秒都不必再等。
+            // ⚠️ 不要改回「自己再算一次剩余时间」：那会引入第二个时间源（`DateTime.now()`
+            //    是真实时钟，与 Timer 的时钟在测试里根本不同步，写出来的回归测试是假的）。
+            //
+            // ⚠️ 恢复**不会**因为不等它而被取消 —— 晚到仍会写回 AuthState，
+            //    Story 7.4 的迟到纠正正建立在这一既有行为之上，不要"顺手"改成可取消。
+            final notifier = ref.read(authControllerProvider.notifier);
+            final restore = notifier.ensureRestored();
+            final timedOut = !notifier.isRestored;
             final ctx = rootNavigatorKey.currentContext;
             if (ctx == null || !ctx.mounted) return;
+            // 🔴 位置守卫（code-review 2026-08-04）：**只有还停在启动屏时才有资格决定落地。**
+            //
+            // 缺这一句的后果：`app.dart` 的 `uriLinkStream` 分支在 splash 期间命中时会直接
+            // `router.go(深链目标)`，而本回调随后无条件 `ctx.go(落地矩阵目标)` 把它覆盖掉 ——
+            // 用户点了分享名片，却被送到默认 Tab。交棒时机本轮从 4500ms 压到 1720ms 之后，
+            // 这个窗口反而更容易被撞上。
+            if (router.routerDelegate.currentConfiguration.uri.path != '/splash') {
+              return;
+            }
             // 分流顺序（AD-8）：pending 深链 > 按用户状态的落地矩阵。
             // 冷启动若由分享页深链唤起 → 落该目标（游客点名片深链也落 Diary 游客态：
-            // `/profile` 已在门控精确例外集里，不再被 redirect 弹回 Discovery）。
+            // `/profile` 已在门控精确例外集里，不再被 redirect 弹回 Social）。
             final pending = ref.read(pendingDeepLinkProvider);
             if (pending != null) {
               ref.read(pendingDeepLinkProvider.notifier).set(null);
@@ -345,7 +402,13 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
             if (timedOut) {
               lateCorrection.arm(target);
               // 约束②：以**恢复 future 完成**为时机（非固定延时）。失败也算完成 —— 走约束⑥。
-              restore.then((_) => lateCorrect()).catchError((_) => lateCorrect());
+              //
+              // ⚠️ 用 `whenComplete` 而不是 `.then(...).catchError(...)`
+              // （code-review 2026-08-04）：`_restoreSession()` 内部已 catch-all，这条 future
+              // **永不 error** ⇒ 原来的 `catchError` 是死路径；更糟的是它挂在 `.then` 的结果上，
+              // 万一 `lateCorrect()` 自己抛错就会**再调一次**（有 `consume()` 兜底所以当前无害，
+              // 但结构是错的）。`whenComplete` 无论成功失败都只调一次，正好就是约束②要的语义。
+              restore.whenComplete(lateCorrect);
             }
           },
         ),
@@ -371,12 +434,18 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
           var created = s.extra is PetProfile ? s.extra as PetProfile : null;
           // Debug 截图钩子（仅 debug + flag）：深链无 extra 时合成代表性档案，让 pet-success 庆祝页可直达。
           if (created == null && kDebugMode && const bool.fromEnvironment('DEV_CELEBRATE')) {
-            created = const PetProfile(id: 7001, name: 'Mochi', cardToken: 'dev-token', petType: 'CAT');
+            created = const PetProfile(
+              id: 7001,
+              name: 'Mochi',
+              cardToken: 'dev-token',
+              petType: 'CAT',
+            );
           }
           if (created == null) {
             // 防御：无数据直达（如刷新/深链）→ 回首页，不崩。
-            WidgetsBinding.instance
-                .addPostFrameCallback((_) => c.canPop() ? c.pop() : c.go('/home'));
+            WidgetsBinding.instance.addPostFrameCallback(
+              (_) => c.canPop() ? c.pop() : c.go('/home'),
+            );
             return const SizedBox.shrink();
           }
           return ProfileCreatedCelebrationPage(
@@ -406,11 +475,12 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // ?add=VACCINE|DEWORM|...：进页自动弹预选类型的添加表单（bug 20260729-406，健康类里程碑直跳）。
       // ?focus=<记录 id>：进页滚到该条并短暂高亮（Diary 时间线类④ 点击 → 定位到对应条目）。
       GoRoute(
-          path: '/profile/health',
-          builder: (c, s) => HealthListPage(
-                presetAddType: s.uri.queryParameters['add'],
-                focusRecordId: int.tryParse(s.uri.queryParameters['focus'] ?? ''),
-              )),
+        path: '/profile/health',
+        builder: (c, s) => HealthListPage(
+          presetAddType: s.uri.queryParameters['add'],
+          focusRecordId: int.tryParse(s.uri.queryParameters['focus'] ?? ''),
+        ),
+      ),
       // 成长档案当天详情（Story 2.4 AC6 · F9）。?date=yyyy-MM-dd；受控（/profile/ 前缀）。
       GoRoute(
         path: '/profile/day',
@@ -418,8 +488,9 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
           final raw = s.uri.queryParameters['date'];
           final date = raw != null ? DateTime.tryParse(raw) : null;
           if (date == null) {
-            WidgetsBinding.instance
-                .addPostFrameCallback((_) => c.canPop() ? c.pop() : c.go('/profile'));
+            WidgetsBinding.instance.addPostFrameCallback(
+              (_) => c.canPop() ? c.pop() : c.go('/profile'),
+            );
             return const SizedBox.shrink();
           }
           return DayDetailPage(date: date);
@@ -483,12 +554,14 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/consult/conversation/:id',
         builder: (c, s) => ConsultConversationPage(
-            sessionId: int.parse(s.pathParameters['id']!),
-            from: s.uri.queryParameters['from']),
+          sessionId: int.parse(s.pathParameters['id']!),
+          from: s.uri.queryParameters['from'],
+        ),
       ),
       GoRoute(
         path: '/vet/conversation/:id',
-        builder: (c, s) => _vetScoped(VetConversationPage(sessionId: int.parse(s.pathParameters['id']!))),
+        builder: (c, s) =>
+            _vetScoped(VetConversationPage(sessionId: int.parse(s.pathParameters['id']!))),
       ),
       // 兽医收入页（Story 3.7）：当月待结算 + 历史月结倒序（从「我的」进）。
       GoRoute(path: '/vet/income', builder: (c, s) => _vetScoped(const VetIncomePage())),
@@ -496,32 +569,37 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // 供顶栏宠物名；深链无 extra 时降级为 null，仅按 sessionId 拉诊断。
       GoRoute(
         path: '/vet/history/:id',
-        builder: (c, s) => _vetScoped(VetHistoryDetailPage(
-          sessionId: int.parse(s.pathParameters['id']!),
-          entry: s.extra as VetHistoryEntry?,
-        )),
+        builder: (c, s) => _vetScoped(
+          VetHistoryDetailPage(
+            sessionId: int.parse(s.pathParameters['id']!),
+            entry: s.extra as VetHistoryEntry?,
+          ),
+        ),
       ),
       // 抢单请求详情/预览页（Story 5.2 AC5 · F11）：3 分钟预览计时 + 三态返回。
       GoRoute(
         path: '/vet/request/:id',
         // 正常流程从列表带入 extra(VetInboxItem)；extra 为空时仅出现在 dev 深链（DEV_ROUTE，
         // 生产流程恒带 extra）→ 合成一份代表性富样本（含宠物身份），供逐屏视觉验收完整渲染。
-        builder: (c, s) => _vetScoped(VetRequestDetailPage(
-          item: s.extra as VetInboxItem? ??
-              VetInboxItem(
-                sessionId: int.parse(s.pathParameters['id']!),
-                source: 'AI_UPGRADE',
-                aiDangerLevel: 'YELLOW',
-                symptomPreview:
-                    'Muntah busa putih 2x semalam, jadi lebih lemas & kurang nafsu makan',
-                imageCount: 2,
-                waitingElapsedSeconds: 45,
-                petName: 'Mochi',
-                petSpecies: 'CAT',
-                petAgeMonths: 12,
-                ownerHandle: 'aditya.kurniawan',
-              ),
-        )),
+        builder: (c, s) => _vetScoped(
+          VetRequestDetailPage(
+            item:
+                s.extra as VetInboxItem? ??
+                VetInboxItem(
+                  sessionId: int.parse(s.pathParameters['id']!),
+                  source: 'AI_UPGRADE',
+                  aiDangerLevel: 'YELLOW',
+                  symptomPreview:
+                      'Muntah busa putih 2x semalam, jadi lebih lemas & kurang nafsu makan',
+                  imageCount: 2,
+                  waitingElapsedSeconds: 45,
+                  petName: 'Mochi',
+                  petSpecies: 'CAT',
+                  petAgeMonths: 12,
+                  ownerHandle: 'aditya.kurniawan',
+                ),
+          ),
+        ),
       ),
       // 通知中心（Story 6.6）+ 6.1 深链兜底落点。受控路由（需登录）。
       GoRoute(path: '/notifications', builder: (c, s) => const NotificationCenterPage()),
@@ -541,17 +619,21 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // 用户端退款方式选择/填收款 3 屏（Story 4.5）。受控（/me 前缀，需登录）；shell 外顶层隐 Tab。
       GoRoute(path: '/me/refunds', builder: (c, s) => const RefundListPage()),
       GoRoute(
-          path: '/me/refunds/choose',
-          builder: (c, s) => RefundChoosePage(refund: s.extra as MyRefund)),
+        path: '/me/refunds/choose',
+        builder: (c, s) => RefundChoosePage(refund: s.extra as MyRefund),
+      ),
       GoRoute(
-          path: '/me/refunds/account',
-          builder: (c, s) => RefundAccountPage(refund: s.extra as MyRefund)),
+        path: '/me/refunds/account',
+        builder: (c, s) => RefundAccountPage(refund: s.extra as MyRefund),
+      ),
       GoRoute(
-          path: '/me/refunds/status',
-          builder: (c, s) => RefundStatusPage(refund: s.extra as MyRefund)),
+        path: '/me/refunds/status',
+        builder: (c, s) => RefundStatusPage(refund: s.extra as MyRefund),
+      ),
       GoRoute(
-          path: '/me/refunds/pawcoin-success',
-          builder: (c, s) => RefundPawcoinSuccessPage(result: s.extra as RefundPawcoinResult)),
+        path: '/me/refunds/pawcoin-success',
+        builder: (c, s) => RefundPawcoinSuccessPage(result: s.extra as RefundPawcoinResult),
+      ),
       // 语言设置（Story 7.2）。
       GoRoute(path: '/me/language', builder: (c, s) => const LanguageSettingsPage()),
       // 账号注销整页（P-43 · Story 7.3）。受控（/me 前缀，需登录）。
@@ -586,19 +668,26 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/publish/reviewing',
         builder: (c, s) => PublishReviewingPage(
-            args: s.extra is PublishResultArgs ? s.extra as PublishResultArgs : PublishResultArgs.sample),
+          args: s.extra is PublishResultArgs
+              ? s.extra as PublishResultArgs
+              : PublishResultArgs.sample,
+        ),
       ),
       GoRoute(
         path: '/publish/done',
         builder: (c, s) => PublishDonePage(
-            args: s.extra is PublishResultArgs ? s.extra as PublishResultArgs : PublishResultArgs.sample),
+          args: s.extra is PublishResultArgs
+              ? s.extra as PublishResultArgs
+              : PublishResultArgs.sample,
+        ),
       ),
       GoRoute(
         path: '/publish/rejected',
         builder: (c, s) => PublishRejectedPage(
-            args: s.extra is PublishResultArgs
-                ? s.extra as PublishResultArgs
-                : PublishResultArgs.sampleRejected),
+          args: s.extra is PublishResultArgs
+              ? s.extra as PublishResultArgs
+              : PublishResultArgs.sampleRejected,
+        ),
       ),
       // 里程碑列表页（壳）（Story 6.1 · FR-42）：MILESTONE_NODE 深链承接；本体属里程碑 mini-epic。受控（/profile/ 前缀）。
       GoRoute(path: '/profile/milestones', builder: (c, s) => const MilestoneListPage()),
@@ -608,12 +697,16 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         // 分支声明顺序即索引来源，手写四段会与枚举顺序脱节；循环生成后结构上不可能漂移。
         branches: <StatefulShellBranch>[
           for (final AppTab tab in AppTab.values)
-            StatefulShellBranch(routes: [
-              GoRoute(path: tab.location, builder: (c, s) => _tabRootPage(tab)),
-            ]),
+            StatefulShellBranch(
+              routes: [GoRoute(path: tab.location, builder: (c, s) => _tabRootPage(tab))],
+            ),
         ],
       ),
     ],
   );
+  // 见 [onNavigationAwayFromFallback]：用户离开过兜底落地页就永久放弃纠正（AC4）。
+  router.routerDelegate.addListener(onNavigationAwayFromFallback);
+  ref.onDispose(() => router.routerDelegate.removeListener(onNavigationAwayFromFallback));
+
   return router;
 });

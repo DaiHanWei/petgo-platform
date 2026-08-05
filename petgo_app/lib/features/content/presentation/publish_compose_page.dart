@@ -679,7 +679,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
 
   /// 「同步到 Moment」开关（Story 4.2 · AC1/AC2 · UI 稿 P1/P2）。**仅 Diary 渲染，默认开启**。
   ///
-  /// 关掉 = 这条只进自己的成长档案（`visibility=PRIVATE`），不进 Discovery / 话题聚合 / 任何公开位。
+  /// 关掉 = 这条只进自己的成长档案（`visibility=PRIVATE`），不进 Socialy / 话题聚合 / 任何公开位。
   /// ⚠️ 发布后**不可更改**（FR-83 AC7）：本页是唯一的设置点，详情页 / 我的发布 / 编辑流程都不得加
   /// 「转为私密」入口 —— 让内容不再被他人看到的唯一途径是删除该条。
   Widget _syncSwitch(PublishController controller, AppLocalizations l10n) {

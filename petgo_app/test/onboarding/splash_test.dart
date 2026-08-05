@@ -64,24 +64,99 @@ void main() {
     });
 
     testWidgets('AC0/AC5：尺寸相对屏宽 —— 换屏宽后 mark 与字标等比跟随', (tester) async {
-      Future<double> markWidthAt(double screenW) async {
+      // ⚠️ 原实现是 `tester.getSize(find.byType(SplashPage)).width` —— 那是**整页宽**，
+      // 于是 `expect(await markWidthAt(390), 390)` 恒真，把 mark 改回硬编码 `width: 108`
+      // 也照样绿（code-review 2026-08-04）。现在真去量 mark 与字标自己的渲染宽度。
+      //
+      // 量的是**终态**（reduce-motion 把 `_master` 钉在 1.0）：首帧宽度按决策 D2 是与原生对齐的
+      // 绝对值 [SplashPage.markHandoffWidth]，只有终态才是「相对屏宽」的那个契约。
+      Future<(double mark, double wordmark)> sizesAt(double screenW) async {
         tester.view.physicalSize = Size(screenW, 2400);
         tester.view.devicePixelRatio = 1.0;
         addTearDown(tester.view.reset);
-        await pumpSplash(tester, onComplete: () {}, prepareSession: () => Future<void>.value());
-        // 首帧（B1 起点）mark 可见；取其渲染宽度
-        final w = tester.getSize(find.byType(SplashPage)).width;
+        await pumpSplash(tester,
+            onComplete: () {},
+            disableAnimations: true,
+            prepareSession: () => Future<void>.value());
+        // mark 用 SVG 本体量（Stack 里第一个 SVG —— glow 是 Container 不是 SVG）；
+        // 字标用容器 key 量：它在资产异步载入完成前就存在，断言因此不依赖时序。
+        final markW = tester.getSize(find.byType(SvgPicture).first).width;
+        final wordmarkW = tester.getSize(find.byKey(SplashPage.wordmarkBoxKey)).width;
         await tester.pumpWidget(const SizedBox());
-        return w;
+        return (markW, wordmarkW);
       }
 
-      expect(await markWidthAt(390), 390);
-      expect(await markWidthAt(1080), 1080);
+      for (final screenW in const <double>[390, 1080]) {
+        final (markW, wordmarkW) = await sizesAt(screenW);
+        expect(markW, closeTo(screenW * SplashPage.markWidthRatio, 0.5),
+            reason: 'mark 终态宽度应为屏宽 ×${SplashPage.markWidthRatio}（NFR-17：不写死绝对像素）');
+        expect(wordmarkW, closeTo(screenW * SplashPage.wordmarkWidthRatio, 0.5),
+            reason: '字标宽度应为屏宽 ×${SplashPage.wordmarkWidthRatio}');
+      }
       // 比例常量本身即契约，写死绝对像素会破坏它（NFR-17）
       expect(SplashPage.markWidthRatio, 0.42);
       expect(SplashPage.wordmarkWidthRatio, 0.60);
       expect(SplashPage.glowWidthRatio, 0.667);
       expect(SplashPage.taglineWidthRatio, 0.70);
+    });
+
+    // 决策 D2（code-review 2026-08-04）：首帧必须与原生启动屏**同尺寸**交接。
+    // 原生三端可视 mark 都是固定 192 逻辑像素（288 画布 × 2/3），而 Flutter 侧原先直接用
+    // 屏宽 42% —— 两者只在屏宽 457dp 时相等（iPhone SE 差 30%），交接必跳尺寸。
+    testWidgets('AC0：首帧 mark 宽度 = 原生的 192，与屏宽无关', (tester) async {
+      for (final screenW in const <double>[320, 411, 1080]) {
+        tester.view.physicalSize = Size(screenW, 866);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+
+        final never = Completer<void>();
+        addTearDown(() { if (!never.isCompleted) never.complete(); });
+        await pumpSplash(tester, onComplete: () {}, prepareSession: () => never.future);
+        // pumpSplash 已推进 50ms，B1 已走了一小段 ⇒ 宽度已从 192 往相对尺寸插值。
+        // 故断言「首帧一侧」用 t≈0 的上界：宽度必须落在 [min(192,相对), max(192,相对)] 内，
+        // 且在 320dp 这种窄屏上必须**明显大于**相对尺寸（192 vs 134）。
+        final markW = tester.getSize(find.byType(SvgPicture).first).width;
+        final relative = screenW * SplashPage.markWidthRatio;
+        final lo = relative < SplashPage.markHandoffWidth ? relative : SplashPage.markHandoffWidth;
+        final hi = relative < SplashPage.markHandoffWidth ? SplashPage.markHandoffWidth : relative;
+        expect(markW, inInclusiveRange(lo - 0.5, hi + 0.5),
+            reason: '${screenW.toInt()}dp：mark 宽度应在「原生 192」与「相对 $relative」之间插值');
+        if (screenW == 320) {
+          expect(markW, greaterThan(relative + 20),
+              reason: '窄屏上首帧应贴近原生的 192，而不是相对尺寸的 134 —— 否则交接跳尺寸');
+        }
+        await tester.pumpWidget(const SizedBox());
+      }
+      expect(SplashPage.markHandoffWidth, 192);
+    });
+
+    // 🔴 code-review 2026-08-04：首帧 mark 的垂直居中原先用「宽度的一半」抵扣，而 mark 是
+    // 宽扁的（宽高比 1.21）⇒ 整块上移 `(w−h)/2 = 0.087w`，411dp 机型即 **15dp**。
+    // 「首帧与原生那一帧同位」正是本 Epic 存在的理由，偏 15dp 等于交接处跳一下。
+    testWidgets('AC0：mark 的视觉中心精确落在动效线上（居中抵扣必须用高度而非宽度）', (tester) async {
+      tester.view.physicalSize = const Size(411, 866);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final never = Completer<void>();
+      addTearDown(() { if (!never.isCompleted) never.complete(); });
+      // reduce-motion 把 `_master` 钉在 1.0 ⇒ B1 的 t 恒为 1 ⇒ mark 应当正中在**设计位 43%**。
+      // 用终态而非首帧来断言是为了确定性：首帧之后动画立刻推进，按 t=0 断言会随 pump 时长漂移。
+      await pumpSplash(tester,
+          onComplete: () {}, disableAnimations: true, prepareSession: () => never.future);
+
+      final rect = tester.getRect(find.byType(SvgPicture).first);
+      final expected = 866 * SplashPage.centerYRatio;
+      // 若把抵扣写回 `w / 2`，中心会上移 (w−h)/2 = 0.087w ≈ 15dp（411dp 机型）⇒ 这条会红。
+      expect(rect.center.dy, closeTo(expected, 1.0),
+          reason: 'mark 视觉中心应落在 43% 线（${expected.toStringAsFixed(1)}），'
+              '实际 ${rect.center.dy.toStringAsFixed(1)}。偏约 15dp 通常意味着居中用了宽度的一半，'
+              '而 mark 是宽扁的（宽高比 ${SplashPage.markAspect.toStringAsFixed(3)}）');
+      // 宽高比契约：抵扣量取决于它，换资产必须同步改 markAspect
+      expect(rect.width / rect.height, closeTo(SplashPage.markAspect, 0.01),
+          reason: '渲染宽高比与 markAspect 不符 —— 资产 viewBox 变了但常量没跟着改');
+
+      await tester.pumpWidget(const SizedBox());
     });
 
     testWidgets('AC4：入场总时长收敛为 1540ms，不超 1.8s 上限（NFR-13）', (tester) async {
@@ -266,8 +341,11 @@ void main() {
       addTearDown(() { if (!never.isCompleted) never.complete(); });
       await pumpSplash(tester, onComplete: () => done = true, prepareSession: () => never.future);
 
-      final slot = find.byWidgetPredicate(
-          (w) => w is SizedBox && w.height == SplashPage.bottomSlotHeight);
+      // 容器是 ConstrainedBox(minHeight:)（code-review 2026-08-04 由写死的 height 改来，
+      // 见下一条溢出用例）。「无位移」靠的是提示 Text 恒在树中 ⇒ 高度与是否可见无关。
+      final slot = find.byWidgetPredicate((w) =>
+          w is ConstrainedBox &&
+          w.constraints.minHeight == SplashPage.bottomSlotHeight);
       final before = tester.getRect(slot.first);
       await tester.pump(const Duration(milliseconds: 2400)); // 两个指示都已出现
       final after = tester.getRect(slot.first);
@@ -276,6 +354,42 @@ void main() {
       await tester.pump(const Duration(milliseconds: 2800)); // 越过 5s 兜底，清掉 splash 的定时器
       await tester.pumpWidget(const SizedBox());
     });
+
+    // 🔴 code-review 2026-08-04：底部等待槽原先是写死的 `SizedBox(height: 56)`，
+    // 56 按「12.5px × 行高 1.4 的单行」算出，没给系统字号放大（NFR-13 支持到 1.3）
+    // 和窄屏换行留余量。实测溢出：360dp + 印尼语 + **默认字号**就溢出 14px。
+    // 而且提示 Text 恒在树中 ⇒ **快网用户从没见过这条提示，也一样溢出**。
+    // 这一组用例把「窄屏 × 三档字号」全部钉住，别再退回固定高度。
+    for (final w in const <double>[360, 411]) {
+      for (final scale in const <double>[1.0, 1.15, 1.3]) {
+        testWidgets('AC4：${w.toInt()}dp × 字号 $scale 下等待槽不溢出（含印尼语最长文案）',
+            (tester) async {
+          tester.view.physicalSize = Size(w, 866);
+          tester.view.devicePixelRatio = 1.0;
+          addTearDown(tester.view.reset);
+
+          final never = Completer<void>();
+          addTearDown(() { if (!never.isCompleted) never.complete(); });
+          await tester.pumpWidget(MaterialApp(
+            locale: const Locale('id'), // 印尼语提示最长
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: MediaQuery(
+              data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+              child: SplashPage(onComplete: () {}, prepareSession: () => never.future),
+            ),
+          ));
+          await tester.pump();
+          // 推进到慢网提示已出现（2290ms）—— 溢出与否与可见性无关，但显示态更直观
+          await tester.pump(const Duration(milliseconds: 2400));
+
+          expect(tester.takeException(), isNull,
+              reason: '${w.toInt()}dp × $scale 下底部等待槽溢出了（RenderFlex overflow）');
+
+          await tester.pumpWidget(const SizedBox());
+        });
+      }
+    }
 
     testWidgets('AC8：未改落地分流与 onComplete 契约 —— 仅调用一次', (tester) async {
       var calls = 0;

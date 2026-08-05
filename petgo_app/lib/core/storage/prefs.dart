@@ -8,7 +8,11 @@ class AppPrefs {
 
   final SharedPreferences _prefs;
 
-  static Future<AppPrefs> create() async => AppPrefs(await SharedPreferences.getInstance());
+  static Future<AppPrefs> create() async {
+    final prefs = AppPrefs(await SharedPreferences.getInstance());
+    await prefs._pruneRemovedKeys(); // 清掉已废弃的键（见文件末尾说明）
+    return prefs;
+  }
 
   // --- 语言 ---
   static const _kLocale = 'petgo.locale';
@@ -27,7 +31,23 @@ class AppPrefs {
   bool get pushPermissionAsked => _prefs.getBool(_kPushPermissionAsked) ?? false;
   Future<void> setPushPermissionAsked(bool asked) => _prefs.setBool(_kPushPermissionAsked, asked);
 
-  // --- Splash 当天是否已播放过完整动画（新 splash：当天首开播全程，之后只显静止终态）---
+  // --- 已废弃的键（下面这些**刻意不再提供 getter/setter**）---
+  //
+  // `petgo.splash_last_shown_date`：曾用于「splash 当天只播一次完整动画」。
+  // 该门控已在 V1.1.2 Story 7.3（决策 C-3）**整条废止** —— 现在每次冷启动都播，
+  // reduce-motion 直落终态。原先这里只留了一句描述已删功能的孤立注释、下面却没有任何成员
+  // （code-review 2026-08-04 指出会误导后来人以为门控仍在）。
+  //
+  // 存量安装里这个键会一直留着。启动时**一次性清掉**，避免脏数据长期堆在 prefs 里
+  // （无副作用：全仓已无任何读取点）。
+  static const _kRemovedKeys = <String>['petgo.splash_last_shown_date'];
+
+  /// 清理已废弃的键。由 [create] 在初始化后调用一次，失败无所谓（纯清理）。
+  Future<void> _pruneRemovedKeys() async {
+    for (final k in _kRemovedKeys) {
+      if (_prefs.containsKey(k)) await _prefs.remove(k);
+    }
+  }
 
   int getInt(String key, {int fallback = 0}) => _prefs.getInt(key) ?? fallback;
   Future<void> setInt(String key, int value) => _prefs.setInt(key, value);

@@ -133,25 +133,23 @@ void main() {
       expect(lc.armed, '/home');
     });
 
-    test('AC6 埋点口径：沿用既有 T-1 事件名，新增两个区分属性（源码级锁定）', () {
-      // 超时兜底态与真实游客态**都上报 user_state=guest**，混在一起则「兜底发生率」无法
-      // 统计（PRD OQ-23 的口径要求）。故：兜底那次带 restore_timeout、纠正那次带 corrected_from。
-      final src = File('lib/core/router/app_router.dart').readAsStringSync();
-      // 事件名不得新造 —— 否则 Story 6.1 已交付的看板口径会断
-      expect(src.contains("'app_launch_landed_on_tab'"), isTrue);
-      expect(
-        RegExp(r"Analytics\.capture\('app_launch_landed_on_tab'").allMatches(src).length,
-        2,
-        reason: '应恰好两处上报：兜底落地 + 纠正后落地',
-      );
-      expect(src.contains("'restore_timeout': true"), isTrue, reason: '兜底那次的区分标记');
-      expect(src.contains("'corrected_from': from"), isTrue, reason: '纠正那次的区分标记');
-      // 属性名 snake_case（CLAUDE.md 命名映射链）
+    test('AC6 埋点口径：属性名 snake_case', () {
+      // ⚠️ 事件名与两个区分属性的**实际上报**已改为行为级断言，见
+      // `test/shared/splash_landing_budget_test.dart`：兜底那次带 `restore_timeout: true`、
+      // 纠正那次带 `corrected_from`，且两次都用既有事件名 `app_launch_landed_on_tab`。
+      //
+      // 原先这里是源码 grep：`src.contains("'corrected_from': from")` 逐字匹配一行代码，
+      // 以及 `allMatches(...).length == 2` 数源码里出现几次。两者都守的是写法而不是行为 ——
+      // code-review 2026-08-04 把 `corrected_from` 的取值从路径原文改成产品名（与同一次上报的
+      // `tab` 对齐）之后，行为更正确了，这条却因为字面量变了而变红。
       for (final k in ['restore_timeout', 'corrected_from', 'user_state']) {
         expect(k, matches(RegExp(r'^[a-z][a-z0-9_]*$')));
       }
       // 不得引入新的埋点 SDK / 不得绕过门面直调 SDK。
       // 注：`PosthogObserver` 是 Story 6.1 既有的自动页面追踪 observer，属既有实现，不在此列。
+      // 这一条**保留源码断言**：它守的是「不出现某个写法」，而不是某段行为 ——
+      // 反例天生只能从源码上判定，行为测试看不见「有人偷偷直调了 SDK」。
+      final src = File('lib/core/router/app_router.dart').readAsStringSync();
       expect(src.contains('Posthog()'), isFalse,
           reason: '上报一律走 Analytics 门面，不得在路由层直调 PostHog SDK');
     });
@@ -159,23 +157,33 @@ void main() {
     test('🔴 ⑦ 安全红线：兽医角色隔离守卫仍在，未被 FR-91 替代（源码级锁定）', () {
       // 那是**用户/兽医路由互斥的安全边界**，继承「安全规则只升不降不可绕过」。
       // FR-91 新增机制时容易产生「都统一走迟到纠正就行了」的想法 —— 不行，必须留作双保险。
+      // ⚠️ 断言**分要素匹配**，不逐字匹配整行（code-review 2026-08-04）：原先其中一条写的是
+      // `src.contains("if (isVetRoute && loc != '/vet/login') return '/home';")` ——
+      // 一次 `dart format` 折行就会变红，而行为一个字都没变；反过来它也拦不住语义被改坏
+      // 但格式恰好没动的情况。真正的行为覆盖在 `test/auth/story_1_5_gating_test.dart`
+      // 与 `test/shared/splash_landing_budget_test.dart`（兽医慢网兜底 → 收口工作台）。
+      // 这里只留「关键要素还在源码里」这一层粗筛，作为「被整段删掉」的最后一道提醒。
       final src = File('lib/core/router/app_router.dart').readAsStringSync();
-      expect(src.contains('if (auth.isVet)'), isTrue, reason: '兽医隔离守卫不得移除');
-      expect(src.contains("return '/vet/workbench'"), isTrue);
-      expect(src.contains("if (isVetRoute && loc != '/vet/login') return '/home';"), isTrue,
-          reason: '反向隔离（非兽医不进 vet 路由）同样不得移除');
+      // 去掉换行与连续空白，使断言对格式化不敏感
+      final flat = src.replaceAll(RegExp(r'\s+'), ' ');
+      expect(flat.contains('if (auth.isVet)'), isTrue, reason: '兽医隔离守卫不得移除');
+      expect(flat.contains("return '/vet/workbench'"), isTrue);
+      for (final piece in const ['isVetRoute', "loc != '/vet/login'", "return '/home'"]) {
+        expect(flat.contains(piece), isTrue,
+            reason: '反向隔离（非兽医不进 vet 路由）的要素 `$piece` 不得移除');
+      }
       // 门控「默认受控 + 精确例外」的安全默认也不得被本 Story 动到（NFR-3）
-      expect(src.contains('!auth.isLoggedIn && controlled'), isTrue);
+      expect(flat.contains('!auth.isLoggedIn && controlled'), isTrue);
     });
 
-    test('AC9 边界：未把 .timeout 改成可取消（7-4 的迟到纠正正建立在该行为之上）', () {
-      final src = File('lib/core/router/app_router.dart').readAsStringSync();
-      // 仍是「只停止等待、不取消底层请求」的 timeout；若换成可取消的实现，恢复晚到就不会
-      // 写回 AuthState，迟到纠正将永远不触发。
-      expect(src.contains('.timeout('), isTrue);
-      expect(src.contains('onTimeout: () => timedOut = true'), isTrue,
-          reason: '超时只做标记、不取消 —— 这是 FR-91 成立的前提');
-    });
+    // AC9 边界「不得把等待改成可取消」的锁定已移到**行为级**测试：
+    // `test/shared/splash_landing_budget_test.dart` 的「恢复晚到仍写回 → 迟到纠正照常触发」。
+    //
+    // 原先这里断言的是 `app_router.dart` 源码里出现 `.timeout(` 与
+    // `onTimeout: () => timedOut = true` 两个**字面量** —— 那守的是实现细节而不是约束本身：
+    // code-review 2026-08-04 把「二次等待」整段删掉（等待预算收归 splash 单一时间源）后，
+    // 约束依然成立（恢复未被取消、晚到仍写回、纠正照常触发），这条却因为字面量消失而变红。
+    // 反过来，只要有人保留字面量却改成可取消的实现，它又拦不住。故改用行为断言。
 
     test('六态全覆盖：每一态都有确定的判定结果，无遗漏', () {
       for (final s in AppUserState.values) {

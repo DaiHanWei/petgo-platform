@@ -34,7 +34,7 @@ const Set<AppTab> kUngatedTabs = {AppTab.home, AppTab.profile};
 /// App 主框架外壳（Story 1.2 外观 + Story 1.5 受控 Tab 门控）。
 ///
 /// 5 位底部 Tab Bar + 中间凸起「＋」；内容区切换 [AppMotion.tabFade]=120ms 淡入。
-/// 门控（Story 1.5）：仅 Discovery 游客可访问；Diary/[+]/Health/我的 未登录点击 → 经
+/// 门控（Story 1.5）：仅 Social 游客可访问；Diary/[+]/Health/我的 未登录点击 → 经
 /// **单一门控入口** [requireLogin] 弹强弹窗（注入 pendingAction），不切换目的地。
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key, required this.navigationShell});
@@ -103,7 +103,7 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
       }
       _goBranch(index); // 免门控：游客可进
       if (tab == AppTab.profile) {
-        // 切回 Diary → 刷新时间线 / 日历 / 统计（照 Discovery 的 feedProvider.refresh() 范式）。
+        // 切回 Diary → 刷新时间线 / 日历 / 统计（照 Social 的 feedProvider.refresh() 范式）。
         // Story 3.2 起时间线会镜像里程碑 / 健康记录 / 身份证条目，它们在用户不在本页时也会变化；
         // 不刷新会导致切回后看不到新条目。日历按年月分族，整族失效（含非当前月缓存）。
         ref.invalidate(timelineFirstPageProvider);
@@ -111,7 +111,7 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
         ref.invalidate(calendarMonthProvider);
       }
       if (tab == AppTab.home) {
-        // 切回 Discovery（原首页）：刷新 feed（keepAlive 缓存，否则看不到新内容/删帖/发布变更）。
+        // 切回 Social（原首页，V1.1.2 曾短暂叫 Discovery）：刷新 feed（keepAlive 缓存，否则看不到新内容/删帖/发布变更）。
         // 已在该 Tab 再次点击 → 额外回到顶部（bug 20260709-278）。
         if (reTap) {
           ref.read(homeScrollTopProvider.notifier).bump();
@@ -141,8 +141,14 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
     requireLogin(
       ref,
       context,
-      // 登录后回跳落 Diary（V1.1.2 FR-78 连带调整①：落地页由 Discovery 改为 Diary）。
-      pendingAction: const RouteIntent(location: '/profile'),
+      // 登录后回跳落 Social（内容流）。
+      //
+      // ⚠️ 2026-08-04 code-review 决策 D3 改于此：原先写死 `/profile`（Diary），注释还引着
+      // 「FR-78 连带调整①：落地页由 Discovery 改为 Diary」的旧口径。但 Story 7.4 已把
+      // **A·未建档**的冷启动落地由 `/profile` 改为 `/home`，而刚注册完的新用户正是这一态 ⇒
+      // 会出现「注册成功回跳到空的建档引导页，下次冷启动却落内容流」的两套口径。
+      // 现统一为 `/home`：未建档的人一律先看内容流（Story 7.4 的立论——空建档页即时价值低）。
+      pendingAction: const RouteIntent(location: '/home'),
       // bug 20260703-244：在「成长档案（Diary）」Tab（底部第 2 个）点创建 → 编辑页默认选「成长日历（Growth）」；
       // 其余 Tab 保持默认第一个 tag（Momen）。Growth 需宠物档案（否则 segment 灰置），无档案则不预选、回落 Momen。
       onAllowed: () {

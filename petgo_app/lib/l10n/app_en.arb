@@ -787,6 +787,9 @@
 
   "splashTagline": "A community for Indonesia's pet lovers",
   "splashSlowNetworkHint": "Your connection is slow, hang on…",
+  "@splashSlowNetworkHint": {
+    "description": "Splash 慢网提示（Story 7.3 / FR-89）。动效播完后再等 430ms 仍未就绪才淡入，快网用户永远看不到。⚠️ 印尼语侧为设计侧占位（决策 D-3），待母语同事审核后替换 —— 见 PRD OQ-22。⚠️ 本条用 Fraunces 子集字体渲染（仅 97 码位）：换文案时不要引入破折号 U+2014 或弯双引号，否则那个字会掉到系统字体、同一行出现两种字形（见 pubspec 字体注释）。"
+  },
 
   "pushPromptTitle": "Turn on notifications for your furry friend?",
   "pushPromptSubtitle": "Don't miss the important moments with them.",

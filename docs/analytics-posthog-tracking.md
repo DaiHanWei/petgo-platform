@@ -180,7 +180,7 @@ Tab 切换走 `goBranch` 不触发它，但**冷启动落地是 `ctx.go()`、是
 
 | # | 事件名 | 一句话（产品视角） | 属性 | 代码位置 |
 |---|---|---|---|---|
-| T-1 | `app_launch_landed_on_tab` | 冷启动后落在了哪个 Tab | `tab`（diary/social/vet_workbench）、`user_state` | `app_router.dart` splash 回调 |
+| T-1 | `app_launch_landed_on_tab` | 冷启动后落在了哪个 Tab | `tab`（diary/social/vet_workbench）、`user_state`、`restore_timeout`（仅超时兜底那次）、`corrected_from`（仅迟到纠正那次） | `app_router.dart` splash 回调 |
 | T-2 | `bottom_nav_tab_switched` | 点了底部导航切 Tab | `from_tab`、`to_tab`、`user_state` | `app_shell.dart` |
 | T-3 | `diary_guest_page_viewed` | 未登录用户看到了 Diary 游客种草页 | `session_first`（是否本次启动首次看到） | `diary_guest_page.dart` |
 | T-4 | `diary_guest_create_profile_cta_tapped` | 游客点了任一「建档引导」入口 | `source` | `diary_guest_page.dart` / `diary_demo_detail_page.dart` |
@@ -210,6 +210,16 @@ Tab 切换走 `goBranch` 不触发它，但**冷启动落地是 `ctx.go()`、是
   本行曾写错，按错值配的看板筛选会恒为 0 条（code-review 2026-08-04 修正）。
   `UNSPECIFIED` = 老后端没下发 `itemType` 的兜底：宁可标成「不知道」，也不送前端猜的分类值，
   否则「后端真这么分」与「前端猜的」在看板上无法区分。
+- `restore_timeout`（T-1，**仅出现在超时兜底那一次**，V1.1.2 Story 7.4 · FR-91）：`true`
+  —— 会话恢复没在 5s 预算内回来、按当时已知态（游客）兜底落地。**这是「兜底发生率」的唯一口径**
+  （PRD OQ-23 靠它闭合）：超时兜底态与真实游客态都上报 `user_state=guest`，不靠这个标记分不开。
+  正常路径**不带**该属性（不是 `false`，是没有这个键）。
+- `corrected_from`（T-1，**仅出现在迟到纠正那一次**）：`diary` / `social` / `vet_workbench`
+  —— 恢复晚到后按真实身份重判、把用户从哪个兜底落地页纠正过来的。
+  ⚠️ 取值是**产品名**（与同一次上报的 `tab` 同一套词表），不是 `/profile` 这种路由路径原文
+  —— 送路径原文会让两个属性在看板上对不起来（code-review 2026-08-04 修正）。
+  一次冷启动最多出现一次（FR-91 只纠正一次）。
+
 - `path`（T-12）：`health_record`（疫苗/驱虫/绝育记录触发）/ `consult`（真人兽医问诊结束触发）/
   `checkin`（用户手动打卡）/ `publish`（发布内容回填）/ `system_auto`（计数、组合、档案创建等）
 
