@@ -564,10 +564,14 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                   ),
                 ],
                 const SizedBox(height: 16),
-                // 原型底部：居中公开提示。
+                // 原型底部：居中可见性提示，**跟随实际可见范围**（2026-08-05 用户实机反馈）。
+                // 此前写死「所有人可见」：Diary 关掉同步开关后，这句与开关副标题「没人看得到」
+                // 在同屏互相打脸。判定统一走 [PublishController.isSharing]（Moment/Tips 恒公开，
+                // Diary 看开关）—— ⚠️ 别在这里另写一遍类型判断，两处判定迟早走歧。
                 Center(
                   child: Text(
-                    l10n.publishPublicNotice,
+                    controller.isSharing ? l10n.publishPublicNotice : l10n.publishPrivateNotice,
+                    key: const ValueKey('publishVisibilityNotice'),
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       color: AppColors.textTertiary,

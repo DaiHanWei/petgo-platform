@@ -149,14 +149,19 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
       // 会出现「注册成功回跳到空的建档引导页，下次冷启动却落内容流」的两套口径。
       // 现统一为 `/home`：未建档的人一律先看内容流（Story 7.4 的立论——空建档页即时价值低）。
       pendingAction: const RouteIntent(location: '/home'),
-      // bug 20260703-244：在「成长档案（Diary）」Tab（底部第 2 个）点创建 → 编辑页默认选「成长日历（Growth）」；
-      // 其余 Tab 保持默认第一个 tag（Momen）。Growth 需宠物档案（否则 segment 灰置），无档案则不预选、回落 Momen。
+      // Tab 语境 → 预选类型。**本方法只做「按 Tab 给 preset」这一件事**，「有无档案 → 默认哪个类型」
+      // 一律留给发布页 `initState`（Story 4.2 · AC6 单一口径，别把档案判定搬回这里）。
+      //
+      // - Diary Tab（bug 20260703-244）→ 预选 Diary；无档案时 segment 灰置，不预选、由页面回落 Moment。
+      // - Social Tab（2026-08-05 用户反馈）→ **预选 Moment**。此前这里传 null，页面便按「有档案 → Diary」
+      //   回落，于是在内容流里点「＋」也开在 Diary 上：用户当下的意图明显是发广场动态，却要多点一次
+      //   才能切过去，且一不留神就把想公开的内容发进了自己的 Diary。**给 null 等于放弃 Tab 语境。**
+      // - 其余 Tab（Health / Me）无明确语境 → 仍传 null，由页面按有无档案决定。
       onAllowed: () {
-        final onGrowthTab = AppTab.values[widget.navigationShell.currentIndex] == AppTab.profile;
+        final tab = AppTab.values[widget.navigationShell.currentIndex];
         final p = ref.read(authControllerProvider).profile;
         final canGrowth = p?.petStatus == 'HAS_PET' && (p?.hasPetProfile ?? false);
-        PublishComposePage.open(
-            context, preset: (onGrowthTab && canGrowth) ? ContentType.growthMoment : null);
+        PublishComposePage.open(context, preset: addButtonPreset(tab, canGrowth: canGrowth));
       },
     );
   }
@@ -203,3 +208,20 @@ class _FixedCenterDockedFabLocation extends FloatingActionButtonLocation {
     return Offset(fabX, math.min(fabY, maxFabY));
   }
 }
+
+/// 底栏「＋」按下时按 **Tab 语境** 给发布页的预选类型（纯函数，L0 可测）。
+///
+/// 职责边界（Story 4.2 · AC6 单一口径）：本函数只回答「当前 Tab 想发什么」，返回 `null` 表示
+/// **没有语境、交给发布页按有无宠物档案决定**。⚠️ 别在这里做「有档案 → Diary」那类回落判定 ——
+/// 那是发布页 `initState` 的唯一职责，两处各判一次就会互相覆盖。
+///
+/// - Diary Tab → Diary（bug 20260703-244）。`canGrowth=false`（无档案，segment 灰置）时放弃预选。
+/// - Social Tab → Moment（2026-08-05 用户反馈）：在内容流点「＋」的意图就是发广场动态；
+///   这里若返回 null，有档案的用户会开在 Diary 上，既多一次点击，也容易把想公开的内容发进私人 Diary。
+/// - Health / Me → 无语境，返回 null。
+@visibleForTesting
+ContentType? addButtonPreset(AppTab tab, {required bool canGrowth}) => switch (tab) {
+      AppTab.profile => canGrowth ? ContentType.growthMoment : null,
+      AppTab.home => ContentType.daily,
+      _ => null,
+    };

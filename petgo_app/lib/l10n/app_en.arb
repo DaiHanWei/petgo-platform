@@ -126,6 +126,10 @@
   },
   "publishButton": "Post",
   "publishPublicNotice": "Your post will be visible to all users.",
+  "publishPrivateNotice": "Only you can see this diary.",
+  "@publishPrivateNotice": {
+    "description": "发布页底部可见性提示的私密态（Diary + 同步开关关闭）。与 publishPublicNotice 二选一显示——两句必须同步维护，否则底部说的和开关说的会打架。"
+  },
   "publishGrowthNeedsProfile": "Create a pet profile first",
   "publishLinkedToPet": "Linked to {name}",
   "@publishLinkedToPet": {
@@ -1574,7 +1578,6 @@
   "healthFieldCustomName": "Record name",
   "healthFieldNote": "Note",
   "healthCustomNameRequired": "Please enter a name for the custom record.",
-  "healthMilestoneHint": "Milestone progress updated 🏆",
   "healthSave": "Save",
   "healthDelete": "Delete",
   "healthSaveError": "Could not save. Please try again.",

@@ -580,12 +580,11 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
       if (unlocked != null) {
         await _celebrate(unlocked);
         if (!mounted) return;
-      } else if (_type == 'VACCINE' || _type == 'DEWORM') {
-        // 无新解锁（如非首次疫苗/驱虫）维持原提示（F3，轻量非阻塞）。
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(l10n.healthMilestoneHint)));
       }
+      // ⚠️ 无新解锁时**不提示任何里程碑文案**（2026-08-05 用户实机反馈）：原 F3 的垫底 toast
+      // 「里程碑进度已更新 🏆」只看 type 是不是 VACCINE/DEWORM，不看是否真有变化 —— 第二针起
+      // 每存一次都弹一次，带奖杯的措辞让人误以为又解锁了一个节点。真解锁走上面的庆祝层，
+      // 这里静默即可（表单关闭 + 列表新增一条已是足够反馈）。**别再加回"顺带提一句"的提示。**
       Navigator.of(context).pop(true);
     } catch (_) {
       if (mounted) {
