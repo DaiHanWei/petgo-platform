@@ -19,12 +19,6 @@ import 'button_ids.dart';
 class Analytics {
   Analytics._();
 
-  /// stag 分支专属总开关（2026-08-03 用户指令）：stag 环境不向 PostHog 上报任何数据。
-  /// 默认关闭 = 跳过 SDK setup 且所有 Posthog() 调用短路（AppsFlyer 归因不受影响）；
-  /// 如需临时验证埋点可 `--dart-define=POSTHOG_ENABLED=true` 打开。
-  /// ⚠️ 本改动只留在 stag 分支，勿合回 v1.1-dev / main。
-  static const bool _posthogEnabled = bool.fromEnvironment('POSTHOG_ENABLED');
-
   /// write-only Project Token（可安全入端）。dart-define `POSTHOG_KEY` 覆盖，默认生产值。
   static const String _apiKey = String.fromEnvironment(
     'POSTHOG_KEY',
@@ -62,10 +56,6 @@ class Analytics {
 
   /// `runApp` 前调用一次。初始化失败不抛（分析非关键路径）。
   static Future<void> init() async {
-    if (!_posthogEnabled) {
-      debugPrint('[Analytics] PostHog disabled (stag), skip setup');
-      return;
-    }
     try {
       final config = PostHogConfig(_apiKey)
         ..host = _host
@@ -86,7 +76,6 @@ class Analytics {
   /// 天然逐字节一致；不用邮箱/手机号（PDP 合规红线）。
   static Future<void> identifyUser(int userId) async {
     AppsFlyerClient.instance.setUserId(distinctIdFor(userId));
-    if (!_posthogEnabled) return;
     try {
       await Posthog().identify(userId: distinctIdFor(userId));
     } catch (e) {
@@ -97,7 +86,6 @@ class Analytics {
   /// 登出 / 续期失败 → 解除关联，回到匿名。AppsFlyer CUID 同步清空（防换账号串数据）。
   static Future<void> reset() async {
     AppsFlyerClient.instance.clearUserId();
-    if (!_posthogEnabled) return;
     try {
       await Posthog().reset();
     } catch (e) {
@@ -127,7 +115,6 @@ class Analytics {
     if (isAppsFlyerEvent(event)) {
       AppsFlyerClient.instance.logEvent(event, clean);
     }
-    if (!_posthogEnabled) return;
     try {
       await Posthog().capture(eventName: event, properties: clean);
     } catch (e) {
