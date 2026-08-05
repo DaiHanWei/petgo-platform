@@ -16,7 +16,9 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.1.0+7
+# ⚠️ stag 分支边界：版本号必须带 -stag 后缀（PostHog 按 App Version 区分 stag/生产数据）。
+# 合并冲突时保留 -stag；语义版本跟随下一个生产版本号（生产 v1.1.2 ↔ 这里 1.1.2-stag）。
+version: 1.1.2-stag+8
 
 environment:
   sdk: ^3.12.1
