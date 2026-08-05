@@ -10,7 +10,7 @@
 #   ./scripts/deploy-backend-stag-pm.sh          # mvn build → 上传 → 服务器重建 staging 容器
 #
 # 可选环境变量:
-#   DEPLOY_HOST=dai@62.146.239.156   服务器（默认；须配置好受限 key）
+#   DEPLOY_HOST=hex@62.146.239.156   服务器（默认；hex=受限部署专用账号）
 #   SKIP_BUILD=1                     跳过本地 mvn build，直接用现有 target/*.jar
 #
 set -euo pipefail
@@ -18,7 +18,7 @@ set -euo pipefail
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 readonly BACKEND_DIR="$REPO_ROOT/petgo-backend"
-readonly DEPLOY_HOST="${DEPLOY_HOST:-dai@62.146.239.156}"
+readonly DEPLOY_HOST="${DEPLOY_HOST:-hex@62.146.239.156}"
 
 log() { echo "[$(date +%H:%M:%S)] $*"; }
 die() { echo "✗ $*" >&2; exit 1; }

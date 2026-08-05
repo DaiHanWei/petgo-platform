@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 #
-# TailTopia staging 受限运维入口（安装于服务器 dai@62.146.239.156 的 ~/bin/stag-ops.sh）
+# TailTopia staging 受限运维入口（安装于服务器专用账号 hex@62.146.239.156 的 /home/hex/bin/stag-ops.sh）
 #
-# 用途：给非技术同事（PM）的专用 SSH key 在 authorized_keys 里用 command= 强制绑定本脚本，
-# 无论客户端请求执行什么，落到服务器只能触发下面白名单动作，物理上碰不到生产资源
-# （petgo-server / 8084 / petgo 库 / redis DB2 / ~/.env.petgo）。
+# 用途：非技术同事（PM）走独立系统账号 hex（有 docker 组、无 sudo、密码锁定），其唯一
+# SSH key 在 authorized_keys 里用 command= 强制绑定本脚本——无论客户端请求执行什么，
+# 落到服务器只能触发下面白名单动作，物理上碰不到生产资源
+# （petgo-server / 8084 / petgo 库 / redis DB2 / dai 的 ~/.env.petgo）。
 #
 # 安装（见 docs/runbook-stag-pm.md §A）：
-#   scp scripts/stag-ops-server.sh dai@62.146.239.156:~/bin/stag-ops.sh && ssh dai@62.146.239.156 chmod +x '~/bin/stag-ops.sh'
-#   authorized_keys 追加（一行）：
-#   command="/home/dai/bin/stag-ops.sh",no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-pty <PM公钥> stag-pm
+#   /home/hex/bin/stag-ops.sh (755, hex:hex) + /home/hex/.env.petgo-stag（从 dai 的复制）
+#   /home/hex/.ssh/authorized_keys 仅一行：
+#   command="/home/hex/bin/stag-ops.sh",no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-pty <PM公钥> stag-pm
 #
 set -euo pipefail
 
