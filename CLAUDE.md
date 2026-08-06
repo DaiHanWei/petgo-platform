@@ -18,7 +18,7 @@
 
 - 部署验证流程：stag 分支 → `./scripts/deploy-backend-stag.sh` → `curl -s https://api-stag.tailtopia.id/actuator/health` 应为 UP。
 - 分支纪律：**只在 stag 分支工作**；禁止 push main、禁止 force push、禁止 `ALLOW_BRANCH=1`。
-- **APK 版本边界**：stag 打的包 `pubspec.yaml` 版本号**必须带 `-stag` 后缀**（如 `1.1.2-stag+8`，语义版本跟随下一个生产版本）。埋点平台按 App Version 过滤区分 stag 测试数据与生产数据（`v1.1.2` vs `v1.1.2-stag`），丢了后缀会污染生产数据口径。合并冲突一律保留 `-stag` 版。
+- **APK 版本边界**：stag 出包**必须走 `scripts/build-stag-apk.sh`**（`debug` 参数=开发自测包；默认=release 内测包）——脚本自动在构建时注入 `-stag` 版本后缀（versionName=`1.1.2-stag`），埋点平台按 App Version 区分 stag 测试数据与生产数据。`pubspec.yaml` 的 version **保持纯净**（与其它分支一致、不带 `-stag`，合并零冲突）；**禁止**直接 `flutter build` 出 stag 包（丢后缀会污染生产埋点口径），也禁止把 `-stag` 写回 pubspec。
 - 被 stag-guard 拦截时：不要想办法绕过（换写法/转义/写脚本间接执行都不行），改用 staging 等价物；确有需要联系 Dai。
 
 ## 这是什么项目
