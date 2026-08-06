@@ -176,7 +176,8 @@ class TriageResultView extends ConsumerWidget {
                   label: '💬 ${l10n.triageConsultNow}',
                   color: AppColors.mint,
                   onTap: () {
-                    Analytics.capture('consult_started');
+                    Analytics.capture('consult_started',
+                        {'consult_type': 'VET', 'source': 'triage_result'});
                     context.push(_consultRoute());
                   },
                 ),
@@ -201,7 +202,8 @@ class TriageResultView extends ConsumerWidget {
                   border: AppColors.triageGreen,
                   text: AppColors.triageGreen,
                   onTap: () {
-                    Analytics.capture('consult_started');
+                    Analytics.capture('consult_started',
+                        {'consult_type': 'VET', 'source': 'triage_result'});
                     context.push(_consultRoute());
                   },
                 ),

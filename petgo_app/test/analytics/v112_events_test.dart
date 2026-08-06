@@ -217,11 +217,15 @@ void main() {
       const allowedPrefixes = <String>[
         'app_', 'bottom_nav_', 'diary_', 'social_', 'health_', 'publish_', 'me_',
         'signup_', 'milestone_',
+        // 问诊双线漏斗（2026-08-06：PostHog 区分 AI/VET）——事件必带 consult_type 属性。
+        'consult_', 'ai_',
       ];
       // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
       const allowedSuffixes = <String>[
         '_viewed', '_shown', '_tapped', '_selected', '_toggled', '_switched',
         '_succeeded', '_completed', '_landed_on_tab', '_achieved',
+        // 问诊漏斗节点（2026-08-06）：下单提交 / 流程开始。
+        '_submitted', '_started',
       ];
       for (final e in eventNamesInSource()) {
         if (legacyEvents.contains(e)) continue;
@@ -267,6 +271,8 @@ void main() {
         // 兜底那次带 restore_timeout、纠正那次带 corrected_from。实际上报形态由
         // test/shared/splash_landing_budget_test.dart 行为级断言把守。
         'restore_timeout', 'corrected_from',
+        // 问诊双线漏斗（2026-08-06）：consult_type ∈ {AI, VET} 是区分两线的唯一维度。
+        'consult_type', 'price_idr',
       ];
       for (final n in propNames) {
         expect(naming.hasMatch(n), isTrue, reason: '$n 不是 snake_case');

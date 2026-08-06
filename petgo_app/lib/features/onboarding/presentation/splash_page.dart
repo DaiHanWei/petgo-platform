@@ -55,8 +55,17 @@ class SplashPage extends StatefulWidget {
   /// 入场总时长（B1 480 + B2 900，B3 终态落在 1540）。上限 1.8s（NFR-13）。
   static const Duration animatedTotal = Duration(milliseconds: 1540);
 
-  /// 播完动效后再停留多久才交给 [onComplete]。
-  static const Duration animatedHold = Duration(milliseconds: 1720);
+  /// 从 splash 首帧起停留多久才交给 [onComplete]（**不是"动效播完之后再停"**，计时自首帧起算）。
+  ///
+  /// 2026-08-06 由 1720 → **2266**（用户实机反馈：标语来不及看）。标语淡入落在 1240–1540ms
+  /// （见 `_tagline`），1720 的档位只给它留下 `1720−1540 = 180ms` 的完全不透明时间 ——
+  /// 一行 6 词的标语根本读不完。2266 把这段拉到 **726ms**。
+  ///
+  /// ⚠️ **为什么偏偏是 2266 而不是取整**：慢网提示在 [slowHintAt]=2290ms 淡入，且只在"尚未就绪"
+  /// 时出现。停留一旦越过 2290，就会出现「会话 2.4s 才就绪 → 用户先被『网络较慢』吓一下 →
+  /// 200ms 后画面就走了」的假警报。2266 卡在它前面 24ms，等待反馈那一串时点因此一个都不用动。
+  /// **再往上调必须连 [progressLineAt] / [slowHintAt] / [readyDeadline] 一起重算。**
+  static const Duration animatedHold = Duration(milliseconds: 2266);
   static const Duration staticHold = Duration(milliseconds: 1400);
 
   /// 各元素可视宽占屏宽的比例（NFR-17：不写死绝对像素）。

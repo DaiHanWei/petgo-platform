@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
@@ -38,6 +39,8 @@ class _VetRequestConfirmPageState extends ConsumerState<VetRequestConfirmPage> {
     setState(() => _busy = true);
     try {
       final req = await ref.read(consultRepositoryProvider).createRequest();
+      // 兽医问诊漏斗：下单成功（PostHog 区分 AI/VET）。
+      Analytics.capture('consult_request_submitted', {'consult_type': 'VET'});
       if (!mounted) return;
       // 占用命中（alreadyActive）已在支付态 → 直跳支付屏；否则入队等待屏。
       final path = req.state == ConsultRequestState.acceptedAwaitPay

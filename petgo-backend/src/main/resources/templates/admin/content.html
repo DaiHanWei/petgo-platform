@@ -88,7 +88,16 @@
             <td th:text="${c.id()}">1</td>
             <td th:text="${c.type()}">DAILY</td>
             <td th:text="${c.authorId()}">-</td>
-            <td class="muted cell-wide" th:text="${#strings.abbreviate(c.textPreview(), 60)}">…</td>
+            <!-- bug 20260803-447：长正文不再硬截断——短文直显，长文 <details> 折叠可展开看全文。 -->
+            <td class="muted cell-wide">
+                <details th:if="${c.textPreview() != null and #strings.length(c.textPreview()) > 60}">
+                    <summary style="cursor:pointer" th:text="${#strings.abbreviate(c.textPreview(), 60)}">…</summary>
+                    <div style="white-space:pre-wrap;word-break:break-word;max-width:420px"
+                         th:text="${c.textPreview()}">…</div>
+                </details>
+                <span th:unless="${c.textPreview() != null and #strings.length(c.textPreview()) > 60}"
+                      th:text="${c.textPreview()}">…</span>
+            </td>
             <td>
                 <span th:if="${c.imageUrls() == null or #lists.isEmpty(c.imageUrls())}" class="muted">—</span>
                 <img th:each="img : ${c.imageUrls()}" th:src="${img}" alt="" loading="lazy" data-lightbox

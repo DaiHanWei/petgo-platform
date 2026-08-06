@@ -1,6 +1,5 @@
 import 'dart:io' show Platform;
 
-import 'package:app_tracking_transparency/app_tracking_transparency.dart';
 import 'package:appsflyer_sdk/appsflyer_sdk.dart';
 import 'package:flutter/foundation.dart';
 
@@ -74,23 +73,11 @@ class AppsFlyerClient {
     }
   }
 
-  /// 首帧后调用：iOS 先请求 ATT 授权（结果出来/被跳过后）再上报启动；Android 直接上报。
-  /// 幂等（只 start 一次）。
-  ///
-  /// TODO(产品/合规)：iOS 上应先展示一屏价值说明页再弹 ATT（提升同意率，Apple 审核友好），
-  /// 待产品出文案后接入；当前直接请求（交付文档 §3.5 待确认项 3/4）。
+  /// 启动上报（幂等，只 start 一次）。**ATT 请求不在本类**——审核拒信修复
+  /// （2026-08-06）后由 `AttGate.requestIfNeeded()` 独立负责，调用方须先 await
+  /// 它再调本方法（见 main.dart），AppsFlyer init 失败不影响 ATT 弹窗。
   Future<void> start() async {
     if (!_initialized || _started) return;
-    try {
-      if (Platform.isIOS) {
-        final status = await AppTrackingTransparency.trackingAuthorizationStatus;
-        if (status == TrackingStatus.notDetermined) {
-          await AppTrackingTransparency.requestTrackingAuthorization();
-        }
-      }
-    } catch (e) {
-      debugPrint('[AppsFlyer] ATT request failed: $e'); // ATT 失败不阻断启动上报
-    }
     try {
       _sdk?.startSDK();
       _started = true;

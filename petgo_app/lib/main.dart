@@ -8,6 +8,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:tailtopia/app.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/core/analytics/appsflyer_client.dart';
+import 'package:tailtopia/core/analytics/att_gate.dart';
 import 'package:tailtopia/core/l10n/locale_controller.dart';
 import 'package:tailtopia/core/storage/prefs.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
@@ -55,9 +56,11 @@ Future<void> main() async {
     child: const TailTopiaApp(),
   ));
 
-  // 首帧后再上报 AppsFlyer 启动（iOS 先走 ATT 授权流程），不占首帧耗时。
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    AppsFlyerClient.instance.start();
+  // 首帧后：iOS 先独立走 ATT 授权（等 resumed 再弹，防 inactive 静默不弹——
+  // 2026-08-06 审核拒信根因），结果落定后再上报 AppsFlyer 启动；不占首帧耗时。
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    await AttGate.requestIfNeeded();
+    await AppsFlyerClient.instance.start();
   });
 }
 

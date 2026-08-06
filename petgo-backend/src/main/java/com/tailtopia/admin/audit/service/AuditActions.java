@@ -104,6 +104,10 @@ public final class AuditActions {
     /** 职责分离拦截：同一 admin 试图兼任两职（含 SUPER_ADMIN 不豁免，A-1）。 */
     public static final String REFUND_DUTY_VIOLATION_BLOCKED = "REFUND_DUTY_VIOLATION_BLOCKED";
 
+    // ===== 用户账号治理补充 =====
+    /** 后台赠送 PawCoin（bug 20260728-389；summary 含数量/原因/幂等键，不落 PII）。 */
+    public static final String PAWCOIN_GRANTED = "PAWCOIN_GRANTED";
+
     private AuditActions() {
     }
 }

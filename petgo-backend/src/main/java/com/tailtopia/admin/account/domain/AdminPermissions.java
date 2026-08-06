@@ -28,6 +28,8 @@ public final class AdminPermissions {
     public static final String USER_VIEW = "user.view";
     public static final String USER_DEACTIVATE = "user.deactivate";
     public static final String USER_DELETE = "user.delete";
+    /** 后台赠送 PawCoin（bug 20260728-389：运营向指定账户入账 BONUS）。 */
+    public static final String USER_GRANT_PAWCOIN = "user.grant_pawcoin";
 
     // 内容审核（Epic 4）
     public static final String CONTENT_VIEW_REPORTS = "content.view_reports";
@@ -110,7 +112,7 @@ public final class AdminPermissions {
             new PermissionGroup("perm.group.edit", List.of(
                     CONTENT_TAKEDOWN, CONTENT_RESTORE, CONTENT_PROACTIVE_TAKEDOWN,
                     CONTENT_MANUAL_REVIEW,
-                    USER_DEACTIVATE, USER_DELETE,
+                    USER_DEACTIVATE, USER_DELETE, USER_GRANT_PAWCOIN,
                     VET_CREATE, VET_EDIT, VET_BAN, VET_RESET_PASSWORD, VET_QUALIFY,
                     CONSULT_HANDLE,
                     SUPPORT_HANDLE, REFUND_SUBMIT, REFUND_APPROVE, REFUND_PAYOUT,

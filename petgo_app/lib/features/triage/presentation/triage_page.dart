@@ -83,6 +83,8 @@ class _TriagePageState extends ConsumerState<TriagePage> {
         pendingAction: const RouteIntent(location: '/consult'),
         onAllowed: () {
           Analytics.buttonTapped(ButtonId.consultStart);
+          // 与 triage 结果页同一事件名，靠 source 区分入口（口径同 T-4：拆事件名会碎分母）。
+          Analytics.capture('consult_started', {'consult_type': 'VET', 'source': 'direct'});
           context.push('/consult');
         },
       ),

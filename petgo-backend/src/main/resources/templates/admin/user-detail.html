@@ -33,6 +33,22 @@
             </form>
         </div>
 
+        <!-- 赠送 PawCoin（bug 20260728-389，user.grant_pawcoin 门控）。已注销账号不提供。 -->
+        <div class="card" th:unless="${user.deleted()}"
+             sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.grant_pawcoin')">
+            <h3 th:text="#{admin.userdetail.grant}">赠送 PawCoin</h3>
+            <p><span th:text="#{admin.userdetail.pawcoinBalance}">PawCoin 余额</span>:
+                <b th:text="${#numbers.formatInteger(user.pawcoinBalance(), 0, 'COMMA')}">0</b></p>
+            <form class="inline" th:action="@{/admin/users/{id}/grant-pawcoin(id=${user.id()})}"
+                  method="post" th:data-confirm="#{admin.userdetail.grantConfirm}">
+                <input type="hidden" name="idempotencyToken" th:value="${grantToken}"/>
+                <input type="number" name="coins" min="1" step="1"
+                       th:placeholder="#{admin.userdetail.grantAmount}" required/>
+                <input type="text" name="reason" th:placeholder="#{admin.userdetail.grantReason}" required/>
+                <button type="submit" class="btn" th:text="#{admin.userdetail.grantSubmit}">赠送</button>
+            </form>
+        </div>
+
         <!-- 删除账号（不可逆，user.delete 门控）。已注销账号仅展示，不再提供删除。 -->
         <div class="card" th:unless="${user.deleted()}"
              sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.delete')"
@@ -60,6 +76,9 @@
             <p><span th:text="#{admin.userdetail.email}">注册邮箱</span>: <span th:text="${user.email()}">a@x</span></p>
             <p><span th:text="#{admin.userdetail.created}">注册时间</span>:
                 <span th:text="${@adminTime.wib(user.createdAt())}">-</span></p>
+            <p sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.grant_pawcoin')">
+                <span th:text="#{admin.userdetail.pawcoinBalance}">PawCoin 余额</span>:
+                <span th:text="${#numbers.formatInteger(user.pawcoinBalance(), 0, 'COMMA')}">0</span></p>
             <p><span th:text="#{admin.userdetail.status}">账号状态</span>:
                 <span th:if="${user.deleted()}" class="badge badge-neutral"
                       th:text="#{admin.users.status.deleted}">已注销</span>

@@ -16,6 +16,7 @@ public record AdminUserDetailView(
         Instant createdAt,
         boolean deactivated,
         boolean deleted,
+        long pawcoinBalance,
         List<PetRow> pets,
         List<PostSummary> posts,
         List<SessionMeta> sessions) {
