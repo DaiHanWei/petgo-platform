@@ -12,8 +12,11 @@ import 'package:tailtopia/features/consult/presentation/consult_refresh.dart';
 import 'package:tailtopia/features/content/presentation/feed_controller.dart';
 import 'package:tailtopia/features/me/data/my_posts_repository.dart';
 import 'package:tailtopia/features/notify/data/notification_repository.dart';
+import 'package:tailtopia/features/pawcoin/presentation/pawcoin_controller.dart';
 import 'package:tailtopia/features/profile/data/health_record_repository.dart';
+import 'package:tailtopia/features/profile/data/id_card_repository.dart';
 import 'package:tailtopia/features/profile/data/milestone_repository.dart';
+import 'package:tailtopia/features/profile/data/newbie_task_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/data/timeline_repository.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
@@ -167,5 +170,12 @@ void resetUserScopedCaches(WidgetRef ref) {
   ref.invalidate(myPostsProvider); // 我的：我的发布
   ref.invalidate(feedProvider); // 首页 Feed（按新用户宠物状态重过滤）
   ref.invalidate(unreadCountProvider); // 通知铃铛未读角标（bug 20260625-088：换账号防显示上个用户角标）
+  // bug 20260731-446：宠物身份证是用户维度缓存（列表/单卡/详情 family），不登记则同设备
+  // 换账号会看到上一账号（含已删档案）的历史卡片（隐私泄漏，同 421/上面健康记录同型）。
+  ref.invalidate(idCardProvider); // 身份证：单卡（旧版入口）
+  ref.invalidate(idCardListProvider); // 身份证：多卡列表
+  ref.invalidate(idCardDetailProvider); // 身份证：卡详情（按 cardId family 整族失效）
+  ref.invalidate(newbieTasksProvider); // 新手任务进度（同型隐患：换账号防串任务状态）
+  ref.invalidate(pawCoinProvider); // PawCoin 余额（同型隐患：换账号防显示上个账号余额）
   ref.read(consultRefreshProvider.notifier).bump(); // 问诊页 _active/_history 重拉
 }
