@@ -10,9 +10,16 @@ import 'package:tailtopia/features/content/data/feed_repository.dart';
 import 'package:tailtopia/features/content/presentation/feed_tab_row.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/widgets/empty_state.dart';
+import 'package:tailtopia/features/profile/data/profile_repository.dart';
+import 'package:tailtopia/features/profile/presentation/diary_guest_page.dart';
+import 'package:tailtopia/shared/widgets/bottom_tab_bar.dart';
 import 'package:tailtopia/shared/widgets/login_hard_dialog.dart';
 
 import '../support/fake_feed_repository.dart';
+
+/// 底栏标签精确定位：页面正文里也可能出现同名文字（如 Diary 游客态页头统计列的 "Diary"）。
+Finder _tabButton(String label) =>
+    find.descendant(of: find.byType(BottomTabBar), matching: find.text(label));
 
 LoginResponse _old() => const LoginResponse(
     accessToken: 'a', refreshToken: 'r', role: 'USER', isNewUser: false, onboardingCompleted: true);
@@ -109,6 +116,10 @@ void main() {
       child: const TailTopiaApp(),
     ));
     await tester.pumpAndSettle();
+    // V1.1.2 Story 2.4：游客冷启动落地页已由 Discovery 改为 Diary（落地矩阵 AD-8）。
+    // 本条测的是 Discovery 的游客只读体验，先切过去。
+    await tester.tap(_tabButton('Social'));
+    await tester.pumpAndSettle();
 
     // Story 3.2：首页 Feed 已就位，游客可见分类 Tab + 空状态（可下拉滚动容器）。
     expect(find.byType(FeedTabRow), findsOneWidget);
@@ -123,16 +134,22 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Health')); // 问诊 Tab（inactive 标签，bug 20260706-248：Consult→Health）
+    await tester.tap(_tabButton('Health')); // 问诊 Tab（inactive 标签，bug 20260706-248：Consult→Health）
     await tester.pumpAndSettle();
 
     expect(find.byType(LoginHardDialog), findsOneWidget);
-    // 未切换：首页 Feed 仍在
-    expect(find.byType(FeedTabRow), findsOneWidget);
+    // 未切换目的地：仍停在冷启动落地页（V1.1.2 起游客落 Diary 游客引导态，不再是 Discovery）。
+    expect(find.byType(DiaryGuestPage), findsOneWidget);
   });
 
   testWidgets('AC2: 已登录点受控 Tab → 直接进入，不弹窗', (tester) async {
-    final container = ProviderContainer();
+    // V1.1.2 Story 2.4：已登录用户冷启动落地页改为 Diary（落地矩阵 AD-8），
+    // 该页会拉宠物档案 —— 测试环境无后端，故把档案 provider 打桩为「无档案」，
+    // 否则首帧的加载转圈让 pumpAndSettle 收不敛（与本条要测的 Tab 门控无关）。
+    final container = ProviderContainer(overrides: [
+      petProfileProvider.overrideWith((ref) async => null),
+      feedRepositoryProvider.overrideWithValue(FakeFeedRepository()),
+    ]);
     addTearDown(container.dispose);
     container.read(authControllerProvider.notifier).applyLogin(_old());
 
@@ -142,7 +159,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Health')); // bug 20260706-248：Consult→Health
+    await tester.tap(_tabButton('Health')); // bug 20260706-248：Consult→Health
     // 问诊 hub AI 卡在线脉冲为常驻动画，pumpAndSettle 不收敛——固定帧推进。
     // 200ms 覆盖底部 Tab 按压释放的 120ms 动画 timer，避免 tearDown 报 pending timer。
     await tester.pump();

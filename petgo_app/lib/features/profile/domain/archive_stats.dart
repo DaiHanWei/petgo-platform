@@ -5,6 +5,7 @@ class ArchiveStats {
     required this.consultCount,
     required this.milestoneCompleted,
     required this.milestoneTotal,
+    this.healthRecordCount = 0,
   });
 
   final int happyMomentCount;
@@ -16,10 +17,15 @@ class ArchiveStats {
   /// 里程碑总数（按 pet_type：猫/狗 30，其他 15）。
   final int milestoneTotal;
 
+  /// 结构化健康记录条数（V1.1.2）。**统计栏不展示它** —— 只供页头健康入口的副文案
+  /// 按 0 / 非 0 分支（UI 稿 A4 近空态：还没有记录时副文案改「Belum ada catatan」）。
+  final int healthRecordCount;
+
   factory ArchiveStats.fromJson(Map<String, dynamic> json) => ArchiveStats(
         happyMomentCount: (json['happyMomentCount'] ?? 0) as int,
         consultCount: (json['consultCount'] ?? 0) as int,
         milestoneCompleted: (json['milestoneCompleted'] ?? 0) as int,
         milestoneTotal: (json['milestoneTotal'] ?? 0) as int,
+        healthRecordCount: (json['healthRecordCount'] ?? 0) as int,
       );
 }

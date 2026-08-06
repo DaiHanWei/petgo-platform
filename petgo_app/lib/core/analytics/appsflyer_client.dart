@@ -56,11 +56,17 @@ class AppsFlyerClient {
         timeToWaitForATTUserAuthorization: 60,
         manualStart: true,
       ));
-      await sdk.initSdk(
-        registerConversionDataCallback: true, // 安装来源回调（GCD）
-        registerOnAppOpenAttributionCallback: false,
-        registerOnDeepLinkingCallback: false, // 之后做 OneLink 再打开
-      );
+      // 超时上限（V1.1.2 Story 7.3 · NFR-13）：本方法在 `main.dart` 里被 `runApp` 前 await，
+      // 卡住会直接拖慢首帧。原先只有下方的 try/catch 吞错、**没有超时**，initSdk 若不返回
+      // 就会无限期阻塞启动。与 `Analytics.init()` 取同一口径（3s + 吞错）。
+      // 超时后 `_initialized` 保持 false ⇒ 归因不上报，与初始化抛错的降级行为一致。
+      await sdk
+          .initSdk(
+            registerConversionDataCallback: true, // 安装来源回调（GCD）
+            registerOnAppOpenAttributionCallback: false,
+            registerOnDeepLinkingCallback: false, // 之后做 OneLink 再打开
+          )
+          .timeout(const Duration(seconds: 3));
       _sdk = sdk;
       _initialized = true;
     } catch (e) {

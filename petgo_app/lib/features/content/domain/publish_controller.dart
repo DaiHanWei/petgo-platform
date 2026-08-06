@@ -36,6 +36,13 @@ class PublishController extends ChangeNotifier {
   final ContentRepository repository;
 
   ContentType type = ContentType.daily;
+
+  /// 「同步到 Moment」开关（Story 4.2 · FR-83）。**默认开启**：发 Diary 的默认行为仍是公开分享。
+  ///
+  /// 仅对 Diary（`growthMoment`）有意义 —— Moment / Tips 本就公开进 Feed，不渲染该开关。
+  /// 关掉 → 发布请求带 `visibility=PRIVATE`，该条只进作者自己的成长档案。
+  /// ⚠️ 发布后不可更改（FR-83 AC7），所以这里只影响创建，不存在事后切换入口。
+  bool syncToMoment = true;
   String text = '';
   final List<ImageUploadItem> items = <ImageUploadItem>[];
   bool publishing = false;
@@ -62,8 +69,21 @@ class PublishController extends ChangeNotifier {
 
   void setType(ContentType t) {
     type = t;
+    // 切到 Moment / Tips 时把开关复位为默认开启：它们不渲染开关，若残留 false
+    // 会让「看不见的开关」偷偷把公开内容发成私密。
+    if (t != ContentType.growthMoment) {
+      syncToMoment = true;
+    }
     notifyListeners();
   }
+
+  void setSyncToMoment(bool value) {
+    syncToMoment = value;
+    notifyListeners();
+  }
+
+  /// 主按钮文案是否为「分享」（开关开）；关 → 「保存」（Story 4.2 · AC2，PRD 未提、UI 稿 P2 独有）。
+  bool get isSharing => type != ContentType.growthMoment || syncToMoment;
 
   void setText(String value) {
     text = value;
@@ -131,6 +151,8 @@ class PublishController extends ChangeNotifier {
         imageUrls: urls,
         eventDate: growth ? (eventDate ?? DateTime.now()) : null,
         idempotencyKey: idempotencyKey,
+        // 非 Diary 恒公开；Diary 由开关决定。
+        syncToMoment: growth ? syncToMoment : true,
       );
     } finally {
       publishing = false;

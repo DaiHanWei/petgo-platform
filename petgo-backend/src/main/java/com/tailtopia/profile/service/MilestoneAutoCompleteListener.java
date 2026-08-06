@@ -1,9 +1,11 @@
 package com.tailtopia.profile.service;
 
 import com.tailtopia.content.domain.ContentType;
+import com.tailtopia.content.domain.ContentVisibility;
 import com.tailtopia.content.event.ContentCommentedEvent;
 import com.tailtopia.content.event.ContentLikedEvent;
 import com.tailtopia.content.event.ContentPublishedEvent;
+import com.tailtopia.consult.event.ConsultClosedEvent;
 import com.tailtopia.profile.domain.HealthRecordType;
 import com.tailtopia.profile.domain.MilestoneCompletionSource;
 import com.tailtopia.profile.event.CardSharedEvent;
@@ -23,7 +25,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * <p>覆盖系统自动类节点：
  * <ul>
  *   <li>{@link ProfileCreatedEvent} → S1 档案创建完成。</li>
- *   <li>{@link ContentPublishedEvent} → S2 首张成长日历照片 + 计数 M10/L5；S5 首条日常分享。</li>
+ *   <li>{@link ContentPublishedEvent} → S2 首张成长日历照片 + 计数 M10/L5；S5 首条**对外可见**帖子。</li>
  *   <li>{@link CardSharedEvent} → S3 首次分享名片。</li>
  *   <li>{@link HealthArchivedEvent} → S4 首次保存问诊结论。</li>
  *   <li>{@link ContentCommentedEvent} → S14 首次被评论（排除自评）。</li>
@@ -47,6 +49,18 @@ public class MilestoneAutoCompleteListener {
         completion.completeForOwner(e.ownerId(), "S1", MilestoneCompletionSource.SYSTEM_AUTO);
     }
 
+    /**
+     * 内容发布 → S2 / 计数类 / S5。
+     *
+     * <p><b>S5「首条平台帖子」的判定口径（2026-08-05 修）</b>：按**是否对外可见**判，不按内容类型判。
+     * 原实现只认 {@code DAILY}，但 V1.1.2 把 Diary（{@code GROWTH_MOMENT}）设成了有宠用户的**默认**
+     * 发布类型、并用「同步到 Moment」开关决定它是否进 Feed（Story 4.1/4.2 只改 visibility、
+     * **不改 type**）。结果是：顺着默认路径发帖、内容已出现在广场，S5 却永不解锁 —— 与节点文案
+     * 「发布你在平台上的第一条帖子」直接矛盾，且 S5 是新手任务六件套之一，连带聚合奖励也卡死。
+     *
+     * <p>⚠️ {@code PRIVATE} 一律不算：私密内容只进作者自己的档案，不进任何公开位，
+     * 「平台发帖」语义不成立。**别为了让节点更好解锁而放宽这一条。**
+     */
     @Async
     @TransactionalEventListener
     public void onContentPublished(ContentPublishedEvent e) {
@@ -55,10 +69,16 @@ public class MilestoneAutoCompleteListener {
             completion.onGrowthMomentCount(e.authorId(), e.authorGrowthMomentCount());
             // 「系统推送 + 当天发布」L 级节点回填：第一个生日 L1 / 满 100 天 L2 / 满 365 天 L3（8.6）。
             completion.completeDateGatedLNodesOnPublish(e.authorId());
-        } else if (e.type() == ContentType.DAILY) {
+        }
+        // S5：DAILY 恒算；GROWTH_MOMENT / KNOWLEDGE 需 PUBLIC（对外可见）才算。幂等，与上面互不影响。
+        if (isPlatformPost(e)) {
             completion.completeForOwner(e.authorId(), "S5", MilestoneCompletionSource.SYSTEM_AUTO);
         }
-        // KNOWLEDGE 不对应里程碑节点。
+    }
+
+    /** 是否构成「平台上的一条帖子」：Moment 恒是；Diary / Tips 仅在公开时是（私密不算）。 */
+    private static boolean isPlatformPost(ContentPublishedEvent e) {
+        return e.type() == ContentType.DAILY || e.visibility() == ContentVisibility.PUBLIC;
     }
 
     @Async
@@ -88,12 +108,38 @@ public class MilestoneAutoCompleteListener {
         completion.maybeUnlockLulusPemulaForOwner(e.ownerId());
     }
 
+    /**
+     * 健康记录类型 → 里程碑后缀（FR-86 映射表，Story 5.1 补全 NEUTER）。
+     *
+     * <p>⚠️ 月经 / 自定义**刻意不映射任何里程碑**（PRD 明确：无对应节点），别顺手补上去。
+     * M5「第一次看兽医」不在此表 —— 它由**兽医咨询结束**触发（见 {@link #onConsultClosed}），
+     * 不是录健康记录触发。
+     */
     private static String suffixFor(HealthRecordType type) {
         return switch (type) {
             case VACCINE -> "M3";
             case DEWORM -> "M4";
-            case MENSTRUATION, NEUTER, CUSTOM -> null;
+            case NEUTER -> "M9"; // Story 5.1 新增（2026-07-29 产品确认）
+            case MENSTRUATION, CUSTOM -> null;
         };
+    }
+
+    /**
+     * M5「第一次看兽医」：**真人兽医咨询结束**即自动完成（Story 5.1 · AC2）。
+     *
+     * <p>⚠️ <b>不需要、也不要加「排除 AI 问诊」的条件</b>：{@code ConsultClosedEvent} 只由
+     * consult 模块的**真人兽医会话**发布，AI 分诊走 triage 模块、不发这个事件 —— 模块隔离已经
+     * 天然满足「AI 问诊不解锁 M5」（OQ-17）。加一层 AI 判断只是冗余分支，反而让人以为可能漏。
+     *
+     * <p>与 S4「第一次保存兽医问诊结论」**分属两个独立订阅，不合并**：S4 订 {@code HealthArchivedEvent}
+     * （用户可跳过存档），M5 订本事件（只要看过兽医就算）。合并会让「跳过存档」把 M5 一起吃掉。
+     *
+     * <p>幂等：{@code completeForOwner} 依赖 {@code milestone_completions} 的唯一约束，重复关闭安全。
+     */
+    @Async
+    @TransactionalEventListener
+    public void onConsultClosed(ConsultClosedEvent e) {
+        completion.completeForOwner(e.userId(), "M5", MilestoneCompletionSource.SYSTEM_AUTO);
     }
 
     @Async

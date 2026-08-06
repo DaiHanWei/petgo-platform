@@ -7,18 +7,34 @@ import 'package:go_router/go_router.dart';
 import '../../core/router/route_intent.dart';
 import '../../core/theme/colors.dart';
 import '../../core/theme/motion.dart';
+import '../../core/analytics/analytics.dart';
 import '../../features/auth/domain/auth_guard.dart';
 import '../../features/auth/domain/auth_state.dart';
+import '../../features/auth/domain/user_state.dart';
 import '../../features/content/domain/home_refresh_provider.dart';
 import '../../features/content/domain/content_type.dart';
 import '../../features/content/presentation/feed_controller.dart';
+import '../../features/profile/data/timeline_repository.dart';
 import '../../features/content/presentation/publish_compose_page.dart';
 import 'bottom_tab_bar.dart';
+
+/// **免门控 Tab 白名单**（Story 1.1 去索引化 · Story 2.4 放行 Diary）。
+///
+/// 按 Tab 语义判定，不比较裸索引——重排后裸索引会指向错误的 Tab（AD-3 AC3①）。
+///
+/// ⚠️ 这是 **Tab 点击门控**（AD-7 Rule 2），与 `app_router.dart` 的**深链门控**是**两处独立机制**，
+/// 改法也不同（那边是「前缀默认受控 + 精确例外集」）。放行 Diary 必须两处同改 ——
+/// 只改深链那处，游客点 Diary 标签仍会被弹登录框（PRD 只覆盖了深链那处）。
+///
+/// `Diary` 在此白名单里指的**只是 Diary 主页**：其子页（建档 / 编辑 / 当天详情 / 里程碑列表）
+/// 由深链门控继续拦截，游客点进去仍会被 redirect。
+/// **Health / [+] / Me 对游客维持受控**，不得顺手加进来。
+const Set<AppTab> kUngatedTabs = {AppTab.home, AppTab.profile};
 
 /// App 主框架外壳（Story 1.2 外观 + Story 1.5 受控 Tab 门控）。
 ///
 /// 5 位底部 Tab Bar + 中间凸起「＋」；内容区切换 [AppMotion.tabFade]=120ms 淡入。
-/// 门控（Story 1.5）：仅首页游客可访问；成长档案/[+]/问诊/我的 未登录点击 → 经
+/// 门控（Story 1.5）：仅 Social 游客可访问；Diary/[+]/Health/我的 未登录点击 → 经
 /// **单一门控入口** [requireLogin] 弹强弹窗（注入 pendingAction），不切换目的地。
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key, required this.navigationShell});
@@ -35,9 +51,6 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
     duration: AppMotion.tabFade,
     value: 1,
   );
-
-  /// Tab index → 受控路由位置（首页 index 0 游客可达，不门控）。
-  static const List<String> _tabLocations = ['/home', '/profile', '/triage', '/me'];
 
   @override
   void didUpdateWidget(covariant AppShell oldWidget) {
@@ -60,26 +73,66 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
     );
   }
 
+  /// Tab 切换 + Tab 根页浏览埋点（Story 6.1 · T-1/T-2 · AC2）。
+  ///
+  /// PostHog 的 `$screen` 由路由 observer 产生，而 Tab 切换走 `StatefulShellRoute.goBranch`
+  /// （不 push 根路由）→ **不产生 `$screen`**，所以必须自己埋。
+  /// `user_state` 取 Story 2.4 落地矩阵的同源判定，避免埋点口径与实际分流对不上。
+  ///
+  /// ⚠️ **只在真的切过去了才上报**（code-review 2026-08-04）。两条曾经踩过的坑：
+  /// 1. 上报早于门控判定 → 游客点 Health/Me 只会弹强登录、页面根本没打开，看板却记了一条浏览
+  ///    → 落地页分流被系统性高估，而这正是 AC2 要度量的东西；
+  /// 2. 重复点当前 Tab 也报，且 `from_tab == to_tab` → 与 T-11（切视图）明确 no-op 的口径不一致。
+  void _reportTabEntered(AppTab from, AppTab tab) {
+    Analytics.screen('${tab.analyticsName}_page');
+    Analytics.capture('bottom_nav_tab_switched', {
+      'from_tab': from.analyticsName,
+      'to_tab': tab.analyticsName,
+      'user_state': appUserStateOf(ref.read(authControllerProvider)).wire,
+    });
+  }
+
   void _onTabSelected(int index) {
-    if (index == AppTab.home.index) {
-      // 从其它 Tab 切回首页：刷新 feed（keepAlive 缓存，否则看不到新内容/删帖/发布变更）。
-      final fromElsewhere = widget.navigationShell.currentIndex != AppTab.home.index;
-      _goBranch(index); // 首页：游客可进
-      if (fromElsewhere) {
-        ref.read(feedProvider.notifier).refresh();
-      } else {
-        // 已在首页再次点击 Home → 回到顶部 + 刷新（bug 20260709-278）。
-        ref.read(homeScrollTopProvider.notifier).bump();
+    // 按 Tab 语义判定，不比较裸索引（AD-3 AC3①）——重排后裸索引会指向错误的 Tab。
+    final AppTab tab = AppTab.values[index];
+    final AppTab from = AppTab.values[widget.navigationShell.currentIndex];
+    final bool reTap = widget.navigationShell.currentIndex == index;
+    if (kUngatedTabs.contains(tab)) {
+      if (!reTap) {
+        _reportTabEntered(from, tab);
+      }
+      _goBranch(index); // 免门控：游客可进
+      if (tab == AppTab.profile) {
+        // 切回 Diary → 刷新时间线 / 日历 / 统计（照 Social 的 feedProvider.refresh() 范式）。
+        // Story 3.2 起时间线会镜像里程碑 / 健康记录 / 身份证条目，它们在用户不在本页时也会变化；
+        // 不刷新会导致切回后看不到新条目。日历按年月分族，整族失效（含非当前月缓存）。
+        ref.invalidate(timelineFirstPageProvider);
+        ref.invalidate(archiveStatsProvider);
+        ref.invalidate(calendarMonthProvider);
+      }
+      if (tab == AppTab.home) {
+        // 切回 Social（原首页，V1.1.2 曾短暂叫 Discovery）：刷新 feed（keepAlive 缓存，否则看不到新内容/删帖/发布变更）。
+        // 已在该 Tab 再次点击 → 额外回到顶部（bug 20260709-278）。
+        if (reTap) {
+          ref.read(homeScrollTopProvider.notifier).bump();
+        }
         ref.read(feedProvider.notifier).refresh();
       }
       return;
     }
     // 受控 Tab：单一门控入口；未登录弹强弹窗 + 注入 pendingAction（登录后回到该 Tab）。
+    // 目的地取自枚举内嵌的 location，不再依赖并行数组。
+    // 埋点放在 onAllowed 里 —— 被门控拦下时页面没打开，不该记一条浏览。
     requireLogin(
       ref,
       context,
-      pendingAction: RouteIntent(location: _tabLocations[index]),
-      onAllowed: () => _goBranch(index),
+      pendingAction: RouteIntent(location: tab.location),
+      onAllowed: () {
+        if (!reTap) {
+          _reportTabEntered(from, tab);
+        }
+        _goBranch(index);
+      },
     );
   }
 
@@ -88,15 +141,27 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
     requireLogin(
       ref,
       context,
+      // 登录后回跳落 Social（内容流）。
+      //
+      // ⚠️ 2026-08-04 code-review 决策 D3 改于此：原先写死 `/profile`（Diary），注释还引着
+      // 「FR-78 连带调整①：落地页由 Discovery 改为 Diary」的旧口径。但 Story 7.4 已把
+      // **A·未建档**的冷启动落地由 `/profile` 改为 `/home`，而刚注册完的新用户正是这一态 ⇒
+      // 会出现「注册成功回跳到空的建档引导页，下次冷启动却落内容流」的两套口径。
+      // 现统一为 `/home`：未建档的人一律先看内容流（Story 7.4 的立论——空建档页即时价值低）。
       pendingAction: const RouteIntent(location: '/home'),
-      // bug 20260703-244：在「成长档案（Diary）」Tab（底部第 2 个）点创建 → 编辑页默认选「成长日历（Growth）」；
-      // 其余 Tab 保持默认第一个 tag（Momen）。Growth 需宠物档案（否则 segment 灰置），无档案则不预选、回落 Momen。
+      // Tab 语境 → 预选类型。**本方法只做「按 Tab 给 preset」这一件事**，「有无档案 → 默认哪个类型」
+      // 一律留给发布页 `initState`（Story 4.2 · AC6 单一口径，别把档案判定搬回这里）。
+      //
+      // - Diary Tab（bug 20260703-244）→ 预选 Diary；无档案时 segment 灰置，不预选、由页面回落 Moment。
+      // - Social Tab（2026-08-05 用户反馈）→ **预选 Moment**。此前这里传 null，页面便按「有档案 → Diary」
+      //   回落，于是在内容流里点「＋」也开在 Diary 上：用户当下的意图明显是发广场动态，却要多点一次
+      //   才能切过去，且一不留神就把想公开的内容发进了自己的 Diary。**给 null 等于放弃 Tab 语境。**
+      // - 其余 Tab（Health / Me）无明确语境 → 仍传 null，由页面按有无档案决定。
       onAllowed: () {
-        final onGrowthTab = widget.navigationShell.currentIndex == AppTab.profile.index;
+        final tab = AppTab.values[widget.navigationShell.currentIndex];
         final p = ref.read(authControllerProvider).profile;
         final canGrowth = p?.petStatus == 'HAS_PET' && (p?.hasPetProfile ?? false);
-        PublishComposePage.open(
-            context, preset: (onGrowthTab && canGrowth) ? ContentType.growthMoment : null);
+        PublishComposePage.open(context, preset: addButtonPreset(tab, canGrowth: canGrowth));
       },
     );
   }
@@ -143,3 +208,20 @@ class _FixedCenterDockedFabLocation extends FloatingActionButtonLocation {
     return Offset(fabX, math.min(fabY, maxFabY));
   }
 }
+
+/// 底栏「＋」按下时按 **Tab 语境** 给发布页的预选类型（纯函数，L0 可测）。
+///
+/// 职责边界（Story 4.2 · AC6 单一口径）：本函数只回答「当前 Tab 想发什么」，返回 `null` 表示
+/// **没有语境、交给发布页按有无宠物档案决定**。⚠️ 别在这里做「有档案 → Diary」那类回落判定 ——
+/// 那是发布页 `initState` 的唯一职责，两处各判一次就会互相覆盖。
+///
+/// - Diary Tab → Diary（bug 20260703-244）。`canGrowth=false`（无档案，segment 灰置）时放弃预选。
+/// - Social Tab → Moment（2026-08-05 用户反馈）：在内容流点「＋」的意图就是发广场动态；
+///   这里若返回 null，有档案的用户会开在 Diary 上，既多一次点击，也容易把想公开的内容发进私人 Diary。
+/// - Health / Me → 无语境，返回 null。
+@visibleForTesting
+ContentType? addButtonPreset(AppTab tab, {required bool canGrowth}) => switch (tab) {
+      AppTab.profile => canGrowth ? ContentType.growthMoment : null,
+      AppTab.home => ContentType.daily,
+      _ => null,
+    };

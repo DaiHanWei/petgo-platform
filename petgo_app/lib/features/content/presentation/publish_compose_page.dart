@@ -79,6 +79,11 @@ class PublishComposePage extends ConsumerStatefulWidget {
     DateTime? presetEventDate,
     String? milestoneCode,
   }) {
+    // AC2 的第 5 个底栏位（code-review 2026-08-04 决策 D1）：发布页是 modal sheet 而非
+    // `PageRoute`，PostHog 的 `defaultPostHogRouteFilter` 只跟踪 `PageRoute` → observer 收不到，
+    // 所以和 4 个 Tab 根页一样手工上报，屏名沿用同一套 `<产品叫法>_page` 命名。
+    // ⚠️ 它不是 Tab 根页，看板上按「底栏 5 个位置的曝光」统计时才把它算进来。
+    Analytics.screen('publish_page');
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -108,19 +113,24 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   @override
   void initState() {
     super.initState();
-    // 深链/灰选预选类型（如生日 / 成长日历）：首帧后设控制器类型，与手动选 tab 等价。
-    final preset = widget.preset;
-    if (preset != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        final c = ref.read(publishControllerProvider);
-        c.setType(preset);
-        if (preset == ContentType.growthMoment) {
-          c.setEventDate(widget.presetEventDate ?? DateTime.now()); // F9 默认事件日期
-          _ensurePetLoaded();
-        }
-      });
-    }
+    // 默认类型判定的**唯一口径**（Story 4.2 · AC3/AC6）：
+    //   ① 调用方给了 preset（深链 / 日历某天 / Diary Tab 语境）→ 用它；
+    //   ② 否则**有宠物档案 → Diary**、无档案 → Moment（Diary 此时是灰置的，选不了）。
+    //
+    // ⚠️ 合并结论：`app_shell.dart _onAddPressed` **只负责传 preset**（它知道用户当时在哪个 Tab），
+    // 「有无档案 → 默认哪个类型」的判定**只在本页做**。此前两处各判一次，会出现
+    // 「shell 预选 Growth、本页又落回 Daily」这类互相覆盖。别把判定加回 shell。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final c = ref.read(publishControllerProvider);
+      final ContentType initial =
+          widget.preset ?? (_hasPetProfile ? ContentType.growthMoment : ContentType.daily);
+      c.setType(initial);
+      if (initial == ContentType.growthMoment) {
+        c.setEventDate(widget.presetEventDate ?? DateTime.now()); // F9 默认事件日期
+        _ensurePetLoaded();
+      }
+    });
   }
 
   /// 成长日历绑定的宠物档案（V1 单账号单宠物）。选「成长日历」时拉取，发布时带其 id。
@@ -460,7 +470,11 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                                 color: Colors.white,
                               ),
                             )
-                          : Text(l10n.publishButton),
+                          // AC2：同步开关关 → 主按钮由「分享」变「保存」（PRD 未提，UI 稿 P2 独有，
+                          // 靠 widget test 防回归）。
+                          : Text(controller.isSharing
+                              ? l10n.publishButton
+                              : l10n.publishButtonSave),
                     ),
                   ],
                 ),
@@ -476,6 +490,11 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                 if (growthSelected) ...[
                   const SizedBox(height: 14),
                   _petTargetRow(l10n),
+                  const SizedBox(height: 12),
+                  _syncSwitch(controller, l10n),
+                ] else ...[
+                  const SizedBox(height: 12),
+                  _publicHint(l10n),
                 ],
                 const SizedBox(height: 16),
                 _imageRow(controller, l10n),
@@ -545,10 +564,14 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                   ),
                 ],
                 const SizedBox(height: 16),
-                // 原型底部：居中公开提示。
+                // 原型底部：居中可见性提示，**跟随实际可见范围**（2026-08-05 用户实机反馈）。
+                // 此前写死「所有人可见」：Diary 关掉同步开关后，这句与开关副标题「没人看得到」
+                // 在同屏互相打脸。判定统一走 [PublishController.isSharing]（Moment/Tips 恒公开，
+                // Diary 看开关）—— ⚠️ 别在这里另写一遍类型判断，两处判定迟早走歧。
                 Center(
                   child: Text(
-                    l10n.publishPublicNotice,
+                    controller.isSharing ? l10n.publishPublicNotice : l10n.publishPrivateNotice,
+                    key: const ValueKey('publishVisibilityNotice'),
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       color: AppColors.textTertiary,
@@ -580,13 +603,27 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   }
 
   /// 类型标签：原型横向 pill chips（紫底圆角 9999 选中态，#E6E6E6 边框未选）。
+  /// T-8 `publish_page_content_type_selected`（Story 6.1）：类型选择的实际分布 + 是否等于默认值
+  /// —— 用来验证「默认 Diary」这个改动到底改变了多少发布构成。
+  void _reportTypeSelected(ContentType type) {
+    final defaultType = _hasPetProfile ? ContentType.growthMoment : ContentType.daily;
+    Analytics.capture('publish_page_content_type_selected', {
+      'type': type.wire,
+      'is_default': type == defaultType,
+      'has_pet_profile': _hasPetProfile,
+    });
+  }
+
   Widget _segments(PublishController controller, AppLocalizations l10n) {
     return SizedBox(
       height: 34,
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: [
-          // 原型 typechips 顺序：Cerita Harian / Tips & Info / Momen Bahagia🌟（成长末位）。
+          // Story 4.2 · AC5：顺序改为 **Diary / Moment / Tips**，与默认选中项及 FR-83 的术语一致
+          // （原 V1.0.0 顺序是 Cerita Harian / Tips / 成长末位）。
+          _growthChip(l10n, controller),
+          const SizedBox(width: 7),
           _segChip(
             l10n.publishSegmentDaily,
             ContentType.daily,
@@ -600,8 +637,6 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
             controller,
             'seg_${ContentType.knowledge.wire}',
           ),
-          const SizedBox(width: 7),
-          _growthChip(l10n, controller),
         ],
       ),
     );
@@ -618,7 +653,10 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       label: label,
       selected: controller.type == type,
       enabled: true,
-      onTap: () => controller.setType(type),
+      onTap: () {
+        _reportTypeSelected(type);
+        controller.setType(type);
+      },
     );
   }
 
@@ -631,6 +669,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       enabled: enabled,
       onTap: enabled
           ? () {
+              _reportTypeSelected(ContentType.growthMoment);
               controller.setType(ContentType.growthMoment);
               if (controller.eventDate == null) {
                 controller.setEventDate(
@@ -642,6 +681,67 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
           : () => _onGrowthBlocked(l10n),
     );
   }
+
+  /// 「同步到 Moment」开关（Story 4.2 · AC1/AC2 · UI 稿 P1/P2）。**仅 Diary 渲染，默认开启**。
+  ///
+  /// 关掉 = 这条只进自己的成长档案（`visibility=PRIVATE`），不进 Socialy / 话题聚合 / 任何公开位。
+  /// ⚠️ 发布后**不可更改**（FR-83 AC7）：本页是唯一的设置点，详情页 / 我的发布 / 编辑流程都不得加
+  /// 「转为私密」入口 —— 让内容不再被他人看到的唯一途径是删除该条。
+  Widget _syncSwitch(PublishController controller, AppLocalizations l10n) {
+    final on = controller.syncToMoment;
+    return Container(
+      key: const ValueKey('publishSyncSwitch'),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.cream2,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(l10n.publishSyncTitle,
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink)),
+                const SizedBox(height: 2),
+                Text(on ? l10n.publishSyncSub : l10n.publishSyncOffSub,
+                    style: const TextStyle(fontSize: 11, height: 1.3, color: AppColors.ink2)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Switch(
+            key: const ValueKey('publishSyncToggle'),
+            value: on,
+            activeThumbColor: AppColors.onAccent,
+            activeTrackColor: AppColors.mint,
+            onChanged: (value) {
+              // T-9 publish_page_sync_to_moment_toggled：**本版本最关键的产品假设验证** ——
+              // 到底有多少人真的想把 Diary 只留给自己。属性只记开关值，不记内容。
+              Analytics.capture('publish_page_sync_to_moment_toggled', {'enabled': value});
+              controller.setSyncToMoment(value);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Moment / Tips 的公开提示（AC4）：这两类本就公开进 Feed，**不渲染同步开关**。
+  Widget _publicHint(AppLocalizations l10n) => Row(
+        key: const ValueKey('publishPublicHint'),
+        children: [
+          const Icon(Icons.public, size: 14, color: AppColors.muted),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(l10n.publishPublicHint,
+                style: const TextStyle(fontSize: 11.5, color: AppColors.muted)),
+          ),
+        ],
+      );
 
   /// 关联对象（原型 petsel，仅成长）：紫浅底行「Untuk: 🐾 {pet} (wajib diisi)」。
   Widget _petTargetRow(AppLocalizations l10n) {

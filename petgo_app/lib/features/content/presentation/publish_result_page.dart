@@ -141,7 +141,10 @@ class PublishDonePage extends StatelessWidget {
               const SizedBox(height: 8),
               TextButton(
                 key: const ValueKey('publishDoneBackHome'),
-                onPressed: () => context.go('/home'),
+                // 「Back to Diary」→ Diary Tab（2026-08-05 用户反馈）。原先两个按钮都去 `/home`，
+                // 次按钮等于主按钮的重复，用户没有回自己档案的出口。
+                // ⚠️ 文案与目的地绑定：改其一必须改另一（key 名保留 BackHome 只为不动测试锚点）。
+                onPressed: () => context.go('/profile'),
                 child: Text(l10n.publishDoneBackHome,
                     style: const TextStyle(fontSize: 13, color: AppColors.muted)),
               ),

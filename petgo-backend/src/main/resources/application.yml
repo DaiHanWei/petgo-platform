@@ -220,6 +220,17 @@ logging:
     format:
       file: ecs
 
+# 服务端埋点（V1.1.2 Story 6.1 · T-12 里程碑达成）。
+# key 留空 = 整个上报静默关闭（本地 / 测试默认状态，不产生任何出网请求）。
+# host 必须与客户端同一个 PostHog project，否则前后端事件落在两个项目里、漏斗拼不起来。
+analytics:
+  posthog:
+    key: ${POSTHOG_SERVER_KEY:}
+    # 留空（含空串）→ 客户端回退到 https://eu.i.posthog.com，见 PostHogAnalyticsClient#resolveHost
+    host: ${POSTHOG_HOST:}
+    # 出网必须有超时：埋点走专用有界线程池，但没有超时仍会把那个池挂满、丢事件（code-review 2026-08-04）
+    timeout-seconds: ${POSTHOG_TIMEOUT_SECONDS:3}
+
 # OpenAPI 3.1 文档（springdoc）
 springdoc:
   api-docs:

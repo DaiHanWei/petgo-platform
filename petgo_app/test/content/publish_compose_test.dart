@@ -27,6 +27,7 @@ class _ThrowRepo implements ContentRepository {
     List<String> imageUrls = const [],
     DateTime? eventDate,
     required String idempotencyKey,
+    bool syncToMoment = true,
   }) async {
     final ro = RequestOptions(path: '/api/v1/content-posts');
     throw DioException(
@@ -51,6 +52,7 @@ class _OkRepo implements ContentRepository {
     List<String> imageUrls = const [],
     DateTime? eventDate,
     required String idempotencyKey,
+    bool syncToMoment = true,
   }) async =>
       1;
 }
@@ -314,5 +316,111 @@ void main() {
 
     expect(find.byType(PublishComposePage), findsOneWidget); // 重开发布页（跳过庆祝页）
     expect(find.byKey(const ValueKey('publishEventDate')), findsOneWidget); // 预选成长日历 → 事件日期字段在
+  });
+
+  // ===== 发布成功页两个出口（2026-08-05 用户反馈） =====
+  //
+  // 回归的缺陷：主次两个按钮都去 `/home`，次按钮等于主按钮的重复，用户没有回自己档案的出口。
+  // 文案与目的地绑定：主=「View in Social」→ Social Tab；次=「Back to Diary」→ Diary Tab。
+
+  Widget doneRouterApp(GoRouter router) => MaterialApp.router(
+        routerConfig: router,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+      );
+
+  GoRouter doneRouter() => GoRouter(
+        initialLocation: '/publish/done',
+        routes: [
+          GoRoute(path: '/home', builder: (c, s) => const Scaffold(body: Text('SOCIAL_TAB'))),
+          GoRoute(path: '/profile', builder: (c, s) => const Scaffold(body: Text('DIARY_TAB'))),
+          GoRoute(
+              path: '/publish/done',
+              builder: (c, s) => const PublishDonePage(
+                  args: PublishResultArgs(excerpt: 'x', typeLabel: 'Diary', photoCount: 0))),
+        ],
+      );
+
+  testWidgets('发布成功页主按钮「View in Social」→ Social Tab', (tester) async {
+    _tallView(tester);
+    await tester.pumpWidget(doneRouterApp(doneRouter()));
+    await tester.pumpAndSettle();
+
+    final l10n = await _en();
+    expect(find.text(l10n.publishDoneViewFeed), findsOneWidget);
+    expect(l10n.publishDoneViewFeed.toLowerCase().contains('feed'), isFalse,
+        reason: '文案已统一为 Social，不得再出现 Feed');
+
+    await tester.tap(find.byKey(const ValueKey('publishDoneViewFeed')));
+    await tester.pumpAndSettle();
+    expect(find.text('SOCIAL_TAB'), findsOneWidget);
+  });
+
+  testWidgets('发布成功页次按钮「Back to Diary」→ Diary Tab（此前也去 Social，与主按钮重复）', (tester) async {
+    _tallView(tester);
+    await tester.pumpWidget(doneRouterApp(doneRouter()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('publishDoneBackHome')));
+    await tester.pumpAndSettle();
+    expect(find.text('DIARY_TAB'), findsOneWidget);
+    expect(find.text('SOCIAL_TAB'), findsNothing);
+  });
+
+  // ===== 底部可见性提示跟随实际可见范围（2026-08-05 用户实机反馈） =====
+  //
+  // 回归的缺陷：底部那句写死「所有人可见」，Diary 关掉同步开关后与开关副标题
+  //「没人看得到」同屏互相打脸。判定必须与 PublishController.isSharing 一致。
+
+  testWidgets('Diary 默认（开关开）→ 底部提示为公开态', (tester) async {
+    _tallView(tester);
+    final container = ProviderContainer(overrides: [
+      publishControllerProvider.overrideWithValue(_controller(_OkRepo())),
+      profileRepositoryProvider.overrideWithValue(_FakeProfileRepo()),
+    ]);
+    addTearDown(container.dispose);
+    final l10n = await _en();
+
+    await tester.pumpWidget(_composeApp(container, preset: ContentType.growthMoment));
+    await tester.pumpAndSettle();
+
+    expect(find.text(l10n.publishPublicNotice), findsOneWidget);
+    expect(find.text(l10n.publishPrivateNotice), findsNothing);
+  });
+
+  testWidgets('Diary 关掉同步开关 → 底部提示改私密态，且不再出现「所有人可见」', (tester) async {
+    _tallView(tester);
+    final container = ProviderContainer(overrides: [
+      publishControllerProvider.overrideWithValue(_controller(_OkRepo())),
+      profileRepositoryProvider.overrideWithValue(_FakeProfileRepo()),
+    ]);
+    addTearDown(container.dispose);
+    final l10n = await _en();
+
+    await tester.pumpWidget(_composeApp(container, preset: ContentType.growthMoment));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('publishSyncToggle')));
+    await tester.pumpAndSettle();
+
+    expect(find.text(l10n.publishPrivateNotice), findsOneWidget);
+    expect(find.text(l10n.publishPublicNotice), findsNothing,
+        reason: '开关已关闭，底部绝不能还说「所有人可见」——这正是本次修的缺陷');
+  });
+
+  testWidgets('Moment（无同步开关）恒公开 → 底部提示始终是公开态', (tester) async {
+    _tallView(tester);
+    final container = ProviderContainer(overrides: [
+      publishControllerProvider.overrideWithValue(_controller(_OkRepo())),
+      profileRepositoryProvider.overrideWithValue(_FakeProfileRepo()),
+    ]);
+    addTearDown(container.dispose);
+    final l10n = await _en();
+
+    await tester.pumpWidget(_composeApp(container, preset: ContentType.daily));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('publishSyncSwitch')), findsNothing); // Moment 不渲染开关
+    expect(find.text(l10n.publishPublicNotice), findsOneWidget);
   });
 }

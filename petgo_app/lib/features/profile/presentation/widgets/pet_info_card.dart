@@ -26,14 +26,22 @@ class PetInfoCard extends StatelessWidget {
   final int? consultCount;
   final int? milestoneCount;
 
+  /// 无头像时的 emoji 占位：**按物种取**（原先恒为 🐱，狗主人会看到自家狗顶着猫脸 ——
+  /// 2026-08-04 用户实机反馈）。未知物种走中性爪印。
+  String get _placeholderEmoji => switch (profile.petType) {
+        'CAT' => '🐱',
+        'DOG' => '🐶',
+        _ => '🐾',
+      };
+
   /// 头像：有 avatarUrl 渲染真实头像图（填满圆圈，与 Me/编辑页同用 AppImage），
-  /// 加载中/失败回退 emoji 占位。无 URL → 🐱 占位。
+  /// 加载中/失败回退 emoji 占位。无 URL → 按物种的 emoji 占位。
   Widget _avatar() {
     final provider = AppImage.provider(profile.avatarUrl, thumbWidth: 240);
     if (provider == null) {
-      return const Text('🐱', style: TextStyle(fontSize: 26));
+      return Text(_placeholderEmoji, style: const TextStyle(fontSize: 26));
     }
-    const fallback = Text('🐾', style: TextStyle(fontSize: 26));
+    final fallback = Text(_placeholderEmoji, style: const TextStyle(fontSize: 26));
     return Image(
       image: provider,
       key: ValueKey('petAvatar-${profile.avatarUrl}'), // URL 变即重建，避免换头像后旧图残留
@@ -49,10 +57,18 @@ class PetInfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final age = computePetAge(profile.birthday);
+    // A3/A4 稿的 meta 行是「物种 · 品种 · 年龄」；此前漏了物种，只有品种时
+    // 「Pomeranian」这类品种名并不能让人一眼看出是猫还是狗（我的页宠物卡一直是带物种的）。
+    final species = switch (profile.petType) {
+      'CAT' => l10n.petTypeCat,
+      'DOG' => l10n.petTypeDog,
+      'OTHER' => l10n.petTypeOther,
+      _ => null,
+    };
     final sub = [
+      ?species,
       if (profile.breed != null && profile.breed!.isNotEmpty) profile.breed!,
-      if (profile.birthday != null) l10n.growthArchiveAge(age.years, age.months),
+      ?formatPetAge(l10n, profile.birthday),
     ].join(' · ');
 
     return Container(

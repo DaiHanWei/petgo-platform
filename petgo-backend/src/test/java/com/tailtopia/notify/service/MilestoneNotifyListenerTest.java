@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.tailtopia.notify.domain.NotificationType;
+import com.tailtopia.profile.domain.MilestoneCompletionSource;
 import com.tailtopia.profile.domain.MilestoneLevel;
 import com.tailtopia.profile.event.MilestoneCompletedEvent;
 import org.junit.jupiter.api.Test;
@@ -21,7 +22,7 @@ class MilestoneNotifyListenerTest {
     @Test
     void lLevelSendsMilestoneNodePush() {
         listener.onMilestoneCompleted(
-                new MilestoneCompletedEvent(7L, "C-L1", MilestoneLevel.L, "第一个生日"));
+                new MilestoneCompletedEvent(7L, "C-L1", MilestoneLevel.L, "第一个生日", MilestoneCompletionSource.SYSTEM_AUTO));
         verify(notificationService).send(eq(7L), eq(NotificationType.MILESTONE_NODE),
                 any(), any(), eq(NotificationType.MILESTONE_NODE.name()), eq("C-L1"));
     }
@@ -29,9 +30,9 @@ class MilestoneNotifyListenerTest {
     @Test
     void sAndMLevelDoNotPush() {
         listener.onMilestoneCompleted(
-                new MilestoneCompletedEvent(7L, "C-S1", MilestoneLevel.S, "档案创建完成"));
+                new MilestoneCompletedEvent(7L, "C-S1", MilestoneLevel.S, "档案创建完成", MilestoneCompletionSource.SYSTEM_AUTO));
         listener.onMilestoneCompleted(
-                new MilestoneCompletedEvent(7L, "C-M8", MilestoneLevel.M, "陪伴满 30 天"));
+                new MilestoneCompletedEvent(7L, "C-M8", MilestoneLevel.M, "陪伴满 30 天", MilestoneCompletionSource.SYSTEM_AUTO));
         verify(notificationService, never()).send(anyLong(), any(), any(), any(), any(), any());
     }
 }

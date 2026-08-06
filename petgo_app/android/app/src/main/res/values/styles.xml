@@ -17,6 +17,12 @@
 
          This Theme is only used starting with V2 of Flutter's Android embedding. -->
     <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
-        <item name="android:windowBackground">?android:colorBackground</item>
+    <!-- ⚠️ code-review 2026-08-04：这里**必须**是品牌紫，不能是 ?android:colorBackground。
+         NormalTheme 是 FlutterActivity 在 onCreate 里立刻切换过去的主题，而 Flutter 首帧在那之后。
+         API 31+ 有系统 SplashScreen 盖住、看不出来；**API 30 及以下**（印尼市场占比不低）
+         会在「原生启动屏」与「紫色首帧」之间露出这一层：Theme.Light 下是白、Theme.Black 下是黑
+         —— 即缺陷 B-1/B-2 在旧机型上的残留形态。pubspec 的注释当时把病因全归给 splash 底色，
+         漏了这一层。⏳ 需 Android 11 及以下真机 + 浅色/深色各录一次冷启动确认。 -->
+        <item name="android:windowBackground">@color/brand_violet</item>
     </style>
 </resources>

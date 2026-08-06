@@ -12,8 +12,6 @@ import 'package:tailtopia/core/l10n/locale_controller.dart';
 import 'package:tailtopia/core/storage/prefs.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
-import 'package:tailtopia/features/profile/domain/profile_prompt_controller.dart';
-import 'package:tailtopia/features/profile/domain/profile_prompt_state.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,14 +33,11 @@ Future<void> main() async {
     DeviceOrientation.portraitDown,
   ]);
 
-  // Story 1.7：加载档案提示条持久态 + 本次冷启动计数 +1（FR-0H）。
-  final promptBootstrap = await _loadProfilePromptBootstrap();
   // Story 7.2：读持久化语言选择（空/缺失 = 跟随设备）。
   final savedLocale = await _loadSavedLocale();
 
   runApp(ProviderScope(
     overrides: [
-      profilePromptBootstrapProvider.overrideWithValue(promptBootstrap),
       // Debug-only：--dart-define=DEV_LOCALE=id 强制语言（视觉验收对齐印尼语原型）；否则跟持久化/设备。
       localeOverrideProvider.overrideWithValue(
         kDebugMode && const String.fromEnvironment('DEV_LOCALE').isNotEmpty
@@ -102,18 +97,3 @@ Future<String?> _loadSavedLocale() async {
   }
 }
 
-Future<ProfilePromptState> _loadProfilePromptBootstrap() async {
-  try {
-    final prefs = await AppPrefs.create();
-    var state = ProfilePromptState(
-      restartCount: prefs.getInt(AppPrefs.kProfilePromptRestartCount),
-      dismissedPermanently: prefs.getBool(AppPrefs.kProfilePromptDismissedPermanently),
-      petProfileCompleted: prefs.getBool(AppPrefs.kPetProfileCompleted),
-    );
-    state = onColdStartIncrement(state); // 本次冷启动 +1
-    await prefs.setInt(AppPrefs.kProfilePromptRestartCount, state.restartCount);
-    return state;
-  } catch (_) {
-    return const ProfilePromptState(restartCount: 1); // prefs 缺失/损坏 → 默认首启
-  }
-}

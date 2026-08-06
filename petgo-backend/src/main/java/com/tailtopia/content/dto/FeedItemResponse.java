@@ -2,6 +2,7 @@ package com.tailtopia.content.dto;
 
 import com.tailtopia.auth.dto.AuthorView;
 import com.tailtopia.content.domain.ContentPost;
+import com.tailtopia.content.domain.ContentVisibility;
 import com.tailtopia.content.domain.ContentType;
 import java.time.Instant;
 import java.util.List;
@@ -35,8 +36,13 @@ public record FeedItemResponse(
         String body,
         String firstImageUrl,
         long likeCount,
-        Instant createdAt) {
+        Instant createdAt,
+        ContentVisibility visibility) {
 
+    /**
+     * ⚠️ {@code visibility} 恒下发（Story 4.1 · AC7）。Feed 里只会出现 PUBLIC，
+     * 但「我的发布」复用同一 DTO —— 前端据此给私密内容打「仅自己可见」标识（Story 4.2）。
+     */
     public static FeedItemResponse of(ContentPost p, AuthorView author, long likeCount) {
         List<String> images = p.getImageUrls();
         String firstImage = (images != null && !images.isEmpty()) ? images.get(0) : null;
@@ -50,6 +56,7 @@ public record FeedItemResponse(
                 p.getText(),
                 firstImage,
                 likeCount,
-                p.getCreatedAt());
+                p.getCreatedAt(),
+                p.getVisibility());
     }
 }

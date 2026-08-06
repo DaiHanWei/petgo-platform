@@ -92,7 +92,8 @@ void main() {
     ]);
     await tester.pumpWidget(_wrap(auth: _authA(), profile: profile, page: page));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('healthEventTile')), findsOneWidget);
+    // Story 3.3：健康/问诊条渲染改走共用组件（④a 粉底条 key = timelineConsultRow）。
+    expect(find.byKey(const ValueKey('timelineConsultRow')), findsOneWidget);
     // paspor.html 重做：等级徽章用 emoji + l10n 标签（默认英文 → 🟡 Yellow），不再裸露 enum 值。
     expect(find.text('🟡 Yellow'), findsOneWidget);
   });

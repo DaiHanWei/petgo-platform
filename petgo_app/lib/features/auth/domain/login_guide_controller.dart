@@ -31,6 +31,11 @@ class LoginGuideController {
   /// Apple 登录执行器（FR-44，仅 iOS）：为空则引导浮层不展示 Apple 入口。
   final LoginRunner? _loginApple;
 
+  /// 本次登录尝试的来源，供 T-7 `signup_succeeded` 的 `entry_source` 归因（Story 6.1）。
+  /// 由 [showSoftSheet] / [showHardDialog] 在弹出时写入 —— 一次只可能有一个引导在前台，
+  /// 所以单个字段足够，不需要按弹层实例分别记。
+  String _entrySource = 'other';
+
   bool _softShownThisSession = false;
   bool _hardDialogShowing = false;
   RouteIntent? _pending;
@@ -40,19 +45,29 @@ class LoginGuideController {
   bool get hardDialogShowing => _hardDialogShowing;
 
   /// 软浮层（每 session 最多一次；第 2 次起 no-op）。
-  Future<void> showSoftSheet(BuildContext context, {RouteIntent? pendingAction}) async {
+  Future<void> showSoftSheet(BuildContext context,
+      {RouteIntent? pendingAction, String entrySource = 'social_soft_login'}) async {
     if (_softShownThisSession) return;
     _softShownThisSession = true;
     _pending = pendingAction;
+    _entrySource = entrySource;
+    // T-6（Story 6.1）：曝光埋在 session 去重**之后** —— 第 2 次起是 no-op，不该记曝光。
+    Analytics.capture('social_soft_login_sheet_shown');
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetCtx) => LoginSoftSheet(
-        onLogin: () => _attemptLogin(context, sheetCtx, _login),
+        onLogin: () {
+          Analytics.capture('social_soft_login_sheet_login_tapped', {'method': 'google'});
+          return _attemptLogin(context, sheetCtx, _login);
+        },
         onAppleLogin: _loginApple == null
             ? null
-            : () => _attemptLogin(context, sheetCtx, _loginApple),
+            : () {
+                Analytics.capture('social_soft_login_sheet_login_tapped', {'method': 'apple'});
+                return _attemptLogin(context, sheetCtx, _loginApple);
+              },
         onClose: () {
           _pending = null;
           Navigator.of(sheetCtx).pop();
@@ -66,10 +81,12 @@ class LoginGuideController {
   ///
   /// 但**并发去重**：同一时刻只存在一个强弹窗（并发 401 不叠多窗，单例引导）。
   /// 顺序触发（关闭后再触发）仍正常弹出。
-  Future<void> showHardDialog(BuildContext context, {RouteIntent? pendingAction}) async {
+  Future<void> showHardDialog(BuildContext context,
+      {RouteIntent? pendingAction, String entrySource = 'other'}) async {
     if (_hardDialogShowing) return; // 并发单例
     _hardDialogShowing = true;
     _pending = pendingAction;
+    _entrySource = entrySource;
     try {
       await showDialog<void>(
         context: context,
@@ -121,6 +138,11 @@ class LoginGuideController {
     if (resp == null) return LoginGuideOutcome.cancelled; // 取消：保持引导，停留原页
     if (overlayContext.mounted && Navigator.of(overlayContext).canPop()) {
       Navigator.of(overlayContext).pop();
+    }
+    // T-7 signup_succeeded（Story 6.1）：**注册真正成功**才报（取消/失败都已在上面 return）。
+    // 现有埋点只有「点了登录按钮」，缺的就是这一环；`entry_source` 是转化路径构成的唯一来源。
+    if (resp.isNewUser) {
+      Analytics.capture('signup_succeeded', {'entry_source': _entrySource});
     }
     if (!rootContext.mounted) return LoginGuideOutcome.success;
     _handleSuccess(rootContext, resp);
