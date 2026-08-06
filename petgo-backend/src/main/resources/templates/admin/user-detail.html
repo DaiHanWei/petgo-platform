@@ -59,7 +59,7 @@
             <p><span th:text="#{admin.userdetail.nickname}">昵称</span>: <span th:text="${user.nickname()}">-</span></p>
             <p><span th:text="#{admin.userdetail.email}">注册邮箱</span>: <span th:text="${user.email()}">a@x</span></p>
             <p><span th:text="#{admin.userdetail.created}">注册时间</span>:
-                <span th:text="${#temporals.format(user.createdAt(), 'yyyy-MM-dd HH:mm')}">-</span></p>
+                <span th:text="${@adminTime.wib(user.createdAt())}">-</span></p>
             <p><span th:text="#{admin.userdetail.status}">账号状态</span>:
                 <span th:if="${user.deleted()}" class="badge badge-neutral"
                       th:text="#{admin.users.status.deleted}">已注销</span>
@@ -130,7 +130,7 @@
                 <tr th:each="s : ${user.sessions()}">
                     <td th:text="${s.sessionId()}">1</td>
                     <td th:text="${s.vetId()}">-</td>
-                    <td th:text="${#temporals.format(s.createdAt(), 'yyyy-MM-dd HH:mm')}">-</td>
+                    <td th:text="${@adminTime.wib(s.createdAt())}">-</td>
                     <td><code th:text="${s.status()}">CLOSED</code></td>
                     <td th:text="${s.stars() != null} ? ${s.stars()} + ' ★' : '—'">—</td>
                 </tr>

@@ -37,7 +37,7 @@
                     <span class="badge badge-info" th:text="${r.targetType()}">NICKNAME</span></td>
                 <td class="cell-wide" th:text="${#strings.abbreviate(r.valuePreview(), 40)}">…</td>
                 <td th:text="${r.riskScore() != null} ? ${r.riskScore()} : '—'">—</td>
-                <td th:text="${#temporals.format(r.submittedAt(), 'yyyy-MM-dd HH:mm')}">-</td>
+                <td th:text="${@adminTime.wib(r.submittedAt())}">-</td>
                 <td>
                     <span th:if="${r.strikes().total() == 0}">—</span>
                     <span class="badge badge-warn" th:if="${r.strikes().total() > 0}"
@@ -96,7 +96,7 @@
                     <span th:unless="${r.avatarUrl() != null}">—</span>
                 </td>
                 <td th:text="${r.riskScore() != null} ? ${r.riskScore()} : '—'">—</td>
-                <td th:text="${#temporals.format(r.createdAt(), 'yyyy-MM-dd HH:mm')}">-</td>
+                <td th:text="${@adminTime.wib(r.createdAt())}">-</td>
                 <td>
                     <span th:if="${r.strikes().total() == 0}">—</span>
                     <span class="badge badge-warn" th:if="${r.strikes().total() > 0}"

@@ -3,38 +3,74 @@
 <!-- 客服工单详情（Story 4.7）。support.handle 门控。结案「已联系+已解决」→ RESOLVED + 结案/CSAT 通知。 -->
 <head>
     <meta charset="UTF-8"/>
-    <title>工单详情 · TailTopia 运营后台</title>
+    <title th:text="#{admin.ticket.title}">工单详情 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1>工单详情</h1>
+        <h1 th:text="#{admin.ticket.title}">工单详情</h1>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
-        <p><a class="btn btn-neutral btn-sm" th:href="@{/admin/support-tickets}">返回列表</a></p>
+        <p><a class="btn btn-neutral btn-sm" th:href="@{/admin/support-tickets}" th:text="#{admin.common.backToList}">返回列表</a></p>
 
         <table>
-            <tr><th>工单</th><td th:text="${ticket.ticketToken}">tok</td></tr>
-            <tr><th>标题</th><td th:text="${ticket.subject}">subject</td></tr>
-            <tr><th>正文</th><td th:text="${ticket.body}">body</td></tr>
-            <tr><th>联系方式</th><td><span th:text="${ticket.contactType}">EMAIL</span> · <span th:text="${ticket.contactValue}">x</span></td></tr>
-            <tr><th>需联系</th><td th:text="${ticket.needContact} ? '是' : '否'">是</td></tr>
-            <tr><th>已联系</th><td th:text="${ticket.contacted} ? '是' : '否'">否</td></tr>
-            <tr><th>状态</th><td th:text="${ticket.status}">OPEN</td></tr>
-            <tr><th>标签</th><td th:text="${#strings.listJoin(ticket.labels, ', ')} ?: '—'">—</td></tr>
-            <tr><th>附件数</th><td th:text="${ticket.attachmentCount}">0</td></tr>
+            <tr><th th:text="#{admin.ticket.ticket}">工单</th><td th:text="${ticket.ticketToken}">tok</td></tr>
+            <tr><th th:text="#{admin.ticket.subject}">标题</th><td th:text="${ticket.subject}">subject</td></tr>
+            <tr><th th:text="#{admin.ticket.body}">正文</th><td th:text="${ticket.body}">body</td></tr>
+            <tr><th th:text="#{admin.ticket.contact}">联系方式</th><td><span th:text="${ticket.contactType}">EMAIL</span> · <span th:text="${ticket.contactValue}">x</span></td></tr>
+            <tr><th th:text="#{admin.ticket.needContact}">需联系</th><td th:text="${ticket.needContact} ? #{admin.common.yes} : #{admin.common.no}">是</td></tr>
+            <tr><th th:text="#{admin.ticket.contacted}">已联系</th><td th:text="${ticket.contacted} ? #{admin.common.yes} : #{admin.common.no}">否</td></tr>
+            <tr><th th:text="#{admin.common.status}">状态</th><td th:text="${ticket.status}">OPEN</td></tr>
+            <tr><th th:text="#{admin.ticket.labels}">标签</th><td th:text="${#strings.listJoin(ticket.labels, ', ')} ?: '—'">—</td></tr>
+            <tr><th th:text="#{admin.ticket.relatedOrder}">关联订单</th><td th:text="${ticket.relatedOrderToken} ?: '—'">—</td></tr>
+            <tr th:if="${ticket.refundToken != null}"><th th:text="#{admin.ticket.refund}">退款单</th>
+                <td><a th:href="@{/admin/refunds/{t}(t=${ticket.refundToken})}" th:text="${ticket.refundToken}">tok</a>
+                    · <span th:text="${ticket.refundNeedDecision}">PENDING</span></td></tr>
+            <tr><th th:text="#{admin.ticket.attachments}">附件</th>
+                <td>
+                    <!-- 附件后台内预览（bug 20260728-387）：短 TTL 签名 URL，data-lightbox 走全局灯箱 -->
+                    <span th:if="${#lists.isEmpty(ticket.attachmentUrls)}" th:text="${ticket.attachmentCount}">0</span>
+                    <img th:each="url : ${ticket.attachmentUrls}" th:src="${url}" data-lightbox
+                         alt="attachment" style="max-height:120px;max-width:160px;margin:2px;cursor:zoom-in"/>
+                </td></tr>
             <tr><th>CSAT</th><td><span th:text="${ticket.csatScore} ?: '—'">—</span> <span th:text="${ticket.csatComment} ?: ''"></span></td></tr>
-            <tr><th>结案时间</th>
-                <td th:text="${ticket.resolvedAt != null} ? ${#temporals.format(ticket.resolvedAt, 'yyyy-MM-dd HH:mm')} : '—'">—</td></tr>
+            <tr><th th:text="#{admin.ticket.resolvedAt}">结案时间</th>
+                <td th:text="${ticket.resolvedAt != null} ? ${@adminTime.wib(ticket.resolvedAt)} : '—'">—</td></tr>
         </table>
+
+        <!-- AB-5B 客服判定（bug 20260728-384/388）：关联订单 → 批准/驳回退款需求 -->
+        <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('support.handle')"
+             th:if="${ticket.status == 'OPEN' or ticket.status == 'IN_PROGRESS'}">
+            <h3 th:text="#{admin.ticket.relatedOrder}">关联订单</h3>
+            <form method="post" th:action="@{/admin/support-tickets/{t}/link-order(t=${ticket.ticketToken})}">
+                <input type="text" name="orderToken" th:placeholder="#{admin.ticket.ph.orderToken}" placeholder="订单号（orderToken）" required/>
+                <button class="btn btn-sm" type="submit" th:text="${ticket.relatedOrderToken == null} ? #{admin.ticket.btn.linkOrder} : #{admin.ticket.btn.relinkOrder}">关联订单</button>
+            </form>
+        </div>
+        <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('refund.submit')"
+             th:if="${(ticket.status == 'OPEN' or ticket.status == 'IN_PROGRESS')
+                      and ticket.relatedOrderToken != null
+                      and (ticket.refundNeedDecision == null or ticket.refundNeedDecision == 'PENDING')}">
+            <h3 th:text="#{admin.ticket.section.refundDecision}">退款需求判定</h3>
+            <form method="post" th:action="@{/admin/support-tickets/{t}/refund-approve(t=${ticket.ticketToken})}"
+                  style="display:inline"
+                  th:attr="onsubmit='return confirm(&quot;' + #{admin.ticket.confirm.refundApprove(${ticket.relatedOrderToken})} + '&quot;)'">
+                <button class="btn btn-sm" type="submit" th:text="#{admin.ticket.btn.refundApprove}">批准退款需求</button>
+            </form>
+            <form method="post" th:action="@{/admin/support-tickets/{t}/refund-reject(t=${ticket.ticketToken})}"
+                  style="display:inline"
+                  th:attr="onsubmit='return confirm(&quot;' + #{admin.ticket.confirm.refundReject} + '&quot;)'">
+                <button class="btn btn-neutral btn-sm" type="submit" th:text="#{admin.ticket.btn.refundReject}">驳回退款需求</button>
+            </form>
+        </div>
 
         <!-- 结案（仅 OPEN/IN_PROGRESS 可）：勾「已联系+已解决」-->
         <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('support.handle')"
              th:if="${ticket.status == 'OPEN' or ticket.status == 'IN_PROGRESS'}">
-            <h3>结案</h3>
+            <h3 th:text="#{admin.ticket.section.resolve}">结案</h3>
             <form method="post" th:action="@{/admin/support-tickets/{t}/resolve(t=${ticket.ticketToken})}">
-                <button class="btn btn-sm" type="submit">已联系 + 已解决（结案）</button>
+                <button class="btn btn-sm" type="submit" th:text="#{admin.ticket.btn.resolve}">已联系 + 已解决（结案）</button>
             </form>
         </div>
     </div>

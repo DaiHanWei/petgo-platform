@@ -58,7 +58,7 @@
             <tbody>
             <tr th:each="r : ${result.content}">
                 <td th:text="${r.id}">1</td>
-                <td th:text="${#temporals.format(r.createdAt, 'yyyy-MM-dd HH:mm:ss')}">-</td>
+                <td th:text="${@adminTime.wib(r.createdAt)}">-</td>
                 <td th:text="${r.actorAccountId}">-</td>
                 <td><code th:text="${r.actionType}">ACTION</code></td>
                 <td>

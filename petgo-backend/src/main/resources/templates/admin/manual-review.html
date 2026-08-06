@@ -76,7 +76,7 @@
                           th:title="|帖子 ${r.strikes().post()} / 评论 ${r.strikes().comment()} / 名称 ${r.strikes().name()} / 头像 ${r.strikes().avatar()}|"
                           th:text="|#{admin.moderation.strikes.label} ${r.strikes().total()}|">累计违规</span>
                 </td>
-                <td th:text="${#temporals.format(r.submittedAt(), 'yyyy-MM-dd HH:mm')}">-</td>
+                <td th:text="${@adminTime.wib(r.submittedAt())}">-</td>
                 <td sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown') or hasAuthority('content.manual_review')">
                     <!-- 通过 / 拒绝 左右并排。 -->
                     <div class="row-actions">

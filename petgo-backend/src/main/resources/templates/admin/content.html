@@ -94,7 +94,7 @@
                 <img th:each="img : ${c.imageUrls()}" th:src="${img}" alt="" loading="lazy" data-lightbox
                      style="width:48px;height:48px;object-fit:cover;border-radius:4px;margin:2px;vertical-align:middle;cursor:zoom-in"/>
             </td>
-            <td th:text="${#temporals.format(c.createdAt(), 'yyyy-MM-dd HH:mm')}">-</td>
+            <td th:text="${@adminTime.wib(c.createdAt())}">-</td>
             <td>
                 <span class="badge" th:classappend="${c.deleted()} ? 'badge-danger' : 'badge-ok'"
                       th:text="${c.deleted()} ? #{admin.content.status.deleted} : #{admin.content.status.online}">上线中</span>

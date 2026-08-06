@@ -32,8 +32,8 @@ petgo:
     secret-key: ${TENCENT_IM_SECRET_KEY:}
     user-sig-ttl-seconds: ${IM_USERSIG_TTL_SECONDS:86400}
     callback-token: ${TENCENT_IM_CALLBACK_TOKEN:}
-    # live REST 域名（按数据中心选德国/欧洲，与后端同区）+ 管理员 IM 标识（REST 鉴权身份，不计 MAU）。
-    rest-base-url: ${IM_REST_BASE_URL:https://adminapiger.im.qcloud.com}
+    # live REST 域名——必须与 SDKAppID 所在数据中心一致（本应用=新加坡；配错回 60026 且曾静默失败）。
+    rest-base-url: ${IM_REST_BASE_URL:https://adminapisgp.im.qcloud.com}
     admin-identifier: ${IM_ADMIN_IDENTIFIER:administrator}
   # 支付网关（Story 1.1，V1.1 资金地基）：Midtrans 收款 + 幂等 + 回调/轮询双通道去重。
   # mode=stub（默认）走桩网关，无凭证即可启动并验意图状态机/去重（L0/L1）；mode=live 才打真实 Midtrans（L2）。

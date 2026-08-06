@@ -18,6 +18,11 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
     /** 迷你主页发布数（Story 3.8）：某作者未软删的已发布内容数。 */
     long countByAuthorIdAndDeletedAtIsNullAndStatus(long authorId, PostStatus status);
 
+    /** 概览看板（bug 20260731-442）：仅真实用户发的帖（剔除虚拟/种子账号铺量内容）。 */
+    @Query("select count(p) from ContentPost p join User u on u.id = p.authorId "
+            + "where u.accountType = com.tailtopia.auth.domain.AccountType.REAL")
+    long countByRealAuthor();
+
     /**
      * 删除宠物档案前解绑其成长帖（bug 20260702-237 / 决策 F18）：把引用该 pet 的 content_posts.pet_id 置 NULL。
      * FK fk_content_posts_pet 无 ON DELETE，直接删 pet 会被引用阻断；置空保留帖子本体（UGC 保留），

@@ -45,7 +45,7 @@
                 <td th:text="${a.userId != null} ? ${a.userId} : #{admin.anomalies.anonymized}">-</td>
                 <td th:text="${a.vetId}">-</td>
                 <td th:text="${a.anomalyType}">VET_BANNED</td>
-                <td th:text="${#temporals.format(a.createdAt, 'yyyy-MM-dd HH:mm')}">-</td>
+                <td th:text="${@adminTime.wib(a.createdAt)}">-</td>
                 <td>
                     <span class="badge"
                           th:classappend="${a.status.name() == 'OPEN'} ? 'badge-danger' : 'badge-ok'"

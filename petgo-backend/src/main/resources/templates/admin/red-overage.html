@@ -3,20 +3,19 @@
 <!-- 红色超额只读监控（Story 9.6，AB-7A）。纯观测 + 人工标记，无自动拦截。 -->
 <head>
     <meta charset="UTF-8"/>
-    <title>红色超额监控 · TailTopia 运营后台</title>
+    <title th:text="#{admin.redOverage.title}">红色超额监控 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1>红色超额监控</h1>
+        <h1 th:text="#{admin.redOverage.title}">红色超额监控</h1>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
-        <p class="hint">⚠️ 仅观测：按用户 RED 分诊计数降序，供人工排查。<b>系统不做任何自动拦截/限流/封禁</b>——
-            是否处置由人工判断。可标记 待核查 / 已处理。</p>
+        <p class="hint"><span th:text="#{admin.redOverage.hint.observe}">⚠️ 仅观测：按用户 RED 分诊计数降序，供人工排查。</span><b th:text="#{admin.redOverage.hint.noAuto}">系统不做任何自动拦截/限流/封禁</b><span th:text="#{admin.redOverage.hint.manual}">——是否处置由人工判断。可标记 待核查 / 已处理。</span></p>
         <table>
             <thead>
-            <tr><th>用户</th><th>RED 计数</th><th>复核态</th><th>备注</th><th>操作</th></tr>
+            <tr><th th:text="#{admin.common.user}">用户</th><th th:text="#{admin.redOverage.col.redCount}">RED 计数</th><th th:text="#{admin.redOverage.col.reviewStatus}">复核态</th><th th:text="#{admin.common.note}">备注</th><th th:text="#{admin.common.actions}">操作</th></tr>
             </thead>
             <tbody>
             <tr th:each="r : ${rows}">
@@ -28,15 +27,15 @@
                     <form method="post" th:action="@{/admin/red-overage/{u}/review(u=${r.userId})}"
                           style="display:inline">
                         <select name="status">
-                            <option value="TO_VERIFY">待核查</option>
-                            <option value="RESOLVED">已处理</option>
+                            <option value="TO_VERIFY" th:text="#{admin.redOverage.status.toVerify}">待核查</option>
+                            <option value="RESOLVED" th:text="#{admin.redOverage.status.resolved}">已处理</option>
                         </select>
-                        <input type="text" name="note" placeholder="备注" maxlength="255"/>
-                        <button type="submit" class="btn btn-neutral btn-sm">标记</button>
+                        <input type="text" name="note" th:placeholder="#{admin.common.note}" placeholder="备注" maxlength="255"/>
+                        <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.redOverage.btn.mark}">标记</button>
                     </form>
                 </td>
             </tr>
-            <tr th:if="${rows.isEmpty()}"><td colspan="5">暂无 RED 分诊记录</td></tr>
+            <tr th:if="${rows.isEmpty()}"><td colspan="5" th:text="#{admin.redOverage.empty}">暂无 RED 分诊记录</td></tr>
             </tbody>
         </table>
     </div>

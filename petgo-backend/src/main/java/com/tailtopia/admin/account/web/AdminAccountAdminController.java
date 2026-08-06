@@ -30,6 +30,8 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 public class AdminAccountAdminController {
 
     private static final String CREATE_AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('admin.create_account')";
+    private static final String VIEW_AUTH =
+            "hasRole('SUPER_ADMIN') or hasAuthority('admin.view_accounts') or hasAuthority('admin.create_account')";
     private static final String DEACTIVATE_AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('admin.deactivate')";
 
     private final AdminAccountService accountService;
@@ -39,7 +41,7 @@ public class AdminAccountAdminController {
     }
 
     @GetMapping("/admin/accounts")
-    @PreAuthorize(CREATE_AUTH)
+    @PreAuthorize(VIEW_AUTH)
     public String accounts(Model model) {
         populate(model);
         if (!model.containsAttribute("createAdminAccountForm")) {

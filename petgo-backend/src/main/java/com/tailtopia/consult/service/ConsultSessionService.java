@@ -29,6 +29,14 @@ public class ConsultSessionService {
     /** 无人接单超时阈值（秒）。超时<b>不迁移状态</b>，仅供前端弹「继续等待/转 AI」。 */
     public static final long WAITING_TIMEOUT_SECONDS = 60;
 
+    /**
+     * 排队弃单线（秒，bug 20260803 接单校验）：超时弹层出现后用户可点「继续等待」续期
+     * （{@code resetWaiting} 重置计时）；超过本线仍未续期/未取消视为已离开——接单拒绝 +
+     * 兽医收件箱隐藏。= 超时线 60s + 弹层决策宽限 240s（用户仍停留在弹层期间被接单是正常路径，
+     * 其轮询会自动进入聊天室）。
+     */
+    public static final long WAITING_ABANDON_SECONDS = WAITING_TIMEOUT_SECONDS + 240;
+
     private final ConsultSessionRepository repo;
     private final ConsultQueueService queue;
     private final TriageService triageService;

@@ -17,6 +17,10 @@ import java.util.List;
  * @param status        状态（OPEN/IN_PROGRESS/RESOLVED/CLOSED）
  * @param labels        标签枚举名
  * @param attachmentCount 附件数
+ * @param attachmentUrls 附件短 TTL 签名 URL（仅详情签发；列表恒空，bug 20260728-387）
+ * @param relatedOrderToken 关联订单 token（可空；AB-5B 退款判定前置，bug 20260728-384）
+ * @param refundToken   该订单退款单 token（可空，未发起退款则 null）
+ * @param refundNeedDecision 退款需求判定态（PENDING/APPROVED/REJECTED，可空）
  * @param csatScore     CSAT 分（可空）
  * @param csatComment   CSAT 评论（可空）
  * @param createdAt     建单时间
@@ -33,6 +37,10 @@ public record AdminTicketView(
         String status,
         List<String> labels,
         int attachmentCount,
+        List<String> attachmentUrls,
+        String relatedOrderToken,
+        String refundToken,
+        String refundNeedDecision,
         Short csatScore,
         String csatComment,
         Instant createdAt,
