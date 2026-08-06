@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/network/problem_detail.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
@@ -108,6 +109,13 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
       final session = await ref.read(consultRepositoryProvider).active();
       if (!mounted) return;
       if (session != null) {
+        // 现金（QRIS）到账靠 status 404 → active 会话侦测，成功点只在这里。
+        if (_awaitingCash) {
+          Analytics.capture('consult_pay_succeeded',
+              {'consult_type': 'VET', 'method': 'qris'});
+        }
+        // 兽医问诊漏斗终点：支付完成、会话建立。
+        Analytics.capture('consult_session_started', {'consult_type': 'VET'});
         _navigating = true;
         context.pushReplacement('/consult/conversation/${session.id}');
         return;
@@ -166,6 +174,9 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
           .payRequest(widget.requestToken, _channel);
       if (!mounted) return;
       if (result.isDone) {
+        // 兽医问诊漏斗：PawCoin 即时支付成功（现金 QRIS 的成功点在 _gotoActiveOrExit）。
+        Analytics.capture('consult_pay_succeeded',
+            {'consult_type': 'VET', 'method': 'pawcoin'});
         // PawCoin 即时成功 → 余额已变，失效缓存供全 App 后续读到真实值（bug 20260806）。
         ref.invalidate(pawCoinProvider);
         // 建单建会话已完成 → 跳会话。
