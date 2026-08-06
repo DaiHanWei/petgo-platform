@@ -18,21 +18,33 @@ class StudentFields {
     required this.name,
     required this.birthday,
     required this.species,
+    required this.school,
+    required this.faculty,
     this.avatarUrl,
   });
 
   final String name;
   final String birthday;
   final String species;
+
+  /// 学校/学院（bug 20260730-429：用户填写快照；null → 趣味默认）。
+  final String school;
+  final String faculty;
   final String? avatarUrl;
 }
 
-/// 纯函数：快照 → 学生卡字段（无趣味默认外的采集；pet_type → 物种本地化）。
+/// 纯函数：快照 → 学生卡字段（pet_type → 物种本地化；school/faculty 空落趣味默认）。
 StudentFields buildStudentFields(IdCardData data) {
   return StudentFields(
     name: (data.name?.isNotEmpty == true ? data.name! : 'MOCHI').toUpperCase(),
     birthday: data.birthday == null ? '01-01-2022' : _dmy(data.birthday!),
     species: _species(data.petType),
+    school: (data.school?.trim().isNotEmpty == true)
+        ? data.school!.trim().toUpperCase()
+        : 'TAILTOPIA ACADEMY',
+    faculty: (data.faculty?.trim().isNotEmpty == true)
+        ? data.faculty!.trim().toUpperCase()
+        : 'FAKULTAS KEBAHAGIAAN',
     avatarUrl: data.avatarUrl,
   );
 }
@@ -66,11 +78,12 @@ abstract final class _StudentLayout {
   static const double photoBorder = 8;
   static const double photoRadius = 40;
 
-  // 字段三行（label : value）。
+  // 字段五行（label : value）。bug 20260730-429：加 School/Faculty 两行并整体上移
+  // （700→540；5 行基线 540..868，与照片区 420..820 大致纵向居中，末行不压底部紫线 ~966）。
   static const double labelX = 640;
   static const double colonX = 980;
   static const double valueX = 1040;
-  static const double firstBaseline = 700;
+  static const double firstBaseline = 540;
   static const double pitch = 82;
   static const double fieldSize = 48;
 
@@ -129,6 +142,8 @@ class StudentCardFront extends StatelessWidget {
       ('Name', fields.name),
       ('Date of Birth', fields.birthday),
       ('Species', fields.species),
+      ('School', fields.school),
+      ('Faculty', fields.faculty),
     ];
     final out = <Widget>[];
     for (var i = 0; i < rows.length; i++) {

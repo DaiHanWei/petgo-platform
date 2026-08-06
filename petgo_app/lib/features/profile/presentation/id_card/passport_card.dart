@@ -132,9 +132,10 @@ abstract final class _PL {
   static const double nikimLabelLeft = 76;
 
   // Kantor Yang Mengeluarkan / Issuing Office：设计稿折两行右对齐，值 TAILTOPIA 再低一行。
-  static const double kantorLine1Baseline = 1126;
-  static const double kantorLine2Baseline = 1168;
-  static const double kantorValueBaseline = 1232;
+  // bug 370：随第 6 行带（987）整体上移，保持三行内部节奏（+42/+64）。
+  static const double kantorLine1Baseline = 987;
+  static const double kantorLine2Baseline = 1029;
+  static const double kantorValueBaseline = 1093;
 }
 
 const Color _kInk = Color(0xFF1A1A1A);
@@ -161,22 +162,25 @@ class PassportCardFront extends StatelessWidget {
 
   final PassportFields fields;
 
+  // bug 20260727-370（2026-08-06 提报人拍板）：整个文案区尽量与照片（y=384..1064）等高——
+  // 首行 label 顶≈照片顶（baseline 412）、末行 value 底≈照片底（baseline 1051），
+  // 行带 pitch 161→115、label→value 统一 64。6 行带基线：412/527/642/757/872/987（+64=value）。
   List<_Field> _fields() => <_Field>[
-        // 左列（基线为设计稿差分测量值 ×2）。
-        _Field('Jenis / Type', PassportFields.type, 306, 378, left: 660),
-        _Field('Name / Name', fields.name, 480, 550, left: 660),
-        _Field('Kewarganegaraan / Nationality', PassportFields.nationality, 644, 710, left: 660),
-        _Field('Tgl.Lahir / Date of Birth', fields.dateOfBirth, 804, 872, left: 660),
-        _Field('Tgl.Pengeluaran / Date of Issue', fields.dateOfIssue, 966, 1032, left: 660),
-        _Field('Reg.No', fields.regNo, 1126, 1192, left: 660),
+        // 左列。
+        _Field('Jenis / Type', PassportFields.type, 412, 476, left: 660),
+        _Field('Name / Name', fields.name, 527, 591, left: 660),
+        _Field('Kewarganegaraan / Nationality', PassportFields.nationality, 642, 706, left: 660),
+        _Field('Tgl.Lahir / Date of Birth', fields.dateOfBirth, 757, 821, left: 660),
+        _Field('Tgl.Pengeluaran / Date of Issue', fields.dateOfIssue, 872, 936, left: 660),
+        _Field('Reg.No', fields.regNo, 987, 1051, left: 660),
         // 中列。
-        _Field('Kode Negara / Country Code', PassportFields.countryCode, 306, 378, left: 955),
+        _Field('Kode Negara / Country Code', PassportFields.countryCode, 412, 476, left: 955),
         // 右列（右对齐到卡右缘）。
-        _Field('No.Paspor / Passport.No', fields.passportNo, 306, 378, rightX: 1920),
-        _Field('Kelamin / Sex', fields.sex, 480, 550, rightX: 1920),
+        _Field('No.Paspor / Passport.No', fields.passportNo, 412, 476, rightX: 1920),
+        _Field('Kelamin / Sex', fields.sex, 527, 591, rightX: 1920),
         // 设计稿此行只有印尼语（无英文后缀，空间留给左列 Date of Birth）。
-        _Field('Tempat Lahir', fields.placeOfBirth, 804, 872, rightX: 1920),
-        _Field('Tgl.Habis Berlaku / Date of Expiry', fields.dateOfExpiry, 966, 1032, rightX: 1920),
+        _Field('Tempat Lahir', fields.placeOfBirth, 757, 821, rightX: 1920),
+        _Field('Tgl.Habis Berlaku / Date of Expiry', fields.dateOfExpiry, 872, 936, rightX: 1920),
       ];
 
   @override
