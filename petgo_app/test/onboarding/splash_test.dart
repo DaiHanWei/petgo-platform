@@ -10,7 +10,7 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 ///
 /// 与改版前的差异（**改断言而非绕过**，Story 7.2 AC9）：
 /// - 版本号已整体移除（AC5 / 缺陷 B-6）→ 删除 `SplashPage.version` 断言（该常量已不存在）
-/// - 入场总时长 4320ms → **1540ms**，`animatedHold` 4500 → **1720ms**（AC4）
+/// - 入场总时长 4320ms → **1540ms**，`animatedHold` 4500 → 1720 → **2266ms**（AC4 + 标语可读性）
 /// - 常驻 spinner 已移除（AC5）；条件出现的进度线属 Story 7.3
 ///
 /// 注入 onComplete 以免依赖 GoRouter；含无限光晕动画，故用 pump(Duration) 而非 pumpAndSettle。
@@ -44,7 +44,7 @@ void main() {
     expect(find.textContaining('Komunitas Pecinta Hewan Peliharaan'), findsOneWidget);
     expect(done, isFalse); // 动效进行中，过场未触发
 
-    await tester.pump(const Duration(milliseconds: 1800)); // 越过 animatedHold(1720ms)
+    await tester.pump(const Duration(milliseconds: 2400)); // 越过 animatedHold(2266ms)
     expect(done, isTrue);
 
     await tester.pumpWidget(const SizedBox()); // 触发 dispose，避免 ticker 残留
@@ -162,8 +162,27 @@ void main() {
     testWidgets('AC4：入场总时长收敛为 1540ms，不超 1.8s 上限（NFR-13）', (tester) async {
       expect(SplashPage.animatedTotal, const Duration(milliseconds: 1540));
       expect(SplashPage.animatedTotal.inMilliseconds, lessThanOrEqualTo(1800));
-      // hold 随之收敛（改前 4500ms 是配 4320ms 动效的）
-      expect(SplashPage.animatedHold, const Duration(milliseconds: 1720));
+      // hold 随之收敛（改前 4500ms 是配 4320ms 动效的）；2026-08-06 由 1720 抬到 2266 让标语读得完。
+      expect(SplashPage.animatedHold, const Duration(milliseconds: 2266));
+    });
+
+    testWidgets('标语完整可见时间 ≥700ms —— 压缩动效时别再把它挤没（2026-08-06 用户实机反馈）', (tester) async {
+      // 标语淡入结束于 animatedTotal(1540ms)，之后到交棒之间才是「完全不透明、读得清」的窗口。
+      // 1720 的旧档位只留 180ms，一行 6 词根本读不完。这条断言把下限钉死，
+      // 免得日后再压缩动效或收缩 hold 时又悄悄回到读不完的状态。
+      final visibleMs =
+          SplashPage.animatedHold.inMilliseconds - SplashPage.animatedTotal.inMilliseconds;
+      expect(visibleMs, greaterThanOrEqualTo(700),
+          reason: '标语完整可见仅 ${visibleMs}ms，不足以读完一行标语');
+    });
+
+    testWidgets('hold 不得越过慢网提示时点 —— 否则快网也会闪一下「网络较慢」', (tester) async {
+      // 慢网提示只在「尚未就绪」时出现。若 hold > slowHintAt，会话在两者之间就绪的用户
+      // 会先被提示吓一下、随即画面就走 —— 假警报。要越过这条线，必须连同等待反馈的三个
+      // 时点一起重算，而不是只调 hold。
+      expect(SplashPage.animatedHold.inMilliseconds,
+          lessThan(SplashPage.slowHintAt.inMilliseconds),
+          reason: 'hold 越过了慢网提示时点，需连 progressLineAt/slowHintAt/readyDeadline 一并重算');
     });
 
     testWidgets('AC0：首帧交接位为 50%，设计位 43% —— 两者不可混为一谈', (tester) async {
@@ -247,11 +266,11 @@ void main() {
         await pumpSplash(tester,
             onComplete: () => done = true,
             prepareSession: () => Future<void>.delayed(const Duration(milliseconds: 900)));
-        // 若门控仍在，第二次会走 staticHold(1400) 直落终态；此处按 animatedHold(1720) 断言
+        // 若门控仍在，第二次会走 staticHold(1400) 直落终态；此处按 animatedHold(2266) 断言
         await tester.pump(const Duration(milliseconds: 1500));
-        expect(done, isFalse, reason: '第 ${i + 1} 次：1.5s 时不应已过场（说明走的是 1720ms 动画档）');
-        await tester.pump(const Duration(milliseconds: 300));
-        expect(done, isTrue, reason: '第 ${i + 1} 次：越过 1720ms 后应过场');
+        expect(done, isFalse, reason: '第 ${i + 1} 次：1.5s 时不应已过场（说明走的是 2266ms 动画档）');
+        await tester.pump(const Duration(milliseconds: 900));
+        expect(done, isTrue, reason: '第 ${i + 1} 次：越过 2266ms 后应过场');
         await tester.pumpWidget(const SizedBox());
       }
     });
@@ -281,7 +300,9 @@ void main() {
 
       // 注：提示的 Text 节点**恒在树中**（靠 opacity 显隐，以保证无布局位移 AC4），
       // 故不能用 findsNothing 断言"没出现"—— 要看 opacity。
-      for (var t = 0; t < 2200; t += 100) {
+      // 上界随 animatedHold(2266ms) 抬到 2400 —— 且刻意越过慢网提示时点 2290ms：
+      // 会话 900ms 就绪，那两个指示无论何时都不该亮，跨过阈值反而把断言变强。
+      for (var t = 0; t < 2400; t += 100) {
         await tester.pump(const Duration(milliseconds: 100));
         for (final o in tester.widgetList<AnimatedOpacity>(find.byType(AnimatedOpacity))) {
           expect(o.opacity, 0, reason: 't=${t}ms 处等待指示的 opacity 不为 0（疑似闪现）');
