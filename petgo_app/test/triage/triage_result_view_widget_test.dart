@@ -195,20 +195,77 @@ void main() {
     expect(find.text('triage-home'), findsOneWidget);
   });
 
-  testWidgets('AC3: 点「存入档案」→ 调起存档回调（FR-16 触发）', (tester) async {
+  testWidgets('AC3: 点「存入档案」→ 调起存档回调（FR-16 触发），且按显式保存传参', (tester) async {
     var called = false;
+    bool? sawExplicit;
     await _pump(
       tester,
       const TriageResult(
           status: TriageStatus.done, dangerLevel: DangerLevel.green, advice: '观察'),
-      archiveHandler: (context, ref, {required triageId, required level, advice, symptom}) async {
+      archiveHandler: (context, ref,
+          {required triageId, required level, advice, symptom, explicitSave = false}) async {
         called = true;
+        sawExplicit = explicitSave;
         expect(triageId, 7);
         expect(level, DangerLevel.green);
+        return false; // 用户选了「跳过」：不得报「已保存」
       },
     );
     await tester.tap(find.byKey(const ValueKey('triageSaveToArchive')));
     await tester.pump();
     expect(called, isTrue);
+    // 主动按保存键必须绕过 FR-16「只问一次」守卫，否则之前选过跳过的人再点会被静默拦下
+    // （2026-08-05 用户反馈「点了没反应」的成因之一）。
+    expect(sawExplicit, isTrue);
+  });
+
+  testWidgets('存档真落库 → 出成功 toast；未落库（跳过/转建档）→ 不得谎报已保存', (tester) async {
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+
+    // ① 未落库：不出 toast。
+    await _pump(
+      tester,
+      const TriageResult(
+          status: TriageStatus.done, dangerLevel: DangerLevel.green, advice: '观察'),
+      archiveHandler: (context, ref,
+              {required triageId, required level, advice, symptom, explicitSave = false}) async =>
+          false,
+    );
+    await tester.tap(find.byKey(const ValueKey('triageSaveToArchive')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text(l10n.consultArchiveSavedToDiary), findsNothing);
+
+    // ② 真落库：出成功 toast。
+    await _pump(
+      tester,
+      const TriageResult(
+          status: TriageStatus.done, dangerLevel: DangerLevel.green, advice: '观察'),
+      archiveHandler: (context, ref,
+              {required triageId, required level, advice, symptom, explicitSave = false}) async =>
+          true,
+    );
+    await tester.tap(find.byKey(const ValueKey('triageSaveToArchive')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text(l10n.consultArchiveSavedToDiary), findsOneWidget);
+    await tester.pump(const Duration(seconds: 3)); // 放掉 toast 的自动消失定时器
+  });
+
+  testWidgets('存档抛错 → 出失败 toast（不再静默吞掉）', (tester) async {
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    await _pump(
+      tester,
+      const TriageResult(
+          status: TriageStatus.done, dangerLevel: DangerLevel.green, advice: '观察'),
+      archiveHandler: (context, ref,
+              {required triageId, required level, advice, symptom, explicitSave = false}) async =>
+          throw Exception('boom'),
+    );
+    await tester.tap(find.byKey(const ValueKey('triageSaveToArchive')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text(l10n.consultArchiveSaveFailed), findsOneWidget);
+    await tester.pump(const Duration(seconds: 3)); // 放掉 toast 的自动消失定时器
   });
 }
