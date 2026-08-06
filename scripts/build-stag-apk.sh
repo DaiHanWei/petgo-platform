@@ -56,7 +56,8 @@ else
   out="build/app/outputs/flutter-apk/app-release.apk"
 fi
 
-dest="$HOME/Downloads/tailtopia-$stag_name+$build_number-$MODE.apk"
+# 产物命名：<版本号>-<时间戳 月日时分秒>.apk（如 1.1.2-stag+8-0806161045.apk）
+dest="$HOME/Downloads/${stag_name}+${build_number}-$(date +%m%d%H%M%S).apk"
 cp "$out" "$dest"
 log "✓ 出包: $dest"
 # 自检：包内 versionName 必须带 -stag（防脚本/参数回归）。
