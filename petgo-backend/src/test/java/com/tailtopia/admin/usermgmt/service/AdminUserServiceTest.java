@@ -32,6 +32,7 @@ class AdminUserServiceTest {
     private com.tailtopia.consult.service.ConsultInterruptService consultInterrupt;
     private com.tailtopia.admin.audit.service.AdminAuditService auditService;
     private com.tailtopia.account.service.AccountDeletionService accountDeletion;
+    private com.tailtopia.pay.service.PawCoinWalletService pawCoinWallet;
     private AdminUserService service;
 
     @BeforeEach
@@ -44,8 +45,9 @@ class AdminUserServiceTest {
         consultInterrupt = mock(com.tailtopia.consult.service.ConsultInterruptService.class);
         auditService = mock(com.tailtopia.admin.audit.service.AdminAuditService.class);
         accountDeletion = mock(com.tailtopia.account.service.AccountDeletionService.class);
+        pawCoinWallet = mock(com.tailtopia.pay.service.PawCoinWalletService.class);
         service = new AdminUserService(accountQuery, profileService, contentService, consultHistory,
-                authService, consultInterrupt, auditService, accountDeletion);
+                authService, consultInterrupt, auditService, accountDeletion, pawCoinWallet);
     }
 
     private User user() {
@@ -182,6 +184,55 @@ class AdminUserServiceTest {
                 org.mockito.ArgumentMatchers.any());
         verify(contentService, never()).takedownAllByAuthor(anyLong()); // D1 不下架
         verify(accountDeletion).requestDeletion(42L);
+    }
+
+    // ===== bug 20260728-389：后台赠送 PawCoin =====
+
+    @Test
+    void grantPawCoinCreditsBonusAndAudits() {
+        User u = user();
+        when(accountQuery.findUserById(42L)).thenReturn(Optional.of(u));
+        service.grantPawCoin(42L, 500L, "运营补偿", "tok-1", 3L);
+
+        verify(pawCoinWallet).credit(org.mockito.ArgumentMatchers.eq(42L),
+                org.mockito.ArgumentMatchers.eq(500L),
+                org.mockito.ArgumentMatchers.eq(com.tailtopia.pay.domain.PawCoinTxnType.BONUS),
+                org.mockito.ArgumentMatchers.eq("ADMIN_GRANT"), org.mockito.ArgumentMatchers.eq(3L),
+                org.mockito.ArgumentMatchers.eq("admin-grant:tok-1"));
+        verify(auditService).record(org.mockito.ArgumentMatchers.eq(3L),
+                org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.audit.service.AuditActions.PAWCOIN_GRANTED),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("42"),
+                org.mockito.ArgumentMatchers.contains("500"));
+    }
+
+    @Test
+    void grantPawCoinRejectsInvalidInputWithoutSideEffects() {
+        // 数量非正 / 原因空 / 缺幂等 token → 拒绝，不触发入账。
+        assertThatThrownBy(() -> service.grantPawCoin(42L, 0L, "补偿", "tok", 3L))
+                .isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.grantPawCoin(42L, 100L, "  ", "tok", 3L))
+                .isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.grantPawCoin(42L, 100L, "补偿", " ", 3L))
+                .isInstanceOf(AppException.class);
+        verify(pawCoinWallet, never()).credit(anyLong(), anyLong(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void grantPawCoinRejectsUnknownOrDeletedUser() {
+        when(accountQuery.findUserById(99L)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.grantPawCoin(99L, 100L, "补偿", "tok", 3L))
+                .isInstanceOf(AppException.class);
+
+        User deleted = user();
+        when(deleted.getDeletedAt()).thenReturn(Instant.now());
+        when(accountQuery.findUserById(42L)).thenReturn(Optional.of(deleted));
+        assertThatThrownBy(() -> service.grantPawCoin(42L, 100L, "补偿", "tok", 3L))
+                .isInstanceOf(AppException.class);
+        verify(pawCoinWallet, never()).credit(anyLong(), anyLong(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 
     @Test

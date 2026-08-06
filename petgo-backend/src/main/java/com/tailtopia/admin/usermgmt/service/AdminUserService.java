@@ -13,6 +13,8 @@ import com.tailtopia.auth.service.AuthService;
 import com.tailtopia.consult.service.ConsultHistoryService;
 import com.tailtopia.consult.service.ConsultInterruptService;
 import com.tailtopia.content.service.ContentService;
+import com.tailtopia.pay.domain.PawCoinTxnType;
+import com.tailtopia.pay.service.PawCoinWalletService;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.service.ProfileService;
 import com.tailtopia.shared.error.AppException;
@@ -38,11 +40,13 @@ public class AdminUserService {
     private final ConsultInterruptService consultInterrupt;
     private final AdminAuditService auditService;
     private final AccountDeletionService accountDeletionService;
+    private final PawCoinWalletService pawCoinWallet;
 
     public AdminUserService(AccountQueryService accountQuery, ProfileService profileService,
             ContentService contentService, ConsultHistoryService consultHistory,
             AuthService authService, ConsultInterruptService consultInterrupt,
-            AdminAuditService auditService, AccountDeletionService accountDeletionService) {
+            AdminAuditService auditService, AccountDeletionService accountDeletionService,
+            PawCoinWalletService pawCoinWallet) {
         this.accountQuery = accountQuery;
         this.profileService = profileService;
         this.contentService = contentService;
@@ -51,6 +55,37 @@ public class AdminUserService {
         this.consultInterrupt = consultInterrupt;
         this.auditService = auditService;
         this.accountDeletionService = accountDeletionService;
+        this.pawCoinWallet = pawCoinWallet;
+    }
+
+    /**
+     * 后台赠送 PawCoin（bug 20260728-389）。经 owning service {@link PawCoinWalletService#credit} 以
+     * {@code BONUS} 类型入账（钱包/总账/流水三写原子，计 PLATFORM_REVENUE 科目，对账不破坏）；幂等键取页面
+     * 渲染时生成的一次性 token（防双击/刷新重复入账）；同事务写审计 PAWCOIN_GRANTED（含数量/原因）。
+     */
+    @Transactional
+    public void grantPawCoin(long userId, long coins, String reason, String idempotencyToken,
+            long actorAccountId) {
+        if (coins <= 0) {
+            throw AppException.validation("赠送数量必须为正整数");
+        }
+        if (reason == null || reason.isBlank()) {
+            throw AppException.validation("赠送原因不能为空");
+        }
+        if (idempotencyToken == null || idempotencyToken.isBlank()) {
+            throw AppException.validation("缺少幂等标识，请刷新页面后重试");
+        }
+        User target = accountQuery.findUserById(userId)
+                .orElseThrow(() -> AppException.notFound("用户不存在"));
+        if (target.getDeletedAt() != null) {
+            throw AppException.validation("该账号已注销，不可赠送");
+        }
+        String idempotencyKey = "admin-grant:" + idempotencyToken.trim();
+        pawCoinWallet.credit(userId, coins, PawCoinTxnType.BONUS, "ADMIN_GRANT", actorAccountId,
+                idempotencyKey);
+        auditService.record(actorAccountId, AuditActions.PAWCOIN_GRANTED, "USER",
+                String.valueOf(userId),
+                "赠送 PawCoin（数量：" + coins + "；原因：" + reason.trim() + "；幂等键：" + idempotencyKey + "）");
     }
 
     /**
@@ -147,7 +182,7 @@ public class AdminUserService {
         String email = deleted ? u.getDeletedEmail() : u.getEmail();
         return new AdminUserDetailView(
                 u.getId(), name, u.getNickname(), email, u.getCreatedAt(),
-                deactivated(u), deleted, pets,
+                deactivated(u), deleted, pawCoinWallet.balanceOf(userId), pets,
                 contentService.listByAuthorForAdmin(userId),
                 consultHistory.adminSessionMetadata(userId));
     }
