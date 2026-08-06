@@ -318,6 +318,55 @@ void main() {
     expect(find.byKey(const ValueKey('publishEventDate')), findsOneWidget); // 预选成长日历 → 事件日期字段在
   });
 
+  // ===== 发布成功页两个出口（2026-08-05 用户反馈） =====
+  //
+  // 回归的缺陷：主次两个按钮都去 `/home`，次按钮等于主按钮的重复，用户没有回自己档案的出口。
+  // 文案与目的地绑定：主=「View in Social」→ Social Tab；次=「Back to Diary」→ Diary Tab。
+
+  Widget doneRouterApp(GoRouter router) => MaterialApp.router(
+        routerConfig: router,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+      );
+
+  GoRouter doneRouter() => GoRouter(
+        initialLocation: '/publish/done',
+        routes: [
+          GoRoute(path: '/home', builder: (c, s) => const Scaffold(body: Text('SOCIAL_TAB'))),
+          GoRoute(path: '/profile', builder: (c, s) => const Scaffold(body: Text('DIARY_TAB'))),
+          GoRoute(
+              path: '/publish/done',
+              builder: (c, s) => const PublishDonePage(
+                  args: PublishResultArgs(excerpt: 'x', typeLabel: 'Diary', photoCount: 0))),
+        ],
+      );
+
+  testWidgets('发布成功页主按钮「View in Social」→ Social Tab', (tester) async {
+    _tallView(tester);
+    await tester.pumpWidget(doneRouterApp(doneRouter()));
+    await tester.pumpAndSettle();
+
+    final l10n = await _en();
+    expect(find.text(l10n.publishDoneViewFeed), findsOneWidget);
+    expect(l10n.publishDoneViewFeed.toLowerCase().contains('feed'), isFalse,
+        reason: '文案已统一为 Social，不得再出现 Feed');
+
+    await tester.tap(find.byKey(const ValueKey('publishDoneViewFeed')));
+    await tester.pumpAndSettle();
+    expect(find.text('SOCIAL_TAB'), findsOneWidget);
+  });
+
+  testWidgets('发布成功页次按钮「Back to Diary」→ Diary Tab（此前也去 Social，与主按钮重复）', (tester) async {
+    _tallView(tester);
+    await tester.pumpWidget(doneRouterApp(doneRouter()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('publishDoneBackHome')));
+    await tester.pumpAndSettle();
+    expect(find.text('DIARY_TAB'), findsOneWidget);
+    expect(find.text('SOCIAL_TAB'), findsNothing);
+  });
+
   // ===== 底部可见性提示跟随实际可见范围（2026-08-05 用户实机反馈） =====
   //
   // 回归的缺陷：底部那句写死「所有人可见」，Diary 关掉同步开关后与开关副标题

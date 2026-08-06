@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/app_toast.dart';
+import '../../profile/data/timeline_repository.dart';
 import '../data/triage_repository.dart';
 import '../domain/triage_archive.dart';
 import '../domain/triage_unlock_controller.dart';
@@ -223,9 +225,35 @@ class TriageResultView extends ConsumerWidget {
   String _consultRoute() =>
       triageId == null ? '/consult' : '/consult?triageTaskId=$triageId';
 
-  void _archive(BuildContext context, WidgetRef ref, DangerLevel level, String summary) =>
-      ref.read(triageArchiveHandlerProvider)(context, ref,
-          triageId: triageId, level: level, advice: result.advice, symptom: summary);
+  /// 绿色态「保存到健康记录」显式保存（2026-08-05 用户反馈：点了毫无动静）。
+  ///
+  /// 三处缺失一并补齐，与问诊结果页的保存（`consult_conversation_page._saveToArchive`）同口径：
+  /// ① `explicitSave` —— 主动按保存键要绕过 FR-16「只问一次」守卫，否则此前对同一次问诊选过
+  ///    「跳过」的人再来点，会被守卫静默拦下、连弹层都不出现，正是「点了没反应」的成因之一；
+  /// ② **成功 toast** —— 真落库了才报，跳过 / 转去建档（异步回灌）一律不报，免得谎报已保存；
+  /// ③ **失效时间线与统计** —— 否则要等下次切 Tab 才在 Diary 里看到这条，用户会以为没存上。
+  Future<void> _archive(
+      BuildContext context, WidgetRef ref, DangerLevel level, String summary) async {
+    final l10n = AppLocalizations.of(context);
+    try {
+      final saved = await ref.read(triageArchiveHandlerProvider)(context, ref,
+          triageId: triageId,
+          level: level,
+          advice: result.advice,
+          symptom: summary,
+          explicitSave: true);
+      if (!context.mounted) return;
+      ref.invalidate(timelineFirstPageProvider);
+      ref.invalidate(archiveStatsProvider);
+      if (saved) {
+        // 文案复用问诊侧的同一条（「已保存 —— 去 Diary 看」）：两处说的是同一件事，
+        // 各留一份会在改文案时漏改其中一处。
+        showAppToast(context, l10n.consultArchiveSavedToDiary);
+      }
+    } catch (_) {
+      if (context.mounted) showAppToast(context, l10n.consultArchiveSaveFailed);
+    }
+  }
 
   /// 黄色「Selesai」：先弹 P-25 存档确认（已建档存/跳过、未建档引导），解决后退出分诊。
   /// triageId 为空 / 已提示过时 handler 自身 no-op，仍照常退出。
