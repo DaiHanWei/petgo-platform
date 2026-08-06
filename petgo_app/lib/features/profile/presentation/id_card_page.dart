@@ -119,6 +119,12 @@ class IdCardPage extends ConsumerWidget {
     final serial = (card.cardNo?.isNotEmpty == true)
         ? card.cardNo!
         : (card.serialId == null ? '----' : card.serialId!.toString().padLeft(4, '0'));
+    // bug 20260730-430：一卡一面后列表须能分辨卡种（复用建卡页三 Tab 文案）。
+    final typeLabel = switch (card.effectiveCardType) {
+      'PASSPORT' => l10n.idCardStylePaspor,
+      'STUDENT' => l10n.idCardStylePelajar,
+      _ => l10n.idCardStyleKtp,
+    };
     return Material(
       color: AppColors.surface,
       borderRadius: BorderRadius.circular(14),
@@ -147,7 +153,7 @@ class IdCardPage extends ConsumerWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink)),
                     const SizedBox(height: 3),
-                    Text(l10n.idCardSerialLabel(serial),
+                    Text('$typeLabel · ${l10n.idCardSerialLabel(serial)}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontSize: 12, color: AppColors.ink2)),

@@ -107,11 +107,13 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             long authorId, long petId, ContentType type, LocalDate eventDate);
 
     /**
-     * 名片快乐时刻流（Story 2.6 AC7 · F9）：某作者某类型未删内容，按 event_date 倒序取最近 N。
+     * 名片快乐时刻流（Story 2.6 AC7 · F9）：某作者**某宠物**某类型未删内容，按 event_date 倒序取最近 N。
      * 内容审核 story 2（§5.4）：叠加 {@code status} 过滤——公开/名片路径传 {@code PUBLISHED}，挂起零泄漏。
+     * bug 20260730-435：必须带 petId——删旧宠物档案走 detachPet（pet_id 置 NULL、帖保留 PUBLISHED），
+     * 只按作者过滤会把旧宠物遗留帖混进新宠物的名片/打卡候选。
      */
-    List<ContentPost> findByAuthorIdAndTypeAndDeletedAtIsNullAndStatusOrderByEventDateDescCreatedAtDesc(
-            long authorId, ContentType type, PostStatus status, Pageable pageable);
+    List<ContentPost> findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndStatusOrderByEventDateDescCreatedAtDesc(
+            long authorId, long petId, ContentType type, PostStatus status, Pageable pageable);
 
     /** 统计：某作者某类型未删且已发布内容数（里程碑计数 Story 8.3，按作者跨宠计）。 */
     long countByAuthorIdAndTypeAndDeletedAtIsNullAndStatus(

@@ -46,6 +46,9 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
   String _address = '';
   String _occupation = '';
   String _maritalStatus = '';
+  // 学生卡专属（bug 20260730-429）。空 = 卡面渲染趣味默认。
+  String _school = '';
+  String _faculty = '';
   bool _prefilled = false;
   int _styleIndex = 0; // 0=KTP, 1=Paspor, 2=Pelajar
   bool _busy = false; // 上传/创建中
@@ -87,7 +90,16 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
         address: _emptyToNull(_address),
         occupation: _emptyToNull(_occupation),
         maritalStatus: _emptyToNull(_maritalStatus),
+        school: _emptyToNull(_school),
+        faculty: _emptyToNull(_faculty),
       );
+
+  /// 当前 Tab 对应的卡种 wire 值（bug 20260730-430：建卡即绑定单卡面）。
+  String get _cardTypeWire => switch (_styleIndex) {
+        1 => 'PASSPORT',
+        2 => 'STUDENT',
+        _ => 'KTP',
+      };
 
   static String? _emptyToNull(String v) => v.trim().isEmpty ? null : v.trim();
 
@@ -261,7 +273,9 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
             birthCity: _birthCity,
             address: _address,
             occupation: _occupation,
-            maritalStatus: _maritalStatus),
+            maritalStatus: _maritalStatus,
+            school: _school,
+            faculty: _faculty),
       ),
     );
     if (result != null) {
@@ -276,6 +290,8 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
         _address = result.address;
         _occupation = result.occupation;
         _maritalStatus = result.maritalStatus;
+        _school = result.school;
+        _faculty = result.faculty;
       });
     }
   }
@@ -315,6 +331,10 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
             address: _emptyToNull(_address),
             occupation: _emptyToNull(_occupation),
             maritalStatus: _emptyToNull(_maritalStatus),
+            // bug 430：在哪个卡面 Tab 点 Create 就只建哪种卡。
+            cardType: _cardTypeWire,
+            school: _emptyToNull(_school),
+            faculty: _emptyToNull(_faculty),
           ));
       ref.invalidate(idCardListProvider);
     } catch (_) {
@@ -398,7 +418,9 @@ class _InfoDraft {
       this.birthCity = '',
       this.address = '',
       this.occupation = '',
-      this.maritalStatus = ''});
+      this.maritalStatus = '',
+      this.school = '',
+      this.faculty = ''});
   final String name;
   final String? petType;
   final String breed;
@@ -411,6 +433,10 @@ class _InfoDraft {
   final String address;
   final String occupation;
   final String maritalStatus;
+
+  // 学生卡专属（bug 20260730-429）。空 = 卡面渲染趣味默认。
+  final String school;
+  final String faculty;
 }
 
 /// 修改信息底部表单（会话级；确认返回草稿，不触后端）。
@@ -430,6 +456,8 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
   late final TextEditingController _address;
   late final TextEditingController _occupation;
   late final TextEditingController _maritalStatus;
+  late final TextEditingController _school;
+  late final TextEditingController _faculty;
   late String? _petType;
   late DateTime? _birthday;
   late String _gender;
@@ -444,6 +472,8 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
     _address = TextEditingController(text: widget.initial.address);
     _occupation = TextEditingController(text: widget.initial.occupation);
     _maritalStatus = TextEditingController(text: widget.initial.maritalStatus);
+    _school = TextEditingController(text: widget.initial.school);
+    _faculty = TextEditingController(text: widget.initial.faculty);
     _petType = widget.initial.petType;
     _birthday = widget.initial.birthday;
     _gender = widget.initial.gender;
@@ -458,6 +488,8 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
     _address.dispose();
     _occupation.dispose();
     _maritalStatus.dispose();
+    _school.dispose();
+    _faculty.dispose();
     super.dispose();
   }
 
@@ -590,6 +622,15 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
             _label(l10n.idCardMaritalLabel),
             const SizedBox(height: 6),
             _funField('idCardEditMarital', _maritalStatus, KtpDefaults.statusPerkawinan, 20),
+            // 学生卡专属（bug 20260730-429）：留空走卡面趣味默认（设计常量非 locale 文案）。
+            const SizedBox(height: 14),
+            _label(l10n.idCardSchoolLabel),
+            const SizedBox(height: 6),
+            _funField('idCardEditSchool', _school, 'TAILTOPIA ACADEMY', 20),
+            const SizedBox(height: 14),
+            _label(l10n.idCardFacultyLabel),
+            const SizedBox(height: 6),
+            _funField('idCardEditFaculty', _faculty, 'FAKULTAS KEBAHAGIAAN', 20),
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
@@ -608,7 +649,9 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
                     birthCity: _birthCity.text.trim(),
                     address: _address.text.trim(),
                     occupation: _occupation.text.trim(),
-                    maritalStatus: _maritalStatus.text.trim())),
+                    maritalStatus: _maritalStatus.text.trim(),
+                    school: _school.text.trim(),
+                    faculty: _faculty.text.trim())),
                 child: Text(l10n.idCardEditDone,
                     style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
               ),

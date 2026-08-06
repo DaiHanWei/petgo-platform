@@ -81,6 +81,18 @@ public class IdCard {
     @Column(name = "marital_status", length = 24)
     private String maritalStatus;
 
+    /** 卡种 KTP/PASSPORT/STUDENT（bug 20260730-430：一卡一面，V93 列自此真正接线；存量卡 DEFAULT 'KTP'）。 */
+    @Column(name = "card_type", nullable = false, length = 16)
+    private String cardType;
+
+    // ---- 学生卡专属字段快照（bug 20260730-429）。可空：null → 前端趣味默认。----
+
+    @Column(name = "school", length = 40)
+    private String school;
+
+    @Column(name = "faculty", length = 40)
+    private String faculty;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -95,7 +107,8 @@ public class IdCard {
     public static IdCard snapshot(long userId, long serialId, String name, String petType,
             String breed, LocalDate birthday, String avatarUrl, String intro,
             String gender, String cardNo, String passportNo,
-            String birthCity, String address, String occupation, String maritalStatus) {
+            String birthCity, String address, String occupation, String maritalStatus,
+            String cardType, String school, String faculty) {
         IdCard c = new IdCard();
         c.userId = userId;
         c.serialId = serialId;
@@ -113,6 +126,9 @@ public class IdCard {
         c.address = address;
         c.occupation = occupation;
         c.maritalStatus = maritalStatus;
+        c.cardType = cardType;
+        c.school = school;
+        c.faculty = faculty;
         return c;
     }
 
@@ -194,6 +210,18 @@ public class IdCard {
 
     public String getMaritalStatus() {
         return maritalStatus;
+    }
+
+    public String getCardType() {
+        return cardType;
+    }
+
+    public String getSchool() {
+        return school;
+    }
+
+    public String getFaculty() {
+        return faculty;
     }
 
     public Instant getCreatedAt() {

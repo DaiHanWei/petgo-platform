@@ -456,15 +456,16 @@ public class ContentService {
     /**
      * 名片快乐时刻流（Story 2.6 AC7 · F9）：按 {@code event_date} 倒序取最近 limit 条 GROWTH_MOMENT。
      * 经 service 接口供 H5 名片 / 里程碑打卡候选取数（禁 join）。
+     * bug 20260730-435：按 petId 过滤，排除删档遗留（pet_id=NULL）的旧宠物帖。
      *
      * <p><b>可见性（内容审核 story 2 · §5.4 补泄漏口）</b>：仅 {@code PUBLISHED}——名片是他人/公开视角，
      * 挂起（UNDER_REVIEW）成长时刻零泄漏；里程碑打卡候选亦不含挂起帖（挂起帖不可被打卡关联）。
      * 作者本人自看时间线（{@link #findGrowthMoments} 等）含挂起帖，口径不同。
      */
     @Transactional(readOnly = true)
-    public List<GrowthMomentView> findRecentGrowthMomentsByEventDate(long authorId, int limit) {
-        return posts.findByAuthorIdAndTypeAndDeletedAtIsNullAndStatusOrderByEventDateDescCreatedAtDesc(
-                        authorId, ContentType.GROWTH_MOMENT, PostStatus.PUBLISHED, PageRequest.of(0, limit))
+    public List<GrowthMomentView> findRecentGrowthMomentsByEventDate(long authorId, long petId, int limit) {
+        return posts.findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndStatusOrderByEventDateDescCreatedAtDesc(
+                        authorId, petId, ContentType.GROWTH_MOMENT, PostStatus.PUBLISHED, PageRequest.of(0, limit))
                 .stream()
                 .map(ContentService::toGrowthMomentView)
                 .toList();

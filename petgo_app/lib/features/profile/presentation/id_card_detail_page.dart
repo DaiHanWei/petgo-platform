@@ -34,7 +34,10 @@ class IdCardDetailPage extends ConsumerStatefulWidget {
 
 class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
   bool _hdBusy = false;
-  int _styleIndex = 0; // 视图样式：0=KTP, 1=Paspor, 2=Pelajar（同一快照三种卡面）。
+
+  /// 当前卡面（bug 20260730-430：一卡一面，由快照 cardType 决定，不再提供三 Tab 切换）。
+  /// 0=KTP, 1=Paspor, 2=Pelajar；在 [_view] 随卡数据赋值，供导出链（[_exportHd]）选画布。
+  int _styleIndex = 0;
   final GlobalKey idCardBoundaryKey = GlobalKey();
 
   @override
@@ -57,7 +60,13 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
 
   Widget _view(AppLocalizations l10n, IdCard card) {
     final data = card.toIdCardData();
-    // 视图级样式切换（恢复 6-1~6-4 三 Tab）：同一快照渲染 KTP / Paspor / Pelajar 三种卡面。
+    // bug 20260730-430：一卡一面——卡面由快照 cardType 决定（存量旧卡 null → KTP），
+    // 不再提供三 Tab 视图切换；HD 解锁随之天然按单卡面计费。
+    _styleIndex = switch (card.effectiveCardType) {
+      'PASSPORT' => 1,
+      'STUDENT' => 2,
+      _ => 0,
+    };
     final (Size canvas, double radius, Widget cardFront) = switch (_styleIndex) {
       1 => (
           kPassportCardCanvas,
@@ -78,7 +87,7 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
     return SafeArea(
       child: Column(
         children: [
-          _styleSwitcher(l10n),
+          const SizedBox(height: 12),
           Expanded(
             child: Center(
               child: Padding(
@@ -154,50 +163,6 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
     );
   }
 
-  /// KTP / Paspor / Pelajar 三 Tab 样式切换（视图级，不改快照数据）。
-  Widget _styleSwitcher(AppLocalizations l10n) {
-    final labels = [l10n.idCardStyleKtp, l10n.idCardStylePaspor, l10n.idCardStylePelajar];
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      child: Row(
-        children: [
-          for (var i = 0; i < labels.length; i++)
-            Expanded(
-              child: Padding(
-                padding: EdgeInsets.only(right: i < labels.length - 1 ? 8 : 0),
-                child: _styleTab(labels[i], i),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _styleTab(String label, int index) {
-    final selected = _styleIndex == index;
-    return GestureDetector(
-      key: ValueKey('idCardStyleTab_$index'),
-      onTap: () => setState(() => _styleIndex = index),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: selected ? AppColors.mint : AppColors.card,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: selected ? AppColors.mint : AppColors.line, width: 1.5),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? Colors.white : AppColors.ink2,
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
-          ),
-        ),
-      ),
-    );
-  }
-
   Future<void> _onDownloadHd(IdCard card) async {
     if (card.hdUnlocked) {
       await _exportHd();
@@ -241,6 +206,8 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
       if (res.unlocked) {
         ref.invalidate(idCardDetailProvider(widget.cardId));
         ref.invalidate(idCardListProvider);
+        // bug 20260806 同类收口：PawCoin 即时扣款成功后失效余额缓存，防他处读到旧余额。
+        ref.invalidate(pawCoinProvider);
         _toast(l10n.idCardHdUnlockedToast);
         await _exportHd();
       } else if ((res.payload?.isNotEmpty ?? false) && mounted) {
@@ -282,8 +249,26 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
       if (boundary == null) return;
       final box = context.findRenderObject() as RenderBox?;
       final origin = box != null ? box.localToGlobal(Offset.zero) & box.size : null;
-      final pixelRatio = kIdCardCanvas.width / boundary.size.width;
-      final ui.Image image = await boundary.toImage(pixelRatio: pixelRatio);
+      // 按当前卡面选画布（护照 1990×1548 与 KTP/学生卡 1988×1200 不同，
+      // 恒用 KTP 宽会把护照导出尺寸错算）。
+      final exportCanvas = switch (_styleIndex) {
+        1 => kPassportCardCanvas,
+        2 => kStudentCardCanvas,
+        _ => kIdCardCanvas,
+      };
+      final pixelRatio = exportCanvas.width / boundary.size.width;
+      final ui.Image shot = await boundary.toImage(pixelRatio: pixelRatio);
+      // bug 20260731-441：卡面 ClipRRect 圆角外是 alpha=0 透明像素，PNG 存透明本身没问题，
+      // 但相册查看器深色主题/IM 转发压缩会把透明平铺成黑角——导出前合成到白底再编码。
+      final recorder = ui.PictureRecorder();
+      final composeCanvas = Canvas(recorder);
+      composeCanvas.drawRect(
+        Rect.fromLTWH(0, 0, shot.width.toDouble(), shot.height.toDouble()),
+        Paint()..color = Colors.white,
+      );
+      composeCanvas.drawImage(shot, Offset.zero, Paint());
+      final ui.Image image =
+          await recorder.endRecording().toImage(shot.width, shot.height);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) return;
       final bytes = byteData.buffer.asUint8List();

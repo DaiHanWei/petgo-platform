@@ -49,6 +49,11 @@ public class ConsultAcceptService {
         if (s.getStatus() != SessionStatus.WAITING) {
             throw AppException.conflict("该咨询已被接走");
         }
+        // bug 20260803（会话 81 事故）：用户排队超时离开后仍可被接单 → 兽医进空房 + BUSY 卡死。
+        // 弃单线内点「继续等待」会重置计时，不受影响；超线即拒。
+        if (s.isWaitingAbandoned(ConsultSessionService.WAITING_ABANDON_SECONDS)) {
+            throw AppException.conflict("用户等待超时已离开，无法接单");
+        }
         // Story 2.1：资质门控（权威点）——仅 CERTIFIED/EXPIRING_SOON 可接单；未过资质即拒，
         // 不进 IN_PROGRESS、不占会话、不消队列。跨模块经 service（禁跨 repo）。
         if (!vetQualificationService.canTakeConsult(vetId)) {

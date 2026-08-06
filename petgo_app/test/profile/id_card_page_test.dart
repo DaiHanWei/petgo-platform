@@ -65,7 +65,9 @@ void main() {
     ]);
     expect(find.text('Mochi'), findsOneWidget);
     expect(find.text('Coco'), findsOneWidget);
-    expect(find.text('No. 0012'), findsOneWidget); // 编号补零展示
+    // 编号补零展示；bug 430 起序号行带卡种前缀（无 cardType 的存量卡归 KTP）。
+    expect(find.textContaining('No. 0012'), findsOneWidget);
+    expect(find.textContaining('KTP'), findsWidgets);
     expect(find.byKey(const ValueKey('idCardTile_1')), findsOneWidget);
     expect(find.byKey(const ValueKey('idCardTile_2')), findsOneWidget);
     // 建卡入口（列表态用 InkWell 版，同 key）。

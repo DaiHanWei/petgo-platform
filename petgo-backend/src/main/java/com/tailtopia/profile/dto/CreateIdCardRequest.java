@@ -15,6 +15,8 @@ import java.time.LocalDate;
  * gender 传 MALE/FEMALE/UNKNOWN，可空（null 视同 UNKNOWN），非法值与其余字段校验统一 422。
  * birthCity/address/occupation/maritalStatus（bug 20260729-409：Edit Info 与卡面字段对齐）
  * 均选填；null → 前端渲染趣味默认。
+ * cardType（bug 20260730-430：一卡一面）：KTP/PASSPORT/STUDENT；null 容错默认 KTP（兼容旧客户端）。
+ * school/faculty（bug 20260730-429：学生卡专属）选填；null → 前端趣味默认。
  */
 public record CreateIdCardRequest(
         @NotBlank @Size(max = 60) String name,
@@ -27,5 +29,8 @@ public record CreateIdCardRequest(
         @Size(max = 40) String birthCity,
         @Size(max = 80) String address,
         @Size(max = 40) String occupation,
-        @Size(max = 24) String maritalStatus) {
+        @Size(max = 24) String maritalStatus,
+        @Pattern(regexp = "KTP|PASSPORT|STUDENT") String cardType,
+        @Size(max = 40) String school,
+        @Size(max = 40) String faculty) {
 }
