@@ -9,9 +9,9 @@ import java.time.Instant;
 public record TriageHistoryItem(long triageId, String dangerLevel, String symptomSummary, Instant date) {
 
     public static TriageHistoryItem of(TriageTask t) {
-        String text = t.getSymptomText();
-        String summary = text == null ? null : (text.length() > 40 ? text.substring(0, 40) + "…" : text);
+        // bug 20260730-437：不再 40 字符硬截——快照页靠本字段回显症状全文（结果接口不回传症状），
+        // 列表 UI 自带 maxLines 省略，服务端截断只会让详情页无全文可展。
         String level = t.getDangerLevel() == null ? null : t.getDangerLevel().name();
-        return new TriageHistoryItem(t.getId(), level, summary, t.getCreatedAt());
+        return new TriageHistoryItem(t.getId(), level, t.getSymptomText(), t.getCreatedAt());
     }
 }

@@ -33,6 +33,10 @@ public final class ErrorTypes {
     /** 内容审核 story 3：评论发送同步过滤命中（L1 硬拦截 / 风险 ≥0.8，422，从未落库/不发事件/不入队）。 */
     public static final URI COMMENT_BLOCKED = URI.create(BASE + "comment-blocked");
 
+    /** bug 20260806：PawCoin 余额不足（409）。专属 type——409 在支付链路多因复用（支付窗过期/守卫不符），
+     * 前端须按 type 精确映射「余额不足」文案，不能只看 status。 */
+    public static final URI PAWCOIN_INSUFFICIENT = URI.create(BASE + "pawcoin-insufficient");
+
     private ErrorTypes() {
     }
 }

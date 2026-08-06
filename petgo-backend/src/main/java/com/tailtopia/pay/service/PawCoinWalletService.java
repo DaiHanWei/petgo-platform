@@ -84,7 +84,7 @@ public class PawCoinWalletService {
             return; // 已扣减，幂等短路（Redis 前置 + 跨 TTL 的 DB 兜底，须在改钱包之前）
         }
         if (wallets.applyDelta(userId, -coins) == 0) {
-            throw AppException.conflict("PawCoin 余额不足");
+            throw AppException.pawcoinInsufficient("PawCoin 余额不足");
         }
         String group = UUID.randomUUID().toString();
         // FLOAT_LIABILITY DEBIT 镜像钱包 -coins；贷方计平台收入。

@@ -12,6 +12,7 @@ import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../data/health_record_repository.dart';
 import '../data/milestone_repository.dart';
+import '../data/timeline_repository.dart';
 import '../domain/health_list_item.dart';
 import '../domain/health_record_icons.dart';
 import '../domain/health_milestones.dart';
@@ -501,6 +502,13 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
     );
     if (saved == true) {
       ref.invalidate(healthListProvider);
+      // bug 20260729-414：健康记录增删改后，Diary 侧四个常驻缓存 provider 必须同步失效，
+      // 否则 /profile/health 是 shell 外路由，pop 回 Diary 不经切 Tab 刷新钩子，时间线/统计/
+      // 日历仍是旧快照（口径同 pet_profile_edit_page._deleteProfile 的失效链）。
+      ref.invalidate(timelineFirstPageProvider);
+      ref.invalidate(archiveStatsProvider);
+      ref.invalidate(calendarMonthProvider);
+      ref.invalidate(dayDetailProvider);
     }
   }
 }

@@ -101,7 +101,7 @@ public class CardPageController {
         model.addAttribute("hasMilestones", stats.milestoneCompleted() > 0);
 
         // ⑤ 快乐时刻照片流（按 event_date 倒序，AC7）。
-        List<CardMoment> moments = buildMoments(ownerId);
+        List<CardMoment> moments = buildMoments(ownerId, profile.getId());
         model.addAttribute("moments", moments);
         model.addAttribute("hasMoments", !moments.isEmpty());
 
@@ -151,8 +151,8 @@ public class CardPageController {
         return view != null ? view.nickname() : null;
     }
 
-    private List<CardMoment> buildMoments(long ownerId) {
-        List<GrowthMomentView> raw = contentService.findRecentGrowthMomentsByEventDate(ownerId, MAX_MOMENTS);
+    private List<CardMoment> buildMoments(long ownerId, long petId) {
+        List<GrowthMomentView> raw = contentService.findRecentGrowthMomentsByEventDate(ownerId, petId, MAX_MOMENTS);
         List<CardMoment> out = new ArrayList<>(raw.size());
         for (GrowthMomentView m : raw) {
             List<String> stripped = new ArrayList<>();

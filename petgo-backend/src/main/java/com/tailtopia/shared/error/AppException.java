@@ -43,6 +43,11 @@ public class AppException extends RuntimeException {
         return new AppException(HttpStatus.CONFLICT, ErrorTypes.CONFLICT, detail);
     }
 
+    /** bug 20260806：PawCoin 余额不足——专属 type 供前端精确映射文案（409 多因复用，status 不够分流）。 */
+    public static AppException pawcoinInsufficient(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.PAWCOIN_INSUFFICIENT, detail);
+    }
+
     public static AppException unauthorized(String detail) {
         return new AppException(HttpStatus.UNAUTHORIZED, ErrorTypes.UNAUTHORIZED, detail);
     }

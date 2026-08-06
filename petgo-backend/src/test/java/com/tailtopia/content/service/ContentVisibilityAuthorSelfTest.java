@@ -39,8 +39,8 @@ class ContentVisibilityAuthorSelfTest {
             // 日历月视图 / 当天详情（派生查询，语义写在方法名里）
             "findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndEventDateBetweenOrderByEventDateAscCreatedAtAsc",
             "findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndEventDateOrderByCreatedAtAsc",
-            // 名片 H5（作者主动分享，OQ-18）——派生查询，语义写在方法名里
-            "findByAuthorIdAndTypeAndDeletedAtIsNullAndStatusOrderByEventDateDescCreatedAtDesc",
+            // 名片 H5（作者主动分享，OQ-18）——派生查询，语义写在方法名里（bug 435 起带 petId）
+            "findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndStatusOrderByEventDateDescCreatedAtDesc",
             "findMyPosts"); // 我的发布
 
     /** 平台自动分发的查询 —— 这些**必须**带 visibility 过滤。 */

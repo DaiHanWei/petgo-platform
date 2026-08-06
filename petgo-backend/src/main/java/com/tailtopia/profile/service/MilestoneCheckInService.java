@@ -53,7 +53,7 @@ public class MilestoneCheckInService {
         PetProfile pet = requireProfile(ownerId);
         Set<Long> linkedIds = linkedContentIds(pet.getId());
         List<MilestoneCheckinCandidateResponse> items = contentService
-                .findRecentGrowthMomentsByEventDate(ownerId, CANDIDATE_LIMIT).stream()
+                .findRecentGrowthMomentsByEventDate(ownerId, pet.getId(), CANDIDATE_LIMIT).stream()
                 .map(v -> toCandidate(v, linkedIds.contains(v.id())))
                 .toList();
         return new MilestoneCheckinCandidateResponse.Page(items);
