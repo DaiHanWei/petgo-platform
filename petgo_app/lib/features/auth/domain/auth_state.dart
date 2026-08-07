@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/im/im_service.dart';
 import '../../../core/network/dio_client.dart';
+import '../../../core/push/push_service.dart';
 import 'auth_routing.dart';
 import 'login_response.dart';
 
@@ -122,7 +123,18 @@ class AuthController extends Notifier<AuthState> {
   /// best-effort fire-and-forget：不阻塞游客态切换，失败静默（页面已离场）。
   void toGuest() {
     state = const AuthState.guest();
-    ref.read(imServiceProvider).logout().catchError((_) {});
+    // 顺序硬约束：先反注册离线推送、再 IM logout——反注册需要 IM 登录态才能解绑 token；
+    // 不解绑则同设备下一用户仍收上一账号的推送（与 IM 漏登出同型的跨用户隐私泄漏）。
+    // 反注册限时 5s（code-review 2026-08-07）：原生调用挂起时绝不能饿死后面的 IM logout
+    // （logout 首行清 IM 凭证，是防跨账号串号的底线，必须保证执行）。
+    // 两步均 best-effort fire-and-forget：不阻塞游客态切换，失败静默（页面已离场）。
+    final push = ref.read(pushServiceProvider);
+    final im = ref.read(imServiceProvider);
+    push
+        .unregister()
+        .timeout(const Duration(seconds: 5))
+        .catchError((_) {})
+        .whenComplete(() => im.logout().catchError((_) {}));
   }
 }
 

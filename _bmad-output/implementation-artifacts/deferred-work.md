@@ -137,3 +137,8 @@
 - **迟到纠正的免打扰仍漏一类场景**：`showModalBottomSheet`（默认 `useRootNavigator: false`）与游客 Diary 的页内 `Navigator.push` 走分支 Navigator，既不改变路由 path、也不出现在根 Navigator 的 `canPop` 里 ⇒ 用户正看着它们时纠正仍会跳页并把它们关掉。两条路：① 把分支 Navigator 的 key 暴露到 router 层统一判定（要改 shell 构建）；② 「兜底落地后只要用户有任何交互就 disarm」（最安全，但 FR-91 实际几乎不会触发 —— 属产品取舍，AC4 的优先级原则支持它）。
 - **Fraunces 子集需补码位**：实测仅 97 码位（U+0020–U+007E + U+2019 + U+2026），缺破折号 U+2014/U+2013 与弯引号 U+2018/U+201C/U+201D。当前四条 splash 文案全在范围内，所以是「下次改文案就会踩」。需重跑 fonttools 子集脚本，并把 pubspec 里的码位说明同步为实测值。本轮只加了 `fontFamilyFallback` 兜底（缺字掉系统字体而非豆腐块，代价是同行两种字形）。
 - **开源许可页**：本轮已把 `assets/fonts/OFL.txt` 加入 assets（真正随包分发），但用户无处查看，OFL §2 的「随分发附带」只做到一半。用 Flutter 内置 `LicenseRegistry` / `AboutDialog` 承载即可，顺带把 Poppins / Rubik（及已停止打包但文件保留的 Quicksand）的许可证一并登记 —— 与上面「开源许可证收口」是同一件事，建议合并做。
+
+## 2026-08-07 · 推送接入评审 defer 项（spec-push-timpush-integration 评审产出）
+- **usersig 放宽后的 IM 滥用面缓解**：MAU 闸门取消（用户拍板决策）后，任意登录用户可拿 UserSig 用裸 SDK 向任意 `u_<id>`/`v_<id>` 发 C2C（绕过问诊排队骚扰兽医）。缓解手段不在本 story：可在 IM 控制台开「单聊消息校验回调」由后端校验会话关系后放行/拦截（ImCallbackController 已有骨架），或开腾讯好友关系链校验。上线前评估。
+- **`ConsultSessionService.hasImLoginEligibleSession`（:129）成死代码**：MAU 闸门放宽后无调用方，随后续提交清理。
+- **兽医侧 id 寻址类推送深链**：`sendToVet` 现固定 `token=null,targetRef=null`（当前唯一兽医推送 NEW_CONSULT_REQUEST 是固定落点，无影响）；未来若加兽医侧订单/工单类推送，需把 targetRef 穿透 `sendToVet` 签名。

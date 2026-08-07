@@ -24,6 +24,7 @@ class ImChatPlaceholder extends ConsumerStatefulWidget {
       {super.key,
       this.imConversationId,
       this.peerId,
+      this.sessionId,
       this.accent = AppColors.mint,
       this.selfIsVet = false,
       this.inputController});
@@ -36,6 +37,10 @@ class ImChatPlaceholder extends ConsumerStatefulWidget {
 
   /// 对端 IM 账号（用户侧 `v_<vetId>` / 兽医侧 `u_<userId>`）。真机 C2C 收发用。
   final String? peerId;
+
+  /// 问诊会话 id：发送消息时附带离线推送规格（接收方杀进程/后台可收系统通知 + 点击深链回会话）。
+  /// 为空则不附带（IM 默认模板会带消息内容预览，正式会话场景务必传入以保证中性文案）。
+  final String? sessionId;
 
   /// 己方气泡 + 发送钮品牌主色：用户侧紫 `AppColors.mint`(#845EC9 默认) / 兽医侧薄荷 `vetPrimary`(#5BCBBB)。
   /// 直接取品牌 token（非 M3 colorScheme.primary，避免色调偏移失真）。
@@ -141,9 +146,15 @@ class _ImChatPlaceholderState extends ConsumerState<ImChatPlaceholder> {
       _input.clear();
     });
     _scrollToEnd();
-    _service!.sendText(peerId: peer, text: t).catchError((_) {
+    _service!.sendText(peerId: peer, text: t, push: _pushSpec).catchError((_) {
       if (mounted) _toast(AppLocalizations.of(context).imSendFailed);
     });
+  }
+
+  /// 离线推送规格（sessionId 在场才附带；中性文案 + 深链回会话，见 [ChatPushSpec]）。
+  ChatPushSpec? get _pushSpec {
+    final id = widget.sessionId;
+    return (id == null || id.isEmpty) ? null : ChatPushSpec(sessionId: id);
   }
 
   Future<void> _pickAndSendImage() async {
@@ -155,7 +166,7 @@ class _ImChatPlaceholderState extends ConsumerState<ImChatPlaceholder> {
       _msgs.add(ImMessage(who: 'me', imageUrl: picked.path)); // 本地路径乐观上屏
     });
     _scrollToEnd();
-    _service!.sendImage(peerId: peer, filePath: picked.path).catchError((_) {
+    _service!.sendImage(peerId: peer, filePath: picked.path, push: _pushSpec).catchError((_) {
       if (mounted) _toast(AppLocalizations.of(context).imSendFailed);
     });
   }

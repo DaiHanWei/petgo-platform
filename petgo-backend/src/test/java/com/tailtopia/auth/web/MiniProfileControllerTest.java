@@ -34,13 +34,26 @@ class MiniProfileControllerTest {
     void activeUserReturnsNicknameAvatarPostCount() {
         when(accounts.findAuthorViews(anyList()))
                 .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", "https://cdn/a.jpg", false)));
+        when(accounts.activeSignatureOf(7L)).thenReturn(java.util.Optional.of("爱猫的人运气都不会太差"));
         when(content.countPublishedByAuthor(7L)).thenReturn(2L);
 
         MiniProfileResponse r = controller.miniProfile(7L);
         assertThat(r.isDeactivated()).isFalse();
         assertThat(r.nickname()).isEqualTo("Alice");
         assertThat(r.avatarUrl()).isEqualTo("https://cdn/a.jpg");
+        assertThat(r.signature()).isEqualTo("爱猫的人运气都不会太差");
         assertThat(r.postCount()).isEqualTo(2L);
+    }
+
+    /** 没设签名 → null（前端据此回落「主页筹备中」占位）。 */
+    @Test
+    void userWithoutSignatureReturnsNull() {
+        when(accounts.findAuthorViews(anyList()))
+                .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", null, false)));
+        when(accounts.activeSignatureOf(7L)).thenReturn(java.util.Optional.empty());
+        when(content.countPublishedByAuthor(7L)).thenReturn(0L);
+
+        assertThat(controller.miniProfile(7L).signature()).isNull();
     }
 
     @Test
@@ -52,7 +65,10 @@ class MiniProfileControllerTest {
         assertThat(r.isDeactivated()).isTrue();
         assertThat(r.nickname()).isNull();
         assertThat(r.avatarUrl()).isNull();
-        // 注销不查发布数（不暴露任何信息）。
+        // 🔒 注销不外泄签名（NFR-8 匿名化）——签名是用户自填文本，同属身份信息。
+        assertThat(r.signature()).isNull();
+        // 注销不查发布数、也不查签名（不暴露任何信息、也不白打一次库）。
         verify(content, never()).countPublishedByAuthor(eq(8L));
+        verify(accounts, never()).activeSignatureOf(eq(8L));
     }
 }

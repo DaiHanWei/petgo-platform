@@ -20,10 +20,10 @@ class _FakeImService implements ImService {
   Future<void> loginIfNeeded() async {}
 
   @override
-  Future<void> sendText({required String peerId, required String text}) async {}
+  Future<void> sendText({required String peerId, required String text, ChatPushSpec? push}) async {}
 
   @override
-  Future<void> sendImage({required String peerId, required String filePath}) async {}
+  Future<void> sendImage({required String peerId, required String filePath, ChatPushSpec? push}) async {}
 
   @override
   Stream<ImMessage> onMessages(String peerId) => const Stream.empty();

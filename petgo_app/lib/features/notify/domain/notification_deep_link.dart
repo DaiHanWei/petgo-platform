@@ -22,11 +22,49 @@ class NotificationDeepLink {
     required String? token,
     String? targetRef,
     bool commentAnchor = false,
+  }) {
+    return _open(
+      markRead: (t) => ref.read(notificationRepositoryProvider).markRead(t),
+      invalidateUnread: () => ref.invalidate(unreadCountProvider),
+      type: type,
+      token: token,
+      targetRef: targetRef,
+      commentAnchor: commentAnchor,
+    );
+  }
+
+  /// 系统推送点击入口（PushService，provider [Ref] 语境）。与 [open] 同一口径，
+  /// 仅 ref 类型不同（WidgetRef 与 Ref 无公共超类，两个包装共享 [_open] 核心）。
+  /// 会话消息推送的 ext 无 token（发送端 SDK 附带，非通知中心行）→ 自然跳过标记已读。
+  static Future<String> openFromPush(
+    Ref ref, {
+    required String? type,
+    required String? token,
+    String? targetRef,
+    bool commentAnchor = false,
+  }) {
+    return _open(
+      markRead: (t) => ref.read(notificationRepositoryProvider).markRead(t),
+      invalidateUnread: () => ref.invalidate(unreadCountProvider),
+      type: type,
+      token: token,
+      targetRef: targetRef,
+      commentAnchor: commentAnchor,
+    );
+  }
+
+  static Future<String> _open({
+    required Future<void> Function(String token) markRead,
+    required void Function() invalidateUnread,
+    required String? type,
+    required String? token,
+    String? targetRef,
+    bool commentAnchor = false,
   }) async {
     if (token != null && token.isNotEmpty) {
       try {
-        await ref.read(notificationRepositoryProvider).markRead(token);
-        ref.invalidate(unreadCountProvider); // 角标重算（与列表点击一致）
+        await markRead(token);
+        invalidateUnread(); // 角标重算（与列表点击一致）
       } catch (_) {
         // 标记失败不阻断跳转。
       }

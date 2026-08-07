@@ -13,6 +13,7 @@ class PushPermissionGate {
     required this.prefs,
     required this.requestSystemPermission,
     this.confirmViaRationale,
+    this.onAsked,
   });
 
   final AppPrefs prefs;
@@ -24,6 +25,11 @@ class PushPermissionGate {
   /// 返回 true=用户点「开启」（继续请求系统权限）；false=点「暂不」/关闭（跳过系统请求）。
   /// 无论哪种结果，本次门控都记为「已问」（拒绝后不再主动弹）。
   final Future<bool> Function()? confirmViaRationale;
+
+  /// 本次门控完成（`asked` 已落 true）后回调。可选——推送接入用它在 F7 时机达成后
+  /// **立即**注册离线推送（TIMPush registerPush，见 core/push/push_service.dart），
+  /// 不必等下次冷启动。异常吞掉，不影响门控主流程。
+  final Future<void> Function()? onAsked;
 
   /// 纯判定：两时机任一成立且未问过 → 应触发一次。
   /// - 首次问诊完成（`firstConsultDone`）；或
@@ -68,9 +74,20 @@ class PushPermissionGate {
       if (agreed) {
         await requestSystemPermission();
       }
+    } catch (_) {
+      // 权限请求/前置说明异常**不外抛**（code-review 2026-08-07）：门控本身已完成
+      // （asked 即将落位），异常语义等同「拒绝」；外抛会传染调用方（建档庆祝页续跳 /home）
+      // 且跳过下方 onAsked 即时注册。
     } finally {
       // 无论同意/拒绝/异常，都标记已问过——拒绝后不再主动弹。
       await prefs.setPushPermissionAsked(true);
+    }
+    // F7 达成 → 通知外部（推送注册等）。拒绝也回调：token 仍可上报，
+    // 用户后续在系统设置开启即自动恢复，无需再注册。
+    try {
+      await onAsked?.call();
+    } catch (_) {
+      // 回调异常不影响门控语义。
     }
     return true;
   }

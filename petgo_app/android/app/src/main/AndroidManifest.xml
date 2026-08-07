@@ -14,9 +14,10 @@
     <!-- 相机非必需：无相机设备仍可装（走相册）。 -->
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
 
+    <!-- android:name 指向 TIMPush 要求的 Application 子类（系统推送）；勿改回 ${applicationName}。 -->
     <application
         android:label="TailTopia"
-        android:name="${applicationName}"
+        android:name=".TailTopiaApplication"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"
