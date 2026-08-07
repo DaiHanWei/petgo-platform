@@ -31,14 +31,57 @@ class AttGate {
       await _waitUntilResumed();
       // 刚转 active 立即请求仍有概率不弹（iOS 已知行为），延迟 1s 兜底。
       await Future<void>.delayed(const Duration(seconds: 1));
-      final status = await AppTrackingTransparency.trackingAuthorizationStatus;
-      if (status == TrackingStatus.notDetermined) {
-        await AppTrackingTransparency.requestTrackingAuthorization();
-        await _waitUntilDetermined();
-      }
+      // 诊断（长期保留）：ATT 不弹窗时这是唯一可判读的信号——
+      // denied/restricted 多半是「设置→隐私→跟踪」总开关关闭或旧安装遗留状态，非 App 缺陷。
+      debugPrint('[ATT] status=${await AppTrackingTransparency.trackingAuthorizationStatus}');
+      await _requestWithRetry();
     } catch (e) {
       debugPrint('[ATT] request failed: $e'); // 失败不阻断启动链路
     }
+  }
+
+  /// 请求 ATT，**弹窗没真正出现就退避重试**（最多 3 次）。
+  ///
+  /// 🔴 为什么需要（L2 实测 2026-08-07，iPhone / iOS 26.5）：**全新安装的首次冷启动不弹、
+  /// 第二次启动才弹**。首启时 scene 尚未被系统认定为 active（iOS 26 + SceneDelegate 下
+  /// Flutter 报出的 `resumed` 早于系统的 active），此时的请求被**静默吞掉**、状态仍留在
+  /// notDetermined。审核员通常只跑首次启动 ⇒ 正是 2026-08-06 拒信（Guideline 2.1）的成因。
+  ///
+  /// 判据用「App 是否被系统弹窗夺焦」：ATT 弹窗一旦显示，App 必然转 inactive。
+  /// 没夺焦 ⇒ 这次请求被吞了 ⇒ 退避重试；夺焦了 ⇒ 等用户作答完再返回（保证后续的
+  /// 通知权限弹窗不会挤掉它）。
+  static Future<void> _requestWithRetry() async {
+    for (var attempt = 0; attempt < 3; attempt++) {
+      final status = await AppTrackingTransparency.trackingAuthorizationStatus;
+      if (status != TrackingStatus.notDetermined) return; // 已作答/系统禁止，无需再问
+      final shown = _waitUntilInactive(const Duration(milliseconds: 1500));
+      await AppTrackingTransparency.requestTrackingAuthorization();
+      if (await shown) {
+        await _waitUntilDetermined(); // 弹窗确实出现了：等用户作答落定
+        return;
+      }
+      // 被系统吞了：退避（2s / 4s）后重试，给 scene 更多时间真正 active。
+      await Future<void>.delayed(Duration(seconds: 2 * (attempt + 1)));
+    }
+    debugPrint('[ATT] prompt never appeared after retries');
+  }
+
+  /// 监听 App 是否在 [within] 内失去前台焦点（=系统弹窗盖上来了）。
+  static Future<bool> _waitUntilInactive(Duration within) {
+    final binding = WidgetsBinding.instance;
+    final completer = Completer<bool>();
+    late final _LifecycleProbe probe;
+    probe = _LifecycleProbe((state) {
+      if (state != AppLifecycleState.resumed && !completer.isCompleted) {
+        binding.removeObserver(probe);
+        completer.complete(true);
+      }
+    });
+    binding.addObserver(probe);
+    return completer.future.timeout(within, onTimeout: () {
+      binding.removeObserver(probe);
+      return false;
+    });
   }
 
   /// 轮询到 ATT 状态不再是 notDetermined（最多 15s）。
@@ -86,4 +129,14 @@ class _ResumeObserver with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) onResumed();
   }
+}
+
+/// 通用生命周期探针（ATT 用它判断系统弹窗是否真的盖上来了）。
+class _LifecycleProbe with WidgetsBindingObserver {
+  _LifecycleProbe(this.onState);
+
+  final void Function(AppLifecycleState) onState;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) => onState(state);
 }
