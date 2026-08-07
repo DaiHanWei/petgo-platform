@@ -199,25 +199,32 @@ class PushService {
 
   /// 通知点击（前台/后台/杀进程冷启动三态同一入口）。
   /// 与通知中心列表点击共用 NotificationDeepLink（标记已读 + 角标重算 + 算 location）。
+  /// 通知点击（前台/后台/杀进程冷启动三态同一入口）。
+  ///
+  /// 🔄 产品决策 2026-08-07：**点推送一律落通知中心**，不再按 type 直达内容页/会话
+  ///（原 FR-38 深链路由表的直达语义）。理由是落点可预期、不会因深链目标失效（内容被删、
+  /// 会话已关）而落到空页；具体跳转交由用户在通知中心内点条目完成——那条链路（列表点击
+  /// → `NotificationDeepLink.open` → `pushPayloadToLocation`）保持不变，深链数据未废弃。
+  ///
+  /// 仍按 token 标记已读：用户点了推送即视为已读，通知中心不该再显未读（与列表点击同口径）。
+  /// 兽医角色不受影响：V1 兽医侧无通知中心，`/notifications` 会被角色守卫收口到工作台
+  ///（Story 5.1 F2），正是兽医新单推送该去的地方。
   void _onNotificationClicked({required String ext, String? userID, String? groupID}) {
     final p = parsePushExt(ext);
     Future<void>(() async {
-      // 全程兜底（code-review 2026-08-07）：标读/映射/导航任一环节抛错都不许成为
-      // 逃逸异步错误（点击静默无反应）——降级落通知中心，仍失败则吞掉。
-      var location = DeepLinkRoutes.notificationsCenter;
       try {
-        location = await NotificationDeepLink.openFromPush(
+        // 复用同一入口做「标记已读 + 角标重算」；其返回的深链 location 此处**刻意不用**。
+        await NotificationDeepLink.openFromPush(
           _ref,
           type: p.type,
           token: p.token,
           targetRef: p.targetRef,
-          commentAnchor: p.type == 'CONTENT_COMMENTED',
         );
       } catch (_) {
-        // 标记已读/映射失败 → 兜底通知中心。
+        // 标记已读失败不阻断跳转（与列表点击同口径）。
       }
       try {
-        _navigate(location);
+        _navigate(DeepLinkRoutes.notificationsCenter);
       } catch (_) {
         // 导航失败吞掉（router 未就绪等极端态）。
       }
