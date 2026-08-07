@@ -41,6 +41,20 @@ PushPayload parsePushExt(String ext) {
   }
 }
 
+/// 是否可以注册离线推送（纯判定，L0 可测）。
+///
+/// - 兽医：恒可（新单推送是工作刚需，登录即注册，不受 F7 约束）。
+/// - C 端：过了 F7 门（`f7Asked`）**或**系统通知权限已授予（`permissionGranted`）。
+///   后者是存量用户的唯一入口——F7 两个触发点都是一次性的，老用户换机/重装后
+///   本地标记清空且不会重走建档，缺此旁路即永久收不到推送（L2 2026-08-07 实测缺口）。
+///   已授权时注册不弹窗，故不违反 FR-22D。
+bool shouldRegister({
+  required bool isVet,
+  required bool f7Asked,
+  required bool permissionGranted,
+}) =>
+    isVet || f7Asked || permissionGranted;
+
 /// 系统推送单一收口（TIMPush，仅 FCM+APNs 通道）。
 ///
 /// 注册时机（谁调 [syncRegistration]）：
@@ -95,7 +109,23 @@ class PushService {
   Future<void> _doSync(bool isVet, int myEpoch) async {
     final prefs = await AppPrefs.create();
     // C 端未过 F7 门：不注册（注册会触发原生权限弹窗，时机归 F7 独占）。
-    if (!isVet && !prefs.pushPermissionAsked) return;
+    //
+    // ⚠️ 例外——**系统通知权限已授予则直接注册**（L2 2026-08-07 实测缺口）：
+    // F7 只有「建档完成」「首次问诊完成」两个触发点，都是一次性的。老用户换手机 / 重装 App
+    // 后本地 `pushPermissionAsked` 清空，却再也不会走建档、也可能不再问诊 ⇒ 永远不注册、
+    // 永远收不到任何推送（生产存量用户几乎全员命中）。
+    // 已授权时 `registerPush` 内部的权限申请是**无弹窗直返**（iOS requestAuthorization 对
+    // 已决状态、Android 13+ 同理），故不违反 FR-22D「绝不在冷启动打扰用户」。
+    // 顺带覆盖：用户自行到系统设置里打开通知后，下次冷启动即自动恢复推送能力。
+    if (!isVet && !prefs.pushPermissionAsked) {
+      var granted = false;
+      try {
+        granted = (await ph.Permission.notification.status).isGranted;
+      } catch (_) {
+        // 查询失败按未授权处理（保守：宁可不注册也不越过 F7 弹窗）。
+      }
+      if (!shouldRegister(isVet: isVet, f7Asked: false, permissionGranted: granted)) return;
+    }
     if (isVet) {
       // 兽医旁路：直接请求系统通知权限（已授予/永久拒绝时 request() 立即返回，不重复打扰）。
       try {

@@ -51,4 +51,24 @@ void main() {
       expect(p.token, isNull);
     });
   });
+
+  group('shouldRegister（注册门控判定）', () {
+    test('兽医恒可注册（不受 F7 约束——新单推送是工作刚需）', () {
+      expect(shouldRegister(isVet: true, f7Asked: false, permissionGranted: false), isTrue);
+    });
+
+    test('C 端过了 F7 门 → 可注册', () {
+      expect(shouldRegister(isVet: false, f7Asked: true, permissionGranted: false), isTrue);
+    });
+
+    test('存量用户缺口：未过 F7 但系统权限已授予 → 仍可注册', () {
+      // L2 2026-08-07 实测：老账号换机/重装后 F7 标记清空且不再走建档，
+      // 缺此旁路即永久收不到推送。已授权时注册不弹窗，不违反 FR-22D。
+      expect(shouldRegister(isVet: false, f7Asked: false, permissionGranted: true), isTrue);
+    });
+
+    test('C 端未过 F7 且未授权 → 不注册（F7 独占弹窗时机）', () {
+      expect(shouldRegister(isVet: false, f7Asked: false, permissionGranted: false), isFalse);
+    });
+  });
 }
