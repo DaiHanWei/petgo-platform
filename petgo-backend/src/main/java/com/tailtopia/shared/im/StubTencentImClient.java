@@ -50,7 +50,8 @@ public class StubTencentImClient implements TencentImClient {
     }
 
     @Override
-    public void pushOffline(String imUserId, String title, String body, String deepLinkType, String deepLinkToken) {
+    public void pushOffline(String imUserId, String title, String body, String deepLinkType, String deepLinkToken,
+            String targetRef) {
         // 桩：仅记非敏感字段（不打印 body 正文/token）。真实 APNs/FCM 经 IM 离线通道属 L2。
         log.debug("[IM-stub] offline push to {} type={}", imUserId, deepLinkType);
     }

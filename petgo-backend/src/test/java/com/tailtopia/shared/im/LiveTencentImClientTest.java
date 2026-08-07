@@ -133,4 +133,37 @@ class LiveTencentImClientTest {
                 Clock.fixed(Instant.ofEpochSecond(FIXED_TIME), ZoneOffset.UTC));
         assertThat(c2.verifyCallback("anything")).isFalse();
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void buildBatchPushBodyCarriesExtContractAndOfflinePushInfo() {
+        // 推送接入（2026-08-07）：/v4/timpush/batch 请求体契约——Ext 只含 type/token/targetRef，
+        // PushFlag=0 启用离线推送，To_Account 单收件人列表。
+        java.util.Map<String, Object> body = LiveTencentImClient.buildBatchPushBody(
+                "administrator", 12345, "u_7", "标题", "正文", "VET_REPLY", "tok123", "88");
+
+        assertThat(body.get("From_Account")).isEqualTo("administrator");
+        assertThat((java.util.List<String>) body.get("To_Account")).containsExactly("u_7");
+        assertThat(body.get("MsgRandom")).isEqualTo(12345);
+        java.util.Map<String, Object> push = (java.util.Map<String, Object>) body.get("OfflinePushInfo");
+        assertThat(push.get("PushFlag")).isEqualTo(0);
+        assertThat(push.get("Title")).isEqualTo("标题");
+        assertThat(push.get("Desc")).isEqualTo("正文");
+        assertThat(push.get("Ext"))
+                .isEqualTo("{\"type\":\"VET_REPLY\",\"token\":\"tok123\",\"targetRef\":\"88\"}");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void buildBatchPushBodyOmitsBlankTokenAndTargetRef() {
+        // 固定目标类（兽医新单/生日等）：无 token/targetRef → Ext 只带 type，不产出空字段。
+        java.util.Map<String, Object> body = LiveTencentImClient.buildBatchPushBody(
+                "administrator", 1, "v_3", null, null, "NEW_CONSULT_REQUEST", null, "");
+
+        java.util.Map<String, Object> push = (java.util.Map<String, Object>) body.get("OfflinePushInfo");
+        assertThat(push.get("Ext")).isEqualTo("{\"type\":\"NEW_CONSULT_REQUEST\"}");
+        // title/body 为 null 时降级空串（腾讯字段非空要求），绝不 NPE。
+        assertThat(push.get("Title")).isEqualTo("");
+        assertThat(push.get("Desc")).isEqualTo("");
+    }
 }

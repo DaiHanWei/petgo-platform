@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -7,12 +8,38 @@ import 'package:tencent_cloud_chat_sdk/enum/V2TimAdvancedMsgListener.dart';
 import 'package:tencent_cloud_chat_sdk/enum/V2TimSDKListener.dart';
 import 'package:tencent_cloud_chat_sdk/enum/log_level_enum.dart';
 import 'package:tencent_cloud_chat_sdk/enum/message_elem_type.dart';
+import 'package:tencent_cloud_chat_sdk/enum/offlinePushInfo.dart';
 import 'package:tencent_cloud_chat_sdk/models/v2_tim_conversation.dart';
 import 'package:tencent_cloud_chat_sdk/models/v2_tim_message.dart';
 import 'package:tencent_cloud_chat_sdk/tencent_im_sdk_plugin.dart';
 
 import '../network/api_paths.dart';
 import '../network/dio_client.dart';
+
+/// 会话消息的离线推送规格（发送端附带；接收方后台/杀进程时由 IM 服务端经 FCM/APNs 投递）。
+///
+/// 文案恒为**中性印尼语、不含消息内容/诊断内容**（隐私护栏：推送文案零 PII/健康数据）。
+/// Ext 深链契约与后端 pushOffline 同构：`{type, targetRef}`（无 token——非通知中心行，无需标已读）。
+/// 双向共用 `VET_REPLY + sessionId`：用户收到 → 落 `/consult/conversation/<id>`；
+/// 兽医收到 → 同 location 被角色守卫收口到 `/vet/workbench`（Story 5.1 F2，天然正确落点）。
+@immutable
+class ChatPushSpec {
+  const ChatPushSpec({required this.sessionId});
+
+  /// 问诊会话 id（双端同一 id；接收方按它深链回会话）。
+  final String sessionId;
+
+  /// 中性推送文案（印尼语，App 默认语言）。发送端定稿无法按接收方 locale 渲染——
+  /// 双语渲染能力在后端通知链路（NotificationService），会话推送 V1 取中性单语。
+  static const String neutralTitle = 'TailTopia';
+  static const String neutralDesc = 'Ada pesan baru untuk Anda';
+
+  OfflinePushInfo toOfflinePushInfo() => OfflinePushInfo(
+        title: neutralTitle,
+        desc: neutralDesc,
+        ext: jsonEncode({'type': 'VET_REPLY', 'targetRef': sessionId}),
+      );
+}
 
 /// 一条 IM 消息（Story 5.5）。`who` ∈ me / peer / system；文字与图片二选一。
 @immutable
@@ -70,10 +97,12 @@ abstract interface class ImService {
   Future<void> logout();
 
   /// 向对端发文字（C2C，peer=`u_<id>`/`v_<id>`）。
-  Future<void> sendText({required String peerId, required String text});
+  /// [push]：离线推送规格（接收方后台/杀进程可收系统通知）；null = 不附带（沿用 IM 默认，
+  /// 默认模板会带消息内容预览，会话场景**应当传**以保证中性文案）。
+  Future<void> sendText({required String peerId, required String text, ChatPushSpec? push});
 
-  /// 向对端发图片（本地路径，C2C）。媒体留 IM，不落 OSS / 后端。
-  Future<void> sendImage({required String peerId, required String filePath});
+  /// 向对端发图片（本地路径，C2C）。媒体留 IM，不落 OSS / 后端。[push] 语义同 [sendText]。
+  Future<void> sendImage({required String peerId, required String filePath, ChatPushSpec? push});
 
   /// 订阅与某对端（[peerId]）的实时消息流（取消订阅即离开）。
   Stream<ImMessage> onMessages(String peerId);
@@ -188,18 +217,18 @@ class LiveImService implements ImService {
   }
 
   @override
-  Future<void> sendText({required String peerId, required String text}) async {
+  Future<void> sendText({required String peerId, required String text, ChatPushSpec? push}) async {
     final mm = TencentImSDKPlugin.v2TIMManager.getMessageManager();
     final created = await mm.createTextMessage(text: text);
     final msg = created.data?.messageInfo;
     if (msg == null) {
       throw StateError('createTextMessage 失败: ${created.code}');
     }
-    await _sendWithRelogin(msg, peerId, 'sendText');
+    await _sendWithRelogin(msg, peerId, 'sendText', push);
   }
 
   @override
-  Future<void> sendImage({required String peerId, required String filePath}) async {
+  Future<void> sendImage({required String peerId, required String filePath, ChatPushSpec? push}) async {
     // 媒体留 IM，不落 OSS/后端：直接以本地路径建图片消息发出。
     final mm = TencentImSDKPlugin.v2TIMManager.getMessageManager();
     final created = await mm.createImageMessage(imagePath: filePath);
@@ -207,18 +236,21 @@ class LiveImService implements ImService {
     if (msg == null) {
       throw StateError('createImageMessage 失败: ${created.code}');
     }
-    await _sendWithRelogin(msg, peerId, 'sendImage');
+    await _sendWithRelogin(msg, peerId, 'sendImage', push);
   }
 
   /// 发送 + 被踢自愈：遇 6014（未登录/被踢下线）→ 清凭证重登一次再重试，
   /// 解决「被踢后发送恒失败、需重启 App」（Story 5.5 live）。
-  Future<void> _sendWithRelogin(V2TimMessage msg, String peerId, String label) async {
+  Future<void> _sendWithRelogin(V2TimMessage msg, String peerId, String label, ChatPushSpec? push) async {
     final mm = TencentImSDKPlugin.v2TIMManager.getMessageManager();
-    var res = await mm.sendMessage(message: msg, receiver: peerId, groupID: '');
+    final pushInfo = push?.toOfflinePushInfo();
+    var res = await mm.sendMessage(
+        message: msg, receiver: peerId, groupID: '', offlinePushInfo: pushInfo);
     if (res.code == _kImNotLoggedIn) {
       _credential = null; // 强制下次 login 真正执行（绕过幂等 guard）
       await loginIfNeeded();
-      res = await mm.sendMessage(message: msg, receiver: peerId, groupID: '');
+      res = await mm.sendMessage(
+          message: msg, receiver: peerId, groupID: '', offlinePushInfo: pushInfo);
     }
     if (res.code != 0) {
       throw StateError('$label 失败: ${res.code}');
