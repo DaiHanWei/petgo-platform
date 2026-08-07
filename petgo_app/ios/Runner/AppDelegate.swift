@@ -37,4 +37,18 @@ import tencent_cloud_chat_push
   func applicationGroupID() -> String! {
     return TencentCloudChatPushFlutterModal.shared.kAPNSApplicationGroupID
   }
+
+  /// 收到远程推送 / 点击通知栏通知（离线态点击即经此回调）。
+  ///
+  /// **必须实现并转发给插件**：插件的 `tryNotifyDartOnNotificationClickEvent` 是把 ext 送回
+  /// Dart（`onNotificationClicked`）的唯一入口，而它在插件内部**没有任何调用方**——
+  /// 按官方集成要求由宿主 AppDelegate 调用。缺这一步的表象是：推送能收到、点击却什么也不发生，
+  /// App 只是普通冷启动落到首页（L2 实测 2026-08-07 定位）。
+  ///
+  /// 返回 `true`：接管解析，阻止 TIMPush 走内置 TUIKit 的跳转逻辑（本项目自己用 go_router
+  /// 落地，见 `PushService._onNotificationClicked`）。
+  func onRemoteNotificationReceived(_ notice: String?) -> Bool {
+    TencentCloudChatPushPlugin.shared.tryNotifyDartOnNotificationClickEvent(notice)
+    return true
+  }
 }
