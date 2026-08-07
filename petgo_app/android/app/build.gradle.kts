@@ -68,6 +68,12 @@ android {
             } else {
                 signingConfigs.getByName("debug")
             }
+            // AGP 9 起 release 默认开 R8。TIMPush 依赖链里的 WorkManager/Room 靠反射找
+            // 生成类，不加 keep 规则会启动即崩（2026-08-07 真机实测，见 proguard-rules.pro）。
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }
