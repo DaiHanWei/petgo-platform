@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:posthog_flutter/posthog_flutter.dart';
 
 import '../analytics/analytics.dart';
+import 'deep_link_routes.dart';
 import '../theme/app_theme.dart';
 
 import '../../features/auth/domain/auth_state.dart';
@@ -146,6 +147,50 @@ Widget _tabRootPage(AppTab tab) => switch (tab) {
   AppTab.home => const HomePage(),
   AppTab.me => const MePage(),
 };
+
+/// 冷启动深链是否需要**先铺一层底座页再叠上去**（纯函数，L0 可测）。
+///
+/// 🐛 2026-08-07 iOS 实机：杀后台 → 点系统推送 → 落通知中心，**返回不了**（无返回箭头、
+/// 左滑手势也无效）；而从 Feed 进同一个页面一切正常。
+///
+/// 根因不在通知中心页，而在这里：冷启动的深链落点当时是无条件 `go(pending)`。`go` 会**替换
+/// 整个路由栈**，于是 `/notifications` 成了栈里唯一一页 —— `Navigator.canPop()` 为 false，
+/// `AppBar` 便不会自动生成返回箭头，iOS 的边缘返回手势同样因为没有上一页而失效。用户被困死，
+/// 只能杀进程。
+///
+/// 从 Feed 进去之所以正常，是因为那是 `push`（叠在 shell 之上，下面有页可回）。
+/// App 已在运行时的推送点击也走 `push`（见 `push_service.dart` 的 `_navigate`）——
+/// **只有冷启动这一条路径漏了**，而它恰恰是最常见的点推送场景。
+///
+/// 影响面不止通知中心：`/content/:id`、`/consult/conversation/:id`、`/profile/milestones`、
+/// `/publish` 等**所有 shell 外的深链落点**在冷启动下都是死路。
+///
+/// 判定与 `_navigate` 同口径：Tab 分支根必须 `go`（`push` 会二次构建 StatefulShellRoute →
+/// GlobalKey 撞车 → release 白屏，见 [DeepLinkRoutes.shellTabRoots] 的血泪注释）；
+/// `/vet/*` 也走 `go`（靠角色守卫收口到工作台）。其余一律「先 go 底座，再 push 目标」。
+bool deepLinkNeedsBaseRoute(String location) =>
+    !DeepLinkRoutes.isShellTabRoot(location) && !location.startsWith('/vet');
+
+/// 冷启动落深链：需要底座的先 `go` 到落地矩阵目标，再把深链 `push` 上去（这样才可返回）。
+///
+/// 底座取**落地矩阵目标**而不是写死 `/home`：游客/已建档用户落 Diary、其余落 Social，
+/// 返回后看到的是他本该看到的那一屏，与不点推送直接冷启动完全一致。
+void _goDeepLink(BuildContext ctx, Ref ref, String location) {
+  if (!deepLinkNeedsBaseRoute(location)) {
+    ctx.go(location);
+    return;
+  }
+  ctx.go(appUserStateOf(ref.read(authControllerProvider)).landingLocation);
+  // ⚠️ **必须等下一帧再 push，不能和 go 同帧发出**（2026-08-07 实测）：go_router 的 `go`
+  // 走的是 RouteInformationParser 的**异步**解析，调用返回时 `currentConfiguration` 还是旧值。
+  // 同帧接着 push，等于把目标叠在**旧栈**（/splash）上，随后 go 的解析落地又把整个栈替换掉 ——
+  // 净效果是深链被吃掉，用户只落到底座页。必须让 go 先落定。
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    final c = rootNavigatorKey.currentContext;
+    if (c == null || !c.mounted) return;
+    c.push(location);
+  });
+}
 
 /// FR-91 迟到纠正的**判定结果**（纯数据，便于单测逐条锁 7 条约束）。
 enum LateCorrectionOutcome {
@@ -377,7 +422,7 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
               ref.read(pendingDeepLinkProvider.notifier).set(null);
               // 约束⑤：深链唤起的冷启动**不纠正** —— 深链优先级最高（与 AD-8 分流顺序一致）。
               // 此处不武装 lateCorrection，故恢复晚到也不会把用户从深链目标拽走。
-              ctx.go(pending);
+              _goDeepLink(ctx, ref, pending);
               return;
             }
             // 落地 Tab 按**当时状态实时判定**，不持久化「上次落在哪」（宠物状态会变，记住反而错）。

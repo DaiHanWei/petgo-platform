@@ -90,6 +90,23 @@ class _NotificationCenterPageState
         backgroundColor: AppColors.base,
         scrolledUnderElevation: 0,
         titleSpacing: 20,
+        // 🐛 2026-08-07：**永远给一个出口**。
+        //
+        // `AppBar` 只在 `Navigator.canPop()` 为真时才自动生成返回箭头。冷启动点推送落到这里时
+        // 本页曾是栈里唯一一页（`go` 替换了整个栈）⇒ 没有箭头、iOS 左滑手势也因无上一页而失效，
+        // 用户被困死只能杀进程（真机实测）。
+        //
+        // 根因已在 `app_router.dart` 的 `_goDeepLink` 修掉（先铺底座再 push）。这里是第二道防线：
+        // 任何未来路径若又把本页作为栈底送达，用户至少还能回到主页，而不是死在这一屏。
+        leading: Navigator.of(context).canPop()
+            ? null // 有上一页 → 交给 AppBar 的默认返回键（保留系统返回语义与左滑手势）
+            : IconButton(
+                key: const ValueKey('notificationCenterHome'),
+                icon: const Icon(Icons.arrow_back),
+                color: AppColors.ink,
+                tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                onPressed: () => context.go('/home'),
+              ),
         title: Text(
           l10n.notificationCenterTitle,
           style: const TextStyle(
