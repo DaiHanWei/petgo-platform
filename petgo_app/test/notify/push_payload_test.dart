@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/core/im/im_service.dart';
 import 'package:tailtopia/core/push/push_service.dart';
+import 'package:tailtopia/core/router/deep_link_routes.dart';
 
 /// 推送接入（spec-push-timpush-integration）L0：ext 透传契约的两端——
 /// 解析（[parsePushExt]，点击回调入口）与生成（[ChatPushSpec]，会话消息发送端）。
@@ -69,6 +70,30 @@ void main() {
 
     test('C 端未过 F7 且未授权 → 不注册（F7 独占弹窗时机）', () {
       expect(shouldRegister(isVet: false, f7Asked: false, permissionGranted: false), isFalse);
+    });
+  });
+
+  group('pushClickLocation（点击落点分流）', () {
+    test('通知类（有 token）→ 通知中心，忽略深链目标', () {
+      expect(
+        pushClickLocation(hasToken: true, deepLink: '/content/357'),
+        DeepLinkRoutes.notificationsCenter,
+      );
+    });
+
+    test('IM 会话消息（无 token）→ 落会话，不去通知中心', () {
+      // 中心无此条目，送去中心=死路（用户看不到该消息）。
+      expect(
+        pushClickLocation(hasToken: false, deepLink: '/consult/conversation/88'),
+        '/consult/conversation/88',
+      );
+    });
+
+    test('IM 类但深链已兜底成通知中心 → 按原样返回', () {
+      expect(
+        pushClickLocation(hasToken: false, deepLink: DeepLinkRoutes.notificationsCenter),
+        DeepLinkRoutes.notificationsCenter,
+      );
     });
   });
 }

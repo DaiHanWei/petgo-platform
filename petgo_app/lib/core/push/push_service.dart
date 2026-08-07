@@ -41,6 +41,13 @@ PushPayload parsePushExt(String ext) {
   }
 }
 
+/// 推送点击落点分流（纯函数，L0 可测）。见 [PushService._onNotificationClicked] 的决策说明。
+///
+/// - [hasToken] 为真 ⇒ 通知类（通知中心有对应行）⇒ 落通知中心。
+/// - 否则 ⇒ IM 会话消息（中心无条目）⇒ 落其深链目标（会话）；深链本身兜底为通知中心时按原样返回。
+String pushClickLocation({required bool hasToken, required String deepLink}) =>
+    hasToken ? DeepLinkRoutes.notificationsCenter : deepLink;
+
 /// 是否可以注册离线推送（纯判定，L0 可测）。
 ///
 /// - 兽医：恒可（新单推送是工作刚需，登录即注册，不受 F7 约束）。
@@ -201,30 +208,39 @@ class PushService {
   /// 与通知中心列表点击共用 NotificationDeepLink（标记已读 + 角标重算 + 算 location）。
   /// 通知点击（前台/后台/杀进程冷启动三态同一入口）。
   ///
-  /// 🔄 产品决策 2026-08-07：**点推送一律落通知中心**，不再按 type 直达内容页/会话
-  ///（原 FR-38 深链路由表的直达语义）。理由是落点可预期、不会因深链目标失效（内容被删、
-  /// 会话已关）而落到空页；具体跳转交由用户在通知中心内点条目完成——那条链路（列表点击
-  /// → `NotificationDeepLink.open` → `pushPayloadToLocation`）保持不变，深链数据未废弃。
+  /// 🔄 产品决策 2026-08-07，**按推送来源分流**（判据是 ext 里有无 `token`）：
   ///
-  /// 仍按 token 标记已读：用户点了推送即视为已读，通知中心不该再显未读（与列表点击同口径）。
+  /// - **通知类推送**（有 token——后端 `NotificationService` 下发，通知中心有对应行）
+  ///   → 一律落**通知中心**，不再按 type 直达内容页（原 FR-38 直达语义已改）。落点可预期，
+  ///   且不会因深链目标失效（内容被删/会话已关）而落到空页；具体跳转交由用户在中心内点条目
+  ///   完成——列表点击链路（`NotificationDeepLink.open` → `pushPayloadToLocation`）保持不变。
+  /// - **IM 会话消息推送**（无 token——发送端 SDK 附带 `OfflinePushInfo`，**不进通知中心**）
+  ///   → 落**对应会话**。这类消息在通知中心根本没有条目，若也送去中心，用户将面对一个找不到
+  ///   该消息的列表（死路）。
+  ///
+  /// 通知类仍按 token 标记已读（点推送即视为已读，与列表点击同口径）；IM 类无 token 自然跳过。
   /// 兽医角色不受影响：V1 兽医侧无通知中心，`/notifications` 会被角色守卫收口到工作台
   ///（Story 5.1 F2），正是兽医新单推送该去的地方。
   void _onNotificationClicked({required String ext, String? userID, String? groupID}) {
     final p = parsePushExt(ext);
     Future<void>(() async {
+      String location;
       try {
-        // 复用同一入口做「标记已读 + 角标重算」；其返回的深链 location 此处**刻意不用**。
-        await NotificationDeepLink.openFromPush(
+        // 复用同一入口做「标记已读 + 角标重算」并拿到深链 location。
+        final deepLink = await NotificationDeepLink.openFromPush(
           _ref,
           type: p.type,
           token: p.token,
           targetRef: p.targetRef,
         );
+        location = pushClickLocation(
+            hasToken: p.token != null && p.token!.isNotEmpty, deepLink: deepLink);
       } catch (_) {
-        // 标记已读失败不阻断跳转（与列表点击同口径）。
+        // 标记已读/映射失败 → 兜底通知中心。
+        location = DeepLinkRoutes.notificationsCenter;
       }
       try {
-        _navigate(DeepLinkRoutes.notificationsCenter);
+        _navigate(location);
       } catch (_) {
         // 导航失败吞掉（router 未就绪等极端态）。
       }
