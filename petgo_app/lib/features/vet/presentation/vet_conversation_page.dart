@@ -64,7 +64,9 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
 
   @override
   void dispose() {
-    if (_imLoginStarted) _imService?.logout();
+    // 🔄 推送接入（2026-08-07）：不再离开即登出 IM（logout 即停投离线推送——兽医离开会话页
+    // 后必须仍能收新单/新消息推送，「杀应用也在线」的在线态设计正依赖推送可达）。
+    // 兽医显式下线（vet_online_status.toggle(false)）与账号登出（toGuest）仍会登出 IM。
     _chatInput.dispose();
     super.dispose();
   }
@@ -201,6 +203,8 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
               ImChatPlaceholder(
                 imConversationId: d.session.imConversationId,
                 peerId: d.session.userId != null ? 'u_${d.session.userId}' : null,
+                sessionId: '${d.session.id}', // 用户点推送深链回 /consult/conversation/<id>
+
                 accent: AppColors.vetPrimary, // 兽医侧气泡/发送钮薄荷 #5BCBBB（非 M3 偏移色）
                 selfIsVet: true, // 兽医视角：己方薄荷「D」/ 对端用户紫「A」
                 inputController: _chatInput, // Template「Pakai」预填进此框

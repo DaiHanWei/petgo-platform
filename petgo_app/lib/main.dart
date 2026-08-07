@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -24,10 +26,21 @@ Future<void> main() async {
   }
   // 本地化日期格式化的 locale 数据（id 非默认 locale，DateFormat 用前必须初始化）。
   await initializeDateFormatting();
-  // 前端行为分析（PostHog）：runApp 前初始化，失败不阻断启动。
-  await Analytics.init();
-  // 移动归因（AppsFlyer）：manualStart 只 init 不上报；启动上报在首帧后（见下方回调）。
-  await AppsFlyerClient.instance.init();
+  // 前端行为分析（PostHog）：**发起但不 await**（2026-08-07 冷启动耗时治理）。
+  //
+  // 改前是 `await Analytics.init()` —— 原生 setup（超时上限 3s）被压在首帧之前，那一段
+  // 画面还是原生启动屏，用户在纯等待，而首帧之前没有任何东西需要 PostHog 就绪。
+  //
+  // 为什么不 await 也**不会丢首帧那条 `$screen`**（漏斗「过启动页」这一步的来源）：
+  // `Posthog().setup()` 在本行**同步**把 setup 消息投进 `posthog_flutter` 平台通道
+  // （Dart 侧从调用到 `invokeMethod` 之间没有 await），而后续 capture / screen 走**同一条
+  // 通道**、原生侧按序取用且 setup 是同步处理的 ⇒「setup 先于任何上报被执行」由通道的
+  // 顺序性保证，不需要 Dart 侧 await 来串。
+  //
+  // ⚠️ 因此本行**必须留在 `runApp` 之前**。一旦挪到首帧之后（比如并进下面的 postFrame
+  // 回调），PosthogObserver 为启动屏打的那条 `$screen` 就会排在 setup 前面 —— 原生 SDK
+  // 对 setup 前的事件是**直接丢弃**（不缓冲），启动漏斗的第一级会凭空消失。
+  unawaited(Analytics.init());
   // V1：锁定竖屏（portrait-only）。
   SystemChrome.setPreferredOrientations(const [
     DeviceOrientation.portraitUp,
@@ -56,10 +69,22 @@ Future<void> main() async {
     child: const TailTopiaApp(),
   ));
 
-  // 首帧后：iOS 先独立走 ATT 授权（等 resumed 再弹，防 inactive 静默不弹——
-  // 2026-08-06 审核拒信根因），结果落定后再上报 AppsFlyer 启动；不占首帧耗时。
+  // 首帧后：归因 SDK 初始化 + iOS ATT 授权 + 启动上报，三件事全部让开首帧。
+  //
+  // 2026-08-07 冷启动耗时治理：`AppsFlyerClient.init()`（原生 initSdk，超时上限 3s）改前在
+  // `runApp` 之前 await —— 首帧之前没有任何东西依赖归因 SDK 就绪，那 3s 纯粹是让用户
+  // 多看几秒原生启动屏。移到这里后，最坏情况的等待从「用户盯着不动的紫屏」变成
+  // 「启动屏动效照常播」，不再计入 time-to-content。
+  //
+  // ⚠️ 三者的先后不可随手改：
+  // - init 与 ATT **并发**发起（`afInit` 先拿到 future 再 await ATT），不是串行 ——
+  //   串行会让 ATT 弹窗被 initSdk 拖后最多 3s，而「等 resumed 再弹 ATT」正是 2026-08-06
+  //   审核拒信（Guideline 2.1）的修复点，不能再往后推。
+  // - `start()` 必须同时晚于 ATT 结果与 init（未 init 时 start 是 no-op），故末尾按序 await 两者。
   WidgetsBinding.instance.addPostFrameCallback((_) async {
+    final Future<void> afInit = AppsFlyerClient.instance.init();
     await AttGate.requestIfNeeded();
+    await afInit;
     await AppsFlyerClient.instance.start();
   });
 }

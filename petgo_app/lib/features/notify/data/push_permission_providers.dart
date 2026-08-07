@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
 
+import '../../../core/push/push_service.dart';
 import '../../../core/router/app_router.dart' show rootNavigatorKey;
 import '../../../core/storage/prefs.dart';
 import '../domain/push_permission_gate.dart';
@@ -28,6 +29,8 @@ final pushPermissionGateProvider = FutureProvider<PushPermissionGate>((ref) asyn
         return false;
       }
     },
+    // F7 达成 → 立即注册离线推送（TIMPush；registerPush 的门控对象就是这次 asked 标记）。
+    onAsked: () => ref.read(pushServiceProvider).syncRegistration(isVet: false),
   );
 });
 

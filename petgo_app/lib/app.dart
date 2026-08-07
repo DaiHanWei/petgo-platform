@@ -4,7 +4,9 @@ import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
+import 'package:tailtopia/core/im/im_service.dart';
 import 'package:tailtopia/core/l10n/locale_controller.dart';
+import 'package:tailtopia/core/push/push_service.dart';
 import 'package:tailtopia/core/router/app_router.dart';
 import 'package:tailtopia/core/theme/app_theme.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
@@ -51,14 +53,22 @@ class TailTopiaApp extends ConsumerStatefulWidget {
   ConsumerState<TailTopiaApp> createState() => _TailTopiaAppState();
 }
 
-class _TailTopiaAppState extends ConsumerState<TailTopiaApp> {
+class _TailTopiaAppState extends ConsumerState<TailTopiaApp> with WidgetsBindingObserver {
   final AppLinks _appLinks = AppLinks();
   StreamSubscription<Uri>? _linkSub;
 
   @override
   void initState() {
     super.initState();
+    // 前后台切换 → 同步腾讯 IM doForeground/doBackground（Flutter 裸 SDK 不自动做；
+    // 不同步则后台收不到厂商离线推送 / 前台重复弹通知，见 core/push/push_service.dart）。
+    WidgetsBinding.instance.addObserver(this);
     _initDeepLinks();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    ref.read(pushServiceProvider).onAppLifecycleChanged(state);
   }
 
   Future<void> _initDeepLinks() async {
@@ -81,6 +91,7 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _linkSub?.cancel();
     super.dispose();
   }
@@ -112,6 +123,33 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> {
       // 兽医登录 profile=null（nextId=null）自动跳过，不误刷用户维度缓存。
       if (next.status != AuthStatus.guest && nextId != null && nextId != prevId) {
         resetUserScopedCaches(ref);
+      }
+
+      // 系统推送注册（收口于此单点，与 identify/缓存失效同一监听）：
+      // ① 变为已登录态（冷启动恢复 / 登录 / 兽医登录 / 引导完成转正）→ 按门控注册离线推送。
+      //    C 端受 F7 门控（asked=false 时内部直接跳过，不弹权限）；兽医旁路直注册。
+      // ② 直接换账号（authenticated→authenticated 且 id 变化，中途未过 guest——与上方
+      //    resetUserScopedCaches 同一场景，code-review 2026-08-07）：必须先解绑旧账号推送
+      //    + IM 登出旧身份，再按新账号重登注册——否则设备 token 与 IM 登录态仍是上一用户，
+      //    B 的设备持续收 A 的推送（跨用户隐私泄漏，与 IM 漏登出同型）。
+      // fire-and-forget：注册失败静默，推送是增强能力。
+      final becameAuthed =
+          next.status == AuthStatus.authenticated && prev?.status != AuthStatus.authenticated;
+      final switchedUser = next.status != AuthStatus.guest &&
+          nextId != null &&
+          prevId != null &&
+          nextId != prevId;
+      if (switchedUser) {
+        final push = ref.read(pushServiceProvider);
+        final im = ref.read(imServiceProvider);
+        push
+            .unregister()
+            .timeout(const Duration(seconds: 5))
+            .catchError((_) {})
+            .whenComplete(() => im.logout().catchError((_) {}))
+            .whenComplete(() => push.syncRegistration(isVet: next.isVet));
+      } else if (becameAuthed) {
+        ref.read(pushServiceProvider).syncRegistration(isVet: next.isVet);
       }
     });
     // Story 7.2：用户手动选择优先（localeController）；null → 跟随设备（resolutionCallback 回退英语）。

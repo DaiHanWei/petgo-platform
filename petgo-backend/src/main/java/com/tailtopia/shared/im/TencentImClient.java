@@ -31,10 +31,13 @@ public interface TencentImClient {
     void sendSystemMessage(String conversationId, String text);
 
     /**
-     * 经 IM 离线推送通道（底层 APNs/FCM）下发通知（Story 6.1）。
-     * payload 携带 {@code type + deepLinkToken}（绝不带顺序 id / 健康数据明文）。
+     * 经 IM 离线推送通道（底层 APNs/FCM）下发通知（Story 6.1；live 实现 2026-08-07 接通
+     * {@code /v4/timpush/batch} 指定 UserID 推送）。payload（Ext）携带
+     * {@code type + deepLinkToken + targetRef}——targetRef 与通知中心列表 API 同一暴露口径
+     * （id 寻址类目标页按它深链直跳），绝不带健康数据明文；title/body 由调用方按收件人语言渲染。
      */
-    void pushOffline(String imUserId, String title, String body, String deepLinkType, String deepLinkToken);
+    void pushOffline(String imUserId, String title, String body, String deepLinkType, String deepLinkToken,
+            String targetRef);
 
     /** 校验腾讯 IM 服务端回调签名/token（非法回调拒绝）。 */
     boolean verifyCallback(String token);

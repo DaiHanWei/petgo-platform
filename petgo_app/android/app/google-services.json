@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "947569877956",
+    "project_id": "tailtopia-ba4f7",
+    "storage_bucket": "tailtopia-ba4f7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:947569877956:android:93df034073b9785c703a91",
+        "android_client_info": {
+          "package_name": "com.tailtopia.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAdyXFptvKu9zDTkrOK9mu2WSC0e6Jstz8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

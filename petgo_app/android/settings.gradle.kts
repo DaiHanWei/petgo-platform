@@ -21,6 +21,8 @@ plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
     id("com.android.application") version "9.0.1" apply false
     id("org.jetbrains.kotlin.android") version "2.3.20" apply false
+    // 系统推送（TIMPush/FCM）：解析 google-services.json 生成 Firebase 资源。
+    id("com.google.gms.google-services") version "4.5.0" apply false
 }
 
 include(":app")

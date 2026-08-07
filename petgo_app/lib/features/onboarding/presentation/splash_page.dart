@@ -157,6 +157,19 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
   /// 入场动效的停留时长是否已走完。
   bool _holdDone = false;
 
+  /// 5s 兜底（[SplashPage.readyDeadline]）是否已到点。**一经置位不再清除**（sticky）。
+  ///
+  /// 为什么不能只靠兜底 Timer 里那一次 `force: true`（2026-08-07 修，死锁）：
+  /// [_maybeComplete] 的第一道判断是 `!_holdDone` —— 用户若在启动期切了一次后台，
+  /// 回前台会**重置动效并重新计一个完整的 [SplashPage.animatedHold]**（见 [_onLifecycleChange]），
+  /// 于是 5s 到点时 `_holdDone` 很可能仍是 false ⇒ **那次 force 被静默丢掉**，而兜底是
+  /// 一次性 Timer、不会再来第二次。此后重启的停留到点时调的是**不带 force** 的交棒，
+  /// 条件退化成「会话恢复必须已完成」：慢网下 `/me` 迟迟不回 ⇒ **永远停在启动屏**，
+  /// 用户只能杀进程。（`_paused` 那条压住兜底的路径最终也汇入同一个死角。）
+  ///
+  /// 改成 sticky 标志后，兜底额度不会被停留重启吃掉：到点即记账，停留一走完立刻放行。
+  bool _deadlineReached = false;
+
   /// 是否已把控制权交给 [SplashPage.onComplete]（只交一次）。
   bool _completed = false;
 
@@ -365,6 +378,10 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
     // 兜底：到 5s 无论就绪与否都放行（决策 D-2）。
     _deadlineTimer = Timer(SplashPage.readyDeadline, () {
       if (!mounted) return;
+      // ⚠️ **先记账再尝试交棒**（见 [_deadlineReached]）：此刻停留可能因切后台被重新计时，
+      // 交棒会被 `!_holdDone` 挡下 —— 但额度已经落在标志上，停留一走完就放行，
+      // 不会像改前那样把唯一一次兜底机会丢掉。
+      _deadlineReached = true;
       if (!devPin) _maybeComplete(force: true);
     });
   }
@@ -381,12 +398,16 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
     if (!devPin) _maybeComplete();
   }
 
-  /// 交棒条件：**动效停留走完** 且（**已就绪** 或 **到了 5s 兜底**）。
+  /// 交棒条件：**动效停留走完** 且（**已就绪** 或 **5s 兜底已到点**）。
   ///
   /// ⚠️ 不改 [SplashPage.onComplete] 的调用契约 —— 路由层仍在其中做分流
   /// （pending 深链 > 落地矩阵）。本 Story 只改「什么时候交棒、交棒前显示什么」。
+  ///
+  /// ⚠️ 判定里必须带 [_deadlineReached]，**不能只认入参 `force`**：兜底是一次性 Timer，
+  /// 而 `!_holdDone` 会把那一次 force 挡掉且不留痕（切后台重启停留即触发），
+  /// 之后就再没有任何东西能放行 —— 详见 [_deadlineReached] 的说明。
   void _maybeComplete({bool force = false}) {
-    if (_completed || !_holdDone || !(force || _ready)) return;
+    if (_completed || !_holdDone || !(force || _ready || _deadlineReached)) return;
     // 后台不交棒（见 [_paused]）：压到回前台再做，避免在用户看不见时上报落地埋点并换页。
     if (_paused) {
       _completePending = true;

@@ -81,7 +81,7 @@ public class NotificationService {
         java.util.Locale locale = accountQuery.localeOf(recipientUserId);
         pusher.pushToUser(recipientUserId,
                 pushText(type, "title", locale, title), pushText(type, "body", locale, body),
-                deepLinkType, token);
+                deepLinkType, token, targetRef);
         return saved;
     }
 
@@ -93,7 +93,7 @@ public class NotificationService {
         // 兽医侧 V1 无语言偏好，统一印尼语渲染（bug 20260625-105）。
         pusher.pushToVet(vetId,
                 pushText(type, "title", INDONESIAN, title), pushText(type, "body", INDONESIAN, body),
-                deepLinkType, null);
+                deepLinkType, null, null);
     }
 
     /**

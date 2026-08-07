@@ -169,14 +169,79 @@ public class LiveTencentImClient implements TencentImClient {
                 "MsgRandom", ThreadLocalRandom.current().nextInt(Integer.MAX_VALUE),
                 "MsgBody", java.util.List.of(Map.of(
                         "MsgType", "TIMTextElem",
-                        "MsgContent", Map.of("Text", text))));
+                        "MsgContent", Map.of("Text", text))),
+                // 接收方后台/杀进程时的通知栏文案：中性印尼语（系统消息正文当前为中文硬编码，
+                // 且可能含会话细节——绝不进推送预览）。Ext 深链：无 sessionId 可用（会话 id
+                // 仅 c2c 对端对），落 VET_REPLY 无 targetRef → 客户端兜底通知中心。
+                "OfflinePushInfo", Map.of(
+                        "PushFlag", 0,
+                        "Title", "TailTopia",
+                        "Desc", "Ada pembaruan konsultasi",
+                        "Ext", "{\"type\":\"VET_REPLY\"}"));
         postRest("/v4/openim/sendmsg", body, "sendSystemMessage");
     }
 
     @Override
-    public void pushOffline(String imUserId, String title, String body, String deepLinkType, String deepLinkToken) {
-        // 离线推送属 Epic 6（独立推送系统），本增量不实现真实下发；仅记非敏感日志占位（L2/Epic6 待本地）。
-        log.debug("[IM-live] offline push to {} type={} (deferred to Epic6)", imUserId, deepLinkType);
+    public void pushOffline(String imUserId, String title, String body, String deepLinkType, String deepLinkToken,
+            String targetRef) {
+        // 推送接入（2026-08-07）：/v4/timpush/batch 指定 UserID 推送（1~500/批，此处单收件人）。
+        // 不进 IM 会话、默认不增未读；离线经厂商通道（FCM 证书 9088 / APNs 17703·17704）落通知栏。
+        // 前置：收件人须已注册过 TIMPush（客户端 registerPush）；未注册用户腾讯侧静默不投，无副作用。
+        postRest("/v4/timpush/batch",
+                buildBatchPushBody(props.getAdminIdentifier(),
+                        ThreadLocalRandom.current().nextInt(Integer.MAX_VALUE),
+                        imUserId, title, body, deepLinkType, deepLinkToken, targetRef),
+                "pushOffline");
+    }
+
+    /**
+     * 组 {@code /v4/timpush/batch} 请求体（包可见静态：L0 单测断言 Ext 契约——只含
+     * type/token/targetRef，绝不带健康数据明文；title/body 由调用方按收件人语言渲染完毕）。
+     */
+    static Map<String, Object> buildBatchPushBody(String fromAccount, int msgRandom, String imUserId,
+            String title, String body, String deepLinkType, String deepLinkToken, String targetRef) {
+        StringBuilder ext = new StringBuilder("{\"type\":\"").append(jsonEscape(deepLinkType)).append('"');
+        if (deepLinkToken != null && !deepLinkToken.isBlank()) {
+            ext.append(",\"token\":\"").append(jsonEscape(deepLinkToken)).append('"');
+        }
+        if (targetRef != null && !targetRef.isBlank()) {
+            ext.append(",\"targetRef\":\"").append(jsonEscape(targetRef)).append('"');
+        }
+        ext.append('}');
+        return Map.of(
+                "From_Account", fromAccount,
+                "To_Account", java.util.List.of(imUserId),
+                "MsgRandom", msgRandom,
+                "OfflinePushInfo", Map.of(
+                        "PushFlag", 0, // 0=启用离线推送
+                        "Title", title == null ? "" : title,
+                        "Desc", body == null ? "" : body,
+                        "Ext", ext.toString()));
+    }
+
+    /**
+     * JSON 字符串转义（Ext 字段值：token 为 base62、type 为枚举名、targetRef 为 id/常量，防御性兜底）。
+     * 控制字符（&lt;0x20，含换行/回车）转 {@code \\uXXXX}（code-review 2026-08-07：漏转义会产出
+     * 非法 JSON → 客户端 parsePushExt 静默降级空载荷、深链丢失且无告警）。
+     */
+    private static String jsonEscape(String s) {
+        if (s == null) return "";
+        StringBuilder sb = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '\\' -> sb.append("\\\\");
+                case '"' -> sb.append("\\\"");
+                default -> {
+                    if (c < 0x20) {
+                        sb.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        sb.append(c);
+                    }
+                }
+            }
+        }
+        return sb.toString();
     }
 
     @Override

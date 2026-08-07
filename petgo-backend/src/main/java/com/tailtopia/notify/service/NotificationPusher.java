@@ -22,21 +22,24 @@ public class NotificationPusher {
         this.imClient = imClient;
     }
 
-    /** 推送给用户（IM 账号 u_{userId}）。 */
+    /** 推送给用户（IM 账号 u_{userId}）。{@code targetRef}：id 寻址类深链直跳用（与通知中心列表同口径）。 */
     @Async
-    public void pushToUser(long userId, String title, String body, String deepLinkType, String deepLinkToken) {
-        deliver(ImAccountMapper.userImId(userId), title, body, deepLinkType, deepLinkToken);
+    public void pushToUser(long userId, String title, String body, String deepLinkType, String deepLinkToken,
+            String targetRef) {
+        deliver(ImAccountMapper.userImId(userId), title, body, deepLinkType, deepLinkToken, targetRef);
     }
 
     /** 推送给兽医（IM 账号 v_{vetId}，Story 6.2 新请求推送在线兽医）。 */
     @Async
-    public void pushToVet(long vetId, String title, String body, String deepLinkType, String deepLinkToken) {
-        deliver(ImAccountMapper.vetImId(vetId), title, body, deepLinkType, deepLinkToken);
+    public void pushToVet(long vetId, String title, String body, String deepLinkType, String deepLinkToken,
+            String targetRef) {
+        deliver(ImAccountMapper.vetImId(vetId), title, body, deepLinkType, deepLinkToken, targetRef);
     }
 
-    private void deliver(String imUserId, String title, String body, String deepLinkType, String deepLinkToken) {
+    private void deliver(String imUserId, String title, String body, String deepLinkType, String deepLinkToken,
+            String targetRef) {
         try {
-            imClient.pushOffline(imUserId, title, body, deepLinkType, deepLinkToken);
+            imClient.pushOffline(imUserId, title, body, deepLinkType, deepLinkToken, targetRef);
         } catch (RuntimeException e) {
             log.warn("离线推送投递失败 type={} cause={}", deepLinkType, e.getClass().getSimpleName());
         }

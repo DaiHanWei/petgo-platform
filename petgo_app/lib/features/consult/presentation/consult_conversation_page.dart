@@ -110,8 +110,10 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
     _suspendTicker?.cancel();
     // 离开会话页 → 清激活标记（用 initState 捕获的 notifier，避免 dispose 期 ref 失效）。
     _activeNotifier?.set(null);
-    // 离开即登出 IM（不留长连接 / 控 MAU）。
-    if (_imLoginStarted) _imService?.logout();
+    // 🔄 推送接入（2026-08-07）：**不再**离开即登出 IM。腾讯语义「logout 即停投离线推送」——
+    // 原「控 MAU」动机已随 usersig 放宽（登录用户都签，MAU 按月去重计）失效，而登出会让用户
+    // 离开会话页后收不到任何系统推送（兽医回复/点赞/生日全灭）。账号级登出唯一收口仍是
+    // AuthController.toGuest()（先反注册推送再 IM logout）。
     super.dispose();
   }
 
@@ -525,6 +527,7 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
                     ImChatPlaceholder(
                       imConversationId: 'session-${widget.sessionId}',
                       peerId: _peerId,
+                      sessionId: '${widget.sessionId}', // 离线推送深链回本会话
                     ),
                   // CLOSED(30min 窗口过)：不再实时聊天，正文平铺只读会诊结果（参考兽医填写页，不可编辑）。
                   if (closed) Expanded(child: _closedResultArea(l10n)),
