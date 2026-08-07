@@ -39,6 +39,12 @@ class AppsFlyerClient {
   bool _initialized = false;
   bool _started = false;
 
+  /// init 完成前到达的 CUID（PR#34 finding #15）。init 移到首帧后（runApp 之后）与
+  /// auth 冷启动恢复的 identify 形成竞态——identify 抢跑时若直接丢弃，且调用方只在
+  /// 用户 id **变化**时才重报，该会话的归因事件（含 af_purchase）就整段无 CUID。
+  /// 空串 = 待补发的 clear；null = 无待发。
+  String? _pendingCuid;
+
   /// `runApp` 前调用一次（`main()`）。只 init 不上报（manualStart），失败不抛。
   Future<void> init() async {
     if (!_appsflyerEnabled) {
@@ -68,6 +74,16 @@ class AppsFlyerClient {
           .timeout(const Duration(seconds: 3));
       _sdk = sdk;
       _initialized = true;
+      // 补发 init 期间抢跑的 identify/clear（finding #15：早退丢弃 → 整会话无 CUID）。
+      final pending = _pendingCuid;
+      _pendingCuid = null;
+      if (pending != null) {
+        if (pending.isEmpty) {
+          clearUserId();
+        } else {
+          setUserId(pending);
+        }
+      }
     } catch (e) {
       debugPrint('[AppsFlyer] init failed: $e');
     }
@@ -90,7 +106,10 @@ class AppsFlyerClient {
   /// `Analytics.distinctIdFor(userId)`（同一份 Dart 代码天然一致），不传邮箱/手机号。
   /// Android 用 `setCustomerIdAndLogSession` 补发一次带 CUID 的 session。
   void setUserId(String cuid) {
-    if (!_initialized) return;
+    if (!_initialized) {
+      _pendingCuid = cuid; // init 完成后补发（finding #15）
+      return;
+    }
     try {
       if (Platform.isAndroid) {
         _sdk?.setCustomerIdAndLogSession(cuid);
@@ -104,7 +123,10 @@ class AppsFlyerClient {
 
   /// 登出/换账号时清空 CUID，避免下一账号的事件挂到上一用户身上。
   void clearUserId() {
-    if (!_initialized) return;
+    if (!_initialized) {
+      _pendingCuid = ''; // 覆盖可能挂着的待发 identify——登出语义优先（finding #15）
+      return;
+    }
     try {
       _sdk?.setCustomerUserId('');
     } catch (e) {

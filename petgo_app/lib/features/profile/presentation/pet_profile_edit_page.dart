@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/media/media_scope.dart';
 import '../../../core/theme/colors.dart';
+import '../../auth/domain/auth_state.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../media/domain/media_upload_use_case.dart';
@@ -145,6 +146,15 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
       // bug 20260730-421：健康记录缓存同样要清（healthListProvider 非 autoDispose，
       // 漏失效 → 删档重建后健康页仍显示上一只宠物的记录；后端级联删无漏，纯前端缓存问题）。
       ref.invalidate(healthListProvider);
+      // PR#34 finding #12：auth 里的 hasPetProfile 只在建档时置 true、删档必须对称置 false——
+      // 否则本会话内发布页「无 preset 默认类型」仍读到 true，默认落 Diary 且 chip 可点，
+      // 用户写完点分享才被「先建档」拒绝（与建档页 applyProfile(hasPetProfile: true) 成对）。
+      final authProfile = ref.read(authControllerProvider).profile;
+      if (authProfile != null && authProfile.hasPetProfile) {
+        ref
+            .read(authControllerProvider.notifier)
+            .applyProfile(authProfile.copyWith(hasPetProfile: false));
+      }
       if (mounted) context.go('/profile');
     } catch (_) {
       if (mounted) _toast(l10n.petProfileDeleteFailed);

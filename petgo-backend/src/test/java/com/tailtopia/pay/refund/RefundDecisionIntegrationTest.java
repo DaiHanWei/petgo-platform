@@ -118,16 +118,18 @@ class RefundDecisionIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
-    void approve_onNonCompletedOrder_isIdempotentSkip_doesNotTouchInProgress() {
-        // 订单 IN_PROGRESS（3-8 markRefunding 的领域）——本 story 的 COMPLETED→REFUNDING CAS 不应命中
+    void approve_onNonCompletedOrder_throws409_andRollsBackNeedDecision() {
+        // PR#34 finding #4：旧行为是 CAS 返 0 静默跳过——need=APPROVED 但订单未动，
+        // App 端「选方式」入口恒 409、退款单永久悬置。新契约：非 COMPLETED 订单批准 → 409 整体回滚。
         ConsultOrder order = seedInProgressOrder(50000);
         String token = refundService.createRefundRequest(order.getOrderToken(), null, 900L);
 
-        refundService.approveNeed(token, 904L); // CAS 返 0，幂等跳过不报错
+        assertThatThrownBy(() -> refundService.approveNeed(token, 904L))
+                .isInstanceOf(AppException.class);
 
-        // need 仍推进为 APPROVED；但订单状态保持 IN_PROGRESS（未被 4-4 CAS 误置为 REFUNDING）
+        // 事务回滚：need 仍 PENDING（可待订单完成后重批）；订单保持 IN_PROGRESS
         assertThat(refunds.findByRefundToken(token).orElseThrow().getNeedDecision())
-                .isEqualTo(NeedDecision.APPROVED);
+                .isEqualTo(NeedDecision.PENDING);
         assertThat(orders.findById(order.getId()).orElseThrow().getStatus())
                 .isEqualTo(ConsultOrderStatus.IN_PROGRESS);
     }

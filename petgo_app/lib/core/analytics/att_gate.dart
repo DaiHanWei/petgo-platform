@@ -23,10 +23,12 @@ class AttGate {
   /// iOS：等前台活跃后请求 ATT 授权（状态非 notDetermined 则跳过）。
   /// Android/异常一律静默返回——绝不抛错、绝不无限挂起，调用方可放心 await。
   ///
-  /// **返回即代表 ATT 已落定**（用户作答完毕或本就无需询问）——这是对调用方的硬保证，
-  /// 后续的系统弹窗（通知权限）依赖它串行排队，见 [_waitUntilDetermined]。
-  static Future<void> requestIfNeeded() async {
-    if (kIsWeb || !Platform.isIOS) return;
+  /// 返回值 = **屏幕上是否已没有等待作答的 ATT 弹窗**（PR#34 finding #14）：
+  /// - `true`：已落定 / 本就无需询问 / 弹窗从未出现——调用方可以安全地接着弹下一个系统弹窗；
+  /// - `false`：弹窗**仍开着**（用户 15s 未作答）——调用方**不得**再弹任何系统弹窗
+  ///   （会盖住 ATT，重蹈 2026-08-06 Guideline 2.1 拒信），应推迟到下一次冷启动。
+  static Future<bool> requestIfNeeded() async {
+    if (kIsWeb || !Platform.isIOS) return true;
     try {
       await _waitUntilResumed();
       // 刚转 active 立即请求仍有概率不弹（iOS 已知行为），延迟 1s 兜底。
@@ -34,13 +36,14 @@ class AttGate {
       // 诊断（长期保留）：ATT 不弹窗时这是唯一可判读的信号——
       // denied/restricted 多半是「设置→隐私→跟踪」总开关关闭或旧安装遗留状态，非 App 缺陷。
       debugPrint('[ATT] status=${await AppTrackingTransparency.trackingAuthorizationStatus}');
-      await _requestWithRetry();
+      return await _requestWithRetry();
     } catch (e) {
       debugPrint('[ATT] request failed: $e'); // 失败不阻断启动链路
+      return true; // 异常 ⇒ 弹窗大概率没出现，不因 ATT 插件故障饿死通知权限
     }
   }
 
-  /// 请求 ATT，**弹窗没真正出现就退避重试**（最多 3 次）。
+  /// 请求 ATT，**弹窗没真正出现就退避重试**（最多 3 次）。返回语义同 [requestIfNeeded]。
   ///
   /// 🔴 为什么需要（L2 实测 2026-08-07，iPhone / iOS 26.5）：**全新安装的首次冷启动不弹、
   /// 第二次启动才弹**。首启时 scene 尚未被系统认定为 active（iOS 26 + SceneDelegate 下
@@ -50,20 +53,22 @@ class AttGate {
   /// 判据用「App 是否被系统弹窗夺焦」：ATT 弹窗一旦显示，App 必然转 inactive。
   /// 没夺焦 ⇒ 这次请求被吞了 ⇒ 退避重试；夺焦了 ⇒ 等用户作答完再返回（保证后续的
   /// 通知权限弹窗不会挤掉它）。
-  static Future<void> _requestWithRetry() async {
+  static Future<bool> _requestWithRetry() async {
     for (var attempt = 0; attempt < 3; attempt++) {
       final status = await AppTrackingTransparency.trackingAuthorizationStatus;
-      if (status != TrackingStatus.notDetermined) return; // 已作答/系统禁止，无需再问
+      if (status != TrackingStatus.notDetermined) return true; // 已作答/系统禁止，无需再问
       final shown = _waitUntilInactive(const Duration(milliseconds: 1500));
       await AppTrackingTransparency.requestTrackingAuthorization();
       if (await shown) {
-        await _waitUntilDetermined(); // 弹窗确实出现了：等用户作答落定
-        return;
+        // 弹窗确实出现了：等用户作答落定。超时（15s 未作答）⇒ 弹窗还开着，返回 false
+        // 告知调用方绝不能再叠系统弹窗（PR#34 finding #14）。
+        return _waitUntilDetermined();
       }
       // 被系统吞了：退避（2s / 4s）后重试，给 scene 更多时间真正 active。
       await Future<void>.delayed(Duration(seconds: 2 * (attempt + 1)));
     }
     debugPrint('[ATT] prompt never appeared after retries');
+    return true; // 三次都没弹出来 ⇒ 屏上没有 ATT 弹窗，后续系统弹窗不会遮挡它
   }
 
   /// 监听 App 是否在 [within] 内失去前台焦点（=系统弹窗盖上来了）。
@@ -84,7 +89,7 @@ class AttGate {
     });
   }
 
-  /// 轮询到 ATT 状态不再是 notDetermined（最多 15s）。
+  /// 轮询到 ATT 状态不再是 notDetermined（最多 15s）。返回是否真正落定。
   ///
   /// 🔴 为什么需要（L2 实测 2026-08-07，iPhone / iOS 26.5）：
   /// `requestTrackingAuthorization()` 的 Future 在新系统上**会在用户作答前就 resolve**，
@@ -93,14 +98,16 @@ class AttGate {
   /// App Store 拒信（Guideline 2.1）的同款表现，只是成因换成了弹窗互挤。
   /// 状态查询是唯一可信信号，故以轮询兜底，不依赖插件 Future 的时序语义。
   ///
-  /// 超时（用户一直不作答）也照常返回，不阻断启动链路。
-  static Future<void> _waitUntilDetermined() async {
+  /// 超时（用户 15s 一直不作答）返回 `false`——弹窗仍开着，调用方据此推迟后续系统弹窗
+  ///（PR#34 finding #14：旧实现超时也静默正常返回，破坏「返回即已落定」契约）。
+  static Future<bool> _waitUntilDetermined() async {
     final deadline = DateTime.now().add(const Duration(seconds: 15));
     while (DateTime.now().isBefore(deadline)) {
       await Future<void>.delayed(const Duration(milliseconds: 300));
       final s = await AppTrackingTransparency.trackingAuthorizationStatus;
-      if (s != TrackingStatus.notDetermined) return;
+      if (s != TrackingStatus.notDetermined) return true;
     }
+    return false;
   }
 
   /// 等 app 进入 resumed；已是 resumed 直通。3s 超时兜底（生命周期事件缺失时不挂死）。

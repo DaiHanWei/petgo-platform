@@ -15,6 +15,7 @@ import '../../features/content/domain/home_refresh_provider.dart';
 import '../../features/content/domain/content_type.dart';
 import '../../features/content/presentation/feed_controller.dart';
 import '../../features/profile/data/timeline_repository.dart';
+import '../../features/profile/domain/profile_tab_entered_provider.dart';
 import '../../features/content/presentation/publish_compose_page.dart';
 import 'bottom_tab_bar.dart';
 
@@ -109,6 +110,11 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
         ref.invalidate(timelineFirstPageProvider);
         ref.invalidate(archiveStatsProvider);
         ref.invalidate(calendarMonthProvider);
+        // 曝光信号（PR#34 次要项 3）：分支根保活、initState 只跑一次，重复曝光靠此信号补报
+        //（DiaryGuestPage 监听）。仅真实切入才 bump（reTap 时页面本就可见，非新曝光）。
+        if (!reTap) {
+          ref.read(profileTabEnteredProvider.notifier).bump();
+        }
       }
       if (tab == AppTab.home) {
         // 切回 Social（原首页，V1.1.2 曾短暂叫 Discovery）：刷新 feed（keepAlive 缓存，否则看不到新内容/删帖/发布变更）。

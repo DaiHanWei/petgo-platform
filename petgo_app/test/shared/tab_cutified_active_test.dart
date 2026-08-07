@@ -183,18 +183,23 @@ void main() {
       expect(find.byKey(const ValueKey('activeTabIcon')), findsOneWidget);
       expect(find.byKey(const ValueKey('activeTabCharm')), findsOneWidget);
 
-      final scale = tester.widget<AnimatedScale>(
+      final scale = tester.widget<TweenAnimationBuilder<double>>(
         find.byKey(const ValueKey('activeTabBounce')),
       );
       expect(scale.duration, Duration.zero, reason: 'reduced-motion 下时长归 0');
     });
 
-    testWidgets('未开启时按 tabCharmBounce 时长播放', (tester) async {
+    testWidgets('未开启时按 tabCharmBounce 时长播放（挂载即从 0.7 过冲弹到 1）', (tester) async {
+      // PR#34 次要项 2：旧写法 AnimatedScale(scale:1) 恒定不动、弹跳从未发生；
+      // 现为「挂载即播」的 TweenAnimationBuilder——charm 只在 Tab 转 active 时挂载，
+      // 挂载动画正是 T3 的「③ 一次轻弹跳」。
       await pump(tester, currentIndex: 0);
-      final scale = tester.widget<AnimatedScale>(
+      final scale = tester.widget<TweenAnimationBuilder<double>>(
         find.byKey(const ValueKey('activeTabBounce')),
       );
       expect(scale.duration, AppMotion.tabCharmBounce);
+      expect(scale.tween.begin, isNot(scale.tween.end),
+          reason: 'begin==end 的 tween 不产生任何动画（次要项 2 的原病灶）');
     });
   });
 }

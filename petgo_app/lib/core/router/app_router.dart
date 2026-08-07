@@ -171,6 +171,25 @@ Widget _tabRootPage(AppTab tab) => switch (tab) {
 bool deepLinkNeedsBaseRoute(String location) =>
     !DeepLinkRoutes.isShellTabRoot(location) && !location.startsWith('/vet');
 
+/// [location] 在 [auth] 登录态下是否会被顶层 redirect 改写（纯函数，L0 可测；
+/// 逻辑镜像下方 GoRouter `redirect`，改守卫时**必须同步维护**）。
+///
+/// PR#34 finding #8：`push` 同样走 redirect 管线，且**改写后的目标以 push 方式入栈**。
+/// 游客态点推送（如会话过期 → 401 → toGuest 之后）深链 `/notifications` 会被改写成
+/// `/home`——shell 分支根被 push 即二次构建 StatefulShellRoute → GlobalKey 撞车 →
+/// release 白屏 + Tab 永久失效（bug 20260729 同机制）。
+/// 因此「无法证明落点不被改写就不许 push」：本判定为 true 时调用方必须用 `go`（或放弃叠加）。
+bool redirectWouldRewrite(AuthState auth, String location) {
+  final path = Uri.parse(location).path; // redirect 比对的是 matchedLocation（无 query）
+  final isVetRoute = path == '/vet' || path.startsWith('/vet/');
+  if (auth.isVet) return !isVetRoute || path == '/vet/login';
+  if (isVetRoute && path != '/vet/login') return true;
+  final controlled =
+      _controlledLocations.any((p) => path == p || path.startsWith('$p/')) &&
+          !_controlledExactExceptions.contains(path);
+  return !auth.isLoggedIn && controlled;
+}
+
 /// 冷启动落深链：需要底座的先 `go` 到落地矩阵目标，再把深链 `push` 上去（这样才可返回）。
 ///
 /// 底座取**落地矩阵目标**而不是写死 `/home`：游客/已建档用户落 Diary、其余落 Social，
@@ -188,6 +207,9 @@ void _goDeepLink(BuildContext ctx, Ref ref, String location) {
   WidgetsBinding.instance.addPostFrameCallback((_) {
     final c = rootNavigatorKey.currentContext;
     if (c == null || !c.mounted) return;
+    // PR#34 finding #8（孪生位）：游客/角色不符时受控深链会被 redirect 改写到 shell 根，
+    // push 它 = GlobalKey 撞车白屏。底座已是该状态的正确落地页，直接放弃叠加。
+    if (redirectWouldRewrite(ref.read(authControllerProvider), location)) return;
     c.push(location);
   });
 }

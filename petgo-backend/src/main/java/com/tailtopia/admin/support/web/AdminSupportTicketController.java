@@ -5,7 +5,11 @@ import com.tailtopia.admin.support.service.AdminSupportTicketQueryService;
 import com.tailtopia.admin.support.service.AdminTicketRefundService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.support.service.SupportTicketService;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -25,6 +29,8 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 @Controller
 public class AdminSupportTicketController {
 
+    private static final int PAGE_SIZE = 20;
+
     private static final String HANDLE_AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('support.handle')";
     private static final String VIEW_AUTH =
             "hasRole('SUPER_ADMIN') or hasAuthority('support.view') or hasAuthority('support.handle')";
@@ -43,18 +49,35 @@ public class AdminSupportTicketController {
 
     @GetMapping("/admin/support-tickets")
     @PreAuthorize(VIEW_AUTH)
-    public String list(Model model) {
+    public String list(Model model,
+            @RequestParam(value = "page", defaultValue = "0") int page) {
+        var pageResult = query.list(PageRequest.of(Math.max(page, 0), PAGE_SIZE,
+                Sort.by(Sort.Direction.DESC, "createdAt")));
         model.addAttribute("active", "support-tickets");
-        model.addAttribute("items", query.list());
+        model.addAttribute("items", pageResult.getContent());
+        model.addAttribute("page", pageResult);
         return "admin/support-tickets";
     }
 
     @GetMapping("/admin/support-tickets/{ticketToken}")
     @PreAuthorize(VIEW_AUTH)
-    public String detail(@PathVariable String ticketToken, Model model) {
+    public String detail(@PathVariable String ticketToken, Model model, Authentication auth) {
         model.addAttribute("active", "support-tickets");
-        model.addAttribute("ticket", query.find(ticketToken));
+        // PII 最小可见面（finding #13）：联系方式原文仅 handle/SUPER_ADMIN；view-only 看脱敏值。
+        model.addAttribute("ticket", query.find(ticketToken, canSeeContactPii(auth)));
         return "admin/support-ticket-detail";
+    }
+
+    private static boolean canSeeContactPii(Authentication auth) {
+        if (auth == null) {
+            return false;
+        }
+        for (GrantedAuthority a : auth.getAuthorities()) {
+            if ("ROLE_SUPER_ADMIN".equals(a.getAuthority()) || "support.handle".equals(a.getAuthority())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 结案（客服勾「已联系+已解决」）→ RESOLVED + 发结案/CSAT 通知。 */

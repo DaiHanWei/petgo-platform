@@ -93,8 +93,18 @@ abstract interface class ImService {
   /// 取 UserSig 并登录 IM（幂等：已登录则空转）。失败抛异常（调用方提示重试，不崩）。
   Future<void> loginIfNeeded();
 
+  /// 立即（同步）作废本地凭证并返回当前登录代际号（PR#34 finding #10）。
+  ///
+  /// 登出编排里 native logout 被压在推送反注册之后延迟执行——这中间新账号可能已登录。
+  /// 调用本方法后：① 新账号的 [loginIfNeeded] 会做真实重登（不再幂等空转在旧凭证上）；
+  /// ② 拿到的代际号交给 [logout] 的 `ifGeneration`，期间发生过新登录则放弃迟到的登出。
+  int invalidateCredential();
+
   /// 登出 IM（离开会话 / 兽医下线 / 登出时）。
-  Future<void> logout();
+  ///
+  /// [ifGeneration] 非空时：当前登录代际与之不符（说明期间发生了新登录）则直接放弃，
+  /// 防止迟到的 logout 清掉下一个账号的 IM 会话（PR#34 finding #10）。
+  Future<void> logout({int? ifGeneration});
 
   /// 向对端发文字（C2C，peer=`u_<id>`/`v_<id>`）。
   /// [push]：离线推送规格（接收方后台/杀进程可收系统通知）；null = 不附带（沿用 IM 默认，
@@ -134,6 +144,8 @@ class LiveImService implements ImService {
 
   final Dio dio;
   ImCredential? _credential;
+  // 登录代际号：每次 SDK login 成功递增。延迟 logout 据此判断「期间是否有新登录」。
+  int _loginGeneration = 0;
   bool _sdkInited = false;
   V2TimAdvancedMsgListener? _listener;
   // 单飞登录（bug 20260721-347）：并发 loginIfNeeded 共享同一次登录，避免 initSDK/监听器被重复注册
@@ -203,10 +215,21 @@ class LiveImService implements ImService {
       throw StateError('IM login 失败: ${res.code}');
     }
     _credential = cred;
+    _loginGeneration++;
   }
 
   @override
-  Future<void> logout() async {
+  int invalidateCredential() {
+    _credential = null;
+    return _loginGeneration;
+  }
+
+  @override
+  Future<void> logout({int? ifGeneration}) async {
+    if (ifGeneration != null && ifGeneration != _loginGeneration) {
+      // 代际已变=期间有新账号登录，放弃迟到的登出（否则清掉的是新账号的会话，finding #10）。
+      return;
+    }
     _credential = null;
     if (!_sdkInited) return;
     try {

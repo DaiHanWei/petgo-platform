@@ -48,6 +48,17 @@ public class AdminTicketRefundService {
         if (!order.getUserId().equals(t.getUserId())) {
             throw AppException.validation("该订单不属于本工单用户，无法关联");
         }
+        // PR#34 finding #5：工单退款视图从「当前关联订单」推导——已批出退款后再重关联，
+        // 审批区块会重新出现，可对第二笔订单再批退款（且可经 refundToPawCoin 自助到账）。
+        // 已有已批准退款的工单禁止改挂订单；确需二次退款走独立主管线并留审计。
+        if (t.getRelatedOrderId() != null && !t.getRelatedOrderId().equals(order.getId())) {
+            boolean approvedRefundExists = refunds.findByOrderId(t.getRelatedOrderId())
+                    .map(r -> r.getNeedDecision() == com.tailtopia.pay.refund.domain.NeedDecision.APPROVED)
+                    .orElse(false);
+            if (approvedRefundExists) {
+                throw AppException.conflict("本工单关联订单已批准退款，禁止改挂其他订单");
+            }
+        }
         t.linkRelatedOrder(order.getId());
         audit.record(adminId, AuditActions.TICKET_ORDER_LINKED, "feedback_ticket", ticketToken,
                 "工单关联订单 order=" + order.getOrderToken());

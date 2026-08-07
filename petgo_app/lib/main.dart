@@ -86,14 +86,19 @@ Future<void> main() async {
   // - `start()` 必须同时晚于 ATT 结果与 init（未 init 时 start 是 no-op），故末尾按序 await 两者。
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     final Future<void> afInit = AppsFlyerClient.instance.init();
-    await AttGate.requestIfNeeded();
+    final attSettled = await AttGate.requestIfNeeded();
     // 首启即申请通知权限（2026-08-07 产品决策，取代 F7 双时机——见 PushPermissionBootstrap
     // 文档：双时机对存量用户是死路）。拒绝后不再自动弹，改由设置页开关兜底。
     //
-    // 🔴 必须在 ATT **落定之后**：`AttGate.requestIfNeeded()` 已保证返回即已落定
-    //（内部轮询兜底插件 Future 提前返回的问题）。若把这行提前或改成并发，
-    // 通知弹窗会盖掉 ATT 弹窗 ⇒ 用户对跟踪没得选 ⇒ 重蹈 Guideline 2.1 拒信。
-    await PushPermissionBootstrap.requestOnFirstLaunch();
+    // 🔴 必须在 ATT **落定之后**且**仅在弹窗已收场时**（PR#34 finding #14）：
+    // `requestIfNeeded()` 返回 false = 用户 15s 未作答、ATT 弹窗还开着——此时再弹通知权限
+    // 会盖住它 ⇒ 用户对跟踪没得选 ⇒ 重蹈 2026-08-06 Guideline 2.1 拒信。
+    // 宁可把通知权限推迟到下一次冷启动（首启标记未消费，下次照常询问）。
+    if (attSettled) {
+      await PushPermissionBootstrap.requestOnFirstLaunch();
+    } else {
+      debugPrint('[ATT] undetermined after wait — defer notification prompt to next launch');
+    }
     await afInit;
     await AppsFlyerClient.instance.start();
   });

@@ -39,7 +39,11 @@ class AdminSupportAccessControlTest {
     static class TestConfig {
         @Bean
         AdminSupportTicketQueryService query() {
-            return mock(AdminSupportTicketQueryService.class);
+            var q = mock(AdminSupportTicketQueryService.class);
+            // 分页化后 controller 会对返回值取 getContent()——mock 默认 null 会 NPE，返回空页。
+            org.mockito.Mockito.when(q.list(org.mockito.ArgumentMatchers.any()))
+                    .thenReturn(org.springframework.data.domain.Page.empty());
+            return q;
         }
 
         @Bean
@@ -88,7 +92,7 @@ class AdminSupportAccessControlTest {
     }
 
     private void list() {
-        controller.list(new ConcurrentModel());
+        controller.list(new ConcurrentModel(), 0);
     }
 
     private void resolve() {
