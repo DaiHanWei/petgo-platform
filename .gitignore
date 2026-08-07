@@ -46,3 +46,4 @@ CODEBUDDY.md
 
 # git worktrees
 .worktrees/
+petgo_app/android/build/
