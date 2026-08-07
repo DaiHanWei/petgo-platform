@@ -80,4 +80,35 @@ void main() {
     // 无 sheet：关闭按钮不存在
     expect(find.byKey(const ValueKey('miniProfileClose')), findsNothing);
   });
+
+  // ===== 个性签名（2026-08-07 用户反馈：设了签名的用户，别人点这张卡应当看得到）=====
+
+  testWidgets('设了签名 → 卡片展示签名，并取代「主页筹备中」占位', (tester) async {
+    await _pump(tester, const MiniProfile(
+        postCount: 2, isDeactivated: false, nickname: 'Liu Xi', signature: '爱猫的人运气都不会太差'));
+    await tester.tap(find.byKey(const ValueKey('openMini')));
+    await tester.pumpAndSettle();
+
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    expect(find.text('爱猫的人运气都不会太差'), findsOneWidget);
+    // 占位与签名二选一：有签名时那句「主页筹备中」既多余又自相矛盾。
+    expect(find.text(l10n.miniProfileComingSoon), findsNothing);
+  });
+
+  testWidgets('签名为空串/纯空白 → 按没设置处理，回落占位文案（卡片不留空白）', (tester) async {
+    for (final sig in <String?>[null, '', '   ']) {
+      await _pump(tester, MiniProfile(
+          postCount: 1, isDeactivated: false, nickname: 'Liu Xi', signature: sig));
+      await tester.tap(find.byKey(const ValueKey('openMini')));
+      await tester.pumpAndSettle();
+
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(find.text(l10n.miniProfileComingSoon), findsOneWidget,
+          reason: 'signature=${sig == null ? 'null' : '"$sig"'} 时应回落占位');
+      expect(find.byKey(const ValueKey('miniProfileSignature')), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('miniProfileClose')));
+      await tester.pumpAndSettle();
+    }
+  });
 }

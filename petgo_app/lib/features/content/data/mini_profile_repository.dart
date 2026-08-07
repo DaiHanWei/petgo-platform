@@ -4,13 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
 
-/// 他人迷你主页投影（对应后端 `MiniProfileResponse`）。V1 仅 nickname/avatar/postCount。
+/// 他人迷你主页投影（对应后端 `MiniProfileResponse`）。V1 仅 nickname/avatar/signature/postCount。
 class MiniProfile {
   const MiniProfile({
     required this.postCount,
     required this.isDeactivated,
     this.nickname,
     this.avatarUrl,
+    this.signature,
   });
 
   final int postCount;
@@ -18,11 +19,18 @@ class MiniProfile {
   final String? nickname;
   final String? avatarUrl;
 
+  /// 个性签名（用户自填 ≤60 字）。未设置 / 已注销 → null。
+  final String? signature;
+
+  /// 是否有可展示的签名（空串与纯空白按「没设置」处理，免得卡片上留一片空白）。
+  bool get hasSignature => signature?.trim().isNotEmpty == true;
+
   factory MiniProfile.fromJson(Map<String, dynamic> json) => MiniProfile(
         postCount: (json['postCount'] ?? 0) as int,
         isDeactivated: (json['isDeactivated'] ?? false) as bool,
         nickname: json['nickname'] as String?,
         avatarUrl: json['avatarUrl'] as String?,
+        signature: json['signature'] as String?,
       );
 }
 
