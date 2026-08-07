@@ -86,6 +86,20 @@ public class AccountQueryService {
         return users.findByRole(Role.USER, pageable);
     }
 
+    /**
+     * 迷你主页专用：取用户个性签名（未设置 / 已注销 / 不存在 → empty）。
+     *
+     * <p>⚠️ **刻意不塞进 {@link AuthorView}** —— 那是 Feed 每一行都要带的作者投影，
+     * 为了一个只在「点头像弹卡」时才用得上的字段，让整个内容流的响应都变胖不划算。
+     * 注销过滤在此就地做（与 {@link #toAuthorView} 同口径），避免调用方漏判 NFR-8 匿名化。
+     */
+    @Transactional(readOnly = true)
+    public Optional<String> activeSignatureOf(long userId) {
+        return users.findById(userId)
+                .filter(u -> u.getDeletedAt() == null)
+                .map(User::getSignature);
+    }
+
     private static AuthorView toAuthorView(User u) {
         if (u.getDeletedAt() != null) {
             return AuthorView.anonymized(u.getId());

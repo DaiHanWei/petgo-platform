@@ -58,11 +58,24 @@ class _MiniProfileCard extends StatelessWidget {
             const SizedBox(height: AppSpacing.xs),
             Text(l10n.miniProfilePostCount(profile.postCount), style: AppTypography.caption),
             const SizedBox(height: AppSpacing.md),
-            Text(
-              l10n.miniProfileComingSoon,
-              style: AppTypography.body.copyWith(color: AppColors.textSecondary),
-              textAlign: TextAlign.center,
-            ),
+            // 有签名就展示签名，没有才退回「主页筹备中」占位（2026-08-07 用户反馈）。
+            //
+            // 为什么是二选一而不是两句都显示：占位文案的存在意义就是「这里暂时没内容可看」，
+            // 签名一旦在场，这句话既多余又自相矛盾（明明有东西看）。
+            if (profile.hasSignature)
+              Text(
+                profile.signature!.trim(),
+                key: const ValueKey('miniProfileSignature'),
+                style: AppTypography.body.copyWith(color: AppColors.textSecondary),
+                textAlign: TextAlign.center,
+              )
+            else
+              Text(
+                l10n.miniProfileComingSoon,
+                key: const ValueKey('miniProfileComingSoon'),
+                style: AppTypography.body.copyWith(color: AppColors.textSecondary),
+                textAlign: TextAlign.center,
+              ),
             const SizedBox(height: AppSpacing.lg),
             TextButton(
               key: const ValueKey('miniProfileClose'),
