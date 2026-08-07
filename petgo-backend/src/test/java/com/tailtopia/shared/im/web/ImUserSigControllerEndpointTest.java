@@ -20,8 +20,8 @@ import org.springframework.http.HttpHeaders;
  * <p>{@code GET /api/v1/im/usersig}：需 JWT。dev 默认 {@code petgo.im.mode=stub} →
  * {@link com.tailtopia.shared.im.StubTencentImClient} 签占位 UserSig（前缀 {@code stub-usersig-}）。
  *
- * <p>覆盖 5.5 live 增量的<b>用户态 MAU 闸门矩阵</b>：USER 有进行中会话→200；USER 无活跃会话→403；
- * VET 恒签→200；缺 token→401。
+ * <p>🔄 2026-08-07 推送接入决策：原 MAU 硬门控放宽为登录用户一律签发（推送注册依赖 IM 登录）。
+ * 覆盖矩阵：USER（有/无会话）→200；VET 恒签→200；缺 token→401。
  */
 class ImUserSigControllerEndpointTest extends ApiIntegrationTest {
 
@@ -44,13 +44,15 @@ class ImUserSigControllerEndpointTest extends ApiIntegrationTest {
     }
 
     @Test
-    void userWithoutActiveSessionGets403() throws Exception {
-        // 无任何进行中/待关闭会话的用户 → MAU 闸门拒签，403。
+    void userWithoutActiveSessionAlsoGets200() throws Exception {
+        // 🔄 2026-08-07 放宽：无会话用户也签（原 403 门控取消——推送注册依赖 IM 登录）。
         User actor = newUser();
 
         mvc.perform(get("/api/v1/im/usersig")
                         .header(HttpHeaders.AUTHORIZATION, userBearer(actor.getId())))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.imUserId", is("u_" + actor.getId())))
+                .andExpect(jsonPath("$.userSig", is("stub-usersig-u_" + actor.getId())));
     }
 
     @Test

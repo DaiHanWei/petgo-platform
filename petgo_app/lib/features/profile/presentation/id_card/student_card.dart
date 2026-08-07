@@ -18,21 +18,33 @@ class StudentFields {
     required this.name,
     required this.birthday,
     required this.species,
+    required this.school,
+    required this.faculty,
     this.avatarUrl,
   });
 
   final String name;
   final String birthday;
   final String species;
+
+  /// 学校/学院（bug 20260730-429：用户填写快照；null → 趣味默认）。
+  final String school;
+  final String faculty;
   final String? avatarUrl;
 }
 
-/// 纯函数：快照 → 学生卡字段（无趣味默认外的采集；pet_type → 物种本地化）。
+/// 纯函数：快照 → 学生卡字段（pet_type → 物种本地化；school/faculty 空落趣味默认）。
 StudentFields buildStudentFields(IdCardData data) {
   return StudentFields(
     name: (data.name?.isNotEmpty == true ? data.name! : 'MOCHI').toUpperCase(),
     birthday: data.birthday == null ? '01-01-2022' : _dmy(data.birthday!),
     species: _species(data.petType),
+    school: (data.school?.trim().isNotEmpty == true)
+        ? data.school!.trim().toUpperCase()
+        : 'TAILTOPIA ACADEMY',
+    faculty: (data.faculty?.trim().isNotEmpty == true)
+        ? data.faculty!.trim().toUpperCase()
+        : 'FAKULTAS KEBAHAGIAAN',
     avatarUrl: data.avatarUrl,
   );
 }
@@ -66,11 +78,23 @@ abstract final class _StudentLayout {
   static const double photoBorder = 8;
   static const double photoRadius = 40;
 
-  // 字段三行（label : value）。
+  // 字段五行（label : value）。bug 20260730-429：加 School/Faculty 两行并整体上移
+  // （700→540；与照片区大致纵向居中）。2026-08-07 用户反馈再上移：改为**首行与照片顶端平齐**。
   static const double labelX = 640;
   static const double colonX = 980;
   static const double valueX = 1040;
-  static const double firstBaseline = 700;
+
+  /// Rubik 的 capHeight = 700/1000 em（读自 `assets/fonts/Rubik-VariableFont_wght.ttf`
+  /// 的 OS/2 表，'N'/'F'/'D' 的 yMax 亦为 700）。字号 × 此比例 = 大写字母顶端到基线的距离。
+  static const double _capHeightRatio = 0.70;
+
+  /// 首行基线 = 照片顶端 + 一个 cap 高 ⇒ 「Name」的**字母顶端**与照片上沿齐平（≈453.6）。
+  ///
+  /// 之所以写成派生式而不是拍一个数：这个位置的设计意图就是「跟照片顶端对齐」，
+  /// photo 或 fieldSize 一改，它必须跟着走。写死数字的话下次调照片位置就会悄悄错位。
+  /// ⚠️ 用 capHeight 而非字体 ascent（0.935 em）—— ascent 含字母上方的空白，
+  /// 按它对齐会让肉眼看到的字比照片低一截。
+  static final double firstBaseline = photo.top + fieldSize * _capHeightRatio;
   static const double pitch = 82;
   static const double fieldSize = 48;
 
@@ -129,6 +153,8 @@ class StudentCardFront extends StatelessWidget {
       ('Name', fields.name),
       ('Date of Birth', fields.birthday),
       ('Species', fields.species),
+      ('School', fields.school),
+      ('Faculty', fields.faculty),
     ];
     final out = <Widget>[];
     for (var i = 0; i < rows.length; i++) {

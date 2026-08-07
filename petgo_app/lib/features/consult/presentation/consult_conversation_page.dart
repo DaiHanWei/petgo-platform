@@ -20,6 +20,8 @@ import '../../profile/presentation/archive_prompt_dialog.dart';
 import '../data/consult_repository.dart';
 import '../domain/consult_case.dart';
 import '../domain/consult_diagnosis.dart';
+import '../domain/consult_session.dart';
+import '../../../shared/widgets/app_image.dart';
 import 'consult_diagnosis_sheet.dart';
 import 'consult_diagnosis_view.dart';
 import 'consult_rating_dialog.dart';
@@ -67,6 +69,19 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
   bool _imLoginStarted = false;
   String? _peerId; // 对端 IM 账号 v_<vetId>（用户侧）
 
+  // ── 顶栏对端（兽医）身份，全部来自后端（2026-08-07）──
+  //
+  // 改前这三样是**写死的占位**：名字恒为 `drh. Dewi Santoso`、头像首字母恒为 `D`、
+  // 在线点恒亮，且还挂了个不存在的诊所名 `Klinik Hewan Sehat`。不管哪个兽医接单都长一样。
+  // 更坑的是那个名字恰好是 staging 上真实存在的兽医账号 —— 现象看起来像「会话串号」，
+  // 实际代码里从没读过任何兽医数据，排查绕了很大一圈。
+  //
+  // ⚠️ 取不到时一律回落**中性文案**（`consultVetFallbackName`），
+  // **绝不能再填任何具体人名**，否则同样的误判会再来一次。
+  String? _vetName;
+  String? _vetAvatarUrl;
+  bool? _vetOnline; // null = 未知 → 顶栏不显示在线/离线那一行（不猜）
+
   @override
   void initState() {
     super.initState();
@@ -110,8 +125,10 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
     _suspendTicker?.cancel();
     // 离开会话页 → 清激活标记（用 initState 捕获的 notifier，避免 dispose 期 ref 失效）。
     _activeNotifier?.set(null);
-    // 离开即登出 IM（不留长连接 / 控 MAU）。
-    if (_imLoginStarted) _imService?.logout();
+    // 🔄 推送接入（2026-08-07）：**不再**离开即登出 IM。腾讯语义「logout 即停投离线推送」——
+    // 原「控 MAU」动机已随 usersig 放宽（登录用户都签，MAU 按月去重计）失效，而登出会让用户
+    // 离开会话页后收不到任何系统推送（兽医回复/点赞/生日全灭）。账号级登出唯一收口仍是
+    // AuthController.toGuest()（先反注册推送再 IM logout）。
     super.dispose();
   }
 
@@ -126,6 +143,11 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
         // 后端报已评分即锁死评分入口（含补评分后 closedReason 仍 UNRATED 的情形）。
         if (s.rated) _rated = true;
         if (s.vetId != null) _peerId = 'v_${s.vetId}';
+        // 顶栏对端身份（2026-08-07）。**只在拿到非空值时覆盖**：后端这三个字段是 fail-soft 的
+        // （兽医账号查询抖一下就返回 null），偶发降级不该让已经显示出来的名字突然变空白。
+        if (s.vetDisplayName != null) _vetName = s.vetDisplayName;
+        if (s.vetAvatarUrl != null) _vetAvatarUrl = s.vetAvatarUrl;
+        if (s.vetOnline != null) _vetOnline = s.vetOnline;
       });
       _syncSuspendTicker(); // 挂起态启用 1s 倒计时刷新，退出挂起则停
       // 进行中（已接单）才登录 IM：取 UserSig 经后端 MAU 闸门（用户须有活跃会话）。
@@ -525,6 +547,7 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
                     ImChatPlaceholder(
                       imConversationId: 'session-${widget.sessionId}',
                       peerId: _peerId,
+                      sessionId: '${widget.sessionId}', // 离线推送深链回本会话
                     ),
                   // CLOSED(30min 窗口过)：不再实时聊天，正文平铺只读会诊结果（参考兽医填写页，不可编辑）。
                   if (closed) Expanded(child: _closedResultArea(l10n)),
@@ -603,6 +626,24 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
 
   /// 浅色顶栏（原型 chat.html）：返回钮 + 薄荷头像（在线点）+ 兽医名 + 「● Online · 诊所」/终态副行。
   /// 用户侧无「结束会话」入口——会话结束由兽医发起（Story 5.6），用户只能离开/评分。
+  /// 顶栏兽医头像：有图用图，无图/加载失败一律退回首字母底片（不留破图、不写死 `D`）。
+  Widget _vetAvatarInitial() => Text(
+        ConsultSession.initialOf(_vetName),
+        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
+      );
+
+  Widget _vetAvatarWidget() {
+    final img = AppImage.provider(_vetAvatarUrl, thumbWidth: 120);
+    if (img == null) return _vetAvatarInitial();
+    return Image(
+      image: img,
+      width: 38,
+      height: 38,
+      fit: BoxFit.cover,
+      errorBuilder: (_, _, _) => _vetAvatarInitial(),
+    );
+  }
+
   Widget _topBar(AppLocalizations l10n, {required String? terminalLabel}) {
     return Container(
       decoration: const BoxDecoration(
@@ -631,7 +672,7 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
                 ),
               ),
               const SizedBox(width: 11),
-              // 兽医头像 + 在线点。占位内容。
+              // 兽医头像 + 在线点。**全部来自后端**（见 [_vetName] 处的说明，勿改回写死值）。
               SizedBox(
                 width: 38,
                 height: 38,
@@ -641,23 +682,26 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
                       width: 38,
                       height: 38,
                       alignment: Alignment.center,
-                      decoration: const BoxDecoration(color: AppColors.vetPrimary, shape: BoxShape.circle),
-                      child: const Text('D',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+                      clipBehavior: Clip.antiAlias,
+                      decoration: const BoxDecoration(
+                          color: AppColors.vetPrimary, shape: BoxShape.circle),
+                      child: _vetAvatarWidget(),
                     ),
-                    Positioned(
-                      right: 0,
-                      bottom: 0,
-                      child: Container(
-                        width: 11,
-                        height: 11,
-                        decoration: BoxDecoration(
-                          color: AppColors.vetPrimary,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.surface, width: 2),
+                    // 在线点：**只在后端明确说在线时才亮**。改前它恒亮，与兽医实际状态无关。
+                    if (_vetOnline == true)
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          width: 11,
+                          height: 11,
+                          decoration: BoxDecoration(
+                            color: AppColors.vetPrimary,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: AppColors.surface, width: 2),
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               ),
@@ -667,22 +711,31 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('drh. Dewi Santoso',
+                    // 名字取不到 → 中性文案，**不得再填任何具体人名**（见 [_vetName] 说明）。
+                    Text(_vetName ?? l10n.consultVetFallbackName,
+                        key: const ValueKey('consultPeerName'),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink)),
+                        style: const TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink)),
                     if (terminalLabel != null)
                       Text(terminalLabel,
                           key: const ValueKey('consultTerminalLabel'),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 11, color: AppColors.muted))
-                    else
-                      Text('${l10n.consultPeerOnline} · Klinik Hewan Sehat',
+                    // 在线态未知（后端富化降级 / 尚无兽医）→ 整行不渲染。
+                    // 改前这里恒显示「● Online · Klinik Hewan Sehat」，前半截是假状态、
+                    // 后半截是个后端根本没有的诊所名，两截都不能留。
+                    else if (_vetOnline != null)
+                      Text(_vetOnline! ? l10n.consultPeerOnline : l10n.consultPeerOffline,
+                          key: const ValueKey('consultPeerPresence'),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.vetPrimary)),
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: _vetOnline! ? AppColors.vetPrimary : AppColors.muted)),
                   ],
                 ),
               ),

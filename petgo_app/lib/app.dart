@@ -4,7 +4,9 @@ import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
+import 'package:tailtopia/core/im/im_service.dart';
 import 'package:tailtopia/core/l10n/locale_controller.dart';
+import 'package:tailtopia/core/push/push_service.dart';
 import 'package:tailtopia/core/router/app_router.dart';
 import 'package:tailtopia/core/theme/app_theme.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
@@ -12,8 +14,11 @@ import 'package:tailtopia/features/consult/presentation/consult_refresh.dart';
 import 'package:tailtopia/features/content/presentation/feed_controller.dart';
 import 'package:tailtopia/features/me/data/my_posts_repository.dart';
 import 'package:tailtopia/features/notify/data/notification_repository.dart';
+import 'package:tailtopia/features/pawcoin/presentation/pawcoin_controller.dart';
 import 'package:tailtopia/features/profile/data/health_record_repository.dart';
+import 'package:tailtopia/features/profile/data/id_card_repository.dart';
 import 'package:tailtopia/features/profile/data/milestone_repository.dart';
+import 'package:tailtopia/features/profile/data/newbie_task_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/data/timeline_repository.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
@@ -48,14 +53,22 @@ class TailTopiaApp extends ConsumerStatefulWidget {
   ConsumerState<TailTopiaApp> createState() => _TailTopiaAppState();
 }
 
-class _TailTopiaAppState extends ConsumerState<TailTopiaApp> {
+class _TailTopiaAppState extends ConsumerState<TailTopiaApp> with WidgetsBindingObserver {
   final AppLinks _appLinks = AppLinks();
   StreamSubscription<Uri>? _linkSub;
 
   @override
   void initState() {
     super.initState();
+    // 前后台切换 → 同步腾讯 IM doForeground/doBackground（Flutter 裸 SDK 不自动做；
+    // 不同步则后台收不到厂商离线推送 / 前台重复弹通知，见 core/push/push_service.dart）。
+    WidgetsBinding.instance.addObserver(this);
     _initDeepLinks();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    ref.read(pushServiceProvider).onAppLifecycleChanged(state);
   }
 
   Future<void> _initDeepLinks() async {
@@ -78,6 +91,7 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _linkSub?.cancel();
     super.dispose();
   }
@@ -109,6 +123,37 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> {
       // 兽医登录 profile=null（nextId=null）自动跳过，不误刷用户维度缓存。
       if (next.status != AuthStatus.guest && nextId != null && nextId != prevId) {
         resetUserScopedCaches(ref);
+      }
+
+      // 系统推送注册（收口于此单点，与 identify/缓存失效同一监听）：
+      // ① 变为已登录态（冷启动恢复 / 登录 / 兽医登录 / 引导完成转正）→ 按门控注册离线推送。
+      //    C 端受 F7 门控（asked=false 时内部直接跳过，不弹权限）；兽医旁路直注册。
+      // ② 直接换账号（authenticated→authenticated 且 id 变化，中途未过 guest——与上方
+      //    resetUserScopedCaches 同一场景，code-review 2026-08-07）：必须先解绑旧账号推送
+      //    + IM 登出旧身份，再按新账号重登注册——否则设备 token 与 IM 登录态仍是上一用户，
+      //    B 的设备持续收 A 的推送（跨用户隐私泄漏，与 IM 漏登出同型）。
+      // fire-and-forget：注册失败静默，推送是增强能力。
+      final becameAuthed =
+          next.status == AuthStatus.authenticated && prev?.status != AuthStatus.authenticated;
+      final switchedUser = next.status != AuthStatus.guest &&
+          nextId != null &&
+          prevId != null &&
+          nextId != prevId;
+      if (switchedUser) {
+        final push = ref.read(pushServiceProvider);
+        final im = ref.read(imServiceProvider);
+        // 同步作废旧凭证 + 记代际（PR#34 finding #10）：新账号若在 5s 窗口内已自行 IM 登录
+        //（如直接进会话页），迟到的 logout 按代际放弃，不清新账号会话。
+        final logoutGeneration = im.invalidateCredential();
+        push
+            .unregister()
+            .timeout(const Duration(seconds: 5))
+            .catchError((_) {})
+            .whenComplete(() =>
+                im.logout(ifGeneration: logoutGeneration).catchError((_) {}))
+            .whenComplete(() => push.syncRegistration(isVet: next.isVet));
+      } else if (becameAuthed) {
+        ref.read(pushServiceProvider).syncRegistration(isVet: next.isVet);
       }
     });
     // Story 7.2：用户手动选择优先（localeController）；null → 跟随设备（resolutionCallback 回退英语）。
@@ -167,5 +212,12 @@ void resetUserScopedCaches(WidgetRef ref) {
   ref.invalidate(myPostsProvider); // 我的：我的发布
   ref.invalidate(feedProvider); // 首页 Feed（按新用户宠物状态重过滤）
   ref.invalidate(unreadCountProvider); // 通知铃铛未读角标（bug 20260625-088：换账号防显示上个用户角标）
+  // bug 20260731-446：宠物身份证是用户维度缓存（列表/单卡/详情 family），不登记则同设备
+  // 换账号会看到上一账号（含已删档案）的历史卡片（隐私泄漏，同 421/上面健康记录同型）。
+  ref.invalidate(idCardProvider); // 身份证：单卡（旧版入口）
+  ref.invalidate(idCardListProvider); // 身份证：多卡列表
+  ref.invalidate(idCardDetailProvider); // 身份证：卡详情（按 cardId family 整族失效）
+  ref.invalidate(newbieTasksProvider); // 新手任务进度（同型隐患：换账号防串任务状态）
+  ref.invalidate(pawCoinProvider); // PawCoin 余额（同型隐患：换账号防显示上个账号余额）
   ref.read(consultRefreshProvider.notifier).bump(); // 问诊页 _active/_history 重拉
 }

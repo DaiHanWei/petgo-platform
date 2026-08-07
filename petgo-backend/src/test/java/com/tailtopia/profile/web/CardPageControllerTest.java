@@ -47,8 +47,20 @@ class CardPageControllerTest {
     }
 
     private PetProfile profile() {
-        return PetProfile.create(7L, com.tailtopia.profile.domain.PetType.CAT, "Momo",
+        PetProfile p = PetProfile.create(7L, com.tailtopia.profile.domain.PetType.CAT, "Momo",
                 "https://cdn/a.jpg", "Shiba", LocalDate.of(2022, 1, 1), "好奇宝宝", "TOK");
+        setField(p, "id", 10L);
+        return p;
+    }
+
+    private static void setField(Object o, String name, Object value) {
+        try {
+            var f = o.getClass().getDeclaredField(name);
+            f.setAccessible(true);
+            f.set(o, value);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     private void stubOwner(long happy, long consult, long milestoneCompleted) {
@@ -56,14 +68,14 @@ class CardPageControllerTest {
         when(accountQueryService.findAuthorViews(any()))
                 .thenReturn(Map.of(7L, new AuthorView(7L, "Aurel", null, false)));
         when(timelineService.getStats(7L))
-                .thenReturn(new ArchiveStatsResponse(happy, consult, milestoneCompleted, 30));
+                .thenReturn(new ArchiveStatsResponse(happy, consult, milestoneCompleted, 30, 0));
     }
 
     @Test
     void validTokenRenders6BlockCardWithStrippedImagesAndStats() {
         when(profileService.findByCardToken("TOK")).thenReturn(Optional.of(profile()));
         stubOwner(2, 1, 0);
-        when(contentService.findRecentGrowthMomentsByEventDate(7L, 5))
+        when(contentService.findRecentGrowthMomentsByEventDate(7L, 10L, 5))
                 .thenReturn(List.of(new GrowthMomentView(
                         1L, Instant.now(), LocalDate.of(2024, 5, 1), List.of("https://cdn/m.jpg"), "hi")));
 
@@ -93,7 +105,7 @@ class CardPageControllerTest {
     void zeroMomentsAndMilestonesDegradeGracefully() {
         when(profileService.findByCardToken("TOK")).thenReturn(Optional.of(profile()));
         stubOwner(0, 0, 0);
-        when(contentService.findRecentGrowthMomentsByEventDate(7L, 5)).thenReturn(List.of());
+        when(contentService.findRecentGrowthMomentsByEventDate(7L, 10L, 5)).thenReturn(List.of());
 
         Model model = new ConcurrentModel();
         HttpServletResponse resp = mock(HttpServletResponse.class);

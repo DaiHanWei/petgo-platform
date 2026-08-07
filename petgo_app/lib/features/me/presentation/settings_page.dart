@@ -8,10 +8,12 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/config/legal_urls.dart';
 import '../../../core/l10n/locale_controller.dart';
 import '../../../core/network/dio_client.dart';
+import '../../../core/push/push_service.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
 import '../../auth/domain/auth_state.dart';
+import '../../notify/data/push_permission_providers.dart';
 
 /// 二级「设置」页（Story 7.1 · F8 · settings.html 1:1 还原）。
 ///
@@ -25,22 +27,92 @@ class SettingsPage extends ConsumerStatefulWidget {
   ConsumerState<SettingsPage> createState() => _SettingsPageState();
 }
 
-class _SettingsPageState extends ConsumerState<SettingsPage> {
-  // V1 占位开关（无后端持久化）：通知默认开、公开档案默认开。（深色模式下版本再做，暂隐藏）
-  bool _notif = true;
+class _SettingsPageState extends ConsumerState<SettingsPage> with WidgetsBindingObserver {
+  // V1 占位开关（无后端持久化）：公开档案默认开。（深色模式下版本再做，暂隐藏）
   bool _petPublic = true;
+
+  /// 通知开关（2026-08-07 改为真开关）：**真相源是系统权限**，不是本地存储——
+  /// App 无法代替用户开关系统通知，只能如实反映 + 引导。进页面与从系统设置返回时刷新。
+  bool _notif = false;
 
   static const Color _danger = AppColors.popRed;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this); // 从系统设置返回 → 刷新开关真实状态
+    _refreshNotifStatus();
     // Debug 截图钩子（仅 debug + flag）：自动进注销整页（P-43，截 delete-account 用）。绝不真删。
     if (kDebugMode && const bool.fromEnvironment('DEV_DELETE_ACCOUNT')) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) context.push('/me/delete-account');
       });
     }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refreshNotifStatus();
+  }
+
+  Future<void> _refreshNotifStatus() async {
+    final granted = await isPushPermissionGranted();
+    if (!mounted) return;
+    setState(() => _notif = granted);
+    // 用户刚在系统设置里打开通知 → 立即补注册离线推送（否则要等下次冷启动才生效）。
+    if (granted) {
+      final isVet = ref.read(authControllerProvider).isVet;
+      ref.read(pushServiceProvider).syncRegistration(isVet: isVet);
+    }
+  }
+
+  /// 通知开关：App 只能**申请**权限、不能代关。
+  /// - 开：未申请过 → 弹系统权限窗；已被拒 → 引导去系统设置（此时 App 已在设置列表里）。
+  /// - 关：一律引导去系统设置（系统权限只能用户自己撤）。
+  Future<void> _onNotifToggle(bool want) async {
+    final l10n = AppLocalizations.of(context);
+    if (!want) {
+      await _showOpenSettingsDialog(l10n);
+      await _refreshNotifStatus(); // 用户可能真去关了
+      return;
+    }
+    // request()：notDetermined 会弹系统窗；已 denied/永久拒绝则立即返回 denied（不打扰）。
+    final granted = await requestPushPermission();
+    if (!mounted) return;
+    if (granted) {
+      setState(() => _notif = true);
+      final isVet = ref.read(authControllerProvider).isVet;
+      ref.read(pushServiceProvider).syncRegistration(isVet: isVet);
+      return;
+    }
+    await _showOpenSettingsDialog(l10n);
+    await _refreshNotifStatus();
+  }
+
+  Future<void> _showOpenSettingsDialog(AppLocalizations l10n) async {
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        key: const ValueKey('notifOpenSettingsDialog'),
+        title: Text(l10n.pushEnableGuideTitle),
+        content: Text(l10n.pushEnableGuideBody),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text(l10n.pushSoftGuideLater)),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text(l10n.mediaOpenSettings)),
+        ],
+      ),
+    );
+    if (go ?? false) await openPushSettings();
   }
 
   @override
@@ -81,7 +153,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               _navRow(l10n.healthListTitle, onTap: () => context.push('/profile/health'),
                   key: const ValueKey('meHealthRecords')),
               _divider(),
-              _toggleRow(l10n.notificationCenterTitle, _notif, (v) => setState(() => _notif = v),
+              _toggleRow(l10n.notificationCenterTitle, _notif, _onNotifToggle,
                   key: const ValueKey('meNotifToggle')),
               _divider(),
               _navRow(l10n.meLanguage, value: langValue,

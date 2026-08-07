@@ -229,6 +229,23 @@ class ContentServiceTest {
         assertThat(resp.id()).isNotNull();
     }
 
+    /** PR#34 finding #2：PRIVATE 日记进人工审核挂起时必须保留可见范围——否则审核通过后以实体默认 PUBLIC 进 Feed。 */
+    @Test
+    void privateContentKeepsVisibilityWhenEnqueuedForManualReview() {
+        when(manualReviewGate.enabled()).thenReturn(true);
+        var captor = org.mockito.ArgumentCaptor.forClass(ContentPost.class);
+
+        service.publish(1L, new ContentPostCreateRequest(ContentType.DAILY, null,
+                "stub-high borderline text", null, null,
+                com.tailtopia.content.domain.ContentVisibility.PRIVATE), null);
+
+        verify(posts).save(captor.capture());
+        assertThat(captor.getValue().getStatus())
+                .isEqualTo(com.tailtopia.content.domain.PostStatus.UNDER_REVIEW);
+        assertThat(captor.getValue().getVisibility())
+                .isEqualTo(com.tailtopia.content.domain.ContentVisibility.PRIVATE);
+    }
+
     /** AC-B3（降级）：开关打开 + 三方降级（stub-timeout）→ 落 UNDER_REVIEW + DEGRADED_FAILCLOSED + 入队。 */
     @Test
     void degradedContentEnqueuedAsUnderReviewWhenManualReviewEnabled() {

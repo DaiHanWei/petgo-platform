@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/im/im_service.dart';
 import '../../../core/network/dio_client.dart';
+import '../../../core/push/push_service.dart';
 import 'auth_routing.dart';
 import 'login_response.dart';
 
@@ -43,11 +44,25 @@ class AuthController extends Notifier<AuthState> {
   /// 等冷启动会话恢复结束（成功或失败均完成）。splash 用它在分流前确保 role 已就绪。
   Future<void> ensureRestored() => _restoreFuture ?? Future<void>.value();
 
+  bool _restored = false;
+
+  /// 冷启动恢复是否**已经结束**（成功或失败都算）。**同步可读，不需要 await。**
+  ///
+  /// 为什么需要它（code-review 2026-08-04）：落地分流要区分「按真实状态落地」与
+  /// 「等超时了、按当时已知态兜底落地」（后者要打 `restore_timeout` 标记并武装 FR-91 迟到纠正）。
+  /// 改前路由层是靠**自己再 `await restore.timeout(5s)`** 来得出这个结论的 —— 而 splash 侧已经
+  /// 有一个 5s 兜底，两段串联成了最坏 10s，且「5~10s 之间完成」会被误判成「没超时」，
+  /// 使兜底标记与迟到纠正双双失效。
+  /// 现在等待预算**只由 splash 持有**（单一时间源），路由层只读这个标志、不再二次等待。
+  bool get isRestored => _restored;
+
   /// 冷启动按本地 token 的真实 role 恢复登录态;无 token / 失效则保持游客。
   ///
   /// 兽医(role=VET)走 `/vet/me` 校验 → 置 VET 态，router 据此直达兽医工作台(不再误进用户首页);
   /// 用户走 `/me` 恢复 profile。**修复**:原先 role 写死 'USER'，致兽医冷启动被当成用户进 home。
   Future<void> _restoreSession() async {
+    // 无论成功、失败还是提前 return，都要标记「已结束」—— 落地分流据此判断是否属超时兜底。
+    // 放在 finally 里，保证在本 future 完成**之前**就已置位（外部 `.then` 一定看得到）。
     try {
       final repo = ref.read(authRepositoryProvider);
       final role = await repo.readTokenRole();
@@ -68,6 +83,8 @@ class AuthController extends Notifier<AuthState> {
       );
     } catch (_) {
       // 恢复失败保持游客态（不阻塞启动）。
+    } finally {
+      _restored = true;
     }
   }
 
@@ -106,7 +123,24 @@ class AuthController extends Notifier<AuthState> {
   /// best-effort fire-and-forget：不阻塞游客态切换，失败静默（页面已离场）。
   void toGuest() {
     state = const AuthState.guest();
-    ref.read(imServiceProvider).logout().catchError((_) {});
+    // 顺序硬约束：先反注册离线推送、再 IM logout——反注册需要 IM 登录态才能解绑 token；
+    // 不解绑则同设备下一用户仍收上一账号的推送（与 IM 漏登出同型的跨用户隐私泄漏）。
+    // 反注册限时 5s（code-review 2026-08-07）：原生调用挂起时绝不能饿死后面的 IM logout。
+    // 两步均 best-effort fire-and-forget：不阻塞游客态切换，失败静默（页面已离场）。
+    //
+    // 竞态防护（PR#34 finding #10）：logout 被压到反注册之后，5s 窗口内可能有新账号登录
+    //（缓存秒登 / 401 强制登录弹窗）。① 此刻同步作废本地 IM 凭证——新账号 loginIfNeeded
+    // 会做真实重登而非在旧凭证上幂等空转；② 记录登出代际号，迟到的 logout 发现代际已变
+    //（新登录发生过）则放弃执行，绝不清掉新账号的 IM 会话。
+    final push = ref.read(pushServiceProvider);
+    final im = ref.read(imServiceProvider);
+    final logoutGeneration = im.invalidateCredential();
+    push
+        .unregister()
+        .timeout(const Duration(seconds: 5))
+        .catchError((_) {})
+        .whenComplete(
+            () => im.logout(ifGeneration: logoutGeneration).catchError((_) {}));
   }
 }
 

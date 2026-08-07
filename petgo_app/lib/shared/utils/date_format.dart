@@ -24,6 +24,10 @@ String formatDayMonthYear(BuildContext context, DateTime d) =>
 String formatDayMonth(BuildContext context, DateTime d) =>
     DateFormat('d MMM', _ln(context)).format(d);
 
+/// "S" / "M"。星期几的**最窄**写法（日历表头一行 7 个字母）。
+String formatWeekdayNarrow(BuildContext context, DateTime d) =>
+    DateFormat('EEEEE', _ln(context)).format(d);
+
 /// "Jun"。仅缩写月份（日期列）。
 String formatMonthAbbr(BuildContext context, DateTime d) =>
     DateFormat('MMM', _ln(context)).format(d);

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,12 +10,12 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:tailtopia/app.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/core/analytics/appsflyer_client.dart';
+import 'package:tailtopia/core/analytics/att_gate.dart';
 import 'package:tailtopia/core/l10n/locale_controller.dart';
 import 'package:tailtopia/core/storage/prefs.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
-import 'package:tailtopia/features/profile/domain/profile_prompt_controller.dart';
-import 'package:tailtopia/features/profile/domain/profile_prompt_state.dart';
+import 'package:tailtopia/features/notify/domain/push_permission_bootstrap.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,24 +27,32 @@ Future<void> main() async {
   }
   // 本地化日期格式化的 locale 数据（id 非默认 locale，DateFormat 用前必须初始化）。
   await initializeDateFormatting();
-  // 前端行为分析（PostHog）：runApp 前初始化，失败不阻断启动。
-  await Analytics.init();
-  // 移动归因（AppsFlyer）：manualStart 只 init 不上报；启动上报在首帧后（见下方回调）。
-  await AppsFlyerClient.instance.init();
+  // 前端行为分析（PostHog）：**发起但不 await**（2026-08-07 冷启动耗时治理）。
+  //
+  // 改前是 `await Analytics.init()` —— 原生 setup（超时上限 3s）被压在首帧之前，那一段
+  // 画面还是原生启动屏，用户在纯等待，而首帧之前没有任何东西需要 PostHog 就绪。
+  //
+  // 为什么不 await 也**不会丢首帧那条 `$screen`**（漏斗「过启动页」这一步的来源）：
+  // `Posthog().setup()` 在本行**同步**把 setup 消息投进 `posthog_flutter` 平台通道
+  // （Dart 侧从调用到 `invokeMethod` 之间没有 await），而后续 capture / screen 走**同一条
+  // 通道**、原生侧按序取用且 setup 是同步处理的 ⇒「setup 先于任何上报被执行」由通道的
+  // 顺序性保证，不需要 Dart 侧 await 来串。
+  //
+  // ⚠️ 因此本行**必须留在 `runApp` 之前**。一旦挪到首帧之后（比如并进下面的 postFrame
+  // 回调），PosthogObserver 为启动屏打的那条 `$screen` 就会排在 setup 前面 —— 原生 SDK
+  // 对 setup 前的事件是**直接丢弃**（不缓冲），启动漏斗的第一级会凭空消失。
+  unawaited(Analytics.init());
   // V1：锁定竖屏（portrait-only）。
   SystemChrome.setPreferredOrientations(const [
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
 
-  // Story 1.7：加载档案提示条持久态 + 本次冷启动计数 +1（FR-0H）。
-  final promptBootstrap = await _loadProfilePromptBootstrap();
   // Story 7.2：读持久化语言选择（空/缺失 = 跟随设备）。
   final savedLocale = await _loadSavedLocale();
 
   runApp(ProviderScope(
     overrides: [
-      profilePromptBootstrapProvider.overrideWithValue(promptBootstrap),
       // Debug-only：--dart-define=DEV_LOCALE=id 强制语言（视觉验收对齐印尼语原型）；否则跟持久化/设备。
       localeOverrideProvider.overrideWithValue(
         kDebugMode && const String.fromEnvironment('DEV_LOCALE').isNotEmpty
@@ -60,9 +70,37 @@ Future<void> main() async {
     child: const TailTopiaApp(),
   ));
 
-  // 首帧后再上报 AppsFlyer 启动（iOS 先走 ATT 授权流程），不占首帧耗时。
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    AppsFlyerClient.instance.start();
+  // 首帧后：归因 SDK 初始化 + iOS ATT 授权 + 启动上报，三件事全部让开首帧。
+  //
+  // 2026-08-07 冷启动耗时治理：`AppsFlyerClient.init()`（原生 initSdk，超时上限 3s）改前在
+  // `runApp` 之前 await —— 首帧之前没有任何东西依赖归因 SDK 就绪，那 3s 纯粹是让用户
+  // 多看几秒原生启动屏。移到这里后，最坏情况的等待从「用户盯着不动的紫屏」变成
+  // 「启动屏动效照常播」，不再计入 time-to-content。
+  //
+  // ⚠️ 四者的先后不可随手改：
+  // - init 与 ATT **并发**发起（`afInit` 先拿到 future 再 await ATT），不是串行 ——
+  //   串行会让 ATT 弹窗被 initSdk 拖后最多 3s，而「等 resumed 再弹 ATT」正是 2026-08-06
+  //   审核拒信（Guideline 2.1）的修复点，不能再往后推。
+  // - **通知权限必须排在 ATT 之后**（2026-08-07）：两个系统弹窗同帧抛出会互相遮挡，
+  //   两者授权率一起掉；串行让用户先答完跟踪、再答通知。
+  // - `start()` 必须同时晚于 ATT 结果与 init（未 init 时 start 是 no-op），故末尾按序 await 两者。
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    final Future<void> afInit = AppsFlyerClient.instance.init();
+    final attSettled = await AttGate.requestIfNeeded();
+    // 首启即申请通知权限（2026-08-07 产品决策，取代 F7 双时机——见 PushPermissionBootstrap
+    // 文档：双时机对存量用户是死路）。拒绝后不再自动弹，改由设置页开关兜底。
+    //
+    // 🔴 必须在 ATT **落定之后**且**仅在弹窗已收场时**（PR#34 finding #14）：
+    // `requestIfNeeded()` 返回 false = 用户 15s 未作答、ATT 弹窗还开着——此时再弹通知权限
+    // 会盖住它 ⇒ 用户对跟踪没得选 ⇒ 重蹈 2026-08-06 Guideline 2.1 拒信。
+    // 宁可把通知权限推迟到下一次冷启动（首启标记未消费，下次照常询问）。
+    if (attSettled) {
+      await PushPermissionBootstrap.requestOnFirstLaunch();
+    } else {
+      debugPrint('[ATT] undetermined after wait — defer notification prompt to next launch');
+    }
+    await afInit;
+    await AppsFlyerClient.instance.start();
   });
 }
 
@@ -102,18 +140,3 @@ Future<String?> _loadSavedLocale() async {
   }
 }
 
-Future<ProfilePromptState> _loadProfilePromptBootstrap() async {
-  try {
-    final prefs = await AppPrefs.create();
-    var state = ProfilePromptState(
-      restartCount: prefs.getInt(AppPrefs.kProfilePromptRestartCount),
-      dismissedPermanently: prefs.getBool(AppPrefs.kProfilePromptDismissedPermanently),
-      petProfileCompleted: prefs.getBool(AppPrefs.kPetProfileCompleted),
-    );
-    state = onColdStartIncrement(state); // 本次冷启动 +1
-    await prefs.setInt(AppPrefs.kProfilePromptRestartCount, state.restartCount);
-    return state;
-  } catch (_) {
-    return const ProfilePromptState(restartCount: 1); // prefs 缺失/损坏 → 默认首启
-  }
-}

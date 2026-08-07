@@ -25,6 +25,9 @@ public record IdCardResponse(
         String address,
         String occupation,
         String maritalStatus,
+        String cardType,
+        String school,
+        String faculty,
         boolean hdUnlocked,
         Instant createdAt) {
 
@@ -32,6 +35,7 @@ public record IdCardResponse(
         return new IdCardResponse(c.getId(), c.getSerialId(), c.getName(), c.getPetType(),
                 c.getBreed(), c.getBirthday(), c.getAvatarUrl(), c.getIntro(), c.getGender(),
                 c.getCardNo(), c.getPassportNo(), c.getBirthCity(), c.getAddress(),
-                c.getOccupation(), c.getMaritalStatus(), c.isHdUnlocked(), c.getCreatedAt());
+                c.getOccupation(), c.getMaritalStatus(), c.getCardType(), c.getSchool(),
+                c.getFaculty(), c.isHdUnlocked(), c.getCreatedAt());
     }
 }

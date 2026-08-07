@@ -148,14 +148,19 @@ class ContentFeedControllerEndpointTest extends ApiIntegrationTest {
         Assertions.assertThat(sawKnow).as("KNOWLEDGE Tab 应含本测试的 KNOWLEDGE 帖").isTrue();
     }
 
+    /**
+     * Story 4.1 · AC5：V1.0.0「状态 B 用户 Feed 不显示成长日历快乐时刻」**整条废止**（FR-83）——
+     * 公开内容对所有用户一视同仁，不再按宠物状态过滤。
+     *
+     * <p>原断言（B 状态 Feed 不含 GROWTH_MOMENT）随规则作废，此处反向锁定新口径：**B 状态照样看得到**。
+     * 过滤维度已换成 `visibility = PUBLIC`（与内容类型、观看者宠物状态都无关）。
+     */
     @Test
-    void petStatusBExcludesGrowthMoment() throws Exception {
-        // B（计划养）用户：硬过滤掉成长日历快乐时刻。
+    void petStatusBNowSeesGrowthMomentToo() throws Exception {
         User viewerB = newUser(PetStatus.PLANNING);
         User poster = newUser(PetStatus.HAS_PET);
         String growth = "growthmark-" + SEQ.incrementAndGet();
         String daily = "bdailymark-" + SEQ.incrementAndGet();
-        // GROWTH_MOMENT 需 petId 非空且满足 FK → 造一只 poster 的真实档案。
         long petId = newPetProfile(poster.getId());
         savePost(poster.getId(), ContentType.GROWTH_MOMENT, petId, growth);
         savePost(poster.getId(), ContentType.DAILY, null, daily);
@@ -165,18 +170,23 @@ class ContentFeedControllerEndpointTest extends ApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn();
         var items = json.readTree(res.getResponse().getContentAsString()).get("items");
+        boolean sawGrowth = false;
         boolean sawDaily = false;
         for (var item : items) {
             String body = item.get("body").asText(null);
             if (growth.equals(body)) {
-                Assertions.fail("B 状态用户 Feed 不应含 GROWTH_MOMENT");
+                sawGrowth = true;
+                // 每条都恒带 visibility（契约字段，Story 4.1 AC7）
+                Assertions.assertThat(item.get("visibility").asText()).isEqualTo("PUBLIC");
             }
             if (daily.equals(body)) {
                 sawDaily = true;
             }
         }
-        // DAILY 不受硬过滤，应可见（在首批 20 内）。
-        Assertions.assertThat(sawDaily).as("B 状态仍应看到 DAILY 帖").isTrue();
+        Assertions.assertThat(sawGrowth)
+                .as("B 状态用户现在**应该**看到公开的成长日历内容（V1.0.0 硬过滤已废止）")
+                .isTrue();
+        Assertions.assertThat(sawDaily).as("普通日常内容照常可见").isTrue();
     }
 
     @Test

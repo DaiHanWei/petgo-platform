@@ -12,9 +12,9 @@
         <div class="card card-wide">
             <h1 th:text="#{admin.seed.title}">发布种子内容</h1>
             <div class="tabs" data-tabs>
-                <button class="tab active" type="button" data-tab-target="single">单独发布</button>
+                <button class="tab active" type="button" data-tab-target="single" th:text="#{admin.seed.tab.single}">单独发布</button>
                 <button class="tab" type="button" data-tab-target="batch"
-                        sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')">批量发布</button>
+                        sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')" th:text="#{admin.seed.tab.batch}">批量发布</button>
             </div>
             <p class="ok" th:if="${publishedId}">
                 <span th:text="#{admin.seed.published.prefix}">已发布，内容 ID：</span><span th:text="${publishedId}">0</span><span th:text="#{admin.seed.published.suffix}">（与用户内容混排，无特殊标记）。</span>
@@ -48,36 +48,37 @@
             </section>
             <section class="tab-panel" data-tab-panel="batch" hidden
                      sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')">
-                <p class="hint">以选定虚拟账号为作者逐条发日常（DAILY）种子。每行一条，格式
-                    <code>文本</code> 或 <code>文本 ||| 图URL1, 图URL2</code>（≤9 图）。相同内容跨批自动去重跳过。</p>
+                <p class="hint"><span th:text="#{admin.seed.batch.hint.intro}">以选定虚拟账号为作者逐条发日常（DAILY）种子。每行一条，格式</span>
+                    <code th:text="#{admin.seed.batch.hint.fmt1}">文本</code> <span th:text="#{admin.seed.batch.hint.or}">或</span> <code th:text="#{admin.seed.batch.hint.fmt2}">文本 ||| 图URL1, 图URL2</code><span th:text="#{admin.seed.batch.hint.tail}">（≤9 图）。相同内容跨批自动去重跳过。</span></p>
                 <form method="post" th:action="@{/admin/seed-batch}">
-                    <label class="field" for="batchVirtualUserId">虚拟账号</label>
+                    <label class="field" for="batchVirtualUserId" th:text="#{admin.seed.batch.account}">虚拟账号</label>
                     <select id="batchVirtualUserId" name="virtualUserId" class="field-full" required>
-                        <option value="" disabled selected>选择虚拟账号</option>
+                        <option value="" disabled selected th:text="#{admin.seed.batch.selectAccount}">选择虚拟账号</option>
                         <option th:each="a : ${accounts}" th:value="${a.id}"
                                 th:disabled="${!a.enabled}"
-                                th:text="${a.nickname + ' (id=' + a.id + (a.enabled ? '' : ' · 停用') + ')'}">名</option>
+                                th:text="${a.nickname} + ' (id=' + ${a.id} + (${a.enabled} ? '' : ' · ' + #{admin.common.disabled}) + ')'">名</option>
                     </select>
-                    <label class="field" for="batchLines">批量内容（每行一条）</label>
+                    <label class="field" for="batchLines" th:text="#{admin.seed.batch.lines}">批量内容（每行一条）</label>
                     <textarea id="batchLines" name="lines" rows="12" required
+                              th:placeholder="#{admin.seed.batch.linesPlaceholder}"
                               placeholder="今天带喵星人晒太阳啦 ||| https://cdn/x.jpg&#10;第二条日常..."></textarea>
-                    <button type="submit" class="btn btn-primary form-submit">批量发布</button>
+                    <button type="submit" class="btn btn-primary form-submit" th:text="#{admin.seed.batch.submit}">批量发布</button>
                 </form>
                 <hr class="section-line"/>
                 <form method="post" th:action="@{/admin/seed-batch/import}" enctype="multipart/form-data">
-                    <label class="field" for="importVirtualUserId">虚拟账号</label>
+                    <label class="field" for="importVirtualUserId" th:text="#{admin.seed.batch.account}">虚拟账号</label>
                     <select id="importVirtualUserId" name="virtualUserId" class="field-full" required>
-                        <option value="" disabled selected>选择虚拟账号</option>
+                        <option value="" disabled selected th:text="#{admin.seed.batch.selectAccount}">选择虚拟账号</option>
                         <option th:each="a : ${accounts}" th:value="${a.id}"
                                 th:disabled="${!a.enabled}"
-                                th:text="${a.nickname + ' (id=' + a.id + (a.enabled ? '' : ' · 停用') + ')'}">名</option>
+                                th:text="${a.nickname} + ' (id=' + ${a.id} + (${a.enabled} ? '' : ' · ' + #{admin.common.disabled}) + ')'">名</option>
                     </select>
-                    <label class="field" for="seedImportFile">Excel 导入</label>
+                    <label class="field" for="seedImportFile" th:text="#{admin.seed.batch.excel}">Excel 导入</label>
                     <input id="seedImportFile" name="file" type="file" class="field-full" required
                            accept=".xlsx,.xls,.csv,.tsv,.txt"/>
-                    <p class="hint">Excel 第一张表：第 1 列正文，第 2 列图片 URL（多个 URL 用逗号分隔）。首行“文本 / 正文 / text / content”会自动跳过。</p>
-                    <p><a class="btn btn-neutral btn-sm" th:href="@{/admin/seed-batch/template}">下载 Excel 示例</a></p>
-                    <button type="submit" class="btn btn-primary">导入并发布</button>
+                    <p class="hint" th:text="#{admin.seed.batch.excelHint}">Excel 第一张表：第 1 列正文，第 2 列图片 URL（多个 URL 用逗号分隔）。首行“文本 / 正文 / text / content”会自动跳过。</p>
+                    <p><a class="btn btn-neutral btn-sm" th:href="@{/admin/seed-batch/template}" th:text="#{admin.seed.batch.template}">下载 Excel 示例</a></p>
+                    <button type="submit" class="btn btn-primary" th:text="#{admin.seed.batch.import}">导入并发布</button>
                 </form>
             </section>
         </div>

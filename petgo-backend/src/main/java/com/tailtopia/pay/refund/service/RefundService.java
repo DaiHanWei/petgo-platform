@@ -102,15 +102,21 @@ public class RefundService {
 
     /**
      * ①客服<b>批准</b>退款需求（Story 4.4，submitter 角色，AB-5B）。仅 {@code need_decision=PENDING} 可判定
-     * （重复判定 → 409 拒绝，OPEN-1）。need→APPROVED + 订单 <b>CAS {@code COMPLETED→REFUNDING}</b>
-     * （{@code markRefundingFromCompleted}，幂等：非 COMPLETED 时返 0 跳过不报错）。
+     * （重复判定 → 409 拒绝，OPEN-1）。need→APPROVED + 订单 <b>CAS {@code COMPLETED→REFUNDING}</b>。
+     * <b>CAS 返 0（订单非 COMPLETED，如问诊仍进行中）→ 409 回滚整个审批</b>——否则 need=APPROVED
+     * 但订单纹丝未动，App 端「选退款方式」入口恒 409、该退款单永久悬置且代码内无修复路径
+     * （PR#34 finding #4：静默空转 + 界面假成功）。
      * <b>不发任何通知</b>（解锁「选方式」经 need=APPROVED，App 4-5 据此暴露入口）+ 审计。
      */
     @Transactional
     public void approveNeed(String refundToken, long submitterAdminId) {
         RefundRequest r = requirePending(refundToken);
         r.markNeedDecision(NeedDecision.APPROVED, submitterAdminId);
-        orders.markRefundingFromCompleted(r.getOrderId()); // CAS 幂等：0=订单已非 COMPLETED，跳过
+        int updated = orders.markRefundingFromCompleted(r.getOrderId());
+        if (updated == 0) {
+            // 事务回滚 → need 仍 PENDING，后台看到真实原因而非假成功。
+            throw AppException.conflict("订单当前不是已完成状态，无法进入退款流程（问诊结束后再批准）");
+        }
         audit.record(submitterAdminId, AuditActions.REFUND_NEED_APPROVED, "refund_request", refundToken,
                 "退款需求批准（订单进 REFUNDING，解锁选方式）");
     }

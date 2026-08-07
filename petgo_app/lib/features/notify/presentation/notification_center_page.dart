@@ -90,6 +90,23 @@ class _NotificationCenterPageState
         backgroundColor: AppColors.base,
         scrolledUnderElevation: 0,
         titleSpacing: 20,
+        // 🐛 2026-08-07：**永远给一个出口**。
+        //
+        // `AppBar` 只在 `Navigator.canPop()` 为真时才自动生成返回箭头。冷启动点推送落到这里时
+        // 本页曾是栈里唯一一页（`go` 替换了整个栈）⇒ 没有箭头、iOS 左滑手势也因无上一页而失效，
+        // 用户被困死只能杀进程（真机实测）。
+        //
+        // 根因已在 `app_router.dart` 的 `_goDeepLink` 修掉（先铺底座再 push）。这里是第二道防线：
+        // 任何未来路径若又把本页作为栈底送达，用户至少还能回到主页，而不是死在这一屏。
+        leading: Navigator.of(context).canPop()
+            ? null // 有上一页 → 交给 AppBar 的默认返回键（保留系统返回语义与左滑手势）
+            : IconButton(
+                key: const ValueKey('notificationCenterHome'),
+                icon: const Icon(Icons.arrow_back),
+                color: AppColors.ink,
+                tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                onPressed: () => context.go('/home'),
+              ),
         title: Text(
           l10n.notificationCenterTitle,
           style: const TextStyle(
@@ -140,8 +157,10 @@ class _NotificationCenterPageState
 
     final today = items.where(isToday).toList();
     final earlier = items.where((it) => !isToday(it)).toList();
+    // bug 20260730-436：显式 padding 会关掉 ScrollView 自动注入的底部安全区补偿，
+    // edge-to-edge 下末条会被系统手势条/三键遮挡——固定 20 之上叠加安全区高度。
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+      padding: EdgeInsets.fromLTRB(16, 4, 16, 20 + MediaQuery.paddingOf(context).bottom),
       children: [
         if (today.isNotEmpty) ...[
           _groupLabel(l10n.notifyGroupToday),
@@ -406,8 +425,13 @@ class _NotificationTileState extends State<_NotificationTile> {
                   child: LayoutBuilder(builder: (context, constraints) {
                     // bug 20260727-368：只在正文折叠态(2 行)真溢出时才显示 展开/收起 按钮。
                     // 测量必须与正文 Text 同 style、同可用宽、同 textScaler（clamp≤1.3 后的实际值）。
+                    // bug 20260730-431：style 必须 merge DefaultTextStyle——裸 _kBodyStyle 无
+                    // fontFamily，TextPainter 落到平台默认字体(Roboto 偏窄)，而渲染 Text 继承主题
+                    // Poppins(偏宽)，临界长度文案「量得下画不下」→ 溢出却不出展开按钮。
+                    final bodyStyle =
+                        DefaultTextStyle.of(context).style.merge(_kBodyStyle);
                     final bodyPainter = TextPainter(
-                      text: TextSpan(text: _typeBody(l10n), style: _kBodyStyle),
+                      text: TextSpan(text: _typeBody(l10n), style: bodyStyle),
                       maxLines: 2,
                       textDirection: Directionality.of(context),
                       textScaler: MediaQuery.textScalerOf(context),
@@ -432,7 +456,7 @@ class _NotificationTileState extends State<_NotificationTile> {
                           overflow: _expanded
                               ? TextOverflow.visible
                               : TextOverflow.ellipsis,
-                          style: _kBodyStyle,
+                          style: bodyStyle,
                         ),
                         const SizedBox(height: 6),
                         Row(

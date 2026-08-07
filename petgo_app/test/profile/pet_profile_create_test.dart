@@ -7,7 +7,6 @@ import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
-import 'package:tailtopia/features/profile/domain/profile_prompt_controller.dart';
 import 'package:tailtopia/features/profile/presentation/pet_profile_create_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
@@ -175,12 +174,11 @@ void main() {
       petProfileProvider.overrideWith((ref) => repo.getMyProfile()), // 无既有档案 → 渲染表单
     ]);
     addTearDown(container.dispose);
-    // 起始：HAS_PET 用户尚无档案（提示条会显示的前置态）。
+    // 起始：HAS_PET 用户尚无档案。
     container
         .read(authControllerProvider.notifier)
         .applyProfile(const UserProfile(petStatus: 'HAS_PET', hasPetProfile: false));
     expect(container.read(authControllerProvider).profile?.hasPetProfile, isFalse);
-    expect(container.read(profilePromptProvider).petProfileCompleted, isFalse);
 
     await _pumpRouted(tester, container);
     await _fillAndSubmit(tester);
@@ -188,12 +186,11 @@ void main() {
     expect(repo.createCalled, isTrue);
     // 关键断言：本次 session 内状态已翻转（修复前要等下次冷启动重拉 /me 才更新）。
     expect(container.read(authControllerProvider).profile?.hasPetProfile, isTrue);
-    expect(container.read(profilePromptProvider).petProfileCompleted, isTrue);
     // 正常建档（默认 origin=onboarding）→ 跳庆祝页。
     expect(find.text('created'), findsOneWidget);
   });
 
-  testWidgets('并发 409（档案已存在）→ 同样翻转状态并直达档案（提示条不残留）', (tester) async {
+  testWidgets('并发 409（档案已存在）→ 同样翻转状态并直达档案', (tester) async {
     final repo = _FakeRepo()..failExists = true;
     final container = ProviderContainer(overrides: [
       profileRepositoryProvider.overrideWithValue(repo),
@@ -208,7 +205,6 @@ void main() {
     await _fillAndSubmit(tester);
 
     expect(container.read(authControllerProvider).profile?.hasPetProfile, isTrue);
-    expect(container.read(profilePromptProvider).petProfileCompleted, isTrue);
     expect(find.text('profile'), findsOneWidget); // 提示并直达档案 Tab
     await tester.pump(const Duration(seconds: 3)); // 走完 petProfileExists toast 定时器
   });

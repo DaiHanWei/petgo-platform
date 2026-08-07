@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.tailtopia.content.domain.ContentType;
+import com.tailtopia.content.domain.ContentVisibility;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -39,7 +40,7 @@ class FeedResponseContractTest {
     /** FeedItemResponse 完整形态的权威字段集 —— 必须与 App FeedItem.fromJson 读取的键一一对应。 */
     private static final Set<String> ITEM_FIELDS = Set.of(
             "id", "authorId", "authorNickname", "authorAvatarUrl", "authorDeleted",
-            "type", "body", "firstImageUrl", "likeCount", "createdAt");
+            "type", "body", "firstImageUrl", "likeCount", "createdAt", "visibility");
 
     /** 游标分页信封字段集 —— 对应 App FeedPage.fromJson 的 {items, nextCursor, hasMore}。 */
     private static final Set<String> ENVELOPE_FIELDS = Set.of("items", "nextCursor", "hasMore");
@@ -55,7 +56,7 @@ class FeedResponseContractTest {
         FeedItemResponse item = new FeedItemResponse(
                 42L, 7L, "小明", "https://cdn.petgo/p/a.jpg", false,
                 ContentType.DAILY, "今天带毛孩子去遛弯", "https://cdn.petgo/p/img.jpg", 3L,
-                Instant.parse("2026-06-05T00:00:00Z"));
+                Instant.parse("2026-06-05T00:00:00Z"), ContentVisibility.PUBLIC);
 
         Map<String, Object> m = wire(item);
         assertThat(m.keySet())
@@ -63,6 +64,8 @@ class FeedResponseContractTest {
                 .isEqualTo(ITEM_FIELDS);
         // 枚举落 UPPER_SNAKE 线格式（App FeedCategory.wire / FeedItem.type 依赖此）。
         assertThat(m.get("type")).isEqualTo("DAILY");
+        // Story 4.1：visibility 为**必填、恒下发**（NON_NULL 下也不省略），线格式 UPPER_SNAKE。
+        assertThat(m.get("visibility")).isEqualTo("PUBLIC");
     }
 
     @Test
@@ -71,12 +74,13 @@ class FeedResponseContractTest {
         FeedItemResponse item = new FeedItemResponse(
                 42L, 7L, null, null, true,
                 ContentType.GROWTH_MOMENT, null, null, 0L,
-                Instant.parse("2026-06-05T00:00:00Z"));
+                Instant.parse("2026-06-05T00:00:00Z"), ContentVisibility.PRIVATE);
 
         Map<String, Object> m = wire(item);
         assertThat(m.keySet())
                 .as("NON_NULL：可空字段缺省即省略；必填恒在（App 侧均 null 容忍）")
-                .isEqualTo(Set.of("id", "authorId", "authorDeleted", "type", "likeCount", "createdAt"));
+                .isEqualTo(Set.of("id", "authorId", "authorDeleted", "type", "likeCount", "createdAt",
+                        "visibility"));
         assertThat(m).doesNotContainKey("authorNickname"); // 注销不外泄 PII
         assertThat(m).doesNotContainKey("firstImageUrl");   // 纯文字卡，App hasImage=false
     }

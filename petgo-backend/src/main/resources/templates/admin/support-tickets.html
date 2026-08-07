@@ -3,25 +3,25 @@
 <!-- 客服工单列表（Story 4.7）。support.handle 门控。 -->
 <head>
     <meta charset="UTF-8"/>
-    <title>客服工单 · TailTopia 运营后台</title>
+    <title th:text="#{admin.support.title}">客服工单 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1>客服工单</h1>
+        <h1 th:text="#{admin.support.title}">客服工单</h1>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
         <table>
             <thead>
             <tr>
-                <th>工单</th>
-                <th>标题</th>
-                <th>状态</th>
-                <th>需联系</th>
-                <th>已联系</th>
+                <th th:text="#{admin.support.col.ticket}">工单</th>
+                <th th:text="#{admin.support.col.subject}">标题</th>
+                <th th:text="#{admin.common.status}">状态</th>
+                <th th:text="#{admin.support.col.needContact}">需联系</th>
+                <th th:text="#{admin.support.col.contacted}">已联系</th>
                 <th>CSAT</th>
-                <th>操作</th>
+                <th th:text="#{admin.common.actions}">操作</th>
             </tr>
             </thead>
             <tbody>
@@ -29,16 +29,23 @@
                 <td th:text="${t.ticketToken}">tok</td>
                 <td th:text="${t.subject}">subject</td>
                 <td th:text="${t.status}">OPEN</td>
-                <td th:text="${t.needContact} ? '是' : '否'">是</td>
-                <td th:text="${t.contacted} ? '是' : '否'">否</td>
+                <td th:text="${t.needContact} ? #{admin.common.yes} : #{admin.common.no}">是</td>
+                <td th:text="${t.contacted} ? #{admin.common.yes} : #{admin.common.no}">否</td>
                 <td th:text="${t.csatScore} ?: '—'">—</td>
-                <td><a class="btn btn-neutral btn-sm" th:href="@{/admin/support-tickets/{t}(t=${t.ticketToken})}">详情</a></td>
+                <td><a class="btn btn-neutral btn-sm" th:href="@{/admin/support-tickets/{t}(t=${t.ticketToken})}" th:text="#{admin.common.detail}">详情</a></td>
             </tr>
             <tr th:if="${items.isEmpty()}">
-                <td colspan="7">暂无工单</td>
+                <td colspan="7" th:text="#{admin.support.empty}">暂无工单</td>
             </tr>
             </tbody>
         </table>
+        <div class="pager" th:if="${page != null and page.totalElements > 0}">
+            <a th:if="${page.hasPrevious()}" th:href="@{/admin/support-tickets(page=${page.number - 1})}"
+               th:text="#{admin.audit.prev}">← 上一页</a>
+            <span th:text="#{admin.audit.page(${page.number + 1}, ${page.totalPages}, ${page.totalElements})}">分页</span>
+            <a th:if="${page.hasNext()}" th:href="@{/admin/support-tickets(page=${page.number + 1})}"
+               th:text="#{admin.audit.next}">下一页 →</a>
+        </div>
     </div>
 </div>
 </body>

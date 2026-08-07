@@ -72,6 +72,8 @@ public final class AuditActions {
     public static final String CONTENT_REVIEW_TIMED_OUT = "CONTENT_REVIEW_TIMED_OUT";
     /** 客服工单结案（Story 4.7，「已联系+已解决」→ RESOLVED + 发结案/CSAT 通知）。 */
     public static final String TICKET_RESOLVED = "TICKET_RESOLVED";
+    /** 客服为工单补挂关联订单（AB-5B 退款判定前置，bug 20260728-384）。 */
+    public static final String TICKET_ORDER_LINKED = "TICKET_ORDER_LINKED";
     /** 异常工单加内部备注（Story 5.1）。 */
     public static final String ANOMALY_NOTE_ADDED = "ANOMALY_NOTE_ADDED";
     /** 异常工单标记已处理/归档（Story 5.1）。 */
@@ -94,6 +96,10 @@ public final class AuditActions {
     public static final String REFUND_PAYOUT_RECORDED = "REFUND_PAYOUT_RECORDED";
     /** 职责分离拦截：同一 admin 试图兼任两职（含 SUPER_ADMIN 不豁免，A-1）。 */
     public static final String REFUND_DUTY_VIOLATION_BLOCKED = "REFUND_DUTY_VIOLATION_BLOCKED";
+
+    // ===== 用户账号治理补充 =====
+    /** 后台赠送 PawCoin（bug 20260728-389；summary 含数量/原因/幂等键，不落 PII）。 */
+    public static final String PAWCOIN_GRANTED = "PAWCOIN_GRANTED";
 
     // ===== 内容审核补充规范 story 8（后台审核增强）=====
     /** 调整人工审核队列项优先级（story 8，§5.1，含旧→新优先级）。 */

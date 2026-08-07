@@ -14,16 +14,19 @@ class _FakeImService implements ImService {
   int logoutCalls = 0;
 
   @override
-  Future<void> logout() async => logoutCalls++;
+  int invalidateCredential() => 0;
+
+  @override
+  Future<void> logout({int? ifGeneration}) async => logoutCalls++;
 
   @override
   Future<void> loginIfNeeded() async {}
 
   @override
-  Future<void> sendText({required String peerId, required String text}) async {}
+  Future<void> sendText({required String peerId, required String text, ChatPushSpec? push}) async {}
 
   @override
-  Future<void> sendImage({required String peerId, required String filePath}) async {}
+  Future<void> sendImage({required String peerId, required String filePath, ChatPushSpec? push}) async {}
 
   @override
   Stream<ImMessage> onMessages(String peerId) => const Stream.empty();

@@ -71,7 +71,7 @@ class MilestoneCheckInServiceTest {
                 .thenReturn(List.of(milestone("C-S6", 1)));
         when(completions.findByPetMilestoneIdIn(List.of(1L)))
                 .thenReturn(List.of(MilestoneCompletion.of(1L, MilestoneCompletionSource.USER_CHECKIN, 2L)));
-        when(contentService.findRecentGrowthMomentsByEventDate(7L, 100))
+        when(contentService.findRecentGrowthMomentsByEventDate(7L, 10L, 100))
                 .thenReturn(List.of(moment(2), moment(3)));
 
         MilestoneCheckinCandidateResponse.Page page = service.candidates(7L);

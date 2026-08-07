@@ -23,6 +23,8 @@ class IdCardData {
     this.address,
     this.occupation,
     this.maritalStatus,
+    this.school,
+    this.faculty,
   });
 
   final bool generated;
@@ -55,6 +57,10 @@ class IdCardData {
   final String? occupation;
   final String? maritalStatus;
 
+  /// 学生卡专属快照（bug 20260730-429）。null = 渲染趣味默认。
+  final String? school;
+  final String? faculty;
+
   factory IdCardData.fromJson(Map<String, dynamic> json) {
     return IdCardData(
       generated: json['generated'] as bool? ?? false,
@@ -75,6 +81,8 @@ class IdCardData {
       address: json['address'] as String?,
       occupation: json['occupation'] as String?,
       maritalStatus: json['maritalStatus'] as String?,
+      school: json['school'] as String?,
+      faculty: json['faculty'] as String?,
     );
   }
 }
@@ -103,6 +111,9 @@ class IdCard {
     this.address,
     this.occupation,
     this.maritalStatus,
+    this.cardType,
+    this.school,
+    this.faculty,
   });
 
   /// 卡自身主键（授权态内部用；详情端点 `GET /pet-profiles/me/id-cards/{id}` 寻址）。
@@ -138,6 +149,13 @@ class IdCard {
   final String? occupation;
   final String? maritalStatus;
 
+  /// 卡种 KTP/PASSPORT/STUDENT（bug 20260730-430：一卡一面）。旧后端/存量卡 null → 视同 KTP。
+  final String? cardType;
+
+  /// 学生卡专属快照（bug 20260730-429）。null = 渲染趣味默认。
+  final String? school;
+  final String? faculty;
+
   factory IdCard.fromJson(Map<String, dynamic> json) {
     return IdCard(
       id: (json['id'] as num).toInt(),
@@ -157,8 +175,14 @@ class IdCard {
       address: json['address'] as String?,
       occupation: json['occupation'] as String?,
       maritalStatus: json['maritalStatus'] as String?,
+      cardType: json['cardType'] as String?,
+      school: json['school'] as String?,
+      faculty: json['faculty'] as String?,
     );
   }
+
+  /// 归一化卡种（bug 430）：旧后端/存量卡 null → KTP。
+  String get effectiveCardType => cardType ?? 'KTP';
 
   /// 转成 [IdCardData] 以复用 KTP 卡面渲染（`buildKtpFields` / `KtpCardFront`）。快照恒 `generated=true`。
   IdCardData toIdCardData() => IdCardData(
@@ -178,6 +202,8 @@ class IdCard {
         address: address,
         occupation: occupation,
         maritalStatus: maritalStatus,
+        school: school,
+        faculty: faculty,
       );
 }
 
@@ -197,6 +223,9 @@ class CreateIdCardRequest {
     this.address,
     this.occupation,
     this.maritalStatus,
+    this.cardType,
+    this.school,
+    this.faculty,
   });
 
   final String name;
@@ -213,6 +242,13 @@ class CreateIdCardRequest {
   final String? occupation;
   final String? maritalStatus;
 
+  /// 卡种 KTP/PASSPORT/STUDENT（bug 20260730-430：建卡即绑定单卡面）。null → 后端默认 KTP。
+  final String? cardType;
+
+  /// 学生卡专属（bug 20260730-429）。null/空 = 后端落 null → 渲染趣味默认。
+  final String? school;
+  final String? faculty;
+
   Map<String, dynamic> toJson() => <String, dynamic>{
         'name': name,
         if (petType != null) 'petType': petType,
@@ -225,6 +261,9 @@ class CreateIdCardRequest {
         if (address != null) 'address': address,
         if (occupation != null) 'occupation': occupation,
         if (maritalStatus != null) 'maritalStatus': maritalStatus,
+        if (cardType != null) 'cardType': cardType,
+        if (school != null) 'school': school,
+        if (faculty != null) 'faculty': faculty,
       };
 
   static String _isoDate(DateTime d) =>

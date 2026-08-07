@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/analytics/analytics.dart';
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/widgets/qr_payment_sheet.dart';
@@ -159,12 +160,23 @@ Future<void> runAiUnlockFlow(
     priceIdr: priceIdr ?? kAiUnlockPriceIdr, // 后端下发价优先，回退硬编码默认（bug 342）
   );
   if (method == null || !context.mounted) return;
+  // AI 问诊付费漏斗（PostHog 区分 AI/VET）：确认支付方式即「解锁开始」。
+  Analytics.capture('ai_unlock_started', {
+    'consult_type': 'AI',
+    'method': _methodWire(method),
+    'price_idr': priceIdr ?? kAiUnlockPriceIdr,
+  });
   final TriageUnlockController notifier = ref.read(
     triageUnlockControllerProvider.notifier,
   );
   await notifier.unlock(triageId, method);
   if (!context.mounted) return;
   final TriageUnlockState st = ref.read(triageUnlockControllerProvider);
+  if (st.phase == UnlockPhase.unlocked) {
+    // 免费额度 / PawCoin 同步即成。
+    Analytics.capture('ai_unlock_succeeded',
+        {'consult_type': 'AI', 'method': _methodWire(method)});
+  }
   if (st.phase == UnlockPhase.waitingPayment &&
       (st.payload?.isNotEmpty ?? false)) {
     await showQrPaymentSheet(
@@ -176,6 +188,8 @@ Future<void> runAiUnlockFlow(
             .read(triageRepositoryProvider)
             .pollTriage(triageId);
         if (r.locked == false) {
+          Analytics.capture('ai_unlock_succeeded',
+              {'consult_type': 'AI', 'method': _methodWire(method)});
           notifier.markUnlocked(triageId, r);
           return true;
         }
@@ -184,6 +198,13 @@ Future<void> runAiUnlockFlow(
     );
   }
 }
+
+/// 埋点受控词表（snake_case wire 值，勿直接用 enum.name——freeQuota 会漏成 camelCase）。
+String _methodWire(UnlockMethod m) => switch (m) {
+  UnlockMethod.freeQuota => 'free_quota',
+  UnlockMethod.pawcoin => 'pawcoin',
+  UnlockMethod.qris => 'qris',
+};
 
 String _methodName(UnlockMethod m, AppLocalizations l10n) => switch (m) {
   UnlockMethod.freeQuota => l10n.triageUnlockMethodFree,

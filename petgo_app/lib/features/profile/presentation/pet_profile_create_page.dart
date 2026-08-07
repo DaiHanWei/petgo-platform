@@ -20,7 +20,6 @@ import '../data/profile_repository.dart';
 import '../data/timeline_repository.dart';
 import '../domain/pending_archive.dart';
 import '../domain/profile_created_flow.dart';
-import '../domain/profile_prompt_controller.dart';
 import 'widgets/pet_form_fields.dart';
 
 /// 宠物档案创建表单（Story 2.2 · F1）。
@@ -168,10 +167,11 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
     }
   }
 
-  /// 建档成功后同步本地登录态与提示条：
-  /// 1) 回填 `auth.profile.hasPetProfile = true`（首页"先建档"提示条等多处的权威源；
-  ///    否则要等下次冷启动重拉 `/me` 才更新，导致建完档提示条仍在）；
-  /// 2) `markCompleted()` 永久关闭档案提示条。
+  /// 建档成功后回填本地登录态：`auth.profile.hasPetProfile = true`。
+  ///
+  /// 这是「是否已建档」的权威源之一（Diary 分支判定、发布页宠物绑定等多处读它）；
+  /// 不回填就要等下次冷启动重拉 `/me` 才更新。
+  /// （V1.1.2 Story 2.3：原先这里还要关闭 FR-0H 首页提示条，该提示条已整条废止。）
   void _markProfileCreated() {
     final profile = ref.read(authControllerProvider).profile;
     if (profile != null && !profile.hasPetProfile) {
@@ -179,7 +179,6 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
           .read(authControllerProvider.notifier)
           .applyProfile(profile.copyWith(hasPetProfile: true));
     }
-    ref.read(profilePromptProvider.notifier).markCompleted();
   }
 
   void _toast(String msg) {

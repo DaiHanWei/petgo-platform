@@ -98,7 +98,7 @@ public class MilestoneCompletionService {
         MilestoneDefinition def = MilestoneCatalog.byCode(code);
         events.publishEvent(new MilestoneCompletedEvent(
                 resolveOwnerId(petProfileId), code, m.getLevel(),
-                def != null ? def.titleZh() : code));
+                def != null ? def.titleZh() : code, source));
         maybeUnlockHealthCombo(petProfileId, petType, code);
         // Lulus Pemula 聚合（7.3）：S1–S5 任一新完成后，若 6 新手任务全达成则解锁。
         if (MilestoneCatalog.NEWBIE_PREREQ_SUFFIXES.contains(suffix)) {

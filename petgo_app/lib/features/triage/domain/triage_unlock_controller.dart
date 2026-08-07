@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../pawcoin/presentation/pawcoin_controller.dart';
 import '../data/triage_repository.dart';
 
 /// AI 详建解锁价（Story 2.4）。前端常量 = 后端默认（Rp10.000）；9-2 后台改价落地后宜由后端下发（[OPEN]）。
@@ -56,6 +57,10 @@ class TriageUnlockController extends Notifier<TriageUnlockState> {
       final UnlockResult res =
           await ref.read(triageRepositoryProvider).unlockTriage(triageId, method);
       if (res.unlocked) {
+        // bug 20260806 同类收口：PawCoin 解锁即时扣款成功后失效余额缓存。
+        if (method == UnlockMethod.pawcoin) {
+          ref.invalidate(pawCoinProvider);
+        }
         state = TriageUnlockState(
             phase: UnlockPhase.unlocked, triageId: triageId, result: res.result);
       } else {

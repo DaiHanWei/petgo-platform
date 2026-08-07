@@ -3,35 +3,35 @@
 <!-- AI 问诊收入统计 + 订单查询（Story 9.4，AB-8C/8G）。只读。与兽医订单命名空间隔离。 -->
 <head>
     <meta charset="UTF-8"/>
-    <title>AI 问诊订单 · TailTopia 运营后台</title>
+    <title th:text="#{admin.aiOrders.title}">AI 问诊订单 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1>AI 问诊收入 · 订单</h1>
+        <h1 th:text="#{admin.aiOrders.title}">AI 问诊收入 · 订单</h1>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
 
-        <h2>收入汇总</h2>
-        <p class="hint">收入口径 = 已完成（COMPLETED）订单金额之和；待支付/异常不计收入。</p>
+        <h2 th:text="#{admin.aiOrders.summary}">收入汇总</h2>
+        <p class="hint" th:text="#{admin.aiOrders.hint.revenue}">收入口径 = 已完成（COMPLETED）订单金额之和；待支付/异常不计收入。</p>
         <table>
-            <tr><th>总收入（IDR）</th><td th:text="${summary.totalRevenue}">0</td></tr>
-            <tr><th>· QRIS 现金</th><td th:text="${summary.revenueQris}">0</td></tr>
-            <tr><th>· PawCoin</th><td th:text="${summary.revenuePawcoin}">0</td></tr>
-            <tr><th>已完成订单数</th><td th:text="${summary.completedCount}">0</td></tr>
-            <tr><th>待支付</th><td th:text="${summary.pendingCount}">0</td></tr>
-            <tr><th>异常（对账）</th><td th:text="${summary.abnormalCount}">0</td></tr>
+            <tr><th th:text="#{admin.aiOrders.totalRevenue}">总收入（IDR）</th><td th:text="${summary.totalRevenue}">0</td></tr>
+            <tr><th th:text="#{admin.aiOrders.revenueQris}">· QRIS 现金</th><td th:text="${summary.revenueQris}">0</td></tr>
+            <tr><th th:text="#{admin.aiOrders.revenuePawcoin}">· PawCoin</th><td th:text="${summary.revenuePawcoin}">0</td></tr>
+            <tr><th th:text="#{admin.aiOrders.completedCount}">已完成订单数</th><td th:text="${summary.completedCount}">0</td></tr>
+            <tr><th th:text="#{admin.aiOrders.pendingCount}">待支付</th><td th:text="${summary.pendingCount}">0</td></tr>
+            <tr><th th:text="#{admin.aiOrders.abnormalCount}">异常（对账）</th><td th:text="${summary.abnormalCount}">0</td></tr>
         </table>
 
-        <h2>订单</h2>
+        <h2 th:text="#{admin.common.order}">订单</h2>
         <p>
             <a class="btn btn-neutral btn-sm" th:href="@{/admin/ai-orders/export}"
-               sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('order.export')">导出 CSV</a>
+               sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('order.export')" th:text="#{admin.common.exportCsv}">导出 CSV</a>
         </p>
         <table>
             <thead>
-            <tr><th>订单</th><th>用户</th><th>分诊任务</th><th>金额</th><th>渠道</th><th>状态</th><th>成交时间</th><th>操作</th></tr>
+            <tr><th th:text="#{admin.common.order}">订单</th><th th:text="#{admin.common.user}">用户</th><th th:text="#{admin.aiOrders.col.triageTask}">分诊任务</th><th th:text="#{admin.common.amount}">金额</th><th th:text="#{admin.common.channel}">渠道</th><th th:text="#{admin.common.status}">状态</th><th th:text="#{admin.common.paidAt}">成交时间</th><th th:text="#{admin.common.actions}">操作</th></tr>
             </thead>
             <tbody>
             <tr th:each="o : ${orders}">
@@ -43,9 +43,9 @@
                 <td th:text="${o.status}">COMPLETED</td>
                 <td th:text="${@adminTime.wib(o.paidAt)}">—</td>
                 <td><a class="btn btn-neutral btn-sm"
-                       th:href="@{/admin/ai-orders/{t}(t=${o.orderToken})}">详情</a></td>
+                       th:href="@{/admin/ai-orders/{t}(t=${o.orderToken})}" th:text="#{admin.common.detail}">详情</a></td>
             </tr>
-            <tr th:if="${orders.isEmpty()}"><td colspan="8">暂无 AI 问诊订单</td></tr>
+            <tr th:if="${orders.isEmpty()}"><td colspan="8" th:text="#{admin.aiOrders.empty}">暂无 AI 问诊订单</td></tr>
             </tbody>
         </table>
     </div>

@@ -112,6 +112,33 @@ class AdminUserAccessControlTest {
         assertThatCode(this::deactivate).doesNotThrowAnyException();
     }
 
+    // ===== bug 20260728-389：赠币受 user.grant_pawcoin 门控 =====
+
+    private void grant() {
+        var admin = new com.tailtopia.admin.service.AdminUserDetails(1L, null, "a@x", null,
+                com.tailtopia.admin.account.domain.AdminAccountType.SUPER_ADMIN);
+        controller.grantPawCoin(admin, 5L, 100L, "补偿", "tok-1",
+                new org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap());
+    }
+
+    @Test
+    void grantRequiresGrantPawcoinAuthority() {
+        auth("ROLE_ADMIN", "user.view", "user.deactivate", "user.delete"); // 全治理权仍无赠币权
+        assertThatThrownBy(this::grant).isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void grantWithAuthorityAllowed() {
+        auth("ROLE_ADMIN", "user.grant_pawcoin");
+        assertThatCode(this::grant).doesNotThrowAnyException();
+    }
+
+    @Test
+    void grantAllowedForSuperAdmin() {
+        auth("ROLE_ADMIN", "ROLE_SUPER_ADMIN");
+        assertThatCode(this::grant).doesNotThrowAnyException();
+    }
+
     // ===== Story 3.3：删除受 user.delete 门控 =====
 
     private void delete() {

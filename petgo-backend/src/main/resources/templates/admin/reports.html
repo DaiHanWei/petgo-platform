@@ -59,7 +59,7 @@
                     <td th:text="${r.reporterId}">-</td>
                     <td th:text="${r.reasonType}">OTHER</td>
                     <td th:text="${r.reportCount}">1</td>
-                    <td th:text="${#temporals.format(r.createdAt, 'yyyy-MM-dd HH:mm')}">-</td>
+                    <td th:text="${@adminTime.wib(r.createdAt)}">-</td>
                     <td>
                         <button type="submit" form="batch-form" formaction="" class="btn btn-danger btn-sm"
                                 th:formaction="@{/admin/reports/{id}/takedown(id=${r.reportId})}"
@@ -97,7 +97,7 @@
                 <td th:text="${r.authorId}">-</td>
                 <td th:text="${r.reasonType}">OTHER</td>
                 <td th:text="${r.handledBy}">-</td>
-                <td th:text="${r.handledAt != null} ? ${#temporals.format(r.handledAt, 'yyyy-MM-dd HH:mm')} : '-'">-</td>
+                <td th:text="${@adminTime.wib(r.handledAt)}">-</td>
                 <td class="muted" th:text="${r.takedownSummary != null} ? ${r.takedownSummary} : '-'">-</td>
             </tr>
             <tr th:if="${#lists.isEmpty(reports)}">

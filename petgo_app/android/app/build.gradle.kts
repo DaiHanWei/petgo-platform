@@ -3,6 +3,8 @@ import java.util.Properties
 
 plugins {
     id("com.android.application")
+    // 系统推送（TIMPush/FCM）：读 app/google-services.json（FCM 通道注册在 IM 控制台，证书 ID 9088）。
+    id("com.google.gms.google-services")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -66,6 +68,12 @@ android {
             } else {
                 signingConfigs.getByName("debug")
             }
+            // AGP 9 起 release 默认开 R8。TIMPush 依赖链里的 WorkManager/Room 靠反射找
+            // 生成类，不加 keep 规则会启动即崩（2026-08-07 真机实测，见 proguard-rules.pro）。
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }
@@ -74,6 +82,14 @@ kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
+}
+
+dependencies {
+    // TIMPush FCM 厂商通道工件（tencent_cloud_chat_push 插件只带 timpush 核心 9.0.7653，
+    // 厂商工件按需自选——本项目仅接 FCM，国内厂商通道一律不接）。
+    // ⚠️ 版本 9.0.7652 非笔误：mavenCentral 上 fcm 工件只发到 9.0.7652（核心 9.0.7653 无配套 fcm，
+    // 腾讯发布侧错位），同小版本兼容。升级插件时先查 repo.maven.apache.org 的 fcm maven-metadata。
+    implementation("com.tencent.timpush:fcm:9.0.7652")
 }
 
 flutter {

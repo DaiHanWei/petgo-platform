@@ -33,8 +33,8 @@
                 th:classappend="${r.systemFailure} ? 'row-alert'">
                 <td class="mono" th:text="${#strings.abbreviate(r.requestToken, 10)}">tok</td>
                 <td th:text="${r.userId}">1</td>
-                <td th:text="${#temporals.format(r.submittedAt, 'MM-dd HH:mm')}">-</td>
-                <td th:text="${#temporals.format(r.cancelledAt, 'MM-dd HH:mm')}">-</td>
+                <td th:text="${@adminTime.wib(r.submittedAt)}">-</td>
+                <td th:text="${@adminTime.wib(r.cancelledAt)}">-</td>
                 <td>
                     <span class="badge" th:classappend="${r.systemFailure} ? 'badge-danger' : 'badge-info'"
                           th:text="#{'admin.failed.reason.' + ${r.cancelReason.name()}}">原因</span>

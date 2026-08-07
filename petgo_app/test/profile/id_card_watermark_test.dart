@@ -58,12 +58,13 @@ void main() {
     expect(find.byType(IdCardWatermark), findsOneWidget);
   });
 
-  testWidgets('未解锁同样盖水印；切护照/学生卡样式水印仍在', (tester) async {
-    await _pump(tester, IdCard(id: 1, serialId: 12, name: 'Mochi', hdUnlocked: false));
-    for (final tab in [1, 2, 0]) {
-      await tester.tap(find.byKey(ValueKey('idCardStyleTab_$tab')));
+  testWidgets('未解锁同样盖水印；护照/学生卡卡种同样盖（bug 430 一卡一面后按 cardType 渲染）',
+      (tester) async {
+    for (final type in ['PASSPORT', 'STUDENT', 'KTP']) {
+      await _pump(tester,
+          IdCard(id: 1, serialId: 12, name: 'Mochi', hdUnlocked: false, cardType: type));
       await tester.pumpAndSettle();
-      expect(find.byType(IdCardWatermark), findsOneWidget, reason: 'styleTab=$tab');
+      expect(find.byType(IdCardWatermark), findsOneWidget, reason: 'cardType=$type');
     }
   });
 

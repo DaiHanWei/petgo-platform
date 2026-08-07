@@ -6,14 +6,17 @@ package com.tailtopia.profile.dto;
  * <p>里程碑总数 {@code milestoneTotal} 按宠物类型动态取值（猫/狗 = 30，其他 = 15）；
  * 里程碑本体为单独 mini-epic，{@code milestoneCompleted} 当前走零态（0），不硬依赖其落地。
  *
- * @param happyMomentCount   快乐时刻条数
- * @param consultCount       问诊（健康事件）次数
- * @param milestoneCompleted 已完成里程碑数（零态 = 0）
- * @param milestoneTotal     里程碑总数（按 pet_type：猫/狗 30，其他 15）
+ * @param happyMomentCount    快乐时刻条数
+ * @param consultCount        问诊（健康事件）次数
+ * @param milestoneCompleted  已完成里程碑数（零态 = 0）
+ * @param milestoneTotal      里程碑总数（按 pet_type：猫/狗 30，其他 15）
+ * @param healthRecordCount   结构化健康记录条数（V1.1.2：Diary 页头健康入口副文案按 0 / 非 0 切换，
+ *        UI 稿 A4 近空态要求）。统计栏本身不展示该数字，只用于文案分支
  */
 public record ArchiveStatsResponse(
         long happyMomentCount,
         long consultCount,
         long milestoneCompleted,
-        int milestoneTotal) {
+        int milestoneTotal,
+        long healthRecordCount) {
 }

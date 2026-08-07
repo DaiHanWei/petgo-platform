@@ -39,7 +39,10 @@ class _FakeIm implements ImService {
   @override
   Future<void> loginIfNeeded() async {}
   @override
-  Future<void> logout() async {}
+  int invalidateCredential() => 0;
+
+  @override
+  Future<void> logout({int? ifGeneration}) async {}
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

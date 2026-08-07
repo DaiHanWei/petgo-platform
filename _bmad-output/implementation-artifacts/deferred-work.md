@@ -113,3 +113,39 @@
 
 ## Deferred from: code review of story 1.1-1.3 联审 (2026-07-11)
 - PENDING 支付意图无本地过期扫描 → 僵尸意图堆积 + 极晚 settlement 仍入账。超出 1.3 AC，留未来 story（建议并入 Epic 3 限时支付的 @Scheduled 扫描范式统一做）。[PaymentIntentService]
+
+## Deferred from: code review of story 6-1-v112-埋点收尾 (2026-08-04)
+
+靶子 commit `06462846`（埋点改名 + 后端里程碑埋点 + 三处遗留闭合）。三层并行评审 + 主审复核，共 5 决策 / 22 待修 / 2 延后。下列两项判定为既有问题、非本次引入：
+
+- **`LoginGuideController` 把调用方身份硬编码进自己**：类注释明确「组件本身不含触发条件，暴露供任意触发源注入」，但事件名 `social_soft_login_sheet_shown`（2026-08-04 由 `discovery_soft_login_sheet_shown` 改名） 与 `entrySource` 默认值 `social_soft_login` 写死了 Discovery。当前唯一真实调用点确实是 Discovery（`home_page.dart:46`），故看板暂无错误数据；**下一个复用该浮层的页面会被记成 Discovery**。届时应把来源改为由调用方注入（与 `requireLogin(entrySource:)` 同范式）。[`petgo_app/lib/features/auth/domain/login_guide_controller.dart:37, 49`]
+- **时间线预取阈值 400px 可能连锁拉多页，且外层 `Column` 全量构建无上界**：单页新增内容高度 < 400px 时（某页全是矮胶囊/banner），一次惯性滑动可能把后续各页一口气拉完；时间线用全量 `Column` 渲染（非懒加载 sliver），条目累积后 build/layout 成本无上界。属本次分页方案的固有特性而非回归，重度用户（数百条）才会有体感。彻底解法是改 sliver + 预取节流 + `_extra` 总量上限。[`petgo_app/lib/features/profile/presentation/growth_archive_page.dart:274, 581`]
+
+## Deferred from: code review of Epic 7 (7-1~7-4) (2026-08-04)
+
+靶子 `07c70b9b..HEAD`（11 提交 / 代码与文档 75 文件 +1564/-432）。三层并行评审 + 主审复核。完整 findings 台账在 `v1.1.2/7-4-落地分流收口与超时兜底迟到纠正.md#Review Findings`。下列三项判定为既有欠账或已知取舍：
+
+- **iOS 原生 mark 固定 192pt 与 Android 180dp 相差 6.7%**：Story 7-1 自己已记「V1 不上 iOS，待 iOS 上架前处理」。⚠️ 与之相关的**另一条不是延后项**：Flutter 首帧用屏宽 42%（411dp 机型 172.6dp）与原生的固定 192 在任何常见机型上都不相等（iPhone SE 差 30%），那条属决策项、需拍板。
+- **`ios/Runner/Base.lproj/LaunchScreen.storyboard` 的 `<image width="1152" height="1152"/>` 与 1x 资产实测 288×288 不符**：`flutter_native_splash` 生成物按源图尺寸写元数据，仅影响 Xcode 画布预览、不影响运行时；手工改会在下次 `dart run flutter_native_splash:create` 时被覆盖。若要根治需改生成器输入或接受该元数据。
+- **Poppins / Quicksand / Rubik 三款既有字体没有随包分发许可证文件**：本轮只有新增的 Fraunces 明确在 pubspec 注释里声称了 OFL 合规（而它实际也没做到，已列入待修）。这三款属长期欠账，建议单独一轮「开源许可证收口」：把各字体的 LICENSE 加入 assets 或统一用 `LicenseRegistry.addLicense` 注册，并在设置页提供开源许可页。
+
+### 追加（Epic 7 修补过程中新增，2026-08-05）
+
+上面三项之外，31 条待修全部修完后新冒出三条需产品/技术定夺的，完整描述见
+`v1.1.2/7-4-落地分流收口与超时兜底迟到纠正.md#Review Findings` 末尾的 Open 项：
+
+- **迟到纠正的免打扰仍漏一类场景**：`showModalBottomSheet`（默认 `useRootNavigator: false`）与游客 Diary 的页内 `Navigator.push` 走分支 Navigator，既不改变路由 path、也不出现在根 Navigator 的 `canPop` 里 ⇒ 用户正看着它们时纠正仍会跳页并把它们关掉。两条路：① 把分支 Navigator 的 key 暴露到 router 层统一判定（要改 shell 构建）；② 「兜底落地后只要用户有任何交互就 disarm」（最安全，但 FR-91 实际几乎不会触发 —— 属产品取舍，AC4 的优先级原则支持它）。
+- **Fraunces 子集需补码位**：实测仅 97 码位（U+0020–U+007E + U+2019 + U+2026），缺破折号 U+2014/U+2013 与弯引号 U+2018/U+201C/U+201D。当前四条 splash 文案全在范围内，所以是「下次改文案就会踩」。需重跑 fonttools 子集脚本，并把 pubspec 里的码位说明同步为实测值。本轮只加了 `fontFamilyFallback` 兜底（缺字掉系统字体而非豆腐块，代价是同行两种字形）。
+- **开源许可页**：本轮已把 `assets/fonts/OFL.txt` 加入 assets（真正随包分发），但用户无处查看，OFL §2 的「随分发附带」只做到一半。用 Flutter 内置 `LicenseRegistry` / `AboutDialog` 承载即可，顺带把 Poppins / Rubik（及已停止打包但文件保留的 Quicksand）的许可证一并登记 —— 与上面「开源许可证收口」是同一件事，建议合并做。
+
+## 2026-08-07 · 推送接入评审 defer 项（spec-push-timpush-integration 评审产出）
+- **usersig 放宽后的 IM 滥用面缓解**：MAU 闸门取消（用户拍板决策）后，任意登录用户可拿 UserSig 用裸 SDK 向任意 `u_<id>`/`v_<id>` 发 C2C（绕过问诊排队骚扰兽医）。缓解手段不在本 story：可在 IM 控制台开「单聊消息校验回调」由后端校验会话关系后放行/拦截（ImCallbackController 已有骨架），或开腾讯好友关系链校验。上线前评估。
+- **`ConsultSessionService.hasImLoginEligibleSession`（:129）成死代码**：MAU 闸门放宽后无调用方，随后续提交清理。
+- **兽医侧 id 寻址类推送深链**：`sendToVet` 现固定 `token=null,targetRef=null`（当前唯一兽医推送 NEW_CONSULT_REQUEST 是固定落点，无影响）；未来若加兽医侧订单/工单类推送，需把 targetRef 穿透 `sendToVet` 签名。
+
+## 2026-08-07 · IM 会话消息的离线推送未跑通（已决定搁置，不阻塞发版）
+**现象**：通知类推送（点赞/评论，走后端 `/v4/timpush/batch`）iOS/Android 双端均正常；**IM 会话消息**（兽医↔用户聊天，走发送端 SDK 附带 `OfflinePushInfo`）双向都收不到通知栏推送。
+**已排除**：① `doBackground` 时序（先回桌面停 5s 再发，同样收不到）；② 客户端接线（两侧 `ImChatPlaceholder` 均已传 `sessionId`，`ChatPushSpec` 正确构造）；③ 推送通道与证书（同设备同证书下通知类推送可达）；④ SDK 版本一致性（chat_sdk 与 push 均 9.0.7652）。
+**待查线索**：TIMPush 插件全程未调用 IM SDK 的 `V2TIMOfflinePushManager.setOfflinePushConfig`（把 token 绑给 **IM 服务**的接口）——但 iOS 侧插件并不暴露 APNs token，说明该绑定**本应由 TIMPush 原生自动完成**，故此线索未坐实。
+**下一步建议**：① 用后端系统消息（`sendSystemMessage`，已带 `OfflinePushInfo`，纯服务端 → IM 服务路径）做区分实验——能到则问题在客户端发送路径，不能到则是 IM 服务侧绑定/配置；② 腾讯控制台 Push → 接入测试指定 userID 验通道；③ 必要时提工单。
+**影响面**：兽医回复的**通知中心推送**（FR-22A，后端 `VET_REPLY`）不受影响、正常可达；缺的只是聊天消息本身的即时通知栏提醒。

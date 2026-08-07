@@ -117,7 +117,7 @@ class _TriageUploadPageState extends ConsumerState<TriageUploadPage> {
 
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context);
-    Analytics.capture('triage_submitted');
+    Analytics.capture('triage_submitted', {'consult_type': 'AI'});
     try {
       await ref.read(triageUploadProvider.notifier).submit();
     } catch (_) {
@@ -163,7 +163,11 @@ class _TriageUploadPageState extends ConsumerState<TriageUploadPage> {
             primaryLabel: l10n.triageResubmit,
             onPrimary: _submit,
             softGuideLabel: l10n.triageContactVet, // 软引导：失败降级时去在线兽医咨询
-            onSoftGuide: () => context.push('/consult'),
+            onSoftGuide: () {
+              Analytics.capture('consult_started',
+                  {'consult_type': 'VET', 'source': 'triage_fallback'});
+              context.push('/consult');
+            },
           ),
         TriagePhase.done => _buildResult(),
         TriagePhase.idle => _buildForm(l10n),

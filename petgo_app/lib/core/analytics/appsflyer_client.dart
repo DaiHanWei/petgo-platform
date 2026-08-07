@@ -1,6 +1,5 @@
 import 'dart:io' show Platform;
 
-import 'package:app_tracking_transparency/app_tracking_transparency.dart';
 import 'package:appsflyer_sdk/appsflyer_sdk.dart';
 import 'package:flutter/foundation.dart';
 
@@ -34,6 +33,12 @@ class AppsFlyerClient {
   bool _initialized = false;
   bool _started = false;
 
+  /// init 完成前到达的 CUID（PR#34 finding #15）。init 移到首帧后（runApp 之后）与
+  /// auth 冷启动恢复的 identify 形成竞态——identify 抢跑时若直接丢弃，且调用方只在
+  /// 用户 id **变化**时才重报，该会话的归因事件（含 af_purchase）就整段无 CUID。
+  /// 空串 = 待补发的 clear；null = 无待发。
+  String? _pendingCuid;
+
   /// `runApp` 前调用一次（`main()`）。只 init 不上报（manualStart），失败不抛。
   Future<void> init() async {
     if (_initialized) return;
@@ -46,35 +51,39 @@ class AppsFlyerClient {
         timeToWaitForATTUserAuthorization: 60,
         manualStart: true,
       ));
-      await sdk.initSdk(
-        registerConversionDataCallback: true, // 安装来源回调（GCD）
-        registerOnAppOpenAttributionCallback: false,
-        registerOnDeepLinkingCallback: false, // 之后做 OneLink 再打开
-      );
+      // 超时上限（V1.1.2 Story 7.3 · NFR-13）：本方法在 `main.dart` 里被 `runApp` 前 await，
+      // 卡住会直接拖慢首帧。原先只有下方的 try/catch 吞错、**没有超时**，initSdk 若不返回
+      // 就会无限期阻塞启动。与 `Analytics.init()` 取同一口径（3s + 吞错）。
+      // 超时后 `_initialized` 保持 false ⇒ 归因不上报，与初始化抛错的降级行为一致。
+      await sdk
+          .initSdk(
+            registerConversionDataCallback: true, // 安装来源回调（GCD）
+            registerOnAppOpenAttributionCallback: false,
+            registerOnDeepLinkingCallback: false, // 之后做 OneLink 再打开
+          )
+          .timeout(const Duration(seconds: 3));
       _sdk = sdk;
       _initialized = true;
+      // 补发 init 期间抢跑的 identify/clear（finding #15：早退丢弃 → 整会话无 CUID）。
+      final pending = _pendingCuid;
+      _pendingCuid = null;
+      if (pending != null) {
+        if (pending.isEmpty) {
+          clearUserId();
+        } else {
+          setUserId(pending);
+        }
+      }
     } catch (e) {
       debugPrint('[AppsFlyer] init failed: $e');
     }
   }
 
-  /// 首帧后调用：iOS 先请求 ATT 授权（结果出来/被跳过后）再上报启动；Android 直接上报。
-  /// 幂等（只 start 一次）。
-  ///
-  /// TODO(产品/合规)：iOS 上应先展示一屏价值说明页再弹 ATT（提升同意率，Apple 审核友好），
-  /// 待产品出文案后接入；当前直接请求（交付文档 §3.5 待确认项 3/4）。
+  /// 启动上报（幂等，只 start 一次）。**ATT 请求不在本类**——审核拒信修复
+  /// （2026-08-06）后由 `AttGate.requestIfNeeded()` 独立负责，调用方须先 await
+  /// 它再调本方法（见 main.dart），AppsFlyer init 失败不影响 ATT 弹窗。
   Future<void> start() async {
     if (!_initialized || _started) return;
-    try {
-      if (Platform.isIOS) {
-        final status = await AppTrackingTransparency.trackingAuthorizationStatus;
-        if (status == TrackingStatus.notDetermined) {
-          await AppTrackingTransparency.requestTrackingAuthorization();
-        }
-      }
-    } catch (e) {
-      debugPrint('[AppsFlyer] ATT request failed: $e'); // ATT 失败不阻断启动上报
-    }
     try {
       _sdk?.startSDK();
       _started = true;
@@ -87,7 +96,10 @@ class AppsFlyerClient {
   /// `Analytics.distinctIdFor(userId)`（同一份 Dart 代码天然一致），不传邮箱/手机号。
   /// Android 用 `setCustomerIdAndLogSession` 补发一次带 CUID 的 session。
   void setUserId(String cuid) {
-    if (!_initialized) return;
+    if (!_initialized) {
+      _pendingCuid = cuid; // init 完成后补发（finding #15）
+      return;
+    }
     try {
       if (Platform.isAndroid) {
         _sdk?.setCustomerIdAndLogSession(cuid);
@@ -101,7 +113,10 @@ class AppsFlyerClient {
 
   /// 登出/换账号时清空 CUID，避免下一账号的事件挂到上一用户身上。
   void clearUserId() {
-    if (!_initialized) return;
+    if (!_initialized) {
+      _pendingCuid = ''; // 覆盖可能挂着的待发 identify——登出语义优先（finding #15）
+      return;
+    }
     try {
       _sdk?.setCustomerUserId('');
     } catch (e) {

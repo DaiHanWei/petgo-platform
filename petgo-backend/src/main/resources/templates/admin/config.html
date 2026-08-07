@@ -3,76 +3,73 @@
 <!-- 运营配置（Story 9.2）：定价 / PawCoin / 充值档位。改值只影响后续（历史落快照）；变更留审计。 -->
 <head>
     <meta charset="UTF-8"/>
-    <title>运营配置 · TailTopia 运营后台</title>
+    <title th:text="#{admin.config.title}">运营配置 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1>运营配置</h1>
+        <h1 th:text="#{admin.config.title}">运营配置</h1>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
-        <p class="hint">改动仅影响后续新成交；历史订单按成交快照不变。每次修改记入变更日志与审计哈希链。</p>
+        <p class="hint" th:text="#{admin.config.hint}">改动仅影响后续新成交；历史订单按成交快照不变。每次修改记入变更日志与审计哈希链。</p>
 
         <!-- 定价（AB-8A/8F）——仅 config.edit 可改；否则只读 -->
-        <h2>定价配置</h2>
+        <h2 th:text="#{admin.config.pricing}">定价配置</h2>
         <form class="card" method="post" th:action="@{/admin/config/pricing}"
               sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.edit')">
-            <label class="field">兽医单次咨询价（IDR）
+            <label class="field"><span th:text="#{admin.config.vetConsultPrice}">兽医单次咨询价（IDR）</span>
                 <input class="field-full" type="number" name="vetConsultPrice" min="0" th:value="${pricing.vetConsultPrice}"/>
             </label>
-            <label class="field">兽医分成（%，0–100）
+            <label class="field"><span th:text="#{admin.config.vetShareRate}">兽医分成（%，0–100）</span>
                 <input class="field-full" type="number" name="vetShareRate" min="0" max="100" th:value="${pricing.vetShareRate}"/>
             </label>
-            <label class="field">AI 详情解锁价（IDR）
+            <label class="field"><span th:text="#{admin.config.aiUnlockPrice}">AI 详情解锁价（IDR）</span>
                 <input class="field-full" type="number" name="aiUnlockPrice" min="0" th:value="${pricing.aiUnlockPrice}"/>
             </label>
-            <label class="field">身份证高清图下载价（IDR）
+            <label class="field"><span th:text="#{admin.config.idHdDownloadPrice}">身份证高清图下载价（IDR）</span>
                 <input class="field-full" type="number" name="idHdDownloadPrice" min="0" th:value="${pricing.idHdDownloadPrice}"/>
             </label>
-            <label class="field">每月AI问诊免费额度（0–35）
+            <label class="field"><span th:text="#{admin.config.monthlyFreeQuota}">每月AI问诊免费额度（0–35）</span>
                 <input class="field-full" type="number" name="monthlyFreeQuota" min="0" max="35" th:value="${pricing.monthlyFreeQuota}"/>
             </label>
-            <button type="submit" class="btn btn-primary btn-sm mt-sm">保存定价</button>
+            <button type="submit" class="btn btn-primary btn-sm mt-sm" th:text="#{admin.config.btn.savePricing}">保存定价</button>
         </form>
-        <p class="hint" sec:authorize="!hasRole('SUPER_ADMIN') and !hasAuthority('config.edit')">
-            当前兽医单价 <span th:text="${pricing.vetConsultPrice}">0</span> / 分成
-            <span th:text="${pricing.vetShareRate}">0</span>% / AI
-            <span th:text="${pricing.aiUnlockPrice}">0</span> / HD
-            <span th:text="${pricing.idHdDownloadPrice}">0</span> / 每月AI问诊免费额度
-            <span th:text="${pricing.monthlyFreeQuota}">0</span>（只读，需 config.edit 权限修改）
+        <p class="hint" sec:authorize="!hasRole('SUPER_ADMIN') and !hasAuthority('config.edit')"
+           th:text="#{admin.config.pricingReadonly(${pricing.vetConsultPrice}, ${pricing.vetShareRate}, ${pricing.aiUnlockPrice}, ${pricing.idHdDownloadPrice}, ${pricing.monthlyFreeQuota})}">
+            当前定价（只读，需 config.edit 权限修改）
         </p>
 
         <!-- PawCoin（AB-6A/6C）-->
         <h2>PawCoin</h2>
         <form method="post" th:action="@{/admin/config/pawcoin}"
               sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.edit')">
-            <label>退款转币溢价（%，0–50）
+            <label><span th:text="#{admin.config.premiumRate}">退款转币溢价（%，0–50）</span>
                 <input type="number" name="premiumRate" min="0" max="50" th:value="${pawcoin.premiumRate}"/></label>
-            <label>退款转币固定溢价（koin，≥0）
+            <label><span th:text="#{admin.config.premiumFixed}">退款转币固定溢价（koin，≥0）</span>
                 <input type="number" name="premiumFixed" min="0" th:value="${pawcoin.premiumFixed}"/></label>
-            <label>暂停充值
+            <label><span th:text="#{admin.config.topupPaused}">暂停充值</span>
                 <input type="checkbox" name="topupPaused" value="true" th:checked="${pawcoin.topupPaused}"/></label>
-            <button type="submit" class="btn btn-primary btn-sm">保存 PawCoin 配置</button>
+            <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.config.btn.savePawcoin}">保存 PawCoin 配置</button>
         </form>
 
         <!-- 充值档位（AB-6B）——保底 ≥1 启用 -->
-        <h2>充值档位</h2>
-        <p class="hint">至少保留 1 个启用档位；停用不影响历史订单。</p>
+        <h2 th:text="#{admin.config.tiers}">充值档位</h2>
+        <p class="hint" th:text="#{admin.config.hint.tiers}">至少保留 1 个启用档位；停用不影响历史订单。</p>
         <table>
             <thead>
-            <tr><th>档位</th><th>金额（IDR）</th><th>状态</th><th>操作</th></tr>
+            <tr><th th:text="#{admin.config.col.tier}">档位</th><th th:text="#{admin.config.col.amount}">金额（IDR）</th><th th:text="#{admin.common.status}">状态</th><th th:text="#{admin.common.actions}">操作</th></tr>
             </thead>
             <tbody>
             <tr th:each="t : ${tiers}">
                 <td th:text="${t.tierKey}">10k</td>
                 <td th:text="${t.amountIdr}">10000</td>
-                <td th:text="${t.enabled} ? '启用' : '停用'">启用</td>
+                <td th:text="${t.enabled} ? #{admin.common.enabled} : #{admin.common.disabled}">启用</td>
                 <td sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.edit')">
                     <form method="post" th:action="@{/admin/config/tiers/{id}/enabled(id=${t.id})}" style="display:inline">
                         <input type="hidden" name="enabled" th:value="${!t.enabled}"/>
                         <button type="submit" class="btn btn-neutral btn-sm"
-                                th:text="${t.enabled} ? '停用' : '启用'">切换</button>
+                                th:text="${t.enabled} ? #{admin.common.disable} : #{admin.common.enable}">切换</button>
                     </form>
                 </td>
             </tr>

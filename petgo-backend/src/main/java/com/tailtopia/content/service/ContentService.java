@@ -18,12 +18,16 @@ import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.ratelimit.IdempotencyService;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -190,7 +194,7 @@ public class ContentService {
                                 p.getAuthorId(), ContentType.GROWTH_MOMENT, PostStatus.PUBLISHED)
                         : 0L;
                 events.publishEvent(new ContentPublishedEvent(p.getId(), p.getAuthorId(), p.getType(),
-                        p.getPetId(), growthCount, p.getCreatedAt()));
+                        p.getPetId(), growthCount, p.getVisibility(), p.getCreatedAt()));
             }
         });
     }
@@ -331,8 +335,12 @@ public class ContentService {
                         ? java.math.BigDecimal.valueOf(outcome.riskScore())
                                 .setScale(3, java.math.RoundingMode.HALF_UP)
                         : null; // 降级评分未知（-1）→ 不落
-                ContentPost pending = posts.save(ContentPost.pendingReview(
-                        authorId, req.type(), petId, text, imageUrls, eventDate, riskScore, reviewReason));
+                ContentPost pendingPost = ContentPost.pendingReview(
+                        authorId, req.type(), petId, text, imageUrls, eventDate, riskScore, reviewReason);
+                // 挂起帖同样要带上用户选择的可见范围——否则 PRIVATE 日记审核通过后会以实体默认的
+                // PUBLIC 进 Feed（approveReview 只翻 status、终身无修正机会），私密内容被公开。
+                pendingPost.setVisibility(req.visibilityOrPublic());
+                ContentPost pending = posts.save(pendingPost);
                 idempotency.store(idempotencyKey, pending.getId());
                 manualReviewGate.enqueue(pending.getId());
                 return ContentPostResponse.from(pending);
@@ -341,19 +349,23 @@ public class ContentService {
             // fall-through 至下方正常发布路径。
         }
 
-        ContentPost saved = posts.save(ContentPost.publish(
-                authorId, req.type(), petId, text, imageUrls, eventDate));
+        ContentPost post = ContentPost.publish(
+                authorId, req.type(), petId, text, imageUrls, eventDate);
+        // Story 4.2 同步开关：关 → PRIVATE（仅作者自视）。省略/开 → PUBLIC。
+        // ⚠️ 审核流程不因私密而跳过（私密内容同样过审核，AC9）——这里只设可见范围，不动 status。
+        post.setVisibility(req.visibilityOrPublic());
+        ContentPost saved = posts.save(post);
 
         idempotency.store(idempotencyKey, saved.getId());
 
-        // 里程碑自动完成（Story 8.3）：发布领域事件供 profile 订阅（首张成长日历 S2 / 首条日常 S5 /
+        // 里程碑自动完成（Story 8.3）：发布领域事件供 profile 订阅（首张成长日历 S2 / 首条平台帖子 S5 /
         // 计数类 M10·L5）。GROWTH_MOMENT 携发布后总数供计数判定，非该类为 0。content 不直调 profile 里程碑。
         long growthCount = req.type() == ContentType.GROWTH_MOMENT
                 ? posts.countByAuthorIdAndTypeAndDeletedAtIsNullAndStatus(
                         authorId, ContentType.GROWTH_MOMENT, PostStatus.PUBLISHED)
                 : 0L;
-        events.publishEvent(new ContentPublishedEvent(
-                saved.getId(), authorId, req.type(), petId, growthCount, saved.getCreatedAt()));
+        events.publishEvent(new ContentPublishedEvent(saved.getId(), authorId, req.type(), petId,
+                growthCount, saved.getVisibility(), saved.getCreatedAt()));
         return ContentPostResponse.from(saved);
     }
 
@@ -372,6 +384,52 @@ public class ContentService {
                 .stream()
                 .map(ContentService::toGrowthMomentView)
                 .toList();
+    }
+
+    /**
+     * 成长时间线取数（Story 3.1 · AD-1）：按**统一游标锚点**取一批快乐时刻，
+     * 排序 = {@code event_date} 倒序 → 同日 {@code created_at} 倒序（与聚合侧全局序一致）。
+     *
+     * <p>取代 {@link #findGrowthMoments}（按 created_at 单键）——排序键与游标键必须同一把尺子，
+     * 否则补记旧日期的日记会在翻页时丢失或重复（重构前的现网缺陷）。
+     *
+     * <p>内部**两路取数再归并**：event_date 非空走复合锚点；V26 之前 event_date 为 NULL 的存量行
+     * 走 created_at 单键上界（其有效日期由 created_at 推导，与之单调同序）。拆两路是为了避免在
+     * JPQL 里对 timestamptz 做时区敏感的 date 转换；漏掉第二路会让存量老内容整体消失。
+     *
+     * <p><b>不在本方法内截断到页大小</b>——归并后再截断由聚合侧统一负责（AD-1 Rule 2）。
+     *
+     * @param anchorDate          锚点事件日期（严格小于）
+     * @param anchorKey           锚点同日排序键（同日时严格小于）
+     * @param createdAtUpperBound 锚点在 created_at 单键上的等价上界（供 NULL event_date 存量行使用）
+     * @param limit               本批最多条数（调用方按需多取，用于归并稳健性）
+     */
+    @Transactional(readOnly = true)
+    public List<GrowthMomentView> findGrowthMomentsBeforeAnchor(long authorId, long petId,
+            LocalDate anchorDate, Instant anchorKey, Instant createdAtUpperBound, int limit) {
+        Pageable page = PageRequest.of(0, limit);
+        List<GrowthMomentView> dated = posts.findGrowthMomentsBeforeAnchor(
+                        authorId, petId, ContentType.GROWTH_MOMENT, anchorDate, anchorKey, page)
+                .stream().map(ContentService::toGrowthMomentView).toList();
+        List<GrowthMomentView> legacy = posts.findGrowthMomentsBeforeAnchorLegacyNullEventDate(
+                        authorId, petId, ContentType.GROWTH_MOMENT, createdAtUpperBound, page)
+                .stream().map(ContentService::toGrowthMomentView).toList();
+        if (legacy.isEmpty()) {
+            return dated; // 绝大多数账号无存量 NULL 行，直接返回避免多余拷贝
+        }
+        List<GrowthMomentView> merged = new ArrayList<>(dated.size() + legacy.size());
+        merged.addAll(dated);
+        merged.addAll(legacy);
+        merged.sort(Comparator
+                .comparing((GrowthMomentView g) -> effectiveDateOf(g))
+                .thenComparing(GrowthMomentView::createdAt)
+                .reversed());
+        return merged.size() > limit ? List.copyOf(merged.subList(0, limit)) : List.copyOf(merged);
+    }
+
+    /** 有效日期：event_date 为空时回退 created_at 的 UTC 日（与 TimelineItemResponse.effectiveDate 同口径）。 */
+    private static LocalDate effectiveDateOf(GrowthMomentView g) {
+        return g.eventDate() != null ? g.eventDate() : g.createdAt().atZone(ZoneOffset.UTC).toLocalDate();
     }
 
     /**
@@ -402,15 +460,16 @@ public class ContentService {
     /**
      * 名片快乐时刻流（Story 2.6 AC7 · F9）：按 {@code event_date} 倒序取最近 limit 条 GROWTH_MOMENT。
      * 经 service 接口供 H5 名片 / 里程碑打卡候选取数（禁 join）。
+     * bug 20260730-435：按 petId 过滤，排除删档遗留（pet_id=NULL）的旧宠物帖。
      *
      * <p><b>可见性（内容审核 story 2 · §5.4 补泄漏口）</b>：仅 {@code PUBLISHED}——名片是他人/公开视角，
      * 挂起（UNDER_REVIEW）成长时刻零泄漏；里程碑打卡候选亦不含挂起帖（挂起帖不可被打卡关联）。
      * 作者本人自看时间线（{@link #findGrowthMoments} 等）含挂起帖，口径不同。
      */
     @Transactional(readOnly = true)
-    public List<GrowthMomentView> findRecentGrowthMomentsByEventDate(long authorId, int limit) {
-        return posts.findByAuthorIdAndTypeAndDeletedAtIsNullAndStatusOrderByEventDateDescCreatedAtDesc(
-                        authorId, ContentType.GROWTH_MOMENT, PostStatus.PUBLISHED, PageRequest.of(0, limit))
+    public List<GrowthMomentView> findRecentGrowthMomentsByEventDate(long authorId, long petId, int limit) {
+        return posts.findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndStatusOrderByEventDateDescCreatedAtDesc(
+                        authorId, petId, ContentType.GROWTH_MOMENT, PostStatus.PUBLISHED, PageRequest.of(0, limit))
                 .stream()
                 .map(ContentService::toGrowthMomentView)
                 .toList();

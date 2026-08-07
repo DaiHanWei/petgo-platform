@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.1.0+7
+version: 1.1.2+8
 
 environment:
   sdk: ^3.12.1
@@ -76,6 +76,10 @@ dependencies:
   # Story 5.5 L2：腾讯 IM Flutter SDK（兽医↔用户实时 C2C 收发）。
   # UserSig 取自后端 /im/usersig（短时），前端绝不自签 / 不持 SecretKey。
   tencent_cloud_chat_sdk: ^9.0.7652+1
+  # 系统推送（TIMPush 统一插件，仅 FCM+APNs 通道）。版本须与 chat_sdk 同号配套（9.0.7652）。
+  # 注册时机受 F7 门控（core/push/push_service.dart 单一收口），反注册绑 toGuest。
+  # 调研报告：_bmad-output/planning-artifacts/research/technical-tencent-im-offline-push-fcm-apns-research-2026-08-07.md
+  tencent_cloud_chat_push: 9.0.7652
   # 前端行为分析（PostHog Cloud US）。Project Token 走 dart-define 注入（POSTHOG_KEY），
   # 不外露 PII / 不传自增 id（identify 用哈希 distinctId，见 core/analytics/analytics.dart）。
   posthog_flutter: ^5.33.0
@@ -85,6 +89,13 @@ dependencies:
   appsflyer_sdk: ^6.18.1
   # iOS 14.5+ ATT 授权弹窗（拿 IDFA 用；AppsFlyer 插件只等待不弹框）。Android 上无操作。
   app_tracking_transparency: ^2.0.6
+
+dependency_overrides:
+  # jcenter() 已被 Gradle 9 移除而 pub.dev 原版 9.0.7652 仍在用 → vendor 打补丁
+  # （唯一改动=删两行 jcenter，见 third_party/tencent_cloud_chat_push/VENDORED.md）。
+  # 上游修复后删除本段与 third_party 目录回归 pub 版。
+  tencent_cloud_chat_push:
+    path: third_party/tencent_cloud_chat_push
 
 dev_dependencies:
   flutter_test:
@@ -118,11 +129,20 @@ flutter:
   # 演示/假数据宠物照片（mock 模式 Feed/详情/档案用，asset: 前缀经 app_image 解析）。
   assets:
     - assets/seed/
+    # Diary 游客引导态的内置示例配图（FR-80 · NFR-5 零网络）。
+    # 目前是 assets/seed 的缩图占位（OQ-1 未闭合）；素材到位后同名替换即可，不需改代码。
+    - assets/demo_diary/
     - assets/icons/
     - assets/brand/
     - assets/ktp/
     - assets/passport/
     - assets/student/
+    # 字体许可证。**必须打进包里**（code-review 2026-08-04）：OFL-1.1 §2 要求
+    # 「每份分发副本须含版权声明与本许可证」，而 `fonts:` 段只会打包 ttf 本身 ——
+    # 改前 OFL.txt 只存在于 git 仓库、从不随 app 分发，pubspec 注释却宣称已合规。
+    # ⚠️ 仅打包还不等于「用户可见」；如需完全合规，另需一个开源许可页
+    # （Flutter 内置 `LicenseRegistry` / `AboutDialog` 即可承载）—— 已记 deferred-work。
+    - assets/fonts/OFL.txt
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
@@ -160,15 +180,52 @@ flutter:
           weight: 600
         - asset: assets/fonts/Poppins-Bold.ttf
           weight: 700
-    # Quicksand：圆角字体，splash 标语用（原型 p-01）。可变字体(300–700)，按 fontVariations 取字重。
-    - family: Quicksand
-      fonts:
-        - asset: assets/fonts/Quicksand-VariableFont_wght.ttf
+    # Quicksand（124KB）：**已停止打包**（code-review 2026-08-04）。
+    # 它原是 splash 标语用字体，而 Story 7.2 已把标语改用 Fraunces ⇒ 全仓再无任何代码引用
+    # （`grep Quicksand lib/` 只剩说明性注释），继续声明只是让每个用户白下载 124KB。
+    # 字体文件本身保留在 assets/fonts/ 下（物理删除留 Epic 收尾统一处理，与旧品牌资产同批）；
+    # 若日后要重新启用，把下面三行取消注释即可。
+    # - family: Quicksand
+    #   fonts:
+    #     - asset: assets/fonts/Quicksand-VariableFont_wght.ttf
     # Rubik：KTP 证件卡专用（设计稿 FONT.txt 指定 SemiBold/Medium）。可变字体(300–900)，
     # 按 fontVariations 取字重。仅证件卡用，不进全局主题。
     - family: Rubik
       fonts:
         - asset: assets/fonts/Rubik-VariableFont_wght.ttf
+    # Fraunces：splash 标语与慢网提示专用（V1.1.2 Story 7.2 · 决策 C-9）。仅 splash 用，不进全局主题。
+    #
+    # 来源：Google Fonts 的 Fraunces 可变字体（OFL-1.1）。许可证在 assets/fonts/OFL.txt，
+    # **已加入上面的 assets 列表**（2026-08-04 修：改前只在 git 里、不随 app 分发，
+    # 而本注释当时已宣称合规）。勿删、勿从 assets 列表里移出。子集化后 38KB。
+    #
+    # ⚠️ 轴的处置（与设计稿 F1 的四轴写法有出入，理由如下，改前先读）：
+    #   - wght 500 与 opsz 已**烘死进字体**（instancer 固化）—— 这两个值设计上恒定，
+    #     保留可变会把体积从 38KB 抬到 121KB。实测 fvar 只剩 SOFT / WONK 两轴，
+    #     OS/2.usWeightClass = 500，内部 PostScript 名是 `Fraunces-9ptBlack`。
+    #     ⚠️ **烘入的具体 opsz 值无法从文件反查**（code-review 2026-08-04）：本注释原写 16、
+    #     而 splash_page.dart 的慢网提示注释原写「opsz 12 已烘入」—— 同一个文件不可能两者都真。
+    #     两处已订正为「opsz 已固化、值需重跑子集脚本核对」。
+    #     连带后果：**Story 7-3 AC5 要求的「提示用 opsz 12」不可达**，提示实际以标语的光学尺寸
+    #     渲染。决策 D5（2026-08-04）：不为一行 12.5px 的提示重新产字体，接受该偏差。
+    #   - SOFT 与 WONK **保留可变**，由代码 fontVariations 设 SOFT 100 / WONK 1。
+    #     WONK 必须留可变：PRD OQ-21 待真机确认手感，可能要退到 WONK 0 —— 留着就只改一个数字，
+    #     烘死则要重新产字体。
+    #
+    # 子集范围（**以下为 code-review 2026-08-04 实测 cmap 的结果，勿凭记忆改**）：
+    #   基础拉丁可打印区 U+0020–U+007E（95 个）+ U+2019 右单引号 + U+2026 省略号 = **97 码位**。
+    # ⚠️ 原注释写「+ 弯引号，共 98 码位」不准确：**弯双引号 U+201C/U+201D 与左单引号 U+2018
+    #   一个都没有**，两份 ARB 里高频出现的破折号 U+2014 也没有。
+    #   当前 splash 的四条文案全在范围内（英文标语用的是 ASCII 撇号 U+0027），
+    #   所以这是「**下一次改文案就会踩**」的坑，不是现存缺陷。
+    # 📌 待办（需重跑子集脚本，非本轮范围）：补 U+2014 U+2013 U+2018 U+201C U+201D。
+    #   在补齐之前，splash 里的两处 TextStyle 都显式给了 fontFamilyFallback ——
+    #   缺字时至少掉到系统字体而不是显示豆腐块（代价是同一行出现两种字形，
+    #   与 NFR-16「splash 内只允许一款字体」相悖，故只是兜底而非解决）。
+    - family: Fraunces
+      fonts:
+        - asset: assets/fonts/Fraunces-subset-SOFT-WONK.ttf
+          weight: 500
 
 # App 图标（紫色猫狗 logo）。重生成：dart run flutter_launcher_icons
 flutter_launcher_icons:
@@ -179,10 +236,30 @@ flutter_launcher_icons:
   adaptive_icon_background: "#FFFFFF"
   adaptive_icon_foreground: "assets/brand/app_icon_padded.png"
 
-# 原生启动屏（白底 + logo 居中，替换 Flutter 默认）。重生成：dart run flutter_native_splash:create
+# 原生启动屏（紫底 #7D45F6 + 白 mark 居中）—— Story 7.1 / FR-87。
+#
+# 设计口径：**让原生启动屏成为入场动画的第 0 帧**。原生显示紫底白 mark，Flutter 首帧接住
+# 同位同尺寸的 mark 再开始变化 —— 不可控的原生启动耗时被吸收进叙事，用户感知不到交接点。
+# 改前为白底 + 紫 logo，与 Flutter 的紫底形成落差，每次冷启动必闪一次白（缺陷 B-1）。
+#
+# ⚠️ 本块之外的 android/ 与 ios/ 启动屏文件**全是生成物**，手工改会在下次生成时被覆盖。
+#    唯一该手工编辑的是本块与 assets/brand/ 下的源资产。
+# ⚠️ 改完必须重跑：dart run flutter_native_splash:create
+#    并**真机分别验证浅色与深色两种模式**（缺陷 B-2 正是因为当初只验了浅色才长期存在）。
 flutter_native_splash:
-  color: "#FFFFFF"
-  image: "assets/brand/app_icon.png"
+  color: "#7D45F6"
+  # 缺陷 B-2：改前深色模式的 windowSplashScreenBackground 同样是 #FFFFFF，也白闪。
+  # 缺少 color_dark 时生成器不会改 values-night-v31，故必须显式声明。
+  color_dark: "#7D45F6"
+  # 白 mark（透明底），取自品牌母文件 ICON SVG.svg 的 Layer_7、viewBox 紧贴 bbox。
+  # 改前用的 app_icon.png 是紫色应用图标，在紫底上会看不见。
+  image: "assets/brand/splash_mark_white.png"
+  image_dark: "assets/brand/splash_mark_white.png"
   android_12:
-    image: "assets/brand/app_icon_padded.png"
-    color: "#FFFFFF"
+    # Android 12+ 规范：画布 288dp、可视内容限 192dp（= 占宽 66.7%）。
+    # 改前 android12splash.png 为 200×200 mdpi，超出可视上限会被系统裁切（缺陷 B-3）。
+    # 本资产画布 1152×1152（288dp @4x），可视内容 768×636（占宽 66.7%），居中。
+    image: "assets/brand/splash_mark_white.png"
+    color: "#7D45F6"
+    image_dark: "assets/brand/splash_mark_white.png"
+    color_dark: "#7D45F6"

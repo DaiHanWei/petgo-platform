@@ -41,17 +41,22 @@ public class AdminDashboardService {
         this.settlements = settlements;
     }
 
+    /**
+     * bug 20260731-442：统计剔除测试/铺量数据——用户数仅计 REAL 且未注销（虚拟账号原先被双计），
+     * 帖/评论仅计真实用户所发（种子内容挂虚拟作者）。虚拟账号数仍单列供对照。
+     * 人工直插库的测试业务行无环境标记列，代码层无法识别，不在本口径内。
+     */
     @Transactional(readOnly = true)
     public OverviewMetrics overview() {
         AiRevenueSummary ai = aiOrders.summary();
         return new OverviewMetrics(
-                users.count(),
+                users.countByAccountTypeAndDeletedAtIsNull(AccountType.REAL),
                 users.countByAccountType(AccountType.VIRTUAL),
                 consultOrders.count(),
                 ai.completedCount(),
                 ai.totalRevenue(),
-                posts.count(),
-                comments.count(),
+                posts.countByRealAuthor(),
+                comments.countByRealAuthor(),
                 vets.count(),
                 settlements.countByStatus(VetSettlement.PENDING_FINANCE));
     }

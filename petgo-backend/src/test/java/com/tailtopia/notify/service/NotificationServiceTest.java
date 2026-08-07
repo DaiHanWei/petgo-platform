@@ -60,7 +60,7 @@ class NotificationServiceTest {
         verify(repo).save(any(Notification.class));
         verify(valueOps).increment(NotificationService.UNREAD_KEY_PREFIX + "7");
         verify(pusher).pushToUser(eq(7L), eq("标题"), eq("正文"),
-                eq(NotificationType.VET_REPLY.name()), anyString());
+                eq(NotificationType.VET_REPLY.name()), anyString(), eq("ref-1"));
     }
 
     @Test

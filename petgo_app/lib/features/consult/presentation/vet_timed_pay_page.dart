@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../../../core/analytics/analytics.dart';
+import '../../../core/network/problem_detail.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
@@ -107,6 +109,13 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
       final session = await ref.read(consultRepositoryProvider).active();
       if (!mounted) return;
       if (session != null) {
+        // 现金（QRIS）到账靠 status 404 → active 会话侦测，成功点只在这里。
+        if (_awaitingCash) {
+          Analytics.capture('consult_pay_succeeded',
+              {'consult_type': 'VET', 'method': 'qris'});
+        }
+        // 兽医问诊漏斗终点：支付完成、会话建立。
+        Analytics.capture('consult_session_started', {'consult_type': 'VET'});
         _navigating = true;
         context.pushReplacement('/consult/conversation/${session.id}');
         return;
@@ -134,6 +143,9 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
     // bug 20260721-322 同类：付款前 await 真实余额，避免 pawCoinProvider 未加载完时
     // 同步读到 0 → 误判 PawCoin 不足 → 把有钱用户错误地跳去充值页。
     if (_channel == 'PAWCOIN') {
+      // bug 20260806：PawCoin 消费后 pawCoinProvider 不失效（只有充值路径失效），
+      // 上一单花掉的钱在缓存里还在 → 守卫误判「余额够」直接打后端吃 409。支付前强制刷新。
+      ref.invalidate(pawCoinProvider);
       int balance;
       try {
         balance = (await ref.read(pawCoinProvider.future)).balance;
@@ -162,7 +174,12 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
           .payRequest(widget.requestToken, _channel);
       if (!mounted) return;
       if (result.isDone) {
-        // PawCoin 即时成功 → 建单建会话已完成 → 跳会话。
+        // 兽医问诊漏斗：PawCoin 即时支付成功（现金 QRIS 的成功点在 _gotoActiveOrExit）。
+        Analytics.capture('consult_pay_succeeded',
+            {'consult_type': 'VET', 'method': 'pawcoin'});
+        // PawCoin 即时成功 → 余额已变，失效缓存供全 App 后续读到真实值（bug 20260806）。
+        ref.invalidate(pawCoinProvider);
+        // 建单建会话已完成 → 跳会话。
         _poll?.cancel();
         _display?.cancel();
         await _gotoActiveOrExit();
@@ -178,11 +195,12 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
     } on DioException catch (e) {
       if (!mounted) return;
       setState(() => _paying = false);
-      final code = e.response?.statusCode;
-      // 409=余额不足/支付窗过期/守卫不符；503=IM 建会话失败可重试。均映射 l10n，不显后端 detail。
+      // 409 多因复用（余额不足/支付窗过期/守卫不符）→ 按 ProblemDetail type 分流，
+      // 余额不足给专属文案（bug 20260806：曾恒显「支付失败请重试」）。不显后端 detail 原文。
+      final slug = ProblemDetail.fromJson(e.response?.data)?.typeSlug;
       showAppToast(
         context,
-        code == 409 ? l10n.vetPayFailed : l10n.vetPayFailed,
+        slug == 'pawcoin-insufficient' ? l10n.vetPayInsufficient : l10n.vetPayFailed,
       );
     }
   }

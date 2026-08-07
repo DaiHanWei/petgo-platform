@@ -8,5 +8,10 @@
 	<array>
 		<string>Default</string>
 	</array>
+	<!-- 系统推送（TIMPush/APNs）：debug 装机走 development 环境；Archive 分发时 Xcode
+	     按 provisioning profile 自动改写为 production。App ID 已在 Apple Developer 勾选
+	     Push Notifications（2026-08-07），证书 ID：开发 17703 / 生产 17704（Dart 侧按构建环境注入）。 -->
+	<key>aps-environment</key>
+	<string>development</string>
 </dict>
 </plist>

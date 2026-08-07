@@ -7,7 +7,7 @@ import 'package:posthog_flutter/posthog_flutter.dart';
 import 'appsflyer_client.dart';
 import 'button_ids.dart';
 
-/// 前端行为分析门面（PostHog Cloud US）。
+/// 前端行为分析门面（PostHog Cloud EU · project 211847）。
 ///
 /// 设计约束（CLAUDE.md 护栏）：
 /// - Project Token / Host 走 dart-define 注入，带生产默认值，对齐 `dio_client.dart`。
@@ -108,10 +108,17 @@ class Analytics {
   /// 事件是否分发 AppsFlyer（纯函数，L0 可测）。
   static bool isAppsFlyerEvent(String event) => appsflyerEvents.contains(event);
 
+  /// 测试观察点（Story 6.1）：非 null 时，每条 [capture] / [screen] 都同步回调一次
+  /// **净化后**的属性。埋点断言必须看到端上真正发出的形态，所以钩子挂在 scrub 之后。
+  /// 生产路径恒为 null（`main.dart` 从不赋值），不影响上报。
+  @visibleForTesting
+  static void Function(String event, Map<String, Object>? properties)? debugCaptureSink;
+
   /// 自定义事件上报。properties 先经 [scrub] 剥离敏感键再上报；
   /// 白名单内事件用**同一份净化后属性**同步分发 AppsFlyer（单通路，无旁路）。
   static Future<void> capture(String event, [Map<String, Object>? properties]) async {
     final clean = properties == null ? null : scrub(properties);
+    debugCaptureSink?.call(event, clean);
     if (isAppsFlyerEvent(event)) {
       AppsFlyerClient.instance.logEvent(event, clean);
     }
@@ -119,6 +126,23 @@ class Analytics {
       await Posthog().capture(eventName: event, properties: clean);
     } catch (e) {
       debugPrint('[Analytics] capture failed: $e');
+    }
+  }
+
+  /// 页面浏览事件（PostHog `$screen`）。
+  ///
+  /// **为什么需要它**（Story 6.1 AC2，PRD 点名的 P0 缺口）：底部 Tab 走
+  /// `StatefulShellRoute.goBranch` 切分支，**不 push 根路由** → `PosthogObserver` 收不到
+  /// `didPush`，四个 Tab 根页此前一个浏览事件都没有，落地页分流是否生效无从验证。
+  /// 这里补的是「Tab 根页」这一层，详情页仍由 observer 自动上报，两者不重复。
+  ///
+  /// [name] 必须是稳定的受控字面量（Tab 名 / 路由名），**不得**传 UI 文案。
+  static Future<void> screen(String name) async {
+    debugCaptureSink?.call(r'$screen', {r'$screen_name': name});
+    try {
+      await Posthog().screen(screenName: name);
+    } catch (e) {
+      debugPrint('[Analytics] screen failed: $e');
     }
   }
 

@@ -18,6 +18,11 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
     /** 迷你主页发布数（Story 3.8）：某作者未软删的已发布内容数。 */
     long countByAuthorIdAndDeletedAtIsNullAndStatus(long authorId, PostStatus status);
 
+    /** 概览看板（bug 20260731-442）：仅真实用户发的帖（剔除虚拟/种子账号铺量内容）。 */
+    @Query("select count(p) from ContentPost p join User u on u.id = p.authorId "
+            + "where u.accountType = com.tailtopia.auth.domain.AccountType.REAL")
+    long countByRealAuthor();
+
     /**
      * 删除宠物档案前解绑其成长帖（bug 20260702-237 / 决策 F18）：把引用该 pet 的 content_posts.pet_id 置 NULL。
      * FK fk_content_posts_pet 无 ON DELETE，直接删 pet 会被引用阻断；置空保留帖子本体（UGC 保留），
@@ -38,6 +43,61 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
     List<ContentPost> findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndCreatedAtLessThanOrderByCreatedAtDesc(
             long authorId, long petId, ContentType type, Instant before, Pageable pageable);
 
+    /**
+     * 成长时间线读（Story 3.1 · AD-1）：按**统一游标锚点**（event_date + 同日 created_at）取一批。
+     * 取代上面按 created_at 单键的取数——排序键与游标键必须是同一把尺子，否则补记旧日期的日记
+     * （event_date 旧、created_at 新）会在翻页时丢失或重复。
+     *
+     * <p>本查询只覆盖 <b>event_date 非空</b>的行；V26 之前的存量行 event_date 为 NULL，
+     * 由 {@link #findGrowthMomentsBeforeAnchorLegacyNullEventDate} 单独取，两路在 service 层归并。
+     * 拆两路是为了避免在 JPQL 里对 timestamptz 做时区敏感的 date 转换。
+     */
+    // ⚠️ 作者自视视图（成长档案时间线 / 日历 / 当天详情）：**不得加 visibility 过滤**（NFR-4）。
+    // 作者设为私密的 Diary 必须仍出现在他自己的成长档案里 —— 加了过滤就是把用户自己的日记藏起来。
+    @Query("""
+            SELECT p FROM ContentPost p
+            WHERE p.authorId = :authorId
+              AND p.petId = :petId
+              AND p.type = :type
+              AND p.deletedAt IS NULL
+              AND p.eventDate IS NOT NULL
+              AND (p.eventDate < :anchorDate
+                   OR (p.eventDate = :anchorDate AND p.createdAt < :anchorKey))
+            ORDER BY p.eventDate DESC, p.createdAt DESC
+            """)
+    List<ContentPost> findGrowthMomentsBeforeAnchor(
+            @Param("authorId") long authorId,
+            @Param("petId") long petId,
+            @Param("type") ContentType type,
+            @Param("anchorDate") LocalDate anchorDate,
+            @Param("anchorKey") Instant anchorKey,
+            Pageable pageable);
+
+    /**
+     * 成长时间线读·存量兜底（Story 3.1）：<b>event_date 为 NULL</b> 的历史行。
+     *
+     * <p>V26 加列时未回填，这批行的有效日期由 {@code created_at} 的 UTC 日推导（与
+     * {@code TimelineItemResponse.effectiveDate()} 的兜底一致）。因其有效日期与 created_at 单调同序，
+     * 锚点在此退化为单键上界（由 {@code TimelineAnchor.createdAtUpperBound()} 夹紧后传入）。
+     * <b>漏掉这一路会让这批老内容从时间线上整体消失。</b>
+     */
+    @Query("""
+            SELECT p FROM ContentPost p
+            WHERE p.authorId = :authorId
+              AND p.petId = :petId
+              AND p.type = :type
+              AND p.deletedAt IS NULL
+              AND p.eventDate IS NULL
+              AND p.createdAt < :createdAtUpperBound
+            ORDER BY p.createdAt DESC
+            """)
+    List<ContentPost> findGrowthMomentsBeforeAnchorLegacyNullEventDate(
+            @Param("authorId") long authorId,
+            @Param("petId") long petId,
+            @Param("type") ContentType type,
+            @Param("createdAtUpperBound") Instant createdAtUpperBound,
+            Pageable pageable);
+
     /** 日历月度聚合（Story 2.4 R2 · F9）：某作者某宠物某类型未删内容，event_date 落 [from,to]，按 event_date 升、created_at 升（bug 271 加 petId）。 */
     List<ContentPost> findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndEventDateBetweenOrderByEventDateAscCreatedAtAsc(
             long authorId, long petId, ContentType type, LocalDate from, LocalDate to);
@@ -47,11 +107,13 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             long authorId, long petId, ContentType type, LocalDate eventDate);
 
     /**
-     * 名片快乐时刻流（Story 2.6 AC7 · F9）：某作者某类型未删内容，按 event_date 倒序取最近 N。
+     * 名片快乐时刻流（Story 2.6 AC7 · F9）：某作者**某宠物**某类型未删内容，按 event_date 倒序取最近 N。
      * 内容审核 story 2（§5.4）：叠加 {@code status} 过滤——公开/名片路径传 {@code PUBLISHED}，挂起零泄漏。
+     * bug 20260730-435：必须带 petId——删旧宠物档案走 detachPet（pet_id 置 NULL、帖保留 PUBLISHED），
+     * 只按作者过滤会把旧宠物遗留帖混进新宠物的名片/打卡候选。
      */
-    List<ContentPost> findByAuthorIdAndTypeAndDeletedAtIsNullAndStatusOrderByEventDateDescCreatedAtDesc(
-            long authorId, ContentType type, PostStatus status, Pageable pageable);
+    List<ContentPost> findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndStatusOrderByEventDateDescCreatedAtDesc(
+            long authorId, long petId, ContentType type, PostStatus status, Pageable pageable);
 
     /** 统计：某作者某类型未删且已发布内容数（里程碑计数 Story 8.3，按作者跨宠计）。 */
     long countByAuthorIdAndTypeAndDeletedAtIsNullAndStatus(
@@ -72,6 +134,8 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
      * ——挂起帖仅作者本人可见（本查询已按 {@code authorId} 收口 + {@code deletedAt IS NULL}，加入 UNDER_REVIEW
      * 不泄漏）。Feed（{@link #findFeed}）保持仅 PUBLISHED，他人零可见。
      */
+    // ⚠️ 「我的发布」= 作者自视：**不得加 visibility 过滤**（NFR-4）。私密内容在这里照常出现，
+    // 由前端打「仅自己可见」标识（Story 4.2）。
     @Query("""
             SELECT p FROM ContentPost p
             WHERE p.authorId = :authorId
@@ -115,7 +179,7 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
               AND (p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
                    OR (p.status = com.tailtopia.content.domain.PostStatus.UNDER_REVIEW
                        AND :hasViewer = true AND p.authorId = :viewerId))
-              AND (:excludeGrowth = false OR p.type <> com.tailtopia.content.domain.ContentType.GROWTH_MOMENT)
+              AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
               AND (:type IS NULL OR p.type = :type)
               AND (:requirePet = false OR p.petId IS NOT NULL)
               AND (:hasViewer = false
@@ -127,7 +191,6 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             ORDER BY p.createdAt DESC, p.id DESC
             """)
     List<ContentPost> findFeed(
-            @Param("excludeGrowth") boolean excludeGrowth,
             @Param("type") ContentType type,
             @Param("requirePet") boolean requirePet,
             @Param("hasViewer") boolean hasViewer,

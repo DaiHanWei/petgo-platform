@@ -125,4 +125,31 @@ void main() {
     expect(await gate.maybeRequestAfterFirstConsult(firstConsultDone: true), isFalse);
     expect(requestCount, 0);
   });
+
+  test('推送接入：onAsked 在门控完成后回调一次（拒绝也回调）；被门控跳过时不回调', () async {
+    final prefs = await AppPrefs.create();
+    var askedCallbacks = 0;
+    final gate = PushPermissionGate(
+      prefs: prefs,
+      // 拒绝授权（false）也应回调 onAsked：token 仍可上报，系统设置开启后自动恢复。
+      requestSystemPermission: () async => false,
+      onAsked: () async => askedCallbacks++,
+    );
+    expect(await gate.maybeRequestAfterProfileCreated(neverConsulted: true), isTrue);
+    expect(askedCallbacks, 1);
+    // 已问过 → 门控跳过，不再回调（避免重复注册路径噪声）。
+    expect(await gate.maybeRequestAfterFirstConsult(firstConsultDone: true), isFalse);
+    expect(askedCallbacks, 1);
+  });
+
+  test('推送接入：onAsked 抛异常不影响门控语义（asked 已落、返回 true）', () async {
+    final prefs = await AppPrefs.create();
+    final gate = PushPermissionGate(
+      prefs: prefs,
+      requestSystemPermission: () async => true,
+      onAsked: () async => throw StateError('register failed'),
+    );
+    expect(await gate.maybeRequestAfterFirstConsult(firstConsultDone: true), isTrue);
+    expect(prefs.pushPermissionAsked, isTrue);
+  });
 }

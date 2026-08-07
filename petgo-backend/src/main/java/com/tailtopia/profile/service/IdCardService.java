@@ -72,13 +72,20 @@ public class IdCardService {
         IdCard card = idCards.save(IdCard.snapshot(ownerId, serial, req.name(), req.petType(),
                 req.breed(), req.birthday(), req.avatarUrl(), req.intro(), gender, cardNo,
                 passportNo, blankToNull(req.birthCity()), blankToNull(req.address()),
-                blankToNull(req.occupation()), blankToNull(req.maritalStatus())));
+                blankToNull(req.occupation()), blankToNull(req.maritalStatus()),
+                normalizeCardType(req.cardType()), blankToNull(req.school()),
+                blankToNull(req.faculty())));
         return IdCardResponse.from(card);
     }
 
     /** gender 归一化：null 视同 UNKNOWN。白名单由 DTO 的 {@code @Pattern} 保证（非法值与其余字段统一 422）。 */
     private static String normalizeGender(String gender) {
         return gender == null ? "UNKNOWN" : gender;
+    }
+
+    /** cardType 归一化（bug 430）：null 视同 KTP（兼容未升级客户端）。白名单由 {@code @Pattern} 保证。 */
+    private static String normalizeCardType(String cardType) {
+        return cardType == null ? "KTP" : cardType;
     }
 
     /** 趣味字段空串折叠为 null（快照 null = 前端渲染趣味默认，避免空串盖掉默认展示）。 */

@@ -133,6 +133,11 @@ public class FeedbackTicket {
         this.status = TicketStatus.CLOSED;
     }
 
+    /** 客服补挂关联订单（AB-5B「关联订单」；归属校验由 service 层完成后传入）。 */
+    public void linkRelatedOrder(long orderId) {
+        this.relatedOrderId = orderId;
+    }
+
     @PrePersist
     void onCreate() {
         Instant now = Instant.now();

@@ -29,6 +29,8 @@ public class AdminUserController {
     private static final String DEACTIVATE_AUTH =
             "hasRole('SUPER_ADMIN') or hasAuthority('user.deactivate')";
     private static final String DELETE_AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('user.delete')";
+    private static final String GRANT_PAWCOIN_AUTH =
+            "hasRole('SUPER_ADMIN') or hasAuthority('user.grant_pawcoin')";
     private static final int PAGE_SIZE = 50;
 
     private final AdminUserService adminUserService;
@@ -65,7 +67,26 @@ public class AdminUserController {
     public String userDetail(@PathVariable long userId, Model model) {
         model.addAttribute("active", "users");
         model.addAttribute("user", adminUserService.detail(userId));
+        // 赠币表单一次性幂等 token（bug 20260728-389）：防双击/回退重提交重复入账。
+        model.addAttribute("grantToken", java.util.UUID.randomUUID().toString());
         return "admin/user-detail";
+    }
+
+    /** 后台赠送 PawCoin（bug 20260728-389，user.grant_pawcoin 门控）。 */
+    @PostMapping("/admin/users/{userId}/grant-pawcoin")
+    @PreAuthorize(GRANT_PAWCOIN_AUTH)
+    public String grantPawCoin(@AuthenticationPrincipal AdminUserDetails admin,
+            @PathVariable long userId, @RequestParam("coins") long coins,
+            @RequestParam("reason") String reason,
+            @RequestParam("idempotencyToken") String idempotencyToken, RedirectAttributes flash) {
+        try {
+            adminUserService.grantPawCoin(userId, coins, reason, idempotencyToken,
+                    admin.getAdminAccountId());
+            flash.addFlashAttribute("notice", "已赠送 " + coins + " PawCoin");
+        } catch (AppException e) {
+            flash.addFlashAttribute("error", e.getMessage());
+        }
+        return "redirect:/admin/users/" + userId;
     }
 
     @PostMapping("/admin/users/{userId}/deactivate")

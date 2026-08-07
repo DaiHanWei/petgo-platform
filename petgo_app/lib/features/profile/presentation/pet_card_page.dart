@@ -26,10 +26,15 @@ class PetCardPage extends ConsumerWidget {
     final stats = ref.watch(archiveStatsProvider).asData?.value;
     final name = profile?.name ?? 'Mochi';
     final age = computePetAge(profile?.birthday);
+    // 名片这行只给「X 岁」；不满 1 个月会变成「0 tahun」，故与档案页同样降级到天数
+    // （生日当天 → formatPetAge 返回 null，整段省略）。
+    final ageLine = age.isUnderOneMonth
+        ? formatPetAge(l10n, profile?.birthday)
+        : l10n.petCardYears(age.years);
     final breedLine = [
       _speciesLabel(l10n, profile?.petType),
       if (profile?.breed != null && profile!.breed!.isNotEmpty) profile.breed!,
-      if (profile?.birthday != null) l10n.petCardYears(age.years),
+      ?ageLine,
     ].join(' · ');
     final daysTogether = profile?.birthday == null
         ? 365

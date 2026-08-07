@@ -1,5 +1,6 @@
 package com.tailtopia.profile.event;
 
+import com.tailtopia.profile.domain.MilestoneCompletionSource;
 import com.tailtopia.profile.domain.MilestoneLevel;
 
 /**
@@ -13,6 +14,9 @@ import com.tailtopia.profile.domain.MilestoneLevel;
  * @param code    里程碑目录码（C-L1 等）
  * @param level   级别（notify 仅对 L 级下发达成推送）
  * @param title   里程碑中文标题（推送文案用）
+ * @param source  完成来源（V1.1.2 Story 6.1 追加）：埋点 {@code path} 属性据此判定。
+ *                notify 侧不关心它 —— 加这个字段纯为让分析侧能回答「这个里程碑是怎么点亮的」。
  */
-public record MilestoneCompletedEvent(long ownerId, String code, MilestoneLevel level, String title) {
+public record MilestoneCompletedEvent(long ownerId, String code, MilestoneLevel level, String title,
+        MilestoneCompletionSource source) {
 }
