@@ -89,6 +89,10 @@ Future<void> main() async {
     await AttGate.requestIfNeeded();
     // 首启即申请通知权限（2026-08-07 产品决策，取代 F7 双时机——见 PushPermissionBootstrap
     // 文档：双时机对存量用户是死路）。拒绝后不再自动弹，改由设置页开关兜底。
+    //
+    // 🔴 必须在 ATT **落定之后**：`AttGate.requestIfNeeded()` 已保证返回即已落定
+    //（内部轮询兜底插件 Future 提前返回的问题）。若把这行提前或改成并发，
+    // 通知弹窗会盖掉 ATT 弹窗 ⇒ 用户对跟踪没得选 ⇒ 重蹈 Guideline 2.1 拒信。
     await PushPermissionBootstrap.requestOnFirstLaunch();
     await afInit;
     await AppsFlyerClient.instance.start();
