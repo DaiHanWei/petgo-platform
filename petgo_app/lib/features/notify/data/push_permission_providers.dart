@@ -34,8 +34,12 @@ final pushPermissionGateProvider = FutureProvider<PushPermissionGate>((ref) asyn
   );
 });
 
-/// 是否当前已授予通知权限（「我的」页引导可见性判定，L2 真机）。
+/// 是否当前已授予通知权限（设置页开关真相源 / 引导可见性判定，L2 真机）。
 Future<bool> isPushPermissionGranted() async => (await ph.Permission.notification.status).isGranted;
+
+/// 申请通知权限（设置页开关用）。`notDetermined` 会弹系统窗；已拒绝则立即返回 false（不打扰）。
+Future<bool> requestPushPermission() async =>
+    (await ph.Permission.notification.request()).isGranted;
 
 /// 打开系统设置页（拒绝后「去设置」深链，统一复用 Story 2.1 模式）。
 Future<bool> openPushSettings() => ph.openAppSettings();
