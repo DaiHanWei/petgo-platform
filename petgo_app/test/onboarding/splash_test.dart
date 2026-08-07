@@ -437,4 +437,70 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     });
   });
+
+  /// 2026-08-07 · 冷启动流失排查（PostHog 8/6 投放批次）
+  ///
+  /// 「切后台 → 回前台」会把入场动效**重置并重新计一个完整的 [SplashPage.animatedHold]**
+  /// （这是既有设计，见 `_onLifecycleChange`：后台期间 ticker 停滞，不补播等于一帧动效都没看到）。
+  /// 隐患在于它与「5s 兜底是一次性 Timer」相撞 —— 下面两条锁死修复后的行为。
+  group('🐛 回归：后台往返不得吃掉 5s 兜底额度（否则慢网下永远停在启动屏）', () {
+    /// 用不完成的恢复 future 模拟「`/me` 迟迟不回」，这正是死锁的必要条件之一。
+    Future<void> pumpNeverReady(WidgetTester tester, void Function() onDone) {
+      final never = Completer<void>();
+      addTearDown(() {
+        if (!never.isCompleted) never.complete();
+      });
+      return pumpSplash(tester, onComplete: onDone, prepareSession: () => never.future);
+    }
+
+    testWidgets('兜底到点时停留正因后台往返而重新计时 → 停留一走完仍须放行', (tester) async {
+      var done = false;
+      await pumpNeverReady(tester, () => done = true);
+
+      // t≈1.05s 切后台。注意 Dart 的 Timer 在后台照常触发：原 hold(2266) 会在 t≈2.27s 到点，
+      // 但 `_paused` 会把那次交棒压住（不在用户看不见时换页），符合既有设计。
+      await tester.pump(const Duration(milliseconds: 1000));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pump();
+
+      // t≈3.05s 回前台 → 动效从头补播，并**重新计 2266ms**（新的到点在 t≈5.32s）。
+      await tester.pump(const Duration(milliseconds: 2000));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+
+      // t≈5.15s：已越过 readyDeadline(5000)，但重启的停留还没走完 —— 此刻不交棒是对的
+      // （否则又回到「在动效中途换页」的老问题）。
+      await tester.pump(const Duration(milliseconds: 2100));
+      expect(done, isFalse, reason: '停留未走完就交棒 → 入场叙事被拦腰截断');
+
+      // t≈5.55s：重启的停留走完。兜底额度必须**还在**。
+      // 改前这里恒为 false：兜底那次 force 被 `!_holdDone` 静默丢掉，而 Timer 是一次性的，
+      // 此后放行条件退化成「会话恢复已完成」—— 慢网下永远不成立 ⇒ 用户只能杀进程。
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(done, isTrue, reason: '兜底额度被停留重启吃掉 —— 会话永不就绪时将永远停在启动屏');
+
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('连续两次后台往返同样能出去（额度是 sticky 的，不是「再给一次」）', (tester) async {
+      var done = false;
+      await pumpNeverReady(tester, () => done = true);
+
+      for (var i = 0; i < 2; i++) {
+        await tester.pump(const Duration(milliseconds: 1000));
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 1500));
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+        await tester.pump();
+      }
+      expect(done, isFalse, reason: '每次回前台都重新计停留，此时都还没到点');
+
+      // 最后一次回前台后再等一个完整停留 → 必须出得去（兜底早已到点）。
+      await tester.pump(const Duration(milliseconds: 2400));
+      expect(done, isTrue);
+
+      await tester.pumpWidget(const SizedBox());
+    });
+  });
 }
