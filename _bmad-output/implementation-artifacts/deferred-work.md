@@ -142,3 +142,10 @@
 - **usersig 放宽后的 IM 滥用面缓解**：MAU 闸门取消（用户拍板决策）后，任意登录用户可拿 UserSig 用裸 SDK 向任意 `u_<id>`/`v_<id>` 发 C2C（绕过问诊排队骚扰兽医）。缓解手段不在本 story：可在 IM 控制台开「单聊消息校验回调」由后端校验会话关系后放行/拦截（ImCallbackController 已有骨架），或开腾讯好友关系链校验。上线前评估。
 - **`ConsultSessionService.hasImLoginEligibleSession`（:129）成死代码**：MAU 闸门放宽后无调用方，随后续提交清理。
 - **兽医侧 id 寻址类推送深链**：`sendToVet` 现固定 `token=null,targetRef=null`（当前唯一兽医推送 NEW_CONSULT_REQUEST 是固定落点，无影响）；未来若加兽医侧订单/工单类推送，需把 targetRef 穿透 `sendToVet` 签名。
+
+## 2026-08-07 · IM 会话消息的离线推送未跑通（已决定搁置，不阻塞发版）
+**现象**：通知类推送（点赞/评论，走后端 `/v4/timpush/batch`）iOS/Android 双端均正常；**IM 会话消息**（兽医↔用户聊天，走发送端 SDK 附带 `OfflinePushInfo`）双向都收不到通知栏推送。
+**已排除**：① `doBackground` 时序（先回桌面停 5s 再发，同样收不到）；② 客户端接线（两侧 `ImChatPlaceholder` 均已传 `sessionId`，`ChatPushSpec` 正确构造）；③ 推送通道与证书（同设备同证书下通知类推送可达）；④ SDK 版本一致性（chat_sdk 与 push 均 9.0.7652）。
+**待查线索**：TIMPush 插件全程未调用 IM SDK 的 `V2TIMOfflinePushManager.setOfflinePushConfig`（把 token 绑给 **IM 服务**的接口）——但 iOS 侧插件并不暴露 APNs token，说明该绑定**本应由 TIMPush 原生自动完成**，故此线索未坐实。
+**下一步建议**：① 用后端系统消息（`sendSystemMessage`，已带 `OfflinePushInfo`，纯服务端 → IM 服务路径）做区分实验——能到则问题在客户端发送路径，不能到则是 IM 服务侧绑定/配置；② 腾讯控制台 Push → 接入测试指定 userID 验通道；③ 必要时提工单。
+**影响面**：兽医回复的**通知中心推送**（FR-22A，后端 `VET_REPLY`）不受影响、正常可达；缺的只是聊天消息本身的即时通知栏提醒。
