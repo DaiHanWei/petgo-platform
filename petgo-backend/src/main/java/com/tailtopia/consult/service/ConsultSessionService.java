@@ -10,6 +10,8 @@ import com.tailtopia.shared.error.AppException;
 import com.tailtopia.triage.domain.DangerLevel;
 import com.tailtopia.triage.dto.TriageUpgradeContext;
 import com.tailtopia.triage.service.TriageService;
+import com.tailtopia.consult.dto.ConsultSessionResponse.VetPeer;
+import com.tailtopia.vet.service.VetAccountService;
 import com.tailtopia.vet.service.VetPresenceService;
 import java.util.List;
 import java.util.Optional;
@@ -42,15 +44,48 @@ public class ConsultSessionService {
     private final TriageService triageService;
     private final ApplicationEventPublisher events;
     private final VetPresenceService presence;
+    private final VetAccountService vetAccounts;
 
     public ConsultSessionService(ConsultSessionRepository repo, ConsultQueueService queue,
             TriageService triageService, ApplicationEventPublisher events,
-            VetPresenceService presence) {
+            VetPresenceService presence, VetAccountService vetAccounts) {
         this.repo = repo;
         this.queue = queue;
         this.triageService = triageService;
         this.events = events;
         this.presence = presence;
+        this.vetAccounts = vetAccounts;
+    }
+
+    /**
+     * 会话对端（兽医）身份快照，供用户侧会话页顶栏显示「我在跟谁聊」（2026-08-07）。
+     *
+     * <p>为什么需要它：改前 App 顶栏的兽医名 / 头像首字母 / 在线点全是**写死的占位**，
+     * 不管谁接单都显示同一个人。而那个名字恰好是真实存在的兽医账号，于是现象看起来像
+     * 「会话串号」，实际代码里根本没读过任何兽医数据 —— 排查绕了很大一圈。
+     *
+     * <p><b>失败一律降级为 {@link VetPeer#UNKNOWN}，绝不外抛</b>：顶栏是装饰性信息，
+     * 不值得让兽医账号查询的抖动把整个会话轮询打成 500（那会直接让用户的聊天页白屏）。
+     * 与 {@code ConsultHistoryService#safeVetName} 同口径。
+     *
+     * <p>🔴 <b>本方法不得加 {@code @Transactional}</b>（2026-08-07 实测，被既有端点测试逼出来的）。
+     * 加上之后 catch 会形同虚设：{@code vetAccounts.getById} 查不到兽医时抛异常，已经把当前事务
+     * 标记为 <b>rollback-only</b>；异常虽被这里吞掉，方法返回时事务提交仍会抛
+     * {@code UnexpectedRollbackException} ⇒ {@code GET /consult-sessions/&#123;id&#125;} 直接 500，
+     * 正是本方法要避免的后果。不开事务，则 getById 的异常在它自己的事务内回滚完再传上来，
+     * 这里接住即可。本方法只读一个实体 + 一次 Redis，本就不需要事务边界。
+     */
+    public VetPeer vetPeerOf(ConsultSession s) {
+        Long vetId = s == null ? null : s.getVetId();
+        if (vetId == null) {
+            return VetPeer.UNKNOWN; // WAITING：还没有兽医，前端显示排队态、不显示顶栏身份
+        }
+        try {
+            var vet = vetAccounts.getById(vetId);
+            return new VetPeer(vet.getDisplayName(), vet.getAvatarUrl(), presence.isOnline(vetId));
+        } catch (RuntimeException e) {
+            return VetPeer.UNKNOWN;
+        }
     }
 
     /** 发起结果：新建会话 or 命中已有占用态会话（alreadyActive=true，前端跳「查看进行中 →」）。 */
