@@ -15,6 +15,7 @@ import 'package:tailtopia/core/l10n/locale_controller.dart';
 import 'package:tailtopia/core/storage/prefs.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/features/notify/domain/push_permission_bootstrap.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -76,14 +77,19 @@ Future<void> main() async {
   // 多看几秒原生启动屏。移到这里后，最坏情况的等待从「用户盯着不动的紫屏」变成
   // 「启动屏动效照常播」，不再计入 time-to-content。
   //
-  // ⚠️ 三者的先后不可随手改：
+  // ⚠️ 四者的先后不可随手改：
   // - init 与 ATT **并发**发起（`afInit` 先拿到 future 再 await ATT），不是串行 ——
   //   串行会让 ATT 弹窗被 initSdk 拖后最多 3s，而「等 resumed 再弹 ATT」正是 2026-08-06
   //   审核拒信（Guideline 2.1）的修复点，不能再往后推。
+  // - **通知权限必须排在 ATT 之后**（2026-08-07）：两个系统弹窗同帧抛出会互相遮挡，
+  //   两者授权率一起掉；串行让用户先答完跟踪、再答通知。
   // - `start()` 必须同时晚于 ATT 结果与 init（未 init 时 start 是 no-op），故末尾按序 await 两者。
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     final Future<void> afInit = AppsFlyerClient.instance.init();
     await AttGate.requestIfNeeded();
+    // 首启即申请通知权限（2026-08-07 产品决策，取代 F7 双时机——见 PushPermissionBootstrap
+    // 文档：双时机对存量用户是死路）。拒绝后不再自动弹，改由设置页开关兜底。
+    await PushPermissionBootstrap.requestOnFirstLaunch();
     await afInit;
     await AppsFlyerClient.instance.start();
   });
