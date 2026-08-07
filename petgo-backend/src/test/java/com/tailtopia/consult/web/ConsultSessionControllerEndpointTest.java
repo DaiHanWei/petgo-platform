@@ -392,4 +392,25 @@ class ConsultSessionControllerEndpointTest extends ApiIntegrationTest {
         s.endByVet();
         return sessions.save(s);
     }
+
+    /**
+     * 🐛 回归（2026-08-07）：兽医身份富化失败**不得**把会话轮询打成 500。
+     *
+     * <p>本用例的会话挂着一个数据库里根本不存在的 vetId —— 富化必然失败。要求：仍 200，
+     * 只是不带 {@code vetDisplayName} 等字段（前端据此走中性兜底）。
+     *
+     * <p>历史：首版把 {@code vetPeerOf} 标了 {@code @Transactional}，于是 catch 形同虚设 ——
+     * 查不到兽医时事务已被标记 rollback-only，方法返回时提交抛 {@code UnexpectedRollbackException}，
+     * 接口 500、用户聊天页白屏。会话页每 5s 轮询一次，这个 500 是持续性的，不是偶发。
+     */
+    @Test
+    void get_whenVetIdentityLookupFails_stillReturns200WithoutPeerFields() throws Exception {
+        User u = newUser();
+        ConsultSession s = pendingClose(u.getId(), 999_999L); // 不存在的兽医
+        mvc.perform(get(BASE + "/" + s.getId()).header("Authorization", userBearer(u.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.vetDisplayName").doesNotExist())
+                .andExpect(jsonPath("$.vetAvatarUrl").doesNotExist())
+                .andExpect(jsonPath("$.vetOnline").doesNotExist());
+    }
 }

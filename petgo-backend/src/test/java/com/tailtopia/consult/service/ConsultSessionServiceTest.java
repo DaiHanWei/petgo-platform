@@ -42,9 +42,11 @@ class ConsultSessionServiceTest {
     org.springframework.context.ApplicationEventPublisher events;
     @Mock
     com.tailtopia.vet.service.VetPresenceService presence;
+    @Mock
+    com.tailtopia.vet.service.VetAccountService vetAccounts;
 
     private ConsultSessionService service() {
-        return new ConsultSessionService(repo, queue, triageService, events, presence);
+        return new ConsultSessionService(repo, queue, triageService, events, presence, vetAccounts);
     }
 
     @Test
@@ -151,5 +153,54 @@ class ConsultSessionServiceTest {
         service().continueWaiting(7L, 11L);
         assertThat(s.getStatus()).isEqualTo(SessionStatus.WAITING);
         assertThat(s.getWaitingStartedAt()).isAfterOrEqualTo(before);
+    }
+
+    // ===== 会话对端（兽医）身份富化（2026-08-07 bug：用户端顶栏显示的是另一个兽医的名字）=====
+
+    @Test
+    void vetPeerIsUnknownWhileWaitingSoNoVetLookupHappens() {
+        ConsultSession waiting = ConsultSession.startWaiting(7L, ConsultSource.DIRECT);
+
+        assertThat(service().vetPeerOf(waiting))
+                .isEqualTo(com.tailtopia.consult.dto.ConsultSessionResponse.VetPeer.UNKNOWN);
+        // 尚无兽医就不该去查兽医账号（省一次跨模块查询，也避免 getById(null) 之类的坑）
+        verify(vetAccounts, never()).getById(anyLong());
+    }
+
+    /**
+     * 富化失败**必须**降级为 UNKNOWN，不得外抛。
+     *
+     * <p>为什么这条重要：会话页每 5s 轮询一次 {@code GET /consult-sessions/{id}}，顶栏身份只是
+     * 装饰信息。若兽医账号查询的抖动能把这个接口打成 500，用户的聊天页会直接白屏 ——
+     * 拿一个「显示谁」的小功能去换掉整个会话页的可用性，不划算。
+     */
+    @Test
+    void vetPeerDegradesToUnknownWhenLookupFails() {
+        ConsultSession s = ConsultSession.startWaiting(7L, ConsultSource.DIRECT);
+        s.markInProgress(2L);
+        when(vetAccounts.getById(2L)).thenThrow(new IllegalStateException("vet account lookup down"));
+
+        assertThat(service().vetPeerOf(s))
+                .isEqualTo(com.tailtopia.consult.dto.ConsultSessionResponse.VetPeer.UNKNOWN);
+    }
+
+    @Test
+    void vetPeerCarriesTheAcceptingVetIdentityNotSomeoneElse() {
+        ConsultSession s = ConsultSession.startWaiting(7L, ConsultSource.DIRECT);
+        s.markInProgress(2L);
+        com.tailtopia.vet.domain.VetAccount vet = com.tailtopia.vet.domain.VetAccount.create(
+                "vettest1", "hash", "drh. Test Satu (vettest1)");
+        vet.setAvatarUrl("https://cdn/v2.jpg");
+        when(vetAccounts.getById(2L)).thenReturn(vet);
+        when(presence.isOnline(2L)).thenReturn(true);
+
+        var peer = service().vetPeerOf(s);
+
+        // 身份必须来自**本会话的接单兽医**（vetId=2）。改前 App 端写死了另一个兽医的名字，
+        // 现象看起来就像会话串号 —— 这条锁住「谁接单就显示谁」。
+        assertThat(peer.displayName()).isEqualTo("drh. Test Satu (vettest1)");
+        assertThat(peer.avatarUrl()).isEqualTo("https://cdn/v2.jpg");
+        assertThat(peer.online()).isTrue();
+        verify(vetAccounts).getById(2L);
     }
 }

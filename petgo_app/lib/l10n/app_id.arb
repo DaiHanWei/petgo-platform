@@ -901,6 +901,8 @@
   "consultRateTagFriendly": "Ramah",
   "consultRateTagProfessional": "Profesional",
   "consultPeerOnline": "● Online",
+  "consultPeerOffline": "● Sedang tidak aktif",
+  "consultVetFallbackName": "Dokter hewan Anda",
   "consultSymptomView": "Lihat",
   "triageUploadTitle": "Cek Gejala",
   "triageSpeedBannerTitle": "Hasil dalam hitungan detik",

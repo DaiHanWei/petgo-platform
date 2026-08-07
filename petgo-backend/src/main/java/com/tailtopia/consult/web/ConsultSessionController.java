@@ -1,5 +1,6 @@
 package com.tailtopia.consult.web;
 
+import com.tailtopia.consult.domain.ConsultSession;
 import com.tailtopia.consult.domain.ConsultSource;
 import com.tailtopia.consult.dto.ConsultAiContextResponse;
 import com.tailtopia.consult.dto.ConsultSessionResponse;
@@ -79,14 +80,20 @@ public class ConsultSessionController {
             @AuthenticationPrincipal Jwt jwt) {
         return service.findActiveForUser(currentUserId(jwt))
                 .map(s -> org.springframework.http.ResponseEntity.ok(
-                        ConsultSessionResponse.of(s, ConsultSessionService.WAITING_TIMEOUT_SECONDS, true)))
+                        ConsultSessionResponse.of(s, ConsultSessionService.WAITING_TIMEOUT_SECONDS, true,
+                                service.vetPeerOf(s))))
                 .orElseGet(() -> org.springframework.http.ResponseEntity.noContent().build());
     }
 
+    /**
+     * 会话视图（会话页每 5s 轮询）。<b>带兽医身份富化</b>——顶栏「我在跟谁聊」的唯一数据来源
+     * （2026-08-07：改前 App 里是写死的占位人名，见 {@code ConsultSessionResponse} 说明）。
+     */
     @GetMapping("/{id}")
     public ConsultSessionResponse get(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
-        return ConsultSessionResponse.of(service.getForUser(currentUserId(jwt), id),
-                ConsultSessionService.WAITING_TIMEOUT_SECONDS, false);
+        ConsultSession s = service.getForUser(currentUserId(jwt), id);
+        return ConsultSessionResponse.of(s, ConsultSessionService.WAITING_TIMEOUT_SECONDS, false,
+                service.vetPeerOf(s));
     }
 
     /**
