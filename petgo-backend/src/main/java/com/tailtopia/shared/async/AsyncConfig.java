@@ -29,6 +29,11 @@ public class AsyncConfig {
      * <p><b>有界 + 满则丢弃</b>：埋点是可损数据。队列满时 {@link ThreadPoolExecutor.DiscardPolicy}
      * 直接丢事件，绝不回压到调用方线程（{@code CallerRunsPolicy} 会把阻塞传染回业务线程，
      * 正是要避免的东西）。配合客户端侧的 3s 超时，最坏情况有明确上界。
+     *
+     * <p><b>⚠ 本 bean 实现了 {@code Executor}，会抑制 Boot 自动配置的 {@code applicationTaskExecutor}</b>
+     * （其条件是 {@code @ConditionalOnMissingBean(Executor.class)}）——业务 {@code @Async} 会因此失去
+     * 专属池。必须配合 {@code spring.task.execution.mode=force}（application.yml）强制恢复业务池；
+     * 删除该配置前先想清楚这一层。埋点调用点使用限定符 {@code @Async("analyticsExecutor")}。
      */
     @Bean("analyticsExecutor")
     public TaskExecutor analyticsExecutor() {

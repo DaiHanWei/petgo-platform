@@ -342,6 +342,8 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       excerpt: excerpt,
       typeLabel: _typeLabel(controller.type, l10n),
       photoCount: controller.items.length,
+      // 私密保存（Diary 关掉同步开关）→ 成功页走私密文案/CTA（PR#34 finding #11）。
+      isPrivate: !controller.isSharing,
     );
   }
 

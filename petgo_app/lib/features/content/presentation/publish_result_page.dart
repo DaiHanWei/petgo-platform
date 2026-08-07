@@ -15,6 +15,7 @@ class PublishResultArgs {
     required this.photoCount,
     this.petEmoji = '🐱',
     this.reasons = const <String>[],
+    this.isPrivate = false,
   });
 
   final String excerpt;
@@ -23,12 +24,17 @@ class PublishResultArgs {
   final String petEmoji;
   final List<String> reasons;
 
+  /// 私密保存（Diary 关掉「同步到 Moment」，PR#34 finding #11）：成功页不得再用
+  /// 社区口吻 +「去 Social 看」CTA——该内容永远不进公开 Feed，用户会翻找无果误以为失败。
+  final bool isPrivate;
+
   PublishResultArgs withReasons(List<String> r) => PublishResultArgs(
         excerpt: excerpt,
         typeLabel: typeLabel,
         photoCount: photoCount,
         petEmoji: petEmoji,
         reasons: r,
+        isPrivate: isPrivate,
       );
 
   /// DEV 直达样例（深链无 extra 时用，供逐屏视觉验收）。
@@ -58,6 +64,8 @@ class PublishDonePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    // 私密保存（finding #11）：换标题/副文案、CTA 改「去 Diary 看」；不渲染 ❤/💬 社区 meta。
+    final private = args.isPrivate;
     return Scaffold(
       backgroundColor: AppColors.base,
       body: SafeArea(
@@ -92,40 +100,47 @@ class PublishDonePage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 22),
-              Text(l10n.publishDoneTitle,
+              Text(private ? l10n.publishDonePrivateTitle : l10n.publishDoneTitle,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                       fontSize: 21, fontWeight: FontWeight.w700, color: AppColors.ink, height: 1.3)),
               const SizedBox(height: 8),
-              Text(l10n.publishDoneSubtitle,
+              Text(private ? l10n.publishDonePrivateSubtitle : l10n.publishDoneSubtitle,
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 13, height: 1.6, color: AppColors.ink2)),
               const SizedBox(height: 24),
               _PreviewCard(
                 args: args,
-                meta: Row(
-                  children: [
-                    Text('❤ 0',
-                        style: const TextStyle(fontSize: 11, color: AppColors.muted)),
-                    const SizedBox(width: 12),
-                    Text('💬 0',
-                        style: const TextStyle(fontSize: 11, color: AppColors.muted)),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(l10n.publishDoneJustNow,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 11, color: AppColors.mint)),
-                    ),
-                  ],
-                ),
+                meta: private
+                    // 私密：无社区互动，❤/💬 只会误导；改类型 + 图片数（与审核中页同款 meta）。
+                    ? Text('${args.typeLabel} · ${l10n.vetInboxImages(args.photoCount)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 11, color: AppColors.muted))
+                    : Row(
+                        children: [
+                          Text('❤ 0',
+                              style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+                          const SizedBox(width: 12),
+                          Text('💬 0',
+                              style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(l10n.publishDoneJustNow,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 11, color: AppColors.mint)),
+                          ),
+                        ],
+                      ),
               ),
               const Spacer(),
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
                   key: const ValueKey('publishDoneViewFeed'),
-                  onPressed: () => context.go('/home'),
+                  // 私密内容永不进 Social Feed → 主 CTA 改「去 Diary 看」（finding #11）。
+                  onPressed: () => context.go(private ? '/profile' : '/home'),
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.mint,
                     foregroundColor: AppColors.onAccent,
@@ -134,20 +149,23 @@ class PublishDonePage extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 15),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
-                  child: Text(l10n.publishDoneViewFeed,
+                  child: Text(
+                      private ? l10n.publishDonePrivateViewDiary : l10n.publishDoneViewFeed,
                       style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                 ),
               ),
               const SizedBox(height: 8),
-              TextButton(
-                key: const ValueKey('publishDoneBackHome'),
-                // 「Back to Diary」→ Diary Tab（2026-08-05 用户反馈）。原先两个按钮都去 `/home`，
-                // 次按钮等于主按钮的重复，用户没有回自己档案的出口。
-                // ⚠️ 文案与目的地绑定：改其一必须改另一（key 名保留 BackHome 只为不动测试锚点）。
-                onPressed: () => context.go('/profile'),
-                child: Text(l10n.publishDoneBackHome,
-                    style: const TextStyle(fontSize: 13, color: AppColors.muted)),
-              ),
+              // 私密时主 CTA 已指向 Diary，次按钮再指 Diary 就重复 → 不渲染。
+              if (!private)
+                TextButton(
+                  key: const ValueKey('publishDoneBackHome'),
+                  // 「Back to Diary」→ Diary Tab（2026-08-05 用户反馈）。原先两个按钮都去 `/home`，
+                  // 次按钮等于主按钮的重复，用户没有回自己档案的出口。
+                  // ⚠️ 文案与目的地绑定：改其一必须改另一（key 名保留 BackHome 只为不动测试锚点）。
+                  onPressed: () => context.go('/profile'),
+                  child: Text(l10n.publishDoneBackHome,
+                      style: const TextStyle(fontSize: 13, color: AppColors.muted)),
+                ),
             ],
           ),
         ),

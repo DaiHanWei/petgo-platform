@@ -9,6 +9,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../core/analytics/analytics.dart';
 import '../../auth/domain/auth_guard.dart';
 import '../domain/diary_demo_data.dart';
+import '../domain/profile_tab_entered_provider.dart';
 import '../domain/timeline_item.dart';
 import 'diary_demo_detail_page.dart';
 import 'widgets/diary_header.dart';
@@ -47,6 +48,10 @@ class _DiaryGuestPageState extends ConsumerState<DiaryGuestPage> {
     super.initState();
     // T-3 diary_guest_page_viewed（Story 6.1）：游客态是本版本的核心新增门面，曝光量是
     // 所有游客转化率的分母。session_first 区分「第一次看到」与「来回切 Tab 的重复曝光」。
+    _reportViewed();
+  }
+
+  void _reportViewed() {
     Analytics.capture('diary_guest_page_viewed',
         {'session_first': !_guestViewReportedThisSession});
     _guestViewReportedThisSession = true;
@@ -54,6 +59,10 @@ class _DiaryGuestPageState extends ConsumerState<DiaryGuestPage> {
 
   @override
   Widget build(BuildContext context) {
+    // 重复曝光补报（PR#34 次要项 3）：本页是 indexedStack 分支根、保活不重挂载，
+    // initState 每会话只跑一次——来回切 Tab 的曝光靠 AppShell 的切入信号补报。
+    // 首次挂载时 bump 发生在挂载前（监听尚未建立），不会与 initState 双报。
+    ref.listen<int>(profileTabEnteredProvider, (_, _) => _reportViewed());
     final l10n = AppLocalizations.of(context);
     final profile = DiaryDemoData.profile(l10n);
     final items = DiaryDemoData.items(l10n);

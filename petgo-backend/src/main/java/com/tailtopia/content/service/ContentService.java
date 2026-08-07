@@ -335,8 +335,12 @@ public class ContentService {
                         ? java.math.BigDecimal.valueOf(outcome.riskScore())
                                 .setScale(3, java.math.RoundingMode.HALF_UP)
                         : null; // 降级评分未知（-1）→ 不落
-                ContentPost pending = posts.save(ContentPost.pendingReview(
-                        authorId, req.type(), petId, text, imageUrls, eventDate, riskScore, reviewReason));
+                ContentPost pendingPost = ContentPost.pendingReview(
+                        authorId, req.type(), petId, text, imageUrls, eventDate, riskScore, reviewReason);
+                // 挂起帖同样要带上用户选择的可见范围——否则 PRIVATE 日记审核通过后会以实体默认的
+                // PUBLIC 进 Feed（approveReview 只翻 status、终身无修正机会），私密内容被公开。
+                pendingPost.setVisibility(req.visibilityOrPublic());
+                ContentPost pending = posts.save(pendingPost);
                 idempotency.store(idempotencyKey, pending.getId());
                 manualReviewGate.enqueue(pending.getId());
                 return ContentPostResponse.from(pending);

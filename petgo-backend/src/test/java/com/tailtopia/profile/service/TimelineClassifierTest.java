@@ -78,6 +78,26 @@ class TimelineClassifierTest {
         assertThat(out.get(0).milestoneLevel()).isEqualTo("S");
     }
 
+    /**
+     * PR#34 finding #3：打卡里程碑的关联内容**不在本批**（补录旧日期照片 → 内容按 eventDate 落在
+     * 别的分页）时，里程碑必须按类③ banner 呈现，不能因 linkedContentId 非空被无条件吞掉。
+     */
+    @Test
+    void step3_linkedContentAbsentFromBatch_milestoneFallsBackToBanner() {
+        List<MilestoneTimelineView> milestones =
+                List.of(new MilestoneTimelineView("D-S13", MilestoneLevel.S, T9, 42L));
+
+        // 本批 contents 不含 postId=42 的内容（它在别的分页）
+        List<TimelineItemResponse> out = TimelineClassifier.classify(
+                List.of(content(99L, T9, D)), List.of(), milestones, List.of());
+
+        assertThat(out).hasSize(2);
+        assertThat(of(out, TimelineItemType.MILESTONE_BANNER))
+                .isNotNull()
+                .returns("D-S13", TimelineItemResponse::milestoneCode);
+        assertThat(of(out, TimelineItemType.HAPPY_MOMENT).postId()).isEqualTo(99L);
+    }
+
     @Test
     void step4_systemAutoMilestone_isClassThreeBanner() {
         List<TimelineItemResponse> out = TimelineClassifier.classify(List.of(), List.of(),

@@ -125,16 +125,22 @@ class AuthController extends Notifier<AuthState> {
     state = const AuthState.guest();
     // 顺序硬约束：先反注册离线推送、再 IM logout——反注册需要 IM 登录态才能解绑 token；
     // 不解绑则同设备下一用户仍收上一账号的推送（与 IM 漏登出同型的跨用户隐私泄漏）。
-    // 反注册限时 5s（code-review 2026-08-07）：原生调用挂起时绝不能饿死后面的 IM logout
-    // （logout 首行清 IM 凭证，是防跨账号串号的底线，必须保证执行）。
+    // 反注册限时 5s（code-review 2026-08-07）：原生调用挂起时绝不能饿死后面的 IM logout。
     // 两步均 best-effort fire-and-forget：不阻塞游客态切换，失败静默（页面已离场）。
+    //
+    // 竞态防护（PR#34 finding #10）：logout 被压到反注册之后，5s 窗口内可能有新账号登录
+    //（缓存秒登 / 401 强制登录弹窗）。① 此刻同步作废本地 IM 凭证——新账号 loginIfNeeded
+    // 会做真实重登而非在旧凭证上幂等空转；② 记录登出代际号，迟到的 logout 发现代际已变
+    //（新登录发生过）则放弃执行，绝不清掉新账号的 IM 会话。
     final push = ref.read(pushServiceProvider);
     final im = ref.read(imServiceProvider);
+    final logoutGeneration = im.invalidateCredential();
     push
         .unregister()
         .timeout(const Duration(seconds: 5))
         .catchError((_) {})
-        .whenComplete(() => im.logout().catchError((_) {}));
+        .whenComplete(
+            () => im.logout(ifGeneration: logoutGeneration).catchError((_) {}));
   }
 }
 

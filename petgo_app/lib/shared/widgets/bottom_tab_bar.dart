@@ -421,11 +421,15 @@ class _TabItem extends StatelessWidget {
   /// 按 T3 规格摆放该 Tab 的装饰。三种摆法：顶部居中（猫耳）/ 角落偏移（爪印、尾巴）/ 居中覆盖（项圈）。
   Widget _charm(Duration bounce) {
     final _TabCharm spec = _kTabCharms[tab]!;
-    final Widget art = AnimatedScale(
+    // charm 只在 Tab 转 active 时挂载 → 用「挂载即播」的 Tween 从 0.7 过冲弹到 1，
+    // 这才是 T3 规格的「③ 一次轻弹跳」。旧写法 AnimatedScale(scale: 1) 挂在每次新建的
+    // widget 上，scale 恒 1 永不动画——纯死代码（PR#34 次要项 2）。
+    final Widget art = TweenAnimationBuilder<double>(
       key: const ValueKey('activeTabBounce'),
-      scale: 1,
+      tween: Tween(begin: 0.7, end: 1),
       duration: bounce,
       curve: Curves.easeOutBack,
+      builder: (_, scale, child) => Transform.scale(scale: scale, child: child),
       child: SvgPicture.string(
         spec.svg,
         key: const ValueKey('activeTabCharm'),

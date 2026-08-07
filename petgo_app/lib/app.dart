@@ -142,11 +142,15 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> with WidgetsBinding
       if (switchedUser) {
         final push = ref.read(pushServiceProvider);
         final im = ref.read(imServiceProvider);
+        // 同步作废旧凭证 + 记代际（PR#34 finding #10）：新账号若在 5s 窗口内已自行 IM 登录
+        //（如直接进会话页），迟到的 logout 按代际放弃，不清新账号会话。
+        final logoutGeneration = im.invalidateCredential();
         push
             .unregister()
             .timeout(const Duration(seconds: 5))
             .catchError((_) {})
-            .whenComplete(() => im.logout().catchError((_) {}))
+            .whenComplete(() =>
+                im.logout(ifGeneration: logoutGeneration).catchError((_) {}))
             .whenComplete(() => push.syncRegistration(isVet: next.isVet));
       } else if (becameAuthed) {
         ref.read(pushServiceProvider).syncRegistration(isVet: next.isVet);

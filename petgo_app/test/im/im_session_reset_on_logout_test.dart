@@ -14,7 +14,10 @@ class _FakeImService implements ImService {
   int logoutCalls = 0;
 
   @override
-  Future<void> logout() async => logoutCalls++;
+  int invalidateCredential() => 0;
+
+  @override
+  Future<void> logout({int? ifGeneration}) async => logoutCalls++;
 
   @override
   Future<void> loginIfNeeded() async {}

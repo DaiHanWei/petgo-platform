@@ -9,6 +9,7 @@ import 'package:permission_handler/permission_handler.dart' as ph;
 import 'package:tencent_cloud_chat_push/tencent_cloud_chat_push.dart';
 import 'package:tencent_cloud_chat_sdk/tencent_im_sdk_plugin.dart';
 
+import '../../features/auth/domain/auth_state.dart';
 import '../../features/notify/domain/notification_deep_link.dart';
 import '../im/im_service.dart';
 import '../router/app_router.dart';
@@ -259,6 +260,10 @@ class PushService {
       return;
     }
     if (DeepLinkRoutes.isShellTabRoot(location) || location.startsWith('/vet')) {
+      ctx.go(location);
+    } else if (redirectWouldRewrite(_ref.read(authControllerProvider), location)) {
+      // PR#34 finding #8：push 也过 redirect 管线，游客/角色不符时受控深链会被改写到
+      // shell 根（/home）——以 push 入栈即 GlobalKey 撞车 release 白屏。改写场景一律 go。
       ctx.go(location);
     } else {
       ctx.push(location);

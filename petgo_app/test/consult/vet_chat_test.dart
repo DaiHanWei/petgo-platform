@@ -19,7 +19,10 @@ class _FakeImService implements ImService {
   Future<void> loginIfNeeded() async => loggedIn = true;
 
   @override
-  Future<void> logout() async => loggedIn = false;
+  int invalidateCredential() => 0;
+
+  @override
+  Future<void> logout({int? ifGeneration}) async => loggedIn = false;
 
   @override
   Future<void> sendText({required String peerId, required String text, ChatPushSpec? push}) async {

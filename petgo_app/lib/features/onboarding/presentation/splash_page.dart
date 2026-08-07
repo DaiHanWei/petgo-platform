@@ -418,9 +418,15 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
   }
 
   /// 前后台切换。后台期间**压住交棒**，回前台后把入场从头补播一次再走原流程。
+  ///
+  /// ⚠️ 只认 hidden/paused 为「进后台」，**inactive 不算**（PR#34 finding #9）：
+  /// 首启的 ATT/通知权限系统弹窗只夺焦不进后台（App 转 inactive、splash 仍在屏上可见、
+  /// ticker 未停），若把 inactive 一并当后台，用户每答完一个弹窗动画就从第 0 帧重播一次
+  ///（iOS 两个弹窗重播两次）并重计 2266ms hold——冷启动被拉长且观感异常。
+  /// 真正进后台（iOS: inactive→hidden→paused）仍会命中 hidden/paused，补播逻辑不受影响。
   void _onLifecycleChange(AppLifecycleState state) {
     final wasPaused = _paused;
-    _paused = state != AppLifecycleState.resumed;
+    _paused = state == AppLifecycleState.paused || state == AppLifecycleState.hidden;
     if (!wasPaused || _paused || _completed || !mounted) return;
 
     // 回到前台。后台期间 ticker 停滞、单帧巨大 elapsed 会把 `_master` 直接推到终态 ——

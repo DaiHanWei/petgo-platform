@@ -453,6 +453,20 @@ void main() {
       return pumpSplash(tester, onComplete: onDone, prepareSession: () => never.future);
     }
 
+    // 真进后台/回前台的完整状态序列（框架断言相邻跳变合法性，不能 paused→resumed 直跳）。
+    // finding #9 后「进后台」判定认 hidden/paused，inactive 已豁免——序列里的 inactive 只是过路。
+    void goBackground(WidgetTester tester) {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    }
+
+    void goForeground(WidgetTester tester) {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    }
+
     testWidgets('兜底到点时停留正因后台往返而重新计时 → 停留一走完仍须放行', (tester) async {
       var done = false;
       await pumpNeverReady(tester, () => done = true);
@@ -460,12 +474,12 @@ void main() {
       // t≈1.05s 切后台。注意 Dart 的 Timer 在后台照常触发：原 hold(2266) 会在 t≈2.27s 到点，
       // 但 `_paused` 会把那次交棒压住（不在用户看不见时换页），符合既有设计。
       await tester.pump(const Duration(milliseconds: 1000));
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      goBackground(tester);
       await tester.pump();
 
       // t≈3.05s 回前台 → 动效从头补播，并**重新计 2266ms**（新的到点在 t≈5.32s）。
       await tester.pump(const Duration(milliseconds: 2000));
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      goForeground(tester);
       await tester.pump();
 
       // t≈5.15s：已越过 readyDeadline(5000)，但重启的停留还没走完 —— 此刻不交棒是对的
@@ -488,10 +502,10 @@ void main() {
 
       for (var i = 0; i < 2; i++) {
         await tester.pump(const Duration(milliseconds: 1000));
-        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+        goBackground(tester);
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 1500));
-        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+        goForeground(tester);
         await tester.pump();
       }
       expect(done, isFalse, reason: '每次回前台都重新计停留，此时都还没到点');
@@ -502,5 +516,29 @@ void main() {
 
       await tester.pumpWidget(const SizedBox());
     });
+  });
+
+  /// PR#34 finding #9：首启的 ATT/通知权限系统弹窗只夺焦（inactive）不进后台——
+  /// 不得触发「回前台从头重播 + 重计 hold」，否则 iOS 首启两个弹窗重播两次、冷启动被拉长。
+  testWidgets('🐛 回归：inactive（系统权限弹窗夺焦）不重播入场、不重计停留', (tester) async {
+    var done = false;
+    await pumpSplash(tester,
+        onComplete: () => done = true,
+        prepareSession: () => Future<void>.value()); // 会话秒回，唯一变量是 hold 计时
+
+    // t≈1.05s 系统弹窗盖上来（inactive），t≈1.25s 用户作答完回 resumed。
+    await tester.pump(const Duration(milliseconds: 1000));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+
+    // 原 hold(2266ms) 到点即交棒。若 inactive 被误当后台，hold 会在 t≈1.25s 重计
+    // → 此刻（t≈2.55s）还差 ~1s 才放行，断言失败。
+    await tester.pump(const Duration(milliseconds: 1300));
+    expect(done, isTrue, reason: 'inactive 不得重置入场动效/停留计时（finding #9）');
+
+    await tester.pumpWidget(const SizedBox());
   });
 }

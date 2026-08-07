@@ -98,9 +98,19 @@ public final class TimelineClassifier {
             }
         }
 
+        // 本批内容 id 集合：类② 的「由内容承载」只有在关联内容**确实在本批**时才成立。
+        // 里程碑按 completedAt 取窗、内容按 eventDate 取窗，两把尺子不同——给旧日期照片补打卡时
+        // 两者会落在不同分页，若只看 linkedContentId 非空就跳过，该里程碑在任何一页都不出现。
+        Set<Long> contentIdsInBatch = new HashSet<>();
+        for (ContentCandidate c : contents) {
+            if (c.postId() != null) {
+                contentIdsInBatch.add(c.postId());
+            }
+        }
+
         for (MilestoneTimelineView m : milestones) {
-            if (m.linkedContentId() != null) {
-                continue; // 已由类② 的内容承载
+            if (m.linkedContentId() != null && contentIdsInBatch.contains(m.linkedContentId())) {
+                continue; // 已由类② 的内容承载（内容确在本批，金徽章正在渲染）
             }
             LocalDate day = m.completedAt().atZone(ZoneOffset.UTC).toLocalDate();
             if (isHealthMilestone(m.code()) && daysWithHealthItem.contains(day)) {

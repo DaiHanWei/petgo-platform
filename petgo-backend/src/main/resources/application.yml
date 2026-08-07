@@ -138,6 +138,12 @@ spring:
     name: petgo-backend
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
+  # analyticsExecutor（AsyncConfig）实现了 Executor，会让 Boot 的 applicationTaskExecutor 因
+  # @ConditionalOnMissingBean(Executor.class) 不再创建 → 无限定符 @Async 退化为 SimpleAsyncTaskExecutor
+  # （每次调用新建线程、无池化无上限）。force 强制创建 applicationTaskExecutor 并把 @Async 绑回业务池。
+  task:
+    execution:
+      mode: force
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:petgo}
     username: ${DB_USER:petgo}
