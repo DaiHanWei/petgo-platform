@@ -20,15 +20,28 @@ import 'package:flutter/widgets.dart';
 class AttGate {
   AttGate._();
 
+  /// 单飞：前台补弹与冷启动请求可能并发（作答后 resumed 触发新一轮，而旧一轮的 15s
+  /// 轮询还没退出）——同一时刻只允许一个请求周期，后来者直接返回「未落定」。
+  static bool _inFlight = false;
+
   /// iOS：等前台活跃后请求 ATT 授权（状态非 notDetermined 则跳过）。
   /// Android/异常一律静默返回——绝不抛错、绝不无限挂起，调用方可放心 await。
   ///
-  /// 返回值 = **屏幕上是否已没有等待作答的 ATT 弹窗**（PR#34 finding #14）：
-  /// - `true`：已落定 / 本就无需询问 / 弹窗从未出现——调用方可以安全地接着弹下一个系统弹窗；
-  /// - `false`：弹窗**仍开着**（用户 15s 未作答）——调用方**不得**再弹任何系统弹窗
-  ///   （会盖住 ATT，重蹈 2026-08-06 Guideline 2.1 拒信），应推迟到下一次冷启动。
+  /// 返回值 = **ATT 是否已真正落定**（PR#34 finding #14 + 2026-08-09 iPad 拒信收紧）：
+  /// - `true`：已作答 / 系统禁止询问 / 本就无需询问——调用方可以安全地接着弹下一个系统弹窗；
+  /// - `false`：仍是 notDetermined（弹窗开着没作答，**或请求被系统吞掉**）——调用方
+  ///   **不得**弹任何系统弹窗（会盖住/挤掉 ATT，Guideline 2.1 两封拒信的成因），
+  ///   等 [installForegroundRetry] 的下一次前台补弹。
+  ///
+  /// ⚠️ 2026-08-09 拒信（iPad Air/iPadOS 26.6，iPhone-only App 跑兼容模式）教训：
+  /// 冷启动这一次机会的重试窗口（~11s）在 iPad 上不够——请求被吞后本会话内再无请求时机，
+  /// 审核员全新安装启动一次就永远看不到 ATT 弹窗。故不再把「三次都被吞」当安全放行，
+  /// 并配合 [installForegroundRetry] 在每次回前台时补弹（系统保证弹窗只真正出现一次：
+  /// 仅 notDetermined 状态有 UI，已作答后调用是无 UI 的空转）。
   static Future<bool> requestIfNeeded() async {
     if (kIsWeb || !Platform.isIOS) return true;
+    if (_inFlight) return false; // 已有周期在跑，本轮不重入（结果由在跑周期负责）
+    _inFlight = true;
     try {
       await _waitUntilResumed();
       // 刚转 active 立即请求仍有概率不弹（iOS 已知行为），延迟 1s 兜底。
@@ -40,7 +53,18 @@ class AttGate {
     } catch (e) {
       debugPrint('[ATT] request failed: $e'); // 失败不阻断启动链路
       return true; // 异常 ⇒ 弹窗大概率没出现，不因 ATT 插件故障饿死通知权限
+    } finally {
+      _inFlight = false;
     }
+  }
+
+  /// 前台补弹（2026-08-09 iPad 拒信根治）：每次 App 回到前台、ATT 仍未落定就再请求。
+  ///
+  /// [onSettled] 在**某一轮请求真正落定**后回调（最多一次语义由调用方自持）——
+  /// 用于把被推迟的通知权限接回来。Android/Web 直接空转不挂监听。
+  static void installForegroundRetry({required Future<void> Function() onSettled}) {
+    if (kIsWeb || !Platform.isIOS) return;
+    WidgetsBinding.instance.addObserver(_ForegroundRetryObserver(onSettled));
   }
 
   /// 请求 ATT，**弹窗没真正出现就退避重试**（最多 3 次）。返回语义同 [requestIfNeeded]。
@@ -67,8 +91,11 @@ class AttGate {
       // 被系统吞了：退避（2s / 4s）后重试，给 scene 更多时间真正 active。
       await Future<void>.delayed(Duration(seconds: 2 * (attempt + 1)));
     }
-    debugPrint('[ATT] prompt never appeared after retries');
-    return true; // 三次都没弹出来 ⇒ 屏上没有 ATT 弹窗，后续系统弹窗不会遮挡它
+    debugPrint('[ATT] prompt never appeared after retries — will retry on next foreground');
+    // 2026-08-09 iPad 拒信收紧：三次都被吞 ≠ 安全。iPad 兼容模式下弹窗可能「已在屏上但
+    // 失焦判据没探到」（此时放行通知权限就是盖弹窗），也可能真被吞（那就等前台补弹）。
+    // 两种情形的正确动作一致：按未落定处理，通知权限一并推迟。
+    return false;
   }
 
   /// 监听 App 是否在 [within] 内失去前台焦点（=系统弹窗盖上来了）。
@@ -146,4 +173,43 @@ class _LifecycleProbe with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) => onState(state);
+}
+
+/// 前台补弹监听（2026-08-09 iPad 拒信）：resumed 且 ATT 仍 notDetermined → 再走一轮请求；
+/// 某轮落定后回调 [onSettled] 并自摘（不再监听）。
+///
+/// 注意与请求周期内部的 `_waitUntilInactive`/`_waitUntilResumed` 探针互不干扰——
+/// 周期内产生的 resumed（用户答完 ATT 弹窗回前台）会触发本监听，但此时要么状态已落定
+/// （走 onSettled 收尾），要么 [AttGate._inFlight] 单飞挡掉重入。
+class _ForegroundRetryObserver with WidgetsBindingObserver {
+  _ForegroundRetryObserver(this.onSettled);
+
+  final Future<void> Function() onSettled;
+  bool _settledFired = false;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed || _settledFired) return;
+    Future<void>(() async {
+      try {
+        final status = await AppTrackingTransparency.trackingAuthorizationStatus;
+        if (status != TrackingStatus.notDetermined) {
+          // 已落定（可能是上一轮弹窗刚被作答）：收尾一次并自摘。
+          _fireSettled();
+          return;
+        }
+        final settled = await AttGate.requestIfNeeded();
+        if (settled) _fireSettled();
+      } catch (e) {
+        debugPrint('[ATT] foreground retry failed: $e');
+      }
+    });
+  }
+
+  void _fireSettled() {
+    if (_settledFired) return;
+    _settledFired = true;
+    WidgetsBinding.instance.removeObserver(this);
+    onSettled();
+  }
 }
