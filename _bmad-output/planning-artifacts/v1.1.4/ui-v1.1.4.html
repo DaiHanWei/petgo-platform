@@ -1,0 +1,1015 @@
+<meta charset="utf-8">
+<title>TailTopia V1.1.4 — 社区管控 UI 整合稿</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --tt-violet:#845EC9; --tt-violet-2:#9E83DA; --tt-violet-deep:#6C48AE; --tt-violet-tint:#F8F2FF;
+  --tt-canvas:#FFFFFF; --tt-ink:#2E2A45; --tt-ink-2:#544864; --tt-muted:#9690A6;
+  --tt-line:#E6E6E6; --tt-line-2:#F0F0F0;
+  --tt-coral:#F0425A; --tt-coral-tint:#FDE7EB;
+  --tt-radius:14px;
+  --tt-font:'Poppins', system-ui, "Segoe UI", Roboto, sans-serif;
+
+  --page-bg:#FAF9FC; --page-ink:#211F2E; --page-ink-2:#57536B;
+  --page-muted:#8E89A3; --page-rule:#E4E0EE; --page-accent:#7D45F6; --page-accent-soft:#EFE6FF;
+  --lane-a:#3D8BD1; --lane-b:#845EC9; --lane-c:#D1477A; --lane-d:#1F9E6A;
+}
+*{box-sizing:border-box; -webkit-font-smoothing:antialiased;}
+body{margin:0; padding:0 0 80px; background:var(--page-bg); font-family:var(--tt-font); color:var(--page-ink);}
+.wrap{max-width:1360px; margin:0 auto; padding:0 40px;}
+
+/* ---------- deck 装饰（手机框外，可写中文说明） ---------- */
+.doc-header{padding:56px 0 28px; border-bottom:1px solid var(--page-rule); margin-bottom:28px;}
+.doc-header h1{font-size:26px; margin:0 0 10px; letter-spacing:-.3px;}
+.doc-header .sub{font-size:13.5px; color:var(--page-ink-2); line-height:1.85;}
+.pill{display:inline-block; font-size:11.5px; font-weight:600; color:var(--page-accent);
+  background:var(--page-accent-soft); border-radius:999px; padding:4px 12px; margin-right:8px;}
+.note{background:#fff; border:1px solid var(--page-rule); border-left:3px solid var(--page-accent);
+  border-radius:10px; padding:14px 18px; font-size:12.5px; color:var(--page-ink-2); line-height:1.9; margin:18px 0;}
+.note b{color:var(--page-ink);}
+.note.warn{border-left-color:var(--tt-coral);}
+table.idx{width:100%; border-collapse:collapse; font-size:12.5px; margin:16px 0 8px;}
+table.idx th,table.idx td{border:1px solid var(--page-rule); padding:8px 12px; text-align:left; vertical-align:top;}
+table.idx th{background:#fff; font-weight:600; color:var(--page-ink);}
+table.idx td{background:#fff; color:var(--page-ink-2);}
+.lane{margin:52px 0 6px;}
+.lane h2{font-size:17px; margin:0 0 6px; display:flex; align-items:center; gap:10px;}
+.lane h2::before{content:''; width:5px; height:19px; border-radius:3px; background:var(--lane);}
+.lane .desc{font-size:12.5px; color:var(--page-ink-2); line-height:1.85; margin:0 0 20px; max-width:1100px;}
+.flow{display:flex; flex-wrap:wrap; align-items:center; gap:7px; font-size:12.5px;
+  color:var(--page-ink-2); line-height:1.9; margin:0 0 22px; padding:12px 16px; background:#fff;
+  border:1px solid var(--page-rule); border-radius:10px;}
+.flow s{text-decoration:none; font-weight:600; color:var(--page-accent); background:var(--page-accent-soft);
+  border-radius:6px; padding:2px 8px;}
+.flow i{font-style:normal; color:var(--page-muted);}
+.flow em{font-style:normal; color:var(--page-ink); font-weight:600;}
+.flow .nl{flex-basis:100%; height:0;}
+.frames{display:grid; grid-template-columns:repeat(3, 384px); gap:40px 34px;
+  justify-content:start; padding:8px 4px 26px;}
+.frame{display:flex; flex-direction:column; align-items:center; gap:11px; width:384px; flex-shrink:0;}
+.frame-tag{font-family:"Iowan Old Style",Palatino,Georgia,serif; font-size:12.5px; font-weight:600;
+  color:var(--page-accent); border:1px solid var(--page-accent); border-radius:999px; padding:3px 12px; text-align:center;}
+.frame-cap{font-size:12px; color:var(--page-ink-2); text-align:left; align-self:stretch; line-height:1.8;}
+.frame-cap b{color:var(--page-ink);}
+
+/* ---------- 手机框 ---------- */
+.phone-shell{width:384px; height:812px; border-radius:42px; background:#0d0c12; padding:11px;
+  box-shadow:0 1px 2px rgba(33,31,46,.06), 0 16px 40px rgba(33,31,46,.14); flex-shrink:0;}
+.phone-screen{width:100%; height:100%; background:var(--tt-canvas); border-radius:26px; overflow:hidden;
+  position:relative; font-family:var(--tt-font); display:flex; flex-direction:column;}
+
+/* ---------- App 通用件 ---------- */
+.statusbar{height:44px; display:flex; align-items:center; justify-content:space-between;
+  padding:0 22px; font-size:12.5px; font-weight:600; color:var(--tt-ink); flex-shrink:0;}
+.statusbar .r{display:flex; gap:5px; align-items:center; font-size:11px;}
+.appbar{height:52px; display:flex; align-items:center; padding:0 8px 0 6px; flex-shrink:0; gap:4px;}
+.appbar .ttl{font-size:16px; font-weight:600; color:var(--tt-ink);}
+.icobtn{width:40px; height:40px; border-radius:999px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+.body{flex:1; overflow:hidden; position:relative;}
+
+/* Feed 卡片（背景页，仅作上下文） */
+.feedcard{padding:14px 16px 12px; border-bottom:1px solid var(--tt-line-2);}
+.fc-top{display:flex; align-items:center; gap:9px; margin-bottom:9px;}
+.avatar{border-radius:999px; background:var(--tt-line); flex-shrink:0; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:600;}
+.a36{width:36px; height:36px; font-size:13px;}
+.a44{width:44px; height:44px; font-size:15px;}
+.a64{width:64px; height:64px; font-size:22px;}
+.nm{font-size:13.5px; font-weight:600; color:var(--tt-ink);}
+.tm{font-size:11px; color:var(--tt-muted); margin-top:1px;}
+.ph{border-radius:12px; background:linear-gradient(135deg,#EFE9FB,#F7F1FF); height:190px;
+  display:flex; align-items:center; justify-content:center; font-size:30px;}
+.ftxt{font-size:13px; color:var(--tt-ink-2); line-height:1.65; margin-top:10px;}
+
+/* 评论行 */
+.crow{display:flex; gap:9px; padding:11px 16px;}
+.ctext{font-size:12.5px; color:var(--tt-ink-2); line-height:1.6; margin-top:2px;}
+
+/* 遮罩 + 抽屉（硬规则：贴底、顶部圆角、遮罩、上层内容隐约可见） */
+.mask{position:absolute; inset:0; background:rgba(24,20,38,.42); z-index:2;}
+.sheet{position:absolute; left:0; right:0; bottom:0; z-index:3; background:#fff;
+  border-radius:20px 20px 0 0; box-shadow:0 -8px 28px rgba(20,18,28,.18);
+  padding:10px 22px 28px; max-height:86%; display:flex; flex-direction:column;}
+.grab{width:36px; height:4px; border-radius:999px; background:var(--tt-line); margin:0 auto 16px;}
+
+/* 抽屉内元件 —— 规格严格取自 report_sheet.dart */
+.sh-ttl{font-size:16px; font-weight:700; color:var(--tt-ink);}
+.sh-sub{font-size:12px; color:var(--tt-ink-2); margin-top:4px;}
+.reason{display:flex; align-items:center; gap:10px; padding:12px 14px; border-radius:13px;
+  border:1.5px solid var(--tt-line); background:#fff; margin-top:10px;}
+.reason.on{border-color:var(--tt-violet); background:var(--tt-violet-tint);}
+.reason .rt{font-size:13px; color:var(--tt-ink); flex:1;}
+.radio{width:20px; height:20px; border-radius:999px; border:2px solid var(--tt-muted); flex-shrink:0; position:relative;}
+.reason.on .radio{border-color:var(--tt-violet);}
+.reason.on .radio::after{content:''; position:absolute; inset:3.5px; border-radius:999px; background:var(--tt-violet);}
+.ta{margin-top:10px; border:1.5px solid var(--tt-violet); border-radius:13px; padding:12px 14px;
+  background:#fff; min-height:76px; display:flex; flex-direction:column;}
+.ta .ph2{font-size:13px; color:var(--tt-muted); line-height:1.6;}
+.ta .cnt{font-size:11px; color:var(--tt-muted); text-align:right; margin-top:auto;}
+.btn{width:100%; border-radius:14px; padding:14px 0; text-align:center; font-size:14px; font-weight:700;
+  background:var(--tt-violet); color:#fff; margin-top:14px;}
+.btn.off{background:var(--tt-line); color:var(--tt-muted);}
+.btn.ghost{background:#fff; color:var(--tt-ink-2); border:1.5px solid var(--tt-line); font-weight:600;
+  padding:13px 0; margin-top:8px;}
+.btn.danger{background:var(--tt-coral);}
+.spin{width:18px; height:18px; border-radius:999px; border:2.5px solid rgba(255,255,255,.45);
+  border-top-color:#fff; display:inline-block; vertical-align:-3px;}
+
+/* Toast —— 3–5s 自动消失，含恢复路径 */
+.toast{position:absolute; left:20px; right:20px; bottom:34px; z-index:6; background:rgba(31,27,48,.94);
+  color:#fff; border-radius:12px; padding:13px 16px; font-size:12.5px; line-height:1.55;
+  box-shadow:0 10px 28px rgba(20,18,28,.28);}
+
+/* ⋯ 菜单（锚定右上角，非第三层抽屉） */
+.menu{position:absolute; z-index:5; background:#fff; border-radius:14px; padding:6px;
+  box-shadow:0 8px 30px rgba(20,18,28,.20); border:1px solid var(--tt-line-2); min-width:176px;}
+.mi{display:flex; align-items:center; gap:11px; padding:12px 12px; border-radius:10px; font-size:13.5px; color:var(--tt-ink);}
+.mi .sub{font-size:11px; color:var(--tt-muted); margin-top:2px;}
+.mi.dis{color:var(--tt-muted);}
+
+/* 设置页 / 列表 */
+.sect{font-size:11px; font-weight:700; color:var(--tt-muted); letter-spacing:.6px; padding:20px 20px 8px;}
+.row{display:flex; align-items:center; gap:12px; padding:15px 20px; background:#fff; border-bottom:1px solid var(--tt-line-2);}
+.row .lab{font-size:14px; color:var(--tt-ink); flex:1;}
+.row .val{font-size:12.5px; color:var(--tt-muted);}
+.blk{display:flex; align-items:center; gap:12px; padding:13px 20px; border-bottom:1px solid var(--tt-line-2);}
+.blk .info{flex:1; min-width:0;}
+.tagmini{display:inline-block; font-size:10px; font-weight:600; color:var(--tt-violet-deep);
+  background:var(--tt-violet-tint); border-radius:999px; padding:2px 8px; margin-left:6px; vertical-align:1px;}
+.rowmore{width:30px; height:30px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+.unblock{font-size:12px; font-weight:600; color:var(--tt-violet); padding:7px 11px;
+  border:1.5px solid var(--tt-violet); border-radius:999px; flex-shrink:0;}
+.empty{display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; padding:0 46px; text-align:center; gap:12px;}
+.empty .ic{font-size:44px;}
+.empty .t{font-size:14.5px; font-weight:600; color:var(--tt-ink);}
+.empty .d{font-size:12.5px; color:var(--tt-muted); line-height:1.7;}
+.skel{height:13px; border-radius:7px; background:linear-gradient(90deg,#F1EEF7,#F8F6FC,#F1EEF7);}
+.err{display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; padding:0 46px; text-align:center; gap:12px;}
+.retry{font-size:13px; font-weight:700; color:#fff; background:var(--tt-violet); border-radius:999px; padding:10px 26px; margin-top:4px;}
+svg{display:block;}
+</style>
+
+<div class="wrap">
+
+<div class="doc-header">
+  <h1>TailTopia V1.1.4 — 社区管控 UI 整合稿</h1>
+  <div class="sub">
+    <span class="pill">✅ 已定稿（2026-08-14）</span>
+    <span class="pill">25 屏 · 4 条泳道</span>
+    <span class="pill">2026-08-14</span><br>
+    对应 <b>FR-58 用户账号举报</b> + <b>FR-94 用户拉黑</b>（PRD：<code>v1-1-4prd.md</code>）。
+    后台 AB-3D / AB-3E 按产品要求<b>不出 UI 稿</b>，本文件只含 App 端。<br>
+    手机框内为印尼语（与真实 App 一致），所有说明文字一律在框外。<br>
+    <b>产品已确认定稿，且不拆成一页一文件</b> —— 研发直接以本整合稿为准（沿用 V1.1.6 的既定做法）。
+    每条泳道上方有<b>流程条</b>标明屏与屏之间的跳转关系。
+  </div>
+</div>
+
+<div class="note">
+  <b>本稿的取值来源（均已回代码核实，非凭需求文档想象）：</b><br>
+  · 配色取 <code>core/theme/colors.dart</code> —— <b><code>AppColors.mint</code> 的实际色值是品牌紫 <code>#845EC9</code></b>，不是绿色，整套 mint 阶都是紫色阶。<br>
+  · 举报抽屉规格取 <code>content/presentation/report_sheet.dart</code> —— 内边距 22/12/22/28、拖拽手柄 36×4、原因卡圆角 13 / 边框 1.5px / 内距 14·12 / 卡间距 10、提交按钮圆角 14 · 垂直内距 14。<b>本稿逐项照搬，未自创数值。</b><br>
+  · 迷你主页卡结构取 <code>shared/widgets/mini_profile_sheet.dart</code>；设置页分组取 <code>features/me/presentation/settings_page.dart</code>。<br>
+  · 印尼语文案凡 <code>app_id.arb</code> 里已有的一律复用（Tutup / Batal / Pilih alasan yang paling sesuai / Laporan diterima / PRIVASI &amp; KEAMANAN 等）。
+</div>
+
+<div class="note warn">
+  <b>⚠️ 三处需要你确认的地方（已在 PRD 与决策日志留痕，本稿按当前口径画）：</b><br>
+  <b>1 · 举报成功态不提"内容会被隐藏"</b>（2026-08-14 定案）。已知与既有内容举报的 <code>reportHiddenToast</code>
+  「Kamu tidak akan melihat konten ini lagi」不一致——举报<b>帖子</b>会告知、举报<b>账号</b>不告知，产品接受该差异。<br>
+  <b>2 · 印尼语文案有一批是新写的</b>（账号举报 5 类原因、拉黑全套、4 条 Toast），已在文末单独列表，<b>待运营复核措辞</b>。<br>
+  <b>3 · 迷你主页卡本来一个操作按钮都没有</b>（纯展示：头像/昵称/发布数/「主页筹备中」/关闭）。本版本是从零加入口，取「⋯」菜单方案。
+</div>
+
+<table class="idx">
+  <tr><th style="width:88px">泳道</th><th style="width:150px">屏号</th><th>内容</th><th style="width:190px">对应 PRD</th></tr>
+  <tr><td><b>A</b></td><td>A1–A5</td><td>迷你主页预览卡：默认 / ⋯菜单 / 已举报 / 已拉黑拦截 / 网络失败</td><td>FR-58 举报入口 · FR-94 生效范围④</td></tr>
+  <tr><td><b>B</b></td><td>B1–B7</td><td>举报流程：类型选择 / 「其他」展开 / 未填禁用 / 提交中 / 成功 / 失败 / 重复举报</td><td>FR-58 全流程</td></tr>
+  <tr><td><b>C</b></td><td>C1–C4</td><td>拉黑流程：二次确认 / 提交中 / 成功 / 失败</td><td>FR-94 入口①</td></tr>
+  <tr><td><b>D</b></td><td>D1–D9</td><td>黑名单：设置入口 / 列表 / 空态 / 加载 / 失败 / 解除确认 / 解除成功 / 已注销条目 / 行内 ⋯ 举报</td><td>FR-94 黑名单管理</td></tr>
+</table>
+
+<!-- ==================== 泳道 A ==================== -->
+<div class="lane" style="--lane:var(--lane-a)">
+  <h2>A · 迷你主页预览卡（既有 sheet，本版本加入口）</h2>
+  <p class="desc">
+    这张卡是既有组件 <code>mini_profile_sheet.dart</code>，原本<b>只有展示、没有任何操作</b>：头像（r=32）→ 昵称 → 发布数 → 「主页筹备中」→ 「关闭」。
+    本版本在右上角加一个「⋯」，点开出「举报 / 拉黑」两项——保持卡片原貌几乎不变，代价是多一层点击（产品已确认接受）。
+    A4 / A5 两屏是<b>卡根本没弹出来</b>的两种情况，背景保持在用户点击前所处的 Feed 页。
+  </p>
+  <div class="flow">
+    <em>主路径：</em><s>A1</s> 默认卡 <i>—— 点「⋯」 →</i> <s>A2</s> 菜单 <i>—— 选举报 →</i> <em>泳道 B</em>
+    <i>／ 选拉黑 →</i> <em>泳道 C</em>
+    <span class="nl"></span>
+    <em>变体：</em><s>A3</s> 曾举报过该账号时的菜单（替代 A2）
+    <span class="nl"></span>
+    <em>卡片不弹出的两种情况：</em><s>A4</s> 对方已被拉黑 <i>／</i> <s>A5</s> 网络失败
+  </div>
+  <div class="frames">
+
+    <!-- A1 -->
+    <div class="frame">
+      <span class="frame-tag">A1 · 迷你主页卡 · 默认态</span>
+      <div class="phone-shell"><div class="phone-screen">
+        <div class="statusbar"><span>9:41</span><span class="r">‧‧‧ ⌁ ▮</span></div>
+        <div class="body">
+          <div class="feedcard">
+            <div class="fc-top"><div class="avatar a36" style="background:#B79BE8">R</div>
+              <div><div class="nm">Rina P.</div><div class="tm">10 menit lalu</div></div></div>
+            <div class="ph">🐈</div>
+            <div class="ftxt">Mochi genap 2 tahun hari ini 🎂</div>
+          </div>
+          <div class="feedcard"><div class="fc-top"><div class="avatar a36" style="background:#8FBFE0">D</div>
+            <div><div class="nm">Dimas</div><div class="tm">1 jam lalu</div></div></div>
+            <div class="ftxt">Ada rekomendasi dokter hewan di Bandung?</div></div>
+        </div>
+        <div class="mask"></div>
+        <div class="sheet" style="padding:10px 24px 26px">
+          <div class="grab"></div>
+          <div style="position:absolute; right:14px; top:16px;" class="icobtn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9690A6" stroke-width="2.2" stroke-linecap="round">
+              <circle cx="5" cy="12" r="1.4" fill="#9690A6" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="#9690A6" stroke="none"/><circle cx="19" cy="12" r="1.4" fill="#9690A6" stroke="none"/></svg>
+          </div>
+          <div style="display:flex; flex-direction:column; align-items:center; padding-top:6px">
+            <div class="avatar a64" style="background:#B79BE8">R</div>
+            <div style="font-size:17px; font-weight:600; color:var(--tt-ink); margin-top:8px">Rina P.</div>
+            <div style="font-size:12px; color:var(--tt-muted); margin-top:4px">128 postingan dibagikan</div>
+            <div style="font-size:13px; color:var(--tt-ink-2); line-height:1.7; text-align:center; margin-top:12px">
+              Halaman pribadi mereka sedang disiapkan dengan penuh perhatian, lebih banyak kejutan menanti ✨</div>
+            <div style="font-size:14px; font-weight:600; color:var(--tt-violet); margin-top:20px; padding:8px 20px">Tutup</div>
+          </div>
+        </div>
+      </div></div>
+      <div class="frame-cap"><b>新增：右上角「⋯」</b>。其余 5 个元素（头像 / 昵称 / 发布数 / 「主页筹备中」/ Tutup）与既有实现<b>逐项保持不变</b>，位置、字号、文案都没动。</div>
+    </div>
+
+    <!-- A2 -->
+    <div class="frame">
+      <span class="frame-tag">A2 · ⋯ 菜单展开</span>
+      <div class="phone-shell"><div class="phone-screen">
+        <div class="statusbar"><span>9:41</span><span class="r">‧‧‧ ⌁ ▮</span></div>
+        <div class="body">
+          <div class="feedcard"><div class="fc-top"><div class="avatar a36" style="background:#B79BE8">R</div>
+            <div><div class="nm">Rina P.</div><div class="tm">10 menit lalu</div></div></div>
+            <div class="ph">🐈</div>
+            <div class="ftxt">Mochi genap 2 tahun hari ini 🎂</div></div>
+        </div>
+        <div class="mask"></div>
+        <div class="sheet" style="padding:10px 24px 26px">
+          <div class="grab"></div>
+          <div style="position:absolute; right:14px; top:16px;" class="icobtn">
+            <svg width="20" height="20" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4" fill="#845EC9"/><circle cx="12" cy="12" r="1.4" fill="#845EC9"/><circle cx="19" cy="12" r="1.4" fill="#845EC9"/></svg>
+          </div>
+          <div style="display:flex; flex-direction:column; align-items:center; padding-top:6px">
+            <div class="avatar a64" style="background:#B79BE8">R</div>
+            <div style="font-size:17px; font-weight:600; color:var(--tt-ink); margin-top:8px">Rina P.</div>
+            <div style="font-size:12px; color:var(--tt-muted); margin-top:4px">128 postingan dibagikan</div>
+            <div style="font-size:13px; color:var(--tt-ink-2); line-height:1.7; text-align:center; margin-top:12px">
+              Halaman pribadi mereka sedang disiapkan dengan penuh perhatian, lebih banyak kejutan menanti ✨</div>
+            <div style="font-size:14px; font-weight:600; color:var(--tt-violet); margin-top:20px; padding:8px 20px">Tutup</div>
+          </div>
+          <div class="menu" style="right:14px; bottom:100%; margin-bottom:10px">
+          <div class="mi">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#2E2A45" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 21V4M4 4h11l-1.4 3.5L15 11H4"/></svg>
+            <div><div>Laporkan</div><div class="sub">Langgar aturan komunitas</div></div>
+          </div>
+          <div class="mi">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#2E2A45" stroke-width="1.9" stroke-linecap="round">
+              <circle cx="12" cy="12" r="8.4"/><path d="M6.1 6.1l11.8 11.8"/></svg>
+            <div><div>Blokir</div><div class="sub">Berhenti melihat mereka</div></div>
+          </div>
+          </div>
+        </div>
+      </div></div>
+      <div class="frame-cap">两项<b>并列、不分主次</b>——它们是两种意图不是轻重两档。副标题对应 PRD 定的语义边界：举报=「TA 违反了社区规定，请平台尽快处理」/ 拉黑=「我不想再看见 TA」。菜单锚在「⋯」下方，<b>不是第三层抽屉</b>。</div>
+    </div>
+
+    <!-- A3 -->
+    <div class="frame">
+      <span class="frame-tag">A3 · 已举报过该账号</span>
+      <div class="phone-shell"><div class="phone-screen">
+        <div class="statusbar"><span>9:41</span><span class="r">‧‧‧ ⌁ ▮</span></div>
+        <div class="body">
+          <div class="feedcard"><div class="fc-top"><div class="avatar a36" style="background:#B79BE8">R</div>
+            <div><div class="nm">Rina P.</div><div class="tm">10 menit lalu</div></div></div>
+            <div class="ph">🐈</div>
+            <div class="ftxt">Mochi genap 2 tahun hari ini 🎂</div></div>
+        </div>
+        <div class="mask"></div>
+        <div class="sheet" style="padding:10px 24px 26px">
+          <div class="grab"></div>
+          <div style="position:absolute; right:14px; top:16px;" class="icobtn">
+            <svg width="20" height="20" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4" fill="#845EC9"/><circle cx="12" cy="12" r="1.4" fill="#845EC9"/><circle cx="19" cy="12" r="1.4" fill="#845EC9"/></svg>
+          </div>
+          <div style="display:flex; flex-direction:column; align-items:center; padding-top:6px">
+            <div class="avatar a64" style="background:#B79BE8">R</div>
+            <div style="font-size:17px; font-weight:600; color:var(--tt-ink); margin-top:8px">Rina P.</div>
+            <div style="font-size:12px; color:var(--tt-muted); margin-top:4px">128 postingan dibagikan</div>
+            <div style="font-size:13px; color:var(--tt-ink-2); line-height:1.7; text-align:center; margin-top:12px">
+              Halaman pribadi mereka sedang disiapkan dengan penuh perhatian, lebih banyak kejutan menanti ✨</div>
+            <div style="font-size:14px; font-weight:600; color:var(--tt-violet); margin-top:20px; padding:8px 20px">Tutup</div>
+          </div>
+          <div class="menu" style="right:14px; bottom:100%; margin-bottom:10px">
+          <div class="mi">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#845EC9" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 21V4M4 4h11l-1.4 3.5L15 11H4"/></svg>
+            <div><div style="color:var(--tt-violet); font-weight:600">Sudah dilaporkan</div><div class="sub">Ketuk untuk melaporkan lagi</div></div>
+          </div>
+          <div class="mi">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#2E2A45" stroke-width="1.9" stroke-linecap="round">
+              <circle cx="12" cy="12" r="8.4"/><path d="M6.1 6.1l11.8 11.8"/></svg>
+            <div><div>Blokir</div><div class="sub">Berhenti melihat mereka</div></div>
+          </div>
+          </div>
+        </div>
+      </div></div>
+      <div class="frame-cap"><b>「已举报」是服务端持久化状态</b>，重启 App 不丢（PRD 明确改掉了原「当前会话内显示」的写法）。<b>仍可点击</b>再次举报——副标题直接说明这一点，避免用户以为是禁用态。</div>
+    </div>
+
+    <!-- A4 -->
+    <div class="frame">
+      <span class="frame-tag">A4 · 点已拉黑用户 → 卡不弹</span>
+      <div class="phone-shell"><div class="phone-screen">
+        <div class="statusbar"><span>9:41</span><span class="r">‧‧‧ ⌁ ▮</span></div>
+        <div class="body">
+          <div class="feedcard"><div class="fc-top"><div class="avatar a36" style="background:#8FBFE0">D</div>
+            <div><div class="nm">Dimas</div><div class="tm">1 jam lalu</div></div></div>
+            <div class="ftxt">Ada rekomendasi dokter hewan di Bandung?</div></div>
+          <div class="crow"><div class="avatar a36" style="background:#E0A87C; width:30px; height:30px; font-size:11px">B</div>
+            <div><div class="nm" style="font-size:12.5px">Budi S.</div>
+              <div class="ctext">Coba klinik dekat Dago, bagus kok.</div></div></div>
+        </div>
+        <div class="toast">Kamu sudah memblokir pengguna ini</div>
+      </div></div>
+      <div class="frame-cap">点被拉黑者的头像/昵称 → <b>卡片完全不弹</b>，只出 Toast。⚠️ 这条要走<b>独立分支</b>，不能复用既有的 <code>catch (_) { return; }</code> 静默路径——两者语义不同。</div>
+    </div>
+
+    <!-- A5 -->
+    <div class="frame">
+      <span class="frame-tag">A5 · 拉取失败（既有行为变更）</span>
+      <div class="phone-shell"><div class="phone-screen">
+        <div class="statusbar"><span>9:41</span><span class="r">‧‧‧ ⌁ ▮</span></div>
+        <div class="body">
+          <div class="feedcard"><div class="fc-top"><div class="avatar a36" style="background:#B79BE8">R</div>
+            <div><div class="nm">Rina P.</div><div class="tm">10 menit lalu</div></div></div>
+            <div class="ph">🐈</div>
+            <div class="ftxt">Mochi genap 2 tahun hari ini 🎂</div></div>
+        </div>
+        <div class="toast">Gagal terhubung, coba lagi</div>
+      </div></div>
+      <div class="frame-cap"><b>⚠️ 这一屏是对既有行为的变更，不是新增。</b> 原实现拉取失败<b>静默不弹</b>（注释理由"非关键路径"）——用户点了头像什么都不发生。本版本改为出 Toast。研发注意：<b>要改原来的 catch 分支，不是只加新分支。</b></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ==================== 泳道 B ==================== -->
+<div class="lane" style="--lane:var(--lane-b)">
+  <h2>B · 举报流程（扩展既有 report_sheet.dart）</h2>
+  <p class="desc">
+    抽屉的<b>全部视觉规格照搬既有实现</b>：内边距 22/12/22/28、手柄 36×4、原因卡圆角 13 · 边框 1.5px · 内距 14·12 · 间距 10、
+    选中态＝紫边＋紫浅底＋实心 radio、提交按钮圆角 14 · 垂直内距 14、取消按钮描边 1.5px。
+    <b>唯一的实质改动是原因选项换成了账号维度的 5 类</b>——既有 <code>ReportReason</code> 是内容维度的（虚假信息 / 不当内容…），与账号举报只有"骚扰"和"其他"能对上，必须新建枚举。
+  </p>
+  <div class="flow">
+    <em>主路径：</em><i>由 A2 或 D9 进入 →</i> <s>B1</s> 选类型 <i>→</i> <s>B3</s> 已选可提交 <i>→</i>
+    <s>B4</s> 提交中 <i>→</i> <s>B5</s> 成功 <i>／</i> <s>B6</s> 失败
+    <span class="nl"></span>
+    <em>分支：</em><s>B1</s> <i>—— 选「其他」→</i> <s>B2</s> 展开必填框（填完才可提交）
+    <span class="nl"></span>
+    <em>变体：</em><s>B7</s> 曾举报过该账号时的表单（替代 B1，副标题不同）
+  </div>
+  <div class="frames">
+
+    <!-- B1 -->
+    <div class="frame">
+      <span class="frame-tag">B1 · 举报类型选择（未选中）</span>
+      <div class="phone-shell"><div class="phone-screen">
+        <div class="statusbar"><span>9:41</span><span class="r">‧‧‧ ⌁ ▮</span></div>
+        <div class="body"><div class="feedcard"><div class="fc-top"><div class="avatar a36" style="background:#B79BE8">R</div>
+          <div><div class="nm">Rina P.</div></div></div><div class="ph">🐈</div></div></div>
+        <div class="mask"></div>
+        <div class="sheet">
+          <div class="grab"></div>
+          <div class="sh-ttl">Laporkan akun ini</div>
+          <div class="sh-sub">Pilih alasan yang paling sesuai</div>
+          <div style="margin-top:16px">
+            <div class="reason"><div class="radio"></div><div class="rt">Spam atau promosi berlebihan</div></div>
+            <div class="reason"><div class="radio"></div><div class="rt">Menyamar sebagai orang lain</div></div>
+            <div class="reason"><div class="radio"></div><div class="rt">Pelecehan berulang</div></div>
+            <div class="reason"><div class="radio"></div><div class="rt">Memposting konten melanggar aturan</div></div>
+            <div class="reason"><div class="radio"></div><div class="rt">Lainnya</div></div>
+          </div>
+          <div class="btn off">Kirim Laporan</div>
+          <div class="btn ghost">Batal</div>
+        </div>
+      </div></div>
+      <div class="frame-cap"><b>未选中 → 提交按钮禁用</b>（既有代码就是 <code>onPressed: null</code>，非自创）。标题从既有的「Laporkan konten ini」改为<b>「Laporkan akun ini」</b>——举报对象从内容变成账号。副标题复用既有 <code>reportSubtitle</code>。</div>
+    </div>
+
+    <!-- B2 -->
+    <div class="frame">
+      <span class="frame-tag">B2 · 选中「其他」→ 展开必填框</span>
+      <div class="phone-shell"><div class="phone-screen">
+        <div class="statusbar"><span>9:41</span><span class="r">‧‧‧ ⌁ ▮</span></div>
+        <div class="body"><div class="feedcard"><div class="fc-top"><div class="avatar a36" style="background:#B79BE8">R</div>
+          <div><div class="nm">Rina P.</div></div></div><div class="ph">🐈</div></div></div>
+        <div class="mask"></div>
+        <div class="sheet">
+          <div class="grab"></div>
+          <div class="sh-ttl">Laporkan akun ini</div>
+          <div class="sh-sub">Pilih alasan yang paling sesuai</div>
+          <div style="margin-top:16px">
+            <div class="reason"><div class="radio"></div><div class="rt">Spam atau promosi berlebihan</div></div>
+            <div class="reason"><div class="radio"></div><div class="rt">Menyamar sebagai orang lain</div></div>
+            <div class="reason"><div class="radio"></div><div class="rt">Pelecehan berulang</div></div>
+            <div class="reason"><div class="radio"></div><div class="rt">Memposting konten melanggar aturan</div></div>
+            <div class="reason on"><div class="radio"></div><div class="rt">Lainnya</div></div>
+            <div class="ta">
+              <div class="ph2">Ceritakan apa yang terjadi…</div>
+              <div class="cnt">0 / 200</div>
+            </div>
+          </div>
+          <div class="btn off">Kirim Laporan</div>
+          <div class="btn ghost">Batal</div>
+        </div>
+      </div></div>
+      <div class="frame-cap">只有选中「Lainnya」才展开文本框，<b>其余四类不给补充说明框</b>（PRD 明确：多个空字段只会增加运营阅读成本）。上限 200 字。</div>
+    </div>
+
+    <!-- B3 -->
+    <div class="frame">
+      <span class="frame-tag">B3 · 已选普通类型 → 可提交</span>
+      <div class="phone-shell"><div class="phone-screen">
+        <div class="statusbar"><span>9:41</span><span class="r">‧‧‧ ⌁ ▮</span></div>
+        <div class="body"><div class="feedcard"><div class="fc-top"><div class="avatar a36" style="background:#B79BE8">R</div>
+          <div><div class="nm">Rina P.</div></div></div><div class="ph">🐈</div></div></div>
+        <div class="mask"></div>
+        <div class="sheet">
+          <div class="grab"></div>
+          <div class="sh-ttl">Laporkan akun ini</div>
+          <div class="sh-sub">Pilih alasan yang paling sesuai</div>
+          <div style="margin-top:16px">
+            <div class="reason"><div class="radio"></div><div class="rt">Spam atau promosi berlebihan</div></div>
+            <div class="reason"><div class="radio"></div><div class="rt">Menyamar sebagai orang lain</div></div>
+            <div class="reason on"><div class="radio"></div><div class="rt">Pelecehan berulang</div></div>
+            <div class="reason"><div class="radio"></div><div class="rt">Memposting konten melanggar aturan</div></div>
+            <div class="reason"><div class="radio"></div><div class="rt">Lainnya</div></div>
+          </div>
+          <div class="btn">Kirim Laporan</div>
+          <div class="btn ghost">Batal</div>
+        </div>
+      </div></div>
+      <div class="frame-cap">选中态＝<b>紫边 <code>#845EC9</code> + 紫浅底 <code>#F8F2FF</code> + 实心 radio</b>，逐项取自既有代码。提交按钮此时激活。</div>
+    </div>
+
+    <!-- B4 -->
+    <div class="frame">
+      <span class="frame-tag">B4 · 提交中</span>
+      <div class="phone-shell"><div class="phone-screen">
+        <div class="statusbar"><span>9:41</span><span class="r">‧‧‧ ⌁ ▮</span></div>
+        <div class="body"><div class="feedcard"><div class="fc-top"><div class="avatar a36" style="background:#B79BE8">R</div>
+          <div><div class="nm">Rina P.</div></div></div><div class="ph">🐈</div></div></div>
+        <div class="mask"></div>
+        <div class="sheet">
+          <div class="grab"></div>
+          <div class="sh-ttl">Laporkan akun ini</div>
+          <div class="sh-sub">Pilih alasan yang paling sesuai</div>
+          <div style="margin-top:16px; opacity:.55">
+            <div class="reason"><div class="radio"></div><div class="rt">Spam atau promosi berlebihan</div></div>
+            <div class="reason"><div class="radio"></div><div class="rt">Menyamar sebagai orang lain</div></div>
+            <div class="reason on"><div class="radio"></div><div class="rt">Pelecehan berulang</div></div>
+            <div class="reason"><div class="radio"></div><div class="rt">Memposting konten melanggar aturan</div></div>
+            <div class="reason"><div class="radio"></div><div class="rt">Lainnya</div></div>
+          </div>
+          <div class="btn" style="opacity:.75"><span class="spin"></span></div>
+          <div class="btn ghost" style="opacity:.5">Batal</div>
+        </div>
+      </div></div>
+      <div class="frame-cap">既有 <code>_submitting</code> 态：<b>选项与取消一并禁用</b>，防止重复提交。抽屉不关闭。</div>
+    </div>
+
+    <!-- B5 -->
+    <div class="frame">
+      <span class="frame-tag">B5 · 提交成功（抽屉原地切换）</span>
+      <div class="phone-shell"><div class="phone-screen">
+        <div class="statusbar"><span>9:41</span><span class="r">‧‧‧ ⌁ ▮</span></div>
+        <div class="body"><div class="feedcard"><div class="fc-top"><div class="avatar a36" style="background:#B79BE8">R</div>
+          <div><div class="nm">Rina P.</div></div></div><div class="ph">🐈</div></div></div>
+        <div class="mask"></div>
+        <div class="sheet" style="padding:10px 22px 30px">
+          <div class="grab"></div>
+          <div style="display:flex; flex-direction:column; align-items:center; padding:8px 0 0">
+            <div style="font-size:40px">✅</div>
+            <div style="font-size:15px; font-weight:700; color:var(--tt-ink); margin-top:10px">Laporan diterima</div>
+            <div style="font-size:13px; color:var(--tt-ink-2); text-align:center; margin-top:6px; line-height:1.65">
+              Kami akan segera memprosesnya.</div>
+          </div>
+          <div class="btn ghost" style="margin-top:22px">Tutup</div>
+        </div>
+      </div></div>
+      <div class="frame-cap">
+        <b>成功态在抽屉内原地切换，不用 Toast、不自动收起</b>（既有 <code>_done</code> 模式）。点 Tutup 后<b>两层一并收起</b>，回到点开迷你卡之前的页面。<br>
+        <b>✅ 2026-08-14 定案：不提"内容将被隐藏"。</b> 已知与既有内容举报的 <code>reportHiddenToast</code>（举报帖子会告知）不一致，产品接受这一差异，本稿按此定稿。
+      </div>
+    </div>
+
+    <!-- B6 -->
+    <div class="frame">
+      <span class="frame-tag">B6 · 提交失败</span>
+      <div class="phone-shell"><div class="phone-screen">
+        <div class="statusbar"><span>9:41</span><span class="r">‧‧‧ ⌁ ▮</span></div>
+        <div class="body"><div class="feedcard"><div class="fc-top"><div class="avatar a36" style="background:#B79BE8">R</div>
+          <div><div class="nm">Rina P.</div></div></div><div class="ph">🐈</div></div></div>
+        <div class="mask"></div>
+        <div class="sheet">
+          <div class="grab"></div>
+          <div class="sh-ttl">Laporkan akun ini</div>
+          <div class="sh-sub">Pilih alasan yang paling sesuai</div>
+          <div style="margin-top:16px">
+            <div class="reason"><div class="radio"></div><div class="rt">Spam atau promosi berlebihan</div></div>
+            <div class="reason"><div class="radio"></div><div class="rt">Menyamar sebagai orang lain</div></div>
+            <div class="reason on"><div class="radio"></div><div class="rt">Pelecehan berulang</div></div>
+            <div class="reason"><div class="radio"></div><div class="rt">Memposting konten melanggar aturan</div></div>
+            <div class="reason"><div class="radio"></div><div class="rt">Lainnya</div></div>
+          </div>
+          <div class="btn">Kirim Laporan</div>
+          <div class="btn ghost">Batal</div>
+        </div>
+        <div class="toast" style="bottom:auto; top:22px">Gagal mengirim laporan. Periksa koneksi lalu coba lagi, atau hubungi dukungan</div>
+      </div></div>
+      <div class="frame-cap"><b>抽屉不关、不清空已选</b>，用户可直接再点提交。⚠️ 既有代码的 catch 分支<b>只把提交中状态复位、不给任何提示</b>，本 FR 要补。Toast 放顶部避开抽屉。</div>
+    </div>
+
+    <!-- B7 -->
+    <div class="frame">
+      <span class="frame-tag">B7 · 重复举报（已举报过）</span>
+      <div class="phone-shell"><div class="phone-screen">
+        <div class="statusbar"><span>9:41</span><span class="r">‧‧‧ ⌁ ▮</span></div>
+        <div class="body"><div class="feedcard"><div class="fc-top"><div class="avatar a36" style="background:#B79BE8">R</div>
+          <div><div class="nm">Rina P.</div></div></div><div class="ph">🐈</div></div></div>
+        <div class="mask"></div>
+        <div class="sheet">
+          <div class="grab"></div>
+          <div class="sh-ttl">Laporkan akun ini</div>
+          <div class="sh-sub" style="color:var(--tt-violet-deep); background:var(--tt-violet-tint); border-radius:10px; padding:10px 12px; margin-top:8px; line-height:1.6">
+            Kamu sudah pernah melaporkan akun ini. Melapor lagi memberi tahu kami bahwa masalahnya masih berlanjut, dan kami akan mempercepat penanganannya.</div>
+          <div style="margin-top:14px">
+            <div class="reason"><div class="radio"></div><div class="rt">Spam atau promosi berlebihan</div></div>
+            <div class="reason"><div class="radio"></div><div class="rt">Menyamar sebagai orang lain</div></div>
+            <div class="reason"><div class="radio"></div><div class="rt">Pelecehan berulang</div></div>
+            <div class="reason"><div class="radio"></div><div class="rt">Memposting konten melanggar aturan</div></div>
+            <div class="reason"><div class="radio"></div><div class="rt">Lainnya</div></div>
+          </div>
+          <div class="btn off">Kirim Laporan</div>
+        </div>
+      </div></div>
+      <div class="frame-cap">副标题替换为 PRD 定的重复举报说明。<b>类型重新选，不预填上次的选择</b>——PRD 要求每次举报的类型都要独立留存（第一次选骚扰、第二次选仿冒是"问题在升级"的证据）。</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ==================== 泳道 C ==================== -->
+<div class="lane" style="--lane:var(--lane-c)">
+  <h2>C · 拉黑流程</h2>
+  <p class="desc">
+    确认抽屉沿用举报抽屉的骨架（手柄 / 内边距 / 按钮规格一致），但<b>主按钮用危险色</b>——拉黑对用户自己的视图是不可逆的强动作，与"提交举报"不是同一性质。
+    文案按 PRD 定稿：<b>只说"你将不再看到 TA 的内容和评论"</b>，不提影子评论、不提"对方不会收到通知"。
+  </p>
+  <div class="flow">
+    <em>主路径：</em><i>由 A2 进入 →</i> <s>C1</s> 二次确认 <i>→</i> <s>C2</s> 提交中 <i>→</i>
+    <s>C3</s> 成功（收起 + Toast） <i>／</i> <s>C4</s> 失败（抽屉保持打开）
+  </div>
+  <div class="frames">
+
+    <!-- C1 -->
+    <div class="frame">
+      <span class="frame-tag">C1 · 拉黑二次确认</span>
+      <div class="phone-shell"><div class="phone-screen">
+        <div class="statusbar"><span>9:41</span><span class="r">‧‧‧ ⌁ ▮</span></div>
+        <div class="body"><div class="feedcard"><div class="fc-top"><div class="avatar a36" style="background:#B79BE8">R</div>
+          <div><div class="nm">Rina P.</div></div></div><div class="ph">🐈</div></div></div>
+        <div class="mask"></div>
+        <div class="sheet" style="padding:10px 22px 30px">
+          <div class="grab"></div>
+          <div style="display:flex; flex-direction:column; align-items:center; padding-top:4px">
+            <div class="avatar a44" style="background:#B79BE8">R</div>
+            <div style="font-size:16px; font-weight:700; color:var(--tt-ink); margin-top:12px">Blokir Rina P.?</div>
+            <div style="font-size:13px; color:var(--tt-ink-2); text-align:center; line-height:1.7; margin-top:8px">
+              Setelah diblokir, kamu tidak akan melihat konten dan komentar mereka lagi.</div>
+          </div>
+          <div class="btn danger" style="margin-top:22px">Blokir</div>
+          <div class="btn ghost">Batal</div>
+        </div>
+      </div></div>
+      <div class="frame-cap">主按钮用 <code>#F0425A</code>（既有 <code>AppColors.popRed</code>，同一色值也用于点赞红心与危险操作）。头像重复出现是<b>刻意的</b>——确认拉黑谁比确认动作本身更重要。</div>
+    </div>
+
+    <!-- C2 -->
+    <div class="frame">
+      <span class="frame-tag">C2 · 提交中</span>
+      <div class="phone-shell"><div class="phone-screen">
+        <div class="statusbar"><span>9:41</span><span class="r">‧‧‧ ⌁ ▮</span></div>
+        <div class="body"><div class="feedcard"><div class="fc-top"><div class="avatar a36" style="background:#B79BE8">R</div>
+          <div><div class="nm">Rina P.</div></div></div><div class="ph">🐈</div></div></div>
+        <div class="mask"></div>
+        <div class="sheet" style="padding:10px 22px 30px">
+          <div class="grab"></div>
+          <div style="display:flex; flex-direction:column; align-items:center; padding-top:4px; opacity:.55">
+            <div class="avatar a44" style="background:#B79BE8">R</div>
+            <div style="font-size:16px; font-weight:700; color:var(--tt-ink); margin-top:12px">Blokir Rina P.?</div>
+            <div style="font-size:13px; color:var(--tt-ink-2); text-align:center; line-height:1.7; margin-top:8px">
+              Setelah diblokir, kamu tidak akan melihat konten dan komentar mereka lagi.</div>
+          </div>
+          <div class="btn danger" style="margin-top:22px; opacity:.75"><span class="spin"></span></div>
+          <div class="btn ghost" style="opacity:.5">Batal</div>
+        </div>
+      </div></div>
+      <div class="frame-cap">与举报提交中同构：<b>取消一并禁用</b>，避免中途取消导致状态不一致。</div>
+    </div>
+
+    <!-- C3 -->
+    <div class="frame">
+      <span class="frame-tag">C3 · 拉黑成功（收起 + Toast）</span>
+      <div class="phone-shell"><div class="phone-screen">
+        <div class="statusbar"><span>9:41</span><span class="r">‧‧‧ ⌁ ▮</span></div>
+        <div class="body">
+          <div class="feedcard"><div class="fc-top"><div class="avatar a36" style="background:#8FBFE0">D</div>
+            <div><div class="nm">Dimas</div><div class="tm">1 jam lalu</div></div></div>
+            <div class="ftxt">Ada rekomendasi dokter hewan di Bandung?</div></div>
+          <div class="feedcard"><div class="fc-top"><div class="avatar a36" style="background:#7FC8A9">S</div>
+            <div><div class="nm">Sari</div><div class="tm">2 jam lalu</div></div></div>
+            <div class="ph" style="height:150px">🐕</div>
+            <div class="ftxt">Grooming pertama Kopi hari ini ✂️</div></div>
+          <div class="feedcard"><div class="fc-top"><div class="avatar a36" style="background:#D9A0C0">N</div>
+            <div><div class="nm">Nadia</div><div class="tm">3 jam lalu</div></div></div>
+            <div class="ftxt">Tips: jangan lupa vaksin tahunan ya 🐾</div></div>
+        </div>
+        <div class="toast">Berhasil diblokir. Lihat di Daftar Blokir</div>
+      </div></div>
+      <div class="frame-cap"><b>两层抽屉一并收起</b>，回到 Feed —— 而且 Rina 的卡片<b>已经不在列表里了</b>（拉黑即时生效）。Toast 刻意点出「Daftar Blokir」，让用户知道去哪儿解除。</div>
+    </div>
+
+    <!-- C4 -->
+    <div class="frame">
+      <span class="frame-tag">C4 · 拉黑失败</span>
+      <div class="phone-shell"><div class="phone-screen">
+        <div class="statusbar"><span>9:41</span><span class="r">‧‧‧ ⌁ ▮</span></div>
+        <div class="body"><div class="feedcard"><div class="fc-top"><div class="avatar a36" style="background:#B79BE8">R</div>
+          <div><div class="nm">Rina P.</div></div></div><div class="ph">🐈</div></div></div>
+        <div class="mask"></div>
+        <div class="sheet" style="padding:10px 22px 30px">
+          <div class="grab"></div>
+          <div style="display:flex; flex-direction:column; align-items:center; padding-top:4px">
+            <div class="avatar a44" style="background:#B79BE8">R</div>
+            <div style="font-size:16px; font-weight:700; color:var(--tt-ink); margin-top:12px">Blokir Rina P.?</div>
+            <div style="font-size:13px; color:var(--tt-ink-2); text-align:center; line-height:1.7; margin-top:8px">
+              Setelah diblokir, kamu tidak akan melihat konten dan komentar mereka lagi.</div>
+          </div>
+          <div class="btn danger" style="margin-top:22px">Blokir</div>
+          <div class="btn ghost">Batal</div>
+        </div>
+        <div class="toast" style="bottom:auto; top:22px">Gagal memblokir, coba lagi</div>
+      </div></div>
+      <div class="frame-cap"><b>抽屉保持打开</b>，用户可直接再点一次。与成功态（收起）行为相反，这是刻意的——失败不该让用户重新走一遍入口。</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ==================== 泳道 D ==================== -->
+<div class="lane" style="--lane:var(--lane-d)">
+  <h2>D · 黑名单管理</h2>
+  <p class="desc">
+    入口放在设置页的 <b>PRIVASI &amp; KEAMANAN</b> 分组（既有分组，同组已有「Profil Hewan (publik)」开关与隐私政策）。
+    列表<b>只包含用户主动拉黑的对象</b>——举报产生的隐藏不可解除、不进本页（PRD 定案，与既有内容举报的行为一致）。
+  </p>
+  <div class="flow">
+    <em>进入：</em><s>D1</s> 设置页 <i>→</i> <s>D2</s> 列表
+    <i>（拉取期间 <s>D4</s> 加载中 <i>／</i> 失败 <s>D5</s> <i>／</i> 无数据 <s>D3</s> 空态）</i>
+    <span class="nl"></span>
+    <em>解除：</em><s>D2</s> <i>—— 点「解除拉黑」→</i> <s>D6</s> 二次确认 <i>→</i> <s>D7</s> 解除成功
+    <span class="nl"></span>
+    <em>举报：</em><s>D2</s> <i>—— 点行内「⋯」→</i> <s>D9</s> 菜单 <i>—— 选举报 →</i> <em>泳道 B</em>
+    <span class="nl"></span>
+    <em>变体：</em><s>D8</s> 对方已注销的条目（头像/昵称不可点，只留解除）
+  </div>
+  <div class="frames">
+
+    <!-- D1 -->
+    <div class="frame">
+      <span class="frame-tag">D1 · 设置页新增入口</span>
+      <div class="phone-shell"><div class="phone-screen">
+        <div class="statusbar"><span>9:41</span><span class="r">‧‧‧ ⌁ ▮</span></div>
+        <div class="appbar">
+          <div class="icobtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2E2A45" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></div>
+          <div class="ttl">Pengaturan</div>
+        </div>
+        <div class="body" style="background:#FAF9FC; overflow:auto">
+          <div class="sect">AKUN</div>
+          <div class="row"><div class="lab">Edit Profil</div><div class="val">›</div></div>
+          <div class="row"><div class="lab">Kartu Identitas</div><div class="val">›</div></div>
+          <div class="row"><div class="lab">Catatan Kesehatan</div><div class="val">›</div></div>
+          <div class="sect">PRIVASI &amp; KEAMANAN</div>
+          <div class="row"><div class="lab">Profil Hewan (publik)</div>
+            <div style="width:44px; height:26px; border-radius:999px; background:var(--tt-violet); position:relative">
+              <div style="position:absolute; right:3px; top:3px; width:20px; height:20px; border-radius:999px; background:#fff"></div></div></div>
+          <div class="row" style="background:var(--tt-violet-tint)"><div class="lab" style="font-weight:600">Daftar Blokir</div><div class="val">3 ›</div></div>
+          <div class="row"><div class="lab">Kebijakan Privasi</div><div class="val">›</div></div>
+          <div class="row"><div class="lab">Ketentuan Layanan</div><div class="val">›</div></div>
+          <div class="sect">ZONA BAHAYA</div>
+          <div class="row"><div class="lab" style="color:var(--tt-coral)">Keluar</div></div>
+        </div>
+      </div></div>
+      <div class="frame-cap"><b>新增行以紫浅底标出仅为本稿示意，实现时与其他行同样式。</b> 右侧计数（3）让用户不进页面也知道拉黑了几个。分组名 <code>settingsSectionPrivacy</code> 复用既有文案。</div>
+    </div>
+
+    <!-- D2 -->
+    <div class="frame">
+      <span class="frame-tag">D2 · 黑名单列表（有数据）</span>
+      <div class="phone-shell"><div class="phone-screen">
+        <div class="statusbar"><span>9:41</span><span class="r">‧‧‧ ⌁ ▮</span></div>
+        <div class="appbar">
+          <div class="icobtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2E2A45" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></div>
+          <div class="ttl">Daftar Blokir</div>
+        </div>
+        <div class="body" style="overflow:auto">
+          <div style="font-size:12px; color:var(--tt-muted); padding:12px 20px 10px; line-height:1.7">
+            Mereka tidak akan tahu kalau kamu memblokirnya.</div>
+          <div class="blk">
+            <div class="avatar a44" style="background:#B79BE8">R</div>
+            <div class="info"><div class="nm">Rina P.<span class="tagmini">Dilaporkan</span></div>
+              <div class="tm">Diblokir 14 Agu 2026</div></div>
+            <div class="unblock">Buka Blokir</div>
+            <div class="rowmore"><svg width="17" height="17" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="#9690A6"/><circle cx="12" cy="12" r="1.5" fill="#9690A6"/><circle cx="19" cy="12" r="1.5" fill="#9690A6"/></svg></div>
+          </div>
+          <div class="blk">
+            <div class="avatar a44" style="background:#E0A87C">B</div>
+            <div class="info"><div class="nm">Budi S.</div><div class="tm">Diblokir 09 Agu 2026</div></div>
+            <div class="unblock">Buka Blokir</div>
+            <div class="rowmore"><svg width="17" height="17" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="#9690A6"/><circle cx="12" cy="12" r="1.5" fill="#9690A6"/><circle cx="19" cy="12" r="1.5" fill="#9690A6"/></svg></div>
+          </div>
+          <div class="blk">
+            <div class="avatar a44" style="background:#8FBFE0">A</div>
+            <div class="info"><div class="nm">Andi W.</div><div class="tm">Diblokir 02 Agu 2026</div></div>
+            <div class="unblock">Buka Blokir</div>
+            <div class="rowmore"><svg width="17" height="17" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="#9690A6"/><circle cx="12" cy="12" r="1.5" fill="#9690A6"/><circle cx="19" cy="12" r="1.5" fill="#9690A6"/></svg></div>
+          </div>
+        </div>
+      </div></div>
+      <div class="frame-cap">
+        按拉黑时间<b>倒序</b>。「Dilaporkan」小标签＝该账号也被举报过（服务端持久化状态）。
+        「Buka Blokir」是<b>常驻按钮</b>（解除是主动作，必须一眼可见）；右侧<b>「⋯」是举报入口</b>（次要动作，见 D9）。两个热区分开、互不误触。
+      </div>
+    </div>
+
+    <!-- D3 -->
+    <div class="frame">
+      <span class="frame-tag">D3 · 空态</span>
+      <div class="phone-shell"><div class="phone-screen">
+        <div class="statusbar"><span>9:41</span><span class="r">‧‧‧ ⌁ ▮</span></div>
+        <div class="appbar">
+          <div class="icobtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2E2A45" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></div>
+          <div class="ttl">Daftar Blokir</div>
+        </div>
+        <div class="body">
+          <div class="empty">
+            <div class="ic">🐾</div>
+            <div class="t">Belum ada akun yang diblokir</div>
+            <div class="d">Kalau ada yang mengganggu, kamu bisa memblokirnya lewat menu di kartu profil mereka.</div>
+          </div>
+        </div>
+      </div></div>
+      <div class="frame-cap">空态<b>给了下一步指引</b>（去哪儿拉黑），不是白屏——这是 ui-ux-pro-max 的硬要求："Show helpful message and action / Don't: blank empty screens"。</div>
+    </div>
+
+    <!-- D4 -->
+    <div class="frame">
+      <span class="frame-tag">D4 · 加载中</span>
+      <div class="phone-shell"><div class="phone-screen">
+        <div class="statusbar"><span>9:41</span><span class="r">‧‧‧ ⌁ ▮</span></div>
+        <div class="appbar">
+          <div class="icobtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2E2A45" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></div>
+          <div class="ttl">Daftar Blokir</div>
+        </div>
+        <div class="body">
+          <div style="padding:20px">
+            <div style="display:flex; gap:12px; align-items:center; margin-bottom:24px">
+              <div style="width:44px; height:44px; border-radius:999px; background:#F1EEF7"></div>
+              <div style="flex:1"><div class="skel" style="width:44%"></div><div class="skel" style="width:30%; margin-top:8px; height:11px"></div></div>
+              <div style="width:88px; height:32px; border-radius:999px; background:#F1EEF7"></div>
+            </div>
+            <div style="display:flex; gap:12px; align-items:center; margin-bottom:24px">
+              <div style="width:44px; height:44px; border-radius:999px; background:#F1EEF7"></div>
+              <div style="flex:1"><div class="skel" style="width:36%"></div><div class="skel" style="width:30%; margin-top:8px; height:11px"></div></div>
+              <div style="width:88px; height:32px; border-radius:999px; background:#F1EEF7"></div>
+            </div>
+            <div style="display:flex; gap:12px; align-items:center">
+              <div style="width:44px; height:44px; border-radius:999px; background:#F1EEF7"></div>
+              <div style="flex:1"><div class="skel" style="width:50%"></div><div class="skel" style="width:30%; margin-top:8px; height:11px"></div></div>
+              <div style="width:88px; height:32px; border-radius:999px; background:#F1EEF7"></div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+      <div class="frame-cap">骨架屏而非转圈——列表结构已知，骨架能减少布局跳动。PRD 说"沿用 App 内既有列表页惯例"，<b>研发落地时以既有列表的 loading 实现为准</b>，本屏只表达形态。</div>
+    </div>
+
+    <!-- D5 -->
+    <div class="frame">
+      <span class="frame-tag">D5 · 加载失败</span>
+      <div class="phone-shell"><div class="phone-screen">
+        <div class="statusbar"><span>9:41</span><span class="r">‧‧‧ ⌁ ▮</span></div>
+        <div class="appbar">
+          <div class="icobtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2E2A45" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></div>
+          <div class="ttl">Daftar Blokir</div>
+        </div>
+        <div class="body">
+          <div class="err">
+            <div style="font-size:40px">😿</div>
+            <div class="t" style="font-size:14.5px; font-weight:600; color:var(--tt-ink)">Gagal memuat daftar</div>
+            <div class="d" style="font-size:12.5px; color:var(--tt-muted); line-height:1.7">Periksa koneksi internetmu, lalu coba lagi.</div>
+            <div class="retry">Coba Lagi</div>
+          </div>
+        </div>
+      </div></div>
+      <div class="frame-cap">错误态<b>必须给恢复路径</b>（ui-ux-pro-max："Error without recovery path" 是明确的反模式）——所以有「Coba Lagi」按钮，不是只报错。</div>
+    </div>
+
+    <!-- D6 -->
+    <div class="frame">
+      <span class="frame-tag">D6 · 解除拉黑二次确认</span>
+      <div class="phone-shell"><div class="phone-screen">
+        <div class="statusbar"><span>9:41</span><span class="r">‧‧‧ ⌁ ▮</span></div>
+        <div class="appbar">
+          <div class="icobtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2E2A45" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></div>
+          <div class="ttl">Daftar Blokir</div>
+        </div>
+        <div class="body">
+          <div class="blk"><div class="avatar a44" style="background:#B79BE8">R</div>
+            <div class="info"><div class="nm">Rina P.</div><div class="tm">Diblokir 14 Agu 2026</div></div>
+            <div class="unblock">Buka Blokir</div>
+            <div class="rowmore"><svg width="17" height="17" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="#9690A6"/><circle cx="12" cy="12" r="1.5" fill="#9690A6"/><circle cx="19" cy="12" r="1.5" fill="#9690A6"/></svg></div></div>
+          <div class="blk"><div class="avatar a44" style="background:#E0A87C">B</div>
+            <div class="info"><div class="nm">Budi S.</div><div class="tm">Diblokir 09 Agu 2026</div></div>
+            <div class="unblock">Buka Blokir</div>
+            <div class="rowmore"><svg width="17" height="17" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="#9690A6"/><circle cx="12" cy="12" r="1.5" fill="#9690A6"/><circle cx="19" cy="12" r="1.5" fill="#9690A6"/></svg></div></div>
+        </div>
+        <div class="mask"></div>
+        <div class="sheet" style="padding:10px 22px 30px">
+          <div class="grab"></div>
+          <div style="display:flex; flex-direction:column; align-items:center; padding-top:4px">
+            <div class="avatar a44" style="background:#B79BE8">R</div>
+            <div style="font-size:16px; font-weight:700; color:var(--tt-ink); margin-top:12px">Buka blokir Rina P.?</div>
+            <div style="font-size:13px; color:var(--tt-ink-2); text-align:center; line-height:1.7; margin-top:8px">
+              Kamu akan mulai melihat konten mereka lagi.</div>
+          </div>
+          <div class="btn" style="margin-top:22px">Buka Blokir</div>
+          <div class="btn ghost">Batal</div>
+        </div>
+      </div></div>
+      <div class="frame-cap">解除是<b>恢复性动作</b>，主按钮用品牌紫不用危险红，与 C1 拉黑确认的危险红形成对照。</div>
+    </div>
+
+    <!-- D7 -->
+    <div class="frame">
+      <span class="frame-tag">D7 · 解除成功</span>
+      <div class="phone-shell"><div class="phone-screen">
+        <div class="statusbar"><span>9:41</span><span class="r">‧‧‧ ⌁ ▮</span></div>
+        <div class="appbar">
+          <div class="icobtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2E2A45" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></div>
+          <div class="ttl">Daftar Blokir</div>
+        </div>
+        <div class="body">
+          <div class="blk"><div class="avatar a44" style="background:#E0A87C">B</div>
+            <div class="info"><div class="nm">Budi S.</div><div class="tm">Diblokir 09 Agu 2026</div></div>
+            <div class="unblock">Buka Blokir</div>
+            <div class="rowmore"><svg width="17" height="17" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="#9690A6"/><circle cx="12" cy="12" r="1.5" fill="#9690A6"/><circle cx="19" cy="12" r="1.5" fill="#9690A6"/></svg></div></div>
+          <div class="blk"><div class="avatar a44" style="background:#8FBFE0">A</div>
+            <div class="info"><div class="nm">Andi W.</div><div class="tm">Diblokir 02 Agu 2026</div></div>
+            <div class="unblock">Buka Blokir</div>
+            <div class="rowmore"><svg width="17" height="17" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="#9690A6"/><circle cx="12" cy="12" r="1.5" fill="#9690A6"/><circle cx="19" cy="12" r="1.5" fill="#9690A6"/></svg></div></div>
+        </div>
+        <div class="toast">Blokir dibuka. Segarkan untuk melihat konten mereka lagi</div>
+      </div></div>
+      <div class="frame-cap">Rina 的条目<b>已从列表移除</b>。Toast 措辞刻意用「Segarkan（刷新后）」而不是"立即"——PRD 明确要求，为后续引入带序列缓存的推荐算法留余地，届时文案无需改。</div>
+    </div>
+
+    <!-- D8 -->
+    <div class="frame">
+      <span class="frame-tag">D8 · 对方已注销</span>
+      <div class="phone-shell"><div class="phone-screen">
+        <div class="statusbar"><span>9:41</span><span class="r">‧‧‧ ⌁ ▮</span></div>
+        <div class="appbar">
+          <div class="icobtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2E2A45" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></div>
+          <div class="ttl">Daftar Blokir</div>
+        </div>
+        <div class="body">
+          <div style="font-size:12px; color:var(--tt-muted); padding:12px 20px 10px; line-height:1.7">
+            Mereka tidak akan tahu kalau kamu memblokirnya.</div>
+          <div class="blk">
+            <div class="avatar a44" style="background:#E4E1EC">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#9690A6" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="8" r="3.6"/><path d="M4.6 20c.9-3.6 3.9-5.6 7.4-5.6s6.5 2 7.4 5.6"/></svg></div>
+            <div class="info"><div class="nm" style="color:var(--tt-muted)">Pengguna nonaktif</div>
+              <div class="tm">Diblokir 14 Agu 2026</div></div>
+            <div class="unblock">Buka Blokir</div>
+            <div class="rowmore"><svg width="17" height="17" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="#9690A6"/><circle cx="12" cy="12" r="1.5" fill="#9690A6"/><circle cx="19" cy="12" r="1.5" fill="#9690A6"/></svg></div>
+          </div>
+          <div class="blk"><div class="avatar a44" style="background:#E0A87C">B</div>
+            <div class="info"><div class="nm">Budi S.</div><div class="tm">Diblokir 09 Agu 2026</div></div>
+            <div class="unblock">Buka Blokir</div>
+            <div class="rowmore"><svg width="17" height="17" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="#9690A6"/><circle cx="12" cy="12" r="1.5" fill="#9690A6"/><circle cx="19" cy="12" r="1.5" fill="#9690A6"/></svg></div></div>
+        </div>
+      </div></div>
+      <div class="frame-cap"><b>头像与昵称不可点</b>（无点击态）——既有 <code>showMiniProfile</code> 对已注销用户本就不弹卡，留着点击态会让用户点了没反应。<b>条目保留、不自动移除</b>，仍可解除。</div>
+    </div>
+
+
+    <!-- D9 -->
+    <div class="frame">
+      <span class="frame-tag">D9 · 行内 ⋯ → 举报入口</span>
+      <div class="phone-shell"><div class="phone-screen">
+        <div class="statusbar"><span>9:41</span><span class="r">‧‧‧ ⌁ ▮</span></div>
+        <div class="appbar">
+          <div class="icobtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2E2A45" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></div>
+          <div class="ttl">Daftar Blokir</div>
+        </div>
+        <div class="body">
+          <div style="font-size:12px; color:var(--tt-muted); padding:12px 20px 10px; line-height:1.7">
+            Mereka tidak akan tahu kalau kamu memblokirnya.</div>
+          <div class="blk">
+            <div class="avatar a44" style="background:#B79BE8">R</div>
+            <div class="info"><div class="nm">Rina P.</div><div class="tm">Diblokir 14 Agu 2026</div></div>
+            <div class="unblock">Buka Blokir</div>
+            <div class="rowmore"><svg width="17" height="17" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="#845EC9"/><circle cx="12" cy="12" r="1.5" fill="#845EC9"/><circle cx="19" cy="12" r="1.5" fill="#845EC9"/></svg></div>
+          </div>
+          <div class="blk"><div class="avatar a44" style="background:#E0A87C">B</div>
+            <div class="info"><div class="nm">Budi S.</div><div class="tm">Diblokir 09 Agu 2026</div></div>
+            <div class="unblock">Buka Blokir</div>
+            <div class="rowmore"><svg width="17" height="17" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="#9690A6"/><circle cx="12" cy="12" r="1.5" fill="#9690A6"/><circle cx="19" cy="12" r="1.5" fill="#9690A6"/></svg></div></div>
+          <div class="blk"><div class="avatar a44" style="background:#8FBFE0">A</div>
+            <div class="info"><div class="nm">Andi W.</div><div class="tm">Diblokir 02 Agu 2026</div></div>
+            <div class="unblock">Buka Blokir</div>
+            <div class="rowmore"><svg width="17" height="17" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="#9690A6"/><circle cx="12" cy="12" r="1.5" fill="#9690A6"/><circle cx="19" cy="12" r="1.5" fill="#9690A6"/></svg></div></div>
+        </div>
+        <div class="menu" style="right:12px; top:196px; min-width:158px">
+          <div class="mi">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#2E2A45" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 21V4M4 4h11l-1.4 3.5L15 11H4"/></svg>
+            <div>Laporkan</div>
+          </div>
+        </div>
+      </div></div>
+      <div class="frame-cap">
+        <b>举报入口用行内「⋯」，不用滑动手势</b>（2026-08-14 定，推翻了先前的左滑方案）。<br>
+        <b>为什么不用滑动：</b>① <b>右滑撞返回手势</b>——iOS 从左边缘右滑 = pop 返回，Android 10+ 手势导航同理，而黑名单页是从设置 push 进来的；
+        ② <b>左滑会误触解除</b>——滑动区正好压在「Buka Blokir」上，同一片像素滑得短是点击（解除）、滑得长才是露出（举报）。<br>
+        <b>为什么选「⋯」：</b>与 A2 迷你主页卡的「⋯」<b>是同一个交互模式</b>——用户学一次就够，不用为"对某个用户执行操作"记两套。且两个热区分开、无误触，可发现性也比隐藏手势强。<br>
+        <b>为什么必须有这个入口：</b>拉黑后进不去对方迷你主页，而那是举报的唯一入口——不给这条路径，<b>拉黑就等于永久放弃举报该账号的能力</b>，而骚扰者恰恰最容易先被拉黑。
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ==================== 文案表 ==================== -->
+<div class="lane" style="--lane:var(--page-accent)">
+  <h2>附 · 印尼语文案清单</h2>
+  <p class="desc">✅ = 直接复用 <code>app_id.arb</code> 既有键；🆕 = 本次新写，<b>待运营复核措辞</b>。</p>
+  <table class="idx">
+    <tr><th style="width:56px">状态</th><th style="width:230px">中文（PRD 定稿）</th><th>印尼语</th><th style="width:200px">既有键 / 备注</th></tr>
+    <tr><td>✅</td><td>关闭</td><td>Tutup</td><td><code>commonClose</code></td></tr>
+    <tr><td>✅</td><td>取消</td><td>Batal</td><td><code>commonCancel</code></td></tr>
+    <tr><td>✅</td><td>选择最合适的理由</td><td>Pilih alasan yang paling sesuai</td><td><code>reportSubtitle</code></td></tr>
+    <tr><td>✅</td><td>已收到你的举报，我们会尽快处理</td><td>Laporan diterima / Kami akan segera memprosesnya.</td><td><code>reportDoneTitle</code> + <code>reportDoneBody</code>，与 PRD 定稿完全对应</td></tr>
+    <tr><td>✅</td><td>提交举报</td><td>Kirim Laporan</td><td><code>reportSubmit</code></td></tr>
+    <tr><td>✅</td><td>隐私与安全</td><td>PRIVASI &amp; KEAMANAN</td><td><code>settingsSectionPrivacy</code></td></tr>
+    <tr><td>🆕</td><td>举报这个账号</td><td>Laporkan akun ini</td><td>既有 <code>reportTitle</code> 是「Laporkan konten <b>ini</b>」，对象不同需新键</td></tr>
+    <tr><td>🆕</td><td>垃圾信息 / 恶意营销</td><td>Spam atau promosi berlebihan</td><td rowspan="5">账号举报专用 5 类，<b>不可复用既有 <code>ReportReason</code></b></td></tr>
+    <tr><td>🆕</td><td>仿冒他人</td><td>Menyamar sebagai orang lain</td></tr>
+    <tr><td>🆕</td><td>持续骚扰</td><td>Pelecehan berulang</td></tr>
+    <tr><td>🆕</td><td>发布违规内容</td><td>Memposting konten melanggar aturan</td></tr>
+    <tr><td>🆕</td><td>其他</td><td>Lainnya</td></tr>
+    <tr><td>🆕</td><td>说说发生了什么…</td><td>Ceritakan apa yang terjadi…</td><td>「其他」的必填框 placeholder</td></tr>
+    <tr><td>🆕</td><td>你已举报过该用户，再次举报会让我们知道问题仍在持续，我们会加快处理</td><td>Kamu sudah pernah melaporkan akun ini. Melapor lagi memberi tahu kami bahwa masalahnya masih berlanjut, dan kami akan mempercepat penanganannya.</td><td>较长，UI 阶段可能需精简</td></tr>
+    <tr><td>🆕</td><td>举报失败，请刷新网络状态重试或联系客服</td><td>Gagal mengirim laporan. Periksa koneksi lalu coba lagi, atau hubungi dukungan</td><td></td></tr>
+    <tr><td>🆕</td><td>举报 / 已举报</td><td>Laporkan / Sudah dilaporkan</td><td>菜单项与状态</td></tr>
+    <tr><td>🆕</td><td>拉黑 / 解除拉黑 / 黑名单</td><td>Blokir / Buka Blokir / Daftar Blokir</td><td>全套拉黑术语</td></tr>
+    <tr><td>🆕</td><td>拉黑后你将不再看到 TA 的内容和评论</td><td>Setelah diblokir, kamu tidak akan melihat konten dan komentar mereka lagi.</td><td></td></tr>
+    <tr><td>🆕</td><td>拉黑成功，请在黑名单里查看</td><td>Berhasil diblokir. Lihat di Daftar Blokir</td><td></td></tr>
+    <tr><td>🆕</td><td>拉黑失败，请重试</td><td>Gagal memblokir, coba lagi</td><td></td></tr>
+    <tr><td>🆕</td><td>你已拉黑该用户</td><td>Kamu sudah memblokir pengguna ini</td><td></td></tr>
+    <tr><td>🆕</td><td>网络失败，请重试</td><td>Gagal terhubung, coba lagi</td><td>⚠️ 变更既有静默行为</td></tr>
+    <tr><td>🆕</td><td>已解除拉黑，刷新后可重新看到 TA 的内容</td><td>Blokir dibuka. Segarkan untuk melihat konten mereka lagi</td><td></td></tr>
+    <tr><td>🆕</td><td>还没有拉黑任何账号</td><td>Belum ada akun yang diblokir</td><td>空态标题</td></tr>
+    <tr><td>🆕</td><td>如果有人打扰你，可以在他们的资料卡菜单里拉黑</td><td>Kalau ada yang mengganggu, kamu bisa memblokirnya lewat menu di kartu profil mereka.</td><td>空态引导</td></tr>
+    <tr><td>🆕</td><td>他们不会知道你拉黑了他们</td><td>Mereka tidak akan tahu kalau kamu memblokirnya.</td><td>列表页顶部说明</td></tr>
+    <tr><td>🆕</td><td>已注销用户</td><td>Pengguna nonaktif</td><td></td></tr>
+    <tr><td>🆕</td><td>举报（行内 ⋯ 菜单项）</td><td>Laporkan</td><td>D9，与 A2 迷你卡菜单同一文案</td></tr>
+    <tr><td>🆕</td><td>加载失败 / 请检查网络后重试 / 重试</td><td>Gagal memuat daftar / Periksa koneksi internetmu, lalu coba lagi. / Coba Lagi</td><td></td></tr>
+    <tr><td>🆕</td><td>解除拉黑后你将重新看到 TA 的内容</td><td>Kamu akan mulai melihat konten mereka lagi.</td><td>解除确认正文</td></tr>
+  </table>
+</div>
+
+</div>
