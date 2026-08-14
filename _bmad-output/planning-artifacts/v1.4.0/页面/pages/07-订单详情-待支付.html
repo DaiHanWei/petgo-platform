@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="id" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TailTopia V1.4.0 · 订单详情·待支付</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared.css">
+<link rel="stylesheet" href="../../../../1.项目总述/UI&UX/imports/tokens.css">
+</head>
+<body>
+
+<div class="phone">
+  <div class="pill"></div>
+  <div class="statusbar"><span class="t">9:41</span><span class="icons">●●●●</span></div>
+  <div class="pages"><div class="page" style="display:flex;flex-direction:column;">
+
+    <div style="flex:1;overflow-y:auto;">
+      <div class="appbar">
+        <button class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+        <div class="appbar-title">Detail Pesanan</div>
+      </div>
+
+      <div style="margin:0 20px 14px;background:linear-gradient(135deg,#FEF3DE,#FFF9EE);border-radius:18px;padding:18px;text-align:center;border:1.5px solid #F6D89B;">
+        <div style="font-size:12px;font-weight:700;color:var(--amber-700);letter-spacing:.4px;">MENUNGGU PEMBAYARAN</div>
+        <div style="font-size:30px;font-weight:700;color:var(--amber-700);margin:6px 0 3px;font-variant-numeric:tabular-nums;">42 : 15</div>
+        <div style="font-size:11.5px;color:var(--amber-700);opacity:.85;">Pesanan otomatis dibatalkan jika tidak dibayar</div>
+      </div>
+
+      <div class="section-label">Barang</div>
+      <div class="card"><div class="card-pad" style="padding-top:4px;padding-bottom:4px;">
+        <div class="orow" style="border-bottom:1px solid #F0F0F0;">
+          <div class="t">🍖</div><div class="i"><b>Royal Canin Medium Adult</b><div class="sp">3 kg × 1</div><div class="pz">Rp 285.000</div></div>
+        </div>
+        <div class="orow">
+          <div class="t">💊</div><div class="i"><b>Drontal Plus Obat Cacing</b><div class="sp">1 tablet × 1</div><div class="pz">Rp 85.000</div></div>
+        </div>
+      </div></div>
+
+      <div class="section-label">Pengiriman</div>
+      <div class="card"><div class="card-pad">
+        <div style="font-size:13px;font-weight:600;color:var(--color-text-heading);">Shawn Liu · +62 812-3456-7890</div>
+        <div style="font-size:12px;color:var(--color-text-secondary);line-height:1.6;margin-top:4px;">Jl. Kemang Raya No. 12, Blok B Lt. 3<br>Mampang Prapatan, Jakarta Selatan, DKI Jakarta 12730</div>
+        <div style="margin-top:9px;padding-top:9px;border-top:1px solid var(--grey-200);font-size:12px;color:var(--color-text-secondary);">Metode: <b style="color:var(--color-text-heading);">Sameday (GoSend)</b></div>
+      </div></div>
+
+      <div class="section-label">Rincian</div>
+      <div class="card"><div class="card-pad">
+        <div class="sumrow"><span>Subtotal barang</span><span>Rp 370.000</span></div>
+        <div class="sumrow"><span>Ongkos kirim</span><span>Rp 22.000</span></div>
+        <div class="sumrow"><span>Gratis ongkir</span><span class="neg">− Rp 22.000</span></div>
+        <div class="sumrow total"><span>Total</span><span>Rp 370.000</span></div>
+      </div></div>
+
+      <div class="card"><div class="card-pad">
+        <div class="sumrow" style="padding:3px 0;"><span>No. Pesanan</span><span style="color:var(--color-text-heading);font-weight:600;">TT2026081000004217</span></div>
+        <div class="sumrow" style="padding:3px 0;"><span>Waktu pesan</span><span style="color:var(--color-text-heading);">10 Agu 2026, 09:18</span></div>
+        <div class="sumrow" style="padding:3px 0;"><span>Pembayaran</span><span style="color:var(--color-text-heading);">QRIS</span></div>
+      </div></div>
+      <div style="height:8px;"></div>
+    </div>
+
+    <div class="bottombar">
+      <button class="btn btn-ghost" style="width:auto;padding:13px 20px;">Batalkan</button>
+      <button class="btn btn-primary" style="flex:1;">Bayar Rp 370.000</button>
+    </div>
+
+  </div></div>
+  <div class="homebar" style="background:var(--color-bg-surface);"><div></div></div>
+</div>
+
+<div class="spec">
+  <div class="sbox">
+    <div class="title">订单详情 · 待支付</div>
+    <div class="sub">库存已锁定，尚未扣款</div>
+    <span class="frtag">FR-100</span><span class="frtag">FR-102</span><span class="frtag">FR-95</span>
+  </div>
+
+  <div class="sbox">
+    <h3>60 分钟窗口（FR-100）</h3>
+    <div class="warn"><b>待支付超时 = 60 分钟</b>，明显长于兽医咨询的限时支付窗口。<br><br>
+      理由：实物购买的决策与支付节奏和「兽医已接单、赶紧付款」完全不同。沿用短窗口会造成<b>大量误失效订单</b>——用户放下手机去拿钱包回来订单就没了。</div>
+    <ul>
+      <li>超时前 <b>10 分钟</b>推送一次提醒（复用 FR-38 深链接直跳本页）</li>
+      <li>超时 → 自动取消订单 + <b>释放锁定库存</b>（FR-95）</li>
+    </ul>
+  </div>
+
+  <div class="sbox">
+    <h3>此刻的库存状态</h3>
+    <ul>
+      <li>提交订单时：可售 → <b>锁定</b></li>
+      <li>支付成功：锁定 → <b>扣减（出库）</b></li>
+      <li>超时/取消：锁定 → <b>释放回可售</b></li>
+    </ul>
+    <div class="warn">后台库存视图需<b>同时展示实际/锁定/可售三个数，不合并显示</b>（AB-10C）——客服排查「用户说买不了但后台显示有货」时，差异一定在锁定库存上。</div>
+  </div>
+
+  <div class="sbox">
+    <h3>支付复用（FR-100）</h3>
+    <ul>
+      <li>复用 V1.1.0 <b>FR-43 通用支付组件</b>，仅 QRIS</li>
+      <li>支付失败/取消复用 <b>FR-43F 通用规则</b>，不另定义</li>
+    </ul>
+  </div>
+
+  <div class="sbox">
+    <h3>订单号隔离</h3>
+    <ul>
+      <li><b>TT + YYYYMMDD + 8 位自增</b></li>
+      <li>与虚拟商品订单号规则隔离，便于 AB-13D 对账时区分自营实物收入与虚拟商品收入——两者的成本结构完全不同（一个有进货成本，一个没有）</li>
+    </ul>
+  </div>
+</div>
+
+</body></html>

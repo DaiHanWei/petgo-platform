@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="id" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TailTopia V1.4.0 · 订单列表·电商卡片</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared.css">
+<link rel="stylesheet" href="../../../../1.项目总述/UI&UX/imports/tokens.css">
+</head>
+<body>
+
+<div class="phone">
+  <div class="pill"></div>
+  <div class="statusbar"><span class="t">9:41</span><span class="icons">●●●●</span></div>
+  <div class="pages"><div class="page">
+
+    <div class="appbar">
+      <button class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+      <div class="appbar-title">Pesanan Saya</div>
+    </div>
+
+    <div class="chips">
+      <span class="chip on">Semua</span>
+      <span class="chip" style="border-color:var(--violet-300);color:var(--violet-500);">Belanja</span>
+      <span class="chip">Konsultasi</span>
+      <span class="chip">PawCoin</span>
+      <span class="chip">Lainnya</span>
+    </div>
+
+    <!-- 电商订单卡 · FR-101（第 5 类） -->
+    <div class="card"><div class="card-pad">
+      <div style="display:flex;align-items:center;margin-bottom:10px;">
+        <span class="badge b-info">Belanja</span>
+        <span style="flex:1;"></span>
+        <span style="font-size:11.5px;font-weight:700;color:var(--amber-700);">Menunggu pembayaran · 42:15</span>
+      </div>
+      <div class="orow" style="padding-top:0;">
+        <div class="t">🍖</div>
+        <div class="i"><b>Royal Canin Medium Adult</b><div class="sp">3 kg · dan 1 barang lain</div><div class="pz">Rp 370.000</div></div>
+      </div>
+      <button class="btn btn-primary" style="margin-top:8px;">Bayar sekarang</button>
+    </div></div>
+
+    <div class="card"><div class="card-pad">
+      <div style="display:flex;align-items:center;margin-bottom:10px;">
+        <span class="badge b-info">Belanja</span>
+        <span style="flex:1;"></span>
+        <span style="font-size:11.5px;font-weight:700;color:var(--violet-500);">Dikirim</span>
+      </div>
+      <div class="orow" style="padding-top:0;">
+        <div class="t">💊</div>
+        <div class="i"><b>Drontal Plus Obat Cacing Anjing</b><div class="sp">1 tablet</div><div class="pz">Rp 85.000</div></div>
+      </div>
+      <button class="btn btn-secondary" style="margin-top:8px;">Lacak pengiriman</button>
+    </div></div>
+
+    <!-- 既有虚拟商品订单卡 · FR-54A（证明混排） -->
+    <div class="card"><div class="card-pad">
+      <div style="display:flex;align-items:center;margin-bottom:10px;">
+        <span class="badge b-grey">Konsultasi</span>
+        <span style="flex:1;"></span>
+        <span style="font-size:11.5px;font-weight:700;color:var(--green-700);">Selesai</span>
+      </div>
+      <div class="orow" style="padding-top:0;">
+        <div class="t" style="background:var(--mint-50);">🩺</div>
+        <div class="i"><b>Konsultasi Dokter Hewan</b><div class="sp">drh. Maya · 18 Jul</div><div class="pz">Rp 30.000</div></div>
+      </div>
+    </div></div>
+
+    <div class="card"><div class="card-pad">
+      <div style="display:flex;align-items:center;margin-bottom:10px;">
+        <span class="badge b-info">Belanja</span>
+        <span style="flex:1;"></span>
+        <span style="font-size:11.5px;font-weight:700;color:var(--green-700);">Selesai</span>
+      </div>
+      <div class="orow" style="padding-top:0;">
+        <div class="t">🦴</div>
+        <div class="i"><b>Camilan Dental Stick Anjing</b><div class="sp">7 pcs</div><div class="pz">Rp 45.000</div></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="btn btn-secondary" style="flex:1;">Beri ulasan</button>
+        <button class="btn btn-ghost" style="flex:1;">Beli lagi</button>
+      </div>
+    </div></div>
+    <div style="height:14px;"></div>
+
+  </div></div>
+
+  <div class="tabbar">
+    <button class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span class="tlabel">Diary</span></button>
+    <button class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg><span class="tlabel">Toko</span></button>
+    <button class="tabplus"><span class="plusinner"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></button>
+    <button class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg><span class="tlabel">Jelajah</span></button>
+    <button class="tab on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span class="tlabel">Profil</span></button>
+  </div>
+  <div class="homebar"><div></div></div>
+</div>
+
+<div class="spec">
+  <div class="sbox">
+    <div class="title">订单列表 · 电商卡片</div>
+    <div class="sub">复用 FR-54 外壳，新增第 5 类卡片</div>
+    <span class="frtag">FR-101</span><span class="frtag">复用 FR-54</span>
+  </div>
+
+  <div class="sbox">
+    <h3>复用而非新建（FR-101）</h3>
+    <div class="warn">V1.1.0 FR-54 已定义订单页主体结构与 <b>4 类卡片</b>：<br>
+      · FR-54A 兽医咨询　· FR-54B PawCoin 充值<br>
+      · FR-54C AI 问诊解锁　· FR-54D 高清图购买<br><br>
+      电商订单是<b>第 5 类卡片</b>，复用订单页外壳、入口与列表框架。<b>不新建订单入口。</b></div>
+    <ul><li>需回写 FR-54 主体结构说明（见 .decision-log L-3）</li></ul>
+  </div>
+
+  <div class="sbox">
+    <h3>用户侧混排，后台侧分列</h3>
+    <ul>
+      <li><b>用户端</b>：电商订单与虚拟商品订单在同一列表按时间倒序<b>混排</b>——用户心智里「我的订单」就是一个地方</li>
+      <li><b>后台</b>（AB-11A）：<b>分列表管理</b>——两者运营动作完全不同，混在一起会让待发货订单淹没在问诊订单里</li>
+    </ul>
+    <div class="warn">这两个方向相反的决定是有意的，不是不一致。</div>
+  </div>
+
+  <div class="sbox">
+    <h3>筛选与订单号</h3>
+    <ul>
+      <li>筛选 chips 新增 <b>Belanja</b>（购物）类型，与既有类型并列</li>
+      <li>订单号规则 <b>TT + YYYYMMDD + 8 位自增</b>，与虚拟商品订单号<b>隔离</b>——便于财务区分自营实物与虚拟商品收入（后台 AB-13D 对账）</li>
+    </ul>
+  </div>
+
+  <div class="sbox">
+    <h3>主操作按钮随状态变化</h3>
+    <ul>
+      <li>待支付 → <b>Bayar sekarang</b> + 倒计时（60 分钟）</li>
+      <li>已发货 → <b>Lacak pengiriman</b></li>
+      <li>已完成 → <b>Beri ulasan</b> / <b>Beli lagi</b></li>
+      <li>「Beli lagi」是低成本的复购入口，与 FR-107~109 的主动触发互补</li>
+    </ul>
+  </div>
+</div>
+
+</body></html>
