@@ -154,8 +154,8 @@ svg{display:block;}
   <h1>TailTopia V1.1.4 — 社区管控 UI 整合稿</h1>
   <div class="sub">
     <span class="pill">✅ 已定稿（2026-08-14）</span>
-    <span class="pill">25 屏 · 4 条泳道</span>
-    <span class="pill">2026-08-14</span><br>
+    <span class="pill" style="color:#0F7B4F; background:#E3F5EC">🔄 校验订正（2026-08-15）</span>
+    <span class="pill">28 屏 · 4 条泳道</span><br>
     对应 <b>FR-58 用户账号举报</b> + <b>FR-94 用户拉黑</b>（PRD：<code>v1-1-4prd.md</code>）。
     后台 AB-3D / AB-3E 按产品要求<b>不出 UI 稿</b>，本文件只含 App 端。<br>
     手机框内为印尼语（与真实 App 一致），所有说明文字一律在框外。<br>
@@ -173,36 +173,58 @@ svg{display:block;}
 </div>
 
 <div class="note warn">
-  <b>⚠️ 三处需要你确认的地方（已在 PRD 与决策日志留痕，本稿按当前口径画）：</b><br>
-  <b>1 · 举报成功态不提"内容会被隐藏"</b>（2026-08-14 定案）。已知与既有内容举报的 <code>reportHiddenToast</code>
-  「Kamu tidak akan melihat konten ini lagi」不一致——举报<b>帖子</b>会告知、举报<b>账号</b>不告知，产品接受该差异。<br>
-  <b>2 · 印尼语文案有一批是新写的</b>（账号举报 5 类原因、拉黑全套、4 条 Toast），已在文末单独列表，<b>待运营复核措辞</b>。<br>
-  <b>3 · 迷你主页卡本来一个操作按钮都没有</b>（纯展示：头像/昵称/发布数/「主页筹备中」/关闭）。本版本是从零加入口，取「⋯」菜单方案。
+  <b>🔄 2026-08-15 校验订正：本稿在 08-14 定稿版基础上改了 5 处，新增 3 屏。</b>
+  订正源自一轮<b>代码实证的对抗式评审</b>——原稿有两处对既有实现的描述是错的。完整评审见仓库
+  <code>_bmad-output/planning-artifacts/v1.1.4/validation-2026-08-15/</code>。<br><br>
+  <table class="idx" style="margin:0">
+    <tr><th style="width:64px">改动</th><th style="width:150px">屏</th><th>内容</th></tr>
+    <tr><td><b>新增</b></td><td><b>A1b</b> 签名态</td><td>迷你卡<b>实际有 6 个元素不是 5 个</b>——漏了「个性签名」，且「主页筹备中」只是<b>没设签名时的兜底</b>。原稿 25 屏全画的是兜底态。签名是用户自填文本，<b>骚扰账号可以把攻击性内容写在这里</b>，而它就展示在你要举报他的那张卡上</td></tr>
+    <tr><td><b>新增</b></td><td><b>A6</b> 评论区入口</td><td>评论区点头像<b>原本不弹卡</b>（全 App 只有 Feed 卡片作者、详情页作者两处会弹）。而本版本的影子评论 / R1 / R2 / 通知抑制<b>全是为评论区骚扰设计的</b>——入口却不在评论区</td></tr>
+    <tr><td><b>新增</b></td><td><b>D7b</b> 解除成功变体</td><td>对方<b>也被举报过</b>时，原 Toast「刷新后可重新看到 TA 的内容」<b>是假话</b>——举报隐藏永久不可撤销，解除拉黑救不回来</td></tr>
+    <tr><td>改</td><td>A1 / A2 / A3 说明</td><td>框外说明写的「其余 5 个元素逐项保持不变」是错的，已改</td></tr>
+    <tr><td>改</td><td>B1–B4 / B7</td><td>提交按钮上方加一行<b>「提交后无法撤销」</b>——举报是终局，三次点击就让一个账号的全部内容对你永久消失</td></tr>
+  </table>
+  <br>
+  <b>⚠️ 仍需你确认的两件事：</b><br>
+  <b>1 · 举报成功态仍不提「内容会被隐藏」</b>（2026-08-14 定案，08-15 复核维持）。已知与既有内容举报的 <code>reportHiddenToast</code>
+  「Kamu tidak akan melihat konten ini lagi」不一致——举报<b>帖子</b>会告知、举报<b>账号</b>不告知，产品接受该差异。
+  <b>但 D7b 是个有意的例外</b>：解除拉黑时必须说实话，那是全产品唯一揭示「举报会隐藏内容」的地方。<br>
+  <b>2 · 印尼语文案有一批是新写的</b>，其中<b>本次新增的 4 条尚未产出印尼语</b>（见文末清单标 🔺 者），需与封号通知一并送法务 / 运营（OQ-A4）。
 </div>
 
 <table class="idx">
   <tr><th style="width:88px">泳道</th><th style="width:150px">屏号</th><th>内容</th><th style="width:190px">对应 PRD</th></tr>
-  <tr><td><b>A</b></td><td>A1–A5</td><td>迷你主页预览卡：默认 / ⋯菜单 / 已举报 / 已拉黑拦截 / 网络失败</td><td>FR-58 举报入口 · FR-94 生效范围④</td></tr>
-  <tr><td><b>B</b></td><td>B1–B7</td><td>举报流程：类型选择 / 「其他」展开 / 未填禁用 / 提交中 / 成功 / 失败 / 重复举报</td><td>FR-58 全流程</td></tr>
+  <tr><td><b>A</b></td><td>A1 · <b>A1b</b> · A2–A5 · <b>A6</b></td><td>迷你主页预览卡：默认 / <b>签名态🆕</b> / ⋯菜单 / 已举报 / 已拉黑拦截 / 网络失败 / <b>评论区入口🆕</b></td><td>FR-58 举报入口 · FR-94 生效范围④</td></tr>
+  <tr><td><b>B</b></td><td>B1–B7</td><td>举报流程：类型选择 / 「其他」展开 / 未填禁用 / 提交中 / 成功 / 失败 / 重复举报（<b>表单态均加「不可撤销」提示</b>）</td><td>FR-58 全流程</td></tr>
   <tr><td><b>C</b></td><td>C1–C4</td><td>拉黑流程：二次确认 / 提交中 / 成功 / 失败</td><td>FR-94 入口①</td></tr>
-  <tr><td><b>D</b></td><td>D1–D9</td><td>黑名单：设置入口 / 列表 / 空态 / 加载 / 失败 / 解除确认 / 解除成功 / 已注销条目 / 行内 ⋯ 举报</td><td>FR-94 黑名单管理</td></tr>
+  <tr><td><b>D</b></td><td>D1–D7 · <b>D7b</b> · D8–D9</td><td>黑名单：设置入口 / 列表 / 空态 / 加载 / 失败 / 解除确认 / 解除成功 / <b>解除成功·对方也被举报过🆕</b> / 已注销条目 / 行内 ⋯ 举报</td><td>FR-94 黑名单管理</td></tr>
 </table>
 
 <!-- ==================== 泳道 A ==================== -->
 <div class="lane" style="--lane:var(--lane-a)">
   <h2>A · 迷你主页预览卡（既有 sheet，本版本加入口）</h2>
   <p class="desc">
-    这张卡是既有组件 <code>mini_profile_sheet.dart</code>，原本<b>只有展示、没有任何操作</b>：头像（r=32）→ 昵称 → 发布数 → 「主页筹备中」→ 「关闭」。
+    这张卡是既有组件 <code>mini_profile_sheet.dart</code>，原本<b>只有展示、没有任何操作</b>。
     本版本在右上角加一个「⋯」，点开出「举报 / 拉黑」两项——保持卡片原貌几乎不变，代价是多一层点击（产品已确认接受）。
-    A4 / A5 两屏是<b>卡根本没弹出来</b>的两种情况，背景保持在用户点击前所处的 Feed 页。
+    A4 / A5 两屏是<b>卡根本没弹出来</b>的两种情况，背景保持在用户点击前所处的 Feed 页。<br>
+    <b>🔄 2026-08-15 订正：卡片有 6 个元素，不是 5 个。</b>顺序是 头像（r=32）→ 昵称 → 发布数 →
+    <b>个性签名 <i>或</i> 「主页筹备中」（二选一）</b> → 「关闭」。设了签名就显示签名、不显示占位语；没设才回落到「主页筹备中」。
+    <b>A1 是兜底态（无签名）、A1b 是签名态</b>，两屏并排看差别。<br>
+    <b>🔄 同日新增 A6：评论区入口。</b>原稿默认"点头像就会弹卡"，但代码里<b>只有 Feed 卡片作者和详情页作者两处会弹，评论区不弹</b>——
+    而这恰恰是本版本最需要它的地方。
   </p>
   <div class="flow">
     <em>主路径：</em><s>A1</s> 默认卡 <i>—— 点「⋯」 →</i> <s>A2</s> 菜单 <i>—— 选举报 →</i> <em>泳道 B</em>
     <i>／ 选拉黑 →</i> <em>泳道 C</em>
     <span class="nl"></span>
+    <em>三个入口都通向 A1 / A1b：</em>Feed 卡片作者 <i>／</i> 详情页作者 <i>／</i> <s>A6</s> <b>评论区头像🆕</b>
+    <span class="nl"></span>
+    <em>卡片内容的两种形态：</em><s>A1</s> 无签名（显示「主页筹备中」）<i>／</i> <s>A1b</s> <b>有签名🆕</b>（显示签名原文）
+    <span class="nl"></span>
     <em>变体：</em><s>A3</s> 曾举报过该账号时的菜单（替代 A2）
     <span class="nl"></span>
-    <em>卡片不弹出的两种情况：</em><s>A4</s> 对方已被拉黑 <i>／</i> <s>A5</s> 网络失败
+    <em>卡片不弹出的两种情况：</em><s>A4</s> 对方已被<b>主动拉黑</b> <i>／</i> <s>A5</s> 网络失败
+    <i>（⚠️ 只被举报过<b>照常弹卡</b>，举报不禁止进主页）</i>
   </div>
   <div class="frames">
 
@@ -239,7 +261,49 @@ svg{display:block;}
           </div>
         </div>
       </div></div>
-      <div class="frame-cap"><b>新增：右上角「⋯」</b>。其余 5 个元素（头像 / 昵称 / 发布数 / 「主页筹备中」/ Tutup）与既有实现<b>逐项保持不变</b>，位置、字号、文案都没动。</div>
+      <div class="frame-cap">
+        <b>新增：右上角「⋯」</b>。其余元素与既有实现<b>逐项保持不变</b>，位置、字号、文案都没动。<br>
+        <b>🔄 08-15 订正：</b>本屏是<b>兜底态——该用户没设个性签名</b>，所以第 4 行显示「主页筹备中」。
+        设了签名的用户长什么样见 <b>A1b</b>。原说明写的「其余 5 个元素」是错的，卡片实际有 6 个。
+      </div>
+    </div>
+
+    <!-- A1b（2026-08-15 新增） -->
+    <div class="frame">
+      <span class="frame-tag" style="color:#0F7B4F; border-color:#0F7B4F">A1b · 迷你主页卡 · 有个性签名🆕</span>
+      <div class="phone-shell"><div class="phone-screen">
+        <div class="statusbar"><span>9:41</span><span class="r">‧‧‧ ⌁ ▮</span></div>
+        <div class="body">
+          <div class="feedcard">
+            <div class="fc-top"><div class="avatar a36" style="background:#B79BE8">R</div>
+              <div><div class="nm">Rina P.</div><div class="tm">10 menit lalu</div></div></div>
+            <div class="ph">🐈</div>
+            <div class="ftxt">Mochi genap 2 tahun hari ini 🎂</div>
+          </div>
+        </div>
+        <div class="mask"></div>
+        <div class="sheet" style="padding:10px 24px 26px">
+          <div class="grab"></div>
+          <div style="position:absolute; right:14px; top:16px;" class="icobtn">
+            <svg width="20" height="20" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4" fill="#9690A6"/><circle cx="12" cy="12" r="1.4" fill="#9690A6"/><circle cx="19" cy="12" r="1.4" fill="#9690A6"/></svg>
+          </div>
+          <div style="display:flex; flex-direction:column; align-items:center; padding-top:6px">
+            <div class="avatar a64" style="background:#B79BE8">R</div>
+            <div style="font-size:17px; font-weight:600; color:var(--tt-ink); margin-top:8px">Rina P.</div>
+            <div style="font-size:12px; color:var(--tt-muted); margin-top:4px">128 postingan dibagikan</div>
+            <div style="font-size:13px; color:var(--tt-ink-2); line-height:1.7; text-align:center; margin-top:12px; padding:0 4px">
+              Pencinta kucing · Mochi &amp; Kopi · Jakarta Selatan 🐾 DM untuk kolaborasi</div>
+            <div style="font-size:14px; font-weight:600; color:var(--tt-violet); margin-top:20px; padding:8px 20px">Tutup</div>
+          </div>
+        </div>
+      </div></div>
+      <div class="frame-cap">
+        <b>🔄 本屏为 2026-08-15 新增。</b>与 A1 的唯一差别在第 4 行：<b>有签名就显示签名原文，「主页筹备中」不出现</b>——两者二选一，不是并存。
+        本屏画的是 <b>60 字满格</b>的极端情况（既有上限），用于确认换行后<b>不与右上角「⋯」重叠</b>、也不把菜单顶出可视区。<br>
+        <b>⚠️ 这不只是画错一屏，有真实的产品后果：</b>签名是<b>用户自填的自由文本</b>——骚扰账号完全可以把攻击性内容写在这里，
+        而那段文字<b>恰恰展示在你要举报他的那张卡上</b>。产品定：<b>举报场景下不隐藏签名</b>（隐藏会让点开「⋯」时内容跳动），
+        但<b>签名要随账号举报一并进入 AB-3D 工单上下文</b>——举报「仿冒他人」「持续骚扰」时，签名往往就是证据本身。
+      </div>
     </div>
 
     <!-- A2 -->
@@ -281,7 +345,7 @@ svg{display:block;}
           </div>
         </div>
       </div></div>
-      <div class="frame-cap">两项<b>并列、不分主次</b>——它们是两种意图不是轻重两档。副标题对应 PRD 定的语义边界：举报=「TA 违反了社区规定，请平台尽快处理」/ 拉黑=「我不想再看见 TA」。菜单锚在「⋯」下方，<b>不是第三层抽屉</b>。</div>
+      <div class="frame-cap"><b>（本屏画的是无签名的兜底态；有签名时卡片内容按 A1b，菜单位置不变。）</b> 两项<b>并列、不分主次</b>——它们是两种意图不是轻重两档。副标题对应 PRD 定的语义边界：举报=「TA 违反了社区规定，请平台尽快处理」/ 拉黑=「我不想再看见 TA」。菜单锚在「⋯」下方，<b>不是第三层抽屉</b>。</div>
     </div>
 
     <!-- A3 -->
@@ -323,7 +387,10 @@ svg{display:block;}
           </div>
         </div>
       </div></div>
-      <div class="frame-cap"><b>「已举报」是服务端持久化状态</b>，重启 App 不丢（PRD 明确改掉了原「当前会话内显示」的写法）。<b>仍可点击</b>再次举报——副标题直接说明这一点，避免用户以为是禁用态。</div>
+      <div class="frame-cap"><b>「已举报」是服务端持久化状态</b>，重启 App 不丢（PRD 明确改掉了原「当前会话内显示」的写法）。<b>仍可点击</b>再次举报——副标题直接说明这一点，避免用户以为是禁用态。<br>
+        <b>🔄 08-15 补：这一屏能存在，靠的是「举报不禁止进主页」这条规则。</b>只被举报过的用户<b>照常弹卡</b>（对比 A4：被<b>主动拉黑</b>的才不弹）。
+        若把不弹卡的判断写成"存在隐藏关系即不弹"，会一并把举报隐藏拦掉，这一屏就永远看不到了，重复举报也没有入口。<br>
+        <b>另注意「拉黑」项此时仍可点、不置灰</b>——举报后再拉黑不是多余操作，它多带一个举报没有的效果：<b>禁止再进对方主页</b>。</div>
     </div>
 
     <!-- A4 -->
@@ -360,6 +427,81 @@ svg{display:block;}
       <div class="frame-cap"><b>⚠️ 这一屏是对既有行为的变更，不是新增。</b> 原实现拉取失败<b>静默不弹</b>（注释理由"非关键路径"）——用户点了头像什么都不发生。本版本改为出 Toast。研发注意：<b>要改原来的 catch 分支，不是只加新分支。</b></div>
     </div>
 
+    <!-- A6（2026-08-15 新增） -->
+    <div class="frame">
+      <span class="frame-tag" style="color:#0F7B4F; border-color:#0F7B4F">A6 · 评论区头像 → 弹卡🆕</span>
+      <div class="phone-shell"><div class="phone-screen">
+        <div class="statusbar"><span>9:41</span><span class="r">‧‧‧ ⌁ ▮</span></div>
+        <div class="appbar">
+          <div class="icobtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2E2A45" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></div>
+          <div class="ttl">Postingan</div>
+        </div>
+        <div class="body">
+          <div class="feedcard" style="padding-bottom:10px">
+            <div class="fc-top"><div class="avatar a36" style="background:#7FC8A9">S</div>
+              <div><div class="nm">Sari</div><div class="tm">2 jam lalu</div></div></div>
+            <div class="ftxt" style="margin-top:0">Grooming pertama Kopi hari ini ✂️</div>
+          </div>
+          <div style="font-size:11px; font-weight:700; color:var(--tt-muted); letter-spacing:.5px; padding:14px 16px 4px">KOMENTAR · 3</div>
+          <div class="crow">
+            <div class="avatar" style="background:#8FBFE0; width:30px; height:30px; font-size:11px">D</div>
+            <div><div class="nm" style="font-size:12.5px">Dimas</div>
+              <div class="ctext">Lucu banget! Di mana groomingnya?</div></div>
+          </div>
+          <div class="crow" style="background:var(--tt-violet-tint); border-radius:12px; margin:0 8px">
+            <div class="avatar" style="background:#E0A87C; width:30px; height:30px; font-size:11px; box-shadow:0 0 0 2.5px var(--tt-violet)">B</div>
+            <div><div class="nm" style="font-size:12.5px; color:var(--tt-violet-deep)">Budi S.</div>
+              <div class="ctext">Mahal amat, mending ke tempat gue aja. WA 08xx…</div></div>
+          </div>
+          <div class="crow">
+            <div class="avatar" style="background:#D9A0C0; width:30px; height:30px; font-size:11px">N</div>
+            <div><div class="nm" style="font-size:12.5px">Nadia</div>
+              <div class="ctext">Gemesin bangetttt 🥰</div></div>
+          </div>
+        </div>
+        <div class="mask"></div>
+        <div class="sheet" style="padding:10px 24px 26px">
+          <div class="grab"></div>
+          <div style="position:absolute; right:14px; top:16px;" class="icobtn">
+            <svg width="20" height="20" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4" fill="#845EC9"/><circle cx="12" cy="12" r="1.4" fill="#845EC9"/><circle cx="19" cy="12" r="1.4" fill="#845EC9"/></svg>
+          </div>
+          <div style="display:flex; flex-direction:column; align-items:center; padding-top:6px">
+            <div class="avatar a64" style="background:#E0A87C">B</div>
+            <div style="font-size:17px; font-weight:600; color:var(--tt-ink); margin-top:8px">Budi S.</div>
+            <div style="font-size:12px; color:var(--tt-muted); margin-top:4px">0 postingan dibagikan</div>
+            <div style="font-size:13px; color:var(--tt-ink-2); line-height:1.7; text-align:center; margin-top:12px">
+              Halaman pribadi mereka sedang disiapkan dengan penuh perhatian, lebih banyak kejutan menanti ✨</div>
+            <div style="font-size:14px; font-weight:600; color:var(--tt-violet); margin-top:20px; padding:8px 20px">Tutup</div>
+          </div>
+          <div class="menu" style="right:14px; bottom:100%; margin-bottom:10px">
+            <div class="mi">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#2E2A45" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 21V4M4 4h11l-1.4 3.5L15 11H4"/></svg>
+              <div><div>Laporkan</div><div class="sub">Langgar aturan komunitas</div></div>
+            </div>
+            <div class="mi">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#2E2A45" stroke-width="1.9" stroke-linecap="round">
+                <circle cx="12" cy="12" r="8.4"/><path d="M6.1 6.1l11.8 11.8"/></svg>
+              <div><div>Blokir</div><div class="sub">Berhenti melihat mereka</div></div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+      <div class="frame-cap">
+        <b>🔄 本屏为 2026-08-15 新增，是本次订正里最要紧的一处。</b><br>
+        <b>问题：</b>迷你卡在全 App <b>只有两个触发点</b>——Feed 卡片的作者、详情页的作者。<b>评论区的头像点了不弹卡。</b>
+        而迷你卡是账号举报的<b>唯一入口</b>、拉黑的主入口。<br>
+        <b>后果：</b>本版本的影子评论 / R1 / R2 / 互动通知抑制<b>全部是为「评论区骚扰」设计的</b>
+        （被拉黑方在你帖子下持续挂攻击性评论），可发起入口<b>恰恰在评论区不存在</b>。
+        一个<b>只在评论区骚扰、从不发帖</b>的账号（就像图里的 Budi——发布数 0），用户既举报不了也拉黑不了，
+        除非等他哪天发一条帖子再从 Feed 里找到他。<br>
+        <b>改法：</b>评论区（含一级评论与二级回复）的头像 / 昵称接入 <code>showMiniProfile</code>，与 Feed / 详情页作者<b>完全一致</b>——
+        同一张卡、同一套「⋯」菜单。<b>不在评论行内另设「⋯」或滑动手势</b>（理由与 D9 同：一个交互模式学一次就够）。<br>
+        <b>⚠️ 实现须一并复核评论区的已注销分支</b>：已注销用户不弹卡（NFR-8），这个判断此前只在 Feed 侧考虑过。<br>
+        <i>（图中紫底与头像描边仅为标示"点了哪一个"，实现时评论行无此高亮。）</i>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -369,7 +511,7 @@ svg{display:block;}
   <p class="desc">
     抽屉的<b>全部视觉规格照搬既有实现</b>：内边距 22/12/22/28、手柄 36×4、原因卡圆角 13 · 边框 1.5px · 内距 14·12 · 间距 10、
     选中态＝紫边＋紫浅底＋实心 radio、提交按钮圆角 14 · 垂直内距 14、取消按钮描边 1.5px。
-    <b>唯一的实质改动是原因选项换成了账号维度的 5 类</b>——既有 <code>ReportReason</code> 是内容维度的（虚假信息 / 不当内容…），与账号举报只有"骚扰"和"其他"能对上，必须新建枚举。
+    <b>🔄 2026-08-15 订正：全部表单态（B1–B4 / B6 / B7）在提交按钮上方加了一行「Laporan tidak dapat dibatalkan setelah dikirim（提交后无法撤销）」</b>——举报是终局：三次点击就让一个账号的全部内容对你永久消失、且他在你帖子下的评论对所有人隐藏，而产品<b>不提供任何撤销与申诉路径</b>。<b>只说不可撤销、不说会隐藏</b>，不破坏「成功态不提隐藏」那条取舍。<br><b>唯一的实质改动是原因选项换成了账号维度的 5 类</b>——既有 <code>ReportReason</code> 是内容维度的（虚假信息 / 不当内容…），与账号举报只有"骚扰"和"其他"能对上，必须新建枚举。
   </p>
   <div class="flow">
     <em>主路径：</em><i>由 A2 或 D9 进入 →</i> <s>B1</s> 选类型 <i>→</i> <s>B3</s> 已选可提交 <i>→</i>
@@ -400,7 +542,8 @@ svg{display:block;}
             <div class="reason"><div class="radio"></div><div class="rt">Memposting konten melanggar aturan</div></div>
             <div class="reason"><div class="radio"></div><div class="rt">Lainnya</div></div>
           </div>
-          <div class="btn off">Kirim Laporan</div>
+          <div style="font-size:11px; color:var(--tt-muted); text-align:center; margin-top:14px; line-height:1.5">Laporan tidak dapat dibatalkan setelah dikirim</div>
+          <div class="btn off" style="margin-top:8px">Kirim Laporan</div>
           <div class="btn ghost">Batal</div>
         </div>
       </div></div>
@@ -430,7 +573,8 @@ svg{display:block;}
               <div class="cnt">0 / 200</div>
             </div>
           </div>
-          <div class="btn off">Kirim Laporan</div>
+          <div style="font-size:11px; color:var(--tt-muted); text-align:center; margin-top:14px; line-height:1.5">Laporan tidak dapat dibatalkan setelah dikirim</div>
+          <div class="btn off" style="margin-top:8px">Kirim Laporan</div>
           <div class="btn ghost">Batal</div>
         </div>
       </div></div>
@@ -456,7 +600,8 @@ svg{display:block;}
             <div class="reason"><div class="radio"></div><div class="rt">Memposting konten melanggar aturan</div></div>
             <div class="reason"><div class="radio"></div><div class="rt">Lainnya</div></div>
           </div>
-          <div class="btn">Kirim Laporan</div>
+          <div style="font-size:11px; color:var(--tt-muted); text-align:center; margin-top:14px; line-height:1.5">Laporan tidak dapat dibatalkan setelah dikirim</div>
+          <div class="btn" style="margin-top:8px">Kirim Laporan</div>
           <div class="btn ghost">Batal</div>
         </div>
       </div></div>
@@ -482,7 +627,8 @@ svg{display:block;}
             <div class="reason"><div class="radio"></div><div class="rt">Memposting konten melanggar aturan</div></div>
             <div class="reason"><div class="radio"></div><div class="rt">Lainnya</div></div>
           </div>
-          <div class="btn" style="opacity:.75"><span class="spin"></span></div>
+          <div style="font-size:11px; color:var(--tt-muted); text-align:center; margin-top:14px; line-height:1.5; opacity:.5">Laporan tidak dapat dibatalkan setelah dikirim</div>
+          <div class="btn" style="opacity:.75; margin-top:8px"><span class="spin"></span></div>
           <div class="btn ghost" style="opacity:.5">Batal</div>
         </div>
       </div></div>
@@ -533,7 +679,8 @@ svg{display:block;}
             <div class="reason"><div class="radio"></div><div class="rt">Memposting konten melanggar aturan</div></div>
             <div class="reason"><div class="radio"></div><div class="rt">Lainnya</div></div>
           </div>
-          <div class="btn">Kirim Laporan</div>
+          <div style="font-size:11px; color:var(--tt-muted); text-align:center; margin-top:14px; line-height:1.5">Laporan tidak dapat dibatalkan setelah dikirim</div>
+          <div class="btn" style="margin-top:8px">Kirim Laporan</div>
           <div class="btn ghost">Batal</div>
         </div>
         <div class="toast" style="bottom:auto; top:22px">Gagal mengirim laporan. Periksa koneksi lalu coba lagi, atau hubungi dukungan</div>
@@ -561,7 +708,8 @@ svg{display:block;}
             <div class="reason"><div class="radio"></div><div class="rt">Memposting konten melanggar aturan</div></div>
             <div class="reason"><div class="radio"></div><div class="rt">Lainnya</div></div>
           </div>
-          <div class="btn off">Kirim Laporan</div>
+          <div style="font-size:11px; color:var(--tt-muted); text-align:center; margin-top:14px; line-height:1.5">Laporan tidak dapat dibatalkan setelah dikirim</div>
+          <div class="btn off" style="margin-top:8px">Kirim Laporan</div>
         </div>
       </div></div>
       <div class="frame-cap">副标题替换为 PRD 定的重复举报说明。<b>类型重新选，不预填上次的选择</b>——PRD 要求每次举报的类型都要独立留存（第一次选骚扰、第二次选仿冒是"问题在升级"的证据）。</div>
@@ -683,13 +831,14 @@ svg{display:block;}
   <h2>D · 黑名单管理</h2>
   <p class="desc">
     入口放在设置页的 <b>PRIVASI &amp; KEAMANAN</b> 分组（既有分组，同组已有「Profil Hewan (publik)」开关与隐私政策）。
-    列表<b>只包含用户主动拉黑的对象</b>——举报产生的隐藏不可解除、不进本页（PRD 定案，与既有内容举报的行为一致）。
+    列表<b>只包含用户主动拉黑的对象</b>——举报产生的隐藏不可解除、不进本页（PRD 定案，与既有内容举报的行为一致）。<br><b>🔄 2026-08-15 新增 D7b。</b>一个人<b>既被拉黑又被举报</b>是正常路径（举报后仍可进对方主页、卡上「拉黑」照常可点），他<b>会</b>出现在本页（因为含主动拉黑这一层）。但解除时<b>只解掉拉黑那一层，举报隐藏还在、内容依旧看不见</b>——所以解除提示必须分两句，见 D7 / D7b 对照。
   </p>
   <div class="flow">
     <em>进入：</em><s>D1</s> 设置页 <i>→</i> <s>D2</s> 列表
     <i>（拉取期间 <s>D4</s> 加载中 <i>／</i> 失败 <s>D5</s> <i>／</i> 无数据 <s>D3</s> 空态）</i>
     <span class="nl"></span>
-    <em>解除：</em><s>D2</s> <i>—— 点「解除拉黑」→</i> <s>D6</s> 二次确认 <i>→</i> <s>D7</s> 解除成功
+    <em>解除：</em><s>D2</s> <i>—— 点「解除拉黑」→</i> <s>D6</s> 二次确认 <i>→</i> <s>D7</s> 解除成功（对方没被举报过）
+    <i>／</i> <s>D7b</s> <b>解除成功（对方也被举报过 → 内容仍不可见）🆕</b>
     <span class="nl"></span>
     <em>举报：</em><s>D2</s> <i>—— 点行内「⋯」→</i> <s>D9</s> 菜单 <i>—— 选举报 →</i> <em>泳道 B</em>
     <span class="nl"></span>
@@ -882,8 +1031,8 @@ svg{display:block;}
           <div class="ttl">Daftar Blokir</div>
         </div>
         <div class="body">
-          <div class="blk"><div class="avatar a44" style="background:#E0A87C">B</div>
-            <div class="info"><div class="nm">Budi S.</div><div class="tm">Diblokir 09 Agu 2026</div></div>
+          <div class="blk"><div class="avatar a44" style="background:#B79BE8">R</div>
+            <div class="info"><div class="nm">Rina P.<span class="tagmini">Dilaporkan</span></div><div class="tm">Diblokir 14 Agu 2026</div></div>
             <div class="unblock">Buka Blokir</div>
             <div class="rowmore"><svg width="17" height="17" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="#9690A6"/><circle cx="12" cy="12" r="1.5" fill="#9690A6"/><circle cx="19" cy="12" r="1.5" fill="#9690A6"/></svg></div></div>
           <div class="blk"><div class="avatar a44" style="background:#8FBFE0">A</div>
@@ -893,7 +1042,45 @@ svg{display:block;}
         </div>
         <div class="toast">Blokir dibuka. Segarkan untuk melihat konten mereka lagi</div>
       </div></div>
-      <div class="frame-cap">Rina 的条目<b>已从列表移除</b>。Toast 措辞刻意用「Segarkan（刷新后）」而不是"立即"——PRD 明确要求，为后续引入带序列缓存的推荐算法留余地，届时文案无需改。</div>
+      <div class="frame-cap">
+        本屏解除的是 <b>Budi S.（没有「Dilaporkan」标签）</b>，他的条目<b>已从列表移除</b>。
+        Toast 措辞刻意用「Segarkan（刷新后）」而不是「立即」——PRD 明确要求，为后续引入带序列缓存的推荐算法留余地，届时文案无需改。<br>
+        <b>🔄 08-15 订正：本屏只适用于「对方没被举报过」的情况。</b>原稿这一屏解除的是 Rina，而 Rina 在 D2 里恰恰带着「Dilaporkan」标签——
+        对她用这句 Toast <b>是假话</b>。已改为解除 Budi，被举报过的情形见 <b>D7b</b>。
+      </div>
+    </div>
+
+    <!-- D7b（2026-08-15 新增） -->
+    <div class="frame">
+      <span class="frame-tag" style="color:#0F7B4F; border-color:#0F7B4F">D7b · 解除成功 · 对方也被举报过🆕</span>
+      <div class="phone-shell"><div class="phone-screen">
+        <div class="statusbar"><span>9:41</span><span class="r">‧‧‧ ⌁ ▮</span></div>
+        <div class="appbar">
+          <div class="icobtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2E2A45" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></div>
+          <div class="ttl">Daftar Blokir</div>
+        </div>
+        <div class="body">
+          <div class="blk"><div class="avatar a44" style="background:#E0A87C">B</div>
+            <div class="info"><div class="nm">Budi S.</div><div class="tm">Diblokir 09 Agu 2026</div></div>
+            <div class="unblock">Buka Blokir</div>
+            <div class="rowmore"><svg width="17" height="17" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="#9690A6"/><circle cx="12" cy="12" r="1.5" fill="#9690A6"/><circle cx="19" cy="12" r="1.5" fill="#9690A6"/></svg></div></div>
+          <div class="blk"><div class="avatar a44" style="background:#8FBFE0">A</div>
+            <div class="info"><div class="nm">Andi W.</div><div class="tm">Diblokir 02 Agu 2026</div></div>
+            <div class="unblock">Buka Blokir</div>
+            <div class="rowmore"><svg width="17" height="17" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="#9690A6"/><circle cx="12" cy="12" r="1.5" fill="#9690A6"/><circle cx="19" cy="12" r="1.5" fill="#9690A6"/></svg></div></div>
+        </div>
+        <div class="toast" style="line-height:1.65">Blokir dibuka. Kamu pernah melaporkan akun ini, jadi kontennya tetap tidak ditampilkan.</div>
+      </div></div>
+      <div class="frame-cap">
+        <b>🔄 本屏为 2026-08-15 新增。</b>解除的是 <b>Rina P.</b>——她带「Dilaporkan」标签，即<b>既被拉黑、又被举报过</b>。<br>
+        <b>为什么必须是另一句：</b>举报隐藏<b>永久不可撤销</b>，解除拉黑只拿掉「主动拉黑」这一层，<b>内容依旧看不见</b>。
+        对这种人用 D7 那句「刷新后可重新看到 TA 的内容」，就是<b>一句假话</b>，用户刷新后发现还是刷不到，会当成 bug 反馈。<br>
+        <b>⚠️ 这是全产品唯一会向用户揭示「举报会隐藏内容」的地方</b>——而举报成功态（B5）是刻意不提的。
+        两处口径不同<b>是有意为之</b>：这里不说实话就是在撒谎，那里说了会破坏"提示简短"的取舍。<b>下次复盘别当成漏了。</b><br>
+        <b>条目照常从列表移除</b>（拉黑关系确实解除了），只是内容不恢复。<br>
+        <b>⚠️ D6 解除确认屏同理需要变体</b>：对被举报过的人，确认文案「Kamu akan mulai melihat konten mereka lagi.（解除后你将重新看到 TA 的内容）」<b>同样是假话</b>，
+        应改为「Kamu pernah melaporkan akun ini — kontennya tetap tidak akan ditampilkan.」。<b>本稿未单独出图，实现时按此处理。</b>
+      </div>
     </div>
 
     <!-- D8 -->
@@ -976,7 +1163,7 @@ svg{display:block;}
 <!-- ==================== 文案表 ==================== -->
 <div class="lane" style="--lane:var(--page-accent)">
   <h2>附 · 印尼语文案清单</h2>
-  <p class="desc">✅ = 直接复用 <code>app_id.arb</code> 既有键；🆕 = 本次新写，<b>待运营复核措辞</b>。</p>
+  <p class="desc">✅ = 直接复用 <code>app_id.arb</code> 既有键；🆕 = 新写，<b>待运营复核措辞</b>；<b>🔺 = 2026-08-15 新增且尚无印尼语</b>，需与封号通知一并送法务 / 运营（OQ-A4）。<br><b>🔄 08-15 变化：新增 6 条</b>（3 条已给印尼语草稿、3 条待产出）。</p>
   <table class="idx">
     <tr><th style="width:56px">状态</th><th style="width:230px">中文（PRD 定稿）</th><th>印尼语</th><th style="width:200px">既有键 / 备注</th></tr>
     <tr><td>✅</td><td>关闭</td><td>Tutup</td><td><code>commonClose</code></td></tr>
@@ -1001,14 +1188,21 @@ svg{display:block;}
     <tr><td>🆕</td><td>拉黑失败，请重试</td><td>Gagal memblokir, coba lagi</td><td></td></tr>
     <tr><td>🆕</td><td>你已拉黑该用户</td><td>Kamu sudah memblokir pengguna ini</td><td></td></tr>
     <tr><td>🆕</td><td>网络失败，请重试</td><td>Gagal terhubung, coba lagi</td><td>⚠️ 变更既有静默行为</td></tr>
-    <tr><td>🆕</td><td>已解除拉黑，刷新后可重新看到 TA 的内容</td><td>Blokir dibuka. Segarkan untuk melihat konten mereka lagi</td><td></td></tr>
+    <tr><td>🆕</td><td>已解除拉黑，刷新后可重新看到 TA 的内容</td><td>Blokir dibuka. Segarkan untuk melihat konten mereka lagi</td><td>D7 · <b>⚠️ 仅用于对方<u>未被举报过</u>的情况</b>；被举报过用下一行</td></tr>
     <tr><td>🆕</td><td>还没有拉黑任何账号</td><td>Belum ada akun yang diblokir</td><td>空态标题</td></tr>
     <tr><td>🆕</td><td>如果有人打扰你，可以在他们的资料卡菜单里拉黑</td><td>Kalau ada yang mengganggu, kamu bisa memblokirnya lewat menu di kartu profil mereka.</td><td>空态引导</td></tr>
     <tr><td>🆕</td><td>他们不会知道你拉黑了他们</td><td>Mereka tidak akan tahu kalau kamu memblokirnya.</td><td>列表页顶部说明</td></tr>
     <tr><td>🆕</td><td>已注销用户</td><td>Pengguna nonaktif</td><td></td></tr>
     <tr><td>🆕</td><td>举报（行内 ⋯ 菜单项）</td><td>Laporkan</td><td>D9，与 A2 迷你卡菜单同一文案</td></tr>
     <tr><td>🆕</td><td>加载失败 / 请检查网络后重试 / 重试</td><td>Gagal memuat daftar / Periksa koneksi internetmu, lalu coba lagi. / Coba Lagi</td><td></td></tr>
-    <tr><td>🆕</td><td>解除拉黑后你将重新看到 TA 的内容</td><td>Kamu akan mulai melihat konten mereka lagi.</td><td>解除确认正文</td></tr>
+    <tr><td>🆕</td><td>解除拉黑后你将重新看到 TA 的内容</td><td>Kamu akan mulai melihat konten mereka lagi.</td><td>D6 解除确认正文 · <b>⚠️ 仅用于对方未被举报过的情况</b></td></tr>
+    <tr><td colspan="4" style="background:#F2FAF6; font-weight:600; color:#0F7B4F">🔄 以下 6 条为 2026-08-15 校验订正新增</td></tr>
+    <tr><td>🆕</td><td>提交后无法撤销</td><td>Laporan tidak dapat dibatalkan setelah dikirim</td><td>B1–B4 / B6 / B7 提交按钮上方。<b>只说不可撤销、不说会隐藏</b></td></tr>
+    <tr><td>🆕</td><td>已解除拉黑。你举报过 TA，内容仍不会展示给你</td><td>Blokir dibuka. Kamu pernah melaporkan akun ini, jadi kontennya tetap tidak ditampilkan.</td><td>D7b · <b>全产品唯一揭示「举报会隐藏内容」的地方</b>，有意为之</td></tr>
+    <tr><td>🆕</td><td>你举报过 TA，解除拉黑后内容仍不会展示</td><td>Kamu pernah melaporkan akun ini — kontennya tetap tidak akan ditampilkan.</td><td>D6 解除确认的<b>被举报过变体</b>，本稿未单独出图</td></tr>
+    <tr><td><b>🔺</b></td><td>你的账号因违反 TailTopia 社区规范收到一次警告，请遵守社区规范</td><td style="color:var(--tt-coral)">待产出</td><td>运营点「警告」后发给用户的系统通知（PRD §3.1）。<b>不告知举报人 / 具体内容 / 第几次</b></td></tr>
+    <tr><td><b>🔺</b></td><td>你的举报已处理，感谢你帮助维护社区环境</td><td style="color:var(--tt-coral)">待产出</td><td><b>⚠️ 本版本要改线上既有文案</b>（现为「举报已处理 / 感谢你的举报，我们已完成审核。」）。<b>内容举报与账号举报共用</b>，改了会连带影响已上线的内容举报回告</td></tr>
+    <tr><td><b>🔺</b></td><td>（封号通知，中印双语草稿见 PRD §3.1）</td><td style="color:var(--tt-coral)">草稿待法务确认</td><td>🚩 <b>上线阻塞</b>（OQ-A4）——尤须确认「引导联系客服反馈异议」是否会被解读为承诺正式申诉结果</td></tr>
   </table>
 </div>
 
