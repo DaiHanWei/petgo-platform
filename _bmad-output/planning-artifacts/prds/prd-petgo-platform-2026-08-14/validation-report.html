@@ -1,0 +1,1186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>PRD Validation: TailTopia V1.4.0 · 精选自营电商</title>
+<style>
+  :root {
+    --bg: #fafaf9;
+    --surface: #ffffff;
+    --border: #e7e5e4;
+    --text: #1c1917;
+    --muted: #78716c;
+
+    --verdict-strong: #16a34a;
+    --verdict-adequate: #65a30d;
+    --verdict-thin: #d97706;
+    --verdict-broken: #dc2626;
+
+    --sev-low: #64748b;
+    --sev-medium: #ca8a04;
+    --sev-high: #ea580c;
+    --sev-critical: #dc2626;
+
+    --grade-exc: #16a34a;
+    --grade-good: #65a30d;
+    --grade-fair: #d97706;
+    --grade-poor: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    font-size: 15px;
+  }
+  .container { max-width: 960px; margin: 0 auto; padding: 32px 24px 64px; }
+
+  header.report-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+  }
+  .title h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  .title .subtitle { color: var(--muted); font-size: 13px; margin-top: 4px; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .grade {
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-weight: 600;
+    color: white;
+    font-size: 15px;
+    white-space: nowrap;
+  }
+  .grade-excellent { background: var(--grade-exc); }
+  .grade-good { background: var(--grade-good); }
+  .grade-fair { background: var(--grade-fair); }
+  .grade-poor { background: var(--grade-poor); }
+
+  .synthesis {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--muted);
+    border-radius: 8px;
+    padding: 18px 22px;
+    margin-bottom: 24px;
+    font-size: 15.5px;
+  }
+  .synthesis p { margin: 0 0 10px; }
+  .synthesis p:last-child { margin-bottom: 0; }
+
+  .dimension-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .dim-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .dim-card .dim-name { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .dim-card .dim-verdict { font-size: 14px; font-weight: 600; }
+
+  section.dimension, section.reviewer-section { margin-bottom: 14px; }
+  section.dimension details, section.reviewer-section details {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  section summary {
+    padding: 14px 20px;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  section summary::-webkit-details-marker { display: none; }
+  section summary::before {
+    content: "▸";
+    display: inline-block;
+    color: var(--muted);
+    transition: transform 0.15s ease;
+  }
+  section details[open] summary::before { transform: rotate(90deg); }
+  section summary h2 {
+    display: inline;
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    flex: 1;
+  }
+  .verdict-pill {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: white;
+  }
+  .verdict-strong { background: var(--verdict-strong); }
+  .verdict-adequate { background: var(--verdict-adequate); }
+  .verdict-thin { background: var(--verdict-thin); }
+  .verdict-broken { background: var(--verdict-broken); }
+
+  .dim-body { padding: 4px 20px 18px; }
+  .dim-judgment { color: var(--text); font-size: 14.5px; }
+  .dim-judgment p { margin: 0 0 10px; }
+
+  .findings-list { padding: 0 20px 4px; }
+  article.finding {
+    padding: 14px 0;
+    border-top: 1px solid var(--border);
+  }
+  article.finding:first-child { border-top: none; }
+  article.finding header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .badge {
+    font-size: 10.5px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    line-height: 1.4;
+  }
+  .badge-sev-low { background: rgba(100, 116, 139, 0.12); color: var(--sev-low); }
+  .badge-sev-medium { background: rgba(202, 138, 4, 0.14); color: var(--sev-medium); }
+  .badge-sev-high { background: rgba(234, 88, 12, 0.14); color: var(--sev-high); }
+  .badge-sev-critical { background: rgba(220, 38, 38, 0.14); color: var(--sev-critical); }
+  .finding-title { margin: 0; font-size: 15px; font-weight: 500; flex: 1; min-width: 200px; }
+  .finding-location { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; color: var(--muted); }
+  .finding-note, .finding-fix { margin-top: 6px; font-size: 14px; }
+  .finding-fix strong { color: var(--muted); font-weight: 500; }
+
+  .reviewer-source {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  .mechanical {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-top: 24px;
+    font-size: 14px;
+  }
+  .mechanical h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .mechanical ul { margin: 0; padding-left: 20px; }
+  .mechanical li { margin-bottom: 4px; color: var(--text); }
+
+  footer.report-footer {
+    margin-top: 40px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  footer .meta { display: flex; gap: 24px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+  <div class="container">
+
+    <header class="report-header">
+      <div class="title">
+        <h1>TailTopia V1.4.0 · 精选自营电商 — Validation Report</h1>
+        <div class="subtitle">v1.4.0/PRD-v1.4.0.md（FR-93~110） + v1.4.0/PRD-v1.4.0-后台.md（模块 10–13 + 模块 6 扩展）</div>
+      </div>
+      <div class="grade grade-poor">Poor</div>
+    </header>
+
+    <div class="synthesis">
+      <p><strong>关于 Grade：</strong>分级规则是机械的——<code>Poor = 任一维度 broken 或存在任一 critical finding</code>。本次<strong>无 broken 维度</strong>，但有 8 条 critical（去重后 7 条），因此落 Poor。这不代表 PRD 写得草率：三名评审员一致认为其思考质量高于同类文档平均水平。Poor 反映的是「距离可交付下游拆 story 还差多少」，不是「写得多烂」。</p>
+      <p>这是一份<strong>思考质量明显高于平均、但工程可用性尚未达标</strong>的 PRD 集。它有真实的战略论点（复购引擎而非货架），并愿意为论点付出代价——FR-110 主动禁掉问诊侧荐货变现、FR-93 主动砍掉搜索框，理由都写在正文里；decision-log 的 L-7 甚至把自己初稿的「单笔上限 = 浮存阀门」判定为错误论证并连带推翻三处结论。theater 几乎为零。但它<strong>不可直接交给下游拆 story</strong>：① 版本自称的存在理由（复购引擎）建立在三个数据输入上，其中两个在代码中不存在，PRD 正文却把它们声明为「V1.0.0 已有」；② §4 三张状态机不穷尽——<code>已送达</code> 的进入条件依赖被明确排除的承运商 API，部分退款在订单状态机中无表达，拒收 / 驳回回边 / 采购入库多条必然发生的转移在图上不存在；③ 花约 100 行把 PawCoin 混合支付的七条规则论证得极细，却漏掉了取整规则、用户能否选择不用 Coin、以及归因属性——而后者恰恰使 AB-13B 那个「判定版本成败的直接依据」在埋点 schema 上无法计算。</p>
+      <p>两名额外评审员显著改变了图景，方向不同但都指向同一结论。<strong>adversarial</strong> 把火力集中在「能不能跑起来」：退货寄回环节（寄到哪、怎么计费）在两份文档中整体缺失，而 FR-100A 规则 3 与 AB-12C 都在按它算钱；本版本首次建立 PII 数据集却零合规覆盖，DEP-1~8 无一条涉及印尼 UU PDP；FR-102 的订单号 <code>TT+YYYYMMDD+8位自增</code> 直接违反 CLAUDE.md「对外标识一律不可枚举」的强制护栏，<strong>且被 PRD 当成优点写</strong>。<strong>跨文档一致性</strong>评审员的结论则是分裂的：资金与售后链对得极齐（措辞逐字互锁），履约与状态机链却是断的；它还用交叉表抓出了另外两名评审员都不易发现的一类错误——<strong>用户端 4 处 FR 编号整体偏移一位，而后台在同一位置引的是正确编号</strong>，两边各自读都通顺、合起来读却指向不同条目。</p>
+      <p><strong>结论：返工后可进入 <code>bmad-ux</code> / <code>bmad-architecture</code>，返工是「补」不是「重写」。</strong>必须闭合的最小集：CODE-1 混合支付模型选型（架构）、CODE-3 的 FR-108 范围二选一（产品）、4 处交叉引用偏移、<code>已发货</code> 死锁与状态机缺边、部分退款的状态表达、AB-12C 溢价单/双值矛盾、埋点归因属性、混合支付取整规则。</p>
+    </div>
+
+    <div class="mechanical" style="margin-top:0;margin-bottom:24px;">
+      <h3>§4 五处代码偏差的正式承接（README §11 的核心诉求）</h3>
+      <p style="margin:0 0 10px;">README §4 的五处「PRD 假设 vs 当前代码」偏差已作为<strong>既定事实</strong>喂入全部三名评审员，未被重新发现，而是被承接进各自的评审维度。建议的正式编号如下——<code>decision-log.md</code> §三现为「与既有文档的矛盾 / 缺口」（L-1~L-7），把标题扩为「<strong>与既有文档 / 代码的矛盾 · 缺口</strong>」，五条顺延为 L-8~L-12 即可，不必新开命名空间。</p>
+      <ul>
+        <li><strong>CODE-1</strong>（混合支付与 <code>PaymentIntent</code> 冲突）→ <strong>L-8 + D-9 / OQ-35</strong>，需<strong>架构</strong>二选一 · 本次落为 rubric <em>critical</em>（Shape fit）：FR-100「不新建支付通道」把最高风险项写成零成本复用</li>
+        <li><strong>CODE-2</strong>（<code>PetProfile</code> 无体重）→ <strong>L-9</strong>，直接排 story（绝育字段是否一并加需产品一句话）· 本次落为 rubric <em>critical</em>（Substance）：FR-107 数据源写「V1.0.0 FR-11 已有」，实为不存在</li>
+        <li><strong>CODE-3</strong>（<code>HealthRecord</code> 无周期/到期）→ <strong>L-10 + D-10 / OQ-36</strong>，需<strong>产品</strong>拍板（范围问题）· 本次落为 rubric <em>critical</em>（Decision-readiness）：范围二选一根本没进 OQ 表</li>
+        <li><strong>CODE-4</strong>（单账号单宠物硬约束）→ <strong>L-11</strong>，epics 标注「1.3.0 后启用」· 本次落为 rubric <em>high</em>，并<strong>额外发现</strong> PRD 用了本仓不存在的编号格式 <code>FR-1.2.0</code></li>
+        <li><strong>CODE-5</strong>（<code>AppTab</code> 无预留位）→ <strong>L-12</strong>，已归 <strong>DEP-1</strong> · 本次落为 rubric <em>high</em>：确认为 PRD 内部自相矛盾，且它决定 §5 基线埋点的对象</li>
+      </ul>
+      <p style="margin:10px 0 0;">做完这一步，README §4 即可按其 §11 自述<strong>退化为历史记录</strong>。三名评审员在 CODE 之外的独立发现共 <strong>123 条</strong>，构成本报告主体。</p>
+    </div>
+
+    <div class="dimension-summary">
+      <div class="dim-card">
+        <div class="dim-name">Decision-readiness</div>
+        <div class="dim-verdict" style="color: var(--verdict-adequate)">adequate</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">Substance over theater</div>
+        <div class="dim-verdict" style="color: var(--verdict-strong)">strong</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">Strategic coherence</div>
+        <div class="dim-verdict" style="color: var(--verdict-adequate)">adequate</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">Done-ness clarity</div>
+        <div class="dim-verdict" style="color: var(--verdict-thin)">thin</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">Scope honesty</div>
+        <div class="dim-verdict" style="color: var(--verdict-adequate)">adequate</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">Downstream usability</div>
+        <div class="dim-verdict" style="color: var(--verdict-thin)">thin</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">Shape fit</div>
+        <div class="dim-verdict" style="color: var(--verdict-thin)">thin</div>
+      </div>
+    </div>
+
+    <!-- ============ 1. Decision-readiness ============ -->
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>1 · Decision-readiness — 决策可行动性</h2>
+          <span class="verdict-pill verdict-adequate">adequate</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>决策以决策形式出现，且带日期与承担者：FR-100A 规则 1「不提供退回真钱选项」、规则 7「补偿走 Coin 侧溢价，不开退现金的口子」、FR-97「不预留会员价字段，避免为暂缓功能提前埋成本」。取舍写明了<strong>放弃了什么</strong>而不只是选了什么。§1「范围性质说明」直接给出排期取舍的优先级方向（压缩目标 1，不压缩目标 2），这是决策者真正能用的东西。L-7 的自我更正尤其加分——一份敢于写「原文误将其论证为浮存的前置阀门」并连带推翻三处结论的 PRD，其余论证的可信度也随之提高。</p>
+            <p>扣分主要来自三处：<strong>最该被拍板的事没有出现在待拍板表里</strong>（FR-108 的范围二选一）；<strong>OQ-27/28/29 是等着盖章而非真正开放</strong>的条目——「现状建议」栏即答案、责任方均为产品自身；<strong>没有目标值</strong>——A-16 的判据是「若触发卡点击率不<em>显著</em>高于普通商品曝光」，「显著」没有数值、没有观察窗口、没有不达标时的处置。对一个把版本存在意义押在单一机制上的 launch 级 PRD，缺 kill criteria 是硬伤。</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-critical">critical</span>
+              <h3 class="finding-title">CODE-3 · FR-108 的范围二选一未登记为待拍板项</h3>
+              <span class="finding-location">§3.9 FR-108 / §9 / §8</span>
+            </header>
+            <div class="finding-note">FR-108 数据源写为「FR-45A 结构化健康记录 <strong>+ 1.2.0 健康提醒的间隔配置</strong>」，后半截在代码中不存在（<code>HealthRecord.java</code> 仅有 <code>eventDate</code>）。PRD 正文把 FR-108 写成已定型功能，§9 OQ 表与 §8 依赖表均未收录——决策者读 PRD 无从得知复购引擎三条机制里有一条悬空。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 新增 OQ-36「FR-108 的到期判定间隔从哪来」，两选项按 README §4③ 原样列出（(a) 依赖 1.2.0 先落地、本版本降级不做；(b) 本版本自带犬猫驱虫/疫苗常规间隔默认表，作为 1.2.0 的前置资产），责任方=产品；§8 加一条跨版本依赖行。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">版本没有成功指标目标值与 kill criteria</h3>
+              <span class="finding-location">§1 / §5 / A-16 / AB-13B</span>
+            </header>
+            <div class="finding-note">§1 目标 2 称复购引擎是「版本存在的意义」，但全文没有任何数字门槛。上线后没有任何一句话能裁决「复购引擎是否成立」。</div>
+            <div class="finding-fix"><strong>Fix:</strong> §1 后增补 Success Metrics（建议 SM-1~SM-4 编号以便下游引用）：触发卡→成单转化率相对全站的倍数门槛、30 日复购率目标、观察窗口（建议 8 周）、不达标处置；A-16 的验证方式指向该 SM。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">A-17 比 decision-log 更不诚实，掩盖了已失效的缓释措施</h3>
+              <span class="finding-location">§10 A-17 ↔ decision-log N-2</span>
+            </header>
+            <div class="finding-note">A-17 验证方式写「承接变现模型假设 D，属财务侧，<strong>不在本 PRD 验证</strong>」。但 N-2 明写：假设 D 的原文缓释措施是「先抽佣/代采、控自营备货」，「改为直接自营后，<strong>该缓释失效</strong>」。PRD 把一个「原有护栏已被本版本亲手拆掉」的假设写成了「照旧承接」。</div>
+            <div class="finding-fix"><strong>Fix:</strong> A-17 改写为承接 N-2 原文，致命度上调；§8 加一行「备货上限与周转纪律」（责任方=商务+财务，阻塞=首批采购）。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">OQ-27 / OQ-28 / OQ-29 是伪开放项，无截止日与默认生效机制</h3>
+              <span class="finding-location">§9</span>
+            </header>
+            <div class="finding-note">三条的「现状建议」栏即为答案，decision-log D-3/D-4/D-5 给的是同一答案，责任方均为产品自身。既不推动讨论，又抬高了开放项计数。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 改为「若 {日期} 前无异议，按现状建议执行」，或下沉进 FR 正文并从 OQ 表移除，把 OQ 表留给真正未决的项。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">DEP-7 若结论为否，降级路径未与已存在的开关关联</h3>
+              <span class="finding-location">§8 DEP-7 ↔ AB-6D</span>
+            </header>
+            <div class="finding-note">DEP-7 标注「阻塞 PawCoin 购物上线（不阻塞电商本身）」，但 PRD 没说清「不阻塞」在产品上如何实现。AB-6D 的总开关正是这个降级手段，两处却没有互相引用；AB-6D 还把该开关用途限定为「功能出故障时的一键回退」，未包含合规未决时的默认关闭。</div>
+            <div class="finding-fix"><strong>Fix:</strong> FR-100A 开头加「本节全部规则受 AB-6D 总开关控制；DEP-7 未回执前默认关闭，电商按纯 QRIS 上线」，并在 AB-6D 说明栏补上这一用途。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">承重常数「客单约 Rp 285.000」无出处</h3>
+              <span class="finding-location">FR-100A 规则 4 / OQ-33 / AB-6D / AB-6C</span>
+            </header>
+            <div class="finding-note">该数字在四处被用来论证 Rp 1.000.000 上限「几乎不会触发」，是该决策唯一的支撑，但从未标注来源。它一旦是估算值或口径不同（含运费？含 PPN？），整条论证随之松动。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 首次出现处标注来源文档与口径，或降级措辞为「按变现模型估算的客单量级」。</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <!-- ============ 2. Substance over theater ============ -->
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>2 · Substance over theater — 内容是否承重</h2>
+          <span class="verdict-pill verdict-strong">strong</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>theater 含量极低，几乎每一段都在承担工作。没有 persona 章节（增量文档合理地留给 V1.0.0），没有可平移到任何 PRD 的愿景段落，没有「系统必须可扩展/安全/可靠」式的 NFR 样板。差异化主张具体、可证伪，并且<strong>用真实代价支撑</strong>：FR-110 主动禁掉问诊侧的荐货变现，理由写明「其损失远大于电商的短期转化收益」；FR-93 主动砍掉搜索框，理由写明「搜索框会把产品心智推向通用货架」。这种「为论点付费」的写法是判断一份 PRD 有没有真实 thesis 的最好证据。</p>
+            <p>后台同样扎实：AB-10B「缺失进货价的 SKU 单独列为『成本未录』，<strong>不静默按零成本计算利润</strong>」、AB-10C「库存增加只能通过入库单，不提供直接编辑库存数字的入口」、AB-13A「补偿溢价须单列一行并计入毛利扣减——它虽以 PawCoin 形式发放、当期不流出现金，但会形成未来的兑付义务」。这些是有人真的想过运营与财务会怎么被坑之后才写得出的条款。</p>
+            <p>但有一处 substance 的空心必须点名，而且恰好落在版本的心脏上——<strong>§3.9 复购引擎的论证是悬空的</strong>；另有一处是 NFR 的<strong>缺席</strong>（不是 theater，是没有）。</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-critical">critical</span>
+              <h3 class="finding-title">CODE-2 + CODE-3 · 复购引擎的三个数据输入两个不存在，版本论证悬空</h3>
+              <span class="finding-location">§3.9 / FR-107 数据源 / FR-109 计算</span>
+            </header>
+            <div class="finding-note">FR-107 数据源写「宠物档案（物种、品种、年龄、体重、绝育状态）— V1.0.0 FR-11 <strong>已有</strong>」，但 <code>PetProfile.java</code> 无体重、无绝育；FR-109 明写「缺少任一输入时不触发，<strong>不做兜底猜测</strong>」，字段不加即<strong>恒 100% 不触发</strong>。三条机制中 FR-109 归零、FR-108 无判定源、FR-107 退化为物种过滤——即 §1 自己警告的「只做完目标 1 等于做了一个更差的 Shopee」。而 §1 与 N-1 都把复购引擎认定为「版本存在的意义」与财务月交易率缺口的答案。</div>
+            <div class="finding-fix"><strong>Fix:</strong> §3.9 节首加「前置数据资产」段，三项输入逐条列当前状态与补齐责任（体重+绝育=本版本 story；到期间隔=OQ-36；每日建议喂量=DEP-6）；FR-107 的「已有」改为「FR-11 档案模型 + 本版本新增体重/绝育字段」；§8 把 DEP-6 的阻塞面上调为「FR-109 可用性」。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">首次引入 PII 与实物履约数据，未登记进注销级联删除/匿名化</h3>
+              <span class="finding-location">§6 跨文档影响表 / FR-98 / FR-101 / FR-106</span>
+            </header>
+            <div class="finding-note">CLAUDE.md 把「注销级联删除/匿名化」（story 7.3，按 D1/D2 落实）列为三类<strong>安全攸关节点</strong>之一。§6 表未包含任何一行指向账号注销的数据生命周期处置。财务留存与用户删除权之间存在天然冲突（已完成订单需留存对账），PRD 未表态。</div>
+            <div class="finding-fix"><strong>Fix:</strong> §6 增加一行：新增表（收货地址簿 / 电商订单 / 订单地址快照 / 物流 / 评价 / 退货申请 + 凭证图）逐类标注注销时的处置（删除 / 匿名化 / 依法留存 N 年），冲突项作为 OQ 登记，责任方=Legal。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">差异化主张未给基线证据</h3>
+              <span class="finding-location">§1 目标 2 / A-15 / A-16</span>
+            </header>
+            <div class="finding-note">「这是本版本区别于 Shopee/Tokopedia 的<strong>唯一理由</strong>」是全文最重的断言，但没有引用任何现有数据支撑其可行性：当前建档率、档案里年龄/体重/健康记录的填写完整度全文未出现——<strong>而这个数今天就能查</strong>。若完整档案的用户只占个位数，复购引擎的可触达面从一开始就不成立。</div>
+            <div class="finding-fix"><strong>Fix:</strong> A-16 的验证方式前置一条「上线前基线」；若低于阈值则 FR-107 的「补全档案，推荐更准」引导卡需从辅助位提升为主动运营动作。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">FR-100A 规则 6 是全文唯一近似 furniture 的条目</h3>
+              <span class="finding-location">§3.5 FR-100A 规则 6</span>
+            </header>
+            <div class="finding-note">该规则自述「本版本无此场景，此条为防御性声明」。保留防御性声明本身合理，但它同时把措辞写坏了（见 Done-ness clarity 中的 PPN 项）。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 与那条一并改写；若只是为 DEP-7 留痕，移入 §8 DEP-7 说明栏而不占用 FR 规则位。</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <!-- ============ 3. Strategic coherence ============ -->
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>3 · Strategic coherence — 战略连贯性</h2>
+          <span class="verdict-pill verdict-adequate">adequate</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>thesis 清晰且贯穿：「把宠物档案转化为购买触发点」→ 由此推出不做搜索（FR-93）、SKU 上限 30、规则式而非算法推荐（FR-107）、不做优惠券会员价（FR-97）、不开放三方入驻（§7）。这是一条自洽的收敛链，不是「一堆有人想要的能力」。§1 显式声明「目标 1 是交付基础，目标 2 是版本存在的意义」并给出取舍方向——这一句比大多数 PRD 的整节优先级论述更有用。</p>
+            <p>问题在于<strong>度量层接不住战略层</strong>：AB-13B 指定的那个决定性对比，在 §5 的 13 个事件里算不出来。其次是 <strong>counter-metric 近乎为零</strong>——13 个事件里只有两个勉强算负向，本版本已知的四个自伤面一个对应事件都没有。</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">判定版本成败的决定性指标在埋点 schema 上不可计算（三名评审员独立命中）</h3>
+              <span class="finding-location">§5 ↔ AB-13B / A-16</span>
+            </header>
+            <div class="finding-note">AB-13B 把「触发卡转化率 vs 普通商品曝光转化率」列为判定 A-16 的直接依据，但 <code>order_submitted</code>（<code>order_id, amount, shipping_method</code>）与 <code>payment_succeeded</code>（<code>order_id, amount, channel</code>）均无 <code>entry_source</code> / <code>trigger_type</code>，多商品订单也无行级归因。链路只到 <code>add_to_cart</code> 为止：<strong>能算点击率，算不出转化率。</strong>考虑到 L-6 已为「基线缺失导致指标不可得」立过一次前车之鉴，这里再踩同类坑代价很高。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 给 <code>order_submitted</code> 增加行级数组属性 <code>items[]{sku_id, qty, entry_source, trigger_type}</code>，或在服务端订单行上持久化加购来源由后台直接出数（更可靠，不受客户端事件丢失影响）；AB-13B 明确转化终点定义。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">无任何 counter-metric，13 个事件只测量上行</h3>
+              <span class="finding-location">§5</span>
+            </header>
+            <div class="finding-note">四个已知自伤面全部无事件：复购推送疲劳、Tab 替换对被替换模块的伤害（§5 自己要求取基线，却没定义对照事件名）、FR-110 边界侵蚀、两类溢价发放规模（A-21 认定的真正浮存风险源）。另缺 <code>cart_viewed</code> 与超服务范围阻断事件——<strong>17 屏里专门画了「结算页超服务范围」，却没有对应埋点，这个最确定的流失点永远不可知。</strong></div>
+            <div class="finding-fix"><strong>Fix:</strong> 补 <code>repurchase_card_dismissed</code>、<code>push_permission_revoked</code>、<code>triage_to_category_jump</code>（FR-110 护栏监控）、后台侧「溢价发放额（按类型分）」日报；§5 末尾把「被替换 Tab 的对应曝光事件」写成具名事件而非泛指。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">AB-13B 的「粮量预估准确度」无数据源</h3>
+              <span class="finding-location">§5 / AB-13B</span>
+            </header>
+            <div class="finding-note">该指标口径为「预估耗尽日与实际再购日的偏差分布」，但没有任何事件或字段记录系统当时给出的预估耗尽日。</div>
+            <div class="finding-fix"><strong>Fix:</strong> <code>repurchase_card_impression</code> 增加 <code>predicted_depletion_date</code> 与 <code>days_remaining</code>，或在服务端落一张预估记录表供后台回算。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">无 SM 编号体系，成功指标散落四处</h3>
+              <span class="finding-location">§1 / §5 / §10 / AB-13B</span>
+            </header>
+            <div class="finding-note">目标在 §1、事件在 §5、假设验证方式在 §10、看板口径在 AB-13B，四处措辞不同且无编号，下游 epics 无法把 story 挂到指标上。本仓已有 FR/OQ/A/AB/DEP 五套编号，唯独缺 SM。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 建立 SM-1 起的编号，每条含口径、目标值、观察窗口、数据来源事件，并在 A-15/A-16 与 AB-13B 中反向引用。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">FR-110 被编入「§3.9 复购引擎（版本核心）」，节内语义混杂</h3>
+              <span class="finding-location">§3.9</span>
+            </header>
+            <div class="finding-note">FR-110 自述「这是一条限制性需求，不是功能」，与同节三条实现机制并列会让下游把它当成第四条机制去拆 story，或在切分 epic 时把它连同复购引擎一起降级。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 单独提为 §3.10「约束性需求」，或移入 §7 相邻位置并标注为长期约束。</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <!-- ============ 4. Done-ness clarity ============ -->
+    <section class="dimension">
+      <details open>
+        <summary>
+          <h2>4 · Done-ness clarity — 完成判据清晰度</h2>
+          <span class="verdict-pill verdict-thin">thin</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>这一维是下游拆 story 压得最重的一维，也是失分最集中的地方。先说好的：相当一部分 FR 的完成判据可测且质量上乘——FR-94/FR-98 的字段表带必填标记与长度上限；FR-94A「未选规格时加购按钮为禁用态，不默认选中第一个规格」；FR-95「购物车与结算是两次独立校验……第二次失败时明确标出是哪个 SKU 不可用，允许移除后继续下单，不整单打回」；FR-100「待支付超时 = 60 分钟」「超时前 10 分钟推送一次」；FR-104「须在商品详情页、结算页、退货申请页<strong>三处</strong>明示」。这些都能直接转成验收条件。</p>
+            <p>但<strong>越靠近钱与状态，判据越薄</strong>，而这恰好是电商最不能含糊的两处。<strong>状态机不穷尽</strong>（<code>已送达</code> 依赖被排除的能力、拒收路径不存在、部分退款无法表达、退款执行无失败分支、驳回无回边）；<strong>钱的规则缺取整、缺选择权、且有一处措辞把方向写反了</strong>。</p>
+            <p><strong>含糊措辞逐条点名：</strong>FR-95「制造<em>合理</em>紧迫感」· FR-98「剩余地址中<em>最近使用</em>的一条自动升为默认」（最近下单？最近编辑？）· AB-11B「已发货超过 <em>N 日</em>」（N 未取值）· FR-93「<em>4–6 个</em>商品」（何时 4 何时 6、不足 4 个时整区是否隐藏均未定义）· FR-93「最多 <em>2 张</em>」复购卡（三类同时命中的优先级未定义）· FR-94「富文本（图文）」（无体积/标签白名单约束）。</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-critical">critical</span>
+              <h3 class="finding-title">FR-102 的 <code>已送达</code> 依赖已被明确排除的能力，订单存在永不完成的卡死路径</h3>
+              <span class="finding-location">§4.1 / FR-102 ↔ AB-11B</span>
+            </header>
+            <div class="finding-note">状态表写「<code>已送达</code> 进入条件 = 承运商标记送达 <strong>或</strong> 后台标记」，而 FR-103「不接承运商 API」、AB-11B「首版不接承运商 API……『已送达』需后台手动标记或依赖用户确认收货」。若后台漏标且用户不点确认，订单停留 <code>已发货</code>，「送达后 7 日自动确认」无起算点，<code>已完成</code> 与退货窗口双双不可达。AB-11B 的「已发货超过 N 日未确认收货」只是待办提示，不是转移规则，且 N 无值。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 删除「承运商标记送达」这一进入条件（本版本不可用），补一条兜底自动转移：<code>已发货</code> 起 M 日（建议 7 日）无人工标记则自动置 <code>已送达</code> 并开始计时；给 AB-11B 的 N 取值并与 M 对齐。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-critical">critical</span>
+              <h3 class="finding-title">部分退款 / 部分退货在订单状态机中无表达</h3>
+              <span class="finding-location">§4.1 / FR-105 ↔ AB-12C / AB-11D</span>
+            </header>
+            <div class="finding-note">FR-105、AB-12C、AB-11D 都在按「部分退款 / 部分取消」写规则，但 §4.1 只有订单级的 <code>退款中</code> / <code>已退款</code>，一张多商品订单退掉其中一件后处于什么状态没有定义；<code>已退款</code> 作为终态更与「其余商品仍需履约」直接冲突。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 明确两级状态模型——订单级与退货申请级分离，订单在部分退款后<strong>保持原状态</strong>，仅全部行退款完成时转 <code>已退款</code>；§4.1 下补「退款单状态 → 订单状态」映射表（AB-12C 已要求不允许不一致，但没给映射）。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">混合支付按比例拆分无取整规则，可破坏 PRD 自称的闭环不变式</h3>
+              <span class="finding-location">FR-100A 规则 2 / FR-105 ↔ AB-12C</span>
+            </header>
+            <div class="finding-note">示例用 60.000/240.000 整除数掩盖了问题；IDR 不展示小数，<code>实退金额 × 固化比例</code> 必然产生余额。规则 2 明确宣称该机制「天然保证用户拿回的真钱永远不超过其投入的真钱……可用于向法务/财务说明闭环性」——<strong>取整方向选错即破坏此断言</strong>。多次部分退款的累计误差同样无规则。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 明确「现金段向下取整、Coin 段吸收全部余数」，最后一笔退款按「实付额 − 已退累计」轧差而非按比例算；AB-12C 与 AB-13D 同步口径。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">FR-100A 规则 2 未给用户「本单不使用 PawCoin」的选项</h3>
+              <span class="finding-location">FR-100A 规则 1+2 / FR-97</span>
+            </header>
+            <div class="finding-note">「余额优先全额抵扣，差额由 QRIS 补足」是无条件的，结算页只被要求「同时展示两段金额」，没有开关。叠加规则 1（Coin 段只退 Coin），每一单都在把用户账上「本可退现金」的钱<strong>不可逆地</strong>转为「只能退 Coin」的钱，哪怕余额只有几千盾。这是一个与规则 1 的防套现目的<strong>无关</strong>的独立产品决策，却被当作实现细节隐含掉了。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 结算页增加显式开关（默认值作为产品决策登记为 OQ）；若坚持强制抵扣，须写成显式决定并给出理由。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">FR-100A 规则 6 的措辞把 PPN 排除在禁止范围之外，读起来等于允许</h3>
+              <span class="finding-location">FR-100A 规则 6 ↔ §8 DEP-8</span>
+            </header>
+            <div class="finding-note">原文「PawCoin <strong>不可用于</strong>支付 PPN 增值税<strong>之外的</strong>任何平台外部结算」，字面含义是 PPN 可以用 Coin 付；而 DEP-8 正把「PPN 开票金额按零售价还是实付真钱」列为未决。<strong>一条声称防御性的条款反而写成了未经拍板的授权。</strong></div>
+            <div class="finding-fix"><strong>Fix:</strong> 改为「PawCoin 不可用于任何平台外部结算（含 PPN 等税费）」，或若确实允许 Coin 覆盖含税零售价，改写为正向表述并在 DEP-8 中明确该口径。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">FR-108 无触发提前量，同节 FR-109 有</h3>
+              <span class="finding-location">§3.9 FR-108 vs FR-109</span>
+            </header>
+            <div class="finding-note">FR-109 明写「耗尽日前 <strong>7 天</strong>开始」，FR-108 只写「当健康提醒判定某项临近到期时」——「临近」是多少天没有定义，而这正是与 CODE-3 叠加后最容易被实现者临场编造的数值。频控（30 日一次）反而定义了。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 给出提前量（驱虫/疫苗各自取值，或统一 7 日与 FR-109 对齐），并明确到期后仍未处理时是否重复提醒。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">「签收」未定义，与 <code>已送达</code> / <code>确认收货</code> 三词混用，退货窗口起算点歧义（三名评审员独立命中）</h3>
+              <span class="finding-location">FR-102 / FR-104 / §4.1 / OQ-27</span>
+            </header>
+            <div class="finding-note">FR-104 时限栏写「<strong>签收后</strong> 7 日内」，FR-102 状态名是 <code>已送达</code>、终态是用户「确认收货」，§4.1 又写「<code>已完成</code> 在签收 7 日内仍可转 <code>退款中</code>」。<strong>「签收」既未在术语表定义，也不是任何一个状态名。</strong>7 日窗口从送达日还是确认日起算，相差最多 7 天；而 OQ-27 讨论的正是「7+7 叠加是否过长」——<strong>起算点不定，这条 OQ 本身无法回答</strong>。既然不接承运商 API，签收时间无从采集，实现层只能落成「以后台标记时间为准」——用户的 7 天权利长度由运营的手速决定。</div>
+            <div class="finding-fix"><strong>Fix:</strong> §2 术语表定义「签收 = 订单进入 <code>已送达</code> 的时刻」，全文统一措辞并据此重写 FR-102 后果与 §4.1；AB-12A 队列加「退货窗口截止时间」字段与超窗拦截；D-3/OQ-27 的问题描述需先修订再拍板。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">无仓库/发货地模型，「同城 Kecamatan」不可判定</h3>
+              <span class="finding-location">FR-99 ↔ AB-10C / AB-11C</span>
+            </header>
+            <div class="finding-note">FR-99 规定当日达适用范围为「服务范围内的<strong>同城</strong> Kecamatan」，但两份文档从未定义发货地：AB-10C 入库单无仓库字段，AB-11C 的运费表是「配送方式 × 区域」二维、无发货侧维度。实现者无法判定任一地址是否可选当日达。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 引入单仓假设并写死（「本版本仅一个发货仓，位于 {Kecamatan}」），当日达资格改为「收货 Kecamatan ∈ 后台配置的当日达可达列表」（配置项加入 AB-11C）；多仓明确列入 §7。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">原始运费（去程）在部分退货时是否退回无规则</h3>
+              <span class="finding-location">FR-104 / FR-105 ↔ AB-12A</span>
+            </header>
+            <div class="finding-note">FR-104 的表格是<strong>回程</strong>运费的归属规则，FR-105 却写「运费是否退回按 FR-104 的运费归属规则判定」——把<strong>去程</strong>运费的退回问题指向了一张只讲回程的表。多商品订单只退一件时，已支付的去程运费该退多少（全退/不退/按比例）没有答案，而这笔钱同样要参与 PawCoin/QRIS 比例拆分。</div>
+            <div class="finding-fix"><strong>Fix:</strong> FR-104 表格下补一行去程运费规则（建议：整单退→全退；部分退→不退，并在退货申请页明示），AB-12A 的运费归属判定拆为「去程/回程」两项。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">FR-109 公式漏掉购买数量</h3>
+              <span class="finding-location">§3.9 FR-109</span>
+            </header>
+            <div class="finding-note"><code>预计可用天数 = SKU 净含量(克) ÷ 日喂量</code>，未乘以本次购买件数。一次买两袋的用户会在第一袋用完时就收到补货卡，且 §5 无法区分这是预估错误还是用户行为。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 改为 <code>(SKU 净含量 × 购买数量) ÷ 日喂量</code>；补一句多宠物共食时不触发或按当前选中宠物计算（与 CODE-4 联动）。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">FR-93 补货区「最多 2 张」缺三类触发同时命中时的优先级</h3>
+              <span class="finding-location">§3.1 FR-93 区域① / FR-108 / FR-109</span>
+            </header>
+            <div class="finding-note">驱虫、疫苗、粮量三类可同时成立，区域①只放 2 张，孰先孰后未定义；且疫苗触发按 FR-108 跳转健康模块而非商品，是否应占用这 2 个位也未表态。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 给出优先级（建议 粮量 &gt; 驱虫 &gt; 疫苗，理由是前者时效最硬、后者本就不带交易），并说明疫苗卡是否计入上限。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">「4–6 个」的取数规则与不足下限时的行为未定义</h3>
+              <span class="finding-location">§3.1 FR-93 区域② / FR-107 步骤 4</span>
+            </header>
+            <div class="finding-note">两处都写 4–6 个，但没说何时取 4、何时取 6，也没说命中商品少于 4 个（SKU 上限 30、四品类、三重过滤后极易发生）时区域②是隐藏、补位还是照常展示 N 个。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 改为「最多 6 个，少于 2 个时整区不渲染并回落到区域④」之类的确定规则。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">FR-95 的「服务端原子扣减」与 AB-11D 承认超卖之间没有口径</h3>
+              <span class="finding-location">FR-95 ↔ AB-11D</span>
+            </header>
+            <div class="finding-note">两句只能同时成立于「原子性有边界」的前提下，而该边界（隔离级别、是否允许可售库存瞬时为负、超卖容忍度目标）未声明；用户侧在超卖已发生（已付款但无货）时的处置流程也完全缺失。</div>
+            <div class="finding-fix"><strong>Fix:</strong> FR-95 补一句不变式（如「以行级条件更新实现，可售库存不得为负，超卖目标为 0」），新增用户侧处置：超卖订单由后台发起整单/部分取消 + 全额退款 + 回告理由，并在 §4.1 标出该边。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">收货地址是否随订单快照固化未声明</h3>
+              <span class="finding-location">FR-98 ↔ AB-11A</span>
+            </header>
+            <div class="finding-note">地址簿可编辑可删除（上限 20 条、可删默认），AB-11A 要求「订单详情展示完整收货地址」，但没有一句说明订单持有的是快照还是引用。用户在发货前修改或删除地址时已成立订单的收货信息会不会变，直接影响履约。</div>
+            <div class="finding-fix"><strong>Fix:</strong> FR-98 补「下单时对地址做快照，后续编辑/删除不影响已成立订单」；「发货前修改订单地址」明确支持或写入 §7。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">AB-6D 两个开关关闭时的用户端行为未定义</h3>
+              <span class="finding-location">AB-6D ↔ FR-100A</span>
+            </header>
+            <div class="finding-note">后台定义了「电商 PawCoin 支付总开关」与「是否允许 PawCoin 抵扣运费」，但用户端 FR-100A 把规则 3（运费可用 Coin）写成无条件规则，也没描述总开关关闭时结算页长什么样、与规则 5（充值暂停但消费可用）在界面上如何区分。运费开关关闭还会改变比例拆分的基数。</div>
+            <div class="finding-fix"><strong>Fix:</strong> FR-100A 补一小节「开关关闭时的表现」，逐个描述结算页与退款页的降级形态，并说明运费开关关闭时比例基数改为「不含运费的商品小计」。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">FR-106 评价的可修改性与边界情况未定义</h3>
+              <span class="finding-location">§3.8 FR-106</span>
+            </header>
+            <div class="finding-note">「每个订单每个 SKU 各评一次」是可测的，但评价能否修改/删除、已退款或退货中的商品能否评价、评价被审核拦截后用户是否收到告知，均未定义。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 补三句：不可修改不可删除（或 N 日内可改一次）、已全额退款的行不可评价、拦截时复用既有审核告知机制。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">失效商品在恢复后的行为未定义</h3>
+              <span class="finding-location">§3.3 FR-96</span>
+            </header>
+            <div class="finding-note">失效分区含「已下架、已售罄」两类，售罄是可逆的，但商品补货后购物车中的该行是否自动移回有效区没有说明；「清空失效商品」是否连同可恢复的售罄项一并清掉也没说。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 明确「售罄恢复后自动移回有效区，下架不可逆」。</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <!-- ============ 5. Scope honesty ============ -->
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>5 · Scope honesty — 范围诚实度</h2>
+          <span class="verdict-pill verdict-adequate">adequate</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>§7「非本版本范围」做了真实的工作：6 条排除项每条都带理由或指向。更值得肯定的是<strong>散落在正文里的就地排除</strong>——FR-99「超重/超体积附加费：首版不做」并给出为什么可以不做、FR-103 的分期理由、FR-106「首版不做追评、不做商家回复」并给出成本论证、AB-12D「首版不引入第三方质检」。这类「排除 + 触发再做的条件」的写法，正是 Non-Goals 应有的样子。</p>
+            <p>失分在于<strong>披露的位置不对，以及三个应排未排的洞</strong>。最关键的：5 处代码偏差与 4 项高阻塞依赖的真实严重度，只活在 README §4/§5 与 decision-log 里——而下游读的是 PRD。三个洞：PPN 与发票在用户端完全缺席、是否支持行级部分退货未表态、超卖后的用户侧处置缺失。</p>
+            <p>开放项密度对 launch 级偏高：去重后约 24–26 项，问题不是数量而是<strong>高阻塞项全部压在版本主线上</strong>（CODE-1 阻塞退款/对账全链、CODE-2·3 打掉复购引擎 2/3、DEP-1 阻塞入口定稿、DEP-3 阻塞上线）。README §10 给出的推进顺序是对的，<strong>但那份顺序不在 PRD 里</strong>。</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">5 处代码偏差与 4 项高阻塞依赖只活在 README / decision-log，PRD 正文承载的是乐观图景</h3>
+              <span class="finding-location">§8 / §9 / FR-100 / FR-107 / §3.1</span>
+            </header>
+            <div class="finding-note">README §11 自述报告跑完后「§4 退化为历史记录」，即偏差应回写 PRD；而 PRD 正文当前写的是 FR-100「复用 FR-43 通用支付组件，不新建支付通道」、FR-107「V1.0.0 FR-11 已有」、FR-93「已预留的位置」「复用多宠物管理已有的全局当前宠物概念」——<strong>四处都与代码相反。下游只读 PRD 即失明。</strong></div>
+            <div class="finding-fix"><strong>Fix:</strong> §8 新增「代码前置项」段，把 CODE-1~CODE-5 逐条登记（含 README §4① 的架构二选一），并逐处修正正文措辞；§9 新增 OQ 承接 CODE-3 的范围二选一。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">PPN / 发票在用户端完全缺席，§7 也未排除</h3>
+              <span class="finding-location">§3.3 FR-97 ↔ §8 DEP-3 / DEP-8</span>
+            </header>
+            <div class="finding-note">DEP-3 涉及「PPN 增值税登记与开票」且标注「高，阻塞上线」、DEP-8 问「PPN 开票金额按零售价还是实付真钱」，但 FR-97 的金额明细四行<strong>没有税行</strong>，全文没有一句说明零售价是否含税，也没有任何用户侧收据/发票能力或对其的排除声明。<strong>一个被自己标注为「阻塞上线」的能力，既没有需求也没有被排除——它只是没写。</strong></div>
+            <div class="finding-fix"><strong>Fix:</strong> FR-97 明确「展示价为含 PPN 的最终应付价」（或相反），决定是否单列税额行；若本版本不提供用户侧发票能力，写进 §7 并注明触发再做的条件（DEP-3 结论）。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">是否支持行级部分退货未表态</h3>
+              <span class="finding-location">§3.7 FR-104 vs FR-105 ↔ AB-12A / AB-12C</span>
+            </header>
+            <div class="finding-note">FR-105 与 AB-12C 都在为「部分退款」定规则，FR-104 的申请流程与 AB-12A 的队列字段（「商品/SKU」单值）却更像整申请粒度。这直接决定订单状态机的复杂度与退款拆分的实现形态。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 明确表态：支持行级选择但每张订单同时仅允许一个进行中的退货申请（建议），或明确不支持并写入 §7。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">超卖发生后的用户侧处置缺失</h3>
+              <span class="finding-location">AB-11D ↔ FR-95</span>
+            </header>
+            <div class="finding-note">后台有异常订单视图，用户端没有对应流程：已付款但无货的用户如何被告知、是否自动全额退款、多久内处理，均无规定。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 见 Done-ness 中相应条目，此处仅需在 §7 或 FR-95 明示归属。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">无内联 <code>[ASSUMPTION]</code> / <code>[NOTE FOR PM]</code> 标记，§10 假设索引无法回溯正文</h3>
+              <span class="finding-location">§10 / 全文</span>
+            </header>
+            <div class="finding-note">§10 列了 A-15~A-21 共 7 条假设，但正文中没有任何一处内联标注这些假设影响了哪条 FR。roundtrip 单向断裂：索引存在、内联不存在。例如 A-19 实际锚定 FR-99、A-18 锚定 FR-104，<strong>读 FR 的人看不到自己正踩在一条未验证假设上</strong>。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 在受影响的 FR 后果段落加内联标记（如 FR-99 末尾 <code>[ASSUMPTION: A-19]</code>），至少覆盖三条高致命度假设 A-15/A-16/A-21。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">开放项密度对 launch 级偏高，且高阻塞项集中在主线</h3>
+              <span class="finding-location">§8 / §9 / §10 + decision-log</span>
+            </header>
+            <div class="finding-note">去重后约 24–26 项开放项，其中 CODE-1、CODE-2/3、DEP-1、DEP-3 四项同时压在版本骨架上。PRD 本身没有闭合顺序与时间线。</div>
+            <div class="finding-fix"><strong>Fix:</strong> §8 前增加「开工前置闭合顺序」一节，承接 README §10 的排序并给每项标注目标闭合日与阻塞的下游产物（架构 delta / UX / epics），使 PRD 自身可作为 go/no-go 依据。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">订单侧无联系客服入口</h3>
+              <span class="finding-location">§3.6 FR-101 / FR-102 / §3.7 FR-104</span>
+            </header>
+            <div class="finding-note">退货走 AB-5E/AB-5B 工单复用，但用户端订单卡片与详情的「主操作按钮」清单里没有任何联系客服/申诉入口；已发货丢件、地址填错等不属退货的场景无出口。</div>
+            <div class="finding-fix"><strong>Fix:</strong> FR-101 的按钮清单补「联系客服」（复用 FR-52 工单入口）并说明哪些状态下出现。</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <!-- ============ 6. Downstream usability ============ -->
+    <section class="dimension">
+      <details open>
+        <summary>
+          <h2>6 · Downstream usability — 下游可用性</h2>
+          <span class="verdict-pill verdict-thin">thin</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>本维在 chain-top 场景下权重最高。基础条件是具备的：§2 有术语表，FR-93~110 连续唯一无重号，后台四段各自连续、AB-6D 追加位置正确，编号延续规则在两份文档的 §0 都做了显式交代——这在多版本并行的仓库里很有价值。后台对用户端 FR 的引用密度也高且大多可解析。</p>
+            <p>但有三处会直接损坏下游自动化：<strong>4 处 FR 交叉引用系统性 +1 偏移</strong>（可解析但解析到错误对象，比断链危险，因为不会报错）；<strong>两份文档没有任何 User Journey</strong>（新引入下单/支付/收货/退货四段全新流程，牵动用户、CS、财务三类角色）；<strong>用户端定义、后台未实现的配置项</strong>，以及缺少 FR↔AB 对照表。</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-critical">critical</span>
+              <h3 class="finding-title">4 处 FR 交叉引用系统性 +1 偏移，与后台的正确引用互指不同条目</h3>
+              <span class="finding-location">§2:42 / §3.1:60 / §3.2:98 / §3.2:102 ↔ AB-10A:41,43 / AB-10B:51</span>
+            </header>
+            <div class="finding-note">「复购触发卡……驱动（FR-109/FR-110）」应为 FR-108/FR-109；「按档案推荐（FR-108）」应为 FR-107；「用于 FR-108 档案推荐过滤」应为 FR-107；「<strong>FR-110</strong> 粮量见底预估的计算依据」应为 FR-109。<strong>后台在同一件事上引的全是正确编号</strong>，两边各自读都通顺、合起来读指向不同条目。三处错误都把指针挪到 FR-110 这条<strong>约束性需求</strong>上——而 N-3 认定它优先于一切转化优化。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 四处逐一改正，改完跑一次 <code>grep -o 'FR-1[01][0-9]'</code> 全量回归核对。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">两份 PRD 均无 User Journey，新流程与新角色无旅程可源提取</h3>
+              <span class="finding-location">全文 / §0 说明</span>
+            </header>
+            <div class="finding-note">新增的下单、支付、收货确认、退货寄回四段流程，以及 CS（AB-12A 双判定 + AB-12D 开封判例）、财务（AB-13A/13D）两类新角色的工作流，全部只以「功能 + 后果」条目存在。§0 声称沿用 V1.0.0 的用户旅程，<strong>但 V1.0.0 不含实物交易</strong>。CS/财务这两类没有 UI 预览的角色，连反向拼装的素材都没有。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 至少补 4 条带具名主角的 UJ：① 已建档用户被粮量触发卡带入首单（FR-109→93→94A→96→97→98→100→100A→102）；② 混合支付订单的质量问题退货（FR-104→105→100A 规则 1/2/7→AB-12A/12B/12C）；③ CS 处理一笔「开封不退」争议（AB-12A→12D）；④ 财务完成一次月度对账（AB-13A→13D→DEP-8）。②③④ 跨两份文档，正好承担跨文档一致性的验证职责。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">CODE-4 · FR-93 引用了不存在的概念，且使用了本仓不存在的编号格式</h3>
+              <span class="finding-location">§3.1 FR-93 后果末条</span>
+            </header>
+            <div class="finding-note">原文「多宠物用户（<strong>FR-1.2.0</strong> 多宠物账号管理）……选中态<strong>复用多宠物管理已有的全局当前宠物概念</strong>，不新建选择器」。代码事实是 <code>ProfileService.java:56</code> 以 <code>existsByOwnerId</code> → 409 硬约束单账号单宠物，该概念不存在；<code>FR-1.2.0</code> 也不符合本仓 <code>FR-&lt;数字&gt;</code> 格式，无法解析。虽不阻塞，但「复用已有」的措辞会让实现者去找一个找不到的东西。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 改写为「本版本按单宠物实现，区域①② 直接使用该用户唯一宠物；多宠物待 1.3.0 落地后按其全局当前宠物概念接入（<strong>1.3.0 后启用</strong>）」，去掉非法编号（改为指向 Roadmap 条目）。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">FR-107 定义了后台未实现的配置项（年龄段阈值）</h3>
+              <span class="finding-location">§3.9 FR-107 步骤 2 ↔ 后台模块 10</span>
+            </header>
+            <div class="finding-note">「幼年 &lt;1 岁 / 成年 1–7 岁 / 老年 &gt;7 岁，犬猫阈值<strong>可后台配置</strong>」，但 AB-10A~10D 的字段与配置清单中没有年龄段阈值配置。属「一方定义、另一方未实现」，且犬猫分段差异很大（猫的「老年」通常 &gt;10 岁），首版就会需要调。</div>
+            <div class="finding-fix"><strong>Fix:</strong> AB-10D 或新增 AB-10E「推荐规则配置」补该配置项，或 FR-107 改为写死阈值并在 §7 明确不做配置化。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">无 FR ↔ AB 双向对照表，三人并行下追溯成本高</h3>
+              <span class="finding-location">两份文档 §0</span>
+            </header>
+            <div class="finding-note">互相引用密集（FR-100A ↔ AB-6D/AB-6A、FR-95 ↔ AB-10C、FR-105 ↔ AB-12C、FR-109 ↔ AB-10B），但没有任何一处给出汇总映射。README §6 显示本版本与另两位同事并行、共享 <code>OrderCenterService</code> 与三个枚举，追溯需求尤其强。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 在用户端 §6 后或后台 §6 增加一张 FR→AB 对照表（含反向未覆盖列），可直接作为 epics 阶段的拆分依据与并行冲突检查表。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">§5 埋点未声明 PII 禁入规则，与项目硬护栏冲突</h3>
+              <span class="finding-location">§5</span>
+            </header>
+            <div class="finding-note">本版本首次采集姓名/手机号/详细地址，§5 定义了 13 个上报事件却没有一句规定哪些字段禁止进入 PostHog。CLAUDE.md 将「严禁记录 PII / 健康数据 / 令牌 / 签名 URL」列为强制护栏，而 <code>repurchase_card_impression</code> 还带 <code>pet_id</code>（关联健康数据语义）。</div>
+            <div class="finding-fix"><strong>Fix:</strong> §5 增加属性规约：禁止上报姓名/手机号/详细地址/邮编；<code>pet_id</code> 明确为不可反查的内部标识；商品图/凭证图仅传 id 不传签名 URL。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">§3.1 FR-93A 的章节引用错误</h3>
+              <span class="finding-location">§3.1 FR-93A 第 3 条:81</span>
+            </header>
+            <div class="finding-note">「Tab 切换需上报埋点（V1.1.2 起底部 Tab 切换已改为手动上报，<strong>见 §6</strong>）」，但埋点在 §5，§6 是「跨文档影响说明」。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 改为 §5。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">OQ 编号跨两份文档且顺序错乱，A 编号顺序错乱</h3>
+              <span class="finding-location">§9 / 后台 §8 / §10</span>
+            </header>
+            <div class="finding-note">§9 排列为 OQ-25、26、<strong>33、34</strong>、27、28、29，后台为 30–32；§10 为 A-15、16、17、<strong>20、21</strong>、18、19。整体连续无重号，但新增项插在了中间，人工与自动比对都会出错。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 按编号升序重排两张表；后台 OQ 表补一句「OQ-30~32 属后台，与用户端 OQ 同一命名空间」。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">术语漂移四处</h3>
+              <span class="finding-location">§2 与全文 / 两份文档间</span>
+            </header>
+            <div class="finding-note">①「运营权重」（FR-107）vs「精选权重」（AB-10A/10D）指同一物；②「品类」vs「分类入口」；③「规格 / SKU / Varian」三词交替使用；④ 退货类型枚举「<strong>待</strong>发货前取消」（FR-100A 规则 7 表）vs「发货前取消」（AB-12A）。</div>
+            <div class="finding-fix"><strong>Fix:</strong> §2 补入「精选权重」并统一使用；②③ 各取一词写入术语表；④ 统一枚举字面值——<strong>枚举值会直接落库为 varchar，措辞不一致会变成两个值</strong>。</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <!-- ============ 7. Shape fit ============ -->
+    <section class="dimension">
+      <details open>
+        <summary>
+          <h2>7 · Shape fit — 形态匹配度</h2>
+          <span class="verdict-pill verdict-thin">thin</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>作为 brownfield 增量文档，形态选择大体正确：轻量结构、显式声明「不重复 V1.0.0 已写明的产品愿景、用户旅程和术语表」、只写新增/变更、编号从既有最大值延续、§6 用一张表登记对既有文档的回写要求——这套做法与仓库既有的 v1.1 / v1.1.2 delta 惯例一致。作为 chain-top，它对下游的意识也是有的：§8 依赖表标了责任方与阻塞程度，§5 主动要求埋点先行发版取基线（并引用 V1.1.2 的真实翻车教训 L-6）。</p>
+            <p>但 rubric 对 brownfield 的硬条是「<strong>existing-code references must be accurate</strong>」，而这正是最失分之处——五处代码偏差全部落在这一条上，且其中两处不是「信息滞后」而是<strong>把最高风险项写成了零成本复用</strong>。</p>
+            <p>另有一处形态观察：<strong>篇幅分配与重要性排序相反</strong>。FR-100A 约占 100 行，是全文最长最细的一节；而被 §1 与 N-1 共同认定为「版本存在意义」的复购引擎三条加起来约 50 行。这不是说 FR-100A 写多了——它写得确实好——而是说注意力流向了争议最多的地方，而非最承重的地方。</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-critical">critical</span>
+              <h3 class="finding-title">CODE-1 · FR-100 把需要改共享支付基座的最高风险项写成零成本复用</h3>
+              <span class="finding-location">§3.5 FR-100 首句 / FR-100A 规则 2 / FR-105 ↔ AB-12C / AB-13D</span>
+            </header>
+            <div class="finding-note">原文「复用 FR-43 通用支付组件，<strong>不新建支付通道</strong>」。代码事实：<code>pay/domain/PaymentIntent.java</code> 为严格单渠道单金额模型（<code>channel</code> 单值枚举、<code>amount</code> 单值、两者 <code>updatable=false</code>；<code>PayChannel</code> 仅 {QRIS, PAWCOIN}），无法表达混合支付与「下单时固化比例」。影响面覆盖 FR-100A 全 7 条规则、FR-105、AB-12C、AB-13D。<strong>PRD 未暴露该分叉，架构评审若只读 PRD 会直接跳过它。</strong></div>
+            <div class="finding-fix"><strong>Fix:</strong> FR-100 首句改为「支付通道复用 FR-43，但<strong>混合支付需扩展支付模型</strong>，方案二选一待架构 delta 拍板」，并把 README §4① 的两个候选（(a) 扩展 <code>PaymentIntent</code> 加 coin/cash 两段金额列 + 比例固化列；(b) 电商侧自建支付拆分表、同一订单起两笔 intent）连同各自代价原样写入 §8；§9 登记为 OQ 并标注「不闭合则相关 story 无法开写」。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">CODE-5 · PRD 内部两处措辞自相矛盾，且与代码事实不符</h3>
+              <span class="finding-location">§3.1 FR-93 首段 vs §5 埋点章节</span>
+            </header>
+            <div class="finding-note">§3.1「占用底部 Tab Bar 中<strong>已预留的位置</strong>」与 §5「电商 Tab <strong>会替换掉一个既有 Tab</strong>，面临完全相同的风险」不能同时成立；<code>bottom_tab_bar.dart:18</code> 的 <code>AppTab</code> 为 4 值 + 中间 [+] 发布按钮，无空位。这一矛盾还直接决定 §5 基线埋点的对象，以及 DEP-1 的问题陈述是否成立。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 统一为「替换其一 或 扩为 5 Tab（挤压 [+]）」的待定表述；§5 基线要求改为「被替换 Tab 一经 DEP-1 确定，其曝光/使用事件须与 <code>toko_tab_viewed</code> 同批先行发版」；<strong>DEP-1 的描述中补上「当前无空位」这一事实，使承接方拿到的是问题而非误判前提</strong>。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">架构选型分歧点不在 PRD 内，chain-top 链条会在第二环断</h3>
+              <span class="finding-location">§8 ↔ README §4① / README §6</span>
+            </header>
+            <div class="finding-note">除 CODE-1 的支付模型二选一外，README §6 的三人并行护栏（Flyway 独占号段、三个共享枚举只可追加、<code>OrderCenterService</code> 纯追加式改法、App 端共享壳只追加）同样是架构 delta 的输入，且 README 自述「须三人共同确认，不是单方面写」。<strong>这些全部不在两份 PRD 中。</strong></div>
+            <div class="finding-fix"><strong>Fix:</strong> §8 增补「架构前置决策」行指向待建的 <code>architecture-v1.4.0-delta.md</code>，列明必须在其中拍板的三项（混合支付模型、Flyway 号段、共享枚举/聚合器的追加约定）；或按 README 建议先落 <code>PARALLEL-DEV-CONTRACT.md</code> 并在 PRD 中引用。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">篇幅密度与重要性排序相反</h3>
+              <span class="finding-location">§3.5 FR-100A ≈100 行 vs §3.9 FR-107/108/109 ≈50 行</span>
+            </header>
+            <div class="finding-note">被认定为版本存在意义的复购引擎，规格密度显著低于一条支付方式的使用规则：FR-108 无提前量、FR-107 的取数规则含糊、FR-109 公式漏数量。反观 FR-100A 连取整之外的每个边角都有论证。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 不必压缩 FR-100A；把 FR-107/108/109 补到同等密度（各自的触发阈值、优先级、降级路径、频控、与推送模板的关系），并按 D-5 的结论补齐与健康提醒合并推送的具体形态。</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">后台权限章节未覆盖资金杠杆类配置</h3>
+              <span class="finding-location">后台 §7 权限</span>
+            </header>
+            <div class="finding-note">§7 为模块 10–13 定义了独立角色权限并把进货价/毛利/对账单列权限位，但<strong>模块 6 扩展的三类配置（AB-6D 总开关与单笔上限、AB-6A 两条溢价比例与上限、AB-6C 浮存监控）没有任何权限声明</strong>。这几项是直接影响资金与负债的旋钮，敏感度不低于进货价。</div>
+            <div class="finding-fix"><strong>Fix:</strong> §7 补一行：AB-6D / AB-6A 溢价配置的修改权限单列，默认仅财务 + 管理层，且变更需二级确认（两者已要求写操作日志，权限位是缺失的另一半）。</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <!-- ============ Reviewer: adversarial ============ -->
+    <section class="reviewer-section">
+      <details>
+        <summary>
+          <h2>额外评审员 · Adversarial（对抗性评审，38 条）</h2>
+          <span class="reviewer-source">review-adversarial-general.md</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p><strong>方法说明：</strong>该评审方法（<code>bmad-review-adversarial-general</code>）刻意<strong>不标严重度、不排优先级</strong>——findings 一律平铺，由读者自行判断。以下保留其原始视角与语气，未作软化。CODE-1~CODE-5 未重复；与 CODE-2/CODE-3 相邻但属不同层面的三条（冷启动覆盖率、FR-109 输入齐全时仍算错、疫苗类污染 A-16 判据）已在正文标明增量所在。</p>
+            <p><strong>总体判断：</strong>两份 PRD 在「规则解释」和「决策留痕」上写得异常好，但在「<strong>能不能跑起来</strong>」上是残缺的——钱的算法在部分退款/运费/溢价三者叠加处算不平，三张状态机之间有真实的死锁与断边，而实物履约最基本的几件事（退货往哪寄、一单多包、仓库在哪、发票怎么开）压根没写、也没被 §7 排除。这不是打磨问题，是若干条必须在架构前补齐的空白。</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><h3 class="finding-title">退货寄回的物流环节整体缺失，而 FR-100A 规则 3 与 AB-12C 都依赖它算钱</h3><span class="finding-location">FR-99 / FR-104 / AB-11C / AB-12A / §4.2</span></header>
+            <div class="finding-note">两处用同样措辞写「退货运费由用户承担时，从退款金额中扣除后再退回」。但这个数从哪来？FR-99 只定义了<strong>发货</strong>方向的运费表；退货是用户自行寄快递、还是平台上门取件、<strong>寄到哪个地址</strong>、按什么标准计费——用户端与后台<strong>没有任何一处定义</strong>，AB-11C 的配置项里也没有「退货收货地址」。而 §4.2 已经画了 <code>待用户寄回 ──超时未寄回(7日)──→ 已关闭(终)</code>，<strong>却没有告诉用户寄到哪里</strong>。这是最小可售闭环的必需环节，不在 §7 排除清单、也不在 DEP-1~8 里——是被静默省略的。</div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title"><code>已发货</code> 是一个用户无操作、系统无自动出口的准死锁状态</h3><span class="finding-location">FR-102 / §4.1 ↔ AB-11B</span></header>
+            <div class="finding-note">自动通路实际不存在，<code>已发货 → 已送达</code> 100% 依赖运营手工点击。运营漏点一单，该订单永久停在 <code>已发货</code>：7 日自动确认永不启动，<code>已完成</code> 永不到达，FR-106 评价入口永不出现，FR-109 依赖「最近一次 Makanan 购买」的基准日也随之失真。AB-11B 的兜底是把一个系统性死锁<strong>降级成了人工待办清单</strong>。丢件、承运商长期不更新、用户搬家想拦截这三种在途异常，用户端<strong>没有任何入口</strong>。</div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">FR-100A 规则 2 与规则 4 直接冲突，且冲突时的行为完全未定义</h3><span class="finding-location">FR-100A 规则 2 / 规则 4 ↔ AB-6D</span></header>
+            <div class="finding-note">余额 1.5M、订单 1.2M 时，「余额优先全额抵扣」必然被上限截断，但没有一句说明此时是自动截断、拒绝下单还是提示用户。AB-6D 又把该上限做成<strong>可配置项</strong>且无最小值校验或告警——运营调到 Rp 100.000，规则 2 的「全额抵扣」就在<strong>每一单</strong>上被截断，而结算页没有任何解释截断的文案位。<strong>爆炸点在支付前的最后一屏</strong>：用户看到余额 500k 却只被抵扣 100k，且找不到原因。</div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">用户端全程没有「我不想用 PawCoin」的开关，与规则 1 的不可逆性叠加成陷阱</h3><span class="finding-location">FR-100A 规则 1+2 / FR-97 / FR-100</span></header>
+            <div class="finding-note">用户攒下的 Coin（主要来自 FR-43D 退款转入，PRD 自称「多为零头金额」，本意是留着买 Rp 18k–30k 级的问诊）会在下第一单实物时被<strong>强制吸干</strong>，且退货也拿不回选择权。PawCoin 是不可提现不可转让的封闭币，<strong>剥夺使用时机的选择权比剥夺退现金选择权更伤</strong>——而后者 PRD 专门为它设计了规则 7 的溢价补偿，前者连提都没提。</div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">FR-100A 规则 6 的第一句在合规方向上写反了，且措辞会被实现者读成授权</h3><span class="finding-location">FR-100A 规则 6 ↔ DEP-8</span></header>
+            <div class="finding-note">PPN 是缴给印尼税务机关的、最典型的<strong>平台外部现金结算</strong>，恰恰是封闭币最不该触碰的一项——用无现金垫底的赠币（规则 7 溢价）去覆盖税款，等于用负债抵扣现金义务。叠加 DEP-8 悬空，实现者会在没有财务口径的情况下按字面写出把 Coin 计入 PPN 计税或抵扣基数的分支。<strong>一句「防御性声明」写反了防御方向，比不写更糟。</strong></div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">退货运费与免运费门槛在部分退款下无分摊规则，构成可复现的套利路径</h3><span class="finding-location">FR-97 / FR-104 / FR-105 / AB-12C</span></header>
+            <div class="finding-note">用户凑单到 300k 触发免运费、收货后退掉 250k（非质量问题、未拆封）只留 50k——平台已实付承运商运费，是否向用户回收无规定。同理一笔订单发生两次部分退货（一次平台承担、一次用户承担）时，<strong>只有一份运费却要被两次判定争夺</strong>，按金额、按件数还是先到先得，PRD 没有定义。<strong>这是电商最经典的凑单-退货口子，四处均未覆盖。</strong></div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">AB-13D 的对账口径对「溢价 Coin」是错的，会把无现金垫底的负债当成有垫底的预收款核销</h3><span class="finding-location">AB-13D ↔ AB-6C / AB-13A</span></header>
+            <div class="finding-note">AB-13D 写「PawCoin 是<strong>此前已收现金的预收款核销</strong>」——这对充值币成立，对两类溢价 Coin 不成立（AB-6C 自己在同一份文档里明写它们「不像充值那样有等额现金流入垫底」）。溢价 Coin 买走一袋有真实进货成本的狗粮时，平台交付实物、支出现金、却被记为预收款核销，<strong>现金流入被虚增</strong>。要拆开必须在钱包侧区分「充值币 / 赠币」的余额批次与核销顺序，<strong>而两份 PRD 与 AB-6D 的配置项里没有任何一处要求余额分层</strong>。且 AB-13A 在发放时点计入毛利扣减、AB-13D 在核销时点按预收款处理——两个时点各记一次且口径不一致，月度毛利与现金流对不上时无从追溯。</div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">规则 7 的反刷单论证不成立，且没有任何频次风控</h3><span class="finding-location">FR-100A 规则 7 / AB-12D / AB-13A</span></header>
+            <div class="finding-note">论证依赖「小额」，但 OQ-34 给的上限是 <strong>Rp 50.000</strong>——约等于两次 AI 问诊解锁，在客单 Rp 285.000 的语境下不是小额。凭据是 ≤6 张图 + CS 主观判定，而<strong>宠物食品的「包装破损」是所有品类里最容易制造和最难证伪的一种</strong>。AB-12D 判例库是一致性工具，<strong>不是风控</strong>。两份 PRD 无任何同用户/同地址/同支付账号的退货频次限制、无溢价累计上限、无异常名单；AB-13A 只是事后报表不是拦截。</div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">两张状态机的接缝处漏了「退款被驳回」的回边，FR-102「无悬空态」按图论为假</h3><span class="finding-location">§4.1 / §4.2 / FR-102 ↔ AB-12C</span></header>
+            <div class="finding-note">§4.2 有两个 <code>已驳回(终)</code> 与一个 <code>已关闭(终)</code>，但 §4.1 中 <code>退款中</code> 只有一条出边指向 <code>已退款(终)</code>。退货被驳回后订单回到哪、7 日窗口是否重算、能否二次申请，都没写。而 FR-102 断言「终态三个，无悬空态」——<strong>按现有两张图，被驳回的订单恰恰就是悬空态</strong>。AB-12C 只约束了「订单已退款但退款单未完成」一个方向，反方向无约束。</div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">「签收」在系统中不是一个存在的事件，但退货窗口的起点挂在它上面</h3><span class="finding-location">FR-102 / FR-104 / §4.1 / OQ-27</span></header>
+            <div class="finding-note">既然不接承运商 API，签收时间根本无从采集。结果是退货窗口的起算点在实现层不存在，只能被迫落成「以后台标记送达时间为准」——而后台标记时间取决于运营什么时候点，<strong>用户的 7 天权利长度由运营的手速决定</strong>。D-3/OQ-27 在讨论「7+7 是否过长」的时候，讨论的是一个<strong>起点未定义</strong>的区间。</div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">拒收商品在流程上跳过质检，却在库存上无法入库，形成账实分离的黑洞</h3><span class="finding-location">§4.2 / FR-104 ↔ AB-12B / AB-10C / AB-13C</span></header>
+            <div class="finding-note">拒收的是<strong>已出库的实物</strong>，几天后会真实回到仓库。但 AB-12B 规定「只有质检通过的退货才进入可售库存」，AB-10C 规定「库存增加只能通过入库单」且必填「采购单号·供应商·进货单价」——拒收退回的货既没有采购单号也没有进货单价，且流程上<strong>已经跳过了质检</strong>。这批货既无法入库、也没有被记为报损。<strong>钱已退、货已回、系统里不存在</strong>，并会污染 AB-13C 的「库存金额是资金占用的直接读数」。</div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">库存状态机 §4.3 缺三条必然发生的通路</h3><span class="finding-location">§4.3 ↔ AB-11D / AB-10C / AB-10D</span></header>
+            <div class="finding-note">(a) <code>已扣减 → 可售</code> 的回退（AB-11D 的取消要把货退回可售）——顺带这句话本身暴露了 PRD 未承认的前提：<strong>系统库存与实物库存会脱节</strong>（否则「已扣减库存的订单缺货」不可能发生）。(b) 报损与盘点调整——AB-10C 明列这是库存减少的两条合法途径，§4.3 完全没有，也没有任何约束禁止把实际库存调到低于当前锁定量（<strong>这才是超卖的真实来源</strong>）。(c) 下架时锁定库存的归属——AB-10D 只处理了购物车，没处理已进入 <code>待支付</code> 的订单所锁定的库存。</div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">超卖处置在两份 PRD 之间自相矛盾，且后台只给了视图没给动作</h3><span class="finding-location">FR-95 ↔ AB-11D</span></header>
+            <div class="finding-note">如果原子扣减在提交订单锁定这一步就生效，并发路径上的超卖不可能发生——<strong>真正会超卖的是盘点/报损/退货入库撤销，而 PRD 把它归因成了并发</strong>。更要命的是 AB-11D 只定义了「视图」，<strong>没有定义任何处置动作</strong>：哪一单被取消、按什么顺序（先到先得？大额优先？）、如何通知、是否补偿、库存回补到哪里，全部空白。CS 拿到这个视图之后无章可循。</div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">锁定库存可被无成本占用 60 分钟，PRD 只论证了「别误杀」没论证「防滥用」</h3><span class="finding-location">FR-95 / FR-100 ↔ AB-11D</span></header>
+            <div class="finding-note">在 SKU 上限 30、自营备货受现金约束的前提下，单个账号或脚本反复提交不支付即可把爆款 SKU 的全部可售库存<strong>锁死 60 分钟并无限续期</strong>。两份 PRD 没有任何「同用户并发待支付订单数上限 / 单 SKU 单用户锁定量上限 / 连续超时取消后的冷却」约束，AB-11D 的异常视图也不覆盖此场景（这不是超卖）。爆炸点是<strong>上线首周的爆款断供</strong>，且 <code>out_of_stock_viewed</code> 埋点会把它记成真实缺货需求。</div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">部分发货与「包裹」概念整体缺失，而多 SKU 订单在自营下是常态</h3><span class="finding-location">FR-102 / FR-103 ↔ AB-11A / AB-11B / AB-11D</span></header>
+            <div class="finding-note">FR-99 的两档配送在物理上必然分包（7.5kg 狗粮走同城骑手件 + 一盒驱虫药，不可能同一单号），AB-11D 又明确存在「部分取消」。部分发货后订单是什么状态？部分取消后是 <code>退款中</code> 还是 <code>待发货</code>？多个单号在 FR-103 里如何呈现？「送达」以哪个包裹为准、7 日自动确认以哪个为起点？<strong>两份 PRD 一个字都没有</strong>——而 §7 排除的只是「承运商 API 实时轨迹」，不是「一单多包」。</div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">当日达的适用范围判定依赖一个从未定义的对象：平台仓库地址</h3><span class="finding-location">FR-99 ↔ AB-10C / AB-11C</span></header>
+            <div class="finding-note">「同城」是相对发货地而言的，而发货地/仓库地址在两份 PRD 里从未出现。没有发货地，结算页无法判定当日达是否可选，AB-11B 的承运商下拉与配送方式的「联动」也无从计算。首发只有一个仓时这一项可以硬编码，<strong>但 PRD 连「首版单仓」这个前提都没有写下来，架构侧会被迫自己发明。</strong></div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">FR-98 的地址字段有两处会直接导致面单被承运商拒收的模糊定义，且行政区划数据源无归属</h3><span class="finding-location">FR-98 ↔ AB-11C</span></header>
+            <div class="finding-note">手机号「+62 前缀，8–13 位」——8–13 位是含 +62 还是不含、是否允许前导 0、与账号手机号是否同一套校验全未定义；<strong>印尼手机号去 0 后常见为 9–12 位，8 位会放进大量无效号码</strong>。邮编「5 位数字」正确，但没有任何邮编与所选 Kecamatan 的一致性校验——固定运费表按 Kecamatan 计费、承运商按邮编派送，不一致时无人拦截，差额直接落在 A-19 上。更根本的是三级级联的<strong>数据来源从未指定</strong>（内置静态表？第三方 API？Kemendagri 码表？）；印尼有 7,000+ 个 Kecamatan 且持续调整，AB-11C 说服务范围「支持批量导入」，导入的主键是什么码表也没说。<strong>必须在架构前定死的外部数据依赖，DEP-1~8 里没有一条覆盖它。</strong></div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">A-19 的验证方式在系统里无数据可用，因为承运成本从未被要求录入</h3><span class="finding-location">§10 A-19 ↔ AB-11B / AB-10C / AB-13A / AB-13D</span></header>
+            <div class="finding-note">收取运费在三种情形下是三个不同的数（正常收取 / 免运费抵扣为 0 / 被 PawCoin 抵扣，收的不是现金）；而实际承运成本<strong>根本没有录入口</strong>——AB-11B 只录承运商和单号，AB-10C 只覆盖采购成本，AB-13A 的指标清单里没有「运费收入」也没有「承运成本」。<strong>A-19 声明的验证方式不可执行，而它承接的是 FR-99「省掉一整条 API 对接工期」的全部风险。</strong></div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">FR-109 的计算公式在三种主流场景下会给出确定错误的结果，而 PRD 的降级策略拦不住</h3><span class="finding-location">§3.9 FR-109</span></header>
+            <div class="finding-note">(a) <strong>购买数量被完全忽略</strong>——净含量是 SKU 级属性，公式里没有 × qty，用户囤三包 7.5kg 会在第 1 包吃完时收到补货提醒；<strong>囤货是宠粮最主流的购买行为，不是边缘情况</strong>。(b) 起算点用「上次购买日」而非收货日——待支付 60 分钟 + 快递 2–4 日，在只有 7 天提前量的窗口里这是一半以上的误差。(c) 多宠物共食一袋时日喂量应为同物种宠物之和，公式按单只算。PRD 的兜底是「缺少任一输入时不触发，不做兜底猜测」——<strong>但这三种情况输入全部齐全，只是算错，降级策略完全拦不住</strong>。当实际还剩 20 天时，这条推送在一个以信任为护城河的产品里是负资产。</div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">FR-108 的疫苗分支在结构上不可能产生电商转化，却被计入 AB-13B 的生死判据分母</h3><span class="finding-location">FR-108 ↔ AB-13B / A-16</span></header>
+            <div class="finding-note">疫苗类触发卡的转化率<strong>结构上恒为 0</strong>（它根本不通向商品）。而 AB-13B 按 <code>trigger_type</code> 三值统计并把「触发卡转化率 vs 普通商品曝光转化率」列为判定 A-16 的直接依据。把一个不可能转化的类型混进分母，会系统性地压低复购引擎的实测转化率——<strong>用一个自己制造的偏差去判本版本的生死。</strong></div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">复购引擎有一个未被承认的冷启动期，而 A-16 的验证恰好落在这个窗口内</h3><span class="finding-location">§3.9 / A-16</span></header>
+            <div class="finding-note">FR-109 的第一个条件（电商订单历史）<strong>在上线首月对全体用户恒为假</strong>——没有人有电商购买历史。也就是说上线初期「复购引擎」实际只剩 FR-107 一条规则式静态筛选在跑。而 A-16 的验证方式是「上线后看 <code>repurchase_card_clicked</code> 与整体转化对比」——<strong>在冷启动期采到的数据必然低估复购引擎，并可能导致错误的 kill 决策</strong>。两份 PRD 没有一处承认存在冷启动期，也没有为它设计替代触发（例如按品种/年龄的通用周期先兜底）。</div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">复购卡的频控与位次竞争只做了一半，且 FR-108 与已拍板的 D-5 措辞冲突</h3><span class="finding-location">FR-93 区域① / FR-107 / FR-108 / FR-109 ↔ D-5</span></header>
+            <div class="finding-note">FR-109 只有一句「耗尽日前 7 天开始…并推送一次」——「一次」是每个耗尽周期一次还是永久一次？用户不买时这张卡在 7 天里是否持续挂在首页？FR-107 的档案推荐区<strong>完全没有频控</strong>。而当驱虫到期 + 两个 SKU 同时粮量见底时是三张卡抢两个位，<strong>PRD 没有定义任何优先级</strong>。另外 D-5 已拍板「复购触发卡与健康提醒<strong>合并为一条推送</strong>」，但 FR-108 正文仍写「<strong>除既有提醒外，额外</strong>在两处生成复购触发卡」——<strong>照 PRD 实现就是两条推送</strong>。</div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">AB-12C 与 AB-6A（扩展）在同一份后台 PRD 内对「溢价配置是否复用」给出相反指令</h3><span class="finding-location">AB-12C:137 / §6 表:287 ↔ AB-6A 扩展</span></header>
+            <div class="finding-note">三处措辞里有两处会把实现者引向单一比例。这条被 C-9 与 D-8 列为强制约束，用户端 FR-105 也用加粗警告重申过——<strong>但真正会被拿去写代码的是后台 PRD 的模块 12 章节，而那一行写的是「复用」</strong>。一旦写成单值，AB-13A 的售后成本口径与 AB-6C 的浮存归因跟着一起错，<strong>且是静默错误</strong>。</div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">AB-13B 被称为「本版本最该盯的看板」，但它的每一个指标都算不出来</h3><span class="finding-location">§5 ↔ AB-13B</span></header>
+            <div class="finding-note">归因链在数据上无法闭合；「粮量预估准确度」需要把每次预估的 <code>predicted_depletion_date</code> 落进事件，§5 没有任何事件承载它；<code>profile_reco_clicked</code> 的分母「推荐区曝光」只能靠通用的 <code>product_impression</code>，口径能否对上未说明。此外缺 <code>cart_viewed</code>（购物车到结算的漏斗断了一节）与超服务范围阻断事件——<strong>17 屏里专门画了「结算页超服务范围」，却没有对应埋点，流失量永远不可知</strong>。</div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">AB-13B 与 AB-13A/13C/13D 分别建在两套互不相通的数据源上</h3><span class="finding-location">AB-13A~13D ↔ §5</span></header>
+            <div class="finding-note">AB-13B 与 AB-13C 的「缺货损失」来自 PostHog 事件，AB-13A/13D 的 GMV、毛利、对账来自业务库。PostHog 是第三方 SaaS，后台要么反向拉其 API、要么补一套服务端埋点——<strong>两份 PRD 都没有提出这个要求，也没有列为依赖</strong>。同时客户端事件天然带丢失率与广告拦截偏差，把它当作<strong>对账级看板</strong>的口径（AB-13C 的缺货损失会影响补货决策）而不加说明，<strong>是把分析口径当财务口径用</strong>。</div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">FR-107 依赖一个后台从未提供的配置项，且六个时间常量全部硬编码</h3><span class="finding-location">FR-107 / FR-102 / FR-104 / FR-108 / FR-109 ↔ 后台模块 10–13</span></header>
+            <div class="finding-note">年龄段阈值「可后台配置」但后台翻遍模块 10–13 无该界面。同类问题还有：「待支付超时 60 分钟」「送达后 7 日自动确认」「签收后 7 日退货窗口」「30 日频控」「耗尽日前 7 天」——<strong>这六个时间常量全部硬编码在用户端 PRD 里，后台没有一个对应配置项</strong>。而 OQ-27 正在讨论 7+7 是否过长——一旦要改就得发版，这与 AB-6D「一键回退，<strong>不需发版</strong>」体现的运营预期完全不一致。</div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">AB-6D 定义了三个开关，用户端对其中两个的关闭态没有任何行为定义</h3><span class="finding-location">AB-6D ↔ FR-100A 规则 3 / 规则 5 / FR-97</span></header>
+            <div class="finding-note">用户端 FR-100A 只有规则 5 处理了一种停用情形——那是 <strong>AB-6C 充值暂停</strong>，不是 AB-6D 的总开关。更尖锐的是 AB-6D 自己写「<strong>配置变更不追溯已成立的订单</strong>」——而总开关的设计用途恰恰是「Coin 扣减链路出 bug 时一键回退」，那批「按下单时规则执行」的待支付订单<strong>仍会走进出了 bug 的扣减链路</strong>。<strong>开关管不到它被设计出来要救的那批订单。</strong>「不允许抵扣运费」时同理：会出现用户 Coin 余额充足、却仍需 QRIS 单独支付 Rp 20.000 运费的组合，而两段金额展示没有描述这种形态。</div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">「30」这个上限在两份 PRD 之间口径不一致，差三倍，而三项设计决策挂在它上面</h3><span class="finding-location">OQ-25 / AB-10D / 后台 OQ-30 ↔ §2 术语表</span></header>
+            <div class="finding-note">§2 明确区分「商品（Produk）」与「规格/SKU（Varian）」并举例一个商品含 3 个 SKU。<strong>30 个商品和 30 个 SKU 相差 3 倍</strong>：按后者，货架上只有约 10 个商品，四个品类各 2–3 个，「不做搜索」毫无疑问成立但精选流几乎无内容；按前者可到 90+ SKU，FR-93 的无搜索四分类流开始吃力。这个数同时是 C-7 的拍板结论、AB-10D 的告警阈值、和三项设计的论据，<strong>却没有统一口径</strong>（后台 OQ-30 还写成「20–30」）。</div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">AB-10D 的 SKU 上限只是一条告警条，与它自称的「做成产品约束」不符</h3><span class="finding-location">AB-10D ↔ 后台 §7 权限</span></header>
+            <div class="finding-note">告警条不阻断任何操作、不需要审批、没有二次确认——<strong>对比 §7 权限里「库存报损、盘点调整、零售价低于进货价保存」三类比 SKU 数量温和得多的动作反而有硬约束</strong>。运营无视告警把 SKU 录到 200，FR-93 的「不提供全站搜索框」会立刻变成不可用的产品，而 PRD 里<strong>没有任何触发点</strong>要求产品重新评估 FR-93/FR-99/FR-107 三项决策。<strong>战略边界写成了一条可以一路点掉的黄条。</strong></div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">订单号规则违反仓库的强制护栏，且 PRD 把它写成了优点</h3><span class="finding-location">FR-102 ↔ CLAUDE.md</span></header>
+            <div class="finding-note">FR-102 写「订单号规则：<code>TT</code> + <code>YYYYMMDD</code> + <strong>8 位自增</strong>……<strong>便于对账区分</strong>自营实物与虚拟商品收入」。项目护栏写明「对外暴露标识一律<strong>不可枚举 token</strong>，不用自增 id 直接外露」。这是教科书式的可枚举标识：任何用户从自己的订单号即可推断平台当日单量与累计单量（<strong>对一个还在验证 A-15「宠主是否愿意在 TailTopia 买粮」的产品，这是直接泄露最敏感的经营数据</strong>），且可枚举遍历他人订单号去探测接口。8 位自增是全局递增还是按日重置也没写。对账区分的诉求用一个不可枚举 token + 独立的内部序列同样可以满足，<strong>不需要把序号外露</strong>。</div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">本版本第一次建立 PII 数据集，两份 PRD 与依赖清单里没有一条涉及个人数据保护</h3><span class="finding-location">FR-98 ↔ AB-11A / 后台 §7 / DEP-1~8</span></header>
+            <div class="finding-note">FR-98 明确「手机号是履约联系方式，<strong>不与账号手机号互通</strong>」——等于新建了一份与账号体系分离的个人数据集。而 AB-11A 的<strong>列表字段</strong>直接包含「收货人/电话」，筛选支持按电话关键词模糊搜索，详情展示完整地址。§7 权限只为「进货价与毛利数据」单列权限位（理由是"采购成本是商业敏感信息"），对收货地址与手机号<strong>没有任何脱敏、访问控制或访问审计要求</strong>——<strong>一个能按手机号模糊搜全站订单的后台列表，对全体模块 11 运营开放</strong>。护栏写明日志「严禁记录 PII」，但 PRD 层面连产品行为都没有约束；<strong>DEP-1~DEP-8 里没有一条涉及印尼 UU PDP 个人数据保护法</strong>。</div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">注销用户与在途实物订单 / PawCoin 余额的交叉，两份 PRD 零涉及</h3><span class="finding-location">FR-98 / FR-101 ↔ CLAUDE.md D1/D2 · story 7.3</span></header>
+            <div class="finding-note">本版本第一次让注销动作可能撞上：一个 <code>已发货</code> 的实物订单（收货人姓名/电话/地址是履约必需，<strong>删不得</strong>）、一笔待退款的 PawCoin（不可提现不可转让，<strong>删了等于没收</strong>）、一个待质检的退货包裹。FR-98 的地址簿也没说明它是履约凭证还是个人数据——<strong>两种定性导出相反的处置</strong>。这不是边缘场景，是把一个已存在的安全攸关约束和一批新建的实物对象放在一起时<strong>必然出现</strong>的冲突，而没有任何一方承接。</div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">发票 / 收据在用户端与后台都不存在，而 DEP-3 把开票列为「阻塞上线」</h3><span class="finding-location">FR-97 / FR-102 ↔ DEP-3 / AB-13D</span></header>
+            <div class="finding-note">FR-93~FR-110 里<strong>没有任何一条 FR</strong> 描述用户如何取得收据或发票；FR-97 的金额明细<strong>没有税额行</strong>，也没说明零售价是否含税；FR-102 的订单详情没有票据入口；后台模块 10–13 里没有开票模块。<strong>退款/部分退款后的票据冲红更是完全空白。</strong>一个被自己标注为「阻塞上线」的能力，在两份 PRD 中既没有需求也没有被 §7 排除——<strong>它只是没写</strong>。</div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">「开封不退」被要求在三处明示，但其中两处在 PRD 里没有承载位</h3><span class="finding-location">FR-104 ↔ FR-97 / FR-94A / AB-10A / A-18</span></header>
+            <div class="finding-note">FR-97 定义的结算页结构<strong>没有退换货规则的展示位</strong>；退货申请页在 FR-104 里只定义了凭证图上传。更麻烦的是 FR-94A 明写「同一商品的不同规格可有<strong>不同退换货标识</strong>」而 AB-10A 又把默认值设为「开封不退」：用户在详情页选 1.5kg（可退可换）看到一套规则，切到 7.5kg（开封不退）时是否刷新提示？多 SKU 订单在结算页出现三种不同标识时如何在一处呈现？<strong>A-18 假设「用户接受开封不退不产生大量客诉」，而承载这条假设的全部执行细节缺失。</strong></div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">已下架 SKU 的退货入库会产生不可售的沉淀库存，且滞销预警是否覆盖它未定义</h3><span class="finding-location">AB-10D / AB-12B ↔ AB-13C</span></header>
+            <div class="finding-note">当一个 SKU 在用户退货途中被下架（缺货断供、供应商换货、临期清理，<strong>都是自营的日常</strong>），质检通过后这批货会进入一个「已下架商品的可售库存」——<strong>永远卖不出去，但仍然占着资金</strong>。AB-13C 的滞销预警口径是「超过配置天数无销售」，下架商品必然满足该条件，是会被刷屏预警还是被排除在扫描外，PRD 没说；给出的建议动作「降价清货 / 停止补货 / 下架」<strong>对一个已下架的 SKU 全部无效</strong>。</div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">FR 交叉引用有三处指向错误的需求编号，且都出现在会被直接照着实现的位置</h3><span class="finding-location">§2 / §3.1 FR-93 / §3.2 FR-94</span></header>
+            <div class="finding-note">FR-93 是整个 Toko 首页的定义，实现者按它去查 FR-108 会做出一个错误的区域②。<strong>三处错误都把指针挪到了 FR-110 这条约束性需求上，而 FR-110 恰恰是 N-3 认定优先于一切转化优化的护城河条款；把它当成功能条款引用，是最不该出现的错位。</strong></div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">FR-100A 被跨文档一致地称为「六条」，规则 7 在回写清单里被系统性漏掉</h3><span class="finding-location">§6 跨文档影响表 / OQ-26 ↔ decision-log L-4</span></header>
+            <div class="finding-note">FR-100A 实际下辖规则 1~7，但 §6 写「并写入 FR-100A 的<strong>六条</strong>使用规则」、OQ-26 的枚举里也没有规则 7；L-4 同样写「六条」。<strong>规则 7（平台责任补偿溢价）是本版本最新、争议最大、直接涉及资金发放的一条，恰恰是 §6 要求回写到 FR-50C 的那份清单里唯一被漏掉的。执行 §6 的人会把六条抄进 FR-50C，把发钱的那一条留在电商 PRD 里。</strong></div>
+          </article>
+          <article class="finding">
+            <header><h3 class="finding-title">FR-106 的评价与订单终态、内容审核降级两条链都没有闭合</h3><span class="finding-location">§3.8 FR-106 ↔ FR-102 / AB-3B / AB-3C</span></header>
+            <div class="finding-note">用户 5 星好评后成功退货并进入 <code>已退款</code>，这条评价是否保留、是否标注「该用户已退货」，PRD 没说；反向地，退货被驳回后能否再评价也没说。另外 FR-106 写「复用既有内容审核机制：评价提交时走<strong>三方同步过滤</strong>」——三方服务超时或不可用时的降级完全未定义：阻塞提交、放行、还是转异步？<strong>PRD 明确排除了「先发布后审核」，等于把可用性风险全押在第三方同步调用上。</strong>评价含图 ≤6 张，图片是否也进审核范围同样未说明。</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <!-- ============ Reviewer: cross-doc ============ -->
+    <section class="reviewer-section">
+      <details>
+        <summary>
+          <h2>额外评审员 · 跨文档一致性（用户端 FR ↔ 后台 AB，37 条）</h2>
+          <span class="reviewer-source">review-cross-doc-consistency.md</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p><strong>总体判断：</strong>两份文档在「资金与售后」这条主链上对得<strong>相当齐</strong>（FR-100A ↔ AB-6D/AB-6A、FR-105 ↔ AB-12C、FR-95 ↔ AB-10C 的措辞几乎逐字互锁，C-9「两条溢价必须分开」的意图在 AB-6A 扩展节被完整承接），<strong>但在「履约与状态机」这条链上是断的</strong>——后台能执行的运营动作有相当一部分在三张状态机上找不到落点（部分取消、采购入库、报损、盘点调整），而状态机上多条关键转移在后台没有操作入口。</p>
+            <p><strong>最致命的一类是引用错位而非缺失</strong>：用户端 4 处 FR 编号整体偏移一位，而后台在同样的位置引用的是<strong>正确的</strong> FR-107 / FR-109。两边各自读起来都通顺，合起来读却指向不同条目——<strong>这类错误 rubric 与对抗评审都不易发现，只有做交叉表才会暴露。</strong></p>
+            <p><strong>配置项闭环</strong>（本次评审的头号目标）缺口是<strong>双向</strong>的：后台 AB-6D 定义了两个用户端从未定义过行为的开关，而用户端写死了四个时限值和一组年龄阈值，后台<strong>零配置、零提及</strong>。</p>
+            <p>完整的 <strong>FR ↔ AB 引用交叉表</strong>（含单向引用、悬空引用、语义漂移标注）见 <code>review-cross-doc-consistency.md</code>「引用交叉表」一节——那张表本身就是本次评审最可直接复用的产物，建议原样搬进 PRD 作为 epics 阶段的拆分依据。</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-critical">critical</span><h3 class="finding-title">C1 · 用户端 4 处 FR 编号整体偏移一位，与后台的正确引用互指不同条目</h3><span class="finding-location">§2:42 / §3.1:60 / §3.2:98,102 ↔ AB-10A:41,43 / AB-10B:51 / AB-13B:180</span></header>
+            <div class="finding-note">实现者从后台 AB-10A 顺着 FR-107 找到用户端读到的是正确正文；但从用户端 FR-94 顺着 FR-110 找过去，读到的是「兽医不得推荐具体 SKU」的约束性需求——<strong>FR-110 因此被两侧赋予两种完全不同的语义</strong>。§9 OQ-29 与后台 AB-13B 用的都是正确编号，说明错的是这 4 处而非定义本身。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 四处分别改为 FR-108/FR-109、FR-107、FR-107、FR-109；改完重跑 <code>grep -o 'FR-1[01][0-9]'</code> 交叉核对。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-critical">critical</span><h3 class="finding-title">C2 · AB-12C 与后台 §6 表把 AB-6A 写成「一个溢价比例、直接复用」，违反 C-9/D-8</h3><span class="finding-location">AB-12C:137 / §6 表:287 ↔ AB-6A 扩展:242-262 / FR-105:400</span></header>
+            <div class="finding-note">后台文档内部两处仍停留在扩展前的口径：AB-12C「PawCoin 退款溢价比例<strong>复用 AB-6A 配置</strong>」（单数）、§6 表「AB-6A ｜<strong>直接复用</strong>」（整张「既有模块扩展」表完全没有反映 AB-6A 被扩展的事实）。而 AB-6A（扩展）自己写「<strong>两条溢价必须是两个独立配置项，不可复用同一个数值</strong>」。<strong>§6 那张表恰恰是排期时最常被当作后台改动清单直接摘出来的。</strong></div>
+            <div class="finding-fix"><strong>Fix:</strong> AB-12C:137 改为「<strong>两条</strong>溢价比例分别取自 AB-6A 的『激励溢价』与『平台责任补偿溢价』两个独立配置项」；§6 表 AB-6A 行改为「<strong>扩展</strong>：新增第二条配置组，见 §5 AB-6A（扩展）」。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-critical">critical</span><h3 class="finding-title">C3 · <code>已发货</code> → <code>已送达</code> 无后台操作入口，7 日自动确认因此永不触发</h3><span class="finding-location">FR-102:347 / §4.1:507 ↔ AB-11B:95 / AB-11A</span></header>
+            <div class="finding-note">两个进入条件里的第一个（承运商标记）首版不存在，只剩「后台标记」——而后台<strong>并没有把「标记已送达」定义成一个操作</strong>（AB-11B 全节只定义了发货操作与批量发货，AB-11A 的字段里也没有该动作）。<strong>那句话是在解释困难，不是在定义入口。</strong>另：<code>已发货</code> 状态下用户唯一可执行操作是「查看物流」，<strong>没有确认收货入口</strong>（挂在 <code>已送达</code>），所以用户即便收到货，只要运营没标记也无从确认。AB-11B 的待办逻辑上应该是「已<strong>送达</strong>超过 N 日」——它跳过 <code>已送达</code> 直接从 <code>已发货</code> 计时，<strong>等于默认了这条转移不会发生</strong>。</div>
+            <div class="finding-fix"><strong>Fix:</strong> ① AB-11B 新增「标记已送达」操作（单条 + 批量）并纳入 AB-11A 详情；② FR-102 在 <code>已发货</code> 补用户「确认收货」操作；③ 明确无人标记时的兜底自动转移。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">H2 · FR-94 定义了商品级「可退可换」标识，但两份文档中都不存在任何换货流程</h3><span class="finding-location">FR-94:104 / §3.7 ↔ 模块 12 全部 / AB-10C</span></header>
+            <div class="finding-note">FR-94 该字段<strong>必填</strong>、AB-10A 完整承接三值枚举并设默认值。但「换」这条路径零实现：FR-104 可退情形表 4 行全是退款、§4.2 无换货分支、FR-102 无换货状态、AB-12A 退货类型无「换货」、AB-12B 质检结果无「通过→补发」、AB-11B 无补发操作、AB-10C 无换货出入库配对。<strong>运营标成「可退可换」后用户端会据此展示「可换」承诺，而平台没有任何执行能力——直接可被用户援引的对外承诺缺口。</strong>（这也解释了 §3.7 与模块 12 标题里的「换」字从何而来——章节名先有，流程一直没补。）</div>
+            <div class="finding-fix"><strong>Fix:</strong> 建议首版删除「可退可换」枚举值改为二值，§3.7 与模块 12 标题改为「退货与退款」，并在 §7 显式列入「换货」；或补齐换货全链路（工作量不小）。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">H4 · AB-6D 的两个开关在用户端无任何行为定义，且「总开关」与 FR-100A 规则 5 的原则正面冲突</h3><span class="finding-location">AB-6D:220-227,238 ↔ FR-100A 规则 3:262-268 / 规则 5:287-293</span></header>
+            <div class="finding-note">规则 5 立了一条原则：「暂停的是<strong>充值入口</strong>，不是<strong>消费出口</strong>。已持有余额的用户若因此买不了东西，<strong>等于对已付款用户违约</strong>」——而 AB-6D 总开关关闭，做的恰恰就是这件事（后台自己也承认「体验代价大」）。<strong>两处对同一件事给出的定性一个是「违约」、一个是「可接受的故障回退」。</strong>另：规则 3 是<strong>无条件陈述</strong>（「运费计入订单总额，一并参与 PawCoin 抵扣与比例拆分」），通篇没有可开关的表述，关闭后比例基数按含运费还是不含运费算、部分退款拆分怎么走，全部空白。</div>
+            <div class="finding-fix"><strong>Fix:</strong> ① FR-100A 补「总开关关闭时的用户端表现与告知方式」，并说明它与规则 5 原则的关系（建议限定为「仅在资金链路故障时使用，且需站内信告知」）；② 「允许抵扣运费」开关要么删除，要么在规则 3 补关闭态的比例计算口径。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">H5 · 用户端写死的四个时限，后台零配置零提及</h3><span class="finding-location">FR-100:222 / FR-102:348,355 / FR-104:379-380 / §4.2:516 ↔ 后台全文</span></header>
+            <div class="finding-note">待支付超时 60 分钟 · 自动确认 7 日 · 退货窗口 7 日 · 寄回超时 7 日——后台<strong>全部零提及</strong>；AB-11B 反而引入了另一个未定义的 N，AB-12A 无「超窗自动拒绝」规则、CS 只能肉眼算日期，「已关闭」状态在后台也不存在。decision-log D-3/OQ-27 只讨论了「两个 7 日叠加是否过长」，<strong>从未讨论过它们是硬编码还是可配置</strong>。对一个刚上线的自营电商，7 日窗口几乎必然在前 3 个月内被调整。</div>
+            <div class="finding-fix"><strong>Fix:</strong> AB-11C 或新建「AB-11E 履约时限配置」收拢这四个值（+ AB-11B 的 N），标注「变更不追溯已成立的订单」（沿用 AB-6D 的既有措辞）；明确 N 与自动确认 7 日的关系（N 应 &lt; 7 才有跟进意义）。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">H6 · FR-107 声明「犬猫年龄阈值可后台配置」，后台无该配置项</h3><span class="finding-location">FR-107:434 ↔ AB-10A:43</span></header>
+            <div class="finding-note">后台只提供了商品侧的三个过滤标签，<strong>没有任何「宠物侧阈值」配置</strong>。步骤 3「按适用体型匹配档案体重」同样隐含一组体重→体型映射阈值。而犬猫的年龄分段差异很大（猫的「老年」通常 &gt;10 岁），<strong>首版就会需要调</strong>。</div>
+            <div class="finding-fix"><strong>Fix:</strong> AB-10A 或模块 10 新增「推荐阈值配置」（物种 × 年龄分段 × 体型分段），或 FR-107 改为「阈值硬编码，V1.5 再开放配置」。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">H7 · AB-6C 关于「为买粮而充值」的论证方向，与 A-20 / L-7 自纠的结论相反</h3><span class="finding-location">AB-6C:276 ↔ A-20:634 / decision-log L-7:108</span></header>
+            <div class="finding-note">AB-6C 写「为买粮而充值会<strong>显著改变浮存的增长斜率</strong>——这是用户端假设 A-20 的监控依据」，但 A-20 的结论是反向的：「平台不做充值促销，用户没有理由先充值再买粮而不直接 QRIS 付……<strong>净效应预期为浮存下降</strong>」。<strong>L-7 的自纠传导到了 AB-6D 与 AB-6C 的溢价段，唯独漏了这一句。</strong>后果是运营看着 AB-6C 建的监控视图预期浮存上涨、实际看到下降，进而怀疑数据或做出反向处置——正是 L-7 警告的镜像错误。</div>
+            <div class="finding-fix"><strong>Fix:</strong> 改为「实物客单是虚拟商品的 10 倍量级，<strong>电商消费会显著加快存量余额的核销速度，预期浮存下降</strong>（A-20）；若实测反向上涨，说明充值动机确实被激活，需回看 A-20 并重新评估」。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">H9 · AB-13B 的核心指标在 §5 埋点侧不可得</h3><span class="finding-location">AB-13B:188 ↔ §5:549-560 / A-16:632</span></header>
+            <div class="finding-note">能承载「来源」的只有三个事件（<code>product_impression</code> 有 <code>zone</code>、<code>product_detail_viewed</code> 与 <code>add_to_cart</code> 有 <code>entry_source</code>），<strong>而转化终点 <code>order_submitted</code> 与 <code>payment_succeeded</code> 都不带归因属性</strong>。所以埋点能算的只到「触发卡 → 加购」，算不到「触发卡 → 下单/支付」。AB-13B 若按加购口径算，与「普通商品曝光转化率」比较时口径也必须同为加购——但表里写的是「转化率」，未限定。<strong>考虑到 L-6 已经为「基线缺失导致指标不可得」立了一次前车之鉴，这里再踩一次同类坑代价很高。</strong></div>
+            <div class="finding-fix"><strong>Fix:</strong> §5 给 <code>order_submitted</code> 与 <code>payment_succeeded</code> 补 <code>entry_source</code> / <code>trigger_type</code>（或补一个订单级 <code>attribution_source</code>）；AB-13B 明确转化终点定义。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">H10 · AB-11B 引用了 AB-11C 中不存在的「配送方式配置」</h3><span class="finding-location">FR-99:198-206 ↔ AB-11B:94 / AB-11C:100-103</span></header>
+            <div class="finding-note">FR-99 的两档配送<strong>适用范围不同</strong>（当日达=同城 Kecamatan；标准快递=服务范围全部）。AB-11B 写「与 AB-11C 的配送方式配置联动」，但 AB-11C 全节只有服务范围、运费二维表、免运费门槛、变更不追溯四条，<strong>没有任何「配送方式配置」</strong>，且只有一个服务范围集合，无法表达「这个 Kecamatan 可当日达、那个只能标准快递」。AB-11C 还是全后台<strong>唯一被用户端点名两次却零 FR 反向引用</strong>的条目。</div>
+            <div class="finding-fix"><strong>Fix:</strong> AB-11C 补「配送方式主数据（含承运商归属 + 可达范围）」，服务范围改为按配送方式分别维护；或 FR-99 明确「当日达可达范围 = 服务范围全集」取消差异。<strong>二选一必须落一个。</strong></div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">H1 · AB-11D 的「部分取消」与「已支付订单取消」在订单状态机上无对应转移</h3><span class="finding-location">AB-11D:108 ↔ FR-102:342-356 / §4.1:489-505</span></header>
+            <div class="finding-note">部分取消：状态机是整单单一状态，无法表达「A 商品已取消退款、B 商品仍待发货」；两边都只说了金额怎么算，<strong>没说订单处于什么状态</strong>。已支付订单的后台取消：FR-102 的<strong>表</strong>说进 <code>已取消</code>、§4.1 的<strong>图</strong>说必须经 <code>退款中</code>→<code>已退款</code>，而 AB-11D 说「均走退款流程」倾向图的口径——<strong>表与图打架，且后台的实际行为只匹配其中之一。</strong></div>
+            <div class="finding-fix"><strong>Fix:</strong> ① FR-102 表删去 <code>已取消</code> 的「后台取消」入口或限定为待支付订单；② §4 新增部分退款/部分取消的表达方式（建议：订单主状态不变，退款单独立于订单状态机，订单展示「含退款中商品」标记），并在 AB-11D 与 AB-12C 对齐。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">H3 · AB-10C 的三条库存变更路径在 §4.3 库存状态机上完全缺失</h3><span class="finding-location">AB-10C:61-62 ↔ §4.3:531-538</span></header>
+            <div class="finding-note">AB-10C 的措辞是排他性的（「库存增加<strong>只能通过入库单</strong>」「库存减少的合法途径<strong>仅三条</strong>」），但 ① 采购入库 ② 报损 ③ 盘点调整 三条转移在状态机上<strong>一条都没画</strong>。其中<strong>采购入库最要命</strong>——按 §4.3 的图，可售库存的唯一来源是「退货质检通过后入库」，即<strong>库存只能靠退货凭空产生</strong>。（AB-10D 的上下架也无对应：用户端<strong>没有商品状态机</strong>，「在售/下架」这对状态只出现在 AB-10A 字段与 FR-96 的「失效商品」里，术语表未收录。）</div>
+            <div class="finding-fix"><strong>Fix:</strong> §4.3 补三条转移（采购入库 → 可售；可售 → 报损核销；可售 ⇄ 盘点调整），明确「锁定库存」不可被报损/盘点直接触碰；另考虑补一张商品状态机（草稿/在售/下架）。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">H8 · 「拒收」在 AB-12A 是正式退货类型，但用户端无申请入口、状态机无边</h3><span class="finding-location">FR-102:346 / FR-104:378 / §4.1 ↔ AB-12A:120,125</span></header>
+            <div class="finding-note">拒收发生在订单处于 <code>已发货</code>（配送中）时，而该状态的「用户可执行操作」只有「查看物流」，§4.1 中 <code>已发货</code> 的唯一出边是 → <code>已送达</code>。<strong>用户没有任何途径提交拒收申请，CS 队列里的「拒收」类型永远不会有来源。</strong>（实务上拒收往往是用户对承运商口头拒收、平台事后补录——若是这个设计，需要一条「后台代客建单」的路径，两份文档都没有。）</div>
+            <div class="finding-fix"><strong>Fix:</strong> ① FR-102 在 <code>已发货</code> 补用户操作「申请拒收/取消」，§4.1 图补 <code>已发货</code> → <code>退款中</code> 边；或 ② AB-12A 明确「拒收类型由 CS 代客建单，用户端无入口」并在 FR-104 注明。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">M2 · AB-12A 要求 CS 独立判定运费归属，FR-104 却定义为由退货类型机械推导</h3><span class="finding-location">AB-12A:123 ↔ FR-104:376-380 / FR-100A 规则 7:318</span></header>
+            <div class="finding-note">若归属是机械推导结果，它就是<strong>系统计算值</strong>、不需要 CS 判定，「分开记录」多此一举；若 CS 可独立设定，就可能出现「类型=质量问题 但运费判给用户」的组合，直接违反 FR-104。<strong>资金后果：</strong>规则 7 的补偿溢价「复用 AB-12A 已有的退货类型判定结果，由系统自动计算」——若运费归属可与类型脱钩，同一个类型字段就<strong>一半自动一半人工，审计时无法解释</strong>。</div>
+            <div class="finding-fix"><strong>Fix:</strong> AB-12A 明确「运费归属由退货类型自动推导并只读展示，CS 仅在<strong>例外</strong>情形下可覆写且必须填理由」（并在 FR-104 补例外条款），或删去「必须分开判定」的要求。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">M10 · 用户端 §6「跨文档影响」表完全未登记后台侧的回写项</h3><span class="finding-location">§6:575-583 ↔ 后台 §6:283-289 · decision-log L-4</span></header>
+            <div class="finding-note">用户端 §6 列的 7 项<strong>全部是 App 侧</strong>，没有一项指向 <code>v1-1-0后台prd.md</code>。但后台 §6 明明列出 5 处既有后台模块需改动，其中 <strong>AB-6A 是实质性扩展、AB-6C 是口径变更、AB-8E 需加筛选项</strong>。L-4 强调「这不是电商的局部规则，而是对 FR-50 封闭币体系的实质性扩展，应由 PawCoin 负责人一并确认」——<strong>同样的论证完全适用于 AB-6A/AB-6C，但 L-4 没提。结果是用户端回写有人跟，后台回写没人跟。</strong></div>
+            <div class="finding-fix"><strong>Fix:</strong> 用户端 §6 补三行（<code>v1-1-0后台prd.md</code> 的 AB-6A / AB-6C / AB-8E）；decision-log L-4 表格补后台两行。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">M8 / M9 · 退款状态机的「已关闭」终态无后台承接；质检不通过后的商品处置用户端无告知</h3><span class="finding-location">§4.2:516,520 ↔ AB-12A:120 / AB-12B:131</span></header>
+            <div class="finding-note">M8：AB-12A 的队列字段只列到「状态」而未枚举取值，全节没有「已关闭」状态、没有 7 日计时、没有超时自动关闭规则、也没有「已关闭后能否重新申请」——<strong>运营在队列里看到一批停在「待用户寄回」的申请时，无从判断哪些该关</strong>。M9：AB-12B 要求记录处置方式（退回用户 / 报损），但用户端 §4.2 到 <code>已驳回(终)</code> 就结束了——<strong>用户已经把货寄出去了，被驳回后货去哪了、要不要再寄回来、寄回运费谁付，全无说明。这是一个用户会打客诉电话的空白。</strong></div>
+            <div class="finding-fix"><strong>Fix:</strong> AB-12A 补状态枚举（与 §4.2 逐一对应）+ 超时自动关闭规则；FR-104 补「质检不通过时的商品处置与告知」，与 AB-12B 的二选一枚举对齐（含退回运费归属）。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">M1 / M6 / M11 / M12 · 数值与口径不一致四处</h3><span class="finding-location">OQ-25 / AB-10D / 后台 OQ-30 · §6 / OQ-26 · AB-13A · AB-13B</span></header>
+            <div class="finding-note"><strong>M1：</strong>SKU 上限 30 在三处出现两个口径，且 C-7 的「锁」被 AB-10D 降级为「建议」、后台 OQ-30 更写成从未存在过的「20–30」。<strong>M6：</strong>FR-100A 实际七条，用户端 §6 与 OQ-26 两处仍写「六条」且枚举里没有规则 7——<strong>§6 那一行是给 FR-50C 回写用的指令清单，照六条回写就会漏掉发钱的那一条</strong>。<strong>M11：</strong>AB-13A 缺运费收入/承运成本/退款手续费三行。<strong>M12：</strong>疫苗类不产生电商转化却被 AB-13B 按统一口径计入转化率分母。</div>
+            <div class="finding-fix"><strong>Fix:</strong> AB-10D 改「建议 30」为「30（C-7 已确认）」、OQ-30 统一为 30；两处「六条」改「七条」并在枚举末尾补「/ 平台责任 Coin 溢价补偿」；AB-13A 补三行指标；AB-13B 明确「转化率仅统计驱虫/粮量两类，疫苗类单列为『问诊预约转化率』」。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">M4 / M5 · 开放项登记不完整：后台 OQ-30~32 无 D 编号无责任方；D-6 三态冲突</h3><span class="finding-location">后台 §8:306-308 / FR-106:420 ↔ §9:613-623 · decision-log §二</span></header>
+            <div class="finding-note"><strong>M4：</strong>用户端 §9 行序为 25→26→<strong>33→34</strong>→27→28→29，中间跳过 30–32 且无任何说明（读者会认为丢失或误以为笔误）；<strong>后台 OQ-30/31/32 没有任何 D 编号、没有责任方、没有出现在 decision-log 或 README §5 的「开工前须闭合的开放项」里</strong>，而 OQ-30（供应商主数据）与 OQ-31（报损/盘点审批流）都会影响模块 10 的表结构与权限设计。<strong>M5：</strong>D-6 在 decision-log 说「待拍板」、FR-106 已写死「首版不做商家回复」且无 OQ 编号、后台无任何评价管理界面——<strong>同一件事有三种状态</strong>，而 D-3~D-5 都规规矩矩地在 §9 有对应 OQ。</div>
+            <div class="finding-fix"><strong>Fix:</strong> ① §9 表按编号重排并在 30–32 位置加一行「见后台 PRD §8」；② decision-log §二补 D-9/D-10/D-11 对应后台三条并指定责任方；③ D-6 二选一：移入 §一「已确认」（C-10），或给 FR-106 加「（待 D-6 拍板）」并补 OQ 编号。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">M3 / M13 / M14 · 引用与术语缺口三处</h3><span class="finding-location">§0:14 · §8:604-607 ↔ AB-13D / AB-11C / AB-10A·10B · §2:34-43</span></header>
+            <div class="finding-note"><strong>M3：</strong>用户端 §0 声明「后台编号从 AB-10A 起」，<strong>遗漏了编号更靠前的 AB-6D</strong>（用户端自己在两处引用了它；decision-log C-5 的表述反而是完整的）。<strong>M13：</strong>DEP-3/DEP-5/DEP-6 的实际承载界面（AB-13D / AB-11C / AB-10A·10B）<strong>零反向引用</strong>——运营读后台 PRD 时看不到「这个配置项在外部依赖闭合前填不了」。<strong>M14：</strong>后台引入 5 个术语表未收录的名词，其中<strong>「精选权重」与两类溢价名已产生变体</strong>（用户端自己就有「运营排序」「运营权重」两说；溢价共 4 种写法）。</div>
+            <div class="finding-fix"><strong>Fix:</strong> §0 改为「从 AB-10A 起，另含模块 6 扩展的 AB-6D 与 AB-6A/AB-6C 变更」；AB-11C/AB-10A/AB-10B/AB-13D 各加一句依赖标注；§2 增补「精选权重」「激励溢价」「补偿溢价」「入库单」四条并统一用户端内部说法。</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-low">low</span><h3 class="finding-title">L1~L10 · 低severity 十条（枚举字面值 / 术语歧义 / 单向引用 / 表序）</h3><span class="finding-location">见 review-cross-doc-consistency.md</span></header>
+            <div class="finding-note">L1 退货类型两个名字（「<strong>待</strong>发货前取消」vs「发货前取消」，<strong>会落库为两个 varchar 常量</strong>）· L2 Toko 区域② 用户端叫「为我的宠物精选」后台叫「档案推荐」（把功能名当区域名）· L3 「精选」一词承担四种含义而术语表只定义了第一个 · L4 「退换货」标题下无换货 · L5 FR-103 要跳转承运商官网但 AB-11B 无 URL 模板字段（五家承运商地址变更只能发版）· L6 用户端称「AB-12A <strong>已有</strong>枚举」但模块 12 本版本才新建（会让读者误判为无需排期）· L7 A-21（致命度高、自述「真正的浮存风险源」）在后台无编号锚点 · L8 AB-6D「不要动这三个配置」下只列了两个 · L9 客单价 Rp 285.000 两侧一致但无来源 · L10 §10 假设表行序错乱。</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <div class="mechanical">
+      <h3>Mechanical notes</h3>
+      <ul>
+        <li><strong>交叉引用：</strong>4 处 FR 引用 +1 偏移（<code>PRD-v1.4.0.md:42 / :60 / :98 / :102</code>）；1 处章节引用错误（<code>:81</code>「见 §6」应为 §5）。其余 FR↔AB 引用抽查均可解析。</li>
+        <li><strong>ID 连续性：</strong>FR-93~FR-110 连续唯一（含 FR-93A/94A/100A 三个后缀号）；后台 AB-10A~13D 四段各自连续，AB-6D 追加位置正确。OQ-25~34 整体连续但<strong>跨两份文档</strong>且表内非升序；A-15~A-21 同此。</li>
+        <li><strong>双命名空间重叠：</strong>同一批开放项同时有 <code>OQ-n</code>（PRD）与 <code>D-n</code>（decision-log）两个 ID。<strong>D-3/OQ-27、D-4/OQ-28、D-5/OQ-29、D-7/OQ-33、D-8/OQ-34 五组映射经逐条核实全部通过</strong> ✅。建议在 §9 每行末尾标注对应 D 号。</li>
+        <li><strong>Assumptions Index roundtrip：</strong>单向断裂——§10 索引 7 条齐全，正文零处内联 <code>[ASSUMPTION]</code>；全文亦无 <code>[NOTE FOR PM]</code>（§7 以独立章节承担了 Non-Goals 职责，可接受）。</li>
+        <li><strong>UJ 主角命名：</strong>不适用——两份文档无 UJ。</li>
+        <li><strong>数值口径：</strong>后台 OQ-30 写「SKU 上限 20–30」，AB-10D 与 OQ-25 均为 30。统一为 30。</li>
+        <li><strong>枚举字面值：</strong>「待发货前取消」vs「发货前取消」需在 PRD 阶段定死（会落库为 varchar）。</li>
+        <li><strong>§4.3 库存状态机不完整：</strong>缺 AB-10C 明列的报损与盘点调整，<code>已扣减(出库)</code> 节点无出边。</li>
+        <li><strong>必需章节缺口</strong>（相对 launch + 消费级 + chain-top 的组合）：无 Success Metrics 章节、无 NFR / 性能 / 安全 / 数据留存章节、无 User Journeys。</li>
+        <li><strong>文件命名与自引用：</strong>两份 PRD 页脚互引的是<strong>源工作区文件名</strong>（<code>v1-4-0电商后台prd.md</code> / <code>v1-4-0电商PRD.md</code> / <code>.decision-log.md</code>），与落库后实际文件名不一致。README §2 已提示「引用体系不同源」，但页脚仍会让读者按错误路径找文件。</li>
+        <li><strong>frontmatter：</strong>两份均为 <code>status: draft</code> / <code>updated: 2026-08-10</code>，与落库日期 2026-08-14 及 README §4 的核对结论不同步。回写后建议同步 <code>updated</code> 并记录已承接的偏差编号。</li>
+        <li><strong>对齐良好、无需改动：</strong>FR-100A 规则 1 ↔ AB-12C（全文档对齐最好的一处）· C-9 两条溢价的核心承接（仅两处漏改）· L-7 自纠的传导（仅一句漏改）· DEP-7/DEP-8 双向引用 · §7 六条排除项与后台逐条对得上 · 库存术语三件套 / 四品类 / 五承运商 / 退换货三值枚举逐字一致。</li>
+      </ul>
+    </div>
+
+    <footer class="report-footer">
+      <div class="meta">
+        <span>Rubric: .claude/skills/bmad-prd/assets/prd-validation-checklist.md</span>
+        <span>Generated: 2026-08-14T10:26:37Z</span>
+        <span>Reviewers: rubric(53) + adversarial(38) + cross-doc(37) = 128</span>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>
