@@ -128,7 +128,7 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
                           overflow: TextOverflow.ellipsis,
                           style: AppTypography.body.copyWith(fontWeight: FontWeight.w600)),
                     ),
-                    if (b.reported || _justReported.contains(b.userId)) ...[
+                    if (_isReported(b)) ...[
                       const SizedBox(width: 6),
                       _reportedTag(l10n),
                     ],
@@ -260,7 +260,7 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
       context,
       ref,
       b.userId,
-      alreadyReported: b.reported || _justReported.contains(b.userId),
+      alreadyReported: _isReported(b),
       entry: AccountActionEntry.blocklist,
     );
     // 只有真的提交成功（用户点了成功态的「关闭」）才点亮标签；取消与失败都不算。
@@ -268,6 +268,14 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
       setState(() => _justReported.add(b.userId));
     }
   }
+
+  /// 「已举报」的**唯一**真值来源：服务端快照 ∪ 本页刚举报成功的乐观态。
+  ///
+  /// ⚠️ 只看 `b.reported` 是不够的 —— 列表进页面时拉一次就不再重拉，所以在本页
+  /// 先举报、再解除拉黑的用户，`b.reported` 仍是 `false`。那条路径上解除确认与成功
+  /// Toast 会说出「解除后你会重新看到 TA 的内容」这种**假话**：举报隐藏还在，
+  /// 内容并不会回来。（2026-08-16 L2 视觉验收实测复现。）
+  bool _isReported(BlockedUser b) => b.reported || _justReported.contains(b.userId);
 
   Widget _reportedTag(AppLocalizations l10n) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
@@ -285,6 +293,8 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
   /// ⚠️ 主按钮用**品牌紫**（`danger: false`）：解除是恢复性动作，与拉黑确认的危险红形成对照。
   Future<void> _confirmUnblock(AppLocalizations l10n, BlockedUser b) async {
     final name = b.deleted ? l10n.feedDeletedUser : (b.nickname ?? l10n.feedDeletedUser);
+    // 进流程时定格一次：确认与成功 Toast 必须口径一致，中途不再重算。
+    final reported = _isReported(b);
     final overlay = Overlay.maybeOf(context, rootOverlay: true);
     final ok = await showConfirmSheet(
       context,
@@ -292,7 +302,7 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
       // 也被举报过的人：解除拉黑并不会让他的内容回来，必须在动手前就说清楚。
       // ⚠️ 这是全产品唯一会向用户揭示「举报会隐藏内容」的地方——举报成功态刻意不提。
       // 两处口径不同是有意为之，复盘时别当成漏了。
-      message: b.reported ? l10n.unblockConfirmBodyReported : l10n.unblockConfirmBody,
+      message: reported ? l10n.unblockConfirmBodyReported : l10n.unblockConfirmBody,
       confirmLabel: l10n.blockedListUnblock,
       cancelLabel: l10n.commonCancel,
       icon: Icons.lock_open_rounded,
@@ -315,7 +325,7 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
     if (!ok || !mounted) return;
     setState(() => _removed.add(b.userId)); // 两种情况条目都移除（拉黑关系确实解除了）
     // 「刷新后」不是「立即」：措辞给后续带序列缓存的推荐算法留了余地。
-    showAppToast(context, b.reported ? l10n.unblockSuccessReported : l10n.unblockSuccess);
+    showAppToast(context, reported ? l10n.unblockSuccessReported : l10n.unblockSuccess);
   }
 
   /// 空态：给出下一步指引（去哪儿拉黑），不是白屏。

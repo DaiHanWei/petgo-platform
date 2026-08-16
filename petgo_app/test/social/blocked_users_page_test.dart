@@ -303,4 +303,50 @@ void main() {
       expect(find.byKey(const ValueKey('accountReportRepeatNotice')), findsOneWidget);
     });
   });
+
+  // ===== 2026-08-16 L2 视觉验收实测复现的回归 =====
+
+  group('本页刚举报成功的人，解除拉黑的口径要跟着变', () {
+    /// 走一遍行内举报，把该行推进「刚举报成功」状态。
+    Future<void> reportRow7(WidgetTester tester) async {
+      await tester.tap(find.byKey(const ValueKey('blockedMore_7')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('blockedMenuReport_7')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('accountReportReason_harassment')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('accountReportSubmit')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('accountReportDoneClose')));
+      await tester.pumpAndSettle();
+    }
+
+    /// ⚠️ 列表只在进页面时拉一次，所以这一路径上 `reported` 服务端快照恒为 false。
+    /// 只看快照 → 确认正文会说「解除后你会重新看到 TA 的内容」，而举报隐藏还在，
+    /// 内容根本不会回来 —— 全产品唯一一处会揭示「举报会隐藏内容」的文案，在这条路上失灵。
+    testWidgets('先举报后解除 → 确认正文必须是「内容仍不会展示」那一版', (tester) async {
+      await _pump(tester, _FakeRepo([_user()])); // 服务端下发 reported = false
+      await reportRow7(tester);
+
+      await tester.tap(find.byKey(const ValueKey('blockedUnblock_7')));
+      await tester.pumpAndSettle();
+
+      expect(find.text(l10n.unblockConfirmBodyReported), findsOneWidget);
+      expect(find.text(l10n.unblockConfirmBody), findsNothing);
+    });
+
+    testWidgets('先举报后解除 → 成功 Toast 同样是「内容仍不展示」那一版', (tester) async {
+      await _pump(tester, _FakeRepo([_user()]));
+      await reportRow7(tester);
+
+      await tester.tap(find.byKey(const ValueKey('blockedUnblock_7')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('confirmUnblockUser')));
+      await tester.pumpAndSettle();
+
+      expect(find.text(l10n.unblockSuccessReported), findsOneWidget);
+      expect(find.text(l10n.unblockSuccess), findsNothing);
+      await tester.pump(const Duration(seconds: 3));
+    });
+  });
 }
