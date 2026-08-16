@@ -80,7 +80,9 @@ public class ContentDetailService {
         AuthorView author = accountQueryService.findAuthorViews(List.of(post.getAuthorId()))
                 .get(post.getAuthorId());
         // viewer 维度可见性计数（story 3 §5.5）：公开可见 + viewer 自己的非可见评论，与渲染列表一致。
-        long commentCount = comments.countVisibleForViewer(postId, viewerId);
+        // Story 1.3：同一口径再套 R1/R2——被 R2 影子的评论不计入对外评论数（否则「显示 5 条却只数得出 4 条」）。
+        long commentCount = comments.countVisibleForViewer(postId, viewerId != null, viewerId,
+                post.getAuthorId());
         // 用 equals 而非 ==：两者均为装箱 Long，== 是引用比较，id>127（越过 Long 缓存）会误判 false。
         boolean isAuthor = viewerId != null && viewerId.equals(post.getAuthorId());
         // Story 3.4：真实点赞计数 + 当前用户是否已赞（游客 false）。

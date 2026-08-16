@@ -96,3 +96,22 @@
   - 落地：`acceptRequest` 去 `isBusy` 409 守卫；**计费流全程不再触碰 `vet:busy`**（接单不置 BUSY，超时/取消/现金故障不再 goAvailable）；`vetQueue` 池恒可见、`awaitingPay`(单条) → `awaitingPays`(列表)（**API 契约变更**，App `VetQueue` 模型同步）。
   - 不动：V1.0 免费直连流（`ConsultAcceptService`）与 `ConsultCloseService.goAvailable`（对计费流是 no-op，兼容遗留）；在线态显式模型（vet-presence-explicit-only）不变；广播本就发全部在线兽医，无需改。
   - FR-53B 前端判成交改为「待支付 token 集合差 + 进行中会话数增量」。
+
+## 2026-08-16 追加决策（V1.1.4 Story 1.3：评论数与互动量口径）
+
+**任何后续依赖「评论数」或「互动量」的功能，先读完这条再动手。** 隐藏关系有两条过滤，语义完全不同：
+
+- **R1（按查看者）**：查看者自己隐藏了这个人（主动拉黑或举报，**不分来源**）→ 那条评论**只是他不看**，对平台真实存在、对其他所有人公开可见。
+- **R2（影子评论，按内容作者）**：**内容作者**隐藏了这个人 → 那条评论对**所有人**都不存在，**只有写它的人自己看得见**（无感知机制）。
+
+口径分两层，**别混为一谈**：
+
+| 层 | 代表方法 | R1 | R2 |
+|---|---|---|---|
+| **面向查看者**（「他这一屏能看到几条」） | `CommentRepository.countVisibleForViewer` | **套** | **套** |
+| **平台口径 / 互动量统计**（「这是不是一次真实互动」） | `CommentRepository.countByRealAuthor` 及后续任何热度 / 排序 / 选品指标 | **不套**（照常计入） | **不套用即错——必须排除**：影子评论及其回复串**不得计入任何互动量**，否则骚扰账号的评论会变成「热度」 |
+
+- 面向查看者的数字**必须与实际渲染出来的条数一致**。少套 R1 就会出现「标题写着评论 (5)，往下数只有 4 条」的穿帮——那正是 AD-13 列为首要防范的现象。
+- **评论作者本人视角下数字比他人多 1**，是影子机制的固有特性（A-A21），**可接受，不要去「修」**。
+- ⚠️ **AD-13 的「评论数」那一条把「同步套用 R1 + R2」与「R1 隐藏的照常计入」写在同一句里，字面互斥**。Story 1.3 实现时按该条自己列的 Prevents 首项裁定为上表的两层分工。**若产品另有判断，要改的是 `countVisibleForViewer` 里 R1 那两行 WHERE**（外加 `CommentHideFilterIntegrationTest.ac5_r1HiddenCommentAlsoKeepsCountAndRenderedRowsInSync`）。
+- **回复串随父隐藏**：父被任一条过滤挡住，整串对该视角一并不展示（不出现「回复了某条看不见的评论」的孤儿回复）。`replyCount` 取 `findRepliesForParents` 的返回条数，过滤写进 WHERE 后**天然就是过滤后的数**。

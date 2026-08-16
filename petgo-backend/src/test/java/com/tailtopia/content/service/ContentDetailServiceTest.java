@@ -47,7 +47,8 @@ class ContentDetailServiceTest {
         hideRelations = mock(UserHideRelationReader.class);
         service = new ContentDetailService(posts, comments, likes, accounts, reportService, hideRelations);
         when(comments.countVisibleForViewer(org.mockito.ArgumentMatchers.anyLong(),
-                org.mockito.ArgumentMatchers.any())).thenReturn(5L);
+                org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyLong())).thenReturn(5L);
         when(likes.countByPostId(org.mockito.ArgumentMatchers.anyLong())).thenReturn(2L);
     }
 
