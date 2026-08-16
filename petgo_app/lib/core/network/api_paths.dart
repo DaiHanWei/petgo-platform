@@ -218,6 +218,11 @@ class ApiPaths {
   /// 他人迷你主页投影（Story 3.8）。
   static String userMiniProfile(int userId) => '$base/users/$userId/mini-profile';
 
+  /// 黑名单（V1.1.4 Story 1.1/1.2/1.5，FR-94）。
+  /// POST 拉黑（body `{targetUserId}`）· GET 列表（Story 1.5）· DELETE `/{userId}` 解除。
+  static const String meBlockedUsers = '$base/me/blocked-users';
+  static String meBlockedUser(int userId) => '$meBlockedUsers/$userId';
+
   /// 问诊存档（Story 2.5）。
   static const String healthArchiveDecisions = '$base/health-events/archive-decisions';
   static const String healthDecision = '$base/health-events/decision';

@@ -1395,5 +1395,14 @@
   "mePostPrivateBadge": "Hanya kamu",
   "@mePostPrivateBadge": {"description": "My posts: badge on private (unsynced) Diary content"},
   "milestoneHintAutoHealth": "Menyala otomatis saat kamu menambah catatan kesehatan atau selesai konsultasi dokter — tanpa check-in.",
-  "@milestoneHintAutoHealth": {"description": "Milestone sheet: hint for auto-only health milestones (M3/M4/M5/M9), replaces check-in copy"}
+  "@milestoneHintAutoHealth": {"description": "Milestone sheet: hint for auto-only health milestones (M3/M4/M5/M9), replaces check-in copy"},
+
+  "blockUserAction": "Blokir",
+  "blockUserActionSub": "Aku tidak mau melihat dia lagi",
+  "blockUserTitle": "Blokir {nickname}?",
+  "blockUserMessage": "Setelah diblokir, kamu tidak akan melihat konten dan komentar mereka lagi.",
+  "blockUserSuccess": "Berhasil diblokir. Lihat di Daftar Blokir",
+  "blockUserFailed": "Gagal memblokir, coba lagi",
+  "miniProfileBlocked": "Kamu sudah memblokir pengguna ini",
+  "miniProfileLoadFailed": "Gagal terhubung, coba lagi"
 }

@@ -187,7 +187,13 @@ class HomePage extends ConsumerWidget {
                 ..showSnackBar(SnackBar(content: Text(l10n.reportHiddenToast)));
             }
           }),
-          onAuthorTap: (item) => showMiniProfile(context, ref, item.authorId),
+          onAuthorTap: (item) => showMiniProfile(
+            context,
+            ref,
+            item.authorId,
+            // FR-94：拉黑成功 → 该作者在当前列表的**全部**卡片立刻消失（成功 Toast 由迷你卡统一给）。
+            onBlocked: () => ref.read(feedProvider.notifier).removeByAuthor(item.authorId),
+          ),
         );
       },
     );

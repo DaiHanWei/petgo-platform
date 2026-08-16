@@ -1653,5 +1653,25 @@
   "mePostPrivateBadge": "Only you",
   "@mePostPrivateBadge": {"description": "My posts: badge on private (unsynced) Diary content"},
   "milestoneHintAutoHealth": "Lights up automatically when you add a health record or finish a vet consultation — no check-in needed.",
-  "@milestoneHintAutoHealth": {"description": "Milestone sheet: hint for auto-only health milestones (M3/M4/M5/M9), replaces check-in copy"}
+  "@milestoneHintAutoHealth": {"description": "Milestone sheet: hint for auto-only health milestones (M3/M4/M5/M9), replaces check-in copy"},
+
+  "blockUserAction": "Block",
+  "@blockUserAction": {"description": "Mini profile menu / confirm sheet: the block action label (V1.1.4 Story 1.2)"},
+  "blockUserActionSub": "I don't want to see them anymore",
+  "@blockUserActionSub": {"description": "Mini profile menu: subtitle under the block action"},
+  "blockUserTitle": "Block {nickname}?",
+  "@blockUserTitle": {
+    "description": "Block confirm sheet title",
+    "placeholders": { "nickname": { "type": "String" } }
+  },
+  "blockUserMessage": "Once blocked, you won't see their posts or comments anymore.",
+  "@blockUserMessage": {"description": "Block confirm sheet: body copy (deliberately does not mention shadow comments or notifications)"},
+  "blockUserSuccess": "Blocked. You can find them in your block list.",
+  "@blockUserSuccess": {"description": "Toast after a successful block"},
+  "blockUserFailed": "Couldn't block, please try again",
+  "@blockUserFailed": {"description": "Toast when the block request fails; the confirm sheet stays open"},
+  "miniProfileBlocked": "You've blocked this user",
+  "@miniProfileBlocked": {"description": "Toast when opening the mini profile of someone you have blocked"},
+  "miniProfileLoadFailed": "Connection failed, please try again",
+  "@miniProfileLoadFailed": {"description": "Toast when the mini profile fails to load"}
 }

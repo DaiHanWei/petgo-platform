@@ -210,7 +210,17 @@ class _DetailScaffold extends ConsumerWidget {
     if (detail.authorDeleted) return row;
     return GestureDetector(
       key: const ValueKey('detailAuthorRow'),
-      onTap: () => showMiniProfile(context, ref, detail.authorId),
+      onTap: () => showMiniProfile(
+        context,
+        ref,
+        detail.authorId,
+        // FR-94（UI 稿 C3）：详情页拉黑成功 → 该帖对本人已不可见（Story 1.1 AC10 返回 404），
+        // 停在这一页只会看到一个空壳，故回到 Feed；顺带把他在列表里的卡片一并移除。
+        onBlocked: () {
+          ref.read(feedProvider.notifier).removeByAuthor(detail.authorId);
+          if (context.mounted) Navigator.of(context).maybePop();
+        },
+      ),
       child: row,
     );
   }
