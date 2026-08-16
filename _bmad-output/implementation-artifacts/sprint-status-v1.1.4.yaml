@@ -160,7 +160,7 @@
 #    失效清单见 v1.1.4/README.md §2 与决策日志正文顶部（两边一致）
 
 generated: 2026-08-15
-last_updated: 2026-08-16   # Story 1.5 实现完成，转 review
+last_updated: 2026-08-16   # Story 1.6 实现完成，Epic 1 六个 story 全部转 review
 project: TailTopia V1.1.4
 project_key: NOKEY
 tracking_system: file-system
@@ -176,7 +176,7 @@ development_status:
   1-3-评论区里再也看不到他他也没法在我地盘上冲别人喊话: review         # 含 R2「R2 判内容作者非查看者」。四个评论查询方法全部已带 viewerId（架构实证），R1 基本是加一个条件；R2 需 service 传内容作者 id、不 join
   1-4-他来点赞评论我这边一点动静都没有: review                        # 含 R3「抑制判据有两条」。是「不发」不是「发了再隐藏」（未读角标不 +1）；系统通知一律不接入
   1-5-我能看到自己拉黑了谁随时放人出来: review                  # D 泳道 7 屏(D1-D7)+D7b+D8。含 R5「封号≠注销」。行内「⋯」只预留布局不渲染（随 2-4 出现）。IR-4 排序钉死 BLOCK.created_at / IR-6 新增 AC9 模块边界 / IR-8 原 AC0 改为不带编号的验收时序说明。✅ IR-7 已由 IR-7R 撤销、端点已统一为 blocked-users（epics/架构/三个 story 全部同步）。⚠️ 仍有一处待产品确认（不阻塞）：「已注销用户」文案 —— 既有键 feedDeletedUser="Pengguna terhapus" vs UI 稿 D8="Pengguna nonaktif"，建议复用既有键；若取 UI 稿说法则 Feed/详情/评论三处须一并改
-  1-6-只在评论区骚扰从不发帖的人我也能就地处理: ready-for-dev          # 本版本最大闭环缺口的补丁：影子评论/R1/R2/通知抑制全为评论区骚扰设计，而入口原先在评论区根本不存在。IR-9 已补验收时序说明（AC4 待 1-2 完成后回归）
+  1-6-只在评论区骚扰从不发帖的人我也能就地处理: review                 # 本版本最大闭环缺口的补丁：影子评论/R1/R2/通知抑制全为评论区骚扰设计，而入口原先在评论区根本不存在。IR-9 已补验收时序说明（AC4 待 1-2 完成后回归）
   epic-1-retrospective: optional
 
   # ===== Epic 2: 我能把一个账号交给平台，并且立刻眼前清净 =====
