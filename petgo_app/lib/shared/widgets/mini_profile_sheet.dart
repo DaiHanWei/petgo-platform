@@ -11,6 +11,7 @@ import '../../features/auth/domain/auth_guard.dart';
 import '../../features/auth/domain/auth_state.dart';
 import '../../features/content/data/mini_profile_repository.dart';
 import '../../features/social/data/blocked_users_repository.dart';
+import '../../features/social/domain/account_action_entry.dart';
 import '../../features/social/presentation/account_report_sheet.dart';
 import '../../l10n/app_localizations.dart';
 import 'app_image.dart';
@@ -320,6 +321,7 @@ class _MiniProfileCard extends StatelessWidget {
       userId,
       // 「已举报」来自服务端标记（Story 2.1 AC8），不是前端会话态。
       alreadyReported: profile.reported,
+      entry: AccountActionEntry.miniProfile,
     );
     if (!submitted) return;
     if (cardContext.mounted) {

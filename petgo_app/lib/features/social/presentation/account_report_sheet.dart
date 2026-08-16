@@ -5,6 +5,7 @@ import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../data/account_report_repository.dart';
+import '../domain/account_action_entry.dart';
 import '../domain/account_report_reason.dart';
 
 /// 账号举报抽屉（V1.1.4 Story 2.2，FR-58 · UI 稿 B1–B7）。
@@ -17,11 +18,15 @@ import '../domain/account_report_reason.dart';
 /// 3. **提交中加转圈** —— 那边只是禁用按钮，没有任何「正在发」的迹象。
 ///
 /// 返回 true = 用户提交成功并点了「关闭」（调用方据此收起迷你卡那一层）。
+///
+/// [entry]：**从哪个界面发起的**。Story 4.1 会在这里统一收口埋点；
+/// 本 story 只负责把它正确传进来（黑名单页那个入口的点击量要单独看，见 `AccountActionEntry`）。
 Future<bool> openAccountReport(
   BuildContext context,
   WidgetRef ref,
   int targetUserId, {
   required bool alreadyReported,
+  required AccountActionEntry entry,
 }) async {
   final submitted = await showModalBottomSheet<bool>(
     context: context,
@@ -30,6 +35,7 @@ Future<bool> openAccountReport(
     builder: (_) => _AccountReportSheet(
       targetUserId: targetUserId,
       alreadyReported: alreadyReported,
+      entry: entry,
       ref: ref,
     ),
   );
@@ -40,11 +46,16 @@ class _AccountReportSheet extends StatefulWidget {
   const _AccountReportSheet({
     required this.targetUserId,
     required this.alreadyReported,
+    required this.entry,
     required this.ref,
   });
 
   final int targetUserId;
   final bool alreadyReported;
+
+  /// 发起入口。**Story 4.1 在提交成功处读它上报**；本 story 只保证它传到了这里。
+  final AccountActionEntry entry;
+
   final WidgetRef ref;
 
   @override

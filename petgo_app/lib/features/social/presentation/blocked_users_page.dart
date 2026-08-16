@@ -10,7 +10,9 @@ import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/letter_avatar.dart';
 import '../data/blocked_users_repository.dart';
+import '../domain/account_action_entry.dart';
 import '../domain/blocked_user.dart';
+import 'account_report_sheet.dart';
 import 'blocked_list_skeleton.dart';
 
 /// 黑名单管理页（Story 1.5，FR-94 · UI 稿 D 泳道）。
@@ -35,6 +37,12 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
   /// 为什么不直接 `ref.invalidate`：那会把 provider 打回 loading，整页闪一下骨架屏——
   /// 用户刚点完一个按钮，看到的却是整页重载。下次进页会强制刷新，权威数据以服务端为准。
   final Set<int> _removed = <int>{};
+
+  /// 本次会话里刚举报过的人：用来立刻点亮「已举报」标签。
+  ///
+  /// 不走 `ref.invalidate` 重拉列表 —— 那会让整页闪一下骨架屏，而用户只是给某一行加了个标签。
+  /// 下次进页会强制刷新，权威数据以服务端为准（标签本身是服务端持久化的，Story 2.1 AC8）。
+  final Set<int> _justReported = <int>{};
 
   @override
   void initState() {
@@ -119,7 +127,7 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
                           overflow: TextOverflow.ellipsis,
                           style: AppTypography.body.copyWith(fontWeight: FontWeight.w600)),
                     ),
-                    if (b.reported) ...[
+                    if (b.reported || _justReported.contains(b.userId)) ...[
                       const SizedBox(width: 6),
                       _reportedTag(l10n),
                     ],
@@ -146,13 +154,112 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
             child: Text(l10n.blockedListUnblock,
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
           ),
-          // ⚠️ 右侧「⋯」的位置**本 story 只预留、不渲染**：此刻它没有任何动作可执行，
-          // 渲染出来就是一个点开是空菜单的死按钮。举报入口由 Story 2.4 落在这里，
-          // 届时直接把这个 SizedBox 换成 IconButton，行内间距不用重调。
-          const SizedBox(width: 36),
+          // 行内「⋯」→ 举报（Story 2.4）。位置是 Story 1.5 预留好的，间距未动。
+          //
+          // ⚠️ **这个入口堵的是一条真实的死路**：拉黑之后就进不去对方的迷你主页了，
+          // 而迷你主页是举报的**唯一**入口 —— 两条一叠，拉黑等于永久放弃举报他的能力。
+          // 而骚扰者恰恰是最容易先被拉黑的那类账号（被骚扰的第一反应是拉黑图清净，
+          // 冷静下来想举报时路已经没了），结果就是**越恶劣的账号越不容易被举报到运营手里**。
+          SizedBox(
+            width: 36,
+            child: IconButton(
+              key: ValueKey('blockedMore_${b.userId}'),
+              icon: const Icon(Icons.more_horiz_rounded, size: 20, color: AppColors.muted),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+              onPressed: () => _showRowMenu(l10n, b),
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  /// 行内「⋯」菜单（Story 2.4，D9）。
+  ///
+  /// ⚠️ **底部抽屉即可**，不必照搬迷你卡那个「向上弹的浮层」—— 那是因为迷你卡本身就是个底部抽屉、
+  /// 向下弹会溢出屏幕底部（C-76）；黑名单页是普通列表页，没有这个约束。
+  /// ⚠️ **不用任何滑动手势**：右滑撞系统返回（本页是从设置 push 进来的），
+  /// 左滑那片像素正好压在「解除拉黑」上——滑得短是点击、滑得长才是露出，必然误触。
+  Future<void> _showRowMenu(AppLocalizations l10n, BlockedUser b) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (sheetCtx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(
+                      color: AppColors.line, borderRadius: BorderRadius.circular(9999)),
+                ),
+              ),
+              InkWell(
+                key: ValueKey('blockedMenuReport_${b.userId}'),
+                // 已举报过也**照常可点**（允许重复举报——每次的类型独立留存）。
+                onTap: () {
+                  Navigator.of(sheetCtx).pop();
+                  _startReport(b);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: const BoxDecoration(
+                    border: Border(bottom: BorderSide(color: AppColors.line2)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Text('🚩', style: TextStyle(fontSize: 16)),
+                      const SizedBox(width: 10),
+                      Text(l10n.accountReportAction,
+                          style: const TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink)),
+                    ],
+                  ),
+                ),
+              ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: () => Navigator.of(sheetCtx).pop(),
+                  style: TextButton.styleFrom(
+                      foregroundColor: AppColors.textSecondary,
+                      padding: const EdgeInsets.symmetric(vertical: 12)),
+                  child: Text(l10n.commonCancel),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 从黑名单页发起举报 —— 复用 Story 2.2 的同一套抽屉（同样五类、同样的「提交后无法撤销」）。
+  ///
+  /// ⚠️ 成功后**不移除该行**：这一行出现在本页是因为它含 `BLOCK`，而举报只是**另外**加一条
+  /// `REPORT` 关系、碰都不碰 `BLOCK` 行。移除它会让用户以为拉黑也一起解除了。
+  /// 位置同样不变（列表按 `BLOCK` 的拉黑时间排序）。举报成功只是多一个「已举报」标签。
+  Future<void> _startReport(BlockedUser b) async {
+    final submitted = await openAccountReport(
+      context,
+      ref,
+      b.userId,
+      alreadyReported: b.reported || _justReported.contains(b.userId),
+      entry: AccountActionEntry.blocklist,
+    );
+    // 只有真的提交成功（用户点了成功态的「关闭」）才点亮标签；取消与失败都不算。
+    if (submitted && mounted) {
+      setState(() => _justReported.add(b.userId));
+    }
   }
 
   Widget _reportedTag(AppLocalizations l10n) => Container(

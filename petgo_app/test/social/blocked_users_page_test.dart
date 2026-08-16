@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/features/social/data/account_report_repository.dart';
 import 'package:tailtopia/features/social/data/blocked_users_repository.dart';
+import 'package:tailtopia/features/social/domain/account_report_reason.dart';
 import 'package:tailtopia/features/social/domain/blocked_user.dart';
 import 'package:tailtopia/features/social/presentation/blocked_list_skeleton.dart';
 import 'package:tailtopia/features/social/presentation/blocked_users_page.dart';
@@ -52,9 +54,18 @@ BlockedUser _user({
       blockedAt: DateTime.utc(2026, 8, 14, 9, 12),
     );
 
-Future<void> _pump(WidgetTester tester, _FakeRepo repo, {bool settle = true}) async {
+class _FakeReportRepo implements AccountReportRepository {
+  final List<int> reported = [];
+  @override
+  Future<void> report(int targetUserId, AccountReportReason reason, {String? detail}) async =>
+      reported.add(targetUserId);
+}
+
+Future<void> _pump(WidgetTester tester, _FakeRepo repo,
+    {bool settle = true, AccountReportRepository? reportRepo}) async {
   final container = ProviderContainer(overrides: [
     blockedUsersRepositoryProvider.overrideWithValue(repo),
+    accountReportRepositoryProvider.overrideWithValue(reportRepo ?? _FakeReportRepo()),
   ]);
   addTearDown(container.dispose);
   await tester.pumpWidget(UncontrolledProviderScope(
@@ -215,6 +226,81 @@ void main() {
       expect(find.text('Rina'), findsOneWidget);
       expect(find.text(l10n.feedDeletedUser), findsNothing);
       expect(find.text(l10n.blockedListReportedTag), findsNothing);
+    });
+  });
+
+  // ===== Story 2.4：行内「⋯」→ 举报 =====
+
+  group('Story 2.4：黑名单页的行内举报入口', () {
+    testWidgets('AC1：每行渲染「⋯」，点开是含「举报」的菜单', (tester) async {
+      await _pump(tester, _FakeRepo([_user()]));
+
+      expect(find.byKey(const ValueKey('blockedMore_7')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('blockedMore_7')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('blockedMenuReport_7')), findsOneWidget);
+      expect(find.text(l10n.accountReportAction), findsOneWidget);
+    });
+
+    testWidgets('AC1：「解除拉黑」仍是常驻按钮，两个热区分开；无任何滑动手势', (tester) async {
+      await _pump(tester, _FakeRepo([_user()]));
+
+      expect(find.byKey(const ValueKey('blockedUnblock_7')), findsOneWidget);
+      expect(find.byType(Dismissible), findsNothing);
+      // 两个热区不重叠——重叠就必然误触。
+      final more = tester.getRect(find.byKey(const ValueKey('blockedMore_7')));
+      final unblock = tester.getRect(find.byKey(const ValueKey('blockedUnblock_7')));
+      expect(more.overlaps(unblock), isFalse);
+    });
+
+    testWidgets('点举报 → 走 Story 2.2 的同一套抽屉（五类 + 「提交后无法撤销」）', (tester) async {
+      await _pump(tester, _FakeRepo([_user()]));
+      await tester.tap(find.byKey(const ValueKey('blockedMore_7')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('blockedMenuReport_7')));
+      await tester.pumpAndSettle();
+
+      expect(find.text(l10n.accountReportTitle), findsOneWidget);
+      expect(find.byKey(const ValueKey('accountReportIrreversible')), findsOneWidget);
+      expect(find.byKey(const ValueKey('accountReportReason_spam')), findsOneWidget);
+    });
+
+    testWidgets('⚠️ AC3：举报成功后该行**仍在列表里**，只是多了「已举报」标签', (tester) async {
+      final reportRepo = _FakeReportRepo();
+      await _pump(tester, _FakeRepo([_user()]), reportRepo: reportRepo);
+      expect(find.text(l10n.blockedListReportedTag), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('blockedMore_7')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('blockedMenuReport_7')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('accountReportReason_harassment')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('accountReportSubmit')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('accountReportDoneClose')));
+      await tester.pumpAndSettle();
+
+      expect(reportRepo.reported, <int>[7]);
+      // 这一行在本页是因为它含 BLOCK；举报不碰 BLOCK，所以行还在、位置也不变。
+      // 移除它会让用户以为拉黑也一起解除了。
+      expect(find.byKey(const ValueKey('blockedUnblock_7')), findsOneWidget);
+      expect(find.text(l10n.blockedListReportedTag), findsOneWidget);
+    });
+
+    testWidgets('AC2：已举报过的人，菜单里的举报项**照样可点**（允许重复举报）', (tester) async {
+      await _pump(tester, _FakeRepo([_user(reported: true)]));
+      await tester.tap(find.byKey(const ValueKey('blockedMore_7')));
+      await tester.pumpAndSettle();
+
+      final item = tester.widget<InkWell>(find.byKey(const ValueKey('blockedMenuReport_7')));
+      expect(item.onTap, isNotNull);
+
+      await tester.tap(find.byKey(const ValueKey('blockedMenuReport_7')));
+      await tester.pumpAndSettle();
+      // 进去就是重复举报态（副标题换成说明块）。
+      expect(find.byKey(const ValueKey('accountReportRepeatNotice')), findsOneWidget);
     });
   });
 }
