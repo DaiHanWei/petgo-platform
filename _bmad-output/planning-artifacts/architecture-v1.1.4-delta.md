@@ -188,11 +188,37 @@ README 写「`stag` 已排到 V100，本分支只到 V99」。**实测本分支 
 
 **Rule**：
 
-- 后台列表以**一条跨三张既有表的联合查询**产出，在 DB 内排序分页：`content_reports`（内容举报）+ `manual_review_queue`（账号标识字段异步审核，AB-9A/FR-56）+ `account_reports`（本版本新增）。
-- **不新增统一工单索引表、不双写、存量数据零回填**。三类工单的状态仍由各自源表权威持有。
+- 后台列表以**一条联合查询**产出，在 DB 内排序分页。**三个业务类别落在四张既有/新建表上**：
+
+  | 类别 | 源表 | 说明 |
+  |---|---|---|
+  | 内容举报 | `content_reports` | 既有 |
+  | 用户举报 | `account_reports` | **本版本新增**（AD-2） |
+  | **账号标识字段** | **`name_moderation_records`**（V50）+ **`avatar_reviews`**（V51） | **两张并列同构的既有表** |
+
+  > **📌 2026-08-15 CS 阶段订正（据代码实证，按产品意图定）：本条原写第三类是 `manual_review_queue`，该认定不成立。**
+  > `manual_review_queue` 装的是**帖子与评论**——`ReviewContentType` 枚举只有 `CONTENT_POST` / `COMMENT`，`V49` 的 CHECK 是 `content_type IN ('CONTENT_POST','COMMENT')`，且 `V51` 迁移注释原文写明「**不复用帖子 manual_review_queue、不改其 content_type CHECK；CM2 名称/头像各自独立表**」。
+  > **PRD §4.1 的产品意图（第三类 = 账号标识字段，V1.1.0 AB-9A 异步审核产生）是清楚的**，故按产品意图取 `name_moderation_records` + `avatar_reviews` 两张表。**`manual_review_queue` 不进本视图。**
+
+- **不新增统一工单索引表、不双写、存量数据零回填**。各类工单的状态仍由各自源表权威持有。
+- ⚠️ **两张账号标识字段表的状态机不同，联合时须做映射**（详见下方「第三类的三处不同构」）。
 - **后台是运营内部页面，QPS 极低** —— 禁止为其引入缓存或索引表（这条同时是 AD-18 的具体化）。
 - **筛选是统一视图成立的前提，不是锦上添花**：按工单类型（三类）+ 按状态（待处理 / 已处理 / 已驳回）+ 按被举报账号检索，三者必须与列表同版本交付。
 - **不保留「评论举报」空分类** —— 该能力至今未上线，留一个永远没数据的筛选项只会让运营以为漏了什么。
+
+#### 第三类的三处不同构（联合查询必须处理）
+
+`name_moderation_records` 与 `avatar_reviews` 是「并列同构」的设计，但**对统一视图而言有三处不同**：
+
+| # | 差异 | 处理 |
+|---|---|---|
+| ① **状态机不同** | name：`SCORING / AUTO_PASSED / MANUAL_PENDING / RESOLVED_PASS / RESOLVED_VIOLATION / SUPERSEDED / FAILED_TO_QUEUE`（7 值）<br>avatar：`QUEUED / AUTO_PASSED / MANUAL_PENDING / RESOLVED`（4 值） | **两张表都有 `MANUAL_PENDING`** —— 这是「待处理」的共同锚点。**统一视图只取 `MANUAL_PENDING` 的行**（非人工待处置的自动过/陈旧作废本就不该进运营队列） |
+| ② **「已处理 / 已驳回」无直接对应** | name 的终态是 `RESOLVED_PASS` / `RESOLVED_VIOLATION` 两个；avatar 只有单一 `RESOLVED` | AB-3D 的三态筛选（待处理 / 已处理 / 已驳回）对第三类做映射：`MANUAL_PENDING → 待处理`；name 的 `RESOLVED_VIOLATION` 与 avatar 的 `RESOLVED`(verdict=VIOLATION) → 已处理；name 的 `RESOLVED_PASS` 与 avatar 的 `RESOLVED`(verdict=PASS) → 已驳回。**该映射须在实现时固化并写进注释** |
+| ③ **时间锚点字段名不同** | name 用 `submitted_at`；avatar 用 `created_at`（无 `submitted_at`） | 联合查询里各自 `AS` 成同名列，供「同分按最早时间升序」排序用 |
+
+✅ **两张表都有 `MANUAL_PENDING` 的部分索引**（`idx_nmr_pending_queue` / `idx_avr_pending_queue`），取待处理项走索引，无性能问题。
+
+⚠️ **PII 红线**：`name_moderation_records.submitted_value`（送审名称原文）与 `avatar_reviews.avatar_url` 两列的迁移注释都写明「**严禁写入业务日志**」。统一视图**展示**这些内容是允许的（那正是「被举报对象原文」字段），但**日志一律不得记录**。
 
 ### AD-8 — 新建社区关系模块；账号举报归审核模块
 
@@ -307,7 +333,19 @@ README 写「`stag` 已排到 V100，本分支只到 V99」。**实测本分支 
 - **既有内容举报的两条自动预处置通道保持不变**（违法违规原因单次触发 / 举报人数达阈值），**仅作用于内容举报**，且**不再参与统一队列的排序**。
 - **排序统一由 AB-3D 的新公式接管全部三类工单**：`优先级分 = 举报人数 + 高频举报人数`，高频阈值 = 对该对象累计举报 **≥ 5 次**（含 5），**单个举报人贡献封顶 2 分**。分数**实时计算不落库快照**；列表按分数倒序，同分按**最早一次举报时间升序**。
 - 界面**必须把分数拆开展示**（人数 + 次数 + 高频人数 + 算出的分），不要只给一个总分。
-- **⚠️ 账号标识字段审核工单没有举报人，公式对它恒为 0 分 —— 必须显式定义，否则它会永远沉底。** PRD 说「本公式统一接管全部三类工单」时没注意到第三类根本不是举报产生的。**架构默认：按该类工单既有的 `ReviewPriority` 映射成分数 —— `P0 → 10` / `P1 → 2` / `P2 → 0`**，锚点取自 PRD 自己给的两个例子（「10 个人各报 1 次 = 10 分」「1 个人报 100 次 = 2 分」）：P0 视为等同于十人举报的众怒，P1 等同于一个纠缠举报者，P2 沉底。**该映射待产品确认，见 §7 OQ-CA1**；确认前按此实现，不阻塞。
+- **⚠️ 账号标识字段审核工单没有举报人，公式对它恒为 0 分 —— 必须显式定义，否则它会永远沉底。** PRD 说「本公式统一接管全部三类工单」时没注意到第三类根本不是举报产生的。
+
+  **架构默认映射（2026-08-15 CS 阶段据代码实证重定）：**
+
+  | 该类工单的 `priority` | 映射分 | 锚点理由 |
+  |---|---|---|
+  | **`HIGH`**（三方评分 ≥0.8 / 图像高置信违规） | **10** | 对齐公式自身的例子「10 个人各报 1 次 = 10 分」—— 高置信违规视为等同十人举报的众怒 |
+  | **`NORMAL`**（默认值） | **2** | 对齐「1 个人报 100 次 = 2 分」—— 等同一个纠缠的举报者，**不沉底** |
+
+  > **📌 本映射取代了原文的 `P0 → 10 / P1 → 2 / P2 → 0`。** 原映射依据的 `ReviewPriority{P0,P1,P2}` 枚举**只用在 `manual_review_queue`（帖子/评论）上**，而第三类实为 `name_moderation_records` + `avatar_reviews`，其 `priority` 枚举是 **`NORMAL / HIGH` 两值**（`ck_nmr_priority` / `ck_avr_priority`）。原映射无处可用。
+  > **为什么 `NORMAL` 不映射成 0**：`NORMAL` 是这两张表的 `DEFAULT` 值，绝大多数记录都是它。映射成 0 会让这类工单**几乎全部永远沉底** —— 这正是本条要防的事。沿用 `ReviewPriority` 文档里「默认档不沉底」的同一判断。
+
+  **该映射的相对权重待产品确认，见 §7 OQ-CA1**；确认前按此实现，**不阻塞**（确认后改两个常量即可）。
 
 ### AD-18 — 运维 envelope 零增量
 
@@ -377,9 +415,10 @@ flowchart TD
     PORT --> NTF
     PORT --> PROF
 
-    ADM -.读时联合查询.-> T1["content_reports"]
-    ADM -.-> T2["manual_review_queue"]
-    ADM -.-> T3["account_reports<br/>+ entries"]
+    ADM -.读时联合查询.-> T1["content_reports<br/>（内容举报）"]
+    ADM -.-> T2a["name_moderation_records<br/>（账号标识字段·名称）"]
+    ADM -.-> T2b["avatar_reviews<br/>（账号标识字段·头像）"]
+    ADM -.-> T3["account_reports<br/>+ entries<br/>（用户举报·本版本新增）"]
 
     style SOC fill:#EFE6FF,stroke:#7D45F6
     style PORT fill:#EFE6FF,stroke:#7D45F6
@@ -434,9 +473,17 @@ flowchart LR
   | 方法 | 路径 | 说明 |
   |---|---|---|
   | `POST` | `/api/v1/account-reports` | 提交账号举报（类型 + 可选说明） |
-  | `GET` | `/api/v1/me/blocks` | 黑名单列表（按拉黑时间倒序，含「已举报」标记） |
-  | `POST` | `/api/v1/me/blocks` | 拉黑（幂等，见 AD-1） |
-  | `DELETE` | `/api/v1/me/blocks/{userId}` | 解除拉黑（幂等静默成功） |
+  | `GET` | `/api/v1/me/blocked-users` | 黑名单列表（按拉黑时间倒序，含「已举报」标记）。**裸 `List<T>` 全量返回，不分页、无信封、无 `total`** |
+  | `POST` | `/api/v1/me/blocked-users` | 拉黑（幂等，见 AD-1） |
+  | `DELETE` | `/api/v1/me/blocked-users/{userId}` | 解除拉黑（幂等静默成功） |
+
+  > **📌 2026-08-15 CS 阶段订正（用户拍板）：路径由 `/me/blocks` 改为 `/me/blocked-users`。**
+  > 理由：`blocks` 语义偏动词，`blocked-users` 指向资源本身；且与前端 `api_paths.dart` 的「小写复数连字符」命名惯例一致。
+  >
+  > **📌 同批订正：列表响应不带 `total`，改为裸 `List<T>` 全量返回。**
+  > 依据是代码实证：**全仓没有任何列表响应带 `total`** —— 游标信封一律 `{items, nextCursor, hasMore}`，仅有的几个 `total*` 都在「天然全量、总数是业务常量」的接口上（`MilestoneListResponse.totalCount` = 目录总量 30/15、`NewbieTaskResponse.total` = 恒 6）。
+  > 而黑名单最贴近的先例是 `MeRefundController.myRefunds` / `HealthRecordController.list` —— `/api/v1/me/xxx` + 数据量天然小 → **裸 `List<T>` 全量返回，连信封都没有**。全量返回时 `total` 与 `items.length` 冗余。
+  > **D1 设置页的计数由列表长度派生**（前端 `provider.valueOrNull?.length ?? 0`）。列表极小、设置页非热路径，一次小请求可接受。若日后拉黑量级意外增长，再改为游标分页 + 单独计数端点，属独立议题。
   | `GET` | `/api/v1/users/{userId}/mini-profile` | **既有端点**，加可选 viewer + 拉黑拦截 |
 - **错误**：统一 RFC 9457 ProblemDetail，新增可识别 `type`：`blocked-user`（主页访问被拦）。
 - **前端**：`showMiniProfile` 保持唯一入口函数；黑名单页与举报抽屉复用既有 `report_sheet.dart` 的视觉规格（内边距 22/12/22/28、手柄 36×4、原因卡圆角 13 / 边框 1.5px、提交按钮圆角 14），**只换枚举与标题**。
@@ -459,7 +506,9 @@ flowchart LR
 | `V102` | `account_reports` + `account_report_entries` | 工单表 `target_user_id` **唯一**；明细表外键指向工单，索引 `(report_id, reporter_id)` 供优先级公式聚合 |
 | `V103` | `account_disposals` | 索引 `(target_user_id, created_at DESC)` 供工单页「历史处置次数」与时间倒序展示 |
 
-**零回填、零数据迁移。** 三张全新表，既有 `content_reports` / `manual_review_queue` 一字不动（AD-9 / AD-7）。
+**零回填、零数据迁移。** 三张全新表；统一视图联合到的既有表（`content_reports` / `name_moderation_records` / `avatar_reviews`）**一律只读、一字不动**（AD-9 / AD-7）。
+
+> ⚠️ **Story 3.2 另需一个通知类型迁移**：`NotificationType` 当前 19 个值里**没有封号/警告类**（实证：V1 封号不发站内通知），新增须写 `DROP CONSTRAINT ck_notifications_type` + `ADD CONSTRAINT`，**且必须基于 `V97` 的完整 19 值追加** —— 否则会重蹈 `V72` 覆盖审核线三值的覆辙。
 
 ---
 
@@ -476,7 +525,7 @@ flowchart LR
 | FR-58 「已举报」状态持久化 | 由 `REPORT` 行存在与否派生 | AD-1 |
 | FR-58 警告 / 封号两档 | `account_disposals` + 既有停用链路 | AD-10 |
 | FR-58 零自动预处置 | —— | AD-17 |
-| **FR-94** 拉黑 / 解除 | `social` 写服务 + `/api/v1/me/blocks` | AD-1 |
+| **FR-94** 拉黑 / 解除 | `social` 写服务 + `/api/v1/me/blocked-users` | AD-1 |
 | FR-94 生效范围 ① Feed | `findFeed` 加一条件 | AD-5 / AD-9 |
 | FR-94 生效范围 ②⑤ 运营位 / 搜索 | 通用规则，本版本不触发 | AD-1（S1） |
 | FR-94 生效范围 ③ 评论 R1 / R2 | `CommentRepository` 四方法 + 传参 | AD-3 / AD-13 |
@@ -514,7 +563,8 @@ flowchart LR
 | # | 问题 | 责任人 | 阻塞什么 |
 |---|---|---|---|
 | **OQ-A4** 🚩 | 封号通知印尼语措辞待**法务**确认。**同批送审还有四处新增文案**：警告通知 · 二次确认「提交后无法撤销」· 解除拉黑第二句 · FR-51 改后的回告文案 | PM + Legal | **封号功能不得在其闭环前上线**。其余功能不受阻 |
-| **OQ-CA1** | **账号标识字段审核工单在统一队列里的优先级分怎么定** —— 该类工单没有举报人，PRD 的公式对它恒为 0、会永远沉底。架构已给默认映射（`P0 → 10` / `P1 → 2` / `P2 → 0`，锚点取自 PRD 自己的两个例子），需产品确认是否认可这个相对权重 | 产品 | **不阻塞**，按默认实现即可，确认后改常量 |
+| **OQ-CA1**（**2026-08-15 重定**） | **账号标识字段审核工单在统一队列里的优先级分怎么定** —— 该类工单没有举报人，PRD 的公式对它恒为 0、会永远沉底。**架构默认映射：`HIGH → 10` / `NORMAL → 2`**（锚点取自 PRD 自己的两个例子），需产品确认是否认可这个相对权重<br>⚠️ **原提法（按 `ReviewPriority` 的 `P0/P1/P2` 映射）已作废** —— 那个枚举只用在 `manual_review_queue`（帖子/评论）上，第三类实为 `name_moderation_records` + `avatar_reviews`，其 `priority` 是 `NORMAL/HIGH` 两值 | 产品 | **不阻塞**，按默认实现即可，确认后改**两个**常量 |
+| **OQ-CA2**（**2026-08-15 新增**） | **第三类工单的三态映射需产品确认**：`MANUAL_PENDING → 待处理` 无争议；但 name 侧终态有两个（`RESOLVED_PASS` / `RESOLVED_VIOLATION`）、avatar 侧只有一个 `RESOLVED`（靠 `verdict` 区分）。架构默认按「违规 → 已处理 / 通过 → 已驳回」映射，需产品确认这个语义对不对 | 产品 | **不阻塞**，按默认实现，确认后改映射表 |
 | **UI-1** | D6 解除确认屏缺「对方也被举报过」的变体，UI 稿未单独出图 | 实现时按 UI 稿 D7b 框外说明处理，文案已在附录给出 | 不阻塞 |
 | **PRD-1** | FR-51 回告文案改线上是一条**独立交付项**，且会**连带改变已上线的内容举报回告** | 须在 story 里显式列出，不得混在别的改动里悄悄改 | 不阻塞 |
 | **PRD-2** | **上线前必须先量基线**（上线前连续 4 周的周均工单数 / 工单构成 / 人均举报次数），否则 §4.3 整节度量作废 | 产品 | 上线前，不阻塞开发 |
