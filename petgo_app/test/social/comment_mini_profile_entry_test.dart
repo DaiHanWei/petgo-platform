@@ -6,12 +6,12 @@ import 'package:tailtopia/features/content/data/mini_profile_repository.dart';
 import 'package:tailtopia/features/content/domain/comment.dart';
 import 'package:tailtopia/features/content/domain/content_detail.dart';
 import 'package:tailtopia/features/content/presentation/comment_section.dart';
-import 'package:tailtopia/features/content/presentation/detail_providers.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/social/data/blocked_users_repository.dart';
 import 'package:tailtopia/features/social/domain/blocked_user.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/shared/widgets/letter_avatar.dart';
 
 /// V1.1.4 Story 1.6：评论区接入迷你卡。
 ///
@@ -207,5 +207,28 @@ void main() {
     // 真正的过滤保证在服务端 R1（Story 1.3），前端只负责让这一屏跟上。
     expect(repo.getCommentsCalls, 2);
     await tester.pump(const Duration(seconds: 3)); // 放掉成功 toast 的定时器
+  });
+
+  // ===== 2026-08-16 产品决定：评论行补头像（UI 稿 A6）=====
+
+  testWidgets('评论行渲染头像，点头像同样弹卡（热区不再只有一行小字）', (tester) async {
+    await _pump(tester, [_comment()]);
+
+    expect(find.byType(LetterAvatar), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('commentAuthorAvatar_1')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('miniProfileClose')), findsOneWidget);
+  });
+
+  testWidgets('已注销 → 头像走默认 person 态且不可点', (tester) async {
+    final mini = await _pump(tester, [_comment(nickname: null, deleted: true)]);
+
+    expect(tester.widget<LetterAvatar>(find.byType(LetterAvatar)).deleted, isTrue);
+    await tester.tap(find.byKey(const ValueKey('commentAuthorAvatar_1')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('miniProfileClose')), findsNothing);
+    expect(mini.calls, 0);
   });
 }
