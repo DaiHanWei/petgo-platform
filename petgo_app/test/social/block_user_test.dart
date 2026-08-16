@@ -8,6 +8,7 @@ import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/content/data/mini_profile_repository.dart';
 import 'package:tailtopia/features/social/data/blocked_users_repository.dart';
+import 'package:tailtopia/features/social/domain/blocked_user.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/widgets/mini_profile_sheet.dart';
 
@@ -40,6 +41,12 @@ class _FakeBlockRepo implements BlockedUsersRepository {
   final Completer<void>? gate;
   final bool fail;
   final List<int> blocked = <int>[];
+
+  @override
+  Future<List<BlockedUser>> list() async => const <BlockedUser>[];
+
+  @override
+  Future<void> unblock(int userId) async {}
 
   @override
   Future<void> block(int userId) async {

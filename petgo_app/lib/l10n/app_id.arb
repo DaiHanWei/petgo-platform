@@ -1404,5 +1404,21 @@
   "blockUserSuccess": "Berhasil diblokir. Lihat di Daftar Blokir",
   "blockUserFailed": "Gagal memblokir, coba lagi",
   "miniProfileBlocked": "Kamu sudah memblokir pengguna ini",
-  "miniProfileLoadFailed": "Gagal terhubung, coba lagi"
+  "miniProfileLoadFailed": "Gagal terhubung, coba lagi",
+
+  "blockedListTitle": "Daftar Blokir",
+  "blockedListHint": "Mereka tidak akan tahu kalau kamu memblokirnya.",
+  "blockedListEmptyTitle": "Belum ada akun yang diblokir",
+  "blockedListEmptyBody": "Kalau ada yang mengganggu, kamu bisa memblokirnya lewat menu di kartu profil mereka.",
+  "blockedListLoadFailed": "Gagal memuat daftar",
+  "blockedListLoadFailedBody": "Periksa koneksi internetmu, lalu coba lagi.",
+  "blockedListUnblock": "Buka Blokir",
+  "blockedListReportedTag": "Dilaporkan",
+  "blockedListBlockedAt": "Diblokir {date}",
+  "unblockConfirmTitle": "Buka blokir {nickname}?",
+  "unblockConfirmBody": "Setelah dibuka, kamu akan melihat konten mereka lagi.",
+  "unblockConfirmBodyReported": "Kamu pernah melaporkan mereka. Setelah blokir dibuka, kontennya tetap tidak akan ditampilkan.",
+  "unblockSuccess": "Blokir dibuka. Konten mereka akan muncul lagi setelah refresh.",
+  "unblockSuccessReported": "Blokir dibuka. Kamu pernah melaporkan mereka, jadi kontennya tetap tidak ditampilkan.",
+  "unblockFailed": "Gagal membuka blokir, coba lagi"
 }

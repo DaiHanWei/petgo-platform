@@ -5,6 +5,8 @@ import com.tailtopia.social.domain.UserHideRelation;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /**
  * 隐藏关系读写（Story 1.1）。
@@ -27,6 +29,16 @@ public interface UserHideRelationRepository extends JpaRepository<UserHideRelati
 
     /** 某人主动拉黑的全部对象，按拉黑时间倒序（黑名单页，Story 1.5 消费）。 */
     List<UserHideRelation> findByHolderIdAndSourceOrderByCreatedAtDesc(long holderId, HideSource source);
+
+    /**
+     * 这批目标里，哪些还另有一条指定来源的隐藏行（黑名单页标「已举报」用）。
+     *
+     * <p>只取 id 不取实体：一次查询解决整页的标记，避免逐行 exists 打出 N+1。
+     */
+    @Query("SELECT r.targetId FROM UserHideRelation r "
+            + "WHERE r.holderId = :holderId AND r.source = :source AND r.targetId IN :targetIds")
+    List<Long> findTargetIdsByHolderAndSourceIn(@Param("holderId") long holderId,
+            @Param("source") HideSource source, @Param("targetIds") List<Long> targetIds);
 
     /** 删除指定来源的那一行；返回受影响行数（解除拉黑只删 BLOCK 行）。 */
     long deleteByHolderIdAndTargetIdAndSource(long holderId, long targetId, HideSource source);

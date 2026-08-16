@@ -1673,5 +1673,42 @@
   "miniProfileBlocked": "You've blocked this user",
   "@miniProfileBlocked": {"description": "Toast when opening the mini profile of someone you have blocked"},
   "miniProfileLoadFailed": "Connection failed, please try again",
-  "@miniProfileLoadFailed": {"description": "Toast when the mini profile fails to load"}
+  "@miniProfileLoadFailed": {"description": "Toast when the mini profile fails to load"},
+
+  "blockedListTitle": "Block List",
+  "@blockedListTitle": {"description": "Blocked users page: app bar title, also the settings row label"},
+  "blockedListHint": "They won't know you blocked them.",
+  "@blockedListHint": {"description": "Blocked users page: reassurance line above the list"},
+  "blockedListEmptyTitle": "No blocked accounts yet",
+  "@blockedListEmptyTitle": {"description": "Blocked users page: empty state title"},
+  "blockedListEmptyBody": "If someone bothers you, you can block them from the menu on their profile card.",
+  "@blockedListEmptyBody": {"description": "Blocked users page: empty state guidance \u2014 tells the user where blocking happens"},
+  "blockedListLoadFailed": "Couldn't load the list",
+  "@blockedListLoadFailed": {"description": "Blocked users page: error state title"},
+  "blockedListLoadFailedBody": "Check your internet connection and try again.",
+  "@blockedListLoadFailedBody": {"description": "Blocked users page: error state body"},
+  "blockedListUnblock": "Unblock",
+  "@blockedListUnblock": {"description": "Blocked users page: the always-visible primary action on each row"},
+  "blockedListReportedTag": "Reported",
+  "@blockedListReportedTag": {"description": "Blocked users page: tag next to the nickname when this person was also reported"},
+  "blockedListBlockedAt": "Blocked {date}",
+  "@blockedListBlockedAt": {
+    "description": "Blocked users page: when this person was blocked (already formatted date string)",
+    "placeholders": { "date": { "type": "String" } }
+  },
+  "unblockConfirmTitle": "Unblock {nickname}?",
+  "@unblockConfirmTitle": {
+    "description": "Unblock confirm sheet title",
+    "placeholders": { "nickname": { "type": "String" } }
+  },
+  "unblockConfirmBody": "Once unblocked, you'll see their content again.",
+  "@unblockConfirmBody": {"description": "Unblock confirm sheet: body when the person was only blocked"},
+  "unblockConfirmBodyReported": "You reported them. Even after unblocking, their content stays hidden from you.",
+  "@unblockConfirmBodyReported": {"description": "Unblock confirm sheet: body when the person was also reported"},
+  "unblockSuccess": "Unblocked. Their content will show up again after a refresh.",
+  "@unblockSuccess": {"description": "Toast after unblocking \u2014 deliberately says 'after a refresh', not 'immediately'"},
+  "unblockSuccessReported": "Unblocked. You reported them, so their content stays hidden from you.",
+  "@unblockSuccessReported": {"description": "Toast after unblocking someone who was also reported"},
+  "unblockFailed": "Couldn't unblock, please try again",
+  "@unblockFailed": {"description": "Toast when the unblock request fails; the row stays in the list"}
 }

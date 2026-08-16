@@ -14,6 +14,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../notify/data/push_permission_providers.dart';
+import '../../social/data/blocked_users_repository.dart';
 
 /// 二级「设置」页（Story 7.1 · F8 · settings.html 1:1 还原）。
 ///
@@ -174,6 +175,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> with WidgetsBinding
               _divider(),
               _navRow(l10n.termsOfService, onTap: () => _openUrl(kTermsUrl),
                   key: const ValueKey('meTermsOfService')),
+              _divider(),
+              // 黑名单（V1.1.4 Story 1.5 · FR-94）。右侧计数直接取列表长度——
+              // 后端全量返回、不给 total，全量返回时 total 与 length 冗余。
+              // 计数为 0 时也照常显示「0」，与同组其他行保持一致的视觉密度。
+              _navRow(l10n.blockedListTitle,
+                  value: '${ref.watch(blockedUsersProvider).value?.length ?? 0}',
+                  onTap: () => context.push('/me/blocked-users'),
+                  key: const ValueKey('meBlockedUsers')),
             ]),
             const SizedBox(height: 22),
 
