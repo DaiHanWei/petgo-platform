@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<!--
+  统一工单队列（Story 3.1，AB-3D）。三类工单一个列表、一把尺子排序，完全替代旧的 /admin/reports。
+  筛选：类型 / 状态 / 按被举报账号检索；HTMX 局部刷新 #results。展开详情单独拉片段（避免列表 N+1）。
+  ⚠️ 送审名称原文与送审头像 URL 可以在这里展示（那正是运营要看的证据），但严禁进日志。
+-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.tickets.title}">工单队列 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <!-- ⚠️ 新页要自己引 htmx（不是全局自动引入的）——曾有页面漏引导致按钮点了没反应。 -->
+    <script th:src="@{/admin/vendor/htmx.min.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1 th:text="#{admin.tickets.title}">工单队列</h1>
+        <p class="muted" th:text="#{admin.tickets.subtitle}">三类工单统一排队，按优先级从高到低；同分先报的先处理。</p>
+
+        <!-- 筛选条：类型 / 状态 / 按被举报账号检索。HTMX 没加载时退化成整页 GET，仍可用。 -->
+        <form class="filter-bar" th:action="@{/admin/tickets}" method="get"
+              hx-get="/admin/tickets" hx-target="#results" hx-swap="innerHTML">
+            <label><span th:text="#{admin.tickets.filter.type}">工单类型</span>
+                <select name="type">
+                    <option value="" th:text="#{admin.tickets.filter.all}">全部</option>
+                    <option th:each="t : ${types}" th:value="${t}"
+                            th:text="#{'admin.tickets.type.' + ${t}}"
+                            th:selected="${t.name() == type}">TYPE</option>
+                </select>
+            </label>
+            <label><span th:text="#{admin.tickets.filter.status}">状态</span>
+                <select name="status">
+                    <option value="" th:text="#{admin.tickets.filter.all}">全部</option>
+                    <option th:each="s : ${statuses}" th:value="${s}"
+                            th:text="#{'admin.tickets.status.' + ${s}}"
+                            th:selected="${s.name() == status}">STATUS</option>
+                </select>
+            </label>
+            <label><span th:text="#{admin.tickets.filter.account}">被举报账号</span>
+                <input type="text" name="q" th:value="${q}"
+                       th:placeholder="#{admin.tickets.filter.account.hint}"/></label>
+            <button type="submit" class="btn btn-primary" th:text="#{admin.tickets.filter.submit}">筛选</button>
+        </form>
+
+        <div id="results" th:insert="~{:: resultsFragment}">结果占位</div>
+    </div>
+
+    <!-- ===== 结果片段（HX-Request 时控制器单独返回此片段）===== -->
+    <div th:fragment="resultsFragment" th:remove="tag">
+        <p class="empty" th:if="${result.totalElements == 0}" th:text="#{admin.tickets.empty}">没有匹配的工单。</p>
+        <table th:if="${result.totalElements > 0}">
+            <thead>
+            <tr>
+                <th th:text="#{admin.tickets.col.type}">类型</th>
+                <th th:text="#{admin.tickets.col.target}">被举报对象</th>
+                <th th:text="#{admin.tickets.col.preview}">摘要</th>
+                <!-- ⚠️ 四个数必须并列展示：只看次数会把「1 个人报了 27 次」当成众怒；
+                     只看人数会丢掉「同一人反复纠缠」；只给总分等于让运营对着黑盒排队。 -->
+                <th th:text="#{admin.tickets.col.reporters}">举报人数</th>
+                <th th:text="#{admin.tickets.col.reports}">举报次数</th>
+                <th th:text="#{admin.tickets.col.frequent}">高频人数</th>
+                <th th:text="#{admin.tickets.col.score}">优先级分</th>
+                <th th:text="#{admin.tickets.col.disposals}">历史处置</th>
+                <th th:text="#{admin.tickets.col.time}">最早举报</th>
+                <th th:text="#{admin.tickets.col.status}">状态</th>
+                <th th:text="#{admin.tickets.col.action}">操作</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="r : ${result.content}">
+                <td th:text="#{'admin.tickets.type.' + ${r.type}}">类型</td>
+                <td>
+                    <span th:if="${r.targetNickname != null}" th:text="${r.targetNickname}">昵称</span>
+                    <span class="muted" th:if="${r.targetNickname == null}"
+                          th:text="#{admin.tickets.target.unknown}">—</span>
+                    <span class="muted" th:if="${r.targetUserId != null}"
+                          th:text="'#' + ${r.targetUserId}">#id</span>
+                    <span class="muted" th:if="${r.subType != null}" th:text="${r.subType}">SUB</span>
+                </td>
+                <td class="cell-wide" th:text="${r.preview}">-</td>
+                <td th:text="${r.reporterCount}">0</td>
+                <td th:text="${r.reportCount}">0</td>
+                <td th:text="${r.frequentCount}">0</td>
+                <td><b th:text="${r.score}">0</b></td>
+                <td th:text="${r.disposalCount}">0</td>
+                <td th:text="${@adminTime.wib(r.earliestAt)}">-</td>
+                <td th:text="#{'admin.tickets.status.' + ${r.status}}">状态</td>
+                <td>
+                    <!-- 展开才拉详情：签名 / 每一次举报 / 历史处置都只在这一刻查一次。 -->
+                    <a class="btn btn-sm btn-neutral"
+                       th:hx-get="@{/admin/tickets/detail(type=${r.type},sourceId=${r.sourceId},userId=${r.targetUserId})}"
+                       th:hx-target="'#detail-' + ${r.type} + '-' + ${r.sourceId}"
+                       hx-swap="innerHTML"
+                       th:text="#{admin.tickets.expand}">展开</a>
+                </td>
+            </tr>
+            <tr th:each="r : ${result.content}">
+                <td colspan="11" th:id="'detail-' + ${r.type} + '-' + ${r.sourceId}"></td>
+            </tr>
+            </tbody>
+        </table>
+
+        <div class="pager" th:if="${result.totalElements > 0}">
+            <a th:if="${result.hasPrevious()}"
+               th:hx-get="@{/admin/tickets(type=${type},status=${status},q=${q},page=${result.number - 1})}"
+               hx-target="#results" hx-swap="innerHTML"
+               th:href="@{/admin/tickets(type=${type},status=${status},q=${q},page=${result.number - 1})}"
+               th:text="#{admin.audit.prev}">← 上一页</a>
+            <span th:text="#{admin.audit.page(${result.number + 1}, ${result.totalPages}, ${result.totalElements})}">分页</span>
+            <a th:if="${result.hasNext()}"
+               th:hx-get="@{/admin/tickets(type=${type},status=${status},q=${q},page=${result.number + 1})}"
+               hx-target="#results" hx-swap="innerHTML"
+               th:href="@{/admin/tickets(type=${type},status=${status},q=${q},page=${result.number + 1})}"
+               th:text="#{admin.audit.next}">下一页 →</a>
+        </div>
+    </div>
+
+    <!-- ===== 展开详情片段 ===== -->
+    <div th:fragment="detailFragment" th:remove="tag">
+        <div class="banner">
+            <p>
+                <b th:text="#{admin.tickets.detail.signature}">个性签名</b>：
+                <span th:if="${signature != null and !signature.isEmpty()}" th:text="${signature}">签名</span>
+                <span class="muted" th:if="${signature == null or signature.isEmpty()}"
+                      th:text="#{admin.tickets.detail.signature.empty}">未设置</span>
+            </p>
+            <p>
+                <b th:text="#{admin.tickets.detail.disposals}">历史处置</b>：
+                <span class="muted" th:if="${#lists.isEmpty(disposals)}"
+                      th:text="#{admin.tickets.detail.none}">无</span>
+                <span th:each="d : ${disposals}">
+                    <code th:text="${d.disposalType}">TYPE</code>
+                    <span class="muted" th:text="${@adminTime.wib(d.createdAt)}">-</span>
+                </span>
+            </p>
+            <p th:if="${!#lists.isEmpty(entries)}">
+                <b th:text="#{admin.tickets.detail.entries}">每一次举报</b>：
+            </p>
+            <ul th:if="${!#lists.isEmpty(entries)}">
+                <li th:each="e : ${entries}">
+                    <code th:text="${e.reason}">REASON</code>
+                    <span class="muted" th:text="${@adminTime.wib(e.createdAt)}">-</span>
+                    <span th:if="${e.detail != null}" th:text="${e.detail}">补充说明</span>
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+</body>
+</html>

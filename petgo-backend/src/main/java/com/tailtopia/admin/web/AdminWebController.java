@@ -98,40 +98,34 @@ public class AdminWebController {
 
     // ===== Story 3.7 + 4.1：举报审核队列（状态筛选 + 批量 + 双向通知 + 审计）=====
 
+    /**
+     * 旧举报队列 AB-3A（V1.1.4 Story 3.1 起<b>不再作为独立视图存在</b>）。
+     *
+     * <p>它的举报处理能力已并入统一工单队列 {@code /admin/tickets} —— <b>不是两者并存</b>：
+     * 留着两个入口，运营每次还要先判断该去哪个看，而两边的排序口径又不一样。
+     * 这里保留一条重定向，只为不让旧书签/旧链接 404。
+     *
+     * <p>⚠️ 下面那两个 POST（下架 / 驳回）<b>仍然有效</b>，只是重定向到新页；
+     * 它们的新入口由 Story 3.2 / 3.3 在统一视图上接。
+     */
     @GetMapping("/admin/reports")
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('content.view_reports')")
-    public String reports(@RequestParam(value = "status", required = false) String status,
-            @RequestHeader(value = "HX-Request", required = false) String hxRequest, Model model) {
-        com.tailtopia.moderation.domain.ReportStatus st = parseReportStatus(status);
-        model.addAttribute("active", "reports");
-        model.addAttribute("status", st.name());
-        model.addAttribute("reports", adminModerationService.queue(st));
-        return hxRequest != null ? "admin/reports :: rows" : "admin/reports";
-    }
-
-    private com.tailtopia.moderation.domain.ReportStatus parseReportStatus(String s) {
-        if (s == null || s.isBlank()) {
-            return com.tailtopia.moderation.domain.ReportStatus.PENDING;
-        }
-        try {
-            return com.tailtopia.moderation.domain.ReportStatus.valueOf(s);
-        } catch (IllegalArgumentException e) {
-            return com.tailtopia.moderation.domain.ReportStatus.PENDING;
-        }
+    public String reports() {
+        return "redirect:/admin/tickets";
     }
 
     @PostMapping("/admin/reports/{id}/takedown")
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')")
     public String takedown(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id) {
         adminModerationService.takedown(id, admin);
-        return "redirect:/admin/reports";
+        return "redirect:/admin/tickets";
     }
 
     @PostMapping("/admin/reports/{id}/dismiss")
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('content.view_reports')")
     public String dismiss(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id) {
         adminModerationService.dismiss(id, admin);
-        return "redirect:/admin/reports";
+        return "redirect:/admin/tickets";
     }
 
     @PostMapping("/admin/reports/batch")
@@ -144,7 +138,7 @@ public class AdminWebController {
         AdminModerationService.BatchResult result = adminModerationService.batch(reportIds, takedown, admin);
         flash.addFlashAttribute("notice",
                 "批量完成：成功 " + result.ok() + " 条，失败 " + result.failedCount() + " 条");
-        return "redirect:/admin/reports";
+        return "redirect:/admin/tickets";
     }
 
     // ===== Story 5.1：兽医账号 CRUD（复用本 shell）=====

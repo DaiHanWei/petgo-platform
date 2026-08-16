@@ -9,6 +9,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.tailtopia.auth.domain.User;
 import com.tailtopia.content.domain.ContentPost;
 import com.tailtopia.content.domain.ContentType;
+import com.tailtopia.content.domain.CommentModerationStatus;
+import com.tailtopia.content.repository.CommentRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
 import com.tailtopia.social.service.UserHideRelationService;
 import com.tailtopia.support.ApiIntegrationTest;
@@ -39,6 +41,28 @@ class CommentHideFilterIntegrationTest extends ApiIntegrationTest {
     @Autowired
     private UserHideRelationService hideService;
 
+    @Autowired
+    private CommentRepository comments;
+
+    /**
+     * ⚠️ 评论落库时是 {@code UNDER_REVIEW}，机器审核在**另一个线程**跑完才翻成 VISIBLE ——
+     * 在那之前，除作者本人外谁都看不见它。
+     *
+     * <p>不等就断言的话，「过滤生效了」与「异步还没跑完」<b>看起来一模一样</b>：正向用例会偶发红，
+     * 而所有「断言看不到」的负向用例会**假绿**。这道闸是 2026-08-16 全量回归时被一条偶发失败逼出来的
+     * （Story 1.3 首版没有它）。
+     */
+    private void awaitVisible(long commentId) throws Exception {
+        for (int i = 0; i < 100; i++) {
+            var c = comments.findById(commentId).orElseThrow();
+            if (c.getModerationStatus() == CommentModerationStatus.VISIBLE) {
+                return;
+            }
+            Thread.sleep(30);
+        }
+        throw new AssertionError("评论 " + commentId + " 迟迟没走完审核，无法判断可见性过滤是否生效");
+    }
+
     private ContentPost newPost(long authorId) {
         return posts.save(ContentPost.publish(authorId, ContentType.DAILY, null, "测试正文", List.of()));
     }
@@ -51,7 +75,9 @@ class CommentHideFilterIntegrationTest extends ApiIntegrationTest {
                         .content("{\"body\":\"" + body + "\"}"))
                 .andExpect(status().isCreated())
                 .andReturn();
-        return json.readTree(r.getResponse().getContentAsString()).get("id").asLong();
+        long id = json.readTree(r.getResponse().getContentAsString()).get("id").asLong();
+        awaitVisible(id);
+        return id;
     }
 
     /** 以某人身份回复某条一级评论，返回回复 id。 */
@@ -62,7 +88,9 @@ class CommentHideFilterIntegrationTest extends ApiIntegrationTest {
                         .content("{\"body\":\"" + body + "\"}"))
                 .andExpect(status().isCreated())
                 .andReturn();
-        return json.readTree(r.getResponse().getContentAsString()).get("id").asLong();
+        long id = json.readTree(r.getResponse().getContentAsString()).get("id").asLong();
+        awaitVisible(id);
+        return id;
     }
 
     /** 某人（viewerId=null → 游客）看到的一级评论 id 列表。 */

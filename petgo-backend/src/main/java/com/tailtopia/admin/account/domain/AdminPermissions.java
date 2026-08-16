@@ -39,6 +39,14 @@ public final class AdminPermissions {
     public static final String CONTENT_PROACTIVE_TAKEDOWN = "content.proactive_takedown";
     /** 人工审核队列：查看 + 通过/拒绝（内容审核 Story 4.3；开关仍限 SUPER_ADMIN）。 */
     public static final String CONTENT_MANUAL_REVIEW = "content.manual_review";
+    /**
+     * 统一工单队列（V1.1.4 Story 3.1，AB-3D）：三类工单一个列表。
+     *
+     * <p>与 {@link #CONTENT_VIEW_REPORTS}（旧的举报队列）分开一个码，是因为统一视图里还有
+     * <b>账号举报</b>与<b>账号标识字段审核</b>两类 —— 权限粒度跟着能看见的数据走，
+     * 不能靠「反正旧码也能看举报」把两类新数据顺带放出去。
+     */
+    public static final String CONTENT_VIEW_TICKETS = "content.view_tickets";
 
     // 问诊异常与会话（Epic 5）
     public static final String CONSULT_VIEW_ANOMALIES = "consult.view_anomalies";
@@ -101,7 +109,7 @@ public final class AdminPermissions {
     /** 按查看/编辑分组，供账号页勾选区展示。 */
     public static final List<PermissionGroup> GROUPS = List.of(
             new PermissionGroup("perm.group.view", List.of(
-                    CONTENT_VIEW_REPORTS, CONTENT_VIEW,
+                    CONTENT_VIEW_REPORTS, CONTENT_VIEW_TICKETS, CONTENT_VIEW,
                     USER_VIEW,
                     VET_VIEW, VET_QUALIFY_VIEW, RATING_VIEW,
                     CONSULT_VIEW_ANOMALIES, CONSULT_VIEW_SESSIONS,
