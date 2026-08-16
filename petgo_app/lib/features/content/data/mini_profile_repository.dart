@@ -12,6 +12,7 @@ class MiniProfile {
     this.nickname,
     this.avatarUrl,
     this.signature,
+    this.reported = false,
   });
 
   final int postCount;
@@ -22,6 +23,13 @@ class MiniProfile {
   /// 个性签名（用户自填 ≤60 字）。未设置 / 已注销 → null。
   final String? signature;
 
+  /// 当前用户**是否举报过这个人**（V1.1.4 Story 2.1 AC8）。
+  ///
+  /// ⚠️ 由服务端的举报隐藏行派生、**不是前端会话态** —— 用户重装 App 也要还看得到「已举报」，
+  /// 否则他会重复举报同一个人，而每一次都会真的落一行明细、污染运营看到的「12 人 / 27 次」。
+  /// 游客的响应体里**根本没有这个键**（后端用可空布尔 + NON_NULL 省略），故默认 false。
+  final bool reported;
+
   /// 是否有可展示的签名（空串与纯空白按「没设置」处理，免得卡片上留一片空白）。
   bool get hasSignature => signature?.trim().isNotEmpty == true;
 
@@ -31,6 +39,7 @@ class MiniProfile {
         nickname: json['nickname'] as String?,
         avatarUrl: json['avatarUrl'] as String?,
         signature: json['signature'] as String?,
+        reported: (json['reported'] ?? false) as bool,
       );
 }
 

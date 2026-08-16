@@ -11,6 +11,7 @@ import '../../features/auth/domain/auth_guard.dart';
 import '../../features/auth/domain/auth_state.dart';
 import '../../features/content/data/mini_profile_repository.dart';
 import '../../features/social/data/blocked_users_repository.dart';
+import '../../features/social/presentation/account_report_sheet.dart';
 import '../../l10n/app_localizations.dart';
 import 'app_image.dart';
 import 'app_toast.dart';
@@ -222,8 +223,26 @@ class _MiniProfileCard extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // 「举报」项由 Story 2.2 接入（纯加一项，非返工）。在此之前**不渲染**，
-                    // 避免出现点了没反应的死菜单项。两项将并列、不分主次，故此处不用红字强调。
+                    // 「举报」与「拉黑」**并列、不分主次**：两者都不用红字强调，副标题各说各的用途。
+                    //
+                    // ⚠️ 已举报过 → 文案换成「已举报 / 点击可再次举报」并用品牌紫，
+                    // **必须读起来像「还能再点」而不是禁用态**：再报一次是有意义的
+                    // （每次的类型独立留存，第一次报骚扰、第二次报仿冒正是问题在升级的证据）。
+                    _menuItem(
+                      key: const ValueKey('miniProfileMenuReport'),
+                      emoji: profile.reported ? '📌' : '🚩',
+                      label: profile.reported ? l10n.accountReportedAction : l10n.accountReportAction,
+                      subtitle: profile.reported
+                          ? l10n.accountReportedActionSub
+                          : l10n.accountReportActionSub,
+                      labelColor: profile.reported ? AppColors.mint : AppColors.ink,
+                      onTap: () {
+                        close();
+                        _startReport(cardContext);
+                      },
+                    ),
+                    // ⚠️ 举报之后**拉黑项照常可点、不置灰不隐藏**：拉黑带来一个举报没有的效果 ——
+                    // 从此进不去对方主页。以「已举报」为由禁掉它是错的。
                     _menuItem(
                       key: const ValueKey('miniProfileMenuBlock'),
                       emoji: '🚫',
@@ -252,6 +271,7 @@ class _MiniProfileCard extends StatelessWidget {
     required String label,
     required String subtitle,
     required VoidCallback onTap,
+    Color labelColor = AppColors.ink,
   }) =>
       InkWell(
         key: key,
@@ -271,8 +291,8 @@ class _MiniProfileCard extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(label,
-                        style: const TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink)),
+                        style: TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w600, color: labelColor)),
                     const SizedBox(height: 2),
                     Text(subtitle,
                         style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
@@ -283,6 +303,24 @@ class _MiniProfileCard extends StatelessWidget {
           ),
         ),
       );
+
+  /// 举报：打开账号举报抽屉；成功后用户点「关闭」→ **两层一并收起**（回到点开迷你卡之前的页面）。
+  ///
+  /// 中途取消（没提交就点取消）只收起抽屉那一层，回到迷你卡本身。
+  Future<void> _startReport(BuildContext cardContext) async {
+    // FR-0C：游客点社区动作 → 强登录引导，不发请求（与拉黑同一门控）。
+    if (!requireLogin(ref, cardContext, onAllowed: () {})) return;
+    final submitted = await openAccountReport(
+      cardContext,
+      ref,
+      userId,
+      // 「已举报」来自服务端标记（Story 2.1 AC8），不是前端会话态。
+      alreadyReported: profile.reported,
+    );
+    if (submitted && cardContext.mounted) {
+      Navigator.of(cardContext).pop(); // 收起迷你卡（举报抽屉已自行收起）
+    }
+  }
 
   /// 拉黑二次确认 → 提交 → 成功收起两层 / 失败保持打开（AC2，C1–C4）。
   ///
@@ -309,7 +347,11 @@ class _MiniProfileCard extends StatelessWidget {
           return true;
         } catch (_) {
           // 失败提示必须在这里给：此时确认抽屉仍然开着，`showConfirmSheet` 尚未返回。
-          if (overlay != null) showAppToastOnOverlay(overlay, l10n.blockUserFailed);
+          // ⚠️ `top: true` 与举报失败（Story 2.2 AC7）保持同一口径：抽屉还开着时，
+          // toast 的默认底部位置正好压在按钮区上，用户会以为提示是按钮的一部分。
+          if (overlay != null) {
+            showAppToastOnOverlay(overlay, l10n.blockUserFailed, top: true);
+          }
           return false;
         }
       },

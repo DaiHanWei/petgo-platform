@@ -15,18 +15,24 @@ import '../../core/theme/colors.dart';
 OverlayEntry? _current;
 Timer? _timer;
 
+/// [top]：把 toast 放到**屏幕顶部**而不是默认的底部。
+///
+/// V1.1.4 Story 2.2 加的，只为一种场景：**底部抽屉正开着、而提示要谈的就是这个抽屉里的事**
+/// （举报提交失败 → 抽屉保持打开让用户重试）。toast 挂 root Overlay 所以 z 序在抽屉之上不会被遮，
+/// 但默认那个 `bottom + 90` 的位置正好压在抽屉的按钮区上，用户会以为提示是按钮的一部分。
+/// **默认 false 时行为与改动前逐字节一致**，既有 30+ 处调用零影响。
 void showAppToast(BuildContext context, String message,
-    {Duration duration = const Duration(milliseconds: 2600)}) {
+    {Duration duration = const Duration(milliseconds: 2600), bool top = false}) {
   final overlay = Overlay.maybeOf(context, rootOverlay: true);
   if (overlay == null) return;
-  showAppToastOnOverlay(overlay, message, duration: duration);
+  showAppToastOnOverlay(overlay, message, duration: duration, top: top);
 }
 
 void showAppToastOnOverlay(OverlayState overlay, String message,
-    {Duration duration = const Duration(milliseconds: 2600)}) {
+    {Duration duration = const Duration(milliseconds: 2600), bool top = false}) {
   _dismiss();
   final entry = OverlayEntry(
-    builder: (_) => _ToastWidget(message: message, duration: duration),
+    builder: (_) => _ToastWidget(message: message, duration: duration, top: top),
   );
   _current = entry;
   overlay.insert(entry);
@@ -42,10 +48,13 @@ void _dismiss() {
 }
 
 class _ToastWidget extends StatefulWidget {
-  const _ToastWidget({required this.message, required this.duration});
+  const _ToastWidget({required this.message, required this.duration, this.top = false});
 
   final String message;
   final Duration duration;
+
+  /// true = 贴屏幕顶部（避开正开着的底部抽屉）；false = 既有的底部位置。
+  final bool top;
 
   @override
   State<_ToastWidget> createState() => _ToastWidgetState();
@@ -82,7 +91,9 @@ class _ToastWidgetState extends State<_ToastWidget> with SingleTickerProviderSta
     return Positioned(
       left: 24,
       right: 24,
-      bottom: bottom,
+      // 顶部变体：安全区 + 16（避开刘海/状态栏）。底部那套算法一字未动。
+      top: widget.top ? mq.padding.top + 16 : null,
+      bottom: widget.top ? null : bottom,
       child: IgnorePointer(
         // 包一层透明 Material：否则 Overlay 里的 Text 会显示黄色双下划线（无 Material 上下文）。
         child: Material(

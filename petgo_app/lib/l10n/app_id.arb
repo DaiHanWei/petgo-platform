@@ -1420,5 +1420,20 @@
   "unblockConfirmBodyReported": "Kamu pernah melaporkan mereka. Setelah blokir dibuka, kontennya tetap tidak akan ditampilkan.",
   "unblockSuccess": "Blokir dibuka. Konten mereka akan muncul lagi setelah refresh.",
   "unblockSuccessReported": "Blokir dibuka. Kamu pernah melaporkan mereka, jadi kontennya tetap tidak ditampilkan.",
-  "unblockFailed": "Gagal membuka blokir, coba lagi"
+  "unblockFailed": "Gagal membuka blokir, coba lagi",
+
+  "accountReportTitle": "Laporkan akun ini",
+  "accountReportReasonSpam": "Spam atau promosi berlebihan",
+  "accountReportReasonImpersonation": "Menyamar sebagai orang lain",
+  "accountReportReasonHarassment": "Pelecehan berulang",
+  "accountReportReasonViolatingContent": "Memposting konten melanggar aturan",
+  "accountReportReasonOther": "Lainnya",
+  "accountReportDetailHint": "Ceritakan apa yang terjadi…",
+  "accountReportIrreversible": "Laporan tidak dapat dibatalkan setelah dikirim",
+  "accountReportRepeatNotice": "Kamu sudah pernah melaporkan akun ini. Melapor lagi memberi tahu kami bahwa masalahnya masih berlanjut, dan kami akan mempercepat penanganannya.",
+  "accountReportFailed": "Gagal mengirim laporan. Periksa koneksi lalu coba lagi, atau hubungi dukungan",
+  "accountReportAction": "Laporkan",
+  "accountReportActionSub": "Langgar aturan komunitas",
+  "accountReportedAction": "Sudah dilaporkan",
+  "accountReportedActionSub": "Ketuk untuk melaporkan lagi"
 }
