@@ -74,6 +74,8 @@
 | `pet_milestones` / `milestone_completions` | 里程碑 mini-epic（F2）| 归 profile 域；排期 1.0.x/1.1.0 待定，**非 Epic 6**。本轮 FR-42 断档补齐（in-page picker 打卡 / L 级达成推送 / 已过生日补录）已并入 PRD FR-42 规格，随 mini-epic 实现，**本轮不落代码** |
 | `notifications` 去重标记（生日/纪念日/节点已推）| 6.7（F5）| 落 notifications 附加列或独立小表，dev 落实 |
 | `user_hide_relations` | **1.1（V1.1.4）** | 隐藏关系单表双来源（BLOCK/REPORT）。**唯一键三元 `(holder_id, target_id, source)`** —— 幂等只在同源之间成立；举报写 REPORT 行**不得触碰 BLOCK 行任何字段**（黑名单排序取 `BLOCK.created_at`）。Epic 1 全部 + Epic 2 举报即隐藏 复用 |
+| `account_reports` | **2.1（V1.1.4）** | 账号举报工单。**一行 = 一个被举报账号，`target_user_id` 唯一** —— 12 个人举报同一个人也只有一条工单。状态 `PENDING/RESOLVED/DISMISSED`（**展示层第三档叫「无需处置」而非「已驳回」**，C-103；数据层值不改）。已处置后再被举报 → **同一条翻回 PENDING、不新建**，`first_reported_at` **不刷新**。Epic 3 统一队列消费 |
+| `account_report_entries` | **2.1（V1.1.4）** | 账号举报明细，**只追加不覆盖、无任何唯一约束**（刻意 —— 与 `content_reports` 的 `(reporter_id, post_id)` 唯一 + service 幂等吞掉正好相反）。每一次举报的类型与「其他」补充说明都独立留存；`detail` 是用户自由文本，**禁止进日志**。索引 `(report_id, reporter_id)` 供 Epic 3 优先级公式一次聚合出「人数 / 次数 / 高频人数」 |
 
 ## 跨 story 共享设施归属（扫描确认链路连贯）
 
@@ -115,3 +117,21 @@
 - **评论作者本人视角下数字比他人多 1**，是影子机制的固有特性（A-A21），**可接受，不要去「修」**。
 - ⚠️ **AD-13 的「评论数」那一条把「同步套用 R1 + R2」与「R1 隐藏的照常计入」写在同一句里，字面互斥**。Story 1.3 实现时按该条自己列的 Prevents 首项裁定为上表的两层分工。**若产品另有判断，要改的是 `countVisibleForViewer` 里 R1 那两行 WHERE**（外加 `CommentHideFilterIntegrationTest.ac5_r1HiddenCommentAlsoKeepsCountAndRenderedRowsInSync`）。
 - **回复串随父隐藏**：父被任一条过滤挡住，整串对该视角一并不展示（不出现「回复了某条看不见的评论」的孤儿回复）。`replyCount` 取 `findRepliesForParents` 的返回条数，过滤写进 WHERE 后**天然就是过滤后的数**。
+
+
+## 2026-08-16 追加决策（V1.1.4 Story 2.1：账号举报与内容举报是两套东西）
+
+**动账号举报之前先读这条。** 代码里两套举报并存，命名相近、语义相反，照抄是最大的风险：
+
+| | 内容举报 `content_reports`（既有，Story 3.7） | 账号举报 `account_reports` + `_entries`（V1.1.4 Story 2.1） |
+|---|---|---|
+| 粒度 | 一条内容一个工单 | **一个被举报账号一个工单** |
+| 重复举报 | 唯一键 `(reporter_id, post_id)` + service **两处裸 `return` 幂等吞掉，什么都不写** | **每次都追加一行明细**，类型与补充说明逐次留存 |
+| 理由枚举 | `ReportReason`：ILLEGAL / MISINFO / INAPPROPRIATE / HARASSMENT / OTHER | `AccountReportReason`：SPAM / IMPERSONATION / HARASSMENT / VIOLATING_CONTENT / OTHER（**只有两项对得上，不复用**） |
+| 自动预处置 | 有两条：`ILLEGAL` 单次触发 / 举报人数 ≥ 10（`P0_REPORT_COUNT_THRESHOLD`，硬编码在 Java、运营改不了）→ 内容挂起 | **零自动预处置**（AD-17），无论多少人举报都不动他的内容 |
+| 频率限制 | 靠唯一键天然只有一次 | **不设冷却**（A-A23，主动决定）：可无限次举报。service 只有一道 **5 秒**去重窗口，防的是双击穿透与网络重试，**不是限制用户意图** |
+| 副作用 | 无隐藏关系 | **举报即隐藏**：同一事务写一条 `source=REPORT` 的 `user_hide_relations` 行，任一失败整体回滚 |
+
+- **「已举报」标记由 `source=REPORT` 行是否存在派生**（`UserHideRelationReader.isReported`），**不是前端会话态** —— 用户重装 App 也得看得到，否则会重复举报、污染运营看到的「12 人 / 27 次」。
+- ⚠️ **`MiniProfileResponse.reported` 必须是装箱 `Boolean` 且游客时为 null**：全局 Jackson `NON_NULL` 会把 null 键整个省略，游客响应体的 key 集合因此一字未变（Story 1.1 AC6 的硬要求）。写成 primitive `boolean` 会永远出现在 JSON 里，当场破坏游客契约。
+- ⚠️ **举报隐藏永不删除、无任何解除入口**，且不进黑名单页（黑名单只收 `BLOCK`）。**唯一例外是主页访问仍可进入** —— FR-58 闭环（「已举报」状态与重复举报入口）全靠它。

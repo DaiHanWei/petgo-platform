@@ -50,9 +50,14 @@ public class MiniProfileController {
         if (author.deleted()) {
             return MiniProfileResponse.deactivated(); // 注销不暴露身份信息（NFR-8）
         }
+        // Story 2.1 AC8：「已举报」由 REPORT 隐藏行是否存在派生（服务端持久化，不是前端会话态）——
+        // 用户重装 App 也得还看得到，否则他会重复举报同一个人，而每次都会真的落一行明细。
+        // ⚠️ 游客传 null：Jackson NON_NULL 会把这个键整个省略，游客响应体的 key 集合一字未变。
+        Boolean reported = viewerId == null ? null : hideRelations.isReported(viewerId, userId);
         return MiniProfileResponse.of(author,
                 accountQueryService.activeSignatureOf(userId).orElse(null),
-                contentService.countPublishedByAuthor(userId));
+                contentService.countPublishedByAuthor(userId),
+                reported);
     }
 
     /** 登录用户 id（游客 / 无效 JWT → null）。照抄 {@code ContentDetailController}，游客不抛 401。 */

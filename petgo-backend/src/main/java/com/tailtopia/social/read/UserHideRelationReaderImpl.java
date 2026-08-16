@@ -32,4 +32,11 @@ public class UserHideRelationReaderImpl implements UserHideRelationReader {
         // ⚠️ 只认 BLOCK：举报隐藏必须放行，否则打死 FR-58 闭环（AD-11）。
         return relations.existsByHolderIdAndTargetIdAndSource(holderId, targetId, HideSource.BLOCK);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isReported(long holderId, long targetId) {
+        // 「已举报」标记（Story 2.1 AC8）：由 REPORT 行是否存在派生，不是前端会话态。
+        return relations.existsByHolderIdAndTargetIdAndSource(holderId, targetId, HideSource.REPORT);
+    }
 }

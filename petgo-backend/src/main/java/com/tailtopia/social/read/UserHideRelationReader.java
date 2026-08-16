@@ -44,4 +44,17 @@ public interface UserHideRelationReader {
      * 重复举报无入口，<b>FR-58 闭环当场作废</b>。
      */
     boolean isBlocked(long holderId, long targetId);
+
+    /**
+     * holder 是否<b>举报过</b> target —— <b>只认 {@code REPORT}</b>，主动拉黑返回 {@code false}。
+     *
+     * <p><b>用途：迷你主页与黑名单页的「已举报」标记</b>（Story 2.1 AC8）。该标记<b>由这一行是否存在派生</b>，
+     * 不是前端会话态 —— 用户重装 App、换设备都必须还看得到「你举报过他」，否则他会重复举报同一个人，
+     * 而每一次都会真的落一行明细、污染运营看到的「12 人 / 27 次」。
+     *
+     * <p>⚠️ 三个方法的来源口径各不相同，别互相替代：
+     * {@link #isHidden} 不分来源（五处过滤）· {@link #isBlocked} 只认 BLOCK（主页访问）·
+     * 本方法只认 REPORT（「已举报」标记）。
+     */
+    boolean isReported(long holderId, long targetId);
 }
