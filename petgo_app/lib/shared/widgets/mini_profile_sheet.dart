@@ -28,10 +28,11 @@ import 'confirm_sheet.dart';
 /// 2. **已主动拉黑**（服务端 403 `blocked-user`）走**独立分支**，与网络失败分开提示；
 /// 3. **已注销仍旧不弹卡、且不给任何提示**（NFR-8，一字不改）。
 ///
-/// [onBlocked]：拉黑成功且两层弹层都收起后回调——Feed 侧移除该作者的卡片、详情侧退回列表。
-/// 仅成功路径触发；取消 / 失败不触发。
+/// [onBlocked] / [onReported]：拉黑 / 举报成功且两层弹层都收起后回调 ——
+/// 让当前这一屏立刻跟上（移除该作者的卡片、详情侧退回列表）。
+/// **仅成功路径触发**；取消、失败都不触发。两者收尾动作相同，调用方一般传同一个回调。
 Future<void> showMiniProfile(BuildContext context, WidgetRef ref, int userId,
-    {VoidCallback? onBlocked}) async {
+    {VoidCallback? onBlocked, VoidCallback? onReported}) async {
   final MiniProfile profile;
   try {
     profile = await ref.read(miniProfileRepositoryProvider).getMiniProfile(userId);
@@ -61,6 +62,7 @@ Future<void> showMiniProfile(BuildContext context, WidgetRef ref, int userId,
       userId: userId,
       ref: ref,
       onBlocked: onBlocked,
+      onReported: onReported,
     ),
   );
 }
@@ -71,12 +73,14 @@ class _MiniProfileCard extends StatelessWidget {
     required this.userId,
     required this.ref,
     required this.onBlocked,
+    required this.onReported,
   });
 
   final MiniProfile profile;
   final int userId;
   final WidgetRef ref;
   final VoidCallback? onBlocked;
+  final VoidCallback? onReported;
 
   @override
   Widget build(BuildContext context) {
@@ -317,9 +321,13 @@ class _MiniProfileCard extends StatelessWidget {
       // 「已举报」来自服务端标记（Story 2.1 AC8），不是前端会话态。
       alreadyReported: profile.reported,
     );
-    if (submitted && cardContext.mounted) {
+    if (!submitted) return;
+    if (cardContext.mounted) {
       Navigator.of(cardContext).pop(); // 收起迷你卡（举报抽屉已自行收起）
     }
+    // 两层收起后再通知调用方，让当前这一屏立刻不再有他的内容（Story 2.3）。
+    // ⚠️ **静默**：这里不给任何提示，提示会泄露「举报会隐藏内容」。
+    onReported?.call();
   }
 
   /// 拉黑二次确认 → 提交 → 成功收起两层 / 失败保持打开（AC2，C1–C4）。

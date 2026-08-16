@@ -21,6 +21,7 @@ import '../domain/content_type.dart';
 import 'comment_composer.dart';
 import 'comment_section.dart';
 import 'detail_providers.dart';
+import 'author_moderation_callbacks.dart';
 import 'feed_controller.dart';
 import 'like_button.dart';
 import 'report_sheet.dart';
@@ -214,12 +215,10 @@ class _DetailScaffold extends ConsumerWidget {
         context,
         ref,
         detail.authorId,
-        // FR-94（UI 稿 C3）：详情页拉黑成功 → 该帖对本人已不可见（Story 1.1 AC10 返回 404），
-        // 停在这一页只会看到一个空壳，故回到 Feed；顺带把他在列表里的卡片一并移除。
-        onBlocked: () {
-          ref.read(feedProvider.notifier).removeByAuthor(detail.authorId);
-          if (context.mounted) Navigator.of(context).maybePop();
-        },
+        // 详情页拉黑 / 举报成功 → 该帖对本人已不可见（服务端返回 404），停在这一页只会看到一个空壳，
+        // 所以**先退回上一级列表**，再把他在列表里的卡片一并移除。举报侧一律静默。
+        onBlocked: onAuthorHidden(ref, detail.authorId, popContext: context),
+        onReported: onAuthorHidden(ref, detail.authorId, popContext: context),
       ),
       child: row,
     );

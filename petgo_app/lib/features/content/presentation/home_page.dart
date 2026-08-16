@@ -12,6 +12,7 @@ import '../../../features/notify/presentation/notification_bell.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../domain/feed_item.dart';
+import 'author_moderation_callbacks.dart';
 import 'feed_controller.dart';
 import 'feed_skeleton.dart';
 import 'feed_tab_row.dart';
@@ -191,8 +192,10 @@ class HomePage extends ConsumerWidget {
             context,
             ref,
             item.authorId,
-            // FR-94：拉黑成功 → 该作者在当前列表的**全部**卡片立刻消失（成功 Toast 由迷你卡统一给）。
-            onBlocked: () => ref.read(feedProvider.notifier).removeByAuthor(item.authorId),
+            // 拉黑 / 举报成功 → 该作者在当前列表的**全部**卡片立刻消失。
+            // 拉黑的成功 Toast 由迷你卡统一给；**举报一律静默**（提示会泄露「举报会隐藏内容」）。
+            onBlocked: onAuthorHidden(ref, item.authorId),
+            onReported: onAuthorHidden(ref, item.authorId),
           ),
         );
       },
