@@ -170,6 +170,14 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
      *       （相关子查询命中 {@code uq_content_reports_reporter_post}）；{@code hasViewer=false}（游客）→ 不过滤。
      *       同样用布尔标志门控，避免游客传 NULL viewerId 触发 42P18（{@code :viewerId} 虽与 bigint 列比较可定型，
      *       仍沿用 findFeed 既有判空惯例保持一致）。</li>
+     *   <li><b>账号级隐藏（Story 1.1，FR-94 生效范围第 1 条）</b>：{@code hasViewer=true} → 排除
+     *       「当前查看者已隐藏的作者」所发的全部内容（{@code user_hide_relations}，<b>不区分 source</b> ——
+     *       主动拉黑与举报隐藏一视同仁；相关子查询命中 {@code idx_user_hide_relations_holder_target}）。
+     *       ⚠️ <b>与上一条举报过滤是两条并列的独立条件，不合并</b>（AD-9）：一条藏<b>一条帖</b>、
+     *       一条藏<b>一个人</b>，语义不同；既有子查询原样保留，不动已上线行为、不搬存量数据。
+     *       ⚠️ 该过滤属<b>安全规则层，只升不降不可绕过</b>，且必须留在 SQL WHERE 内 ——
+     *       挪到 Java 侧 filter 会破坏 {@code PAGE_SIZE+1} / {@code hasMore} / 游标契约，
+     *       并产生近乎空白的页（AD-5）。</li>
      *   <li>排序：{@code created_at DESC, id DESC}（id tie-breaker 保证游标稳定）。</li>
      * </ul>
      */
@@ -185,6 +193,9 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
               AND (:hasViewer = false
                    OR NOT EXISTS (SELECT 1 FROM ContentReport r
                                   WHERE r.postId = p.id AND r.reporterId = :viewerId))
+              AND (:hasViewer = false
+                   OR NOT EXISTS (SELECT 1 FROM UserHideRelation h
+                                  WHERE h.holderId = :viewerId AND h.targetId = p.authorId))
               AND (:hasCursor = false
                    OR p.createdAt < :cursorTs
                    OR (p.createdAt = :cursorTs AND p.id < :cursorId))

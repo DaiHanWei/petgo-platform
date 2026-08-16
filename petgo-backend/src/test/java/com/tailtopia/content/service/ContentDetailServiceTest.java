@@ -16,6 +16,7 @@ import com.tailtopia.content.repository.CommentRepository;
 import com.tailtopia.content.repository.ContentLikeRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
 import com.tailtopia.moderation.service.ReportService;
+import com.tailtopia.social.read.UserHideRelationReader;
 import com.tailtopia.shared.error.AppException;
 import java.time.Instant;
 import java.util.List;
@@ -32,6 +33,7 @@ class ContentDetailServiceTest {
     private ContentLikeRepository likes;
     private AccountQueryService accounts;
     private ReportService reportService;
+    private UserHideRelationReader hideRelations;
     private ContentDetailService service;
 
     @BeforeEach
@@ -41,7 +43,9 @@ class ContentDetailServiceTest {
         likes = mock(ContentLikeRepository.class);
         accounts = mock(AccountQueryService.class);
         reportService = mock(ReportService.class); // 默认 hasReported → false（未举报）
-        service = new ContentDetailService(posts, comments, likes, accounts, reportService);
+        // Story 1.1：默认 isHidden → false（未隐藏该作者）
+        hideRelations = mock(UserHideRelationReader.class);
+        service = new ContentDetailService(posts, comments, likes, accounts, reportService, hideRelations);
         when(comments.countVisibleForViewer(org.mockito.ArgumentMatchers.anyLong(),
                 org.mockito.ArgumentMatchers.any())).thenReturn(5L);
         when(likes.countByPostId(org.mockito.ArgumentMatchers.anyLong())).thenReturn(2L);
@@ -107,6 +111,32 @@ class ContentDetailServiceTest {
         when(posts.findById(4L)).thenReturn(Optional.of(post(4L, 7L, null)));
         when(reportService.hasReported(4L, 88L)).thenReturn(true);
         assertThatThrownBy(() -> service.getDetail(4L, 88L)).isInstanceOf(AppException.class);
+    }
+
+    /**
+     * Story 1.1 AC10：被隐藏作者的帖，详情页同样 404。
+     *
+     * <p>不加这条会出现语义倒挂——举报**一条帖** → 那条帖 404；拉黑**整个人**（更重的动作）→
+     * 他每一条帖详情页照样能开。Feed 那层是 JPQL 子查询，改了它详情路径不会跟着生效。
+     */
+    @Test
+    void hiddenAuthorPostIsNotFoundForViewer() {
+        when(posts.findById(4L)).thenReturn(Optional.of(post(4L, 7L, null)));
+        when(hideRelations.isHidden(88L, 7L)).thenReturn(true); // 88 隐藏了作者 7
+        assertThatThrownBy(() -> service.getDetail(4L, 88L)).isInstanceOf(AppException.class);
+    }
+
+    /** Story 1.1 AC10：游客不查隐藏关系，行为完全不变。 */
+    @Test
+    void guestDetailUnaffectedByHideRelations() {
+        when(posts.findById(4L)).thenReturn(Optional.of(post(4L, 7L, null)));
+        when(accounts.findAuthorViews(org.mockito.ArgumentMatchers.anyList()))
+                .thenReturn(java.util.Map.of(7L, new com.tailtopia.auth.dto.AuthorView(7L, "A", null, false)));
+
+        service.getDetail(4L, null);
+
+        org.mockito.Mockito.verify(hideRelations, org.mockito.Mockito.never())
+                .isHidden(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyLong());
     }
 
     private static ContentPost underReview(long id, long authorId) {

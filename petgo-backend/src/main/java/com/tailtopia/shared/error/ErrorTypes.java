@@ -37,6 +37,11 @@ public final class ErrorTypes {
      * 前端须按 type 精确映射「余额不足」文案，不能只看 status。 */
     public static final URI PAWCOIN_INSUFFICIENT = URI.create(BASE + "pawcoin-insufficient");
 
+    /** Story 1.1（V1.1.4）：请求他人主页但已主动拉黑对方（403）。专属 type——前端须据此把
+     * 「已拉黑」与「网络失败」两种不弹卡的情况区分开（UI 稿 A4 / A5 两个不同 Toast），
+     * 不能混为一谈。响应体不含被拉黑者的任何展示字段。 */
+    public static final URI BLOCKED_USER = URI.create(BASE + "blocked-user");
+
     private ErrorTypes() {
     }
 }

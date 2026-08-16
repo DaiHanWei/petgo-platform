@@ -73,6 +73,7 @@
 | `pet_profiles.pet_type`（加列）| 2.2 | F6：加列非建表，创建后不可改 |
 | `pet_milestones` / `milestone_completions` | 里程碑 mini-epic（F2）| 归 profile 域；排期 1.0.x/1.1.0 待定，**非 Epic 6**。本轮 FR-42 断档补齐（in-page picker 打卡 / L 级达成推送 / 已过生日补录）已并入 PRD FR-42 规格，随 mini-epic 实现，**本轮不落代码** |
 | `notifications` 去重标记（生日/纪念日/节点已推）| 6.7（F5）| 落 notifications 附加列或独立小表，dev 落实 |
+| `user_hide_relations` | **1.1（V1.1.4）** | 隐藏关系单表双来源（BLOCK/REPORT）。**唯一键三元 `(holder_id, target_id, source)`** —— 幂等只在同源之间成立；举报写 REPORT 行**不得触碰 BLOCK 行任何字段**（黑名单排序取 `BLOCK.created_at`）。Epic 1 全部 + Epic 2 举报即隐藏 复用 |
 
 ## 跨 story 共享设施归属（扫描确认链路连贯）
 
@@ -82,6 +83,11 @@
 - **`NotificationService`**：6.1 建 → 6.2/6.3/6.4 用。
 - **会话状态机**：5.3 入口(WAITING/CANCELLED) → 5.5 接单(IN_PROGRESS) → 5.6 收尾(PENDING_CLOSE/CLOSED) → 5.7 中断(INTERRUPTED) → 5.8 视图收口。
 - **`AccountDeletionJob`**：7.3 建（消费各模块 `deleteByUserId`/`anonymizeByUserId`）。
+- **社区关系模块 `com.tailtopia.social` + `social.read` 只读端口**：**1.1（V1.1.4）建** → Epic 1 全部 / Epic 2 举报即隐藏 复用。
+  - 端口 `UserHideRelationReader` 提供**两种**查询：`isHidden`（不区分来源，供 Feed / 评论 R1·R2 / 通知抑制 / 搜索列表 / 运营干预位**五处**）与 `isBlocked`（**只认 BLOCK**，**专供主页访问校验**）。
+  - ⚠️ **`content` / `notify` / `auth` 三侧只依赖该端口接口，禁止引用 `social.repository`**（AD-8）。端口接口放**提供方**，有意偏离 `ViolationCountReader` 把接口放消费方的先例（那条只有一个消费方，本端口有三个）。
+  - ⚠️ **安全规则层，只升不降不可绕过**：**凡新增「向用户展示他人内容」的位置（列表 / 详情 / 推荐位），一律默认套用该端口，不做逐场景例外**。漏一处等于拉黑白拉。本版本上线时平台尚无运营干预位与用户搜索，规则不触发但已声明；V1.1.6 的 FR-68 顶置坑位实现时须接上。
+  - ⚠️ **无缓存**：每次查库走唯一索引，禁止为其引 Redis 或本地缓存（AD-18）。
 
 ## 2026-07-27 追加决策（bug 20260727-364 拍板）
 
