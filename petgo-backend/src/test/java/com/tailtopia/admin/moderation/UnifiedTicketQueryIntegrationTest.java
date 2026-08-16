@@ -131,12 +131,20 @@ class UnifiedTicketQueryIntegrationTest extends ApiIntegrationTest {
 
     // ===== AC2 / AC4 · 排序与联合 =====
 
-    /** 分倒序；**同分按最早一次举报时间升序**（先报的先处理）。 */
+    /**
+     * 分倒序；**同分按最早一次举报时间升序**（先报的先处理）。
+     *
+     * <p>⚠️ 三个目标都改成同一个唯一昵称前缀，再按它检索 —— <b>不能直接查全队列</b>：
+     * L1 打的是同一个真实库，别的用例造的工单会把这三条挤出第一页，
+     * 断言就变成了「运气好不好」（2026-08-16 全量回归时正是这么红的）。
+     */
     @Test
     void sortsByScoreThenEarliestFirst() {
-        User loud = newUser();   // 3 人 → 3 分
-        User early = newUser();  // 1 人，但报得更早
-        User late = newUser();   // 1 人，报得更晚
+        // ⚠️ nickname 列是 varchar(20)，标签要短：base36 压一下再拼后缀（"sc"+10+"-early" = 18）。
+        String tag = "sc" + Long.toString(SEQ.incrementAndGet(), 36);
+        User loud = renamed(newUser(), tag + "-loud");    // 3 人 → 3 分
+        User early = renamed(newUser(), tag + "-early");  // 1 人，但报得更早
+        User late = renamed(newUser(), tag + "-late");    // 1 人，报得更晚
 
         reportTimes(newUser().getId(), early.getId(), 1);
         for (int i = 0; i < 3; i++) {
@@ -144,14 +152,16 @@ class UnifiedTicketQueryIntegrationTest extends ApiIntegrationTest {
         }
         reportTimes(newUser().getId(), late.getId(), 1);
 
-        List<Long> ids = query.search(TicketType.ACCOUNT_REPORT, TicketStatusBucket.PENDING, null,
-                        PageRequest.of(0, 200))
+        List<Long> ids = query.search(TicketType.ACCOUNT_REPORT, TicketStatusBucket.PENDING, tag,
+                        PageRequest.of(0, 20))
                 .getContent().stream().map(UnifiedTicketRow::targetUserId).toList();
 
-        assertThat(ids).contains(loud.getId(), early.getId(), late.getId());
-        assertThat(ids.indexOf(loud.getId())).isLessThan(ids.indexOf(early.getId()));
-        // 同为 1 分：先被举报的排在前面。
-        assertThat(ids.indexOf(early.getId())).isLessThan(ids.indexOf(late.getId()));
+        assertThat(ids).containsExactly(loud.getId(), early.getId(), late.getId());
+    }
+
+    private User renamed(User u, String nickname) {
+        u.setNickname(nickname);
+        return users.save(u);
     }
 
     /** 内容举报**按帖聚合**：3 个人举报同一条帖 = 一条工单、3 分，不是三条工单。 */

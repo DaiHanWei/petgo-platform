@@ -309,4 +309,21 @@ void main() {
     }
     expect(find.text(l10n.notifyBodyAccountWarned), findsOneWidget);
   });
+
+  testWidgets('V1.1.4 Story 3.4：举报回告用的是定稿那句（旧话不得复活）', (tester) async {
+    await _pump(
+      tester,
+      const NotificationCenterPage(),
+      _FakeNotifyRepo(items: [
+        const NotificationItem(
+            type: 'REPORT_REVIEWED', title: 'x', deepLinkToken: 'r1', read: false),
+      ]),
+    );
+
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    expect(find.text(l10n.notifyBodyReportReviewed), findsOneWidget);
+    // ⚠️ 这句是内容举报与账号举报**共用**的回告，2026-08-16 按 PRD 定稿有意改过。
+    // 旧话是「感谢你的举报，我们已完成审核」——它复活就说明有人把变更改回去了。
+    expect(l10n.notifyBodyReportReviewed.toLowerCase().contains('completed our review'), isFalse);
+  });
 }
