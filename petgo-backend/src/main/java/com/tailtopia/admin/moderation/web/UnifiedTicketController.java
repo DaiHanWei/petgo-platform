@@ -10,6 +10,7 @@ import com.tailtopia.moderation.domain.AccountReportEntry;
 import com.tailtopia.moderation.repository.AccountDisposalRepository;
 import com.tailtopia.moderation.repository.AccountReportEntryRepository;
 import com.tailtopia.moderation.service.AccountDisposalService;
+import com.tailtopia.shared.error.AppException;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -171,6 +172,102 @@ public class UnifiedTicketController {
         disposalService.dismiss(reportId, admin.getAdminAccountId());
         flash.addFlashAttribute("notice", "已标记为无需处置");
         return "redirect:/admin/tickets";
+    }
+
+    // ===== Story 3.3：批量处置 =====
+
+    /**
+     * 批量处置（AC1–AC6）。**真表单 POST**（CSRF 开着，fetch/XHR 那套这里不适用）。
+     *
+     * <p>勾选框的 value 是 <b>{@code 类型:id} 的复合串</b>（如 {@code ACCOUNT_REPORT:12}）——
+     * 光有 id 是<b>分辨不出类型</b>的：内容举报工单的 sourceId 是帖子 id、账号举报是工单 id、
+     * 标识字段是审核记录 id，三者的数字空间会重叠。带上类型，跨类型混选才能在服务端被识别并<b>整批拒绝</b>。
+     *
+     * <p>⚠️ <b>前端的置灰只是体验，这里的校验才是边界</b>：勾选框在浏览器里可以随便改，
+     * 「一次别封掉几百个人」不能只靠前端。
+     */
+    @PostMapping("/admin/tickets/batch")
+    @PreAuthorize(DISPOSE_AUTH)
+    public String batch(@AuthenticationPrincipal AdminUserDetails admin,
+            @RequestParam("action") String action,
+            @RequestParam(value = "ticketIds", required = false) List<String> ticketIds,
+            RedirectAttributes flash) {
+        AccountDisposalService.BatchAction batchAction = parseEnum(
+                AccountDisposalService.BatchAction.class, action);
+        if (batchAction == null) {
+            flash.addFlashAttribute("notice", "未知的批量动作");
+            return "redirect:/admin/tickets";
+        }
+        // 封号那一档额外要 user.deactivate —— 与单条口径一致，别让批量成为绕过它的后门。
+        if (batchAction == AccountDisposalService.BatchAction.SUSPEND && !canSuspend()) {
+            throw new org.springframework.security.access.AccessDeniedException("缺少停用账号权限");
+        }
+
+        List<Long> reportIds;
+        try {
+            reportIds = parseAccountReportIds(ticketIds);
+        } catch (AppException e) {
+            flash.addFlashAttribute("notice", e.getMessage());
+            return "redirect:/admin/tickets";
+        }
+
+        AccountDisposalService.BatchResult result =
+                disposalService.batch(reportIds, batchAction, admin.getAdminAccountId());
+        flash.addFlashAttribute("notice",
+                "批量完成：成功 " + result.ok() + " 条，失败 " + result.failedCount() + " 条");
+        // ⚠️ 失败明细必须真的渲染出来（AC5）：只报数量的话运营不知道是哪几条、为什么，也就无从重试。
+        flash.addFlashAttribute("batchFailures", result.failed());
+        return "redirect:/admin/tickets";
+    }
+
+    /**
+     * 解析 {@code 类型:id} 复合串，并把 AC2 的两条边界钉在服务端：
+     * <b>跨类型整批拒绝</b>、<b>账号级处置只适用于用户举报工单</b>。
+     *
+     * <p>为什么跨类型不能批：不同类型工单的处置对象含义根本不同 ——
+     * 内容举报处置的是<b>内容</b>，账号举报处置的是<b>人</b>。混在一批里执行同一个动作没有意义。
+     */
+    private static List<Long> parseAccountReportIds(List<String> tokens) {
+        if (tokens == null || tokens.isEmpty()) {
+            throw AppException.validation("请先勾选要处理的工单");
+        }
+        String firstType = null;
+        List<Long> ids = new java.util.ArrayList<>(tokens.size());
+        for (String token : tokens) {
+            int sep = token.indexOf(':');
+            if (sep <= 0) {
+                throw AppException.validation("工单标识格式不正确");
+            }
+            String type = token.substring(0, sep);
+            if (firstType == null) {
+                firstType = type;
+            } else if (!firstType.equals(type)) {
+                throw AppException.validation("不同类型的工单不能一起批量处理");
+            }
+            try {
+                ids.add(Long.parseLong(token.substring(sep + 1)));
+            } catch (NumberFormatException e) {
+                throw AppException.validation("工单标识格式不正确");
+            }
+        }
+        if (!TicketType.ACCOUNT_REPORT.name().equals(firstType)) {
+            throw AppException.validation("警告 / 封号只适用于用户举报工单");
+        }
+        return ids;
+    }
+
+    private static boolean canSuspend() {
+        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext()
+                .getAuthentication();
+        if (auth == null) {
+            return false;
+        }
+        var authorities = auth.getAuthorities();
+        boolean superAdmin = authorities.stream()
+                .anyMatch(a -> "ROLE_SUPER_ADMIN".equals(a.getAuthority()));
+        boolean deactivate = authorities.stream()
+                .anyMatch(a -> "user.deactivate".equals(a.getAuthority()));
+        return superAdmin || deactivate;
     }
 
     /** 空白 / 非法值一律当「不筛选」，不给运营一个 400。 */

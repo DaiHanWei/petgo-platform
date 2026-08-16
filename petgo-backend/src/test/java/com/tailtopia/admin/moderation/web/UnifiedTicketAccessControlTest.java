@@ -1,5 +1,6 @@
 package com.tailtopia.admin.moderation.web;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -168,6 +169,48 @@ class UnifiedTicketAccessControlTest {
         assertThatCode(() -> controller.suspend(principalOf(), 7L, 1L,
                 new org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap()))
                 .doesNotThrowAnyException();
+    }
+
+    // ===== Story 3.3：批量的两条服务端边界（跨类型 / 只适用于用户举报）=====
+    //
+    // ⚠️ 这两条**必须在服务端**：勾选框在浏览器里可以随便改，前端的置灰只是体验。
+
+    @Test
+    void batchRejectsMixedTicketTypes() {
+        authenticate(AdminAccountType.SUPER_ADMIN);
+        var flash = new org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap();
+
+        controller.batch(principalOf(), "WARN",
+                java.util.List.of("ACCOUNT_REPORT:1", "CONTENT_REPORT:2"), flash);
+
+        assertThat(flash.getFlashAttributes().get("notice").toString()).contains("不同类型");
+        org.mockito.Mockito.verify(ctx.getBean(AccountDisposalService.class),
+                org.mockito.Mockito.never()).batch(any(), any(), org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    /** 账号级处置只适用于**用户举报**工单：内容举报处置的是内容，账号举报处置的是人。 */
+    @Test
+    void batchRejectsNonAccountTicketTypes() {
+        authenticate(AdminAccountType.SUPER_ADMIN);
+        var flash = new org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap();
+
+        controller.batch(principalOf(), "SUSPEND",
+                java.util.List.of("CONTENT_REPORT:2", "CONTENT_REPORT:3"), flash);
+
+        assertThat(flash.getFlashAttributes().get("notice").toString()).contains("用户举报");
+        org.mockito.Mockito.verify(ctx.getBean(AccountDisposalService.class),
+                org.mockito.Mockito.never()).batch(any(), any(), org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    /** 只有处置权、没有停用权 → **批量封号也走不通**（别让批量成为绕过单条门控的后门）。 */
+    @Test
+    void batchSuspendAlsoNeedsDeactivatePermission() {
+        authenticate(AdminAccountType.STAFF, "content.dispose_account");
+        var flash = new org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap();
+
+        assertThatThrownBy(() -> controller.batch(principalOf(), "SUSPEND",
+                java.util.List.of("ACCOUNT_REPORT:1"), flash))
+                .isInstanceOf(AccessDeniedException.class);
     }
 
     private AdminUserDetails principalOf() {

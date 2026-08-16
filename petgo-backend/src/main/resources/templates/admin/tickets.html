@@ -21,6 +21,14 @@
         <h1 th:text="#{admin.tickets.title}">工单队列</h1>
         <p class="muted" th:text="#{admin.tickets.subtitle}">三类工单统一排队，按优先级从高到低；同分先报的先处理。</p>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <!-- ⚠️ 批量的失败明细必须真的列出来（AC5）：只报「失败 2 条」的话，
+             运营不知道是哪 2 条、为什么，也就无从重试。既有内容举报的批量就是只报了数量。 -->
+        <div class="banner" th:if="${batchFailures != null and !#lists.isEmpty(batchFailures)}">
+            <p><b th:text="#{admin.tickets.batch.failed}">以下工单处理失败，可重新勾选后重试：</b></p>
+            <ul>
+                <li th:each="f : ${batchFailures}" th:text="${f}">工单 X：原因</li>
+            </ul>
+        </div>
 
         <!-- 筛选条：类型 / 状态 / 按被举报账号检索。HTMX 没加载时退化成整页 GET，仍可用。 -->
         <form class="filter-bar" th:action="@{/admin/tickets}" method="get"
@@ -53,9 +61,47 @@
     <!-- ===== 结果片段（HX-Request 时控制器单独返回此片段）===== -->
     <div th:fragment="resultsFragment" th:remove="tag">
         <p class="empty" th:if="${result.totalElements == 0}" th:text="#{admin.tickets.empty}">没有匹配的工单。</p>
+
+        <!-- 批量表单（Story 3.3）：整张表包在一个 form 里，勾选框 name=ticketIds。
+             data-batch-scope 限定 admin.js 那段批量逻辑的作用域（该文件全后台共享）。 -->
+        <form th:if="${result.totalElements > 0}" id="ticket-batch-form" data-batch-scope
+              th:action="@{/admin/tickets/batch}" method="post">
+            <p class="filter-bar">
+                <span th:text="#{admin.tickets.batch.selected}">已选</span>
+                <b data-batch-count class="muted">0 / 50</b>
+                <button type="submit" class="btn btn-sm btn-neutral" data-batch-action
+                        name="action" value="WARN"
+                        th:text="#{admin.tickets.batch.warn}">批量警告</button>
+                <!-- ⚠️ 批量封号必须二次确认并**逐条列出**：既有的 data-confirm 只能弹一句纯文本，
+                     装不下清单。这里走 <dialog>，弹窗内容由 admin.js 在勾选变化时组装。
+                     只给一句「确认封 N 个账号？」等于让运营对着一个数字点确认。 -->
+                <button type="button" class="btn btn-sm btn-danger" data-batch-action
+                        data-open-dialog="batch-suspend-dialog"
+                        th:text="#{admin.tickets.batch.suspend}">批量封号</button>
+                <button type="submit" class="btn btn-sm btn-neutral" data-batch-action
+                        name="action" value="DISMISS"
+                        th:text="#{admin.tickets.batch.dismiss}">批量无需处置</button>
+                <!-- 批量警告与批量无需处置**不弹确认**：警告不影响用户使用，可逆性与封号完全不同。 -->
+            </p>
+
+            <dialog id="batch-suspend-dialog">
+                <h3 th:text="#{admin.tickets.batch.suspend.confirm.title}">确认批量封号</h3>
+                <p class="muted" th:text="#{admin.tickets.batch.suspend.confirm.body}">
+                    以下账号将被停用，他们会收到通知：</p>
+                <ul data-batch-suspend-list></ul>
+                <p>
+                    <button type="submit" class="btn btn-danger btn-sm" name="action" value="SUSPEND"
+                            th:text="#{admin.tickets.batch.suspend.confirm.ok}">确认封号</button>
+                    <button type="button" class="btn btn-neutral btn-sm" data-close-dialog
+                            th:text="#{admin.tickets.batch.suspend.confirm.cancel}">取消</button>
+                </p>
+            </dialog>
+
         <table th:if="${result.totalElements > 0}">
             <thead>
             <tr>
+                <th><input type="checkbox" data-batch-all
+                           th:title="#{admin.tickets.batch.selectAll}"/></th>
                 <th th:text="#{admin.tickets.col.type}">类型</th>
                 <th th:text="#{admin.tickets.col.target}">被举报对象</th>
                 <th th:text="#{admin.tickets.col.preview}">摘要</th>
@@ -73,6 +119,17 @@
             </thead>
             <tbody>
             <tr th:each="r : ${result.content}">
+                <td>
+                    <!-- 只有**待处理**的工单可勾（已处理/无需处置的再点一次没有意义）。
+                         data-type 供跨类型置灰；data-label 供封号确认弹窗逐条列出「昵称 + 被举报次数」。
+                         value 是「类型:id」复合串——光有 id 分辨不出类型，三类工单的数字空间会重叠。 -->
+                    <input type="checkbox" name="ticketIds" data-batch-item
+                           th:if="${r.status.name() == 'PENDING'}"
+                           th:value="${r.type} + ':' + ${r.sourceId}"
+                           th:attr="data-type=${r.type},
+                                    data-label=${(r.targetNickname != null ? r.targetNickname : '#' + r.targetUserId)
+                                                 + ' · ' + r.reportCount + ' 次'}"/>
+                </td>
                 <td th:text="#{'admin.tickets.type.' + ${r.type}}">类型</td>
                 <td>
                     <span th:if="${r.targetNickname != null}" th:text="${r.targetNickname}">昵称</span>
@@ -128,10 +185,11 @@
                 </td>
             </tr>
             <tr th:each="r : ${result.content}">
-                <td colspan="11" th:id="'detail-' + ${r.type} + '-' + ${r.sourceId}"></td>
+                <td colspan="12" th:id="'detail-' + ${r.type} + '-' + ${r.sourceId}"></td>
             </tr>
             </tbody>
         </table>
+        </form>
 
         <div class="pager" th:if="${result.totalElements > 0}">
             <a th:if="${result.hasPrevious()}"

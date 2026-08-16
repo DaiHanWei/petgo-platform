@@ -13,6 +13,9 @@ import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.notify.service.NotificationService;
 import com.tailtopia.shared.error.AppException;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,20 +40,104 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AccountDisposalService {
 
+    /**
+     * 批量单次上限（Story 3.3 AC1）。
+     *
+     * <p>不设上限的话，全选一个长队列再点封号，<b>一次能封掉几百个账号</b>。
+     * ⚠️ 另外这个数字还压着审计的规模成本：{@code AdminAuditService.record} 内有 Postgres advisory 锁
+     * + 链尾查询，批量 50 条 = <b>50 次取锁 + 50 次链尾查询</b>。50 条下可接受，
+     * <b>不要在此基础上放宽</b>，也别为了省事把 N 条审计"优化"成一条汇总
+     * （部分失败时汇总审计说不清到底哪几条成了）。
+     */
+    public static final int MAX_BATCH_SIZE = 50;
+
     private final AccountDisposalRepository disposals;
     private final AccountReportRepository reports;
     private final AuthService authService;
     private final NotificationService notificationService;
     private final AdminAuditService auditService;
 
+    /**
+     * ⚠️ 自引用代理（批量逐条调用用）。
+     *
+     * <p><b>必须经它调</b>，不能 {@code this.warn(...)} —— 后者绕过 Spring 代理，
+     * {@code @Transactional} 直接不生效，「逐条独立事务」的语义就没了：
+     * 第 30 条失败会把前 29 条一起回滚，而那 29 个人已经收到通知了。
+     */
+    private final ObjectProvider<AccountDisposalService> selfProvider;
+
     public AccountDisposalService(AccountDisposalRepository disposals, AccountReportRepository reports,
             AuthService authService, NotificationService notificationService,
-            AdminAuditService auditService) {
+            AdminAuditService auditService, ObjectProvider<AccountDisposalService> selfProvider) {
         this.disposals = disposals;
         this.reports = reports;
         this.authService = authService;
         this.notificationService = notificationService;
         this.auditService = auditService;
+        this.selfProvider = selfProvider;
+    }
+
+    /** 批量动作三档（与单条一一对应）。 */
+    public enum BatchAction {
+        WARN, SUSPEND, DISMISS
+    }
+
+    /**
+     * 批量结果：成功条数 + <b>逐条失败明细</b>。
+     *
+     * <p>⚠️ 明细必须真的展示给运营（AC5）—— 既有内容举报的批量虽然也返回了 failed 列表，
+     * 但模板从没渲染它，运营只看得到「失败 2 条」，**不知道是哪 2 条、为什么**，也就无从重试。
+     */
+    public record BatchResult(int ok, List<String> failed) {
+        public int failedCount() {
+            return failed.size();
+        }
+    }
+
+    /**
+     * 批量处置（Story 3.3）。<b>不开外层事务</b>，逐条经自引用代理调用 —— 每条一个独立事务。
+     *
+     * <p><b>部分失败不整批回滚</b>：20 条里 18 条成功、2 条失败，那 18 条就该保持成功。
+     * 失败的逐条回报（工单号 + 原因），运营可以只对失败项重试。<b>绝不静默吞掉任何一条</b>。
+     *
+     * @param reportIds 账号举报工单 id（调用方已保证同类型，服务端另有校验）
+     */
+    public BatchResult batch(List<Long> reportIds, BatchAction action, long actorAccountId) {
+        List<Long> ids = reportIds == null ? List.of() : reportIds;
+        if (ids.size() > MAX_BATCH_SIZE) {
+            // ⚠️ 服务端硬校验：勾选框在浏览器里可以被随便改，上限不能只靠前端。
+            throw AppException.validation("单次最多处理 " + MAX_BATCH_SIZE + " 条工单");
+        }
+        AccountDisposalService self = selfProvider.getObject();
+        int ok = 0;
+        List<String> failed = new ArrayList<>();
+        for (Long id : ids) {
+            try {
+                self.disposeTicket(id, action, actorAccountId);
+                ok++;
+            } catch (RuntimeException e) {
+                failed.add("工单 " + id + "：" + e.getMessage());
+            }
+        }
+        return new BatchResult(ok, failed);
+    }
+
+    /**
+     * 处置一条**账号举报工单**（批量的单元；也可单独调）。
+     *
+     * <p>⚠️ 这里顺带兜住了 AC2 的服务端一半：工单 id 必须真的存在于 {@code account_reports}。
+     * 混进来的内容举报 id / 标识字段审核 id 会在这一步失败并被逐条回报，
+     * <b>不会拿着一个内容举报的 id 去封某个账号</b>。
+     */
+    @Transactional
+    public void disposeTicket(long reportId, BatchAction action, long actorAccountId) {
+        AccountReport report = reports.findById(reportId)
+                .orElseThrow(() -> AppException.notFound("工单不存在"));
+        switch (action) {
+            case WARN -> warn(report.getTargetUserId(), reportId, actorAccountId);
+            case SUSPEND -> suspend(report.getTargetUserId(), reportId, actorAccountId);
+            case DISMISS -> dismiss(reportId, actorAccountId);
+        }
     }
 
     /**
