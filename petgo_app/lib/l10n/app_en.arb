@@ -1734,5 +1734,14 @@
   "accountReportedAction": "Reported",
   "@accountReportedAction": {"description": "Mini profile menu: label once the user has already reported this account"},
   "accountReportedActionSub": "Tap to report again",
-  "@accountReportedActionSub": {"description": "Mini profile menu: subtitle once already reported \u2014 must read as tappable, not disabled"}
+  "@accountReportedActionSub": {"description": "Mini profile menu: subtitle once already reported \u2014 must read as tappable, not disabled"},
+
+  "notifyTypeAccountWarned": "Account warning",
+  "@notifyTypeAccountWarned": {"description": "Notification center: title for ACCOUNT_WARNED (V1.1.4 Story 3.2)"},
+  "notifyBodyAccountWarned": "Your account received a warning for breaking the TailTopia Community Guidelines. Please follow the guidelines.",
+  "@notifyBodyAccountWarned": {"description": "Notification center: body for ACCOUNT_WARNED. Deliberately does NOT say who reported them, which post, or which warning number this is. \u26a0\ufe0f The Indonesian wording is still a draft pending the ops team (Story 3.2 AC9)."},
+  "notifyTypeAccountSuspended": "Account suspended",
+  "@notifyTypeAccountSuspended": {"description": "Notification center: title for ACCOUNT_SUSPENDED (V1.1.4 Story 3.2)"},
+  "notifyBodyAccountSuspended": "Your account has been suspended for breaking the TailTopia Community Guidelines. If you'd like to appeal, please contact our customer support team.",
+  "@notifyBodyAccountSuspended": {"description": "Notification center: body for ACCOUNT_SUSPENDED. The Indonesian wording was cleared by legal on 2026-08-16 (C-101) \u2014 do not reword it without going back to legal."}
 }

@@ -318,6 +318,18 @@ class _NotificationTileState extends State<_NotificationTile> {
       AppColors.gold,
       AppColors.goldTint,
     ),
+    // 账号级处置（V1.1.4 Story 3.2）：警告用警示琥珀，封号用危险红——两者严重程度不同，
+    // 用同一个颜色会让用户以为「又是一次提醒」而忽略掉自己已经登不上了这件事。
+    'ACCOUNT_WARNED' => (
+      Icons.gpp_maybe_rounded,
+      AppColors.gold,
+      AppColors.goldTint,
+    ),
+    'ACCOUNT_SUSPENDED' => (
+      Icons.block_rounded,
+      AppColors.coral,
+      AppColors.coralTint,
+    ),
     _ => (Icons.notifications_rounded, AppColors.mint, AppColors.cream2),
   };
 
@@ -341,6 +353,9 @@ class _NotificationTileState extends State<_NotificationTile> {
     'NAME_RESET' => l10n.notifyTypeNameReset,
     'AVATAR_RESET' => l10n.notifyTypeAvatarReset,
     'CONTENT_REVIEW_TIMED_OUT' => l10n.notifyTypeReviewTimedOut,
+    // 账号级处置（V1.1.4 Story 3.2）。
+    'ACCOUNT_WARNED' => l10n.notifyTypeAccountWarned,
+    'ACCOUNT_SUSPENDED' => l10n.notifyTypeAccountSuspended,
     // 未知类型兜底：中性「系统通知」，不再复用页面标题（bug 20260729-391 的「克隆卡」观感来源）。
     _ => l10n.notifyTypeSystem,
   };
@@ -368,6 +383,12 @@ class _NotificationTileState extends State<_NotificationTile> {
     'AVATAR_RESET' =>
         _isUserSubject ? l10n.notifyBodyAvatarResetUser : l10n.notifyBodyAvatarResetPet,
     'CONTENT_REVIEW_TIMED_OUT' => l10n.notifyBodyReviewTimedOut,
+    // 账号级处置（V1.1.4 Story 3.2）：
+    // ⚠️ 警告的正文**不说**是谁举报的、因哪条内容、也不说这是第几次——说了等于把举报人暴露给
+    //    被举报人，而「第几次」会变成一个可以试探的计数器。
+    // ⚠️ 封号正文的印尼语**已经法务审核**（C-101），改词前必须回法务。
+    'ACCOUNT_WARNED' => l10n.notifyBodyAccountWarned,
+    'ACCOUNT_SUSPENDED' => l10n.notifyBodyAccountSuspended,
     // 未知类型兜底：中性正文，不再复用空态提示串（那本身就是个 bug）。
     _ => l10n.notifyBodySystem,
   };

@@ -12,6 +12,7 @@ import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.moderation.repository.AccountDisposalRepository;
 import com.tailtopia.moderation.repository.AccountReportEntryRepository;
+import com.tailtopia.moderation.service.AccountDisposalService;
 import java.util.Arrays;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -67,9 +68,15 @@ class UnifiedTicketAccessControlTest {
         }
 
         @Bean
+        AccountDisposalService disposalService() {
+            return mock(AccountDisposalService.class);
+        }
+
+        @Bean
         UnifiedTicketController controller(UnifiedTicketQueryService q,
-                AccountReportEntryRepository e, AccountDisposalRepository d, AccountQueryService a) {
-            return new UnifiedTicketController(q, e, d, a);
+                AccountReportEntryRepository e, AccountDisposalRepository d, AccountQueryService a,
+                AccountDisposalService ds) {
+            return new UnifiedTicketController(q, e, d, a, ds);
         }
     }
 
@@ -132,5 +139,38 @@ class UnifiedTicketAccessControlTest {
         assertThatThrownBy(
                 () -> controller.detail("ACCOUNT_REPORT", 1L, 2L, new ConcurrentModel()))
                 .isInstanceOf(AccessDeniedException.class);
+    }
+
+    // ===== Story 3.2：处置动作的门控 =====
+
+    @Test
+    void warnRequiresDisposePermission() {
+        authenticate(AdminAccountType.STAFF, "content.view_tickets");
+        assertThatThrownBy(() -> controller.warn(null, 7L, 1L,
+                new org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap()))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    /**
+     * ⚠️ 封号<b>额外</b>还要 {@code user.deactivate}：只有工单处置权**不够**。
+     *
+     * <p>停用账号本来就是一项受管能力，不能因为「他能处理工单」就顺带把停用权也给了。
+     */
+    @Test
+    void suspendNeedsBothDisposeAndDeactivate() {
+        authenticate(AdminAccountType.STAFF, "content.dispose_account");
+        assertThatThrownBy(() -> controller.suspend(null, 7L, 1L,
+                new org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap()))
+                .isInstanceOf(AccessDeniedException.class);
+
+        SecurityContextHolder.clearContext();
+        authenticate(AdminAccountType.STAFF, "content.dispose_account", "user.deactivate");
+        assertThatCode(() -> controller.suspend(principalOf(), 7L, 1L,
+                new org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap()))
+                .doesNotThrowAnyException();
+    }
+
+    private AdminUserDetails principalOf() {
+        return (AdminUserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
     }
 }

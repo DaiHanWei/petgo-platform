@@ -1435,5 +1435,10 @@
   "accountReportAction": "Laporkan",
   "accountReportActionSub": "Langgar aturan komunitas",
   "accountReportedAction": "Sudah dilaporkan",
-  "accountReportedActionSub": "Ketuk untuk melaporkan lagi"
+  "accountReportedActionSub": "Ketuk untuk melaporkan lagi",
+
+  "notifyTypeAccountWarned": "Peringatan akun",
+  "notifyBodyAccountWarned": "Akun Anda menerima satu peringatan karena melanggar Pedoman Komunitas TailTopia. Mohon patuhi pedoman komunitas kami.",
+  "notifyTypeAccountSuspended": "Akun dinonaktifkan",
+  "notifyBodyAccountSuspended": "Akun Anda telah dinonaktifkan karena melanggar Pedoman Komunitas TailTopia. Jika Anda ingin mengajukan keberatan, silakan hubungi tim dukungan pelanggan kami."
 }

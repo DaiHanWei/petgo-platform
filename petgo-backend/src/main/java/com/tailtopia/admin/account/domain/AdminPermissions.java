@@ -47,6 +47,13 @@ public final class AdminPermissions {
      * 不能靠「反正旧码也能看举报」把两类新数据顺带放出去。
      */
     public static final String CONTENT_VIEW_TICKETS = "content.view_tickets";
+    /**
+     * 从工单队列执行账号级处置（V1.1.4 Story 3.2）：警告 / 封号 / 判为无需处置。
+     *
+     * <p>⚠️ <b>封号那一档额外还要 {@link #USER_DEACTIVATE}</b>（端点上是 and 关系）——
+     * 停用账号本来就是一项受管能力，不能因为「他能看工单」就顺带把停用权也给了。
+     */
+    public static final String CONTENT_DISPOSE_ACCOUNT = "content.dispose_account";
 
     // 问诊异常与会话（Epic 5）
     public static final String CONSULT_VIEW_ANOMALIES = "consult.view_anomalies";
@@ -119,7 +126,7 @@ public final class AdminPermissions {
                     ADMIN_VIEW_ACCOUNTS, ADMIN_VIEW_LOGS)),
             new PermissionGroup("perm.group.edit", List.of(
                     CONTENT_TAKEDOWN, CONTENT_RESTORE, CONTENT_PROACTIVE_TAKEDOWN,
-                    CONTENT_MANUAL_REVIEW,
+                    CONTENT_MANUAL_REVIEW, CONTENT_DISPOSE_ACCOUNT,
                     USER_DEACTIVATE, USER_DELETE, USER_GRANT_PAWCOIN,
                     VET_CREATE, VET_EDIT, VET_BAN, VET_RESET_PASSWORD, VET_QUALIFY,
                     CONSULT_HANDLE,

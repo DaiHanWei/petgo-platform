@@ -4,19 +4,24 @@ import com.tailtopia.admin.moderation.dto.TicketStatusBucket;
 import com.tailtopia.admin.moderation.dto.TicketType;
 import com.tailtopia.admin.moderation.dto.UnifiedTicketRow;
 import com.tailtopia.admin.moderation.service.UnifiedTicketQueryService;
+import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.moderation.domain.AccountReportEntry;
 import com.tailtopia.moderation.repository.AccountDisposalRepository;
 import com.tailtopia.moderation.repository.AccountReportEntryRepository;
+import com.tailtopia.moderation.service.AccountDisposalService;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 /**
  * 统一工单队列页（Story 3.1，AB-3D）。SSR + HTMX，路由 {@code /admin/tickets}。
@@ -34,20 +39,33 @@ public class UnifiedTicketController {
     static final String VIEW_AUTH =
             "hasRole('SUPER_ADMIN') or hasAuthority('content.view_tickets')";
 
+    /** 警告 / 判为无需处置：只要处置权。 */
+    static final String DISPOSE_AUTH =
+            "hasRole('SUPER_ADMIN') or hasAuthority('content.dispose_account')";
+
+    /**
+     * ⚠️ 封号<b>额外</b>要 {@code user.deactivate}（and 关系）。
+     * 停用账号本来就是一项受管能力，不能因为「他能处理工单」就顺带把停用权也给了。
+     */
+    static final String SUSPEND_AUTH = "hasRole('SUPER_ADMIN') or "
+            + "(hasAuthority('content.dispose_account') and hasAuthority('user.deactivate'))";
+
     private static final int PAGE_SIZE = 20;
 
     private final UnifiedTicketQueryService query;
     private final AccountReportEntryRepository reportEntries;
     private final AccountDisposalRepository disposals;
     private final AccountQueryService accountQueryService;
+    private final AccountDisposalService disposalService;
 
     public UnifiedTicketController(UnifiedTicketQueryService query,
             AccountReportEntryRepository reportEntries, AccountDisposalRepository disposals,
-            AccountQueryService accountQueryService) {
+            AccountQueryService accountQueryService, AccountDisposalService disposalService) {
         this.query = query;
         this.reportEntries = reportEntries;
         this.disposals = disposals;
         this.accountQueryService = accountQueryService;
+        this.disposalService = disposalService;
     }
 
     @GetMapping("/admin/tickets")
@@ -113,6 +131,46 @@ public class UnifiedTicketController {
             model.addAttribute("disposals", List.of());
         }
         return "admin/tickets :: detailFragment";
+    }
+
+    // ===== Story 3.2：账号级处置 =====
+    //
+    // 三个动作都是**真表单 POST**（后台 CSRF 开着，AJAX 那套这里不适用），处理完 redirect 回列表。
+    // ⚠️ 「限流曝光」这一档**不实现、也不留任何 UI 位** —— 它依赖推荐算法打分链路，随 FR-95 移到 1.1.8。
+    //    留一个点了没反应的按钮比没有按钮更糟。
+
+    /** 警告：发一条通知 + 记一行处置，**不影响用户使用**。 */
+    @PostMapping("/admin/tickets/warn")
+    @PreAuthorize(DISPOSE_AUTH)
+    public String warn(@AuthenticationPrincipal AdminUserDetails admin,
+            @RequestParam("targetUserId") long targetUserId,
+            @RequestParam(value = "reportId", required = false) Long reportId,
+            RedirectAttributes flash) {
+        disposalService.warn(targetUserId, reportId, admin.getAdminAccountId());
+        flash.addFlashAttribute("notice", "已警告该账号");
+        return "redirect:/admin/tickets";
+    }
+
+    /** 封号：停用账号（可逆）+ 撤销 refresh 句柄 + 发通知 + 记一行处置。 */
+    @PostMapping("/admin/tickets/suspend")
+    @PreAuthorize(SUSPEND_AUTH)
+    public String suspend(@AuthenticationPrincipal AdminUserDetails admin,
+            @RequestParam("targetUserId") long targetUserId,
+            @RequestParam(value = "reportId", required = false) Long reportId,
+            RedirectAttributes flash) {
+        disposalService.suspend(targetUserId, reportId, admin.getAdminAccountId());
+        flash.addFlashAttribute("notice", "已停用该账号");
+        return "redirect:/admin/tickets";
+    }
+
+    /** 无需处置：工单收档，**对被举报账号什么都不做、也不发任何通知**。 */
+    @PostMapping("/admin/tickets/dismiss")
+    @PreAuthorize(DISPOSE_AUTH)
+    public String dismiss(@AuthenticationPrincipal AdminUserDetails admin,
+            @RequestParam("reportId") long reportId, RedirectAttributes flash) {
+        disposalService.dismiss(reportId, admin.getAdminAccountId());
+        flash.addFlashAttribute("notice", "已标记为无需处置");
+        return "redirect:/admin/tickets";
     }
 
     /** 空白 / 非法值一律当「不筛选」，不给运营一个 400。 */

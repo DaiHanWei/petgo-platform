@@ -80,6 +80,18 @@ public class AccountReport {
         return true;
     }
 
+    /**
+     * 运营处置完成 / 判为无需处置（Story 3.2 AC7）：记下状态、处理人与处理时刻。
+     *
+     * <p>⚠️ 之后该账号<b>又被举报</b>时，本工单会经 {@link #reopenIfHandled()} 翻回待处置 ——
+     * 那只清「当前处置」这两个字段，<b>account_disposals 里已经写下的历史处置记录一条都不减</b>。
+     */
+    public void handleBy(long adminAccountId, AccountReportStatus decision) {
+        this.status = decision;
+        this.handledBy = adminAccountId;
+        this.handledAt = Instant.now();
+    }
+
     @PrePersist
     void onCreate() {
         Instant now = Instant.now();

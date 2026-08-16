@@ -267,4 +267,46 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('DIARY-PAGE'), findsOneWidget);
   });
+
+  testWidgets('V1.1.4 Story 3.2：警告与封号两类通知各有自己的标题/正文与图标', (tester) async {
+    await _pump(
+      tester,
+      const NotificationCenterPage(),
+      _FakeNotifyRepo(items: [
+        const NotificationItem(
+            type: 'ACCOUNT_WARNED', title: 'x', deepLinkToken: 'w1', read: false),
+        const NotificationItem(
+            type: 'ACCOUNT_SUSPENDED', title: 'x', deepLinkToken: 's1', read: false),
+      ]),
+    );
+
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    expect(find.text(l10n.notifyTypeAccountWarned), findsOneWidget);
+    expect(find.text(l10n.notifyTypeAccountSuspended), findsOneWidget);
+    // ⚠️ 两类不能落到「系统通知」兜底：那会让用户看到两条一模一样的卡片，
+    // 而这两件事的严重程度完全不同（一个不影响使用，一个已经登不上了）。
+    expect(find.text(l10n.notifyTypeSystem), findsNothing);
+    expect(find.byIcon(Icons.gpp_maybe_rounded), findsOneWidget); // 警告：警示琥珀
+    expect(find.byIcon(Icons.block_rounded), findsOneWidget);      // 封号：危险红
+  });
+
+  testWidgets('⚠️ 警告正文不透露举报人、内容、也不说这是第几次', (tester) async {
+    await _pump(
+      tester,
+      const NotificationCenterPage(),
+      _FakeNotifyRepo(items: [
+        const NotificationItem(
+            type: 'ACCOUNT_WARNED', title: 'x', deepLinkToken: 'w1', read: false),
+      ]),
+    );
+
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    final body = l10n.notifyBodyAccountWarned.toLowerCase();
+    // 说了「谁报的/哪条内容/第几次」等于把举报人暴露给被举报人，
+    // 而「第几次」会变成一个可以试探的计数器。
+    for (final banned in ['report by', 'reported by', 'first', 'second', 'third', 'times']) {
+      expect(body.contains(banned), isFalse, reason: '警告文案不得出现「$banned」');
+    }
+    expect(find.text(l10n.notifyBodyAccountWarned), findsOneWidget);
+  });
 }
