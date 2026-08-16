@@ -171,12 +171,21 @@ public class AccountDisposalService {
      * 置状态位 + 物理删 refresh 行。<b>已经签发出去的 access JWT 在它自然过期前仍然可用</b>
      * （系统没有 token 黑名单）。刷新端有二次门控（{@code isActiveStatus} 不通过就 403），
      * 所以他<b>续不了期</b>，但当前这一张 access token 的剩余寿命内还能继续请求。
-     * 建 token 黑名单是独立议题，不在本 story 范围。
+     *
+     * <p><b>这个窗口有多长：最多 15 分钟</b>（{@code petgo.auth.jwt.access-ttl-seconds} 默认 900），
+     * 且只在他封号那一刻恰好持有一张刚签发的 token 时才是满 15 分钟，平均约 7 分钟。
+     * 过了这一窗口他就再也换不到新 token —— 因为 refresh 行已删、刷新端还会二次查状态。
+     * 建 token 黑名单（每个请求多查一次 Redis）是独立议题，收益与成本要单独评估，不在本 story 范围。
      *
      * <p>⚠️ 这里<b>刻意不复用</b> {@code AdminUserService.deactivate}：那条路径还会
      * {@code consultInterrupt.interruptByUser(userId)} <b>强关进行中的问诊会话</b>。
      * 问诊是付费的，强关牵扯退款语义 —— 从一条社区举报工单顺手触发一次涉及金钱的副作用，
-     * 风险远大于收益。需要这个行为的话由产品明确后再加，别默认发生。
+     * 风险远大于收益。
+     *
+     * <p><b>✅ 已定案（2026-08-16 用户拍板）：封号不掐断进行中的问诊。</b>
+     * 那通对话让它自然结束；封号影响的是「之后还能不能进来」，不是「正在进行的这一次」。
+     * <b>不要因为「看起来更彻底」而把 interruptByUser 加回来</b> —— 那是一个涉及退款的产品决定，
+     * 不是实现细节。
      */
     @Transactional
     public void suspend(long targetUserId, Long reportId, long actorAccountId) {
