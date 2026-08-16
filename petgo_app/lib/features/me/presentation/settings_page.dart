@@ -148,12 +148,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> with WidgetsBinding
               _navRow(l10n.meEditProfileTitle, onTap: () => context.push('/profile/edit'),
                   key: const ValueKey('meEditProfile')),
               _divider(),
-              _navRow(l10n.idCardTitle, onTap: () => context.push('/profile/id-card'),
-                  key: const ValueKey('meIdCard')),
-              _divider(),
-              _navRow(l10n.healthListTitle, onTap: () => context.push('/profile/health'),
-                  key: const ValueKey('meHealthRecords')),
-              _divider(),
+              // ⚠️ 「宠物证件卡 / 健康记录」两项 2026-08-16 从设置页移除：它们是**内容功能**、
+              // 不是设置项，正主入口在 Diary 的成长档案页（`growth_archive_page`），这里是重复入口。
+              // 路由与页面照旧存在，删的只是这个入口。
               _toggleRow(l10n.notificationCenterTitle, _notif, _onNotifToggle,
                   key: const ValueKey('meNotifToggle')),
               _divider(),
