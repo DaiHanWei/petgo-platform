@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
@@ -106,6 +107,18 @@ class _AccountReportSheetState extends State<_AccountReportSheet> {
             _selected!,
             detail: _selected == AccountReportReason.other ? _detail.text : null,
           );
+      // ⚠️ 埋点在**提交成功之后**：没提交、提交失败都不上报。
+      // ⚠️ 「其他」的补充说明是**用户自由文本，绝不进埋点属性**（Analytics 有兜底剥离，但不依赖兜底）。
+      Analytics.capture('social_account_report_submitted', {
+        'entry': widget.entry.wire,
+        'reason': _selected!.wire, // 受控词表五值，非自由文本
+      });
+      // 举报会在服务端**同时**建立一条 REPORT 隐藏关系（Story 2.1 AC5），
+      // 它同样要计入「隐藏关系」这条口径，只是来源不同 —— 否则主动拉黑与举报隐藏没法分开看。
+      Analytics.capture('social_user_hide_submitted', {
+        'origin': 'REPORT',
+        'entry': AccountActionEntry.reportFlow.wire,
+      });
       if (mounted) setState(() => _done = true); // 原地切成功态，不弹 toast、不自动收起
     } catch (_) {
       if (!mounted) return;

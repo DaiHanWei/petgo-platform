@@ -8,6 +8,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/letter_avatar.dart';
 import '../../../shared/widgets/mini_profile_sheet.dart';
+import '../../social/domain/account_action_entry.dart';
 import '../data/detail_repository.dart';
 import '../domain/comment.dart';
 import 'detail_providers.dart';
@@ -243,7 +244,11 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
       // 用户看到的是「点了没反应」——与网络失败无法区分。
       onAuthorTap: c.authorDeleted
           ? null
-          : () => showMiniProfile(context, ref, c.authorId, onBlocked: _reload),
+          : () => showMiniProfile(context, ref, c.authorId,
+              onBlocked: _reload,
+              onReported: _reload,
+              // 评论区这个入口的量单独可查（本版本的主场景就是评论区骚扰）。
+              entry: AccountActionEntry.comment),
       // story 3：仅作者会收到 TAKEN_DOWN/REJECTED 行 → 渲染「仅你可见」灰标签（VISIBLE/UNDER_REVIEW 无标签，D-CM2）。
       takenDownLabel: c.isTakenDownForAuthor ? l10n.commentTakenDownSelfOnly : null,
       canDelete: _canDelete(c),

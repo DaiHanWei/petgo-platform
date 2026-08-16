@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/analytics/analytics.dart';
 import '../../core/network/problem_detail.dart';
 import '../../core/theme/colors.dart';
 import '../../core/theme/elevation.dart';
@@ -29,11 +30,17 @@ import 'confirm_sheet.dart';
 /// 2. **已主动拉黑**（服务端 403 `blocked-user`）走**独立分支**，与网络失败分开提示；
 /// 3. **已注销仍旧不弹卡、且不给任何提示**（NFR-8，一字不改）。
 ///
+/// [entry]：这张卡是**从哪儿点开的** —— Feed / 详情页作者是 {@link AccountActionEntry.miniProfile}，
+/// 评论区作者是 {@link AccountActionEntry.comment}。只用于埋点，不影响任何行为。
+/// 黑名单页那个入口的点击量要单独看（见 `AccountActionEntry` 的说明）。
+///
 /// [onBlocked] / [onReported]：拉黑 / 举报成功且两层弹层都收起后回调 ——
 /// 让当前这一屏立刻跟上（移除该作者的卡片、详情侧退回列表）。
 /// **仅成功路径触发**；取消、失败都不触发。两者收尾动作相同，调用方一般传同一个回调。
 Future<void> showMiniProfile(BuildContext context, WidgetRef ref, int userId,
-    {VoidCallback? onBlocked, VoidCallback? onReported}) async {
+    {VoidCallback? onBlocked,
+    VoidCallback? onReported,
+    AccountActionEntry entry = AccountActionEntry.miniProfile}) async {
   final MiniProfile profile;
   try {
     profile = await ref.read(miniProfileRepositoryProvider).getMiniProfile(userId);
@@ -64,6 +71,7 @@ Future<void> showMiniProfile(BuildContext context, WidgetRef ref, int userId,
       ref: ref,
       onBlocked: onBlocked,
       onReported: onReported,
+      entry: entry,
     ),
   );
 }
@@ -75,6 +83,7 @@ class _MiniProfileCard extends StatelessWidget {
     required this.ref,
     required this.onBlocked,
     required this.onReported,
+    required this.entry,
   });
 
   final MiniProfile profile;
@@ -82,6 +91,9 @@ class _MiniProfileCard extends StatelessWidget {
   final WidgetRef ref;
   final VoidCallback? onBlocked;
   final VoidCallback? onReported;
+
+  /// 这张卡从哪儿点开的（仅埋点用）。
+  final AccountActionEntry entry;
 
   @override
   Widget build(BuildContext context) {
@@ -321,7 +333,7 @@ class _MiniProfileCard extends StatelessWidget {
       userId,
       // 「已举报」来自服务端标记（Story 2.1 AC8），不是前端会话态。
       alreadyReported: profile.reported,
-      entry: AccountActionEntry.miniProfile,
+      entry: entry,
     );
     if (!submitted) return;
     if (cardContext.mounted) {
@@ -354,6 +366,14 @@ class _MiniProfileCard extends StatelessWidget {
       onConfirm: () async {
         try {
           await ref.read(blockedUsersRepositoryProvider).block(userId);
+          // ⚠️ 埋点在**成功之后**（V1.1.2 的教训：门控前就上报会让指标系统性高估）。
+          // 拉黑失败不上报，取消也不上报。
+          // origin=BLOCK 与举报自动产生的隐藏（origin=REPORT）分开 ——
+          // 不分来源的话，隐藏关系总量会被举报量灌大，看不出主动拉黑的真实使用情况。
+          Analytics.capture('social_user_hide_submitted', {
+            'origin': 'BLOCK',
+            'entry': entry.wire,
+          });
           return true;
         } catch (_) {
           // 失败提示必须在这里给：此时确认抽屉仍然开着，`showConfirmSheet` 尚未返回。

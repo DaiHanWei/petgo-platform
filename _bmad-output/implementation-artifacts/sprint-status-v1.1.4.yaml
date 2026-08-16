@@ -160,7 +160,7 @@
 #    失效清单见 v1.1.4/README.md §2 与决策日志正文顶部（两边一致）
 
 generated: 2026-08-15
-last_updated: 2026-08-16   # Story 3.4 实现完成，Epic 3 四个 story 全部转 review
+last_updated: 2026-08-16   # Story 4.1 实现完成——V1.1.4 全部 15 个 story 转 review
 project: TailTopia V1.1.4
 project_key: NOKEY
 tracking_system: file-system
@@ -206,5 +206,5 @@ development_status:
   # 上线后要能回答：举报量降了还是升了（这是本版本立项赌注的方向，两种结果都说得通）、
   # 主动拉黑的真实使用量、黑名单页那个举报入口到底有没有人用（长期为 0 就该撤掉）。
   epic-4: in-progress
-  4-1-v114-埋点收尾: ready-for-dev                                    # 四个入口参数已在各自 story 预留(mini_profile->1-2 / blocklist->1-5,2-4 / comment->1-6 / report_flow->2-1)，本 story 统一收口与校验。⚠️ AC7「上线前必须先量基线」是**产品任务非代码任务**，漏了整节度量作废
+  4-1-v114-埋点收尾: review                                           # 四个入口参数已在各自 story 预留(mini_profile->1-2 / blocklist->1-5,2-4 / comment->1-6 / report_flow->2-1)，本 story 统一收口与校验。⚠️ AC7「上线前必须先量基线」是**产品任务非代码任务**，漏了整节度量作废
   epic-4-retrospective: optional

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
@@ -208,6 +209,12 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
                 // 已举报过也**照常可点**（允许重复举报——每次的类型独立留存）。
                 onTap: () {
                   Navigator.of(sheetCtx).pop();
+                  // ⚠️ 这个**点击**单独成一个事件（不是提交成功才算）——它回答的是
+                  // 「拉黑之后还需不需要一个举报入口」这个设计判断：
+                  // **长期为 0 就说明这个入口可以撤掉**；量不小则说明原来的设计确实堵死了一条路。
+                  Analytics.capture('social_blocklist_report_tapped', {
+                    'entry': AccountActionEntry.blocklist.wire,
+                  });
                   _startReport(b);
                 },
                 child: Container(
@@ -293,6 +300,11 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
       onConfirm: () async {
         try {
           await ref.read(blockedUsersRepositoryProvider).unblock(b.userId);
+          // 解除只解除**主动拉黑**那一层（举报隐藏没有解除入口），故 origin 恒为 BLOCK。
+          Analytics.capture('social_user_unhide_submitted', {
+            'origin': 'BLOCK',
+            'entry': AccountActionEntry.blocklist.wire,
+          });
           return true;
         } catch (_) {
           if (overlay != null) showAppToastOnOverlay(overlay, l10n.unblockFailed);
