@@ -140,7 +140,11 @@ class _TokoPageState extends ConsumerState<TokoPage> {
           childAspectRatio: 0.72,
         ),
         delegate: SliverChildBuilderDelegate(
-          (context, i) => _ProductCard(product: items[i]),
+          (context, i) => _ProductCard(
+            product: items[i],
+            // 选了品类 = 从品类入口进；未选 = 区域④ 全部精选
+            entrySource: _selected == null ? 'TOKO_ALL_FEATURED' : 'TOKO_CATEGORY',
+          ),
           childCount: items.length,
         ),
       ),
@@ -150,9 +154,13 @@ class _TokoPageState extends ConsumerState<TokoPage> {
 
 /// 商品卡。🔴 图与价都**可能为空**，两者都必须优雅降级而不是崩或显 0。
 class _ProductCard extends StatefulWidget {
-  const _ProductCard({required this.product});
+  const _ProductCard({required this.product, required this.entrySource});
 
   final ShopProductSummary product;
+
+  /// 🔴 归因来源（Story 3.10）：区域④「全部精选」与按品类筛选是两个不同的入口，
+  /// 混为一谈会让 AB-13B 算不出「品类页值不值得做」。
+  final String entrySource;
 
   @override
   State<_ProductCard> createState() => _ProductCardState();
@@ -178,7 +186,8 @@ class _ProductCardState extends State<_ProductCard> {
     final p = widget.product;
     return InkWell(
       // Story 1.7 已实现详情页 → 接上导航（游客同样可进，路由不在受控名单里）
-      onTap: () => context.push('/shop/products/${p.token}'),
+      // `?from=` 把入口带进详情页 → 加购时落到购物车行（Story 3.10 归因链）
+      onTap: () => context.push('/shop/products/${p.token}?from=${widget.entrySource}'),
       child: Container(
         decoration: BoxDecoration(
           color: AppColors.cream,

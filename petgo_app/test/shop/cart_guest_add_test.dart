@@ -209,7 +209,9 @@ class _FakeCartRepo implements CartRepository {
   }
 
   @override
-  Future<CartView> add(String skuToken, {int qty = 1}) async => _write('add:$skuToken:$qty');
+  Future<CartView> add(String skuToken,
+          {int qty = 1, String? entrySource, String? triggerType}) async =>
+      _write('add:$skuToken:$qty${entrySource == null ? '' : ':$entrySource'}');
 
   @override
   Future<CartView> setQty(String skuToken, int qty) async => _write('setQty:$skuToken:$qty');

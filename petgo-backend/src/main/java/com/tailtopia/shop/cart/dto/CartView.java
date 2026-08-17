@@ -34,7 +34,22 @@ public record CartView(
             int qty,
             String mainImageUrl,
             Long availableStock,
-            String invalidReason) {
+            String invalidReason,
+            String entrySource,
+            String triggerType) {
+
+        /**
+         * 不带归因的 9 参构造（Story 3.10 追加两列时保留）。
+         *
+         * <p>🔴 归因只在下单抄写时用得上，<b>不下发给客户端</b>：它是后台看板的口径，
+         * 对用户没有意义，而多下发一个字段就多一处可能被误当成展示数据的地方。
+         */
+        public CartLine(String skuToken, String productToken, String productName, String specName,
+                long price, int qty, String mainImageUrl, Long availableStock,
+                String invalidReason) {
+            this(skuToken, productToken, productName, specName, price, qty, mainImageUrl,
+                    availableStock, invalidReason, null, null);
+        }
     }
 
     /** 失效原因：商品已下架。 */

@@ -499,7 +499,11 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // 商品详情（Story 1.7）。同样对游客开放——不在 _controlledLocations 里。
       GoRoute(
         path: '/shop/products/:token',
-        builder: (c, s) => ProductDetailPage(token: s.pathParameters['token']!),
+        // `?from=` 带入归因来源（Story 3.10）：商品从哪个入口进的，只有跳转那一刻知道。
+        builder: (c, s) => ProductDetailPage(
+          token: s.pathParameters['token']!,
+          entrySource: s.uri.queryParameters['from'],
+        ),
       ),
       // 购物车（Story 3.6）。🔒 **有意不放进 _controlledLocations**：门控在页面内部
       //    （游客渲染「登录后查看」空态 + 软性引导），而不是 redirect 弹走。

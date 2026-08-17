@@ -3,7 +3,7 @@ title: "V1.4.0 电商工作线 · 会话交接"
 type: handoff
 updated: 2026-08-18
 branch: shawn/oneline-ecommerce
-head: 05f0eff0
+head: 9e3cfbb8
 ---
 
 # V1.4.0 电商工作线 · 会话交接
@@ -14,21 +14,21 @@ head: 05f0eff0
 
 ---
 
-## 一 · 进度（22 / 57）
+## 一 · 进度（23 / 57）
 
 | Epic | 进度 | 说明 |
 |---|---|---|
 | **1 商品上架与浏览** | **8/8 ✅ 全部 review** | 后端 + 后台 + App 三段齐全，含全链路 L1 |
 | **2 收货地址与配送范围** | **5/5 ✅ 全部 review** | 含全链路联调 + PII 护栏 |
-| **3 完成一次购买** | **9/10** | 3.1~3.5 后端 · 3.6 购物车 · 3.7 结算 · 3.8 支付+订单详情 · 3.9 订单中心第 5 类<br>**下一条 3.10 Epic 3 联调与埋点（收口）** |
-| 4 履约物流与收货 | 0/6 | |
+| **3 完成一次购买** | **10/10 ✅ 全部 review** | 含全链路 L1（加购→结算→混合支付→到账→订单可见）与埋点收口 |
+| 4 履约物流与收货 | 0/6 | **下一条 4.1 履约段状态机与自动确认收货** |
 | 5 退货与退款 | 0/10 | 🔴 最重（资金精度） |
 | 6 复购引擎 | 0/7 | 版本核心 |
 | 7 商品评价 | 0/4 | |
 | 8 经营数据与对账 | 0/4 | |
 | 9 边界守护与效果度量 | 0/3 | 横切 |
 
-**测试基线：后端 `mvn -B test` **1798 通过 / 0 失败 / 6 跳过**；前端 `flutter test` **866 通过**、`flutter analyze` 零问题。**
+**测试基线：后端 `mvn -B test` **1802 通过 / 0 失败 / 6 跳过**；前端 `flutter test` **875 通过**、`flutter analyze` 零问题。**
 
 > 🔴 **跑全量时务必显式 grep `BUILD` 行**。我曾用 `tail -2` 抓输出，`BUILD FAILURE` 被淹掉，
 > 结果在红着的构建上提交（`f470572c`）。正确写法：
@@ -143,49 +143,29 @@ V108 购物车 · V109 订单 · **V110 ⚠️共享表 payment_intents 混合�
 
 ---
 
-## 九 · Epic 3 剩余 1 条的已知要点（下一个窗口直接用）
+## 九 · Epic 3 已完成 —— 交给 Epic 4 的东西
 
-| Story | 要点 |
+| 已就位 | 说明 |
 |---|---|
-| **3.10 Epic 3 联调与埋点** | 照 `Epic1ChainIntegrationTest` / `Epic2ChainIntegrationTest` 的范式写第三条链路 |
+| **订单状态机** | 只开了「待支付 → 待发货 / 已取消」两条边。Epic 4 加发货段、Epic 5 加退款段，**各加各的** |
+| **支付链路** | `ShopOrderPaymentService`（pay/cancel/懒过期/扫描）· `ShopOrderPaidHandler`（同事务 MANDATORY）· `ShopOrderExpiryScanner`（1min 兜底）—— **不要碰既有逻辑，只加自己的边** |
+| **订单中心第 5 类** | `OrderCenterService` 已被本工作线改过（+70/−1，只追加）。Epic 4 若要加履约态卡片，**先 merge main 再改**，仍只在末尾追加 |
+| **订单详情页** | `/shop/orders/{token}`（3.8）。Epic 4 的履约态在同一页加区块即可，`ShopOrderDetailView` 只加字段不改语义 |
+| **归因链** | 已闭合：加购记来源（V114）→ 下单抄到订单行。Epic 6 的复购触发只需在加购时传 `triggerType` |
+| **RFC 9457 扩展成员** | `shared/error/ProblemExtensions`：业务异常实现它即可让逐行明细搭上统一信封（含 traceId） |
 
-### Story 3.6 落地后新增的三条可复用结论（App 侧）
-1. **游客态必须在数据层短路，不能只靠页面不 watch**：任何 `/me/*` provider 被游客 watch 一次
-   就会 401 → 拦截器**强登录引导**，等于给浏览路径装了登录墙（FR-93A 明令不要）。
-   `CartController.build` 里那行 `if (!auth.isLoggedIn) return CartView.empty;` 是安全语义。
-   🔴 守它的用例必须直读 `ProviderContainer`，widget 用例守不住（变异 M5 实测假绿）。
-2. **`showSoftSheet` 现有 `allowRepeat` 参数**（默认 false，既有调用点行为不变）：
-   用户主动动作触发的登录引导要传 `true`，否则「每 session 一次」的去重会让第二次点击毫无反应。
-3. **购物车状态是全局单例 `cartProvider`**，角标（`cartItemCountProvider`）与购物车页同源；
-   DEP-1 闭合后 Tab 角标直接 watch 它即可，不需要改本次代码。
-4. 🔴 **归因（entry_source / trigger_type）目前一律传 null**：购物车行没有记录商品的进入来源
-   （V108 无该列），编一个值会污染 AB-13B 看板且事后无法识别。闭合归 **Story 9.2 / Epic 6**。
-
-### Story 3.7 落地后新增的三条（后面几条 story 会直接吃到）
-1. **结算/下单 REST 端点已补齐**：`GET /me/checkout?addressToken=` · `POST /me/shop-orders`
-   （3.4 只写了 service，`shop/order/web/` 当时是空目录）。3.8 的订单详情端点要照这个控制器加。
-2. **RFC 9457 扩展成员机制已就位**：`shared/error/ProblemExtensions` —— 业务异常实现它即可让
-   逐行明细搭上统一错误信封（含 traceId）。**不要再在控制器里自拼 ProblemDetail**。
-3. 🔴 **Java 变异验证还原源码后必须 `touch`**：`shutil.move` 会连 mtime 一起还原，Maven 增量编译
+### 🔴 Epic 3 留给后面几条的五条硬结论
+1. **游客态必须在数据层短路**：任何 `/me/*` provider 被游客 watch 一次就会 401 → 强登录引导 = 变相登录墙。
+   守它的用例必须直读 `ProviderContainer`（widget 用例守不住，变异 M5 实测假绿）。
+2. **`showSoftSheet` 有 `allowRepeat`**（默认 false）：用户主动动作触发的引导要传 `true`。
+3. **金额一处算**：结算试算与下单共用 `CheckoutService`，前端一个数都不重算。
+4. 🔴 **Java 变异验证还原源码后必须 `touch`**：`shutil.move` 会连 mtime 一起还原，Maven 增量编译
    便跳过重编，后续构建跑的仍是变异后的 class —— 表现为一条与改动毫无关系的红，极难排查。
+5. 🔴 **纵深防御制造假阳性绿灯 —— 本工作线已 5 次应验**（最近两次：B1 重复回调被意图层幂等兜住、
+   H3 用整文件 `contains` 断言行为被方法签名替它满足）。写安全攸关测试时先问两句：
+   **「我在守哪一层」**与**「删掉被守护的那行，它会不会照样绿」**。
 
-### Story 3.8 落地后新增的四条
-1. **Flyway 号段推进：V113 已被 3-8 用掉**（共享 CHECK `ck_payment_intents_purpose` + 订单支付窗）。
-   台账已重排：**4-2 取 V114、5-1 取 V115、6-1 取 V116、6-3 取 V117、7-1 取 V118**。
-2. 🔴 **又一次触碰共享 CHECK**（purpose 追加 `SHOP_ORDER`）—— 临时授权没点名它，补签须一并认领。
-3. **支付链路已通**：`ShopOrderPaymentService`（pay/cancel/懒过期/扫描）· `ShopOrderPaidHandler`
-   （同事务 MANDATORY 监听 `PaymentIntentPaidEvent`）· `ShopOrderExpiryScanner`（1min 兜底）。
-   Epic 4 的发货只需在状态机上加自己的边，**不要碰这三个类的既有逻辑**。
-4. 🔴 **第四次假绿（B1）**：「重复回调不重复扣库存」被意图层的幂等兜住，删掉 `fulfillPaid` 的守卫
-   照样全绿。补了一条**绕过意图层直接连调两次**的用例才守住。
-   **纵深防御制造假阳性绿灯 —— 这条规律至今 4 次应验，写安全攸关测试时先问「我在守哪一层」。**
-
-### Story 3.9 落地后新增的两条
-1. ⚠️ **`OrderCenterService` 已被本工作线改过**（+70/−1，只追加，既有分支一行未动）。
-   Epic 4/5 若还要动它（如履约态卡片），**先 merge main 再改**，且照旧只在末尾追加。
+### 🔴 仍然悬着的两件事
+1. **SPEC-6 的四条缺边**（拒收 / 退款驳回回边 / 退款执行失败 / 用户撤销退货）**须在 Epic 5 前闭合**。
 2. ⚠️ **类型 chips 的分组口径待 UX 拍板**：现「Konsultasi」只映射兽医、AI 归「Lainnya」——
-   后端筛选一次只接受一个类型。3.10 收口时确认或提 UX 决策。
-
-### 🔴 Epic 3 已埋下、Epic 4/5 必须处理的两件事
-1. **订单状态机只开了「待支付 → 待发货/已取消」两条边**。Epic 4 加发货段、Epic 5 加退款段，**各加各的**。
-2. **SPEC-6 的四条缺边**（拒收 / 退款驳回回边 / 退款执行失败 / 用户撤销退货）**须在 Epic 5 前闭合**。
+   后端筛选一次只接受一个类型。

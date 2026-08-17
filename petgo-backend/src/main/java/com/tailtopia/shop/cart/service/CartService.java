@@ -59,6 +59,19 @@ public class CartService {
     /** 加购。同一 SKU 已在车里则累加数量。 */
     @Transactional
     public CartView add(long userId, String skuToken, int qty) {
+        return add(userId, skuToken, qty, null, null);
+    }
+
+    /**
+     * 带归因的加购（Story 3.10）。
+     *
+     * <p>🔴 <b>来源在这一刻记下，下单时抄到订单行</b> —— 商品「从哪个入口进的购物车」
+     * 只有此刻知道。AB-13B 要用它算触发卡转化率（判定 A-16），而客户端埋点会被
+     * 广告拦截与丢包吃掉。
+     */
+    @Transactional
+    public CartView add(long userId, String skuToken, int qty, String entrySource,
+            String triggerType) {
         requirePositive(qty);
         ShopSku sku = requireSku(skuToken);
         ShopCart cart = cartOf(userId);
@@ -71,8 +84,11 @@ public class CartService {
         items.findByCartIdAndSkuId(cart.getId(), sku.getId())
                 .ifPresentOrElse(i -> {
                     i.setQty(target);
+                    // 首次来源优先：第二次加购通常发生在已决定要买之后，那不是转化发生的地方
+                    i.attributeIfAbsent(entrySource, triggerType);
                     items.save(i);
-                }, () -> items.save(ShopCartItem.of(cart.getId(), sku.getId(), target)));
+                }, () -> items.save(ShopCartItem.of(cart.getId(), sku.getId(), target,
+                        entrySource, triggerType)));
         cart.touch();
         return view(userId);
     }
@@ -173,7 +189,10 @@ public class CartService {
                     row.getQty(),
                     p == null ? null : imageUrls.publicUrl(p.getMainImageKey()),
                     available,
-                    reason);
+                    reason,
+                    // 归因随行带出，供下单时抄到订单行（不下发给客户端，见 CartLine 注释）
+                    row.getEntrySource(),
+                    row.getTriggerType());
 
             if (reason == null) {
                 valid.add(line);

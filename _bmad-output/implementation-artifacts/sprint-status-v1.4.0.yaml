@@ -1,5 +1,5 @@
 # generated: 2026-08-17
-# last_updated: 2026-08-18  (Story 3.9 → review；后端 1798 / 前端 866 全绿)
+# last_updated: 2026-08-18  (Epic 3 完成 10/10；后端 1802 / 前端 875 全绿)
 #
 # ===== ✅ L1 阻塞已解除（2026-08-17）=====
 # 本机 Docker Desktop 一直装着（4.69），只是不自启 —— 前次「本机无 Docker」是误判。
@@ -78,12 +78,13 @@
 #   V112 3-5 pawcoin_config 加补偿溢价两列  ✅ 已提交
 #   V113 3-8 ⚠️共享 CHECK ck_payment_intents_purpose 追加 SHOP_ORDER + shop_orders 支付窗  ✅ 已提交
 #        （原表预留给 4-2 shipments；按"取最大号+1"规则由 3-8 先用掉，4-2 顺延取 V114）
-#   V114 4-2 shipments                     (S-2 一单多包的持久化依据)
-#   V115 5-1 return_requests + return_lines + 部分唯一索引
-#   V116 6-1 ⚠️共享表 pet_profiles 加体重列（须认领）
-#   V117 6-3 repurchase_triggers + ⚠️共享 ck_notifications_type 追加值（须认领）
-#   V118 7-1 shop_reviews
-#   V119+ 预留（平台配置项等）
+#   V114 3-10 shop_cart_items 加 entry_source / trigger_type（归因链闭合）  ✅ 已提交
+#   V115 4-2 shipments                     (S-2 一单多包的持久化依据)
+#   V116 5-1 return_requests + return_lines + 部分唯一索引
+#   V117 6-1 ⚠️共享表 pet_profiles 加体重列（须认领）
+#   V118 6-3 repurchase_triggers + ⚠️共享 ck_notifications_type 追加值（须认领）
+#   V119 7-1 shop_reviews
+#   V120+ 预留（平台配置项等）
 #
 # 🔴 本表是【建议性】的，绑定规则只有一条：**实现时取号段内当前最大号 +1，并立刻回写本表**。
 #    上面这次脱节就是没回写造成的。Flyway 不要求号连续（既有 V86 空洞为证），也不要求单调应用
@@ -145,7 +146,7 @@ development_status:
   3-7-结算页与两段金额: review
   3-8-支付与待支付订单详情: review
   3-9-订单列表电商卡片: review
-  3-10-Epic-3-联调与埋点: backlog
+  3-10-Epic-3-联调与埋点: review
   epic-3-retrospective: optional
 
   # ── Epic 4: 履约、物流与收货 ──

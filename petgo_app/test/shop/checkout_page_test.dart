@@ -460,8 +460,9 @@ class _FakeCartRepo implements CartRepository {
   }
 
   @override
-  Future<CartView> add(String skuToken, {int qty = 1}) async {
-    calls.add('add:$skuToken');
+  Future<CartView> add(String skuToken,
+      {int qty = 1, String? entrySource, String? triggerType}) async {
+    calls.add('add:$skuToken${entrySource == null ? '' : ':$entrySource'}');
     return CartView.empty;
   }
 

@@ -25,10 +25,22 @@ class CartRepository {
     return CartView.fromJson(resp.data!);
   }
 
-  Future<CartView> add(String skuToken, {int qty = 1}) async {
+  /// 加购。
+  ///
+  /// 🔴 [entrySource] 是**归因链的起点**（Story 3.10）：商品「从哪个入口进的购物车」
+  /// 只有此刻知道，服务端记在购物车行上、下单时抄到订单行，后台据此算触发卡转化率
+  /// （AB-13B 判定 A-16）。**拿不到就不传** —— 写 null 是诚实的「未知」，
+  /// 编一个值会污染看板且事后无法识别。
+  Future<CartView> add(String skuToken,
+      {int qty = 1, String? entrySource, String? triggerType}) async {
     final resp = await dio.post<Map<String, dynamic>>(
       ApiPaths.meCartItems,
-      queryParameters: {'skuToken': skuToken, 'qty': qty},
+      queryParameters: {
+        'skuToken': skuToken,
+        'qty': qty,
+        'entrySource': ?entrySource,
+        'triggerType': ?triggerType,
+      },
     );
     return CartView.fromJson(resp.data!);
   }
@@ -98,8 +110,10 @@ class CartController extends AsyncNotifier<CartView> {
   }
 
   /// 加购。失败抛 [CartMutationError] 给调用方（页面负责选文案）。
-  Future<void> add(String skuToken, {int qty = 1}) =>
-      _mutate((repo) => repo.add(skuToken, qty: qty));
+  Future<void> add(String skuToken,
+          {int qty = 1, String? entrySource, String? triggerType}) =>
+      _mutate((repo) => repo.add(skuToken,
+          qty: qty, entrySource: entrySource, triggerType: triggerType));
 
   Future<void> setQty(String skuToken, int qty) =>
       _mutate((repo) => repo.setQty(skuToken, qty));

@@ -51,6 +51,9 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   /// 逐行退货标识是否展开（S-6：默认收起，只显示最严那一条）。
   bool _perLineExpanded = false;
 
+  /// 超范围警示已上报（同一地址反复 rebuild 不重复打点）。
+  bool _outOfRangeReported = false;
+
   @override
   void initState() {
     super.initState();
@@ -178,7 +181,18 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       );
 
   /// 🔴 超服务范围：**警示 + 禁用提交**，但页面照常渲染 —— 用户得看见是哪个地址送不到（FR-99）。
-  Widget _outOfRangeBanner(AppLocalizations l10n) => Padding(
+  ///
+  /// 埋点（Story 3.10）：这是转化漏斗上一个**可运营**的流失点 ——
+  /// 若某个区域反复出现，那是「该开通配送了」的信号，不是用户的问题。
+  Widget _outOfRangeBanner(AppLocalizations l10n) {
+    if (!_outOfRangeReported) {
+      _outOfRangeReported = true;
+      Analytics.capture('toko_checkout_out_of_range_shown');
+    }
+    return _outOfRangeBannerBody(l10n);
+  }
+
+  Widget _outOfRangeBannerBody(AppLocalizations l10n) => Padding(
         padding: const EdgeInsets.fromLTRB(
             AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, 0),
         child: Container(
@@ -504,6 +518,10 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       // 下单成功后车里已被清掉已下单的行 —— 角标必须跟上
       await ref.read(cartProvider.notifier).refresh();
       if (!mounted) return;
+      // 🔴 下单成功（漏斗终点）。行级归因走**服务端**：加购时记在购物车行上、
+      //    下单时抄到订单行（Story 3.10 / V114）—— 客户端事件会被广告拦截与丢包吃掉，
+      //    而 AB-13B 要用它判定 A-16。这里只报一个不含 PII 的件数。
+      Analytics.capture('toko_order_submitted', {'item_count': p.lines.length});
       showAppToast(context, l10n.checkoutOrderPlaced);
       // 🔴 直接进待支付订单详情（Story 3.8）：60 分钟窗口从下单那一刻就在走，
       //    把用户留在结算页等他自己去找订单，等于让他在倒计时里找路。
