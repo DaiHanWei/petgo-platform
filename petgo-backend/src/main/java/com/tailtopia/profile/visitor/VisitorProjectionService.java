@@ -12,10 +12,14 @@ import com.tailtopia.profile.service.MilestoneService;
 import com.tailtopia.profile.service.ProfileService;
 import com.tailtopia.profile.service.TimelineService;
 import com.tailtopia.shared.media.AliyunOssClient;
+import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -119,14 +123,88 @@ public class VisitorProjectionService {
 
         List<VisitorTimelineItem> out = new ArrayList<>(moments.size());
         for (GrowthMomentView m : moments) {
-            out.add(new VisitorTimelineItem(
-                    TimelineItemType.HAPPY_MOMENT,
-                    m.createdAt(),
-                    m.eventDate(),
-                    m.id(),
-                    strippedImages(m.imageUrls()),
-                    m.text(),
-                    null, null, null));
+            out.add(toVisitorItem(m));
+        }
+        return out;
+    }
+
+    /**
+     * 一条快乐时刻 → 访客条目。时间线与某天详情共用<b>同一个</b>转换，
+     * 免得两处各写一遍、将来只改了一处。
+     *
+     * <p>🛡 后三个参数恒为 null（里程碑 code / level / 身份证编号）—— 快乐时刻不带这些。
+     * 类型恒为 {@code HAPPY_MOMENT}：访客侧<b>永远不产出</b> {@code HEALTH_RECORD}
+     * （那是类④，整类剔除）。
+     */
+    private static VisitorTimelineItem toVisitorItem(GrowthMomentView m) {
+        return new VisitorTimelineItem(
+                TimelineItemType.HAPPY_MOMENT,
+                m.createdAt(),
+                m.eventDate(),
+                m.id(),
+                strippedImages(m.imageUrls()),
+                m.text(),
+                null, null, null);
+    }
+
+    /**
+     * 日历月视图投影（V1.1.6 Story 2.2 · AC1~AC5、AC7）。
+     *
+     * <p>🛡 <b>只取 Diary 一个源。</b> 作者态的 {@code TimelineService.getCalendarMonth} 在方法体内
+     * <b>各自直取三源</b>（Diary + 问诊存档 + 结构化健康记录），且没有一个统一汇聚点可以「关掉一个源」——
+     * 这正是不能给它加访问者参数、必须另写一条路径的原因（AD-1 Rule 3）。
+     * 本层不持有那两个仓库，<b>结构上也取不到</b>。
+     *
+     * <p>🛡 <b>只含已发布且未删除</b>（AD-1 Rule 7）。⚠️ 这里用的是
+     * {@code findPublishedGrowthMomentsInMonth}；{@code ContentService} 里那个同名少了 {@code Published}
+     * 的方法是<b>作者自看</b>用的（含审核中的帖），<b>本层绝不能改用它</b> ——
+     * 用错的表现是：违规内容被下架之后，仍能通过分享链接对全网可见。
+     *
+     * <p>⚠️ <b>只有健康记录、没有 Diary 的那一天不出现在结果里</b>（AC3）。
+     * 不是「出现一个空格子」—— 空格子能被数出来，等于告诉访客「这天有事发生但不给你看」。
+     *
+     * <p>首图口径与作者态一致：该 {@code event_date} 下<b>最早 created_at</b> 那条的首图，同日后续不覆盖。
+     * 查询本身已按 event_date 升、created_at 升排序，故<b>首次遇到即为最早</b>，后续同日只补 hasHappyMoment。
+     */
+    @Transactional(readOnly = true)
+    public VisitorCalendarMonth calendarMonth(PetProfile profile, int year, int month) {
+        YearMonth ym = YearMonth.of(year, month);
+        List<GrowthMomentView> moments = contentService.findPublishedGrowthMomentsInMonth(
+                profile.getOwnerId(), profile.getId(), ym.atDay(1), ym.atEndOfMonth());
+
+        // TreeMap 保证 day 升序 —— 与作者态 getCalendarMonth 用的是同一种容器、同一套聚合规则，
+        // 两个日历只差「健康那两源」，不差算法。
+        Map<Integer, VisitorDayCell> byDay = new TreeMap<>();
+        for (GrowthMomentView m : moments) {
+            if (m.eventDate() == null) {
+                continue; // 防御：eventDate 理应非空
+            }
+            int day = m.eventDate().getDayOfMonth();
+            if (byDay.containsKey(day)) {
+                continue; // 同日后续记录不覆盖首图（查询已按 created_at 升序，首次出现即最早那条）
+            }
+            byDay.put(day, new VisitorDayCell(day, strippedOrNull(m.firstImageUrl()), true));
+        }
+        return new VisitorCalendarMonth(year, month, List.copyOf(byDay.values()));
+    }
+
+    /**
+     * 某天详情投影（V1.1.6 Story 2.2）。
+     *
+     * <p>🛡 复用 {@link VisitorTimelineItem} —— <b>不得</b>改用作者态的 {@code TimelineItemResponse}，
+     * 那个带着 {@code symptomSummary}（症状摘要，就是健康数据本身）· {@code aiLevel} ·
+     * {@code healthRecordType} · {@code healthRecordId}，即使当前不填，将来任何人改动都可能填上
+     * 而<b>不会有任何东西报错</b>。
+     *
+     * <p>取数与过滤口径同 {@link #calendarMonth}：只 Diary、只已发布未删除、含私密条目。
+     */
+    @Transactional(readOnly = true)
+    public List<VisitorTimelineItem> dayDetail(PetProfile profile, LocalDate date) {
+        List<GrowthMomentView> moments = contentService.findPublishedGrowthMomentsOnDate(
+                profile.getOwnerId(), profile.getId(), date);
+        List<VisitorTimelineItem> out = new ArrayList<>(moments.size());
+        for (GrowthMomentView m : moments) {
+            out.add(toVisitorItem(m));
         }
         return out;
     }
@@ -170,6 +248,17 @@ public class VisitorProjectionService {
                 .sorted(Comparator.comparing(MilestoneItemResponse::completedAt,
                         Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
+    }
+
+    /**
+     * 日历格子的首图 —— 同样要去 EXIF。
+     *
+     * <p>⚠️ 作者态的 {@code DayCell.firstImageUrl} 是<b>原样下发</b>的（自己看自己的图，无需脱敏）。
+     * 访客侧照抄就会把拍摄地点等元数据一起发出去。
+     * 首图本身取自 {@code GrowthMomentView.firstImageUrl()} —— 与作者态同一个取法。
+     */
+    private static String strippedOrNull(String url) {
+        return url == null ? null : AliyunOssClient.exifStrippedDeliveryUrl(url);
     }
 
     /** 对外图一律经服务端去 EXIF 分发（拍摄地点等元数据不得随图外泄）。 */

@@ -104,10 +104,34 @@ class VisitorProjectionFieldsTest {
         assertThat(VisitorStats.class.getRecordComponents()).hasSize(4);
     }
 
+    /**
+     * 🛡 访客日历格子<b>不得有</b>健康相关字段（V1.1.6 Story 2.2）。
+     *
+     * <p>作者态的 {@code CalendarMonthResponse.DayCell} 有
+     * {@code hasHealthEvent} · {@code healthRecordType} · {@code healthRecordCount} 三个。
+     * 哪怕只下发一个布尔值 {@code hasHealthEvent=true}，也等于告诉陌生人
+     * <b>「这只宠物这天看过病」</b> —— 那正是 PRD §2.9 整块禁止的东西。
+     */
+    @Test
+    void visitorDayCellHasNoHealthFields() {
+        assertNoForbiddenComponents(VisitorDayCell.class);
+        assertThat(VisitorDayCell.class.getRecordComponents())
+                .as("VisitorDayCell 的字段数变了。它刻意只有三个（day / firstImageUrl / hasHappyMoment）—— "
+                        + "作者态那个有六个，多出来的三个全是健康相关，不该被加回来。")
+                .hasSize(3);
+    }
+
+    /** 🛡 访客日历的月容器同样过一遍（它只是壳，但壳上也不该长出健康字段）。 */
+    @Test
+    void visitorCalendarMonthHasNoHealthFields() {
+        assertNoForbiddenComponents(VisitorCalendarMonth.class);
+    }
+
     /** 🛡 访客 DTO 里也不能出现任何拉黑相关信号（AD-1 Rule 9 的附带红线）。 */
     @Test
     void visitorDtosLeakNoBlockSignal() {
-        for (Class<?> type : List.of(VisitorTimelineItem.class, VisitorStats.class)) {
+        for (Class<?> type : List.of(VisitorTimelineItem.class, VisitorStats.class,
+                VisitorDayCell.class, VisitorCalendarMonth.class)) {
             for (RecordComponent rc : type.getRecordComponents()) {
                 String name = rc.getName().toLowerCase(Locale.ROOT);
                 assertThat(name)

@@ -107,6 +107,25 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             long authorId, long petId, ContentType type, LocalDate eventDate);
 
     /**
+     * 日历月度聚合的<b>访客版</b>（V1.1.6 Story 2.2）：在上面那条之上<b>再叠一层 {@code status} 过滤</b>。
+     *
+     * <p>🔴 <b>与上面那条是一对，不可互换</b>：
+     * 上面那条（无 status）供<b>作者自看</b> —— 作者要看得到自己被下架 / 审核中的帖，
+     * 才知道发生了什么；本条（传 {@code PUBLISHED}）供<b>访客</b> ——
+     * 照搬作者那条会让<b>违规内容被下架之后仍能通过分享链接对全网可见</b>。
+     *
+     * <p>⚠️ 将来若有人想「统一成一个方法」，请先读完这段再动。
+     */
+    List<ContentPost> findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndStatusAndEventDateBetweenOrderByEventDateAscCreatedAtAsc(
+            long authorId, long petId, ContentType type, PostStatus status, LocalDate from, LocalDate to);
+
+    /**
+     * 当天详情的<b>访客版</b>（V1.1.6 Story 2.2）。与上面「当天详情」那条成对，理由同上 —— 不可互换。
+     */
+    List<ContentPost> findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndStatusAndEventDateOrderByCreatedAtAsc(
+            long authorId, long petId, ContentType type, PostStatus status, LocalDate eventDate);
+
+    /**
      * 名片快乐时刻流（Story 2.6 AC7 · F9）：某作者**某宠物**某类型未删内容，按 event_date 倒序取最近 N。
      * 内容审核 story 2（§5.4）：叠加 {@code status} 过滤——公开/名片路径传 {@code PUBLISHED}，挂起零泄漏。
      * bug 20260730-435：必须带 petId——删旧宠物档案走 detachPet（pet_id 置 NULL、帖保留 PUBLISHED），
