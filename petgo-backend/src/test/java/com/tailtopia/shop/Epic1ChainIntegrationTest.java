@@ -36,7 +36,7 @@ import org.springframework.test.context.TestPropertySource;
  *
  * <p>⚠️ 需真实 PostgreSQL + Redis。App 侧的模拟器走查属 L2，不在本类范围。
  */
-@TestPropertySource(properties = "petgo.shop.sku-cap=200")
+@TestPropertySource(properties = "petgo.shop.sku-cap=500")
 class Epic1ChainIntegrationTest extends ApiIntegrationTest {
 
     @Autowired
