@@ -143,6 +143,17 @@
                    th:text="#{admin.nav.accounts}">后台账号</a>
             </div>
         </details>
+        <!-- 精选自营电商 模块 10–13（V1.4.0）。⚠️ 共享文件：只追加到导航末尾，不动既有块顺序。 -->
+        <details class="nav-section"
+                 th:attr="open=${active == 'shopProducts'} ? 'open' : null">
+            <summary th:classappend="${active == 'shopProducts'} ? 'active'"
+                     th:text="#{admin.nav.group.shop}">电商</summary>
+            <div class="nav-sub">
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('shop.product_view') or hasAuthority('shop.product_edit')"
+                   th:href="@{/admin/shop/products}" th:classappend="${active == 'shopProducts'} ? 'active'"
+                   th:text="#{admin.nav.shopProducts}">商品管理</a>
+            </div>
+        </details>
     </nav>
     <main>
         <div class="topbar">

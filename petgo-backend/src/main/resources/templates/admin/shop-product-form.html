@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<!-- 商品创建/编辑 + SKU 维护（V1.4.0 Story 1.3，AB-10A / AB-10B）。
+     🔒 进货价字段仅在 canViewCost / canEditCost 为真时才由控制器放进 model —— 服务端门控，非前端隐藏。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.shop.form.title}">商品编辑 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1 th:text="${productId} == null ? #{admin.shop.form.titleNew} : #{admin.shop.form.titleEdit}">商品编辑</h1>
+        <p th:if="${flash}" class="flash" th:text="${flash}">已保存</p>
+
+        <!-- 🔴 Makanan 未填喂量的显著警告：FR-109 能否成立的唯一提醒点 -->
+        <p th:if="${feedingWarning}" class="warn" th:text="${feedingWarning}">
+            此商品为 Makanan 但未填写每日建议喂量。
+        </p>
+
+        <form method="post"
+              th:action="${productId} == null ? @{/admin/shop/products} : @{'/admin/shop/products/' + ${productId}}"
+              th:object="${form}">
+            <fieldset>
+                <legend th:text="#{admin.shop.form.section.basic}">基本信息</legend>
+                <label><span th:text="#{admin.shop.col.name}">商品名</span>
+                    <input type="text" th:field="*{name}" maxlength="60" required/></label>
+                <label><span th:text="#{admin.shop.col.brand}">品牌</span>
+                    <input type="text" th:field="*{brand}" required/></label>
+                <label><span th:text="#{admin.shop.col.category}">品类</span>
+                    <select th:field="*{category}" required>
+                        <option th:each="c : ${categories}" th:value="${c}" th:text="${c}">MAKANAN</option>
+                    </select></label>
+                <label><span th:text="#{admin.shop.col.species}">适用物种</span>
+                    <select th:field="*{species}" required>
+                        <option th:each="s : ${speciesList}" th:value="${s}" th:text="${s}">DOG</option>
+                    </select></label>
+                <label><span th:text="#{admin.shop.col.bodySize}">适用体型</span>
+                    <select th:field="*{bodySize}">
+                        <option value="" th:text="#{admin.common.none}">不限</option>
+                        <option th:each="b : ${bodySizes}" th:value="${b}" th:text="${b}">MEDIUM</option>
+                    </select></label>
+                <label><span th:text="#{admin.shop.col.ageStage}">适用年龄段</span>
+                    <select th:field="*{ageStage}">
+                        <option value="" th:text="#{admin.common.none}">不限</option>
+                        <option th:each="a : ${ageStages}" th:value="${a}" th:text="${a}">ADULT</option>
+                    </select></label>
+                <label><span th:text="#{admin.shop.col.returnPolicy}">退货规则</span>
+                    <select th:field="*{returnPolicy}" required>
+                        <option th:each="r : ${returnPolicies}" th:value="${r}" th:text="${r}">NO_RETURN_AFTER_OPEN</option>
+                    </select></label>
+                <p class="hint" th:text="#{admin.shop.form.hint.returnPolicy}">默认「开封不退」——宠物食品与保健品取安全侧默认值，由运营主动改为宽松。本版本不提供换货，三值中无「可退可换」。</p>
+                <label><span th:text="#{admin.shop.col.sortWeight}">排序权重</span>
+                    <input type="number" th:field="*{sortWeight}"/></label>
+            </fieldset>
+
+            <fieldset>
+                <legend th:text="#{admin.shop.form.section.media}">图片与详情</legend>
+                <label><span th:text="#{admin.shop.col.mainImage}">主图 objectKey</span>
+                    <input type="text" th:field="*{mainImageKey}" required/></label>
+                <p class="hint" th:text="#{admin.shop.form.hint.imageKey}">填 OSS 对象 key，不是 URL。签名 URL 绝不入库。</p>
+                <label><span th:text="#{admin.shop.col.gallery}">图集 objectKey（每行一个，≤8）</span>
+                    <textarea th:field="*{galleryKeysRaw}" rows="4"></textarea></label>
+                <label><span th:text="#{admin.shop.col.detail}">商品详情（含成分表）</span>
+                    <textarea th:field="*{detailHtml}" rows="8" required></textarea></label>
+                <label><span th:text="#{admin.shop.col.shelfLife}">保质期说明</span>
+                    <input type="text" th:field="*{shelfLifeNote}" required/></label>
+            </fieldset>
+
+            <fieldset>
+                <legend th:text="#{admin.shop.form.section.feeding}">每日建议喂量</legend>
+                <!-- 🔴 结构化行编辑器，绝不提供自由文本框 —— FR-109 的唯一计算依据 -->
+                <p class="warn" th:text="#{admin.shop.form.hint.feedingConsequence}">
+                    此字段是粮量见底预估（复购提醒）的唯一计算依据，填成描述性文字会导致整条复购机制失效。
+                </p>
+                <table>
+                    <thead><tr>
+                        <th th:text="#{admin.shop.feed.min}">体重下限(kg)</th>
+                        <th th:text="#{admin.shop.feed.max}">体重上限(kg)</th>
+                        <th th:text="#{admin.shop.feed.grams}">克/日</th>
+                    </tr></thead>
+                    <tbody>
+                    <tr th:each="i : ${#numbers.sequence(0, 5)}">
+                        <td><input type="number" min="1" th:name="'feedWeightMinKg[' + ${i} + ']'"
+                                   th:value="${i < form.feedWeightMinKg.size()} ? ${form.feedWeightMinKg[i]} : ''"/></td>
+                        <td><input type="number" min="1" th:name="'feedWeightMaxKg[' + ${i} + ']'"
+                                   th:value="${i < form.feedWeightMaxKg.size()} ? ${form.feedWeightMaxKg[i]} : ''"/></td>
+                        <td><input type="number" min="1" th:name="'feedGramsPerDay[' + ${i} + ']'"
+                                   th:value="${i < form.feedGramsPerDay.size()} ? ${form.feedGramsPerDay[i]} : ''"/></td>
+                    </tr>
+                    </tbody>
+                </table>
+                <p class="hint" th:text="#{admin.shop.form.hint.feedingRule}">体重区间不得重叠，下限须小于上限，三值均为正整数。留空行会被忽略。</p>
+            </fieldset>
+
+            <button type="submit" class="btn btn-primary" th:text="#{admin.common.save}">保存</button>
+            <a th:href="@{/admin/shop/products}" class="btn btn-sm" th:text="#{admin.common.back}">返回列表</a>
+        </form>
+
+        <!-- ===== SKU 维护（AB-10B），仅编辑态展示 ===== -->
+        <div th:if="${productId} != null">
+            <h2 th:text="#{admin.shop.form.section.skus}">规格与价格</h2>
+            <table>
+                <thead><tr>
+                    <th th:text="#{admin.shop.sku.specName}">规格名</th>
+                    <th th:text="#{admin.shop.sku.price}">售价</th>
+                    <th th:text="#{admin.shop.sku.netWeight}">净含量(g)</th>
+                    <th th:text="#{admin.shop.col.returnPolicy}">退货规则</th>
+                    <th th:text="#{admin.shop.sku.available}">可售库存</th>
+                    <!-- 🔒 无 shop.cost_view 时 canViewCost 为 false，整列不渲染；且 costBySku 根本不在 model 中 -->
+                    <th th:if="${canViewCost}" th:text="#{admin.shop.sku.costPrice}">进货价</th>
+                </tr></thead>
+                <tbody>
+                <tr th:each="s : ${skus}">
+                    <td th:text="${s.specName}">3 kg</td>
+                    <td th:text="${s.price}">285000</td>
+                    <td th:text="${s.netWeightG} ?: '—'">3000</td>
+                    <td th:text="${s.returnPolicy} ?: #{admin.shop.sku.inherit}">继承商品级</td>
+                    <td th:text="${availableBySku[s.id]} ?: 0">0</td>
+                    <td th:if="${canViewCost}" th:text="${costBySku[s.id]} ?: '—'">—</td>
+                </tr>
+                <tr th:if="${#lists.isEmpty(skus)}">
+                    <td colspan="6" th:text="#{admin.shop.sku.empty}">暂无规格，请先添加</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <form method="post" th:action="@{'/admin/shop/products/' + ${productId} + '/skus'}">
+                <fieldset>
+                    <legend th:text="#{admin.shop.sku.addTitle}">新增/编辑规格</legend>
+                    <input type="hidden" name="id"/>
+                    <label><span th:text="#{admin.shop.sku.specName}">规格名</span>
+                        <input type="text" name="specName" required/></label>
+                    <label><span th:text="#{admin.shop.sku.price}">售价（最小币种单位，IDR 无小数）</span>
+                        <input type="number" name="price" min="0" required/></label>
+                    <label><span th:text="#{admin.shop.sku.netWeight}">净含量(g)</span>
+                        <input type="number" name="netWeightG" min="1"/></label>
+                    <label><span th:text="#{admin.shop.col.returnPolicy}">退货规则</span>
+                        <select name="returnPolicy">
+                            <option value="" th:text="#{admin.shop.sku.inherit}">继承商品级</option>
+                            <option th:each="r : ${returnPolicies}" th:value="${r}" th:text="${r}">RETURNABLE</option>
+                        </select></label>
+                    <!-- 🔒 仅有 shop.cost_edit 时才渲染；即便被伪造提交，控制器也会丢弃该值 -->
+                    <label th:if="${canEditCost}"><span th:text="#{admin.shop.sku.costPrice}">进货价</span>
+                        <input type="number" name="costPrice" min="0"/></label>
+                </fieldset>
+                <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.common.save}">保存规格</button>
+            </form>
+        </div>
+    </div>
+</div>
+</body>
+</html>

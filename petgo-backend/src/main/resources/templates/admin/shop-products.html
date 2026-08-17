@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<!-- 商品管理列表（V1.4.0 Story 1.3，AB-10A）。模块 10 入口。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.shop.products.title}">商品管理 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1 th:text="#{admin.shop.products.title}">商品管理</h1>
+        <p class="hint" th:text="#{admin.shop.products.hint}">精选自营商品。新建商品默认未上架，需在上下架管理中主动上架后才对用户可见。</p>
+        <p th:if="${flash}" class="flash" th:text="${flash}">已保存</p>
+
+        <form method="get" th:action="@{/admin/shop/products}">
+            <label><span th:text="#{admin.shop.col.category}">品类</span>
+                <select name="category">
+                    <option value="" th:text="#{admin.common.all}">全部</option>
+                    <option th:each="c : ${categories}" th:value="${c}" th:text="${c}"
+                            th:selected="${c == filterCategory}">MAKANAN</option>
+                </select>
+            </label>
+            <label><span th:text="#{admin.shop.col.active}">上架状态</span>
+                <select name="active">
+                    <option value="" th:text="#{admin.common.all}">全部</option>
+                    <option value="true" th:selected="${filterActive == true}" th:text="#{admin.shop.active.yes}">已上架</option>
+                    <option value="false" th:selected="${filterActive == false}" th:text="#{admin.shop.active.no}">未上架</option>
+                </select>
+            </label>
+            <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.common.search}">查询</button>
+            <a th:if="${canEdit}" th:href="@{/admin/shop/products/new}" class="btn btn-sm"
+               th:text="#{admin.shop.products.btn.new}">新建商品</a>
+        </form>
+
+        <table>
+            <thead>
+            <tr>
+                <th th:text="#{admin.shop.col.name}">商品名</th>
+                <th th:text="#{admin.shop.col.brand}">品牌</th>
+                <th th:text="#{admin.shop.col.category}">品类</th>
+                <th th:text="#{admin.shop.col.active}">上架</th>
+                <th th:text="#{admin.shop.col.skuCount}">规格数</th>
+                <th th:text="#{admin.shop.col.minPrice}">最低价</th>
+                <th th:text="#{admin.shop.col.sortWeight}">排序权重</th>
+                <th th:text="#{admin.common.action}">操作</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="p : ${products}">
+                <td th:text="${p.name}">Royal Canin</td>
+                <td th:text="${p.brand}">Royal Canin</td>
+                <td th:text="${p.category}">MAKANAN</td>
+                <td th:text="${p.active} ? #{admin.shop.active.yes} : #{admin.shop.active.no}">未上架</td>
+                <td th:text="${skuCount[p.id]}">0</td>
+                <td th:text="${minPrice[p.id]} ?: '—'">—</td>
+                <td th:text="${p.sortWeight}">0</td>
+                <td><a th:href="@{'/admin/shop/products/' + ${p.id}}" th:text="#{admin.common.detail}">详情</a></td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(products)}">
+                <td colspan="8" th:text="#{admin.shop.products.empty}">暂无商品</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

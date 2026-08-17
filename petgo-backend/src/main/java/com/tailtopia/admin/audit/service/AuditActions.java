@@ -117,6 +117,16 @@ public final class AuditActions {
     /** 账号举报工单判为无需处置（数据层仍是 DISMISSED，改的只有展示层文案）。 */
     public static final String ACCOUNT_REPORT_DISMISSED = "ACCOUNT_REPORT_DISMISSED";
 
+    // ===== 精选自营电商（V1.4.0 Story 1.3，模块 10）=====
+    /** 创建商品（AB-10A）。 */
+    public static final String SHOP_PRODUCT_CREATED = "SHOP_PRODUCT_CREATED";
+    /** 编辑商品（AB-10A）。 */
+    public static final String SHOP_PRODUCT_UPDATED = "SHOP_PRODUCT_UPDATED";
+    /** 新建或更新 SKU（AB-10B）。 */
+    public static final String SHOP_SKU_UPSERTED = "SHOP_SKU_UPSERTED";
+    /** 🔒 更新进货价——详情【绝不写数值】，只记发生过（商业敏感，NFR-11）。 */
+    public static final String SHOP_PRODUCT_COST_UPDATED = "SHOP_PRODUCT_COST_UPDATED";
+
     private AuditActions() {
     }
 }
