@@ -80,6 +80,38 @@ public class AdminShippingZoneService {
         return zones.save(z);
     }
 
+    /**
+     * 配置<b>退货收件地址</b>（S-7，AB-11C 增配一项）。
+     *
+     * <p>🔴 用户<b>自寄</b>到这个地址；本版本<b>不做上门取件</b>（需承运商 API 与商务账号）。
+     * 三项要么都填、要么都留空 —— 只填一半的地址寄不到，而寄不到的退货会变成
+     * 「货在路上丢了、钱也没退」的双输。
+     */
+    @Transactional
+    public ShippingSettings setReturnAddress(String addressText, String receiverName,
+            String receiverPhone, long actorAccountId) {
+        boolean anyFilled = notBlank(addressText) || notBlank(receiverName)
+                || notBlank(receiverPhone);
+        boolean allFilled = notBlank(addressText) && notBlank(receiverName)
+                && notBlank(receiverPhone);
+        if (anyFilled && !allFilled) {
+            throw com.tailtopia.shared.error.AppException.validation(
+                    "退货收件地址的收件人、电话、地址三项要么都填，要么都留空");
+        }
+        ShippingSettings s = settings.findAll().stream().findFirst()
+                .orElseThrow(() -> com.tailtopia.shared.error.AppException.notFound("配送设置未初始化"));
+        s.applyReturnAddress(addressText, receiverName, receiverPhone);
+        // 🔒 审计只记「配置过」与是否清空，不记地址与电话本身（审计表永久保留）
+        audit.record(actorAccountId, AuditActions.SHOP_SHIPPING_SETTINGS_UPDATED,
+                "SHIPPING_SETTINGS", "1",
+                allFilled ? "配置退货收件地址（内容不入审计）" : "清空退货收件地址");
+        return settings.save(s);
+    }
+
+    private static boolean notBlank(String v) {
+        return v != null && !v.isBlank();
+    }
+
     /** 设置免运门槛。0 = 不做免运（不是「0 元即免运」）。 */
     @Transactional
     public ShippingSettings setFreeShippingThreshold(long value, long actorAccountId) {

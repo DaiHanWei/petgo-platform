@@ -159,6 +159,16 @@ public final class AuditActions {
     /** 异常订单处置：整单取消并退款 / 部分取消 / 联系用户后继续（Story 4.4，AB-11D）。 */
     public static final String SHOP_ORDER_EXCEPTION_HANDLED = "SHOP_ORDER_EXCEPTION_HANDLED";
 
+    // ===== 退货与退款（V1.4.0 Story 5.3 / 5.4 / 5.5 / 5.6，模块 12）=====
+    /** 退货申请审核（批准 / 驳回）。摘要记类型、整单退与两处运费归属 —— 它们直接决定退款金额。 */
+    public static final String SHOP_RETURN_REVIEWED = "SHOP_RETURN_REVIEWED";
+    /** 寄回登记与质检（通过 / 不通过 + 处置方式）。🔒 只记运单号，不记用户地址电话。 */
+    public static final String SHOP_RETURN_INSPECTED = "SHOP_RETURN_INSPECTED";
+    /** 🔒 退款执行。摘要记两段金额与两种溢价 —— 事后审计与客诉复盘的唯一依据。 */
+    public static final String SHOP_RETURN_REFUNDED = "SHOP_RETURN_REFUNDED";
+    /** 开封判定判例沉淀（AB-12D）。⚠️ 一致性工具，非风控工具（SPEC-24）。 */
+    public static final String SHOP_RETURN_PRECEDENT_ADDED = "SHOP_RETURN_PRECEDENT_ADDED";
+
     private AuditActions() {
     }
 }
