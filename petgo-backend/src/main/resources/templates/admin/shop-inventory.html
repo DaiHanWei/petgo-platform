@@ -11,7 +11,8 @@
     <div th:fragment="content" th:remove="tag">
         <h1 th:text="#{admin.shop.inventory.title}">库存管理</h1>
         <p class="hint" th:text="#{admin.shop.inventory.hint}">库存增减只能通过入库单、报损与盘点调整产生，不提供直接编辑库存数字的入口——直接改数会使库存与采购成本脱钩，令毛利核算失真。</p>
-        <p th:if="${flash}" class="flash" th:text="${flash}">已保存</p>
+        <p th:if="${notice}" class="flash" th:text="${notice}">已保存</p>
+        <p th:if="${error}" class="flash error" th:text="${error}">操作失败</p>
 
         <!-- 🔴 三个数必须并排展示：客服排查「用户说买不了但后台显示有货」时，差异一定在锁定库存上 -->
         <table>
@@ -50,8 +51,7 @@
         <section th:if="${canPurchase}">
             <h2 th:text="#{admin.shop.inventory.purchase.title}">采购入库</h2>
             <p class="hint" th:text="#{admin.shop.inventory.purchase.hint}">进货单价必填，不允许留空——留空会使入库的货在成本上不存在，污染毛利与资金占用核算。</p>
-            <form method="post" th:action="@{/admin/shop/inventory/0/purchase}"
-                  onsubmit="this.action=this.action.replace('/0/','/'+this.skuId.value+'/')">
+            <form method="post" th:action="@{/admin/shop/inventory/purchase}">
                 <label><span th:text="#{admin.shop.sku.specName}">SKU</span>
                     <select name="skuId" required>
                         <option th:each="r : ${rows}" th:value="${r.skuId}"
@@ -76,8 +76,7 @@
         <section th:if="${canEdit}">
             <h2 th:text="#{admin.shop.inventory.return.title}">退货入库</h2>
             <p class="hint" th:text="#{admin.shop.inventory.return.hint}">退货与拒收的货走此入口，记为退货入库批次（二次销售风险与采购货不同）。采购单号填原订单号，进货单价由系统取该 SKU 最近一次采购单价。</p>
-            <form method="post" th:action="@{/admin/shop/inventory/0/return-inbound}"
-                  onsubmit="this.action=this.action.replace('/0/','/'+this.skuId.value+'/')">
+            <form method="post" th:action="@{/admin/shop/inventory/return-inbound}">
                 <label><span th:text="#{admin.shop.sku.specName}">SKU</span>
                     <select name="skuId" required>
                         <option th:each="r : ${rows}" th:value="${r.skuId}"
@@ -98,8 +97,7 @@
         <section th:if="${canEdit}">
             <h2 th:text="#{admin.shop.inventory.damage.title}">报损</h2>
             <p class="hint" th:text="#{admin.shop.inventory.damage.hint}">只能报损可售库存。已被订单锁定的货不可报损——那等于把已卖给用户的东西销账。</p>
-            <form method="post" th:action="@{/admin/shop/inventory/0/damage}"
-                  onsubmit="this.action=this.action.replace('/0/','/'+this.skuId.value+'/')">
+            <form method="post" th:action="@{/admin/shop/inventory/damage}">
                 <label><span th:text="#{admin.shop.sku.specName}">SKU</span>
                     <select name="skuId" required>
                         <option th:each="r : ${rows}" th:value="${r.skuId}"
@@ -118,8 +116,7 @@
         <section th:if="${canEdit}">
             <h2 th:text="#{admin.shop.inventory.stocktake.title}">盘点调整</h2>
             <p class="hint" th:text="#{admin.shop.inventory.stocktake.hint}">填写实际盘点到的数量，系统按差额记流水。盘点值不得低于锁定库存。若库存在盘点期间被改动，本次盘点会被拒绝并要求重盘。</p>
-            <form method="post" th:action="@{/admin/shop/inventory/0/stocktake}"
-                  onsubmit="this.action=this.action.replace('/0/','/'+this.skuId.value+'/')">
+            <form method="post" th:action="@{/admin/shop/inventory/stocktake}">
                 <label><span th:text="#{admin.shop.sku.specName}">SKU</span>
                     <select name="skuId" required>
                         <option th:each="r : ${rows}" th:value="${r.skuId}"
