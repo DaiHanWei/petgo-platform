@@ -198,7 +198,18 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
     );
   }
 
+  /// 已上报过售罄的 SKU —— 同一规格反复 rebuild 不重复打点。
+  final Set<String> _outOfStockReported = {};
+
   Widget _stockLine(AppLocalizations l10n, ShopSku sku) {
+    // Story 1.8 埋点收口：售罄曝光是转化漏斗上最值得看的流失点之一
+    //（用户想买但没货 ≠ 用户不想买），Epic 6 的补货提醒要靠它判断值不值得做。
+    if (sku.stockStatus == StockStatus.outOfStock && _outOfStockReported.add(sku.token)) {
+      Analytics.capture('toko_out_of_stock_shown', {
+        'product_token': widget.token,
+        'sku_token': sku.token,
+      });
+    }
     final text = switch (sku.stockStatus) {
       StockStatus.outOfStock => l10n.tokoOutOfStockLine,
       // 🔴 n 取真实剩余数；remaining 缺失时降级为不展示数字，绝不编一个
