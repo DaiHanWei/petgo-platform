@@ -4,6 +4,7 @@ import com.tailtopia.admin.account.domain.AdminPermissions;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.admin.shop.dto.ShopProductForm;
 import com.tailtopia.admin.shop.dto.ShopSkuForm;
+import com.tailtopia.admin.shop.service.AdminShopListingService;
 import com.tailtopia.admin.shop.service.AdminShopProductService;
 import com.tailtopia.shop.domain.AgeStage;
 import com.tailtopia.shop.domain.BodySize;
@@ -48,13 +49,16 @@ public class AdminShopProductController {
             "hasRole('SUPER_ADMIN') or hasAuthority('shop.product_edit')";
 
     private final AdminShopProductService service;
+    private final AdminShopListingService listing;
     private final ShopProductRepository products;
     private final ShopSkuRepository skus;
     private final InventoryService inventory;
 
     public AdminShopProductController(AdminShopProductService service,
-            ShopProductRepository products, ShopSkuRepository skus, InventoryService inventory) {
+            AdminShopListingService listing, ShopProductRepository products,
+            ShopSkuRepository skus, InventoryService inventory) {
         this.service = service;
+        this.listing = listing;
         this.products = products;
         this.skus = skus;
         this.inventory = inventory;
@@ -91,6 +95,10 @@ public class AdminShopProductController {
         model.addAttribute("filterCategory", category);
         model.addAttribute("filterActive", active);
         model.addAttribute("canEdit", has(admin, AdminPermissions.SHOP_PRODUCT_EDIT));
+        // 🔴 告警条与「阻止上架」共用 AdminShopListingService 的同一口径，不在此另算一遍
+        model.addAttribute("activeSkuCount", listing.activeSkuCount());
+        model.addAttribute("skuCap", listing.skuCap());
+        model.addAttribute("skuCapReached", listing.atOrOverCap());
         return "admin/shop-products";
     }
 
@@ -140,21 +148,34 @@ public class AdminShopProductController {
 
     // ---------- 写入 ----------
 
+    // 🔴 写端点一律本地 catch AppException：GlobalExceptionHandler 是 @RestControllerAdvice，
+    //    不 catch 就会把 RFC 9457 裸 JSON 甩给运营，而不是回到页面看到一条提示。
+    //    仓库里 17 个既有 admin 控制器全部如此，本文件先前是例外（Story 1.5 补齐）。
+
     @PostMapping("/admin/shop/products")
     @PreAuthorize(EDIT_AUTH)
     public String create(@AuthenticationPrincipal AdminUserDetails admin,
             @ModelAttribute("form") ShopProductForm form, RedirectAttributes ra) {
-        ShopProduct p = service.create(form, admin.getAdminAccountId());
-        ra.addFlashAttribute("flash", "商品已创建");
-        return "redirect:/admin/shop/products/" + p.getId();
+        try {
+            ShopProduct p = service.create(form, admin.getAdminAccountId());
+            ra.addFlashAttribute("notice", "商品已创建");
+            return "redirect:/admin/shop/products/" + p.getId();
+        } catch (AppException e) {
+            ra.addFlashAttribute("error", e.getMessage());
+            return "redirect:/admin/shop/products/new";
+        }
     }
 
     @PostMapping("/admin/shop/products/{id}")
     @PreAuthorize(EDIT_AUTH)
     public String update(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id,
             @ModelAttribute("form") ShopProductForm form, RedirectAttributes ra) {
-        service.update(id, form, admin.getAdminAccountId());
-        ra.addFlashAttribute("flash", "商品已更新");
+        try {
+            service.update(id, form, admin.getAdminAccountId());
+            ra.addFlashAttribute("notice", "商品已更新");
+        } catch (AppException e) {
+            ra.addFlashAttribute("error", e.getMessage());
+        }
         return "redirect:/admin/shop/products/" + id;
     }
 
@@ -162,15 +183,48 @@ public class AdminShopProductController {
     @PreAuthorize(EDIT_AUTH)
     public String upsertSku(@AuthenticationPrincipal AdminUserDetails admin,
             @PathVariable long id, @ModelAttribute ShopSkuForm form, RedirectAttributes ra) {
-        // 🔒 进货价与 SKU 基础字段分开处理：无 cost_edit 权限时表单里的该值被直接丢弃
-        Long submittedCost = form.getCostPrice();
-        form.setCostPrice(null);
-        ShopSku sku = service.upsertSku(id, form, admin.getAdminAccountId());
-        if (submittedCost != null && has(admin, AdminPermissions.SHOP_COST_EDIT)) {
-            service.updateCostPrice(sku.getId(), submittedCost, admin.getAdminAccountId());
+        try {
+            // 🔒 进货价与 SKU 基础字段分开处理：无 cost_edit 权限时表单里的该值被直接丢弃
+            Long submittedCost = form.getCostPrice();
+            form.setCostPrice(null);
+            ShopSku sku = service.upsertSku(id, form, admin.getAdminAccountId());
+            if (submittedCost != null && has(admin, AdminPermissions.SHOP_COST_EDIT)) {
+                service.updateCostPrice(sku.getId(), submittedCost, admin.getAdminAccountId());
+            }
+            ra.addFlashAttribute("notice", "规格已保存");
+        } catch (AppException e) {
+            ra.addFlashAttribute("error", e.getMessage());
         }
-        ra.addFlashAttribute("flash", "规格已保存");
         return "redirect:/admin/shop/products/" + id;
+    }
+
+    // ---------- 上下架（Story 1.5，AB-10D） ----------
+
+    @PostMapping("/admin/shop/products/{id}/list")
+    @PreAuthorize(EDIT_AUTH)
+    public String listProduct(@AuthenticationPrincipal AdminUserDetails admin,
+            @PathVariable long id, RedirectAttributes ra) {
+        try {
+            listing.list(id, admin.getAdminAccountId());
+            ra.addFlashAttribute("notice", "商品已上架");
+        } catch (AppException e) {
+            ra.addFlashAttribute("error", e.getMessage());
+        }
+        return "redirect:/admin/shop/products";
+    }
+
+    @PostMapping("/admin/shop/products/{id}/delist")
+    @PreAuthorize(EDIT_AUTH)
+    public String delistProduct(@AuthenticationPrincipal AdminUserDetails admin,
+            @PathVariable long id, RedirectAttributes ra) {
+        try {
+            listing.delist(id, admin.getAdminAccountId());
+            // ⚠️ 下架 ≠ 立即停止发货：已下单未支付的订单照常履约（SPEC-7 口径）
+            ra.addFlashAttribute("notice", "商品已下架");
+        } catch (AppException e) {
+            ra.addFlashAttribute("error", e.getMessage());
+        }
+        return "redirect:/admin/shop/products";
     }
 
     // ---------- helpers ----------

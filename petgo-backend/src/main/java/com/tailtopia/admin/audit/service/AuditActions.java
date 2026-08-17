@@ -128,6 +128,12 @@ public final class AuditActions {
     /** 盘点调整——详情记盘点值、原因与前后值。 */
     public static final String SHOP_INVENTORY_STOCKTAKED = "SHOP_INVENTORY_STOCKTAKED";
 
+    // ===== 上下架与精选排序（V1.4.0 Story 1.5，AB-10D）=====
+    /** 商品上架（详情记上架后的在售 SKU 总数与上限，便于回溯超限争议）。 */
+    public static final String SHOP_PRODUCT_LISTED = "SHOP_PRODUCT_LISTED";
+    /** 商品下架。🔴 只改可见性，不触发任何库存或订单动作（SPEC-7 口径）。 */
+    public static final String SHOP_PRODUCT_DELISTED = "SHOP_PRODUCT_DELISTED";
+
     private AuditActions() {
     }
 }

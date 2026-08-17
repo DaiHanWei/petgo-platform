@@ -11,7 +11,15 @@
     <div th:fragment="content" th:remove="tag">
         <h1 th:text="#{admin.shop.products.title}">商品管理</h1>
         <p class="hint" th:text="#{admin.shop.products.hint}">精选自营商品。新建商品默认未上架，需在上下架管理中主动上架后才对用户可见。</p>
-        <p th:if="${flash}" class="flash" th:text="${flash}">已保存</p>
+        <p th:if="${notice}" class="flash" th:text="${notice}">已保存</p>
+        <p th:if="${error}" class="flash error" th:text="${error}">操作失败</p>
+
+        <!-- 🔴 SKU 上限告警条（C-7 的战略边界做成产品约束）。达上限即阻止继续上架。 -->
+        <p th:if="${skuCapReached}" class="flash error">
+            <span th:text="#{admin.shop.skuCap.warn}">在售 SKU 已达上限</span>
+            <span th:text="'(' + ${activeSkuCount} + '/' + ${skuCap} + ')'">(30/30)</span>
+        </p>
+        <p class="hint" th:text="#{admin.shop.delist.hint}">下架只改变可见性：商品立即从 App 所有列表与推荐中消失，但已下单未支付的订单照常履约，最长 60 分钟内仍可能需要发货。需要立即停止发货请在订单异常处理中手工取消相应订单。</p>
 
         <form method="get" th:action="@{/admin/shop/products}">
             <label><span th:text="#{admin.shop.col.category}">品类</span>
@@ -55,7 +63,17 @@
                 <td th:text="${skuCount[p.id]}">0</td>
                 <td th:text="${minPrice[p.id]} ?: '—'">—</td>
                 <td th:text="${p.sortWeight}">0</td>
-                <td><a th:href="@{'/admin/shop/products/' + ${p.id}}" th:text="#{admin.common.detail}">详情</a></td>
+                <td>
+                    <a th:href="@{'/admin/shop/products/' + ${p.id}}" th:text="#{admin.common.detail}">详情</a>
+                    <form th:if="${canEdit and not p.active}" method="post" style="display:inline"
+                          th:action="@{'/admin/shop/products/' + ${p.id} + '/list'}">
+                        <button type="submit" class="btn btn-sm" th:text="#{admin.shop.btn.list}">上架</button>
+                    </form>
+                    <form th:if="${canEdit and p.active}" method="post" style="display:inline"
+                          th:action="@{'/admin/shop/products/' + ${p.id} + '/delist'}">
+                        <button type="submit" class="btn btn-sm" th:text="#{admin.shop.btn.delist}">下架</button>
+                    </form>
+                </td>
             </tr>
             <tr th:if="${#lists.isEmpty(products)}">
                 <td colspan="8" th:text="#{admin.shop.products.empty}">暂无商品</td>
