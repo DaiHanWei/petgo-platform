@@ -41,7 +41,18 @@ public record ShopOrderDetailView(
         /** 退货窗口截止（签收 +7 日）。未签收为 null。 */
         Instant returnWindowEndsAt,
         /** S-2 一单多包：逐条列出，各自标明送达状态。 */
-        List<Package> packages) {
+        List<Package> packages,
+        /**
+         * 🔴 <b>整单归因来源</b>（Story 9.2）：供客户端 {@code toko_order_payment_succeeded}
+         * 携带 {@code attribution_source}，与服务端行级归因<b>互为校验</b>。
+         *
+         * <p>⚠️ <b>权威值始终在服务端</b>（{@code shop_order_lines.entry_source}）。
+         * 客户端事件会被广告拦截与丢包吃掉；两套一比就知道端上丢了多少，
+         * 偏差过大即说明客户端埋点有丢失，<b>以服务端为准</b>。
+         *
+         * <p>取值见 {@link #attributionSourceOf(List)}。
+         */
+        String attributionSource) {
 
     /**
      * 包裹（S-2）。
@@ -99,6 +110,32 @@ public record ShopOrderDetailView(
                         .map(s -> new Package(s.getCarrier().name(), s.getCarrier().displayName(),
                                 s.getTrackingNo(), s.getCarrier().trackingUrl(),
                                 s.getStatus().name(), s.getShippedAt(), s.getDeliveredAt()))
-                        .toList());
+                        .toList(),
+                attributionSourceOf(lines));
+    }
+
+    /**
+     * 整单归因来源：<b>全部行同源取该源；多源取 {@code mixed}；无源取 {@code unknown}</b>。
+     *
+     * <p>🔴 <b>多源不能挑第一条充数</b>：一单里既有复购卡进来的、又有自己逛进来的，
+     * 报成其中任一个都会让 AB-13B 的分子分母各错一次 —— 而 AB-13B 是裁决
+     * A-16（复购引擎是否成立）的唯一依据。宁可标成 {@code mixed} 让它落到单独一档。
+     *
+     * <p>🔒 出参恒为受控词表值，不含 PII。
+     */
+    public static String attributionSourceOf(List<ShopOrderLine> lines) {
+        String seen = null;
+        for (ShopOrderLine l : lines) {
+            String src = l.getEntrySource();
+            if (src == null || src.isBlank()) {
+                continue;
+            }
+            if (seen == null) {
+                seen = src;
+            } else if (!seen.equals(src)) {
+                return "mixed";
+            }
+        }
+        return seen == null ? "unknown" : seen;
     }
 }

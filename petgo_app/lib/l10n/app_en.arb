@@ -1575,6 +1575,10 @@
   "healthLoadError": "Failed to load health records. Please try again.",
   "healthTypeVaccine": "Vaccine",
   "healthTypeDeworm": "Deworming",
+  "healthShopCategoryJump": "Browse Meds & Vitamins",
+  "@healthShopCategoryJump": {
+    "description": "FR-110 唯一允许的问诊→商品关联：按健康记录类型跳品类。刻意不提具体商品名。"
+  },
   "healthTypeMenstruation": "Heat cycle",
   "healthTypeNeuter": "Spay/Neuter",
   "healthTypeCustom": "Custom",

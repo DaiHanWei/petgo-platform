@@ -165,6 +165,18 @@
                    th:href="@{/admin/shop/repurchase-dashboard}"
                    th:classappend="${active == 'shopRepurchase'} ? 'active'"
                    th:text="#{admin.nav.shopRepurchase}">复购引擎效果</a>
+                <!-- 模块 13 经营数据（V1.4.0 Story 8.1/8.2/8.3）。🔒 独立权限位 shop.finance_view。 -->
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('shop.finance_view')"
+                   th:href="@{/admin/shop/margin}" th:classappend="${active == 'shopMargin'} ? 'active'"
+                   th:text="#{admin.nav.shopMargin}">销售与毛利</a>
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('shop.finance_view')"
+                   th:href="@{/admin/shop/inventory-turnover}"
+                   th:classappend="${active == 'shopTurnover'} ? 'active'"
+                   th:text="#{admin.nav.shopTurnover}">库存周转</a>
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('shop.finance_view')"
+                   th:href="@{/admin/shop/reconciliation}"
+                   th:classappend="${active == 'shopReconciliation'} ? 'active'"
+                   th:text="#{admin.nav.shopReconciliation}">对账</a>
                 <!-- AB-11C 服务范围与运费（补 Story 2.2 缺口）。权限沿用运营配置码。 -->
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view') or hasAuthority('config.edit')"
                    th:href="@{/admin/shop/shipping}" th:classappend="${active == 'shopShipping'} ? 'active'"

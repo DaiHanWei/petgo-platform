@@ -75,8 +75,9 @@ class AdminPermissionsTest {
         // + 4（V1.4.0 Story 1.3 电商模块 10：shop.product_view/cost_view/product_edit/cost_edit）= 47
         // + 2（V1.4.0 Story 1.4 库存管理 AB-10C：shop.inventory_view/inventory_edit）= 49
         // + 3（V1.4.0 Story 4.2/4.3 模块 11 订单履约：
-        //      shop.order_view / shop.order_fulfill / shop.order_phone_search）= 52。
+        //      shop.order_view / shop.order_fulfill / shop.order_phone_search）= 52
+        // + 1（V1.4.0 Story 8.4 模块 13 经营数据：shop.finance_view，毛利与对账单独权限位）= 53。
         List<String> all = AdminPermissions.ALL;
-        assertThat(all).hasSize(52);
+        assertThat(all).hasSize(53);
     }
 }

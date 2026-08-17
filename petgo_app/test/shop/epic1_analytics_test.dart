@@ -124,7 +124,10 @@ void main() {
       for (final f in dir.listSync(recursive: true).whereType<File>()) {
         if (!f.path.endsWith('.dart')) continue;
         final src = f.readAsStringSync();
-        for (final m in RegExp(r"Analytics\.capture\([^;]*?\)", dotAll: true).allMatches(src)) {
+        // ⚠️ 终止符是 `);` 而不是 `)`（Story 9.2 修）：原先遇到调用内部的第一个 `)`
+        //    就收工，于是 `items: [ for (final l in p.lines) {...} ]` 这种嵌套 payload
+        //    只被看到最外两个键 —— 恰好是本 story 新加的行级归因整块漏检。
+        for (final m in RegExp(r"Analytics\.capture\([^;]*?\);", dotAll: true).allMatches(src)) {
           for (final p in propRe.allMatches(m.group(0)!)) {
             props.add(p.group(1)!);
           }
@@ -147,9 +150,17 @@ void main() {
       // 🔴 **被这条挡下来并因此没有上报的**：`reco_reason`（Story 6.5 的 AC 要求带）——
       //    理由文本含宠物的年龄段与体型区间，等于把档案的粗化版本送进三方分析平台。
       //    product_id 足以在服务端 join 回商品维度还原理由，分析能力一点没少。
+      // Story 9.2 新增四项（归因链闭合），已逐个确认：
+      // - items：行级归因数组本身；其元素同样过 Analytics.scrub 三道规则
+      //   （List 递归是本 story 补的，见 test/shop/attribution_closure_test.dart）
+      // - sku_id：SKU 的不可枚举 token，与个人无关
+      // - qty：整数数量，与个人无关
+      // - entry_source / attribution_source：受控词表（toko_featured / toko_repurchase_card /
+      //   mixed / unknown …），与个人无关
       expect(props, {
         'product_token', 'sku_token', 'zone', 'pay_channel', 'item_count',
         'trigger_type', 'product_id',
+        'items', 'sku_id', 'qty', 'entry_source', 'attribution_source',
       });
     });
 

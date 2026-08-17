@@ -51,7 +51,15 @@ public record CheckoutPreviewView(
             int qty,
             String mainImageUrl,
             String returnPolicy,
-            String invalidReason) {
+            String invalidReason,
+            /*
+             * 🔴 行级归因（Story 9.2，FR-110 无关但同属 AB-13B 裁决链）。
+             * 服务端在加购时记在购物车行上、下单时抄到订单行（Story 3.4 / 3.10）——
+             * 这里把它一并下发给端上，**只为让客户端 `toko_order_submitted` 能带上同一份值**，
+             * 与服务端数据互为校验。⚠️ 偏差过大 = 客户端埋点有丢失，以服务端为准。
+             */
+            String entrySource,
+            String triggerType) {
     }
 
     public static CheckoutPreviewView of(CheckoutPreview p) {
@@ -84,7 +92,8 @@ public record CheckoutPreviewView(
 
     private static CheckoutLine line(CartView.CartLine l, String policy) {
         return new CheckoutLine(l.skuToken(), l.productToken(), l.productName(), l.specName(),
-                l.price(), l.qty(), l.mainImageUrl(), policy, l.invalidReason());
+                l.price(), l.qty(), l.mainImageUrl(), policy, l.invalidReason(),
+                l.entrySource(), l.triggerType());
     }
 
     /**
