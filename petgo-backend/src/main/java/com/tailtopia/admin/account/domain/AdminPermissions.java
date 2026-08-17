@@ -116,6 +116,15 @@ public final class AdminPermissions {
     public static final String SHOP_COST_VIEW = "shop.cost_view";
     /** 🔒 进货价编辑。 */
     public static final String SHOP_COST_EDIT = "shop.cost_edit";
+    /** 库存管理页只读查看：实际/锁定/可售三列（模块 10 · AB-10C）。 */
+    public static final String SHOP_INVENTORY_VIEW = "shop.inventory_view";
+    /**
+     * 库存变更：采购入库 / 报损 / 盘点调整（AB-10C）。
+     *
+     * <p>🔒 <b>采购入库另需 {@link #SHOP_COST_EDIT}</b>——进货单价按 S-9 不允许留空，而单价是商业
+     * 敏感数据（2026-08-17 产品确认）。退货入库单价由系统带出，只需本权限。
+     */
+    public static final String SHOP_INVENTORY_EDIT = "shop.inventory_edit";
 
     // 后台账号 / 审计（Epic 1）
     public static final String ADMIN_CREATE_ACCOUNT = "admin.create_account";
@@ -134,7 +143,7 @@ public final class AdminPermissions {
                     CONFIG_VIEW, ORDER_VIEW, ORDER_EXPORT, SETTLEMENT_VIEW, PAYMENT_VIEW, RISK_VIEW,
                     VIRTUAL_ACCOUNT_VIEW,
                     ADMIN_VIEW_ACCOUNTS, ADMIN_VIEW_LOGS,
-                    SHOP_PRODUCT_VIEW, SHOP_COST_VIEW)),
+                    SHOP_PRODUCT_VIEW, SHOP_COST_VIEW, SHOP_INVENTORY_VIEW)),
             new PermissionGroup("perm.group.edit", List.of(
                     CONTENT_TAKEDOWN, CONTENT_RESTORE, CONTENT_PROACTIVE_TAKEDOWN,
                     CONTENT_MANUAL_REVIEW, CONTENT_DISPOSE_ACCOUNT,
@@ -145,7 +154,7 @@ public final class AdminPermissions {
                     CONFIG_EDIT, ORDER_EDIT, SETTLEMENT_PAYOUT, RISK_EDIT,
                     VIRTUAL_ACCOUNT_MANAGE,
                     ADMIN_CREATE_ACCOUNT, ADMIN_DEACTIVATE,
-                    SHOP_PRODUCT_EDIT, SHOP_COST_EDIT)));
+                    SHOP_PRODUCT_EDIT, SHOP_COST_EDIT, SHOP_INVENTORY_EDIT)));
 
     /** 全部合法权限码（UI 勾选项 + 校验白名单），保持模块分组顺序。 */
     public static final List<String> ALL = GROUPS.stream()

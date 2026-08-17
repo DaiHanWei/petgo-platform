@@ -74,8 +74,9 @@ class AdminPermissionsTest {
         // + 1（bug 20260728-389 后台赠送 PawCoin user.grant_pawcoin）= 43
         // + 1（V1.1.4 Story 3.1 统一工单队列 content.view_tickets）= 44
         // + 1（V1.1.4 Story 3.2 工单处置 content.dispose_account）= 45
-        // + 4（V1.4.0 Story 1.3 电商模块 10：shop.product_view/cost_view/product_edit/cost_edit）= 49。
+        // + 4（V1.4.0 Story 1.3 电商模块 10：shop.product_view/cost_view/product_edit/cost_edit）= 49
+        // + 2（V1.4.0 Story 1.4 库存管理 AB-10C：shop.inventory_view/inventory_edit）= 51。
         List<String> all = AdminPermissions.ALL;
-        assertThat(all).hasSize(49);
+        assertThat(all).hasSize(51);
     }
 }

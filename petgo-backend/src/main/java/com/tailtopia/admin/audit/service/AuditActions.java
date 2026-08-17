@@ -127,6 +127,14 @@ public final class AuditActions {
     /** 🔒 更新进货价——详情【绝不写数值】，只记发生过（商业敏感，NFR-11）。 */
     public static final String SHOP_PRODUCT_COST_UPDATED = "SHOP_PRODUCT_COST_UPDATED";
 
+    // ===== 库存管理与采购入库（V1.4.0 Story 1.4，AB-10C）=====
+    /** 🔒 采购/退货入库登记——详情记数量与前后值，【绝不写进货单价数值】（同 SHOP_PRODUCT_COST_UPDATED 的处置）。 */
+    public static final String SHOP_INVENTORY_RECEIPT_CREATED = "SHOP_INVENTORY_RECEIPT_CREATED";
+    /** 报损——详情记数量、原因与前后值。 */
+    public static final String SHOP_INVENTORY_DAMAGED = "SHOP_INVENTORY_DAMAGED";
+    /** 盘点调整——详情记盘点值、原因与前后值。 */
+    public static final String SHOP_INVENTORY_STOCKTAKED = "SHOP_INVENTORY_STOCKTAKED";
+
     private AuditActions() {
     }
 }
