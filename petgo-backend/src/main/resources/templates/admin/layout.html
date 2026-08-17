@@ -145,7 +145,7 @@
         </details>
         <!-- 精选自营电商 模块 10–13（V1.4.0）。⚠️ 共享文件：只追加到导航末尾，不动既有块顺序。 -->
         <details class="nav-section"
-                 th:attr="open=${active == 'shopProducts' or active == 'shopOrders'} ? 'open' : null">
+                 th:attr="open=${active == 'shopProducts' or active == 'shopOrders' or active == 'shopReturns'} ? 'open' : null">
             <summary th:classappend="${active == 'shopProducts'} ? 'active'"
                      th:text="#{admin.nav.group.shop}">电商</summary>
             <div class="nav-sub">
@@ -162,6 +162,17 @@
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('shop.order_view') or hasAuthority('shop.order_fulfill')"
                    th:href="@{/admin/shop/order-exceptions}"
                    th:text="#{admin.nav.shopOrderExceptions}">异常订单</a>
+                <!-- 模块 12 退货与退款（V1.4.0 Epic 5）。🔴 权限沿用既有退款审批三级，不新建审核通道。 -->
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('refund.view') or hasAuthority('refund.approve') or hasAuthority('refund.payout')"
+                   th:href="@{/admin/shop/returns}" th:classappend="${active == 'shopReturns'} ? 'active'"
+                   th:text="#{admin.nav.shopReturns}">退货审核</a>
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('refund.view') or hasAuthority('refund.approve')"
+                   th:href="@{/admin/shop/return-precedents}"
+                   th:text="#{admin.nav.shopPrecedents}">开封判例</a>
+                <!-- AB-11C 服务范围与运费（补 Story 2.2 缺口）。权限沿用运营配置码。 -->
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view') or hasAuthority('config.edit')"
+                   th:href="@{/admin/shop/shipping}" th:classappend="${active == 'shopShipping'} ? 'active'"
+                   th:text="#{admin.nav.shopShipping}">服务范围与运费</a>
             </div>
         </details>
     </nav>
