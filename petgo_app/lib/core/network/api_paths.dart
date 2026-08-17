@@ -262,5 +262,6 @@ class ApiPaths {
   static const String meCheckout = '$base/me/checkout';
 
   /// 🔒 电商下单（Story 3.7）。409 带 `unavailableLines` 逐行明细（FR-95，不整单打回）。
+  /// Story 3.8 追加：`/{token}` 详情 · `/{token}/pay` 发起支付 · `/{token}/cancel` 取消。
   static const String meShopOrders = '$base/me/shop-orders';
 }

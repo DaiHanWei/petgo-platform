@@ -88,6 +88,18 @@ public class ShopOrder {
     @Column(name = "cash_amount")
     private Long cashAmount;
 
+    /**
+     * 支付窗截止时刻（AD-8：下单 +60min）。🔴 <b>服务端时刻是唯一权威</b> ——
+     * 客户端倒计时只是展示；用本地计时判定，改一下手机时间就能无限延长锁库存的时间，
+     * 而库存是别人也想买的东西。
+     */
+    @Column(name = "expires_at")
+    private Instant expiresAt;
+
+    /** 本单当前的支付意图 token（到账事件据此回找订单）。纯 PawCoin 单无意图，恒 null。 */
+    @Column(name = "payment_intent_token", length = 64)
+    private String paymentIntentToken;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
     @Column(name = "updated_at", nullable = false)
@@ -115,7 +127,32 @@ public class ShopOrder {
         o.shipKodePos = ship.kodePos();
         o.createdAt = Instant.now();
         o.updatedAt = o.createdAt;
+        // 🔴 AD-8：60 分钟支付窗。窗到即取消并释放库存 —— 锁着别人买不到的库存等一个
+        //    可能永远不会来的付款，是自营模式下最贵的一种沉默损失。
+        o.expiresAt = o.createdAt.plus(PAYMENT_WINDOW);
         return o;
+    }
+
+    /** 支付窗长度（AD-8）。🔴 与 App 端倒计时同源：客户端只展示服务端给的截止时刻。 */
+    public static final java.time.Duration PAYMENT_WINDOW = java.time.Duration.ofMinutes(60);
+
+    /** 是否已过支付窗（无窗的历史订单恒 false —— 它们不参与超时扫描）。 */
+    public boolean isPaymentExpiredAt(Instant now) {
+        return expiresAt != null && now.isAfter(expiresAt);
+    }
+
+    public Instant getExpiresAt() {
+        return expiresAt;
+    }
+
+    public String getPaymentIntentToken() {
+        return paymentIntentToken;
+    }
+
+    /** 绑定支付意图（同一订单重复点「去支付」经幂等键取回同一个意图，故这里是幂等赋值）。 */
+    public void attachPaymentIntent(String token) {
+        this.paymentIntentToken = token;
+        this.updatedAt = Instant.now();
     }
 
     /**

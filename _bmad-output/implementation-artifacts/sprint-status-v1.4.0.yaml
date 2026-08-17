@@ -1,5 +1,5 @@
 # generated: 2026-08-17
-# last_updated: 2026-08-18  (Story 3.7 → review；后端 1776 / 前端 842 全绿)
+# last_updated: 2026-08-18  (Story 3.8 → review；后端 1790 / 前端 855 全绿)
 #
 # ===== ✅ L1 阻塞已解除（2026-08-17）=====
 # 本机 Docker Desktop 一直装着（4.69），只是不自启 —— 前次「本机无 Docker」是误判。
@@ -34,6 +34,8 @@
 #
 # ===== ⛔ 开工前置（未完成不得开写对应 story）=====
 # P-1 并行契约三人签字 + CHECK 认领 -> 挡 3-3(payment_intents) · 6-1(pet_profiles) · 6-3(ck_notifications_type)
+#     ⚠️ 2026-08-18 追加：3-8 又放宽了 ck_payment_intents_purpose（追加 SHOP_ORDER）——
+#        临时授权只点名了 channel 与 notifications_type，purpose 须在补签时一并认领
 #     契约：_bmad-output/implementation-artifacts/v1.4.0/PARALLEL-DEV-CONTRACT.md
 #     ⚠️ 签字表两格仍空 —— 另两位并行同事身份未确认
 # P-2 DEP-6 每日建议喂量数据(Rendy) -> 不挡开工，挡版本核心论证：缺它 FR-109 恒不触发，
@@ -74,12 +76,14 @@
 #   V110 3-3 ⚠️共享表 payment_intents 加三列 + 放宽 ck_payment_intents_channel  ✅ 已提交（依临时授权）
 #   V111 3-4 订单行归因 + shop_pawcoin_rules + 订单拆分列  ✅ 已提交
 #   V112 3-5 pawcoin_config 加补偿溢价两列  ✅ 已提交
-#   V113 4-2 shipments                     (S-2 一单多包的持久化依据)
-#   V114 5-1 return_requests + return_lines + 部分唯一索引
-#   V115 6-1 ⚠️共享表 pet_profiles 加体重列（须认领）
-#   V116 6-3 repurchase_triggers + ⚠️共享 ck_notifications_type 追加值（须认领）
-#   V117 7-1 shop_reviews
-#   V118+ 预留（平台配置项等）
+#   V113 3-8 ⚠️共享 CHECK ck_payment_intents_purpose 追加 SHOP_ORDER + shop_orders 支付窗  ✅ 已提交
+#        （原表预留给 4-2 shipments；按"取最大号+1"规则由 3-8 先用掉，4-2 顺延取 V114）
+#   V114 4-2 shipments                     (S-2 一单多包的持久化依据)
+#   V115 5-1 return_requests + return_lines + 部分唯一索引
+#   V116 6-1 ⚠️共享表 pet_profiles 加体重列（须认领）
+#   V117 6-3 repurchase_triggers + ⚠️共享 ck_notifications_type 追加值（须认领）
+#   V118 7-1 shop_reviews
+#   V119+ 预留（平台配置项等）
 #
 # 🔴 本表是【建议性】的，绑定规则只有一条：**实现时取号段内当前最大号 +1，并立刻回写本表**。
 #    上面这次脱节就是没回写造成的。Flyway 不要求号连续（既有 V86 空洞为证），也不要求单调应用
@@ -139,7 +143,7 @@ development_status:
   3-5-PawCoin-电商消费规则配置: review
   3-6-购物车页: review
   3-7-结算页与两段金额: review
-  3-8-支付与待支付订单详情: backlog
+  3-8-支付与待支付订单详情: review
   3-9-订单列表电商卡片: backlog
   3-10-Epic-3-联调与埋点: backlog
   epic-3-retrospective: optional
