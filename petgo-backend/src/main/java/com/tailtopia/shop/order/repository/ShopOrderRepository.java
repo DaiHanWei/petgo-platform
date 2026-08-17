@@ -86,6 +86,20 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
     List<ShopOrder> searchByPhoneSuffix(@Param("suffixPattern") String suffixPattern,
             Pageable pageable);
 
+    /**
+     * 已签收且送达时间在 {@code since} 之后的订单（Story 6.3 复购日扫的输入）。
+     *
+     * <p>🔴 只看已签收的：粮是从送达那天开始吃的（S-14 修正②）。
+     */
+    @Query("""
+            SELECT o FROM ShopOrder o
+            WHERE o.deliveredAt IS NOT NULL AND o.deliveredAt >= :since
+              AND o.status IN (com.tailtopia.shop.order.domain.ShopOrderStatus.DELIVERED,
+                               com.tailtopia.shop.order.domain.ShopOrderStatus.COMPLETED)
+            ORDER BY o.deliveredAt DESC
+            """)
+    List<ShopOrder> findDeliveredSince(@Param("since") Instant since);
+
     // ---------- Story 4.1 履约段自动推进 ----------
 
     /**
