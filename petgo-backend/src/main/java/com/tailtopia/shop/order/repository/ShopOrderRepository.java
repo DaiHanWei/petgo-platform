@@ -23,6 +23,10 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
 
     List<ShopOrder> findByUserIdOrderByCreatedAtDescIdDesc(long userId);
 
+    /** 订单中心游标分页用（Story 3.9：与虚拟商品订单跨源归并，取 createdAt < cursor 的一页）。 */
+    List<ShopOrder> findByUserIdAndCreatedAtLessThanOrderByCreatedAtDesc(long userId, Instant before,
+            Pageable pageable);
+
     /** 按当前支付意图 token 回找订单（到账事件用，Story 3.8）。 */
     Optional<ShopOrder> findByPaymentIntentToken(String paymentIntentToken);
 

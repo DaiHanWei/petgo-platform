@@ -1525,5 +1525,11 @@
   "shopOrderItems": "Produk",
   "shopOrderShipTo": "Dikirim ke",
   "shopOrderNumber": "No. pesanan {token}",
-  "shopOrderQrisOnly": "QRIS bisa dipindai lewat GoPay, OVO, DANA, dan e-wallet lainnya."
+  "shopOrderQrisOnly": "QRIS bisa dipindai lewat GoPay, OVO, DANA, dan e-wallet lainnya.",
+  "orderTypeEcommerce": "Belanja",
+  "orderFilterKonsultasi": "Konsultasi",
+  "orderFilterPawcoin": "PawCoin",
+  "orderFilterOther": "Lainnya",
+  "orderCardMoreItems": "dan {count} barang lain",
+  "orderPayNow": "Bayar sekarang"
 }

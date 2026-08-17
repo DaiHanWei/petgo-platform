@@ -1913,5 +1913,17 @@
   "shopOrderNumber": "Order no. {token}",
   "@shopOrderNumber": {"description": "Shop order detail: the non-enumerable order token, shown for support", "placeholders": {"token": {"type": "String"}}},
   "shopOrderQrisOnly": "QRIS works with GoPay, OVO, DANA and other e-wallets.",
-  "@shopOrderQrisOnly": {"description": "Shop order detail: FR-100 — only QRIS; prevents users assuming their e-wallet is unsupported"}
+  "@shopOrderQrisOnly": {"description": "Shop order detail: FR-100 — only QRIS; prevents users assuming their e-wallet is unsupported"},
+  "orderTypeEcommerce": "Belanja",
+  "@orderTypeEcommerce": {"description": "Order card: the 5th type (FR-101 self-operated shop). Indonesian per prototype, same word as the filter chip"},
+  "orderFilterKonsultasi": "Konsultasi",
+  "@orderFilterKonsultasi": {"description": "Order list: type filter chip grouping the two consultation types"},
+  "orderFilterPawcoin": "PawCoin",
+  "@orderFilterPawcoin": {"description": "Order list: type filter chip for top-ups"},
+  "orderFilterOther": "Lainnya",
+  "@orderFilterOther": {"description": "Order list: type filter chip for the remaining types"},
+  "orderCardMoreItems": "and {count} more",
+  "@orderCardMoreItems": {"description": "Order card: shown next to the first item name when a shop order has more items. count excludes the first item", "placeholders": {"count": {"type": "int"}}},
+  "orderPayNow": "Bayar sekarang",
+  "@orderPayNow": {"description": "Order card: primary action on an awaiting-payment shop order; opens the order detail where the countdown lives"}
 }
