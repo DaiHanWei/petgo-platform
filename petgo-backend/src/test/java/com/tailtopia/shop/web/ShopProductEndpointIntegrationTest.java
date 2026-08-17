@@ -53,6 +53,14 @@ class ShopProductEndpointIntegrationTest extends ApiIntegrationTest {
         return prefix + SEQ.incrementAndGet();
     }
 
+    /** Story 1.2：给指定 SKU 建库存行。 */
+    private void seedInventory(String skuToken, long actual, long locked) {
+        jdbc.update("""
+                INSERT INTO sku_inventory (sku_id, actual, locked)
+                SELECT id, ?, ? FROM shop_skus WHERE public_token = ?
+                """, actual, locked, skuToken);
+    }
+
     @Test
     @DisplayName("🔴 游客无 JWT 可访问列表与详情（FR-93A）")
     void guestCanBrowse() throws Exception {
@@ -145,6 +153,56 @@ class ShopProductEndpointIntegrationTest extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.returnPolicy").value("NO_RETURN_AFTER_OPEN"))
                 .andExpect(jsonPath("$.skus[0].returnPolicy").value("NO_RETURN_AFTER_OPEN"))
                 .andExpect(jsonPath("$.skus[1].returnPolicy").value("RETURNABLE"));
+    }
+
+    @Test
+    @DisplayName("库存三态（Story 1.2）：售罄 / 低库存含真实剩余数 / 充足不给数字")
+    void stockStatusThreeStates() throws Exception {
+        String token = seedProduct(uniq("st"), "MAKANAN", true, "[]");
+        String sOut = uniq("s");
+        String sLow = uniq("s");
+        String sIn = uniq("s");
+        seedSku(token, sOut, 100_000L, null);
+        seedSku(token, sLow, 200_000L, null);
+        seedSku(token, sIn, 300_000L, null);
+        seedInventory(sOut, 0, 0);      // 售罄
+        seedInventory(sLow, 3, 0);      // 低库存（默认阈值 5）
+        seedInventory(sIn, 50, 0);      // 充足
+
+        mvc.perform(get(BASE + "/" + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.skus[0].stockStatus").value("OUT_OF_STOCK"))
+                .andExpect(jsonPath("$.skus[0].remaining").doesNotExist())
+                .andExpect(jsonPath("$.skus[1].stockStatus").value("LOW_STOCK"))
+                // 🔴 真实剩余数，不虚构
+                .andExpect(jsonPath("$.skus[1].remaining").value(3))
+                .andExpect(jsonPath("$.skus[2].stockStatus").value("IN_STOCK"))
+                .andExpect(jsonPath("$.skus[2].remaining").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("🔴 售罄商品不自动下架 —— 列表与详情仍可见（FR-95）")
+    void outOfStockProductStaysVisible() throws Exception {
+        String token = seedProduct(uniq("os"), "MAKANAN", true, "[]");
+        String sku = uniq("s");
+        seedSku(token, sku, 100_000L, null);
+        seedInventory(sku, 0, 0);
+
+        mvc.perform(get(BASE + "/" + token)).andExpect(status().isOk());
+        mvc.perform(get(BASE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.token=='" + token + "')]").isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("无库存行的 SKU 视为售罄，不报错")
+    void skuWithoutInventoryRowIsOutOfStock() throws Exception {
+        String token = seedProduct(uniq("ni"), "MAKANAN", true, "[]");
+        seedSku(token, uniq("s"), 100_000L, null);   // 故意不建库存行
+
+        mvc.perform(get(BASE + "/" + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.skus[0].stockStatus").value("OUT_OF_STOCK"));
     }
 
     @Test

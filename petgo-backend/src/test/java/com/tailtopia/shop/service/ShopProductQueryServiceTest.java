@@ -13,7 +13,9 @@ import com.tailtopia.shop.domain.Species;
 import com.tailtopia.shop.dto.ShopProductDetailView;
 import com.tailtopia.shop.dto.ShopProductSummaryView;
 import com.tailtopia.shop.repository.ShopProductRepository;
+import com.tailtopia.shop.domain.StockStatus;
 import com.tailtopia.shop.repository.ShopSkuRepository;
+import com.tailtopia.shop.repository.SkuInventoryRepository;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,13 +34,17 @@ class ShopProductQueryServiceTest {
 
     private ShopProductRepository products;
     private ShopSkuRepository skus;
+    private SkuInventoryRepository inventoryRepo;
+    private InventoryService inventory;
     private ShopProductQueryService service;
 
     @BeforeEach
     void setUp() {
         products = Mockito.mock(ShopProductRepository.class);
         skus = Mockito.mock(ShopSkuRepository.class);
-        service = new ShopProductQueryService(products, skus);
+        inventoryRepo = Mockito.mock(SkuInventoryRepository.class);
+        inventory = new InventoryService(inventoryRepo, 5L);
+        service = new ShopProductQueryService(products, skus, inventory);
     }
 
     private ShopProduct product(long id, String token, ProductCategory category) {
@@ -150,6 +156,20 @@ class ShopProductQueryServiceTest {
         assertThatThrownBy(() -> service.detail("nope"))
                 .isInstanceOf(AppException.class)
                 .hasMessageContaining("商品不存在");
+    }
+
+    @Test
+    @DisplayName("详情：无库存行的 SKU 视为售罄，remaining 为 null（Story 1.2）")
+    void detailWithoutInventoryRowIsOutOfStock() {
+        ShopProduct p = product(1L, "tokA", ProductCategory.MAKANAN);
+        when(products.findByPublicTokenAndActiveTrue("tokA")).thenReturn(Optional.of(p));
+        when(skus.findByProductIdOrderByIdAsc(1L)).thenReturn(List.of(sku(11L, 1L, 285_000L, null)));
+        when(inventoryRepo.findBySkuIdIn(ArgumentMatchers.anyList())).thenReturn(List.of());
+
+        ShopProductDetailView view = service.detail("tokA");
+
+        assertThat(view.skus().getFirst().stockStatus()).isEqualTo(StockStatus.OUT_OF_STOCK);
+        assertThat(view.skus().getFirst().remaining()).isNull();
     }
 
     @Test

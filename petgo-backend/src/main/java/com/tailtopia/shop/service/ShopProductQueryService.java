@@ -7,6 +7,7 @@ import com.tailtopia.shop.domain.ShopSku;
 import com.tailtopia.shop.dto.ShopProductDetailView;
 import com.tailtopia.shop.dto.ShopProductSummaryView;
 import com.tailtopia.shop.dto.ShopSkuView;
+import com.tailtopia.shop.domain.StockStatus;
 import com.tailtopia.shop.repository.ShopProductRepository;
 import com.tailtopia.shop.repository.ShopSkuRepository;
 import java.util.ArrayList;
@@ -31,10 +32,13 @@ public class ShopProductQueryService {
 
     private final ShopProductRepository products;
     private final ShopSkuRepository skus;
+    private final InventoryService inventory;
 
-    public ShopProductQueryService(ShopProductRepository products, ShopSkuRepository skus) {
+    public ShopProductQueryService(ShopProductRepository products, ShopSkuRepository skus,
+            InventoryService inventory) {
         this.products = products;
         this.skus = skus;
+        this.inventory = inventory;
     }
 
     /**
@@ -74,14 +78,25 @@ public class ShopProductQueryService {
     public ShopProductDetailView detail(String publicToken) {
         ShopProduct p = products.findByPublicTokenAndActiveTrue(publicToken)
                 .orElseThrow(() -> AppException.notFound("商品不存在"));
-        List<ShopSkuView> skuViews = skus.findByProductIdOrderByIdAsc(p.getId()).stream()
-                .map(s -> new ShopSkuView(
-                        s.getPublicToken(),
-                        s.getSpecName(),
-                        s.getPrice(),
-                        s.getNetWeightG(),
-                        // SKU 级为空时继承商品级，前端直接展示（FR-94A / FR-104 第 1 处明示）
-                        s.effectiveReturnPolicy(p.getReturnPolicy())))
+        List<ShopSku> rows = skus.findByProductIdOrderByIdAsc(p.getId());
+        // 批量取库存，避免 N+1；无库存行的 SKU 视为可售 0（售罄）
+        Map<Long, Long> availableBySku =
+                inventory.availableBySkuId(rows.stream().map(ShopSku::getId).toList());
+        List<ShopSkuView> skuViews = rows.stream()
+                .map(s -> {
+                    long available = availableBySku.getOrDefault(s.getId(), 0L);
+                    StockStatus status = inventory.statusOf(available);
+                    return new ShopSkuView(
+                            s.getPublicToken(),
+                            s.getSpecName(),
+                            s.getPrice(),
+                            s.getNetWeightG(),
+                            // SKU 级为空时继承商品级，前端直接展示（FR-94A / FR-104 第 1 处明示）
+                            s.effectiveReturnPolicy(p.getReturnPolicy()),
+                            status,
+                            // 🔴 仅低库存时给真实剩余数；售罄/充足给 null（不虚构、不泄露经营数据）
+                            status == StockStatus.LOW_STOCK ? available : null);
+                })
                 .toList();
         return new ShopProductDetailView(
                 p.getPublicToken(),
