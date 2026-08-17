@@ -1,5 +1,5 @@
 # generated: 2026-08-17
-# last_updated: 2026-08-17  (Story 3.2 → review；后端 1728 全绿)
+# last_updated: 2026-08-17  (Story 3.3 → review；后端 1736 全绿。⚠️ 已动共享表，依产品临时授权)
 #
 # ===== ✅ L1 阻塞已解除（2026-08-17）=====
 # 本机 Docker Desktop 一直装着（4.69），只是不自启 —— 前次「本机无 Docker」是误判。
@@ -71,7 +71,7 @@
 #   V107 2-2 shipping_zones + shipping_settings  ✅ 已提交
 #   V108 3-1 shop_carts + shop_cart_items  ✅ 已提交
 #   V109 3-2 shop_orders + shop_order_lines  ✅ 已提交
-#   V110 3-3 ⚠️共享表 payment_intents 加三列 + 放宽 ck_payment_intents_channel（须认领）
+#   V110 3-3 ⚠️共享表 payment_intents 加三列 + 放宽 ck_payment_intents_channel  ✅ 已提交（依临时授权）
 #   V111 4-2 shipments                     (S-2 一单多包的持久化依据)
 #   V112 5-1 return_requests + return_lines + 部分唯一索引
 #   V113 6-1 ⚠️共享表 pet_profiles 加体重列（须认领）
@@ -132,7 +132,7 @@ development_status:
   epic-3: in-progress
   3-1-购物车建模与接口: review
   3-2-订单建模-状态机与不可枚举订单号: review
-  3-3-混合支付模型扩展: backlog
+  3-3-混合支付模型扩展: review
   3-4-结算与下单: backlog
   3-5-PawCoin-电商消费规则配置: backlog
   3-6-购物车页: backlog
