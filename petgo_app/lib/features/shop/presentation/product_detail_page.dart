@@ -14,6 +14,8 @@ import '../data/shop_repository.dart';
 import '../domain/shop_product.dart';
 import '../domain/shop_product_detail.dart';
 import 'cart_icon_button.dart';
+import '../data/shop_review_repository.dart';
+import '../domain/shop_review.dart';
 
 /// 商品详情页（Story 1.7，FR-94A / FR-95 / FR-104 / UX-DR10）。
 ///
@@ -156,12 +158,110 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
                     style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                 const SizedBox(height: AppSpacing.xs),
                 Text(d.shelfLifeNote!),
+                const SizedBox(height: AppSpacing.lg),
               ],
+
+              // 评价区（Story 7.3）。🔴 空态如实为空 —— 不伪造、不预填（FR-106）。
+              _reviews(l10n),
             ],
           ),
         ),
       ],
     );
+  }
+
+  /// 评价区（Story 7.3）。
+  ///
+  /// 🔴 <b>无评价就如实展示空态</b>（FR-106）——「不伪造或预填评价」不是防御性措辞：
+  /// 一个刚上架的商品就有五星好评，是最快毁掉整个评价区可信度的做法，
+  /// 而评价区的全部价值就在于它可信。
+  ///
+  /// 🔴 <b>首版不做追评、不做商家回复</b>：自营模式下「商家回复」即平台回复，
+  /// 价值低于运营成本。
+  ///
+  /// 🎨 UX-DR9：空态无视觉稿 —— 沿用本页既有的「小标题 + 一行说明」范式，未自创版式。
+  Widget _reviews(AppLocalizations l10n) {
+    final async = ref.watch(productReviewsProvider(widget.token));
+    return async.maybeWhen(
+      // 加载中/失败都不占位：评价区不该让商品详情整页看起来坏了
+      orElse: () => const SizedBox.shrink(),
+      data: (r) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(l10n.tokoReviewsTitle,
+              key: const ValueKey('tokoReviewsTitle'),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+          const SizedBox(height: AppSpacing.xs),
+          if (r.isEmpty)
+            Text(l10n.tokoReviewsEmpty,
+                key: const ValueKey('tokoReviewsEmpty'),
+                style: const TextStyle(fontSize: 13, color: AppColors.muted))
+          else ...[
+            Text(
+                // 平均分为 null 时只报条数 —— 🔴 绝不显示成「0 分」
+                r.averageRating == null
+                    ? l10n.tokoReviewsCount(r.total)
+                    : l10n.tokoReviewsSummary(
+                        r.averageRating!.toStringAsFixed(1), r.total),
+                key: const ValueKey('tokoReviewsSummary'),
+                style: const TextStyle(fontSize: 13, color: AppColors.muted)),
+            const SizedBox(height: AppSpacing.sm),
+            // 🔴 按时间倒序由服务端保证，前端不重排
+            for (final item in r.items) _reviewTile(item),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _reviewTile(ShopReviewItem item) => Padding(
+        key: ValueKey('tokoReview_${item.id}'),
+        padding: const EdgeInsets.only(bottom: AppSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                for (var i = 0; i < 5; i++)
+                  Icon(i < item.rating ? Icons.star : Icons.star_border,
+                      size: 14, color: AppColors.mint),
+                const SizedBox(width: AppSpacing.xs),
+                if (item.createdAt != null)
+                  Text(_ymd(item.createdAt!),
+                      style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+              ],
+            ),
+            if (item.content != null && item.content!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.xxs),
+                child: Text(item.content!, style: const TextStyle(fontSize: 13)),
+              ),
+            if (item.imageUrls.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.xs),
+                child: Wrap(
+                  spacing: AppSpacing.xs,
+                  children: [
+                    for (final url in item.imageUrls)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(AppSpacing.xs),
+                        child: Image.network(url,
+                            width: 64,
+                            height: 64,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => const SizedBox(width: 64, height: 64)),
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      );
+
+  static String _ymd(DateTime d) {
+    final mm = d.month.toString().padLeft(2, '0');
+    final dd = d.day.toString().padLeft(2, '0');
+    return '${d.year}-$mm-$dd';
   }
 
   Widget _gallery(ShopProductDetail d) {

@@ -21,6 +21,7 @@ import org.springframework.stereotype.Component;
  *   <li><b>自动置送达</b>（10min）：SPEC-2 出口③，发货起 M=7 日无任何标记则置 {@code DELIVERED}。</li>
  *   <li><b>自动确认收货</b>（10min）：送达起 7 日未确认则置 {@code COMPLETED}（FR-102）。</li>
  *   <li><b>退货寄回超时</b>（10min）：S-7，超 7 日未寄回则关闭申请并回退订单状态。</li>
+ *   <li><b>评价审核重试</b>（10min）：Story 7.1，三方不可用时评价落 PENDING，这里收敛。</li>
  *   <li><b>复购粮量见底日扫</b>（24h）：FR-109 / AD-12。🔴 <b>日扫而非请求时实时算</b> ——
  *       实时算需跨订单历史 + 商品喂量 + 档案体重三方 join，不该放在首页请求路径上。</li>
  * </ol>
@@ -39,15 +40,18 @@ public class ShopOrderExpiryScanner {
     private final ShopOrderFulfillmentService fulfillment;
     private final com.tailtopia.shop.returns.service.ReturnRequestService returnRequests;
     private final com.tailtopia.shop.repurchase.service.RepurchaseScanService repurchase;
+    private final com.tailtopia.shop.review.service.ShopReviewService reviewService;
 
     public ShopOrderExpiryScanner(ShopOrderPaymentService payments,
             ShopOrderFulfillmentService fulfillment,
             com.tailtopia.shop.returns.service.ReturnRequestService returnRequests,
-            com.tailtopia.shop.repurchase.service.RepurchaseScanService repurchase) {
+            com.tailtopia.shop.repurchase.service.RepurchaseScanService repurchase,
+            com.tailtopia.shop.review.service.ShopReviewService reviewService) {
         this.payments = payments;
         this.fulfillment = fulfillment;
         this.returnRequests = returnRequests;
         this.repurchase = repurchase;
+        this.reviewService = reviewService;
     }
 
     @Scheduled(fixedDelayString = "${petgo.shop.order-expiry-scan-ms:60000}")
@@ -85,6 +89,16 @@ public class ShopOrderExpiryScanner {
             }
         } catch (RuntimeException e) {
             log.warn("自动确认收货扫描失败 cause={}", e.getClass().getSimpleName());
+        }
+        try {
+            // Story 7.1：三方审核不可用时评价落 PENDING，这里把它们收敛掉。
+            // 🔴 fail-closed 的代价是「用户的评价一直不出现」——所以重试必须真的跑。
+            int settled = reviewService.retryPending(BATCH_LIMIT);
+            if (settled > 0) {
+                log.info("评价审核重试收敛 count={}", settled);
+            }
+        } catch (RuntimeException e) {
+            log.warn("评价审核重试失败 cause={}", e.getClass().getSimpleName());
         }
         try {
             int closed = returnRequests.closeOverdueShipbacks(BATCH_LIMIT);
