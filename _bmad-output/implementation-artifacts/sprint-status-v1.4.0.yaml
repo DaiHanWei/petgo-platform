@@ -1,5 +1,5 @@
 # generated: 2026-08-17
-# last_updated: 2026-08-18  (Epic 3 完成 10/10；后端 1802 / 前端 875 全绿)
+# last_updated: 2026-08-18  (Story 4.1–4.4 完成；后端 1861 / 前端 875 全绿)
 #
 # ===== ✅ L1 阻塞已解除（2026-08-17）=====
 # 本机 Docker Desktop 一直装着（4.69），只是不自启 —— 前次「本机无 Docker」是误判。
@@ -79,12 +79,16 @@
 #   V113 3-8 ⚠️共享 CHECK ck_payment_intents_purpose 追加 SHOP_ORDER + shop_orders 支付窗  ✅ 已提交
 #        （原表预留给 4-2 shipments；按"取最大号+1"规则由 3-8 先用掉，4-2 顺延取 V114）
 #   V114 3-10 shop_cart_items 加 entry_source / trigger_type（归因链闭合）  ✅ 已提交
-#   V115 4-2 shipments                     (S-2 一单多包的持久化依据)
-#   V116 5-1 return_requests + return_lines + 部分唯一索引
-#   V117 6-1 ⚠️共享表 pet_profiles 加体重列（须认领）
-#   V118 6-3 repurchase_triggers + ⚠️共享 ck_notifications_type 追加值（须认领）
-#   V119 7-1 shop_reviews
-#   V120+ 预留（平台配置项等）
+#   V115 4-1 shipments + shop_orders 履约列  ✅ 已提交
+#        （原表记在 4-2；4-1 的 AC「订单转 DELIVERED = 所有包裹送达」硬依赖此表，故提前。
+#          4-2 因此【不需要迁移】。）
+#   V116 4-2 ⚠️共享 CHECK ck_notifications_type 追加 SHOP_ORDER_SHIPPED  ✅ 已提交（依临时授权）
+#   V117 4-4 ⚠️共享 CHECK ck_notifications_type 追加 SHOP_ORDER_EXCEPTION ✅ 已提交（依临时授权）
+#   V118 5-1 return_requests + return_lines + 部分唯一索引
+#   V119 6-1 ⚠️共享表 pet_profiles 加体重列（须认领）
+#   V120 6-3 repurchase_triggers + ⚠️共享 ck_notifications_type 追加值（须认领）
+#   V121 7-1 shop_reviews
+#   V122+ 预留（平台配置项等）
 #
 # 🔴 本表是【建议性】的，绑定规则只有一条：**实现时取号段内当前最大号 +1，并立刻回写本表**。
 #    上面这次脱节就是没回写造成的。Flyway 不要求号连续（既有 V86 空洞为证），也不要求单调应用
@@ -150,11 +154,11 @@ development_status:
   epic-3-retrospective: optional
 
   # ── Epic 4: 履约、物流与收货 ──
-  epic-4: backlog
-  4-1-履约段状态机与自动确认收货: backlog
-  4-2-发货与物流单号录入: backlog
-  4-3-电商订单列表与详情: backlog
-  4-4-订单异常处理: backlog
+  epic-4: in-progress
+  4-1-履约段状态机与自动确认收货: review
+  4-2-发货与物流单号录入: review
+  4-3-电商订单列表与详情: review
+  4-4-订单异常处理: review
   4-5-订单详情履约态: backlog
   4-6-Epic-4-联调: backlog
   epic-4-retrospective: optional

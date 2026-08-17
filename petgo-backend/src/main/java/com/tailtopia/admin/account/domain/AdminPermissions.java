@@ -126,6 +126,20 @@ public final class AdminPermissions {
      */
     public static final String SHOP_INVENTORY_EDIT = "shop.inventory_edit";
 
+    // 电商订单履约（V1.4.0 模块 11 · AB-11A/B/D）——🔴 同样不默认授予任何既有角色（NFR-11）
+    /** 电商订单列表与详情只读（AB-11A）。 */
+    public static final String SHOP_ORDER_VIEW = "shop.order_view";
+    /** 发货 / 标记已送达 / 异常订单处置（AB-11B、AB-11D）。 */
+    public static final String SHOP_ORDER_FULFILL = "shop.order_fulfill";
+    /**
+     * 🔒 <b>按收件人电话模糊搜索全站订单</b>（AB-11A）。
+     *
+     * <p>单独成码而不并入 {@link #SHOP_ORDER_VIEW}：电话是 PII，按它反查能把「查单」变成
+     * 「查人」（NFR-11）。给发货专员看单不等于给他全站按号码捞人的能力。
+     * 每次使用都写审计（{@code SHOP_ORDER_SEARCHED_BY_PHONE}）。
+     */
+    public static final String SHOP_ORDER_PHONE_SEARCH = "shop.order_phone_search";
+
     // 后台账号 / 审计（Epic 1）
     public static final String ADMIN_CREATE_ACCOUNT = "admin.create_account";
     public static final String ADMIN_VIEW_ACCOUNTS = "admin.view_accounts";
@@ -143,7 +157,8 @@ public final class AdminPermissions {
                     CONFIG_VIEW, ORDER_VIEW, ORDER_EXPORT, SETTLEMENT_VIEW, PAYMENT_VIEW, RISK_VIEW,
                     VIRTUAL_ACCOUNT_VIEW,
                     ADMIN_VIEW_ACCOUNTS, ADMIN_VIEW_LOGS,
-                    SHOP_PRODUCT_VIEW, SHOP_COST_VIEW, SHOP_INVENTORY_VIEW)),
+                    SHOP_PRODUCT_VIEW, SHOP_COST_VIEW, SHOP_INVENTORY_VIEW,
+                    SHOP_ORDER_VIEW, SHOP_ORDER_PHONE_SEARCH)),
             new PermissionGroup("perm.group.edit", List.of(
                     CONTENT_TAKEDOWN, CONTENT_RESTORE, CONTENT_PROACTIVE_TAKEDOWN,
                     CONTENT_MANUAL_REVIEW, CONTENT_DISPOSE_ACCOUNT,
@@ -154,7 +169,8 @@ public final class AdminPermissions {
                     CONFIG_EDIT, ORDER_EDIT, SETTLEMENT_PAYOUT, RISK_EDIT,
                     VIRTUAL_ACCOUNT_MANAGE,
                     ADMIN_CREATE_ACCOUNT, ADMIN_DEACTIVATE,
-                    SHOP_PRODUCT_EDIT, SHOP_COST_EDIT, SHOP_INVENTORY_EDIT)));
+                    SHOP_PRODUCT_EDIT, SHOP_COST_EDIT, SHOP_INVENTORY_EDIT,
+                    SHOP_ORDER_FULFILL)));
 
     /** 全部合法权限码（UI 勾选项 + 校验白名单），保持模块分组顺序。 */
     public static final List<String> ALL = GROUPS.stream()

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<!-- 电商订单详情与发货（V1.4.0 Story 4.2，AB-11B）。
+     🔒 本页含收件人 PII（姓名/电话/详细地址）——仅在此页展示，不进列表、不进日志、不进审计摘要。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.shop.order.detail.title}">订单详情 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1 th:text="#{admin.shop.order.detail.title}">订单详情</h1>
+        <p><a th:href="@{/admin/shop/orders}" th:text="#{admin.common.back}">返回列表</a></p>
+        <p th:if="${notice}" class="flash" th:text="${notice}">已保存</p>
+        <p th:if="${error}" class="flash error" th:text="${error}">操作失败</p>
+
+        <h2 th:text="#{admin.shop.order.section.summary}">订单</h2>
+        <table>
+            <tr><th th:text="#{admin.shop.orders.col.token}">订单号</th>
+                <td th:text="${order.publicToken}">abc</td></tr>
+            <tr><th th:text="#{admin.shop.orders.col.status}">状态</th>
+                <td th:text="${order.status}">SHIPPED</td></tr>
+            <tr><th th:text="#{admin.shop.order.col.goodsSubtotal}">商品小计</th>
+                <td th:text="${order.goodsSubtotal}">285000</td></tr>
+            <tr><th th:text="#{admin.shop.order.col.shippingFee}">运费</th>
+                <td th:text="${order.shippingFee}">20000</td></tr>
+            <tr><th th:text="#{admin.shop.order.col.shippingDiscount}">免运抵扣</th>
+                <td th:text="${order.shippingDiscount}">0</td></tr>
+            <tr><th th:text="#{admin.shop.orders.col.total}">合计</th>
+                <td th:text="${order.totalAmount}">305000</td></tr>
+            <!-- 🔴 两段支付构成必须分开展示：客服对账时「用户说付了 305 000」与
+                 「网关只收到 245 000」的差额永远落在 PawCoin 段上。 -->
+            <tr><th th:text="#{admin.shop.order.col.payChannel}">支付渠道</th>
+                <td th:text="${order.payChannel}">MIXED</td></tr>
+            <tr><th th:text="#{admin.shop.order.col.coinAmount}">PawCoin 段</th>
+                <td th:text="${order.coinAmount}">60000</td></tr>
+            <tr><th th:text="#{admin.shop.order.col.cashAmount}">QRIS 段</th>
+                <td th:text="${order.cashAmount}">245000</td></tr>
+            <tr><th th:text="#{admin.shop.order.col.createdAt}">下单</th>
+                <td th:text="${order.createdAt}">-</td></tr>
+            <tr><th th:text="#{admin.shop.order.col.shippedAt}">发货</th>
+                <td th:text="${order.shippedAt}">-</td></tr>
+            <tr><th th:text="#{admin.shop.order.col.deliveredAt}">签收</th>
+                <td>
+                    <span th:text="${order.deliveredAt}">-</span>
+                    <span th:if="${order.deliverySource != null}"
+                          th:text="' / ' + ${order.deliverySource}">ADMIN_MARK</span>
+                </td></tr>
+            <tr><th th:text="#{admin.shop.order.col.completedAt}">完成</th>
+                <td>
+                    <span th:text="${order.completedAt}">-</span>
+                    <span th:if="${order.completionSource != null}"
+                          th:text="' / ' + ${order.completionSource}">USER_CONFIRM</span>
+                </td></tr>
+        </table>
+
+        <h2 th:text="#{admin.shop.order.section.lines}">商品行</h2>
+        <table>
+            <thead>
+            <tr>
+                <th th:text="#{admin.shop.col.name}">商品名</th>
+                <th th:text="#{admin.shop.sku.specName}">规格</th>
+                <th th:text="#{admin.shop.order.col.unitPrice}">单价</th>
+                <th th:text="#{admin.shop.inventory.col.qty}">数量</th>
+                <th th:text="#{admin.shop.order.col.lineTotal}">小计</th>
+                <th th:text="#{admin.shop.order.col.returnPolicy}">退货规则</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="l : ${lines}">
+                <td th:text="${l.productName}">Produk</td>
+                <td th:text="${l.specName}">3 kg</td>
+                <td th:text="${l.unitPrice}">285000</td>
+                <td th:text="${l.qty}">1</td>
+                <td th:text="${l.lineTotal}">285000</td>
+                <td th:text="${l.returnPolicy}">RETURNABLE</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <!-- 🔒 收货地址快照：含三项 PII。下单时定格，不随地址簿改动（AD-13）。 -->
+        <h2 th:text="#{admin.shop.order.section.shipTo}">收货信息</h2>
+        <p class="hint" th:text="#{admin.shop.order.shipTo.hint}">以下信息含个人数据，仅用于履约与客服核对，禁止截图外传或写入任何工单正文。</p>
+        <table>
+            <tr><th th:text="#{admin.shop.order.col.receiver}">收件人</th>
+                <td th:text="${shipTo.receiverName}">Budi</td></tr>
+            <tr><th th:text="#{admin.shop.order.col.phone}">电话</th>
+                <td th:text="${shipTo.receiverPhone}">+628…</td></tr>
+            <tr><th th:text="#{admin.shop.order.col.address}">地址</th>
+                <td th:text="${shipTo.addressLine} + ', ' + ${shipTo.kecamatan} + ', '
+                             + ${shipTo.kotaKabupaten} + ', ' + ${shipTo.provinsi} + ' '
+                             + ${shipTo.kodePos}">Jl. …</td></tr>
+        </table>
+
+        <h2 th:text="#{admin.shop.order.section.packages}">包裹</h2>
+        <p class="hint" th:text="#{admin.shop.order.packages.hint}">一个订单可分多个包裹发出。订单要全部包裹都送达才会转为「已送达」。</p>
+        <table>
+            <thead>
+            <tr>
+                <th th:text="#{admin.shop.order.col.carrier}">承运商</th>
+                <th th:text="#{admin.shop.order.col.trackingNo}">物流单号</th>
+                <th th:text="#{admin.shop.order.col.carrierCost}">承运成本</th>
+                <th th:text="#{admin.shop.orders.col.status}">状态</th>
+                <th th:text="#{admin.shop.order.col.deliveredAt}">送达</th>
+                <th th:text="#{admin.common.action}">操作</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="p : ${packages}">
+                <td th:text="${p.carrier}">JNE</td>
+                <td th:text="${p.trackingNo}">JP123</td>
+                <td th:text="${p.carrierCost}">18000</td>
+                <td th:text="${p.status}">SHIPPED</td>
+                <td th:text="${p.deliveredAt}">-</td>
+                <td>
+                    <form th:if="${canFulfill and markable and !p.delivered}" method="post"
+                          th:action="@{/admin/shop/orders/{t}/packages/{id}/delivered(t=${order.publicToken},id=${p.id})}">
+                        <button type="submit" th:text="#{admin.shop.order.btn.packageDelivered}">标记该包裹送达</button>
+                    </form>
+                </td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(packages)}">
+                <td colspan="6" th:text="#{admin.shop.order.packages.empty}">尚未发货。</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <!-- 发货表单（AB-11B）。承运成本必填（S-11）。 -->
+        <div th:if="${canFulfill and shippable}">
+            <h2 th:text="#{admin.shop.order.section.ship}">发货</h2>
+            <p class="hint" th:text="#{admin.shop.order.ship.hint}">承运成本填运单实际金额。不录会让毛利看板缺行，自营毛利是否成立就无法验证。承运商只作留痕，不影响用户运费。</p>
+            <form method="post" th:action="@{/admin/shop/orders/{t}/ship(t=${order.publicToken})}">
+                <label th:text="#{admin.shop.order.col.carrier}">承运商</label>
+                <select name="carrier" required>
+                    <option th:each="c : ${carriers}" th:value="${c}" th:text="${c.displayName()}">JNE</option>
+                </select>
+                <label th:text="#{admin.shop.order.col.trackingNo}">物流单号</label>
+                <input type="text" name="trackingNo" required maxlength="64"/>
+                <label th:text="#{admin.shop.order.col.carrierCost}">承运成本</label>
+                <input type="number" name="carrierCost" min="0" required/>
+                <button type="submit" th:text="#{admin.shop.order.btn.ship}">发货</button>
+            </form>
+        </div>
+
+        <!-- SPEC-2 出口①：整单标记已送达。 -->
+        <form th:if="${canFulfill and markable}" method="post"
+              th:action="@{/admin/shop/orders/{t}/mark-delivered(t=${order.publicToken})}">
+            <button type="submit" th:text="#{admin.shop.order.btn.markDelivered}">标记整单已送达</button>
+        </form>
+    </div>
+</div>
+</body>
+</html>

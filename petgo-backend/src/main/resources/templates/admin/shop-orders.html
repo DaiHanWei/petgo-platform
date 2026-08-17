@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<!-- 电商订单列表（V1.4.0 Story 4.2，AB-11A/B）。模块 11 第一页。
+     🔒 本页不渲染任何 PII：收件人姓名/电话/详细地址只在详情页出现。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.shop.orders.title}">电商订单 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1 th:text="#{admin.shop.orders.title}">电商订单</h1>
+        <p class="hint" th:text="#{admin.shop.orders.hint}">列表不显示收件人信息。要查看收件地址请进入订单详情。</p>
+        <p th:if="${notice}" class="flash" th:text="${notice}">已保存</p>
+        <p th:if="${error}" class="flash error" th:text="${error}">操作失败</p>
+
+        <form method="get" th:action="@{/admin/shop/orders}" class="filters">
+            <label th:text="#{admin.shop.orders.col.token}">订单号</label>
+            <input type="text" name="orderToken" th:value="${orderToken}" maxlength="32"/>
+            <label th:text="#{admin.shop.orders.col.status}">状态</label>
+            <select name="status">
+                <option value="" th:text="#{admin.shop.orders.filter.all}">全部</option>
+                <option th:each="s : ${statuses}" th:value="${s}" th:text="${s}"
+                        th:selected="${s.name() == status}">SHIPPED</option>
+            </select>
+            <label th:text="#{admin.shop.orders.filter.from}">起始日期</label>
+            <input type="date" name="from" th:value="${from}"/>
+            <label th:text="#{admin.shop.orders.filter.to}">截止日期</label>
+            <input type="date" name="to" th:value="${to}"/>
+            <button type="submit" th:text="#{admin.common.filter}">筛选</button>
+        </form>
+
+        <!-- 🔒 按电话搜索：独立权限位 + 每次审计（AB-11A / NFR-11）。
+             无权限时【连输入框都不渲染】，服务端另有独立判定。 -->
+        <form th:if="${canPhoneSearch}" method="get" th:action="@{/admin/shop/orders}"
+              class="filters" autocomplete="off">
+            <label th:text="#{admin.shop.orders.filter.phone}">收件人电话</label>
+            <!-- 🔒 不回显已搜过的号码：回显会把个人数据带进 URL、浏览器历史与访问日志 -->
+            <input type="search" name="phone" value="" maxlength="20" autocomplete="off"/>
+            <button type="submit" th:text="#{admin.shop.orders.btn.phoneSearch}">按电话搜索</button>
+            <span class="hint" th:text="#{admin.shop.orders.phoneSearch.hint}">每次搜索都会写入操作审计。08xx / 8xx / +62 8xx 三种写法都能搜到同一批订单。</span>
+        </form>
+        <p th:if="${phoneSearched}" class="hint"
+           th:text="#{admin.shop.orders.phoneSearch.audited}">本次按电话搜索已记入操作审计。</p>
+
+        <table>
+            <thead>
+            <tr>
+                <th th:text="#{admin.shop.orders.col.token}">订单号</th>
+                <th th:text="#{admin.shop.orders.col.status}">状态</th>
+                <th th:text="#{admin.shop.orders.col.total}">金额</th>
+                <th th:text="#{admin.shop.orders.col.pay}">支付构成</th>
+                <th th:text="#{admin.shop.orders.col.kecamatan}">配送区</th>
+                <th th:text="#{admin.shop.orders.col.packages}">包裹数</th>
+                <th th:text="#{admin.shop.orders.col.createdAt}">下单时间</th>
+                <th th:text="#{admin.common.action}">操作</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="r : ${rows}">
+                <td th:text="${r.orderToken}">abc</td>
+                <td th:text="${r.status}">SHIPPED</td>
+                <td th:text="${r.totalAmount}">305000</td>
+                <td>
+                    <span th:text="${r.payChannel}">MIXED</span>
+                    <span th:if="${r.coinAmount != null}"
+                          th:text="' (Coin ' + ${r.coinAmount} + ' / Cash ' + ${r.cashAmount} + ')'"></span>
+                </td>
+                <td th:text="${r.kecamatan}">Kebayoran Baru</td>
+                <td th:text="${r.packageCount}">1</td>
+                <td th:text="${r.createdAt}">2026-08-18</td>
+                <td>
+                    <a th:href="@{/admin/shop/orders/{t}(t=${r.orderToken})}"
+                       th:text="#{admin.common.detail}">详情</a>
+                </td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(rows)}">
+                <td colspan="8" th:text="#{admin.shop.orders.empty}">暂无订单。</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

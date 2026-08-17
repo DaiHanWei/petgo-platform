@@ -47,4 +47,67 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
     default List<ShopOrder> findOverduePendingPayment(Instant now, Pageable pageable) {
         return findOverdue(ShopOrderStatus.PENDING_PAYMENT, now, pageable);
     }
+
+    /** 后台订单列表（Story 4.2，按下单时间倒序）。 */
+    List<ShopOrder> findAllByOrderByCreatedAtDescIdDesc(Pageable pageable);
+
+    /** 后台按状态筛选（Story 4.2 发货队列 / Story 4.3 状态筛选）。 */
+    List<ShopOrder> findByStatusOrderByCreatedAtDescIdDesc(ShopOrderStatus status,
+            Pageable pageable);
+
+    /**
+     * 后台组合筛选（Story 4.3，AB-11A）：状态 + 时间范围，任一为 null 即不参与筛选。
+     *
+     * <p>🔒 <b>本查询刻意不含电话</b> —— 按电话反查是独立能力（独立权限位 + 每次审计），
+     * 混进通用筛选就等于让每个能看订单的人都顺手拥有了它。
+     */
+    @Query("""
+            SELECT o FROM ShopOrder o
+            WHERE (:status IS NULL OR o.status = :status)
+              AND (CAST(:from AS timestamp) IS NULL OR o.createdAt >= :from)
+              AND (CAST(:to AS timestamp) IS NULL OR o.createdAt < :to)
+            ORDER BY o.createdAt DESC, o.id DESC
+            """)
+    List<ShopOrder> search(@Param("status") ShopOrderStatus status, @Param("from") Instant from,
+            @Param("to") Instant to, Pageable pageable);
+
+    /**
+     * 🔒 <b>按归一化后的收件人电话后缀匹配</b>（Story 4.3，AB-11A，NFR-11）。
+     *
+     * <p>得益于 C-15 的 E.164 归一化，{@code 08123…} / {@code 8123…} / {@code +62 812-3…}
+     * 三种输入形式指向同一个存储值，都能被搜到。不归一则会搜不全 ——
+     * 而「搜不全」在客服场景里表现为「系统说你没下过单」，比搜不到更糟。
+     */
+    @Query("""
+            SELECT o FROM ShopOrder o
+            WHERE o.shipReceiverPhone LIKE :suffixPattern
+            ORDER BY o.createdAt DESC, o.id DESC
+            """)
+    List<ShopOrder> searchByPhoneSuffix(@Param("suffixPattern") String suffixPattern,
+            Pageable pageable);
+
+    // ---------- Story 4.1 履约段自动推进 ----------
+
+    /**
+     * 发货起已超 M 日仍无任何送达标记的订单（SPEC-2 出口③）。
+     *
+     * <p>🔴 {@code shippedAt IS NOT NULL} 不是冗余条件：本列上线前若已有 {@code SHIPPED} 订单
+     * （历史数据 / 手工改库），它们没有起算点，不该被"自动送达"。
+     */
+    @Query("""
+            SELECT o FROM ShopOrder o
+            WHERE o.status = com.tailtopia.shop.order.domain.ShopOrderStatus.SHIPPED
+              AND o.shippedAt IS NOT NULL AND o.shippedAt < :threshold
+            ORDER BY o.shippedAt ASC
+            """)
+    List<ShopOrder> findAutoDeliverDue(@Param("threshold") Instant threshold, Pageable pageable);
+
+    /** 送达起已超 7 日用户仍未确认的订单（FR-102 自动完成）。 */
+    @Query("""
+            SELECT o FROM ShopOrder o
+            WHERE o.status = com.tailtopia.shop.order.domain.ShopOrderStatus.DELIVERED
+              AND o.deliveredAt IS NOT NULL AND o.deliveredAt < :threshold
+            ORDER BY o.deliveredAt ASC
+            """)
+    List<ShopOrder> findAutoCompleteDue(@Param("threshold") Instant threshold, Pageable pageable);
 }

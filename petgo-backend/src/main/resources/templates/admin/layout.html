@@ -145,7 +145,7 @@
         </details>
         <!-- 精选自营电商 模块 10–13（V1.4.0）。⚠️ 共享文件：只追加到导航末尾，不动既有块顺序。 -->
         <details class="nav-section"
-                 th:attr="open=${active == 'shopProducts'} ? 'open' : null">
+                 th:attr="open=${active == 'shopProducts' or active == 'shopOrders'} ? 'open' : null">
             <summary th:classappend="${active == 'shopProducts'} ? 'active'"
                      th:text="#{admin.nav.group.shop}">电商</summary>
             <div class="nav-sub">
@@ -155,6 +155,13 @@
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('shop.inventory_view') or hasAuthority('shop.inventory_edit')"
                    th:href="@{/admin/shop/inventory}" th:classappend="${active == 'shopInventory'} ? 'active'"
                    th:text="#{admin.nav.shopInventory}">库存管理</a>
+                <!-- 模块 11 订单履约（V1.4.0 Story 4.2） -->
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('shop.order_view') or hasAuthority('shop.order_fulfill')"
+                   th:href="@{/admin/shop/orders}" th:classappend="${active == 'shopOrders'} ? 'active'"
+                   th:text="#{admin.nav.shopOrders}">订单履约</a>
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('shop.order_view') or hasAuthority('shop.order_fulfill')"
+                   th:href="@{/admin/shop/order-exceptions}"
+                   th:text="#{admin.nav.shopOrderExceptions}">异常订单</a>
             </div>
         </details>
     </nav>

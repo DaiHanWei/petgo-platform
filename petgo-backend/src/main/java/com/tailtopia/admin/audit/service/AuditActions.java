@@ -151,6 +151,21 @@ public final class AuditActions {
     /** 修改电商 PawCoin 规则（总开关 / 运费抵扣 / 单笔上限）或平台责任补偿溢价。 */
     public static final String SHOP_PAWCOIN_RULES_UPDATED = "SHOP_PAWCOIN_RULES_UPDATED";
 
+    // ===== 电商订单履约（V1.4.0 Story 4.2 / 4.3 / 4.4，模块 11）=====
+    /** 🔒 发货。摘要记承运商 + 物流单号（非 PII 可记）；<b>收件人姓名/电话/地址严禁写入</b>（NFR-5）。 */
+    public static final String SHOP_ORDER_SHIPPED = "SHOP_ORDER_SHIPPED";
+    /** 运营手动「标记已送达」（SPEC-2 出口①）。留操作人与时间，可审计。 */
+    public static final String SHOP_ORDER_MARKED_DELIVERED = "SHOP_ORDER_MARKED_DELIVERED";
+    /**
+     * 🔒 按收件人电话搜索订单（AB-11A，NFR-11）。
+     *
+     * <p><b>摘要只记命中条数与查询的哈希前缀，绝不记号码本身</b> ——
+     * 审计日志是永久保留、无 TTL 的（V34），把号码写进去等于建了第二份不会过期的通讯录。
+     */
+    public static final String SHOP_ORDER_SEARCHED_BY_PHONE = "SHOP_ORDER_SEARCHED_BY_PHONE";
+    /** 异常订单处置：整单取消并退款 / 部分取消 / 联系用户后继续（Story 4.4，AB-11D）。 */
+    public static final String SHOP_ORDER_EXCEPTION_HANDLED = "SHOP_ORDER_EXCEPTION_HANDLED";
+
     private AuditActions() {
     }
 }
