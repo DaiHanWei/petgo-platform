@@ -6,6 +6,7 @@ import com.tailtopia.avatarmoderation.event.AvatarReviewRequestedEvent;
 import com.tailtopia.namemoderation.domain.NameTargetType;
 import com.tailtopia.namemoderation.event.NameSubmittedEvent;
 import com.tailtopia.profile.domain.PetProfile;
+import com.tailtopia.profile.domain.PetSex;
 import com.tailtopia.profile.domain.PetType;
 import com.tailtopia.profile.dto.PetProfileCreateRequest;
 import com.tailtopia.profile.dto.PetProfileResponse;
@@ -147,6 +148,12 @@ public class ProfileService {
         }
         if (req.birthday() != null) {
             profile.setBirthday(req.birthday());
+        }
+        // 性别（V1.1.6 Story 1.1）。⚠️ 刻意放在这一组、**不放进上面 name/avatarUrl 那两段** ——
+        // 那两段带 nameChanged / avatarChanged 的异步送审分支，性别不需要审核。
+        // 传 null = 不改动（本接口统一语义），故无清空路径；取值已由 @Pattern 挡在 422。
+        if (req.sex() != null) {
+            profile.setSex(PetSex.valueOf(req.sex()));
         }
         if (req.intro() != null) {
             profile.setIntro(blankToNull(req.intro()));

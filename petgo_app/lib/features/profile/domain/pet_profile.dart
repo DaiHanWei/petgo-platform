@@ -10,6 +10,7 @@ class PetProfile {
     this.avatarUrl,
     this.breed,
     this.birthday,
+    this.sex,
     this.intro,
     this.createdAt,
     this.isSystemDefaultName = false,
@@ -27,6 +28,10 @@ class PetProfile {
   final String? avatarUrl;
   final String? breed;
   final DateTime? birthday;
+
+  /// 性别（V1.1.6 Story 1.1）：wire 值 `MALE` / `FEMALE`；**null = 未填**（编辑页显示「请选择」）。
+  /// ⚠️ 只有两值，没有 `UNKNOWN` —— 身份证那套（[IdCard.gender]）才是三值，两者独立不联动。
+  final String? sex;
   final String? intro;
   final DateTime? createdAt;
 
@@ -38,6 +43,8 @@ class PetProfile {
         avatarUrl: json['avatarUrl'] as String?,
         breed: json['breed'] as String?,
         birthday: _parseDate(json['birthday']),
+        // 未填时后端 NON_NULL 会让整个键消失 → 这里自然拿到 null。
+        sex: json['sex'] as String?,
         intro: json['intro'] as String?,
         createdAt: _parseDate(json['createdAt']),
         isSystemDefaultName: (json['isSystemDefaultName'] ?? false) as bool,
@@ -48,6 +55,7 @@ class PetProfile {
     String? avatarUrl,
     String? breed,
     DateTime? birthday,
+    String? sex,
     String? intro,
     bool? isSystemDefaultName,
   }) =>
@@ -59,6 +67,7 @@ class PetProfile {
         avatarUrl: avatarUrl ?? this.avatarUrl,
         breed: breed ?? this.breed,
         birthday: birthday ?? this.birthday,
+        sex: sex ?? this.sex,
         intro: intro ?? this.intro,
         createdAt: createdAt,
         isSystemDefaultName: isSystemDefaultName ?? this.isSystemDefaultName,

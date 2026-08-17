@@ -23,11 +23,14 @@ abstract class ProfileRepository {
   Future<PetProfile?> getMyProfile();
 
   /// 编辑档案（Story 2.8，部分更新 PATCH）。cardToken 不变。
+  ///
+  /// ⚠️ 全字段「传 null = 不改动」，**没有清空语义**（V1.1.6 Story 1.1 沿用该口径新增 [sex]）。
   Future<PetProfile> update({
     String? name,
     String? avatarUrl,
     String? breed,
     DateTime? birthday,
+    String? sex,
     String? intro,
   });
 
@@ -75,6 +78,7 @@ class DioProfileRepository implements ProfileRepository {
     String? avatarUrl,
     String? breed,
     DateTime? birthday,
+    String? sex,
     String? intro,
   }) async {
     final data = <String, dynamic>{};
@@ -82,6 +86,7 @@ class DioProfileRepository implements ProfileRepository {
     if (avatarUrl != null) data['avatarUrl'] = avatarUrl;
     if (breed != null) data['breed'] = breed;
     if (birthday != null) data['birthday'] = _isoDate(birthday);
+    if (sex != null) data['sex'] = sex;
     if (intro != null) data['intro'] = intro;
     final resp = await dio.patch<Map<String, dynamic>>(ApiPaths.petProfileMe, data: data);
     return PetProfile.fromJson(resp.data!);

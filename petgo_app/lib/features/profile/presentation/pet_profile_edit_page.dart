@@ -39,7 +39,9 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
   DateTime? _birthday;
   String? _avatarUrl;
   String? _petType; // F6：创建后不可改，编辑页置灰只读展示，不随 PATCH 提交
-  // KELAMIN（性别）：MALE/FEMALE。⚠️ 仅前端占位——后端 PetProfile 暂无 sex 字段，不随 PATCH 提交、不持久化。
+  // KELAMIN（性别）：MALE/FEMALE，null = 未填。V1.1.6 Story 1.1 起**真正落库**
+  // （此前是纯前端占位：能选能显示，但不提交不持久化）。
+  // ⚠️ 无「清空」路径：PATCH 语义是「传 null = 不改动」，故选了就改不回未填 —— 已知且接受。
   String? _sex;
   bool _uploading = false;
   bool _submitting = false;
@@ -63,6 +65,7 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
     _birthday = p.birthday;
     _avatarUrl = p.avatarUrl;
     _petType = p.petType;
+    _sex = p.sex; // 漏这行 = 存住了但重进页面又变回「请选择」
   }
 
   bool get _canSubmit => _nameController.text.trim().isNotEmpty && !_submitting && !_uploading;
@@ -97,6 +100,7 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
             avatarUrl: _avatarUrl,
             breed: _emptyToNull(_breedController.text),
             birthday: _birthday,
+            sex: _sex,
             intro: _emptyToNull(_introController.text),
           );
       ref.invalidate(petProfileProvider);
@@ -444,7 +448,7 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
         ),
       );
 
-  /// KELAMIN 选择字段（原型 pet-edit：边框 + 下拉箭头）。⚠️ 占位：选了不持久化。
+  /// KELAMIN 选择字段（原型 pet-edit：边框 + 下拉箭头）。未填时显示占位文案。
   Widget _sexField(AppLocalizations l10n) {
     final label = switch (_sex) {
       'MALE' => l10n.petProfileSexMale,

@@ -50,6 +50,7 @@ class _FakeRepo implements ProfileRepository {
     String? avatarUrl,
     String? breed,
     DateTime? birthday,
+    String? sex,
     String? intro,
   }) async =>
       PetProfile(id: 1, name: name ?? 'x', cardToken: 'T');
