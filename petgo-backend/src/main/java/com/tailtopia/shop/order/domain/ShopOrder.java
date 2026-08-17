@@ -79,6 +79,15 @@ public class ShopOrder {
     @Column(name = "is_full_return", nullable = false)
     private boolean fullReturn;
 
+    // ---------- 支付拆分（Story 3.4，建单时固化，🔴 不随后续部分退款重算） ----------
+    @Enumerated(EnumType.STRING)
+    @Column(name = "pay_channel", length = 16)
+    private com.tailtopia.pay.domain.PayChannel payChannel;
+    @Column(name = "coin_amount")
+    private Long coinAmount;
+    @Column(name = "cash_amount")
+    private Long cashAmount;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
     @Column(name = "updated_at", nullable = false)
@@ -125,6 +134,32 @@ public class ShopOrder {
         }
         this.status = next;
         this.updatedAt = Instant.now();
+    }
+
+    /**
+     * 固化支付拆分（Story 3.4）。
+     *
+     * <p>🔴 <b>只在建单时调用一次</b>：三段金额与 channel 一旦写下就不再重算 ——
+     * 部分退款会改变实付比例，若重算，退到一半时「已退多少 Coin」就没有稳定的分母了（AD-2）。
+     */
+    public void applyPaymentSplit(com.tailtopia.pay.domain.PayChannel channel,
+            PaymentSplit split) {
+        this.payChannel = channel;
+        this.coinAmount = split.coinAmount();
+        this.cashAmount = split.cashAmount();
+        this.updatedAt = Instant.now();
+    }
+
+    public com.tailtopia.pay.domain.PayChannel getPayChannel() {
+        return payChannel;
+    }
+
+    public Long getCoinAmount() {
+        return coinAmount;
+    }
+
+    public Long getCashAmount() {
+        return cashAmount;
     }
 
     public Long getId() {

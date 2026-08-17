@@ -55,6 +55,17 @@ public class ShopOrderLine {
     @Column(name = "refunded_qty", nullable = false)
     private int refundedQty;
 
+    /**
+     * 🔴 下单入口来源（Story 3.4，IR 前移）。AB-13B 算转化率的<b>服务端权威依据</b> ——
+     * 只靠客户端埋点会被广告拦截与事件丢失打穿分母，而这个数字是裁决 A-16 的唯一依据。
+     */
+    @Column(name = "entry_source", updatable = false, length = 32)
+    private String entrySource;
+
+    /** 若来自复购触发卡，记其类型；非触发来源为 NULL。 */
+    @Column(name = "trigger_type", updatable = false, length = 32)
+    private String triggerType;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -74,6 +85,20 @@ public class ShopOrderLine {
         l.returnPolicy = returnPolicy;
         l.createdAt = Instant.now();
         return l;
+    }
+
+    /** 归因随建行落库。null 表示来源未知（如后台代下单），不是错误。 */
+    public void attributeTo(String entrySource, String triggerType) {
+        this.entrySource = entrySource;
+        this.triggerType = triggerType;
+    }
+
+    public String getEntrySource() {
+        return entrySource;
+    }
+
+    public String getTriggerType() {
+        return triggerType;
     }
 
     public Long getId() {
