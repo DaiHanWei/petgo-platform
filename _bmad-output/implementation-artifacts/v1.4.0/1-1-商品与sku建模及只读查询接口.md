@@ -8,7 +8,11 @@ touches_shared_files: true   # shared/security/SecurityConfig.java（追加 perm
 
 # Story 1.1: 商品与 SKU 建模及只读查询接口
 
-Status: ready-for-dev
+Status: review
+
+> ⚠️ **DoD 部分达成，非全绿：L0 全部通过（17 单测），L1 一条未跑**（本机无 Docker）。
+> 本 Story 的 4 条 L1 联调子任务保持**未勾选**，须本地起 postgres + redis 后补跑并勾选，**再进 code-review**。
+> 详见 Dev Agent Record → Completion Notes。
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -102,35 +106,39 @@ so that **后台能往里录数据、App 能把商品取出来展示（FR-94 / F
 
 ### 🟦 后端子任务（petgo-backend / Spring Boot 4 · Java 21）
 
-- [ ] **T1 迁移 `V101__init_shop_products_and_skus.sql`**（AC1/AC2/AC3）
-  - [ ] 文件头注释写明：**所属工作线 V1.4.0 电商 · 独占号段 V101–V139 · 本迁移不触碰共享表、无需认领**（照 `V60__init_payment_intents.sql` 的注释风格）
-  - [ ] `shop_products`：12 字段 + `public_token` + `sort_weight` + `is_active` + `created_at`/`updated_at`(`TIMESTAMPTZ`)
-  - [ ] `shop_skus`：`product_id` FK `ON DELETE CASCADE` + `spec_name` + `price BIGINT` + `net_weight_g` + `return_policy`(可空) + `public_token` + 时间戳
-  - [ ] 全部枚举列写 CHECK；`uq_shop_products_token` / `uq_shop_skus_token` 唯一索引；`idx_shop_products_category` / `idx_shop_skus_product`
-- [ ] **T2 新建 `shop/` 模块骨架**（AD-4）
-  - [ ] `com.tailtopia.shop.{domain,dto,repository,service,web}` —— 与 `order/` **平级**
-  - [ ] 🔴 `order/` **一行不改**（它是跨类型订单中心只读聚合层，电商订单接入属 3.9）
-- [ ] **T3 实体与枚举**（AC1/AC2）
-  - [ ] `ShopProduct` / `ShopSku`；枚举 `ProductCategory` / `Species` / `BodySize` / `AgeStage` / `ReturnPolicy`
-  - [ ] `record FeedingGuideEntry(int weightMinKg, int weightMaxKg, int gramsPerDay)`
-  - [ ] `public_token` / `created_at` 标 `updatable = false`（照 `PaymentIntent` 范式）
-- [ ] **T4 `ShopTokenGenerator`**（AC3）—— `SecureRandom` + Base62 22 位，**自建于 `shop/service/`**，理由见 Dev Notes
-- [ ] **T5 查询 service + DTO**（AC4）—— `ShopProductQueryService`；DTO **只暴露 `publicToken`，不暴露 `id`**
-- [ ] **T6 `ShopProductController`**（AC4）—— `/api/v1/shop/products`；未知 token → `AppException.notFound(...)`
-- [ ] **T7 ⚠️ `SecurityConfig` 追加游客放行**（AC4）—— **改共享文件，见 Dev Notes「共享文件」**
-- [ ] **T8 测试**
-  - [ ] `[L0]` `ShopTokenGeneratorTest`（1000 次无碰撞/无前缀规律）· `FeedingGuideEntryContractTest`（JSON 往返）· `ShopProductQueryServiceTest`（筛选/排序分支）
-  - [ ] `[L1]` `ShopProductEndpointIntegrationTest`（两端点 · 游客可访问 · 未知 token 404 · 非法枚举被 DB 拒 · `feeding_guide` 原样往返）
+- [x] **T1 迁移 `V101__init_shop_products_and_skus.sql`**（AC1/AC2/AC3）
+  - [x] 文件头注释写明：**所属工作线 V1.4.0 电商 · 独占号段 V101–V139 · 本迁移不触碰共享表、无需认领**（照 `V60__init_payment_intents.sql` 的注释风格）
+  - [x] `shop_products`：12 字段 + `public_token` + `sort_weight` + `is_active` + `created_at`/`updated_at`(`TIMESTAMPTZ`)
+  - [x] `shop_skus`：`product_id` FK `ON DELETE CASCADE` + `spec_name` + `price BIGINT` + `net_weight_g` + `return_policy`(可空) + `public_token` + 时间戳
+  - [x] 全部枚举列写 CHECK；`uq_shop_products_token` / `uq_shop_skus_token` 唯一索引；`idx_shop_products_category` / `idx_shop_skus_product`
+- [x] **T2 新建 `shop/` 模块骨架**（AD-4）
+  - [x] `com.tailtopia.shop.{domain,dto,repository,service,web}` —— 与 `order/` **平级**
+  - [x] 🔴 `order/` **一行不改**（它是跨类型订单中心只读聚合层，电商订单接入属 3.9）
+- [x] **T3 实体与枚举**（AC1/AC2）
+  - [x] `ShopProduct` / `ShopSku`；枚举 `ProductCategory` / `Species` / `BodySize` / `AgeStage` / `ReturnPolicy`
+  - [x] `record FeedingGuideEntry(int weightMinKg, int weightMaxKg, int gramsPerDay)`
+  - [x] `public_token` / `created_at` 标 `updatable = false`（照 `PaymentIntent` 范式）
+- [x] **T4 `ShopTokenGenerator`**（AC3）—— `SecureRandom` + Base62 22 位，**自建于 `shop/service/`**，理由见 Dev Notes
+- [x] **T5 查询 service + DTO**（AC4）—— `ShopProductQueryService`；DTO **只暴露 `publicToken`，不暴露 `id`**
+- [x] **T6 `ShopProductController`**（AC4）—— `/api/v1/shop/products`；未知 token → `AppException.notFound(...)`
+- [x] **T7 ⚠️ `SecurityConfig` 追加游客放行**（AC4）—— **改共享文件，见 Dev Notes「共享文件」**
+- [x] **T8 测试**
+  - [x] `[L0]` `ShopTokenGeneratorTest`（1000 次无碰撞/无前缀规律）· `FeedingGuideEntryContractTest`（JSON 往返）· `ShopProductQueryServiceTest`（筛选/排序分支）
+  - [x] `[L1]` `ShopProductEndpointIntegrationTest`（两端点 · 游客可访问 · 未知 token 404 · 非法枚举被 DB 拒 · `feeding_guide` 原样往返）
 
-### 🟨 联调验收子任务（L1 ⏳ 待本地 Docker）
+### 🟨 联调验收子任务（L1 ⏳ **待本地 Docker，本次未执行**）
+
+> 🔴 **以下三条本次一条都没跑** —— 本机 `docker info` 失败，`ApiIntegrationTest` 需真实 PostgreSQL + Redis（仓库未用 Testcontainers）。**保持未勾选状态，交本地验收时再勾。**
 
 - [ ] `docker compose` 起 postgres + redis → `mvn spring-boot:run` → `/actuator/health = UP`
-- [ ] `ddl-auto=validate` 启动无报错
-- [ ] 全量回归：`mvn -B test` 绿（**本 Story 不改任何既有代码，回归应零影响**；若有失败，先怀疑是自己动了不该动的）
+- [ ] `ddl-auto=validate` 启动无报错（**AC1 的 L1 部分依赖此条**）
+- [ ] 跑 `ShopProductEndpointIntegrationTest` 9 个用例（已编译通过，待真 DB 执行）
+- [ ] 全量回归：`mvn -B test` 绿
+  > ⚠️ **本次已知**：无 DB 时 4 个既有类失败（`TailtopiaBackendApplicationTests` / `AdminPagesRenderSmokeTest` / `TimelinePaginationRegressionTest` / `SmokeApiTest`），均为 `Connection to localhost:5432 refused`。**已 `git stash` 移除本 Story 全部改动后复跑，失败完全一致 → 确认既有问题，非本 Story 回归。** 本地起 DB 后应全绿
 
 ### 🟩 前端子任务
 
-- [ ] **无。** 本 Story 纯后端。
+- [x] **无。** 本 Story 纯后端 —— 已确认未产生任何 Flutter 侧改动。
 
 ---
 
@@ -223,20 +231,59 @@ so that **后台能往里录数据、App 能把商品取出来展示（FR-94 / F
 
 ### Agent Model Used
 
-（dev agent 填写）
+Claude Opus 5 (1M context) — `claude-opus-5[1m]`
 
 ### Debug Log References
 
+- `mvn -B test -Dtest='Shop*Test,FeedingGuideEntryContractTest'` → **17 tests, 0 failures**
+- `mvn -B test-compile` → BUILD SUCCESS（L1 集成测试编译通过）
+- `mvn -B package -DskipTests` → BUILD SUCCESS
+- ⚠️ `mvn -B test` 全量失败 4 个既有类（`TailtopiaBackendApplicationTests` / `AdminPagesRenderSmokeTest` / `TimelinePaginationRegressionTest` / `SmokeApiTest`），原因均为 `Connection to localhost:5432 refused`。**已用 `git stash` 移除本 Story 全部改动后复跑同一测试，失败一模一样 → 确认为既有的「本机无 PostgreSQL」问题，不是本 Story 的回归。**
+
 ### Completion Notes List
 
-<!-- 必填：
-     - L0 结果（mvn -B package / 单测数）
-     - L1 是否已跑；若在云端 headless 无 Docker，标注「L1 待本地验收」
-     - SecurityConfig 改动是否已在群里知会
-     - 实际使用的 Flyway 号（应为 V101；若因撞号顺延须写明）
--->
+**L0 全绿：** `mvn -B package` BUILD SUCCESS；新增 **17 个 L0 单测全部通过**
+- `ShopTokenGeneratorTest`（5）—— 不止验无碰撞，还验**无公共前缀**与**非单调递增**，这两条才是「不可枚举」的实质；另验 62 个 Base62 字符全部出现过，排除字符表被截断
+- `ShopProductQueryServiceTest`（7）—— 筛选/排序/最低价聚合/继承/404；含一条反射断言「三个对外 record 都不存在名为 `id` 的组件」，把 NFR-3 钉成编译期契约
+- `ShopSkuReturnPolicyTest`（3）—— 含「枚举恰为三值且不含换货」的断言，C-13 被回归看守
+- `FeedingGuideEntryContractTest`（2）—— 钉住 JSON 字段名，字段名一旦漂移历史 JSONB 数据就解析不出来
+
+**⏳ L1 待本地验收：** 本机 **Docker 不可用**（`docker info` 失败），`ApiIntegrationTest` 需真实 PostgreSQL + Redis（仓库未用 Testcontainers）。已写完 `ShopProductEndpointIntegrationTest`（9 个用例）并**编译通过**，待本地起 `postgres + redis` 后跑：游客无 JWT 可访问 · 响应体不含 `id` · 未知 token 404 · 未上架不可见 · 非法 category 422 · category 筛选 · `feeding_guide` JSONB 往返 · SKU 退货规则继承 · **DB CHECK 拒绝含「换」的非法枚举值**。
+
+**⚠️ SecurityConfig 改动尚未在群里知会** —— 这是三人共享文件，改动为**纯追加**（1 条 `requestMatchers` + 3 行注释，插在既有游客放行块末尾 `mini-profile` 之后），**未重排任何既有顺序**。🔴 **需要负责人在群里补一句知会**，并把「`SecurityConfig` 也是共享物」这条**反馈进 `PARALLEL-DEV-CONTRACT.md`** —— 契约 §2/§3 的清单只有 Flyway、共享枚举 CHECK、`OrderCenterService`、App 壳，**漏了它**，而它的风险同类（Spring Security 按声明顺序匹配，重排会静默改鉴权语义）。
+
+**Flyway 号：** 实际使用 **V101**，与计划一致，未撞号。本迁移只建新表、不触碰共享表，**无需认领**。
+
+**环境备注：** PATH 上的 `java` 是 17，但 Maven 跑在 Homebrew JDK 25 上，编译产物 `major version: 65`（Java 21 字节码），与 `pom.xml` 的 `<java.version>21</java.version>` 一致 —— 无需额外装 JDK。
 
 ### File List
+
+**新增（8 主 + 5 测 + 1 迁移）**
+- `petgo-backend/src/main/resources/db/migration/V101__init_shop_products_and_skus.sql`
+- `petgo-backend/src/main/java/com/tailtopia/shop/domain/ProductCategory.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/domain/Species.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/domain/BodySize.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/domain/AgeStage.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/domain/ReturnPolicy.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/domain/FeedingGuideEntry.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/domain/ShopProduct.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/domain/ShopSku.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/repository/ShopProductRepository.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/repository/ShopSkuRepository.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/dto/ShopSkuView.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/dto/ShopProductSummaryView.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/dto/ShopProductDetailView.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/service/ShopTokenGenerator.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/service/ShopProductQueryService.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/web/ShopProductController.java`
+- `petgo-backend/src/test/java/com/tailtopia/shop/service/ShopTokenGeneratorTest.java`
+- `petgo-backend/src/test/java/com/tailtopia/shop/service/ShopProductQueryServiceTest.java`
+- `petgo-backend/src/test/java/com/tailtopia/shop/domain/ShopSkuReturnPolicyTest.java`
+- `petgo-backend/src/test/java/com/tailtopia/shop/dto/FeedingGuideEntryContractTest.java`
+- `petgo-backend/src/test/java/com/tailtopia/shop/web/ShopProductEndpointIntegrationTest.java`
+
+**修改（1，⚠️ 共享文件）**
+- `petgo-backend/src/main/java/com/tailtopia/shared/security/SecurityConfig.java` —— 纯追加游客放行，未重排既有顺序
 
 ---
 
@@ -245,3 +292,4 @@ so that **后台能往里录数据、App 能把商品取出来展示（FR-94 / F
 | 日期 | 变更 | 作者 |
 |---|---|---|
 | 2026-08-17 | 创建 story（`bmad-create-story`），status → ready-for-dev | 设计侧 |
+| 2026-08-17 | 实现完成（`bmad-dev-story`）：Flyway V101 + `shop/` 模块 17 个新文件 + 17 个 L0 单测全绿；`SecurityConfig` 纯追加游客放行。L1 待本地 Docker。status → review | dev agent |
