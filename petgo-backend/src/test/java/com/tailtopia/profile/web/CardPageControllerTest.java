@@ -2,6 +2,8 @@ package com.tailtopia.profile.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -78,7 +80,7 @@ class CardPageControllerTest {
     void validTokenRenders6BlockCardWithStrippedImagesAndStats() {
         when(profileService.findByCardToken("TOK")).thenReturn(Optional.of(profile()));
         stubOwner(2, 1, 0);
-        when(contentService.findRecentGrowthMomentsByEventDate(7L, 10L, 5))
+        when(contentService.findRecentGrowthMomentsByEventDate(eq(7L), eq(10L), anyInt()))
                 .thenReturn(List.of(new GrowthMomentView(
                         1L, Instant.now(), LocalDate.of(2024, 5, 1), List.of("https://cdn/m.jpg"), "hi")));
 
@@ -108,7 +110,7 @@ class CardPageControllerTest {
     void zeroMomentsAndMilestonesDegradeGracefully() {
         when(profileService.findByCardToken("TOK")).thenReturn(Optional.of(profile()));
         stubOwner(0, 0, 0);
-        when(contentService.findRecentGrowthMomentsByEventDate(7L, 10L, 5)).thenReturn(List.of());
+        when(contentService.findRecentGrowthMomentsByEventDate(eq(7L), eq(10L), anyInt())).thenReturn(List.of());
 
         Model model = new ConcurrentModel();
         HttpServletResponse resp = mock(HttpServletResponse.class);
@@ -183,7 +185,7 @@ class CardPageControllerTest {
     void zeroMilestonesNeverTouchesMilestoneService() {
         when(profileService.findByCardToken("TOK")).thenReturn(Optional.of(profile()));
         stubOwner(0, 0, 0);
-        when(contentService.findRecentGrowthMomentsByEventDate(7L, 10L, 5)).thenReturn(List.of());
+        when(contentService.findRecentGrowthMomentsByEventDate(eq(7L), eq(10L), anyInt())).thenReturn(List.of());
 
         controller.card("TOK", new ConcurrentModel(), mock(HttpServletResponse.class));
 
@@ -195,7 +197,7 @@ class CardPageControllerTest {
     void milestoneTotalComesFromCatalogNotTheMockupNumber() {
         when(profileService.findByCardToken("TOK")).thenReturn(Optional.of(profile()));
         stubOwner(0, 0, 0);
-        when(contentService.findRecentGrowthMomentsByEventDate(7L, 10L, 5)).thenReturn(List.of());
+        when(contentService.findRecentGrowthMomentsByEventDate(eq(7L), eq(10L), anyInt())).thenReturn(List.of());
 
         Model model = new ConcurrentModel();
         controller.card("TOK", model, mock(HttpServletResponse.class));
@@ -212,7 +214,7 @@ class CardPageControllerTest {
     void badgesUseIndonesianTitlesAndMostRecentFirst() {
         when(profileService.findByCardToken("TOK")).thenReturn(Optional.of(profile()));
         stubOwner(0, 0, 3);
-        when(contentService.findRecentGrowthMomentsByEventDate(7L, 10L, 5)).thenReturn(List.of());
+        when(contentService.findRecentGrowthMomentsByEventDate(eq(7L), eq(10L), anyInt())).thenReturn(List.of());
         Instant now = Instant.parse("2026-08-17T00:00:00Z");
         stubMilestones(
                 done("C-S1", now.minus(30, ChronoUnit.DAYS)),   // 最早
@@ -237,7 +239,7 @@ class CardPageControllerTest {
     void latestMilestoneAgoComesFromMostRecentCompletion() {
         when(profileService.findByCardToken("TOK")).thenReturn(Optional.of(profile()));
         stubOwner(0, 0, 2);
-        when(contentService.findRecentGrowthMomentsByEventDate(7L, 10L, 5)).thenReturn(List.of());
+        when(contentService.findRecentGrowthMomentsByEventDate(eq(7L), eq(10L), anyInt())).thenReturn(List.of());
         stubMilestones(
                 done("C-S1", Instant.now().minus(40, ChronoUnit.DAYS)),
                 done("C-S6", Instant.now().minus(3, ChronoUnit.DAYS)));
@@ -255,7 +257,7 @@ class CardPageControllerTest {
         p.setSex(com.tailtopia.profile.domain.PetSex.FEMALE);
         when(profileService.findByCardToken("TOK")).thenReturn(Optional.of(p));
         stubOwner(0, 0, 0);
-        when(contentService.findRecentGrowthMomentsByEventDate(7L, 10L, 5)).thenReturn(List.of());
+        when(contentService.findRecentGrowthMomentsByEventDate(eq(7L), eq(10L), anyInt())).thenReturn(List.of());
 
         Model model = new ConcurrentModel();
         controller.card("TOK", model, mock(HttpServletResponse.class));
@@ -270,7 +272,7 @@ class CardPageControllerTest {
     void metaLineSkipsMissingSex() {
         when(profileService.findByCardToken("TOK")).thenReturn(Optional.of(profile())); // sex 为 null
         stubOwner(0, 0, 0);
-        when(contentService.findRecentGrowthMomentsByEventDate(7L, 10L, 5)).thenReturn(List.of());
+        when(contentService.findRecentGrowthMomentsByEventDate(eq(7L), eq(10L), anyInt())).thenReturn(List.of());
 
         Model model = new ConcurrentModel();
         controller.card("TOK", model, mock(HttpServletResponse.class));
