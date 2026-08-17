@@ -134,6 +134,12 @@ public final class AuditActions {
     /** 商品下架。🔴 只改可见性，不触发任何库存或订单动作（SPEC-7 口径）。 */
     public static final String SHOP_PRODUCT_DELISTED = "SHOP_PRODUCT_DELISTED";
 
+    // ===== 服务范围与运费表（V1.4.0 Story 2.2，AB-11C）=====
+    /** 新增/更新/启停一个配送区域及其固定运费。 */
+    public static final String SHOP_SHIPPING_ZONE_UPDATED = "SHOP_SHIPPING_ZONE_UPDATED";
+    /** 修改免运门槛。 */
+    public static final String SHOP_SHIPPING_SETTINGS_UPDATED = "SHOP_SHIPPING_SETTINGS_UPDATED";
+
     private AuditActions() {
     }
 }
