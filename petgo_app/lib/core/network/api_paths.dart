@@ -257,4 +257,10 @@ class ApiPaths {
   static String meCartItem(String skuToken) => '$meCart/items/$skuToken';
   /// 一键清空全部失效行（已下架 / 已售罄）。
   static const String meCartInvalidItems = '$meCart/invalid-items';
+
+  /// 🔒 结算试算（Story 3.7）。`?addressToken=`；超服务范围回 `serviceable=false` 而非报错。
+  static const String meCheckout = '$base/me/checkout';
+
+  /// 🔒 电商下单（Story 3.7）。409 带 `unavailableLines` 逐行明细（FR-95，不整单打回）。
+  static const String meShopOrders = '$base/me/shop-orders';
 }

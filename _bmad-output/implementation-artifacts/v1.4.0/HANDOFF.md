@@ -1,9 +1,9 @@
 ---
 title: "V1.4.0 电商工作线 · 会话交接"
 type: handoff
-updated: 2026-08-17
+updated: 2026-08-18
 branch: shawn/oneline-ecommerce
-head: 6426234f
+head: e79cf5be
 ---
 
 # V1.4.0 电商工作线 · 会话交接
@@ -14,13 +14,13 @@ head: 6426234f
 
 ---
 
-## 一 · 进度（19 / 57）
+## 一 · 进度（20 / 57）
 
 | Epic | 进度 | 说明 |
 |---|---|---|
 | **1 商品上架与浏览** | **8/8 ✅ 全部 review** | 后端 + 后台 + App 三段齐全，含全链路 L1 |
 | **2 收货地址与配送范围** | **5/5 ✅ 全部 review** | 含全链路联调 + PII 护栏 |
-| **3 完成一次购买** | **6/10** | 3.1 购物车 · 3.2 订单+状态机 · 3.3 混合支付 · 3.4 结算下单 · 3.5 PawCoin 规则 · 3.6 购物车页<br>**下一条 3.7 结算页与两段金额（App）** |
+| **3 完成一次购买** | **7/10** | 3.1~3.5 后端 · 3.6 购物车页 · 3.7 结算页（含**补齐的结算/下单 REST 端点**）<br>**下一条 3.8 支付与待支付订单详情（App）** |
 | 4 履约物流与收货 | 0/6 | |
 | 5 退货与退款 | 0/10 | 🔴 最重（资金精度） |
 | 6 复购引擎 | 0/7 | 版本核心 |
@@ -28,7 +28,7 @@ head: 6426234f
 | 8 经营数据与对账 | 0/4 | |
 | 9 边界守护与效果度量 | 0/3 | 横切 |
 
-**测试基线：后端 `mvn -B test` **1760 通过 / 0 失败 / 6 跳过**；前端 `flutter test` **823 通过**、`flutter analyze` 零问题。**
+**测试基线：后端 `mvn -B test` **1776 通过 / 0 失败 / 6 跳过**；前端 `flutter test` **842 通过**、`flutter analyze` 零问题。**
 
 > 🔴 **跑全量时务必显式 grep `BUILD` 行**。我曾用 `tail -2` 抓输出，`BUILD FAILURE` 被淹掉，
 > 结果在红着的构建上提交（`f470572c`）。正确写法：
@@ -143,11 +143,10 @@ V108 购物车 · V109 订单 · **V110 ⚠️共享表 payment_intents 混合�
 
 ---
 
-## 九 · Epic 3 剩余 4 条的已知要点（下一个窗口直接用）
+## 九 · Epic 3 剩余 3 条的已知要点（下一个窗口直接用）
 
 | Story | 要点 |
 |---|---|
-| **3.7 结算页与两段金额** | 调 `CheckoutService.preview`（**别另算一遍运费与拆分，两处必漂移**）。🔴 **FR-104 三处明示的第 2 处**（措辞须与详情页逐字一致） |
 | **3.8 支付与待支付订单详情** | 调 `CheckoutService.settlePawCoinSegment`（已实现，幂等键 `shop-order:{token}`）。60 分钟超时释放库存挂在同一状态迁移事务内（AD-8） |
 | **3.9 订单列表电商卡片** | `OrderType` 末尾追加 `ECOMMERCE`，`OrderCenterService` **if 链末尾追加第 4 分支 + 独立映射方法**，既有三分支**一行不改**（AD-11 / 契约 §3） |
 | **3.10 Epic 3 联调与埋点** | 照 `Epic1ChainIntegrationTest` / `Epic2ChainIntegrationTest` 的范式写第三条链路 |
@@ -161,6 +160,16 @@ V108 购物车 · V109 订单 · **V110 ⚠️共享表 payment_intents 混合�
    用户主动动作触发的登录引导要传 `true`，否则「每 session 一次」的去重会让第二次点击毫无反应。
 3. **购物车状态是全局单例 `cartProvider`**，角标（`cartItemCountProvider`）与购物车页同源；
    DEP-1 闭合后 Tab 角标直接 watch 它即可，不需要改本次代码。
+4. 🔴 **归因（entry_source / trigger_type）目前一律传 null**：购物车行没有记录商品的进入来源
+   （V108 无该列），编一个值会污染 AB-13B 看板且事后无法识别。闭合归 **Story 9.2 / Epic 6**。
+
+### Story 3.7 落地后新增的三条（后面几条 story 会直接吃到）
+1. **结算/下单 REST 端点已补齐**：`GET /me/checkout?addressToken=` · `POST /me/shop-orders`
+   （3.4 只写了 service，`shop/order/web/` 当时是空目录）。3.8 的订单详情端点要照这个控制器加。
+2. **RFC 9457 扩展成员机制已就位**：`shared/error/ProblemExtensions` —— 业务异常实现它即可让
+   逐行明细搭上统一错误信封（含 traceId）。**不要再在控制器里自拼 ProblemDetail**。
+3. 🔴 **Java 变异验证还原源码后必须 `touch`**：`shutil.move` 会连 mtime 一起还原，Maven 增量编译
+   便跳过重编，后续构建跑的仍是变异后的 class —— 表现为一条与改动毫无关系的红，极难排查。
 
 ### 🔴 Epic 3 已埋下、Epic 4/5 必须处理的两件事
 1. **订单状态机只开了「待支付 → 待发货/已取消」两条边**。Epic 4 加发货段、Epic 5 加退款段，**各加各的**。

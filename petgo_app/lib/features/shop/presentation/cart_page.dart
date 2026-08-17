@@ -353,8 +353,9 @@ class _CartPageState extends ConsumerState<CartPage> {
 
   void _checkout(AppLocalizations l10n) {
     Analytics.capture('toko_cart_checkout_tapped');
-    // 结算页属 Story 3.7。此处只提示，**不跳不存在的页面**（同 1.6 对购物车入口的处理）。
-    showAppToast(context, l10n.cartCheckoutComingSoon);
+    // Story 3.7 起接上真实结算页。🔴 只有有效行能结算 —— 失效行连按钮都到不了这里
+    //（`canCheckout` 看的是 `cart.lines`，不含 invalidLines）。
+    context.push('/shop/checkout');
   }
 
   String _errorText(AppLocalizations l10n, CartMutationError e) => switch (e) {
