@@ -61,5 +61,19 @@ public enum NotificationType {
     /** CSAT 满意度问卷 → 通知用户（Story 4.7，枚举先行占位，本 story 不发）。 */
     CSAT_SURVEY,
     /** 身份信息需修改 → 通知用户（Epic 9 身份核验，枚举先行占位，本 story 不发）。 */
-    IDENTITY_REQUIRE_MODIFY
+    IDENTITY_REQUIRE_MODIFY,
+
+    // ===== V1.4.0 精选自营电商（V116 追加共享 CHECK 值，依临时授权）=====
+    /**
+     * 电商订单已发货 → 深链直跳订单详情（Story 4.2，FR-38）。
+     * {@code targetRef} = 订单 {@code publicToken}（🔴 不可枚举，不用自增 id）。
+     * 🔒 文案<b>只提「订单已发货」</b>，不带商品名 / 收件人 / 地址 —— 推送会落在锁屏上。
+     */
+    SHOP_ORDER_SHIPPED,
+    /**
+     * 电商订单异常已处置 → 深链订单详情（Story 4.4，AB-11D / S-3）。
+     * 用于「整单取消并退款」「部分取消」「联系用户后继续」三种处置的告知与致歉。
+     * 🔒 文案含处置原因，<b>不含金额明细、不含收件信息</b> —— 金额在订单详情页看。
+     */
+    SHOP_ORDER_EXCEPTION
 }

@@ -138,6 +138,22 @@ public class ShopOrderLine {
         return returnPolicy;
     }
 
+    /**
+     * 标记本行已被取消/退回的数量（Story 4.4 部分取消；Epic 5 退货按同一列累计）。
+     *
+     * <p>🔴 <b>累加而非覆盖</b>：多次部分退货必须能叠加，覆盖会让第二次退货把第一次抹掉。
+     * 上限是下单数量（库级 CHECK 也守着这一条）。
+     */
+    public void addRefundedQty(int qty) {
+        if (qty <= 0) {
+            throw com.tailtopia.shared.error.AppException.validation("数量必须为正");
+        }
+        if (this.refundedQty + qty > this.qty) {
+            throw com.tailtopia.shared.error.AppException.conflict("退回数量超过下单数量");
+        }
+        this.refundedQty += qty;
+    }
+
     public int getRefundedQty() {
         return refundedQty;
     }

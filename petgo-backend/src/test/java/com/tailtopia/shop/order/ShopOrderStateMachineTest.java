@@ -115,15 +115,18 @@ class ShopOrderStateMachineTest {
     }
 
     @Test
-    @DisplayName("⚠️ Epic 4/5 的边在本 Epic 尚未开放（不提前实现未来 Epic 的迁移）")
+    @DisplayName("⚠️ Epic 5 的退款边尚未开放（不提前实现未来 Epic 的迁移）")
     void futureEpicEdgesNotYetOpen() {
         // 提前开边会造出没有任何代码能推进的悬空态
-        assertThat(ShopOrderStatus.PENDING_SHIPMENT.canTransitionTo(ShopOrderStatus.SHIPPED))
-                .as("发货属 Epic 4").isFalse();
-        assertThat(ShopOrderStatus.DELIVERED.canTransitionTo(ShopOrderStatus.COMPLETED))
-                .as("确认收货属 Epic 4").isFalse();
         assertThat(ShopOrderStatus.COMPLETED.canTransitionTo(ShopOrderStatus.REFUNDING))
                 .as("退款属 Epic 5").isFalse();
+        assertThat(ShopOrderStatus.DELIVERED.canTransitionTo(ShopOrderStatus.REFUNDING))
+                .as("退款属 Epic 5").isFalse();
+        assertThat(ShopOrderStatus.REFUNDING.canTransitionTo(ShopOrderStatus.REFUNDED))
+                .as("退款执行属 Epic 5").isFalse();
+        // Story 4.1 已开的边（在本类只做存在性对照，行为细节见 ShopOrderFulfillmentStateMachineTest）
+        assertThat(ShopOrderStatus.PENDING_SHIPMENT.canTransitionTo(ShopOrderStatus.SHIPPED))
+                .as("发货边由 Story 4.1 开放").isTrue();
     }
 
     // ---------- 🔒 PII 与金额 ----------

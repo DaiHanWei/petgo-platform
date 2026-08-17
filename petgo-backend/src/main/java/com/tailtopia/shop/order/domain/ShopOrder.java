@@ -100,6 +100,26 @@ public class ShopOrder {
     @Column(name = "payment_intent_token", length = 64)
     private String paymentIntentToken;
 
+    // ---------- 履约时刻（Story 4.1） ----------
+    @Column(name = "shipped_at")
+    private Instant shippedAt;
+    /**
+     * 🔴 <b>SPEC-5：「签收」= 订单进入 {@code DELIVERED} 的时刻。</b>
+     * Epic 5 的 7 日退货窗口以此起算，<b>自动确认收货不清空它</b> ——
+     * 该词在 PRD 里出现四次却既不在术语表也不是状态名，不定义则退货窗口在实现层没有起点。
+     */
+    @Column(name = "delivered_at")
+    private Instant deliveredAt;
+    @Column(name = "completed_at")
+    private Instant completedAt;
+    /** SPEC-2 三条出口的留痕：走的是哪一条。 */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "delivery_source", length = 24)
+    private DeliverySource deliverySource;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "completion_source", length = 24)
+    private CompletionSource completionSource;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
     @Column(name = "updated_at", nullable = false)
@@ -171,6 +191,103 @@ public class ShopOrder {
         }
         this.status = next;
         this.updatedAt = Instant.now();
+    }
+
+    // ---------- 履约段（Story 4.1） ----------
+
+    /**
+     * 自动确认收货的两段时长（S-1 已定 M = 7）。
+     *
+     * <p>标准快递 2–4 日 + 3 日冗余。最坏路径：D7 置 {@code DELIVERED} → D14 置 {@code COMPLETED}，
+     * 退货窗口 D7–D14。
+     */
+    public static final java.time.Duration AUTO_DELIVER_AFTER = java.time.Duration.ofDays(7);
+    public static final java.time.Duration AUTO_COMPLETE_AFTER = java.time.Duration.ofDays(7);
+    /** 🔴 Epic 5 退货窗口长度，自「签收」（进入 {@code DELIVERED}）起算。 */
+    public static final java.time.Duration RETURN_WINDOW = java.time.Duration.ofDays(7);
+
+    /** 首个包裹发出：订单转 {@code SHIPPED} 并记录发货时刻（M 日自动送达以此起算）。 */
+    public void markShipped(Instant at) {
+        if (status == ShopOrderStatus.SHIPPED) {
+            return;     // 一单多包：第二个包裹不再改写发货时刻
+        }
+        transitionTo(ShopOrderStatus.SHIPPED);
+        this.shippedAt = at;
+    }
+
+    /**
+     * 订单送达（SPEC-2 三条出口共用）。
+     *
+     * <p>🔴 <b>送达时刻只写一次</b>：{@code deliveredAt} 是退货窗口的锚点，被第二次标记推后
+     * 就等于凭空延长退货期。
+     */
+    public void markDelivered(Instant at, DeliverySource source) {
+        if (status == ShopOrderStatus.DELIVERED) {
+            return;
+        }
+        transitionTo(ShopOrderStatus.DELIVERED);
+        this.deliveredAt = at;
+        this.deliverySource = source;
+    }
+
+    /**
+     * 订单完成。
+     *
+     * <p>🔴 <b>自动确认后仍保留自签收起算 7 日的退货窗口</b>，两者不冲突 ——
+     * 「已完成」说的是履约结束，不是「不能再退」。把两件事绑在一起，用户就会因为系统替他
+     * 点了确认收货而失去退货权。
+     */
+    public void markCompleted(Instant at, CompletionSource source) {
+        if (status == ShopOrderStatus.COMPLETED) {
+            return;
+        }
+        transitionTo(ShopOrderStatus.COMPLETED);
+        this.completedAt = at;
+        this.completionSource = source;
+    }
+
+    /** 退货窗口截止（Epic 5 用）。未签收则无窗口。 */
+    public Instant returnWindowEndsAt() {
+        return deliveredAt == null ? null : deliveredAt.plus(RETURN_WINDOW);
+    }
+
+    /** 🔴 已完成的订单在窗口内依然可退（AC：自动确认与退货窗口并存）。 */
+    public boolean isWithinReturnWindow(Instant now) {
+        Instant end = returnWindowEndsAt();
+        return end != null && !now.isAfter(end);
+    }
+
+    /** 发货起已超 M 日仍无任何送达标记 → 该由 {@code @Scheduled} 兜底置送达。 */
+    public boolean isAutoDeliverDue(Instant now) {
+        return status == ShopOrderStatus.SHIPPED && shippedAt != null
+                && now.isAfter(shippedAt.plus(AUTO_DELIVER_AFTER));
+    }
+
+    /** 送达起已超 7 日用户仍未确认 → 自动完成（FR-102）。 */
+    public boolean isAutoCompleteDue(Instant now) {
+        return status == ShopOrderStatus.DELIVERED && deliveredAt != null
+                && now.isAfter(deliveredAt.plus(AUTO_COMPLETE_AFTER));
+    }
+
+    public Instant getShippedAt() {
+        return shippedAt;
+    }
+
+    /** 🔴 「签收」时刻（SPEC-5）。 */
+    public Instant getDeliveredAt() {
+        return deliveredAt;
+    }
+
+    public Instant getCompletedAt() {
+        return completedAt;
+    }
+
+    public DeliverySource getDeliverySource() {
+        return deliverySource;
+    }
+
+    public CompletionSource getCompletionSource() {
+        return completionSource;
     }
 
     /**
@@ -245,6 +362,24 @@ public class ShopOrder {
 
     public String getShipKecamatan() {
         return shipKecamatan;
+    }
+
+    /**
+     * 累计已退金额（Story 4.4 异常取消；Epic 5 的整数累计法沿用同两列，AD-2）。
+     *
+     * <p>🔴 <b>累加而非覆盖</b>：多次部分退款必须叠加 —— 覆盖会让「已退多少」在第二次退款后
+     * 变成只剩最后一次的数字，而全额退款是否精确归零正是靠这个累计值判定的。
+     */
+    public void recordRefund(long total, long coin) {
+        if (total < 0 || coin < 0) {
+            throw AppException.validation("退款金额不能为负");
+        }
+        if (this.refundedTotal + total > this.totalAmount) {
+            throw AppException.conflict("累计退款超过订单金额");
+        }
+        this.refundedTotal += total;
+        this.refundedCoin += coin;
+        this.updatedAt = Instant.now();
     }
 
     public long getRefundedTotal() {

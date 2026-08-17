@@ -36,10 +36,13 @@ public class MeCheckoutController {
 
     private final CheckoutService checkout;
     private final ShopOrderPaymentService payments;
+    private final com.tailtopia.shop.order.service.ShopOrderFulfillmentService fulfillment;
 
-    public MeCheckoutController(CheckoutService checkout, ShopOrderPaymentService payments) {
+    public MeCheckoutController(CheckoutService checkout, ShopOrderPaymentService payments,
+            com.tailtopia.shop.order.service.ShopOrderFulfillmentService fulfillment) {
         this.checkout = checkout;
         this.payments = payments;
+        this.fulfillment = fulfillment;
     }
 
     /**
@@ -82,7 +85,8 @@ public class MeCheckoutController {
     public ShopOrderDetailView detail(@AuthenticationPrincipal Jwt jwt,
             @PathVariable String token) {
         var order = payments.requireOwn(currentUserId(jwt), token);
-        return ShopOrderDetailView.of(order, payments.linesOf(order));
+        return ShopOrderDetailView.of(order, payments.linesOf(order),
+                fulfillment.shipmentsOf(order.getId()));
     }
 
     /**
@@ -105,7 +109,28 @@ public class MeCheckoutController {
         long userId = currentUserId(jwt);
         payments.cancel(userId, token);
         var order = payments.requireOwn(userId, token);
-        return ShopOrderDetailView.of(order, payments.linesOf(order));
+        return ShopOrderDetailView.of(order, payments.linesOf(order),
+                fulfillment.shipmentsOf(order.getId()));
+    }
+
+    // ===== Story 4.1：履约段（SPEC-2 出口②） =====
+
+    /**
+     * 用户确认收货。
+     *
+     * <p>🔴 <b>{@code SHIPPED} 态即可确认，不必等系统标记送达</b>（SPEC-2 出口②）——
+     * 用户比谁都先知道货到没到。只留「已送达后才能确认」这一条路，等于把订单能否脱离
+     * {@code SHIPPED} 完全押在运营记不记得点那个按钮上。
+     *
+     * <p>幂等：重复点击返回同一个已完成订单，不报错。
+     */
+    @PostMapping("/shop-orders/{token}/confirm-receipt")
+    public ShopOrderDetailView confirmReceipt(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable String token) {
+        long userId = currentUserId(jwt);
+        var order = fulfillment.confirmReceipt(userId, token);
+        return ShopOrderDetailView.of(order, payments.linesOf(order),
+                fulfillment.shipmentsOf(order.getId()));
     }
 
     /**
