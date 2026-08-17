@@ -15,6 +15,7 @@ import '../../features/auth/presentation/login_page.dart';
 import '../../features/shop/address/presentation/address_book_page.dart';
 import '../../features/shop/address/presentation/address_form_page.dart';
 import '../../features/shop/presentation/cart_page.dart';
+import '../../features/shop/presentation/checkout_page.dart';
 import '../../features/shop/presentation/product_detail_page.dart';
 import '../../features/shop/presentation/toko_page.dart';
 import '../../features/auth/presentation/nickname_page.dart';
@@ -505,6 +506,9 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       //    而真相是「登录后就有」，这一句差别就是 FR-0B 软性引导存在的理由。
       //    页面本身不发任何 /me 请求，游客态零数据暴露。
       GoRoute(path: '/shop/cart', builder: (c, s) => const CartPage()),
+      // 结算页（Story 3.7）。🔒 与购物车同理：门控在页内（本页只在已登录态可达 ——
+      //    入口是购物车页的 Checkout 按钮，而游客的购物车页根本不渲染那个按钮）。
+      GoRoute(path: '/shop/checkout', builder: (c, s) => const CheckoutPage()),
       // 地址簿（Story 2.4）。🔒 挂在 /me 前缀下 —— 它已在 _controlledLocations 里，
       // 游客访问自动重定向。地址是 PII，与 Toko 的游客开放策略正好相反。
       GoRoute(path: '/me/addresses', builder: (c, s) => const AddressBookPage()),

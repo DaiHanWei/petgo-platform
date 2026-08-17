@@ -85,14 +85,66 @@ public class CheckoutService {
      *
      * <p>与 {@link #placeOrder} 走<b>同一套</b>运费与拆分计算 ——
      * 两处各算一遍必然漂移，表现为「结算页显示要付 285.000，提交后变成 305.000」。
+     *
+     * <p>🔴 <b>超服务范围时不抛异常，而是回一个 {@code serviceable=false} 的试算</b>（Story 3.7）：
+     * 结算页此时仍要渲染地址、商品清单与「暂不配送至该区域」的警示并禁用提交（FR-99）。
+     * 抛异常会让整页变成错误态 —— 用户看不到自己选的地址是哪一个，也就不知道该改哪里。
+     * <b>下单路径 {@link #placeOrder} 仍然照抛不误</b>，阻断能力一点没少。
      */
     @Transactional(readOnly = true)
     public CheckoutPreview preview(long userId, String addressToken) {
         CartView cart = carts.view(userId);
         ShippingAddress addr = addresses.require(userId, addressToken);
+        if (!quotes.isServiceable(addr.getKecamatan())) {
+            return new CheckoutPreview(cart, addr, null, null, wallet.balanceOf(userId),
+                    maxCoinPerOrder(), false, false, policiesOf(cart));
+        }
         ShippingQuote quote = quotes.quote(addr.getKecamatan(), cart.subtotal());
         PaymentSplit split = splitFor(userId, cart.subtotal(), quote);
-        return new CheckoutPreview(cart, quote, split);
+        return new CheckoutPreview(cart, addr, quote, split, wallet.balanceOf(userId),
+                maxCoinPerOrder(), coinCapped(userId, cart.subtotal(), quote, split), true,
+                policiesOf(cart));
+    }
+
+    /**
+     * 每个有效行的<b>生效</b>退货规则（FR-104 第 2 处明示 / S-6）。
+     *
+     * <p>🔴 与 {@link #placeOrder} 落库用的是<b>同一个</b> {@link #effectiveReturnPolicy} ——
+     * 结算页承诺的与订单行记下的必须是同一件事，否则退货时对不上账（而这正是 FR-104 存在的理由）。
+     */
+    private Map<String, ReturnPolicy> policiesOf(CartView cart) {
+        Map<String, ShopSku> skuByToken = skusOf(cart);
+        Map<String, ReturnPolicy> out = new java.util.LinkedHashMap<>();
+        for (CartView.CartLine l : cart.lines()) {
+            ShopSku sku = skuByToken.get(l.skuToken());
+            if (sku != null) {
+                out.put(l.skuToken(), effectiveReturnPolicy(sku));
+            }
+        }
+        return out;
+    }
+
+    /**
+     * PawCoin 段是否<b>被单笔上限截断</b>（C-16 / UX-DR14）。
+     *
+     * <p>🔴 判定是「若没有上限，本可以抵扣得更多」，<b>不是「coinAmount == 上限」</b>：
+     * 余额恰好等于上限时也会相等，但那不是被截断，多出一行「本单最多可用 …」只会让用户困惑。
+     * 不明示真被截断的情况同样有害 —— 用户会以为系统算错了。
+     */
+    private boolean coinCapped(long userId, long goodsSubtotal, ShippingQuote quote,
+            PaymentSplit split) {
+        ShopPawcoinRules r = requireRules();
+        if (!r.isEnabled()) {
+            return false;
+        }
+        long total = goodsSubtotal + quote.total();
+        long deductible = r.isAllowShippingDeduction() ? total : Math.max(total - quote.total(), 0);
+        long wouldUse = Math.min(deductible, wallet.balanceOf(userId));
+        return wouldUse > r.getMaxCoinPerOrder() && split.coinAmount() == r.getMaxCoinPerOrder();
+    }
+
+    private long maxCoinPerOrder() {
+        return requireRules().getMaxCoinPerOrder();
     }
 
     /**
@@ -226,9 +278,13 @@ public class CheckoutService {
                 .collect(Collectors.toMap(ShopSku::getPublicToken, s -> s, (a, b) -> a));
     }
 
-    private PaymentSplit splitFor(long userId, long goodsSubtotal, ShippingQuote quote) {
-        ShopPawcoinRules r = rules.findById(ShopPawcoinRules.SINGLETON_ID)
+    private ShopPawcoinRules requireRules() {
+        return rules.findById(ShopPawcoinRules.SINGLETON_ID)
                 .orElseThrow(() -> AppException.serviceUnavailable("PawCoin 规则未初始化"));
+    }
+
+    private PaymentSplit splitFor(long userId, long goodsSubtotal, ShippingQuote quote) {
+        ShopPawcoinRules r = requireRules();
         long total = goodsSubtotal + quote.total();
         return PaymentSplit.compute(total, quote.total(), wallet.balanceOf(userId),
                 r.getMaxCoinPerOrder(), r.isEnabled(), r.isAllowShippingDeduction());
@@ -247,7 +303,15 @@ public class CheckoutService {
                 a.getKotaKabupaten(), a.getKecamatan(), a.getAddressLine(), a.getKodePos());
     }
 
-    /** 结算页试算结果。 */
-    public record CheckoutPreview(CartView cart, ShippingQuote shipping, PaymentSplit split) {
+    /**
+     * 结算页试算结果。
+     *
+     * @param shipping 超服务范围时为 {@code null}（此时 {@code serviceable=false}）
+     * @param split    同上
+     * @param coinCapped PawCoin 段被单笔上限截断（UX-DR14 要求多出一行提示）
+     */
+    public record CheckoutPreview(CartView cart, ShippingAddress address, ShippingQuote shipping,
+            PaymentSplit split, long coinBalance, long maxCoinPerOrder, boolean coinCapped,
+            boolean serviceable, Map<String, ReturnPolicy> returnPolicies) {
     }
 }

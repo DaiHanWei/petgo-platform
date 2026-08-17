@@ -1,5 +1,5 @@
 # generated: 2026-08-17
-# last_updated: 2026-08-17  (Story 3.6 → review；后端 1760 / 前端 823 全绿)
+# last_updated: 2026-08-18  (Story 3.7 → review；后端 1776 / 前端 842 全绿)
 #
 # ===== ✅ L1 阻塞已解除（2026-08-17）=====
 # 本机 Docker Desktop 一直装着（4.69），只是不自启 —— 前次「本机无 Docker」是误判。
@@ -138,7 +138,7 @@ development_status:
   3-4-结算与下单: review
   3-5-PawCoin-电商消费规则配置: review
   3-6-购物车页: review
-  3-7-结算页与两段金额: backlog
+  3-7-结算页与两段金额: review
   3-8-支付与待支付订单详情: backlog
   3-9-订单列表电商卡片: backlog
   3-10-Epic-3-联调与埋点: backlog
