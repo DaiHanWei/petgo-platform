@@ -139,4 +139,76 @@ class CardGonePageIntegrationTest extends ApiIntegrationTest {
                 .as("两种情况的页面内容必须一致")
                 .isEqualTo(unknown.getContentAsString());
     }
+
+    // ===== 封号（停用）账号的分享页同样不可见（2026-08-17 产品拍板） =====
+
+    /**
+     * 🛡 <b>被运营封号（停用）的用户，其宠物分享页必须不可见。</b>
+     *
+     * <p>此前只有<b>注销</b>（{@code deletedAt}）会让分享页失效，<b>停用</b>
+     * （{@code status=DEACTIVATED}，即 V1.1.4 Story 3.2 的封号）不会 ——
+     * 也就是说被封号的人，他的宠物头像、名字、照片、里程碑照样对全网可见。
+     * 2026-08-17 产品拍板：<b>封号与注销的 H5 都不可见</b>。
+     */
+    @Test
+    void suspendedAccountAlsoHidesTheSharePage() throws Exception {
+        User owner = newUser();
+        String token = createProfileAndGetToken(owner);
+        // 先确认正常可见
+        mvc.perform(get("/p/" + token)).andExpect(status().isOk());
+
+        // 运营封号（只改 status，不碰 deletedAt）
+        User u = users.findById(owner.getId()).orElseThrow();
+        u.deactivate();
+        users.save(u);
+
+        mvc.perform(get("/p/" + token))
+                .andExpect(status().isNotFound());
+    }
+
+    /** 🛡 封号与「token 不存在」同样不可区分（防枚举口径对封号也成立）。 */
+    @Test
+    void suspendedAccountIsIndistinguishableFromUnknownToken() throws Exception {
+        User owner = newUser();
+        String token = createProfileAndGetToken(owner);
+        User u = users.findById(owner.getId()).orElseThrow();
+        u.deactivate();
+        users.save(u);
+
+        var suspended = mvc.perform(get("/p/" + token)).andReturn().getResponse();
+        var unknown = mvc.perform(get("/p/no-such-token-at-all")).andReturn().getResponse();
+
+        assertThat(suspended.getStatus()).isEqualTo(unknown.getStatus());
+        assertThat(suspended.getContentAsString()).isEqualTo(unknown.getContentAsString());
+    }
+
+    /** 🛡 里程碑分享那条链路同样适用。 */
+    @Test
+    void suspendedAccountAlsoHidesMilestoneShare() throws Exception {
+        User owner = newUser();
+        createProfileAndGetToken(owner);
+        User u = users.findById(owner.getId()).orElseThrow();
+        u.deactivate();
+        users.save(u);
+
+        // 里程碑分享 token 不存在时本就 404；这里验的是「封号后也不会因为账号有效而放行」
+        mvc.perform(get("/m/no-such-token-at-all")).andExpect(status().isNotFound());
+    }
+
+    /** ⚠️ 重新激活后应恢复可见（停用是可逆的，不能变成单向门）。 */
+    @Test
+    void reactivatedAccountBecomesVisibleAgain() throws Exception {
+        User owner = newUser();
+        String token = createProfileAndGetToken(owner);
+
+        User u = users.findById(owner.getId()).orElseThrow();
+        u.deactivate();
+        users.save(u);
+        mvc.perform(get("/p/" + token)).andExpect(status().isNotFound());
+
+        u = users.findById(owner.getId()).orElseThrow();
+        u.reactivate();
+        users.save(u);
+        mvc.perform(get("/p/" + token)).andExpect(status().isOk());
+    }
 }
