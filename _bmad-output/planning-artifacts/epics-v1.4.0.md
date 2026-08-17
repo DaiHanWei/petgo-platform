@@ -237,7 +237,7 @@ inputDocuments:
 
 **FRs covered:** FR-96 · FR-97 · FR-100 · FR-100A（七条规则）· FR-101 · FR-102（建模 + 待支付/待发货段）
 **ABs covered:** AB-6D · AB-6A(扩展·配置项) · AB-6C
-**Flyway:** V104–V106 段内
+**Flyway:** V104→V105→V106 段内（**号序须与 story 序一致**）
 **依赖:** Epic 1（要有商品）+ Epic 2（要有地址）
 **🔴 安全攸关:** FR-100A 规则 1 防套现（PawCoin 段只退 PawCoin，**服务层无对应方法而非有方法加权限判断**）· FR-102 订单号不可枚举 token
 **🔴 前置阻塞:** 本 Epic 第一条后端 story 是 AD-1 的 `PaymentIntent` 扩展，**触碰三人共享表**，须先完成 `PARALLEL-DEV-CONTRACT.md` 签字并认领 `ck_payment_intents_channel`
@@ -281,7 +281,7 @@ inputDocuments:
 
 **FRs covered:** FR-106
 **ABs covered:** —（审核复用既有 AB-3C 机制，不新建）
-**Flyway:** V109 段内
+**Flyway:** V112 段内
 **依赖:** Epic 4（要有已完成订单）
 **🎨 视觉待补:** UX-DR4 评价页无视觉稿，**实现前不得自行发挥**
 
@@ -691,7 +691,8 @@ So that Epic 3 的结算页可以直接取用。
 
 用户能加购、在结算页看到两段金额（PawCoin 抵扣多少 + QRIS 补多少）、用 PawCoin / QRIS / 混合方式付款、拿到订单并在既有订单页看到它。**做完这个 Epic，平台第一次真正卖出了实物商品。**
 
-> **Flyway：** V104–V106 · **依赖：** Epic 1（要有商品）+ Epic 2（要有地址）
+> **Flyway：** V104（购物车）→ **V105**（订单）→ **V106**（`PaymentIntent` 扩展）· **依赖：** Epic 1（要有商品）+ Epic 2（要有地址）
+> 🔴 **号必须与 story 实现顺序一致** —— Flyway 默认 `outOfOrder=false`，先跑了 V106 再出现 V105 会**直接拒绝启动**
 > **🔴 安全攸关：** FR-100A 规则 1 防套现 · FR-102 订单号不可枚举 token
 > **🔴 Story 3.3 触碰三人共享表**，须先完成 `PARALLEL-DEV-CONTRACT.md` 签字并认领 `ck_payment_intents_channel`。**3.1 / 3.2 不受阻塞，可先行开工**
 
@@ -732,12 +733,12 @@ So that 下单、履约、退款三段都有唯一权威的状态来源。
 
 **Acceptance Criteria:**
 
-**Given** 迁移 `V106__init_shop_orders.sql` 已应用
+**Given** 迁移 `V105__init_shop_orders.sql` 已应用
 **When** 检视 `shop_orders` 与 `shop_order_lines`
 **Then** 订单含 8 态状态列 + CHECK：`PENDING_PAYMENT / PENDING_SHIPMENT / SHIPPED / DELIVERED / COMPLETED / CANCELLED / REFUNDING / REFUNDED`
 **And** 🔴 **订单上存收货地址快照（冗余列或 JSONB），不存地址簿外键**（AD-13 —— 用户改地址簿不得改写历史订单的履约地址）
-**And** 含 `refunded_total` 与 `refunded_coin` 两个**累计列**（AD-2 整数累计法的持久化依据，Epic 5 使用）
-**And** 含 `is_full_return` 判定所需字段（FR-104A 去程运费，Epic 5 使用）
+**And** 含 `refunded_total` 与 `refunded_coin` 两个**累计列**（AD-2 整数累计法的持久化依据）与 `is_full_return` 判定所需字段（FR-104A 去程运费）
+> ⚠️ **有意识的偏离（IR 检查登记）：** 这三个字段由 **Epic 5** 使用，却在 Epic 3 建表时一并创建，**违反「表/列只在首次需要时创建」的一般原则**。选择保留的理由：它们在**同一张 `shop_orders` 表**上，随建表一次写完的成本远低于 Epic 5 再起一个 `ALTER`；且三者均为 `DEFAULT 0` / 可空，Epic 3 期间恒为初值、**不影响任何行为**。**若 Epic 5 被推迟或取消，这三列为无害死字段。**
 `[L0]` `mvn -B package` 通过
 
 **Given** 订单号会展示给用户
@@ -768,7 +769,7 @@ So that 混合支付可以下单，且退款能按固定比例原子拆分。
 
 **Acceptance Criteria:**
 
-**Given** 迁移 `V105__extend_payment_intents_mixed.sql` 已应用
+**Given** 迁移 `V106__extend_payment_intents_mixed.sql` 已应用
 **When** 检视 `payment_intents`
 **Then** 新增三列 `coin_amount BIGINT` · `cash_amount BIGINT` · `coin_ratio NUMERIC(9,6)`，**均可空**
 **And** `ck_payment_intents_channel` 放宽为 `IN ('QRIS','PAWCOIN','MIXED')`
@@ -825,6 +826,13 @@ So that 我选好的商品不会在我付款前被别人买走。
 **When** 执行扣减
 **Then** 🔴 **走 `PawCoinWalletService.debit(..., PawCoinTxnType.SPEND, ...)`，复用既有幂等键机制**（AD-9 / NFR-10 —— Redis 前置 + 跨 TTL 的 DB 兜底），**不另造幂等机制**
 **And** 幂等键格式 `shop-order:{orderToken}`（照既有 `id-hd:{petProfileId}` 范式）
+
+**Given** 归因来源必须在下单时就落到订单行上（🔴 **IR 检查前移：原在 Story 9.2，会造成 Epic 6 依赖 Epic 9**）
+**When** 创建订单行
+**Then** 🔴 **每条 `shop_order_lines` 持久化 `entry_source`（来源页/区域）与 `trigger_type`（若来自复购触发卡）**
+**And** 这是 AB-13B 计算「触发卡转化率 vs 普通商品曝光转化率」的**服务端权威依据** —— 不受客户端事件丢失与广告拦截影响
+**And** 🔴 **该字段必须在 Epic 3 落地**，否则 Epic 6 的 AB-13B（Story 6.6）算不出转化率却要等 Epic 9，**构成 Epic N 依赖 Epic N+3 的结构性倒置**
+`[L0]` 单测：从触发卡下单的订单行带 `trigger_type=FOOD_LOW`；直接浏览下单的带 `entry_source` 且 `trigger_type` 为 null
 **And** 余额不足时整个事务回滚，**不建订单不锁库存**
 `[L0]` 单测幂等重放 · `[L1]` 集成：重复提交同一订单不重复扣费
 
@@ -989,7 +997,7 @@ So that 我不会因为超时而莫名其妙丢单。
 
 ---
 
-### Story 3.9: 订单列表电商卡片（App，FR-54 第 5 类）
+### Story 3.9: 订单列表电商卡片（App · **FR-101**，即 FR-54 第 5 类）
 
 As a 用户,
 I want 在既有订单页看到我的电商订单,
@@ -999,7 +1007,7 @@ So that 我不需要去另一个入口找它。
 
 **Given** 用户打开订单页
 **When** 列表渲染
-**Then** 🔴 **复用既有 FR-54 订单页主体结构，不新建订单入口**
+**Then** 🔴 **复用既有 FR-54 订单页主体结构，不新建订单入口**（**FR-101**：电商为 FR-54 的第 5 类卡片，前 4 类为兽医咨询 / PawCoin 充值 / AI 问诊解锁 / 高清图购买）
 **And** 电商订单与既有四类虚拟商品订单**同列表按时间倒序混排，不分栏**
 **And** 筛选 chips 新增「Belanja」，与既有类型并列
 **And** 电商卡片展示：状态标签 · 商品主图（多商品时首图 + 「等 N 件」）· 商品名与规格 · 数量 · 实付金额 · 随状态变化的主操作按钮
@@ -1097,6 +1105,13 @@ So that 用户能查到货到哪了。
 
 **Acceptance Criteria:**
 
+**Given** 迁移 `V107__init_shipments.sql` 已应用（🔴 **IR 检查补入：原 Epic 4 头部声明了 V107 但无任何 story 创建该表**）
+**When** 检视 `shipments` 表
+**Then** 订单一对多：`shop_order_id` · `carrier` · `tracking_no` · `carrier_cost`（S-11 承运成本）· `status` · `delivered_at` + 时间戳
+**And** ✅ **S-2 一单多包的持久化依据** —— 一个订单可有 1..N 行；订单转 `DELIVERED` 需全部行 `delivered`
+**And** 🔴 `tracking_no` **非 PII 可记日志**；同上下文的收件人姓名/电话/地址**严禁记录**（NFR-5）
+`[L0]` `mvn -B package` + `ddl-auto=validate` 通过
+
 **Given** 订单状态为 `PENDING_SHIPMENT`
 **When** 运营执行发货
 **Then** 录入**承运商**（JNE / SiCepat / Anteraja 三选一）· **物流单号** · 🔴 **承运成本**（运单实际金额，**S-11 新增** —— 不录则 AB-13A 缺行、假设 A-19 不可验证），订单转 `SHIPPED`
@@ -1183,6 +1198,7 @@ So that 我心里有数。
 **When** 用户查看订单详情
 **Then** 展示**承运商名 · 物流单号 · 复制按钮 · 跳转承运商官网的链接**
 **And** ✅ **S-2**：一单多包时**逐条列出每个包裹**的承运商与单号，并标明各自送达状态
+**And** 🔴 **UX-DR13（IR 扩大范围）：原型 `07-订单详情-*.html` 含当日达残留需先改** —— `Metode: Sameday (GoSend)` 应为 `Reguler`；`Diperkirakan tiba hari ini`（预计今天送达）应改为标准快递 2–4 日时效文案；承运商由五家收为**三家 JNE/SiCepat/Anteraja**
 **And** 🔴 **不接承运商 API、不在 App 内渲染物流轨迹**（FR-103）
 **And** 🔴 **`已发货` 态即提供「确认收货」入口**（SPEC-2 出口②，不必等系统标记送达）
 `[L0]` widget 测试 · `[L2]` 视觉比对 `页面/pages/07-订单详情-已发货.html`
@@ -1229,7 +1245,7 @@ So that 部分退货可表达，且不会有两张申请同时改同一笔订单
 
 **Given** 迁移 `V108__init_return_requests.sql` 已应用
 **When** 检视 `return_requests` 与 `return_lines`
-**Then** 一张 `return_requests` **承载 1..N 条 `return_lines`**（对应 `shop_order_lines`），🔴 **不是「一单一行」**（C-12 / AD-5）
+**Then** 一张 `return_requests` **承载 1..N 条 `return_lines`**（对应 `shop_order_lines`），🔴 **不是「一单一行」**（**FR-104A** / C-12 / AD-5）
 **And** 含 `is_full_return` 布尔（决定去程运费，由勾选范围自动得出）
 **And** 退款状态列 6 态 + CHECK：`PENDING_REVIEW / REJECTED / AWAIT_SHIPBACK / INSPECTING / REFUNDING / REFUNDED`（另含 `CLOSED` 超时未寄回）
 **And** 对外标识为不可枚举 token（NFR-3）
@@ -1314,7 +1330,7 @@ So that 该退的退、该拒的拒，且钱算得清。
 
 **Given** 客服打开审核队列
 **When** 列表渲染
-**Then** 字段含：申请编号 · 订单号 · 用户 · **退货行（SKU + 数量，可多行）** · 退货类型（质量问题/非质量问题/拒收/发货前取消）· **是否整单退** · 凭证图 · 申请时间 · 状态
+**Then** 字段含：申请编号 · 订单号 · 用户 · **退货行（SKU + 数量，可多行）** · 退货类型（质量问题/非质量问题/拒收/发货前取消）· **是否整单退** · 凭证图 · 申请时间 · 状态（**FR-104A**）
 **And** 🔴 **不新建审核通道，复用 AB-5E 退款申请流程与 AB-5B 工单详情处理**
 
 **Given** 审核需判定两件事
@@ -1435,7 +1451,7 @@ So that 我能把买错或有问题的商品退掉。
 
 **Given** 订单在可退窗口内
 **When** 用户进入退货申请页
-**Then** 展示**订单行的勾选列表**（行级部分退货，C-12）
+**Then** 展示**订单行的勾选列表**（行级部分退货，**FR-104A** / C-12）
 **And** 🔴 **「开封不退」的行保留可见但置灰不可勾选**，并直接标注原因 —— 比提交后再驳回体验好得多
 **And** 🔴 **此处为「开封不退」三处明示的第 3 处**（第 1 处商品详情页 Story 1.7，第 2 处结算页 Story 3.7）
 `[L0]` widget 测试 · `[L2]` 视觉比对 `页面/pages/08-退货申请.html`
@@ -1474,7 +1490,8 @@ So that 我不会误以为整笔都能退成真钱。
 **When** 用户进入退款方式页
 **Then** 🔴 **两段分列 + 比例条**，展示 `Dibayar dengan PawCoin Rp 60.000 · 20%` 与 `Dibayar dengan QRIS Rp 240.000 · 80%`
 **And** ① **PawCoin 段**标 `Otomatis` / `tidak ada pilihan lain`，🔴 **不展示「退回真钱」入口**（不是展示后再拒绝——不给用户产生预期再打破）
-**And** 质量问题时附**平台责任补偿溢价**行（`Bonus kompensasi +Rp 1.500` / `+5%`）与说明「PawCoin 不能提现，包括通过退货；因为这是我们的失误，额外补偿余额」
+**And** 质量问题时附**平台责任补偿溢价**行与说明「PawCoin 不能提现，包括通过退货；因为这是我们的失误，额外补偿余额」
+**And** 🔴 **溢价比例与金额一律取自 AB-6A 的「平台责任补偿溢价」配置项，前端不得硬编码** —— 原型里的 `+5%` / `Rp 1.500` **是示例值不是规格**（D-8 的比例与上限仍待财务定）
 **And** ② **QRIS 段**给用户二选一：退回银行账户（`BCA gratis, OVO/GoPay biaya Rp 2.500`）/ 转 PawCoin（即时到账 + 激励溢价）
 **And** 底栏展示「总退回（含补偿）」
 `[L0]` widget 测试 · `[L2]` 视觉比对 `页面/pages/08-退款方式-混合支付拆分.html`（**此屏原型已完整，可直接实现**）
@@ -1742,7 +1759,8 @@ So that A-16 能被裁决而不是靠感觉。
 
 **Given** 指标来自两套数据源（✅ **S-13 已定**）
 **When** 确定看板口径
-**Then** 🔴 **以服务端业务库为主口径**（Story 9.2 的服务端归因持久化），**PostHog 仅作辅助交叉验证**
+**Then** 🔴 **以服务端业务库为主口径** —— 直接读 **Story 3.4 已在 `shop_order_lines` 上持久化的 `entry_source` / `trigger_type`**，**PostHog 仅作辅助交叉验证**
+**And** ✅ **本 story 不依赖 Epic 9**（归因字段在 Epic 3 就已落地）；Story 9.2 只做**全链路闭环核对**，不是本 story 的前置
 **And** 理由：AB-13B 是裁决 A-16 的唯一依据，🔴 **不能建立在带丢失率与广告拦截偏差的三方 SaaS 上**（L-6 同类教训）
 **And** 🔴 **后台不反拉 PostHog API**（会引入外部依赖，违 NFR-1）
 > ⚠️ **OQ-42 仍未拍板**：kill criteria 的目标值与观察窗口。当前 A-16 的判据「显著」无数值、无窗口、无处置 —— **上线后没有任何一句话能裁决复购引擎是否成立**。
@@ -1775,7 +1793,7 @@ So that 版本核心论证站得住。
 
 用户能对已完成订单的每个 SKU 评价一次，评价经既有三方审核后展示在商品详情页。
 
-> **Flyway：** V109 · **依赖：** Epic 4（要有已完成订单）
+> **Flyway：** **V112** · **依赖：** Epic 4（要有已完成订单）
 > **🎨 视觉待补：** UX-DR4 评价页无稿，**实现前不得自行发挥**
 
 ### Story 7.1: 评价建模与提交接口
@@ -1786,7 +1804,7 @@ So that 评价能被安全地发布。
 
 **Acceptance Criteria:**
 
-**Given** 迁移 `V109__init_shop_reviews.sql` 已应用
+**Given** 迁移 `V112__init_shop_reviews.sql` 已应用
 **When** 检视 `shop_reviews`
 **Then** 含 `shop_order_line_id` · `sku_id` · `user_id` · `rating`(1–5) · `content`(≤500) · 图片 objectKey 数组(≤6) · 审核状态 · 时间戳
 **And** 🔴 **唯一约束保证「每个订单每个 SKU 各评一次」**
@@ -1980,9 +1998,16 @@ So that 问诊不会被用户感知为销售前端，护城河不失效。
 **And** 🔴 **兽医无法选择具体 SKU**，无任何界面入口
 `[L0]` widget 测试 + 单测
 
+**Given** FR-100A **规则 6** 与 FR-110 同为约束性条款，验收同为「能力缺席」（**S-15**，IR 检查补入）
+**When** 审查 PawCoin 相关代码
+**Then** 🔴 **服务层不存在「余额转让给其他用户」的接口或方法** —— `PawCoinWalletService` 的 `credit`/`debit` 均以单一 `userId` 为作用域，**不存在跨用户转移的可达路径**
+**And** 🔴 **不存在任何平台外部结算出口** —— 包含 PPN 等税费（S-15 已修正原措辞：原文「PPN **之外的**任何外部结算」字面把 PPN 排除在禁止之外，等于允许用无现金垫底的赠币缴税）
+**And** 这两条与规则 1（防套现）共同构成 PawCoin 封闭币的三条闭环特征，🔴 **是 DEP-7 合规确认的前提**（不可提现 / 不可转让 / 仅限平台自营商品）
+`[L0]` 静态扫描 + 单测：无跨用户余额转移路径、无外部结算出口
+
 **Given** 上线后转化压力会持续存在
 **When** 建立长期看守
-**Then** 🔴 **上述三条检查入 CI**，任何 PR 引入违反即失败
+**Then** 🔴 **上述检查（FR-110 三条 + 规则 6 两条）全部入 CI**，任何 PR 引入违反即失败
 **And** 埋点 `triage_to_category_jump`（含 `record_type`）用于监控**边界侵蚀**（问诊→商品跳转占比）
 `[L0]` CI 配置
 
@@ -2001,8 +2026,9 @@ So that AB-13B 的转化率算得出来且不受客户端丢失影响。
 **Given** AB-13B 用「触发卡转化率 vs 普通商品曝光转化率」判定 A-16
 **When** 检视归因链
 **Then** 🔴 **原清单只到 `add_to_cart` 为止 —— 能算点击率，算不出转化率**
-**And** 二选一但**必须有一个**：① 客户端补齐 `order_submitted` 的 `items[]{sku_id, qty, entry_source, trigger_type}` 行级归因 + `payment_succeeded` 的 `attribution_source`；② 🔴 **服务端在订单行上持久化加购来源**（更可靠 —— 不受客户端事件丢失与广告拦截影响）
-**And** 推荐取 ②，或两者并行互为校验
+**And** ✅ **服务端侧已由 Story 3.4 落地**（`shop_order_lines` 持久化 `entry_source` / `trigger_type`）—— 🔴 **本 story 不再负责实现，只负责闭环核对**
+**And** 本 story 补齐**客户端侧**：`order_submitted` 的 `items[]{sku_id, qty, entry_source, trigger_type}` 行级归因 + `payment_succeeded` 的 `attribution_source`，**与服务端数据互为校验**
+**And** 🔴 **核对两套数据的偏差率**，偏差过大即说明客户端埋点有丢失，以服务端为准
 `[L1]` 集成：一笔从触发卡进入的订单，其来源在服务端可追溯
 
 > **L-6 前车之鉴：** V1.1.2 因埋点与改版同版本发布，三项核心指标不可得、「唯一裁决指标」失效。**同类错误不可重演。**
