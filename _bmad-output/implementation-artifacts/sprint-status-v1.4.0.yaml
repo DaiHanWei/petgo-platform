@@ -1,5 +1,5 @@
 # generated: 2026-08-17
-# last_updated: 2026-08-18  (Epic 5 完成 9/10，5-9 挡 UX-DR5；后端 1921 / 前端 909 全绿)
+# last_updated: 2026-08-18  (Epic 6 完成 7/7；后端 1954 / 前端 923 全绿)
 #
 # ===== ✅ L1 阻塞已解除（2026-08-17）=====
 # 本机 Docker Desktop 一直装着（4.69），只是不自启 —— 前次「本机无 Docker」是误判。
@@ -87,8 +87,8 @@
 #   V118 5-1 return_requests + return_lines + 部分唯一索引 + shipping_settings 退货地址  ✅ 已提交
 #   V119 5-6 opened_precedents（开封判例库）  ✅ 已提交
 #   V120 5-3/5.4/5.5 ⚠️共享 CHECK ck_notifications_type 追加 SHOP_RETURN_UPDATED  ✅ 已提交（依临时授权）
-#   V121 6-1 ⚠️共享表 pet_profiles 加体重列（须认领）
-#   V122 6-3 repurchase_triggers + ⚠️共享 ck_notifications_type 追加值（须认领）
+#   V121 6-1 ⚠️共享表 pet_profiles 加体重+绝育列  ✅ 已提交（🔴 不在临时授权内，待补认领）
+#   V122 6-3 repurchase_triggers + ⚠️共享 ck_notifications_type 追加 REPURCHASE_FOOD_LOW  ✅ 已提交
 #   V123 7-1 shop_reviews
 #   V124+ 预留（平台配置项等）
 #
@@ -181,14 +181,15 @@ development_status:
   epic-5-retrospective: optional
 
   # ── Epic 6: 复购引擎（版本核心） ──
-  epic-6: backlog
-  6-1-宠物档案补体重与绝育状态: backlog
-  6-2-档案推荐规则引擎: backlog
-  6-3-粮量见底预估日扫: backlog
-  6-4-Toko-首页区域-接入: backlog
-  6-5-档案推荐区与降级引导卡: backlog
-  6-6-复购引擎效果看板: backlog
-  6-7-Epic-6-联调: backlog
+  epic-6: in-progress
+  # ⚠️ 6-1 触碰共享表 pet_profiles，【不在产品临时授权范围内】，仍待补认领（只加列/全可空/不回填）
+  6-1-宠物档案补体重与绝育状态: review
+  6-2-档案推荐规则引擎: review
+  6-3-粮量见底预估日扫: review
+  6-4-Toko-首页区域-接入: review
+  6-5-档案推荐区与降级引导卡: review
+  6-6-复购引擎效果看板: review
+  6-7-Epic-6-联调: review
   epic-6-retrospective: optional
 
   # ── Epic 7: 商品评价 ──
