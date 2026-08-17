@@ -21,6 +21,10 @@ import com.tailtopia.pay.service.PawCoinWalletService;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shop.order.domain.ShopOrder;
+import com.tailtopia.shop.order.domain.ShopOrderStatus;
+import com.tailtopia.shop.order.repository.ShopOrderRepository;
+import com.tailtopia.shop.order.service.ShopOrderCardService;
 import com.tailtopia.triage.domain.AiConsultOrder;
 import com.tailtopia.triage.domain.AiConsultOrderStatus;
 import com.tailtopia.triage.repository.AiConsultOrderRepository;
@@ -49,16 +53,22 @@ public class OrderCenterService {
     private final PawCoinWalletService wallet;
     private final RefundRequestRepository refunds;
     private final PetProfileRepository pets;
+    // ── Story 3.9 追加的第 4 个数据源（电商）。既有 6 个依赖一行未动。
+    private final ShopOrderRepository shopOrders;
+    private final ShopOrderCardService shopCards;
 
     public OrderCenterService(ConsultOrderRepository consultOrders, AiConsultOrderRepository aiOrders,
             PaymentIntentRepository intents, PawCoinWalletService wallet,
-            RefundRequestRepository refunds, PetProfileRepository pets) {
+            RefundRequestRepository refunds, PetProfileRepository pets,
+            ShopOrderRepository shopOrders, ShopOrderCardService shopCards) {
         this.consultOrders = consultOrders;
         this.aiOrders = aiOrders;
         this.intents = intents;
         this.wallet = wallet;
         this.refunds = refunds;
         this.pets = pets;
+        this.shopOrders = shopOrders;
+        this.shopCards = shopCards;
     }
 
     /**
@@ -98,6 +108,14 @@ public class OrderCenterService {
                 merged.add(mapTopupPending(i));
             }
         }
+        // 🔴 Story 3.9：第 4 个分支【追加在 if 链末尾】，既有三个分支与四个映射器一行未改（AD-11 / 契约 O-1）。
+        //    电商订单与虚拟商品订单在同一列表按时间倒序混排 —— 用户心智里「我的订单」就是一个地方（FR-101）。
+        if (filter == null || filter == OrderType.ECOMMERCE) {
+            for (ShopOrder o : shopOrders.findByUserIdAndCreatedAtLessThanOrderByCreatedAtDesc(
+                    userId, before, page)) {
+                merged.add(mapShop(o));
+            }
+        }
         // ID_HD：无源，Epic 6 接入（filter==ID_HD → merged 为空）。
 
         // 跨源归并：createdAt 倒序（tiebreak orderToken 稳定序，防同刻翻页抖动）。
@@ -133,6 +151,12 @@ public class OrderCenterService {
                 && (top.get().getStatus() == PaymentStatus.PAID
                         || top.get().getStatus() == PaymentStatus.PENDING)) {
             return topupDetail(top.get());
+        }
+        // 🔴 Story 3.9 追加：形状与上面三段一致（先按 token 查，再校验 owner），
+        //    越权与不存在同为 404 —— 这是防枚举，不是权限提示。
+        Optional<ShopOrder> shop = shopOrders.findByPublicToken(orderToken);
+        if (shop.isPresent() && shop.get().getUserId() == userId) {
+            return shopDetail(shop.get());
         }
         throw AppException.notFound("订单不存在");
     }
@@ -252,6 +276,51 @@ public class OrderCenterService {
                 OrderDisplayNo.of(OrderDisplayNo.TOPUP, i.getId(), i.getCreatedAt()), "PENDING",
                 OrderStatusColor.WARN.name(), i.getAmount(),
                 i.getChannel() == null ? null : i.getChannel().name(), i.getCreatedAt());
+    }
+
+    // ---- Story 3.9 电商（独立映射方法，不与既有四个映射器纠缠）----
+
+    /**
+     * 电商订单卡片。
+     *
+     * <p>🔴 卡片要给出「买了什么」：首个商品名 + 规格 + 主图 + 件数，
+     * 否则一列订单卡看起来全都一样，用户找不到自己要的那一单（FR-101）。
+     */
+    private OrderSummaryView mapShop(ShopOrder o) {
+        // 取首图/首个商品名的三表串查封装在 shop 模块（ShopOrderCardService），
+        // 这里只多一个依赖 —— 275 行的共享聚合器每多注入一个仓储就多一次撞车机会。
+        ShopOrderCardService.CardInfo card = shopCards.of(o.getId());
+        return new OrderSummaryView(OrderType.ECOMMERCE.name(), o.getPublicToken(),
+                OrderDisplayNo.of(OrderDisplayNo.ECOMMERCE, o.getId(), o.getCreatedAt()),
+                o.getStatus().name(), shopStatusColor(o.getStatus()).name(), o.getTotalAmount(),
+                o.getPayChannel() == null ? null : o.getPayChannel().name(), o.getCreatedAt(),
+                card.thumbnailUrl(), card.itemTitle(), card.itemCount());
+    }
+
+    private OrderDetailView shopDetail(ShopOrder o) {
+        // 电商订单的完整详情（行、地址、倒计时）走 Story 3.8 的专用页面；
+        // 这里只补齐订单中心统一契约需要的那几项，形状与既有三个 detail 一致。
+        return new OrderDetailView(OrderType.ECOMMERCE.name(), o.getPublicToken(),
+                OrderDisplayNo.of(OrderDisplayNo.ECOMMERCE, o.getId(), o.getCreatedAt()),
+                o.getStatus().name(), shopStatusColor(o.getStatus()).name(), o.getTotalAmount(),
+                o.getPayChannel() == null ? null : o.getPayChannel().name(),
+                o.getCreatedAt(), null,
+                null, null, null, false, null, null, null, null, null, null, null);
+    }
+
+    /**
+     * 电商状态色。
+     *
+     * <p>🔴 待支付用 WARN（有事要做），进行中的履约段用 INFO（蓝非红，不制造焦虑 UX-DR2），
+     * 完成/取消用 SUCCESS/UNKNOWN 之外的既有语义 —— <b>取消不是错误</b>，用红色会让用户
+     * 以为出了问题。
+     */
+    private static OrderStatusColor shopStatusColor(ShopOrderStatus status) {
+        return switch (status) {
+            case PENDING_PAYMENT -> OrderStatusColor.WARN;
+            case PENDING_SHIPMENT, SHIPPED, DELIVERED, REFUNDING -> OrderStatusColor.INFO;
+            case COMPLETED, CANCELLED, REFUNDED -> OrderStatusColor.SUCCESS;
+        };
     }
 
     private static OrderType parseType(String type) {
