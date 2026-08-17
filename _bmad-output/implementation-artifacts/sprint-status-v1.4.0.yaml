@@ -1,5 +1,5 @@
 # generated: 2026-08-17
-# last_updated: 2026-08-17  (L1 首次真实执行：全量 mvn test 1606 通过/0 失败；修复 Story 1.3 引入的 3 个护栏红灯)
+# last_updated: 2026-08-17  (Story 1.4 story 文件创建 → ready-for-dev；Flyway 号段表重排，对齐实际)
 #
 # ===== ✅ L1 阻塞已解除（2026-08-17）=====
 # 本机 Docker Desktop 一直装着（4.69），只是不自启 —— 前次「本机无 Docker」是误判。
@@ -58,19 +58,28 @@
 # 🔴 但号序仍应与 story 顺序一致 —— 理由是真实的表依赖：如 V102 的 FK 指向 V101 建的 shop_skus，
 #    1.1 未合入时 V102 无法应用。这是数据依赖，不是 Flyway 配置问题。
 # 🔴 合并时不重排号（与决策 E2 的最大差异；重排会让已应用迁移的校验和失配）
-#   V101 1-1 shop_products + shop_skus
-#   V102 1-2 sku_inventory
-#   V103 2-1 shipping_addresses            (PII·首个用户地址数据集)
-#   V104 3-1 shop_carts + shop_cart_items
-#   V105 3-2 shop_orders + shop_order_lines
-#   V106 3-3 ⚠️共享表 payment_intents 加三列 + 放宽 ck_payment_intents_channel（须认领）
-#   V107 4-2 shipments                     (S-2 一单多包的持久化依据)
-#   V108 5-1 return_requests + return_lines + 部分唯一索引
-#   V109 —— 空号（IR 重排后留空；Flyway 不要求连号，仓库既有 V86 空洞为证）
-#   V110 6-1 ⚠️共享表 pet_profiles 加体重列（须认领）
-#   V111 6-3 repurchase_triggers + ⚠️共享 ck_notifications_type 追加值（须认领）
-#   V112 7-1 shop_reviews
-#   V113+ 预留（平台配置项等）
+# ✏️ 2026-08-17 重排：本表原先与实际已脱节一位 —— 表里 V103 记的是 2-1 shipping_addresses，
+#    但 V103 实际已被 Story 1.3 的 add_shop_sku_cost_price 占用（1.3 落地时漏了回写本表）。
+#    连同 Story 1.4 取 V104，以下为对齐实际后的表：
+#   V101 1-1 shop_products + shop_skus                              ✅ 已提交
+#   V102 1-2 sku_inventory                                          ✅ 已提交
+#   V103 1-3 shop_skus 加 cost_price（进货价）                        ✅ 已提交
+#   V104 1-4 inventory_movements（入库/报损/盘点流水）                 ◀ 当前 story
+#   V105 1-5 ?? 精选排序权重列（若 1.5 需要建列则占此号，否则顺延）
+#   V106 2-1 shipping_addresses            (PII·首个用户地址数据集)
+#   V107 3-1 shop_carts + shop_cart_items
+#   V108 3-2 shop_orders + shop_order_lines
+#   V109 3-3 ⚠️共享表 payment_intents 加三列 + 放宽 ck_payment_intents_channel（须认领）
+#   V110 4-2 shipments                     (S-2 一单多包的持久化依据)
+#   V111 5-1 return_requests + return_lines + 部分唯一索引
+#   V112 6-1 ⚠️共享表 pet_profiles 加体重列（须认领）
+#   V113 6-3 repurchase_triggers + ⚠️共享 ck_notifications_type 追加值（须认领）
+#   V114 7-1 shop_reviews
+#   V115+ 预留（平台配置项等）
+#
+# 🔴 本表是【建议性】的，绑定规则只有一条：**实现时取号段内当前最大号 +1，并立刻回写本表**。
+#    上面这次脱节就是没回写造成的。Flyway 不要求号连续（既有 V86 空洞为证），也不要求单调应用
+#    （out-of-order 已开），所以「预留号被别的 story 先用掉」本身无害 —— 有害的是表不反映实际。
 #
 # ===== 安全攸关节点（AC 含硬约束，不可被无监管流程降级/跳过）=====
 # 3-2  FR-102 订单号必须不可枚举 token（CLAUDE.md 护栏；日期+自增序列同样可枚举，作废）
@@ -101,7 +110,7 @@ development_status:
   1-1-商品与sku建模及只读查询接口: review
   1-2-库存模型与可售库存口径: review
   1-3-商品录入与sku价格规格管理: review
-  1-4-库存管理与采购入库: backlog
+  1-4-库存管理与采购入库: ready-for-dev
   1-5-上下架-精选排序与-SKU-上限告警: backlog
   1-6-Toko-首页分类与全部精选: backlog
   1-7-商品详情页与规格选择器: backlog
