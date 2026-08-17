@@ -1,5 +1,5 @@
 # generated: 2026-08-17
-# last_updated: 2026-08-17  (Story 2.1 → review；后端 1689 全绿)
+# last_updated: 2026-08-17  (Story 2.2 / 2.3 → review；后端 1698 全绿)
 #
 # ===== ✅ L1 阻塞已解除（2026-08-17）=====
 # 本机 Docker Desktop 一直装着（4.69），只是不自启 —— 前次「本机无 Docker」是误判。
@@ -68,15 +68,16 @@
 #   V105 —— 空号。1-5 上下架/精选排序【不需要迁移】：sort_weight 与 is_active
 #          V101 就已建好（列注释「维护逻辑属 1.5」），含索引 idx_shop_products_listing。
 #   V106 2-1 shipping_addresses            (PII·首个用户地址数据集)  ✅ 已提交
-#   V107 3-1 shop_carts + shop_cart_items
-#   V108 3-2 shop_orders + shop_order_lines
-#   V109 3-3 ⚠️共享表 payment_intents 加三列 + 放宽 ck_payment_intents_channel（须认领）
-#   V110 4-2 shipments                     (S-2 一单多包的持久化依据)
-#   V111 5-1 return_requests + return_lines + 部分唯一索引
-#   V112 6-1 ⚠️共享表 pet_profiles 加体重列（须认领）
-#   V113 6-3 repurchase_triggers + ⚠️共享 ck_notifications_type 追加值（须认领）
-#   V114 7-1 shop_reviews
-#   V115+ 预留（平台配置项等）
+#   V107 2-2 shipping_zones + shipping_settings  ✅ 已提交
+#   V108 3-1 shop_carts + shop_cart_items
+#   V109 3-2 shop_orders + shop_order_lines
+#   V110 3-3 ⚠️共享表 payment_intents 加三列 + 放宽 ck_payment_intents_channel（须认领）
+#   V111 4-2 shipments                     (S-2 一单多包的持久化依据)
+#   V112 5-1 return_requests + return_lines + 部分唯一索引
+#   V113 6-1 ⚠️共享表 pet_profiles 加体重列（须认领）
+#   V114 6-3 repurchase_triggers + ⚠️共享 ck_notifications_type 追加值（须认领）
+#   V115 7-1 shop_reviews
+#   V116+ 预留（平台配置项等）
 #
 # 🔴 本表是【建议性】的，绑定规则只有一条：**实现时取号段内当前最大号 +1，并立刻回写本表**。
 #    上面这次脱节就是没回写造成的。Flyway 不要求号连续（既有 V86 空洞为证），也不要求单调应用
@@ -121,8 +122,8 @@ development_status:
   # ── Epic 2: 收货地址与配送范围 ──
   epic-2: in-progress
   2-1-收货地址建模与地址簿接口: review
-  2-2-服务范围与运费表配置: backlog
-  2-3-运费试算接口: backlog
+  2-2-服务范围与运费表配置: review
+  2-3-运费试算接口: review
   2-4-地址簿与新增-编辑地址: backlog
   2-5-Epic-2-联调: backlog
   epic-2-retrospective: optional
