@@ -1,5 +1,5 @@
 # generated: 2026-08-17
-# last_updated: 2026-08-17  (Story 1.6 实现完成 → review；后端 1669 / 前端 768 全绿；2 条 L2 视觉验收待人工)
+# last_updated: 2026-08-17  (Story 1.7 实现完成 → review；前端 784 全绿)
 #
 # ===== ✅ L1 阻塞已解除（2026-08-17）=====
 # 本机 Docker Desktop 一直装着（4.69），只是不自启 —— 前次「本机无 Docker」是误判。
@@ -114,7 +114,7 @@ development_status:
   1-4-库存管理与采购入库: review
   1-5-上下架-精选排序与-SKU-上限告警: review
   1-6-Toko-首页分类与全部精选: review
-  1-7-商品详情页与规格选择器: backlog
+  1-7-商品详情页与规格选择器: review
   1-8-Epic-1-联调与埋点收口: backlog
   epic-1-retrospective: optional
 
