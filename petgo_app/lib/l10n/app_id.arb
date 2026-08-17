@@ -1442,5 +1442,17 @@
   "notifyTypeAccountWarned": "Peringatan akun",
   "notifyBodyAccountWarned": "Akun Anda menerima satu peringatan karena melanggar Pedoman Komunitas TailTopia. Mohon patuhi pedoman komunitas kami.",
   "notifyTypeAccountSuspended": "Akun dinonaktifkan",
-  "notifyBodyAccountSuspended": "Akun Anda telah dinonaktifkan karena melanggar Pedoman Komunitas TailTopia. Jika Anda ingin mengajukan keberatan, silakan hubungi tim dukungan pelanggan kami."
+  "notifyBodyAccountSuspended": "Akun Anda telah dinonaktifkan karena melanggar Pedoman Komunitas TailTopia. Jika Anda ingin mengajukan keberatan, silakan hubungi tim dukungan pelanggan kami.",
+
+  "tokoTitle": "Toko",
+  "tokoCategoryLabel": "Kategori",
+  "tokoAllFeaturedLabel": "Semua Pilihan",
+  "tokoCategoryMakanan": "Makanan",
+  "tokoCategoryObatVitamin": "Obat & Vitamin",
+  "tokoCategoryCamilan": "Camilan",
+  "tokoCategoryPerawatan": "Perawatan",
+  "tokoEmpty": "Belum ada produk.",
+  "tokoLoadFailed": "Gagal memuat produk. Tarik ke bawah untuk coba lagi.",
+  "tokoPriceUnavailable": "Harga segera",
+  "tokoCartComingSoon": "Keranjang segera hadir"
 }

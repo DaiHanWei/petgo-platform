@@ -44,7 +44,12 @@ class ShopProductQueryServiceTest {
         skus = Mockito.mock(ShopSkuRepository.class);
         inventoryRepo = Mockito.mock(SkuInventoryRepository.class);
         inventory = new InventoryService(inventoryRepo, 5L);
-        service = new ShopProductQueryService(products, skus, inventory);
+        // Story 1.6：CDN base 配成固定值，让 mainImageUrl 的派生在本类里可断言
+        com.tailtopia.shared.media.MediaProperties mediaProps =
+                new com.tailtopia.shared.media.MediaProperties();
+        mediaProps.getOss().setCdnBaseUrl("https://cdn.test");
+        service = new ShopProductQueryService(products, skus, inventory,
+                new ShopImageUrlResolver(mediaProps));
     }
 
     private ShopProduct product(long id, String token, ProductCategory category) {

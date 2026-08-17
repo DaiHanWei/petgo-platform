@@ -219,6 +219,9 @@ void main() {
         'signup_', 'milestone_',
         // 问诊双线漏斗（2026-08-06：PostHog 区分 AI/VET）——事件必带 consult_type 属性。
         'consult_', 'ai_',
+        // 精选自营电商（2026-08-17，V1.4.0 Story 1.6）：Toko 是新模块，按既有扩展路径注册前缀
+        // 而不是放宽规则。商品曝光事件必带 zone 属性（区分区域②档案推荐 / 区域④全部精选）。
+        'toko_',
       ];
       // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
       const allowedSuffixes = <String>[

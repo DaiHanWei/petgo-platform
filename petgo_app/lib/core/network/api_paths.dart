@@ -239,4 +239,8 @@ class ApiPaths {
 
   /// 本月免费额度（Story 2.1/2.4）→ {period, limit, used, remaining}。
   static const String freeQuota = '$base/me/free-quota';
+
+  // ===== 精选自营电商（V1.4.0 Story 1.6）=====
+  /// 商品列表（Story 1.1 只读接口，**已对游客放行**）。可选 query：`category`。
+  static const String shopProducts = '$base/shop/products';
 }
