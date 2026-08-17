@@ -1,5 +1,5 @@
 # generated: 2026-08-17
-# last_updated: 2026-08-18  (Story 4.1–4.4 完成；后端 1861 / 前端 875 全绿)
+# last_updated: 2026-08-18  (Epic 4 完成 6/6；后端 1868 / 前端 891 全绿)
 #
 # ===== ✅ L1 阻塞已解除（2026-08-17）=====
 # 本机 Docker Desktop 一直装着（4.69），只是不自启 —— 前次「本机无 Docker」是误判。
@@ -159,8 +159,8 @@ development_status:
   4-2-发货与物流单号录入: review
   4-3-电商订单列表与详情: review
   4-4-订单异常处理: review
-  4-5-订单详情履约态: backlog
-  4-6-Epic-4-联调: backlog
+  4-5-订单详情履约态: review
+  4-6-Epic-4-联调: review
   epic-4-retrospective: optional
 
   # ── Epic 5: 退货与退款 ──

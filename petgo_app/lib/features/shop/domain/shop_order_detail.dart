@@ -34,6 +34,60 @@ enum ShopOrderStatus {
 
   /// 只有待支付才允许支付/取消。
   bool get isPendingPayment => this == ShopOrderStatus.pendingPayment;
+
+  /// 🔴 **已发货态即可确认收货**（Story 4.5，SPEC-2 出口②）——不必等系统标记送达。
+  /// 用户比谁都先知道货到没到；只留「已送达后才能确认」这一条路，等于把订单能否
+  /// 脱离「已发货」完全押在运营记不记得点那个按钮上。
+  bool get canConfirmReceipt =>
+      this == ShopOrderStatus.shipped || this == ShopOrderStatus.delivered;
+
+  /// 已发货之后（含终态）才展示物流区块。
+  bool get hasFulfillmentInfo =>
+      this == ShopOrderStatus.shipped ||
+      this == ShopOrderStatus.delivered ||
+      this == ShopOrderStatus.completed;
+}
+
+/// 一个包裹（Story 4.5，S-2 一单多包）。
+///
+/// 🔴 **不接承运商 API、不在 App 内渲染物流轨迹**（FR-103）：[trackingUrl] 是承运商官网
+/// 地址，点了跳出去查。自建轨迹聚合要为三家 API 的可用性长期负责，V1 不承担这个。
+class ShopOrderPackage {
+  const ShopOrderPackage({
+    required this.carrier,
+    required this.carrierName,
+    required this.trackingNo,
+    required this.trackingUrl,
+    required this.delivered,
+    this.shippedAt,
+    this.deliveredAt,
+  });
+
+  final String carrier;
+
+  /// 展示名（品牌官方写法，不等于枚举名）。
+  final String carrierName;
+  final String trackingNo;
+  final String trackingUrl;
+  final bool delivered;
+  final DateTime? shippedAt;
+  final DateTime? deliveredAt;
+
+  factory ShopOrderPackage.fromJson(Map<String, dynamic> j) {
+    final carrier = j['carrier']?.toString() ?? '';
+    final name = j['carrierName']?.toString();
+    return ShopOrderPackage(
+      carrier: carrier,
+      // 认不出的承运商就把原始码显示出来 —— 显示一个空白比显示 'JNE' 好：
+      // 猜错等于把包裹记到别人家的运单号上，用户点进去查无此单。
+      carrierName: (name == null || name.isEmpty) ? carrier : name,
+      trackingNo: j['trackingNo']?.toString() ?? '',
+      trackingUrl: j['trackingUrl']?.toString() ?? '',
+      delivered: j['status']?.toString() == 'DELIVERED',
+      shippedAt: _time(j['shippedAt']),
+      deliveredAt: _time(j['deliveredAt']),
+    );
+  }
 }
 
 class ShopOrderLine {
@@ -77,6 +131,11 @@ class ShopOrderDetail {
     this.cashAmount,
     this.expiresAt,
     this.createdAt,
+    this.shippedAt,
+    this.deliveredAt,
+    this.completedAt,
+    this.returnWindowEndsAt,
+    this.packages = const [],
   });
 
   final String orderToken;
@@ -96,6 +155,20 @@ class ShopOrderDetail {
   /// 🔴 支付窗截止（服务端时刻）。null = 该单没有支付窗（历史单或已离开待支付态）。
   final DateTime? expiresAt;
   final DateTime? createdAt;
+
+  // ---------- 履约态（Story 4.5） ----------
+  final DateTime? shippedAt;
+
+  /// 🔴 「签收」时刻（SPEC-5）。退货窗口以此起算。
+  final DateTime? deliveredAt;
+  final DateTime? completedAt;
+
+  /// 退货窗口截止 —— **服务端算好下发**，App 不自己加 7 天：
+  /// 时区与设备时钟一错，用户看到的截止日就和后端不是同一天。
+  final DateTime? returnWindowEndsAt;
+
+  /// S-2 一单多包：逐条列出，各自标明送达状态。
+  final List<ShopOrderPackage> packages;
 
   final List<ShopOrderLine> lines;
   final String receiverName;
@@ -127,6 +200,16 @@ class ShopOrderDetail {
       cashAmount: _int(j['cashAmount']),
       expiresAt: _time(j['expiresAt']),
       createdAt: _time(j['createdAt']),
+      shippedAt: _time(j['shippedAt']),
+      deliveredAt: _time(j['deliveredAt']),
+      completedAt: _time(j['completedAt']),
+      returnWindowEndsAt: _time(j['returnWindowEndsAt']),
+      packages: j['packages'] is List
+          ? (j['packages'] as List)
+              .whereType<Map<String, dynamic>>()
+              .map(ShopOrderPackage.fromJson)
+              .toList(growable: false)
+          : const [],
       lines: j['lines'] is List
           ? (j['lines'] as List)
               .whereType<Map<String, dynamic>>()

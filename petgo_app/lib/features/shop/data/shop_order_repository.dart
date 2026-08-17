@@ -34,6 +34,16 @@ class ShopOrderRepository {
         '${ApiPaths.meShopOrders}/$orderToken/cancel');
     return ShopOrderDetail.fromJson(resp.data!);
   }
+
+  /// 确认收货（Story 4.5，SPEC-2 出口②）。
+  ///
+  /// 🔴 **已发货态就能调**，不必等系统标记送达 —— 服务端会顺手写下签收时刻，
+  /// Epic 5 的退货窗口正是从那一刻起算。幂等：重复调用返回同一个已完成订单。
+  Future<ShopOrderDetail> confirmReceipt(String orderToken) async {
+    final resp = await dio.post<Map<String, dynamic>>(
+        '${ApiPaths.meShopOrders}/$orderToken/confirm-receipt');
+    return ShopOrderDetail.fromJson(resp.data!);
+  }
 }
 
 final Provider<ShopOrderRepository> shopOrderRepositoryProvider =

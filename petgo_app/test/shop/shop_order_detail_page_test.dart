@@ -270,6 +270,12 @@ class _FakeOrderRepo implements ShopOrderRepository {
   }
 
   @override
+  Future<ShopOrderDetail> confirmReceipt(String orderToken) async {
+    calls.add('confirmReceipt');
+    return detailData!;
+  }
+
+  @override
   Future<ShopPayResult> pay(String orderToken) async {
     calls.add('pay');
     return const ShopPayResult(orderStatus: 'PENDING_SHIPMENT');
