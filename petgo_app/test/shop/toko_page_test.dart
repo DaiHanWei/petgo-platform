@@ -96,7 +96,11 @@ void main() {
       expect(find.text('Semua Pilihan'), findsOneWidget);
     });
 
-    testWidgets('购物车图标不可点 —— 不得跳到不存在的页面，更不得跳登录页', (tester) async {
+    // ✏️ Story 3.6：购物车页已落地，这条从「不可点」翻面成「可点且不是登录墙」。
+    //    原断言（onPressed == null）当时的意思是「不得跳到不存在的页面/登录页」，
+    //    而不是「购物车图标永远不能点」—— 页面存在之后继续禁用它才是死链。
+    //    「游客点进去不被踢到登录页」由 cart_page_test.dart 的游客态用例接手看守。
+    testWidgets('购物车图标可点（Story 3.6 起），且游客态不显示角标', (tester) async {
       await tester.pumpWidget(host([]));
       await tester.pumpAndSettle();
 
@@ -104,7 +108,9 @@ void main() {
         find.ancestor(of: find.byIcon(Icons.shopping_cart_outlined),
             matching: find.byType(IconButton)),
       );
-      expect(cart.onPressed, isNull, reason: '购物车属 Epic 3；能点即为变相登录墙或死链');
+      expect(cart.onPressed, isNotNull, reason: '购物车页已存在，禁用即死链');
+      // 游客无购物车 → 件数 0 → 不渲染角标（绝不显示占位数字）。
+      expect(find.byKey(const ValueKey('cartBadge')), findsNothing);
     });
   });
 

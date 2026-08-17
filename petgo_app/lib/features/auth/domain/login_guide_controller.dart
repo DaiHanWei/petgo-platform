@@ -45,9 +45,18 @@ class LoginGuideController {
   bool get hardDialogShowing => _hardDialogShowing;
 
   /// 软浮层（每 session 最多一次；第 2 次起 no-op）。
+  ///
+  /// [allowRepeat] 跳过 session 去重（默认 false，既有调用点行为一字不变）。
+  ///
+  /// 🔴 为什么需要它（V1.4.0 Story 3.6）：session 去重守的是**被动弹出**的引导——
+  /// 用户没做什么、系统主动劝他登录，一次就够，弹第二次是骚扰。但**用户自己点了加购**
+  /// 是明确意图，此时 no-op 会让按钮看起来坏了（点了没反应），而这恰是转化漏斗上
+  /// 最贵的一次点击。两类触发的语义不同，不该共用一个去重开关。
   Future<void> showSoftSheet(BuildContext context,
-      {RouteIntent? pendingAction, String entrySource = 'social_soft_login'}) async {
-    if (_softShownThisSession) return;
+      {RouteIntent? pendingAction,
+      String entrySource = 'social_soft_login',
+      bool allowRepeat = false}) async {
+    if (_softShownThisSession && !allowRepeat) return;
     _softShownThisSession = true;
     _pending = pendingAction;
     _entrySource = entrySource;

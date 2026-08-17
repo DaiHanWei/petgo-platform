@@ -8,6 +8,7 @@ import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../data/shop_repository.dart';
 import '../domain/shop_product.dart';
+import 'cart_icon_button.dart';
 
 /// Toko 首页（Story 1.6，FR-93 / FR-93A）。
 ///
@@ -52,14 +53,10 @@ class _TokoPageState extends ConsumerState<TokoPage> {
       appBar: AppBar(
         title: Text(l10n.tokoTitle),
         backgroundColor: AppColors.cream,
-        actions: [
-          // 🔴 购物车属 Epic 3。此处仅占位且【不可点】——
-          //    绝不能跳到不存在的页面，更不能跳登录页（那就成了变相登录墙，违反 FR-93A）。
-          IconButton(
-            icon: const Icon(Icons.shopping_cart_outlined),
-            onPressed: null,
-            tooltip: l10n.tokoCartComingSoon,
-          ),
+        actions: const [
+          // Story 3.6 接上真实购物车页（角标 = 商品件数）。游客点进去看到的是「登录后查看」
+          // 空态 + 软性引导，**不是登录墙**——浏览路径依旧零门槛（FR-93A）。
+          CartIconButton(),
         ],
       ),
       // ①② 区域整体不渲染 —— 此处没有任何占位、没有空标题，页面直接从 Kategori 开始

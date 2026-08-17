@@ -14,6 +14,7 @@ import '../../features/auth/presentation/dev_login_guide_page.dart';
 import '../../features/auth/presentation/login_page.dart';
 import '../../features/shop/address/presentation/address_book_page.dart';
 import '../../features/shop/address/presentation/address_form_page.dart';
+import '../../features/shop/presentation/cart_page.dart';
 import '../../features/shop/presentation/product_detail_page.dart';
 import '../../features/shop/presentation/toko_page.dart';
 import '../../features/auth/presentation/nickname_page.dart';
@@ -498,6 +499,12 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         path: '/shop/products/:token',
         builder: (c, s) => ProductDetailPage(token: s.pathParameters['token']!),
       ),
+      // 购物车（Story 3.6）。🔒 **有意不放进 _controlledLocations**：门控在页面内部
+      //    （游客渲染「登录后查看」空态 + 软性引导），而不是 redirect 弹走。
+      //    redirect 会把游客直接甩回 /home，等于告诉他「这里没有购物车」——
+      //    而真相是「登录后就有」，这一句差别就是 FR-0B 软性引导存在的理由。
+      //    页面本身不发任何 /me 请求，游客态零数据暴露。
+      GoRoute(path: '/shop/cart', builder: (c, s) => const CartPage()),
       // 地址簿（Story 2.4）。🔒 挂在 /me 前缀下 —— 它已在 _controlledLocations 里，
       // 游客访问自动重定向。地址是 PII，与 Toko 的游客开放策略正好相反。
       GoRoute(path: '/me/addresses', builder: (c, s) => const AddressBookPage()),
