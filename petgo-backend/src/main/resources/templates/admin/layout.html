@@ -169,6 +169,11 @@
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('refund.view') or hasAuthority('refund.approve')"
                    th:href="@{/admin/shop/return-precedents}"
                    th:text="#{admin.nav.shopPrecedents}">开封判例</a>
+                <!-- AB-13B 复购引擎效果看板（V1.4.0 Story 6.6）。裁决 A-16 的唯一依据。 -->
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view') or hasAuthority('order.view')"
+                   th:href="@{/admin/shop/repurchase-dashboard}"
+                   th:classappend="${active == 'shopRepurchase'} ? 'active'"
+                   th:text="#{admin.nav.shopRepurchase}">复购引擎效果</a>
                 <!-- AB-11C 服务范围与运费（补 Story 2.2 缺口）。权限沿用运营配置码。 -->
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view') or hasAuthority('config.edit')"
                    th:href="@{/admin/shop/shipping}" th:classappend="${active == 'shopShipping'} ? 'active'"
