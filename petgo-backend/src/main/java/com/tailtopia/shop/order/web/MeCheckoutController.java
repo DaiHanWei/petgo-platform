@@ -3,21 +3,26 @@ package com.tailtopia.shop.order.web;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shop.order.dto.CheckoutPreviewView;
 import com.tailtopia.shop.order.dto.CheckoutUnavailableException;
+import com.tailtopia.shop.order.dto.ShopOrderDetailView;
 import com.tailtopia.shop.order.dto.ShopOrderView;
 import com.tailtopia.shop.order.service.CheckoutService;
+import com.tailtopia.shop.order.service.ShopOrderPaymentService;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 结算试算与下单（Story 3.7 前端所需的两个端点；业务逻辑全在 Story 3.4 的 {@link CheckoutService}）。
+ * 结算、下单与支付（Story 3.7 试算/下单 · Story 3.8 详情/支付/取消）。
+ * 业务逻辑全在 {@link CheckoutService}（3.4）与 {@link ShopOrderPaymentService}（3.8）。
  *
  * <p>🔴 <b>本控制器不含任何金额计算</b>：试算与下单调的是同一个 service，
  * 前端也只认这里下发的数字。「结算页显示 285.000、提交后变成 305.000」这类问题的唯一防法，
@@ -30,9 +35,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class MeCheckoutController {
 
     private final CheckoutService checkout;
+    private final ShopOrderPaymentService payments;
 
-    public MeCheckoutController(CheckoutService checkout) {
+    public MeCheckoutController(CheckoutService checkout, ShopOrderPaymentService payments) {
         this.checkout = checkout;
+        this.payments = payments;
     }
 
     /**
@@ -63,6 +70,42 @@ public class MeCheckoutController {
         }
         return ShopOrderView.of(checkout.placeOrder(currentUserId(jwt), req.addressToken(),
                 req.entrySource(), req.triggerType()));
+    }
+
+    // ===== Story 3.8：待支付订单详情与支付 =====
+
+    /**
+     * 订单详情。🔴 **读的时候就地判过期**（懒过期）——用户会在窗口刚过的那一秒打开这一页，
+     * 等定时扫描（最长 1 分钟延迟）会让他看到一个其实已经作废的倒计时。
+     */
+    @GetMapping("/shop-orders/{token}")
+    public ShopOrderDetailView detail(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable String token) {
+        var order = payments.requireOwn(currentUserId(jwt), token);
+        return ShopOrderDetailView.of(order, payments.linesOf(order));
+    }
+
+    /**
+     * 发起支付。
+     *
+     * <p>🔴 **仅 QRIS 一种真钱渠道**（FR-100）：渠道不是入参 —— 留一个恒等于 QRIS 的参数
+     * 只会让调用方以为还能选别的。PawCoin 段是否参与由**下单时固化的拆分**决定，同样不可现改。
+     */
+    @PostMapping("/shop-orders/{token}/pay")
+    public ShopOrderPaymentService.PayResult pay(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable String token,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+        return payments.pay(currentUserId(jwt), token, idempotencyKey);
+    }
+
+    /** 用户主动取消（仅待支付可取消）。释放库存 + 作废支付意图。 */
+    @PostMapping("/shop-orders/{token}/cancel")
+    public ShopOrderDetailView cancel(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable String token) {
+        long userId = currentUserId(jwt);
+        payments.cancel(userId, token);
+        var order = payments.requireOwn(userId, token);
+        return ShopOrderDetailView.of(order, payments.linesOf(order));
     }
 
     /**

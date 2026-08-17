@@ -500,14 +500,15 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     Analytics.capture('toko_checkout_submit_tapped');
     setState(() => _submitting = true);
     try {
-      await ref.read(checkoutRepositoryProvider).placeOrder(p.addressToken);
+      final order = await ref.read(checkoutRepositoryProvider).placeOrder(p.addressToken);
       // 下单成功后车里已被清掉已下单的行 —— 角标必须跟上
       await ref.read(cartProvider.notifier).refresh();
       if (!mounted) return;
       showAppToast(context, l10n.checkoutOrderPlaced);
-      // 🔴 订单详情页属 Story 3.8。此处不跳不存在的页面，退回 Toko；
-      //    3.8 落地后改为 push('/shop/orders/{token}')。
-      context.go('/shop');
+      // 🔴 直接进待支付订单详情（Story 3.8）：60 分钟窗口从下单那一刻就在走，
+      //    把用户留在结算页等他自己去找订单，等于让他在倒计时里找路。
+      //    用 pushReplacement：结算页此时已无意义（车已清空），回退到它只会看到空态。
+      context.pushReplacement('/shop/orders/${order.orderToken}');
     } on CheckoutFailure catch (e) {
       if (!mounted) return;
       switch (e.kind) {

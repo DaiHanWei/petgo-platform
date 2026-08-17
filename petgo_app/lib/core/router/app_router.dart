@@ -17,6 +17,7 @@ import '../../features/shop/address/presentation/address_form_page.dart';
 import '../../features/shop/presentation/cart_page.dart';
 import '../../features/shop/presentation/checkout_page.dart';
 import '../../features/shop/presentation/product_detail_page.dart';
+import '../../features/shop/presentation/shop_order_detail_page.dart';
 import '../../features/shop/presentation/toko_page.dart';
 import '../../features/auth/presentation/nickname_page.dart';
 import '../../features/auth/presentation/pet_status_page.dart';
@@ -509,6 +510,11 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // 结算页（Story 3.7）。🔒 与购物车同理：门控在页内（本页只在已登录态可达 ——
       //    入口是购物车页的 Checkout 按钮，而游客的购物车页根本不渲染那个按钮）。
       GoRoute(path: '/shop/checkout', builder: (c, s) => const CheckoutPage()),
+      // 电商订单详情（Story 3.8）。token 寻址（不可枚举）；越权与不存在同为后端 404。
+      GoRoute(
+        path: '/shop/orders/:token',
+        builder: (c, s) => ShopOrderDetailPage(orderToken: s.pathParameters['token']!),
+      ),
       // 地址簿（Story 2.4）。🔒 挂在 /me 前缀下 —— 它已在 _controlledLocations 里，
       // 游客访问自动重定向。地址是 PII，与 Toko 的游客开放策略正好相反。
       GoRoute(path: '/me/addresses', builder: (c, s) => const AddressBookPage()),
