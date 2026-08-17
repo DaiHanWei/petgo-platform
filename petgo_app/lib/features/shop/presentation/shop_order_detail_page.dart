@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -14,6 +15,7 @@ import '../../../shared/widgets/qr_payment_sheet.dart';
 import '../../pawcoin/presentation/pawcoin_controller.dart';
 import '../data/cart_repository.dart';
 import '../data/shop_order_repository.dart';
+import '../data/shop_return_repository.dart';
 import '../domain/shop_order_detail.dart';
 import '../domain/shop_product.dart';
 
@@ -152,6 +154,11 @@ class _ShopOrderDetailPageState extends ConsumerState<ShopOrderDetailPage> {
           ),
         const SizedBox(height: AppSpacing.md),
         _amounts(l10n, order),
+        // 退货入口（Story 5.7）。🔴 UX-DR3：已有进行中申请时【置灰并说明】，
+        //    不是隐藏 —— 隐藏会让用户以为退货功能坏了。
+        if (order.status == ShopOrderStatus.delivered ||
+            order.status == ShopOrderStatus.completed)
+          _returnEntry(l10n, order),
         Padding(
           padding: const EdgeInsets.all(AppSpacing.lg),
           child: Text(l10n.shopOrderNumber(order.orderToken),
@@ -306,6 +313,47 @@ class _ShopOrderDetailPageState extends ConsumerState<ShopOrderDetailPage> {
           ),
         ),
       );
+
+  /// 退货入口（Story 5.7 / UX-DR3）。
+  ///
+  /// 可退性由服务端判定 —— 前端不重算窗口与规则。加载中或出错时给一个不可点的按钮，
+  /// 而不是让它看起来可点却什么也不发生。
+  Widget _returnEntry(AppLocalizations l10n, ShopOrderDetail order) {
+    final async = ref.watch(returnEligibilityProvider(order.orderToken));
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 0),
+      child: async.when(
+        loading: () => const SizedBox.shrink(),
+        error: (_, _) => const SizedBox.shrink(),
+        data: (e) {
+          final blocked = !e.eligible;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              OutlinedButton(
+                key: const ValueKey('shopOrderRequestReturn'),
+                onPressed: blocked
+                    ? null
+                    : () => context.push('/shop/orders/\${order.orderToken}/return'),
+                child: Text(l10n.shopOrderRequestReturn),
+              ),
+              if (blocked)
+                Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.xxs),
+                  child: Text(
+                      e.activeRequestToken != null
+                          ? l10n.shopOrderReturnInProgress
+                          : (e.ineligibleReason ?? ''),
+                      key: const ValueKey('shopOrderReturnBlockedReason'),
+                      style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
 
   // ---------- 物流区块（Story 4.5） ----------
 
