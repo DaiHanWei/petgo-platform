@@ -82,7 +82,7 @@ story_location: _bmad-output/implementation-artifacts/v1.4.0
 development_status:
   # ── Epic 1: 商品上架与浏览 ──
   epic-1: in-progress
-  1-1-商品与sku建模及只读查询接口: ready-for-dev
+  1-1-商品与sku建模及只读查询接口: review
   1-2-库存模型与可售库存口径: backlog
   1-3-商品录入与-SKU-价格规格管理: backlog
   1-4-库存管理与采购入库: backlog

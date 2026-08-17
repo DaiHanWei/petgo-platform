@@ -171,6 +171,12 @@ public class SecurityConfig {
                                 "/api/v1/comments/**").permitAll()
                         // 他人迷你主页只读对游客可见（Story 3.8，FR-26 无登录要求）
                         .requestMatchers(HttpMethod.GET, "/api/v1/users/*/mini-profile").permitAll()
+                        // Toko 商品只读对游客可见（V1.4.0 Story 1.1，FR-93A）：GET 商品列表/详情放行。
+                        // 与 FR-78「未登录点击非落地 Tab 触发登录引导」有意不同——商品浏览是转化漏斗
+                        // 最上层，登录墙会直接杀掉转化；登录引导推迟到「加入购物车」（Story 3.6）。
+                        // 写入端点属 Story 1.3 后台，走 /admin/**，不在此放行。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/shop/products",
+                                "/api/v1/shop/products/**").permitAll()
                         // 兽医工作台端点（Story 5.1+）：仅 role=VET 可达；user/guest → 403（双向门控）
                         .requestMatchers("/api/v1/vet/**").hasRole("VET")
                         // 用户侧问诊端点（Story 5.2+ / 计费流 3-2~3-4）：仅 role=USER 可达（vet/guest → 403）
