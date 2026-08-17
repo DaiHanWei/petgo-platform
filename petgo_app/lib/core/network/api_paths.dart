@@ -274,4 +274,12 @@ class ApiPaths {
 
   /// 🔒 Toko 首页区域①「补货提醒」（Story 6.4，FR-109）。`/{id}/dismiss` 关卡。
   static const String meShopRepurchaseCards = '$base/me/shop/repurchase-cards';
+
+  /// 商品详情页的评价区（Story 7.3）。🔒 对游客开放 —— 评价是买前决策信息，
+  /// 拿它当登录墙会直接杀掉转化（FR-93A）。接口不下发任何评价者身份。
+  static String shopProductReviews(String productToken) =>
+      '$base/shop/products/$productToken/reviews';
+
+  /// 🔒 提交 / 重提评价（Story 7.1；供 Story 7.2 评价页调用，该页待 UX-DR4 补稿）。
+  static const String meShopReviews = '$base/me/shop-reviews';
 }
