@@ -325,16 +325,25 @@ class InventoryMovementServiceTest {
     }
 
     @Test
-    @DisplayName("🔴 源码护栏：新原语必须清持久化上下文，否则读回的前后值是脏的且不报错")
-    void newPrimitivesClearPersistenceContext() throws IOException {
+    @DisplayName("🔴 源码护栏：所有「写完要同事务读回」的原语都必须清持久化上下文")
+    void primitivesThatAreReadBackClearPersistenceContext() throws IOException {
         String code = codeOnly(
                 "src/main/java/com/tailtopia/shop/repository/SkuInventoryRepository.java");
-        // damage / stocktakeTo 两条各需一个带 clearAutomatically 的 @Modifying
-        int guarded = code.split("@Modifying\\(clearAutomatically = true, flushAutomatically = true\\)",
-                -1).length - 1;
-        assertThat(guarded)
-                .as("调用方要在同事务内读回 actual 写进流水前后值；不清上下文会读到旧实体")
-                .isGreaterThanOrEqualTo(2);
+
+        // 🔴 逐个原语点名，不用「出现次数 >= N」。
+        //    原先写的是 >= 2（damage + stocktakeTo），于是 restock 漏标时护栏照样绿——
+        //    而 restock 恰恰也走「UPDATE → 同事务读回 actual → 写流水前后值」这条路径。
+        //    计数式断言的通病：加一个新的合规项就能替一个违规项把数凑够。
+        for (String primitive : new String[] {"int restock(", "int damage(", "int stocktakeTo("}) {
+            int m = code.indexOf(primitive);
+            assertThat(m).as("未找到原语 " + primitive).isNotNegative();
+            String block = code.substring(0, m);
+            int lastModifying = block.lastIndexOf("@Modifying");
+            assertThat(block.substring(lastModifying))
+                    .as(primitive + " 未标 clearAutomatically —— 调用方同事务读回时会拿到一级缓存里的"
+                            + "旧实体，前后值同步错位，而 delta 一致性 CHECK 拦不住（错位后仍自洽）")
+                    .startsWith("@Modifying(clearAutomatically = true, flushAutomatically = true)");
+        }
     }
 
     @Test

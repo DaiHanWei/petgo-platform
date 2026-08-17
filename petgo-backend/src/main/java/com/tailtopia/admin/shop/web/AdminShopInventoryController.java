@@ -120,64 +120,90 @@ public class AdminShopInventoryController {
 
     // ---------- 四条增减路径中的三条（第四条退货质检入库属 Story 5.4） ----------
 
-    @PostMapping("/admin/shop/inventory/{skuId}/purchase")
+    /**
+     * 🔴 <b>四个写端点的 {@code skuId} 走表单字段，不走 path variable。</b>
+     *
+     * <p>先前的写法是把 URL 里的占位 {@code /0/} 用 {@code onsubmit} 的 JS 就地替换成选中的 skuId。
+     * 那个替换<b>不幂等</b>：替换后 {@code action} 里已不含 {@code /0/}，同一份 DOM 若被再次提交
+     * （浏览器 bfcache 回退最典型），{@code replace} 找不到目标、{@code action} 原封不动，
+     * 于是<b>操作被静默记到上一次选中的 SKU 上</b>——而流水是 append-only 的，落错了只能再开反向流水。
+     * 改成普通表单字段后，这一整类问题不存在，也不再需要任何 JS。
+     */
+    @PostMapping("/admin/shop/inventory/purchase")
     @PreAuthorize(EDIT_AUTH)
     public String receivePurchase(@AuthenticationPrincipal AdminUserDetails admin,
-            @PathVariable long skuId,
+            @RequestParam long skuId,
             @RequestParam long qty,
             @RequestParam String purchaseNo,
             @RequestParam(required = false) String supplier,
-            @RequestParam Long costPrice,
+            @RequestParam(required = false) Long costPrice,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
                     LocalDate inboundDate,
             RedirectAttributes ra) {
-        // 🔒 服务端独立再判一次——页面不渲染入口只是第一层，看源码可绕过
-        if (!has(admin, AdminPermissions.SHOP_COST_EDIT)) {
-            throw AppException.forbidden(
-                    "采购入库需要「编辑进货价」权限：入库单的进货单价不允许留空（S-9）");
+        try {
+            // 🔒 服务端独立再判一次——页面不渲染入口只是第一层，看源码可绕过
+            if (!has(admin, AdminPermissions.SHOP_COST_EDIT)) {
+                throw AppException.forbidden(
+                        "采购入库需要「编辑进货价」权限：入库单的进货单价不允许留空（S-9）");
+            }
+            movements.receivePurchase(skuId, qty, purchaseNo, supplier, costPrice, inboundDate,
+                    admin.getAdminAccountId());
+            ra.addFlashAttribute("notice", "采购入库已登记");
+        } catch (AppException e) {
+            ra.addFlashAttribute("error", e.getMessage());
         }
-        movements.receivePurchase(skuId, qty, purchaseNo, supplier, costPrice, inboundDate,
-                admin.getAdminAccountId());
-        ra.addFlashAttribute("flash", "采购入库已登记");
         return "redirect:/admin/shop/inventory";
     }
 
-    @PostMapping("/admin/shop/inventory/{skuId}/return-inbound")
+    @PostMapping("/admin/shop/inventory/return-inbound")
     @PreAuthorize(EDIT_AUTH)
     public String receiveReturn(@AuthenticationPrincipal AdminUserDetails admin,
-            @PathVariable long skuId,
+            @RequestParam long skuId,
             @RequestParam long qty,
             @RequestParam String originalOrderNo,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
                     LocalDate inboundDate,
             RedirectAttributes ra) {
-        // 单价由系统取该 SKU 最近一次采购入库单价（S-9）→ 不需要 cost_edit
-        movements.receiveReturn(skuId, qty, originalOrderNo, inboundDate, admin.getAdminAccountId());
-        ra.addFlashAttribute("flash", "退货入库已登记（退货入库批次）");
+        try {
+            // 单价由系统取该 SKU 最近一次采购入库单价（S-9）→ 不需要 cost_edit
+            movements.receiveReturn(skuId, qty, originalOrderNo, inboundDate,
+                    admin.getAdminAccountId());
+            ra.addFlashAttribute("notice", "退货入库已登记（退货入库批次）");
+        } catch (AppException e) {
+            ra.addFlashAttribute("error", e.getMessage());
+        }
         return "redirect:/admin/shop/inventory";
     }
 
-    @PostMapping("/admin/shop/inventory/{skuId}/damage")
+    @PostMapping("/admin/shop/inventory/damage")
     @PreAuthorize(EDIT_AUTH)
     public String writeOff(@AuthenticationPrincipal AdminUserDetails admin,
-            @PathVariable long skuId,
+            @RequestParam long skuId,
             @RequestParam long qty,
             @RequestParam String reason,
             RedirectAttributes ra) {
-        movements.writeOff(skuId, qty, reason, admin.getAdminAccountId());
-        ra.addFlashAttribute("flash", "报损已登记");
+        try {
+            movements.writeOff(skuId, qty, reason, admin.getAdminAccountId());
+            ra.addFlashAttribute("notice", "报损已登记");
+        } catch (AppException e) {
+            ra.addFlashAttribute("error", e.getMessage());
+        }
         return "redirect:/admin/shop/inventory";
     }
 
-    @PostMapping("/admin/shop/inventory/{skuId}/stocktake")
+    @PostMapping("/admin/shop/inventory/stocktake")
     @PreAuthorize(EDIT_AUTH)
     public String stocktake(@AuthenticationPrincipal AdminUserDetails admin,
-            @PathVariable long skuId,
+            @RequestParam long skuId,
             @RequestParam long countedActual,
             @RequestParam String reason,
             RedirectAttributes ra) {
-        movements.stocktake(skuId, countedActual, reason, admin.getAdminAccountId());
-        ra.addFlashAttribute("flash", "盘点调整已登记");
+        try {
+            movements.stocktake(skuId, countedActual, reason, admin.getAdminAccountId());
+            ra.addFlashAttribute("notice", "盘点调整已登记");
+        } catch (AppException e) {
+            ra.addFlashAttribute("error", e.getMessage());
+        }
         return "redirect:/admin/shop/inventory";
     }
 

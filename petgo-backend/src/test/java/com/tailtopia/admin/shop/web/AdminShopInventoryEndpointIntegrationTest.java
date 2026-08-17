@@ -2,7 +2,19 @@ package com.tailtopia.admin.shop.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.tailtopia.admin.account.domain.AdminAccount;
+import com.tailtopia.admin.account.domain.AdminAccountType;
+import com.tailtopia.admin.account.domain.AdminPermissions;
+import com.tailtopia.admin.account.repository.AdminAccountRepository;
+import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shop.domain.InventoryMovement;
 import com.tailtopia.shop.domain.InventoryMovementType;
@@ -10,6 +22,8 @@ import com.tailtopia.shop.repository.SkuInventoryRepository;
 import com.tailtopia.shop.service.InventoryMovementService;
 import com.tailtopia.support.ApiIntegrationTest;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -19,6 +33,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.Authentication;
 
 /**
  * L1 集成：库存管理与采购入库（Story 1.4，AB-10C）。上下文启动即验 Flyway V104 + validate。
@@ -36,6 +52,8 @@ class AdminShopInventoryEndpointIntegrationTest extends ApiIntegrationTest {
     private SkuInventoryRepository inventory;
     @Autowired
     private JdbcTemplate jdbc;
+    @Autowired
+    private AdminAccountRepository adminAccounts;
 
     private static final long ACTOR = 1L;
 
@@ -267,10 +285,134 @@ class AdminShopInventoryEndpointIntegrationTest extends ApiIntegrationTest {
     @Test
     @DisplayName("未登录访问库存管理页 → 重定向登录，不泄露任何库存数据")
     void inventoryPageRequiresLogin() throws Exception {
-        mvc.perform(org.springframework.test.web.servlet.request
-                        .MockMvcRequestBuilders.get("/admin/shop/inventory"))
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
-                        .status().is3xxRedirection());
+        mvc.perform(get("/admin/shop/inventory"))
+                .andExpect(status().is3xxRedirection());
+    }
+
+    /**
+     * 造一个带指定权限码的 STAFF 登录态。
+     *
+     * <p>📌 Story 1.3 曾自陈「actor 构造待本地补齐」而把权限相关的 L1 全部留空——实际上基建
+     * 一直是齐的（{@code AdminUserDetails} 的 6 参构造器 + {@code TestingAuthenticationToken}，
+     * 范式见 {@code AdminPagesRenderSmokeTest}）。**只是没做，不是做不了。**
+     */
+    private Authentication staffWith(String... permissionCodes) {
+        long n = SEQ.incrementAndGet();
+        AdminAccount acc = adminAccounts.save(AdminAccount.newSuperAdmin(
+                "inv-" + n + "@tailtopia.test", "库存测试账号", "{bcrypt}x"));
+        AdminUserDetails principal = new AdminUserDetails(acc.getId(), null, acc.getLarkEmail(),
+                acc.getPasswordHash(), AdminAccountType.STAFF, Set.of(permissionCodes));
+        return new TestingAuthenticationToken(principal, null,
+                new ArrayList<>(principal.getAuthorities()));
+    }
+
+    // ---------- AC1：已登录但无权限 → 403（先前只验了未登录，是不同的分支） ----------
+
+    @Test
+    @DisplayName("🔒 已登录但无 shop.inventory_view/edit 的 STAFF → 403，不是 302")
+    void loggedInWithoutInventoryPermissionIsForbidden() throws Exception {
+        mvc.perform(get("/admin/shop/inventory")
+                        .with(authentication(staffWith(AdminPermissions.SHOP_PRODUCT_VIEW))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("🔒 有 shop.inventory_view 的 STAFF → 200，且三列数值正确（AC1 的 L1 断言）")
+    void inventoryPageShowsThreeColumns() throws Exception {
+        long skuId = seedSku(12, 5);      // actual=12 locked=5 available=7
+
+        String html = mvc.perform(get("/admin/shop/inventory")
+                        .with(authentication(staffWith(AdminPermissions.SHOP_INVENTORY_VIEW))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(html).doesNotContain("??admin.");   // 无 i18n 缺键
+        String token = jdbc.queryForObject(
+                "SELECT public_token FROM shop_skus WHERE id = ?", String.class, skuId);
+        // 该行三个数并排出现：12 / 5 / 7 —— 不合并、不只显示可售
+        assertThat(html).contains(">12<").contains(">5<").contains(">7<");
+        assertThat(token).isNotBlank();
+    }
+
+    // ---------- 🔴 写端点失败时必须回列表页带错误提示，不能吐原始 JSON ----------
+
+    @Test
+    @DisplayName("🔴 报损失败（可售不足）→ 302 回列表页 + error flash，绝不给管理员一坨 JSON")
+    void writeOffFailureRedirectsWithFlashNotJson() throws Exception {
+        long skuId = seedSku(10, 7);      // 可售 3
+
+        mvc.perform(post("/admin/shop/inventory/damage")
+                        .with(authentication(staffWith(AdminPermissions.SHOP_INVENTORY_EDIT)))
+                        .with(csrf())
+                        .param("skuId", String.valueOf(skuId))
+                        .param("qty", "4")
+                        .param("reason", "仓库进水"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/admin/shop/inventory"))
+                .andExpect(flash().attributeExists("error"));
+
+        assertThat(actualOf(skuId)).as("失败后库存一分不动").isEqualTo(10L);
+    }
+
+    @Test
+    @DisplayName("🔒 有 inventory_edit 但无 cost_edit → 采购入库被服务端挡下（不是靠页面不渲染）")
+    void purchaseWithoutCostEditIsRejectedServerSide() throws Exception {
+        long skuId = seedSku(0, 0);
+
+        mvc.perform(post("/admin/shop/inventory/purchase")
+                        .with(authentication(staffWith(AdminPermissions.SHOP_INVENTORY_EDIT)))
+                        .with(csrf())
+                        .param("skuId", String.valueOf(skuId))
+                        .param("qty", "5")
+                        .param("purchaseNo", "PO-X")
+                        .param("costPrice", "1000"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(flash().attributeExists("error"));
+
+        assertThat(actualOf(skuId)).as("无 cost_edit 时一件也不该入库").isZero();
+    }
+
+    @Test
+    @DisplayName("报损成功 → 302 + notice flash，且 actual 正确减少")
+    void writeOffSuccessRedirectsWithNotice() throws Exception {
+        long skuId = seedSku(10, 0);
+
+        mvc.perform(post("/admin/shop/inventory/damage")
+                        .with(authentication(staffWith(AdminPermissions.SHOP_INVENTORY_EDIT)))
+                        .with(csrf())
+                        .param("skuId", String.valueOf(skuId))
+                        .param("qty", "4")
+                        .param("reason", "仓库进水"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(flash().attributeExists("notice"));
+
+        assertThat(actualOf(skuId)).isEqualTo(6L);
+    }
+
+    // ---------- AC5：审计真的落库（先前只在 L0 用 mock 验过调用） ----------
+
+    @Test
+    @DisplayName("🔒 三类操作各落一条审计，且详情里【没有】进货单价数值")
+    void auditRowsPersistedWithoutCostPrice() {
+        long skuId = seedSku(0, 0);
+
+        service.receivePurchase(skuId, 10L, "PO-AUD", "供应商", 193_777L, LocalDate.now(), ACTOR);
+        service.writeOff(skuId, 2L, "破损", ACTOR);
+        service.stocktake(skuId, 6L, "盘亏", ACTOR);
+
+        for (String action : new String[] {"SHOP_INVENTORY_RECEIPT_CREATED",
+                "SHOP_INVENTORY_DAMAGED", "SHOP_INVENTORY_STOCKTAKED"}) {
+            Integer n = jdbc.queryForObject(
+                    "SELECT count(*) FROM admin_audit_logs WHERE action_type = ?",
+                    Integer.class, action);
+            assertThat(n).as(action + " 应已落库").isPositive();
+        }
+
+        // 🔒 审计页可见范围与 shop.cost_view 不同，写进单价 = 绕过权限位
+        Integer leaked = jdbc.queryForObject(
+                "SELECT count(*) FROM admin_audit_logs WHERE summary LIKE '%193777%'",
+                Integer.class);
+        assertThat(leaked).as("审计详情不得出现进货单价数值").isZero();
     }
 
     private boolean insertFails(String sql, Object... args) {

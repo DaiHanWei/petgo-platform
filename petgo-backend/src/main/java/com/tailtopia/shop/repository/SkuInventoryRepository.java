@@ -59,11 +59,21 @@ public interface SkuInventoryRepository extends JpaRepository<SkuInventory, Long
     int commit(@Param("skuId") long skuId, @Param("qty") long qty);
 
     /**
-     * 入库：增加可售（1.4 采购入库 / 报损盘点 / 5.4 退货质检通过）。
+     * 入库：增加可售（1.4 采购入库 / 退货入库 / 5.4 退货质检通过）。
+     *
+     * <p>🔴 {@code clearAutomatically/flushAutomatically} 与 {@link #damage} / {@link #stocktakeTo}
+     * 同理且必须对齐：{@code InventoryMovementService.doInbound} 在本方法之后<b>同事务读回</b>
+     * {@code actual} 写进流水的前后值。若本事务此前已 load 过同一 {@code SkuInventory} 实体，
+     * JPQL 批量 UPDATE 绕过持久化上下文，读回的会是<b>一级缓存里的旧实体</b>——
+     * 前后值同步错位一个 offset，而 {@code ck_inventory_movements_delta_consistent}
+     * <b>拦不住</b>（after = before + delta 在错位后仍然自洽），且<b>不报任何错</b>。
+     *
+     * <p>当前调用路径下事务内无前置 load，尚不会触发；补齐是为了让这三条原语的安全模式对称，
+     * 不留「下次谁把它并进更大的事务就静默出错」的地雷。
      *
      * @return 1 = 成功；0 = 无该 SKU 库存行
      */
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update SkuInventory i set i.actual = i.actual + :qty, i.version = i.version + 1, "
             + "i.updatedAt = CURRENT_TIMESTAMP where i.skuId = :skuId")
     int restock(@Param("skuId") long skuId, @Param("qty") long qty);
