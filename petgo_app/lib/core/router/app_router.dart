@@ -12,6 +12,8 @@ import '../../features/auth/domain/auth_state.dart';
 import '../../features/auth/domain/user_state.dart';
 import '../../features/auth/presentation/dev_login_guide_page.dart';
 import '../../features/auth/presentation/login_page.dart';
+import '../../features/shop/address/presentation/address_book_page.dart';
+import '../../features/shop/address/presentation/address_form_page.dart';
 import '../../features/shop/presentation/product_detail_page.dart';
 import '../../features/shop/presentation/toko_page.dart';
 import '../../features/auth/presentation/nickname_page.dart';
@@ -495,6 +497,14 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/shop/products/:token',
         builder: (c, s) => ProductDetailPage(token: s.pathParameters['token']!),
+      ),
+      // 地址簿（Story 2.4）。🔒 挂在 /me 前缀下 —— 它已在 _controlledLocations 里，
+      // 游客访问自动重定向。地址是 PII，与 Toko 的游客开放策略正好相反。
+      GoRoute(path: '/me/addresses', builder: (c, s) => const AddressBookPage()),
+      GoRoute(path: '/me/addresses/new', builder: (c, s) => const AddressFormPage()),
+      GoRoute(
+        path: '/me/addresses/:token',
+        builder: (c, s) => AddressFormPage(token: s.pathParameters['token']),
       ),
       // 兽医账密登录 + 工作台壳（Story 5.1）。与用户侧 5-Tab 隔离：shell 外顶层路由。
       GoRoute(path: '/vet/login', builder: (c, s) => _vetScoped(const VetLoginPage())),

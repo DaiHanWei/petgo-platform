@@ -177,6 +177,9 @@ public class SecurityConfig {
                         // 写入端点属 Story 1.3 后台，走 /admin/**，不在此放行。
                         .requestMatchers(HttpMethod.GET, "/api/v1/shop/products",
                                 "/api/v1/shop/products/**").permitAll()
+                        // 行政区划树（Story 2.4）：区划与是否可配送都不敏感，
+                        // 且用户在注册前就该能看到「你们送不送我这儿」。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/shop/regions").permitAll()
                         // 兽医工作台端点（Story 5.1+）：仅 role=VET 可达；user/guest → 403（双向门控）
                         .requestMatchers("/api/v1/vet/**").hasRole("VET")
                         // 用户侧问诊端点（Story 5.2+ / 计费流 3-2~3-4）：仅 role=USER 可达（vet/guest → 403）

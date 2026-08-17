@@ -1,5 +1,5 @@
 # generated: 2026-08-17
-# last_updated: 2026-08-17  (Story 2.2 / 2.3 → review；后端 1698 全绿)
+# last_updated: 2026-08-17  (Story 2.4 → review；后端 1698 / 前端 799 全绿)
 #
 # ===== ✅ L1 阻塞已解除（2026-08-17）=====
 # 本机 Docker Desktop 一直装着（4.69），只是不自启 —— 前次「本机无 Docker」是误判。
@@ -124,7 +124,7 @@ development_status:
   2-1-收货地址建模与地址簿接口: review
   2-2-服务范围与运费表配置: review
   2-3-运费试算接口: review
-  2-4-地址簿与新增-编辑地址: backlog
+  2-4-地址簿与新增-编辑地址: review
   2-5-Epic-2-联调: backlog
   epic-2-retrospective: optional
 

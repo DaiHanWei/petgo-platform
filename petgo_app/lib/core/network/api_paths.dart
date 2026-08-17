@@ -235,4 +235,8 @@ class ApiPaths {
   // ===== 精选自营电商（V1.4.0 Story 1.6）=====
   /// 商品列表（Story 1.1 只读接口，**已对游客放行**）。可选 query：`category`。
   static const String shopProducts = '$base/shop/products';
+  /// 行政区划三级树（Story 2.4，游客可读）。
+  static const String shopRegions = '$base/shop/regions';
+  /// 🔒 地址簿（Story 2.1/2.4）。用 `/me` 不用 `/users/me`（决策 C1）。
+  static const String shippingAddresses = '$base/me/shipping-addresses';
 }
