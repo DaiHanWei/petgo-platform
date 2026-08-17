@@ -1,0 +1,176 @@
+# generated: 2026-08-17
+# last_updated: 2026-08-17
+# project: TailTopia V1.4.0 · 精选自营电商（增量）
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts/v1.4.0
+# source_epics: {project-root}/_bmad-output/planning-artifacts/epics-v1.4.0.md （9 Epic / 57 Story）
+# NOTE: 本文件是 V1.4.0 增量 sprint 跟踪，与 sprint-status.yaml(V1.0) / -v1.1 / -v1.1.2 并存，不覆盖。
+#       ⚠️ 偏离 bmad-sprint-planning 默认落点：其默认 status_file 为 sprint-status.yaml，
+#          照写会覆盖 V1.0 台账。沿用 v1.1 / v1.1.2 的版本后缀惯例。
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:        backlog -> in-progress -> done
+# Story Status:       backlog -> ready-for-dev -> in-progress -> review -> done
+# Retrospective:      optional <-> done
+# Action Item:        open -> in-progress -> done
+#
+# WORKFLOW NOTES:
+# - Epic 首个 story 创建(create-story)时自动 -> in-progress
+# - 每 story 三段推进：后端 -> 前端 -> 联调（CLAUDE.md 强制，一次只碰一侧）
+# - 每条 AC 已标 L0(静态) / L1(Docker postgres+redis) / L2(真机·模拟器·真实凭证) 层级
+# - ☁️ 云端 headless 只能跑 L0；L1/L2 一律留本地，story 的 Completion Notes 须标注
+#
+# ===== ⛔ 开工前置（未完成不得开写对应 story）=====
+# P-1 并行契约三人签字 + CHECK 认领 -> 挡 3-3(payment_intents) · 6-1(pet_profiles) · 6-3(ck_notifications_type)
+#     契约：_bmad-output/implementation-artifacts/v1.4.0/PARALLEL-DEV-CONTRACT.md
+#     ⚠️ 签字表两格仍空 —— 另两位并行同事身份未确认
+# P-2 DEP-6 每日建议喂量数据(Rendy) -> 不挡开工，挡版本核心论证：缺它 FR-109 恒不触发，
+#     FR-108 已出局(C-11)故复购引擎冗余归零，本版本将只剩 FR-107。须在商品录入排期前拿到
+# P-3 UX-DR4 评价页 / UX-DR5 退货进度页视觉稿(设计) -> 挡 7-2 · 5-9（已标「实现前不得自行发挥」）
+#
+# ===== 依赖链（Epic N 不依赖 Epic N+k，IR 2026-08-17 已复校）=====
+# E1 商品 ─┐
+#          ├─> E3 购买 ─> E4 履约 ─> E5 退货 ─> E8 经营数据
+# E2 地址 ─┘      │        │
+#                 │        └─> E7 评价（需已完成订单）
+#                 └─> E6 复购（需订单历史）
+# E9 边界与度量 —— 横切，可与 E6~E8 并行
+# 🔴 E1 与 E2 互不依赖，可并行，应排最前
+#
+# ===== FLYWAY 独占号段 V101–V139（并行契约 §1）=====
+# 🔴 号必须与 story 实现顺序一致 —— Flyway 默认 outOfOrder=false，先跑大号再出小号会拒绝启动
+# 🔴 合并时不重排号（与决策 E2 的最大差异；重排会让已应用迁移的校验和失配）
+#   V101 1-1 shop_products + shop_skus
+#   V102 1-2 sku_inventory
+#   V103 2-1 shipping_addresses            (PII·首个用户地址数据集)
+#   V104 3-1 shop_carts + shop_cart_items
+#   V105 3-2 shop_orders + shop_order_lines
+#   V106 3-3 ⚠️共享表 payment_intents 加三列 + 放宽 ck_payment_intents_channel（须认领）
+#   V107 4-2 shipments                     (S-2 一单多包的持久化依据)
+#   V108 5-1 return_requests + return_lines + 部分唯一索引
+#   V109 —— 空号（IR 重排后留空；Flyway 不要求连号，仓库既有 V86 空洞为证）
+#   V110 6-1 ⚠️共享表 pet_profiles 加体重列（须认领）
+#   V111 6-3 repurchase_triggers + ⚠️共享 ck_notifications_type 追加值（须认领）
+#   V112 7-1 shop_reviews
+#   V113+ 预留（平台配置项等）
+#
+# ===== 安全攸关节点（AC 含硬约束，不可被无监管流程降级/跳过）=====
+# 3-2  FR-102 订单号必须不可枚举 token（CLAUDE.md 护栏；日期+自增序列同样可枚举，作废）
+# 5-2  AD-2 资金精度：整数累计法，coin_ratio 不参与计算，多次部分退款后全额退款须精确归零
+# 5-5  FR-100A 规则1 防套现：服务层不存在 PawCoin 段退真钱的可达路径（能力缺席，非权限判断）
+# 9-1  FR-110 兽医不得推荐 SKU + FR-100A 规则6 不可转让/不可外部结算（均为能力缺席，入 CI 看守）
+# 2-1/4-3 OQ-41 注销级联与 UU PDP 未拍板(Legal) -> 先建模、留 ON DELETE 选择空间、不写死实现
+#
+# ===== 其他外部依赖对排期的影响 =====
+# DEP-1/DEP-2 Tab 位序与图标未闭合 -> 本版本不得改 bottom_tab_bar.dart，Toko 入口先走路由挂载
+# DEP-5 承运商企业账号与费率 -> 影响 E4 发货（4-2 录承运商与单号）
+# S-12 不做钱包余额批次分层、只给近似值 -> 建议财务复议；若不够用需回头改钱包（代价最高）
+#
+# ===== 三人并行 =====
+# 本工作线分支 shawn/oneline-ecommerce；🔴 定期 merge main，勿攒到最后一次性合
+# 触碰共享物（Flyway 共享表 / 共享枚举 CHECK / OrderCenterService / App 共享壳）前先在群里认领
+
+generated: 2026-08-17
+last_updated: 2026-08-17
+project: TailTopia V1.4.0 · 精选自营电商
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts/v1.4.0
+
+development_status:
+  # ── Epic 1: 商品上架与浏览 ──
+  epic-1: backlog
+  1-1-商品与-SKU-建模及只读查询接口: backlog
+  1-2-库存模型与可售库存口径: backlog
+  1-3-商品录入与-SKU-价格规格管理: backlog
+  1-4-库存管理与采购入库: backlog
+  1-5-上下架-精选排序与-SKU-上限告警: backlog
+  1-6-Toko-首页分类与全部精选: backlog
+  1-7-商品详情页与规格选择器: backlog
+  1-8-Epic-1-联调与埋点收口: backlog
+  epic-1-retrospective: optional
+
+  # ── Epic 2: 收货地址与配送范围 ──
+  epic-2: backlog
+  2-1-收货地址建模与地址簿接口: backlog
+  2-2-服务范围与运费表配置: backlog
+  2-3-运费试算接口: backlog
+  2-4-地址簿与新增-编辑地址: backlog
+  2-5-Epic-2-联调: backlog
+  epic-2-retrospective: optional
+
+  # ── Epic 3: 完成一次购买 ──
+  epic-3: backlog
+  3-1-购物车建模与接口: backlog
+  3-2-订单建模-状态机与不可枚举订单号: backlog
+  3-3-混合支付模型扩展: backlog
+  3-4-结算与下单: backlog
+  3-5-PawCoin-电商消费规则配置: backlog
+  3-6-购物车页: backlog
+  3-7-结算页与两段金额: backlog
+  3-8-支付与待支付订单详情: backlog
+  3-9-订单列表电商卡片: backlog
+  3-10-Epic-3-联调与埋点: backlog
+  epic-3-retrospective: optional
+
+  # ── Epic 4: 履约、物流与收货 ──
+  epic-4: backlog
+  4-1-履约段状态机与自动确认收货: backlog
+  4-2-发货与物流单号录入: backlog
+  4-3-电商订单列表与详情: backlog
+  4-4-订单异常处理: backlog
+  4-5-订单详情履约态: backlog
+  4-6-Epic-4-联调: backlog
+  epic-4-retrospective: optional
+
+  # ── Epic 5: 退货与退款 ──
+  epic-5: backlog
+  5-1-退货申请建模与行级部分退货: backlog
+  5-2-按比例退款的整数累计法: backlog
+  5-3-退货申请审核队列: backlog
+  5-4-质检与入库: backlog
+  5-5-退款执行: backlog
+  5-6-开封判定判例库: backlog
+  5-7-退货申请页: backlog
+  5-8-退款方式选择页: backlog
+  5-9-退货进度页: backlog
+  5-10-Epic-5-联调: backlog
+  epic-5-retrospective: optional
+
+  # ── Epic 6: 复购引擎（版本核心） ──
+  epic-6: backlog
+  6-1-宠物档案补体重与绝育状态: backlog
+  6-2-档案推荐规则引擎: backlog
+  6-3-粮量见底预估日扫: backlog
+  6-4-Toko-首页区域-接入: backlog
+  6-5-档案推荐区与降级引导卡: backlog
+  6-6-复购引擎效果看板: backlog
+  6-7-Epic-6-联调: backlog
+  epic-6-retrospective: optional
+
+  # ── Epic 7: 商品评价 ──
+  epic-7: backlog
+  7-1-评价建模与提交接口: backlog
+  7-2-评价页: backlog
+  7-3-详情页评价列表与空态: backlog
+  7-4-Epic-7-联调: backlog
+  epic-7-retrospective: optional
+
+  # ── Epic 8: 经营数据与对账 ──
+  epic-8: backlog
+  8-1-销售与毛利看板: backlog
+  8-2-库存周转与滞销预警: backlog
+  8-3-对账: backlog
+  8-4-模块-10-13-权限位与-Epic-8-联调: backlog
+  epic-8-retrospective: optional
+
+  # ── Epic 9: 边界守护与效果度量 ──
+  epic-9: backlog
+  9-1-问诊与商品的边界: backlog
+  9-2-归因链服务端闭合: backlog
+  9-3-跨切口埋点收尾与全量核对: backlog
+  epic-9-retrospective: optional
+
+action_items: []
