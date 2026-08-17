@@ -31,7 +31,13 @@ import 'widgets/repurchase_zones.dart';
 /// 实现上靠「`/shop` 不在 `_controlledLocations` 白名单里」达成，**零安全规则改动**。
 /// 登录引导推迟到加入购物车（Epic 3）。
 class TokoPage extends ConsumerStatefulWidget {
-  const TokoPage({super.key});
+  const TokoPage({super.key, this.initialCategory});
+
+  /// 进页即预选的品类 code（`/shop?category=OBAT_VITAMIN`）。
+  ///
+  /// 🔴 目前唯一的注入方 是健康记录页的 FR-110 品类跳转（Story 9.1）——
+  /// 那条路径上**只有品类 code 能通过**，所以这里也只收 code，不收商品/SKU。
+  final String? initialCategory;
 
   @override
   ConsumerState<TokoPage> createState() => _TokoPageState();
@@ -44,6 +50,7 @@ class _TokoPageState extends ConsumerState<TokoPage> {
   @override
   void initState() {
     super.initState();
+    _selected = ShopCategory.fromApi(widget.initialCategory);
     Analytics.capture('toko_tab_viewed');
   }
 

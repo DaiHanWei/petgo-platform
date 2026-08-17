@@ -535,7 +535,11 @@ class _ShopOrderDetailPageState extends ConsumerState<ShopOrderDetailPage> {
         // 纯 PawCoin：当场结清，没有二维码。余额缓存失效，免得别处读到旧余额。
         ref.invalidate(pawCoinProvider);
         ref.invalidate(shopOrderDetailProvider(widget.orderToken));
-        Analytics.capture('toko_order_payment_succeeded', {'pay_channel': 'PAWCOIN'});
+        // 🔴 Story 9.2：带上整单归因，闭合「曝光 → 加购 → 下单 → 支付」这条链。
+        //    原清单只到 add_to_cart 为止 —— 能算点击率，算不出转化率。
+        //    🔒 attribution_source 是服务端算好的受控词表值，不含 PII。
+        Analytics.capture('toko_order_payment_succeeded',
+            {'pay_channel': 'PAWCOIN', 'attribution_source': order.attributionSource});
         showAppToast(context, l10n.shopOrderPaid);
         return;
       }
@@ -554,8 +558,10 @@ class _ShopOrderDetailPageState extends ConsumerState<ShopOrderDetailPage> {
       ref.invalidate(shopOrderDetailProvider(widget.orderToken));
       ref.invalidate(pawCoinProvider);
       if (paid) {
-        Analytics.capture(
-            'toko_order_payment_succeeded', {'pay_channel': order.payChannel ?? 'UNKNOWN'});
+        Analytics.capture('toko_order_payment_succeeded', {
+          'pay_channel': order.payChannel ?? 'UNKNOWN',
+          'attribution_source': order.attributionSource,
+        });
         showAppToast(context, l10n.shopOrderPaid);
       }
     } catch (_) {

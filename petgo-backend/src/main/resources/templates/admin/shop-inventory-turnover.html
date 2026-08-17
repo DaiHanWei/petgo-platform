@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<!-- 库存周转与滞销预警（V1.4.0 Story 8.2，AB-13C）。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.shop.turnover.title}">库存周转 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1 th:text="#{admin.shop.turnover.title}">库存周转与滞销</h1>
+        <p class="hint" th:text="#{admin.shop.turnover.hint}">库存金额按进货价算——那是资金占用的直接读数。按售价算会把还没赚到的毛利也算成压着的钱。</p>
+
+        <form method="get" th:action="@{/admin/shop/inventory-turnover}" class="filters">
+            <label th:text="#{admin.shop.turnover.col.window}">统计窗口（天）</label>
+            <input type="number" name="days" min="1" th:value="${staleDays}"/>
+            <button type="submit" th:text="#{admin.common.filter}">筛选</button>
+        </form>
+
+        <!-- ⚠️ 缺货损失的口径说明：服务端只能给近似 -->
+        <p class="hint" th:text="#{admin.shop.turnover.oosHint}">「当前售罄 SKU 数」是服务端能给的近似读数。真正的缺货损失（有多少人看到了售罄）是客户端事件，在 PostHog 里——两者不是一回事，别把这个数当成损失金额。</p>
+        <table>
+            <tr><th th:text="#{admin.shop.turnover.col.oos}">当前售罄 SKU 数</th>
+                <td th:text="${outOfStockCount}">0</td></tr>
+        </table>
+
+        <h2 th:text="#{admin.shop.turnover.section.rows}">各 SKU</h2>
+        <table>
+            <thead><tr>
+                <th th:text="#{admin.shop.col.name}">商品</th>
+                <th th:text="#{admin.shop.sku.specName}">规格</th>
+                <th th:text="#{admin.shop.inventory.col.actual}">实际库存</th>
+                <th th:text="#{admin.shop.turnover.col.stockValue}">库存金额（进货价）</th>
+                <th th:text="#{admin.shop.turnover.col.soldRecent}">窗口内销量</th>
+                <th th:text="#{admin.shop.turnover.col.lastSold}">最近售出</th>
+                <th th:text="#{admin.shop.turnover.col.advice}">建议动作</th>
+            </tr></thead>
+            <tbody>
+            <tr th:each="row : ${rows}">
+                <td th:text="${row.get('product_name')}">Produk</td>
+                <td th:text="${row.get('spec_name')}">3 kg</td>
+                <td th:text="${row.get('actual')}">0</td>
+                <td th:text="${row.get('stock_value')}">0</td>
+                <td th:text="${row.get('sold_recent')}">0</td>
+                <td th:text="${row.get('last_sold_at')}">-</td>
+                <!-- 🔴 滞销预警必须给建议动作 —— 只报「滞销」而不说怎么办，运营还是不会动 -->
+                <td th:switch="${row.get('sold_recent') == null or row.get('sold_recent') == 0}">
+                    <span th:case="true" th:text="${row.get('actual') != null and row.get('actual') > 0}
+                            ? #{admin.shop.turnover.advice.stale} : #{admin.shop.turnover.advice.none}">降价清货 / 停止补货 / 下架</span>
+                    <span th:case="*" th:text="#{admin.shop.turnover.advice.healthy}">正常</span>
+                </td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(rows)}">
+                <td colspan="7" th:text="#{admin.shop.inventory.empty}">暂无 SKU。</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

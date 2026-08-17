@@ -136,6 +136,7 @@ class ShopOrderDetail {
     this.completedAt,
     this.returnWindowEndsAt,
     this.packages = const [],
+    this.attributionSource = 'unknown',
   });
 
   final String orderToken;
@@ -175,6 +176,12 @@ class ShopOrderDetail {
   final String receiverPhone;
   final String addressText;
 
+  /// 整单归因来源（服务端算好下发）：全部行同源取该源 / 多源 `mixed` / 无源 `unknown`。
+  ///
+  /// 🔴 只用于 `toko_order_payment_succeeded` 的 `attribution_source`，
+  /// **与服务端行级归因互为校验**（Story 9.2）。⚠️ 权威值始终在服务端。
+  final String attributionSource;
+
   bool get isMixed => (coinAmount ?? 0) > 0 && (cashAmount ?? 0) > 0;
 
   /// 剩余支付时间。🔴 只用于**渲染**；「是否已过期」的判定权在服务端。
@@ -204,6 +211,7 @@ class ShopOrderDetail {
       deliveredAt: _time(j['deliveredAt']),
       completedAt: _time(j['completedAt']),
       returnWindowEndsAt: _time(j['returnWindowEndsAt']),
+      attributionSource: j['attributionSource']?.toString() ?? 'unknown',
       packages: j['packages'] is List
           ? (j['packages'] as List)
               .whereType<Map<String, dynamic>>()

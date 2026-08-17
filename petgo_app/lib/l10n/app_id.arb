@@ -1319,6 +1319,10 @@
   "healthLoadError": "Gagal memuat catatan kesehatan. Coba lagi.",
   "healthTypeVaccine": "Vaksin",
   "healthTypeDeworm": "Obat Cacing",
+  "healthShopCategoryJump": "Lihat produk Obat & Vitamin",
+  "@healthShopCategoryJump": {
+    "description": "FR-110 唯一允许的问诊→商品关联：按健康记录类型跳品类。刻意不提具体商品名。"
+  },
   "healthTypeMenstruation": "Siklus Berahi",
   "healthTypeNeuter": "Sterilisasi",
   "healthTypeCustom": "Lainnya",

@@ -18,6 +18,8 @@ class CheckoutLine {
     this.productToken,
     this.mainImageUrl,
     this.invalidReason,
+    this.entrySource,
+    this.triggerType,
   });
 
   final String skuToken;
@@ -34,6 +36,16 @@ class CheckoutLine {
   /// 失效行才有值（不可购买的行不参与提交）。
   final String? invalidReason;
 
+  /// 行级归因：用户从哪个入口进的这件商品（区域② 档案推荐 / 区域④ 全部精选 …）。
+  ///
+  /// 🔴 服务端在加购时就记在购物车行上、下单时抄到订单行（Story 3.4 / 3.10）。
+  /// 端上拿到它**只为在 `toko_order_submitted` 里带上同一份值** —— 两套数据互为校验。
+  /// ⚠️ 偏差过大即说明客户端埋点有丢失，**以服务端为准**（Story 9.2）。
+  final String? entrySource;
+
+  /// 行级归因：触发类型（复购提醒 / 主动浏览 …）。同 [entrySource]。
+  final String? triggerType;
+
   int get lineTotal => price * qty;
 
   factory CheckoutLine.fromJson(Map<String, dynamic> json) => CheckoutLine(
@@ -47,6 +59,8 @@ class CheckoutLine {
         // 🔴 未知值降级到最保守档（`fromApi` 自带），缺失同理 —— 结算页是承诺现场
         returnPolicy: ReturnPolicy.fromApi(json['returnPolicy']?.toString()),
         invalidReason: _blankToNull(json['invalidReason']?.toString()),
+        entrySource: _blankToNull(json['entrySource']?.toString()),
+        triggerType: _blankToNull(json['triggerType']?.toString()),
       );
 
   static String? _blankToNull(String? s) => (s == null || s.isEmpty) ? null : s;

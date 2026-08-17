@@ -222,6 +222,12 @@ void main() {
         // 精选自营电商（2026-08-17，V1.4.0 Story 1.6）：Toko 是新模块，按既有扩展路径注册前缀
         // 而不是放宽规则。商品曝光事件必带 zone 属性（区分区域②档案推荐 / 区域④全部精选）。
         'toko_',
+        // FR-110 边界侵蚀监控（2026-08-18，V1.4.0 Story 9.1/9.3）：问诊→商品的跳转
+        // 是唯一被允许的关联，其占比必须能被单独看见 —— 混进 toko_ 就看不出来了。
+        'triage_',
+        // 推送疲劳终点信号（2026-08-18，V1.4.0 Story 9.3）：撤销授权发生在 notify 模块的
+        // 检测点上，混进 me_ 会让「在设置页撤销」与「冷启动才发现」看着像两回事。
+        'notify_',
       ];
       // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
       const allowedSuffixes = <String>[
@@ -276,6 +282,12 @@ void main() {
         'restore_timeout', 'corrected_from',
         // 问诊双线漏斗（2026-08-06）：consult_type ∈ {AI, VET} 是区分两线的唯一维度。
         'consult_type', 'price_idr',
+        // FR-110 边界侵蚀监控（V1.4.0 Story 9.1）：record_type ∈ HealthRecordType 受控词表。
+        // 🔒 刻意只带这一个 —— 宠物体重/年龄段那些维度服务端自己 join 得到，不必上报。
+        'record_type',
+        // 推送疲劳终点信号（V1.4.0 Story 9.3）：from_screen ∈ {app_launch, settings_page}，
+        // 受控字面量，不是 UI 文案。
+        'from_screen',
       ];
       for (final n in propNames) {
         expect(naming.hasMatch(n), isTrue, reason: '$n 不是 snake_case');

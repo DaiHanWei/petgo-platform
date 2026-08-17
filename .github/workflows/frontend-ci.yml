@@ -44,6 +44,11 @@ jobs:
       - name: Analyze (zero warnings)
         run: flutter analyze
 
+      # 🔴🔴 FR-110 边界守护（V1.4.0 Story 9.1，安全攸关）。理由同 backend-ci：
+      #    见 petgo-backend 侧同名步骤。两端各扫各的，任一端破了都红。
+      - name: 🔴 Guard — 问诊与商品的边界（FR-110）
+        run: flutter test test/shop/consult_shop_boundary_test.dart
+
       - name: Test
         run: flutter test
 

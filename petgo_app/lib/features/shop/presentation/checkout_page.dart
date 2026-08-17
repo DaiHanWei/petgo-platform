@@ -518,10 +518,26 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       // 下单成功后车里已被清掉已下单的行 —— 角标必须跟上
       await ref.read(cartProvider.notifier).refresh();
       if (!mounted) return;
-      // 🔴 下单成功（漏斗终点）。行级归因走**服务端**：加购时记在购物车行上、
+      // 🔴 下单成功（漏斗终点）。**权威归因在服务端**：加购时记在购物车行上、
       //    下单时抄到订单行（Story 3.10 / V114）—— 客户端事件会被广告拦截与丢包吃掉，
-      //    而 AB-13B 要用它判定 A-16。这里只报一个不含 PII 的件数。
-      Analytics.capture('toko_order_submitted', {'item_count': p.lines.length});
+      //    而 AB-13B 要用它判定 A-16。
+      // 🔴 Story 9.2：客户端仍带一份**行级**归因，不是为了替代服务端，而是为了
+      //    【互为校验】—— 两套数据一比就知道端上丢了多少。偏差过大即说明客户端埋点
+      //    有丢失，**以服务端为准**。原清单只到 add_to_cart 为止（能算点击率、
+      //    算不出转化率），这一份才把归因链闭上。
+      // 🔒 items 里只有受控标识与数量：sku_id 是不可枚举 token，无价格、无名称、无 PII。
+      Analytics.capture('toko_order_submitted', {
+        'item_count': p.lines.length,
+        'items': [
+          for (final l in p.lines)
+            {
+              'sku_id': l.skuToken,
+              'qty': l.qty,
+              'entry_source': l.entrySource ?? 'unknown',
+              'trigger_type': l.triggerType ?? 'none',
+            },
+        ],
+      });
       showAppToast(context, l10n.checkoutOrderPlaced);
       // 🔴 直接进待支付订单详情（Story 3.8）：60 分钟窗口从下单那一刻就在走，
       //    把用户留在结算页等他自己去找订单，等于让他在倒计时里找路。

@@ -202,18 +202,38 @@ development_status:
   epic-7-retrospective: optional
 
   # ── Epic 8: 经营数据与对账 ──
-  epic-8: backlog
-  8-1-销售与毛利看板: backlog
-  8-2-库存周转与滞销预警: backlog
-  8-3-对账: backlog
-  8-4-模块-10-13-权限位与-Epic-8-联调: backlog
+  epic-8: in-progress
+  8-1-销售与毛利看板: review
+  # ⚠️ 「缺货损失」口径偏离：AC 取 PostHog 的 out_of_stock_viewed 事件量，
+  #    但后台不反拉 PostHog（外部依赖违 NFR-1）→ 落地为业务库口径的当前售罄 SKU 数，
+  #    页面文案已注明两者不是一回事。真正的缺货损失在 PostHog 看 toko_out_of_stock_shown。
+  8-2-库存周转与滞销预警: review
+  # ⚠️ S-12 赠币核销额为近似值，须财务确认精度是否够用（不够则要回头改钱包，代价最高）
+  # ⚠️ DEP-8 未闭合：PawCoin 支付实物的税务与收入确认口径
+  8-3-对账: review
+  # 权限位 49 → 53：shop.order_view / order_fulfill / order_phone_search / finance_view
+  8-4-模块-10-13-权限位与-Epic-8-联调: review
   epic-8-retrospective: optional
 
   # ── Epic 9: 边界守护与效果度量 ──
-  epic-9: backlog
-  9-1-问诊与商品的边界: backlog
-  9-2-归因链服务端闭合: backlog
-  9-3-跨切口埋点收尾与全量核对: backlog
+  epic-9: in-progress
+  # 🔴 安全攸关：能力缺席式验收，两端各 1 个守卫测试 + 两个 CI 单列步骤；4 次变异验证全部先红后绿
+  # ⚠️ 品类跳转做在健康记录页（ConsultDiagnosis 无结构化记录类型，AC 前提在会诊结论上不成立）
+  #    该入口无视觉稿，L2 需本地确认；产品若认为不该有，删一个 widget 即可，守卫与埋点不受影响
+  9-1-问诊与商品的边界: review
+  9-2-归因链服务端闭合: review
+  # ⚠️ 两处事件改名以过埋点命名守卫（不放宽规则）：push_permission_revoked →
+  #    notify_push_permission_toggled；triage_to_category_jump → triage_category_jump_tapped
+  #    看板对照表在 test/analytics/v140_events_inventory_test.dart 的 inventory 常量
+  9-3-跨切口埋点收尾与全量核对: review
   epic-9-retrospective: optional
 
-action_items: []
+action_items:
+  # 🔴 全量跑时发现的【既有缺陷】，不属于本工作线，未擅自修改（notify 是共享模块）
+  - id: NOTIFY-CURSOR-TIE
+    what: 通知中心游标分页会整批跳过同一毫秒内的记录（用户永久看不到那几条）
+    where: "NotificationCenterService#list + NotificationRepository#findByRecipientUserIdAndCreatedAtBeforeOrderByCreatedAtDesc"
+    why: 游标是 created_at 截断到毫秒、查询用严格 `<`；分页边界落在某毫秒中间时该毫秒整批被跳过
+    symptom: NotificationControllerEndpointTest.list_paginatesWithCursor 全量跑偶发红（单跑绿）
+    fix: 游标改 (created_at, id) 复合比较；⚠️ 会改变游标 wire 格式
+    owner: notify 模块负责人（建议单开 story）

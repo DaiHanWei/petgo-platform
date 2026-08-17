@@ -140,6 +140,15 @@ public final class AdminPermissions {
      */
     public static final String SHOP_ORDER_PHONE_SEARCH = "shop.order_phone_search";
 
+    /**
+     * 🔒 <b>经营数据：毛利与对账</b>（V1.4.0 模块 13 · AB-13A / AB-13D，NFR-11）。
+     *
+     * <p>与 {@link #SHOP_COST_VIEW}（进货价）分开成两个码：看得到单个 SKU 的进货价，
+     * 和看得到整盘生意的毛利与现金流，是两种不同量级的商业敏感。
+     * 默认<b>仅财务与管理层</b>可见 —— 🔴 <b>不默认授予任何既有运营角色</b>。
+     */
+    public static final String SHOP_FINANCE_VIEW = "shop.finance_view";
+
     // 后台账号 / 审计（Epic 1）
     public static final String ADMIN_CREATE_ACCOUNT = "admin.create_account";
     public static final String ADMIN_VIEW_ACCOUNTS = "admin.view_accounts";
@@ -158,7 +167,7 @@ public final class AdminPermissions {
                     VIRTUAL_ACCOUNT_VIEW,
                     ADMIN_VIEW_ACCOUNTS, ADMIN_VIEW_LOGS,
                     SHOP_PRODUCT_VIEW, SHOP_COST_VIEW, SHOP_INVENTORY_VIEW,
-                    SHOP_ORDER_VIEW, SHOP_ORDER_PHONE_SEARCH)),
+                    SHOP_ORDER_VIEW, SHOP_ORDER_PHONE_SEARCH, SHOP_FINANCE_VIEW)),
             new PermissionGroup("perm.group.edit", List.of(
                     CONTENT_TAKEDOWN, CONTENT_RESTORE, CONTENT_PROACTIVE_TAKEDOWN,
                     CONTENT_MANUAL_REVIEW, CONTENT_DISPOSE_ACCOUNT,

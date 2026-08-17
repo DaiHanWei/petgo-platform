@@ -62,6 +62,21 @@
                 <td th:text="${s.linesTotal()}">0</td></tr>
         </table>
 
+        <!--
+          🔴 Story 9.2 归因链核对：逐档列出服务端权威口径，供与 PostHog 客户端聚合对账。
+             原埋点清单只到 add_to_cart 为止 —— 能算点击率、算不出转化率，
+             而 AB-13B 是裁决 A-16（复购引擎是否成立）的唯一依据。
+        -->
+        <h2 th:text="#{admin.shop.repurchase.section.reconcile}">归因链核对底账</h2>
+        <p class="hint" th:text="#{admin.shop.repurchase.reconcileNote}">以服务端为准。</p>
+        <table>
+            <tr><th th:text="#{admin.shop.repurchase.col.entrySource}">归因来源</th>
+                <th th:text="#{admin.shop.repurchase.col.lineCount}">订单行数（服务端）</th></tr>
+            <tr th:each="e : ${s.linesByEntrySource()}">
+                <td th:text="${e.key}">-</td>
+                <td th:text="${e.value}">0</td></tr>
+        </table>
+
         <h2 th:text="#{admin.shop.repurchase.section.repurchase}">复购率</h2>
         <table>
             <tr th:each="e : ${s.repurchaseRates()}">

@@ -93,9 +93,29 @@ public class RepurchaseDashboardService {
         // 粮量预估准确度：预估耗尽日 vs 实际再购日的偏差（天），只统计已被再次购买超越的触发
         Deviation deviation = depletionDeviation();
 
+        // 🔴 Story 9.2 归因链闭合核对：按来源逐档列出【服务端权威口径】的订单行数。
+        //    运营拿 PostHog 的 `toko_order_submitted.items[]` 同口径聚合往旁边一放，
+        //    差值就是客户端埋点的丢失量。⚠️ 偏差过大以服务端为准，别改服务端迁就端上。
+        Map<String, Long> linesByEntrySource = linesByEntrySource(fromTs, toTs);
+
         return new Snapshot(triggersByType, triggerTotal, triggerConverted, triggerDismissed,
                 linesFromTrigger, linesFromProfileReco, linesTotal,
-                usersWithFoodPurchase, usersWithTrigger, repurchaseRates, deviation);
+                usersWithFoodPurchase, usersWithTrigger, repurchaseRates, deviation,
+                linesByEntrySource);
+    }
+
+    /** 订单行按归因来源分档。无归因的归到 {@code (none)}，<b>不丢弃</b> —— 它是偏差的一部分。 */
+    private Map<String, Long> linesByEntrySource(java.sql.Timestamp from, java.sql.Timestamp to) {
+        Map<String, Long> out = new LinkedHashMap<>();
+        for (Map<String, Object> row : jdbc.queryForList("""
+                SELECT COALESCE(l.entry_source, '(none)') AS src, count(*) AS n
+                FROM shop_order_lines l JOIN shop_orders o ON o.id = l.order_id
+                WHERE o.created_at >= ? AND o.created_at < ?
+                GROUP BY 1 ORDER BY 2 DESC
+                """, from, to)) {
+            out.put(String.valueOf(row.get("src")), ((Number) row.get("n")).longValue());
+        }
+        return out;
     }
 
     private long countTriggers(String type, java.sql.Timestamp from, java.sql.Timestamp to) {
@@ -188,7 +208,17 @@ public class RepurchaseDashboardService {
             long usersWithFoodPurchase,
             long usersWithTrigger,
             Map<Integer, Double> repurchaseRates,
-            Deviation depletionDeviation) {
+            Deviation depletionDeviation,
+            /**
+             * 🔴 <b>归因链核对底账</b>（Story 9.2）：订单行按 {@code entry_source} 分档计数，
+             * 无归因的落 {@code (none)} 档。
+             *
+             * <p>这是<b>服务端权威口径</b>。客户端 {@code toko_order_submitted.items[]}
+             * 的同口径聚合与它相减即偏差；<b>偏差过大说明客户端埋点有丢失，以服务端为准</b>。
+             * 原埋点清单只到 {@code add_to_cart} 为止 —— 能算点击率、算不出转化率，
+             * 而 AB-13B 是裁决 A-16 的唯一依据。
+             */
+            Map<String, Long> linesByEntrySource) {
 
         /** 触发卡转化率 = 触发记录里最终转化的比例。 */
         public double triggerConversionRate() {

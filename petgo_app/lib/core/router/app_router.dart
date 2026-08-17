@@ -498,7 +498,12 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       //    转化漏斗最上层，用登录墙拦截会直接杀掉转化。登录引导推迟到加购（Epic 3）。
       // 🔴 Tab 位序归 DEP-1 未拍板、图标归 DEP-2 未交付 → 本版本【只挂路由，不动 AppTab 枚举】
       //    （bottom_tab_bar.dart 属并行契约 C 类）。Tab 接入待 DEP-1 闭合后单独处理。
-      GoRoute(path: '/shop', builder: (c, s) => const TokoPage()),
+      // `?category=` 只被 FR-110 的品类跳转注入（Story 9.1）：健康记录类型 → 品类，
+      // 系统生成、无 SKU。非法值由 ShopCategory.fromApi 落回 null（= 全部精选）。
+      GoRoute(
+        path: '/shop',
+        builder: (c, s) => TokoPage(initialCategory: s.uri.queryParameters['category']),
+      ),
       // 商品详情（Story 1.7）。同样对游客开放——不在 _controlledLocations 里。
       GoRoute(
         path: '/shop/products/:token',
