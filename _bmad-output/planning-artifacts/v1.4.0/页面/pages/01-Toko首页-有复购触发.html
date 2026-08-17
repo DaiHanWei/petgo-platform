@@ -24,22 +24,11 @@
       </button>
     </div>
 
-    <!-- ① 补货提醒区 · FR-108 / FR-109 -->
+    <!-- ① 补货提醒区 · 仅 FR-109
+         🔴 UX-DR1（2026-08-18 修）：原型原先画了两张卡（FR-108 驱虫 + FR-109 粮量）。
+            FR-108 已移出本版本（C-11），驱虫卡【已删除】——留着会让实现方以为要做两个来源，
+            而本版本区域① 只有 FR-109 一个来源。1.2.0 上线 FR-108 时再把它加回来。 -->
     <div class="section-label" style="color:var(--violet-500);">Saatnya Restok</div>
-
-    <div class="repurchase">
-      <div class="hd">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6m0 0 3-3m-3 3L9 5"/><circle cx="12" cy="15" r="7"/></svg>
-        <b>Jadwal obat cacing Mochi hampir tiba</b>
-        <span class="badge b-info">FR-108</span>
-      </div>
-      <div class="est">Terakhir dicatat 27 Mei · siklus 3 bulan · jatuh tempo <b>27 Agustus</b></div>
-      <div class="prod">
-        <div class="t">💊</div>
-        <div class="i"><b>Drontal Plus Obat Cacing Anjing</b><span>Rp 85.000</span></div>
-        <button class="btn btn-primary btn-sm">Lihat</button>
-      </div>
-    </div>
 
     <div class="repurchase">
       <div class="hd">
@@ -124,7 +113,7 @@
   <div class="sbox">
     <h3>复购触发卡（版本核心）</h3>
     <ul>
-      <li><b>FR-108 健康记录触发</b> — 数据源 FR-45A 结构化健康记录 + 1.2.0 健康提醒。<b>仅驱虫、疫苗两类参与</b>；月经/绝育/自定义不触发</li>
+      <li><b>FR-108 健康记录触发</b> — ⚠️ <b>已移出 V1.4.0（C-11），本版本区域① 不出现驱虫/疫苗卡</b>。1.2.0 上线时数据源为 FR-45A 结构化健康记录 + 健康提醒，仅驱虫、疫苗两类参与；月经/绝育/自定义不触发</li>
       <li><b>FR-109 粮量见底</b> — 上次购买净含量 ÷ 按体重匹配的日喂量。文案必须写「diperkirakan / 预计」，<b>不写成确定事实</b></li>
       <li>频控：同宠物同类型 <b>30 日内最多一次</b></li>
       <li>缺任一输入（无购买史/未配日喂量/档案无体重）<b>不触发，不兜底猜测</b></li>

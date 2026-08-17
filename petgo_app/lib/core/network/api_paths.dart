@@ -275,4 +275,11 @@ class ApiPaths {
   ///
   /// 🔴 **没有 coin-destination**：PawCoin 段没有第二个去向（FR-100A 规则 1，能力缺席）。
   static const String meShopReturns = '$base/me/shop-returns';
+
+  /// 🔒 Toko 首页区域②「为我的宠物精选」（Story 6.5，FR-107）。
+  /// 在 `/me` 下是刻意的：FR-93 状态矩阵里游客不展示该区。
+  static const String meShopRecommendations = '$base/me/shop/recommendations';
+
+  /// 🔒 Toko 首页区域①「补货提醒」（Story 6.4，FR-109）。`/{id}/dismiss` 关卡。
+  static const String meShopRepurchaseCards = '$base/me/shop/repurchase-cards';
 }

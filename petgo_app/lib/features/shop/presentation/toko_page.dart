@@ -9,12 +9,16 @@ import '../../../l10n/app_localizations.dart';
 import '../data/shop_repository.dart';
 import '../domain/shop_product.dart';
 import 'cart_icon_button.dart';
+import 'widgets/repurchase_zones.dart';
 
 /// Toko 首页（Story 1.6，FR-93 / FR-93A）。
 ///
 /// 结构自上而下**只有两段**：区域③「Kategori」+ 区域④「Semua Pilihan」。
 ///
-/// 🔴 **区域①（补货提醒）与区域②（档案精选）整区不渲染，且不留空标题。**
+/// Story 6.4 接入区域①（补货提醒，FR-109）与区域②（为我的宠物精选，FR-107）。
+/// 🔴 **两区在「无内容」时整区不渲染，且不留空标题**（原型注释原文：「①② 区域整体不渲染，
+/// 无空标题」）——一个写着「补货提醒」却什么都没有的标题，比没有这一区更让人困惑。
+/// 游客态在**数据层**短路（provider 不发 `/me` 请求），不是靠这里不画。
 /// 这是 PRD 定义的**合法状态**（无触发 / 无档案时本就不渲染），不是待补的占位——
 /// 原型注释原文：「①② 区域整体不渲染，无空标题」。页面第一个可见元素必须是「Kategori」。
 /// 两区在 Epic 6 接入。
@@ -59,11 +63,15 @@ class _TokoPageState extends ConsumerState<TokoPage> {
           CartIconButton(),
         ],
       ),
-      // ①② 区域整体不渲染 —— 此处没有任何占位、没有空标题，页面直接从 Kategori 开始
       body: RefreshIndicator(
         onRefresh: () async => ref.invalidate(shopProductsProvider(_selected)),
         child: CustomScrollView(
           slivers: [
+            // 区域①（Story 6.4）：无触发时 RepurchaseZone 自己返回 shrink，此处不加任何判断 ——
+            // 判断放在组件里，首页才不会因为多一区就多一层状态分支。
+            const SliverToBoxAdapter(child: RepurchaseZone()),
+            // 区域②（Story 6.4/6.5）：未建档时它自己换成建档引导卡（复用 FR-0G 文案）。
+            const SliverToBoxAdapter(child: ProfileRecoZone(zone: 'toko_profile_reco')),
             SliverToBoxAdapter(child: _sectionLabel(l10n.tokoCategoryLabel)),
             SliverToBoxAdapter(child: _categoryChips(l10n)),
             SliverToBoxAdapter(child: _sectionLabel(l10n.tokoAllFeaturedLabel)),

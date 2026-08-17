@@ -128,6 +128,13 @@ public class RepurchaseScanService {
             if (product == null || product.getCategory() != ProductCategory.MAKANAN) {
                 continue;
             }
+            // 🔴 <b>只有该 SKU 的【最新一笔】订单参与预估</b>：用户再次购买后，
+            //    旧订单不该再继续生成触发 —— 否则「按新订单重新起算」只做了一半，
+            //    旧订单每天都会把刚失效的卡片重新造出来。
+            if (orderLines.existsPaidLineForSkuAfter(order.getUserId(), sku.getId(),
+                    order.getCreatedAt())) {
+                continue;
+            }
             // 🔴 商品未配日喂量（DEP-6 未到位）→ 静默。上线首日这是常态。
             LocalDate depletion = DepletionForecast.estimateDepletionDate(
                     product.getFeedingGuide(), pet.getWeightKg(), sku.getNetWeightG(),

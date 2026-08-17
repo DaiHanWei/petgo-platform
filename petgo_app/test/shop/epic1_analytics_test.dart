@@ -141,7 +141,16 @@ void main() {
       // Story 3.10 新增两项，已逐个确认：
       // - pay_channel：枚举字面量 QRIS / PAWCOIN / MIXED / UNKNOWN，与个人无关
       // - item_count：整数件数，与个人无关
-      expect(props, {'product_token', 'sku_token', 'zone', 'pay_channel', 'item_count'});
+      // Story 6.4 新增两项，已逐个确认：
+      // - trigger_type：枚举字面量 FOOD_LOW / DEWORM / VACCINE，与个人无关
+      // - product_id：商品的不可枚举 token，与个人无关
+      // 🔴 **被这条挡下来并因此没有上报的**：`reco_reason`（Story 6.5 的 AC 要求带）——
+      //    理由文本含宠物的年龄段与体型区间，等于把档案的粗化版本送进三方分析平台。
+      //    product_id 足以在服务端 join 回商品维度还原理由，分析能力一点没少。
+      expect(props, {
+        'product_token', 'sku_token', 'zone', 'pay_channel', 'item_count',
+        'trigger_type', 'product_id',
+      });
     });
 
     test('🔴 Epic 1 声明的四个事件在源码里确实存在（声明与实现不许脱节）', () {
