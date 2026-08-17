@@ -1,0 +1,175 @@
+# generated: 2026-08-17
+# last_updated: 2026-08-17
+# project: TailTopia V1.1.6
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts/v1.1.6
+# source_epics: {project-root}/_bmad-output/planning-artifacts/epics-v1.1.6.md (10 Epic / 29 Story)
+# architecture: {project-root}/_bmad-output/planning-artifacts/architecture-v1.1.6-delta.md (AD-1~AD-17，权威)
+#               ✅ 2026-08-16 AD-1 新增 Rule 9（访客视图不套拉黑过滤，闭合 OA-6）
+# prd: {project-root}/_bmad-output/planning-artifacts/v1.1.6/PRD-v1.1.6.md
+#      + PRD-v1.1.6-admin.md（后台侧，AB-* 编号）
+#
+# NOTE: 本文件是 V1.1.6 增量 sprint 跟踪，与 V1.0 的 sprint-status.yaml、
+#       V1.1 的 sprint-status-v1.1.yaml、V1.1.2 的 sprint-status-v1.1.2.yaml 并存，均不覆盖。
+#       story 文件另放子目录 v1.1.6/，避免与各版的 1-1/2-1 编号混淆。
+#
+# ⚠️ 版本编号：本版本**原名 1.1.4，2026-08-11 交叉重编号后顺延为 1.1.6**。
+#    「1.1.4」已被另一批需求取走（社区管控：FR-58 举报 / FR-94 拉黑 / FR-96 身份证分享），
+#    该版本与本版本并行开发、**先于本版本发版**。判断某条能力归哪个版本，
+#    **用 FR / AB 编号比用版本号可靠** —— 编号全程没有重新分配。
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:   backlog -> in-progress -> done
+# Story Status:  backlog -> ready-for-dev -> in-progress -> review -> done
+# Retrospective: optional <-> done
+# Action Item:   open -> in-progress -> done
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic 首个 story 创建(create-story)时自动 -> in-progress
+# - 每 story 三段推进：后端 -> 前端 -> 联调（CLAUDE.md 纪律）
+# - 每条 AC 已标 L0(静态) / L1(集成) / L2(端到端) 层级
+# - 云端 headless 只跑到 L0 绿灯；L1/L2 留本地，在 Completion Notes 标注
+# - Dev 完成后转 review，再跑 code-review（建议新开 context）
+#
+# ===== Epic 依赖链（全后向，无环） =====
+# 零依赖、可立刻开工：E1 · E3 · E6 · E7 · E8 · E9
+# E1 (1-1 性别字段) -> E2      # 访客视图基础档案区要展示性别；1-1 极小，不构成真实阻塞
+# E3 -> E4                     # 顶置条目与普通条目同构，卡片改版未定稿会改两次
+# E3 -> E5                     # 两类标签都要挂在 3-4 交付的图片区叠加层里
+# E9 独立                      # 2026-08-11 对抗性评审已删除原「依赖 Epic 2」那条边
+# 全部 -> E10                  # 埋点收尾，沿用 V1.1.2「埋点集中一条收尾 story」惯例
+#
+# ===== 跨版本依赖（唯一一条） =====
+# E4 的 Story 4-4 需 V1.1.4 的拉黑过滤层已上线（架构 delta AD-8 Rule 6b）
+#   ✅ 2026-08-16 复核：V1.1.4 拉黑已实现完毕（分支 hex/v1.1.4，Story 1.1~4.1 全部 review，
+#      L0+L1 全绿、L2 视觉验收已过），**待合入 main**。阻塞已解除，4-4 从「等对方开工」
+#      降为「等对方发版」。若最终 V1.1.4 发版晚于本版本，回头重估（自建过滤 / 记为已知缺陷）。
+#
+# ===== Epic 内部顺序（刻意为之，勿调换） =====
+# E1: 1-1 性别字段 -> 1-2 主页面重做（1-2 要展示性别）；1-3 / 1-4 无前后依赖，可并行插入
+# E3: 3-1 后端取数与尺寸列 -> 3-2 通栏容器 -> 3-3 图片三段口径 -> 3-4 轮播与叠加层 -> 3-5 上传裁剪
+#     反过来先做渲染会拿不到尺寸数据，只能先写死比例再返工
+# E4: 4-1 数据模型与时间窗 -> 4-2 坑位渲染 -> 4-3 推广卡片；4-4 拉黑过滤单列且可延后
+# E8: 8-1 权限状态快照（P0 前置，先有观测再改行为）-> 8-2 用户侧 -> 8-3 兽医端
+# E9: 9-1 卡片生成基建 -> 9-2 两套模板 -> 9-3 入口与落地分流
+#
+# ===== 🔴 Flyway 号：本版本从 V105 起，不是 V100 =====
+# 架构 delta 的 frontmatter 写着 flywayBaseline: 'V99'、「新增从 V100 起顺延」——**那已过期**
+# （2026-08-11 写的，当时 V100 与 V1.1.4 的四个迁移都还不存在）。2026-08-17 实核：
+#   本分支已占：…V99、V100（add_id_card_student_fields）
+#   hex/v1.1.4 已占：V101 / V102 / V103 / V104（拉黑关系表、账号举报、账号处置、通知类型扩容）
+#   且 V1.1.4 **先于本版本发版**，其号是既成事实。
+# 故本版本第一个迁移取 **V105**，后续 story 依次 V106、V107…… 取 V101 会同号不同内容，
+# 两分支合并后 Flyway 校验失败、启动即崩。
+# （CLAUDE.md 决策 E2：序号按执行顺序单调分配，**勿照搬 architecture 示例号**。）
+#
+# ===== 本版本必须如期交付的一条埋点 =====
+# E-3（顶置重复曝光）归 Epic 4、随顶置功能一并上线，**不得推迟到 Epic 10**：
+# 它是下游 V1.1.8 判断「要不要为顶置做去重」的唯一数据来源（其 OQ-B3 明确依赖 E-3 的
+# serp_position 分布）。
+
+generated: 2026-08-17
+last_updated: 2026-08-17
+project: TailTopia V1.1.6
+project_key: NOKEY
+tracking_system: file-system
+story_location: "{project-root}/_bmad-output/implementation-artifacts/v1.1.6"
+
+development_status:
+  # ===== Epic 1: 宠物主页对外分享页改版（H5）· FR-92 §①③④ + E-23~E-27 =====
+  # 零依赖起点之一。共享文件：三个 Thymeleaf 模板 + 名片页控制器 —— 埋点接入与模板改造同文件，
+  # 故并入本 Epic，避免两次改动同一文件。
+  epic-1: in-progress
+  1-1-宠物性别字段落地: ready-for-dev                    # 现状是编辑页纯前端占位（选了不提交不入库），顺手修掉；存量为空须容错。零依赖，且是 Epic 2 的前置
+  1-2-h5主页面按定稿视觉重做: backlog                 # 按 E1/E2 屏；主色纠正为品牌紫；单 CTA 与吸底并入本条
+  1-3-失效页印尼化新增加载失败页: backlog             # 失效页现为全篇英文且被两条链路共用；加载失败页当前不存在（异常时浏览器白屏），属新增页面。零依赖
+  1-4-h5埋点从零接入: backlog                        # 页面现无任何埋点；服务端上报不引前端 SDK；点击与结果拆两个事件
+  epic-1-retrospective: optional
+
+  # ===== Epic 2: App 内访客只读视图 · FR-92 §② =====
+  # 依赖 Epic 1 的性别字段（1-1 极小，不构成真实阻塞）。反向不依赖。
+  # ⚠️ AD-1 Rule 9（2026-08-16 闭合 OA-6）：访客视图**不套拉黑过滤**，且响应体不得下发任何
+  #    拉黑相关信号。实现上什么都不用做 —— 那组 AC 是防止有人主动加上去。
+  epic-2: backlog
+  2-1-访客只读投影层: backlog                        # 唯一访客数据出口；结构上不持有健康记录/问诊仓库
+  2-2-日历视图与某天详情的访客版: backlog
+  2-3-访客态页面渲染: backlog                        # 作者态减法，不得另画一套
+  2-4-宠物名片深链落点分流: backlog                   # 现状错误落在给游客做的示例页
+  epic-2-retrospective: optional
+
+  # ===== Epic 3: Feed 卡片改造与图片规范化 · FR-71 + FR-93 + E-8/E-22 =====
+  # 零依赖。是 Epic 4 与 Epic 5 的前置 —— 先做完它，顶置与标签才不用改两次卡片。
+  epic-3: backlog
+  3-1-feed取数扩张与图片尺寸列: backlog               # 后端；一律批量聚合（AD-7），禁逐条查、禁冗余计数列
+  3-2-通栏容器与操作行: backlog                      # 点赞并入本条（原单列一条属人为切分）
+  3-3-图片渲染三段口径与加载期占位: backlog           # 按实际比例 -> clamp 0.75~1.34 -> 高度护栏（AD-6，顺序固定）
+  3-4-多图轮播与图片区叠加层: backlog                 # 叠加层是 Epic 5 两类标签的挂载点
+  3-5-发布页图片上传裁剪: backlog                    # ⚠️ 本版本唯一的 App 端新依赖（现无可用裁剪库，见架构 §6 Deferred）
+  epic-3-retrospective: optional
+
+  # ===== Epic 4: 内容顶置坑位 · FR-68 + E-1/E-2/E-3 =====
+  # 依赖 Epic 3。E-3 必须随本 Epic 交付，不得推迟到 Epic 10（下游 V1.1.8 的唯一数据来源）。
+  epic-4: backlog
+  4-1-顶置配置数据模型与时间窗判定: backlog           # 查询时判定，不落状态列、不建扫描器（AD-9）；时间窗判定须是唯一实现、四处共用
+  4-2-首页坑位渲染与只首屏让位: backlog               # 顶置 content_id 仅从第一页排除，后续页仍可出现（AD-8）
+  4-3-推广卡片: backlog                              # 不对应真实帖子
+  4-4-顶置坑位套用拉黑过滤: backlog                   # ⚠️ 跨版本依赖 V1.1.4（已实现待发版）；套 findFeed 的**账号维度**那条子查询，两条并列不合并
+  epic-4-retrospective: optional
+
+  # ===== Epic 5: 运营标签体系 · FR-74 + FR-75 =====
+  # 依赖 Epic 3（两类标签挂在 3-4 的图片区叠加层；装饰标签占左下角，与顶置角标的右上角互不重叠）。
+  epic-5: backlog
+  5-1-用户标签四处展示位与tooltip: backlog            # 七处展示位一律批量取数（AD-11），评论列表尤其禁止逐条
+  5-2-内容装饰标签三处展示位: backlog
+  epic-5-retrospective: optional
+
+  # ===== Epic 6: 里程碑通知补齐 · FR-76 =====
+  # 全版本最小的一条，零依赖，可立刻开工。
+  epic-6: backlog
+  6-1-sm级里程碑写入通知中心: backlog                 # 新增独立通知类型：进通知中心不发 push、计入未读角标、多个解锁写 N 条、存量不回填（AD-13）
+  epic-6-retrospective: optional
+
+  # ===== Epic 7: 手机号采集 · FR-70 =====
+  # 无代码依赖。🔴 OA-2 阻塞上线：用户协议是否已覆盖「手机号用于运营召回与后续触达」。
+  epic-7: backlog
+  7-1-手机号字段与保存清空: backlog                   # 选填、允许清空写 null、禁入日志，脱敏在展示层（AD-17）
+  7-2-软引导与设置页常驻入口: backlog                 # ⚠️ 须自行实现时机判定 —— 其声明复用的两个时机在线上已不再触发（AD-14）
+  epic-7-retrospective: optional
+
+  # ===== Epic 8: 推送权限重构 · FR-85 + E-19/E-20/E-21 =====
+  # 无代码依赖。⚠️ AD-14：全部触发点只走「跳系统设置」，PRD 的「原生弹窗归属」整段作废
+  #    （首启即申请已于 2026-08-07 上线）；照 PRD 字面实现会做出一段永远走不到的分支。
+  epic-8: backlog
+  8-1-系统通知权限状态快照: backlog                   # P0 前置：先有观测再改行为
+  8-2-用户侧三触发点与通知中心引导条: backlog
+  8-3-兽医端触发点: backlog                          # 切换为在线时
+  epic-8-retrospective: optional
+
+  # ===== Epic 9: 单条内容分享卡 · FR-73 =====
+  # 无依赖（2026-08-11 对抗性评审已删除原「依赖 Epic 2」那条边）。
+  # 客户端生成，复用宠物身份证既有做法；服务端出图能力仅供社交预览缩略图，不挪用（AD-15）。
+  epic-9: backlog
+  9-1-卡片生成基建: backlog                          # 双尺寸 + 水印 + 文字排版
+  9-2-两套模板与下载二维码: backlog                   # 有图 / 纯文字
+  9-3-分享入口与链接落地分流: backlog
+  epic-9-retrospective: optional
+
+  # ===== Epic 10: 埋点收尾（App 侧） =====
+  # 依赖前述各 Epic 的功能须先在。E-3 已随 Epic 4 交付，不在此。
+  epic-10: backlog
+  10-1-app侧剩余埋点与回写全局文档: backlog           # 🚩 OA-7 待产品定：四个事件名是否按 `模块_对象_动作` 规范改名（一旦上线就不能再改）
+  epic-10-retrospective: optional
+
+# ===== 开工前须知的开放问题（详见架构 delta §8） =====
+# 🔴 OA-2  阻塞 FR-70 上线：用户协议是否已覆盖「手机号用于运营召回与后续触达」
+#          （未覆盖则采集用途超出已获同意范围）—— 上线前由产品/法务确认
+# 🔴 OA-5  阻塞 FR-85 与 FR-70 开工：PRD §2.8「原生弹窗机会归属」整段建立在已下线的
+#          第一代双时机之上。AD-14 已按线上现实先行订正，PRD 待同步
+# ⚠️ OA-3  后台 4 条必须同版本模块的排期未定 —— App 端单独上线即空壳（FR-68/70/74/75）
+# ⚠️ OA-1  图片高度护栏的露出余量实机值 —— 不阻塞开工，卡 FR-71/FR-93 的 L2 视觉验收
+# ⚠️ OA-7  四个埋点事件名是否改名 —— 不阻塞开工；建议改，趁本版本这批事件全是新增、
+#          没有历史序列可切断，是唯一零成本的时机
+# ✅ OA-6  已于 2026-08-16 闭合：访客只读视图**不套拉黑过滤**（见 AD-1 Rule 9）
