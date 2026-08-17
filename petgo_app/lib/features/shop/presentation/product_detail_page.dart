@@ -2,12 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/analytics/analytics.dart';
+import '../../../core/router/route_intent.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/app_toast.dart';
+import '../../auth/domain/auth_state.dart';
+import '../../auth/domain/login_guide_controller.dart';
+import '../data/cart_repository.dart';
 import '../data/shop_repository.dart';
 import '../domain/shop_product.dart';
 import '../domain/shop_product_detail.dart';
+import 'cart_icon_button.dart';
 
 /// 商品详情页（Story 1.7，FR-94A / FR-95 / FR-104 / UX-DR10）。
 ///
@@ -60,7 +66,11 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
 
     return Scaffold(
       backgroundColor: AppColors.cream,
-      appBar: AppBar(backgroundColor: AppColors.cream),
+      appBar: AppBar(
+        backgroundColor: AppColors.cream,
+        // 加购后角标当场跟上（同一份 cartProvider）——不给反馈用户会重复点。
+        actions: const [CartIconButton()],
+      ),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => Center(
@@ -251,10 +261,9 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
   /// 底部加购栏。
   ///
   /// 🔴 **启用条件：已有生效 SKU 且该 SKU 可售。** 多规格未选 → 禁用（FR-94A）。
-  /// 加购动作本身属 Epic 3；此处按钮已就位但只给提示，**不跳登录、不跳不存在的页面**。
   Widget _bottomBar(AppLocalizations l10n, ShopProductDetail d) {
     final sku = _effectiveSku(d);
-    final canAdd = sku != null && sku.stockStatus.purchasable;
+    final canAdd = sku != null && sku.stockStatus.purchasable && !_adding;
     final label = sku == null
         ? l10n.tokoChooseVariantFirst
         : (sku.stockStatus == StockStatus.outOfStock ? l10n.tokoOutOfStock : l10n.tokoAddToCart);
@@ -265,16 +274,56 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
         child: SizedBox(
           height: 48,
           child: FilledButton(
-            onPressed: canAdd
-                ? () => ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(l10n.tokoCartComingSoon)),
-                    )
-                : null,
+            onPressed: canAdd ? () => _onAddTapped(l10n, sku) : null,
             child: Text(label),
           ),
         ),
       ),
     );
+  }
+
+  /// 加购请求进行中（防连点重复加）。
+  bool _adding = false;
+
+  /// 加购（Story 3.6，FR-96）。
+  ///
+  /// 🔴 **游客走软性登录引导，登录成功后自动完成本次加购并停留原页**——
+  /// 不跳登录页、不跳走、不丢意图。把用户踢到登录页再让他自己找回来，
+  /// 是转化漏斗上最贵的一次流失，而这次点击恰恰是他表达购买意图的那一下。
+  ///
+  /// 用 `allowRepeat: true` 绕过软浮层的 session 去重：主动动作触发的引导若被去重吞掉，
+  /// 按钮看起来就是坏的（见 `LoginGuideController.showSoftSheet` 的注释）。
+  void _onAddTapped(AppLocalizations l10n, ShopSku sku) {
+    Analytics.capture('toko_add_to_cart_tapped', {
+      'product_token': widget.token,
+      'sku_token': sku.token,
+    });
+    if (ref.read(authControllerProvider).isLoggedIn) {
+      _performAdd(l10n, sku);
+      return;
+    }
+    ref.read(loginGuideControllerProvider).showSoftSheet(
+          context,
+          pendingAction: RouteIntent(onResume: () => _performAdd(l10n, sku)),
+          entrySource: 'toko_add_to_cart',
+          allowRepeat: true,
+        );
+  }
+
+  Future<void> _performAdd(AppLocalizations l10n, ShopSku sku) async {
+    if (_adding) return;
+    setState(() => _adding = true);
+    try {
+      await ref.read(cartProvider.notifier).add(sku.token);
+      if (mounted) showAppToast(context, l10n.cartAdded);
+    } on CartMutationError catch (e) {
+      if (mounted) {
+        showAppToast(
+            context, e == CartMutationError.stock ? l10n.cartStockError : l10n.cartGenericError);
+      }
+    } finally {
+      if (mounted) setState(() => _adding = false);
+    }
   }
 
   static String _stripHtml(String html) =>

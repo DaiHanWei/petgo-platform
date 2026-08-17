@@ -247,4 +247,14 @@ class ApiPaths {
   static const String shopRegions = '$base/shop/regions';
   /// 🔒 地址簿（Story 2.1/2.4）。用 `/me` 不用 `/users/me`（决策 C1）。
   static const String shippingAddresses = '$base/me/shipping-addresses';
+
+  /// 🔒 购物车（Story 3.1 后端 · 3.6 前端）。`/me` 前缀本就受保护 ——
+  /// **游客无购物车**是有意的能力缺席（FR-96），不是待放开的限制。
+  static const String meCart = '$base/me/cart';
+  /// 加购（`?skuToken=&qty=`，同 SKU 累加）。
+  static const String meCartItems = '$meCart/items';
+  /// 改数量（`?qty=`，qty≤0 即删除）/ 删除单行。
+  static String meCartItem(String skuToken) => '$meCart/items/$skuToken';
+  /// 一键清空全部失效行（已下架 / 已售罄）。
+  static const String meCartInvalidItems = '$meCart/invalid-items';
 }
