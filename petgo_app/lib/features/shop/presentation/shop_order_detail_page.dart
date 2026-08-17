@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
@@ -24,6 +26,15 @@ import '../domain/shop_product.dart';
 ///
 /// 🔴 **仅 QRIS**（FR-100）：不支持 GoPay/OVO 直连、不支持银行转账/VA。
 /// 副标题必须说明「QRIS 可被各家 e-wallet 扫码」，否则用户会以为自己的钱包不能用。
+///
+/// Story 4.5 追加履约态：承运商 / 物流单号 / 复制 / 跳承运商官网 · 逐包裹列出（S-2）·
+/// 已发货态即给「确认收货」（SPEC-2 出口②）。
+///
+/// 🔴 **不接承运商 API、不在 App 内渲染物流轨迹**（FR-103）——「查物流」= 跳出去查。
+/// 自建轨迹聚合要为三家承运商 API 的可用性长期负责，V1 不承担这个。
+///
+/// 🔴 **时效文案只说「Reguler 2–4 个工作日」**：C-14 已把配送方式收为一维、砍掉当日达，
+/// 承诺「今天送达」就是每天都在制造一批必然失望的用户（UX-DR13）。
 class ShopOrderDetailPage extends ConsumerStatefulWidget {
   const ShopOrderDetailPage({super.key, required this.orderToken});
 
@@ -75,7 +86,12 @@ class _ShopOrderDetailPageState extends ConsumerState<ShopOrderDetailPage> {
         data: (order) => _content(l10n, order),
       ),
       bottomNavigationBar: async.maybeWhen(
-        data: (order) => order.status.isPendingPayment ? _bottomBar(l10n, order) : null,
+        data: (order) {
+          if (order.status.isPendingPayment) return _bottomBar(l10n, order);
+          // 🔴 SPEC-2 出口②：**已发货态就给确认收货**，不必等系统标记送达。
+          if (order.status.canConfirmReceipt) return _confirmBar(l10n);
+          return null;
+        },
         orElse: () => null,
       ),
     );
@@ -95,6 +111,11 @@ class _ShopOrderDetailPageState extends ConsumerState<ShopOrderDetailPage> {
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
       children: [
         _statusHeader(l10n, order, remaining),
+        if (order.status.hasFulfillmentInfo && order.packages.isNotEmpty) ...[
+          _section(l10n.shopOrderShippingSection),
+          for (var i = 0; i < order.packages.length; i++)
+            _packageCard(l10n, order.packages[i], i, order.packages.length),
+        ],
         _section(l10n.shopOrderShipTo),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
@@ -144,6 +165,9 @@ class _ShopOrderDetailPageState extends ConsumerState<ShopOrderDetailPage> {
     final label = switch (order.status) {
       ShopOrderStatus.pendingPayment => l10n.shopOrderStatusPendingPayment,
       ShopOrderStatus.pendingShipment => l10n.shopOrderStatusPendingShipment,
+      ShopOrderStatus.shipped => l10n.shopOrderStatusShipped,
+      ShopOrderStatus.delivered => l10n.shopOrderStatusDelivered,
+      ShopOrderStatus.completed => l10n.shopOrderStatusCompleted,
       ShopOrderStatus.cancelled => l10n.shopOrderStatusCancelled,
       // 🔴 认不出的状态给中性文案且不给任何动作（见 domain 注释）
       _ => l10n.shopOrderStatusOther,
@@ -174,6 +198,34 @@ class _ShopOrderDetailPageState extends ConsumerState<ShopOrderDetailPage> {
               Text(l10n.shopOrderExpiredNotice,
                   key: const ValueKey('shopOrderExpiredNotice'),
                   style: const TextStyle(fontSize: 13)),
+            ],
+            // 🎨 UX-DR7：已发货 / 已送达 / 已完成三态无视觉稿，沿用待支付态的
+            //    「大标题 + 一行副文案」结构范式，不自创新版式。
+            if (order.status == ShopOrderStatus.shipped) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(l10n.shopOrderEtaReguler,
+                  key: const ValueKey('shopOrderEta'),
+                  style: const TextStyle(fontSize: 13)),
+            ],
+            if (order.status == ShopOrderStatus.delivered) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(l10n.shopOrderDeliveredHint,
+                  key: const ValueKey('shopOrderDeliveredHint'),
+                  style: const TextStyle(fontSize: 13)),
+            ],
+            if (order.status == ShopOrderStatus.completed) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(l10n.shopOrderCompletedHint,
+                  key: const ValueKey('shopOrderCompletedHint'),
+                  style: const TextStyle(fontSize: 13)),
+            ],
+            // 🔴 退货窗口用【服务端下发的截止日】，App 不自己加 7 天。
+            //    「已完成」不等于「不能再退」—— 不写出来，用户会以为确认收货就放弃了退货权。
+            if (order.returnWindowEndsAt != null) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(l10n.shopOrderReturnWindow(_ymd(order.returnWindowEndsAt!)),
+                  key: const ValueKey('shopOrderReturnWindow'),
+                  style: const TextStyle(fontSize: 12, color: AppColors.muted)),
             ],
           ],
         ),
@@ -255,7 +307,175 @@ class _ShopOrderDetailPageState extends ConsumerState<ShopOrderDetailPage> {
         ),
       );
 
+  // ---------- 物流区块（Story 4.5） ----------
+
+  /// 一个包裹。S-2 一单多包时逐条列出，各自标明送达状态。
+  Widget _packageCard(
+      AppLocalizations l10n, ShopOrderPackage pkg, int index, int total) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.sm),
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 只有一个包裹时不显示「第 1 / 共 1 包」—— 那是噪音
+              if (total > 1)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                  child: Text(l10n.shopOrderPackageIndex(index + 1, total),
+                      key: ValueKey('shopOrderPackageIndex_$index'),
+                      style: const TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.muted)),
+                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(l10n.shopOrderCarrier,
+                      style: const TextStyle(fontSize: 13, color: AppColors.muted)),
+                  Text(pkg.carrierName,
+                      key: ValueKey('shopOrderCarrier_$index'),
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.xxs),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(l10n.shopOrderTrackingNo,
+                      style: const TextStyle(fontSize: 13, color: AppColors.muted)),
+                  Flexible(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Flexible(
+                          child: Text(pkg.trackingNo,
+                              key: ValueKey('shopOrderTrackingNo_$index'),
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontWeight: FontWeight.w600)),
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                        TextButton(
+                          key: ValueKey('shopOrderCopy_$index'),
+                          onPressed: () => _copyTracking(l10n, pkg),
+                          child: Text(l10n.shopOrderCopy),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.xxs),
+              Text(
+                  pkg.delivered
+                      ? l10n.shopOrderPackageDelivered
+                      : l10n.shopOrderPackageInTransit,
+                  key: ValueKey('shopOrderPackageState_$index'),
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: pkg.delivered ? AppColors.mint600 : AppColors.muted)),
+              const SizedBox(height: AppSpacing.sm),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  key: ValueKey('shopOrderTrack_$index'),
+                  onPressed: () => _openCarrierSite(l10n, pkg),
+                  child: Text(l10n.shopOrderTrackOnCarrierSite),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _confirmBar(AppLocalizations l10n) => SafeArea(
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          decoration: const BoxDecoration(
+            color: AppColors.cream,
+            border: Border(top: BorderSide(color: AppColors.line)),
+          ),
+          child: SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              key: const ValueKey('shopOrderConfirmReceipt'),
+              onPressed: _busy ? null : () => _confirmReceipt(l10n),
+              child: Text(l10n.shopOrderConfirmReceipt),
+            ),
+          ),
+        ),
+      );
+
   // ---------- 动作 ----------
+
+  Future<void> _copyTracking(AppLocalizations l10n, ShopOrderPackage pkg) async {
+    await Clipboard.setData(ClipboardData(text: pkg.trackingNo));
+    if (!mounted) return;
+    Analytics.capture('toko_order_tracking_copy_tapped');
+    showAppToast(context, l10n.shopOrderCopied);
+  }
+
+  /// 🔴 跳承运商官网（FR-103）—— App 内不渲染轨迹。
+  /// 用 [LaunchMode.externalApplication] 交给系统浏览器：站内 WebView 会让用户以为
+  /// 这仍是我们的页面，而承运商页面上的任何异常都会算到我们头上。
+  Future<void> _openCarrierSite(AppLocalizations l10n, ShopOrderPackage pkg) async {
+    Analytics.capture('toko_order_tracking_site_tapped');
+    final uri = Uri.tryParse(pkg.trackingUrl);
+    final ok = uri == null
+        ? false
+        : await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && mounted) showAppToast(context, l10n.shopOrderTrackOpenFailed);
+  }
+
+  /// 确认收货。
+  ///
+  /// 🔴 **要二次确认**：确认后订单直接完成，且它会写下签收时刻 —— 退货窗口从那一刻起算。
+  /// 弹窗正文必须写明「之后 7 天仍可申请退货」，否则用户会因为怕失去退货权而不敢点，
+  /// 于是订单又靠自动确认才脱离已发货态。
+  Future<void> _confirmReceipt(AppLocalizations l10n) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dlgCtx) => AlertDialog(
+        key: const ValueKey('shopOrderConfirmReceiptDialog'),
+        title: Text(l10n.shopOrderConfirmReceiptTitle),
+        content: Text(l10n.shopOrderConfirmReceiptBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dlgCtx).pop(false),
+            child: Text(l10n.shopOrderConfirmReceiptNo),
+          ),
+          FilledButton(
+            key: const ValueKey('shopOrderConfirmReceiptYes'),
+            onPressed: () => Navigator.of(dlgCtx).pop(true),
+            child: Text(l10n.shopOrderConfirmReceiptYes),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    // 🔴 「点了」与「成功了」是两个事件：确认收货会失败（网络 / 状态已变），
+    //    只埋一个的话，漏斗上分不清是没人点还是点了没成。
+    Analytics.capture('toko_order_receipt_confirm_tapped');
+    setState(() => _busy = true);
+    try {
+      await ref.read(shopOrderRepositoryProvider).confirmReceipt(widget.orderToken);
+      if (!mounted) return;
+      ref.invalidate(shopOrderDetailProvider(widget.orderToken));
+      Analytics.capture('toko_order_receipt_confirm_succeeded');
+      showAppToast(context, l10n.shopOrderReceiptConfirmed);
+    } catch (_) {
+      if (mounted) showAppToast(context, l10n.shopOrderConfirmReceiptFailed);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   Future<void> _pay(AppLocalizations l10n, ShopOrderDetail order) async {
     Analytics.capture('toko_order_pay_tapped');
@@ -347,6 +567,13 @@ class _ShopOrderDetailPageState extends ConsumerState<ShopOrderDetailPage> {
             AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.sm),
         child: Text(text, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
       );
+
+  /// 只到日：退货窗口是个日期概念，给到分秒只会让用户去数小时。
+  static String _ymd(DateTime d) {
+    final mm = d.month.toString().padLeft(2, '0');
+    final dd = d.day.toString().padLeft(2, '0');
+    return '${d.year}-$mm-$dd';
+  }
 
   static String _mmss(Duration d) {
     final m = d.inMinutes.toString().padLeft(2, '0');
