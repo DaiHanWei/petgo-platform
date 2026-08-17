@@ -19,8 +19,15 @@ import java.util.Set;
  * 因为「签收时刻」（SPEC-5，= 进入 {@code DELIVERED} 的时刻）是 Epic 5 退货窗口的唯一起算点，
  * 直达会造出一笔没有签收时刻、退货窗口无从算起的已完成订单。
  *
- * <p>⚠️ SPEC-6 指出状态机还缺四条边（拒收 / 退款驳回回边 / 退款执行失败分支 /
- * 用户主动撤销退货），须在 Epic 5 前闭合。
+ * <p>✅ <b>SPEC-6 的四条缺边已由 Epic 5（Story 5.1）闭合</b>，其中两条落在本枚举上：
+ * <b>拒收</b>（{@code SHIPPED → REFUNDING}）与<b>驳回/撤销回边</b>
+ * （{@code REFUNDING →} 驳回前状态）。另两条（退款执行失败、用户撤销）落在
+ * {@code ReturnStatus} 上 —— 退款单的状态机独立于订单状态机（AD-5）。
+ *
+ * <p>🔴 <b>{@code REFUNDING} 不是「有退款申请」的意思。</b>只有<b>整单</b>会走进 REFUNDING
+ * （拒收 / 发货前取消）；<b>行级部分退货期间订单主状态不变</b>，仅当全部行退完才回写
+ * {@code REFUNDED}。把「有进行中的退货申请」也标成 REFUNDING，会让退了一行的订单
+ * 在所有列表里显示成整单退款中，连带毁掉 AB-13A 售后成本与 AB-13D 对账。
  */
 public enum ShopOrderStatus {
 
@@ -56,12 +63,17 @@ public enum ShopOrderStatus {
             case PENDING_PAYMENT -> next == PENDING_SHIPMENT || next == CANCELLED;
             // 🔴 已付款订单的取消出口（超卖/缺货/地址异常，Story 4.4）。取消必然伴随全额退款，
             //    但退款【执行】属 Epic 5 的资金链路，本枚举只负责这条状态边存在。
-            case PENDING_SHIPMENT -> next == SHIPPED || next == CANCELLED;
+            //    🔴 SPEC-6 ①：发货前取消的退货申请获批 → 整单进入 REFUNDING。
+            case PENDING_SHIPMENT -> next == SHIPPED || next == CANCELLED || next == REFUNDING;
             // 🔴 三条出口共用这一条边（后台标记 / 用户确认 / M 日自动），差别只在 deliverySource。
-            case SHIPPED -> next == DELIVERED;
-            case DELIVERED -> next == COMPLETED;
-            // Epic 5 会在各自 story 里补退款段的边。此处返回 false 不是「禁止」，
-            // 而是「尚未实现」——提前开边会造出没有代码能推进的悬空态。
+            //    🔴 SPEC-6 ①【拒收】：已发货态给用户「拒收」入口，整单进入 REFUNDING。
+            case SHIPPED -> next == DELIVERED || next == REFUNDING;
+            case DELIVERED -> next == COMPLETED || next == REFUNDED;
+            // 🔴 Epic 5：整单退完才回写 REFUNDED（部分退不改主状态，AD-5）。
+            case COMPLETED -> next == REFUNDED;
+            // 🔴 SPEC-6 ②：驳回 / 撤销的【回边】——回到驳回前状态，REFUNDING 不是死路。
+            //    少了这条边，FR-102「无悬空态」按图论就是假的。
+            case REFUNDING -> next == REFUNDED || next == PENDING_SHIPMENT || next == SHIPPED;
             default -> false;
         };
     }
