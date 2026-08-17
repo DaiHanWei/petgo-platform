@@ -1,5 +1,5 @@
 # generated: 2026-08-17
-# last_updated: 2026-08-18  (Epic 4 完成 6/6；后端 1868 / 前端 891 全绿)
+# last_updated: 2026-08-18  (Epic 5 完成 9/10，5-9 挡 UX-DR5；后端 1921 / 前端 909 全绿)
 #
 # ===== ✅ L1 阻塞已解除（2026-08-17）=====
 # 本机 Docker Desktop 一直装着（4.69），只是不自启 —— 前次「本机无 Docker」是误判。
@@ -84,11 +84,13 @@
 #          4-2 因此【不需要迁移】。）
 #   V116 4-2 ⚠️共享 CHECK ck_notifications_type 追加 SHOP_ORDER_SHIPPED  ✅ 已提交（依临时授权）
 #   V117 4-4 ⚠️共享 CHECK ck_notifications_type 追加 SHOP_ORDER_EXCEPTION ✅ 已提交（依临时授权）
-#   V118 5-1 return_requests + return_lines + 部分唯一索引
-#   V119 6-1 ⚠️共享表 pet_profiles 加体重列（须认领）
-#   V120 6-3 repurchase_triggers + ⚠️共享 ck_notifications_type 追加值（须认领）
-#   V121 7-1 shop_reviews
-#   V122+ 预留（平台配置项等）
+#   V118 5-1 return_requests + return_lines + 部分唯一索引 + shipping_settings 退货地址  ✅ 已提交
+#   V119 5-6 opened_precedents（开封判例库）  ✅ 已提交
+#   V120 5-3/5.4/5.5 ⚠️共享 CHECK ck_notifications_type 追加 SHOP_RETURN_UPDATED  ✅ 已提交（依临时授权）
+#   V121 6-1 ⚠️共享表 pet_profiles 加体重列（须认领）
+#   V122 6-3 repurchase_triggers + ⚠️共享 ck_notifications_type 追加值（须认领）
+#   V123 7-1 shop_reviews
+#   V124+ 预留（平台配置项等）
 #
 # 🔴 本表是【建议性】的，绑定规则只有一条：**实现时取号段内当前最大号 +1，并立刻回写本表**。
 #    上面这次脱节就是没回写造成的。Flyway 不要求号连续（既有 V86 空洞为证），也不要求单调应用
@@ -164,17 +166,18 @@ development_status:
   epic-4-retrospective: optional
 
   # ── Epic 5: 退货与退款 ──
-  epic-5: backlog
-  5-1-退货申请建模与行级部分退货: backlog
-  5-2-按比例退款的整数累计法: backlog
-  5-3-退货申请审核队列: backlog
-  5-4-质检与入库: backlog
-  5-5-退款执行: backlog
-  5-6-开封判定判例库: backlog
-  5-7-退货申请页: backlog
-  5-8-退款方式选择页: backlog
-  5-9-退货进度页: backlog
-  5-10-Epic-5-联调: backlog
+  epic-5: in-progress
+  5-1-退货申请建模与行级部分退货: review
+  5-2-按比例退款的整数累计法: review
+  5-3-退货申请审核队列: review
+  5-4-质检与入库: review
+  5-5-退款执行: review
+  5-6-开封判定判例库: review
+  5-7-退货申请页: review
+  5-8-退款方式选择页: review
+  # 🎨 UX-DR5 视觉稿未交付，AC 写死「实现前不得自行发挥」→ 后端与数据层已就绪，前端刻意不做
+  5-9-退货进度页: blocked-on-design
+  5-10-Epic-5-联调: review
   epic-5-retrospective: optional
 
   # ── Epic 6: 复购引擎（版本核心） ──

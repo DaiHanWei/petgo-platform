@@ -17,6 +17,8 @@ import '../../features/shop/address/presentation/address_form_page.dart';
 import '../../features/shop/presentation/cart_page.dart';
 import '../../features/shop/presentation/checkout_page.dart';
 import '../../features/shop/presentation/product_detail_page.dart';
+import '../../features/shop/presentation/refund_method_page.dart';
+import '../../features/shop/presentation/return_request_page.dart';
 import '../../features/shop/presentation/shop_order_detail_page.dart';
 import '../../features/shop/presentation/toko_page.dart';
 import '../../features/auth/presentation/nickname_page.dart';
@@ -520,6 +522,19 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         path: '/shop/orders/:token',
         builder: (c, s) => ShopOrderDetailPage(orderToken: s.pathParameters['token']!),
       ),
+      // 退货申请页（Story 5.7）。入口在订单详情；已有进行中申请时页面自己渲染置灰态
+      // （UX-DR3）而不是 redirect —— 用户需要知道「已在处理中」，而不是被弹走。
+      GoRoute(
+        path: '/shop/orders/:token/return',
+        builder: (c, s) => ReturnRequestPage(orderToken: s.pathParameters['token']!),
+      ),
+      // 退款方式选择页（Story 5.8）。token 寻址（退货申请的不可枚举 token）。
+      GoRoute(
+        path: '/shop/returns/:token/refund-method',
+        builder: (c, s) => RefundMethodPage(returnToken: s.pathParameters['token']!),
+      ),
+      // ⏳ 退货进度页（Story 5.9）路由暂不挂载：UX-DR5 视觉稿未交付，
+      //    AC 写死「实现前不得自行发挥」。后端与数据层已就绪，补稿后只差这一页。
       // 地址簿（Story 2.4）。🔒 挂在 /me 前缀下 —— 它已在 _controlledLocations 里，
       // 游客访问自动重定向。地址是 PII，与 Toko 的游客开放策略正好相反。
       GoRoute(path: '/me/addresses', builder: (c, s) => const AddressBookPage()),

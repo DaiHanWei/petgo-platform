@@ -264,4 +264,15 @@ class ApiPaths {
   /// 🔒 电商下单（Story 3.7）。409 带 `unavailableLines` 逐行明细（FR-95，不整单打回）。
   /// Story 3.8 追加：`/{token}` 详情 · `/{token}/pay` 发起支付 · `/{token}/cancel` 取消。
   static const String meShopOrders = '$base/me/shop-orders';
+
+  /// 退货申请页数据（Story 5.7）。🔴 不可退的行照样下发（带置灰原因），不由前端过滤。
+  static String meReturnEligibility(String orderToken) =>
+      '$meShopOrders/$orderToken/return-eligibility';
+
+  /// 🔒 退货申请（Story 5.7/5.8/5.9）。
+  /// `/{token}` 进度 · `/{token}/cash-destination` 选现金段去向 ·
+  /// `/{token}/shipback` 上传寄回运单 · `/{token}/withdraw` 撤销。
+  ///
+  /// 🔴 **没有 coin-destination**：PawCoin 段没有第二个去向（FR-100A 规则 1，能力缺席）。
+  static const String meShopReturns = '$base/me/shop-returns';
 }
