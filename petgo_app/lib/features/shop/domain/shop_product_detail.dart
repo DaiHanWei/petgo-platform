@@ -11,7 +11,10 @@ import 'shop_product.dart';
 enum ReturnPolicy {
   returnable('RETURNABLE'),
   noReturnAfterOpen('NO_RETURN_AFTER_OPEN'),
-  noReturn('NO_RETURN');
+  // 🔴 后端枚举字面量是 NON_RETURNABLE。Story 1.7 一开始写成了 NO_RETURN，
+  // 靠「未知值降级到最保守档」恰好显示对了——但那是巧合掩盖了契约不一致：
+  // 真出现一个未知值时会与 NON_RETURNABLE 混为一谈，且这类错误不会有任何报错。
+  noReturn('NON_RETURNABLE');
 
   const ReturnPolicy(this.api);
 

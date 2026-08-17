@@ -1,5 +1,5 @@
 # generated: 2026-08-17
-# last_updated: 2026-08-17  (Story 3.3 → review；后端 1736 全绿。⚠️ 已动共享表，依产品临时授权)
+# last_updated: 2026-08-17  (Story 3.4 → review；后端 1753 / 前端 799 全绿)
 #
 # ===== ✅ L1 阻塞已解除（2026-08-17）=====
 # 本机 Docker Desktop 一直装着（4.69），只是不自启 —— 前次「本机无 Docker」是误判。
@@ -72,12 +72,13 @@
 #   V108 3-1 shop_carts + shop_cart_items  ✅ 已提交
 #   V109 3-2 shop_orders + shop_order_lines  ✅ 已提交
 #   V110 3-3 ⚠️共享表 payment_intents 加三列 + 放宽 ck_payment_intents_channel  ✅ 已提交（依临时授权）
-#   V111 4-2 shipments                     (S-2 一单多包的持久化依据)
-#   V112 5-1 return_requests + return_lines + 部分唯一索引
-#   V113 6-1 ⚠️共享表 pet_profiles 加体重列（须认领）
-#   V114 6-3 repurchase_triggers + ⚠️共享 ck_notifications_type 追加值（须认领）
-#   V115 7-1 shop_reviews
-#   V116+ 预留（平台配置项等）
+#   V111 3-4 订单行归因 + shop_pawcoin_rules + 订单拆分列  ✅ 已提交
+#   V112 4-2 shipments                     (S-2 一单多包的持久化依据)
+#   V113 5-1 return_requests + return_lines + 部分唯一索引
+#   V114 6-1 ⚠️共享表 pet_profiles 加体重列（须认领）
+#   V115 6-3 repurchase_triggers + ⚠️共享 ck_notifications_type 追加值（须认领）
+#   V116 7-1 shop_reviews
+#   V117+ 预留（平台配置项等）
 #
 # 🔴 本表是【建议性】的，绑定规则只有一条：**实现时取号段内当前最大号 +1，并立刻回写本表**。
 #    上面这次脱节就是没回写造成的。Flyway 不要求号连续（既有 V86 空洞为证），也不要求单调应用
@@ -133,7 +134,7 @@ development_status:
   3-1-购物车建模与接口: review
   3-2-订单建模-状态机与不可枚举订单号: review
   3-3-混合支付模型扩展: review
-  3-4-结算与下单: backlog
+  3-4-结算与下单: review
   3-5-PawCoin-电商消费规则配置: backlog
   3-6-购物车页: backlog
   3-7-结算页与两段金额: backlog
