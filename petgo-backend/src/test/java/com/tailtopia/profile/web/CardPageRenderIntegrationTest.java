@@ -32,6 +32,9 @@ class CardPageRenderIntegrationTest extends ApiIntegrationTest {
     @Autowired
     private PetProfileRepository profiles;
 
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbc;
+
     private String createProfileAndGetToken(User owner) throws Exception {
         mvc.perform(post("/api/v1/pet-profiles")
                         .header(HttpHeaders.AUTHORIZATION, userBearer(owner.getId()))
@@ -214,5 +217,83 @@ class CardPageRenderIntegrationTest extends ApiIntegrationTest {
         assertThat(html).doesNotContain("··");
         // 通用物种总数是 16；建档自动完成 1 条 → 1 / 16
         assertThat(html).contains("1 / 16");
+    }
+
+    // ===== L2 视觉验收（2026-08-17）实测发现的两个缺陷，各配一条回归 =====
+
+    /**
+     * 🛡 <b>照片簇与「快乐时刻」拼贴不得用同一张照片。</b>
+     *
+     * <p>视觉稿 E1 里这两处画的是不同照片。首版实现两处都从 {@code moments[0]} 开始取，
+     * 于是同一张图在一屏里出现两次 —— L2 实测肉眼可见。
+     */
+    @Test
+    void clusterAndCollageNeverShareTheSamePhoto() throws Exception {
+        User owner = newUser();
+        String token = createProfileAndGetToken(owner);
+        long petId = profiles.findByOwnerId(owner.getId()).orElseThrow().getId();
+        for (int i = 1; i <= 6; i++) {
+            insertMomentWithPhoto(owner.getId(), petId, "m" + i, "https://cdn.test/photo" + i + ".jpg", i);
+        }
+
+        String html = render(token);
+        java.util.Set<String> cluster = photosIn(html, "class=\"pl ");
+        java.util.Set<String> collage = photosIn(html, "class=\"cpl");
+
+        assertThat(cluster).isNotEmpty();
+        assertThat(collage).isNotEmpty();
+        assertThat(java.util.Collections.disjoint(cluster, collage))
+                .as("照片簇与拼贴区出现了同一张照片：簇=%s 拼贴=%s", cluster, collage)
+                .isTrue();
+    }
+
+    /**
+     * 🛡 <b>拼贴位置样式必须按实际渲染序号分配，不能用原始下标。</b>
+     *
+     * <p>首版用 {@code th:each} 的 index 拼 class，而<b>没有配图的记录会被过滤掉却仍占号</b> ——
+     * 于是遇到一条无图的老记录，拼贴区就从 {@code p2} 开始，{@code p1} 那个位置永远空着。
+     * L2 实测：4 张照片只显示出 3 张。
+     */
+    @Test
+    void collagePositionsStartAtP1EvenWhenSomeMomentsHaveNoPhoto() throws Exception {
+        User owner = newUser();
+        String token = createProfileAndGetToken(owner);
+        long petId = profiles.findByOwnerId(owner.getId()).orElseThrow().getId();
+        // 最新的一条**没有配图**（正是踩到的那种老数据）
+        insertMomentWithPhoto(owner.getId(), petId, "no-photo", null, 1);
+        for (int i = 2; i <= 7; i++) {
+            insertMomentWithPhoto(owner.getId(), petId, "m" + i, "https://cdn.test/p" + i + ".jpg", i);
+        }
+
+        String html = render(token);
+        assertThat(html)
+                .as("拼贴区应从 p1 开始 —— 无图记录不该占掉一个位置")
+                .contains("class=\"cpl p1\"");
+    }
+
+    /** 直接插一条快乐时刻（imageUrl 传 null 表示没有配图）。 */
+    private void insertMomentWithPhoto(long ownerId, long petId, String text, String imageUrl, int daysAgo) {
+        jdbc.update("""
+                INSERT INTO content_posts
+                  (author_id, pet_id, type, text, image_urls, status, visibility,
+                   event_date, created_at, updated_at)
+                VALUES (?, ?, 'GROWTH_MOMENT', ?, ?::jsonb, 'PUBLISHED', 'PUBLIC',
+                        current_date - ?, now(), now())
+                """,
+                ownerId, petId, text,
+                imageUrl == null ? null : "[\"" + imageUrl + "\"]",
+                daysAgo);
+    }
+
+    /** 从 HTML 里抓某一类相框中用到的图片文件名。 */
+    private static java.util.Set<String> photosIn(String html, String marker) {
+        java.util.Set<String> out = new java.util.LinkedHashSet<>();
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile(java.util.regex.Pattern.quote(marker) + "[\\s\\S]{0,400}?<img[^>]*src=\"([^\"]+)\"")
+                .matcher(html);
+        while (m.find()) {
+            out.add(m.group(1));
+        }
+        return out;
     }
 }

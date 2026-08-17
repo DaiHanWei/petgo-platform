@@ -208,7 +208,7 @@
     </div>
 
     <!--/* ① 照片簇（交叠）+ 涂鸦层。有图用真图，缺图留虚线空相位（E2「刚开本子」） */-->
-    <div class="cluster" th:with="imgs=${#lists.isEmpty(moments)} ? null : ${moments[0].imageUrls}">
+    <div class="cluster">
         <!--/* 主张：优先第一条快乐时刻的首图，否则头像 */-->
         <div class="pl a">
             <img class="ph" th:if="${avatarUrl}" th:src="${avatarUrl}" alt=""/>
@@ -217,20 +217,18 @@
             <div class="cp">&nbsp;</div>
         </div>
         <!--/* 右后 / 左下前：有第 2、3 张快乐时刻图就贴，否则空相位 */-->
-        <div class="pl b" th:if="${hasMoments and !#lists.isEmpty(moments[0].imageUrls)}">
-            <img class="ph" th:src="${moments[0].imageUrls[0]}" alt=""/>
-            <div class="cp" th:text="${moments[0].text}">&nbsp;</div>
+        <div class="pl b" th:if="${#lists.size(clusterPhotos) > 0}">
+            <img class="ph" th:src="${clusterPhotos[0].imageUrls[0]}" alt=""/>
+            <div class="cp" th:text="${clusterPhotos[0].text}">&nbsp;</div>
         </div>
-        <div class="slotpl" th:unless="${hasMoments and !#lists.isEmpty(moments[0].imageUrls)}"
+        <div class="slotpl" th:unless="${#lists.size(clusterPhotos) > 0}"
              style="right:8px;top:34px;width:104px;height:118px;transform:rotate(7deg)"></div>
 
-        <div class="pl c" th:if="${hasMoments and #lists.size(moments) > 1
-                                  and !#lists.isEmpty(moments[1].imageUrls)}">
-            <img class="ph" th:src="${moments[1].imageUrls[0]}" alt=""/>
-            <div class="cp" th:text="${moments[1].text}">&nbsp;</div>
+        <div class="pl c" th:if="${#lists.size(clusterPhotos) > 1}">
+            <img class="ph" th:src="${clusterPhotos[1].imageUrls[0]}" alt=""/>
+            <div class="cp" th:text="${clusterPhotos[1].text}">&nbsp;</div>
         </div>
-        <div class="slotpl" th:unless="${hasMoments and #lists.size(moments) > 1
-                                        and !#lists.isEmpty(moments[1].imageUrls)}"
+        <div class="slotpl" th:unless="${#lists.size(clusterPhotos) > 1}"
              style="left:8px;bottom:2px;width:96px;height:110px;transform:rotate(-9deg)"></div>
 
         <div class="cornertape"></div>
@@ -330,16 +328,17 @@
     <!--/* ⑥ 快乐时刻（交叠拼贴，最多 4 张）。零态 → 虚线占位 + 手写小字 */-->
     <div class="lab">
         <span class="tg">Momen bahagia</span>
-        <span class="ct" th:if="${hasMoments}">5 terbaru</span>
+        <span class="ct" th:if="${!#lists.isEmpty(collagePhotos)}"
+              th:text="${#lists.size(collagePhotos)} + ' terbaru'">4 terbaru</span>
     </div>
-    <div class="collage" th:if="${hasMoments}">
-        <div th:each="m, it : ${moments}" th:if="${it.index < 4 and !#lists.isEmpty(m.imageUrls)}"
-             th:classappend="'p' + (${it.index} + 1)" class="cpl">
+    <div class="collage" th:if="${!#lists.isEmpty(collagePhotos)}">
+        <div th:each="m, it : ${collagePhotos}" class="cpl"
+             th:classappend="${'p' + (it.index + 1)}">
             <img class="ph" th:src="${m.imageUrls[0]}" alt=""/>
             <div class="t" th:text="${m.text}">&nbsp;</div>
         </div>
     </div>
-    <th:block th:unless="${hasMoments}">
+    <th:block th:if="${#lists.isEmpty(collagePhotos)}">
         <div class="empty">Unduh App untuk lihat<br/>lebih banyak konten</div>
         <div class="emptyline">halaman pertama&hellip;</div>
     </th:block>

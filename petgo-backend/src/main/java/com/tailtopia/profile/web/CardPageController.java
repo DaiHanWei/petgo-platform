@@ -43,7 +43,19 @@ import org.springframework.web.bind.annotation.PathVariable;
 @Controller
 public class CardPageController {
 
-    private static final int MAX_MOMENTS = 5;
+    /**
+     * 取多少条快乐时刻（按 event_date 倒序）。
+     *
+     * <p>⚠️ V1.1.6 Story 1.2 起从 5 提到 6：页面有<b>两处</b>贴照片的地方 ——
+     * 顶部照片簇 2 张 + 「快乐时刻」拼贴 4 张（视觉稿 E1 就是这个配置）。
+     * 停在 5 会让拼贴区最多只有 3 张、永远填不满，且**无图的条目也占名额**
+     * （L2 实测：一条没有配图的老记录挤掉了拼贴区的一格）。
+     */
+    /** 顶部照片簇里贴的照片数（视觉稿 E1：主张之外还有右后、左下前两张）。 */
+    private static final int CLUSTER_PHOTOS = 2;
+    /** 「快乐时刻」拼贴区的照片数（视觉稿 E1：4 张不同尺寸角度交叠）。 */
+    private static final int COLLAGE_PHOTOS = 4;
+    private static final int MAX_MOMENTS = CLUSTER_PHOTOS + COLLAGE_PHOTOS;
     /** 具名徽章展示上限（视觉稿 E1：2 个具名 chip + 2 个空槽，其余靠「N / 总数」计数体现）。 */
     private static final int MAX_BADGES = 2;
 
@@ -122,9 +134,21 @@ public class CardPageController {
         addMilestoneSection(model, profile, stats.milestoneCompleted(), today);
 
         // ⑤ 快乐时刻照片流（按 event_date 倒序，AC7）。
+        // ⚠️ 多取一些再过滤：**无图的条目不该占名额**（L2 实测踩到 —— 一条没配图的老记录
+        // 挤掉了拼贴区的一格）。取 2 倍上限足够覆盖零星缺图，仍是一次查询、无额外开销。
         List<CardMoment> moments = buildMoments(ownerId, profile.getId());
         model.addAttribute("moments", moments);
         model.addAttribute("hasMoments", !moments.isEmpty());
+        // V1.1.6 Story 1.2：页面有**两处**贴照片的地方 —— 顶部照片簇与「快乐时刻」拼贴。
+        // ⚠️ 两处必须用**不同的**照片（视觉稿 E1 就是这么画的），且各自的位置样式按
+        // **实际渲染序号**分配，故在这里切好再交给模板，不让模板用原始下标去猜。
+        List<CardMoment> withPhoto = moments.stream()
+                .filter(m -> m.getImageUrls() != null && !m.getImageUrls().isEmpty())
+                .toList();
+        model.addAttribute("clusterPhotos",
+                withPhoto.stream().limit(CLUSTER_PHOTOS).toList());
+        model.addAttribute("collagePhotos",
+                withPhoto.stream().skip(CLUSTER_PHOTOS).limit(COLLAGE_PHOTOS).toList());
 
         // OG / Twitter：标题本地化为印尼语（页面 lang=id；修 20260702-208 原硬编码中文「…的成长故事」）。
         String ogTitle = "Kisah tumbuh kembang " + profile.getName();
@@ -303,7 +327,8 @@ public class CardPageController {
     }
 
     private List<CardMoment> buildMoments(long ownerId, long petId) {
-        List<GrowthMomentView> raw = contentService.findRecentGrowthMomentsByEventDate(ownerId, petId, MAX_MOMENTS);
+        List<GrowthMomentView> raw =
+                contentService.findRecentGrowthMomentsByEventDate(ownerId, petId, MAX_MOMENTS * 2);
         List<CardMoment> out = new ArrayList<>(raw.size());
         for (GrowthMomentView m : raw) {
             List<String> stripped = new ArrayList<>();
