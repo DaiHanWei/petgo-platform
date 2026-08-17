@@ -13,7 +13,9 @@ authority: "签字后与 CROSS-STORY-DECISIONS.md 同级；本文件是决策 E2
 - **2026-07-11 · Flyway 撞号** → V1.1 资金地基迁移号全量 +13 重排（原文见 `V60__init_payment_intents.sql` 文件头）
 - **2026-07-30 · 两条线各自 `DROP+ADD` 同一个 `ck_notifications_type`** → 合并后审核通知整类失效。**两边测试全绿、合并无冲突、编译不报错**（原文见 `V97__union_notification_types_two_lines.sql` 文件头）
 
-本版本要给 `PayChannel` 加 `MIXED`，是第二次事故的同一个剧本。以下三条约束需三方确认。
+本版本要给 `PayChannel` 加 `MIXED`，是第二次事故的同一个剧本。以下约束需三方确认。
+
+> **2026-08-17 更新：** 开工两条 story 后发现原共享物清单**漏了 4 个文件**（`SecurityConfig` / `AdminPermissions` / admin `layout.html` / 三份 i18n）。已做系统性排查并补入 **§二之二**。
 
 ---
 
@@ -52,6 +54,22 @@ authority: "签字后与 CROSS-STORY-DECISIONS.md 同级；本文件是决策 E2
 > 另：`notifications.type`（`ck_notifications_type`，**19 值**）本版本也要加值，同样需认领——它正是第二次事故的那个约束。
 > `OrderType` **不落库**（纯 DTO 枚举，全仓无 `order_type` 列），改它只有编译期风险。
 
+## 二之二 · 共享文件清单（2026-08-17 补 —— 原清单漏了 4 个）
+
+> **为什么补：** 原清单（Flyway / 共享枚举 CHECK / `OrderCenterService` / App 壳）是**按 PRD 提到的东西列的，不是按代码实际共享的东西列的**。Story 1.1 开工就撞上 `SecurityConfig`，1.3 又撞上 `AdminPermissions`。这里做了一次系统性排查，把 V1.4.0 会碰到的共享文件一次列全。
+
+| # | 共享文件 | 谁会碰 | 改法 | 为什么危险 |
+|---|---|---|---|---|
+| 1 | `shared/security/SecurityConfig.java` | **1.1** ✅已改 · 后续凡加对外端点 | **只追加 `requestMatchers`，插在同类块末尾** | 🔴 **Spring Security 按声明顺序匹配** —— 重排会静默改鉴权语义，编译与测试都不报错 |
+| 2 | `admin/account/domain/AdminPermissions.java` | **1.3 / 1.4 / 1.5 / 4.x / 5.x / 8.x**（模块 10–13 全部） | 常量**只在末尾追加**；`GROUPS` 的两个 `List.of` **只在末尾追加**，不重排 | `ALL` 由 `GROUPS` 派生并作为**权限码校验白名单**；顺序还决定账号页勾选区的展示顺序。删/改一个码 = 已授权账号静默失权 |
+| 3 | `templates/admin/layout.html`（左侧导航） | **1.3 / 4.3 / 5.3 / 8.1**（每加一个后台模块） | 在导航末尾追加 `<details class="nav-section">` 块，**不动既有块顺序** | 三人各加一个模块时最易冲突的单个文件 |
+| 4 | `i18n/messages_{id,en,zh_CN}.properties` | 同上，**三个文件必须同步加** | **只在文件末尾追加 key**，不重排、不删 | 漏加某一语种 → 该语种下显示 raw key；三线并行时最易只改自己看的那一份 |
+| 5 | `order/service/OrderCenterService.java` | **3.9** | 见 §三 | 275 行 fan-in 聚合器 |
+| 6 | 共享枚举与 CHECK（`PayChannel` / `NotificationType` 等） | **3.3 / 6.3** | 见 §二 | 2026-07-30 事故的原发地 |
+| 7 | App 共享壳（ARB / 路由 / `AppTab`） | **1.6 / 1.7 / 3.6+** | 见 §三 | — |
+
+**通用判据（比清单更重要）：** 一个文件只要满足「**另两条工作线也可能在同一周期改它**」就是共享物，无论它在不在上表。**改之前先在群里认领。** 上表是已知的，不是穷尽的。
+
 ## 三 · `OrderCenterService` 与 App 共享壳
 
 `order/service/OrderCenterService.java`，**275 行**，订单中心唯一 fan-in 聚合器，三线共享且无法拆分。
@@ -72,9 +90,12 @@ authority: "签字后与 CROSS-STORY-DECISIONS.md 同级；本文件是决策 E2
 | *（待填）* | *（待填）* | | ☐ |
 | *（待填）* | *（待填）* | | ☐ |
 
-**当场要敲定的三件事：**
+**当场要敲定的四件事：**
 1. **号段边界** —— 上表两格由你们自己填，用量只有你们知道
 2. **`ck_payment_intents_channel` 与 `ck_notifications_type` 归我改**，这期间别人不碰
 3. **`OrderCenterService` 的改动先后** —— 若你们本周期也要加订单类型，排个顺序
+4. **§二之二 的 7 个共享文件**（2026-08-17 补）—— 尤其 `AdminPermissions.java` / `layout.html` / 三份 i18n：**三人各加一个后台模块时，这三处必然同时被改**，需排出先后或约定「各自只追加到文件末尾」
+
+> ⚠️ **已发生的既成事实：** Story 1.1 已改 `SecurityConfig.java`（纯追加游客放行，未重排），**当时尚未认领** —— 需补一句知会。
 
 签字后追加一条摘要到 `_bmad-output/implementation-artifacts/CROSS-STORY-DECISIONS.md`。
