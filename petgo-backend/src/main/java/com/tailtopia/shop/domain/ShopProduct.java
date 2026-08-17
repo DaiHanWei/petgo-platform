@@ -143,6 +143,33 @@ public class ShopProduct {
         this.sortWeight = sortWeight;
     }
 
+    /**
+     * 上架（Story 1.5，AB-10D）。调用方须先校验在售 SKU 上限（C-7）。
+     *
+     * <p>🔴 <b>只改可见性，不碰库存。</b>
+     */
+    public void list() {
+        this.active = true;
+    }
+
+    /**
+     * 下架（Story 1.5，AB-10D）—— 闭合 SPEC-7 的「下架时已锁定库存归属」缺口。
+     *
+     * <p>🔴 <b>只改可见性，一个库存数都不动</b>（2026-08-17 产品拍板）：
+     * <ul>
+     *   <li>与 Story 1.2 的「<b>售罄不下架</b>」同一口径——库存状态与可见性是两件事，不该互相驱动；</li>
+     *   <li>已下单未支付的用户照常付款履约，{@code locked} 随支付出库或 60 分钟超时（AD-8）自然释放；</li>
+     *   <li>召回/食品安全需要立刻止血时，走决策 <b>S-3</b> 的「运营在 AB-11D 手工选单取消」，不在此处造新机制。</li>
+     * </ul>
+     *
+     * <p>⚠️ <b>已知代价：下架 ≠ 立即停止发货。</b>页面必须把这句显式写给运营看。
+     *
+     * <p>🔴 下架<b>不受</b> SKU 上限约束——它只会让在售总数变小。
+     */
+    public void delist() {
+        this.active = false;
+    }
+
     @PrePersist
     void onCreate() {
         Instant now = Instant.now();
