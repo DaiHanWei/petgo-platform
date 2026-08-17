@@ -33,12 +33,14 @@ public class ShopProductQueryService {
     private final ShopProductRepository products;
     private final ShopSkuRepository skus;
     private final InventoryService inventory;
+    private final ShopImageUrlResolver imageUrls;
 
     public ShopProductQueryService(ShopProductRepository products, ShopSkuRepository skus,
-            InventoryService inventory) {
+            InventoryService inventory, ShopImageUrlResolver imageUrls) {
         this.products = products;
         this.skus = skus;
         this.inventory = inventory;
+        this.imageUrls = imageUrls;
     }
 
     /**
@@ -63,6 +65,7 @@ public class ShopProductQueryService {
                     p.getBrand(),
                     p.getCategory(),
                     p.getMainImageKey(),
+                    imageUrls.publicUrl(p.getMainImageKey()),
                     p.getSpecies(),
                     minPriceByProduct.get(p.getId())));
         }
@@ -104,7 +107,9 @@ public class ShopProductQueryService {
                 p.getBrand(),
                 p.getCategory(),
                 p.getMainImageKey(),
+                imageUrls.publicUrl(p.getMainImageKey()),
                 p.getGalleryKeys(),
+                imageUrls.publicUrls(p.getGalleryKeys()),
                 p.getSpecies(),
                 p.getBodySize(),
                 p.getAgeStage(),
