@@ -74,11 +74,15 @@ class ShopOrderFulfillmentStateMachineTest {
     }
 
     @Test
-    @DisplayName("🔴 不提前实现退款段（Epic 5）")
-    void refundEdgesStillClosed() {
-        assertThat(ShopOrderStatus.SHIPPED.canTransitionTo(ShopOrderStatus.REFUNDING)).isFalse();
+    @DisplayName("🔴 履约段的边与退款段互不越界（退款边由 Story 5.1 开放，见 SPEC-6）")
+    void fulfillmentAndRefundEdgesDoNotOverlap() {
+        // 🔴 SPEC-6 ①【拒收】：已发货态可整单进入退款；这是 Epic 5 开的边，不是履约段的。
+        assertThat(ShopOrderStatus.SHIPPED.canTransitionTo(ShopOrderStatus.REFUNDING)).isTrue();
+        // 🔴 已送达 / 已完成不走 REFUNDING：行级部分退货【不动订单主状态】（AD-5），
+        //    全部行退完时直接回写 REFUNDED。开这条边会让退了一行的订单显示成整单退款中。
         assertThat(ShopOrderStatus.DELIVERED.canTransitionTo(ShopOrderStatus.REFUNDING)).isFalse();
-        assertThat(ShopOrderStatus.COMPLETED.canTransitionTo(ShopOrderStatus.REFUNDED)).isFalse();
+        assertThat(ShopOrderStatus.COMPLETED.canTransitionTo(ShopOrderStatus.REFUNDING)).isFalse();
+        assertThat(ShopOrderStatus.COMPLETED.canTransitionTo(ShopOrderStatus.REFUNDED)).isTrue();
     }
 
     @Test

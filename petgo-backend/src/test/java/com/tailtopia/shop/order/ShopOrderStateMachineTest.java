@@ -115,18 +115,24 @@ class ShopOrderStateMachineTest {
     }
 
     @Test
-    @DisplayName("⚠️ Epic 5 的退款边尚未开放（不提前实现未来 Epic 的迁移）")
-    void futureEpicEdgesNotYetOpen() {
-        // 提前开边会造出没有任何代码能推进的悬空态
-        assertThat(ShopOrderStatus.COMPLETED.canTransitionTo(ShopOrderStatus.REFUNDING))
-                .as("退款属 Epic 5").isFalse();
-        assertThat(ShopOrderStatus.DELIVERED.canTransitionTo(ShopOrderStatus.REFUNDING))
-                .as("退款属 Epic 5").isFalse();
-        assertThat(ShopOrderStatus.REFUNDING.canTransitionTo(ShopOrderStatus.REFUNDED))
-                .as("退款执行属 Epic 5").isFalse();
-        // Story 4.1 已开的边（在本类只做存在性对照，行为细节见 ShopOrderFulfillmentStateMachineTest）
+    @DisplayName("各 Epic 的边只在自己那一段开放（本类做存在性对照，行为细节见各 Epic 的状态机用例）")
+    void edgesOpenPerEpic() {
+        // Story 4.1 履约段
         assertThat(ShopOrderStatus.PENDING_SHIPMENT.canTransitionTo(ShopOrderStatus.SHIPPED))
                 .as("发货边由 Story 4.1 开放").isTrue();
+        // Story 5.1 退款段
+        assertThat(ShopOrderStatus.REFUNDING.canTransitionTo(ShopOrderStatus.REFUNDED))
+                .as("退款执行由 Story 5.1 开放").isTrue();
+
+        // 🔴 仍然关闭的：未支付的订单没有钱可退，不该有任何退款边。
+        //    开了它等于允许一笔没收过钱的订单走进退款流程。
+        assertThat(ShopOrderStatus.PENDING_PAYMENT.canTransitionTo(ShopOrderStatus.REFUNDING))
+                .as("未支付订单的出口是取消，不是退款").isFalse();
+        assertThat(ShopOrderStatus.PENDING_PAYMENT.canTransitionTo(ShopOrderStatus.REFUNDED))
+                .isFalse();
+        // 🔴 终态仍不可再迁移
+        assertThat(ShopOrderStatus.CANCELLED.canTransitionTo(ShopOrderStatus.REFUNDING)).isFalse();
+        assertThat(ShopOrderStatus.REFUNDED.canTransitionTo(ShopOrderStatus.REFUNDING)).isFalse();
     }
 
     // ---------- 🔒 PII 与金额 ----------
