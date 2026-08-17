@@ -3,15 +3,23 @@ package com.tailtopia.profile.web;
 import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.content.service.ContentService;
 import com.tailtopia.content.service.GrowthMomentView;
+import com.tailtopia.profile.domain.MilestoneCatalog;
+import com.tailtopia.profile.domain.MilestoneDefinition;
 import com.tailtopia.profile.domain.PetProfile;
+import com.tailtopia.profile.domain.PetSex;
 import com.tailtopia.profile.dto.ArchiveStatsResponse;
+import com.tailtopia.profile.dto.MilestoneItemResponse;
+import com.tailtopia.profile.service.MilestoneService;
 import com.tailtopia.profile.service.OgImageService;
 import com.tailtopia.profile.service.TimelineService;
 import com.tailtopia.shared.media.AliyunOssClient;
 import jakarta.servlet.http.HttpServletResponse;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Value;
@@ -36,11 +44,14 @@ import org.springframework.web.bind.annotation.PathVariable;
 public class CardPageController {
 
     private static final int MAX_MOMENTS = 5;
+    /** 具名徽章展示上限（视觉稿 E1：2 个具名 chip + 2 个空槽，其余靠「N / 总数」计数体现）。 */
+    private static final int MAX_BADGES = 2;
 
     private final ProfileServiceFacade profiles;
     private final ContentService contentService;
     private final AccountQueryService accountQueryService;
     private final TimelineService timelineService;
+    private final MilestoneService milestoneService;
     private final OgImageService ogImageService;
     private final String downloadUrl;
     private final String iosUrl;
@@ -49,7 +60,8 @@ public class CardPageController {
 
     public CardPageController(com.tailtopia.profile.service.ProfileService profileService,
             ContentService contentService, AccountQueryService accountQueryService,
-            TimelineService timelineService, OgImageService ogImageService,
+            TimelineService timelineService, MilestoneService milestoneService,
+            OgImageService ogImageService,
             @Value("${petgo.card.app-download-url:https://petgo.example/download}") String downloadUrl,
             @Value("${petgo.card.ios-url:https://apps.apple.com/app/petgo}") String iosUrl,
             @Value("${petgo.card.android-url:https://play.google.com/store/apps/details?id=com.tailtopia.app}")
@@ -59,6 +71,7 @@ public class CardPageController {
         this.contentService = contentService;
         this.accountQueryService = accountQueryService;
         this.timelineService = timelineService;
+        this.milestoneService = milestoneService;
         this.ogImageService = ogImageService;
         this.downloadUrl = downloadUrl;
         this.iosUrl = iosUrl;
@@ -85,13 +98,19 @@ public class CardPageController {
         }
 
         long ownerId = profile.getOwnerId();
+        LocalDate today = LocalDate.now(ZoneOffset.UTC);
         // ① Hero
         model.addAttribute("name", profile.getName());
         model.addAttribute("breed", profile.getBreed());
         model.addAttribute("intro", profile.getIntro());
         model.addAttribute("avatarUrl", AliyunOssClient.exifStrippedDeliveryUrl(profile.getAvatarUrl()));
-        model.addAttribute("ownerNickname", ownerNickname(ownerId));
+        String nickname = ownerNickname(ownerId);
+        model.addAttribute("ownerNickname", nickname);
         model.addAttribute("companionDays", companionDays(profile.getCreatedAt(), Instant.now()));
+        // 元信息行（V1.1.6 Story 1.2）：品种 · 性别 · 年龄 · bersama 主人。四段全可缺，逐段判空拼接。
+        // 性别来自 Story 1.1（可空）；年龄由生日推出（可空）。全缺则为 null → 模板整行不渲染。
+        model.addAttribute("metaLine", metaLine(profile.getBreed(), profile.getSex(),
+                ageText(profile.getBirthday(), today), nickname));
 
         // ③ 故事数字 + ②④ 里程碑零态（milestoneCompleted=0 → 隐藏徽章条/动态/「里程碑完成」项）。
         ArchiveStatsResponse stats = timelineService.getStats(ownerId);
@@ -99,6 +118,8 @@ public class CardPageController {
         model.addAttribute("consultCount", stats.consultCount());
         model.addAttribute("milestoneCompleted", stats.milestoneCompleted());
         model.addAttribute("hasMilestones", stats.milestoneCompleted() > 0);
+        // ② 里程碑收藏区（V1.1.6 Story 1.2）：完成数 / 总数 + 具名徽章 + 锁定位 + 「+N」。
+        addMilestoneSection(model, profile, stats.milestoneCompleted(), today);
 
         // ⑤ 快乐时刻照片流（按 event_date 倒序，AC7）。
         List<CardMoment> moments = buildMoments(ownerId, profile.getId());
@@ -144,6 +165,136 @@ public class CardPageController {
         }
         long days = ChronoUnit.DAYS.between(createdAt, now);
         return Math.max(0, days);
+    }
+
+    /**
+     * 元信息行：{@code 品种 · 性别 · 年龄 · bersama 主人}（V1.1.6 Story 1.2，E1 屏）。
+     *
+     * <p>🛡 <b>四段全都可能缺</b>（E2 屏就只有「品种 · 性别」两段），故逐段判空后再用 {@code · } 连接。
+     * 拼错的表现是页面上出现 {@code 「Kucing · · bersama Rina」} 这种连续分隔符。
+     * 四段全缺 → 返回 {@code null}，模板整行不渲染（而不是渲染一个空行）。
+     *
+     * <p>纯函数便于 L0 测（{@code CardPageTextTest}）。
+     */
+    public static String metaLine(String breed, PetSex sex, String ageText, String ownerNickname) {
+        List<String> parts = new ArrayList<>(4);
+        addIfPresent(parts, breed);
+        if (sex != null) {
+            addIfPresent(parts, switch (sex) {
+                case MALE -> "Jantan";
+                case FEMALE -> "Betina";
+            });
+        }
+        addIfPresent(parts, ageText);
+        if (ownerNickname != null && !ownerNickname.isBlank()) {
+            parts.add("bersama " + ownerNickname.trim());
+        }
+        return parts.isEmpty() ? null : String.join(" · ", parts);
+    }
+
+    private static void addIfPresent(List<String> parts, String value) {
+        if (value != null && !value.isBlank()) {
+            parts.add(value.trim());
+        }
+    }
+
+    /**
+     * 年龄文案（印尼语）：{@code 2 tahun} / {@code 6 bulan} / {@code 3 hari} / {@code baru lahir}。
+     *
+     * <p>生日可空 → {@code null}（该段不渲染）。不足一岁说月、不足一月说天，
+     * 避免出现「0 tahun」这种读起来像出错的文案。
+     * 生日在未来（脏数据）同样返回 {@code null}，不显示负数。
+     */
+    public static String ageText(java.time.LocalDate birthday, java.time.LocalDate today) {
+        if (birthday == null || birthday.isAfter(today)) {
+            return null;
+        }
+        java.time.Period p = java.time.Period.between(birthday, today);
+        if (p.getYears() > 0) {
+            return p.getYears() + " tahun";
+        }
+        if (p.getMonths() > 0) {
+            return p.getMonths() + " bulan";
+        }
+        int days = p.getDays();
+        return days > 0 ? days + " hari" : "baru lahir";
+    }
+
+    /**
+     * 相对时间（印尼语大写，E1 屏的 {@code 3 HARI LALU}）。
+     *
+     * <p>🛡 H5 全篇印尼语，此处漏一档就是页面上蹦出中文 —— {@code CardPageTextTest} 遍历 0~800 天
+     * 逐个断言不含中日韩字符。未来时间（时钟偏差）夹到「今天」，不出现负数。
+     */
+    public static String relativeDays(java.time.LocalDate when, java.time.LocalDate today) {
+        long days = ChronoUnit.DAYS.between(when, today);
+        if (days <= 0) {
+            return "HARI INI";
+        }
+        if (days == 1) {
+            return "KEMARIN";
+        }
+        if (days < 7) {
+            return days + " HARI LALU";
+        }
+        if (days < 30) {
+            return (days / 7) + " MINGGU LALU";
+        }
+        if (days < 365) {
+            return (days / 30) + " BULAN LALU";
+        }
+        return (days / 365) + " TAHUN LALU";
+    }
+
+    /**
+     * 里程碑收藏区（V1.1.6 Story 1.2 · AC2/AC4）。
+     *
+     * <p>下发：总数（<b>按物种</b>：猫 31 / 狗 31 / 通用 16，取自 {@link MilestoneCatalog}，
+     * <b>不是视觉稿里那个示意的 30</b>）· 最近完成的具名徽章 · 未完成数（「+N」）· 最新动态的相对时间。
+     *
+     * <p>🔴 <b>本页对匿名公众开放，所以绝不能在这里触发写库。</b>
+     * {@code MilestoneService.getMilestones()} 标了 {@code @Transactional}，且读路径发现 roster 缺失时
+     * 会 <b>lazy 物化</b>（{@code assignRoster} → 写 {@code pet_milestones}）。若无条件调用，
+     * 每个陌生人打开一次分享页都可能触发一次写库。
+     * <b>故只在 {@code completed > 0} 时才调它</b> —— 完成数大于 0 意味着 roster 必然已经物化过，
+     * 那条 lazy 分支走不到。零里程碑的宠物（E2 降级态）本就不需要清单，总数直接从常量目录拿。
+     * {@code CardPageMilestoneIntegrationTest} 有一条用例专门钉住这件事。
+     */
+    private void addMilestoneSection(Model model, PetProfile profile, long completed, LocalDate today) {
+        int total = MilestoneCatalog.forType(profile.getPetType()).size();
+        model.addAttribute("milestoneTotal", total);
+        // 「+N」= 尚未完成的数量（视觉稿 E1：7/30 对应 +23）。
+        model.addAttribute("milestoneMore", Math.max(0, total - completed));
+
+        if (completed <= 0) {
+            // E2 零态：无具名徽章、无最新动态。**不调 getMilestones()**（见上方 🔴）。
+            model.addAttribute("badges", List.of());
+            model.addAttribute("latestMilestoneAgo", null);
+            return;
+        }
+
+        List<MilestoneItemResponse> done = milestoneService.getMilestones(profile.getOwnerId())
+                .groups().stream()
+                .flatMap(g -> g.items().stream())
+                .filter(MilestoneItemResponse::completed)
+                .sorted(Comparator.comparing(MilestoneItemResponse::completedAt,
+                        Comparator.nullsLast(Comparator.reverseOrder())))
+                .toList();
+
+        // 具名徽章：最近完成的前 N 个（视觉稿 E1 展示 2 个具名 + 2 个空槽）。
+        // ⚠️ 标题取印尼语 titleId，**不是** MilestoneItemResponse.title（那是中文，AC3 禁止出现在本页）。
+        List<String> badges = done.stream()
+                .limit(MAX_BADGES)
+                .map(i -> {
+                    MilestoneDefinition def = MilestoneCatalog.byCode(i.code());
+                    return def != null ? def.titleId() : i.code(); // 未知 code 兜底回 code，绝不回退中文
+                })
+                .toList();
+        model.addAttribute("badges", badges);
+
+        Instant latest = done.isEmpty() ? null : done.get(0).completedAt();
+        model.addAttribute("latestMilestoneAgo",
+                latest == null ? null : relativeDays(latest.atZone(ZoneOffset.UTC).toLocalDate(), today));
     }
 
     private String ownerNickname(long ownerId) {
