@@ -147,6 +147,10 @@ public final class AuditActions {
     /** 修改免运门槛。 */
     public static final String SHOP_SHIPPING_SETTINGS_UPDATED = "SHOP_SHIPPING_SETTINGS_UPDATED";
 
+    // ===== PawCoin 电商消费规则（V1.4.0 Story 3.5，AB-6D / AB-6A 扩展）=====
+    /** 修改电商 PawCoin 规则（总开关 / 运费抵扣 / 单笔上限）或平台责任补偿溢价。 */
+    public static final String SHOP_PAWCOIN_RULES_UPDATED = "SHOP_PAWCOIN_RULES_UPDATED";
+
     private AuditActions() {
     }
 }
