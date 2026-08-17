@@ -458,6 +458,40 @@ public class ContentService {
     }
 
     /**
+     * 某月快乐时刻的<b>访客版</b>（V1.1.6 Story 2.2 · 访客日历）—— 只含<b>已发布且未删除</b>。
+     *
+     * <p>🔴 <b>与 {@link #findGrowthMomentsInMonth} 成对，不可互换。</b>
+     * 那个是作者自看（含审核中，让作者知道自己的帖出了什么事）；
+     * 本方法是访客视角 —— 用错会让<b>下架内容经分享链接继续对外可见</b>，等于下架没生效。
+     */
+    @Transactional(readOnly = true)
+    public List<GrowthMomentView> findPublishedGrowthMomentsInMonth(long authorId, long petId,
+            LocalDate from, LocalDate to) {
+        return posts
+                .findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndStatusAndEventDateBetweenOrderByEventDateAscCreatedAtAsc(
+                        authorId, petId, ContentType.GROWTH_MOMENT, PostStatus.PUBLISHED, from, to)
+                .stream()
+                .map(ContentService::toGrowthMomentView)
+                .toList();
+    }
+
+    /**
+     * 某天快乐时刻的<b>访客版</b>（V1.1.6 Story 2.2 · 访客某天详情）—— 只含<b>已发布且未删除</b>。
+     *
+     * <p>🔴 与 {@link #findGrowthMomentsOnDate} 成对，不可互换，理由同上。
+     */
+    @Transactional(readOnly = true)
+    public List<GrowthMomentView> findPublishedGrowthMomentsOnDate(long authorId, long petId,
+            LocalDate eventDate) {
+        return posts
+                .findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndStatusAndEventDateOrderByCreatedAtAsc(
+                        authorId, petId, ContentType.GROWTH_MOMENT, PostStatus.PUBLISHED, eventDate)
+                .stream()
+                .map(ContentService::toGrowthMomentView)
+                .toList();
+    }
+
+    /**
      * 名片快乐时刻流（Story 2.6 AC7 · F9）：按 {@code event_date} 倒序取最近 limit 条 GROWTH_MOMENT。
      * 经 service 接口供 H5 名片 / 里程碑打卡候选取数（禁 join）。
      * bug 20260730-435：按 petId 过滤，排除删档遗留（pet_id=NULL）的旧宠物帖。

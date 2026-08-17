@@ -73,7 +73,7 @@
 # serp_position 分布）。
 
 generated: 2026-08-17
-last_updated: 2026-08-17
+last_updated: 2026-08-18
 project: TailTopia V1.1.6
 project_key: NOKEY
 tracking_system: file-system
@@ -96,7 +96,7 @@ development_status:
   #    拉黑相关信号。实现上什么都不用做 —— 那组 AC 是防止有人主动加上去。
   epic-2: in-progress
   2-1-访客只读投影层: review                        # 唯一访客数据出口；结构上不持有健康记录/问诊仓库
-  2-2-日历视图与某天详情的访客版: backlog
+  2-2-日历视图与某天详情的访客版: review
   2-3-访客态页面渲染: backlog                        # 作者态减法，不得另画一套
   2-4-宠物名片深链落点分流: backlog                   # 现状错误落在给游客做的示例页
   epic-2-retrospective: optional
