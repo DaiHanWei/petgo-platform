@@ -48,6 +48,8 @@ class CardPageControllerTest {
         controller = new CardPageController(profileService, contentService, accountQueryService,
                 timelineService, milestoneService,
                 mock(com.tailtopia.profile.service.OgImageService.class),
+                new com.tailtopia.profile.service.CardPageAnalytics(
+                        mock(com.tailtopia.shared.analytics.AnalyticsClient.class)),
                 "https://dl", "https://ios", "https://android", "https://h5.petgo");
     }
 
@@ -56,6 +58,11 @@ class CardPageControllerTest {
                 "https://cdn/a.jpg", "Shiba", LocalDate.of(2022, 1, 1), "好奇宝宝", "TOK");
         setField(p, "id", 10L);
         return p;
+    }
+
+    /** 埋点需要 HttpServletRequest 取 UA / referrer / cookie；L0 用 mock 即可。 */
+    private static jakarta.servlet.http.HttpServletRequest req() {
+        return new org.springframework.mock.web.MockHttpServletRequest();
     }
 
     private static void setField(Object o, String name, Object value) {
@@ -86,7 +93,7 @@ class CardPageControllerTest {
 
         Model model = new ConcurrentModel();
         HttpServletResponse resp = mock(HttpServletResponse.class);
-        String view = controller.card("TOK", model, resp);
+        String view = controller.card("TOK", model, req(), resp);
 
         assertThat(view).isEqualTo("card");
         assertThat(model.getAttribute("name")).isEqualTo("Momo");
@@ -114,7 +121,7 @@ class CardPageControllerTest {
 
         Model model = new ConcurrentModel();
         HttpServletResponse resp = mock(HttpServletResponse.class);
-        String view = controller.card("TOK", model, resp);
+        String view = controller.card("TOK", model, req(), resp);
 
         assertThat(view).isEqualTo("card"); // 不抛错、不阻塞渲染（AC5）
         assertThat(model.getAttribute("hasMilestones")).isEqualTo(false);
@@ -137,7 +144,7 @@ class CardPageControllerTest {
         Model model = new ConcurrentModel();
         HttpServletResponse resp = mock(HttpServletResponse.class);
 
-        String view = controller.card("NOPE", model, resp);
+        String view = controller.card("NOPE", model, req(), resp);
 
         assertThat(view).isEqualTo("card_gone");
         verify(resp).setStatus(404);
@@ -150,7 +157,7 @@ class CardPageControllerTest {
         Model model = new ConcurrentModel();
         HttpServletResponse resp = mock(HttpServletResponse.class);
 
-        String view = controller.card("TOK", model, resp);
+        String view = controller.card("TOK", model, req(), resp);
 
         // 与「不存在」完全一致：同视图 + 同 404，不泄漏 token 曾否存在
         assertThat(view).isEqualTo("card_gone");
@@ -187,7 +194,7 @@ class CardPageControllerTest {
         stubOwner(0, 0, 0);
         when(contentService.findRecentGrowthMomentsByEventDate(eq(7L), eq(10L), anyInt())).thenReturn(List.of());
 
-        controller.card("TOK", new ConcurrentModel(), mock(HttpServletResponse.class));
+        controller.card("TOK", new ConcurrentModel(), req(), mock(HttpServletResponse.class));
 
         org.mockito.Mockito.verify(milestoneService, org.mockito.Mockito.never()).getMilestones(7L);
     }
@@ -200,7 +207,7 @@ class CardPageControllerTest {
         when(contentService.findRecentGrowthMomentsByEventDate(eq(7L), eq(10L), anyInt())).thenReturn(List.of());
 
         Model model = new ConcurrentModel();
-        controller.card("TOK", model, mock(HttpServletResponse.class));
+        controller.card("TOK", model, req(), mock(HttpServletResponse.class));
 
         int catTotal = com.tailtopia.profile.domain.MilestoneCatalog
                 .forType(com.tailtopia.profile.domain.PetType.CAT).size();
@@ -222,7 +229,7 @@ class CardPageControllerTest {
                 done("C-M3", now.minus(10, ChronoUnit.DAYS)));
 
         Model model = new ConcurrentModel();
-        controller.card("TOK", model, mock(HttpServletResponse.class));
+        controller.card("TOK", model, req(), mock(HttpServletResponse.class));
 
         @SuppressWarnings("unchecked")
         List<String> badges = (List<String>) model.getAttribute("badges");
@@ -245,7 +252,7 @@ class CardPageControllerTest {
                 done("C-S6", Instant.now().minus(3, ChronoUnit.DAYS)));
 
         Model model = new ConcurrentModel();
-        controller.card("TOK", model, mock(HttpServletResponse.class));
+        controller.card("TOK", model, req(), mock(HttpServletResponse.class));
 
         assertThat(model.getAttribute("latestMilestoneAgo")).isEqualTo("3 HARI LALU");
     }
@@ -260,7 +267,7 @@ class CardPageControllerTest {
         when(contentService.findRecentGrowthMomentsByEventDate(eq(7L), eq(10L), anyInt())).thenReturn(List.of());
 
         Model model = new ConcurrentModel();
-        controller.card("TOK", model, mock(HttpServletResponse.class));
+        controller.card("TOK", model, req(), mock(HttpServletResponse.class));
 
         String meta = (String) model.getAttribute("metaLine");
         assertThat(meta).startsWith("Shiba · Betina · ").endsWith(" · bersama Aurel");
@@ -275,7 +282,7 @@ class CardPageControllerTest {
         when(contentService.findRecentGrowthMomentsByEventDate(eq(7L), eq(10L), anyInt())).thenReturn(List.of());
 
         Model model = new ConcurrentModel();
-        controller.card("TOK", model, mock(HttpServletResponse.class));
+        controller.card("TOK", model, req(), mock(HttpServletResponse.class));
 
         String meta = (String) model.getAttribute("metaLine");
         assertThat(meta).doesNotContain("Jantan").doesNotContain("Betina");

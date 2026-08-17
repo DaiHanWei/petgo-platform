@@ -199,7 +199,7 @@
         @media (prefers-reduced-motion: reduce) { * { transition:none !important; } }
     </style>
 </head>
-<body>
+<body th:attr="data-track-url=${trackUrl},data-page-state=${hasMoments} ? 'full' : 'empty'">
 <div class="paper">
     <!--/* 顶：品牌标 + 胶带小片「Paspor [名]」 */-->
     <div class="top">
@@ -358,44 +358,90 @@
 </div>
 
 <script th:inline="none">
-
+  // Platform routing + three-step fallback (real-device only, L2):
+  //   Android: (1) deep link -> (2) market:// -> (3) Play web page
+  //   iOS:     (1) deep link -> (2) App Store
+  //   Desktop: straight to the download page
+  // Each step is guarded by a timer; if the previous step succeeded the page goes
+  // hidden and `pagehide` cancels whatever was scheduled next.
   //
-
+  // V1.1.6 Story 1.4 - analytics (E-25 / E-26):
+  //   E-25 `cta_tapped`  fires the INSTANT the button is pressed -> reliable count.
+  //   E-26 `cta_outcome` is INFERRED from the same timing signals -> best effort, will be lost sometimes.
+  //   These two MUST stay separate events. Merging them would let the unreliable one
+  //   contaminate the only number we can actually trust (how many people tapped).
+  //   Reporting goes to our own endpoint; no third-party script is loaded here.
   (function () {
     var ua = navigator.userAgent || '';
     var isIOS = /iPad|iPhone|iPod/.test(ua);
     var isAndroid = /Android/.test(ua);
+    var TRACK_URL = document.body.getAttribute('data-track-url');
+    var PAGE_STATE = document.body.getAttribute('data-page-state');
+    var platform = isIOS ? 'ios' : (isAndroid ? 'android' : 'desktop');
+
+    // Best effort by design: no retry, never blocks navigation, failures are swallowed.
+    function report(event, extra) {
+      if (!TRACK_URL) return;
+      var props = { page_state: PAGE_STATE, ua_platform: platform };
+      if (extra) { for (var k in extra) { props[k] = extra[k]; } }
+      var payload = JSON.stringify({ event: event, props: props });
+      try {
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon(TRACK_URL, new Blob([payload], { type: 'application/json' }));
+        } else {
+          fetch(TRACK_URL, { method: 'POST', body: payload, keepalive: true,
+                             headers: { 'Content-Type': 'application/json' } });
+        }
+      } catch (e) { /* analytics must never break the page */ }
+    }
 
     function toMarket(webUrl) {
       return webUrl.replace('https://play.google.com/store/apps/details', 'market://details');
     }
     function go(url) { window.location.href = url; }
-
     function guard(fn, ms) {
       var t = setTimeout(fn, ms);
       window.addEventListener('pagehide', function () { clearTimeout(t); }, { once: true });
       return t;
     }
+
     ['ctaPrimary'].forEach(function (id) {
       var el = document.getElementById(id);
       if (!el) return;
       el.addEventListener('click', function (e) {
         e.preventDefault();
+        // E-25 first, before anything can navigate away.
+        report('pet_card_cta_tapped');
+
         var deep = el.dataset.deeplink;
         var androidWeb = el.dataset.android;
         var ios = el.dataset.ios;
-        if (isAndroid) {
 
-          guard(function () {
-            guard(function () { go(androidWeb); }, 700);
-            go(toMarket(androidWeb));
-          }, 900);
-          go(deep);
-        } else if (isIOS) {
-          guard(function () { go(ios); }, 900);
+        if (isAndroid || isIOS) {
+          // If the page goes hidden before the deep-link guard fires, the app took over.
+          // That same signal is what the fallback chain already relies on - reuse it,
+          // do NOT invent a second timing scheme or the two will disagree.
+          var settled = false;
+          window.addEventListener('pagehide', function () {
+            if (!settled) { settled = true; report('pet_card_cta_outcome', { outcome: 'app_opened' }); }
+          }, { once: true });
+
+          if (isAndroid) {
+            guard(function () {
+              if (!settled) { settled = true; report('pet_card_cta_outcome', { outcome: 'store_redirect' }); }
+              guard(function () { go(androidWeb); }, 700);
+              go(toMarket(androidWeb));
+            }, 900);
+          } else {
+            guard(function () {
+              if (!settled) { settled = true; report('pet_card_cta_outcome', { outcome: 'store_redirect' }); }
+              go(ios);
+            }, 900);
+          }
           go(deep);
         } else {
-          go(el.href); // desktop -> download page
+          report('pet_card_cta_outcome', { outcome: 'desktop_fallback' });
+          go(el.href);
         }
       });
     });
