@@ -33,6 +33,7 @@ class CardPageControllerTest {
     private ContentService contentService;
     private AccountQueryService accountQueryService;
     private TimelineService timelineService;
+    private com.tailtopia.profile.service.MilestoneService milestoneService;
     private CardPageController controller;
 
     @BeforeEach
@@ -41,8 +42,10 @@ class CardPageControllerTest {
         contentService = mock(ContentService.class);
         accountQueryService = mock(AccountQueryService.class);
         timelineService = mock(TimelineService.class);
+        milestoneService = mock(com.tailtopia.profile.service.MilestoneService.class);
         controller = new CardPageController(profileService, contentService, accountQueryService,
-                timelineService, mock(com.tailtopia.profile.service.OgImageService.class),
+                timelineService, milestoneService,
+                mock(com.tailtopia.profile.service.OgImageService.class),
                 "https://dl", "https://ios", "https://android", "https://h5.petgo");
     }
 
@@ -150,5 +153,131 @@ class CardPageControllerTest {
         // 与「不存在」完全一致：同视图 + 同 404，不泄漏 token 曾否存在
         assertThat(view).isEqualTo("card_gone");
         verify(resp).setStatus(404);
+    }
+
+    // ===== V1.1.6 Story 1.2：里程碑收藏区 + 元信息行 =====
+
+    /** 造一个「已完成」的里程碑项。 */
+    private static com.tailtopia.profile.dto.MilestoneItemResponse done(String code, Instant at) {
+        return new com.tailtopia.profile.dto.MilestoneItemResponse(
+                code, "中文标题", "S", "SYSTEM_AUTO", true, at);
+    }
+
+    private void stubMilestones(com.tailtopia.profile.dto.MilestoneItemResponse... items) {
+        // 参数序：level, completedCount, totalCount, items
+        var group = new com.tailtopia.profile.dto.MilestoneGroupResponse(
+                "S", items.length, items.length, List.of(items));
+        // 参数序：petName, petAvatarUrl, completedCount, totalCount, groups
+        when(milestoneService.getMilestones(7L)).thenReturn(
+                new com.tailtopia.profile.dto.MilestoneListResponse(
+                        "Momo", null, items.length, items.length, List.of(group)));
+    }
+
+    /**
+     * 🔴 <b>本组最要紧的一条</b>：零里程碑时<b>绝不调用</b> {@code getMilestones()}。
+     *
+     * <p>那个方法标了 {@code @Transactional} 且 roster 缺失时会 lazy 物化（写 {@code pet_milestones}）。
+     * H5 是对匿名公众开放的页面 —— 无条件调用等于让每个陌生人的一次 GET 都可能触发写库。
+     */
+    @Test
+    void zeroMilestonesNeverTouchesMilestoneService() {
+        when(profileService.findByCardToken("TOK")).thenReturn(Optional.of(profile()));
+        stubOwner(0, 0, 0);
+        when(contentService.findRecentGrowthMomentsByEventDate(7L, 10L, 5)).thenReturn(List.of());
+
+        controller.card("TOK", new ConcurrentModel(), mock(HttpServletResponse.class));
+
+        org.mockito.Mockito.verify(milestoneService, org.mockito.Mockito.never()).getMilestones(7L);
+    }
+
+    /** 总数按物种取常量目录（猫 31），<b>不是</b>视觉稿里那个示意的 30。 */
+    @Test
+    void milestoneTotalComesFromCatalogNotTheMockupNumber() {
+        when(profileService.findByCardToken("TOK")).thenReturn(Optional.of(profile()));
+        stubOwner(0, 0, 0);
+        when(contentService.findRecentGrowthMomentsByEventDate(7L, 10L, 5)).thenReturn(List.of());
+
+        Model model = new ConcurrentModel();
+        controller.card("TOK", model, mock(HttpServletResponse.class));
+
+        int catTotal = com.tailtopia.profile.domain.MilestoneCatalog
+                .forType(com.tailtopia.profile.domain.PetType.CAT).size();
+        assertThat(catTotal).isEqualTo(31);
+        assertThat(model.getAttribute("milestoneTotal")).isEqualTo(catTotal);
+        assertThat(model.getAttribute("milestoneMore")).isEqualTo(31L); // 一个没完成 → +31
+    }
+
+    /** 具名徽章取<b>最近完成</b>的若干条，且标题是<b>印尼语</b>（AC3：页面不得出现中文）。 */
+    @Test
+    void badgesUseIndonesianTitlesAndMostRecentFirst() {
+        when(profileService.findByCardToken("TOK")).thenReturn(Optional.of(profile()));
+        stubOwner(0, 0, 3);
+        when(contentService.findRecentGrowthMomentsByEventDate(7L, 10L, 5)).thenReturn(List.of());
+        Instant now = Instant.parse("2026-08-17T00:00:00Z");
+        stubMilestones(
+                done("C-S1", now.minus(30, ChronoUnit.DAYS)),   // 最早
+                done("C-S6", now.minus(1, ChronoUnit.DAYS)),    // 最近
+                done("C-M3", now.minus(10, ChronoUnit.DAYS)));
+
+        Model model = new ConcurrentModel();
+        controller.card("TOK", model, mock(HttpServletResponse.class));
+
+        @SuppressWarnings("unchecked")
+        List<String> badges = (List<String>) model.getAttribute("badges");
+        // 最近完成的两条：C-S6（1 天前）、C-M3（10 天前）
+        assertThat(badges).containsExactly("Mandi pertama", "Vaksinasi pertama");
+        // 🛡 一个中文都不许有
+        for (String b : badges) {
+            assertThat(b.codePoints().noneMatch(cp -> cp >= 0x4E00 && cp <= 0x9FFF)).isTrue();
+        }
+    }
+
+    /** 最新动态的相对时间来自最近完成的那条。 */
+    @Test
+    void latestMilestoneAgoComesFromMostRecentCompletion() {
+        when(profileService.findByCardToken("TOK")).thenReturn(Optional.of(profile()));
+        stubOwner(0, 0, 2);
+        when(contentService.findRecentGrowthMomentsByEventDate(7L, 10L, 5)).thenReturn(List.of());
+        stubMilestones(
+                done("C-S1", Instant.now().minus(40, ChronoUnit.DAYS)),
+                done("C-S6", Instant.now().minus(3, ChronoUnit.DAYS)));
+
+        Model model = new ConcurrentModel();
+        controller.card("TOK", model, mock(HttpServletResponse.class));
+
+        assertThat(model.getAttribute("latestMilestoneAgo")).isEqualTo("3 HARI LALU");
+    }
+
+    /** 元信息行：四段齐全时按「品种 · 性别 · 年龄 · bersama 主人」拼。 */
+    @Test
+    void metaLineRendersAllSegments() {
+        PetProfile p = profile();
+        p.setSex(com.tailtopia.profile.domain.PetSex.FEMALE);
+        when(profileService.findByCardToken("TOK")).thenReturn(Optional.of(p));
+        stubOwner(0, 0, 0);
+        when(contentService.findRecentGrowthMomentsByEventDate(7L, 10L, 5)).thenReturn(List.of());
+
+        Model model = new ConcurrentModel();
+        controller.card("TOK", model, mock(HttpServletResponse.class));
+
+        String meta = (String) model.getAttribute("metaLine");
+        assertThat(meta).startsWith("Shiba · Betina · ").endsWith(" · bersama Aurel");
+        assertThat(meta).doesNotContain("··");
+    }
+
+    /** 🛡 存量档案没有性别（Story 1.1 起可空、不回填）→ 该段跳过，不留空位。 */
+    @Test
+    void metaLineSkipsMissingSex() {
+        when(profileService.findByCardToken("TOK")).thenReturn(Optional.of(profile())); // sex 为 null
+        stubOwner(0, 0, 0);
+        when(contentService.findRecentGrowthMomentsByEventDate(7L, 10L, 5)).thenReturn(List.of());
+
+        Model model = new ConcurrentModel();
+        controller.card("TOK", model, mock(HttpServletResponse.class));
+
+        String meta = (String) model.getAttribute("metaLine");
+        assertThat(meta).doesNotContain("Jantan").doesNotContain("Betina");
+        assertThat(meta).doesNotContain("··");
+        assertThat(meta).startsWith("Shiba · ");
     }
 }
