@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
 import '../domain/shop_product.dart';
+import '../domain/shop_product_detail.dart';
 
 /// Toko 数据层（Story 1.6，消费 1-1 的只读接口）。
 ///
@@ -29,6 +30,13 @@ class ShopRepository {
         .map(ShopProductSummary.fromJson)
         .toList(growable: false);
   }
+
+  /// 商品详情（Story 1.7）。未上架/不存在 → 后端 404（`DioException` 抛给页面）。
+  /// 🔒 同样对游客开放，不做登录判断。
+  Future<ShopProductDetail> fetchDetail(String token) async {
+    final resp = await dio.get<Map<String, dynamic>>('${ApiPaths.shopProducts}/$token');
+    return ShopProductDetail.fromJson(resp.data!);
+  }
 }
 
 final shopRepositoryProvider =
@@ -41,4 +49,10 @@ final shopRepositoryProvider =
 final shopProductsProvider = FutureProvider.autoDispose
     .family<List<ShopProductSummary>, ShopCategory?>((ref, category) async {
   return ref.read(shopRepositoryProvider).fetchProducts(category: category);
+});
+
+/// 商品详情（按 token）。
+final shopProductDetailProvider =
+    FutureProvider.autoDispose.family<ShopProductDetail, String>((ref, token) async {
+  return ref.read(shopRepositoryProvider).fetchDetail(token);
 });

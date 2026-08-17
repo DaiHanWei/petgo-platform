@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
@@ -179,8 +180,8 @@ class _ProductCardState extends State<_ProductCard> {
     final l10n = AppLocalizations.of(context);
     final p = widget.product;
     return InkWell(
-      // 详情页属 Story 1.7。此处先不导航——宁可无响应，也不跳到不存在的路由。
-      onTap: null,
+      // Story 1.7 已实现详情页 → 接上导航（游客同样可进，路由不在受控名单里）
+      onTap: () => context.push('/shop/products/${p.token}'),
       child: Container(
         decoration: BoxDecoration(
           color: AppColors.cream,

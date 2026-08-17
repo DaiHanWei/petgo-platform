@@ -12,6 +12,7 @@ import '../../features/auth/domain/auth_state.dart';
 import '../../features/auth/domain/user_state.dart';
 import '../../features/auth/presentation/dev_login_guide_page.dart';
 import '../../features/auth/presentation/login_page.dart';
+import '../../features/shop/presentation/product_detail_page.dart';
 import '../../features/shop/presentation/toko_page.dart';
 import '../../features/auth/presentation/nickname_page.dart';
 import '../../features/auth/presentation/pet_status_page.dart';
@@ -490,6 +491,11 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // 🔴 Tab 位序归 DEP-1 未拍板、图标归 DEP-2 未交付 → 本版本【只挂路由，不动 AppTab 枚举】
       //    （bottom_tab_bar.dart 属并行契约 C 类）。Tab 接入待 DEP-1 闭合后单独处理。
       GoRoute(path: '/shop', builder: (c, s) => const TokoPage()),
+      // 商品详情（Story 1.7）。同样对游客开放——不在 _controlledLocations 里。
+      GoRoute(
+        path: '/shop/products/:token',
+        builder: (c, s) => ProductDetailPage(token: s.pathParameters['token']!),
+      ),
       // 兽医账密登录 + 工作台壳（Story 5.1）。与用户侧 5-Tab 隔离：shell 外顶层路由。
       GoRoute(path: '/vet/login', builder: (c, s) => _vetScoped(const VetLoginPage())),
       GoRoute(path: '/vet/workbench', builder: (c, s) => _vetScoped(const VetWorkbenchShell())),

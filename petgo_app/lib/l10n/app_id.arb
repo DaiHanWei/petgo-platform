@@ -1406,5 +1406,22 @@
   "tokoEmpty": "Belum ada produk.",
   "tokoLoadFailed": "Gagal memuat produk. Tarik ke bawah untuk coba lagi.",
   "tokoPriceUnavailable": "Harga segera",
-  "tokoCartComingSoon": "Keranjang segera hadir"
+  "tokoCartComingSoon": "Keranjang segera hadir",
+  "tokoChooseVariant": "Pilih Varian",
+  "tokoChooseVariantFirst": "Pilih varian dulu",
+  "tokoAddToCart": "Tambah ke Keranjang",
+  "tokoOutOfStock": "Stok habis",
+  "tokoOutOfStockLine": "Stok habis. Coba varian lain.",
+  "tokoLowStockNoCount": "Stok terbatas",
+  "tokoFeedingGuideTitle": "Panduan Porsi Harian",
+  "tokoDetailSectionTitle": "Detail Produk",
+  "tokoShelfLifeTitle": "Masa Simpan",
+  "tokoDetailLoadFailed": "Gagal memuat produk ini.",
+  "tokoReturnableTitle": "Bisa diretur.",
+  "tokoReturnableBody": "Produk dapat dikembalikan sesuai syarat retur.",
+  "tokoNoReturnAfterOpenTitle": "Tidak dapat dikembalikan setelah dibuka.",
+  "tokoNoReturnAfterOpenBody": "Demi keamanan pangan, kemasan makanan yang sudah dibuka tidak bisa diretur.",
+  "tokoNoReturnTitle": "Tidak bisa diretur.",
+  "tokoNoReturnBody": "Produk ini tidak dapat dikembalikan.",
+  "tokoLowStock": "Sisa {count}"
 }
