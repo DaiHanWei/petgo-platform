@@ -1,17 +1,14 @@
 package com.tailtopia.profile.web;
 
-import com.tailtopia.auth.service.AccountQueryService;
-import com.tailtopia.content.service.ContentService;
-import com.tailtopia.content.service.GrowthMomentView;
 import com.tailtopia.profile.domain.MilestoneCatalog;
 import com.tailtopia.profile.domain.MilestoneDefinition;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.domain.PetSex;
-import com.tailtopia.profile.dto.ArchiveStatsResponse;
 import com.tailtopia.profile.dto.MilestoneItemResponse;
-import com.tailtopia.profile.service.MilestoneService;
 import com.tailtopia.profile.service.OgImageService;
-import com.tailtopia.profile.service.TimelineService;
+import com.tailtopia.profile.visitor.VisitorProjectionService;
+import com.tailtopia.profile.visitor.VisitorStats;
+import com.tailtopia.profile.visitor.VisitorTimelineItem;
 import com.tailtopia.shared.media.AliyunOssClient;
 import jakarta.servlet.http.HttpServletResponse;
 import java.time.Instant;
@@ -19,7 +16,6 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Value;
@@ -59,11 +55,18 @@ public class CardPageController {
     /** 具名徽章展示上限（视觉稿 E1：2 个具名 chip + 2 个空槽，其余靠「N / 总数」计数体现）。 */
     private static final int MAX_BADGES = 2;
 
-    private final ProfileServiceFacade profiles;
-    private final ContentService contentService;
-    private final AccountQueryService accountQueryService;
-    private final TimelineService timelineService;
-    private final MilestoneService milestoneService;
+    /**
+     * 🛡 <b>访客数据的唯一来源</b>（V1.1.6 Story 2.1 · AC1）。
+     *
+     * <p>本控制器<b>刻意不再直接持有</b> {@code TimelineService} / {@code ContentService} /
+     * {@code MilestoneService} / {@code AccountQueryService} —— 那些是<b>作者态</b>的表面，
+     * 能查到健康记录、问诊存档、账号状态等访客无权知道的东西。
+     * 全部收进投影层后，「访客能看到什么」这条规则<b>只需要在一个地方正确</b>；
+     * 将来 App 内访客视图（Story 2.2）接的也是同一层，两个出口不会各错各的。
+     *
+     * <p>⚠️ <b>不要为了图快在这里补一个直连的 service 回来。</b>
+     */
+    private final VisitorProjectionService visitors;
     private final OgImageService ogImageService;
     private final com.tailtopia.profile.service.CardPageAnalytics analytics;
     private final String downloadUrl;
@@ -71,32 +74,20 @@ public class CardPageController {
     private final String androidUrl;
     private final String publicBaseUrl;
 
-    public CardPageController(com.tailtopia.profile.service.ProfileService profileService,
-            ContentService contentService, AccountQueryService accountQueryService,
-            TimelineService timelineService, MilestoneService milestoneService,
+    public CardPageController(VisitorProjectionService visitors,
             OgImageService ogImageService, com.tailtopia.profile.service.CardPageAnalytics analytics,
             @Value("${petgo.card.app-download-url:https://petgo.example/download}") String downloadUrl,
             @Value("${petgo.card.ios-url:https://apps.apple.com/app/petgo}") String iosUrl,
             @Value("${petgo.card.android-url:https://play.google.com/store/apps/details?id=com.tailtopia.app}")
                     String androidUrl,
             @Value("${petgo.card.public-base-url:}") String publicBaseUrl) {
-        this.profiles = profileService::findByCardToken;
-        this.contentService = contentService;
-        this.accountQueryService = accountQueryService;
-        this.timelineService = timelineService;
-        this.milestoneService = milestoneService;
+        this.visitors = visitors;
         this.ogImageService = ogImageService;
         this.analytics = analytics;
         this.downloadUrl = downloadUrl;
         this.iosUrl = iosUrl;
         this.androidUrl = androidUrl;
         this.publicBaseUrl = publicBaseUrl;
-    }
-
-    /** 极薄 facade，仅暴露 findByCardToken，避免控制器直依赖整个 service 表面。 */
-    @FunctionalInterface
-    interface ProfileServiceFacade {
-        Optional<PetProfile> findByCardToken(String token);
     }
 
     @GetMapping("/p/{cardToken}")
@@ -106,24 +97,21 @@ public class CardPageController {
         String visitorId = com.tailtopia.shared.analytics.AnonymousVisitorId
                 .resolveOrIssue(request, response);
 
-        Optional<PetProfile> opt = profiles.findByCardToken(cardToken);
+        // token 不存在 / 档案已删 / 账号注销 / 账号封号 —— 四种情况在投影层已收敛成同一个 empty，
+        // 本处无从区分，也就无从泄漏「这个 token 是否曾经存在」（防枚举）。
+        Optional<PetProfile> opt = visitors.findVisibleProfile(cardToken);
         if (opt.isEmpty()) {
             return gone(model, response, visitorId, request);
         }
         PetProfile profile = opt.get();
-        // 账号注销 / 封号 → 与不存在同一失效页（防枚举）。
-        if (!accountQueryService.isActive(profile.getOwnerId())) {
-            return gone(model, response, visitorId, request);
-        }
 
-        long ownerId = profile.getOwnerId();
         LocalDate today = LocalDate.now(ZoneOffset.UTC);
         // ① Hero
         model.addAttribute("name", profile.getName());
         model.addAttribute("breed", profile.getBreed());
         model.addAttribute("intro", profile.getIntro());
         model.addAttribute("avatarUrl", AliyunOssClient.exifStrippedDeliveryUrl(profile.getAvatarUrl()));
-        String nickname = ownerNickname(ownerId);
+        String nickname = visitors.ownerNickname(profile);
         model.addAttribute("ownerNickname", nickname);
         model.addAttribute("companionDays", companionDays(profile.getCreatedAt(), Instant.now()));
         // 元信息行（V1.1.6 Story 1.2）：品种 · 性别 · 年龄 · bersama 主人。四段全可缺，逐段判空拼接。
@@ -132,18 +120,20 @@ public class CardPageController {
                 ageText(profile.getBirthday(), today), nickname));
 
         // ③ 故事数字 + ②④ 里程碑零态（milestoneCompleted=0 → 隐藏徽章条/动态/「里程碑完成」项）。
-        ArchiveStatsResponse stats = timelineService.getStats(ownerId);
-        model.addAttribute("happyCount", stats.happyMomentCount());
+        // 🛡 拿到的是 VisitorStats（三个数），不是作者态那个 5 字段的 ArchiveStatsResponse ——
+        // 健康记录条数在投影层就没进来，本处即便想下发也没有可下发的东西。
+        VisitorStats stats = visitors.stats(profile);
+        model.addAttribute("happyCount", stats.diaryCount());
         model.addAttribute("consultCount", stats.consultCount());
         model.addAttribute("milestoneCompleted", stats.milestoneCompleted());
         model.addAttribute("hasMilestones", stats.milestoneCompleted() > 0);
         // ② 里程碑收藏区（V1.1.6 Story 1.2）：完成数 / 总数 + 具名徽章 + 锁定位 + 「+N」。
-        addMilestoneSection(model, profile, stats.milestoneCompleted(), today);
+        addMilestoneSection(model, profile, stats, today);
 
         // ⑤ 快乐时刻照片流（按 event_date 倒序，AC7）。
         // ⚠️ 多取一些再过滤：**无图的条目不该占名额**（L2 实测踩到 —— 一条没配图的老记录
         // 挤掉了拼贴区的一格）。取 2 倍上限足够覆盖零星缺图，仍是一次查询、无额外开销。
-        List<CardMoment> moments = buildMoments(ownerId, profile.getId());
+        List<CardMoment> moments = buildMoments(profile);
         model.addAttribute("moments", moments);
         model.addAttribute("hasMoments", !moments.isEmpty());
         // V1.1.6 Story 1.2：页面有**两处**贴照片的地方 —— 顶部照片簇与「快乐时刻」拼贴。
@@ -292,33 +282,28 @@ public class CardPageController {
      * <b>不是视觉稿里那个示意的 30</b>）· 最近完成的具名徽章 · 未完成数（「+N」）· 最新动态的相对时间。
      *
      * <p>🔴 <b>本页对匿名公众开放，所以绝不能在这里触发写库。</b>
-     * {@code MilestoneService.getMilestones()} 标了 {@code @Transactional}，且读路径发现 roster 缺失时
-     * 会 <b>lazy 物化</b>（{@code assignRoster} → 写 {@code pet_milestones}）。若无条件调用，
-     * 每个陌生人打开一次分享页都可能触发一次写库。
-     * <b>故只在 {@code completed > 0} 时才调它</b> —— 完成数大于 0 意味着 roster 必然已经物化过，
-     * 那条 lazy 分支走不到。零里程碑的宠物（E2 降级态）本就不需要清单，总数直接从常量目录拿。
-     * {@code CardPageMilestoneIntegrationTest} 有一条用例专门钉住这件事。
+     * 「零完成时不去查里程碑清单」这条已经收进
+     * {@link VisitorProjectionService#completedMilestones(PetProfile, long)} —— 那个方法
+     * 在 {@code completed <= 0} 时直接返回空表，不碰 {@code MilestoneService.getMilestones()}
+     * （后者标了 {@code @Transactional}，roster 缺失时会 <b>lazy 物化写库</b>，
+     * 无条件调用等于让每个陌生人的一次 GET 都可能写一次库）。
+     * {@code CardPageControllerTest.zeroMilestonesNeverTouchesMilestoneService} 钉住它。
      */
-    private void addMilestoneSection(Model model, PetProfile profile, long completed, LocalDate today) {
-        int total = MilestoneCatalog.forType(profile.getPetType()).size();
-        model.addAttribute("milestoneTotal", total);
+    private void addMilestoneSection(Model model, PetProfile profile, VisitorStats stats,
+            LocalDate today) {
+        long completed = stats.milestoneCompleted();
+        // 总数也出自投影层（按物种取常量目录），控制器不自己算。
+        model.addAttribute("milestoneTotal", stats.milestoneTotal());
         // 「+N」= 尚未完成的数量（视觉稿 E1：7/30 对应 +23）。
-        model.addAttribute("milestoneMore", Math.max(0, total - completed));
+        model.addAttribute("milestoneMore", Math.max(0, stats.milestoneTotal() - completed));
 
-        if (completed <= 0) {
-            // E2 零态：无具名徽章、无最新动态。**不调 getMilestones()**（见上方 🔴）。
+        List<MilestoneItemResponse> done = visitors.completedMilestones(profile, completed);
+        if (done.isEmpty()) {
+            // E2 零态：无具名徽章、无最新动态。
             model.addAttribute("badges", List.of());
             model.addAttribute("latestMilestoneAgo", null);
             return;
         }
-
-        List<MilestoneItemResponse> done = milestoneService.getMilestones(profile.getOwnerId())
-                .groups().stream()
-                .flatMap(g -> g.items().stream())
-                .filter(MilestoneItemResponse::completed)
-                .sorted(Comparator.comparing(MilestoneItemResponse::completedAt,
-                        Comparator.nullsLast(Comparator.reverseOrder())))
-                .toList();
 
         // 具名徽章：最近完成的前 N 个（视觉稿 E1 展示 2 个具名 + 2 个空槽）。
         // ⚠️ 标题取印尼语 titleId，**不是** MilestoneItemResponse.title（那是中文，AC3 禁止出现在本页）。
@@ -336,23 +321,17 @@ public class CardPageController {
                 latest == null ? null : relativeDays(latest.atZone(ZoneOffset.UTC).toLocalDate(), today));
     }
 
-    private String ownerNickname(long ownerId) {
-        var view = accountQueryService.findAuthorViews(List.of(ownerId)).get(ownerId);
-        return view != null ? view.nickname() : null;
-    }
-
-    private List<CardMoment> buildMoments(long ownerId, long petId) {
-        List<GrowthMomentView> raw =
-                contentService.findRecentGrowthMomentsByEventDate(ownerId, petId, MAX_MOMENTS * 2);
+    /**
+     * 把访客投影的时间线条目转成模板用的视图对象。
+     *
+     * <p>⚠️ 这里只做<b>形状转换</b>（record → 带 getter 的类，Thymeleaf 需要 getter）。
+     * 取数口径、已发布过滤、去 EXIF 都在投影层做完了，本处不再判断「什么能给什么不能给」。
+     */
+    private List<CardMoment> buildMoments(PetProfile profile) {
+        List<VisitorTimelineItem> raw = visitors.timeline(profile, MAX_MOMENTS * 2);
         List<CardMoment> out = new ArrayList<>(raw.size());
-        for (GrowthMomentView m : raw) {
-            List<String> stripped = new ArrayList<>();
-            if (m.imageUrls() != null) {
-                for (String url : m.imageUrls()) {
-                    stripped.add(AliyunOssClient.exifStrippedDeliveryUrl(url));
-                }
-            }
-            out.add(new CardMoment(stripped, m.text()));
+        for (VisitorTimelineItem m : raw) {
+            out.add(new CardMoment(m.imageUrls(), m.text()));
         }
         return out;
     }

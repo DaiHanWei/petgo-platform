@@ -45,8 +45,14 @@ class CardPageControllerTest {
         accountQueryService = mock(AccountQueryService.class);
         timelineService = mock(TimelineService.class);
         milestoneService = mock(com.tailtopia.profile.service.MilestoneService.class);
-        controller = new CardPageController(profileService, contentService, accountQueryService,
-                timelineService, milestoneService,
+        // V1.1.6 Story 2.1：控制器不再直连这些 service，改经访客投影层。
+        // ⚠️ 这里用**真的**投影层套在同一批 mock 上，而不是把投影层也 mock 掉 ——
+        // 否则下面那条「零里程碑不许碰 MilestoneService」的用例就会变成自说自话
+        // （它要守的正是投影层里那个判断）。
+        var visitors = new com.tailtopia.profile.visitor.VisitorProjectionService(
+                profileService, accountQueryService, contentService, milestoneService,
+                timelineService);
+        controller = new CardPageController(visitors,
                 mock(com.tailtopia.profile.service.OgImageService.class),
                 new com.tailtopia.profile.service.CardPageAnalytics(
                         mock(com.tailtopia.shared.analytics.AnalyticsClient.class)),
