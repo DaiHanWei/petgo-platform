@@ -36,10 +36,20 @@ public class MeCartController {
         return cart.view(currentUserId(jwt));
     }
 
+    /**
+     * 加购。
+     *
+     * <p>🔴 {@code entrySource} / {@code triggerType} 是<b>归因链的起点</b>（Story 3.10）：
+     * 商品「从哪个入口进的购物车」只有此刻知道，下单时抄到订单行，
+     * 后台据此算触发卡转化率（AB-13B 判定 A-16）。
+     * 两者<b>可选</b>：拿不到就留空，写 NULL 是诚实的「未知」，编一个值会污染看板且事后无法识别。
+     */
     @PostMapping("/items")
     public CartView add(@AuthenticationPrincipal Jwt jwt,
-            @RequestParam String skuToken, @RequestParam(defaultValue = "1") int qty) {
-        return cart.add(currentUserId(jwt), skuToken, qty);
+            @RequestParam String skuToken, @RequestParam(defaultValue = "1") int qty,
+            @RequestParam(required = false) String entrySource,
+            @RequestParam(required = false) String triggerType) {
+        return cart.add(currentUserId(jwt), skuToken, qty, entrySource, triggerType);
     }
 
     @PutMapping("/items/{skuToken}")

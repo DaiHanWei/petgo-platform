@@ -184,8 +184,13 @@ public class CheckoutService {
             ShopOrderLine ol = ShopOrderLine.of(order.getId(), sku.getId(),
                     line.productName(), line.specName(), line.price(), line.qty(),
                     effectiveReturnPolicy(sku));
-            // 🔴 归因随订单行落库（IR 前移）：AB-13B 的服务端权威依据
-            ol.attributeTo(entrySource, triggerType);
+            // 🔴 归因随订单行落库（IR 前移）：AB-13B 的服务端权威依据。
+            //    🔴 **优先取购物车行上记下的来源**（Story 3.10）—— 商品「从哪个入口进的车」
+            //    只有加购那一刻知道；调用方传入的值只作兜底（如后台代下单）。
+            //    两者都没有就写 null：诚实的「未知」好过编一个「从购物车结算」。
+            ol.attributeTo(
+                    line.entrySource() != null ? line.entrySource() : entrySource,
+                    line.triggerType() != null ? line.triggerType() : triggerType);
             orderLines.save(ol);
 
             // ④ 🔴 原子锁定库存（Story 1.2 的原语）。影响 0 行即抛，整个事务回滚 ——

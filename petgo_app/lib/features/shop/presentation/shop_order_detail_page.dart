@@ -267,6 +267,7 @@ class _ShopOrderDetailPageState extends ConsumerState<ShopOrderDetailPage> {
         // 纯 PawCoin：当场结清，没有二维码。余额缓存失效，免得别处读到旧余额。
         ref.invalidate(pawCoinProvider);
         ref.invalidate(shopOrderDetailProvider(widget.orderToken));
+        Analytics.capture('toko_order_payment_succeeded', {'pay_channel': 'PAWCOIN'});
         showAppToast(context, l10n.shopOrderPaid);
         return;
       }
@@ -284,9 +285,18 @@ class _ShopOrderDetailPageState extends ConsumerState<ShopOrderDetailPage> {
       if (!mounted) return;
       ref.invalidate(shopOrderDetailProvider(widget.orderToken));
       ref.invalidate(pawCoinProvider);
-      if (paid) showAppToast(context, l10n.shopOrderPaid);
+      if (paid) {
+        Analytics.capture(
+            'toko_order_payment_succeeded', {'pay_channel': order.payChannel ?? 'UNKNOWN'});
+        showAppToast(context, l10n.shopOrderPaid);
+      }
     } catch (_) {
-      if (mounted) showAppToast(context, l10n.shopOrderPayFailed);
+      if (mounted) {
+        // 🔴 报的是「向用户展示了失败」——失败本身可能只是网络抖动，
+        //    而漏斗上要看的是有多少人在这一步被挡住。
+        Analytics.capture('toko_order_payment_failed_shown');
+        showAppToast(context, l10n.shopOrderPayFailed);
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }

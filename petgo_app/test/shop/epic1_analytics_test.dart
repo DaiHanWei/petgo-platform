@@ -137,8 +137,11 @@ void main() {
               reason: '埋点属性 "$p" 命中禁用词 "$bad" —— NFR-5 埋点禁带 PII');
         }
       }
-      // 目前只应有这三个属性；新增属性时这条会红，逼你确认它不是 PII
-      expect(props, {'product_token', 'sku_token', 'zone'});
+      // 🔒 白名单：新增属性时这条会红，**逼你逐个确认它不是 PII**（这正是它红的意义）。
+      // Story 3.10 新增两项，已逐个确认：
+      // - pay_channel：枚举字面量 QRIS / PAWCOIN / MIXED / UNKNOWN，与个人无关
+      // - item_count：整数件数，与个人无关
+      expect(props, {'product_token', 'sku_token', 'zone', 'pay_channel', 'item_count'});
     });
 
     test('🔴 Epic 1 声明的四个事件在源码里确实存在（声明与实现不许脱节）', () {

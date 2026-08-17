@@ -30,9 +30,13 @@ import 'cart_icon_button.dart';
 /// 退货规则标识为 **UX-DR10 的二义三值**：可退 / 开封不退 / 不可退。
 /// C-13 砍掉换货后，原「可退可换」措辞作废——换货零实现，标出来就是无法兑现的承诺。
 class ProductDetailPage extends ConsumerStatefulWidget {
-  const ProductDetailPage({super.key, required this.token});
+  const ProductDetailPage({super.key, required this.token, this.entrySource});
 
   final String token;
+
+  /// 🔴 用户是从哪个入口进到这个商品的（Story 3.10 归因链起点）。
+  /// 由路由 query 参数带入；直接深链进来时为 null —— **不编一个默认值**。
+  final String? entrySource;
 
   @override
   ConsumerState<ProductDetailPage> createState() => _ProductDetailPageState();
@@ -314,7 +318,7 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
     if (_adding) return;
     setState(() => _adding = true);
     try {
-      await ref.read(cartProvider.notifier).add(sku.token);
+      await ref.read(cartProvider.notifier).add(sku.token, entrySource: widget.entrySource);
       if (mounted) showAppToast(context, l10n.cartAdded);
     } on CartMutationError catch (e) {
       if (mounted) {
