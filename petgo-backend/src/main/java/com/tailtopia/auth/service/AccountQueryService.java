@@ -2,6 +2,7 @@ package com.tailtopia.auth.service;
 
 import com.tailtopia.auth.domain.Role;
 import com.tailtopia.auth.domain.User;
+import com.tailtopia.auth.domain.UserStatus;
 import com.tailtopia.auth.dto.AuthorView;
 import com.tailtopia.auth.repository.UserRepository;
 import java.util.Collection;
@@ -27,11 +28,27 @@ public class AccountQueryService {
         this.users = users;
     }
 
-    /** 账号是否有效（存在且未注销 {@code deleted_at IS NULL}）。 */
+    /**
+     * 账号对外是否有效 —— <b>既未注销、也未被封号</b>。
+     *
+     * <p>「注销」与「封号」是<b>两个正交维度</b>：注销是用户自己删号（{@code deleted_at}，不可逆）、
+     * 封号是运营停用（{@code status=DEACTIVATED}，可逆，V1.1.4 Story 3.2）。
+     *
+     * <p>⚠️ <b>2026-08-17 产品拍板：两者的 H5 分享页都不可见。</b>
+     * 此前本方法<b>只看注销</b>，于是被封号的用户其宠物分享页照样对全网可见 ——
+     * 头像、名字、照片、里程碑全在。封号本就是因为违规，让他的对外页继续挂着不合理。
+     *
+     * <p>本方法<b>只服务 H5 对外分享页的可见性判定</b>（{@code CardPageController} 与
+     * {@code MilestoneSharePageController} 是唯二调用方），<b>不是</b>通用的「能否登录」判断
+     * —— 登录门禁在 {@code AuthService} 自己那套里，别把这个方法挪去当登录判据。
+     *
+     * <p>⚠️ 封号可逆，所以本判定也必须可逆：重新激活后分享页要恢复可见
+     * （{@code reactivatedAccountBecomesVisibleAgain} 钉着这条）。
+     */
     @Transactional(readOnly = true)
     public boolean isActive(long userId) {
         return users.findById(userId)
-                .map(u -> u.getDeletedAt() == null)
+                .map(u -> u.getDeletedAt() == null && u.getStatus() == UserStatus.ACTIVE)
                 .orElse(false);
     }
 
