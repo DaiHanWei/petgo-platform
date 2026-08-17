@@ -1,5 +1,5 @@
 # generated: 2026-08-17
-# last_updated: 2026-08-17
+# last_updated: 2026-08-17  (1-1 story 文件创建 → ready-for-dev；epic-1 → in-progress)
 # project: TailTopia V1.4.0 · 精选自营电商（增量）
 # project_key: NOKEY
 # tracking_system: file-system
@@ -81,8 +81,8 @@ story_location: _bmad-output/implementation-artifacts/v1.4.0
 
 development_status:
   # ── Epic 1: 商品上架与浏览 ──
-  epic-1: backlog
-  1-1-商品与-SKU-建模及只读查询接口: backlog
+  epic-1: in-progress
+  1-1-商品与sku建模及只读查询接口: ready-for-dev
   1-2-库存模型与可售库存口径: backlog
   1-3-商品录入与-SKU-价格规格管理: backlog
   1-4-库存管理与采购入库: backlog
