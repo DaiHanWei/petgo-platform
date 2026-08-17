@@ -2,6 +2,7 @@ package com.tailtopia.shop.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shop.repository.SkuInventoryRepository;
 import com.tailtopia.support.ApiIntegrationTest;
 import java.util.concurrent.CountDownLatch;
@@ -60,6 +61,7 @@ class InventoryConcurrencyIntegrationTest extends ApiIntegrationTest {
 
         AtomicInteger ok = new AtomicInteger();
         AtomicInteger soldOut = new AtomicInteger();
+        AtomicInteger dbRejected = new AtomicInteger();
         CountDownLatch start = new CountDownLatch(1);
         CountDownLatch done = new CountDownLatch(threads);
         ExecutorService pool = Executors.newFixedThreadPool(threads);
@@ -70,8 +72,10 @@ class InventoryConcurrencyIntegrationTest extends ApiIntegrationTest {
                     start.await();
                     inventory.lock(skuId, 1L);
                     ok.incrementAndGet();
+                } catch (AppException e) {
+                    soldOut.incrementAndGet();     // 应用层原子条件挡住 → 干净的「已售罄」
                 } catch (Exception e) {
-                    soldOut.incrementAndGet();
+                    dbRejected.incrementAndGet();  // 落到 DB CHECK 才被拒 → 见下方断言
                 } finally {
                     done.countDown();
                 }
@@ -84,6 +88,13 @@ class InventoryConcurrencyIntegrationTest extends ApiIntegrationTest {
         // 🔴 核心断言：成功次数恰为库存数，一件都不能多
         assertThat(ok.get()).isEqualTo(10);
         assertThat(soldOut.get()).isEqualTo(40);
+        // 🔴 判别性断言：失败必须全部来自应用层 SQL 的 (actual - locked) >= qty 条件。
+        //    DB 的 ck_sku_inventory_locked_le_actual 是纵深防御的最后一道，不是本测试的证明对象——
+        //    若删掉应用层条件，超卖请求会落到 DB CHECK 上（用户侧从 409 变成 500），
+        //    没有这条断言时上面三条会照常全绿，本测试就无法证明它声称要证明的事。
+        assertThat(dbRejected.get())
+                .as("不得有请求越过应用层条件、靠 DB CHECK 兜底")
+                .isZero();
 
         var row = repo.findBySkuId(skuId).orElseThrow();
         assertThat(row.getLocked()).isEqualTo(10L);
@@ -100,6 +111,7 @@ class InventoryConcurrencyIntegrationTest extends ApiIntegrationTest {
         CountDownLatch start = new CountDownLatch(1);
         CountDownLatch done = new CountDownLatch(threads);
         AtomicInteger lockedTotal = new AtomicInteger();
+        AtomicInteger dbRejected = new AtomicInteger();
         ExecutorService pool = Executors.newFixedThreadPool(threads);
 
         for (int i = 0; i < threads; i++) {
@@ -109,8 +121,10 @@ class InventoryConcurrencyIntegrationTest extends ApiIntegrationTest {
                     start.await();
                     inventory.lock(skuId, qty);
                     lockedTotal.addAndGet(qty);
-                } catch (Exception ignored) {
+                } catch (AppException ignored) {
                     // 售罄是预期结果
+                } catch (Exception e) {
+                    dbRejected.incrementAndGet();
                 } finally {
                     done.countDown();
                 }
@@ -119,6 +133,11 @@ class InventoryConcurrencyIntegrationTest extends ApiIntegrationTest {
         start.countDown();
         assertThat(done.await(30, TimeUnit.SECONDS)).isTrue();
         pool.shutdownNow();
+
+        // 🔴 判别性断言：同上，失败必须全部由应用层条件产生
+        assertThat(dbRejected.get())
+                .as("不得有请求越过应用层条件、靠 DB CHECK 兜底")
+                .isZero();
 
         var row = repo.findBySkuId(skuId).orElseThrow();
         assertThat(row.getLocked()).isEqualTo((long) lockedTotal.get());
