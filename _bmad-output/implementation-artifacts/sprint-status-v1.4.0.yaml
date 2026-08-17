@@ -1,5 +1,15 @@
 # generated: 2026-08-17
-# last_updated: 2026-08-17  (1-1 story 文件创建 → ready-for-dev；epic-1 → in-progress)
+# last_updated: 2026-08-17  (L1 首次真实执行：全量 mvn test 1606 通过/0 失败；修复 Story 1.3 引入的 3 个护栏红灯)
+#
+# ===== ✅ L1 阻塞已解除（2026-08-17）=====
+# 本机 Docker Desktop 一直装着（4.69），只是不自启 —— 前次「本机无 Docker」是误判。
+#   open -a Docker
+#   docker run -d --name petgo-pg -e POSTGRES_DB=petgo -e POSTGRES_USER=petgo \
+#     -e POSTGRES_PASSWORD=petgo -e TZ=UTC -e PGTZ=UTC -p 5432:5432 postgres:17-alpine
+#   docker run -d --name petgo-redis -p 6379:6379 redis:7-alpine
+# 1-1 / 1-2 的 L1 子任务已全部勾选；1-3 仍有 3 条未验（需登录态后台 actor，见该 story）。
+# 🔴 跑回归必须用全量 `mvn -B test`，不得用 -Dtest='Shop*...' 窄过滤器 ——
+#    跨模块护栏（AdminPermissionsTest / AdminPermissionWiringTest）不在本模块前缀里，窄跑必漏。
 # project: TailTopia V1.4.0 · 精选自营电商（增量）
 # project_key: NOKEY
 # tracking_system: file-system
@@ -40,7 +50,13 @@
 # 🔴 E1 与 E2 互不依赖，可并行，应排最前
 #
 # ===== FLYWAY 独占号段 V101–V139（并行契约 §1）=====
-# 🔴 号必须与 story 实现顺序一致 —— Flyway 默认 outOfOrder=false，先跑大号再出小号会拒绝启动
+# 🔴 号段不得与另两条线重叠 —— 重号（两人各建一个 V101__*.sql）git 不冲突但 Flyway 硬失败：
+#    「Found more than one migration with version 101」。这条与配置无关。
+# ✏️ 2026-08-17 更正：原写「Flyway 默认 outOfOrder=false，先跑大号再出小号会拒绝启动」——
+#    本仓库不成立。application.yml:171 显式 `out-of-order: true`（附理由注释），实测只打 WARN。
+#    IR 报告那条 CRITICAL「Flyway 号与 story 顺序逆序会拒绝启动」建立在同一错误前提上，一并作废。
+# 🔴 但号序仍应与 story 顺序一致 —— 理由是真实的表依赖：如 V102 的 FK 指向 V101 建的 shop_skus，
+#    1.1 未合入时 V102 无法应用。这是数据依赖，不是 Flyway 配置问题。
 # 🔴 合并时不重排号（与决策 E2 的最大差异；重排会让已应用迁移的校验和失配）
 #   V101 1-1 shop_products + shop_skus
 #   V102 1-2 sku_inventory

@@ -8,9 +8,13 @@ head: ede16e10
 
 # V1.4.0 电商工作线 · 会话交接
 
-> **给下一个会话的第一句话：** 规划链条已全通，Epic 1 的前 3 条 story 已实现到 `review`。
+> **给下一个会话的第一句话：** 规划链条已全通，Epic 1 的前 3 条 story 已实现到 `review`，**L1 已在本地真实跑通（全量 1606 通过 / 0 失败）**。
 > **接手时先读三份：** 本文件 → `sprint-status-v1.4.0.yaml`（进度）→ `HEX-SIGNOFF.md`（唯一的人际阻塞）。
 > 其余产物都很详尽，**不必通读**，用到哪条 story 读哪条。
+>
+> 🔴 **本文件 2026-08-17 有两处结论被推翻，别照旧版行事：**
+> ① 「本机无 Docker、L1 跑不了」是**误判**，Docker Desktop 一直装着（§三）；
+> ② 「Flyway 默认 outOfOrder=false 会拒绝启动」是**错的**，本仓库显式设了 `true`（§四）。
 
 ---
 
@@ -75,26 +79,62 @@ PRD ✅ → 并行契约 ✅ → 架构 delta ✅ → UX ✅ → Epic/Story ✅ 
 
 ---
 
-## 三 · 🔴 L1 一条都没跑过
+## 三 · ✅ L1 已跑通（2026-08-17 解除）
 
-**本机既无 Docker 也没装 postgres/redis**，`ApiIntegrationTest` 需要真实 DB（仓库未用 Testcontainers）。
+> ⚠️ **本节原写「本机既无 Docker 也没装 postgres/redis，L1 一条没跑过」—— 那是误判，已作废。**
 
-累计 **17 个 L1 用例已写完并编译通过，但一条未执行**。三条 story 的 L1 子任务全部**保持未勾选**（没有谎报完成）。
+`/Applications/Docker.app`（Docker Desktop 4.69）**一直装着**，只是开机不自启，光看 `docker info` 失败就下了「无 Docker」的结论。**不需要 `brew install` 任何东西**：
 
-**其中最要紧的一条：** `InventoryConcurrencyIntegrationTest` 的「50 线程抢 10 件，成功恰 10」—— **这是唯一能证明防超卖成立的测试**。L0 只能证明「影响 0 行时抛错」，**证明不了并发下不会有两个线程同时通过条件**。Story 1.2 顶部已写死：**未跑 L1 前不得认为防超卖已验证。**
-
-跑起来的命令（需用户自己执行，涉及系统安装）：
 ```
-brew install postgresql@17 redis && brew services start postgresql@17 && brew services start redis
+open -a Docker      # 约 60~90s；socket 出现在 ~/.docker/run/docker.sock
+docker run -d --name petgo-pg -e POSTGRES_DB=petgo -e POSTGRES_USER=petgo \
+  -e POSTGRES_PASSWORD=petgo -e TZ=UTC -e PGTZ=UTC -p 5432:5432 postgres:17-alpine
+docker run -d --name petgo-redis -p 6379:6379 redis:7-alpine
 ```
+账密/库名取自 `application.yml` 默认值。首跑自动应用 102 个 Flyway 迁移，建出 62 张表。
+
+**实测结果：**
+- 全量 `mvn -B test` → **1606 通过 / 0 失败 / 0 错误 / 6 跳过**（约 32s）
+- `mvn spring-boot:run` → `/actuator/health` **UP**（db=PostgreSQL / redis=7.4.10）
+- 真实 HTTP 复验：游客 `GET /api/v1/shop/products` → 200；`GET /admin/shop/products` → 302 → `/admin/login`
+- 1-1 / 1-2 的 L1 子任务**已全部勾选**；1-3 仍有 3 条未验（需构造登录态后台 actor，见该 story）
+
+⚠️ 起 Docker Desktop 会顺带拉起另外两套无关 stack（Dify 15 个 + logistic 3 个），`logistic-app` 占 8080 —— 跑 `spring-boot:run` 需改端口或先停它。
+
+### 🔴 但防超卖那条测试原本是假绿
+
+`InventoryConcurrencyIntegrationTest` 跑绿了，可**把 `SkuInventoryRepository.lock` 的 `and i.actual - i.locked >= :qty` 整条删掉，它照样全绿**。
+
+原因：`ck_sku_inventory_locked_le_actual` 这个 DB CHECK 兜住了结果，而测试写的是 `catch (Exception e) { soldOut++ }`，把「干净的售罄 409」和「DB CHECK 拒绝 500」记成了同一件事。它证明的是**系统**不超卖，不是**应用层原子条件**成立。
+
+已补判别性断言（分别 catch `AppException` 与其他异常，要求后者为 0），修后再变异 → **正确变红**。守卫已还原。
+
+📌 **沉淀：安全攸关的测试，跑绿之后必须再做一次「删掉被测保护 → 确认变红」。** 纵深防御会制造假阳性绿灯，这类问题跑多少次测试都发现不了，只有变异能发现。
 
 ---
 
-## 四 · 本机环境的三个坑
+## 四 · 本机环境
 
 1. **`java -version` 是 17，但 Maven 跑在 JDK 25 上**，编译产物 `major version: 65`（Java 21 字节码），与 `pom.xml` 的 `<java.version>21</java.version>` 一致。**不需要装 JDK**，我一开始误判过。
-2. **无 Docker / 无 postgres / 无 redis** —— 只能跑 L0。`mvn -B test` 全量会失败 4 个既有类（`TailtopiaBackendApplicationTests` / `AdminPagesRenderSmokeTest` / `TimelinePaginationRegressionTest` / `SmokeApiTest`），全是 `Connection to localhost:5432 refused`。**已用 `git stash` 验证过是既有问题，不是本工作线的回归。**
-3. **跑 L0 要指定测试类**：`mvn -B test -Dtest='Shop*Test,Inventory*Test,AdminShop*Test,FeedingGuide*Test'`
+2. ~~无 Docker / 无 postgres / 无 redis~~ —— ✅ **已作废，见 §三。** Docker Desktop 一直装着，起两个容器即可跑全量；那 4 个「既有失败类」DB 一起就全绿了，纯属 `Connection refused`。
+3. 🔴 **不要用窄过滤器代替全量回归。** 原文推荐的 `mvn -B test -Dtest='Shop*Test,Inventory*Test,AdminShop*Test,FeedingGuide*Test'` **正是 Story 1.3 三个红灯被漏检的原因** —— 跨模块护栏（`AdminPermissionsTest` / `AdminPermissionWiringTest`）不在本模块前缀里，窄跑必漏。改共享文件后**必须** `mvn -B test` 全量。
+
+### 🔴 顺带纠正一条扩散了的错误陈述：`outOfOrder`
+
+`application.yml:171` **显式设了 `out-of-order: true`**（附理由注释：集成分支模型下按「谁测好谁先上」上生产，迁移号无法保证单调应用），`V87` 迁移头也写了「out-of-order 已开」。本地实测 Flyway 打的是 `outOfOrder mode is active` 的 **WARN**，不是拒绝启动。
+
+「Flyway 默认 `outOfOrder=false`，先跑大号再出小号会拒绝启动」这句是**错的**，且已扩散到 4 处：
+
+| 位置 | 处置 |
+|---|---|
+| `HEX-SIGNOFF.md` A-1 第二条论据 + 一句话版 | ✅ 已删并加更正说明 |
+| `sprint-status-v1.4.0.yaml` Flyway 号段头注 | ✅ 已改 |
+| IR 报告的 CRITICAL「Flyway 号与 story 顺序逆序」 | ⏳ **未改** —— 该发现建立在同一错误前提上，应作废或重述 |
+| `V101` / `V102` / `V103` 三个迁移的文件头注释 | ⏳ **有意不改** —— Flyway 校验和覆盖整个文件内容（注释也算），改了会让已应用该迁移的库 `Validate failed: checksum mismatch`。按迁移冻结规则留着，等有清库机会再一并订正 |
+
+**A-1 的结论不变**：重号（两人各建 `V101__*.sql`）git 不冲突但 Flyway 硬失败「Found more than one migration with version 101」，号段仍必须划分。只是别拿 outOfOrder 当论据 —— Hex grep 一下就能反驳。
+
+号序与 story 顺序一致这件事**也仍然成立**，但真实理由是**表依赖**：V102 的 FK 指向 V101 建的 `shop_skus`，1.1 未合入时 V102 根本应用不了。
 
 ---
 
@@ -135,6 +175,15 @@ brew install postgresql@17 redis && brew services start postgresql@17 && brew se
 
 ⚠️ 写这类护栏时注意**剥掉注释再扫**，否则会被自己的 javadoc 绊倒（我踩过一次）。
 
+**🔴 2026-08-17 补充两条，都是「护栏本身出问题」，比业务 bug 更难发现：**
+
+1. **写完护栏要变异验证一次 —— 删掉被保护的东西，确认它变红。**
+   `InventoryConcurrencyIntegrationTest` 就是反例：跑绿，但删掉应用层守卫**照样绿**（DB CHECK 兜住了，而 `catch (Exception)` 把两种失败混为一谈）。**纵深防御会制造假阳性绿灯**，这类问题跑多少遍测试都发现不了。
+2. **放宽护栏时要防「把牙拔掉」。** 本次让 `AdminPermissionWiringTest` 认识编程式门控，两个地方差一点就废掉整个护栏：
+   - 扫 `AdminPermissions.<常量>` 时**必须排除 `AdminPermissions.java` 自身** —— 它声明并在 `GROUPS` 里列出全部常量，一旦计入则任何码都「自证已接线」。
+   - **必须用词边界 `\b` 而非 `contains`** —— `CONTENT_VIEW` 是 `CONTENT_VIEW_REPORTS` 的前缀、`VET_QUALIFY` 是 `VET_QUALIFY_VIEW` 的前缀。
+   改完同样做了变异（把唯一引用换成裸字符串 → 正确报红）才算数。
+
 ---
 
 ## 六 · 顺带发现的既有问题（非本工作线引入）
@@ -142,6 +191,7 @@ brew install postgresql@17 redis && brew services start postgresql@17 && brew se
 | 发现 | 严重度 |
 |---|---|
 | **`messages_id.properties` 比 en/zh 少 712 个 key**；`app_id.arb` 比 `app_en.arb` 少 258 行 —— **印尼语系统性落后，而印尼是目标市场** | 建议单开治理 story |
+| **`perm.*` 权限标签在 `messages_id.properties` 里整块缺失**（既有 45 码一条未译）—— 上一条的一个具体切面。`AdminPermissionsTest.everyPermissionHasBilingualLabel` **只校验 zh + en，不校验 id**，所以缺得静悄悄。本次只补了电商 4 码 | 并入 i18n 治理 story |
 | `CROSS-STORY-DECISIONS` **F8 已过期** —— 它写品牌真相是薄荷绿 `#7FD1AE`，实际 `colors.dart:19` 已是 violet `#845EC9`（常量名仍叫 `mint`）。方法论仍成立，色值需更新 | 低 |
 | `AuditActions.java` / `SecurityConfig.java` / `AdminPermissions.java` 等共享文件**缺少 append-only 的书面约定**（本会话已补进契约） | 已处置 |
 
@@ -151,9 +201,15 @@ brew install postgresql@17 redis && brew services start postgresql@17 && brew se
 
 1. 🔴 **把 `HEX-SIGNOFF.md` 的「一句话版」发给 Hex** —— 只有两条，Flyway 那条越早越好
 2. ✅ ~~催 DEP-6~~ **已于 2026-08-17 解除** —— Rendy 离职，产品负责人接手其业务，并确认**每日建议喂量印在商品包装背面**（印尼市售犬粮普遍印有喂食表），录商品时照抄即可；首批 SKU 清单亦已有初步版本。**复购引擎两条机制均可用，无需回头重议 C-11。**
-3. ⏳ **装 postgres+redis 跑 L1** —— 17 个用例待验，其中防超卖那条是硬需求
+3. ✅ ~~装 postgres+redis 跑 L1~~ **已于 2026-08-17 完成** —— 见 §三。全量 1606 通过 / 0 失败；防超卖已真验并做过变异确认。剩 1-3 的 3 条需登录态后台 actor 的 L1 未验。
 4. ▶️ **继续 Story 1.4**（库存管理与采购入库，AB-10C）—— 会再次改 `AdminPermissions`（加 `shop.inventory_*`）与导航
-5. 📋 仍待拍板：**OQ-41**（注销级联，安全攸关，Legal）· OQ-37 · OQ-40 · OQ-42 · 后台 OQ-30~32 · **S-12 找财务复议**
+   > 🔴 **本次踩过的坑，1.4 会原样再踩一遍，开工前先看这三条：**
+   > - 加权限码时，除了 `AdminPermissions` 常量 + `GROUPS`，还必须同步加 **`perm.<code>` i18n 标签**（zh/en/id 三份）。`ShopSharedFileGuardTest` 查的是 `admin.shop.*` 页面文案，**不查 `perm.*`**，漏了它不报错，只是勾选页显示空白。
+   > - `AdminPermissionsTest.listStableSize` 是**故意**的 canary，每加一个码都要有意识地更新数字并续写注释链（现在是 47）。
+   > - 若新权限用**编程式**门控（`has(admin, X)` 而非 `@PreAuthorize`），`AdminPermissionWiringTest` 现已能识别（2026-08-17 改）；但仍要确保引用的是 `AdminPermissions.<常量>` 而非裸字符串，否则仍会被判死码。
+5. ⏳ **补 1-3 剩余 3 条 L1** —— 需按 `AdminPagesRenderSmokeTest` 范式构造「已登录 + 指定权限组合」的后台 actor。**其中「无 `shop.cost_view` 的账号看不到进货价」目前只验了对外 API 那一半，后台页面那一半（才是真正的断言对象）无任何测试覆盖。**
+6. 📋 仍待拍板：**OQ-41**（注销级联，安全攸关，Legal）· OQ-37 · OQ-40 · OQ-42 · 后台 OQ-30~32 · **S-12 找财务复议**
+7. 📋 **IR 报告那条 CRITICAL「Flyway 号与 story 顺序逆序会拒绝启动」需作废或重述** —— 前提是错的，见 §四。
 
 ---
 

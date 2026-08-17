@@ -104,17 +104,24 @@ so that **平台有商品可卖（AB-10A / AB-10B）**。
 - [x] **T8 ⚠️ 共享文件 三份 i18n**（AC5）—— `messages_{id,en,zh_CN}.properties` 各自末尾追加，**三份 key 必须完全一致**
 - [x] **T9 ⚠️ 共享文件 `templates/admin/layout.html`**（AC5）—— 导航末尾追加「电商」分组
 - [x] **T10 测试**
-  - [x] `[L0]` `AdminShopProductServiceTest`（校验分支 / 喂量结构 / 审计不含进货价）· `ShopPermissionMatrixTest`（4 组合）· `I18nKeyParityTest`（三份 key 一致）
+  - [x] `[L0]` `AdminShopProductServiceTest`（校验分支 / 喂量结构 / 审计不含进货价）· `ShopSharedFileGuardTest` 6 条（i18n 三份齐全 / 模板 key 存在 / 既有权限码未丢失）
+    > 📌 **类名更正（2026-08-17）**：原文写的 `ShopPermissionMatrixTest` / `I18nKeyParityTest` **两个类都不存在** —— 实际落地时合并进了 `ShopSharedFileGuardTest`（i18n 与权限码守卫）与 `AdminShopProductEndpointIntegrationTest`（权限组合）。覆盖是有的，名字对不上，按实际改正。
   - [x] `[L1]` `AdminShopProductEndpointIntegrationTest`（建商品 / 权限 403 / 进货价不下发 / 审计落库）
 
-### 🟨 联调验收子任务（L1 ⏳ **待本地 postgres，本次未执行**）
+### 🟨 联调验收子任务（L1 🟡 **2026-08-17 部分执行 —— 1/4 达成，3 条仍未验**）
 
-> 🔴 **以下四条本次一条都没跑。保持未勾选。**
+> ✅ Docker 已可用（见 Story 1.1 同节）；但下列后三条**需要构造「已登录 + 特定权限组合」的后台 actor**，
+> 而 `AdminShopProductEndpointIntegrationTest` 类注释已自陈：「本类给出断言骨架，具体 actor 构造在本地接入时按 `AdminPagesRenderSmokeTest` 范式补齐」——该补齐**尚未做**。**保持未勾选，不谎报。**
 
-- [ ] 起 postgres + redis → `ddl-auto=validate` 启动无报错（验 V103）
+- [x] 起 postgres + redis → `ddl-auto=validate` 启动无报错（验 V103）
+  > V103 已应用；`AdminShopProductEndpointIntegrationTest.costPriceColumnExists` 实测 `shop_skus.cost_price` 列存在且 `ck_shop_skus_cost_price` 拒绝负值。
 - [ ] 后台登录 → 建商品 → 配 SKU → 查看列表（含 Thymeleaf 模板真实渲染）
+  > ⏳ 未验。现有覆盖只到「**未登录**访问 `/admin/shop/products` → 302 重定向登录」（已实测，含真实 HTTP）。建商品/配 SKU 的登录态全链路未跑。
 - [ ] 🔒 无 `shop.cost_view` 的账号：页面与响应体均无进货价
+  > 🟡 **只验到一半。** 已证明的是「**对外** API `/api/v1/shop/products/{token}` 响应体中既无 `costPrice` 字段、也不出现进货价数值」（`costPriceNeverLeaksToPublicApi` 绿）。
+  > **未证明**的是「**已登录但无 `shop.cost_view` 的后台账号**打开商品表单页时，`canViewCost=false` 且 `costBySku` 不进 model」——这才是本条真正的断言对象。控制器代码（`AdminShopProductController:126`）看起来正确，但**没有测试覆盖**。
 - [ ] 审计日志页能查到 4 个新动作码，且**详情不含进货价数值**
+  > ⏳ 未验。`AdminShopProductServiceTest`（L0）断言了审计记录不含进货价，但「审计日志**页面**能查到这 4 个动作码」需登录态后台页，未跑。
 
 ### 🟩 前端子任务
 
@@ -205,6 +212,49 @@ Claude Opus 5 (1M context) — `claude-opus-5[1m]`
 - `mvn -B test` （shop + admin.shop 全部 L0）→ **48 tests, 0 failures**
 
 ### Completion Notes List
+
+---
+
+#### 🔴 补记（2026-08-17）：本 Story 打破了 3 个跨模块护栏测试，已修复
+
+首次在本地跑**全量** `mvn -B test` 时暴露，**当时 3 红**。之前一直用窄过滤器
+`-Dtest='Shop*Test,Inventory*Test,AdminShop*Test,FeedingGuide*Test'` 跑，
+恰好把 `AdminPermissionsTest` / `AdminPermissionWiringTest` 这两个**跨模块**护栏类排除在外，所以一直没暴露。
+
+> **教训：改共享文件（本 Story 改了 4 个）之后，窄过滤器不能替代全量回归。**
+> 护栏测试按定义就在**别的模块**里 —— 用本模块前缀过滤，必然扫不到它们。
+
+| # | 失败测试 | 根因 | 性质 | 修法 |
+|---|---|---|---|---|
+| 1 | `AdminPermissionsTest.everyPermissionHasBilingualLabel` | 4 个 `perm.shop.*` 标签未加进 i18n | **真缺陷** | 补 zh/en/id 三份共 12 行 |
+| 2 | `AdminPermissionsTest.listStableSize` | canary 43 → 实际 47 | 设计如此，需有意识更新 | 改 47 并续写注释链 |
+| 3 | `AdminPermissionWiringTest` | `shop.cost_view` / `shop.cost_edit` 无 `hasAuthority` 字面量落点 | **护栏误报**，非安全洞 | 让护栏认识编程式门控 |
+
+**关于 #1 —— `ShopSharedFileGuardTest` 有盲区。**
+本 Story 自称「电商 i18n key 三份齐全」已被看守，但它查的是 `admin.shop.*` **页面文案** key，
+**不查 `perm.<code>` 权限标签**。结果：账号权限勾选页对这 4 个新权限显示空白。
+👉 加权限码时，`perm.<code>` 标签是**另一组必须同步加**的 key，与页面文案不是一回事。
+
+**关于 #3 —— 判定过程（不要照抄结论，要照抄判法）。**
+护栏报「`shop.cost_view` 是无落点死码」。**但这两个码确实被强制执行**，走的是
+`AdminShopProductController:126/169` 的**编程式**判断 `has(admin, AdminPermissions.SHOP_COST_VIEW)`，
+而 `AdminPermissionWiringTest` 只正则扫 `hasAuthority('x')` 字面量，认不出这种写法。
+
+🔴 **这条不能靠加 `@PreAuthorize("hasAuthority('shop.cost_view')")` 来消红** ——
+进货价是**字段级**门控（同一页面对不同权限下发不同字段），塞进方法级会把**没有成本权限的人整页挡掉**，
+等于把一个误报「修」成真 bug。正确解法是让护栏认识第二种合法门控形式。
+
+**已改 `AdminPermissionWiringTest`：** 反射取 `AdminPermissions` 全部常量得到「码值 → 常量名」映射，
+除 `hasAuthority('x')` 字面量外，也接受 `AdminPermissions.<常量名>` 的引用作为落点。两个关键点：
+- 🔴 **必须排除 `AdminPermissions.java` 自身** —— 该文件声明并在 `GROUPS` 里列出全部常量，一旦计入则任何码都「自证已接线」，护栏彻底失效。
+- 🔴 **必须用词边界 `\b` 而非 `contains`** —— `CONTENT_VIEW` 是 `CONTENT_VIEW_REPORTS` 的前缀、`VET_QUALIFY` 是 `VET_QUALIFY_VIEW` 的前缀；用 `contains` 会让长码的引用顺带「证明」短码已接线，等于给死码开后门。
+
+**改后已做变异验证：** 把控制器里唯一的 `AdminPermissions.SHOP_COST_VIEW` 引用换成裸字符串
+`has(admin, "shop.cost_view")` 后重跑 → **护栏正确报红**。确认牙还在，不是把断言放宽了了事。
+
+**当前状态：`mvn -B test` 全量 1606 通过 / 0 失败 / 6 跳过。**
+
+---
 
 **L0 全绿：48 个单测**（1.1/1.2 的 31 个 + 本 Story 新增 17 个）
 

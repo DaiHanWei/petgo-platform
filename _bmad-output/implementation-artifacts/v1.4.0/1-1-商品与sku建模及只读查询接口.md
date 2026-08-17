@@ -126,15 +126,28 @@ so that **后台能往里录数据、App 能把商品取出来展示（FR-94 / F
   - [x] `[L0]` `ShopTokenGeneratorTest`（1000 次无碰撞/无前缀规律）· `FeedingGuideEntryContractTest`（JSON 往返）· `ShopProductQueryServiceTest`（筛选/排序分支）
   - [x] `[L1]` `ShopProductEndpointIntegrationTest`（两端点 · 游客可访问 · 未知 token 404 · 非法枚举被 DB 拒 · `feeding_guide` 原样往返）
 
-### 🟨 联调验收子任务（L1 ⏳ **待本地 Docker，本次未执行**）
+### 🟨 联调验收子任务（L1 ✅ **2026-08-17 已在本地真实执行**）
 
-> 🔴 **以下三条本次一条都没跑** —— 本机 `docker info` 失败，`ApiIntegrationTest` 需真实 PostgreSQL + Redis（仓库未用 Testcontainers）。**保持未勾选状态，交本地验收时再勾。**
+> ✅ **前次判断有误已纠正**：本机 `/Applications/Docker.app`（Docker Desktop 4.69）**一直装着**，只是未自启，`docker info` 失败被误读成「无 Docker」。
+> 实际起法（不需 `brew install` 任何东西）：
+> ```
+> open -a Docker
+> docker run -d --name petgo-pg -e POSTGRES_DB=petgo -e POSTGRES_USER=petgo \
+>   -e POSTGRES_PASSWORD=petgo -e TZ=UTC -e PGTZ=UTC -p 5432:5432 postgres:17-alpine
+> docker run -d --name petgo-redis -p 6379:6379 redis:7-alpine
+> ```
 
-- [ ] `docker compose` 起 postgres + redis → `mvn spring-boot:run` → `/actuator/health = UP`
-- [ ] `ddl-auto=validate` 启动无报错（**AC1 的 L1 部分依赖此条**）
-- [ ] 跑 `ShopProductEndpointIntegrationTest` 9 个用例（已编译通过，待真 DB 执行）
-- [ ] 全量回归：`mvn -B test` 绿
-  > ⚠️ **本次已知**：无 DB 时 4 个既有类失败（`TailtopiaBackendApplicationTests` / `AdminPagesRenderSmokeTest` / `TimelinePaginationRegressionTest` / `SmokeApiTest`），均为 `Connection to localhost:5432 refused`。**已 `git stash` 移除本 Story 全部改动后复跑，失败完全一致 → 确认既有问题，非本 Story 回归。** 本地起 DB 后应全绿
+- [x] 起 postgres + redis → `mvn spring-boot:run` → `/actuator/health = UP`
+  > 实测（端口改 8081，因本机 `logistic-app` 容器占用 8080）：`{"status":"UP"}`，`db=PostgreSQL UP` · `redis=7.4.10 UP` · `livenessState/readinessState UP`。
+  > 另经**真实 HTTP**（非 MockMvc）复验 T7 的 `SecurityConfig` 改动：游客 `GET /api/v1/shop/products` → **200**；`GET /admin/shop/products` → **302 → /admin/login**。
+- [x] `ddl-auto=validate` 启动无报错（**AC1 的 L1 部分依赖此条**）
+  > Flyway 在空库上应用 **102 个迁移**（含 V101/V102/V103）后建出 62 张表，Hibernate `validate` 通过。
+- [x] 跑 `ShopProductEndpointIntegrationTest` —— **12 个用例全绿**（9 个本 Story + 3 个 Story 1.2 补的库存用例）
+- [x] 全量回归：`mvn -B test` 绿 —— **1606 通过 / 0 失败 / 0 错误 / 6 跳过**
+  > ✅ 前述 4 个既有类（`TailtopiaBackendApplicationTests` / `AdminPagesRenderSmokeTest` / `TimelinePaginationRegressionTest` / `SmokeApiTest`）**DB 一起即全绿**，确认纯属 `Connection refused`，非代码问题。
+  > 🔴 但全量首跑**暴露了 3 个本工作线引入的红灯**（`AdminPermissionsTest` ×2 / `AdminPermissionWiringTest` ×1，均由 Story 1.3 追加 `shop.*` 权限码触发）——
+  > 之前一直用窄过滤器 `-Dtest='Shop*Test,Inventory*Test,AdminShop*Test,FeedingGuide*Test'`，恰好把这两个跨模块护栏类排除在外才没发现。详见 Story 1.3 Completion Notes。
+  > **教训：窄过滤器不能替代全量回归。**
 
 ### 🟩 前端子任务
 
