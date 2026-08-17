@@ -29,7 +29,11 @@ public class LogSanitizer {
             "token", "usersig", "secret", "secretkey", "signature", "authorization",
             "email", "phone", "googlesub",
             // 健康/症状类（消费侧问诊、AI 分诊）
-            "symptomtext", "symptom", "symptoms", "aiobservation", "diagnosis");
+            "symptomtext", "symptom", "symptoms", "aiobservation", "diagnosis",
+            // 收货地址 PII（V1.4.0 Story 2.1 · Epic 2 头注要求）——App 内首个用户地址数据集。
+            // 🔴 收件人姓名/履约电话/详细地址三项：快递员靠它们找到人，泄露即等同泄露住址。
+            //    receiverphone 虽已被上面的 "phone" 命中，仍显式列出以免将来有人改那条时连带打开这里。
+            "receivername", "receiverphone", "addressline", "kodepos");
 
     /** 签名 URL 特征（命中即整串打码——OSS/S3 预签名、带 Signature/Expires 的链接）。 */
     private static final Pattern SIGNED_URL = Pattern.compile(

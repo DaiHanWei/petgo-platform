@@ -1,5 +1,5 @@
 # generated: 2026-08-17
-# last_updated: 2026-08-17  (Epic 1 全部 8 条 → review；后端 1674 / 前端 789 全绿)
+# last_updated: 2026-08-17  (Story 2.1 → review；后端 1689 全绿)
 #
 # ===== ✅ L1 阻塞已解除（2026-08-17）=====
 # 本机 Docker Desktop 一直装着（4.69），只是不自启 —— 前次「本机无 Docker」是误判。
@@ -67,7 +67,7 @@
 #   V104 1-4 inventory_movements（入库/报损/盘点流水）                 ◀ 当前 story
 #   V105 —— 空号。1-5 上下架/精选排序【不需要迁移】：sort_weight 与 is_active
 #          V101 就已建好（列注释「维护逻辑属 1.5」），含索引 idx_shop_products_listing。
-#   V106 2-1 shipping_addresses            (PII·首个用户地址数据集)
+#   V106 2-1 shipping_addresses            (PII·首个用户地址数据集)  ✅ 已提交
 #   V107 3-1 shop_carts + shop_cart_items
 #   V108 3-2 shop_orders + shop_order_lines
 #   V109 3-3 ⚠️共享表 payment_intents 加三列 + 放宽 ck_payment_intents_channel（须认领）
@@ -119,8 +119,8 @@ development_status:
   epic-1-retrospective: optional
 
   # ── Epic 2: 收货地址与配送范围 ──
-  epic-2: backlog
-  2-1-收货地址建模与地址簿接口: backlog
+  epic-2: in-progress
+  2-1-收货地址建模与地址簿接口: review
   2-2-服务范围与运费表配置: backlog
   2-3-运费试算接口: backlog
   2-4-地址簿与新增-编辑地址: backlog
