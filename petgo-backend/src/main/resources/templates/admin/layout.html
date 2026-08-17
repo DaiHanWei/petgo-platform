@@ -143,6 +143,9 @@
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('shop.product_view') or hasAuthority('shop.product_edit')"
                    th:href="@{/admin/shop/products}" th:classappend="${active == 'shopProducts'} ? 'active'"
                    th:text="#{admin.nav.shopProducts}">商品管理</a>
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('shop.inventory_view') or hasAuthority('shop.inventory_edit')"
+                   th:href="@{/admin/shop/inventory}" th:classappend="${active == 'shopInventory'} ? 'active'"
+                   th:text="#{admin.nav.shopInventory}">库存管理</a>
             </div>
         </details>
     </nav>

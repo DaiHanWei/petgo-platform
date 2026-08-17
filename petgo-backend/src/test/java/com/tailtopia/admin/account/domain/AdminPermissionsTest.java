@@ -72,8 +72,9 @@ class AdminPermissionsTest {
         // = 44 + 1（content.manual_review，stag 拣回）= 45
         // − 3（bug 20260731-440 摘除无落点死码 content.export/content.view_reporters/consult.edit_sessions）= 42
         // + 1（bug 20260728-389 后台赠送 PawCoin user.grant_pawcoin）= 43
-        // + 4（V1.4.0 Story 1.3 电商模块 10：shop.product_view/cost_view/product_edit/cost_edit）= 47。
+        // + 4（V1.4.0 Story 1.3 电商模块 10：shop.product_view/cost_view/product_edit/cost_edit）= 47
+        // + 2（V1.4.0 Story 1.4 库存管理 AB-10C：shop.inventory_view/inventory_edit）= 49。
         List<String> all = AdminPermissions.ALL;
-        assertThat(all).hasSize(47);
+        assertThat(all).hasSize(49);
     }
 }

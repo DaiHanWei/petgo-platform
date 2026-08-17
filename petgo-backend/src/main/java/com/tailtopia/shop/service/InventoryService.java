@@ -108,6 +108,17 @@ public class InventoryService {
                         (a, b) -> a));
     }
 
+    /**
+     * 批量取库存行原样（1.4 后台库存管理页要同时展示 actual / locked / available 三列）。
+     *
+     * <p>🔴 页面<b>不得合并这三个数</b>：客服排查「用户说买不了但后台显示有货」时，
+     * 差异一定在 {@code locked} 上（AB-10C）。
+     */
+    @Transactional(readOnly = true)
+    public List<SkuInventory> rowsBySkuId(List<Long> skuIds) {
+        return skuIds.isEmpty() ? List.of() : inventory.findBySkuIdIn(skuIds);
+    }
+
     public long lowStockThreshold() {
         return lowStockThreshold;
     }
