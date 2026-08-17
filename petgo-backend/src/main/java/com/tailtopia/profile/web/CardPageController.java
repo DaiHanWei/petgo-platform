@@ -65,6 +65,7 @@ public class CardPageController {
     private final TimelineService timelineService;
     private final MilestoneService milestoneService;
     private final OgImageService ogImageService;
+    private final com.tailtopia.profile.service.CardPageAnalytics analytics;
     private final String downloadUrl;
     private final String iosUrl;
     private final String androidUrl;
@@ -73,7 +74,7 @@ public class CardPageController {
     public CardPageController(com.tailtopia.profile.service.ProfileService profileService,
             ContentService contentService, AccountQueryService accountQueryService,
             TimelineService timelineService, MilestoneService milestoneService,
-            OgImageService ogImageService,
+            OgImageService ogImageService, com.tailtopia.profile.service.CardPageAnalytics analytics,
             @Value("${petgo.card.app-download-url:https://petgo.example/download}") String downloadUrl,
             @Value("${petgo.card.ios-url:https://apps.apple.com/app/petgo}") String iosUrl,
             @Value("${petgo.card.android-url:https://play.google.com/store/apps/details?id=com.tailtopia.app}")
@@ -85,6 +86,7 @@ public class CardPageController {
         this.timelineService = timelineService;
         this.milestoneService = milestoneService;
         this.ogImageService = ogImageService;
+        this.analytics = analytics;
         this.downloadUrl = downloadUrl;
         this.iosUrl = iosUrl;
         this.androidUrl = androidUrl;
@@ -98,15 +100,20 @@ public class CardPageController {
     }
 
     @GetMapping("/p/{cardToken}")
-    public String card(@PathVariable String cardToken, Model model, HttpServletResponse response) {
+    public String card(@PathVariable String cardToken, Model model,
+            jakarta.servlet.http.HttpServletRequest request, HttpServletResponse response) {
+        // V1.1.6 Story 1.4：匿名访客标识（首访即种 cookie）。三个埋点事件共用它串漏斗。
+        String visitorId = com.tailtopia.shared.analytics.AnonymousVisitorId
+                .resolveOrIssue(request, response);
+
         Optional<PetProfile> opt = profiles.findByCardToken(cardToken);
         if (opt.isEmpty()) {
-            return gone(model, response);
+            return gone(model, response, visitorId, request);
         }
         PetProfile profile = opt.get();
-        // 账号注销 → 与不存在同一失效页（防枚举）。
+        // 账号注销 / 封号 → 与不存在同一失效页（防枚举）。
         if (!accountQueryService.isActive(profile.getOwnerId())) {
-            return gone(model, response);
+            return gone(model, response, visitorId, request);
         }
 
         long ownerId = profile.getOwnerId();
@@ -179,6 +186,14 @@ public class CardPageController {
         model.addAttribute("iosUrl", iosUrl);
         model.addAttribute("androidUrl", androidUrl);
         model.addAttribute("deepLink", "tailtopia://card/" + cardToken);
+        // 供前端上报 E-25/E-26 用（打到自家 /p/track，不加载任何第三方脚本）。
+        model.addAttribute("trackUrl", "/p/track");
+
+        // E-24：页面被打开。⚠️ page_state 的 empty 判据是「没有快乐时刻」而非里程碑数 ——
+        // 建档本身就会自动完成一条里程碑，按里程碑判永远判不出空态（Story 1.2 实测）。
+        analytics.linkOpened(visitorId,
+                com.tailtopia.profile.service.CardPageAnalytics.pageState(!moments.isEmpty()),
+                request);
         return "card";
     }
 
@@ -342,9 +357,16 @@ public class CardPageController {
         return out;
     }
 
-    private String gone(Model model, HttpServletResponse response) {
+    /**
+     * 失效页。⚠️ 这条路径<b>同样要种 cookie 并上报</b> ——
+     * 「分享出去的链接有多少已经失效」本身就是要看的数，漏了这批人这个数就永远是 0。
+     */
+    private String gone(Model model, HttpServletResponse response, String visitorId,
+            jakarta.servlet.http.HttpServletRequest request) {
         response.setStatus(HttpServletResponse.SC_NOT_FOUND);
         model.addAttribute("downloadUrl", downloadUrl);
+        analytics.linkOpened(visitorId,
+                com.tailtopia.profile.service.CardPageAnalytics.STATE_GONE, request);
         return "card_gone";
     }
 
