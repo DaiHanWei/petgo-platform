@@ -103,6 +103,46 @@ public class ShopProduct {
     protected ShopProduct() {
     }
 
+    /**
+     * 创建商品（Story 1.3 后台录入）。<b>状态变更集中在实体方法</b>，照 {@code PaymentIntent} 范式；
+     * 不暴露 setter，避免调用方绕过不变式。
+     *
+     * <p>🔴 {@code publicToken} 由调用方经 {@code ShopTokenGenerator} 生成传入，
+     * <b>绝不由自增 id 派生</b>（CLAUDE.md 护栏）。新建默认<b>未上架</b>，由运营主动上架（Story 1.5）。
+     */
+    public static ShopProduct create(String publicToken, String name, String brand,
+            ProductCategory category, String mainImageKey, List<String> galleryKeys,
+            Species species, BodySize bodySize, AgeStage ageStage, String detailHtml,
+            List<FeedingGuideEntry> feedingGuide, String shelfLifeNote,
+            ReturnPolicy returnPolicy, int sortWeight) {
+        ShopProduct p = new ShopProduct();
+        p.publicToken = publicToken;
+        p.apply(name, brand, category, mainImageKey, galleryKeys, species, bodySize, ageStage,
+                detailHtml, feedingGuide, shelfLifeNote, returnPolicy, sortWeight);
+        p.active = false;
+        return p;
+    }
+
+    /** 编辑商品（Story 1.3）。上架状态与 token 不经此方法改动。 */
+    public void apply(String name, String brand, ProductCategory category, String mainImageKey,
+            List<String> galleryKeys, Species species, BodySize bodySize, AgeStage ageStage,
+            String detailHtml, List<FeedingGuideEntry> feedingGuide, String shelfLifeNote,
+            ReturnPolicy returnPolicy, int sortWeight) {
+        this.name = name;
+        this.brand = brand;
+        this.category = category;
+        this.mainImageKey = mainImageKey;
+        this.galleryKeys = galleryKeys;
+        this.species = species;
+        this.bodySize = bodySize;
+        this.ageStage = ageStage;
+        this.detailHtml = detailHtml;
+        this.feedingGuide = feedingGuide;
+        this.shelfLifeNote = shelfLifeNote;
+        this.returnPolicy = returnPolicy;
+        this.sortWeight = sortWeight;
+    }
+
     @PrePersist
     void onCreate() {
         Instant now = Instant.now();

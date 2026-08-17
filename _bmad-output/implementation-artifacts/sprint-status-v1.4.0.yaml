@@ -84,7 +84,7 @@ development_status:
   epic-1: in-progress
   1-1-商品与sku建模及只读查询接口: review
   1-2-库存模型与可售库存口径: review
-  1-3-商品录入与-SKU-价格规格管理: backlog
+  1-3-商品录入与sku价格规格管理: review
   1-4-库存管理与采购入库: backlog
   1-5-上下架-精选排序与-SKU-上限告警: backlog
   1-6-Toko-首页分类与全部精选: backlog

@@ -48,6 +48,13 @@ public class ShopSku {
     @Column(name = "net_weight_g")
     private Long netWeightG;
 
+    /**
+     * 🔒 进货价（最小币种单位）。<b>商业敏感</b>：需 {@code shop.cost_view} 权限，
+     * 服务端按权限决定是否下发（Story 1.3，V103）。<b>绝不出现在对外 DTO 中。</b>
+     */
+    @Column(name = "cost_price")
+    private Long costPrice;
+
     /** 可空 = 继承商品级（FR-94A）。 */
     @Enumerated(EnumType.STRING)
     @Column(name = "return_policy", length = 24)
@@ -60,6 +67,32 @@ public class ShopSku {
     private Instant updatedAt;
 
     protected ShopSku() {
+    }
+
+    /** 创建 SKU（Story 1.3）。{@code publicToken} 由 {@code ShopTokenGenerator} 生成传入。 */
+    public static ShopSku create(String publicToken, Long productId, String specName, long price,
+            Long netWeightG, ReturnPolicy returnPolicy) {
+        ShopSku s = new ShopSku();
+        s.publicToken = publicToken;
+        s.productId = productId;
+        s.apply(specName, price, netWeightG, returnPolicy);
+        return s;
+    }
+
+    /** 编辑 SKU 的非敏感字段。🔒 进货价单独走 {@link #applyCostPrice}，受权限门控。 */
+    public void apply(String specName, long price, Long netWeightG, ReturnPolicy returnPolicy) {
+        this.specName = specName;
+        this.price = price;
+        this.netWeightG = netWeightG;
+        this.returnPolicy = returnPolicy;
+    }
+
+    /**
+     * 🔒 单独设置进货价 —— 与 {@link #apply} 分开，使「无 {@code shop.cost_edit} 权限时
+     * 根本不调用本方法」成为结构性保证，而不是靠调用方记得判断。
+     */
+    public void applyCostPrice(Long costPrice) {
+        this.costPrice = costPrice;
     }
 
     @PrePersist
@@ -107,6 +140,11 @@ public class ShopSku {
 
     public Long getNetWeightG() {
         return netWeightG;
+    }
+
+    /** 🔒 商业敏感：调用方必须先校验 {@code shop.cost_view}，否则不得下发。 */
+    public Long getCostPrice() {
+        return costPrice;
     }
 
     public ReturnPolicy getReturnPolicy() {

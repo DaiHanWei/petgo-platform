@@ -109,6 +109,17 @@ public final class AuditActions {
     /** 头像违规重置为平台默认头像（story 5 处置，story 8 后台入口触发；summary 含判定依据/备注，无图片 URL）。 */
     public static final String AVATAR_RESET = "AVATAR_RESET";
 
+
+    // ===== 精选自营电商（V1.4.0 Story 1.3，模块 10）=====
+    /** 创建商品（AB-10A）。 */
+    public static final String SHOP_PRODUCT_CREATED = "SHOP_PRODUCT_CREATED";
+    /** 编辑商品（AB-10A）。 */
+    public static final String SHOP_PRODUCT_UPDATED = "SHOP_PRODUCT_UPDATED";
+    /** 新建或更新 SKU（AB-10B）。 */
+    public static final String SHOP_SKU_UPSERTED = "SHOP_SKU_UPSERTED";
+    /** 🔒 更新进货价——详情【绝不写数值】，只记发生过（商业敏感，NFR-11）。 */
+    public static final String SHOP_PRODUCT_COST_UPDATED = "SHOP_PRODUCT_COST_UPDATED";
+
     private AuditActions() {
     }
 }
