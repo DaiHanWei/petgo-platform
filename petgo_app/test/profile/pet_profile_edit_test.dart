@@ -12,6 +12,10 @@ class _FakeRepo implements ProfileRepository {
   final PetProfile profile;
   String? updatedName;
   bool deleted = false;
+  /// V1.1.6 Story 1.1：记录 PATCH 实际带出去的性别。
+  /// `updateCalled` 用来区分「传了 null」与「压根没调用 update」——只看 `updatedSex == null` 分不出这两者。
+  String? updatedSex;
+  bool updateCalled = false;
 
   @override
   Future<void> deleteMyProfile() async {
@@ -39,10 +43,13 @@ class _FakeRepo implements ProfileRepository {
     String? avatarUrl,
     String? breed,
     DateTime? birthday,
+    String? sex,
     String? intro,
   }) async {
     updatedName = name;
-    return profile.copyWith(name: name);
+    updatedSex = sex;
+    updateCalled = true;
+    return profile.copyWith(name: name, sex: sex);
   }
 }
 
@@ -132,5 +139,65 @@ void main() {
     expect(speciesField.locked, isTrue); // 锁定不可改
     expect(speciesField.onChanged, isNull); // 无变更回调
     // update() 签名无 petType 参数 → 结构上不可能随 PATCH 提交（后端 DTO 亦无该字段）。
+  });
+
+  // ===== V1.1.6 Story 1.1：性别字段落地 =====
+  //
+  // 本组用例守的是一个**曾经存在的缺陷**：性别选择器能选能显示，但选完不提交、不回填 ——
+  // 用户选了、保存了、退出再进来又变回「请选择」。三条用例分别钉住：能存、能回填、未填不崩。
+
+  testWidgets('AC1：选了性别再保存 → 随 PATCH 带出去', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(440, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repo = _FakeRepo(const PetProfile(id: 1, name: 'Momo', cardToken: 'TOK'));
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+
+    // 打开性别选择器 → 选「公」
+    final sexTile = find.byKey(const ValueKey('petProfileEditSexTile'));
+    await tester.ensureVisible(sexTile);
+    await tester.tap(sexTile);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('petSexMaleOption')));
+    await tester.pumpAndSettle();
+
+    final submit = find.byKey(const ValueKey('petProfileEditSubmit'));
+    await tester.ensureVisible(submit);
+    await tester.tap(submit);
+    await tester.pumpAndSettle();
+
+    expect(repo.updateCalled, isTrue);
+    expect(repo.updatedSex, 'MALE'); // ⚠️ 缺陷期这里是 null
+
+    // 提交成功后页面会 context.go('/profile')，测试里没有 router → 落到 catch 弹 toast。
+    // 与本用例无关，但要把它的 3s 定时器排空，否则框架报「Timer is still pending」。
+    await tester.pump(const Duration(seconds: 4));
+  });
+
+  testWidgets('AC1：已有性别的档案 → 进页面就回填，不是「请选择」', (tester) async {
+    final repo = _FakeRepo(const PetProfile(
+      id: 1,
+      name: 'Momo',
+      cardToken: 'TOK',
+      sex: 'FEMALE',
+    ));
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    expect(find.text(l10n.petProfileSexFemale), findsOneWidget);
+    expect(find.text(l10n.petProfileSexPick), findsNothing); // 占位不该还在
+  });
+
+  testWidgets('AC3：存量档案没有性别 → 显示占位文案，不崩不空白', (tester) async {
+    // 存量宠物一律 sex = null（迁移不回填），这是最常见的一种档案。
+    final repo = _FakeRepo(const PetProfile(id: 1, name: 'Momo', cardToken: 'TOK'));
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    expect(find.byKey(const ValueKey('petProfileEditSexTile')), findsOneWidget);
+    expect(find.text(l10n.petProfileSexPick), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

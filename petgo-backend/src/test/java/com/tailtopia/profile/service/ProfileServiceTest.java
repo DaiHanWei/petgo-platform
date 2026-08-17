@@ -115,7 +115,7 @@ class ProfileServiceTest {
         when(profiles.save(any(PetProfile.class))).thenAnswer(inv -> withId(inv.getArgument(0), 100L));
 
         PetProfileResponse resp = service.update(1L,
-                new com.tailtopia.profile.dto.PetProfileUpdateRequest(null, "New", null, null, "new intro"));
+                new com.tailtopia.profile.dto.PetProfileUpdateRequest(null, "New", null, null, null, "new intro"));
 
         assertThat(resp.name()).isEqualTo("New");
         assertThat(resp.intro()).isEqualTo("new intro");
@@ -127,7 +127,7 @@ class ProfileServiceTest {
     void updateWithoutProfileThrows404() {
         when(profiles.findByOwnerId(9L)).thenReturn(java.util.Optional.empty());
         assertThatThrownBy(() -> service.update(9L,
-                new com.tailtopia.profile.dto.PetProfileUpdateRequest(null, "X", null, null, null)))
+                new com.tailtopia.profile.dto.PetProfileUpdateRequest(null, "X", null, null, null, null)))
                 .isInstanceOf(AppException.class);
     }
 
@@ -136,7 +136,7 @@ class ProfileServiceTest {
         PetProfile existing = PetProfile.create(1L, PetType.CAT, "Old", null, null, null, null, "TOK");
         when(profiles.findByOwnerId(1L)).thenReturn(java.util.Optional.of(existing));
         assertThatThrownBy(() -> service.update(1L,
-                new com.tailtopia.profile.dto.PetProfileUpdateRequest(null, "   ", null, null, null)))
+                new com.tailtopia.profile.dto.PetProfileUpdateRequest(null, "   ", null, null, null, null)))
                 .isInstanceOf(AppException.class);
     }
 
