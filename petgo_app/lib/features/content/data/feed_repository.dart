@@ -4,12 +4,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
 import '../domain/feed_item.dart';
+import '../domain/pinned_slot.dart';
 
 /// Feed 读取数据层（Story 3.2）。游标分页读 `GET /content-posts`。
 ///
 /// 游客无 token 也可调（auth_interceptor 放行只读，后端 GET 放行）；硬过滤在后端按 JWT 宠物状态权威执行。
 abstract class FeedRepository {
   Future<FeedPage> getFeed({FeedCategory category = FeedCategory.all, String? cursor, int limit = 20});
+
+  /// 顶置坑位（V1.1.6 Story 4.2）。
+  ///
+  /// 🛡 **独立取数**：与首页取数分开，首页的分页形态一点不变；
+  /// 本请求失败时调用方当作没有顶置，首页照常显示。
+  Future<PinnedSlot?> getPinnedSlot();
 }
 
 class DioFeedRepository implements FeedRepository {
@@ -30,6 +37,12 @@ class DioFeedRepository implements FeedRepository {
       queryParameters: query,
     );
     return FeedPage.fromJson(resp.data!);
+  }
+
+  @override
+  Future<PinnedSlot?> getPinnedSlot() async {
+    final resp = await dio.get<Map<String, dynamic>>(ApiPaths.contentPinnedSlot);
+    return PinnedSlot.fromJson(resp.data ?? const {});
   }
 }
 

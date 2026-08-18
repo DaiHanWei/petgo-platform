@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/feed_repository.dart';
 import '../domain/feed_item.dart';
 import '../domain/home_refresh_provider.dart';
+import '../domain/pinned_slot.dart';
 
 /// 当前选中的分类 Tab（Story 3.2，AC3）。切换即重置游标重拉（feedProvider watch 此值）。
 final NotifierProvider<FeedCategoryNotifier, FeedCategory> feedCategoryProvider =
@@ -142,3 +143,17 @@ class FeedController extends AsyncNotifier<FeedState> {
 
 final AsyncNotifierProvider<FeedController, FeedState> feedProvider =
     AsyncNotifierProvider<FeedController, FeedState>(FeedController.new);
+
+
+/// 顶置坑位（V1.1.6 Story 4.2 · FR-68）。
+///
+/// 🛡 **取数失败一律当作"没有顶置"** —— AC 明写"顶置取数失败不得连带整个首页失败"。
+/// 一个运营位不该把主功能带崩，所以这里吞掉异常返回 null，而不是把错误抛给首页的状态机。
+final FutureProvider<PinnedSlot?> pinnedSlotProvider =
+    FutureProvider<PinnedSlot?>((ref) async {
+  try {
+    return await ref.read(feedRepositoryProvider).getPinnedSlot();
+  } catch (_) {
+    return null;
+  }
+});

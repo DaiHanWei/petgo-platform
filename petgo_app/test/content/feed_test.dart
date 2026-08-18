@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/features/content/domain/pinned_slot.dart';
 import 'package:tailtopia/features/content/data/feed_repository.dart';
 import 'package:tailtopia/features/content/domain/feed_item.dart';
 import 'package:tailtopia/features/content/presentation/feed_controller.dart';
@@ -43,6 +44,11 @@ class _FakeFeedRepo implements FeedRepository {
     int limit = 20,
   }) async =>
       FeedPage(items: items, nextCursor: null, hasMore: false);
+
+  /// V1.1.6 Story 4.2：本 fake 不涉及顶置 —— 恒无顶置（与"坑位为空"同义）。
+  @override
+  Future<PinnedSlot?> getPinnedSlot() async => null;
+
 }
 
 /// 脚本化 fake：由注入函数决定每次 getFeed 的结果（含抛错），用于 AC5 失败态。
@@ -57,6 +63,11 @@ class _ScriptedFeedRepo implements FeedRepository {
     int limit = 20,
   }) =>
       handler(category, cursor);
+
+  /// V1.1.6 Story 4.2：本 fake 不涉及顶置 —— 恒无顶置（与"坑位为空"同义）。
+  @override
+  Future<PinnedSlot?> getPinnedSlot() async => null;
+
 }
 
 Future<void> _pumpHome(WidgetTester tester, List<FeedItem> items) async {

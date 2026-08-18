@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.data.domain.Pageable;
 
 /**
@@ -52,7 +53,9 @@ class FeedBatchAggregationTest {
         accounts = mock(AccountQueryService.class);
         likes = mock(ContentLikeRepository.class);
         comments = mock(CommentRepository.class);
-        service = new FeedService(posts, accounts, likes, comments);
+        // V1.1.6 Story 4.2：只首屏让位要查顶置。这两类单测不验让位，给 mock（默认无顶置）。
+        service = new FeedService(posts, accounts, likes, comments,
+                Mockito.mock(ContentPinService.class));
         when(accounts.findAuthorViews(anyList())).thenAnswer(inv -> {
             List<Long> ids = inv.getArgument(0);
             return ids.stream().distinct().collect(Collectors.toMap(
@@ -70,7 +73,7 @@ class FeedBatchAggregationTest {
             rows.add(p);
         }
         when(posts.findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
-                any(Boolean.class), any(), any(), any(Pageable.class)))
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), any(Pageable.class)))
                 .thenReturn(rows);
     }
 
