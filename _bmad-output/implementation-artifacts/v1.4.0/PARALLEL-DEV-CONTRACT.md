@@ -84,9 +84,24 @@ authority: "签字后与 CROSS-STORY-DECISIONS.md 同级；本文件是决策 E2
 | 新增的方法 | `findByRecipientUserIdOrderByCreatedAtDescIdDesc(long)`（非分页，供测试与小规模内部核对） |
 | Flyway | `V125` 取自**电商线独占段** —— 号段按线独占分配、不按模块归属分配，这样才不会与另两条线撞号 |
 
-⚠️ **`OrderCenterService#listOrders` 有同一类缺陷，本次没动**（§三 明写它是三线共享）。
-它是跨 3 源 in-memory 归并，`(created_at, id)` 不直接成立 —— id 来自不同表，需先定跨源全序键。
-记为 `sprint-status action_items: ORDER-CENTER-CURSOR-TIE`，**动它之前请先认领**。
+### 🔔 2026-08-18 事后补认领（第二批）：`OrderCenterService` 与 PawCoin 流水
+
+同一族缺陷另外两处也已修（**由用户明确要求**），两处都是共享面，同样事后补记：
+
+| 位置 | 改了什么 | 破坏性 |
+|---|---|---|
+| `order/service/OrderCenterService`（🔴 **§三 点名的三线共享文件**）+ 4 个源仓储各加一个 `findPageBefore` / `findOrderCenterPageBefore` | 跨源全序定为 `(createdAt DESC, sourceRank ASC, id DESC)`；游标改 base64url 的 `(micros, sourceRank, id)`；首页上界 `now` → `now+60s` | `nextCursor` wire 格式变更（不透明串，客户端只回传）；旧的 `findByUserIdAndCreatedAtLessThan...` **已删** |
+| `pay/service/PawCoinQueryService` + `PawCoinTransactionRepository` | 换用 `shared/paging/KeysetCursor` 的 `(createdAt, id)` | 同上 |
+
+🔴 **`OrderCenterService` 的四个 `if` 分支与四个映射器仍是一行未改**（AD-11 / 契约 O-1）——
+改的只有「取数的那一句」和归并/游标那一段，第 5 个源接进来时照旧在 `if` 链末尾追加即可。
+但 **`RANK_*` 常量只许追加、不许重排**：它是游标的一部分，重排会让在途游标错位。
+
+### 🧰 新增共享件：`shared/paging/KeysetCursor`
+
+单表倒序列表的复合游标 `(createdAt, id)` + base64url 编码。
+**以后写分页直接用它，不要再手写 `epochMillis` 游标** —— 本轮三处缺陷是同一个写法犯了三次。
+（跨源归并的场景用不了它，见 `OrderCenterCursor` 的类注释解释为什么。）
 
 ## 三 · `OrderCenterService` 与 App 共享壳
 

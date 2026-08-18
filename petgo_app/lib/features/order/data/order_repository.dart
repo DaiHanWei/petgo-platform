@@ -13,7 +13,11 @@ class OrderRepository {
 
   final Dio dio;
 
-  /// 拉订单页。[type] 为空聚合 3 类；[cursor] 为末条 createdAt epochMillis（首页 null）。
+  /// 拉订单页。[type] 为空聚合 4 类；[cursor] 为**服务端给的不透明串**（首页 null）。
+  ///
+  /// 🔴 **原样回传，不要解析、不要自己拼**。2026-08-18 它已经从「纯 epochMillis」
+  /// 变成了 base64url 的复合键 —— 只按时间做游标会在同刻订单处整组丢单
+  /// （`action_items: ORDER-CENTER-CURSOR-TIE`）。以后还可能再变。
   Future<OrderPage> fetchOrders({OrderType? type, String? cursor, int limit = 20}) async {
     final resp = await dio.get<Map<String, dynamic>>(
       ApiPaths.orders,
