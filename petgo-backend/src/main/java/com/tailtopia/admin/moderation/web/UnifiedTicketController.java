@@ -58,15 +58,18 @@ public class UnifiedTicketController {
     private final AccountDisposalRepository disposals;
     private final AccountQueryService accountQueryService;
     private final AccountDisposalService disposalService;
+    private final com.tailtopia.moderation.service.ReportService contentReportService;
 
     public UnifiedTicketController(UnifiedTicketQueryService query,
             AccountReportEntryRepository reportEntries, AccountDisposalRepository disposals,
-            AccountQueryService accountQueryService, AccountDisposalService disposalService) {
+            AccountQueryService accountQueryService, AccountDisposalService disposalService,
+            com.tailtopia.moderation.service.ReportService contentReportService) {
         this.query = query;
         this.reportEntries = reportEntries;
         this.disposals = disposals;
         this.accountQueryService = accountQueryService;
         this.disposalService = disposalService;
+        this.contentReportService = contentReportService;
     }
 
     @GetMapping("/admin/tickets")
@@ -119,9 +122,18 @@ public class UnifiedTicketController {
         model.addAttribute("type", ticketType == null ? null : ticketType.name());
         model.addAttribute("sourceId", sourceId);
 
-        List<AccountReportEntry> entries = ticketType == TicketType.ACCOUNT_REPORT
-                ? reportEntries.findByReportIdOrderByCreatedAtDesc(sourceId)
-                : List.of();
+        // 修复清单 #3：内容举报的「每一次举报」也要能看（原因 + 时间）——旧 /admin/reports 页
+        // 下线后这里是唯一可见处。两类映射成同一形状（reason/createdAt/detail）复用同一段模板。
+        List<?> entries;
+        if (ticketType == TicketType.ACCOUNT_REPORT) {
+            entries = reportEntries.findByReportIdOrderByCreatedAtDesc(sourceId);
+        } else if (ticketType == TicketType.CONTENT_REPORT) {
+            entries = contentReportService.findAllForPost(sourceId).stream()
+                    .map(r -> new ReportEntryView(r.getReasonType().name(), r.getCreatedAt(), null))
+                    .toList();
+        } else {
+            entries = List.of();
+        }
         model.addAttribute("entries", entries);
 
         if (userId != null) {
@@ -211,8 +223,15 @@ public class UnifiedTicketController {
             return "redirect:/admin/tickets";
         }
 
-        AccountDisposalService.BatchResult result =
-                disposalService.batch(reportIds, batchAction, admin.getAdminAccountId());
+        AccountDisposalService.BatchResult result;
+        try {
+            result = disposalService.batch(reportIds, batchAction, admin.getAdminAccountId());
+        } catch (AppException e) {
+            // 超 50 条上限等整批校验失败：给 flash 提示回列表，不能让运营吃一个整页错误
+            //（前端置灰只是体验，勾选框在浏览器里可以随便改）。
+            flash.addFlashAttribute("notice", e.getMessage());
+            return "redirect:/admin/tickets";
+        }
         flash.addFlashAttribute("notice",
                 "批量完成：成功 " + result.ok() + " 条，失败 " + result.failedCount() + " 条");
         // ⚠️ 失败明细必须真的渲染出来（AC5）：只报数量的话运营不知道是哪几条、为什么，也就无从重试。
@@ -268,6 +287,13 @@ public class UnifiedTicketController {
         boolean deactivate = authorities.stream()
                 .anyMatch(a -> "user.deactivate".equals(a.getAuthority()));
         return superAdmin || deactivate;
+    }
+
+    /**
+     * 展开详情「每一次举报」的统一行形状：账号举报直接用实体（reason/createdAt/detail 同名），
+     * 内容举报映射到本 record —— 两类共用模板同一段循环。
+     */
+    public record ReportEntryView(String reason, java.time.Instant createdAt, String detail) {
     }
 
     /** 空白 / 非法值一律当「不筛选」，不给运营一个 400。 */

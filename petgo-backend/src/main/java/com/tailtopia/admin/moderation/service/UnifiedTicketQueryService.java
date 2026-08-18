@@ -95,7 +95,9 @@ public class UnifiedTicketQueryService {
                 -- ① 内容举报：**按帖聚合**（12 个人举报同一条帖是一条工单，不是 12 条）
                 SELECT 'CONTENT_REPORT'::text                     AS ticket_type,
                        cr.post_id                                 AS source_id,
-                       NULL::text                                 AS sub_type,
+                       -- 举报原因去重聚合（修复清单 #3）：旧 /admin/reports 页下线后这是原因唯一可见处，
+                       -- 固定 NULL 会让 INFRINGEMENT 与 SPAM 无从区分。
+                       string_agg(DISTINCT cr.reason_type, ' / ') AS sub_type,
                        cp.author_id                               AS target_user_id,
                        CASE WHEN bool_or(cr.status = 'PENDING')  THEN 'PENDING'
                             WHEN bool_or(cr.status = 'RESOLVED') THEN 'RESOLVED'
@@ -107,7 +109,10 @@ public class UnifiedTicketQueryService {
                        -- ⇒ 次数恒等于人数、高频恒为 0，分数就是举报人数。
                        COUNT(DISTINCT cr.reporter_id)::bigint     AS score,
                        MIN(cr.created_at)                         AS earliest_at,
-                       LEFT(COALESCE(cp.text, ''), 60)            AS preview
+                       LEFT(COALESCE(cp.text, ''), 60)            AS preview,
+                       -- 代表性举报单 id：下架端点按 reportId 收口（它会顺带关掉该帖全部 PENDING 单），
+                       -- 取任意一条 PENDING 即可；全部已处理时为 NULL（也不再需要动作按钮）。
+                       MIN(cr.id) FILTER (WHERE cr.status = 'PENDING') AS action_ref
                   FROM content_reports cr
                   JOIN content_posts cp ON cp.id = cr.post_id
                  GROUP BY cr.post_id, cp.author_id, cp.text
@@ -127,7 +132,8 @@ public class UnifiedTicketQueryService {
                        COALESCE(agg.frequent_count, 0)::bigint,
                        (COALESCE(agg.reporter_count, 0) + COALESCE(agg.frequent_count, 0))::bigint,
                        COALESCE(agg.earliest_at, ar.first_reported_at),
-                       NULL::text
+                       NULL::text,
+                       NULL::bigint
                   FROM account_reports ar
                   LEFT JOIN account_agg agg ON agg.report_id = ar.id
 
@@ -145,7 +151,8 @@ public class UnifiedTicketQueryService {
                        0::bigint, 0::bigint, 0::bigint,
                        (CASE nmr.priority WHEN 'HIGH' THEN %d ELSE %d END)::bigint,
                        nmr.submitted_at,
-                       nmr.submitted_value
+                       nmr.submitted_value,
+                       NULL::bigint
                   FROM name_moderation_records nmr
                   LEFT JOIN pet_profiles pp
                          ON nmr.target_type = 'PET_NAME' AND pp.id = nmr.target_ref_id
@@ -165,7 +172,8 @@ public class UnifiedTicketQueryService {
                        0::bigint, 0::bigint, 0::bigint,
                        (CASE avr.priority WHEN 'HIGH' THEN %d ELSE %d END)::bigint,
                        avr.created_at,
-                       avr.avatar_url
+                       avr.avatar_url,
+                       NULL::bigint
                   FROM avatar_reviews avr
                   LEFT JOIN pet_profiles pp2
                          ON avr.subject_type = 'PET_AVATAR' AND pp2.id = avr.subject_id
@@ -204,9 +212,12 @@ public class UnifiedTicketQueryService {
         }
         String keyword = search == null ? null : search.trim();
         if (keyword != null && !keyword.isEmpty()) {
-            if (keyword.chars().allMatch(Character::isDigit)) {
+            // ⚠️ 纯数字也可能超 Long（比如整段粘贴的长号码）——溢出就当普通昵称模糊匹配，
+            // 绝不能让一个筛选输入把整页打成 500。
+            Long asId = parseUserId(keyword);
+            if (asId != null) {
                 where.append(" AND u.target_user_id = ?");
-                args.add(Long.parseLong(keyword));
+                args.add(asId);
             } else {
                 where.append(" AND usr.nickname ILIKE ?");
                 args.add("%" + keyword + "%");
@@ -234,7 +245,7 @@ public class UnifiedTicketQueryService {
                                 usr.nickname AS target_nickname,
                                 (usr.deleted_at IS NOT NULL) AS target_deleted,
                                 u.status_bucket, u.reporter_count, u.report_count, u.frequent_count,
-                                u.score, u.earliest_at, u.preview,
+                                u.score, u.earliest_at, u.preview, u.action_ref,
                                 COALESCE(d.c, 0) AS disposal_count
                         """ + joins + where
                         + " ORDER BY u.score DESC, u.earliest_at ASC LIMIT ? OFFSET ?",
@@ -248,6 +259,8 @@ public class UnifiedTicketQueryService {
         // 不能挪到构造器参数列表里去——那里中间还夹着别的列的读取。
         long rawTargetId = rs.getLong("target_user_id");
         Long targetUserId = rs.wasNull() ? null : rawTargetId;
+        long rawActionRef = rs.getLong("action_ref");
+        Long actionRef = rs.wasNull() ? null : rawActionRef;
         return new UnifiedTicketRow(
                 TicketType.valueOf(rs.getString("ticket_type")),
                 rs.getLong("source_id"),
@@ -262,8 +275,21 @@ public class UnifiedTicketQueryService {
                 rs.getLong("score"),
                 toInstant(rs, "earliest_at"),
                 rs.getString("preview"),
+                actionRef,
                 rs.getLong("disposal_count"));
     };
+
+    /** 纯数字且在 Long 范围内 → userId；否则 null（走昵称模糊匹配）。 */
+    private static Long parseUserId(String keyword) {
+        if (!keyword.chars().allMatch(Character::isDigit)) {
+            return null;
+        }
+        try {
+            return Long.parseLong(keyword);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
 
     private static java.time.Instant toInstant(ResultSet rs, String column) throws SQLException {
         java.sql.Timestamp ts = rs.getTimestamp(column);

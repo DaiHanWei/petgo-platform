@@ -11,6 +11,7 @@ import '../../../shared/widgets/mini_profile_sheet.dart';
 import '../../social/domain/account_action_entry.dart';
 import '../data/detail_repository.dart';
 import '../domain/comment.dart';
+import 'author_moderation_callbacks.dart';
 import 'detail_providers.dart';
 
 /// 评论区（Story 3.3 只读 + Story 3.5 回复/删除入口）。一级时间正序首 10 + 「查看更多评论」；
@@ -22,11 +23,16 @@ class CommentSection extends ConsumerStatefulWidget {
     super.key,
     required this.postId,
     this.currentUserId,
+    this.postAuthorId,
     this.isContentAuthor = false,
   });
 
   final int postId;
   final int? currentUserId;
+
+  /// 帖子作者 id：评论区拉黑/举报的对象**恰好是帖主**时，除了刷 Feed 还要退出本详情页
+  /// （停在服务端已 404 的详情页上是明显穿帮）。
+  final int? postAuthorId;
   final bool isContentAuthor;
 
   @override
@@ -128,6 +134,20 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     } catch (_) {
       // 保持现状。
     }
+  }
+
+  /// 评论区迷你卡拉黑/举报成功后的收尾（修复清单 #7）：
+  /// ① 与首页/详情入口同一套 [onAuthorHidden]——乐观清掉 Feed 里该作者的全部卡片；
+  ///    对象恰好是帖主时传 popContext 退出本详情页（那一页服务端已经 404 了）。
+  /// ② 帖主之外的场景再静默刷本帖评论（影子评论过滤由下一次拉取兜底，这里补的是当下这一屏）。
+  VoidCallback _onCommentAuthorHidden(int authorId) {
+    final bool isPostAuthor = widget.postAuthorId != null && authorId == widget.postAuthorId;
+    return () {
+      onAuthorHidden(ref, authorId, popContext: isPostAuthor ? context : null)();
+      if (!isPostAuthor) {
+        _reload();
+      }
+    };
   }
 
   Future<void> _confirmDelete(int commentId) async {
@@ -245,8 +265,11 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
       onAuthorTap: c.authorDeleted
           ? null
           : () => showMiniProfile(context, ref, c.authorId,
-              onBlocked: _reload,
-              onReported: _reload,
+              // 修复清单 #7：与首页/详情入口同一套收尾（onAuthorHidden = 乐观清 Feed 该作者
+              // 全部卡片；对象是帖主时顺带退出本详情页），再刷本帖评论。只接 _reload 的话，
+              // 用户回到首页会看见「我明明处理了，他的东西还在」。
+              onBlocked: _onCommentAuthorHidden(c.authorId),
+              onReported: _onCommentAuthorHidden(c.authorId),
               // 评论区这个入口的量单独可查（本版本的主场景就是评论区骚扰）。
               entry: AccountActionEntry.comment),
       // story 3：仅作者会收到 TAKEN_DOWN/REJECTED 行 → 渲染「仅你可见」灰标签（VISIBLE/UNDER_REVIEW 无标签，D-CM2）。

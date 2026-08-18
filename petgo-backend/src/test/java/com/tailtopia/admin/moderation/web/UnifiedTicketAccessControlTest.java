@@ -74,10 +74,15 @@ class UnifiedTicketAccessControlTest {
         }
 
         @Bean
+        com.tailtopia.moderation.service.ReportService contentReports() {
+            return mock(com.tailtopia.moderation.service.ReportService.class);
+        }
+
+        @Bean
         UnifiedTicketController controller(UnifiedTicketQueryService q,
                 AccountReportEntryRepository e, AccountDisposalRepository d, AccountQueryService a,
-                AccountDisposalService ds) {
-            return new UnifiedTicketController(q, e, d, a, ds);
+                AccountDisposalService ds, com.tailtopia.moderation.service.ReportService cr) {
+            return new UnifiedTicketController(q, e, d, a, ds, cr);
         }
     }
 

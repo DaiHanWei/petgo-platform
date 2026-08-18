@@ -23,6 +23,9 @@ public interface ContentReportRepository extends JpaRepository<ContentReport, Lo
     /** 某帖的举报次数（队列详情展示）。 */
     long countByPostId(long postId);
 
+    /** 某帖全部举报单（统一工单队列展开详情：逐条列原因与时间，倒序）。 */
+    List<ContentReport> findByPostIdOrderByCreatedAtDesc(long postId);
+
     /**
      * 某帖是否存在指定原因的举报（内容审核 cm-6 §5.1）：判 P0「法律违规」——是否含 {@code ILLEGAL} 原因举报
      * （本次或历史，同事务内本次刚写入亦可见）。

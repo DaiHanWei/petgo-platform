@@ -154,14 +154,16 @@ public class AccountDisposalService {
         // ① 先落记录 —— 顺序不能反（见类注释）。
         disposals.save(AccountDisposal.create(targetUserId, AccountDisposalType.WARNING,
                 actorAccountId, reportId));
-        // ② 再触发后果。
-        notificationService.send(targetUserId, NotificationType.ACCOUNT_WARNED,
-                "账号警告", "你的账号因违反 TailTopia 社区规范收到一次警告，请遵守社区规范",
-                NotificationType.ACCOUNT_WARNED.name(), null);
+        // ② 收档 + 审计。
         resolveTicket(reportId, actorAccountId);
         // ⚠️ summary 里严禁 PII / 内容原文 / 令牌。
         auditService.record(actorAccountId, AuditActions.ACCOUNT_WARNED, "USER",
                 String.valueOf(targetUserId), "账号警告（工单 " + (reportId == null ? "-" : reportId) + "）");
+        // ③ 通知必须排最后：send 是 REQUIRES_NEW（立即独立提交并推送、回滚不撤回），
+        //    放在收档/审计之前的话，后两步一旦失败回滚，用户已经收到了一条「假处置」通知。
+        notificationService.send(targetUserId, NotificationType.ACCOUNT_WARNED,
+                "账号警告", "你的账号因违反 TailTopia 社区规范收到一次警告，请遵守社区规范",
+                NotificationType.ACCOUNT_WARNED.name(), null);
     }
 
     /**
@@ -192,12 +194,14 @@ public class AccountDisposalService {
         disposals.save(AccountDisposal.create(targetUserId, AccountDisposalType.SUSPEND,
                 actorAccountId, reportId));
         authService.deactivateUser(targetUserId); // 置 DEACTIVATED + 撤销 refresh 句柄
-        notificationService.send(targetUserId, NotificationType.ACCOUNT_SUSPENDED,
-                "账号已停用", "你的账号因违反 TailTopia 社区规范已被停用。如有异议，请联系客服团队。",
-                NotificationType.ACCOUNT_SUSPENDED.name(), null);
         resolveTicket(reportId, actorAccountId);
         auditService.record(actorAccountId, AuditActions.ACCOUNT_SUSPENDED, "USER",
                 String.valueOf(targetUserId), "账号停用（工单 " + (reportId == null ? "-" : reportId) + "）");
+        // 通知必须排最后：send 是 REQUIRES_NEW（立即独立提交并推送、回滚不撤回），
+        // 放在收档/审计之前的话，后两步一旦失败回滚停用，用户却已收到「账号已停用」的假通知。
+        notificationService.send(targetUserId, NotificationType.ACCOUNT_SUSPENDED,
+                "账号已停用", "你的账号因违反 TailTopia 社区规范已被停用。如有异议，请联系客服团队。",
+                NotificationType.ACCOUNT_SUSPENDED.name(), null);
     }
 
     /**

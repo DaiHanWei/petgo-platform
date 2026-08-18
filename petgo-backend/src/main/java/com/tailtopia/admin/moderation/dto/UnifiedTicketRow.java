@@ -24,6 +24,9 @@ import java.time.Instant;
  * @param earliestAt        最早一次举报/送审时刻 —— 同分时按它升序（先报的先处理）
  * @param preview           展示用摘要：内容正文片段 / 送审名称原文 / 送审头像 URL。
  *                          ⚠️ 后两者是 PII 红线字段：<b>可展示，严禁进日志</b>
+ * @param actionRef         内容举报专用：该帖任意一条 <b>PENDING</b> 举报单 id，下架端点
+ *                          {@code /admin/reports/{id}/takedown} 按它收口（会顺带关掉该帖全部
+ *                          PENDING 单）。其余类别与「无待处理单」时为 null
  * @param disposalCount     该账号历史被处置次数（含每一次警告）。Story 3.2 写入前恒为 0
  */
 public record UnifiedTicketRow(
@@ -40,5 +43,6 @@ public record UnifiedTicketRow(
         long score,
         Instant earliestAt,
         String preview,
+        Long actionRef,
         long disposalCount) {
 }
