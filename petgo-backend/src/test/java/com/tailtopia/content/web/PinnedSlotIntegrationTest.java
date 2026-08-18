@@ -1,6 +1,7 @@
 package com.tailtopia.content.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -190,6 +191,65 @@ class PinnedSlotIntegrationTest extends ApiIntegrationTest {
                 now.plusSeconds(3600), now.plusSeconds(7200)));
 
         assertThat(feed(null)).contains("\"id\":" + future.getId() + ",");
+    }
+
+
+    // ---------------------------------------------------------------- 推广卡片（Story 4.3）
+
+    /** 推广卡片下发三个字段，且 **item 为空**（它不对应任何真实帖子）。 */
+    @Test
+    void promoCardShipsItsThreeFields() throws Exception {
+        Instant now = Instant.now();
+        pinService.schedule(ContentPin.ofPromo(ContentPin.SLOT_HOME_FEED,
+                "https://cdn.example.com/banner.jpg", "Ikut lomba foto anabul!",
+                "tailtopia://open", now.minusSeconds(60), now.plusSeconds(3600)));
+
+        String body = pinnedSlot();
+
+        assertThat(body).contains("\"pinType\":\"PROMO\"");
+        assertThat(body).contains("\"imageUrl\":\"https://cdn.example.com/banner.jpg\"");
+        assertThat(body).contains("\"title\":\"Ikut lomba foto anabul!\"");
+        assertThat(body).contains("\"linkUrl\":\"tailtopia://open\"");
+        assertThat(body).doesNotContain("\"item\"");
+    }
+
+    /** 跳转目标可空 = 纯展示卡。 */
+    @Test
+    void promoCardWithoutALinkIsStillValid() throws Exception {
+        Instant now = Instant.now();
+        pinService.schedule(ContentPin.ofPromo(ContentPin.SLOT_HOME_FEED,
+                "https://cdn.example.com/b.jpg", "Judul", null,
+                now.minusSeconds(60), now.plusSeconds(3600)));
+
+        assertThat(pinnedSlot()).contains("\"pinType\":\"PROMO\"");
+    }
+
+    /** 图片或标题缺失 → 拦截（给运营一句人话，而不是抛一串英文约束名）。 */
+    @Test
+    void promoCardRequiresImageAndTitle() {
+        Instant now = Instant.now();
+        assertThatThrownBy(() -> pinService.schedule(ContentPin.ofPromo(
+                ContentPin.SLOT_HOME_FEED, "", "Judul", null,
+                now.minusSeconds(60), now.plusSeconds(3600))))
+                .isInstanceOf(com.tailtopia.shared.error.AppException.class);
+
+        assertThatThrownBy(() -> pinService.schedule(ContentPin.ofPromo(
+                ContentPin.SLOT_HOME_FEED, "https://cdn.example.com/b.jpg", null, null,
+                now.minusSeconds(60), now.plusSeconds(3600))))
+                .isInstanceOf(com.tailtopia.shared.error.AppException.class);
+    }
+
+    /** 🛡 推广卡片**无内容编号**，天然不参与"只首屏让位" —— 首页一条都不该被挡掉。 */
+    @Test
+    void promoCardNeverExcludesAnythingFromTheFeed() throws Exception {
+        User author = newUser();
+        ContentPost newest = savePost(author.getId(), "NEWEST-PROMO-" + SEQ.incrementAndGet());
+        Instant now = Instant.now();
+        pinService.schedule(ContentPin.ofPromo(ContentPin.SLOT_HOME_FEED,
+                "https://cdn.example.com/b.jpg", "Judul", null,
+                now.minusSeconds(60), now.plusSeconds(3600)));
+
+        assertThat(feed(null)).contains("\"id\":" + newest.getId() + ",");
     }
 
     private static String extractCursor(String body) {
