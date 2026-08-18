@@ -88,15 +88,17 @@ void main() {
           reason: '分享入口仍在 —— 访客不得二次转发');
     });
 
-    testWidgets('该保留的都在：统计条三列 · 里程碑进度 · 视图切换 · 来源横幅', (tester) async {
+    testWidgets('该保留的都在：统计条三列 · 里程碑进度 · 来源横幅（无视图切换）', (tester) async {
       await tester.pumpWidget(_wrap(auth: const AuthState.guest()));
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('petInfoCard')), findsOneWidget);
       expect(find.byKey(const ValueKey('archiveMilestoneBar')), findsOneWidget);
-      expect(find.byKey(const ValueKey('visitorViewTimeline')), findsOneWidget);
-      expect(find.byKey(const ValueKey('visitorViewCalendar')), findsOneWidget);
       expect(find.byKey(const ValueKey('visitorSharedBanner')), findsOneWidget);
+      // ⚠️ 2026-08-18 产品决定：访客态先不做日历屏 → 没有视图切换行。
+      // 若哪天接回来，这两条断言要改成 findsOneWidget。
+      expect(find.byKey(const ValueKey('visitorViewTimeline')), findsNothing);
+      expect(find.byKey(const ValueKey('visitorViewCalendar')), findsNothing);
       // 统计数字与作者态同源（AD-1 Rule 8）
       expect(find.text('24'), findsOneWidget);
       expect(find.text('3'), findsOneWidget);
