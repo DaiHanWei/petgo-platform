@@ -110,6 +110,41 @@ void main() {
       expect(crops.last.$2!['original_ratio'], closeTo(1080 / 1920, 0.001));
     });
 
+
+    /// E-9：确认裁剪。`is_batch_lock_source` 区分"主动选的档位"与"被前一张锁进来的"。
+    testWidgets('确认裁剪上报目标比例，并标出哪一张是锁定源', (tester) async {
+      final seen = <(String, Map<String, Object>?)>[];
+      Analytics.debugCaptureSink = (e, p) => seen.add((e, p));
+
+      await applyBatchCrop([_wide, _inRange, _tall], ask: (b, s, l) async =>
+          const CropChoice(preset: CropPreset.portrait, alignX: .5, alignY: .5));
+
+      final done = seen.where((e) => e.$1 == 'publish_image_crop_completed').toList();
+      expect(done, hasLength(2), reason: '只有两张需要裁');
+      expect(done.first.$2!['target_ratio'], '4x5');
+      expect(done.first.$2!['is_batch_lock_source'], isTrue, reason: '第一张定档');
+      expect(done.last.$2!['is_batch_lock_source'], isFalse, reason: '第二张是被锁进来的');
+    });
+
+    /// E-10：退出裁剪。带原始比例 —— 与 E-8 对照才看得出哪一类图让用户直接放弃。
+    testWidgets('退出裁剪上报原始比例', (tester) async {
+      final seen = <(String, Map<String, Object>?)>[];
+      Analytics.debugCaptureSink = (e, p) => seen.add((e, p));
+
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: PublishCropPage(bytes: _wide, size: const ImageSize(1920, 1080)),
+      ));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('cropClose')));
+      await tester.pumpAndSettle();
+
+      final quit = seen.where((e) => e.$1 == 'publish_image_crop_exit_tapped').toList();
+      expect(quit, hasLength(1));
+      expect(quit.first.$2!['original_ratio'], closeTo(1920 / 1080, 0.001));
+    });
+
     testWidgets('全在区间内 → 一条都不报（理想状态就是这个事件量很小）', (tester) async {
       final seen = <String>[];
       Analytics.debugCaptureSink = (e, p) => seen.add(e);

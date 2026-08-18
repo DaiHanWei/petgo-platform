@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
@@ -64,7 +65,15 @@ class _PublishCropPageState extends State<PublishCropPage> {
                 IconButton(
                   key: const ValueKey('cropClose'),
                   icon: const Icon(Icons.close, color: Colors.white),
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: () {
+                    // 埋点 E-10：退出裁剪。带原始比例 —— 与 E-8 的分布对照才看得出
+                    // "哪一类图让用户直接放弃了"。
+                    Analytics.capture('publish_image_crop_exit_tapped', {
+                      'original_ratio':
+                          double.parse(widget.size.ratio.toStringAsFixed(3)),
+                    });
+                    Navigator.of(context).pop();
+                  },
                 ),
                 Expanded(
                   child: Text(
