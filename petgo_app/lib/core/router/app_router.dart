@@ -738,7 +738,16 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // 内容详情（Story 3.3）。shell 外顶层 push（隐藏 Tab Bar）；返回保持 Feed 滚动位置。游客只读可进。
       GoRoute(
         path: '/content/:id',
-        builder: (c, s) => ContentDetailPage(postId: int.parse(s.pathParameters['id']!)),
+        // `?focus=comments` → 进来直接滚到评论区（V1.1.6 Story 3.2 · AC4）。
+        // ⚠️ 这个参数名**早就存在**：通知深链在生成"评论锚点"跳转时一直在产出它
+        // （deep_link_routes.dart，测试也断言了这个串），只是详情页从没消费过。
+        // 首页评论按钮沿用同一个名字 —— 两侧同名是硬要求，且接通后通知那条链路也跟着好了。
+        //
+        // ⚠️ 别与 `/profile/health?focus=<记录编号>` 混淆：同名不同义，路由不同不冲突。
+        builder: (c, s) => ContentDetailPage(
+          postId: int.parse(s.pathParameters['id']!),
+          focusComments: s.uri.queryParameters['focus'] == 'comments',
+        ),
       ),
       // ===== V1.1.6 Story 2.3：App 内访客只读视图（AD-2 Rule 6）=====
       //

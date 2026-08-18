@@ -11,7 +11,11 @@ enum FeedCategory {
   final String wire;
 }
 
-/// Feed 卡片条目（对应后端 `FeedItemResponse`）。**不含点赞/评论数**（FR-17）。
+/// Feed 卡片条目（对应后端 `FeedItemResponse`）。
+///
+/// ⚠️ V1.1.6 Story 3.2 起**含点赞态与评论数** —— FR-93 明确推翻了 V1.0.0 FR-17
+/// 「点赞/评论数不在卡片展示」那条限制（首页要能直接点赞、看到有多少条评论）。
+/// 本注释此前写的是「不含点赞/评论数（FR-17）」，别照着旧注释判断。
 class FeedItem {
   const FeedItem({
     required this.id,
@@ -24,6 +28,9 @@ class FeedItem {
     this.firstImageUrl,
     required this.createdAt,
     this.visibility = kVisibilityPublic,
+    this.likeCount = 0,
+    this.liked = false,
+    this.commentCount = 0,
   });
 
   final int id;
@@ -55,6 +62,20 @@ class FeedItem {
 
   final DateTime createdAt;
 
+  /// 点赞数（V1.1.6 Story 3.2）。
+  ///
+  /// ⚠️ 后端**一直在下发**，只是当年 FR-17 的口径是"卡片不展示"，客户端从没读过。
+  final int likeCount;
+
+  /// 当前用户是否已赞（V1.1.6 Story 3.2）。未登录恒为 false。
+  final bool liked;
+
+  /// 评论数（V1.1.6 Story 3.2）。
+  ///
+  /// 🔴 口径与内容详情页**完全一致**（含自己那条尚未对外可见的评论）——
+  /// 两处显示的是同一个数字，不一致用户只会以为出 bug（后端 Story 3.1 已对齐）。
+  final int commentCount;
+
   bool get hasImage => firstImageUrl != null && firstImageUrl!.isNotEmpty;
 
   factory FeedItem.fromJson(Map<String, dynamic> json) => FeedItem(
@@ -68,6 +89,10 @@ class FeedItem {
         firstImageUrl: json['firstImageUrl'] as String?,
         createdAt: DateTime.parse(json['createdAt'] as String),
         visibility: (json['visibility'] ?? kVisibilityPublic) as String,
+        // 三项均为原始类型、后端恒下发；给默认值只是防老后端/测试夹具缺字段。
+        likeCount: (json['likeCount'] ?? 0) as int,
+        liked: (json['liked'] ?? false) as bool,
+        commentCount: (json['commentCount'] ?? 0) as int,
       );
 }
 

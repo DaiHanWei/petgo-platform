@@ -78,14 +78,17 @@ Future<void> _pumpHome(WidgetTester tester, List<FeedItem> items) async {
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('MasonryCard 纯文字卡渲染昵称与正文（无点赞评论数）', (tester) async {
-    await tester.pumpWidget(MaterialApp(
+  // ⚠️ 用例名与断言在 V1.1.6 Story 3.2 后已订正：卡片**现在有**点赞与评论数
+  // （FR-93 推翻了 FR-17「不在卡片展示」）。操作行本身的行为由
+  // feed_action_row_test.dart 专门覆盖，这里只保留"文字内容渲染"这一层。
+  testWidgets('MasonryCard 纯文字卡渲染昵称与正文', (tester) async {
+    await tester.pumpWidget(ProviderScope(child: MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: MasonryCard(item: _item(body: 'doggo day'), deletedUserLabel: 'Deleted user'),
       ),
-    ));
+    )));
     await tester.pump();
     expect(find.text('doggo day'), findsOneWidget);
     expect(find.text('Alice'), findsOneWidget);
