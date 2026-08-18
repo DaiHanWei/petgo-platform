@@ -6,7 +6,11 @@ import 'package:intl/intl.dart';
 import '../../../core/router/deep_link_routes.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../core/analytics/analytics.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../profile/domain/milestone_celebration_copy.dart';
+import '../../profile/domain/milestone_titles.dart';
+import '../../profile/data/profile_repository.dart';
 import '../data/notification_repository.dart';
 import '../domain/notification_deep_link.dart';
 import '../domain/notification_item.dart';
@@ -49,7 +53,39 @@ class _NotificationCenterPageState
     });
   }
 
+  /// 通知类型 → 埋点取值（PRD §3.2 口径）。
+  ///
+  /// ⚠️ 与线格式**刻意分开**：线格式是 UPPER_SNAKE 的枚举名，埋点取值由 PRD 定死；
+  /// 直接把枚举名发上去会让这条事件与 PRD 的判读口径对不上。
+  static String _notifTypeForAnalytics(String type) => switch (type) {
+    'MILESTONE_SM_NODE' => 'milestone_sm',
+    'MILESTONE_NODE' => 'milestone_l',
+    'CONTENT_LIKED' => 'like',
+    'CONTENT_COMMENTED' => 'comment',
+    'VET_REPLY' => 'vet_reply',
+    _ => type.toLowerCase(),
+  };
+
+  /// 里程碑级别（S/M/L），从编码里取（形如 `C-S14`）。非里程碑通知返回 null。
+  static String? _milestoneLevelOf(NotificationItem item) {
+    if (!item.type.startsWith('MILESTONE')) return null;
+    final code = item.targetRef;
+    if (code == null) return null;
+    final parts = code.split('-');
+    if (parts.length < 2 || parts[1].isEmpty) return null;
+    return parts[1][0].toUpperCase();
+  }
+
   Future<void> _onTap(NotificationItem item) async {
+    // 埋点（V1.1.6 Story 6.1 · AC6）：**所有类型都报** —— 只报里程碑就没法横向对比点击率，
+    // 而"S/M 通知到底是留痕还是召回"这个判断恰恰要靠与点赞/评论类的对比得出。
+    final props = <String, Object>{'notif_type': _notifTypeForAnalytics(item.type)};
+    // 里程碑类另带级别（S/M/L）——判读时要能把 S/M 与 L 拆开看。
+    final level = _milestoneLevelOf(item);
+    if (level != null) {
+      props['level'] = level;
+    }
+    Analytics.capture('app_notification_item_tapped', props);
     final token = item.deepLinkToken;
     if (token != null && token.isNotEmpty && !item.read) {
       setState(() {
@@ -159,6 +195,9 @@ class _NotificationCenterPageState
     final earlier = items.where((it) => !isToday(it)).toList();
     // bug 20260730-436：显式 padding 会关掉 ScrollView 自动注入的底部安全区补偿，
     // edge-to-edge 下末条会被系统手势条/三键遮挡——固定 20 之上叠加安全区高度。
+    // V1.1.6 Story 6.1：S/M 里程碑通知要显示**具体是哪一条**，文案里带 `{name}` 占位符。
+    // V1 单宠物，取当前档案的名字；拿不到就退化成简短标题（仍然具体）。
+    final petName = ref.watch(petProfileProvider).asData?.value?.name;
     return ListView(
       padding: EdgeInsets.fromLTRB(16, 4, 16, 20 + MediaQuery.paddingOf(context).bottom),
       children: [
@@ -169,6 +208,7 @@ class _NotificationCenterPageState
               item: it,
               read: _isRead(it),
               onTap: () => _onTap(it),
+              petName: petName,
             ),
         ],
         if (earlier.isNotEmpty) ...[
@@ -179,6 +219,7 @@ class _NotificationCenterPageState
               item: it,
               read: _isRead(it),
               onTap: () => _onTap(it),
+              petName: petName,
             ),
         ],
       ],
@@ -233,11 +274,16 @@ class _NotificationTile extends StatefulWidget {
     required this.item,
     required this.read,
     required this.onTap,
+    this.petName,
   });
 
   final NotificationItem item;
   final bool read;
   final VoidCallback onTap;
+
+  /// 当前宠物名（V1 单宠物）。里程碑庆祝文案里带 `{name}` 占位符，靠它替换。
+  /// 拿不到时退化成里程碑的**简短标题** —— 仍然是具体名称，不会落到中性兜底。
+  final String? petName;
 
   @override
   State<_NotificationTile> createState() => _NotificationTileState();
@@ -245,6 +291,27 @@ class _NotificationTile extends StatefulWidget {
 
 class _NotificationTileState extends State<_NotificationTile> {
   bool _expanded = false;
+
+  /// S/M 里程碑通知的文案（V1.1.6 Story 6.1 · AC4）。
+  ///
+  /// 🔴 **具体名称由客户端按里程碑编码查表得出**，后端只下发编码（`targetRef`）——
+  /// 这是本模块一贯的约定：后端不下发展示文案，杜绝中文泄漏到印尼语界面。
+  ///
+  /// 优先用**庆祝文案**（AC 要求复用它）；它带 `{name}` 占位符，需要宠物名。
+  /// 拿不到宠物名时退化成里程碑的**简短标题** —— 仍然是具体名称，
+  /// **绝不会落到"你完成了一个里程碑"那种看不出发生了什么的兜底**。
+  ({String title, String body}) _milestoneCopy(BuildContext context) {
+    final code = widget.item.targetRef;
+    final locale = Localizations.localeOf(context);
+    if (code == null || code.isEmpty) {
+      return (title: AppLocalizations.of(context).notifyTypeMilestoneNode, body: '');
+    }
+    final name = widget.petName;
+    if (name == null || name.isEmpty) {
+      return (title: localizedMilestoneTitle(code, locale), body: '');
+    }
+    return localizedMilestoneCelebration(code, locale, name);
+  }
 
   /// 变体派生（内容审核 cm-7）：NAME_RESET/AVATAR_RESET 按 targetRef 判别主体是用户还是宠物。
   /// 后端约定 targetRef="NICKNAME"（昵称）/"USER_AVATAR"（用户头像）→ 用户变体；
@@ -284,6 +351,13 @@ class _NotificationTileState extends State<_NotificationTile> {
       Icons.emoji_events_rounded,
       AppColors.triageGreen,
       AppColors.momenBadgeBg,
+    ),
+    // V1.1.6 Story 6.1：S/M 级里程碑（只留痕、不推送）。与 L 级同族但换一个更轻的图标 ——
+    // 同族是因为落点一样（都进里程碑列表），轻一档是因为它本就是"小成就"。
+    'MILESTONE_SM_NODE' => (
+      Icons.military_tech_rounded,
+      AppColors.gold,
+      AppColors.goldTint,
     ),
     // bug 20260729-391：以下类型此前无映射 → 全落兜底渲染，同瞬两条(结案+邀评)看似「重复发送」。
     'TICKET_RESOLVED' => (
@@ -330,6 +404,8 @@ class _NotificationTileState extends State<_NotificationTile> {
     'PET_BIRTHDAY' => l10n.notifyTypePetBirthday,
     'COMPANION_ANNIVERSARY' => l10n.notifyTypeCompanionAnniversary,
     'MILESTONE_NODE' => l10n.notifyTypeMilestoneNode,
+    // 🔴 S/M 必须写明**是哪一条里程碑**（AC4 明令禁止"你完成了一个里程碑"这类泛化文案）。
+    'MILESTONE_SM_NODE' => _milestoneCopy(context).title,
     'TICKET_RESOLVED' => l10n.notifyTypeTicketResolved,
     'CSAT_SURVEY' => l10n.notifyTypeCsatSurvey,
     'REFUND_REJECTED' => l10n.notifyTypeRefundRejected,
@@ -355,6 +431,7 @@ class _NotificationTileState extends State<_NotificationTile> {
     'PET_BIRTHDAY' => l10n.notifyBodyPetBirthday,
     'COMPANION_ANNIVERSARY' => l10n.notifyBodyCompanionAnniversary,
     'MILESTONE_NODE' => l10n.notifyBodyMilestoneNode,
+    'MILESTONE_SM_NODE' => _milestoneCopy(context).body,
     'TICKET_RESOLVED' => l10n.notifyBodyTicketResolved,
     'CSAT_SURVEY' => l10n.notifyBodyCsatSurvey,
     'REFUND_REJECTED' => l10n.notifyBodyRefundRejected,

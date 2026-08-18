@@ -129,8 +129,8 @@ development_status:
 
   # ===== Epic 6: 里程碑通知补齐 · FR-76 =====
   # 全版本最小的一条，零依赖，可立刻开工。
-  epic-6: backlog
-  6-1-sm级里程碑写入通知中心: backlog                 # 新增独立通知类型：进通知中心不发 push、计入未读角标、多个解锁写 N 条、存量不回填（AD-13）
+  epic-6: in-progress
+  6-1-sm级里程碑写入通知中心: review                      # 新增独立通知类型：进通知中心不发 push、计入未读角标、多个解锁写 N 条、存量不回填（AD-13）
   epic-6-retrospective: optional
 
   # ===== Epic 7: 手机号采集 · FR-70 =====

@@ -671,8 +671,10 @@ E-10 放弃率偏高则说明裁剪这一步在**赶走发布行为**，属须�
 
 | # | 事件 | 触发时机 | 关键属性 |
 | --- | --- | --- | --- |
-| E-17 | `notification_center_opened` | 打开站内通知中心 | `unread_count`、**`push_permission`**: granted/denied/not_asked |
-| E-18 | `notification_item_tapped` | 点击通知列表任一条目 | **`notif_type`**: milestone_sm/milestone_l/like/comment/vet_reply/…、`level`（里程碑类） |
+| E-17 | `app_notification_center_viewed` | 打开站内通知中心 | `unread_count`、**`push_permission`**: granted/denied/not_asked |
+| E-18 | `app_notification_item_tapped` | 点击通知列表任一条目 | **`notif_type`**: milestone_sm/milestone_l/like/comment/vet_reply/…、`level`（里程碑类） |
+> `[命名订正 2026-08-19]` 两条原名（`notification_center_opened` / `notification_item_tapped`）都不符合本项目埋点命名规范：① **模块前缀**须取自既有词表，通知中心从任何页面都可达、归 `app_`；② **动作须落在词尾**且取自允许词表，`_opened` 不在其中，曝光统一用 `_viewed`。改为 `app_notification_center_viewed` / `app_notification_item_tapped`，**属性未改动**。
+> `[范围说明 2026-08-19]` **E-18 已随 Story 6.1 交付**（对所有通知类型都上报，否则无法横向对比点击率）。**E-17 留给 Epic 8**：它要带的 `push_permission` 属于 FR-85 的权限模型，且它同时是 FR-85 触发点 4 的曝光分母，放在那边一次做完更合适。
 
 **判读：** S/M 里程碑通知的点击率，与 L 级、以及点赞/评论类通知横向对比。若 `milestone_sm` 点击率显著偏低，说明 FR-76 的实际价值只是**留痕**而非**召回**，后续不必再往这个方向追加投入（例如不必再考虑给 S/M 加 push）。E-17 同时是 FR-85 触发点 4 的曝光分母。
 
