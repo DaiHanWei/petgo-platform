@@ -7,9 +7,7 @@ import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../data/timeline_repository.dart';
-import '../domain/archive_scope.dart';
 import '../domain/timeline_item.dart';
-import 'widgets/archive_calendar.dart';
 import 'widgets/diary_header.dart';
 import 'widgets/timeline_item_tile.dart';
 
@@ -19,12 +17,14 @@ import 'widgets/timeline_item_tile.dart';
 /// [DiaryUserState] 的第五个分支，不是另一个页面。
 ///
 /// ## 这一屏是「作者态减法」，不是新画的一套
-/// 页头（[DiaryHeader]）· 视图切换 · 五类条目渲染（[TimelineItemTile]）· 日历
-/// （[ArchiveCalendar]）全部与作者态**同一批组件**，只是：
+/// 页头（[DiaryHeader]）与五类条目渲染（[TimelineItemTile]）与作者态**同一批组件**，只是：
 /// - 页头传 `readOnly`：**不渲染**编辑铅笔与入口网格两张卡
 /// - 不传分享按钮 → 标题行右侧整块消失（访客不得二次转发）
-/// - 日历不传「+」回调 → 空白格不再是发布入口
 /// - 条目点击按服务端下发的「可否点开」分流
+///
+/// ⚠️ **2026-08-18 产品决定：访客态先不做日历屏**，本页只有时间线，也就没有视图切换行。
+/// 后端的访客日历与某天详情接口已建好且有测试（Story 2.2），是**有意留着的**，
+/// 要接回来只需在本页加回切换行与日历组件，服务端零改动。
 ///
 /// ⚠️ **不引入「陪伴天数」**（AD-4）：那是 H5 名片独有的，Diary 页从来没有这个字段。
 ///
@@ -41,12 +41,7 @@ class VisitorArchiveView extends ConsumerStatefulWidget {
   ConsumerState<VisitorArchiveView> createState() => _VisitorArchiveViewState();
 }
 
-enum _VisitorView { timeline, calendar }
-
 class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
-  _VisitorView _view = _VisitorView.timeline;
-
-  ArchiveScope get _scope => ArchiveScope.visitor(widget.token);
 
   @override
   Widget build(BuildContext context) {
@@ -78,17 +73,12 @@ class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
                 milestoneTotal: stats?.milestoneTotal,
                 // 里程碑进度条只展示，不跳转（跳的是当前登录用户自己的里程碑页）。
               ),
-              _viewToggleRow(l10n),
+              // ⚠️ 2026-08-18 产品决定：**访客态先不做日历屏**，只保留时间线。
+              // 因此这里没有「时间线 / 日历」切换行 —— 只有一种视图时给个切换器是噪音。
+              // 后端的访客日历接口已建好并有测试（Story 2.2），随时可以接回来；
+              // 要恢复的话，把切换行与 ArchiveCalendar 加回本处即可，服务端无需改动。
               const SizedBox(height: 10),
-              if (_view == _VisitorView.timeline)
-                _timeline(l10n, profile.name)
-              else
-                ArchiveCalendar(
-                  scope: _scope,
-                  onOpenDay: (date) => context.push(
-                      '/pet/${widget.token}/day?date=${date.year}-${_two(date.month)}-${_two(date.day)}'),
-                  // 🛡 不传 onAddOnDate：访客没有任何写入能力（AD-2 Rule 5）。
-                ),
+              _timeline(l10n, profile.name),
             ],
           ),
         ),
@@ -146,47 +136,6 @@ class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
       ),
     );
   }
-
-  /// 视图切换：与作者态同样的两个等宽按钮（AD-4：印尼语是 Linimasa，不是 Timeline）。
-  Widget _viewToggleRow(AppLocalizations l10n) => Row(
-        children: [
-          Expanded(
-            child: _toggleBtn('⏱ ${l10n.growthArchiveViewTimeline}',
-                _view == _VisitorView.timeline, () => _switchView(_VisitorView.timeline),
-                const ValueKey('visitorViewTimeline')),
-          ),
-          const SizedBox(width: 7),
-          Expanded(
-            child: _toggleBtn('📅 ${l10n.growthArchiveViewCalendar}',
-                _view == _VisitorView.calendar, () => _switchView(_VisitorView.calendar),
-                const ValueKey('visitorViewCalendar')),
-          ),
-        ],
-      );
-
-  void _switchView(_VisitorView to) {
-    if (_view == to) return;
-    setState(() => _view = to);
-  }
-
-  Widget _toggleBtn(String label, bool on, VoidCallback onTap, Key key) => GestureDetector(
-        key: key,
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 9),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: on ? AppColors.mint : AppColors.card,
-            borderRadius: BorderRadius.circular(10),
-            border: on ? null : Border.all(color: AppColors.line, width: 1.5),
-          ),
-          child: Text(label,
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: on ? AppColors.onAccent : AppColors.ink2)),
-        ),
-      );
 
   Widget _timeline(AppLocalizations l10n, String petName) {
     final async = ref.watch(visitorTimelineProvider(widget.token));
@@ -251,7 +200,6 @@ class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
     return () => showAppToast(context, AppLocalizations.of(context).visitorPrivateItemNotice);
   }
 
-  static String _two(int n) => n.toString().padLeft(2, '0');
 }
 
 /// 链接失效（token 不存在 / 档案已删 / 主人注销或被封）。
