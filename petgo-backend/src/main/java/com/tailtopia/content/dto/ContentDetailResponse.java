@@ -24,6 +24,8 @@ public record ContentDetailResponse(
         boolean authorDeleted,
         // 运营标签（V1.1.6 Story 5.1 · FR-74）。最多 3 个；注销作者恒为空表。
         java.util.List<com.tailtopia.auth.dto.UserTagView> authorTags,
+        // 内容装饰标签（V1.1.6 Story 5.2 · FR-75）。空表不下发。
+        java.util.List<ContentTagView> decorationTags,
         ContentType type,
         String body,
         List<String> imageUrls,
@@ -34,10 +36,13 @@ public record ContentDetailResponse(
         Instant createdAt) {
 
     public static ContentDetailResponse of(ContentPost p, AuthorView author, long likeCount,
-            long commentCount, boolean liked, boolean isAuthor) {
+            long commentCount, boolean liked, boolean isAuthor,
+            List<ContentTagView> decorationTags) {
         return new ContentDetailResponse(
                 p.getId(), p.getAuthorId(), author.nickname(), author.avatarUrl(),
-                author.deleted(), author.tags().isEmpty() ? null : author.tags(), p.getType(), p.getText(), p.getImageUrls(),
+                author.deleted(), author.tags().isEmpty() ? null : author.tags(),
+                (decorationTags == null || decorationTags.isEmpty()) ? null : decorationTags,
+                p.getType(), p.getText(), p.getImageUrls(),
                 likeCount, commentCount, liked, isAuthor, p.getCreatedAt());
     }
 }

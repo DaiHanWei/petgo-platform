@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/user_tag_row.dart';
+import '../../../shared/widgets/content_tag_chip.dart';
+import '../domain/content_tag.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/colors.dart';
@@ -138,9 +140,24 @@ class _DetailScaffold extends ConsumerWidget {
                     const SizedBox(height: AppSpacing.md),
                     if (detail.body != null && detail.body!.isNotEmpty)
                       Text(detail.body!, style: AppTypography.body),
+                    // V1.1.6 Story 5.2：装饰标签的位置**按有无配图切换**（FR-75）。
                     if (detail.imageUrls.isNotEmpty) ...[
                       const SizedBox(height: AppSpacing.md),
-                      _ImageCarousel(urls: detail.imageUrls),
+                      // 有图 → 叠在首图角落。
+                      _ImageCarousel(
+                        urls: detail.imageUrls,
+                        decorationTags: detail.decorationTags,
+                      ),
+                    ] else if (detail.decorationTags.isNotEmpty) ...[
+                      // 无图 → 正文下方**单独一行**小胶囊。
+                      const SizedBox(height: AppSpacing.sm),
+                      Wrap(
+                        spacing: AppSpacing.xs,
+                        runSpacing: AppSpacing.xs,
+                        children: [
+                          for (final t in detail.decorationTags) ContentTagChip.inline(tag: t),
+                        ],
+                      ),
                     ],
                     const SizedBox(height: AppSpacing.md),
                     _interactionBar(ref),
@@ -392,9 +409,12 @@ class _DetailScaffold extends ConsumerWidget {
 
 /// 多图左右滑 + 角标 x/y（UX-DR12）；点击全屏 lightbox。
 class _ImageCarousel extends StatefulWidget {
-  const _ImageCarousel({required this.urls});
+  const _ImageCarousel({required this.urls, this.decorationTags = const []});
 
   final List<String> urls;
+
+  /// V1.1.6 Story 5.2：装饰标签叠在**首图角落**（有图时的位置）。
+  final List<ContentTag> decorationTags;
 
   @override
   State<_ImageCarousel> createState() => _ImageCarouselState();
@@ -442,6 +462,17 @@ class _ImageCarouselState extends State<_ImageCarousel> {
             ),
           ),
         ),
+        // 装饰标签：左下角，与右上角的页码角标分处两角、互不遮挡。
+        if (widget.decorationTags.isNotEmpty)
+          Positioned(
+            left: AppSpacing.sm,
+            bottom: AppSpacing.sm,
+            right: AppSpacing.xl,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: ContentTagChip.overlay(tag: widget.decorationTags.first),
+            ),
+          ),
         if (widget.urls.length > 1)
           Positioned(
             top: AppSpacing.sm,

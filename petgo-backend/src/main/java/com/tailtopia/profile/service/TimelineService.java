@@ -64,6 +64,9 @@ public class TimelineService {
 
     private final ProfileService profileService;
     private final ContentService contentService;
+
+    /** V1.1.6 Story 5.2：内容装饰标签，**组装完成后统一贴一次**（AD-11）。 */
+    private final com.tailtopia.content.service.ContentTagQueryService contentTags;
     private final ObjectProvider<HealthEventTimelineSource> healthSource;
     private final MilestoneService milestoneService;
     private final HealthRecordRepository healthRecords;
@@ -73,8 +76,10 @@ public class TimelineService {
     public TimelineService(ProfileService profileService, ContentService contentService,
             ObjectProvider<HealthEventTimelineSource> healthSource,
             MilestoneService milestoneService, HealthRecordRepository healthRecords,
-            MilestoneCompletionRepository milestoneCompletions, IdCardRepository idCards) {
+            MilestoneCompletionRepository milestoneCompletions, IdCardRepository idCards,
+            com.tailtopia.content.service.ContentTagQueryService contentTags) {
         this.profileService = profileService;
+        this.contentTags = contentTags;
         this.contentService = contentService;
         this.healthSource = healthSource;
         this.milestoneService = milestoneService;
@@ -130,7 +135,38 @@ public class TimelineService {
             TimelineItemResponse last = page.get(page.size() - 1);
             nextCursor = new TimelineAnchor(last.effectiveDate(), last.date()).encode();
         }
-        return new TimelinePageResponse(withinDayAscending(page), nextCursor, cut.hasMore());
+        return new TimelinePageResponse(
+                attachDecorationTags(withinDayAscending(page)), nextCursor, cut.hasMore());
+    }
+
+
+    /**
+     * 给一页时间线条目贴上内容装饰标签（V1.1.6 Story 5.2 · FR-75 / AD-11）。
+     *
+     * <h2>🔴 为什么在这里统一贴，而不是在各个组装点各取一遍</h2>
+     * 时间线是**五类混排**（快乐时刻 / 问诊 / 健康记录 / 里程碑 / 身份证），
+     * 且**组装点不止一处**（分页与当天详情各自组装）。在每个组装点各取一遍标签：
+     * 既容易漏掉某一处，又必然退化成逐条查。
+     *
+     * <p>所以做成**组装完成后的唯一贴标点**：一个响应一次批量查询。
+     * 只有带内容编号的快乐时刻类条目才可能有标签，其余类天然为空。
+     */
+    private List<TimelineItemResponse> attachDecorationTags(List<TimelineItemResponse> items) {
+        List<Long> postIds = items.stream()
+                .map(TimelineItemResponse::postId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        if (postIds.isEmpty()) {
+            return List.copyOf(items);
+        }
+        var tags = contentTags.findVisibleTags(postIds, Instant.now());
+        if (tags.isEmpty()) {
+            return List.copyOf(items);
+        }
+        return items.stream()
+                .map(i -> i.postId() == null ? i : i.withDecorationTags(tags.get(i.postId())))
+                .toList();
     }
 
     /** 一次截断的结果。{@code complete=false} 表示本批未能把边界所在的那一天取全，需放大批次重取。 */
@@ -436,7 +472,7 @@ public class TimelineService {
         // 大类优先级：diary(0) > 问诊(1) > 健康记录(2)；类内按时间正序。
         items.sort(Comparator.comparingInt(TimelineService::dayDetailCategory)
                 .thenComparing(TimelineItemResponse::date));
-        return new DayDetailResponse(date, List.copyOf(items));
+        return new DayDetailResponse(date, attachDecorationTags(items));
     }
 
     /**

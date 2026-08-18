@@ -9,6 +9,7 @@ import com.tailtopia.content.domain.PinObjectType;
 import com.tailtopia.content.domain.PostStatus;
 import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.domain.FeedCategory;
+import com.tailtopia.content.dto.ContentTagView;
 import com.tailtopia.content.dto.FeedItemResponse;
 import com.tailtopia.content.dto.FeedPageResponse;
 import com.tailtopia.content.dto.PinnedSlotResponse;
@@ -54,13 +55,24 @@ public class FeedService {
     /** V1.1.6 Story 4.2：只首屏让位要知道当前顶置了哪条内容。 */
     private final ContentPinService pins;
 
+    /** V1.1.6 Story 5.2：内容装饰标签，**整页一次批量**（AD-11）。 */
+    private final ContentTagQueryService contentTags;
+
     public FeedService(ContentPostRepository posts, AccountQueryService accountQueryService,
-            ContentLikeRepository likes, CommentRepository comments, ContentPinService pins) {
+            ContentLikeRepository likes, CommentRepository comments, ContentPinService pins,
+            ContentTagQueryService contentTags) {
         this.posts = posts;
         this.accountQueryService = accountQueryService;
         this.likes = likes;
         this.comments = comments;
         this.pins = pins;
+        this.contentTags = contentTags;
+    }
+
+    /** 一页内容各自的装饰标签（整页一次查询）。 */
+    private Map<Long, List<ContentTagView>> decorationTags(List<ContentPost> page) {
+        return contentTags.findVisibleTags(page.stream().map(ContentPost::getId).toList(),
+                Instant.now());
     }
 
     /**
@@ -168,11 +180,14 @@ public class FeedService {
         Set<Long> liked = likedIds(page, viewerId);
         Map<Long, Long> commentCounts = commentCounts(page, viewerId);
 
+        Map<Long, List<ContentTagView>> decorations = decorationTags(page);
+
         List<FeedItemResponse> items = page.stream()
                 .map(p -> FeedItemResponse.of(p, authors.get(p.getAuthorId()),
                         likeCounts.getOrDefault(p.getId(), 0L),
                         liked.contains(p.getId()),
-                        commentCounts.getOrDefault(p.getId(), 0L)))
+                        commentCounts.getOrDefault(p.getId(), 0L),
+                        decorations.get(p.getId())))
                 .toList();
 
         String nextCursor = null;
@@ -218,7 +233,8 @@ public class FeedService {
         FeedItemResponse item = FeedItemResponse.of(post, authors.get(post.getAuthorId()),
                 likeCounts(one).getOrDefault(post.getId(), 0L),
                 likedIds(one, viewerId).contains(post.getId()),
-                commentCounts(one, viewerId).getOrDefault(post.getId(), 0L));
+                commentCounts(one, viewerId).getOrDefault(post.getId(), 0L),
+                decorationTags(one).get(post.getId()));
         return new PinnedSlotResponse(new PinnedSlotResponse.Pinned(
                 pin.getId(), pin.getObjectType().name(), item, null));
     }
@@ -253,11 +269,13 @@ public class FeedService {
         // 这里 viewer 恒为本人（「我的发布」），故已赞与评论数都按本人口径算。
         Set<Long> liked = likedIds(page, userId);
         Map<Long, Long> commentCounts = commentCounts(page, userId);
+        // ⚠️「我的发布」**不是** FR-75 列的三处展示位之一，故不查装饰标签 ——
+        // 为一个不展示它的页面多发一次查询没有意义。真要展示时把这里换成 decorationTags(page) 即可。
         List<FeedItemResponse> items = page.stream()
                 .map(p -> FeedItemResponse.of(p, authors.get(p.getAuthorId()),
                         likeCounts.getOrDefault(p.getId(), 0L),
                         liked.contains(p.getId()),
-                        commentCounts.getOrDefault(p.getId(), 0L)))
+                        commentCounts.getOrDefault(p.getId(), 0L), null))
                 .toList();
 
         String nextCursor = null;

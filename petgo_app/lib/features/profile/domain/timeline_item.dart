@@ -1,3 +1,4 @@
+import '../../content/domain/content_tag.dart';
 /// 成长时间线条目类型（数据来源维度，V1.0.0 既有契约）。
 enum TimelineKind { happyMoment, healthEvent, unknown }
 
@@ -67,6 +68,7 @@ class TimelineItem {
     this.healthRecordId,
     this.idCardSerial,
     this.openable,
+    this.decorationTags = const [],
   });
 
   final TimelineKind kind;
@@ -76,6 +78,9 @@ class TimelineItem {
 
   /// 成长日历事件日期（F9，仅快乐时刻有值）；为空回退 [date]。决定时间线显示与排序位置。
   final DateTime? eventDate;
+
+  /// 内容装饰标签（V1.1.6 Story 5.2 · FR-75）。**只有快乐时刻类条目**可能有。
+  final List<ContentTag> decorationTags;
 
   // 快乐时刻字段
   final int? postId;
@@ -169,6 +174,7 @@ class TimelineItem {
       date: DateTime.parse(json['date'] as String),
       eventDate: rawEvent != null ? DateTime.parse(rawEvent) : null,
       postId: json['postId'] as int?,
+      decorationTags: ContentTag.listFromJson(json['decorationTags']),
       imageUrls: rawImages is List ? rawImages.map((e) => e.toString()).toList() : const [],
       text: json['text'] as String?,
       aiLevel: json['aiLevel'] as String?,
