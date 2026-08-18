@@ -135,8 +135,9 @@ class TimelineServiceTest {
         when(healthProvider.getIfAvailable()).thenReturn(health);
         when(contentService.findGrowthMomentsBeforeAnchor(eq(1L), anyLong(), Mockito.any(), Mockito.any(), Mockito.any(), anyInt()))
                 .thenReturn(List.of(moment(1, "2026-06-01T10:00:00Z")));
-        when(health.recentHealthEvents(anyLong(), Mockito.any(), anyInt()))
-                .thenReturn(List.of(new HealthEventView(Instant.parse("2026-06-03T10:00:00Z"), "YELLOW", "咳嗽", "AI_TRIAGE", "triage-1")));
+        when(health.recentHealthEvents(anyLong(), Mockito.any(), Mockito.any(), anyInt()))
+                .thenReturn(List.of(new HealthEventView(Instant.parse("2026-06-03T10:00:00Z"),
+                        LocalDate.parse("2026-06-03"), "YELLOW", "咳嗽", "AI_TRIAGE", "triage-1")));
 
         TimelinePageResponse resp = service.getTimeline(1L, null, 20);
 
@@ -203,8 +204,10 @@ class TimelineServiceTest {
                 momentEv(12, "2026-06-10T09:00:00Z", "2026-06-10", "img10")));
         // 健康事件 6/2（叠加角标）+ 6/20（独立 🏥 日）。
         when(health.healthEventsInRange(eq(1L), Mockito.any(), Mockito.any())).thenReturn(List.of(
-                new HealthEventView(Instant.parse("2026-06-02T12:00:00Z"), "GREEN", "x", "AI_TRIAGE", "triage-x"),
-                new HealthEventView(Instant.parse("2026-06-20T12:00:00Z"), "YELLOW", "y", "AI_TRIAGE", "triage-y")));
+                new HealthEventView(Instant.parse("2026-06-02T12:00:00Z"),
+                        LocalDate.parse("2026-06-02"), "GREEN", "x", "AI_TRIAGE", "triage-x"),
+                new HealthEventView(Instant.parse("2026-06-20T12:00:00Z"),
+                        LocalDate.parse("2026-06-20"), "YELLOW", "y", "AI_TRIAGE", "triage-y")));
 
         CalendarMonthResponse resp = service.getCalendarMonth(1L, 2026, 6);
 
@@ -229,8 +232,9 @@ class TimelineServiceTest {
         when(healthProvider.getIfAvailable()).thenReturn(health);
         when(contentService.findGrowthMomentsOnDate(eq(1L), anyLong(), eq(LocalDate.parse("2026-06-02"))))
                 .thenReturn(List.of(momentEv(10, "2026-06-02T08:00:00Z", "2026-06-02", "a")));
-        when(health.healthEventsOnDay(eq(1L), Mockito.any(), Mockito.any()))
-                .thenReturn(List.of(new HealthEventView(Instant.parse("2026-06-02T07:00:00Z"), "GREEN", "z", "AI_TRIAGE", "triage-z")));
+        when(health.healthEventsOnDay(eq(1L), Mockito.any()))
+                .thenReturn(List.of(new HealthEventView(Instant.parse("2026-06-02T07:00:00Z"),
+                        LocalDate.parse("2026-06-02"), "GREEN", "z", "AI_TRIAGE", "triage-z")));
 
         DayDetailResponse resp = service.getDayDetail(1L, LocalDate.parse("2026-06-02"));
 
