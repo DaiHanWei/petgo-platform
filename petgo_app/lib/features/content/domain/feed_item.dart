@@ -34,6 +34,7 @@ class FeedItem {
     this.liked = false,
     this.commentCount = 0,
     this.imageSizes = const [],
+    this.imageUrls = const [],
   });
 
   final int id;
@@ -86,7 +87,19 @@ class FeedItem {
   /// 取用一律走 [firstImageSize] 这类安全取法。
   final List<ImageSize?> imageSizes;
 
+  /// 整组图片（V1.1.6 Story 3.4）。
+  ///
+  /// ⚠️ 后端**一直在下发**，只是首页此前每帖只显示一张，客户端从没读过。
+  /// [firstImageUrl] 保留不删：后端仍在下发，且"我的发布"等处也在用。
+  final List<String> imageUrls;
+
   bool get hasImage => firstImageUrl != null && firstImageUrl!.isNotEmpty;
+
+  /// 轮播用的图片清单。
+  ///
+  /// 整组为空时回落到首图 —— 老后端 / 测试夹具只给首图时不至于变成"无图帖"。
+  List<String> get images =>
+      imageUrls.isNotEmpty ? imageUrls : (hasImage ? [firstImageUrl!] : const []);
 
   /// 首图尺寸；无图 / 存量 / 那一张测不出来 → null（渲染侧按占位比例预留）。
   ImageSize? get firstImageSize => imageSizes.isEmpty ? null : imageSizes.first;
@@ -108,6 +121,9 @@ class FeedItem {
         commentCount: (json['commentCount'] ?? 0) as int,
         // 无图时后端整个字段都不下发（Jackson NON_NULL）——解析必须容忍缺失。
         imageSizes: ImageSize.listFromJson(json['imageSizes']),
+        // 同样在无图时整个字段都不下发。
+        imageUrls: (json['imageUrls'] as List?)?.whereType<String>().toList(growable: false) ??
+            const [],
       );
 }
 

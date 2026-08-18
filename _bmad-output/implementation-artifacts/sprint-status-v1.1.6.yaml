@@ -107,7 +107,7 @@ development_status:
   3-1-feed取数扩张与图片尺寸列: review               # 后端；一律批量聚合（AD-7），禁逐条查、禁冗余计数列
   3-2-通栏容器与操作行: review                      # 点赞并入本条（原单列一条属人为切分）
   3-3-图片渲染三段口径与加载期占位: review                # 按实际比例 -> clamp 0.75~1.34 -> 高度护栏（AD-6，顺序固定）
-  3-4-多图轮播与图片区叠加层: backlog                 # 叠加层是 Epic 5 两类标签的挂载点
+  3-4-多图轮播与图片区叠加层: review                      # 叠加层是 Epic 5 两类标签的挂载点
   3-5-发布页图片上传裁剪: backlog                    # ⚠️ 本版本唯一的 App 端新依赖（现无可用裁剪库，见架构 §6 Deferred）
   epic-3-retrospective: optional
 
