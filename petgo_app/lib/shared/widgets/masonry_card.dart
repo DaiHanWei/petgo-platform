@@ -35,6 +35,8 @@ class MasonryCard extends StatelessWidget {
     this.onComment,
     this.onMore,
     this.maxImageHeight,
+    this.pinnedBadge,
+    this.decorTag,
   });
 
   final FeedItem item;
@@ -60,6 +62,12 @@ class MasonryCard extends StatelessWidget {
   /// 由**列表容器**量出滚动视口的真实高度后传下来 —— 卡片自己量不到视口。
   /// 为 null 时退化成按屏高（扣安全区）估算，够单卡场景用，但列表里请务必传实测值。
   final double? maxImageHeight;
+
+  /// 🛡 图片区**右上角位**：顶置角标（Epic 4 挂）。
+  final Widget? pinnedBadge;
+
+  /// 🛡 图片区**左下角位**：装饰标签（Epic 5 挂）。
+  final Widget? decorTag;
 
   /// 类型 → (badge 文案, 文字色, 底色)：Momen 绿 / Tips 黄 / Cerita 紫（原型 b-happy/b-tips/b-story）。
   static (String, Color, Color) _badgeStyle(String type, AppLocalizations l10n) {
@@ -167,11 +175,15 @@ class MasonryCard extends StatelessWidget {
                 // 卡片高度**从齐整变为不齐整**是产品已知并接受的代价（保构图 > 保版面）。
                 if (item.hasImage)
                   FeedImage(
-                    url: item.firstImageUrl!,
+                    urls: item.images,
                     type: item.type,
                     declaredSize: item.firstImageSize,
                     width: media.size.width,
                     maxImageHeight: maxH,
+                    // 🛡 两个角位留给 Epic 4（顶置角标）与 Epic 5（装饰标签）——
+                    // 它们只往这里挂内容，**不得再改图片区结构**（AD-8 Rule 6）。
+                    topRight: pinnedBadge,
+                    bottomLeft: decorTag,
                   ),
               ],
             ),
