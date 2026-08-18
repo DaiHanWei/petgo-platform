@@ -607,9 +607,10 @@ V1.0.0 FR-14 原设计为双 CTA：主 CTA「给我的宠物创建同款档案�
 
 | # | 事件 | 触发时机 | 关键属性 |
 | --- | --- | --- | --- |
-| E-1 | `feed_pinned_slot_viewed` | 顶置坑位在 Feed 渲染并曝光 | `pin_config_id`、**`pin_type`**: post/promo_card、`content_id`（仅 post 类型） |
-| E-2 | `feed_pinned_slot_tapped` | 点击顶置坑位 | 同 E-1 + `jump_target`: post_detail/external_url/deeplink |
-| E-3 | `feed_pinned_duplicate_exposed` | 被顶置的内容**同时**出现在本次首屏算法序列中 | `content_id`、`serp_position`（它在算法序列里的位次） |
+| E-1 | `social_pinned_slot_viewed` | 顶置坑位在 Feed 渲染并曝光 | `pin_config_id`、**`pin_type`**: post/promo_card、`content_id`（仅 post 类型） |
+| E-2 | `social_pinned_slot_tapped` | 点击顶置坑位 | 同 E-1 + `jump_target`: post_detail/external_url/deeplink |
+| E-3 | `social_pinned_duplicate_viewed` | 被顶置的内容**同时**出现在本次首屏算法序列中 | `content_id`、`serp_position`（它在算法序列里的位次） |
+> `[命名订正 2026-08-18]` 三条原名（`feed_pinned_slot_viewed` / `feed_pinned_slot_tapped` / `feed_pinned_duplicate_exposed`）不符合本项目埋点命名规范：① **模块前缀**须取自既有词表，首页 Feed 属 **Social（Jelajah）** 页，故前缀为 `social_` 而非 `feed_`；② **动作须落在词尾**，`_exposed` 不在允许的动作词尾里，曝光统一用 `_viewed`。现改为 `social_pinned_slot_viewed` / `social_pinned_slot_tapped` / `social_pinned_duplicate_viewed`，属性不变。命名规范由 `test/analytics/v112_events_test.dart` 强制。
 
 **判读：** 坑位 CTR（E-2 ÷ E-1）与同期 Feed 普通卡片 CTR 对比；按 `pin_type` 拆分，看「推广卡片」和「顶置真实帖子」哪种形态更有效——这直接决定运营该往哪种投精力。E-3 用于回答 `../2.数据算法/首页推荐算法.md` §7 明确甩回给 FR-68 的问题（顶置内容不占算法槽位，因此同一条内容可能在首屏顶置位与算法序列中各出现一次）：**先用数据看重复实际发生的频率与位次分布，再决定要不要为此做去重**，不预先设计。
 

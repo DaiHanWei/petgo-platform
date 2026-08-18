@@ -167,6 +167,9 @@ class HomePage extends ConsumerWidget {
         // 访客登录引导卡已下线（不再显示登录/注册按钮）；游客与登录态一致自动翻页浏览。
         return FeedMasonryView(
           header: header,
+          // 顶置坑位（V1.1.6 Story 4.2）：取数失败或无生效配置 → null → 什么都不渲染。
+          pinned: ref.watch(pinnedSlotProvider).value,
+          onTapPinned: (item) => context.push('/content/${item.id}'),
           autoLoadMore: true,
           footer: null,
           items: state.items,
@@ -176,7 +179,11 @@ class HomePage extends ConsumerWidget {
           loadMoreErrorLabel: l10n.feedLoadMoreError,
           deletedUserLabel: l10n.feedDeletedUser,
           onLoadMore: () => ref.read(feedProvider.notifier).loadMore(),
-          onRefresh: () => ref.read(feedProvider.notifier).refresh(),
+          onRefresh: () async {
+            // 顶置与首页各自取数，下拉刷新要**两边一起**刷 —— 只刷一边会让坑位停在旧配置上。
+            ref.invalidate(pinnedSlotProvider);
+            await ref.read(feedProvider.notifier).refresh();
+          },
           onTapItem: (item) => context.push('/content/${item.id}'),
           onLongPressItem: (item) => openReport(context, ref, item.id, onReported: () {
             // cm-6 §6.1：举报成功 → 乐观移除卡片 +「不再向你展示」提示（后端 §5.4 已过滤，刷新亦不复现）。

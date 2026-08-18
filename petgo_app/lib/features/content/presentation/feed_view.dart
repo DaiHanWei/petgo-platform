@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../shared/widgets/masonry_card.dart';
 import '../domain/feed_image_layout.dart';
 import '../domain/feed_item.dart';
+import '../domain/pinned_slot.dart';
+import 'pinned_badge.dart';
 import '../domain/home_refresh_provider.dart';
 
 /// Feed 单列视图（原型 feed.html：单列全宽卡片，非 2 列瀑布）。
@@ -28,6 +31,8 @@ class FeedMasonryView extends ConsumerStatefulWidget {
     this.onCommentItem,
     this.onMoreItem,
     this.header,
+    this.pinned,
+    this.onTapPinned,
     this.footer,
     this.autoLoadMore = true,
   });
@@ -55,6 +60,14 @@ class FeedMasonryView extends ConsumerStatefulWidget {
   /// 可选全幅头部（随 Feed 同滚）。Beranda 用作问候/快捷入口/每日提示区。
   final Widget? header;
 
+  /// 顶置坑位（V1.1.6 Story 4.2 · FR-68）。
+  ///
+  /// 🛡 为空 → **什么都不渲染、不留占位**，该位置由普通内容按正常排序填充。
+  final PinnedSlot? pinned;
+
+  /// 点顶置卡（进详情页）。埋点在本组件内上报，回调只负责跳转。
+  final ValueChanged<FeedItem>? onTapPinned;
+
   /// 可选全幅尾部（随 Feed 同滚）。feed-guest 用作底部登录引导横幅（访客翻页闸门）。
   final Widget? footer;
 
@@ -78,10 +91,64 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
   /// 距底预加载阈值（≈3~5 卡）。
   static const double _preloadThreshold = 600;
 
+  /// 顶置曝光只报一次（重建不重复报）。
+  bool _pinExposureReported = false;
+
+  /// 已报过"重复曝光"的内容 id —— 同一条不该因为滚动重建反复上报。
+  final Set<int> _duplicateReported = <int>{};
+
   @override
   void initState() {
     super.initState();
     _controller.addListener(_onScroll);
+    _reportPinAnalytics();
+  }
+
+  @override
+  void didUpdateWidget(covariant FeedMasonryView old) {
+    super.didUpdateWidget(old);
+    if (old.pinned?.pinConfigId != widget.pinned?.pinConfigId) {
+      _pinExposureReported = false;
+      _duplicateReported.clear();
+    }
+    _reportPinAnalytics();
+  }
+
+  /// 顶置相关的两个曝光事件（E-1 / E-3）。
+  ///
+  /// ⚠️ 本项目没有"进入视口才算曝光"的基建，这里按**渲染即曝光**上报 ——
+  /// 顶置位是首屏第一条，渲染与看到之间的差距可以忽略；重复曝光那条本就是统计频率与位次，
+  /// 精确到视口对判读没有实际影响。这条口径写在这里，免得日后有人以为漏做了。
+  void _reportPinAnalytics() {
+    final pin = widget.pinned;
+    if (pin == null) return;
+
+    if (!_pinExposureReported) {
+      _pinExposureReported = true;
+      Analytics.capture('social_pinned_slot_viewed', {
+        'pin_config_id': pin.pinConfigId,
+        'pin_type': pin.analyticsType,
+        if (pin.item != null) 'content_id': pin.item!.id,
+      });
+    }
+
+    // 🛡 重复曝光：被顶置的内容**在后续页**出现时上报，带它在序列里的位次。
+    //
+    // ⚠️ 该事件的语义已随 AD-8 改写为"观测后续页的重复曝光频率与位次" ——
+    // 第一页已经排除了，首屏不可能重复。它是下游版本判断"要不要为顶置做去重"的**唯一数据来源**，
+    // 所以必须随本功能一并上线，不能推到埋点收尾。
+    final pinnedId = pin.item?.id;
+    if (pinnedId == null || _duplicateReported.contains(pinnedId)) return;
+    for (var i = 0; i < widget.items.length; i++) {
+      if (widget.items[i].id != pinnedId) continue;
+      _duplicateReported.add(pinnedId);
+      Analytics.capture('social_pinned_duplicate_viewed', {
+        'content_id': pinnedId,
+        // 它在算法序列里的位次（从 1 起，与产品口径一致）。
+        'serp_position': i + 1,
+      });
+      break;
+    }
   }
 
   @override
@@ -112,7 +179,49 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
         // 在这里量最准：顶部标签行与底部导航栏已经被外层扣掉，卡片内不需要再减一次。
         // 视口无界时（理论上不会发生）算出的上限是无穷大，护栏自动不介入 —— 安全退化。
         final maxImageHeight = FeedCardMetrics.maxImageHeight(constraints.maxHeight);
+        // 顶置卡：与普通卡**同一个组件**，只多挂一个右上角标。
+        // 🛡 为空则整块不渲染 —— 不留占位。
+        final pin = widget.pinned;
+        final pinnedItem = pin?.item;
         final cards = <Widget>[
+          if (pinnedItem != null)
+            Container(
+              padding: const EdgeInsets.only(bottom: 12),
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: AppColors.line2, width: 1)),
+              ),
+              child: MasonryCard(
+                key: const ValueKey('feedPinnedCard'),
+                item: pinnedItem,
+                deletedUserLabel: widget.deletedUserLabel,
+                maxImageHeight: maxImageHeight,
+                pinnedBadge: const PinnedBadge(),
+                onTap: () {
+                  Analytics.capture('social_pinned_slot_tapped', {
+                    'pin_config_id': pin!.pinConfigId,
+                    'pin_type': pin.analyticsType,
+                    'content_id': pinnedItem.id,
+                    // 本 story 只有"顶置一篇已发布内容"，跳的就是详情页。
+                    // 推广卡片的外链 / 深链属 Story 4.3。
+                    'jump_target': 'post_detail',
+                  });
+                  widget.onTapPinned?.call(pinnedItem);
+                },
+                onComment: widget.onCommentItem == null
+                    ? null
+                    : () => widget.onCommentItem!(pinnedItem),
+                onAuthorTap:
+                    widget.onAuthorTap == null ? null : () => widget.onAuthorTap!(pinnedItem),
+                // 🔴 举报入口（长按 + 「···」）**必须一并挂上**：AC 要求"其余部分与普通条目完全一致，
+                // 常规互动入口位置不变"。实机上才发现漏了 —— 只挂点击与评论会让顶置卡少一个入口，
+                // 用户对顶置内容反而没法举报。
+                onLongPress: widget.onLongPressItem == null
+                    ? null
+                    : () => widget.onLongPressItem!(pinnedItem),
+                onMore: widget.onMoreItem == null ? null : () => widget.onMoreItem!(pinnedItem),
+              ),
+            ),
           for (var i = 0; i < widget.items.length; i++)
             // 通栏版式（V1.1.6 Story 3.2 · FR-93）：条目之间 1px 分隔线 + 上下 12px；
             // ⚠️ **最后一条不画线**，否则列表底部会多出一道悬空的横线。

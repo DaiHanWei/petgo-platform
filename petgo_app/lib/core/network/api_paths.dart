@@ -217,6 +217,9 @@ class ApiPaths {
   /// 内容发布 + Feed 列表（Story 2.3 / 3.2）。
   static const String contentPosts = '$base/content-posts';
 
+  /// 顶置坑位（V1.1.6 Story 4.2）。**独立取数**，与首页分页互不影响。
+  static const String contentPinnedSlot = '$base/content-posts/pinned';
+
   /// 内容详情（Story 3.3）。
   static String contentPostDetail(int id) => '$base/content-posts/$id';
 

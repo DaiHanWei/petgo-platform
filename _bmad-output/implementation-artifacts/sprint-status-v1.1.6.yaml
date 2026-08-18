@@ -115,7 +115,7 @@ development_status:
   # 依赖 Epic 3。E-3 必须随本 Epic 交付，不得推迟到 Epic 10（下游 V1.1.8 的唯一数据来源）。
   epic-4: backlog
   4-1-顶置配置数据模型与时间窗判定: review                # 查询时判定，不落状态列、不建扫描器（AD-9）；时间窗判定须是唯一实现、四处共用
-  4-2-首页坑位渲染与只首屏让位: backlog               # 顶置 content_id 仅从第一页排除，后续页仍可出现（AD-8）
+  4-2-首页坑位渲染与只首屏让位: review                    # 顶置 content_id 仅从第一页排除，后续页仍可出现（AD-8）
   4-3-推广卡片: backlog                              # 不对应真实帖子
   4-4-顶置坑位套用拉黑过滤: backlog                   # ⚠️ 跨版本依赖 V1.1.4（已实现待发版）；套 findFeed 的**账号维度**那条子查询，两条并列不合并
   epic-4-retrospective: optional

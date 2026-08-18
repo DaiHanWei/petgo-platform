@@ -938,6 +938,7 @@
   "publishCropHint": "Geser untuk memilih bagian yang tampil",
   "publishCropApply": "Terapkan",
   "publishCropLocked": "Rasio mengikuti foto pertama yang dipotong",
+  "feedPinnedBadge": "Disematkan",
   "publishCamera": "Kamera",
   "publishHintDaily": "Apa yang terjadi hari ini?",
   "publishHintGrowth": "Tulis catatan Diary {name}...",

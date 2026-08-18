@@ -22,6 +22,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.Pageable;
 
@@ -32,6 +33,7 @@ class FeedServiceTest {
     private AccountQueryService accounts;
     private ContentLikeRepository likes;
     private com.tailtopia.content.repository.CommentRepository comments;
+    private ContentPinService pins;
     private FeedService service;
 
     @BeforeEach
@@ -41,7 +43,10 @@ class FeedServiceTest {
         likes = mock(ContentLikeRepository.class); // countByPostIdIn 默认返空表 → likeCount 默认 0
         // V1.1.6 Story 3.1：默认返空表 → commentCount 默认 0、已赞默认 false
         comments = mock(com.tailtopia.content.repository.CommentRepository.class);
-        service = new FeedService(posts, accounts, likes, comments);
+        // V1.1.6 Story 4.2：只首屏让位要查顶置；默认无顶置（Optional.empty）。
+        pins = mock(ContentPinService.class);
+        when(pins.activePin(any(), any())).thenReturn(java.util.Optional.empty());
+        service = new FeedService(posts, accounts, likes, comments, pins);
         // 默认作者视图：返回非注销，nickname 由 id 推。
         when(accounts.findAuthorViews(anyList())).thenAnswer(inv -> {
             List<Long> ids = inv.getArgument(0);
@@ -80,29 +85,29 @@ class FeedServiceTest {
     @Test
     void feedNoLongerBranchesOnPetStatus() {
         when(posts.findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
-                any(Boolean.class), any(), any(), any()))
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), any()))
                 .thenReturn(List.of());
 
         service.loadFeed("PLANNING", "ALL", null, null);
         service.loadFeed("HAS_PET", "ALL", null, null);
         service.loadFeed(null, "ALL", null, null); // 游客
 
-        // 三种身份 → 完全相同的取数参数（8 参：type, requirePet, hasViewer, viewerId,
-        // hasCursor, cursorTs, cursorId, pageable）。
+        // 三种身份 → 完全相同的取数参数（10 参：type, requirePet, hasViewer, viewerId,
+        // hasCursor, cursorTs, cursorId, hasExclude, excludeId, pageable）。
         org.mockito.Mockito.verify(posts, org.mockito.Mockito.times(3))
-                .findFeed(isNull(), eq(false), eq(false), isNull(), eq(false), isNull(), isNull(),
+                .findFeed(isNull(), eq(false), eq(false), isNull(), eq(false), isNull(), isNull(), eq(false), isNull(),
                         any(Pageable.class));
     }
 
     @Test
     void growthCategoryRequiresPetAndTypeFilter() {
         when(posts.findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
-                any(Boolean.class), any(), any(), any()))
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), any()))
                 .thenReturn(List.of());
         service.loadFeed("HAS_PET", "GROWTH_MOMENT", null, null);
 
         org.mockito.Mockito.verify(posts).findFeed(eq(ContentType.GROWTH_MOMENT),
-                eq(true), eq(false), isNull(), eq(false), isNull(), isNull(), any(Pageable.class));
+                eq(true), eq(false), isNull(), eq(false), isNull(), isNull(), eq(false), isNull(), any(Pageable.class));
     }
 
     @Test
@@ -113,7 +118,7 @@ class FeedServiceTest {
                 .mapToObj(i -> post(100 - i, ContentType.DAILY, 1L, base.minusSeconds(i), null))
                 .toList();
         when(posts.findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
-                any(Boolean.class), any(), any(), any()))
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), any()))
                 .thenReturn(rows);
 
         FeedPageResponse page = service.loadFeed("HAS_PET", "ALL", null, null);
@@ -130,7 +135,7 @@ class FeedServiceTest {
         List<ContentPost> rows = List.of(
                 post(2L, ContentType.DAILY, 1L, Instant.now(), List.of("https://cdn/a.jpg")));
         when(posts.findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
-                any(Boolean.class), any(), any(), any()))
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), any()))
                 .thenReturn(rows);
 
         FeedPageResponse page = service.loadFeed("HAS_PET", "ALL", null, null);
@@ -145,7 +150,7 @@ class FeedServiceTest {
     void deletedAuthorAnonymizedInProjection() {
         List<ContentPost> rows = List.of(post(5L, ContentType.DAILY, 9L, Instant.now(), null));
         when(posts.findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
-                any(Boolean.class), any(), any(), any()))
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), any()))
                 .thenReturn(rows);
         when(accounts.findAuthorViews(anyList()))
                 .thenReturn(Map.of(9L, AuthorView.anonymized(9L)));
@@ -160,7 +165,7 @@ class FeedServiceTest {
     @Test
     void cursorDecodedAndPassedToRepo() {
         when(posts.findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
-                any(Boolean.class), any(), any(), any()))
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), any()))
                 .thenReturn(List.of());
         Instant ts = Instant.parse("2026-06-01T12:00:00Z");
         String cursor = new FeedCursor(ts, 50L).encode();
@@ -168,19 +173,57 @@ class FeedServiceTest {
         service.loadFeed("ENTHUSIAST", "DAILY", cursor, null);
 
         org.mockito.Mockito.verify(posts).findFeed(eq(ContentType.DAILY), eq(false),
-                eq(false), isNull(), eq(true), eq(ts), eq(50L), any(Pageable.class));
+                eq(false), isNull(), eq(true), eq(ts), eq(50L), eq(false), isNull(), any(Pageable.class));
     }
 
     @Test
     void loggedInViewerThreadsViewerIdForReporterFilter() {
         // 内容审核 cm-6 §5.4：登录用户 → hasViewer=true + viewerId 透传（后端排除本人已举报的帖）。
         when(posts.findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
-                any(Boolean.class), any(), any(), any()))
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), any()))
                 .thenReturn(List.of());
 
         service.loadFeed("HAS_PET", "ALL", null, 42L);
 
         org.mockito.Mockito.verify(posts).findFeed(isNull(), eq(false),
-                eq(true), eq(42L), eq(false), isNull(), isNull(), any(Pageable.class));
+                eq(true), eq(42L), eq(false), isNull(), isNull(), eq(false), isNull(), any(Pageable.class));
+    }
+
+    /**
+     * 🛡 **顶置取数失败不得连带整个首页失败**（AC3）。
+     *
+     * <p>这一处最容易漏：大家通常只想到"坑位端点挂了客户端不显示"，
+     * 忘了首页取数**内部**也查了一次顶置（为了让位）。那一次抛异常若不接住，
+     * 整个首页会 500 —— 一个运营位把主功能带崩。
+     *
+     * <p>降级的代价是那一次可能出现重复展示，明确接受。
+     */
+    @Test
+    void feedSurvivesWhenThePinLookupBlowsUp() {
+        when(pins.activePin(any(), any())).thenThrow(new IllegalStateException("boom"));
+        when(posts.findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), any()))
+                .thenReturn(List.of());
+
+        var page = service.loadFeed(null, "ALL", null, null);
+
+        assertThat(page.items()).isEmpty();
+        // 降级 = 当作没有顶置继续走：不排除任何内容
+        org.mockito.Mockito.verify(posts).findFeed(isNull(), eq(false), eq(false), isNull(),
+                eq(false), isNull(), isNull(), eq(false), isNull(), any(Pageable.class));
+    }
+
+    /** 🛡 **只首屏让位** —— 带游标（后续页）时不查顶置、也不排除。 */
+    @Test
+    void laterPagesDoNotYieldAtAll() {
+        when(posts.findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), any()))
+                .thenReturn(List.of());
+
+        service.loadFeed(null, "ALL", new FeedCursor(java.time.Instant.now(), 9L).encode(), null);
+
+        org.mockito.Mockito.verifyNoInteractions(pins);
+        org.mockito.Mockito.verify(posts).findFeed(any(), any(Boolean.class), any(Boolean.class),
+                any(), eq(true), any(), any(), eq(false), isNull(), any(Pageable.class));
     }
 }

@@ -2,16 +2,22 @@ package com.tailtopia.content.service;
 
 import com.tailtopia.auth.dto.AuthorView;
 import com.tailtopia.auth.service.AccountQueryService;
+import com.tailtopia.content.domain.ContentPin;
 import com.tailtopia.content.domain.ContentPost;
+import com.tailtopia.content.domain.ContentVisibility;
+import com.tailtopia.content.domain.PinObjectType;
+import com.tailtopia.content.domain.PostStatus;
 import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.domain.FeedCategory;
 import com.tailtopia.content.dto.FeedItemResponse;
 import com.tailtopia.content.dto.FeedPageResponse;
+import com.tailtopia.content.dto.PinnedSlotResponse;
 import com.tailtopia.content.repository.CommentRepository;
 import com.tailtopia.content.repository.CommentRepository.PostCommentCount;
 import com.tailtopia.content.repository.ContentLikeRepository;
 import com.tailtopia.content.repository.ContentLikeRepository.PostLikeCount;
 import com.tailtopia.content.repository.ContentPostRepository;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -33,6 +39,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class FeedService {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(FeedService.class);
+
     /** Feed 每批条数（FR-17）。 */
     public static final int PAGE_SIZE = 20;
 
@@ -43,12 +51,39 @@ public class FeedService {
     /** V1.1.6 Story 3.1：评论数批量聚合。⚠️ 只用批量方法，逐条那个是详情页的。 */
     private final CommentRepository comments;
 
+    /** V1.1.6 Story 4.2：只首屏让位要知道当前顶置了哪条内容。 */
+    private final ContentPinService pins;
+
     public FeedService(ContentPostRepository posts, AccountQueryService accountQueryService,
-            ContentLikeRepository likes, CommentRepository comments) {
+            ContentLikeRepository likes, CommentRepository comments, ContentPinService pins) {
         this.posts = posts;
         this.accountQueryService = accountQueryService;
         this.likes = likes;
         this.comments = comments;
+        this.pins = pins;
+    }
+
+    /**
+     * 第一页要让位的那条内容 id（V1.1.6 Story 4.2 · AD-8 Rule 1）。
+     *
+     * <p>🛡 <b>只有第一页调用</b> —— 后续页仍可正常出现被顶置的内容。
+     *
+     * <p>🔴 <b>查顶置出错时当作没有顶置继续走</b>：AC 明写"顶置取数失败不得连带整个首页失败"。
+     * 代价是那一次可能出现重复展示 —— 明确接受，比整个首页 500 好得多。
+     * 这一处最容易漏：大家通常只想到"坑位端点挂了客户端不显示"，忘了首页内部也查了一次。
+     */
+    private Long pinnedContentIdToYield(String cursor) {
+        if (cursor != null && !cursor.isBlank()) {
+            return null; // 只首屏让位
+        }
+        try {
+            return pins.activePin(ContentPin.SLOT_HOME_FEED, Instant.now())
+                    .map(ContentPin::getContentId)   // 推广卡片没有内容 id，天然不参与排除
+                    .orElse(null);
+        } catch (RuntimeException e) {
+            log.warn("查顶置失败，本次首页不让位（降级）", e);
+            return null;
+        }
     }
 
     /**
@@ -108,6 +143,7 @@ public class FeedService {
         boolean requirePet = cat.requiresPet();
 
         FeedCursor decoded = (cursor == null || cursor.isBlank()) ? null : FeedCursor.decode(cursor);
+        Long yieldId = pinnedContentIdToYield(cursor);
 
         // 多取一条以判定 hasMore（不漏不重）。
         // 过滤口径（AD-4 Rule 2）：**一切消费公开内容的查询统一按 visibility = PUBLIC**，
@@ -118,6 +154,7 @@ public class FeedService {
                 decoded != null,
                 decoded == null ? null : decoded.createdAt(),
                 decoded == null ? null : decoded.id(),
+                yieldId != null, yieldId,
                 PageRequest.of(0, PAGE_SIZE + 1));
 
         boolean hasMore = rows.size() > PAGE_SIZE;
@@ -144,6 +181,46 @@ public class FeedService {
             nextCursor = new FeedCursor(last.getCreatedAt(), last.getId()).encode();
         }
         return new FeedPageResponse(items, nextCursor, hasMore);
+    }
+
+
+    /**
+     * 顶置坑位取数（V1.1.6 Story 4.2 · AC3 独立取数）。
+     *
+     * <p>返回的条目是**与普通条目完全同构的那一个 DTO**（同一个工厂、同一批聚合口径），
+     * 客户端因此可以用同一个卡片组件渲染，只多挂一个角标 —— 而不是新写一套。
+     *
+     * <p>顶置内容若已不可展示（被删 / 挂起 / 转私密），视为坑位为空。
+     * Story 4.1 的下架联动会即时结束排期，这里再兜一道，防止事件与查询之间的窗口。
+     */
+    @Transactional(readOnly = true)
+    public PinnedSlotResponse loadPinnedSlot(String slot, Long viewerId) {
+        ContentPin pin = pins.activePin(slot, Instant.now()).orElse(null);
+        if (pin == null) {
+            return new PinnedSlotResponse(null);
+        }
+        if (pin.getObjectType() != PinObjectType.CONTENT || pin.getContentId() == null) {
+            // 推广卡片属 Story 4.3；本 story 只处理"顶置一篇已发布内容"。
+            return new PinnedSlotResponse(null);
+        }
+        ContentPost post = posts.findById(pin.getContentId()).orElse(null);
+        if (post == null || !isDisplayable(post)) {
+            return new PinnedSlotResponse(null);
+        }
+        List<ContentPost> one = List.of(post);
+        Map<Long, AuthorView> authors = accountQueryService.findAuthorViews(List.of(post.getAuthorId()));
+        FeedItemResponse item = FeedItemResponse.of(post, authors.get(post.getAuthorId()),
+                likeCounts(one).getOrDefault(post.getId(), 0L),
+                likedIds(one, viewerId).contains(post.getId()),
+                commentCounts(one, viewerId).getOrDefault(post.getId(), 0L));
+        return new PinnedSlotResponse(new PinnedSlotResponse.Pinned(
+                pin.getId(), pin.getObjectType().name(), item));
+    }
+
+    private static boolean isDisplayable(ContentPost post) {
+        return post.getDeletedAt() == null
+                && post.getStatus() == PostStatus.PUBLISHED
+                && post.getVisibility() == ContentVisibility.PUBLIC;
     }
 
     /**

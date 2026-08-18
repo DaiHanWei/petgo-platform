@@ -189,6 +189,11 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
      *       （相关子查询命中 {@code uq_content_reports_reporter_post}）；{@code hasViewer=false}（游客）→ 不过滤。
      *       同样用布尔标志门控，避免游客传 NULL viewerId 触发 42P18（{@code :viewerId} 虽与 bigint 列比较可定型，
      *       仍沿用 findFeed 既有判空惯例保持一致）。</li>
+     *   <li>顶置让位（V1.1.6 Story 4.2 · AD-8）：{@code hasExclude=true} → 排除被顶置的那条内容。
+     *       🛡 <b>只有第一页会传</b>，后续页仍可正常出现。
+     *       🔴 排除**留在 WHERE 内**而不是取完一页再内存剔除 —— 后者会同时坏掉两件事：
+     *       第一页少一条、以及"还有更多"的判断（它依赖多取一条），两者都要靠数据库自己往后补。
+     *       同样用布尔标志门控，避免不排除时传 NULL 触发 42P18。</li>
      *   <li>排序：{@code created_at DESC, id DESC}（id tie-breaker 保证游标稳定）。</li>
      * </ul>
      */
@@ -204,6 +209,7 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
               AND (:hasViewer = false
                    OR NOT EXISTS (SELECT 1 FROM ContentReport r
                                   WHERE r.postId = p.id AND r.reporterId = :viewerId))
+              AND (:hasExclude = false OR p.id <> :excludeId)
               AND (:hasCursor = false
                    OR p.createdAt < :cursorTs
                    OR (p.createdAt = :cursorTs AND p.id < :cursorId))
@@ -217,6 +223,8 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             @Param("hasCursor") boolean hasCursor,
             @Param("cursorTs") Instant cursorTs,
             @Param("cursorId") Long cursorId,
+            @Param("hasExclude") boolean hasExclude,
+            @Param("excludeId") Long excludeId,
             Pageable pageable);
 
     /**

@@ -1076,6 +1076,7 @@
   "publishCropHint": "Drag to choose the visible area",
   "publishCropApply": "Apply",
   "publishCropLocked": "Ratio follows the first cropped photo",
+  "feedPinnedBadge": "Pinned",
   "publishCamera": "Camera",
   "publishHintDaily": "What happened today?",
   "publishHintGrowth": "Write {name}'s diary entry...",
