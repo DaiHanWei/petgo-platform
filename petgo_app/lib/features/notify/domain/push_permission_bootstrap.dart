@@ -1,7 +1,6 @@
 import 'package:permission_handler/permission_handler.dart' as ph;
 
 import '../../../core/storage/prefs.dart';
-import 'push_permission_change_reporter.dart';
 
 /// 首启通知权限申请（2026-08-07 产品决策变更）。
 ///
@@ -27,18 +26,10 @@ class PushPermissionBootstrap {
     try {
       final p = prefs ?? await AppPrefs.create();
       if (p.pushPermissionAsked) {
-        final granted = await _isGranted();
-        // 🔴 Story 9.3：撤销通常发生在 App 被杀掉、用户去系统设置里关掉通知的时候 ——
-        //    冷启动是端上唯一能察觉它的时机。错过这里就永远看不到这个信号。
-        await PushPermissionChangeReporter.record(granted,
-            fromScreen: 'app_launch', prefs: p);
-        return granted;
+        return await _isGranted();
       }
       final granted = await (request ?? _request)();
       await p.setPushPermissionAsked(true);
-      // 首启这一次只写基线（reporter 内部：无上一次状态 → 不上报）
-      await PushPermissionChangeReporter.record(granted,
-          fromScreen: 'app_launch', prefs: p);
       return granted;
     } catch (_) {
       return false;

@@ -44,7 +44,7 @@ class ProfileApiControllerTest {
     @Test
     void createUsesOwnerFromJwtAndRateLimits() {
         PetProfileResponse stub = new PetProfileResponse(
-                5L, null, "CAT", "Momo", null, null, null, "TOK", false, null, null, Instant.now());
+                5L, null, "CAT", "Momo", null, null, null, "TOK", false, Instant.now());
         when(service.create(eq(77L), org.mockito.ArgumentMatchers.any())).thenReturn(stub);
 
         PetProfileResponse resp = controller.create(
@@ -65,7 +65,7 @@ class ProfileApiControllerTest {
     @Test
     void myProfileDelegatesWithJwtUser() {
         PetProfileResponse stub = new PetProfileResponse(
-                5L, null, "CAT", "Momo", null, null, null, "TOK", false, null, null, Instant.now());
+                5L, null, "CAT", "Momo", null, null, null, "TOK", false, Instant.now());
         when(service.getMyProfile(77L)).thenReturn(stub);
         assertThat(controller.myProfile(jwt("77")).cardToken()).isEqualTo("TOK");
     }
@@ -81,7 +81,7 @@ class ProfileApiControllerTest {
     @Test
     void updateUsesJwtOwnerAndTriggersRerender() {
         PetProfileResponse updated = new PetProfileResponse(
-                5L, null, "CAT", "Momo2", null, null, null, "TOK", false, null, null, Instant.now());
+                5L, null, "CAT", "Momo2", null, null, null, "TOK", false, Instant.now());
         when(service.update(eq(77L), ArgumentMatchers.any())).thenReturn(updated);
 
         PetProfileResponse resp = controller.update(

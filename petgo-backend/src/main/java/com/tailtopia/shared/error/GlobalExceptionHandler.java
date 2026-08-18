@@ -32,11 +32,6 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AppException.class)
     public ResponseEntity<ProblemDetail> handleApp(AppException ex, HttpServletRequest req) {
         ProblemDetail pd = base(ex.getStatus(), ex.getType(), titleFor(ex.getStatus()), ex.getMessage(), req);
-        // RFC 9457 §3.2 扩展成员：少数错误光有一句 detail 不够用（如下单被库存挡住时的逐行明细）。
-        // 信封仍在这里统一产出 —— 控制器自拼会漏掉 traceId/instance，而排障最先看的就是 traceId。
-        if (ex instanceof ProblemExtensions pe) {
-            pe.problemExtensions().forEach(pd::setProperty);
-        }
         return ResponseEntity.status(ex.getStatus()).body(pd);
     }
 

@@ -10,7 +10,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.ObjectMapper;
 
@@ -28,18 +27,6 @@ import tools.jackson.databind.ObjectMapper;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @AutoConfigureMockMvc
 @ActiveProfiles("dev")
-// 🔴 限制每个测试上下文的连接池大小。
-//    Spring 的 TestContext 会【缓存并保持】每个不同配置的上下文，其 Hikari 池不释放；
-//    每有一个 @TestPropertySource 差异就多一个上下文、多一个池（默认 10 连接）。
-//    2026-08-17 曾因此打满 postgres 的 max_connections=100，
-//    表现是一堆无关测试报 "Failed to load ApplicationContext"，而单跑全绿——
-//    误导性极强，因为报错的类和真正的原因毫无关系。
-//    minimum-idle=0 让闲置上下文的池自行收缩。
-@TestPropertySource(properties = {
-        "spring.datasource.hikari.maximum-pool-size=4",
-        "spring.datasource.hikari.minimum-idle=0",
-        "spring.datasource.hikari.idle-timeout=10000",
-})
 public abstract class ApiIntegrationTest {
 
     /** 进程内唯一序列（nanoTime 种子避免跨运行撞唯一约束）。 */

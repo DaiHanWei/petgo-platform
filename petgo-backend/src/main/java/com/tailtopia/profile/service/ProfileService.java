@@ -70,13 +70,6 @@ public class ProfileService {
                 req.birthday(),
                 blankToNull(req.intro()),
                 tokenGenerator.generate());
-        // Story 6.1：建档时的体重【可跳过】—— 设必填会挡住既有建档转化。
-        if (req.weightKg() != null) {
-            profile.setWeightKg(req.weightKg());
-        }
-        if (req.neuterStatus() != null && !req.neuterStatus().isBlank()) {
-            profile.setNeuterStatus(parseNeuterStatus(req.neuterStatus()));
-        }
         try {
             PetProfile saved = profiles.save(profile);
             // 建档按 pet_type 自动分配里程碑 roster（Story 8.1，同模块直调，非事件订阅；幂等）。
@@ -155,13 +148,6 @@ public class ProfileService {
         if (req.birthday() != null) {
             profile.setBirthday(req.birthday());
         }
-        // Story 6.1：体重与绝育状态。🔒 体重是 PII 邻近的健康数据 —— 下面任何一行都不得进日志。
-        if (req.weightKg() != null) {
-            profile.setWeightKg(req.weightKg());
-        }
-        if (req.neuterStatus() != null && !req.neuterStatus().isBlank()) {
-            profile.setNeuterStatus(parseNeuterStatus(req.neuterStatus()));
-        }
         if (req.intro() != null) {
             profile.setIntro(blankToNull(req.intro()));
         }
@@ -238,22 +224,6 @@ public class ProfileService {
     }
 
     /** 解析宠物类型（F6）：必填 + 枚举合法，非法 → 422。@NotBlank 已拦空，此处兜底大小写/非法值。 */
-    /**
-     * 解析绝育状态。
-     *
-     * <p>🔴 未知值抛错而不是降级到 UNKNOWN：{@code UNKNOWN} 有它自己的含义
-     * （用户明确表示「不知道」，领养的成年宠常见），把解析失败也塞进去会让
-     * 「有多少人真的不知道」这个数字失真。
-     */
-    private static com.tailtopia.profile.domain.NeuterStatus parseNeuterStatus(String raw) {
-        for (var v : com.tailtopia.profile.domain.NeuterStatus.values()) {
-            if (v.name().equalsIgnoreCase(raw.trim())) {
-                return v;
-            }
-        }
-        throw AppException.validation("绝育状态不合法");
-    }
-
     private static PetType parsePetType(String raw) {
         if (raw == null || raw.isBlank()) {
             throw AppException.validation("宠物类型必选");

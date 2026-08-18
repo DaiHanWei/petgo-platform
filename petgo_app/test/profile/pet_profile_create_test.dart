@@ -27,8 +27,6 @@ class _FakeRepo implements ProfileRepository {
     String? avatarUrl,
     String? breed,
     String? intro,
-    double? weightKg,
-    String? neuterStatus,
     String? idempotencyKey,
   }) async {
     createCalled = true;
@@ -53,8 +51,6 @@ class _FakeRepo implements ProfileRepository {
     String? breed,
     DateTime? birthday,
     String? intro,
-    double? weightKg,
-    String? neuterStatus,
   }) async =>
       PetProfile(id: 1, name: name ?? 'x', cardToken: 'T');
 }

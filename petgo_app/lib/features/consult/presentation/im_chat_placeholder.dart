@@ -9,7 +9,6 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/im/im_service.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../../shared/boundary/shop_link_policy.dart';
 import '../../../shared/widgets/case_image_viewer.dart';
 
 /// 实时对话区（Story 5.5 · TailTopia Prototype VetChat 换肤）。
@@ -258,7 +257,7 @@ class _Bubble extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 280),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           decoration: BoxDecoration(color: AppColors.cream2, borderRadius: BorderRadius.circular(999)),
-          child: Text(ShopLinkPolicy.neutralize(msg.text),
+          child: Text(msg.text ?? '',
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 12, color: AppColors.muted)),
         ),
@@ -297,9 +296,7 @@ class _Bubble extends StatelessWidget {
           ),
           boxShadow: const [BoxShadow(color: Color(0x0A2B2A27), offset: Offset(0, 1), blurRadius: 2)],
         ),
-        // 🔴 FR-110：渲染前过滤商品链接（Story 9.1）。兽医手打的链接不能变成
-        //    「点进去就能买」——那一刻起问诊就是销售前端了。文字本身保留。
-        child: Text(ShopLinkPolicy.neutralize(msg.text),
+        child: Text(msg.text ?? '',
             style: TextStyle(fontSize: 14.5, height: 1.45, color: me ? Colors.white : AppColors.ink)),
       );
     }

@@ -13,8 +13,6 @@ class PetProfile {
     this.intro,
     this.createdAt,
     this.isSystemDefaultName = false,
-    this.weightKg,
-    this.neuterStatus,
   });
 
   final int id;
@@ -32,18 +30,6 @@ class PetProfile {
   final String? intro;
   final DateTime? createdAt;
 
-  /// 🔒 体重（kg），Story 6.1。**PII 邻近的健康数据 —— 禁止写入任何日志或埋点属性**（NFR-5）。
-  ///
-  /// null = 用户还没填（可跳过是刻意的：设必填会挡住建档转化）。
-  /// 前端据此在推荐区尾部展示「补全档案，推荐更准」引导卡 —— 那是存量用户回填的唯一入口。
-  final double? weightKg;
-
-  /// NEUTERED / INTACT / UNKNOWN。null = 没填过（与 UNKNOWN「说不知道」不是一回事）。
-  final String? neuterStatus;
-
-  /// 档案是否完整到能给出精准推荐（有生日 + 有体重）。
-  bool get isCompleteForReco => birthday != null && weightKg != null;
-
   factory PetProfile.fromJson(Map<String, dynamic> json) => PetProfile(
         id: json['id'] as int,
         name: json['name'] as String,
@@ -55,8 +41,6 @@ class PetProfile {
         intro: json['intro'] as String?,
         createdAt: _parseDate(json['createdAt']),
         isSystemDefaultName: (json['isSystemDefaultName'] ?? false) as bool,
-        weightKg: (json['weightKg'] as num?)?.toDouble(),
-        neuterStatus: json['neuterStatus'] as String?,
       );
 
   PetProfile copyWith({
@@ -66,8 +50,6 @@ class PetProfile {
     DateTime? birthday,
     String? intro,
     bool? isSystemDefaultName,
-    double? weightKg,
-    String? neuterStatus,
   }) =>
       PetProfile(
         id: id,
@@ -80,8 +62,6 @@ class PetProfile {
         intro: intro ?? this.intro,
         createdAt: createdAt,
         isSystemDefaultName: isSystemDefaultName ?? this.isSystemDefaultName,
-        weightKg: weightKg ?? this.weightKg,
-        neuterStatus: neuterStatus ?? this.neuterStatus,
       );
 
   static DateTime? _parseDate(Object? raw) {

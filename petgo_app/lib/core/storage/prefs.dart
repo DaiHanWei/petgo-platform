@@ -31,17 +31,6 @@ class AppPrefs {
   bool get pushPermissionAsked => _prefs.getBool(_kPushPermissionAsked) ?? false;
   Future<void> setPushPermissionAsked(bool asked) => _prefs.setBool(_kPushPermissionAsked, asked);
 
-  // --- 上一次已知的推送授权态（Story 9.3，推送疲劳终点信号）---
-  //
-  // 🔴 只为算出「撤销」这一个跃迁：系统权限的 granted→denied 通常发生在 App
-  // 被杀掉、用户在系统设置里关掉通知的时候 —— 端上唯一能察觉的时机是下次冷启动，
-  // 而那时内存里没有任何「之前是开着的」记忆。所以必须落盘。
-  // ⚠️ 存的是布尔态，不是权限本身；真相源永远是系统权限查询。
-  static const _kPushPermissionLastGranted = 'petgo.push_permission_last_granted';
-  bool? get pushPermissionLastGranted => _prefs.getBool(_kPushPermissionLastGranted);
-  Future<void> setPushPermissionLastGranted(bool granted) =>
-      _prefs.setBool(_kPushPermissionLastGranted, granted);
-
   // --- 已废弃的键（下面这些**刻意不再提供 getter/setter**）---
   //
   // `petgo.splash_last_shown_date`：曾用于「splash 当天只播一次完整动画」。

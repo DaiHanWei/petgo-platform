@@ -16,11 +16,6 @@ public final class OrderDisplayNo {
     public static final String VET_CONSULT = "CONSVET";
     public static final String AI_UNLOCK = "CONSAI";
     public static final String TOPUP = "TOPUP";
-    /**
-     * 精选自营电商（Story 3.9）。🔴 <b>与虚拟商品订单号前缀隔离</b> ——
-     * 财务要能一眼区分自营实物与虚拟商品收入（后台 AB-13D 对账）。
-     */
-    public static final String ECOMMERCE = "TOKO";
 
     private static final ZoneId WIB = ZoneId.of("Asia/Jakarta");
     private static final DateTimeFormatter YMD = DateTimeFormatter.ofPattern("yyyyMMdd");

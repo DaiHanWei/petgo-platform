@@ -74,8 +74,6 @@ class _FakeProfileRepo implements ProfileRepository {
     String? avatarUrl,
     String? breed,
     String? intro,
-    double? weightKg,
-    String? neuterStatus,
     String? idempotencyKey,
   }) async =>
       PetProfile(id: 99, name: name, cardToken: 'T', petType: petType, birthday: birthday);
@@ -88,8 +86,6 @@ class _FakeProfileRepo implements ProfileRepository {
     String? breed,
     DateTime? birthday,
     String? intro,
-    double? weightKg,
-    String? neuterStatus,
   }) async =>
       PetProfile(id: 99, name: name ?? 'x', cardToken: 'T');
 }

@@ -37,10 +37,6 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
   final _nameController = TextEditingController();
   final _breedController = TextEditingController();
   final _introController = TextEditingController();
-
-  /// 🔒 体重（kg），Story 6.1。**PII 邻近的健康数据 —— 禁止写入日志或埋点属性**（NFR-5）。
-  /// 可留空：建档与编辑都不设必填，设必填会挡住既有转化。
-  final _weightController = TextEditingController();
   DateTime? _birthday;
   String? _avatarUrl;
   String? _petType; // F6：创建后不可改，编辑页置灰只读展示，不随 PATCH 提交
@@ -56,7 +52,6 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
     _nameController.dispose();
     _breedController.dispose();
     _introController.dispose();
-    _weightController.dispose();
     super.dispose();
   }
 
@@ -66,16 +61,10 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
     _nameController.text = p.name;
     _breedController.text = p.breed ?? '';
     _introController.text = p.intro ?? '';
-    // null（没填过）与 0 是两回事 —— 空串表示没填，不要预填成 "0"
-    _weightController.text = p.weightKg == null ? '' : _trimZero(p.weightKg!);
     _birthday = p.birthday;
     _avatarUrl = p.avatarUrl;
     _petType = p.petType;
   }
-
-  /// 15.0 → "15"；15.5 → "15.5"。别让用户每次进来都看到一个多余的小数点。
-  static String _trimZero(double v) =>
-      v == v.roundToDouble() ? v.toInt().toString() : v.toString();
 
   bool get _canSubmit => _nameController.text.trim().isNotEmpty && !_submitting && !_uploading;
 
@@ -110,8 +99,6 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
             breed: _emptyToNull(_breedController.text),
             birthday: _birthday,
             intro: _emptyToNull(_introController.text),
-            // 🔒 体重：留空 = 不改动（部分更新语义），不会把已填的值清掉
-            weightKg: double.tryParse(_weightController.text.trim()),
           );
       ref.invalidate(petProfileProvider);
       if (mounted) context.go('/profile');
@@ -387,21 +374,6 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          // Story 6.1：体重。🔴 这是 FR-107 精准推荐与 FR-109 粮量预估的唯一输入 ——
-          //    但它【可跳过】：设必填会挡住既有编辑转化。
-          _sectionLabel(l10n.petProfileWeightLabel),
-          const SizedBox(height: 6),
-          TextField(
-            key: const ValueKey('petProfileEditWeightField'),
-            controller: _weightController,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: _inputDeco(),
-          ),
-          const SizedBox(height: 4),
-          Text(l10n.petProfileWeightHint,
-              key: const ValueKey('petProfileEditWeightHint'),
-              style: const TextStyle(fontSize: 11, color: AppColors.textTertiary)),
           const SizedBox(height: 16),
           _sectionLabel(l10n.petProfileBioLabel),
           const SizedBox(height: 6),

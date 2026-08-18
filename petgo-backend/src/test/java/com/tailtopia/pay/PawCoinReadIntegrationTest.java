@@ -7,12 +7,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.tailtopia.pay.domain.PawCoinTxnType;
 import com.tailtopia.pay.service.PawCoinWalletService;
 import com.tailtopia.support.ApiIntegrationTest;
-import java.util.ArrayList;
-import java.util.List;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.jdbc.core.JdbcTemplate;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -22,9 +18,6 @@ class PawCoinReadIntegrationTest extends ApiIntegrationTest {
 
     @Autowired
     private PawCoinWalletService walletService;
-
-    @Autowired
-    private JdbcTemplate jdbc;
 
     private JsonNode getPawcoin(long userId, String query) throws Exception {
         String resp = mvc.perform(get("/api/v1/me/pawcoin" + query)
@@ -54,49 +47,6 @@ class PawCoinReadIntegrationTest extends ApiIntegrationTest {
         assertThat(items.get(0).has("id")).isFalse();
         assertThat(items.get(0).has("refId")).isFalse();
         assertThat(items.get(0).has("entryGroup")).isFalse();
-    }
-
-    /**
-     * 🔴🔴 同刻流水不得在翻页时丢失（2026-08-18 修，{@code action_items} 同一族）。
-     *
-     * <p><b>钱包流水是这一族里最容易撞上的</b>：一次结算就在同一个事务里写多条
-     * （抵扣 + 退款分账 + 补偿），而 Postgres 的 {@code now()} 是<b>事务开始时刻</b> ——
-     * 这几条的 {@code created_at} 一模一样。原来的「{@code created_at <} 截断到毫秒的游标」
-     * 会把整个同刻组一次跳过。🔴 <b>这是钱的账，少一笔就是对不上。</b>
-     */
-    @Test
-    @DisplayName("🔴🔴 5 笔流水时间戳完全相同 → 逐页翻完，一笔不多一笔不少")
-    void ledgerDoesNotSkipRowsSharingTheSameInstant() throws Exception {
-        long userId = newUser().getId();
-        List<Long> expected = new ArrayList<>();
-        for (int i = 0; i < 5; i++) {
-            long delta = 1_000L + i;
-            expected.add(delta);
-            walletService.credit(userId, delta, PawCoinTxnType.TOPUP, "PAYMENT_INTENT", (long) i,
-                    "same-instant-" + SEQ.incrementAndGet());
-        }
-        // 五笔同刻（精确到微秒都一样）—— 真实场景是「一个事务写多条」，这里直接构造出来，
-        // 让缺陷从「偶发」变成「必现」。取这批里最早的真实时间戳，避免与首页哨兵打架。
-        jdbc.update("UPDATE pawcoin_transactions SET created_at = "
-                + "(SELECT MIN(created_at) FROM pawcoin_transactions WHERE user_id = ?) "
-                + "WHERE user_id = ?", userId, userId);
-
-        List<Long> seen = new ArrayList<>();
-        String cursor = null;
-        for (int page = 0; page < 10; page++) {
-            JsonNode node = getPawcoin(userId,
-                    cursor == null ? "?limit=2" : "?limit=2&cursor=" + cursor);
-            for (JsonNode item : node.get("items")) {
-                seen.add(item.get("delta").asLong());
-            }
-            if (!node.get("hasMore").asBoolean()) {
-                break;
-            }
-            cursor = node.get("nextCursor").asString();
-        }
-
-        assertThat(seen).containsExactlyInAnyOrderElementsOf(expected);
-        assertThat(seen).doesNotHaveDuplicates();
     }
 
     @Test

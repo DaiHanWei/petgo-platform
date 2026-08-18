@@ -103,10 +103,6 @@ public class IdCardHdService {
                 String payload = ensureCharge(intent, price, PayChannel.QRIS, PaymentPurpose.ID_HD);
                 yield HdPurchaseResponse.paymentRequired(intent, payload);
             }
-            // 🔴 虚拟商品【恒单渠道】（AD-3 纵深防御）：MIXED 只用于电商实物订单。
-            //    显式拒绝而不是落到 default —— 前者在编译期就逼着每个新渠道的引入者
-            //    来面对这个分支，后者会静默把新渠道当成某个旧分支处理。
-            case MIXED -> throw AppException.validation("该商品不支持混合支付");
         };
     }
 
@@ -189,8 +185,6 @@ public class IdCardHdService {
                 String payload = ensureCharge(intent, price, PayChannel.QRIS, PaymentPurpose.ID_HD);
                 yield HdPurchaseResponse.paymentRequired(intent, payload);
             }
-            // 🔴 虚拟商品【恒单渠道】（AD-3）：MIXED 只用于电商实物订单。
-            case MIXED -> throw AppException.validation("该商品不支持混合支付");
         };
     }
 

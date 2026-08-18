@@ -3,14 +3,10 @@ package com.tailtopia.admin.account.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -23,18 +19,7 @@ import org.junit.jupiter.api.Test;
  * <p>历史缺陷根因：常量类单点定义 + 各 Controller 手写表达式，两轨间无任何检查——新页面漏写门控、
  * 写了对不上的码（勾选页出现「勾了也没用」的死码）都静默通过。本测试扫源码文件强制两个方向：
  * ① 代码/模板中每个 {@code hasAuthority('x')} 的 x 必须在 {@link AdminPermissions#ALL}（防拼错/幽灵码）；
- * ② ALL 中每个码必须至少被一处门控引用（防勾选页死码复发）。
- *
- * <p><b>门控有两种合法形式，② 都认</b>（V1.4.0 Story 1.3 补）：
- * <ul>
- *   <li><b>方法/页面级</b>——{@code @PreAuthorize} / {@code sec:authorize} 里的 {@code hasAuthority('x')} 字面量；</li>
- *   <li><b>字段级</b>——控制器里的编程式判断，如 {@code has(admin, AdminPermissions.SHOP_COST_VIEW)}，
- *       用于「同一页面对不同权限下发不同字段」。进货价即属此类：无 {@code shop.cost_view} 时该字段
- *       <b>根本不进 model</b>。这类门控<b>不能</b>改写成 {@code @PreAuthorize}——那会把无成本权限的人整页挡掉。</li>
- * </ul>
- *
- * <p>🔴 扫描常量引用时<b>必须排除 {@code AdminPermissions.java} 自身</b>：该文件声明并在 {@code GROUPS}
- * 里列出全部常量，一旦计入，任何码都会「自证已接线」，② 将永远为真而彻底失去意义。
+ * ② ALL 中每个码必须至少被一处 {@code hasAuthority} 引用（防勾选页死码复发）。
  *
  * <p>源码扫描以 surefire 工作目录（模块根）定位 {@code src/main}；纯文件读取，无 Spring / DB。
  */
@@ -43,26 +28,10 @@ class AdminPermissionWiringTest {
     /** 只匹配真实码型 {@code <模块>.<动作>}（全小写点分）；javadoc 占位示例（如 {@code '<code>'}）不计。 */
     private static final Pattern HAS_AUTHORITY = Pattern.compile("hasAuthority\\('([a-z_]+\\.[a-z_]+)'\\)");
 
-    /** 常量类自身——声明处不算落点，见类注释。 */
-    private static final String DECLARING_FILE = "AdminPermissions.java";
-
     @Test
     void everyReferencedAuthorityIsRegisteredAndEveryCodeIsWired() throws IOException {
         Path main = Path.of("src", "main");
         assertThat(main).as("需在模块根运行（surefire 默认）").isDirectory();
-
-        // 码值 -> 常量名（用于识别编程式引用 AdminPermissions.<常量名>）。
-        Map<String, String> codeToConstant = new HashMap<>();
-        for (Field f : AdminPermissions.class.getDeclaredFields()) {
-            if (Modifier.isStatic(f.getModifiers()) && Modifier.isFinal(f.getModifiers())
-                    && f.getType() == String.class) {
-                try {
-                    codeToConstant.put((String) f.get(null), f.getName());
-                } catch (IllegalAccessException e) {
-                    throw new AssertionError("读取权限常量失败：" + f.getName(), e);
-                }
-            }
-        }
 
         Set<String> referenced = new HashSet<>();
         try (Stream<Path> files = Files.walk(main)) {
@@ -79,18 +48,6 @@ class AdminPermissionWiringTest {
                 Matcher m = HAS_AUTHORITY.matcher(text);
                 while (m.find()) {
                     referenced.add(m.group(1));
-                }
-                // 字段级编程式门控。排除声明文件自身，否则 ② 恒真。
-                // 🔴 用词边界而非 contains：CONTENT_VIEW 是 CONTENT_VIEW_REPORTS 的前缀、
-                //    VET_QUALIFY 是 VET_QUALIFY_VIEW 的前缀——contains 会让长码的引用顺带
-                //    「证明」短码已接线，等于给死码开后门。
-                if (!p.getFileName().toString().equals(DECLARING_FILE)) {
-                    codeToConstant.forEach((code, constant) -> {
-                        if (Pattern.compile("AdminPermissions\\." + constant + "\\b")
-                                .matcher(text).find()) {
-                            referenced.add(code);
-                        }
-                    });
                 }
             });
         }

@@ -18,10 +18,7 @@ import com.tailtopia.triage.domain.AiConsultOrder;
 import com.tailtopia.triage.repository.AiConsultOrderRepository;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -94,72 +91,6 @@ class OrderCenterIntegrationTest extends ApiIntegrationTest {
                 .containsExactly("PAWCOIN_TOPUP", "AI_UNLOCK", "VET_CONSULT");
         assertThat(page.items()).allSatisfy(v -> assertThat(v.statusColor()).isEqualTo("SUCCESS"));
         assertThat(page.hasMore()).isFalse();
-    }
-
-    /**
-     * 🔴🔴 同刻订单不得在翻页时丢失（2026-08-18 修，{@code action_items: ORDER-CENTER-CURSOR-TIE}）。
-     *
-     * <p><b>原缺陷两层</b>：① 游标是 {@code createdAt} <b>截断到毫秒</b>，查询是严格 {@code <} ——
-     * 末条是 {@code .123456} 时游标写成 {@code .123}，落在 {@code [.123000, .123456]} 之间的订单
-     * <b>被永久跳过</b>；② 同刻订单（跨源）整组被跳过。
-     *
-     * <p><b>这条测试把 6 单的时间戳写成同一个值</b>，让缺陷从「要撞运气」变成「必现」：
-     * 6 单跨 3 个源（2 兽医 + 2 AI + 2 充值），{@code limit=2} 逐页翻完，
-     * 断言<b>一单不多、一单不少</b> —— 这同时覆盖了「同源同刻」和「跨源同刻」两种情况。
-     */
-    @Test
-    @DisplayName("🔴🔴 6 单时间戳完全相同（跨 3 源）→ 逐页翻完，一单不多一单不少")
-    void pagination_doesNotSkipOrdersSharingTheSameInstant() {
-        long userId = newUser().getId();
-        Instant same = Instant.now().minus(5, ChronoUnit.MINUTES);
-        List<String> expected = new ArrayList<>();
-        for (int i = 0; i < 2; i++) {
-            ConsultOrder v = seedVet(userId, 50000 + i);
-            setCreatedAt("consult_orders", "order_token", v.getOrderToken(), same);
-            expected.add(v.getOrderToken());
-            AiConsultOrder a = seedAi(userId, 5000 + i);
-            setCreatedAt("ai_consult_orders", "order_token", a.getOrderToken(), same);
-            expected.add(a.getOrderToken());
-            PaymentIntent t = seedTopup(userId, 25000 + i);
-            setCreatedAt("payment_intents", "public_token", t.getPublicToken(), same);
-            expected.add(t.getPublicToken());
-        }
-
-        List<String> seen = new ArrayList<>();
-        String cursor = null;
-        for (int guard = 0; guard < 10; guard++) {
-            OrderPage page = orderCenter.listOrders(userId, null, cursor, 2);
-            page.items().forEach(v -> seen.add(v.orderToken()));
-            if (!page.hasMore()) {
-                break;
-            }
-            cursor = page.nextCursor();
-            assertThat(cursor).as("hasMore=true 就必须给得出游标").isNotBlank();
-        }
-
-        assertThat(seen).as("🔴 有订单在翻页时丢了 —— 用户再也看不到它")
-                .containsExactlyInAnyOrderElementsOf(expected);
-        assertThat(seen).as("🔴 同刻订单没有确定顺序时，同一单会在两页里各出现一次")
-                .doesNotHaveDuplicates();
-    }
-
-    @Test
-    @DisplayName("🔒 游标是不透明串，且不含明文顺序主键")
-    void cursor_isOpaqueAndCarriesNoPlainId() {
-        long userId = newUser().getId();
-        ConsultOrder a = seedVet(userId, 10000);
-        seedVet(userId, 20000);
-        seedVet(userId, 30000);
-
-        OrderPage p1 = orderCenter.listOrders(userId, null, null, 2);
-        assertThat(p1.hasMore()).isTrue();
-        String cursor = p1.nextCursor();
-        // 🔒 不外泄顺序主键：订单对外一律用不可枚举 token（架构护栏）
-        assertThat(cursor).doesNotContain(String.valueOf(a.getId()));
-        // 也不是「一眼能看懂的时间戳」——它是 base64url 的复合键
-        assertThat(cursor).doesNotContain(":");
-        // 但必须仍是个能用的游标（不是把功能删了换绿）
-        assertThat(orderCenter.listOrders(userId, null, cursor, 2).items()).hasSize(1);
     }
 
     @Test

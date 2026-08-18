@@ -26,6 +26,7 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpHeaders;
 
 /**
@@ -205,6 +206,7 @@ class ReportTriageIntegrationTest extends ApiIntegrationTest {
     }
 
     private List<Notification> authorNotifications(long authorId) {
-        return notifications.findByRecipientUserIdOrderByCreatedAtDescIdDesc(authorId);
+        return notifications.findByRecipientUserIdAndCreatedAtBeforeOrderByCreatedAtDesc(
+                authorId, Instant.now().plusSeconds(60), PageRequest.of(0, 50));
     }
 }

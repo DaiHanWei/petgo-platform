@@ -27,7 +27,6 @@ import 'widgets/archive_calendar.dart';
 import 'widgets/diary_header.dart';
 import 'widgets/share_fab.dart';
 import 'widgets/timeline_item_tile.dart';
-import '../../shop/presentation/widgets/repurchase_zones.dart';
 
 /// Diary 页（`/profile`）的四种用户状态（V1.1.2 · AD-15）。
 ///
@@ -322,10 +321,6 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
             onOpenHealth: () => context.push('/profile/health'),
             onOpenMilestones: () => context.push('/profile/milestones'),
           ),
-          // Story 6.5：档案推荐区的第二个展示位（另一处是 Toko 首页区域②）。
-          // 🔴 同一个组件、同一套规则 —— 两处各写一份判定迟早会漂移，
-          //    而「同一只宠物在两个页面看到不同推荐」是最难解释的一类 bug。
-          const ProfileRecoZone(zone: 'diary_profile_reco'),
           _viewToggleRow(l10n),
           const SizedBox(height: 10),
           // 时间线**始终挂载**、只在切到日历时 offstage（code-review 2026-08-04）：

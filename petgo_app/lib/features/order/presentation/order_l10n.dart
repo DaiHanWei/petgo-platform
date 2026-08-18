@@ -14,7 +14,6 @@ IconData orderTypeIcon(OrderType t) => switch (t) {
       OrderType.aiUnlock => Icons.auto_awesome_outlined,
       OrderType.pawcoinTopup => Icons.savings_outlined,
       OrderType.idHd => Icons.badge_outlined,
-      OrderType.ecommerce => Icons.shopping_bag_outlined,
       OrderType.unknown => Icons.receipt_long_outlined,
     };
 
@@ -24,16 +23,11 @@ String orderTypeLabel(AppLocalizations l10n, OrderType t) => switch (t) {
       OrderType.aiUnlock => l10n.orderTypeAi,
       OrderType.pawcoinTopup => l10n.orderTypeTopup,
       OrderType.idHd => l10n.orderTypeIdHd,
-      OrderType.ecommerce => l10n.orderTypeEcommerce,
       OrderType.unknown => l10n.orderTypeUnknown,
     };
 
 /// 状态副标题（按 statusCode）。
 String orderStatusLabel(AppLocalizations l10n, String statusCode) => switch (statusCode) {
-      // 电商状态（Story 3.9，与既有 statusCode 同名空间；后端已保证不重名）
-      'PENDING_PAYMENT' => l10n.shopOrderStatusPendingPayment,
-      'PENDING_SHIPMENT' => l10n.shopOrderStatusPendingShipment,
-      'CANCELLED' => l10n.shopOrderStatusCancelled,
       'IN_PROGRESS' => l10n.orderStatusInProgress,
       'COMPLETED' => l10n.orderStatusCompleted,
       'COMPLETED_REFUND_REJECTED' => l10n.orderStatusRefundRejected,
