@@ -18,6 +18,9 @@ public record PetProfileResponse(
         String intro,
         String cardToken,
         boolean isSystemDefaultName,
+        /** 🔒 体重（kg），Story 6.1。null = 用户还没填 —— 前端据此展示补全引导卡。 */
+        java.math.BigDecimal weightKg,
+        String neuterStatus,
         Instant createdAt) {
 
     public static PetProfileResponse from(PetProfile p) {
@@ -32,6 +35,8 @@ public record PetProfileResponse(
                 p.getCardToken(),
                 // 内容审核 story 4：宠物名是否为违规重置的系统默认编码名。
                 p.isSystemDefaultName(),
+                p.getWeightKg(),
+                p.getNeuterStatus() == null ? null : p.getNeuterStatus().name(),
                 p.getCreatedAt());
     }
 }

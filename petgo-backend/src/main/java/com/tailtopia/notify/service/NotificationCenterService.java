@@ -5,6 +5,7 @@ import com.tailtopia.notify.dto.NotificationItem;
 import com.tailtopia.notify.dto.NotificationPage;
 import com.tailtopia.notify.repository.NotificationRepository;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.paging.KeysetCursor;
 import java.time.Instant;
 import java.util.List;
 import org.springframework.data.domain.PageRequest;
@@ -31,17 +32,24 @@ public class NotificationCenterService {
         return NotificationService.UNREAD_KEY_PREFIX + userId;
     }
 
-    /** 倒序游标分页（cursor=上一页末条 epochMillis，首页 null）。 */
+    /**
+     * 倒序游标分页。
+     *
+     * <p>游标是 {@link KeysetCursor}（base64url 的 {@code (createdAt, id)}，首页 null）。
+     * 对客户端是<b>不透明串</b>：App 只把 {@code nextCursor} 原样回传，不解析
+     * （已核对 Flutter 侧 `NotificationPage`）。
+     */
     @Transactional(readOnly = true)
     public NotificationPage list(long userId, String cursor, int limit) {
-        Instant before = parseCursor(cursor);
-        List<Notification> rows = repo.findByRecipientUserIdAndCreatedAtBeforeOrderByCreatedAtDesc(
-                userId, before, PageRequest.of(0, limit + 1));
+        KeysetCursor c = parseCursor(cursor);
+        List<Notification> rows = repo.findPageBefore(
+                userId, c.createdAt(), c.id(), PageRequest.of(0, limit + 1));
         boolean hasMore = rows.size() > limit;
         List<Notification> pageRows = hasMore ? rows.subList(0, limit) : rows;
         List<NotificationItem> items = pageRows.stream().map(NotificationItem::from).toList();
-        String nextCursor = hasMore && !pageRows.isEmpty()
-                ? String.valueOf(pageRows.get(pageRows.size() - 1).getCreatedAt().toEpochMilli())
+        Notification last = pageRows.isEmpty() ? null : pageRows.get(pageRows.size() - 1);
+        String nextCursor = hasMore && last != null
+                ? new KeysetCursor(last.getCreatedAt(), last.getId()).encode()
                 : null;
         // 打开通知中心（首页）时以 DB 真实未读数校准 Redis 角标，自愈计数漂移
         // （如计数器残留致角标>0 但列表空，或行被清而计数未减）。仅校准计数，不改已读态。
@@ -98,14 +106,30 @@ public class NotificationCenterService {
         }
     }
 
-    private static Instant parseCursor(String cursor) {
+    // ---------- 游标 ----------
+
+    /**
+     * 解析游标。
+     *
+     * <p>🔴 坏游标退化成首页而不是报错：游标是客户端传回来的，
+     * 让整个通知中心 4xx/5xx 等于把用户锁在门外。
+     */
+    private static KeysetCursor parseCursor(String cursor) {
         if (cursor == null || cursor.isBlank()) {
-            return Instant.now().plusSeconds(60); // 首页：取「现在之前」全部（留余量含刚写入）
+            return KeysetCursor.firstPage();
         }
+        KeysetCursor parsed = KeysetCursor.decodeOrNull(cursor);
+        if (parsed != null) {
+            return parsed;
+        }
+        // 过渡兼容：老客户端手上还捏着旧格式（纯 epochMillis）的游标。
+        // 用 Long.MIN_VALUE 让「同刻」分支恒不命中 → 行为与老实现逐字一致（仍会漏，
+        // 但不会因为换了格式而报错或错位）。老客户端翻完这一轮就没有旧游标了。
         try {
-            return Instant.ofEpochMilli(Long.parseLong(cursor));
+            return new KeysetCursor(Instant.ofEpochMilli(Long.parseLong(cursor.trim())),
+                    Long.MIN_VALUE);
         } catch (NumberFormatException e) {
-            return Instant.now().plusSeconds(60);
+            return KeysetCursor.firstPage();
         }
     }
 }

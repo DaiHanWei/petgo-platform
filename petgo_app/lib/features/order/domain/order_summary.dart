@@ -10,6 +10,9 @@ enum OrderType {
   aiUnlock,
   pawcoinTopup,
   idHd,
+  /// 精选自营电商（V1.4.0 Story 3.9，FR-101 —— FR-54 的第 5 类卡片）。
+  /// 🔴 只在末尾追加（并行契约 O-1）。
+  ecommerce,
   unknown;
 
   static OrderType fromCode(String? code) => switch (code) {
@@ -17,6 +20,7 @@ enum OrderType {
         'AI_UNLOCK' => OrderType.aiUnlock,
         'PAWCOIN_TOPUP' => OrderType.pawcoinTopup,
         'ID_HD' => OrderType.idHd,
+        'ECOMMERCE' => OrderType.ecommerce,
         _ => OrderType.unknown,
       };
 
@@ -26,6 +30,7 @@ enum OrderType {
         OrderType.aiUnlock => 'AI_UNLOCK',
         OrderType.pawcoinTopup => 'PAWCOIN_TOPUP',
         OrderType.idHd => 'ID_HD',
+        OrderType.ecommerce => 'ECOMMERCE',
         OrderType.unknown => null,
       };
 }
@@ -71,6 +76,9 @@ class OrderSummary {
     this.amount,
     this.payChannel,
     this.createdAt,
+    this.thumbnailUrl,
+    this.itemTitle,
+    this.itemCount,
   });
 
   final OrderType orderType;
@@ -87,6 +95,16 @@ class OrderSummary {
   final String? payChannel;
   final DateTime? createdAt;
 
+  /// 🔴 以下三项**只有电商卡片有**（其余 4 类恒 null）——它们本就没有商品，
+  /// 不是「暂时为空」。
+  final String? thumbnailUrl;
+
+  /// 「首个商品名 · 规格」。
+  final String? itemTitle;
+
+  /// 件数（**非种类数**，与购物车角标同口径）。多于首件时卡片展示「等 N 件」。
+  final int? itemCount;
+
   factory OrderSummary.fromJson(Map<String, dynamic> j) => OrderSummary(
         orderType: OrderType.fromCode(j['orderType'] as String?),
         orderToken: (j['orderToken'] ?? '') as String,
@@ -97,6 +115,9 @@ class OrderSummary {
         payChannel: j['payChannel'] as String?,
         createdAt:
             j['createdAt'] == null ? null : DateTime.tryParse(j['createdAt'] as String)?.toLocal(),
+        thumbnailUrl: j['thumbnailUrl'] as String?,
+        itemTitle: j['itemTitle'] as String?,
+        itemCount: (j['itemCount'] as num?)?.toInt(),
       );
 }
 

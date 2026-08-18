@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="id" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TailTopia V1.4.0 · Toko首页·有复购触发</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared.css">
+<link rel="stylesheet" href="../../../../1.项目总述/UI&UX/imports/tokens.css">
+</head>
+<body>
+
+<div class="phone">
+  <div class="pill"></div>
+  <div class="statusbar"><span class="t">9:41</span><span class="icons">●●●●</span></div>
+  <div class="pages"><div class="page">
+
+    <div class="appbar">
+      <div class="appbar-title">Toko</div>
+      <button class="ibtn" style="position:relative;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+        <span style="position:absolute;top:4px;right:4px;min-width:16px;height:16px;border-radius:9999px;background:#F0425A;color:#fff;font-size:9.5px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 4px;">2</span>
+      </button>
+    </div>
+
+    <!-- ① 补货提醒区 · 仅 FR-109
+         🔴 UX-DR1（2026-08-18 修）：原型原先画了两张卡（FR-108 驱虫 + FR-109 粮量）。
+            FR-108 已移出本版本（C-11），驱虫卡【已删除】——留着会让实现方以为要做两个来源，
+            而本版本区域① 只有 FR-109 一个来源。1.2.0 上线 FR-108 时再把它加回来。 -->
+    <div class="section-label" style="color:var(--violet-500);">Saatnya Restok</div>
+
+    <div class="repurchase">
+      <div class="hd">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+        <b>Makanan Mochi diperkirakan habis</b>
+        <span class="badge b-info">FR-109</span>
+      </div>
+      <div class="est">Dibeli 3 kg pada 18 Juli · ±110 g/hari untuk 12 kg → perkiraan habis <b>~5 hari lagi</b></div>
+      <div class="prod">
+        <div class="t">🍖</div>
+        <div class="i"><b>Royal Canin Medium Adult 3 kg</b><span>Rp 285.000</span></div>
+        <button class="btn btn-primary btn-sm">Beli lagi</button>
+      </div>
+    </div>
+
+    <!-- ② 档案推荐 · FR-107 -->
+    <div class="section-label">Pilihan buat Mochi</div>
+    <div class="pgrid">
+      <div class="pcard"><div class="thumb">🍖</div><div class="body">
+        <div class="nm">Royal Canin Medium Adult</div><div class="rs">1.5 / 3 / 7.5 kg</div>
+        <div class="pr">Rp 285.000</div><span class="reason">Anjing dewasa 10–25 kg</span></div></div>
+      <div class="pcard"><div class="thumb">🥩</div><div class="body">
+        <div class="nm">Pro Plan Adult Sensitive Skin</div><div class="rs">3 / 7.5 kg</div>
+        <div class="pr">Rp 320.000</div><span class="reason">Anjing dewasa 10–25 kg</span></div></div>
+      <div class="pcard"><div class="thumb">💊</div><div class="body">
+        <div class="nm">Drontal Plus Obat Cacing</div><div class="rs">1 tablet</div>
+        <div class="pr">Rp 85.000</div><span class="reason">Siklus jatuh tempo</span></div></div>
+      <div class="pcard"><div class="thumb">🦴</div><div class="body">
+        <div class="nm">Camilan Dental Stick Anjing</div><div class="rs">7 pcs</div>
+        <div class="pr">Rp 45.000</div><span class="reason">Anjing dewasa</span></div></div>
+    </div>
+
+    <!-- ③ 分类入口 -->
+    <div class="section-label">Kategori</div>
+    <div class="chips">
+      <span class="chip on">Makanan</span>
+      <span class="chip">Obat &amp; Vitamin</span>
+      <span class="chip">Camilan</span>
+      <span class="chip">Perawatan</span>
+    </div>
+
+    <!-- ④ 全部精选 -->
+    <div class="section-label">Semua Pilihan</div>
+    <div class="pgrid">
+      <div class="pcard"><div class="thumb">🐕</div><div class="body">
+        <div class="nm">Pedigree Adult Dog Food</div><div class="rs">1.5 / 3 kg</div><div class="pr">Rp 96.000</div></div></div>
+      <div class="pcard"><div class="thumb">🧴</div><div class="body">
+        <div class="nm">Shampoo Anti Kutu Anjing</div><div class="rs">200 ml</div><div class="pr">Rp 68.000</div></div></div>
+    </div>
+    <div style="height:14px;"></div>
+
+  </div></div>
+
+  <div class="tabbar">
+    <button class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span class="tlabel">Diary</span></button>
+    <button class="tab on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg><span class="tlabel">Toko</span></button>
+    <button class="tabplus"><span class="plusinner"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></button>
+    <button class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg><span class="tlabel">Jelajah</span></button>
+    <button class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span class="tlabel">Profil</span></button>
+  </div>
+  <div class="homebar"><div></div></div>
+</div>
+
+<div class="spec">
+  <div class="sbox">
+    <div class="title">Toko 首页 · 已建档用户</div>
+    <div class="sub">状态 A · 已建档 · 有复购触发</div>
+    <span class="frtag">FR-93</span><span class="frtag">FR-107</span><span class="frtag">FR-108</span><span class="frtag">FR-109</span>
+  </div>
+
+  <div class="sbox">
+    <h3>四区域结构（FR-93）</h3>
+    <ul>
+      <li><b>① 补货提醒区</b> — 复购触发卡最多 2 张。<b>无触发时整区不渲染</b>，不留空标题</li>
+      <li><b>② 为我的宠物精选</b> — 「Pilihan buat {宠物名}」，规则式推荐 4–6 个</li>
+      <li><b>③ 分类入口</b> — 四个固定品类，常驻</li>
+      <li><b>④ 全部精选</b> — 按运营权重排序（后台 AB-10D）</li>
+    </ul>
+    <div class="warn"><b>不提供全站搜索框。</b>SKU 上限受控（OQ-25 建议 20–30），四分类 + 精选流已足够。搜索框会把心智推向通用货架，与「主动放弃 #2」冲突。</div>
+  </div>
+
+  <div class="sbox">
+    <h3>复购触发卡（版本核心）</h3>
+    <ul>
+      <li><b>FR-108 健康记录触发</b> — ⚠️ <b>已移出 V1.4.0（C-11），本版本区域① 不出现驱虫/疫苗卡</b>。1.2.0 上线时数据源为 FR-45A 结构化健康记录 + 健康提醒，仅驱虫、疫苗两类参与；月经/绝育/自定义不触发</li>
+      <li><b>FR-109 粮量见底</b> — 上次购买净含量 ÷ 按体重匹配的日喂量。文案必须写「diperkirakan / 预计」，<b>不写成确定事实</b></li>
+      <li>频控：同宠物同类型 <b>30 日内最多一次</b></li>
+      <li>缺任一输入（无购买史/未配日喂量/档案无体重）<b>不触发，不兜底猜测</b></li>
+    </ul>
+    <div class="warn"><b>疫苗触发例外：</b>疫苗为处方类医疗行为，平台不自营销售疫苗。疫苗触发卡跳<b>健康模块</b>，不跳商品详情。</div>
+  </div>
+
+  <div class="sbox">
+    <h3>推荐理由必须可见</h3>
+    <ul>
+      <li>卡片底部绿色标签即推荐理由（「Anjing dewasa 10–25 kg」）</li>
+      <li>不可解释的推荐在信任驱动的产品里是负资产</li>
+      <li>档案缺体重/年龄时降级为按物种推荐，并在推荐区尾部附「补全档案」引导卡</li>
+    </ul>
+  </div>
+
+  <div class="sbox">
+    <h3>埋点</h3>
+    <ul>
+      <li><b>toko_tab_viewed</b> · entry_source</li>
+      <li><b>product_impression</b> · zone=补货/精选/分类/全部</li>
+      <li><b>repurchase_card_impression</b> / <b>_clicked</b> · trigger_type</li>
+      <li><b>profile_reco_clicked</b> · reco_reason</li>
+    </ul>
+    <div class="warn"><b>基线必须先埋。</b>埋点清单v112 §0.3 的教训：V1.1.2 埋点与改版同版本发布，导致三项核心指标不可得。本次同样是替换 Tab，<b>toko_tab_viewed 与被替换 Tab 的曝光事件须在前一个版本先行发布</b>。</div>
+  </div>
+</div>
+
+</body></html>

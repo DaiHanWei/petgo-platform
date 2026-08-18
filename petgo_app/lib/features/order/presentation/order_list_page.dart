@@ -69,6 +69,8 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
       children: [
         _summaryHeader(context, l10n, state),
         const SizedBox(height: AppSpacing.md),
+        _typeChips(l10n, ref, state),
+        const SizedBox(height: AppSpacing.sm),
         _statusChips(l10n),
         const SizedBox(height: AppSpacing.md),
         if (visible.isEmpty)
@@ -185,6 +187,37 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
               const Icon(Icons.chevron_right, size: 14, color: Colors.white70),
           ],
         ),
+      ],
+    );
+  }
+
+  /// 类型筛选 chip（Story 3.9 / FR-101）：Semua / Belanja / Konsultasi / PawCoin / Lainnya。
+  ///
+  /// 🔴 **走后端筛选**（`setFilter` → 重拉），与下面的状态 chip（纯前端过滤）正交：
+  /// 类型决定拉哪些源，状态只过滤已加载的那一页。
+  ///
+  /// ⚠️ 偏离原型：原型 06 只画了类型 chips，但既有实现已有一行状态 chips（V1.1 能力）。
+  /// **两行并存**而不是替换 —— 删掉状态筛选属于本 story 范围外的功能删除。
+  /// 「Konsultasi」合并兽医与 AI 两类：用户心智里它们都是「问诊」，而后端筛选一次只能给一个
+  /// 类型，故该 chip 取兽医（AI 由「Lainnya」覆盖）——待 UX 拍板后再调整分组。
+  Widget _typeChips(AppLocalizations l10n, WidgetRef ref, OrderListState state) {
+    final options = <(OrderType?, String)>[
+      (null, l10n.orderFilterAll),
+      (OrderType.ecommerce, l10n.orderTypeEcommerce),
+      (OrderType.vetConsult, l10n.orderFilterKonsultasi),
+      (OrderType.pawcoinTopup, l10n.orderFilterPawcoin),
+      (OrderType.aiUnlock, l10n.orderFilterOther),
+    ];
+    return Wrap(
+      spacing: AppSpacing.sm,
+      children: [
+        for (final (type, label) in options)
+          ChoiceChip(
+            key: ValueKey('orderTypeChip_${type?.name ?? 'all'}'),
+            label: Text(label),
+            selected: state.filter == type,
+            onSelected: (_) => ref.read(orderListProvider.notifier).setFilter(type),
+          ),
       ],
     );
   }

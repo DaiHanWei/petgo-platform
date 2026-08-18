@@ -26,6 +26,8 @@ class _FakeRepo implements ProfileRepository {
     String? avatarUrl,
     String? breed,
     String? intro,
+    double? weightKg,
+    String? neuterStatus,
     String? idempotencyKey,
   }) async =>
       profile;
@@ -40,6 +42,8 @@ class _FakeRepo implements ProfileRepository {
     String? breed,
     DateTime? birthday,
     String? intro,
+    double? weightKg,
+    String? neuterStatus,
   }) async {
     updatedName = name;
     return profile.copyWith(name: name);

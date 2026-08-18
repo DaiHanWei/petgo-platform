@@ -108,6 +108,65 @@ public final class AuditActions {
     /** 后台赠送 PawCoin（bug 20260728-389；summary 含数量/原因/幂等键，不落 PII）。 */
     public static final String PAWCOIN_GRANTED = "PAWCOIN_GRANTED";
 
+    // ===== 精选自营电商（V1.4.0 Story 1.3，模块 10）=====
+    /** 创建商品（AB-10A）。 */
+    public static final String SHOP_PRODUCT_CREATED = "SHOP_PRODUCT_CREATED";
+    /** 编辑商品（AB-10A）。 */
+    public static final String SHOP_PRODUCT_UPDATED = "SHOP_PRODUCT_UPDATED";
+    /** 新建或更新 SKU（AB-10B）。 */
+    public static final String SHOP_SKU_UPSERTED = "SHOP_SKU_UPSERTED";
+    /** 🔒 更新进货价——详情【绝不写数值】，只记发生过（商业敏感，NFR-11）。 */
+    public static final String SHOP_PRODUCT_COST_UPDATED = "SHOP_PRODUCT_COST_UPDATED";
+
+    // ===== 库存管理与采购入库（V1.4.0 Story 1.4，AB-10C）=====
+    /** 🔒 采购/退货入库登记——详情记数量与前后值，【绝不写进货单价数值】（同 SHOP_PRODUCT_COST_UPDATED 的处置）。 */
+    public static final String SHOP_INVENTORY_RECEIPT_CREATED = "SHOP_INVENTORY_RECEIPT_CREATED";
+    /** 报损——详情记数量、原因与前后值。 */
+    public static final String SHOP_INVENTORY_DAMAGED = "SHOP_INVENTORY_DAMAGED";
+    /** 盘点调整——详情记盘点值、原因与前后值。 */
+    public static final String SHOP_INVENTORY_STOCKTAKED = "SHOP_INVENTORY_STOCKTAKED";
+
+    // ===== 上下架与精选排序（V1.4.0 Story 1.5，AB-10D）=====
+    /** 商品上架（详情记上架后的在售 SKU 总数与上限，便于回溯超限争议）。 */
+    public static final String SHOP_PRODUCT_LISTED = "SHOP_PRODUCT_LISTED";
+    /** 商品下架。🔴 只改可见性，不触发任何库存或订单动作（SPEC-7 口径）。 */
+    public static final String SHOP_PRODUCT_DELISTED = "SHOP_PRODUCT_DELISTED";
+
+    // ===== 服务范围与运费表（V1.4.0 Story 2.2，AB-11C）=====
+    /** 新增/更新/启停一个配送区域及其固定运费。 */
+    public static final String SHOP_SHIPPING_ZONE_UPDATED = "SHOP_SHIPPING_ZONE_UPDATED";
+    /** 修改免运门槛。 */
+    public static final String SHOP_SHIPPING_SETTINGS_UPDATED = "SHOP_SHIPPING_SETTINGS_UPDATED";
+
+    // ===== PawCoin 电商消费规则（V1.4.0 Story 3.5，AB-6D / AB-6A 扩展）=====
+    /** 修改电商 PawCoin 规则（总开关 / 运费抵扣 / 单笔上限）或平台责任补偿溢价。 */
+    public static final String SHOP_PAWCOIN_RULES_UPDATED = "SHOP_PAWCOIN_RULES_UPDATED";
+
+    // ===== 电商订单履约（V1.4.0 Story 4.2 / 4.3 / 4.4，模块 11）=====
+    /** 🔒 发货。摘要记承运商 + 物流单号（非 PII 可记）；<b>收件人姓名/电话/地址严禁写入</b>（NFR-5）。 */
+    public static final String SHOP_ORDER_SHIPPED = "SHOP_ORDER_SHIPPED";
+    /** 运营手动「标记已送达」（SPEC-2 出口①）。留操作人与时间，可审计。 */
+    public static final String SHOP_ORDER_MARKED_DELIVERED = "SHOP_ORDER_MARKED_DELIVERED";
+    /**
+     * 🔒 按收件人电话搜索订单（AB-11A，NFR-11）。
+     *
+     * <p><b>摘要只记命中条数与查询的哈希前缀，绝不记号码本身</b> ——
+     * 审计日志是永久保留、无 TTL 的（V34），把号码写进去等于建了第二份不会过期的通讯录。
+     */
+    public static final String SHOP_ORDER_SEARCHED_BY_PHONE = "SHOP_ORDER_SEARCHED_BY_PHONE";
+    /** 异常订单处置：整单取消并退款 / 部分取消 / 联系用户后继续（Story 4.4，AB-11D）。 */
+    public static final String SHOP_ORDER_EXCEPTION_HANDLED = "SHOP_ORDER_EXCEPTION_HANDLED";
+
+    // ===== 退货与退款（V1.4.0 Story 5.3 / 5.4 / 5.5 / 5.6，模块 12）=====
+    /** 退货申请审核（批准 / 驳回）。摘要记类型、整单退与两处运费归属 —— 它们直接决定退款金额。 */
+    public static final String SHOP_RETURN_REVIEWED = "SHOP_RETURN_REVIEWED";
+    /** 寄回登记与质检（通过 / 不通过 + 处置方式）。🔒 只记运单号，不记用户地址电话。 */
+    public static final String SHOP_RETURN_INSPECTED = "SHOP_RETURN_INSPECTED";
+    /** 🔒 退款执行。摘要记两段金额与两种溢价 —— 事后审计与客诉复盘的唯一依据。 */
+    public static final String SHOP_RETURN_REFUNDED = "SHOP_RETURN_REFUNDED";
+    /** 开封判定判例沉淀（AB-12D）。⚠️ 一致性工具，非风控工具（SPEC-24）。 */
+    public static final String SHOP_RETURN_PRECEDENT_ADDED = "SHOP_RETURN_PRECEDENT_ADDED";
+
     private AuditActions() {
     }
 }

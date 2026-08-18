@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<!-- 复购引擎效果看板（V1.4.0 Story 6.6，AB-13B）。裁决 A-16 的唯一依据。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.shop.repurchase.title}">复购引擎效果 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1 th:text="#{admin.shop.repurchase.title}">复购引擎效果</h1>
+
+        <!-- ⚠️ 这两段是 AC 的一部分，不是装饰 -->
+        <p class="hint" th:text="#{admin.shop.repurchase.scopeNote}">本看板评的是两条机制，不是三条：驱虫/疫苗周期提醒（FR-108）已挪到 1.2.0。</p>
+        <p class="hint" th:text="#{admin.shop.repurchase.zeroNote}">DEWORM / VACCINE 在本版本恒为 0——这是范围决策，不是数据丢失，也不是埋点坏了。</p>
+        <p class="hint" th:text="#{admin.shop.repurchase.sourceNote}">口径以服务端业务库为准（直接读订单行上的归因字段）。PostHog 仅作交叉验证，后台不反拉它的接口。</p>
+
+        <form method="get" th:action="@{/admin/shop/repurchase-dashboard}" class="filters">
+            <input type="date" name="from" th:value="${from}"/>
+            <input type="date" name="to" th:value="${to}"/>
+            <button type="submit" th:text="#{admin.common.filter}">筛选</button>
+        </form>
+
+        <!-- 🔴 DEP-6 未到位的显式提示：不写这句，运营会把「数据没填」读成「机制无效」 -->
+        <p th:if="${s.looksLikeMissingFeedingData()}" class="flash error"
+           th:text="#{admin.shop.repurchase.depSixWarning}">触发覆盖率为 0，但已有用户买过粮——这几乎可以肯定是商品的每日建议喂量还没录入（DEP-6），而不是复购机制无效。请先补喂量数据再评估。</p>
+
+        <h2 th:text="#{admin.shop.repurchase.section.triggers}">触发</h2>
+        <table>
+            <tr><th th:text="#{admin.shop.repurchase.col.byType}">按类型</th>
+                <td>
+                    <span th:each="e : ${s.triggersByType()}"
+                          th:text="${e.key} + '=' + ${e.value} + '  '">FOOD_LOW=0</span>
+                </td></tr>
+            <tr><th th:text="#{admin.shop.repurchase.col.total}">触发总数</th>
+                <td th:text="${s.triggerTotal()}">0</td></tr>
+            <tr><th th:text="#{admin.shop.repurchase.col.converted}">已转化</th>
+                <td th:text="${s.triggerConverted()}">0</td></tr>
+            <tr><th th:text="#{admin.shop.repurchase.col.dismissed}">被关掉</th>
+                <td th:text="${s.triggerDismissed()}">0</td></tr>
+            <tr><th th:text="#{admin.shop.repurchase.col.conversionRate}">触发卡转化率</th>
+                <td th:text="${#numbers.formatPercent(s.triggerConversionRate(), 1, 2)}">0%</td></tr>
+            <!-- 🔴 DEP-6 是否到位的直接读数 -->
+            <tr><th th:text="#{admin.shop.repurchase.col.coverage}">FR-109 触发覆盖率</th>
+                <td>
+                    <span th:text="${#numbers.formatPercent(s.triggerCoverage(), 1, 2)}">0%</span>
+                    <span class="hint" th:text="' ' + ${s.usersWithTrigger()} + ' / ' + ${s.usersWithFoodPurchase()}"></span>
+                </td></tr>
+        </table>
+
+        <h2 th:text="#{admin.shop.repurchase.section.attribution}">归因（服务端权威口径）</h2>
+        <p class="hint" th:text="#{admin.shop.repurchase.attributionNote}">下面的占比直接读订单行上的 entry_source / trigger_type——用户真的从那个入口买了，而不是「曝光过」。触发卡曝光数与点击率属客户端事件，在 PostHog 交叉验证。</p>
+        <table>
+            <tr><th th:text="#{admin.shop.repurchase.col.fromTrigger}">来自补货卡的订单行</th>
+                <td><span th:text="${s.linesFromTrigger()}">0</span>
+                    <span th:text="' (' + ${#numbers.formatPercent(s.triggerLineShare(), 1, 2)} + ')'"></span></td></tr>
+            <tr><th th:text="#{admin.shop.repurchase.col.fromReco}">来自档案推荐的订单行</th>
+                <td><span th:text="${s.linesFromProfileReco()}">0</span>
+                    <span th:text="' (' + ${#numbers.formatPercent(s.profileRecoLineShare(), 1, 2)} + ')'"></span></td></tr>
+            <tr><th th:text="#{admin.shop.repurchase.col.allLines}">全部订单行</th>
+                <td th:text="${s.linesTotal()}">0</td></tr>
+        </table>
+
+        <!--
+          🔴 Story 9.2 归因链核对：逐档列出服务端权威口径，供与 PostHog 客户端聚合对账。
+             原埋点清单只到 add_to_cart 为止 —— 能算点击率、算不出转化率，
+             而 AB-13B 是裁决 A-16（复购引擎是否成立）的唯一依据。
+        -->
+        <h2 th:text="#{admin.shop.repurchase.section.reconcile}">归因链核对底账</h2>
+        <p class="hint" th:text="#{admin.shop.repurchase.reconcileNote}">以服务端为准。</p>
+        <table>
+            <tr><th th:text="#{admin.shop.repurchase.col.entrySource}">归因来源</th>
+                <th th:text="#{admin.shop.repurchase.col.lineCount}">订单行数（服务端）</th></tr>
+            <tr th:each="e : ${s.linesByEntrySource()}">
+                <td th:text="${e.key}">-</td>
+                <td th:text="${e.value}">0</td></tr>
+        </table>
+
+        <h2 th:text="#{admin.shop.repurchase.section.repurchase}">复购率</h2>
+        <table>
+            <tr th:each="e : ${s.repurchaseRates()}">
+                <th th:text="${e.key} + ' 日'">30 日</th>
+                <td th:text="${#numbers.formatPercent(e.value, 1, 2)}">0%</td>
+            </tr>
+        </table>
+
+        <h2 th:text="#{admin.shop.repurchase.section.accuracy}">粮量预估准确度</h2>
+        <p class="hint" th:text="#{admin.shop.repurchase.accuracyNote}">偏差 = 实际再购日 − 预估耗尽日。正值表示用户比预估晚买（预估偏早），负值表示预估偏晚。只统计已被再次购买超越的触发。</p>
+        <table>
+            <tr><th th:text="#{admin.shop.repurchase.col.sample}">样本数</th>
+                <td th:text="${s.depletionDeviation().sampleCount()}">0</td></tr>
+            <tr><th th:text="#{admin.shop.repurchase.col.avgDev}">平均偏差（天）</th>
+                <td th:text="${s.depletionDeviation().avgDays()}">0</td></tr>
+            <tr><th th:text="#{admin.shop.repurchase.col.devRange}">偏差区间（天）</th>
+                <td th:text="${s.depletionDeviation().minDays()} + ' ~ ' + ${s.depletionDeviation().maxDays()}">0 ~ 0</td></tr>
+        </table>
+
+        <!-- ⚠️ OQ-42 未拍板：kill criteria 的目标值与观察窗口 -->
+        <p class="hint" th:text="#{admin.shop.repurchase.oq42}">⚠️ A-16 的判据「显著」目前无数值、无窗口、无处置（OQ-42 未拍板）——本看板能给出读数，但还不能替任何人做「继续还是砍掉」的决定。</p>
+    </div>
+</div>
+</body>
+</html>

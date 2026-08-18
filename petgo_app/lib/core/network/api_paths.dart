@@ -231,4 +231,55 @@ class ApiPaths {
 
   /// 本月免费额度（Story 2.1/2.4）→ {period, limit, used, remaining}。
   static const String freeQuota = '$base/me/free-quota';
+
+  // ===== 精选自营电商（V1.4.0 Story 1.6）=====
+  /// 商品列表（Story 1.1 只读接口，**已对游客放行**）。可选 query：`category`。
+  static const String shopProducts = '$base/shop/products';
+  /// 行政区划三级树（Story 2.4，游客可读）。
+  static const String shopRegions = '$base/shop/regions';
+  /// 🔒 地址簿（Story 2.1/2.4）。用 `/me` 不用 `/users/me`（决策 C1）。
+  static const String shippingAddresses = '$base/me/shipping-addresses';
+
+  /// 🔒 购物车（Story 3.1 后端 · 3.6 前端）。`/me` 前缀本就受保护 ——
+  /// **游客无购物车**是有意的能力缺席（FR-96），不是待放开的限制。
+  static const String meCart = '$base/me/cart';
+  /// 加购（`?skuToken=&qty=`，同 SKU 累加）。
+  static const String meCartItems = '$meCart/items';
+  /// 改数量（`?qty=`，qty≤0 即删除）/ 删除单行。
+  static String meCartItem(String skuToken) => '$meCart/items/$skuToken';
+  /// 一键清空全部失效行（已下架 / 已售罄）。
+  static const String meCartInvalidItems = '$meCart/invalid-items';
+
+  /// 🔒 结算试算（Story 3.7）。`?addressToken=`；超服务范围回 `serviceable=false` 而非报错。
+  static const String meCheckout = '$base/me/checkout';
+
+  /// 🔒 电商下单（Story 3.7）。409 带 `unavailableLines` 逐行明细（FR-95，不整单打回）。
+  /// Story 3.8 追加：`/{token}` 详情 · `/{token}/pay` 发起支付 · `/{token}/cancel` 取消。
+  static const String meShopOrders = '$base/me/shop-orders';
+
+  /// 退货申请页数据（Story 5.7）。🔴 不可退的行照样下发（带置灰原因），不由前端过滤。
+  static String meReturnEligibility(String orderToken) =>
+      '$meShopOrders/$orderToken/return-eligibility';
+
+  /// 🔒 退货申请（Story 5.7/5.8/5.9）。
+  /// `/{token}` 进度 · `/{token}/cash-destination` 选现金段去向 ·
+  /// `/{token}/shipback` 上传寄回运单 · `/{token}/withdraw` 撤销。
+  ///
+  /// 🔴 **没有 coin-destination**：PawCoin 段没有第二个去向（FR-100A 规则 1，能力缺席）。
+  static const String meShopReturns = '$base/me/shop-returns';
+
+  /// 🔒 Toko 首页区域②「为我的宠物精选」（Story 6.5，FR-107）。
+  /// 在 `/me` 下是刻意的：FR-93 状态矩阵里游客不展示该区。
+  static const String meShopRecommendations = '$base/me/shop/recommendations';
+
+  /// 🔒 Toko 首页区域①「补货提醒」（Story 6.4，FR-109）。`/{id}/dismiss` 关卡。
+  static const String meShopRepurchaseCards = '$base/me/shop/repurchase-cards';
+
+  /// 商品详情页的评价区（Story 7.3）。🔒 对游客开放 —— 评价是买前决策信息，
+  /// 拿它当登录墙会直接杀掉转化（FR-93A）。接口不下发任何评价者身份。
+  static String shopProductReviews(String productToken) =>
+      '$base/shop/products/$productToken/reviews';
+
+  /// 🔒 提交 / 重提评价（Story 7.1；供 Story 7.2 评价页调用，该页待 UX-DR4 补稿）。
+  static const String meShopReviews = '$base/me/shop-reviews';
 }

@@ -85,6 +85,12 @@ petgo:
     ios-url: ${CARD_IOS_URL:https://play.google.com/store/apps/details?id=com.tailtopia.app}
     app-download-url: ${CARD_APP_DOWNLOAD_URL:https://play.google.com/store/apps/details?id=com.tailtopia.app}
 
+  # 精选自营电商（V1.4.0）
+  shop:
+    # 低库存提示阈值（FR-95）：可售 ≤ 此值时详情页展示「Sisa {n}」。
+    # {n} 取真实剩余数——制造合理紧迫感但不虚构数字。
+    low-stock-threshold: ${SHOP_LOW_STOCK_THRESHOLD:5}
+
 # 退款收款账户 PII 加密（Story 4.3，A-1/FR-NFR-4）。AES-256-GCM 密钥（base64 的 32 字节）。
 # 凭证 env 注入红线，绝不入库；缺失时加/解密抛异常（不静默存明文）。dev/test 用 application-dev.yml 的占位密钥。
 refund:

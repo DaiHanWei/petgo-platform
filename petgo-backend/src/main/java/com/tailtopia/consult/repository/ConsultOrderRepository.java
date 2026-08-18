@@ -6,6 +6,7 @@ import com.tailtopia.consult.dto.VetPayoutAggregate;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -19,9 +20,30 @@ public interface ConsultOrderRepository extends JpaRepository<ConsultOrder, Long
     /** 兽医历史「到手金额」（V88）：按 (vetId, 会话 id 批) 批量取订单，service 建 sessionId→order Map 避免 N+1。 */
     List<ConsultOrder> findByVetIdAndConsultSessionIdIn(long vetId, java.util.Collection<Long> consultSessionIds);
 
-    /** 订单中心游标分页（Story 5.1）：本人订单 created_at < cursor 倒序（全 4 态入订单中心）。 */
-    List<ConsultOrder> findByUserIdAndCreatedAtLessThanOrderByCreatedAtDesc(
-            long userId, Instant cursor, org.springframework.data.domain.Pageable pageable);
+    /**
+     * 订单中心游标分页（Story 5.1）：本人订单，游标 {@code (beforeTs, beforeId)} 之后的一页，
+     * 排序 {@code created_at DESC, id DESC}。
+     *
+     * <p>🔴🔴 <b>游标必须是 {@code (created_at, id)} 复合的</b>（2026-08-18 修，
+     * {@code action_items: ORDER-CENTER-CURSOR-TIE}）。原来是 {@code created_at < cursor}
+     * 且游标截断到毫秒 —— 落在同一毫秒里的订单会在分页边界被<b>整批跳过</b>，用户再也看不到。
+     *
+     * <p>⚠️ {@code beforeId} 由 {@code OrderCenterService} 按<b>源的先后位</b>给哨兵值：
+     * 排在游标源之前的源传 {@code Long.MIN_VALUE}（同刻组已发完 → 退化为严格 {@code <}），
+     * 之后的源传 {@code Long.MAX_VALUE}（同刻组还没发 → 等价 {@code <=}），
+     * 游标自己那个源传真实 id。这样<b>一条查询覆盖三种边界</b>，
+     * 且排序键与归并层的全序<b>逐字一致</b> —— 两处不一致就是漏单的来源。
+     */
+    @Query("""
+            SELECT o FROM ConsultOrder o
+            WHERE o.userId = :userId
+              AND (o.createdAt < :beforeTs
+                   OR (o.createdAt = :beforeTs AND o.id < :beforeId))
+            ORDER BY o.createdAt DESC, o.id DESC
+            """)
+    List<ConsultOrder> findPageBefore(@Param("userId") long userId,
+            @Param("beforeTs") Instant beforeTs,
+            @Param("beforeId") long beforeId, Pageable pageable);
 
     /**
      * 退款起步 CAS（Story 3.8，H-5 退款幂等唯一闸）：{@code IN_PROGRESS→REFUNDING}。返回行数（1=本路胜、可退款；

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<!-- 库存流水（V1.4.0 Story 1.4，AB-10C）。append-only：每次 actual 变更的操作人/原因/前后值。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.shop.inventory.movements.title}">库存流水 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1 th:text="#{admin.shop.inventory.movements.title}">库存流水</h1>
+        <p class="hint">
+            <span th:text="#{admin.shop.sku.specName}">规格</span>:
+            <span th:text="${sku.specName}">3 kg</span>
+        </p>
+        <p class="hint" th:text="#{admin.shop.inventory.movements.hint}">流水只增不改：要撤销一笔操作，应再落一笔反向流水，而不是修改历史。</p>
+
+        <table>
+            <thead>
+            <tr>
+                <th th:text="#{admin.shop.inventory.col.time}">时间</th>
+                <th th:text="#{admin.shop.inventory.col.type}">类型</th>
+                <th th:text="#{admin.shop.inventory.col.delta}">增减</th>
+                <th th:text="#{admin.shop.inventory.col.before}">变更前</th>
+                <th th:text="#{admin.shop.inventory.col.after}">变更后</th>
+                <th th:text="#{admin.shop.inventory.col.purchaseNo}">采购单号</th>
+                <th th:text="#{admin.shop.inventory.col.supplier}">供应商</th>
+                <!-- 🔒 无 shop.cost_view 时整列不渲染，且 costByMovementId 根本不在 model 中 -->
+                <th th:if="${canViewCost}" th:text="#{admin.shop.sku.costPrice}">进货单价</th>
+                <th th:text="#{admin.shop.inventory.col.reason}">原因</th>
+                <th th:text="#{admin.shop.inventory.col.operator}">操作人</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="m : ${movements}">
+                <td th:text="${m.createdAt}">2026-08-17</td>
+                <td th:text="${m.movementType}">PURCHASE_INBOUND</td>
+                <td th:text="${m.qtyDelta}">+10</td>
+                <td th:text="${m.actualBefore}">0</td>
+                <td th:text="${m.actualAfter}">10</td>
+                <td th:text="${m.purchaseNo} ?: '-'">PO-001</td>
+                <td th:text="${m.supplier} ?: '-'">供应商</td>
+                <td th:if="${canViewCost}" th:text="${costByMovementId[m.id]} ?: '-'">190000</td>
+                <td th:text="${m.reason} ?: '-'">-</td>
+                <td th:text="${m.operatorAccountId}">1</td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(movements)}">
+                <td colspan="10" th:text="#{admin.shop.inventory.movements.empty}">该 SKU 暂无库存流水。</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <p><a th:href="@{/admin/shop/inventory}" th:text="#{admin.common.back}">返回</a></p>
+    </div>
+</div>
+</body>
+</html>

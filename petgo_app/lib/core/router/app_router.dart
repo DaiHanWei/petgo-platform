@@ -12,6 +12,15 @@ import '../../features/auth/domain/auth_state.dart';
 import '../../features/auth/domain/user_state.dart';
 import '../../features/auth/presentation/dev_login_guide_page.dart';
 import '../../features/auth/presentation/login_page.dart';
+import '../../features/shop/address/presentation/address_book_page.dart';
+import '../../features/shop/address/presentation/address_form_page.dart';
+import '../../features/shop/presentation/cart_page.dart';
+import '../../features/shop/presentation/checkout_page.dart';
+import '../../features/shop/presentation/product_detail_page.dart';
+import '../../features/shop/presentation/refund_method_page.dart';
+import '../../features/shop/presentation/return_request_page.dart';
+import '../../features/shop/presentation/shop_order_detail_page.dart';
+import '../../features/shop/presentation/toko_page.dart';
 import '../../features/auth/presentation/nickname_page.dart';
 import '../../features/auth/presentation/pet_status_page.dart';
 import '../../features/content/domain/content_type.dart';
@@ -481,6 +490,63 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(path: '/login', builder: (c, s) => const LoginPage()),
+
+      // ===== Toko（V1.4.0 Story 1.6，FR-93 / FR-93A）=====
+      // 🔒 游客可直接进入：靠【不在 _controlledLocations 白名单里】达成，零安全规则改动。
+      //    这与 V1.1.2 FR-78「未登录点击非落地 Tab 触发登录引导」有意不同——商品浏览是
+      //    转化漏斗最上层，用登录墙拦截会直接杀掉转化。登录引导推迟到加购（Epic 3）。
+      // 🔴 Tab 位序归 DEP-1 未拍板、图标归 DEP-2 未交付 → 本版本【只挂路由，不动 AppTab 枚举】
+      //    （bottom_tab_bar.dart 属并行契约 C 类）。Tab 接入待 DEP-1 闭合后单独处理。
+      // `?category=` 只被 FR-110 的品类跳转注入（Story 9.1）：健康记录类型 → 品类，
+      // 系统生成、无 SKU。非法值由 ShopCategory.fromApi 落回 null（= 全部精选）。
+      GoRoute(
+        path: '/shop',
+        builder: (c, s) => TokoPage(initialCategory: s.uri.queryParameters['category']),
+      ),
+      // 商品详情（Story 1.7）。同样对游客开放——不在 _controlledLocations 里。
+      GoRoute(
+        path: '/shop/products/:token',
+        // `?from=` 带入归因来源（Story 3.10）：商品从哪个入口进的，只有跳转那一刻知道。
+        builder: (c, s) => ProductDetailPage(
+          token: s.pathParameters['token']!,
+          entrySource: s.uri.queryParameters['from'],
+        ),
+      ),
+      // 购物车（Story 3.6）。🔒 **有意不放进 _controlledLocations**：门控在页面内部
+      //    （游客渲染「登录后查看」空态 + 软性引导），而不是 redirect 弹走。
+      //    redirect 会把游客直接甩回 /home，等于告诉他「这里没有购物车」——
+      //    而真相是「登录后就有」，这一句差别就是 FR-0B 软性引导存在的理由。
+      //    页面本身不发任何 /me 请求，游客态零数据暴露。
+      GoRoute(path: '/shop/cart', builder: (c, s) => const CartPage()),
+      // 结算页（Story 3.7）。🔒 与购物车同理：门控在页内（本页只在已登录态可达 ——
+      //    入口是购物车页的 Checkout 按钮，而游客的购物车页根本不渲染那个按钮）。
+      GoRoute(path: '/shop/checkout', builder: (c, s) => const CheckoutPage()),
+      // 电商订单详情（Story 3.8）。token 寻址（不可枚举）；越权与不存在同为后端 404。
+      GoRoute(
+        path: '/shop/orders/:token',
+        builder: (c, s) => ShopOrderDetailPage(orderToken: s.pathParameters['token']!),
+      ),
+      // 退货申请页（Story 5.7）。入口在订单详情；已有进行中申请时页面自己渲染置灰态
+      // （UX-DR3）而不是 redirect —— 用户需要知道「已在处理中」，而不是被弹走。
+      GoRoute(
+        path: '/shop/orders/:token/return',
+        builder: (c, s) => ReturnRequestPage(orderToken: s.pathParameters['token']!),
+      ),
+      // 退款方式选择页（Story 5.8）。token 寻址（退货申请的不可枚举 token）。
+      GoRoute(
+        path: '/shop/returns/:token/refund-method',
+        builder: (c, s) => RefundMethodPage(returnToken: s.pathParameters['token']!),
+      ),
+      // ⏳ 退货进度页（Story 5.9）路由暂不挂载：UX-DR5 视觉稿未交付，
+      //    AC 写死「实现前不得自行发挥」。后端与数据层已就绪，补稿后只差这一页。
+      // 地址簿（Story 2.4）。🔒 挂在 /me 前缀下 —— 它已在 _controlledLocations 里，
+      // 游客访问自动重定向。地址是 PII，与 Toko 的游客开放策略正好相反。
+      GoRoute(path: '/me/addresses', builder: (c, s) => const AddressBookPage()),
+      GoRoute(path: '/me/addresses/new', builder: (c, s) => const AddressFormPage()),
+      GoRoute(
+        path: '/me/addresses/:token',
+        builder: (c, s) => AddressFormPage(token: s.pathParameters['token']),
+      ),
       // 兽医账密登录 + 工作台壳（Story 5.1）。与用户侧 5-Tab 隔离：shell 外顶层路由。
       GoRoute(path: '/vet/login', builder: (c, s) => _vetScoped(const VetLoginPage())),
       GoRoute(path: '/vet/workbench', builder: (c, s) => _vetScoped(const VetWorkbenchShell())),

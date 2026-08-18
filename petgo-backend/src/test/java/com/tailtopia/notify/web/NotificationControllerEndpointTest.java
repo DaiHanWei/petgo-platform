@@ -1,5 +1,6 @@
 package com.tailtopia.notify.web;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -10,9 +11,13 @@ import com.tailtopia.notify.domain.Notification;
 import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.notify.repository.NotificationRepository;
 import com.tailtopia.support.ApiIntegrationTest;
+import java.util.ArrayList;
+import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * {@link NotificationController} 端点集成测试（{@code /api/v1/notifications}，4 端点，均需 USER JWT）：
@@ -26,6 +31,9 @@ class NotificationControllerEndpointTest extends ApiIntegrationTest {
 
     @Autowired
     private NotificationRepository notifications;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     /** 造一条已落库通知（token 由调用方给定，便于断言/标记）。 */
     private Notification persist(long recipientUserId, NotificationType type, String token, boolean read) {
@@ -109,6 +117,102 @@ class NotificationControllerEndpointTest extends ApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(1))
                 .andExpect(jsonPath("$.hasMore").value(false));
+    }
+
+    /**
+     * 🔴🔴 同刻通知不得在翻页时丢失（2026-08-18 修，`action_items: NOTIFY-CURSOR-TIE`）。
+     *
+     * <p><b>原缺陷</b>：游标只有 {@code created_at} 且截断到毫秒，查询是严格 {@code <} ——
+     * 同一毫秒里有 ≥2 条通知、分页边界又正好落在中间时，<b>那一毫秒里的记录被整批跳过</b>，
+     * 用户永久看不到那几条。一毫秒内写入多条通知在生产上完全正常（一次批量触达就是）。
+     *
+     * <p><b>为什么这条测试要直接改 {@code created_at}</b>：靠 {@code now()} 撞同一微秒是运气 ——
+     * 原有的 {@code list_paginatesWithCursor} 就是这么偶发红的（全量跑红、单跑绿，
+     * 于是很容易被当成抖动放过）。这里把 5 条的时间戳<b>写死成同一个值</b>，
+     * 让缺陷从「偶发」变成「必现」。
+     */
+    @Test
+    @DisplayName("🔴🔴 5 条通知时间戳完全相同 → 逐页翻完，一条不多一条不少")
+    void list_doesNotSkipRowsSharingTheSameInstant() throws Exception {
+        User me = newUser();
+        List<String> expected = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            String t = tok();
+            expected.add(t);
+            persist(me.getId(), NotificationType.CONTENT_COMMENTED, t, false);
+        }
+        // 🔴 五条同刻（精确到微秒都一样）—— 只有 created_at 的游标在这里必然丢数据。
+        //    统一取这批里最早的那个【真实】时间戳，而不是写死一个日期：写死会跟
+        //    「首页取 now+60s 之前」的哨兵打架（跑测试那天在 UTC 上过没过那个点纯看运气）。
+        jdbc.update("UPDATE notifications SET created_at = "
+                + "(SELECT MIN(created_at) FROM notifications WHERE recipient_user_id = ?) "
+                + "WHERE recipient_user_id = ?", me.getId(), me.getId());
+
+        List<String> seen = new ArrayList<>();
+        String cursor = null;
+        for (int page = 0; page < 10; page++) {
+            var req = get("/api/v1/notifications").param("limit", "2")
+                    .header(HttpHeaders.AUTHORIZATION, userBearer(me.getId()));
+            if (cursor != null) {
+                req = req.param("cursor", cursor);
+            }
+            String body = mvc.perform(req).andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString();
+            var node = json.readTree(body);
+            for (var item : node.get("items")) {
+                seen.add(item.get("deepLinkToken").asString());
+            }
+            if (!node.get("hasMore").asBoolean()) {
+                break;
+            }
+            cursor = node.get("nextCursor").asString();
+        }
+
+        // 一条不少
+        assertThat(seen).containsExactlyInAnyOrderElementsOf(expected);
+        // 🔴 一条不多 —— 同刻记录若没有确定顺序，翻页时同一条会重复出现
+        assertThat(seen).doesNotHaveDuplicates();
+    }
+
+    @Test
+    @DisplayName("🔒 游标里不许出现明文顺序主键 —— 列表体不外泄 id，游标也不能变成后门")
+    void list_cursorDoesNotLeakSequentialId() throws Exception {
+        User me = newUser();
+        List<Long> ids = new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            ids.add(persist(me.getId(), NotificationType.VET_REPLY, tok(), false).getId());
+        }
+
+        String body = mvc.perform(get("/api/v1/notifications").param("limit", "2")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(me.getId())))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String cursor = json.readTree(body).get("nextCursor").asString();
+
+        // 🔴 id 只作为 tie-breaker 活在 base64url 游标里，明文一个都不许露 ——
+        //    列表体本来就断言了不外泄 id（见 list_returnsOnlyOwnNotifications），
+        //    游标不能成为绕过它的那扇后门。
+        for (Long id : ids) {
+            assertThat(cursor).doesNotContain(String.valueOf(id));
+            assertThat(body).doesNotContain("\"id\":" + id);
+        }
+        // 但它必须仍是个能用的游标（不是把功能删了换绿）
+        mvc.perform(get("/api/v1/notifications").param("limit", "2").param("cursor", cursor)
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1));
+    }
+
+    @Test
+    @DisplayName("坏游标不 500，退化成首页（游标是客户端传来的，不能信）")
+    void list_toleratesGarbageCursor() throws Exception {
+        User me = newUser();
+        persist(me.getId(), NotificationType.VET_REPLY, tok(), false);
+
+        mvc.perform(get("/api/v1/notifications").param("cursor", "not-a-cursor")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1));
     }
 
     // ---------- 未读数 ----------
