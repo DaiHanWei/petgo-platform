@@ -19,10 +19,12 @@
 
 1. 建独立系统账号 `hex`：`/bin/bash` shell、加 `docker` 组、**无 sudo、密码锁定**（只能凭 key 进，且 key 被强制命令绑死）。
 2. `/home/hex/bin/stag-ops.sh` ← 本仓库 `scripts/stag-ops-server.sh`（755, hex:hex）。
-3. `/home/hex/.ssh/authorized_keys` 仅一行（PM 公钥 + 强制命令）：
+3. `/home/hex/.ssh/authorized_keys` **每个被授权同事一行**（公钥 + 强制命令，末尾注释 `stag-<名字>` 用于 auth.log 区分）：
    ```
-   command="/home/hex/bin/stag-ops.sh",no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-pty ssh-ed25519 <PM公钥> stag-pm
+   command="/home/hex/bin/stag-ops.sh",no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-pty ssh-ed25519 <公钥> stag-<名字>
    ```
+   已授权：`stag-pm`（Hex，2026-08-05）、`stag-shawn`（Shawn，2026-08-18）。
+   新增同事只需追加一行；吊销 = 删掉对应那行。账号本身的限制（无 shell/无 sudo/仅白名单动作）对每把 key 同等生效。
 4. `/home/hex/.env.petgo-stag` ← 从 `/home/dai/.env.petgo-stag` 复制（600, hex:hex）。
    ⚠️ Dai 侧改 staging env 后要**同步重拷**这份副本，否则 hex 部署用的是旧配置。
 
