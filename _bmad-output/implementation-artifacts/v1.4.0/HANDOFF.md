@@ -3,7 +3,7 @@ title: "V1.4.0 电商工作线 · 会话交接"
 type: handoff
 updated: 2026-08-18
 branch: shawn/oneline-ecommerce
-head: f9c98bf2
+head: 393aa47f
 ---
 
 # V1.4.0 电商工作线 · 会话交接
