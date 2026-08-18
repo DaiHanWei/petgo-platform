@@ -60,7 +60,9 @@ class ContentServiceTest {
         // 它是 @Async 且会发网络请求，单测里不该真跑。
         service = new ContentService(posts, comments, likes, profileService, idempotency,
                 new ContentModerationService(), events, manualReviewGate,
-                new ImageSizeResolver(), Mockito.mock(ImageSizeBackfillService.class));
+                new ImageSizeResolver(), Mockito.mock(ImageSizeBackfillService.class),
+                // V1.1.6 Story 4.1：顶置联动。本类不验联动，给 mock；联动本身由 L1 覆盖。
+                Mockito.mock(ContentPinService.class));
     }
 
     private static void setId(ContentPost p, long id) {
