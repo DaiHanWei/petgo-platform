@@ -7,6 +7,7 @@ import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/content/data/content_repository.dart';
 import 'package:tailtopia/features/content/domain/content_type.dart';
+import 'package:tailtopia/features/content/domain/feed_image_layout.dart';
 import 'package:tailtopia/features/content/domain/publish_controller.dart';
 import 'package:tailtopia/features/content/presentation/publish_compose_page.dart';
 import 'package:tailtopia/features/content/presentation/publish_landing_page.dart';
@@ -27,6 +28,7 @@ class _ThrowRepo implements ContentRepository {
     int? petId,
     String? text,
     List<String> imageUrls = const [],
+    List<ImageSize?> imageSizes = const [],
     DateTime? eventDate,
     required String idempotencyKey,
     bool syncToMoment = true,
@@ -52,6 +54,7 @@ class _OkRepo implements ContentRepository {
     int? petId,
     String? text,
     List<String> imageUrls = const [],
+    List<ImageSize?> imageSizes = const [],
     DateTime? eventDate,
     required String idempotencyKey,
     bool syncToMoment = true,
