@@ -14,13 +14,19 @@ package com.tailtopia.profile.visitor;
  * <p>⚠️ 「问诊<b>次数</b>」与「问诊<b>记录</b>」是两件事：次数是计数、可下发（PRD 2026-08-06 产品确认保留）；
  * 记录本身不可。别因为这里有 {@code consultCount} 就以为问诊内容也能给。
  *
- * @param diaryCount         Diary 条数（<b>含</b>作者关闭同步的私密条目，与访客可见的时间线一致）
+ * <p>🔴 <b>字段名必须与作者态那份保持一致</b>（{@code happyMomentCount}）——
+ * 客户端两边用的是<b>同一个</b>模型类去解析，名字对不上就会被解析时的兜底默认值
+ * <b>静默变成 0</b>：页面照常渲染、不报任何错，只是统计条永远显示 0。
+ * 2026-08-18 的 L2 视觉验收就是这么发现的（当时这里叫 {@code diaryCount}）。
+ * 产品口径叫「Diary」是展示文案的事，由客户端的多语言文案决定，不该反过来改线上契约的字段名。
+ *
+ * @param happyMomentCount   Diary 条数（<b>含</b>作者关闭同步的私密条目，与访客可见的时间线一致）
  * @param consultCount       问诊次数（只是计数，不含任何问诊内容）
  * @param milestoneCompleted 已完成里程碑数
  * @param milestoneTotal     里程碑总数（按物种：猫 31 / 狗 31 / 通用 16）
  */
 public record VisitorStats(
-        long diaryCount,
+        long happyMomentCount,
         long consultCount,
         long milestoneCompleted,
         int milestoneTotal) {

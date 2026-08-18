@@ -123,7 +123,7 @@ public class CardPageController {
         // 🛡 拿到的是 VisitorStats（三个数），不是作者态那个 5 字段的 ArchiveStatsResponse ——
         // 健康记录条数在投影层就没进来，本处即便想下发也没有可下发的东西。
         VisitorStats stats = visitors.stats(profile);
-        model.addAttribute("happyCount", stats.diaryCount());
+        model.addAttribute("happyCount", stats.happyMomentCount());
         model.addAttribute("consultCount", stats.consultCount());
         model.addAttribute("milestoneCompleted", stats.milestoneCompleted());
         model.addAttribute("hasMilestones", stats.milestoneCompleted() > 0);

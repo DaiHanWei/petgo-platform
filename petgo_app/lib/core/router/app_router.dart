@@ -191,16 +191,42 @@ bool redirectWouldRewrite(AuthState auth, String location) {
   return !auth.isLoggedIn && controlled;
 }
 
+/// 热启动落深链（app 已活、被深链唤起）。
+///
+/// 🔴 **V1.1.6 Story 2.4 起必须走这里，不能再直接 `go`。**
+/// 在此之前名片深链落的是 `/profile`（一个 Tab 根），`go` 掉整个栈也无所谓 ——
+/// 用户落在带底部导航的主界面里，哪儿都去得了。
+/// 现在落的是 `/pet/{token}`，一个**在 Tab 外**的顶层路由：`go` 之后既没有底部导航、
+/// 也没有返回栈，**按返回键会直接退出 App**（2026-08-18 L2 实测踩到）。
+/// 对一个「从 WhatsApp 点链接进来」的人来说，那就是一条死路 ——
+/// 而这条链路的全部意义正是把人**引进** App。
+void goDeepLinkFromLiveApp(WidgetRef ref, String location) {
+  final ctx = rootNavigatorKey.currentContext;
+  if (ctx == null || !ctx.mounted) {
+    ref.read(routerProvider).go(location); // 极端兜底：拿不到 context 时至少别丢深链
+    return;
+  }
+  _goDeepLinkWith(ctx, () => ref.read(authControllerProvider), location);
+}
+
 /// 冷启动落深链：需要底座的先 `go` 到落地矩阵目标，再把深链 `push` 上去（这样才可返回）。
 ///
 /// 底座取**落地矩阵目标**而不是写死 `/home`：游客/已建档用户落 Diary、其余落 Social，
 /// 返回后看到的是他本该看到的那一屏，与不点推送直接冷启动完全一致。
-void _goDeepLink(BuildContext ctx, Ref ref, String location) {
+void _goDeepLink(BuildContext ctx, Ref ref, String location) =>
+    _goDeepLinkWith(ctx, () => ref.read(authControllerProvider), location);
+
+/// 冷启动与热启动共用的实现。
+///
+/// 两处的 ref 类型不同（`Ref` / `WidgetRef`），而这里只需要「当前登录态」这一样东西，
+/// 故把它做成一个取值函数传进来 —— 既避免复制一份逻辑，也保留「用时才读」：
+/// 下面那次读发生在**下一帧**，不能提前取快照。
+void _goDeepLinkWith(BuildContext ctx, AuthState Function() authNow, String location) {
   if (!deepLinkNeedsBaseRoute(location)) {
     ctx.go(location);
     return;
   }
-  ctx.go(appUserStateOf(ref.read(authControllerProvider)).landingLocation);
+  ctx.go(appUserStateOf(authNow()).landingLocation);
   // ⚠️ **必须等下一帧再 push，不能和 go 同帧发出**（2026-08-07 实测）：go_router 的 `go`
   // 走的是 RouteInformationParser 的**异步**解析，调用返回时 `currentConfiguration` 还是旧值。
   // 同帧接着 push，等于把目标叠在**旧栈**（/splash）上，随后 go 的解析落地又把整个栈替换掉 ——
@@ -210,7 +236,7 @@ void _goDeepLink(BuildContext ctx, Ref ref, String location) {
     if (c == null || !c.mounted) return;
     // PR#34 finding #8（孪生位）：游客/角色不符时受控深链会被 redirect 改写到 shell 根，
     // push 它 = GlobalKey 撞车白屏。底座已是该状态的正确落地页，直接放弃叠加。
-    if (redirectWouldRewrite(ref.read(authControllerProvider), location)) return;
+    if (redirectWouldRewrite(authNow(), location)) return;
     c.push(location);
   });
 }
