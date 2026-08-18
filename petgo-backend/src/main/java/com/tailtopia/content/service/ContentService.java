@@ -10,6 +10,7 @@ import com.tailtopia.content.dto.ContentPostCreateRequest;
 import com.tailtopia.content.dto.ContentPostResponse;
 import com.tailtopia.content.event.ContentPublishedEvent;
 import com.tailtopia.content.event.ContentRemovedEvent;
+import com.tailtopia.content.event.ContentUnavailableEvent;
 import com.tailtopia.content.moderation.ModerationOutcome;
 import com.tailtopia.content.repository.CommentRepository;
 import com.tailtopia.content.repository.ContentLikeRepository;
@@ -56,12 +57,15 @@ public class ContentService {
     private final ImageSizeResolver imageSizes;
     /** V1.1.6 Story 3.1：缺失尺寸的异步兜底测量。⚠️ 绝不同步调用（见 scheduleSizeBackfill）。 */
     private final ImageSizeBackfillService sizeBackfill;
+    /** V1.1.6 Story 4.1：注销联动收口顶置排期（注销是批量隐藏，发不出逐条事件）。 */
+    private final ContentPinService pins;
 
     public ContentService(ContentPostRepository posts, CommentRepository comments,
             ContentLikeRepository likes, ProfileService profileService,
             IdempotencyService idempotency, ContentModerationService moderation,
             ApplicationEventPublisher events, ManualReviewGate manualReviewGate,
-            ImageSizeResolver imageSizes, ImageSizeBackfillService sizeBackfill) {
+            ImageSizeResolver imageSizes, ImageSizeBackfillService sizeBackfill,
+            ContentPinService pins) {
         this.posts = posts;
         this.comments = comments;
         this.likes = likes;
@@ -72,6 +76,7 @@ public class ContentService {
         this.manualReviewGate = manualReviewGate;
         this.imageSizes = imageSizes;
         this.sizeBackfill = sizeBackfill;
+        this.pins = pins;
     }
 
     /**
@@ -109,12 +114,20 @@ public class ContentService {
         }
         likes.deleteByPostId(post.getId());
         log.info("内容软删 postId={} reason={}", post.getId(), reason);
+        Instant now = Instant.now();
         // AC3 ②：仅运营下架通知作者「内容因违规被移除」；作者自删不发事件（不自通知）。
         // 经领域事件 → notify 消费（content 不直调 notify）；不说明举报人、V1 无申诉入口。
         if (reason == DeleteReason.ADMIN_TAKEDOWN) {
             events.publishEvent(new ContentRemovedEvent(
-                    post.getId(), post.getAuthorId(), Instant.now()));
+                    post.getId(), post.getAuthorId(), now));
         }
+        // V1.1.6 Story 4.1：**无论什么原因**都发一条「这条内容不再可展示」，供顶置排期联动收手。
+        //
+        // 🔴 不能复用上面那个事件：它只在运营下架时发，而"作者自删不发"是刻意的
+        // （它被 notify 用来推「你的内容因违规被移除」，自删也发会让用户删自己的帖收到违规通知）。
+        // 而顶置联动要的是三种触发全覆盖（作者删除 / 审核判违规下架 / 作者账号被封禁）。
+        events.publishEvent(new ContentUnavailableEvent(
+                post.getId(), post.getAuthorId(), reason, now));
     }
 
     /**
@@ -128,6 +141,16 @@ public class ContentService {
         int posted = posts.deactivateByAuthor(userId, now);
         int commented = comments.deactivateByAuthor(userId, now);
         log.info("注销联动内容隐藏 userId(agent) posts={} comments={}", posted, commented);
+        // V1.1.6 Story 4.1：注销后内容对他人不可见，引用它的顶置排期一并收手。
+        //
+        // ⚠️ 这条**超出 Story 4.1 的 AC**（AC 只列了作者删除 / 违规下架 / 账号封禁三种），
+        // 但性质完全相同：顶置位会继续展示一条别人已经看不到的内容。
+        // 注销走的是**批量隐藏**（内容不软删、拿不到逐条 id），发不出上面那种逐条事件，
+        // 故在模块内直接收口。
+        int endedPins = pins.terminateForAuthor(userId, now);
+        if (endedPins > 0) {
+            log.info("注销联动顶置排期提前结束 count={}", endedPins);
+        }
     }
 
     /** 迷你主页发布数（Story 3.8）：某作者未软删的已发布内容数。经 service 暴露，不让 auth 直读 content 表。 */
