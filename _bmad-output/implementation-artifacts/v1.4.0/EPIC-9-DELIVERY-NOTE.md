@@ -30,23 +30,33 @@
 
 | 层级 | 含义 | 本版本执行状态 |
 |---|---|---|
-| `[L0]` | 静态：`flutter analyze` / `flutter test` / `mvn -B package` | ✅ 前端 `analyze` 零告警 + 953 例全绿；后端 1989 例 / 0 失败 / 6 跳过（**BUILD SUCCESS**） |
+| `[L0]` | 静态：`flutter analyze` / `flutter test` / `mvn -B package` | ✅ 前端 `analyze` 零告警 + 953 例全绿；后端 1991 例 / 0 失败 / 6 跳过（**BUILD SUCCESS**） |
 | `[L1]` | Docker postgres + redis 真跑 | ✅ 各 Epic 联调 story 均有 `*ChainIntegrationTest` |
 | `[L2]` | 真机 · 模拟器视觉 · 真实第三方凭证 | ⏳ **全部待本地人工** —— 云端 headless 做不到 |
 
-### ⚠️ 全量跑时发现的一个既有缺陷（**不属于本版本，但必须记下来**）
+### ✅ 全量跑时发现并已修掉的一个既有缺陷（NOTIFY-CURSOR-TIE）
 
 `NotificationControllerEndpointTest.list_paginatesWithCursor` 在某一轮全量跑时红了一次，
 单跑与复跑均绿。**这不是 flaky 测试，是一个真实的分页丢数据缺陷**，测试只是偶尔撞上：
 
-`NotificationCenterService` 的游标是 **`created_at` 截断到毫秒**，查询是
-`created_at < cursor`（`findByRecipientUserIdAndCreatedAtBeforeOrderByCreatedAtDesc`）。
+游标是 **`created_at` 截断到毫秒**、查询是严格 `created_at < cursor`。
 🔴 **同一毫秒内有 ≥2 条通知、且分页边界正好落在中间时，那一毫秒里的记录会被整批跳过** ——
-用户永久看不到那几条通知。一毫秒内写入多条通知在生产上完全正常（批量触达）。
+用户永久看不到那几条通知。一毫秒内写入多条通知在生产上完全正常（一次批量触达就是）。
 
-修法方向：游标改为 `(created_at, id)` 复合、比较改为 `(created_at, id) < (?, ?)`。
-⚠️ **会改变游标 wire 格式**，且 `notify` 是共享模块 —— 本工作线**未擅自修改**，
-建议单开一条 story 由 notify 负责人处理。
+**已修**（2026-08-18，经用户明确要求跨模块动手）：
+- 游标改 `(created_at, id)` 复合，`ORDER BY created_at DESC, id DESC`
+  （顺带修掉第二个问题：同刻记录原本**没有确定顺序**，翻页时同一条会重复或消失）
+- 游标编码按**微秒** —— ⚠️ 截到毫秒会让复合分支因精度失配而恒不命中，等于没修
+- `V125` 补配套索引 `(recipient_user_id, created_at DESC, id DESC)`
+- 回归：`list_doesNotSkipRowsSharingTheSameInstant`（**把 5 条时间戳写成同一个值，
+  让缺陷从「偶发」变成「必现」**）+ `list_toleratesGarbageCursor`；两次变异验证先红后绿
+
+🔴 **wire 格式变了**：`nextCursor` 由「纯 epochMillis」→ `"<epochMicros>_<id>"`。
+对客户端是**不透明串**（Flutter 侧只原样回传，已核对不解析），服务端另留一轮过渡兼容。
+
+⚠️ **同一类缺陷的兄弟没修**：`OrderCenterService#listOrders` 也是「epochMillis + 严格 `<`」，
+但它是**三线共享**文件且为跨 3 源 in-memory 归并，`(created_at, id)` 不直接成立
+（id 来自不同表，需先定跨源全序键）。记为 `ORDER-CENTER-CURSOR-TIE`，须先认领再动。
 
 ### 主动留白的两条（不是遗漏）
 
