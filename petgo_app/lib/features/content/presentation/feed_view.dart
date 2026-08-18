@@ -24,6 +24,8 @@ class FeedMasonryView extends ConsumerStatefulWidget {
     this.onTapItem,
     this.onLongPressItem,
     this.onAuthorTap,
+    this.onCommentItem,
+    this.onMoreItem,
     this.header,
     this.footer,
     this.autoLoadMore = true,
@@ -40,6 +42,12 @@ class FeedMasonryView extends ConsumerStatefulWidget {
   final Future<void> Function() onLoadMore;
   final Future<void> Function() onRefresh;
   final ValueChanged<FeedItem>? onTapItem;
+
+  /// 点评论按钮（V1.1.6 Story 3.2）：跳详情页并定位评论区。
+  final ValueChanged<FeedItem>? onCommentItem;
+
+  /// 作者行右侧「···」（V1.1.6 Story 3.2）。
+  final ValueChanged<FeedItem>? onMoreItem;
   final ValueChanged<FeedItem>? onLongPressItem;
   final ValueChanged<FeedItem>? onAuthorTap;
 
@@ -99,8 +107,16 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
     ref.listen<int>(homeScrollTopProvider, (_, _) => _scrollToTop());
     final cards = <Widget>[
       for (var i = 0; i < widget.items.length; i++)
-        Padding(
+        // 通栏版式（V1.1.6 Story 3.2 · FR-93）：条目之间 1px 分隔线 + 上下 12px；
+        // ⚠️ **最后一条不画线**，否则列表底部会多出一道悬空的横线。
+        Container(
           padding: const EdgeInsets.only(bottom: 12),
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: i == widget.items.length - 1
+              ? null
+              : const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: AppColors.line2, width: 1)),
+                ),
           child: MasonryCard(
             item: widget.items[i],
             deletedUserLabel: widget.deletedUserLabel,
@@ -110,6 +126,11 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
                 : () => widget.onLongPressItem!(widget.items[i]),
             onAuthorTap:
                 widget.onAuthorTap == null ? null : () => widget.onAuthorTap!(widget.items[i]),
+            onComment: widget.onCommentItem == null
+                ? null
+                : () => widget.onCommentItem!(widget.items[i]),
+            onMore:
+                widget.onMoreItem == null ? null : () => widget.onMoreItem!(widget.items[i]),
           ),
         ),
     ];
@@ -124,10 +145,13 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
           children: [
             if (widget.header != null) widget.header!,
             Padding(
-              padding: const EdgeInsets.all(AppSpacing.screenEdge),
+              // 🔴 通栏：**去掉左右屏边距**，让卡片里的图片能贴到屏幕边缘。
+              // ⚠️ 文字区的 16px 由卡片内部各块自己补（作者行/操作行/正文/时间），
+              // 不是整张卡贴边 —— 那样文字会顶到屏幕边上。
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.screenEdge),
               child: Column(
                 children: [
-                  // 单列全宽卡片（原型 feed.html）。
+                  // 单列通栏卡片（FR-93）。
                   ...cards,
                   if (widget.footer != null) widget.footer!,
                   if (widget.loadingMore)

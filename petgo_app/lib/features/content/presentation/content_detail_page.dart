@@ -31,9 +31,16 @@ import 'report_sheet.dart';
 /// 多态完整（UX-DR18）：404 失效页 / 403 无权限页 / 网络错误 / 加载骨架。
 /// 「···」举报入口[3.7] + 作者删除入口[3.6]、点赞按钮行为[3.4]、作者点击迷你卡[3.8] 本 Story 仅占位。
 class ContentDetailPage extends ConsumerWidget {
-  const ContentDetailPage({super.key, required this.postId});
+  const ContentDetailPage({super.key, required this.postId, this.focusComments = false});
 
   final int postId;
+
+  /// 进来就滚到评论区（V1.1.6 Story 3.2 · AC4）。
+  ///
+  /// 由路由的 `?focus=comments` 注入。⚠️ **这个参数名是既有的** ——
+  /// 通知深链早就在产出它，只是详情页一直没消费。首页评论按钮沿用同一个名字，
+  /// 满足「两侧必须同名」的要求，也顺带把通知深链的评论锚点接通了。
+  final bool focusComments;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -46,7 +53,7 @@ class ContentDetailPage extends ConsumerWidget {
       loading: () => _shell(context, body: const Center(
           child: CircularProgressIndicator(color: AppColors.accentGrowth))),
       error: (err, _) => _shell(context, body: _errorBody(context, ref, l10n, err)),
-      data: (d) => _DetailScaffold(postId: postId, detail: d),
+      data: (d) => _DetailScaffold(postId: postId, detail: d, focusComments: focusComments),
     );
   }
 
@@ -84,10 +91,15 @@ class ContentDetailPage extends ConsumerWidget {
 }
 
 class _DetailScaffold extends ConsumerWidget {
-  const _DetailScaffold({required this.postId, required this.detail});
+  const _DetailScaffold({
+    required this.postId,
+    required this.detail,
+    this.focusComments = false,
+  });
 
   final int postId;
   final ContentDetail detail;
+  final bool focusComments;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -132,12 +144,17 @@ class _DetailScaffold extends ConsumerWidget {
                     const SizedBox(height: AppSpacing.md),
                     _interactionBar(ref),
                     const Divider(height: AppSpacing.xl, color: AppColors.divider),
-                    // KOMENTAR (n) 计数标题（detail.html）。
-                    Text('${l10n.detailCommentsTitle.toUpperCase()} (${detail.commentCount})',
-                        style: AppTypography.caption.copyWith(
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.5,
-                            color: AppColors.ink2)),
+                    // KOMENTAR (n) 计数标题（detail.html）。带 ?focus=comments 进来时滚到这里。
+                    _ScrollIntoViewOnMount(
+                      enabled: focusComments,
+                      child: Text(
+                          '${l10n.detailCommentsTitle.toUpperCase()} (${detail.commentCount})',
+                          key: const ValueKey('detailCommentsTitle'),
+                          style: AppTypography.caption.copyWith(
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.5,
+                              color: AppColors.ink2)),
+                    ),
                     const SizedBox(height: AppSpacing.sm),
                     CommentSection(
                       postId: postId,
@@ -226,13 +243,15 @@ class _DetailScaffold extends ConsumerWidget {
   }
 
   Widget _interactionBar(WidgetRef ref) {
-    // 点赞按钮（Story 3.4，乐观更新）+ 评论数读取展示。卡片不展示计数，详情互动栏展示。
+    // 点赞按钮（Story 3.4，乐观更新）+ 评论数。⚠️ V1.1.6 Story 3.2 起**首页卡片也展示**这两项。
     return Row(
       children: [
         LikeButton(
           postId: detail.id,
           initialLiked: detail.liked,
           initialCount: detail.likeCount,
+          // 🛡 两个挂载点都必须传来源，否则「首页点赞是净增还是前移」这个对比失效。
+          source: 'detail',
         ),
         const SizedBox(width: AppSpacing.lg),
         // 点评论图标/计数 → 聚焦底部评论框弹键盘（游客转登录引导）。
@@ -490,4 +509,42 @@ class _LightboxState extends State<_Lightbox> {
       ),
     );
   }
+}
+
+/// 挂载后把自己滚进视野（V1.1.6 Story 3.2 · AC4）。
+///
+/// 为什么做成一个小组件而不是给页面加滚动控制器：详情页是**单一滚动容器**，
+/// `Scrollable.ensureVisible` 能自己找到外层的可滚动祖先 ——
+/// 不需要为此把整个页面改成有状态、也不需要额外管理控制器的生命周期。
+///
+/// ⚠️ 必须等下一帧：挂载当时布局还没完成，立刻滚会滚不到正确位置。
+class _ScrollIntoViewOnMount extends StatefulWidget {
+  const _ScrollIntoViewOnMount({required this.enabled, required this.child});
+
+  final bool enabled;
+  final Widget child;
+
+  @override
+  State<_ScrollIntoViewOnMount> createState() => _ScrollIntoViewOnMountState();
+}
+
+class _ScrollIntoViewOnMountState extends State<_ScrollIntoViewOnMount> {
+  @override
+  void initState() {
+    super.initState();
+    if (!widget.enabled) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Scrollable.ensureVisible(
+        context,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+        // 让标题落在视野靠上的位置，评论列表跟着露出来。
+        alignment: 0.05,
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

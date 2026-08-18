@@ -197,6 +197,18 @@ class HomePage extends ConsumerWidget {
             onBlocked: onAuthorHidden(ref, item.authorId),
             onReported: onAuthorHidden(ref, item.authorId),
           ),
+          // V1.1.6 Story 3.2：评论跳详情页并**定位到评论区**。
+          // ⚠️ `?focus=comments` 是既有参数名（通知深链一直在产出它），两侧必须同名。
+          onCommentItem: (item) => context.push('/content/${item.id}?focus=comments'),
+          // 「···」：Feed 此前只有长按举报，没有显式入口；两者走同一个动作。
+          onMoreItem: (item) => openReport(context, ref, item.id, onReported: () {
+            ref.read(feedProvider.notifier).removeItem(item.id);
+            if (context.mounted) {
+              ScaffoldMessenger.of(context)
+                ..hideCurrentSnackBar()
+                ..showSnackBar(SnackBar(content: Text(l10n.reportHiddenToast)));
+            }
+          }),
         );
       },
     );
