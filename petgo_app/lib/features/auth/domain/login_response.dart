@@ -42,6 +42,7 @@ class UserProfile {
     this.onboardingCompleted = false,
     this.hasPetProfile = false,
     this.isSystemDefaultName = false,
+    this.phone,
   });
 
   /// 当前用户 id（Story 3.5：评论删除入口可见性判定）。
@@ -63,6 +64,13 @@ class UserProfile {
   /// 后端下发即解析；V1 可选用于轻量「去改名」引导（非必需，无 UI 强制）。
   final bool isSystemDefaultName;
 
+  /// 手机号（V1.1.6 Story 7.1 · FR-70）。选填、不验证、不用于登录；
+  /// 未填写 / 已撤回时为 null。
+  ///
+  /// 🛡 与 email 同一口径：**仅 /me 本人聚合视图返回**，绝不进任何对他人展示的投影。
+  /// 这里拿到的是**完整号码** —— 脱敏是显示层的事（设置页列表脱敏、编辑抽屉展示完整）。
+  final String? phone;
+
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
         id: json['id'] as int?,
         nickname: json['nickname'] as String?,
@@ -74,6 +82,7 @@ class UserProfile {
         onboardingCompleted: (json['onboardingCompleted'] ?? false) as bool,
         hasPetProfile: (json['hasPetProfile'] ?? false) as bool,
         isSystemDefaultName: (json['isSystemDefaultName'] ?? false) as bool,
+        phone: json['phone'] as String?,
       );
 
   UserProfile copyWith({
@@ -87,6 +96,7 @@ class UserProfile {
     bool? onboardingCompleted,
     bool? hasPetProfile,
     bool? isSystemDefaultName,
+    String? phone,
   }) =>
       UserProfile(
         id: id ?? this.id,
@@ -99,5 +109,6 @@ class UserProfile {
         onboardingCompleted: onboardingCompleted ?? this.onboardingCompleted,
         hasPetProfile: hasPetProfile ?? this.hasPetProfile,
         isSystemDefaultName: isSystemDefaultName ?? this.isSystemDefaultName,
+        phone: phone ?? this.phone,
       );
 }

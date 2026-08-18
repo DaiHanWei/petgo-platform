@@ -53,6 +53,11 @@ class _FakeMeRepo implements MeRepository {
   @override
   Future<UserProfile> updateProfile({String? nickname, String? signature}) async =>
       UserProfile(nickname: nickname, signature: signature);
+
+  /// V1.1.6 Story 7.1：本 fake 不涉及手机号。
+  @override
+  Future<UserProfile> updatePhone(String phone) async => const UserProfile();
+
 }
 
 class _TestAuthController extends AuthController {
