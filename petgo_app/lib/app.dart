@@ -24,12 +24,26 @@ import 'package:tailtopia/features/profile/data/timeline_repository.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// 成长档案分享页深链 → go_router location 的纯映射（L0 可测）。
-/// `tailtopia://card/{token}` → `/profile`（成长档案 Tab，分享页 CTA 第①级）。
-/// `tailtopia://open` → `/home`（下载引导落地页 `s.tailtopia.id/get` 唤起已装 app 的通用深链）。
-/// 其它 scheme/host 暂不识别（返回 null，调用方忽略）。
+///
+/// - `tailtopia://card/{token}` → `/pet/{token}`（**被分享的那只宠物**，V1.1.6 Story 2.4）
+/// - `tailtopia://open` → `/home`（下载引导落地页 `s.tailtopia.id/get` 唤起已装 app 的通用深链）
+/// - 其它 scheme/host 暂不识别（返回 null，调用方忽略）
+///
+/// ## 🔴 V1.1.6 Story 2.4 修的就是这里
+/// 改之前这个函数把 `card` 深链**整个映射成 `/profile`**，连 token 都没解析 —— 于是：
+/// 未登录的人点开看到给游客做的**示例成长本**，已登录有宠的人点开看到**自己家的宠物**。
+/// 两种都不是被分享的那一只。
+///
+/// ⚠️ token 只从 **path** 取，不接受 query 覆盖 —— 少一个可被构造的入口。
+/// 没有 token（如裸 `tailtopia://card`）则退回 `/profile`：没有 token 就没有可展示的宠物。
+///
+/// ⚠️ 「作者本人点自己的链接该落回自己的档案页」（AD-2 Rule 3）**不在这里判**：
+/// 那是 Diary 页单一状态判定入口的职责（AD-15）。在这里判等于开第二处判定，
+/// 两处迟早分叉，而分叉的表现是作者丢管理入口、或访客拿到管理入口。
 String? deepLinkToLocation(Uri uri) {
   if (uri.scheme == 'tailtopia' && uri.host == 'card') {
-    return '/profile';
+    final token = uri.pathSegments.isEmpty ? '' : uri.pathSegments.first;
+    return token.isEmpty ? '/profile' : '/pet/$token';
   }
   if (uri.scheme == 'tailtopia' && uri.host == 'open') {
     return '/home';
