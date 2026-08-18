@@ -28,13 +28,17 @@ head: f9c98bf2
 | **8 经营数据与对账** | **4/4 ✅** | 权限位 49 → 53 |
 | **9 边界守护与效果度量** | **3/3 ✅** | FR-110 能力缺席守卫已入 CI（两端各一步命名 Guard） |
 
-**测试基线：后端 `mvn -B test` **1989 通过 / 0 失败 / 6 跳过**（BUILD SUCCESS）；
+**测试基线：后端 `mvn -B test` **1991 通过 / 0 失败 / 6 跳过**（BUILD SUCCESS）；
 前端 `flutter test` **953 通过**、`flutter analyze` 零问题。**
 
-> ⚠️ 全量跑的**前一轮**出现过 1 例 `NotificationControllerEndpointTest.list_paginatesWithCursor` 红，
-> 复跑绿。**别当成抖动放过** —— 根因是通知中心游标分页会整批跳过同一毫秒内的记录，
-> 是真缺陷，只是偶尔撞上。已记为 sprint-status 的 `action_items: NOTIFY-CURSOR-TIE`；
-> `notify` 是共享模块，本工作线**未擅自修改**。
+> ✅ **NOTIFY-CURSOR-TIE 已修**（2026-08-18，经用户要求跨模块动手）：
+> 通知中心游标改 `(created_at, id)` 复合、编码按**微秒**、V125 补配套索引。
+> 🔴 `nextCursor` 的 wire 格式因此变了（→ `"<epochMicros>_<id>"`），对客户端是**不透明串**，
+> 服务端保留一轮过渡兼容。详见 sprint-status 的 `action_items`。
+>
+> ⚠️ **同一类缺陷的兄弟没修**：`OrderCenterService#listOrders` 也是
+> 「epochMillis + 严格 `<`」。它是**三线共享**文件，且是跨 3 源 in-memory 归并，
+> `(created_at, id)` 不直接成立 —— 记为 `ORDER-CENTER-CURSOR-TIE`，须先认领再动。
 
 ## 一 B · 🔴 交付前必须由人完成的事（代码这边做不了）
 

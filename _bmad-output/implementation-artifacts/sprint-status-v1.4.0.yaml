@@ -90,7 +90,11 @@
 #   V121 6-1 ⚠️共享表 pet_profiles 加体重+绝育列  ✅ 已提交（🔴 不在临时授权内，待补认领）
 #   V122 6-3 repurchase_triggers + ⚠️共享 ck_notifications_type 追加 REPURCHASE_FOOD_LOW  ✅ 已提交
 #   V123 7-1 shop_reviews  ✅ 已提交
-#   V124+ 预留（Epic 8 平台配置项等）
+#   V124 8-3 pawcoin_wallets 预留 batch_type（S-12 折中，刻意不启用）  ✅ 已提交
+#   V125 ⚠️【非电商】notifications 游标索引改 (recipient_user_id, created_at DESC, id DESC)
+#        —— 修 NOTIFY-CURSOR-TIE，经用户明确要求。号从本工作线独占段取，是为了不与另两条线撞号
+#        （号段独占是按线分配、不按模块归属分配）。✅ 已提交
+#   V126+ 预留
 #
 # 🔴 本表是【建议性】的，绑定规则只有一条：**实现时取号段内当前最大号 +1，并立刻回写本表**。
 #    上面这次脱节就是没回写造成的。Flyway 不要求号连续（既有 V86 空洞为证），也不要求单调应用
@@ -229,11 +233,29 @@ development_status:
   epic-9-retrospective: optional
 
 action_items:
-  # 🔴 全量跑时发现的【既有缺陷】，不属于本工作线，未擅自修改（notify 是共享模块）
+  # ✅ 已修（2026-08-18，经用户明确要求跨模块动手）
   - id: NOTIFY-CURSOR-TIE
+    status: done
     what: 通知中心游标分页会整批跳过同一毫秒内的记录（用户永久看不到那几条）
-    where: "NotificationCenterService#list + NotificationRepository#findByRecipientUserIdAndCreatedAtBeforeOrderByCreatedAtDesc"
     why: 游标是 created_at 截断到毫秒、查询用严格 `<`；分页边界落在某毫秒中间时该毫秒整批被跳过
     symptom: NotificationControllerEndpointTest.list_paginatesWithCursor 全量跑偶发红（单跑绿）
-    fix: 游标改 (created_at, id) 复合比较；⚠️ 会改变游标 wire 格式
-    owner: notify 模块负责人（建议单开 story）
+    fixed_by: |
+      NotificationRepository#findPageBefore 换成 (created_at, id) 复合游标 +
+      ORDER BY created_at DESC, id DESC（顺带修掉同刻记录顺序不确定 → 翻页重复/丢失）；
+      NotificationCenterService 游标编码改 "<epochMicros>_<id>"（⚠️ 必须按微秒，
+      截到毫秒会让复合分支因精度失配而失效，等于没修）；V125 补配套索引。
+      回归：list_doesNotSkipRowsSharingTheSameInstant（5 条同刻，缺陷从偶发变必现）
+      + list_toleratesGarbageCursor；两次变异验证均先红后绿。
+    wire_change: |
+      🔴 nextCursor 格式由「纯 epochMillis」变为 "<epochMicros>_<id>"。
+      对客户端是不透明串（Flutter 侧 NotificationPage 只原样回传，已核对不解析）；
+      服务端保留一轮过渡兼容：无下划线的老游标按旧语义处理。
+  # 🔴 同一类缺陷的【兄弟】，未修 —— 它是三线共享的 OrderCenterService，且形态更难
+  - id: ORDER-CENTER-CURSOR-TIE
+    status: open
+    what: 订单中心游标分页有同一类缺陷（created_at epochMillis + 严格 `<`）
+    where: "OrderCenterService#listOrders / #parseCursor"
+    why: |
+      同刻订单会在分页边界被整批跳过。⚠️ 修法不能照抄 notify：它是【跨 3 源 in-memory 归并】，
+      id 来自不同表，(created_at, id) 复合游标不直接成立 —— 需要先定一个跨源全序键。
+    owner: OrderCenterService 属三线共享（并行契约 §三），须先认领再动

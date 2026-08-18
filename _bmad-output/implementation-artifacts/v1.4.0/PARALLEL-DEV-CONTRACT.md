@@ -70,6 +70,24 @@ authority: "签字后与 CROSS-STORY-DECISIONS.md 同级；本文件是决策 E2
 
 **通用判据（比清单更重要）：** 一个文件只要满足「**另两条工作线也可能在同一周期改它**」就是共享物，无论它在不在上表。**改之前先在群里认领。** 上表是已知的，不是穷尽的。
 
+### 🔔 2026-08-18 事后补认领：`notify` 游标分页（NOTIFY-CURSOR-TIE）
+
+电商线在跑全量回归时发现并修了 `notify` 的一个**分页丢数据缺陷**（同一毫秒内的通知会在
+分页边界被整批跳过，用户永久看不到）。**由用户明确要求跨模块动手**，这里事后补记，
+另两条线请知悉：
+
+| 项 | 内容 |
+|---|---|
+| 改了什么 | `NotificationRepository`（换成 `findPageBefore`，`(created_at, id)` 复合游标）· `NotificationCenterService`（游标编码 `"<epochMicros>_<id>"`）· `NotificationPage` javadoc · `V125` 索引 |
+| 🔴 破坏性 | `nextCursor` 的 **wire 格式变了**。对客户端是不透明串（Flutter 侧只原样回传，已核对不解析）；服务端保留一轮过渡兼容（无下划线的老游标按旧语义处理） |
+| 删掉的方法 | `findByRecipientUserIdAndCreatedAtBeforeOrderByCreatedAtDesc`（**故意删掉，不留着** —— 留着就还会有人用到那个坏的） |
+| 新增的方法 | `findByRecipientUserIdOrderByCreatedAtDescIdDesc(long)`（非分页，供测试与小规模内部核对） |
+| Flyway | `V125` 取自**电商线独占段** —— 号段按线独占分配、不按模块归属分配，这样才不会与另两条线撞号 |
+
+⚠️ **`OrderCenterService#listOrders` 有同一类缺陷，本次没动**（§三 明写它是三线共享）。
+它是跨 3 源 in-memory 归并，`(created_at, id)` 不直接成立 —— id 来自不同表，需先定跨源全序键。
+记为 `sprint-status action_items: ORDER-CENTER-CURSOR-TIE`，**动它之前请先认领**。
+
 ## 三 · `OrderCenterService` 与 App 共享壳
 
 `order/service/OrderCenterService.java`，**275 行**，订单中心唯一 fan-in 聚合器，三线共享且无法拆分。
