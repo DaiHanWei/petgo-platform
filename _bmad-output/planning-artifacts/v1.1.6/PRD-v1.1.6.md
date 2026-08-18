@@ -628,7 +628,8 @@ V1.0.0 FR-14 原设计为双 CTA：主 CTA「给我的宠物创建同款档案�
 
 | # | 事件 | 触发时机 | 关键属性 |
 | --- | --- | --- | --- |
-| E-8 | `publish_image_crop_required` | 图片被判定超出容差区间、弹出裁剪框 | **`original_ratio`**（原始宽:高比例数值）、`batch_size` |
+| E-8 | `publish_image_crop_shown` | 图片被判定超出容差区间、弹出裁剪框 | **`original_ratio`**（原始宽:高比例数值）、`batch_size` |
+> `[命名订正 2026-08-18]` 原名 `publish_image_crop_required` 违反本项目埋点命名规范（**动作须落在词尾**，如 `_shown`/`_tapped`，好让产品一眼分得清曝光与点击；`_required` 是状态不是动作）。改为 `publish_image_crop_shown`，语义也更准 —— 事件确实是在裁剪页出现的那一刻上报。
 | E-9 | `publish_image_crop_confirmed` | 用户确认裁剪 | **`target_ratio`**: 1x1/4x5、`is_batch_lock_source`: bool（是否本批次第一张、即决定锁定值的那张） |
 | E-10 | `publish_image_crop_abandoned` | 点击裁剪页右上角返回、退出裁剪 | `original_ratio` |
 

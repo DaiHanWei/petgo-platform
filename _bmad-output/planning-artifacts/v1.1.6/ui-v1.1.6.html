@@ -1049,7 +1049,7 @@ h4.section-label{ font-size:11px; font-weight:700; letter-spacing:.04em; text-tr
           </div>
           <div class="sticky-cta" style="background:#0d0c12;border-top:none"><div class="btn btn-primary" style="flex:none;padding:12px 26px;margin:0 auto">Lanjutkan</div></div>
         </div></div>
-        <div class="frame-cap"><span class="fr-ref">FR-71</span> 全新界面（现状代码无此步骤）。<b>触发条件</b>：仅当图片原始比例超出 0.75~1.34 容差区间才会弹出（如 16:9 等超宽横图、很长的竖图；2026-08-05 上界由 1.2 提高到 1.34 后，手机 4:3 横拍已免裁剪），不是每张图都会经过这一步。右上角返回按钮退出裁剪、回到重新选图/取消上传；这里选定的 1:1/4:5，会锁定为本次上传批次内其它"同样需要裁剪"的图的目标比例（见屏09）。</div>
+        <div class="frame-cap"><span class="fr-ref">FR-71</span> 全新界面（现状代码无此步骤）。<b>触发条件</b>：仅当图片原始比例超出 0.75~1.34 容差区间才会弹出（如 16:9 等超宽横图、很长的竖图；2026-08-05 上界由 1.2 提高到 1.34 后，手机 4:3 横拍已免裁剪），不是每张图都会经过这一步。<b>左上角 ✕</b> 退出裁剪、回到重新选图/取消上传，<b>前进动作（应用裁剪）由底部主按钮承担</b>（<span style="color:#b23">图注原写「右上角返回按钮」，与 PRD 2026-08-07 的订正冲突：右上角按 iOS/Material 惯例是前进/确认位，退出放那里会画出「左箭头放在右上角」这种方向与位置互相矛盾的控件。2026-08-18 随 Story 3.5 一并订正</span>）；这里选定的 1:1/4:5，会锁定为本次上传批次内其它"同样需要裁剪"的图的目标比例（见屏09）。</div>
       </div>
 
       <!-- 9: mixed-batch preview after publishing flow (real publish_compose_page.dart chrome) -->

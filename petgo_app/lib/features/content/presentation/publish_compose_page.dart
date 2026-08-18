@@ -29,7 +29,10 @@ import '../../../shared/utils/media_permission.dart';
 import '../../me/data/my_posts_repository.dart';
 import '../data/content_repository.dart';
 import '../domain/content_type.dart';
+import '../domain/feed_image_layout.dart';
+import '../domain/image_crop.dart';
 import '../domain/publish_controller.dart';
+import 'publish_crop_page.dart';
 import 'feed_controller.dart';
 import 'publish_result_page.dart';
 
@@ -174,10 +177,22 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       // 处理结束即撤占位：成功则下方 item 入列接管显示，失败/取消则恢复添加格。
       if (mounted) setState(() => _addingImage = false);
     }
+    if (bytes == null) return;
+    // 只有超出容差区间的图才会被裁剪框打断；区间内的图用户完全感知不到这一步存在。
+    final cropped = await applyBatchCrop([bytes], ask: _askCrop);
+    if (cropped == null || cropped.isEmpty) return; // 用户在裁剪页退出 → 取消本次上传
     // 即选即传：item 入列即以 pending/uploading 态渲染（自带 loading 盖层）；上传期间发布按钮置灰。
-    if (bytes != null && controller.addImage(bytes)) {
+    if (controller.addImage(cropped.first)) {
       await controller.uploadAll();
     }
+  }
+
+  /// 打开裁剪页问用户怎么裁。[locked] 非空表示本批次档位已定，界面上不再让换档。
+  Future<CropChoice?> _askCrop(Uint8List bytes, ImageSize size, CropPreset? locked) {
+    if (!mounted) return Future<CropChoice?>.value();
+    return Navigator.of(context).push<CropChoice>(MaterialPageRoute<CropChoice>(
+      builder: (_) => PublishCropPage(bytes: bytes, size: size, lockedPreset: locked),
+    ));
   }
 
   Future<void> _addGalleryImages(PublishController controller) async {
@@ -193,7 +208,10 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       if (mounted) setState(() => _addingImage = false);
     }
     if (images.isEmpty) return;
-    for (final bytes in images) {
+    // 🛡 批次锁定只作用于「需要裁剪的图之间」——区间内的图原样入列，不被跟着改比例。
+    final cropped = await applyBatchCrop(images, ask: _askCrop);
+    if (cropped == null) return; // 用户在裁剪页退出 → 整批取消
+    for (final bytes in cropped) {
       controller.addImage(bytes);
     }
     await controller.uploadAll();
