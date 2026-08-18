@@ -23,9 +23,30 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
 
     List<ShopOrder> findByUserIdOrderByCreatedAtDescIdDesc(long userId);
 
-    /** 订单中心游标分页用（Story 3.9：与虚拟商品订单跨源归并，取 createdAt < cursor 的一页）。 */
-    List<ShopOrder> findByUserIdAndCreatedAtLessThanOrderByCreatedAtDesc(long userId, Instant before,
-            Pageable pageable);
+    /**
+     * 订单中心游标分页（Story 3.9）：本人电商订单，游标 {@code (beforeTs, beforeId)} 之后的一页，
+     * 排序 {@code created_at DESC, id DESC}。
+     *
+     * <p>🔴🔴 <b>游标必须是 {@code (created_at, id)} 复合的</b>（2026-08-18 修，
+     * {@code action_items: ORDER-CENTER-CURSOR-TIE}）。原来是 {@code created_at < cursor}
+     * 且游标截断到毫秒 —— 落在同一毫秒里的订单会在分页边界被<b>整批跳过</b>，用户再也看不到。
+     *
+     * <p>⚠️ {@code beforeId} 由 {@code OrderCenterService} 按<b>源的先后位</b>给哨兵值：
+     * 排在游标源之前的源传 {@code Long.MIN_VALUE}（同刻组已发完 → 退化为严格 {@code <}），
+     * 之后的源传 {@code Long.MAX_VALUE}（同刻组还没发 → 等价 {@code <=}），
+     * 游标自己那个源传真实 id。这样<b>一条查询覆盖三种边界</b>，
+     * 且排序键与归并层的全序<b>逐字一致</b> —— 两处不一致就是漏单的来源。
+     */
+    @Query("""
+            SELECT o FROM ShopOrder o
+            WHERE o.userId = :userId
+              AND (o.createdAt < :beforeTs
+                   OR (o.createdAt = :beforeTs AND o.id < :beforeId))
+            ORDER BY o.createdAt DESC, o.id DESC
+            """)
+    List<ShopOrder> findOrderCenterPageBefore(@Param("userId") long userId,
+            @Param("beforeTs") Instant beforeTs,
+            @Param("beforeId") long beforeId, Pageable pageable);
 
     /** 按当前支付意图 token 回找订单（到账事件用，Story 3.8）。 */
     Optional<ShopOrder> findByPaymentIntentToken(String paymentIntentToken);

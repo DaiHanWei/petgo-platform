@@ -188,6 +188,35 @@ class NotificationControllerEndpointTest extends ApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("🔒 游标里不许出现明文顺序主键 —— 列表体不外泄 id，游标也不能变成后门")
+    void list_cursorDoesNotLeakSequentialId() throws Exception {
+        User me = newUser();
+        List<Long> ids = new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            ids.add(persist(me.getId(), NotificationType.VET_REPLY, tok(), false).getId());
+        }
+
+        String body = mvc.perform(get("/api/v1/notifications").param("limit", "2")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(me.getId())))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String cursor = json.readTree(body).get("nextCursor").asString();
+
+        // 🔴 id 只作为 tie-breaker 活在 base64url 游标里，明文一个都不许露 ——
+        //    列表体本来就断言了不外泄 id（见 list_returnsOnlyOwnNotifications），
+        //    游标不能成为绕过它的那扇后门。
+        for (Long id : ids) {
+            assertThat(cursor).doesNotContain(String.valueOf(id));
+            assertThat(body).doesNotContain("\"id\":" + id);
+        }
+        // 但它必须仍是个能用的游标（不是把功能删了换绿）
+        mvc.perform(get("/api/v1/notifications").param("limit", "2").param("cursor", cursor)
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1));
+    }
+
+    @Test
     @DisplayName("坏游标不 500，退化成首页（游标是客户端传来的，不能信）")
     void list_toleratesGarbageCursor() throws Exception {
         User me = newUser();

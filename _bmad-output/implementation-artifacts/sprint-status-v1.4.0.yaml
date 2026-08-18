@@ -250,12 +250,34 @@ action_items:
       🔴 nextCursor 格式由「纯 epochMillis」变为 "<epochMicros>_<id>"。
       对客户端是不透明串（Flutter 侧 NotificationPage 只原样回传，已核对不解析）；
       服务端保留一轮过渡兼容：无下划线的老游标按旧语义处理。
-  # 🔴 同一类缺陷的【兄弟】，未修 —— 它是三线共享的 OrderCenterService，且形态更难
+  # ✅ 已修（2026-08-18，经用户明确要求）
   - id: ORDER-CENTER-CURSOR-TIE
-    status: open
+    status: done
     what: 订单中心游标分页有同一类缺陷（created_at epochMillis + 严格 `<`）
-    where: "OrderCenterService#listOrders / #parseCursor"
+    why: 同刻订单在分页边界被整批跳过；截断到毫秒还额外放大出一个 1ms 的跳过窗口
+    fixed_by: |
+      跨源全序定为 (createdAt DESC, sourceRank ASC, id DESC)，游标 = base64url 的
+      (micros, sourceRank, id)。各源用同一条 tuple 查询，靠 idBound() 按「源的先后位」
+      给 MIN/真实 id/MAX 三种上界，一条 SQL 覆盖三种边界。
+      🔴 tie-breaker 用 id 而不是 orderToken：token 在 SQL 里的顺序取决于列排序规则
+      （collation），与 Java 的 String.compareTo 对不上 —— 两边不同序照样漏单。
+      🔴 各源必须按【同一个序】取自己的前 limit+1 条，「各源取前 N 再归并」才成立；
+      这也是为什么不能把 tie 判定放到归并层用 token 做（同刻组一超过 limit+1 就漏）。
+      顺带把首页上界从 now 改成 now+60s（库钟与应用钟不是同一个，刚下的单会被挡在外面）。
+      回归：pagination_doesNotSkipOrdersSharingTheSameInstant（6 单跨 3 源同刻）
+      + cursor_isOpaqueAndCarriesNoPlainId；两次变异验证均先红后绿。
+    wire_change: |
+      🔴 nextCursor 由「纯 epochMillis」变为 base64url 复合键。对客户端是不透明串
+      （Flutter 侧只原样回传，已核对）；服务端保留一轮过渡兼容（纯数字按旧语义处理）。
+  # ✅ 顺手发现并修掉的同族第三处（改 notify 时全库扫 cursor 实现扫出来的）
+  - id: PAWCOIN-LEDGER-CURSOR-TIE
+    status: done
+    what: PawCoin 流水游标分页同一类缺陷
+    where: "PawCoinQueryService#view + PawCoinTransactionRepository"
     why: |
-      同刻订单会在分页边界被整批跳过。⚠️ 修法不能照抄 notify：它是【跨 3 源 in-memory 归并】，
-      id 来自不同表，(created_at, id) 复合游标不直接成立 —— 需要先定一个跨源全序键。
-    owner: OrderCenterService 属三线共享（并行契约 §三），须先认领再动
+      🔴 这一处比 notify 更容易撞上：一次结算就在同一个事务里写多条（抵扣 + 退款分账 +
+      补偿），Postgres 的 now() 是事务开始时刻 —— 这几条 created_at 一模一样，
+      原游标会把整组跳过。这是钱的账，少一笔就是对不上。
+    fixed_by: |
+      换成 shared/paging/KeysetCursor 的 (createdAt, id) 复合游标 + findPageBefore；
+      回归 ledgerDoesNotSkipRowsSharingTheSameInstant（5 笔同刻）。

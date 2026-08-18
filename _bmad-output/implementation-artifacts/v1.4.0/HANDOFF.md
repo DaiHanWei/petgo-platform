@@ -28,7 +28,7 @@ head: 393aa47f
 | **8 经营数据与对账** | **4/4 ✅** | 权限位 49 → 53 |
 | **9 边界守护与效果度量** | **3/3 ✅** | FR-110 能力缺席守卫已入 CI（两端各一步命名 Guard） |
 
-**测试基线：后端 `mvn -B test` **1991 通过 / 0 失败 / 6 跳过**（BUILD SUCCESS）；
+**测试基线：后端 `mvn -B test` **1995 通过 / 0 失败 / 6 跳过**（BUILD SUCCESS）；
 前端 `flutter test` **953 通过**、`flutter analyze` 零问题。**
 
 > ✅ **NOTIFY-CURSOR-TIE 已修**（2026-08-18，经用户要求跨模块动手）：
@@ -36,9 +36,14 @@ head: 393aa47f
 > 🔴 `nextCursor` 的 wire 格式因此变了（→ `"<epochMicros>_<id>"`），对客户端是**不透明串**，
 > 服务端保留一轮过渡兼容。详见 sprint-status 的 `action_items`。
 >
-> ⚠️ **同一类缺陷的兄弟没修**：`OrderCenterService#listOrders` 也是
-> 「epochMillis + 严格 `<`」。它是**三线共享**文件，且是跨 3 源 in-memory 归并，
-> `(created_at, id)` 不直接成立 —— 记为 `ORDER-CENTER-CURSOR-TIE`，须先认领再动。
+> ✅ **同族的另外两处也一起修了**（同日，经用户要求）：
+> `ORDER-CENTER-CURSOR-TIE`（订单中心，跨 4 源归并 → 全序改
+> `(createdAt, sourceRank, id)`）与 `PAWCOIN-LEDGER-CURSOR-TIE`（钱包流水 ——
+> **同族里最容易撞上的一处**：一次结算在同一事务里写多条，时间戳一模一样）。
+>
+> 🔴 **这三处的 `nextCursor` wire 格式都变了**（→ base64url 复合键）。对客户端都是
+> **不透明串**，Flutter 侧只原样回传（已逐个核对）；服务端各留一轮过渡兼容。
+> 新代码写分页请直接用 `shared/paging/KeysetCursor`，别再手写 epochMillis 游标。
 
 ## 一 B · 🔴 交付前必须由人完成的事（代码这边做不了）
 
