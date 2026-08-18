@@ -33,7 +33,7 @@ class MiniProfileControllerTest {
     @Test
     void activeUserReturnsNicknameAvatarPostCount() {
         when(accounts.findAuthorViews(anyList()))
-                .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", "https://cdn/a.jpg", false)));
+                .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", "https://cdn/a.jpg", false, java.util.List.of())));
         when(accounts.activeSignatureOf(7L)).thenReturn(java.util.Optional.of("爱猫的人运气都不会太差"));
         when(content.countPublishedByAuthor(7L)).thenReturn(2L);
 
@@ -49,7 +49,7 @@ class MiniProfileControllerTest {
     @Test
     void userWithoutSignatureReturnsNull() {
         when(accounts.findAuthorViews(anyList()))
-                .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", null, false)));
+                .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", null, false, java.util.List.of())));
         when(accounts.activeSignatureOf(7L)).thenReturn(java.util.Optional.empty());
         when(content.countPublishedByAuthor(7L)).thenReturn(0L);
 

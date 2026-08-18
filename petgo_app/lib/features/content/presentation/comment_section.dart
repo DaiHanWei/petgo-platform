@@ -9,6 +9,7 @@ import '../../../shared/widgets/confirm_sheet.dart';
 import '../data/detail_repository.dart';
 import '../domain/comment.dart';
 import 'detail_providers.dart';
+import '../../../shared/widgets/user_tag_row.dart';
 
 /// 评论区（Story 3.3 只读 + Story 3.5 回复/删除入口）。一级时间正序首 10 + 「查看更多评论」；
 /// 二级默认内嵌 3 条 + 「查看全部 X 条回复」展开。非自身滚动（嵌入详情页滚动）。
@@ -274,7 +275,13 @@ class _CommentTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(name, style: AppTypography.caption.copyWith(fontWeight: FontWeight.w600)),
+          // V1.1.6 Story 5.1：评论区昵称旁挂运营标签（四处展示位之一）。
+          // ⚠️ 一页评论可达数十条 —— 标签是随作者投影**整批**取回来的，这里没有任何逐条查询。
+          UserTagRow(
+            name: name,
+            nameStyle: AppTypography.caption.copyWith(fontWeight: FontWeight.w600),
+            tags: comment.authorDeleted ? const [] : comment.authorTags,
+          ),
           const SizedBox(height: AppSpacing.xxs),
           Text(comment.body, style: AppTypography.body),
           if (takenDownLabel != null)

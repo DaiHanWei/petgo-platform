@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../shared/widgets/app_toast.dart';
+import '../../../shared/widgets/user_tag_row.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/colors.dart';
@@ -205,9 +206,12 @@ class _DetailScaffold extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(name,
-                  style: AppTypography.body.copyWith(fontWeight: FontWeight.w700),
-                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              // V1.1.6 Story 5.1：作者区挂运营标签（四处展示位之一）。
+              UserTagRow(
+                name: name,
+                nameStyle: AppTypography.body.copyWith(fontWeight: FontWeight.w700),
+                tags: detail.authorDeleted ? const [] : detail.authorTags,
+              ),
               Text(_relativeTime(l10n, detail.createdAt),
                   style: AppTypography.caption.copyWith(color: AppColors.textTertiary)),
             ],

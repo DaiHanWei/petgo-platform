@@ -39,12 +39,16 @@ class ContentDetailAndCommentContractTest {
     @Test
     void contentDetailHasExactlyTheContractFields() {
         ContentDetailResponse d = new ContentDetailResponse(
-                1L, 7L, "小明", "https://cdn/a.jpg", false, ContentType.DAILY, "正文",
+                1L, 7L, "小明", "https://cdn/a.jpg", false,
+                // V1.1.6 Story 5.1：运营标签随作者一起下发；**空表不下发**（NON_NULL 省略）。
+                List.of(new com.tailtopia.auth.dto.UserTagView("vet", "兽医", "🩺", "已认证兽医")),
+                ContentType.DAILY, "正文",
                 List.of("https://cdn/1.jpg", "https://cdn/2.jpg"), 5L, 2L, true, false,
                 Instant.parse("2026-06-05T00:00:00Z"));
 
         assertThat(wire(d).keySet()).isEqualTo(Set.of(
-                "id", "authorId", "authorNickname", "authorAvatarUrl", "authorDeleted", "type",
+                "id", "authorId", "authorNickname", "authorAvatarUrl", "authorDeleted",
+                "authorTags", "type",
                 "body", "imageUrls", "likeCount", "commentCount", "liked", "isAuthor", "createdAt"));
     }
 
@@ -52,19 +56,22 @@ class ContentDetailAndCommentContractTest {
     void topLevelCommentHasModerationStatusField() {
         // story 3：新增 moderationStatus 字段（VISIBLE 无标签；TAKEN_DOWN 前端渲染「仅你可见」）。
         CommentResponse top = new CommentResponse(
-                10L, 7L, "小明", "https://cdn/a.jpg", false, "评论正文",
+                10L, 7L, "小明", "https://cdn/a.jpg", false,
+                List.of(new com.tailtopia.auth.dto.UserTagView("vet", "兽医", "🩺", "已认证兽医")),
+                "评论正文",
                 Instant.parse("2026-06-05T00:00:00Z"), 3, List.of(), "VISIBLE");
 
         assertThat(wire(top).keySet()).isEqualTo(Set.of(
                 "id", "authorId", "authorNickname", "authorAvatarUrl", "authorDeleted",
-                "body", "createdAt", "replyCount", "replies", "moderationStatus"));
+                "authorTags", "body", "createdAt", "replyCount", "replies", "moderationStatus"));
     }
 
     @Test
     void replyCommentOmitsReplyCountAndReplies() {
         // 二级回复无嵌套：replyCount/replies 为 null → NON_NULL 省略；moderationStatus 始终下发。
         CommentResponse reply = new CommentResponse(
-                11L, 8L, "小红", null, false, "回复正文",
+                // 无标签 → authorTags 为 null → NON_NULL 省略（下方字段集里因此没有它）。
+                11L, 8L, "小红", null, false, null, "回复正文",
                 Instant.parse("2026-06-05T00:00:00Z"), null, null, "VISIBLE");
 
         assertThat(wire(reply).keySet()).isEqualTo(Set.of(

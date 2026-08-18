@@ -138,4 +138,36 @@ class ScheduleWindowTest {
             assertThat(ScheduleWindow.toWib(ScheduleWindow.fromWib(wall))).isEqualTo(wall);
         }
     }
+
+    @Nested
+    class 永久分配_不设结束时间 {
+
+        /**
+         * 🛡 V1.1.6 Story 5.1：标签可以**永久分配**（不设结束时间）。
+         *
+         * <p>这是对同一份判定的**严格扩展**，不是另写一份 —— 顶置排期那边传的仍是非空值，
+         * 行为一字不变（上面那几组测试就是它的回归）。
+         */
+        @Test
+        void nullEndMeansNeverEnds() {
+            Instant farFuture = Instant.parse("2099-01-01T00:00:00Z");
+            assertThat(ScheduleWindow.isActiveAt(farFuture, START, null)).isTrue();
+            assertThat(ScheduleWindow.phaseAt(farFuture, START, null)).isEqualTo(SchedulePhase.ACTIVE);
+        }
+
+        /** 永久也要等到开始时刻 —— 开始前仍是「待生效」。 */
+        @Test
+        void permanentStillWaitsForItsStart() {
+            Instant before = START.minusMillis(1);
+            assertThat(ScheduleWindow.isActiveAt(before, START, null)).isFalse();
+            assertThat(ScheduleWindow.phaseAt(before, START, null)).isEqualTo(SchedulePhase.PENDING);
+        }
+
+        /** 永久永远不会是「已结束」。 */
+        @Test
+        void permanentIsNeverEnded() {
+            assertThat(ScheduleWindow.phaseAt(Instant.parse("2099-01-01T00:00:00Z"), START, null))
+                    .isNotEqualTo(SchedulePhase.ENDED);
+        }
+    }
 }

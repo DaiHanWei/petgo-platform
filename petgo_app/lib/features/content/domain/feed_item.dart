@@ -1,3 +1,4 @@
+import '../../auth/domain/user_tag.dart';
 import 'feed_image_layout.dart';
 
 /// Feed 分类 Tab（Story 3.2，AC3）。`all` 是浏览态语义，对应后端 category=ALL。
@@ -35,6 +36,7 @@ class FeedItem {
     this.commentCount = 0,
     this.imageSizes = const [],
     this.imageUrls = const [],
+    this.authorTags = const [],
   });
 
   final int id;
@@ -44,6 +46,9 @@ class FeedItem {
   final bool authorDeleted;
   final String? authorNickname;
   final String? authorAvatarUrl;
+
+  /// 作者的运营标签（V1.1.6 Story 5.1 · FR-74）。最多 3 个；注销作者恒为空。
+  final List<UserTag> authorTags;
 
   /// 内容类型线格式（DAILY/GROWTH_MOMENT/KNOWLEDGE）。
   final String type;
@@ -122,6 +127,7 @@ class FeedItem {
         // 无图时后端整个字段都不下发（Jackson NON_NULL）——解析必须容忍缺失。
         imageSizes: ImageSize.listFromJson(json['imageSizes']),
         // 同样在无图时整个字段都不下发。
+        authorTags: UserTag.listFromJson(json['authorTags']),
         imageUrls: (json['imageUrls'] as List?)?.whereType<String>().toList(growable: false) ??
             const [],
       );

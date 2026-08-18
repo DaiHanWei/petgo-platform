@@ -45,7 +45,9 @@ class FeedResponseContractTest {
             "type", "body", "firstImageUrl", "likeCount", "createdAt", "visibility",
             // V1.1.6 Story 3.1（AD-7 Rule 1）：整组图片 + 是否已赞 + 评论数。
             // ⚠️ firstImageUrl **保留不动** —— 老客户端还在读它。
-            "imageUrls", "imageSizes", "liked", "commentCount");
+            "imageUrls", "imageSizes", "liked", "commentCount",
+            // V1.1.6 Story 5.1（FR-74）：运营标签随作者下发。**空表不下发**（NON_NULL 省略）。
+            "authorTags");
 
     /** 游标分页信封字段集 —— 对应 App FeedPage.fromJson 的 {items, nextCursor, hasMore}。 */
     private static final Set<String> ENVELOPE_FIELDS = Set.of("items", "nextCursor", "hasMore");
@@ -60,6 +62,8 @@ class FeedResponseContractTest {
     void feedItemFullShapeHasExactlyTheContractFields() {
         FeedItemResponse item = new FeedItemResponse(
                 42L, 7L, "小明", "https://cdn.petgo/p/a.jpg", false,
+                // V1.1.6 Story 5.1：运营标签随作者一起下发；**空表不下发**（NON_NULL 省略）。
+                List.of(new com.tailtopia.auth.dto.UserTagView("vet", "兽医", "🩺", "已认证兽医")),
                 ContentType.DAILY, "今天带毛孩子去遛弯", "https://cdn.petgo/p/img.jpg", 3L,
                 Instant.parse("2026-06-05T00:00:00Z"), ContentVisibility.PUBLIC,
                 List.of("https://cdn.petgo/p/img.jpg", "https://cdn.petgo/p/img2.jpg"),
@@ -82,7 +86,7 @@ class FeedResponseContractTest {
     void deletedAuthorAndTextlessCardOmitsNullablesButKeepsRequired() {
         // 注销作者（NFR-8：昵称/头像不外泄）+ 纯文字无图卡（firstImageUrl null）+ 无正文。
         FeedItemResponse item = new FeedItemResponse(
-                42L, 7L, null, null, true,
+                42L, 7L, null, null, true, null,
                 ContentType.GROWTH_MOMENT, null, null, 0L,
                 Instant.parse("2026-06-05T00:00:00Z"), ContentVisibility.PRIVATE,
                 null, null, false, 0L);

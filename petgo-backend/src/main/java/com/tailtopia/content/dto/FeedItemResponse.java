@@ -33,6 +33,8 @@ public record FeedItemResponse(
         String authorNickname,
         String authorAvatarUrl,
         boolean authorDeleted,
+        // 运营标签（V1.1.6 Story 5.1 · FR-74）。最多 3 个；注销作者恒为空表。
+        java.util.List<com.tailtopia.auth.dto.UserTagView> authorTags,
         ContentType type,
         String body,
         String firstImageUrl,
@@ -83,6 +85,8 @@ public record FeedItemResponse(
                 author.nickname(),
                 author.avatarUrl(),
                 author.deleted(),
+                // 空标签不下发（NON_NULL 省略）：Feed 一页 20 行，每行一个空数组白占体积。
+                author.tags().isEmpty() ? null : author.tags(),
                 p.getType(),
                 p.getText(),
                 firstImage,

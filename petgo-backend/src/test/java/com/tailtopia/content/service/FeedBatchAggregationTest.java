@@ -60,7 +60,7 @@ class FeedBatchAggregationTest {
             List<Long> ids = inv.getArgument(0);
             return ids.stream().distinct().collect(Collectors.toMap(
                     id -> (Long) id,
-                    id -> new AuthorView((Long) id, "u" + id, null, false)));
+                    id -> new AuthorView((Long) id, "u" + id, null, false, java.util.List.of())));
         });
     }
 

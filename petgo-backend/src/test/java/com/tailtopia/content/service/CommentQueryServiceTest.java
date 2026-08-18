@@ -48,7 +48,7 @@ class CommentQueryServiceTest {
         when(accounts.findAuthorViews(anyList())).thenAnswer(inv -> {
             List<Long> ids = inv.getArgument(0);
             return ids.stream().distinct().collect(Collectors.toMap(
-                    id -> (Long) id, id -> new AuthorView((Long) id, "u" + id, null, false)));
+                    id -> (Long) id, id -> new AuthorView((Long) id, "u" + id, null, false, java.util.List.of())));
         });
     }
 
