@@ -620,8 +620,10 @@ V1.0.0 FR-14 原设计为双 CTA：主 CTA「给我的宠物创建同款档案�
 | --- | --- | --- | --- |
 | E-4 | `phone_prompt_shown` | 一次性软引导曝光 | **`trigger`**: first_consult/profile_created |
 | E-5 | `phone_prompt_responded` | 用户对软引导做出响应 | **`action`**: submitted/skipped/dismissed |
-| E-6 | `phone_saved` | 手机号保存成功 | **`entry`**: soft_prompt/me_page、`is_first_time`: bool（首次填写 vs 修改） |
-| E-7 | `phone_save_failed` | 格式校验不通过（对应 FR-70 的失败 Toast） | `entry` |
+| E-6 | `me_phone_save_succeeded` | 手机号保存成功 | **`entry`**: soft_prompt/me_page、`is_first_time`: bool（首次填写 vs 修改） |
+| E-7 | `me_phone_save_error_shown` | 格式校验不通过（对应 FR-70 的失败 Toast） | `entry` |
+> `[命名订正 2026-08-19]` 两条原名（`phone_saved` / `phone_save_failed`）不符合本项目埋点命名规范：① **模块前缀**须取自既有词表，手机号入口在「我的」这条线上 → `me_`；② **动作须落在词尾且取自允许词表**，`_failed` 不在其中 —— 失败态实际发生的事是**弹了一次格式错误提示**，故用 `_error_shown`（同时更贴近它的判读用途：失败率 = 这个提示弹了多少次）。属性均未改动。
+> `[范围说明 2026-08-19]` 两条**均已随 Story 7.1 交付**（编辑抽屉是 7.1 的交付物，两个事件都在它内部上报）。Story 7.2 只需在接入口时把 `entry` 传成对应值（`soft_prompt` / `me_page`），**不需要再补埋点**。
 
 **判读：** 软引导填写率 = E-6(`entry=soft_prompt`) ÷ E-4，是"值不值得为此打断用户一次"的唯一依据；`entry=me_page` 的占比反映常驻入口的独立贡献，决定后续要不要加强「我的」页那个入口。**E-7 失败率需单独看**——印尼手机号写法很杂（`08xx` / `+628xx` / 带空格或连字符），失败率偏高说明格式校验规则太严在挡人，而不是用户填错，属可直接修的体验问题。手机号总覆盖率**不需要埋点**，后台 AB-11A 的"已填写/未填写"筛选可直接查。
 

@@ -19,7 +19,16 @@ public record UserProfileResponse(
         PetStatus petStatus,
         boolean onboardingCompleted,
         boolean hasPetProfile,
-        boolean isSystemDefaultName) {
+        boolean isSystemDefaultName,
+        /**
+         * 手机号（V1.1.6 Story 7.1 · FR-70）；未填写 / 已撤回时为 null。
+         *
+         * <p>🛡 **仅本人 /me 聚合视图返回**，与 email 同一口径 —— 绝不进任何对他人展示的投影。
+         *
+         * <p>这里下发的是**完整号码**：设置页要展示脱敏形态、编辑抽屉要展示完整号码，
+         * 两者都是**同一个人看自己的数据**，脱敏属**显示层**的事，放客户端做（口径只有一处）。
+         */
+        String phone) {
 
     public static UserProfileResponse from(User u, boolean hasPetProfile) {
         return new UserProfileResponse(
@@ -34,6 +43,7 @@ public record UserProfileResponse(
                 u.isOnboardingCompleted(),
                 hasPetProfile,
                 // 内容审核 story 4：昵称是否为违规重置的系统默认编码名（App 可据此轻量引导去改名，非必需）。
-                u.isSystemDefaultName());
+                u.isSystemDefaultName(),
+                u.getPhone());
     }
 }

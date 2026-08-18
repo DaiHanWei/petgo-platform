@@ -50,6 +50,18 @@ public class User {
     private String signature;
 
     /**
+     * 手机号（V1.1.6 Story 7.1 · FR-70）。选填、**不验证、不用于登录**，仅供运营做流失召回。
+     *
+     * <p>🛡 **属个人信息，禁止写入任何日志**。项目的日志脱敏是**按字段名整串打码**的，
+     * 名单里已经有 {@code phone} —— 所以这个字段**必须叫 phone**。改成 phoneNumber / mobile
+     * 都不会命中，日志里就会出现真实号码，**且不会有任何报错**。命名本身就是护栏。
+     *
+     * <p>{@code null} = 未填写 / 已撤回（用户清空保存即写回 null，个人数据保护法的删除权）。
+     */
+    @Column(name = "phone", length = 32)
+    private String phone;
+
+    /**
      * 昵称当前是否为违规重置生成的系统默认编码名（{@code user_<hex>}，内容审核 story 4，D-CM4）。
      * 违规重置 ≠ 注销匿名化：此标记只随违规重置写入的真实昵称，与 7.3「已注销用户」展示层无关。
      * 用户主动改新昵称时清 false。
@@ -246,6 +258,15 @@ public class User {
 
     public void setSignature(String signature) {
         this.signature = signature;
+    }
+
+    public String getPhone() {
+        return phone;
+    }
+
+    /** {@code null} = 清空（撤回）。 */
+    public void setPhone(String phone) {
+        this.phone = phone;
     }
 
     public String getLocale() {
