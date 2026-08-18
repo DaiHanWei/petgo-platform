@@ -184,6 +184,20 @@ class ApiPaths {
   static const String petProfileDay = '$base/pet-profiles/me/day';
   static const String petProfileArchiveStats = '$base/pet-profiles/me/archive-stats';
 
+  // ===== V1.1.6 Story 2.2/2.3：App 内访客只读视图 =====
+  // 🛡 挂在 /public/ 下是刻意的：SecurityConfig 里 `GET /api/v1/public/**` 已 permitAll，
+  // 访客（含未登录）才进得来。上面那批 /me 路径身份取自 JWT，访客没有身份，
+  // 且架构 AD-1 Rule 3 禁止给它们加访问者参数来复用。
+  static String sharedPetProfile(String token) => '$base/public/shared-pets/$token/profile';
+
+  static String sharedPetStats(String token) => '$base/public/shared-pets/$token/stats';
+
+  static String sharedPetTimeline(String token) => '$base/public/shared-pets/$token/timeline';
+
+  static String sharedPetCalendar(String token) => '$base/public/shared-pets/$token/calendar';
+
+  static String sharedPetDay(String token) => '$base/public/shared-pets/$token/day';
+
   /// 里程碑列表/进度（Story 8.1/8.2 · FR-42）。
   static const String petProfileMilestones = '$base/pet-profiles/me/milestones';
 

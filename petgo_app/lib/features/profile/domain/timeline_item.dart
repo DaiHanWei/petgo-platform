@@ -66,6 +66,7 @@ class TimelineItem {
     this.healthRecordType,
     this.healthRecordId,
     this.idCardSerial,
+    this.openable,
   });
 
   final TimelineKind kind;
@@ -114,6 +115,17 @@ class TimelineItem {
 
   /// 身份证编号（类 ⑤ 用，如 `#00842`）。**可为空**——老档案未申请时后端无编号，此时不渲染编号位。
   final String? idCardSerial;
+
+  /// 访客是否<b>可以点开</b>这条（V1.1.6 Story 2.3 · 仅访客态下发）。
+  ///
+  /// 服务端算好的结论：可见范围为公开 **且** 状态为已发布，两条同时成立才为 true。
+  ///
+  /// ⚠️ **null 视同不可点**（fail-closed）。作者态本就不下发这个字段，
+  /// 而作者态的点击语义走的是另一套注入，不看它。
+  /// 之所以不默认 true：万一哪天访客接口漏发了这个字段，
+  /// 默认 true 会让**私密内容悄悄变得可点开**，而默认 null/false 最多是「本该能点的点不开」——
+  /// 前者是隐私事故，后者只是个能一眼看见的小毛病。
+  final bool? openable;
 
   /// 实际用于选样式的分类：优先后端下发的 [itemType]，缺失时按 [kind] 兜底。
   ///
@@ -169,6 +181,7 @@ class TimelineItem {
       healthRecordType: json['healthRecordType'] as String?,
       healthRecordId: (json['healthRecordId'] as num?)?.toInt(),
       idCardSerial: json['idCardSerial'] as String?,
+      openable: json['openable'] as bool?,
     );
   }
 

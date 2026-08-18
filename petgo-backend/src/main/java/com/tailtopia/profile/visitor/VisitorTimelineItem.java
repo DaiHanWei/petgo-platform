@@ -41,5 +41,19 @@ public record VisitorTimelineItem(
         String text,
         String milestoneCode,
         String milestoneLevel,
-        String idCardSerial) {
+        String idCardSerial,
+        /**
+         * 访客是否<b>可以点开</b>这条（V1.1.6 Story 2.3 · AD-3 Rule 1/2）。
+         *
+         * <p>判定是<b>两条同时成立</b>：可见范围为公开 <b>且</b> 状态为已发布。
+         *
+         * <h2>🛡 为什么下发的是「结论」而不是「可见范围」本身</h2>
+         * 判定是两条<b>联合</b>成立，把原始可见范围丢给前端就等于允许两处各写一遍这个判断 ——
+         * 而写漏的那一次<b>是静默的</b>：私密内容悄悄变得可点开，没有任何东西会报错。
+         * 下发一个结论位，前端就只有「照做」一种选择。
+         *
+         * <p>⚠️ {@code false} 时前端<b>不得跳转</b>，只给一句解释性提示 ——
+         * 私密内容因此始终不越出分享链接的边界。
+         */
+        boolean openable) {
 }
