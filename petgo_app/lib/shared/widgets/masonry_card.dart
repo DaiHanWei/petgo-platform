@@ -3,12 +3,12 @@ import 'package:flutter/material.dart';
 import '../../core/theme/colors.dart';
 import '../../core/theme/spacing.dart';
 import '../../core/theme/typography.dart';
+import '../../features/content/domain/feed_image_layout.dart';
 import '../../features/content/domain/feed_item.dart';
 import '../../features/content/presentation/like_button.dart';
 import '../../l10n/app_localizations.dart';
-import 'app_image.dart';
+import 'feed_image.dart';
 import 'letter_avatar.dart';
-import 'post_cover.dart';
 
 /// Feed 单列卡片。**V1.1.6 Story 3.2 起为通栏版式**（FR-93）。
 ///
@@ -34,6 +34,7 @@ class MasonryCard extends StatelessWidget {
     this.onAuthorTap,
     this.onComment,
     this.onMore,
+    this.maxImageHeight,
   });
 
   final FeedItem item;
@@ -53,6 +54,12 @@ class MasonryCard extends StatelessWidget {
 
   /// 作者行右侧「···」（V1.1.6 Story 3.2）。Feed 此前只有长按举报，没有显式入口。
   final VoidCallback? onMore;
+
+  /// 图片区高度上限（V1.1.6 Story 3.3 的高度护栏）。
+  ///
+  /// 由**列表容器**量出滚动视口的真实高度后传下来 —— 卡片自己量不到视口。
+  /// 为 null 时退化成按屏高（扣安全区）估算，够单卡场景用，但列表里请务必传实测值。
+  final double? maxImageHeight;
 
   /// 类型 → (badge 文案, 文字色, 底色)：Momen 绿 / Tips 黄 / Cerita 紫（原型 b-happy/b-tips/b-story）。
   static (String, Color, Color) _badgeStyle(String type, AppLocalizations l10n) {
@@ -81,6 +88,10 @@ class MasonryCard extends StatelessWidget {
         item.authorDeleted ? deletedUserLabel : (item.authorNickname ?? deletedUserLabel);
     final (badgeLabel, badgeFg, badgeBg) = _badgeStyle(item.type, l10n);
     final time = _relativeTime(l10n, item.createdAt);
+    final media = MediaQuery.of(context);
+    // 护栏上限：优先用列表容器实测的视口高度；单卡场景退化成按屏高扣安全区估算。
+    final maxH = maxImageHeight ??
+        FeedCardMetrics.maxImageHeight(media.size.height - media.padding.vertical);
 
     return Semantics(
       button: onTap != null,
@@ -151,18 +162,16 @@ class MasonryCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // 高度按**三段口径**定（实际比例 → 收敛闭区间 → 高度护栏）。
+                // ⚠️ 这里此前是写死的 4:3 —— FR-71 起改为按实际比例，
+                // 卡片高度**从齐整变为不齐整**是产品已知并接受的代价（保构图 > 保版面）。
                 if (item.hasImage)
-                  AspectRatio(
-                    aspectRatio: 4 / 3,
-                    child: AppImage.widget(
-                      item.firstImageUrl!,
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      height: double.infinity,
-                      thumbWidth: 800, // Feed 全宽封面：OSS 缩略图省流量、列表滚动更顺
-                      errorBuilder: (context, error, stack) =>
-                          PostCoverPlaceholder(type: item.type),
-                    ),
+                  FeedImage(
+                    url: item.firstImageUrl!,
+                    type: item.type,
+                    declaredSize: item.firstImageSize,
+                    width: media.size.width,
+                    maxImageHeight: maxH,
                   ),
               ],
             ),

@@ -1,3 +1,5 @@
+import 'feed_image_layout.dart';
+
 /// Feed 分类 Tab（Story 3.2，AC3）。`all` 是浏览态语义，对应后端 category=ALL。
 enum FeedCategory {
   all('ALL'),
@@ -31,6 +33,7 @@ class FeedItem {
     this.likeCount = 0,
     this.liked = false,
     this.commentCount = 0,
+    this.imageSizes = const [],
   });
 
   final int id;
@@ -76,7 +79,17 @@ class FeedItem {
   /// 两处显示的是同一个数字，不一致用户只会以为出 bug（后端 Story 3.1 已对齐）。
   final int commentCount;
 
+  /// 图片原始尺寸数组（V1.1.6 Story 3.3 · AD-5）。
+  ///
+  /// 🔴 与图片**同序等长**，测不出来的位置为 null；**存量内容整列为空**。
+  /// ⚠️ 别假设长度与图片数一致 —— 后端有专门覆盖长度不符的用例，
+  /// 取用一律走 [firstImageSize] 这类安全取法。
+  final List<ImageSize?> imageSizes;
+
   bool get hasImage => firstImageUrl != null && firstImageUrl!.isNotEmpty;
+
+  /// 首图尺寸；无图 / 存量 / 那一张测不出来 → null（渲染侧按占位比例预留）。
+  ImageSize? get firstImageSize => imageSizes.isEmpty ? null : imageSizes.first;
 
   factory FeedItem.fromJson(Map<String, dynamic> json) => FeedItem(
         id: json['id'] as int,
@@ -93,6 +106,8 @@ class FeedItem {
         likeCount: (json['likeCount'] ?? 0) as int,
         liked: (json['liked'] ?? false) as bool,
         commentCount: (json['commentCount'] ?? 0) as int,
+        // 无图时后端整个字段都不下发（Jackson NON_NULL）——解析必须容忍缺失。
+        imageSizes: ImageSize.listFromJson(json['imageSizes']),
       );
 }
 
