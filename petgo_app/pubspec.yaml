@@ -18,7 +18,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # of the product and file versions while build-number is used as the build suffix.
 # stag 出包纪律（2026-08-06 决策）：version 保持与其它分支一致（不带 -stag，合并零冲突）；
 # -stag 后缀由 scripts/build-stag-apk.sh 构建时经 --build-name 注入——stag 打包必须走该脚本。
-version: 1.1.2+8
+version: 1.1.4+10
 
 environment:
   sdk: ^3.12.1

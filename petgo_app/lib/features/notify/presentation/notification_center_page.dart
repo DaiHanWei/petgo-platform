@@ -250,10 +250,9 @@ class _NotificationTileState extends State<_NotificationTile> {
   /// 后端约定 targetRef="NICKNAME"（昵称）/"USER_AVATAR"（用户头像）→ 用户变体；
   /// 否则为宠物 cardToken → 宠物变体。App 据此选 body 键（不渲染后端串）。
   bool get _isUserSubject =>
-      widget.item.targetRef == 'NICKNAME' ||
-      widget.item.targetRef == 'USER_AVATAR';
+      widget.item.targetRef == 'NICKNAME' || widget.item.targetRef == 'USER_AVATAR';
 
-  /// 圆角方形彩色图标块配色（按 type）：兽医薄荷 / 点赞红 / 评论紫 / 里程碑绿 / 生日金 / 审核警示琥珀。
+  /// 圆角方形彩色图标块配色（按 type）：兽医薄荷 / 点赞红 / 评论紫 / 里程碑绿 / 生日金。
   (IconData, Color, Color) get _iconStyle => switch (widget.item.type) {
     'VET_REPLY' || 'CONSULT_CLOSED' => (
       Icons.medical_services_rounded,
@@ -286,17 +285,6 @@ class _NotificationTileState extends State<_NotificationTile> {
       AppColors.triageGreen,
       AppColors.momenBadgeBg,
     ),
-    // 审核类（cm-7）：中性/警示琥珀配色（盾牌+叹号），与点赞红/评论紫区分；不滥用变现禁区告警红。
-    'NAME_RESET' ||
-    'AVATAR_RESET' ||
-    'CONTENT_REVIEW_REJECTED' ||
-    'CONTENT_REVIEW_TIMED_OUT' ||
-    'CONTENT_REMOVED' ||
-    'REPORT_REVIEWED' => (
-      Icons.gpp_maybe_rounded,
-      AppColors.gold,
-      AppColors.goldTint,
-    ),
     // bug 20260729-391：以下类型此前无映射 → 全落兜底渲染，同瞬两条(结案+邀评)看似「重复发送」。
     'TICKET_RESOLVED' => (
       Icons.support_agent_rounded,
@@ -314,6 +302,34 @@ class _NotificationTileState extends State<_NotificationTile> {
       AppColors.triageGreen,
       AppColors.momenBadgeBg,
     ),
+    'CONTENT_REVIEW_REJECTED' || 'CONTENT_REMOVED' => (
+      Icons.remove_circle_outline_rounded,
+      AppColors.coral,
+      AppColors.coralTint,
+    ),
+    'REPORT_REVIEWED' => (
+      Icons.verified_user_rounded,
+      AppColors.mint,
+      AppColors.cream2,
+    ),
+    // 审核类（cm-7）：名称/头像重置与审核超时用中性警示琥珀（盾牌+叹号）。
+    'NAME_RESET' || 'AVATAR_RESET' || 'CONTENT_REVIEW_TIMED_OUT' => (
+      Icons.gpp_maybe_rounded,
+      AppColors.gold,
+      AppColors.goldTint,
+    ),
+    // 账号级处置（V1.1.4 Story 3.2）：警告用警示琥珀，封号用危险红——两者严重程度不同，
+    // 用同一个颜色会让用户以为「又是一次提醒」而忽略掉自己已经登不上了这件事。
+    'ACCOUNT_WARNED' => (
+      Icons.gpp_maybe_rounded,
+      AppColors.gold,
+      AppColors.goldTint,
+    ),
+    'ACCOUNT_SUSPENDED' => (
+      Icons.block_rounded,
+      AppColors.coral,
+      AppColors.coralTint,
+    ),
     _ => (Icons.notifications_rounded, AppColors.mint, AppColors.cream2),
   };
 
@@ -326,17 +342,20 @@ class _NotificationTileState extends State<_NotificationTile> {
     'PET_BIRTHDAY' => l10n.notifyTypePetBirthday,
     'COMPANION_ANNIVERSARY' => l10n.notifyTypeCompanionAnniversary,
     'MILESTONE_NODE' => l10n.notifyTypeMilestoneNode,
-    // 审核类（cm-7）。CONTENT_REMOVED 通用（帖子/评论 targetRef 都是 postId，无法区分）。
-    'NAME_RESET' => l10n.notifyTypeNameReset,
-    'AVATAR_RESET' => l10n.notifyTypeAvatarReset,
-    'CONTENT_REVIEW_REJECTED' => l10n.notifyTypeReviewRejected,
-    'CONTENT_REVIEW_TIMED_OUT' => l10n.notifyTypeReviewTimedOut,
-    'CONTENT_REMOVED' => l10n.notifyTypeContentRemoved,
-    'REPORT_REVIEWED' => l10n.notifyTypeReportReviewed,
     'TICKET_RESOLVED' => l10n.notifyTypeTicketResolved,
     'CSAT_SURVEY' => l10n.notifyTypeCsatSurvey,
     'REFUND_REJECTED' => l10n.notifyTypeRefundRejected,
     'CONTENT_REVIEW_APPROVED' => l10n.notifyTypeReviewApproved,
+    'CONTENT_REVIEW_REJECTED' => l10n.notifyTypeReviewRejected,
+    'CONTENT_REMOVED' => l10n.notifyTypeContentRemoved,
+    'REPORT_REVIEWED' => l10n.notifyTypeReportReviewed,
+    // 审核类（cm-7）。
+    'NAME_RESET' => l10n.notifyTypeNameReset,
+    'AVATAR_RESET' => l10n.notifyTypeAvatarReset,
+    'CONTENT_REVIEW_TIMED_OUT' => l10n.notifyTypeReviewTimedOut,
+    // 账号级处置（V1.1.4 Story 3.2）。
+    'ACCOUNT_WARNED' => l10n.notifyTypeAccountWarned,
+    'ACCOUNT_SUSPENDED' => l10n.notifyTypeAccountSuspended,
     // 未知类型兜底：中性「系统通知」，不再复用页面标题（bug 20260729-391 的「克隆卡」观感来源）。
     _ => l10n.notifyTypeSystem,
   };
@@ -351,19 +370,25 @@ class _NotificationTileState extends State<_NotificationTile> {
     'PET_BIRTHDAY' => l10n.notifyBodyPetBirthday,
     'COMPANION_ANNIVERSARY' => l10n.notifyBodyCompanionAnniversary,
     'MILESTONE_NODE' => l10n.notifyBodyMilestoneNode,
-    // 审核类（cm-7）：名称/头像按 targetRef 选 用户/宠物 变体；CONTENT_REMOVED 用通用文案。
-    'NAME_RESET' =>
-      _isUserSubject ? l10n.notifyBodyNameResetUser : l10n.notifyBodyNameResetPet,
-    'AVATAR_RESET' =>
-      _isUserSubject ? l10n.notifyBodyAvatarResetUser : l10n.notifyBodyAvatarResetPet,
-    'CONTENT_REVIEW_REJECTED' => l10n.notifyBodyReviewRejected,
-    'CONTENT_REVIEW_TIMED_OUT' => l10n.notifyBodyReviewTimedOut,
-    'CONTENT_REMOVED' => l10n.notifyBodyContentRemoved,
-    'REPORT_REVIEWED' => l10n.notifyBodyReportReviewed,
     'TICKET_RESOLVED' => l10n.notifyBodyTicketResolved,
     'CSAT_SURVEY' => l10n.notifyBodyCsatSurvey,
     'REFUND_REJECTED' => l10n.notifyBodyRefundRejected,
     'CONTENT_REVIEW_APPROVED' => l10n.notifyBodyReviewApproved,
+    'CONTENT_REVIEW_REJECTED' => l10n.notifyBodyReviewRejected,
+    'CONTENT_REMOVED' => l10n.notifyBodyContentRemoved,
+    'REPORT_REVIEWED' => l10n.notifyBodyReportReviewed,
+    // 审核类（cm-7）：名称/头像按 targetRef 选 用户/宠物 变体。
+    'NAME_RESET' =>
+        _isUserSubject ? l10n.notifyBodyNameResetUser : l10n.notifyBodyNameResetPet,
+    'AVATAR_RESET' =>
+        _isUserSubject ? l10n.notifyBodyAvatarResetUser : l10n.notifyBodyAvatarResetPet,
+    'CONTENT_REVIEW_TIMED_OUT' => l10n.notifyBodyReviewTimedOut,
+    // 账号级处置（V1.1.4 Story 3.2）：
+    // ⚠️ 警告的正文**不说**是谁举报的、因哪条内容、也不说这是第几次——说了等于把举报人暴露给
+    //    被举报人，而「第几次」会变成一个可以试探的计数器。
+    // ⚠️ 封号正文的印尼语**已经法务审核**（C-101），改词前必须回法务。
+    'ACCOUNT_WARNED' => l10n.notifyBodyAccountWarned,
+    'ACCOUNT_SUSPENDED' => l10n.notifyBodyAccountSuspended,
     // 未知类型兜底：中性正文，不再复用空态提示串（那本身就是个 bug）。
     _ => l10n.notifyBodySystem,
   };

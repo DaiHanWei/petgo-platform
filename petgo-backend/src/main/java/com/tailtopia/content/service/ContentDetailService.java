@@ -10,6 +10,7 @@ import com.tailtopia.content.repository.ContentLikeRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
 import com.tailtopia.moderation.service.ReportService;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.social.read.UserHideRelationReader;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,15 +32,17 @@ public class ContentDetailService {
     private final ContentLikeRepository likes;
     private final AccountQueryService accountQueryService;
     private final ReportService reportService;
+    private final UserHideRelationReader hideRelations;
 
     public ContentDetailService(ContentPostRepository posts, CommentRepository comments,
             ContentLikeRepository likes, AccountQueryService accountQueryService,
-            ReportService reportService) {
+            ReportService reportService, UserHideRelationReader hideRelations) {
         this.posts = posts;
         this.comments = comments;
         this.likes = likes;
         this.accountQueryService = accountQueryService;
         this.reportService = reportService;
+        this.hideRelations = hideRelations;
     }
 
     /**
@@ -64,10 +67,22 @@ public class ContentDetailService {
             throw AppException.notFound(GONE_DETAIL);
         }
 
+        // Story 1.1（V1.1.4）：被隐藏作者的内容，详情页同样不可达——否则「举报一条帖 → 那条帖 404」
+        // 而「拉黑整个人 → 他每一条帖详情页照样能开」，语义反而倒挂（PRD §7 方案甲要消灭的塌陷）。
+        // Feed 那层是 JPQL 子查询，详情这条路径独立，改了 Feed 它不会跟着生效，必须单独拦。
+        // ⚠️ 不区分 source（主动拉黑与举报隐藏都拦）——与主页访问校验只认 BLOCK 正好相反，别写混。
+        // ⚠️ 沿用上方「取回后 exists 检查再抛统一 404」的既有形状，不改成 SQL 子查询：
+        //    详情/列表两条路径的这处不对称是刻意的防枚举设计，不要顺手「统一」掉。
+        if (viewerId != null && hideRelations.isHidden(viewerId, post.getAuthorId())) {
+            throw AppException.notFound(GONE_DETAIL);
+        }
+
         AuthorView author = accountQueryService.findAuthorViews(List.of(post.getAuthorId()))
                 .get(post.getAuthorId());
         // viewer 维度可见性计数（story 3 §5.5）：公开可见 + viewer 自己的非可见评论，与渲染列表一致。
-        long commentCount = comments.countVisibleForViewer(postId, viewerId);
+        // Story 1.3：同一口径再套 R1/R2——被 R2 影子的评论不计入对外评论数（否则「显示 5 条却只数得出 4 条」）。
+        long commentCount = comments.countVisibleForViewer(postId, viewerId != null, viewerId,
+                post.getAuthorId());
         // 用 equals 而非 ==：两者均为装箱 Long，== 是引用比较，id>127（越过 Long 缓存）会误判 false。
         boolean isAuthor = viewerId != null && viewerId.equals(post.getAuthorId());
         // Story 3.4：真实点赞计数 + 当前用户是否已赞（游客 false）。

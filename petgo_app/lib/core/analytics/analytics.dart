@@ -71,13 +71,18 @@ class Analytics {
     }
   }
 
-  /// 登录成功后关联用户。distinctId 取 `sha256('tailtopia-user-' + id)`，不传任何 userProperties。
+  /// 登录成功后关联用户。distinctId 取 `sha256('tailtopia-user-' + id)`，并以 person property
+  /// 附带明文数字 id（运营在 PostHog 按 id 定位用户；无盐哈希本可被反推回自增 id，明给不增加
+  /// 暴露面）。username/昵称/邮箱/手机号仍一概不传（PDP 合规红线）。
   /// 同一哈希值同时设为 AppsFlyer CUID（跨端归因 P0）：两端跑同一份 Dart 代码，
-  /// 天然逐字节一致；不用邮箱/手机号（PDP 合规红线）。
+  /// 天然逐字节一致。
   static Future<void> identifyUser(int userId) async {
     AppsFlyerClient.instance.setUserId(distinctIdFor(userId));
     try {
-      await Posthog().identify(userId: distinctIdFor(userId));
+      await Posthog().identify(
+        userId: distinctIdFor(userId),
+        userProperties: {'internal_user_id': userId},
+      );
     } catch (e) {
       debugPrint('[Analytics] identify failed: $e');
     }

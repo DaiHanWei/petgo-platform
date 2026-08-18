@@ -79,13 +79,6 @@ public final class AuditActions {
     /** 异常工单标记已处理/归档（Story 5.1）。 */
     public static final String ANOMALY_RESOLVED = "ANOMALY_RESOLVED";
 
-    // ===== 内容审核补充规范 story 8（后台审核增强）=====
-    /** 调整人工审核队列项优先级（story 8，§5.1，含旧→新优先级）。 */
-    public static final String REVIEW_PRIORITY_CHANGED = "REVIEW_PRIORITY_CHANGED";
-    /** 名称违规重置为系统默认编码名（story 4 处置，story 8 后台入口触发；summary 含判定依据/备注，无名称原文）。 */
-    public static final String NAME_RESET = "NAME_RESET";
-    /** 头像违规重置为平台默认头像（story 5 处置，story 8 后台入口触发；summary 含判定依据/备注，无图片 URL）。 */
-    public static final String AVATAR_RESET = "AVATAR_RESET";
     // ===== 退款两段审批（V1.1 Story 4.3，最高危 A-1）=====
     /** 退款请求创建（绑订单/工单）。 */
     public static final String REFUND_REQUEST_CREATED = "REFUND_REQUEST_CREATED";
@@ -107,6 +100,22 @@ public final class AuditActions {
     // ===== 用户账号治理补充 =====
     /** 后台赠送 PawCoin（bug 20260728-389；summary 含数量/原因/幂等键，不落 PII）。 */
     public static final String PAWCOIN_GRANTED = "PAWCOIN_GRANTED";
+
+    // ===== 内容审核补充规范 story 8（后台审核增强）=====
+    /** 调整人工审核队列项优先级（story 8，§5.1，含旧→新优先级）。 */
+    public static final String REVIEW_PRIORITY_CHANGED = "REVIEW_PRIORITY_CHANGED";
+    /** 名称违规重置为系统默认编码名（story 4 处置，story 8 后台入口触发；summary 含判定依据/备注，无名称原文）。 */
+    public static final String NAME_RESET = "NAME_RESET";
+    /** 头像违规重置为平台默认头像（story 5 处置，story 8 后台入口触发；summary 含判定依据/备注，无图片 URL）。 */
+    public static final String AVATAR_RESET = "AVATAR_RESET";
+
+    // ===== V1.1.4 Story 3.2 账号级处置（社区管控）=====
+    /** 账号警告（summary 只带工单号，绝不带内容原文/举报人）。 */
+    public static final String ACCOUNT_WARNED = "ACCOUNT_WARNED";
+    /** 账号停用（社区处置路径；与用户管理页的 USER_DEACTIVATED 分开，两条路径的副作用不同）。 */
+    public static final String ACCOUNT_SUSPENDED = "ACCOUNT_SUSPENDED";
+    /** 账号举报工单判为无需处置（数据层仍是 DISMISSED，改的只有展示层文案）。 */
+    public static final String ACCOUNT_REPORT_DISMISSED = "ACCOUNT_REPORT_DISMISSED";
 
     private AuditActions() {
     }

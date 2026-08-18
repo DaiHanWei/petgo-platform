@@ -48,6 +48,17 @@ public class AppException extends RuntimeException {
         return new AppException(HttpStatus.CONFLICT, ErrorTypes.PAWCOIN_INSUFFICIENT, detail);
     }
 
+    /**
+     * Story 1.1（V1.1.4）：请求他人主页但已主动拉黑对方（403）。
+     *
+     * <p>取 403 而非 404：语义是「你屏蔽了这个人」不是「这个人不存在」，且<b>不构成枚举泄漏</b>——
+     * 能触发该分支的前提是调用者自己建立过拉黑关系，他本就知道对方存在。前端按 type 分流，不依赖 status。
+     * <b>响应体不得含被拉黑者的任何展示字段</b>（AD-11：「200 + 标记字段」等于拦了一半）。
+     */
+    public static AppException blockedUser(String detail) {
+        return new AppException(HttpStatus.FORBIDDEN, ErrorTypes.BLOCKED_USER, detail);
+    }
+
     public static AppException unauthorized(String detail) {
         return new AppException(HttpStatus.UNAUTHORIZED, ErrorTypes.UNAUTHORIZED, detail);
     }

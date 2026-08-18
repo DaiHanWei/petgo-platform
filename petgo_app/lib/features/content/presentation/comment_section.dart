@@ -6,6 +6,9 @@ import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
+import '../../../shared/widgets/letter_avatar.dart';
+import '../../../shared/widgets/mini_profile_sheet.dart';
+import '../../social/domain/account_action_entry.dart';
 import '../data/detail_repository.dart';
 import '../domain/comment.dart';
 import 'detail_providers.dart';
@@ -230,6 +233,22 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
       comment: c,
       name: name,
       replyLabel: l10n.detailReply,
+      // V1.1.4 Story 1.6：点评论作者 → 迷你卡（举报 / 拉黑的入口）。
+      //
+      // ⚠️ 这是本版本最大的闭环缺口：影子评论 / R1 / R2 / 通知抑制**全是为评论区骚扰设计的**，
+      // 而在此之前 `showMiniProfile` 全 App 只有 Feed 卡片作者与详情页作者两个触发点——
+      // 一个只在评论区骚扰、从不发帖的账号，用户既举报不了也拉黑不了。
+      //
+      // ⚠️ 已注销 → 传 null，整体去掉点击手势（NFR-8，与首页/详情两处一致），且**不给任何 Toast**。
+      // `showMiniProfile` 内部虽有第二道防线（isDeactivated 直接 return），但那要先走一次网络往返，
+      // 用户看到的是「点了没反应」——与网络失败无法区分。
+      onAuthorTap: c.authorDeleted
+          ? null
+          : () => showMiniProfile(context, ref, c.authorId,
+              onBlocked: _reload,
+              onReported: _reload,
+              // 评论区这个入口的量单独可查（本版本的主场景就是评论区骚扰）。
+              entry: AccountActionEntry.comment),
       // story 3：仅作者会收到 TAKEN_DOWN/REJECTED 行 → 渲染「仅你可见」灰标签（VISIBLE/UNDER_REVIEW 无标签，D-CM2）。
       takenDownLabel: c.isTakenDownForAuthor ? l10n.commentTakenDownSelfOnly : null,
       canDelete: _canDelete(c),
@@ -248,6 +267,7 @@ class _CommentTile extends StatelessWidget {
     required this.canDelete,
     required this.onReply,
     required this.onDelete,
+    required this.onAuthorTap,
     this.takenDownLabel,
   });
 
@@ -257,6 +277,10 @@ class _CommentTile extends StatelessWidget {
   final bool canDelete;
   final VoidCallback onReply;
   final VoidCallback onDelete;
+
+  /// 点头像/作者名 → 迷你卡（Story 1.6）。**为 null = 已注销**，此时头像与名字都不可点，
+  /// 整行只剩「点了回复」的既有行为。
+  final VoidCallback? onAuthorTap;
 
   /// 非空 = 该评论被下架/移除、仅作者可见 → 渲染灰态提示标签（story 3）。
   final String? takenDownLabel;
@@ -270,42 +294,71 @@ class _CommentTile extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onReply,
       child: Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(name, style: AppTypography.caption.copyWith(fontWeight: FontWeight.w600)),
-          const SizedBox(height: AppSpacing.xxs),
-          Text(comment.body, style: AppTypography.body),
-          if (takenDownLabel != null)
-            Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.xxs),
-              child: Text(
-                takenDownLabel!,
-                key: ValueKey('commentTakenDown_${comment.id}'),
-                style: AppTypography.micro.copyWith(color: AppColors.textTertiary),
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+        // 头像 + 右侧文字块（UI 稿 A6）。头像是 2026-08-16 才补的：在此之前评论行只有
+        // 「作者名 + 正文 + 操作」，`Comment.authorAvatarUrl` 有数据却从未渲染，
+        // 而 Story 1.6 把这里变成了举报/拉黑的入口——只留一行 12.5px 的小字当热区太窄。
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 头像与作者名共用同一个手势（热区连成一片）；已注销时 onAuthorTap 为 null → 不可点。
+            GestureDetector(
+              key: ValueKey('commentAuthorAvatar_${comment.id}'),
+              onTap: onAuthorTap,
+              child: LetterAvatar(
+                url: comment.authorDeleted ? null : comment.authorAvatarUrl,
+                name: name,
+                deleted: comment.authorDeleted,
+                size: 30,
               ),
             ),
-          Row(
-            children: [
-              GestureDetector(
-                key: ValueKey('replyComment_${comment.id}'),
-                onTap: onReply,
-                child: Text(replyLabel, style: AppTypography.micro),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 作者名单独可点：外层整行的 onTap 是「回复」，内层这个 GestureDetector 命中优先，
+                  // 所以点名字/头像弹卡、点正文回复，两者不会打架。
+                  GestureDetector(
+                    key: ValueKey('commentAuthor_${comment.id}'),
+                    onTap: onAuthorTap,
+                    child: Text(name,
+                        style: AppTypography.caption.copyWith(fontWeight: FontWeight.w600)),
+                  ),
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(comment.body, style: AppTypography.body),
+                  if (takenDownLabel != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.xxs),
+                      child: Text(
+                        takenDownLabel!,
+                        key: ValueKey('commentTakenDown_${comment.id}'),
+                        style: AppTypography.micro.copyWith(color: AppColors.textTertiary),
+                      ),
+                    ),
+                  Row(
+                    children: [
+                      GestureDetector(
+                        key: ValueKey('replyComment_${comment.id}'),
+                        onTap: onReply,
+                        child: Text(replyLabel, style: AppTypography.micro),
+                      ),
+                      if (canDelete) ...[
+                        const SizedBox(width: AppSpacing.md),
+                        GestureDetector(
+                          key: ValueKey('deleteComment_${comment.id}'),
+                          onTap: onDelete,
+                          child: Icon(Icons.delete_outline_rounded,
+                              size: 14, color: AppColors.textTertiary),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
               ),
-              if (canDelete) ...[
-                const SizedBox(width: AppSpacing.md),
-                GestureDetector(
-                  key: ValueKey('deleteComment_${comment.id}'),
-                  onTap: onDelete,
-                  child: Icon(Icons.delete_outline_rounded,
-                      size: 14, color: AppColors.textTertiary),
-                ),
-              ],
-            ],
-          ),
-        ],
-      ),
+            ),
+          ],
+        ),
       ),
     );
   }

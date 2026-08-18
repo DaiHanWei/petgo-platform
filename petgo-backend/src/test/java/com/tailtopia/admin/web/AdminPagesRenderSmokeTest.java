@@ -42,7 +42,7 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
 
     @Test
     void allExternalizedAdminPagesRenderInBothLocales() throws Exception {
-        String[] paths = {"/admin/dashboard", "/admin/seed-post", "/admin/reports", "/admin/content",
+        String[] paths = {"/admin/dashboard", "/admin/seed-post", "/admin/tickets", "/admin/content",
                 "/admin/manual-review", "/admin/anomalies", "/admin/consult-sessions", "/admin/vets",
                 "/admin/vets/online", "/admin/failed-requests", "/admin/ratings", "/admin/users",
                 "/admin/audit-logs", "/admin/accounts"};

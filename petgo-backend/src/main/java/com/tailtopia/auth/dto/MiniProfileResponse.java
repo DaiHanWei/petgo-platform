@@ -12,19 +12,29 @@ package com.tailtopia.auth.dto;
  *                     设了签名的用户，别人点进这张卡应当看得到）。**注销必须为 null**（NFR-8 匿名化）。
  * @param postCount    已发布（未软删）内容数
  * @param isDeactivated 是否已注销
+ * @param reported     当前查看者<b>是否举报过</b>此人（Story 2.1 AC8）。
+ *                     <b>⚠️ 必须是装箱 {@code Boolean} 且游客时为 null</b> ——
+ *                     全局 Jackson {@code NON_NULL} 会把 null 字段整个键省略掉，游客拿到的
+ *                     key 集合因此<b>一字未变</b>（Story 1.1 AC6 的硬要求，L1 测试有三条断言守着）。
+ *                     写成 primitive {@code boolean} 就永远出现在 JSON 里，当场破坏游客契约。
  */
 public record MiniProfileResponse(
         String nickname,
         String avatarUrl,
         String signature,
         long postCount,
-        boolean isDeactivated) {
+        boolean isDeactivated,
+        Boolean reported) {
 
+    /** 已注销：不暴露任何身份信息，也不下发「已举报」（对方都注销了，这个标记没有意义）。 */
     public static MiniProfileResponse deactivated() {
-        return new MiniProfileResponse(null, null, null, 0, true);
+        return new MiniProfileResponse(null, null, null, 0, true, null);
     }
 
-    public static MiniProfileResponse of(AuthorView author, String signature, long postCount) {
-        return new MiniProfileResponse(author.nickname(), author.avatarUrl(), signature, postCount, false);
+    /** @param reported 登录者传 true/false；<b>游客传 null</b>（键会被 NON_NULL 省略）。 */
+    public static MiniProfileResponse of(AuthorView author, String signature, long postCount,
+            Boolean reported) {
+        return new MiniProfileResponse(author.nickname(), author.avatarUrl(), signature, postCount,
+                false, reported);
     }
 }
