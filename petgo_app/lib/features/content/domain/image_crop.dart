@@ -31,6 +31,11 @@ enum CropPreset {
 
   /// 宽 ÷ 高。
   final double aspect;
+
+  /// 埋点取值（PRD 口径 `1x1` / `4x5`）。
+  ///
+  /// ⚠️ 与界面文案 [label] **刻意分开**：界面用 `1:1` 更易读，埋点取值一旦变动会切断已有序列。
+  String get analyticsValue => label.replaceAll(':', 'x');
 }
 
 /// 这张图是否需要裁剪。
@@ -206,6 +211,14 @@ Future<List<Uint8List>?> applyBatchCrop(
 
     final choice = await ask(bytes, size, locked);
     if (choice == null) return null; // 用户退出 → 取消本次上传
+
+    // 埋点 E-9：确认裁剪。`is_batch_lock_source` 标记"是不是决定了本批次锁定值的那一张"——
+    // 少了它就分不清用户是主动选的档位，还是被前一张锁进来的。
+    final isLockSource = locked == null;
+    Analytics.capture('publish_image_crop_completed', {
+      'target_ratio': (locked ?? choice.preset).analyticsValue,
+      'is_batch_lock_source': isLockSource,
+    });
 
     // 第一张需要裁的定下档位，其余同样需要裁的沿用。
     locked ??= choice.preset;
