@@ -130,10 +130,13 @@ public class AdminWebController {
 
     /**
      * 按帖驳回（V1.1.4 修复清单 #3）：统一队列的内容举报工单按帖聚合，驳回=该帖全部 PENDING 单收档。
-     * 权限沿用单条驳回的 {@code content.view_reports}（V105 已为其持有者回填 view_tickets，两码同人）。
+     *
+     * <p>⚠️ 权限对齐<b>批量</b>驳回的 {@code content.takedown}（{@code /admin/reports/batch} 同 gate），
+     * <b>不是</b>单条驳回的 {@code content.view_reports}——一次抹掉整帖全部举报是批量级动作，
+     * 挂在查看权上等于让只读审核员（V105 回填人群）绕过处置权限批量驳回真实举报。
      */
     @PostMapping("/admin/reports/post/{postId}/dismiss-all")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('content.view_reports')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')")
     public String dismissAllForPost(@AuthenticationPrincipal AdminUserDetails admin,
             @PathVariable long postId,
             org.springframework.web.servlet.mvc.support.RedirectAttributes flash) {

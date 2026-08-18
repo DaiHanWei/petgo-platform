@@ -79,10 +79,16 @@ class UnifiedTicketAccessControlTest {
         }
 
         @Bean
+        com.tailtopia.admin.service.AdminModerationService adminModeration() {
+            return mock(com.tailtopia.admin.service.AdminModerationService.class);
+        }
+
+        @Bean
         UnifiedTicketController controller(UnifiedTicketQueryService q,
                 AccountReportEntryRepository e, AccountDisposalRepository d, AccountQueryService a,
-                AccountDisposalService ds, com.tailtopia.moderation.service.ReportService cr) {
-            return new UnifiedTicketController(q, e, d, a, ds, cr);
+                AccountDisposalService ds, com.tailtopia.moderation.service.ReportService cr,
+                com.tailtopia.admin.service.AdminModerationService am) {
+            return new UnifiedTicketController(q, e, d, a, ds, cr, am);
         }
     }
 
@@ -202,9 +208,13 @@ class UnifiedTicketAccessControlTest {
         controller.batch(principalOf(), "SUSPEND",
                 java.util.List.of("CONTENT_REPORT:2", "CONTENT_REPORT:3"), flash);
 
-        assertThat(flash.getFlashAttributes().get("notice").toString()).contains("用户举报");
+        // 二轮修复 #7 后：内容举报批次不再整体拒绝，但警告/封号动作仍然打不到它——
+        // 提示改为指向内容自己的两个动作，且账号批量与内容批量都不得被触发。
+        assertThat(flash.getFlashAttributes().get("notice").toString()).contains("内容举报");
         org.mockito.Mockito.verify(ctx.getBean(AccountDisposalService.class),
                 org.mockito.Mockito.never()).batch(any(), any(), org.mockito.ArgumentMatchers.anyLong());
+        org.mockito.Mockito.verify(ctx.getBean(com.tailtopia.admin.service.AdminModerationService.class),
+                org.mockito.Mockito.never()).batchByPost(any(), org.mockito.ArgumentMatchers.anyBoolean(), any());
     }
 
     /** 只有处置权、没有停用权 → **批量封号也走不通**（别让批量成为绕过单条门控的后门）。 */

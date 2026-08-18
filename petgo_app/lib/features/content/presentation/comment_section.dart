@@ -139,13 +139,15 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
   /// 评论区迷你卡拉黑/举报成功后的收尾（修复清单 #7）：
   /// ① 与首页/详情入口同一套 [onAuthorHidden]——乐观清掉 Feed 里该作者的全部卡片；
   ///    对象恰好是帖主时传 popContext 退出本详情页（那一页服务端已经 404 了）。
-  /// ② 帖主之外的场景再静默刷本帖评论（影子评论过滤由下一次拉取兜底，这里补的是当下这一屏）。
+  /// ② 帖主之外的场景 bump [commentsRefreshProvider]——它同时驱动本区 _reload **与**详情页头部
+  ///    「KOMENTAR (N)」计数失效。只调 _reload 的话列表变短、计数不动，正是 AD-13 要消灭的
+  ///    「标 5 条只数得出 3 条」拉黑泄底破绽。
   VoidCallback _onCommentAuthorHidden(int authorId) {
     final bool isPostAuthor = widget.postAuthorId != null && authorId == widget.postAuthorId;
     return () {
       onAuthorHidden(ref, authorId, popContext: isPostAuthor ? context : null)();
       if (!isPostAuthor) {
-        _reload();
+        ref.read(commentsRefreshProvider.notifier).bump();
       }
     };
   }

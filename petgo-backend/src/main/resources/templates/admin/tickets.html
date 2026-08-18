@@ -66,21 +66,34 @@
              data-batch-scope 限定 admin.js 那段批量逻辑的作用域（该文件全后台共享）。 -->
         <form th:if="${result.totalElements > 0}" id="ticket-batch-form" data-batch-scope
               th:action="@{/admin/tickets/batch}" method="post">
-            <p class="filter-bar">
+            <!-- ⚠️ 批量条整体与每个按钮都按权限渲染（修复清单二轮 #10）：端点 gate 在
+                 content.dispose_account / content.takedown 上，给无权人群渲染「点了必 403」的
+                 活按钮等于日常工作流反复撞墙（V105 回填的 view_tickets-only 人群首当其冲）。 -->
+            <p class="filter-bar"
+               sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.dispose_account') or hasAuthority('content.takedown')">
                 <span th:text="#{admin.tickets.batch.selected}">已选</span>
                 <b data-batch-count class="muted">0 / 50</b>
-                <button type="submit" class="btn btn-sm btn-neutral" data-batch-action
-                        name="action" value="WARN"
-                        th:text="#{admin.tickets.batch.warn}">批量警告</button>
-                <!-- ⚠️ 批量封号必须二次确认并**逐条列出**：既有的 data-confirm 只能弹一句纯文本，
-                     装不下清单。这里走 <dialog>，弹窗内容由 admin.js 在勾选变化时组装。
-                     只给一句「确认封 N 个账号？」等于让运营对着一个数字点确认。 -->
-                <button type="button" class="btn btn-sm btn-danger" data-batch-action
-                        data-open-dialog="batch-suspend-dialog"
-                        th:text="#{admin.tickets.batch.suspend}">批量封号</button>
+                <th:block sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.dispose_account')">
+                    <button type="submit" class="btn btn-sm btn-neutral" data-batch-action
+                            name="action" value="WARN"
+                            th:text="#{admin.tickets.batch.warn}">批量警告</button>
+                    <!-- ⚠️ 批量封号必须二次确认并**逐条列出**：既有的 data-confirm 只能弹一句纯文本，
+                         装不下清单。这里走 <dialog>，弹窗内容由 admin.js 在勾选变化时组装。
+                         只给一句「确认封 N 个账号？」等于让运营对着一个数字点确认。 -->
+                    <button type="button" class="btn btn-sm btn-danger" data-batch-action
+                            data-open-dialog="batch-suspend-dialog"
+                            sec:authorize="hasRole('SUPER_ADMIN') or (hasAuthority('content.dispose_account') and hasAuthority('user.deactivate'))"
+                            th:text="#{admin.tickets.batch.suspend}">批量封号</button>
+                </th:block>
+                <!-- 批量无需处置对两类都有效：账号工单走处置权、内容工单（=批量驳回）走下架权。 -->
                 <button type="submit" class="btn btn-sm btn-neutral" data-batch-action
                         name="action" value="DISMISS"
                         th:text="#{admin.tickets.batch.dismiss}">批量无需处置</button>
+                <!-- 批量下架：只对内容举报工单有效（修复清单二轮 #7——旧举报页下线后批量能力不消失）。 -->
+                <button type="submit" class="btn btn-sm btn-danger" data-batch-action
+                        name="action" value="TAKEDOWN"
+                        sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')"
+                        th:text="#{admin.tickets.batch.takedown}">批量下架</button>
                 <!-- 批量警告与批量无需处置**不弹确认**：警告不影响用户使用，可逆性与封号完全不同。 -->
             </p>
 
@@ -164,8 +177,11 @@
                          第一个（其余「侥幸存活」）——首行警告按钮就此绑到批量 form 上提交 → 400。
                          ⚠️ 只在待处理时给动作：已处理/无需处置的工单再点一次没有意义。
                          ⚠️ 「限流曝光」不实现、不留 UI 位（随 FR-95 移至 1.1.8）。 -->
+    <!-- ⚠️ 全部动作按钮按权限渲染（修复清单二轮 #10）：端点 gate 在 dispose/takedown 上，
+                         无权人群看见「点了必 403」的活按钮=日常撞墙。 -->
                     <span th:if="${r.type.name() == 'ACCOUNT_REPORT' and r.status.name() == 'PENDING'
-                                   and r.targetUserId != null}">
+                                   and r.targetUserId != null}"
+                          sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.dispose_account')">
                         <button type="submit" class="btn btn-sm btn-neutral"
                                 th:form="'warn-form-' + ${r.sourceId}"
                                 th:text="#{admin.tickets.action.warn}">警告</button>
@@ -183,14 +199,15 @@
                          下架复用既有 /admin/reports/{id}/takedown（按代表性 PENDING 单收口，
                          会关掉该帖全部 PENDING 单）；驳回走按帖端点（全部单一并收档）。 -->
                     <span th:if="${r.type.name() == 'CONTENT_REPORT' and r.status.name() == 'PENDING'
-                                   and r.actionRef != null}">
+                                   and r.actionRef != null}"
+                          sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')">
                         <button type="submit" class="btn btn-sm btn-danger"
                                 th:form="'takedown-form-' + ${r.sourceId}"
-                                sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')"
                                 th:text="#{admin.tickets.action.takedown}">下架</button>
+                        <!-- 驳回=一次抹掉整帖全部举报，批量级动作，gate 对齐批量的 takedown
+                             （挂查看权上会让只读审核员绕过处置权限，修复清单二轮 #6）。 -->
                         <button type="submit" class="btn btn-sm btn-neutral"
                                 th:form="'dismissall-form-' + ${r.sourceId}"
-                                sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.view_reports')"
                                 th:text="#{admin.tickets.action.dismissContent}">驳回</button>
                     </span>
                 </td>

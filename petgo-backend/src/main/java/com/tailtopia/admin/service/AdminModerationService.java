@@ -165,6 +165,41 @@ public class AdminModerationService {
     }
 
     /**
+     * 按帖下架（统一工单队列批量用）：取该帖任意一条 PENDING 举报单走 {@link #takedown}
+     * （它会软删帖子并关掉该帖<b>全部</b> PENDING 单）。没有待处理举报 → 404（工单已被并发处理）。
+     */
+    @Transactional
+    public void takedownByPost(long postId, AdminUserDetails admin) {
+        ContentReport first = reportService.findPendingForPost(postId).stream().findFirst()
+                .orElseThrow(() -> AppException.notFound("该帖没有待处理的举报"));
+        takedown(first.getId(), admin);
+    }
+
+    /**
+     * 内容举报工单的批量下架/驳回（统一队列 V1.1.4 修复清单 #7：旧 /admin/reports 页下线后
+     * 批量能力不能跟着消失）。与账号工单批量同款语义：<b>不开外层事务</b>，逐帖经自引用代理调用
+     * （各自独立事务），部分失败不整批回滚，失败逐条回报。
+     */
+    public BatchResult batchByPost(List<Long> postIds, boolean takedown, AdminUserDetails admin) {
+        AdminModerationService self = selfProvider.getObject();
+        int ok = 0;
+        List<String> failed = new ArrayList<>();
+        for (Long postId : postIds == null ? List.<Long>of() : postIds) {
+            try {
+                if (takedown) {
+                    self.takedownByPost(postId, admin);
+                } else {
+                    self.dismissAllForPost(postId, admin);
+                }
+                ok++;
+            } catch (RuntimeException e) {
+                failed.add("帖 " + postId + "：" + e.getMessage());
+            }
+        }
+        return new BatchResult(ok, failed);
+    }
+
+    /**
      * 批量下架/驳回（Story 4.1 AC5）：**不开外层事务**，逐条经自引用代理调用（各自独立事务）；
      * 部分失败不影响已成功项，汇总结果回报。
      */

@@ -77,7 +77,8 @@ public class ApiAccessLoggingFilter extends OncePerRequestFilter {
             ContentCachingResponseWrapper resp, long durMs) {
         String reqBody = "";
         if (req instanceof ContentCachingRequestWrapper w) {
-            reqBody = sanitizer.sanitize(w.getContentAsByteArray(), original.getContentType());
+            // 请求体口径：额外打码用户自由文本键（如举报补充说明 detail）——响应体不受影响。
+            reqBody = sanitizer.sanitizeRequest(w.getContentAsByteArray(), original.getContentType());
         } else if (original.getContentLength() > 0) {
             reqBody = "<" + safe(original.getContentType()) + ", " + original.getContentLength() + "B>";
         }

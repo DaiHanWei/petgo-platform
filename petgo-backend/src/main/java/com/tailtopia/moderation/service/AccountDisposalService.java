@@ -2,12 +2,15 @@ package com.tailtopia.moderation.service;
 
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
+import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.auth.service.AuthService;
 import com.tailtopia.moderation.domain.AccountDisposal;
 import com.tailtopia.moderation.domain.AccountDisposalType;
 import com.tailtopia.moderation.domain.AccountReport;
 import com.tailtopia.moderation.domain.AccountReportStatus;
+import com.tailtopia.moderation.event.ReportResolvedEvent;
 import com.tailtopia.moderation.repository.AccountDisposalRepository;
+import com.tailtopia.moderation.repository.AccountReportEntryRepository;
 import com.tailtopia.moderation.repository.AccountReportRepository;
 import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.notify.service.NotificationService;
@@ -16,6 +19,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,9 +57,12 @@ public class AccountDisposalService {
 
     private final AccountDisposalRepository disposals;
     private final AccountReportRepository reports;
+    private final AccountReportEntryRepository entries;
     private final AuthService authService;
     private final NotificationService notificationService;
     private final AdminAuditService auditService;
+    private final AccountQueryService accountQuery;
+    private final ApplicationEventPublisher events;
 
     /**
      * ⚠️ 自引用代理（批量逐条调用用）。
@@ -67,13 +74,18 @@ public class AccountDisposalService {
     private final ObjectProvider<AccountDisposalService> selfProvider;
 
     public AccountDisposalService(AccountDisposalRepository disposals, AccountReportRepository reports,
-            AuthService authService, NotificationService notificationService,
-            AdminAuditService auditService, ObjectProvider<AccountDisposalService> selfProvider) {
+            AccountReportEntryRepository entries, AuthService authService,
+            NotificationService notificationService, AdminAuditService auditService,
+            AccountQueryService accountQuery, ApplicationEventPublisher events,
+            ObjectProvider<AccountDisposalService> selfProvider) {
         this.disposals = disposals;
         this.reports = reports;
+        this.entries = entries;
         this.authService = authService;
         this.notificationService = notificationService;
         this.auditService = auditService;
+        this.accountQuery = accountQuery;
+        this.events = events;
         this.selfProvider = selfProvider;
     }
 
@@ -151,6 +163,7 @@ public class AccountDisposalService {
      */
     @Transactional
     public void warn(long targetUserId, Long reportId, long actorAccountId) {
+        requireDisposalTarget(targetUserId, reportId);
         // ① 先落记录 —— 顺序不能反（见类注释）。
         disposals.save(AccountDisposal.create(targetUserId, AccountDisposalType.WARNING,
                 actorAccountId, reportId));
@@ -191,6 +204,7 @@ public class AccountDisposalService {
      */
     @Transactional
     public void suspend(long targetUserId, Long reportId, long actorAccountId) {
+        requireDisposalTarget(targetUserId, reportId);
         disposals.save(AccountDisposal.create(targetUserId, AccountDisposalType.SUSPEND,
                 actorAccountId, reportId));
         authService.deactivateUser(targetUserId); // 置 DEACTIVATED + 撤销 refresh 句柄
@@ -218,6 +232,7 @@ public class AccountDisposalService {
         reports.save(report);
         auditService.record(actorAccountId, AuditActions.ACCOUNT_REPORT_DISMISSED, "ACCOUNT_REPORT",
                 String.valueOf(reportId), "账号举报工单无需处置");
+        notifyReporters(reportId); // FR-51 回告：驳回与处置文案完全一致（模糊，不透露结果）
     }
 
     /**
@@ -233,7 +248,41 @@ public class AccountDisposalService {
         reports.findById(reportId).ifPresent(r -> {
             r.handleBy(actorAccountId, AccountReportStatus.RESOLVED);
             reports.save(r);
+            notifyReporters(reportId); // FR-51 回告：每个举报人一条模糊通知
         });
+    }
+
+    /**
+     * FR-51 举报处理回告：向该工单的<b>每个去重举报人</b>发布 {@link ReportResolvedEvent}。
+     * 复用内容举报同一事件/监听器（文案模糊、下架与驳回完全一致，不透露处置结果）；
+     * 监听器 AFTER_COMMIT 消费，事务回滚则不发——与「通知排最后」的原则同构。
+     */
+    private void notifyReporters(long reportId) {
+        Instant now = Instant.now();
+        for (Long reporterId : entries.findDistinctReporterIds(reportId)) {
+            events.publishEvent(new ReportResolvedEvent(reportId, reporterId, now));
+        }
+    }
+
+    /**
+     * 单条处置表单的两道服务端校验（表单字段在浏览器里可以随便改，前端一致性不算数）：
+     * <ul>
+     *   <li><b>目标账号必须存在</b>——否则 disposals 的 FK 在提交时才炸成 500；</li>
+     *   <li><b>工单必须属于该账号</b>——否则「警告 X 却关掉 Y 的工单」：Y 的举报凭空消失，
+     *       account_disposals 行还永久引用错误工单，污染处置证据链。</li>
+     * </ul>
+     */
+    private void requireDisposalTarget(long targetUserId, Long reportId) {
+        if (accountQuery.findUserById(targetUserId).isEmpty()) {
+            throw AppException.notFound("用户不存在");
+        }
+        if (reportId != null) {
+            AccountReport report = reports.findById(reportId)
+                    .orElseThrow(() -> AppException.notFound("工单不存在"));
+            if (report.getTargetUserId() != targetUserId) {
+                throw AppException.validation("工单与被处置账号不匹配，请刷新列表后重试");
+            }
+        }
     }
 
     /** 某账号历史被处置次数（含<b>每一次警告</b>——只数封号会漏掉「已经警告过三次」这种关键背景）。 */

@@ -59,17 +59,20 @@ public class UnifiedTicketController {
     private final AccountQueryService accountQueryService;
     private final AccountDisposalService disposalService;
     private final com.tailtopia.moderation.service.ReportService contentReportService;
+    private final com.tailtopia.admin.service.AdminModerationService moderationService;
 
     public UnifiedTicketController(UnifiedTicketQueryService query,
             AccountReportEntryRepository reportEntries, AccountDisposalRepository disposals,
             AccountQueryService accountQueryService, AccountDisposalService disposalService,
-            com.tailtopia.moderation.service.ReportService contentReportService) {
+            com.tailtopia.moderation.service.ReportService contentReportService,
+            com.tailtopia.admin.service.AdminModerationService moderationService) {
         this.query = query;
         this.reportEntries = reportEntries;
         this.disposals = disposals;
         this.accountQueryService = accountQueryService;
         this.disposalService = disposalService;
         this.contentReportService = contentReportService;
+        this.moderationService = moderationService;
     }
 
     @GetMapping("/admin/tickets")
@@ -159,9 +162,8 @@ public class UnifiedTicketController {
             @RequestParam("targetUserId") long targetUserId,
             @RequestParam(value = "reportId", required = false) Long reportId,
             RedirectAttributes flash) {
-        disposalService.warn(targetUserId, reportId, admin.getAdminAccountId());
-        flash.addFlashAttribute("notice", "已警告该账号");
-        return "redirect:/admin/tickets";
+        return withFlashOnError(flash, "已警告该账号",
+                () -> disposalService.warn(targetUserId, reportId, admin.getAdminAccountId()));
     }
 
     /** 封号：停用账号（可逆）+ 撤销 refresh 句柄 + 发通知 + 记一行处置。 */
@@ -171,18 +173,31 @@ public class UnifiedTicketController {
             @RequestParam("targetUserId") long targetUserId,
             @RequestParam(value = "reportId", required = false) Long reportId,
             RedirectAttributes flash) {
-        disposalService.suspend(targetUserId, reportId, admin.getAdminAccountId());
-        flash.addFlashAttribute("notice", "已停用该账号");
-        return "redirect:/admin/tickets";
+        return withFlashOnError(flash, "已停用该账号",
+                () -> disposalService.suspend(targetUserId, reportId, admin.getAdminAccountId()));
     }
 
-    /** 无需处置：工单收档，**对被举报账号什么都不做、也不发任何通知**。 */
+    /** 无需处置：工单收档，**对被举报账号什么都不做**（举报人仍收 FR-51 模糊回告）。 */
     @PostMapping("/admin/tickets/dismiss")
     @PreAuthorize(DISPOSE_AUTH)
     public String dismiss(@AuthenticationPrincipal AdminUserDetails admin,
             @RequestParam("reportId") long reportId, RedirectAttributes flash) {
-        disposalService.dismiss(reportId, admin.getAdminAccountId());
-        flash.addFlashAttribute("notice", "已标记为无需处置");
+        return withFlashOnError(flash, "已标记为无需处置",
+                () -> disposalService.dismiss(reportId, admin.getAdminAccountId()));
+    }
+
+    /**
+     * 单条处置的业务失败（工单不匹配 / 用户不存在 / 已被并发处理）走 flash 回列表——
+     * 运营端不该为一次陈旧表单吃整页 500。
+     */
+    private static String withFlashOnError(RedirectAttributes flash, String successNotice,
+            Runnable action) {
+        try {
+            action.run();
+            flash.addFlashAttribute("notice", successNotice);
+        } catch (AppException e) {
+            flash.addFlashAttribute("notice", e.getMessage());
+        }
         return "redirect:/admin/tickets";
     }
 
@@ -199,28 +214,47 @@ public class UnifiedTicketController {
      * 「一次别封掉几百个人」不能只靠前端。
      */
     @PostMapping("/admin/tickets/batch")
-    @PreAuthorize(DISPOSE_AUTH)
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('content.dispose_account')"
+            + " or hasAuthority('content.takedown')")
     public String batch(@AuthenticationPrincipal AdminUserDetails admin,
             @RequestParam("action") String action,
             @RequestParam(value = "ticketIds", required = false) List<String> ticketIds,
             RedirectAttributes flash) {
+        ParsedBatch parsed;
+        try {
+            parsed = parseBatch(ticketIds);
+        } catch (AppException e) {
+            flash.addFlashAttribute("notice", e.getMessage());
+            return "redirect:/admin/tickets";
+        }
+
+        // 按工单类型分派（修复清单二轮 #7：旧 /admin/reports 页下线后，内容举报的批量能力
+        // 必须在统一队列接住，不能整体回退成逐条点）。权限矩阵按分支各自收口——
+        // 账号处置权与内容下架权是两套授权域，端点级 gate 只做「至少持有其一」的粗筛。
+        return switch (parsed.type()) {
+            case ACCOUNT_REPORT -> batchAccountReports(admin, action, parsed.ids(), flash);
+            case CONTENT_REPORT -> batchContentReports(admin, action, parsed.ids(), flash);
+            case ACCOUNT_IDENTITY -> {
+                flash.addFlashAttribute("notice", "账号标识字段工单请在名称 / 头像审核页处理");
+                yield "redirect:/admin/tickets";
+            }
+        };
+    }
+
+    private String batchAccountReports(AdminUserDetails admin, String action, List<Long> reportIds,
+            RedirectAttributes flash) {
+        if (!hasAnyAuthority("content.dispose_account")) {
+            throw new org.springframework.security.access.AccessDeniedException("缺少账号处置权限");
+        }
         AccountDisposalService.BatchAction batchAction = parseEnum(
                 AccountDisposalService.BatchAction.class, action);
         if (batchAction == null) {
-            flash.addFlashAttribute("notice", "未知的批量动作");
+            flash.addFlashAttribute("notice", "用户举报工单支持：批量警告 / 批量封号 / 批量无需处置");
             return "redirect:/admin/tickets";
         }
         // 封号那一档额外要 user.deactivate —— 与单条口径一致，别让批量成为绕过它的后门。
         if (batchAction == AccountDisposalService.BatchAction.SUSPEND && !canSuspend()) {
             throw new org.springframework.security.access.AccessDeniedException("缺少停用账号权限");
-        }
-
-        List<Long> reportIds;
-        try {
-            reportIds = parseAccountReportIds(ticketIds);
-        } catch (AppException e) {
-            flash.addFlashAttribute("notice", e.getMessage());
-            return "redirect:/admin/tickets";
         }
 
         AccountDisposalService.BatchResult result;
@@ -239,28 +273,59 @@ public class UnifiedTicketController {
         return "redirect:/admin/tickets";
     }
 
+    /** 内容举报批量：动作只有下架 / 驳回（DISMISS 按钮在内容语境下就是驳回），gate 对齐旧批量的 takedown。 */
+    private String batchContentReports(AdminUserDetails admin, String action, List<Long> postIds,
+            RedirectAttributes flash) {
+        boolean takedown = "TAKEDOWN".equals(action);
+        if (!takedown && !"DISMISS".equals(action)) {
+            flash.addFlashAttribute("notice", "内容举报工单支持：批量下架 / 批量无需处置（驳回）");
+            return "redirect:/admin/tickets";
+        }
+        if (!hasAnyAuthority("content.takedown")) {
+            throw new org.springframework.security.access.AccessDeniedException("缺少内容下架权限");
+        }
+        if (postIds.size() > AccountDisposalService.MAX_BATCH_SIZE) {
+            flash.addFlashAttribute("notice",
+                    "单次最多处理 " + AccountDisposalService.MAX_BATCH_SIZE + " 条工单");
+            return "redirect:/admin/tickets";
+        }
+        com.tailtopia.admin.service.AdminModerationService.BatchResult result =
+                moderationService.batchByPost(postIds, takedown, admin);
+        flash.addFlashAttribute("notice",
+                "批量完成：成功 " + result.ok() + " 条，失败 " + result.failedCount() + " 条");
+        flash.addFlashAttribute("batchFailures", result.failed());
+        return "redirect:/admin/tickets";
+    }
+
+    /** 一批同类型工单：类型 + 源表 id 列表（内容举报是 postId、账号举报是工单 id）。 */
+    private record ParsedBatch(TicketType type, List<Long> ids) {
+    }
+
     /**
-     * 解析 {@code 类型:id} 复合串，并把 AC2 的两条边界钉在服务端：
-     * <b>跨类型整批拒绝</b>、<b>账号级处置只适用于用户举报工单</b>。
+     * 解析 {@code 类型:id} 复合串，并把 AC2 的边界钉在服务端：<b>跨类型整批拒绝</b>。
      *
      * <p>为什么跨类型不能批：不同类型工单的处置对象含义根本不同 ——
      * 内容举报处置的是<b>内容</b>，账号举报处置的是<b>人</b>。混在一批里执行同一个动作没有意义。
+     * 同类型批次放行，动作合法性由各类型分支自行判定。
      */
-    private static List<Long> parseAccountReportIds(List<String> tokens) {
+    private static ParsedBatch parseBatch(List<String> tokens) {
         if (tokens == null || tokens.isEmpty()) {
             throw AppException.validation("请先勾选要处理的工单");
         }
-        String firstType = null;
+        TicketType batchType = null;
         List<Long> ids = new java.util.ArrayList<>(tokens.size());
         for (String token : tokens) {
             int sep = token.indexOf(':');
             if (sep <= 0) {
                 throw AppException.validation("工单标识格式不正确");
             }
-            String type = token.substring(0, sep);
-            if (firstType == null) {
-                firstType = type;
-            } else if (!firstType.equals(type)) {
+            TicketType type = parseEnum(TicketType.class, token.substring(0, sep));
+            if (type == null) {
+                throw AppException.validation("工单标识格式不正确");
+            }
+            if (batchType == null) {
+                batchType = type;
+            } else if (batchType != type) {
                 throw AppException.validation("不同类型的工单不能一起批量处理");
             }
             try {
@@ -269,24 +334,32 @@ public class UnifiedTicketController {
                 throw AppException.validation("工单标识格式不正确");
             }
         }
-        if (!TicketType.ACCOUNT_REPORT.name().equals(firstType)) {
-            throw AppException.validation("警告 / 封号只适用于用户举报工单");
-        }
-        return ids;
+        return new ParsedBatch(batchType, ids);
     }
 
     private static boolean canSuspend() {
+        return hasAnyAuthority("user.deactivate");
+    }
+
+    /** 持有任一指定权限码，或 SUPER_ADMIN（全后台通例：SUPER_ADMIN 覆盖一切权限点）。 */
+    private static boolean hasAnyAuthority(String... names) {
         var auth = org.springframework.security.core.context.SecurityContextHolder.getContext()
                 .getAuthentication();
         if (auth == null) {
             return false;
         }
-        var authorities = auth.getAuthorities();
-        boolean superAdmin = authorities.stream()
-                .anyMatch(a -> "ROLE_SUPER_ADMIN".equals(a.getAuthority()));
-        boolean deactivate = authorities.stream()
-                .anyMatch(a -> "user.deactivate".equals(a.getAuthority()));
-        return superAdmin || deactivate;
+        return auth.getAuthorities().stream().anyMatch(a -> {
+            String granted = a.getAuthority();
+            if ("ROLE_SUPER_ADMIN".equals(granted)) {
+                return true;
+            }
+            for (String name : names) {
+                if (granted.equals(name)) {
+                    return true;
+                }
+            }
+            return false;
+        });
     }
 
     /**

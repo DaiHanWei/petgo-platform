@@ -212,15 +212,19 @@ public class UnifiedTicketQueryService {
         }
         String keyword = search == null ? null : search.trim();
         if (keyword != null && !keyword.isEmpty()) {
-            // ⚠️ 纯数字也可能超 Long（比如整段粘贴的长号码）——溢出就当普通昵称模糊匹配，
-            // 绝不能让一个筛选输入把整页打成 500。
+            // 纯数字（且没超 Long）：既当 userId 精确匹配、也当昵称模糊匹配——数字昵称
+            //（「88888」这类印尼市场常见形态）不能因为「像 id」就永远搜不到。
+            // ⚠️ ILIKE 模式必须转义 % _ \（否则搜「_」= 匹配全部昵称，筛选形同虚设），
+            // 超 Long 的长号码降级为纯昵称匹配，绝不让一个筛选输入把整页打成 500。
             Long asId = parseUserId(keyword);
+            String pattern = "%" + escapeLike(keyword) + "%";
             if (asId != null) {
-                where.append(" AND u.target_user_id = ?");
+                where.append(" AND (u.target_user_id = ? OR usr.nickname ILIKE ? ESCAPE '\\')");
                 args.add(asId);
+                args.add(pattern);
             } else {
-                where.append(" AND usr.nickname ILIKE ?");
-                args.add("%" + keyword + "%");
+                where.append(" AND usr.nickname ILIKE ? ESCAPE '\\'");
+                args.add(pattern);
             }
         }
 
@@ -279,7 +283,12 @@ public class UnifiedTicketQueryService {
                 rs.getLong("disposal_count"));
     };
 
-    /** 纯数字且在 Long 范围内 → userId；否则 null（走昵称模糊匹配）。 */
+    /** ILIKE 模式转义：% _ \ 是通配元字符，来自用户输入时必须按字面量处理。 */
+    private static String escapeLike(String keyword) {
+        return keyword.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+    }
+
+    /** 纯数字且在 Long 范围内 → userId；否则 null（只走昵称字面量匹配）。 */
     private static Long parseUserId(String keyword) {
         if (!keyword.chars().allMatch(Character::isDigit)) {
             return null;

@@ -103,3 +103,23 @@
 - 模板类问题（#2/#3/#6）必须真浏览器验收，MockMvc 绿灯不算数。
 - #1/#4/#8 补集成测试后在本地 scratch 库过 L1。
 - 前端 #7 修完模拟器（Android）实测拉黑链路。
+
+## 二轮评审（2026-08-18，全量重审 · 以代码为事实）修复批
+
+一轮 10 条修复经直读代码逐条复核**全部真实生效**；二轮新入榜 10 条已全部修复：
+
+| # | 问题 | 修法 |
+|---|---|---|
+| R2-1 [x] | `upsertTicket` catch 唯一约束异常=死代码（rollback-only），并发首报败方 500 丢数据 | 改 `INSERT … ON CONFLICT (target_user_id) DO NOTHING` + find；提交前校验目标用户存在（404） |
+| R2-2 [x] | `insertIfAbsent` 同款假幂等，双击拉黑/拉黑不存在者 500 | 改 `ON CONFLICT (holder,target,source) DO NOTHING`；block 前校验目标存在（404） |
+| R2-3 [x] | 举报自由文本 `detail` 原文进接口日志（PII 红线） | LogSanitizer 新增**仅请求体**脱敏键集 `{detail}`（`sanitizeRequest`），响应体 RFC 9457 的 detail 不受影响 |
+| R2-4 [x] | 账号举报处置从不回告举报人（FR-51 缺失） | `resolveTicket`/`dismiss` 后对该工单**去重举报人**逐个发布 `ReportResolvedEvent`（复用内容举报同一监听器与模糊文案，AFTER_COMMIT） |
+| R2-5 [x] | warn/suspend 不校验 reportId 归属，可警告 X 关掉 Y 的工单 | `requireDisposalTarget`：目标用户须存在 + `report.targetUserId` 必须匹配；controller 侧 AppException 走 flash 不再 500 |
+| R2-6 [x] | dismiss-all 只 gate 查看权，只读审核员可批量抹举报 | gate 改 `content.takedown`（对齐旧批量驳回）；模板按钮同步 |
+| R2-7 [x] | 内容举报批量能力回退 + 报错答非所问 | batch 端点按类型分派：内容批次支持 TAKEDOWN（新「批量下架」按钮）/DISMISS（=批量驳回，走 `batchByPost` 逐帖独立事务），警告/封号给指向性提示；账号/内容两支各自收权限口 |
+| R2-8 [x] | 检索 ILIKE 元字符零转义 + 数字昵称搜不到 | `escapeLike`（%/_/\\ + ESCAPE）；纯数字改 `(target_user_id = ? OR nickname ILIKE ?)` 双命中 |
+| R2-9 [x] | 拉黑评论作者后评论计数不刷新（拉黑泄底） | `_onCommentAuthorHidden` 改 bump `commentsRefreshProvider`（同时驱动列表与头部计数） |
+| R2-10 [x] | 警告/无需处置/批量条缺 sec:authorize，view-only 人群点了必 403 | 行内动作与批量条全部按权限渲染（警告/无需处置=dispose；批量封号=+user.deactivate；下架/驳回/批量下架=takedown） |
+
+L0：后端 test-compile + 44 单测绿（含契约更新的 `batchRejectsNonAccountTicketTypes`）；前端 analyze 0 + social/content 130 测试绿。
+未入榜 backlog 仍开放：settings 拉黑计数、200 字 grapheme/UTF-16 计数、重复举报重复计数、注销者拉黑 403 toast、浮层遗留、cleanup 一批。
