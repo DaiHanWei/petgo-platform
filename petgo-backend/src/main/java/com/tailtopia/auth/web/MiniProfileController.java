@@ -60,9 +60,15 @@ public class MiniProfileController {
                 reported);
     }
 
-    /** 登录用户 id（游客 / 无效 JWT → null）。照抄 {@code ContentDetailController}，游客不抛 401。 */
+    /**
+     * 登录<b>用户</b> id（游客 / 无效 JWT / <b>非 USER 角色</b> → null）。
+     *
+     * <p>⚠️ 本端点 permitAll，兽医 token 也进得来。必须只认 {@code role=USER}——否则兽医的
+     * {@code sub=vetId} 会被当成碰撞的 {@code users.id}，用它查 {@code isBlocked}/{@code isReported}
+     * 就是拿无关用户的隐藏关系做判断（安全评审三轮 #1）。非用户一律按游客投影。
+     */
     private static Long viewerId(Jwt jwt) {
-        if (jwt == null || jwt.getSubject() == null) {
+        if (jwt == null || jwt.getSubject() == null || !"USER".equals(jwt.getClaimAsString("role"))) {
             return null;
         }
         try {

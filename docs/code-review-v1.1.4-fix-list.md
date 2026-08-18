@@ -123,3 +123,24 @@
 
 L0：后端 test-compile + 44 单测绿（含契约更新的 `batchRejectsNonAccountTicketTypes`）；前端 analyze 0 + social/content 130 测试绿。
 未入榜 backlog 仍开放：settings 拉黑计数、200 字 grapheme/UTF-16 计数、重复举报重复计数、注销者拉黑 403 toast、浮层遗留、cleanup 一批。
+
+## 三轮评审（2026-08-19，全量重审 · 只信任代码）修复批
+
+前两轮 20 条修复经直读当前代码逐条复核**全部真实生效、无假修复**。三轮新入榜 10 条已全部修复：
+
+| # | 严重度 | 问题 | 修法 |
+|---|---|---|---|
+| R3-1 [x] | 安全 | 兽医 JWT 可越权操作任意用户拉黑/举报（新端点落 anyRequest().authenticated()，sub=vetId 与 users.id 碰撞） | SecurityConfig 给 /me/blocked-users 与 /account-reports 补 `hasRole('USER')`（对齐 consult/support）；MiniProfileController.viewerId 额外校验 role=USER（permitAll 端点的深度防御） |
+| R3-2 [x] | 安全 | 单条驳回 /admin/reports/{id}/dismiss 仍 gate 查看权，绕过 R2-6 处置权闸 | gate 改 `content.takedown`（对齐 dismiss-all/批量驳回） |
+| R3-3 [x] | 正确性 | warn/suspend/dismiss 无 PENDING 守卫，过期页/并发重放副作用 | requireDisposalTarget + dismiss 加 `requirePending`（工单非 PENDING 报错回列表） |
+| R3-4 [x] | 正确性 | 评论计数缺「父被隐藏→整串回复不计数」传递条件，拉黑泄底 | countVisibleForViewer 对回复行加父评论自身可见性 EXISTS（覆盖父被隐藏/影子/软删） |
+| R3-5 [x] | 并发（PLAUSIBLE） | 处置进行中提交的新举报静默落入终态工单丢失 | 举报提交与处置双路径改行级写锁（findByTargetUserIdForUpdate / findByIdForUpdate）串行化，单行同序无死锁 |
+| R3-6 [x] | 正确性 | 批量按钮跨权限渲染，点了整页 403 | 控制器分支的权限不足从 throw AccessDeniedException 降级为红色 flash（不再 500/403） |
+| R3-7 [x] | 正确性 | 回告用全量举报人，工单翻面重发历史周期幽灵通知 | notifyReporters 以上次 handled_at 为界，只回告本周期新举报人（findDistinctReporterIdsAfter） |
+| R3-8 [x] | 正确性 | 举报成功态被点蒙层收起当成取消，Feed/标签不更新 | openAccountReport 改用 onSubmitted 回调记账，成功与关闭方式解耦（怎么关都算成功） |
+| R3-9 [x] | 正确性 | 处置失败提示渲染成绿色成功横幅，运营读成成功 | 失败信息改走 error flash 键 + 模板加红色 err 横幅（对齐全后台约定） |
+| R3-10 [x] | 轻微 | 黑名单日期显示 UTC 差一天 | blockedAt 解析后 .toLocal()（对齐 App 内其它绝对日期路径） |
+
+L0：后端 test-compile + 相关单测绿（含契约更新的批量权限/flash 断言）；前端 analyze 0 + social/content 130 测试绿。
+**待 L1**（需 DB/scratch 库真跑）：R3-3 状态守卫、R3-4 计数 SQL 传递条件、R3-5 行级锁串行化都只能在集成测试/真库验证——L0 编译绿不代表 SQL 语义与锁行为正确。
+未入榜 backlog 仍开放：confirm_sheet 无 PopScope、takedown 重定向无 flash、解除拉黑 toast 遮挡，及 cleanup 一批。

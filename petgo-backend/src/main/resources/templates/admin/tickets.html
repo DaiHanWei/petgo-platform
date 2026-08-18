@@ -21,6 +21,9 @@
         <h1 th:text="#{admin.tickets.title}">工单队列</h1>
         <p class="muted" th:text="#{admin.tickets.subtitle}">三类工单统一排队，按优先级从高到低；同分先报的先处理。</p>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <!-- 失败提示走红色 err 横幅（评审三轮 #9）：全后台约定 notice=绿色成功 / error=红色失败，
+             本页早先把处置失败也塞进 notice，运营会把「工单不匹配」读成封号成功。 -->
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
         <!-- ⚠️ 批量的失败明细必须真的列出来（AC5）：只报「失败 2 条」的话，
              运营不知道是哪 2 条、为什么，也就无从重试。既有内容举报的批量就是只报了数量。 -->
         <div class="banner" th:if="${batchFailures != null and !#lists.isEmpty(batchFailures)}">

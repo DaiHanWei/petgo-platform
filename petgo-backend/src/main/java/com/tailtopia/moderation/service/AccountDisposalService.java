@@ -226,13 +226,15 @@ public class AccountDisposalService {
      */
     @Transactional
     public void dismiss(long reportId, long actorAccountId) {
-        AccountReport report = reports.findById(reportId)
+        AccountReport report = reports.findByIdForUpdate(reportId) // 行级写锁串行化（#5）
                 .orElseThrow(() -> AppException.notFound("工单不存在"));
+        requirePending(report); // 过期页面/并发重放守卫（评审三轮 #3）
+        Instant boundary = report.getHandledAt(); // 上次处置时刻，回告只覆盖此后的新举报人（#7）
         report.handleBy(actorAccountId, AccountReportStatus.DISMISSED);
         reports.save(report);
         auditService.record(actorAccountId, AuditActions.ACCOUNT_REPORT_DISMISSED, "ACCOUNT_REPORT",
                 String.valueOf(reportId), "账号举报工单无需处置");
-        notifyReporters(reportId); // FR-51 回告：驳回与处置文案完全一致（模糊，不透露结果）
+        notifyReporters(reportId, boundary); // FR-51 回告：驳回与处置文案完全一致（模糊，不透露结果）
     }
 
     /**
@@ -246,20 +248,28 @@ public class AccountDisposalService {
             return; // 运营主动巡查的处置，没有关联工单
         }
         reports.findById(reportId).ifPresent(r -> {
+            Instant boundary = r.getHandledAt(); // 上次处置时刻（首次处置为 null）
             r.handleBy(actorAccountId, AccountReportStatus.RESOLVED);
             reports.save(r);
-            notifyReporters(reportId); // FR-51 回告：每个举报人一条模糊通知
+            notifyReporters(reportId, boundary); // FR-51 回告：仅本周期的新举报人
         });
     }
 
     /**
-     * FR-51 举报处理回告：向该工单的<b>每个去重举报人</b>发布 {@link ReportResolvedEvent}。
+     * FR-51 举报处理回告：向<b>本处置周期内</b>的每个去重举报人发布 {@link ReportResolvedEvent}。
      * 复用内容举报同一事件/监听器（文案模糊、下架与驳回完全一致，不透露处置结果）；
      * 监听器 AFTER_COMMIT 消费，事务回滚则不发——与「通知排最后」的原则同构。
+     *
+     * <p>⚠️ 以 {@code boundary}（上次处置时刻）为界只回告此后的新举报人（评审三轮 #7）：
+     * 工单每次 AC9 翻面再处置，若扫全量明细会把几个月前早已收到回告的历史举报人再通知一遍，
+     * 变成「毫无动作却又收到举报已处理」的幽灵通知。首次处置 boundary 为 null → 覆盖全部。
      */
-    private void notifyReporters(long reportId) {
+    private void notifyReporters(long reportId, Instant boundary) {
         Instant now = Instant.now();
-        for (Long reporterId : entries.findDistinctReporterIds(reportId)) {
+        List<Long> reporterIds = boundary == null
+                ? entries.findDistinctReporterIds(reportId)
+                : entries.findDistinctReporterIdsAfter(reportId, boundary);
+        for (Long reporterId : reporterIds) {
             events.publishEvent(new ReportResolvedEvent(reportId, reporterId, now));
         }
     }
@@ -277,11 +287,26 @@ public class AccountDisposalService {
             throw AppException.notFound("用户不存在");
         }
         if (reportId != null) {
-            AccountReport report = reports.findById(reportId)
+            // 取行级写锁（评审三轮 #5/#3）：锁在任何处置副作用之前，与举报提交及并发处置串行化，
+            // 锁一直持有到本事务结束。
+            AccountReport report = reports.findByIdForUpdate(reportId)
                     .orElseThrow(() -> AppException.notFound("工单不存在"));
             if (report.getTargetUserId() != targetUserId) {
                 throw AppException.validation("工单与被处置账号不匹配，请刷新列表后重试");
             }
+            requirePending(report);
+        }
+    }
+
+    /**
+     * 工单必须仍在待处理（评审三轮 #3）。按钮只在渲染时看 PENDING，过期页面或双运营并发会拿着
+     * 已处置工单再点一次 —— handleBy 盲覆盖 status 会完整重放副作用链（二次推送不可撤回、虚增
+     * 处置数、重发回告），甚至把 RESOLVED 翻成 DISMISSED 让审计与工单态自相矛盾。
+     * 调用方已在同事务内持有该行写锁，此判定在锁内做，真并发也安全。
+     */
+    private static void requirePending(AccountReport report) {
+        if (report.getStatus() != AccountReportStatus.PENDING) {
+            throw AppException.validation("该工单已被处理，请刷新列表后重试");
         }
     }
 

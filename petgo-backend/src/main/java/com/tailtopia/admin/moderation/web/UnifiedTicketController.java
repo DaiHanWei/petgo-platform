@@ -189,6 +189,9 @@ public class UnifiedTicketController {
     /**
      * 单条处置的业务失败（工单不匹配 / 用户不存在 / 已被并发处理）走 flash 回列表——
      * 运营端不该为一次陈旧表单吃整页 500。
+     *
+     * <p>⚠️ 失败写 {@code error}（红色横幅）而非 {@code notice}（绿色成功横幅）——评审三轮 #9：
+     * 把「工单不匹配」塞进 notice 会让运营把失败读成封号成功。
      */
     private static String withFlashOnError(RedirectAttributes flash, String successNotice,
             Runnable action) {
@@ -196,7 +199,7 @@ public class UnifiedTicketController {
             action.run();
             flash.addFlashAttribute("notice", successNotice);
         } catch (AppException e) {
-            flash.addFlashAttribute("notice", e.getMessage());
+            flash.addFlashAttribute("error", e.getMessage());
         }
         return "redirect:/admin/tickets";
     }
@@ -224,18 +227,21 @@ public class UnifiedTicketController {
         try {
             parsed = parseBatch(ticketIds);
         } catch (AppException e) {
-            flash.addFlashAttribute("notice", e.getMessage());
+            flash.addFlashAttribute("error", e.getMessage());
             return "redirect:/admin/tickets";
         }
 
         // 按工单类型分派（修复清单二轮 #7：旧 /admin/reports 页下线后，内容举报的批量能力
         // 必须在统一队列接住，不能整体回退成逐条点）。权限矩阵按分支各自收口——
         // 账号处置权与内容下架权是两套授权域，端点级 gate 只做「至少持有其一」的粗筛。
+        // ⚠️ 分支内的「持有另一类权限但没有本类权限」不能抛 AccessDeniedException（评审三轮 #6）——
+        // 「批量无需处置」按钮对两类工单共用、且只要有其一即渲染，抛异常=运营点渲染出来的按钮吃整页 403；
+        // 一律降级为红色 flash 提示。
         return switch (parsed.type()) {
             case ACCOUNT_REPORT -> batchAccountReports(admin, action, parsed.ids(), flash);
             case CONTENT_REPORT -> batchContentReports(admin, action, parsed.ids(), flash);
             case ACCOUNT_IDENTITY -> {
-                flash.addFlashAttribute("notice", "账号标识字段工单请在名称 / 头像审核页处理");
+                flash.addFlashAttribute("error", "账号标识字段工单请在名称 / 头像审核页处理");
                 yield "redirect:/admin/tickets";
             }
         };
@@ -244,17 +250,20 @@ public class UnifiedTicketController {
     private String batchAccountReports(AdminUserDetails admin, String action, List<Long> reportIds,
             RedirectAttributes flash) {
         if (!hasAnyAuthority("content.dispose_account")) {
-            throw new org.springframework.security.access.AccessDeniedException("缺少账号处置权限");
+            flash.addFlashAttribute("error", "你没有处置用户举报工单的权限");
+            return "redirect:/admin/tickets";
         }
         AccountDisposalService.BatchAction batchAction = parseEnum(
                 AccountDisposalService.BatchAction.class, action);
         if (batchAction == null) {
-            flash.addFlashAttribute("notice", "用户举报工单支持：批量警告 / 批量封号 / 批量无需处置");
+            flash.addFlashAttribute("error", "用户举报工单支持：批量警告 / 批量封号 / 批量无需处置");
             return "redirect:/admin/tickets";
         }
         // 封号那一档额外要 user.deactivate —— 与单条口径一致，别让批量成为绕过它的后门。
+        // 封号按钮在模板已按 user.deactivate 隐藏，走到这里只可能是篡改，红色提示即可（不 500）。
         if (batchAction == AccountDisposalService.BatchAction.SUSPEND && !canSuspend()) {
-            throw new org.springframework.security.access.AccessDeniedException("缺少停用账号权限");
+            flash.addFlashAttribute("error", "你没有停用账号的权限");
+            return "redirect:/admin/tickets";
         }
 
         AccountDisposalService.BatchResult result;
@@ -263,7 +272,7 @@ public class UnifiedTicketController {
         } catch (AppException e) {
             // 超 50 条上限等整批校验失败：给 flash 提示回列表，不能让运营吃一个整页错误
             //（前端置灰只是体验，勾选框在浏览器里可以随便改）。
-            flash.addFlashAttribute("notice", e.getMessage());
+            flash.addFlashAttribute("error", e.getMessage());
             return "redirect:/admin/tickets";
         }
         flash.addFlashAttribute("notice",
@@ -278,14 +287,15 @@ public class UnifiedTicketController {
             RedirectAttributes flash) {
         boolean takedown = "TAKEDOWN".equals(action);
         if (!takedown && !"DISMISS".equals(action)) {
-            flash.addFlashAttribute("notice", "内容举报工单支持：批量下架 / 批量无需处置（驳回）");
+            flash.addFlashAttribute("error", "内容举报工单支持：批量下架 / 批量无需处置（驳回）");
             return "redirect:/admin/tickets";
         }
         if (!hasAnyAuthority("content.takedown")) {
-            throw new org.springframework.security.access.AccessDeniedException("缺少内容下架权限");
+            flash.addFlashAttribute("error", "你没有处置内容举报工单的权限");
+            return "redirect:/admin/tickets";
         }
         if (postIds.size() > AccountDisposalService.MAX_BATCH_SIZE) {
-            flash.addFlashAttribute("notice",
+            flash.addFlashAttribute("error",
                     "单次最多处理 " + AccountDisposalService.MAX_BATCH_SIZE + " 条工单");
             return "redirect:/admin/tickets";
         }

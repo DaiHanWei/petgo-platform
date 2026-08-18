@@ -122,8 +122,10 @@ public class AdminWebController {
     }
 
     @PostMapping("/admin/reports/{id}/dismiss")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('content.view_reports')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')")
     public String dismiss(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id) {
+        // ⚠️ gate 对齐 dismiss-all / 批量驳回的 content.takedown（评审三轮 #2）：驳回是处置动作，
+        // 挂查看权上等于让只读审核员逐条 POST 绕过处置权限（等价被禁的 dismiss-all）。
         adminModerationService.dismiss(id, admin);
         return "redirect:/admin/tickets";
     }

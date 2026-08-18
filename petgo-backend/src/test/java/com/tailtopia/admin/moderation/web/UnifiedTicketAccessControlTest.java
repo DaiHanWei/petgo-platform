@@ -194,7 +194,8 @@ class UnifiedTicketAccessControlTest {
         controller.batch(principalOf(), "WARN",
                 java.util.List.of("ACCOUNT_REPORT:1", "CONTENT_REPORT:2"), flash);
 
-        assertThat(flash.getFlashAttributes().get("notice").toString()).contains("不同类型");
+        // 失败提示走 error（红色横幅）而非 notice（评审三轮 #9）。
+        assertThat(flash.getFlashAttributes().get("error").toString()).contains("不同类型");
         org.mockito.Mockito.verify(ctx.getBean(AccountDisposalService.class),
                 org.mockito.Mockito.never()).batch(any(), any(), org.mockito.ArgumentMatchers.anyLong());
     }
@@ -210,7 +211,7 @@ class UnifiedTicketAccessControlTest {
 
         // 二轮修复 #7 后：内容举报批次不再整体拒绝，但警告/封号动作仍然打不到它——
         // 提示改为指向内容自己的两个动作，且账号批量与内容批量都不得被触发。
-        assertThat(flash.getFlashAttributes().get("notice").toString()).contains("内容举报");
+        assertThat(flash.getFlashAttributes().get("error").toString()).contains("内容举报");
         org.mockito.Mockito.verify(ctx.getBean(AccountDisposalService.class),
                 org.mockito.Mockito.never()).batch(any(), any(), org.mockito.ArgumentMatchers.anyLong());
         org.mockito.Mockito.verify(ctx.getBean(com.tailtopia.admin.service.AdminModerationService.class),
@@ -223,9 +224,11 @@ class UnifiedTicketAccessControlTest {
         authenticate(AdminAccountType.STAFF, "content.dispose_account");
         var flash = new org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap();
 
-        assertThatThrownBy(() -> controller.batch(principalOf(), "SUSPEND",
-                java.util.List.of("ACCOUNT_REPORT:1"), flash))
-                .isInstanceOf(AccessDeniedException.class);
+        // 评审三轮 #6：权限不足降级为红色 flash 提示（不再抛 AccessDeniedException 打成整页 403）。
+        controller.batch(principalOf(), "SUSPEND", java.util.List.of("ACCOUNT_REPORT:1"), flash);
+        assertThat(flash.getFlashAttributes().get("error").toString()).contains("停用");
+        org.mockito.Mockito.verify(ctx.getBean(AccountDisposalService.class),
+                org.mockito.Mockito.never()).batch(any(), any(), org.mockito.ArgumentMatchers.anyLong());
     }
 
     private AdminUserDetails principalOf() {

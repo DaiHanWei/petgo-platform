@@ -179,6 +179,12 @@ public class SecurityConfig {
                                 "/api/v1/consultations", "/api/v1/consultations/**").hasRole("USER")
                         // 客服工单端点（Story 4.1，FR-52）：用户建单/查单，仅 role=USER（vet/guest → 403）
                         .requestMatchers("/api/v1/support-tickets", "/api/v1/support-tickets/**").hasRole("USER")
+                        // 拉黑与账号举报（V1.1.4 Story 1.5 / 2.1）：仅 role=USER。⚠️ 必须显式限定——
+                        // controller 的 currentUserId 盲取 jwt.sub 当 users.id，而兽医 token 的 sub=vetId
+                        // 与 users.id 是独立命名空间且大量碰撞；落到 anyRequest().authenticated() 会让
+                        // 兽医以无关用户名义写入不可撤销的举报隐藏行（安全评审三轮 #1）。
+                        .requestMatchers("/api/v1/me/blocked-users", "/api/v1/me/blocked-users/**",
+                                "/api/v1/account-reports", "/api/v1/account-reports/**").hasRole("USER")
                         // 用户端退款方式选择/填收款（Story 4.5）：列表 + PawCoin 即时退 + QRIS 填账户，仅 role=USER
                         .requestMatchers("/api/v1/me/refund-requests",
                                 "/api/v1/refund-requests/**").hasRole("USER")

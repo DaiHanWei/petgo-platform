@@ -107,7 +107,9 @@ public class AccountReportService {
      */
     private AccountReport upsertTicket(long targetUserId) {
         reports.insertIfAbsent(targetUserId);
-        AccountReport report = reports.findByTargetUserId(targetUserId)
+        // ⚠️ 取行级写锁再读（评审三轮 #5）：与运营处置路径串行化——处置进行中，本次提交阻塞到
+        // 处置事务提交后才读到 RESOLVED，reopenIfHandled 才能正确翻回 PENDING，避免新举报静默丢失。
+        AccountReport report = reports.findByTargetUserIdForUpdate(targetUserId)
                 .orElseThrow(() -> AppException.conflict("举报提交冲突，请重试"));
         report.reopenIfHandled();
         return reports.save(report);
