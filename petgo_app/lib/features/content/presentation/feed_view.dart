@@ -9,6 +9,7 @@ import '../domain/feed_image_layout.dart';
 import '../domain/feed_item.dart';
 import '../domain/pinned_slot.dart';
 import 'pinned_badge.dart';
+import 'promo_pinned_card.dart';
 import '../domain/home_refresh_provider.dart';
 
 /// Feed 单列视图（原型 feed.html：单列全宽卡片，非 2 列瀑布）。
@@ -33,6 +34,7 @@ class FeedMasonryView extends ConsumerStatefulWidget {
     this.header,
     this.pinned,
     this.onTapPinned,
+    this.onTapPromo,
     this.footer,
     this.autoLoadMore = true,
   });
@@ -67,6 +69,9 @@ class FeedMasonryView extends ConsumerStatefulWidget {
 
   /// 点顶置卡（进详情页）。埋点在本组件内上报，回调只负责跳转。
   final ValueChanged<FeedItem>? onTapPinned;
+
+  /// 点推广卡（V1.1.6 Story 4.3）。回调负责"怎么跳"，埋点仍在本组件内上报。
+  final ValueChanged<PromoCard>? onTapPromo;
 
   /// 可选全幅尾部（随 Feed 同滚）。feed-guest 用作底部登录引导横幅（访客翻页闸门）。
   final Widget? footer;
@@ -183,7 +188,33 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
         // 🛡 为空则整块不渲染 —— 不留占位。
         final pin = widget.pinned;
         final pinnedItem = pin?.item;
+        final promo = pin?.promo;
         final cards = <Widget>[
+          // 推广卡片（Story 4.3）：与内容类顶置**共用同一个角标**，视觉不作区分、不加广告标识。
+          if (promo != null)
+            Container(
+              key: const ValueKey('feedPromoCard'),
+              padding: const EdgeInsets.only(bottom: 12),
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: AppColors.line2, width: 1)),
+              ),
+              child: PromoPinnedCard(
+                promo: promo,
+                maxImageHeight: maxImageHeight,
+                // 🔴 认不出的跳转目标 → 不可点。运营填错一个字符不该让首页出问题。
+                onTap: promo.jumpTarget == PromoJumpTarget.unknown
+                    ? null
+                    : () {
+                        Analytics.capture('social_pinned_slot_tapped', {
+                          'pin_config_id': pin!.pinConfigId,
+                          'pin_type': pin.analyticsType,
+                          'jump_target': promo.jumpTarget.analyticsValue,
+                        });
+                        widget.onTapPromo?.call(promo);
+                      },
+              ),
+            ),
           if (pinnedItem != null)
             Container(
               padding: const EdgeInsets.only(bottom: 12),

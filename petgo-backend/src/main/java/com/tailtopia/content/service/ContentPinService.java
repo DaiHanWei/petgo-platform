@@ -1,6 +1,7 @@
 package com.tailtopia.content.service;
 
 import com.tailtopia.content.domain.ContentPin;
+import com.tailtopia.content.domain.PinObjectType;
 import com.tailtopia.content.repository.ContentPinRepository;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.schedule.SchedulePhase;
@@ -35,8 +36,29 @@ public class ContentPinService {
     @Transactional
     public ContentPin schedule(ContentPin pin) {
         validateWindow(pin.getStartsAt(), pin.getEndsAt());
+        validateObject(pin);
         requireNoOverlap(pin.getSlot(), pin.getStartsAt(), pin.getEndsAt(), null);
         return pins.save(pin);
+    }
+
+    /**
+     * 两类对象各自的必填项（Story 4.3 · FR-68）。
+     *
+     * <p>数据库已有互斥约束兜底，这里再拦一道只为给运营一句**人话**提示 ——
+     * 约束违例抛出来的是一串英文约束名。
+     */
+    private void validateObject(ContentPin pin) {
+        if (pin.getObjectType() == PinObjectType.PROMO) {
+            if (isBlank(pin.getPromoImageUrl()) || isBlank(pin.getPromoTitle())) {
+                throw AppException.validation("推广卡片的图片与标题为必填");
+            }
+        } else if (pin.getContentId() == null) {
+            throw AppException.validation("请选择要顶置的内容");
+        }
+    }
+
+    private static boolean isBlank(String s) {
+        return s == null || s.isBlank();
     }
 
     private void validateWindow(Instant startsAt, Instant endsAt) {

@@ -199,8 +199,14 @@ public class FeedService {
         if (pin == null) {
             return new PinnedSlotResponse(null);
         }
-        if (pin.getObjectType() != PinObjectType.CONTENT || pin.getContentId() == null) {
-            // 推广卡片属 Story 4.3；本 story 只处理"顶置一篇已发布内容"。
+        if (pin.getObjectType() == PinObjectType.PROMO) {
+            // 推广卡片（Story 4.3）：不对应任何真实帖子，只有图片 / 标题 / 跳转目标三个字段。
+            return new PinnedSlotResponse(new PinnedSlotResponse.Pinned(
+                    pin.getId(), pin.getObjectType().name(), null,
+                    new PinnedSlotResponse.Promo(
+                            pin.getPromoImageUrl(), pin.getPromoTitle(), pin.getPromoLinkUrl())));
+        }
+        if (pin.getContentId() == null) {
             return new PinnedSlotResponse(null);
         }
         ContentPost post = posts.findById(pin.getContentId()).orElse(null);
@@ -214,7 +220,7 @@ public class FeedService {
                 likedIds(one, viewerId).contains(post.getId()),
                 commentCounts(one, viewerId).getOrDefault(post.getId(), 0L));
         return new PinnedSlotResponse(new PinnedSlotResponse.Pinned(
-                pin.getId(), pin.getObjectType().name(), item));
+                pin.getId(), pin.getObjectType().name(), item, null));
     }
 
     private static boolean isDisplayable(ContentPost post) {

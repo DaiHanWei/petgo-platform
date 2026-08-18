@@ -16,8 +16,22 @@ public record PinnedSlotResponse(Pinned pin) {
      * @param pinConfigId 坑位配置标识（埋点要带）
      * @param pinType     顶置类型：{@code CONTENT}（已发布内容）/ {@code PROMO}（推广卡片）
      * @param item        顶置的内容条目 —— 与普通条目**完全同构的那一个 DTO**，
-     *                    好让客户端用同一个卡片组件渲染。推广卡片（Story 4.3）时为 null
+     *                    好让客户端用同一个卡片组件渲染。推广卡片时为 null
+     * @param promo       推广卡片（Story 4.3）；顶置已发布内容时为 null
      */
-    public record Pinned(long pinConfigId, String pinType, FeedItemResponse item) {
+    public record Pinned(long pinConfigId, String pinType, FeedItemResponse item, Promo promo) {
+    }
+
+    /**
+     * 推广卡片（Story 4.3 · FR-68 对象 b）。**不对应任何真实帖子**。
+     *
+     * <p>🔴 只有这三个字段 —— **没有作者、没有点赞评论、没有时间**。
+     * 客户端因此不渲染那三块（没有数据可放），而不是编造出来。
+     *
+     * @param imageUrl 必填
+     * @param title    必填
+     * @param linkUrl  跳转目标；外部链接或 App 内部深链，**可空 = 纯展示卡**
+     */
+    public record Promo(String imageUrl, String title, String linkUrl) {
     }
 }

@@ -17,6 +17,7 @@ import 'feed_controller.dart';
 import 'feed_skeleton.dart';
 import 'feed_tab_row.dart';
 import 'feed_view.dart';
+import 'promo_target.dart';
 import 'publish_compose_page.dart';
 import 'report_sheet.dart';
 import '../../../shared/widgets/mini_profile_sheet.dart';
@@ -171,6 +172,7 @@ class HomePage extends ConsumerWidget {
           // 顶置坑位（V1.1.6 Story 4.2）：取数失败或无生效配置 → null → 什么都不渲染。
           pinned: ref.watch(pinnedSlotProvider).value,
           onTapPinned: (item) => context.push('/content/${item.id}'),
+          onTapPromo: (promo) => openPromoTarget(context, promo),
           autoLoadMore: true,
           footer: null,
           items: state.items,
