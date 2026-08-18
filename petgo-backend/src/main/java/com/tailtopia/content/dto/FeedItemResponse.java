@@ -2,8 +2,9 @@ package com.tailtopia.content.dto;
 
 import com.tailtopia.auth.dto.AuthorView;
 import com.tailtopia.content.domain.ContentPost;
-import com.tailtopia.content.domain.ContentVisibility;
 import com.tailtopia.content.domain.ContentType;
+import com.tailtopia.content.domain.ContentVisibility;
+import com.tailtopia.content.domain.ImageSize;
 import java.time.Instant;
 import java.util.List;
 
@@ -37,13 +38,43 @@ public record FeedItemResponse(
         String firstImageUrl,
         long likeCount,
         Instant createdAt,
-        ContentVisibility visibility) {
+        ContentVisibility visibility,
+        /**
+         * 整组图片（V1.1.6 Story 3.1 · AD-7 Rule 1）—— 多图轮播必需。
+         *
+         * <p>⚠️ {@code firstImageUrl} <b>保留不动</b>：老客户端还在读它，且时间线 / 名片 /
+         * 后台等处的取数口径也没变。新客户端读这一列。
+         */
+        List<String> imageUrls,
+        /**
+         * 图片原始宽高（V1.1.6 Story 3.1 · AD-5），与 {@link #imageUrls()} <b>同序等长</b>；
+         * 测不出来的位置为 {@code null}，存量内容整列为 {@code null}。
+         *
+         * <p>🛡 <b>只有原始宽高</b>。展示比例的收敛与高度护栏<b>一律客户端算</b> ——
+         * 服务端先算一遍、客户端再算一遍就是双重裁切（AD-6 Rule 6）。
+         * ⚠️ 想在这里加「比例」或「高度」字段之前，先读一遍这段。
+         */
+        List<ImageSize> imageSizes,
+        /** 当前访客是否已赞（V1.1.6 Story 3.1）。未登录访客<b>恒为 false</b>。 */
+        boolean liked,
+        /**
+         * 评论数（V1.1.6 Story 3.1）。
+         *
+         * <p>🔴 口径与内容详情页<b>完全一致</b>（含访客自己那条尚未对外可见的评论）——
+         * 两处显示的是同一个东西，数字不一致用户只会以为出 bug 了。
+         */
+        long commentCount) {
 
     /**
      * ⚠️ {@code visibility} 恒下发（Story 4.1 · AC7）。Feed 里只会出现 PUBLIC，
      * 但「我的发布」复用同一 DTO —— 前端据此给私密内容打「仅自己可见」标识（Story 4.2）。
      */
-    public static FeedItemResponse of(ContentPost p, AuthorView author, long likeCount) {
+    /**
+     * ⚠️ <b>首页与「我的发布」共用这一个工厂</b>（AD-7 Rule 4：复用同一投影的出口口径不得分叉）。
+     * 要加字段就加在这里，<b>不要为某一个出口另写一个</b> —— 那正是口径分叉的起点。
+     */
+    public static FeedItemResponse of(ContentPost p, AuthorView author, long likeCount,
+            boolean liked, long commentCount) {
         List<String> images = p.getImageUrls();
         String firstImage = (images != null && !images.isEmpty()) ? images.get(0) : null;
         return new FeedItemResponse(
@@ -57,6 +88,10 @@ public record FeedItemResponse(
                 firstImage,
                 likeCount,
                 p.getCreatedAt(),
-                p.getVisibility());
+                p.getVisibility(),
+                images,
+                p.getImageSizes(),
+                liked,
+                commentCount);
     }
 }

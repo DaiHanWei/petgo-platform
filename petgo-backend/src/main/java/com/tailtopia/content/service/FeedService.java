@@ -7,11 +7,14 @@ import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.domain.FeedCategory;
 import com.tailtopia.content.dto.FeedItemResponse;
 import com.tailtopia.content.dto.FeedPageResponse;
+import com.tailtopia.content.repository.CommentRepository;
+import com.tailtopia.content.repository.CommentRepository.PostCommentCount;
 import com.tailtopia.content.repository.ContentLikeRepository;
 import com.tailtopia.content.repository.ContentLikeRepository.PostLikeCount;
 import com.tailtopia.content.repository.ContentPostRepository;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -37,11 +40,45 @@ public class FeedService {
     private final AccountQueryService accountQueryService;
     private final ContentLikeRepository likes;
 
+    /** V1.1.6 Story 3.1：评论数批量聚合。⚠️ 只用批量方法，逐条那个是详情页的。 */
+    private final CommentRepository comments;
+
     public FeedService(ContentPostRepository posts, AccountQueryService accountQueryService,
-            ContentLikeRepository likes) {
+            ContentLikeRepository likes, CommentRepository comments) {
         this.posts = posts;
         this.accountQueryService = accountQueryService;
         this.likes = likes;
+        this.comments = comments;
+    }
+
+    /**
+     * 一页帖子里<b>当前访客赞过哪些</b>（V1.1.6 Story 3.1 · AD-7 Rule 2）。
+     *
+     * <p>🛡 <b>未登录访客整批短路，不发这次查询</b> —— Feed 对游客开放，
+     * 而游客不可能赞过任何东西，白跑一次查询没有意义。
+     */
+    private Set<Long> likedIds(List<ContentPost> page, Long viewerId) {
+        if (viewerId == null || page.isEmpty()) {
+            return Set.of();
+        }
+        List<Long> ids = page.stream().map(ContentPost::getId).toList();
+        return Set.copyOf(likes.findLikedPostIds(viewerId, ids));
+    }
+
+    /**
+     * 一页帖子各自的评论数（V1.1.6 Story 3.1 · AD-7 Rule 2）。
+     *
+     * <p>🔴 口径与内容详情页<b>逐字一致</b>（含访客自己那条尚未对外可见的评论）——
+     * 两处是同一个数字，不一致用户只会以为出 bug。
+     */
+    private Map<Long, Long> commentCounts(List<ContentPost> page, Long viewerId) {
+        if (page.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> ids = page.stream().map(ContentPost::getId).toList();
+        return comments.countVisibleForViewerIn(ids, viewerId).stream()
+                .collect(Collectors.toMap(PostCommentCount::getPostId,
+                        PostCommentCount::getCommentCount));
     }
 
     /** 一页帖子的点赞数（PRD-642 卡片点赞数）：一次 GROUP BY 批量取，无赞的帖默认 0。 */
@@ -89,10 +126,16 @@ public class FeedService {
         Map<Long, AuthorView> authors = accountQueryService.findAuthorViews(
                 page.stream().map(ContentPost::getAuthorId).toList());
         Map<Long, Long> likeCounts = likeCounts(page);
+        // V1.1.6 Story 3.1：两次新增的批量聚合。⚠️ 加起来每页多两次查询 ——
+        // AD-7 Rule 3 已判定这是可接受代价，**不要为此加冗余计数列**。
+        Set<Long> liked = likedIds(page, viewerId);
+        Map<Long, Long> commentCounts = commentCounts(page, viewerId);
 
         List<FeedItemResponse> items = page.stream()
                 .map(p -> FeedItemResponse.of(p, authors.get(p.getAuthorId()),
-                        likeCounts.getOrDefault(p.getId(), 0L)))
+                        likeCounts.getOrDefault(p.getId(), 0L),
+                        liked.contains(p.getId()),
+                        commentCounts.getOrDefault(p.getId(), 0L)))
                 .toList();
 
         String nextCursor = null;
@@ -123,9 +166,15 @@ public class FeedService {
         Map<Long, AuthorView> authors = accountQueryService.findAuthorViews(
                 page.stream().map(ContentPost::getAuthorId).toList());
         Map<Long, Long> likeCounts = likeCounts(page);
+        // AD-7 Rule 4：复用同一投影的出口**口径不得分叉** —— 与 loadFeed 走同一批聚合与同一个工厂。
+        // 这里 viewer 恒为本人（「我的发布」），故已赞与评论数都按本人口径算。
+        Set<Long> liked = likedIds(page, userId);
+        Map<Long, Long> commentCounts = commentCounts(page, userId);
         List<FeedItemResponse> items = page.stream()
                 .map(p -> FeedItemResponse.of(p, authors.get(p.getAuthorId()),
-                        likeCounts.getOrDefault(p.getId(), 0L)))
+                        likeCounts.getOrDefault(p.getId(), 0L),
+                        liked.contains(p.getId()),
+                        commentCounts.getOrDefault(p.getId(), 0L)))
                 .toList();
 
         String nextCursor = null;

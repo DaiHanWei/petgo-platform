@@ -56,8 +56,11 @@ class ContentServiceTest {
         // 默认开关关（现网行为）；按需在用例内 stub enabled()=true。
         when(manualReviewGate.enabled()).thenReturn(false);
         // 审核用真实 stub：既有用例文本均良性 → PASS；R2 用例显式触发拦截标记。
+        // V1.1.6 Story 3.1：尺寸归一用真实实现（纯函数、无 IO）；兜底测量用 mock ——
+        // 它是 @Async 且会发网络请求，单测里不该真跑。
         service = new ContentService(posts, comments, likes, profileService, idempotency,
-                new ContentModerationService(), events, manualReviewGate);
+                new ContentModerationService(), events, manualReviewGate,
+                new ImageSizeResolver(), Mockito.mock(ImageSizeBackfillService.class));
     }
 
     private static void setId(ContentPost p, long id) {
@@ -227,6 +230,31 @@ class ContentServiceTest {
         verify(events, never()).publishEvent(any( // 不进 Feed / 不触发里程碑
                 com.tailtopia.content.event.ContentPublishedEvent.class));
         assertThat(resp.id()).isNotNull();
+    }
+
+    /**
+     * 🔴 V1.1.6 Story 3.1：<b>审核挂起的帖同样要写图片尺寸</b>。
+     *
+     * <p>发布入口里有<b>两条落库分支</b>（正常发布 / 审核挂起）。只在正常那条写尺寸的话，
+     * 挂起帖审核通过后进 Feed 时<b>永远没有尺寸</b> —— 而且不会有任何东西报错，
+     * 只是那批内容的卡片高度一直在跳。
+     */
+    @Test
+    void pendingReviewPostAlsoCarriesImageSizes() {
+        when(manualReviewGate.enabled()).thenReturn(true);
+        var captor = org.mockito.ArgumentCaptor.forClass(ContentPost.class);
+
+        service.publish(1L, new ContentPostCreateRequest(
+                ContentType.DAILY, null, "stub-high borderline text",
+                java.util.List.of("https://cdn/a.jpg"), null, null,
+                java.util.List.of(new com.tailtopia.content.domain.ImageSize(1200, 1600))), null);
+
+        verify(posts).save(captor.capture());
+        ContentPost pending = captor.getValue();
+        assertThat(pending.getStatus()).isEqualTo(com.tailtopia.content.domain.PostStatus.UNDER_REVIEW);
+        assertThat(pending.getImageSizes())
+                .as("挂起分支漏写尺寸 —— 审核通过后进 Feed 会永远没有尺寸，且不报任何错")
+                .containsExactly(new com.tailtopia.content.domain.ImageSize(1200, 1600));
     }
 
     /** PR#34 finding #2：PRIVATE 日记进人工审核挂起时必须保留可见范围——否则审核通过后以实体默认 PUBLIC 进 Feed。 */
