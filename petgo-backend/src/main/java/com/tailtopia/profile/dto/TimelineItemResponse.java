@@ -77,10 +77,17 @@ public record TimelineItemResponse(
      * 前端据此区分 AI/兽医（bug 20260702-231）；{@code sourceRef} = 问诊/会话 token（幂等键），
      * 前端据此深链到对应结果页（bug 20260706-259）。
      */
-    public static TimelineItemResponse healthEvent(Instant date, String aiLevel, String symptomSummary,
-            String sourceType, String sourceRef) {
-        return new TimelineItemResponse(HEALTH_EVENT, TimelineItemType.HEALTH_RECORD, date, null, null,
-                null, null, aiLevel, symptomSummary, sourceType, sourceRef, null, null,
+    /**
+     * 类④ 问诊存档。
+     *
+     * <p>🔴 V1.1.6 修正：加入 {@code eventDate}（<b>就诊那天</b>）。
+     * {@code date} 是<b>归档进档案的时刻</b> —— 一次三个月前的问诊今天才归档，两者差三个月。
+     * 不带就诊日期的话 {@link #effectiveDate()} 会回退到归档时刻，条目就显示在「今天」。
+     */
+    public static TimelineItemResponse healthEvent(Instant date, LocalDate eventDate, String aiLevel,
+            String symptomSummary, String sourceType, String sourceRef) {
+        return new TimelineItemResponse(HEALTH_EVENT, TimelineItemType.HEALTH_RECORD, date, eventDate,
+                null, null, null, aiLevel, symptomSummary, sourceType, sourceRef, null, null,
                 "CONSULT", null, null);
     }
 

@@ -82,16 +82,24 @@ class TimelineCursorMergeTest {
                             .toList();
                 });
 
-        // 假健康源：只认 createdAt 上界（与真实实现一致）。
-        when(health.recentHealthEvents(anyLong(), Mockito.any(), anyInt())).thenAnswer(inv -> {
-            Instant before = inv.getArgument(1);
-            int limit = inv.getArgument(2);
-            return healthEvents.stream()
-                    .filter(h -> h.createdAt().isBefore(before))
-                    .sorted(Comparator.comparing(HealthEventView::createdAt).reversed())
-                    .limit(limit)
-                    .toList();
-        });
+        // 假健康源：按**就诊日期的复合锚点**取（与真实实现一致，V1.1.6 修正后）。
+        // ⚠️ 改之前这里按 createdAt 单键上界过滤 —— 与排序用的就诊日期不是同一把尺子。
+        when(health.recentHealthEvents(anyLong(), Mockito.any(), Mockito.any(), anyInt()))
+                .thenAnswer(inv -> {
+                    java.time.LocalDate anchorDate = inv.getArgument(1);
+                    Instant anchorKey = inv.getArgument(2);
+                    int limit = inv.getArgument(3);
+                    return healthEvents.stream()
+                            .filter(h -> h.eventDate().isBefore(anchorDate)
+                                    || (h.eventDate().equals(anchorDate)
+                                            && h.createdAt().isBefore(anchorKey)))
+                            .sorted(Comparator
+                                    .comparing(HealthEventView::eventDate)
+                                    .thenComparing(HealthEventView::createdAt)
+                                    .reversed())
+                            .limit(limit)
+                            .toList();
+                });
 
                 // Story 3.2 新增的两个源（本类不造它们的数据 → 返回空列表，等价于「只有内容 + 问诊存档」）。
         milestoneCompletions =
@@ -351,8 +359,11 @@ class TimelineCursorMergeTest {
                 com.tailtopia.content.domain.PostStatus.PUBLISHED);
     }
 
+    /** 就诊日期取归档时刻的当天（本类的用例不涉及"补录旧问诊"这一场景）。 */
     private static HealthEventView healthAt(String iso) {
-        return new HealthEventView(Instant.parse(iso), "GREEN", "摘要", "AI_TRIAGE", "t-" + iso);
+        Instant at = Instant.parse(iso);
+        return new HealthEventView(at, at.atZone(java.time.ZoneOffset.UTC).toLocalDate(),
+                "GREEN", "摘要", "AI_TRIAGE", "t-" + iso);
     }
 
     private static PetProfile pet() {

@@ -3,6 +3,7 @@ package com.tailtopia.profile.service;
 import com.tailtopia.profile.domain.ArchiveDecision;
 import com.tailtopia.profile.repository.HealthEventRepository;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
@@ -25,12 +26,12 @@ public class HealthEventTimelineSourceImpl implements HealthEventTimelineSource 
     }
 
     @Override
-    public List<HealthEventView> recentHealthEvents(long ownerId, Instant before, int limit) {
+    public List<HealthEventView> recentHealthEvents(long ownerId, LocalDate anchorDate,
+            Instant anchorKey, int limit) {
         return profileService.findByOwnerId(ownerId)
                 .map(pet -> healthEvents
-                        .findByPetIdAndArchiveDecisionAndCreatedAtLessThanOrderByCreatedAtDesc(
-                                pet.getId(), ArchiveDecision.ARCHIVED,
-                                before == null ? Instant.now() : before, PageRequest.of(0, limit))
+                        .findBeforeAnchor(pet.getId(), ArchiveDecision.ARCHIVED,
+                                anchorDate, anchorKey, PageRequest.of(0, limit))
                         .stream()
                         .map(HealthEventTimelineSourceImpl::toView)
                         .toList())
@@ -38,11 +39,10 @@ public class HealthEventTimelineSourceImpl implements HealthEventTimelineSource 
     }
 
     @Override
-    public List<HealthEventView> healthEventsInRange(long ownerId, Instant from, Instant to) {
+    public List<HealthEventView> healthEventsInRange(long ownerId, LocalDate from, LocalDate to) {
         return profileService.findByOwnerId(ownerId)
                 .map(pet -> healthEvents
-                        .findByPetIdAndArchiveDecisionAndCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtAsc(
-                                pet.getId(), ArchiveDecision.ARCHIVED, from, to)
+                        .findByEventDateBetween(pet.getId(), ArchiveDecision.ARCHIVED, from, to)
                         .stream()
                         .map(HealthEventTimelineSourceImpl::toView)
                         .toList())
@@ -50,8 +50,8 @@ public class HealthEventTimelineSourceImpl implements HealthEventTimelineSource 
     }
 
     @Override
-    public List<HealthEventView> healthEventsOnDay(long ownerId, Instant dayStart, Instant dayEnd) {
-        return healthEventsInRange(ownerId, dayStart, dayEnd);
+    public List<HealthEventView> healthEventsOnDay(long ownerId, LocalDate day) {
+        return healthEventsInRange(ownerId, day, day);
     }
 
     @Override
@@ -62,7 +62,7 @@ public class HealthEventTimelineSourceImpl implements HealthEventTimelineSource 
     }
 
     private static HealthEventView toView(com.tailtopia.profile.domain.HealthEvent e) {
-        return new HealthEventView(e.getCreatedAt(), e.getAiLevel(), e.getSymptomSummary(),
+        return new HealthEventView(e.getCreatedAt(), e.getEventDate(), e.getAiLevel(), e.getSymptomSummary(),
                 e.getSourceType() == null ? null : e.getSourceType().name(), e.getSourceRef());
     }
 }

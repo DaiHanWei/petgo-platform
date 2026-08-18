@@ -141,9 +141,9 @@ class CalendarAndDayDetailStory34Test {
                         DAY, List.of(), "文字",
                 com.tailtopia.content.domain.ContentVisibility.PUBLIC,
                 com.tailtopia.content.domain.PostStatus.PUBLISHED)));
-        when(health.healthEventsOnDay(eq(1L), Mockito.any(), Mockito.any()))
+        when(health.healthEventsOnDay(eq(1L), Mockito.any()))
                 .thenReturn(List.of(new HealthEventView(Instant.parse("2026-06-02T09:00:00Z"),
-                        "GREEN", "摘要", "AI_TRIAGE", "triage:1")));
+                        DAY, "GREEN", "摘要", "AI_TRIAGE", "triage:1")));
         when(healthRecords.findByPetProfileIdAndEventDateBetweenOrderByEventDateAscIdAsc(
                 anyLong(), eq(DAY), eq(DAY)))
                 .thenReturn(List.of(record(HealthRecordType.VACCINE, "2026-06-02T08:00:00Z")));
@@ -168,7 +168,7 @@ class CalendarAndDayDetailStory34Test {
                         new GrowthMomentView(1L, Instant.parse("2026-06-02T09:00:00Z"), DAY, List.of(), "早",
                 com.tailtopia.content.domain.ContentVisibility.PUBLIC,
                 com.tailtopia.content.domain.PostStatus.PUBLISHED)));
-        when(health.healthEventsOnDay(eq(1L), Mockito.any(), Mockito.any())).thenReturn(List.of());
+        when(health.healthEventsOnDay(eq(1L), Mockito.any())).thenReturn(List.of());
         when(healthRecords.findByPetProfileIdAndEventDateBetweenOrderByEventDateAscIdAsc(
                 anyLong(), eq(DAY), eq(DAY))).thenReturn(List.of());
 
