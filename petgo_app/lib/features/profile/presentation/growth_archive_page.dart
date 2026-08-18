@@ -23,6 +23,7 @@ import '../domain/pet_profile.dart';
 import '../domain/share_service.dart';
 import '../domain/timeline_item.dart';
 import 'diary_guest_page.dart';
+import 'visitor_archive_view.dart';
 import 'widgets/archive_calendar.dart';
 import 'widgets/diary_header.dart';
 import 'widgets/share_fab.dart';
@@ -43,6 +44,15 @@ enum DiaryUserState {
 
   /// 状态 A 且已建档 → 真实成长档案页。
   ownerWithProfile,
+
+  /// 访客（V1.1.6 Story 2.3 · AD-4）：拿着分享 token 看**别人的**宠物 → 只读态。
+  ///
+  /// ⚠️ **与登录态无关**：已登录非作者与未登录访客看到**同一套**只读视图
+  /// （AD-2 Rule 2）。判据只有一个 —— 有没有分享 token。
+  ///
+  /// ⚠️ 「作者本人点自己的链接该落回自己的档案页」（AD-2 Rule 3）是
+  /// **Story 2.4 深链分流**的职责，不在本页判定里做。
+  visitor,
 }
 
 /// AD-15 唯一状态判定：按序（游客 → 非有宠 → 有无档案）分发，不留隐式 fallback。
@@ -57,7 +67,13 @@ DiaryUserState resolveDiaryUserState({
   required bool isLoggedIn,
   required String? petStatus,
   required bool hasPetProfile,
+  String? visitorToken,
 }) {
+  // V1.1.6 Story 2.3：访客判据**最先**且**独占** —— 有 token 就是在看别人的宠物，
+  // 此时自己是谁、有没有登录、有没有自己的档案，一概不影响这一屏（AD-2 Rule 2）。
+  if (visitorToken != null && visitorToken.isNotEmpty) {
+    return DiaryUserState.visitor;
+  }
   final app = resolveAppUserState(
     isLoggedIn: isLoggedIn,
     // 兽医与用户侧路由互斥（router 层守卫），走不到本页 → 此处恒 false。
@@ -84,7 +100,12 @@ DiaryUserState resolveDiaryUserState({
 /// ⚠️ 本页**任何其它位置不得再判用户状态**（AD-15 核心约束）——要加状态相关分支，
 /// 一律扩 [DiaryUserState] 并在下面的 switch 里布线。
 class GrowthArchivePage extends ConsumerWidget {
-  const GrowthArchivePage({super.key});
+  const GrowthArchivePage({super.key, this.visitorToken});
+
+  /// 分享 token（V1.1.6 Story 2.3）。非 null = 访客只读态。
+  ///
+  /// ⚠️ 由带 token 的**独立路由**注入（AD-2 Rule 6）；作者态路由永远传 null。
+  final String? visitorToken;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -94,7 +115,12 @@ class GrowthArchivePage extends ConsumerWidget {
     // 仅「有宠路径」订阅档案：游客无令牌，订阅会打出 401 → 全局强登录引导
     // （门控在 2.4 放行游客进本页后即暴露）；非有宠态本就无档案可拉。
     // 该条件与 resolveDiaryUserState 返回两个 owner 态的条件等价，故下面 `profileAsync!` 安全。
-    final ownerPath = auth.isLoggedIn && (petStatus == null || petStatus == 'HAS_PET');
+    //
+    // ⚠️ V1.1.6 Story 2.3：**访客态同样不订阅**自己的档案 ——
+    // 未登录访客订阅会 401；已登录访客拉到的是**自己的**宠物，与这一屏毫不相干。
+    final isVisitor = visitorToken != null && visitorToken!.isNotEmpty;
+    final ownerPath =
+        !isVisitor && auth.isLoggedIn && (petStatus == null || petStatus == 'HAS_PET');
     final profileAsync = ownerPath ? ref.watch(petProfileProvider) : null;
 
     // ===== AD-15：全页唯一的用户状态判定 + 分发 =====
@@ -105,12 +131,14 @@ class GrowthArchivePage extends ConsumerWidget {
       // 加载中 / 失败先落 ownerWithoutProfile，两者的具体渲染由 _ownerBranch 内的
       // when(loading/error) 承接 —— 行为与改版前完全一致。
       hasPetProfile: profileAsync?.asData?.value != null,
+      visitorToken: visitorToken,
     );
 
     return switch (state) {
       DiaryUserState.guest => const DiaryGuestPage(),
       DiaryUserState.nonOwner =>
         _NonOwnerView(onChangeStatus: () => _openStatusEditor(context, ref)),
+      DiaryUserState.visitor => VisitorArchiveView(token: visitorToken!),
       DiaryUserState.ownerWithoutProfile ||
       DiaryUserState.ownerWithProfile =>
         _ownerBranch(context, ref, profileAsync!, state),
@@ -309,7 +337,7 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
           // 页头（标题行 + 信息卡 + 健康记录入口 + 里程碑进度）走 Story 2.2 抽出的共用组件，
           // 与游客态同一份实现（3.3 要求两态页头一致）。入口跳转由本页注入。
           DiaryHeader(
-            profile: widget.profile,
+            profile: widget.profile.header,
             happyCount: stats?.happyMomentCount,
             consultCount: stats?.consultCount,
             milestoneCompleted: stats?.milestoneCompleted,

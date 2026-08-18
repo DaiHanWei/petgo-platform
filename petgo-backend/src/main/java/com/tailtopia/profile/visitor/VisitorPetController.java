@@ -44,10 +44,49 @@ public class VisitorPetController {
      */
     private static final String GONE_DETAIL = "链接已失效";
 
+    /**
+     * 🛡 时间线单次最多给多少条。
+     *
+     * <p>这是个<b>对公网开放的匿名接口</b>，{@code limit} 来自请求方 ——
+     * 不夹紧的话，一个 {@code limit=100000} 就能让每次请求拖着整张表走。
+     */
+    private static final int MAX_TIMELINE_LIMIT = 100;
+
     private final VisitorProjectionService visitors;
 
     public VisitorPetController(VisitorProjectionService visitors) {
         this.visitors = visitors;
+    }
+
+    /**
+     * 访客看到的宠物档案（V1.1.6 Story 2.3）。
+     *
+     * <p>🛡 响应是白名单 record，不是作者档案的删减版 —— 见 {@link VisitorProfileResponse}。
+     */
+    @GetMapping("/{cardToken}/profile")
+    public VisitorProfileResponse profile(@PathVariable String cardToken) {
+        PetProfile pet = requireVisible(cardToken);
+        return VisitorProfileResponse.of(pet, visitors.ownerNickname(pet));
+    }
+
+    /** 访客统计条三列。🛡 健康记录条数不在其中（{@link VisitorStats} 里根本没有那个字段）。 */
+    @GetMapping("/{cardToken}/stats")
+    public VisitorStats stats(@PathVariable String cardToken) {
+        return visitors.stats(requireVisible(cardToken));
+    }
+
+    /**
+     * 访客时间线（V1.1.6 Story 2.3）。
+     *
+     * <p>⚠️ <b>不分页</b>：投影层的 {@code timeline} 取的是「最近 N 条」，与 H5 名片同一条实现。
+     * 作者态那套游标翻页<b>没有</b>照搬过来 —— 访客是「看一眼别人的宠物」，不是「翻完整个档案」，
+     * 而每多一个对外参数就多一处要防的输入。
+     */
+    @GetMapping("/{cardToken}/timeline")
+    public TimelineItems timeline(@PathVariable String cardToken,
+            @RequestParam(name = "limit", defaultValue = "30") int limit) {
+        int safe = Math.max(1, Math.min(limit, MAX_TIMELINE_LIMIT));
+        return new TimelineItems(visitors.timeline(requireVisible(cardToken), safe));
     }
 
     /** 访客日历月视图。只返回<b>有 Diary 记录</b>的日子；无记录日与未来日由前端补格。 */
@@ -82,5 +121,9 @@ public class VisitorPetController {
      * 后者带着症状摘要、AI 分级、健康记录 id 四个字段。
      */
     public record DayItems(LocalDate date, List<VisitorTimelineItem> items) {
+    }
+
+    /** 时间线响应。包一层对象而不是裸数组 —— 将来要加字段（如是否还有更多）不必改响应形状。 */
+    public record TimelineItems(List<VisitorTimelineItem> items) {
     }
 }

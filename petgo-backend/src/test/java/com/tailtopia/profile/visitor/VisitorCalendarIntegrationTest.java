@@ -375,6 +375,109 @@ class VisitorCalendarIntegrationTest extends ApiIntegrationTest {
                 .andReturn().getResponse().getContentAsString());
     }
 
+    // ===================== Story 2.3：可否点开 + 新增三个端点 =====================
+
+    /**
+     * 🛡 <b>私密条目的「可否点开」为 false，公开条目为 true</b>（Story 2.3 · AD-3 Rule 1/2）。
+     *
+     * <p>这个布尔位是<b>后端算的结论</b>，不是把可见范围丢给前端让它自己推 ——
+     * 判定是「可见范围公开 <b>且</b> 状态已发布」两条联合成立，散到前端就等于允许两处各写一遍，
+     * 而写漏的那一次是<b>静默的</b>：私密内容悄悄变得可点开，没有任何东西会报错。
+     */
+    @Test
+    void privateItemsAreMarkedNotOpenableWhilePublicOnesAre() throws Exception {
+        User owner = newUser();
+        PetProfile pet = createProfile(owner);
+        seedPublicMoment(pet, day(18), "publik");
+        seedMoment(pet, day(19), "privat", "PUBLISHED", "PRIVATE", false, "https://cdn.test/q.jpg");
+
+        java.util.Map<String, Boolean> openableByText = new java.util.HashMap<>();
+        for (VisitorTimelineItem item : visitors.timeline(pet, 50)) {
+            openableByText.put(item.text(), item.openable());
+        }
+
+        assertThat(openableByText.get("publik"))
+                .as("公开条目应可点开")
+                .isTrue();
+        assertThat(openableByText.get("privat"))
+                .as("🔴 私密条目被标成了可点开 —— 访客点进去就能读到作者没公开的内容，"
+                        + "私密内容因此越出了分享链接的边界")
+                .isFalse();
+
+        // 某天详情走同一个转换，同样带这个位
+        assertThat(getVisitorDay(pet.getCardToken(), day(19)))
+                .contains("\"openable\":false");
+    }
+
+    /** 访客档案端点：给该给的，且<b>不回显</b>内部标识。 */
+    @Test
+    void profileEndpointGivesWhitelistedFieldsOnly() throws Exception {
+        User owner = newUser();
+        PetProfile pet = createProfile(owner);
+
+        String json = mvc.perform(get("/api/v1/public/shared-pets/" + pet.getCardToken() + "/profile"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(json).contains("Momo").contains("Kucing Domestik").contains("ownerNickname");
+        assertThat(json)
+                .as("访客档案回显了内部标识 —— ownerId / cardToken 都是不该给陌生人的")
+                .doesNotContain("ownerId")
+                .doesNotContain("cardToken")
+                .doesNotContain("serialId");
+        // 头像若有则须去 EXIF；本夹具没传头像，故只断言不出现原始 OSS 直链形态
+        assertThat(json).doesNotContain("healthRecordCount");
+    }
+
+    /** 统计端点三列；🛡 健康记录条数在结构上就不存在。 */
+    @Test
+    void statsEndpointCarriesThreeNumbersAndNoHealthCount() throws Exception {
+        User owner = newUser();
+        PetProfile pet = createProfile(owner);
+        seedPublicMoment(pet, day(4), "m");
+
+        String json = mvc.perform(get("/api/v1/public/shared-pets/" + pet.getCardToken() + "/stats"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(json).contains("diaryCount").contains("consultCount")
+                .contains("milestoneCompleted").contains("milestoneTotal");
+        assertThat(json).doesNotContain("healthRecordCount");
+    }
+
+    /**
+     * 时间线端点。
+     *
+     * <p>🛡 顺带钉住 {@code limit} 被夹紧 —— 这是对公网开放的匿名接口，
+     * 不夹的话一个超大 limit 就能让每次请求拖着整张表走。
+     */
+    @Test
+    void timelineEndpointReturnsItemsAndClampsLimit() throws Exception {
+        User owner = newUser();
+        PetProfile pet = createProfile(owner);
+        seedPublicMoment(pet, day(9), "satu");
+
+        assertThat(mvc.perform(get("/api/v1/public/shared-pets/" + pet.getCardToken() + "/timeline"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString())
+                .contains("satu").contains("openable");
+
+        // 超大 limit 不报错、被夹到上限（响应仍正常返回）
+        mvc.perform(get("/api/v1/public/shared-pets/" + pet.getCardToken() + "/timeline")
+                        .param("limit", "100000"))
+                .andExpect(status().isOk());
+    }
+
+    /** 三个新端点同样走统一失效判定（防枚举）。 */
+    @Test
+    void newEndpointsShareTheSameGoneResponse() throws Exception {
+        String token = "NO-SUCH-" + SEQ.incrementAndGet();
+        for (String suffix : List.of("/profile", "/stats", "/timeline")) {
+            mvc.perform(get("/api/v1/public/shared-pets/" + token + suffix))
+                    .andExpect(status().isNotFound());
+        }
+    }
+
     // ===================== AC1：未登录可访问 =====================
 
     /**

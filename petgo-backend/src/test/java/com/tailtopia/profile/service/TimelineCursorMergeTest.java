@@ -292,7 +292,9 @@ class TimelineCursorMergeTest {
     /** 存量兜底：event_date 为 NULL 的历史行（V26 加列未回填）不得从时间线上消失。 */
     @Test
     void legacyNullEventDateRowsStillAppear() {
-        moments.add(new GrowthMomentView(1L, Instant.parse("2026-06-02T10:00:00Z"), null, List.of("u1"), "legacy"));
+        moments.add(new GrowthMomentView(1L, Instant.parse("2026-06-02T10:00:00Z"), null, List.of("u1"), "legacy",
+                com.tailtopia.content.domain.ContentVisibility.PUBLIC,
+                com.tailtopia.content.domain.PostStatus.PUBLISHED));
         moments.add(momentEv(2, "2026-06-03T10:00:00Z", "2026-06-03"));
 
         List<TimelineItemResponse> all = drainAllPages(1);
@@ -344,7 +346,9 @@ class TimelineCursorMergeTest {
 
     private static GrowthMomentView momentEv(long id, String createdIso, String eventIso) {
         return new GrowthMomentView(id, Instant.parse(createdIso), LocalDate.parse(eventIso),
-                List.of("u" + id), "m" + id);
+                List.of("u" + id), "m" + id,
+                com.tailtopia.content.domain.ContentVisibility.PUBLIC,
+                com.tailtopia.content.domain.PostStatus.PUBLISHED);
     }
 
     private static HealthEventView healthAt(String iso) {

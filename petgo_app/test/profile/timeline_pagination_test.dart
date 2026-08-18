@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/features/profile/domain/archive_scope.dart';
+import 'package:tailtopia/features/profile/domain/visitor_profile.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
@@ -26,6 +28,11 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 /// 2. **失败态下不自动重试** —— 用户停在底部会被无限重试刷屏，且看不到那行提示；
 /// 3. 「Pertama 🌟」只在**确认没有更多页**时才标，否则会把「当前最旧」误标成「第一条」。
 class _FakeTimelineRepo implements TimelineRepository {
+  /// 本假 repo 只服务作者态；访客态另有专门的测试夹具。
+  @override
+  Future<VisitorProfile> getVisitorProfile(String token) async =>
+      throw UnimplementedError('作者态测试不该走访客接口');
+
   _FakeTimelineRepo({required this.page2, this.failPage2 = false});
 
   final TimelinePage page2;
@@ -34,7 +41,7 @@ class _FakeTimelineRepo implements TimelineRepository {
   String? lastCursor;
 
   @override
-  Future<TimelinePage> getTimeline({String? cursor, int limit = 20}) async {
+  Future<TimelinePage> getTimeline({String? cursor, int limit = 20, ArchiveScope scope = const ArchiveScope.me()}) async {
     page2Calls++;
     lastCursor = cursor;
     if (failPage2) {
@@ -44,14 +51,14 @@ class _FakeTimelineRepo implements TimelineRepository {
   }
 
   @override
-  Future<CalendarMonth> getCalendar(int year, int month) async =>
+  Future<CalendarMonth> getCalendar(int year, int month, {ArchiveScope scope = const ArchiveScope.me()}) async =>
       CalendarMonth(year: year, month: month, days: const []);
 
   @override
-  Future<DayDetail> getDay(DateTime date) async => DayDetail(date: date, items: const []);
+  Future<DayDetail> getDay(DateTime date, {ArchiveScope scope = const ArchiveScope.me()}) async => DayDetail(date: date, items: const []);
 
   @override
-  Future<ArchiveStats> getStats() async => const ArchiveStats(
+  Future<ArchiveStats> getStats({ArchiveScope scope = const ArchiveScope.me()}) async => const ArchiveStats(
       happyMomentCount: 0, consultCount: 0, milestoneCompleted: 0, milestoneTotal: 30);
 }
 

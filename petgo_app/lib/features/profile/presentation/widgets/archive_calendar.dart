@@ -6,6 +6,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/utils/date_format.dart';
 import '../../../../shared/widgets/app_image.dart';
 import '../../data/timeline_repository.dart';
+import '../../domain/archive_scope.dart';
 import '../../domain/calendar_month.dart';
 import '../../domain/health_record_icons.dart';
 
@@ -15,10 +16,23 @@ import '../../domain/health_record_icons.dart';
 /// 无记录→日期数字 + 淡「+」引导；**未来日→灰显不可点**。月份顶部 + 左右切月。
 /// 点有记录格 → [onOpenDay]；点无记录格「+」→ [onAddOnDate]（跳发布预填该日，AC6）。
 class ArchiveCalendar extends ConsumerStatefulWidget {
-  const ArchiveCalendar({super.key, required this.onOpenDay, required this.onAddOnDate});
+  const ArchiveCalendar({
+    super.key,
+    required this.onOpenDay,
+    this.onAddOnDate,
+    this.scope = const ArchiveScope.me(),
+  });
 
   final void Function(DateTime date) onOpenDay;
-  final void Function(DateTime date) onAddOnDate;
+
+  /// 无记录日的「+」快捷发布。
+  ///
+  /// 🛡 V1.1.6 Story 2.3 起**可为 null**：访客态没有任何写入能力（AD-2 Rule 5），
+  /// 传 null 则那些格子不再可点、也不渲染「+」。
+  final void Function(DateTime date)? onAddOnDate;
+
+  /// 数据作用域（V1.1.6 Story 2.3）。作者态走 `/me`，访客态走分享 token。
+  final ArchiveScope scope;
 
   @override
   ConsumerState<ArchiveCalendar> createState() => _ArchiveCalendarState();
@@ -53,7 +67,7 @@ class _ArchiveCalendarState extends ConsumerState<ArchiveCalendar> {
 
   @override
   Widget build(BuildContext context) {
-    final monthAsync = ref.watch(calendarMonthProvider((year: _year, month: _month)));
+    final monthAsync = ref.watch(calendarMonthProviderFor(widget.scope, _year, _month));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -192,9 +206,11 @@ class _ArchiveCalendarState extends ConsumerState<ArchiveCalendar> {
       );
     }
     // 无记录日：日期 + 淡「+」，点击跳发布预填该日（AC6）。
+    // 🛡 访客态没有写入能力（AD-2 Rule 5）→ onAddOnDate 为 null 时不可点、也不渲染「+」。
+    final canAdd = widget.onAddOnDate != null;
     return GestureDetector(
       key: ValueKey('calDayEmpty_$day'),
-      onTap: () => widget.onAddOnDate(date),
+      onTap: canAdd ? () => widget.onAddOnDate!(date) : null,
       child: Container(
         alignment: Alignment.center,
         decoration:
@@ -203,7 +219,8 @@ class _ArchiveCalendarState extends ConsumerState<ArchiveCalendar> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text('$day', style: const TextStyle(fontSize: 12, color: AppColors.ink2)),
-            const Text('+', style: TextStyle(fontSize: 13, color: AppColors.line)),
+            if (canAdd)
+              const Text('+', style: TextStyle(fontSize: 13, color: AppColors.line)),
           ],
         ),
       ),

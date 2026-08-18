@@ -539,7 +539,8 @@ public class ContentService {
 
     private static GrowthMomentView toGrowthMomentView(ContentPost p) {
         return new GrowthMomentView(
-                p.getId(), p.getCreatedAt(), p.getEventDate(), p.getImageUrls(), p.getText());
+                p.getId(), p.getCreatedAt(), p.getEventDate(), p.getImageUrls(), p.getText(),
+                p.getVisibility(), p.getStatus());
     }
 
     private static String blankToNull(String s) {

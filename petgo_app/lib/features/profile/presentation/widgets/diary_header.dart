@@ -3,7 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
-import '../../domain/pet_profile.dart';
+import '../../domain/pet_header_info.dart';
 import 'pet_info_card.dart';
 
 /// Diary 页头**共用组件**（V1.1.2 Story 2.2 · FR-80/82）。
@@ -39,9 +39,20 @@ class DiaryHeader extends StatelessWidget {
     this.onOpenIdCard,
     this.onOpenHealth,
     this.onOpenMilestones,
+    this.readOnly = false,
   });
 
-  final PetProfile profile;
+  /// 只读态（V1.1.6 Story 2.3 访客视图）。
+  ///
+  /// 🛡 为 true 时**不渲染**编辑铅笔与入口网格两张卡（健康记录 / 身份证）。
+  ///
+  /// ⚠️ 必须是「**不渲染**」而不是「不可点」：
+  /// 把 `onEditProfile` 传 null 只会让铅笔变灰、图标仍在，看上去像坏了；
+  /// 而身份证入口跳的是**当前登录用户自己的**身份证页，访客点进去必然出错 ——
+  /// AD-2 Rule 5 因此要求两张卡**整块移除**，「留个锁」不算数。
+  final bool readOnly;
+
+  final PetHeaderInfo profile;
 
   /// 三列统计（未就绪传 null → 显占位「·」，沿用现状）。
   final int? happyCount;
@@ -84,16 +95,17 @@ class DiaryHeader extends StatelessWidget {
               titleAction!,
               const SizedBox(width: 8),
             ],
-            _iconBtn(
-              key: const ValueKey('editProfileButton'),
-              onTap: onEditProfile,
-              child: SvgPicture.asset(
-                'assets/brand/ic_edit.svg',
-                width: 18,
-                height: 18,
-                colorFilter: const ColorFilter.mode(AppColors.ink, BlendMode.srcIn),
+            if (!readOnly)
+              _iconBtn(
+                key: const ValueKey('editProfileButton'),
+                onTap: onEditProfile,
+                child: SvgPicture.asset(
+                  'assets/brand/ic_edit.svg',
+                  width: 18,
+                  height: 18,
+                  colorFilter: const ColorFilter.mode(AppColors.ink, BlendMode.srcIn),
+                ),
               ),
-            ),
           ],
         ),
         const SizedBox(height: 14),
@@ -103,8 +115,12 @@ class DiaryHeader extends StatelessWidget {
           consultCount: consultCount,
           milestoneCount: milestoneCompleted,
         ),
-        const SizedBox(height: 11),
-        _entryGrid(l10n),
+        // 🛡 入口网格（健康记录 / 身份证）整块移除，不是「留个锁」——
+        // 健康记录不对访客开放；身份证入口跳的是当前登录用户自己的卡，点进去必然出错。
+        if (!readOnly) ...[
+          const SizedBox(height: 11),
+          _entryGrid(l10n),
+        ],
         const SizedBox(height: 11),
         if (milestoneCompleted != null && milestoneTotal != null)
           Padding(

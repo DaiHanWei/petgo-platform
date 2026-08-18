@@ -718,6 +718,37 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         path: '/content/:id',
         builder: (c, s) => ContentDetailPage(postId: int.parse(s.pathParameters['id']!)),
       ),
+      // ===== V1.1.6 Story 2.3：App 内访客只读视图（AD-2 Rule 6）=====
+      //
+      // 🛡 **带 token 的独立路由，刻意不复用 `/profile`**：后者对未登录会落游客示例页，
+      // 与「点开分享链接就要看到被分享的那只宠物」直接冲突。
+      //
+      // 🛡 **必须对未登录开放**（同一个链接在浏览器里无需登录即可看完整 Diary，
+      // App 内若要求登录只会把用户推回浏览器）。`/pet` 不在 `_controlledLocations` 任何前缀下，
+      // 因此天然不受门控 —— ⚠️ **不要把它挪到 `/profile/...` 之下**，那会让它自动受控。
+      //
+      // 页面本体复用 `GrowthArchivePage`（AD-4：复用作者态结构做减法，不另建页面），
+      // 由 `visitorToken` 触发第五个状态分支。
+      GoRoute(
+        path: '/pet/:token',
+        builder: (c, s) => GrowthArchivePage(visitorToken: s.pathParameters['token']),
+        routes: [
+          GoRoute(
+            path: 'day',
+            builder: (c, s) {
+              final raw = s.uri.queryParameters['date'];
+              final date = raw == null ? null : DateTime.tryParse(raw);
+              if (date == null) {
+                return const SizedBox.shrink();
+              }
+              return DayDetailPage(
+                date: date,
+                token: s.pathParameters['token'],
+              );
+            },
+          ),
+        ],
+      ),
       // 发布深链着陆（Story 6.1 · FR-40）：PET_BIRTHDAY 深链 → 打开统一发布 sheet，可预选成长日历。受控（需登录）。
       GoRoute(
         path: '/publish',

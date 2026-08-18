@@ -61,12 +61,16 @@ class TimelineServiceTest {
     }
 
     private GrowthMomentView moment(long id, String iso) {
-        return new GrowthMomentView(id, Instant.parse(iso), null, List.of("u" + id), "moment" + id);
+        return new GrowthMomentView(id, Instant.parse(iso), null, List.of("u" + id), "moment" + id,
+                com.tailtopia.content.domain.ContentVisibility.PUBLIC,
+                com.tailtopia.content.domain.PostStatus.PUBLISHED);
     }
 
     private GrowthMomentView momentEv(long id, String createdIso, String eventIso, String img) {
         return new GrowthMomentView(id, Instant.parse(createdIso), LocalDate.parse(eventIso),
-                List.of(img), "moment" + id);
+                List.of(img), "moment" + id,
+                com.tailtopia.content.domain.ContentVisibility.PUBLIC,
+                com.tailtopia.content.domain.PostStatus.PUBLISHED);
     }
 
     private static PetProfile pet(PetType type) {

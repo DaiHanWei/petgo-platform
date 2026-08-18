@@ -144,7 +144,8 @@ public class VisitorProjectionService {
                 m.id(),
                 strippedImages(m.imageUrls()),
                 m.text(),
-                null, null, null);
+                null, null, null,
+                m.openableByVisitor());
     }
 
     /**

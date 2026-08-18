@@ -127,11 +127,36 @@ class VisitorProjectionFieldsTest {
         assertNoForbiddenComponents(VisitorCalendarMonth.class);
     }
 
+    /**
+     * 🛡 访客档案<b>不得</b>出现内部标识或健康字段（V1.1.6 Story 2.3）。
+     *
+     * <p>作者态的档案对象带着 {@code ownerId} · 自增 {@code id} · {@code cardToken} ·
+     * {@code serialId}。前两个是<b>可枚举的内部标识</b>（架构护栏：对外一律用不可枚举 token），
+     * 后两个访客本来就不该拿到。这个 record 是白名单，不是「作者档案删几个字段」。
+     */
+    @Test
+    void visitorProfileCarriesNoInternalIdentifiers() {
+        assertNoForbiddenComponents(VisitorProfileResponse.class);
+        List<String> leaked = new ArrayList<>();
+        for (RecordComponent rc : VisitorProfileResponse.class.getRecordComponents()) {
+            String name = rc.getName().toLowerCase(Locale.ROOT);
+            // 「id」要精确匹配：ownerId / cardToken / serialId 该拦，
+            // 但将来若出现合法的含 id 词（如 idCardIssued）不该误伤，故只列确切名字。
+            if (List.of("id", "ownerid", "cardtoken", "serialid", "ogimageurl").contains(name)) {
+                leaked.add(rc.getName());
+            }
+        }
+        assertThat(leaked)
+                .as("访客档案里出现了内部标识：%s —— 这些是可枚举的内部 id 或不该回显的 token，"
+                        + "访客档案是白名单 record，加字段前先问「陌生人有必要知道这个吗」", leaked)
+                .isEmpty();
+    }
+
     /** 🛡 访客 DTO 里也不能出现任何拉黑相关信号（AD-1 Rule 9 的附带红线）。 */
     @Test
     void visitorDtosLeakNoBlockSignal() {
         for (Class<?> type : List.of(VisitorTimelineItem.class, VisitorStats.class,
-                VisitorDayCell.class, VisitorCalendarMonth.class)) {
+                VisitorDayCell.class, VisitorCalendarMonth.class, VisitorProfileResponse.class)) {
             for (RecordComponent rc : type.getRecordComponents()) {
                 String name = rc.getName().toLowerCase(Locale.ROOT);
                 assertThat(name)

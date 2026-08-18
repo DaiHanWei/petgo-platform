@@ -95,7 +95,9 @@ class CardPageControllerTest {
         stubOwner(2, 1, 0);
         when(contentService.findRecentGrowthMomentsByEventDate(eq(7L), eq(10L), anyInt()))
                 .thenReturn(List.of(new GrowthMomentView(
-                        1L, Instant.now(), LocalDate.of(2024, 5, 1), List.of("https://cdn/m.jpg"), "hi")));
+                        1L, Instant.now(), LocalDate.of(2024, 5, 1), List.of("https://cdn/m.jpg"), "hi",
+                com.tailtopia.content.domain.ContentVisibility.PUBLIC,
+                com.tailtopia.content.domain.PostStatus.PUBLISHED)));
 
         Model model = new ConcurrentModel();
         HttpServletResponse resp = mock(HttpServletResponse.class);
