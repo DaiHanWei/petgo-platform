@@ -96,10 +96,12 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> with WidgetsBinding
     } catch (_) {
       // 拿不到初始链接不阻塞启动。
     }
-    // 热启动（app 已活，后台/前台被深链唤起）：直接导航。
+    // 热启动（app 已活，后台/前台被深链唤起）。
+    // ⚠️ 走 goDeepLinkFromLiveApp 而**不是**直接 go：落点若在 Tab 外（如访客视图
+    // `/pet/{token}`），go 掉整个栈会让用户按返回直接退出 App —— 见该函数的说明。
     _linkSub = _appLinks.uriLinkStream.listen((uri) {
       final loc = deepLinkToLocation(uri);
-      if (loc != null) ref.read(routerProvider).go(loc);
+      if (loc != null) goDeepLinkFromLiveApp(ref, loc);
     }, onError: (_) {});
   }
 

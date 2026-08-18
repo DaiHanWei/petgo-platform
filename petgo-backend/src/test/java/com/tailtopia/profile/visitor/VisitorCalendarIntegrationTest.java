@@ -440,7 +440,9 @@ class VisitorCalendarIntegrationTest extends ApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
-        assertThat(json).contains("diaryCount").contains("consultCount")
+        // 🔴 字段名必须与作者态一致：客户端两边用同一个模型解析，
+        // 名字对不上会被解析兜底静默变成 0（2026-08-18 L2 实测踩到）。
+        assertThat(json).contains("happyMomentCount").contains("consultCount")
                 .contains("milestoneCompleted").contains("milestoneTotal");
         assertThat(json).doesNotContain("healthRecordCount");
     }

@@ -228,7 +228,7 @@ class VisitorProjectionIntegrationTest extends ApiIntegrationTest {
         VisitorStats visitor = visitors.stats(pet);
 
         // 同源：三个数一一对上（AC5 —— 两个页面不该出现不一样的数字）
-        assertThat(visitor.diaryCount()).isEqualTo(author.happyMomentCount());
+        assertThat(visitor.happyMomentCount()).isEqualTo(author.happyMomentCount());
         assertThat(visitor.consultCount()).isEqualTo(author.consultCount());
         assertThat(visitor.milestoneCompleted()).isEqualTo(author.milestoneCompleted());
         assertThat(visitor.milestoneTotal()).isEqualTo(author.milestoneTotal());

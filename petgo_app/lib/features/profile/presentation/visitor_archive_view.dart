@@ -64,6 +64,7 @@ class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
           data: (profile) => ListView(
             padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 8, AppSpacing.lg, 40),
             children: [
+              _backRow(context),
               _banner(l10n, profile.ownerNickname),
               const SizedBox(height: 12),
               DiaryHeader(
@@ -94,6 +95,30 @@ class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
       ),
     );
   }
+
+  /// 返回（UI 稿 P1 的 `.ro-titlerow` 左侧箭头）。
+  ///
+  /// 🔴 **这是访客回到 App 的唯一可见出口**：访客视图在 Tab 之外，没有底部导航。
+  /// 缺了它，从 WhatsApp 点链接进来的人就落进一条死路 ——
+  /// 而这条链路的全部意义正是把人**引进** App（2026-08-18 L2 实测补）。
+  ///
+  /// 栈里没有上一页时（例如深链直达）回落到首页，而不是让返回变成空操作。
+  Widget _backRow(BuildContext context) => Align(
+        alignment: Alignment.centerLeft,
+        child: IconButton(
+          key: const ValueKey('visitorBackButton'),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+          icon: const Icon(Icons.arrow_back, size: 22, color: AppColors.ink),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/home');
+            }
+          },
+        ),
+      );
 
   /// 顶部来源横幅：「由 {昵称} 分享 · 仅可查看」（UI 稿 P1 的 `.ro-banner`）。
   /// 昵称查不到时整条不渲染 —— 比渲染一句「由 分享」体面。
