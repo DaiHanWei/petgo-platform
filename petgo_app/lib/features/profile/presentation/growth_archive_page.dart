@@ -68,10 +68,24 @@ DiaryUserState resolveDiaryUserState({
   required String? petStatus,
   required bool hasPetProfile,
   String? visitorToken,
+  String? myCardToken,
 }) {
-  // V1.1.6 Story 2.3：访客判据**最先**且**独占** —— 有 token 就是在看别人的宠物，
-  // 此时自己是谁、有没有登录、有没有自己的档案，一概不影响这一屏（AD-2 Rule 2）。
+  // V1.1.6 Story 2.3/2.4：带 token 时的判定。
   if (visitorToken != null && visitorToken.isNotEmpty) {
+    // 🛡 作者本人点到自己分享出去的链接（比如从自己的聊天记录里翻出来）
+    // → 落**自己的**档案页、保留全部管理入口（AD-2 Rule 3）。
+    //
+    // ⚠️ 这个判定**只能在这里做**：Diary 页的状态判定是单一入口（AD-15）。
+    // 放到路由层判等于开第二处判定，两处迟早分叉 ——
+    // 而分叉的表现要么是作者丢了管理入口，要么是**访客拿到了管理入口**（后者严重得多）。
+    //
+    // ⚠️ myCardToken 为 null 有两种情况，**都按访客处理**：未登录（无从比对，
+    // 且不该为了比对去拉档案 —— 没有令牌会 401 并弹全局强登录窗），
+    // 或档案尚未加载完（加载完会自然重建切换，不必为此让所有访客白等一次网络往返）。
+    if (myCardToken != null && myCardToken == visitorToken) {
+      return DiaryUserState.ownerWithProfile;
+    }
+    // 已登录非作者与未登录访客看到**同一套**只读视图（AD-2 Rule 2）。
     return DiaryUserState.visitor;
   }
   final app = resolveAppUserState(
@@ -102,9 +116,12 @@ DiaryUserState resolveDiaryUserState({
 class GrowthArchivePage extends ConsumerWidget {
   const GrowthArchivePage({super.key, this.visitorToken});
 
-  /// 分享 token（V1.1.6 Story 2.3）。非 null = 访客只读态。
+  /// 分享 token（V1.1.6 Story 2.3/2.4）。非 null = 从分享链接进来的。
   ///
   /// ⚠️ 由带 token 的**独立路由**注入（AD-2 Rule 6）；作者态路由永远传 null。
+  ///
+  /// ⚠️ 非 null **不等于**一定渲染只读态：作者本人点自己的链接会落回作者态
+  /// （AD-2 Rule 3），判定见 [resolveDiaryUserState]。
   final String? visitorToken;
 
   @override
@@ -116,12 +133,13 @@ class GrowthArchivePage extends ConsumerWidget {
     // （门控在 2.4 放行游客进本页后即暴露）；非有宠态本就无档案可拉。
     // 该条件与 resolveDiaryUserState 返回两个 owner 态的条件等价，故下面 `profileAsync!` 安全。
     //
-    // ⚠️ V1.1.6 Story 2.3：**访客态同样不订阅**自己的档案 ——
-    // 未登录访客订阅会 401；已登录访客拉到的是**自己的**宠物，与这一屏毫不相干。
-    final isVisitor = visitorToken != null && visitorToken!.isNotEmpty;
-    final ownerPath =
-        !isVisitor && auth.isLoggedIn && (petStatus == null || petStatus == 'HAS_PET');
+    // ⚠️ V1.1.6 Story 2.3/2.4：访客态**只在已登录时**订阅自己的档案，
+    // 且只为一件事 —— 比对「这个 token 是不是我自己的」（AD-2 Rule 3）。
+    // 🛡 **未登录时绝不订阅**：没有令牌的请求会 401，而 401 会弹出全局强登录窗，
+    // 正好打破「点分享链接不要求登录」这条（否则会把用户推回浏览器）。
+    final ownerPath = auth.isLoggedIn && (petStatus == null || petStatus == 'HAS_PET');
     final profileAsync = ownerPath ? ref.watch(petProfileProvider) : null;
+    final myProfile = profileAsync?.asData?.value;
 
     // ===== AD-15：全页唯一的用户状态判定 + 分发 =====
     final state = resolveDiaryUserState(
@@ -130,8 +148,9 @@ class GrowthArchivePage extends ConsumerWidget {
       // 「已建档」以真实档案为准，不信任登录响应里可能 stale 的 hasPetProfile（与「我的」页同口径）。
       // 加载中 / 失败先落 ownerWithoutProfile，两者的具体渲染由 _ownerBranch 内的
       // when(loading/error) 承接 —— 行为与改版前完全一致。
-      hasPetProfile: profileAsync?.asData?.value != null,
+      hasPetProfile: myProfile != null,
       visitorToken: visitorToken,
+      myCardToken: myProfile?.cardToken,
     );
 
     return switch (state) {
