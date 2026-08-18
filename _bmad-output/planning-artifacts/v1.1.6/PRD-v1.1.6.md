@@ -618,7 +618,7 @@ V1.0.0 FR-14 原设计为双 CTA：主 CTA「给我的宠物创建同款档案�
 | # | 事件 | 触发时机 | 关键属性 |
 | --- | --- | --- | --- |
 | E-4 | `phone_prompt_shown` | 一次性软引导曝光 | **`trigger`**: first_consult/profile_created |
-| E-5 | `phone_prompt_result` | 用户对软引导做出响应 | **`action`**: submitted/skipped/dismissed |
+| E-5 | `phone_prompt_responded` | 用户对软引导做出响应 | **`action`**: submitted/skipped/dismissed |
 | E-6 | `phone_saved` | 手机号保存成功 | **`entry`**: soft_prompt/me_page、`is_first_time`: bool（首次填写 vs 修改） |
 | E-7 | `phone_save_failed` | 格式校验不通过（对应 FR-70 的失败 Toast） | `entry` |
 
@@ -646,7 +646,7 @@ E-10 放弃率偏高则说明裁剪这一步在**赶走发布行为**，属须�
 | --- | --- | --- | --- |
 | E-11 | `post_share_card_tapped` | 内容详情页点击分享入口 | `content_type`: diary/moment/tips、**`is_private_diary`**: bool、`has_image`: bool |
 | E-12 | `post_share_card_generated` | 卡片生成成功 | `template`: image/text_only、`size`: 9x16/1x1、**`duration_ms`**（生成耗时） |
-| E-13 | `post_share_card_share_completed` | 系统分享菜单回调成功 | `channel`: whatsapp/instagram/other（仅能拿到回调的平台上报） |
+| E-13 | `post_share_card_sent` | 系统分享菜单回调成功 | `channel`: whatsapp/instagram/other（仅能拿到回调的平台上报） |
 | E-14 | `post_share_link_opened` | 分享出去的卡片/链接被打开 | `is_app_installed`、`viewer_state`: guest/logged_in、**`open_method`**: link / qr（2026-08-10 随下载二维码新增） |
 
 > `[订正记录 2026-08-10]` E-14 原文写的是「对齐既有 `pet_card_link_opened`」。**该事件从未实现**——它只出现在 `../3.数据埋点/数据v100-v110.md` 的「建议新增」清单里，前后端代码均无。E-14 是**全新事件**，不存在可复用的既有实现。
@@ -686,8 +686,8 @@ E-10 放弃率偏高则说明裁剪这一步在**赶走发布行为**，属须�
 | # | 事件 | 触发时机 | 关键属性 |
 | --- | --- | --- | --- |
 | E-19 | `push_permission_prompt_shown` | 任一触发点展示权限提示 | **`trigger_point`**: first_consult / profile_created / notification_center / **vet_online**（触发点 5，兽医切换为在线）、**`prompt_type`**: native_dialog/in_app_guide |
-| E-20 | `push_permission_result` | 用户对该提示做出响应 | **`trigger_point`**、**`prompt_type`**、**`result`**: granted/denied/settings_opened/dismissed |
-| E-21 | `push_permission_state_snapshot` | 每次冷启动上报一次当前系统通知开关状态 | **`granted`**: bool |
+| E-20 | `push_permission_responded` | 用户对该提示做出响应 | **`trigger_point`**、**`prompt_type`**、**`result`**: granted/denied/settings_opened/dismissed |
+| E-21 | `push_permission_state_reported` | 每次冷启动上报一次当前系统通知开关状态 | **`granted`**: bool |
 
 **判读（四层，缺一层结论不完整）：**
 
