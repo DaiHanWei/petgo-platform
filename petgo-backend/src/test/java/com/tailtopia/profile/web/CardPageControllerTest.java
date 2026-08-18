@@ -84,7 +84,7 @@ class CardPageControllerTest {
     private void stubOwner(long happy, long consult, long milestoneCompleted) {
         when(accountQueryService.isActive(7L)).thenReturn(true);
         when(accountQueryService.findAuthorViews(any()))
-                .thenReturn(Map.of(7L, new AuthorView(7L, "Aurel", null, false)));
+                .thenReturn(Map.of(7L, new AuthorView(7L, "Aurel", null, false, java.util.List.of())));
         when(timelineService.getStats(7L))
                 .thenReturn(new ArchiveStatsResponse(happy, consult, milestoneCompleted, 30, 0));
     }

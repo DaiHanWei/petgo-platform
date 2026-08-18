@@ -8,6 +8,7 @@ import '../../features/content/domain/feed_item.dart';
 import '../../features/content/presentation/like_button.dart';
 import '../../l10n/app_localizations.dart';
 import 'feed_image.dart';
+import 'user_tag_row.dart';
 import 'letter_avatar.dart';
 
 /// Feed 单列卡片。**V1.1.6 Story 3.2 起为通栏版式**（FR-93）。
@@ -126,13 +127,17 @@ class MasonryCard extends StatelessWidget {
                             size: 32),
                         const SizedBox(width: 9),
                         Flexible(
-                          child: Text(name,
-                              style: const TextStyle(
-                                  fontSize: 13.5,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.ink),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis),
+                          // V1.1.6 Story 5.1：昵称旁挂运营标签（四处展示位之一）。
+                          // 🛡 空间不足时**昵称完整优先、标签丢弃**，不截断昵称、不做「+N」折叠。
+                          child: UserTagRow(
+                            name: name,
+                            nameStyle: const TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.ink),
+                            // 注销作者不挂标签（匿名化之后不该再有身份标识）。
+                            tags: item.authorDeleted ? const [] : item.authorTags,
+                          ),
                         ),
                         const SizedBox(width: 6),
                         // 类型徽章保留：三类内容要在首页可辨识（FR-93 明确要求保留）。

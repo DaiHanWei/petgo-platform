@@ -52,7 +52,7 @@ class FeedServiceTest {
             List<Long> ids = inv.getArgument(0);
             return ids.stream().distinct().collect(Collectors.toMap(
                     id -> (Long) id,
-                    id -> new AuthorView((Long) id, "u" + id, "https://cdn/" + id + ".jpg", false)));
+                    id -> new AuthorView((Long) id, "u" + id, "https://cdn/" + id + ".jpg", false, java.util.List.of())));
         });
     }
 

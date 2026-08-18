@@ -38,17 +38,25 @@ public final class ScheduleWindow {
 
     /**
      * 当前是否生效中。区间 {@code [startAt, endAt)}：开始那一刻算生效，结束那一刻算已结束。
+     *
+     * <p>🛡 {@code endAt} 为 null = <b>不设结束时间 = 永不结束</b>（V1.1.6 Story 5.1 的永久分配）。
+     * 这是对本判定的**严格扩展**：顶置排期那边传的仍是非空值，行为一字不变 ——
+     * 加这个口径而不是另写一份，正是为了守住 AD-9「判定只有一份」。
      */
     public static boolean isActiveAt(Instant now, Instant startAt, Instant endAt) {
-        return !now.isBefore(startAt) && now.isBefore(endAt);
+        return !now.isBefore(startAt) && (endAt == null || now.isBefore(endAt));
     }
 
-    /** 三段判定。后台列表展示的「待生效 / 生效中 / 已结束」用的就是它。 */
+    /**
+     * 三段判定。后台列表展示的「待生效 / 生效中 / 已结束」用的就是它。
+     *
+     * <p>{@code endAt} 为 null（永久）→ 只会是「待生效」或「生效中」，永远不会「已结束」。
+     */
     public static SchedulePhase phaseAt(Instant now, Instant startAt, Instant endAt) {
         if (now.isBefore(startAt)) {
             return SchedulePhase.PENDING;
         }
-        return now.isBefore(endAt) ? SchedulePhase.ACTIVE : SchedulePhase.ENDED;
+        return (endAt == null || now.isBefore(endAt)) ? SchedulePhase.ACTIVE : SchedulePhase.ENDED;
     }
 
     /**

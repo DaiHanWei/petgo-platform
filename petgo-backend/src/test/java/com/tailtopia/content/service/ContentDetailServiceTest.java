@@ -75,7 +75,7 @@ class ContentDetailServiceTest {
     void returnsDetailWithCommentCountAndImagesInOrder() {
         when(posts.findById(1L)).thenReturn(Optional.of(post(1L, 7L, null)));
         when(accounts.findAuthorViews(anyList()))
-                .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", "https://cdn/av.jpg", false)));
+                .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", "https://cdn/av.jpg", false, java.util.List.of())));
 
         ContentDetailResponse d = service.getDetail(1L, 7L);
         assertThat(d.imageUrls()).containsExactly("https://cdn/a.jpg", "https://cdn/b.jpg");
@@ -90,7 +90,7 @@ class ContentDetailServiceTest {
     void guestIsNotAuthor() {
         when(posts.findById(1L)).thenReturn(Optional.of(post(1L, 7L, null)));
         when(accounts.findAuthorViews(anyList()))
-                .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", null, false)));
+                .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", null, false, java.util.List.of())));
         assertThat(service.getDetail(1L, null).isAuthor()).isFalse();
     }
 
@@ -151,7 +151,7 @@ class ContentDetailServiceTest {
         // 内容审核 D-CM2：审核中作者无感知——本人可正常点入自己的挂起帖详情。
         when(posts.findById(5L)).thenReturn(Optional.of(underReview(5L, 7L)));
         when(accounts.findAuthorViews(anyList()))
-                .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", null, false)));
+                .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", null, false, java.util.List.of())));
         ContentDetailResponse d = service.getDetail(5L, 7L);
         assertThat(d.isAuthor()).isTrue();
     }

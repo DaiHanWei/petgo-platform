@@ -123,7 +123,7 @@ development_status:
   # ===== Epic 5: 运营标签体系 · FR-74 + FR-75 =====
   # 依赖 Epic 3（两类标签挂在 3-4 的图片区叠加层；装饰标签占左下角，与顶置角标的右上角互不重叠）。
   epic-5: backlog
-  5-1-用户标签四处展示位与tooltip: backlog            # 七处展示位一律批量取数（AD-11），评论列表尤其禁止逐条
+  5-1-用户标签四处展示位与tooltip: review                 # 七处展示位一律批量取数（AD-11），评论列表尤其禁止逐条
   5-2-内容装饰标签三处展示位: backlog
   epic-5-retrospective: optional
 

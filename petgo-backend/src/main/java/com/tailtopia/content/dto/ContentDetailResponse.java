@@ -22,6 +22,8 @@ public record ContentDetailResponse(
         String authorNickname,
         String authorAvatarUrl,
         boolean authorDeleted,
+        // 运营标签（V1.1.6 Story 5.1 · FR-74）。最多 3 个；注销作者恒为空表。
+        java.util.List<com.tailtopia.auth.dto.UserTagView> authorTags,
         ContentType type,
         String body,
         List<String> imageUrls,
@@ -35,7 +37,7 @@ public record ContentDetailResponse(
             long commentCount, boolean liked, boolean isAuthor) {
         return new ContentDetailResponse(
                 p.getId(), p.getAuthorId(), author.nickname(), author.avatarUrl(),
-                author.deleted(), p.getType(), p.getText(), p.getImageUrls(),
+                author.deleted(), author.tags().isEmpty() ? null : author.tags(), p.getType(), p.getText(), p.getImageUrls(),
                 likeCount, commentCount, liked, isAuthor, p.getCreatedAt());
     }
 }

@@ -62,7 +62,7 @@ class CommentServiceTest {
         when(accounts.findAuthorViews(anyList())).thenAnswer(inv -> {
             List<Long> ids = inv.getArgument(0);
             return java.util.Map.of((Long) ids.get(0),
-                    new AuthorView((Long) ids.get(0), "u", null, false));
+                    new AuthorView((Long) ids.get(0), "u", null, false, java.util.List.of()));
         });
         // save 回填 id（仅对新建实体；已有 id 的更新/软删不改 id）。
         when(comments.save(any(Comment.class))).thenAnswer(inv -> {
