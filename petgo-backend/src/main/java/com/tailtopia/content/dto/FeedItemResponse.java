@@ -35,6 +35,8 @@ public record FeedItemResponse(
         boolean authorDeleted,
         // 运营标签（V1.1.6 Story 5.1 · FR-74）。最多 3 个；注销作者恒为空表。
         java.util.List<com.tailtopia.auth.dto.UserTagView> authorTags,
+        // 内容装饰标签（V1.1.6 Story 5.2 · FR-75）。空表不下发（NON_NULL 省略）。
+        java.util.List<ContentTagView> decorationTags,
         ContentType type,
         String body,
         String firstImageUrl,
@@ -76,7 +78,7 @@ public record FeedItemResponse(
      * 要加字段就加在这里，<b>不要为某一个出口另写一个</b> —— 那正是口径分叉的起点。
      */
     public static FeedItemResponse of(ContentPost p, AuthorView author, long likeCount,
-            boolean liked, long commentCount) {
+            boolean liked, long commentCount, List<ContentTagView> decorationTags) {
         List<String> images = p.getImageUrls();
         String firstImage = (images != null && !images.isEmpty()) ? images.get(0) : null;
         return new FeedItemResponse(
@@ -87,6 +89,7 @@ public record FeedItemResponse(
                 author.deleted(),
                 // 空标签不下发（NON_NULL 省略）：Feed 一页 20 行，每行一个空数组白占体积。
                 author.tags().isEmpty() ? null : author.tags(),
+                (decorationTags == null || decorationTags.isEmpty()) ? null : decorationTags,
                 p.getType(),
                 p.getText(),
                 firstImage,

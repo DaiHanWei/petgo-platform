@@ -42,13 +42,14 @@ class ContentDetailAndCommentContractTest {
                 1L, 7L, "小明", "https://cdn/a.jpg", false,
                 // V1.1.6 Story 5.1：运营标签随作者一起下发；**空表不下发**（NON_NULL 省略）。
                 List.of(new com.tailtopia.auth.dto.UserTagView("vet", "兽医", "🩺", "已认证兽医")),
+                List.of(new ContentTagView("editor_pick", "编辑推荐", "🏆", "被官方选中的优质内容")),
                 ContentType.DAILY, "正文",
                 List.of("https://cdn/1.jpg", "https://cdn/2.jpg"), 5L, 2L, true, false,
                 Instant.parse("2026-06-05T00:00:00Z"));
 
         assertThat(wire(d).keySet()).isEqualTo(Set.of(
                 "id", "authorId", "authorNickname", "authorAvatarUrl", "authorDeleted",
-                "authorTags", "type",
+                "authorTags", "decorationTags", "type",
                 "body", "imageUrls", "likeCount", "commentCount", "liked", "isAuthor", "createdAt"));
     }
 

@@ -59,7 +59,9 @@ class CalendarAndDayDetailStory34Test {
         IdCardRepository idCards = Mockito.mock(IdCardRepository.class);
         when(healthProvider.getIfAvailable()).thenReturn(health);
         service = new TimelineService(profileService, contentService, healthProvider, milestoneService,
-                healthRecords, completions, idCards);
+                healthRecords, completions, idCards,
+                // V1.1.6 Story 5.2：装饰标签统一贴标点；本类不验它，给 mock（默认无标签）。
+                Mockito.mock(com.tailtopia.content.service.ContentTagQueryService.class));
 
         PetProfile profile = PetProfile.create(1L, PetType.CAT, "Momo", null, null, null, null, "tok");
         java.lang.reflect.Field id;

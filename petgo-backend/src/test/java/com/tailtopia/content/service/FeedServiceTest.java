@@ -46,7 +46,9 @@ class FeedServiceTest {
         // V1.1.6 Story 4.2：只首屏让位要查顶置；默认无顶置（Optional.empty）。
         pins = mock(ContentPinService.class);
         when(pins.activePin(any(), any())).thenReturn(java.util.Optional.empty());
-        service = new FeedService(posts, accounts, likes, comments, pins);
+        service = new FeedService(posts, accounts, likes, comments, pins,
+                // V1.1.6 Story 5.2：装饰标签；本类不验它，给 mock（默认无标签）。
+                mock(com.tailtopia.content.service.ContentTagQueryService.class));
         // 默认作者视图：返回非注销，nickname 由 id 推。
         when(accounts.findAuthorViews(anyList())).thenAnswer(inv -> {
             List<Long> ids = inv.getArgument(0);

@@ -8,6 +8,7 @@ import '../../features/content/domain/feed_item.dart';
 import '../../features/content/presentation/like_button.dart';
 import '../../l10n/app_localizations.dart';
 import 'feed_image.dart';
+import 'content_tag_chip.dart';
 import 'user_tag_row.dart';
 import 'letter_avatar.dart';
 
@@ -188,7 +189,13 @@ class MasonryCard extends StatelessWidget {
                     // 🛡 两个角位留给 Epic 4（顶置角标）与 Epic 5（装饰标签）——
                     // 它们只往这里挂内容，**不得再改图片区结构**（AD-8 Rule 6）。
                     topRight: pinnedBadge,
-                    bottomLeft: decorTag,
+                    // V1.1.6 Story 5.2：装饰标签挂**左下角位**（3.4 交付的入参）。
+                    // 只取第一枚 —— 角位空间有限，多枚会一路铺到底边圆点底下。
+                    // ⚠️ 外部传入的 decorTag 优先（留给调用方覆盖用）。
+                    bottomLeft: decorTag ??
+                        (item.decorationTags.isEmpty
+                            ? null
+                            : ContentTagChip.overlay(tag: item.decorationTags.first)),
                   ),
               ],
             ),

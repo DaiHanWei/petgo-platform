@@ -1,4 +1,5 @@
 import '../../auth/domain/user_tag.dart';
+import 'content_tag.dart';
 /// 内容详情（对应后端 `ContentDetailResponse`）。
 class ContentDetail {
   const ContentDetail({
@@ -13,6 +14,7 @@ class ContentDetail {
     required this.createdAt,
     this.authorNickname,
     this.authorTags = const [],
+    this.decorationTags = const [],
     this.authorAvatarUrl,
     this.body,
     this.imageUrls = const [],
@@ -33,6 +35,9 @@ class ContentDetail {
 
   /// 作者的运营标签（V1.1.6 Story 5.1）。最多 3 个；注销作者恒为空。
   final List<UserTag> authorTags;
+
+  /// 内容装饰标签（V1.1.6 Story 5.2）。有图叠首图角落 / 无图置正文下方。
+  final List<ContentTag> decorationTags;
   final String? authorAvatarUrl;
   final String? body;
   final List<String> imageUrls;
@@ -51,6 +56,7 @@ class ContentDetail {
       createdAt: DateTime.parse(json['createdAt'] as String),
       authorNickname: json['authorNickname'] as String?,
       authorTags: UserTag.listFromJson(json['authorTags']),
+      decorationTags: ContentTag.listFromJson(json['decorationTags']),
       authorAvatarUrl: json['authorAvatarUrl'] as String?,
       body: json['body'] as String?,
       imageUrls: raw is List ? raw.map((e) => e.toString()).toList() : const [],

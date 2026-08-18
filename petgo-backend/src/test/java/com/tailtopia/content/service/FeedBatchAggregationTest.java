@@ -55,7 +55,8 @@ class FeedBatchAggregationTest {
         comments = mock(CommentRepository.class);
         // V1.1.6 Story 4.2：只首屏让位要查顶置。这两类单测不验让位，给 mock（默认无顶置）。
         service = new FeedService(posts, accounts, likes, comments,
-                Mockito.mock(ContentPinService.class));
+                Mockito.mock(ContentPinService.class),
+                Mockito.mock(com.tailtopia.content.service.ContentTagQueryService.class));
         when(accounts.findAuthorViews(anyList())).thenAnswer(inv -> {
             List<Long> ids = inv.getArgument(0);
             return ids.stream().distinct().collect(Collectors.toMap(
@@ -156,8 +157,15 @@ class FeedBatchAggregationTest {
      */
     @Test
     void responseCarriesRawSizesOnlyNoRatioNoHeight() {
+        // ⚠️ 精确豁免：`decorationTags`（V1.1.6 Story 5.2 内容装饰标签）里恰好含有
+        // "deco-RATIO-nTags" 这个子串，与本规则要防的"下发已算好的比例"毫无关系。
+        // 放宽 hint（比如把 "ratio" 删掉）会让真正该拦的字段名溜过去，所以这里改用**逐个豁免**。
+        var explicitlyAllowed = java.util.List.of("decorationtags");
         for (var rc : FeedItemResponse.class.getRecordComponents()) {
             String n = rc.getName().toLowerCase(java.util.Locale.ROOT);
+            if (explicitlyAllowed.contains(n)) {
+                continue;
+            }
             assertThat(n)
                     .as("FeedItemResponse.%s 看起来在下发已算好的比例 / 高度 —— "
                             + "那些只能客户端算（护栏依赖可视区高度），服务端也算一遍就是双重裁切",

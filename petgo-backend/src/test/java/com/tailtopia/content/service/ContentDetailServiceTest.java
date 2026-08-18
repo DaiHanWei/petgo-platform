@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
+import org.mockito.Mockito;
 import org.junit.jupiter.api.Test;
 
 /** L0：详情读取 + 多态（404 不存在/软删；注销作者 200 匿名化）+ isAuthor（AC1/AC4）。 */
@@ -41,7 +42,8 @@ class ContentDetailServiceTest {
         likes = mock(ContentLikeRepository.class);
         accounts = mock(AccountQueryService.class);
         reportService = mock(ReportService.class); // 默认 hasReported → false（未举报）
-        service = new ContentDetailService(posts, comments, likes, accounts, reportService);
+        service = new ContentDetailService(posts, comments, likes, accounts, reportService,
+                Mockito.mock(com.tailtopia.content.service.ContentTagQueryService.class));
         when(comments.countVisibleForViewer(org.mockito.ArgumentMatchers.anyLong(),
                 org.mockito.ArgumentMatchers.any())).thenReturn(5L);
         when(likes.countByPostId(org.mockito.ArgumentMatchers.anyLong())).thenReturn(2L);

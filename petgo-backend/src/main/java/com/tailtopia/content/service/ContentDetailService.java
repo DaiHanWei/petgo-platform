@@ -26,6 +26,9 @@ public class ContentDetailService {
     /** 统一 404 文案：不暴露资源是否曾存在（防枚举）。 */
     static final String GONE_DETAIL = "这条内容已不存在";
 
+    /** V1.1.6 Story 5.2：内容装饰标签。 */
+    private final ContentTagQueryService contentTags;
+
     private final ContentPostRepository posts;
     private final CommentRepository comments;
     private final ContentLikeRepository likes;
@@ -34,7 +37,8 @@ public class ContentDetailService {
 
     public ContentDetailService(ContentPostRepository posts, CommentRepository comments,
             ContentLikeRepository likes, AccountQueryService accountQueryService,
-            ReportService reportService) {
+            ReportService reportService, ContentTagQueryService contentTags) {
+        this.contentTags = contentTags;
         this.posts = posts;
         this.comments = comments;
         this.likes = likes;
@@ -73,6 +77,11 @@ public class ContentDetailService {
         // Story 3.4：真实点赞计数 + 当前用户是否已赞（游客 false）。
         long likeCount = likes.countByPostId(postId);
         boolean liked = viewerId != null && likes.existsByPostIdAndUserId(postId, viewerId);
-        return ContentDetailResponse.of(post, author, likeCount, commentCount, liked, isAuthor);
+        // V1.1.6 Story 5.2：装饰标签（三处展示位之一）。单条也走批量方法 ——
+        // 仓储刻意不提供逐条取法，免得别处照着写成逐条查。
+        var decorations = contentTags.findVisibleTags(java.util.List.of(postId), java.time.Instant.now())
+                .get(postId);
+        return ContentDetailResponse.of(post, author, likeCount, commentCount, liked, isAuthor,
+                decorations);
     }
 }
