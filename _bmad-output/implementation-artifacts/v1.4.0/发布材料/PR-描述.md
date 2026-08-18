@@ -107,5 +107,15 @@ Flutter 侧只原样回传（已逐个核对）；服务端各留一轮过渡兼
 按 `_bmad-output/implementation-artifacts/v1.4.0/人工验收清单.md` 走：
 **合 stag → 部署 staging → 在 staging 上做 L2 → 生产 → 盯 C 节两个告警**。
 
-🔴 **staging 部署时重点看那 24 个迁移的日志** —— 它们至今只在本地空库上顺序跑过，
-staging 是从生产克隆的库，是它们第一次面对真实数据。
+### ✅ 迁移升级路径已提前演练（2026-08-18）
+
+不是从空库建表（CI 每次都在跑），而是复刻 staging 的真实路径：
+**main 的 99 个迁移 → 塞存量行（38 条通知覆盖全部 19 个历史类型 / 32 条支付意图覆盖旧 purpose × channel）
+→ 应用本分支 24 个迁移 → `ddl-auto=validate` 启动**。
+
+**24 个全部成功，存量行一条没掉，health = UP。**
+静态审计也确认**没有任何历史枚举值被丢掉**（2026-07-30 事故的形态没有重演）。
+
+⚠️ 仍需在 staging 上看的：用的是构造数据不是真实生产数据；演练走 psql 未走 Flyway 记账；
+`notifications` 三次 `DROP+ADD CONSTRAINT` 会全表校验、V125 `CREATE INDEX` 会锁表 ——
+**表大时建议低峰期执行**。细节见验收清单 A5。
