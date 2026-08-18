@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../shared/widgets/masonry_card.dart';
+import '../domain/feed_image_layout.dart';
 import '../domain/feed_item.dart';
 import '../domain/home_refresh_provider.dart';
 
@@ -105,80 +106,96 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
   Widget build(BuildContext context) {
     // 已在首页再次点击 Home Tab → 回到顶部（bug 20260709-278）。
     ref.listen<int>(homeScrollTopProvider, (_, _) => _scrollToTop());
-    final cards = <Widget>[
-      for (var i = 0; i < widget.items.length; i++)
-        // 通栏版式（V1.1.6 Story 3.2 · FR-93）：条目之间 1px 分隔线 + 上下 12px；
-        // ⚠️ **最后一条不画线**，否则列表底部会多出一道悬空的横线。
-        Container(
-          padding: const EdgeInsets.only(bottom: 12),
-          margin: const EdgeInsets.only(bottom: 12),
-          decoration: i == widget.items.length - 1
-              ? null
-              : const BoxDecoration(
-                  border: Border(bottom: BorderSide(color: AppColors.line2, width: 1)),
-                ),
-          child: MasonryCard(
-            item: widget.items[i],
-            deletedUserLabel: widget.deletedUserLabel,
-            onTap: widget.onTapItem == null ? null : () => widget.onTapItem!(widget.items[i]),
-            onLongPress: widget.onLongPressItem == null
-                ? null
-                : () => widget.onLongPressItem!(widget.items[i]),
-            onAuthorTap:
-                widget.onAuthorTap == null ? null : () => widget.onAuthorTap!(widget.items[i]),
-            onComment: widget.onCommentItem == null
-                ? null
-                : () => widget.onCommentItem!(widget.items[i]),
-            onMore:
-                widget.onMoreItem == null ? null : () => widget.onMoreItem!(widget.items[i]),
-          ),
-        ),
-    ];
-
-    return RefreshIndicator(
-      color: AppColors.accentGrowth,
-      onRefresh: widget.onRefresh,
-      child: SingleChildScrollView(
-        controller: _controller,
-        physics: const AlwaysScrollableScrollPhysics(),
-        child: Column(
-          children: [
-            if (widget.header != null) widget.header!,
-            Padding(
-              // 🔴 通栏：**去掉左右屏边距**，让卡片里的图片能贴到屏幕边缘。
-              // ⚠️ 文字区的 16px 由卡片内部各块自己补（作者行/操作行/正文/时间），
-              // 不是整张卡贴边 —— 那样文字会顶到屏幕边上。
-              padding: const EdgeInsets.symmetric(vertical: AppSpacing.screenEdge),
-              child: Column(
-                children: [
-                  // 单列通栏卡片（FR-93）。
-                  ...cards,
-                  if (widget.footer != null) widget.footer!,
-                  if (widget.loadingMore)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
-                      child: CircularProgressIndicator(color: AppColors.accentGrowth),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // 🔴 高度护栏（V1.1.6 Story 3.3）的「可视区高度」口径 = **滚动视口的实际高度**。
+        // 在这里量最准：顶部标签行与底部导航栏已经被外层扣掉，卡片内不需要再减一次。
+        // 视口无界时（理论上不会发生）算出的上限是无穷大，护栏自动不介入 —— 安全退化。
+        final maxImageHeight = FeedCardMetrics.maxImageHeight(constraints.maxHeight);
+        final cards = <Widget>[
+          for (var i = 0; i < widget.items.length; i++)
+            // 通栏版式（V1.1.6 Story 3.2 · FR-93）：条目之间 1px 分隔线 + 上下 12px；
+            // ⚠️ **最后一条不画线**，否则列表底部会多出一道悬空的横线。
+            Container(
+              padding: const EdgeInsets.only(bottom: 12),
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: i == widget.items.length - 1
+                  ? null
+                  : const BoxDecoration(
+                      border: Border(bottom: BorderSide(color: AppColors.line2, width: 1)),
                     ),
-                  // AC5：增量加载失败 → 底部「加载失败，点击重试」（已加载内容保留在上方）。
-                  if (widget.loadMoreFailed && !widget.loadingMore)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-                      child: TextButton.icon(
-                        key: const ValueKey('feedLoadMoreRetry'),
-                        onPressed: widget.onLoadMore,
-                        icon: const Icon(Icons.refresh, size: 18, color: AppColors.accentGrowth),
-                        label: Text(
-                          widget.loadMoreErrorLabel ?? 'Gagal memuat lagi, ketuk untuk coba lagi',
-                          style: const TextStyle(color: AppColors.accentGrowth),
-                        ),
-                      ),
-                    ),
-                ],
+              child: MasonryCard(
+                item: widget.items[i],
+                deletedUserLabel: widget.deletedUserLabel,
+                onTap: widget.onTapItem == null ? null : () => widget.onTapItem!(widget.items[i]),
+                onLongPress: widget.onLongPressItem == null
+                    ? null
+                    : () => widget.onLongPressItem!(widget.items[i]),
+                onAuthorTap: widget.onAuthorTap == null
+                    ? null
+                    : () => widget.onAuthorTap!(widget.items[i]),
+                onComment: widget.onCommentItem == null
+                    ? null
+                    : () => widget.onCommentItem!(widget.items[i]),
+                onMore: widget.onMoreItem == null
+                    ? null
+                    : () => widget.onMoreItem!(widget.items[i]),
+                maxImageHeight: maxImageHeight,
               ),
             ),
-          ],
-        ),
-      ),
+        ];
+
+        return RefreshIndicator(
+          color: AppColors.accentGrowth,
+          onRefresh: widget.onRefresh,
+          child: SingleChildScrollView(
+            controller: _controller,
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: Column(
+              children: [
+                if (widget.header != null) widget.header!,
+                Padding(
+                  // 🔴 通栏：**去掉左右屏边距**，让卡片里的图片能贴到屏幕边缘。
+                  // ⚠️ 文字区的 16px 由卡片内部各块自己补（作者行/操作行/正文/时间），
+                  // 不是整张卡贴边 —— 那样文字会顶到屏幕边上。
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.screenEdge),
+                  child: Column(
+                    children: [
+                      // 单列通栏卡片（FR-93）。
+                      ...cards,
+                      if (widget.footer != null) widget.footer!,
+                      if (widget.loadingMore)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
+                          child: CircularProgressIndicator(color: AppColors.accentGrowth),
+                        ),
+                      // AC5：增量加载失败 → 底部「加载失败，点击重试」（已加载内容保留在上方）。
+                      if (widget.loadMoreFailed && !widget.loadingMore)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+                          child: TextButton.icon(
+                            key: const ValueKey('feedLoadMoreRetry'),
+                            onPressed: widget.onLoadMore,
+                            icon: const Icon(
+                              Icons.refresh,
+                              size: 18,
+                              color: AppColors.accentGrowth,
+                            ),
+                            label: Text(
+                              widget.loadMoreErrorLabel ??
+                                  'Gagal memuat lagi, ketuk untuk coba lagi',
+                              style: const TextStyle(color: AppColors.accentGrowth),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
