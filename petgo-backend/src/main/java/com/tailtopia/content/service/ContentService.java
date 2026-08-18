@@ -4,6 +4,7 @@ import com.tailtopia.content.domain.Comment;
 import com.tailtopia.content.domain.ContentPost;
 import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.domain.DeleteReason;
+import com.tailtopia.content.domain.ImageSize;
 import com.tailtopia.content.domain.PostStatus;
 import com.tailtopia.content.dto.ContentPostCreateRequest;
 import com.tailtopia.content.dto.ContentPostResponse;
@@ -51,11 +52,16 @@ public class ContentService {
     private final ContentModerationService moderation;
     private final ApplicationEventPublisher events;
     private final ManualReviewGate manualReviewGate;
+    /** V1.1.6 Story 3.1：客户端上报尺寸的采信与归一（长度不符整组作废）。 */
+    private final ImageSizeResolver imageSizes;
+    /** V1.1.6 Story 3.1：缺失尺寸的异步兜底测量。⚠️ 绝不同步调用（见 scheduleSizeBackfill）。 */
+    private final ImageSizeBackfillService sizeBackfill;
 
     public ContentService(ContentPostRepository posts, CommentRepository comments,
             ContentLikeRepository likes, ProfileService profileService,
             IdempotencyService idempotency, ContentModerationService moderation,
-            ApplicationEventPublisher events, ManualReviewGate manualReviewGate) {
+            ApplicationEventPublisher events, ManualReviewGate manualReviewGate,
+            ImageSizeResolver imageSizes, ImageSizeBackfillService sizeBackfill) {
         this.posts = posts;
         this.comments = comments;
         this.likes = likes;
@@ -64,6 +70,8 @@ public class ContentService {
         this.moderation = moderation;
         this.events = events;
         this.manualReviewGate = manualReviewGate;
+        this.imageSizes = imageSizes;
+        this.sizeBackfill = sizeBackfill;
     }
 
     /**
@@ -340,7 +348,12 @@ public class ContentService {
                 // 挂起帖同样要带上用户选择的可见范围——否则 PRIVATE 日记审核通过后会以实体默认的
                 // PUBLIC 进 Feed（approveReview 只翻 status、终身无修正机会），私密内容被公开。
                 pendingPost.setVisibility(req.visibilityOrPublic());
+                // V1.1.6 Story 3.1：🔴 挂起分支**同样要写尺寸** ——
+                // 只写下面那条正常分支的话，审核挂起的帖会永远没有尺寸。
+                List<ImageSize> pendingSizes = imageSizes.normalize(imageUrls, req.imageSizes());
+                pendingPost.setImageSizes(pendingSizes);
                 ContentPost pending = posts.save(pendingPost);
+                scheduleSizeBackfill(pending, pendingSizes);
                 idempotency.store(idempotencyKey, pending.getId());
                 manualReviewGate.enqueue(pending.getId());
                 return ContentPostResponse.from(pending);
@@ -354,7 +367,12 @@ public class ContentService {
         // Story 4.2 同步开关：关 → PRIVATE（仅作者自视）。省略/开 → PUBLIC。
         // ⚠️ 审核流程不因私密而跳过（私密内容同样过审核，AC9）——这里只设可见范围，不动 status。
         post.setVisibility(req.visibilityOrPublic());
+        // V1.1.6 Story 3.1（AD-5）：客户端上报的尺寸先归一（长度不符即整组作废），
+        // 缺失的位置交由异步兜底测量 —— 绝不在本事务里同步拉图。
+        List<ImageSize> sizes = imageSizes.normalize(imageUrls, req.imageSizes());
+        post.setImageSizes(sizes);
         ContentPost saved = posts.save(post);
+        scheduleSizeBackfill(saved, sizes);
 
         idempotency.store(idempotencyKey, saved.getId());
 
@@ -535,6 +553,20 @@ public class ContentService {
                         && p.getDeletedAt() == null
                         && p.getStatus() == PostStatus.PUBLISHED)
                 .orElse(false);
+    }
+
+    /**
+     * 有位置没尺寸时排一次异步兜底测量（V1.1.6 Story 3.1 · AD-5 Rule 3）。
+     *
+     * <p>🛡 <b>异步是刻意的</b>：一条内容最多 9 张图，同步测量等于把 9 次网络往返压进发布事务、
+     * 长时间占着数据库连接。为一个装饰性字段赌上「发布成功」这件事不划算。
+     * 代价（刚发布的帖可能短暂没尺寸）是可接受的 —— 存量内容本来就永远没有尺寸，
+     * 客户端的加载期占位策略本就是必做项。
+     */
+    private void scheduleSizeBackfill(ContentPost saved, List<ImageSize> sizes) {
+        if (imageSizes.needsBackfill(sizes)) {
+            sizeBackfill.backfill(saved.getId());
+        }
     }
 
     private static GrowthMomentView toGrowthMomentView(ContentPost p) {

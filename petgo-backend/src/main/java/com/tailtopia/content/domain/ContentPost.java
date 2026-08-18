@@ -48,6 +48,24 @@ public class ContentPost {
     @Column(name = "image_urls")
     private List<String> imageUrls;
 
+    /**
+     * 图片原始宽高（V1.1.6 Story 3.1 · AD-5）。与 {@link #imageUrls} <b>同序等长</b>，
+     * 测不出来的位置为 {@code null} 占位。
+     *
+     * <h2>🛡 等长同序是硬约束</h2>
+     * 错位的后果是<b>图文不符</b>（第 1 张图套用第 2 张的比例），比"没有尺寸"严重得多 ——
+     * 后者有客户端占位兜底，前者是显示错误。所以长度对不上时<b>整组作废</b>，不做部分采信。
+     *
+     * <h2>⚠️ 只存原始宽高</h2>
+     * <b>不得</b>存已收敛的比例或已算好的高度：那些依赖可视区尺寸，只能客户端算；
+     * 服务端先算一遍、客户端再算一遍 = <b>双重裁切</b>（AD-6 Rule 6）。
+     *
+     * <p>存量内容<b>永远为 null</b>（零回填是 AD-5 Rule 1 的硬要求）。
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "image_sizes")
+    private List<ImageSize> imageSizes;
+
     @Column(name = "danger_level", length = 8)
     private String dangerLevel;
 
@@ -232,6 +250,20 @@ public class ContentPost {
 
     public String getText() {
         return text;
+    }
+
+    public List<ImageSize> getImageSizes() {
+        return imageSizes;
+    }
+
+    /**
+     * 写入图片尺寸（V1.1.6 Story 3.1）。
+     *
+     * <p>🛡 调用方必须保证与 {@link #getImageUrls()} <b>同序等长</b> —— 校验在发布服务里做，
+     * 这里只负责存。
+     */
+    public void setImageSizes(List<ImageSize> imageSizes) {
+        this.imageSizes = imageSizes;
     }
 
     public List<String> getImageUrls() {

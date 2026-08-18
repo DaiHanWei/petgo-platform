@@ -31,6 +31,7 @@ class FeedServiceTest {
     private ContentPostRepository posts;
     private AccountQueryService accounts;
     private ContentLikeRepository likes;
+    private com.tailtopia.content.repository.CommentRepository comments;
     private FeedService service;
 
     @BeforeEach
@@ -38,7 +39,9 @@ class FeedServiceTest {
         posts = mock(ContentPostRepository.class);
         accounts = mock(AccountQueryService.class);
         likes = mock(ContentLikeRepository.class); // countByPostIdIn 默认返空表 → likeCount 默认 0
-        service = new FeedService(posts, accounts, likes);
+        // V1.1.6 Story 3.1：默认返空表 → commentCount 默认 0、已赞默认 false
+        comments = mock(com.tailtopia.content.repository.CommentRepository.class);
+        service = new FeedService(posts, accounts, likes, comments);
         // 默认作者视图：返回非注销，nickname 由 id 推。
         when(accounts.findAuthorViews(anyList())).thenAnswer(inv -> {
             List<Long> ids = inv.getArgument(0);
