@@ -17,6 +17,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
@@ -34,6 +35,18 @@ class NotificationControllerEndpointTest extends ApiIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private StringRedisTemplate redis;
+
+    /** 直接写角标键，模拟「计数漂移」（Redis 有数但库里没有对应未读行）。 */
+    private void seedBadge(long userId, long value) {
+        redis.opsForValue().set("notify:unread:" + userId, String.valueOf(value));
+    }
+
+    private String badge(long userId) {
+        return redis.opsForValue().get("notify:unread:" + userId);
+    }
 
     /** 造一条已落库通知（token 由调用方给定，便于断言/标记）。 */
     private Notification persist(long recipientUserId, NotificationType type, String token, boolean read) {
@@ -339,5 +352,80 @@ class NotificationControllerEndpointTest extends ApiIntegrationTest {
     void readAll_missingToken_is401() throws Exception {
         mvc.perform(post("/api/v1/notifications/read-all"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    // ---------- 角标与列表不一致的自愈（2026-08-19 补覆盖缺口） ----------
+
+    /**
+     * 🔴 核心回归：**角标 > 0 但列表为空**时，打开通知中心（首页，cursor=null）必须
+     * 把角标校准回真实未读数（这里是 0）。
+     *
+     * <p>这是线上反馈「铃铛上有数字，点进去没有新消息」的那条自愈路径。此前 10 个测试
+     * 全都没覆盖它 —— 它们造的行都会让角标与库天然一致，构造不出漂移。
+     */
+    @Test
+    @DisplayName("角标残留 + 列表空 → 打开列表后角标自愈为 0")
+    void list_recalibratesStaleBadgeWhenListIsEmpty() throws Exception {
+        User u = newUser();
+        seedBadge(u.getId(), 3); // 人为漂移：库里 0 条未读，角标却是 3
+
+        // 打开前：角标读 Redis，如实暴露那个 3
+        mvc.perform(get("/api/v1/notifications/unread-count")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(u.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(3));
+
+        // 打开通知中心首页 → 列表空，且服务端按库校准角标
+        mvc.perform(get("/api/v1/notifications")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(u.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isEmpty());
+
+        assertThat(badge(u.getId())).isEqualTo("0");
+        mvc.perform(get("/api/v1/notifications/unread-count")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(u.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(0));
+    }
+
+    /**
+     * 漂移的另一半：库里**有**未读行、但角标数字偏大（如重复自增），首页同样校准到真实值。
+     */
+    @Test
+    @DisplayName("角标偏大 + 列表有未读 → 校准为真实未读数")
+    void list_recalibratesInflatedBadgeToActualUnread() throws Exception {
+        User u = newUser();
+        persist(u.getId(), NotificationType.VET_REPLY, tok(), false);
+        persist(u.getId(), NotificationType.VET_REPLY, tok(), true); // 已读，不计入
+        seedBadge(u.getId(), 99);
+
+        mvc.perform(get("/api/v1/notifications")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(u.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(2));
+
+        assertThat(badge(u.getId())).isEqualTo("1");
+    }
+
+    /**
+     * ⚠️ 已知边界，如实固定为断言：**只有首页（cursor=null）才校准角标**。
+     * 带 cursor 的翻页请求不校准 —— 因为它拿不到「全量未读」的语义。
+     *
+     * <p>这意味着：若客户端某条路径打开通知中心时**带了 cursor**，角标就永远不会自愈。
+     * 当前 Flutter 侧 initState 是不带 cursor 的（已核对），故不受影响；本断言用于
+     * 锁住这个前提，将来若有人改成带 cursor 打开，这条会立刻红。
+     */
+    @Test
+    @DisplayName("带 cursor 的翻页请求不校准角标（已知边界）")
+    void list_withCursorDoesNotRecalibrateBadge() throws Exception {
+        User u = newUser();
+        seedBadge(u.getId(), 3);
+
+        mvc.perform(get("/api/v1/notifications")
+                        .param("cursor", String.valueOf(System.currentTimeMillis() * 1000L) + "_0")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(u.getId())))
+                .andExpect(status().isOk());
+
+        assertThat(badge(u.getId())).isEqualTo("3"); // 未被校准
     }
 }
