@@ -193,8 +193,10 @@ class StudentCardFront extends StatelessWidget {
         padding: const EdgeInsets.all(_StudentLayout.photoBorder),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(_StudentLayout.photoRadius - _StudentLayout.photoBorder),
+          // 加载失败（快照 URL 死链/网络故障）与无照片同占位，不静默空白。
           child: fields.avatarUrl != null && fields.avatarUrl!.isNotEmpty
-              ? AppImage.widget(fields.avatarUrl!, fit: BoxFit.cover, thumbWidth: 400)
+              ? AppImage.widget(fields.avatarUrl!, fit: BoxFit.cover, thumbWidth: 400,
+                  errorBuilder: (_, _, _) => Container(color: const Color(0xFFEDE7F7)))
               : Container(color: const Color(0xFFEDE7F7)),
         ),
       ),

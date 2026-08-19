@@ -41,19 +41,31 @@ public class IdCardService {
 
     // ---- Story 6-7：多卡快照 + 历史列表 + 独立建卡器 ----
 
-    /** 历史卡列表（建卡时刻倒序）。 */
+    /** 历史卡列表（建卡时刻倒序）。档案已删的未付费卡不返回（见 {@link #visible}）。 */
     @Transactional(readOnly = true)
     public List<IdCardResponse> listMyCards(long ownerId) {
         return idCards.findByUserIdOrderByCreatedAtDesc(ownerId).stream()
+                .filter(IdCardService::visible)
                 .map(IdCardResponse::from).toList();
     }
 
-    /** 单卡详情（归属校验，非本人 404 防枚举）。 */
+    /** 单卡详情（归属校验，非本人 404 防枚举）。档案已删的未付费卡同 404（不可预览）。 */
     @Transactional(readOnly = true)
     public IdCardResponse getMyCard(long ownerId, long cardId) {
         return idCards.findByIdAndUserId(cardId, ownerId)
+                .filter(IdCardService::visible)
                 .map(IdCardResponse::from)
                 .orElseThrow(() -> AppException.notFound("身份证卡不存在"));
+    }
+
+    /**
+     * 卡可见性（V108，2026-08-19 决策 F21）：付费卡恒可见（哪怕档案已删/已换宠物，展示快照信息）；
+     * 未付费卡（含等待付款/过期等一切非到账态）在档案删除后隐藏。到账回调
+     * （{@code IdCardHdService.completeCardByIntent}，按 findById 不走本过滤）翻转 hdUnlocked
+     * 后自动重新可见——防「删档时支付在途」的时间差丢卡。
+     */
+    private static boolean visible(IdCard card) {
+        return card.isHdUnlocked() || card.getProfileDeletedAt() == null;
     }
 
     /**

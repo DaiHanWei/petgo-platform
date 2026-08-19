@@ -101,8 +101,8 @@ public class ProfileService {
      * 与注销 7.3「匿名化保留 UGC」一致。<b>petStatus 不改</b>：删后用户仍为 HAS_PET 但无档案，
      * 前端据 GET /me 的 404 落「空档案态」，可重建档案或切换宠物状态（闭合 bug 20260702-237 的困死）。
      *
-     * <p>DB 级联由内层 {@code ProfileDeletionService#deleteByUserId} 原子提交；OSS 清理在提交后 best-effort
-     * （OSS 故障不回滚已删档案，孤儿对象非正确性问题）。无档案 → 404。
+     * <p>DB 级联由内层 {@code ProfileDeletionService#deleteByUserId} 原子提交；OSS 对象自 2026-08-19（F21）
+     * 起<b>保留不删</b>——id_cards 快照可能长期引用头像对象（{@code MediaDeletionService} 只记账）。无档案 → 404。
      */
     public void deleteMyProfile(long ownerId) {
         if (!profiles.existsByOwnerId(ownerId)) {
