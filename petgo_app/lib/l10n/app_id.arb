@@ -629,6 +629,8 @@
   "@notifyBodyReportReviewed": { "description": "Isi notifikasi laporan selesai ditinjau;闭环模糊。⚠️ V1.1.4 Story 3.4 有意变更为 PRD 定稿那句（旧：Terima kasih atas laporanmu. Kami telah menyelesaikan peninjauan.）——不是 bug，别改回去。印尼语措辞随 OQ-A4 同批送运营确认" },
   "notifyGroupToday": "Hari ini",
   "notifyGroupEarlier": "Sebelumnya",
+  "notifyMarkAllRead": "Tandai semua dibaca",
+  "notifyLoadMoreRetry": "Gagal memuat lagi · Ketuk untuk coba lagi",
   "notifyTimeJustNow": "Baru saja",
   "notifyTimeMinutesAgo": "{count} menit lalu",
   "@notifyTimeMinutesAgo": {

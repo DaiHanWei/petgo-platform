@@ -12,15 +12,28 @@ import 'package:tailtopia/features/notify/presentation/notification_center_page.
 import 'package:tailtopia/l10n/app_localizations.dart';
 
 class _FakeNotifyRepo extends NotificationRepository {
-  _FakeNotifyRepo({this.items = const [], this.unread = 0}) : super(dio: Dio());
+  _FakeNotifyRepo({this.items = const [], this.unread = 0, this.pages})
+      : super(dio: Dio());
 
   final List<NotificationItem> items;
   int unread;
   final List<String> markReadTokens = [];
 
+  /// 分页桩：`cursor` → 该页结果。null 键为首页。给翻页用例用。
+  final Map<String?, NotificationPage>? pages;
+
+  /// 记录每次请求带的 cursor，用于断言「原样回传、不解析」。
+  final List<String?> requestedCursors = [];
+  int markAllReadCalls = 0;
+
   @override
-  Future<NotificationPage> list({String? cursor, int limit = 20}) async =>
-      NotificationPage(items: items, hasMore: false);
+  Future<NotificationPage> list({String? cursor, int limit = 20}) async {
+    requestedCursors.add(cursor);
+    if (pages != null) {
+      return pages![cursor] ?? const NotificationPage(items: [], hasMore: false);
+    }
+    return NotificationPage(items: items, hasMore: false);
+  }
 
   @override
   Future<int> unreadCount() async => unread;
@@ -30,9 +43,15 @@ class _FakeNotifyRepo extends NotificationRepository {
     markReadTokens.add(token);
     if (unread > 0) unread--; // 已读 → 角标递减（库口径）
   }
+
+  @override
+  Future<void> markAllRead() async {
+    markAllReadCalls++;
+    unread = 0;
+  }
 }
 
-Future<void> _pump(WidgetTester tester, Widget home, _FakeNotifyRepo repo) async {
+Future<void> _pump(WidgetTester tester, Widget home, NotificationRepository repo) async {
   await tester.pumpWidget(ProviderScope(
     overrides: [notificationRepositoryProvider.overrideWithValue(repo)],
     child: MaterialApp(
@@ -326,4 +345,131 @@ void main() {
     // 旧话是「感谢你的举报，我们已完成审核」——它复活就说明有人把变更改回去了。
     expect(l10n.notifyBodyReportReviewed.toLowerCase().contains('completed our review'), isFalse);
   });
+
+  // ---------- 翻页与全部已读（2026-08-19 修「角标有数、点进去没有新消息」）----------
+
+  /// 🔴 这个缺陷的核心回归：**第一页之外的通知必须能被加载到**。
+  ///
+  /// 此前本页只拉最新 20 条、界面上没有任何「加载更多」（`nextCursor`/`hasMore`
+  /// 解析了却一处未用）。于是未读若落在第一页之外，用户既读不到、角标也永远消不掉
+  /// —— 铃铛显示 4、点进去却"没有新消息"，正是这个。
+  testWidgets('翻页：滚到底加载下一页，第一页之外的通知能被看到', (tester) async {
+    final repo = _FakeNotifyRepo(pages: {
+      null: NotificationPage(
+        items: [
+          for (var i = 0; i < 20; i++)
+            NotificationItem(
+                type: 'CONTENT_LIKED', title: 'p1-$i', deepLinkToken: 'a$i', read: true),
+        ],
+        nextCursor: 'CURSOR_P2',
+        hasMore: true,
+      ),
+      'CURSOR_P2': const NotificationPage(
+        items: [
+          NotificationItem(
+              type: 'VET_REPLY', title: '第二页的未读', deepLinkToken: 'b1', read: false),
+        ],
+        hasMore: false,
+      ),
+    });
+
+    await _pump(tester, const NotificationCenterPage(), repo);
+    // 首页只有第一页内容，第二页那条还看不到
+    expect(find.byKey(const ValueKey('notification_b1')), findsNothing);
+
+    // 滚到底 → 自动加载下一页
+    await tester.drag(find.byType(ListView), const Offset(0, -6000));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('notification_b1')), findsOneWidget);
+    // 🛡 cursor 必须原样回传（不解析、不拼装）
+    expect(repo.requestedCursors, [null, 'CURSOR_P2']);
+  });
+
+  /// 🛡 加载更多失败**不得清空已加载的内容**，只在末尾给可重试入口。
+  testWidgets('翻页失败：保留已加载内容 + 末尾可重试', (tester) async {
+    var failNext = true;
+    final repo = _ThrowingSecondPageRepo(() => failNext, () => failNext = false);
+
+    await _pump(tester, const NotificationCenterPage(), repo);
+    await tester.drag(find.byType(ListView), const Offset(0, -6000));
+    await tester.pumpAndSettle();
+
+    // 第一页内容还在（取滚到底后仍在视口内的末尾几条断言 —— a0 已滚出视口、不在树里）
+    expect(find.byKey(const ValueKey('notification_a19')), findsOneWidget);
+    // 出现重试入口
+    final retry = find.byKey(const ValueKey('notificationLoadMoreRetry'));
+    expect(retry, findsOneWidget);
+
+    await tester.tap(retry);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('notification_b1')), findsOneWidget);
+  });
+
+  /// 「全部已读」：有未读才露出；点一下即生效，**无二次确认**（产品 2026-08-19 定）。
+  testWidgets('全部已读：有未读才露出，点击即调用且不弹确认', (tester) async {
+    final repo = _FakeNotifyRepo(items: const [
+      NotificationItem(type: 'VET_REPLY', title: 'u', deepLinkToken: 't1', read: false),
+    ], unread: 1);
+    await _pump(tester, const NotificationCenterPage(), repo);
+
+    final btn = find.byKey(const ValueKey('notificationMarkAllRead'));
+    expect(btn, findsOneWidget);
+
+    await tester.tap(btn);
+    await tester.pumpAndSettle();
+
+    expect(repo.markAllReadCalls, 1);
+    // 无二次确认：点完不该有对话框
+    expect(find.byType(Dialog), findsNothing);
+    // 点完已无未读 → 按钮收起
+    expect(find.byKey(const ValueKey('notificationMarkAllRead')), findsNothing);
+  });
+
+  testWidgets('全部已读：无未读时不露出该入口', (tester) async {
+    await _pump(
+      tester,
+      const NotificationCenterPage(),
+      _FakeNotifyRepo(items: const [
+        NotificationItem(type: 'CONTENT_LIKED', title: 'r', deepLinkToken: 't9', read: true),
+      ]),
+    );
+    expect(find.byKey(const ValueKey('notificationMarkAllRead')), findsNothing);
+  });
+}
+
+/// 第二页首次抛错、重试成功的桩（给「翻页失败可重试」用例）。
+class _ThrowingSecondPageRepo extends NotificationRepository {
+  _ThrowingSecondPageRepo(this.shouldFail, this.clearFail) : super(dio: Dio());
+
+  final bool Function() shouldFail;
+  final void Function() clearFail;
+
+  @override
+  Future<NotificationPage> list({String? cursor, int limit = 20}) async {
+    if (cursor == null) {
+      return NotificationPage(
+        items: [
+          for (var i = 0; i < 20; i++)
+            NotificationItem(
+                type: 'CONTENT_LIKED', title: 'p1-$i', deepLinkToken: 'a$i', read: true),
+        ],
+        nextCursor: 'C2',
+        hasMore: true,
+      );
+    }
+    if (shouldFail()) {
+      clearFail();
+      throw StateError('boom');
+    }
+    return const NotificationPage(
+      items: [
+        NotificationItem(type: 'VET_REPLY', title: '二页', deepLinkToken: 'b1', read: false),
+      ],
+      hasMore: false,
+    );
+  }
+
+  @override
+  Future<int> unreadCount() async => 0;
 }
