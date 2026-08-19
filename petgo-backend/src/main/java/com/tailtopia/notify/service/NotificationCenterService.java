@@ -8,6 +8,8 @@ import com.tailtopia.shared.error.AppException;
 import java.time.Instant;
 import java.util.List;
 import org.springframework.data.domain.PageRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class NotificationCenterService {
+
+    private static final Logger log = LoggerFactory.getLogger(NotificationCenterService.class);
 
     private final NotificationRepository repo;
     private final StringRedisTemplate redis;
@@ -52,6 +56,16 @@ public class NotificationCenterService {
         // （如计数器残留致角标>0 但列表空，或行被清而计数未减）。仅校准计数，不改已读态。
         if (cursor == null) {
             long actualUnread = repo.countByRecipientUserIdAndReadIsFalse(userId);
+            // 🔎 漂移可观测（2026-08-19 加）：校准前后不一致说明角标确实漂了。
+            // 线上反馈过「铃铛有数字、点进去没有新消息」，但代码里已知的四条成因
+            // （INSERT 被静默丢弃 / 角标不自愈 / 前端刷太早 / 失败画成空态）都已修，
+            // 复现不出来。此处如实记下每一次真实漂移，把「查不出」变成「下次有据可查」。
+            // 只记内部 userId 与两个计数，不含任何 PII / 通知内容。
+            String beforeRaw = redis.opsForValue().get(unreadKey(userId));
+            if (beforeRaw != null && !beforeRaw.equals(String.valueOf(actualUnread))) {
+                log.warn("未读角标与库不一致，已按库校准 userId={} badgeWas={} actualUnread={} listSize={}",
+                        userId, beforeRaw, actualUnread, items.size());
+            }
             redis.opsForValue().set(unreadKey(userId), String.valueOf(actualUnread));
         }
         return new NotificationPage(items, nextCursor, hasMore);
