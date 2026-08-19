@@ -32,25 +32,122 @@ class _NotificationCenterPageState
   late Future<NotificationPage> _page;
   final Set<String> _locallyReadTokens = <String>{};
 
+  /// 已累加的条目（首页 + 后续每页追加）。
+  ///
+  /// 🔴 2026-08-19 修：此前本页**只拉最新 20 条且界面上没有任何「加载更多」** ——
+  /// `nextCursor` / `hasMore` 两个字段解析进来了却一处未用。后果是**第 20 条之后的通知
+  /// 在 App 里永远到不了**；而铃铛角标数的是全库未读、不受这 20 条限制，于是一旦有未读
+  /// 落在第一页之外，就出现「角标有数字、点进去没有新消息」，且**用户永远读不到那几条、
+  /// 角标永远消不掉**。线上反馈的正是这个。
+  final List<NotificationItem> _items = <NotificationItem>[];
+  String? _nextCursor;
+  bool _hasMore = false;
+  bool _loadingMore = false;
+  bool _loadMoreFailed = false;
+  bool _markingAllRead = false;
+  final ScrollController _scroll = ScrollController();
+
   @override
   void initState() {
     super.initState();
-    _page = ref.read(notificationRepositoryProvider).list();
-    // list() 服务端按 DB 真实未读校准 Redis 角标（自愈计数漂移：角标>0 但列表空等）；
-    // 拉完刷新铃铛未读角标使其立即与真实一致。
-    _page.whenComplete(() {
+    _scroll.addListener(_onScroll);
+    _loadFirstPage();
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  /// 首页（cursor=null）。服务端在此按 DB 真实未读校准 Redis 角标（自愈计数漂移）；
+  /// 拉完刷新铃铛角标使其立即与真实一致。
+  void _loadFirstPage() {
+    final f = ref.read(notificationRepositoryProvider).list();
+    _page = f;
+    f.then((page) {
+      if (!mounted) return;
+      setState(() {
+        _items
+          ..clear()
+          ..addAll(page.items);
+        _nextCursor = page.nextCursor;
+        _hasMore = page.hasMore;
+        _loadMoreFailed = false;
+      });
+    }).whenComplete(() {
       if (mounted) ref.invalidate(unreadCountProvider);
     });
   }
 
   /// 重拉列表（bug 20260625-088：加载失败态的重试）。
   void _reload() {
+    setState(_loadFirstPage);
+  }
+
+  /// 滚到底部附近 → 自动加载下一页。
+  ///
+  /// ⚠️ **上一次加载更多失败后不再自动重试**，改由用户点末尾的重试入口。否则持续失败时
+  /// （断网、后端 5xx）每一次滚动抖动都会再发一次请求，变成请求风暴。
+  void _onScroll() {
+    if (!_scroll.hasClients || _loadMoreFailed) return;
+    final pos = _scroll.position;
+    if (pos.pixels >= pos.maxScrollExtent - 320) {
+      _loadMore();
+    }
+  }
+
+  Future<void> _loadMore() async {
+    final cursor = _nextCursor;
+    if (_loadingMore || !_hasMore || cursor == null) return;
     setState(() {
-      _page = ref.read(notificationRepositoryProvider).list();
-      _page.whenComplete(() {
-        if (mounted) ref.invalidate(unreadCountProvider);
-      });
+      _loadingMore = true;
+      _loadMoreFailed = false;
     });
+    try {
+      // ⚠️ cursor 对客户端是**不透明串**：原样回传，不解析、不拼装
+      // （服务端格式为 "<epochMicros>_<id>" 的复合游标，见后端 NotificationRepository#findPageBefore）。
+      final page = await ref.read(notificationRepositoryProvider).list(cursor: cursor);
+      if (!mounted) return;
+      setState(() {
+        _items.addAll(page.items);
+        _nextCursor = page.nextCursor;
+        _hasMore = page.hasMore;
+        _loadingMore = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      // 加载更多失败**不清空已加载的内容**，只在末尾给一个可重试的提示。
+      setState(() {
+        _loadingMore = false;
+        _loadMoreFailed = true;
+      });
+    }
+  }
+
+  /// 全部标为已读（2026-08-19 加）。后端 read-all 接口与仓库方法早已存在、只缺界面入口。
+  ///
+  /// 产品定：**不做二次确认**（2026-08-19）。这也是用户被卡死的角标的**唯一自助出路** ——
+  /// 在翻页修好之前，落在第一页之外的未读通知既读不到、角标也消不掉。
+  Future<void> _markAllRead() async {
+    if (_markingAllRead) return;
+    setState(() => _markingAllRead = true);
+    try {
+      await ref.read(notificationRepositoryProvider).markAllRead();
+      if (!mounted) return;
+      // 本地即时置灰：已加载的条目全部按已读渲染（服务端已落库，重进页面同样是已读）。
+      setState(() {
+        for (final it in _items) {
+          final t = it.deepLinkToken;
+          if (t != null && t.isNotEmpty) _locallyReadTokens.add(t);
+        }
+      });
+      ref.invalidate(unreadCountProvider);
+    } catch (_) {
+      // 失败不改本地已读态，避免界面与服务端不一致。
+    } finally {
+      if (mounted) setState(() => _markingAllRead = false);
+    }
   }
 
   /// 通知类型 → 埋点取值（PRD §3.2 口径）。
@@ -151,6 +248,29 @@ class _NotificationCenterPageState
             color: AppColors.ink,
           ),
         ),
+        // 「全部已读」（2026-08-19 加，产品定：右上角、**不做二次确认**）。
+        // 仅在已加载到至少一条未读时露出 —— 没有未读时这个按钮没有意义，露出来只是噪音。
+        actions: [
+          if (_items.any((it) => !_isRead(it)))
+            _markingAllRead
+                ? const Padding(
+                    padding: EdgeInsets.only(right: 18),
+                    child: Center(
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  )
+                : IconButton(
+                    key: const ValueKey('notificationMarkAllRead'),
+                    icon: const Icon(Icons.done_all),
+                    color: AppColors.ink,
+                    tooltip: l10n.notifyMarkAllRead,
+                    onPressed: _markAllRead,
+                  ),
+        ],
       ),
       body: FutureBuilder<NotificationPage>(
         future: _page,
@@ -163,7 +283,9 @@ class _NotificationCenterPageState
           if (snapshot.hasError) {
             return _errorState(l10n);
           }
-          final items = snapshot.data?.items ?? const <NotificationItem>[];
+          // ⚠️ 用累加列表（含后续页），**不是** snapshot 里的首页快照 ——
+          // 否则每次 setState 重建都会把翻页加载到的内容抹回第一页。
+          final items = _items;
           if (items.isEmpty) {
             return EmptyState(
               key: const ValueKey('notificationEmpty'),
@@ -199,6 +321,7 @@ class _NotificationCenterPageState
     // V1 单宠物，取当前档案的名字；拿不到就退化成简短标题（仍然具体）。
     final petName = ref.watch(petProfileProvider).asData?.value?.name;
     return ListView(
+      controller: _scroll, // 滚到底附近自动加载下一页（_onScroll）
       padding: EdgeInsets.fromLTRB(16, 4, 16, 20 + MediaQuery.paddingOf(context).bottom),
       children: [
         if (today.isNotEmpty) ...[
@@ -222,6 +345,24 @@ class _NotificationCenterPageState
               petName: petName,
             ),
         ],
+        // 翻页尾部：加载中 / 失败可重试 / 到底了。
+        if (_hasMore || _loadingMore || _loadMoreFailed)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Center(
+              child: _loadMoreFailed
+                  ? TextButton(
+                      key: const ValueKey('notificationLoadMoreRetry'),
+                      onPressed: _loadMore,
+                      child: Text(l10n.notifyLoadMoreRetry),
+                    )
+                  : const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+            ),
+          ),
       ],
     );
   }

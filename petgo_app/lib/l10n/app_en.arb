@@ -930,6 +930,10 @@
   "notifyBodyReportReviewed": "Thanks for your report. We've completed our review.",
   "notifyGroupToday": "Today",
   "notifyGroupEarlier": "Earlier",
+  "notifyMarkAllRead": "Mark all as read",
+  "@notifyMarkAllRead": {"description": "Notification center: top-right action, marks every notification read (no confirmation)"},
+  "notifyLoadMoreRetry": "Failed to load more · Tap to retry",
+  "@notifyLoadMoreRetry": {"description": "Notification center: retry link at list bottom when loading the next page failed"},
   "notifyTimeJustNow": "Just now",
   "notifyTimeMinutesAgo": "{count}m ago",
   "@notifyTimeMinutesAgo": {

@@ -806,6 +806,8 @@
   },
   "notifyGroupToday": "Hari ini",
   "notifyGroupEarlier": "Sebelumnya",
+  "notifyMarkAllRead": "Tandai semua dibaca",
+  "notifyLoadMoreRetry": "Gagal memuat lagi · Ketuk untuk coba lagi",
   "notifyTimeJustNow": "Baru saja",
   "notifyTimeMinutesAgo": "{count} menit lalu",
   "@notifyTimeMinutesAgo": {
