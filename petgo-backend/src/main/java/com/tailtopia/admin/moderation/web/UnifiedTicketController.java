@@ -37,6 +37,10 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 @Controller
 public class UnifiedTicketController {
 
+    /** 本页作用域：只有用户举报（2026-08-19 拆分）。 */
+    private static final java.util.Set<TicketType> SCOPE =
+            java.util.EnumSet.of(TicketType.ACCOUNT_REPORT);
+
     static final String VIEW_AUTH =
             "hasRole('SUPER_ADMIN') or hasAuthority('content.view_tickets')";
 
@@ -85,17 +89,18 @@ public class UnifiedTicketController {
             @RequestHeader(value = "HX-Request", required = false) String hxRequest,
             Model model) {
 
-        TicketType typeFilter = parseEnum(TicketType.class, type);
         TicketStatusBucket statusFilter = parseEnum(TicketStatusBucket.class, status);
-        Page<UnifiedTicketRow> result =
-                query.search(typeFilter, statusFilter, q, PageRequest.of(Math.max(page, 0), PAGE_SIZE));
+        // 🔴 2026-08-19 拆分：本页**只管用户举报**，标题改为「被举报用户」。
+        // 内容举报与账号标识字段已移入「人工复核」页 —— 它们的处置动作和授权域都不在本页，
+        // 之前挤在一起的结果是：账号标识字段那一类在本页根本无法处置（点批量只吃一条红字提示）。
+        Page<UnifiedTicketRow> result = query.search(SCOPE, null, statusFilter, q,
+                PageRequest.of(Math.max(page, 0), PAGE_SIZE));
 
         model.addAttribute("active", "tickets");
         model.addAttribute("result", result);
-        model.addAttribute("types", TicketType.values());
         model.addAttribute("statuses", TicketStatusBucket.values());
-        // 回显筛选条件（分页链接要带着它们走）。
-        model.addAttribute("type", typeFilter == null ? null : typeFilter.name());
+        // 回显筛选条件（分页链接要带着它们走）。类别下拉已移除（本页恒为用户举报一类）。
+        model.addAttribute("type", null);
         model.addAttribute("status", statusFilter == null ? null : statusFilter.name());
         model.addAttribute("q", q);
 
@@ -237,11 +242,12 @@ public class UnifiedTicketController {
         // ⚠️ 分支内的「持有另一类权限但没有本类权限」不能抛 AccessDeniedException（评审三轮 #6）——
         // 「批量无需处置」按钮对两类工单共用、且只要有其一即渲染，抛异常=运营点渲染出来的按钮吃整页 403；
         // 一律降级为红色 flash 提示。
+        // 2026-08-19 拆分后本页只渲染用户举报，另两类不会从这里提交；
+        // 但表单是可以被手改的，仍如实给出去处，绝不 500、也绝不误处置成别的类型。
         return switch (parsed.type()) {
             case ACCOUNT_REPORT -> batchAccountReports(admin, action, parsed.ids(), flash);
-            case CONTENT_REPORT -> batchContentReports(admin, action, parsed.ids(), flash);
-            case ACCOUNT_IDENTITY -> {
-                flash.addFlashAttribute("error", "账号标识字段工单请在名称 / 头像审核页处理");
+            case CONTENT_REPORT, ACCOUNT_IDENTITY -> {
+                flash.addFlashAttribute("error", "该类工单请在「人工复核」页处理");
                 yield "redirect:/admin/tickets";
             }
         };

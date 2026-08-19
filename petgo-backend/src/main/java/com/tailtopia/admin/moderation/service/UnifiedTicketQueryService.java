@@ -200,9 +200,41 @@ public class UnifiedTicketQueryService {
     @Transactional(readOnly = true)
     public Page<UnifiedTicketRow> search(TicketType type, TicketStatusBucket status, String search,
             Pageable pageable) {
+        return search(java.util.EnumSet.allOf(TicketType.class), type, status, search, pageable);
+    }
+
+    /**
+     * 带**作用域**的检索（2026-08-19 拆分后新增）。
+     *
+     * <p>拆分背景：原先三类工单挤在同一个队列页，但它们的处置动作与授权域各不相同 ——
+     * 账号标识字段那一类在该页**根本无法处置**（只能看，动作在另一个页面），运营点了批量按钮
+     * 只会吃一条「请到名称/头像审核页处理」的红字。现在按「能不能在本页处置」拆开：
+     * <ul>
+     *   <li><b>被举报用户</b>页 —— 作用域 {@code {ACCOUNT_REPORT}}，动作＝警告 / 封号 / 无需处置</li>
+     *   <li><b>人工复核</b>页 —— 作用域 {@code {CONTENT_REPORT, ACCOUNT_IDENTITY}}，动作按行的类型各自渲染</li>
+     * </ul>
+     *
+     * @param scope 本页可见的类别集合（**不可为空**：空集合意味着「什么都不显示」，
+     *              那是调用方写错了，不该静默返回空页让人以为没有待办）
+     * @param type  用户在本页内选的类别筛选（null = 作用域内全部）；**超出作用域时忽略**，
+     *              防止有人手改 URL 把别的类别捞进不能处置它的页面
+     */
+    @Transactional(readOnly = true)
+    public Page<UnifiedTicketRow> search(java.util.Set<TicketType> scope, TicketType type,
+            TicketStatusBucket status, String search, Pageable pageable) {
+        if (scope == null || scope.isEmpty()) {
+            throw new IllegalArgumentException("工单作用域不能为空");
+        }
         List<Object> args = new ArrayList<>();
         StringBuilder where = new StringBuilder(" WHERE 1 = 1");
-        if (type != null) {
+        // 作用域：始终生效，且与用户选的 type 是「与」关系。
+        where.append(" AND u.ticket_type IN (")
+                .append(String.join(",", java.util.Collections.nCopies(scope.size(), "?")))
+                .append(')');
+        for (TicketType t : scope) {
+            args.add(t.name());
+        }
+        if (type != null && scope.contains(type)) {
             where.append(" AND u.ticket_type = ?");
             args.add(type.name());
         }

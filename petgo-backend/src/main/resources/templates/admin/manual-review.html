@@ -13,8 +13,8 @@
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1 th:text="#{admin.review.title}">人工审核队列</h1>
-        <p class="muted" th:text="#{admin.review.note}">预建能力：默认未激活时维持现网「自动审核拦截即发布失败」；开启后未过审内容入队挂起。</p>
+        <h1 th:text="#{admin.review.title}">人工复核</h1>
+        <p class="muted" th:text="#{admin.review.intro}">本页汇总需要人工判断的待办：内容举报、昵称/宠物名审核、用户/宠物头像审核。用户举报（账号级警告/封号）在「被举报用户」页。</p>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
 
@@ -30,6 +30,130 @@
                         th:text="${manualReviewEnabled} ? #{admin.review.switch.disable} : #{admin.review.switch.enable}">开启</button>
             </form>
         </div>
+
+        <!-- ===== 复核列表（2026-08-19 从工单队列页移入）=====
+             内容举报 + 账号标识字段（名称/头像）混排，按类型筛选。
+             ⚠️ 每行的处置动作**按类型各自渲染** —— 四类的动作语义与授权域都不同：
+                内容举报 → 下架 / 无需处置（content.takedown）
+                名称审核 → 通过 / 违规（重置昵称）
+                头像审核 → 通过 / 违规（重置为默认头像）
+             统一成两个按钮会让「违规」对内容是下架、对头像是重置默认图，后果不同却长得一样。 -->
+        <h2 th:text="#{admin.review.section.tickets}">待复核</h2>
+
+        <form class="filter-bar" th:action="@{/admin/manual-review}" method="get">
+            <label><span th:text="#{admin.review.filter.type}">类型</span>
+                <select name="type">
+                    <option value="" th:text="#{admin.tickets.filter.all}">全部</option>
+                    <option th:each="t : ${types}" th:value="${t}"
+                            th:text="#{'admin.tickets.type.' + ${t}}"
+                            th:selected="${t.name() == type}">TYPE</option>
+                </select>
+            </label>
+            <label><span th:text="#{admin.tickets.filter.status}">状态</span>
+                <select name="status">
+                    <option value="" th:text="#{admin.tickets.filter.all}">全部</option>
+                    <option th:each="s : ${statuses}" th:value="${s}"
+                            th:text="#{'admin.tickets.status.' + ${s}}"
+                            th:selected="${s.name() == status}">STATUS</option>
+                </select>
+            </label>
+            <label><span th:text="#{admin.review.filter.q}">被举报账号</span>
+                <input type="text" name="q" th:value="${q}" placeholder="账号 id 或昵称"/>
+            </label>
+            <button type="submit" class="btn btn-primary" th:text="#{admin.tickets.filter.submit}">筛选</button>
+        </form>
+
+        <table>
+            <thead>
+            <tr>
+                <th th:text="#{admin.review.col.ticketType}">类型</th>
+                <th th:text="#{admin.review.col.subject}">对象</th>
+                <th th:text="#{admin.review.col.preview}">摘要</th>
+                <th th:text="#{admin.review.col.score}">优先级分</th>
+                <th th:text="#{admin.review.col.earliest}">最早时间</th>
+                <th th:text="#{admin.review.col.status}">状态</th>
+                <th th:text="#{admin.review.col.action}">操作</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:if="${result == null or result.isEmpty()}">
+                <td colspan="7" class="muted" th:text="#{admin.review.empty}">暂无待复核项</td>
+            </tr>
+            <tr th:each="row : ${result != null ? result.content : null}">
+                <td th:text="#{'admin.tickets.type.' + ${row.type()}}">类型</td>
+                <td>
+                    <!-- 宠物类对象：SQL 已把宠物解析到宠主；解析不到＝宠物档案已删除，
+                         如实说明，别只给一个光秃秃的破折号让运营以为是 bug。 -->
+                    <span th:if="${row.targetNickname() != null}" th:text="${row.targetNickname()}">昵称</span>
+                    <span th:if="${row.targetNickname() == null and row.targetDeleted()}" class="muted"
+                          th:text="#{admin.review.subject.deactivated}">账号已注销</span>
+                    <span th:if="${row.targetNickname() == null and !row.targetDeleted()}" class="muted"
+                          th:text="#{admin.review.subject.gone}">宠物档案已删除</span>
+                    <span th:if="${row.subType() != null}" class="badge badge-neutral"
+                          th:text="${row.subType()}">SUB</span>
+                </td>
+                <td class="muted" th:text="${row.preview()}">摘要</td>
+                <td><strong th:text="${row.score()}">0</strong></td>
+                <td th:text="${row.earliestAt()}">时间</td>
+                <td th:text="#{'admin.tickets.status.' + ${row.status()}}">状态</td>
+                <td>
+                    <!-- 内容举报：下架 / 无需处置 -->
+                    <div th:if="${row.type().name() == 'CONTENT_REPORT' and row.actionRef() != null}"
+                         sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')">
+                        <form th:action="@{'/admin/reports/' + ${row.actionRef()} + '/takedown'}"
+                              method="post" class="inline-form">
+                            <button type="submit" class="btn btn-sm btn-danger"
+                                    th:text="#{admin.review.act.takedown}">下架</button>
+                        </form>
+                        <form th:action="@{'/admin/reports/' + ${row.actionRef()} + '/dismiss'}"
+                              method="post" class="inline-form">
+                            <button type="submit" class="btn btn-sm btn-neutral"
+                                    th:text="#{admin.review.act.dismiss}">无需处置</button>
+                        </form>
+                    </div>
+                    <!-- 名称审核：通过 / 违规（重置昵称）-->
+                    <div th:if="${row.type().name() == 'ACCOUNT_IDENTITY'
+                                 and (row.subType() == 'NICKNAME' or row.subType() == 'PET_NAME')
+                                 and row.status().name() == 'PENDING'}"
+                         sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')">
+                        <form th:action="@{'/admin/name-moderation/' + ${row.sourceId()} + '/decide'}"
+                              method="post" class="inline-form">
+                            <input type="hidden" name="decision" value="PASS"/>
+                            <button type="submit" class="btn btn-sm btn-neutral"
+                                    th:text="#{admin.review.act.pass}">通过</button>
+                        </form>
+                        <form th:action="@{'/admin/name-moderation/' + ${row.sourceId()} + '/decide'}"
+                              method="post" class="inline-form">
+                            <input type="hidden" name="decision" value="VIOLATION"/>
+                            <button type="submit" class="btn btn-sm btn-danger"
+                                    th:text="#{admin.review.act.violationName}">违规（重置名称）</button>
+                        </form>
+                    </div>
+                    <!-- 头像审核：通过 / 违规（重置为默认头像）-->
+                    <div th:if="${row.type().name() == 'ACCOUNT_IDENTITY'
+                                 and (row.subType() == 'USER_AVATAR' or row.subType() == 'PET_AVATAR')
+                                 and row.status().name() == 'PENDING'}"
+                         sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')">
+                        <form th:action="@{'/admin/avatar-review/' + ${row.sourceId()} + '/decide'}"
+                              method="post" class="inline-form">
+                            <input type="hidden" name="decision" value="PASS"/>
+                            <button type="submit" class="btn btn-sm btn-neutral"
+                                    th:text="#{admin.review.act.pass}">通过</button>
+                        </form>
+                        <form th:action="@{'/admin/avatar-review/' + ${row.sourceId()} + '/decide'}"
+                              method="post" class="inline-form">
+                            <input type="hidden" name="decision" value="VIOLATION"/>
+                            <button type="submit" class="btn btn-sm btn-danger"
+                                    th:text="#{admin.review.act.violationAvatar}">违规（重置头像）</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+
+        <!-- ===== 内容送审队列（受上方激活开关控制；开关关着时这里恒为空）===== -->
+        <h2 th:text="#{admin.review.section.queue}">内容送审队列</h2>
 
         <table>
             <thead>

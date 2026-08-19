@@ -23,8 +23,10 @@
             <div class="nav-sub">
                 <a th:href="@{/admin/seed-post}" th:classappend="${active == 'seed'} ? 'active'"
                    th:text="#{admin.nav.seed}">种子内容发布</a>
-                <!-- V1.1.4 Story 3.1：统一工单队列**完全替代**旧的举报队列（/admin/reports 已重定向到这里），
-                     不是两者并存——留着两个入口等于运营还要自己判断该去哪个看。 -->
+                <!-- V1.1.4 Story 3.1：统一队列**完全替代**旧的举报队列（/admin/reports 已重定向到这里）。
+                     2026-08-19 再拆：本项只留**用户举报**（账号级处置：警告/封号），
+                     内容举报与名称/头像审核移入「人工复核」——按「能不能在本页处置」分家，
+                     此前账号标识字段挤在这里只能看不能处置。名称/头像审核页已删除（列表并入人工复核）。 -->
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.view_tickets')"
                    th:href="@{/admin/tickets}" th:classappend="${active == 'tickets'} ? 'active'"
                    th:text="#{admin.nav.tickets}">工单队列</a>
@@ -37,9 +39,6 @@
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.manual_review')"
                    th:href="@{/admin/manual-review}" th:classappend="${active == 'manual-review'} ? 'active'"
                    th:text="#{admin.nav.review}">人工审核</a>
-                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')"
-                   th:href="@{/admin/name-avatar-review}" th:classappend="${active == 'name-avatar-review'} ? 'active'"
-                   th:text="#{admin.nav.nameAvatar}">名称/头像审核</a>
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.view')"
                    th:href="@{/admin/users}" th:classappend="${active == 'users'} ? 'active'"
                    th:text="#{admin.nav.users}">用户</a>

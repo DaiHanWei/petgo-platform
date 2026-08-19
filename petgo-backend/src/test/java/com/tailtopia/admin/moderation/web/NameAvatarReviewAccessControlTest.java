@@ -25,11 +25,13 @@ import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.ui.ConcurrentModel;
 
 /**
  * L0：名称/头像处置控制台门控（story 8，AC13）——页面 + 头像处置均 {@code SUPER_ADMIN or content.takedown}
  * （展示审核证据，§5.5）。方法安全切片，无 DB。
+ *
+ * <p>🔴 <b>2026-08-19：页面已删除（列表并入「人工复核」），故原三条「页面门控」用例随之作废、已移除。</b>
+ * 本类保留的是<b>头像处置端点</b>的门控 —— 该端点仅此一处，是头像判违规的唯一入口。
  */
 class NameAvatarReviewAccessControlTest {
 
@@ -64,9 +66,8 @@ class NameAvatarReviewAccessControlTest {
         }
 
         @Bean
-        NameAvatarReviewAdminController controller(NameModerationService n, AvatarModerationService a,
-                ViolationCountReader v, PetProfileRepository p) {
-            return new NameAvatarReviewAdminController(n, a, v, p);
+        NameAvatarReviewAdminController controller(AvatarModerationService a) {
+            return new NameAvatarReviewAdminController(a);
         }
     }
 
@@ -98,30 +99,8 @@ class NameAvatarReviewAccessControlTest {
         return new AdminUserDetails(1L, null, "a@x", null, AdminAccountType.SUPER_ADMIN);
     }
 
-    private void page() {
-        controller.page(new ConcurrentModel());
-    }
-
     private void decideAvatar() {
         controller.decideAvatar(admin(), 5L, "PASS", "OTHER", null);
-    }
-
-    @Test
-    void pageDeniedWithoutTakedown() {
-        auth("ROLE_ADMIN", "content.restore");
-        assertThatThrownBy(this::page).isInstanceOf(AccessDeniedException.class);
-    }
-
-    @Test
-    void pageAllowedWithTakedown() {
-        auth("ROLE_ADMIN", "content.takedown");
-        assertThatCode(this::page).doesNotThrowAnyException();
-    }
-
-    @Test
-    void pageAllowedForSuperAdmin() {
-        auth("ROLE_ADMIN", "ROLE_SUPER_ADMIN");
-        assertThatCode(this::page).doesNotThrowAnyException();
     }
 
     @Test

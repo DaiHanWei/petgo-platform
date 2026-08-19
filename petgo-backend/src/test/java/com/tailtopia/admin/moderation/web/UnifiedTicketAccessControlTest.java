@@ -209,9 +209,9 @@ class UnifiedTicketAccessControlTest {
         controller.batch(principalOf(), "SUSPEND",
                 java.util.List.of("CONTENT_REPORT:2", "CONTENT_REPORT:3"), flash);
 
-        // 二轮修复 #7 后：内容举报批次不再整体拒绝，但警告/封号动作仍然打不到它——
-        // 提示改为指向内容自己的两个动作，且账号批量与内容批量都不得被触发。
-        assertThat(flash.getFlashAttributes().get("error").toString()).contains("内容举报");
+        // 🔴 2026-08-19 拆分后：内容举报已移出本页（本页只管用户举报），
+        // 故这里如实指向新去处「人工复核」页；账号批量与内容批量都不得被触发。
+        assertThat(flash.getFlashAttributes().get("error").toString()).contains("人工复核");
         org.mockito.Mockito.verify(ctx.getBean(AccountDisposalService.class),
                 org.mockito.Mockito.never()).batch(any(), any(), org.mockito.ArgumentMatchers.anyLong());
         org.mockito.Mockito.verify(ctx.getBean(com.tailtopia.admin.service.AdminModerationService.class),

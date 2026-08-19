@@ -36,14 +36,6 @@
         <!-- 筛选条：类型 / 状态 / 按被举报账号检索。HTMX 没加载时退化成整页 GET，仍可用。 -->
         <form class="filter-bar" th:action="@{/admin/tickets}" method="get"
               hx-get="/admin/tickets" hx-target="#results" hx-swap="innerHTML">
-            <label><span th:text="#{admin.tickets.filter.type}">工单类型</span>
-                <select name="type">
-                    <option value="" th:text="#{admin.tickets.filter.all}">全部</option>
-                    <option th:each="t : ${types}" th:value="${t}"
-                            th:text="#{'admin.tickets.type.' + ${t}}"
-                            th:selected="${t.name() == type}">TYPE</option>
-                </select>
-            </label>
             <label><span th:text="#{admin.tickets.filter.status}">状态</span>
                 <select name="status">
                     <option value="" th:text="#{admin.tickets.filter.all}">全部</option>
@@ -92,11 +84,7 @@
                 <button type="submit" class="btn btn-sm btn-neutral" data-batch-action
                         name="action" value="DISMISS"
                         th:text="#{admin.tickets.batch.dismiss}">批量无需处置</button>
-                <!-- 批量下架：只对内容举报工单有效（修复清单二轮 #7——旧举报页下线后批量能力不消失）。 -->
-                <button type="submit" class="btn btn-sm btn-danger" data-batch-action
-                        name="action" value="TAKEDOWN"
-                        sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')"
-                        th:text="#{admin.tickets.batch.takedown}">批量下架</button>
+                
                 <!-- 批量警告与批量无需处置**不弹确认**：警告不影响用户使用，可逆性与封号完全不同。 -->
             </p>
 
