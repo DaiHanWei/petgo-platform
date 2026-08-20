@@ -41,6 +41,40 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
     }
 
     /**
+     * 页内标题必须与导航名一致（bug 20260820）。
+     *
+     * <p>2026-08-19 那次拆分改了导航名（工单队列 → 被举报用户），却漏了页内 h1、
+     * 浏览器 title、副标题和权限显示名 —— 侧栏写「被举报用户」、点进去大标题还是
+     * 「工单队列」，副标题还写着「三类工单统一排队」，而这页早就只剩一类了。
+     *
+     * <p>此前没有任何测试盯着这种不一致：缺键会被 {@code ??admin.} 断言抓到，
+     * <b>但「键在、值过期」渲染得完全正常</b>。这条直接钉住渲染出的字面量。
+     */
+    @Test
+    void pageHeadingsMatchTheirNavLabels() throws Exception {
+        String tickets = visibleText("/admin/tickets");
+        assertThat(tickets).as("被举报用户页的标题").contains("被举报用户");
+        assertThat(tickets).as("拆分后本页只剩用户举报一类，旧标题不该再出现")
+                .doesNotContain("工单队列").doesNotContain("三类工单统一排队");
+
+        assertThat(visibleText("/admin/manual-review")).as("人工复核页的标题").contains("人工复核");
+    }
+
+    /**
+     * 页面渲染结果**去掉 HTML 注释**后的内容。
+     *
+     * <p>后台模板里的中文说明注释会原样发到浏览器（Thymeleaf 不吃标准 HTML 注释），
+     * 其中不乏「从『工单队列』拆分而来」这类如实记述历史的句子 ——
+     * 直接对整份 HTML 断言「不含旧名」会被这些注释误伤。这里只留可见文本。
+     */
+    private String visibleText(String path) throws Exception {
+        String html = mvc.perform(get(path).param("lang", "zh_CN")
+                        .with(authentication(superAdminAuth())))
+                .andReturn().getResponse().getContentAsString();
+        return html.replaceAll("(?s)<!--.*?-->", "");
+    }
+
+    /**
      * 筛选栏的下拉「选完即刷新」（bug 20260820）：靠 {@code form[data-autosubmit]} +
      * admin.js 的 change 委托实现。
      *

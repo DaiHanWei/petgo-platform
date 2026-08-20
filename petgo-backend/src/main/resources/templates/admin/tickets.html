@@ -2,13 +2,16 @@
 <html lang="zh" xmlns:th="http://www.thymeleaf.org"
       xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <!--
-  统一工单队列（Story 3.1，AB-3D）。三类工单一个列表、一把尺子排序，完全替代旧的 /admin/reports。
+  被举报用户（Story 3.1，AB-3D；2026-08-19 从「工单队列」拆分而来）。
+  **本页只有用户举报** —— 处置是账号级的警告 / 封号。内容举报与昵称/头像审核的处置动作
+  在另一个授权域，已移入「人工复核」页（templates/admin/manual-review.html）。
+  排序：未处理优先 → 优先级分倒序 → 同分最早优先（UnifiedTicketQueryService 的 ORDER BY）。
   筛选：类型 / 状态 / 按被举报账号检索；HTMX 局部刷新 #results。展开详情单独拉片段（避免列表 N+1）。
   ⚠️ 送审名称原文与送审头像 URL 可以在这里展示（那正是运营要看的证据），但严禁进日志。
 -->
 <head>
     <meta charset="UTF-8"/>
-    <title th:text="#{admin.tickets.title}">工单队列 · TailTopia 运营后台</title>
+    <title th:text="#{admin.tickets.title}">被举报用户 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <!-- ⚠️ 新页要自己引 htmx（不是全局自动引入的）——曾有页面漏引导致按钮点了没反应。 -->
     <script th:src="@{/admin/vendor/htmx.min.js}"></script>
@@ -18,8 +21,8 @@
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1 th:text="#{admin.tickets.title}">工单队列</h1>
-        <p class="muted" th:text="#{admin.tickets.subtitle}">三类工单统一排队，按优先级从高到低；同分先报的先处理。</p>
+        <h1 th:text="#{admin.tickets.title}">被举报用户</h1>
+        <p class="muted" th:text="#{admin.tickets.subtitle}">仅用户举报（账号级警告 / 封号）。未处理排在前面，再按优先级从高到低；同分先报的先处理。</p>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <!-- 失败提示走红色 err 横幅（评审三轮 #9）：全后台约定 notice=绿色成功 / error=红色失败，
              本页早先把处置失败也塞进 notice，运营会把「工单不匹配」读成封号成功。 -->
