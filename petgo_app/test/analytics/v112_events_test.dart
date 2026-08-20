@@ -423,6 +423,60 @@ void main() {
       expect(ev.props!['has_pet_profile'], isTrue);
     });
 
+    /// 图片来源选择（2026-08-20 用户要求）：发布页点「Add」后弹的 sheet 里，
+    /// 用户选了相机还是相册。
+    ///
+    /// **为什么值得埋**：这两条路的成本完全不同 —— 相册是"我已经有照片了"，
+    /// 相机是"我现在为发帖专门拍一张"。后者说明发布意愿更强、但也更容易在拍摄这一步流失。
+    /// 一个事件 + `source` 属性（不是两个事件），与同页 `publish_page_content_type_selected`
+    /// 的形状一致，看板里可直接对比占比。
+    testWidgets('选相机 / 选相册上报 publish_page_image_source_selected（source）', (tester) async {
+      tester.view.physicalSize = const Size(1200, 3200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_composeApp());
+      await tester.pumpAndSettle();
+
+      // 相册
+      events.clear();
+      await tester.tap(find.byKey(const ValueKey('publishAddImage')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('publishPickGallery')));
+      await tester.pumpAndSettle();
+      expect(_one('publish_page_image_source_selected').props!['source'], 'gallery');
+
+      // 相机
+      events.clear();
+      await tester.tap(find.byKey(const ValueKey('publishAddImage')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('publishPickCamera')));
+      await tester.pumpAndSettle();
+      expect(_one('publish_page_image_source_selected').props!['source'], 'camera');
+    });
+
+    /// 🛡 关掉 sheet 而不选 —— **不该**产生这个事件。
+    /// 否则「选了哪个来源」的分母会混进"打开又关掉"的人，占比失真。
+    testWidgets('关掉 sheet 不选来源 → 不报事件', (tester) async {
+      tester.view.physicalSize = const Size(1200, 3200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_composeApp());
+      await tester.pumpAndSettle();
+      events.clear();
+
+      await tester.tap(find.byKey(const ValueKey('publishAddImage')));
+      await tester.pumpAndSettle();
+      // 点 sheet 外的遮罩关掉
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+
+      expect(events.where((e) => e.event == 'publish_page_image_source_selected'), isEmpty);
+    });
+
     testWidgets('关同步开关上报 publish_page_sync_to_moment_toggled(enabled=false)——本版本最关键的假设验证', (tester) async {
       tester.view.physicalSize = const Size(1200, 3200);
       tester.view.devicePixelRatio = 1.0;
