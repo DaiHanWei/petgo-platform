@@ -38,15 +38,35 @@ jar="$(ls -t target/petgo-backend-*.jar 2>/dev/null | head -1)"
 log "使用 jar: $jar"
 
 tarball="$(mktemp -t stag-pm-build).tar.gz"
-tar -czf "$tarball" Dockerfile.deploy "$jar"
+# --no-xattrs：macOS bsdtar 默认把扩展属性（com.apple.provenance）写成 pax 头，
+# 服务器端 GNU tar 读到会刷一行 "Ignoring unknown extended header keyword" 噪音，
+# 掩盖真正的失败原因。包内容不需要 xattr，直接不写。
+tar --no-xattrs -czf "$tarball" Dockerfile.deploy "$jar"
 
-log "上传 build 包（受限通道）"
-ssh "$DEPLOY_HOST" put-build < "$tarball"
+# 上传前先在本地验一次包完整 —— 否则本地就坏了的包传上去，服务器只会报
+# 「缺 Dockerfile.deploy」，让人以为是打包漏文件（2026-08-20 实际踩过：
+# 那次是**传输截断**，服务器读到断口前列不出条目，报错指向了错的地方）。
+tar -tzf "$tarball" >/dev/null 2>&1 || die "本地 build 包损坏（tar -tzf 读不通），重试构建"
+tarball_bytes="$(wc -c < "$tarball" | tr -d ' ')"
+
+log "上传 build 包（受限通道，$((tarball_bytes / 1048576)) MB）"
+# ⚠️ put-build 走 stdin，**传输截断时服务器侧看到的是一个合法但不完整的流**。
+# 服务器会用「解不开 / 缺条目」拒掉，这里把它明确翻译成「上传失败，重试」，
+# 别让下一个人去查打包脚本漏没漏文件。
+if ! ssh "$DEPLOY_HOST" put-build < "$tarball"; then
+  rm -f "$tarball"
+  die "上传被服务器拒绝（多为传输截断；包本地已验证完整，$tarball_bytes 字节）。直接重试本脚本，或加 SKIP_BUILD=1 复用已构建的 jar"
+fi
 rm -f "$tarball"
 
 log "服务器端部署 staging 容器"
-ssh "$DEPLOY_HOST" deploy
+ssh "$DEPLOY_HOST" deploy || die "服务器端部署失败，用 'ssh $DEPLOY_HOST logs 200' 看原因"
 
 log "公网健康检查"
-curl -fs https://api-stag.tailtopia.id/actuator/health && echo
+# ⚠️ 到这一步为止，上面每一环失败都已经 die 了（set -e + 显式判断）。
+# 但**调用方**若把本脚本接进管道（`./deploy... | tail`），管道退出码取自最后一环、
+# 不是本脚本 —— 失败会被读成成功。要判断成败请看下面这行 ✓，或直接看退出码
+# （别用管道，或给调用方加 set -o pipefail）。
+curl -fs https://api-stag.tailtopia.id/actuator/health && echo \
+  || die "容器已重建但公网健康检查不通（Cloudflare Tunnel 或应用启动失败）：ssh $DEPLOY_HOST logs 200"
 echo "✓ staging 部署完成（生产服务不受影响）"

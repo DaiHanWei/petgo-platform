@@ -29,8 +29,26 @@ deny() { echo "DENIED: $*" >&2; exit 1; }
 do_put_build() {
   head -c "$MAX_TAR_BYTES" > "$BUILD_TAR"
   [[ -s "$BUILD_TAR" ]] || deny "空 build 包"
-  tar -tzf "$BUILD_TAR" | grep -q '^Dockerfile\.deploy$' || { rm -f "$BUILD_TAR"; deny "build 包缺 Dockerfile.deploy"; }
-  tar -tzf "$BUILD_TAR" | grep -q '^target/petgo-backend-.*\.jar$' || { rm -f "$BUILD_TAR"; deny "build 包缺 target/petgo-backend-*.jar"; }
+
+  # ⚠️ 2026-08-20：先判「包能不能解开」，再判「缺哪个条目」。
+  # 顺序反了会指错地方 —— 那天上传被截断，tar 读到断口前一个条目都列不出来，
+  # 于是报「缺 Dockerfile.deploy」，让人跑去查打包脚本漏没漏文件，
+  # 而真正的毛病是重传就能解决的传输截断。
+  local listing
+  if ! listing="$(tar -tzf "$BUILD_TAR" 2>/dev/null)"; then
+    rm -f "$BUILD_TAR"
+    deny "build 包解不开（gzip/tar 流损坏，多为上传截断）—— 重传即可，不用查打包脚本"
+  fi
+
+  # 恰好等于上限 ⇒ 极可能是被 head -c 削掉了尾巴（合法 gzip 前缀也能解出部分条目，
+  # 所以这个判断必须独立做，不能指望上面那步报错）。
+  if [[ "$(wc -c < "$BUILD_TAR")" -eq "$MAX_TAR_BYTES" ]]; then
+    rm -f "$BUILD_TAR"
+    deny "build 包达到 ${MAX_TAR_BYTES} 字节上限、已被截断 —— 包太大，联系 Dai 调 MAX_TAR_BYTES"
+  fi
+
+  grep -q '^Dockerfile\.deploy$' <<<"$listing" || { rm -f "$BUILD_TAR"; deny "build 包缺 Dockerfile.deploy（包能解开，是真的没这个文件）"; }
+  grep -q '^target/petgo-backend-.*\.jar$' <<<"$listing" || { rm -f "$BUILD_TAR"; deny "build 包缺 target/petgo-backend-*.jar（包能解开，是真的没这个文件）"; }
   echo "OK put-build $(du -h "$BUILD_TAR" | cut -f1)"
 }
 
