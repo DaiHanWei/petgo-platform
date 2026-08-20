@@ -43,8 +43,18 @@ class MiniProfileControllerTest {
         return null;
     }
 
+    /**
+     * 已登录访问者的 JWT。
+     *
+     * <p>⚠️ {@code role=USER} 这个 claim 不能省：{@code viewerId()} 拿不到它就返回 null，
+     * 于后拉黑守卫、「已举报」派生全部整段跳过 —— 测试会假绿（守卫没跑却以为跑了）。
+     * 线上由 {@code JwtService.issueAccessToken(sub, role)} 签发，一定带 role。
+     */
     private static Jwt viewer(long userId) {
-        return Jwt.withTokenValue("t").header("alg", "none").subject(String.valueOf(userId)).build();
+        return Jwt.withTokenValue("t").header("alg", "none")
+                .subject(String.valueOf(userId))
+                .claim("role", "USER")
+                .build();
     }
 
     @Test

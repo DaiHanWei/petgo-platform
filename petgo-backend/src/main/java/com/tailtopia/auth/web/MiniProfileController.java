@@ -47,6 +47,12 @@ public class MiniProfileController {
             throw AppException.blockedUser("你已拉黑该用户");
         }
         AuthorView author = accountQueryService.findAuthorViews(java.util.List.of(userId)).get(userId);
+        // 该 id 根本不存在 → 投影里没有这一行，get 返回 null。必须显式 404：
+        // 直接点 author.deleted() 会 NPE，对外表现是 500（还会把「查了个不存在的 id」这件事
+        // 变成一条堆栈日志）。注销与不存在都不外泄身份信息，但状态码不能混。
+        if (author == null) {
+            throw AppException.notFound("用户不存在");
+        }
         if (author.deleted()) {
             return MiniProfileResponse.deactivated(); // 注销不暴露身份信息（NFR-8）
         }
