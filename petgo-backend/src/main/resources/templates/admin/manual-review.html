@@ -42,7 +42,7 @@
              后果各不相同却长得一样。 -->
         <h2 th:text="#{admin.review.section.tickets}">待复核</h2>
 
-        <form class="filter-bar" th:action="@{/admin/manual-review}" method="get">
+        <form class="filter-bar" th:action="@{/admin/manual-review}" method="get" data-autosubmit>
             <label><span th:text="#{admin.review.filter.type}">类型</span>
                 <select name="type">
                     <option value="" th:text="#{admin.tickets.filter.all}">全部</option>

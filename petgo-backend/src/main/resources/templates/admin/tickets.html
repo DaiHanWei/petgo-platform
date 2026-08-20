@@ -34,7 +34,7 @@
         </div>
 
         <!-- 筛选条：类型 / 状态 / 按被举报账号检索。HTMX 没加载时退化成整页 GET，仍可用。 -->
-        <form class="filter-bar" th:action="@{/admin/tickets}" method="get"
+        <form class="filter-bar" th:action="@{/admin/tickets}" method="get" data-autosubmit
               hx-get="/admin/tickets" hx-target="#results" hx-swap="innerHTML">
             <label><span th:text="#{admin.tickets.filter.status}">状态</span>
                 <select name="status">

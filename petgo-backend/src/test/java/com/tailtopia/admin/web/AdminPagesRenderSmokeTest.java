@@ -40,6 +40,23 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
         assertThat(html).as(path + " (" + lang + ") 应有内容").isNotEmpty();
     }
 
+    /**
+     * 筛选栏的下拉「选完即刷新」（bug 20260820）：靠 {@code form[data-autosubmit]} +
+     * admin.js 的 change 委托实现。
+     *
+     * <p>这条守的是**属性别被顺手删掉** —— 删了页面照样渲染、测试照样绿，
+     * 只是运营又得多点一次「筛选」，而这种回退没人会立刻注意到。
+     * （JS 行为本身后台没有测试基建，这里只钉住服务端渲染出的那半边。）
+     */
+    @Test
+    void filterBarsOptInToAutoSubmit() throws Exception {
+        for (String path : new String[] {"/admin/manual-review", "/admin/tickets"}) {
+            String html = mvc.perform(get(path).with(authentication(superAdminAuth())))
+                    .andReturn().getResponse().getContentAsString();
+            assertThat(html).as(path + " 的筛选表单应带 data-autosubmit").contains("data-autosubmit");
+        }
+    }
+
     @Test
     void allExternalizedAdminPagesRenderInBothLocales() throws Exception {
         String[] paths = {"/admin/dashboard", "/admin/seed-post", "/admin/tickets", "/admin/content",
