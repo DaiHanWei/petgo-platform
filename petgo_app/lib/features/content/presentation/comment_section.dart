@@ -6,8 +6,12 @@ import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
+import '../../../shared/widgets/letter_avatar.dart';
+import '../../../shared/widgets/mini_profile_sheet.dart';
+import '../../social/domain/account_action_entry.dart';
 import '../data/detail_repository.dart';
 import '../domain/comment.dart';
+import 'author_moderation_callbacks.dart';
 import 'detail_providers.dart';
 
 /// 评论区（Story 3.3 只读 + Story 3.5 回复/删除入口）。一级时间正序首 10 + 「查看更多评论」；
@@ -19,11 +23,16 @@ class CommentSection extends ConsumerStatefulWidget {
     super.key,
     required this.postId,
     this.currentUserId,
+    this.postAuthorId,
     this.isContentAuthor = false,
   });
 
   final int postId;
   final int? currentUserId;
+
+  /// 帖子作者 id：评论区拉黑/举报的对象**恰好是帖主**时，除了刷 Feed 还要退出本详情页
+  /// （停在服务端已 404 的详情页上是明显穿帮）。
+  final int? postAuthorId;
   final bool isContentAuthor;
 
   @override
@@ -125,6 +134,22 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     } catch (_) {
       // 保持现状。
     }
+  }
+
+  /// 评论区迷你卡拉黑/举报成功后的收尾（修复清单 #7）：
+  /// ① 与首页/详情入口同一套 [onAuthorHidden]——乐观清掉 Feed 里该作者的全部卡片；
+  ///    对象恰好是帖主时传 popContext 退出本详情页（那一页服务端已经 404 了）。
+  /// ② 帖主之外的场景 bump [commentsRefreshProvider]——它同时驱动本区 _reload **与**详情页头部
+  ///    「KOMENTAR (N)」计数失效。只调 _reload 的话列表变短、计数不动，正是 AD-13 要消灭的
+  ///    「标 5 条只数得出 3 条」拉黑泄底破绽。
+  VoidCallback _onCommentAuthorHidden(int authorId) {
+    final bool isPostAuthor = widget.postAuthorId != null && authorId == widget.postAuthorId;
+    return () {
+      onAuthorHidden(ref, authorId, popContext: isPostAuthor ? context : null)();
+      if (!isPostAuthor) {
+        ref.read(commentsRefreshProvider.notifier).bump();
+      }
+    };
   }
 
   Future<void> _confirmDelete(int commentId) async {
@@ -230,6 +255,25 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
       comment: c,
       name: name,
       replyLabel: l10n.detailReply,
+      // V1.1.4 Story 1.6：点评论作者 → 迷你卡（举报 / 拉黑的入口）。
+      //
+      // ⚠️ 这是本版本最大的闭环缺口：影子评论 / R1 / R2 / 通知抑制**全是为评论区骚扰设计的**，
+      // 而在此之前 `showMiniProfile` 全 App 只有 Feed 卡片作者与详情页作者两个触发点——
+      // 一个只在评论区骚扰、从不发帖的账号，用户既举报不了也拉黑不了。
+      //
+      // ⚠️ 已注销 → 传 null，整体去掉点击手势（NFR-8，与首页/详情两处一致），且**不给任何 Toast**。
+      // `showMiniProfile` 内部虽有第二道防线（isDeactivated 直接 return），但那要先走一次网络往返，
+      // 用户看到的是「点了没反应」——与网络失败无法区分。
+      onAuthorTap: c.authorDeleted
+          ? null
+          : () => showMiniProfile(context, ref, c.authorId,
+              // 修复清单 #7：与首页/详情入口同一套收尾（onAuthorHidden = 乐观清 Feed 该作者
+              // 全部卡片；对象是帖主时顺带退出本详情页），再刷本帖评论。只接 _reload 的话，
+              // 用户回到首页会看见「我明明处理了，他的东西还在」。
+              onBlocked: _onCommentAuthorHidden(c.authorId),
+              onReported: _onCommentAuthorHidden(c.authorId),
+              // 评论区这个入口的量单独可查（本版本的主场景就是评论区骚扰）。
+              entry: AccountActionEntry.comment),
       // story 3：仅作者会收到 TAKEN_DOWN/REJECTED 行 → 渲染「仅你可见」灰标签（VISIBLE/UNDER_REVIEW 无标签，D-CM2）。
       takenDownLabel: c.isTakenDownForAuthor ? l10n.commentTakenDownSelfOnly : null,
       canDelete: _canDelete(c),
@@ -248,6 +292,7 @@ class _CommentTile extends StatelessWidget {
     required this.canDelete,
     required this.onReply,
     required this.onDelete,
+    required this.onAuthorTap,
     this.takenDownLabel,
   });
 
@@ -257,6 +302,10 @@ class _CommentTile extends StatelessWidget {
   final bool canDelete;
   final VoidCallback onReply;
   final VoidCallback onDelete;
+
+  /// 点头像/作者名 → 迷你卡（Story 1.6）。**为 null = 已注销**，此时头像与名字都不可点，
+  /// 整行只剩「点了回复」的既有行为。
+  final VoidCallback? onAuthorTap;
 
   /// 非空 = 该评论被下架/移除、仅作者可见 → 渲染灰态提示标签（story 3）。
   final String? takenDownLabel;
@@ -270,42 +319,71 @@ class _CommentTile extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onReply,
       child: Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(name, style: AppTypography.caption.copyWith(fontWeight: FontWeight.w600)),
-          const SizedBox(height: AppSpacing.xxs),
-          Text(comment.body, style: AppTypography.body),
-          if (takenDownLabel != null)
-            Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.xxs),
-              child: Text(
-                takenDownLabel!,
-                key: ValueKey('commentTakenDown_${comment.id}'),
-                style: AppTypography.micro.copyWith(color: AppColors.textTertiary),
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+        // 头像 + 右侧文字块（UI 稿 A6）。头像是 2026-08-16 才补的：在此之前评论行只有
+        // 「作者名 + 正文 + 操作」，`Comment.authorAvatarUrl` 有数据却从未渲染，
+        // 而 Story 1.6 把这里变成了举报/拉黑的入口——只留一行 12.5px 的小字当热区太窄。
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 头像与作者名共用同一个手势（热区连成一片）；已注销时 onAuthorTap 为 null → 不可点。
+            GestureDetector(
+              key: ValueKey('commentAuthorAvatar_${comment.id}'),
+              onTap: onAuthorTap,
+              child: LetterAvatar(
+                url: comment.authorDeleted ? null : comment.authorAvatarUrl,
+                name: name,
+                deleted: comment.authorDeleted,
+                size: 30,
               ),
             ),
-          Row(
-            children: [
-              GestureDetector(
-                key: ValueKey('replyComment_${comment.id}'),
-                onTap: onReply,
-                child: Text(replyLabel, style: AppTypography.micro),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 作者名单独可点：外层整行的 onTap 是「回复」，内层这个 GestureDetector 命中优先，
+                  // 所以点名字/头像弹卡、点正文回复，两者不会打架。
+                  GestureDetector(
+                    key: ValueKey('commentAuthor_${comment.id}'),
+                    onTap: onAuthorTap,
+                    child: Text(name,
+                        style: AppTypography.caption.copyWith(fontWeight: FontWeight.w600)),
+                  ),
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(comment.body, style: AppTypography.body),
+                  if (takenDownLabel != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.xxs),
+                      child: Text(
+                        takenDownLabel!,
+                        key: ValueKey('commentTakenDown_${comment.id}'),
+                        style: AppTypography.micro.copyWith(color: AppColors.textTertiary),
+                      ),
+                    ),
+                  Row(
+                    children: [
+                      GestureDetector(
+                        key: ValueKey('replyComment_${comment.id}'),
+                        onTap: onReply,
+                        child: Text(replyLabel, style: AppTypography.micro),
+                      ),
+                      if (canDelete) ...[
+                        const SizedBox(width: AppSpacing.md),
+                        GestureDetector(
+                          key: ValueKey('deleteComment_${comment.id}'),
+                          onTap: onDelete,
+                          child: Icon(Icons.delete_outline_rounded,
+                              size: 14, color: AppColors.textTertiary),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
               ),
-              if (canDelete) ...[
-                const SizedBox(width: AppSpacing.md),
-                GestureDetector(
-                  key: ValueKey('deleteComment_${comment.id}'),
-                  onTap: onDelete,
-                  child: Icon(Icons.delete_outline_rounded,
-                      size: 14, color: AppColors.textTertiary),
-                ),
-              ],
-            ],
-          ),
-        ],
-      ),
+            ),
+          ],
+        ),
       ),
     );
   }

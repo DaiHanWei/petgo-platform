@@ -140,6 +140,66 @@ public class AdminModerationService {
     }
 
     /**
+     * 按帖驳回（V1.1.4 修复清单 #3）：统一工单队列的内容举报工单<b>按帖聚合</b>，
+     * 驳回必须把该帖<b>全部</b> PENDING 举报单一并 DISMISSED —— 沿用单条 {@link #dismiss} 只关一条的话，
+     * 剩下的单会把工单钉在 PENDING 上永远关不掉。语义与单条驳回逐项对齐：
+     * 每个举报人都收模糊回告；P0 预处置挂起帖恢复可见（非挂起为幂等 no-op）；审计一条（按帖）。
+     */
+    @Transactional
+    public int dismissAllForPost(long postId, AdminUserDetails admin) {
+        List<ContentReport> pending = reportService.findPendingForPost(postId);
+        if (pending.isEmpty()) {
+            throw AppException.notFound("该帖没有待处理的举报");
+        }
+        long handler = handlerId(admin);
+        for (ContentReport r : pending) {
+            reportService.mark(r.getId(), handler, ReportStatus.DISMISSED);
+            notifyReporter(r);
+        }
+        contentService.releaseReportHold(postId); // P0 误报恢复；非 P0 held no-op；不发事件/不通知
+        auditService.record(admin.getAdminAccountId(), AuditActions.REPORT_DISMISSED, "CONTENT_REPORT",
+                String.valueOf(postId), "驳回举报（帖 " + postId + "，共 " + pending.size() + " 单）");
+        log.info("运营按帖驳回举报 postId={} count={} adminAccountId={}", postId, pending.size(),
+                admin.getAdminAccountId());
+        return pending.size();
+    }
+
+    /**
+     * 按帖下架（统一工单队列批量用）：取该帖任意一条 PENDING 举报单走 {@link #takedown}
+     * （它会软删帖子并关掉该帖<b>全部</b> PENDING 单）。没有待处理举报 → 404（工单已被并发处理）。
+     */
+    @Transactional
+    public void takedownByPost(long postId, AdminUserDetails admin) {
+        ContentReport first = reportService.findPendingForPost(postId).stream().findFirst()
+                .orElseThrow(() -> AppException.notFound("该帖没有待处理的举报"));
+        takedown(first.getId(), admin);
+    }
+
+    /**
+     * 内容举报工单的批量下架/驳回（统一队列 V1.1.4 修复清单 #7：旧 /admin/reports 页下线后
+     * 批量能力不能跟着消失）。与账号工单批量同款语义：<b>不开外层事务</b>，逐帖经自引用代理调用
+     * （各自独立事务），部分失败不整批回滚，失败逐条回报。
+     */
+    public BatchResult batchByPost(List<Long> postIds, boolean takedown, AdminUserDetails admin) {
+        AdminModerationService self = selfProvider.getObject();
+        int ok = 0;
+        List<String> failed = new ArrayList<>();
+        for (Long postId : postIds == null ? List.<Long>of() : postIds) {
+            try {
+                if (takedown) {
+                    self.takedownByPost(postId, admin);
+                } else {
+                    self.dismissAllForPost(postId, admin);
+                }
+                ok++;
+            } catch (RuntimeException e) {
+                failed.add("帖 " + postId + "：" + e.getMessage());
+            }
+        }
+        return new BatchResult(ok, failed);
+    }
+
+    /**
      * 批量下架/驳回（Story 4.1 AC5）：**不开外层事务**，逐条经自引用代理调用（各自独立事务）；
      * 部分失败不影响已成功项，汇总结果回报。
      */

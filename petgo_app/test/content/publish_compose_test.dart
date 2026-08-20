@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:tailtopia/features/auth/domain/auth_state.dart';
+import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/content/data/content_repository.dart';
 import 'package:tailtopia/features/content/domain/content_type.dart';
 import 'package:tailtopia/features/content/domain/publish_controller.dart';
@@ -89,6 +91,42 @@ class _FakeProfileRepo implements ProfileRepository {
 
 PublishController _controller(ContentRepository repo) =>
     PublishController(repository: repo, uploadOne: (b) async => 'https://cdn/x.jpg');
+
+/// 已登录 + 明确无档案（未建/已删——删档对称置 false，PR#34 #12）。
+class _NoArchiveAuth extends AuthController {
+  @override
+  AuthState build() => const AuthState(
+        status: AuthStatus.authenticated,
+        role: 'USER',
+        profile: UserProfile(
+          nickname: 'Aurel',
+          petStatus: 'HAS_PET', // F18：删档后 petStatus 不改，仍 HAS_PET 但无档案
+          hasPetProfile: false,
+          onboardingCompleted: true,
+        ),
+      );
+
+  @override
+  Future<void> ensureRestored() => Future<void>.value();
+}
+
+/// 已登录 + 有档案。
+class _WithArchiveAuth extends AuthController {
+  @override
+  AuthState build() => const AuthState(
+        status: AuthStatus.authenticated,
+        role: 'USER',
+        profile: UserProfile(
+          nickname: 'Aurel',
+          petStatus: 'HAS_PET',
+          hasPetProfile: true,
+          onboardingCompleted: true,
+        ),
+      );
+
+  @override
+  Future<void> ensureRestored() => Future<void>.value();
+}
 
 Future<AppLocalizations> _en() => AppLocalizations.delegate.load(const Locale('en'));
 
@@ -255,6 +293,46 @@ void main() {
     await tester.pumpWidget(_composeApp(container)); // 默认 daily
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('publishEventDate')), findsNothing);
+  });
+
+  // ===== bug 20260819：无档案（未建/已删）时 Diary preset 过档案闸 =====
+  //
+  // 「＋」入口（shell）有 canGrowth 守卫，但深链 / 日历格 / 里程碑「去发布」等入口直传 preset。
+  // 明确无档案时 Diary preset 须回落 Moment（chip 本就灰置，但此前 preset 能把它「选中」，
+  // 用户写完提交才被「先建档」拒）。
+
+  testWidgets('无档案 + Diary preset → 回落 Moment（不选中灰置的 Diary）', (tester) async {
+    _tallView(tester);
+    final controller = _controller(_OkRepo());
+    final container = ProviderContainer(overrides: [
+      publishControllerProvider.overrideWithValue(controller),
+      profileRepositoryProvider.overrideWithValue(_FakeProfileRepo()),
+      authControllerProvider.overrideWith(() => _NoArchiveAuth()),
+    ]);
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(_composeApp(container, preset: ContentType.growthMoment));
+    await tester.pumpAndSettle();
+
+    expect(controller.type, ContentType.daily); // Diary preset 被闸 → Moment
+    expect(find.byKey(const ValueKey('publishEventDate')), findsNothing); // 无成长日历事件日期
+  });
+
+  testWidgets('有档案 + Diary preset → 保持 Diary（闸只拦明确无档案）', (tester) async {
+    _tallView(tester);
+    final controller = _controller(_OkRepo());
+    final container = ProviderContainer(overrides: [
+      publishControllerProvider.overrideWithValue(controller),
+      profileRepositoryProvider.overrideWithValue(_FakeProfileRepo()),
+      authControllerProvider.overrideWith(() => _WithArchiveAuth()),
+    ]);
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(_composeApp(container, preset: ContentType.growthMoment));
+    await tester.pumpAndSettle();
+
+    expect(controller.type, ContentType.growthMoment);
+    expect(find.byKey(const ValueKey('publishEventDate')), findsOneWidget);
   });
 
   // ===== AC7 B/C 灰选建档返回（F15 跳过庆祝页） =====

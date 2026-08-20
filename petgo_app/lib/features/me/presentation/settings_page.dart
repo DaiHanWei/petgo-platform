@@ -14,6 +14,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../notify/data/push_permission_providers.dart';
+import '../../social/data/blocked_users_repository.dart';
 
 /// 二级「设置」页（Story 7.1 · F8 · settings.html 1:1 还原）。
 ///
@@ -147,12 +148,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> with WidgetsBinding
               _navRow(l10n.meEditProfileTitle, onTap: () => context.push('/profile/edit'),
                   key: const ValueKey('meEditProfile')),
               _divider(),
-              _navRow(l10n.idCardTitle, onTap: () => context.push('/profile/id-card'),
-                  key: const ValueKey('meIdCard')),
-              _divider(),
-              _navRow(l10n.healthListTitle, onTap: () => context.push('/profile/health'),
-                  key: const ValueKey('meHealthRecords')),
-              _divider(),
+              // ⚠️ 「宠物证件卡 / 健康记录」两项 2026-08-16 从设置页移除：它们是**内容功能**、
+              // 不是设置项，正主入口在 Diary 的成长档案页（`growth_archive_page`），这里是重复入口。
+              // 路由与页面照旧存在，删的只是这个入口。
               _toggleRow(l10n.notificationCenterTitle, _notif, _onNotifToggle,
                   key: const ValueKey('meNotifToggle')),
               _divider(),
@@ -174,6 +172,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> with WidgetsBinding
               _divider(),
               _navRow(l10n.termsOfService, onTap: () => _openUrl(kTermsUrl),
                   key: const ValueKey('meTermsOfService')),
+              _divider(),
+              // 黑名单（V1.1.4 Story 1.5 · FR-94）。右侧计数直接取列表长度——
+              // 后端全量返回、不给 total，全量返回时 total 与 length 冗余。
+              // 计数为 0 时也照常显示「0」，与同组其他行保持一致的视觉密度。
+              _navRow(l10n.blockedListTitle,
+                  value: '${ref.watch(blockedUsersProvider).value?.length ?? 0}',
+                  onTap: () => context.push('/me/blocked-users'),
+                  key: const ValueKey('meBlockedUsers')),
             ]),
             const SizedBox(height: 22),
 

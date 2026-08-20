@@ -296,10 +296,14 @@ class KtpCardFront extends StatelessWidget {
   }
 
   /// 照片框：白描边 + 内圆角。设计稿里的纯红块是「此处由用户上传照片」的占位标记，不是配色；
-  /// 无照片时退回品牌浅底 + 宠物图标，绝不渲染成红块（会像报错）。
+  /// 无照片或加载失败（快照 URL 死链/网络故障）时退回品牌浅底 + 宠物图标，绝不静默空白/红块。
   Widget _photo() {
     final url = fields.avatarUrl;
     final hasPhoto = url != null && url.isNotEmpty;
+    const placeholder = ColoredBox(
+      color: Color(0xFFEAE4F5),
+      child: Center(child: Icon(Icons.pets, size: 160, color: Color(0x80845EC9))),
+    );
     return _positioned(
       _KtpLayout.photo,
       Container(
@@ -311,11 +315,8 @@ class KtpCardFront extends StatelessWidget {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(_KtpLayout.photoInnerRadius),
           child: hasPhoto
-              ? AppImage.widget(url, fit: BoxFit.cover)
-              : const ColoredBox(
-                  color: Color(0xFFEAE4F5),
-                  child: Center(child: Icon(Icons.pets, size: 160, color: Color(0x80845EC9))),
-                ),
+              ? AppImage.widget(url, fit: BoxFit.cover, errorBuilder: (_, _, _) => placeholder)
+              : placeholder,
         ),
       ),
     );

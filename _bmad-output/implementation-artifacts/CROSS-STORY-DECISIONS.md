@@ -42,6 +42,7 @@
 | **F17** | 数据/契约（**前端占位待后端**） | `pet_profiles` **拟加列 `sex varchar null`**（`MALE`/`FEMALE`，UPPER_SNAKE；可空——存量与未填允许 null）。来源：2026-06-18 UI 保真比对——`pet-edit` 原型含 **KELAMIN（Jantan/Betina）** 字段，但后端 `PetProfileResponse`/客户端 `PetProfile` 模型与创建页均无此字段。**当前前端编辑页已落占位选择器（选了不随 PATCH 提交、不持久化）**。后端待办：加列（Flyway 顺延 E2）+ DTO（`PetProfileResponse`/`*Request` 加 `sex`）+ **创建页(2-2) 与编辑页(2-8) 双端接通** + mock 镜像四处同步（C4/C5）。性别属 PII，**日志脱敏护栏适用**。与 F6（`pet_type` 同表加列）同范式 | 前端 `pet_profile_edit_page.dart` 占位已落；后端 + 2-2/2-8 待接 |
 | **F18** | 数据生命周期（**✅ 已实现 2026-07-06**） | **宠物档案删除**：`DELETE /api/v1/pet-profiles/me`（走 `/me` 主体，C1；账号注销 7-3 另论）。来源：2026-06-18 UI 保真——`pet-edit` 原型含「🗑 Hapus Profil」危险区。**【2026-07-06 已实现（bug 20260702-237，L2 验收通过）】** 后端 `ProfileApiController.deleteMyProfile` → `ProfileService.deleteMyProfile` **复用 `ProfileDeletionService`**（与注销 7-3 同一套级联）：物理删 `health_events`/`pet_milestones`/`milestone_completions`/`milestone_shares`，名片 `card_token` 随档案行消失自然失效，OSS 个人图（头像/OG/健康图）提交后 best-effort 清理。**删除语义定为「立即物理删」**（与 7-3 一致，无软删冷静期——契合 V1 姿态）。**UGC（`content_posts` 成长日历条目）定为「保留」**（与注销 7-3「匿名化保留 UGC」一致，原「保留 vs 删除」待定项就此拍板）。**`petStatus` 不改**：删后用户仍 HAS_PET 但无档案 → 前端落空档案态可重建/切换（闭合被困死问题）。前端编辑页恢复红色删除按钮 + 二次确认。**红色态/合规护栏不变**。 | ✅ 已实现（2026-07-06）：后端 `DELETE /me` + 级联 + 单测；前端删除按钮/弹窗/删档跳空态；L2 验收通过 |
 | **F20** | 数据生命周期（**⚠️ 有意偏离 7-3 匿名化总精神，业务负责人拍板承担**，2026-07-10） | **运营后台展示已注销用户**（运营诉求：原来注销后后台信息空白、状态仍「正常」，无法识别谁注销）。**DB 改动（迁移 `V47__add_user_deletion_display.sql`）**：`users` 表新增两列 `deleted_email VARCHAR(320)` / `deleted_display_name VARCHAR(255)`；`User.anonymizeForDeletion` 首次注销时把 `email`/`displayName` **快照**进这两列（幂等，重跑不覆盖），**原 `email`/`display_name` 仍按 7-3 置空**。**合规定性**：这两列保留了已注销用户的 email+用户名 PII，属对「注销剥离全部 user PII」总精神的**有意偏离**（非回退 D1/D2/triage 删除等白纸黑字条款）；风险由业务负责人（hanwei）确认承担。**隔离保证**：新列**仅 `AdminUserService`（后台列表/详情）读**，无任何 API 直接序列化 User 实体 → **不泄漏 C 端/兽医**（公开作者名 `toAuthorView` 与 vet 富化仍读置空的原列、走 `deletedAt` 匿名分支）。**重注册不受影响**（live `email` 仍 null、无唯一约束、注册按 `googleSub` 墓碑）。后台已注销账号**仅展示、不可处置**（停用/激活/删除入口隐藏 + `deleteUser` 后端护栏拒绝重复删除）。**已知限制**：后台按邮箱搜索匹配 live 列 → 搜不到注销用户（只能列表浏览/按 ID）；注销用户混排入列表并计入分页。 | ✅ 已实现（2026-07-10）：迁移 V47 + `User`(快照字段/幂等) + `AdminUserRow`/`AdminUserDetailView`(deleted) + `AdminUserService` + `users.html`/`user-detail.html`(已注销态+隐藏处置) + i18n `admin.users.status.deleted` + `UserAnonymizeTest`；usermgmt/auth L0 79 项通过 |
+| **F21** | 数据生命周期（**⚠️ 有意偏离 D2/7.3「OSS 个人图物理删除」，业务负责人拍板承担**，2026-08-19） | **OSS 对象任何情况不再物理删除 + KTP 卡删档可见性分流**。背景：KOL KTP 卡快照头像丢失事故——`id_cards` 快照只存 URL 不拥有对象，用户删档重建（F18 复用注销级联）把仍被卡引用的头像对象物理删掉，快照成死链且不可恢复（桶未开版本控制，存量 9 卡 4 用户永久损失）。**决策①（hanwei 拍板）：OSS 对象任何情况保留不删**——`MediaDeletionService` 改只记账 no-op（API 形状保留供 7.3/F18 编排继续调用），`AliyunOssClient` 删除原语整体移除；**DB 行删除/匿名化不受影响，仅对象存储保留**。合规定性：注销后头像等个人图对象仍存于公开桶可经原 URL 访问，属对 D2「存档私密桶副本随个人图删除」及 7.3 个人图删除的**有意偏离**，风险由业务负责人确认承担；新增任何删除逻辑须先回本条重新拍板。**决策②：删档时卡按付费态分流**（迁移 `V108__add_id_cards_profile_deleted_at.sql`）：`id_cards` 新增 `profile_deleted_at` 打标列（`ProfileDeletionService` 删档时批量打标，幂等只打未打标行）；可见性 = `hd_unlocked OR profile_deleted_at IS NULL`——**付费卡恒可见**（哪怕档案已删/已换宠物，展示快照信息）；**未付费卡（含等待付款/过期等一切非到账态）隐藏**（列表不返回、详情 404 不可预览）；到账回调（`completeCardByIntent` 按 findById 不走过滤）翻转 `hd_unlocked` 后**自动重新可见**（防「删档时支付在途」时间差丢卡）。存量回填：卡建立时点早于现存档案或用户已无档案 → 视为档案已删打标。前端三卡面照片框补 errorBuilder 回落占位（死链/网络失败不再静默空白）。 | ✅ 已实现（2026-08-19）：V108 + `IdCard.profileDeletedAt` + `IdCardRepository.markProfileDeleted` + `ProfileDeletionService` 打标 + `IdCardService` 可见性过滤 + `MediaDeletionService` no-op + `AliyunOssClient` 删除原语移除 + ktp/passport/student 卡照片 errorBuilder + `IdCardServiceTest` 可见性 3 例 |
 | **F19** | 数据/契约（**前端占位待后端**） | **兽医可用状态拟从二元升为三态**：当前后端兽医在线态为 `bool`（`PUT /vet/online-status` · `readOnlineStatus()→bool` · `setOnline(bool)`），仅 online/offline。来源：2026-06-21 UI 保真——`vet-status-popup`（V-st）原型含 **三选项 Online / Sibuk(忙碌) / Offline**。**当前前端已落 V-st 状态切换抽屉 + 三态 `VetAvailability{online,busy,offline}`（`vetAvailabilityProvider`）**，但持久化时按二元映射：**Online→接单(true)、Sibuk/Offline→不接单(false)**——**「Sibuk」为纯前端占位态**：选中后后端落 false（与 Offline 同），药丸前端显示 Busy，但冷启动 / 他处改在线态后回落为 Offline，无法独立持久。后端待办：在线态升三态枚举（`AVAILABILITY varchar` UPPER_SNAKE：`ONLINE`/`BUSY`/`OFFLINE`，替换/兼容现 bool）+ DTO + 端点契约 + mock 镜像同步（C4/C5）+ 决定「Sibuk」对抢单队列可见性的语义（用户侧是否显示「忙碌」）。**护栏不变**：不引新中间件；IM 上/下线仍按「是否接单」二分跟随（Sibuk 视作下线/不接单）。需产品先拍板是否要 Busy 三态再实现 | 前端 `vet_top_bar.dart` / `vet_status_sheet.dart` / `vet_online_status.dart` 占位已落；后端三态 + 队列可见性语义待拍板 |
 
 ## 风险台账（V1 不阻塞，记账待评）
@@ -73,6 +74,10 @@
 | `pet_profiles.pet_type`（加列）| 2.2 | F6：加列非建表，创建后不可改 |
 | `pet_milestones` / `milestone_completions` | 里程碑 mini-epic（F2）| 归 profile 域；排期 1.0.x/1.1.0 待定，**非 Epic 6**。本轮 FR-42 断档补齐（in-page picker 打卡 / L 级达成推送 / 已过生日补录）已并入 PRD FR-42 规格，随 mini-epic 实现，**本轮不落代码** |
 | `notifications` 去重标记（生日/纪念日/节点已推）| 6.7（F5）| 落 notifications 附加列或独立小表，dev 落实 |
+| `user_hide_relations` | **1.1（V1.1.4）** | 隐藏关系单表双来源（BLOCK/REPORT）。**唯一键三元 `(holder_id, target_id, source)`** —— 幂等只在同源之间成立；举报写 REPORT 行**不得触碰 BLOCK 行任何字段**（黑名单排序取 `BLOCK.created_at`）。Epic 1 全部 + Epic 2 举报即隐藏 复用 |
+| `account_reports` | **2.1（V1.1.4）** | 账号举报工单。**一行 = 一个被举报账号，`target_user_id` 唯一** —— 12 个人举报同一个人也只有一条工单。状态 `PENDING/RESOLVED/DISMISSED`（**展示层第三档叫「无需处置」而非「已驳回」**，C-103；数据层值不改）。已处置后再被举报 → **同一条翻回 PENDING、不新建**，`first_reported_at` **不刷新**。Epic 3 统一队列消费 |
+| `account_report_entries` | **2.1（V1.1.4）** | 账号举报明细，**只追加不覆盖、无任何唯一约束**（刻意 —— 与 `content_reports` 的 `(reporter_id, post_id)` 唯一 + service 幂等吞掉正好相反）。每一次举报的类型与「其他」补充说明都独立留存；`detail` 是用户自由文本，**禁止进日志**。索引 `(report_id, reporter_id)` 供 Epic 3 优先级公式一次聚合出「人数 / 次数 / 高频人数」 |
+| `account_disposals` | **3.1（V1.1.4）** | 账号级处置留痕（WARNING / SUSPEND）。**Story 3.1 建表并读**（工单列表的「历史处置次数」），**写入由 Story 3.2 接入** —— 上线初期表为空、次数显示 0 属逻辑完整状态。在此之前账号级处置**没有任何结构化留痕**（只有 `admin_audit_logs` 里一行中文 detail），这正是本表的立项理由 |
 
 ## 跨 story 共享设施归属（扫描确认链路连贯）
 
@@ -82,6 +87,11 @@
 - **`NotificationService`**：6.1 建 → 6.2/6.3/6.4 用。
 - **会话状态机**：5.3 入口(WAITING/CANCELLED) → 5.5 接单(IN_PROGRESS) → 5.6 收尾(PENDING_CLOSE/CLOSED) → 5.7 中断(INTERRUPTED) → 5.8 视图收口。
 - **`AccountDeletionJob`**：7.3 建（消费各模块 `deleteByUserId`/`anonymizeByUserId`）。
+- **社区关系模块 `com.tailtopia.social` + `social.read` 只读端口**：**1.1（V1.1.4）建** → Epic 1 全部 / Epic 2 举报即隐藏 复用。
+  - 端口 `UserHideRelationReader` 提供**两种**查询：`isHidden`（不区分来源，供 Feed / 评论 R1·R2 / 通知抑制 / 搜索列表 / 运营干预位**五处**）与 `isBlocked`（**只认 BLOCK**，**专供主页访问校验**）。
+  - ⚠️ **`content` / `notify` / `auth` 三侧只依赖该端口接口，禁止引用 `social.repository`**（AD-8）。端口接口放**提供方**，有意偏离 `ViolationCountReader` 把接口放消费方的先例（那条只有一个消费方，本端口有三个）。
+  - ⚠️ **安全规则层，只升不降不可绕过**：**凡新增「向用户展示他人内容」的位置（列表 / 详情 / 推荐位），一律默认套用该端口，不做逐场景例外**。漏一处等于拉黑白拉。本版本上线时平台尚无运营干预位与用户搜索，规则不触发但已声明；V1.1.6 的 FR-68 顶置坑位实现时须接上。
+  - ⚠️ **无缓存**：每次查库走唯一索引，禁止为其引 Redis 或本地缓存（AD-18）。
 
 ## 2026-07-27 追加决策（bug 20260727-364 拍板）
 
@@ -90,3 +100,99 @@
   - 落地：`acceptRequest` 去 `isBusy` 409 守卫；**计费流全程不再触碰 `vet:busy`**（接单不置 BUSY，超时/取消/现金故障不再 goAvailable）；`vetQueue` 池恒可见、`awaitingPay`(单条) → `awaitingPays`(列表)（**API 契约变更**，App `VetQueue` 模型同步）。
   - 不动：V1.0 免费直连流（`ConsultAcceptService`）与 `ConsultCloseService.goAvailable`（对计费流是 no-op，兼容遗留）；在线态显式模型（vet-presence-explicit-only）不变；广播本就发全部在线兽医，无需改。
   - FR-53B 前端判成交改为「待支付 token 集合差 + 进行中会话数增量」。
+
+## 2026-08-16 追加决策（V1.1.4 Story 1.3：评论数与互动量口径）
+
+**任何后续依赖「评论数」或「互动量」的功能，先读完这条再动手。** 隐藏关系有两条过滤，语义完全不同：
+
+- **R1（按查看者）**：查看者自己隐藏了这个人（主动拉黑或举报，**不分来源**）→ 那条评论**只是他不看**，对平台真实存在、对其他所有人公开可见。
+- **R2（影子评论，按内容作者）**：**内容作者**隐藏了这个人 → 那条评论对**所有人**都不存在，**只有写它的人自己看得见**（无感知机制）。
+
+口径分两层，**别混为一谈**：
+
+| 层 | 代表方法 | R1 | R2 |
+|---|---|---|---|
+| **面向查看者**（「他这一屏能看到几条」） | `CommentRepository.countVisibleForViewer` | **套** | **套** |
+| **平台口径 / 互动量统计**（「这是不是一次真实互动」） | `CommentRepository.countByRealAuthor` 及后续任何热度 / 排序 / 选品指标 | **不套**（照常计入） | **不套用即错——必须排除**：影子评论及其回复串**不得计入任何互动量**，否则骚扰账号的评论会变成「热度」 |
+
+- 面向查看者的数字**必须与实际渲染出来的条数一致**。少套 R1 就会出现「标题写着评论 (5)，往下数只有 4 条」的穿帮——那正是 AD-13 列为首要防范的现象。
+- **评论作者本人视角下数字比他人多 1**，是影子机制的固有特性（A-A21），**可接受，不要去「修」**。
+- ⚠️ **AD-13 的「评论数」那一条把「同步套用 R1 + R2」与「R1 隐藏的照常计入」写在同一句里，字面互斥**。Story 1.3 实现时按该条自己列的 Prevents 首项裁定为上表的两层分工。**若产品另有判断，要改的是 `countVisibleForViewer` 里 R1 那两行 WHERE**（外加 `CommentHideFilterIntegrationTest.ac5_r1HiddenCommentAlsoKeepsCountAndRenderedRowsInSync`）。
+- **回复串随父隐藏**：父被任一条过滤挡住，整串对该视角一并不展示（不出现「回复了某条看不见的评论」的孤儿回复）。`replyCount` 取 `findRepliesForParents` 的返回条数，过滤写进 WHERE 后**天然就是过滤后的数**。
+
+
+## 2026-08-16 追加决策（V1.1.4 Story 2.1：账号举报与内容举报是两套东西）
+
+**动账号举报之前先读这条。** 代码里两套举报并存，命名相近、语义相反，照抄是最大的风险：
+
+| | 内容举报 `content_reports`（既有，Story 3.7） | 账号举报 `account_reports` + `_entries`（V1.1.4 Story 2.1） |
+|---|---|---|
+| 粒度 | 一条内容一个工单 | **一个被举报账号一个工单** |
+| 重复举报 | 唯一键 `(reporter_id, post_id)` + service **两处裸 `return` 幂等吞掉，什么都不写** | **每次都追加一行明细**，类型与补充说明逐次留存 |
+| 理由枚举 | `ReportReason`：ILLEGAL / MISINFO / INAPPROPRIATE / HARASSMENT / OTHER | `AccountReportReason`：SPAM / IMPERSONATION / HARASSMENT / VIOLATING_CONTENT / OTHER（**只有两项对得上，不复用**） |
+| 自动预处置 | 有两条：`ILLEGAL` 单次触发 / 举报人数 ≥ 10（`P0_REPORT_COUNT_THRESHOLD`，硬编码在 Java、运营改不了）→ 内容挂起 | **零自动预处置**（AD-17），无论多少人举报都不动他的内容 |
+| 频率限制 | 靠唯一键天然只有一次 | **不设冷却**（A-A23，主动决定）：可无限次举报。service 只有一道 **5 秒**去重窗口，防的是双击穿透与网络重试，**不是限制用户意图** |
+| 副作用 | 无隐藏关系 | **举报即隐藏**：同一事务写一条 `source=REPORT` 的 `user_hide_relations` 行，任一失败整体回滚 |
+
+- **「已举报」标记由 `source=REPORT` 行是否存在派生**（`UserHideRelationReader.isReported`），**不是前端会话态** —— 用户重装 App 也得看得到，否则会重复举报、污染运营看到的「12 人 / 27 次」。
+- ⚠️ **`MiniProfileResponse.reported` 必须是装箱 `Boolean` 且游客时为 null**：全局 Jackson `NON_NULL` 会把 null 键整个省略，游客响应体的 key 集合因此一字未变（Story 1.1 AC6 的硬要求）。写成 primitive `boolean` 会永远出现在 JSON 里，当场破坏游客契约。
+- ⚠️ **举报隐藏永不删除、无任何解除入口**，且不进黑名单页（黑名单只收 `BLOCK`）。**唯一例外是主页访问仍可进入** —— FR-58 闭环（「已举报」状态与重复举报入口）全靠它。
+
+
+## 2026-08-16 追加决策（V1.1.4 Story 3.1：统一工单队列的三个口径）
+
+**1）三个业务类别落在四张表上**（架构 AD-7 原写的 `manual_review_queue` 认定不成立，已按产品意图订正）：
+
+| 类别 | 源表 | 工单粒度 |
+|---|---|---|
+| 内容举报 | `content_reports`（既有） | **按帖聚合**：12 个人举报同一条帖是**一条**工单 |
+| 用户举报 | `account_reports`（V1.1.4 新增） | 一个被举报账号一条 |
+| 账号标识字段 | `name_moderation_records` + `avatar_reviews`（两张既有表） | 一条送审记录一条 |
+
+**读时联合，不建索引表、不双写、存量零回填、不加缓存**（AD-7）。各类工单的状态**仍由各自源表权威持有** —— 一旦双写，「工单在哪张表里是真的」立刻变成需要对账的问题。
+
+**2）优先级公式（改之前先看那四条测试）**
+
+```
+分 = 举报人数 + 高频举报人数
+举报人数     = 举报过该对象的不同账号数（去重）
+高频举报人数 = 其中对该对象累计举报 ≥5 次（含 5）的账号数
+```
+- **单个举报人的贡献上限恒为 2 分**（1 基础 + 1 高频）。这是设计目的不是巧合：**众怒要排在纠缠前面** —— 一个人刷 100 次只有 2 分，十个人各报一次是 10 分。
+- 账号标识字段那一类**没有举报人**，分数按各表的 `priority` 映射：**`HIGH → 10` / `NORMAL → 2`**（C-102）。⚠️ **`NORMAL` 不得映射成 0** —— 它是那两张表的 DEFAULT 值、绝大多数记录都是它，映射成 0 会让这类工单集体永远沉底。
+- 分数**实时算、不落库快照**；排序 = 分倒序 + **同分按最早一次举报时间升序**（先报的先处理）。
+- **展示必须拆开**：举报人数 / 举报次数 / 高频人数 / 总分四个数并列。只看次数会把「1 个人报了 27 次」当成众怒；只看人数会丢掉「同一人反复纠缠」；只给总分等于让运营对着黑盒排队。
+
+**3）账号标识字段两表的三处不同构（联合查询里已固化，改动前先读注释）**
+
+| | `name_moderation_records` | `avatar_reviews` |
+|---|---|---|
+| 待处理锚点 | `MANUAL_PENDING` | `MANUAL_PENDING`（**两表唯一的共同状态**） |
+| 违规终态 → 已处理 | `RESOLVED_VIOLATION` | `RESOLVED` + `verdict='VIOLATION'` |
+| 通过终态 → 无需处置 | `RESOLVED_PASS` | `RESOLVED` + 其余 verdict |
+| 时间锚点 | `submitted_at` | `created_at` |
+
+其余状态（`SCORING`/`QUEUED`/`AUTO_PASSED`/`SUPERSEDED`/`FAILED_TO_QUEUE`）**一律不进运营队列**。
+⚠️ **PII 红线**：`submitted_value`（送审名称原文）与 `avatar_url` **可以在工单里展示**（那正是运营要看的证据），**严禁写入任何日志**。
+
+**4）第三档状态叫「无需处置」不叫「已驳回」**（C-103）：这一档里混着「审核通过、本来就没问题」的记录。⚠️ **改的只是展示层文案** —— 数据层的 `DISMISSED` 值、以及举报侧的「驳回」动作按钮**都不改**（对举报而言「驳回」是准确的）。
+
+
+## 2026-08-16 追加决策（V1.1.4 Story 3.4：FR-51 举报回告文案有意变更）
+
+**旧**：「举报已处理 / 感谢你的举报，我们已完成审核。」
+**新**：「举报已处理 / **你的举报已处理，感谢你帮助维护社区环境**」（PRD §6 定稿）
+
+- ⚠️ **这不是修 bug，是产品定稿的文案变更。** 日后拿线上文案与更早的文档比对时，别以为是谁改错了又改回去。
+- ⚠️ **影响面不止本版本**：这条通知是**内容举报与账号举报共用的同一条**，所以**已经上线的内容举报回告也跟着变了 —— 有意为之**。
+- 仍**不透露具体处置结果**（继承 FR-51 既有口径）；`deepLinkType` / `targetRef` / 通知 type 一概未动，**无 Flyway 迁移**。
+- ⚠️ **同一句话落在三处，改一处就会前后不一致**：
+
+| # | 位置 | 谁在用 |
+|---|---|---|
+| ① | `ModerationNotifyListener` 的 `send(title, body)` | 落库的通知行（数据记录） |
+| ② | `messages_{zh_CN,en,id}.properties` 的 `notify.REPORT_REVIEWED.*` | **离线推送**（按收件人语言渲染） |
+| ③ | **App 的 ARB `notifyBodyReportReviewed`** | **站内通知中心 —— 用户真正看到的那句** |
+
+漏改任何一处的表现是「**站内看到新文案、推送收到旧文案**」，用户会觉得平台在自说自话。三处都有测试守着（后端 `ReportReviewedCopyTest`，前端通知中心用例）。
+- 印尼语措辞随 OQ-A4 同批送运营确认，**不阻塞发版**。

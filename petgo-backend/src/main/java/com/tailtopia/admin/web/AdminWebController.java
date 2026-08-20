@@ -98,40 +98,59 @@ public class AdminWebController {
 
     // ===== Story 3.7 + 4.1：举报审核队列（状态筛选 + 批量 + 双向通知 + 审计）=====
 
+    /**
+     * 旧举报队列 AB-3A（V1.1.4 Story 3.1 起<b>不再作为独立视图存在</b>）。
+     *
+     * <p>它的举报处理能力已并入统一工单队列 {@code /admin/tickets} —— <b>不是两者并存</b>：
+     * 留着两个入口，运营每次还要先判断该去哪个看，而两边的排序口径又不一样。
+     * 这里保留一条重定向，只为不让旧书签/旧链接 404。
+     *
+     * <p>⚠️ 下面那两个 POST（下架 / 驳回）<b>仍然有效</b>，只是重定向到新页；
+     * 它们的新入口由 Story 3.2 / 3.3 在统一视图上接。
+     */
     @GetMapping("/admin/reports")
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('content.view_reports')")
-    public String reports(@RequestParam(value = "status", required = false) String status,
-            @RequestHeader(value = "HX-Request", required = false) String hxRequest, Model model) {
-        com.tailtopia.moderation.domain.ReportStatus st = parseReportStatus(status);
-        model.addAttribute("active", "reports");
-        model.addAttribute("status", st.name());
-        model.addAttribute("reports", adminModerationService.queue(st));
-        return hxRequest != null ? "admin/reports :: rows" : "admin/reports";
-    }
-
-    private com.tailtopia.moderation.domain.ReportStatus parseReportStatus(String s) {
-        if (s == null || s.isBlank()) {
-            return com.tailtopia.moderation.domain.ReportStatus.PENDING;
-        }
-        try {
-            return com.tailtopia.moderation.domain.ReportStatus.valueOf(s);
-        } catch (IllegalArgumentException e) {
-            return com.tailtopia.moderation.domain.ReportStatus.PENDING;
-        }
+    public String reports() {
+        // 🔴 2026-08-20 改指向：内容举报已于 2026-08-19 拆分时移入「人工复核」页。
+        // 原先指 /admin/tickets（现在的「被举报用户」）—— 那页只剩用户举报，
+        // 顺着旧书签进来的人会看到一个**没有任何内容举报**的列表，以为举报都没了。
+        return "redirect:/admin/manual-review";
     }
 
     @PostMapping("/admin/reports/{id}/takedown")
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')")
     public String takedown(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id) {
         adminModerationService.takedown(id, admin);
-        return "redirect:/admin/reports";
+        // 回内容举报现在的所在页（拆分后是「人工复核」）。回 /admin/tickets 等于把人甩到另一个
+        // 页面，且刚处置的那条根本不在那儿 —— 运营会以为操作没生效。
+        return "redirect:/admin/manual-review";
     }
 
     @PostMapping("/admin/reports/{id}/dismiss")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('content.view_reports')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')")
     public String dismiss(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id) {
+        // ⚠️ gate 对齐 dismiss-all / 批量驳回的 content.takedown（评审三轮 #2）：驳回是处置动作，
+        // 挂查看权上等于让只读审核员逐条 POST 绕过处置权限（等价被禁的 dismiss-all）。
         adminModerationService.dismiss(id, admin);
-        return "redirect:/admin/reports";
+        return "redirect:/admin/manual-review";
+    }
+
+    /**
+     * 按帖驳回（V1.1.4 修复清单 #3）：统一队列的内容举报工单按帖聚合，驳回=该帖全部 PENDING 单收档。
+     *
+     * <p>⚠️ 权限对齐<b>批量</b>驳回的 {@code content.takedown}（{@code /admin/reports/batch} 同 gate），
+     * <b>不是</b>单条驳回的 {@code content.view_reports}——一次抹掉整帖全部举报是批量级动作，
+     * 挂在查看权上等于让只读审核员（V105 回填人群）绕过处置权限批量驳回真实举报。
+     */
+    @PostMapping("/admin/reports/post/{postId}/dismiss-all")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')")
+    public String dismissAllForPost(@AuthenticationPrincipal AdminUserDetails admin,
+            @PathVariable long postId,
+            org.springframework.web.servlet.mvc.support.RedirectAttributes flash) {
+        int n = adminModerationService.dismissAllForPost(postId, admin);
+        flash.addFlashAttribute("notice", "已驳回该帖全部举报（" + n + " 条）");
+        // 内容举报现在的所在页是「人工复核」（2026-08-19 拆分）。
+        return "redirect:/admin/manual-review";
     }
 
     @PostMapping("/admin/reports/batch")
@@ -144,7 +163,7 @@ public class AdminWebController {
         AdminModerationService.BatchResult result = adminModerationService.batch(reportIds, takedown, admin);
         flash.addFlashAttribute("notice",
                 "批量完成：成功 " + result.ok() + " 条，失败 " + result.failedCount() + " 条");
-        return "redirect:/admin/reports";
+        return "redirect:/admin/manual-review";
     }
 
     // ===== Story 5.1：兽医账号 CRUD（复用本 shell）=====

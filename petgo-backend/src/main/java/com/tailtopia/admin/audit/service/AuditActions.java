@@ -109,6 +109,14 @@ public final class AuditActions {
     /** 头像违规重置为平台默认头像（story 5 处置，story 8 后台入口触发；summary 含判定依据/备注，无图片 URL）。 */
     public static final String AVATAR_RESET = "AVATAR_RESET";
 
+    // ===== V1.1.4 Story 3.2 账号级处置（社区管控）=====
+    /** 账号警告（summary 只带工单号，绝不带内容原文/举报人）。 */
+    public static final String ACCOUNT_WARNED = "ACCOUNT_WARNED";
+    /** 账号停用（社区处置路径；与用户管理页的 USER_DEACTIVATED 分开，两条路径的副作用不同）。 */
+    public static final String ACCOUNT_SUSPENDED = "ACCOUNT_SUSPENDED";
+    /** 账号举报工单判为无需处置（数据层仍是 DISMISSED，改的只有展示层文案）。 */
+    public static final String ACCOUNT_REPORT_DISMISSED = "ACCOUNT_REPORT_DISMISSED";
+
     private AuditActions() {
     }
 }

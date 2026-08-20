@@ -1,5 +1,6 @@
 package com.tailtopia.notify.web;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -10,9 +11,14 @@ import com.tailtopia.notify.domain.Notification;
 import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.notify.repository.NotificationRepository;
 import com.tailtopia.support.ApiIntegrationTest;
+import java.util.ArrayList;
+import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * {@link NotificationController} 端点集成测试（{@code /api/v1/notifications}，4 端点，均需 USER JWT）：
@@ -26,6 +32,21 @@ class NotificationControllerEndpointTest extends ApiIntegrationTest {
 
     @Autowired
     private NotificationRepository notifications;
+
+    @Autowired
+    private JdbcTemplate jdbc;
+
+    @Autowired
+    private StringRedisTemplate redis;
+
+    /** 直接写角标键，模拟「计数漂移」（Redis 有数但库里没有对应未读行）。 */
+    private void seedBadge(long userId, long value) {
+        redis.opsForValue().set("notify:unread:" + userId, String.valueOf(value));
+    }
+
+    private String badge(long userId) {
+        return redis.opsForValue().get("notify:unread:" + userId);
+    }
 
     /** 造一条已落库通知（token 由调用方给定，便于断言/标记）。 */
     private Notification persist(long recipientUserId, NotificationType type, String token, boolean read) {
@@ -109,6 +130,73 @@ class NotificationControllerEndpointTest extends ApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(1))
                 .andExpect(jsonPath("$.hasMore").value(false));
+    }
+
+    /**
+     * 🔴🔴 同刻通知不得在翻页时丢失（2026-08-18 修，`action_items: NOTIFY-CURSOR-TIE`）。
+     *
+     * <p><b>原缺陷</b>：游标只有 {@code created_at} 且截断到毫秒，查询是严格 {@code <} ——
+     * 同一毫秒里有 ≥2 条通知、分页边界又正好落在中间时，<b>那一毫秒里的记录被整批跳过</b>，
+     * 用户永久看不到那几条。一毫秒内写入多条通知在生产上完全正常（一次批量触达就是）。
+     *
+     * <p><b>为什么这条测试要直接改 {@code created_at}</b>：靠 {@code now()} 撞同一微秒是运气 ——
+     * 原有的 {@code list_paginatesWithCursor} 就是这么偶发红的（全量跑红、单跑绿，
+     * 于是很容易被当成抖动放过）。这里把 5 条的时间戳<b>写死成同一个值</b>，
+     * 让缺陷从「偶发」变成「必现」。
+     */
+    @Test
+    @DisplayName("🔴🔴 5 条通知时间戳完全相同 → 逐页翻完，一条不多一条不少")
+    void list_doesNotSkipRowsSharingTheSameInstant() throws Exception {
+        User me = newUser();
+        List<String> expected = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            String t = tok();
+            expected.add(t);
+            persist(me.getId(), NotificationType.CONTENT_COMMENTED, t, false);
+        }
+        // 🔴 五条同刻（精确到微秒都一样）—— 只有 created_at 的游标在这里必然丢数据。
+        //    统一取这批里最早的那个【真实】时间戳，而不是写死一个日期：写死会跟
+        //    「首页取 now+60s 之前」的哨兵打架（跑测试那天在 UTC 上过没过那个点纯看运气）。
+        jdbc.update("UPDATE notifications SET created_at = "
+                + "(SELECT MIN(created_at) FROM notifications WHERE recipient_user_id = ?) "
+                + "WHERE recipient_user_id = ?", me.getId(), me.getId());
+
+        List<String> seen = new ArrayList<>();
+        String cursor = null;
+        for (int page = 0; page < 10; page++) {
+            var req = get("/api/v1/notifications").param("limit", "2")
+                    .header(HttpHeaders.AUTHORIZATION, userBearer(me.getId()));
+            if (cursor != null) {
+                req = req.param("cursor", cursor);
+            }
+            String body = mvc.perform(req).andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString();
+            var node = json.readTree(body);
+            for (var item : node.get("items")) {
+                seen.add(item.get("deepLinkToken").asString());
+            }
+            if (!node.get("hasMore").asBoolean()) {
+                break;
+            }
+            cursor = node.get("nextCursor").asString();
+        }
+
+        // 一条不少
+        assertThat(seen).containsExactlyInAnyOrderElementsOf(expected);
+        // 🔴 一条不多 —— 同刻记录若没有确定顺序，翻页时同一条会重复出现
+        assertThat(seen).doesNotHaveDuplicates();
+    }
+
+    @Test
+    @DisplayName("坏游标不 500，退化成首页（游标是客户端传来的，不能信）")
+    void list_toleratesGarbageCursor() throws Exception {
+        User me = newUser();
+        persist(me.getId(), NotificationType.VET_REPLY, tok(), false);
+
+        mvc.perform(get("/api/v1/notifications").param("cursor", "not-a-cursor")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1));
     }
 
     // ---------- 未读数 ----------
@@ -264,5 +352,80 @@ class NotificationControllerEndpointTest extends ApiIntegrationTest {
     void readAll_missingToken_is401() throws Exception {
         mvc.perform(post("/api/v1/notifications/read-all"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    // ---------- 角标与列表不一致的自愈（2026-08-19 补覆盖缺口） ----------
+
+    /**
+     * 🔴 核心回归：**角标 > 0 但列表为空**时，打开通知中心（首页，cursor=null）必须
+     * 把角标校准回真实未读数（这里是 0）。
+     *
+     * <p>这是线上反馈「铃铛上有数字，点进去没有新消息」的那条自愈路径。此前 10 个测试
+     * 全都没覆盖它 —— 它们造的行都会让角标与库天然一致，构造不出漂移。
+     */
+    @Test
+    @DisplayName("角标残留 + 列表空 → 打开列表后角标自愈为 0")
+    void list_recalibratesStaleBadgeWhenListIsEmpty() throws Exception {
+        User u = newUser();
+        seedBadge(u.getId(), 3); // 人为漂移：库里 0 条未读，角标却是 3
+
+        // 打开前：角标读 Redis，如实暴露那个 3
+        mvc.perform(get("/api/v1/notifications/unread-count")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(u.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(3));
+
+        // 打开通知中心首页 → 列表空，且服务端按库校准角标
+        mvc.perform(get("/api/v1/notifications")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(u.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isEmpty());
+
+        assertThat(badge(u.getId())).isEqualTo("0");
+        mvc.perform(get("/api/v1/notifications/unread-count")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(u.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(0));
+    }
+
+    /**
+     * 漂移的另一半：库里**有**未读行、但角标数字偏大（如重复自增），首页同样校准到真实值。
+     */
+    @Test
+    @DisplayName("角标偏大 + 列表有未读 → 校准为真实未读数")
+    void list_recalibratesInflatedBadgeToActualUnread() throws Exception {
+        User u = newUser();
+        persist(u.getId(), NotificationType.VET_REPLY, tok(), false);
+        persist(u.getId(), NotificationType.VET_REPLY, tok(), true); // 已读，不计入
+        seedBadge(u.getId(), 99);
+
+        mvc.perform(get("/api/v1/notifications")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(u.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(2));
+
+        assertThat(badge(u.getId())).isEqualTo("1");
+    }
+
+    /**
+     * ⚠️ 已知边界，如实固定为断言：**只有首页（cursor=null）才校准角标**。
+     * 带 cursor 的翻页请求不校准 —— 因为它拿不到「全量未读」的语义。
+     *
+     * <p>这意味着：若客户端某条路径打开通知中心时**带了 cursor**，角标就永远不会自愈。
+     * 当前 Flutter 侧 initState 是不带 cursor 的（已核对），故不受影响；本断言用于
+     * 锁住这个前提，将来若有人改成带 cursor 打开，这条会立刻红。
+     */
+    @Test
+    @DisplayName("带 cursor 的翻页请求不校准角标（已知边界）")
+    void list_withCursorDoesNotRecalibrateBadge() throws Exception {
+        User u = newUser();
+        seedBadge(u.getId(), 3);
+
+        mvc.perform(get("/api/v1/notifications")
+                        .param("cursor", String.valueOf(System.currentTimeMillis() * 1000L) + "_0")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(u.getId())))
+                .andExpect(status().isOk());
+
+        assertThat(badge(u.getId())).isEqualTo("3"); // 未被校准
     }
 }

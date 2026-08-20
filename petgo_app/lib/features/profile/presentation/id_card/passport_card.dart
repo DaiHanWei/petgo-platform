@@ -249,8 +249,10 @@ class PassportCardFront extends StatelessWidget {
       height: r.height,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(_PL.photoRadius),
+        // 加载失败（快照 URL 死链/网络故障）与无照片同占位，不静默空白。
         child: fields.avatarUrl != null && fields.avatarUrl!.isNotEmpty
-            ? AppImage.widget(fields.avatarUrl!, fit: BoxFit.cover, thumbWidth: 560)
+            ? AppImage.widget(fields.avatarUrl!, fit: BoxFit.cover, thumbWidth: 560,
+                errorBuilder: (_, _, _) => Container(color: const Color(0xFF6DA8E0)))
             : Container(color: const Color(0xFF6DA8E0)), // 护照照片蓝底
       ),
     );

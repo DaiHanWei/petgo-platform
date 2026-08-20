@@ -121,6 +121,18 @@ class FeedController extends AsyncNotifier<FeedState> {
     state = AsyncData(current.copyWith(items: filtered));
   }
 
+  /// 拉黑成功后本地乐观移除**该作者的全部卡片**（V1.1.4 Story 1.2 AC2）。
+  ///
+  /// 与 [removeItem] 的区别是粒度：举报针对一条内容，拉黑针对一个人——只移除当前那张卡的话，
+  /// 同屏里他别的帖子还在，用户会觉得「拉黑没生效」。下次刷新以后端过滤为权威（Story 1.1 AC3）。
+  void removeByAuthor(int authorId) {
+    final current = state.value;
+    if (current == null) return;
+    final filtered = current.items.where((i) => i.authorId != authorId).toList();
+    if (filtered.length == current.items.length) return; // 当前列表没有他的内容：无操作
+    state = AsyncData(current.copyWith(items: filtered));
+  }
+
   /// 下拉刷新：重建首屏（重置游标）。
   Future<void> refresh() async {
     ref.invalidateSelf();

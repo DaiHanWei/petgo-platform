@@ -8,9 +8,11 @@ import com.tailtopia.profile.repository.HealthRecordRepository;
 import com.tailtopia.profile.repository.MilestoneCompletionRepository;
 import com.tailtopia.profile.repository.MilestoneShareRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
+import com.tailtopia.profile.repository.IdCardRepository;
 import com.tailtopia.profile.repository.PetMilestoneRepository;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.shared.media.PersonalMedia;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -33,12 +35,13 @@ public class ProfileDeletionService {
     private final MilestoneShareRepository milestoneShares;
     private final ContentPostRepository contentPosts;
     private final SerialAllocationService serialAllocation;
+    private final IdCardRepository idCards;
 
     public ProfileDeletionService(PetProfileRepository petProfiles, HealthEventRepository healthEvents,
             HealthRecordRepository healthRecords, PetMilestoneRepository petMilestones,
             MilestoneCompletionRepository milestoneCompletions,
             MilestoneShareRepository milestoneShares, ContentPostRepository contentPosts,
-            SerialAllocationService serialAllocation) {
+            SerialAllocationService serialAllocation, IdCardRepository idCards) {
         this.petProfiles = petProfiles;
         this.healthEvents = healthEvents;
         this.healthRecords = healthRecords;
@@ -47,6 +50,7 @@ public class ProfileDeletionService {
         this.milestoneShares = milestoneShares;
         this.contentPosts = contentPosts;
         this.serialAllocation = serialAllocation;
+        this.idCards = idCards;
     }
 
     @Transactional
@@ -78,6 +82,11 @@ public class ProfileDeletionService {
         petMilestones.deleteByPetProfileId(petId);
         // 里程碑对外分享（P-35 分享链接）：随档案删除，token 立即失效（防注销后仍可访问 H5）。
         milestoneShares.deleteByPetProfileId(petId);
+
+        // 身份证卡打标（V108，2026-08-19 决策 F21）：卡快照不删（决策③旧卡保留），但记录「档案已删」。
+        // 可见性在 IdCardService：付费卡恒可见；未付费卡隐藏，支付回调到账后自动重现（防支付时间差）。
+        // 注销路径（7.3）下 id_cards 行随 users FK 级联删除，本打标无害。
+        idCards.markProfileDeleted(userId, Instant.now());
 
         // 解绑成长帖（bug 20260702-237 / F18）：FK fk_content_posts_pet 无 ON DELETE，删 pet 前须先把
         // 引用它的 content_posts.pet_id 置 NULL，否则外键阻断（历史账号注销 deletionId=1 即栽在此）。

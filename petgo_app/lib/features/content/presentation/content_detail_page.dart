@@ -21,6 +21,7 @@ import '../domain/content_type.dart';
 import 'comment_composer.dart';
 import 'comment_section.dart';
 import 'detail_providers.dart';
+import 'author_moderation_callbacks.dart';
 import 'feed_controller.dart';
 import 'like_button.dart';
 import 'report_sheet.dart';
@@ -141,6 +142,7 @@ class _DetailScaffold extends ConsumerWidget {
                     CommentSection(
                       postId: postId,
                       currentUserId: currentUserId,
+                      postAuthorId: detail.authorId,
                       isContentAuthor: detail.isAuthor,
                     ),
                   ],
@@ -210,7 +212,15 @@ class _DetailScaffold extends ConsumerWidget {
     if (detail.authorDeleted) return row;
     return GestureDetector(
       key: const ValueKey('detailAuthorRow'),
-      onTap: () => showMiniProfile(context, ref, detail.authorId),
+      onTap: () => showMiniProfile(
+        context,
+        ref,
+        detail.authorId,
+        // 详情页拉黑 / 举报成功 → 该帖对本人已不可见（服务端返回 404），停在这一页只会看到一个空壳，
+        // 所以**先退回上一级列表**，再把他在列表里的卡片一并移除。举报侧一律静默。
+        onBlocked: onAuthorHidden(ref, detail.authorId, popContext: context),
+        onReported: onAuthorHidden(ref, detail.authorId, popContext: context),
+      ),
       child: row,
     );
   }
