@@ -17,8 +17,8 @@
         <a th:href="@{/admin/dashboard}" th:classappend="${active == 'dashboard'} ? 'active'"
            th:text="#{admin.nav.dashboard}">概览</a>
         <details class="nav-section"
-                 th:attr="open=${active == 'seed' or active == 'tickets' or active == 'content' or active == 'comments' or active == 'manual-review' or active == 'name-avatar-review' or active == 'users'} ? 'open' : null">
-            <summary th:classappend="${active == 'seed' or active == 'tickets' or active == 'content' or active == 'comments' or active == 'manual-review' or active == 'name-avatar-review' or active == 'users'} ? 'active'"
+                 th:attr="open=${active == 'seed' or active == 'tickets' or active == 'content' or active == 'comments' or active == 'manual-review' or active == 'users'} ? 'open' : null">
+            <summary th:classappend="${active == 'seed' or active == 'tickets' or active == 'content' or active == 'comments' or active == 'manual-review' or active == 'users'} ? 'active'"
                      th:text="#{admin.nav.group.content}">内容</summary>
             <div class="nav-sub">
                 <a th:href="@{/admin/seed-post}" th:classappend="${active == 'seed'} ? 'active'"
@@ -29,7 +29,7 @@
                      此前账号标识字段挤在这里只能看不能处置。名称/头像审核页已删除（列表并入人工复核）。 -->
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.view_tickets')"
                    th:href="@{/admin/tickets}" th:classappend="${active == 'tickets'} ? 'active'"
-                   th:text="#{admin.nav.tickets}">工单队列</a>
+                   th:text="#{admin.nav.tickets}">被举报用户</a>
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.proactive_takedown')"
                    th:href="@{/admin/content}" th:classappend="${active == 'content'} ? 'active'"
                    th:text="#{admin.nav.content}">内容管理</a>
@@ -38,7 +38,7 @@
                    th:text="#{admin.nav.comments}">评论管理</a>
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.manual_review')"
                    th:href="@{/admin/manual-review}" th:classappend="${active == 'manual-review'} ? 'active'"
-                   th:text="#{admin.nav.review}">人工审核</a>
+                   th:text="#{admin.nav.review}">人工复核</a>
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.view')"
                    th:href="@{/admin/users}" th:classappend="${active == 'users'} ? 'active'"
                    th:text="#{admin.nav.users}">用户</a>
