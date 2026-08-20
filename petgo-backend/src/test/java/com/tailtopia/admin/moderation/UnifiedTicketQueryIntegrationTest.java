@@ -174,6 +174,39 @@ class UnifiedTicketQueryIntegrationTest extends ApiIntegrationTest {
         assertThat(ids).containsExactly(loud.getId(), early.getId(), late.getId());
     }
 
+    /**
+     * 🔴 未处理优先是**最外层**排序键：一条分更高的**已处理**工单也得排在待处理之后。
+     *
+     * <p>2026-08-20 之前只有「分倒序 + 同分最早」，于是运营开页第一屏看到的是已经干完的活，
+     * 真要处理的被挤到下面，得先自己点一次状态筛选。待办列表的第一屏就该是待办。
+     *
+     * <p>造数刻意让顺序与分数**相反**：已处理那条 3 分、待处理那条 1 分。
+     * 只按分排会把已处理那条放前面 —— 排序键少了最外层那一级，这条就会红。
+     */
+    @Test
+    void pendingSortsAheadOfHandledEvenWhenHandledScoresHigher() {
+        String tag = "st" + Long.toString(SEQ.incrementAndGet(), 36);
+        User handled = renamed(newUser(), tag + "-done");    // 3 分，但已处理
+        User pending = renamed(newUser(), tag + "-todo");    // 1 分，待处理
+
+        for (int i = 0; i < 3; i++) {
+            reportTimes(newUser().getId(), handled.getId(), 1);
+        }
+        reportTimes(newUser().getId(), pending.getId(), 1);
+        jdbc.update("UPDATE account_reports SET status = 'RESOLVED' WHERE target_user_id = ?",
+                handled.getId());
+
+        List<UnifiedTicketRow> rows = query
+                .search(TicketType.ACCOUNT_REPORT, null, tag, PageRequest.of(0, 20)).getContent();
+
+        assertThat(rows).hasSize(2);
+        assertThat(rows.get(0).targetUserId()).isEqualTo(pending.getId());
+        assertThat(rows.get(0).status()).isEqualTo(TicketStatusBucket.PENDING);
+        assertThat(rows.get(0).score()).isEqualTo(1);      // 分更低，但排在前面
+        assertThat(rows.get(1).targetUserId()).isEqualTo(handled.getId());
+        assertThat(rows.get(1).score()).isEqualTo(3);
+    }
+
     private User renamed(User u, String nickname) {
         u.setNickname(nickname);
         return users.save(u);
