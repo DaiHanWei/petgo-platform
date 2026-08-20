@@ -87,12 +87,41 @@ class TicketDetailReporterIntegrationTest extends ApiIntegrationTest {
                         .with(authentication(adminAuth())))
                 .andReturn().getResponse().getContentAsString();
 
-        // 两个举报人各自的昵称与 id 都在
+        // 多于 1 条 → 原因区是聚合「原因 × 次数」
+        assertThat(html).as("原因聚合").contains("×1");
+        assertThat(html).as("两个原因都在").contains("OTHER").contains("IMPERSONATION");
+        // 明细折叠起来，但内容仍在页面里（<details> 默认收起，点开即见）
+        assertThat(html).as("折叠入口").contains("查看逐条");
         assertThat(html).as("举报人昵称").contains(tag + "-a").contains(tag + "-b");
         assertThat(html).as("举报人 id").contains("#" + first.getId()).contains("#" + second.getId());
-        // 两条各自的理由
-        assertThat(html).as("举报理由").contains("OTHER").contains("IMPERSONATION");
-        // 举报人填的补充说明（仅 OTHER 会落库）
-        assertThat(html).as("补充说明").contains("私信刷广告");
+        assertThat(html).as("补充说明（仅 OTHER 会落库）").contains("私信刷广告");
+    }
+
+    /**
+     * 只有 1 条举报 → **不折叠、不聚合**，那一条直接摊开。
+     *
+     * <p>聚合摘要（「原因 ×1」）与「查看逐条」的折叠入口对单条毫无意义：多点一次才看到唯一的一条，
+     * 纯属添乱。这条把「单条不折叠」钉住 —— 否则很容易为了少写一个分支而让两种情况共用折叠形态。
+     */
+    @Test
+    void singleReportIsShownExpandedWithoutFolding() throws Exception {
+        String tag = "sg" + Long.toString(SEQ.incrementAndGet(), 36);
+        User target = newUser();
+        User only = renamed(newUser(), tag + "-solo");
+
+        accountReports.submit(only.getId(), target.getId(), AccountReportReason.SPAM, null);
+        long reportId = reports.findByTargetUserId(target.getId()).orElseThrow().getId();
+
+        String html = mvc.perform(get("/admin/tickets/detail")
+                        .param("type", "ACCOUNT_REPORT")
+                        .param("sourceId", String.valueOf(reportId))
+                        .param("userId", String.valueOf(target.getId()))
+                        .param("lang", "zh_CN")
+                        .with(authentication(adminAuth())))
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(html).as("单条也要看得到是谁报的").contains(tag + "-solo").contains("SPAM");
+        assertThat(html).as("单条不该有折叠入口").doesNotContain("查看逐条");
+        assertThat(html).as("单条不该显示「×次数」聚合").doesNotContain("×1");
     }
 }

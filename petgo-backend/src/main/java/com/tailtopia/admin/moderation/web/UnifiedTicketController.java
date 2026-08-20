@@ -166,6 +166,17 @@ public class UnifiedTicketController {
             entries = List.of();
         }
         model.addAttribute("entries", entries);
+        // 多于 1 条时页面只显示「原因 × 次数」，逐条明细折叠起来（2026-08-20 产品口径）：
+        // 十几个人举报同一个对象时，逐条列出来的那一屏没人会一行行读，真正要看的是「都在报什么」。
+        // 次数倒序、同次数按原因名稳定排序 —— 别让同一份数据两次打开顺序不同。
+        model.addAttribute("reasonCounts", entries.stream()
+                .collect(java.util.stream.Collectors.groupingBy(ReportEntryView::reason,
+                        java.util.TreeMap::new, java.util.stream.Collectors.counting()))
+                .entrySet().stream()
+                .map(e -> new ReasonCount(e.getKey(), e.getValue()))
+                .sorted(java.util.Comparator.comparingLong(ReasonCount::count).reversed()
+                        .thenComparing(ReasonCount::reason))
+                .toList());
 
         if (userId != null) {
             model.addAttribute("signature", accountQueryService.activeSignatureOf(userId).orElse(null));
@@ -405,6 +416,16 @@ public class UnifiedTicketController {
      * 展开详情「每一次举报」的统一行形状：账号举报直接用实体（reason/createdAt/detail 同名），
      * 内容举报映射到本 record —— 两类共用模板同一段循环。
      */
+    /**
+     * 「原因 × 次数」的一行（多于 1 条举报时的聚合摘要）。
+     *
+     * @param reason 举报原因枚举名
+     * @param count  该原因被报了多少**次**（不是多少人）—— 人数/次数/高频人数三个数在**行上**
+     *               已经分列给出，这里只回答「都在报什么」
+     */
+    public record ReasonCount(String reason, long count) {
+    }
+
     /**
      * 展开面板里「每一次举报」的一行。两类举报映射成同一形状复用同一段模板。
      *
