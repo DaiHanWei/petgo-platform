@@ -76,9 +76,11 @@
 - **换人**：未经 guest 直接切到另一账号 → 先 `reset()` 再 `identify()`（遵守 PostHog 换人先 reset 规约）。
 - **reset**：登出 / 续期失败回到 guest 且此前确有身份 → `reset()`。纯游客态抖动不 reset，保住匿名漏斗连续性。
 
-**distinctId = `sha256("tailtopia-user-" + 内部用户id)`**（`analytics.dart:115`），不传任何 `userProperties`。
+**distinctId = `sha256("tailtopia-user-" + 内部用户id)`**（`analytics.dart`），并以 person property 额外携带明文数字 id：`userProperties: {internal_user_id: <id>}`。除此之外不传任何其它 `userProperties`。
 
-已知取舍（代码注释里写明）：这是**无盐** sha256，持 PostHog 读权限的人可以暴力反推回内部自增 id。V1 接受——该 id 既非 PII 也非健康数据，且 distinctId 不是对外 API 面无枚举风险。若要真正不可枚举，应由后端下发不透明分析 token。
+已知取舍（代码注释里写明）：distinctId 是**无盐** sha256，持 PostHog 读权限的人本可以暴力反推回内部自增 id。V1 接受——该 id 既非 PII 也非健康数据，且 distinctId 不是对外 API 面无枚举风险。
+
+**「自增 id 不外露」护栏的 PostHog 专项豁免（2026-08-18 拍板）**：`internal_user_id` 明文随 identify 上报——既然无盐哈希本可被反推，明文不增加实际暴露面，而运营在 PostHog 需要按数字 id 直接定位用户。**豁免边界**：只限 PostHog 这一家；AppsFlyer CUID 等其它第三方仍只传哈希；对外 API 面仍一律不可枚举 token；username/昵称/邮箱/手机号照旧一概不传。若未来要收紧，替代方案是后端下发不透明分析 token（HMAC 映射）。
 
 ---
 

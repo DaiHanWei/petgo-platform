@@ -121,6 +121,18 @@ public class ReportService {
         reports.save(r);
     }
 
+    /** 某帖全部待处理举报单（统一工单队列按帖驳回用）。 */
+    @Transactional(readOnly = true)
+    public List<ContentReport> findPendingForPost(long postId) {
+        return reports.findByPostIdAndStatus(postId, ReportStatus.PENDING);
+    }
+
+    /** 某帖全部举报单（统一工单队列展开详情：逐条列原因与时间，倒序）。 */
+    @Transactional(readOnly = true)
+    public List<ContentReport> findAllForPost(long postId) {
+        return reports.findByPostIdOrderByCreatedAtDesc(postId);
+    }
+
     /**
      * 内容被下架时，把该帖所有 PENDING 举报单一并置 RESOLVED，避免已下架内容仍残留在待处理队列
      * （bug 20260630-155；同时解决同帖多举报单只关一条的隐患）。返回本次处理条数。

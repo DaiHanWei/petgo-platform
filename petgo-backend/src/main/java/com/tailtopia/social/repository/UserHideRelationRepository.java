@@ -42,4 +42,20 @@ public interface UserHideRelationRepository extends JpaRepository<UserHideRelati
 
     /** 删除指定来源的那一行；返回受影响行数（解除拉黑只删 BLOCK 行）。 */
     long deleteByHolderIdAndTargetIdAndSource(long holderId, long targetId, HideSource source);
+
+    /**
+     * 同源幂等插入：已存在则什么都不做（不刷新时间戳），返回实际插入行数。
+     *
+     * <p>⚠️ 必须用 {@code ON CONFLICT DO NOTHING} 而不是「save + catch 唯一约束异常」——
+     * 约束异常穿出 repo 代理时共享事务已被标记 rollback-only，catch 了也救不回来，
+     * 外层提交时 UnexpectedRollbackException → 500（并发双击拉黑就能触发）。
+     */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value = """
+            INSERT INTO user_hide_relations (holder_id, target_id, source, created_at, updated_at)
+            VALUES (:holderId, :targetId, :source, now(), now())
+            ON CONFLICT (holder_id, target_id, source) DO NOTHING
+            """, nativeQuery = true)
+    int insertIfAbsent(@Param("holderId") long holderId, @Param("targetId") long targetId,
+            @Param("source") String source);
 }

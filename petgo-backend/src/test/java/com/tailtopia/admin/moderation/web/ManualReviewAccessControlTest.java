@@ -48,8 +48,15 @@ class ManualReviewAccessControlTest {
         }
 
         @Bean
-        ManualReviewAdminController controller(ManualReviewService r, AdminSettingsService s) {
-            return new ManualReviewAdminController(r, s);
+        com.tailtopia.admin.moderation.service.UnifiedTicketQueryService ticketQuery() {
+            return org.mockito.Mockito.mock(
+                    com.tailtopia.admin.moderation.service.UnifiedTicketQueryService.class);
+        }
+
+        @Bean
+        ManualReviewAdminController controller(ManualReviewService r, AdminSettingsService s,
+                com.tailtopia.admin.moderation.service.UnifiedTicketQueryService q) {
+            return new ManualReviewAdminController(r, s, q);
         }
     }
 
@@ -82,7 +89,8 @@ class ManualReviewAccessControlTest {
     }
 
     private void queue() {
-        controller.queue(null, new ConcurrentModel());
+        // 2026-08-19：queue() 增加了复核列表的筛选参数（type/status/q/page）。
+        controller.queue(null, null, null, 0, null, new ConcurrentModel());
     }
 
     private void toggle() {

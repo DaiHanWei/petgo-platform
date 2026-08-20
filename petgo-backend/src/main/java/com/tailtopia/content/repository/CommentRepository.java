@@ -71,6 +71,12 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
      *   <li>评论作者本人视角下数字比他人多 1，是影子机制的固有特性，<b>可接受、不要去「修」</b>（A-A21）。</li>
      * </ul>
      *
+     * <p><b>⚠️「父被隐藏 → 整串回复也不计数」（AC4 传递条件，评审三轮 #4）：</b>
+     * 回复行（{@code parentId IS NOT NULL}）额外要求其父评论<b>自身可见</b>（父未删 + 对本 viewer 可见 +
+     * 不被 R1 拉黑 + 不被 R2 影子）。渲染路径三处（{@code findTopLevel} 过滤父、回复取自已过滤的父、
+     * 展开端点判父隐藏）都让父不可见时整串消失；计数少了这一层就会「标题 (3) 下面空空」——
+     * AD-13 首要要防的拉黑泄底。同时覆盖父被软删的回复（父不在 {@code findTopLevel} 里，回复也不该计）。
+     *
      * <p>⚠️ AD-13 的「评论数」那一条里，「同步套用 R1 + R2」与「R1 隐藏的评论照常计入」写在同一句里，
      * 字面互斥。按<b>该条自己列的 Prevents 首项</b>（防「显示 5 条却只数得出 4 条」）裁定为上面两层的分工，
      * 已回写 {@code CROSS-STORY-DECISIONS.md}。若产品要改成另一种读法，改的是本方法的 R1 那两行 WHERE。
@@ -86,6 +92,17 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
               AND ((:hasViewer = true AND c.authorId = :viewerId)
                    OR NOT EXISTS (SELECT 1 FROM UserHideRelation h2
                                   WHERE h2.holderId = :postAuthorId AND h2.targetId = c.authorId))
+              AND (c.parentId IS NULL
+                   OR EXISTS (SELECT 1 FROM Comment p
+                              WHERE p.id = c.parentId AND p.deletedAt IS NULL
+                                AND (p.moderationStatus = com.tailtopia.content.domain.CommentModerationStatus.VISIBLE
+                                     OR (:viewerId IS NOT NULL AND p.authorId = :viewerId))
+                                AND (:hasViewer = false
+                                     OR NOT EXISTS (SELECT 1 FROM UserHideRelation hp
+                                                    WHERE hp.holderId = :viewerId AND hp.targetId = p.authorId))
+                                AND ((:hasViewer = true AND p.authorId = :viewerId)
+                                     OR NOT EXISTS (SELECT 1 FROM UserHideRelation hp2
+                                                    WHERE hp2.holderId = :postAuthorId AND hp2.targetId = p.authorId))))
             """)
     long countVisibleForViewer(@Param("postId") long postId,
             @Param("hasViewer") boolean hasViewer,

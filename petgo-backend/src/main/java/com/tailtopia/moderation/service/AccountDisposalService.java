@@ -2,12 +2,15 @@ package com.tailtopia.moderation.service;
 
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
+import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.auth.service.AuthService;
 import com.tailtopia.moderation.domain.AccountDisposal;
 import com.tailtopia.moderation.domain.AccountDisposalType;
 import com.tailtopia.moderation.domain.AccountReport;
 import com.tailtopia.moderation.domain.AccountReportStatus;
+import com.tailtopia.moderation.event.ReportResolvedEvent;
 import com.tailtopia.moderation.repository.AccountDisposalRepository;
+import com.tailtopia.moderation.repository.AccountReportEntryRepository;
 import com.tailtopia.moderation.repository.AccountReportRepository;
 import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.notify.service.NotificationService;
@@ -16,6 +19,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,9 +57,12 @@ public class AccountDisposalService {
 
     private final AccountDisposalRepository disposals;
     private final AccountReportRepository reports;
+    private final AccountReportEntryRepository entries;
     private final AuthService authService;
     private final NotificationService notificationService;
     private final AdminAuditService auditService;
+    private final AccountQueryService accountQuery;
+    private final ApplicationEventPublisher events;
 
     /**
      * ⚠️ 自引用代理（批量逐条调用用）。
@@ -67,13 +74,18 @@ public class AccountDisposalService {
     private final ObjectProvider<AccountDisposalService> selfProvider;
 
     public AccountDisposalService(AccountDisposalRepository disposals, AccountReportRepository reports,
-            AuthService authService, NotificationService notificationService,
-            AdminAuditService auditService, ObjectProvider<AccountDisposalService> selfProvider) {
+            AccountReportEntryRepository entries, AuthService authService,
+            NotificationService notificationService, AdminAuditService auditService,
+            AccountQueryService accountQuery, ApplicationEventPublisher events,
+            ObjectProvider<AccountDisposalService> selfProvider) {
         this.disposals = disposals;
         this.reports = reports;
+        this.entries = entries;
         this.authService = authService;
         this.notificationService = notificationService;
         this.auditService = auditService;
+        this.accountQuery = accountQuery;
+        this.events = events;
         this.selfProvider = selfProvider;
     }
 
@@ -151,17 +163,20 @@ public class AccountDisposalService {
      */
     @Transactional
     public void warn(long targetUserId, Long reportId, long actorAccountId) {
+        requireDisposalTarget(targetUserId, reportId);
         // ① 先落记录 —— 顺序不能反（见类注释）。
         disposals.save(AccountDisposal.create(targetUserId, AccountDisposalType.WARNING,
                 actorAccountId, reportId));
-        // ② 再触发后果。
-        notificationService.send(targetUserId, NotificationType.ACCOUNT_WARNED,
-                "账号警告", "你的账号因违反 TailTopia 社区规范收到一次警告，请遵守社区规范",
-                NotificationType.ACCOUNT_WARNED.name(), null);
+        // ② 收档 + 审计。
         resolveTicket(reportId, actorAccountId);
         // ⚠️ summary 里严禁 PII / 内容原文 / 令牌。
         auditService.record(actorAccountId, AuditActions.ACCOUNT_WARNED, "USER",
                 String.valueOf(targetUserId), "账号警告（工单 " + (reportId == null ? "-" : reportId) + "）");
+        // ③ 通知必须排最后：send 是 REQUIRES_NEW（立即独立提交并推送、回滚不撤回），
+        //    放在收档/审计之前的话，后两步一旦失败回滚，用户已经收到了一条「假处置」通知。
+        notificationService.send(targetUserId, NotificationType.ACCOUNT_WARNED,
+                "账号警告", "你的账号因违反 TailTopia 社区规范收到一次警告，请遵守社区规范",
+                NotificationType.ACCOUNT_WARNED.name(), null);
     }
 
     /**
@@ -189,15 +204,18 @@ public class AccountDisposalService {
      */
     @Transactional
     public void suspend(long targetUserId, Long reportId, long actorAccountId) {
+        requireDisposalTarget(targetUserId, reportId);
         disposals.save(AccountDisposal.create(targetUserId, AccountDisposalType.SUSPEND,
                 actorAccountId, reportId));
         authService.deactivateUser(targetUserId); // 置 DEACTIVATED + 撤销 refresh 句柄
-        notificationService.send(targetUserId, NotificationType.ACCOUNT_SUSPENDED,
-                "账号已停用", "你的账号因违反 TailTopia 社区规范已被停用。如有异议，请联系客服团队。",
-                NotificationType.ACCOUNT_SUSPENDED.name(), null);
         resolveTicket(reportId, actorAccountId);
         auditService.record(actorAccountId, AuditActions.ACCOUNT_SUSPENDED, "USER",
                 String.valueOf(targetUserId), "账号停用（工单 " + (reportId == null ? "-" : reportId) + "）");
+        // 通知必须排最后：send 是 REQUIRES_NEW（立即独立提交并推送、回滚不撤回），
+        // 放在收档/审计之前的话，后两步一旦失败回滚停用，用户却已收到「账号已停用」的假通知。
+        notificationService.send(targetUserId, NotificationType.ACCOUNT_SUSPENDED,
+                "账号已停用", "你的账号因违反 TailTopia 社区规范已被停用。如有异议，请联系客服团队。",
+                NotificationType.ACCOUNT_SUSPENDED.name(), null);
     }
 
     /**
@@ -208,12 +226,15 @@ public class AccountDisposalService {
      */
     @Transactional
     public void dismiss(long reportId, long actorAccountId) {
-        AccountReport report = reports.findById(reportId)
+        AccountReport report = reports.findByIdForUpdate(reportId) // 行级写锁串行化（#5）
                 .orElseThrow(() -> AppException.notFound("工单不存在"));
+        requirePending(report); // 过期页面/并发重放守卫（评审三轮 #3）
+        Instant boundary = report.getHandledAt(); // 上次处置时刻，回告只覆盖此后的新举报人（#7）
         report.handleBy(actorAccountId, AccountReportStatus.DISMISSED);
         reports.save(report);
         auditService.record(actorAccountId, AuditActions.ACCOUNT_REPORT_DISMISSED, "ACCOUNT_REPORT",
                 String.valueOf(reportId), "账号举报工单无需处置");
+        notifyReporters(reportId, boundary); // FR-51 回告：驳回与处置文案完全一致（模糊，不透露结果）
     }
 
     /**
@@ -227,9 +248,66 @@ public class AccountDisposalService {
             return; // 运营主动巡查的处置，没有关联工单
         }
         reports.findById(reportId).ifPresent(r -> {
+            Instant boundary = r.getHandledAt(); // 上次处置时刻（首次处置为 null）
             r.handleBy(actorAccountId, AccountReportStatus.RESOLVED);
             reports.save(r);
+            notifyReporters(reportId, boundary); // FR-51 回告：仅本周期的新举报人
         });
+    }
+
+    /**
+     * FR-51 举报处理回告：向<b>本处置周期内</b>的每个去重举报人发布 {@link ReportResolvedEvent}。
+     * 复用内容举报同一事件/监听器（文案模糊、下架与驳回完全一致，不透露处置结果）；
+     * 监听器 AFTER_COMMIT 消费，事务回滚则不发——与「通知排最后」的原则同构。
+     *
+     * <p>⚠️ 以 {@code boundary}（上次处置时刻）为界只回告此后的新举报人（评审三轮 #7）：
+     * 工单每次 AC9 翻面再处置，若扫全量明细会把几个月前早已收到回告的历史举报人再通知一遍，
+     * 变成「毫无动作却又收到举报已处理」的幽灵通知。首次处置 boundary 为 null → 覆盖全部。
+     */
+    private void notifyReporters(long reportId, Instant boundary) {
+        Instant now = Instant.now();
+        List<Long> reporterIds = boundary == null
+                ? entries.findDistinctReporterIds(reportId)
+                : entries.findDistinctReporterIdsAfter(reportId, boundary);
+        for (Long reporterId : reporterIds) {
+            events.publishEvent(new ReportResolvedEvent(reportId, reporterId, now));
+        }
+    }
+
+    /**
+     * 单条处置表单的两道服务端校验（表单字段在浏览器里可以随便改，前端一致性不算数）：
+     * <ul>
+     *   <li><b>目标账号必须存在</b>——否则 disposals 的 FK 在提交时才炸成 500；</li>
+     *   <li><b>工单必须属于该账号</b>——否则「警告 X 却关掉 Y 的工单」：Y 的举报凭空消失，
+     *       account_disposals 行还永久引用错误工单，污染处置证据链。</li>
+     * </ul>
+     */
+    private void requireDisposalTarget(long targetUserId, Long reportId) {
+        if (accountQuery.findUserById(targetUserId).isEmpty()) {
+            throw AppException.notFound("用户不存在");
+        }
+        if (reportId != null) {
+            // 取行级写锁（评审三轮 #5/#3）：锁在任何处置副作用之前，与举报提交及并发处置串行化，
+            // 锁一直持有到本事务结束。
+            AccountReport report = reports.findByIdForUpdate(reportId)
+                    .orElseThrow(() -> AppException.notFound("工单不存在"));
+            if (report.getTargetUserId() != targetUserId) {
+                throw AppException.validation("工单与被处置账号不匹配，请刷新列表后重试");
+            }
+            requirePending(report);
+        }
+    }
+
+    /**
+     * 工单必须仍在待处理（评审三轮 #3）。按钮只在渲染时看 PENDING，过期页面或双运营并发会拿着
+     * 已处置工单再点一次 —— handleBy 盲覆盖 status 会完整重放副作用链（二次推送不可撤回、虚增
+     * 处置数、重发回告），甚至把 RESOLVED 翻成 DISMISSED 让审计与工单态自相矛盾。
+     * 调用方已在同事务内持有该行写锁，此判定在锁内做，真并发也安全。
+     */
+    private static void requirePending(AccountReport report) {
+        if (report.getStatus() != AccountReportStatus.PENDING) {
+            throw AppException.validation("该工单已被处理，请刷新列表后重试");
+        }
     }
 
     /** 某账号历史被处置次数（含<b>每一次警告</b>——只数封号会漏掉「已经警告过三次」这种关键背景）。 */

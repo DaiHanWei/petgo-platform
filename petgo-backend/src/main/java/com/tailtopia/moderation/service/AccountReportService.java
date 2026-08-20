@@ -5,11 +5,11 @@ import com.tailtopia.moderation.domain.AccountReportEntry;
 import com.tailtopia.moderation.domain.AccountReportReason;
 import com.tailtopia.moderation.repository.AccountReportEntryRepository;
 import com.tailtopia.moderation.repository.AccountReportRepository;
+import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.social.service.UserHideRelationService;
 import java.time.Duration;
 import java.time.Instant;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,12 +47,14 @@ public class AccountReportService {
     private final AccountReportRepository reports;
     private final AccountReportEntryRepository entries;
     private final UserHideRelationService hideRelations;
+    private final AccountQueryService accountQuery;
 
     public AccountReportService(AccountReportRepository reports, AccountReportEntryRepository entries,
-            UserHideRelationService hideRelations) {
+            UserHideRelationService hideRelations, AccountQueryService accountQuery) {
         this.reports = reports;
         this.entries = entries;
         this.hideRelations = hideRelations;
+        this.accountQuery = accountQuery;
     }
 
     /**
@@ -74,6 +76,11 @@ public class AccountReportService {
         if (reporterId == targetUserId) {
             throw AppException.validation("不能举报自己");
         }
+        // 目标不存在（伪造/陈旧 id）→ 404：不校验的话 INSERT 撞 FK，事务被标记 rollback-only → 500。
+        // 注销用户是软删（users 行仍在），照常可举报。
+        if (accountQuery.findUserById(targetUserId).isEmpty()) {
+            throw AppException.notFound("用户不存在");
+        }
         String normalizedDetail = normalizeDetail(reason, detail);
 
         AccountReport report = upsertTicket(targetUserId);
@@ -93,21 +100,19 @@ public class AccountReportService {
     /**
      * 找到该账号的工单，没有就建一条；<b>已处置的翻回待处置</b>（AC9），绝不新建第二条。
      *
-     * <p>并发下两个举报人可能同时通过 findBy 检查，此时由 {@code uq_account_reports_target_user}
-     * 兜底 —— 捕获后重新读出胜出线程建的那条，与串行结果一致。
+     * <p>并发安全由数据库单语句 {@code ON CONFLICT DO NOTHING} 保证：并发首报时败方的插入
+     * 会等胜方提交后落到 DO NOTHING，随后的 find 一定读到那条工单——与串行结果一致，
+     * 全程无异常路径。⚠️ 不要改回「saveAndFlush + catch 唯一约束异常」：异常穿出 repo 代理时
+     * 共享事务已被标记 rollback-only，catch 内的任何查询都在已 abort 的事务里再抛 → 500。
      */
     private AccountReport upsertTicket(long targetUserId) {
-        AccountReport existing = reports.findByTargetUserId(targetUserId).orElse(null);
-        if (existing != null) {
-            existing.reopenIfHandled();
-            return reports.save(existing);
-        }
-        try {
-            return reports.saveAndFlush(AccountReport.create(targetUserId));
-        } catch (DataIntegrityViolationException e) {
-            return reports.findByTargetUserId(targetUserId)
-                    .orElseThrow(() -> AppException.conflict("举报提交冲突，请重试"));
-        }
+        reports.insertIfAbsent(targetUserId);
+        // ⚠️ 取行级写锁再读（评审三轮 #5）：与运营处置路径串行化——处置进行中，本次提交阻塞到
+        // 处置事务提交后才读到 RESOLVED，reopenIfHandled 才能正确翻回 PENDING，避免新举报静默丢失。
+        AccountReport report = reports.findByTargetUserIdForUpdate(targetUserId)
+                .orElseThrow(() -> AppException.conflict("举报提交冲突，请重试"));
+        report.reopenIfHandled();
+        return reports.save(report);
     }
 
     /**

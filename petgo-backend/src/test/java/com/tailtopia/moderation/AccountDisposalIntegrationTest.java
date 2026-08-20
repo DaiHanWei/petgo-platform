@@ -1,6 +1,7 @@
 package com.tailtopia.moderation;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.tailtopia.auth.domain.User;
 import com.tailtopia.auth.domain.UserStatus;
@@ -16,6 +17,7 @@ import com.tailtopia.moderation.repository.AccountDisposalRepository;
 import com.tailtopia.moderation.repository.AccountReportRepository;
 import com.tailtopia.moderation.service.AccountDisposalService;
 import com.tailtopia.moderation.service.AccountReportService;
+import com.tailtopia.shared.error.AppException;
 import com.tailtopia.notify.repository.NotificationRepository;
 import com.tailtopia.support.ApiIntegrationTest;
 import java.util.List;
@@ -89,14 +91,26 @@ class AccountDisposalIntegrationTest extends ApiIntegrationTest {
      *
      * <p>三次警告就是三条记录 + 三条通知。累计到任何次数都不会自动封号 ——
      * 自动升级等于把处置权交给一个谁都没审过的阈值，是否升级由运营看着历史记录人工判断。
+     *
+     * <p><b>2026-08-20 口径澄清</b>：这三次警告分别来自<b>三次举报</b>，不是对着同一张
+     * 已处理工单连点三下。同一张工单处置完就转 RESOLVED，再处置会被
+     * {@code requirePending} 挡掉（见下一条用例）—— 那道守卫防的是运营停在过期页面上
+     * 重复提交、以及并发重放。该账号<b>又被举报</b>时，工单经 {@code reopenIfHandled()}
+     * 翻回待处置，这才是「再警告一次」的正当入口。
+     *
+     * <p>工单粒度是「被举报账号」（{@code target_user_id} 唯一），所以「新工单」在库里
+     * 仍是同一行被重开，不会长出第二行。
      */
     @Test
     void ac4_repeatedWarningsAreNeverMergedAndNeverAutoEscalate() {
         User target = newUser();
-        long ticket = reportedTicketFor(target);
 
+        // 每次警告前都有一次新举报把工单翻回待处置（reportedTicketFor 每次换一个举报人）。
+        long ticket = reportedTicketFor(target);
         disposalService.warn(target.getId(), ticket, 1L);
+        assertThat(reportedTicketFor(target)).isEqualTo(ticket); // 同一张工单被重开，不是新行
         disposalService.warn(target.getId(), ticket, 1L);
+        reportedTicketFor(target);
         disposalService.warn(target.getId(), ticket, 1L);
 
         assertThat(disposals.countByTargetUserId(target.getId())).isEqualTo(3);
@@ -105,6 +119,29 @@ class AccountDisposalIntegrationTest extends ApiIntegrationTest {
         // 三次警告之后账号依然是正常状态——没有任何自动封号。
         assertThat(userRepo.findById(target.getId()).orElseThrow().getStatus())
                 .isEqualTo(UserStatus.ACTIVE);
+    }
+
+    /**
+     * 🔒 同一张<b>已处理</b>工单不得再处置（过期页面重复提交 / 并发重放守卫）。
+     *
+     * <p>与上一条是一对：AC4 允许「多次警告」，但入口是<b>新举报把工单重开</b>，
+     * 不是对着一张处理完的工单再点一次。这条把界线钉住 —— 少了它，谁都可能
+     * 把守卫当成「妨碍 AC4」而放宽回去，于是运营刷新慢一步就白警告第二次。
+     */
+    @Test
+    void samePendingTicketCannotBeDisposedTwice() {
+        User target = newUser();
+        long ticket = reportedTicketFor(target);
+
+        disposalService.warn(target.getId(), ticket, 1L);
+
+        assertThatThrownBy(() -> disposalService.warn(target.getId(), ticket, 1L))
+                .isInstanceOf(AppException.class)
+                .hasMessageContaining("已被处理");
+
+        // 被挡掉的那次没有留下任何痕迹：一条记录、一条通知。
+        assertThat(disposals.countByTargetUserId(target.getId())).isEqualTo(1);
+        assertThat(notificationTypesOf(target.getId())).containsExactly("ACCOUNT_WARNED");
     }
 
     // ===== AC5 · 封号 =====

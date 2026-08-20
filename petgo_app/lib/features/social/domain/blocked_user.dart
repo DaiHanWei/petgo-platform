@@ -34,6 +34,8 @@ class BlockedUser {
         avatarUrl: json['avatarUrl'] as String?,
         deleted: (json['deleted'] ?? false) as bool,
         reported: (json['reported'] ?? false) as bool,
-        blockedAt: DateTime.parse(json['blockedAt'] as String),
+        // 后端 Instant 是 UTC，必须 toLocal 再展示（评审三轮 #10）——否则 WIB 用户凌晨拉黑会
+        // 显示成前一天。与 App 内其它绝对日期路径（订单/客服/身份证）一致，格式化前先转本地。
+        blockedAt: DateTime.parse(json['blockedAt'] as String).toLocal(),
       );
 }

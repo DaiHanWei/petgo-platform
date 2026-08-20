@@ -710,6 +710,10 @@
   "@notifyBodyReportReviewed": {"description": "Notification center body for REPORT_REVIEWED. ⚠️ Deliberately changed in V1.1.4 Story 3.4 to the wording signed off in the PRD (was: \"Thanks for your report. We've completed our review.\"). This is NOT a bug — do not revert. The same sentence also lives in the backend's ModerationNotifyListener and messages_*.properties; all three must stay in sync."},
   "notifyGroupToday": "Today",
   "notifyGroupEarlier": "Earlier",
+  "notifyMarkAllRead": "Mark all as read",
+  "@notifyMarkAllRead": {"description": "Notification center: top-right action, marks every notification read (no confirmation)"},
+  "notifyLoadMoreRetry": "Failed to load more · Tap to retry",
+  "@notifyLoadMoreRetry": {"description": "Notification center: retry link at list bottom when loading the next page failed"},
   "notifyTimeJustNow": "Just now",
   "notifyTimeMinutesAgo": "{count}m ago",
   "@notifyTimeMinutesAgo": {

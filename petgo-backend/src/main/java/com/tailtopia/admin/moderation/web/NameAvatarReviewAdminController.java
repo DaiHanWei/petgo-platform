@@ -1,32 +1,27 @@
 package com.tailtopia.admin.moderation.web;
 
-import com.tailtopia.admin.moderation.dto.AvatarReviewRow;
-import com.tailtopia.admin.moderation.dto.NameReviewRow;
-import com.tailtopia.admin.moderation.dto.ViolationCounts;
-import com.tailtopia.admin.moderation.read.ViolationCountReader;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.avatarmoderation.domain.AvatarDecision;
-import com.tailtopia.avatarmoderation.domain.AvatarSubjectType;
 import com.tailtopia.avatarmoderation.service.AvatarModerationService;
 import com.tailtopia.content.moderation.ModerationDecision;
-import com.tailtopia.namemoderation.domain.NameTargetType;
-import com.tailtopia.namemoderation.service.NameModerationService;
-import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.shared.error.AppException;
-import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 /**
- * 名称/头像违规处置控制台（内容审核 story 8，§5.2/§6.2）。SSR（Thymeleaf），{@code /admin/name-avatar-review}。
+ * 名称/头像违规**处置端点**（内容审核 story 8，§5.2/§6.2）。
+ *
+ * <p>🔴 <b>2026-08-19：页面已删除，本类只剩处置端点。</b> 待审列表已并入「人工复核」页
+ * （{@code /admin/manual-review}）的混排列表 —— 原先「统一工单页能看不能处置、处置得去另一个页面」
+ * 的割裂就是从这里来的。本类**刻意保留**：头像处置端点<b>仅此一处</b>
+ *（名称处置在 {@code /admin/name-moderation/{recordId}/decide}，另一个控制器），
+ * 删掉它等于删掉头像判违规的唯一入口。
  *
  * <p><b>增量边界</b>：待审列表数据来自 story 4 {@link NameModerationService#pendingQueue()} / story 5
  * {@link AvatarModerationService#pendingQueue()}（{@code MANUAL_PENDING} 记录）；重置领域逻辑归 story 4/5，
@@ -42,27 +37,10 @@ public class NameAvatarReviewAdminController {
 
     private static final String AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')";
 
-    private final NameModerationService nameService;
     private final AvatarModerationService avatarService;
-    private final ViolationCountReader violationCounts;
-    private final PetProfileRepository petProfiles;
 
-    public NameAvatarReviewAdminController(NameModerationService nameService,
-            AvatarModerationService avatarService, ViolationCountReader violationCounts,
-            PetProfileRepository petProfiles) {
-        this.nameService = nameService;
+    public NameAvatarReviewAdminController(AvatarModerationService avatarService) {
         this.avatarService = avatarService;
-        this.violationCounts = violationCounts;
-        this.petProfiles = petProfiles;
-    }
-
-    @GetMapping("/admin/name-avatar-review")
-    @PreAuthorize(AUTH)
-    public String page(Model model) {
-        model.addAttribute("active", "name-avatar-review");
-        model.addAttribute("nameRows", nameRows());
-        model.addAttribute("avatarRows", avatarRows());
-        return "admin/name-avatar-review";
     }
 
     /**
@@ -87,39 +65,6 @@ public class NameAvatarReviewAdminController {
     }
 
     // ---------- 视图行构造（含违规计数解析） ----------
-
-    private List<NameReviewRow> nameRows() {
-        return nameService.pendingQueue().stream().map(r -> new NameReviewRow(
-                r.getId(), r.getTargetType().name(), r.getSubmittedValue(), r.getRiskScore(),
-                r.getSubmittedAt(), nameStrikes(r.getTargetType(), r.getTargetRefId()))).toList();
-    }
-
-    private List<AvatarReviewRow> avatarRows() {
-        return avatarService.pendingQueue().stream().map(r -> new AvatarReviewRow(
-                r.getId(), r.getSubjectType().name(), r.getAvatarUrl(), r.getRiskScore(),
-                r.getCreatedAt(), avatarStrikes(r.getSubjectType(), r.getSubjectId()))).toList();
-    }
-
-    /** 名称行作者账号：昵称 → 目标即 users.id；宠物名 → 解析 owner。空则空计数。 */
-    private ViolationCounts nameStrikes(NameTargetType type, long targetRefId) {
-        Long account = type == NameTargetType.NICKNAME ? targetRefId : ownerOfPet(targetRefId);
-        return strikesFor(account);
-    }
-
-    /** 头像行作者账号：用户头像 → subject 即 users.id；宠物头像 → 解析 owner。空则空计数。 */
-    private ViolationCounts avatarStrikes(AvatarSubjectType type, long subjectId) {
-        Long account = type == AvatarSubjectType.USER_AVATAR ? subjectId : ownerOfPet(subjectId);
-        return strikesFor(account);
-    }
-
-    private Long ownerOfPet(long petProfileId) {
-        return petProfiles.findById(petProfileId).map(p -> p.getOwnerId()).orElse(null);
-    }
-
-    private ViolationCounts strikesFor(Long account) {
-        return account == null ? ViolationCounts.empty()
-                : ViolationCounts.fromMap(violationCounts.countsFor(account));
-    }
 
     private static AvatarDecision parseAvatarDecision(String raw) {
         if (raw == null) {

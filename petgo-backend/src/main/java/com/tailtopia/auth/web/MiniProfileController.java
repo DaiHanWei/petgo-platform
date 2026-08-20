@@ -47,6 +47,12 @@ public class MiniProfileController {
             throw AppException.blockedUser("你已拉黑该用户");
         }
         AuthorView author = accountQueryService.findAuthorViews(java.util.List.of(userId)).get(userId);
+        // 该 id 根本不存在 → 投影里没有这一行，get 返回 null。必须显式 404：
+        // 直接点 author.deleted() 会 NPE，对外表现是 500（还会把「查了个不存在的 id」这件事
+        // 变成一条堆栈日志）。注销与不存在都不外泄身份信息，但状态码不能混。
+        if (author == null) {
+            throw AppException.notFound("用户不存在");
+        }
         if (author.deleted()) {
             return MiniProfileResponse.deactivated(); // 注销不暴露身份信息（NFR-8）
         }
@@ -60,9 +66,15 @@ public class MiniProfileController {
                 reported);
     }
 
-    /** 登录用户 id（游客 / 无效 JWT → null）。照抄 {@code ContentDetailController}，游客不抛 401。 */
+    /**
+     * 登录<b>用户</b> id（游客 / 无效 JWT / <b>非 USER 角色</b> → null）。
+     *
+     * <p>⚠️ 本端点 permitAll，兽医 token 也进得来。必须只认 {@code role=USER}——否则兽医的
+     * {@code sub=vetId} 会被当成碰撞的 {@code users.id}，用它查 {@code isBlocked}/{@code isReported}
+     * 就是拿无关用户的隐藏关系做判断（安全评审三轮 #1）。非用户一律按游客投影。
+     */
     private static Long viewerId(Jwt jwt) {
-        if (jwt == null || jwt.getSubject() == null) {
+        if (jwt == null || jwt.getSubject() == null || !"USER".equals(jwt.getClaimAsString("role"))) {
             return null;
         }
         try {

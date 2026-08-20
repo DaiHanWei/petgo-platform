@@ -29,7 +29,11 @@ Future<bool> openAccountReport(
   required bool alreadyReported,
   required AccountActionEntry entry,
 }) async {
-  final submitted = await showModalBottomSheet<bool>(
+  // ⚠️ 成功与否用回调记在外层，不靠 pop 的返回值（评审三轮 #8）：举报一旦服务端确认成功，
+  // 无论用户点「关闭」还是点蒙层/下拉收起抽屉，都必须让调用方知道成功了——否则已建 REPORT
+  // 隐藏关系却被当成取消，迷你卡不收、Feed 卡片不消失、「已举报」标签不点亮（Story 2.3/2.4）。
+  bool submittedOk = false;
+  await showModalBottomSheet<void>(
     context: context,
     backgroundColor: AppColors.surface,
     isScrollControlled: true, // 「其他」展开输入框后要能被键盘顶起
@@ -38,9 +42,10 @@ Future<bool> openAccountReport(
       alreadyReported: alreadyReported,
       entry: entry,
       ref: ref,
+      onSubmitted: () => submittedOk = true,
     ),
   );
-  return submitted == true;
+  return submittedOk;
 }
 
 class _AccountReportSheet extends StatefulWidget {
@@ -49,6 +54,7 @@ class _AccountReportSheet extends StatefulWidget {
     required this.alreadyReported,
     required this.entry,
     required this.ref,
+    required this.onSubmitted,
   });
 
   final int targetUserId;
@@ -58,6 +64,9 @@ class _AccountReportSheet extends StatefulWidget {
   final AccountActionEntry entry;
 
   final WidgetRef ref;
+
+  /// 服务端确认举报成功时回调（评审三轮 #8）：成功态与抽屉关闭方式解耦。
+  final VoidCallback onSubmitted;
 
   @override
   State<_AccountReportSheet> createState() => _AccountReportSheetState();
@@ -119,6 +128,7 @@ class _AccountReportSheetState extends State<_AccountReportSheet> {
         'origin': 'REPORT',
         'entry': AccountActionEntry.reportFlow.wire,
       });
+      widget.onSubmitted(); // 成功即记账（评审三轮 #8）：此后无论怎么关都算成功
       if (mounted) setState(() => _done = true); // 原地切成功态，不弹 toast、不自动收起
     } catch (_) {
       if (!mounted) return;
@@ -348,8 +358,8 @@ class _AccountReportSheetState extends State<_AccountReportSheet> {
                 padding: const EdgeInsets.symmetric(vertical: 13),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
-              // 返回 true → 调用方把迷你卡那一层也收起（两层一并收起，回到点开卡之前的页面）。
-              onPressed: () => Navigator.of(context).pop(true),
+              // 成功与否已由 onSubmitted 记账（评审三轮 #8），这里只负责收起抽屉。
+              onPressed: () => Navigator.of(context).pop(),
               child: Text(l10n.commonClose),
             ),
           ),

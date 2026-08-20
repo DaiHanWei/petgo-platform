@@ -74,10 +74,21 @@ class UnifiedTicketAccessControlTest {
         }
 
         @Bean
+        com.tailtopia.moderation.service.ReportService contentReports() {
+            return mock(com.tailtopia.moderation.service.ReportService.class);
+        }
+
+        @Bean
+        com.tailtopia.admin.service.AdminModerationService adminModeration() {
+            return mock(com.tailtopia.admin.service.AdminModerationService.class);
+        }
+
+        @Bean
         UnifiedTicketController controller(UnifiedTicketQueryService q,
                 AccountReportEntryRepository e, AccountDisposalRepository d, AccountQueryService a,
-                AccountDisposalService ds) {
-            return new UnifiedTicketController(q, e, d, a, ds);
+                AccountDisposalService ds, com.tailtopia.moderation.service.ReportService cr,
+                com.tailtopia.admin.service.AdminModerationService am) {
+            return new UnifiedTicketController(q, e, d, a, ds, cr, am);
         }
     }
 
@@ -183,7 +194,8 @@ class UnifiedTicketAccessControlTest {
         controller.batch(principalOf(), "WARN",
                 java.util.List.of("ACCOUNT_REPORT:1", "CONTENT_REPORT:2"), flash);
 
-        assertThat(flash.getFlashAttributes().get("notice").toString()).contains("不同类型");
+        // 失败提示走 error（红色横幅）而非 notice（评审三轮 #9）。
+        assertThat(flash.getFlashAttributes().get("error").toString()).contains("不同类型");
         org.mockito.Mockito.verify(ctx.getBean(AccountDisposalService.class),
                 org.mockito.Mockito.never()).batch(any(), any(), org.mockito.ArgumentMatchers.anyLong());
     }
@@ -197,9 +209,13 @@ class UnifiedTicketAccessControlTest {
         controller.batch(principalOf(), "SUSPEND",
                 java.util.List.of("CONTENT_REPORT:2", "CONTENT_REPORT:3"), flash);
 
-        assertThat(flash.getFlashAttributes().get("notice").toString()).contains("用户举报");
+        // 🔴 2026-08-19 拆分后：内容举报已移出本页（本页只管用户举报），
+        // 故这里如实指向新去处「人工复核」页；账号批量与内容批量都不得被触发。
+        assertThat(flash.getFlashAttributes().get("error").toString()).contains("人工复核");
         org.mockito.Mockito.verify(ctx.getBean(AccountDisposalService.class),
                 org.mockito.Mockito.never()).batch(any(), any(), org.mockito.ArgumentMatchers.anyLong());
+        org.mockito.Mockito.verify(ctx.getBean(com.tailtopia.admin.service.AdminModerationService.class),
+                org.mockito.Mockito.never()).batchByPost(any(), org.mockito.ArgumentMatchers.anyBoolean(), any());
     }
 
     /** 只有处置权、没有停用权 → **批量封号也走不通**（别让批量成为绕过单条门控的后门）。 */
@@ -208,9 +224,11 @@ class UnifiedTicketAccessControlTest {
         authenticate(AdminAccountType.STAFF, "content.dispose_account");
         var flash = new org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap();
 
-        assertThatThrownBy(() -> controller.batch(principalOf(), "SUSPEND",
-                java.util.List.of("ACCOUNT_REPORT:1"), flash))
-                .isInstanceOf(AccessDeniedException.class);
+        // 评审三轮 #6：权限不足降级为红色 flash 提示（不再抛 AccessDeniedException 打成整页 403）。
+        controller.batch(principalOf(), "SUSPEND", java.util.List.of("ACCOUNT_REPORT:1"), flash);
+        assertThat(flash.getFlashAttributes().get("error").toString()).contains("停用");
+        org.mockito.Mockito.verify(ctx.getBean(AccountDisposalService.class),
+                org.mockito.Mockito.never()).batch(any(), any(), org.mockito.ArgumentMatchers.anyLong());
     }
 
     private AdminUserDetails principalOf() {

@@ -21,6 +21,9 @@
         <h1 th:text="#{admin.tickets.title}">工单队列</h1>
         <p class="muted" th:text="#{admin.tickets.subtitle}">三类工单统一排队，按优先级从高到低；同分先报的先处理。</p>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <!-- 失败提示走红色 err 横幅（评审三轮 #9）：全后台约定 notice=绿色成功 / error=红色失败，
+             本页早先把处置失败也塞进 notice，运营会把「工单不匹配」读成封号成功。 -->
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
         <!-- ⚠️ 批量的失败明细必须真的列出来（AC5）：只报「失败 2 条」的话，
              运营不知道是哪 2 条、为什么，也就无从重试。既有内容举报的批量就是只报了数量。 -->
         <div class="banner" th:if="${batchFailures != null and !#lists.isEmpty(batchFailures)}">
@@ -33,14 +36,6 @@
         <!-- 筛选条：类型 / 状态 / 按被举报账号检索。HTMX 没加载时退化成整页 GET，仍可用。 -->
         <form class="filter-bar" th:action="@{/admin/tickets}" method="get"
               hx-get="/admin/tickets" hx-target="#results" hx-swap="innerHTML">
-            <label><span th:text="#{admin.tickets.filter.type}">工单类型</span>
-                <select name="type">
-                    <option value="" th:text="#{admin.tickets.filter.all}">全部</option>
-                    <option th:each="t : ${types}" th:value="${t}"
-                            th:text="#{'admin.tickets.type.' + ${t}}"
-                            th:selected="${t.name() == type}">TYPE</option>
-                </select>
-            </label>
             <label><span th:text="#{admin.tickets.filter.status}">状态</span>
                 <select name="status">
                     <option value="" th:text="#{admin.tickets.filter.all}">全部</option>
@@ -66,21 +61,30 @@
              data-batch-scope 限定 admin.js 那段批量逻辑的作用域（该文件全后台共享）。 -->
         <form th:if="${result.totalElements > 0}" id="ticket-batch-form" data-batch-scope
               th:action="@{/admin/tickets/batch}" method="post">
-            <p class="filter-bar">
+            <!-- ⚠️ 批量条整体与每个按钮都按权限渲染（修复清单二轮 #10）：端点 gate 在
+                 content.dispose_account / content.takedown 上，给无权人群渲染「点了必 403」的
+                 活按钮等于日常工作流反复撞墙（V105 回填的 view_tickets-only 人群首当其冲）。 -->
+            <p class="filter-bar"
+               sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.dispose_account') or hasAuthority('content.takedown')">
                 <span th:text="#{admin.tickets.batch.selected}">已选</span>
                 <b data-batch-count class="muted">0 / 50</b>
-                <button type="submit" class="btn btn-sm btn-neutral" data-batch-action
-                        name="action" value="WARN"
-                        th:text="#{admin.tickets.batch.warn}">批量警告</button>
-                <!-- ⚠️ 批量封号必须二次确认并**逐条列出**：既有的 data-confirm 只能弹一句纯文本，
-                     装不下清单。这里走 <dialog>，弹窗内容由 admin.js 在勾选变化时组装。
-                     只给一句「确认封 N 个账号？」等于让运营对着一个数字点确认。 -->
-                <button type="button" class="btn btn-sm btn-danger" data-batch-action
-                        data-open-dialog="batch-suspend-dialog"
-                        th:text="#{admin.tickets.batch.suspend}">批量封号</button>
+                <th:block sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.dispose_account')">
+                    <button type="submit" class="btn btn-sm btn-neutral" data-batch-action
+                            name="action" value="WARN"
+                            th:text="#{admin.tickets.batch.warn}">批量警告</button>
+                    <!-- ⚠️ 批量封号必须二次确认并**逐条列出**：既有的 data-confirm 只能弹一句纯文本，
+                         装不下清单。这里走 <dialog>，弹窗内容由 admin.js 在勾选变化时组装。
+                         只给一句「确认封 N 个账号？」等于让运营对着一个数字点确认。 -->
+                    <button type="button" class="btn btn-sm btn-danger" data-batch-action
+                            data-open-dialog="batch-suspend-dialog"
+                            sec:authorize="hasRole('SUPER_ADMIN') or (hasAuthority('content.dispose_account') and hasAuthority('user.deactivate'))"
+                            th:text="#{admin.tickets.batch.suspend}">批量封号</button>
+                </th:block>
+                <!-- 批量无需处置对两类都有效：账号工单走处置权、内容工单（=批量驳回）走下架权。 -->
                 <button type="submit" class="btn btn-sm btn-neutral" data-batch-action
                         name="action" value="DISMISS"
                         th:text="#{admin.tickets.batch.dismiss}">批量无需处置</button>
+                
                 <!-- 批量警告与批量无需处置**不弹确认**：警告不影响用户使用，可逆性与封号完全不同。 -->
             </p>
 
@@ -118,7 +122,10 @@
             </tr>
             </thead>
             <tbody>
-            <tr th:each="r : ${result.content}">
+            <!-- ⚠️ 单循环内逐工单输出「主行 + 详情占位行」两个 <tr>（修复清单 #6）——
+                 拆成两个并列循环的话，全部占位行会堆在表尾，展开的详情装到屏外、看着像点了没反应。 -->
+            <th:block th:each="r : ${result.content}">
+            <tr>
                 <td>
                     <!-- 只有**待处理**的工单可勾（已处理/无需处置的再点一次没有意义）。
                          data-type 供跨类型置灰；data-label 供封号确认弹窗逐条列出「昵称 + 被举报次数」。
@@ -155,41 +162,86 @@
                        hx-swap="innerHTML"
                        th:text="#{admin.tickets.expand}">展开</a>
 
-                    <!-- 账号级处置（Story 3.2）：只对**用户举报**工单开放。内容举报走既有下架/驳回，
-                         账号标识字段走它自己的审核页——三类工单的处置动作不是同一套东西。
+                    <!-- 账号级处置（Story 3.2）：只对**用户举报**工单开放。
+                         ⚠️ 按钮用 form= 远程关联批量 form 之外的真表单（修复清单 #2）：
+                         HTML 禁止 form 嵌套，行内直接写 <form> 会被浏览器解析器按渲染顺序丢掉
+                         第一个（其余「侥幸存活」）——首行警告按钮就此绑到批量 form 上提交 → 400。
                          ⚠️ 只在待处理时给动作：已处理/无需处置的工单再点一次没有意义。
                          ⚠️ 「限流曝光」不实现、不留 UI 位（随 FR-95 移至 1.1.8）。 -->
+    <!-- ⚠️ 全部动作按钮按权限渲染（修复清单二轮 #10）：端点 gate 在 dispose/takedown 上，
+                         无权人群看见「点了必 403」的活按钮=日常撞墙。 -->
                     <span th:if="${r.type.name() == 'ACCOUNT_REPORT' and r.status.name() == 'PENDING'
-                                   and r.targetUserId != null}">
-                        <form th:action="@{/admin/tickets/warn}" method="post" style="display:inline"
-                              th:attr="data-confirm=#{admin.tickets.confirm.warn}">
-                            <input type="hidden" name="targetUserId" th:value="${r.targetUserId}"/>
-                            <input type="hidden" name="reportId" th:value="${r.sourceId}"/>
-                            <button type="submit" class="btn btn-sm btn-neutral"
-                                    th:text="#{admin.tickets.action.warn}">警告</button>
-                        </form>
-                        <form th:action="@{/admin/tickets/suspend}" method="post" style="display:inline"
-                              th:attr="data-confirm=#{admin.tickets.confirm.suspend}"
-                              sec:authorize="hasRole('SUPER_ADMIN') or (hasAuthority('content.dispose_account') and hasAuthority('user.deactivate'))">
-                            <input type="hidden" name="targetUserId" th:value="${r.targetUserId}"/>
-                            <input type="hidden" name="reportId" th:value="${r.sourceId}"/>
-                            <button type="submit" class="btn btn-sm btn-danger"
-                                    th:text="#{admin.tickets.action.suspend}">封号</button>
-                        </form>
-                        <form th:action="@{/admin/tickets/dismiss}" method="post" style="display:inline">
-                            <input type="hidden" name="reportId" th:value="${r.sourceId}"/>
-                            <button type="submit" class="btn btn-sm btn-neutral"
-                                    th:text="#{admin.tickets.action.dismiss}">无需处置</button>
-                        </form>
+                                   and r.targetUserId != null}"
+                          sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.dispose_account')">
+                        <button type="submit" class="btn btn-sm btn-neutral"
+                                th:form="'warn-form-' + ${r.sourceId}"
+                                th:text="#{admin.tickets.action.warn}">警告</button>
+                        <button type="submit" class="btn btn-sm btn-danger"
+                                th:form="'suspend-form-' + ${r.sourceId}"
+                                sec:authorize="hasRole('SUPER_ADMIN') or (hasAuthority('content.dispose_account') and hasAuthority('user.deactivate'))"
+                                th:text="#{admin.tickets.action.suspend}">封号</button>
+                        <button type="submit" class="btn btn-sm btn-neutral"
+                                th:form="'dismiss-form-' + ${r.sourceId}"
+                                th:text="#{admin.tickets.action.dismiss}">无需处置</button>
+                    </span>
+
+                    <!-- 内容举报的行内处置（修复清单 #3）：旧 /admin/reports 页已下线成 redirect，
+                         不在这里接回下架/驳回的话，内容举报工单在任何界面都无法处置、永久堆积。
+                         下架复用既有 /admin/reports/{id}/takedown（按代表性 PENDING 单收口，
+                         会关掉该帖全部 PENDING 单）；驳回走按帖端点（全部单一并收档）。 -->
+                    <span th:if="${r.type.name() == 'CONTENT_REPORT' and r.status.name() == 'PENDING'
+                                   and r.actionRef != null}"
+                          sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')">
+                        <button type="submit" class="btn btn-sm btn-danger"
+                                th:form="'takedown-form-' + ${r.sourceId}"
+                                th:text="#{admin.tickets.action.takedown}">下架</button>
+                        <!-- 驳回=一次抹掉整帖全部举报，批量级动作，gate 对齐批量的 takedown
+                             （挂查看权上会让只读审核员绕过处置权限，修复清单二轮 #6）。 -->
+                        <button type="submit" class="btn btn-sm btn-neutral"
+                                th:form="'dismissall-form-' + ${r.sourceId}"
+                                th:text="#{admin.tickets.action.dismissContent}">驳回</button>
                     </span>
                 </td>
             </tr>
-            <tr th:each="r : ${result.content}">
+            <tr>
                 <td colspan="12" th:id="'detail-' + ${r.type} + '-' + ${r.sourceId}"></td>
             </tr>
+            </th:block>
             </tbody>
         </table>
         </form>
+
+        <!-- 行内处置的真表单（修复清单 #2）：必须放在批量 form **闭合之后**，表格里的按钮用
+             form= 属性远程关联。只含 hidden 字段与 CSRF，不渲染任何可见内容。
+             id 用「动作前缀 + sourceId」——三类工单的数字空间会重叠，但每个前缀只对一类渲染。 -->
+        <th:block th:each="r : ${result.content}">
+            <th:block th:if="${r.type.name() == 'ACCOUNT_REPORT' and r.status.name() == 'PENDING'
+                               and r.targetUserId != null}">
+                <form th:id="'warn-form-' + ${r.sourceId}" th:action="@{/admin/tickets/warn}"
+                      method="post" th:attr="data-confirm=#{admin.tickets.confirm.warn}">
+                    <input type="hidden" name="targetUserId" th:value="${r.targetUserId}"/>
+                    <input type="hidden" name="reportId" th:value="${r.sourceId}"/>
+                </form>
+                <form th:id="'suspend-form-' + ${r.sourceId}" th:action="@{/admin/tickets/suspend}"
+                      method="post" th:attr="data-confirm=#{admin.tickets.confirm.suspend}">
+                    <input type="hidden" name="targetUserId" th:value="${r.targetUserId}"/>
+                    <input type="hidden" name="reportId" th:value="${r.sourceId}"/>
+                </form>
+                <form th:id="'dismiss-form-' + ${r.sourceId}" th:action="@{/admin/tickets/dismiss}"
+                      method="post">
+                    <input type="hidden" name="reportId" th:value="${r.sourceId}"/>
+                </form>
+            </th:block>
+            <th:block th:if="${r.type.name() == 'CONTENT_REPORT' and r.status.name() == 'PENDING'
+                               and r.actionRef != null}">
+                <form th:id="'takedown-form-' + ${r.sourceId}"
+                      th:action="@{/admin/reports/{id}/takedown(id=${r.actionRef})}"
+                      method="post" th:attr="data-confirm=#{admin.tickets.confirm.takedown}"></form>
+                <form th:id="'dismissall-form-' + ${r.sourceId}"
+                      th:action="@{/admin/reports/post/{id}/dismiss-all(id=${r.sourceId})}"
+                      method="post"></form>
+            </th:block>
+        </th:block>
 
         <div class="pager" th:if="${result.totalElements > 0}">
             <a th:if="${result.hasPrevious()}"

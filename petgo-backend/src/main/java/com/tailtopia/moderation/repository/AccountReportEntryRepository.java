@@ -27,4 +27,21 @@ public interface AccountReportEntryRepository extends JpaRepository<AccountRepor
             Instant after);
 
     long countByReportId(long reportId);
+
+    /** 某工单的全部<b>去重</b>举报人（首次处置回告 FR-51：每个举报人一条模糊通知，不按明细重复发）。 */
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT DISTINCT e.reporterId FROM AccountReportEntry e WHERE e.reportId = :reportId")
+    List<Long> findDistinctReporterIds(
+            @org.springframework.data.repository.query.Param("reportId") long reportId);
+
+    /**
+     * 某工单在<b>上次处置之后</b>的去重举报人（AC9 翻面再处置的回告，评审三轮 #7）：
+     * 只通知本周期的新举报人，不重发历史周期早已回告过的人。
+     */
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT DISTINCT e.reporterId FROM AccountReportEntry e "
+            + "WHERE e.reportId = :reportId AND e.createdAt > :after")
+    List<Long> findDistinctReporterIdsAfter(
+            @org.springframework.data.repository.query.Param("reportId") long reportId,
+            @org.springframework.data.repository.query.Param("after") Instant after);
 }

@@ -126,6 +126,12 @@ public class AuthService {
             return users.save(User.newAppleUser(id.sub(), id.email()));
         });
 
+        // Story 3.2：停用账号即时不可登录——与 loginWithGoogle / rotateRefresh 同一道闸。
+        // 漏掉这里等于给被封号的 Apple 用户留一条「重新登录就复活」的旁路。
+        if (!user.isActiveStatus()) {
+            throw AppException.forbidden(DEACTIVATED_MESSAGE);
+        }
+
         if (isNew[0]) {
             registerImAccount(user); // 建号即注册 IM（幂等/非阻断；Apple 无昵称用「用户<id>」占位）
         }

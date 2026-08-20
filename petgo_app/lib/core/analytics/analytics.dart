@@ -11,8 +11,11 @@ import 'button_ids.dart';
 ///
 /// 设计约束（CLAUDE.md 护栏）：
 /// - Project Token / Host 走 dart-define 注入，带生产默认值，对齐 `dio_client.dart`。
-/// - **绝不**向 PostHog 传 PII（email/昵称/姓名/电话）或健康数据；identify 只传哈希 distinctId，
-///   既避明文 PII，又避「自增 id 直接外露」护栏。
+/// - **绝不**向 PostHog 传 PII（email/昵称/姓名/电话）或健康数据。
+/// - identify 的 distinctId 用哈希；person property 额外明文携带内部数字 id
+///   （**「自增 id 不外露」护栏的 PostHog 专项豁免**，2026-08-18 拍板：无盐哈希本可被反推，
+///   明文不增加实际暴露面，运营需按 id 定位用户）。豁免只限 PostHog——AppsFlyer CUID
+///   等其它第三方仍只传哈希，对外 API 面仍一律不可枚举 token。
 /// - 所有上报调用 try/catch 吞错，分析失败绝不阻断主流程。
 ///
 /// 本期为基建层：提供 init / identify / reset / 脱敏 capture，不批量埋业务事件。

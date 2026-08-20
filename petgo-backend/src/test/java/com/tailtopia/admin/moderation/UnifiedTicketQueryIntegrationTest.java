@@ -59,13 +59,28 @@ class UnifiedTicketQueryIntegrationTest extends ApiIntegrationTest {
         }
     }
 
-    private UnifiedTicketRow accountTicketOf(long targetUserId) {
-        return query.search(TicketType.ACCOUNT_REPORT, null, String.valueOf(targetUserId),
-                        PageRequest.of(0, 20))
+    /**
+     * 按类别取某账号那一行。
+     *
+     * <p>⚠️ 两处都不能省，否则用例会**随类内其它用例造的数据量而随机红**：
+     * <ul>
+     *   <li><b>必须按 targetUserId 精确过滤</b> —— 检索词是纯数字时，服务端除了按 id 精确匹配，
+     *       还会按<b>昵称模糊匹配</b>（数字昵称是印尼市场常见形态，那是有意为之）。
+     *       测试用户的昵称是「用户+19 位 nanoTime」，搜 id「1172」会顺带命中昵称里含 1172 的别人。
+     *       {@code findFirst()} 于是可能抓到另一个账号的行。</li>
+     *   <li><b>页要开够大</b> —— 排序是分倒序，那些误命中的行分可能更高，把要找的行挤下第一页。</li>
+     * </ul>
+     */
+    private UnifiedTicketRow rowOf(TicketType type, long targetUserId) {
+        return query.search(type, null, String.valueOf(targetUserId), PageRequest.of(0, 500))
                 .getContent().stream()
                 .filter(r -> r.targetUserId() != null && r.targetUserId() == targetUserId)
                 .findFirst()
-                .orElseThrow(() -> new AssertionError("没查到 " + targetUserId + " 的账号举报工单"));
+                .orElseThrow(() -> new AssertionError("没查到 " + targetUserId + " 的 " + type + " 工单"));
+    }
+
+    private UnifiedTicketRow accountTicketOf(long targetUserId) {
+        return rowOf(TicketType.ACCOUNT_REPORT, targetUserId);
     }
 
     // ===== AC4 · 优先级公式的四个校验用例 =====
@@ -251,10 +266,7 @@ class UnifiedTicketQueryIntegrationTest extends ApiIntegrationTest {
     }
 
     private UnifiedTicketRow identityRowOf(long userId) {
-        return query.search(TicketType.ACCOUNT_IDENTITY, null, String.valueOf(userId),
-                        PageRequest.of(0, 20))
-                .getContent().stream().findFirst()
-                .orElseThrow(() -> new AssertionError("没查到 " + userId + " 的标识字段工单"));
+        return rowOf(TicketType.ACCOUNT_IDENTITY, userId);
     }
 
     // ===== AC9 · 筛选与检索 =====
@@ -300,5 +312,99 @@ class UnifiedTicketQueryIntegrationTest extends ApiIntegrationTest {
                 + "VALUES (?, 'SUSPEND', now())", target.getId());
 
         assertThat(accountTicketOf(target.getId()).disposalCount()).isEqualTo(2);
+    }
+
+    // ===== 内容送审（2026-08-19 并入混排列表）=====
+
+    /**
+     * 送审分数按 P0/P1/P2 三档映射，且**没有举报人**（三个计数都是 0）。
+     *
+     * <p>分档锚点：P0(12) 压过标识字段的 HIGH(10)，P2(2) 与 NORMAL 齐平 ——
+     * 送审是「内容还没面世、卡在发布链路上」，同等紧迫度下应比事后审核先看。
+     */
+    @Test
+    void submissionScoresByPriority() {
+        User author = newUser();
+        ContentPost post = posts.save(
+                ContentPost.publish(author.getId(), ContentType.DAILY, null, "等放行的正文", List.of()));
+        jdbc.update("INSERT INTO manual_review_queue (content_id, content_type, submitted_at, status, "
+                + "priority, created_at, updated_at) "
+                + "VALUES (?, 'CONTENT_POST', now(), 'PENDING', 'P0', now(), now())", post.getId());
+
+        UnifiedTicketRow row = submissionRowOf(author.getId());
+        assertThat(row.score()).isEqualTo(12);
+        assertThat(row.preview()).contains("等放行的正文");
+        assertThat(row.subType()).isEqualTo("P0 · CONTENT_POST");
+        assertThat(row.reporterCount()).isZero();
+        assertThat(row.reportCount()).isZero();
+        assertThat(row.frequentCount()).isZero();
+    }
+
+    /**
+     * ⚠️ 回归守卫：{@code manual_review_queue} 是**多态**表，{@code content_id} 在
+     * 帖子与评论两个命名空间里各自计数 —— 一条评论的 id 完全可能等于某条无关帖子的 id。
+     *
+     * <p>联合查询若漏掉 {@code content_type} 判别，这一行就会显示<b>另一个人的帖子正文和作者</b>，
+     * 审核员据此下的每一个判都落在错的对象上。这条用例造的正是那个撞号：
+     * 先取一条已存在帖子的 id，再造一条 id 与它相同的评论送审项。
+     */
+    @Test
+    void commentSubmissionNeverMisJoinsAPostWithTheSameId() {
+        User postAuthor = newUser();
+        ContentPost decoy = posts.save(
+                ContentPost.publish(postAuthor.getId(), ContentType.DAILY, null, "无关的别人的帖子", List.of()));
+
+        // 造一条 id 恰好等于 decoy.id 的评论（撞号是本用例的全部意义，故显式指定 id）。
+        User commentAuthor = newUser();
+        jdbc.update("INSERT INTO comments (id, post_id, author_id, body, created_at, updated_at) "
+                + "VALUES (?, ?, ?, '等放行的评论', now(), now())",
+                decoy.getId(), decoy.getId(), commentAuthor.getId());
+        jdbc.update("INSERT INTO manual_review_queue (content_id, content_type, submitted_at, status, "
+                + "priority, created_at, updated_at) "
+                + "VALUES (?, 'COMMENT', now(), 'PENDING', 'P1', now(), now())", decoy.getId());
+
+        UnifiedTicketRow row = submissionRowOf(commentAuthor.getId());
+        assertThat(row.targetUserId()).isEqualTo(commentAuthor.getId());
+        assertThat(row.preview()).contains("等放行的评论");
+        assertThat(row.preview()).doesNotContain("无关的别人的帖子");
+        assertThat(row.subType()).isEqualTo("P1 · COMMENT");
+        assertThat(row.score()).isEqualTo(6);
+    }
+
+    /** 终态映射：{@code TIMED_OUT}（挂到超时被系统放掉）→ **无需处置**，不是「已处理」。 */
+    @Test
+    void submissionTimedOutMapsToNoAction() {
+        User author = newUser();
+        ContentPost post = posts.save(
+                ContentPost.publish(author.getId(), ContentType.DAILY, null, "超时的正文", List.of()));
+        jdbc.update("INSERT INTO manual_review_queue (content_id, content_type, submitted_at, status, "
+                + "priority, created_at, updated_at) "
+                + "VALUES (?, 'CONTENT_POST', now(), 'TIMED_OUT', 'P2', now(), now())", post.getId());
+
+        assertThat(submissionRowOf(author.getId()).status()).isEqualTo(TicketStatusBucket.NO_ACTION);
+    }
+
+    /** 超 24h 未处置 → 模板高亮（原独立送审表 AC7，随行迁入混排后阈值不变）。 */
+    @Test
+    void submissionOverdueAfter24Hours() {
+        User fresh = newUser();
+        User stale = newUser();
+        ContentPost freshPost = posts.save(
+                ContentPost.publish(fresh.getId(), ContentType.DAILY, null, "刚送审", List.of()));
+        ContentPost stalePost = posts.save(
+                ContentPost.publish(stale.getId(), ContentType.DAILY, null, "挂了两天", List.of()));
+        jdbc.update("INSERT INTO manual_review_queue (content_id, content_type, submitted_at, status, "
+                + "priority, created_at, updated_at) "
+                + "VALUES (?, 'CONTENT_POST', now(), 'PENDING', 'P1', now(), now())", freshPost.getId());
+        jdbc.update("INSERT INTO manual_review_queue (content_id, content_type, submitted_at, status, "
+                + "priority, created_at, updated_at) VALUES (?, 'CONTENT_POST', "
+                + "now() - interval '2 days', 'PENDING', 'P1', now(), now())", stalePost.getId());
+
+        assertThat(submissionRowOf(fresh.getId()).overdue()).isFalse();
+        assertThat(submissionRowOf(stale.getId()).overdue()).isTrue();
+    }
+
+    private UnifiedTicketRow submissionRowOf(long userId) {
+        return rowOf(TicketType.CONTENT_SUBMISSION, userId);
     }
 }

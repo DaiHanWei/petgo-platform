@@ -142,6 +142,7 @@ class _DetailScaffold extends ConsumerWidget {
                     CommentSection(
                       postId: postId,
                       currentUserId: currentUserId,
+                      postAuthorId: detail.authorId,
                       isContentAuthor: detail.isAuthor,
                     ),
                   ],

@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 统一工单队列查询（Story 3.1，AB-3D）。**三个业务类别、四张源表，读时联合。**
+ * 统一工单队列查询（Story 3.1，AB-3D）。**四个业务类别、六张源表，读时联合。**
  *
  * <h2>为什么是「读时联合」而不是建一张索引表</h2>
  * 不新增统一索引表、不双写、存量零回填、不加缓存（AD-7）。各类工单的状态<b>仍由各自源表权威持有</b>——
@@ -42,7 +42,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <h2>⚠️ 别照抄既有举报队列的 N+1</h2>
  * {@code AdminModerationService.queue} 在循环里逐条查内容摘要与举报数，靠 50 条硬上限勉强撑住。
- * 本视图是四表联合 + 优先级实时计算，照抄会更糟。这里<b>一条 SQL 出结果、排序分页都在库内做</b>，
+ * 本视图是六表联合 + 优先级实时计算，照抄会更糟。这里<b>一条 SQL 出结果、排序分页都在库内做</b>，
  * 「人数 / 次数 / 高频人数」由 Story 2.1 建的 {@code idx_account_report_entries_report_reporter}
  * 一次聚合得出。
  *
@@ -52,6 +52,11 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class UnifiedTicketQueryService {
+
+    /** 内容送审的分数映射（2026-08-19）：P0 最急、P2 沉底，与其余类别同序可比。 */
+    static final int SUBMISSION_SCORE_P0 = 12;
+    static final int SUBMISSION_SCORE_P1 = 6;
+    static final int SUBMISSION_SCORE_P2 = 2;
 
     /** 账号标识字段工单的分数映射（AC6，C-102）。抽成常量便于日后调整。 */
     static final int IDENTITY_SCORE_HIGH = 10;
@@ -63,7 +68,7 @@ public class UnifiedTicketQueryService {
     static final int FREQUENT_REPORTER_THRESHOLD = 5;
 
     /**
-     * 四表联合的 CTE。
+     * 六表联合的 CTE（① 内容举报 ② 用户举报 ③ 名称 ④ 头像 ⑤ 内容送审）。
      *
      * <p>⚠️ 账号标识字段两表<b>只收 MANUAL_PENDING 与两个终态</b>：
      * {@code SCORING / QUEUED / AUTO_PASSED / SUPERSEDED / FAILED_TO_QUEUE} 一律不进运营队列
@@ -95,7 +100,9 @@ public class UnifiedTicketQueryService {
                 -- ① 内容举报：**按帖聚合**（12 个人举报同一条帖是一条工单，不是 12 条）
                 SELECT 'CONTENT_REPORT'::text                     AS ticket_type,
                        cr.post_id                                 AS source_id,
-                       NULL::text                                 AS sub_type,
+                       -- 举报原因去重聚合（修复清单 #3）：旧 /admin/reports 页下线后这是原因唯一可见处，
+                       -- 固定 NULL 会让 INFRINGEMENT 与 SPAM 无从区分。
+                       string_agg(DISTINCT cr.reason_type, ' / ') AS sub_type,
                        cp.author_id                               AS target_user_id,
                        CASE WHEN bool_or(cr.status = 'PENDING')  THEN 'PENDING'
                             WHEN bool_or(cr.status = 'RESOLVED') THEN 'RESOLVED'
@@ -107,7 +114,10 @@ public class UnifiedTicketQueryService {
                        -- ⇒ 次数恒等于人数、高频恒为 0，分数就是举报人数。
                        COUNT(DISTINCT cr.reporter_id)::bigint     AS score,
                        MIN(cr.created_at)                         AS earliest_at,
-                       LEFT(COALESCE(cp.text, ''), 60)            AS preview
+                       LEFT(COALESCE(cp.text, ''), 60)            AS preview,
+                       -- 代表性举报单 id：下架端点按 reportId 收口（它会顺带关掉该帖全部 PENDING 单），
+                       -- 取任意一条 PENDING 即可；全部已处理时为 NULL（也不再需要动作按钮）。
+                       MIN(cr.id) FILTER (WHERE cr.status = 'PENDING') AS action_ref
                   FROM content_reports cr
                   JOIN content_posts cp ON cp.id = cr.post_id
                  GROUP BY cr.post_id, cp.author_id, cp.text
@@ -127,7 +137,8 @@ public class UnifiedTicketQueryService {
                        COALESCE(agg.frequent_count, 0)::bigint,
                        (COALESCE(agg.reporter_count, 0) + COALESCE(agg.frequent_count, 0))::bigint,
                        COALESCE(agg.earliest_at, ar.first_reported_at),
-                       NULL::text
+                       NULL::text,
+                       NULL::bigint
                   FROM account_reports ar
                   LEFT JOIN account_agg agg ON agg.report_id = ar.id
 
@@ -145,7 +156,8 @@ public class UnifiedTicketQueryService {
                        0::bigint, 0::bigint, 0::bigint,
                        (CASE nmr.priority WHEN 'HIGH' THEN %d ELSE %d END)::bigint,
                        nmr.submitted_at,
-                       nmr.submitted_value
+                       nmr.submitted_value,
+                       NULL::bigint
                   FROM name_moderation_records nmr
                   LEFT JOIN pet_profiles pp
                          ON nmr.target_type = 'PET_NAME' AND pp.id = nmr.target_ref_id
@@ -165,15 +177,46 @@ public class UnifiedTicketQueryService {
                        0::bigint, 0::bigint, 0::bigint,
                        (CASE avr.priority WHEN 'HIGH' THEN %d ELSE %d END)::bigint,
                        avr.created_at,
-                       avr.avatar_url
+                       avr.avatar_url,
+                       NULL::bigint
                   FROM avatar_reviews avr
                   LEFT JOIN pet_profiles pp2
                          ON avr.subject_type = 'PET_AVATAR' AND pp2.id = avr.subject_id
                  WHERE avr.status IN ('MANUAL_PENDING', 'RESOLVED')
+
+                UNION ALL
+
+                -- ⑤ 内容送审（2026-08-19 并入）：机器判「拿不准」→ 发布事务内挂起等人工放行。
+                --    **没有举报人**（与①内容举报的本质区别：①是内容已公开、事后被人报）。
+                --    分数取 P0/P1/P2 三档映射，让它能和其余类别在同一个序里排。
+                --
+                --    ⚠️⚠️ 这张表是**多态**的（V49 起 content_type ∈ CONTENT_POST / COMMENT），
+                --    content_id 在两个命名空间里各自计数。所以两个 JOIN 都**必须带 content_type 判别**：
+                --    只 join content_posts 会让「评论 id 恰好等于某帖 id」错配成一条毫不相干的帖子，
+                --    页面上显示别人的正文和作者 —— 审核员据此下的每一个判都是错的。
+                SELECT 'CONTENT_SUBMISSION'::text,
+                       mrq.id,
+                       mrq.priority || ' · ' || mrq.content_type,
+                       COALESCE(cp2.author_id, cmt.author_id),
+                       CASE mrq.status WHEN 'PENDING'  THEN 'PENDING'
+                                       WHEN 'APPROVED' THEN 'RESOLVED'
+                                       WHEN 'REJECTED' THEN 'RESOLVED'
+                                       ELSE 'NO_ACTION' END,
+                       0::bigint, 0::bigint, 0::bigint,
+                       (CASE mrq.priority WHEN 'P0' THEN %d WHEN 'P1' THEN %d ELSE %d END)::bigint,
+                       mrq.submitted_at,
+                       LEFT(COALESCE(cp2.text, cmt.body, ''), 60),
+                       mrq.id
+                  FROM manual_review_queue mrq
+                  LEFT JOIN content_posts cp2
+                         ON mrq.content_type = 'CONTENT_POST' AND cp2.id = mrq.content_id
+                  LEFT JOIN comments cmt
+                         ON mrq.content_type = 'COMMENT' AND cmt.id = mrq.content_id
             )
             """.formatted(FREQUENT_REPORTER_THRESHOLD,
             IDENTITY_SCORE_HIGH, IDENTITY_SCORE_NORMAL,
-            IDENTITY_SCORE_HIGH, IDENTITY_SCORE_NORMAL);
+            IDENTITY_SCORE_HIGH, IDENTITY_SCORE_NORMAL,
+            SUBMISSION_SCORE_P0, SUBMISSION_SCORE_P1, SUBMISSION_SCORE_P2);
 
     private final JdbcTemplate jdbc;
 
@@ -192,9 +235,41 @@ public class UnifiedTicketQueryService {
     @Transactional(readOnly = true)
     public Page<UnifiedTicketRow> search(TicketType type, TicketStatusBucket status, String search,
             Pageable pageable) {
+        return search(java.util.EnumSet.allOf(TicketType.class), type, status, search, pageable);
+    }
+
+    /**
+     * 带**作用域**的检索（2026-08-19 拆分后新增）。
+     *
+     * <p>拆分背景：原先三类工单挤在同一个队列页，但它们的处置动作与授权域各不相同 ——
+     * 账号标识字段那一类在该页**根本无法处置**（只能看，动作在另一个页面），运营点了批量按钮
+     * 只会吃一条「请到名称/头像审核页处理」的红字。现在按「能不能在本页处置」拆开：
+     * <ul>
+     *   <li><b>被举报用户</b>页 —— 作用域 {@code {ACCOUNT_REPORT}}，动作＝警告 / 封号 / 无需处置</li>
+     *   <li><b>人工复核</b>页 —— 作用域 {@code {CONTENT_REPORT, ACCOUNT_IDENTITY}}，动作按行的类型各自渲染</li>
+     * </ul>
+     *
+     * @param scope 本页可见的类别集合（**不可为空**：空集合意味着「什么都不显示」，
+     *              那是调用方写错了，不该静默返回空页让人以为没有待办）
+     * @param type  用户在本页内选的类别筛选（null = 作用域内全部）；**超出作用域时忽略**，
+     *              防止有人手改 URL 把别的类别捞进不能处置它的页面
+     */
+    @Transactional(readOnly = true)
+    public Page<UnifiedTicketRow> search(java.util.Set<TicketType> scope, TicketType type,
+            TicketStatusBucket status, String search, Pageable pageable) {
+        if (scope == null || scope.isEmpty()) {
+            throw new IllegalArgumentException("工单作用域不能为空");
+        }
         List<Object> args = new ArrayList<>();
         StringBuilder where = new StringBuilder(" WHERE 1 = 1");
-        if (type != null) {
+        // 作用域：始终生效，且与用户选的 type 是「与」关系。
+        where.append(" AND u.ticket_type IN (")
+                .append(String.join(",", java.util.Collections.nCopies(scope.size(), "?")))
+                .append(')');
+        for (TicketType t : scope) {
+            args.add(t.name());
+        }
+        if (type != null && scope.contains(type)) {
             where.append(" AND u.ticket_type = ?");
             args.add(type.name());
         }
@@ -204,12 +279,19 @@ public class UnifiedTicketQueryService {
         }
         String keyword = search == null ? null : search.trim();
         if (keyword != null && !keyword.isEmpty()) {
-            if (keyword.chars().allMatch(Character::isDigit)) {
-                where.append(" AND u.target_user_id = ?");
-                args.add(Long.parseLong(keyword));
+            // 纯数字（且没超 Long）：既当 userId 精确匹配、也当昵称模糊匹配——数字昵称
+            //（「88888」这类印尼市场常见形态）不能因为「像 id」就永远搜不到。
+            // ⚠️ ILIKE 模式必须转义 % _ \（否则搜「_」= 匹配全部昵称，筛选形同虚设），
+            // 超 Long 的长号码降级为纯昵称匹配，绝不让一个筛选输入把整页打成 500。
+            Long asId = parseUserId(keyword);
+            String pattern = "%" + escapeLike(keyword) + "%";
+            if (asId != null) {
+                where.append(" AND (u.target_user_id = ? OR usr.nickname ILIKE ? ESCAPE '\\')");
+                args.add(asId);
+                args.add(pattern);
             } else {
-                where.append(" AND usr.nickname ILIKE ?");
-                args.add("%" + keyword + "%");
+                where.append(" AND usr.nickname ILIKE ? ESCAPE '\\'");
+                args.add(pattern);
             }
         }
 
@@ -234,7 +316,7 @@ public class UnifiedTicketQueryService {
                                 usr.nickname AS target_nickname,
                                 (usr.deleted_at IS NOT NULL) AS target_deleted,
                                 u.status_bucket, u.reporter_count, u.report_count, u.frequent_count,
-                                u.score, u.earliest_at, u.preview,
+                                u.score, u.earliest_at, u.preview, u.action_ref,
                                 COALESCE(d.c, 0) AS disposal_count
                         """ + joins + where
                         + " ORDER BY u.score DESC, u.earliest_at ASC LIMIT ? OFFSET ?",
@@ -248,6 +330,8 @@ public class UnifiedTicketQueryService {
         // 不能挪到构造器参数列表里去——那里中间还夹着别的列的读取。
         long rawTargetId = rs.getLong("target_user_id");
         Long targetUserId = rs.wasNull() ? null : rawTargetId;
+        long rawActionRef = rs.getLong("action_ref");
+        Long actionRef = rs.wasNull() ? null : rawActionRef;
         return new UnifiedTicketRow(
                 TicketType.valueOf(rs.getString("ticket_type")),
                 rs.getLong("source_id"),
@@ -262,8 +346,26 @@ public class UnifiedTicketQueryService {
                 rs.getLong("score"),
                 toInstant(rs, "earliest_at"),
                 rs.getString("preview"),
+                actionRef,
                 rs.getLong("disposal_count"));
     };
+
+    /** ILIKE 模式转义：% _ \ 是通配元字符，来自用户输入时必须按字面量处理。 */
+    private static String escapeLike(String keyword) {
+        return keyword.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+    }
+
+    /** 纯数字且在 Long 范围内 → userId；否则 null（只走昵称字面量匹配）。 */
+    private static Long parseUserId(String keyword) {
+        if (!keyword.chars().allMatch(Character::isDigit)) {
+            return null;
+        }
+        try {
+            return Long.parseLong(keyword);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
 
     private static java.time.Instant toInstant(ResultSet rs, String column) throws SQLException {
         java.sql.Timestamp ts = rs.getTimestamp(column);

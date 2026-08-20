@@ -1,10 +1,9 @@
 package com.tailtopia.social.service;
 
+import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.social.domain.HideSource;
-import com.tailtopia.social.domain.UserHideRelation;
 import com.tailtopia.social.repository.UserHideRelationRepository;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,9 +20,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserHideRelationService {
 
     private final UserHideRelationRepository relations;
+    private final AccountQueryService accountQuery;
 
-    public UserHideRelationService(UserHideRelationRepository relations) {
+    public UserHideRelationService(UserHideRelationRepository relations,
+            AccountQueryService accountQuery) {
         this.relations = relations;
+        this.accountQuery = accountQuery;
     }
 
     /**
@@ -37,6 +39,9 @@ public class UserHideRelationService {
     @Transactional
     public void block(long holderId, long targetId) {
         requireNotSelf(holderId, targetId, "不能拉黑自己");
+        // 目标不存在（伪造/陈旧 id）→ 404：不校验的话 INSERT 撞 FK，事务被标记 rollback-only，
+        // 提交时 UnexpectedRollbackException → 500。注销用户是软删（users 行仍在），不受影响。
+        requireUserExists(targetId);
         insertIfAbsent(holderId, targetId, HideSource.BLOCK);
     }
 
@@ -67,19 +72,20 @@ public class UserHideRelationService {
     }
 
     /**
-     * 同源幂等插入：该 {@code (holder, target, source)} 已存在则什么都不做。
+     * 同源幂等插入：该 {@code (holder, target, source)} 已存在则什么都不做（不刷新时间戳）。
      *
-     * <p>并发下两个线程可能同时通过 exists 检查，此时由三元唯一约束兜底 ——
-     * 捕获后视为「已存在」静默返回，与先到线程的结果一致（幂等语义不变）。
+     * <p>幂等由数据库 {@code ON CONFLICT DO NOTHING} 单语句保证——并发双写、重放都不会抛异常。
+     * ⚠️ 不要改回「save + catch 唯一约束异常」：异常穿出 repo 代理时共享事务已被标记
+     * rollback-only，catch 了也救不回来，外层提交必 500。
      */
     private void insertIfAbsent(long holderId, long targetId, HideSource source) {
-        if (relations.existsByHolderIdAndTargetIdAndSource(holderId, targetId, source)) {
-            return; // 幂等：不新增、不刷新时间戳
-        }
-        try {
-            relations.save(UserHideRelation.create(holderId, targetId, source));
-        } catch (DataIntegrityViolationException e) {
-            // 并发撞三元唯一约束：本次未新增，结果与胜出线程一致，幂等吞掉。
+        relations.insertIfAbsent(holderId, targetId, source.name());
+    }
+
+    /** 目标账号必须物理存在（软删/注销仍算存在）。 */
+    private void requireUserExists(long userId) {
+        if (accountQuery.findUserById(userId).isEmpty()) {
+            throw AppException.notFound("用户不存在");
         }
     }
 
