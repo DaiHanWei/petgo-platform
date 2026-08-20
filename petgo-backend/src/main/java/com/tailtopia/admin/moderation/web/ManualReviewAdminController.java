@@ -39,11 +39,14 @@ public class ManualReviewAdminController {
      * 本页作用域（2026-08-19 拆分）：内容举报 + 账号标识字段（名称 / 头像）。
      *
      * <p>用户举报**不在此列** —— 它的处置是账号级（警告 / 封号），归「被举报用户」页。
+     *
+     * <p>内容送审（{@code CONTENT_SUBMISSION}）已于 2026-08-19 第二步并入本列表，
+     * 页内原先那张独立表格随之移除 —— 两张表并列会让运营以为「上面那张看完了就没事了」。
      * 拆开的理由：账号标识字段这一类此前挤在工单队列页里，那页的批量按钮全是账号处置与内容下架权，
      * **对它一个都用不上**，运营点了只会吃一条「请到名称/头像审核页处理」的红字。
      */
-    private static final java.util.Set<TicketType> SCOPE =
-            java.util.EnumSet.of(TicketType.CONTENT_REPORT, TicketType.ACCOUNT_IDENTITY);
+    private static final java.util.Set<TicketType> SCOPE = java.util.EnumSet.of(
+            TicketType.CONTENT_REPORT, TicketType.ACCOUNT_IDENTITY, TicketType.CONTENT_SUBMISSION);
 
     private static final int PAGE_SIZE = 20;
 
@@ -71,7 +74,6 @@ public class ManualReviewAdminController {
         // ⚠️ 这个开关管的是**内容发布要不要走人工审核这道关**（默认关＝机器判完直接发布），
         // 不是页面开关。下面的复核列表与它无关、始终显示。按钮本身仅超管可见（模板 sec:authorize）。
         model.addAttribute("manualReviewEnabled", settingsService.isManualReviewEnabled());
-        model.addAttribute("items", reviewService.pendingQueue());
 
         // 复核列表（2026-08-19 从工单队列页移入）：内容举报 + 账号标识字段混排，按类型筛选。
         TicketType typeFilter = parseTicketType(type);

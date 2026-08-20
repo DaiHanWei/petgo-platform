@@ -14,7 +14,7 @@
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
         <h1 th:text="#{admin.review.title}">人工复核</h1>
-        <p class="muted" th:text="#{admin.review.intro}">本页汇总需要人工判断的待办：内容举报、昵称/宠物名审核、用户/宠物头像审核。用户举报（账号级警告/封号）在「被举报用户」页。</p>
+        <p class="muted" th:text="#{admin.review.intro}">本页汇总需要人工判断的待办：内容送审（等放行）、内容举报、昵称/宠物名审核、用户/宠物头像审核。用户举报（账号级警告/封号）在「被举报用户」页。</p>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
 
@@ -32,12 +32,14 @@
         </div>
 
         <!-- ===== 复核列表（2026-08-19 从工单队列页移入）=====
-             内容举报 + 账号标识字段（名称/头像）混排，按类型筛选。
-             ⚠️ 每行的处置动作**按类型各自渲染** —— 四类的动作语义与授权域都不同：
-                内容举报 → 下架 / 无需处置（content.takedown）
+             内容送审（2026-08-19 第二步并入）+ 内容举报 + 账号标识字段（名称/头像）混排，按类型筛选。
+             ⚠️ 每行的处置动作**按类型各自渲染** —— 各类的动作语义与授权域都不同：
+                内容送审 → 通过（放行发布）/ 拒绝（丢弃，从未公开）/ 改优先级
+                内容举报 → 下架（已公开过）/ 无需处置（content.takedown）
                 名称审核 → 通过 / 违规（重置昵称）
                 头像审核 → 通过 / 违规（重置为默认头像）
-             统一成两个按钮会让「违规」对内容是下架、对头像是重置默认图，后果不同却长得一样。 -->
+             统一成两个按钮会让「违规」对内容是下架、对头像是重置默认图、对送审是丢弃，
+             后果各不相同却长得一样。 -->
         <h2 th:text="#{admin.review.section.tickets}">待复核</h2>
 
         <form class="filter-bar" th:action="@{/admin/manual-review}" method="get">
@@ -75,11 +77,13 @@
                 <th th:text="#{admin.review.col.action}">操作</th>
             </tr>
             </thead>
-            <tbody>
+            <!-- th:fragment="rows"：controller 的 HX-Request 分支只回这段 tbody（原挂在已删除的送审表上）。 -->
+            <tbody th:fragment="rows">
             <tr th:if="${result == null or result.isEmpty()}">
                 <td colspan="7" class="muted" th:text="#{admin.review.empty}">暂无待复核项</td>
             </tr>
-            <tr th:each="row : ${result != null ? result.content : null}">
+            <tr th:each="row : ${result != null ? result.content : null}"
+                th:classappend="${row.overdue()} ? 'row-overdue'">
                 <td th:text="#{'admin.tickets.type.' + ${row.type()}}">类型</td>
                 <td>
                     <!-- 宠物类对象：SQL 已把宠物解析到宠主；解析不到＝宠物档案已删除，
@@ -95,7 +99,11 @@
                 <td class="muted" th:text="${row.preview()}">摘要</td>
                 <td><strong th:text="${row.score()}">0</strong></td>
                 <td th:text="${row.earliestAt()}">时间</td>
-                <td th:text="#{'admin.tickets.status.' + ${row.status()}}">状态</td>
+                <td>
+                    <span th:text="#{'admin.tickets.status.' + ${row.status()}}">状态</span>
+                    <span class="badge badge-danger" th:if="${row.overdue()}"
+                          th:text="#{admin.review.overdue}">超 24h</span>
+                </td>
                 <td>
                     <!-- 内容举报：下架 / 无需处置 -->
                     <div th:if="${row.type().name() == 'CONTENT_REPORT' and row.actionRef() != null}"
@@ -129,6 +137,62 @@
                                     th:text="#{admin.review.act.violationName}">违规（重置名称）</button>
                         </form>
                     </div>
+                    <!-- 内容送审：通过（放行发布）/ 拒绝（丢弃 + 记判定依据）/ 改优先级。
+                         ⚠️「拒绝」在这里是**丢弃一条还没公开过的内容**，与内容举报的「下架」不同源：
+                         那条已经公开过、有人看过、要通知举报人；这条从未面世。端点因此各自独立。 -->
+                    <div th:if="${row.type().name() == 'CONTENT_SUBMISSION' and row.status().name() == 'PENDING'}"
+                         sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown') or hasAuthority('content.manual_review')">
+                        <div class="row-actions">
+                            <form th:action="@{/admin/manual-review/{id}/approve(id=${row.sourceId()})}"
+                                  method="post" class="inline-form">
+                                <button type="submit" class="btn btn-sm btn-primary"
+                                        th:text="#{admin.review.approve}">通过</button>
+                            </form>
+                            <!-- 拒绝弹框由 admin.js 的 data-open/close-dialog 委托，无内联 JS。 -->
+                            <button type="button" class="btn btn-sm btn-danger"
+                                    th:attr="data-open-dialog=|reject-dlg-${row.sourceId()}|"
+                                    th:text="#{admin.review.reject}">拒绝</button>
+                        </div>
+                        <!-- 改优先级（story 8 §5.1，写一条审计）。不预选当前值：现值已在「对象」列的徽标上（如 P1 · COMMENT）。 -->
+                        <form th:action="@{/admin/manual-review/{id}/priority(id=${row.sourceId()})}" method="post"
+                              class="inline-form">
+                            <select name="priority" aria-label="priority">
+                                <option value="P0">P0</option>
+                                <option value="P1">P1</option>
+                                <option value="P2">P2</option>
+                            </select>
+                            <button type="submit" class="btn btn-neutral btn-sm"
+                                    th:text="#{admin.review.priority.change}">改</button>
+                        </form>
+                        <dialog th:id="|reject-dlg-${row.sourceId()}|" class="modal">
+                            <div class="modal-head">
+                                <h3 th:text="#{admin.review.reject.title}">拒绝并记录原因</h3>
+                                <button type="button" class="modal-close" data-close-dialog aria-label="Close">&times;</button>
+                            </div>
+                            <form th:action="@{/admin/manual-review/{id}/reject(id=${row.sourceId()})}" method="post">
+                                <div class="modal-body">
+                                    <label class="field" th:text="#{admin.review.reject.category}">原因</label>
+                                    <select name="category" class="field-full" aria-label="category">
+                                        <option value="ILLEGAL" th:text="#{admin.review.cat.illegal}">违法</option>
+                                        <option value="HATE" th:text="#{admin.review.cat.hate}">仇恨</option>
+                                        <option value="PORN" th:text="#{admin.review.cat.porn}">色情</option>
+                                        <option value="POLITICAL" th:text="#{admin.review.cat.political}">政治敏感</option>
+                                        <option value="AD" th:text="#{admin.review.cat.ad}">广告引流</option>
+                                        <option value="HARASSMENT" th:text="#{admin.review.cat.harassment}">骚扰</option>
+                                        <option value="OTHER" selected th:text="#{admin.review.cat.other}">其他</option>
+                                    </select>
+                                    <label class="field" th:text="#{admin.review.reject.note}">备注（选填）</label>
+                                    <textarea name="note" rows="2" class="field-full"></textarea>
+                                </div>
+                                <div class="modal-foot">
+                                    <button type="button" class="btn btn-neutral" data-close-dialog
+                                            th:text="#{admin.review.cancel}">取消</button>
+                                    <button type="submit" class="btn btn-danger"
+                                            th:text="#{admin.review.reject.confirm}">确认拒绝</button>
+                                </div>
+                            </form>
+                        </dialog>
+                    </div>
                     <!-- 头像审核：通过 / 违规（重置为默认头像）-->
                     <div th:if="${row.type().name() == 'ACCOUNT_IDENTITY'
                                  and (row.subType() == 'USER_AVATAR' or row.subType() == 'PET_AVATAR')
@@ -152,113 +216,6 @@
             </tbody>
         </table>
 
-        <!-- ===== 内容送审队列（受上方激活开关控制；开关关着时这里恒为空）===== -->
-        <h2 th:text="#{admin.review.section.queue}">内容送审队列</h2>
-
-        <table>
-            <thead>
-            <tr>
-                <th th:text="#{admin.review.col.item}">队列项</th>
-                <th th:text="#{admin.review.col.priority}">优先级</th>
-                <th th:text="#{admin.review.col.content}">内容</th>
-                <th th:text="#{admin.review.col.type}">类型</th>
-                <th th:text="#{admin.review.col.author}">作者</th>
-                <th th:text="#{admin.review.col.submitted}">提交时间</th>
-                <th th:text="#{admin.review.col.action}">操作</th>
-            </tr>
-            </thead>
-            <tbody id="review-rows" th:fragment="rows">
-            <!-- 行按 priority 升序 + submitted_at 升序渲染（后端已排序，§5.1）；24h 高亮不变。 -->
-            <tr th:each="r : ${items}" th:classappend="${r.overdue()} ? 'row-overdue'">
-                <td th:text="${r.itemId()}">1</td>
-                <td>
-                    <span class="badge"
-                          th:classappend="${r.priority().name() == 'P0'} ? 'badge-danger' : (${r.priority().name() == 'P1'} ? 'badge-warn' : 'badge-info')"
-                          th:text="${r.priority()}">P1</span>
-                    <!-- 运营改优先级（写操作 → 审计）。仅 PENDING 项；处置权门控。 -->
-                    <form th:action="@{/admin/manual-review/{id}/priority(id=${r.itemId()})}" method="post"
-                          class="inline-form" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')">
-                        <select name="priority" aria-label="priority">
-                            <option value="P0">P0</option>
-                            <option value="P1">P1</option>
-                            <option value="P2">P2</option>
-                        </select>
-                        <button type="submit" class="btn btn-neutral btn-sm"
-                                th:text="#{admin.review.priority.change}">改</button>
-                    </form>
-                </td>
-                <td>
-                    #<span th:text="${r.contentId()}">0</span>
-                    <span class="badge badge-danger" th:if="${r.overdue()}" th:text="#{admin.review.overdue}">超 24h</span>
-                    <!-- bug 20260803-447 同型：长文折叠可展开，审核员须能看到全文再定夺。 -->
-                    <div class="muted cell-wide">
-                        <details th:if="${r.textPreview() != null and #strings.length(r.textPreview()) > 60}">
-                            <summary style="cursor:pointer" th:text="${#strings.abbreviate(r.textPreview(), 60)}">…</summary>
-                            <div style="white-space:pre-wrap;word-break:break-word;max-width:420px"
-                                 th:text="${r.textPreview()}">…</div>
-                        </details>
-                        <span th:unless="${r.textPreview() != null and #strings.length(r.textPreview()) > 60}"
-                              th:text="${r.textPreview()}">…</span>
-                    </div>
-                </td>
-                <td th:text="${r.type()}">DAILY</td>
-                <td>
-                    <span th:text="${r.authorId()}">-</span>
-                    <!-- 作者累计违规（§5.4，只读展示；story 9 未接入 → total=0 不显示）。 -->
-                    <span class="badge badge-warn" th:if="${r.strikes().total() > 0}"
-                          th:title="|帖子 ${r.strikes().post()} / 评论 ${r.strikes().comment()} / 名称 ${r.strikes().name()} / 头像 ${r.strikes().avatar()}|"
-                          th:text="|#{admin.moderation.strikes.label} ${r.strikes().total()}|">累计违规</span>
-                </td>
-                <td th:text="${@adminTime.wib(r.submittedAt())}">-</td>
-                <td sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown') or hasAuthority('content.manual_review')">
-                    <!-- 通过 / 拒绝 左右并排。 -->
-                    <div class="row-actions">
-                        <form th:action="@{/admin/manual-review/{id}/approve(id=${r.itemId()})}" method="post"
-                              class="inline">
-                            <button type="submit" class="btn btn-primary btn-sm"
-                                    th:text="#{admin.review.approve}">通过</button>
-                        </form>
-                        <!-- 拒绝：点按钮弹框采集判定依据（违规类别）+ 选填备注（§5.2，折叠进审计，无原文）。
-                             data-open-dialog / data-close-dialog 由 admin.js 委托，无内联 JS。 -->
-                        <button type="button" class="btn btn-danger btn-sm"
-                                th:attr="data-open-dialog=|reject-dlg-${r.itemId()}|"
-                                th:text="#{admin.review.reject}">拒绝</button>
-                    </div>
-                    <dialog th:id="|reject-dlg-${r.itemId()}|" class="modal">
-                        <div class="modal-head">
-                            <h3 th:text="#{admin.review.reject.title}">拒绝并记录原因</h3>
-                            <button type="button" class="modal-close" data-close-dialog aria-label="Close">&times;</button>
-                        </div>
-                        <form th:action="@{/admin/manual-review/{id}/reject(id=${r.itemId()})}" method="post">
-                            <div class="modal-body">
-                                <label class="field" th:text="#{admin.review.reject.category}">原因</label>
-                                <select name="category" class="field-full" aria-label="category">
-                                    <option value="ILLEGAL" th:text="#{admin.review.cat.illegal}">违法</option>
-                                    <option value="HATE" th:text="#{admin.review.cat.hate}">仇恨</option>
-                                    <option value="PORN" th:text="#{admin.review.cat.porn}">色情</option>
-                                    <option value="POLITICAL" th:text="#{admin.review.cat.political}">政治敏感</option>
-                                    <option value="AD" th:text="#{admin.review.cat.ad}">广告引流</option>
-                                    <option value="HARASSMENT" th:text="#{admin.review.cat.harassment}">骚扰</option>
-                                    <option value="OTHER" selected th:text="#{admin.review.cat.other}">其他</option>
-                                </select>
-                                <label class="field" th:text="#{admin.review.reject.note}">备注（选填）</label>
-                                <textarea name="note" rows="2" class="field-full"></textarea>
-                            </div>
-                            <div class="modal-foot">
-                                <button type="button" class="btn btn-neutral" data-close-dialog
-                                        th:text="#{admin.review.cancel}">取消</button>
-                                <button type="submit" class="btn btn-danger"
-                                        th:text="#{admin.review.reject.confirm}">确认拒绝</button>
-                            </div>
-                        </form>
-                    </dialog>
-                </td>
-            </tr>
-            <tr th:if="${#lists.isEmpty(items)}">
-                <td colspan="7" class="empty" th:text="#{admin.review.empty}">队列为空。</td>
-            </tr>
-            </tbody>
-        </table>
     </div>
 </div>
 </body>

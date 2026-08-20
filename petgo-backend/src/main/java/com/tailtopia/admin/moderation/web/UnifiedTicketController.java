@@ -246,7 +246,7 @@ public class UnifiedTicketController {
         // 但表单是可以被手改的，仍如实给出去处，绝不 500、也绝不误处置成别的类型。
         return switch (parsed.type()) {
             case ACCOUNT_REPORT -> batchAccountReports(admin, action, parsed.ids(), flash);
-            case CONTENT_REPORT, ACCOUNT_IDENTITY -> {
+            case CONTENT_REPORT, ACCOUNT_IDENTITY, CONTENT_SUBMISSION -> {
                 flash.addFlashAttribute("error", "该类工单请在「人工复核」页处理");
                 yield "redirect:/admin/tickets";
             }

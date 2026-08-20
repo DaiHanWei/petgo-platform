@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 统一工单队列查询（Story 3.1，AB-3D）。**三个业务类别、四张源表，读时联合。**
+ * 统一工单队列查询（Story 3.1，AB-3D）。**四个业务类别、六张源表，读时联合。**
  *
  * <h2>为什么是「读时联合」而不是建一张索引表</h2>
  * 不新增统一索引表、不双写、存量零回填、不加缓存（AD-7）。各类工单的状态<b>仍由各自源表权威持有</b>——
@@ -42,7 +42,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <h2>⚠️ 别照抄既有举报队列的 N+1</h2>
  * {@code AdminModerationService.queue} 在循环里逐条查内容摘要与举报数，靠 50 条硬上限勉强撑住。
- * 本视图是四表联合 + 优先级实时计算，照抄会更糟。这里<b>一条 SQL 出结果、排序分页都在库内做</b>，
+ * 本视图是六表联合 + 优先级实时计算，照抄会更糟。这里<b>一条 SQL 出结果、排序分页都在库内做</b>，
  * 「人数 / 次数 / 高频人数」由 Story 2.1 建的 {@code idx_account_report_entries_report_reporter}
  * 一次聚合得出。
  *
@@ -52,6 +52,11 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class UnifiedTicketQueryService {
+
+    /** 内容送审的分数映射（2026-08-19）：P0 最急、P2 沉底，与其余类别同序可比。 */
+    static final int SUBMISSION_SCORE_P0 = 12;
+    static final int SUBMISSION_SCORE_P1 = 6;
+    static final int SUBMISSION_SCORE_P2 = 2;
 
     /** 账号标识字段工单的分数映射（AC6，C-102）。抽成常量便于日后调整。 */
     static final int IDENTITY_SCORE_HIGH = 10;
@@ -63,7 +68,7 @@ public class UnifiedTicketQueryService {
     static final int FREQUENT_REPORTER_THRESHOLD = 5;
 
     /**
-     * 四表联合的 CTE。
+     * 六表联合的 CTE（① 内容举报 ② 用户举报 ③ 名称 ④ 头像 ⑤ 内容送审）。
      *
      * <p>⚠️ 账号标识字段两表<b>只收 MANUAL_PENDING 与两个终态</b>：
      * {@code SCORING / QUEUED / AUTO_PASSED / SUPERSEDED / FAILED_TO_QUEUE} 一律不进运营队列
@@ -178,10 +183,40 @@ public class UnifiedTicketQueryService {
                   LEFT JOIN pet_profiles pp2
                          ON avr.subject_type = 'PET_AVATAR' AND pp2.id = avr.subject_id
                  WHERE avr.status IN ('MANUAL_PENDING', 'RESOLVED')
+
+                UNION ALL
+
+                -- ⑤ 内容送审（2026-08-19 并入）：机器判「拿不准」→ 发布事务内挂起等人工放行。
+                --    **没有举报人**（与①内容举报的本质区别：①是内容已公开、事后被人报）。
+                --    分数取 P0/P1/P2 三档映射，让它能和其余类别在同一个序里排。
+                --
+                --    ⚠️⚠️ 这张表是**多态**的（V49 起 content_type ∈ CONTENT_POST / COMMENT），
+                --    content_id 在两个命名空间里各自计数。所以两个 JOIN 都**必须带 content_type 判别**：
+                --    只 join content_posts 会让「评论 id 恰好等于某帖 id」错配成一条毫不相干的帖子，
+                --    页面上显示别人的正文和作者 —— 审核员据此下的每一个判都是错的。
+                SELECT 'CONTENT_SUBMISSION'::text,
+                       mrq.id,
+                       mrq.priority || ' · ' || mrq.content_type,
+                       COALESCE(cp2.author_id, cmt.author_id),
+                       CASE mrq.status WHEN 'PENDING'  THEN 'PENDING'
+                                       WHEN 'APPROVED' THEN 'RESOLVED'
+                                       WHEN 'REJECTED' THEN 'RESOLVED'
+                                       ELSE 'NO_ACTION' END,
+                       0::bigint, 0::bigint, 0::bigint,
+                       (CASE mrq.priority WHEN 'P0' THEN %d WHEN 'P1' THEN %d ELSE %d END)::bigint,
+                       mrq.submitted_at,
+                       LEFT(COALESCE(cp2.text, cmt.body, ''), 60),
+                       mrq.id
+                  FROM manual_review_queue mrq
+                  LEFT JOIN content_posts cp2
+                         ON mrq.content_type = 'CONTENT_POST' AND cp2.id = mrq.content_id
+                  LEFT JOIN comments cmt
+                         ON mrq.content_type = 'COMMENT' AND cmt.id = mrq.content_id
             )
             """.formatted(FREQUENT_REPORTER_THRESHOLD,
             IDENTITY_SCORE_HIGH, IDENTITY_SCORE_NORMAL,
-            IDENTITY_SCORE_HIGH, IDENTITY_SCORE_NORMAL);
+            IDENTITY_SCORE_HIGH, IDENTITY_SCORE_NORMAL,
+            SUBMISSION_SCORE_P0, SUBMISSION_SCORE_P1, SUBMISSION_SCORE_P2);
 
     private final JdbcTemplate jdbc;
 

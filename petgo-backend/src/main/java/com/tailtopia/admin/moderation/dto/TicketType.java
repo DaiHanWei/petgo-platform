@@ -17,5 +17,16 @@ public enum TicketType {
     ACCOUNT_REPORT,
 
     /** 账号标识字段审核 —— 源表 {@code name_moderation_records} + {@code avatar_reviews}。 */
-    ACCOUNT_IDENTITY
+    ACCOUNT_IDENTITY,
+
+    /**
+     * 内容送审 —— 源表 {@code manual_review_queue}（2026-08-19 并入混排列表）。
+     *
+     * <p>与「内容举报」的区别：**没有举报人**。它是机器审核判定「拿不准」的内容，
+     * 在发布事务里被挂起等人工放行；举报是内容已经公开、事后有人报。
+     *
+     * <p>⚠️ 该分支受「人工审核」总闸控制（默认**关**＝机器判完直接发布、此队列恒空）。
+     * 那个开关**不影响本列表其余三类**，它管的是内容发布链路要不要走这道关。
+     */
+    CONTENT_SUBMISSION
 }
