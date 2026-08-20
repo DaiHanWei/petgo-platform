@@ -105,37 +105,63 @@
                           th:text="#{admin.review.overdue}">超 24h</span>
                 </td>
                 <td>
-                    <!-- 内容举报：下架 / 无需处置 -->
-                    <div th:if="${row.type().name() == 'CONTENT_REPORT' and row.actionRef() != null}"
+                    <!-- 内容举报：下架 / 驳回。
+                         ⚠️ 驳回必须走**按帖**端点 /admin/reports/post/{postId}/dismiss-all：
+                            本类工单是**按帖聚合**的（12 个人举报同一条帖 = 一条工单），
+                            而 /admin/reports/{reportId}/dismiss 只收档**一条**举报单 ——
+                            该帖还有别人的 PENDING 单，行仍是「待处理」、下次打开又在。
+                            运营会以为「点了没反应」。（下架端点相反：它会顺带关掉该帖全部 PENDING 单。）
+                         ⚠️ 下架带 data-confirm：帖子会被隐藏、该帖全部待处理举报一并关闭，
+                            是不可顺手撤回的动作。2026-08-19 拆分时把这个二次确认丢了。
+                         sourceId 是 post_id（不是某条举报单 id），actionRef 是代表性 PENDING 单 id。 -->
+                    <div th:if="${row.type().name() == 'CONTENT_REPORT'
+                                 and row.status().name() == 'PENDING' and row.actionRef() != null}"
                          sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')">
-                        <form th:action="@{'/admin/reports/' + ${row.actionRef()} + '/takedown'}"
-                              method="post" class="inline-form">
+                        <form th:action="@{/admin/reports/{id}/takedown(id=${row.actionRef()})}"
+                              method="post" class="inline-form"
+                              th:attr="data-confirm=#{admin.tickets.confirm.takedown}">
                             <button type="submit" class="btn btn-sm btn-danger"
                                     th:text="#{admin.review.act.takedown}">下架</button>
                         </form>
-                        <form th:action="@{'/admin/reports/' + ${row.actionRef()} + '/dismiss'}"
+                        <form th:action="@{/admin/reports/post/{id}/dismiss-all(id=${row.sourceId()})}"
                               method="post" class="inline-form">
                             <button type="submit" class="btn btn-sm btn-neutral"
-                                    th:text="#{admin.review.act.dismiss}">无需处置</button>
+                                    th:text="#{admin.tickets.action.dismissContent}">驳回</button>
                         </form>
                     </div>
-                    <!-- 名称审核：通过 / 违规（重置昵称）-->
+                    <!-- 名称审核：判过保留 / 违规（重置名称）。
+                         ⚠️ 必须走 HTMX：/admin/name-moderation/{id}/decide 是 @ResponseBody **纯文本**端点
+                            （设计上供就地回显）。用普通表单 POST 会把浏览器导航到一个只有一行字的
+                            白页，运营丢掉整个列表上下文 —— 2026-08-19 拆分时换成了普通表单，
+                            正是这个毛病。
+                         ⚠️「判定依据 + 备注」不能省：违规处置要折叠进审计（story 8 §5.2）。
+                            拆分时一并丢了，这两类的违规记录在审计里就没了原因。 -->
                     <div th:if="${row.type().name() == 'ACCOUNT_IDENTITY'
                                  and (row.subType() == 'NICKNAME' or row.subType() == 'PET_NAME')
                                  and row.status().name() == 'PENDING'}"
                          sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')">
-                        <form th:action="@{'/admin/name-moderation/' + ${row.sourceId()} + '/decide'}"
-                              method="post" class="inline-form">
-                            <input type="hidden" name="decision" value="PASS"/>
-                            <button type="submit" class="btn btn-sm btn-neutral"
+                        <form th:hx-post="@{/admin/name-moderation/{id}/decide(id=${row.sourceId()})}"
+                              th:hx-target="'#name-result-' + ${row.sourceId()}" hx-swap="innerHTML"
+                              class="inline-form">
+                            <!-- HTMX 表单不走 th:action → 手动带 CSRF token（/admin 会话 CSRF 链）。 -->
+                            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                            <select name="category" aria-label="category">
+                                <option value="ILLEGAL" th:text="#{admin.review.cat.illegal}">违法</option>
+                                <option value="HATE" th:text="#{admin.review.cat.hate}">仇恨</option>
+                                <option value="PORN" th:text="#{admin.review.cat.porn}">色情</option>
+                                <option value="POLITICAL" th:text="#{admin.review.cat.political}">政治敏感</option>
+                                <option value="AD" th:text="#{admin.review.cat.ad}">广告引流</option>
+                                <option value="HARASSMENT" th:text="#{admin.review.cat.harassment}">骚扰</option>
+                                <option value="OTHER" selected th:text="#{admin.review.cat.other}">其他</option>
+                            </select>
+                            <input type="text" name="note" class="input-sm"
+                                   th:placeholder="#{admin.review.reject.note}"/>
+                            <button type="submit" name="decision" value="PASS" class="btn btn-neutral btn-sm"
                                     th:text="#{admin.review.act.pass}">通过</button>
-                        </form>
-                        <form th:action="@{'/admin/name-moderation/' + ${row.sourceId()} + '/decide'}"
-                              method="post" class="inline-form">
-                            <input type="hidden" name="decision" value="VIOLATION"/>
-                            <button type="submit" class="btn btn-sm btn-danger"
+                            <button type="submit" name="decision" value="VIOLATION" class="btn btn-danger btn-sm"
                                     th:text="#{admin.review.act.violationName}">违规（重置名称）</button>
                         </form>
+                        <span class="muted" th:id="'name-result-' + ${row.sourceId()}"></span>
                     </div>
                     <!-- 内容送审：通过（放行发布）/ 拒绝（丢弃 + 记判定依据）/ 改优先级。
                          ⚠️「拒绝」在这里是**丢弃一条还没公开过的内容**，与内容举报的「下架」不同源：
@@ -193,23 +219,39 @@
                             </form>
                         </dialog>
                     </div>
-                    <!-- 头像审核：通过 / 违规（重置为默认头像）-->
+                    <!-- 头像审核：判过保留 / 违规（重置为默认头像）。
+                         ⚠️ 必须走 HTMX：/admin/avatar-review/{id}/decide 是 @ResponseBody **纯文本**端点
+                            （设计上供就地回显）。用普通表单 POST 会把浏览器导航到一个只有一行字的
+                            白页，运营丢掉整个列表上下文 —— 2026-08-19 拆分时换成了普通表单，
+                            正是这个毛病。
+                         ⚠️「判定依据 + 备注」不能省：违规处置要折叠进审计（story 8 §5.2）。
+                            拆分时一并丢了，这两类的违规记录在审计里就没了原因。 -->
                     <div th:if="${row.type().name() == 'ACCOUNT_IDENTITY'
                                  and (row.subType() == 'USER_AVATAR' or row.subType() == 'PET_AVATAR')
                                  and row.status().name() == 'PENDING'}"
                          sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')">
-                        <form th:action="@{'/admin/avatar-review/' + ${row.sourceId()} + '/decide'}"
-                              method="post" class="inline-form">
-                            <input type="hidden" name="decision" value="PASS"/>
-                            <button type="submit" class="btn btn-sm btn-neutral"
+                        <form th:hx-post="@{/admin/avatar-review/{id}/decide(id=${row.sourceId()})}"
+                              th:hx-target="'#avatar-result-' + ${row.sourceId()}" hx-swap="innerHTML"
+                              class="inline-form">
+                            <!-- HTMX 表单不走 th:action → 手动带 CSRF token（/admin 会话 CSRF 链）。 -->
+                            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                            <select name="category" aria-label="category">
+                                <option value="ILLEGAL" th:text="#{admin.review.cat.illegal}">违法</option>
+                                <option value="HATE" th:text="#{admin.review.cat.hate}">仇恨</option>
+                                <option value="PORN" th:text="#{admin.review.cat.porn}">色情</option>
+                                <option value="POLITICAL" th:text="#{admin.review.cat.political}">政治敏感</option>
+                                <option value="AD" th:text="#{admin.review.cat.ad}">广告引流</option>
+                                <option value="HARASSMENT" th:text="#{admin.review.cat.harassment}">骚扰</option>
+                                <option value="OTHER" selected th:text="#{admin.review.cat.other}">其他</option>
+                            </select>
+                            <input type="text" name="note" class="input-sm"
+                                   th:placeholder="#{admin.review.reject.note}"/>
+                            <button type="submit" name="decision" value="PASS" class="btn btn-neutral btn-sm"
                                     th:text="#{admin.review.act.pass}">通过</button>
-                        </form>
-                        <form th:action="@{'/admin/avatar-review/' + ${row.sourceId()} + '/decide'}"
-                              method="post" class="inline-form">
-                            <input type="hidden" name="decision" value="VIOLATION"/>
-                            <button type="submit" class="btn btn-sm btn-danger"
+                            <button type="submit" name="decision" value="VIOLATION" class="btn btn-danger btn-sm"
                                     th:text="#{admin.review.act.violationAvatar}">违规（重置头像）</button>
                         </form>
+                        <span class="muted" th:id="'avatar-result-' + ${row.sourceId()}"></span>
                     </div>
                 </td>
             </tr>

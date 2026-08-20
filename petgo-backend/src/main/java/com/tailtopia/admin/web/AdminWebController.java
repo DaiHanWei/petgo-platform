@@ -111,14 +111,19 @@ public class AdminWebController {
     @GetMapping("/admin/reports")
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('content.view_reports')")
     public String reports() {
-        return "redirect:/admin/tickets";
+        // 🔴 2026-08-20 改指向：内容举报已于 2026-08-19 拆分时移入「人工复核」页。
+        // 原先指 /admin/tickets（现在的「被举报用户」）—— 那页只剩用户举报，
+        // 顺着旧书签进来的人会看到一个**没有任何内容举报**的列表，以为举报都没了。
+        return "redirect:/admin/manual-review";
     }
 
     @PostMapping("/admin/reports/{id}/takedown")
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')")
     public String takedown(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id) {
         adminModerationService.takedown(id, admin);
-        return "redirect:/admin/tickets";
+        // 回内容举报现在的所在页（拆分后是「人工复核」）。回 /admin/tickets 等于把人甩到另一个
+        // 页面，且刚处置的那条根本不在那儿 —— 运营会以为操作没生效。
+        return "redirect:/admin/manual-review";
     }
 
     @PostMapping("/admin/reports/{id}/dismiss")
@@ -127,7 +132,7 @@ public class AdminWebController {
         // ⚠️ gate 对齐 dismiss-all / 批量驳回的 content.takedown（评审三轮 #2）：驳回是处置动作，
         // 挂查看权上等于让只读审核员逐条 POST 绕过处置权限（等价被禁的 dismiss-all）。
         adminModerationService.dismiss(id, admin);
-        return "redirect:/admin/tickets";
+        return "redirect:/admin/manual-review";
     }
 
     /**
@@ -144,7 +149,8 @@ public class AdminWebController {
             org.springframework.web.servlet.mvc.support.RedirectAttributes flash) {
         int n = adminModerationService.dismissAllForPost(postId, admin);
         flash.addFlashAttribute("notice", "已驳回该帖全部举报（" + n + " 条）");
-        return "redirect:/admin/tickets";
+        // 内容举报现在的所在页是「人工复核」（2026-08-19 拆分）。
+        return "redirect:/admin/manual-review";
     }
 
     @PostMapping("/admin/reports/batch")
@@ -157,7 +163,7 @@ public class AdminWebController {
         AdminModerationService.BatchResult result = adminModerationService.batch(reportIds, takedown, admin);
         flash.addFlashAttribute("notice",
                 "批量完成：成功 " + result.ok() + " 条，失败 " + result.failedCount() + " 条");
-        return "redirect:/admin/tickets";
+        return "redirect:/admin/manual-review";
     }
 
     // ===== Story 5.1：兽医账号 CRUD（复用本 shell）=====
