@@ -219,6 +219,11 @@ void main() {
         'signup_', 'milestone_',
         // 问诊双线漏斗（2026-08-06：PostHog 区分 AI/VET）——事件必带 consult_type 属性。
         'consult_', 'ai_',
+        // 推送权限（V1.1.6 FR-85 / Story 8.1）。模块是「推送权限」而非某个页面 ——
+        // 它跨冷启动与四个触发点，本来就不属于任何单页；`push_permission_*` 一眼可读，
+        // 符合本规则的**用意**（产品看得出是哪个功能）。
+        // ⚠️ 这是**新模块**入表，不是为遗留事件放宽规则（那种情况请加 legacyEvents）。
+        'push_',
       ];
       // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
       const allowedSuffixes = <String>[
@@ -226,6 +231,12 @@ void main() {
         '_succeeded', '_completed', '_landed_on_tab', '_achieved',
         // 问诊漏斗节点（2026-08-06）：下单提交 / 流程开始。
         '_submitted', '_started',
+        // 状态上报（V1.1.6 Story 8.1）：`_reported` = 端上主动上报一次当前状态，
+        // 与「用户做了什么」的 _tapped/_selected 区分开 —— 这类事件没有用户动作，
+        // 分母是启动数而不是曝光数，混在一起会让判读口径错位。
+        // 🔴 产品 2026-08-18 定名时正是把旧名 `..._state_snapshot` 改成了它
+        //    （snapshot 是名词，不满足「动作在词尾且须是动词」），OA-7 已闭合。
+        '_reported',
       ];
       for (final e in eventNamesInSource()) {
         if (legacyEvents.contains(e)) continue;

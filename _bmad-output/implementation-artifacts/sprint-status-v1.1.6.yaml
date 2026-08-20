@@ -97,7 +97,7 @@
 # serp_position 分布）。
 
 generated: 2026-08-17
-last_updated: 2026-08-18
+last_updated: 2026-08-20
 project: TailTopia V1.1.6
 project_key: NOKEY
 tracking_system: file-system
@@ -171,8 +171,8 @@ development_status:
   #    四个触发点的时机 PRD 本就写明、并未失效；剩下的是源目录 PRD 回写（文档同步，不挡代码）。
   # ⚠️ AD-14：全部触发点只走「跳系统设置」，PRD 的「原生弹窗归属」整段作废
   #    （首启即申请已于 2026-08-07 上线）；照 PRD 字面实现会做出一段永远走不到的分支。
-  epic-8: backlog
-  8-1-系统通知权限状态快照: backlog                   # P0 前置：先有观测再改行为
+  epic-8: in-progress
+  8-1-系统通知权限状态快照: review                   # P0 前置：先有观测再改行为
   8-2-用户侧三触发点与通知中心引导条: backlog
   8-3-兽医端触发点: backlog                          # 切换为在线时
   epic-8-retrospective: optional
