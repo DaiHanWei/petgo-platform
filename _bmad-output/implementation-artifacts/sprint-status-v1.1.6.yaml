@@ -137,16 +137,16 @@ development_status:
 
   # ===== Epic 4: 内容顶置坑位 · FR-68 + E-1/E-2/E-3 =====
   # 依赖 Epic 3。E-3 必须随本 Epic 交付，不得推迟到 Epic 10（下游 V1.1.8 的唯一数据来源）。
-  epic-4: backlog
+  epic-4: in-progress
   4-1-顶置配置数据模型与时间窗判定: review                # 查询时判定，不落状态列、不建扫描器（AD-9）；时间窗判定须是唯一实现、四处共用
   4-2-首页坑位渲染与只首屏让位: review                    # 顶置 content_id 仅从第一页排除，后续页仍可出现（AD-8）
   4-3-推广卡片: review                                   # 不对应真实帖子
-  4-4-顶置坑位套用拉黑过滤: backlog                   # ⚠️ 跨版本依赖 V1.1.4（已实现待发版）；套 findFeed 的**账号维度**那条子查询，两条并列不合并
+  4-4-顶置坑位套用拉黑过滤: ready-for-dev                   # ⚠️ 跨版本依赖 V1.1.4（已实现待发版）；套 findFeed 的**账号维度**那条子查询，两条并列不合并
   epic-4-retrospective: optional
 
   # ===== Epic 5: 运营标签体系 · FR-74 + FR-75 =====
   # 依赖 Epic 3（两类标签挂在 3-4 的图片区叠加层；装饰标签占左下角，与顶置角标的右上角互不重叠）。
-  epic-5: backlog
+  epic-5: in-progress
   5-1-用户标签四处展示位与tooltip: review                 # 七处展示位一律批量取数（AD-11），评论列表尤其禁止逐条
   5-2-内容装饰标签三处展示位: review      
   epic-5-retrospective: optional
@@ -163,7 +163,7 @@ development_status:
   #    已死，而新时机至今无人定义（AD-14 只写了「须自行实现时机判定」，没给口径）。
   epic-7: in-progress
   7-1-手机号字段与保存清空: review                        # 选填、允许清空写 null、禁入日志，脱敏在展示层（AD-17）
-  7-2-软引导与设置页常驻入口: backlog                 # 🔴 OA-5 仍挡这一条：新时机口径待产品给出（旧的两个时机在线上已不再触发，AD-14）
+  7-2-软引导与设置页常驻入口: ready-for-dev                 # 🔴 OA-5 仍挡这一条：新时机口径待产品给出（旧的两个时机在线上已不再触发，AD-14）
   epic-7-retrospective: optional
 
   # ===== Epic 8: 推送权限重构 · FR-85 + E-19/E-20/E-21 =====
@@ -173,23 +173,23 @@ development_status:
   #    （首启即申请已于 2026-08-07 上线）；照 PRD 字面实现会做出一段永远走不到的分支。
   epic-8: in-progress
   8-1-系统通知权限状态快照: review                   # P0 前置：先有观测再改行为
-  8-2-用户侧三触发点与通知中心引导条: backlog
-  8-3-兽医端触发点: backlog                          # 切换为在线时
+  8-2-用户侧三触发点与通知中心引导条: ready-for-dev
+  8-3-兽医端触发点: ready-for-dev                          # 切换为在线时
   epic-8-retrospective: optional
 
   # ===== Epic 9: 单条内容分享卡 · FR-73 =====
   # 无依赖（2026-08-11 对抗性评审已删除原「依赖 Epic 2」那条边）。
   # 客户端生成，复用宠物身份证既有做法；服务端出图能力仅供社交预览缩略图，不挪用（AD-15）。
-  epic-9: backlog
-  9-1-卡片生成基建: backlog                          # 双尺寸 + 水印 + 文字排版
-  9-2-两套模板与下载二维码: backlog                   # 有图 / 纯文字
-  9-3-分享入口与链接落地分流: backlog
+  epic-9: in-progress
+  9-1-卡片生成基建: ready-for-dev                          # 双尺寸 + 水印 + 文字排版
+  9-2-两套模板与下载二维码: ready-for-dev                   # 有图 / 纯文字
+  9-3-分享入口与链接落地分流: ready-for-dev
   epic-9-retrospective: optional
 
   # ===== Epic 10: 埋点收尾（App 侧） =====
   # 依赖前述各 Epic 的功能须先在。E-3 已随 Epic 4 交付，不在此。
-  epic-10: backlog
-  10-1-app侧剩余埋点与回写全局文档: backlog           # ✅ OA-7 已闭合（2026-08-18 定案改名）：实现按新名，见埋点清单 §1 的新旧对照表
+  epic-10: in-progress
+  10-1-app侧剩余埋点与回写全局文档: ready-for-dev           # ✅ OA-7 已闭合（2026-08-18 定案改名）：实现按新名，见埋点清单 §1 的新旧对照表
   epic-10-retrospective: optional
 
 # ===== 开工前须知的开放问题（详见架构 delta §8） =====
