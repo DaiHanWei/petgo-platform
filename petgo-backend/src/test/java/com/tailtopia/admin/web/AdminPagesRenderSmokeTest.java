@@ -41,6 +41,27 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
     }
 
     /**
+     * 「内容」分组的侧栏次序由**产品指定**（2026-08-20）：
+     * 种子内容发布 → 内容管理 → 评论管理 → 人工复核 → 用户 → 被举报用户。
+     *
+     * <p>钉住它是因为这个次序<b>没有任何自解释的规律</b>（不是字母序、不是权限分组序），
+     * 后来人加菜单时很容易按「新加的往后排」或顺手重排，而改错了没有任何报错 ——
+     * 只有运营下次找不到入口时才会发现。被举报用户排末位是因为它是账号级处置
+     * （警告/封号），与前面几项的内容维度不同。
+     */
+    @Test
+    void contentNavKeepsTheProductSpecifiedOrder() throws Exception {
+        String html = visibleText("/admin/dashboard");
+        java.util.List<String> expected = java.util.List.of(
+                "/admin/seed-post", "/admin/content", "/admin/comments",
+                "/admin/manual-review", "/admin/users", "/admin/tickets");
+        java.util.List<Integer> positions = expected.stream().map(html::indexOf).toList();
+        assertThat(positions).as("每个入口都应渲染出来").doesNotContain(-1);
+        assertThat(positions).as("侧栏次序：" + String.join(" → ", expected))
+                .isSorted();
+    }
+
+    /**
      * 侧栏「人工复核」链接的可见性必须与该页入口门一致（2026-08-20 一并放宽到 content.takedown）。
      *
      * <p>两边走散时的表现最难查：**权限放行了、直接敲 URL 能进，但侧栏里没有这个链接** ——
