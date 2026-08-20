@@ -826,6 +826,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
+              key: const ValueKey('publishPickCamera'),
               leading: const Icon(
                 Icons.photo_camera_outlined,
                 color: AppColors.mint,
@@ -834,6 +835,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
               onTap: () => Navigator.of(ctx).pop(MediaSource.camera),
             ),
             ListTile(
+              key: const ValueKey('publishPickGallery'),
               leading: const Icon(
                 Icons.photo_library_outlined,
                 color: AppColors.mint,
@@ -845,6 +847,21 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
         ),
       ),
     );
+    // 图片来源选择（2026-08-20 用户要求）：相机与相册是两条成本完全不同的路 ——
+    // 相册是「我已经有照片了」，相机是「我现在为发帖专门拍一张」。后者发布意愿更强，
+    // 但也更容易在拍摄那一步流失。一个事件 + source 属性（不是两个事件），
+    // 与同页 publish_page_content_type_selected 形状一致，看板可直接对比占比。
+    //
+    // ⚠️ 报在这里（sheet 已返回选择、真正去拍/去选**之前**）：它记的是「用户选了哪条路」。
+    //    挪到取图成功之后会变成「成功率」事件，分母口径就不是这个了 ——
+    //    而"选了相机却没拍成"恰恰是想观察的流失。
+    // ⚠️ source == null（点遮罩关掉 sheet）**不报**：否则分母会混进"打开又关掉"的人。
+    if (source != null) {
+      await Analytics.capture(
+        'publish_page_image_source_selected',
+        {'source': source.name},
+      );
+    }
     if (source == MediaSource.gallery) {
       await _addGalleryImages(controller);
     } else if (source != null) {

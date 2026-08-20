@@ -425,3 +425,22 @@ social_user_hide_submitted       {origin: REPORT, entry: report_flow}
 4. 事件名是 2026-08-18 按命名规范改名后的新名（旧名 `push_permission_state_snapshot`，
    `snapshot` 是名词、不符合"动作在词尾且须是动词"）。**本次是首次落地；一旦发版即锁死**
    —— 理由同 §8.9。
+
+### 9.2 `publish_page_image_source_selected`（2026-08-20 用户要求）
+
+| 项 | 值 |
+|---|---|
+| 时机 | 发布页点「Add」弹出来源 sheet 后，用户选了相机或相册（**sheet 已返回、真正去拍/去选之前**） |
+| 属性 | `source`：`camera` / `gallery`（直取 `MediaSource` 枚举名，稳定受控字面量） |
+| 落点 | `lib/features/content/presentation/publish_compose_page.dart` → `_pickImageSource` |
+
+**为什么值得埋**：这两条路的成本完全不同 —— 相册是「我已经有照片了」，
+相机是「我现在为发帖专门拍一张」。后者发布意愿更强，但也更容易在拍摄那一步流失。
+
+判读注意：
+
+1. **报的是「选了哪条路」，不是「取图成功」。** 挪到取图之后会变成成功率事件，
+   而"选了相机却没拍成"恰恰是想观察的流失。
+2. **点遮罩关掉 sheet 不报。** 否则占比的分母会混进"打开又关掉"的人。
+3. 一个事件 + `source` 属性，不是两个事件 —— 与同页 `publish_page_content_type_selected`
+   形状一致，看板里可直接对比占比。
