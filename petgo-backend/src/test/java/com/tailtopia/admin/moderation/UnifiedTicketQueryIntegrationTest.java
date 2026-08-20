@@ -277,8 +277,15 @@ class UnifiedTicketQueryIntegrationTest extends ApiIntegrationTest {
                 + "VALUES ('NICKNAME', ?, 1, '自动过的昵称', 'AUTO_PASSED', 'NORMAL', now())",
                 autoPassed.getId());
 
+        // ⚠️ 必须按 targetUserId 精确过滤：纯数字检索词也会按**昵称模糊匹配**（数字昵称是印尼
+        //    常见形态，有意为之），而测试昵称是「用户+19 位 nanoTime」，搜 id 会顺带命中别人。
+        //    不过滤的话，这条会随类内其它用例造的数据量随机红（见 rowOf 的说明）。
         assertThat(query.search(TicketType.ACCOUNT_IDENTITY, null,
-                String.valueOf(autoPassed.getId()), PageRequest.of(0, 20)).getContent()).isEmpty();
+                String.valueOf(autoPassed.getId()), PageRequest.of(0, 500)).getContent().stream()
+                // ⚠️ 两侧都是 Long，必须 Objects.equals —— `==` 比的是**引用**，
+                //    超过 127 不走 Long 缓存 ⇒ 恒 false，断言「为空」会因此假绿。
+                .filter(r -> java.util.Objects.equals(r.targetUserId(), autoPassed.getId()))
+                .toList()).isEmpty();
     }
 
     /** 终态映射：名称的 `RESOLVED_PASS` → **无需处置**（不是「已处理」）。 */
@@ -296,6 +303,70 @@ class UnifiedTicketQueryIntegrationTest extends ApiIntegrationTest {
 
         assertThat(identityRowOf(passed.getId()).status()).isEqualTo(TicketStatusBucket.NO_ACTION);
         assertThat(identityRowOf(violated.getId()).status()).isEqualTo(TicketStatusBucket.RESOLVED);
+    }
+
+    /**
+     * 🔴 处置对象已不存在 → **不该再是「待处理」**（bug 20260820，运营在 staging 上一眼看出）。
+     *
+     * <p>宠物档案是**硬删**的（{@code ProfileDeletionService.petProfiles.delete}），而删除流程
+     * 不清理 {@code avatar_reviews} / {@code name_moderation_records} ⇒ 孤儿审核记录会永远挂在
+     * 待处理里。可处置的东西已经没了（名字重置给谁？头像重置到哪？），让运营对着它点一次纯属白干。
+     *
+     * <p>这里造的是最难的那一种：宠物头像审核 + 宠主还在、只有宠物档案被删。
+     * 判定若只看「账号是否注销」就会漏掉它。
+     */
+    @Test
+    void identityRowIsNoActionWhenTheSubjectIsGone() {
+        User owner = newUser();
+        // 造一条宠物档案，拿到 id 后直接删掉 —— 模拟「档案已删、审核记录还在」。
+        // card_token 是 NOT NULL 且唯一（对外不可枚举名片 token），造数要给一个唯一值。
+        jdbc.update("INSERT INTO pet_profiles (owner_id, name, pet_type, card_token, created_at, updated_at) "
+                + "VALUES (?, '待删的宠物', 'DOG', ?, now(), now())",
+                owner.getId(), "tok-" + SEQ.incrementAndGet());
+        Long petId = jdbc.queryForObject("SELECT id FROM pet_profiles WHERE owner_id = ?",
+                Long.class, owner.getId());
+        // ⚠️ 标记 URL 每次唯一：库是全 suite 共享的，写死会撞上上一次跑留下的行。
+        String marker = "https://cdn/gone-" + SEQ.incrementAndGet() + ".jpg";
+        jdbc.update("INSERT INTO avatar_reviews (subject_type, subject_id, avatar_url, status, priority) "
+                + "VALUES ('PET_AVATAR', ?, ?, 'MANUAL_PENDING', 'NORMAL')", petId, marker);
+
+        // 删档案前：宠主还在 → 这条是待处理
+        assertThat(identityRowOf(owner.getId()).status()).isEqualTo(TicketStatusBucket.PENDING);
+
+        jdbc.update("DELETE FROM pet_profiles WHERE id = ?", petId);
+
+        // 删档案后：源表仍是 MANUAL_PENDING，但队列里必须落到「无需处置」
+        var rows = query.search(TicketType.ACCOUNT_IDENTITY, null, null, PageRequest.of(0, 500))
+                .getContent().stream()
+                .filter(r -> marker.equals(r.preview()))
+                .toList();
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).status()).isEqualTo(TicketStatusBucket.NO_ACTION);
+        // 也不该再出现在「待处理」筛选里 —— 那才是运营每天真正在看的那一屏。
+        assertThat(query.search(TicketType.ACCOUNT_IDENTITY, TicketStatusBucket.PENDING, null,
+                        PageRequest.of(0, 500)).getContent().stream()
+                .filter(r -> marker.equals(r.preview())).toList())
+                .isEmpty();
+    }
+
+    /** 账号已注销 → 头像审核同样落「无需处置」（重置头像给一个注销账号没有意义）。 */
+    @Test
+    void identityRowIsNoActionWhenTheAccountIsDeactivated() {
+        User gone = newUser();
+        String marker = "https://cdn/deactivated-" + SEQ.incrementAndGet() + ".jpg";
+        jdbc.update("INSERT INTO avatar_reviews (subject_type, subject_id, avatar_url, status, priority) "
+                + "VALUES ('USER_AVATAR', ?, ?, 'MANUAL_PENDING', 'NORMAL')", gone.getId(), marker);
+
+        assertThat(identityRowOf(gone.getId()).status()).isEqualTo(TicketStatusBucket.PENDING);
+
+        jdbc.update("UPDATE users SET deleted_at = now() WHERE id = ?", gone.getId());
+
+        var rows = query.search(TicketType.ACCOUNT_IDENTITY, null, null, PageRequest.of(0, 500))
+                .getContent().stream()
+                .filter(r -> marker.equals(r.preview()))
+                .toList();
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).status()).isEqualTo(TicketStatusBucket.NO_ACTION);
     }
 
     private UnifiedTicketRow identityRowOf(long userId) {
@@ -328,10 +399,15 @@ class UnifiedTicketQueryIntegrationTest extends ApiIntegrationTest {
         long reportId = reports.findByTargetUserId(target.getId()).orElseThrow().getId();
         jdbc.update("UPDATE account_reports SET status = 'RESOLVED' WHERE id = ?", reportId);
 
+        // 同上：按 targetUserId 精确过滤，别被「昵称含这串数字」的别人误伤。
         assertThat(query.search(null, TicketStatusBucket.PENDING, String.valueOf(target.getId()),
-                PageRequest.of(0, 20)).getContent()).isEmpty();
+                PageRequest.of(0, 500)).getContent().stream()
+                .filter(r -> java.util.Objects.equals(r.targetUserId(), target.getId()))
+                .toList()).isEmpty();
         assertThat(query.search(null, TicketStatusBucket.RESOLVED, String.valueOf(target.getId()),
-                PageRequest.of(0, 20)).getContent()).hasSize(1);
+                PageRequest.of(0, 500)).getContent().stream()
+                .filter(r -> java.util.Objects.equals(r.targetUserId(), target.getId()))
+                .toList()).hasSize(1);
     }
 
     /** 历史处置次数**含每一次警告**（Story 3.2 写入前恒为 0，这里直接造数验读取口径）。 */
