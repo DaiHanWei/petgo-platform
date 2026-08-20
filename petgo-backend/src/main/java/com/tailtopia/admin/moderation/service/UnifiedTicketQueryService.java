@@ -152,9 +152,17 @@ public class UnifiedTicketQueryService {
                        nmr.target_type,
                        CASE WHEN nmr.target_type = 'NICKNAME' THEN nmr.target_ref_id
                             ELSE pp.owner_id END,
-                       CASE nmr.status WHEN 'MANUAL_PENDING'     THEN 'PENDING'
-                                       WHEN 'RESOLVED_VIOLATION' THEN 'RESOLVED'
-                                       ELSE 'NO_ACTION' END,
+                       -- ⚠️ 对象已不存在 → 一律 NO_ACTION（2026-08-20）：
+                       -- 宠物档案是**硬删**的、账号注销置 deleted_at，而删除流程都不清理这两张
+                       -- 审核表 ⇒ 孤儿记录会永远挂在「待处理」里。可处置的东西已经没了
+                       -- （名字重置给谁？头像重置到哪？），让运营对着它点一次纯属白干。
+                       CASE WHEN (nmr.target_type = 'NICKNAME'
+                                  AND (un.id IS NULL OR un.deleted_at IS NOT NULL))
+                                 OR (nmr.target_type = 'PET_NAME' AND pp.id IS NULL)
+                                 THEN 'NO_ACTION'
+                            WHEN nmr.status = 'MANUAL_PENDING'     THEN 'PENDING'
+                            WHEN nmr.status = 'RESOLVED_VIOLATION' THEN 'RESOLVED'
+                            ELSE 'NO_ACTION' END,
                        0::bigint, 0::bigint, 0::bigint,
                        (CASE nmr.priority WHEN 'HIGH' THEN %d ELSE %d END)::bigint,
                        nmr.submitted_at,
@@ -163,6 +171,8 @@ public class UnifiedTicketQueryService {
                   FROM name_moderation_records nmr
                   LEFT JOIN pet_profiles pp
                          ON nmr.target_type = 'PET_NAME' AND pp.id = nmr.target_ref_id
+                  LEFT JOIN users un
+                         ON nmr.target_type = 'NICKNAME' AND un.id = nmr.target_ref_id
                  WHERE nmr.status IN ('MANUAL_PENDING', 'RESOLVED_VIOLATION', 'RESOLVED_PASS')
 
                 UNION ALL
@@ -173,7 +183,12 @@ public class UnifiedTicketQueryService {
                        avr.subject_type,
                        CASE WHEN avr.subject_type = 'USER_AVATAR' THEN avr.subject_id
                             ELSE pp2.owner_id END,
-                       CASE WHEN avr.status = 'MANUAL_PENDING'                       THEN 'PENDING'
+                       -- ⚠️ 同上：对象已不存在 → NO_ACTION，别再占着待处理。
+                       CASE WHEN (avr.subject_type = 'USER_AVATAR'
+                                  AND (ua.id IS NULL OR ua.deleted_at IS NOT NULL))
+                                 OR (avr.subject_type = 'PET_AVATAR' AND pp2.id IS NULL)
+                                 THEN 'NO_ACTION'
+                            WHEN avr.status = 'MANUAL_PENDING'                       THEN 'PENDING'
                             WHEN avr.status = 'RESOLVED' AND avr.verdict = 'VIOLATION' THEN 'RESOLVED'
                             ELSE 'NO_ACTION' END,
                        0::bigint, 0::bigint, 0::bigint,
@@ -184,6 +199,8 @@ public class UnifiedTicketQueryService {
                   FROM avatar_reviews avr
                   LEFT JOIN pet_profiles pp2
                          ON avr.subject_type = 'PET_AVATAR' AND pp2.id = avr.subject_id
+                  LEFT JOIN users ua
+                         ON avr.subject_type = 'USER_AVATAR' AND ua.id = avr.subject_id
                  WHERE avr.status IN ('MANUAL_PENDING', 'RESOLVED')
 
                 UNION ALL
