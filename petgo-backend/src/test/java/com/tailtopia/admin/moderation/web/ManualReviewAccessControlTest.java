@@ -105,10 +105,31 @@ class ManualReviewAccessControlTest {
         controller.changePriority(admin(), 5L, "P0", new RedirectAttributesModelMap());
     }
 
+    /**
+     * 入口对**无关权限**仍然拒绝（放宽只放开了 manual_review / takedown 两把，不是人人可进）。
+     */
     @Test
-    void queueDeniedForNonSuperAdmin() {
-        auth("ROLE_ADMIN", "content.takedown"); // 有处置权但非超管 → 入口仍拒
+    void queueDeniedWithUnrelatedAuthority() {
+        auth("ROLE_ADMIN", "content.restore"); // 有别的内容权，但既非 manual_review 也非 takedown
         assertThatThrownBy(this::queue).isInstanceOf(AccessDeniedException.class);
+    }
+
+    /**
+     * 🔴 2026-08-20 放宽：只拿到 {@code content.takedown} 的审核员也能打开本页。
+     *
+     * <p>本页混排四类，其中**三类**（内容举报 / 名称审核 / 头像审核）的处置动作要的正是
+     * takedown。放宽前入口只认 manual_review，于是那三类的按钮全在这一页上、
+     * 而有权按它们的人打不开这一页 —— 得同时授两个权限才能干活，且这个组合要求没处写着。
+     *
+     * <p>⚠️ 这条**不是**「放松了处置」：放开的只是入口。每行按钮仍各自门控，
+     * takedown 本来就在 DECIDE_AUTH 与那三类端点的门里（见 approveAllowedWithTakedown）。
+     * 若哪天有人把入口收回去，这条会红 —— 那正是要提醒他：收回去等于让 takedown 审核员失去
+     * 全部三类的入口。
+     */
+    @Test
+    void queueAllowedWithTakedownOnly() {
+        auth("ROLE_ADMIN", "content.takedown");
+        assertThatCode(this::queue).doesNotThrowAnyException();
     }
 
     @Test

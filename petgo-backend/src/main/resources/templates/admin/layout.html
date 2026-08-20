@@ -36,7 +36,11 @@
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.proactive_takedown')"
                    th:href="@{/admin/comments}" th:classappend="${active == 'comments'} ? 'active'"
                    th:text="#{admin.nav.comments}">评论管理</a>
-                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.manual_review')"
+                <!-- ⚠️ 这个条件必须与 ManualReviewAdminController.QUEUE_AUTH 保持一致
+                     （2026-08-20 一并放宽到 content.takedown）。两边不一致时的表现最难查：
+                     权限放行了、直接敲 URL 能进，但侧栏里没有这个链接 ——
+                     运营只会得出「我没有这个功能」。 -->
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.manual_review') or hasAuthority('content.takedown')"
                    th:href="@{/admin/manual-review}" th:classappend="${active == 'manual-review'} ? 'active'"
                    th:text="#{admin.nav.review}">人工复核</a>
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.view')"

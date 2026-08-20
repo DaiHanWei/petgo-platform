@@ -41,6 +41,39 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
     }
 
     /**
+     * 侧栏「人工复核」链接的可见性必须与该页入口门一致（2026-08-20 一并放宽到 content.takedown）。
+     *
+     * <p>两边走散时的表现最难查：**权限放行了、直接敲 URL 能进，但侧栏里没有这个链接** ——
+     * 运营只会得出「我没有这个功能」，而日志、403、报错一概没有，无从下手。
+     *
+     * <p>这里以只持 {@code content.takedown} 的 STAFF 身份渲染任意一页，断言侧栏里有这个链接。
+     */
+    @Test
+    void navShowsManualReviewForTakedownOnlyStaff() throws Exception {
+        long n = SEQ.incrementAndGet();
+        AdminAccount acc = adminAccounts.save(AdminAccount.newSuperAdmin(
+                "navstaff-" + n + "@tailtopia.test", "只有下架权的审核员", "{bcrypt}x"));
+        AdminUserDetails principal = new AdminUserDetails(acc.getId(), null, acc.getLarkEmail(),
+                acc.getPasswordHash(), AdminAccountType.STAFF);
+        // ⚠️ ROLE_ADMIN 不能省：/admin/** 那条链在 URL 层就要求它（SecurityConfig
+        //    anyRequest().hasRole("ADMIN")），少了它拿到的是过滤链的 403，
+        //    根本走不到 @PreAuthorize —— 会被误读成「权限门没放行」。
+        Authentication staff = new TestingAuthenticationToken(principal, null,
+                java.util.List.of(
+                        new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_ADMIN"),
+                        new org.springframework.security.core.authority.SimpleGrantedAuthority("content.takedown")));
+
+        String html = mvc.perform(get("/admin/manual-review").param("lang", "zh_CN")
+                        .with(authentication(staff)))
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(html).as("只持 content.takedown 应能打开本页（入口门 2026-08-20 放宽）")
+                .isNotEmpty();
+        assertThat(html).as("侧栏应有「人工复核」入口，否则运营只会以为自己没有这个功能")
+                .contains("/admin/manual-review");
+    }
+
+    /**
      * 页内标题必须与导航名一致（bug 20260820）。
      *
      * <p>2026-08-19 那次拆分改了导航名（工单队列 → 被举报用户），却漏了页内 h1、
