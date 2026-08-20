@@ -174,6 +174,39 @@ class UnifiedTicketQueryIntegrationTest extends ApiIntegrationTest {
         assertThat(ids).containsExactly(loud.getId(), early.getId(), late.getId());
     }
 
+    /**
+     * 🔴 未处理优先是**最外层**排序键：一条分更高的**已处理**工单也得排在待处理之后。
+     *
+     * <p>2026-08-20 之前只有「分倒序 + 同分最早」，于是运营开页第一屏看到的是已经干完的活，
+     * 真要处理的被挤到下面，得先自己点一次状态筛选。待办列表的第一屏就该是待办。
+     *
+     * <p>造数刻意让顺序与分数**相反**：已处理那条 3 分、待处理那条 1 分。
+     * 只按分排会把已处理那条放前面 —— 排序键少了最外层那一级，这条就会红。
+     */
+    @Test
+    void pendingSortsAheadOfHandledEvenWhenHandledScoresHigher() {
+        String tag = "st" + Long.toString(SEQ.incrementAndGet(), 36);
+        User handled = renamed(newUser(), tag + "-done");    // 3 分，但已处理
+        User pending = renamed(newUser(), tag + "-todo");    // 1 分，待处理
+
+        for (int i = 0; i < 3; i++) {
+            reportTimes(newUser().getId(), handled.getId(), 1);
+        }
+        reportTimes(newUser().getId(), pending.getId(), 1);
+        jdbc.update("UPDATE account_reports SET status = 'RESOLVED' WHERE target_user_id = ?",
+                handled.getId());
+
+        List<UnifiedTicketRow> rows = query
+                .search(TicketType.ACCOUNT_REPORT, null, tag, PageRequest.of(0, 20)).getContent();
+
+        assertThat(rows).hasSize(2);
+        assertThat(rows.get(0).targetUserId()).isEqualTo(pending.getId());
+        assertThat(rows.get(0).status()).isEqualTo(TicketStatusBucket.PENDING);
+        assertThat(rows.get(0).score()).isEqualTo(1);      // 分更低，但排在前面
+        assertThat(rows.get(1).targetUserId()).isEqualTo(handled.getId());
+        assertThat(rows.get(1).score()).isEqualTo(3);
+    }
+
     private User renamed(User u, String nickname) {
         u.setNickname(nickname);
         return users.save(u);
@@ -359,6 +392,12 @@ class UnifiedTicketQueryIntegrationTest extends ApiIntegrationTest {
         jdbc.update("INSERT INTO comments (id, post_id, author_id, body, created_at, updated_at) "
                 + "VALUES (?, ?, ?, '等放行的评论', now(), now())",
                 decoy.getId(), decoy.getId(), commentAuthor.getId());
+        // 🔴 显式指定 id 插入**不会推进** BIGSERIAL 的序列。不补这一手，本类之后任何
+        //    正常插评论的用例（全 suite 共享一个库）迟早会 nextval 到这个 id 上 →
+        //    主键冲突 → 发评论接口 500。表现是 content / social 那边一批用例
+        //    「expected:<201> but was:<500>」，看起来与本文件毫无关系，
+        //    单独跑还全绿 —— 极难查。造数指定 id 时必须顺手把序列推过去。
+        jdbc.execute("SELECT setval('comments_id_seq', (SELECT MAX(id) FROM comments))");
         jdbc.update("INSERT INTO manual_review_queue (content_id, content_type, submitted_at, status, "
                 + "priority, created_at, updated_at) "
                 + "VALUES (?, 'COMMENT', now(), 'PENDING', 'P1', now(), now())", decoy.getId());

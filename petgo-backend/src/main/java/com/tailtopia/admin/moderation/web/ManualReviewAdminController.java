@@ -30,7 +30,23 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 @Controller
 public class ManualReviewAdminController {
 
-    private static final String QUEUE_AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('content.manual_review')";
+    /**
+     * 本页入口。
+     *
+     * <p>🔴 2026-08-20 放宽：加上 {@code content.takedown}。
+     * 本页混排四类，其中<b>三类</b>（内容举报 / 名称审核 / 头像审核）的处置动作要的是
+     * {@code content.takedown} —— 原先入口只认 {@code content.manual_review}，于是只拿到
+     * takedown 的审核员**根本打不开这个页面**，而那三类的按钮全在这页上；反过来只拿到
+     * manual_review 的人进得来，却只能处置内容送审。要真干活得同时给两个权限，
+     * 而这个组合要求没有任何地方写着。
+     *
+     * <p>放宽的只是**入口（能不能打开这一页）**。每行的按钮仍按各自权限单独门控
+     * （模板 {@code sec:authorize} + 各处置端点的 {@code @PreAuthorize}），
+     * <b>没有任何一类因为这次放宽而多出处置能力</b> —— {@code content.takedown} 本来就在
+     * {@code DECIDE_AUTH} 与那三类端点的门里，此前缺的只是「走到按钮跟前」的路。
+     */
+    private static final String QUEUE_AUTH = "hasRole('SUPER_ADMIN') "
+            + "or hasAuthority('content.manual_review') or hasAuthority('content.takedown')";
     private static final String TOGGLE_AUTH = "hasRole('SUPER_ADMIN')";
     private static final String DECIDE_AUTH =
             "hasRole('SUPER_ADMIN') or hasAuthority('content.takedown') or hasAuthority('content.manual_review')";

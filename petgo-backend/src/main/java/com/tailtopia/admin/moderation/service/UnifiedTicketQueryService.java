@@ -32,7 +32,9 @@ import org.springframework.transaction.annotation.Transactional;
  * 一个人刷 100 次也就 2 分，十个人各报一次是 10 分。<b>众怒排在纠缠前面。</b>
  * 校验用例（有 L1 测试逐一钉死）：甲3+乙7 → 3；甲5+乙6 → 4；10 人各 1 次 → 10；1 人 100 次 → 2。
  *
- * <p>分数<b>实时算、不落库快照</b>。排序：分倒序，<b>同分按最早一次举报时间升序</b>（先报的先处理）。
+ * <p>分数<b>实时算、不落库快照</b>。排序：<b>未处理优先</b> → 分倒序 → <b>同分按最早一次举报时间
+ * 升序</b>（先报的先处理）。「未处理优先」是最外层键 —— 没有它，一条分高的已处理工单会压在待处理
+ * 前面，运营开页第一屏看到的是已经干完的活。终态（已处理 / 无需处置）沉到后面且彼此不细分。
  *
  * <h2>⚠️ 账号标识字段那一类没有举报人</h2>
  * 它的分数按各表自己的 {@code priority} 映射：<b>{@code HIGH → 10} / {@code NORMAL → 2}</b>（C-102）。
@@ -319,7 +321,14 @@ public class UnifiedTicketQueryService {
                                 u.score, u.earliest_at, u.preview, u.action_ref,
                                 COALESCE(d.c, 0) AS disposal_count
                         """ + joins + where
-                        + " ORDER BY u.score DESC, u.earliest_at ASC LIMIT ? OFFSET ?",
+                        // 排序三级：① 未处理优先 ② 分倒序 ③ 同分最早优先。
+                        //
+                        // ①是 2026-08-20 加的：原先只有②③，于是一条分高的**已处理**工单会压在
+                        // 待处理的前面 —— 运营开页第一屏看到的是已经处理完的东西，真正要干的活被挤下去，
+                        // 得先自己去点一次状态筛选。待办列表的第一屏就该是待办。
+                        // 终态（已处理 / 无需处置）一律沉到后面，彼此不再细分，组内同样按②③排。
+                        + " ORDER BY CASE u.status_bucket WHEN 'PENDING' THEN 0 ELSE 1 END,"
+                        + "          u.score DESC, u.earliest_at ASC LIMIT ? OFFSET ?",
                 ROW_MAPPER, pageArgs.toArray());
 
         return new PageImpl<>(rows, pageable, total == null ? 0 : total);

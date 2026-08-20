@@ -2,13 +2,16 @@
 <html lang="zh" xmlns:th="http://www.thymeleaf.org"
       xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <!--
-  统一工单队列（Story 3.1，AB-3D）。三类工单一个列表、一把尺子排序，完全替代旧的 /admin/reports。
+  被举报用户（Story 3.1，AB-3D；2026-08-19 从「工单队列」拆分而来）。
+  **本页只有用户举报** —— 处置是账号级的警告 / 封号。内容举报与昵称/头像审核的处置动作
+  在另一个授权域，已移入「人工复核」页（templates/admin/manual-review.html）。
+  排序：未处理优先 → 优先级分倒序 → 同分最早优先（UnifiedTicketQueryService 的 ORDER BY）。
   筛选：类型 / 状态 / 按被举报账号检索；HTMX 局部刷新 #results。展开详情单独拉片段（避免列表 N+1）。
   ⚠️ 送审名称原文与送审头像 URL 可以在这里展示（那正是运营要看的证据），但严禁进日志。
 -->
 <head>
     <meta charset="UTF-8"/>
-    <title th:text="#{admin.tickets.title}">工单队列 · TailTopia 运营后台</title>
+    <title th:text="#{admin.tickets.title}">被举报用户 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <!-- ⚠️ 新页要自己引 htmx（不是全局自动引入的）——曾有页面漏引导致按钮点了没反应。 -->
     <script th:src="@{/admin/vendor/htmx.min.js}"></script>
@@ -18,8 +21,8 @@
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1 th:text="#{admin.tickets.title}">工单队列</h1>
-        <p class="muted" th:text="#{admin.tickets.subtitle}">三类工单统一排队，按优先级从高到低；同分先报的先处理。</p>
+        <h1 th:text="#{admin.tickets.title}">被举报用户</h1>
+        <p class="muted" th:text="#{admin.tickets.subtitle}">仅用户举报（账号级警告 / 封号）。未处理排在前面，再按优先级从高到低；同分先报的先处理。</p>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <!-- 失败提示走红色 err 横幅（评审三轮 #9）：全后台约定 notice=绿色成功 / error=红色失败，
              本页早先把处置失败也塞进 notice，运营会把「工单不匹配」读成封号成功。 -->
@@ -34,7 +37,7 @@
         </div>
 
         <!-- 筛选条：类型 / 状态 / 按被举报账号检索。HTMX 没加载时退化成整页 GET，仍可用。 -->
-        <form class="filter-bar" th:action="@{/admin/tickets}" method="get"
+        <form class="filter-bar" th:action="@{/admin/tickets}" method="get" data-autosubmit
               hx-get="/admin/tickets" hx-target="#results" hx-swap="innerHTML">
             <label><span th:text="#{admin.tickets.filter.status}">状态</span>
                 <select name="status">
@@ -276,18 +279,63 @@
                     <span class="muted" th:text="${@adminTime.wib(d.createdAt)}">-</span>
                 </span>
             </p>
+            <!-- 原因区分两种形态（2026-08-20 产品口径）：
+                   · 多于 1 条 → 只显示「原因 × 次数」，逐条明细折叠进 <details>；
+                   · 只有 1 条 → 直接摊开（聚合与折叠对单条毫无意义）。
+                 十几个人举报同一对象时，逐条那一屏没人会一行行读，真正要看的是「都在报什么」；
+                 但「是谁在报」不能因此没处看 —— 折叠起来，点一下就有。
+                 <details> 是原生元素，不额外引 JS。 -->
             <p th:if="${!#lists.isEmpty(entries)}">
                 <b th:text="#{admin.tickets.detail.entries}">每一次举报</b>：
+                <th:block th:if="${#lists.size(entries) > 1}">
+                    <th:block th:each="rc,it : ${reasonCounts}">
+                        <code th:text="${rc.reason}">REASON</code><span th:text="'×' + ${rc.count}">×1</span><span
+                            th:if="${!it.last}" class="muted"> · </span>
+                    </th:block>
+                </th:block>
             </p>
-            <ul th:if="${!#lists.isEmpty(entries)}">
-                <li th:each="e : ${entries}">
-                    <code th:text="${e.reason}">REASON</code>
-                    <span class="muted" th:text="${@adminTime.wib(e.createdAt)}">-</span>
-                    <span th:if="${e.detail != null}" th:text="${e.detail}">补充说明</span>
-                </li>
+
+            <ul th:if="${#lists.size(entries) == 1}">
+                <th:block th:each="e : ${entries}">
+                    <li th:replace="~{:: entryLine(${e})}"></li>
+                </th:block>
             </ul>
+
+            <details th:if="${#lists.size(entries) > 1}">
+                <summary style="cursor:pointer" class="muted"
+                         th:text="#{admin.tickets.detail.entriesEach}">查看逐条（谁举报的）</summary>
+                <ul>
+                    <!-- ⚠️ th:each 必须挂在**外层** th:block 上：同一元素上 th:replace 的优先级
+                         高于 th:each，写在一起时片段参数 ${e} 还没绑定就被求值 → 渲染期抛异常。 -->
+                    <th:block th:each="e : ${entries}">
+                        <li th:replace="~{:: entryLine(${e})}"></li>
+                    </th:block>
+                </ul>
+            </details>
         </div>
     </div>
+
+<!-- 举报明细的行片段（供上面两处形态复用；不在 detailFragment 内，单独渲染不会输出）。 -->
+<ul th:remove="tag">
+            <!-- 一行 = 一次举报：谁报的 · 什么理由 · 什么时候 · 补充说明。抽成片段，两处形态共用。
+                 ⚠️ 举报人身份只在**运营后台**展示，绝不下发给被举报人、也绝不进日志 ——
+                    一旦外泄，被举报者就能定点报复，举报功能等于废掉。
+                 ⚠️ 举报人不能省：三个不同的人各报一次与一个人反复报三次，处置结论可能完全相反，
+                    而优先级分把这件事压成了一个数字。 -->
+            <li th:fragment="entryLine(e)">
+                <span th:if="${e.reporterNickname != null}" th:text="${e.reporterNickname}">举报人</span>
+                <span th:if="${e.reporterNickname == null}" class="muted"
+                      th:text="#{admin.review.subject.deactivated}">账号已注销</span>
+                <span class="muted" th:if="${e.reporterId != null}"
+                      th:text="'#' + ${e.reporterId}">#0</span>
+                <code th:text="${e.reason}">REASON</code>
+                <span class="muted" th:text="${@adminTime.wib(e.createdAt)}">-</span>
+                <!-- 补充说明是举报人自己填的文本，与原因分开标出，别和上面几项糊成一句。 -->
+                <span th:if="${e.detail != null}">
+                    <b th:text="#{admin.tickets.detail.note}">补充</b>：<span th:text="${e.detail}">…</span>
+                </span>
+            </li>
+</ul>
 </div>
 </body>
 </html>

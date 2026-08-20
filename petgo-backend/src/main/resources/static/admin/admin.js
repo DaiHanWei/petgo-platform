@@ -31,6 +31,26 @@ document.addEventListener('click', function (e) {
     }
 });
 
+// 筛选栏下拉选完即刷新（bug 20260820：人工复核页选了状态还得再点一次「筛选」，多一步且容易忘）。
+// form[data-autosubmit] 内的 <select> 一变就提交所在表单。
+//   ⚠️ 只管 <select>，**不碰文本框** —— 文本输入的 change 在失焦时才触发，
+//      打字中途点别处就会莫名刷新一次，比多点一下按钮更糟。文本框仍走「筛选」按钮。
+//   ⚠️ 用 requestSubmit() 而非 submit()：前者会派发 submit 事件，本文件顶部的
+//      data-confirm 二次确认、以及表单上的 hx-get（HTMX 监听 submit）才不会被绕过。
+//      老浏览器无此方法时回退 submit()（HTMX 页会退化成整页 GET，结果一样）。
+//   「筛选」按钮保留：无 JS 时仍可用，也是文本框的提交入口。
+document.addEventListener('change', function (e) {
+    var el = e.target;
+    if (!el || el.tagName !== 'SELECT') { return; }
+    var form = el.closest && el.closest('form[data-autosubmit]');
+    if (!form) { return; }
+    if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+    } else {
+        form.submit();
+    }
+});
+
 // 图片灯箱（内容管理等）：点带 data-lightbox 的缩略图 → 原生 <dialog> 全屏看大图（非下载）。
 // 惰性建一个通用 dialog，全后台复用；点任意处关闭。HTMX 换行后仍生效（事件委托在 document）。
 document.addEventListener('click', function (e) {
