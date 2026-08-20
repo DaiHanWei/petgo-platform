@@ -392,6 +392,12 @@ class UnifiedTicketQueryIntegrationTest extends ApiIntegrationTest {
         jdbc.update("INSERT INTO comments (id, post_id, author_id, body, created_at, updated_at) "
                 + "VALUES (?, ?, ?, '等放行的评论', now(), now())",
                 decoy.getId(), decoy.getId(), commentAuthor.getId());
+        // 🔴 显式指定 id 插入**不会推进** BIGSERIAL 的序列。不补这一手，本类之后任何
+        //    正常插评论的用例（全 suite 共享一个库）迟早会 nextval 到这个 id 上 →
+        //    主键冲突 → 发评论接口 500。表现是 content / social 那边一批用例
+        //    「expected:<201> but was:<500>」，看起来与本文件毫无关系，
+        //    单独跑还全绿 —— 极难查。造数指定 id 时必须顺手把序列推过去。
+        jdbc.execute("SELECT setval('comments_id_seq', (SELECT MAX(id) FROM comments))");
         jdbc.update("INSERT INTO manual_review_queue (content_id, content_type, submitted_at, status, "
                 + "priority, created_at, updated_at) "
                 + "VALUES (?, 'COMMENT', now(), 'PENDING', 'P1', now(), now())", decoy.getId());

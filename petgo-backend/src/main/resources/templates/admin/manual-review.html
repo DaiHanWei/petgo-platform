@@ -82,8 +82,11 @@
             <tr th:if="${result == null or result.isEmpty()}">
                 <td colspan="7" class="muted" th:text="#{admin.review.empty}">暂无待复核项</td>
             </tr>
-            <tr th:each="row : ${result != null ? result.content : null}"
-                th:classappend="${row.overdue()} ? 'row-overdue'">
+            <!-- 一条工单渲染**两个 tr**（数据行 + 展开面板承载行），所以循环挂在 th:block 上：
+                 HTML 不允许 tr 嵌套，th:each 若挂在数据行上，第二个 tr 就落在循环外、
+                 拿不到 row（渲染期直接抛 SpringEL 求值异常）。tickets.html 同样处理。 -->
+            <th:block th:each="row : ${result != null ? result.content : null}">
+            <tr th:classappend="${row.overdue()} ? 'row-overdue'">
                 <td th:text="#{'admin.tickets.type.' + ${row.type()}}">类型</td>
                 <td>
                     <!-- 宠物类对象：SQL 已把宠物解析到宠主；解析不到＝宠物档案已删除，
@@ -117,6 +120,14 @@
                     <div th:if="${row.type().name() == 'CONTENT_REPORT'
                                  and row.status().name() == 'PENDING' and row.actionRef() != null}"
                          sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')">
+                        <!-- 展开：看「谁举报的 + 什么理由」。2026-08-20 补 —— 内容举报拆到本页后
+                             这一页没有展开面板，于是它的举报人与逐条理由在任何界面都看不到
+                             （/admin/tickets/detail 的 CONTENT_REPORT 分支成了死代码）。 -->
+                        <a class="btn btn-sm btn-neutral"
+                           th:hx-get="@{/admin/tickets/detail(type=${row.type()},sourceId=${row.sourceId()},userId=${row.targetUserId()})}"
+                           th:hx-target="'#detail-' + ${row.type()} + '-' + ${row.sourceId()}"
+                           hx-swap="innerHTML"
+                           th:text="#{admin.tickets.expand}">展开</a>
                         <form th:action="@{/admin/reports/{id}/takedown(id=${row.actionRef()})}"
                               method="post" class="inline-form"
                               th:attr="data-confirm=#{admin.tickets.confirm.takedown}">
@@ -255,6 +266,12 @@
                     </div>
                 </td>
             </tr>
+            <!-- 展开面板的承载行（HTMX 把 detailFragment 塞进这里）。列数与表头一致＝7。
+                 只有内容举报有展开入口，其余三类没有举报人这回事。 -->
+            <tr th:if="${row.type().name() == 'CONTENT_REPORT'}">
+                <td colspan="7" th:id="'detail-' + ${row.type()} + '-' + ${row.sourceId()}"></td>
+            </tr>
+            </th:block>
             </tbody>
         </table>
 

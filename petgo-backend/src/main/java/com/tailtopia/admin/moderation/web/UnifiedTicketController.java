@@ -120,8 +120,18 @@ public class UnifiedTicketController {
      *       本身就是问题在升级的证据）。</li>
      * </ul>
      */
+    /**
+     * 展开面板。**两个页面共用**：被举报用户（用户举报）与人工复核（内容举报）。
+     *
+     * <p>🔴 权限比列表页的 {@code VIEW_AUTH} 宽一档：加上 {@code content.manual_review} 与
+     * {@code content.takedown}。因为内容举报 2026-08-19 拆到了人工复核页，而那页的入口认的是
+     * 后两个码 —— 若这里仍只认 {@code content.view_tickets}，只持 takedown 的审核员
+     * <b>页面打得开、点「展开」却吃 403</b>：面板一片空白、没有任何提示，
+     * 只能当成「这个功能坏了」。
+     */
     @GetMapping("/admin/tickets/detail")
-    @PreAuthorize(VIEW_AUTH)
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('content.view_tickets') "
+            + "or hasAuthority('content.manual_review') or hasAuthority('content.takedown')")
     public String detail(@RequestParam("type") String type,
             @RequestParam("sourceId") long sourceId,
             @RequestParam(value = "userId", required = false) Long userId,
@@ -132,12 +142,25 @@ public class UnifiedTicketController {
 
         // 修复清单 #3：内容举报的「每一次举报」也要能看（原因 + 时间）——旧 /admin/reports 页
         // 下线后这里是唯一可见处。两类映射成同一形状（reason/createdAt/detail）复用同一段模板。
-        List<?> entries;
+        // 每一行都带上**举报人**（2026-08-20）：处置一条举报时，「谁在报」和「报的什么理由」
+        // 一样是判断依据 —— 三个不同的人各报一次与一个人反复报三次，处置结论可能完全相反，
+        // 而优先级分只把这件事压成一个数字。原先这里只给原因 + 时间，运营看不出是谁。
+        // ⚠️ 昵称**批量解析一次**（findAuthorViews 收一组 id）。逐条查昵称就是 N+1，
+        //    而这个面板是逐行展开、每次都会打一遍。
+        List<ReportEntryView> entries;
         if (ticketType == TicketType.ACCOUNT_REPORT) {
-            entries = reportEntries.findByReportIdOrderByCreatedAtDesc(sourceId);
+            var rows = reportEntries.findByReportIdOrderByCreatedAtDesc(sourceId);
+            var names = nicknamesOf(rows.stream().map(e -> e.getReporterId()).toList());
+            entries = rows.stream()
+                    .map(e -> new ReportEntryView(e.getReporterId(), names.get(e.getReporterId()),
+                            e.getReason().name(), e.getCreatedAt(), e.getDetail()))
+                    .toList();
         } else if (ticketType == TicketType.CONTENT_REPORT) {
-            entries = contentReportService.findAllForPost(sourceId).stream()
-                    .map(r -> new ReportEntryView(r.getReasonType().name(), r.getCreatedAt(), null))
+            var rows = contentReportService.findAllForPost(sourceId);
+            var names = nicknamesOf(rows.stream().map(r -> r.getReporterId()).toList());
+            entries = rows.stream()
+                    .map(r -> new ReportEntryView(r.getReporterId(), names.get(r.getReporterId()),
+                            r.getReasonType().name(), r.getCreatedAt(), null))
                     .toList();
         } else {
             entries = List.of();
@@ -382,7 +405,36 @@ public class UnifiedTicketController {
      * 展开详情「每一次举报」的统一行形状：账号举报直接用实体（reason/createdAt/detail 同名），
      * 内容举报映射到本 record —— 两类共用模板同一段循环。
      */
-    public record ReportEntryView(String reason, java.time.Instant createdAt, String detail) {
+    /**
+     * 展开面板里「每一次举报」的一行。两类举报映射成同一形状复用同一段模板。
+     *
+     * @param reporterId       举报人账号 id。⚠️ 只在运营后台展示 —— <b>绝不下发给被举报人、
+     *                         也绝不进日志</b>（举报人身份一旦外泄，被举报者就能定点报复，
+     *                         举报功能等于废掉）
+     * @param reporterNickname 举报人当前昵称；注销 / 查不到时为 null，模板显示为「账号已注销」
+     * @param detail           举报人填的补充说明（账号举报有，内容举报没有这个字段）
+     */
+    public record ReportEntryView(Long reporterId, String reporterNickname, String reason,
+            java.time.Instant createdAt, String detail) {
+    }
+
+    /**
+     * 一批账号 id → 昵称。注销或查不到的**不放进 map**（模板据此显示「账号已注销」）。
+     *
+     * <p>一次查完，不在循环里逐条查 —— 展开面板每次都会打这一遍。
+     */
+    private java.util.Map<Long, String> nicknamesOf(List<Long> ids) {
+        var distinct = ids.stream().filter(java.util.Objects::nonNull).distinct().toList();
+        if (distinct.isEmpty()) {
+            return java.util.Map.of();
+        }
+        java.util.Map<Long, String> out = new java.util.HashMap<>();
+        accountQueryService.findAuthorViews(distinct).forEach((id, view) -> {
+            if (view != null && !view.deleted() && view.nickname() != null) {
+                out.put(id, view.nickname());
+            }
+        });
+        return out;
     }
 
     /** 空白 / 非法值一律当「不筛选」，不给运营一个 400。 */

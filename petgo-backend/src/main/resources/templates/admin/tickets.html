@@ -283,10 +283,23 @@
                 <b th:text="#{admin.tickets.detail.entries}">每一次举报</b>：
             </p>
             <ul th:if="${!#lists.isEmpty(entries)}">
+                <!-- 一行 = 一次举报：谁报的 · 什么理由 · 什么时候 · 补充说明。
+                     ⚠️ 举报人身份只在**运营后台**展示，绝不下发给被举报人、也绝不进日志 ——
+                        一旦外泄，被举报者就能定点报复，举报功能等于废掉。
+                     ⚠️ 举报人不能省：三个不同的人各报一次与一个人反复报三次，处置结论可能完全相反，
+                        而优先级分把这件事压成了一个数字。 -->
                 <li th:each="e : ${entries}">
+                    <span th:if="${e.reporterNickname != null}" th:text="${e.reporterNickname}">举报人</span>
+                    <span th:if="${e.reporterNickname == null}" class="muted"
+                          th:text="#{admin.review.subject.deactivated}">账号已注销</span>
+                    <span class="muted" th:if="${e.reporterId != null}"
+                          th:text="'#' + ${e.reporterId}">#0</span>
                     <code th:text="${e.reason}">REASON</code>
                     <span class="muted" th:text="${@adminTime.wib(e.createdAt)}">-</span>
-                    <span th:if="${e.detail != null}" th:text="${e.detail}">补充说明</span>
+                    <!-- 补充说明是举报人自己填的文本，与原因分开标出，别和上面几项糊成一句。 -->
+                    <span th:if="${e.detail != null}">
+                        <b th:text="#{admin.tickets.detail.note}">补充</b>：<span th:text="${e.detail}">…</span>
+                    </span>
                 </li>
             </ul>
         </div>
