@@ -192,11 +192,14 @@ void main() {
   });
 
   group('双 UI 开关', () {
-    testWidgets('默认变体是 v1 —— 未验收的版式不该被忘记指定的构建拿到', (tester) async {
+    // ⚠️ 2026-08-21 产品指定翻转默认值：v1 → v2。本条随之改向。
+    //    原理由「未验收的版式不该被忘记指定的构建拿到」在验收对象本身就是 v2 之后不再成立
+    //    —— 继续默认 v1 会让每个包都得记着传 flag，反而更容易出错。
+    testWidgets('默认变体是 v2；v1 仍可经 --dart-define=SHOP_UI=v1 回退', (tester) async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
-      expect(container.read(shopUiVariantProvider), ShopUiVariant.v1);
+      expect(container.read(shopUiVariantProvider), ShopUiVariant.v2);
     });
 
     testWidgets('ShopUiSwitch 按变体二选一，切换后立即换页面', (tester) async {
@@ -224,6 +227,14 @@ void main() {
           ),
         ),
       ));
+      await tester.pump();
+
+      // 默认 v2（翻转后）→ toggle 到 v1 → 再 toggle 回 v2，双向都验，
+      // 免得只验单向时「toggle 其实是单程票」这种缺陷混过去。
+      expect(find.byType(TokoPageV2), findsOneWidget);
+      expect(find.byType(TokoPage), findsNothing);
+
+      container.read(shopUiVariantProvider.notifier).toggle();
       await tester.pump();
 
       expect(find.byType(TokoPage), findsOneWidget);

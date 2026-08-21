@@ -198,7 +198,7 @@ void main() {
       expect(find.text('harga terakhir'), findsOneWidget);
       final price = tester.widget<Text>(find.text('Rp 185.000'));
       expect(price.style?.color, ShopColors.text4);
-      expect(price.style?.color, isNot(ShopColors.rose));
+      expect(price.style?.color, isNot(ShopColors.accent));
     });
 
     testWidgets('🔴 不写「segera」这类无信息到货承诺', (tester) async {

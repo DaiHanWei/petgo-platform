@@ -105,7 +105,7 @@ class _CardState extends ConsumerState<_Card> {
               Expanded(
                 child: Text(l10n.recoTriggerEyebrow(pet).toUpperCase(),
                     style: ShopText.badge.copyWith(
-                        fontSize: 9.5, color: ShopColors.rose, letterSpacing: .8)),
+                        fontSize: 9.5, color: ShopColors.accent, letterSpacing: .8)),
               ),
               // 🔴 可解释性入口用**文字不用 icon**（合规与信任要求）——
               //    一个问号图标传达不了「这里能看到算法口径和关闭入口」。
@@ -177,7 +177,7 @@ class _CardState extends ConsumerState<_Card> {
                 child: ShopButton(
                   key: ValueKey('recoBuyAgain_${c.triggerId}'),
                   label: l10n.tokoBuyAgain,
-                  variant: ShopButtonVariant.rose,
+                  variant: ShopButtonVariant.pay,
                   onTap: () {
                     Analytics.capture('toko_repurchase_card_tapped', {
                       'trigger_type': c.triggerType,
@@ -429,7 +429,7 @@ class _BasicCardState extends State<_BasicCard> {
             ),
           ),
           Text(formatIdr(it.minPrice),
-              style: ShopText.priceRail.copyWith(color: ShopColors.rose)),
+              style: ShopText.priceRail.copyWith(color: ShopColors.accent)),
           // 🔴 降级态**不带来源标签**（设计稿）—— 它本来就不是按某条记录挑的。
         ],
       ),

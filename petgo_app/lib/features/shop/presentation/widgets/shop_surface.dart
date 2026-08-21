@@ -140,7 +140,7 @@ class ShopBottomBarWithTotal extends StatelessWidget {
     required this.label,
     required this.amount,
     required this.action,
-    this.amountColor = ShopColors.rose,
+    this.amountColor = ShopColors.accent,
   });
 
   /// 总价上方的小灰标签（`Total · 2 barang` / `Total bayar`）。

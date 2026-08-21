@@ -135,7 +135,7 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
 
     return Container(
       width: double.infinity,
-      color: expired ? ShopColors.border2 : ShopColors.rose,
+      color: expired ? ShopColors.border2 : ShopColors.accent,
       padding: const EdgeInsets.symmetric(horizontal: kShopScreenEdge, vertical: 14),
       child: Column(
         children: [
@@ -375,7 +375,7 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
                   Text(formatIdr(cash),
                       style: ShopText.priceInline.copyWith(
                           // 🔴 已付的钱用墨色 —— 玫红只留给「还需要付钱」的动作。
-                          color: pending ? ShopColors.rose : ShopColors.ink)),
+                          color: pending ? ShopColors.accent : ShopColors.ink)),
                 ],
               ),
             ),
@@ -423,7 +423,7 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
                           Expanded(
                             child: Text(formatIdr(line.unitPrice),
                                 style: ShopText.priceInline.copyWith(
-                                    color: pending ? ShopColors.rose : ShopColors.ink)),
+                                    color: pending ? ShopColors.accent : ShopColors.ink)),
                           ),
                           Text('×${line.qty}', style: ShopText.meta),
                         ],
@@ -457,7 +457,7 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
               Text(formatIdr(paidSplit ? _cashSegment(order) : order.totalAmount),
                   key: const ValueKey('shopOrderTotalV2'),
                   style: ShopText.priceGrid.copyWith(
-                      color: pending ? ShopColors.rose : ShopColors.ink)),
+                      color: pending ? ShopColors.accent : ShopColors.ink)),
             ],
           ),
           // 🔴 已支付订单必须保留 PawCoin 分段 —— 退款拆分的用户侧依据。
@@ -574,7 +574,7 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
           // 🔴 金额是**现在真要付的现金段**，不是订单总额：币段下单时已冻结，
           //    按钮写总额会让用户以为币白冻结了、还要再付一次全款。
           label: '${l10n.shopOrderPayNow} ${formatIdr(_cashSegment(order))}',
-          variant: _busy ? ShopButtonVariant.disabled : ShopButtonVariant.rose,
+          variant: _busy ? ShopButtonVariant.disabled : ShopButtonVariant.pay,
           onTap: _busy ? null : () => _pay(l10n, order),
         ),
       );
@@ -622,7 +622,7 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
         label: e.activeRequestToken != null
             ? l10n.shopOrderReturnInProgress
             : l10n.shopOrderRequestReturn,
-        variant: blocked ? ShopButtonVariant.disabled : ShopButtonVariant.rose,
+        variant: blocked ? ShopButtonVariant.disabled : ShopButtonVariant.pay,
         onTap: blocked
             ? null
             : () => context.push('/shop/orders/${order.orderToken}/return'),
@@ -755,7 +755,7 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
           ShopButton(
             key: const ValueKey('shopOrderCancelConfirmYesV2'),
             label: l10n.shopOrderCancelConfirmYes,
-            variant: ShopButtonVariant.rose,
+            variant: ShopButtonVariant.pay,
             dense: true,
             onTap: () => Navigator.of(dlgCtx).pop(true),
           ),

@@ -60,7 +60,7 @@ class _GalleryState extends State<_Gallery> {
         amount: 'Rp 279.000',
         action: ShopButton(
           label: 'Checkout',
-          variant: ShopButtonVariant.rose,
+          variant: ShopButtonVariant.pay,
           onTap: () {},
           padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 14),
         ),
@@ -73,7 +73,7 @@ class _GalleryState extends State<_Gallery> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _priceDemo('在售', ShopColors.rose),
+                _priceDemo('在售', ShopColors.accent),
                 _priceDemo('已付', ShopColors.ink),
                 _priceDemo('售罄', ShopColors.text4),
               ],
@@ -100,7 +100,7 @@ class _GalleryState extends State<_Gallery> {
               spacing: 9,
               runSpacing: 9,
               children: [
-                ShopButton(label: 'Bayar', variant: ShopButtonVariant.rose, onTap: () {}),
+                ShopButton(label: 'Bayar', variant: ShopButtonVariant.pay, onTap: () {}),
                 ShopButton(
                     label: 'Lihat Alternatif', variant: ShopButtonVariant.purple, onTap: () {}),
                 ShopButton(label: '+ Keranjang', variant: ShopButtonVariant.ink, onTap: () {}),
@@ -122,7 +122,7 @@ class _GalleryState extends State<_Gallery> {
             child: ShopButton(
               label: 'Beli Sekarang',
               subtitle: 'Bayar Rp 154.000',
-              variant: ShopButtonVariant.rose,
+              variant: ShopButtonVariant.pay,
               onTap: () {},
             ),
           ),
@@ -285,7 +285,7 @@ class _GalleryState extends State<_Gallery> {
 
           _label('倒计时 · 等宽'),
           Container(
-            color: ShopColors.rose,
+            color: ShopColors.accent,
             padding: const EdgeInsets.symmetric(vertical: 14),
             child: Column(
               children: [
