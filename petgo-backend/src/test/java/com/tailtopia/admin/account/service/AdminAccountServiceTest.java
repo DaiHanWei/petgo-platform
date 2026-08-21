@@ -14,6 +14,7 @@ import com.tailtopia.admin.account.domain.AdminAccount;
 import com.tailtopia.admin.account.domain.AdminAccountPermission;
 import com.tailtopia.admin.account.domain.AdminAccountStatus;
 import com.tailtopia.admin.account.domain.AdminAccountType;
+import com.tailtopia.admin.account.domain.AdminRole;
 import com.tailtopia.admin.account.repository.AdminAccountPermissionRepository;
 import com.tailtopia.admin.account.repository.AdminAccountRepository;
 import com.tailtopia.admin.audit.service.AdminAuditService;
@@ -51,7 +52,7 @@ class AdminAccountServiceTest {
     }
 
     private AdminAccount staff(long id, AdminAccountStatus status) {
-        AdminAccount a = AdminAccount.create("s@x", "S", AdminAccountType.STAFF, 1L);
+        AdminAccount a = AdminAccount.create("s@x", "S", AdminRole.CUSTOM, 1L);
         ReflectionTestUtils.setField(a, "id", id);
         ReflectionTestUtils.setField(a, "status", status);
         return a;
@@ -59,7 +60,7 @@ class AdminAccountServiceTest {
 
     @Test
     void createStaffPersistsAccountPermissionsAndAudits() {
-        long id = service.createAccount("new@x", "新人", AdminAccountType.STAFF,
+        long id = service.createAccount("new@x", "新人", AdminRole.CUSTOM,
                 List.of("vet.view", "admin.view_logs"), 1L);
 
         assertThat(id).isEqualTo(42L);
@@ -71,14 +72,14 @@ class AdminAccountServiceTest {
     @Test
     void createRejectsDuplicateEmail() {
         when(accounts.findByLarkEmail("dup@x")).thenReturn(Optional.of(staff(9L, AdminAccountStatus.ACTIVE)));
-        assertThatThrownBy(() -> service.createAccount("dup@x", "X", AdminAccountType.STAFF, List.of(), 1L))
+        assertThatThrownBy(() -> service.createAccount("dup@x", "X", AdminRole.CUSTOM, List.of(), 1L))
                 .isInstanceOf(AppException.class);
         verify(accounts, never()).save(any());
     }
 
     @Test
     void createRejectsInvalidPermissionCode() {
-        assertThatThrownBy(() -> service.createAccount("p@x", "X", AdminAccountType.STAFF,
+        assertThatThrownBy(() -> service.createAccount("p@x", "X", AdminRole.CUSTOM,
                 List.of("not.a.real.code"), 1L)).isInstanceOf(AppException.class);
     }
 
@@ -86,7 +87,7 @@ class AdminAccountServiceTest {
     void createSuperAdminBeyondCapRejected() {
         when(accounts.countByAccountTypeAndStatus(AdminAccountType.SUPER_ADMIN, AdminAccountStatus.ACTIVE))
                 .thenReturn(5L);
-        assertThatThrownBy(() -> service.createAccount("boss@x", "老板", AdminAccountType.SUPER_ADMIN,
+        assertThatThrownBy(() -> service.createAccount("boss@x", "老板", AdminRole.SUPER_ADMIN,
                 List.of(), 1L)).isInstanceOf(AppException.class);
     }
 
@@ -94,7 +95,7 @@ class AdminAccountServiceTest {
     void createSuperAdminIgnoresPermissionCodes() {
         when(accounts.countByAccountTypeAndStatus(AdminAccountType.SUPER_ADMIN, AdminAccountStatus.ACTIVE))
                 .thenReturn(1L);
-        service.createAccount("boss@x", "老板", AdminAccountType.SUPER_ADMIN,
+        service.createAccount("boss@x", "老板", AdminRole.SUPER_ADMIN,
                 List.of("vet.view"), 1L);
         // 超管隐式全权，不写权限表。
         verify(permissions, never()).saveAll(any());
@@ -128,7 +129,7 @@ class AdminAccountServiceTest {
 
     @Test
     void cannotEditSuperAdminPermissions() {
-        AdminAccount sa = AdminAccount.create("b@x", "B", AdminAccountType.SUPER_ADMIN, 1L);
+        AdminAccount sa = AdminAccount.create("b@x", "B", AdminRole.SUPER_ADMIN, 1L);
         ReflectionTestUtils.setField(sa, "id", 2L);
         when(accounts.findById(2L)).thenReturn(Optional.of(sa));
         assertThatThrownBy(() -> service.updatePermissions(2L, List.of("vet.view"), 1L))
@@ -146,7 +147,7 @@ class AdminAccountServiceTest {
 
     @Test
     void cannotDeactivateLastActiveSuperAdmin() {
-        AdminAccount sa = AdminAccount.create("b@x", "B", AdminAccountType.SUPER_ADMIN, null);
+        AdminAccount sa = AdminAccount.create("b@x", "B", AdminRole.SUPER_ADMIN, null);
         ReflectionTestUtils.setField(sa, "id", 1L);
         when(accounts.findById(1L)).thenReturn(Optional.of(sa));
         when(accounts.countByAccountTypeAndStatus(AdminAccountType.SUPER_ADMIN, AdminAccountStatus.ACTIVE))

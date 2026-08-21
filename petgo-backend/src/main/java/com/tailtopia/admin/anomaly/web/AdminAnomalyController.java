@@ -6,6 +6,7 @@ import com.tailtopia.admin.anomaly.service.ConsultAnomalyService;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.media.SignedUrlService;
+import com.tailtopia.shared.i18n.Messages;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
@@ -31,9 +32,14 @@ public class AdminAnomalyController {
     private final ConsultAnomalyService anomalyService;
     private final SignedUrlService signedUrlService;
 
-    public AdminAnomalyController(ConsultAnomalyService anomalyService, SignedUrlService signedUrlService) {
+    /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
+    private final Messages msg;
+
+    public AdminAnomalyController(ConsultAnomalyService anomalyService, SignedUrlService signedUrlService,
+            Messages msg) {
         this.anomalyService = anomalyService;
         this.signedUrlService = signedUrlService;
+        this.msg = msg;
     }
 
     @GetMapping("/admin/anomalies")
@@ -50,7 +56,7 @@ public class AdminAnomalyController {
     @PreAuthorize(VIEW_AUTH)
     public String detail(@PathVariable long id, Model model) {
         model.addAttribute("active", "anomalies");
-        ConsultAnomaly a = anomalyService.find(id).orElseThrow(() -> AppException.notFound("异常工单不存在"));
+        ConsultAnomaly a = anomalyService.find(id).orElseThrow(() -> AppException.notFound("异常工单不存在").code("admin.err.anomaly.notFound"));
         model.addAttribute("anomaly", a);
         // 处理图现签短 TTL URL（不缓存、不入库、不落日志）。
         String key = a.getResolutionImageKey();
@@ -65,9 +71,9 @@ public class AdminAnomalyController {
             @RequestParam("note") String note, RedirectAttributes flash) {
         try {
             anomalyService.addNote(id, note, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已添加内部备注");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.anomaly.noteAdded"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/anomalies/" + id;
     }
@@ -78,7 +84,7 @@ public class AdminAnomalyController {
             @RequestParam(value = "resolutionImageKey", required = false) String resolutionImageKey,
             RedirectAttributes flash) {
         anomalyService.resolve(id, resolutionImageKey, admin.getAdminAccountId());
-        flash.addFlashAttribute("notice", "已标记为已处理并归档");
+        flash.addFlashAttribute("notice", msg.get("admin.flash.anomaly.resolved"));
         return "redirect:/admin/anomalies/" + id;
     }
 

@@ -53,6 +53,14 @@ public class IdCard {
     @Column(name = "hd_unlocked", nullable = false)
     private boolean hdUnlocked;
 
+    /**
+     * 档案删除打标（V108，2026-08-19 决策）：非空 = 建卡所属档案已被删除。
+     * 可见性 = {@code hdUnlocked || profileDeletedAt == null}——付费卡恒可见（展示快照），
+     * 未付费卡隐藏；支付回调到账翻转 {@code hdUnlocked} 后自动重新可见（防支付时间差）。
+     */
+    @Column(name = "profile_deleted_at")
+    private Instant profileDeletedAt;
+
     /** 性别快照 MALE/FEMALE/UNKNOWN（与 pet_type 同为字符串快照）。旧卡（新规则前建）为 null。 */
     @Column(name = "gender", length = 8)
     private String gender;
@@ -182,6 +190,10 @@ public class IdCard {
 
     public boolean isHdUnlocked() {
         return hdUnlocked;
+    }
+
+    public Instant getProfileDeletedAt() {
+        return profileDeletedAt;
     }
 
     public String getGender() {

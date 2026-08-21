@@ -36,7 +36,7 @@ public class AdminSettlementService {
     @Transactional
     public void markPaid(long id, String proof, long adminId) {
         VetSettlement s = settlements.findById(id)
-                .orElseThrow(() -> AppException.notFound("月结不存在"));
+                .orElseThrow(() -> AppException.notFound("月结不存在").code("admin.err.settlement.notFound"));
         s.markPaid(proof, adminId);
         settlements.save(s);
         audit.record(adminId, "SETTLEMENT_PAID", "vet_settlement", String.valueOf(id),
@@ -47,7 +47,7 @@ public class AdminSettlementService {
     @Transactional
     public void archive(long id, long adminId) {
         VetSettlement s = settlements.findById(id)
-                .orElseThrow(() -> AppException.notFound("月结不存在"));
+                .orElseThrow(() -> AppException.notFound("月结不存在").code("admin.err.settlement.notFound"));
         s.archive(adminId);
         settlements.save(s);
         audit.record(adminId, "SETTLEMENT_ARCHIVED", "vet_settlement", String.valueOf(id),

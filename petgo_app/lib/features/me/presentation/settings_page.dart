@@ -14,6 +14,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../notify/data/push_permission_providers.dart';
+import '../../notify/domain/push_permission_change_reporter.dart';
 import '../../social/data/blocked_users_repository.dart';
 
 /// 二级「设置」页（Story 7.1 · F8 · settings.html 1:1 还原）。
@@ -64,6 +65,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> with WidgetsBinding
 
   Future<void> _refreshNotifStatus() async {
     final granted = await isPushPermissionGranted();
+    // 🔴 Story 9.3：从系统设置返回是撤销的第二个可观测时机（第一个是冷启动）。
+    //    reporter 只在真的发生跃迁时上报，重复刷新不会灌水。
+    await PushPermissionChangeReporter.record(granted, fromScreen: 'settings_page');
     if (!mounted) return;
     setState(() => _notif = granted);
     // 用户刚在系统设置里打开通知 → 立即补注册离线推送（否则要等下次冷启动才生效）。

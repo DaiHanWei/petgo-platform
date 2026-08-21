@@ -104,7 +104,7 @@ public class FailedConsultRequest {
     /** 归档：SYSTEM_FAILURE 须先跟进，否则拒绝（AC3/AC4）。 */
     public void archive() {
         if (this.cancelReason == CancelReason.SYSTEM_FAILURE && !this.followedUp) {
-            throw com.tailtopia.shared.error.AppException.validation("系统故障类需先标记跟进才能归档");
+            throw com.tailtopia.shared.error.AppException.validation("系统故障类需先标记跟进才能归档").code("admin.err.failed.followUpFirst");
         }
         this.archivedAt = Instant.now();
     }

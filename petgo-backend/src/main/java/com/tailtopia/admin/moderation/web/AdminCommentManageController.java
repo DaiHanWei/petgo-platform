@@ -3,6 +3,7 @@ package com.tailtopia.admin.moderation.web;
 import com.tailtopia.admin.moderation.service.AdminCommentManageService;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.i18n.Messages;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
@@ -26,8 +27,13 @@ public class AdminCommentManageController {
 
     private final AdminCommentManageService commentManage;
 
-    public AdminCommentManageController(AdminCommentManageService commentManage) {
+    /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
+    private final Messages msg;
+
+    public AdminCommentManageController(AdminCommentManageService commentManage,
+            Messages msg) {
         this.commentManage = commentManage;
+        this.msg = msg;
     }
 
     @PostMapping("/admin/comments/{id}/takedown")
@@ -36,9 +42,9 @@ public class AdminCommentManageController {
             @RequestParam("reason") String reason, RedirectAttributes flash) {
         try {
             commentManage.takedownComment(id, reason, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已下架该评论（已通知作者，操作留审计）");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.comment.takenDown"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/comments";
     }
@@ -48,7 +54,7 @@ public class AdminCommentManageController {
     public String restore(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id,
             RedirectAttributes flash) {
         commentManage.restoreComment(id, admin.getAdminAccountId());
-        flash.addFlashAttribute("notice", "已恢复该评论（重新对他人可见）");
+        flash.addFlashAttribute("notice", msg.get("admin.flash.comment.restored"));
         return "redirect:/admin/comments";
     }
 }

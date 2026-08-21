@@ -127,7 +127,7 @@ public class AccountDeletionService {
         // auth 最后删（用户行删除后 UGC 即匿名）；收头像图。
         media = media.merge(authDeletion.deleteByUserId(userId));
 
-        // OSS 个人图删除（私密②全删；公开①仅头像/名片个人图，UGC 帖子图不在此列）。
+        // OSS 个人图：2026-08-19 起保留不删（F21，快照引用保护；MediaDeletionService 只记账）。
         mediaDeletion.deletePrivateKeys(media.privateKeys());
         mediaDeletion.deletePublicByUrls(media.publicUrls());
         // IM 聊天媒体（决策 D2）。

@@ -98,12 +98,12 @@ public class AdminConfigService {
     @Transactional
     public void setTierEnabled(long tierId, boolean enabled, long adminId) {
         PawCoinTopupTier tier = tierRepo.findById(tierId)
-                .orElseThrow(() -> AppException.notFound("充值档位不存在"));
+                .orElseThrow(() -> AppException.notFound("充值档位不存在").code("admin.err.config.tierNotFound"));
         if (tier.isEnabled() == enabled) {
             return; // 无变更。
         }
         if (!enabled && tierRepo.countByEnabledTrue() <= 1) {
-            throw AppException.validation("至少保留 1 个启用的充值档位");
+            throw AppException.validation("至少保留 1 个启用的充值档位").code("admin.err.config.keepOneTier");
         }
         tier.setEnabled(enabled);
         tierRepo.save(tier);

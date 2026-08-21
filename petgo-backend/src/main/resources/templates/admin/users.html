@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
 <!-- 用户搜索（Story 3.1，只读）。按 ID/注册邮箱查普通用户；HTMX 片段刷新。门控 user.view。 -->
 <head>
     <meta charset="UTF-8"/>

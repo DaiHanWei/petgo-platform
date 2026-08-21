@@ -300,6 +300,9 @@ tbody tr:hover { background: var(--brand-tint); }
     gap: 12px;
     max-width: 920px;
 }
+/* 显式设了 display 的元素会盖掉浏览器默认的 [hidden]{display:none}，
+   于是账号页选中模板角色时 JS 置了 hidden 也藏不住这块（V165）。 */
+.perm-groups[hidden] { display: none; }
 .perm-group {
     border: 1px solid var(--line);
     border-radius: var(--radius-sm);
@@ -382,3 +385,22 @@ form.inline { display: inline; margin: 0; }
 dialog.lightbox { border: none; padding: 0; background: transparent; max-width: 92vw; max-height: 92vh; }
 dialog.lightbox::backdrop { background: rgba(0, 0, 0, .8); }
 dialog.lightbox img { display: block; max-width: 92vw; max-height: 92vh; object-fit: contain; cursor: zoom-out; }
+
+/* ===== 后台账号页 · 岗位角色（V165） ===== */
+/* 角色标签：列表里一眼分清运营 / 发货 / 客服 / 财务。超管与自定义用警示色 —— 前者是全权、
+   后者是「不套模板、逐码授权」，两种都值得多看一眼。 */
+.role-tag { font-weight: 600; }
+.role-tag.role-SUPER_ADMIN { background: var(--danger-tint, #fdecec); color: var(--danger, #b3261e);
+    border-color: var(--danger-line, #f5c6c4); }
+.role-tag.role-CUSTOM { background: var(--warn-tint, #fff4e5); color: var(--warn, #8a5300);
+    border-color: var(--warn-line, #f2d5a8); }
+
+/* 角色职责说明 + 权限预览：建号时先看清这个岗位能进哪些模块，再决定要不要改成自定义。 */
+.role-desc { margin-top: 6px; }
+.role-perm-preview { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px;
+    padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2, #fafafa); }
+.role-perm-preview[hidden] { display: none; }
+
+/* 列表行内的改角色表单：下拉 + 按钮同排，不撑高行。 */
+.account-role-form { display: inline-flex; align-items: center; gap: 6px; }
+.role-select { font-size: var(--fs-xs); padding: 3px 6px; max-width: 140px; }

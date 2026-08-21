@@ -6,6 +6,7 @@ import com.tailtopia.admin.config.service.AdminConfigService;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.config.service.PlatformConfigService;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.i18n.Messages;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
@@ -30,9 +31,14 @@ public class AdminConfigController {
     private final PlatformConfigService read;
     private final AdminConfigService write;
 
-    public AdminConfigController(PlatformConfigService read, AdminConfigService write) {
+    /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
+    private final Messages msg;
+
+    public AdminConfigController(PlatformConfigService read, AdminConfigService write,
+            Messages msg) {
         this.read = read;
         this.write = write;
+        this.msg = msg;
     }
 
     @GetMapping("/admin/config")
@@ -55,9 +61,9 @@ public class AdminConfigController {
             write.updatePricing(new PricingForm(vetConsultPrice, vetShareRate, aiUnlockPrice,
                     idHdDownloadPrice, monthlyFreeQuota), admin.getAdminAccountId());
             // bug 20260721-346：定价保存成功提示改用 toast（短暂自动消失），区别于常驻 notice 横幅。
-            flash.addFlashAttribute("toast", "定价已更新（仅影响后续新成交；操作留审计）");
+            flash.addFlashAttribute("toast", msg.get("admin.flash.config.pricingSaved"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/config";
     }
@@ -70,9 +76,9 @@ public class AdminConfigController {
             @RequestParam(defaultValue = "false") boolean topupPaused, RedirectAttributes flash) {
         try {
             write.updatePawCoin(new PawCoinForm(premiumRate, premiumFixed, topupPaused), admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "PawCoin 配置已更新（操作留审计）");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.config.pawcoinSaved"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/config";
     }
@@ -83,9 +89,9 @@ public class AdminConfigController {
             @PathVariable long id, @RequestParam boolean enabled, RedirectAttributes flash) {
         try {
             write.setTierEnabled(id, enabled, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "充值档位已更新（操作留审计）");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.config.tiersSaved"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/config";
     }

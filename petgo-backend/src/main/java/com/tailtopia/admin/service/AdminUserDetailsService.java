@@ -4,6 +4,7 @@ import com.tailtopia.admin.account.domain.AdminAccount;
 import com.tailtopia.admin.account.domain.AdminAccountPermission;
 import com.tailtopia.admin.account.domain.AdminAccountStatus;
 import com.tailtopia.admin.account.domain.AdminAccountType;
+import com.tailtopia.admin.account.domain.AdminRole;
 import com.tailtopia.admin.account.repository.AdminAccountPermissionRepository;
 import com.tailtopia.admin.account.repository.AdminAccountRepository;
 import com.tailtopia.auth.domain.Role;
@@ -63,14 +64,33 @@ public class AdminUserDetailsService implements UserDetailsService {
         Long operatorUserId = users.findByEmailAndRole(a.getLarkEmail(), Role.ADMIN)
                 .map(u -> u.getId())
                 .orElse(null);
-        // Story 1.5：STAFF 装载其模块权限码为 authority；SUPER_ADMIN 隐式全权（经 hasRole('SUPER_ADMIN')
-        // 表达式判定，不注入全集——新增权限码无需同步，抗遗漏），故此处不为其查权限表。
-        Set<String> permissionCodes = a.getAccountType() == AdminAccountType.SUPER_ADMIN
-                ? Set.of()
-                : permissions.findByAccountId(a.getId()).stream()
-                        .map(AdminAccountPermission::getPermissionCode)
-                        .collect(Collectors.toSet());
+        Set<String> permissionCodes = resolvePermissions(a);
         return new AdminUserDetails(a.getId(), operatorUserId, a.getLarkEmail(),
                 a.getPasswordHash(), a.getAccountType(), permissionCodes);
+    }
+
+    /**
+     * 解析该账号本次登录应装载的权限码（V165 岗位角色）。三条互斥路径：
+     * <ol>
+     *   <li>{@code SUPER_ADMIN} → 空集。隐式全权由表达式 {@code hasRole('SUPER_ADMIN')} 命中，
+     *       不注入全集——新增权限码无需同步，抗遗漏（Story 1.5 既有语义，不变）。</li>
+     *   <li>{@code CUSTOM} → 读 {@code admin_account_permissions} 勾选行（Story 1.5 原有形态；
+     *       存量 STAFF 账号迁移到 CUSTOM，故行为逐位不变）。</li>
+     *   <li>其余岗位角色 → 取 {@link AdminRole#permissionCodes()} 模板，<b>不查表</b>。
+     *       所以给某角色新增一个模块权限时，该角色所有账号下次登录即生效，
+     *       不需要逐个账号重存权限行——角色定义与实际授权不会漂移。</li>
+     * </ol>
+     */
+    private Set<String> resolvePermissions(AdminAccount a) {
+        AdminRole role = a.getRole();
+        if (a.getAccountType() == AdminAccountType.SUPER_ADMIN || role == null) {
+            return Set.of();
+        }
+        if (role.isTemplated()) {
+            return Set.copyOf(role.permissionCodes());
+        }
+        return permissions.findByAccountId(a.getId()).stream()
+                .map(AdminAccountPermission::getPermissionCode)
+                .collect(Collectors.toSet());
     }
 }

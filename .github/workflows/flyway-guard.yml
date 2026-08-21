@@ -1,0 +1,29 @@
+name: flyway-guard
+
+# Flyway 迁移号守门（决策 E6）：树内重号 / 动冻结迁移 / 非时间戳新号 / 与 main 撞号 → 不绿
+on:
+  push:
+    branches: [main]
+    paths:
+      - "petgo-backend/src/main/resources/db/migration/**"
+      - ".github/workflows/flyway-guard.yml"
+      - "scripts/ci/check-flyway-versions.sh"
+  pull_request:
+    paths:
+      - "petgo-backend/src/main/resources/db/migration/**"
+      - ".github/workflows/flyway-guard.yml"
+      - "scripts/ci/check-flyway-versions.sh"
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Flyway 版本号检查
+        env:
+          # PR 时以 PR 目标分支为基线；push main 时为空 → 只做树内查重
+          BASE_REF: ${{ github.base_ref && format('origin/{0}', github.base_ref) || '' }}
+        run: bash scripts/ci/check-flyway-versions.sh "$BASE_REF"

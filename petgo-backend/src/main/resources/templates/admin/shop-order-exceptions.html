@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<!-- 异常订单处置（V1.4.0 Story 4.4，AB-11D / S-3）。
+     🔒 本页不渲染收件人 PII（同订单列表口径）。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.shop.exceptions.title}">异常订单 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <div class="s-page-head">
+            <div class="s-title-wrap">
+                <h1 th:text="#{admin.shop.exceptions.title}">异常订单</h1>
+            </div>
+        </div><!-- ⚠️ 这段文案是 AC 的一部分，不是装饰：不写明来源，运营会一直以为是系统 bug。 -->
+        <p class="hint" th:text="#{admin.shop.exceptions.hint}">这里列出实际库存已不足以发出的待发货订单。真正的超卖来源是盘点、报损与退货入库撤销，不是并发下单——并发早已由下单时的条件原子写解决。发现异常时请先回查最近一次盘点或报损记录。</p>
+        <p class="hint" th:text="#{admin.shop.exceptions.manualHint}">系统不会自动取消任何订单。每一单都由你判断后手工处置。</p>
+        <p th:if="${notice}" class="flash" th:text="${notice}">已保存</p>
+        <p th:if="${error}" class="flash error" th:text="${error}">操作失败</p>
+
+        <div th:each="o : ${orders}">
+            <h2>
+                <a th:href="@{/admin/shop/orders/{t}(t=${o.publicToken})}"
+                   th:text="${o.publicToken}">abc</a>
+                <span th:text="' · ' + ${o.status} + ' · ' + ${o.totalAmount}"></span>
+            </h2>
+
+            <div class="s-card">
+            <table>
+                <thead>
+                <tr>
+                    <th th:text="#{admin.shop.col.name}">商品名</th>
+                    <th th:text="#{admin.shop.sku.specName}">规格</th>
+                    <th th:text="#{admin.shop.inventory.col.qty}">数量</th>
+                    <th th:text="#{admin.shop.exceptions.col.cancelled}">已取消</th>
+                    <th th:text="#{admin.common.action}">操作</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="l : ${linesByToken.get(o.publicToken)}">
+                    <td th:text="${l.productName}">Produk</td>
+                    <td th:text="${l.specName}">3 kg</td>
+                    <td th:text="${l.qty}">1</td>
+                    <td th:text="${l.refundedQty}">0</td>
+                    <td>
+                        <!-- 处置②：部分取消 -->
+                        <form th:if="${canHandle and l.refundedQty < l.qty}" method="post"
+                              th:action="@{/admin/shop/order-exceptions/{t}/cancel-line(t=${o.publicToken})}">
+                            <input type="hidden" name="lineId" th:value="${l.id}"/>
+                            <input type="number" name="qty" min="1" th:max="${l.qty - l.refundedQty}"
+                                   th:value="${l.qty - l.refundedQty}" required/>
+                            <input type="text" name="reason" required maxlength="200"
+                                   th:placeholder="#{admin.shop.exceptions.reason.placeholder}"/>
+                            <button type="submit" th:text="#{admin.shop.exceptions.btn.cancelLine}">部分取消</button>
+                        </form>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+            </div>
+
+            <div th:if="${canHandle}">
+                <!-- 处置①：整单取消并退款（全额含运费 + 补偿溢价补 Coin） -->
+                <form method="post"
+                      th:action="@{/admin/shop/order-exceptions/{t}/cancel(t=${o.publicToken})}">
+                    <input type="text" name="reason" required maxlength="200"
+                           th:placeholder="#{admin.shop.exceptions.reason.placeholder}"/>
+                    <button type="submit" th:text="#{admin.shop.exceptions.btn.cancelWhole}">整单取消并退款</button>
+                </form>
+                <!-- 处置③：联系用户后继续 -->
+                <form method="post"
+                      th:action="@{/admin/shop/order-exceptions/{t}/continue(t=${o.publicToken})}">
+                    <input type="text" name="reason" required maxlength="200"
+                           th:placeholder="#{admin.shop.exceptions.reason.placeholder}"/>
+                    <button type="submit" th:text="#{admin.shop.exceptions.btn.continue}">联系用户后继续</button>
+                </form>
+            </div>
+        </div>
+
+        <p th:if="${#lists.isEmpty(orders)}" th:text="#{admin.shop.exceptions.empty}">当前没有异常订单。</p>
+    </div>
+</div>
+</body>
+</html>

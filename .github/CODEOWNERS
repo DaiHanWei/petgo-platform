@@ -1,0 +1,5 @@
+# 全库代码所有者 = 创始人(2026-08-20 配置)。
+# 配合 main 分支保护的 require_code_owner_reviews:
+#   - 其他协作者的 PR 必须由 @DaiHanWei 批准才能合并(协作者互批无效);
+#   - 创始人本人是 admin 且 enforce_admins=false,自己的 PR 经「bypass rules」勾选直接合并。
+* @DaiHanWei

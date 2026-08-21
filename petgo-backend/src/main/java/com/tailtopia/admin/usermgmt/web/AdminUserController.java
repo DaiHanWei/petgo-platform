@@ -4,6 +4,7 @@ import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.admin.usermgmt.dto.AdminUserRow;
 import com.tailtopia.admin.usermgmt.service.AdminUserService;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.i18n.Messages;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -35,8 +36,13 @@ public class AdminUserController {
 
     private final AdminUserService adminUserService;
 
-    public AdminUserController(AdminUserService adminUserService) {
+    /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
+    private final Messages msg;
+
+    public AdminUserController(AdminUserService adminUserService,
+            Messages msg) {
         this.adminUserService = adminUserService;
+        this.msg = msg;
     }
 
     @GetMapping("/admin/users")
@@ -82,9 +88,9 @@ public class AdminUserController {
         try {
             adminUserService.grantPawCoin(userId, coins, reason, idempotencyToken,
                     admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已赠送 " + coins + " PawCoin");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.user.pawcoinGranted", coins));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/users/" + userId;
     }
@@ -95,9 +101,9 @@ public class AdminUserController {
             @RequestParam("reason") String reason, RedirectAttributes flash) {
         try {
             adminUserService.deactivate(userId, reason, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已停用该用户（即时不可登录，进行中问诊已强关）");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.user.deactivated"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/users/" + userId;
     }
@@ -107,7 +113,7 @@ public class AdminUserController {
     public String reactivate(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long userId,
             RedirectAttributes flash) {
         adminUserService.reactivate(userId, admin.getAdminAccountId());
-        flash.addFlashAttribute("notice", "已重新激活该用户");
+        flash.addFlashAttribute("notice", msg.get("admin.flash.user.reactivated"));
         return "redirect:/admin/users/" + userId;
     }
 
@@ -120,10 +126,10 @@ public class AdminUserController {
             adminUserService.deleteUser(userId,
                     com.tailtopia.admin.usermgmt.domain.DeletionType.fromOrNull(type), note,
                     admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已提交删除（不可逆，级联匿名化处理中）");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.user.deletionSubmitted"));
             return "redirect:/admin/users";
         } catch (com.tailtopia.shared.error.AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
             return "redirect:/admin/users/" + userId;
         }
     }

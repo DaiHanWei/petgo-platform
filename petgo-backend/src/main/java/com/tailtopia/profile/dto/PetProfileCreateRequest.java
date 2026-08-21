@@ -33,5 +33,26 @@ public record PetProfileCreateRequest(
         @Size(max = 60) String breed,
         // 允许生日=今天（当天出生合法；前端选择器 maxDate=now，与此对齐——bug：选今天被 @Past 拒 422）。
         @NotNull(message = "生日必填且需完整年月日") @PastOrPresent(message = "生日不能是未来") LocalDate birthday,
-        @Size(max = 30, message = "介绍不能超过 30 字") String intro) {
+        @Size(max = 30, message = "介绍不能超过 30 字") String intro,
+        /**
+         * 🔒 体重（kg），Story 6.1。<b>选填 —— 建档流程可跳过</b>：
+         * 设为必填会挡住既有建档转化，而建档转化在漏斗上比推荐精度重要得多。
+         * 未填时 FR-107 降级为按物种推荐、FR-109 静默不触发。
+         */
+        @jakarta.validation.constraints.DecimalMin(value = "0.1", message = "体重需大于 0")
+        @jakarta.validation.constraints.DecimalMax(value = "200", message = "体重不能超过 200 kg")
+        java.math.BigDecimal weightKg,
+        /** 绝育状态，选填：NEUTERED / INTACT / UNKNOWN。 */
+        String neuterStatus) {
+
+    /**
+     * 便捷构造：不带体重与绝育状态。
+     *
+     * <p>两者<b>本就选填</b>（Story 6.1：建档可跳过），既有调用点不必逐个补 null ——
+     * 也顺带说明了「不填」是一等情形，不是遗漏。
+     */
+    public PetProfileCreateRequest(String avatarUrl, String petType, String name, String breed,
+            LocalDate birthday, String intro) {
+        this(avatarUrl, petType, name, breed, birthday, intro, null, null);
+    }
 }

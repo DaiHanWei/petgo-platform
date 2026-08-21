@@ -50,7 +50,8 @@
    - **L0 静态**：`flutter analyze` / `flutter test` / `mvn -B compile|package`（无需 DB、无需凭证）
    - **L1 集成**：需 Docker daemon + postgres + redis 真跑（`mvn spring-boot:run` + `/actuator/health=UP`）
    - **L2 端到端**：需真实第三方凭证 / 真机 / 模拟器视觉
-4. **严格按 Epic 1→7、story 编号升序**。Flyway 序号按执行顺序**单调分配**（占位 `V<n>__`，实际号顺延，勿照搬 architecture 示例号，会撞 → 决策 E2）。
+4. **严格按 Epic 1→7、story 编号升序**。
+5. **Flyway 新迁移一律时间戳版本号**：`V<yyyyMMdd_HHmm>__<snake_case>.sql`（如 `V20260821_1435__init_shop_orders.sql`，取创建时刻），**禁止再用序列号**（决策 E6，反转 E2 的序号分配）。存量序号迁移（≤V108 等）保持原号**冻结**——已合入 main 的迁移文件不改不删，改表另起新迁移。CI `flyway-guard` 强制这四条：树内同号 / 动冻结文件 / 新文件非时间戳格式 / 与 main 撞号 → PR 不绿（本地自查：`bash scripts/ci/check-flyway-versions.sh origin/main`）。`out-of-order=true` 已全环境常开，时间戳跨分支合并乱序是预期行为。
 
 ## ☁️ 云端（headless）能做什么、不能做什么
 

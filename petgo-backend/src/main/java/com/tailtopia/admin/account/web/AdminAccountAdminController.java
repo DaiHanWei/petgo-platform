@@ -1,11 +1,12 @@
 package com.tailtopia.admin.account.web;
 
-import com.tailtopia.admin.account.domain.AdminAccountType;
 import com.tailtopia.admin.account.domain.AdminPermissions;
+import com.tailtopia.admin.account.domain.AdminRole;
 import com.tailtopia.admin.account.dto.CreateAdminAccountForm;
 import com.tailtopia.admin.account.service.AdminAccountService;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.i18n.Messages;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -36,8 +37,13 @@ public class AdminAccountAdminController {
 
     private final AdminAccountService accountService;
 
-    public AdminAccountAdminController(AdminAccountService accountService) {
+    /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
+    private final Messages msg;
+
+    public AdminAccountAdminController(AdminAccountService accountService,
+            Messages msg) {
         this.accountService = accountService;
+        this.msg = msg;
     }
 
     @GetMapping("/admin/accounts")
@@ -61,10 +67,10 @@ public class AdminAccountAdminController {
         }
         try {
             long id = accountService.createAccount(form.getLarkEmail(), form.getDisplayName(),
-                    form.getAccountType(), form.getPermissionCodes(), admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已创建后台账号 #" + id + "（" + form.getLarkEmail() + "）");
+                    form.getRole(), form.getPermissionCodes(), admin.getAdminAccountId());
+            flash.addFlashAttribute("notice", msg.get("admin.flash.account.created", id, form.getLarkEmail()));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/accounts";
     }
@@ -77,9 +83,27 @@ public class AdminAccountAdminController {
             RedirectAttributes flash) {
         try {
             accountService.updatePermissions(id, permissionCodes, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已更新账号 #" + id + " 的权限（下次登录生效）");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.account.permsUpdated", id));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
+        }
+        return "redirect:/admin/accounts";
+    }
+
+    /**
+     * 改岗位角色（V165）。门控与创建账号同级（{@code admin.create_account}）——改角色就是重新授权，
+     * 与建号是同一量级的动作，不该比它更容易拿到。
+     */
+    @PostMapping("/admin/accounts/{id}/role")
+    @PreAuthorize(CREATE_AUTH)
+    public String changeRole(@AuthenticationPrincipal AdminUserDetails admin,
+            @PathVariable long id, @RequestParam("role") AdminRole role,
+            RedirectAttributes flash) {
+        try {
+            accountService.changeRole(id, role, admin.getAdminAccountId());
+            flash.addFlashAttribute("notice", msg.get("admin.flash.account.roleChanged", id, msg.get(role.titleCode())));
+        } catch (AppException e) {
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/accounts";
     }
@@ -90,9 +114,9 @@ public class AdminAccountAdminController {
             RedirectAttributes flash) {
         try {
             accountService.deactivate(id, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已停用账号 #" + id + "（其会话即时失效）");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.account.deactivated", id));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/accounts";
     }
@@ -103,9 +127,9 @@ public class AdminAccountAdminController {
             RedirectAttributes flash) {
         try {
             accountService.reactivate(id, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已重新激活账号 #" + id);
+            flash.addFlashAttribute("notice", msg.get("admin.flash.account.reactivated", id));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/accounts";
     }
@@ -115,6 +139,10 @@ public class AdminAccountAdminController {
         model.addAttribute("accounts", accountService.list());
         model.addAttribute("allPermissions", AdminPermissions.ALL);
         model.addAttribute("permissionGroups", AdminPermissions.GROUPS);
-        model.addAttribute("accountTypes", AdminAccountType.values());
+        model.addAttribute("roles", AdminRole.selectable());
+        // 角色 → 权限码，供页面在选角色时即时预览「这个岗位能看到什么」（仅体验；真正的授权在服务端按角色解析）。
+        model.addAttribute("rolePermissions", java.util.Arrays.stream(AdminRole.values())
+                .collect(java.util.stream.Collectors.toMap(Enum::name, AdminRole::permissionCodes,
+                        (a, b) -> a, java.util.LinkedHashMap::new)));
     }
 }

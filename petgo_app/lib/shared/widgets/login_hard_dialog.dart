@@ -5,6 +5,7 @@ import '../../core/theme/colors.dart';
 import '../../core/theme/spacing.dart';
 import '../../core/theme/typography.dart';
 import '../../l10n/app_localizations.dart';
+import 'agreement_links.dart';
 import 'login_guide_outcome.dart';
 
 /// 强登录引导弹窗（FR-0C）。
@@ -112,7 +113,10 @@ class _LoginHardDialogState extends State<LoginHardDialog> {
             // 主按钮：Google 登录（白底 + 描边 + Google G）。V1 无独立注册流（Google 即建号），
             // 原「Daftar Gratis」次按钮与 Google 同源、纯冗余，2026-07-23 按产品要求移除。
             _GoogleButton(loading: _loading, onTap: _loading ? null : () => _run(widget.onLogin)),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
+            // 条款与隐私（FR-0D / 审核合规：登录 CTA 前必须展示 EULA 链接）。
+            const AgreementLinks(),
+            const SizedBox(height: 4),
             // 继续看（文字链）。
             TextButton(
               key: const ValueKey('hardDialogClose'),

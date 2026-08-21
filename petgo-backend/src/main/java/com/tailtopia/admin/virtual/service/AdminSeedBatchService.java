@@ -55,7 +55,7 @@ public class AdminSeedBatchService {
 
     public String readLines(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw AppException.validation("请选择要导入的 Excel 文件");
+            throw AppException.validation("请选择要导入的 Excel 文件").code("admin.err.seedBatch.fileRequired");
         }
         String name = file.getOriginalFilename() == null ? "" : file.getOriginalFilename().toLowerCase();
         try {
@@ -80,7 +80,7 @@ public class AdminSeedBatchService {
                 return out.toString();
             }
         } catch (Exception e) {
-            throw AppException.validation("Excel 导入失败，请检查文件格式");
+            throw AppException.validation("Excel 导入失败，请检查文件格式").code("admin.err.seedBatch.importFailed");
         }
     }
 
@@ -90,15 +90,15 @@ public class AdminSeedBatchService {
     @Transactional
     public BatchResult publishBatch(long virtualUserId, String rawLines, long adminId) {
         User author = users.findById(virtualUserId)
-                .orElseThrow(() -> AppException.notFound("虚拟账号不存在"));
+                .orElseThrow(() -> AppException.notFound("虚拟账号不存在").code("admin.err.virtualAccount.notFound"));
         if (author.getAccountType() != AccountType.VIRTUAL) {
-            throw AppException.validation("只能以虚拟账号批量发布");
+            throw AppException.validation("只能以虚拟账号批量发布").code("admin.err.seedBatch.virtualOnly");
         }
         if (!author.isEnabled()) {
-            throw AppException.validation("该虚拟账号已停用");
+            throw AppException.validation("该虚拟账号已停用").code("admin.err.seedBatch.accountDisabled");
         }
         if (rawLines == null || rawLines.isBlank()) {
-            throw AppException.validation("批量内容为空");
+            throw AppException.validation("批量内容为空").code("admin.err.seedBatch.empty");
         }
 
         int published = 0;
@@ -149,7 +149,8 @@ public class AdminSeedBatchService {
             return null;
         }
         if (out.size() > MAX_IMAGES) {
-            throw AppException.validation("单条最多 " + MAX_IMAGES + " 张图片");
+            throw AppException.validation("单条最多 " + MAX_IMAGES + " 张图片")
+                    .code("admin.err.seedBatch.tooManyImages", MAX_IMAGES);
         }
         return out;
     }

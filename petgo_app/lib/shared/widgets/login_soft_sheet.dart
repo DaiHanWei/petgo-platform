@@ -6,6 +6,7 @@ import '../../core/theme/rounded.dart';
 import '../../core/theme/spacing.dart';
 import '../../core/theme/typography.dart';
 import '../../l10n/app_localizations.dart';
+import 'agreement_links.dart';
 import 'login_guide_outcome.dart';
 
 /// 软性登录推荐浮层（FR-0B）。
@@ -125,6 +126,8 @@ class _LoginSoftSheetState extends State<LoginSoftSheet> {
             label: Text(l10n.loginGoogle, style: AppTypography.button),
           ),
           const SizedBox(height: AppSpacing.sm),
+          // 条款与隐私（FR-0D / 审核合规：登录 CTA 前必须展示 EULA 链接）。
+          const AgreementLinks(),
           // 关闭：小号浅色弱化（软性）
           Center(
             child: TextButton(

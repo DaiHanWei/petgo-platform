@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<!-- 退货审核队列（V1.4.0 Story 5.3，AB-12A）。🔒 列表不渲染收件人 PII。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.shop.returns.title}">退货审核 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <div class="s-page-head">
+            <div class="s-title-wrap">
+                <h1 th:text="#{admin.shop.returns.title}">退货审核</h1>
+                <p class="s-sub" th:text="#{admin.shop.returns.hint}">「是否批准退货」与「运费由谁承担」是两件事。运费归属由退货类型与勾选范围自动得出，没有手工开关——手工可调等于打开凑单-退货套利的口子。</p>
+            </div>
+        </div>
+        <p th:if="${notice}" class="flash" th:text="${notice}">已保存</p>
+        <p th:if="${error}" class="flash error" th:text="${error}">操作失败</p>
+
+        <div class="s-card">
+            <div class="s-card-body">
+                <form method="get" th:action="@{/admin/shop/returns}" class="filters">
+            <label th:text="#{admin.shop.orders.col.status}">状态</label>
+            <select name="status">
+                <option value="" th:text="#{admin.shop.orders.filter.all}">全部</option>
+                <option th:each="s : ${statuses}" th:value="${s}" th:text="${s}"
+                        th:selected="${s.name() == status}">PENDING_REVIEW</option>
+            </select>
+            <button type="submit" th:text="#{admin.common.filter}">筛选</button>
+        </form>
+            </div>
+        </div>
+
+        <div class="s-card">
+            <!-- 状态 Tab（同订单页）。退货审核是按状态推进的流水作业，
+                 「待审核」有多少条是运营开工第一眼要看的。 -->
+            <div class="s-tabs">
+                <a th:href="@{/admin/shop/returns}"
+                   th:classappend="${#strings.isEmpty(status)} ? 'active'"
+                   th:text="#{admin.shop.orders.filter.all}">全部</a>
+                <a th:each="st : ${statuses}"
+                   th:href="@{/admin/shop/returns(status=${st})}"
+                   th:classappend="${st.name() == status} ? 'active'"
+                   th:text="${st}">PENDING_REVIEW</a>
+            </div>
+        <table>
+            <thead>
+            <tr>
+                <th th:text="#{admin.shop.returns.col.token}">申请编号</th>
+                <th th:text="#{admin.shop.orders.col.token}">订单号</th>
+                <th th:text="#{admin.shop.returns.col.type}">退货类型</th>
+                <th th:text="#{admin.shop.returns.col.lines}">退货行数</th>
+                <th th:text="#{admin.shop.returns.col.full}">整单退</th>
+                <th th:text="#{admin.shop.returns.col.returnShip}">回程运费</th>
+                <th th:text="#{admin.shop.returns.col.outbound}">去程运费退回</th>
+                <th th:text="#{admin.shop.orders.col.status}">状态</th>
+                <th th:text="#{admin.shop.orders.col.createdAt}">申请时间</th>
+                <th th:text="#{admin.common.action}">操作</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="r : ${rows}">
+                <td th:text="${r.publicToken}">abc</td>
+                <td th:text="${orderTokens.get(r.publicToken)}">ord</td>
+                <td th:text="${r.returnType}">QUALITY_ISSUE</td>
+                <td th:text="${lineCounts.get(r.publicToken)}">1</td>
+                <td th:text="${r.fullReturn}">false</td>
+                <td th:text="${r.returnShipBearer}">PLATFORM</td>
+                <td th:text="${r.outboundFeeRefundable}">false</td>
+                <td th:text="${r.status}">PENDING_REVIEW</td>
+                <td th:text="${r.createdAt}">-</td>
+                <td>
+                    <a th:href="@{/admin/shop/returns/{t}(t=${r.publicToken})}"
+                       th:text="#{admin.common.detail}">详情</a>
+                </td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(rows)}">
+                <td colspan="10" th:text="#{admin.shop.returns.empty}">暂无退货申请。</td>
+            </tr>
+            </tbody>
+        </table>
+        </div>
+    </div>
+</div>
+</body>
+</html>

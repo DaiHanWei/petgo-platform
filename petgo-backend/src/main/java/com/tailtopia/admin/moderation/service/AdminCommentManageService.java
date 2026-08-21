@@ -45,7 +45,7 @@ public class AdminCommentManageService {
     @Transactional
     public void takedownComment(long commentId, String reason, long actorAccountId) {
         if (reason == null || reason.isBlank()) {
-            throw AppException.validation("下架原因不能为空");
+            throw AppException.validation("下架原因不能为空").code("admin.err.moderation.reasonRequired");
         }
         Optional<CommentModerationSummary> transitioned = commentService.takedownComment(commentId);
         transitioned.ifPresent(s -> {

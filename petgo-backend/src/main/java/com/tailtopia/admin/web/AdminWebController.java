@@ -14,6 +14,7 @@ import com.tailtopia.admin.virtual.service.AdminVirtualAccountService;
 import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.dto.ContentPostResponse;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.i18n.Messages;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -44,16 +45,21 @@ public class AdminWebController {
     private final com.tailtopia.admin.dashboard.service.AdminDashboardService dashboardService;
     private final AdminVirtualAccountService virtualAccountService;
 
+    /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
+    private final Messages msg;
+
     public AdminWebController(AdminContentService adminContentService,
             AdminModerationService adminModerationService,
             AdminVetService adminVetService,
             com.tailtopia.admin.dashboard.service.AdminDashboardService dashboardService,
-            AdminVirtualAccountService virtualAccountService) {
+            AdminVirtualAccountService virtualAccountService,
+            Messages msg) {
         this.adminContentService = adminContentService;
         this.adminModerationService = adminModerationService;
         this.adminVetService = adminVetService;
         this.dashboardService = dashboardService;
         this.virtualAccountService = virtualAccountService;
+        this.msg = msg;
     }
 
     /** 登录页（未认证可访问；认证失败回显 error，登出回显 logout）。 */
@@ -162,7 +168,7 @@ public class AdminWebController {
         boolean takedown = "takedown".equals(action);
         AdminModerationService.BatchResult result = adminModerationService.batch(reportIds, takedown, admin);
         flash.addFlashAttribute("notice",
-                "批量完成：成功 " + result.ok() + " 条，失败 " + result.failedCount() + " 条");
+                msg.get("admin.flash.seed.batchDone", result.ok(), result.failedCount()));
         return "redirect:/admin/manual-review";
     }
 
@@ -251,19 +257,19 @@ public class AdminWebController {
             RedirectAttributes flash) {
         String ct = avatar.getContentType();
         if (avatar.isEmpty() || ct == null || !ct.startsWith("image/")) {
-            flash.addFlashAttribute("error", "请选择图片文件");
+            flash.addFlashAttribute("error", msg.get("admin.flash.vet.avatarNotImage"));
             return "redirect:/admin/vets/" + id + "/edit";
         }
         if (avatar.getSize() > 5L * 1024 * 1024) {
-            flash.addFlashAttribute("error", "头像不能超过 5MB");
+            flash.addFlashAttribute("error", msg.get("admin.flash.vet.avatarTooLarge"));
             return "redirect:/admin/vets/" + id + "/edit";
         }
         try {
             adminVetService.updateAvatar(id, avatar.getBytes(), ct, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已更新兽医头像");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.vet.avatarUpdated"));
         } catch (Exception e) {
             // 读文件 IO / OSS 未配置或上传失败（含凭证异常）均优雅回显，不抛 500。
-            flash.addFlashAttribute("error", "头像上传失败，请重试");
+            flash.addFlashAttribute("error", msg.get("admin.flash.vet.avatarUploadFailed"));
         }
         return "redirect:/admin/vets/" + id + "/edit";
     }
@@ -281,7 +287,7 @@ public class AdminWebController {
         try {
             adminVetService.updateProfile(id, form.getDisplayName(), form.getUsername(),
                     form.getContactPhone(), admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已保存兽医资料");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.vet.profileSaved"));
             return "redirect:/admin/vets";
         } catch (AppException e) {
             binding.reject("update.failed", e.getMessage());
@@ -298,9 +304,9 @@ public class AdminWebController {
             RedirectAttributes flash) {
         try {
             adminVetService.resetPassword(id, newPassword, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已重置该兽医密码（请将新密码线下交付）");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.vet.passwordReset"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/vets";
     }
@@ -310,7 +316,7 @@ public class AdminWebController {
     public String setVetStatus(@AuthenticationPrincipal AdminUserDetails admin,
             @PathVariable long id, @RequestParam("banned") boolean banned, RedirectAttributes flash) {
         adminVetService.setBanned(id, banned, admin.getAdminAccountId());
-        flash.addFlashAttribute("notice", banned ? "已封禁该兽医（进行中问诊已中断并通知用户）" : "已解封该兽医");
+        flash.addFlashAttribute("notice", msg.get(banned ? "admin.flash.vet.banned" : "admin.flash.vet.unbanned"));
         return "redirect:/admin/vets";
     }
 

@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -180,12 +181,55 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
       // 键盘弹出时不收缩外壳：底栏 + 中间「＋」发布按钮固定在屏幕底部不被顶起（用户反馈）。
       // 各 Tab 根页本身无内联输入框，文字编辑均走 modal bottom sheet（自带 viewInsets 让位），故安全。
       resizeToAvoidBottomInset: false,
-      body: FadeTransition(opacity: _fade, child: widget.navigationShell),
+      // 🔧 仅 debug：内容区上叠一个 Toko 悬浮入口（见 [_TokoDevEntry]）。
+      //    release 走的是与从前逐字一致的那一支（裸 navigationShell），线上零影响。
+      body: FadeTransition(
+        opacity: _fade,
+        child: kDebugMode
+            ? Stack(
+                children: [
+                  widget.navigationShell,
+                  const Positioned(right: 12, bottom: 24, child: _TokoDevEntry()),
+                ],
+              )
+            : widget.navigationShell,
+      ),
       floatingActionButton: AddTabButton(activeIndex: index, onPressed: _onAddPressed),
       // 与 centerDocked 同位，但忽略 SnackBar 高度：底部出现「sign-in」等错误弹框时
       // 中间「＋」发布按钮保持固定，不被顶起（iOS/Android 一致）。
       floatingActionButtonLocation: const _FixedCenterDockedFabLocation(),
       bottomNavigationBar: BottomTabBar(currentIndex: index, onTabSelected: _onTabSelected),
+    );
+  }
+}
+
+/// 🔧 **仅 debug 的 Toko 悬浮入口**（2026-08-19 本地验收补）。
+///
+/// **为什么需要**：Toko 归 **DEP-1 未拍板**，`AppTab` 四值无空位、并行契约明确
+/// **禁改 `bottom_tab_bar.dart`**（UX-DR12 的 Tab 两态图标亦无稿），因此 `/shop`
+/// 至今**只挂了路由、不占 Tab 位**。冷启动后走到 Toko 的唯一产品路径是
+/// 「登录 → 建档 → 加驱虫记录 → 点 FR-110 品类跳转」—— 验收十个电商页面时太绕。
+///
+/// 🔴 **这不是产品形态，别当入口方案来评审。** 真正的入口等 DEP-1 拍板 + DEP-2 出稿；
+///    颜色刻意取扎眼的橙色而非设计系统色，就是为了让它一眼看着「不像产品的一部分」。
+///
+/// 🔒 `kDebugMode` 硬门：release 构建里整段被编译期裁掉，行为与从前逐字一致。
+///    形态照抄仓库既有先例（`shop_ui_variant.dart` 的版式切换、`app.dart` 的调试深链）。
+///
+/// ⚠️ `heroTag` 必须显式错开 —— 同一个 Scaffold 里已经有中间凸起的 [AddTabButton]，
+///    两个 FAB 共用默认 tag 会在 Hero 动画时直接抛异常。
+class _TokoDevEntry extends StatelessWidget {
+  const _TokoDevEntry();
+
+  @override
+  Widget build(BuildContext context) {
+    return FloatingActionButton.small(
+      heroTag: 'tokoDevEntry',
+      backgroundColor: Colors.deepOrange,
+      foregroundColor: Colors.white,
+      tooltip: 'Toko（仅 debug 入口）',
+      onPressed: () => context.push('/shop'),
+      child: const Icon(Icons.storefront_outlined),
     );
   }
 }

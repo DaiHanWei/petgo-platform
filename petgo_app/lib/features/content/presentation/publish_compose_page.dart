@@ -123,8 +123,18 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final c = ref.read(publishControllerProvider);
+      // bug 20260819：Diary preset 也要过档案闸——「＋」入口（shell）有 canGrowth 守卫，但深链 /
+      // 日历格 / 里程碑「去发布」等入口（publish_landing_page / growth_archive_page）直传 preset。
+      // 无档案（含已删——删档已对称置 false，PR#34 #12）时 Diary 会被预选中：chip 灰置却处于选中态，
+      // 用户写完提交才被「先建档」拒。明确无档案 → Diary preset 视同无 preset，回落 Moment。
+      // 仅在「auth profile 在且 hasPetProfile=false」时拦：profile 为 null（游客/极端时序）不误伤
+      // 灰选建档返回流（AC7）——真实链路建档成功已 applyProfile(hasPetProfile: true)。
+      final authProfile = ref.read(authControllerProvider).profile;
+      final bool noArchive = authProfile != null && !authProfile.hasPetProfile;
+      final ContentType? preset =
+          (widget.preset == ContentType.growthMoment && noArchive) ? null : widget.preset;
       final ContentType initial =
-          widget.preset ?? (_hasPetProfile ? ContentType.growthMoment : ContentType.daily);
+          preset ?? (_hasPetProfile ? ContentType.growthMoment : ContentType.daily);
       c.setType(initial);
       if (initial == ContentType.growthMoment) {
         c.setEventDate(widget.presetEventDate ?? DateTime.now()); // F9 默认事件日期

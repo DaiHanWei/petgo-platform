@@ -37,6 +37,15 @@ public class AdminAccount {
     @Column(name = "account_type", nullable = false, length = 20)
     private AdminAccountType accountType;
 
+    /**
+     * 岗位角色（V165）。{@code CUSTOM} 表示权限按 {@code admin_account_permissions} 勾选行走
+     * （Story 1.5 原有形态），其余按 {@link AdminRole} 模板在登录时解析。
+     * 与 {@link #accountType} 由 {@link AdminRole#accountType()} 单向推导保持自洽（库级另有 CHECK 兜底）。
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "role", nullable = false, length = 32)
+    private AdminRole role = AdminRole.CUSTOM;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private AdminAccountStatus status = AdminAccountStatus.ACTIVE;
@@ -64,21 +73,27 @@ public class AdminAccount {
         a.larkEmail = larkEmail;
         a.displayName = displayName;
         a.accountType = AdminAccountType.SUPER_ADMIN;
+        a.role = AdminRole.SUPER_ADMIN;
         a.status = AdminAccountStatus.ACTIVE;
         a.passwordHash = passwordHash;
         return a;
     }
 
     /**
-     * 超管在后台创建账号（Story 1.5）：ACTIVE、无密码（STAFF/SUPER_ADMIN 均走 Lark OAuth 登录；
-     * 紧急账密仅 bootstrap 预置的超管有）。{@code createdBy} = 操作的超管账号 id。
+     * 超管在后台创建账号（Story 1.5；V165 改为按<b>岗位角色</b>建号）：ACTIVE、无密码
+     * （STAFF/SUPER_ADMIN 均走 Lark OAuth 登录；紧急账密仅 bootstrap 预置的超管有）。
+     * {@code createdBy} = 操作的超管账号 id。
+     *
+     * <p>{@code accountType} 由 {@link AdminRole#accountType()} 推导而非单独传入——单一入参定型，
+     * 不给「角色=发货、类型=超管」这类矛盾组合留出口。
      */
     public static AdminAccount create(String larkEmail, String displayName,
-            AdminAccountType accountType, Long createdBy) {
+            AdminRole role, Long createdBy) {
         AdminAccount a = new AdminAccount();
         a.larkEmail = larkEmail;
         a.displayName = displayName;
-        a.accountType = accountType;
+        a.role = role;
+        a.accountType = role.accountType();
         a.status = AdminAccountStatus.ACTIVE;
         a.createdBy = createdBy;
         return a;
@@ -104,6 +119,15 @@ public class AdminAccount {
         this.status = status;
     }
 
+    /**
+     * 改岗位角色（同步推导 {@code accountType}，二者永不脱钩）。
+     * 超管名额上限与「不降级最后一个超管」的护栏在 {@code AdminAccountService} 侧校验。
+     */
+    public void setRole(AdminRole role) {
+        this.role = role;
+        this.accountType = role.accountType();
+    }
+
     public Long getId() {
         return id;
     }
@@ -118,6 +142,10 @@ public class AdminAccount {
 
     public AdminAccountType getAccountType() {
         return accountType;
+    }
+
+    public AdminRole getRole() {
+        return role;
     }
 
     public AdminAccountStatus getStatus() {

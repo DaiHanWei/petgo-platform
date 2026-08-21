@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<!-- 库存管理（V1.4.0 Story 1.4，AB-10C）。模块 10 第二页。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.shop.inventory.title}">库存管理 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <div class="s-page-head">
+            <div class="s-title-wrap">
+                <h1 th:text="#{admin.shop.inventory.title}">库存管理</h1>
+                <p class="s-sub" th:text="#{admin.shop.inventory.hint}">库存增减只能通过入库单、报损与盘点调整产生，不提供直接编辑库存数字的入口——直接改数会使库存与采购成本脱钩，令毛利核算失真。</p>
+            </div>
+        </div>
+        <p th:if="${notice}" class="flash" th:text="${notice}">已保存</p>
+        <p th:if="${error}" class="flash error" th:text="${error}">操作失败</p>
+
+        <!-- 🔴 三个数必须并排展示：客服排查「用户说买不了但后台显示有货」时，差异一定在锁定库存上 -->
+        <div class="s-card">
+        <table>
+            <thead>
+            <tr>
+                <th th:text="#{admin.shop.col.name}">商品名</th>
+                <th th:text="#{admin.shop.sku.specName}">规格</th>
+                <th th:text="#{admin.shop.inventory.col.actual}">实际库存</th>
+                <th th:text="#{admin.shop.inventory.col.locked}">锁定库存</th>
+                <th th:text="#{admin.shop.inventory.col.available}">可售库存</th>
+                <th th:text="#{admin.shop.inventory.col.status}">状态</th>
+                <th th:text="#{admin.common.action}">操作</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="r : ${rows}">
+                <td th:text="${r.productName}">商品</td>
+                <td th:text="${r.specName}">3 kg</td>
+                <td th:text="${r.actual}">10</td>
+                <td th:text="${r.locked}">3</td>
+                <td th:text="${r.available}">7</td>
+                <td th:text="${r.stockStatus}">IN_STOCK</td>
+                <td>
+                    <a th:href="@{/admin/shop/inventory/{id}/movements(id=${r.skuId})}"
+                       th:text="#{admin.shop.inventory.btn.movements}">流水</a>
+                </td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(rows)}">
+                <td colspan="7" th:text="#{admin.shop.inventory.empty}">暂无 SKU。请先在商品管理中录入商品与规格。</td>
+            </tr>
+            </tbody>
+        </table>
+        </div>
+
+        <!-- ===== 采购入库：需 shop.inventory_edit + shop.cost_edit 双权限 ===== -->
+        <!-- 🔒 canPurchase 为 false 时整块不渲染；服务端在控制器里【独立再判一次】，看源码绕不过 -->
+        <section th:if="${canPurchase}">
+            <h2 th:text="#{admin.shop.inventory.purchase.title}">采购入库</h2>
+            <p class="hint" th:text="#{admin.shop.inventory.purchase.hint}">进货单价必填，不允许留空——留空会使入库的货在成本上不存在，污染毛利与资金占用核算。</p>
+            <form method="post" th:action="@{/admin/shop/inventory/purchase}">
+                <label><span th:text="#{admin.shop.sku.specName}">SKU</span>
+                    <select name="skuId" required>
+                        <option th:each="r : ${rows}" th:value="${r.skuId}"
+                                th:text="${r.productName} + ' / ' + ${r.specName}">商品 / 3 kg</option>
+                    </select></label>
+                <label><span th:text="#{admin.shop.inventory.col.qty}">数量</span>
+                    <input type="number" name="qty" min="1" required/></label>
+                <label><span th:text="#{admin.shop.inventory.col.purchaseNo}">采购单号</span>
+                    <input type="text" name="purchaseNo" maxlength="64" required/></label>
+                <label><span th:text="#{admin.shop.inventory.col.supplier}">供应商</span>
+                    <input type="text" name="supplier" maxlength="200"/></label>
+                <label><span th:text="#{admin.shop.sku.costPrice}">进货单价</span>
+                    <input type="number" name="costPrice" min="0" required/></label>
+                <label><span th:text="#{admin.shop.inventory.col.inboundDate}">入库日期</span>
+                    <input type="date" name="inboundDate"/></label>
+                <button type="submit" class="btn btn-primary btn-sm"
+                        th:text="#{admin.shop.inventory.btn.purchase}">登记入库</button>
+            </form>
+        </section>
+
+        <!-- ===== 退货入库批次：只需 shop.inventory_edit（单价由系统带出，S-9） ===== -->
+        <section th:if="${canEdit}">
+            <h2 th:text="#{admin.shop.inventory.return.title}">退货入库</h2>
+            <p class="hint" th:text="#{admin.shop.inventory.return.hint}">退货与拒收的货走此入口，记为退货入库批次（二次销售风险与采购货不同）。采购单号填原订单号，进货单价由系统取该 SKU 最近一次采购单价。</p>
+            <form method="post" th:action="@{/admin/shop/inventory/return-inbound}">
+                <label><span th:text="#{admin.shop.sku.specName}">SKU</span>
+                    <select name="skuId" required>
+                        <option th:each="r : ${rows}" th:value="${r.skuId}"
+                                th:text="${r.productName} + ' / ' + ${r.specName}">商品 / 3 kg</option>
+                    </select></label>
+                <label><span th:text="#{admin.shop.inventory.col.qty}">数量</span>
+                    <input type="number" name="qty" min="1" required/></label>
+                <label><span th:text="#{admin.shop.inventory.col.originalOrderNo}">原订单号</span>
+                    <input type="text" name="originalOrderNo" maxlength="64" required/></label>
+                <label><span th:text="#{admin.shop.inventory.col.inboundDate}">入库日期</span>
+                    <input type="date" name="inboundDate"/></label>
+                <button type="submit" class="btn btn-sm"
+                        th:text="#{admin.shop.inventory.btn.return}">登记退货入库</button>
+            </form>
+        </section>
+
+        <!-- ===== 报损：上限是【可售库存】，不是实际库存 ===== -->
+        <section th:if="${canEdit}">
+            <h2 th:text="#{admin.shop.inventory.damage.title}">报损</h2>
+            <p class="hint" th:text="#{admin.shop.inventory.damage.hint}">只能报损可售库存。已被订单锁定的货不可报损——那等于把已卖给用户的东西销账。</p>
+            <form method="post" th:action="@{/admin/shop/inventory/damage}">
+                <label><span th:text="#{admin.shop.sku.specName}">SKU</span>
+                    <select name="skuId" required>
+                        <option th:each="r : ${rows}" th:value="${r.skuId}"
+                                th:text="${r.productName} + ' / ' + ${r.specName}">商品 / 3 kg</option>
+                    </select></label>
+                <label><span th:text="#{admin.shop.inventory.col.qty}">数量</span>
+                    <input type="number" name="qty" min="1" required/></label>
+                <label><span th:text="#{admin.shop.inventory.col.reason}">原因</span>
+                    <input type="text" name="reason" maxlength="500" required/></label>
+                <button type="submit" class="btn btn-sm"
+                        th:text="#{admin.shop.inventory.btn.damage}">登记报损</button>
+            </form>
+        </section>
+
+        <!-- ===== 盘点调整：下限是锁定库存 ===== -->
+        <section th:if="${canEdit}">
+            <h2 th:text="#{admin.shop.inventory.stocktake.title}">盘点调整</h2>
+            <p class="hint" th:text="#{admin.shop.inventory.stocktake.hint}">填写实际盘点到的数量，系统按差额记流水。盘点值不得低于锁定库存。若库存在盘点期间被改动，本次盘点会被拒绝并要求重盘。</p>
+            <form method="post" th:action="@{/admin/shop/inventory/stocktake}">
+                <label><span th:text="#{admin.shop.sku.specName}">SKU</span>
+                    <select name="skuId" required>
+                        <option th:each="r : ${rows}" th:value="${r.skuId}"
+                                th:text="${r.productName} + ' / ' + ${r.specName}">商品 / 3 kg</option>
+                    </select></label>
+                <label><span th:text="#{admin.shop.inventory.col.counted}">盘点数量</span>
+                    <input type="number" name="countedActual" min="0" required/></label>
+                <label><span th:text="#{admin.shop.inventory.col.reason}">差异原因</span>
+                    <input type="text" name="reason" maxlength="500" required/></label>
+                <button type="submit" class="btn btn-sm"
+                        th:text="#{admin.shop.inventory.btn.stocktake}">登记盘点</button>
+            </form>
+        </section>
+    </div>
+</div>
+</body>
+</html>

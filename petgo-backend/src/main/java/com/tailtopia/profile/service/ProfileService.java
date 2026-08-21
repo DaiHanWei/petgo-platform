@@ -70,6 +70,13 @@ public class ProfileService {
                 req.birthday(),
                 blankToNull(req.intro()),
                 tokenGenerator.generate());
+        // Story 6.1：建档时的体重【可跳过】—— 设必填会挡住既有建档转化。
+        if (req.weightKg() != null) {
+            profile.setWeightKg(req.weightKg());
+        }
+        if (req.neuterStatus() != null && !req.neuterStatus().isBlank()) {
+            profile.setNeuterStatus(parseNeuterStatus(req.neuterStatus()));
+        }
         try {
             PetProfile saved = profiles.save(profile);
             // 建档按 pet_type 自动分配里程碑 roster（Story 8.1，同模块直调，非事件订阅；幂等）。
@@ -101,8 +108,8 @@ public class ProfileService {
      * 与注销 7.3「匿名化保留 UGC」一致。<b>petStatus 不改</b>：删后用户仍为 HAS_PET 但无档案，
      * 前端据 GET /me 的 404 落「空档案态」，可重建档案或切换宠物状态（闭合 bug 20260702-237 的困死）。
      *
-     * <p>DB 级联由内层 {@code ProfileDeletionService#deleteByUserId} 原子提交；OSS 清理在提交后 best-effort
-     * （OSS 故障不回滚已删档案，孤儿对象非正确性问题）。无档案 → 404。
+     * <p>DB 级联由内层 {@code ProfileDeletionService#deleteByUserId} 原子提交；OSS 对象自 2026-08-19（F21）
+     * 起<b>保留不删</b>——id_cards 快照可能长期引用头像对象（{@code MediaDeletionService} 只记账）。无档案 → 404。
      */
     public void deleteMyProfile(long ownerId) {
         if (!profiles.existsByOwnerId(ownerId)) {
@@ -147,6 +154,13 @@ public class ProfileService {
         }
         if (req.birthday() != null) {
             profile.setBirthday(req.birthday());
+        }
+        // Story 6.1：体重与绝育状态。🔒 体重是 PII 邻近的健康数据 —— 下面任何一行都不得进日志。
+        if (req.weightKg() != null) {
+            profile.setWeightKg(req.weightKg());
+        }
+        if (req.neuterStatus() != null && !req.neuterStatus().isBlank()) {
+            profile.setNeuterStatus(parseNeuterStatus(req.neuterStatus()));
         }
         if (req.intro() != null) {
             profile.setIntro(blankToNull(req.intro()));
@@ -224,6 +238,22 @@ public class ProfileService {
     }
 
     /** 解析宠物类型（F6）：必填 + 枚举合法，非法 → 422。@NotBlank 已拦空，此处兜底大小写/非法值。 */
+    /**
+     * 解析绝育状态。
+     *
+     * <p>🔴 未知值抛错而不是降级到 UNKNOWN：{@code UNKNOWN} 有它自己的含义
+     * （用户明确表示「不知道」，领养的成年宠常见），把解析失败也塞进去会让
+     * 「有多少人真的不知道」这个数字失真。
+     */
+    private static com.tailtopia.profile.domain.NeuterStatus parseNeuterStatus(String raw) {
+        for (var v : com.tailtopia.profile.domain.NeuterStatus.values()) {
+            if (v.name().equalsIgnoreCase(raw.trim())) {
+                return v;
+            }
+        }
+        throw AppException.validation("绝育状态不合法");
+    }
+
     private static PetType parsePetType(String raw) {
         if (raw == null || raw.isBlank()) {
             throw AppException.validation("宠物类型必选");
