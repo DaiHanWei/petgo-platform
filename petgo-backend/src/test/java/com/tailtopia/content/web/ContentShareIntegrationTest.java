@@ -142,7 +142,12 @@ class ContentShareIntegrationTest extends ApiIntegrationTest {
         // 🛡 页面上没有任何通往该宠物其它内容的路径。
         assertThat(html).doesNotContain("/p/");   // 名片页（整本档案只读视图）
         assertThat(html).doesNotContain("/m/");   // 里程碑分享页
-        assertThat(html).doesNotContain(String.valueOf(p.getId()));
+        // 🔴 **不要写成 doesNotContain(帖子 id 的字符串)**。id 小的时候（新库里第一条就是 3）
+        // 单个数字在任何 HTML 的 CSS 色值里都有（#2E2A45 / rgba(46,42,69,.10)），
+        // 那条断言只在 id 恰好是个不常见的大数时才绿 —— 是靠运气过的假绿。
+        // 真正要表达的是「页面不带按 id 寻址的链接」，就直接断言那些路径形状。
+        assertThat(html).doesNotContain("/api/v1/content-posts/");
+        assertThat(html).doesNotContain("/content/" + p.getId());
         // 不进搜索引擎（防枚举）。
         assertThat(html).contains("noindex");
     }
