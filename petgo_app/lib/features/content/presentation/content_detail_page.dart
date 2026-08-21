@@ -22,6 +22,7 @@ import '../data/detail_repository.dart';
 import '../domain/content_detail.dart';
 import '../domain/content_type_badge.dart';
 import '../domain/content_type.dart';
+import '../domain/share_card_data.dart';
 import 'comment_composer.dart';
 import 'comment_section.dart';
 import 'detail_providers.dart';
@@ -29,6 +30,7 @@ import 'author_moderation_callbacks.dart';
 import 'feed_controller.dart';
 import 'like_button.dart';
 import 'report_sheet.dart';
+import 'share_card/share_card_preview_page.dart';
 
 /// 内容详情页（Story 3.3，FR-28）。只读容器：正文 + 多图左右滑 + 互动栏占位 + 评论区 + 底部评论框。
 ///
@@ -284,6 +286,13 @@ class _DetailScaffold extends ConsumerWidget {
             ],
           ),
         ),
+        const SizedBox(width: AppSpacing.lg),
+        // 分享卡入口（V1.1.6 Story 9.3 · FR-73）。
+        //
+        // 🔴 **刻意放在这里，不放顶栏** —— UI 稿 SH1 画的是顶栏右上角，但那么做会把顶栏的
+        // 「···」挤掉，而「···」是**举报入口**（合规入口，不能变难找）。
+        // 2026-08-14 产品决定：分享让位，顶栏保持现状。照 SH1 实现就是把合规入口做掉。
+        _ShareCardButton(detail: detail),
       ],
     );
   }
@@ -578,4 +587,66 @@ class _ScrollIntoViewOnMountState extends State<_ScrollIntoViewOnMount> {
 
   @override
   Widget build(BuildContext context) => widget.child;
+}
+
+/// 互动栏第三个图标：生成分享卡（Story 9.3 · FR-73）。
+///
+/// 点击 → 取该条内容的对外分享链接（后端幂等，重复分享复用同一 token）
+/// → 进预览页（9-2 的两套模板）→ 出图 → 系统分享菜单。
+///
+/// 🛡 **顶栏的「···」不受影响** —— 那是举报入口，见 `_interactionBar` 里的说明。
+class _ShareCardButton extends ConsumerStatefulWidget {
+  const _ShareCardButton({required this.detail});
+
+  final ContentDetail detail;
+
+  @override
+  ConsumerState<_ShareCardButton> createState() => _ShareCardButtonState();
+}
+
+class _ShareCardButtonState extends ConsumerState<_ShareCardButton> {
+  bool _busy = false;
+
+  /// 取链接用的仓库入口。测试用它替身，免得为一个按钮起 provider override。
+  static Future<String> Function(int postId)? shareUrlForTest;
+
+  Future<void> _open() async {
+    final l10n = AppLocalizations.of(context);
+    setState(() => _busy = true);
+    try {
+      final fetch = shareUrlForTest ??
+          (int id) => ref.read(detailRepositoryProvider).getShareUrl(id);
+      final url = await fetch(widget.detail.id);
+      if (!mounted) return;
+      final data = ShareCardData.fromDetail(
+        widget.detail,
+        shareUrl: url,
+        fallbackAuthorName: l10n.feedDeletedUser,
+      );
+      await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => ShareCardPreviewPage(data: data),
+      ));
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(l10n.shareCardExportError)));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      key: const ValueKey('detailShareCardIcon'),
+      behavior: HitTestBehavior.opaque,
+      onTap: _busy ? null : _open,
+      child: Icon(
+        Icons.ios_share_rounded,
+        size: 20,
+        color: _busy ? AppColors.muted : AppColors.textSecondary,
+      ),
+    );
+  }
 }

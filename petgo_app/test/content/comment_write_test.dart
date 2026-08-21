@@ -24,6 +24,9 @@ Comment _c(int id, int authorId) => Comment(
     );
 
 class _RecordingRepo implements DetailRepository {
+  @override
+  Future<String> getShareUrl(int postId) => throw UnimplementedError();
+
   _RecordingRepo({this.comments = const [], this.failPost = false});
   final List<Comment> comments;
 

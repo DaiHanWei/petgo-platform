@@ -45,6 +45,9 @@ Comment _reply(int id) => Comment(
     );
 
 class _FakeDetailRepo implements DetailRepository {
+  @override
+  Future<String> getShareUrl(int postId) => throw UnimplementedError();
+
   _FakeDetailRepo({
     this.detail,
     this.error,

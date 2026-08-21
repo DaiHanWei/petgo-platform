@@ -183,7 +183,7 @@ development_status:
   epic-9: in-progress
   9-1-卡片生成基建: review                          # 双尺寸 + 水印 + 文字排版
   9-2-两套模板与下载二维码: review                   # 有图 / 纯文字
-  9-3-分享入口与链接落地分流: ready-for-dev
+  9-3-分享入口与链接落地分流: review
   epic-9-retrospective: optional
 
   # ===== Epic 10: 埋点收尾（App 侧） =====

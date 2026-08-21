@@ -29,6 +29,7 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 /// 成长档案分享页深链 → go_router location 的纯映射（L0 可测）。
 ///
 /// - `tailtopia://card/{token}` → `/pet/{token}`（**被分享的那只宠物**，V1.1.6 Story 2.4）
+/// - `tailtopia://post/{token}` → `/shared-post/{token}`（**只有被分享的那一条内容**，V1.1.6 Story 9.3）
 /// - `tailtopia://open` → `/home`（下载引导落地页 `s.tailtopia.id/get` 唤起已装 app 的通用深链）
 /// - 其它 scheme/host 暂不识别（返回 null，调用方忽略）
 ///
@@ -47,6 +48,16 @@ String? deepLinkToLocation(Uri uri) {
   if (uri.scheme == 'tailtopia' && uri.host == 'card') {
     final token = uri.pathSegments.isEmpty ? '' : uri.pathSegments.first;
     return token.isEmpty ? '/profile' : '/pet/$token';
+  }
+  // 单条内容分享（V1.1.6 Story 9.3）。
+  // 🔴 **与 card 是两个独立类型、两个落点**（AD-15 Rule 5）：
+  // `card` 落整本档案的只读视图，`post` 只落被分享的那一条。
+  // 合成一个深链目标，就等于把「我只想分享一条」变成「我把整本都给你了」。
+  if (uri.scheme == 'tailtopia' && uri.host == 'post') {
+    final token = uri.pathSegments.isEmpty ? '' : uri.pathSegments.first;
+    // 没 token 就没有可展示的那一条 —— 落首页，不要退回任何档案页
+    // （退到档案页就成了"点别人的分享链接看到自己家宠物"，正是 2.4 修掉的那个 bug）。
+    return token.isEmpty ? '/home' : '/shared-post/$token';
   }
   if (uri.scheme == 'tailtopia' && uri.host == 'open') {
     return '/home';

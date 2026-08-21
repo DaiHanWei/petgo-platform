@@ -228,6 +228,13 @@ void main() {
         // 符合本规则的**用意**（产品看得出是哪个功能）。
         // ⚠️ 这是**新模块**入表，不是为遗留事件放宽规则（那种情况请加 legacyEvents）。
         'push_',
+        // 单条内容分享（V1.1.6 FR-73 / Story 9.3）。模块是「一条内容（post）」——
+        // 分享入口在详情页，但事件描述的对象是这条内容本身，`post_*` 一眼可读。
+        // ⚠️ 表里原本没有 `post_`，而 `post_like_tapped` 早已在用（见 legacyEvents）——
+        // 这次是把它作为**正式模块**入表，不是为遗留事件放宽规则。
+        // 🔴 名字由产品 2026-08-18 按命名规范定为 `post_share_card_sent`；
+        //    story 明令**不许**改名（改名等于推翻已闭合的 OA-7），所以扩表、不改名。
+        'post_',
       ];
       // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
       const allowedSuffixes = <String>[
@@ -247,6 +254,11 @@ void main() {
         // 🔴 产品 2026-08-18 定名时正是把旧名 `..._state_snapshot` 改成了它
         //    （snapshot 是名词，不满足「动作在词尾且须是动词」），OA-7 已闭合。
         '_reported',
+        // 分享已递给系统（V1.1.6 Story 9.3）：`_sent` = 出图完成、内容已交给系统分享面板。
+        // 🔴 刻意**不用** `_completed` —— 产品 2026-08-18 定名时的理由是
+        //    「completed 不如 sent 明确」：我们只知道递出去了，不知道对方到底发没发出。
+        //    `_completed` 会让人误读成"分享成功送达"。
+        '_sent',
       ];
       for (final e in eventNamesInSource()) {
         if (legacyEvents.contains(e)) continue;
