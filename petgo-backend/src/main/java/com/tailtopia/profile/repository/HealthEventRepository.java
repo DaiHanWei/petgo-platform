@@ -3,6 +3,7 @@ package com.tailtopia.profile.repository;
 import com.tailtopia.profile.domain.ArchiveDecision;
 import com.tailtopia.profile.domain.HealthEvent;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
@@ -33,4 +34,15 @@ public interface HealthEventRepository extends JpaRepository<HealthEvent, Long> 
 
     @org.springframework.transaction.annotation.Transactional
     void deleteByPetId(long petId);
+
+    /**
+     * 该宠物在 [from, to] 内是否有已存档的健康事件（V1.4.0 · 推荐静默期）。
+     *
+     * <p>按 {@code eventDate}（用户填的事件日）而非 {@code createdAt} 判定 —— 静默期要围绕
+     * <b>事情发生的那天</b>，不是补录的那天。补录一条上周的问诊，静默窗口应落在上周。
+     *
+     * <p>🔴 只读判定，不返回事件内容（症状 / 评级 / 建议均属健康数据）。
+     */
+    boolean existsByPetIdAndArchiveDecisionAndEventDateBetween(long petId,
+            ArchiveDecision decision, LocalDate from, LocalDate to);
 }

@@ -70,7 +70,7 @@ public class AdminSupportTicketQueryService {
     @Transactional(readOnly = true)
     public AdminTicketView find(String ticketToken, boolean includeContactPii) {
         FeedbackTicket t = tickets.findByTicketToken(ticketToken)
-                .orElseThrow(() -> AppException.notFound("工单不存在"));
+                .orElseThrow(() -> AppException.notFound("工单不存在").code("admin.err.ticket.notFound"));
         return toDetailView(t, includeContactPii);
     }
 

@@ -7,6 +7,7 @@ import com.tailtopia.admin.vetqual.dto.QualificationForm;
 import com.tailtopia.admin.vetqual.service.VetQualificationService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.media.SignedUrlService;
+import com.tailtopia.shared.i18n.Messages;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
@@ -33,11 +34,16 @@ public class AdminVetQualificationController {
     private final AdminVetService adminVetService;
     private final SignedUrlService signedUrlService;
 
+    /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
+    private final Messages msg;
+
     public AdminVetQualificationController(VetQualificationService qualService,
-            AdminVetService adminVetService, SignedUrlService signedUrlService) {
+            AdminVetService adminVetService, SignedUrlService signedUrlService,
+            Messages msg) {
         this.qualService = qualService;
         this.adminVetService = adminVetService;
         this.signedUrlService = signedUrlService;
+        this.msg = msg;
     }
 
     @GetMapping("/admin/vets/{id}/qualification")
@@ -72,13 +78,13 @@ public class AdminVetQualificationController {
         try {
             if ("renew".equals(mode)) {
                 qualService.renew(id, form, admin.getAdminAccountId());
-                flash.addFlashAttribute("notice", "已续期，资质保持已认证");
+                flash.addFlashAttribute("notice", msg.get("admin.flash.vetQual.renewed"));
             } else {
                 qualService.recordByOps(id, form, admin.getAdminAccountId());
-                flash.addFlashAttribute("notice", "已录入资质，状态：已认证");
+                flash.addFlashAttribute("notice", msg.get("admin.flash.vetQual.recorded"));
             }
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/vets/" + id + "/qualification";
     }
@@ -89,9 +95,9 @@ public class AdminVetQualificationController {
             RedirectAttributes flash) {
         try {
             qualService.approve(id, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已通过审核，状态：已认证");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.vetQual.approved"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/vets/" + id + "/qualification";
     }
@@ -102,9 +108,9 @@ public class AdminVetQualificationController {
             @RequestParam("reason") String reason, RedirectAttributes flash) {
         try {
             qualService.reject(id, reason, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已驳回该资质");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.vetQual.rejected"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/vets/" + id + "/qualification";
     }

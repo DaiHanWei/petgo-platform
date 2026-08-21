@@ -27,6 +27,9 @@ import 'widgets/archive_calendar.dart';
 import 'widgets/diary_header.dart';
 import 'widgets/share_fab.dart';
 import 'widgets/timeline_item_tile.dart';
+import '../../shop/presentation/shop_ui_variant.dart';
+import '../../shop/presentation/widgets/repurchase_zones.dart';
+import '../../shop/presentation/widgets/repurchase_zones_v2.dart';
 
 /// Diary 页（`/profile`）的四种用户状态（V1.1.2 · AD-15）。
 ///
@@ -320,6 +323,17 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
             onOpenIdCard: () => context.push('/profile/id-card'),
             onOpenHealth: () => context.push('/profile/health'),
             onOpenMilestones: () => context.push('/profile/milestones'),
+          ),
+          // Story 6.5：档案推荐区的第二个展示位（另一处是 Toko 首页区域②）。
+          // 🔴 同一个组件、同一套规则 —— 两处各写一份判定迟早会漂移，
+          //    而「同一只宠物在两个页面看到不同推荐」是最难解释的一类 bug。
+          // 🔴 复购触发卡（V1.4.0 设计稿屏 1）：**只在 v2 版式下渲染**。
+          //    它是「记录的出口」，所以长在 Diary 里而不是 Toko 里。
+          //    v1 版式没有这张卡 —— 保持 v1 一行不改。
+          const ShopUiSwitch(v1: _nothing, v2: _diaryTriggerCard),
+          ShopUiSwitch(
+            v1: (_) => const ProfileRecoZone(zone: 'diary_profile_reco'),
+            v2: (_) => const ProfileRecoZoneV2(zone: 'diary_profile_reco'),
           ),
           _viewToggleRow(l10n),
           const SizedBox(height: 10),
@@ -913,3 +927,10 @@ class _NonOwnerView extends StatelessWidget {
     );
   }
 }
+
+/// v1 版式下不渲染复购触发卡（那是 V1.4.0 设计稿新增的东西）。
+Widget _nothing(BuildContext _) => const SizedBox.shrink();
+
+/// v2 版式下的 Diary 复购触发卡。
+Widget _diaryTriggerCard(BuildContext _) =>
+    const RepurchaseTriggerCardV2(source: 'diary');

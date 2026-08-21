@@ -6,12 +6,13 @@ import java.io.ByteArrayInputStream;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
+import com.tailtopia.support.TestMessages;
 
 class AdminSeedBatchControllerTest {
 
     @Test
     void templateReturnsReadableExcelExample() throws Exception {
-        var controller = new AdminSeedBatchController(null);
+        var controller = new AdminSeedBatchController(null, TestMessages.real());
 
         var response = controller.template();
 

@@ -6,6 +6,7 @@ import com.tailtopia.admin.moderation.service.ManualReviewService;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.content.moderation.ModerationDecision;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.i18n.Messages;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.tailtopia.admin.moderation.dto.TicketStatusBucket;
@@ -70,11 +71,16 @@ public class ManualReviewAdminController {
     private final AdminSettingsService settingsService;
     private final UnifiedTicketQueryService ticketQuery;
 
+    /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
+    private final Messages msg;
+
     public ManualReviewAdminController(ManualReviewService reviewService,
-            AdminSettingsService settingsService, UnifiedTicketQueryService ticketQuery) {
+            AdminSettingsService settingsService, UnifiedTicketQueryService ticketQuery,
+            Messages msg) {
         this.reviewService = reviewService;
         this.settingsService = settingsService;
         this.ticketQuery = ticketQuery;
+        this.msg = msg;
     }
 
     @GetMapping("/admin/manual-review")
@@ -134,9 +140,7 @@ public class ManualReviewAdminController {
     public String toggle(@AuthenticationPrincipal AdminUserDetails admin,
             @RequestParam("enabled") boolean enabled, RedirectAttributes flash) {
         settingsService.setManualReviewEnabled(enabled, admin.getAdminAccountId());
-        flash.addFlashAttribute("notice", enabled
-                ? "已开启人工审核（未过自动审核的内容将入队挂起）"
-                : "已关闭人工审核（恢复现网行为：拦截即发布失败）");
+        flash.addFlashAttribute("notice", msg.get(enabled ? "admin.flash.review.enabled" : "admin.flash.review.disabled"));
         return "redirect:/admin/manual-review";
     }
 
@@ -146,9 +150,9 @@ public class ManualReviewAdminController {
             RedirectAttributes flash) {
         try {
             reviewService.approve(itemId, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已通过（内容已发布并通知作者）");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.review.approved"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/manual-review";
     }
@@ -162,9 +166,9 @@ public class ManualReviewAdminController {
         try {
             // story 8 §5.2：判定依据 + 备注折叠进 append-only 审计（service 内落，无内容原文）。
             reviewService.reject(itemId, admin.getAdminAccountId(), new ModerationDecision(category, note));
-            flash.addFlashAttribute("notice", "已拒绝（内容已丢弃并通知作者）");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.review.rejected"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/manual-review";
     }
@@ -176,21 +180,21 @@ public class ManualReviewAdminController {
             @RequestParam("priority") String priority, RedirectAttributes flash) {
         try {
             reviewService.changePriority(itemId, parsePriority(priority), admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已调整优先级为 " + priority.trim().toUpperCase());
+            flash.addFlashAttribute("notice", msg.get("admin.flash.review.priorityChanged", priority.trim().toUpperCase()));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/manual-review";
     }
 
     private static ReviewPriority parsePriority(String raw) {
         if (raw == null) {
-            throw AppException.validation("优先级必填（P0 / P1 / P2）");
+            throw AppException.validation("优先级必填（P0 / P1 / P2）").code("admin.err.review.priorityRequired");
         }
         try {
             return ReviewPriority.valueOf(raw.trim().toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw AppException.validation("优先级非法，须为 P0 / P1 / P2 之一");
+            throw AppException.validation("优先级非法，须为 P0 / P1 / P2 之一").code("admin.err.review.priorityInvalid");
         }
     }
 }

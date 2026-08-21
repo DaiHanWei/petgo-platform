@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh" xmlns:th="http://www.thymeleaf.org"
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org"
       xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <!-- 用户详情聚合（Story 3.1 只读五块 + 3.2 停用/激活处置）。问诊仅元数据。门控 user.view；处置 user.deactivate。 -->
 <head>

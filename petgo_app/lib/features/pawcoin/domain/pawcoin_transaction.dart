@@ -44,7 +44,10 @@ class PawCoinWalletPage {
   final int balance;
   final List<PawCoinTxnItem> items;
 
-  /// 下一页游标（末条 epochMillis；无更多→null）。
+  /// 下一页游标：**服务端给的不透明串**，原样回传（无更多→null）。
+  ///
+  /// 🔴 **不要解析**。2026-08-18 从「纯 epochMillis」改成了 base64url 复合键 ——
+  /// 只按时间做游标会把同一笔结算里同刻写下的多条流水整组跳过，那是钱的账。
   final String? nextCursor;
   final bool hasMore;
 

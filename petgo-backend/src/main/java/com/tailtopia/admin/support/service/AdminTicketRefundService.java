@@ -44,9 +44,9 @@ public class AdminTicketRefundService {
     public void linkOrder(String ticketToken, String orderToken, long adminId) {
         FeedbackTicket t = requireOpen(ticketToken);
         ConsultOrder order = orders.findByOrderToken(orderToken == null ? "" : orderToken.trim())
-                .orElseThrow(() -> AppException.notFound("订单不存在"));
+                .orElseThrow(() -> AppException.notFound("订单不存在").code("admin.err.order.notFound"));
         if (!order.getUserId().equals(t.getUserId())) {
-            throw AppException.validation("该订单不属于本工单用户，无法关联");
+            throw AppException.validation("该订单不属于本工单用户，无法关联").code("admin.err.ticket.orderNotOwned");
         }
         // PR#34 finding #5：工单退款视图从「当前关联订单」推导——已批出退款后再重关联，
         // 审批区块会重新出现，可对第二笔订单再批退款（且可经 refundToPawCoin 自助到账）。
@@ -56,7 +56,7 @@ public class AdminTicketRefundService {
                     .map(r -> r.getNeedDecision() == com.tailtopia.pay.refund.domain.NeedDecision.APPROVED)
                     .orElse(false);
             if (approvedRefundExists) {
-                throw AppException.conflict("本工单关联订单已批准退款，禁止改挂其他订单");
+                throw AppException.conflict("本工单关联订单已批准退款，禁止改挂其他订单").code("admin.err.ticket.refundApprovedLocked");
             }
         }
         t.linkRelatedOrder(order.getId());
@@ -80,9 +80,9 @@ public class AdminTicketRefundService {
 
     private FeedbackTicket requireOpen(String ticketToken) {
         FeedbackTicket t = tickets.findByTicketToken(ticketToken)
-                .orElseThrow(() -> AppException.notFound("工单不存在"));
+                .orElseThrow(() -> AppException.notFound("工单不存在").code("admin.err.ticket.notFound"));
         if (t.getStatus() != TicketStatus.OPEN && t.getStatus() != TicketStatus.IN_PROGRESS) {
-            throw AppException.conflict("工单已结案，无法操作");
+            throw AppException.conflict("工单已结案，无法操作").code("admin.err.ticket.alreadyResolved");
         }
         return t;
     }
@@ -90,14 +90,14 @@ public class AdminTicketRefundService {
     /** 取该订单既有退款单 token；没有则创建（related_ticket_id 溯源工单）。要求已关联订单。 */
     private String ensureRefundRequest(FeedbackTicket t, long adminId) {
         if (t.getRelatedOrderId() == null) {
-            throw AppException.validation("请先关联订单，再判定退款需求");
+            throw AppException.validation("请先关联订单，再判定退款需求").code("admin.err.ticket.linkOrderFirst");
         }
         return refunds.findByOrderId(t.getRelatedOrderId())
                 .map(r -> r.getRefundToken())
                 .orElseGet(() -> {
                     String orderToken = orders.findById(t.getRelatedOrderId())
                             .map(ConsultOrder::getOrderToken)
-                            .orElseThrow(() -> AppException.notFound("关联订单不存在"));
+                            .orElseThrow(() -> AppException.notFound("关联订单不存在").code("admin.err.ticket.linkedOrderNotFound"));
                     return refundService.createRefundRequest(orderToken, t.getId(), adminId);
                 });
     }

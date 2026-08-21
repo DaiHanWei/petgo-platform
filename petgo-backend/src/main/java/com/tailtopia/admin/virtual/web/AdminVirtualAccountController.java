@@ -3,6 +3,7 @@ package com.tailtopia.admin.virtual.web;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.admin.virtual.service.AdminVirtualAccountService;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.i18n.Messages;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
@@ -26,8 +27,13 @@ public class AdminVirtualAccountController {
 
     private final AdminVirtualAccountService service;
 
-    public AdminVirtualAccountController(AdminVirtualAccountService service) {
+    /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
+    private final Messages msg;
+
+    public AdminVirtualAccountController(AdminVirtualAccountService service,
+            Messages msg) {
         this.service = service;
+        this.msg = msg;
     }
 
     @GetMapping("/admin/virtual-accounts")
@@ -45,9 +51,9 @@ public class AdminVirtualAccountController {
             RedirectAttributes flash) {
         try {
             long id = service.create(nickname, avatarUrl, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已创建虚拟账号（id=" + id + "，无登录能力）");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.virtualAccount.created", id));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/virtual-accounts";
     }
@@ -58,9 +64,9 @@ public class AdminVirtualAccountController {
             @RequestParam boolean enabled, RedirectAttributes flash) {
         try {
             service.setEnabled(id, enabled, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已更新虚拟账号状态");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.virtualAccount.statusUpdated"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/virtual-accounts";
     }

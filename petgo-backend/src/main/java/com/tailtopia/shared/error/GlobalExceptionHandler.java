@@ -29,9 +29,23 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    private final com.tailtopia.shared.i18n.Messages messages;
+
+    public GlobalExceptionHandler(com.tailtopia.shared.i18n.Messages messages) {
+        this.messages = messages;
+    }
+
     @ExceptionHandler(AppException.class)
     public ResponseEntity<ProblemDetail> handleApp(AppException ex, HttpServletRequest req) {
-        ProblemDetail pd = base(ex.getStatus(), ex.getType(), titleFor(ex.getStatus()), ex.getMessage(), req);
+        // 挂了文案码的按当前请求 locale 取（后台页面用），没挂码的原样输出。
+        // api 链请求没有后台 locale cookie，回落 zh_CN —— 与外化前逐字相同，App 侧无感知。
+        ProblemDetail pd = base(ex.getStatus(), ex.getType(), titleFor(ex.getStatus()),
+                messages.resolve(ex), req);
+        // RFC 9457 §3.2 扩展成员：少数错误光有一句 detail 不够用（如下单被库存挡住时的逐行明细）。
+        // 信封仍在这里统一产出 —— 控制器自拼会漏掉 traceId/instance，而排障最先看的就是 traceId。
+        if (ex instanceof ProblemExtensions pe) {
+            pe.problemExtensions().forEach(pd::setProperty);
+        }
         return ResponseEntity.status(ex.getStatus()).body(pd);
     }
 

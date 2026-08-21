@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <!-- 退款管理列表（Story 4.6）。三段职责分离：客服判定 / 主管审批 / 财务打款。PII 脱敏（账号末 4 位）。 -->
 <head>
     <meta charset="UTF-8"/>

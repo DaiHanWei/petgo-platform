@@ -186,28 +186,57 @@ class Analytics {
   static String distinctIdFor(int userId) =>
       sha256.convert(utf8.encode('tailtopia-user-$userId')).toString();
 
-  /// 防御性剥离敏感键，返回新 map。三道规则（键归一化后比对，**递归**嵌套 map）：
+  /// 防御性剥离敏感键，返回新 map。三道规则（键归一化后比对，**递归**嵌套 map 与 List）：
   /// PII/健康键丢弃、自由文本键丢弃、超长字符串值丢弃。纯函数，L0 可测。
+  ///
+  /// 🔴 **List 也要递归**（Story 9.2 补）：行级归因把 `items[]` 这种「map 的数组」
+  /// 带进了埋点。此前 List 是整块透传的 —— 只要有人往行里加个收件人名，
+  /// 它会绕过全部三道规则直接发出去。NFR-5 不接受「这一层碰巧没人放 PII」。
   static Map<String, Object> scrub(Map<String, Object> props) {
     final out = <String, Object>{};
     props.forEach((k, v) {
       if (_isPiiKey(k) || _isFreeTextKey(k)) return;
       if (v is String && v.length > _maxStringValueLen) return;
-      if (v is Map) {
-        final nested = <String, Object>{};
-        v.forEach((nk, nv) {
-          if (nv != null) nested[nk.toString()] = nv as Object;
-        });
-        out[k] = scrub(nested);
-      } else {
-        out[k] = v;
-      }
+      out[k] = _scrubValue(v);
     });
     return out;
   }
 
+  /// 递归净化单个值：map → 逐键过规则；list → 逐元素递归；其余原样。
+  static Object _scrubValue(Object v) {
+    if (v is Map) {
+      final nested = <String, Object>{};
+      v.forEach((nk, nv) {
+        if (nv != null) nested[nk.toString()] = nv as Object;
+      });
+      return scrub(nested);
+    }
+    if (v is List) {
+      // 🔴 超长字符串元素同样丢弃 —— 规则在 List 里不该打折。
+      return [
+        for (final e in v)
+          if (e != null && !(e is String && e.length > _maxStringValueLen))
+            _scrubValue(e as Object),
+      ];
+    }
+    return v;
+  }
+
   /// 键归一化（小写 + 去非字母数字）后比对黑名单：snake_case/kebab 与 camelCase 同名一并命中。
-  static bool _isPiiKey(String key) => _piiKeys.contains(_normalizeKey(key));
+  /// 🔴 **后缀也要拦**（Story 9.3 全量核对补）：黑名单原先是「归一化后精确相等」，
+  /// 于是 `receiver_name` / `receiver_phone` / `address_line` 一个都不命中 ——
+  /// 而这三个正是 Epic 2 收货地址引入、NFR-5 点名新增的禁记项。
+  /// 精确表继续留着（`ip` / `dob` 这类短词不适合做后缀），后缀表只收长到不会误伤的词。
+  /// ⚠️ 代价是 `product_name` 之类也会被丢 —— 那本就是自由文本，看板该用 `product_id`。
+  static const Set<String> _piiKeySuffixes = {
+    'name', 'phone', 'address', 'email', 'whatsapp',
+  };
+
+  static bool _isPiiKey(String key) {
+    final k = _normalizeKey(key);
+    if (_piiKeys.contains(k)) return true;
+    return _piiKeySuffixes.any(k.endsWith);
+  }
 
   static bool _isFreeTextKey(String key) => _freeTextKeys.contains(_normalizeKey(key));
 

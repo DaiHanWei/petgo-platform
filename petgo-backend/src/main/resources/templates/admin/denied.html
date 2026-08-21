@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
 <!--
   权限不足提示页（403 统一落点）。admin 链 accessDeniedHandler forward 至此：
   URL 级门控与 @PreAuthorize 方法级拒绝（如 STAFF 无 vet.create 提交开户）都在这里友好提示，

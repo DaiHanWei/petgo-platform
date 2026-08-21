@@ -158,7 +158,7 @@ public class VetQualification {
     /** 审核通过：仅 UNDER_REVIEW 可通过。 */
     public void approve() {
         if (this.status != QualificationStatus.UNDER_REVIEW) {
-            throw com.tailtopia.shared.error.AppException.conflict("仅「审核中」的资质可通过审核");
+            throw com.tailtopia.shared.error.AppException.conflict("仅「审核中」的资质可通过审核").code("admin.err.vetQual.approveOnlyUnderReview");
         }
         markCertified();
     }
@@ -166,10 +166,10 @@ public class VetQualification {
     /** 驳回：仅 UNDER_REVIEW 可驳回，必填原因。 */
     public void reject(String reason) {
         if (this.status != QualificationStatus.UNDER_REVIEW) {
-            throw com.tailtopia.shared.error.AppException.conflict("仅「审核中」的资质可驳回");
+            throw com.tailtopia.shared.error.AppException.conflict("仅「审核中」的资质可驳回").code("admin.err.vetQual.rejectOnlyUnderReview");
         }
         if (reason == null || reason.isBlank()) {
-            throw com.tailtopia.shared.error.AppException.validation("驳回原因不能为空");
+            throw com.tailtopia.shared.error.AppException.validation("驳回原因不能为空").code("admin.err.vetQual.rejectReasonRequired");
         }
         this.status = QualificationStatus.REJECTED;
         this.rejectReason = reason.trim();
@@ -195,7 +195,8 @@ public class VetQualification {
                 && this.status != QualificationStatus.EXPIRING_SOON
                 && this.status != QualificationStatus.EXPIRED) {
             throw com.tailtopia.shared.error.AppException.conflict(
-                    "仅「已认证/即将到期/已过期」的资质可续期；未完善/审核中/已驳回请用直录");
+                    "仅「已认证/即将到期/已过期」的资质可续期；未完善/审核中/已驳回请用直录")
+                    .code("admin.err.vetQual.renewOnlyCertified");
         }
         markCertified();
     }

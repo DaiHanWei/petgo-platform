@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:app_links/app_links.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
@@ -26,12 +27,25 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 /// 成长档案分享页深链 → go_router location 的纯映射（L0 可测）。
 /// `tailtopia://card/{token}` → `/profile`（成长档案 Tab，分享页 CTA 第①级）。
 /// `tailtopia://open` → `/home`（下载引导落地页 `s.tailtopia.id/get` 唤起已装 app 的通用深链）。
+/// `tailtopia://open/<路径>` → 该路径（🔧 **仅 debug 包**，本地验收导航用；release 恒 `/home`）。
 /// 其它 scheme/host 暂不识别（返回 null，调用方忽略）。
 String? deepLinkToLocation(Uri uri) {
   if (uri.scheme == 'tailtopia' && uri.host == 'card') {
     return '/profile';
   }
   if (uri.scheme == 'tailtopia' && uri.host == 'open') {
+    // 🔧 DEBUG ONLY：`tailtopia://open/<路径>` 直达任意路由，供本地验收导航用。
+    //
+    // 为什么需要它：Toko 归 DEP-1 未拍板，**不占 Tab 位**（`AppTab` 四值无空位，
+    // 且契约禁改 `bottom_tab_bar.dart`）。于是冷启动后走到 `/shop` 的唯一通路是
+    // 「登录 → 建档 → 加驱虫记录 → 点 FR-110 品类跳转」—— 验收十个页面时太绕。
+    //
+    // 🔒 `kDebugMode` 硬门：release 包里这段被编译期裁掉，
+    //    `tailtopia://open/...` 行为与从前逐字一致（恒 `/home`），线上零影响。
+    //    形态照抄仓库既有先例（`settings_page.dart` 的 `DEV_DELETE_ACCOUNT` 截图钩子）。
+    if (kDebugMode && uri.path.length > 1) {
+      return uri.path + (uri.query.isEmpty ? '' : '?${uri.query}');
+    }
     return '/home';
   }
   return null;

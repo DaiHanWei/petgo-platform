@@ -71,6 +71,21 @@ public class PetProfile {
     @Column(name = "serial_id")
     private Long serialId;
 
+    /**
+     * 🔒 体重（kg）。<b>PII 邻近的健康数据，日志禁记</b>（NFR-5）。
+     *
+     * <p>可空 —— 存量用户没填过（L-9）。🔴 <b>不猜、不回填</b>：猜错的体重会让 FR-109 的
+     * 耗尽日整体偏移，而用户根本不知道系统在按一个他没填过的数字算。
+     * 回填的唯一入口是 FR-107 推荐区尾部的引导卡（Story 6.5），不另设入口。
+     */
+    @Column(name = "weight_kg", precision = 5, scale = 2)
+    private java.math.BigDecimal weightKg;
+
+    /** 绝育状态。FR-107 的可选过滤维度；可空。 */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "neuter_status", length = 16)
+    private NeuterStatus neuterStatus;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -103,6 +118,33 @@ public class PetProfile {
 
     @PreUpdate
     void onUpdate() {
+        this.updatedAt = Instant.now();
+    }
+
+    /** 🔒 体重（kg）。调用方<b>不得</b>写入日志。 */
+    public java.math.BigDecimal getWeightKg() {
+        return weightKg;
+    }
+
+    /**
+     * 设置体重。传 null 表示「用户跳过」——<b>可跳过是刻意的</b>：
+     * 设为必填会挡住既有建档转化，而建档转化在漏斗上比推荐精度重要得多。
+     */
+    public void setWeightKg(java.math.BigDecimal value) {
+        if (value != null
+                && (value.signum() <= 0 || value.compareTo(new java.math.BigDecimal("200")) > 0)) {
+            throw com.tailtopia.shared.error.AppException.validation("体重应在 0–200 kg 之间");
+        }
+        this.weightKg = value;
+        this.updatedAt = Instant.now();
+    }
+
+    public NeuterStatus getNeuterStatus() {
+        return neuterStatus;
+    }
+
+    public void setNeuterStatus(NeuterStatus value) {
+        this.neuterStatus = value;
         this.updatedAt = Instant.now();
     }
 

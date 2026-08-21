@@ -3,6 +3,7 @@ package com.tailtopia.admin.settlement.web;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.admin.settlement.service.AdminSettlementService;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.i18n.Messages;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
@@ -25,8 +26,13 @@ public class AdminSettlementController {
 
     private final AdminSettlementService service;
 
-    public AdminSettlementController(AdminSettlementService service) {
+    /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
+    private final Messages msg;
+
+    public AdminSettlementController(AdminSettlementService service,
+            Messages msg) {
         this.service = service;
+        this.msg = msg;
     }
 
     @GetMapping("/admin/settlements")
@@ -43,9 +49,9 @@ public class AdminSettlementController {
             @RequestParam(required = false) String proof, RedirectAttributes flash) {
         try {
             service.markPaid(id, proof, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已确认打款（记凭证 + 审计）");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.settlement.paid"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/settlements";
     }
@@ -56,9 +62,9 @@ public class AdminSettlementController {
             RedirectAttributes flash) {
         try {
             service.archive(id, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已归档（审计留痕）");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.settlement.archived"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/settlements";
     }

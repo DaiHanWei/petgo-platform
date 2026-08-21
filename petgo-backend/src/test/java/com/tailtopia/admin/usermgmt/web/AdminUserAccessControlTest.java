@@ -21,6 +21,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.ui.ConcurrentModel;
+import com.tailtopia.support.TestMessages;
 
 /** L0：用户搜索/详情 {@code @PreAuthorize(user.view)}（Story 3.1 AC6）。 */
 class AdminUserAccessControlTest {
@@ -40,7 +41,7 @@ class AdminUserAccessControlTest {
 
         @Bean
         AdminUserController controller(AdminUserService s) {
-            return new AdminUserController(s);
+            return new AdminUserController(s, TestMessages.real());
         }
     }
 

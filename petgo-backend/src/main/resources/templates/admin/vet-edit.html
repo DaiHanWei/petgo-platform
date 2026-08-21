@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
 <!-- 编辑兽医资料（Story 2.4）。不含密码（重置走列表内独立端点）。门控 @PreAuthorize(vet.create)。 -->
 <head>
     <meta charset="UTF-8"/>

@@ -22,6 +22,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.ui.ConcurrentModel;
 import org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap;
+import com.tailtopia.support.TestMessages;
 
 /**
  * L0：内容管理门控（Story 4.2 AC7）——浏览/下架 {@code content.proactive_takedown}、
@@ -42,7 +43,7 @@ class AdminContentManageAccessControlTest {
 
         @Bean
         AdminContentManageController controller(AdminContentManageService s) {
-            return new AdminContentManageController(s);
+            return new AdminContentManageController(s, TestMessages.real());
         }
     }
 

@@ -107,6 +107,48 @@ public final class AdminPermissions {
     public static final String RISK_VIEW = "risk.view";
     public static final String RISK_EDIT = "risk.edit";
 
+    // 精选自营电商（V1.4.0，模块 10–13）——🔴 不默认授予任何既有运营角色（NFR-11）
+    /** 商品与库存只读查看（模块 10）。 */
+    public static final String SHOP_PRODUCT_VIEW = "shop.product_view";
+    /** 商品创建/编辑、SKU 与规格维护（模块 10）。 */
+    public static final String SHOP_PRODUCT_EDIT = "shop.product_edit";
+    /** 🔒 进货价查看——商业敏感，默认仅财务与管理层。无此权限时服务端不下发该字段。 */
+    public static final String SHOP_COST_VIEW = "shop.cost_view";
+    /** 🔒 进货价编辑。 */
+    public static final String SHOP_COST_EDIT = "shop.cost_edit";
+    /** 库存管理页只读查看：实际/锁定/可售三列（模块 10 · AB-10C）。 */
+    public static final String SHOP_INVENTORY_VIEW = "shop.inventory_view";
+    /**
+     * 库存变更：采购入库 / 报损 / 盘点调整（AB-10C）。
+     *
+     * <p>🔒 <b>采购入库另需 {@link #SHOP_COST_EDIT}</b>——进货单价按 S-9 不允许留空，而单价是商业
+     * 敏感数据（2026-08-17 产品确认）。退货入库单价由系统带出，只需本权限。
+     */
+    public static final String SHOP_INVENTORY_EDIT = "shop.inventory_edit";
+
+    // 电商订单履约（V1.4.0 模块 11 · AB-11A/B/D）——🔴 同样不默认授予任何既有角色（NFR-11）
+    /** 电商订单列表与详情只读（AB-11A）。 */
+    public static final String SHOP_ORDER_VIEW = "shop.order_view";
+    /** 发货 / 标记已送达 / 异常订单处置（AB-11B、AB-11D）。 */
+    public static final String SHOP_ORDER_FULFILL = "shop.order_fulfill";
+    /**
+     * 🔒 <b>按收件人电话模糊搜索全站订单</b>（AB-11A）。
+     *
+     * <p>单独成码而不并入 {@link #SHOP_ORDER_VIEW}：电话是 PII，按它反查能把「查单」变成
+     * 「查人」（NFR-11）。给发货专员看单不等于给他全站按号码捞人的能力。
+     * 每次使用都写审计（{@code SHOP_ORDER_SEARCHED_BY_PHONE}）。
+     */
+    public static final String SHOP_ORDER_PHONE_SEARCH = "shop.order_phone_search";
+
+    /**
+     * 🔒 <b>经营数据：毛利与对账</b>（V1.4.0 模块 13 · AB-13A / AB-13D，NFR-11）。
+     *
+     * <p>与 {@link #SHOP_COST_VIEW}（进货价）分开成两个码：看得到单个 SKU 的进货价，
+     * 和看得到整盘生意的毛利与现金流，是两种不同量级的商业敏感。
+     * 默认<b>仅财务与管理层</b>可见 —— 🔴 <b>不默认授予任何既有运营角色</b>。
+     */
+    public static final String SHOP_FINANCE_VIEW = "shop.finance_view";
+
     // 后台账号 / 审计（Epic 1）
     public static final String ADMIN_CREATE_ACCOUNT = "admin.create_account";
     public static final String ADMIN_VIEW_ACCOUNTS = "admin.view_accounts";
@@ -123,7 +165,9 @@ public final class AdminPermissions {
                     SUPPORT_VIEW, REFUND_VIEW,
                     CONFIG_VIEW, ORDER_VIEW, ORDER_EXPORT, SETTLEMENT_VIEW, PAYMENT_VIEW, RISK_VIEW,
                     VIRTUAL_ACCOUNT_VIEW,
-                    ADMIN_VIEW_ACCOUNTS, ADMIN_VIEW_LOGS)),
+                    ADMIN_VIEW_ACCOUNTS, ADMIN_VIEW_LOGS,
+                    SHOP_PRODUCT_VIEW, SHOP_COST_VIEW, SHOP_INVENTORY_VIEW,
+                    SHOP_ORDER_VIEW, SHOP_ORDER_PHONE_SEARCH, SHOP_FINANCE_VIEW)),
             new PermissionGroup("perm.group.edit", List.of(
                     CONTENT_TAKEDOWN, CONTENT_RESTORE, CONTENT_PROACTIVE_TAKEDOWN,
                     CONTENT_MANUAL_REVIEW, CONTENT_DISPOSE_ACCOUNT,
@@ -133,7 +177,9 @@ public final class AdminPermissions {
                     SUPPORT_HANDLE, REFUND_SUBMIT, REFUND_APPROVE, REFUND_PAYOUT,
                     CONFIG_EDIT, ORDER_EDIT, SETTLEMENT_PAYOUT, RISK_EDIT,
                     VIRTUAL_ACCOUNT_MANAGE,
-                    ADMIN_CREATE_ACCOUNT, ADMIN_DEACTIVATE)));
+                    ADMIN_CREATE_ACCOUNT, ADMIN_DEACTIVATE,
+                    SHOP_PRODUCT_EDIT, SHOP_COST_EDIT, SHOP_INVENTORY_EDIT,
+                    SHOP_ORDER_FULFILL)));
 
     /** 全部合法权限码（UI 勾选项 + 校验白名单），保持模块分组顺序。 */
     public static final List<String> ALL = GROUPS.stream()

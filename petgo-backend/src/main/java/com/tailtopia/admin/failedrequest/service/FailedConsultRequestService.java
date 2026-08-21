@@ -95,7 +95,7 @@ public class FailedConsultRequestService {
     }
 
     private FailedConsultRequest require(long id) {
-        return repo.findById(id).orElseThrow(() -> AppException.notFound("记录不存在"));
+        return repo.findById(id).orElseThrow(() -> AppException.notFound("记录不存在").code("admin.err.common.recordNotFound"));
     }
 
     private String generateToken() {

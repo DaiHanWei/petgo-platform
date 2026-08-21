@@ -31,6 +31,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.ui.ConcurrentModel;
+import com.tailtopia.support.TestMessages;
 
 /** L0：兽医列表端点 {@code @PreAuthorize}（Story 2.2 AC4）——vet.view 或 SUPER_ADMIN 放行，否则 403。 */
 class AdminVetsAccessControlTest {
@@ -55,7 +56,8 @@ class AdminVetsAccessControlTest {
             return new AdminWebController(mock(AdminContentService.class),
                     mock(AdminModerationService.class), vet,
                     mock(com.tailtopia.admin.dashboard.service.AdminDashboardService.class),
-                    mock(com.tailtopia.admin.virtual.service.AdminVirtualAccountService.class));
+                    mock(com.tailtopia.admin.virtual.service.AdminVirtualAccountService.class),
+                    TestMessages.real());
         }
     }
 
