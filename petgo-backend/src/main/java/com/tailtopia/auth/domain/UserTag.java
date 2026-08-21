@@ -39,6 +39,10 @@ public class UserTag {
     @Column(name = "description", nullable = false, length = 140)
     private String description;
 
+    /** 下线时刻；NULL = 在线（Story 11.3，与装饰标签同形状）。 */
+    @Column(name = "retired_at")
+    private Instant retiredAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -67,6 +71,33 @@ public class UserTag {
     @PreUpdate
     void onUpdate() {
         this.updatedAt = Instant.now();
+    }
+
+    /** 编辑展示信息。code 不可改 —— 它是对外稳定标识。 */
+    public void edit(String name, String icon, String description) {
+        this.name = name;
+        this.icon = icon;
+        this.description = description;
+    }
+
+    /** 下线（幂等）。 */
+    public void retire(Instant at) {
+        if (this.retiredAt == null) {
+            this.retiredAt = at;
+        }
+    }
+
+    /** 重新上线（幂等）。 */
+    public void restore() {
+        this.retiredAt = null;
+    }
+
+    public boolean isRetired() {
+        return retiredAt != null;
+    }
+
+    public Instant getRetiredAt() {
+        return retiredAt;
     }
 
     public Long getId() {

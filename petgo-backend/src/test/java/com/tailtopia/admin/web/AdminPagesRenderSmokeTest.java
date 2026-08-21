@@ -117,6 +117,8 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
         assertThat(visibleText("/admin/content-pins")).as("顶置管理页的标题").contains("顶置管理");
         // Story 11.2：侧栏叫「装饰标签」，页内标题必须同名。
         assertThat(visibleText("/admin/content-tags")).as("装饰标签页的标题").contains("装饰标签");
+        // Story 11.3：侧栏叫「用户标签」，页内标题必须同名。
+        assertThat(visibleText("/admin/user-tags")).as("用户标签页的标题").contains("用户标签");
     }
 
     /**
@@ -153,7 +155,7 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
     @Test
     void allExternalizedAdminPagesRenderInBothLocales() throws Exception {
         String[] paths = {"/admin/dashboard", "/admin/seed-post", "/admin/tickets", "/admin/content",
-                "/admin/content-pins", "/admin/content-tags",
+                "/admin/content-pins", "/admin/content-tags", "/admin/user-tags",
                 "/admin/manual-review", "/admin/anomalies", "/admin/consult-sessions", "/admin/vets",
                 "/admin/vets/online", "/admin/failed-requests", "/admin/ratings", "/admin/users",
                 "/admin/audit-logs", "/admin/accounts"};

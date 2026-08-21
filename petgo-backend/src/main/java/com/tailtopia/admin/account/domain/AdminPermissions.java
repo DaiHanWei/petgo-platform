@@ -30,6 +30,13 @@ public final class AdminPermissions {
     public static final String USER_DELETE = "user.delete";
     /** 后台赠送 PawCoin（bug 20260728-389：运营向指定账户入账 BONUS）。 */
     public static final String USER_GRANT_PAWCOIN = "user.grant_pawcoin";
+    /**
+     * 用户标签管理（V1.1.6 Story 11.3 · AB-12A）。查看 / 编辑分两码。
+     * ⚠️ 编辑权限**不要下放得比其它模块更宽** —— 该页的分配支持批量，
+     * 是"一次影响很多用户"的动作。
+     */
+    public static final String USER_TAG_VIEW = "user.tag_view";
+    public static final String USER_TAG_MANAGE = "user.tag_manage";
 
     // 内容审核（Epic 4）
     public static final String CONTENT_VIEW_REPORTS = "content.view_reports";
@@ -131,7 +138,7 @@ public final class AdminPermissions {
     public static final List<PermissionGroup> GROUPS = List.of(
             new PermissionGroup("perm.group.view", List.of(
                     CONTENT_VIEW_REPORTS, CONTENT_VIEW_TICKETS, CONTENT_VIEW, CONTENT_PIN_VIEW, CONTENT_TAG_VIEW,
-                    USER_VIEW,
+                    USER_VIEW, USER_TAG_VIEW,
                     VET_VIEW, VET_QUALIFY_VIEW, RATING_VIEW,
                     CONSULT_VIEW_ANOMALIES, CONSULT_VIEW_SESSIONS,
                     SUPPORT_VIEW, REFUND_VIEW,
@@ -141,7 +148,7 @@ public final class AdminPermissions {
             new PermissionGroup("perm.group.edit", List.of(
                     CONTENT_TAKEDOWN, CONTENT_RESTORE, CONTENT_PROACTIVE_TAKEDOWN,
                     CONTENT_MANUAL_REVIEW, CONTENT_DISPOSE_ACCOUNT, CONTENT_PIN_MANAGE, CONTENT_TAG_MANAGE,
-                    USER_DEACTIVATE, USER_DELETE, USER_GRANT_PAWCOIN,
+                    USER_DEACTIVATE, USER_DELETE, USER_GRANT_PAWCOIN, USER_TAG_MANAGE,
                     VET_CREATE, VET_EDIT, VET_BAN, VET_RESET_PASSWORD, VET_QUALIFY,
                     CONSULT_HANDLE,
                     SUPPORT_HANDLE, REFUND_SUBMIT, REFUND_APPROVE, REFUND_PAYOUT,

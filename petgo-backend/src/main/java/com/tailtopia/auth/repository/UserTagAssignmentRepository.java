@@ -37,4 +37,36 @@ public interface UserTagAssignmentRepository extends JpaRepository<UserTagAssign
             """)
     List<Object[]> findActiveWithTag(@Param("userIds") Collection<Long> userIds,
             @Param("now") Instant now);
+
+    /**
+     * 后台「按标签」维度（Story 11.3）：某标签当前**生效中**的分配。
+     *
+     * <p>口径与 {@link #findActiveWithTag} 一致（半开区间，{@code endsAt} 为空 = 永久）。
+     * 🛡 无状态列、无扫描器。
+     */
+    @Query("""
+            select a from UserTagAssignment a
+             where a.tagId = :tagId
+               and a.startsAt <= :now
+               and (a.endsAt is null or :now < a.endsAt)
+             order by a.startsAt desc, a.id desc
+            """)
+    List<UserTagAssignment> findActiveByTag(@Param("tagId") long tagId, @Param("now") Instant now);
+
+    /** 后台「按用户」维度：某用户全部分配（含已失效的历史）。 */
+    List<UserTagAssignment> findByUserIdOrderByStartsAtDesc(long userId);
+
+    /**
+     * 某用户当前**生效中**的分配数（Story 11.3 的"第 4 个"提示用）。
+     *
+     * <p>⚠️ 这问的是「有几个在生效」，**不是**「会展示哪几个」——
+     * 后者是 {@code UserTagQueryService.findVisibleTags} 的职责，不要在这里重造。
+     */
+    @Query("""
+            select count(a) from UserTagAssignment a
+             where a.userId = :userId
+               and a.startsAt <= :now
+               and (a.endsAt is null or :now < a.endsAt)
+            """)
+    long countActiveByUser(@Param("userId") long userId, @Param("now") Instant now);
 }

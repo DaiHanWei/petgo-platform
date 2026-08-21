@@ -27,9 +27,59 @@ public class UserTagQueryService {
     public static final int MAX_VISIBLE = 3;
 
     private final UserTagAssignmentRepository assignments;
+    private final com.tailtopia.auth.repository.UserTagRepository tags;
 
-    public UserTagQueryService(UserTagAssignmentRepository assignments) {
+    public UserTagQueryService(UserTagAssignmentRepository assignments,
+            com.tailtopia.auth.repository.UserTagRepository tags) {
         this.assignments = assignments;
+        this.tags = tags;
+    }
+
+    /**
+     * 给一个用户分配标签（Story 11.3 后台接入）。
+     *
+     * <p>🛡 校验落在这里而不是后台层，理由与装饰标签同：后台是目前唯一的入口，
+     * 但把规则放在机制这一侧，将来多一个入口也不会漏。
+     * <ul>
+     *   <li>已下线的标签不可再分配（已分配的不受影响 —— 下线是"不再发新的"）</li>
+     *   <li>{@code endsAt} 可空 = 永久；非空时必须晚于 {@code startsAt}</li>
+     * </ul>
+     *
+     * <p>⚠️ **分配数量不设上限** —— 展示才封顶 {@link #MAX_VISIBLE} 个。
+     * 超出的分配记录保留在库、仅不展示（AD-10 Rule 4）。
+     */
+    @Transactional
+    public UserTagAssignment assign(long userId, long tagId, Instant startsAt, Instant endsAt) {
+        UserTag tag = tags.findById(tagId)
+                .orElseThrow(() -> com.tailtopia.shared.error.AppException.validation("标签不存在"));
+        if (tag.isRetired()) {
+            throw com.tailtopia.shared.error.AppException.validation("该标签已下线，不能再分配");
+        }
+        if (startsAt == null || (endsAt != null && !endsAt.isAfter(startsAt))) {
+            throw com.tailtopia.shared.error.AppException.validation("结束时间必须晚于开始时间");
+        }
+        return assignments.save(UserTagAssignment.of(userId, tagId, startsAt, endsAt));
+    }
+
+    /** 取消分配。不存在视为幂等 no-op。 */
+    @Transactional
+    public boolean unassign(long assignmentId) {
+        return assignments.findById(assignmentId).map(a -> {
+            assignments.delete(a);
+            return true;
+        }).orElse(false);
+    }
+
+    /**
+     * 某用户当前生效中的分配**数量**（后台"第 4 个"提示用）。
+     *
+     * <p>⚠️ 与 {@link #findVisibleTags} 是两个不同的问题：这问「有几个在生效」，
+     * 那问「会展示哪几个」。后台需要"会展示哪 3 个"时**必须调 findVisibleTags**，
+     * 不要用本方法的数字自己再排一遍序。
+     */
+    @Transactional(readOnly = true)
+    public long countActive(long userId, Instant now) {
+        return assignments.countActiveByUser(userId, now);
     }
 
     /**

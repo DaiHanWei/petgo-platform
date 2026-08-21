@@ -74,6 +74,22 @@
                    th:text="#{admin.nav.contentTags}">装饰标签</a>
             </div>
         </details>
+        <!-- 用户运营（后台 PRD 模块 12）：用户标签。
+             ⚠️ 刻意**不并入上面的「内容运营」** —— 用户标签挂在人身上、不是内容，
+             并入会让分组名与内容不符；而改「内容运营」这个名字要连带改四处（侧栏名/页内标题/
+             页面说明/权限显示名），代价更大。 -->
+        <details class="nav-section"
+                 sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.tag_view')"
+                 th:attr="open=${active == 'user-tags'} ? 'open' : null">
+            <summary th:classappend="${active == 'user-tags'} ? 'active'"
+                     th:text="#{admin.nav.group.userOps}">用户运营</summary>
+            <div class="nav-sub">
+                <!-- 🛡 与 AdminUserTagController 的 @PreAuthorize(VIEW) 逐字一致 -->
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.tag_view')"
+                   th:href="@{/admin/user-tags}" th:classappend="${active == 'user-tags'} ? 'active'"
+                   th:text="#{admin.nav.userTags}">用户标签</a>
+            </div>
+        </details>
         <details class="nav-section"
                  th:attr="open=${active == 'vets' or active == 'online' or active == 'failed-requests' or active == 'ratings'} ? 'open' : null">
             <summary th:classappend="${active == 'vets' or active == 'online' or active == 'failed-requests' or active == 'ratings'} ? 'active'"
