@@ -36,6 +36,26 @@ class LoginGuideController {
   /// 所以单个字段足够，不需要按弹层实例分别记。
   String _entrySource = 'other';
 
+  /// 本次进程里"是从名片分享链接进来的"这一事实（埋点 E-27 的 `pet_card` 取值）。
+  ///
+  /// 🔴 **为什么需要一个额外的静态字段，而不是把 `entrySource` 一路传下来**：
+  /// 深链落点是**访客只读页**（`/pet/:token`），那一页**根本没有注册入口** ——
+  /// 用户是先看完别人的档案、再从别处（底栏、点赞、发布…）撞上登录引导才注册的。
+  /// 所以从名片来的归因跨了好几个页面，没有一条参数能贯通它。
+  ///
+  /// 只在 `_entrySource` 仍是兜底值 `other` 时才生效 ——
+  /// 也就是说，**任何明确的来源都优先于它**（例如从游客 Diary 的 CTA 注册，仍记 `diary_cta`）。
+  ///
+  /// ⚠️ 进程内布尔、不落盘：换次冷启动就作废。这是刻意的 ——
+  /// 三天前点过一次名片链接，不该被算成那次分享带来的注册。
+  static bool _cameFromPetCard = false;
+
+  /// 访客只读页在被打开时调用一次（Story 10.1）。
+  static void markPetCardEntry() => _cameFromPetCard = true;
+
+  @visibleForTesting
+  static void resetPetCardEntry() => _cameFromPetCard = false;
+
   bool _softShownThisSession = false;
   bool _hardDialogShowing = false;
   RouteIntent? _pending;
@@ -142,7 +162,11 @@ class LoginGuideController {
     // T-7 signup_succeeded（Story 6.1）：**注册真正成功**才报（取消/失败都已在上面 return）。
     // 现有埋点只有「点了登录按钮」，缺的就是这一环；`entry_source` 是转化路径构成的唯一来源。
     if (resp.isNewUser) {
-      Analytics.capture('signup_succeeded', {'entry_source': _entrySource});
+      // E-27（Story 10.1）：`pet_card` 只在没有更明确来源时兜上 —— 见 [_cameFromPetCard]。
+      final source = _entrySource == 'other' && _cameFromPetCard
+          ? 'pet_card'
+          : _entrySource;
+      Analytics.capture('signup_succeeded', {'entry_source': source});
     }
     if (!rootContext.mounted) return LoginGuideOutcome.success;
     _handleSuccess(rootContext, resp);

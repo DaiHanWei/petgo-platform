@@ -31,8 +31,19 @@ class PhoneEditSheet extends ConsumerStatefulWidget {
   final String entry;
 
   /// 打开抽屉。返回是否保存成功（调用方可据此刷新）。
-  static Future<bool> open(BuildContext context, {required String entry}) async {
-    final saved = await showModalBottomSheet<bool>(
+  static Future<bool> open(BuildContext context, {required String entry}) async =>
+      await openDetailed(context, entry: entry) ?? false;
+
+  /// 打开抽屉，**保留三态**：`true` 保存成功 · `false` 点了「取消」· `null` 划走/点遮罩关掉。
+  ///
+  /// 🔴 三态不是多余的精细度 —— 埋点清单 §3 对 E-5 的 `action` 明写
+  /// 「`skipped` 与 `dismissed` 要分开：**前者是拒绝，后者可能只是没看懂**」。
+  /// 合并成一个"没保存"，这条判读就永久做不出来（而事后补埋点补不回已流失的数据）。
+  ///
+  /// ⚠️ [open] 仍折叠成 bool，是因为设置页那个入口只关心"要不要刷新"。
+  static Future<bool?> openDetailed(BuildContext context,
+      {required String entry}) async {
+    return showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.surface,
@@ -41,7 +52,6 @@ class PhoneEditSheet extends ConsumerStatefulWidget {
       ),
       builder: (_) => PhoneEditSheet(entry: entry),
     );
-    return saved ?? false;
   }
 
   @override

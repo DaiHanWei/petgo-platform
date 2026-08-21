@@ -426,7 +426,7 @@ social_user_hide_submitted       {origin: REPORT, entry: report_flow}
    `snapshot` 是名词、不符合"动作在词尾且须是动词"）。**本次是首次落地；一旦发版即锁死**
    —— 理由同 §8.9。
 
-### 9.2 `publish_page_image_source_selected`（2026-08-20 用户要求）
+### 10.2 `publish_page_image_source_selected`（E-28 · 2026-08-20 用户要求）
 
 | 项 | 值 |
 |---|---|
@@ -445,7 +445,7 @@ social_user_hide_submitted       {origin: REPORT, entry: report_flow}
 3. 一个事件 + `source` 属性，不是两个事件 —— 与同页 `publish_page_content_type_selected`
    形状一致，看板里可直接对比占比。
 
-### 9.3 `push_permission_prompt_shown` / `push_permission_responded`（E-19 / E-20 · Story 8.2）
+### 10.3 `push_permission_prompt_shown` / `push_permission_responded`（E-19 / E-20 · Story 8.2）
 
 | 项 | 值 |
 |---|---|
@@ -472,7 +472,7 @@ social_user_hide_submitted       {origin: REPORT, entry: report_flow}
    原生弹窗的机会在首启就被第二代「首启即申请」消耗掉了，那条分支是死的。
    **这条可以配成线上告警**：一旦出现，说明有人绕过了 `PushPermissionPrompt`。
 2. ⚠️ **`result=settings_opened` 只表示跳走了，不代表真的开了。**
-   净授权率看 §9.1 的 E-21（冷启动快照）。两者别混着解读。
+   净授权率看 §10.1 的 E-21（冷启动快照）。两者别混着解读。
 3. ⚠️ **触发点 3 不存在** —— PRD 编号是 1/2/4/5，不是漏了一个。
 4. 🔴 **触发点 5（兽医切为在线，`trigger_point=vet_online`）不限次数**（Story 8.3）。
    一个兽医一天切五次在线就产生五次曝光 ⇒ **它的曝光量天然远高于用户侧三点**。
@@ -483,3 +483,88 @@ social_user_hide_submitted       {origin: REPORT, entry: report_flow}
    其余兽医流程仍是黑盒。
 5. 曝光与响应**配对使用**：`_shown` 是分母、`_responded` 是分子。
    两者都不 `await`（埋点不得阻塞用户流程 —— 这段逻辑夹在「建档完成 → 进首页」之间）。
+
+### 10.4 V1.1.6 事件全表（E-1~E-28 · 收尾于 Story 10.1）
+
+> 🔴 **本表列的是实现名。** 其中十条与 `埋点清单v116.md` 的原名不同 —— 那些名字在实现期
+> 按本项目命名规范（§8.1）逐条订正过，PRD §3.2 都写了订正块与理由，**清单当时漏了同步**，
+> 已随 Story 10.1 补回。看旧讨论/旧清单的人以本表为准。
+>
+> 🔴 **产品 2026-08-18 拍板的四个名字不在订正范围内**（`phone_prompt_responded` /
+> `push_permission_responded` / `push_permission_state_reported` / `post_share_card_sent`）——
+> 它们本身就是那次改名的产物。**一旦发版即锁死**（理由同 §8.9）。
+
+| # | 事件名（实现） | 清单原名（若不同） | 属性 | 落点 |
+|---|---|---|---|---|
+| E-1 | `social_pinned_slot_viewed` | `feed_pinned_slot_viewed` | `pin_config_id`、**`pin_type`**、`content_id` | `feed_view.dart` |
+| E-2 | `social_pinned_slot_tapped` | `feed_pinned_slot_tapped` | 同 E-1 + `jump_target` | `feed_view.dart` |
+| E-3 | `social_pinned_duplicate_viewed` | `feed_pinned_duplicate_exposed` | `content_id`、`serp_position` | `feed_view.dart` |
+| E-4 | `phone_prompt_shown` | — | **`trigger`** = `day3_open` | `phone_soft_prompt.dart` |
+| E-5 | `phone_prompt_responded` | — | **`action`**: submitted/skipped/**dismissed** | 同上 |
+| E-6 | `me_phone_save_succeeded` | `phone_saved` | **`entry`**、`is_first_time` | `phone_edit_sheet.dart` |
+| E-7 | `me_phone_save_error_shown` | `phone_save_failed` | `entry` | 同上 |
+| E-8 | `publish_image_crop_shown` | `publish_image_crop_required` | **`original_ratio`**、`batch_size` | `image_crop.dart` |
+| E-9 | `publish_image_crop_completed` | `publish_image_crop_confirmed` | **`target_ratio`**、`is_batch_lock_source` | 同上 |
+| E-10 | `publish_image_crop_exit_tapped` | `publish_image_crop_abandoned` | `original_ratio` | `publish_crop_page.dart` |
+| E-11 | `post_share_card_tapped` | — | `content_type`、**`is_private_diary`**、`has_image` | `content_detail_page.dart` |
+| E-12 | `post_share_card_generated` | — | `template`、`size`、**`duration_ms`** | `share_card_preview_page.dart` |
+| E-13 | `post_share_card_sent` | （旧名 `..._share_completed` 已废） | `channel` | 同上（**系统回调之后**） |
+| E-14 | `post_share_link_opened` | — | `open_method`、`ua_platform` | **服务端** `PostSharePageAnalytics` |
+| E-15 | `user_badge_tooltip_opened` | — | `badge_id`、**`position`** | `user_tag_row.dart` |
+| E-16 | `content_badge_tooltip_opened` | — | `badge_id`、**`position`** | `content_tag_chip.dart` |
+| E-17 | `app_notification_center_viewed` | `notification_center_opened` | `unread_count`、**`push_permission`** | `notification_center_page.dart` |
+| E-18 | `app_notification_item_tapped` | `notification_item_tapped` | **`notif_type`**、`level` | 同上 |
+| E-19 | `push_permission_prompt_shown` | — | 见 §10.3 | `push_permission_prompt.dart` |
+| E-20 | `push_permission_responded` | — | 见 §10.3 | 同上 |
+| E-21 | `push_permission_state_reported` | — | **`granted`** | 见 §10.1 |
+| E-22 | `post_like_tapped`（扩展） | — | `liked` + **新增 `source`** | `like_button.dart` |
+| E-23 | `pet_card_share_tapped` | — | **`entry`**、`has_milestone` | `growth_archive_page.dart` |
+| E-24 | `pet_card_link_opened` | — | **`page_state`**、`ua_platform`、`referrer_host` | **服务端** `CardPageAnalytics` |
+| E-25 | `pet_card_cta_tapped` | — | **`page_state`**、`ua_platform` | 同上（浏览器 → `/p/track`） |
+| E-26 | `pet_card_cta_outcome` | — | **`outcome`** | 同上（**尽力上报、会丢**） |
+| E-27 | `signup_succeeded`（扩展） | — | `entry_source` **新增 `pet_card`** | `login_guide_controller.dart` |
+| E-28 | `publish_page_image_source_selected` | — | **`source`** | 见 §10.2 |
+
+**三条口径，缺一条对应结论就做不出来：**
+
+1. **E-12 与 E-13 是两个事件，不得合并。** E-12 报「出图成功」（`duration_ms` 衡量基建性能），
+   E-13 报「系统分享菜单**回调成功**」。合成一个 = 每次预览导出都算一次分享，
+   「实际分享出去多少」只会被高估，且**事后无法修正**。
+   ⚠️ Story 9.3 当初就是合成一个的，Story 10.1 拆开了。
+2. **E-4 是 E-5 的分母。** 拿 E-5 的条数当分母算响应率会系统性高估
+   —— 那是"作答数"，与"曝光数"在崩溃/杀进程/埋点丢失时并不相等。
+3. **`open_method` 靠二维码印的那份 URL 带 `?src=qr`。**
+   码里和文字里印同一个 URL，服务端就永远分不出扫码与点链接 ——
+   而这是**下载二维码唯一的验收依据**（它占了卡片页脚近一半版面）。
+
+### 10.5 🛡 五项已知缺口：本版本**不解决、不承诺**
+
+> **写明缺口不是免责声明，是防止误判。** 看板上没数据的时候，分析的人必须能立刻分清
+> 「埋点坏了」和「这里从来没埋」。否则每次都要白查一轮。
+
+| # | 缺口 | 说明 |
+|---|---|---|
+| G-1 | **深链归因基建缺失** | 未装 App 的用户「安装 → 打开 → 注册」这一段拼不出来（AD-16 Rule 5）。E-27 的 `pet_card` **只覆盖已装用户**（深链直接进 App）。要覆盖未装用户需要 deferred deeplink 一整套基建，不在本版本。 |
+| G-2 | **兽医端全流程仍零埋点** | 本版本触发点 5（Story 8.3 · `trigger_point=vet_online`）是兽医端**第一个也是唯一一个**事件。派单、接单、回复、结束会话 —— 全是黑盒。 |
+| G-3 | **stag / prod 共用同一个 project token** | 打包时须用构建参数覆盖。忘了覆盖 ⇒ 测试流量混进生产看板，且**无法事后剔除**（事件里没有环境维度）。 |
+| G-4 | **后台侧完全无埋点** | 顶置配置、装饰标签打标、用户标签分配、批量催填 —— 这些**运营操作全无记录**。一旦出现「这条内容为什么被顶置了」「谁给这个用户打了标签」的争议，**没有任何客观依据可查**。⚠️ 出事时会先被当成"埋点坏了"去查，白费一轮 —— 所以这条尤其要写在这里。 |
+| G-5 | **访客登录态属性做不出来** | `viewer_state`（访客是否已有账号）与 `is_app_installed`：H5 是无登录态公开页，服务端判不出来。🛡 **不得写进任何验收标准**（AD-16 Rule 4）—— 这不是「暂时没做」，是**做不出来**。也**不要拿 cookie 有无去猜新老访客**，那不是同一回事。已由 `PostSharePageAnalyticsIntegrationTest` 与 `CardPageAnalyticsIntegrationTest` 各钉一条「不得出现这两个属性」的测试。 |
+
+### 10.6 可配成线上告警的两条护栏
+
+两条都是**「实现违背规格」型**，与 §8.6 的 T-12 是同一类用法：出现即说明代码被绕过，
+而不是数据异常。
+
+| # | 出现即异常的组合 | 为什么 | 怎么查 |
+|---|---|---|---|
+| 护栏一 | `push_permission_prompt_shown` 且 `trigger_point=notification_center` 且 `prompt_type=native_dialog` | FR-85 于 2026-08-05 定稿「触发点 4 **永不**唤起原生弹窗」（原生弹窗机会留给 1/2/5）。AD-14 Rule 6。 | PostHog 建一个该组合的 insight，阈值 > 0 即告警。命中说明有人绕过了 `PushPermissionPrompt`。 |
+| 护栏二 | 同一设备同一用户出现**多条** `push_permission_prompt_shown` 且 `trigger_point ≠ vet_online` | 除兽医端外，每个触发点每设备每用户**最多一条**。重复即 AD-14 的四个标记键实现有误。 | 按 `distinct_id` + `trigger_point` 分组计数 > 1。🔴 **必须排除 `vet_online`** —— 触发点 5 不受"各一次"限制（2026-08-05 确认），不排除会天天误报。 |
+
+**§8.6 那条 V1.1.2 的护栏继续有效**：健康类里程碑（M3/M4/M5/M9）出现
+`path=checkin` 的 `milestone_achieved`，说明"取消手动打卡"的后端护栏被绕过。
+
+### 10.7 明确不做（本版本范围外）
+
+- **后台侧埋点** —— 见 G-4，本版本只写明缺口
+- **兽医端其余流程埋点** —— 见 G-2
+- **深链归因基建** —— 见 G-1，需独立基建

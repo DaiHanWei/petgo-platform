@@ -159,7 +159,7 @@ class TimelineItemTile extends StatelessWidget {
                     spacing: 4,
                     runSpacing: 4,
                     children: [
-                      for (final t in item.decorationTags) ContentTagChip.inline(tag: t),
+                      for (final t in item.decorationTags) ContentTagChip.inline(tag: t, position: 'diary'),
                     ],
                   ),
                 ],

@@ -25,12 +25,18 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 ///    就等于把「我只想分享一条」变成「我把整本都给你了」。
 /// 3. **落地页拿不到任何通往其它内容的把手** —— 边界画在投影类型上，不只画在页面上。
 void main() {
-  ContentDetail detail({List<String> images = const ['https://cdn/1.jpg']}) => ContentDetail(
+  ContentDetail detail({
+    List<String> images = const ['https://cdn/1.jpg'],
+    String type = 'DAILY',
+    String visibility = 'PUBLIC',
+  }) =>
+      ContentDetail(
         id: 5,
         authorId: 7,
         authorDeleted: false,
         authorNickname: 'Alice',
-        type: 'DAILY',
+        type: type,
+        visibility: visibility,
         body: 'A lovely pet day',
         imageUrls: images,
         likeCount: 3,
@@ -172,7 +178,7 @@ void main() {
   });
 
   group('AC4 · 埋点用新名', () {
-    testWidgets('分享递出 → post_share_card_sent', (tester) async {
+    testWidgets('出图完成 → post_share_card_generated（E-13 要等系统回调，此刻不报）', (tester) async {
       final events = <String>[];
       Analytics.debugCaptureSink = (name, props) => events.add(name);
       addTearDown(() => Analytics.debugCaptureSink = null);
@@ -189,9 +195,50 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('shareCardShareCta')));
       await tester.pumpAndSettle();
 
-      expect(events, contains('post_share_card_sent'));
+      // 🔴 Story 10.1 订正：出图这一刻报的是 **E-12 `post_share_card_generated`**，
+      //    不是 E-13。E-13 的定义是「系统分享菜单**回调成功**」，报在出图那刻等于
+      //    把「看了一眼预览就退出」的人也算成分享成功 —— 只会高估，且事后无法修正。
+      // E-11（Story 10.1 补齐）：**漏斗起点**，点击那一刻就报。
+      expect(events, contains('post_share_card_tapped'));
+      expect(events, contains('post_share_card_generated'));
+      expect(events, isNot(contains('post_share_card_sent')),
+          reason: '还没走到系统分享面板的回调，不该出现 E-13');
       // 🔴 旧名 2026-08-18 已作废（重复了 share，且 completed 不如 sent 明确）。
       expect(events, isNot(contains('post_share_card_share_completed')));
+    });
+
+    /// 🔴 `content_type` 走**显式映射**，不把线格式发上去：清单 §3 把
+    /// `GROWTH_MOMENT`/`DAILY`/`KNOWLEDGE` 与 `diary`/`moment`/`tips` 并列标了
+    /// 「需与工程统一」，而看板维度一旦发版就改不动了。
+    testWidgets('E-11 的 content_type 是埋点词表，不是后端枚举线格式', (tester) async {
+      final captured = <String, Map<String, Object>?>{};
+      Analytics.debugCaptureSink = (name, props) => captured[name] = props;
+      addTearDown(() => Analytics.debugCaptureSink = null);
+
+      await pumpDetail(tester,
+          _FakeDetailRepo(detail: detail(type: 'GROWTH_MOMENT', visibility: 'PRIVATE')));
+      await tester.tap(find.byKey(const ValueKey('detailShareCardIcon')));
+      await tester.pumpAndSettle();
+
+      expect(captured['post_share_card_tapped'], {
+        'content_type': 'diary',
+        // 私密日记**允许**分享（AD-15 Rule 6）—— 这个属性是产品判断依据，不是拦人的闸。
+        'is_private_diary': true,
+        'has_image': true,
+      });
+    });
+
+    testWidgets('公开的 Diary → is_private_diary=false（不是"只要是 Diary 就算私密"）',
+        (tester) async {
+      final captured = <String, Map<String, Object>?>{};
+      Analytics.debugCaptureSink = (name, props) => captured[name] = props;
+      addTearDown(() => Analytics.debugCaptureSink = null);
+
+      await pumpDetail(tester, _FakeDetailRepo(detail: detail(type: 'GROWTH_MOMENT')));
+      await tester.tap(find.byKey(const ValueKey('detailShareCardIcon')));
+      await tester.pumpAndSettle();
+
+      expect(captured['post_share_card_tapped']?['is_private_diary'], false);
     });
   });
 }

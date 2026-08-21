@@ -57,9 +57,11 @@ class _ShareCardPreviewPageState extends State<ShareCardPreviewPage> {
     setState(() => _busy = true);
     try {
       final capture = ShareCardPreviewPage.captureForTest;
+      final startedAt = DateTime.now();
       final bytes = capture != null
           ? await capture(_canvas)
           : await CardRenderPipeline.capture(boundaryKey: _boundaryKey, canvas: _canvas);
+      final elapsedMs = DateTime.now().difference(startedAt).inMilliseconds;
       if (!mounted) return;
       if (bytes == null) {
         ScaffoldMessenger.of(context)
@@ -67,13 +69,25 @@ class _ShareCardPreviewPageState extends State<ShareCardPreviewPage> {
         return;
       }
 
-      // 埋点在**出图成功、准备递给系统**这一刻上报（AC4）。
-      // 事件名 `post_share_card_sent`：2026-08-18 按命名规范定名，
-      // 旧名 `post_share_card_share_completed` 已作废（重复了 share，且 completed 不如 sent 明确）。
+      // ===== 埋点：出图与分享是**两个**事件，别再合成一个（Story 10.1 订正）=====
+      //
+      // 🔴 9-3 当初把 `post_share_card_sent` 报在了这一刻（出图成功），并带了
+      //    `ratio`/`template` 两个属性。三处都不对：
+      //    ① **时机**：清单与 PRD 都写 E-13 = 「系统分享菜单回调成功」。报在出图那刻，
+      //       等于**每次预览导出都算一次分享** —— 用户看了一眼就退出也计入，
+      //       「实际分享出去多少」这个数直接失真（且只会高估，无法事后修正）。
+      //    ② **属性**：E-13 唯一的属性是 `channel`（走哪个渠道），当时没报；
+      //       报上去的 `ratio`/`template` 其实是 E-12 的 `size`/`template`。
+      //    ③ **词表**：`ratio: '1:1'/'9:16'` 与 `template: 'text'` 都不在清单 §3 的词表里
+      //       （应为 `size: '1x1'/'9x16'`、`template: 'text_only'`）。
+      //    现按 E-12 / E-13 各归各位。
+      //
+      // E-12：出图成功。`duration_ms` 是**生成基建的性能**，也是这条的加粗属性。
       // ⚠️ 用 unawaited 语义：埋点不该挡住分享面板弹出。
-      Analytics.capture('post_share_card_sent', {
-        'ratio': _canvas == CardCanvas.square ? '1:1' : '9:16',
-        'template': widget.data.hasImage ? 'image' : 'text',
+      Analytics.capture('post_share_card_generated', {
+        'template': widget.data.hasImage ? 'image' : 'text_only',
+        'size': _canvas == CardCanvas.square ? '1x1' : '9x16',
+        'duration_ms': elapsedMs,
       });
 
       final box = context.findRenderObject() as RenderBox?;
@@ -83,6 +97,9 @@ class _ShareCardPreviewPageState extends State<ShareCardPreviewPage> {
         bytes: bytes,
         name: 'tailtopia_card',
         shareOrigin: origin,
+        // E-13：**系统面板回调分享成功之后**才报，取消不报。
+        onShared: (channel) =>
+            Analytics.capture('post_share_card_sent', {'channel': channel}),
       );
     } finally {
       if (mounted) setState(() => _busy = false);

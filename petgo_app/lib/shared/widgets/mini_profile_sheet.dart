@@ -141,6 +141,7 @@ class _MiniProfileCard extends StatelessWidget {
                   const SizedBox(height: AppSpacing.sm),
                   // V1.1.6 Story 5.1：迷你主页预览卡挂运营标签（四处展示位之一）。
                   UserTagRow(
+                    position: 'mini_profile',
                     name: profile.nickname ?? '',
                     nameStyle: AppTypography.title,
                     tags: profile.isDeactivated ? const [] : profile.tags,

@@ -87,8 +87,15 @@ public class CardPageAnalytics {
         analytics.capture(visitorId, event, properties);
     }
 
-    /** 粗粒度平台，只为分渠道看转化，不做设备指纹。 */
-    static String uaPlatform(HttpServletRequest request) {
+    /**
+     * 粗粒度平台，只为分渠道看转化，不做设备指纹。
+     *
+     * <p>⚠️ Story 10.1 把它从包私有改成 {@code public}：单条内容分享页
+     * （{@code PostSharePageAnalytics}）要报同一个 {@code ua_platform}。
+     * <b>刻意不各写一份</b> —— 两处 UA 判定迟早会分叉，而分叉之后看板上
+     * 「ios 占比」这类数在两个事件之间就不可比了。
+     */
+    public static String uaPlatform(HttpServletRequest request) {
         String ua = request == null ? null : request.getHeader(HttpHeaders.USER_AGENT);
         if (ua == null || ua.isBlank()) {
             return "other";

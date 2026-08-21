@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/analytics/analytics.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/user_tag_row.dart';
 import '../../../shared/widgets/content_tag_chip.dart';
@@ -158,7 +159,7 @@ class _DetailScaffold extends ConsumerWidget {
                         spacing: AppSpacing.xs,
                         runSpacing: AppSpacing.xs,
                         children: [
-                          for (final t in detail.decorationTags) ContentTagChip.inline(tag: t),
+                          for (final t in detail.decorationTags) ContentTagChip.inline(tag: t, position: 'detail'),
                         ],
                       ),
                     ],
@@ -225,6 +226,7 @@ class _DetailScaffold extends ConsumerWidget {
             children: [
               // V1.1.6 Story 5.1：作者区挂运营标签（四处展示位之一）。
               UserTagRow(
+                position: 'detail',
                 name: name,
                 nameStyle: AppTypography.body.copyWith(fontWeight: FontWeight.w700),
                 tags: detail.authorDeleted ? const [] : detail.authorTags,
@@ -475,7 +477,7 @@ class _ImageCarouselState extends State<_ImageCarousel> {
             right: AppSpacing.xl,
             child: Align(
               alignment: Alignment.centerLeft,
-              child: ContentTagChip.overlay(tag: widget.decorationTags.first),
+              child: ContentTagChip.overlay(tag: widget.decorationTags.first, position: 'detail'),
             ),
           ),
         if (widget.urls.length > 1)
@@ -610,8 +612,27 @@ class _ShareCardButtonState extends ConsumerState<_ShareCardButton> {
   /// 取链接用的仓库入口。测试用它替身，免得为一个按钮起 provider override。
   static Future<String> Function(int postId)? shareUrlForTest;
 
+  /// 埋点 `content_type` 的词表（`diary`/`moment`/`tips`）。
+  ///
+  /// 🔴 **刻意做一次显式映射**，不把线格式 `GROWTH_MOMENT`/`DAILY`/`KNOWLEDGE` 直接发上去 ——
+  /// 埋点清单 §3 把这两套写法并列标了「需与工程统一」，而看板维度一旦发版就改不动了。
+  /// 与 4-2 对 `pin_type` 的处理同一做法。
+  static String _analyticsContentType(String wireType) => switch (wireType) {
+        'GROWTH_MOMENT' => 'diary',
+        'KNOWLEDGE' => 'tips',
+        _ => 'moment',
+      };
+
   Future<void> _open() async {
     final l10n = AppLocalizations.of(context);
+    // E-11（Story 10.1 补齐）：**漏斗起点**，在点击这一刻上报 ——
+    // 放在取链接成功之后会把「取链接失败」的人从分母里抹掉，
+    // 而那批人恰恰是这个漏斗最该看见的流失。
+    Analytics.capture('post_share_card_tapped', {
+      'content_type': _analyticsContentType(widget.detail.type),
+      'is_private_diary': widget.detail.isPrivateDiary,
+      'has_image': widget.detail.imageUrls.isNotEmpty,
+    });
     setState(() => _busy = true);
     try {
       final fetch = shareUrlForTest ??

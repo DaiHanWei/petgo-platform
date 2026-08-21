@@ -75,6 +75,37 @@ class _NotificationCenterPageState
     _scroll.addListener(_onScroll);
     _loadFirstPage();
     _maybeShowPushBanner();
+    unawaited(_reportOpened());
+  }
+
+  /// E-17 `app_notification_center_viewed`（Story 10.1 补齐）。
+  ///
+  /// **两个属性各有独立用途**：
+  /// - `unread_count`：通知中心使用率的分层维度 —— 「有未读才点进来」和
+  ///   「没未读也点进来」是两种完全不同的使用习惯。
+  /// - `push_permission`：本事件**同时是 FR-85 触发点 4 的曝光分母**（清单原话）。
+  ///   触发点 4 的引导条只对"通知关着"的人显示，所以要算它的转化率，
+  ///   就得知道打开通知中心的人里有多少本来就关着。
+  ///
+  /// 🔴 `not_asked` 必须与 `denied` 分开：iOS 上"从没问过"和"问过被拒"
+  /// 在系统 API 里返回的是同一个 `denied`，只有本地那个「问过没有」的标记能分开两者。
+  /// 混在一起会让"拒绝率"里混进一批压根没被问过的人，这个数就没法用了。
+  Future<void> _reportOpened() async {
+    try {
+      final granted = await (widget.isNotificationGrantedForTest ??
+          isPushPermissionGranted)();
+      final prefs = widget.prefsForTest ?? await AppPrefs.create();
+      final asked = prefs.pushPermissionAsked;
+      final unread = await ref.read(notificationRepositoryProvider).unreadCount();
+      await Analytics.capture('app_notification_center_viewed', {
+        'unread_count': unread,
+        'push_permission':
+            granted ? 'granted' : (asked ? 'denied' : 'not_asked'),
+      });
+    } catch (e) {
+      // 埋点失败绝不影响这一页 —— 它是用户主动打开的功能页。
+      debugPrint('[NotificationCenter] open report failed: $e');
+    }
   }
 
   /// 判定 + 曝光上报。⚠️ 判定与「各一次」的标记都走 [PushPermissionPrompt]，

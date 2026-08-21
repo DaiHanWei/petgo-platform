@@ -28,6 +28,7 @@ Future<void> _pumpRow(
             name: name,
             nameStyle: const TextStyle(fontSize: 14),
             tags: tags,
+            position: 'feed',
           ),
         ),
       ),

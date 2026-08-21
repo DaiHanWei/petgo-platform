@@ -36,3 +36,15 @@ String postShareUrl(String shareToken, {String baseUrl = kH5BaseUrl}) {
   final trimmed = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
   return '$trimmed/c/$shareToken';
 }
+
+/// 同一条链接的**二维码专用**变体：尾部带 `?src=qr`（Story 10.1 · 埋点 E-14）。
+///
+/// 🔴 **不加这个标记，`open_method` 这个属性就是做不出来的** ——
+/// 二维码里印的和图上文字里给的是同一个 URL，服务端收到请求时无从分辨。
+/// 而 `open_method` 是**下载二维码唯一的验收依据**（清单 §3 原话）：
+/// 它占了卡片页脚近一半版面，`qr` 长期极低就该撤掉 —— 没有这个数就只能靠感觉吵。
+///
+/// ⚠️ 只加在**印进码里**的那一份，分享出去的文字链接不带 ——
+/// 两份都带就又分不出来了。
+String postShareQrUrl(String shareToken, {String baseUrl = kH5BaseUrl}) =>
+    '${postShareUrl(shareToken, baseUrl: baseUrl)}?src=qr';

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/analytics/analytics.dart';
 import '../../features/auth/domain/user_tag.dart';
 import 'anchored_tooltip.dart';
 
@@ -21,6 +22,7 @@ class UserTagRow extends StatelessWidget {
     required this.name,
     required this.nameStyle,
     required this.tags,
+    required this.position,
     this.iconSize = 15,
     this.gap = 4,
   });
@@ -30,6 +32,13 @@ class UserTagRow extends StatelessWidget {
 
   /// 后端已按分配时间倒序截断到最多 3 个；这里只管"放得下几个"。
   final List<UserTag> tags;
+
+  /// 这一行长在哪儿（埋点 E-15 的 `position`）：`feed` / `detail` / `comment` / `mini_profile`。
+  ///
+  /// 🔴 **必填、且没有默认值**：这个属性的全部用途就是回答"四处展示位哪些真的被点"。
+  /// 给个默认值的话，将来新增第五处展示位会**静默**记成默认那一处，
+  /// 而看板上完全看不出来 —— 编译期报错反而是这里想要的。
+  final String position;
 
   final double iconSize;
 
@@ -67,7 +76,7 @@ class UserTagRow extends StatelessWidget {
             ),
             for (final t in shown) ...[
               SizedBox(width: gap),
-              _TagIcon(tag: t, size: iconSize),
+              _TagIcon(tag: t, size: iconSize, position: position),
             ],
           ],
         );
@@ -88,10 +97,11 @@ class UserTagRow extends StatelessWidget {
 
 /// 单个标签图标；点一下弹提示层（四处行为一致）。
 class _TagIcon extends StatelessWidget {
-  const _TagIcon({required this.tag, required this.size});
+  const _TagIcon({required this.tag, required this.size, required this.position});
 
   final UserTag tag;
   final double size;
+  final String position;
 
   @override
   Widget build(BuildContext context) {
@@ -99,8 +109,15 @@ class _TagIcon extends StatelessWidget {
       key: ValueKey('userTag_${tag.code}'),
       behavior: HitTestBehavior.opaque,
       // 🛡 点标签只弹提示，**不触发外层的整块点击**（否则点标签会被跳进详情页）。
-      onTap: () => showAnchoredTooltip(context,
-          title: tag.name, message: tag.description),
+      onTap: () {
+        // E-15（Story 10.1 补齐）：`badge_id` 取 `code` —— 客户端手里没有数字 id，
+        // 而 code 是运营在后台配的稳定标识，改名不改码，正适合当看板维度。
+        Analytics.capture('user_badge_tooltip_opened', {
+          'badge_id': tag.code,
+          'position': position,
+        });
+        showAnchoredTooltip(context, title: tag.name, message: tag.description);
+      },
       child: SizedBox(
         width: size,
         height: size,

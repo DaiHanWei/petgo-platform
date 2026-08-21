@@ -406,6 +406,20 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
         ref.invalidate(shareFabAnimatedShownProvider);
       },
       onPressed: (origin) async {
+        // E-23 `pet_card_share_tapped`（Story 10.1 补齐）：**FR-92 这条漏斗的起点**。
+        // 「名片分享 → 下载转化」此前一处埋点都没有，E-24 ÷ E-23 才算得出
+        // 「分享出去到底有没有人点」。
+        //
+        // 🔴 `has_milestone` 判据是「**除建档那条之外**还有没有已完成里程碑」，
+        //    不是「里程碑数 > 0」。建档动作本身就会自动完成一条（C-S1「Profil dibuat」），
+        //    所以任何档案都 ≥ 1 —— 按 `> 0` 判会让这个属性**恒为 true**、彻底没用。
+        //    1-2 在 H5 的 `page_state` 上正是踩过这个坑（见 CardPageAnalytics 的注释）。
+        //    这里用页头已经加载好的统计数，不额外发请求。
+        final done = ref.read(archiveStatsProvider).asData?.value.milestoneCompleted;
+        Analytics.capture('pet_card_share_tapped', {
+          'entry': 'archive_header',
+          'has_milestone': (done ?? 0) > 1,
+        });
         // 传按钮矩形作 iOS 分享面板锚点 + await + 兜错（bug 20260707：iOS 点了没反应）。
         try {
           await ref.read(shareServiceProvider)(

@@ -2,6 +2,9 @@ package com.tailtopia.content.web;
 
 import com.tailtopia.content.dto.SharedPostResponse;
 import com.tailtopia.content.service.ContentShareService;
+import com.tailtopia.content.service.PostSharePageAnalytics;
+import com.tailtopia.shared.analytics.AnonymousVisitorId;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.time.ZoneId;
 import java.util.Optional;
@@ -32,16 +35,19 @@ import org.springframework.web.bind.annotation.PathVariable;
 public class ContentSharePageController {
 
     private final ContentShareService shareService;
+    private final PostSharePageAnalytics analytics;
     private final String downloadUrl;
     private final String iosUrl;
     private final String androidUrl;
 
     public ContentSharePageController(ContentShareService shareService,
+            PostSharePageAnalytics analytics,
             @Value("${petgo.card.app-download-url:https://petgo.example/download}") String downloadUrl,
             @Value("${petgo.card.ios-url:https://apps.apple.com/app/petgo}") String iosUrl,
             @Value("${petgo.card.android-url:https://play.google.com/store/apps/details?id=com.tailtopia.app}")
                     String androidUrl) {
         this.shareService = shareService;
+        this.analytics = analytics;
         this.downloadUrl = downloadUrl;
         this.iosUrl = iosUrl;
         this.androidUrl = androidUrl;
@@ -49,7 +55,13 @@ public class ContentSharePageController {
 
     @GetMapping("/c/{shareToken}")
     public String sharedPost(@PathVariable String shareToken, Model model,
-            HttpServletResponse response) {
+            HttpServletRequest request, HttpServletResponse response) {
+        // 埋点 E-14（Story 10.1）：匿名访客标识复用名片页那个 tt_vid cookie ——
+        // 同一个人先点名片、后点某条内容，在看板上要串成同一条路径。
+        String visitorId = AnonymousVisitorId.resolveOrIssue(request, response);
+        // 🛡 **在成功/失效分叉之前报**：失效也是要看的数（见 PostSharePageAnalytics 注释）。
+        analytics.linkOpened(visitorId, request);
+
         Optional<SharedPostResponse> opt = shareService.findSharedPost(shareToken);
         if (opt.isEmpty()) {
             response.setStatus(HttpServletResponse.SC_NOT_FOUND);

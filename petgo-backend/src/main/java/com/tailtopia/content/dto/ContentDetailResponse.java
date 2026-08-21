@@ -3,6 +3,7 @@ package com.tailtopia.content.dto;
 import com.tailtopia.auth.dto.AuthorView;
 import com.tailtopia.content.domain.ContentPost;
 import com.tailtopia.content.domain.ContentType;
+import com.tailtopia.content.domain.ContentVisibility;
 import java.time.Instant;
 import java.util.List;
 
@@ -33,6 +34,15 @@ public record ContentDetailResponse(
         long commentCount,
         boolean liked,
         boolean isAuthor,
+        /**
+         * 可见性（V1.1.6 Story 10.1 补下发）。<b>恒下发</b>，与 {@code FeedItemResponse} 同口径。
+         *
+         * <p>补它的唯一理由是埋点 E-11 的 {@code is_private_diary} —— 那是个<b>加粗属性</b>，
+         * 用来回答「用户到底会不会把私密日记分享出去」。分享私密内容本身是<b>允许</b>的
+         * （AD-15 Rule 6：visibility 约束平台自动分发，不约束用户自己按分享键），
+         * 所以这个数是产品判断，不是拦人的依据。
+         */
+        ContentVisibility visibility,
         Instant createdAt) {
 
     public static ContentDetailResponse of(ContentPost p, AuthorView author, long likeCount,
@@ -43,6 +53,7 @@ public record ContentDetailResponse(
                 author.deleted(), author.tags().isEmpty() ? null : author.tags(),
                 (decorationTags == null || decorationTags.isEmpty()) ? null : decorationTags,
                 p.getType(), p.getText(), p.getImageUrls(),
-                likeCount, commentCount, liked, isAuthor, p.getCreatedAt());
+                likeCount, commentCount, liked, isAuthor, p.getVisibility(),
+                p.getCreatedAt());
     }
 }

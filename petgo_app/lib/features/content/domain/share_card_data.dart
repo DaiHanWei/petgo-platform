@@ -34,6 +34,13 @@ class ShareCardData {
   /// 🛡 **有没有图，是选模板的唯一判据**（AD-15 Rule 3）。
   bool get hasImage => (imageUrl ?? '').isNotEmpty;
 
+  /// 印进二维码的那一份 URL：比 [shareUrl] 多一个 `?src=qr`（Story 10.1 · 埋点 E-14）。
+  ///
+  /// 🔴 **只有码里带标记，才分得出"扫码进来"和"点链接进来"**。
+  /// 已带查询串的 URL 用 `&` 续接 —— 现在的链接形状没有查询串，
+  /// 但把这个判断写在这里，将来加了参数也不会拼出两个 `?`。
+  String get qrUrl => shareUrl.contains('?') ? '$shareUrl&src=qr' : '$shareUrl?src=qr';
+
   factory ShareCardData.fromDetail(
     ContentDetail detail, {
     required String shareUrl,

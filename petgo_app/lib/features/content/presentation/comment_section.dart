@@ -351,6 +351,7 @@ class _CommentTile extends StatelessWidget {
                     // V1.1.6 Story 5.1：评论区昵称旁挂运营标签（四处展示位之一）。
                     // ⚠️ 一页评论可达数十条 —— 标签是随作者投影**整批**取回来的，这里没有任何逐条查询。
                     child: UserTagRow(
+                      position: 'comment',
                       name: name,
                       nameStyle: AppTypography.caption.copyWith(fontWeight: FontWeight.w600),
                       tags: comment.authorDeleted ? const [] : comment.authorTags,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/analytics/analytics.dart';
 import '../../core/theme/colors.dart';
 import '../../features/content/domain/content_tag.dart';
 import 'anchored_tooltip.dart';
@@ -12,18 +13,36 @@ import 'anchored_tooltip.dart';
 /// - [ContentTagChip.overlay]：叠在图片上（首页卡左下角位、详情页首图角落）—— 深底白字，图片明暗都压得住。
 /// - [ContentTagChip.inline]：正文下方单独一行的小胶囊（详情页**无图**时用）。
 class ContentTagChip extends StatelessWidget {
-  const ContentTagChip._({super.key, required this.tag, required this.onImage});
+  const ContentTagChip._({
+    super.key,
+    required this.tag,
+    required this.onImage,
+    required this.position,
+  });
 
   /// 叠在图片上的形态。
-  const ContentTagChip.overlay({Key? key, required ContentTag tag})
-      : this._(key: key, tag: tag, onImage: true);
+  const ContentTagChip.overlay({
+    Key? key,
+    required ContentTag tag,
+    required String position,
+  }) : this._(key: key, tag: tag, onImage: true, position: position);
 
   /// 正文下方的形态（无图时）。
-  const ContentTagChip.inline({Key? key, required ContentTag tag})
-      : this._(key: key, tag: tag, onImage: false);
+  const ContentTagChip.inline({
+    Key? key,
+    required ContentTag tag,
+    required String position,
+  }) : this._(key: key, tag: tag, onImage: false, position: position);
 
   final ContentTag tag;
   final bool onImage;
+
+  /// 这个标签长在哪儿（埋点 E-16 的 `position`）：`feed` / `detail` / `diary`。
+  ///
+  /// 🔴 **与形态（overlay/inline）不是一回事**：详情页首图角落是 overlay、
+  /// 详情页无图时是 inline，两者的 `position` 都是 `detail`。
+  /// 拿 `onImage` 反推展示位会把这两种情况记成两个地方。
+  final String position;
 
   @override
   Widget build(BuildContext context) {
@@ -31,8 +50,14 @@ class ContentTagChip extends StatelessWidget {
       key: ValueKey('contentTag_${tag.code}'),
       behavior: HitTestBehavior.opaque,
       // 🛡 点标签只弹提示、**不触发外层的整块点击**（否则点标签会被跳进详情页）。
-      onTap: () =>
-          showAnchoredTooltip(context, title: tag.name, message: tag.description),
+      onTap: () {
+        // E-16（Story 10.1 补齐）。`badge_id` 同 E-15 取 `code`。
+        Analytics.capture('content_badge_tooltip_opened', {
+          'badge_id': tag.code,
+          'position': position,
+        });
+        showAnchoredTooltip(context, title: tag.name, message: tag.description);
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(

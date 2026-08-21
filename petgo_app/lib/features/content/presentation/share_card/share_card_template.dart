@@ -234,7 +234,9 @@ class ShareCardTemplate extends StatelessWidget {
                 ],
               ),
             ),
-            CardQr(data: data.shareUrl, side: _qrSide),
+            // 🔴 码里印的是带 `?src=qr` 的变体 —— 见 [ShareCardData.qrUrl]。
+            // 印 shareUrl 会让 E-14 的 open_method 永远分不出 qr。
+            CardQr(data: data.qrUrl, side: _qrSide),
           ],
         ),
       ],

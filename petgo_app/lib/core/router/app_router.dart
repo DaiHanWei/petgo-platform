@@ -9,6 +9,7 @@ import 'deep_link_routes.dart';
 import '../theme/app_theme.dart';
 
 import '../../features/auth/domain/auth_state.dart';
+import '../../features/auth/domain/login_guide_controller.dart';
 import '../../features/auth/domain/user_state.dart';
 import '../../features/auth/presentation/dev_login_guide_page.dart';
 import '../../features/auth/presentation/login_page.dart';
@@ -789,7 +790,13 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/pet/:token',
-        builder: (c, s) => GrowthArchivePage(visitorToken: s.pathParameters['token']),
+        builder: (c, s) {
+          // E-27（Story 10.1）：从名片分享链接深链进来的**已装用户**，
+          // 若之后在本次进程里注册，把这笔注册归因给 `pet_card`。
+          // ⚠️ 这一页自己没有注册入口，所以归因必须跨页留痕 —— 见 markPetCardEntry 的注释。
+          LoginGuideController.markPetCardEntry();
+          return GrowthArchivePage(visitorToken: s.pathParameters['token']);
+        },
         routes: [
           GoRoute(
             path: 'day',

@@ -235,6 +235,20 @@ void main() {
         // 🔴 名字由产品 2026-08-18 按命名规范定为 `post_share_card_sent`；
         //    story 明令**不许**改名（改名等于推翻已闭合的 OA-7），所以扩表、不改名。
         'post_',
+        // 用户运营标签（V1.1.6 FR-74 / Story 10.1 的 E-15）。模块是「用户身上的标签」——
+        // 它出现在四处**互不相干**的界面（首页卡、详情页、评论列表、迷你名片），
+        // 挂到任何单页前缀下都会误导（`social_badge_*` 会让人以为只有首页有）。
+        // 名字由产品定为 `user_badge_tooltip_opened`，扩表、不改名。
+        'user_',
+        // 内容装饰标签（V1.1.6 FR-75 / Story 10.1 的 E-16）。同上，跨首页/详情/Diary 三处。
+        // ⚠️ 表里原本没有 `content_`，而 `content_publish_submitted` 早已在用
+        // （见 legacyEvents）—— 这次是把它作为**正式模块**入表，不是为遗留事件放宽规则。
+        'content_',
+        // 宠物名片对外分享（V1.1.6 FR-92 / Story 10.1 的 E-23）。
+        // 🔴 与 App 内的 `diary_*` 刻意分开：`pet_card_*` 这一组四个事件里有三个是
+        //    **服务端从 H5 页上报**的（E-24~E-26），和 App 内的 Diary 页不是一回事。
+        //    共用前缀会让人把两组数混着看。
+        'pet_card_',
       ];
       // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
       const allowedSuffixes = <String>[
@@ -259,6 +273,17 @@ void main() {
         //    「completed 不如 sent 明确」：我们只知道递出去了，不知道对方到底发没发出。
         //    `_completed` 会让人误读成"分享成功送达"。
         '_sent',
+        // 出图完成（V1.1.6 Story 10.1 的 E-12 `post_share_card_generated`）：
+        // `_generated` = **系统产出了一个东西**，与用户动作（_tapped）分得开。
+        // 🔴 刻意不并进 `_completed`：这条事件的价值全在 `duration_ms`（生成基建性能），
+        //    它衡量的是机器而不是人，混进"用户完成了某步"那一档会让口径含混。
+        '_generated',
+        // 提示层被打开（V1.1.6 Story 10.1 的 E-15/E-16 tooltip）：
+        // `_opened` = **用户的动作让某个东西打开了**，与 `_viewed`（被动曝光、用户没做什么）
+        // 是两回事。tooltip 必须点一下才出来，记成 `_viewed` 会让它和真正的曝光事件
+        // 在同一维度上被拿来比。
+        // ⚠️ 也正因为这条界线，E-17 通知中心用的是 `_viewed`（打开页面即曝光，不是点某个东西）。
+        '_opened',
       ];
       for (final e in eventNamesInSource()) {
         if (legacyEvents.contains(e)) continue;

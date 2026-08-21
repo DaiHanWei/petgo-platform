@@ -110,7 +110,7 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> with WidgetsBinding
       showSheet: () async {
         final ctx = rootNavigatorKey.currentContext;
         if (ctx == null) return false;
-        return PhoneEditSheet.open(ctx, entry: 'soft_prompt');
+        return PhoneEditSheet.openDetailed(ctx, entry: 'soft_prompt');
       },
     );
   }

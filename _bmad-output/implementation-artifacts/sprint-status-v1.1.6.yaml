@@ -189,7 +189,7 @@ development_status:
   # ===== Epic 10: 埋点收尾（App 侧） =====
   # 依赖前述各 Epic 的功能须先在。E-3 已随 Epic 4 交付，不在此。
   epic-10: in-progress
-  10-1-app侧剩余埋点与回写全局文档: ready-for-dev           # ✅ OA-7 已闭合（2026-08-18 定案改名）：实现按新名，见埋点清单 §1 的新旧对照表
+  10-1-app侧剩余埋点与回写全局文档: review           # ✅ OA-7 已闭合（2026-08-18 定案改名）：实现按新名，见埋点清单 §1 的新旧对照表
   epic-10-retrospective: optional
 
   # ===== Epic 11：运营后台配置补齐（2026-08-21 拆入）=====

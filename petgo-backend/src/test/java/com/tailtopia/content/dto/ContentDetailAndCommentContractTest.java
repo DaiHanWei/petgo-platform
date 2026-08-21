@@ -45,12 +45,18 @@ class ContentDetailAndCommentContractTest {
                 List.of(new ContentTagView("editor_pick", "编辑推荐", "🏆", "被官方选中的优质内容")),
                 ContentType.DAILY, "正文",
                 List.of("https://cdn/1.jpg", "https://cdn/2.jpg"), 5L, 2L, true, false,
+                // V1.1.6 Story 10.1：**恒下发**（与 FeedItemResponse 同口径）。
+                // 补它的唯一理由是埋点 E-11 的加粗属性 is_private_diary。
+                com.tailtopia.content.domain.ContentVisibility.PRIVATE,
                 Instant.parse("2026-06-05T00:00:00Z"));
 
         assertThat(wire(d).keySet()).isEqualTo(Set.of(
                 "id", "authorId", "authorNickname", "authorAvatarUrl", "authorDeleted",
                 "authorTags", "decorationTags", "type",
-                "body", "imageUrls", "likeCount", "commentCount", "liked", "isAuthor", "createdAt"));
+                "body", "imageUrls", "likeCount", "commentCount", "liked", "isAuthor",
+                "visibility", "createdAt"));
+        // 线格式是枚举名大写（客户端按字符串比 PRIVATE / PUBLIC，不做数字映射）。
+        assertThat(wire(d)).containsEntry("visibility", "PRIVATE");
     }
 
     @Test

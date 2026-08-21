@@ -131,6 +131,7 @@ class MasonryCard extends StatelessWidget {
                           // V1.1.6 Story 5.1：昵称旁挂运营标签（四处展示位之一）。
                           // 🛡 空间不足时**昵称完整优先、标签丢弃**，不截断昵称、不做「+N」折叠。
                           child: UserTagRow(
+                            position: 'feed',
                             name: name,
                             nameStyle: const TextStyle(
                                 fontSize: 13.5,
@@ -195,7 +196,7 @@ class MasonryCard extends StatelessWidget {
                     bottomLeft: decorTag ??
                         (item.decorationTags.isEmpty
                             ? null
-                            : ContentTagChip.overlay(tag: item.decorationTags.first)),
+                            : ContentTagChip.overlay(tag: item.decorationTags.first, position: 'feed')),
                   ),
               ],
             ),
