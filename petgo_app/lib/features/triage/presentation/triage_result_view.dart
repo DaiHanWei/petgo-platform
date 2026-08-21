@@ -40,7 +40,6 @@ class TriageResultView extends ConsumerWidget {
 
   /// 从历史记录回看：红色态跳过强制阅读倒计时（历史不该再等）。首次生成保持锁定。
   final bool fromHistory;
-
   /// 解锁后用已解锁结果覆盖（Story 2.4）：现金/同步解锁成功 → 结果页去 paywall、显详建。
   TriageResult _resolveResult(WidgetRef ref) {
     final int? id = triageId;

@@ -113,8 +113,6 @@ public class AccountDeletionService {
                 .merge(triageDeletion.deleteByUserId(userId))
                 .merge(consultAnonymization.anonymizeByUserId(userId));
         notificationDeletion.deleteByUserId(userId);
-        // PawCoin 余额作废（Story 1.6，FR-50D）：写 FORFEITURE 终结分录归零 + 物理删钱包/流水；在删 user 行前。
-        pawCoinDeletion.voidBalanceAndPurge(userId);
 
         // 内容审核 story 9 注销联动（§5.5）：必须在 user 行删除【前】完成——此时 author_id 仍可识别其内容。
         //  ① 帖子/评论对他人隐藏（AUTHOR_DEACTIVATED，保留匿名化，可见性层≠7-3显示层匿名化，D-CM4）；
@@ -124,6 +122,8 @@ public class AccountDeletionService {
         reviewService.removePendingForAuthor(userId);
         violationCountService.deleteByAccount(userId);
 
+        // PawCoin 余额作废（Story 1.6，FR-50D）：写 FORFEITURE 终结分录归零 + 物理删钱包/流水；在删 user 行前。
+        pawCoinDeletion.voidBalanceAndPurge(userId);
         // auth 最后删（用户行删除后 UGC 即匿名）；收头像图。
         media = media.merge(authDeletion.deleteByUserId(userId));
 

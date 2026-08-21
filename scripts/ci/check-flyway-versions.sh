@@ -4,7 +4,11 @@
 # 规则：
 #   1. 树内同一版本号只能出现一次（同号不同文件 = Flyway 启动即崩）。
 #   2. 已合入 main 的迁移文件冻结：不得修改、不得删除（改表另起新迁移）。
+#      —— 真实约束是「已被任何环境应用过的迁移不能再改」，改了 checksum 对不上，
+#         Flyway 启动即拒。「在 main 上」只是 CI 能查到的最佳代理判据。
 #   3. 新增迁移一律时间戳版本号 V<yyyyMMdd_HHmm>__<snake_case>.sql，禁止序列号。
+#      —— 例外：scripts/ci/flyway-legacy-versions.txt 列出的存量序号迁移保留原号，
+#         它们早于时间戳制、且多已应用到 prod/petgo_stag，改名会让 Flyway 起不来。
 #   4. 新增迁移的版本号不得与 main 上任何已有版本号相同。
 #
 # 用法：
@@ -16,6 +20,13 @@ MIG_DIR="petgo-backend/src/main/resources/db/migration"
 BASE_REF="${1:-}"
 # 时间戳格式：V20260821_1435__init_shop_orders.sql
 TS_REGEX='^V20[0-9]{2}(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])_([01][0-9]|2[0-3])[0-5][0-9]__[a-z0-9_]+\.sql$'
+# 存量序号迁移基线：时间戳制确立前已存在的序号，保留原号、免于格式检查。
+LEGACY_FILE="$(dirname "${BASH_SOURCE[0]}")/flyway-legacy-versions.txt"
+legacy_versions=""
+if [[ -f "$LEGACY_FILE" ]]; then
+  legacy_versions=$(grep -E '^[0-9]+$' "$LEGACY_FILE" || true)
+fi
+is_legacy() { [[ -n "$legacy_versions" ]] && grep -qx "$1" <<<"$legacy_versions"; }
 fail=0
 
 # 文件名 → Flyway 版本号（Flyway 把版本段里的 _ 规范化为 .，V101 与 V101 同号，V20260821_1435 → 20260821.1435）
@@ -51,7 +62,7 @@ if [[ -n "$BASE_REF" ]]; then
     [[ -z "$f" ]] && continue
     fname=$(basename "$f")
     if git cat-file -e "origin/main:$MIG_DIR/$fname" 2>/dev/null; then
-      echo "::error file=$f::已合入 main 的迁移文件被修改或删除。已提交迁移冻结，改表请另起新迁移（决策 E6/E2）"
+      echo "::error file=$f::已合入 main 的迁移文件被修改或删除。已应用的迁移改动会导致 Flyway checksum 校验失败、启动即拒；改表请另起新迁移"
       fail=1
     fi
   done < <(git diff --name-only --diff-filter=MDR "$base" HEAD -- "$MIG_DIR")
@@ -60,14 +71,19 @@ if [[ -n "$BASE_REF" ]]; then
   while read -r f; do
     [[ -z "$f" ]] && continue
     fname=$(basename "$f")
+    v=$(extract_version "$fname")
+    # 存量序号迁移（早于时间戳制、多已应用到 prod/petgo_stag）保留原号，不强制改名。
+    if is_legacy "$v"; then
+      echo "flyway-guard: 放行存量序号迁移 ${fname}（在 legacy 基线内）"
+      continue
+    fi
     if ! grep -qE "$TS_REGEX" <<<"$fname"; then
-      echo "::error file=$f::新迁移必须用时间戳版本号 V<yyyyMMdd_HHmm>__<snake_case>.sql（如 V20260821_1435__init_shop_orders.sql），禁止序列号（决策 E6）"
+      echo "::error file=$f::新迁移必须用时间戳版本号 V<yyyyMMdd_HHmm>__<snake_case>.sql（如 V20260821_1435__init_shop_orders.sql）。序列号已停用；仅 scripts/ci/flyway-legacy-versions.txt 内的存量号例外"
       fail=1
       continue
     fi
-    v=$(extract_version "$fname")
     if grep -qx "$v" <<<"$main_versions"; then
-      echo "::error file=$f::版本号 $v 与 main 上已有迁移撞号，请换一个时间（决策 E6）"
+      echo "::error file=$f::版本号 $v 与 main 上已有迁移撞号，请换一个时间（同号 = Flyway 启动即崩）"
       fail=1
     fi
   done < <(git diff --name-only --diff-filter=A "$base" HEAD -- "$MIG_DIR")

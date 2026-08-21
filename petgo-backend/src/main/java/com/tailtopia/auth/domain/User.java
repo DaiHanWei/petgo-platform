@@ -45,10 +45,6 @@ public class User {
     @Column(name = "nickname", length = 20)
     private String nickname;
 
-    /** 一句话个性签名（bug 20260721-327，用户级，区别于宠物档案 intro）；≤60，可空。 */
-    @Column(name = "signature", length = 60)
-    private String signature;
-
     /**
      * 昵称当前是否为违规重置生成的系统默认编码名（{@code user_<hex>}，内容审核 story 4，D-CM4）。
      * 违规重置 ≠ 注销匿名化：此标记只随违规重置写入的真实昵称，与 7.3「已注销用户」展示层无关。
@@ -60,6 +56,9 @@ public class User {
     /** 语言偏好（bug 20260625-105）：由 App 请求 Accept-Language 捕获，'id'/'en'；空=默认 id。供系统推送文案本地化。 */
     @Column(name = "locale", length = 8)
     private String locale;
+    /** 一句话个性签名（bug 20260721-327，用户级，区别于宠物档案 intro）；≤60，可空。 */
+    @Column(name = "signature", length = 60)
+    private String signature;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "pet_status", length = 8)
@@ -240,14 +239,6 @@ public class User {
         this.avatarUrl = avatarUrl;
     }
 
-    public String getSignature() {
-        return signature;
-    }
-
-    public void setSignature(String signature) {
-        this.signature = signature;
-    }
-
     public String getLocale() {
         return locale;
     }
@@ -255,6 +246,14 @@ public class User {
     /** 语言偏好（bug 20260625-105）：'id'/'en'，由 Accept-Language 捕获。 */
     public void setLocale(String locale) {
         this.locale = locale;
+    }
+
+    public String getSignature() {
+        return signature;
+    }
+
+    public void setSignature(String signature) {
+        this.signature = signature;
     }
 
     public String getNickname() {
@@ -311,6 +310,16 @@ public class User {
         return deletedAt;
     }
 
+    /** 注销前 email 快照（仅后台展示）。 */
+    public String getDeletedEmail() {
+        return deletedEmail;
+    }
+
+    /** 注销前 displayName 快照（仅后台展示）。 */
+    public String getDeletedDisplayName() {
+        return deletedDisplayName;
+    }
+
     public AccountType getAccountType() {
         return accountType;
     }
@@ -334,16 +343,6 @@ public class User {
     /** 虚拟账号发布计数 +1（Story 9.8 Part 2 批量种子）。 */
     public void incrementPublished() {
         this.publishedCount++;
-    }
-
-    /** 注销前 email 快照（仅后台展示）。 */
-    public String getDeletedEmail() {
-        return deletedEmail;
-    }
-
-    /** 注销前 displayName 快照（仅后台展示）。 */
-    public String getDeletedDisplayName() {
-        return deletedDisplayName;
     }
 
     /**

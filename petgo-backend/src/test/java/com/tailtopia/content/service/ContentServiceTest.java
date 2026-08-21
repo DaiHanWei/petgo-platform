@@ -427,18 +427,6 @@ class ContentServiceTest {
         verify(posts, never()).save(any(ContentPost.class));
     }
 
-    @Test
-    void countGrowthMomentsIncludesUnderReview() {
-        // bug 20260728-379：统计口径含审核中（timeline 不过滤 status，统计卡只数 PUBLISHED 会 5 发 3 计）。
-        when(posts.countByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndStatusIn(1L, 9L,
-                ContentType.GROWTH_MOMENT,
-                List.of(com.tailtopia.content.domain.PostStatus.PUBLISHED,
-                        com.tailtopia.content.domain.PostStatus.UNDER_REVIEW)))
-                .thenReturn(5L);
-
-        assertThat(service.countGrowthMoments(1L, 9L)).isEqualTo(5L);
-    }
-
     // ---- 内容审核 cm-6：P0 举报预处置 hold / 误报恢复（关键：恢复不得双 fire ContentPublishedEvent） ----
 
     @Test
@@ -495,6 +483,18 @@ class ContentServiceTest {
 
         verify(posts, never()).save(any(ContentPost.class));
         verify(events, never()).publishEvent(any());
+    }
+
+    @Test
+    void countGrowthMomentsIncludesUnderReview() {
+        // bug 20260728-379：统计口径含审核中（timeline 不过滤 status，统计卡只数 PUBLISHED 会 5 发 3 计）。
+        when(posts.countByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndStatusIn(1L, 9L,
+                ContentType.GROWTH_MOMENT,
+                List.of(com.tailtopia.content.domain.PostStatus.PUBLISHED,
+                        com.tailtopia.content.domain.PostStatus.UNDER_REVIEW)))
+                .thenReturn(5L);
+
+        assertThat(service.countGrowthMoments(1L, 9L)).isEqualTo(5L);
     }
 
     private static com.tailtopia.content.domain.Comment newComment(long id) {

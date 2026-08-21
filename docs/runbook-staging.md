@@ -295,6 +295,72 @@ git push origin stag                    # ⚠️ 需你明确同意；shared 分
 - ⚠️ **绝不要把裸功能分支直接部署到 `petgo_stag`**：功能分支缺其它功能的迁移文件 → Flyway 报 missing migration、容器起不来。**一律先合进 `stag`，再部署 `stag`**（部署走 §D/§G）。
 - **`out-of-order=true` 已开**（`application.yml` `spring.flyway.out-of-order`）：功能按「谁测好谁先上」顺序合 `main`，生产 apply 顺序**非单调**（如先上 V60-83、后补 V47-56 的低号），必须开此开关，否则后上的功能在生产 `validate` 失败。
 - **号段纪律（决策 E2）**：新功能迁移号取**当前全局 max 之后**顺延；已提交迁移**冻结**，改动一律**新起 `ALTER`**，绝不改旧文件（改旧文件会破坏已部署环境的 checksum 校验）。
+- ⚠️ **「全局 max」是全部远端分支的 max，不是你知道的那两条**。各条线「从自己的基座往后顺延」，
+  只要漏盘一条分支，两条线就会顺延到同一个号上（2026-08-20 实际发生，见 §I）。取号前跑一次：
+  ```bash
+  for b in $(git branch -r | grep -v HEAD); do
+    git ls-tree -r --name-only $b -- petgo-backend/src/main/resources/db/migration
+  done | sed -n 's|.*/V\([0-9]*\)__.*|\1|p' | sort -n -u | tail -20
+  ```
+  号一旦在某个环境 **applied 过就动不了了**（动它＝已应用的迁移凭空消失 + 那次变更重跑）。
+  撞号时让号的一方是**还没落库的那一方**。
 
 ### H7 · 部署到 staging
 合并 + push 后，按 §D / §G 用 `scripts/deploy-backend-stag.sh` 部署（构建 stag → 8085 → Flyway 在 `petgo_stag` 上顺延应用新迁移）。
+
+---
+
+## I. 事故记录
+
+### I1 · 2026-08-20：staging 起不来（Flyway 并集缺口）
+
+**现象**：stag 部署后容器反复重启（`docker ps` 的 uptime 在 2~9 秒之间来回），
+`/actuator/health` 无响应。日志：
+
+```
+Validate failed: Migrations have failed validation
+Detected applied migration not resolved locally: 105.
+Detected applied migration not resolved locally: 106.
+```
+
+**根因**：`hex/v1.1.4` 与 `hex/v1.1.6` 两条**裸功能分支都被直接部署过 `petgo_stag`**
+（违反 §H6 第二条）。1.1.6 那次把它的 V105（宠物性别）/ V106（图片尺寸列）applied 进了库，
+而 stag 分支没有这两个文件 → validate 报「已应用但本地找不到」。
+
+⚠️ **这个坑潜伏了一段时间**：当时在跑的老镜像同样缺这两个文件，只是它启动在那两个迁移被
+applied **之前**，所以一直活着。**任何一次重启都会崩** —— 不重启就发现不了。后来那次部署
+只是触发者，不是根因。
+
+**处理**：按 §H6 第一条把 1.1.6 的 V105/V106 **按原字节**纳入 stag（checksum 必须与已 applied
+的一致，所以从对方分支 `git checkout` 原样取、绝不重写）。两者都是纯加列，stag 上没有对应
+读写代码也无害 —— `ddl-auto=validate` 只查实体缺列，不管库里多列。
+
+**同时暴露的撞号**：1.1.6 的 `V107__fix_notifications_cursor_index` 与 stag 的
+`V107__backfill_view_tickets_permission` 同号不同内容（后者已 applied）。两个文件同处一棵树
+会直接 `Found more than one migration with version 107` 启动即崩，只留一个则 checksum 失败。
+由**还没落库的**那一方（1.1.6）改号到 V126 —— 取 126 是因为**全仓 100–125 已全部占用**
+（1.1.4 占 101–104 与 107、1.1.6 占 105–112、`shawn/oneline-ecommerce` 占 113–125）。
+
+**教训**
+1. **§H6 第二条不是建议**。裸功能分支部署 staging 会在库里攒出「没有任何单一分支覆盖得住」
+   的迁移并集，代价是之后每条线都起不来，且**下次重启才爆**。
+2. 取号要盘**全部远端分支**（§H6 已补命令）。
+3. 排障顺序：`ps` 看 uptime **是否在回落**（回落＝崩溃重启，不是"还在启动"）→
+   `logs` 抓 `Caused by` 最深一层，别停在最外层的 `Unable to start web server`。
+
+### I2 · 2026-08-20：put-build 报错指错了地方
+
+**现象**：`deploy-backend-stag-pm.sh` 上传被拒 —— `DENIED: build 包缺 Dockerfile.deploy`。
+包在本地验过，条目齐全；同一个 jar 重试一次就成功了。
+
+**根因**：**上传截断**。服务器端 `do_put_build` 先判「缺哪个条目」，而 `tar -tzf` 读到断口前
+一个条目都列不出来 → 报成「缺文件」，把人引去查打包脚本。
+
+**处理**：`stag-ops-server.sh` 改成**先判包能不能解开、再判缺哪个条目**，并单独判「大小恰好
+等于 `MAX_TAR_BYTES`」（`head -c` 削尾后仍是合法 gzip 前缀，解得出部分条目，不独立判就漏）。
+客户端加上传前本地完整性校验 + 把服务器拒绝翻译成「多为传输截断，直接重试」。
+⚠️ 服务器端那份改动**要 Dai 重装 `/home/hex/bin/stag-ops.sh` 才生效**（见 §A 第 2 步）。
+
+**顺带纠正一个误判**：当时以为「脚本失败却返回 0」。实际脚本已正确中止（`set -e` + `deny`
+的 `exit 1`），那个 0 来自调用方自己的管道（`./deploy... | tail -6` 的退出码取自 `tail`）。
+**判断部署成败看脚本最后那行 `✓`，或别用管道** —— 脚本注释里也写了这条。

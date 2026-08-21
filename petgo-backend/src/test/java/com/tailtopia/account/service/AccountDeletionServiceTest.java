@@ -52,8 +52,7 @@ class AccountDeletionServiceTest {
     private AccountDeletionService service() {
         return new AccountDeletionService(deletions, profileDeletion, triageDeletion,
                 consultAnonymization, notificationDeletion, pawCoinDeletion, authDeletion,
-                mediaDeletion, imClient, events,
-                contentService, reviewService, violationCountService);
+                mediaDeletion, imClient, events, contentService, reviewService, violationCountService);
     }
 
     private AccountDeletion pending(long id, long userId) {

@@ -148,7 +148,7 @@ public class SecurityConfig {
                                 "/swagger-ui.html", "/p/**", "/m/**").permitAll()
                         // 品牌静态资源（H5 名片/分享页左上角 wordmark，bug 20260701-182）公开放行。
                         .requestMatchers(HttpMethod.GET, "/brand/**").permitAll()
-                        // 法律政策 H5（隐私政策 / 服务条款 / 账号删除 / 儿童安全标准 / 支持页）+ 下载引导落地页公开放行
+                        // 法律政策 H5（隐私 / 条款 / Mitra 条款 / 账号删除 / 儿童安全 / 支持）+ 下载引导落地页公开放行（商店上架 + App WebView 引用）
                         .requestMatchers(HttpMethod.GET, "/privacy", "/terms", "/mitra-terms",
                                 "/account-deletion", "/child-safety", "/support", "/get").permitAll()
                         // dev 诊断端点（仅 dev profile 存在）+ 错误转发

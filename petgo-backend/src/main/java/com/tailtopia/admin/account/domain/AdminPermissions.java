@@ -182,8 +182,13 @@ public final class AdminPermissions {
                     SHOP_ORDER_FULFILL)));
 
     /** 全部合法权限码（UI 勾选项 + 校验白名单），保持模块分组顺序。 */
-    public static final List<String> ALL = GROUPS.stream()
-            .flatMap(group -> group.permissionCodes().stream())
+    // 采用 v1.1-dev 的 GROUPS 派生模型（更细粒度权限，为 stag 硬编码列表的超集）。
+    // 唯一例外：CONTENT_MANUAL_REVIEW（人工审核）在 GROUPS 重构中被漏纳，而两分支都仍保留
+    // 人工审核功能且以 content.manual_review 门控 → 合并时并集补回，避免静默漏权限。
+    public static final List<String> ALL = java.util.stream.Stream.concat(
+            GROUPS.stream().flatMap(group -> group.permissionCodes().stream()),
+            java.util.stream.Stream.of(CONTENT_MANUAL_REVIEW))
+            .distinct()
             .toList();
 
     private AdminPermissions() {

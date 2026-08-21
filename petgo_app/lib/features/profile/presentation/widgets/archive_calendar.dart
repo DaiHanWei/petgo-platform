@@ -72,13 +72,15 @@ class _ArchiveCalendarState extends ConsumerState<ArchiveCalendar> {
     );
   }
 
+  /// 表头（bug 20260623-047 统一风格）：月份名紫色标题（本地化「July 2026」）+ 右侧紫色左右切月箭头，
+  /// 对齐 date_picker_plus 观感。
   Widget _monthHeader() {
     return Row(
       children: [
         IconButton(
           key: const ValueKey('calPrevMonth'),
           onPressed: () => _shiftMonth(-1),
-          icon: const Icon(Icons.chevron_left_rounded),
+          icon: const Icon(Icons.chevron_left_rounded, color: AppColors.mint),
         ),
         Expanded(
           // A7 稿的 `cal-title` 是「Agustus 2026」这样的本地化月名；此前直接拼 `2026-08`，
@@ -86,12 +88,12 @@ class _ArchiveCalendarState extends ConsumerState<ArchiveCalendar> {
           child: Text(formatMonthYear(context, DateTime(_year, _month)),
               key: const ValueKey('calMonthTitle'),
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.mint)),
         ),
         IconButton(
           key: const ValueKey('calNextMonth'),
           onPressed: () => _shiftMonth(1),
-          icon: const Icon(Icons.chevron_right_rounded),
+          icon: const Icon(Icons.chevron_right_rounded, color: AppColors.mint),
         ),
       ],
     );
@@ -164,7 +166,7 @@ class _ArchiveCalendarState extends ConsumerState<ArchiveCalendar> {
           decoration: BoxDecoration(
               color: AppColors.card, borderRadius: BorderRadius.circular(10)),
           child: Text('$day',
-              style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.muted)),
         ),
       );
     }
@@ -202,7 +204,7 @@ class _ArchiveCalendarState extends ConsumerState<ArchiveCalendar> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text('$day', style: const TextStyle(fontSize: 12, color: AppColors.ink2)),
+            Text('$day', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink2)),
             const Text('+', style: TextStyle(fontSize: 13, color: AppColors.line)),
           ],
         ),
