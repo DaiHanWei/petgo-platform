@@ -205,6 +205,37 @@ development_status:
   11-4-用户手机号查看与召回名单导出: ready-for-dev         # AB-11A 前半（PII 双权限：查看 / 导出各一码）
   epic-11-retrospective: optional
 
+  # ===== Epic 12–15：种子内容发布整改（2026-08-21 拆入，后台 PRD 剩余六条）=====
+  # 与 Epic 11 的区别：那四条阻塞 App 侧已交付的功能；这六条不阻塞任何 App 功能，
+  # 但解决的是运营**实际在用后台时**撞到的三个痛点（单条发布连账号都没得选 / 图只能填 URL /
+  # 批量没有校验预览，提交即上线，50 行错 3 行就是 3 条线上真帖）。
+  #
+  # 🔴 依赖顺序不可乱排：
+  #   12-1 身份池 ──┬─→ 12-2 单条整改 ──┐
+  #                 └─→ 13-3 批量录入   ├─→ 14-1 物种标记（必须最后）
+  #   13-1 草稿/排期模型 ─→ 13-2/13-3/13-4 ─→ 13-5 定时发布
+  #   15-1 互动积分（完全独立，可任意插）
+  # 理由：12-1 是两处选择器的数据源；13-1 的草稿态与排期态是同一模型（先做"只支持立即发布"
+  #   会在同一处返工两次，OQ-21）；14-1 的两个触点挂在 12-2 的选择器与 13-3 的 Excel 模板上，
+  #   而那两处基础从未交付过（PRD §7.4 原文误以为已随 V1.1.0 落地）。
+  epic-12: backlog
+  12-1-运营发布身份池: ready-for-dev                        # AB-3I 🔴 必须最先；独立权限码 seed.publish_as_real，与 virtual_account.manage 解耦
+  12-2-单条发布整改: ready-for-dev                          # AB-3J 落地 V1.1.0 AB-1.1-03 两条从未交付的要求
+  epic-12-retrospective: optional
+  epic-13: backlog
+  13-1-草稿与排期状态机及批次模型: ready-for-dev            # AB-3K/3L 地基 🔴 状态挂行上、批次不持有状态；草稿不得写进 content_posts
+  13-2-批量素材上传与宽高比警告: ready-for-dev              # AB-3K Step1 🔴 清理对象是行不是批次（按批次清会删掉已排期的行）
+  13-3-批量内容录入在线与excel: ready-for-dev               # AB-3K Step0+2 🔴 粘贴分行限制必须界面明示（拆错不报错）
+  13-4-校验预览确认发布与去重口径修正: ready-for-dev        # AB-3K Step3 🔴 指纹加作者维度 + 删除时清理（现无清理→文案永久无法重发）
+  13-5-定时发布与排期管理: ready-for-dev                    # AB-3L 🛡 走既有发布链路含自动审核、无豁免
+  epic-13-retrospective: optional
+  epic-14: backlog
+  14-1-种子内容物种归属标记: ready-for-dev                  # AB-3H 🔴 必须排在 12-2 与 13-3 之后；读时推导、改账号定位零回填
+  epic-14-retrospective: optional
+  epic-15: backlog
+  15-1-内容互动积分与双口径统计: ready-for-dev              # AB-3G ✅ A-2 已闭合：赞/评时间戳都在（V9/V10），口径B 无需新增记录；本条零迁移
+  epic-15-retrospective: optional
+
 # ===== 开工前须知的开放问题（详见架构 delta §8） =====
 # 🔴 OA-2  阻塞 FR-70 上线：用户协议是否已覆盖「手机号用于运营召回与后续触达」
 #          （未覆盖则采集用途超出已获同意范围）—— 上线前由产品/法务确认
@@ -236,3 +267,13 @@ development_status:
 # 不在本轮：AB-3G 互动积分 / AB-3H 物种标记 / AB-3I~3L 种子内容整改（单独一轮）。
 #   它们不阻塞任何 App 侧功能，而本 Epic 四条阻塞。
 #   ⚠️ 若那一轮要拆，注意 AB-3H 必须排在 AB-3J / AB-3K 之后（其两处触点依赖它们提供的基础）。
+
+# ===== Epic 12–15 的 Flyway（2026-08-21）=====
+# 需要新迁移的：12-1（授权关联表）、13-1（批次表 + 行表）、13-4（去重指纹改主键为
+#   (content_hash, author_id)）、14-1（账号物种定位 + content_posts 可空覆写列）。
+# 零迁移的：12-2、13-2、13-3、13-5、15-1。
+# 🔴 一律时间戳号 V<yyyyMMdd_HHmm>__<snake_case>.sql（决策 E6，禁用序列号）；
+#   提交前自查 bash scripts/ci/check-flyway-versions.sh origin/main。
+#
+# 至此后台 PRD 八条全部拆完：Epic 11（AB-10A/10C/11A/12A）+ Epic 12–15（AB-3G/3H/3I/3J/3K/3L）。
+# 仍后移的两项：AB-11A 的批量催填推送（后台无面向用户的群发能力）；AB-3K 的整批撤回（OQ-22）。
