@@ -1,13 +1,12 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/agreement_links.dart';
 import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/analytics/analytics.dart';
-import '../../../core/config/legal_urls.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
@@ -78,13 +77,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   void _showBanner(String message) {
     if (!mounted) return;
     showAppToast(context, message);
-  }
-
-  Future<void> _open(String url) async {
-    final uri = Uri.tryParse(url);
-    if (uri != null) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
   }
 
   @override
@@ -187,14 +179,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 ),
                 const SizedBox(height: 8),
                 // 条款与隐私（FR-0D：两份可点链接，无勾选框）
-                _AgreementLinks(
-                  prefix: l10n.loginAgreementPrefix,
-                  terms: l10n.termsOfService,
-                  and: l10n.loginAgreementAnd,
-                  privacy: l10n.privacyPolicy,
-                  onTerms: () => _open(kTermsUrl),
-                  onPrivacy: () => _open(kPrivacyUrl),
-                ),
+                const AgreementLinks(),
                 const SizedBox(height: 12),
               ],
             ),
@@ -402,52 +387,6 @@ class _AuthButton extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-/// 协议链接（Text Link 模式，FR-0D：两份可点链接，**无勾选框**）。
-class _AgreementLinks extends StatelessWidget {
-  const _AgreementLinks({
-    required this.prefix,
-    required this.terms,
-    required this.and,
-    required this.privacy,
-    required this.onTerms,
-    required this.onPrivacy,
-  });
-
-  final String prefix;
-  final String terms;
-  final String and;
-  final String privacy;
-  final VoidCallback onTerms;
-  final VoidCallback onPrivacy;
-
-  @override
-  Widget build(BuildContext context) {
-    const baseStyle = TextStyle(fontSize: 10.5, color: AppColors.textDisclaimer, height: 1.7);
-    final linkStyle = baseStyle.copyWith(
-      color: AppColors.muted,
-      decoration: TextDecoration.underline,
-    );
-    return Wrap(
-      alignment: WrapAlignment.center,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        Text(prefix, style: baseStyle),
-        GestureDetector(
-          key: const ValueKey('termsLink'),
-          onTap: onTerms,
-          child: Text(terms, style: linkStyle),
-        ),
-        Text(and, style: baseStyle),
-        GestureDetector(
-          key: const ValueKey('privacyLink'),
-          onTap: onPrivacy,
-          child: Text(privacy, style: linkStyle),
-        ),
-      ],
     );
   }
 }

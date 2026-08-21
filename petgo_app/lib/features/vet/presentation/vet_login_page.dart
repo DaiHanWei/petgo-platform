@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/agreement_links.dart';
 import '../../../shared/widgets/customer_service_sheet.dart';
 import '../../auth/domain/auth_state.dart';
 import '../data/vet_repository.dart';
@@ -202,7 +203,10 @@ class _VetLoginPageState extends ConsumerState<VetLoginPage> {
                         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 10),
+            // 条款与隐私（FR-0D / 审核合规：登录 CTA 前必须展示 EULA 链接）。
+            const AgreementLinks(),
+            const SizedBox(height: 14),
             // 「Belum terdaftar?」分隔。
             Row(
               children: [
