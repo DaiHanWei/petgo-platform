@@ -562,6 +562,9 @@
   "triageRedAvoidHeader": "Do NOT",
   "triageRedCtaHint": "Button activates after you read the warning",
   "triageRedLevelLabel": "Urgent: high risk",
+  "vetPushGuideTitle": "Notifications are off",
+  "vetPushGuideBody": "You're online, but with notifications off you won't be alerted about new consultations.",
+  "vetPushGuideLater": "Later",
   "vetLoginLink": "Vet sign-in",
   "@vetLoginLink": {
     "description": "Small link below Google button leading to vet account login."

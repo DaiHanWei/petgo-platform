@@ -116,6 +116,33 @@ class PushPermissionPrompt {
   }) =>
       prefs.setBool(prefsKeyOf(point), true);
 
+  /// 曝光上报（E-19），**按 `trigger_point` 字面量**。
+  ///
+  /// 🔴 为什么要有这个"裸"入口：**触发点 5（兽医切为在线）刻意不在 [PushTriggerPoint] 里**。
+  /// 那个枚举的每个值都对应一个 prefs 标记键，而 AD-14 Rule 4 明令兽医端**无标记位**。
+  /// 把 `vetOnline` 加进那个枚举，就等于给它开了一个"可以有键"的口子 ——
+  /// 拆开之后，「兽医端没有键」在**结构上**就不可能被违反。
+  /// 兽医侧走 `lib/features/vet/domain/vet_push_permission_prompt.dart`，用本入口上报。
+  static Future<void> reportShownRaw(String triggerPoint) => Analytics.capture(
+        'push_permission_prompt_shown',
+        {
+          'trigger_point': triggerPoint,
+          // 🛡 AD-14 Rule 6：恒为 in_app_guide（见 reportShown 的说明）。
+          'prompt_type': 'in_app_guide',
+        },
+      );
+
+  /// 响应上报（E-20），按 `trigger_point` 字面量。理由同 [reportShownRaw]。
+  static Future<void> reportRespondedRaw(String triggerPoint, PushPromptResult result) =>
+      Analytics.capture(
+        'push_permission_responded',
+        {
+          'trigger_point': triggerPoint,
+          'prompt_type': 'in_app_guide',
+          'result': _resultValueOf(result),
+        },
+      );
+
   /// 曝光上报（E-19）。分母 —— 与 [reportResponded] 配对才能算各点的响应率。
   static Future<void> reportShown(PushTriggerPoint point) => Analytics.capture(
         'push_permission_prompt_shown',
