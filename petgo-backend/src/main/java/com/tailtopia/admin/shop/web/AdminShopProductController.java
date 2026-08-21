@@ -17,6 +17,7 @@ import com.tailtopia.shop.repository.ShopProductRepository;
 import com.tailtopia.shop.repository.ShopSkuRepository;
 import com.tailtopia.shop.service.InventoryService;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.i18n.Messages;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,14 +55,19 @@ public class AdminShopProductController {
     private final ShopSkuRepository skus;
     private final InventoryService inventory;
 
+    /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
+    private final Messages msg;
+
     public AdminShopProductController(AdminShopProductService service,
             AdminShopListingService listing, ShopProductRepository products,
-            ShopSkuRepository skus, InventoryService inventory) {
+            ShopSkuRepository skus, InventoryService inventory,
+            Messages msg) {
         this.service = service;
         this.listing = listing;
         this.products = products;
         this.skus = skus;
         this.inventory = inventory;
+        this.msg = msg;
     }
 
     // ---------- 列表 ----------
@@ -119,7 +125,7 @@ public class AdminShopProductController {
     public String detail(@AuthenticationPrincipal AdminUserDetails admin,
             @PathVariable long id, Model model) {
         ShopProduct p = products.findById(id)
-                .orElseThrow(() -> AppException.notFound("商品不存在"));
+                .orElseThrow(() -> AppException.notFound("商品不存在").code("admin.err.product.notFound"));
         List<ShopSku> ss = skus.findByProductIdOrderByIdAsc(id);
         model.addAttribute("form", toForm(p));
         model.addAttribute("productId", id);
@@ -158,10 +164,10 @@ public class AdminShopProductController {
             @ModelAttribute("form") ShopProductForm form, RedirectAttributes ra) {
         try {
             ShopProduct p = service.create(form, admin.getAdminAccountId());
-            ra.addFlashAttribute("notice", "商品已创建");
+            ra.addFlashAttribute("notice", msg.get("admin.flash.product.created"));
             return "redirect:/admin/shop/products/" + p.getId();
         } catch (AppException e) {
-            ra.addFlashAttribute("error", e.getMessage());
+            ra.addFlashAttribute("error", msg.resolve(e));
             return "redirect:/admin/shop/products/new";
         }
     }
@@ -172,30 +178,41 @@ public class AdminShopProductController {
             @ModelAttribute("form") ShopProductForm form, RedirectAttributes ra) {
         try {
             service.update(id, form, admin.getAdminAccountId());
-            ra.addFlashAttribute("notice", "商品已更新");
+            ra.addFlashAttribute("notice", msg.get("admin.flash.product.updated"));
         } catch (AppException e) {
-            ra.addFlashAttribute("error", e.getMessage());
+            ra.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/shop/products/" + id;
     }
 
-    @PostMapping("/admin/shop/products/{id}/skus")
+    // 🔴 路径变量叫 {productId} 而不是 {id} —— 这不是命名洁癖，是**必须的**：
+    //    Spring 的 ExtendedServletRequestDataBinder 会把 URI 模板变量一并绑进 @ModelAttribute
+    //    （仅当同名请求参数缺席时）。若这里叫 {id}，商品 id 就会被绑进 ShopSkuForm.id，
+    //    于是「新建规格」永远走成「更新规格」分支：
+    //      · 找不到该 id 的 SKU → 恒报「规格不存在」，运营一个规格都建不出来；
+    //      · 🔴 更糟：两张表都是 BIGSERIAL，新店里 shop_skus.id 与 shop_products.id 撞号很常见，
+    //        一旦撞上且那个 SKU 恰属本商品，就会【静默覆盖既有规格】而不是新建。
+    //    页面上之所以没出事，只是因为模板恰好渲染了一个空的 <input name="id"/>（请求参数在场
+    //    → URI 变量被跳过）。**把正确性寄托在「模板碰巧有那一行」上不成立**：
+    //    删掉那行、或换个调用方（curl / 脚本）就复现。2026-08-18 补 L1 时抓到。
+    @PostMapping("/admin/shop/products/{productId}/skus")
     @PreAuthorize(EDIT_AUTH)
     public String upsertSku(@AuthenticationPrincipal AdminUserDetails admin,
-            @PathVariable long id, @ModelAttribute ShopSkuForm form, RedirectAttributes ra) {
+            @PathVariable long productId, @ModelAttribute ShopSkuForm form,
+            RedirectAttributes ra) {
         try {
             // 🔒 进货价与 SKU 基础字段分开处理：无 cost_edit 权限时表单里的该值被直接丢弃
             Long submittedCost = form.getCostPrice();
             form.setCostPrice(null);
-            ShopSku sku = service.upsertSku(id, form, admin.getAdminAccountId());
+            ShopSku sku = service.upsertSku(productId, form, admin.getAdminAccountId());
             if (submittedCost != null && has(admin, AdminPermissions.SHOP_COST_EDIT)) {
                 service.updateCostPrice(sku.getId(), submittedCost, admin.getAdminAccountId());
             }
-            ra.addFlashAttribute("notice", "规格已保存");
+            ra.addFlashAttribute("notice", msg.get("admin.flash.product.skuSaved"));
         } catch (AppException e) {
-            ra.addFlashAttribute("error", e.getMessage());
+            ra.addFlashAttribute("error", msg.resolve(e));
         }
-        return "redirect:/admin/shop/products/" + id;
+        return "redirect:/admin/shop/products/" + productId;
     }
 
     // ---------- 上下架（Story 1.5，AB-10D） ----------
@@ -206,9 +223,9 @@ public class AdminShopProductController {
             @PathVariable long id, RedirectAttributes ra) {
         try {
             listing.list(id, admin.getAdminAccountId());
-            ra.addFlashAttribute("notice", "商品已上架");
+            ra.addFlashAttribute("notice", msg.get("admin.flash.product.activated"));
         } catch (AppException e) {
-            ra.addFlashAttribute("error", e.getMessage());
+            ra.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/shop/products";
     }
@@ -220,9 +237,9 @@ public class AdminShopProductController {
         try {
             listing.delist(id, admin.getAdminAccountId());
             // ⚠️ 下架 ≠ 立即停止发货：已下单未支付的订单照常履约（SPEC-7 口径）
-            ra.addFlashAttribute("notice", "商品已下架");
+            ra.addFlashAttribute("notice", msg.get("admin.flash.product.deactivated"));
         } catch (AppException e) {
-            ra.addFlashAttribute("error", e.getMessage());
+            ra.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/shop/products";
     }

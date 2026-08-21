@@ -1,21 +1,27 @@
 <!DOCTYPE html>
-<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
 <!-- 电商订单详情与发货（V1.4.0 Story 4.2，AB-11B）。
      🔒 本页含收件人 PII（姓名/电话/详细地址）——仅在此页展示，不进列表、不进日志、不进审计摘要。 -->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.shop.order.detail.title}">订单详情 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1 th:text="#{admin.shop.order.detail.title}">订单详情</h1>
-        <p><a th:href="@{/admin/shop/orders}" th:text="#{admin.common.back}">返回列表</a></p>
+        <div class="s-page-head">
+            <div class="s-title-wrap">
+                <h1 th:text="#{admin.shop.order.detail.title}">订单详情</h1>
+            </div>
+            <div class="s-actions"><a class="btn btn-neutral" th:href="@{/admin/shop/orders}" th:text="#{admin.common.back}">返回列表</a></div>
+        </div>
         <p th:if="${notice}" class="flash" th:text="${notice}">已保存</p>
         <p th:if="${error}" class="flash error" th:text="${error}">操作失败</p>
 
         <h2 th:text="#{admin.shop.order.section.summary}">订单</h2>
+        <div class="s-card">
         <table>
             <tr><th th:text="#{admin.shop.orders.col.token}">订单号</th>
                 <td th:text="${order.publicToken}">abc</td></tr>
@@ -54,8 +60,10 @@
                           th:text="' / ' + ${order.completionSource}">USER_CONFIRM</span>
                 </td></tr>
         </table>
+        </div>
 
         <h2 th:text="#{admin.shop.order.section.lines}">商品行</h2>
+        <div class="s-card">
         <table>
             <thead>
             <tr>
@@ -78,10 +86,12 @@
             </tr>
             </tbody>
         </table>
+        </div>
 
         <!-- 🔒 收货地址快照：含三项 PII。下单时定格，不随地址簿改动（AD-13）。 -->
         <h2 th:text="#{admin.shop.order.section.shipTo}">收货信息</h2>
         <p class="hint" th:text="#{admin.shop.order.shipTo.hint}">以下信息含个人数据，仅用于履约与客服核对，禁止截图外传或写入任何工单正文。</p>
+        <div class="s-card">
         <table>
             <tr><th th:text="#{admin.shop.order.col.receiver}">收件人</th>
                 <td th:text="${shipTo.receiverName}">Budi</td></tr>
@@ -92,9 +102,11 @@
                              + ${shipTo.kotaKabupaten} + ', ' + ${shipTo.provinsi} + ' '
                              + ${shipTo.kodePos}">Jl. …</td></tr>
         </table>
+        </div>
 
         <h2 th:text="#{admin.shop.order.section.packages}">包裹</h2>
         <p class="hint" th:text="#{admin.shop.order.packages.hint}">一个订单可分多个包裹发出。订单要全部包裹都送达才会转为「已送达」。</p>
+        <div class="s-card">
         <table>
             <thead>
             <tr>
@@ -125,6 +137,7 @@
             </tr>
             </tbody>
         </table>
+        </div>
 
         <!-- 发货表单（AB-11B）。承运成本必填（S-11）。 -->
         <div th:if="${canFulfill and shippable}">

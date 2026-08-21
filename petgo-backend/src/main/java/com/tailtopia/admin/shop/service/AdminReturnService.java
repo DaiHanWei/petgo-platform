@@ -81,7 +81,7 @@ public class AdminReturnService {
     @Transactional(readOnly = true)
     public ReturnRequest require(String returnToken) {
         return returns.findByPublicToken(returnToken)
-                .orElseThrow(() -> AppException.notFound("退货申请不存在"));
+                .orElseThrow(() -> AppException.notFound("退货申请不存在").code("admin.err.return.notFound"));
     }
 
     /**
@@ -125,7 +125,7 @@ public class AdminReturnService {
     @Transactional(readOnly = true)
     public void requireNoActiveRequest(long orderId) {
         if (requests.hasActiveRequest(orderId)) {
-            throw AppException.conflict("该订单已有进行中的退货申请");
+            throw AppException.conflict("该订单已有进行中的退货申请").code("admin.err.return.alreadyInProgress");
         }
     }
 
@@ -190,7 +190,7 @@ public class AdminReturnService {
         ReturnRequest r = require(returnToken);
         if (disposal == RejectDisposal.RETURN_TO_USER
                 && (shipBackTrackingNo == null || shipBackTrackingNo.isBlank())) {
-            throw AppException.validation("选择「退回用户」时必须填写回寄单号");
+            throw AppException.validation("选择「退回用户」时必须填写回寄单号").code("admin.err.return.trackingRequired");
         }
         r.failInspection(note, photoKeys, disposal, shipBackTrackingNo);
         returns.save(r);

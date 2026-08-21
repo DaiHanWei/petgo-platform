@@ -23,6 +23,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.ui.ConcurrentModel;
 import org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap;
+import com.tailtopia.support.TestMessages;
 
 /**
  * L0：人工审核门控分层（Story 4.3 AC3/AC8）——激活开关仅 {@code SUPER_ADMIN}；
@@ -56,7 +57,7 @@ class ManualReviewAccessControlTest {
         @Bean
         ManualReviewAdminController controller(ManualReviewService r, AdminSettingsService s,
                 com.tailtopia.admin.moderation.service.UnifiedTicketQueryService q) {
-            return new ManualReviewAdminController(r, s, q);
+            return new ManualReviewAdminController(r, s, q, TestMessages.real());
         }
     }
 

@@ -169,7 +169,7 @@ public class ManualReviewService {
     @Transactional
     public void changePriority(long itemId, ReviewPriority priority, long actorAccountId) {
         if (priority == null) {
-            throw AppException.validation("优先级必填（P0 / P1 / P2）");
+            throw AppException.validation("优先级必填（P0 / P1 / P2）").code("admin.err.review.priorityRequired");
         }
         ManualReviewItem it = requirePending(itemId);
         ReviewPriority old = it.getPriority();
@@ -272,9 +272,9 @@ public class ManualReviewService {
 
     private ManualReviewItem requirePending(long itemId) {
         ManualReviewItem it = queue.findById(itemId)
-                .orElseThrow(() -> AppException.notFound("审核队列项不存在"));
+                .orElseThrow(() -> AppException.notFound("审核队列项不存在").code("admin.err.review.itemNotFound"));
         if (it.getStatus() != ReviewStatus.PENDING) {
-            throw AppException.validation("该队列项已处置");
+            throw AppException.validation("该队列项已处置").code("admin.err.review.alreadyHandled");
         }
         return it;
     }

@@ -1,21 +1,27 @@
 <!DOCTYPE html>
-<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
 <!-- 库存流水（V1.4.0 Story 1.4，AB-10C）。append-only：每次 actual 变更的操作人/原因/前后值。 -->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.shop.inventory.movements.title}">库存流水 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1 th:text="#{admin.shop.inventory.movements.title}">库存流水</h1>
-        <p class="hint">
+        <div class="s-page-head">
+            <div class="s-title-wrap">
+                <h1 th:text="#{admin.shop.inventory.movements.title}">库存流水</h1>
+                <p class="s-sub">
             <span th:text="#{admin.shop.sku.specName}">规格</span>:
             <span th:text="${sku.specName}">3 kg</span>
         </p>
+            </div>
+        </div>
         <p class="hint" th:text="#{admin.shop.inventory.movements.hint}">流水只增不改：要撤销一笔操作，应再落一笔反向流水，而不是修改历史。</p>
 
+        <div class="s-card">
         <table>
             <thead>
             <tr>
@@ -50,6 +56,7 @@
             </tr>
             </tbody>
         </table>
+        </div>
 
         <p><a th:href="@{/admin/shop/inventory}" th:text="#{admin.common.back}">返回</a></p>
     </div>

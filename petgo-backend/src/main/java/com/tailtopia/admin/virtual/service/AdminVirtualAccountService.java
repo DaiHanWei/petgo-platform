@@ -40,7 +40,7 @@ public class AdminVirtualAccountService {
     public long create(String nickname, String avatarUrl, long adminId) {
         String nn = nickname == null ? "" : nickname.trim();
         if (nn.isEmpty() || nn.length() > NICKNAME_MAX) {
-            throw AppException.validation("昵称必填且不超过 20 字");
+            throw AppException.validation("昵称必填且不超过 20 字").code("admin.err.virtualAccount.nicknameInvalid");
         }
         User u = users.save(User.newVirtual("virtual:" + UUID.randomUUID(), nn,
                 blankToNull(avatarUrl), adminId));
@@ -53,9 +53,9 @@ public class AdminVirtualAccountService {
     @Transactional
     public void setEnabled(long userId, boolean enabled, long adminId) {
         User u = users.findById(userId)
-                .orElseThrow(() -> AppException.notFound("账号不存在"));
+                .orElseThrow(() -> AppException.notFound("账号不存在").code("admin.err.virtualAccount.accountNotFound"));
         if (u.getAccountType() != AccountType.VIRTUAL) {
-            throw AppException.validation("仅虚拟账号可启停");
+            throw AppException.validation("仅虚拟账号可启停").code("admin.err.virtualAccount.virtualOnly");
         }
         if (u.isEnabled() == enabled) {
             return;

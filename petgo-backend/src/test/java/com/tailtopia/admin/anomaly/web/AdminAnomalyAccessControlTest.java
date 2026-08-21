@@ -28,6 +28,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.ui.ConcurrentModel;
 import org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap;
+import com.tailtopia.support.TestMessages;
 
 /**
  * L0：异常工单门控（Story 5.1 AC9）——查看 {@code consult.view_anomalies}；处理（备注/标记已处理）
@@ -56,7 +57,7 @@ class AdminAnomalyAccessControlTest {
 
         @Bean
         AdminAnomalyController controller(ConsultAnomalyService a, SignedUrlService s) {
-            return new AdminAnomalyController(a, s);
+            return new AdminAnomalyController(a, s, TestMessages.real());
         }
     }
 

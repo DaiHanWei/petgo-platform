@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <!-- 全量内容管理（Story 4.2）：跨作者浏览三类内容 + 多维筛选 + 正文搜索 + 主动下架(必填原因)/恢复。
      SSR + HTMX 片段刷新；门控 content.proactive_takedown（浏览/下架）/ content.restore（恢复）。 -->
 <head>

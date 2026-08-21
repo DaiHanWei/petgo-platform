@@ -1,85 +1,127 @@
 <!DOCTYPE html>
-<html lang="zh" xmlns:th="http://www.thymeleaf.org">
-<!-- 商品管理列表（V1.4.0 Story 1.3，AB-10A）。模块 10 入口。 -->
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<!-- 商品管理列表（V1.4.0 Story 1.3，AB-10A）。模块 10 入口。
+     版式：电商后台改版（2026-08-19，参考 Shopee 卖家中心结构，主色仍为 TailTopia 紫）。 -->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.shop.products.title}">商品管理 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1 th:text="#{admin.shop.products.title}">商品管理</h1>
-        <p class="hint" th:text="#{admin.shop.products.hint}">精选自营商品。新建商品默认未上架，需在上下架管理中主动上架后才对用户可见。</p>
+
+        <!-- 页头：标题 + 说明 + 右侧主操作 -->
+        <div class="s-page-head">
+            <div class="s-title-wrap">
+                <h1 th:text="#{admin.shop.products.title}">商品管理</h1>
+                <p class="s-sub" th:text="#{admin.shop.products.hint}">精选自营商品。新建商品默认未上架，需在上下架管理中主动上架后才对用户可见。</p>
+            </div>
+            <div class="s-actions">
+                <a th:if="${canEdit}" th:href="@{/admin/shop/products/new}" class="btn btn-primary"
+                   th:text="#{admin.shop.products.btn.new}">新建商品</a>
+            </div>
+        </div>
+
         <p th:if="${notice}" class="flash" th:text="${notice}">已保存</p>
         <p th:if="${error}" class="flash error" th:text="${error}">操作失败</p>
 
-        <!-- 🔴 SKU 上限告警条（C-7 的战略边界做成产品约束）。达上限即阻止继续上架。 -->
+        <!-- 🔴 SKU 上限告警条。2026-08-19 起默认不设上限（petgo.shop.sku-cap=0），
+             配置回正数即恢复：达上限时本条出现，且阻止继续上架。 -->
         <p th:if="${skuCapReached}" class="flash error">
             <span th:text="#{admin.shop.skuCap.warn}">在售 SKU 已达上限</span>
             <span th:text="'(' + ${activeSkuCount} + '/' + ${skuCap} + ')'">(30/30)</span>
         </p>
+
+        <!-- 筛选条独立成卡：与结果表分开，「筛什么」和「筛出了什么」是两件事 -->
+        <div class="s-card">
+            <div class="s-card-body">
+                <form method="get" th:action="@{/admin/shop/products}" class="s-filters">
+                    <label class="s-f">
+                        <span th:text="#{admin.shop.col.category}">品类</span>
+                        <select name="category">
+                            <option value="" th:text="#{admin.common.all}">全部</option>
+                            <option th:each="c : ${categories}" th:value="${c}" th:text="${c}"
+                                    th:selected="${c == filterCategory}">MAKANAN</option>
+                        </select>
+                    </label>
+                    <label class="s-f">
+                        <span th:text="#{admin.shop.col.active}">上架状态</span>
+                        <select name="active">
+                            <option value="" th:text="#{admin.common.all}">全部</option>
+                            <option value="true" th:selected="${filterActive == true}" th:text="#{admin.shop.active.yes}">已上架</option>
+                            <option value="false" th:selected="${filterActive == false}" th:text="#{admin.shop.active.no}">未上架</option>
+                        </select>
+                    </label>
+                    <div class="s-f-actions">
+                        <button type="submit" class="btn btn-primary" th:text="#{admin.common.search}">查询</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- 结果表 -->
+        <div class="s-card">
+            <!-- 卡头不重复页面标题（页头已经写过一次），改放结果计数 ——
+                 运营筛完最想确认的就是「筛出来几条」。 -->
+            <div class="s-card-head">
+                <h2 th:text="#{admin.shop.count.products(${#lists.size(products)})}">7 件商品</h2>
+            </div>
+            <table>
+                <thead>
+                <tr>
+                    <th th:text="#{admin.shop.col.name}">商品名</th>
+                    <th th:text="#{admin.shop.col.brand}">品牌</th>
+                    <th th:text="#{admin.shop.col.category}">品类</th>
+                    <th th:text="#{admin.shop.col.active}">上架</th>
+                    <th class="s-col-num" th:text="#{admin.shop.col.skuCount}">规格数</th>
+                    <th class="s-col-num" th:text="#{admin.shop.col.minPrice}">最低价</th>
+                    <th class="s-col-num" th:text="#{admin.shop.col.sortWeight}">排序权重</th>
+                    <th class="s-col-act" th:text="#{admin.common.action}">操作</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="p : ${products}">
+                    <td>
+                        <div class="s-cell-product">
+                            <div>
+                                <div class="s-p-name" th:text="${p.name}">Royal Canin</div>
+                                <div class="s-p-sub s-mono" th:text="${p.publicToken}">demo-mkn-01</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td th:text="${p.brand}">Royal Canin</td>
+                    <td th:text="${p.category}">MAKANAN</td>
+                    <!-- 上架态用徽章而不是纯文字：这一列是运营扫得最快的一列 -->
+                    <td>
+                        <span th:if="${p.active}" class="badge badge-ok" th:text="#{admin.shop.active.yes}">已上架</span>
+                        <span th:unless="${p.active}" class="badge badge-muted" th:text="#{admin.shop.active.no}">未上架</span>
+                    </td>
+                    <td class="s-col-num" th:text="${skuCount[p.id]}">0</td>
+                    <td class="s-col-num" th:text="${minPrice[p.id]} ?: '—'">—</td>
+                    <td class="s-col-num" th:text="${p.sortWeight}">0</td>
+                    <td class="s-col-act">
+                        <a th:href="@{'/admin/shop/products/' + ${p.id}}" th:text="#{admin.common.detail}">详情</a>
+                        <form th:if="${canEdit and not p.active}" method="post" style="display:inline"
+                              th:action="@{'/admin/shop/products/' + ${p.id} + '/list'}">
+                            <button type="submit" class="btn btn-sm" th:text="#{admin.shop.btn.list}">上架</button>
+                        </form>
+                        <form th:if="${canEdit and p.active}" method="post" style="display:inline"
+                              th:action="@{'/admin/shop/products/' + ${p.id} + '/delist'}">
+                            <button type="submit" class="btn btn-sm" th:text="#{admin.shop.btn.delist}">下架</button>
+                        </form>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+            <!-- 空态独立于表体：colspan 占位行在列多时会被挤成一条细缝，看不出是「没有数据」 -->
+            <div th:if="${#lists.isEmpty(products)}" class="s-empty">
+                <div class="s-empty-title" th:text="#{admin.shop.products.empty}">暂无商品</div>
+            </div>
+        </div>
+
         <p class="hint" th:text="#{admin.shop.delist.hint}">下架只改变可见性：商品立即从 App 所有列表与推荐中消失，但已下单未支付的订单照常履约，最长 60 分钟内仍可能需要发货。需要立即停止发货请在订单异常处理中手工取消相应订单。</p>
-
-        <form method="get" th:action="@{/admin/shop/products}">
-            <label><span th:text="#{admin.shop.col.category}">品类</span>
-                <select name="category">
-                    <option value="" th:text="#{admin.common.all}">全部</option>
-                    <option th:each="c : ${categories}" th:value="${c}" th:text="${c}"
-                            th:selected="${c == filterCategory}">MAKANAN</option>
-                </select>
-            </label>
-            <label><span th:text="#{admin.shop.col.active}">上架状态</span>
-                <select name="active">
-                    <option value="" th:text="#{admin.common.all}">全部</option>
-                    <option value="true" th:selected="${filterActive == true}" th:text="#{admin.shop.active.yes}">已上架</option>
-                    <option value="false" th:selected="${filterActive == false}" th:text="#{admin.shop.active.no}">未上架</option>
-                </select>
-            </label>
-            <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.common.search}">查询</button>
-            <a th:if="${canEdit}" th:href="@{/admin/shop/products/new}" class="btn btn-sm"
-               th:text="#{admin.shop.products.btn.new}">新建商品</a>
-        </form>
-
-        <table>
-            <thead>
-            <tr>
-                <th th:text="#{admin.shop.col.name}">商品名</th>
-                <th th:text="#{admin.shop.col.brand}">品牌</th>
-                <th th:text="#{admin.shop.col.category}">品类</th>
-                <th th:text="#{admin.shop.col.active}">上架</th>
-                <th th:text="#{admin.shop.col.skuCount}">规格数</th>
-                <th th:text="#{admin.shop.col.minPrice}">最低价</th>
-                <th th:text="#{admin.shop.col.sortWeight}">排序权重</th>
-                <th th:text="#{admin.common.action}">操作</th>
-            </tr>
-            </thead>
-            <tbody>
-            <tr th:each="p : ${products}">
-                <td th:text="${p.name}">Royal Canin</td>
-                <td th:text="${p.brand}">Royal Canin</td>
-                <td th:text="${p.category}">MAKANAN</td>
-                <td th:text="${p.active} ? #{admin.shop.active.yes} : #{admin.shop.active.no}">未上架</td>
-                <td th:text="${skuCount[p.id]}">0</td>
-                <td th:text="${minPrice[p.id]} ?: '—'">—</td>
-                <td th:text="${p.sortWeight}">0</td>
-                <td>
-                    <a th:href="@{'/admin/shop/products/' + ${p.id}}" th:text="#{admin.common.detail}">详情</a>
-                    <form th:if="${canEdit and not p.active}" method="post" style="display:inline"
-                          th:action="@{'/admin/shop/products/' + ${p.id} + '/list'}">
-                        <button type="submit" class="btn btn-sm" th:text="#{admin.shop.btn.list}">上架</button>
-                    </form>
-                    <form th:if="${canEdit and p.active}" method="post" style="display:inline"
-                          th:action="@{'/admin/shop/products/' + ${p.id} + '/delist'}">
-                        <button type="submit" class="btn btn-sm" th:text="#{admin.shop.btn.delist}">下架</button>
-                    </form>
-                </td>
-            </tr>
-            <tr th:if="${#lists.isEmpty(products)}">
-                <td colspan="8" th:text="#{admin.shop.products.empty}">暂无商品</td>
-            </tr>
-            </tbody>
-        </table>
     </div>
 </div>
 </body>

@@ -1,26 +1,35 @@
 <!DOCTYPE html>
-<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
 <!-- 开封判定判例库（V1.4.0 Story 5.6，AB-12D / SPEC-24）。 -->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.shop.precedents.title}">开封判例 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1 th:text="#{admin.shop.precedents.title}">开封判例</h1>
-        <!-- ⚠️ 这句是 AC 的一部分：判例库是一致性工具，不是风控工具（SPEC-24） -->
+        <div class="s-page-head">
+            <div class="s-title-wrap">
+                <h1 th:text="#{admin.shop.precedents.title}">开封判例</h1>
+            </div>
+        </div><!-- ⚠️ 这句是 AC 的一部分：判例库是一致性工具，不是风控工具（SPEC-24） -->
         <p class="hint" th:text="#{admin.shop.precedents.hint}">判例库是一致性工具，不是风控工具：它解决「同一情形不同客服判得不一样」。骗退风控由 90 日 ≤2 次的频次上限承担，两者不可互相替代——查过判例不等于查过风险。</p>
         <p th:if="${notice}" class="flash" th:text="${notice}">已保存</p>
         <p th:if="${error}" class="flash error" th:text="${error}">操作失败</p>
 
-        <form method="get" th:action="@{/admin/shop/return-precedents}" class="filters">
+        <div class="s-card">
+            <div class="s-card-body">
+                <form method="get" th:action="@{/admin/shop/return-precedents}" class="filters">
             <input type="search" name="q" th:value="${q}" maxlength="100"
                    th:placeholder="#{admin.shop.precedents.searchPlaceholder}"/>
             <button type="submit" th:text="#{admin.common.filter}">检索</button>
         </form>
+            </div>
+        </div>
 
+        <div class="s-card">
         <table>
             <thead><tr>
                 <th th:text="#{admin.shop.precedents.col.situation}">情形</th>
@@ -40,6 +49,7 @@
             </tr>
             </tbody>
         </table>
+        </div>
 
         <h2 th:text="#{admin.shop.precedents.section.add}">沉淀一条判例</h2>
         <form method="post" th:action="@{/admin/shop/return-precedents}">

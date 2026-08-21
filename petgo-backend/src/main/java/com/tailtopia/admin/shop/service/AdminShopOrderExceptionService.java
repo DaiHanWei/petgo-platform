@@ -138,11 +138,11 @@ public class AdminShopOrderExceptionService {
         ShopOrder order = requireHandleable(orderToken);
         requireReason(reason);
         if (qty <= 0) {
-            throw AppException.validation("取消数量必须为正");
+            throw AppException.validation("取消数量必须为正").code("admin.err.orderException.qtyPositive");
         }
         ShopOrderLine line = orderLines.findById(lineId)
                 .filter(l -> l.getOrderId().equals(order.getId()))
-                .orElseThrow(() -> AppException.notFound("订单行不存在"));
+                .orElseThrow(() -> AppException.notFound("订单行不存在").code("admin.err.order.lineNotFound"));
 
         line.addRefundedQty(qty);
         orderLines.save(line);
@@ -212,10 +212,11 @@ public class AdminShopOrderExceptionService {
 
     private ShopOrder requireHandleable(String orderToken) {
         ShopOrder order = orders.findByPublicToken(orderToken)
-                .orElseThrow(() -> AppException.notFound("订单不存在"));
+                .orElseThrow(() -> AppException.notFound("订单不存在").code("admin.err.order.notFound"));
         if (order.getStatus() != ShopOrderStatus.PENDING_SHIPMENT) {
             // 已发货的订单出口是退货（Epic 5），不是取消 —— 货已经出门了。
-            throw AppException.conflict("只有待发货订单可走异常处置，当前状态：" + order.getStatus());
+            throw AppException.conflict("只有待发货订单可走异常处置，当前状态：" + order.getStatus())
+                    .code("admin.err.orderException.onlyPending", order.getStatus());
         }
         return order;
     }
@@ -224,7 +225,7 @@ public class AdminShopOrderExceptionService {
         if (reason == null || reason.isBlank()) {
             // 🔴 原因必填：站内信要把它告诉用户，审计要靠它复盘。
             //    「无原因取消」在用户那边就是一条毫无解释的坏消息。
-            throw AppException.validation("请填写处置原因（会一并告知用户）");
+            throw AppException.validation("请填写处置原因（会一并告知用户）").code("admin.err.orderException.reasonRequired");
         }
     }
 

@@ -4,6 +4,7 @@ import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shop.shipping.repository.ShippingSettingsRepository;
 import com.tailtopia.shop.shipping.service.AdminShippingZoneService;
+import com.tailtopia.shared.i18n.Messages;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
@@ -38,10 +39,15 @@ public class AdminShippingController {
     private final AdminShippingZoneService zones;
     private final ShippingSettingsRepository settings;
 
+    /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
+    private final Messages msg;
+
     public AdminShippingController(AdminShippingZoneService zones,
-            ShippingSettingsRepository settings) {
+            ShippingSettingsRepository settings,
+            Messages msg) {
         this.zones = zones;
         this.settings = settings;
+        this.msg = msg;
     }
 
     @GetMapping("/admin/shop/shipping")
@@ -60,9 +66,9 @@ public class AdminShippingController {
             @RequestParam String provinsi, @RequestParam long fee, RedirectAttributes ra) {
         try {
             zones.upsert(kecamatan, kotaKabupaten, provinsi, fee, actorOf(admin));
-            ra.addFlashAttribute("notice", "配送区域已保存");
+            ra.addFlashAttribute("notice", msg.get("admin.flash.shipping.zoneSaved"));
         } catch (AppException e) {
-            ra.addFlashAttribute("error", e.getMessage());
+            ra.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/shop/shipping";
     }
@@ -74,9 +80,9 @@ public class AdminShippingController {
             @RequestParam String kecamatan, @RequestParam boolean active, RedirectAttributes ra) {
         try {
             zones.setActive(kecamatan, active, actorOf(admin));
-            ra.addFlashAttribute("notice", active ? "区域已启用" : "区域已停用");
+            ra.addFlashAttribute("notice", msg.get(active ? "admin.flash.shipping.zoneEnabled" : "admin.flash.shipping.zoneDisabled"));
         } catch (AppException e) {
-            ra.addFlashAttribute("error", e.getMessage());
+            ra.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/shop/shipping";
     }
@@ -87,9 +93,9 @@ public class AdminShippingController {
             @RequestParam long threshold, RedirectAttributes ra) {
         try {
             zones.setFreeShippingThreshold(threshold, actorOf(admin));
-            ra.addFlashAttribute("notice", "免运门槛已保存");
+            ra.addFlashAttribute("notice", msg.get("admin.flash.shipping.freeThresholdSaved"));
         } catch (AppException e) {
-            ra.addFlashAttribute("error", e.getMessage());
+            ra.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/shop/shipping";
     }
@@ -103,16 +109,16 @@ public class AdminShippingController {
             @RequestParam(required = false) String receiverPhone, RedirectAttributes ra) {
         try {
             zones.setReturnAddress(addressText, receiverName, receiverPhone, actorOf(admin));
-            ra.addFlashAttribute("notice", "退货收件地址已保存");
+            ra.addFlashAttribute("notice", msg.get("admin.flash.shipping.returnAddressSaved"));
         } catch (AppException e) {
-            ra.addFlashAttribute("error", e.getMessage());
+            ra.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/shop/shipping";
     }
 
     private static long actorOf(AdminUserDetails admin) {
         if (admin == null) {
-            throw AppException.unauthorized("需要登录");
+            throw AppException.unauthorized("需要登录").code("admin.err.common.loginRequired");
         }
         return admin.getAdminAccountId();
     }

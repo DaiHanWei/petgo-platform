@@ -43,8 +43,19 @@ class AdminPermissionWiringTest {
     /** 只匹配真实码型 {@code <模块>.<动作>}（全小写点分）；javadoc 占位示例（如 {@code '<code>'}）不计。 */
     private static final Pattern HAS_AUTHORITY = Pattern.compile("hasAuthority\\('([a-z_]+\\.[a-z_]+)'\\)");
 
-    /** 常量类自身——声明处不算落点，见类注释。 */
-    private static final String DECLARING_FILE = "AdminPermissions.java";
+    /**
+     * 扫描「编程式门控」时必须跳过的文件——这些地方出现权限码是<b>声明或归类</b>，不是门控落点。
+     *
+     * <ul>
+     *   <li>{@code AdminPermissions.java}：常量声明处 + {@code GROUPS} 列全集，计入则 ② 恒真。</li>
+     *   <li>{@code AdminRole.java}：岗位角色→权限码的映射（V165）。它靠静态导入引用常量，
+     *       而 {@code import static ...AdminPermissions.VET_VIEW;} 这一行就能被下面的正则匹到——
+     *       计入的话，任何码只要被写进某个角色就「自证已接线」，死码可以躲在角色定义里躲过 ②。
+     *       <b>把一个码放进角色，不等于有页面或接口真的判了它</b>，所以这里不算落点。</li>
+     * </ul>
+     */
+    private static final Set<String> NON_GATE_FILES = Set.of(
+            "AdminPermissions.java", "AdminRole.java");
 
     @Test
     void everyReferencedAuthorityIsRegisteredAndEveryCodeIsWired() throws IOException {
@@ -80,11 +91,11 @@ class AdminPermissionWiringTest {
                 while (m.find()) {
                     referenced.add(m.group(1));
                 }
-                // 字段级编程式门控。排除声明文件自身，否则 ② 恒真。
+                // 字段级编程式门控。排除声明/归类文件（见 NON_GATE_FILES），否则 ② 恒真。
                 // 🔴 用词边界而非 contains：CONTENT_VIEW 是 CONTENT_VIEW_REPORTS 的前缀、
                 //    VET_QUALIFY 是 VET_QUALIFY_VIEW 的前缀——contains 会让长码的引用顺带
                 //    「证明」短码已接线，等于给死码开后门。
-                if (!p.getFileName().toString().equals(DECLARING_FILE)) {
+                if (!NON_GATE_FILES.contains(p.getFileName().toString())) {
                     codeToConstant.forEach((code, constant) -> {
                         if (Pattern.compile("AdminPermissions\\." + constant + "\\b")
                                 .matcher(text).find()) {

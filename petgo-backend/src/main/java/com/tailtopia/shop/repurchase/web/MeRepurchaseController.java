@@ -85,10 +85,15 @@ public class MeRepurchaseController {
             if (product == null) {
                 continue;
             }
+            // 推算依据：算不出任一项 → 整组 null，前端整卡不渲染（见 DTO 注释）。
+            var basis = repurchase.basisFor(t, today);
             out.add(new RepurchaseCardView(t.getId(), t.getTriggerType().name(),
                     sku.getPublicToken(), product.getPublicToken(), product.getName(), petName,
                     t.getEstimatedDepletionDate(),
-                    ChronoUnit.DAYS.between(today, t.getEstimatedDepletionDate())));
+                    ChronoUnit.DAYS.between(today, t.getEstimatedDepletionDate()),
+                    basis == null ? null : basis.dailyGrams(),
+                    basis == null ? null : basis.remainingGrams(),
+                    basis == null ? null : basis.purchasedOn()));
         }
         return RepurchaseCardView.capped(out);
     }

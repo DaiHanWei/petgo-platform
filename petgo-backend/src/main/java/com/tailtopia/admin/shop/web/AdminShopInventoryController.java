@@ -11,6 +11,7 @@ import com.tailtopia.shop.repository.ShopProductRepository;
 import com.tailtopia.shop.repository.ShopSkuRepository;
 import com.tailtopia.shop.service.InventoryMovementService;
 import com.tailtopia.shop.service.InventoryService;
+import com.tailtopia.shared.i18n.Messages;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -54,12 +55,17 @@ public class AdminShopInventoryController {
     private final ShopProductRepository products;
     private final ShopSkuRepository skus;
 
+    /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
+    private final Messages msg;
+
     public AdminShopInventoryController(InventoryMovementService movements,
-            InventoryService inventory, ShopProductRepository products, ShopSkuRepository skus) {
+            InventoryService inventory, ShopProductRepository products, ShopSkuRepository skus,
+            Messages msg) {
         this.movements = movements;
         this.inventory = inventory;
         this.products = products;
         this.skus = skus;
+        this.msg = msg;
     }
 
     // ---------- 列表：三个数不合并显示 ----------
@@ -101,7 +107,7 @@ public class AdminShopInventoryController {
     public String movements(@AuthenticationPrincipal AdminUserDetails admin,
             @PathVariable long skuId, Model model) {
         ShopSku sku = skus.findById(skuId)
-                .orElseThrow(() -> AppException.notFound("SKU 不存在"));
+                .orElseThrow(() -> AppException.notFound("SKU 不存在").code("admin.err.product.skuNotFound2"));
         boolean canViewCost = has(admin, AdminPermissions.SHOP_COST_VIEW);
 
         List<InventoryMovement> rows = movements.recentMovements(skuId, MOVEMENT_PAGE_SIZE);
@@ -143,14 +149,13 @@ public class AdminShopInventoryController {
         try {
             // 🔒 服务端独立再判一次——页面不渲染入口只是第一层，看源码可绕过
             if (!has(admin, AdminPermissions.SHOP_COST_EDIT)) {
-                throw AppException.forbidden(
-                        "采购入库需要「编辑进货价」权限：入库单的进货单价不允许留空（S-9）");
+                throw AppException.forbidden("采购入库需要「编辑进货价」权限：入库单的进货单价不允许留空（S-9）").code("admin.err.inventory.costEditRequired");
             }
             movements.receivePurchase(skuId, qty, purchaseNo, supplier, costPrice, inboundDate,
                     admin.getAdminAccountId());
-            ra.addFlashAttribute("notice", "采购入库已登记");
+            ra.addFlashAttribute("notice", msg.get("admin.flash.inventory.purchaseIn"));
         } catch (AppException e) {
-            ra.addFlashAttribute("error", e.getMessage());
+            ra.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/shop/inventory";
     }
@@ -168,9 +173,9 @@ public class AdminShopInventoryController {
             // 单价由系统取该 SKU 最近一次采购入库单价（S-9）→ 不需要 cost_edit
             movements.receiveReturn(skuId, qty, originalOrderNo, inboundDate,
                     admin.getAdminAccountId());
-            ra.addFlashAttribute("notice", "退货入库已登记（退货入库批次）");
+            ra.addFlashAttribute("notice", msg.get("admin.flash.inventory.returnIn"));
         } catch (AppException e) {
-            ra.addFlashAttribute("error", e.getMessage());
+            ra.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/shop/inventory";
     }
@@ -184,9 +189,9 @@ public class AdminShopInventoryController {
             RedirectAttributes ra) {
         try {
             movements.writeOff(skuId, qty, reason, admin.getAdminAccountId());
-            ra.addFlashAttribute("notice", "报损已登记");
+            ra.addFlashAttribute("notice", msg.get("admin.flash.inventory.damage"));
         } catch (AppException e) {
-            ra.addFlashAttribute("error", e.getMessage());
+            ra.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/shop/inventory";
     }
@@ -200,9 +205,9 @@ public class AdminShopInventoryController {
             RedirectAttributes ra) {
         try {
             movements.stocktake(skuId, countedActual, reason, admin.getAdminAccountId());
-            ra.addFlashAttribute("notice", "盘点调整已登记");
+            ra.addFlashAttribute("notice", msg.get("admin.flash.inventory.stocktake"));
         } catch (AppException e) {
-            ra.addFlashAttribute("error", e.getMessage());
+            ra.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/shop/inventory";
     }

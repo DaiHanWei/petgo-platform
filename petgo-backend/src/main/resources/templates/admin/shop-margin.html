@@ -1,18 +1,25 @@
 <!DOCTYPE html>
-<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
 <!-- 销售与毛利看板（V1.4.0 Story 8.1，AB-13A）。🔒 全页商业敏感，独立权限位 shop.finance_view。 -->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.shop.margin.title}">销售与毛利 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1 th:text="#{admin.shop.margin.title}">销售与毛利</h1>
-        <p class="hint" th:text="#{admin.shop.margin.hint}">成本按下单那一刻的进货价快照算——用现在的进货价算不出当时的毛利。数据源是业务库，不是分析平台。</p>
+        <div class="s-page-head">
+            <div class="s-title-wrap">
+                <h1 th:text="#{admin.shop.margin.title}">销售与毛利</h1>
+                <p class="s-sub" th:text="#{admin.shop.margin.hint}">成本按下单那一刻的进货价快照算——用现在的进货价算不出当时的毛利。数据源是业务库，不是分析平台。</p>
+            </div>
+        </div>
 
-        <form method="get" th:action="@{/admin/shop/margin}" class="filters">
+        <div class="s-card">
+            <div class="s-card-body">
+                <form method="get" th:action="@{/admin/shop/margin}" class="filters">
             <input type="date" name="from" th:value="${from}"/>
             <input type="date" name="to" th:value="${to}"/>
             <select name="category">
@@ -22,8 +29,11 @@
             </select>
             <button type="submit" th:text="#{admin.common.filter}">筛选</button>
         </form>
+            </div>
+        </div>
 
         <h2 th:text="#{admin.shop.margin.section.core}">核心</h2>
+        <div class="s-card">
         <table>
             <tr><th th:text="#{admin.shop.margin.col.revenue}">销售额</th><td th:text="${m.revenue()}">0</td></tr>
             <tr><th th:text="#{admin.shop.margin.col.cost}">成本（进货价）</th><td th:text="${m.cost()}">0</td></tr>
@@ -34,19 +44,23 @@
             <tr><th th:text="#{admin.shop.margin.col.net}">净额</th><td th:text="${m.netRevenue()}">0</td></tr>
             <tr><th th:text="#{admin.shop.margin.col.afterSales}">售后成本</th><td th:text="${m.afterSalesCost()}">0</td></tr>
         </table>
+        </div>
 
         <!-- 🔴 SPEC-22 补的三行。缺承运成本则假设 A-19 的验证方式不可执行。 -->
         <h2 th:text="#{admin.shop.margin.section.spec22}">运费与手续费</h2>
         <p class="hint" th:text="#{admin.shop.margin.spec22Hint}">「运费净额」是假设 A-19 的直接读数：收取的运费减去实际承运成本。为负说明运费在补贴配送——而 A-19 承接的正是「不接承运商实时计费 API」省下工期的全部风险。</p>
+        <div class="s-card">
         <table>
             <tr><th th:text="#{admin.shop.margin.col.shippingRevenue}">运费收入</th><td th:text="${m.shippingRevenue()}">0</td></tr>
             <tr><th th:text="#{admin.shop.margin.col.carrierCost}">承运成本</th><td th:text="${m.carrierCost()}">0</td></tr>
             <tr><th th:text="#{admin.shop.margin.col.shippingNet}">运费净额（A-19）</th><td th:text="${m.shippingNet()}">0</td></tr>
             <tr><th th:text="#{admin.shop.margin.col.refundFee}">退款手续费</th><td th:text="${m.refundChannelFee()}">0</td></tr>
         </table>
+        </div>
 
         <h2 th:text="#{admin.shop.margin.section.byReturnType}">售后成本（按退货类型）</h2>
         <p class="hint" th:text="#{admin.shop.margin.byReturnTypeHint}">按退货类型下钻用于反向管理供应商：质量问题的售后成本长期偏高，问题在供货而不在售后。</p>
+        <div class="s-card">
         <table>
             <thead><tr>
                 <th th:text="#{admin.shop.returns.col.type}">退货类型</th>
@@ -62,8 +76,10 @@
             </tr>
             </tbody>
         </table>
+        </div>
 
         <h2 th:text="#{admin.shop.margin.section.bySku}">按 SKU 下钻</h2>
+        <div class="s-card">
         <table>
             <thead><tr>
                 <th th:text="#{admin.shop.col.name}">商品</th>
@@ -85,6 +101,7 @@
             </tr>
             </tbody>
         </table>
+        </div>
     </div>
 </div>
 </body>

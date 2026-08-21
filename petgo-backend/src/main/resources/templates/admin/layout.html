@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh" xmlns:th="http://www.thymeleaf.org"
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org"
       xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <!--
   运营后台外壳（Story 3.1；1.6 外化 i18n + 换肤）。侧栏导航 + 顶栏（语言切换 + 退出）。
@@ -51,9 +51,9 @@
                    th:text="#{admin.nav.tickets}">被举报用户</a>
             </div>
         </details>
-        <details class="nav-section"
-                 th:attr="open=${active == 'vets' or active == 'online' or active == 'failed-requests' or active == 'ratings'} ? 'open' : null">
-            <summary th:classappend="${active == 'vets' or active == 'online' or active == 'failed-requests' or active == 'ratings'} ? 'active'"
+        <details class="nav-section" th:with="navOpen=${active == 'vets' or active == 'online' or active == 'failed-requests' or active == 'ratings'}"
+                 th:attr="open=${navOpen} ? 'open' : null">
+            <summary th:classappend="${navOpen} ? 'active'"
                      th:text="#{admin.nav.group.vet}">兽医（Epic 5）</summary>
             <div class="nav-sub">
                 <a th:href="@{/admin/vets}" th:classappend="${active == 'vets'} ? 'active'"
@@ -69,9 +69,9 @@
                    th:text="#{admin.nav.ratings}">兽医评分</a>
             </div>
         </details>
-        <details class="nav-section" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('consult.view_anomalies') or hasAuthority('consult.view_sessions')"
-                 th:attr="open=${active == 'anomalies' or active == 'consult-sessions'} ? 'open' : null">
-            <summary th:classappend="${active == 'anomalies' or active == 'consult-sessions'} ? 'active'"
+        <details class="nav-section" th:with="navOpen=${active == 'anomalies' or active == 'consult-sessions'}" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('consult.view_anomalies') or hasAuthority('consult.view_sessions')"
+                 th:attr="open=${navOpen} ? 'open' : null">
+            <summary th:classappend="${navOpen} ? 'active'"
                      th:text="#{admin.nav.group.consult}">问诊异常</summary>
             <div class="nav-sub">
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('consult.view_anomalies')"
@@ -82,28 +82,28 @@
                    th:text="#{admin.nav.sessions}">历史会话查询</a>
             </div>
         </details>
-        <details class="nav-section" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('support.handle')"
-                 th:attr="open=${active == 'support-tickets'} ? 'open' : null">
-            <summary th:classappend="${active == 'support-tickets'} ? 'active'"
+        <details class="nav-section" th:with="navOpen=${active == 'support-tickets'}" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('support.handle')"
+                 th:attr="open=${navOpen} ? 'open' : null">
+            <summary th:classappend="${navOpen} ? 'active'"
                      th:text="#{admin.nav.group.support}">客服</summary>
             <div class="nav-sub">
                 <a th:href="@{/admin/support-tickets}" th:classappend="${active == 'support-tickets'} ? 'active'"
                    th:text="#{admin.nav.supportTickets}">客服工单</a>
             </div>
         </details>
-        <details class="nav-section"
+        <details class="nav-section" th:with="navOpen=${active == 'refunds'}"
                  sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('refund.submit') or hasAuthority('refund.approve') or hasAuthority('refund.payout')"
-                 th:attr="open=${active == 'refunds'} ? 'open' : null">
-            <summary th:classappend="${active == 'refunds'} ? 'active'"
+                 th:attr="open=${navOpen} ? 'open' : null">
+            <summary th:classappend="${navOpen} ? 'active'"
                      th:text="#{admin.nav.group.refund}">退款</summary>
             <div class="nav-sub">
                 <a th:href="@{/admin/refunds}" th:classappend="${active == 'refunds'} ? 'active'"
                    th:text="#{admin.nav.refunds}">退款管理</a>
             </div>
         </details>
-        <details class="nav-section" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view') or hasAuthority('order.view') or hasAuthority('settlement.view') or hasAuthority('payment.view') or hasAuthority('risk.view') or hasAuthority('virtual_account.manage')"
-                 th:attr="open=${active == 'config' or active == 'consult-orders' or active == 'ai-orders' or active == 'settlements' or active == 'payments' or active == 'red-overage' or active == 'virtual-accounts'} ? 'open' : null">
-            <summary th:classappend="${active == 'config' or active == 'consult-orders' or active == 'ai-orders' or active == 'settlements' or active == 'payments' or active == 'red-overage' or active == 'virtual-accounts'} ? 'active'"
+        <details class="nav-section" th:with="navOpen=${active == 'config' or active == 'consult-orders' or active == 'ai-orders' or active == 'settlements' or active == 'payments' or active == 'red-overage' or active == 'virtual-accounts'}" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view') or hasAuthority('order.view') or hasAuthority('settlement.view') or hasAuthority('payment.view') or hasAuthority('risk.view') or hasAuthority('virtual_account.manage')"
+                 th:attr="open=${navOpen} ? 'open' : null">
+            <summary th:classappend="${navOpen} ? 'active'"
                      th:text="#{admin.nav.group.ops}">运营</summary>
             <div class="nav-sub">
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view')"
@@ -129,10 +129,10 @@
                    th:text="#{admin.nav.virtualAccounts}">虚拟账号</a>
             </div>
         </details>
-        <details class="nav-section"
+        <details class="nav-section" th:with="navOpen=${active == 'audit-logs' or active == 'accounts'}"
                  sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.view_logs') or hasAuthority('admin.create_account')"
-                 th:attr="open=${active == 'audit-logs' or active == 'accounts'} ? 'open' : null">
-            <summary th:classappend="${active == 'audit-logs' or active == 'accounts'} ? 'active'"
+                 th:attr="open=${navOpen} ? 'open' : null">
+            <summary th:classappend="${navOpen} ? 'active'"
                      th:text="#{admin.nav.group.security}">安全</summary>
             <div class="nav-sub">
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.view_logs')"
@@ -144,9 +144,15 @@
             </div>
         </details>
         <!-- 精选自营电商 模块 10–13（V1.4.0）。⚠️ 共享文件：只追加到导航末尾，不动既有块顺序。 -->
-        <details class="nav-section"
-                 th:attr="open=${active == 'shopProducts' or active == 'shopOrders' or active == 'shopReturns'} ? 'open' : null">
-            <summary th:classappend="${active == 'shopProducts'} ? 'active'"
+        <!--
+          navOpen 用前缀判定而不是逐个列 active 值：电商组先后加了库存/复购/毛利/周转/对账/运费 6 个页面，
+          而 open 条件的枚举没人同步，结果点进这些页侧栏整组折叠（本组曾只列 shopProducts/shopOrders/shopReturns）。
+          约定该组页面的 active 一律以 shop 开头，新增页面就自动被覆盖，不再依赖「记得回来改这一行」。
+          open 与 summary 高亮共用同一个 navOpen，也杜绝两处条件各写一份而对不上。
+        -->
+        <details class="nav-section" th:with="navOpen=${active != null and #strings.startsWith(active, 'shop')}"
+                 th:attr="open=${navOpen} ? 'open' : null">
+            <summary th:classappend="${navOpen} ? 'active'"
                      th:text="#{admin.nav.group.shop}">电商</summary>
             <div class="nav-sub">
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('shop.product_view') or hasAuthority('shop.product_edit')"
@@ -200,6 +206,8 @@
                 <a href="?lang=zh_CN" th:text="#{admin.topbar.lang.zh}">中文</a>
                 /
                 <a href="?lang=en" th:text="#{admin.topbar.lang.en}">EN</a>
+                /
+                <a href="?lang=id" th:text="#{admin.topbar.lang.id}">ID</a>
             </span>
             <form th:action="@{/admin/logout}" method="post">
                 <button type="submit" class="logout" th:text="#{admin.topbar.logout}">退出登录</button>

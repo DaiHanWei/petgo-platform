@@ -1,8 +1,10 @@
 package com.tailtopia.profile.repository;
 
 import com.tailtopia.profile.domain.HealthRecord;
+import com.tailtopia.profile.domain.HealthRecordType;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
@@ -52,4 +54,13 @@ public interface HealthRecordRepository extends JpaRepository<HealthRecord, Long
     /** 档案删除级联硬删（Story 7.1 · PDP）。 */
     @Transactional
     void deleteByPetProfileId(long petProfileId);
+
+    /**
+     * 该宠物在 [from, to] 内是否有指定类型的健康记录（V1.4.0 · 推荐静默期）。
+     *
+     * <p>🔴 只读判定，<b>不返回记录内容</b> —— 调用方（推荐链路）只需要知道「有没有」，
+     * 拿到记录详情就等于把健康数据带进了电商模块的调用栈。
+     */
+    boolean existsByPetProfileIdAndTypeInAndEventDateBetween(long petProfileId,
+            Collection<HealthRecordType> types, LocalDate from, LocalDate to);
 }

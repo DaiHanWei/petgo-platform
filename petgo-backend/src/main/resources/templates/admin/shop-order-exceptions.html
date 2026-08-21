@@ -1,17 +1,21 @@
 <!DOCTYPE html>
-<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
 <!-- 异常订单处置（V1.4.0 Story 4.4，AB-11D / S-3）。
      🔒 本页不渲染收件人 PII（同订单列表口径）。 -->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.shop.exceptions.title}">异常订单 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1 th:text="#{admin.shop.exceptions.title}">异常订单</h1>
-        <!-- ⚠️ 这段文案是 AC 的一部分，不是装饰：不写明来源，运营会一直以为是系统 bug。 -->
+        <div class="s-page-head">
+            <div class="s-title-wrap">
+                <h1 th:text="#{admin.shop.exceptions.title}">异常订单</h1>
+            </div>
+        </div><!-- ⚠️ 这段文案是 AC 的一部分，不是装饰：不写明来源，运营会一直以为是系统 bug。 -->
         <p class="hint" th:text="#{admin.shop.exceptions.hint}">这里列出实际库存已不足以发出的待发货订单。真正的超卖来源是盘点、报损与退货入库撤销，不是并发下单——并发早已由下单时的条件原子写解决。发现异常时请先回查最近一次盘点或报损记录。</p>
         <p class="hint" th:text="#{admin.shop.exceptions.manualHint}">系统不会自动取消任何订单。每一单都由你判断后手工处置。</p>
         <p th:if="${notice}" class="flash" th:text="${notice}">已保存</p>
@@ -24,6 +28,7 @@
                 <span th:text="' · ' + ${o.status} + ' · ' + ${o.totalAmount}"></span>
             </h2>
 
+            <div class="s-card">
             <table>
                 <thead>
                 <tr>
@@ -55,6 +60,7 @@
                 </tr>
                 </tbody>
             </table>
+            </div>
 
             <div th:if="${canHandle}">
                 <!-- 处置①：整单取消并退款（全额含运费 + 补偿溢价补 Coin） -->

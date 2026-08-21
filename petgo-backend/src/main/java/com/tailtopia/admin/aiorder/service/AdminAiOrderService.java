@@ -49,7 +49,7 @@ public class AdminAiOrderService {
     @Transactional(readOnly = true)
     public AdminAiOrderDetail detail(String orderToken) {
         AiConsultOrder o = orders.findByOrderToken(orderToken)
-                .orElseThrow(() -> AppException.notFound("订单不存在"));
+                .orElseThrow(() -> AppException.notFound("订单不存在").code("admin.err.order.notFound"));
         return new AdminAiOrderDetail(o.getOrderToken(), o.getUserId(), o.getTriageTaskId(),
                 o.getAmount(), o.getPayChannel().name(), o.getPaymentIntentToken(),
                 o.getStatus().name(), o.getPaidAt(), o.getCreatedAt());

@@ -22,7 +22,21 @@ public record RepurchaseCardView(
         String petName,
         LocalDate estimatedDepletionDate,
         /** 距耗尽还有几天（可能为负 = 已过预估耗尽日）。前端据此渲染「~N 天」。 */
-        long daysLeft) {
+        long daysLeft,
+
+        // ---- 推算依据（V1.4.0 · 设计文档 03 屏 1）----
+        // 🔴 设计稿把「日均用量 · 剩余量 · 购买日期」列为**缺一不可**：
+        //    它是用户信任这条推荐的唯一凭据，也是它区别于普通广告位的地方。
+        //    三者**同时为 null 或同时有值**；任一算不出来就整组给 null，
+        //    前端据此整卡不渲染 —— 与其给一条没有依据的推荐，不如不给。
+        //    ⚠️ 只追加到 record 末尾，不动既有字段顺序（并行契约）。
+
+        /** 日均用量（克/天）。 */
+        Integer dailyGrams,
+        /** 估算剩余量（克）。已吃超时为 0，**不给负数**。 */
+        Integer remainingGrams,
+        /** 购买（送达）日期。 */
+        LocalDate purchasedOn) {
 
     /** 🔴 区域① 最多 2 张（FR-93）。⚠️ 超过 2 张时的排序规则 SPEC-16 未拍板。 */
     public static final int MAX_CARDS = 2;

@@ -49,7 +49,7 @@ public class RedOverageMonitorService {
     @Transactional
     public void mark(long userId, String status, String note, long adminId) {
         if (!RedOverageReview.TO_VERIFY.equals(status) && !RedOverageReview.RESOLVED.equals(status)) {
-            throw AppException.validation("非法复核状态");
+            throw AppException.validation("非法复核状态").code("admin.err.redOverage.statusInvalid");
         }
         RedOverageReview r = reviews.findById(userId)
                 .map(existing -> {

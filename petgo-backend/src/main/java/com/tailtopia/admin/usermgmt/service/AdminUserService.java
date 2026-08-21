@@ -67,18 +67,18 @@ public class AdminUserService {
     public void grantPawCoin(long userId, long coins, String reason, String idempotencyToken,
             long actorAccountId) {
         if (coins <= 0) {
-            throw AppException.validation("赠送数量必须为正整数");
+            throw AppException.validation("赠送数量必须为正整数").code("admin.err.user.grantAmountPositive");
         }
         if (reason == null || reason.isBlank()) {
-            throw AppException.validation("赠送原因不能为空");
+            throw AppException.validation("赠送原因不能为空").code("admin.err.user.grantReasonRequired");
         }
         if (idempotencyToken == null || idempotencyToken.isBlank()) {
-            throw AppException.validation("缺少幂等标识，请刷新页面后重试");
+            throw AppException.validation("缺少幂等标识，请刷新页面后重试").code("admin.err.user.missingIdempotencyKey");
         }
         User target = accountQuery.findUserById(userId)
-                .orElseThrow(() -> AppException.notFound("用户不存在"));
+                .orElseThrow(() -> AppException.notFound("用户不存在").code("admin.err.user.notFound"));
         if (target.getDeletedAt() != null) {
-            throw AppException.validation("该账号已注销，不可赠送");
+            throw AppException.validation("该账号已注销，不可赠送").code("admin.err.user.deletedNoGrant");
         }
         String idempotencyKey = "admin-grant:" + idempotencyToken.trim();
         pawCoinWallet.credit(userId, coins, PawCoinTxnType.BONUS, "ADMIN_GRANT", actorAccountId,
@@ -97,15 +97,15 @@ public class AdminUserService {
     @Transactional
     public void deleteUser(long userId, DeletionType type, String note, long actorAccountId) {
         if (type == null) {
-            throw AppException.validation("请选择删除类型（注销 / 违规）");
+            throw AppException.validation("请选择删除类型（注销 / 违规）").code("admin.err.user.deleteTypeRequired");
         }
         if (note == null || note.isBlank()) {
-            throw AppException.validation("删除备注不能为空");
+            throw AppException.validation("删除备注不能为空").code("admin.err.user.deleteNoteRequired");
         }
-        User target = accountQuery.findUserById(userId).orElseThrow(() -> AppException.notFound("用户不存在"));
+        User target = accountQuery.findUserById(userId).orElseThrow(() -> AppException.notFound("用户不存在").code("admin.err.user.notFound"));
         // 已注销账号仅展示，禁止重复删除（否则重写审计 + 重触发级联）。
         if (target.getDeletedAt() != null) {
-            throw AppException.validation("该账号已注销，无需重复删除");
+            throw AppException.validation("该账号已注销，无需重复删除").code("admin.err.user.alreadyDeleted");
         }
 
         // 永久记录（append-only）：类型 + 备注 + 操作人；不落 PII。
@@ -127,10 +127,10 @@ public class AdminUserService {
     @Transactional
     public void deactivate(long userId, String reason, long actorAccountId) {
         if (reason == null || reason.isBlank()) {
-            throw AppException.validation("停用原因不能为空");
+            throw AppException.validation("停用原因不能为空").code("admin.err.user.deactivateReasonRequired");
         }
         // 仅普通用户。
-        accountQuery.findUserById(userId).orElseThrow(() -> AppException.notFound("用户不存在"));
+        accountQuery.findUserById(userId).orElseThrow(() -> AppException.notFound("用户不存在").code("admin.err.user.notFound"));
         authService.deactivateUser(userId);
         consultInterrupt.interruptByUser(userId);
         auditService.record(actorAccountId, AuditActions.USER_DEACTIVATED, "USER",
@@ -140,7 +140,7 @@ public class AdminUserService {
     /** 重新激活用户（Story 3.2，AC5）：恢复登录权 + 写审计 USER_REACTIVATED。 */
     @Transactional
     public void reactivate(long userId, long actorAccountId) {
-        accountQuery.findUserById(userId).orElseThrow(() -> AppException.notFound("用户不存在"));
+        accountQuery.findUserById(userId).orElseThrow(() -> AppException.notFound("用户不存在").code("admin.err.user.notFound"));
         authService.reactivateUser(userId);
         auditService.record(actorAccountId, AuditActions.USER_REACTIVATED, "USER",
                 String.valueOf(userId), "重新激活用户");
@@ -169,7 +169,7 @@ public class AdminUserService {
     @Transactional(readOnly = true)
     public AdminUserDetailView detail(long userId) {
         User u = accountQuery.findUserById(userId)
-                .orElseThrow(() -> AppException.notFound("用户不存在"));
+                .orElseThrow(() -> AppException.notFound("用户不存在").code("admin.err.user.notFound"));
 
         List<AdminUserDetailView.PetRow> pets = profileService.findByOwnerId(userId)
                 .map(AdminUserService::toPetRow)

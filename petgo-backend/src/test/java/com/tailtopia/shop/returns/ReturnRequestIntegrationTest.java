@@ -400,6 +400,27 @@ class ReturnRequestIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("🔴 凭证图上限 5 张（2026-08-19 产品口径）—— 第 6 张必须被服务端拒掉")
+    void evidenceCapIsFiveOnServerSide() {
+        Ctx c = deliveredOrder(500_000L, List.of(seedSku(10, 100_000L, "RETURNABLE")));
+        long lineId = linesOf(c.order()).get(0).getId();
+
+        // 🔴 前端 v2 已挡在 5 张，但只挡在前端的规则换个调用方就不存在了。
+        //    数字在这里【硬编码】而不写 MAX_EVIDENCE：这条守的是「产品口径是 5」，
+        //    跟着常量走的断言在有人把上限改回 6 时会一起变绿，等于没守。
+        assertThatThrownBy(() -> returnRequests.submit(c.userId(), c.order().getPublicToken(),
+                ReturnType.QUALITY_ISSUE, Map.of(lineId, 1), "破了",
+                List.of("e1", "e2", "e3", "e4", "e5", "e6")))
+                .isInstanceOf(AppException.class).hasMessageContaining("凭证图最多 5 张");
+
+        // 边界内一张不少：正好 5 张要能过（否则把上限调成 0 也能让上面那条绿）。
+        ReturnRequest r = returnRequests.submit(c.userId(), c.order().getPublicToken(),
+                ReturnType.QUALITY_ISSUE, Map.of(lineId, 1), "破了",
+                List.of("e1", "e2", "e3", "e4", "e5"));
+        assertThat(r.getStatus()).isEqualTo(ReturnStatus.PENDING_REVIEW);
+    }
+
+    @Test
     @DisplayName("退货窗口外不可申请（签收起 7 日，SPEC-5）")
     void outsideReturnWindowRejected() {
         Ctx c = deliveredOrder(500_000L, List.of(seedSku(10, 100_000L, "RETURNABLE")));
