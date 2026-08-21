@@ -23,6 +23,12 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>⚠️ <b>SKU 上限只约束上架方向。</b>下架只会让在售总数变小，任何时候都应允许——
  * 若给下架也加上限校验，会出现「超限了反而下架不掉」的死锁。
+ *
+ * <p>🔴 <b>2026-08-19 产品决策：默认不设上限</b>（{@code petgo.shop.sku-cap} 默认 0）。
+ * 原先默认 30，注释写的是「C-7 的战略边界，不是性能限制」——即刻意限制选品规模。
+ * 产品拍板取消该限制，<b>但守护机制整套保留</b>：把配置项设为正数即恢复原行为
+ * （告警条、上架拦截、审计文案全都照常）。删掉机制的话，日后想重新设限就得把
+ * 「上架之后的总数」这套判定重写一遍，而那正是最容易写歪的地方（见 {@link #list}）。
  */
 @Service
 public class AdminShopListingService {
@@ -33,7 +39,7 @@ public class AdminShopListingService {
     private final int skuCap;
 
     public AdminShopListingService(ShopProductRepository products, ShopSkuRepository skus,
-            AdminAuditService audit, @Value("${petgo.shop.sku-cap:30}") int skuCap) {
+            AdminAuditService audit, @Value("${petgo.shop.sku-cap:0}") int skuCap) {
         this.products = products;
         this.skus = skus;
         this.audit = audit;
@@ -54,15 +60,26 @@ public class AdminShopListingService {
         return skus.countActiveSkus();
     }
 
-    /** 配置上限（{@code petgo.shop.sku-cap}，默认 30 —— C-7 的战略边界，不是性能限制）。 */
+    /** 配置上限（{@code petgo.shop.sku-cap}）。<b>0 或负数 = 不限</b>（2026-08-19 起的默认）。 */
     public int skuCap() {
         return skuCap;
     }
 
-    /** 是否已达上限（供顶部告警条判定）。 */
+    /**
+     * 是否启用上限。
+     *
+     * <p>🔴 <b>「不限」用一个方法表达，不要在各处各写一遍 {@code skuCap > 0}</b> ——
+     * 告警条与上架拦截必须同进同退，两处判定一旦漂移就会出现
+     * 「报警了却拦不住」或「拦住了却不报警」，而两边各自的测试都会是绿的。
+     */
+    public boolean capEnabled() {
+        return skuCap > 0;
+    }
+
+    /** 是否已达上限（供顶部告警条判定）。不限时恒为 false —— 告警条整条不渲染。 */
     @Transactional(readOnly = true)
     public boolean atOrOverCap() {
-        return activeSkuCount() >= skuCap;
+        return capEnabled() && activeSkuCount() >= skuCap;
     }
 
     /**
@@ -81,15 +98,19 @@ public class AdminShopListingService {
         }
         long own = skus.countByProductId(productId);
         long after = activeSkuCount() + own;
-        if (after > skuCap) {
+        if (capEnabled() && after > skuCap) {
             throw AppException.conflict(
                     "上架会使在售 SKU 总数达到 %d，超过上限 %d。请先下架其他商品，或调整 petgo.shop.sku-cap。"
-                            .formatted(after, skuCap));
+                            .formatted(after, skuCap))
+                    .code("admin.err.product.skuCapExceeded", after, skuCap);
         }
         p.list();
+        // 审计文案：不限时不写「/上限」，否则会留下「1234/0」这种读不通的记录。
         audit.record(actorAccountId, AuditActions.SHOP_PRODUCT_LISTED, "SHOP_PRODUCT",
                 p.getPublicToken(),
-                "上架：%s（在售 SKU %d/%d）".formatted(p.getName(), after, skuCap));
+                capEnabled()
+                        ? "上架：%s（在售 SKU %d/%d）".formatted(p.getName(), after, skuCap)
+                        : "上架：%s（在售 SKU %d，未设上限）".formatted(p.getName(), after));
         return p;
     }
 
@@ -112,6 +133,6 @@ public class AdminShopListingService {
 
     private ShopProduct require(long productId) {
         return products.findById(productId)
-                .orElseThrow(() -> AppException.notFound("商品不存在"));
+                .orElseThrow(() -> AppException.notFound("商品不存在").code("admin.err.product.notFound"));
     }
 }

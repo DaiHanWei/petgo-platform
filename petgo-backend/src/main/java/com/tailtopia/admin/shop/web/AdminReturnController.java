@@ -9,6 +9,7 @@ import com.tailtopia.shop.returns.domain.RejectDisposal;
 import com.tailtopia.shop.returns.domain.ReturnRequest;
 import com.tailtopia.shop.returns.domain.ReturnStatus;
 import com.tailtopia.shop.returns.service.ReturnRequestService;
+import com.tailtopia.shared.i18n.Messages;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,12 +50,17 @@ public class AdminReturnController {
     private final ShopOrderRepository orders;
     private final ShopOrderLineRepository orderLines;
 
+    /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
+    private final Messages msg;
+
     public AdminReturnController(AdminReturnService adminReturns, ReturnRequestService requests,
-            ShopOrderRepository orders, ShopOrderLineRepository orderLines) {
+            ShopOrderRepository orders, ShopOrderLineRepository orderLines,
+            Messages msg) {
         this.adminReturns = adminReturns;
         this.requests = requests;
         this.orders = orders;
         this.orderLines = orderLines;
+        this.msg = msg;
     }
 
     // ---------- 5.3 审核队列 ----------
@@ -115,9 +121,9 @@ public class AdminReturnController {
             @PathVariable String token, RedirectAttributes ra) {
         try {
             adminReturns.approve(token, actorOf(admin));
-            ra.addFlashAttribute("notice", "已批准退货");
+            ra.addFlashAttribute("notice", msg.get("admin.flash.return.approved"));
         } catch (AppException e) {
-            ra.addFlashAttribute("error", e.getMessage());
+            ra.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/shop/returns/" + token;
     }
@@ -128,9 +134,9 @@ public class AdminReturnController {
             @PathVariable String token, @RequestParam String reason, RedirectAttributes ra) {
         try {
             adminReturns.reject(token, reason, actorOf(admin));
-            ra.addFlashAttribute("notice", "已驳回并回告用户");
+            ra.addFlashAttribute("notice", msg.get("admin.flash.return.rejected"));
         } catch (AppException e) {
-            ra.addFlashAttribute("error", e.getMessage());
+            ra.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/shop/returns/" + token;
     }
@@ -145,9 +151,9 @@ public class AdminReturnController {
             RedirectAttributes ra) {
         try {
             adminReturns.registerShipback(token, carrier, trackingNo, fee, actorOf(admin));
-            ra.addFlashAttribute("notice", "已登记寄回运单，进入质检");
+            ra.addFlashAttribute("notice", msg.get("admin.flash.return.shipmentRegistered"));
         } catch (AppException e) {
-            ra.addFlashAttribute("error", e.getMessage());
+            ra.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/shop/returns/" + token;
     }
@@ -159,9 +165,9 @@ public class AdminReturnController {
             @RequestParam(required = false) String photoKeys, RedirectAttributes ra) {
         try {
             adminReturns.passInspection(token, note, photoKeys, actorOf(admin));
-            ra.addFlashAttribute("notice", "质检通过，已以退货入库批次入库");
+            ra.addFlashAttribute("notice", msg.get("admin.flash.return.inspectPassed"));
         } catch (AppException e) {
-            ra.addFlashAttribute("error", e.getMessage());
+            ra.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/shop/returns/" + token;
     }
@@ -176,9 +182,9 @@ public class AdminReturnController {
         try {
             adminReturns.failInspection(token, note, photoKeys, parseDisposal(disposal),
                     shipBackTrackingNo, actorOf(admin));
-            ra.addFlashAttribute("notice", "质检不通过已记录（含处置方式）");
+            ra.addFlashAttribute("notice", msg.get("admin.flash.return.inspectFailed"));
         } catch (AppException e) {
-            ra.addFlashAttribute("error", e.getMessage());
+            ra.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/shop/returns/" + token;
     }
@@ -192,10 +198,10 @@ public class AdminReturnController {
         try {
             var out = adminReturns.executeRefund(token, actorOf(admin));
             ra.addFlashAttribute("notice",
-                    "退款已执行：PawCoin %d / 现金 %d / 补偿溢价 %d".formatted(
-                            out.coinRefunded(), out.cashRefunded(), out.compensationPremium()));
+                    msg.get("admin.flash.return.refunded", out.coinRefunded(),
+                            out.cashRefunded(), out.compensationPremium()));
         } catch (AppException e) {
-            ra.addFlashAttribute("error", e.getMessage());
+            ra.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/shop/returns/" + token;
     }
@@ -220,9 +226,9 @@ public class AdminReturnController {
         try {
             adminReturns.addPrecedent(situation, judgedOpened, rationale, evidenceKeys, null,
                     actorOf(admin));
-            ra.addFlashAttribute("notice", "判例已沉淀");
+            ra.addFlashAttribute("notice", msg.get("admin.flash.return.precedentSaved"));
         } catch (AppException e) {
-            ra.addFlashAttribute("error", e.getMessage());
+            ra.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/shop/return-precedents";
     }
@@ -231,7 +237,7 @@ public class AdminReturnController {
 
     private static long actorOf(AdminUserDetails admin) {
         if (admin == null) {
-            throw AppException.unauthorized("需要登录");
+            throw AppException.unauthorized("需要登录").code("admin.err.common.loginRequired");
         }
         return admin.getAdminAccountId();
     }
@@ -257,6 +263,6 @@ public class AdminReturnController {
                 }
             }
         }
-        throw AppException.validation("请选择商品处置方式（退回用户 / 报损）");
+        throw AppException.validation("请选择商品处置方式（退回用户 / 报损）").code("admin.err.return.dispositionRequired");
     }
 }

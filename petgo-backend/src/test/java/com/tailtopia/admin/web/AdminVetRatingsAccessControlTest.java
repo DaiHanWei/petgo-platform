@@ -21,6 +21,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.ui.ConcurrentModel;
+import com.tailtopia.support.TestMessages;
 
 /** L0：单兽医评分详情门控（Story 6.2 AC5）——{@code rating.view}；超管隐式全权。 */
 class AdminVetRatingsAccessControlTest {
@@ -50,7 +51,8 @@ class AdminVetRatingsAccessControlTest {
         AdminWebController controller(AdminContentService c, AdminModerationService m, AdminVetService v) {
             return new AdminWebController(c, m, v,
                     mock(com.tailtopia.admin.dashboard.service.AdminDashboardService.class),
-                    mock(com.tailtopia.admin.virtual.service.AdminVirtualAccountService.class));
+                    mock(com.tailtopia.admin.virtual.service.AdminVirtualAccountService.class),
+                    TestMessages.real());
         }
     }
 

@@ -42,8 +42,14 @@ public class ReturnRequestService {
 
     private static final Logger log = LoggerFactory.getLogger(ReturnRequestService.class);
 
-    /** 凭证图上限（FR-104A）。 */
-    public static final int MAX_EVIDENCE = 6;
+    /**
+     * 凭证图上限（FR-104A）。
+     *
+     * <p>🔴 <b>5，不是 6</b>（2026-08-19 产品口径）。原为 6，而 2026-08 电商设计稿与前端 v2
+     * 实现的是 min 2 / max 5 —— 两端不一致时<b>挡在前端的那一档等于没挡</b>：换个调用方就能
+     * 传 6 张。产品确认以 5 为准后在此对齐，服务端自己也拒。
+     */
+    public static final int MAX_EVIDENCE = 5;
 
     private final ReturnRequestRepository returns;
     private final ReturnLineRepository returnLines;

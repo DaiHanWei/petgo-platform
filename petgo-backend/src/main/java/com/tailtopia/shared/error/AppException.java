@@ -11,11 +11,46 @@ public class AppException extends RuntimeException {
 
     private final HttpStatus status;
     private final URI type;
+    /** 可空的本地化文案码；为空则展示 {@link #getMessage()} 原文。见 {@link #code}。 */
+    private String messageCode;
+    private Object[] messageArgs = EMPTY_ARGS;
+
+    private static final Object[] EMPTY_ARGS = new Object[0];
 
     public AppException(HttpStatus status, URI type, String detail) {
         super(detail);
         this.status = status;
         this.type = type;
+    }
+
+    /**
+     * 挂一个本地化文案码，供管理后台按当前语言展示（{@code com.tailtopia.shared.i18n.Messages#resolve}）。
+     *
+     * <p><b>原文照留，不是替换。</b>构造时传入的中文仍是 {@code getMessage()}，继续充当日志文案、
+     * 单测断言目标，以及取不到 code 时的兜底。这样加码是纯增量的：现有调用点与断言中文的测试全部不受影响。
+     *
+     * <pre>{@code
+     * throw AppException.validation("超级管理员已达上限 " + CAP + " 个")
+     *         .code("admin.err.account.superAdminCap", CAP);
+     * }</pre>
+     *
+     * @param code 文案码（三语键集由 L0 对齐测试保证）
+     * @param args MessageFormat 占位符实参，对应文案里的 {@code {0}}、{@code {1}}……
+     * @return this（便于 {@code throw ...code(...)} 一行写完）
+     */
+    public AppException code(String code, Object... args) {
+        this.messageCode = code;
+        this.messageArgs = args == null ? EMPTY_ARGS : args;
+        return this;
+    }
+
+    /** 本地化文案码；未挂码时为 {@code null}。 */
+    public String getMessageCode() {
+        return messageCode;
+    }
+
+    public Object[] getMessageArgs() {
+        return messageArgs.clone();
     }
 
     public HttpStatus getStatus() {

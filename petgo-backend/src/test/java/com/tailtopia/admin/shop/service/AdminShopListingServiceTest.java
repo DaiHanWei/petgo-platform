@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -105,6 +106,49 @@ class AdminShopListingServiceTest {
                 .hasMessageContaining("超过上限");
 
         verify(audit, never()).record(anyLong(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    // ---------- 2026-08-19 产品决策：默认不设上限（cap <= 0） ----------
+
+    @Test
+    @DisplayName("🔴 不限（cap=0）：在售 9999 + 本商品 5 个也照常上架")
+    void listUnlimitedNeverRejects() {
+        service = new AdminShopListingService(products, skus, audit, 0);
+        given(1L, false, 5L, 9999L);
+
+        assertThat(service.list(1L, 7L).isActive()).isTrue();
+        verify(audit).record(anyLong(), anyString(), anyString(), anyString(),
+                contains("未设上限"));
+    }
+
+    @Test
+    @DisplayName("🔴 不限时告警条恒不亮 —— 拦截与告警必须同进同退")
+    void unlimitedNeverWarns() {
+        service = new AdminShopListingService(products, skus, audit, 0);
+        when(skus.countActiveSkus()).thenReturn(9999L);
+
+        assertThat(service.capEnabled()).isFalse();
+        assertThat(service.atOrOverCap()).isFalse();
+    }
+
+    @Test
+    @DisplayName("负数与 0 同义（配置写 -1 也是不限，不该变成「上限 -1」把一切都挡掉）")
+    void negativeCapMeansUnlimited() {
+        service = new AdminShopListingService(products, skus, audit, -1);
+        given(1L, false, 1L, 500L);
+
+        assertThat(service.list(1L, 7L).isActive()).isTrue();
+    }
+
+    @Test
+    @DisplayName("配置回正数即恢复原行为 —— 机制保留，不是删掉")
+    void capRestorableByConfig() {
+        service = new AdminShopListingService(products, skus, audit, 3);
+        given(1L, false, 1L, 3L);
+
+        assertThatThrownBy(() -> service.list(1L, 7L))
+                .isInstanceOf(AppException.class)
+                .hasMessageContaining("超过上限");
     }
 
     @Test

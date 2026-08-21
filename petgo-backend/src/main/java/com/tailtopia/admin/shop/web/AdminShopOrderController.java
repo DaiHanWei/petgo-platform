@@ -12,6 +12,7 @@ import com.tailtopia.shop.order.domain.ShopOrderStatus;
 import com.tailtopia.shop.order.repository.ShopOrderLineRepository;
 import com.tailtopia.shop.order.repository.ShopOrderRepository;
 import com.tailtopia.shop.order.service.ShopOrderFulfillmentService;
+import com.tailtopia.shared.i18n.Messages;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -55,13 +56,18 @@ public class AdminShopOrderController {
     private final ShopOrderRepository orders;
     private final ShopOrderLineRepository orderLines;
 
+    /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
+    private final Messages msg;
+
     public AdminShopOrderController(AdminShopOrderService adminOrders,
             ShopOrderFulfillmentService fulfillment, ShopOrderRepository orders,
-            ShopOrderLineRepository orderLines) {
+            ShopOrderLineRepository orderLines,
+            Messages msg) {
         this.adminOrders = adminOrders;
         this.fulfillment = fulfillment;
         this.orders = orders;
         this.orderLines = orderLines;
+        this.msg = msg;
     }
 
     // ---------- 列表 ----------
@@ -97,7 +103,7 @@ public class AdminShopOrderController {
         } else if (phone != null && !phone.isBlank()) {
             // 🔒 服务端独立再判一次——页面不渲染入口只是第一层
             if (!canPhoneSearch) {
-                throw AppException.forbidden("按电话搜索订单需要「按电话搜索」权限（NFR-11）");
+                throw AppException.forbidden("按电话搜索订单需要「按电话搜索」权限（NFR-11）").code("admin.err.shopOrder.phoneSearchForbidden");
             }
             try {
                 found = adminOrders.searchByPhone(phone, actorOf(admin), PAGE_SIZE);
@@ -144,7 +150,7 @@ public class AdminShopOrderController {
     public String detail(@AuthenticationPrincipal AdminUserDetails admin,
             @PathVariable String token, Model model) {
         ShopOrder order = orders.findByPublicToken(token)
-                .orElseThrow(() -> AppException.notFound("订单不存在"));
+                .orElseThrow(() -> AppException.notFound("订单不存在").code("admin.err.order.notFound"));
 
         model.addAttribute("order", order);
         model.addAttribute("shipTo", order.shipTo());
@@ -174,9 +180,9 @@ public class AdminShopOrderController {
                     admin == null ? null : admin.getAdminAccountId());
             // 🔒 回显单号（非 PII）；不回显收件人任何字段
             ra.addFlashAttribute("notice",
-                    "已发货：" + s.getCarrier().displayName() + " " + s.getTrackingNo());
+                    msg.get("admin.flash.shopOrder.shipped", s.getCarrier().displayName(), s.getTrackingNo()));
         } catch (AppException e) {
-            ra.addFlashAttribute("error", e.getMessage());
+            ra.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/shop/orders/" + token;
     }
@@ -188,9 +194,9 @@ public class AdminShopOrderController {
             @PathVariable String token, RedirectAttributes ra) {
         try {
             adminOrders.markDelivered(token, admin == null ? null : admin.getAdminAccountId());
-            ra.addFlashAttribute("notice", "已标记为送达");
+            ra.addFlashAttribute("notice", msg.get("admin.flash.shopOrder.delivered"));
         } catch (AppException e) {
-            ra.addFlashAttribute("error", e.getMessage());
+            ra.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/shop/orders/" + token;
     }
@@ -203,9 +209,9 @@ public class AdminShopOrderController {
         try {
             adminOrders.markPackageDelivered(token, shipmentId,
                     admin == null ? null : admin.getAdminAccountId());
-            ra.addFlashAttribute("notice", "包裹已标记送达");
+            ra.addFlashAttribute("notice", msg.get("admin.flash.shopOrder.parcelDelivered"));
         } catch (AppException e) {
-            ra.addFlashAttribute("error", e.getMessage());
+            ra.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/shop/orders/" + token;
     }

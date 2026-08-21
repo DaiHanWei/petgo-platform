@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
 <!-- 兽医在线状态快照（Story 2.6，AB-2F）。只读、手动刷新、不自动轮询。门控 @PreAuthorize(vet.view)。 -->
 <head>
     <meta charset="UTF-8"/>

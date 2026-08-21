@@ -19,6 +19,7 @@ import com.tailtopia.shop.repurchase.domain.RepurchaseTrigger;
 import com.tailtopia.shop.repurchase.domain.RepurchaseTriggerStatus;
 import com.tailtopia.shop.repurchase.repository.RepurchaseTriggerRepository;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -57,10 +58,12 @@ public class RepurchaseScanService {
     private final PetProfileRepository profiles;
     private final RepurchaseTriggerRepository triggers;
     private final NotificationService notifications;
+    private final RecommendationSilenceService silence;
 
     public RepurchaseScanService(ShopOrderRepository orders, ShopOrderLineRepository orderLines,
             ShopSkuRepository skus, ShopProductRepository products, PetProfileRepository profiles,
-            RepurchaseTriggerRepository triggers, NotificationService notifications) {
+            RepurchaseTriggerRepository triggers, NotificationService notifications,
+            RecommendationSilenceService silence) {
         this.orders = orders;
         this.orderLines = orderLines;
         this.skus = skus;
@@ -68,6 +71,7 @@ public class RepurchaseScanService {
         this.profiles = profiles;
         this.triggers = triggers;
         this.notifications = notifications;
+        this.silence = silence;
     }
 
     /**
@@ -142,7 +146,7 @@ public class RepurchaseScanService {
             if (depletion == null || !DepletionForecast.shouldTriggerOn(depletion, today)) {
                 continue;
             }
-            if (upsertTrigger(order, pet, sku, depletion)) {
+            if (upsertTrigger(order, pet, sku, depletion, today)) {
                 created++;
             }
         }
@@ -158,7 +162,7 @@ public class RepurchaseScanService {
      * <p>🔴 <b>推送一次</b>：已推过的触发在后续日扫里<b>不重推</b>。
      */
     private boolean upsertTrigger(ShopOrder order, PetProfile pet, ShopSku sku,
-            LocalDate depletion) {
+            LocalDate depletion, LocalDate today) {
         var existing = triggers.findByUserIdAndSkuIdAndStatus(order.getUserId(), sku.getId(),
                 RepurchaseTriggerStatus.ACTIVE);
         if (existing.isPresent()) {
@@ -171,7 +175,7 @@ public class RepurchaseScanService {
         } catch (DataIntegrityViolationException e) {
             return false;   // 并发下被库级索引挡住 —— 那说明别的线程刚建过，正是我们要的结果
         }
-        notifyOnce(t, pet);
+        notifyOnce(t, pet, today);
         return true;
     }
 
@@ -184,7 +188,15 @@ public class RepurchaseScanService {
      * <p>🔴 文案<b>给估算依据而非断言</b>：说「预计还能吃 ~N 天」，不说「已经吃完了」。
      * 档案体重不准或用户混喂时会有偏差，把估算说成事实会直接损伤信任。
      */
-    private void notifyOnce(RepurchaseTrigger t, PetProfile pet) {
+    private void notifyOnce(RepurchaseTrigger t, PetProfile pet, LocalDate today) {
+        // 🔴 静默期不推送（V1.4.0）。推送落在锁屏上，是所有推荐形态里最强制的一种 ——
+        //    手术后第二天弹「Miko 的粮快吃完了」，比首页多一张卡片冒犯得多。
+        //    ⚠️ 这里**只跳过推送、不建触发记录之外的任何回滚**：触发记录照常落库，
+        //    静默期结束后卡片会正常出现在首页。反过来（连触发都不建）会让这段窗口里
+        //    到期的补货**永久丢失** —— 用户既没被打扰，也再没被提醒过。
+        if (silence.isSilencedForPet(pet.getId(), today)) {
+            return;
+        }
         try {
             notifications.send(t.getUserId(), NotificationType.REPURCHASE_FOOD_LOW,
                     "补货提醒", "%s 的粮预计快吃完了".formatted(pet.getName()),
@@ -243,7 +255,75 @@ public class RepurchaseScanService {
             }
             live.add(t);
         }
+        // 🔴 静默期返回空列表 —— 前端据此整区不渲染（不是渲染空态）。
+        //    ⚠️ 放在过期/被取代的清理**之后**：那段清理是数据维护，跳过它会让失效触发
+        //    在静默期里一直挂着 ACTIVE。静默期该屏蔽的是「给用户看什么」，不是内务。
+        if (silence.isSilenced(userId)) {
+            return List.of();
+        }
         return live;
+    }
+
+    /**
+     * 一条触发的**推算依据**（V1.4.0 · 设计文档 03 屏 1）。
+     *
+     * <p>🔴 设计稿把「日均用量 · 剩余量 · 购买日期」列为**缺一不可**：
+     * 它是用户信任这条推荐的唯一凭据，也是它区别于普通广告位的地方。
+     * 任一项算不出来时整卡不渲染 —— 与其给一条没有依据的推荐，不如不给。
+     */
+    public record DepletionBasis(int dailyGrams, int remainingGrams, LocalDate purchasedOn) {
+    }
+
+    /**
+     * 为一条触发算推算依据。算不出任一项 → 返回 null（调用方整卡不渲染）。
+     *
+     * <p>⚠️ 每张卡一次查询（订单 + 行 + SKU + 商品 + 档案）。卡片数由
+     * {@code RepurchaseCardView.capped} 封顶，故不做批量优化；
+     * 若日后放开上限，这里要改成一次性批量取。
+     */
+    @Transactional(readOnly = true)
+    public DepletionBasis basisFor(RepurchaseTrigger t, LocalDate today) {
+        Long orderId = t.getSourceOrderId();
+        if (orderId == null) {
+            return null;
+        }
+        ShopOrder order = orders.findById(orderId).orElse(null);
+        if (order == null || order.getDeliveredAt() == null) {
+            return null;
+        }
+        PetProfile pet = profiles.findByOwnerId(t.getUserId()).orElse(null);
+        if (pet == null || pet.getWeightKg() == null) {
+            return null;
+        }
+        ShopSku sku = skus.findById(t.getSkuId()).orElse(null);
+        if (sku == null || sku.getNetWeightG() == null || sku.getNetWeightG() <= 0) {
+            return null;
+        }
+        ShopProduct product = products.findById(sku.getProductId()).orElse(null);
+        if (product == null) {
+            return null;
+        }
+        Integer dailyGrams =
+                DepletionForecast.dailyGramsFor(product.getFeedingGuide(), pet.getWeightKg());
+        if (dailyGrams == null || dailyGrams <= 0) {
+            return null;
+        }
+        // 有效数量：与日扫同一口径（扣掉已退的行），否则退了货还按原量算剩余。
+        int qty = 0;
+        for (ShopOrderLine line : orderLines.findByOrderIdOrderByIdAsc(orderId)) {
+            if (line.getSkuId() == sku.getId()) {
+                qty += line.getQty() - line.getRefundedQty();
+            }
+        }
+        if (qty <= 0) {
+            return null;
+        }
+        LocalDate deliveredOn = order.getDeliveredAt().atZone(ZoneOffset.UTC).toLocalDate();
+        long totalGrams = sku.getNetWeightG() * (long) qty;
+        long consumed = Math.max(0, ChronoUnit.DAYS.between(deliveredOn, today)) * dailyGrams;
+        // 🔴 不给负数：吃超了就是 0，显示「剩 −300g」只会让人怀疑整个算法。
+        long remaining = Math.max(0, totalGrams - consumed);
+        return new DepletionBasis(dailyGrams, (int) remaining, deliveredOn);
     }
 
     /** SKU → 商品名（首页卡片文案要用宠物名 + 商品名）。 */

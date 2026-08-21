@@ -61,7 +61,7 @@ public class AdminShopOrderService {
     public Shipment ship(String orderToken, String carrierRaw, String trackingNo,
             Long carrierCost, Long actorAccountId) {
         if (carrierCost == null) {
-            throw AppException.validation("请填写承运成本（S-11：不录则毛利看板缺行）");
+            throw AppException.validation("请填写承运成本（S-11：不录则毛利看板缺行）").code("admin.err.shopOrder.carrierCostRequired");
         }
         Carrier carrier = Carrier.parse(carrierRaw);
         Shipment shipment = fulfillment.ship(orderToken, carrier, trackingNo, carrierCost);
@@ -117,7 +117,8 @@ public class AdminShopOrderService {
         if (digits.length() < MIN_PHONE_QUERY_DIGITS) {
             // 位数太少会把「搜索」变成「遍历」：4 位后缀能捞出全站近万分之一的订单。
             throw AppException.validation(
-                    "按电话搜索至少需要 " + MIN_PHONE_QUERY_DIGITS + " 位数字");
+                    "按电话搜索至少需要 " + MIN_PHONE_QUERY_DIGITS + " 位数字")
+                    .code("admin.err.shopOrder.phoneQueryTooShort", MIN_PHONE_QUERY_DIGITS);
         }
         List<ShopOrder> hits = orders.searchByPhoneSuffix("%" + digits,
                 PageRequest.of(0, Math.max(1, limit)));

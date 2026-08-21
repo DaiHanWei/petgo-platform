@@ -1,21 +1,28 @@
 <!DOCTYPE html>
-<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
 <!-- 电商订单列表（V1.4.0 Story 4.2，AB-11A/B）。模块 11 第一页。
      🔒 本页不渲染任何 PII：收件人姓名/电话/详细地址只在详情页出现。 -->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.shop.orders.title}">电商订单 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1 th:text="#{admin.shop.orders.title}">电商订单</h1>
-        <p class="hint" th:text="#{admin.shop.orders.hint}">列表不显示收件人信息。要查看收件地址请进入订单详情。</p>
+        <div class="s-page-head">
+            <div class="s-title-wrap">
+                <h1 th:text="#{admin.shop.orders.title}">电商订单</h1>
+                <p class="s-sub" th:text="#{admin.shop.orders.hint}">列表不显示收件人信息。要查看收件地址请进入订单详情。</p>
+            </div>
+        </div>
         <p th:if="${notice}" class="flash" th:text="${notice}">已保存</p>
         <p th:if="${error}" class="flash error" th:text="${error}">操作失败</p>
 
-        <form method="get" th:action="@{/admin/shop/orders}" class="filters">
+        <div class="s-card">
+            <div class="s-card-body">
+                <form method="get" th:action="@{/admin/shop/orders}" class="filters">
             <label th:text="#{admin.shop.orders.col.token}">订单号</label>
             <input type="text" name="orderToken" th:value="${orderToken}" maxlength="32"/>
             <label th:text="#{admin.shop.orders.col.status}">状态</label>
@@ -30,10 +37,16 @@
             <input type="date" name="to" th:value="${to}"/>
             <button type="submit" th:text="#{admin.common.filter}">筛选</button>
         </form>
+            </div>
+        </div>
 
         <!-- 🔒 按电话搜索：独立权限位 + 每次审计（AB-11A / NFR-11）。
              无权限时【连输入框都不渲染】，服务端另有独立判定。 -->
-        <form th:if="${canPhoneSearch}" method="get" th:action="@{/admin/shop/orders}"
+        <!-- 🔴 条件搬到卡片上，不能只留在 form 上：
+             无权限时 form 不渲染，但外层卡片照样渲染 → 页面上多一个空白卡。 -->
+        <div class="s-card" th:if="${canPhoneSearch}">
+            <div class="s-card-body">
+                <form method="get" th:action="@{/admin/shop/orders}"
               class="filters" autocomplete="off">
             <label th:text="#{admin.shop.orders.filter.phone}">收件人电话</label>
             <!-- 🔒 不回显已搜过的号码：回显会把个人数据带进 URL、浏览器历史与访问日志 -->
@@ -41,9 +54,24 @@
             <button type="submit" th:text="#{admin.shop.orders.btn.phoneSearch}">按电话搜索</button>
             <span class="hint" th:text="#{admin.shop.orders.phoneSearch.hint}">每次搜索都会写入操作审计。08xx / 8xx / +62 8xx 三种写法都能搜到同一批订单。</span>
         </form>
+            </div>
+        </div>
         <p th:if="${phoneSearched}" class="hint"
            th:text="#{admin.shop.orders.phoneSearch.audited}">本次按电话搜索已记入操作审计。</p>
 
+        <div class="s-card">
+            <!-- 状态 Tab（参考 Shopee 卖家中心）。状态筛选是这一页最高频的操作，
+                 从筛选条的下拉框里提到明面 —— 上方筛选条保留，用于日期与订单号。
+                 ⚠️ 每个 Tab 都带上当前的 from/to，否则点一下状态就把日期范围清掉了。 -->
+            <div class="s-tabs">
+                <a th:href="@{/admin/shop/orders(from=${from},to=${to})}"
+                   th:classappend="${#strings.isEmpty(status)} ? 'active'"
+                   th:text="#{admin.shop.orders.filter.all}">全部</a>
+                <a th:each="st : ${statuses}"
+                   th:href="@{/admin/shop/orders(status=${st},from=${from},to=${to})}"
+                   th:classappend="${st.name() == status} ? 'active'"
+                   th:text="${st}">SHIPPED</a>
+            </div>
         <table>
             <thead>
             <tr>
@@ -80,6 +108,7 @@
             </tr>
             </tbody>
         </table>
+        </div>
     </div>
 </div>
 </body>

@@ -1,20 +1,26 @@
 <!DOCTYPE html>
-<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
 <!-- 库存管理（V1.4.0 Story 1.4，AB-10C）。模块 10 第二页。 -->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.shop.inventory.title}">库存管理 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1 th:text="#{admin.shop.inventory.title}">库存管理</h1>
-        <p class="hint" th:text="#{admin.shop.inventory.hint}">库存增减只能通过入库单、报损与盘点调整产生，不提供直接编辑库存数字的入口——直接改数会使库存与采购成本脱钩，令毛利核算失真。</p>
+        <div class="s-page-head">
+            <div class="s-title-wrap">
+                <h1 th:text="#{admin.shop.inventory.title}">库存管理</h1>
+                <p class="s-sub" th:text="#{admin.shop.inventory.hint}">库存增减只能通过入库单、报损与盘点调整产生，不提供直接编辑库存数字的入口——直接改数会使库存与采购成本脱钩，令毛利核算失真。</p>
+            </div>
+        </div>
         <p th:if="${notice}" class="flash" th:text="${notice}">已保存</p>
         <p th:if="${error}" class="flash error" th:text="${error}">操作失败</p>
 
         <!-- 🔴 三个数必须并排展示：客服排查「用户说买不了但后台显示有货」时，差异一定在锁定库存上 -->
+        <div class="s-card">
         <table>
             <thead>
             <tr>
@@ -45,6 +51,7 @@
             </tr>
             </tbody>
         </table>
+        </div>
 
         <!-- ===== 采购入库：需 shop.inventory_edit + shop.cost_edit 双权限 ===== -->
         <!-- 🔒 canPurchase 为 false 时整块不渲染；服务端在控制器里【独立再判一次】，看源码绕不过 -->

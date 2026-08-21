@@ -1,19 +1,25 @@
 <!DOCTYPE html>
-<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
 <!-- 退货详情：审核 / 质检 / 退款执行（V1.4.0 Story 5.3 / 5.4 / 5.5）。 -->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.shop.return.detail.title}">退货详情 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1 th:text="#{admin.shop.return.detail.title}">退货详情</h1>
-        <p><a th:href="@{/admin/shop/returns}" th:text="#{admin.common.back}">返回列表</a></p>
+        <div class="s-page-head">
+            <div class="s-title-wrap">
+                <h1 th:text="#{admin.shop.return.detail.title}">退货详情</h1>
+            </div>
+            <div class="s-actions"><a class="btn btn-neutral" th:href="@{/admin/shop/returns}" th:text="#{admin.common.back}">返回列表</a></div>
+        </div>
         <p th:if="${notice}" class="flash" th:text="${notice}">已保存</p>
         <p th:if="${error}" class="flash error" th:text="${error}">操作失败</p>
 
+        <div class="s-card">
         <table>
             <tr><th th:text="#{admin.shop.returns.col.token}">申请编号</th><td th:text="${r.publicToken}">abc</td></tr>
             <tr><th th:text="#{admin.shop.orders.col.token}">订单号</th>
@@ -33,8 +39,10 @@
                     <span th:if="${r.returnShipBackTrackingNo != null}"
                           th:text="' · ' + ${r.returnShipBackTrackingNo}"></span></td></tr>
         </table>
+        </div>
 
         <h2 th:text="#{admin.shop.returns.section.lines}">退货行</h2>
+        <div class="s-card">
         <table>
             <thead><tr>
                 <th th:text="#{admin.shop.col.name}">商品</th>
@@ -49,11 +57,13 @@
             </tr>
             </tbody>
         </table>
+        </div>
 
         <!-- 🔴 退款单详情明确列出溢价金额与触发依据，便于事后审计与客诉复盘（5.5 AC） -->
         <div th:if="${quote != null}">
             <h2 th:text="#{admin.shop.returns.section.quote}">退款试算</h2>
             <p class="hint" th:text="#{admin.shop.returns.quote.hint}">两段拆分按整数累计法计算（AD-2）：按累计量取整，不按单次取整，全额退完时 PawCoin 段精确归零漂移。PawCoin 段只能退回 PawCoin——后台不存在改为退真钱的入口。</p>
+            <div class="s-card">
             <table>
                 <tr><th th:text="#{admin.shop.returns.quote.goods}">商品金额</th><td th:text="${quote.goodsAmount}">0</td></tr>
                 <tr><th th:text="#{admin.shop.returns.quote.outbound}">去程运费退回</th><td th:text="${quote.outboundFeeRefund}">0</td></tr>
@@ -67,6 +77,7 @@
                 <tr><th th:text="#{admin.shop.returns.quote.shipback}">回程运费返还</th><td th:text="${quote.shipbackReimbursement}">0</td></tr>
                 <tr><th th:text="#{admin.shop.returns.quote.grand}">总退回（含补偿）</th><td th:text="${quote.grandTotal()}">0</td></tr>
             </table>
+            </div>
         </div>
 
         <!-- 审核（5.3）。🔴 没有运费归属的输入框：那是自动得出的，不是可调项。 -->

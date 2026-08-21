@@ -66,7 +66,7 @@ public class AdminShopProductService {
     public ShopProduct update(long productId, ShopProductForm form, long actorAccountId) {
         validate(form);
         ShopProduct p = products.findById(productId)
-                .orElseThrow(() -> AppException.notFound("商品不存在"));
+                .orElseThrow(() -> AppException.notFound("商品不存在").code("admin.err.product.notFound"));
         p.apply(form.getName().trim(), form.getBrand().trim(), form.getCategory(),
                 form.getMainImageKey().trim(), form.galleryKeys(), form.getSpecies(),
                 form.getBodySize(), form.getAgeStage(), form.getDetailHtml(),
@@ -88,7 +88,7 @@ public class AdminShopProductService {
     @Transactional
     public ShopSku upsertSku(long productId, ShopSkuForm form, long actorAccountId) {
         validateSku(form);
-        products.findById(productId).orElseThrow(() -> AppException.notFound("商品不存在"));
+        products.findById(productId).orElseThrow(() -> AppException.notFound("商品不存在").code("admin.err.product.notFound"));
         ShopSku sku;
         boolean created = false;
         if (form.getId() == null) {
@@ -97,10 +97,10 @@ public class AdminShopProductService {
             created = true;
         } else {
             sku = skus.findById(form.getId())
-                    .orElseThrow(() -> AppException.notFound("规格不存在"));
+                    .orElseThrow(() -> AppException.notFound("规格不存在").code("admin.err.product.skuNotFound"));
             if (!sku.getProductId().equals(productId)) {
                 // 越权改他商品的 SKU：按 404 处理，不泄露存在性
-                throw AppException.notFound("规格不存在");
+                throw AppException.notFound("规格不存在").code("admin.err.product.skuNotFound");
             }
             sku.apply(form.getSpecName().trim(), form.getPrice(), form.getNetWeightG(),
                     form.getReturnPolicy());
@@ -125,10 +125,10 @@ public class AdminShopProductService {
     @Transactional
     public void updateCostPrice(long skuId, Long costPrice, long actorAccountId) {
         if (costPrice != null && costPrice < 0) {
-            throw AppException.validation("进货价不能为负");
+            throw AppException.validation("进货价不能为负").code("admin.err.product.costNegative");
         }
         ShopSku sku = skus.findById(skuId)
-                .orElseThrow(() -> AppException.notFound("规格不存在"));
+                .orElseThrow(() -> AppException.notFound("规格不存在").code("admin.err.product.skuNotFound"));
         sku.applyCostPrice(costPrice);
         skus.save(sku);
         audit.record(actorAccountId, AuditActions.SHOP_PRODUCT_COST_UPDATED,
@@ -139,25 +139,25 @@ public class AdminShopProductService {
 
     /** FR-94 必填项 + 喂量结构。违规抛 {@code validation}，页面回显且保留已填内容。 */
     void validate(ShopProductForm f) {
-        requireText(f.getName(), "商品名称");
+        requireText(f.getName(), "商品名称", "admin.err.product.nameRequired");
         if (f.getName().trim().length() > 60) {
-            throw AppException.validation("商品名称不得超过 60 字符");
+            throw AppException.validation("商品名称不得超过 60 字符").code("admin.err.product.nameTooLong");
         }
-        requireText(f.getBrand(), "品牌");
+        requireText(f.getBrand(), "品牌", "admin.err.product.brandRequired");
         if (f.getCategory() == null) {
-            throw AppException.validation("请选择品类");
+            throw AppException.validation("请选择品类").code("admin.err.product.categoryRequired");
         }
-        requireText(f.getMainImageKey(), "主图");
+        requireText(f.getMainImageKey(), "主图", "admin.err.product.mainImageRequired");
         if (f.getSpecies() == null) {
-            throw AppException.validation("请选择适用物种");
+            throw AppException.validation("请选择适用物种").code("admin.err.product.speciesRequired");
         }
-        requireText(f.getDetailHtml(), "商品详情");
-        requireText(f.getShelfLifeNote(), "保质期说明");
+        requireText(f.getDetailHtml(), "商品详情", "admin.err.product.detailRequired");
+        requireText(f.getShelfLifeNote(), "保质期说明", "admin.err.product.shelfLifeRequired");
         if (f.getReturnPolicy() == null) {
-            throw AppException.validation("请选择退货规则");
+            throw AppException.validation("请选择退货规则").code("admin.err.product.returnPolicyRequired");
         }
         if (f.galleryKeys().size() > 8) {
-            throw AppException.validation("图集最多 8 张");
+            throw AppException.validation("图集最多 8 张").code("admin.err.product.galleryMax");
         }
         validateFeedingGuide(f.feedingGuide());
     }
@@ -175,17 +175,17 @@ public class AdminShopProductService {
         }
         for (FeedingGuideEntry e : guide) {
             if (e.weightMinKg() <= 0 || e.weightMaxKg() <= 0 || e.gramsPerDay() <= 0) {
-                throw AppException.validation("每日建议喂量的体重与克数必须为正整数");
+                throw AppException.validation("每日建议喂量的体重与克数必须为正整数").code("admin.err.product.feedingPositive");
             }
             if (e.weightMinKg() >= e.weightMaxKg()) {
-                throw AppException.validation("体重区间的下限必须小于上限");
+                throw AppException.validation("体重区间的下限必须小于上限").code("admin.err.product.feedingRangeOrder");
             }
         }
         List<FeedingGuideEntry> sorted = guide.stream()
                 .sorted(Comparator.comparingInt(FeedingGuideEntry::weightMinKg)).toList();
         for (int i = 1; i < sorted.size(); i++) {
             if (sorted.get(i).weightMinKg() < sorted.get(i - 1).weightMaxKg()) {
-                throw AppException.validation("体重区间不得重叠");
+                throw AppException.validation("体重区间不得重叠").code("admin.err.product.feedingRangeOverlap");
             }
         }
     }
@@ -204,18 +204,23 @@ public class AdminShopProductService {
     }
 
     void validateSku(ShopSkuForm f) {
-        requireText(f.getSpecName(), "规格名");
+        requireText(f.getSpecName(), "规格名", "admin.err.product.specNameRequired");
         if (f.getPrice() == null || f.getPrice() < 0) {
-            throw AppException.validation("价格必须为非负整数");
+            throw AppException.validation("价格必须为非负整数").code("admin.err.product.priceNonNegative");
         }
         if (f.getNetWeightG() != null && f.getNetWeightG() <= 0) {
-            throw AppException.validation("净含量必须为正");
+            throw AppException.validation("净含量必须为正").code("admin.err.product.netWeightPositive");
         }
     }
 
-    private static void requireText(String v, String label) {
+    /**
+     * 必填校验。{@code label} 只作日志/兜底原文，真正展示给运营的是 {@code code} 对应的三语文案——
+     * 刻意一个字段一个码，而不是把字段名当参数塞进一条通用文案：后者要求解析时再解析一层嵌套 key，
+     * 而印尼语/英语里「XX 不能为空」的语序也未必能用同一个模板套出来。
+     */
+    private static void requireText(String v, String label, String code) {
         if (v == null || v.isBlank()) {
-            throw AppException.validation(label + "不能为空");
+            throw AppException.validation(label + "不能为空").code(code);
         }
     }
 }

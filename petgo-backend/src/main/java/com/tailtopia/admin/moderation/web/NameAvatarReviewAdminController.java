@@ -123,12 +123,12 @@ public class NameAvatarReviewAdminController {
 
     private static AvatarDecision parseAvatarDecision(String raw) {
         if (raw == null) {
-            throw AppException.validation("处置结论必填（PASS / VIOLATION）");
+            throw AppException.validation("处置结论必填（PASS / VIOLATION）").code("admin.err.nameAvatar.verdictRequired");
         }
         try {
             return AvatarDecision.valueOf(raw.trim().toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw AppException.validation("处置结论非法，须为 PASS / VIOLATION 之一");
+            throw AppException.validation("处置结论非法，须为 PASS / VIOLATION 之一").code("admin.err.nameAvatar.verdictInvalid");
         }
     }
 }

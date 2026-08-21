@@ -15,6 +15,8 @@ public final class AuditActions {
     /** 创建后台/兽医账号。 */
     public static final String ACCOUNT_CREATED = "ACCOUNT_CREATED";
     /** 停用后台账号（Story 1.5）。 */
+    /** 改后台账号岗位角色（V165）。detail 记 旧角色 → 新角色。 */
+    public static final String ACCOUNT_ROLE_CHANGED = "ACCOUNT_ROLE_CHANGED";
     public static final String ACCOUNT_DEACTIVATED = "ACCOUNT_DEACTIVATED";
     /** 重新激活后台账号（Story 1.5）。 */
     public static final String ACCOUNT_REACTIVATED = "ACCOUNT_REACTIVATED";

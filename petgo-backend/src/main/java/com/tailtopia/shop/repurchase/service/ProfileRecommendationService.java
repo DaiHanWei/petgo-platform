@@ -43,6 +43,7 @@ public class ProfileRecommendationService {
     private final PetProfileRepository profiles;
     private final ShopProductRepository products;
     private final ShopSkuRepository skus;
+    private final RecommendationSilenceService silence;
 
     /** 🔴 犬猫年龄阈值可后台配置（FR-107）。这里经配置注入，默认取 PRD 值。 */
     private final int puppyMaxYears;
@@ -50,11 +51,13 @@ public class ProfileRecommendationService {
 
     public ProfileRecommendationService(PetProfileRepository profiles,
             ShopProductRepository products, ShopSkuRepository skus,
+            RecommendationSilenceService silence,
             @Value("${petgo.shop.reco.puppy-max-years:1}") int puppyMaxYears,
             @Value("${petgo.shop.reco.adult-max-years:7}") int adultMaxYears) {
         this.profiles = profiles;
         this.products = products;
         this.skus = skus;
+        this.silence = silence;
         this.puppyMaxYears = puppyMaxYears;
         this.adultMaxYears = adultMaxYears;
     }
@@ -73,6 +76,17 @@ public class ProfileRecommendationService {
         if (pet == null) {
             // 未建档：前端用建档引导卡替换整区（FR-93 状态矩阵），这里不编造推荐
             return RecommendationView.empty(null, true, "PROFILE");
+        }
+        // 🔴 静默期优先于一切（含用户主动开启的推荐项）—— 见 RecommendationSilenceService。
+        //    守卫放在**服务层而不是 controller**：controller 只是当前的唯一调用方，
+        //    放这里才保证以后新增的调用方也绕不过去。
+        if (silence.isSilenced(userId)) {
+            // 🔒 返回 degraded=false / missing=NONE / items=[] —— 前端据此**整区不渲染**。
+            //    刻意不给「静默中」之类的标记：客户端一旦能识别静默态，就等于知道了
+            //    这只宠物近期有负面健康事件，那是健康数据越过了 App 边界。
+            //    也刻意不返回 degraded=true —— 那会让前端弹出「补全档案，推荐更准」引导卡，
+            //    在离世/手术记录旁边劝人完善资料以便更好地推荐，比直接推商品更冒犯。
+            return RecommendationView.empty(pet.getName(), false, "NONE");
         }
         ProfileFacts facts = factsOf(pet);
         return recommend(facts);

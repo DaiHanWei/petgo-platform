@@ -43,13 +43,13 @@ public class AdminContentService {
     public ContentPostResponse publishSeed(long adminUserId, ContentType type, Long petId,
             String text, List<String> imageUrls) {
         if (type == null) {
-            throw AppException.validation("内容类型不能为空");
+            throw AppException.validation("内容类型不能为空").code("admin.err.seed.typeRequired");
         }
         if (text != null && text.length() > MAX_TEXT) {
-            throw AppException.validation("正文不能超过 " + MAX_TEXT + " 字");
+            throw AppException.validation("正文不能超过 " + MAX_TEXT + " 字").code("admin.err.seed.textTooLong", MAX_TEXT);
         }
         if (imageUrls != null && imageUrls.size() > MAX_IMAGES) {
-            throw AppException.validation("最多 " + MAX_IMAGES + " 张图片");
+            throw AppException.validation("最多 " + MAX_IMAGES + " 张图片").code("admin.err.seed.tooManyImages", MAX_IMAGES);
         }
         ContentPostCreateRequest req = new ContentPostCreateRequest(type, petId, text, imageUrls);
         // 复用 content 写入路径（同一张表、同一套字段）；幂等键防后台表单重复提交。

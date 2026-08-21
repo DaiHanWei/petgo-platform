@@ -11,6 +11,7 @@ import com.tailtopia.admin.account.domain.AdminAccount;
 import com.tailtopia.admin.account.domain.AdminAccountPermission;
 import com.tailtopia.admin.account.domain.AdminAccountStatus;
 import com.tailtopia.admin.account.domain.AdminAccountType;
+import com.tailtopia.admin.account.domain.AdminRole;
 import com.tailtopia.admin.account.repository.AdminAccountPermissionRepository;
 import com.tailtopia.admin.account.repository.AdminAccountRepository;
 import com.tailtopia.auth.domain.Role;
@@ -43,13 +44,23 @@ class AdminUserDetailsServiceTest {
         service = new AdminUserDetailsService(adminAccounts, users, permissions);
     }
 
-    /** 用真实实体 + 反射设字段（避免 mock JPA 实体的不稳）。 */
+    /**
+     * 用真实实体 + 反射设字段（避免 mock JPA 实体的不稳）。
+     *
+     * <p>⚠️ {@code accountType} 与 {@code role} 是一对不变式（{@code AdminRole.accountType()} 单向推导，
+     * 库里另有 {@code ck_admin_accounts_role_type} 兜底），反射改一个就必须改另一个 ——
+     * 只改 {@code accountType} 会造出「类型 STAFF、角色 SUPER_ADMIN」这种生产上不可能存在的组合，
+     * 测的就不是真实行为了。STAFF 固定给 {@code CUSTOM}（即按 {@code admin_account_permissions}
+     * 勾选行授权，正是这些用例要考察的那条路径）。
+     */
     private AdminAccount account(long id, String email, AdminAccountStatus status,
             String passwordHash, AdminAccountType type) {
         AdminAccount a = AdminAccount.newSuperAdmin(email, "运营", passwordHash);
         ReflectionTestUtils.setField(a, "id", id);
         ReflectionTestUtils.setField(a, "status", status);
         ReflectionTestUtils.setField(a, "accountType", type);
+        ReflectionTestUtils.setField(a, "role",
+                type == AdminAccountType.SUPER_ADMIN ? AdminRole.SUPER_ADMIN : AdminRole.CUSTOM);
         return a;
     }
 

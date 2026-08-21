@@ -3,6 +3,7 @@ package com.tailtopia.admin.moderation.web;
 import com.tailtopia.admin.moderation.service.AdminContentManageService;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.i18n.Messages;
 import java.time.LocalDate;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -33,8 +34,13 @@ public class AdminContentManageController {
 
     private final AdminContentManageService contentManage;
 
-    public AdminContentManageController(AdminContentManageService contentManage) {
+    /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
+    private final Messages msg;
+
+    public AdminContentManageController(AdminContentManageService contentManage,
+            Messages msg) {
         this.contentManage = contentManage;
+        this.msg = msg;
     }
 
     @GetMapping("/admin/content")
@@ -69,9 +75,9 @@ public class AdminContentManageController {
             Model model, RedirectAttributes flash) {
         try {
             contentManage.takedown(postId, reason, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已下架该内容（已通知作者，操作留审计）");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.content.takenDown"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         // HTMX：只回该行片段（原地替换、不整页刷新、不回顶）；非 HTMX 退回 PRG 整页。
         return rowOrRedirect(hxRequest, postId, model);
@@ -83,7 +89,7 @@ public class AdminContentManageController {
             @RequestHeader(value = "HX-Request", required = false) String hxRequest,
             Model model, RedirectAttributes flash) {
         contentManage.restore(postId, admin.getAdminAccountId());
-        flash.addFlashAttribute("notice", "已恢复该内容（重新进入公开口径；评论/点赞不随恢复）");
+        flash.addFlashAttribute("notice", msg.get("admin.flash.content.restored"));
         return rowOrRedirect(hxRequest, postId, model);
     }
 

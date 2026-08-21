@@ -24,6 +24,7 @@ import org.springframework.ui.ConcurrentModel;
 import org.springframework.ui.Model;
 import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.validation.BindingResult;
+import com.tailtopia.support.TestMessages;
 
 /** L0：后台页面视图名 + 种子发布成功/校验失败回显（AC1/AC2，纯控制器单测）。 */
 class AdminWebControllerTest {
@@ -42,7 +43,8 @@ class AdminWebControllerTest {
         virtualAccountService = mock(AdminVirtualAccountService.class);
         when(virtualAccountService.list()).thenReturn(List.of());
         controller = new AdminWebController(adminContentService, adminModerationService, adminVetService,
-                mock(com.tailtopia.admin.dashboard.service.AdminDashboardService.class), virtualAccountService);
+                mock(com.tailtopia.admin.dashboard.service.AdminDashboardService.class), virtualAccountService,
+                TestMessages.real());
     }
 
     private AdminUserDetails admin() {

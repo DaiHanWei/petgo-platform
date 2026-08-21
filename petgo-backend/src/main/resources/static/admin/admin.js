@@ -59,3 +59,31 @@ document.addEventListener('DOMContentLoaded', function () {
         setTimeout(function () { t.remove(); }, 3400);
     });
 });
+
+// 后台账号页 · 岗位角色（V165）。建号表单里做三件显隐：
+//   1) 只显示当前选中角色的职责说明；
+//   2) 只显示当前角色的权限预览（模板已把每个角色的预览都渲染好了）；
+//   3) 权限勾选区仅「自定义」角色显示 —— 其余角色的权限由角色定义决定，服务端会忽略勾选，
+//      留着它只会让人以为「我勾了就生效」。
+// 纯体验层：授权在服务端按角色解析，禁用 JS 也授不出多余权限（页面只是全部展开而已）。
+document.addEventListener('DOMContentLoaded', function () {
+    var roleSelect = document.getElementById('create-role');
+    if (!roleSelect) return;
+    var permGroups = document.getElementById('create-perm-groups');
+    var permNote = permGroups && permGroups.previousElementSibling;
+
+    function sync() {
+        var role = roleSelect.value;
+        document.querySelectorAll('.role-desc').forEach(function (p) {
+            p.hidden = p.getAttribute('data-role') !== role;
+        });
+        document.querySelectorAll('.role-perm-preview').forEach(function (d) {
+            d.hidden = d.getAttribute('data-role') !== role;
+        });
+        var custom = role === 'CUSTOM';
+        if (permGroups) permGroups.hidden = !custom;
+        if (permNote) permNote.hidden = !custom;
+    }
+    roleSelect.addEventListener('change', sync);
+    sync();
+});

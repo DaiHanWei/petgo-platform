@@ -63,7 +63,7 @@ public class AdminContentManageService {
     @Transactional
     public void takedown(long postId, String reason, long actorAccountId) {
         if (reason == null || reason.isBlank()) {
-            throw AppException.validation("下架原因不能为空");
+            throw AppException.validation("下架原因不能为空").code("admin.err.moderation.reasonRequired");
         }
         // story 9 幂等（AC-8）：仅当帖当前【未删】时本次下架才是真实迁移 → 计一次。
         var summary = contentService.findSummary(postId);

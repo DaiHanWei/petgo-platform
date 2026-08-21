@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <!-- 名称/头像违规处置控制台（内容审核 story 8，§5.2/§6.2）。增量页：待审列表数据来自 story 4/5，
      重置领域逻辑归 story 4/5，本页只采集判定依据/备注并委托。审核证据（名称原文/头像图）仅授权运营可见（§5.5）。
      处置用 HTMX 表单 POST，就地回显结果文本（与 story 4 名称端点对称）。本版本无申诉通道。 -->

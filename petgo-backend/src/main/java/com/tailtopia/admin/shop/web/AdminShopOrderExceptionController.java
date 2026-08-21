@@ -6,6 +6,7 @@ import com.tailtopia.admin.shop.service.AdminShopOrderExceptionService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shop.order.domain.ShopOrder;
 import com.tailtopia.shop.order.repository.ShopOrderLineRepository;
+import com.tailtopia.shared.i18n.Messages;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,10 +43,15 @@ public class AdminShopOrderExceptionController {
     private final AdminShopOrderExceptionService exceptions;
     private final ShopOrderLineRepository orderLines;
 
+    /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
+    private final Messages msg;
+
     public AdminShopOrderExceptionController(AdminShopOrderExceptionService exceptions,
-            ShopOrderLineRepository orderLines) {
+            ShopOrderLineRepository orderLines,
+            Messages msg) {
         this.exceptions = exceptions;
         this.orderLines = orderLines;
+        this.msg = msg;
     }
 
     @GetMapping("/admin/shop/order-exceptions")
@@ -70,11 +76,10 @@ public class AdminShopOrderExceptionController {
         try {
             var out = exceptions.cancelWholeOrder(token, reason, actorOf(admin));
             ra.addFlashAttribute("notice",
-                    "已整单取消。PawCoin 退回 %d，补偿溢价 %d，待退现金段 %d（走 Epic 5 打款）"
-                            .formatted(out.coinRefunded(), out.compensationPremium(),
-                                    out.cashRefundDue()));
+                    msg.get("admin.flash.orderException.fullCancelled", out.coinRefunded(),
+                            out.compensationPremium(), out.cashRefundDue()));
         } catch (AppException e) {
-            ra.addFlashAttribute("error", e.getMessage());
+            ra.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/shop/order-exceptions";
     }
@@ -86,9 +91,9 @@ public class AdminShopOrderExceptionController {
             @RequestParam String reason, RedirectAttributes ra) {
         try {
             exceptions.cancelLine(token, lineId, qty, reason, actorOf(admin));
-            ra.addFlashAttribute("notice", "已部分取消并回补库存（金额结算走 Epic 5）");
+            ra.addFlashAttribute("notice", msg.get("admin.flash.orderException.partialCancelled"));
         } catch (AppException e) {
-            ra.addFlashAttribute("error", e.getMessage());
+            ra.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/shop/order-exceptions";
     }
@@ -99,9 +104,9 @@ public class AdminShopOrderExceptionController {
             @PathVariable String token, @RequestParam String reason, RedirectAttributes ra) {
         try {
             exceptions.contactAndContinue(token, reason, actorOf(admin));
-            ra.addFlashAttribute("notice", "已记录：联系用户后继续履约");
+            ra.addFlashAttribute("notice", msg.get("admin.flash.orderException.contactAndContinue"));
         } catch (AppException e) {
-            ra.addFlashAttribute("error", e.getMessage());
+            ra.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/shop/order-exceptions";
     }

@@ -1,21 +1,27 @@
 <!DOCTYPE html>
-<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
 <!-- 服务范围与运费表（AB-11C）。补 Story 2.2 的缺口 + Epic 5 S-7 退货收件地址。
      🔴 界面不出现「配送方式」维度：C-14 已把二维运费表降为一维，只剩 Reguler。 -->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.shop.shipping.title}">服务范围与运费 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1 th:text="#{admin.shop.shipping.title}">服务范围与运费</h1>
-        <p class="hint" th:text="#{admin.shop.shipping.hint}">以 Kecamatan 为粒度维护可配送区域，每个区域一个固定运费。不接承运商实时计费；配送方式只有 Reguler 一档，界面刻意不给「配送方式」维度。停用区域用停用而不是删除——历史订单的运费需要可追溯。</p>
+        <div class="s-page-head">
+            <div class="s-title-wrap">
+                <h1 th:text="#{admin.shop.shipping.title}">服务范围与运费</h1>
+                <p class="s-sub" th:text="#{admin.shop.shipping.hint}">以 Kecamatan 为粒度维护可配送区域，每个区域一个固定运费。不接承运商实时计费；配送方式只有 Reguler 一档，界面刻意不给「配送方式」维度。停用区域用停用而不是删除——历史订单的运费需要可追溯。</p>
+            </div>
+        </div>
         <p th:if="${notice}" class="flash" th:text="${notice}">已保存</p>
         <p th:if="${error}" class="flash error" th:text="${error}">操作失败</p>
 
         <h2 th:text="#{admin.shop.shipping.section.zones}">可配送区域</h2>
+        <div class="s-card">
         <table>
             <thead><tr>
                 <th th:text="#{admin.shop.shipping.col.kecamatan}">Kecamatan</th>
@@ -46,6 +52,7 @@
             </tr>
             </tbody>
         </table>
+        </div>
 
         <h2 th:text="#{admin.shop.shipping.section.addZone}">新增 / 更新区域</h2>
         <form method="post" th:action="@{/admin/shop/shipping/zones}">

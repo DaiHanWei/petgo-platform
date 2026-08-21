@@ -1,0 +1,390 @@
+/*
+ * 电商后台专用样式（V1.4.0，2026-08-19 产品决策）。
+ *
+ * ## 作用域：只有电商 15 页引这个文件
+ *
+ * 后台 50 个页面共用 `admin.css` 与 `layout.html`。产品要求「参考 Shopee 卖家中心风格改电商部分」，
+ * 且**明确只改电商页**（`templates/admin/shop-*.html`，共 15 个）。因此本文件由电商模板在自己的 <head> 里额外引入，
+ * 靠加载范围天然限定作用域 —— 不需要在 body 上挂 class，也不用动 layout.html。
+ *
+ * 🔴 **刻意不碰侧栏与顶栏**。它们属于共享外壳：若跟着换风格，运营从「内容」点进「电商」时
+ * 整个导航会变个样子，比内容区变化刺眼得多。只换工作区，导航保持连续。
+ *
+ * ## 借的是结构，不是配色
+ *
+ * 主色仍是 TailTopia 紫 `--brand`（`admin.css` 的 :root，视觉源真相 = UX_DESIGN.md）。
+ * 从 Shopee 卖家中心借的是**让高密度后台好用的那几件事**，与它的橙色无关：
+ *
+ * | 借的结构 | 解决什么 |
+ * |---|---|
+ * | 卡片分区（替代 `<fieldset><legend>`） | 长表单有了视觉分组，不再是一片连续的输入框 |
+ * | 标签列右对齐 + 控件列 | 标签宽度一致 → 眼睛沿一条竖线扫，比标签内联换行快得多 |
+ * | 表格上方状态 Tab | 订单/退货的状态筛选是**最高频**操作，从下拉框里掏出来放到明面 |
+ * | 底部固定操作条 | 长表单不用滚到底找保存；也杜绝「改完忘了保存」 |
+ * | 页头块（标题 + 说明 + 右侧主操作） | 每页第一屏就说清「这是哪、能干什么」 |
+ *
+ * ⚠️ 复用 `admin.css` 的 :root 令牌与 `.btn` / `.badge` / `.flash`，**不重新定义它们** ——
+ * 两套按钮样式并存的结果是同一个后台里出现两种「主按钮」。
+ */
+
+/* ============================================================
+   页头块
+   ============================================================ */
+
+.s-page-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin: 0 0 16px;
+}
+
+.s-page-head .s-title-wrap { flex: 1; min-width: 0; }
+
+/* 覆盖 admin.css 的 h1 底距 —— 这里由 .s-page-head 统一控制间距 */
+.s-page-head h1 { margin: 0; font-size: 20px; line-height: 1.3; }
+
+.s-page-head .s-sub {
+    margin: 6px 0 0;
+    color: var(--muted);
+    font-size: var(--fs-sm);
+    line-height: 1.6;
+    max-width: 900px;
+}
+
+/* 右侧主操作。flex-shrink:0 —— 说明文字再长也不许把按钮挤变形 */
+.s-page-head .s-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+    padding-top: 2px;
+}
+
+/* ============================================================
+   卡片
+   ============================================================ */
+
+.s-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    margin-bottom: 14px;
+}
+
+/* 🔴 不用 admin.css 的 .card：那个带 max-width:680px，是给窄表单用的。
+   电商列表页要占满宽度，套上去表格会被截在 680px。 */
+
+.s-card > .s-card-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--line);
+}
+
+.s-card-head h2,
+.s-card-head h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--ink);
+    flex: 1;
+    min-width: 0;
+}
+
+.s-card-head .s-card-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+.s-card > .s-card-body { padding: 16px; }
+
+/* 表格直接贴卡片边缘：外层卡片已经给了边框，表格再来一圈就是双线 */
+.s-card > table { border: 0; border-radius: 0; }
+.s-card > table th:first-child,
+.s-card > table td:first-child { padding-left: 16px; }
+.s-card > table th:last-child,
+.s-card > table td:last-child { padding-right: 16px; }
+.s-card > table tbody tr:last-child td { border-bottom: 0; }
+
+/* ============================================================
+   筛选条
+   ============================================================ */
+
+.s-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px 16px;
+}
+
+.s-filters .s-f {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+}
+
+.s-filters .s-f > span {
+    font-size: var(--fs-xs);
+    color: var(--ink-2);
+    font-weight: 500;
+}
+
+.s-filters .s-f input,
+.s-filters .s-f select { min-width: 150px; }
+
+/* 操作推到最右。margin-left:auto 而不是 justify-content:space-between ——
+   后者在换行时会把最后一行的字段也拉开，看着像对不齐 */
+.s-filters .s-f-actions {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+}
+
+/* ============================================================
+   状态 Tab（Shopee 的招牌，订单/退货用）
+   ============================================================ */
+
+.s-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--line);
+    overflow-x: auto;
+    /* 品类多时横滑而不是换行 —— 换行会让下方表格位置随状态数量上下跳 */
+    scrollbar-width: none;
+}
+.s-tabs::-webkit-scrollbar { display: none; }
+
+.s-tabs a {
+    padding: 12px 14px;
+    font-size: var(--fs-sm);
+    font-weight: 500;
+    color: var(--ink-2);
+    text-decoration: none;
+    white-space: nowrap;
+    border-bottom: 2px solid transparent;
+    /* 抵消 border-bottom 让文字上移 1px 的错觉 */
+    margin-bottom: -1px;
+}
+
+.s-tabs a:hover { color: var(--brand-strong); }
+
+.s-tabs a.active {
+    color: var(--brand-strong);
+    font-weight: 600;
+    border-bottom-color: var(--brand);
+}
+
+/* 计数徽标。0 时不渲染由模板控制 —— 显示「(0)」等于告诉运营这里没事做，
+   而实际是「这个筛选下没有」，两件事不一样 */
+.s-tabs a .s-tab-n {
+    display: inline-block;
+    margin-left: 5px;
+    padding: 0 6px;
+    border-radius: 9px;
+    background: var(--brand-tint);
+    color: var(--brand-strong);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 17px;
+}
+.s-tabs a.active .s-tab-n { background: var(--brand); color: #fff; }
+
+/* ============================================================
+   表格（卡片内）
+   ============================================================ */
+
+.s-card th {
+    background: #FAFAFB;
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    color: var(--ink-2);
+    letter-spacing: .2px;
+    white-space: nowrap;
+}
+
+.s-card td { vertical-align: middle; }
+
+.s-card tbody tr:hover { background: #FAF8FE; }
+
+/* 操作列贴右，且不许换行把按钮拆散 */
+.s-card .s-col-act { text-align: right; white-space: nowrap; }
+.s-card .s-col-num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* 单号/token 这类等宽内容 */
+.s-mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: var(--fs-xs);
+    color: var(--muted);
+}
+
+/* 表格里的商品单元：小图 + 两行文字 */
+.s-cell-product { display: flex; gap: 10px; align-items: center; }
+.s-cell-product .s-thumb {
+    width: 40px; height: 40px; flex-shrink: 0;
+    border-radius: 4px; border: 1px solid var(--line);
+    background: #F3F1F8;
+    object-fit: cover;
+}
+.s-cell-product .s-p-name { font-weight: 500; color: var(--ink); }
+.s-cell-product .s-p-sub { color: var(--muted); font-size: var(--fs-xs); margin-top: 2px; }
+
+/* ============================================================
+   表单：标签列 + 控件列
+   ============================================================ */
+
+.s-form-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 9px 0;
+}
+
+/* 🔴 标签列定宽右对齐 —— 这是本次改版最实际的一处收益。
+   原来标签内联跟在输入框旁边，长短不一时会各自换行，
+   「适用年龄段」这种四字标签会被甩到下一行、与它的 select 分家（改版前截图可见）。 */
+.s-form-row > .s-label {
+    width: 150px;
+    flex-shrink: 0;
+    text-align: right;
+    font-size: var(--fs-sm);
+    color: var(--ink-2);
+    /* ⚠️ 用 padding-top 对齐控件首行，**不要**用 line-height:32px：
+       后者只对单行标签成立；「图集 objectKey（每行一个，≤8）」这种长标签一旦折行，
+       32px 行距会把三行拉成 96px 高，与右侧控件完全对不上（离线预览抓到）。 */
+    line-height: 1.5;
+    padding-top: 7px;
+}
+
+.s-form-row > .s-label.s-req::before {
+    content: "*";
+    color: var(--danger);
+    margin-right: 3px;
+}
+
+.s-form-row > .s-ctl { flex: 1; min-width: 0; }
+
+.s-form-row > .s-ctl > input,
+.s-form-row > .s-ctl > select { min-width: 260px; }
+.s-form-row > .s-ctl > textarea { width: 100%; max-width: 720px; }
+
+/* 字段下方说明。跟着控件走而不是跟着标签走 —— 说明是关于「填什么」的 */
+.s-form-row .s-ctl .hint { margin-top: 5px; max-width: 720px; }
+
+/* 一行放多个控件（如喂量区间的三个数字） */
+.s-inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* ============================================================
+   底部固定操作条
+   ============================================================ */
+
+.s-actionbar {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 -2px 10px rgba(31, 35, 48, .06);
+    margin-top: 14px;
+}
+
+/* 🔴 给固定条让出高度。sticky 条是**浮在内容之上**的，不留白的话
+   表单最后一行会被它永久压住 —— 用户以为那一行不存在（离线预览抓到）。
+   56px = 条高(约 54) + 一点富余。 */
+.s-card + .s-actionbar { margin-top: 14px; }
+form:has(> .s-actionbar) > .s-card:last-of-type { margin-bottom: 56px; }
+
+/* 左侧放辅助信息（如「上次保存于」），主操作恒在右 */
+.s-actionbar .s-bar-note { margin-right: auto; color: var(--muted); font-size: var(--fs-xs); line-height: 30px; }
+
+/* ============================================================
+   空态
+   ============================================================ */
+
+.s-empty {
+    padding: 44px 16px;
+    text-align: center;
+    color: var(--muted);
+    font-size: var(--fs-sm);
+}
+.s-empty .s-empty-title { color: var(--ink-2); font-weight: 600; margin-bottom: 6px; }
+
+/* ============================================================
+   概览小卡（销售/毛利/库存周转等页顶部的数字条）
+   ============================================================ */
+
+.s-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.s-stat {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
+}
+.s-stat .s-stat-k { color: var(--muted); font-size: var(--fs-xs); }
+.s-stat .s-stat-v {
+    margin-top: 6px;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+}
+.s-stat .s-stat-sub { margin-top: 4px; font-size: var(--fs-xs); color: var(--muted); }
+
+/* 中性徽章。admin.css 只有 ok/danger/warn/info 四个语义色，
+   而「未上架」不是异常也不是成功 —— 给它一个不带情绪的灰。 */
+.badge-muted { background: #EEF0F4; color: var(--muted); }
+
+/* ============================================================
+   既有 .filters 筛选表单（订单/退货/对账等 6 页在用）
+   ============================================================
+
+   ⚠️ `.filters` 在 admin.css 里**没有任何样式** —— 那几页的筛选条一直是裸的行内流，
+   标签与控件挨在一起、换行位置随窗口宽度乱跳。这里补上布局，
+   且**不改模板内部结构**：那些页面是「<label> 后面跟一个兄弟控件」的写法，
+   不是 label 包住控件，逐页重构的收益不抵风险。 */
+
+.s-card .filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 14px;
+    margin: 0;
+}
+
+/* 标签贴住它后面的那个控件：给标签留左边距、去掉与前一个控件之间的粘连 */
+.s-card .filters > label {
+    font-size: var(--fs-xs);
+    color: var(--ink-2);
+    font-weight: 500;
+    margin: 0 -6px 0 0;   /* 负边距把 gap 收窄，让「标签+控件」成对读 */
+    display: inline-block;
+}
+
+.s-card .filters > input,
+.s-card .filters > select { min-width: 150px; }
+
+/* 表单里的按钮统一走 .btn 外观 —— 这几页的 <button> 没带 class，
+   不给样式的话会是浏览器默认灰按钮，和旁边的 .btn 完全两个样。 */
+.s-card .filters > button {
+    padding: 7px 14px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: var(--fs-sm);
+    background: var(--brand);
+    color: #fff;
+    line-height: 1.3;
+}
+.s-card .filters > button:hover { background: var(--brand-strong); }
+
+/* 说明文字独占一行，不参与横向排布 */
+.s-card .filters > .hint { flex-basis: 100%; margin: 2px 0 0; }
