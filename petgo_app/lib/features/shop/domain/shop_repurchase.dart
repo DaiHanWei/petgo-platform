@@ -16,6 +16,9 @@ class RepurchaseCard {
     required this.productName,
     required this.daysLeft,
     this.petName,
+    this.dailyGrams,
+    this.remainingGrams,
+    this.purchasedOn,
   });
 
   final int triggerId;
@@ -30,6 +33,25 @@ class RepurchaseCard {
   /// 距预估耗尽还有几天。**可能为负** = 已过预估耗尽日。
   final int daysLeft;
 
+  // ---- 推算依据（V1.4.0 · 设计文档 03 屏 1）----
+  // 🔴 设计稿把「日均用量 · 剩余量 · 购买日期」列为**缺一不可** ——
+  //    它是用户信任这条推荐的唯一凭据，也是它区别于普通广告位的地方。
+  //    服务端三者同时给或同时不给；任一为 null 即 [hasBasis] 为 false，
+  //    此时**整卡不渲染**，不退化成一条没有依据的推荐。
+
+  /// 日均用量（克/天）。
+  final int? dailyGrams;
+
+  /// 估算剩余量（克）。已吃超时为 0，**不会是负数**。
+  final int? remainingGrams;
+
+  /// 购买（送达）日期。
+  final DateTime? purchasedOn;
+
+  /// 🔴 推算依据是否齐全。为 false 时调用方**必须整卡不渲染**。
+  bool get hasBasis =>
+      dailyGrams != null && remainingGrams != null && purchasedOn != null;
+
   bool get isOverdue => daysLeft < 0;
 
   factory RepurchaseCard.fromJson(Map<String, dynamic> j) => RepurchaseCard(
@@ -39,6 +61,9 @@ class RepurchaseCard {
         productName: j['productName']?.toString() ?? '',
         petName: j['petName']?.toString(),
         daysLeft: (j['daysLeft'] as num?)?.toInt() ?? 0,
+        dailyGrams: (j['dailyGrams'] as num?)?.toInt(),
+        remainingGrams: (j['remainingGrams'] as num?)?.toInt(),
+        purchasedOn: DateTime.tryParse(j['purchasedOn']?.toString() ?? ''),
       );
 }
 

@@ -85,7 +85,16 @@ class _ShopOrderDetailPageState extends ConsumerState<ShopOrderDetailPage> {
             child: Text(l10n.shopOrderLoadFailed, textAlign: TextAlign.center),
           ),
         ),
-        data: (order) => _content(l10n, order),
+        // 🔴 下拉刷新（2026-08-18 本地验收补）：**履约态是被别人推进的**。
+        //    发货、标记送达、退货审核都发生在运营侧，用户这边不做任何动作，
+        //    页面却只在「用户自己动过手」之后才 invalidate（支付/取消/确认收货/提退货）——
+        //    于是「付完款停在订单页等发货」这个再常见不过的场景，
+        //    运营发了货用户也永远看不到，除非杀掉 App 重进。
+        //    推送被拒的用户更是完全没有补救手段。
+        data: (order) => RefreshIndicator(
+          onRefresh: () => ref.refresh(shopOrderDetailProvider(widget.orderToken).future),
+          child: _content(l10n, order),
+        ),
       ),
       bottomNavigationBar: async.maybeWhen(
         data: (order) {
@@ -335,7 +344,11 @@ class _ShopOrderDetailPageState extends ConsumerState<ShopOrderDetailPage> {
                 key: const ValueKey('shopOrderRequestReturn'),
                 onPressed: blocked
                     ? null
-                    : () => context.push('/shop/orders/\${order.orderToken}/return'),
+                    // 🔴 这里曾经写成 '\${order.orderToken}'（反斜杠转义了 $）——
+                    //    插值不生效，路由参数字面量就是 "${order.orderToken}"，
+                    //    退货页 100% 打不开（后端收到 %24%7B... 直接 404）。
+                    //    2026-08-18 本地全流程验收抓到；单测 mock 掉 push 的话看不见这种错。
+                    : () => context.push('/shop/orders/${order.orderToken}/return'),
                 child: Text(l10n.shopOrderRequestReturn),
               ),
               if (blocked)

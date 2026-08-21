@@ -33,6 +33,11 @@ String orderStatusLabel(AppLocalizations l10n, String statusCode) => switch (sta
       // 电商状态（Story 3.9，与既有 statusCode 同名空间；后端已保证不重名）
       'PENDING_PAYMENT' => l10n.shopOrderStatusPendingPayment,
       'PENDING_SHIPMENT' => l10n.shopOrderStatusPendingShipment,
+      // 🔴 履约段两态（Story 4.1 起后端会下发）**必须在这里有分支**：
+      //    缺了就落到兜底 `_ => statusCode`，把 `SHIPPED` 这个枚举字面量原样显示给用户。
+      //    2026-08-19 上机在订单列表上抓到 —— 单测与 analyze 全绿，因为兜底分支本身合法。
+      'SHIPPED' => l10n.shopOrderStatusShipped,
+      'DELIVERED' => l10n.shopOrderStatusDelivered,
       'CANCELLED' => l10n.shopOrderStatusCancelled,
       'IN_PROGRESS' => l10n.orderStatusInProgress,
       'COMPLETED' => l10n.orderStatusCompleted,
