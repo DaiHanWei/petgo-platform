@@ -97,7 +97,7 @@
 # serp_position 分布）。
 
 generated: 2026-08-17
-last_updated: 2026-08-20
+last_updated: 2026-08-21
 project: TailTopia V1.1.6
 project_key: NOKEY
 tracking_system: file-system
@@ -173,7 +173,7 @@ development_status:
   #    （首启即申请已于 2026-08-07 上线）；照 PRD 字面实现会做出一段永远走不到的分支。
   epic-8: in-progress
   8-1-系统通知权限状态快照: review                   # P0 前置：先有观测再改行为
-  8-2-用户侧三触发点与通知中心引导条: ready-for-dev
+  8-2-用户侧三触发点与通知中心引导条: review
   8-3-兽医端触发点: ready-for-dev                          # 切换为在线时
   epic-8-retrospective: optional
 

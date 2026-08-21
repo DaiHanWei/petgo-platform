@@ -12,7 +12,8 @@ import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/case_image_viewer.dart';
 import 'consult_refresh.dart';
-import '../../notify/data/push_permission_providers.dart';
+import '../../notify/domain/push_permission_prompt.dart';
+import '../../notify/presentation/push_permission_guide_flow.dart';
 import '../../notify/domain/push_suppression.dart';
 import '../../profile/data/health_event_repository.dart';
 import '../../profile/data/timeline_repository.dart';
@@ -170,17 +171,24 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
     }
   }
 
-  /// 首次问诊完成（会话 CLOSED）→ 触发推送权限闸门（Story 6.4 双时机之一）。
-  /// 接 ① 的 P-09 前置 sheet；gate 凭 `pushPermissionAsked` 持久化自守仅一次，本页再加一道防重入。
-  /// 失败静默——绝不阻断问诊完成体验。
+  /// 触发点 1「首次问诊后」（V1.1.6 Story 8.2 / FR-85）：会话 CLOSED 时。
+  ///
+  /// 🔴 原先调的是 Story 6.4 的 PushPermissionGate，而它的门 `!alreadyAsked` 已被第二代
+  ///    「首启即申请」在首次冷启动置位 ⇒ 恒 false，这个时机事实上从未触发过。
+  ///    改走新模型（各触发点独立一键，AD-14 Rule 2）；旧类按 Rule 3 保留不删。
+  ///
+  /// 本页仍保留一道防重入（`_firstConsultPushTried`）：会话状态可能在同一次停留内多次刷新，
+  /// 而新模型的持久化标记要等异步落盘，先挡住同帧重复。
+  /// 失败静默 —— 绝不阻断问诊完成体验。
   Future<void> _maybeTriggerFirstConsultPush() async {
     if (_firstConsultPushTried) return;
     _firstConsultPushTried = true;
     try {
-      final gate = await ref.read(pushPermissionGateProvider.future);
-      await gate.maybeRequestAfterFirstConsult(firstConsultDone: true);
+      if (mounted) {
+        await maybeShowPushPermissionGuide(context, PushTriggerPoint.firstConsult);
+      }
     } catch (_) {
-      // 推送闸门异常不影响问诊流程。
+      // 推送引导异常不影响问诊流程。
     }
   }
 

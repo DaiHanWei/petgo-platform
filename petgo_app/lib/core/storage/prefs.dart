@@ -31,6 +31,18 @@ class AppPrefs {
   bool get pushPermissionAsked => _prefs.getBool(_kPushPermissionAsked) ?? false;
   Future<void> setPushPermissionAsked(bool asked) => _prefs.setBool(_kPushPermissionAsked, asked);
 
+  // --- FR-85 三个用户侧触发点各自的「已提示过」标记（V1.1.6 Story 8.2）---
+  //
+  // 🛡 **AD-14 Rule 2：四键物理隔离** —— 这三个 + 手机号软引导（Story 7.2）那一个，
+  //    禁止任何两者共用。混用一个键 = 一个触发点用掉全部机会，
+  //    FR-85 直接退化成「只提醒一次」。
+  // 🛡 **AD-14 Rule 3**：它们与上面的 `petgo.push_permission_asked`（第二代首启申请）
+  //    **互不相干** —— 存量用户那个键为 true 时，这三个仍从「未触发」开始，
+  //    否则 FR-85 对存量用户完全失效，而那正是这条 FR 要解决的问题。
+  static const kPushPromptFirstConsult = 'petgo.push_prompt_first_consult';
+  static const kPushPromptProfileCreated = 'petgo.push_prompt_profile_created';
+  static const kPushPromptNotificationCenter = 'petgo.push_prompt_notification_center';
+
   // --- 已废弃的键（下面这些**刻意不再提供 getter/setter**）---
   //
   // `petgo.splash_last_shown_date`：曾用于「splash 当天只播一次完整动画」。

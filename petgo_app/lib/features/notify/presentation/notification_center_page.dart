@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -14,13 +16,27 @@ import '../../profile/data/profile_repository.dart';
 import '../data/notification_repository.dart';
 import '../domain/notification_deep_link.dart';
 import '../domain/notification_item.dart';
+import '../domain/push_permission_prompt.dart';
+import '../../../core/storage/prefs.dart';
+import '../data/push_permission_providers.dart';
 
 /// 通知中心列表页（Story 6.6 F2/F3，FR-34）。倒序六(~七)类 + 空态 + 点击标记已读并深链跳目标。
 /// 🔄 PRD V1.0.0 修订（F2 · 2026-06-08）：展示类型由四类扩到六(~七)类（加生日/纪念日/里程碑节点）。
 ///
 /// 亦是 6.1 深链未知/兜底的落地页（`/notifications`）。
 class NotificationCenterPage extends ConsumerStatefulWidget {
-  const NotificationCenterPage({super.key});
+  const NotificationCenterPage({
+    super.key,
+    this.prefsForTest,
+    this.isNotificationGrantedForTest,
+    this.openSettingsForTest,
+  });
+
+  /// 以下三个仅供测试注入 —— 生产路径全部走默认实现。
+  /// 触发点 4 要读系统通知开关与 prefs，二者在 widget test 里都没有平台实现。
+  final AppPrefs? prefsForTest;
+  final Future<bool> Function()? isNotificationGrantedForTest;
+  final Future<bool> Function()? openSettingsForTest;
 
   @override
   ConsumerState<NotificationCenterPage> createState() =>
@@ -47,11 +63,49 @@ class _NotificationCenterPageState
   bool _markingAllRead = false;
   final ScrollController _scroll = ScrollController();
 
+  /// 触发点 4（FR-85 / Story 8.2）：打开通知中心且系统通知关闭 → 顶部引导条。
+  ///
+  /// **为什么这个位置语境最贴合**：用户主动打开通知中心，说明他此刻在意「有没有人找我」；
+  /// 而通知关着的话，这一页里的东西他从来不会被及时告知。
+  bool _showPushBanner = false;
+
   @override
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
     _loadFirstPage();
+    _maybeShowPushBanner();
+  }
+
+  /// 判定 + 曝光上报。⚠️ 判定与「各一次」的标记都走 [PushPermissionPrompt]，
+  /// 与触发点 1/2 共用同一套（形态不同，判定必须同一份）。
+  Future<void> _maybeShowPushBanner() async {
+    try {
+      final prefs = widget.prefsForTest ?? await AppPrefs.create();
+      final should = await PushPermissionPrompt.shouldPrompt(
+        PushTriggerPoint.notificationCenter,
+        prefs: prefs,
+        isGranted: widget.isNotificationGrantedForTest,
+      );
+      if (!should || !mounted) return;
+      // 展示即用掉这次机会（与触发点 1/2 同口径：划走也算）。
+      await PushPermissionPrompt.markPrompted(
+        PushTriggerPoint.notificationCenter,
+        prefs: prefs,
+      );
+      unawaited(PushPermissionPrompt.reportShown(PushTriggerPoint.notificationCenter));
+      if (mounted) setState(() => _showPushBanner = true);
+    } catch (e) {
+      debugPrint('[PushPrompt] notification center banner failed: $e');
+    }
+  }
+
+  Future<void> _openPushSettings() async {
+    unawaited(PushPermissionPrompt.reportResponded(
+      PushTriggerPoint.notificationCenter,
+      PushPromptResult.settingsOpened,
+    ));
+    await (widget.openSettingsForTest ?? openPushSettings)();
   }
 
   @override
@@ -272,7 +326,71 @@ class _NotificationCenterPageState
                   ),
         ],
       ),
-      body: FutureBuilder<NotificationPage>(
+      // 引导条在列表**之外**、置于其上：它对空态与有内容态都要出现 ——
+      // 通知中心是空的恰恰可能正因为通知被关着（收不到 → 也没人点进来看过）。
+      body: Column(
+        children: [
+          if (_showPushBanner) _pushBanner(l10n),
+          Expanded(child: _listArea(l10n)),
+        ],
+      ),
+    );
+  }
+
+  /// 触发点 4 的引导条。形态与「我的」页的 [PushEnableGuide] 同族（同一套文案键），
+  /// 但这里是页内顶部条 + 可关闭，故不直接复用那个组件。
+  Widget _pushBanner(AppLocalizations l10n) {
+    return Container(
+      key: const ValueKey('pushCenterBanner'),
+      margin: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.notifications_active_outlined,
+              color: AppColors.accentConsult),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(l10n.pushEnableGuideTitle,
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 2),
+                Text(l10n.pushEnableGuideBody,
+                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+              ],
+            ),
+          ),
+          TextButton(
+            key: const ValueKey('pushCenterBannerAction'),
+            onPressed: _openPushSettings,
+            child: Text(l10n.mediaOpenSettings),
+          ),
+          IconButton(
+            key: const ValueKey('pushCenterBannerClose'),
+            icon: const Icon(Icons.close, size: 18),
+            tooltip: l10n.commonClose,
+            onPressed: () {
+              // 关掉即上报 dismissed。标记在展示时就已置位，这里不再动它。
+              unawaited(PushPermissionPrompt.reportResponded(
+                PushTriggerPoint.notificationCenter,
+                PushPromptResult.dismissed,
+              ));
+              setState(() => _showPushBanner = false);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _listArea(AppLocalizations l10n) {
+    return FutureBuilder<NotificationPage>(
         future: _page,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -296,9 +414,7 @@ class _NotificationCenterPageState
             );
           }
           return _notificationList(l10n, items);
-        },
-      ),
-    );
+        });
   }
 
   Widget _notificationList(
