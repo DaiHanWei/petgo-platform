@@ -32,4 +32,22 @@ public interface ContentTagAssignmentRepository extends JpaRepository<ContentTag
             """)
     List<Object[]> findActiveWithTag(@Param("postIds") Collection<Long> postIds,
             @Param("now") Instant now);
+
+    /**
+     * 后台「按标签」维度（Story 11.2）：某标签当前**生效中**的分配记录。
+     *
+     * <p>口径与 {@link #findActiveWithTag} 一致：{@code startsAt <= now} 且
+     * （{@code endsAt} 为空 = 永久 或 {@code now < endsAt}）。🛡 无状态列、无扫描器。
+     */
+    @Query("""
+            select a from ContentTagAssignment a
+             where a.tagId = :tagId
+               and a.startsAt <= :now
+               and (a.endsAt is null or :now < a.endsAt)
+             order by a.startsAt desc
+            """)
+    List<ContentTagAssignment> findActiveByTag(@Param("tagId") long tagId, @Param("now") Instant now);
+
+    /** 后台「按内容」维度（Story 11.2）：某条内容的全部分配记录（含已失效的历史）。 */
+    List<ContentTagAssignment> findByPostIdOrderByStartsAtDesc(long postId);
 }

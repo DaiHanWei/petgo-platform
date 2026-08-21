@@ -49,16 +49,26 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
      * <p>⚠️ **候选集接近全量内容**：FR-83 的同步开关已于 2026-07-30 反转为默认开启，
      * 被排除的只是"作者主动关开关"的少数 —— 因此本查询**必须分页**，
      * 调用方不可假设候选量小到能平铺。
+     *
+     * <h2>🔴 关键词一律传"已拼好的 LIKE 模式"，绝不传 null</h2>
+     * 原先写的是 {@code (:kw IS NULL OR LOWER(p.text) LIKE LOWER(CONCAT('%', :kw, '%')))}。
+     * 绑 null 时 Postgres 推不出参数类型，直接报
+     * {@code function lower(bytea) does not exist} —— 而**页面首次加载恰恰是不带关键词的那一次**。
+     * （Story 11.1 的测试当时是绿的，只因为它第一次调用带了关键词；换个顺序就炸。）
+     *
+     * <p>所以模式串在 Java 侧拼好：无关键词时传 {@code "%"}。
+     * {@code COALESCE(p.text, '')} 是配套的 —— 纯图片帖 {@code text} 为 NULL，
+     * 而 {@code NULL LIKE '%'} 结果是 NULL（不是 true），不 COALESCE 会把这些帖子整批漏掉。
      */
     @Query("""
             SELECT p FROM ContentPost p
             WHERE p.deletedAt IS NULL
               AND p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
               AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
-              AND (:kw IS NULL OR LOWER(p.text) LIKE LOWER(CONCAT('%', :kw, '%')))
+              AND LOWER(COALESCE(p.text, '')) LIKE :pattern
             ORDER BY p.createdAt DESC, p.id DESC
             """)
-    List<ContentPost> searchPinnable(@Param("kw") String kw, Pageable pageable);
+    List<ContentPost> searchPinnable(@Param("pattern") String pattern, Pageable pageable);
 
     /**
      * 成长时间线读：某作者某宠物某类型未删内容，createdAt 倒序游标分页（Story 2.4）。

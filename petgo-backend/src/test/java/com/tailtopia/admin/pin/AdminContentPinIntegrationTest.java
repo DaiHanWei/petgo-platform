@@ -190,6 +190,40 @@ class AdminContentPinIntegrationTest extends ApiIntegrationTest {
 
     // ——————————————————— 🛡 AC4 只允许公开内容 ———————————————————
 
+    /**
+     * 🔴 **不带关键词、且是本次运行里对该查询的第一次调用。**
+     *
+     * <p>这正是页面首次加载的形态（选择器 `hx-trigger="load"`，没有 q）。
+     * 原实现把关键词绑成 null，Postgres 推不出类型直接 500
+     * （`function lower(bytea) does not exist`）——
+     * 而 Story 11.1 原来的测试之所以绿，只因为它第一次调用带了关键词。
+     * 本条刻意把"无关键词"放在最前面，顺序一变就会重现那个 bug。
+     */
+    @Test
+    void contentPickerWorksWithoutAnyKeyword() throws Exception {
+        User author = newUser();
+        ContentPost open = publicPost(author.getId(), "首屏就该能看到我");
+        String html = mvc.perform(get("/admin/content-pins/pick")
+                        .with(authentication(superAdminAuth())))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(html).contains(String.valueOf(open.getId()));
+    }
+
+    /** 纯图片帖（正文为 NULL）也要能出现在候选里 —— NULL LIKE '%' 是 NULL，不是 true。 */
+    @Test
+    void contentPickerIncludesPostsWithoutText() throws Exception {
+        User author = newUser();
+        ContentPost imageOnly = posts.save(ContentPost.publish(
+                author.getId(), ContentType.DAILY, null, null, List.of("https://cdn/x.jpg")));
+        String html = mvc.perform(get("/admin/content-pins/pick")
+                        .with(authentication(superAdminAuth())))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(html).as("纯图片帖不该被 NULL 正文漏掉")
+                .contains(String.valueOf(imageOnly.getId()));
+    }
+
     @Test
     void contentPickerReturnsOnlyPublicContent() throws Exception {
         User author = newUser();

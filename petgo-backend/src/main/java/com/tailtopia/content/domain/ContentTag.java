@@ -37,6 +37,15 @@ public class ContentTag {
     @Column(name = "description", nullable = false, length = 140)
     private String description;
 
+    /**
+     * 下线时刻；NULL = 在线（V1.1.6 Story 11.2）。
+     *
+     * <p>🛡 用可空时间戳而不是布尔：「什么时候下线的」也一并留档。
+     * 下线后不可再分配，**已分配的照旧生效到各自 ends_at** —— 下线是"不再发新的"。
+     */
+    @Column(name = "retired_at")
+    private Instant retiredAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -65,6 +74,33 @@ public class ContentTag {
     @PreUpdate
     void onUpdate() {
         this.updatedAt = Instant.now();
+    }
+
+    /** 编辑展示信息（Story 11.2）。code 不可改 —— 它是对外稳定标识。 */
+    public void edit(String name, String icon, String description) {
+        this.name = name;
+        this.icon = icon;
+        this.description = description;
+    }
+
+    /** 下线（幂等）。 */
+    public void retire(Instant at) {
+        if (this.retiredAt == null) {
+            this.retiredAt = at;
+        }
+    }
+
+    /** 重新上线（幂等）。 */
+    public void restore() {
+        this.retiredAt = null;
+    }
+
+    public boolean isRetired() {
+        return retiredAt != null;
+    }
+
+    public Instant getRetiredAt() {
+        return retiredAt;
     }
 
     public Long getId() {

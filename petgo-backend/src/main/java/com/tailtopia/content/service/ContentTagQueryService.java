@@ -3,8 +3,6 @@ package com.tailtopia.content.service;
 import com.tailtopia.content.domain.ContentPost;
 import com.tailtopia.content.domain.ContentTag;
 import com.tailtopia.content.domain.ContentTagAssignment;
-import com.tailtopia.content.domain.ContentVisibility;
-import com.tailtopia.content.domain.PostStatus;
 import com.tailtopia.content.dto.ContentTagView;
 import com.tailtopia.content.repository.ContentPostRepository;
 import com.tailtopia.content.repository.ContentTagAssignmentRepository;
@@ -48,11 +46,23 @@ public class ContentTagQueryService {
 
     private final ContentTagAssignmentRepository assignments;
     private final ContentPostRepository posts;
+    private final com.tailtopia.content.repository.ContentTagRepository tags;
 
     public ContentTagQueryService(ContentTagAssignmentRepository assignments,
-            ContentPostRepository posts) {
+            ContentPostRepository posts,
+            com.tailtopia.content.repository.ContentTagRepository tags) {
         this.assignments = assignments;
         this.posts = posts;
+        this.tags = tags;
+    }
+
+    /** 取消打标（Story 11.2）。不存在视为幂等 no-op。 */
+    @Transactional
+    public boolean unassign(long assignmentId) {
+        return assignments.findById(assignmentId).map(a -> {
+            assignments.delete(a);
+            return true;
+        }).orElse(false);
     }
 
     /**
@@ -87,6 +97,12 @@ public class ContentTagQueryService {
     public ContentTagAssignment assign(long postId, long tagId, Instant startsAt, Instant endsAt) {
         ContentPost post = posts.findById(postId)
                 .orElseThrow(() -> AppException.validation("内容不存在"));
+        // 🛡 已下线的标签不可再分配（Story 11.2）。已分配的不受影响 —— 下线是"不再发新的"。
+        ContentTag tag = tags.findById(tagId)
+                .orElseThrow(() -> AppException.validation("标签不存在"));
+        if (tag.isRetired()) {
+            throw AppException.validation("该标签已下线，不能再分配");
+        }
         if (!isPubliclyVisible(post)) {
             throw AppException.validation("只有公开内容可以打标（未同步的私密 Diary 不可打标）");
         }
@@ -96,9 +112,15 @@ public class ContentTagQueryService {
         return assignments.save(ContentTagAssignment.of(postId, tagId, startsAt, endsAt));
     }
 
+    /**
+     * 委托给 {@link ContentDisplayability} —— 那是全仓**唯一**的「内容还能不能对外展示」判定
+     * （Story 11.1 从 FeedService 抽出）。
+     *
+     * <p>⚠️ 本方法原先是这里的第三份同款实现（Feed 一份、这里一份、后台顶置列表差点再写一份）。
+     * 各写一遍的后果不是重复代码，而是**口径漂移**：某天有人给其中一处加了条件，
+     * 另外两处照旧 —— 表现是"同一条内容在 Feed 里不见了、却还能被打标"，无人会立刻发现。
+     */
     private static boolean isPubliclyVisible(ContentPost post) {
-        return post.getDeletedAt() == null
-                && post.getStatus() == PostStatus.PUBLISHED
-                && post.getVisibility() == ContentVisibility.PUBLIC;
+        return ContentDisplayability.isDisplayable(post);
     }
 }

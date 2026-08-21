@@ -57,9 +57,9 @@
              往中间插一项会打乱它，且渲染烟测 contentNavKeepsTheProductSpecifiedOrder 正盯着那个顺序。
              本分组后续由 Story 11.2（装饰标签）继续加项。 -->
         <details class="nav-section"
-                 sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.pin_view')"
-                 th:attr="open=${active == 'content-pins'} ? 'open' : null">
-            <summary th:classappend="${active == 'content-pins'} ? 'active'"
+                 sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.pin_view') or hasAuthority('content.tag_view')"
+                 th:attr="open=${active == 'content-pins' or active == 'content-tags'} ? 'open' : null">
+            <summary th:classappend="${active == 'content-pins' or active == 'content-tags'} ? 'active'"
                      th:text="#{admin.nav.group.contentOps}">内容运营</summary>
             <div class="nav-sub">
                 <!-- 🛡 本条件必须与 AdminContentPinController 的 @PreAuthorize(VIEW) **逐字一致**：
@@ -68,6 +68,10 @@
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.pin_view')"
                    th:href="@{/admin/content-pins}" th:classappend="${active == 'content-pins'} ? 'active'"
                    th:text="#{admin.nav.contentPins}">顶置管理</a>
+                <!-- 🛡 与 AdminContentTagController 的 @PreAuthorize(VIEW) 逐字一致 -->
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.tag_view')"
+                   th:href="@{/admin/content-tags}" th:classappend="${active == 'content-tags'} ? 'active'"
+                   th:text="#{admin.nav.contentTags}">装饰标签</a>
             </div>
         </details>
         <details class="nav-section"

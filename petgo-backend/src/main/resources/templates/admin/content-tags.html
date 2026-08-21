@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!-- 内容装饰标签管理（V1.1.6 Story 11.2 · AB-10C）。
+     打标机制（含"只有公开内容可打标"的校验）与生效判定早在 Story 5.2 就随 ContentTagQueryService
+     落地了，此前没有入口 —— 线上装饰标签因此恒为空。本页把它接上，并补齐标签增改下线与取消打标。
+     🛡 生效判定一律查询时按 [starts_at, ends_at) 算，ends_at 为空 = 永久；无状态列、无扫描器。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.tags.title}">装饰标签 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin.js}"></script>
+    <script th:src="@{/admin/vendor/htmx.min.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1 th:text="#{admin.tags.title}">装饰标签</h1>
+        <p class="muted" th:text="#{admin.tags.subtitle}">为公开内容挂荣誉标签。</p>
+
+        <!-- 🔴 排序副作用提示（AC4）。**这段不可删** ——
+             不提示的两个后果：① 把打标后的数据上涨误读成"这条内容本来就这么火"；
+             ② 取消打标后曝光回落被误判为线上故障。
+             ⚠️ 权重数值以算法文档为准；算法侧调整后本处文案需同步。 -->
+        <div class="banner warn" id="tagRankWarn" th:text="#{admin.tags.rankWarn}">
+            打标同时是一个流量动作……
+        </div>
+
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+
+        <!-- 标签列表 -->
+        <table class="table">
+            <thead>
+            <tr>
+                <th th:text="#{admin.tags.code}">标签码</th>
+                <th th:text="#{admin.tags.name}">名称</th>
+                <th th:text="#{admin.tags.description}">说明文案</th>
+                <th th:text="#{admin.tags.activeCount}">生效中分配数</th>
+                <th th:text="#{admin.tags.status}">状态</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:if="${#lists.isEmpty(tags)}">
+                <td colspan="6" class="muted" th:text="#{admin.tags.empty}">还没有任何装饰标签。</td>
+            </tr>
+            <tr th:each="t : ${tags}">
+                <td th:text="${t.code}">code</td>
+                <td th:text="${t.name}">名称</td>
+                <td th:text="${t.description}">说明</td>
+                <td>
+                    <a th:href="@{/admin/content-tags(tagId=${t.id})}" th:text="${t.activeAssignments}">0</a>
+                </td>
+                <td>
+                    <span class="badge" th:classappend="${t.retired} ? '' : 'badge-ok'"
+                          th:text="${t.retired} ? #{admin.tags.retired} : #{admin.tags.online}">在线</span>
+                </td>
+                <td sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.tag_manage')">
+                    <form class="inline-form" method="post"
+                          th:action="@{/admin/content-tags/{id}/edit(id=${t.id})}">
+                        <input type="text" name="name" th:value="${t.name}" required/>
+                        <input type="text" name="icon" th:value="${t.icon}" required/>
+                        <input type="text" name="description" th:value="${t.description}" required/>
+                        <button type="submit" class="btn btn-sm" th:text="#{admin.tags.edit}">编辑</button>
+                    </form>
+                    <form class="inline-form" method="post"
+                          th:action="@{/admin/content-tags/{id}/retire(id=${t.id})}">
+                        <input type="hidden" name="retired" th:value="${!t.retired}"/>
+                        <button type="submit" class="btn btn-sm"
+                                th:classappend="${t.retired} ? '' : 'btn-danger'"
+                                th:attr="data-confirm=${t.retired} ? null : #{admin.tags.retireConfirm}"
+                                th:text="${t.retired} ? #{admin.tags.restore} : #{admin.tags.retire}">下线</button>
+                    </form>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+
+        <!-- 新建标签 -->
+        <div class="card" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.tag_manage')">
+            <h2 th:text="#{admin.tags.newTag}">新建标签</h2>
+            <form method="post" th:action="@{/admin/content-tags}">
+                <label><span th:text="#{admin.tags.code}">标签码</span>
+                    <input type="text" name="code" class="field-full" required/></label>
+                <label><span th:text="#{admin.tags.name}">名称</span>
+                    <input type="text" name="name" class="field-full" required/></label>
+                <label><span th:text="#{admin.tags.icon}">图标</span>
+                    <input type="text" name="icon" class="field-full" required/></label>
+                <label><span th:text="#{admin.tags.description}">说明文案</span>
+                    <input type="text" name="description" class="field-full" maxlength="140" required/></label>
+                <button type="submit" class="btn btn-primary" th:text="#{admin.tags.save}">保存</button>
+            </form>
+        </div>
+
+        <!-- 打标 -->
+        <div class="card" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.tag_manage')">
+            <h2 th:text="#{admin.tags.assignTitle}">给内容打标</h2>
+            <form method="post" th:action="@{/admin/content-tags/assign}">
+                <label>
+                    <span th:text="#{admin.tags.name}">标签</span>
+                    <!-- 🛡 只列在线标签：已下线的不可再分配 -->
+                    <select name="tagId" required>
+                        <option th:each="t : ${assignable}" th:value="${t.id}"
+                                th:text="${t.name} + ' (' + ${t.code} + ')'">标签</option>
+                    </select>
+                </label>
+                <fieldset>
+                    <legend th:text="#{admin.tags.pickContent}">选择内容</legend>
+                    <p class="muted" th:text="#{admin.tags.pickHint}">只列可公开展示的内容。</p>
+                    <input type="search" name="q" th:placeholder="#{admin.tags.pickSearch}"
+                           hx-get="/admin/content-tags/pick" hx-target="#tagCandidates"
+                           hx-trigger="keyup changed delay:300ms, search"/>
+                    <div id="tagCandidates" hx-get="/admin/content-tags/pick" hx-trigger="load">
+                        <div th:replace="~{admin/content-tags :: candidates}"></div>
+                    </div>
+                </fieldset>
+                <label>
+                    <span th:text="#{admin.tags.window}">生效时间（WIB，结束可留空 = 永久）</span>
+                    <input type="datetime-local" name="startsAt" required/>
+                    <input type="datetime-local" name="endsAt"/>
+                    <!-- 🛡 WIB 字样必须在输入框旁 -->
+                    <span class="muted">WIB</span>
+                </label>
+                <button type="submit" class="btn btn-primary" th:text="#{admin.tags.assign}">打标</button>
+            </form>
+        </div>
+
+        <!-- 分配记录：两种维度（AC5）。按标签 = 这个标签发给了谁；按内容 = 这条内容挂了什么。 -->
+        <div class="card">
+            <h2 th:text="#{admin.tags.assignments}">分配记录</h2>
+            <form class="filter-bar" method="get" th:action="@{/admin/content-tags}" data-autosubmit>
+                <label>
+                    <span th:text="#{admin.tags.byTag}">按标签看</span>
+                    <select name="tagId">
+                        <option value=""></option>
+                        <option th:each="t : ${tags}" th:value="${t.id}" th:text="${t.name}"
+                                th:selected="${tagId != null and t.id == tagId}">标签</option>
+                    </select>
+                </label>
+                <label>
+                    <span th:text="#{admin.tags.byPost}">按内容看</span>
+                    <input type="number" name="postId" th:value="${postId}"
+                           th:placeholder="#{admin.tags.postId}"/>
+                </label>
+            </form>
+            <table class="table" th:if="${assignments != null}">
+                <thead>
+                <tr>
+                    <th th:text="#{admin.tags.postId}">内容 ID</th>
+                    <th th:text="#{admin.tags.name}">标签</th>
+                    <th th:text="#{admin.tags.window}">生效时间</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:if="${#lists.isEmpty(assignments)}">
+                    <td colspan="4" class="muted" th:text="#{admin.tags.assignmentsEmpty}">没有符合条件的分配记录。</td>
+                </tr>
+                <tr th:each="a : ${assignments}">
+                    <td>
+                        <span th:text="${a.postId}">1</span>
+                        <span class="muted" th:text="${a.postSummary}">摘要</span>
+                    </td>
+                    <td th:text="${a.tagName}">标签</td>
+                    <td>
+                        <span th:text="${#temporals.format(a.startsAt, 'yyyy-MM-dd HH:mm', 'Asia/Jakarta')}">开始</span>
+                        –
+                        <span th:if="${a.permanent}" th:text="#{admin.tags.permanent}">永久</span>
+                        <span th:unless="${a.permanent}"
+                              th:text="${#temporals.format(a.endsAt, 'yyyy-MM-dd HH:mm', 'Asia/Jakarta')}">结束</span>
+                        <span class="muted">WIB</span>
+                    </td>
+                    <td sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.tag_manage')">
+                        <form class="inline-form" method="post"
+                              th:action="@{/admin/content-tags/assignments/{id}/remove(id=${a.id})}">
+                            <button type="submit" class="btn btn-sm btn-danger"
+                                    th:attr="data-confirm=#{admin.tags.removeConfirm}"
+                                    th:text="#{admin.tags.remove}">取消打标</button>
+                        </form>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 内容候选（HTMX 局部）。复用顶置那条「只返回可公开展示内容」的分页查询。 -->
+        <div th:fragment="candidates" th:remove="tag">
+            <p class="muted" th:if="${#lists.isEmpty(candidates)}" th:text="#{admin.tags.pickEmpty}">没有可打标的公开内容。</p>
+            <label th:each="c : ${candidates}" class="pick-row">
+                <input type="radio" name="postId" th:value="${c.id}"/>
+                <span th:text="${c.id}">1</span>
+                <span th:text="${c.type}">DAILY</span>
+                <span th:text="${c.summary}">摘要</span>
+                <span class="muted" th:text="${#temporals.format(c.createdAt, 'yyyy-MM-dd', 'Asia/Jakarta')}">日期</span>
+            </label>
+        </div>
+    </div>
+</div>
+</body>
+</html>

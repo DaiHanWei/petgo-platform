@@ -81,8 +81,11 @@ public class AdminContentPinService {
     /** 内容选择器：只返回可公开展示的内容，分页。 */
     @Transactional(readOnly = true)
     public List<PinnableContentRow> pickable(String keyword, int page) {
-        String kw = (keyword == null || keyword.isBlank()) ? null : keyword.trim();
-        return posts.searchPinnable(kw, PageRequest.of(Math.max(page, 0), PICK_PAGE_SIZE)).stream()
+        // 🔴 绝不传 null：绑 null 时 Postgres 推不出类型（lower(bytea) does not exist），
+        //    而"不带关键词"正是页面首次加载的那一次。无关键词 → "%" 匹配全部。
+        String pattern = (keyword == null || keyword.isBlank())
+                ? "%" : "%" + keyword.trim().toLowerCase() + "%";
+        return posts.searchPinnable(pattern, PageRequest.of(Math.max(page, 0), PICK_PAGE_SIZE)).stream()
                 .map(p -> new PinnableContentRow(p.getId(), p.getType().name(),
                         truncate(p.getText()), p.getCreatedAt()))
                 .toList();

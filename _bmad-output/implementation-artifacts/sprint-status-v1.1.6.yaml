@@ -200,7 +200,7 @@ development_status:
   # 四条彼此零耦合，可并行、可任意顺序。
   epic-11: in-progress
   11-1-顶置管理feed坑位: review                     # AB-10A ⚠️ 同坑位时间重叠校验全系统不存在，后台是唯一能挡的地方
-  11-2-内容装饰标签管理: ready-for-dev                     # AB-10C 需加「下线」列；打标界面必须提示 ×1.3 排序副作用
+  11-2-内容装饰标签管理: review                     # AB-10C 需加「下线」列；打标界面必须提示 ×1.3 排序副作用
   11-3-用户标签配置与分配: ready-for-dev                   # AB-12A 需加「下线」列；排序口径以 App 侧 AuthorView 为权威，勿另立
   11-4-用户手机号查看与召回名单导出: ready-for-dev         # AB-11A 前半（PII 双权限：查看 / 导出各一码）
   epic-11-retrospective: optional

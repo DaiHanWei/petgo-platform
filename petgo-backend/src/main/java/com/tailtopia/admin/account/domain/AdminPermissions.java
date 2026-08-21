@@ -47,6 +47,13 @@ public final class AdminPermissions {
     public static final String CONTENT_PIN_VIEW = "content.pin_view";
     public static final String CONTENT_PIN_MANAGE = "content.pin_manage";
     /**
+     * 内容装饰标签管理（V1.1.6 Story 11.2 · AB-10C）。同样查看 / 编辑分两码 ——
+     * 🔴 打标不只是发荣誉，**它同时是个流量动作**（生效中的标签给该内容 ×1.3 曝光加权），
+     * 能看不等于能改。
+     */
+    public static final String CONTENT_TAG_VIEW = "content.tag_view";
+    public static final String CONTENT_TAG_MANAGE = "content.tag_manage";
+    /**
      * 统一工单队列（V1.1.4 Story 3.1，AB-3D）：三类工单一个列表。
      *
      * <p>与 {@link #CONTENT_VIEW_REPORTS}（旧的举报队列）分开一个码，是因为统一视图里还有
@@ -123,7 +130,7 @@ public final class AdminPermissions {
     /** 按查看/编辑分组，供账号页勾选区展示。 */
     public static final List<PermissionGroup> GROUPS = List.of(
             new PermissionGroup("perm.group.view", List.of(
-                    CONTENT_VIEW_REPORTS, CONTENT_VIEW_TICKETS, CONTENT_VIEW, CONTENT_PIN_VIEW,
+                    CONTENT_VIEW_REPORTS, CONTENT_VIEW_TICKETS, CONTENT_VIEW, CONTENT_PIN_VIEW, CONTENT_TAG_VIEW,
                     USER_VIEW,
                     VET_VIEW, VET_QUALIFY_VIEW, RATING_VIEW,
                     CONSULT_VIEW_ANOMALIES, CONSULT_VIEW_SESSIONS,
@@ -133,7 +140,7 @@ public final class AdminPermissions {
                     ADMIN_VIEW_ACCOUNTS, ADMIN_VIEW_LOGS)),
             new PermissionGroup("perm.group.edit", List.of(
                     CONTENT_TAKEDOWN, CONTENT_RESTORE, CONTENT_PROACTIVE_TAKEDOWN,
-                    CONTENT_MANUAL_REVIEW, CONTENT_DISPOSE_ACCOUNT, CONTENT_PIN_MANAGE,
+                    CONTENT_MANUAL_REVIEW, CONTENT_DISPOSE_ACCOUNT, CONTENT_PIN_MANAGE, CONTENT_TAG_MANAGE,
                     USER_DEACTIVATE, USER_DELETE, USER_GRANT_PAWCOIN,
                     VET_CREATE, VET_EDIT, VET_BAN, VET_RESET_PASSWORD, VET_QUALIFY,
                     CONSULT_HANDLE,
