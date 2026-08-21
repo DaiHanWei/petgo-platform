@@ -256,6 +256,48 @@ Claude Opus 5 (1M context) — `claude-opus-5[1m]`
 
 ---
 
+#### ✅ 补记（2026-08-18）：欠的 L1 已补齐，并抓到一个真缺陷
+
+本 Story 当年在 Completion Notes 里写「actor 构造在本地接入时按 `AdminPagesRenderSmokeTest` 范式补齐」，
+于是 AC1 / AC3 / AC4 / AC5 的 `[L1]` 全部空着。Story 1.4 补自己的 L1 时已经指出
+**基建一直是齐的**（`AdminUserDetails` 六参构造器 + `TestingAuthenticationToken`）——
+「只是没做，不是做不了」。本次补齐 **8 条 L1**，`AdminShopProductEndpointIntegrationTest` 11 条全绿：
+
+| AC | 补的 L1 |
+|---|---|
+| AC1 | 端到端建商品（FR-94 必填项逐个落对列 + token 不可枚举）· 缺必填项回表单页 + `error` flash 且不落库 · 只有 `product_view` 时建商品 **403** |
+| AC2 | 喂量结构化落库（`feeding_guide` 里真有那三个数） |
+| AC3 | 新建 SKU 自动建库存行且 `actual=0` · 价格以最小币种单位整型存储 |
+| AC4 | 🔒 无 `shop.cost_view` 时 `costBySku` **不在 model 里**、响应体不含该数值；**反向对照**：有权限时必须真的在（否则 `doesNotContain` 是恒真废断言）· 有 `product_edit` 无 `cost_edit` 时提交的进货价被丢弃 |
+| AC5 | 三类审计真的落库，且 `summary` 里没有进货价数值 |
+
+#### 🔴 补 L1 时抓到的真缺陷：路径变量 `{id}` 被绑进了 `ShopSkuForm.id`
+
+`POST /admin/shop/products/{id}/skus` 的 `{id}` 是**商品 id**，但 Spring 的
+`ExtendedServletRequestDataBinder` 会把 URI 模板变量一并绑进 `@ModelAttribute`
+（**仅当同名请求参数缺席时**）。`ShopSkuForm` 恰好也有 `id` 字段 —— 于是「新建规格」
+被绑成 `form.id = 商品id`，走进「更新规格」分支：
+
+- 找不到该 id 的 SKU → 恒报「规格不存在」，**一个规格都建不出来**；
+- 🔴 更糟：两张表都是 `BIGSERIAL`，新店里 `shop_skus.id` 与 `shop_products.id` 撞号很常见。
+  一旦撞上且那个 SKU 恰属本商品，就会**静默覆盖既有规格**而不是新建。
+
+**页面上之所以一直没出事**，只是因为模板恰好渲染了一个空的 `<input type="hidden" name="id"/>`
+—— 浏览器提交 `id=""`，请求参数在场 → URI 变量被跳过。
+🔴 **把正确性寄托在「模板碰巧有那一行」上不成立**：删掉那行、或换个调用方（curl / 脚本）就复现。
+
+**修法：** 路径变量改名 `{productId}`（URL 字面量不变，模板无需改），让这个绑定在结构上不可能发生。
+全仓扫了一遍同形状端点（`@PostMapping` 带 URI 变量 + `@ModelAttribute`）共 4 处，
+只有本处的表单类有同名 `id` 字段，其余三处（`EditVetForm` / `ShopProductForm` / `QualificationForm`）无字段可撞。
+
+**变异验证：** 改回 `{id}` 后 **3 条护栏正确报红**。
+⚠️ 值得记一笔：「浏览器形态（带 `id=""`）」那条测试在变异下**仍然绿** ——
+它单独存在时是假绿，真正抓住缺陷的是**不带 `id` 参数**的那条。两条都要留。
+
+**当前状态：`mvn -B test` 全量 2003 通过 / 0 失败 / 6 跳过（BUILD SUCCESS）。**
+
+---
+
 **L0 全绿：48 个单测**（1.1/1.2 的 31 个 + 本 Story 新增 17 个）
 
 **本 Story 真正的价值在两条护栏测试，不在业务代码。** `ShopSharedFileGuardTest`（6 条）看守的是**出错时不会引起编译或行为报错**的那类改动：
