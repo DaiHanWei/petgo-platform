@@ -175,9 +175,9 @@ void main() {
     // 三条断言全部到期，改由 test/shared/diary_gating_and_landing_test.dart 双向守门
     // （拦截方向：/profile/* 子页仍受控；放行方向：/profile 与示例详情对游客可达）。
     // 这里只保留一条最小连接断言，确认本页的游客分支确实对游客可达。
-    test('Diary 主页已在免门控 Tab 白名单里，Health / Me 仍受控', () {
+    test('Diary 主页已在免门控 Tab 白名单里，Me 仍受控', () {
       expect(kUngatedTabs.contains(AppTab.profile), isTrue);
-      expect(kUngatedTabs.contains(AppTab.triage), isFalse);
+      // DEP-1 闭合后原 Health 位换成 Toko 并一并放行；受控侧的最小守门收敛到 Me。
       expect(kUngatedTabs.contains(AppTab.me), isFalse);
     });
   });

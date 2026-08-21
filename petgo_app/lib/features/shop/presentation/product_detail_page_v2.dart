@@ -432,7 +432,9 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
                 key: const ValueKey('pdpSeeAlternatives'),
                 label: l10n.tokoSeeAlternatives,
                 variant: ShopButtonVariant.purple,
-                onTap: () => context.push('/shop?category=${category.api}'),
+                // ⚠️ `go` 而非 `push`：DEP-1 闭合后 `/shop` 是 shell 分支根，
+                //    push 会二次构建 StatefulShellRoute → GlobalKey 撞车 → release 白屏。
+                onTap: () => context.go('/shop?category=${category.api}'),
               ),
       );
     }

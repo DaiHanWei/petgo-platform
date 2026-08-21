@@ -22,8 +22,9 @@ void main() {
     expect(addButtonPreset(AppTab.profile, canGrowth: false), isNull);
   });
 
-  test('Health / Me 无语境 → 不预选，判定留给发布页', () {
-    for (final tab in [AppTab.triage, AppTab.me]) {
+  test('Toko / Me 无语境 → 不预选，判定留给发布页', () {
+    // DEP-1 闭合（2026-08-21）：第 2 位由 Health 换为 Toko，「无发布语境」的结论不变。
+    for (final tab in [AppTab.shop, AppTab.me]) {
       expect(addButtonPreset(tab, canGrowth: true), isNull, reason: '$tab 不该抢发布页的默认值判定');
       expect(addButtonPreset(tab, canGrowth: false), isNull);
     }
