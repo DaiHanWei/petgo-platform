@@ -141,6 +141,53 @@ FROM shop_skus k JOIN (VALUES
 WHERE NOT EXISTS (SELECT 1 FROM sku_inventory i WHERE i.sku_id = k.id);
 
 -- ---------------------------------------------------------------------------
+-- 2b. 采购入库流水
+--
+-- 🔴 **不能只 INSERT sku_inventory 就完事**（2026-08-18 本地全流程验收撞到的）：
+--    退货质检通过时要把货以「退货入库批次」入库，而入库要回查该 SKU 的**采购单价** ——
+--    没有任何 PURCHASE_INBOUND 记录的 SKU 会直接抛「该 SKU 尚无采购入库记录」，
+--    事务回滚、退货单永远卡在 INSPECTING。
+--    换句话说：少了这一段，**整条退货链在 staging 上根本走不完**。
+--
+-- ⚠️ operator_account_id 必须是**真实存在**的 ACTIVE 超管。
+--    🔴 2026-08-19 修：原先写的是 `COALESCE(..., 1)` —— 「没有就退回 1」。
+--    那个假设在**干净库上不成立**（全新 staging 克隆 / 刚迁移完的本地库都可能一个管理员都没有），
+--    结果是外键报错 `operator_account_id_fkey`，信息里完全看不出「你得先建管理员」。
+--    现改为前置断言：缺管理员就直接给出可执行的提示，而不是抛一个要人反查的约束错。
+-- ---------------------------------------------------------------------------
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM admin_accounts
+                   WHERE account_type = 'SUPER_ADMIN' AND status = 'ACTIVE') THEN
+        RAISE WARNING '%', E'\n'
+            '⚠️  没有 ACTIVE 的 SUPER_ADMIN → 跳过采购入库流水。\n'
+            '    商品 / SKU / 库存照常灌入，但【退货质检会卡在 INSPECTING】，\n'
+            '    因为质检入库要回查该 SKU 的采购单价。\n'
+            '    建好超管账号后重跑本脚本即可补上（脚本幂等）。';
+    END IF;
+END $$;
+
+INSERT INTO inventory_movements
+    (sku_id, movement_type, qty_delta, actual_before, actual_after,
+     reason, purchase_no, supplier, cost_price, inbound_date, operator_account_id)
+SELECT k.id, 'PURCHASE_INBOUND', i.actual, 0, i.actual,
+       '演示数据初始入库', 'DEMO-PO-001', 'Demo Supplier',
+       COALESCE(k.cost_price, k.price / 2), CURRENT_DATE,
+       (SELECT id FROM admin_accounts
+        WHERE account_type = 'SUPER_ADMIN' AND status = 'ACTIVE'
+        ORDER BY id LIMIT 1)
+FROM shop_skus k
+JOIN sku_inventory i ON i.sku_id = k.id
+WHERE k.public_token LIKE 'demo-%'
+  AND i.actual > 0
+  -- 🔴 没有超管就整段不插（上面的 WARNING 已说明后果）。
+  --    切勿退回一个写死的 id —— 那会变成一个要人反查的外键报错。
+  AND EXISTS (SELECT 1 FROM admin_accounts
+              WHERE account_type = 'SUPER_ADMIN' AND status = 'ACTIVE')
+  AND NOT EXISTS (SELECT 1 FROM inventory_movements m
+                  WHERE m.sku_id = k.id AND m.movement_type = 'PURCHASE_INBOUND');
+
+-- ---------------------------------------------------------------------------
 -- 3. 核对
 -- ---------------------------------------------------------------------------
 SELECT '商品' AS what, count(*) AS n FROM shop_products WHERE public_token LIKE 'demo-%'
@@ -157,4 +204,7 @@ UNION ALL SELECT '低库存 SKU（应为 2）',
 UNION ALL SELECT '带喂量的 MAKANAN（应为 3）',
        count(*) FROM shop_products
        WHERE public_token LIKE 'demo-%' AND category = 'MAKANAN' AND feeding_guide IS NOT NULL
-UNION ALL SELECT '配送 Kecamatan', count(*) FROM shipping_zones WHERE active;
+UNION ALL SELECT '配送 Kecamatan', count(*) FROM shipping_zones WHERE active
+UNION ALL SELECT '🔴 有采购入库记录的 SKU（缺了退货质检会卡死）',
+       count(DISTINCT m.sku_id) FROM inventory_movements m JOIN shop_skus k ON k.id = m.sku_id
+       WHERE k.public_token LIKE 'demo-%' AND m.movement_type = 'PURCHASE_INBOUND';
