@@ -134,7 +134,7 @@ class ContentDetailServiceTest {
     void guestDetailUnaffectedByHideRelations() {
         when(posts.findById(4L)).thenReturn(Optional.of(post(4L, 7L, null)));
         when(accounts.findAuthorViews(org.mockito.ArgumentMatchers.anyList()))
-                .thenReturn(java.util.Map.of(7L, new com.tailtopia.auth.dto.AuthorView(7L, "A", null, false)));
+                .thenReturn(java.util.Map.of(7L, new com.tailtopia.auth.dto.AuthorView(7L, "A", null, false, java.util.List.of())));
 
         service.getDetail(4L, null);
 

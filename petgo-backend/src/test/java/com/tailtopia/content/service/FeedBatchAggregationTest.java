@@ -2,6 +2,7 @@ package com.tailtopia.content.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
@@ -103,7 +104,7 @@ class FeedBatchAggregationTest {
         verify(comments, times(1)).countVisibleForViewerIn(anyList(), any());
         // 🛡 逐条方法一次都不该被碰 —— 它们是内容详情页的，搬进 Feed 就是 N+1。
         verify(likes, never()).existsByPostIdAndUserId(anyLong(), anyLong());
-        verify(comments, never()).countVisibleForViewer(anyLong(), any());
+        verify(comments, never()).countVisibleForViewer(anyLong(), anyBoolean(), any(), anyLong());
     }
 
     /**
@@ -147,7 +148,7 @@ class FeedBatchAggregationTest {
 
         verify(likes, times(1)).findLikedPostIds(anyLong(), anyList());
         verify(comments, times(1)).countVisibleForViewerIn(anyList(), any());
-        verify(comments, never()).countVisibleForViewer(anyLong(), any());
+        verify(comments, never()).countVisibleForViewer(anyLong(), anyBoolean(), any(), anyLong());
     }
 
     /**

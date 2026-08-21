@@ -103,7 +103,7 @@ class MiniProfileControllerTest {
     @Test
     void guestNeverConsultsHideRelations() {
         when(accounts.findAuthorViews(anyList()))
-                .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", null, false)));
+                .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", null, false, java.util.List.of())));
         when(accounts.activeSignatureOf(7L)).thenReturn(java.util.Optional.empty());
         when(content.countPublishedByAuthor(7L)).thenReturn(0L);
 
@@ -142,7 +142,7 @@ class MiniProfileControllerTest {
         // 只举报过：isBlocked=false（isHidden 会是 true，但主页校验不该看它）
         when(hideRelations.isBlocked(5L, 9L)).thenReturn(false);
         when(accounts.findAuthorViews(anyList()))
-                .thenReturn(Map.of(9L, new AuthorView(9L, "Rina", "https://cdn/r.jpg", false)));
+                .thenReturn(Map.of(9L, new AuthorView(9L, "Rina", "https://cdn/r.jpg", false, java.util.List.of())));
         when(accounts.activeSignatureOf(9L)).thenReturn(java.util.Optional.empty());
         when(content.countPublishedByAuthor(9L)).thenReturn(3L);
 
