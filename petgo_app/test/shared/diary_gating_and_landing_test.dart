@@ -15,6 +15,8 @@ import 'package:tailtopia/shared/widgets/bottom_tab_bar.dart';
 import 'package:tailtopia/shared/widgets/login_hard_dialog.dart';
 
 import '../support/fake_feed_repository.dart';
+import 'package:tailtopia/features/shop/data/shop_repository.dart';
+import 'package:tailtopia/features/shop/domain/shop_product.dart';
 
 /// 底栏标签精确定位：页面正文里也可能出现同名文字（如游客态页头的统计列 "Diary"），
 /// 直接 `find.text('Diary')` 会命中多个。
@@ -30,7 +32,12 @@ Finder _tabButton(String label) =>
 /// 本文件的断言是这条规则的守门人：拦截方向与放行方向都锁死，任一侧被改坏都会红。
 Future<ProviderContainer> _pumpGuestApp(WidgetTester tester) async {
   final container = ProviderContainer(
-    overrides: [feedRepositoryProvider.overrideWithValue(FakeFeedRepository())],
+    overrides: [
+      feedRepositoryProvider.overrideWithValue(FakeFeedRepository()),
+  // Toko 现为第 2 位 Tab（DEP-1 闭合）。打桩商品列表，否则点进去会走真实 dio 请求，
+  // 测试环境无后端 → 挂在 30s receiveTimeout 上（表现为 pumpAndSettle 不收敛 / pending timer）。
+      shopProductsProvider.overrideWith((ref, category) async => <ShopProductSummary>[]),
+    ],
   );
   addTearDown(container.dispose);
   await tester.pumpWidget(
@@ -128,9 +135,12 @@ void main() {
   });
 
   group('AC2 Tab 点击门控（第二处，PRD 未覆盖）', () {
-    test('免门控白名单 = {Discovery, Diary}；Health / Me 维持受控', () {
-      expect(kUngatedTabs, <AppTab>{AppTab.home, AppTab.profile});
-      expect(kUngatedTabs.contains(AppTab.triage), isFalse, reason: 'Health 对游客维持受控');
+    test('免门控白名单 = {Discovery, Diary, Toko}；Me 维持受控', () {
+      expect(kUngatedTabs, <AppTab>{AppTab.home, AppTab.profile, AppTab.shop});
+      // DEP-1 闭合（2026-08-21）：Toko 放行给游客，与路由层 _controlledLocations 不含 /shop
+      // 同源——商品浏览在转化漏斗最上层，登录引导推迟到加购（Epic 3）。
+      // ⚠️ 放行仅限 Toko 主页与商品详情；加购/结算/订单/地址仍受控。
+      expect(kUngatedTabs.contains(AppTab.shop), isTrue, reason: 'Toko 对游客开放');
       expect(kUngatedTabs.contains(AppTab.me), isFalse, reason: 'Me 对游客维持受控');
     });
 
@@ -148,15 +158,20 @@ void main() {
       expect(find.byType(DiaryGuestPage), findsOneWidget);
     });
 
-    testWidgets('游客点 Health → 仍弹强登录窗且不切换目的地', (tester) async {
+    // ⚠️ 本条于 2026-08-21 DEP-1 闭合时**语义反转**：第 2 位由 Health(受控) 换成 Toko(开放)。
+    //    原断言「游客点第 2 位会弹登录窗」不再成立，且不是回归 —— 商品浏览处于转化漏斗最上层，
+    //    用登录墙拦截会直接杀掉转化，登录引导推迟到加购（Epic 3）。
+    //    受控方向的守门未减：紧随其后的「游客点 Me → 仍弹强登录窗」保持不变。
+    testWidgets('游客点 Toko → 直接进入，不弹登录框（转化漏斗设计）', (tester) async {
       await _pumpGuestApp(tester);
 
-      await tester.tap(_tabButton('Health'));
+      await tester.tap(_tabButton('Toko'));
       await tester.pumpAndSettle();
 
-      expect(find.byType(LoginHardDialog), findsOneWidget);
-      // 不切换目的地：仍停在冷启动落地的 Diary 游客态
-      expect(find.byType(DiaryGuestPage), findsOneWidget);
+      expect(find.byType(LoginHardDialog), findsNothing,
+          reason: 'Toko 在 kUngatedTabs 里，与路由层 /shop 不受控同源');
+      // 确实切换了目的地：不再停在 Diary 游客态
+      expect(find.byType(DiaryGuestPage), findsNothing);
     });
 
     testWidgets('游客点 Me → 仍弹强登录窗', (tester) async {
@@ -206,7 +221,7 @@ void main() {
       // 真路径下游客态是 Tab 分支根页，底栏必须在（A1 稿亦有底栏）。
       expect(find.byType(BottomTabBar), findsOneWidget);
       expect(_tabButton('Diary'), findsOneWidget);
-      expect(_tabButton('Health'), findsOneWidget);
+      expect(_tabButton('Toko'), findsOneWidget);
       expect(_tabButton('Social'), findsOneWidget);
       expect(_tabButton('Me'), findsOneWidget);
     });

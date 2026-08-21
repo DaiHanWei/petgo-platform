@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -30,13 +29,19 @@ import 'bottom_tab_bar.dart';
 ///
 /// `Diary` 在此白名单里指的**只是 Diary 主页**：其子页（建档 / 编辑 / 当天详情 / 里程碑列表）
 /// 由深链门控继续拦截，游客点进去仍会被 redirect。
-/// **Health / [+] / Me 对游客维持受控**，不得顺手加进来。
-const Set<AppTab> kUngatedTabs = {AppTab.home, AppTab.profile};
+/// **[+] / Me 对游客维持受控**，不得顺手加进来。
+///
+/// 🔴 `Toko` 在白名单里是**刻意的**，且与路由层同源：`/shop` 不在 `_controlledLocations`
+/// （app_router.dart），理由是商品浏览处于转化漏斗最上层，用登录墙拦截会直接杀掉转化，
+/// 登录引导推迟到加购（Epic 3）。**两处必须同步** —— 只放行路由那一处，游客点 Toko 标签
+/// 仍会被弹登录框（本注释开头记载的 Diary 事故就是这么来的）。
+/// 放行范围仅限 Toko 主页与商品详情；加购 / 结算 / 订单 / 地址等仍受控。
+const Set<AppTab> kUngatedTabs = {AppTab.home, AppTab.profile, AppTab.shop};
 
 /// App 主框架外壳（Story 1.2 外观 + Story 1.5 受控 Tab 门控）。
 ///
 /// 5 位底部 Tab Bar + 中间凸起「＋」；内容区切换 [AppMotion.tabFade]=120ms 淡入。
-/// 门控（Story 1.5）：仅 Social 游客可访问；Diary/[+]/Health/我的 未登录点击 → 经
+/// 门控（Story 1.5 + DEP-1 闭合）：Social / Diary / Toko 游客可访问；[+]/我的 未登录点击 → 经
 /// **单一门控入口** [requireLogin] 弹强弹窗（注入 pendingAction），不切换目的地。
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key, required this.navigationShell});
@@ -181,19 +186,9 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
       // 键盘弹出时不收缩外壳：底栏 + 中间「＋」发布按钮固定在屏幕底部不被顶起（用户反馈）。
       // 各 Tab 根页本身无内联输入框，文字编辑均走 modal bottom sheet（自带 viewInsets 让位），故安全。
       resizeToAvoidBottomInset: false,
-      // 🔧 仅 debug：内容区上叠一个 Toko 悬浮入口（见 [_TokoDevEntry]）。
-      //    release 走的是与从前逐字一致的那一支（裸 navigationShell），线上零影响。
-      body: FadeTransition(
-        opacity: _fade,
-        child: kDebugMode
-            ? Stack(
-                children: [
-                  widget.navigationShell,
-                  const Positioned(right: 12, bottom: 24, child: _TokoDevEntry()),
-                ],
-              )
-            : widget.navigationShell,
-      ),
+      // 2026-08-21 DEP-1 闭合：Toko 已占正式 Tab 位，原先那个「仅 debug 的橙色悬浮入口」
+      // （_TokoDevEntry）存在理由消失，随本次改动一并移除，内容区回到裸 navigationShell。
+      body: FadeTransition(opacity: _fade, child: widget.navigationShell),
       floatingActionButton: AddTabButton(activeIndex: index, onPressed: _onAddPressed),
       // 与 centerDocked 同位，但忽略 SnackBar 高度：底部出现「sign-in」等错误弹框时
       // 中间「＋」发布按钮保持固定，不被顶起（iOS/Android 一致）。
@@ -203,36 +198,6 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
   }
 }
 
-/// 🔧 **仅 debug 的 Toko 悬浮入口**（2026-08-19 本地验收补）。
-///
-/// **为什么需要**：Toko 归 **DEP-1 未拍板**，`AppTab` 四值无空位、并行契约明确
-/// **禁改 `bottom_tab_bar.dart`**（UX-DR12 的 Tab 两态图标亦无稿），因此 `/shop`
-/// 至今**只挂了路由、不占 Tab 位**。冷启动后走到 Toko 的唯一产品路径是
-/// 「登录 → 建档 → 加驱虫记录 → 点 FR-110 品类跳转」—— 验收十个电商页面时太绕。
-///
-/// 🔴 **这不是产品形态，别当入口方案来评审。** 真正的入口等 DEP-1 拍板 + DEP-2 出稿；
-///    颜色刻意取扎眼的橙色而非设计系统色，就是为了让它一眼看着「不像产品的一部分」。
-///
-/// 🔒 `kDebugMode` 硬门：release 构建里整段被编译期裁掉，行为与从前逐字一致。
-///    形态照抄仓库既有先例（`shop_ui_variant.dart` 的版式切换、`app.dart` 的调试深链）。
-///
-/// ⚠️ `heroTag` 必须显式错开 —— 同一个 Scaffold 里已经有中间凸起的 [AddTabButton]，
-///    两个 FAB 共用默认 tag 会在 Hero 动画时直接抛异常。
-class _TokoDevEntry extends StatelessWidget {
-  const _TokoDevEntry();
-
-  @override
-  Widget build(BuildContext context) {
-    return FloatingActionButton.small(
-      heroTag: 'tokoDevEntry',
-      backgroundColor: Colors.deepOrange,
-      foregroundColor: Colors.white,
-      tooltip: 'Toko（仅 debug 入口）',
-      onPressed: () => context.push('/shop'),
-      child: const Icon(Icons.storefront_outlined),
-    );
-  }
-}
 
 /// 居中贴底栏顶边的 FAB 定位，复刻 [FloatingActionButtonLocation.centerDocked]，
 /// **但不把 SnackBar 高度计入**——底部错误弹框出现时「＋」发布按钮固定不动（用户反馈：按钮被顶起）。

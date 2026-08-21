@@ -164,9 +164,15 @@ const Set<String> _controlledExactExceptions = {'/profile'};
 const String _devRoute = String.fromEnvironment('DEV_ROUTE');
 
 /// Tab 分支根页（与 [AppTab] 一一对应；穷尽 switch，新增 Tab 时编译期报错，不会静默漏配）。
-Widget _tabRootPage(AppTab tab) => switch (tab) {
+/// Tab 根页。**接收 [GoRouterState]** 而非只接 tab —— Toko 要读 `?category=`
+/// （FR-110 品类跳转注入），无 state 就取不到。其余 Tab 忽略它。
+Widget _tabRootPage(AppTab tab, GoRouterState state) => switch (tab) {
   AppTab.profile => const GrowthArchivePage(),
-  AppTab.triage => const TriagePage(),
+  // 🔴 双 UI 并存（见 shop_ui_variant.dart）：切换只在渲染层，路由结构不变。
+  AppTab.shop => ShopUiSwitch(
+      v1: (_) => TokoPage(initialCategory: state.uri.queryParameters['category']),
+      v2: (_) => TokoPageV2(initialCategory: state.uri.queryParameters['category']),
+    ),
   AppTab.home => const HomePage(),
   AppTab.me => const MePage(),
 };
@@ -542,16 +548,6 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // 🔴 双 UI 并存（2026-08-19）：v1 = 逐 story 实现的首发版式，v2 = 电商设计稿版式。
       //    **路由结构一行不改** —— URL、深链、导航栈、受控路由名单全不变，
       //    切换的只是渲染层，否则对比的就不只是 UI 了（见 shop_ui_variant.dart）。
-      GoRoute(
-        path: '/shop',
-        builder: (c, s) {
-          final category = s.uri.queryParameters['category'];
-          return ShopUiSwitch(
-            v1: (_) => TokoPage(initialCategory: category),
-            v2: (_) => TokoPageV2(initialCategory: category),
-          );
-        },
-      ),
       // 商品详情（Story 1.7）。同样对游客开放——不在 _controlledLocations 里。
       GoRoute(
         path: '/shop/products/:token',
@@ -736,6 +732,12 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // 表单 —— 两者都与真实游客路径不符，极易被误判成缺陷。现在验游客态请走真路径：
       // 退出登录 → 冷启动即落 Diary 游客引导态（底栏在、点 CTA 弹登录窗）。
       // AI 分诊上传页（Story 4.3）。受控路由（/triage/ 前缀，游客被门控）；shell 外 push 隐藏 Tab Bar。
+      // 🔴 DEP-1 闭合（2026-08-21）：Health 让出 Tab 位给 Toko 后，`/triage` 由 shell 分支
+      //    降为顶层路由。**必须保留** —— consult_conversation / vet_waiting / vet_timed_pay
+      //    等处有十余个 `context.go('/triage')` 作为问诊流程的返回落点，缺了就是 404。
+      //    界面入口移到健康记录页（health_list_page.dart）。仍在 _controlledLocations 内，
+      //    登录门控不变。
+      GoRoute(path: '/triage', builder: (c, s) => const TriagePage()),
       GoRoute(path: '/triage/upload', builder: (c, s) => const TriageUploadPage()),
       // AI 分诊历史结果快照（bug 20260702-238/228）：按 triageId 只读回看，extra 带历史症状摘要。
       GoRoute(
@@ -996,7 +998,7 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         branches: <StatefulShellBranch>[
           for (final AppTab tab in AppTab.values)
             StatefulShellBranch(
-              routes: [GoRoute(path: tab.location, builder: (c, s) => _tabRootPage(tab))],
+              routes: [GoRoute(path: tab.location, builder: (c, s) => _tabRootPage(tab, s))],
             ),
         ],
       ),

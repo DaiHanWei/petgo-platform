@@ -16,6 +16,14 @@
   "@tabAdd": {
     "description": "Bottom tab center plus button (publish)."
   },
+  "tabShop": "Toko",
+  "@tabShop": {
+    "description": "Bottom tab label: Toko (e-commerce). DEP-1 闭合（2026-08-21）后占用原 Health 位。两语均用 Toko —— 它在印尼语里就是「店铺」，英文侧沿用同一词保持品牌一致，且 4 字符远短于底栏 66px 格宽的截断线（对比 tabTriage 那条关于 Kesehatan 被截断的记录）。"
+  },
+  "healthStartConsult": "Start consultation",
+  "@healthStartConsult": {
+    "description": "Health records page AppBar action: start an AI/vet consultation. 新增于 2026-08-21——Health 让出底栏 Tab 位给 Toko 后，问诊需要一个界面入口，本页此前只展示问诊存档、无发起动作。"
+  },
   "tabTriage": "Health",
   "@tabTriage": {
     "description": "Bottom tab label: Triage / consult. OQ-11B 关联决策 OQ-19（2026-08-04 定稿）：印尼语侧也用 Health 而不是 Kesehatan —— 底栏是固定 66px 高、每格标签只有约 66px 宽，Kesehatan 在真机 411dp 的默认字号下就会被省略号截断。"

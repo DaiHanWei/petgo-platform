@@ -45,8 +45,8 @@ void main() {
 
   /// 两种语言的四个标签全列出来 —— 只测一种语言正是上次放跑 `Discovery` 的原因。
   const labelsByLocale = <String, List<String>>{
-    'id': ['Diary', 'Health', 'Sosial', 'Saya'],
-    'en': ['Diary', 'Health', 'Social', 'Me'],
+    'id': ['Diary', 'Toko', 'Sosial', 'Saya'],
+    'en': ['Diary', 'Toko', 'Social', 'Me'],
   };
 
   for (final entry in labelsByLocale.entries) {

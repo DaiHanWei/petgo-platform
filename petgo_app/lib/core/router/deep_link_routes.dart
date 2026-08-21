@@ -13,7 +13,15 @@ class DeepLinkRoutes {
   /// Shell 四 Tab 的分支根路由。**分支根只能 `go`（切分支），绝不能 `push`**：
   /// push 会在同一匹配链里二次构建 StatefulShellRoute → GlobalKey 撞车 → release 白屏，
   /// 且此后该分支 `goBranch` 持续抛异常、Tab 永久点不进去（bug 20260729-纪念日通知白屏）。
-  static const Set<String> shellTabRoots = {'/home', '/profile', '/triage', '/me'};
+  ///
+  /// ⚠️ 2026-08-21 DEP-1 闭合：`/triage` 换成 `/shop`（Health 让位给 Toko）。
+  /// 换位当时 `health_list_page.dart` 的 FR-110 品类跳转还在用 push 而非 go ——
+  /// 那在换位前无害（`/shop` 当时是顶层路由），换位后正是上面这条 bug 的复现路径，
+  /// 已同批改掉。**今后新增任何通向 `/shop` 的跳转，一律用 `go`。**
+  ///
+  /// 该约束由 `test/shop/toko_page_test.dart` 的源码护栏机械守门（全量扫 lib/）。
+  /// ⚠️ 护栏按原始文本匹配、不剔注释，所以此处刻意**不写出**那个被禁的字面量。
+  static const Set<String> shellTabRoots = {'/home', '/profile', '/shop', '/me'};
 
   /// [location] 是否为 shell Tab 分支根（须用 `go` 导航）。
   static bool isShellTabRoot(String location) => shellTabRoots.contains(location);
