@@ -1,5 +1,5 @@
 # generated: 2026-08-17
-# last_updated: 2026-08-17
+# last_updated: 2026-08-21
 # project: TailTopia V1.1.6
 # project_key: NOKEY
 # tracking_system: file-system
@@ -181,7 +181,7 @@ development_status:
   # 无依赖（2026-08-11 对抗性评审已删除原「依赖 Epic 2」那条边）。
   # 客户端生成，复用宠物身份证既有做法；服务端出图能力仅供社交预览缩略图，不挪用（AD-15）。
   epic-9: in-progress
-  9-1-卡片生成基建: ready-for-dev                          # 双尺寸 + 水印 + 文字排版
+  9-1-卡片生成基建: review                          # 双尺寸 + 水印 + 文字排版
   9-2-两套模板与下载二维码: ready-for-dev                   # 有图 / 纯文字
   9-3-分享入口与链接落地分流: ready-for-dev
   epic-9-retrospective: optional
