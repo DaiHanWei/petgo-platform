@@ -1085,6 +1085,7 @@
   "publishCropLocked": "Ratio follows the first cropped photo",
   "feedPinnedBadge": "Pinned",
   "phoneEditTitle": "Phone number",
+  "phoneNotSet": "Not set",
   "phoneEditHint": "Example: 0812 3456 7890",
   "phoneSaveSuccess": "Phone number saved",
   "phoneSaveFormatError": "Couldn't save — check the phone number format",

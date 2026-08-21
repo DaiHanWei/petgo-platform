@@ -945,6 +945,7 @@
   "publishCropLocked": "Rasio mengikuti foto pertama yang dipotong",
   "feedPinnedBadge": "Disematkan",
   "phoneEditTitle": "Nomor HP",
+  "phoneNotSet": "Belum diisi",
   "phoneEditHint": "Contoh: 0812 3456 7890",
   "phoneSaveSuccess": "Nomor HP tersimpan",
   "phoneSaveFormatError": "Gagal menyimpan, periksa format nomor HP",

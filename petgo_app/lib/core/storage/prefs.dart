@@ -43,6 +43,15 @@ class AppPrefs {
   static const kPushPromptProfileCreated = 'petgo.push_prompt_profile_created';
   static const kPushPromptNotificationCenter = 'petgo.push_prompt_notification_center';
 
+  // --- 手机号软引导「已提示过」标记（V1.1.6 Story 7.2 · FR-70）---
+  //
+  // 🛡 **AD-14 Rule 2 四键中的第四把** —— 与上面推送权限那三把**物理隔离**。
+  //    PRD 明确：手机号采集「全局仅一次」，不跟随 FR-85 的多触发点模型；
+  //    共用任何一把都会让两条功能互相消耗机会。
+  // ⚠️ 按设备存储 ⇒ 「全局仅一次」实为「**本设备**仅一次」，换设备会再问一次。
+  //    这是 AD-14 Rule 1 的既定代价、不是缺陷；已填手机号者永不被问，故影响面很小。
+  static const kPhonePromptShown = 'petgo.phone_prompt_shown';
+
   // --- 已废弃的键（下面这些**刻意不再提供 getter/setter**）---
   //
   // `petgo.splash_last_shown_date`：曾用于「splash 当天只播一次完整动画」。

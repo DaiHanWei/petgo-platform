@@ -43,6 +43,7 @@ class UserProfile {
     this.hasPetProfile = false,
     this.isSystemDefaultName = false,
     this.phone,
+    this.createdAt,
   });
 
   /// 当前用户 id（Story 3.5：评论删除入口可见性判定）。
@@ -71,6 +72,10 @@ class UserProfile {
   /// 这里拿到的是**完整号码** —— 脱敏是显示层的事（设置页列表脱敏、编辑抽屉展示完整）。
   final String? phone;
 
+  /// 注册时间（Story 7.2 · FR-70）。手机号软引导的时机是「第 3 天打开 App」，
+  /// 只能从这里算。⚠️ 服务端下发 UTC，**时区换算在 [PhonePromptTiming] 一处做**。
+  final DateTime? createdAt;
+
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
         id: json['id'] as int?,
         nickname: json['nickname'] as String?,
@@ -83,6 +88,9 @@ class UserProfile {
         hasPetProfile: (json['hasPetProfile'] ?? false) as bool,
         isSystemDefaultName: (json['isSystemDefaultName'] ?? false) as bool,
         phone: json['phone'] as String?,
+        createdAt: json['createdAt'] == null
+            ? null
+            : DateTime.tryParse(json['createdAt'] as String),
       );
 
   UserProfile copyWith({
@@ -97,6 +105,7 @@ class UserProfile {
     bool? hasPetProfile,
     bool? isSystemDefaultName,
     String? phone,
+    DateTime? createdAt,
   }) =>
       UserProfile(
         id: id ?? this.id,
@@ -110,5 +119,6 @@ class UserProfile {
         hasPetProfile: hasPetProfile ?? this.hasPetProfile,
         isSystemDefaultName: isSystemDefaultName ?? this.isSystemDefaultName,
         phone: phone ?? this.phone,
+        createdAt: createdAt ?? this.createdAt,
       );
 }

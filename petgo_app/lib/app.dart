@@ -13,6 +13,9 @@ import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/consult/presentation/consult_refresh.dart';
 import 'package:tailtopia/features/content/presentation/feed_controller.dart';
 import 'package:tailtopia/features/me/data/my_posts_repository.dart';
+import 'package:tailtopia/features/me/presentation/phone_edit_sheet.dart';
+import 'package:tailtopia/features/me/domain/phone_soft_prompt.dart';
+import 'package:tailtopia/core/storage/prefs.dart';
 import 'package:tailtopia/features/notify/data/notification_repository.dart';
 import 'package:tailtopia/features/pawcoin/presentation/pawcoin_controller.dart';
 import 'package:tailtopia/features/profile/data/health_record_repository.dart';
@@ -78,6 +81,27 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> with WidgetsBinding
     // 不同步则后台收不到厂商离线推送 / 前台重复弹通知，见 core/push/push_service.dart）。
     WidgetsBinding.instance.addObserver(this);
     _initDeepLinks();
+
+    // 手机号软引导接进推送权限的排队入口（Story 7.2 / AD-14 Rule 7：先推送权限、后手机号）。
+    //
+    // 🛡 这里**只注册**，不弹任何东西 —— 它跟着推送权限那几个触发点走。
+    //    注册放这里而不是 `main.dart`：判定要读 `authControllerProvider`（当前用户档案），
+    //    而 main 的启动回调在 ProviderScope 之外，拿不到 ref。
+    // ⚠️ 取值全部是**函数**，到触发那一刻才读 —— 用户可能刚在设置页填过号码。
+    // ⚠️ 绝不在别处另写一套「同时命中谁先谁后」的判定，那正是 Rule 7 要消除的不确定性。
+    PhoneSoftPrompt.register(
+      prefs: AppPrefs.create,
+      registeredAt: () async => ref.read(authControllerProvider).profile?.createdAt,
+      hasPhone: () async {
+        final phone = ref.read(authControllerProvider).profile?.phone;
+        return phone != null && phone.isNotEmpty;
+      },
+      showSheet: () async {
+        final ctx = rootNavigatorKey.currentContext;
+        if (ctx == null) return false;
+        return PhoneEditSheet.open(ctx, entry: 'soft_prompt');
+      },
+    );
   }
 
   @override
