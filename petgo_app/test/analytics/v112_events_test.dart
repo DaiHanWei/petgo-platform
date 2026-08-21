@@ -231,6 +231,12 @@ void main() {
         '_succeeded', '_completed', '_landed_on_tab', '_achieved',
         // 问诊漏斗节点（2026-08-06）：下单提交 / 流程开始。
         '_submitted', '_started',
+        // 用户对提示的响应（V1.1.6 Story 8.2）：`_responded` 与 `_tapped` 的区别在于
+        // **它是对一个「被问」的回答**，取值有多档（granted / denied / settings_opened /
+        // dismissed），而不是单一动作。分母是提示曝光数（`_shown`），配对使用。
+        // 🔴 8-1 刻意**没有**提前把它加进来 —— 白名单里放尚未用到的条目，
+        //    就失去了「改动时被迫想一次」的作用。本 story 用到了才加。
+        '_responded',
         // 状态上报（V1.1.6 Story 8.1）：`_reported` = 端上主动上报一次当前状态，
         // 与「用户做了什么」的 _tapped/_selected 区分开 —— 这类事件没有用户动作，
         // 分母是启动数而不是曝光数，混在一起会让判读口径错位。

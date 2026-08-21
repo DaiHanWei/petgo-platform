@@ -45,7 +45,8 @@ import '../../features/profile/presentation/id_card_detail_page.dart';
 import '../../features/profile/presentation/id_card_page.dart';
 import '../../features/profile/presentation/milestone_list_page.dart';
 import '../../features/profile/domain/pet_profile.dart';
-import '../../features/notify/data/push_permission_providers.dart';
+import '../../features/notify/domain/push_permission_prompt.dart';
+import '../../features/notify/presentation/push_permission_guide_flow.dart';
 import '../../features/onboarding/presentation/splash_page.dart';
 import '../../features/profile/presentation/pet_profile_create_page.dart';
 import '../../features/profile/presentation/day_detail_page.dart';
@@ -546,10 +547,19 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
             petName: created.name,
             avatarUrl: created.avatarUrl,
             onStartExplore: () async {
-              // FR-22D 建档时机（庆祝页后、进首页前）：触发推送权限闸门（Story 6.4）。
-              // neverConsulted 传 true 安全——已问诊者其 `alreadyAsked` 守卫已使闸门跳过（取最早、仅一次）。
-              final gate = await ref.read(pushPermissionGateProvider.future);
-              await gate.maybeRequestAfterProfileCreated(neverConsulted: true);
+              // 触发点 2「建档后」（V1.1.6 Story 8.2 / FR-85）：庆祝页后、进首页前。
+              //
+              // 🔴 这里原先调的是 Story 6.4 的 PushPermissionGate ——
+              //    它的门是 `!alreadyAsked`，而那个键被第二代「首启即申请」
+              //    （PushPermissionBootstrap，2026-08-07）在**首次冷启动**就置位了
+              //    ⇒ 对所有用户恒 false，这个时机事实上从未触发过。
+              //    旧类按 AD-14 Rule 3 保留不删（仍供「我的」页被动引导用），但这里改走新模型。
+              //
+              // ⚠️ 不再传 neverConsulted：那是旧「双时机取最早、全局仅一次」模型的去重手段。
+              //    新模型是**多触发点、每点各一次**（AD-14 Rule 2 四键物理隔离），
+              //    触发点 1 与 2 相互独立 —— 沿用 neverConsulted 会压掉已问诊用户的建档那次机会，
+              //    与本 FR「多给几次机会」的目的相反。
+              await maybeShowPushPermissionGuide(c, PushTriggerPoint.profileCreated);
               if (c.mounted) c.go('/home');
             },
           );

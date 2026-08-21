@@ -444,3 +444,38 @@ social_user_hide_submitted       {origin: REPORT, entry: report_flow}
 2. **点遮罩关掉 sheet 不报。** 否则占比的分母会混进"打开又关掉"的人。
 3. 一个事件 + `source` 属性，不是两个事件 —— 与同页 `publish_page_content_type_selected`
    形状一致，看板里可直接对比占比。
+
+### 9.3 `push_permission_prompt_shown` / `push_permission_responded`（E-19 / E-20 · Story 8.2）
+
+| 项 | 值 |
+|---|---|
+| 时机 | 三个用户侧触发点：**首次问诊后** · **建档后** · **打开通知中心**（各一次） |
+| 属性（曝光） | `trigger_point`、`prompt_type` |
+| 属性（响应） | `trigger_point`、`prompt_type`、`result` |
+| 落点 | `lib/features/notify/domain/push_permission_prompt.dart`（判定与上报）· `push_permission_guide_flow.dart`（触发点 1/2 的抽屉）· `notification_center_page.dart`（触发点 4 的顶部条） |
+
+**`trigger_point` 是这条 FR 的全部意义所在。** 产品 2026-08-14 决定「四个触发点先全做、
+观察一个周期后再砍」，而**砍哪个留哪个的唯一依据就是按 `trigger_point` 拆分的响应分布**。
+缺这个属性不是「埋点不全」，是**决策依据没了**。
+
+取值：
+
+| 属性 | 取值 |
+|---|---|
+| `trigger_point` | `first_consult` · `profile_created` · `notification_center` · `vet_online`（触发点 5，Story 8.3） |
+| `prompt_type` | 🛡 **恒为 `in_app_guide`** |
+| `result` | `granted` · `denied` · `settings_opened` · `dismissed` |
+
+判读注意：
+
+1. 🛡 **`prompt_type=native_dialog` 出现即实现违规**（AD-14 Rule 6）——
+   原生弹窗的机会在首启就被第二代「首启即申请」消耗掉了，那条分支是死的。
+   **这条可以配成线上告警**：一旦出现，说明有人绕过了 `PushPermissionPrompt`。
+2. ⚠️ **`result=settings_opened` 只表示跳走了，不代表真的开了。**
+   净授权率看 §9.1 的 E-21（冷启动快照）。两者别混着解读。
+3. ⚠️ **触发点 3 不存在** —— PRD 编号是 1/2/4/5，不是漏了一个。
+4. ⚠️ **触发点 5（兽医切为在线）不限次数**（Story 8.3），曝光量天然远高于用户侧三点。
+   横向对比四个触发点时**必须按人去重**，否则兽医那一点会把整体数据带偏 ——
+   这是模型差异的必然结果，不是埋点缺陷。
+5. 曝光与响应**配对使用**：`_shown` 是分母、`_responded` 是分子。
+   两者都不 `await`（埋点不得阻塞用户流程 —— 这段逻辑夹在「建档完成 → 进首页」之间）。
