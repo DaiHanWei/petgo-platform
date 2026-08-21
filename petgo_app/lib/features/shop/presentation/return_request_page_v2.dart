@@ -170,7 +170,7 @@ class _ReturnRequestPageV2State extends ConsumerState<ReturnRequestPageV2> {
                   const SizedBox(height: 3),
                   Text(formatIdr(line.unitPrice),
                       style: ShopText.priceInline.copyWith(
-                          color: selectable ? ShopColors.rose : ShopColors.text4)),
+                          color: selectable ? ShopColors.accent : ShopColors.text4)),
                   // 🔴 不可退的原因由**服务端**给，前端直接展示 ——
                   //    前端自己拼会和服务端判定漂移。
                   if (!selectable && line.blockedReason != null) ...[
@@ -359,7 +359,7 @@ class _ReturnRequestPageV2State extends ConsumerState<ReturnRequestPageV2> {
           primary: ShopButton(
             key: const ValueKey('returnSubmitV2'),
             label: l10n.returnNextChooseRefund,
-            variant: _busy ? ShopButtonVariant.disabled : ShopButtonVariant.rose,
+            variant: _busy ? ShopButtonVariant.disabled : ShopButtonVariant.pay,
             onTap: _busy ? null : () => _submit(l10n),
           ),
         ),

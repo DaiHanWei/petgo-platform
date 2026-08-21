@@ -131,7 +131,7 @@ void main() {
 
       final price = tester.widget<Text>(find.text('Rp 95.000'));
       expect(price.style?.color, ShopColors.text4);
-      expect(price.style?.color, isNot(ShopColors.rose));
+      expect(price.style?.color, isNot(ShopColors.accent));
     });
 
     testWidgets('认不出的失效原因照样算失效（不当成有效行）', (tester) async {

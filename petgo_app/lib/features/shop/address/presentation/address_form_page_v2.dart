@@ -106,7 +106,7 @@ class _AddressFormPageV2State extends ConsumerState<AddressFormPageV2> {
         primary: ShopButton(
           key: const ValueKey('addressSaveV2'),
           label: l10n.addressSave,
-          variant: _saving ? ShopButtonVariant.disabled : ShopButtonVariant.rose,
+          variant: _saving ? ShopButtonVariant.disabled : ShopButtonVariant.pay,
           onTap: _saving ? null : () => _save(l10n),
         ),
       ),
@@ -262,7 +262,9 @@ class _AddressFormPageV2State extends ConsumerState<AddressFormPageV2> {
           ShopSection(
             child: Text(_submitError!,
                 key: const ValueKey('addressSubmitError'),
-                style: ShopText.body.copyWith(color: ShopColors.roseDark)),
+                // 提交失败提示：错误态用 error 系而非强调色——换紫后若跟着变紫，
+                // 「这里出错了」就读不出来了。
+                style: ShopText.body.copyWith(color: ShopColors.errorText)),
           ),
         const SizedBox(height: kShopGutter),
       ],
@@ -373,8 +375,10 @@ class _AddressFormPageV2State extends ConsumerState<AddressFormPageV2> {
               // 错误只改描边色 + 下方一行说明（设计稿），不用 Material 的 errorText
               // ——那会把控件整体上移，一片红边时页面会跳动。
               border: _border(ShopColors.border),
-              enabledBorder: _border(error == null ? ShopColors.border : ShopColors.rose),
-              focusedBorder: _border(error == null ? ShopColors.purple : ShopColors.rose),
+              // 错误边框保持红（ShopColors.error）：强调色已改为品牌紫，
+              // 若错误边框也用强调色，正常聚焦态与错误态会同为紫、无法区分。
+              enabledBorder: _border(error == null ? ShopColors.border : ShopColors.error),
+              focusedBorder: _border(error == null ? ShopColors.purple : ShopColors.error),
             ),
           ),
         ),
@@ -396,7 +400,7 @@ class _AddressFormPageV2State extends ConsumerState<AddressFormPageV2> {
   Widget _errorLine(String text) => Padding(
         padding: const EdgeInsets.only(top: 3),
         child: Text(text,
-            style: ShopText.meta.copyWith(fontSize: 9.5, color: ShopColors.rose)),
+            style: ShopText.meta.copyWith(fontSize: 9.5, color: ShopColors.error)),
       );
 
   /// 级联选择器。`(显示名, 是否在服务范围)`。

@@ -60,11 +60,28 @@ void main() {
   });
 
   group('三色分工（README「Color Semantics」定为信息骨架，不可混用）', () {
-    test('电商玫红与全局 popRed 是两个不同的红，不许合并', () {
-      // popRed 已被「危险 / 点赞 / 疫苗 / 分诊」占满。若有人为了「统一主题色」把
-      // ShopColors.rose 指向 popRed，价格与危险态就再也分不出来了。
-      expect(ShopColors.rose, isNot(AppColors.popRed));
-      expect(ShopColors.rose, const Color(0xFFE1485F));
+    // ⚠️ 本条于 2026-08-21 随「Toko 主题色改为品牌紫」翻转。
+    //    原断言：电商玫红 #E1485F 与全局 popRed 是两个不同的红，不许合并。
+    //    产品指定换色后玫红已不存在，但**那条断言真正在守的东西没变** ——
+    //    「价格/转化」与「危险/错误」必须是两个能分开的颜色。故守门对象改为 accent vs error。
+    test('商业强调色与错误红是两个色，不许合并', () {
+      expect(ShopColors.accent, isNot(ShopColors.error),
+          reason: '价格与错误态同色 → 用户分不出「要付钱」和「填错了」');
+      // 强调色 = 品牌紫，别名回全局（不是复制字面量，避免日后全局调色时这里脱节）
+      expect(identical(ShopColors.accent, AppColors.mint), isTrue);
+      expect(identical(ShopColors.accentDark, AppColors.mint600), isTrue);
+      // 错误红同样别名回全局，电商侧不自造第二个红
+      expect(identical(ShopColors.error, AppColors.popRed), isTrue);
+    });
+
+    test('强调色与紫当前同值，但仍是两个独立旋钮', () {
+      // 二者语义不同（accent 管钱与转化，purple 管平台能力），当前同色是产品选择，
+      // 不是可以合并的信号。合并后日后想重新拉开，就得回头逐个辨认调用点的原意。
+      expect(ShopColors.accent, ShopColors.purple, reason: '当前同值');
+      final src = File('lib/core/theme/shop_tokens.dart').readAsStringSync();
+      expect(src, contains('static const Color accent'));
+      expect(src, contains('static const Color purple'),
+          reason: '两个 token 必须各自独立声明，不得其一别名到另一个');
     });
 
     test('紫与 text2 是对既有 token 的别名，不是复制的字面量', () {

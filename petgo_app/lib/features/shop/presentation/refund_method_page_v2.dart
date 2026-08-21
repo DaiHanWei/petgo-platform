@@ -395,7 +395,7 @@ class _RefundMethodPageV2State extends ConsumerState<RefundMethodPageV2> {
               height: 16,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: current ? ShopColors.rose : ShopColors.border,
+                color: current ? ShopColors.accent : ShopColors.border,
                 shape: BoxShape.circle,
               ),
               child: Text('$n',
@@ -423,7 +423,7 @@ class _RefundMethodPageV2State extends ConsumerState<RefundMethodPageV2> {
         primary: ShopButton(
           key: const ValueKey('refundConfirmV2'),
           label: l10n.refundAgreeShipBack,
-          variant: _busy ? ShopButtonVariant.disabled : ShopButtonVariant.rose,
+          variant: _busy ? ShopButtonVariant.disabled : ShopButtonVariant.pay,
           onTap: _busy ? null : () => _confirm(l10n, p),
         ),
       );

@@ -217,7 +217,7 @@ class _CheckoutPageV2State extends ConsumerState<CheckoutPageV2> {
               height: 14,
               margin: const EdgeInsets.only(top: 1),
               alignment: Alignment.center,
-              decoration: const BoxDecoration(color: ShopColors.rose, shape: BoxShape.circle),
+              decoration: const BoxDecoration(color: ShopColors.accent, shape: BoxShape.circle),
               child: const Text('!',
                   style: TextStyle(
                       fontSize: 9, fontWeight: FontWeight.w800, color: ShopColors.surface)),
@@ -230,7 +230,7 @@ class _CheckoutPageV2State extends ConsumerState<CheckoutPageV2> {
                   Text(l10n.checkoutOutOfRange,
                       key: const ValueKey('checkoutOutOfRangeTitle'),
                       style: ShopText.cardTitle
-                          .copyWith(fontSize: 11, color: ShopColors.roseDark)),
+                          .copyWith(fontSize: 11, color: ShopColors.accentDark)),
                   const SizedBox(height: 2),
                   Text(l10n.checkoutOutOfRangeBody,
                       style: ShopText.body.copyWith(color: const Color(0xFF8A5560))),
@@ -312,7 +312,7 @@ class _CheckoutPageV2State extends ConsumerState<CheckoutPageV2> {
                             Expanded(
                               child: Text(formatIdr(line.price),
                                   style: ShopText.priceInline
-                                      .copyWith(color: ShopColors.rose)),
+                                      .copyWith(color: ShopColors.accent)),
                             ),
                             Text('×${line.qty}', style: ShopText.meta),
                           ],
@@ -525,11 +525,11 @@ class _CheckoutPageV2State extends ConsumerState<CheckoutPageV2> {
       amount: p.payableTotal == null
           ? l10n.checkoutShippingUnavailable
           : formatIdr(p.payableTotal!),
-      amountColor: p.serviceable ? ShopColors.rose : ShopColors.text4,
+      amountColor: p.serviceable ? ShopColors.accent : ShopColors.text4,
       action: ShopButton(
         key: const ValueKey('checkoutSubmitV2'),
         label: l10n.checkoutSubmit,
-        variant: canSubmit ? ShopButtonVariant.rose : ShopButtonVariant.disabled,
+        variant: canSubmit ? ShopButtonVariant.pay : ShopButtonVariant.disabled,
         padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
         onTap: canSubmit ? () => _submit(l10n, p) : null,
       ),
@@ -606,7 +606,7 @@ class _CheckoutPageV2State extends ConsumerState<CheckoutPageV2> {
           ShopButton(
             key: const ValueKey('checkoutRemoveUnavailableV2'),
             label: l10n.checkoutUnavailableRemove,
-            variant: ShopButtonVariant.rose,
+            variant: ShopButtonVariant.pay,
             dense: true,
             onTap: () => Navigator.of(dlgCtx).pop(true),
           ),

@@ -12,8 +12,12 @@ import '../../../../core/theme/shop_tokens.dart';
 /// 波纹溢出与 40px 最小高度，三者都和本设计冲突（设计稿明令产品 UI 内不使用阴影，
 /// 且小按钮实测高度 30–34px）。改用 [InkWell] + [DecoratedBox] 自绘。
 enum ShopButtonVariant {
-  /// 玫红实色 —— **未完成的付款动作**与促销转化（`Bayar` / `Checkout` / `Beli Lagi`）。
-  rose,
+  /// 强调实色 —— **未完成的付款动作**与促销转化（`Bayar` / `Checkout` / `Beli Lagi`）。
+  ///
+  /// ⚠️ 2026-08-21 由玫红改为品牌紫，与 [ShopButtonVariant.purple] 当前**同色**。
+  /// 两个变体**刻意不合并**：它们表达的是不同语义（付钱 vs 平台能力），
+  /// 合并后日后想重新拉开，就得回头逐个辨认 25 个调用点当初是哪一类。
+  pay,
 
   /// 紫实色 —— 平台能力侧的主操作（`Lihat Alternatif` / `Ya, ingatkan saya`）。
   purple,
@@ -71,7 +75,7 @@ class ShopButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (Color bg, Color fg, Color? border) = switch (variant) {
-      ShopButtonVariant.rose => (ShopColors.rose, ShopColors.surface, null),
+      ShopButtonVariant.pay => (ShopColors.accent, ShopColors.surface, null),
       ShopButtonVariant.purple => (ShopColors.purple, ShopColors.surface, null),
       ShopButtonVariant.ink => (ShopColors.ink, ShopColors.surface, null),
       ShopButtonVariant.outlineMuted => (

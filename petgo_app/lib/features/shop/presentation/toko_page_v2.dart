@@ -282,7 +282,7 @@ class _CartCapsule extends ConsumerWidget {
                   alignment: Alignment.center,
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   decoration: const BoxDecoration(
-                      color: ShopColors.rose, shape: BoxShape.circle),
+                      color: ShopColors.accent, shape: BoxShape.circle),
                   child: Text(count > 99 ? '99+' : '$count',
                       style: ShopText.badge.copyWith(color: ShopColors.surface)),
                 ),
@@ -359,7 +359,7 @@ class _RestockRow extends ConsumerWidget {
                   // 🔴 给估算依据而非断言 —— `±N 天` 的 ± 是刻意的（沿用 v1 的同一条纪律）。
                   c.isOverdue ? l10n.tokoRestockTagOverdue : l10n.tokoRestockTag(c.daysLeft),
                   style: ShopText.badge.copyWith(
-                      fontSize: 9.5, color: ShopColors.rose, letterSpacing: .8),
+                      fontSize: 9.5, color: ShopColors.accent, letterSpacing: .8),
                 ),
                 const SizedBox(height: 3),
                 Text(c.productName,
@@ -374,7 +374,7 @@ class _RestockRow extends ConsumerWidget {
           ShopButton(
             key: ValueKey('tokoRestockBuy_${c.triggerId}'),
             label: l10n.tokoBuyAgain,
-            variant: ShopButtonVariant.rose,
+            variant: ShopButtonVariant.pay,
             dense: true,
             onTap: () {
               Analytics.capture('toko_repurchase_card_tapped',
@@ -532,7 +532,7 @@ class _RailCardState extends State<_RailCard> {
               ),
             ),
             Text(formatIdr(it.minPrice),
-                style: ShopText.priceRail.copyWith(color: ShopColors.rose)),
+                style: ShopText.priceRail.copyWith(color: ShopColors.accent)),
             // ★ 评分 · 已售数：接口无此字段 → 整行不显示（不显示 0）。
             if (widget.showReason && it.reason.isNotEmpty) ...[
               const SizedBox(height: 4),
@@ -607,7 +607,7 @@ class _GridCardState extends State<_GridCard> {
                 // 🔴 无 SKU 时显占位而非 `Rp 0` —— 那是错的价格，不是缺失的价格。
                 p.minPrice == null ? l10n.tokoPriceUnavailable : formatIdr(p.minPrice!),
                 style: ShopText.priceGrid.copyWith(
-                    color: p.minPrice == null ? ShopColors.text4 : ShopColors.rose),
+                    color: p.minPrice == null ? ShopColors.text4 : ShopColors.accent),
               ),
               // ★ 评分 · 已售数：接口无此字段 → 整行不显示。
             ],
