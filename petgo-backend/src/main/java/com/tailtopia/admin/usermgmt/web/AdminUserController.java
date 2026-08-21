@@ -1,5 +1,6 @@
 package com.tailtopia.admin.usermgmt.web;
 
+import com.tailtopia.admin.account.domain.AdminPermissions;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.admin.usermgmt.dto.AdminUserRow;
 import com.tailtopia.admin.usermgmt.service.AdminUserService;
@@ -7,6 +8,8 @@ import com.tailtopia.shared.error.AppException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
@@ -26,6 +29,12 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 public class AdminUserController {
 
     private static final String AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('user.view')";
+    /**
+     * 召回名单导出（Story 11.4）。🛡 与"查看手机号"是**两个**权限码 ——
+     * 导出把 PII 批量带出系统，风险高一档。
+     */
+    private static final String EXPORT_AUTH =
+            "hasRole('SUPER_ADMIN') or hasAuthority('" + AdminPermissions.USER_PHONE_EXPORT + "')";
     private static final String DEACTIVATE_AUTH =
             "hasRole('SUPER_ADMIN') or hasAuthority('user.deactivate')";
     private static final String DELETE_AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('user.delete')";
@@ -43,12 +52,22 @@ public class AdminUserController {
     @PreAuthorize(AUTH)
     public String users(@RequestParam(value = "q", required = false) String q,
             @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "phone", required = false) String phone,
             @RequestHeader(value = "HX-Request", required = false) String hxRequest, Model model) {
         model.addAttribute("active", "users");
         model.addAttribute("q", q);
+        // 手机号筛选（Story 11.4）：filled / empty / 不筛。
+        model.addAttribute("phone", phone);
         boolean searched = q != null && !q.isBlank();
         model.addAttribute("searched", searched);
-        if (searched) {
+        Boolean phoneFilled = "filled".equals(phone) ? Boolean.TRUE
+                : ("empty".equals(phone) ? Boolean.FALSE : null);
+        if (!searched && phoneFilled != null) {
+            Page<AdminUserRow> pageResult = adminUserService.listByPhoneFilled(phoneFilled,
+                    PageRequest.of(Math.max(page, 0), PAGE_SIZE));
+            model.addAttribute("results", pageResult.getContent());
+            model.addAttribute("page", pageResult);
+        } else if (searched) {
             // 精确搜索：按 ID / 注册邮箱命中 0 或 1 条，不分页。
             model.addAttribute("results", adminUserService.search(q));
             model.addAttribute("page", null);
@@ -64,9 +83,14 @@ public class AdminUserController {
 
     @GetMapping("/admin/users/{userId}")
     @PreAuthorize(AUTH)
-    public String userDetail(@PathVariable long userId, Model model) {
+    public String userDetail(@PathVariable long userId,
+            org.springframework.security.core.Authentication auth, Model model) {
         model.addAttribute("active", "users");
-        model.addAttribute("user", adminUserService.detail(userId));
+        // 🛡 无 user.phone_view 权限 → 服务端**根本不装**手机号（不是模板隐藏）。
+        //    只在模板里隐藏等于数据已经到了浏览器，看源码或抓接口就能拿到。
+        boolean canSeePhone = hasPhoneView(auth);
+        model.addAttribute("canSeePhone", canSeePhone);
+        model.addAttribute("user", adminUserService.detail(userId, canSeePhone));
         // 赠币表单一次性幂等 token（bug 20260728-389）：防双击/回退重提交重复入账。
         model.addAttribute("grantToken", java.util.UUID.randomUUID().toString());
         return "admin/user-detail";
@@ -126,5 +150,37 @@ public class AdminUserController {
             flash.addFlashAttribute("error", e.getMessage());
             return "redirect:/admin/users/" + userId;
         }
+    }
+
+    /**
+     * 召回名单导出（Story 11.4 · AB-11A）。
+     *
+     * <p>🔴 独立权限 {@code user.phone_export} —— 与"查看"分开：
+     * 查看是一次看一个人，导出是把 PII **批量带出系统**，风险高一档。
+     *
+     * <p>🛡 名单**不自动剔除已封号账号，但每行标注账号状态**，由运营自行判断。
+     * 导出动作记审计（操作人 / 时间 / 条数 / 筛选条件），号码本身绝不进审计摘要。
+     */
+    @GetMapping(value = "/admin/users/phone-recall.csv", produces = "text/csv; charset=UTF-8")
+    @PreAuthorize(EXPORT_AUTH)
+    public ResponseEntity<String> exportRecallList(
+            @AuthenticationPrincipal AdminUserDetails admin,
+            @RequestParam(value = "phone", defaultValue = "empty") String phone) {
+        boolean filled = "filled".equals(phone);
+        String csv = adminUserService.exportRecallList(admin.getAdminAccountId(), filled);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"phone-recall.csv\"")
+                .body(csv);
+    }
+
+    /** 是否持有手机号查看权限。⚠️ 表达式须与侧栏/模板的 sec:authorize 逐字一致。 */
+    private static boolean hasPhoneView(org.springframework.security.core.Authentication auth) {
+        if (auth == null) {
+            return false;
+        }
+        return auth.getAuthorities().stream().anyMatch(a ->
+                "ROLE_SUPER_ADMIN".equals(a.getAuthority())
+                        || AdminPermissions.USER_PHONE_VIEW.equals(a.getAuthority()));
     }
 }

@@ -7,6 +7,8 @@ import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface UserRepository extends JpaRepository<User, Long> {
 
@@ -20,6 +22,42 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     /** bug 20260701-164：后台用户管理按角色分页列举（只列普通用户 USER）。 */
     Page<User> findByRole(Role role, Pageable pageable);
+
+    /**
+     * 后台按**手机号是否已填写**筛选用户（V1.1.6 Story 11.4 · AB-11A）。
+     *
+     * <p>🔴 「未填写」的判据是 <b>{@code phone IS NULL OR phone = ''}</b> —— 两种空都要算。
+     * FR-70 允许用户**留空保存以撤回号码**（保存时写 null），
+     * 而历史上也可能存在空串；只判 NULL 会把撤回过的人错分到"已填写"，
+     * 于是运营的催填名单里就永远少了这批人。
+     *
+     * <p>⚠️ 字段名一律用 {@code phone}：日志脱敏按字段名匹配，
+     * 换个别名转手该值就会绕过脱敏、让真实号码落盘（见该列的迁移注释）。
+     */
+    @Query("""
+            SELECT u FROM User u
+             WHERE u.role = :role
+               AND (:filled = true
+                    AND u.phone IS NOT NULL AND u.phone <> ''
+                    OR :filled = false
+                    AND (u.phone IS NULL OR u.phone = ''))
+             ORDER BY u.id DESC
+            """)
+    Page<User> findByRoleAndPhoneFilled(@Param("role") Role role,
+            @Param("filled") boolean filled, Pageable pageable);
+
+    /** 召回名单导出（Story 11.4）：同一筛选口径、不分页、id 倒序。 */
+    @Query("""
+            SELECT u FROM User u
+             WHERE u.role = :role
+               AND (:filled = true
+                    AND u.phone IS NOT NULL AND u.phone <> ''
+                    OR :filled = false
+                    AND (u.phone IS NULL OR u.phone = ''))
+             ORDER BY u.id DESC
+            """)
+    java.util.List<User> findAllByRoleAndPhoneFilled(@Param("role") Role role,
+            @Param("filled") boolean filled);
 
     /** 虚拟账号列表（Story 9.8，A-6），近建在前。 */
     java.util.List<User> findByAccountTypeOrderByIdDesc(AccountType accountType);

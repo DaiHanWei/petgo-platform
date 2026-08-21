@@ -76,11 +76,13 @@ class AdminPermissionsTest {
         // + 1（V1.1.4 Story 3.2 工单处置 content.dispose_account）= 45
         // + 2（V1.1.6 Story 11.1 顶置管理 content.pin_view / content.pin_manage）= 47
         // + 2（V1.1.6 Story 11.2 装饰标签 content.tag_view / content.tag_manage）= 49
-        // + 2（V1.1.6 Story 11.3 用户标签 user.tag_view / user.tag_manage）= 51。
+        // + 2（V1.1.6 Story 11.3 用户标签 user.tag_view / user.tag_manage）= 51
+        // + 2（V1.1.6 Story 11.4 手机号 user.phone_view / user.phone_export）= 53
+        //     ⚠️ 两个都归**查看组** —— 导出不改任何数据，它是"看得更狠的一种看"。 
         //
         // ⚠️ 这条守的是「新增权限码是件需要被看见的事」：权限码一旦落地即冻结（改名会切断
         //    已授予关系），所以每加一个都应当在这里留一行账，而不是让数字悄悄变大。
         List<String> all = AdminPermissions.ALL;
-        assertThat(all).hasSize(51);
+        assertThat(all).hasSize(53);
     }
 }

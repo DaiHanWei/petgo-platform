@@ -46,8 +46,10 @@ class AdminUserServiceTest {
         auditService = mock(com.tailtopia.admin.audit.service.AdminAuditService.class);
         accountDeletion = mock(com.tailtopia.account.service.AccountDeletionService.class);
         pawCoinWallet = mock(com.tailtopia.pay.service.PawCoinWalletService.class);
+        // Story 11.4：新增 UserRepository 入参（手机号筛选与召回名单导出专用）。
         service = new AdminUserService(accountQuery, profileService, contentService, consultHistory,
-                authService, consultInterrupt, auditService, accountDeletion, pawCoinWallet);
+                authService, consultInterrupt, auditService, accountDeletion, pawCoinWallet,
+                mock(com.tailtopia.auth.repository.UserRepository.class));
     }
 
     private User user() {

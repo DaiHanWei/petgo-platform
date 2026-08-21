@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<html lang="zh" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <!-- 用户搜索（Story 3.1，只读）。按 ID/注册邮箱查普通用户；HTMX 片段刷新。门控 user.view。 -->
 <head>
     <meta charset="UTF-8"/>
@@ -21,6 +21,31 @@
             <button type="submit" class="btn btn-primary" th:text="#{admin.users.search}">搜索</button>
         </form>
 
+        <!-- 手机号筛选（Story 11.4 · AB-11A）：供运营挑催填名单。
+             🛡 列表只显示"填了没填"，**不显示号码本身** —— 少一处出现 PII 就少一个泄漏面。 -->
+        <form class="filter-bar" th:action="@{/admin/users}" method="get" data-autosubmit>
+            <label>
+                <span th:text="#{admin.users.phoneFilter}">手机号</span>
+                <select name="phone">
+                    <option value="" th:text="#{admin.users.phoneFilter.any}"
+                            th:selected="${phone == null or phone == ''}">全部</option>
+                    <option value="filled" th:text="#{admin.users.phoneFilter.filled}"
+                            th:selected="${phone == 'filled'}">已填写</option>
+                    <option value="empty" th:text="#{admin.users.phoneFilter.empty}"
+                            th:selected="${phone == 'empty'}">未填写</option>
+                </select>
+            </label>
+            <!-- 🔴 导出是独立权限：把 PII 批量带出系统，风险高一档 -->
+            <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.phone_export')"
+               class="btn btn-sm"
+               th:href="@{/admin/users/phone-recall.csv(phone=${phone == null or phone == '' ? 'empty' : phone})}"
+               th:text="#{admin.users.exportRecall}">导出召回名单</a>
+            <span class="muted" th:text="#{admin.users.exportNote}"
+                  sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.phone_export')">
+                名单含已封号账号并标注状态，由运营自行判断。
+            </span>
+        </form>
+
         <table>
             <thead>
             <tr>
@@ -28,6 +53,7 @@
                 <th th:text="#{admin.users.col.name}">昵称</th>
                 <th th:text="#{admin.users.col.email}">注册邮箱</th>
                 <th th:text="#{admin.users.col.created}">注册时间</th>
+                <th th:text="#{admin.users.col.phone}">手机号</th>
                 <th th:text="#{admin.users.col.status}">状态</th>
                 <th th:text="#{admin.users.col.action}">操作</th>
             </tr>
@@ -38,6 +64,11 @@
                 <td th:text="${u.displayName()}">用户</td>
                 <td th:text="${u.email()}">a@x</td>
                 <td th:text="${@adminTime.wib(u.createdAt())}">-</td>
+                <td>
+                    <!-- 🛡 只显示"填了 / 没填"，不显示号码 -->
+                    <span class="badge" th:classappend="${u.phoneFilled()} ? 'badge-ok' : 'badge-neutral'"
+                          th:text="${u.phoneFilled()} ? #{admin.users.phone.filled} : #{admin.users.phone.empty}">未填写</span>
+                </td>
                 <td>
                     <span th:if="${u.deleted()}" class="badge badge-neutral"
                           th:text="#{admin.users.status.deleted}">已注销</span>
@@ -51,7 +82,7 @@
                 </td>
             </tr>
             <tr th:if="${#lists.isEmpty(results)}">
-                <td colspan="6" class="empty"
+                <td colspan="7" class="empty"
                     th:text="${searched} ? #{admin.users.empty} : #{admin.users.emptyAll}">无匹配用户</td>
             </tr>
             </tbody>

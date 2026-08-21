@@ -69,8 +69,9 @@ class AdminUserAccessControlTest {
     }
 
     private void search() {
-        // 传非空 q 走搜索分支（stub 了 search()）；页码参数为新签名所需。
-        controller.users("42", 0, null, new ConcurrentModel());
+        // 传非空 q 走搜索分支（stub 了 search()）；页码与手机号筛选参数为新签名所需
+        // （Story 11.4 加了 phone 筛选参数，null = 不筛）。
+        controller.users("42", 0, null, null, new ConcurrentModel());
     }
 
     @Test

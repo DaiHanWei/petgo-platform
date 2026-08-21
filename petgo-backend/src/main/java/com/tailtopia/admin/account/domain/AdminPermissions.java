@@ -37,6 +37,20 @@ public final class AdminPermissions {
      */
     public static final String USER_TAG_VIEW = "user.tag_view";
     public static final String USER_TAG_MANAGE = "user.tag_manage";
+    /**
+     * 用户手机号查看（V1.1.6 Story 11.4 · AB-11A）。
+     *
+     * <p>🔴 手机号是 **PII**，因此**不沿用「能看用户详情就能看手机号」** ——
+     * 后台 PRD 原写「不新增独立权限项」，2026-08-21 决定改为独立权限。
+     */
+    public static final String USER_PHONE_VIEW = "user.phone_view";
+    /**
+     * 召回名单导出（Story 11.4）。
+     *
+     * <p>🔴 **与查看分开的第二个码**：查看是一次看一个人，导出是把 PII **批量带出系统**，
+     * 风险高一档，而且带出之后平台再也管不到它。
+     */
+    public static final String USER_PHONE_EXPORT = "user.phone_export";
 
     // 内容审核（Epic 4）
     public static final String CONTENT_VIEW_REPORTS = "content.view_reports";
@@ -138,7 +152,7 @@ public final class AdminPermissions {
     public static final List<PermissionGroup> GROUPS = List.of(
             new PermissionGroup("perm.group.view", List.of(
                     CONTENT_VIEW_REPORTS, CONTENT_VIEW_TICKETS, CONTENT_VIEW, CONTENT_PIN_VIEW, CONTENT_TAG_VIEW,
-                    USER_VIEW, USER_TAG_VIEW,
+                    USER_VIEW, USER_TAG_VIEW, USER_PHONE_VIEW, USER_PHONE_EXPORT,
                     VET_VIEW, VET_QUALIFY_VIEW, RATING_VIEW,
                     CONSULT_VIEW_ANOMALIES, CONSULT_VIEW_SESSIONS,
                     SUPPORT_VIEW, REFUND_VIEW,

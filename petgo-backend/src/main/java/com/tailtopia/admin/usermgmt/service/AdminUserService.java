@@ -7,6 +7,7 @@ import com.tailtopia.admin.usermgmt.domain.DeletionType;
 import com.tailtopia.admin.usermgmt.dto.AdminUserDetailView;
 import com.tailtopia.admin.usermgmt.dto.AdminUserRow;
 import com.tailtopia.auth.domain.User;
+import com.tailtopia.auth.repository.UserRepository;
 import com.tailtopia.auth.domain.UserStatus;
 import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.auth.service.AuthService;
@@ -41,12 +42,20 @@ public class AdminUserService {
     private final AdminAuditService auditService;
     private final AccountDeletionService accountDeletionService;
     private final PawCoinWalletService pawCoinWallet;
+    /**
+     * 仅供手机号筛选与召回名单导出（Story 11.4）。
+     *
+     * <p>⚠️ 其余读取一律走 {@code accountQuery} —— 本类不直接查 users 表是既有约定；
+     * 这里破例是因为「按 phone 是否为空筛选 + 分页」必须写在 SQL 的 WHERE 里
+     * （捞出来再筛会破坏分页），而 AccountQueryService 不该为一个后台专用筛选条件开口。
+     */
+    private final UserRepository users;
 
     public AdminUserService(AccountQueryService accountQuery, ProfileService profileService,
             ContentService contentService, ConsultHistoryService consultHistory,
             AuthService authService, ConsultInterruptService consultInterrupt,
             AdminAuditService auditService, AccountDeletionService accountDeletionService,
-            PawCoinWalletService pawCoinWallet) {
+            PawCoinWalletService pawCoinWallet, UserRepository users) {
         this.accountQuery = accountQuery;
         this.profileService = profileService;
         this.contentService = contentService;
@@ -56,6 +65,7 @@ public class AdminUserService {
         this.auditService = auditService;
         this.accountDeletionService = accountDeletionService;
         this.pawCoinWallet = pawCoinWallet;
+        this.users = users;
     }
 
     /**
@@ -165,9 +175,76 @@ public class AdminUserService {
         return hit.map(u -> List.of(toRow(u))).orElseGet(List::of);
     }
 
+    /**
+     * 按**手机号是否已填写**筛选（V1.1.6 Story 11.4 · AB-11A）。
+     *
+     * <p>供运营挑催填名单。判据见 {@code UserRepository#findByRoleAndPhoneFilled} ——
+     * NULL 与空串都算未填写。
+     */
+    @Transactional(readOnly = true)
+    public Page<AdminUserRow> listByPhoneFilled(boolean filled, Pageable pageable) {
+        return users.findByRoleAndPhoneFilled(com.tailtopia.auth.domain.Role.USER, filled, pageable)
+                .map(this::toRow);
+    }
+
+    /**
+     * 召回名单导出（Story 11.4）。
+     *
+     * <p>🛡 **不自动剔除已封号账号，但每行必须标注账号状态** —— 运营有时确实要联系已封号用户，
+     * 但不标注就等于让他在不知情的情况下发召回。
+     *
+     * <p>🔴 **导出记审计**（PRD 未要求，本 story 加的）：PII 批量出库不留痕，
+     * 事后无从回答"这份名单是谁什么时候导的"。
+     *
+     * @return CSV 文本（首行表头）
+     */
+    // ⚠️ **不能标 readOnly** —— 本方法要写审计行。第一版写成了 readOnly=true，
+    //    结果导出直接 500（`cannot execute INSERT in a read-only transaction`）：
+    //    读的部分没问题，是那条审计插入被只读事务挡了。
+    @Transactional
+    public String exportRecallList(long actorAccountId, boolean filled) {
+        List<User> rows = users.findAllByRoleAndPhoneFilled(
+                com.tailtopia.auth.domain.Role.USER, filled);
+        StringBuilder csv = new StringBuilder("user_id,display_name,phone,account_status\n");
+        for (User u : rows) {
+            boolean deleted = u.getDeletedAt() != null;
+            String name = deleted ? u.getDeletedDisplayName() : currentName(u);
+            // 账号状态：正常 / 已停用 / 已注销 —— 由运营自行判断是否纳入触达。
+            String status = deleted ? "DELETED" : (deactivated(u) ? "DEACTIVATED" : "ACTIVE");
+            csv.append(u.getId()).append(',')
+                    .append(csvCell(name)).append(',')
+                    .append(csvCell(u.getPhone())).append(',')
+                    .append(status).append('\n');
+        }
+        // ⚠️ 审计摘要里**只写条数与筛选条件，绝不写号码本身**。
+        auditService.record(actorAccountId, "USER_PHONE_RECALL_EXPORT", "USER", null,
+                "导出召回名单：filter=" + (filled ? "已填写" : "未填写") + " rows=" + rows.size());
+        return csv.toString();
+    }
+
+    private static String csvCell(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        // 逗号/引号/换行都要转义，否则一个昵称里的逗号就能把整份名单的列错开。
+        String escaped = raw.replace("\"", "\"\"");
+        return '"' + escaped + '"';
+    }
+
     /** 用户详情聚合（五块只读）。 */
     @Transactional(readOnly = true)
     public AdminUserDetailView detail(long userId) {
+        return detail(userId, false);
+    }
+
+    /**
+     * 用户详情聚合。
+     *
+     * @param includePhone 🛡 是否装入手机号。**false 时字段恒为 null，服务端就不下发** ——
+     *                     只在模板里隐藏是不够的：数据已经到了浏览器，看源码就能拿到。
+     */
+    @Transactional(readOnly = true)
+    public AdminUserDetailView detail(long userId, boolean includePhone) {
         User u = accountQuery.findUserById(userId)
                 .orElseThrow(() -> AppException.notFound("用户不存在"));
 
@@ -182,7 +259,9 @@ public class AdminUserService {
         String email = deleted ? u.getDeletedEmail() : u.getEmail();
         return new AdminUserDetailView(
                 u.getId(), name, u.getNickname(), email, u.getCreatedAt(),
-                deactivated(u), deleted, pawCoinWallet.balanceOf(userId), pets,
+                deactivated(u), deleted,
+                includePhone ? u.getPhone() : null,
+                pawCoinWallet.balanceOf(userId), pets,
                 contentService.listByAuthorForAdmin(userId),
                 consultHistory.adminSessionMetadata(userId));
     }
@@ -201,7 +280,10 @@ public class AdminUserService {
         // display_name 是注册时刻快照，与 AccountQueryService.toAuthorView 同一兜底约定）。
         String name = deleted ? u.getDeletedDisplayName() : currentName(u);
         String email = deleted ? u.getDeletedEmail() : u.getEmail();
-        return new AdminUserRow(u.getId(), name, email, u.getCreatedAt(), deactivated(u), deleted);
+        // 🛡 列表只带"有没有填"这个布尔，不带号码本身 —— 少一处出现 PII 就少一个泄漏面。
+        boolean phoneFilled = u.getPhone() != null && !u.getPhone().isBlank();
+        return new AdminUserRow(u.getId(), name, email, u.getCreatedAt(), deactivated(u), deleted,
+                phoneFilled);
     }
 
     private static String currentName(User u) {

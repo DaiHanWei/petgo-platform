@@ -74,6 +74,22 @@
             <p>ID: <span th:text="${user.id()}">1</span></p>
             <p><span th:text="#{admin.userdetail.nickname}">昵称</span>: <span th:text="${user.nickname()}">-</span></p>
             <p><span th:text="#{admin.userdetail.email}">注册邮箱</span>: <span th:text="${user.email()}">a@x</span></p>
+            <!-- 手机号（Story 11.4 · PII）。
+                 🛡 无 user.phone_view 权限时，`user.phone()` 在**服务端就是 null** ——
+                 号码根本没进这份 HTML，不是靠 CSS 藏起来的。 -->
+            <!-- 🛡 这里的表达式必须与 AdminUserController#hasPhoneView 判定的**同一个码**一致。
+                 两道门是有意的分工：
+                   · 服务端不装值（真正的保护 —— 号码根本不进 HTML）
+                   · 这道 sec:authorize（双重保险，并且让权限接线护栏
+                     AdminPermissionWiringTest 能看到 user.phone_view 有落点）
+                 ⚠️ 只留 Java 那一处判断的话，权限码在源码里就没有 hasAuthority 落点，
+                    护栏会（正确地）把它判成「勾了也没用」的死码。 -->
+            <p sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.phone_view')"
+               th:if="${canSeePhone}">
+                <span th:text="#{admin.userdetail.phone}">手机号</span>:
+                <span th:text="${user.phone() != null and !user.phone().isBlank()}
+                               ? ${user.phone()} : #{admin.userdetail.phone.empty}">未填写</span>
+            </p>
             <p><span th:text="#{admin.userdetail.created}">注册时间</span>:
                 <span th:text="${@adminTime.wib(user.createdAt())}">-</span></p>
             <p sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.grant_pawcoin')">
