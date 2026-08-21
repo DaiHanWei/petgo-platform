@@ -585,7 +585,7 @@ h4.section-label{ font-size:11px; font-weight:700; letter-spacing:.04em; text-tr
             </div>
           </div>
         </div></div>
-        <div class="frame-cap"><span class="code-ref">content_detail_page.dart</span><span class="fr-ref">FR-73</span> 详情页右上角分享图标 → 系统分享菜单；菜单顶部是常规分享渠道（WhatsApp/IG Story/复制链接），底部新增"生成图片卡"入口（本 FR 核心），点击进入卡片预览（SH2/SH3）。</div>
+        <div class="frame-cap"><span class="code-ref">content_detail_page.dart</span><span class="fr-ref">FR-73</span> <b style="color:#C4263C">🔴 本屏已被订正（2026-08-14 决策 X-22），请勿照此实现：</b><b>分享入口不在顶栏，改放详情页<u>底部互动区</u></b>（现状「点赞 ｜ 评论」之后加第三个图标），<b>顶栏保持现状不动</b>。原因：本屏把顶栏的「···」整个画没了，而那里是<b>举报入口</b>（合规入口，不能变难找）；分享与「···」在顶栏争位，结论是分享让位。⚠️ <b>照本屏实现会把举报入口做掉。</b>本屏待重绘。已按订正实现并写成回归测试（Story 9.3）。<br><span style="opacity:.65">—— 以下为原图注（已过时）：</span> 详情页右上角分享图标 → 系统分享菜单；菜单顶部是常规分享渠道（WhatsApp/IG Story/复制链接），底部新增"生成图片卡"入口（本 FR 核心），点击进入卡片预览（SH2/SH3）。</div>
       </div>
 
       <!-- SH2: 分享卡预览·有图 -->
