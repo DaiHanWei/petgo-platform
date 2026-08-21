@@ -11,8 +11,10 @@ import '../../../core/network/dio_client.dart';
 import '../../../core/push/push_service.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../../shared/widgets/confirm_sheet.dart';
 import '../../auth/domain/auth_state.dart';
+import '../domain/phone_mask.dart';
+import 'phone_edit_sheet.dart';
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../../notify/data/push_permission_providers.dart';
 import '../../social/data/blocked_users_repository.dart';
 
@@ -121,6 +123,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> with WidgetsBinding
     final l10n = AppLocalizations.of(context);
     // 语言行右值随当前选择动态显示（null=跟随系统）；与 language_settings_page 同一套映射。
     final localeCode = ref.watch(localeControllerProvider)?.languageCode;
+    // watch 而非 read：抽屉里保存/清空后 applyProfile 会刷新它，右值要跟着变。
+    final phone = ref.watch(authControllerProvider).profile?.phone;
     final langValue = switch (localeCode) {
       'en' => l10n.languageEnglish,
       'id' => l10n.languageIndonesian,
@@ -156,6 +160,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> with WidgetsBinding
               _divider(),
               _navRow(l10n.meLanguage, value: langValue,
                   onTap: () => context.push('/me/language'), key: const ValueKey('meLanguage')),
+              _divider(),
+              // 手机号常驻入口（Story 7.2 · FR-70）：**不论是否跳过过软引导，这里永远可填**。
+              // 右值：未填 → 占位文案；已填 → **脱敏**（UI 稿 05b 屏）。
+              // ⚠️ 脱敏只在这一行；点进抽屉展示**完整号码**，否则用户改不了自己的号。
+              _navRow(l10n.phoneEditTitle,
+                  value: PhoneMask.mask(phone) ?? l10n.phoneNotSet,
+                  onTap: () => PhoneEditSheet.open(context, entry: 'me_page'),
+                  key: const ValueKey('mePhoneEntry')),
             ]),
             const SizedBox(height: 22),
 
