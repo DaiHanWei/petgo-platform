@@ -1524,6 +1524,7 @@
   "idCardHdInsufficientBalance": "PawCoin tidak cukup. Silakan isi ulang dulu.",
   "idCardHdPurchaseError": "Pembayaran gagal. Coba lagi.",
   "idCardHdExportError": "Gagal mengekspor gambar. Coba lagi.",
+  "shareCardScanHint": "Scan buat unduh 🐾",
   "cardSaveToGallery": "Simpan ke Galeri",
   "cardShareImage": "Bagikan",
   "cardSavedToGallery": "Tersimpan ke galeri",

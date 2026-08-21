@@ -20,6 +20,7 @@ import '../../../shared/widgets/mini_profile_sheet.dart';
 import '../../profile/data/timeline_repository.dart';
 import '../data/detail_repository.dart';
 import '../domain/content_detail.dart';
+import '../domain/content_type_badge.dart';
 import '../domain/content_type.dart';
 import 'comment_composer.dart';
 import 'comment_section.dart';
@@ -199,16 +200,11 @@ class _DetailScaffold extends ConsumerWidget {
     return l10n.timeDaysAgo(d.inDays);
   }
 
-  /// 内容类型徽章（detail.html 作者行右侧 chip）：Momen 绿 / Tips 黄 / Cerita 紫。
-  static (String, Color, Color) _typeBadge(String type, AppLocalizations l10n) => switch (type) {
-        'GROWTH_MOMENT' => (l10n.mePostTypeMomen, AppColors.momenBadgeText, AppColors.momenBadgeBg),
-        'KNOWLEDGE' => (l10n.mePostTypeTips, AppColors.tipsBadgeText, AppColors.goldTint),
-        _ => (l10n.mePostTypeCerita, AppColors.mint, AppColors.skyTint),
-      };
 
   Widget _authorRow(BuildContext context, WidgetRef ref, AppLocalizations l10n) {
     final name = detail.authorDeleted ? l10n.feedDeletedUser : (detail.authorNickname ?? l10n.feedDeletedUser);
-    final (badgeLabel, badgeFg, badgeBg) = _typeBadge(detail.type, l10n);
+    // 映射单一来源：分享卡也用它（见 ContentTypeBadge 的注释）。
+    final badge = ContentTypeBadge.of(detail.type, l10n);
     final row = Row(
       children: [
         // 头像着色与列表卡片共用同一算法（LetterAvatar），保证同一用户两处颜色一致。
@@ -238,9 +234,9 @@ class _DetailScaffold extends ConsumerWidget {
         // 分类彩徽章。
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-          decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(7)),
-          child: Text(badgeLabel,
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: badgeFg)),
+          decoration: BoxDecoration(color: badge.bg, borderRadius: BorderRadius.circular(7)),
+          child: Text(badge.label,
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: badge.fg)),
         ),
       ],
     );

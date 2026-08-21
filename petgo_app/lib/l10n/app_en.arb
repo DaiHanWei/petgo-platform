@@ -2219,6 +2219,7 @@
   "idCardHdInsufficientBalance": "Not enough PawCoin. Please top up first.",
   "idCardHdPurchaseError": "Payment could not be completed. Please try again.",
   "idCardHdExportError": "Could not export the image. Please try again.",
+  "shareCardScanHint": "Scan to download 🐾",
   "cardSaveToGallery": "Save to gallery",
   "cardShareImage": "Share",
   "cardSavedToGallery": "Saved to gallery",
