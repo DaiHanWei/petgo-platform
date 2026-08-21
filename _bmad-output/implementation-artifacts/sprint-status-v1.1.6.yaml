@@ -192,6 +192,19 @@ development_status:
   10-1-app侧剩余埋点与回写全局文档: ready-for-dev           # ✅ OA-7 已闭合（2026-08-18 定案改名）：实现按新名，见埋点清单 §1 的新旧对照表
   epic-10-retrospective: optional
 
+  # ===== Epic 11：运营后台配置补齐（2026-08-21 拆入）=====
+  # 🔴 本 Epic 是「已交付功能的开关」，不是新功能。App 侧 FR-68/70/74/75 已全部进 review、
+  #    表也建好了（content_pins V108 / user_tags V109 / content_tags V110 / users.phone V112），
+  #    但后台一个页面都没有 —— 这四条不做，那四个 FR 就是上线即空壳。
+  # ⚠️ 后台 PRD 的 OQ-18 结论已过期（它写「确认与 App 端同步开发」，实际 App 侧已做完、后台未开工）。
+  # 四条彼此零耦合，可并行、可任意顺序。
+  epic-11: backlog
+  11-1-顶置管理feed坑位: ready-for-dev                     # AB-10A ⚠️ 同坑位时间重叠校验全系统不存在，后台是唯一能挡的地方
+  11-2-内容装饰标签管理: ready-for-dev                     # AB-10C 需加「下线」列；打标界面必须提示 ×1.3 排序副作用
+  11-3-用户标签配置与分配: ready-for-dev                   # AB-12A 需加「下线」列；排序口径以 App 侧 AuthorView 为权威，勿另立
+  11-4-用户手机号查看与召回名单导出: ready-for-dev         # AB-11A 前半（PII 双权限：查看 / 导出各一码）
+  epic-11-retrospective: optional
+
 # ===== 开工前须知的开放问题（详见架构 delta §8） =====
 # 🔴 OA-2  阻塞 FR-70 上线：用户协议是否已覆盖「手机号用于运营召回与后续触达」
 #          （未覆盖则采集用途超出已获同意范围）—— 上线前由产品/法务确认
@@ -207,3 +220,19 @@ development_status:
 #          push_permission_state_reported / post_share_card_sent。
 #          定案时它们一行代码都还没写，改名零成本。🔴 发版后锁死，改名会切断历史序列
 # ✅ OA-6  已于 2026-08-16 闭合：访客只读视图**不套拉黑过滤**（见 AD-1 Rule 9）
+
+# ===== Epic 11（后台）的 Flyway 与后移项（2026-08-21）=====
+# Flyway：本 Epic **只有一处**真需要迁移 —— user_tags / content_tags 两张表没有「下线」列，
+#   而 PRD 要求「标签创建 / 编辑 / 下线」。下线不能用删除代替（分配表有 FK 指向标签）。
+#   两条 story 各加一列，**号取时间戳** V<yyyyMMdd_HHmm>__<snake_case>.sql（决策 E6 已反转 E2 的序号分配，
+#   禁用序列号；CI flyway-guard 强制。提交前自查 bash scripts/ci/check-flyway-versions.sh origin/main）。
+#   其余三项零迁移：顶置表字段全齐、users.phone 已在、权限码是代码常量（AdminPermissions.java）
+#   —— 新功能刻意**不做权限回填**，不给存量账号自动授予。
+#
+# 后移：AB-11A 的「批量催填推送」不在本轮。后台目前没有任何面向用户的群发推送能力
+#   （现存 broadcast 只给兽医广播接单请求），那是名单筛选 + 文案 + 发送任务 + 失败处理 +
+#   送达统计一整套新基建。导出名单已足够让运营开工（走 WhatsApp 触达本就是 FR-70 的目的）。
+#
+# 不在本轮：AB-3G 互动积分 / AB-3H 物种标记 / AB-3I~3L 种子内容整改（单独一轮）。
+#   它们不阻塞任何 App 侧功能，而本 Epic 四条阻塞。
+#   ⚠️ 若那一轮要拆，注意 AB-3H 必须排在 AB-3J / AB-3K 之后（其两处触点依赖它们提供的基础）。
