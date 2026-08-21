@@ -9,7 +9,9 @@
 --
 -- ⚠️ 存量内容永远为空：客户端的加载期占位策略因此是必做项（AD-6 Rule 4），
 -- 不是可选优化。
-ALTER TABLE content_posts ADD COLUMN image_sizes JSONB;
+-- 🔴 号说明（2026-08-21 E6 改号）：原号 V106，已 applied 在 petgo_stag，同 V20260817_1327 的说明——
+-- DDL 幂等，新号在 stag 重跑 no-op。
+ALTER TABLE content_posts ADD COLUMN IF NOT EXISTS image_sizes JSONB;
 
 COMMENT ON COLUMN content_posts.image_sizes IS
   'V1.1.6 Story 3.1：与 image_urls 同序等长的原始宽高数组 [{w,h}|null]。仅原始尺寸，'

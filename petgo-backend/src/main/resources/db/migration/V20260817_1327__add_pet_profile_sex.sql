@@ -13,11 +13,14 @@
 -- 改档案性别若联动，已发出的身份码会与卡面对不上、甚至撞唯一约束。两者取值域也不同
 -- （身份证三值含 UNKNOWN，本列两值 + NULL）。
 --
--- 🔴 Flyway 号说明：本版本从 V105 起，**不是架构 delta frontmatter 写的 V100**。
--- 那份 baseline 写于 2026-08-11，当时 V100 与并行分支 hex/v1.1.4 的 V101~V104 都还不存在。
--- V1.1.4 先于本版本发版，其号是既成事实；取 V101 会同号不同内容，合并后 Flyway 校验失败。
--- （CLAUDE.md 决策 E2：序号按执行顺序单调分配，勿照搬 architecture 示例号。）
-ALTER TABLE pet_profiles ADD COLUMN sex VARCHAR(16);
+-- 🔴 号说明（2026-08-21 E6 改号）：原号 V105，按决策 E6 改为时间戳号（取创建时刻）。
+-- ⚠️ 旧号 V105 已 applied 在 petgo_stag（2026-08-18 部署），改号后 stag 会以新号重跑本文件——
+-- 因此下方 DDL 全部幂等（IF NOT EXISTS / 吞 duplicate_object），重跑 no-op；旧号行靠 ignore-missing 容忍。
+ALTER TABLE pet_profiles ADD COLUMN IF NOT EXISTS sex VARCHAR(16);
 
-ALTER TABLE pet_profiles
-    ADD CONSTRAINT ck_pet_profiles_sex CHECK (sex IS NULL OR sex IN ('MALE', 'FEMALE'));
+DO $$
+BEGIN
+    ALTER TABLE pet_profiles
+        ADD CONSTRAINT ck_pet_profiles_sex CHECK (sex IS NULL OR sex IN ('MALE', 'FEMALE'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
