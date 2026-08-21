@@ -23,3 +23,16 @@ String milestoneShareUrl(String shareToken, {String baseUrl = kH5BaseUrl}) {
   final trimmed = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
   return '$trimmed/m/$shareToken';
 }
+
+/// 由不可枚举 shareToken 拼出**单条内容**对外分享 URL（后端 `GET /c/{shareToken}` 直出 H5）。
+///
+/// 🔴 **与 [petCardShareUrl] 是两种不同的链接类型，落地页也不同**（Story 9.3 · AD-15 Rule 5）：
+/// - `/p/{cardToken}` → 整本档案的只读视图
+/// - `/c/{shareToken}` → **只有被分享的那一条**
+///
+/// 复用同一落点等于把「我只想分享一条」变成「我把整本都给你了」—— 这是隐私边界，不是路由洁癖。
+/// 与前两者同 H5 子域；非用户明确指令不得改默认值。
+String postShareUrl(String shareToken, {String baseUrl = kH5BaseUrl}) {
+  final trimmed = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+  return '$trimmed/c/$shareToken';
+}

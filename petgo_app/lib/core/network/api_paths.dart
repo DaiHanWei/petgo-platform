@@ -232,6 +232,13 @@ class ApiPaths {
   /// 内容点赞开关（Story 3.4）。POST 点赞 / DELETE 取消。
   static String contentPostLike(int id) => '$base/content-posts/$id/like';
 
+  /// 单条内容分享链接（V1.1.6 Story 9.3）。作者本人 POST，回不可枚举 shareToken。
+  static String contentPostShareLink(int id) => '$base/content-posts/$id/share-link';
+
+  /// 单条分享内容的**公开**只读投影（Story 9.3）。未登录可读 —— 否则会把人推回浏览器。
+  /// 按 token 寻址，返回的投影里没有任何 id。
+  static String publicSharedPost(String shareToken) => '$base/public/shared-posts/$shareToken';
+
   /// 他人迷你主页投影（Story 3.8）。
   static String userMiniProfile(int userId) => '$base/users/$userId/mini-profile';
 

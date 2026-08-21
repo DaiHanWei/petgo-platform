@@ -16,6 +16,7 @@ import '../../features/auth/presentation/nickname_page.dart';
 import '../../features/auth/presentation/pet_status_page.dart';
 import '../../features/content/domain/content_type.dart';
 import '../../features/content/presentation/content_detail_page.dart';
+import '../../features/content/presentation/shared_post_page.dart';
 import '../../features/content/presentation/home_page.dart';
 import '../../features/content/presentation/publish_landing_page.dart';
 import '../../features/content/presentation/publish_result_page.dart';
@@ -770,6 +771,18 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       //
       // 页面本体复用 `GrowthArchivePage`（AD-4：复用作者态结构做减法，不另建页面），
       // 由 `visitorToken` 触发第五个状态分支。
+      // 单条内容分享落点（V1.1.6 Story 9.3 · AD-15 Rule 5）。
+      //
+      // 🔴 **与上面的 `/pet/:token` 是两个不同的落地页，刻意不合并**：那边是整本档案的
+      // 只读视图，这里**只有被分享的那一条**。合成一个落点等于把「我只想分享一条」
+      // 变成「我把整本都给你了」—— 这是隐私边界。
+      //
+      // ⚠️ **刻意不进 `_controlledLocations`**：未登录访客必须能直接看（AC3），
+      // 加进受控前缀会把人 redirect 到 /home，等于把他推回浏览器。
+      GoRoute(
+        path: '/shared-post/:token',
+        builder: (c, s) => SharedPostPage(shareToken: s.pathParameters['token']!),
+      ),
       GoRoute(
         path: '/pet/:token',
         builder: (c, s) => GrowthArchivePage(visitorToken: s.pathParameters['token']),

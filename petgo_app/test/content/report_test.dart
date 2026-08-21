@@ -11,6 +11,9 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/widgets/login_hard_dialog.dart';
 
 class _ReportRepo implements DetailRepository {
+  @override
+  Future<String> getShareUrl(int postId) => throw UnimplementedError();
+
   String? lastReason;
   int reportCalls = 0;
 
