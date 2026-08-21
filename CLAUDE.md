@@ -33,7 +33,13 @@
    - **L1 集成**：需 Docker daemon + postgres + redis 真跑（`mvn spring-boot:run` + `/actuator/health=UP`）
    - **L2 端到端**：需真实第三方凭证 / 真机 / 模拟器视觉
 4. **严格按 Epic 1→7、story 编号升序**。
-5. **Flyway 新迁移一律时间戳版本号**：`V<yyyyMMdd_HHmm>__<snake_case>.sql`（如 `V20260821_1435__init_shop_orders.sql`，取创建时刻），**禁止再用序列号**（决策 E6，反转 E2 的序号分配）。存量序号迁移（≤V108 等）保持原号**冻结**——已合入 main 的迁移文件不改不删，改表另起新迁移。CI `flyway-guard` 强制这四条：树内同号 / 动冻结文件 / 新文件非时间戳格式 / 与 main 撞号 → PR 不绿（本地自查：`bash scripts/ci/check-flyway-versions.sh origin/main`）。`out-of-order=true` 已全环境常开，时间戳跨分支合并乱序是预期行为。
+5. **Flyway 新迁移一律时间戳版本号**：`V<yyyyMMdd_HHmm>__<snake_case>.sql`（如 `V20260821_1435__init_shop_orders.sql`，取创建时刻），**禁止再用序列号**（决策 E7，取代 E6/E2；时间戳制为常设规则，不再有过渡条款）。
+   - **存量序号迁移 V1–V108 一律保留原号，不改名、不返工**（名单见 `scripts/ci/flyway-legacy-versions.txt`）。它们多数已应用到 prod / `petgo_stag`，改名会让 Flyway 找不到已应用记录、启动即拒。**一切以数据库现状为准。**
+   - **能不能改一个迁移文件，判据是「它有没有被任何环境应用过」，不是「它在不在 main 上」**：已应用的绝不能改（checksum 对不上，启动即失败），从未应用过的可以直接改。
+   - **改 CHECK 约束必须重列全集**：`ck_notifications_type` 这类被多条工作线共用的约束，一律 `DROP + ADD` 全量重建，且值必须取自**当前树里最后一条重建它的迁移**，不是某个记忆中的旧列表。此处已出过三次事故（V72、V20260818_0358 各丢一批值），每次都是照着过期列表抄。
+   - CI `flyway-guard` 强制：树内同号 / 动 main 上已有文件 / 新增非时间戳且不在 legacy 名单 / 与 main 撞号 → PR 不绿（本地自查：`bash scripts/ci/check-flyway-versions.sh origin/main`）。
+   - `out-of-order=true` 已全环境常开，时间戳跨分支合并乱序是预期行为。
+6. **构建产物必须 `clean`**：`mvn package` 不删 `target/classes` 的旧文件，迁移改名后新旧两份会一起进 jar，Flyway 报 `Found more than one migration with version X` 启动即崩（2026-08-21 实际踩过）。**打包一律 `mvn -B clean package`。**
 
 ## ☁️ 云端（headless）能做什么、不能做什么
 
