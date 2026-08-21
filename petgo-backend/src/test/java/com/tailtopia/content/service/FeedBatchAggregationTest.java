@@ -57,7 +57,9 @@ class FeedBatchAggregationTest {
         // V1.1.6 Story 4.2：只首屏让位要查顶置。这两类单测不验让位，给 mock（默认无顶置）。
         service = new FeedService(posts, accounts, likes, comments,
                 Mockito.mock(ContentPinService.class),
-                Mockito.mock(com.tailtopia.content.service.ContentTagQueryService.class));
+                Mockito.mock(com.tailtopia.content.service.ContentTagQueryService.class),
+                // V1.1.6 Story 4.4：顶置位隐藏过滤；本类只验批量取数，mock 默认 isHidden=false。
+                Mockito.mock(com.tailtopia.social.read.UserHideRelationReader.class));
         when(accounts.findAuthorViews(anyList())).thenAnswer(inv -> {
             List<Long> ids = inv.getArgument(0);
             return ids.stream().distinct().collect(Collectors.toMap(

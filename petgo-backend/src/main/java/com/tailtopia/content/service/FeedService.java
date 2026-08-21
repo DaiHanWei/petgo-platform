@@ -26,6 +26,7 @@ import java.util.stream.Collectors;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.tailtopia.social.read.UserHideRelationReader;
 
 /**
  * Feed 读取服务（Story 3.2）。时间倒序 + 宠物状态硬过滤 + 分类过滤 + 游标分页，**无算法、无关注、无缓存**。
@@ -58,15 +59,24 @@ public class FeedService {
     /** V1.1.6 Story 5.2：内容装饰标签，**整页一次批量**（AD-11）。 */
     private final ContentTagQueryService contentTags;
 
+    /**
+     * 隐藏关系只读端口（Story 4.4）。
+     *
+     * <p>⚠️ 依赖的是 {@code social.read} 的**接口**，不是它的 repository ——
+     * content / notify / auth 三侧一律只依赖该端口（AD-8 的模块边界）。
+     */
+    private final UserHideRelationReader hideRelations;
+
     public FeedService(ContentPostRepository posts, AccountQueryService accountQueryService,
             ContentLikeRepository likes, CommentRepository comments, ContentPinService pins,
-            ContentTagQueryService contentTags) {
+            ContentTagQueryService contentTags, UserHideRelationReader hideRelations) {
         this.posts = posts;
         this.accountQueryService = accountQueryService;
         this.likes = likes;
         this.comments = comments;
         this.pins = pins;
         this.contentTags = contentTags;
+        this.hideRelations = hideRelations;
     }
 
     /** 一页内容各自的装饰标签（整页一次查询）。 */
@@ -226,6 +236,23 @@ public class FeedService {
         }
         ContentPost post = posts.findById(pin.getContentId()).orElse(null);
         if (post == null || !isDisplayable(post)) {
+            return new PinnedSlotResponse(null);
+        }
+        // 🔴 Story 4.4：作者被**当前查看者**隐藏 → 对该查看者视为坑位为空。
+        //
+        // 为什么 FR-68 正文里找不到这条：原 1.1.4 → 现 1.1.6 交叉重编号时，为保两版零耦合
+        // 刻意没改 FR-68 正文，于是它只写了两条回退触发条件（坑位为空、顶置期间内容被下架），
+        // **拉黑不在其中** —— 只读 FR-68 不会知道要加这层。
+        // 而隐藏关系那个只读端口的注释里早就写明了：「若某个**运营干预位（顶置位**、推荐位等）
+        // 命中被隐藏作者，则对该用户**视为该位为空**…**漏一处等于拉黑白拉**」。
+        //
+        // 🛡 **不新写过滤逻辑**，套的就是那一层（不区分 source ⇒ 主动拉黑与举报隐藏一次覆盖）。
+        // 🛡 **不为该用户单独选替补顶置** —— 顶置是运营的编排结果，为某个人临时换一条会让
+        //    「运营配了什么」变得不可预期、也无法解释。走 FR-68 既有的"位为空"回退即可。
+        // ⚠️ 游客没有隐藏关系，整批短路、不发这次查询（沿用 findFeed 的既有惯例）。
+        // ⚠️ 与 isDisplayable 是**两种不同性质的判定**，刻意不合成一个方法：
+        //    前者与查看者无关（这条内容还在不在），后者因人而异（这个人愿不愿意看见）。
+        if (viewerId != null && hideRelations.isHidden(viewerId, post.getAuthorId())) {
             return new PinnedSlotResponse(null);
         }
         List<ContentPost> one = List.of(post);
