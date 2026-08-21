@@ -157,10 +157,16 @@ void main() {
       // - qty：整数数量，与个人无关
       // - entry_source / attribution_source：受控词表（toko_featured / toko_repurchase_card /
       //   mixed / unknown …），与个人无关
+      // V1.4.0 第 3 批新增一项，已逐个确认：
+      // - card_source：复购触发卡出现在哪个界面（`diary` / `home`），受控词表两值。
+      //   设计文档要求区分这两处的转化率（记录里的卡 vs 商城里的卡效果差很多），
+      //   与个人无关。⚠️ 名字**刻意不叫 `source`**：那个词太泛，看板上分不清
+      //   它说的是「卡片在哪」还是「用户从哪来」（后者是 entry_source）。
       expect(props, {
         'product_token', 'sku_token', 'zone', 'pay_channel', 'item_count',
         'trigger_type', 'product_id',
         'items', 'sku_id', 'qty', 'entry_source', 'attribution_source',
+        'card_source',
       });
     });
 

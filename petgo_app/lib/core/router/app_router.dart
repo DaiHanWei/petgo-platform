@@ -21,6 +21,16 @@ import '../../features/shop/presentation/refund_method_page.dart';
 import '../../features/shop/presentation/return_request_page.dart';
 import '../../features/shop/presentation/shop_order_detail_page.dart';
 import '../../features/shop/presentation/toko_page.dart';
+import '../../features/shop/presentation/shop_ui_variant.dart';
+import '../../features/order/presentation/order_list_page_v2.dart';
+import '../../features/shop/address/presentation/address_form_page_v2.dart';
+import '../../features/shop/presentation/cart_page_v2.dart';
+import '../../features/shop/presentation/checkout_page_v2.dart';
+import '../../features/shop/presentation/product_detail_page_v2.dart';
+import '../../features/shop/presentation/refund_method_page_v2.dart';
+import '../../features/shop/presentation/return_request_page_v2.dart';
+import '../../features/shop/presentation/shop_order_detail_page_v2.dart';
+import '../../features/shop/presentation/toko_page_v2.dart';
 import '../../features/auth/presentation/nickname_page.dart';
 import '../../features/auth/presentation/pet_status_page.dart';
 import '../../features/content/domain/content_type.dart';
@@ -499,50 +509,99 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       //    （bottom_tab_bar.dart 属并行契约 C 类）。Tab 接入待 DEP-1 闭合后单独处理。
       // `?category=` 只被 FR-110 的品类跳转注入（Story 9.1）：健康记录类型 → 品类，
       // 系统生成、无 SKU。非法值由 ShopCategory.fromApi 落回 null（= 全部精选）。
+      // 🔴 双 UI 并存（2026-08-19）：v1 = 逐 story 实现的首发版式，v2 = 电商设计稿版式。
+      //    **路由结构一行不改** —— URL、深链、导航栈、受控路由名单全不变，
+      //    切换的只是渲染层，否则对比的就不只是 UI 了（见 shop_ui_variant.dart）。
       GoRoute(
         path: '/shop',
-        builder: (c, s) => TokoPage(initialCategory: s.uri.queryParameters['category']),
+        builder: (c, s) {
+          final category = s.uri.queryParameters['category'];
+          return ShopUiSwitch(
+            v1: (_) => TokoPage(initialCategory: category),
+            v2: (_) => TokoPageV2(initialCategory: category),
+          );
+        },
       ),
       // 商品详情（Story 1.7）。同样对游客开放——不在 _controlledLocations 里。
       GoRoute(
         path: '/shop/products/:token',
         // `?from=` 带入归因来源（Story 3.10）：商品从哪个入口进的，只有跳转那一刻知道。
-        builder: (c, s) => ProductDetailPage(
-          token: s.pathParameters['token']!,
-          entrySource: s.uri.queryParameters['from'],
-        ),
+        builder: (c, s) {
+          final token = s.pathParameters['token']!;
+          final from = s.uri.queryParameters['from'];
+          return ShopUiSwitch(
+            v1: (_) => ProductDetailPage(token: token, entrySource: from),
+            v2: (_) => ProductDetailPageV2(token: token, entrySource: from),
+          );
+        },
       ),
       // 购物车（Story 3.6）。🔒 **有意不放进 _controlledLocations**：门控在页面内部
       //    （游客渲染「登录后查看」空态 + 软性引导），而不是 redirect 弹走。
       //    redirect 会把游客直接甩回 /home，等于告诉他「这里没有购物车」——
       //    而真相是「登录后就有」，这一句差别就是 FR-0B 软性引导存在的理由。
       //    页面本身不发任何 /me 请求，游客态零数据暴露。
-      GoRoute(path: '/shop/cart', builder: (c, s) => const CartPage()),
+      GoRoute(
+        path: '/shop/cart',
+        builder: (c, s) => ShopUiSwitch(
+          v1: (_) => const CartPage(),
+          v2: (_) => const CartPageV2(),
+        ),
+      ),
       // 结算页（Story 3.7）。🔒 与购物车同理：门控在页内（本页只在已登录态可达 ——
       //    入口是购物车页的 Checkout 按钮，而游客的购物车页根本不渲染那个按钮）。
-      GoRoute(path: '/shop/checkout', builder: (c, s) => const CheckoutPage()),
+      GoRoute(
+        path: '/shop/checkout',
+        builder: (c, s) => ShopUiSwitch(
+          v1: (_) => const CheckoutPage(),
+          v2: (_) => const CheckoutPageV2(),
+        ),
+      ),
       // 电商订单详情（Story 3.8）。token 寻址（不可枚举）；越权与不存在同为后端 404。
       GoRoute(
         path: '/shop/orders/:token',
-        builder: (c, s) => ShopOrderDetailPage(orderToken: s.pathParameters['token']!),
+        builder: (c, s) {
+          final token = s.pathParameters['token']!;
+          return ShopUiSwitch(
+            v1: (_) => ShopOrderDetailPage(orderToken: token),
+            v2: (_) => ShopOrderDetailPageV2(orderToken: token),
+          );
+        },
       ),
       // 退货申请页（Story 5.7）。入口在订单详情；已有进行中申请时页面自己渲染置灰态
       // （UX-DR3）而不是 redirect —— 用户需要知道「已在处理中」，而不是被弹走。
       GoRoute(
         path: '/shop/orders/:token/return',
-        builder: (c, s) => ReturnRequestPage(orderToken: s.pathParameters['token']!),
+        builder: (c, s) {
+          final token = s.pathParameters['token']!;
+          return ShopUiSwitch(
+            v1: (_) => ReturnRequestPage(orderToken: token),
+            v2: (_) => ReturnRequestPageV2(orderToken: token),
+          );
+        },
       ),
       // 退款方式选择页（Story 5.8）。token 寻址（退货申请的不可枚举 token）。
       GoRoute(
         path: '/shop/returns/:token/refund-method',
-        builder: (c, s) => RefundMethodPage(returnToken: s.pathParameters['token']!),
+        builder: (c, s) {
+          final token = s.pathParameters['token']!;
+          return ShopUiSwitch(
+            v1: (_) => RefundMethodPage(returnToken: token),
+            v2: (_) => RefundMethodPageV2(returnToken: token),
+          );
+        },
       ),
       // ⏳ 退货进度页（Story 5.9）路由暂不挂载：UX-DR5 视觉稿未交付，
       //    AC 写死「实现前不得自行发挥」。后端与数据层已就绪，补稿后只差这一页。
       // 地址簿（Story 2.4）。🔒 挂在 /me 前缀下 —— 它已在 _controlledLocations 里，
       // 游客访问自动重定向。地址是 PII，与 Toko 的游客开放策略正好相反。
       GoRoute(path: '/me/addresses', builder: (c, s) => const AddressBookPage()),
-      GoRoute(path: '/me/addresses/new', builder: (c, s) => const AddressFormPage()),
+      GoRoute(
+        path: '/me/addresses/new',
+        builder: (c, s) => ShopUiSwitch(
+          v1: (_) => const AddressFormPage(),
+          v2: (_) => const AddressFormPageV2(),
+        ),
+      ),
       GoRoute(
         path: '/me/addresses/:token',
         builder: (c, s) => AddressFormPage(token: s.pathParameters['token']),
@@ -743,7 +802,13 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // PawCoin 充值页（Story 1.5）。余额页「Isi Saldo」入口；同样 /me 门控 + shell 外隐 Tab。
       GoRoute(path: '/me/pawcoin/recharge', builder: (c, s) => const RechargePage()),
       // 订单中心列表（Story 5.2）。受控（/me 前缀，需登录）；shell 外顶层隐 Tab。
-      GoRoute(path: '/me/orders', builder: (c, s) => const OrderListPage()),
+      GoRoute(
+        path: '/me/orders',
+        builder: (c, s) => ShopUiSwitch(
+          v1: (_) => const OrderListPage(),
+          v2: (_) => const OrderListPageV2(),
+        ),
+      ),
       // 订单详情（Story 5.3）：各态 + 退款进度 + 宠物已删失效占位。受控（/me 前缀）。
       GoRoute(
         path: '/me/orders/:token',

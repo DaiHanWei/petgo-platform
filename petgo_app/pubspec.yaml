@@ -180,6 +180,26 @@ flutter:
           weight: 600
         - asset: assets/fonts/Poppins-Bold.ttf
           weight: 700
+        # 800 = ExtraBold（V1.4.0 电商设计稿 tokens）。设计把 800 用在所有价格与页面大标题上
+        # （详情页主价 26px/800、底部条总价 19px/800、网格卡价 16px/800）。
+        # ⚠️ **不能省**：Flutter 对自定义字体**不做字重合成**，声明缺失时 w800 会静默回落到
+        #    最接近的 700 —— 页面不报错，只是价格全都比设计稿轻一档，且看不出是哪里错了。
+        - asset: assets/fonts/Poppins-ExtraBold.ttf
+          weight: 800
+    # IBM Plex Mono：**仅**订单号 / 运单号 / 倒计时（V1.4.0 电商设计稿硬要求）。不进全局主题。
+    #
+    # 为什么必须等宽：待支付倒计时逐秒刷新，比例字体下数字宽度不等会让整行左右抖动
+    # （`58:12` → `58:11` 时 1 比 2 窄）。设计稿把这条单独列为不可省的规则。
+    #
+    # 子集化到 72 个字形（0-9 A-Z a-z 与 `:-./ #_,()`）：全量 Regular+Medium 共 271KB，
+    # 子集后 13.5KB。这些字段只可能是字母数字与分隔符，子集范围覆盖得住。
+    # ⚠️ 若日后要用它渲染任何用户输入或印尼语文案，**必须先重跑子集**（会缺字形 → 豆腐块）。
+    - family: IBMPlexMono
+      fonts:
+        - asset: assets/fonts/IBMPlexMono-subset-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/IBMPlexMono-subset-Medium.ttf
+          weight: 500
     # Quicksand（124KB）：**已停止打包**（code-review 2026-08-04）。
     # 它原是 splash 标语用字体，而 Story 7.2 已把标语改用 Fraunces ⇒ 全仓再无任何代码引用
     # （`grep Quicksand lib/` 只剩说明性注释），继续声明只是让每个用户白下载 124KB。

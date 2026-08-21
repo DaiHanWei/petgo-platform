@@ -4,7 +4,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
+import 'package:go_router/go_router.dart';
 import 'package:tailtopia/features/shop/data/shop_order_repository.dart';
+import 'package:tailtopia/features/shop/data/shop_return_repository.dart';
+import 'package:tailtopia/features/shop/domain/shop_return.dart';
 import 'package:tailtopia/features/shop/domain/shop_order_detail.dart';
 import 'package:tailtopia/features/shop/presentation/shop_order_detail_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
@@ -53,6 +56,124 @@ void main() {
     await t.pump();
     await t.pump();
   }
+
+  group('🔴 下拉刷新：履约态是被别人推进的', () {
+    /// **为什么这组测试存在（2026-08-18 本地全流程验收现场抓到的）**：
+    /// 走到「已支付、停在订单详情页等发货」时，运营在后台发了货 ——
+    /// 后端 `GET /me/shop-orders/{token}` 已经返回 `SHIPPED` + 承运商 + 单号，
+    /// **App 这一屏却纹丝不动**。原因是页面里 7 处 `invalidate` 全挂在
+    /// 「用户自己动过手」之后（支付 / 取消 / 确认收货 / 提退货），
+    /// 没有一处是「我想看看现在到哪了」。当时只能杀掉 App 重进才看得到。
+    ///
+    /// 🔴 这个场景一点都不罕见：付完款盯着订单页等发货是常态；
+    /// 而**推送权限被拒的用户完全没有别的补救手段**。
+    ///
+    /// ⚠️ 这里断言的是「接线」而不是模拟手势：RefreshIndicator 的拖出/触发/收回
+    /// 是三段动画 + 手势竞技场，在 widget test 里模拟得不稳（试过 fling 各种参数
+    /// 组合都进不去回调）。**与其写一条时灵时不灵的测试，不如断言确定的那件事**：
+    /// 刷新回调真的会重新问服务端并把新状态渲染出来。
+    testWidgets('刷新回调 → 重新问服务端 → 新状态渲染出来', (t) async {
+      repo.detailData = _order(status: ShopOrderStatus.pendingShipment);
+      await open(t);
+
+      // 起点：待发货，没有承运商信息
+      expect(find.textContaining('JP1234'), findsNothing);
+
+      // 运营在后台发了货（用户这边一个手指头都没动）
+      repo.detailData = _order(status: ShopOrderStatus.shipped, packages: const [
+        ShopOrderPackage(
+          carrier: 'JNE',
+          carrierName: 'JNE',
+          trackingNo: 'JP1234567890',
+          trackingUrl: 'https://www.jne.co.id/tracking-package',
+          delivered: false,
+        ),
+      ]);
+      final before = repo.calls.where((c) => c == 'detail').length;
+
+      final indicator = t.widget<RefreshIndicator>(find.byType(RefreshIndicator));
+      await indicator.onRefresh();
+      await t.pumpAndSettle();
+
+      expect(repo.calls.where((c) => c == 'detail').length, greaterThan(before),
+          reason: '🔴 刷新回调没有真去问服务端 —— 那它就是个摆设');
+      expect(find.textContaining('JP1234'), findsOneWidget,
+          reason: '🔴 拿到新数据却没渲染承运商信息');
+    });
+
+  });
+
+  group('🔴 退货入口的路由参数（2026-08-18 本地验收抓到的必现 bug）', () {
+    /// **踩过的坑**：这一行曾经写成
+    /// ```dart
+    /// context.push('/shop/orders/\${order.orderToken}/return')   // ← 反斜杠转义了 $
+    /// ```
+    /// 反斜杠让插值失效，push 出去的路径字面量就是 `/shop/orders/${order.orderToken}/return`。
+    /// 用户从「已完成」订单点「申请退货」→ 后端收到 `%24%7Border.orderToken%7D`
+    /// → **404 订单不存在**，退货入口 100% 打不开。
+    ///
+    /// 🔴 **为什么单测之前没拦住**：既有测试只断言「按钮在不在、可不可点」，
+    /// 从没断言**它到底 push 到哪儿去**。路由参数是字符串，拼错了编译器不管、
+    /// analyzer 不管、按钮照样渲染 —— 只有真按下去才看得见。
+    /// 所以这条测试挂一个真 GoRouter，断言落地路径里**没有任何未展开的模板字面量**。
+    testWidgets('点申请退货 → 路径里是真 token，不是没展开的 \${...}', (t) async {
+      repo.detailData = _order(
+        status: ShopOrderStatus.completed,
+        returnWindowEndsAt: DateTime.now().add(const Duration(days: 5)),
+      );
+
+      String? pushed;
+      final router = GoRouter(
+        initialLocation: '/order',
+        routes: [
+          GoRoute(
+              path: '/order',
+              builder: (_, _) => const ShopOrderDetailPage(orderToken: 'ord-1')),
+          GoRoute(
+            path: '/shop/orders/:token/return',
+            builder: (_, st) {
+              pushed = st.uri.toString();
+              return const Scaffold(body: Text('return-page'));
+            },
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+
+      t.view.physicalSize = const Size(1200, 3000);
+      t.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        t.view.resetPhysicalSize();
+        t.view.resetDevicePixelRatio();
+      });
+
+      await t.pumpWidget(ProviderScope(
+        overrides: [
+          authControllerProvider.overrideWith(() => _TestAuthController(
+                const AuthState(status: AuthStatus.authenticated, role: 'USER'),
+              )),
+          shopOrderRepositoryProvider.overrideWithValue(repo),
+          returnEligibilityProvider('ord-1').overrideWith((ref) async =>
+              const ReturnEligibility(orderToken: 'ord-1', eligible: true, lines: [])),
+        ],
+        child: MaterialApp.router(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('id'),
+          routerConfig: router,
+        ),
+      ));
+      await t.pumpAndSettle();
+
+      await t.tap(find.byKey(const ValueKey('shopOrderRequestReturn')));
+      await t.pumpAndSettle();
+
+      expect(pushed, isNotNull, reason: '🔴 点了申请退货却没走到退货路由');
+      expect(pushed, contains('ord-1'), reason: '🔴 路径里没有真实 token');
+      expect(pushed, isNot(contains(r'$')),
+          reason: r'🔴 路径里还留着未展开的 ${...} —— 插值被转义了，退货入口打不开');
+    });
+  });
 
   group('🔴 SPEC-2 出口②：已发货态即可确认收货', () {
     testWidgets('已发货：确认收货按钮就在底栏，不必等系统标记送达', (t) async {
