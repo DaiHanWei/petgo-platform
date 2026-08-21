@@ -51,6 +51,25 @@
                    th:text="#{admin.nav.tickets}">被举报用户</a>
             </div>
         </details>
+        <!-- 内容运营（后台 PRD 模块 15）：顶置坑位 / 装饰标签。
+             ⚠️ 刻意**另起一个分组**，不塞进上面的「内容」分组 —— 那个分组的次序是产品
+             2026-08-20 逐项指定过的（种子内容发布→内容管理→评论管理→人工复核→用户→被举报用户），
+             往中间插一项会打乱它，且渲染烟测 contentNavKeepsTheProductSpecifiedOrder 正盯着那个顺序。
+             本分组后续由 Story 11.2（装饰标签）继续加项。 -->
+        <details class="nav-section"
+                 sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.pin_view')"
+                 th:attr="open=${active == 'content-pins'} ? 'open' : null">
+            <summary th:classappend="${active == 'content-pins'} ? 'active'"
+                     th:text="#{admin.nav.group.contentOps}">内容运营</summary>
+            <div class="nav-sub">
+                <!-- 🛡 本条件必须与 AdminContentPinController 的 @PreAuthorize(VIEW) **逐字一致**：
+                     两边走散时，权限放行了、敲 URL 能进，但侧栏没链接 —— 运营只会以为自己没这个功能，
+                     而日志、403、报错一概没有，无从下手。 -->
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.pin_view')"
+                   th:href="@{/admin/content-pins}" th:classappend="${active == 'content-pins'} ? 'active'"
+                   th:text="#{admin.nav.contentPins}">顶置管理</a>
+            </div>
+        </details>
         <details class="nav-section"
                  th:attr="open=${active == 'vets' or active == 'online' or active == 'failed-requests' or active == 'ratings'} ? 'open' : null">
             <summary th:classappend="${active == 'vets' or active == 'online' or active == 'failed-requests' or active == 'ratings'} ? 'active'"

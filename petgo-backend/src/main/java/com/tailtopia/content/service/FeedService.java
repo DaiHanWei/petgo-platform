@@ -239,10 +239,12 @@ public class FeedService {
                 pin.getId(), pin.getObjectType().name(), item, null));
     }
 
+    /**
+     * 委托给 {@link ContentDisplayability} —— <b>后台顶置列表也读同一条</b>（Story 11.1）。
+     * 两处各写一遍的表现是「后台说生效中、App 坑位却是空的」，运营无从下手。
+     */
     private static boolean isDisplayable(ContentPost post) {
-        return post.getDeletedAt() == null
-                && post.getStatus() == PostStatus.PUBLISHED
-                && post.getVisibility() == ContentVisibility.PUBLIC;
+        return ContentDisplayability.isDisplayable(post);
     }
 
     /**

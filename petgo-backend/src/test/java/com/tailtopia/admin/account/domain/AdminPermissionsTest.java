@@ -73,8 +73,12 @@ class AdminPermissionsTest {
         // − 3（bug 20260731-440 摘除无落点死码 content.export/content.view_reporters/consult.edit_sessions）= 42
         // + 1（bug 20260728-389 后台赠送 PawCoin user.grant_pawcoin）= 43
         // + 1（V1.1.4 Story 3.1 统一工单队列 content.view_tickets）= 44
-        // + 1（V1.1.4 Story 3.2 工单处置 content.dispose_account）= 45。
+        // + 1（V1.1.4 Story 3.2 工单处置 content.dispose_account）= 45
+        // + 2（V1.1.6 Story 11.1 顶置管理 content.pin_view / content.pin_manage）= 47。
+        //
+        // ⚠️ 这条守的是「新增权限码是件需要被看见的事」：权限码一旦落地即冻结（改名会切断
+        //    已授予关系），所以每加一个都应当在这里留一行账，而不是让数字悄悄变大。
         List<String> all = AdminPermissions.ALL;
-        assertThat(all).hasSize(45);
+        assertThat(all).hasSize(47);
     }
 }

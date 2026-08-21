@@ -1,10 +1,10 @@
 ---
-baseline_commit: TBD
+baseline_commit: 9a4520e7
 ---
 
 # Story 11.1: 顶置管理（Feed 坑位）
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -48,9 +48,14 @@ so that FR-68 的顶置能力不再是个没有开关的空壳。
 
 **Then** 🛡 同一坑位内时间窗重叠的配置**保存时校验拦截** `[L1]`（FR-68）
 
-> 🔴 **这条现在完全不存在。** `content_pins` 表上**没有**任何重叠约束 —— 读取侧只需要
-> "取当前生效的那一条"，所以 App 侧 story 从未需要它。**写入侧的重叠校验是后台独有的职责。**
-> 不做的后果：同坑位两条同时生效，Feed 顶谁取决于查询顺序，运营看到的是随机结果。
+> 🔴 **订正（2026-08-21 实读）：这条校验其实已经存在**，在 `ContentPinService.schedule()` 里
+> （`requireNoOverlap`，且首尾相接不算重叠）。拆 story 时我只看了「表上无约束 + App 侧读取只取一条」
+> 就断言"全系统不存在"，**没去看写入服务** —— 判断错了。
+>
+> **真实情况**：机制在，但**没有任何入口能调到它**（Story 4.1 的类注释原话：
+> 「本 story 没有对外接口 —— 后台配置界面 AB-10A 不在本轮范围…交付的是机制，供后台接上来之后直接调用」）。
+> 所以本 story 的活是**接上来 + 钉住它真的走到了**，而不是从零实现。
+> 若哪天有人绕过 service 直接写库，重叠仍会发生（表上确实没有约束）—— 这一点不变。
 >
 > ⚠️ 判定要用**半开区间** `[starts_at, ends_at)`：`A.starts < B.ends AND B.starts < A.ends`。
 > 用闭区间会把"上一条 10:00 结束、下一条 10:00 开始"误判成重叠 —— 那是运营最常见的排法。
@@ -112,24 +117,24 @@ so that FR-68 的顶置能力不再是个没有开关的空壳。
 
 ## Tasks / Subtasks
 
-- [ ] **T1 · 服务层**（AC1、AC3、AC5）
-  - [ ] 生效判定：`[starts_at, COALESCE(terminated_at, ends_at))`，🛡 无状态列、无扫描器
-  - [ ] 🔴 同坑位重叠校验，**半开区间**判定
-  - [ ] 生效时的内容有效性校验，连带在读取查询里做
-- [ ] **T2 · 列表 / 新建 / 编辑 / 提前下线页面**（AC1、AC2、AC6、AC8）
-  - [ ] 坑位下拉（本版本仅 `HOME_FEED`），按"以后会有多个"实现，不写死
-  - [ ] 时间输入旁标「WIB」
-- [ ] **T3 · 内容选择器**（AC4）
-  - [ ] 🛡 只返回公开内容；🔴 用代码枚举 `DAILY`/`KNOWLEDGE`/已同步 `GROWTH_MOMENT`
-  - [ ] 按大结果集设计：搜索 + 分页
-- [ ] **T4 · 推广卡片图比例警告**（AC7）
-- [ ] **T5 · 权限与导航**（AC9）
-- [ ] **T6 · 测试**
-  - [ ] L1：🔴 同坑位重叠被拦（含"首尾相接不算重叠"的边界）
-  - [ ] L1：🛡 未同步的 Diary 不出现在选择器结果里
-  - [ ] L1：内容被下架 → 该配置不生效且标注
-  - [ ] L1：提前结束写 `terminated_at`、不动 `ends_at`
-  - [ ] L0：侧栏条件与入口门条件逐字一致（可参照既有渲染烟测的写法）
+- [x] **T1 · 服务层**（AC1、AC3、AC5）
+  - [x] 生效判定：`[starts_at, COALESCE(terminated_at, ends_at))`，🛡 无状态列、无扫描器
+  - [x] 🔴 同坑位重叠校验，**半开区间**判定
+  - [x] 生效时的内容有效性校验，连带在读取查询里做
+- [x] **T2 · 列表 / 新建 / 编辑 / 提前下线页面**（AC1、AC2、AC6、AC8）
+  - [x] 坑位下拉（本版本仅 `HOME_FEED`），按"以后会有多个"实现，不写死
+  - [x] 时间输入旁标「WIB」
+- [x] **T3 · 内容选择器**（AC4）
+  - [x] 🛡 只返回公开内容；🔴 用代码枚举 `DAILY`/`KNOWLEDGE`/已同步 `GROWTH_MOMENT`
+  - [x] 按大结果集设计：搜索 + 分页
+- [x] **T4 · 推广卡片图比例警告**（AC7）
+- [x] **T5 · 权限与导航**（AC9）
+- [x] **T6 · 测试**
+  - [x] L1：🔴 同坑位重叠被拦（含"首尾相接不算重叠"的边界）
+  - [x] L1：🛡 未同步的 Diary 不出现在选择器结果里
+  - [x] L1：内容被下架 → 该配置不生效且标注
+  - [x] L1：提前结束写 `terminated_at`、不动 `ends_at`
+  - [x] L0：侧栏条件与入口门条件逐字一致（可参照既有渲染烟测的写法）
 
 ---
 
@@ -160,13 +165,114 @@ so that FR-68 的顶置能力不再是个没有开关的空壳。
 
 ### Context Reference
 
+story 自带上下文 + 实读 Story 4.1 已交付的 `ContentPinService` / `ContentPinRepository` / `FeedService` 坑位取数。
+
 ### Agent Model Used
+
+claude-opus-5[1m]
 
 ### Debug Log References
 
+- 本 story 用例：`AdminContentPinIntegrationTest` **12 passed**
+- 渲染烟测：`AdminPagesRenderSmokeTest` **5 passed**（新页已纳入双 locale 渲染 + 标题与导航名一致）
+- 后端全量：**1921 passed / 0 failed**（首轮 4 红：1 条是权限计数守门需更新——见下；另 3 条通知未读数属既有偶发，已定位并证明与本改动无关）
+- ⚠️ 后端测试须 `DB_NAME=petgo_rebased`（本分支专用库）
+
 ### Completion Notes List
 
+**🔴 先更正一处我在拆 story 时写错的判断。**
+story 的 AC3 原文写「同坑位时间重叠校验**在整个系统里不存在**」。**这是错的。**
+它早在 Story 4.1 就写好了 —— `ContentPinService.schedule()` → `requireNoOverlap()`，
+而且首尾相接不算重叠的半开区间语义也在，`findOverlapping` 连 `excludeId` 参数都预留了。
+我当时只看了「表上无约束 + App 侧读取只取一条」就下了结论，**没去看写入服务**。
+
+**所以本 story 的实际性质是"接上来"，不是"从零实现"。** Story 4.1 的类注释把这件事说得很清楚：
+「本 story 没有对外接口 —— 后台配置界面（AB-10A）不在本轮范围，运营还无处配置。
+本类交付的是**机制**，供后台接上来之后直接调用」。本 story 就是那个「接上来」。
+测试的重点因此从"验证机制"改成了**"后台这条路径真的走到了那套既有机制"**。
+
+**服务层只补了三个缺口**（其余全部复用）：
+- `update()` —— 编辑时重叠校验**排除自身**（否则"把自己的窗口往后挪一小时"会被自己拦住）
+- `terminateNow()` —— 手动提前结束，委托领域对象既有的 `terminateAt()`（自带幂等 + 保证 `terminated_at <= ends_at`）
+- `listBySlot()` —— 后台列表要含已结束的历史
+
+**🔴 抽出了一份唯一的「内容还能不能对外展示」判定**（`ContentDisplayability`）。
+它原本是 `FeedService` 里的私有 `isDisplayable`。顶置有两个读它的地方：App 的 Feed（决定坑位渲染什么）
+与后台列表（决定要不要标「内容失效未生效」）。**各写一遍的表现最难查 ——
+后台显示「生效中」而 App 上那个坑位是空的**，运营会以为是缓存或故障，日志里什么都没有。
+判定口径一字未改，只是搬了位置 + 让 FeedService 委托它。
+
+**⚠️ 一处口径分歧，我按"跟随现状"处理并留档待产品定。**
+本 story 的 AC5 原文写内容有效性含「**作者账号未被封禁**」，但 **Feed 侧今天并不按作者封号过滤内容**
+（`isDisplayable` 只看 已删 / 非 PUBLISHED / 非 PUBLIC）。
+若只在后台加这一条，就会造出反方向的谎：**后台说失效、App 上照样在展示**。
+所以 `ContentDisplayability` 严格跟随 Feed 的现有口径。
+🔴 **「Feed 是否也该排除封号作者的内容」是一个独立问题，需要产品定，定了两处一起改。**
+（注销已被覆盖 —— 那会把状态翻成 `AUTHOR_DEACTIVATED`；举报预处置也被覆盖 —— 翻成 `UNDER_REVIEW`。
+真正没盖住的只有"账号被封号但内容状态没动"这一种。）
+
+**导航另起了一个「内容运营」分组，没有塞进既有的「内容」分组。**
+理由是那个分组的次序是产品 2026-08-20 逐项指定过的（种子内容发布→内容管理→评论管理→人工复核→用户→被举报用户），
+往中间插一项会打乱它，而且渲染烟测 `contentNavKeepsTheProductSpecifiedOrder` 正盯着那个顺序。
+新分组对应后台 PRD 的模块 15，Story 11.2（装饰标签）会继续往里加项。
+
+**推广卡片的比例警告在浏览器里量，不需要上传也不需要服务端抓图。**
+把 URL 塞进一个隐藏 `<img>`，`load` 后读 `naturalWidth/naturalHeight` 算比例。
+超出 0.75~1.34 时给**带方向与百分比**的警告（16:9 → 「左右各裁切约 25%」），🛡 只警告、不阻止提交。
+（本 story 的推广图仍是 URL 字段；上传控件是 12-2 的范围。）
+
+**踩到并修掉的两处（都是我测试写错）**
+1. **POST 全部 403，GET 正常。** 我先前只看到 `csrf.disable()` 就以为不用带令牌 ——
+   那行在**API 链**上，`/admin/**` 那条链**保留了 CSRF**。少了 `.with(csrf())` 拿到的是 403，
+   **极易被误读成「权限门没放行」**，而权限完全正确。已在测试里写明这一点。
+2. 第一轮补 CSRF 时用正则匹配 `post("/admin/content-pins...")`，**漏掉了两条用字符串拼接 URL 的**
+   （`"/admin/content-pins/" + id + "/edit"`），于是那两条还红着。
+
+**零 Flyway 迁移**（表和列都在，权限码是代码常量、刻意不做回填）。CI `flyway-guard` 无需触发。
+
+**权限计数守门要一起改。** `AdminPermissionsTest.listStableSize` 钉着权限码总数（45 → 47），
+首轮全量因此红了一条。**这条红是对的** —— 它守的是「新增权限码是件需要被看见的事」：
+权限码一旦落地即冻结（改名会切断已授予关系），所以每加一个都应当在那份账里留一行，
+而不是让数字悄悄变大。已按格式补了一行说明。
+
+**另外 3 条通知未读数的红，查清了不是本改动造成的。** 证据链（不是"应该不是我的"）：
+- 基线（暂存我的全部改动后）单跑该类：**19/19 通过**
+- 带我的改动单跑该类：**19/19 通过**
+- 首轮全量：挂了 3 条；与另一个类同跑：挂的是**第 4 条不同的用例**
+- 第二轮全量：**0 失败**
+
+**同一份代码不同运行挂不同用例 ⇒ 是不确定性，而确定性的代码改动不会产生这种表现。**
+根因看得见：那几条断言的是**绝对未读数**（如「新建用户 → 未读必须为 0」），
+而日志里能看到 `milestone completed: code=C-S1 source=SYSTEM_AUTO` 这类**异步**里程碑完成会写通知行 ——
+时序凑巧对上就会多出一条。
+⚠️ **这是那个测试类自身的既有隐患，不在本 story 范围**：修法是把绝对计数改成相对差值、
+或在断言前等异步落定。此前 Story 7.2 的完成记录里也记过一次同类现象，
+当时未能定位（surefire 报告被后续运行覆盖），**这次定位到了**。
+
+**留 L2 的**：真机/浏览器上看比例警告的实际观感、HTMX 选择器的交互手感、`data-confirm` 弹窗。
+
 ### File List
+
+**新增**
+- `petgo-backend/src/main/java/com/tailtopia/content/service/ContentDisplayability.java`
+- `petgo-backend/src/main/java/com/tailtopia/admin/pin/dto/PinRow.java`
+- `petgo-backend/src/main/java/com/tailtopia/admin/pin/dto/PinnableContentRow.java`
+- `petgo-backend/src/main/java/com/tailtopia/admin/pin/service/AdminContentPinService.java`
+- `petgo-backend/src/main/java/com/tailtopia/admin/pin/web/AdminContentPinController.java`
+- `petgo-backend/src/main/resources/templates/admin/content-pins.html`
+- `petgo-backend/src/test/java/com/tailtopia/admin/pin/AdminContentPinIntegrationTest.java`
+
+**修改**
+- `petgo-backend/src/main/java/com/tailtopia/content/domain/ContentPin.java`（`reschedule` / `retarget`）
+- `petgo-backend/src/main/java/com/tailtopia/content/service/ContentPinService.java`（`update` / `terminateNow` / `listBySlot`）
+- `petgo-backend/src/main/java/com/tailtopia/content/service/FeedService.java`（`isDisplayable` 改为委托唯一判定）
+- `petgo-backend/src/main/java/com/tailtopia/content/repository/ContentPinRepository.java`（列表查询）
+- `petgo-backend/src/main/java/com/tailtopia/content/repository/ContentPostRepository.java`（`searchPinnable`）
+- `petgo-backend/src/main/java/com/tailtopia/admin/account/domain/AdminPermissions.java`（两个权限码 + 分组）
+- `petgo-backend/src/main/resources/templates/admin/layout.html`（「内容运营」分组 + 顶置入口）
+- `petgo-backend/src/main/resources/i18n/messages_{zh_CN,en,id}.properties`（各 34 条）
+- `petgo-backend/src/test/java/com/tailtopia/admin/web/AdminPagesRenderSmokeTest.java`（纳入新页）
+- `_bmad-output/implementation-artifacts/sprint-status-v1.1.6.yaml`
 
 ---
 
@@ -175,3 +281,4 @@ so that FR-68 的顶置能力不再是个没有开关的空壳。
 | 日期 | 变更 |
 |---|---|
 | 2026-08-21 | 由后台 PRD 校验后拆出，status = ready-for-dev |
+| 2026-08-21 | 实现完成：后台顶置管理页接上 Story 4.1 已交付的机制；12 条测试；更正 AC3 一处错误判断；status = review |

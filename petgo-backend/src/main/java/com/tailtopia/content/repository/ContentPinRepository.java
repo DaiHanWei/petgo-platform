@@ -37,6 +37,9 @@ public interface ContentPinRepository extends JpaRepository<ContentPin, Long> {
         return findActive(slot, now).stream().findFirst();
     }
 
+    /** 后台列表（Story 11.1）：某坑位全部排期，含已结束的历史，开始时间倒序。 */
+    List<ContentPin> findBySlotOrderByStartsAtDesc(String slot);
+
     /**
      * 与给定窗口重叠的排期（重叠校验用）。
      *

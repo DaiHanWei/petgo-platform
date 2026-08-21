@@ -36,6 +36,31 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
     List<ContentPost> findByAuthorIdOrderByCreatedAtDesc(long authorId);
 
     /**
+     * 顶置内容选择器（V1.1.6 Story 11.1 · AB-10A）：**只返回可公开展示的内容**。
+     *
+     * <p>🛡 三个条件缺一不可 —— 缺了就可能把作者主动设为私密的内容顶到 Feed，
+     * 直接违背 FR-83 给作者的可见范围选择权：
+     * 未软删 + 状态 PUBLISHED + visibility PUBLIC。
+     * （举报预处置会把状态翻成 UNDER_REVIEW，已被第二条覆盖。）
+     *
+     * <p>⚠️ 判定与 {@code ContentDisplayability} 同口径 —— 那是给单条对象用的 Java 版，
+     * 这里是分页查询必须写在 WHERE 里的 SQL 版（捞出来再筛会破坏分页）。
+     *
+     * <p>⚠️ **候选集接近全量内容**：FR-83 的同步开关已于 2026-07-30 反转为默认开启，
+     * 被排除的只是"作者主动关开关"的少数 —— 因此本查询**必须分页**，
+     * 调用方不可假设候选量小到能平铺。
+     */
+    @Query("""
+            SELECT p FROM ContentPost p
+            WHERE p.deletedAt IS NULL
+              AND p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
+              AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
+              AND (:kw IS NULL OR LOWER(p.text) LIKE LOWER(CONCAT('%', :kw, '%')))
+            ORDER BY p.createdAt DESC, p.id DESC
+            """)
+    List<ContentPost> searchPinnable(@Param("kw") String kw, Pageable pageable);
+
+    /**
      * 成长时间线读：某作者某宠物某类型未删内容，createdAt 倒序游标分页（Story 2.4）。
      * bug 20260721-271：按 petId 过滤——删宠档后 detachPet 把旧帖 pet_id 置 NULL，
      * 不加 petId 会让 NULL 旧帖漏进新宠物档案（串档）。

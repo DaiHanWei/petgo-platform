@@ -74,6 +74,49 @@ public class ContentPinService {
         }
     }
 
+    /**
+     * 修改一条既有排期的时间窗 / 对象（Story 11.1 · AB-10A）。
+     *
+     * <p>🔴 重叠校验**排除自身**（`excludeId`）—— 否则"把自己的时间窗往后挪一小时"
+     * 会被自己拦住。`findOverlapping` 早就留了这个参数，之前没有调用方。
+     */
+    @Transactional
+    public ContentPin update(long id, Instant startsAt, Instant endsAt, ContentPin patch) {
+        ContentPin pin = pins.findById(id)
+                .orElseThrow(() -> AppException.notFound("顶置排期不存在"));
+        validateWindow(startsAt, endsAt);
+        requireNoOverlap(pin.getSlot(), startsAt, endsAt, id);
+        pin.reschedule(startsAt, endsAt);
+        if (patch != null) {
+            pin.retarget(patch.getObjectType(), patch.getContentId(),
+                    patch.getPromoImageUrl(), patch.getPromoTitle(), patch.getPromoLinkUrl());
+            validateObject(pin);
+        }
+        return pin;
+    }
+
+    /**
+     * 运营手动提前结束一条排期（Story 11.1 · AB-10A）。
+     *
+     * <p>🛡 写 `terminatedAt`、**绝不覆盖 `endsAt`** —— 覆盖了运营只会看到
+     * 「这条 14:32 结束了」，**无从知道是排期到点还是被人提前收的**，排期意图的记录也没了。
+     *
+     * <p>已结束的（自然到点或已被结束）视为幂等 no-op，返回 false。
+     */
+    @Transactional
+    public boolean terminateNow(long id, Instant at) {
+        ContentPin pin = pins.findById(id)
+                .orElseThrow(() -> AppException.notFound("顶置排期不存在"));
+        // 领域对象自带幂等守卫，并保证 terminatedAt <= endsAt（满足 DB 约束）。
+        return pin.terminateAt(at);
+    }
+
+    /** 后台列表：某坑位的全部排期（含已结束的历史），开始时间倒序。 */
+    @Transactional(readOnly = true)
+    public List<ContentPin> listBySlot(String slot) {
+        return pins.findBySlotOrderByStartsAtDesc(slot);
+    }
+
     /** 某坑位当前生效中的排期；无则空。 */
     @Transactional(readOnly = true)
     public Optional<ContentPin> activePin(String slot, Instant now) {

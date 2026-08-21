@@ -40,6 +40,13 @@ public final class AdminPermissions {
     /** 人工审核队列：查看 + 通过/拒绝（内容审核 Story 4.3；开关仍限 SUPER_ADMIN）。 */
     public static final String CONTENT_MANUAL_REVIEW = "content.manual_review";
     /**
+     * 顶置管理（V1.1.6 Story 11.1 · AB-10A）。查看 / 编辑分两码 ——
+     * 顶置直接改首页第一屏，能看不等于能改。
+     * ⚠️ 新功能**不做权限回填迁移**：不给存量账号自动授予才是对的，由超管按需勾选。
+     */
+    public static final String CONTENT_PIN_VIEW = "content.pin_view";
+    public static final String CONTENT_PIN_MANAGE = "content.pin_manage";
+    /**
      * 统一工单队列（V1.1.4 Story 3.1，AB-3D）：三类工单一个列表。
      *
      * <p>与 {@link #CONTENT_VIEW_REPORTS}（旧的举报队列）分开一个码，是因为统一视图里还有
@@ -116,7 +123,7 @@ public final class AdminPermissions {
     /** 按查看/编辑分组，供账号页勾选区展示。 */
     public static final List<PermissionGroup> GROUPS = List.of(
             new PermissionGroup("perm.group.view", List.of(
-                    CONTENT_VIEW_REPORTS, CONTENT_VIEW_TICKETS, CONTENT_VIEW,
+                    CONTENT_VIEW_REPORTS, CONTENT_VIEW_TICKETS, CONTENT_VIEW, CONTENT_PIN_VIEW,
                     USER_VIEW,
                     VET_VIEW, VET_QUALIFY_VIEW, RATING_VIEW,
                     CONSULT_VIEW_ANOMALIES, CONSULT_VIEW_SESSIONS,
@@ -126,7 +133,7 @@ public final class AdminPermissions {
                     ADMIN_VIEW_ACCOUNTS, ADMIN_VIEW_LOGS)),
             new PermissionGroup("perm.group.edit", List.of(
                     CONTENT_TAKEDOWN, CONTENT_RESTORE, CONTENT_PROACTIVE_TAKEDOWN,
-                    CONTENT_MANUAL_REVIEW, CONTENT_DISPOSE_ACCOUNT,
+                    CONTENT_MANUAL_REVIEW, CONTENT_DISPOSE_ACCOUNT, CONTENT_PIN_MANAGE,
                     USER_DEACTIVATE, USER_DELETE, USER_GRANT_PAWCOIN,
                     VET_CREATE, VET_EDIT, VET_BAN, VET_RESET_PASSWORD, VET_QUALIFY,
                     CONSULT_HANDLE,

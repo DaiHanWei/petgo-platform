@@ -132,6 +132,37 @@ public class ContentPin {
         return true;
     }
 
+    /**
+     * 改时间窗（Story 11.1 后台编辑）。重叠校验由 service 负责（须排除自身）。
+     *
+     * <p>⚠️ 不动 {@code terminatedAt}：一条已被提前结束的排期，改时间窗不等于"复活它"。
+     * 真要复活是另一个动作，本版本不做。
+     */
+    public void reschedule(Instant startsAt, Instant endsAt) {
+        this.startsAt = startsAt;
+        this.endsAt = endsAt;
+    }
+
+    /**
+     * 改顶置对象（Story 11.1 后台编辑）。两类互斥 —— 切到另一类时把上一类的字段清空，
+     * 否则 DB 的互斥 CHECK 约束会挡下来，而抛出的是一串英文约束名。
+     */
+    public void retarget(PinObjectType type, Long contentId,
+            String promoImageUrl, String promoTitle, String promoLinkUrl) {
+        this.objectType = type;
+        if (type == PinObjectType.PROMO) {
+            this.contentId = null;
+            this.promoImageUrl = promoImageUrl;
+            this.promoTitle = promoTitle;
+            this.promoLinkUrl = promoLinkUrl;
+        } else {
+            this.contentId = contentId;
+            this.promoImageUrl = null;
+            this.promoTitle = null;
+            this.promoLinkUrl = null;
+        }
+    }
+
     @PrePersist
     void onCreate() {
         Instant now = Instant.now();

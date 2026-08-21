@@ -112,6 +112,9 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
                 .doesNotContain("工单队列").doesNotContain("三类工单统一排队");
 
         assertThat(visibleText("/admin/manual-review")).as("人工复核页的标题").contains("人工复核");
+
+        // Story 11.1：侧栏叫「顶置管理」，页内标题必须同名（四处同源里的前两处）。
+        assertThat(visibleText("/admin/content-pins")).as("顶置管理页的标题").contains("顶置管理");
     }
 
     /**
@@ -148,6 +151,7 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
     @Test
     void allExternalizedAdminPagesRenderInBothLocales() throws Exception {
         String[] paths = {"/admin/dashboard", "/admin/seed-post", "/admin/tickets", "/admin/content",
+                "/admin/content-pins",
                 "/admin/manual-review", "/admin/anomalies", "/admin/consult-sessions", "/admin/vets",
                 "/admin/vets/online", "/admin/failed-requests", "/admin/ratings", "/admin/users",
                 "/admin/audit-logs", "/admin/accounts"};
