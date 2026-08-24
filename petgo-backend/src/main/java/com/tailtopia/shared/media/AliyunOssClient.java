@@ -113,6 +113,30 @@ public class AliyunOssClient {
     }
 
     /**
+     * 服务端上传字节到公开桶①并<b>显式带对象 ACL public-read</b>（Lark 定时发帖图片转存用）。
+     *
+     * <p>与 {@link #putPublicObject} 的差异：桶级并非公开读（BPA 关闭 + 桶 ACL 私有），
+     * 对象必须逐个带 {@code x-oss-object-acl: public-read} 才能公网直读——预签名直传路径
+     * （{@link #presignedPutUrl}）一直如此，本方法把同一约定补到服务端上传。L2 真实网络。
+     *
+     * @return 对外 CDN URL
+     */
+    public String putPublicObjectWithAcl(String objectKey, byte[] bytes, String contentType) {
+        OSS client = buildClient();
+        try {
+            com.aliyun.oss.model.ObjectMetadata meta = new com.aliyun.oss.model.ObjectMetadata();
+            meta.setContentType(contentType);
+            meta.setContentLength(bytes.length);
+            meta.setHeader("x-oss-object-acl", "public-read");
+            client.putObject(props.getOss().getPublicBucket(), stripLeadingSlash(objectKey),
+                    new ByteArrayInputStream(bytes), meta);
+            return publicUrl(objectKey);
+        } finally {
+            client.shutdown();
+        }
+    }
+
+    /**
      * 服务端上传字节到私密桶②（Story 2.5 IM→OSS 桥接用）。L2 真实网络。
      * 调用方负责字节已去 EXIF（IM 图复制场景由 {@link ImToOssArchiver} 控制）。
      */
