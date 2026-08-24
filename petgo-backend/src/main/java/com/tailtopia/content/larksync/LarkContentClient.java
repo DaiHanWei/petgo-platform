@@ -1,8 +1,8 @@
 package com.tailtopia.content.larksync;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +18,10 @@ import org.springframework.web.client.RestClient;
  * <p>四类能力：tenant_access_token（内存缓存，过期前 5 分钟主动刷新）、读表格值域、
  * 按行回写「上传状态/发布账号」、云盘文件夹列表 + 文件下载。全部经 Spring {@link RestClient}，
  * 显式超时（连接 5s / 读 {@code timeoutSeconds}s，图片下载可能数 MB）。
+ *
+ * <p>响应一律 {@code .body(Map.class)} 解析——与 {@code GeminiDeveloperApiClient} 同范式。
+ * ⚠️ 勿改回 JsonNode：Boot 4 运行期是 Jackson 3（tools.jackson），绑 com.fasterxml 的
+ * JsonNode 会 HttpMessageConversionException（2026-08-24 stag 实测踩过）。
  *
  * <p>护栏：appSecret 仅本类持有，<b>绝不落日志</b>；Lark 响应一律先验 {@code code==0}，
  * 非 0 抛 {@link LarkApiException}。{@link LarkApiException} 的语义是<b>传输/平台层失败</b>
@@ -62,15 +66,15 @@ public class LarkContentClient {
         if (cachedToken != null && Instant.now().isBefore(tokenExpireAt)) {
             return cachedToken;
         }
-        JsonNode resp = rest.post()
+        Map<?, ?> resp = rest.post()
                 .uri("/open-apis/auth/v3/tenant_access_token/internal")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(Map.of("app_id", props.getAppId(), "app_secret", props.getAppSecret()))
                 .retrieve()
-                .body(JsonNode.class);
+                .body(Map.class);
         ensureOk(resp, "tenant_access_token");
-        cachedToken = resp.path("tenant_access_token").asText();
-        long expireSeconds = resp.path("expire").asLong(7200);
+        cachedToken = str(resp.get("tenant_access_token"));
+        long expireSeconds = num(resp.get("expire"), 7200);
         tokenExpireAt = Instant.now().plusSeconds(Math.max(60, expireSeconds - 300));
         return cachedToken;
     }
@@ -88,19 +92,18 @@ public class LarkContentClient {
      */
     public List<List<String>> readRows() {
         String range = props.getSheetId() + "!A2:F" + (props.getRowLimit() + 1);
-        JsonNode resp = rest.get()
+        Map<?, ?> resp = rest.get()
                 .uri("/open-apis/sheets/v2/spreadsheets/{token}/values/{range}?valueRenderOption=ToString",
                         props.getSpreadsheetToken(), range)
                 .header("Authorization", "Bearer " + tenantToken())
                 .retrieve()
-                .body(JsonNode.class);
+                .body(Map.class);
         ensureOk(resp, "读取表格");
-        JsonNode values = resp.path("data").path("valueRange").path("values");
-        List<List<String>> rows = new java.util.ArrayList<>();
-        for (JsonNode row : values) {
-            List<String> cells = new java.util.ArrayList<>();
-            for (JsonNode cell : row) {
-                cells.add(cell.isNull() ? "" : cell.asText().trim());
+        List<List<String>> rows = new ArrayList<>();
+        for (Object rowObj : valuesOf(resp)) {
+            List<String> cells = new ArrayList<>();
+            for (Object cell : (List<?>) rowObj) {
+                cells.add(cell == null ? "" : String.valueOf(cell).trim());
             }
             rows.add(cells);
         }
@@ -113,17 +116,18 @@ public class LarkContentClient {
      */
     public Optional<Integer> findRowByCode(String contentCode) {
         String range = props.getSheetId() + "!B2:B" + (props.getRowLimit() + 1);
-        JsonNode resp = rest.get()
+        Map<?, ?> resp = rest.get()
                 .uri("/open-apis/sheets/v2/spreadsheets/{token}/values/{range}?valueRenderOption=ToString",
                         props.getSpreadsheetToken(), range)
                 .header("Authorization", "Bearer " + tenantToken())
                 .retrieve()
-                .body(JsonNode.class);
+                .body(Map.class);
         ensureOk(resp, "定位行");
-        JsonNode values = resp.path("data").path("valueRange").path("values");
         int i = 0;
-        for (JsonNode row : values) {
-            String cell = row.size() > 0 && !row.get(0).isNull() ? row.get(0).asText().trim() : "";
+        for (Object rowObj : valuesOf(resp)) {
+            List<?> row = (List<?>) rowObj;
+            String cell = !row.isEmpty() && row.get(0) != null
+                    ? String.valueOf(row.get(0)).trim() : "";
             if (contentCode.equals(cell)) {
                 return Optional.of(i + 2);
             }
@@ -138,7 +142,7 @@ public class LarkContentClient {
      */
     public void writeStatus(int sheetRowNumber, String status, String account) {
         String range = props.getSheetId() + "!E" + sheetRowNumber + ":F" + sheetRowNumber;
-        JsonNode resp = rest.put()
+        Map<?, ?> resp = rest.put()
                 .uri("/open-apis/sheets/v2/spreadsheets/{token}/values", props.getSpreadsheetToken())
                 .header("Authorization", "Bearer " + tenantToken())
                 .contentType(MediaType.APPLICATION_JSON)
@@ -146,7 +150,7 @@ public class LarkContentClient {
                         "range", range,
                         "values", List.of(List.of(status, account)))))
                 .retrieve()
-                .body(JsonNode.class);
+                .body(Map.class);
         ensureOk(resp, "回写表格");
     }
 
@@ -158,7 +162,7 @@ public class LarkContentClient {
         String pageToken = null;
         do {
             final String pt = pageToken;
-            JsonNode resp = rest.get()
+            Map<?, ?> resp = rest.get()
                     .uri(b -> {
                         b.path("/open-apis/drive/v1/files")
                                 .queryParam("folder_token", props.getFolderToken())
@@ -170,16 +174,20 @@ public class LarkContentClient {
                     })
                     .header("Authorization", "Bearer " + tenantToken())
                     .retrieve()
-                    .body(JsonNode.class);
+                    .body(Map.class);
             ensureOk(resp, "列云盘文件夹");
-            for (JsonNode f : resp.path("data").path("files")) {
-                if ("file".equals(f.path("type").asText())) {
-                    files.put(f.path("name").asText(), f.path("token").asText());
+            Map<?, ?> data = asMap(resp.get("data"));
+            Object fileList = data.get("files");
+            if (fileList instanceof List<?> list) {
+                for (Object fObj : list) {
+                    Map<?, ?> f = asMap(fObj);
+                    if ("file".equals(str(f.get("type")))) {
+                        files.put(str(f.get("name")), str(f.get("token")));
+                    }
                 }
             }
-            pageToken = resp.path("data").path("has_more").asBoolean(false)
-                    ? resp.path("data").path("next_page_token").asText(null)
-                    : null;
+            boolean hasMore = Boolean.TRUE.equals(data.get("has_more"));
+            pageToken = hasMore ? str(data.get("next_page_token")) : null;
         } while (pageToken != null && !pageToken.isBlank());
         return files;
     }
@@ -225,17 +233,37 @@ public class LarkContentClient {
                 && b[8] == 'W' && b[9] == 'E' && b[10] == 'B' && b[11] == 'P'; // WEBP
     }
 
-    private void ensureOk(JsonNode resp, String action) {
+    // ===== Map 解析工具（勿引 JsonNode，见类注释）=====
+
+    /** data.valueRange.values，不存在时返回空 List。 */
+    private static List<?> valuesOf(Map<?, ?> resp) {
+        Object values = asMap(asMap(resp.get("data")).get("valueRange")).get("values");
+        return values instanceof List<?> list ? list : List.of();
+    }
+
+    private static Map<?, ?> asMap(Object o) {
+        return o instanceof Map<?, ?> m ? m : Map.of();
+    }
+
+    private static String str(Object o) {
+        return o == null ? null : String.valueOf(o);
+    }
+
+    private static long num(Object o, long fallback) {
+        return o instanceof Number n ? n.longValue() : fallback;
+    }
+
+    private void ensureOk(Map<?, ?> resp, String action) {
         if (resp == null) {
             invalidateToken();
             throw new LarkApiException(action + " 响应为空");
         }
-        int code = resp.path("code").asInt(-1);
+        long code = num(resp.get("code"), -1);
         if (code != 0) {
             // 保守起见任何非 0 都作废 token 缓存：代价只是下轮多换一次 token，
             // 换来密钥轮换/提前吊销场景的自愈。msg 是 Lark 错误描述，不含凭证，可安全带出。
             invalidateToken();
-            throw new LarkApiException(action + " 失败 code=" + code + " msg=" + resp.path("msg").asText());
+            throw new LarkApiException(action + " 失败 code=" + code + " msg=" + str(resp.get("msg")));
         }
     }
 }
