@@ -141,7 +141,7 @@ class CartPageV2 extends ConsumerWidget {
         action: ShopButton(
           key: const ValueKey('cartCheckoutV2'),
           label: l10n.cartCheckout,
-          variant: ShopButtonVariant.rose,
+          variant: ShopButtonVariant.pay,
           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
           onTap: () => context.push('/shop/checkout'),
         ),
@@ -207,7 +207,7 @@ class _ValidLineState extends ConsumerState<_ValidLine> {
                 Text(line.specName, style: ShopText.meta),
                 const SizedBox(height: 5),
                 Text(formatIdr(line.price),
-                    style: ShopText.priceRail.copyWith(color: ShopColors.rose)),
+                    style: ShopText.priceRail.copyWith(color: ShopColors.accent)),
                 const SizedBox(height: 6),
                 Row(
                   children: [

@@ -36,18 +36,34 @@ class ShopColors {
   // 主色 —— 三色分工，README「Color Semantics」定为信息骨架，不可混用
   // ============================================================
 
-  /// 玫红。**唯一用途**：价格、促销、未完成的付款动作、电商类订单徽标。
+  /// 商业强调色。**唯一用途**：价格、促销、未完成的付款动作、电商类订单徽标。
   ///
-  /// 🔴 推论式规则（设计稿明列，实现时逐条照做）：
-  /// - 售罄商品与超服务范围页的价格转 [text4] 灰，**不用玫红** —— 不用一个买不到的价格做促销刺激。
-  /// - 已支付订单的价格用 [ink] 墨色 —— 玫红只留给「还需要付钱」的动作。
-  static const Color rose = Color(0xFFE1485F);
+  /// ⚠️ 2026-08-21 产品指定：由设计稿的玫红 #E1485F 改为 **TailTopia 品牌紫**，
+  /// 理由是 Toko 要和 app 其余部分看起来是同一个产品。改名 rose → accent 是同批做的：
+  /// 一个叫 rose 的紫色 token 是个会留很久的坑（参见 [AppColors.mint] —— 那个名字叫薄荷
+  /// 的紫色常量，注释里至今写着「历史包袱」）。
+  ///
+  /// 🔴 与 [purple] **当前同值但仍是两个旋钮**：purple 管平台能力，accent 管钱与转化。
+  /// 日后若要重新拉开二者，改这里一行即可，不必回头去分辨 41 个调用点当初想表达哪个语义。
+  ///
+  /// 🔴 推论式规则（设计稿明列，换色后逐条仍适用）：
+  /// - 售罄商品与超服务范围页的价格转 [text4] 灰，**不用强调色** —— 不用一个买不到的价格做促销刺激。
+  /// - 已支付订单的价格用 [ink] 墨色 —— 强调色只留给「还需要付钱」的动作。
+  static const Color accent = AppColors.mint; // #845EC9
 
-  /// 玫红深 —— 仅错误提示块内的标题文字（红条内）。
-  static const Color roseDark = Color(0xFFB02F45);
+  /// 强调色深 —— 徽标文字、按下态。
+  static const Color accentDark = AppColors.mint600; // #6C48AE
 
-  /// 玫红块底 —— 支付真钱侧、电商徽标底、错误条底。
-  static const Color roseBg = Color(0xFFFDF3F5);
+  /// 强调色块底 —— 支付真钱侧、电商徽标底。
+  static const Color accentBg = AppColors.mintTint; // #F8F2FF
+
+  /// 错误态专用红。**从原玫红里拆出来的**：换紫之后错误边框若跟着变紫，
+  /// 「这里填错了」就读不出来了 —— 错误必须保持红。
+  /// 直接别名回全局 [AppColors.popRed]，电商侧不再自造第二个红。
+  static const Color error = AppColors.popRed; // #F0425A
+
+  /// 错误文字深色 —— 错误块内的正文/标题，比 [error] 更深以保证对比度。
+  static const Color errorText = AppColors.healthEventText; // #C4263C
 
   /// 紫。**唯一用途**：平台能力（宠物档案、PawCoin、推荐系统、虚拟服务类订单徽标）。
   ///

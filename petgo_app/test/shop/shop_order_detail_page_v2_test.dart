@@ -157,7 +157,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final total = tester.widget<Text>(find.byKey(const ValueKey('shopOrderTotalV2')));
-      expect(total.style?.color, ShopColors.rose);
+      expect(total.style?.color, ShopColors.accent);
     });
 
     testWidgets('已发货 → 总额转墨色（玫红只留给还要付钱的动作）', (tester) async {
@@ -169,7 +169,7 @@ void main() {
 
       final total = tester.widget<Text>(find.byKey(const ValueKey('shopOrderTotalV2')));
       expect(total.style?.color, ShopColors.ink);
-      expect(total.style?.color, isNot(ShopColors.rose));
+      expect(total.style?.color, isNot(ShopColors.accent));
     });
 
     testWidgets('🔴 已支付订单保留 PawCoin 分段 —— 退款拆分的用户侧依据', (tester) async {

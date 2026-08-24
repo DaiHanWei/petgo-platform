@@ -235,7 +235,7 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
               // 🔴 三色分工：售罄价转灰（不用玫红做买不到的促销刺激），
               //    在售用玫红（未完成的付款动作）。
               fontSize: soldOut ? 24 : 26,
-              color: soldOut ? ShopColors.text4 : ShopColors.rose,
+              color: soldOut ? ShopColors.text4 : ShopColors.accent,
             ),
           ),
           if (soldOut) ...[
@@ -367,7 +367,7 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
               const SizedBox(height: 8),
               Text(l10n.tokoChooseVariantFirst,
                   key: const ValueKey('pdpChooseVariantHint'),
-                  style: ShopText.meta.copyWith(color: ShopColors.rose)),
+                  style: ShopText.meta.copyWith(color: ShopColors.accent)),
             ],
           ],
         ),
@@ -432,7 +432,9 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
                 key: const ValueKey('pdpSeeAlternatives'),
                 label: l10n.tokoSeeAlternatives,
                 variant: ShopButtonVariant.purple,
-                onTap: () => context.push('/shop?category=${category.api}'),
+                // ⚠️ `go` 而非 `push`：DEP-1 闭合后 `/shop` 是 shell 分支根，
+                //    push 会二次构建 StatefulShellRoute → GlobalKey 撞车 → release 白屏。
+                onTap: () => context.go('/shop?category=${category.api}'),
               ),
       );
     }
@@ -454,7 +456,7 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
         label: l10n.tokoBuyNow,
         // 副文案 = 售价 − 可抵扣 PawCoin，未含运费。当前无「可抵扣额」接口，
         // 🔴 **宁可不显示也不显示一个算错的数** —— 这一行直接影响用户对要付多少钱的预期。
-        variant: canBuy ? ShopButtonVariant.rose : ShopButtonVariant.disabled,
+        variant: canBuy ? ShopButtonVariant.pay : ShopButtonVariant.disabled,
         onTap: canBuy ? () => _onBuyNowTapped(l10n, sku) : null,
       ),
     );
@@ -555,7 +557,7 @@ class _CartButton extends ConsumerWidget {
               height: 16,
               alignment: Alignment.center,
               padding: const EdgeInsets.symmetric(horizontal: 4),
-              decoration: const BoxDecoration(color: ShopColors.rose, shape: BoxShape.circle),
+              decoration: const BoxDecoration(color: ShopColors.accent, shape: BoxShape.circle),
               child: Text(count > 99 ? '99+' : '$count',
                   style: ShopText.badge.copyWith(color: ShopColors.surface)),
             ),

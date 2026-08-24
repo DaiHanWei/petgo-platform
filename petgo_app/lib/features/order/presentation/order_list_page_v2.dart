@@ -162,7 +162,7 @@ class _FilterTabs extends StatelessWidget implements PreferredSizeWidget {
                   decoration: BoxDecoration(
                     border: Border(
                       bottom: BorderSide(
-                        color: f == current ? ShopColors.rose : Colors.transparent,
+                        color: f == current ? ShopColors.accent : Colors.transparent,
                         width: 2,
                       ),
                     ),
@@ -317,7 +317,7 @@ class OrderCardV2 extends StatelessWidget {
 
   /// 🔴 <b>金额颜色按「还需不需要付钱」定</b>（三色分工）：
   /// 待支付玫红、其余墨色。已付的钱是信息，不是行动召唤。
-  Color _amountColor() => _awaitingPayment ? ShopColors.rose : ShopColors.ink;
+  Color _amountColor() => _awaitingPayment ? ShopColors.accent : ShopColors.ink;
 
   /// 🔴 待支付判定**必须覆盖两个状态码空间**：虚拟单是 `PENDING`，
   /// 电商单是 `PENDING_PAYMENT`（见 [orderStatusLabel] 的注释「同名空间」）。
@@ -327,7 +327,7 @@ class OrderCardV2 extends StatelessWidget {
       order.statusCode == 'PENDING' || order.statusCode == 'PENDING_PAYMENT';
 
   Color _statusColor() => switch (order.statusColor) {
-        OrderStatusColor.warn => ShopColors.rose,
+        OrderStatusColor.warn => ShopColors.accent,
         OrderStatusColor.info => ShopColors.purple,
         OrderStatusColor.success => ShopColors.text3,
         OrderStatusColor.unknown => ShopColors.text3,
@@ -351,7 +351,7 @@ class OrderCardV2 extends StatelessWidget {
           ShopButton(
             key: ValueKey('orderPayNowV2_${order.orderToken}'),
             label: l10n.orderPayNow,
-            variant: ShopButtonVariant.rose,
+            variant: ShopButtonVariant.pay,
             dense: true,
             // 跳详情页而不是就地支付：那里有倒计时、支付构成与取消入口，
             // 就地拉起支付会把「还剩多久」这个关键信息藏起来。

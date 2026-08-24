@@ -12,6 +12,9 @@ ALTER TABLE notifications ADD CONSTRAINT ck_notifications_type CHECK (type IN (
     'CONTENT_REVIEW_APPROVED', 'CONTENT_REVIEW_REJECTED',
     'NAME_RESET', 'AVATAR_RESET', 'CONTENT_REVIEW_TIMED_OUT',
     'REFUND_REJECTED', 'TICKET_RESOLVED', 'CSAT_SURVEY', 'IDENTITY_REQUIRE_MODIFY',
+    -- V1.1.4 Story 3.2（V104）账号级处置两值：本条原基于 V97 的 19 值书写，漏抄了它们，
+    --   staging 因 notifications 已有此类行而 23514 崩启动。补回 —— 勿再删。
+    'ACCOUNT_WARNED', 'ACCOUNT_SUSPENDED',
     'SHOP_ORDER_SHIPPED', 'SHOP_ORDER_EXCEPTION',
     -- V1.4.0 Epic 5：退货进度更新（审核 / 质检 / 退款完成共用）
     'SHOP_RETURN_UPDATED'));
