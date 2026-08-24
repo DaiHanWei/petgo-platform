@@ -5,49 +5,29 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * 推荐序基建参数（V1.1.6 Story 16.1）。
+ * 推荐序<b>基建</b>参数（V1.1.6 Story 16.1，16.4 收窄）。
  *
- * <p>⚠️ <b>本类是临时载体</b>：Story 16.4 会把打分类参数搬到既有配置中心（改后无需发版）。
- * 那一步不是优化项 —— FR-95 与首页点赞同批发版，开发阶段线上不存在 {@code source=feed} 的点赞数据，
- * 参数<b>第一次校准必然发生在发版之后</b>（OQ-B1）。所以这里的取值只当默认值看，
- * 别在别处再抄一份常量。
+ * <p>✅ 打分类参数（权重 / 评论权重 / P95 / 曝光衰减 / 曝光窗口 / 两项配比 / 窗口大小）
+ * 已在 Story 16.4 迁到配置表 {@code feed_rank_config}，改后<b>无需发版</b>。
  *
- * <p>🛡 曝光衰减与序列长度归本 story；打分权重（0.6/0.4）、评论权重、P95 归 16.2/16.4，<b>不在这里</b>。
+ * <p>🛡 <b>留在本类的只有"改了要发版也无所谓"的基建量</b>：序列快照 TTL、序列长度、候选池上界。
+ * 它们不是运营会去调的东西（调错了表现是缓存失效或查询变慢，不是排序效果变差），
+ * 放进后台只会多三个没人敢动的输入框。
  */
 @Component
 public class FeedRankProperties {
 
-    private final double exposureDecay;
-    private final int seenWindowDays;
     private final int sequenceTtlMinutes;
     private final int sequenceLength;
     private final int candidatePoolSize;
 
     public FeedRankProperties(
-            @Value("${petgo.feed.rank.exposure-decay:0.3}") double exposureDecay,
-            @Value("${petgo.feed.rank.seen-window-days:7}") int seenWindowDays,
             @Value("${petgo.feed.rank.sequence-ttl-minutes:30}") int sequenceTtlMinutes,
             @Value("${petgo.feed.rank.sequence-length:100}") int sequenceLength,
             @Value("${petgo.feed.rank.candidate-pool-size:1000}") int candidatePoolSize) {
-        this.exposureDecay = exposureDecay;
-        this.seenWindowDays = seenWindowDays;
         this.sequenceTtlMinutes = sequenceTtlMinutes;
         this.sequenceLength = sequenceLength;
         this.candidatePoolSize = candidatePoolSize;
-    }
-
-    /**
-     * 已曝光内容的打分乘数（默认 0.3）。
-     *
-     * <p>🛡 <b>是降权不是硬过滤</b>：候选池只有几百条，硬过滤已看过的内容会让活跃用户直接刷空。
-     */
-    public double exposureDecay() {
-        return exposureDecay;
-    }
-
-    /** 曝光记录的保留窗口（默认 7 天）。 */
-    public Duration seenWindow() {
-        return Duration.ofDays(seenWindowDays);
     }
 
     /** 序列快照 TTL（默认 30 分钟）。 */

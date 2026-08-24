@@ -30,7 +30,7 @@ class FeedRankEngineTest {
 
     private FeedRankEngine.Result rank(List<RankCandidate> pool, String mainSpecies, int wanted) {
         return engine.rank(new FeedRankEngine.Input(pool, mainSpecies, Map.of(), Set.of(),
-                Map.of(), NOW, P), wanted);
+                Map.of(), NOW, P, AttributeTemplate.defaultSchedule()), wanted);
     }
 
     private static List<FeedAttribute> attrs(FeedRankEngine.Result r) {
@@ -197,7 +197,7 @@ class FeedRankEngineTest {
 
         // id1 已曝光（×0.3）→ 让位给 id2
         FeedRankEngine.Result r = engine.rank(new FeedRankEngine.Input(pool, null,
-                Map.of(1L, 0.3), Set.of(), Map.of(), NOW, P), 1);
+                Map.of(1L, 0.3), Set.of(), Map.of(), NOW, P, AttributeTemplate.defaultSchedule()), 1);
         assertThat(ids(r)).containsExactly(2L);
     }
 
@@ -212,12 +212,12 @@ class FeedRankEngineTest {
 
         // id2 带生效中标签 → ×1.3 反超
         FeedRankEngine.Result boosted = engine.rank(new FeedRankEngine.Input(pool, null,
-                Map.of(), Set.of(2L), Map.of(), NOW, P), 1);
+                Map.of(), Set.of(2L), Map.of(), NOW, P, AttributeTemplate.defaultSchedule()), 1);
         assertThat(ids(boosted)).containsExactly(2L);
 
         // 标签到期（不在集合内）→ 回落 1.0，id1 恢复领先
         FeedRankEngine.Result expired = engine.rank(new FeedRankEngine.Input(pool, null,
-                Map.of(), Set.of(), Map.of(), NOW, P), 1);
+                Map.of(), Set.of(), Map.of(), NOW, P, AttributeTemplate.defaultSchedule()), 1);
         assertThat(ids(expired)).containsExactly(1L);
     }
 
@@ -231,7 +231,7 @@ class FeedRankEngineTest {
         assertThat(ids(rank(pool, null, 1))).containsExactly(1L);
 
         FeedRankEngine.Result throttled = engine.rank(new FeedRankEngine.Input(pool, null,
-                Map.of(), Set.of(), Map.of(1L, 0.2), NOW, P), 1);
+                Map.of(), Set.of(), Map.of(1L, 0.2), NOW, P, AttributeTemplate.defaultSchedule()), 1);
         assertThat(ids(throttled)).containsExactly(2L);
     }
 
@@ -395,8 +395,8 @@ class FeedRankEngineTest {
     /** 🛡 物种配比三项之和须等于窗口大小（16.4 那道校验的本地兜底）。 */
     @Test
     void speciesQuotaConsistencyIsCheckable() {
-        assertThat(P.speciesQuotasConsistent()).isTrue();
+        assertThat(P.speciesQuotasConsistent(10)).isTrue();
         assertThat(new RankParams(0.6, 0.4, 2, 50, 1.3, 6, 2, 3, 2, 1, 2, 1)
-                .speciesQuotasConsistent()).isFalse();
+                .speciesQuotasConsistent(10)).isFalse();
     }
 }

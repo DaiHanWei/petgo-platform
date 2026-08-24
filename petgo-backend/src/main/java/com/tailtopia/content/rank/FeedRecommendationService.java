@@ -8,6 +8,8 @@ import com.tailtopia.content.repository.ContentPostRepository;
 import com.tailtopia.content.service.ContentTagQueryService;
 import com.tailtopia.content.species.ContentSpeciesResolver;
 import com.tailtopia.content.species.ResolvedSpecies;
+import com.tailtopia.config.domain.FeedRankConfig;
+import com.tailtopia.config.service.PlatformConfigService;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import java.time.Instant;
@@ -72,11 +74,19 @@ public class FeedRecommendationService {
     private final FeedRankEngine engine;
     private final FeedRankProperties props;
 
+    /**
+     * 打分参数的<b>唯一来源</b>（Story 16.4）。
+     *
+     * <p>🛡 每次生成序列只读一次（不是每条内容读一次），所以直读单行、不加缓存
+     * （沿用 {@link PlatformConfigService} 既有口径，护栏禁通用缓存层）。
+     */
+    private final PlatformConfigService platformConfig;
+
     public FeedRecommendationService(ContentPostRepository posts, ContentLikeRepository likes,
             CommentRepository comments, ContentTagQueryService contentTags,
             ContentSpeciesResolver speciesResolver, PetProfileRepository pets,
             FeedSeenStore seenStore, FeedSequenceStore sequenceStore, FeedRankEngine engine,
-            FeedRankProperties props) {
+            FeedRankProperties props, PlatformConfigService platformConfig) {
         this.posts = posts;
         this.likes = likes;
         this.comments = comments;
@@ -87,6 +97,7 @@ public class FeedRecommendationService {
         this.sequenceStore = sequenceStore;
         this.engine = engine;
         this.props = props;
+        this.platformConfig = platformConfig;
     }
 
     /**
@@ -264,14 +275,17 @@ public class FeedRecommendationService {
                     commentCounts.getOrDefault(p.getId(), 0L)));
         }
 
-        RankParams params = params(candidates);
+        FeedRankConfig cfg = platformConfig.feedRank();
+        RankParams params = params(cfg, candidates);
+        AttributeSchedule schedule = AttributeTemplate.forQuotas(cfg.getAttrFunQuota(),
+                cfg.getAttrEduQuota(), cfg.getAttrLifeQuota(), cfg.getWindowSize());
         Map<Long, Double> decay = seenStore.decayFactors(key,
                 candidates.stream().map(RankCandidate::id).toList(), now);
 
         FeedRankEngine.Result r = engine.rank(new FeedRankEngine.Input(candidates,
                 viewerMainSpecies(viewerId), decay, honored,
                 // 🛡 限流系数：Epic 17 接入前恒 1.0（空 Map 即缺省 1.0）
-                Map.of(), now, params), wanted);
+                Map.<Long, Double>of(), now, params, schedule), wanted);
         if (r.attributeRelaxed() > 0 || r.speciesRelaxed() > 0) {
             // 🛡 级别 1、2 是**预期行为，不告警** —— 只记 debug 供排查（§6.2）。
             log.debug("推荐序降级 池={} 属性放宽={} 物种放宽={} 防扎堆让步={}",
@@ -282,27 +296,40 @@ public class FeedRecommendationService {
     }
 
     /**
-     * 打分参数。
+     * 打分参数与属性排期 —— 全部来自 {@code feed_rank_config}（Story 16.4）。
      *
-     * <p>⚠️ {@code P95} <b>由本次候选池现算</b>（候选池本身就是「最近 N 条」，天然是近期口径），
-     * 因此不多发一次查询、也不会为空。
-     * 🔴 Story 16.4 会把它换成「近 30 天动态重算 + 重算失败沿用上次」并搬进配置中心；
-     * 在那之前这里是唯一的取值处，<b>别在别处再算一份</b>。
-     *
-     * <p>荣誉加成直接取 {@link ContentTagQueryService#RANK_WEIGHT_MULTIPLIER} ——
-     * 🛡 那是既有的唯一事实源，本 story 不新写一个 1.3。
+     * <p>🛡 荣誉加成直接取 {@link ContentTagQueryService#RANK_WEIGHT_MULTIPLIER} ——
+     * 那是既有的唯一事实源，<b>不在配置表里再存一份 1.3</b>（存两份就会出现改了一处没改另一处，
+     * 而那不会报错）。限流系数（0.2）同理，归 Epic 17。
      */
-    private RankParams params(List<RankCandidate> candidates) {
-        RankParams base = RankParams.defaults(percentile95(candidates));
-        return new RankParams(base.freshnessWeight(), base.interactionWeight(),
-                base.commentWeight(), base.interactionP95(),
+    private RankParams params(FeedRankConfig cfg, List<RankCandidate> candidates) {
+        return new RankParams(
+                cfg.getFreshnessWeight(), cfg.getInteractionWeight(), cfg.getCommentWeight(),
+                effectiveP95(cfg, candidates),
                 ContentTagQueryService.RANK_WEIGHT_MULTIPLIER,
-                base.mainSpeciesQuota(), base.otherSpeciesQuota(), base.generalQuota(),
-                base.maxSameAttributeRun(), base.maxSameAuthorRun(),
-                base.maxSameAuthorPerWindow(), base.maxSameOtherSpeciesRun());
+                cfg.getSpeciesMainQuota(), cfg.getSpeciesOtherQuota(), cfg.getSpeciesGeneralQuota(),
+                RankParams.DEFAULT_MAX_SAME_ATTRIBUTE_RUN, RankParams.DEFAULT_MAX_SAME_AUTHOR_RUN,
+                RankParams.DEFAULT_MAX_SAME_AUTHOR_PER_WINDOW,
+                RankParams.DEFAULT_MAX_SAME_OTHER_SPECIES_RUN);
     }
 
-    /** 候选池互动量的 95 分位。空池 / 全零 → 0（引擎会把互动度按 0 计，不除零）。 */
+    /**
+     * 生效的 P95。
+     *
+     * <p>配置里那个值由定时重算维护（近 30 天 95 分位）。
+     * ⚠️ <b>它为 0 时（冷启动：还没跑过一次重算）回落到本次候选池现算</b> ——
+     * 否则 {@code ln(1 + 0)} 让互动度对<b>所有内容</b>都记 0，排序退化成纯新鲜度，
+     * 那就是"首页又变回时间倒序了"，而且不报错。
+     * 🔴 这是<b>冷启动兜底</b>，不是第二个事实源：一旦重算跑过，永远用配置里的值。
+     */
+    private static double effectiveP95(FeedRankConfig cfg, List<RankCandidate> candidates) {
+        if (cfg.getInteractionP95() > 0) {
+            return cfg.getInteractionP95();
+        }
+        return percentile95(candidates);
+    }
+
+    /** 候选池互动量的 95 分位（仅冷启动兜底用）。空池 / 全零 → 0（引擎按 0 计，不除零）。 */
     private static double percentile95(List<RankCandidate> candidates) {
         if (candidates.isEmpty()) {
             return 0d;

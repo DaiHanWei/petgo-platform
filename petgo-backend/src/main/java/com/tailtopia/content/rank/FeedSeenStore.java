@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import com.tailtopia.config.service.PlatformConfigService;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Component;
@@ -37,11 +38,22 @@ public class FeedSeenStore {
     static final String KEY_PREFIX = "feed:seen:";
 
     private final StringRedisTemplate redis;
-    private final FeedRankProperties props;
 
-    public FeedSeenStore(StringRedisTemplate redis, FeedRankProperties props) {
+    /**
+     * 曝光衰减系数与曝光窗口天数的来源（Story 16.4 起归配置表）。
+     *
+     * <p>🛡 每次生成序列只读一次单行 —— 不是每条内容读一次。
+     */
+    private final PlatformConfigService platformConfig;
+
+    public FeedSeenStore(StringRedisTemplate redis, PlatformConfigService platformConfig) {
         this.redis = redis;
-        this.props = props;
+        this.platformConfig = platformConfig;
+    }
+
+    /** 曝光窗口（Story 16.4：可配）。 */
+    private java.time.Duration seenWindow() {
+        return java.time.Duration.ofDays(platformConfig.feedRank().getSeenWindowDays());
     }
 
     static String key(FeedRankCacheKey cacheKey) {
@@ -59,14 +71,15 @@ public class FeedSeenStore {
         }
         String key = key(cacheKey);
         double score = now.toEpochMilli();
+        java.time.Duration window = seenWindow();
         FeedRankRedisGuard.guardVoid("markSeen", () -> {
             ZSetOperations<String, String> z = redis.opsForZSet();
             for (Long id : contentIds) {
                 z.add(key, String.valueOf(id), score);
             }
             // 修剪掉出窗的成员，防止键无界增长。读路径按 score 判窗，不依赖这一步的及时性。
-            z.removeRangeByScore(key, Double.NEGATIVE_INFINITY, cutoff(now) - 1);
-            redis.expire(key, props.seenWindow());
+            z.removeRangeByScore(key, Double.NEGATIVE_INFINITY, cutoff(window, now) - 1);
+            redis.expire(key, window);
         });
     }
 
@@ -91,24 +104,25 @@ public class FeedSeenStore {
             return out;
         }
         String key = key(cacheKey);
+        com.tailtopia.config.domain.FeedRankConfig cfg = platformConfig.feedRank();
         Object[] members = contentIds.stream().map(String::valueOf).toArray();
         List<Double> scores = FeedRankRedisGuard.guard("decayFactors",
                 () -> redis.opsForZSet().score(key, members), null);
         if (scores == null) {
             return out;
         }
-        double cutoff = cutoff(now);
+        double cutoff = cutoff(java.time.Duration.ofDays(cfg.getSeenWindowDays()), now);
         for (int i = 0; i < contentIds.size() && i < scores.size(); i++) {
             Double s = scores.get(i);
             if (s != null && s >= cutoff) {
-                out.put(contentIds.get(i), props.exposureDecay());
+                out.put(contentIds.get(i), cfg.getExposureDecay());
             }
         }
         return out;
     }
 
     /** 窗口下界（epochMillis）：早于此的曝光记录视为已过期。 */
-    private double cutoff(Instant now) {
-        return now.minus(props.seenWindow()).toEpochMilli();
+    private static double cutoff(java.time.Duration window, Instant now) {
+        return now.minus(window).toEpochMilli();
     }
 }

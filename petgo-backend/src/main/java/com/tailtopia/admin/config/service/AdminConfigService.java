@@ -1,17 +1,21 @@
 package com.tailtopia.admin.config.service;
 
 import com.tailtopia.admin.audit.service.AdminAuditService;
+import com.tailtopia.admin.config.dto.FeedRankForm;
 import com.tailtopia.admin.config.dto.PawCoinForm;
 import com.tailtopia.admin.config.dto.PricingForm;
 import com.tailtopia.config.domain.ConfigChangeLog;
 import com.tailtopia.config.domain.ConfigChangeLog.ConfigType;
+import com.tailtopia.config.domain.FeedRankConfig;
 import com.tailtopia.config.domain.PawCoinConfig;
 import com.tailtopia.config.domain.PawCoinTopupTier;
 import com.tailtopia.config.domain.PricingConfig;
 import com.tailtopia.config.repository.ConfigChangeLogRepository;
+import com.tailtopia.config.repository.FeedRankConfigRepository;
 import com.tailtopia.config.repository.PawCoinConfigRepository;
 import com.tailtopia.config.repository.PawCoinTopupTierRepository;
 import com.tailtopia.config.repository.PricingConfigRepository;
+import com.tailtopia.content.rank.AttributeTemplate;
 import com.tailtopia.shared.error.AppException;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,10 +37,12 @@ public class AdminConfigService {
     private final PawCoinTopupTierRepository tierRepo;
     private final ConfigChangeLogRepository changeLogs;
     private final AdminAuditService audit;
+    private final FeedRankConfigRepository feedRankRepo;
 
     public AdminConfigService(PricingConfigRepository pricingRepo, PawCoinConfigRepository pawcoinRepo,
             PawCoinTopupTierRepository tierRepo, ConfigChangeLogRepository changeLogs,
-            AdminAuditService audit) {
+            AdminAuditService audit, FeedRankConfigRepository feedRankRepo) {
+        this.feedRankRepo = feedRankRepo;
         this.pricingRepo = pricingRepo;
         this.pawcoinRepo = pawcoinRepo;
         this.tierRepo = tierRepo;
@@ -92,6 +98,76 @@ public class AdminConfigService {
         c.setTopupPaused(form.topupPaused());
         pawcoinRepo.save(c);
         commit(logs, adminId, "PAWCOIN", "pawcoin_config");
+    }
+
+    // ── 推荐算法参数（V1.1.6 Story 16.4，FR-95）──────────────────────────────
+    /**
+     * 更新打分参数。
+     *
+     * <p>🛡 <b>两项配比的自洽是硬校验</b>（AC4）：不校验的后果是运营把 5/3/2 改成 5/3/3，
+     * 窗口凑不满或溢出 —— 而那<b>不会报错</b>，只会让首页节奏莫名其妙，且极难被想到去查配置。
+     *
+     * <p>🔴 <b>属性配比还要多一道</b>：单项不得超过窗口的一半，否则必然出现同属性相邻，
+     * 「穿插」这件事本身失去意义。校验与生成排期用的是<b>同一处</b>规则
+     * （{@link AttributeTemplate#rejectUnusableQuotas}）—— 两处各写一遍就会出现
+     * 「保存通过了但生成出来的模板是坏的」。
+     *
+     * <p>⚠️ <b>不含 P95</b>：那是定期重算的动态值（{@code FeedRankP95Scanner}），不是手填常数。
+     */
+    @Transactional
+    public void updateFeedRank(FeedRankForm form, long adminId) {
+        require(form.freshnessWeight() >= 0 && form.interactionWeight() >= 0, "权重不可为负");
+        require(form.freshnessWeight() + form.interactionWeight() > 0,
+                "新鲜度与互动度权重不可同时为 0（那会让所有内容同分）");
+        require(form.commentWeight() >= 0, "评论权重不可为负");
+        require(form.exposureDecay() >= 0 && form.exposureDecay() <= 1,
+                "曝光衰减须在 0–1（大于 1 就是「看过的排更前面」，与这一维的意图相反）");
+        require(form.seenWindowDays() >= 1, "曝光窗口须 ≥ 1 天");
+
+        String attrProblem = AttributeTemplate.rejectUnusableQuotas(form.attrFunQuota(),
+                form.attrEduQuota(), form.attrLifeQuota(), form.windowSize());
+        require(attrProblem == null, attrProblem == null ? "" : attrProblem);
+
+        int speciesSum = form.speciesMainQuota() + form.speciesOtherQuota()
+                + form.speciesGeneralQuota();
+        require(form.speciesMainQuota() >= 0 && form.speciesOtherQuota() >= 0
+                && form.speciesGeneralQuota() >= 0, "物种配比不可为负");
+        require(speciesSum == form.windowSize(),
+                "物种配比之和（" + speciesSum + "）须等于窗口大小（" + form.windowSize() + "）");
+
+        FeedRankConfig c = feedRankRepo.findById(FeedRankConfig.SINGLETON_ID)
+                .orElseThrow(() -> new IllegalStateException("feed_rank_config 缺失"));
+        List<ConfigChangeLog> logs = new ArrayList<>();
+        ConfigType t = ConfigType.FEED_RANK;
+        diff(logs, t, "freshness_weight", c.getFreshnessWeight(), form.freshnessWeight(), adminId);
+        diff(logs, t, "interaction_weight", c.getInteractionWeight(), form.interactionWeight(), adminId);
+        diff(logs, t, "comment_weight", c.getCommentWeight(), form.commentWeight(), adminId);
+        diff(logs, t, "exposure_decay", c.getExposureDecay(), form.exposureDecay(), adminId);
+        diff(logs, t, "seen_window_days", c.getSeenWindowDays(), form.seenWindowDays(), adminId);
+        diff(logs, t, "window_size", c.getWindowSize(), form.windowSize(), adminId);
+        diff(logs, t, "attr_fun_quota", c.getAttrFunQuota(), form.attrFunQuota(), adminId);
+        diff(logs, t, "attr_edu_quota", c.getAttrEduQuota(), form.attrEduQuota(), adminId);
+        diff(logs, t, "attr_life_quota", c.getAttrLifeQuota(), form.attrLifeQuota(), adminId);
+        diff(logs, t, "species_main_quota", c.getSpeciesMainQuota(), form.speciesMainQuota(), adminId);
+        diff(logs, t, "species_other_quota", c.getSpeciesOtherQuota(), form.speciesOtherQuota(), adminId);
+        diff(logs, t, "species_general_quota", c.getSpeciesGeneralQuota(), form.speciesGeneralQuota(), adminId);
+        if (logs.isEmpty()) {
+            return; // 无变更 → 不写、不审计（沿用本类既有口径）。
+        }
+        c.setFreshnessWeight(form.freshnessWeight());
+        c.setInteractionWeight(form.interactionWeight());
+        c.setCommentWeight(form.commentWeight());
+        c.setExposureDecay(form.exposureDecay());
+        c.setSeenWindowDays(form.seenWindowDays());
+        c.setWindowSize(form.windowSize());
+        c.setAttrFunQuota(form.attrFunQuota());
+        c.setAttrEduQuota(form.attrEduQuota());
+        c.setAttrLifeQuota(form.attrLifeQuota());
+        c.setSpeciesMainQuota(form.speciesMainQuota());
+        c.setSpeciesOtherQuota(form.speciesOtherQuota());
+        c.setSpeciesGeneralQuota(form.speciesGeneralQuota());
+        feedRankRepo.save(c);
+        commit(logs, adminId, "FEED_RANK", "feed_rank_config");
     }
 
     // ── 充值档位启停（保底 ≥1）─────────────────────────────────────────────────

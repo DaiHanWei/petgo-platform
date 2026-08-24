@@ -32,7 +32,6 @@ class FeedSeenStoreTest {
 
     private StringRedisTemplate redis;
     private ZSetOperations<String, String> zset;
-    private FeedRankProperties props;
     private FeedSeenStore store;
 
     @BeforeEach
@@ -41,8 +40,15 @@ class FeedSeenStoreTest {
         redis = mock(StringRedisTemplate.class);
         zset = mock(ZSetOperations.class);
         when(redis.opsForZSet()).thenReturn(zset);
-        props = new FeedRankProperties(0.3, 7, 30, 100, 1000);
-        store = new FeedSeenStore(redis, props);
+        // Story 16.4：曝光衰减与曝光窗口改由配置表提供
+        com.tailtopia.config.domain.FeedRankConfig cfg =
+                mock(com.tailtopia.config.domain.FeedRankConfig.class);
+        when(cfg.getExposureDecay()).thenReturn(0.3);
+        when(cfg.getSeenWindowDays()).thenReturn(7);
+        com.tailtopia.config.service.PlatformConfigService platformConfig =
+                mock(com.tailtopia.config.service.PlatformConfigService.class);
+        when(platformConfig.feedRank()).thenReturn(cfg);
+        store = new FeedSeenStore(redis, platformConfig);
     }
 
     // ── AC1 / AC2：曝光衰减系数 ──────────────────────────────────────

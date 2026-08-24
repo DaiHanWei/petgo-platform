@@ -35,18 +35,33 @@ public record RankParams(
         int maxSameAuthorPerWindow,
         int maxSameOtherSpeciesRun) {
 
+    /**
+     * 防扎堆四条的默认阈值。
+     *
+     * <p>⚠️ 刻意<b>不放进配置表</b>：AC1 的可调清单里没有它们，而防扎堆是"节奏底线"——
+     * 调松它等于允许刷屏，调紧它会让小池子频繁挑不出人来。真要调，改这里并发版。
+     */
+    public static final int DEFAULT_MAX_SAME_ATTRIBUTE_RUN = 2;
+    public static final int DEFAULT_MAX_SAME_AUTHOR_RUN = 1;
+    public static final int DEFAULT_MAX_SAME_AUTHOR_PER_WINDOW = 2;
+    public static final int DEFAULT_MAX_SAME_OTHER_SPECIES_RUN = 1;
+
     /** 上线初值（发版后按 OQ-B1 校准）。 */
     public static RankParams defaults(double interactionP95) {
-        return new RankParams(0.6, 0.4, 2.0, interactionP95, 1.3, 6, 2, 2, 2, 1, 2, 1);
+        return new RankParams(0.6, 0.4, 2.0, interactionP95, 1.3, 6, 2, 2,
+                DEFAULT_MAX_SAME_ATTRIBUTE_RUN, DEFAULT_MAX_SAME_AUTHOR_RUN,
+                DEFAULT_MAX_SAME_AUTHOR_PER_WINDOW, DEFAULT_MAX_SAME_OTHER_SPECIES_RUN);
     }
 
     /**
-     * 🛡 物种配比三项之和须等于窗口大小（16.4 AC4 的那道校验，这里先本地兜一层）。
+     * 🛡 物种配比三项之和须等于窗口大小。
      *
      * <p>不校验的后果：运营把 6/2/2 改成 6/2/3，窗口凑不满或溢出 ——
      * 而那<b>不会报错</b>，只会让节奏莫名其妙，且极难被想到去查配置。
+     *
+     * <p>⚠️ 窗口大小自 Story 16.4 起<b>可配</b>，所以由调用方传入，不再读常量。
      */
-    public boolean speciesQuotasConsistent() {
-        return mainSpeciesQuota + otherSpeciesQuota + generalQuota == AttributeTemplate.WINDOW;
+    public boolean speciesQuotasConsistent(int window) {
+        return mainSpeciesQuota + otherSpeciesQuota + generalQuota == window;
     }
 }

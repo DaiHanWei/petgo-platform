@@ -369,6 +369,20 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
     List<ContentPost> findOwnPendingPosts(@Param("authorId") long authorId, Pageable pageable);
 
     /**
+     * 近期公开内容的 id（V1.1.6 Story 16.4）—— 供 P95 重算统计互动量分布。
+     *
+     * <p>🛡 只取 id：这个集合可能有几万条，取整个实体是白搬数据。
+     */
+    @Query("""
+            SELECT p.id FROM ContentPost p
+            WHERE p.deletedAt IS NULL
+              AND p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
+              AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
+              AND p.createdAt >= :since
+            """)
+    List<Long> findPublicIdsPublishedSince(@Param("since") Instant since);
+
+    /**
      * 注销联动（内容审核 story 9，§5.5.1）：把注销用户仍在公开/挂起口径的帖子置 {@code AUTHOR_DEACTIVATED}
      * （对他人隐藏；内容保留 {@code deletedAt IS NULL}，与匿名化并存）。仅动 PUBLISHED/UNDER_REVIEW（幂等）。
      */

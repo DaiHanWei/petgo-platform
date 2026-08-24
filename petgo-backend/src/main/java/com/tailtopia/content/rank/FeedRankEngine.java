@@ -53,7 +53,14 @@ public class FeedRankEngine {
             /** 限流系数（Epic 17 供）。缺省 = 1.0；本 story 一律传空。 */
             Map<Long, Double> throttleFactors,
             Instant now,
-            RankParams params) {
+            RankParams params,
+            /**
+             * 属性穿插排期（Story 16.4）。
+             *
+             * <p>⚠️ 窗口大小来自它（{@code schedule.window()}），<b>不再是常量</b> ——
+             * 配比与模板由同一处产生，改配比就会真的改顺序。
+             */
+            AttributeSchedule schedule) {
     }
 
     /**
@@ -108,13 +115,15 @@ public class FeedRankEngine {
 
         Map<SpeciesBucket, Integer> speciesUsed = new EnumMap<>(SpeciesBucket.class);
         Map<Long, Integer> authorInWindow = new HashMap<>();
+        AttributeSchedule schedule = in.schedule();
+        int window = schedule.window();
 
         for (int slot = 0; slot < wanted && !pool.isEmpty(); slot++) {
-            if (slot % AttributeTemplate.WINDOW == 0) {
+            if (slot % window == 0) {
                 speciesUsed.clear();
                 authorInWindow.clear();
             }
-            FeedAttribute wantedAttr = AttributeTemplate.at(slot);
+            FeedAttribute wantedAttr = schedule.at(slot);
             boolean speciesActive = in.mainSpecies() != null;
 
             Predicate<Scored> quotaOk = s -> !speciesActive
@@ -137,7 +146,7 @@ public class FeedRankEngine {
                     if (!ok.test(s)) {
                         continue;
                     }
-                    if (clumps(s, picked, slot, in.mainSpecies(), p)) {
+                    if (clumps(s, picked, slot, window, p)) {
                         // 违反防扎堆 → 跳过取次高分（AC6）。留一个兜底，防止全都违反时空槽。
                         if (dirtyFallback == null) {
                             dirtyFallback = s;
@@ -179,7 +188,7 @@ public class FeedRankEngine {
     }
 
     /** 防扎堆四条（AC6）。任一条命中即视为扎堆。 */
-    private boolean clumps(Scored s, List<RankCandidate> picked, int slot, String mainSpecies,
+    private boolean clumps(Scored s, List<RankCandidate> picked, int slot, int window,
             RankParams p) {
         RankCandidate c = s.candidate();
         // 1. 同一属性连续 ≤ maxSameAttributeRun（兜底：模板已保证不相邻，此条防降级补位破坏节奏）
@@ -191,7 +200,7 @@ public class FeedRankEngine {
             return true;
         }
         // 3. 同一作者 10 条窗口内 ≤ maxSameAuthorPerWindow（防单个种子号占据整屏）
-        int windowStart = (slot / AttributeTemplate.WINDOW) * AttributeTemplate.WINDOW;
+        int windowStart = (slot / window) * window;
         long inWindow = picked.subList(Math.min(windowStart, picked.size()), picked.size()).stream()
                 .filter(x -> x.authorId() == c.authorId()).count();
         if (inWindow >= p.maxSameAuthorPerWindow()) {

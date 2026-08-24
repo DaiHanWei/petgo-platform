@@ -70,9 +70,27 @@ class FeedRecommendationServiceTest {
         when(posts.findOwnPendingPosts(org.mockito.ArgumentMatchers.anyLong(), any()))
                 .thenReturn(List.of());
 
+        // Story 16.4：打分参数来自配置表（本类不验参数取值，给默认种子值）
+        com.tailtopia.config.domain.FeedRankConfig cfg =
+                mock(com.tailtopia.config.domain.FeedRankConfig.class);
+        when(cfg.getFreshnessWeight()).thenReturn(0.6);
+        when(cfg.getInteractionWeight()).thenReturn(0.4);
+        when(cfg.getCommentWeight()).thenReturn(2.0);
+        when(cfg.getInteractionP95()).thenReturn(50.0);
+        when(cfg.getSpeciesMainQuota()).thenReturn(6);
+        when(cfg.getSpeciesOtherQuota()).thenReturn(2);
+        when(cfg.getSpeciesGeneralQuota()).thenReturn(2);
+        when(cfg.getWindowSize()).thenReturn(10);
+        when(cfg.getAttrFunQuota()).thenReturn(5);
+        when(cfg.getAttrEduQuota()).thenReturn(3);
+        when(cfg.getAttrLifeQuota()).thenReturn(2);
+        com.tailtopia.config.service.PlatformConfigService platformConfig =
+                mock(com.tailtopia.config.service.PlatformConfigService.class);
+        when(platformConfig.feedRank()).thenReturn(cfg);
+
         service = new FeedRecommendationService(posts, likes, comments, tags, species, pets,
                 seen, sequences, new FeedRankEngine(),
-                new FeedRankProperties(0.3, 7, 30, 100, 1000));
+                new FeedRankProperties(30, 100, 1000), platformConfig);
     }
 
     private static ContentPost post(long id, long authorId) {

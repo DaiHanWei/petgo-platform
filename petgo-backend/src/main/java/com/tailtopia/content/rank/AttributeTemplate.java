@@ -26,11 +26,10 @@ import java.util.stream.Collectors;
  * 两个模板都以 FUN 开头、EDU 结尾，所以边界天然安全 —— 但这是<b>字面量的巧合，不是不变量</b>，
  * 所以有一条测试专门钉它（改动模板时会立刻变红）。
  *
- * <p>🔴 <b>留给 16.4 的一处硬接缝</b>：这两个模板是<b>手写的字面量</b>。
- * 16.4 要把「属性配比 5/3/2」做成可调，但改那三个数<b>不会自动改变模板顺序</b> ——
- * 配置改了却不生效是最坏的一类 bug（不报错、不告警、只是节奏不对）。
- * 所以 16.4 必须二选一：要么同时给出「由配比生成模板」的规则，要么在配置校验里
- * 拒绝与模板不一致的配比（本类的 {@link #quotas()} 就是给那道校验用的）。
+ * <p>✅ <b>16.2 留的那处硬接缝已在 16.4 补上</b>：当时这两个模板是手写字面量，改配比不会改顺序。
+ * 现在 {@link #forQuotas} 由配比生成排期（配比恰为 5/3/2 且窗口为 10 时原样返回下面这两张手写表，
+ * 保证 16.2 AC1 钉死的默认行为一个字不变），{@link #rejectUnusableQuotas} 把不可用的配比
+ * 挡在保存之前。
  */
 public final class AttributeTemplate {
 
@@ -58,8 +57,107 @@ public final class AttributeTemplate {
         return forWindow(globalSlot / WINDOW).get((int) (globalSlot % WINDOW));
     }
 
-    /** 模板的属性构成（供 16.4 的配置校验比对，见类注释那条接缝）。 */
+    /** 模板的属性构成（FUN 5 / EDU 3 / LIFE 2）。 */
     public static Map<FeedAttribute, Long> quotas() {
         return A.stream().collect(Collectors.groupingBy(a -> a, Collectors.counting()));
+    }
+
+    /** 手写的默认排期（5/3/2、窗口 10）。 */
+    public static AttributeSchedule defaultSchedule() {
+        return new AttributeSchedule(A, B);
+    }
+
+    /**
+     * 按配比生成排期（V1.1.6 Story 16.4）。
+     *
+     * <p>🔴 <b>配比是 5/3/2 且窗口是 10 时，原样返回手写的 A/B</b> ——
+     * Story 16.2 的 AC1 把那两张表逐槽位钉死了，默认行为一个字都不能变。
+     * 生成器只在<b>运营真的改了配比</b>时上场。
+     *
+     * <p>生成规则：每一槽取「剩余配额最多、且与上一槽不同」的属性；平手时按变体各自的偏好序打破
+     * （A 偏 EDU、B 偏 LIFE）—— 于是 5/3/2 下生成的 B 恰好等于手写的 B。
+     *
+     * <p>⚠️ 极端配比下相邻不可避免（比如 10 槽里 9 个 FUN），所以
+     * {@link #rejectUnusableQuotas} 会先把那类配比挡在保存之前。
+     */
+    public static AttributeSchedule forQuotas(int fun, int edu, int life, int window) {
+        if (fun == 5 && edu == 3 && life == 2 && window == WINDOW) {
+            return defaultSchedule();
+        }
+        return new AttributeSchedule(
+                generate(fun, edu, life, window, List.of(FUN, EDU, LIFE)),
+                generate(fun, edu, life, window, List.of(FUN, LIFE, EDU)));
+    }
+
+    private static List<FeedAttribute> generate(int fun, int edu, int life, int window,
+            List<FeedAttribute> preference) {
+        Map<FeedAttribute, Integer> left = new java.util.EnumMap<>(FeedAttribute.class);
+        left.put(FUN, fun);
+        left.put(EDU, edu);
+        left.put(LIFE, life);
+        List<FeedAttribute> out = new java.util.ArrayList<>(window);
+        FeedAttribute prev = null;
+        for (int i = 0; i < window; i++) {
+            FeedAttribute pick = pick(left, prev, preference);
+            if (pick == null) {
+                // 只剩上一槽那个属性了 —— 只能相邻（防扎堆规则会兜住，级别 1 补位也会）。
+                pick = pick(left, null, preference);
+            }
+            if (pick == null) {
+                break; // 配额用尽（之和 < window，业务层已校验，这里兜底不崩）
+            }
+            out.add(pick);
+            left.merge(pick, -1, Integer::sum);
+            prev = pick;
+        }
+        return List.copyOf(out);
+    }
+
+    private static FeedAttribute pick(Map<FeedAttribute, Integer> left, FeedAttribute exclude,
+            List<FeedAttribute> preference) {
+        FeedAttribute best = null;
+        int bestLeft = 0;
+        for (FeedAttribute a : preference) {
+            int n = left.getOrDefault(a, 0);
+            if (n <= 0 || a == exclude) {
+                continue;
+            }
+            if (n > bestLeft) { // 严格大于 ⇒ 平手时保留 preference 里先出现的那个
+                best = a;
+                bestLeft = n;
+            }
+        }
+        return best;
+    }
+
+    /**
+     * 🛡 配比是否可用（供保存前校验）。
+     *
+     * <p>两条：
+     * <ul>
+     *   <li>三项之和 <b>必须等于</b>窗口大小 —— 不等就是窗口凑不满或溢出，
+     *       而那<b>不会报错</b>，只会让首页节奏莫名其妙</li>
+     *   <li>单项 <b>不得超过</b> {@code ceil(window/2)} —— 超过就必然出现同属性相邻，
+     *       穿插这件事本身失去意义（5/10 正好在边界上，可行）</li>
+     * </ul>
+     *
+     * @return 不可用的原因；{@code null} = 可用
+     */
+    public static String rejectUnusableQuotas(int fun, int edu, int life, int window) {
+        if (window < 2) {
+            return "窗口大小须 ≥ 2";
+        }
+        if (fun < 0 || edu < 0 || life < 0) {
+            return "配比不可为负";
+        }
+        if (fun + edu + life != window) {
+            return "属性配比之和（" + (fun + edu + life) + "）须等于窗口大小（" + window + "）";
+        }
+        int cap = (window + 1) / 2;
+        int max = Math.max(fun, Math.max(edu, life));
+        if (max > cap) {
+            return "单一属性配额（" + max + "）不得超过窗口的一半（" + cap + "）—— 否则必然出现同属性相邻";
+        }
+        return null;
     }
 }
