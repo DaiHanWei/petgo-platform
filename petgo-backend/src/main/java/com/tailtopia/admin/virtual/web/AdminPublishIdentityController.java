@@ -32,9 +32,8 @@ public class AdminPublishIdentityController {
      * 按该账号过滤的排期列表路径（AC4 的"跳转链接"）。
      *
      * <p>📌 <b>这个页面由 Story 13.5（定时发布与排期管理）交付</b>，本 story 落地时还不存在。
-     * 链接**只在待发布排期数 &gt; 0 时才渲染**，而在 13.5 之前那个数恒为 0
-     * （见 {@code NoContentScheduleYet}）—— 所以今天线上不会出现死链。
-     * 13.5 若改了路径，改这一个常量即可。
+     * 链接**只在待发布排期数 &gt; 0 时才渲染**，而在 13.4/13.5 开始产生排期之前那个数为 0，
+     * 所以今天线上不会出现死链。13.5 若改了路径，改这一个常量即可。
      */
     static final String SCHEDULE_LIST_PATH = "/admin/content-schedules";
 

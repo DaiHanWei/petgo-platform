@@ -250,10 +250,10 @@ class AdminPublishIdentityIntegrationTest extends ApiIntegrationTest {
     /**
      * 确认页显示排期条数，而且<b>什么都不处置</b>。
      *
-     * <p>🔴 当前 0 是**正确答案**而非占位：内容排期能力由 Story 13.1/13.5 交付，
-     * 在那之前系统里确实不存在任何待发布排期（见 {@code NoContentScheduleYet}）。
-     * 本条钉的是"这一页存在、能显示这个数、且是只读的"——
-     * 13.5 换掉计数实现后，护栏无需改动。
+     * <p>🔴 这里的 0 是**真实统计的结果**：Story 13.1 起计数已接到 {@code seed_batch_rows}
+     * （{@code ScheduledSeedRowCounter}），而本用例没有造任何排期行。
+     * 本条钉的是"这一页存在、能显示这个数、且是只读的"；
+     * 「有排期时数字对不对」由 {@code SeedBatchStateMachineIntegrationTest} 钉。
      */
     @Test
     void removeConfirmPageShowsTheScheduleCountAndChangesNothing() throws Exception {
