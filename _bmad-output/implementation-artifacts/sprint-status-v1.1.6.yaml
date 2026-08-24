@@ -232,6 +232,36 @@ development_status:
   epic-14: in-progress
   14-1-种子内容物种归属标记: review                  # AB-3H 🔴 必须排在 12-2 与 13-3 之后；读时推导、改账号定位零回填
   epic-14-retrospective: optional
+  # ===== Epic 16–18：1.1.6 补充 PRD（2026-08-24 拆入）=====
+  # 来源 V1.1.6/1-1-6补充prd.md。FR-95 与 FR-96 功能互不依赖，PRD 定的顺序是 FR-95 先。
+  # 🔴 限流曝光（Epic 17）依赖 Epic 16 —— 限流是打分公式里的乘法系数，没有推荐序就没有落点。
+  #
+  # 🔴 拆分前对 PRD 做过一次代码核查，五处已过期/不符（详见 epics 文档的核查表）：
+  #    ① A-B8 顶置首屏去重**已实现且更严**（4-2 排除整个第一页 20 条，PRD 写前 10 条）→ 不收窄
+  #    ② A-C2「连 ShareResult 都没读」**已过期**（10-1 已读 success）→ 产品拍板：只在 success 时发币
+  #    ③ 优先级 1（用内容自己的 pet_id）14-1 未实现 → 单宠平台下不阻塞，随 FR-64 复核
+  #    ④ 优先级 4「无档案 → GENERAL」与 14-1 的「推不出来」冲突 → 产品拍板：两个语义分开
+  #    ⑤ 举报者隐藏与拉黑**刻意不合并**（AD-9）→ 不合并
+  #
+  # ⚠️ 平台无灰度分流基建。产品拍板：全量上线不加开关。
+  #    已告知并被确认的代价：降级链只在**出错**时回落，"排序效果不好"不算出错 ⇒ 只能发版回退。
+  epic-16: backlog
+  16-1-曝光记录与序列快照基建: ready-for-dev              # §8.1 两项硬前置 🔴 缺则曝光衰减失效/翻页重复
+  16-2-打分与配比引擎: ready-for-dev                      # 🔴 纯计算不碰 DB/HTTP，配比与打分要能穷举单测
+  16-3-候选池与推荐序接入all-tab: ready-for-dev           # 🛡 举报者隐藏与拉黑不合并；非 ALL Tab 完全不动
+  16-4-打分参数配置化: ready-for-dev                      # 🔴 非优化项：第一次校准必然在发版后（OQ-B1）
+  16-5-feed埋点补tab与排序模式: ready-for-dev             # 两条排序路径必须可区分，否则效果无法归因
+  epic-16-retrospective: optional
+  epic-17: backlog
+  17-1-限流状态模型与到期解除: ready-for-dev              # 🛡 降权不下架、对用户不可见不通知
+  17-2-后台限流处置动作与状态可见: ready-for-dev          # 🔴 确认前须明示"不是下架"，否则运营当下架用
+  epic-17-retrospective: optional
+  epic-18: backlog
+  18-1-全局分享额度总控: ready-for-dev                    # 🔴 FR-50B 的前置能力先行交付，范围严限于"上限控制"
+  18-2-卡面页分享入口与奖励发放: ready-for-dev            # 🔴 按**档案**去重不按卡（卡可无限建）；success 才发币
+  18-3-ab-3m后台配置: ready-for-dev                       # 🔴 配置页须同屏展示 HD 价并算出兑换比值
+  epic-18-retrospective: optional
+
   epic-15: in-progress
   15-1-内容互动积分与双口径统计: review              # AB-3G ✅ A-2 已闭合：赞/评时间戳都在（V9/V10），口径B 无需新增记录；本条零迁移
   epic-15-retrospective: optional
