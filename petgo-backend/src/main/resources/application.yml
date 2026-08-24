@@ -80,6 +80,20 @@ petgo:
     android-store-url: ${APP_ANDROID_STORE_URL:}
   # 对外 H5（名片 /p、里程碑庆祝分享 /m）下载 CTA（CardPageController + MilestoneSharePageController 共用）。
   # V1 仅 Android 上架：iOS / 桌面统一兜底到 Play 商店；待 iOS 上架再单独配 CARD_IOS_URL。env 可覆盖。
+  # 首页推荐序基建（V1.1.6 Story 16.1，FR-95）。
+  # ⚠️ 这些取值是**临时载体**：Story 16.4 会把打分类参数搬到既有配置中心（改后无需发版）——
+  # FR-95 与首页点赞同批发版，开发阶段线上不存在 source=feed 的点赞数据，参数第一次校准
+  # 必然在发版之后（OQ-B1）。别在别处再抄一份常量。
+  feed:
+    rank:
+      # 已曝光内容的打分乘数。🛡 是降权不是硬过滤 —— 候选池只有几百条，硬过滤会让活跃用户刷空。
+      exposure-decay: ${FEED_RANK_EXPOSURE_DECAY:0.3}
+      # 曝光记录保留窗口（天）。窗口落在 ZSET 的每条 score 上，不是键 TTL（见 FeedSeenStore 注释）。
+      seen-window-days: ${FEED_RANK_SEEN_WINDOW_DAYS:7}
+      # 序列快照 TTL（分钟）。翻页途中会续期，避免翻到一半快照过期导致下一页重复。
+      sequence-ttl-minutes: ${FEED_RANK_SEQUENCE_TTL_MINUTES:30}
+      # 一次生成的序列长度。游标超出后用同一种子续算下一段。
+      sequence-length: ${FEED_RANK_SEQUENCE_LENGTH:100}
   card:
     android-url: ${CARD_ANDROID_URL:https://play.google.com/store/apps/details?id=com.tailtopia.app}
     ios-url: ${CARD_IOS_URL:https://play.google.com/store/apps/details?id=com.tailtopia.app}
