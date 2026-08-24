@@ -260,7 +260,7 @@ development_status:
   17-2-后台限流处置动作与状态可见: review                # 🔴 确认前须明示"不是下架"，否则运营当下架用
   epic-17-retrospective: optional
   epic-18: backlog
-  18-1-全局分享额度总控: ready-for-dev                    # 🔴 FR-50B 的前置能力先行交付，范围严限于"上限控制"
+  18-1-全局分享额度总控: review                              # 🔴 FR-50B 的前置能力先行交付，范围严限于"上限控制"
   18-2-卡面页分享入口与奖励发放: ready-for-dev            # 🔴 按**档案**去重不按卡（卡可无限建）；success 才发币
   18-3-ab-3m后台配置: ready-for-dev                       # 🔴 配置页须同屏展示 HD 价并算出兑换比值
   epic-18-retrospective: optional

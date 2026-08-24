@@ -30,6 +30,25 @@ public class PawCoinConfig {
     @Column(name = "topup_paused", nullable = false)
     private boolean topupPaused;
 
+    /**
+     * 分享奖励**总开关**（V1.1.6 Story 18.1 · AC6）。
+     *
+     * <p>🔴 存在的唯一理由是「发现被刷要能立刻全线关掉」，所以它必须<b>比任何渠道层配置优先</b>。
+     * 🛡 关掉时一律不发币、不展示提示，但<b>分享功能本身不受影响</b>。
+     */
+    @Column(name = "share_reward_enabled", nullable = false)
+    private boolean shareRewardEnabled;
+
+    /**
+     * 单账号每 WIB 自然月通过**所有分享类行为**可免费获得的 PawCoin 上限（Story 18.1 · AC1）。
+     *
+     * <p>🛡 按「所有分享类行为」合一，<b>不是按渠道各算一份</b>。
+     * ⚠️ 种子值 2000 是**待产品确认**的取值：1 PawCoin = 1 IDR、HD 解锁价种子 5000
+     * ⇒ 攒满 2.5 个月换一次 HD 解锁。这个比值正是 OQ-C1 要运营看见的（18-3 配置页同屏算出）。
+     */
+    @Column(name = "share_reward_monthly_cap", nullable = false)
+    private long shareRewardMonthlyCap;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -42,6 +61,22 @@ public class PawCoinConfig {
     @PreUpdate
     void onUpdate() {
         this.updatedAt = Instant.now();
+    }
+
+    public boolean isShareRewardEnabled() {
+        return shareRewardEnabled;
+    }
+
+    public void setShareRewardEnabled(boolean v) {
+        this.shareRewardEnabled = v;
+    }
+
+    public long getShareRewardMonthlyCap() {
+        return shareRewardMonthlyCap;
+    }
+
+    public void setShareRewardMonthlyCap(long v) {
+        this.shareRewardMonthlyCap = v;
     }
 
     public Long getId() {
