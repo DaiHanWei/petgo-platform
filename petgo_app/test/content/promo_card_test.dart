@@ -64,8 +64,9 @@ void main() {
 
       final area = tester.getRect(find.byType(FeedImage));
       final badge = tester.getRect(find.byType(PinnedBadge));
-      expect(area.right - badge.right, closeTo(8, 0.01));
-      expect(badge.top - area.top, closeTo(8, 0.01));
+      // UI 稿 `.pin-corner`：top/right 均为 9（2026-08-25 比对订正，原实现是 8）。
+      expect(area.right - badge.right, closeTo(9, 0.01));
+      expect(badge.top - area.top, closeTo(9, 0.01));
     });
 
     /// 🛡 **不加"广告 / 推广"字样**（FR-68，本版本按平台自有活动引导定位）。

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/analytics/analytics.dart';
 import '../../features/auth/domain/user_tag.dart';
 import 'anchored_tooltip.dart';
+import 'tag_icon.dart';
 
 /// 昵称 + 运营标签的一行（V1.1.6 Story 5.1 · FR-74）。
 ///
@@ -122,11 +123,8 @@ class _TagIcon extends StatelessWidget {
         width: size,
         height: size,
         // 定宽定高 —— 上面"放得下几个"的计算依赖它。
-        child: Center(
-          child: Text(tag.icon,
-              style: TextStyle(fontSize: size * 0.86, height: 1.0),
-              textAlign: TextAlign.center),
-        ),
+        // Story 11.5：图标改为上传的图片（存量 emoji 走 TagIcon 内的兼容分支）。
+        child: Center(child: TagIcon(icon: tag.icon, size: size)),
       ),
     );
   }

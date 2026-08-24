@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -25,6 +26,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -106,6 +108,25 @@ class AdminUserTagIntegrationTest extends ApiIntegrationTest {
      * 于是「按分配时间倒序取 3 个」与「按 id 取前 3 个」给出的是**不同的三个**。
      * 后台那一列若是自己排的序，这里必然对不上。
      */
+
+    /**
+     * 一张合规的标签图标（Story 11.5：PNG、正方、≥72px）。
+     *
+     * <p>⚠️ 图标改成**上传**之后，建标签的请求必须是 multipart —— 原先那种
+     * {@code .param("icon", "star.png")} 的写法已经不成立（那时 icon 是个文本框）。
+     */
+    private static MockMultipartFile iconPng() {
+        try {
+            java.awt.image.BufferedImage img =
+                    new java.awt.image.BufferedImage(96, 96, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            javax.imageio.ImageIO.write(img, "png", out);
+            return new MockMultipartFile("iconFile", "icon.png", "image/png", out.toByteArray());
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     @Test
     void adminVisibilityColumnAgreesWithTheAppSideAuthority() throws Exception {
         User u = newUser();
@@ -226,13 +247,13 @@ class AdminUserTagIntegrationTest extends ApiIntegrationTest {
     @Test
     void duplicateCodeIsRejected() throws Exception {
         String code = "DUP_" + SEQ.incrementAndGet();
-        mvc.perform(post("/admin/user-tags").with(authentication(superAdminAuth())).with(csrf())
+        mvc.perform(multipart("/admin/user-tags").file(iconPng()).with(authentication(superAdminAuth())).with(csrf())
                         .param("code", code).param("name", "n")
-                        .param("icon", "i.png").param("description", "d"))
+                        .param("description", "d"))
                 .andExpect(status().is3xxRedirection());
-        mvc.perform(post("/admin/user-tags").with(authentication(superAdminAuth())).with(csrf())
+        mvc.perform(multipart("/admin/user-tags").file(iconPng()).with(authentication(superAdminAuth())).with(csrf())
                 .param("code", code).param("name", "n2")
-                .param("icon", "i.png").param("description", "d"));
+                .param("description", "d"));
         assertThat(tags.findAllByOrderByIdDesc().stream()
                 .filter(t -> code.equals(t.getCode())).toList()).hasSize(1);
     }
@@ -299,9 +320,10 @@ class AdminUserTagIntegrationTest extends ApiIntegrationTest {
         mvc.perform(get("/admin/user-tags").with(authentication(viewer)))
                 .andExpect(status().isOk());
         String code = "NOPE_" + SEQ.incrementAndGet();
-        mvc.perform(post("/admin/user-tags").with(authentication(viewer)).with(csrf())
+        mvc.perform(multipart("/admin/user-tags").file(iconPng())
+                        .with(authentication(viewer)).with(csrf())
                         .param("code", code).param("name", "x")
-                        .param("icon", "x.png").param("description", "x"))
+                        .param("description", "x"))
                 .andExpect(status().isForbidden());
         assertThat(tags.findByCode(code)).isEmpty();
     }

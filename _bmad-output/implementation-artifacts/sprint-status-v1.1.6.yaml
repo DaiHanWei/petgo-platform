@@ -203,7 +203,7 @@ development_status:
   11-2-内容装饰标签管理: review                     # AB-10C 需加「下线」列；打标界面必须提示 ×1.3 排序副作用
   11-3-用户标签配置与分配: review                   # AB-12A 需加「下线」列；排序口径以 App 侧 AuthorView 为权威，勿另立
   11-4-用户手机号查看与召回名单导出: review         # AB-11A 前半（PII 双权限：查看 / 导出各一码）
-  11-5-标签图标上传与尺寸规范: ready-for-dev        # 🔴 实现与 PRD 不符：icon 做成了文本框，FR-74/75 原文写的是"上传"
+  11-5-标签图标上传与尺寸规范: review                # 🔴 实现与 PRD 不符：icon 做成了文本框，FR-74/75 原文写的是"上传"
   11-6-装饰标签单标签约束: ready-for-dev            # 🔴 2026-08-25 产品新定；顺带修「首页只显一个/详情页显全部」的既有不一致
   epic-11-retrospective: optional
 

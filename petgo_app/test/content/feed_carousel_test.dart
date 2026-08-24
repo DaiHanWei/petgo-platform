@@ -145,12 +145,14 @@ void main() {
       final topRight = tester.getRect(find.byKey(const ValueKey('slotTopRight')));
       final bottomLeft = tester.getRect(find.byKey(const ValueKey('slotBottomLeft')));
 
-      // 右上：贴右、贴顶
-      expect(area.right - topRight.right, closeTo(8, 0.01));
-      expect(topRight.top - area.top, closeTo(8, 0.01));
-      // 左下：贴左、贴底
-      expect(bottomLeft.left - area.left, closeTo(8, 0.01));
-      expect(area.bottom - bottomLeft.bottom, closeTo(8, 0.01));
+      // 右上：贴右、贴顶 —— UI 稿 `.pin-corner` top/right 9
+      expect(area.right - topRight.right, closeTo(9, 0.01));
+      expect(topRight.top - area.top, closeTo(9, 0.01));
+      // 左下：贴左、贴底 —— UI 稿 `.deco-on-card` left/bottom 10
+      // ⚠️ 两个角位的边距**本来就不一样**（9 vs 10），不是笔误。
+      //    2026-08-25 拿设计稿逐项比对时才发现原实现两处都写了 8。
+      expect(bottomLeft.left - area.left, closeTo(10, 0.01));
+      expect(area.bottom - bottomLeft.bottom, closeTo(10, 0.01));
       // 三者互不重叠
       expect(topRight.overlaps(bottomLeft), isFalse);
 

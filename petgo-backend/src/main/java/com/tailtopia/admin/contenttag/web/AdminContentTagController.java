@@ -14,7 +14,9 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import com.tailtopia.admin.tagicon.AdminTagIconService;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 /**
@@ -39,8 +41,16 @@ public class AdminContentTagController {
 
     private final AdminContentTagService service;
 
-    public AdminContentTagController(AdminContentTagService service) {
+    /**
+     * 标签图标上传（Story 11.5）。
+     *
+     * <p>🛡 空文件表示"这次不改图标" —— 编辑标签时运营常常只改名称。
+     */
+    private final AdminTagIconService icons;
+
+    public AdminContentTagController(AdminContentTagService service, AdminTagIconService icons) {
         this.service = service;
+        this.icons = icons;
     }
 
     @GetMapping("/admin/content-tags")
@@ -59,6 +69,8 @@ public class AdminContentTagController {
         } else if (postId != null) {
             model.addAttribute("assignments", service.assignmentsByPost(postId));
         }
+        // AC3：尺寸规范文案常驻在上传控件旁（三语走 MessageSource）。
+        model.addAttribute("iconSpec", icons.specText());
         return "admin/content-tags";
     }
 
@@ -75,10 +87,17 @@ public class AdminContentTagController {
     @PreAuthorize(MANAGE)
     public String createTag(@AuthenticationPrincipal AdminUserDetails admin,
             @RequestParam String code, @RequestParam String name,
-            @RequestParam String icon, @RequestParam String description,
+            @RequestParam(value = "iconFile", required = false) MultipartFile iconFile,
+            @RequestParam String description,
             RedirectAttributes flash) {
         try {
-            service.createTag(admin.getAdminAccountId(), code, name, icon, description);
+            // Story 11.5：图标改为上传。🔴 新建时**必须**有图标 —— 没有图标的标签在
+            // Feed 卡上只剩文字，与设计稿不符（规格里图标是胶囊的固定组成部分）。
+            String iconUrl = icons.uploadOrKeep(iconFile);
+            if (iconUrl == null) {
+                throw AppException.validation(icons.iconRequiredMessage());
+            }
+            service.createTag(admin.getAdminAccountId(), code, name, iconUrl, description);
             flash.addFlashAttribute("notice", "已新建装饰标签");
         } catch (AppException e) {
             flash.addFlashAttribute("error", e.getMessage());
@@ -89,10 +108,13 @@ public class AdminContentTagController {
     @PostMapping("/admin/content-tags/{id}/edit")
     @PreAuthorize(MANAGE)
     public String editTag(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id,
-            @RequestParam String name, @RequestParam String icon,
+            @RequestParam String name,
+            @RequestParam(value = "iconFile", required = false) MultipartFile iconFile,
             @RequestParam String description, RedirectAttributes flash) {
         try {
-            service.editTag(admin.getAdminAccountId(), id, name, icon, description);
+            // 🛡 没传新文件 → 传 null，服务层保留原图标（不是清空）。
+            service.editTag(admin.getAdminAccountId(), id, name,
+                    icons.uploadOrKeep(iconFile), description);
             flash.addFlashAttribute("notice", "已更新标签");
         } catch (AppException e) {
             flash.addFlashAttribute("error", e.getMessage());

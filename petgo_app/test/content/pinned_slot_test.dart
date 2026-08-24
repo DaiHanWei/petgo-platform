@@ -110,8 +110,9 @@ void main() {
 
       expect(badge.top, greaterThanOrEqualTo(area.top));
       expect(badge.right, lessThanOrEqualTo(area.right));
-      expect(area.right - badge.right, closeTo(8, 0.01));
-      expect(badge.top - area.top, closeTo(8, 0.01));
+      // UI 稿 `.pin-corner`：top/right 均为 9（2026-08-25 比对订正，原实现是 8）。
+      expect(area.right - badge.right, closeTo(9, 0.01));
+      expect(badge.top - area.top, closeTo(9, 0.01));
     });
   });
 

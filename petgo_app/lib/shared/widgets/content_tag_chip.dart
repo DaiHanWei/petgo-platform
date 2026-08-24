@@ -4,6 +4,7 @@ import '../../core/analytics/analytics.dart';
 import '../../core/theme/colors.dart';
 import '../../features/content/domain/content_tag.dart';
 import 'anchored_tooltip.dart';
+import 'tag_icon.dart';
 
 /// 内容装饰标签（V1.1.6 Story 5.2 · FR-75）。
 ///
@@ -84,7 +85,9 @@ class ContentTagChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(tag.icon, style: const TextStyle(fontSize: 9, height: 1.0)),
+            // Story 11.5：图标改为上传的图片（存量 emoji 走 TagIcon 内的兼容分支）。
+            // 边长 9 = UI 稿 `.deco-badge .st` 的 font-size。
+            TagIcon(icon: tag.icon, size: 9),
             const SizedBox(width: 4),
             // ⚠️ 标签文案由运营配，可能很长 —— 限一行 + 打点，
             // 否则窄屏上它会一路铺到轮播圆点底下（AC 自己也标了这个风险）。

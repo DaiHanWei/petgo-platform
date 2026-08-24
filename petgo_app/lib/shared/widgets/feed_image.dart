@@ -237,7 +237,8 @@ class _FeedImageState extends State<FeedImage> {
             ),
 
           // 🛡 角位二：右上 —— 顶置角标（Epic 4）。
-          if (widget.topRight != null) Positioned(top: 8, right: 8, child: widget.topRight!),
+          // UI 稿 `.pin-corner`：top/right 均为 9（原实现写的 8，2026-08-25 比对订正）。
+          if (widget.topRight != null) Positioned(top: 9, right: 9, child: widget.topRight!),
 
           // 🛡 角位三：左下 —— 装饰标签（Epic 5）。
           // UI 稿 `.deco-on-card`：left/bottom 均为 10。

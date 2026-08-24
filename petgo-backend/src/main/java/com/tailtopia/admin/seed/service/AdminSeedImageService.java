@@ -1,19 +1,14 @@
 package com.tailtopia.admin.seed.service;
 
 import com.tailtopia.admin.seed.dto.UploadedImage;
+import com.tailtopia.content.domain.ImageBytesMeasurer;
 import com.tailtopia.content.domain.ImageSize;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.media.AliyunOssClient;
 import com.tailtopia.shared.media.MediaProperties;
-import java.awt.Dimension;
-import java.io.InputStream;
-import java.util.Iterator;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
-import javax.imageio.ImageIO;
-import javax.imageio.ImageReader;
-import javax.imageio.stream.ImageInputStream;
 import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.stereotype.Service;
@@ -136,31 +131,18 @@ public class AdminSeedImageService {
     }
 
     /**
-     * 只读文件头拿宽高（做法与 {@code ImageSizeBackfillService#measure} 同源）。
+     * 只读文件头拿宽高。
      *
-     * <p>测不出来返回 {@code null} —— 🛡 <b>绝不因此拦住上传</b>：格式冷门与"这张图能不能用"
-     * 是两件事，而 Feed 侧对无尺寸的图本来就有占位兜底。
+     * <p>⚠️ 实现已于 Story 11.5 提到 {@link ImageBytesMeasurer} ——
+     * 标签图标上传也要量宽高，而让它依赖本服务只为一个工具函数，方向不对。
+     * 这里保留一个转发是为了不动本服务既有调用点。
+     *
+     * <p>测不出来返回 {@code null} —— 🛡 <b>本链路绝不因此拦住上传</b>：格式冷门与
+     * "这张图能不能用"是两件事，而 Feed 侧对无尺寸的图本来就有占位兜底。
+     * （标签图标那条链路相反，它会拦住 —— 见 {@code AdminTagIconService}。）
      */
     static ImageSize measure(byte[] bytes) {
-        ImageReader reader = null;
-        try (InputStream in = new java.io.ByteArrayInputStream(bytes);
-                ImageInputStream iis = ImageIO.createImageInputStream(in)) {
-            Iterator<ImageReader> readers = ImageIO.getImageReaders(iis);
-            if (!readers.hasNext()) {
-                return null;
-            }
-            reader = readers.next();
-            reader.setInput(iis, true, true);
-            Dimension d = new Dimension(reader.getWidth(0), reader.getHeight(0));
-            ImageSize size = new ImageSize(d.width, d.height);
-            return size.isReasonable() ? size : null;
-        } catch (Exception e) {
-            return null;
-        } finally {
-            if (reader != null) {
-                reader.dispose();
-            }
-        }
+        return ImageBytesMeasurer.measure(bytes);
     }
 
     private String msg(String key, Object[] args) {

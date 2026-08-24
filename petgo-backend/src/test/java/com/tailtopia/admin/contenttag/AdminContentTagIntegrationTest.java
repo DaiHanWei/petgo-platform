@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -25,6 +26,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -116,28 +118,47 @@ class AdminContentTagIntegrationTest extends ApiIntegrationTest {
 
     // ——————————————————— AC1 标签增改下线 ———————————————————
 
+
+    /**
+     * 一张合规的标签图标（Story 11.5：PNG、正方、≥72px）。
+     *
+     * <p>⚠️ 图标改成**上传**之后，建标签的请求必须是 multipart —— 原先那种
+     * {@code .param("icon", "star.png")} 的写法已经不成立（那时 icon 是个文本框）。
+     */
+    private static MockMultipartFile iconPng() {
+        try {
+            java.awt.image.BufferedImage img =
+                    new java.awt.image.BufferedImage(96, 96, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            javax.imageio.ImageIO.write(img, "png", out);
+            return new MockMultipartFile("iconFile", "icon.png", "image/png", out.toByteArray());
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     @Test
     void creatingATagWithABlankFieldIsRejected() throws Exception {
         String code = "BLANK_" + SEQ.incrementAndGet();
-        mvc.perform(post("/admin/content-tags").with(authentication(superAdminAuth())).with(csrf())
+        mvc.perform(multipart("/admin/content-tags").file(iconPng()).with(authentication(superAdminAuth())).with(csrf())
                 .param("code", code).param("name", " ")
-                .param("icon", "star.png").param("description", "x"));
+                .param("description", "x"));
         assertThat(tags.findByCode(code)).as("四项必填，空白不得落库").isEmpty();
     }
 
     @Test
     void creatingATagRequiresAllFourFieldsAndRejectsDuplicateCode() throws Exception {
         String code = "WEEKLY_PICK_" + SEQ.incrementAndGet();
-        mvc.perform(post("/admin/content-tags").with(authentication(superAdminAuth())).with(csrf())
+        mvc.perform(multipart("/admin/content-tags").file(iconPng()).with(authentication(superAdminAuth())).with(csrf())
                         .param("code", code).param("name", "本周最佳")
-                        .param("icon", "star.png").param("description", "编辑精选"))
+                        .param("description", "编辑精选"))
                 .andExpect(status().is3xxRedirection());
         assertThat(tags.findByCode(code)).isPresent();
 
         // 同码重复 → 拦下（回显一句人话，不抛 500）
-        mvc.perform(post("/admin/content-tags").with(authentication(superAdminAuth())).with(csrf())
+        mvc.perform(multipart("/admin/content-tags").file(iconPng()).with(authentication(superAdminAuth())).with(csrf())
                 .param("code", code).param("name", "又一个")
-                .param("icon", "star.png").param("description", "x"));
+                .param("description", "x"));
         assertThat(tags.findAllByOrderByIdDesc().stream()
                 .filter(t -> code.equals(t.getCode())).toList()).hasSize(1);
     }
@@ -293,9 +314,10 @@ class AdminContentTagIntegrationTest extends ApiIntegrationTest {
         Authentication viewer = staffAuth(AdminAccountType.STAFF, "content.tag_view");
         mvc.perform(get("/admin/content-tags").with(authentication(viewer)))
                 .andExpect(status().isOk());
-        mvc.perform(post("/admin/content-tags").with(authentication(viewer)).with(csrf())
+        mvc.perform(multipart("/admin/content-tags").file(iconPng())
+                        .with(authentication(viewer)).with(csrf())
                         .param("code", "NOPE").param("name", "x")
-                        .param("icon", "x.png").param("description", "x"))
+                        .param("description", "x"))
                 .andExpect(status().isForbidden());
         assertThat(tags.findByCode("NOPE")).isEmpty();
     }

@@ -54,10 +54,17 @@
                           th:text="${t.retired} ? #{admin.utags.retired} : #{admin.utags.online}">在线</span>
                 </td>
                 <td sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.tag_manage')">
-                    <form class="inline-form" method="post"
+                    <form class="inline-form" method="post" enctype="multipart/form-data"
                           th:action="@{/admin/user-tags/{id}/edit(id=${t.id})}">
                         <input type="text" name="name" th:value="${t.name}" required/>
-                        <input type="text" name="icon" th:value="${t.icon}" required/>
+                        <!-- Story 11.5：图标改为上传。🛡 行内编辑**不设 required** ——
+                             不选文件表示"保留原图标"，运营改错别字时不该被迫重传一次图。 -->
+                        <img th:if="${t.icon != null and #strings.startsWith(t.icon, 'http')}"
+                             th:src="${t.icon}" alt="" width="20" height="20"
+                             style="vertical-align:middle;border-radius:4px"/>
+                        <span th:if="${t.icon != null and !#strings.startsWith(t.icon, 'http')}"
+                              th:text="${t.icon}" title="存量字符图标，重新上传即替换"></span>
+                        <input type="file" name="iconFile" accept="image/png,image/webp"/>
                         <input type="text" name="description" th:value="${t.description}" required/>
                         <button type="submit" class="btn btn-sm" th:text="#{admin.utags.edit}">编辑</button>
                     </form>
@@ -77,13 +84,19 @@
         <!-- 新建标签 -->
         <div class="card" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.tag_manage')">
             <h2 th:text="#{admin.utags.newTag}">新建标签</h2>
-            <form method="post" th:action="@{/admin/user-tags}">
+            <form method="post" enctype="multipart/form-data" th:action="@{/admin/user-tags}">
                 <label><span th:text="#{admin.utags.code}">标签码</span>
                     <input type="text" name="code" class="field-full" required/></label>
                 <label><span th:text="#{admin.utags.name}">名称</span>
                     <input type="text" name="name" class="field-full" required/></label>
                 <label><span th:text="#{admin.utags.icon}">图标</span>
-                    <input type="text" name="icon" class="field-full" required/></label>
+                    <input type="file" name="iconFile" accept="image/png,image/webp" required/></label>
+                <!-- 🔴 AC3：尺寸规范必须常驻在上传控件旁。
+                     不写的后果不是运营填错一次，而是每换一个人就问一遍，
+                     且传了不合规的图只会看到一句报错、不知道该改成多少。 -->
+                <p class="muted" data-notice="tag-icon-spec" th:text="${iconSpec}">
+                    PNG 或 WebP，必须透明底；正方形，最短边 ≥ 72 像素、最长边 ≤ 1024 像素；文件 ≤ 512 KB。
+                </p>
                 <label><span th:text="#{admin.utags.description}">说明文案</span>
                     <input type="text" name="description" class="field-full" maxlength="140" required/></label>
                 <button type="submit" class="btn btn-primary" th:text="#{admin.utags.save}">保存</button>

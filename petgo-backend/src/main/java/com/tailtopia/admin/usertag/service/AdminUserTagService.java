@@ -81,7 +81,10 @@ public class AdminUserTagService {
     @Transactional
     public void editTag(long adminId, long id, String name, String icon, String description) {
         UserTag tag = tags.findById(id).orElseThrow(() -> AppException.notFound("标签不存在"));
-        tag.edit(name, icon, description);
+        // Story 11.5：icon 为 null 表示"这次没传新文件" ⇒ **保留原图标**，不是清空。
+        // 🛡 写成 tag.edit(name, icon, ...) 会把不改图标的那次编辑变成"把图标删了"，
+        //    而那在界面上看不出来 —— 运营改个错别字，App 上的图标就没了。
+        tag.edit(name, icon == null ? tag.getIcon() : icon, description);
         audit.record(adminId, "USER_TAG_EDIT", "user_tag", String.valueOf(id), "name=" + name);
     }
 
