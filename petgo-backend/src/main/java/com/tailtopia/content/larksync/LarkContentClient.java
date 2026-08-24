@@ -86,12 +86,31 @@ public class LarkContentClient {
 
     // ===== 表格 =====
 
+    /** 读表头行（A1:N1，宽裕余量）——列位置按表头文字动态定位，运营调整表结构不误读。 */
+    public List<String> readHeader() {
+        Map<?, ?> resp = rest.get()
+                .uri("/open-apis/sheets/v2/spreadsheets/{token}/values/{range}?valueRenderOption=ToString",
+                        props.getSpreadsheetToken(), props.getSheetId() + "!A1:N1")
+                .header("Authorization", "Bearer " + tenantToken())
+                .retrieve()
+                .body(Map.class);
+        ensureOk(resp, "读取表头");
+        List<?> values = valuesOf(resp);
+        List<String> header = new ArrayList<>();
+        if (!values.isEmpty() && values.get(0) instanceof List<?> row) {
+            for (Object cell : row) {
+                header.add(cell == null ? "" : String.valueOf(cell).trim());
+            }
+        }
+        return header;
+    }
+
     /**
-     * 读数据区（A2:F{rowLimit+1}）。返回原始行（cell 统一转字符串，null 单元格 → ""）。
-     * 外层 index 0 对应表格第 2 行——行号换算归 {@link LarkRowParser}。
+     * 读数据区（A2:N{rowLimit+1}，宽读——列语义由表头映射决定）。返回原始行
+     * （cell 统一转字符串，null 单元格 → ""）。外层 index 0 对应表格第 2 行。
      */
     public List<List<String>> readRows() {
-        String range = props.getSheetId() + "!A2:F" + (props.getRowLimit() + 1);
+        String range = props.getSheetId() + "!A2:N" + (props.getRowLimit() + 1);
         Map<?, ?> resp = rest.get()
                 .uri("/open-apis/sheets/v2/spreadsheets/{token}/values/{range}?valueRenderOption=ToString",
                         props.getSpreadsheetToken(), range)
@@ -112,10 +131,12 @@ public class LarkContentClient {
 
     /**
      * 回写前按「内容编号」重定位行号：开轮快照与回写之间运营可能插/删行，
-     * 按快照行号盲写会标错行。返回当前 B 列中第一个等于 {@code contentCode} 的表格行号。
+     * 按快照行号盲写会标错行。{@code codeColLetter} = 内容编号所在列字母（表头映射而来）。
+     * 返回该列中第一个等于 {@code contentCode} 的表格行号。
      */
-    public Optional<Integer> findRowByCode(String contentCode) {
-        String range = props.getSheetId() + "!B2:B" + (props.getRowLimit() + 1);
+    public Optional<Integer> findRowByCode(String codeColLetter, String contentCode) {
+        String range = props.getSheetId() + "!" + codeColLetter + "2:" + codeColLetter
+                + (props.getRowLimit() + 1);
         Map<?, ?> resp = rest.get()
                 .uri("/open-apis/sheets/v2/spreadsheets/{token}/values/{range}?valueRenderOption=ToString",
                         props.getSpreadsheetToken(), range)
@@ -137,18 +158,19 @@ public class LarkContentClient {
     }
 
     /**
-     * 回写某一行的「上传状态(E) / 发布账号(F)」。{@code sheetRowNumber} 是表格实际行号
-     * （数据区第一条 = 2）。
+     * 回写单个单元格（列字母由表头映射而来——「上传状态/发布账号」列位置不再硬编码）。
+     * {@code sheetRowNumber} 是表格实际行号（数据区第一条 = 2）。
      */
-    public void writeStatus(int sheetRowNumber, String status, String account) {
-        String range = props.getSheetId() + "!E" + sheetRowNumber + ":F" + sheetRowNumber;
+    public void writeCell(String colLetter, int sheetRowNumber, String value) {
+        String range = props.getSheetId() + "!" + colLetter + sheetRowNumber
+                + ":" + colLetter + sheetRowNumber;
         Map<?, ?> resp = rest.put()
                 .uri("/open-apis/sheets/v2/spreadsheets/{token}/values", props.getSpreadsheetToken())
                 .header("Authorization", "Bearer " + tenantToken())
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(Map.of("valueRange", Map.of(
                         "range", range,
-                        "values", List.of(List.of(status, account)))))
+                        "values", List.of(List.of(value)))))
                 .retrieve()
                 .body(Map.class);
         ensureOk(resp, "回写表格");

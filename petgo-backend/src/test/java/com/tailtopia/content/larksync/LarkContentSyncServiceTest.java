@@ -72,9 +72,12 @@ class LarkContentSyncServiceTest {
                 .thenAnswer(inv -> "https://cdn.example/" + inv.getArgument(0));
         when(contentService.publishTrusted(Mockito.anyLong(), any(), anyString()))
                 .thenReturn(response(101L));
+        // 表头动态列映射（2026-08-24 实测运营会改表结构）：C=编号 F=状态 G=账号。
+        when(client.readHeader()).thenReturn(List.of(
+                "序号", "内容分类", "内容编号", "文案部分", "图片编号", "上传状态", "发布账号"));
         // 回写重定位：默认 DR001→行2 / DR002→行3（与各用例的 readRows 顺序一致）。
-        when(client.findRowByCode("DR001")).thenReturn(Optional.of(2));
-        when(client.findRowByCode("DR002")).thenReturn(Optional.of(3));
+        when(client.findRowByCode("C", "DR001")).thenReturn(Optional.of(2));
+        when(client.findRowByCode("C", "DR002")).thenReturn(Optional.of(3));
     }
 
     private static ContentPostResponse response(long id) {
@@ -83,7 +86,7 @@ class LarkContentSyncServiceTest {
     }
 
     private static List<String> row(String code, String text, String img, String status) {
-        return Arrays.asList("1", code, text, img, status, "");
+        return Arrays.asList("1", "Moment", code, text, img, status, "");
     }
 
     @Test
@@ -116,7 +119,8 @@ class LarkContentSyncServiceTest {
         verify(contentService, never()).publishTrusted(Mockito.anyLong(), any(), eq("lark-content:DR002"));
         // OSS key 带内容编号目录；回写「已发布 ... WIB」+ 昵称（行号经 findRowByCode 重定位）。
         verify(oss).putPublicObjectWithAcl(startsWith("public/lark-content/DR001/"), any(), eq("image/jpeg"));
-        verify(client).writeStatus(eq(2), contains("已发布"), eq("Si Oyen"));
+        verify(client).writeCell(eq("F"), eq(2), contains("已发布"));
+        verify(client).writeCell(eq("G"), eq(2), eq("Si Oyen"));
         // DB 状态机落 PUBLISHED。
         ArgumentCaptor<LarkContentPublish> saved = ArgumentCaptor.forClass(LarkContentPublish.class);
         verify(records).save(saved.capture());
@@ -158,9 +162,11 @@ class LarkContentSyncServiceTest {
 
         // DR001 补回写（行2），不再发帖；额度用于 DR002（行3）。
         verify(contentService, never()).publishTrusted(Mockito.anyLong(), any(), eq("lark-content:DR001"));
-        verify(client).writeStatus(eq(2), contains("已发布"), eq("Si Oyen"));
+        verify(client).writeCell(eq("F"), eq(2), contains("已发布"));
+        verify(client).writeCell(eq("G"), eq(2), eq("Si Oyen"));
         verify(contentService, times(1)).publishTrusted(eq(7L), any(), eq("lark-content:DR002"));
-        verify(client).writeStatus(eq(3), contains("已发布"), eq("Si Oyen"));
+        verify(client).writeCell(eq("F"), eq(3), contains("已发布"));
+        verify(client).writeCell(eq("G"), eq(3), eq("Si Oyen"));
     }
 
     @Test
@@ -174,7 +180,7 @@ class LarkContentSyncServiceTest {
 
         service.syncOnce();
 
-        verify(client).writeStatus(eq(2), contains("失败"), eq(""));
+        verify(client).writeCell(eq("F"), eq(2), contains("失败"));
         verify(contentService, times(1)).publishTrusted(eq(7L), any(), eq("lark-content:DR002"));
         // 两次落库：DR001 FAILED + DR002 PUBLISHED。
         ArgumentCaptor<LarkContentPublish> saved = ArgumentCaptor.forClass(LarkContentPublish.class);
@@ -196,7 +202,7 @@ class LarkContentSyncServiceTest {
         service.syncOnce();
 
         verify(contentService, never()).publishTrusted(Mockito.anyLong(), any(), eq("lark-content:DR001"));
-        verify(client).writeStatus(eq(2), contains("缺图"), eq(""));
+        verify(client).writeCell(eq("F"), eq(2), contains("缺图"));
         verify(contentService, times(1)).publishTrusted(eq(7L), any(), eq("lark-content:DR002"));
     }
 
@@ -211,7 +217,7 @@ class LarkContentSyncServiceTest {
 
         service.syncOnce();
 
-        verify(client).writeStatus(eq(2), contains("失败"), eq(""));
+        verify(client).writeCell(eq("F"), eq(2), contains("失败"));
         // 前置校验拦截：DR001 的图一张都不该下载/上传。
         verify(client, never()).downloadFile("tok1");
         verify(oss, never()).putPublicObjectWithAcl(startsWith("public/lark-content/DR001/"), any(), anyString());
@@ -224,7 +230,7 @@ class LarkContentSyncServiceTest {
                 row("DR001", "text-1", "DR001-1", "已发布 2026-08-24 10:07 WIB")));
         service.syncOnce();
         verifyNoInteractions(contentService, oss);
-        verify(client, never()).writeStatus(anyInt(), anyString(), anyString());
+        verify(client, never()).writeCell(anyString(), anyInt(), anyString());
     }
 
     @Test
@@ -232,7 +238,7 @@ class LarkContentSyncServiceTest {
         when(client.readRows()).thenThrow(new LarkContentClient.LarkApiException("读取表格 失败 code=91403"));
         service.syncOnce();
         verifyNoInteractions(contentService, oss, records);
-        verify(client, never()).writeStatus(anyInt(), anyString(), anyString());
+        verify(client, never()).writeCell(anyString(), anyInt(), anyString());
     }
 
     @Test
@@ -248,7 +254,7 @@ class LarkContentSyncServiceTest {
         // 传输层失败：不发帖、不落 FAILED、不回写任何「失败」——下小时重试。
         verifyNoInteractions(contentService, oss);
         verify(records, never()).save(any());
-        verify(client, never()).writeStatus(anyInt(), anyString(), anyString());
+        verify(client, never()).writeCell(anyString(), anyInt(), anyString());
     }
 
     @Test
@@ -262,7 +268,7 @@ class LarkContentSyncServiceTest {
 
         verifyNoInteractions(contentService);
         verify(records, never()).save(any());
-        verify(client, never()).writeStatus(anyInt(), anyString(), anyString());
+        verify(client, never()).writeCell(anyString(), anyInt(), anyString());
     }
 
     @Test
@@ -271,7 +277,7 @@ class LarkContentSyncServiceTest {
         for (int i = 1; i <= 7; i++) {
             String code = "DR00" + i;
             rows.add(row(code, "text-" + i, code + "-1", ""));
-            when(client.findRowByCode(code)).thenReturn(Optional.of(i + 1));
+            when(client.findRowByCode("C", code)).thenReturn(Optional.of(i + 1));
         }
         when(client.readRows()).thenReturn(rows);
         when(client.listFolderFiles()).thenReturn(Map.of()); // 全部缺图 → 行级失败连发。
@@ -280,8 +286,8 @@ class LarkContentSyncServiceTest {
 
         // 熔断阈值 5：只有前 5 行被标 FAILED，第 6/7 行不再触碰。
         verify(records, times(LarkContentSyncService.MAX_ROW_FAILURES)).save(any());
-        verify(client, never()).findRowByCode("DR006");
-        verify(client, never()).findRowByCode("DR007");
+        verify(client, never()).findRowByCode("C", "DR006");
+        verify(client, never()).findRowByCode("C", "DR007");
         verify(contentService, never()).publishTrusted(Mockito.anyLong(), any(), anyString());
     }
 
@@ -294,7 +300,7 @@ class LarkContentSyncServiceTest {
         service.syncOnce();
 
         // 第二行（行3）是重复编号：只按快照行号回写提醒，不发帖不落库。
-        verify(client).writeStatus(eq(3), contains("重复"), eq(""));
+        verify(client).writeCell(eq("F"), eq(3), contains("重复"));
         verify(contentService, never()).publishTrusted(Mockito.anyLong(), any(), anyString());
         verify(records, never()).save(any());
     }
@@ -305,12 +311,12 @@ class LarkContentSyncServiceTest {
         when(client.listFolderFiles()).thenReturn(Map.of("DR001-1.jpg", "tok1"));
         when(client.downloadFile("tok1")).thenReturn(new byte[] {1});
         // 快照时 DR001 在行2；回写前运营在上方插了 3 行 → 现在在行5。
-        when(client.findRowByCode("DR001")).thenReturn(Optional.of(5));
+        when(client.findRowByCode("C", "DR001")).thenReturn(Optional.of(5));
 
         service.syncOnce();
 
-        verify(client).writeStatus(eq(5), contains("已发布"), eq("Si Oyen"));
-        verify(client, never()).writeStatus(eq(2), anyString(), anyString());
+        verify(client).writeCell(eq("F"), eq(5), contains("已发布"));
+        verify(client, never()).writeCell(anyString(), eq(2), anyString());
     }
 
     @Test
