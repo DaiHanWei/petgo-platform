@@ -39,6 +39,8 @@ class MasonryCard extends StatelessWidget {
     this.maxImageHeight,
     this.pinnedBadge,
     this.decorTag,
+    this.feedTab,
+    this.rankMode,
   });
 
   final FeedItem item;
@@ -70,6 +72,13 @@ class MasonryCard extends StatelessWidget {
 
   /// 🛡 图片区**左下角位**：装饰标签（Epic 5 挂）。
   final Widget? decorTag;
+
+  /// 埋点 `feed_tab` / `rank_mode`（V1.1.6 Story 16.5）。
+  ///
+  /// ⚠️ 只透传给卡片里的点赞按钮，本组件自己不报事件。
+  /// 非 Feed 场景（如「我的发布」）不传 —— 那里没有"哪个 Tab、哪条排序路径"这回事。
+  final String? feedTab;
+  final String? rankMode;
 
   /// 类型 → (badge 文案, 文字色, 底色)：Momen 绿 / Tips 黄 / Cerita 紫（原型 b-happy/b-tips/b-story）。
   static (String, Color, Color) _badgeStyle(String type, AppLocalizations l10n) {
@@ -213,6 +222,9 @@ class MasonryCard extends StatelessWidget {
                   initialCount: item.likeCount,
                   // 🛡 两侧都要传，否则「首页点赞是净增还是把详情页的前移了」无从判断。
                   source: 'feed',
+                  // V1.1.6 Story 16.5：FR-95 的效果归因靠这两个属性区分排序路径。
+                  feedTab: feedTab,
+                  rankMode: rankMode,
                 ),
                 const SizedBox(width: 18),
                 GestureDetector(

@@ -26,10 +26,17 @@ class FeedState {
     this.loadingMore = false,
     this.loadMoreFailed = false,
     this.pagesLoaded = 1,
+    this.rankMode = RankMode.unknown,
   });
 
   final List<FeedItem> items;
   final FeedCategory category;
+
+  /// 本次刷新（含已翻的各页）实际用的排序路径（V1.1.6 Story 16.5，服务端下发）。
+  ///
+  /// ⚠️ 翻页时按 [RankMode.merge] 合并：首屏推荐序、第二页恰好降级的情况确实存在，
+  /// 那种会话记成 [RankMode.mixed] —— 挑一边冒充会污染 FR-95 的效果归因。
+  final String rankMode;
   final String? nextCursor;
   final bool hasMore;
   final bool loadingMore;
@@ -50,6 +57,7 @@ class FeedState {
     bool? loadingMore,
     bool? loadMoreFailed,
     int? pagesLoaded,
+    String? rankMode,
   }) =>
       FeedState(
         items: items ?? this.items,
@@ -59,6 +67,7 @@ class FeedState {
         loadingMore: loadingMore ?? this.loadingMore,
         loadMoreFailed: loadMoreFailed ?? this.loadMoreFailed,
         pagesLoaded: pagesLoaded ?? this.pagesLoaded,
+        rankMode: rankMode ?? this.rankMode,
       );
 }
 
@@ -78,6 +87,7 @@ class FeedController extends AsyncNotifier<FeedState> {
       nextCursor: page.nextCursor,
       hasMore: page.hasMore,
       pagesLoaded: 1,
+      rankMode: page.rankMode,
     );
   }
 
@@ -103,6 +113,7 @@ class FeedController extends AsyncNotifier<FeedState> {
           loadingMore: false,
           loadMoreFailed: false,
           pagesLoaded: current.pagesLoaded + 1,
+          rankMode: RankMode.merge(current.rankMode, page.rankMode),
         ));
       } catch (_) {
         // AC5：加载更多失败 → 保留已加载内容（不整屏报错、不清空），底部失败提示 + 重试入口。

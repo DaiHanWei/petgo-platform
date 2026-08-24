@@ -48,6 +48,17 @@ import tools.jackson.databind.ObjectMapper;
             // 这样那些测试仍然走**真实的推荐序路径**，而不是被迫改成时间倒序绕开问题。
             // ⚠️ 别为了「更快」或「更像生产」调大：调大就是把那十来条测试变成随机红。
             "petgo.feed.rank.candidate-pool-size=60",
+            // V1.1.6 Story 16.4：P95 重算是每 6 小时一次的定时任务，初始延迟 2 分钟 ——
+            // 而全量套件要跑 7 分钟，所以它**会在跑测试的中途触发**，并对
+            // 「近 30 天全部公开内容」做一遍互动统计。
+            //
+            // 🔴 关掉它不是为了让测试变快，而是为了**去掉一份不确定性**：
+            // 它在测试里跑一遍不验证任何东西（FeedRankP95ScannerTest 与
+            // FeedRankConfigLiveIntegrationTest 已直接覆盖），却会
+            // ① 拉长其他集成测试的竞态窗口（本项目有若干"全局计数 +1"型断言，
+            //    共享库不回滚，撞上并发写就会随机红），② 改写共享库那一行单行配置。
+            // ⚠️ 别为了"更像生产"打开它 —— 打开就是给整个套件加随机红。
+            "petgo.feed.rank.p95-recompute-enabled=false",
         })
 @AutoConfigureMockMvc
 @ActiveProfiles("dev")

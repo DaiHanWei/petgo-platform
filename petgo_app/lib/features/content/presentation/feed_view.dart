@@ -37,6 +37,8 @@ class FeedMasonryView extends ConsumerStatefulWidget {
     this.onTapPromo,
     this.footer,
     this.autoLoadMore = true,
+    this.feedTab,
+    this.rankMode,
   });
 
   final List<FeedItem> items;
@@ -78,6 +80,16 @@ class FeedMasonryView extends ConsumerStatefulWidget {
 
   /// 滚动到底是否自动翻页。默认 true；访客态置 false——翻页只由底部引导卡「Lanjut lihat dulu」手动触发。
   final bool autoLoadMore;
+
+  /// 埋点 `feed_tab` / `rank_mode`（V1.1.6 Story 16.5）。
+  ///
+  /// 🔴 两个都要有：只有 `feed_tab` 不够 —— 降级链级别 4 会让 ALL Tab **也走时间倒序**，
+  /// 那时 `feed_tab=all` 但 `rank_mode=chrono`，把它算进推荐序的效果里就是错的。
+  /// 而这个 FR 的参数本来就要在发版后校准，归因不了等于校准也做不了。
+  ///
+  /// ⚠️ 非 Feed 场景不传（如「我的发布」复用本组件时）。
+  final String? feedTab;
+  final String? rankMode;
 
   @override
   ConsumerState<FeedMasonryView> createState() => _FeedMasonryViewState();
@@ -124,6 +136,13 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
   /// ⚠️ 本项目没有"进入视口才算曝光"的基建，这里按**渲染即曝光**上报 ——
   /// 顶置位是首屏第一条，渲染与看到之间的差距可以忽略；重复曝光那条本就是统计频率与位次，
   /// 精确到视口对判读没有实际影响。这条口径写在这里，免得日后有人以为漏做了。
+  /// 本次 Feed 会话的排序上下文（V1.1.6 Story 16.5）。
+  ///
+  /// 🛡 规则（缺任一个就都不带）在 [RankMode.eventProps] 里，本处只是取值 ——
+  /// 那条规则有自己的测试，别在这里另写一遍。
+  Map<String, Object> get _rankContext =>
+      RankMode.eventProps(widget.feedTab, widget.rankMode);
+
   void _reportPinAnalytics() {
     final pin = widget.pinned;
     if (pin == null) return;
@@ -134,6 +153,7 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
         'pin_config_id': pin.pinConfigId,
         'pin_type': pin.analyticsType,
         if (pin.item != null) 'content_id': pin.item!.id,
+        ..._rankContext,
       });
     }
 
@@ -151,6 +171,9 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
         'content_id': pinnedId,
         // 它在算法序列里的位次（从 1 起，与产品口径一致）。
         'serp_position': i + 1,
+        // 🔴 这条尤其需要 rank_mode：降级到时间倒序时"序列位次"根本不是算法排的,
+        // 混在一起看会得出错误结论（Story 16.5）。
+        ..._rankContext,
       });
       break;
     }
@@ -210,6 +233,7 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
                           'pin_config_id': pin!.pinConfigId,
                           'pin_type': pin.analyticsType,
                           'jump_target': promo.jumpTarget.analyticsValue,
+                          ..._rankContext,
                         });
                         widget.onTapPromo?.call(promo);
                       },
@@ -226,6 +250,8 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
                 key: const ValueKey('feedPinnedCard'),
                 item: pinnedItem,
                 deletedUserLabel: widget.deletedUserLabel,
+                feedTab: widget.feedTab,
+                rankMode: widget.rankMode,
                 maxImageHeight: maxImageHeight,
                 pinnedBadge: const PinnedBadge(),
                 onTap: () {
@@ -236,6 +262,7 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
                     // 本 story 只有"顶置一篇已发布内容"，跳的就是详情页。
                     // 推广卡片的外链 / 深链属 Story 4.3。
                     'jump_target': 'post_detail',
+                    ..._rankContext,
                   });
                   widget.onTapPinned?.call(pinnedItem);
                 },
@@ -267,6 +294,8 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
               child: MasonryCard(
                 item: widget.items[i],
                 deletedUserLabel: widget.deletedUserLabel,
+                feedTab: widget.feedTab,
+                rankMode: widget.rankMode,
                 onTap: widget.onTapItem == null ? null : () => widget.onTapItem!(widget.items[i]),
                 onLongPress: widget.onLongPressItem == null
                     ? null

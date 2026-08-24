@@ -250,7 +250,7 @@ development_status:
   16-2-打分与配比引擎: review                              # 🔴 纯计算不碰 DB/HTTP，配比与打分要能穷举单测
   16-3-候选池与推荐序接入all-tab: review                # 🛡 举报者隐藏与拉黑不合并；非 ALL Tab 完全不动
   16-4-打分参数配置化: review                                # 🔴 非优化项：第一次校准必然在发版后（OQ-B1）
-  16-5-feed埋点补tab与排序模式: ready-for-dev             # 两条排序路径必须可区分，否则效果无法归因
+  16-5-feed埋点补tab与排序模式: review                  # 两条排序路径必须可区分，否则效果无法归因
   epic-16-retrospective: optional
   epic-17: backlog
   17-1-限流状态模型与到期解除: ready-for-dev              # 🛡 降权不下架、对用户不可见不通知

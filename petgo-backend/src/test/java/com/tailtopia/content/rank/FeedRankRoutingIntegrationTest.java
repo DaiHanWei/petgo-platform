@@ -128,6 +128,34 @@ class FeedRankRoutingIntegrationTest extends ApiIntegrationTest {
                 .andExpect(status().isUnprocessableEntity());
     }
 
+    // ── V1.1.6 Story 16.5：rankMode 由服务端下发 ─────────────────────
+
+    /**
+     * 🔴 两条路径下发的 {@code rankMode} 必须不同。
+     *
+     * <p>这是客户端唯一能分辨排序路径的依据 —— 降级链级别 4 会让 ALL Tab 也走时间倒序，
+     * 那对客户端完全无感。客户端按「是不是 ALL Tab」自己判断的话，
+     * 降级期间的数据会被算进推荐序的效果里，而那正是 FR-95 参数校准要看的数。
+     */
+    @Test
+    void rankModeTellsTheTwoPathsApart() throws Exception {
+        seedTwoPages();
+
+        assertThat(feed("").get("rankMode").asText()).isEqualTo("recommend");
+        assertThat(feed("?category=DAILY").get("rankMode").asText()).isEqualTo("chrono");
+    }
+
+    /** 🛡 每一页都带（翻页时客户端要按页合并，某页缺了会让整段变成 unknown）。 */
+    @Test
+    void everyPageCarriesRankMode() throws Exception {
+        seedTwoPages();
+
+        JsonNode first = feed("");
+        assertThat(first.get("rankMode").asText()).isEqualTo("recommend");
+        JsonNode second = feed("?cursor=" + first.get("nextCursor").asText());
+        assertThat(second.get("rankMode").asText()).isEqualTo("recommend");
+    }
+
     private static boolean catching(Runnable r) {
         try {
             r.run();

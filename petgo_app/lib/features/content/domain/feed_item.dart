@@ -13,6 +13,68 @@ enum FeedCategory {
 
   /// 后端 category 查询参（UPPER_SNAKE）。
   final String wire;
+
+  /// 埋点里的 `feed_tab` 取值（V1.1.6 Story 16.5）。
+  ///
+  /// 🛡 与 [wire] **刻意分开**：前者是接口契约（改了要动后端），后者是埋点词表
+  /// （改了要动看板）。共用一个值意味着任何一侧想改都得动另一侧。
+  /// ⚠️ 取值用小写短名，与清单 v116 的既有属性词表一致（`all` / `daily` / `moment` / `tips`）。
+  String get analyticsTab => switch (this) {
+        FeedCategory.all => 'all',
+        FeedCategory.daily => 'daily',
+        FeedCategory.growthMoment => 'moment',
+        FeedCategory.knowledge => 'tips',
+      };
+}
+
+/// 排序路径（V1.1.6 Story 16.5）—— 埋点里的 `rank_mode` 取值。
+///
+/// 🔴 **由服务端下发，客户端推不出来**：降级链级别 4 会让 ALL Tab 也走时间倒序，
+/// 而那对客户端完全无感。按"是不是 ALL Tab"自己判断的话，降级期间的数据会被算进
+/// 推荐序的效果里 —— 而那正是 FR-95 参数校准要看的数。
+class RankMode {
+  RankMode._();
+
+  static const String recommend = 'recommend';
+  static const String chrono = 'chrono';
+
+  /// 同一次刷新里各页路径不一致（例如首屏推荐序、第二页恰好降级到级别 4）。
+  ///
+  /// 🔴 **不挑一边冒充**：那种会话的归因本来就是含混的，
+  /// 硬记成 recommend 会把降级期间的数据算进推荐序的效果里，
+  /// 硬记成 chrono 又把推荐序的首屏效果丢掉。`mixed` 在看板上一眼就能筛掉。
+  static const String mixed = 'mixed';
+
+  /// 服务端没下发（老后端 / 非 Feed 出口）→ `unknown`。
+  ///
+  /// 🛡 **不默认成 chrono 也不默认成 recommend**：猜错哪一边都会污染效果归因，
+  /// 而 `unknown` 在看板上一眼就能看出"这批数据不能用"。
+  static const String unknown = 'unknown';
+
+  /// Feed 事件要附加的两个属性（V1.1.6 Story 16.5）。
+  ///
+  /// 🛡 **缺任一个就都不带** —— 半套属性比没有更糟：看板上会出现一批
+  /// 「有 feed_tab 没有 rank_mode」的记录，那些既不能算进推荐序也不能算进时间倒序，
+  /// 只能整批扔掉，而扔的时候没人知道它们本来属于哪边。
+  ///
+  /// ⚠️ 做成公开函数（而不是留在某个 State 里）是为了让这条规则**可被直接测**，
+  /// 也让后续新增的 Feed 事件照抄同一处。
+  static Map<String, Object> eventProps(String? feedTab, String? rankMode) =>
+      (feedTab == null || rankMode == null)
+          ? const {}
+          : {'feed_tab': feedTab, 'rank_mode': rankMode};
+
+  /// 合并同一次刷新里两页的路径。
+  ///
+  /// ⚠️ `unknown` 与任何值合并仍是 `unknown`（有一页说不清，整段就说不清）。
+  static String merge(String a, String b) {
+    if (a == b) return a;
+    if (a == unknown || b == unknown) return unknown;
+    return mixed;
+  }
+
+  static String parse(Object? raw) =>
+      (raw == recommend || raw == chrono) ? raw! as String : unknown;
 }
 
 /// Feed 卡片条目（对应后端 `FeedItemResponse`）。
@@ -145,11 +207,19 @@ const String kVisibilityPrivate = 'PRIVATE';
 
 /// Feed 游标分页（对应后端 `{items, nextCursor, hasMore}`）。
 class FeedPage {
-  const FeedPage({required this.items, this.nextCursor, this.hasMore = false});
+  const FeedPage({
+    required this.items,
+    this.nextCursor,
+    this.hasMore = false,
+    this.rankMode = RankMode.unknown,
+  });
 
   final List<FeedItem> items;
   final String? nextCursor;
   final bool hasMore;
+
+  /// 本页实际用的排序路径（V1.1.6 Story 16.5）。见 [RankMode]。
+  final String rankMode;
 
   factory FeedPage.fromJson(Map<String, dynamic> json) {
     final rawItems = json['items'];
@@ -159,6 +229,7 @@ class FeedPage {
           : const [],
       nextCursor: json['nextCursor'] as String?,
       hasMore: (json['hasMore'] ?? false) as bool,
+      rankMode: RankMode.parse(json['rankMode']),
     );
   }
 }

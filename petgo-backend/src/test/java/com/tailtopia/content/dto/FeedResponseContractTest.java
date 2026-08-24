@@ -52,7 +52,9 @@ class FeedResponseContractTest {
             "decorationTags");
 
     /** 游标分页信封字段集 —— 对应 App FeedPage.fromJson 的 {items, nextCursor, hasMore}。 */
-    private static final Set<String> ENVELOPE_FIELDS = Set.of("items", "nextCursor", "hasMore");
+    /** V1.1.6 Story 16.5 起信封多一个 {@code rankMode}（非 Feed 出口时省略）。 */
+    private static final Set<String> ENVELOPE_FIELDS =
+            Set.of("items", "nextCursor", "hasMore", "rankMode");
 
     private Map<String, Object> wire(Object dto) {
         @SuppressWarnings("unchecked")
@@ -110,21 +112,37 @@ class FeedResponseContractTest {
 
     @Test
     void envelopeShapeMatchesCursorContractWhenHasMore() {
-        FeedPageResponse page = new FeedPageResponse(List.of(), "eyJjcmVhdGVkQXQiOjF9", true);
+        FeedPageResponse page = new FeedPageResponse(List.of(), "eyJjcmVhdGVkQXQiOjF9", true,
+                FeedPageResponse.RANK_MODE_RECOMMEND);
 
         Map<String, Object> m = wire(page);
         assertThat(m.keySet()).isEqualTo(ENVELOPE_FIELDS);
         assertThat(m.get("items")).isInstanceOf(List.class);
         assertThat(m.get("hasMore")).isEqualTo(true);
+        // V1.1.6 Story 16.5：客户端靠它区分两条排序路径（降级时 ALL Tab 也是 chrono）。
+        assertThat(m.get("rankMode")).isEqualTo("recommend");
+    }
+
+    /**
+     * 🔴 非 Feed 出口（「我的发布」）不下发 {@code rankMode}。
+     *
+     * <p>给它填个 {@code chrono} 会让埋点侧把它算进首页排序的分母里。
+     */
+    @Test
+    void envelopeOmitsRankModeForNonFeedOutlets() {
+        FeedPageResponse page = new FeedPageResponse(List.of(), null, false, null);
+
+        assertThat(wire(page)).doesNotContainKey("rankMode");
     }
 
     @Test
     void envelopeOmitsNextCursorOnLastPage() {
         // 末页：hasMore=false → nextCursor=null → NON_NULL 省略（App FeedPage.fromJson 容忍缺省）。
-        FeedPageResponse page = new FeedPageResponse(List.of(), null, false);
+        FeedPageResponse page = new FeedPageResponse(List.of(), null, false,
+                FeedPageResponse.RANK_MODE_CHRONO);
 
         Map<String, Object> m = wire(page);
         assertThat(m).doesNotContainKey("nextCursor");
-        assertThat(m.keySet()).isEqualTo(Set.of("items", "hasMore"));
+        assertThat(m.keySet()).isEqualTo(Set.of("items", "hasMore", "rankMode"));
     }
 }

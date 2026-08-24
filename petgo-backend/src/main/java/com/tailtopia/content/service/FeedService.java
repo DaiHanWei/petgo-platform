@@ -204,7 +204,8 @@ public class FeedService {
             Long yieldId = pinnedContentIdToYield(cursor);
             FeedRecommendationService.RankedPage ranked =
                     recommendations.page(viewerId, anonSessionId, cursor, PAGE_SIZE, yieldId);
-            return assemble(ranked.posts(), viewerId, ranked.nextCursor(), ranked.hasMore());
+            return assemble(ranked.posts(), viewerId, ranked.nextCursor(), ranked.hasMore(),
+                    FeedPageResponse.RANK_MODE_RECOMMEND);
         } catch (AppException e) {
             throw e; // 游标非法等入参问题照常 422，不能被当成"算不出来"吞掉
         } catch (RuntimeException e) {
@@ -245,7 +246,10 @@ public class FeedService {
             ContentPost last = page.get(page.size() - 1);
             nextCursor = new FeedCursor(last.getCreatedAt(), last.getId()).encode();
         }
-        return assemble(page, viewerId, nextCursor, hasMore);
+        // 🔴 分类 Tab 与级别 4 回落都走这里，两者都是 chrono ——
+        // 客户端据此把降级期间的数据从推荐序效果里剔出去（Story 16.5）。
+        return assemble(page, viewerId, nextCursor, hasMore,
+                FeedPageResponse.RANK_MODE_CHRONO);
     }
 
     /**
@@ -255,7 +259,7 @@ public class FeedService {
      * 也不会出现「推荐序的卡少了评论数」这种分叉。新增字段只需改这一处。
      */
     private FeedPageResponse assemble(List<ContentPost> page, Long viewerId, String nextCursor,
-            boolean hasMore) {
+            boolean hasMore, String rankMode) {
         Map<Long, AuthorView> authors = accountQueryService.findAuthorViews(
                 page.stream().map(ContentPost::getAuthorId).toList());
         Map<Long, Long> likeCounts = likeCounts(page);
@@ -273,7 +277,7 @@ public class FeedService {
                         commentCounts.getOrDefault(p.getId(), 0L),
                         decorations.get(p.getId())))
                 .toList();
-        return new FeedPageResponse(items, nextCursor, hasMore);
+        return new FeedPageResponse(items, nextCursor, hasMore, rankMode);
     }
 
 
@@ -380,6 +384,8 @@ public class FeedService {
             ContentPost last = page.get(page.size() - 1);
             nextCursor = new FeedCursor(last.getCreatedAt(), last.getId()).encode();
         }
-        return new FeedPageResponse(items, nextCursor, hasMore);
+        // ⚠️「我的发布」不是 Feed 出口，rankMode 省略（Jackson NON_NULL）——
+        // 给它填个 chrono 会让埋点侧把它算进首页排序的分母里。
+        return new FeedPageResponse(items, nextCursor, hasMore, null);
     }
 }

@@ -21,6 +21,8 @@ class LikeButton extends ConsumerStatefulWidget {
     required this.initialLiked,
     required this.initialCount,
     required this.source,
+    this.feedTab,
+    this.rankMode,
   });
 
   final int postId;
@@ -33,6 +35,15 @@ class LikeButton extends ConsumerStatefulWidget {
   /// 只改一侧的话，「开放首页点赞到底是净增长还是把详情页的点赞前移了」这个对比
   /// 就**彻底失效**，而这正是本版本要回答的问题。故设为必填参数：漏传编译不过。
   final String source;
+
+  /// 埋点 `feed_tab`（V1.1.6 Story 16.5）。只有从 Feed 卡片来时才有值。
+  final String? feedTab;
+
+  /// 埋点 `rank_mode`（V1.1.6 Story 16.5，服务端下发）。同上。
+  ///
+  /// 🛡 两个都做成可选：详情页的点赞没有"哪个 Tab、哪条排序路径"这回事，
+  /// 硬填一个值会在看板上造出不存在的 Feed 会话。
+  final String? rankMode;
 
   @override
   ConsumerState<LikeButton> createState() => _LikeButtonState();
@@ -77,7 +88,15 @@ class _LikeButtonState extends ConsumerState<LikeButton> {
 
     // 🛡 只加 source 属性，**事件名不动** —— 改名会切断已有的点赞历史序列
     // （埋点清单 E-22 与命名护栏测试都盯着这一点）。
-    Analytics.capture('post_like_tapped', {'liked': !_liked, 'source': widget.source});
+    Analytics.capture('post_like_tapped', {
+      'liked': !_liked,
+      'source': widget.source,
+      // V1.1.6 Story 16.5：首页点赞是 FR-95 效果归因的主要信号 ——
+      // 🔴 两个属性都要有。只有 feed_tab 不够：降级链级别 4 会让 ALL Tab 也走时间倒序，
+      // 那时 feed_tab=all 但 rank_mode=chrono，把它算进推荐序的效果里就是错的。
+      if (widget.feedTab != null) 'feed_tab': widget.feedTab!,
+      if (widget.rankMode != null) 'rank_mode': widget.rankMode!,
+    });
     final prevLiked = _liked;
     final prevCount = _count;
     // 乐观更新：先翻转 UI。
