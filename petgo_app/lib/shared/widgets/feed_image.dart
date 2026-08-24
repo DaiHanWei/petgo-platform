@@ -240,7 +240,9 @@ class _FeedImageState extends State<FeedImage> {
           if (widget.topRight != null) Positioned(top: 8, right: 8, child: widget.topRight!),
 
           // 🛡 角位三：左下 —— 装饰标签（Epic 5）。
-          if (widget.bottomLeft != null) Positioned(left: 8, bottom: 8, child: widget.bottomLeft!),
+          // UI 稿 `.deco-on-card`：left/bottom 均为 10。
+          if (widget.bottomLeft != null)
+            Positioned(left: 10, bottom: 10, child: widget.bottomLeft!),
         ],
       ),
     );

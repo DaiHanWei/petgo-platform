@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/core/theme/colors.dart';
 import 'package:tailtopia/features/content/domain/content_tag.dart';
 import 'package:tailtopia/features/content/domain/feed_image_layout.dart';
 import 'package:tailtopia/features/content/domain/feed_item.dart';
@@ -70,8 +71,8 @@ void main() {
 
       final area = tester.getRect(find.byType(FeedImage));
       final chip = tester.getRect(find.byType(ContentTagChip));
-      expect(chip.left - area.left, closeTo(8, 0.01));
-      expect(area.bottom - chip.bottom, closeTo(8, 0.01));
+      expect(chip.left - area.left, closeTo(10, 0.01)); // UI 稿 .deco-on-card
+      expect(area.bottom - chip.bottom, closeTo(10, 0.01));
     });
 
     /// 🛡 三个角位分处三处、互不遮挡（AD-8 Rule 6）：
@@ -184,6 +185,51 @@ void main() {
         ],
       });
       expect(item.decorationTags.single.code, 'a');
+    });
+  });
+
+  group('装饰标签胶囊的视觉按 UI 稿 `.deco-badge` 钉住', () {
+    /// 🔴 这一组存在的理由：2026-08-24 实机比对发现实现与规格不符 ——
+    /// 当时是「叠图半透明黑 / 无图金色浅底 + 圆角 11 + 无投影」，
+    /// 而规格是「橙→红 135° 渐变 + 全圆角 + 双层红投影」，两种形态**同一套视觉**。
+    /// 光看截图不容易发现（深色照片上半透明黑很不显眼），所以钉成断言。
+    BoxDecoration decoOf(WidgetTester tester) {
+      final box = tester.widget<Container>(find.descendant(
+          of: find.byType(ContentTagChip), matching: find.byType(Container)));
+      return box.decoration! as BoxDecoration;
+    }
+
+    Future<void> pumpChip(WidgetTester tester, Widget chip) async {
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: Center(child: chip))));
+    }
+
+    const tag = ContentTag(
+        code: 'EDITOR_PICK', name: 'Pilihan Editor', icon: '⭐', description: 'd');
+
+    testWidgets('叠图形态：橙→红 135° 渐变 + 全圆角 + 双层投影', (tester) async {
+      await pumpChip(tester, const ContentTagChip.overlay(tag: tag, position: 'feed'));
+      final d = decoOf(tester);
+
+      final g = d.gradient! as LinearGradient;
+      expect(g.colors, [AppColors.gold, AppColors.decoBadgeEnd]);
+      expect(g.begin, Alignment.topLeft); // CSS 135deg
+      expect(g.end, Alignment.bottomRight);
+      expect(d.color, isNull, reason: '🛡 不该再有纯色背景（旧实现是半透明黑）');
+      expect((d.borderRadius! as BorderRadius).topLeft.x, 999);
+      expect(d.boxShadow, hasLength(2), reason: '规格是双层投影');
+    });
+
+    /// 🛡 无图 inline 形态**视觉完全相同** —— 规格里 6 处装饰标签是同一个 class。
+    testWidgets('inline 形态与叠图形态视觉一致', (tester) async {
+      await pumpChip(tester, const ContentTagChip.overlay(tag: tag, position: 'feed'));
+      final a = decoOf(tester);
+      await pumpChip(tester, const ContentTagChip.inline(tag: tag, position: 'detail'));
+      final b = decoOf(tester);
+
+      expect((b.gradient! as LinearGradient).colors,
+          (a.gradient! as LinearGradient).colors);
+      expect(b.borderRadius, a.borderRadius);
+      expect(b.boxShadow!.length, a.boxShadow!.length);
     });
   });
 }
