@@ -92,6 +92,11 @@ void main() {
         // FR-93 点赞（扩展既有事件）+ 清单外 E-28
         'post_like_tapped',
         'publish_page_image_source_selected',
+        // FR-96 身份证分享奖励（Story 18.2 补）。命名按 `模块_对象_动作`：
+        // id_card（模块）_ share（对象）_ tapped/sent/rewarded（动作）。
+        'id_card_share_tapped',
+        'id_card_share_sent',
+        'id_card_share_rewarded',
       };
       final inSource = eventNamesInSource();
       final missing = appSideEvents.difference(inSource);

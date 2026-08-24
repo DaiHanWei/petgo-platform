@@ -34,8 +34,12 @@ class ProfileApiControllerTest {
     private final IdCardService idCardService = mock(IdCardService.class);
     private final IdCardHdService idCardHdService = mock(IdCardHdService.class);
     private final RedisRateLimiter rateLimiter = mock(RedisRateLimiter.class);
+    /** Story 18.2：本类不验分享奖励（有 IdCardShareRewardIntegrationTest），给个哑桩。 */
+    private final com.tailtopia.share.service.IdCardShareRewardService idCardShareRewards =
+            mock(com.tailtopia.share.service.IdCardShareRewardService.class);
     private final ProfileApiController controller = new ProfileApiController(
-            service, timelineService, cardRerenderService, idCardService, idCardHdService, rateLimiter);
+            service, timelineService, cardRerenderService, idCardService, idCardHdService,
+            rateLimiter, idCardShareRewards);
 
     private static Jwt jwt(String sub) {
         return Jwt.withTokenValue("t").header("alg", "HS256").subject(sub).claim("x", "y").build();
