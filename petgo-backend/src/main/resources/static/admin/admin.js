@@ -155,3 +155,25 @@ document.addEventListener('DOMContentLoaded', function () {
         document.querySelectorAll('[data-batch-scope]').forEach(refresh);
     });
 })();
+
+// ===== 「以运营真实账号发布」的二次确认（V1.1.6 Story 12.1 · AC6）=====
+// 顶部那个 data-confirm 是**静态**文案、每次提交都弹；这里要的是**只在选中真实账号时**弹
+//   —— 虚拟账号是常用路径，每次都拦会让运营养成"不看就点确定"的习惯，
+//      那时真正危险的那一次也会被闭着眼点过去。
+//
+// 判据是选项上的 data-real="true"（由 admin/fragments/publish-identity-select 渲染）。
+// 以运营真实账号误发不可撤回：内容会出现在那个真人的个人主页并推送给他的粉丝。
+//
+// ⚠️ 与顶部 data-confirm 一样用 capture 阶段：要在 HTMX 的 submit 处理之前拦住。
+// 🛡 这只是体验层 —— 服务端还有一道 seed.publish_as_real 硬校验，勾选框在浏览器里改得动。
+document.addEventListener('submit', function (e) {
+    var form = e.target;
+    if (!form || !form.getAttribute) { return; }
+    var msg = form.getAttribute('data-real-identity-confirm');
+    if (!msg) { return; }
+    var select = form.querySelector('select[name="virtualUserId"]');
+    var opt = select && select.selectedIndex >= 0 ? select.options[select.selectedIndex] : null;
+    if (opt && opt.getAttribute('data-real') === 'true' && !window.confirm(msg)) {
+        e.preventDefault();
+    }
+}, true);

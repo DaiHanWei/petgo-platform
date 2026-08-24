@@ -140,7 +140,7 @@
                    th:text="#{admin.nav.refunds}">退款管理</a>
             </div>
         </details>
-        <details class="nav-section" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view') or hasAuthority('order.view') or hasAuthority('settlement.view') or hasAuthority('payment.view') or hasAuthority('risk.view') or hasAuthority('virtual_account.manage')"
+        <details class="nav-section" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view') or hasAuthority('order.view') or hasAuthority('settlement.view') or hasAuthority('payment.view') or hasAuthority('risk.view') or hasAuthority('virtual_account.manage') or hasAuthority('seed.publish_as_real')"
                  th:attr="open=${active == 'config' or active == 'consult-orders' or active == 'ai-orders' or active == 'settlements' or active == 'payments' or active == 'red-overage' or active == 'virtual-accounts'} ? 'open' : null">
             <summary th:classappend="${active == 'config' or active == 'consult-orders' or active == 'ai-orders' or active == 'settlements' or active == 'payments' or active == 'red-overage' or active == 'virtual-accounts'} ? 'active'"
                      th:text="#{admin.nav.group.ops}">运营</summary>
@@ -163,9 +163,12 @@
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('risk.view')"
                    th:href="@{/admin/red-overage}" th:classappend="${active == 'red-overage'} ? 'active'"
                    th:text="#{admin.nav.redOverage}">红色超额</a>
-                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')"
+                <!-- 🛡 本表达式与 AdminVirtualAccountController 的 VIEW_AUTH **逐字一致**。
+                     必须含 seed.publish_as_real：只持有该码的人（管真实发布身份、不管虚拟账号）
+                     否则会看得见入口、点进去 403。 -->
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.view') or hasAuthority('virtual_account.manage') or hasAuthority('seed.publish_as_real')"
                    th:href="@{/admin/virtual-accounts}" th:classappend="${active == 'virtual-accounts'} ? 'active'"
-                   th:text="#{admin.nav.virtualAccounts}">虚拟账号</a>
+                   th:text="#{admin.nav.virtualAccounts}">运营发布身份</a>
             </div>
         </details>
         <details class="nav-section"

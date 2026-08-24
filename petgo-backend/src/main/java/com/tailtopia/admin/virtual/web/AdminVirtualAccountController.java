@@ -1,6 +1,7 @@
 package com.tailtopia.admin.virtual.web;
 
 import com.tailtopia.admin.service.AdminUserDetails;
+import com.tailtopia.admin.virtual.service.AdminPublishIdentityService;
 import com.tailtopia.admin.virtual.service.AdminVirtualAccountService;
 import com.tailtopia.shared.error.AppException;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -14,27 +15,54 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 /**
- * 后台虚拟账号管理（Story 9.8，A-6）。Thymeleaf admin slice，{@code /admin/virtual-accounts/**}，redirect+flash。
- * 门控 {@code virtual_account.manage}（SUPER_ADMIN 隐式全权）。
+ * 后台**运营发布身份**管理（Story 9.8 建虚拟账号侧；V1.1.6 Story 12.1 升格为两区）。
+ * Thymeleaf admin slice，{@code /admin/virtual-accounts/**}，redirect+flash。
+ *
+ * <p><b>这一页现在管两类发布身份</b>：【虚拟账号】（本控制器）与【运营真实账号】
+ * （{@link AdminPublishIdentityController}，独立权限码 {@code seed.publish_as_real}）。
+ * 🛡 虚拟账号侧的既有能力（创建 / 列表 / 启停 / 导出）**一处未改**。
+ *
+ * <p>⚠️ <b>URL 刻意不改名</b>：改路径会让运营的收藏夹与既有测试一起失效，
+ * 而"这一页管什么"是界面上的事，不是路径上的事。
  */
 @Controller
 public class AdminVirtualAccountController {
 
     private static final String AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')";
+
+    /** 供 {@link AdminPublishIdentityController} 的禁用确认页复用（同一操作，同一门）。 */
+    static final String MANAGE_AUTH = AUTH;
+
+    /**
+     * 列表页的门。
+     *
+     * <p>🔴 <b>必须把 {@code seed.publish_as_real} 也算进来</b>：只持有该码的人
+     * （管真实发布身份但不管虚拟账号）否则会看得见侧栏入口、点进去 403。
+     * 🛡 <b>本表达式与侧栏 {@code sec:authorize} 必须逐字一致。</b>
+     */
     private static final String VIEW_AUTH =
-            "hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.view') or hasAuthority('virtual_account.manage')";
+            "hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.view')"
+                    + " or hasAuthority('virtual_account.manage')"
+                    + " or hasAuthority('seed.publish_as_real')";
 
     private final AdminVirtualAccountService service;
+    private final AdminPublishIdentityService identities;
 
-    public AdminVirtualAccountController(AdminVirtualAccountService service) {
+    public AdminVirtualAccountController(AdminVirtualAccountService service,
+            AdminPublishIdentityService identities) {
         this.service = service;
+        this.identities = identities;
     }
 
     @GetMapping("/admin/virtual-accounts")
     @PreAuthorize(VIEW_AUTH)
-    public String list(Model model) {
+    public String list(Model model, @RequestParam(required = false) String q) {
         model.addAttribute("active", "virtual-accounts");
         model.addAttribute("accounts", service.list());
+        model.addAttribute("realAccounts", identities.listRealAccounts());
+        // 纳入候选：只有真搜了才查（空搜索返回空表，不会把全站用户列出来）。
+        model.addAttribute("candidates", identities.searchCandidates(q));
+        model.addAttribute("q", q);
         return "admin/virtual-accounts";
     }
 

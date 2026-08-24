@@ -3,7 +3,6 @@ package com.tailtopia.admin.virtual.service;
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.virtual.domain.SeedContentHash;
 import com.tailtopia.admin.virtual.repository.SeedContentHashRepository;
-import com.tailtopia.auth.domain.AccountType;
 import com.tailtopia.auth.domain.User;
 import com.tailtopia.auth.repository.UserRepository;
 import com.tailtopia.content.domain.ContentType;
@@ -39,13 +38,16 @@ public class AdminSeedBatchService {
     private final UserRepository users;
     private final ContentService contentService;
     private final SeedContentHashRepository hashes;
+    private final AdminPublishIdentityService identities;
     private final AdminAuditService audit;
 
     public AdminSeedBatchService(UserRepository users, ContentService contentService,
-            SeedContentHashRepository hashes, AdminAuditService audit) {
+            SeedContentHashRepository hashes, AdminPublishIdentityService identities,
+            AdminAuditService audit) {
         this.users = users;
         this.contentService = contentService;
         this.hashes = hashes;
+        this.identities = identities;
         this.audit = audit;
     }
 
@@ -85,17 +87,34 @@ public class AdminSeedBatchService {
     }
 
     /**
-     * 批量发布。校验虚拟账号（VIRTUAL + enabled）；逐行解析 → hash 去重 → 以虚拟账号发布 → 记 hash + 计数。
+     * 批量发布。校验作者**在身份池内** + enabled；逐行解析 → hash 去重 → 发布 → 记 hash + 计数。
+     *
+     * <p>🔴 <b>V1.1.6 Story 12.1 放开的就是这里</b>：原先是一句
+     * {@code author.getAccountType() != AccountType.VIRTUAL} 的硬断言，它是当时唯一挡着
+     * 运营真实账号发布的东西。改成问「在不在身份池内」——
+     * <b>而不是</b>去改那个账号的 {@code account_type}（改类型会让它在 App 内的一切行为
+     * 走进未被验证的分支，见 {@link AdminPublishIdentityService}）。
      */
     @Transactional
-    public BatchResult publishBatch(long virtualUserId, String rawLines, long adminId) {
+    public BatchResult publishBatch(long virtualUserId, String rawLines, long adminId,
+            boolean callerMayPublishAsRealIdentity) {
         User author = users.findById(virtualUserId)
-                .orElseThrow(() -> AppException.notFound("虚拟账号不存在"));
-        if (author.getAccountType() != AccountType.VIRTUAL) {
-            throw AppException.validation("只能以虚拟账号批量发布");
+                .orElseThrow(() -> AppException.notFound("发布账号不存在"));
+        if (!identities.isInPool(author)) {
+            throw AppException.validation("该账号不在运营发布身份池内，不能作为发布者");
+        }
+        // 🔴 AC5 ②：**以运营真实账号身份发布**需要独立权限码 seed.publish_as_real。
+        //
+        // 为什么把它做成一个**显式入参**而不是在服务里读 SecurityContext：
+        // 这个检查要在三处发布入口（12-2 单条 / 13-x 批量 / 13-5 定时）都成立，
+        // 而"忘记检查"是静默的 —— 加个参数就让漏掉变成**编译错误**。
+        // 从 SecurityContext 里偷偷读，新入口作者不会知道有这回事。
+        if (!callerMayPublishAsRealIdentity && identities.isRealPublishIdentity(author.getId())) {
+            throw AppException.validation("以运营真实账号发布内容需要单独授权（seed.publish_as_real）");
         }
         if (!author.isEnabled()) {
-            throw AppException.validation("该虚拟账号已停用");
+            // 虚拟账号"停用"与真实账号"被封"在这里是同一件事：都不该继续替它发内容。
+            throw AppException.validation("该发布账号已停用");
         }
         if (rawLines == null || rawLines.isBlank()) {
             throw AppException.validation("批量内容为空");
@@ -127,7 +146,8 @@ public class AdminSeedBatchService {
             ContentPostResponse saved = contentService.publish(virtualUserId,
                     new ContentPostCreateRequest(ContentType.DAILY, null, text, images),
                     UUID.randomUUID().toString());
-            hashes.save(SeedContentHash.of(hash, saved.id(), virtualUserId));
+            // AC7：记下**实际按下发布的后台账号** —— 真实账号是某个真人的账号，出事要追到人。
+            hashes.save(SeedContentHash.of(hash, saved.id(), virtualUserId, adminId));
             author.incrementPublished();
             published++;
         }

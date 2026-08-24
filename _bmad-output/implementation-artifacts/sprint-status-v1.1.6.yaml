@@ -218,8 +218,8 @@ development_status:
   # 理由：12-1 是两处选择器的数据源；13-1 的草稿态与排期态是同一模型（先做"只支持立即发布"
   #   会在同一处返工两次，OQ-21）；14-1 的两个触点挂在 12-2 的选择器与 13-3 的 Excel 模板上，
   #   而那两处基础从未交付过（PRD §7.4 原文误以为已随 V1.1.0 落地）。
-  epic-12: backlog
-  12-1-运营发布身份池: ready-for-dev                        # AB-3I 🔴 必须最先；独立权限码 seed.publish_as_real，与 virtual_account.manage 解耦
+  epic-12: in-progress
+  12-1-运营发布身份池: review                        # AB-3I 🔴 必须最先；独立权限码 seed.publish_as_real，与 virtual_account.manage 解耦
   12-2-单条发布整改: ready-for-dev                          # AB-3J 落地 V1.1.0 AB-1.1-03 两条从未交付的要求
   epic-12-retrospective: optional
   epic-13: backlog

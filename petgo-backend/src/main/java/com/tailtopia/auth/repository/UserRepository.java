@@ -71,4 +71,14 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     /** 内容审核 story 4：违规重置默认昵称唯一性查重（DefaultNameGenerator）。 */
     boolean existsByNickname(String nickname);
+
+    /**
+     * 按昵称模糊搜索某类账号（V1.1.6 Story 12.1 · AC3 纳入身份池用）。
+     *
+     * <p>⚠️ 与后台既有的用户搜索（{@code AdminUserService#search}，按 id 或**注册邮箱**精确命中）
+     * <b>刻意分开</b>：纳入身份池时运营手里只有"那个 IP 号叫什么"，没有邮箱；
+     * 而把模糊昵称匹配加进那个搜索，会改变它"命中 0 或 1 条"的既有语义。
+     */
+    java.util.List<User> findTop20ByRoleAndAccountTypeAndNicknameContainingIgnoreCaseOrderByIdDesc(
+            Role role, com.tailtopia.auth.domain.AccountType accountType, String nickname);
 }

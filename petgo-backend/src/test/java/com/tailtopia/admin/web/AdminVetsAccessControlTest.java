@@ -55,7 +55,8 @@ class AdminVetsAccessControlTest {
             return new AdminWebController(mock(AdminContentService.class),
                     mock(AdminModerationService.class), vet,
                     mock(com.tailtopia.admin.dashboard.service.AdminDashboardService.class),
-                    mock(com.tailtopia.admin.virtual.service.AdminVirtualAccountService.class));
+                    mock(com.tailtopia.admin.virtual.service.AdminVirtualAccountService.class),
+                    mock(com.tailtopia.admin.virtual.service.AdminPublishIdentityService.class));
         }
     }
 

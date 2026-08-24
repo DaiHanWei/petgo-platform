@@ -1,5 +1,6 @@
 package com.tailtopia.admin.virtual.web;
 
+import com.tailtopia.admin.account.domain.AdminPermissions;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.admin.virtual.service.AdminSeedBatchService;
 import com.tailtopia.admin.virtual.service.AdminSeedBatchService.BatchResult;
@@ -34,6 +35,19 @@ public class AdminSeedBatchController {
 
     public AdminSeedBatchController(AdminSeedBatchService batch) {
         this.batch = batch;
+    }
+
+    /**
+     * 本次操作者能否**以运营真实账号身份**发布（V1.1.6 Story 12.1 · AC5 ②）。
+     *
+     * <p>🔴 与 {@code AdminPublishIdentityController.REAL_AUTH} 同一口径：
+     * 超管隐式全权，其余看有没有 {@code seed.publish_as_real}。
+     * 选虚拟账号发布不受它影响 —— 那条常用路径的门仍是 {@code virtual_account.manage}。
+     */
+    private static boolean mayPublishAsReal(AdminUserDetails admin) {
+        return admin.getAuthorities().stream().anyMatch(a ->
+                "ROLE_SUPER_ADMIN".equals(a.getAuthority())
+                        || AdminPermissions.SEED_PUBLISH_AS_REAL.equals(a.getAuthority()));
     }
 
     @GetMapping("/admin/seed-batch")
@@ -74,7 +88,8 @@ public class AdminSeedBatchController {
     public String publish(@AuthenticationPrincipal AdminUserDetails admin,
             @RequestParam long virtualUserId, @RequestParam String lines, RedirectAttributes flash) {
         try {
-            BatchResult r = batch.publishBatch(virtualUserId, lines, admin.getAdminAccountId());
+            BatchResult r = batch.publishBatch(virtualUserId, lines, admin.getAdminAccountId(),
+                    mayPublishAsReal(admin));
             flash.addFlashAttribute("notice",
                     "批量完成：发布 " + r.published() + " 条，去重跳过 " + r.skipped() + " 条");
         } catch (AppException e) {
@@ -89,7 +104,8 @@ public class AdminSeedBatchController {
             @RequestParam long virtualUserId, @RequestParam MultipartFile file, RedirectAttributes flash) {
         try {
             String lines = batch.readLines(file);
-            BatchResult r = batch.publishBatch(virtualUserId, lines, admin.getAdminAccountId());
+            BatchResult r = batch.publishBatch(virtualUserId, lines, admin.getAdminAccountId(),
+                    mayPublishAsReal(admin));
             flash.addFlashAttribute("notice",
                     "Excel 导入完成：发布 " + r.published() + " 条，去重跳过 " + r.skipped() + " 条");
         } catch (AppException e) {

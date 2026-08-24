@@ -1,27 +1,31 @@
 <!DOCTYPE html>
 <html lang="zh" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
-<!-- 虚拟账号管理（Story 9.8，A-6）。无登录，复用 content_posts.author_id 发种子。 -->
+<!-- 运营发布身份管理。两区：
+       【虚拟账号】（Story 9.8，A-6）无登录，复用 content_posts.author_id 发种子
+       【运营真实账号】（V1.1.6 Story 12.1 · AB-3I）公司人格化 IP 号，独立权限码 seed.publish_as_real
+     🛡 虚拟账号侧的既有能力一处未改。 -->
 <head>
     <meta charset="UTF-8"/>
-    <title th:text="#{admin.virtualAccounts.title}">虚拟账号 · TailTopia 运营后台</title>
+    <title th:text="#{admin.publishIdentity.pageTitle}">运营发布身份 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1 th:text="#{admin.virtualAccounts.title}">虚拟账号</h1>
+        <h1 th:text="#{admin.publishIdentity.pageTitle}">运营发布身份</h1>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
-        <p class="hint" th:text="#{admin.virtualAccounts.hint}">虚拟账号用于冷启动种子内容运营：无登录能力、无密码，复用作者身份发布。</p>
+        <p class="hint" th:text="#{admin.publishIdentity.pageHint}">这一页管两类发布身份：虚拟账号与运营真实账号。</p>
 
-        <h2 th:text="#{admin.virtualAccounts.create}">新建虚拟账号</h2>
+        <h2 th:text="#{admin.virtualAccounts.title}">虚拟账号</h2>
+        <h3 th:text="#{admin.virtualAccounts.create}">新建虚拟账号</h3>
         <form method="post" th:action="@{/admin/virtual-accounts}">
             <label><span th:text="#{admin.virtualAccounts.nickname}">昵称（≤20）</span><input type="text" name="nickname" maxlength="20" required/></label>
             <label><span th:text="#{admin.virtualAccounts.avatarUrl}">头像 URL（选填）</span><input type="text" name="avatarUrl" maxlength="1024"/></label>
             <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.virtualAccounts.btn.create}">创建</button>
         </form>
 
-        <h2 th:text="#{admin.virtualAccounts.list}">虚拟账号列表</h2>
+        <h3 th:text="#{admin.virtualAccounts.list}">虚拟账号列表</h3>
         <table>
             <thead>
             <tr><th>ID</th><th th:text="#{admin.virtualAccounts.col.nickname}">昵称</th><th th:text="#{admin.virtualAccounts.col.avatar}">头像</th><th th:text="#{admin.common.status}">状态</th><th th:text="#{admin.virtualAccounts.col.published}">已发布</th><th th:text="#{admin.virtualAccounts.col.createdBy}">建号人</th><th th:text="#{admin.common.actions}">操作</th></tr>
@@ -35,17 +39,114 @@
                 <td th:text="${a.publishedCount}">0</td>
                 <td th:text="${a.createdBy} ?: '—'">—</td>
                 <td>
-                    <form method="post" th:action="@{/admin/virtual-accounts/{id}/enabled(id=${a.id})}"
+                    <!-- 🔴 禁用先过确认页（AC4）：那一页要显示"还有 N 条待发布排期"，
+                         而 N 只有服务端算得出来。启用是无害的，直接提交。 -->
+                    <a th:if="${a.enabled}" class="btn btn-neutral btn-sm"
+                       th:href="@{/admin/virtual-accounts/{id}/disable(id=${a.id})}"
+                       th:text="#{admin.common.disable}">停用</a>
+                    <form th:unless="${a.enabled}" method="post"
+                          th:action="@{/admin/virtual-accounts/{id}/enabled(id=${a.id})}"
                           style="display:inline">
-                        <input type="hidden" name="enabled" th:value="${!a.enabled}"/>
+                        <input type="hidden" name="enabled" value="true"/>
                         <button type="submit" class="btn btn-neutral btn-sm"
-                                th:text="${a.enabled} ? #{admin.common.disable} : #{admin.common.enable}">切换</button>
+                                th:text="#{admin.common.enable}">启用</button>
                     </form>
                 </td>
             </tr>
             <tr th:if="${accounts.isEmpty()}"><td colspan="7" th:text="#{admin.virtualAccounts.empty}">暂无虚拟账号</td></tr>
             </tbody>
         </table>
+
+        <!-- ===== 运营真实账号（V1.1.6 Story 12.1）=====
+             整区门控 seed.publish_as_real，与 virtual_account.manage 完全解耦：
+             🔴 能管虚拟账号 ≠ 能以真人身份发言。
+             🛡 本表达式与控制器 @PreAuthorize(REAL_AUTH) 必须逐字一致。 -->
+        <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('seed.publish_as_real')">
+            <h2 th:text="#{admin.publishIdentity.realSection}">运营真实账号</h2>
+            <p class="hint" th:text="#{admin.publishIdentity.realHint}">
+                只接纳公司资产性质的人格化 IP 号，不接纳员工私人账号。</p>
+
+            <h3 th:text="#{admin.publishIdentity.search}">搜索并纳入</h3>
+            <form method="get" th:action="@{/admin/virtual-accounts}">
+                <label><span th:text="#{admin.publishIdentity.searchField}">用户 ID 或昵称</span>
+                    <input type="text" name="q" th:value="${q}" maxlength="50"/></label>
+                <button type="submit" class="btn btn-neutral btn-sm"
+                        th:text="#{admin.publishIdentity.btn.search}">搜索</button>
+            </form>
+
+            <table th:if="${q != null and !q.isBlank()}">
+                <thead>
+                <tr><th>ID</th><th th:text="#{admin.virtualAccounts.col.nickname}">昵称</th>
+                    <th th:text="#{admin.common.status}">状态</th>
+                    <th th:text="#{admin.publishIdentity.col.note}">授权说明</th>
+                    <th th:text="#{admin.common.actions}">操作</th></tr>
+                </thead>
+                <tbody>
+                <tr th:each="c : ${candidates}">
+                    <td th:text="${c.userId}">0</td>
+                    <td th:text="${c.nickname}">名</td>
+                    <td th:text="${c.deactivated} ? #{admin.common.disabled} : #{admin.common.enabled}">正常</td>
+                    <td>
+                        <!-- 授权说明必填：风险边界是"内部人冒充内部人"，技术强绑定挡不住，
+                             靠的是审计可追责 —— 而说明是这条链上唯一记录"为什么可以"的地方。 -->
+                        <form method="post" th:action="@{/admin/publish-identities}" style="display:inline"
+                              th:id="'grant-' + ${c.userId}">
+                            <input type="hidden" name="userId" th:value="${c.userId}"/>
+                            <input type="text" name="authorizationNote" maxlength="500" required
+                                   th:placeholder="#{admin.publishIdentity.notePlaceholder}"/>
+                        </form>
+                    </td>
+                    <td>
+                        <button type="submit" class="btn btn-primary btn-sm" th:form="'grant-' + ${c.userId}"
+                                th:disabled="${c.alreadyInPool}"
+                                th:text="${c.alreadyInPool} ? #{admin.publishIdentity.alreadyInPool} : #{admin.publishIdentity.btn.grant}">纳入</button>
+                    </td>
+                </tr>
+                <tr th:if="${candidates.isEmpty()}"><td colspan="5"
+                        th:text="#{admin.publishIdentity.noCandidate}">没有匹配的真实用户账号</td></tr>
+                </tbody>
+            </table>
+
+            <h3 th:text="#{admin.publishIdentity.realList}">身份池内的真实账号</h3>
+            <table>
+                <thead>
+                <tr><th>ID</th><th th:text="#{admin.virtualAccounts.col.nickname}">昵称</th>
+                    <th th:text="#{admin.virtualAccounts.col.avatar}">头像</th>
+                    <th th:text="#{admin.publishIdentity.col.note}">授权说明</th>
+                    <th th:text="#{admin.publishIdentity.col.grantedAt}">纳入时间</th>
+                    <th th:text="#{admin.publishIdentity.col.grantedBy}">纳入人</th>
+                    <th th:text="#{admin.common.status}">状态</th>
+                    <th th:text="#{admin.publishIdentity.col.published}">经后台发布</th>
+                    <th th:text="#{admin.publishIdentity.col.species}">物种推导</th>
+                    <th th:text="#{admin.common.actions}">操作</th></tr>
+                </thead>
+                <tbody>
+                <tr th:each="r : ${realAccounts}">
+                    <td th:text="${r.userId}">0</td>
+                    <td th:text="${r.nickname}">名</td>
+                    <td th:text="${r.avatarUrl} ?: '—'">—</td>
+                    <td th:text="${r.authorizationNote}">说明</td>
+                    <td th:text="${r.grantedAt}">时间</td>
+                    <td th:text="${r.grantedBy}">人</td>
+                    <td th:text="${r.deactivated} ? #{admin.common.disabled} : #{admin.common.enabled}">正常</td>
+                    <!-- 🛡 只统计经后台代发的；持有人在 App 内自主发布的不计入。
+                         括号里的"已被删除"来自另一个写入方（持有人本人）—— 后台不阻止他删，
+                         但记录必须反映出来，不可继续显示为在线。 -->
+                    <td th:text="${r.deletedCount} > 0
+                                 ? ${r.publishedByAdminCount} + ' (' + #{admin.publishIdentity.deleted(${r.deletedCount})} + ')'
+                                 : ${r.publishedByAdminCount}">0</td>
+                    <td th:text="${r.speciesGuess} + ' · ' + ${r.speciesSource}">—</td>
+                    <td>
+                        <a class="btn btn-neutral btn-sm"
+                           th:href="@{/admin/publish-identities/{id}/remove(id=${r.userId})}"
+                           th:text="#{admin.publishIdentity.btn.remove}">移出</a>
+                    </td>
+                </tr>
+                <tr th:if="${realAccounts.isEmpty()}"><td colspan="10"
+                        th:text="#{admin.publishIdentity.realEmpty}">身份池内暂无真实账号</td></tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 </body>

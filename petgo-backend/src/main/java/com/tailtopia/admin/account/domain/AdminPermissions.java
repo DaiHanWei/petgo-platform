@@ -123,6 +123,19 @@ public final class AdminPermissions {
     public static final String VIRTUAL_ACCOUNT_MANAGE = "virtual_account.manage";
     public static final String VIRTUAL_ACCOUNT_VIEW = "virtual_account.view";
 
+    // 运营发布身份池（V1.1.6 Story 12.1 · AB-3I）
+    /**
+     * 以**运营真实账号**身份发布内容，以及该身份池的纳入 / 移除。
+     *
+     * <p>🔴 <b>与 {@link #VIRTUAL_ACCOUNT_MANAGE} 完全解耦，刻意独立</b>：
+     * 能管虚拟账号 ≠ 能以真人身份发言。以运营真实账号误发的后果**不可撤回** ——
+     * 内容会出现在那个真人的个人主页并推送给他的粉丝，事后删除也已经推送过了。
+     *
+     * <p>本版本**仅分配给超级管理员**，不下放（OQ-24）。权限码独立存在的意义是
+     * 后续如需下放，只改权限配置、不改代码。
+     */
+    public static final String SEED_PUBLISH_AS_REAL = "seed.publish_as_real";
+
     // 运营配置（V1.1 Epic 9，Story 9-2/9-6）——定价 / PawCoin / 红色超额阈值等
     /** 配置查看。 */
     public static final String CONFIG_VIEW = "config.view";
@@ -167,7 +180,7 @@ public final class AdminPermissions {
                     CONSULT_HANDLE,
                     SUPPORT_HANDLE, REFUND_SUBMIT, REFUND_APPROVE, REFUND_PAYOUT,
                     CONFIG_EDIT, ORDER_EDIT, SETTLEMENT_PAYOUT, RISK_EDIT,
-                    VIRTUAL_ACCOUNT_MANAGE,
+                    VIRTUAL_ACCOUNT_MANAGE, SEED_PUBLISH_AS_REAL,
                     ADMIN_CREATE_ACCOUNT, ADMIN_DEACTIVATE)));
 
     /** 全部合法权限码（UI 勾选项 + 校验白名单），保持模块分组顺序。 */

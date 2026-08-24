@@ -42,7 +42,9 @@ class AdminWebControllerTest {
         virtualAccountService = mock(AdminVirtualAccountService.class);
         when(virtualAccountService.list()).thenReturn(List.of());
         controller = new AdminWebController(adminContentService, adminModerationService, adminVetService,
-                mock(com.tailtopia.admin.dashboard.service.AdminDashboardService.class), virtualAccountService);
+                mock(com.tailtopia.admin.dashboard.service.AdminDashboardService.class), virtualAccountService,
+                // V1.1.6 Story 12.1：发布账号选择器的数据源（本类不验它，给 mock）。
+                mock(com.tailtopia.admin.virtual.service.AdminPublishIdentityService.class));
     }
 
     private AdminUserDetails admin() {
