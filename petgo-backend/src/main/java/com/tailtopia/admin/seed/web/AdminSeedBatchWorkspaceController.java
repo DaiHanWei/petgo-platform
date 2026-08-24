@@ -4,6 +4,7 @@ import com.tailtopia.admin.seed.domain.SeedBatch;
 import com.tailtopia.admin.seed.service.SeedBatchAssetService;
 import com.tailtopia.admin.seed.service.SeedBatchService;
 import com.tailtopia.admin.service.AdminUserDetails;
+import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.shared.error.AppException;
 import java.util.Map;
 import org.springframework.http.ResponseEntity;
@@ -36,13 +37,25 @@ public class AdminSeedBatchWorkspaceController {
     private static final String AUTH =
             "hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')";
 
+    /** 运营填的墙上时间按这个时区解释（与顶置管理、Excel 导入同口径）。 */
+    private static final java.time.ZoneId WIB = java.time.ZoneId.of("Asia/Jakarta");
+
     private final SeedBatchService batches;
     private final SeedBatchAssetService assets;
+    private final com.tailtopia.admin.seed.service.SeedBatchEntryService entry;
+    private final com.tailtopia.admin.seed.service.SeedBatchExcelService excel;
+    private final com.tailtopia.admin.virtual.service.AdminPublishIdentityService identities;
 
     public AdminSeedBatchWorkspaceController(SeedBatchService batches,
-            SeedBatchAssetService assets) {
+            SeedBatchAssetService assets,
+            com.tailtopia.admin.seed.service.SeedBatchEntryService entry,
+            com.tailtopia.admin.seed.service.SeedBatchExcelService excel,
+            com.tailtopia.admin.virtual.service.AdminPublishIdentityService identities) {
         this.batches = batches;
         this.assets = assets;
+        this.entry = entry;
+        this.excel = excel;
+        this.identities = identities;
     }
 
     /** 批次列表 —— 🛡 按各行状态**聚合**展示（13-1 AC2），批次自己没有状态。 */
@@ -71,8 +84,149 @@ public class AdminSeedBatchWorkspaceController {
         model.addAttribute("active", "seed");
         model.addAttribute("batchId", batchId);
         model.addAttribute("rows", batches.rowsOf(batchId));
+        model.addAttribute("batch", entry.findBatch(batchId).orElse(null));
+        // 🔴 批次级设置的三个下拉数据源。**全页只有这一处** —— 此前在线录入与
+        //    Excel 导入各带一个一模一样的账号下拉，同一页面出现两次。
+        model.addAttribute("publishIdentities", identities.selectableIdentities());
+        model.addAttribute("batchTypes",
+                com.tailtopia.admin.seed.service.SeedBatchExcelService.BATCH_TYPES);
+        model.addAttribute("speciesOptions",
+                com.tailtopia.admin.seed.service.SeedBatchExcelService.SPECIES_OPTIONS);
         addWall(model, batchId);
         return "admin/seed-batch-workspace";
+    }
+
+    /** 页头那一处批次级设置（AC1）。 */
+    @PostMapping("/admin/seed-batches/{batchId}/settings")
+    @PreAuthorize(AUTH)
+    public String saveSettings(@PathVariable long batchId,
+            @RequestParam(required = false) Long defaultAuthorUserId,
+            @RequestParam(required = false) ContentType defaultContentType,
+            @RequestParam(required = false) String defaultScheduledAt,
+            RedirectAttributes flash) {
+        try {
+            entry.saveDefaults(batchId, defaultAuthorUserId, defaultContentType,
+                    wallClockToUtc(defaultScheduledAt));
+            flash.addFlashAttribute("notice", "已保存批次设置");
+        } catch (AppException e) {
+            flash.addFlashAttribute("error", e.getMessage());
+        }
+        return "redirect:/admin/seed-batches/" + batchId;
+    }
+
+    /**
+     * 粘贴多行 → 逐行生成草稿（AC2/AC3）。
+     *
+     * <p>🔴 **按一行一条拆分**。界面上那句提示不可省略 —— 粘入带段落的长正文会被拆成残句，
+     * 而且**不会有任何报错**（每一段都是合法正文）。
+     */
+    @PostMapping("/admin/seed-batches/{batchId}/rows/paste")
+    @PreAuthorize(AUTH)
+    public String paste(@PathVariable long batchId, @RequestParam String lines,
+            RedirectAttributes flash) {
+        try {
+            int n = entry.pasteLines(batchId, lines);
+            flash.addFlashAttribute("notice", "已生成 " + n + " 个待编辑行");
+        } catch (AppException e) {
+            flash.addFlashAttribute("error", e.getMessage());
+        }
+        return "redirect:/admin/seed-batches/" + batchId;
+    }
+
+    @PostMapping("/admin/seed-batches/{batchId}/rows")
+    @PreAuthorize(AUTH)
+    public String addRow(@PathVariable long batchId, RedirectAttributes flash) {
+        entry.addBlankRow(batchId);
+        return "redirect:/admin/seed-batches/" + batchId;
+    }
+
+    /** 逐行编辑（行卡片上的保存）。空值一律表示"继承默认"。 */
+    @PostMapping("/admin/seed-batches/{batchId}/rows/{rowId}")
+    @PreAuthorize(AUTH)
+    public String editRow(@PathVariable long batchId, @PathVariable long rowId,
+            @RequestParam(required = false) String body,
+            @RequestParam(required = false) String assetFileNames,
+            @RequestParam(required = false) Long authorUserId,
+            @RequestParam(required = false) ContentType contentType,
+            @RequestParam(required = false) String species,
+            @RequestParam(required = false) String scheduledAt,
+            RedirectAttributes flash) {
+        try {
+            entry.editRow(rowId, body, splitNames(assetFileNames), authorUserId, contentType,
+                    species, wallClockToUtc(scheduledAt));
+            flash.addFlashAttribute("notice", "已保存第 " + rowId + " 行");
+        } catch (AppException e) {
+            flash.addFlashAttribute("error", e.getMessage());
+        }
+        return "redirect:/admin/seed-batches/" + batchId;
+    }
+
+    @PostMapping("/admin/seed-batches/{batchId}/rows/{rowId}/delete")
+    @PreAuthorize(AUTH)
+    public String deleteRow(@PathVariable long batchId, @PathVariable long rowId) {
+        entry.deleteRow(rowId);
+        return "redirect:/admin/seed-batches/" + batchId;
+    }
+
+    /** 带下拉数据校验的 Excel 模板（AC4）。 */
+    @GetMapping("/admin/seed-batches/{batchId}/template")
+    @PreAuthorize(AUTH)
+    @ResponseBody
+    public ResponseEntity<byte[]> template(@PathVariable long batchId) {
+        byte[] bytes = excel.template(identities.selectableIdentities());
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=seed-batch-template.xlsx")
+                .contentType(org.springframework.http.MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(bytes);
+    }
+
+    /** Excel 导入（AC4）。🛡 与在线录入**共用同一套字段继承规则**。 */
+    @PostMapping("/admin/seed-batches/{batchId}/import")
+    @PreAuthorize(AUTH)
+    public String importExcel(@PathVariable long batchId, @RequestParam MultipartFile file,
+            RedirectAttributes flash) {
+        try {
+            var raws = excel.parse(file);
+            int n = entry.appendRows(batchId, raws).size();
+            flash.addFlashAttribute("notice", "已导入 " + n + " 行");
+        } catch (AppException e) {
+            flash.addFlashAttribute("error", e.getMessage());
+        }
+        return "redirect:/admin/seed-batches/" + batchId;
+    }
+
+    /**
+     * 运营填的墙上时间 → UTC。
+     *
+     * <p>⚠️ 面向印尼市场，运营心里那个"9 月 1 日早上 8 点"是 **WIB**。
+     * 按服务器时区解释会整体偏 7 小时，而这种偏差在测试环境（也在 UTC）里看不出来。
+     */
+    private static java.time.Instant wallClockToUtc(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return java.time.LocalDateTime.parse(raw.trim().replace(' ', 'T'))
+                    .atZone(WIB).toInstant();
+        } catch (Exception e) {
+            throw AppException.validation("时间格式应为 2026-09-01T08:30");
+        }
+    }
+
+    private static java.util.List<String> splitNames(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return java.util.List.of();
+        }
+        java.util.List<String> out = new java.util.ArrayList<>();
+        for (String p : raw.split(",")) {
+            String t = p.trim();
+            if (!t.isEmpty()) {
+                out.add(t);
+            }
+        }
+        return out;
     }
 
     /**

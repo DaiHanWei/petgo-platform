@@ -225,7 +225,7 @@ development_status:
   epic-13: in-progress
   13-1-草稿与排期状态机及批次模型: review            # AB-3K/3L 地基 🔴 状态挂行上、批次不持有状态；草稿不得写进 content_posts
   13-2-批量素材上传与宽高比警告: review              # AB-3K Step1 🔴 清理对象是行不是批次（按批次清会删掉已排期的行）
-  13-3-批量内容录入在线与excel: ready-for-dev               # AB-3K Step0+2 🔴 粘贴分行限制必须界面明示（拆错不报错）
+  13-3-批量内容录入在线与excel: review               # AB-3K Step0+2 🔴 粘贴分行限制必须界面明示（拆错不报错）
   13-4-校验预览确认发布与去重口径修正: ready-for-dev        # AB-3K Step3 🔴 指纹加作者维度 + 删除时清理（现无清理→文案永久无法重发）
   13-5-定时发布与排期管理: ready-for-dev                    # AB-3L 🛡 走既有发布链路含自动审核、无豁免
   epic-13-retrospective: optional

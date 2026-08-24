@@ -7,6 +7,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import com.tailtopia.content.domain.ContentType;
 import jakarta.persistence.Table;
 import java.time.Instant;
 
@@ -46,7 +47,42 @@ public class SeedBatch {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /**
+     * 批次级默认发布账号（V1.1.6 Story 13.3 · AC1/AC5）。
+     *
+     * <p>🔴 <b>它的存在消除了两处重复的账号下拉</b>：此前在线录入与 Excel 导入
+     * 各带一个一模一样的下拉。而逐行必填意味着 50 行填 50 次、其中大多数是同一个值 ——
+     * 纯重复劳动，且手打账号名比选下拉更易错（§7.5 第 2 条）。
+     *
+     * <p>⚠️ 这**覆盖**了 V1.1.0 原「发布账号留空 = 校验失败、视为必填缺失」的规则。
+     */
+    @Column(name = "default_author_user_id")
+    private Long defaultAuthorUserId;
+
+    /**
+     * 批次默认内容类型。
+     *
+     * <p>🔴 只允许 {@code DAILY} / {@code KNOWLEDGE} —— **批量不支持
+     * {@code GROWTH_MOMENT}**（A-10）。理由已从"做不到"变为"**不该做**"：
+     * 运营真实账号有宠物档案后技术上可行了，但成长日历需逐行绑定具体宠物与事件日期、
+     * 且属"真实记录"性质，不适合批量灌入。
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "default_content_type", length = 20)
+    private ContentType defaultContentType;
+
+    /** 批次默认计划发布时间。{@code null} = 立即发布。 */
+    @Column(name = "default_scheduled_at")
+    private Instant defaultScheduledAt;
+
     protected SeedBatch() {
+    }
+
+    /** 页头那一处批次级设置。三项都可留空。 */
+    public void applyDefaults(Long authorUserId, ContentType type, Instant scheduledAt) {
+        this.defaultAuthorUserId = authorUserId;
+        this.defaultContentType = type;
+        this.defaultScheduledAt = scheduledAt;
     }
 
     public static SeedBatch open(Source source, long adminAccountId) {
@@ -71,5 +107,17 @@ public class SeedBatch {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public Long getDefaultAuthorUserId() {
+        return defaultAuthorUserId;
+    }
+
+    public ContentType getDefaultContentType() {
+        return defaultContentType;
+    }
+
+    public Instant getDefaultScheduledAt() {
+        return defaultScheduledAt;
     }
 }

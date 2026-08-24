@@ -76,6 +76,18 @@ public class SeedBatchRow {
     @Column(name = "image_sizes")
     private List<ImageSize> imageSizes;
 
+    /**
+     * 关联物种（AB-3H / Story 14-1 的字段；本 story 只负责**承载与继承**）。
+     *
+     * <p>🔴 <b>刻意没有批次级默认</b>（A-14）：账号物种定位本身就在扮演账号级默认值的角色、
+     * 而且扮演得更好（配一次永久生效、跟着账号走）。再加一层批次默认会与它冲突 ——
+     * 批次默认设「猫」、行留空、而该行发布账号是狗号时，<b>取谁没有正确答案</b>。
+     *
+     * <p>留空的解析规则见 {@code SeedRowDefaults}。
+     */
+    @Column(name = "species", length = 20)
+    private String species;
+
     /** 计划发布时刻（UTC）。null = 还没排期。 */
     @Column(name = "scheduled_at")
     private Instant scheduledAt;
@@ -105,7 +117,14 @@ public class SeedBatchRow {
     /** 新录入的一行，初始为 {@link SeedBatchRowStatus#DRAFT}。 */
     public static SeedBatchRow draft(long batchId, int rowNo, long authorUserId, ContentType type,
             Long petId, String body, List<String> imageUrls, List<ImageSize> imageSizes) {
+        return draft(batchId, rowNo, authorUserId, type, petId, body, imageUrls, imageSizes, null);
+    }
+
+    public static SeedBatchRow draft(long batchId, int rowNo, long authorUserId, ContentType type,
+            Long petId, String body, List<String> imageUrls, List<ImageSize> imageSizes,
+            String species) {
         SeedBatchRow r = new SeedBatchRow();
+        r.species = species;
         r.batchId = batchId;
         r.rowNo = rowNo;
         r.status = SeedBatchRowStatus.DRAFT;
@@ -220,6 +239,21 @@ public class SeedBatchRow {
 
     public List<ImageSize> getImageSizes() {
         return imageSizes;
+    }
+
+    public String getSpecies() {
+        return species;
+    }
+
+    /** 行级覆盖：填了就用填的（AC5「填了就用你填的，留空就继承默认」）。 */
+    public void setSpecies(String species) {
+        this.species = species;
+        this.updatedAt = Instant.now();
+    }
+
+    public void setAuthorUserId(long authorUserId) {
+        this.authorUserId = authorUserId;
+        this.updatedAt = Instant.now();
     }
 
     public Instant getScheduledAt() {
