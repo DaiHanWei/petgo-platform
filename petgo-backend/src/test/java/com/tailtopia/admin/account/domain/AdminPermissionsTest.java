@@ -79,6 +79,8 @@ class AdminPermissionsTest {
         // + 2（V1.1.6 Story 11.3 用户标签 user.tag_view / user.tag_manage）= 51
         // + 2（V1.1.6 Story 11.4 手机号 user.phone_view / user.phone_export）= 53
         // + 1（V1.1.6 Story 12.1 运营发布身份池 seed.publish_as_real）= 54
+        // + 2（V1.1.6 Story 15.1 互动积分 content.stats_view / content.stats_export）= 56
+        //     ⚠️ 两个都归**查看组** —— 导出不改任何数据，它是"看得更狠的一种看"（同 11.4）。
         //     🔴 归**编辑组**，且与 virtual_account.manage **完全解耦** ——
         //     能管虚拟账号 ≠ 能以真人身份发言（以真实账号误发不可撤回：已推送给他的粉丝）。
         //     ⚠️ 两个都归**查看组** —— 导出不改任何数据，它是"看得更狠的一种看"。 
@@ -86,6 +88,6 @@ class AdminPermissionsTest {
         // ⚠️ 这条守的是「新增权限码是件需要被看见的事」：权限码一旦落地即冻结（改名会切断
         //    已授予关系），所以每加一个都应当在这里留一行账，而不是让数字悄悄变大。
         List<String> all = AdminPermissions.ALL;
-        assertThat(all).hasSize(54);
+        assertThat(all).hasSize(56);
     }
 }

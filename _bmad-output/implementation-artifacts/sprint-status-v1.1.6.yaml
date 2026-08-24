@@ -232,8 +232,8 @@ development_status:
   epic-14: in-progress
   14-1-种子内容物种归属标记: review                  # AB-3H 🔴 必须排在 12-2 与 13-3 之后；读时推导、改账号定位零回填
   epic-14-retrospective: optional
-  epic-15: backlog
-  15-1-内容互动积分与双口径统计: ready-for-dev              # AB-3G ✅ A-2 已闭合：赞/评时间戳都在（V9/V10），口径B 无需新增记录；本条零迁移
+  epic-15: in-progress
+  15-1-内容互动积分与双口径统计: review              # AB-3G ✅ A-2 已闭合：赞/评时间戳都在（V9/V10），口径B 无需新增记录；本条零迁移
   epic-15-retrospective: optional
 
 # ===== 开工前须知的开放问题（详见架构 delta §8） =====

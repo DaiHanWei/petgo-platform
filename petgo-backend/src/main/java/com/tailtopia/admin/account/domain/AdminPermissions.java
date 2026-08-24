@@ -123,6 +123,18 @@ public final class AdminPermissions {
     public static final String VIRTUAL_ACCOUNT_MANAGE = "virtual_account.manage";
     public static final String VIRTUAL_ACCOUNT_VIEW = "virtual_account.view";
 
+    // 内容互动积分统计（V1.1.6 Story 15.1 · AB-3G）
+    /** 互动积分榜查看。 */
+    public static final String CONTENT_STATS_VIEW = "content.stats_view";
+    /**
+     * 互动积分榜导出。
+     *
+     * <p>🔴 <b>与查看分开的第二个码</b>，理由同 Story 11.4：导出是把数据**批量带出系统**，
+     * 风险高一档。⚠️ 本条导出的是内容统计而非 PII，但**既有约定一致更好记** ——
+     * 让"导出永远是单独一个码"成为一条不用查的规矩，比逐个功能权衡更省心。
+     */
+    public static final String CONTENT_STATS_EXPORT = "content.stats_export";
+
     // 运营发布身份池（V1.1.6 Story 12.1 · AB-3I）
     /**
      * 以**运营真实账号**身份发布内容，以及该身份池的纳入 / 移除。
@@ -166,6 +178,7 @@ public final class AdminPermissions {
             new PermissionGroup("perm.group.view", List.of(
                     CONTENT_VIEW_REPORTS, CONTENT_VIEW_TICKETS, CONTENT_VIEW, CONTENT_PIN_VIEW, CONTENT_TAG_VIEW,
                     USER_VIEW, USER_TAG_VIEW, USER_PHONE_VIEW, USER_PHONE_EXPORT,
+                    CONTENT_STATS_VIEW, CONTENT_STATS_EXPORT,
                     VET_VIEW, VET_QUALIFY_VIEW, RATING_VIEW,
                     CONSULT_VIEW_ANOMALIES, CONSULT_VIEW_SESSIONS,
                     SUPPORT_VIEW, REFUND_VIEW,

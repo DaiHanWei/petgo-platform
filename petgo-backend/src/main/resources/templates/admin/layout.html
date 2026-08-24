@@ -66,7 +66,7 @@
              往中间插一项会打乱它，且渲染烟测 contentNavKeepsTheProductSpecifiedOrder 正盯着那个顺序。
              本分组后续由 Story 11.2（装饰标签）继续加项。 -->
         <details class="nav-section"
-                 sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.pin_view') or hasAuthority('content.tag_view')"
+                 sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.pin_view') or hasAuthority('content.tag_view') or hasAuthority('content.stats_view')"
                  th:attr="open=${active == 'content-pins' or active == 'content-tags'} ? 'open' : null">
             <summary th:classappend="${active == 'content-pins' or active == 'content-tags'} ? 'active'"
                      th:text="#{admin.nav.group.contentOps}">内容运营</summary>
@@ -81,6 +81,12 @@
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.tag_view')"
                    th:href="@{/admin/content-tags}" th:classappend="${active == 'content-tags'} ? 'active'"
                    th:text="#{admin.nav.contentTags}">装饰标签</a>
+                <!-- 内容互动积分（V1.1.6 Story 15.1）。
+                     🛡 与 AdminContentStatsController.VIEW 逐字一致 ——
+                     不一致的表现是"看得见入口点进去 403"或"有权限却看不到入口"。 -->
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.stats_view')"
+                   th:href="@{/admin/content-stats}" th:classappend="${active == 'content-stats'} ? 'active'"
+                   th:text="#{admin.nav.contentStats}">内容互动积分</a>
             </div>
         </details>
         <!-- 用户运营（后台 PRD 模块 12）：用户标签。

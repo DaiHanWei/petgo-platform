@@ -165,7 +165,9 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
                 // V1.1.6 Story 13.2：批次列表（工作台需要一个真实 batchId，另在其专属测试里渲染）。
                 "/admin/seed-batches",
                 // V1.1.6 Story 13.5：排期管理（12-1 的移出提示会跳到这里）。
-                "/admin/content-schedules"};
+                "/admin/content-schedules",
+                // V1.1.6 Story 15.1：内容互动积分榜。
+                "/admin/content-stats"};
         for (String p : paths) {
             assertRenders(p, "zh_CN");
             assertRenders(p, "en");
