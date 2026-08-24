@@ -39,4 +39,12 @@ public interface SeedBatchRowRepository extends JpaRepository<SeedBatchRow, Long
      */
     List<SeedBatchRow> findByStatusAndScheduledAtLessThanEqualOrderByScheduledAtAsc(
             SeedBatchRowStatus status, Instant deadline);
+
+    /** 排期列表（13-5 AC4）。⚠️ 含 FAILED —— 失败的行要**留在列表里**供运营处理，不自动消失。 */
+    List<SeedBatchRow> findByStatusInOrderByScheduledAtAsc(
+            java.util.Collection<SeedBatchRowStatus> statuses);
+
+    /** 按发布账号过滤（12-1 的移出提示会带 authorId 跳进来）。 */
+    List<SeedBatchRow> findByStatusInAndAuthorUserIdOrderByScheduledAtAsc(
+            java.util.Collection<SeedBatchRowStatus> statuses, long authorUserId);
 }

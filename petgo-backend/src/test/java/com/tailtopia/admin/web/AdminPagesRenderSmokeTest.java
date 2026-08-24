@@ -163,7 +163,9 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
                 // ⚠️ 这一页此前不在本表里 —— 加进来才会验它的 i18n 键在两种语言下都齐。
                 "/admin/virtual-accounts",
                 // V1.1.6 Story 13.2：批次列表（工作台需要一个真实 batchId，另在其专属测试里渲染）。
-                "/admin/seed-batches"};
+                "/admin/seed-batches",
+                // V1.1.6 Story 13.5：排期管理（12-1 的移出提示会跳到这里）。
+                "/admin/content-schedules"};
         for (String p : paths) {
             assertRenders(p, "zh_CN");
             assertRenders(p, "en");

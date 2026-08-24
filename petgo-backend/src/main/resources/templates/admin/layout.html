@@ -28,6 +28,10 @@
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')"
                    th:href="@{/admin/seed-batches}" th:classappend="${active == 'seed-batches'} ? 'active'"
                    th:text="#{admin.nav.seedBatches}">批量内容</a>
+                <!-- 排期管理（V1.1.6 Story 13.5）。🛡 与 AdminContentScheduleController 的门逐字一致。 -->
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')"
+                   th:href="@{/admin/content-schedules}" th:classappend="${active == 'content-schedules'} ? 'active'"
+                   th:text="#{admin.nav.contentSchedules}">排期管理</a>
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.proactive_takedown')"
                    th:href="@{/admin/content}" th:classappend="${active == 'content'} ? 'active'"
                    th:text="#{admin.nav.content}">内容管理</a>

@@ -210,12 +210,20 @@ public class AdminSeedBatchWorkspaceController {
         if (raw == null || raw.isBlank()) {
             return null;
         }
+        java.time.Instant at;
         try {
-            return java.time.LocalDateTime.parse(raw.trim().replace(' ', 'T'))
+            at = java.time.LocalDateTime.parse(raw.trim().replace(' ', 'T'))
                     .atZone(WIB).toInstant();
         } catch (Exception e) {
             throw AppException.validation("时间格式应为 2026-09-01T08:30");
         }
+        // 🔴 V1.1.6 Story 13.5 · AC1：**不可早于当前时刻**。
+        //    排一个已经过去的时间，下一轮扫描就会立刻发出去 —— 而运营的本意多半是
+        //    "排到某个更晚的时候"，手滑填成过去的日期就成了立即发布，且不可撤回。
+        if (!at.isAfter(java.time.Instant.now())) {
+            throw AppException.validation("计划发布时间不能早于当前时刻（印尼时间 WIB）");
+        }
+        return at;
     }
 
     private static java.util.List<String> splitNames(String raw) {

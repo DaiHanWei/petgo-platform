@@ -13,6 +13,7 @@ import com.tailtopia.content.dto.ContentPostCreateRequest;
 import com.tailtopia.content.dto.ContentPostResponse;
 import com.tailtopia.content.service.ContentService;
 import com.tailtopia.shared.error.AppException;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -43,11 +44,15 @@ public class SeedBatchPublishService {
     private final SeedBatchService stateMachine;
     private final ContentService contentService;
     private final SeedContentHashRepository hashes;
+    private final com.tailtopia.auth.repository.UserRepository users;
+    private final com.tailtopia.admin.virtual.service.AdminPublishIdentityService identities;
     private final AdminAuditService audit;
 
     public SeedBatchPublishService(SeedBatchRepository batches, SeedBatchRowRepository rows,
             SeedBatchValidator validator, SeedBatchService stateMachine,
             ContentService contentService, SeedContentHashRepository hashes,
+            com.tailtopia.auth.repository.UserRepository users,
+            com.tailtopia.admin.virtual.service.AdminPublishIdentityService identities,
             AdminAuditService audit) {
         this.batches = batches;
         this.rows = rows;
@@ -55,6 +60,8 @@ public class SeedBatchPublishService {
         this.stateMachine = stateMachine;
         this.contentService = contentService;
         this.hashes = hashes;
+        this.users = users;
+        this.identities = identities;
         this.audit = audit;
     }
 
@@ -107,11 +114,14 @@ public class SeedBatchPublishService {
             }
             try {
                 stateMachine.markValidated(row.getId());
-                if (row.getScheduledAt() != null) {
+                // ⚠️ 计划时间已经过了 ⇒ **立即发**，而不是排一个已经过期的期。
+                //    运营昨天排的、今天才点确认，属常见情形；排进去也只是让扫描器
+                //    在下一轮把它发出来，中间多一次状态跳转、还多一条"逾期"的观感。
+                if (row.getScheduledAt() != null && row.getScheduledAt().isAfter(Instant.now())) {
                     stateMachine.schedule(row.getId(), row.getScheduledAt(), adminAccountId);
                     scheduled++;
                 } else {
-                    publishNow(row, adminAccountId);
+                    publishRowNow(row, adminAccountId);
                     published++;
                 }
             } catch (RuntimeException e) {
@@ -135,9 +145,34 @@ public class SeedBatchPublishService {
      *
      * <p>🔴 <b>内容类型取自该行</b>（{@code DAILY} / {@code KNOWLEDGE}）。
      * 老路径把它硬编码成 {@code DAILY} —— 那是 V1.1.0 AB-1.1-02 的**实现偏差而非需求变更**，
-     * 本 story 把它恢复（AC6）。
+     * 13-4 把它恢复。
+     *
+     * <p>🛡 <b>V1.1.6 Story 13.5 起，到点发布的扫描器调用的就是这个方法</b>（不是私有的了）。
+     * 那条 AC 写着「走与即时发布**完全相同的链路**，含内容自动审核、无豁免」——
+     * 而"另写一条到点发布的快路"是最容易被想到的省事做法。
+     * 共用同一个方法是让那条 AC 在**结构上**成立，而不是靠两处代码碰巧一致。
      */
-    private void publishNow(SeedBatchRow row, long adminAccountId) {
+    public void publishRowNow(SeedBatchRow row, long adminAccountId) {
+        // 🔴 V1.1.6 Story 13.5 · AC5：**发布那一刻**再确认账号还能用。
+        //
+        // 排期期间账号可能被移出身份池或被停用 —— 那正是 12-1 那条"移出前提示还有 N 条排期"
+        // 要防的后果。确认发布时校验过一遍，但**排期是隔了几天才执行的**，
+        // 中间的状态变化只有这里能看见。
+        //
+        // ⚠️ 这里**只查会变的状态**（在不在池内 / 有没有被停用），
+        //    **不查 seed.publish_as_real 权限** —— 那是"谁授权了这次发布"的问题，
+        //    在运营点确认那一刻就已经查过；扫描器手里压根没有操作人主体，
+        //    在这里再查一次只能查出"没有权限"，把所有排期都毙掉。
+        com.tailtopia.auth.domain.User author = users.findById(row.getAuthorUserId())
+                .orElseThrow(() -> AppException.validation(
+                        "发布账号 id=" + row.getAuthorUserId() + " 已不存在"));
+        if (!identities.isInPool(author)) {
+            throw AppException.validation(
+                    "发布账号「" + author.getNickname() + "」已不在运营发布身份池内");
+        }
+        if (!author.isEnabled()) {
+            throw AppException.validation("发布账号「" + author.getNickname() + "」已停用");
+        }
         ContentPostResponse saved = contentService.publish(row.getAuthorUserId(),
                 new ContentPostCreateRequest(row.getContentType(), row.getPetId(), row.getBody(),
                         row.getImageUrls(), null, null, row.getImageSizes()),
@@ -160,7 +195,7 @@ public class SeedBatchPublishService {
      * 在同一个事务里写"失败原因"会连带丢掉 —— 于是运营看到的是一行没有任何说明的失败。
      */
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
-    void safelyFail(long rowId, String reason) {
+    public void safelyFail(long rowId, String reason) {
         try {
             stateMachine.markFailed(rowId, reason == null ? "发布失败" : reason);
         } catch (RuntimeException ignored) {
