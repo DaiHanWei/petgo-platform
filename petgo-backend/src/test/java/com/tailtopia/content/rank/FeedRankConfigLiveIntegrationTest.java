@@ -40,7 +40,7 @@ class FeedRankConfigLiveIntegrationTest extends ApiIntegrationTest {
     private ContentPostRepository posts;
 
     private static final FeedRankForm SEED =
-            new FeedRankForm(0.6, 0.4, 2, 0.3, 7, 10, 5, 3, 2, 6, 2, 2);
+            new FeedRankForm(0.6, 0.4, 2, 0.3, 0.2, 7, 10, 5, 3, 2, 6, 2, 2);
 
     @AfterEach
     void restore() {
@@ -64,7 +64,7 @@ class FeedRankConfigLiveIntegrationTest extends ApiIntegrationTest {
     /** 🔴 写进去的值，读服务下一次就拿到 —— 中间没有任何缓存层。 */
     @Test
     void writeIsVisibleToTheReadServiceImmediately() {
-        write.updateFeedRank(new FeedRankForm(0.9, 0.1, 5, 0.15, 21, 10, 5, 3, 2, 6, 2, 2), 1L);
+        write.updateFeedRank(new FeedRankForm(0.9, 0.1, 5, 0.15, 0.2, 21, 10, 5, 3, 2, 6, 2, 2), 1L);
 
         FeedRankConfig c = read.feedRank();
         assertThat(c.getFreshnessWeight()).isEqualTo(0.9);
@@ -86,7 +86,7 @@ class FeedRankConfigLiveIntegrationTest extends ApiIntegrationTest {
                 read.feedRank().getWindowSize());
         assertThat(before.variantA()).containsExactlyElementsOf(AttributeTemplate.A);
 
-        write.updateFeedRank(new FeedRankForm(0.6, 0.4, 2, 0.3, 7, 10, 4, 4, 2, 6, 2, 2), 1L);
+        write.updateFeedRank(new FeedRankForm(0.6, 0.4, 2, 0.3, 0.2, 7, 10, 4, 4, 2, 6, 2, 2), 1L);
 
         FeedRankConfig c = read.feedRank();
         AttributeSchedule after = AttributeTemplate.forQuotas(c.getAttrFunQuota(),
@@ -113,7 +113,7 @@ class FeedRankConfigLiveIntegrationTest extends ApiIntegrationTest {
             posts.save(ContentPost.publish(newUser().getId(), ContentType.DAILY, null,
                     "cfg-live-" + SEQ.incrementAndGet(), List.of()));
         }
-        write.updateFeedRank(new FeedRankForm(0.2, 0.8, 4, 0.5, 3, 10, 4, 4, 2, 5, 3, 2), 1L);
+        write.updateFeedRank(new FeedRankForm(0.2, 0.8, 4, 0.5, 0.2, 3, 10, 4, 4, 2, 5, 3, 2), 1L);
 
         mvc.perform(get("/api/v1/content-posts"))
                 .andExpect(status().isOk());

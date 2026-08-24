@@ -123,6 +123,13 @@ public class AdminConfigService {
         require(form.exposureDecay() >= 0 && form.exposureDecay() <= 1,
                 "曝光衰减须在 0–1（大于 1 就是「看过的排更前面」，与这一维的意图相反）");
         require(form.seenWindowDays() >= 1, "曝光窗口须 ≥ 1 天");
+        // 🛡 Story 17.1 · AC2：两头都不能取到 —— 与建表 CHECK 同一口径。
+        // ≥ 1 不是降权（等于没处置）；= 0 让分数恒为 0 ⇒ 永远排不进推荐序 ⇒ 事实上等于下架，
+        // 而那条 AC 明令「限流是降权不是下架」。这里给的是人话理由，
+        // 靠 CHECK 兜底会以 500 的形式露出来，运营看不懂。
+        require(form.throttleFactor() > 0 && form.throttleFactor() < 1,
+                "限流系数须在 0–1 之间且两端都不取："
+                        + "取 1 等于没处置，取 0 会让被限流的内容永远排不进首页（那是下架，不是降权）");
 
         String attrProblem = AttributeTemplate.rejectUnusableQuotas(form.attrFunQuota(),
                 form.attrEduQuota(), form.attrLifeQuota(), form.windowSize());
@@ -143,6 +150,7 @@ public class AdminConfigService {
         diff(logs, t, "interaction_weight", c.getInteractionWeight(), form.interactionWeight(), adminId);
         diff(logs, t, "comment_weight", c.getCommentWeight(), form.commentWeight(), adminId);
         diff(logs, t, "exposure_decay", c.getExposureDecay(), form.exposureDecay(), adminId);
+        diff(logs, t, "throttle_factor", c.getThrottleFactor(), form.throttleFactor(), adminId);
         diff(logs, t, "seen_window_days", c.getSeenWindowDays(), form.seenWindowDays(), adminId);
         diff(logs, t, "window_size", c.getWindowSize(), form.windowSize(), adminId);
         diff(logs, t, "attr_fun_quota", c.getAttrFunQuota(), form.attrFunQuota(), adminId);
@@ -158,6 +166,7 @@ public class AdminConfigService {
         c.setInteractionWeight(form.interactionWeight());
         c.setCommentWeight(form.commentWeight());
         c.setExposureDecay(form.exposureDecay());
+        c.setThrottleFactor(form.throttleFactor());
         c.setSeenWindowDays(form.seenWindowDays());
         c.setWindowSize(form.windowSize());
         c.setAttrFunQuota(form.attrFunQuota());

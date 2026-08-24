@@ -45,6 +45,7 @@ class FeedRecommendationServiceTest {
     private PetProfileRepository pets;
     private FeedSeenStore seen;
     private FeedSequenceStore sequences;
+    private com.tailtopia.moderation.throttle.service.RankThrottleService throttles;
     private FeedRecommendationService service;
 
     @BeforeEach
@@ -88,9 +89,13 @@ class FeedRecommendationServiceTest {
                 mock(com.tailtopia.config.service.PlatformConfigService.class);
         when(platformConfig.feedRank()).thenReturn(cfg);
 
+        // Story 17.1：本类不验限流（有 RankThrottleIntegrationTest），默认无限流记录。
+        throttles = mock(com.tailtopia.moderation.throttle.service.RankThrottleService.class);
+        when(throttles.factorsFor(anyList(), any())).thenReturn(Map.of());
+
         service = new FeedRecommendationService(posts, likes, comments, tags, species, pets,
                 seen, sequences, new FeedRankEngine(),
-                new FeedRankProperties(30, 100, 1000), platformConfig);
+                new FeedRankProperties(30, 100, 1000), platformConfig, throttles);
     }
 
     private static ContentPost post(long id, long authorId) {

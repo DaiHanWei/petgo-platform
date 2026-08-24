@@ -5,12 +5,15 @@ package com.tailtopia.admin.config.dto;
  *
  * <p>⚠️ <b>不含 P95</b>：它是定期重算的动态值，不是运营手填的常数。
  * 做成输入框只会让人以为"填个大点的数就能压住爆款"，而下一次重算就把它冲掉了。
+ *
+ * <p>{@code throttleFactor} 是 Story 17.1 · AC5 加的限流系数（平台级，默认 0.2）。
  */
 public record FeedRankForm(
         double freshnessWeight,
         double interactionWeight,
         double commentWeight,
         double exposureDecay,
+        double throttleFactor,
         int seenWindowDays,
         int windowSize,
         int attrFunQuota,

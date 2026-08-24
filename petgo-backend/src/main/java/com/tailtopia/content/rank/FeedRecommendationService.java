@@ -10,6 +10,7 @@ import com.tailtopia.content.species.ContentSpeciesResolver;
 import com.tailtopia.content.species.ResolvedSpecies;
 import com.tailtopia.config.domain.FeedRankConfig;
 import com.tailtopia.config.service.PlatformConfigService;
+import com.tailtopia.moderation.throttle.service.RankThrottleService;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import java.time.Instant;
@@ -81,12 +82,14 @@ public class FeedRecommendationService {
      * （沿用 {@link PlatformConfigService} 既有口径，护栏禁通用缓存层）。
      */
     private final PlatformConfigService platformConfig;
+    private final RankThrottleService rankThrottles;
 
     public FeedRecommendationService(ContentPostRepository posts, ContentLikeRepository likes,
             CommentRepository comments, ContentTagQueryService contentTags,
             ContentSpeciesResolver speciesResolver, PetProfileRepository pets,
             FeedSeenStore seenStore, FeedSequenceStore sequenceStore, FeedRankEngine engine,
-            FeedRankProperties props, PlatformConfigService platformConfig) {
+            FeedRankProperties props, PlatformConfigService platformConfig,
+            RankThrottleService rankThrottles) {
         this.posts = posts;
         this.likes = likes;
         this.comments = comments;
@@ -98,6 +101,7 @@ public class FeedRecommendationService {
         this.engine = engine;
         this.props = props;
         this.platformConfig = platformConfig;
+        this.rankThrottles = rankThrottles;
     }
 
     /**
@@ -282,10 +286,15 @@ public class FeedRecommendationService {
         Map<Long, Double> decay = seenStore.decayFactors(key,
                 candidates.stream().map(RankCandidate::id).toList(), now);
 
+        // 限流系数（Story 17.1 · AC6）。🛡 无限流记录 ⇒ 返回空 Map ⇒ 引擎按缺省 1.0 处理，
+        // 而不是回填一堆 1.0（回填会把「没有处置」和「处置成 1.0」混成一件事）。
+        Map<Long, Double> throttle = rankThrottles.factorsFor(candidates.stream()
+                .map(c -> new RankThrottleService.Target(c.id(), c.authorId()))
+                .toList(), now);
+
         FeedRankEngine.Result r = engine.rank(new FeedRankEngine.Input(candidates,
                 viewerMainSpecies(viewerId), decay, honored,
-                // 🛡 限流系数：Epic 17 接入前恒 1.0（空 Map 即缺省 1.0）
-                Map.<Long, Double>of(), now, params, schedule), wanted);
+                throttle, now, params, schedule), wanted);
         if (r.attributeRelaxed() > 0 || r.speciesRelaxed() > 0) {
             // 🛡 级别 1、2 是**预期行为，不告警** —— 只记 debug 供排查（§6.2）。
             log.debug("推荐序降级 池={} 属性放宽={} 物种放宽={} 防扎堆让步={}",
@@ -300,7 +309,10 @@ public class FeedRecommendationService {
      *
      * <p>🛡 荣誉加成直接取 {@link ContentTagQueryService#RANK_WEIGHT_MULTIPLIER} ——
      * 那是既有的唯一事实源，<b>不在配置表里再存一份 1.3</b>（存两份就会出现改了一处没改另一处，
-     * 而那不会报错）。限流系数（0.2）同理，归 Epic 17。
+     * 而那不会报错）。
+     *
+     * <p>⚠️ 限流系数不在这里 —— 它是<b>逐条</b>的（哪条内容被降权），
+     * 而本方法产出的是**整批共用**的打分参数。见上面的 {@code throttle}。
      */
     private RankParams params(FeedRankConfig cfg, List<RankCandidate> candidates) {
         return new RankParams(

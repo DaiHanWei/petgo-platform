@@ -49,6 +49,8 @@ class AdminFeedRankConfigTest {
         set(c, "commentWeight", 2.0);
         set(c, "interactionP95", 0d);
         set(c, "exposureDecay", 0.3);
+        set(c, "throttleFactor", 0.2); // Story 17.1
+
         set(c, "seenWindowDays", 7);
         set(c, "windowSize", 10);
         set(c, "attrFunQuota", 5);
@@ -80,9 +82,21 @@ class AdminFeedRankConfigTest {
         }
     }
 
+    /**
+     * 默认限流系数走 {@link #VALID_THROTTLE}（Story 17.1 加的字段）—— 让本类既有的
+     * 10 个调用点保持原样，它们验的是权重与配比，与限流无关。限流系数本身由
+     * {@code throttleFactor...} 那几条用例用 {@link #formWithThrottle} 单独验。
+     */
+    private static final double VALID_THROTTLE = 0.2;
+
     private static FeedRankForm form(double fw, double iw, double cw, double decay, int days,
             int window, int fun, int edu, int life, int main, int other, int general) {
-        return new FeedRankForm(fw, iw, cw, decay, days, window, fun, edu, life, main, other, general);
+        return new FeedRankForm(fw, iw, cw, decay, VALID_THROTTLE, days, window, fun, edu, life,
+                main, other, general);
+    }
+
+    private static FeedRankForm formWithThrottle(double throttle) {
+        return new FeedRankForm(0.7, 0.3, 3, 0.2, throttle, 14, 10, 5, 3, 2, 6, 2, 2);
     }
 
     private static FeedRankForm valid() {
@@ -118,6 +132,46 @@ class AdminFeedRankConfigTest {
         svc.updateFeedRank(form(0.6, 0.4, 2, 0.3, 7, 10, 5, 3, 2, 6, 2, 2), 7L);
 
         Mockito.verify(repo, Mockito.never()).save(Mockito.any());
+        Mockito.verifyNoInteractions(changeLogs, audit);
+    }
+
+    // ── Story 17.1 · AC5：限流系数 ─────────────────────────────────
+
+    @Test
+    void throttleFactorChangeIsAppliedAndLogged() {
+        svc.updateFeedRank(formWithThrottle(0.35), 7L);
+
+        assertThat(cfg.getThrottleFactor()).isEqualTo(0.35);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ConfigChangeLog>> logs = ArgumentCaptor.forClass(List.class);
+        Mockito.verify(changeLogs).saveAll(logs.capture());
+        assertThat(logs.getValue()).extracting(ConfigChangeLog::getField)
+                .contains("throttle_factor");
+    }
+
+    /**
+     * 🛡 系数取 1 被拒 —— 那等于没处置。
+     *
+     * <p>让运营存下一个「看起来生效了、其实什么都没做」的配置，比报错糟得多：
+     * 之后每一次限流都不会有任何效果，而界面上一切正常。
+     */
+    @Test
+    void throttleFactorOfOneIsRejected() {
+        assertThatThrownBy(() -> svc.updateFeedRank(formWithThrottle(1.0), 7L))
+                .hasMessageContaining("限流系数");
+        Mockito.verifyNoInteractions(changeLogs, audit);
+    }
+
+    /**
+     * 🔴 系数取 0 被拒 —— 分数恒为 0 就永远排不进推荐序，那是**下架**而不是降权，
+     * 而 17.1 的 AC2 明令「降权不下架」。这条把那条 AC 在配置层面也堵上。
+     */
+    @Test
+    void throttleFactorOfZeroIsRejectedBecauseThatWouldBeRemovalNotDemotion() {
+        assertThatThrownBy(() -> svc.updateFeedRank(formWithThrottle(0), 7L))
+                .hasMessageContaining("限流系数");
+        assertThatThrownBy(() -> svc.updateFeedRank(formWithThrottle(-0.1), 7L))
+                .hasMessageContaining("限流系数");
         Mockito.verifyNoInteractions(changeLogs, audit);
     }
 

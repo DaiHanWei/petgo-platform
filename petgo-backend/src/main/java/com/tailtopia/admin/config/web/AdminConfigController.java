@@ -92,13 +92,13 @@ public class AdminConfigController {
     public String updateFeedRank(@AuthenticationPrincipal AdminUserDetails admin,
             @RequestParam double freshnessWeight, @RequestParam double interactionWeight,
             @RequestParam double commentWeight, @RequestParam double exposureDecay,
-            @RequestParam int seenWindowDays, @RequestParam int windowSize,
+            @RequestParam double throttleFactor, @RequestParam int seenWindowDays, @RequestParam int windowSize,
             @RequestParam int attrFunQuota, @RequestParam int attrEduQuota,
             @RequestParam int attrLifeQuota, @RequestParam int speciesMainQuota,
             @RequestParam int speciesOtherQuota, @RequestParam int speciesGeneralQuota,
             RedirectAttributes flash) {
         write.updateFeedRank(new FeedRankForm(freshnessWeight, interactionWeight, commentWeight,
-                exposureDecay, seenWindowDays, windowSize, attrFunQuota, attrEduQuota,
+                exposureDecay, throttleFactor, seenWindowDays, windowSize, attrFunQuota, attrEduQuota,
                 attrLifeQuota, speciesMainQuota, speciesOtherQuota, speciesGeneralQuota),
                 admin.getAdminAccountId());
         flash.addFlashAttribute("ok", "推荐算法参数已更新");
