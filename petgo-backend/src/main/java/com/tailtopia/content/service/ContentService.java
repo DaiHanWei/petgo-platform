@@ -280,6 +280,17 @@ public class ContentService {
             if (p.getStatus() == PostStatus.UNDER_REVIEW && p.getDeletedAt() == null) {
                 p.softDelete();
                 posts.save(p);
+                // 🔴 V1.1.6 Story 13.4 补：这条路径原先**不发**「内容不再可展示」事件。
+                //
+                // 它此前没被注意到，是因为 4.1 的顶置联动碰不到挂起内容（顶置选择器
+                // 只挑得到公开内容）。但**去重指纹会**：批量发布记指纹是在 publish 之后，
+                // 而开了人工审核时 publish 落的就是 UNDER_REVIEW —— 审核判违规丢弃之后，
+                // 指纹留着、内容没了 ⇒ **同一文案永久无法重发**，正是 AC4 要修的那个后果。
+                //
+                // 用 AUTHOR_DELETE 作 reason：它只用于审计日志与"要不要通知作者违规"，
+                // 而审核丢弃**不该**给作者发违规通知（ADMIN_TAKEDOWN 会触发那条通知）。
+                events.publishEvent(new ContentUnavailableEvent(
+                        p.getId(), p.getAuthorId(), DeleteReason.AUTHOR_DELETE, Instant.now()));
             }
         });
     }

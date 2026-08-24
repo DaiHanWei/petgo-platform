@@ -45,17 +45,20 @@ public class AdminSeedBatchWorkspaceController {
     private final com.tailtopia.admin.seed.service.SeedBatchEntryService entry;
     private final com.tailtopia.admin.seed.service.SeedBatchExcelService excel;
     private final com.tailtopia.admin.virtual.service.AdminPublishIdentityService identities;
+    private final com.tailtopia.admin.seed.service.SeedBatchPublishService publishing;
 
     public AdminSeedBatchWorkspaceController(SeedBatchService batches,
             SeedBatchAssetService assets,
             com.tailtopia.admin.seed.service.SeedBatchEntryService entry,
             com.tailtopia.admin.seed.service.SeedBatchExcelService excel,
-            com.tailtopia.admin.virtual.service.AdminPublishIdentityService identities) {
+            com.tailtopia.admin.virtual.service.AdminPublishIdentityService identities,
+            com.tailtopia.admin.seed.service.SeedBatchPublishService publishing) {
         this.batches = batches;
         this.assets = assets;
         this.entry = entry;
         this.excel = excel;
         this.identities = identities;
+        this.publishing = publishing;
     }
 
     /** 批次列表 —— 🛡 按各行状态**聚合**展示（13-1 AC2），批次自己没有状态。 */
@@ -269,6 +272,56 @@ public class AdminSeedBatchWorkspaceController {
     public String wall(@PathVariable long batchId, Model model) {
         addWall(model, batchId);
         return "admin/fragments/seed-asset-wall :: wall";
+    }
+
+    /**
+     * 校验预览（AC1）。
+     *
+     * <p>🔴 <b>这一页是本 story 的全部意义</b>：此前提交即上线，
+     * 50 行错 3 行就是 3 条线上真帖，只能逐条去找、逐条下架。
+     */
+    @GetMapping("/admin/seed-batches/{batchId}/preview")
+    @PreAuthorize(AUTH)
+    public String preview(@PathVariable long batchId, Model model) {
+        model.addAttribute("active", "seed");
+        model.addAttribute("batchId", batchId);
+        var checks = publishing.preview(batchId);
+        model.addAttribute("checks", checks);
+        model.addAttribute("passCount", checks.stream().filter(c -> c.passes()).count());
+        model.addAttribute("failCount", checks.stream().filter(c -> !c.passes()).count());
+        model.addAttribute("dupCount", checks.stream().filter(c -> c.warns()).count());
+        return "admin/seed-batch-preview";
+    }
+
+    /** 确认发布（AC2）。🛡 只发通过的行；失败行留草稿可改后重提。 */
+    @PostMapping("/admin/seed-batches/{batchId}/confirm")
+    @PreAuthorize(AUTH)
+    public String confirm(@AuthenticationPrincipal AdminUserDetails admin,
+            @PathVariable long batchId,
+            @RequestParam(defaultValue = "false") boolean includeDuplicates,
+            RedirectAttributes flash) {
+        try {
+            var out = publishing.confirm(batchId, admin.getAdminAccountId(), includeDuplicates);
+            StringBuilder msg = new StringBuilder("已发布 " + out.published() + " 条");
+            if (out.scheduled() > 0) {
+                msg.append("，转入排期 ").append(out.scheduled()).append(" 条");
+            }
+            if (out.skippedByError() > 0) {
+                // 🛡 措辞写明"留在草稿里可改后重提"—— 只说"跳过 N 条"运营不知道那几条去哪了。
+                msg.append("；").append(out.skippedByError()).append(" 条校验未过，留在草稿里可修改后再提交");
+            }
+            if (out.skippedByDuplicate() > 0) {
+                msg.append("；").append(out.skippedByDuplicate())
+                        .append(" 条与该账号已发内容重复，未发（如仍要发请勾选「重复的也发」）");
+            }
+            if (out.failed() > 0) {
+                msg.append("；").append(out.failed()).append(" 条发布失败，原因见该行");
+            }
+            flash.addFlashAttribute("notice", msg.toString());
+        } catch (AppException e) {
+            flash.addFlashAttribute("error", e.getMessage());
+        }
+        return "redirect:/admin/seed-batches/" + batchId + "/preview";
     }
 
     private void addWall(Model model, long batchId) {

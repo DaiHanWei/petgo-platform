@@ -113,6 +113,11 @@
             <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.batch.addRow}">新增空行</button>
         </form>
 
+        <!-- 🔴 Step 3 入口：先预览再发（此前是提交即上线）。 -->
+        <p><a class="btn btn-primary"
+              th:href="@{/admin/seed-batches/{id}/preview(id=${batchId})}"
+              th:text="#{admin.batch.toPreview}">下一步：校验预览</a></p>
+
         <!-- 🛡 形态是**行卡片列表**而非电子表格网格（A-8）：后台是服务端渲染 + 轻量增强、
              无框架无构建，真网格（单元格键盘导航、区域选择、撤销）成本高一个量级。 -->
         <div class="seed-row-cards">

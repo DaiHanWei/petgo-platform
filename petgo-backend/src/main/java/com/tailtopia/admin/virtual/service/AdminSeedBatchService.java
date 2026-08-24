@@ -11,8 +11,6 @@ import com.tailtopia.content.dto.ContentPostResponse;
 import com.tailtopia.content.service.ContentService;
 import com.tailtopia.shared.error.AppException;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -138,9 +136,18 @@ public class AdminSeedBatchService {
             if (text.isEmpty()) {
                 continue;
             }
-            String hash = contentHash(text, images);
-            if (hashes.existsById(hash)) {
-                skipped++; // 跨批去重：已发过，跳过
+            String hash = com.tailtopia.admin.seed.service.SeedContentFingerprint.of(
+                    ContentType.DAILY, text, images);
+            // 🔴 V1.1.6 Story 13.4：判据加了**作者维度** —— 同一文案不同账号各自独立。
+            //    原先按 hash 单列判，"同一文案换个账号再发一遍"（内容运营的常规操作）
+            //    会被静默吞掉。
+            //
+            // ⚠️ 这条老路径（Story 9.8 的"贴进去就发"）**仍然保留静默跳过** ——
+            //    它没有预览这一步，无处展示提示。AC4 要求的"改为提示、由运营决定"
+            //    落在新工作台的校验预览里（13-4 的 SeedBatchValidator）。
+            //    两条路径的去重**判据**已统一；差别只在"命中之后怎么告诉人"。
+            if (hashes.existsByContentHashAndAuthorId(hash, virtualUserId)) {
+                skipped++;
                 continue;
             }
             ContentPostResponse saved = contentService.publish(virtualUserId,
@@ -179,23 +186,7 @@ public class AdminSeedBatchService {
         return t.equals("文本") || t.equals("正文") || t.equals("text") || t.equals("content");
     }
 
-    /** sha256(type|text|sorted images) 十六进制。图排序保证顺序无关的稳定去重。 */
-    private static String contentHash(String text, List<String> images) {
-        StringBuilder sb = new StringBuilder("DAILY\n").append(text).append('\n');
-        if (images != null) {
-            images.stream().sorted().forEach(u -> sb.append(u).append(','));
-        }
-        try {
-            byte[] d = MessageDigest.getInstance("SHA-256")
-                    .digest(sb.toString().getBytes(StandardCharsets.UTF_8));
-            StringBuilder hex = new StringBuilder(64);
-            for (byte b : d) {
-                hex.append(Character.forDigit((b >> 4) & 0xF, 16));
-                hex.append(Character.forDigit(b & 0xF, 16));
-            }
-            return hex.toString();
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
-    }
+    // ⚠️ 原先这里有一份私有的 contentHash 实现。V1.1.6 Story 13.4 抽成
+    //    SeedContentFingerprint 共享 —— 两条录入路径写进的是**同一张指纹表**，
+    //    各算一份的表现是"老路径发过的文案，新工作台判不出重复"，而那种不一致没人会想到去查。
 }

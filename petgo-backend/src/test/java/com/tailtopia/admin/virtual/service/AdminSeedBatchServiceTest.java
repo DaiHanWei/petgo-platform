@@ -72,7 +72,9 @@ class AdminSeedBatchServiceTest {
     @Test
     void publishesEachLineUnderVirtualAccount() {
         User v = virtual(50L);
-        when(hashes.existsById(anyString())).thenReturn(false);
+        // 🔴 V1.1.6 Story 13.4：去重判据加了**作者维度** —— 原先是 existsById(hash) 单列。
+        when(hashes.existsByContentHashAndAuthorId(anyString(), Mockito.anyLong()))
+                .thenReturn(false);
 
         BatchResult r = svc.publishBatch(50L, "第一条\n第二条 ||| https://x/a.jpg, https://x/b.jpg\n\n", 7L, true);
 
@@ -93,7 +95,8 @@ class AdminSeedBatchServiceTest {
     void skipsDuplicateContentByHash() {
         virtual(50L);
         // 首条 hash 已存在 → 跳过；次条新 → 发。
-        when(hashes.existsById(anyString())).thenReturn(true, false);
+        when(hashes.existsByContentHashAndAuthorId(anyString(), Mockito.anyLong()))
+                .thenReturn(true, false);
 
         BatchResult r = svc.publishBatch(50L, "重复内容\n新内容", 7L, true);
 
