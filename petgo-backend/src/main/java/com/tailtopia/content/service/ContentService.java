@@ -193,6 +193,20 @@ public class ContentService {
         return posts.adminSearch(type, authorId, from, to, deleted, keyword, limit, offset);
     }
 
+    /**
+     * 设置 / 清除行级物种覆写（V1.1.6 Story 14.1 · AC5）。传 {@code null} 即清除。
+     *
+     * <p>🛡 <b>本方法不做"谁能改"的判断</b> —— 那是运营侧的规则（真实用户内容只读），
+     * 由 {@code AdminContentManageService} 权威校验。content 模块只负责写这一列。
+     */
+    @Transactional
+    public void setSpeciesOverride(long postId, String species) {
+        posts.findById(postId).ifPresent(p -> {
+            p.setSpeciesOverride(species);
+            posts.save(p);
+        });
+    }
+
     /** 后台按 id 取单条内容行（HTMX 局部刷新用）；不存在返回 null。 */
     @Transactional(readOnly = true)
     public com.tailtopia.content.dto.AdminContentRow adminRow(long postId) {

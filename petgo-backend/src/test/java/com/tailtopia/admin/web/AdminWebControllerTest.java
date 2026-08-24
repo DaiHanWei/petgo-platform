@@ -85,8 +85,10 @@ class AdminWebControllerTest {
         f.setImageUrlsRaw("https://cdn/a.jpg\nhttps://cdn/b.jpg");
         f.setImageSizesRaw("1200x900\n800x800");
         BindingResult binding = new BeanPropertyBindingResult(f, "seedPostForm");
+        // ⚠️ V1.1.6 Story 14.1 加了第 8 个参数（关联物种）。桩没跟上时
+        //    Mockito 返回 null，表现是控制器里 NPE —— 看起来像被测代码坏了。
         when(adminContentService.publishSeed(anyLong(), eq(ContentType.DAILY), any(), eq("hello"),
-                any(), any(), anyBoolean()))
+                any(), any(), anyBoolean(), any()))
                 .thenReturn(new ContentPostResponse(7L, ContentType.DAILY, null, "hello", null, null, Instant.now()));
 
         Model model = new ConcurrentModel();
@@ -101,7 +103,7 @@ class AdminWebControllerTest {
                 eq("hello"), eq(List.of("https://cdn/a.jpg", "https://cdn/b.jpg")),
                 eq(List.of(new com.tailtopia.content.domain.ImageSize(1200, 900),
                         new com.tailtopia.content.domain.ImageSize(800, 800))),
-                anyBoolean());
+                anyBoolean(), any());
     }
 
     @Test
@@ -115,7 +117,7 @@ class AdminWebControllerTest {
 
         assertThat(view).isEqualTo("admin/seed-post");
         verify(adminContentService, org.mockito.Mockito.never())
-                .publishSeed(anyLong(), any(), any(), any(), any(), any(), anyBoolean());
+                .publishSeed(anyLong(), any(), any(), any(), any(), any(), anyBoolean(), any());
     }
 
     @Test
@@ -123,7 +125,8 @@ class AdminWebControllerTest {
         SeedPostForm f = form(ContentType.GROWTH_MOMENT, "x");
         f.setAuthorUserId(4242L);
         BindingResult binding = new BeanPropertyBindingResult(f, "seedPostForm");
-        when(adminContentService.publishSeed(anyLong(), any(), any(), any(), any(), any(), anyBoolean()))
+        when(adminContentService.publishSeed(anyLong(), any(), any(), any(), any(), any(),
+                anyBoolean(), any()))
                 .thenThrow(AppException.validation("无法绑定该宠物档案"));
 
         Model model = new ConcurrentModel();
@@ -213,6 +216,6 @@ class AdminWebControllerTest {
         assertThat(view).isEqualTo("admin/seed-post");
         assertThat(binding.hasGlobalErrors()).isTrue();
         verify(adminContentService, org.mockito.Mockito.never())
-                .publishSeed(anyLong(), any(), any(), any(), any(), any(), anyBoolean());
+                .publishSeed(anyLong(), any(), any(), any(), any(), any(), anyBoolean(), any());
     }
 }

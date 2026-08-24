@@ -262,12 +262,17 @@ class SeedBatchEntryIntegrationTest extends ApiIntegrationTest {
     /**
      * 🔴 <b>「关联物种」刻意没有批次默认</b>（A-14）。
      *
-     * <p>虚拟账号留空时继承其「账号物种定位」——那个字段由 14-1 落地，
-     * 当前实现恒空（{@code NoAccountSpeciesYet}），所以这里的期望就是 null。
-     * ⚠️ 本用例同时是 14-1 的**接线提醒**：14-1 换掉实现后，这条会变成"应该有值"。
+     * <p>⚠️ <b>本用例的期望已随 V1.1.6 Story 14.1 变过一次</b>：
+     * 13-3 落地时「账号物种定位」这个字段还不存在，继承读到的是空，所以当时断言 null；
+     * 13-3 的注释里就预告了这件事（「本用例同时是 14-1 的接线提醒」）。
+     * 14-1 建好字段并换掉那个恒空实现之后，虚拟账号的默认定位 {@code GENERAL} 会被继承下来。
+     *
+     * <p>🔴 <b>但本用例真正守的那一条没变</b>：页头设置里**没有**物种这一项 ——
+     * 它的默认来自**账号属性**，不是批次（A-14：再加一层批次默认会与账号定位冲突，
+     * 批次默认设「猫」、行留空、而该行账号是狗号时，取谁没有正确答案）。
      */
     @Test
-    void speciesHasNoBatchLevelDefaultAndStaysNullUntilStoryFourteenOne() throws Exception {
+    void speciesHasNoBatchLevelDefaultAndComesFromTheAccountInstead() throws Exception {
         long batchId = newBatch();
         long virtualId = virtualAccounts.create(shortName("待配位"), null, 1L);
         mvc.perform(post("/admin/seed-batches/" + batchId + "/settings")
@@ -280,7 +285,9 @@ class SeedBatchEntryIntegrationTest extends ApiIntegrationTest {
                         .param("lines", "物种留空-" + SEQ.incrementAndGet()))
                 .andExpect(status().is3xxRedirection());
 
-        assertThat(batchService.rowsOf(batchId).get(0).getSpecies()).isNull();
+        // 继承自该行发布账号的「账号物种定位」（虚拟账号未配 ⇒ 读时默认 GENERAL）。
+        assertThat(batchService.rowsOf(batchId).get(0).getSpecies())
+                .isEqualTo(com.tailtopia.content.species.ContentSpecies.GENERAL);
         // 🛡 页头设置里**没有**物种这一项 —— 它的默认来自账号属性，不是批次。
         assertThat(workspace(batchId)).doesNotContain("name=\"defaultSpecies\"");
     }

@@ -44,6 +44,21 @@
                     <div th:replace="~{admin/fragments/publish-identity-select :: select(${publishIdentities}, 'seedAuthorUserId', 'authorUserId', @{/admin/seed-post/pets}, '#seedPetSelect')}"></div>
                     <p class="err" th:if="${#fields.hasErrors('authorUserId')}" th:errors="*{authorUserId}">账号错误</p>
 
+                    <!-- ===== 关联物种（V1.1.6 Story 14.1 · AC4）=====
+                         🔴 挂在「发布账号」选择器**之后**（AC4 明写位置）。
+                         默认跟随所选账号的账号物种定位；运营可当场覆盖。
+                         🛡 **运营手动改过之后就不再被自动跟随覆盖** ——
+                            切个账号把他刚选的值冲掉，是最容易让人发错的那种"贴心"。
+                         🔴 选的是运营真实账号时默认**留空**：它有真实宠物档案，
+                            让算法读档案比让运营猜一个准确。 -->
+                    <label class="field" for="seedSpecies" th:text="#{admin.seed.species}">关联物种</label>
+                    <select id="seedSpecies" name="species" class="field-full" data-species-follow>
+                        <option value="" th:text="#{admin.seed.species.none}">留空（由算法按作者宠物档案推导）</option>
+                        <option th:each="sp : ${speciesOptions}" th:value="${sp}" th:text="${sp}">GENERAL</option>
+                    </select>
+                    <p class="hint" th:text="#{admin.seed.species.hint}">
+                        默认跟随所选发布账号的「账号物种定位」；改过之后就不再自动跟随。</p>
+
                     <label class="field" for="type" th:text="#{admin.seed.type}">内容类型</label>
                     <!-- ⚠️ 取值是**代码枚举** DAILY / GROWTH_MOMENT / KNOWLEDGE（AC6）。
                          PRD 里写的 MOMENT 在代码里不存在：产品口语的 "Moment" = DAILY、

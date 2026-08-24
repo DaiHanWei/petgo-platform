@@ -60,9 +60,12 @@ public class AdminVirtualAccountController {
 
     @GetMapping("/admin/virtual-accounts")
     @PreAuthorize(VIEW_AUTH)
-    public String list(Model model, @RequestParam(required = false) String q) {
+    public String list(Model model, @RequestParam(required = false) String q,
+            @RequestParam(required = false) String species) {
         model.addAttribute("active", "virtual-accounts");
-        model.addAttribute("accounts", service.list());
+        model.addAttribute("species", species);
+        model.addAttribute("speciesOptions", com.tailtopia.content.species.ContentSpecies.ALL);
+        model.addAttribute("accounts", service.list(species));
         model.addAttribute("realAccounts", identities.listRealAccounts());
         // 纳入候选：只有真搜了才查（空搜索返回空表，不会把全站用户列出来）。
         model.addAttribute("candidates", identities.searchCandidates(q));
@@ -83,19 +86,41 @@ public class AdminVirtualAccountController {
     public String create(@AuthenticationPrincipal AdminUserDetails admin,
             @RequestParam String nickname, @RequestParam(required = false) String avatarUrl,
             @RequestParam(required = false) MultipartFile avatarFile,
+            @RequestParam(required = false) String accountSpecies,
             RedirectAttributes flash) {
         try {
             String finalUrl = avatarUrl;
             if (avatarFile != null && !avatarFile.isEmpty()) {
                 finalUrl = images.upload(avatarFile, "virtual-avatar").url();
             }
-            long id = service.create(nickname, finalUrl, admin.getAdminAccountId());
+            long id = service.create(nickname, finalUrl, accountSpecies,
+                    admin.getAdminAccountId());
             flash.addFlashAttribute("notice", "已创建虚拟账号（id=" + id + "，无登录能力）");
         } catch (AppException e) {
             flash.addFlashAttribute("error", e.getMessage());
         } catch (Exception e) {
             // 对象存储未配置 / 凭证异常 —— 优雅回显，不抛 500。
             flash.addFlashAttribute("error", "头像上传失败，请重试");
+        }
+        return "redirect:/admin/virtual-accounts";
+    }
+
+    /**
+     * 改账号物种定位（V1.1.6 Story 14.1 · AC2）。
+     *
+     * <p>✅ 改完立即影响该号**全部历史内容**的物种归属 —— 读时推导、零回填。
+     * 所以这个下拉是本 story 里运营最常用的那一个。
+     */
+    @PostMapping("/admin/virtual-accounts/{id}/species")
+    @PreAuthorize(AUTH)
+    public String setSpecies(@AuthenticationPrincipal AdminUserDetails admin,
+            @PathVariable long id, @RequestParam String accountSpecies, RedirectAttributes flash) {
+        try {
+            service.setAccountSpecies(id, accountSpecies, admin.getAdminAccountId());
+            flash.addFlashAttribute("notice",
+                    "已更新账号物种定位（该号全部历史内容的物种归属已随之生效）");
+        } catch (AppException e) {
+            flash.addFlashAttribute("error", e.getMessage());
         }
         return "redirect:/admin/virtual-accounts";
     }

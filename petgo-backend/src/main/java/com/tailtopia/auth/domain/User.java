@@ -332,6 +332,28 @@ public class User {
         return deletedAt;
     }
 
+    /**
+     * 账号物种定位（V1.1.6 Story 14.1 · AB-3H）。
+     *
+     * <p>🔴 <b>仅对虚拟账号有意义</b>：算法要 join 作者的宠物档案推导内容物种，
+     * 而虚拟账号创建时只填昵称+头像、<b>不建宠物档案</b> ⇒ 全部种子内容的物种推导都是空，
+     * 而 Tips/科普类主要由虚拟号发布。
+     *
+     * <p>⚠️ {@code null} 在读时按 {@code GENERAL} 解释（存量零回填）——
+     * 见 {@code ContentSpeciesResolver#effectiveAccountSpecies}。
+     * 真实账号恒 {@code null}：它们的物种走作者宠物档案推导。
+     */
+    @Column(name = "account_species", length = 20)
+    private String accountSpecies;
+
+    public String getAccountSpecies() {
+        return accountSpecies;
+    }
+
+    public void setAccountSpecies(String accountSpecies) {
+        this.accountSpecies = accountSpecies;
+    }
+
     public AccountType getAccountType() {
         return accountType;
     }

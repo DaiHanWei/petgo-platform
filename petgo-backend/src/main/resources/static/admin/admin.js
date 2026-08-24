@@ -480,3 +480,29 @@ document.addEventListener('submit', function (e) {
         [].slice.call(document.querySelectorAll('[data-batch-uploader]')).forEach(paint);
     });
 })();
+
+// ===== 「关联物种」跟随所选发布账号（V1.1.6 Story 14.1 · AC4）=====
+//
+// 默认跟随该账号的「账号物种定位」；🛡 **运营手动改过之后就不再自动跟随** ——
+// 切个账号把他刚选的值冲掉，是最容易让人发错的那种"贴心"。
+//
+// 🔴 选的是运营真实账号时默认**留空**（它没有账号物种定位，物种由作者宠物档案推导）。
+document.addEventListener('change', function (e) {
+    var el = e.target;
+    if (!el || el.tagName !== 'SELECT') { return; }
+
+    // ① 运营自己动了物种下拉 ⇒ 打上"已手动"标记，此后不再被跟随覆盖。
+    if (el.hasAttribute('data-species-follow')) {
+        el.setAttribute('data-touched', 'true');
+        return;
+    }
+
+    // ② 换了发布账号 ⇒ 若物种没被手动改过，跟随更新。
+    if (el.name !== 'authorUserId') { return; }
+    var form = el.closest('form');
+    var species = form && form.querySelector('[data-species-follow]');
+    if (!species || species.getAttribute('data-touched') === 'true') { return; }
+    var opt = el.selectedIndex >= 0 ? el.options[el.selectedIndex] : null;
+    // data-species 为空（运营真实账号）⇒ 留空。
+    species.value = (opt && opt.getAttribute('data-species')) || '';
+});

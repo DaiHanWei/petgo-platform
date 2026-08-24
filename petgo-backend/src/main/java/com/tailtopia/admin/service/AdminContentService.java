@@ -10,6 +10,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 运营种子内容发布（Story 3.1，FR-18）。
@@ -50,6 +51,22 @@ public class AdminContentService {
             String text, List<String> imageUrls,
             List<com.tailtopia.content.domain.ImageSize> imageSizes,
             boolean callerMayPublishAsRealIdentity) {
+        return publishSeed(authorUserId, type, petId, text, imageUrls, imageSizes,
+                callerMayPublishAsRealIdentity, null);
+    }
+
+    /**
+     * 带关联物种的版本（V1.1.6 Story 14.1 · AC4）。
+     *
+     * <p>🔴 物种落的是 {@code content_posts.species_override}（**行级覆写**）——
+     * 运营在单条发布页明确选了一个值，那就是覆写；留空则不写，
+     * 由读时推导按"账号定位 → 作者宠物档案"回落。
+     */
+    @Transactional
+    public ContentPostResponse publishSeed(long authorUserId, ContentType type, Long petId,
+            String text, List<String> imageUrls,
+            List<com.tailtopia.content.domain.ImageSize> imageSizes,
+            boolean callerMayPublishAsRealIdentity, String species) {
         if (type == null) {
             throw AppException.validation("内容类型不能为空");
         }
@@ -75,7 +92,15 @@ public class AdminContentService {
         ContentPostCreateRequest req = new ContentPostCreateRequest(type, petId, text, imageUrls,
                 null, null, imageSizes);
         // 复用 content 写入路径（同一张表、同一套字段）；幂等键防后台表单重复提交。
+        if (species != null && !species.isBlank()
+                && !com.tailtopia.content.species.ContentSpecies.isValid(species)) {
+            throw AppException.validation("关联物种取值须是 "
+                    + com.tailtopia.content.species.ContentSpecies.ALL);
+        }
         ContentPostResponse saved = contentService.publish(authorUserId, req, UUID.randomUUID().toString());
+        if (species != null && !species.isBlank()) {
+            contentService.setSpeciesOverride(saved.id(), species.trim());
+        }
         log.info("种子内容发布成功 authorUserId={} postId={} type={}", authorUserId, saved.id(), type);
         return saved;
     }

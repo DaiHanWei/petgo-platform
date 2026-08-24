@@ -26,6 +26,12 @@
             <!-- V1.1.6 Story 12.2 · AC2：头像默认路径改为**上传**，URL 折叠作兜底。 -->
             <label><span th:text="#{admin.virtualAccounts.avatarUpload}">头像（选填，JPG/PNG/WEBP，≤10MB）</span>
                 <input type="file" name="avatarFile" accept="image/jpeg,image/png,image/webp"/></label>
+            <!-- 🔴 账号物种定位（V1.1.6 Story 14.1 · AC2）。必填。
+                 改它会**立即影响该号全部历史内容**的物种归属（读时推导、零回填）。 -->
+            <label><span th:text="#{admin.species.accountLabel}">账号物种定位（必填）</span>
+                <select name="accountSpecies" required>
+                    <option th:each="sp : ${speciesOptions}" th:value="${sp}" th:text="${sp}">GENERAL</option>
+                </select></label>
             <details>
                 <summary th:text="#{admin.virtualAccounts.avatarUrl}">头像 URL（兜底）</summary>
                 <input type="text" name="avatarUrl" maxlength="1024"/>
@@ -34,9 +40,18 @@
         </form>
 
         <h3 th:text="#{admin.virtualAccounts.list}">虚拟账号列表</h3>
+        <!-- 按账号物种定位筛选（AC2）。运营配完定位要能自查"还有哪些是 GENERAL"。 -->
+        <form method="get" th:action="@{/admin/virtual-accounts}" data-autosubmit>
+            <label><span th:text="#{admin.species.filter}">按账号物种定位筛选</span>
+                <select name="species">
+                    <option value="" th:text="#{admin.species.all}">全部</option>
+                    <option th:each="sp : ${speciesOptions}" th:value="${sp}" th:text="${sp}"
+                            th:selected="${species == sp}">GENERAL</option>
+                </select></label>
+        </form>
         <table>
             <thead>
-            <tr><th>ID</th><th th:text="#{admin.virtualAccounts.col.nickname}">昵称</th><th th:text="#{admin.virtualAccounts.col.avatar}">头像</th><th th:text="#{admin.common.status}">状态</th><th th:text="#{admin.virtualAccounts.col.published}">已发布</th><th th:text="#{admin.virtualAccounts.col.createdBy}">建号人</th><th th:text="#{admin.common.actions}">操作</th></tr>
+            <tr><th>ID</th><th th:text="#{admin.virtualAccounts.col.nickname}">昵称</th><th th:text="#{admin.virtualAccounts.col.avatar}">头像</th><th th:text="#{admin.common.status}">状态</th><th th:text="#{admin.virtualAccounts.col.published}">已发布</th><th th:text="#{admin.species.col}">账号物种定位</th><th th:text="#{admin.virtualAccounts.col.createdBy}">建号人</th><th th:text="#{admin.common.actions}">操作</th></tr>
             </thead>
             <tbody>
             <tr th:each="a : ${accounts}">
@@ -45,6 +60,15 @@
                 <td th:text="${a.avatarUrl} ?: '—'">—</td>
                 <td th:text="${a.enabled} ? #{admin.common.enabled} : #{admin.common.disabled}">启用</td>
                 <td th:text="${a.publishedCount}">0</td>
+                <td>
+                    <form method="post" th:action="@{/admin/virtual-accounts/{id}/species(id=${a.id})}"
+                          style="display:inline" data-autosubmit>
+                        <select name="accountSpecies">
+                            <option th:each="sp : ${speciesOptions}" th:value="${sp}" th:text="${sp}"
+                                    th:selected="${a.accountSpecies == sp}">GENERAL</option>
+                        </select>
+                    </form>
+                </td>
                 <td th:text="${a.createdBy} ?: '—'">—</td>
                 <td>
                     <!-- 🔴 禁用先过确认页（AC4）：那一页要显示"还有 N 条待发布排期"，
@@ -61,7 +85,7 @@
                     </form>
                 </td>
             </tr>
-            <tr th:if="${accounts.isEmpty()}"><td colspan="7" th:text="#{admin.virtualAccounts.empty}">暂无虚拟账号</td></tr>
+            <tr th:if="${accounts.isEmpty()}"><td colspan="8" th:text="#{admin.virtualAccounts.empty}">暂无虚拟账号</td></tr>
             </tbody>
         </table>
 

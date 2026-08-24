@@ -177,6 +177,11 @@ public class SeedBatchPublishService {
                 new ContentPostCreateRequest(row.getContentType(), row.getPetId(), row.getBody(),
                         row.getImageUrls(), null, null, row.getImageSizes()),
                 UUID.randomUUID().toString());
+        // V1.1.6 Story 14.1：行上的关联物种落成**行级覆写** ——
+        // 运营在录入时明确选过的值就是覆写；留空则不写，由读时推导回落到账号定位/档案。
+        if (row.getSpecies() != null && !row.getSpecies().isBlank()) {
+            contentService.setSpeciesOverride(saved.id(), row.getSpecies());
+        }
         // 指纹：🔴 带**作者维度**（同一文案不同账号各自独立），并记下按发布键的后台账号。
         String hash = SeedContentFingerprint.of(row.getContentType(), row.getBody(),
                 row.getImageUrls());

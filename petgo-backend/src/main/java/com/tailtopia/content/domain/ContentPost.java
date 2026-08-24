@@ -117,6 +117,27 @@ public class ContentPost {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
+    /**
+     * 行级物种覆写（V1.1.6 Story 14.1 · AC5/AC7）。
+     *
+     * <p>🔴 <b>这是存量种子内容唯一的物种修正入口</b>：账号定位是全量粗粒度开关，
+     * 改它会把整个号的历史内容一起套上同一个物种；而个别错标只能靠这一列改。
+     *
+     * <p>🛡 稀疏列、<b>真实用户内容恒为空</b>（它们走作者宠物档案 join 推导）。
+     * 推导优先级见 {@code ContentSpeciesResolver}。
+     */
+    @Column(name = "species_override", length = 20)
+    private String speciesOverride;
+
+    public String getSpeciesOverride() {
+        return speciesOverride;
+    }
+
+    /** 运营设置 / 清除行级覆写（传 null 即清除，回落到账号定位或档案推导）。 */
+    public void setSpeciesOverride(String speciesOverride) {
+        this.speciesOverride = speciesOverride;
+    }
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

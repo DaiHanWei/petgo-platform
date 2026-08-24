@@ -106,6 +106,8 @@ public class AdminWebController {
         //    不给的话 `petOptions.isEmpty()` 在 null 上求值，整页 500。
         //    真正的内容由 HTMX 在选定账号后从 /admin/seed-post/pets 换进来。
         model.addAttribute("petOptions", java.util.List.of());
+        // V1.1.6 Story 14.1 · AC4：「关联物种」下拉（挂在发布账号选择器之后）。
+        model.addAttribute("speciesOptions", com.tailtopia.content.species.ContentSpecies.ALL);
     }
 
     // ===== Story 3.7 + 4.1：举报审核队列（状态筛选 + 批量 + 双向通知 + 审计）=====
@@ -388,7 +390,7 @@ public class AdminWebController {
             ContentPostResponse saved = adminContentService.publishSeed(
                     form.getAuthorUserId(), form.getType(), form.getPetId(), form.getText(),
                     form.imageUrls(), form.imageSizes(),
-                    AdminSeedBatchController.mayPublishAsReal(admin));
+                    AdminSeedBatchController.mayPublishAsReal(admin), form.getSpecies());
             // 发布成功：清空表单 + 成功提示（含 postId，便于运营核对）。
             model.addAttribute("seedPostForm", new SeedPostForm());
             model.addAttribute("publishedId", saved.id());

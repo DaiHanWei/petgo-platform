@@ -59,8 +59,17 @@ public class SeedBatchService {
     @Transactional
     public SeedBatchRow addDraft(long batchId, int rowNo, long authorUserId, ContentType type,
             Long petId, String body, List<String> imageUrls, List<ImageSize> imageSizes) {
+        return addDraft(batchId, rowNo, authorUserId, type, petId, body, imageUrls, imageSizes,
+                null);
+    }
+
+    /** 带关联物种的版本（V1.1.6 Story 14.1）。 */
+    @Transactional
+    public SeedBatchRow addDraft(long batchId, int rowNo, long authorUserId, ContentType type,
+            Long petId, String body, List<String> imageUrls, List<ImageSize> imageSizes,
+            String species) {
         return rows.save(SeedBatchRow.draft(batchId, rowNo, authorUserId, type, petId, body,
-                imageUrls, imageSizes));
+                imageUrls, imageSizes, species));
     }
 
     // ——————————————————— 流转 ———————————————————

@@ -27,6 +27,7 @@
                       th:if="${identities.?[!real].size() > 0}">
                 <option th:each="o : ${identities.?[!real]}" th:value="${o.userId}"
                         th:disabled="${o.disabled}" data-real="false"
+                        th:attr="data-species=${o.accountSpecies}"
                         th:text="${o.nickname} + ' (id=' + ${o.userId} + (${o.disabled} ? ' · ' + #{admin.common.disabled} : '') + ')'">名</option>
             </optgroup>
             <!-- ⚠️ 真实账号一律在后：手滑选到靠前项时，选到的是危害最小的那类。 -->
@@ -34,6 +35,7 @@
                       th:if="${identities.?[real].size() > 0}">
                 <option th:each="o : ${identities.?[real]}" th:value="${o.userId}"
                         th:disabled="${o.disabled}" data-real="true"
+                        th:attr="data-species=${o.accountSpecies}"
                         th:text="'⚠️ ' + ${o.nickname} + ' (id=' + ${o.userId} + (${o.disabled} ? ' · ' + #{admin.common.disabled} : '') + ')'">名</option>
             </optgroup>
         </select>

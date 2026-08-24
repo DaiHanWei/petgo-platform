@@ -229,8 +229,8 @@ development_status:
   13-4-校验预览确认发布与去重口径修正: review        # AB-3K Step3 🔴 指纹加作者维度 + 删除时清理（现无清理→文案永久无法重发）
   13-5-定时发布与排期管理: review                    # AB-3L 🛡 走既有发布链路含自动审核、无豁免
   epic-13-retrospective: optional
-  epic-14: backlog
-  14-1-种子内容物种归属标记: ready-for-dev                  # AB-3H 🔴 必须排在 12-2 与 13-3 之后；读时推导、改账号定位零回填
+  epic-14: in-progress
+  14-1-种子内容物种归属标记: review                  # AB-3H 🔴 必须排在 12-2 与 13-3 之后；读时推导、改账号定位零回填
   epic-14-retrospective: optional
   epic-15: backlog
   15-1-内容互动积分与双口径统计: ready-for-dev              # AB-3G ✅ A-2 已闭合：赞/评时间戳都在（V9/V10），口径B 无需新增记录；本条零迁移

@@ -48,6 +48,15 @@ public class SeedPostForm {
     /** 仅 GROWTH_MOMENT 需绑定（属运营账号的宠物档案）；其余类型留空。 */
     private Long petId;
 
+    /**
+     * 关联物种（V1.1.6 Story 14.1 · AC4）。
+     *
+     * <p>界面上默认跟随所选发布账号的账号物种定位，运营可当场覆盖。
+     * 🔴 发布账号为**运营真实账号**时默认**留空** —— 它有真实宠物档案，
+     * 让算法读档案比让运营猜一个准确。
+     */
+    private String species;
+
     @Size(max = 1000, message = "正文不能超过 1000 字")
     private String text;
 
@@ -76,6 +85,14 @@ public class SeedPostForm {
 
     public void setImageSizesRaw(String imageSizesRaw) {
         this.imageSizesRaw = imageSizesRaw;
+    }
+
+    public String getSpecies() {
+        return species;
+    }
+
+    public void setSpecies(String species) {
+        this.species = species;
     }
 
     public Long getPetId() {

@@ -89,11 +89,16 @@ public class AdminPublishIdentityService {
     public List<PublishIdentityOption> selectableIdentities() {
         List<PublishIdentityOption> out = new ArrayList<>();
         for (User u : users.findByAccountTypeOrderByIdDesc(AccountType.VIRTUAL)) {
-            out.add(new PublishIdentityOption(u.getId(), u.getNickname(), false, !u.isEnabled()));
+            // V1.1.6 Story 14.1：带上账号物种定位，供单条发布页的物种下拉自动跟随。
+            out.add(new PublishIdentityOption(u.getId(), u.getNickname(), false, !u.isEnabled(),
+                    com.tailtopia.content.species.ContentSpeciesResolver
+                            .effectiveAccountSpecies(u)));
         }
         for (SeedRealAccountGrant g : grants.findByStatusOrderByIdDesc(Status.ACTIVE)) {
+            // 🔴 运营真实账号**没有**账号物种定位 —— 传 null，界面据此默认留空。
             users.findById(g.getUserId()).ifPresent(u -> out.add(
-                    new PublishIdentityOption(u.getId(), u.getNickname(), true, !u.isEnabled())));
+                    new PublishIdentityOption(u.getId(), u.getNickname(), true, !u.isEnabled(),
+                            null)));
         }
         return out;
     }

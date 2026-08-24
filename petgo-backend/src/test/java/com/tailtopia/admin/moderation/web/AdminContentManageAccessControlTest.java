@@ -75,7 +75,7 @@ class AdminContentManageAccessControlTest {
     }
 
     private void browse() {
-        controller.content(null, null, null, null, null, null, 0, null, new ConcurrentModel());
+        controller.content(null, null, null, null, null, null, 0, null, null, null, new ConcurrentModel());
     }
 
     private void takedown() {
