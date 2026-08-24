@@ -20,6 +20,16 @@ import java.util.Base64;
  */
 public record FeedRankCursor(String seed, int consumed) {
 
+    /**
+     * 种子前缀。
+     *
+     * <p>🔴 存在的唯一理由：把本游标与时间倒序游标的编码空间<b>隔开</b>。
+     * 两者都是 {@code base64url("<a>:<b>")}，不加区分标记时时间倒序游标
+     * {@code "<micros>:<id>"} 会被本类<b>静默解出</b>一个看似合法的 (seed, consumed) ——
+     * 表现是客户端切 Tab 忘了清游标就拿到一页莫名其妙的内容，且服务端一条错都不记。
+     */
+    public static final String SEED_PREFIX = "s";
+
     /** 编码为对外 token：{@code base64url("<seed>:<consumed>")}（不暴露顺序语义）。 */
     public String encode() {
         return Base64.getUrlEncoder().withoutPadding()
@@ -33,7 +43,9 @@ public record FeedRankCursor(String seed, int consumed) {
             int sep = raw.lastIndexOf(':');
             String seed = raw.substring(0, sep);
             int consumed = Integer.parseInt(raw.substring(sep + 1));
-            if (seed.isBlank() || consumed < 0) {
+            if (!seed.startsWith(SEED_PREFIX) || seed.length() <= SEED_PREFIX.length()
+                    || consumed < 0) {
+                // 🔴 拒绝而不是"尽力解读"：这里最可能收到的就是另一条路径的游标。
                 throw new IllegalArgumentException("bad cursor");
             }
             return new FeedRankCursor(seed, consumed);

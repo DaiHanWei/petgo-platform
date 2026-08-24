@@ -52,9 +52,14 @@ public class FeedSequenceStore {
      *
      * <p>⚠️ 键空间已经带了 namespace，所以种子里<b>不再拼 userId</b> ——
      * 拼了等于把 userId 在键里写两遍。
+     *
+     * <p>🔴 <b>前缀 {@value FeedRankCursor#SEED_PREFIX} 不是装饰</b>：它让推荐序游标与时间倒序游标的
+     * 编码空间<b>不可能重叠</b>。没有它，时间倒序游标 {@code "<micros>:<id>"} 喂给推荐序解码器会被
+     * <b>静默接受</b>（seed 变成那串毫秒数、consumed 变成 id），用户拿到一个不存在种子的
+     * 任意偏移页 —— 不崩、不报错、只是页很怪，没人查得出来。
      */
     public String newSeed(Instant refreshAt) {
-        return Long.toString(refreshAt.toEpochMilli(), 36);
+        return FeedRankCursor.SEED_PREFIX + Long.toString(refreshAt.toEpochMilli(), 36);
     }
 
     /** 已缓存的序列长度；Redis 不可用或键不存在 → 0。 */

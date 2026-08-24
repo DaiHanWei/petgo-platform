@@ -36,6 +36,10 @@ import org.springframework.transaction.annotation.Transactional;
  * 快照有 30 分钟寿命，期间内容可能被删 / 被挂起 / 转私密，或查看者刚拉黑了某个作者。
  * 所以读页走 {@link ContentPostRepository#findRankableByIds}，而不是 {@code findAllById} ——
  * AC4 明写「任何级别下候选池的全部过滤都不得被绕过」。
+ *
+ * <h2>作者本人的挂起帖走单独一条路</h2>
+ * 它们<b>不进候选池</b>（不占算法槽位、不参与配比与打分），首屏单独置顶插回 ——
+ * 让它们进池去和全平台内容抢分数，抢不到就等于「刚发的帖从首页消失」，正是 AC2 要防的事。
  */
 @Service
 public class FeedRecommendationService {
@@ -49,6 +53,13 @@ public class FeedRecommendationService {
      * <p>⚠️ 不是性能调优参数：不多要就会返回一个短页，而短页会被客户端理解成「到底了」。
      */
     private static final int OVERFETCH = 10;
+
+    /**
+     * 首屏最多置顶几条本人挂起帖。
+     *
+     * <p>⚠️ 有上界是为了防「一个人连发十条待审」把首屏整页占满 —— 那对作者自己也不是好体验。
+     */
+    private static final int MAX_OWN_PENDING = 3;
 
     private final ContentPostRepository posts;
     private final ContentLikeRepository likes;
@@ -111,6 +122,22 @@ public class FeedRecommendationService {
         int consumed = rc.consumed();
         boolean sequenceExhausted = false;
 
+        // 🔴 AC2：作者本人的挂起帖首屏置顶，**不占算法槽位、不参与配比与打分**。
+        // 候选池只收 PUBLISHED，所以它们压根没进引擎；这里单独取、单独插。
+        // ⚠️ 只首屏插 —— 后续页来自序列，序列里没有它们，天然不会重复。
+        Set<Long> pinnedPending = new LinkedHashSet<>();
+        if (firstPage && viewerId != null) {
+            for (ContentPost pending : posts.findOwnPendingPosts(viewerId,
+                    PageRequest.of(0, MAX_OWN_PENDING))) {
+                page.add(pending);
+                // ⚠️ 记进 served 是为了**去重**：一条帖可能在排序时还是 PUBLISHED、之后才被挂起，
+                //    而按 id 读回来的那个查询允许作者看自己的挂起帖 ⇒ 同一条会从"置顶"和"序列"
+                //    两边各冒一次。不去重就是首屏同一条出现两次。
+                served.add(pending.getId());
+                pinnedPending.add(pending.getId());
+            }
+        }
+
         while (page.size() < pageSize && !sequenceExhausted) {
             int want = pageSize - page.size() + OVERFETCH;
             List<Long> slice = slice(key, rc.seed(), consumed, want, viewerId, now);
@@ -144,7 +171,10 @@ public class FeedRecommendationService {
         }
 
         // 🔴 AC2（16.1）：序列返回给客户端时即记入曝光，不等客户端上报。
-        seenStore.markSeen(key, served, now);
+        // 🛡 本人挂起帖**不记曝光**：它没参与打分，记了不影响任何东西，
+        //    只会让作者自己的待审内容莫名占着曝光集合的位置。
+        List<Long> exposed = served.stream().filter(id -> !pinnedPending.contains(id)).toList();
+        seenStore.markSeen(key, exposed, now);
 
         boolean hasMore = !sequenceExhausted || page.size() == pageSize;
         String next = (page.isEmpty() || !hasMore) ? null

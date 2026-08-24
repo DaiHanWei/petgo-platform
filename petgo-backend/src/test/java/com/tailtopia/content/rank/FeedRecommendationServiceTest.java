@@ -65,7 +65,10 @@ class FeedRecommendationServiceTest {
         when(pets.findByOwnerId(org.mockito.ArgumentMatchers.anyLong()))
                 .thenReturn(java.util.Optional.empty());
         when(seen.decayFactors(any(), anyList(), any())).thenReturn(Map.of());
-        when(sequences.newSeed(any())).thenReturn("seed-1");
+        when(sequences.newSeed(any())).thenReturn("s-seed-1");
+        // 默认无挂起帖（AC2 那条单独用例自己打桩）
+        when(posts.findOwnPendingPosts(org.mockito.ArgumentMatchers.anyLong(), any()))
+                .thenReturn(List.of());
 
         service = new FeedRecommendationService(posts, likes, comments, tags, species, pets,
                 seen, sequences, new FeedRankEngine(),
@@ -100,8 +103,8 @@ class FeedRecommendationServiceTest {
      * 此时上一个 answer 会带着 null 参数执行，直接 NPE。
      */
     private void sequenceIs(List<Long> ids, java.util.function.LongPredicate stillAlive) {
-        when(sequences.length(any(), eq("seed-1"))).thenReturn((long) ids.size());
-        when(sequences.read(any(), eq("seed-1"), org.mockito.ArgumentMatchers.anyLong(), anyInt()))
+        when(sequences.length(any(), eq("s-seed-1"))).thenReturn((long) ids.size());
+        when(sequences.read(any(), eq("s-seed-1"), org.mockito.ArgumentMatchers.anyLong(), anyInt()))
                 .thenAnswer(inv -> {
                     long off = inv.getArgument(2);
                     int lim = inv.getArgument(3);
@@ -189,7 +192,7 @@ class FeedRecommendationServiceTest {
 
         // 25 = 20 条展示 + 5 条被丢弃；用「页码 × 20」会得到 20，下一页就会重复读到 21..25
         assertThat(c.consumed()).isEqualTo(25);
-        assertThat(c.seed()).isEqualTo("seed-1");
+        assertThat(c.seed()).isEqualTo("s-seed-1");
     }
 
     /** 🔴 翻页不重复：连续三页的 id 互不相交。 */
@@ -212,6 +215,90 @@ class FeedRecommendationServiceTest {
         assertThat(all).doesNotHaveDuplicates();
     }
 
+    // ── AC2：作者本人的挂起帖 ───────────────────────────────────────
+
+    /**
+     * 🔴 挂起帖首屏置顶，且<b>不占算法槽位、不参与配比与打分</b>。
+     *
+     * <p>让它进候选池是很自然的写法（时间倒序那条路径就是那么写的），但那会让作者自己的
+     * 待审内容去和全平台内容<b>抢分数</b> —— 抢不到就等于「刚发的帖从首页消失」，
+     * 而作者只会以为发布失败了。
+     */
+    @Test
+    void ownPendingPostIsPinnedToTheFirstPageAndNeverScored() {
+        List<Long> seq = new ArrayList<>();
+        for (long i = 1; i <= 40; i++) {
+            seq.add(i);
+        }
+        sequenceIs(seq);
+        when(posts.findOwnPendingPosts(eq(9L), any())).thenReturn(List.of(post(999L, 9L)));
+
+        FeedRecommendationService.RankedPage p = service.page(9L, null, null, 20, null);
+
+        assertThat(p.posts().get(0).getId()).as("挂起帖应在首屏最前").isEqualTo(999L);
+        assertThat(p.posts()).hasSize(20); // 页大小不变
+        // 🛡 它没进候选池 ⇒ 引擎压根没见过它（候选池查询只收 PUBLISHED，这里以"没被当成序列项"体现）
+        assertThat(p.posts().stream().skip(1).map(ContentPost::getId)).doesNotContain(999L);
+    }
+
+    /** 🛡 只首屏置顶；后续页不再出现（序列里本来就没有它）。 */
+    @Test
+    void ownPendingPostDoesNotRepeatOnLaterPages() {
+        List<Long> seq = new ArrayList<>();
+        for (long i = 1; i <= 60; i++) {
+            seq.add(i);
+        }
+        sequenceIs(seq);
+        when(posts.findOwnPendingPosts(eq(9L), any())).thenReturn(List.of(post(999L, 9L)));
+
+        String cursor = new FeedRankCursor("s-seed-1", 20).encode();
+        FeedRecommendationService.RankedPage later = service.page(9L, null, cursor, 20, null);
+
+        assertThat(later.posts().stream().map(ContentPost::getId)).doesNotContain(999L);
+    }
+
+    /**
+     * 🔴 <b>排序后才被挂起</b>的那条不能出现两次。
+     *
+     * <p>一条帖排序时还是 PUBLISHED、之后被挂起 ⇒ 它既在序列里、又会被"本人挂起帖"取到，
+     * 而按 id 读回来的查询允许作者看自己的挂起帖 —— 不去重就是首屏同一条出现两次。
+     */
+    @Test
+    void aPostHeldAfterRankingIsNotShownTwice() {
+        sequenceIs(List.of(5L, 6L, 7L));
+        when(posts.findOwnPendingPosts(eq(9L), any())).thenReturn(List.of(post(5L, 9L)));
+
+        FeedRecommendationService.RankedPage p = service.page(9L, null, null, 20, null);
+
+        assertThat(p.posts().stream().map(ContentPost::getId)).doesNotHaveDuplicates();
+        assertThat(p.posts().stream().map(ContentPost::getId)).containsExactly(5L, 6L, 7L);
+    }
+
+    /** 🛡 挂起帖不记曝光（它没参与打分，记了只会占着曝光集合）。 */
+    @Test
+    void ownPendingPostIsNotMarkedAsSeen() {
+        sequenceIs(List.of(1L, 2L));
+        when(posts.findOwnPendingPosts(eq(9L), any())).thenReturn(List.of(post(999L, 9L)));
+
+        service.page(9L, null, null, 20, null);
+
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<Collection<Long>> captor =
+                org.mockito.ArgumentCaptor.forClass(Collection.class);
+        verify(seen).markSeen(any(), captor.capture(), any());
+        assertThat(captor.getValue()).containsExactly(1L, 2L).doesNotContain(999L);
+    }
+
+    /** 游客没有"本人挂起帖"这回事，压根不该发这次查询。 */
+    @Test
+    void guestNeverQueriesPendingPosts() {
+        sequenceIs(List.of(1L));
+
+        service.page(null, "anon", null, 20, null);
+
+        verify(posts, never()).findOwnPendingPosts(org.mockito.ArgumentMatchers.anyLong(), any());
+    }
+
     // ── 顶置首屏让位（沿用 Story 4.2 口径） ──────────────────────────
 
     /** 🛡 顶置的那条不在第一页出现；后续页不让位。 */
@@ -227,7 +314,7 @@ class FeedRecommendationServiceTest {
         assertThat(first.posts().stream().map(ContentPost::getId)).doesNotContain(3L);
 
         // 后续页（带游标）不让位 —— 传同一个 yieldId 也不生效
-        String cursor = new FeedRankCursor("seed-1", 0).encode();
+        String cursor = new FeedRankCursor("s-seed-1", 0).encode();
         FeedRecommendationService.RankedPage later = service.page(9L, null, cursor, 20, 3L);
         assertThat(later.posts().stream().map(ContentPost::getId)).contains(3L);
     }

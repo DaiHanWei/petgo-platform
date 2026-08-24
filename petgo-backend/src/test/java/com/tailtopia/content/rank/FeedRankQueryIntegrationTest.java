@@ -94,6 +94,44 @@ class FeedRankQueryIntegrationTest extends ApiIntegrationTest {
     }
 
     /**
+     * 🔴 <b>挂起帖不进候选池 —— 连作者自己的也不进</b>（AC2）。
+     *
+     * <p>它<b>不占算法槽位、不参与配比与打分</b>：进池就要和全平台内容抢分数，抢不到
+     * 就等于「刚发的帖从首页消失」，而作者只会以为发布失败了。
+     * 它走 {@link ContentPostRepository#findOwnPendingPosts} 单独取、首屏置顶插回。
+     */
+    @Test
+    void pendingPostsStayOutOfTheCandidatePoolEvenForTheirAuthor() {
+        User author = newUser();
+        ContentPost p = publish(author.getId(), ContentType.DAILY);
+        p.applyReportHold();
+        posts.save(p);
+
+        List<Long> pool = posts.findRankCandidatePool(true, author.getId(),
+                PageRequest.of(0, 200)).stream().map(ContentPost::getId).toList();
+        assertThat(pool).doesNotContain(p.getId());
+
+        // 但单独那条路取得到，且只取到本人的
+        assertThat(posts.findOwnPendingPosts(author.getId(), PageRequest.of(0, 10)))
+                .extracting(ContentPost::getId).contains(p.getId());
+        assertThat(posts.findOwnPendingPosts(newUser().getId(), PageRequest.of(0, 10)))
+                .extracting(ContentPost::getId).doesNotContain(p.getId());
+    }
+
+    /** 🛡 软删的挂起帖对所有人隐藏 —— 含作者（拒绝即软删）。 */
+    @Test
+    void softDeletedPendingPostIsHiddenFromItsAuthorToo() {
+        User author = newUser();
+        ContentPost p = publish(author.getId(), ContentType.DAILY);
+        p.applyReportHold();
+        p.softDelete();
+        posts.save(p);
+
+        assertThat(posts.findOwnPendingPosts(author.getId(), PageRequest.of(0, 10)))
+                .extracting(ContentPost::getId).doesNotContain(p.getId());
+    }
+
+    /**
      * 🛡 举报者隐藏与账号级隐藏是<b>两条并列的独立条件，不合并</b>（AD-9）。
      *
      * <p>🔴 补充 PRD 写它们「可合并为一次过滤」——<b>那与代码不符</b>：

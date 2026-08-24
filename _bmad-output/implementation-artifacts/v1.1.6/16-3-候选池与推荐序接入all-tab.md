@@ -111,8 +111,11 @@ so that 不会连续刷到同一个人、科普与日常有节奏、养猫少刷
 - [x] **T4 · 降级链四级 + 告警分级**（AC4）
 - [x] **T5 · 测试**
   - [x] L1：ALL Tab 走推荐序、非 ALL Tab 仍是严格时间倒序（钉住 AC1 的"两条独立路径"）
+        —— 端点层 `FeedRankRoutingIntegrationTest`（按**游标结构**判别，不靠"顺序不一样"）
   - [x] L1：🛡 拉黑与举报隐藏**各自**生效（钉住 AC2 的"不合并"）
-  - [x] L1：🛡 级别 4 回落时间倒序，**拉黑仍然生效**（钉住 AC4 那条"不得被绕过"）
+  - [x] **L0**：🛡 级别 4 回落时间倒序，**拉黑仍然生效**（钉住 AC4 那条"不得被绕过"）
+        ⚠️ 原写 `[L1]`，**实际只做到 L0**（断言调用点实参）—— 真实触发级别 4 需要 bean 覆盖，
+        而那会多出一个 Spring 上下文（基类注释里那条连接池告警）。真实演练已列进「留 L2 的」。
   - [x] L1：作者本人挂起帖在自己的 Feed 里、他人看不到
   - [x] L1：顶置内容不在第一页出现（回归 4-2，钉住 AC5 不被放宽）
   - [x] L0：排序链路上不再有 `petStatus`
@@ -254,6 +257,73 @@ ALL Tab 端点的覆盖，而 ALL 恰好是本 story 唯一改动的路径。
 同一次会话内的翻页重复）。
 ⚠️ 该请求头**可缺省** —— 老版本客户端不带它照样能刷首页，只是同一批游客共用一份序列快照。
 
+**11b. 🔴 复核时发现两处问题（一处是我报告不准，一处是真缺陷）**
+
+被要求"自己好好看下"之后重新核了一遍，结果两样都有：
+
+**(a) 我勾错了两个框。** story 的测试清单里这两条标着 `[L1]`，我实际只做到 L0：
+「ALL 走推荐序、非 ALL 严格时间倒序」与「级别 4 回落时拉黑仍然生效」。
+前者已补真正的 L1（见下）；后者**改标签为 L0** 并把真实演练留进 L2 ——
+真触发级别 4 要 bean 覆盖，那会多出一个 Spring 上下文（基类注释里那条连接池告警）。
+
+⚠️ 顺带查清一个虚警：surefire 的 `.txt` 汇总（2214）与 `.xml`（2239）差 25，
+是 `ScheduleWindowTest`(16) 与 `MilestoneAnalyticsTest`(9) 用了 `@Nested`，
+`.txt` 对外层类记 0 —— 报告格式的假象，两边都 0 失败，xml 与 Maven 汇总一致。
+
+**(b) 🔴 两种游标的编码空间没隔开 —— 真缺陷。**
+
+补 L1 路由测试时发现的：两条路径的游标都是 `base64url("<a>:<b>")`。
+把**时间倒序游标喂给 ALL Tab**，`FeedRankCursor.decode` 会**静默接受** ——
+seed 解成那串毫秒数、consumed 解成 id，用户拿到一个不存在种子的**任意偏移页**。
+🔴 **不崩、不报错、服务端一条错都不记**，表现只是「切 Tab 后首页内容很怪」，没人查得出来。
+（反方向恰好能 422 纯属运气：种子的 base36 串里一般有字母，`Long.parseLong` 才失败 ——
+ 而 base36 全是数字的概率约 3.5e-5，那就是一条极难复现的偶发 bug。）
+
+修法：种子加前缀 `s`，解码时校验；两个空间由此**不可能重叠**。
+反证（去掉校验）→ `chronoCursorIsRejectedByTheAllTab` 红在
+`Status expected:<422> but was:<200>`，正是那个静默接受。
+
+⚠️ **这条缺陷本来会漏掉**：它不在任何 AC 里，也没有测试会自然覆盖到 ——
+是为了把一个标错的 `[L1]` 补上、去想「端点层怎么确定性地判别两条路径」时撞出来的。
+
+**11c. 🔴 复核又逼出一条 AC 我根本没实现（不是标签问题，是漏做）**
+
+AC2 有一句：**「作者本人的挂起帖直接插回其时间序位置，不占算法槽位、不参与配比与打分」**。
+我的第一版把挂起帖**放进了候选池**（照抄了时间倒序那条路径 `findFeed` 的写法）——
+于是它跟着一起打分、占配额、和全平台内容抢分数。
+
+⚠️ **而我勾的那个框「本人挂起帖在自己的 Feed 里、他人看不到」碰巧是绿的** ——
+因为它确实在池子里、确实只有本人看得到。测试没错，是**我用一个较弱的命题冒充了 AC**。
+🔴 真实后果：作者刚发的帖抢不到分数 ⇒ 从首页消失 ⇒ 作者只会以为发布失败了。
+这正是那句 AC 的存在理由。
+
+修法：
+- 候选池查询**只收 `PUBLISHED`** —— 挂起帖压根不进引擎
+- 新增 `findOwnPendingPosts`，首屏**置顶插回**
+  （推荐序里没有「时间序位置」这回事，首屏置顶是最贴近原意的落法：
+   作者刚发的本来就是他最新的东西，放最前面最不意外），上限 3 条防连发占满首屏
+- 🔴 **去重**：一条帖可能排序时还是 `PUBLISHED`、之后才被挂起 ⇒ 它既在序列里、
+  又会被"本人挂起帖"取到（按 id 读回来那个查询允许作者看自己的挂起帖）——
+  不去重就是**首屏同一条出现两次**。有专门用例钉这个。
+- 🛡 挂起帖**不记曝光**：它没参与打分，记了只会让待审内容占着曝光集合的位置
+
+反证（把挂起帖放回候选池，即我原来那个写法）→
+`pendingPostsStayOutOfTheCandidatePoolEvenForTheirAuthor` 精确红一条。
+
+**11d. 复核这一轮的总结**
+
+三样东西是「跑完了、绿了」之后才发现的：
+| 发现 | 性质 |
+|---|---|
+| surefire txt/xml 差 25 条 | ❌ 虚警（`@Nested` 的报告格式） |
+| 两个 `[L1]` 框实际只有 L0 覆盖 | ⚠️ 我报告不准 |
+| 游标编码空间没隔开 | 🔴 真缺陷（静默接受，不报错） |
+| 挂起帖进了候选池 | 🔴 真漏做（AC2 明写，我用较弱命题冒充） |
+
+⚠️ 两条真问题**都不是测试红了才发现的** —— 是逐条把 AC 对回实现、
+以及去想「这个 `[L1]` 该怎么在端点层确定性验证」时撞出来的。
+**全绿不等于做完了**：绿只证明我写的断言成立，不证明断言覆盖了 AC。
+
 **12. 本 story 零迁移**（只新增两个 JPQL 查询，无 schema 变化）。flyway-guard 无关。
 
 **13. 留 L2 的**
@@ -264,11 +334,11 @@ ALL Tab 端点的覆盖，而 ALL 恰好是本 story 唯一改动的路径。
 ### File List
 
 **新增（后端）**
-- `petgo-backend/src/main/java/com/tailtopia/content/rank/FeedRankCursor.java`
+- `petgo-backend/src/main/java/com/tailtopia/content/rank/FeedRankCursor.java`（含种子前缀校验，见第 11b(b) 条）
 - `petgo-backend/src/main/java/com/tailtopia/content/rank/FeedRecommendationService.java`
 
 **修改（后端）**
-- `.../content/repository/ContentPostRepository.java`（新增 `findRankCandidatePool` / `findRankableByIds`）
+- `.../content/repository/ContentPostRepository.java`（新增 `findRankCandidatePool` / `findRankableByIds` / `findOwnPendingPosts`）
 - `.../content/service/FeedService.java`（ALL/非 ALL 分流、级别 4 回落、抽出 `assemble`、删 `petStatus`）
 - `.../content/web/ContentFeedController.java`（删 `petStatus` 与 `resolvePetStatus`、接 `X-Anon-Session`）
 - `.../content/rank/FeedRankProperties.java`（新增 `candidatePoolSize`）
@@ -282,6 +352,7 @@ ALL Tab 端点的覆盖，而 ALL 恰好是本 story 唯一改动的路径。
 
 **新增（测试）**
 - `.../content/rank/FeedRecommendationServiceTest.java`（L0 · 13）
+- `.../content/rank/FeedRankRoutingIntegrationTest.java`（L1 端点层 · 5）
 - `.../content/rank/FeedRankQueryIntegrationTest.java`（L1 真库 · 7）
 - `petgo_app/test/features/content/data/anon_feed_session_test.dart`（L0 · 3）
 

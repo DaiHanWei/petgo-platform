@@ -291,13 +291,17 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
      *
      * <p>🛡 <b>不传顶置排除</b>：顶置让位在<b>服务页时</b>处理，因为「首页」在推荐序里
      * 是序列的前 20 个位置，而序列是一次算 100 条的 —— 在取数时排掉会让它永远不出现。
+     *
+     * <p>🔴 <b>只收 {@code PUBLISHED}，作者本人的挂起帖不进池</b>（AC2）：
+     * 挂起帖<b>不占算法槽位、不参与配比与打分</b>，由
+     * {@link #findOwnPendingPosts} 单独取、在服务页时插回。
+     * ⚠️ 让它进池是很自然的写法（{@code findFeed} 就是那么写的），但那会让作者自己的
+     * 待审内容去和全平台内容抢分数 —— 抢不到就等于「刚发的帖从首页消失」，正是 AC 要防的事。
      */
     @Query("""
             SELECT p FROM ContentPost p
             WHERE p.deletedAt IS NULL
-              AND (p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
-                   OR (p.status = com.tailtopia.content.domain.PostStatus.UNDER_REVIEW
-                       AND :hasViewer = true AND p.authorId = :viewerId))
+              AND p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
               AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
               AND (:hasViewer = false
                    OR NOT EXISTS (SELECT 1 FROM ContentReport r
@@ -343,6 +347,26 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             @Param("ids") Collection<Long> ids,
             @Param("hasViewer") boolean hasViewer,
             @Param("viewerId") Long viewerId);
+
+    /**
+     * 查看者<b>本人</b>的挂起帖（V1.1.6 Story 16.3 · AC2）。
+     *
+     * <p>推荐序里没有「时间序位置」这回事，所以 AC 那句「插回其时间序位置」在这条路径上
+     * 落成<b>首屏置顶</b>：作者刚发的内容本来就是他自己最新的东西，放在最前面最不意外。
+     * 关键是它<b>不参与打分</b> —— 抢不到分数就等于从首页消失，那是体验回退。
+     *
+     * <p>🛡 只有<b>本人</b>看得到（对他人零泄漏由候选池只收 {@code PUBLISHED} 保证）；
+     * 拒绝即软删（{@code deletedAt}），对所有人含作者隐藏。
+     */
+    @Query("""
+            SELECT p FROM ContentPost p
+            WHERE p.authorId = :authorId
+              AND p.deletedAt IS NULL
+              AND p.status = com.tailtopia.content.domain.PostStatus.UNDER_REVIEW
+              AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
+            ORDER BY p.createdAt DESC, p.id DESC
+            """)
+    List<ContentPost> findOwnPendingPosts(@Param("authorId") long authorId, Pageable pageable);
 
     /**
      * 注销联动（内容审核 story 9，§5.5.1）：把注销用户仍在公开/挂起口径的帖子置 {@code AUTHOR_DEACTIVATED}
