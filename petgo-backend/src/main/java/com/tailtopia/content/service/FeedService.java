@@ -17,7 +17,9 @@ import com.tailtopia.content.repository.CommentRepository;
 import com.tailtopia.content.repository.CommentRepository.PostCommentCount;
 import com.tailtopia.content.repository.ContentLikeRepository;
 import com.tailtopia.content.repository.ContentLikeRepository.PostLikeCount;
+import com.tailtopia.content.rank.FeedRecommendationService;
 import com.tailtopia.content.repository.ContentPostRepository;
+import com.tailtopia.shared.error.AppException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -67,9 +69,17 @@ public class FeedService {
      */
     private final UserHideRelationReader hideRelations;
 
+    /**
+     * 推荐序取数（V1.1.6 Story 16.3）。
+     *
+     * <p>🛡 <b>只有 ALL Tab 用它</b>；分类 Tab 走的是本类原有的时间倒序，一行代码没动。
+     */
+    private final FeedRecommendationService recommendations;
+
     public FeedService(ContentPostRepository posts, AccountQueryService accountQueryService,
             ContentLikeRepository likes, CommentRepository comments, ContentPinService pins,
-            ContentTagQueryService contentTags, UserHideRelationReader hideRelations) {
+            ContentTagQueryService contentTags, UserHideRelationReader hideRelations,
+            FeedRecommendationService recommendations) {
         this.posts = posts;
         this.accountQueryService = accountQueryService;
         this.likes = likes;
@@ -77,6 +87,7 @@ public class FeedService {
         this.pins = pins;
         this.contentTags = contentTags;
         this.hideRelations = hideRelations;
+        this.recommendations = recommendations;
     }
 
     /** 一页内容各自的装饰标签（整页一次查询）。 */
@@ -151,16 +162,63 @@ public class FeedService {
     /**
      * 读取一批 Feed。
      *
-     * @param petStatus 调用者宠物状态。⚠️ **Story 4.1 起不再参与过滤**（FR-83：V1.0.0「状态 B 用户
-     *                  Feed 不显示成长日历」整条废止，公开内容对所有用户一视同仁）。形参保留仅为
-     *                  兼容调用点，不读取；下一次改这条链路时可一并删除。
-     * @param category  分类 Tab（ALL/DAILY/GROWTH_MOMENT/KNOWLEDGE）
-     * @param cursor    上一批末尾游标 token；null = 首批
-     * @param viewerId  当前登录用户 id（游客为 null）；非空则排除「本人已举报的帖」（内容审核 cm-6 §5.4）
+     * <h2>🔴 两条独立路径，不是「推荐序 + 降级分支」</h2>
+     * <table>
+     *   <tr><th></th><th>ALL Tab</th><th>非 ALL Tab</th></tr>
+     *   <tr><td>排序</td><td><b>推荐序</b>（Story 16.3）</td><td><b>纯时间倒序</b>（FR-17 既有逻辑）</td></tr>
+     *   <tr><td>属性穿插 / 物种配比 / 防扎堆</td><td>✅</td><td>❌</td></tr>
+     *   <tr><td>序列快照</td><td>✅ 需要</td><td>❌ 不需要（时间倒序 + 游标本就稳定）</td></tr>
+     *   <tr><td>候选池全部过滤</td><td>✅</td><td>✅ 同样生效（这层与排序无关）</td></tr>
+     * </table>
+     * 理由：① 用户切到分类 Tab 的预期就是「筛出这一类、按时间看最新」；
+     * ② 非 ALL 不需要序列快照，省掉一整套缓存开销、少一条出错路径；③ 回滚只需关掉 ALL 分支。
+     *
+     * <p>⚠️ <b>petStatus 形参已删除</b>（Story 16.3 · AC3）：Story 4.1 起它就不参与过滤
+     * （FR-83 整条废止），留着只会让后人误以为它还有作用。
+     *
+     * @param category 分类 Tab（ALL/DAILY/GROWTH_MOMENT/KNOWLEDGE）
+     * @param cursor   上一批末尾游标 token；null = 首批
+     * @param viewerId 当前登录用户 id（游客为 null）；非空则排除「本人已举报的帖」（内容审核 cm-6 §5.4）
+     * @param anonSessionId 游客的匿名会话 id（推荐序缓存键用；登录用户忽略）
      */
     @Transactional(readOnly = true)
-    public FeedPageResponse loadFeed(String petStatus, String category, String cursor, Long viewerId) {
+    public FeedPageResponse loadFeed(String category, String cursor, Long viewerId,
+            String anonSessionId) {
         FeedCategory cat = FeedCategory.parse(category);
+        if (cat == FeedCategory.ALL) {
+            return recommendedFeed(cursor, viewerId, anonSessionId);
+        }
+        return chronoFeed(cat, cursor, viewerId);
+    }
+
+    /**
+     * ALL Tab：推荐序（Story 16.3）。
+     *
+     * <p>🔴 <b>降级链级别 4</b>：打分 / 依赖查询出任何异常 → <b>整体回落纯时间倒序</b>，用户无感。
+     * 🛡 回落走的是 {@link #chronoFeed}，也就是<b>同一套候选池过滤</b> ——
+     * AC4 明写「任何级别下候选池的全部过滤都不得被绕过」，回落时把过滤丢掉就是拉黑白拉。
+     * ⚠️ 级别 4 <b>要告警</b>（级别 1、2 是预期行为不告警，见 §6.2）。
+     */
+    private FeedPageResponse recommendedFeed(String cursor, Long viewerId, String anonSessionId) {
+        try {
+            Long yieldId = pinnedContentIdToYield(cursor);
+            FeedRecommendationService.RankedPage ranked =
+                    recommendations.page(viewerId, anonSessionId, cursor, PAGE_SIZE, yieldId);
+            return assemble(ranked.posts(), viewerId, ranked.nextCursor(), ranked.hasMore());
+        } catch (AppException e) {
+            throw e; // 游标非法等入参问题照常 422，不能被当成"算不出来"吞掉
+        } catch (RuntimeException e) {
+            log.warn("{} cls={} msg={}", RANK_FALLBACK_MARKER, e.getClass().getSimpleName(),
+                    e.getMessage());
+            return chronoFeed(FeedCategory.ALL, cursor, viewerId);
+        }
+    }
+
+    /** 告警锚点串（降级链级别 4）。🛡 改动即等于改动告警配置。 */
+    static final String RANK_FALLBACK_MARKER = "feed-rank-fallback-to-chrono";
+
+    /** 非 ALL Tab 与级别 4 回落：纯时间倒序（FR-17 既有逻辑，🛡 一行未动）。 */
+    private FeedPageResponse chronoFeed(FeedCategory cat, String cursor, Long viewerId) {
         ContentType type = cat.toContentType();
         boolean requirePet = cat.requiresPet();
 
@@ -182,6 +240,22 @@ public class FeedService {
         boolean hasMore = rows.size() > PAGE_SIZE;
         List<ContentPost> page = hasMore ? rows.subList(0, PAGE_SIZE) : rows;
 
+        String nextCursor = null;
+        if (hasMore && !page.isEmpty()) {
+            ContentPost last = page.get(page.size() - 1);
+            nextCursor = new FeedCursor(last.getCreatedAt(), last.getId()).encode();
+        }
+        return assemble(page, viewerId, nextCursor, hasMore);
+    }
+
+    /**
+     * 一页内容 → 一页 DTO。
+     *
+     * <p>🔴 <b>两条排序路径共用这一个组装口径</b>（AD-7 Rule 4）：客户端因此可以用同一个卡片组件，
+     * 也不会出现「推荐序的卡少了评论数」这种分叉。新增字段只需改这一处。
+     */
+    private FeedPageResponse assemble(List<ContentPost> page, Long viewerId, String nextCursor,
+            boolean hasMore) {
         Map<Long, AuthorView> authors = accountQueryService.findAuthorViews(
                 page.stream().map(ContentPost::getAuthorId).toList());
         Map<Long, Long> likeCounts = likeCounts(page);
@@ -199,12 +273,6 @@ public class FeedService {
                         commentCounts.getOrDefault(p.getId(), 0L),
                         decorations.get(p.getId())))
                 .toList();
-
-        String nextCursor = null;
-        if (hasMore && !page.isEmpty()) {
-            ContentPost last = page.get(page.size() - 1);
-            nextCursor = new FeedCursor(last.getCreatedAt(), last.getId()).encode();
-        }
         return new FeedPageResponse(items, nextCursor, hasMore);
     }
 

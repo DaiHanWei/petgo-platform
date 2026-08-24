@@ -274,6 +274,77 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             Pageable pageable);
 
     /**
+     * 推荐序候选池（V1.1.6 Story 16.3 · AC2）。
+     *
+     * <p>🔴 <b>过滤口径与 {@link #findFeed} 逐条相同</b>，只去掉「分类」「游标」「排序」三件事 ——
+     * 推荐序不按 {@code created_at} 翻页，排序由引擎决定。
+     *
+     * <p>⚠️ <b>为什么仍带 {@code ORDER BY created_at DESC} 且必须传 Pageable</b>：候选池要有上界。
+     * 不设上界的话这个查询会随总帖数线性变大，而它每次下拉刷新都要跑一次；
+     * 且推导物种、批量取赞评、取装饰标签都要按这一批的规模走。
+     * 取「最近 N 条」是有意的：更早的内容新鲜度已趋近 0，靠互动度单独也很难排上来。
+     * ⚠️ 顺带这条 {@code ORDER BY ... LIMIT} 让查询走既有 {@code idx_content_posts_feed} 索引
+     * 而不是全表扫（Story 16.1 的索引重估结论）。
+     *
+     * <p>🛡 举报者隐藏与账号级隐藏<b>仍是两条并列条件，不合并</b>（AD-9）——
+     * 一条藏一条帖、一条藏一个人。合并会改变已上线行为。
+     *
+     * <p>🛡 <b>不传顶置排除</b>：顶置让位在<b>服务页时</b>处理，因为「首页」在推荐序里
+     * 是序列的前 20 个位置，而序列是一次算 100 条的 —— 在取数时排掉会让它永远不出现。
+     */
+    @Query("""
+            SELECT p FROM ContentPost p
+            WHERE p.deletedAt IS NULL
+              AND (p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
+                   OR (p.status = com.tailtopia.content.domain.PostStatus.UNDER_REVIEW
+                       AND :hasViewer = true AND p.authorId = :viewerId))
+              AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
+              AND (:hasViewer = false
+                   OR NOT EXISTS (SELECT 1 FROM ContentReport r
+                                  WHERE r.postId = p.id AND r.reporterId = :viewerId))
+              AND (:hasViewer = false
+                   OR NOT EXISTS (SELECT 1 FROM UserHideRelation h
+                                  WHERE h.holderId = :viewerId AND h.targetId = p.authorId))
+            ORDER BY p.createdAt DESC, p.id DESC
+            """)
+    List<ContentPost> findRankCandidatePool(
+            @Param("hasViewer") boolean hasViewer,
+            @Param("viewerId") Long viewerId,
+            Pageable pageable);
+
+    /**
+     * 按 id 取内容，<b>并重新套一遍候选池过滤</b>（V1.1.6 Story 16.3 · AC4）。
+     *
+     * <p>🔴 <b>这个方法存在的唯一理由</b>：序列快照有 30 分钟寿命，期间内容可能被删、被挂起、
+     * 转成私密，或者查看者刚拉黑了某个作者。直接 {@code findAllById} 取回来就是
+     * <b>绕过了安全规则层</b> —— 而 AC4 明写「任何级别下候选池的全部过滤都不得被绕过」。
+     *
+     * <p>⚠️ 返回条数可能少于传入的 id 数（有的已不合格）。调用方须据此从序列里<b>再多取几条</b>补齐，
+     * 而不是直接返回一个短页。
+     *
+     * <p>🛡 不带排序 —— 顺序由序列决定，调用方按 id 重排。
+     */
+    @Query("""
+            SELECT p FROM ContentPost p
+            WHERE p.id IN :ids
+              AND p.deletedAt IS NULL
+              AND (p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
+                   OR (p.status = com.tailtopia.content.domain.PostStatus.UNDER_REVIEW
+                       AND :hasViewer = true AND p.authorId = :viewerId))
+              AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
+              AND (:hasViewer = false
+                   OR NOT EXISTS (SELECT 1 FROM ContentReport r
+                                  WHERE r.postId = p.id AND r.reporterId = :viewerId))
+              AND (:hasViewer = false
+                   OR NOT EXISTS (SELECT 1 FROM UserHideRelation h
+                                  WHERE h.holderId = :viewerId AND h.targetId = p.authorId))
+            """)
+    List<ContentPost> findRankableByIds(
+            @Param("ids") Collection<Long> ids,
+            @Param("hasViewer") boolean hasViewer,
+            @Param("viewerId") Long viewerId);
+
+    /**
      * 注销联动（内容审核 story 9，§5.5.1）：把注销用户仍在公开/挂起口径的帖子置 {@code AUTHOR_DEACTIVATED}
      * （对他人隐藏；内容保留 {@code deletedAt IS NULL}，与匿名化并存）。仅动 PUBLISHED/UNDER_REVIEW（幂等）。
      */

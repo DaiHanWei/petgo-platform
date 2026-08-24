@@ -21,16 +21,19 @@ public class FeedRankProperties {
     private final int seenWindowDays;
     private final int sequenceTtlMinutes;
     private final int sequenceLength;
+    private final int candidatePoolSize;
 
     public FeedRankProperties(
             @Value("${petgo.feed.rank.exposure-decay:0.3}") double exposureDecay,
             @Value("${petgo.feed.rank.seen-window-days:7}") int seenWindowDays,
             @Value("${petgo.feed.rank.sequence-ttl-minutes:30}") int sequenceTtlMinutes,
-            @Value("${petgo.feed.rank.sequence-length:100}") int sequenceLength) {
+            @Value("${petgo.feed.rank.sequence-length:100}") int sequenceLength,
+            @Value("${petgo.feed.rank.candidate-pool-size:1000}") int candidatePoolSize) {
         this.exposureDecay = exposureDecay;
         this.seenWindowDays = seenWindowDays;
         this.sequenceTtlMinutes = sequenceTtlMinutes;
         this.sequenceLength = sequenceLength;
+        this.candidatePoolSize = candidatePoolSize;
     }
 
     /**
@@ -55,5 +58,19 @@ public class FeedRankProperties {
     /** 一次生成的序列长度（默认前 100 条）。游标超出后用同一种子续算下一段。 */
     public int sequenceLength() {
         return sequenceLength;
+    }
+
+    /**
+     * 候选池上界（默认最近 1000 条公开内容）。
+     *
+     * <p>🔴 <b>候选池必须有上界</b>：不设的话这个查询随总帖数线性变大，而它每次下拉刷新都要跑一次，
+     * 且推导物种、批量取赞评、取装饰标签都按这一批的规模走。
+     * 取「最近 N 条」是有意的 —— 更早的内容新鲜度已趋近 0，靠互动度单独也很难排上来。
+     *
+     * <p>⚠️ 顺带这条 {@code ORDER BY created_at DESC LIMIT N} 让候选池查询走既有
+     * {@code idx_content_posts_feed} 索引而不是全表扫（Story 16.1 的索引重估留的那条）。
+     */
+    public int candidatePoolSize() {
+        return candidatePoolSize;
     }
 }

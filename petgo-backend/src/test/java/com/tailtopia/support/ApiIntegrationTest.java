@@ -37,6 +37,17 @@ import tools.jackson.databind.ObjectMapper;
         properties = {
             "spring.datasource.hikari.maximum-pool-size=3",
             "spring.datasource.hikari.minimum-idle=0",
+            // V1.1.6 Story 16.3：ALL Tab 走推荐序，候选池默认是「最近 1000 条」。
+            //
+            // 🔴 共享测试库里堆着**几千条历史测试数据**，其中大量带赞/评（互动度高）。
+            // 默认池下，一条刚造的 0 赞新帖要和它们按分数竞争，**落到第 20 名之后完全正常** ——
+            // 于是十来条既有 L1 测试（「新帖出现在首页第一页」）会莫名其妙地红，
+            // 而红的原因跟它们各自要验的过滤/投影/顶置毫无关系。
+            //
+            // 压到 60 = 「最近 60 条」，单个测试方法刚造的内容**必然在池内**（集成测试串行跑）。
+            // 这样那些测试仍然走**真实的推荐序路径**，而不是被迫改成时间倒序绕开问题。
+            // ⚠️ 别为了「更快」或「更像生产」调大：调大就是把那十来条测试变成随机红。
+            "petgo.feed.rank.candidate-pool-size=60",
         })
 @AutoConfigureMockMvc
 @ActiveProfiles("dev")

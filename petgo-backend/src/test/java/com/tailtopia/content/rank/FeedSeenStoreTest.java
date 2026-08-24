@@ -41,7 +41,7 @@ class FeedSeenStoreTest {
         redis = mock(StringRedisTemplate.class);
         zset = mock(ZSetOperations.class);
         when(redis.opsForZSet()).thenReturn(zset);
-        props = new FeedRankProperties(0.3, 7, 30, 100);
+        props = new FeedRankProperties(0.3, 7, 30, 100, 1000);
         store = new FeedSeenStore(redis, props);
     }
 

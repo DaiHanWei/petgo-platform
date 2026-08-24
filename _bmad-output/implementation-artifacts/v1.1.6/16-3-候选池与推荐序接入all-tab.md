@@ -1,10 +1,10 @@
 ---
-baseline_commit: TBD
+baseline_commit: 8a5f44e7
 ---
 
 # Story 16.3: 候选池与推荐序接入 ALL Tab
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -105,17 +105,17 @@ so that 不会连续刷到同一个人、科普与日常有节奏、养猫少刷
 
 ## Tasks / Subtasks
 
-- [ ] **T1 · ALL Tab 接推荐序；非 ALL Tab 原样不动**（AC1）
-- [ ] **T2 · 候选池六条过滤（🛡 第 3/4 条不合并）+ 挂起帖插回时间序位**（AC2）
-- [ ] **T3 · 删 `petStatus` 死参数**（AC3）
-- [ ] **T4 · 降级链四级 + 告警分级**（AC4）
-- [ ] **T5 · 测试**
-  - [ ] L1：ALL Tab 走推荐序、非 ALL Tab 仍是严格时间倒序（钉住 AC1 的"两条独立路径"）
-  - [ ] L1：🛡 拉黑与举报隐藏**各自**生效（钉住 AC2 的"不合并"）
-  - [ ] L1：🛡 级别 4 回落时间倒序，**拉黑仍然生效**（钉住 AC4 那条"不得被绕过"）
-  - [ ] L1：作者本人挂起帖在自己的 Feed 里、他人看不到
-  - [ ] L1：顶置内容不在第一页出现（回归 4-2，钉住 AC5 不被放宽）
-  - [ ] L0：排序链路上不再有 `petStatus`
+- [x] **T1 · ALL Tab 接推荐序；非 ALL Tab 原样不动**（AC1）
+- [x] **T2 · 候选池六条过滤（🛡 第 3/4 条不合并）+ 挂起帖插回时间序位**（AC2）
+- [x] **T3 · 删 `petStatus` 死参数**（AC3）
+- [x] **T4 · 降级链四级 + 告警分级**（AC4）
+- [x] **T5 · 测试**
+  - [x] L1：ALL Tab 走推荐序、非 ALL Tab 仍是严格时间倒序（钉住 AC1 的"两条独立路径"）
+  - [x] L1：🛡 拉黑与举报隐藏**各自**生效（钉住 AC2 的"不合并"）
+  - [x] L1：🛡 级别 4 回落时间倒序，**拉黑仍然生效**（钉住 AC4 那条"不得被绕过"）
+  - [x] L1：作者本人挂起帖在自己的 Feed 里、他人看不到
+  - [x] L1：顶置内容不在第一页出现（回归 4-2，钉住 AC5 不被放宽）
+  - [x] L0：排序链路上不再有 `petStatus`
 
 ## Dev Notes
 
@@ -136,13 +136,161 @@ so that 不会连续刷到同一个人、科普与日常有节奏、养猫少刷
 
 ### Context Reference
 
+- `_bmad-output/planning-artifacts/epics-v1.1.6.md` §补充：Epic 16–18
+- `V1.1.6/1-1-6补充prd.md` §2 候选池 · §6.2 降级链 · §8.3 顶置重复曝光
+
 ### Agent Model Used
+
+claude-opus-5[1m]
 
 ### Debug Log References
 
+一次「测试红得不是地方」与一次 Mockito 重复打桩 NPE，见 Completion Notes 第 6、7 条。
+
 ### Completion Notes List
 
+**1. 🔴 一处 AC 没写、但不做就是安全漏洞：从快照读回来的 id 必须重新过一遍过滤**
+
+序列快照有 30 分钟寿命。这期间内容可能被删、被挂起、转成私密，或者**查看者刚拉黑了某个作者**。
+按 id 直接 `findAllById` 取回来就是**绕过了安全规则层** —— 而 AC4 明写
+「任何级别下候选池的全部过滤都不得被绕过」。
+
+所以新增了 `findRankableByIds`：按 id 取，但**套一遍与候选池逐条相同的 WHERE**。
+⚠️ 它返回的条数可能少于传入的 id 数，调用方必须从序列里**再多取几条补齐**
+（本实现每页多要 10 条），否则会返回一个短页 —— 而短页会被客户端理解成「到底了」。
+
+**2. 🔴 游标语义不是「页码 × 20」，是「已消费条数」**
+
+被过滤掉的条目**也算消费掉了**。用页码乘法算下一页起点，会让下一页重复读到那些被丢弃的位置。
+有一条测试专门钉这个（20 条展示 + 5 条被丢弃 ⇒ `consumed == 25`）。
+
+**3. 🔴 候选池必须有上界（AC 没写，工程上必须）**
+
+不设上界这个查询随总帖数线性变大，而它**每次下拉刷新都要跑一次**，
+且推导物种 / 批量取赞评 / 取装饰标签都按这一批规模走。
+定为「最近 1000 条」（`petgo.feed.rank.candidate-pool-size`）——
+更早的内容新鲜度已趋近 0，靠互动度单独也很难排上来。
+⚠️ 顺带这条 `ORDER BY created_at DESC LIMIT N` 让候选池查询**走既有 `idx_content_posts_feed` 索引**
+而不是全表扫，正好接上 Story 16.1 索引重估留的那条。
+
+**4. P95 由本次候选池现算**
+
+候选池本身就是「最近 N 条」，天然是近期口径 ⇒ 不用多发一次查询、也不会为空。
+🔴 16.4 会换成「近 30 天动态重算 + 重算失败沿用上次」并搬进配置中心；在那之前**这里是唯一取值处**。
+荣誉加成直接取既有的 `ContentTagQueryService.RANK_WEIGHT_MULTIPLIER`，🛡 **没有新写一个 1.3**。
+
+**5. 🔴 入参问题不能被降级吞掉**
+
+级别 4 是「算不出来就回落时间倒序」，但**游标非法是入参问题**，必须照常 422。
+不区分的话客户端传了个坏游标会得到一页时间倒序内容 —— 表现是「下拉刷新后又从头开始了」，
+且服务端一条错都不记，无从排查。实现上先 `catch (AppException) { throw e; }` 再兜 `RuntimeException`。
+
+**6. ⚠️ 一条既有 L1 测试的前提被本 story 推翻了（不是它写错，是路径变了）**
+
+`ReportTriageIntegrationTest.feedContains` 断言「刚发的帖出现在**第一页**」。
+那个前提只对时间倒序成立 —— 推荐序里一条 0 赞新帖要和池子里上千条内容按分数竞争，
+**落到第 20 名之后完全正常**。它一开始就红了 2 条。
+
+处理：把它改回分类 Tab（时间倒序，确定性），并在注释里写清为什么**不能**留 ALL ——
+硬留会得到一条时不时红、且红的时候跟举报过滤没有任何关系的测试。
+推荐序路径上的过滤覆盖另建 `FeedRankQueryIntegrationTest`，断言落在**查询层**：
+「该内容不在候选池里」。
+🔴 **缺席类断言在排序面前是稳的，在席类断言不是** —— 这是本 story 学到的测试设计原则。
+
+**6b. 🔴 全量套件红了 12 条 —— 同一个根因，且解法不是「把测试改成绕开」**
+
+单跑相关类都绿，**全量才红**：`ContentFeedControllerEndpointTest`（4）、
+`PinnedSlotIntegrationTest`（4）、`FeedExpandedFieldsIntegrationTest`、`ContentTagIntegrationTest`、
+`UserHideRelationIntegrationTest`、`SeedBatchStateMachineIntegrationTest` 各 1。
+全都是「刚造的内容出现在 ALL 首页第一页」型断言。
+
+⚠️ **根因是测试库体量，不是排序错了**：共享库里堆着几千条历史测试数据，
+其中大量带赞/评（互动度高）。默认候选池「最近 1000 条」下，一条 0 赞新帖要和它们按分数竞争，
+落到第 20 名之后完全正常。
+
+🔴 **第一反应「把这些测试改成分类 Tab」是错的** —— 那会让十来条 L1 测试<b>整体退出</b>
+ALL Tab 端点的覆盖，而 ALL 恰好是本 story 唯一改动的路径。
+
+实际解法：在 **L1 基类**（`ApiIntegrationTest`）把候选池压到 **60 条**。
+「最近 60 条」在集成测试串行跑的前提下**必然包含**单个测试方法刚造的内容 ⇒
+那些测试仍然走**真实推荐序路径**，只是不再被历史数据淹没。
+🛡 放在基类而不是各个子类，是为了不多出 Spring 上下文（基类注释里那条连接池告警）。
+⚠️ 别为了「更像生产」调大 —— 调大就是把这十来条测试变成随机红。
+
+**7. ⚠️ Mockito 重复打桩的坑**
+
+用例里二次 `when(mock.f(any()))` 覆盖 `@BeforeEach` 里的 answer，会**真的调一次 mock** 来记录调用，
+此时上一个 answer 带着 null 参数执行 → NPE，报错完全不指向真凶。
+改成把「哪些 id 还合格」做成辅助方法的参数。
+
+**8. 🔴 一条反证红得不是地方，补了一条精确断言才算钉住**
+
+反证「读页改成不带过滤的 `findAllById`」时红了 7 条 —— 但都是因为那个方法没打桩、返回空，
+**不是因为断言抓到了过滤被绕过**。
+真正要钉的是「过滤参数有没有传下去」：把 `hasViewer/viewerId` 写成 `false/null`，
+查询照样能跑、页照样满，但两条子查询会被整条短路 —— **拉黑白拉，且没有任何报错**。
+补了 `viewerScopedFiltersAreActuallyPassedToTheQuery` 直接断言调用点实参，
+再反证时精确红一条。
+
+**9. AC2 的两处「按实际代码而非 PRD」已落实**
+
+- 🛡 举报者隐藏与账号级隐藏**两条并列不合并**（AD-9）—— 候选池查询里原样保留两个 `NOT EXISTS`，
+  并有 L1 测试钉住区分（举报只藏一条帖 / 拉黑藏整个人 / 只对该查看者生效）
+- 🛡 顶置首屏让位沿用 Story 4.2 的**整页 20 条**口径，**没有收窄到前 10 条**
+
+**10. AC3 `petStatus` 已删净**
+
+`FeedService.loadFeed` 形参删除，控制器里**只为它存在的** `resolvePetStatus` 方法一并删除，
+`AccountQueryService` 依赖也从控制器移除。
+⚠️ 顺带 `FeedServiceTest` 里那条 `feedNoLongerBranchesOnPetStatus` 的前提**再次失效**
+（形参没了，「不同宠物状态取数参数相同」在签名层面就不可能不成立）——
+改写成仍有意义的那半：**取数参数只随 viewerId 变化**。
+
+**11. 客户端只多做一件事**
+
+游客带上匿名会话 id（`X-Anon-Session`）。
+🛡 **只挂在首页取数上，没做成全局请求头** —— 它长得像跟踪 id，别让它出现在无关请求里。
+🛡 **只在进程内存活、不落盘**，冷启动即换新（曝光衰减对游客本就不生效，这个 id 只解决
+同一次会话内的翻页重复）。
+⚠️ 该请求头**可缺省** —— 老版本客户端不带它照样能刷首页，只是同一批游客共用一份序列快照。
+
+**12. 本 story 零迁移**（只新增两个 JPQL 查询，无 schema 变化）。flyway-guard 无关。
+
+**13. 留 L2 的**
+- 真机/模拟器上「首页确实不再连续出现同一个人 / 科普与日常有节奏」的**观感验收**
+- **真实 Redis 宕机演练**（停 redis 容器再刷首页，验级别 3：仍出内容、翻页可能重复）
+- 级别 4 的真实触发（构造打分链路异常）—— L0 已用异常注入覆盖行为，真实演练留本地
+
 ### File List
+
+**新增（后端）**
+- `petgo-backend/src/main/java/com/tailtopia/content/rank/FeedRankCursor.java`
+- `petgo-backend/src/main/java/com/tailtopia/content/rank/FeedRecommendationService.java`
+
+**修改（后端）**
+- `.../content/repository/ContentPostRepository.java`（新增 `findRankCandidatePool` / `findRankableByIds`）
+- `.../content/service/FeedService.java`（ALL/非 ALL 分流、级别 4 回落、抽出 `assemble`、删 `petStatus`）
+- `.../content/web/ContentFeedController.java`（删 `petStatus` 与 `resolvePetStatus`、接 `X-Anon-Session`）
+- `.../content/rank/FeedRankProperties.java`（新增 `candidatePoolSize`）
+- `petgo-backend/src/main/resources/application.yml`（新增 `candidate-pool-size`）
+
+**新增（App）**
+- `petgo_app/lib/features/content/data/anon_feed_session.dart`
+
+**修改（App）**
+- `petgo_app/lib/features/content/data/feed_repository.dart`（首页取数带 `X-Anon-Session`）
+
+**新增（测试）**
+- `.../content/rank/FeedRecommendationServiceTest.java`（L0 · 13）
+- `.../content/rank/FeedRankQueryIntegrationTest.java`（L1 真库 · 7）
+- `petgo_app/test/features/content/data/anon_feed_session_test.dart`（L0 · 3）
+
+**修改（测试）**
+- `.../support/ApiIntegrationTest.java`（L1 基类压小候选池，见第 6b 条）
+- `.../content/service/FeedServiceTest.java`（签名 + 分类 Tab 化 + 新增 5 条 ALL 分流用例）
+- `.../content/service/FeedBatchAggregationTest.java`（签名 + 分类 Tab 化）
+- `.../content/rank/FeedSeenStoreTest.java` / `FeedSequenceStoreTest.java`（构造器多一参）
+- `.../moderation/web/ReportTriageIntegrationTest.java`（`feedContains` 改走时间倒序，见第 6 条）
 
 ---
 
@@ -151,3 +299,4 @@ so that 不会连续刷到同一个人、科普与日常有节奏、养猫少刷
 | 日期 | 变更 |
 |---|---|
 | 2026-08-24 | 由 1.1.6 补充 PRD 拆出（拆前做过一次代码核查，五处过期陈述已修正），status = ready-for-dev |
+| 2026-08-24 | 实现完成：ALL Tab 接推荐序（两条独立路径）、候选池两个新查询、级别 4 回落保过滤、petStatus 删净、客户端匿名会话 id；四次反证确认（其中一次红得不是地方，补精确断言后重做）；status = review |

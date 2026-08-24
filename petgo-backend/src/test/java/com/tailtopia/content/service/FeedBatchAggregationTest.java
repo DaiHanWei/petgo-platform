@@ -59,7 +59,10 @@ class FeedBatchAggregationTest {
                 Mockito.mock(ContentPinService.class),
                 Mockito.mock(com.tailtopia.content.service.ContentTagQueryService.class),
                 // V1.1.6 Story 4.4：顶置位隐藏过滤；本类只验批量取数，mock 默认 isHidden=false。
-                Mockito.mock(com.tailtopia.social.read.UserHideRelationReader.class));
+                Mockito.mock(com.tailtopia.social.read.UserHideRelationReader.class),
+                // V1.1.6 Story 16.3：ALL Tab 走推荐序。本类验的是**组装那一步**的批量聚合，
+                // 两条排序路径共用它（AD-7 Rule 4），所以用分类 Tab 验即可、不需要真的推荐序。
+                Mockito.mock(com.tailtopia.content.rank.FeedRecommendationService.class));
         when(accounts.findAuthorViews(anyList())).thenAnswer(inv -> {
             List<Long> ids = inv.getArgument(0);
             return ids.stream().distinct().collect(Collectors.toMap(
@@ -100,7 +103,7 @@ class FeedBatchAggregationTest {
     void newFieldsAreQueriedOncePerPageNotPerItem() {
         stubPage(20);
 
-        service.loadFeed(null, "ALL", null, 99L);
+        service.loadFeed("DAILY", null, 99L, null);
 
         verify(likes, times(1)).findLikedPostIds(anyLong(), anyList());
         verify(comments, times(1)).countVisibleForViewerIn(anyList(), any());
@@ -118,7 +121,7 @@ class FeedBatchAggregationTest {
     void guestSkipsTheLikedQueryEntirely() {
         stubPage(5);
 
-        FeedPageResponse page = service.loadFeed(null, "ALL", null, null);
+        FeedPageResponse page = service.loadFeed("DAILY", null, null, null);
 
         verify(likes, never()).findLikedPostIds(anyLong(), anyList());
         assertThat(page.items()).isNotEmpty();
@@ -130,7 +133,7 @@ class FeedBatchAggregationTest {
     void emptyPageIssuesNoAggregationQueries() {
         stubPage(0);
 
-        service.loadFeed(null, "ALL", null, 99L);
+        service.loadFeed("DAILY", null, 99L, null);
 
         verify(likes, never()).findLikedPostIds(anyLong(), anyList());
         verify(comments, never()).countVisibleForViewerIn(anyList(), any());
