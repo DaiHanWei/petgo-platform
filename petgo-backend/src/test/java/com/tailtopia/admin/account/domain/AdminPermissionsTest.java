@@ -81,6 +81,10 @@ class AdminPermissionsTest {
         // + 1（V1.1.6 Story 12.1 运营发布身份池 seed.publish_as_real）= 54
         // + 2（V1.1.6 Story 15.1 互动积分 content.stats_view / content.stats_export）= 56
         // + 2（V1.1.6 Story 17.2 限流处置 content.throttle_view / content.throttle_manage）= 58
+        // + 2（V1.1.6 Story 18.3 分享奖励 config.share_reward_view / config.share_reward_edit）= 60
+        //     🔴 与 config.view/config.edit 分开不是洁癖而是**可用性**：
+        //     总开关的意义是「发现被刷要能立刻全线关掉」，而 config.edit 那道门
+        //     管着兽医单价与分成比例，只有极少数人过得去 —— 塞在那后面，"立刻"就做不到。
         //     🛡 处置码归**编辑组**，且刻意**不**额外要 user.deactivate（封号那一档才要）——
         //     限流可逆、用户不可感知，抬到与停用账号同级会让这一档又变得没人敢用。
         //     ⚠️ 两个都归**查看组** —— 导出不改任何数据，它是"看得更狠的一种看"（同 11.4）。
@@ -91,6 +95,6 @@ class AdminPermissionsTest {
         // ⚠️ 这条守的是「新增权限码是件需要被看见的事」：权限码一旦落地即冻结（改名会切断
         //    已授予关系），所以每加一个都应当在这里留一行账，而不是让数字悄悄变大。
         List<String> all = AdminPermissions.ALL;
-        assertThat(all).hasSize(58);
+        assertThat(all).hasSize(60);
     }
 }

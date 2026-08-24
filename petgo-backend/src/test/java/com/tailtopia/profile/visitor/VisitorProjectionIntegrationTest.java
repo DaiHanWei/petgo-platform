@@ -92,6 +92,27 @@ class VisitorProjectionIntegrationTest extends ApiIntegrationTest {
     }
 
     /** 直插一条快乐时刻，可指定审核状态与可见性。 */
+
+    /**
+     * 等到异步里程碑不再变化（连续两次读数相同）为止。
+     *
+     * <p>⚠️ 这不是「失败就重试」——它等的是一个**确定会停下来**的过程：
+     * 建档触发的里程碑评估是有限的一批，落完就不再变。
+     * 超时上限 5 秒纯属兜底，正常情况下一两轮就稳定。
+     */
+    private void awaitMilestonesSettled(long ownerId) throws Exception {
+        long previous = -1;
+        long deadline = System.nanoTime() + java.time.Duration.ofSeconds(5).toNanos();
+        while (System.nanoTime() < deadline) {
+            long current = timelineService.getStats(ownerId).milestoneCompleted();
+            if (current == previous) {
+                return;
+            }
+            previous = current;
+            Thread.sleep(100);
+        }
+    }
+
     private void seedMoment(long ownerId, long petId, String text, String status,
             String visibility, boolean softDeleted, int daysAgo) {
         jdbc.update("""
@@ -223,6 +244,16 @@ class VisitorProjectionIntegrationTest extends ApiIntegrationTest {
         seedHealthRecord(pet);
         seedConsultArchive(pet, "gatal");
         seedMoment(owner.getId(), pet.getId(), "m1", "PUBLISHED", "PUBLIC", false, 1);
+
+        // ⚠️ 先等异步里程碑落定，再取两侧的数。
+        //
+        // 🔴 建档走的是真实端点，而建档里程碑是 **@Async** 落库的。
+        //    下面两次读之间只要那笔异步提交进来，两个数就会不一致 ——
+        //    而 visitors.stats() 是**直接委托**给 timelineService.getStats() 的，
+        //    也就是说这个不一致跟「访客投影有没有做对」毫无关系，纯粹是读的时刻不同。
+        //    2026-08-25 真撞了一次（作者侧 0 / 访客侧 1），此前一直侥幸绿着；
+        //    并发负载一高（同一次 run 里别的测试类在跑线程池）就会更容易撞上。
+        awaitMilestonesSettled(owner.getId());
 
         ArchiveStatsResponse author = timelineService.getStats(owner.getId());
         VisitorStats visitor = visitors.stats(pet);

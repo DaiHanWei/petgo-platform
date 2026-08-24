@@ -16,6 +16,7 @@ import com.tailtopia.config.repository.PawCoinConfigRepository;
 import com.tailtopia.config.repository.PawCoinTopupTierRepository;
 import com.tailtopia.config.repository.PricingConfigRepository;
 import com.tailtopia.content.rank.AttributeTemplate;
+import com.tailtopia.admin.config.dto.ShareRewardForm;
 import com.tailtopia.shared.error.AppException;
 import java.util.ArrayList;
 import java.util.List;
@@ -96,6 +97,46 @@ public class AdminConfigService {
         c.setPremiumRate(form.premiumRate());
         c.setPremiumFixed(form.premiumFixed());
         c.setTopupPaused(form.topupPaused());
+        pawcoinRepo.save(c);
+        commit(logs, adminId, "PAWCOIN", "pawcoin_config");
+    }
+
+    // ── 分享奖励四项（V1.1.6 Story 18.3 · AB-3M）─────────────────────────────
+    /**
+     * 更新分享奖励配置。
+     *
+     * <p>🛡 AC4：四项均须非负；<b>0 是合法取值</b>（= 不发），不是错误。
+     * ⚠️ 「非整数」在参数绑定阶段就被挡住了（{@code long}/{@code int} 参数收到 "1.5" 直接 400），
+     * 所以这里只管语义上的非负。
+     *
+     * <p>🛡 与 {@link #updatePawCoin} 写同一张单行、用同一个 PAWCOIN 审计组（AC1），
+     * 但入口与权限分开（AC5）—— 理由见 {@link ShareRewardForm} 的类注释。
+     */
+    @Transactional
+    public void updateShareReward(ShareRewardForm form, long adminId) {
+        require(form.shareRewardMonthlyCap() >= 0, "分享奖励月度上限须 ≥ 0（0 = 不发）");
+        require(form.idCardShareReward() >= 0, "身份证分享每次发放枚数须 ≥ 0（0 = 不发）");
+        require(form.idCardShareDailyCap() >= 0, "身份证分享每日次数上限须 ≥ 0（0 = 不发）");
+
+        PawCoinConfig c = pawcoinRepo.findById(PawCoinConfig.SINGLETON_ID)
+                .orElseThrow(() -> new IllegalStateException("pawcoin_config 缺失"));
+        List<ConfigChangeLog> logs = new ArrayList<>();
+        ConfigType t = ConfigType.PAWCOIN;
+        diff(logs, t, "share_reward_enabled", c.isShareRewardEnabled(),
+                form.shareRewardEnabled(), adminId);
+        diff(logs, t, "share_reward_monthly_cap", c.getShareRewardMonthlyCap(),
+                form.shareRewardMonthlyCap(), adminId);
+        diff(logs, t, "id_card_share_reward", c.getIdCardShareReward(),
+                form.idCardShareReward(), adminId);
+        diff(logs, t, "id_card_share_daily_cap", c.getIdCardShareDailyCap(),
+                form.idCardShareDailyCap(), adminId);
+        if (logs.isEmpty()) {
+            return; // 无变更 → 不写、不记日志、不审计（沿用本类既有口径）
+        }
+        c.setShareRewardEnabled(form.shareRewardEnabled());
+        c.setShareRewardMonthlyCap(form.shareRewardMonthlyCap());
+        c.setIdCardShareReward(form.idCardShareReward());
+        c.setIdCardShareDailyCap(form.idCardShareDailyCap());
         pawcoinRepo.save(c);
         commit(logs, adminId, "PAWCOIN", "pawcoin_config");
     }

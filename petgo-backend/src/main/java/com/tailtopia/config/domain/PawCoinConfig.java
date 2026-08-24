@@ -49,6 +49,25 @@ public class PawCoinConfig {
     @Column(name = "share_reward_monthly_cap", nullable = false)
     private long shareRewardMonthlyCap;
 
+    /**
+     * 身份证卡面分享一次发几枚（Story 18.2 · 渠道层）。
+     *
+     * <p>⚠️ 这是**渠道层**配置，与 {@link #shareRewardMonthlyCap} 的全局层是两层：
+     * 全局层管「一个账号一个月最多免费拿多少」，本项管「这个渠道一次发几枚」。
+     * 🔴 全局总开关优先——关掉它，本项配成什么都不发。
+     */
+    @Column(name = "id_card_share_reward", nullable = false)
+    private long idCardShareReward;
+
+    /**
+     * 身份证卡面分享的**日上限次数**（Story 18.2 · 渠道层）。
+     *
+     * <p>⚠️ 本渠道另有「按宠物档案去重、一个档案只发一次」的更强约束，
+     * 所以日上限对它是**冗余的保险**；它存在是为了后续渠道接入时这一层已经就位。
+     */
+    @Column(name = "id_card_share_daily_cap", nullable = false)
+    private int idCardShareDailyCap;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -77,6 +96,22 @@ public class PawCoinConfig {
 
     public void setShareRewardMonthlyCap(long v) {
         this.shareRewardMonthlyCap = v;
+    }
+
+    public long getIdCardShareReward() {
+        return idCardShareReward;
+    }
+
+    public void setIdCardShareReward(long v) {
+        this.idCardShareReward = v;
+    }
+
+    public int getIdCardShareDailyCap() {
+        return idCardShareDailyCap;
+    }
+
+    public void setIdCardShareDailyCap(int v) {
+        this.idCardShareDailyCap = v;
     }
 
     public Long getId() {

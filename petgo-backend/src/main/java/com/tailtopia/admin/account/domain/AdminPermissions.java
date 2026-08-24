@@ -171,6 +171,24 @@ public final class AdminPermissions {
     /** 配置编辑（定价 / PawCoin / 阈值）。 */
     public static final String CONFIG_EDIT = "config.edit";
 
+    /**
+     * 查看分享奖励配置与当月消耗（V1.1.6 Story 18.3 · AC5）。
+     *
+     * <p>🛡 与 {@link #CONFIG_VIEW} 分开：分享奖励是增长侧的数，
+     * 让增长看得到它不该顺带把兽医定价与分成比例也放出去。
+     */
+    public static final String CONFIG_SHARE_REWARD_VIEW = "config.share_reward_view";
+
+    /**
+     * 改分享奖励四项，含**总开关**（V1.1.6 Story 18.3 · AC5）。
+     *
+     * <p>🔴 与 {@link #CONFIG_EDIT} 分开的理由是**可用性**而不是洁癖：
+     * 总开关存在的全部意义是「发现被刷要能立刻全线关掉」，
+     * 而 {@code config.edit} 那道门管着兽医单价与分成比例 —— 只有极少数人过得去。
+     * 把开关塞在那道门后面，"立刻"就根本做不到。
+     */
+    public static final String CONFIG_SHARE_REWARD_EDIT = "config.share_reward_edit";
+
     // 兽医分成月结对账（V1.1 Epic 9，Story 9-5）
     /** 月结对账查看。 */
     public static final String SETTLEMENT_VIEW = "settlement.view";
@@ -199,7 +217,7 @@ public final class AdminPermissions {
                     VET_VIEW, VET_QUALIFY_VIEW, RATING_VIEW,
                     CONSULT_VIEW_ANOMALIES, CONSULT_VIEW_SESSIONS,
                     SUPPORT_VIEW, REFUND_VIEW,
-                    CONFIG_VIEW, ORDER_VIEW, ORDER_EXPORT, SETTLEMENT_VIEW, PAYMENT_VIEW, RISK_VIEW,
+                    CONFIG_VIEW, CONFIG_SHARE_REWARD_VIEW, ORDER_VIEW, ORDER_EXPORT, SETTLEMENT_VIEW, PAYMENT_VIEW, RISK_VIEW,
                     VIRTUAL_ACCOUNT_VIEW,
                     ADMIN_VIEW_ACCOUNTS, ADMIN_VIEW_LOGS)),
             new PermissionGroup("perm.group.edit", List.of(
@@ -210,7 +228,7 @@ public final class AdminPermissions {
                     VET_CREATE, VET_EDIT, VET_BAN, VET_RESET_PASSWORD, VET_QUALIFY,
                     CONSULT_HANDLE,
                     SUPPORT_HANDLE, REFUND_SUBMIT, REFUND_APPROVE, REFUND_PAYOUT,
-                    CONFIG_EDIT, ORDER_EDIT, SETTLEMENT_PAYOUT, RISK_EDIT,
+                    CONFIG_EDIT, CONFIG_SHARE_REWARD_EDIT, ORDER_EDIT, SETTLEMENT_PAYOUT, RISK_EDIT,
                     VIRTUAL_ACCOUNT_MANAGE, SEED_PUBLISH_AS_REAL,
                     ADMIN_CREATE_ACCOUNT, ADMIN_DEACTIVATE)));
 
