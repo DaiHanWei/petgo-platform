@@ -256,8 +256,8 @@ development_status:
   16-5-feed埋点补tab与排序模式: review                  # 两条排序路径必须可区分，否则效果无法归因
   epic-16-retrospective: optional
   epic-17: backlog
-  17-1-限流状态模型与到期解除: ready-for-dev              # 🛡 降权不下架、对用户不可见不通知
-  17-2-后台限流处置动作与状态可见: ready-for-dev          # 🔴 确认前须明示"不是下架"，否则运营当下架用
+  17-1-限流状态模型与到期解除: review                      # 🛡 降权不下架、对用户不可见不通知
+  17-2-后台限流处置动作与状态可见: review                # 🔴 确认前须明示"不是下架"，否则运营当下架用
   epic-17-retrospective: optional
   epic-18: backlog
   18-1-全局分享额度总控: ready-for-dev                    # 🔴 FR-50B 的前置能力先行交付，范围严限于"上限控制"

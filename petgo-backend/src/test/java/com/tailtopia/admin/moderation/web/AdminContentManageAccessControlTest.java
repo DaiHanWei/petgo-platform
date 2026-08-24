@@ -41,8 +41,14 @@ class AdminContentManageAccessControlTest {
         }
 
         @Bean
-        AdminContentManageController controller(AdminContentManageService s) {
-            return new AdminContentManageController(s);
+        com.tailtopia.admin.throttle.service.AdminThrottleReadService throttleRead() {
+            return mock(com.tailtopia.admin.throttle.service.AdminThrottleReadService.class);
+        }
+
+        @Bean
+        AdminContentManageController controller(AdminContentManageService s,
+                com.tailtopia.admin.throttle.service.AdminThrottleReadService t) {
+            return new AdminContentManageController(s, t);
         }
     }
 

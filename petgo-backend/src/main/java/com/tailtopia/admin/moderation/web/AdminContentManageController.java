@@ -32,9 +32,12 @@ public class AdminContentManageController {
             "hasRole('SUPER_ADMIN') or hasAuthority('content.restore')";
 
     private final AdminContentManageService contentManage;
+    private final com.tailtopia.admin.throttle.service.AdminThrottleReadService throttleRead;
 
-    public AdminContentManageController(AdminContentManageService contentManage) {
+    public AdminContentManageController(AdminContentManageService contentManage,
+            com.tailtopia.admin.throttle.service.AdminThrottleReadService throttleRead) {
         this.contentManage = contentManage;
+        this.throttleRead = throttleRead;
     }
 
     @GetMapping("/admin/content")
@@ -66,8 +69,16 @@ public class AdminContentManageController {
         model.addAttribute("speciesSources",
                 com.tailtopia.content.species.SpeciesSource.values());
         // 🔴 带物种信息的行：整页一次推导（逐行会是 N+1）。
-        model.addAttribute("items", contentManage.browseWithSpecies(type, authorId, from, to,
-                status, q, page, species, speciesSource));
+        var items = contentManage.browseWithSpecies(type, authorId, from, to,
+                status, q, page, species, speciesSource);
+        model.addAttribute("items", items);
+        // Story 17.2 · AC3：限流状态列。🔴 整页一次取（逐行查就是 N+1，
+        // 与上面物种推导同一份教训）。
+        model.addAttribute("throttles", throttleRead.forPosts(
+                items.stream().map(r -> r.content().id()).toList(),
+                items.stream().collect(java.util.stream.Collectors.toMap(
+                        r -> r.content().id(), r -> r.content().authorId(), (a, b) -> a)),
+                java.time.Instant.now()));
         return hxRequest != null ? "admin/content :: rows" : "admin/content";
     }
 

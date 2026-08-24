@@ -73,6 +73,16 @@
             <button type="submit" class="btn btn-primary" th:text="#{admin.content.search}">查询</button>
         </form>
 
+        <!-- 🔴 Story 17.2 · AC2：确认前必须明示这不是下架。
+             不明示运营会把它当下架用，然后向举报人回复「已处理」，而内容其实还在。 -->
+        <p class="hint" data-notice="throttle-not-takedown"
+           th:text="#{admin.throttle.notTakedown}">
+            限流曝光只降低 Feed 分发权重，内容仍可通过直链和作者主页访问，不是下架。</p>
+        <!-- ⚠️ AC4：非 ALL Tab 无处施加（OQ-B6）。运营不知道这条就会以为限流后"到处都看不到了"。 -->
+        <p class="hint" data-notice="throttle-all-tab-only"
+           th:text="#{admin.throttle.allTabOnly}">
+            限流只作用于首页推荐（ALL）。分类 Tab 走纯时间倒序、不打分，限流在那里无处施加。</p>
+
         <table>
             <thead>
             <tr>
@@ -83,6 +93,8 @@
                 <th th:text="#{admin.content.col.images}">图片</th>
                 <th th:text="#{admin.content.col.created}">创建时间</th>
                 <th th:text="#{admin.content.col.status}">状态</th>
+                <th sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.throttle_view')"
+                    th:text="#{admin.throttle.col}">限流状态</th>
                 <!-- V1.1.6 Story 14.1 · AC5：物种 + **推导来源**。
                      来源那一列是关键：没有它，运营看到一堆"猫"分不出哪些是自己逐条标的、
                      哪些是账号定位顺带套上的。 -->
@@ -105,7 +117,7 @@
                 </th:block>
             </th:block>
             <tr th:if="${#lists.isEmpty(items)}">
-                <td colspan="10" class="empty" th:text="#{admin.content.empty}">无匹配内容。</td>
+                <td colspan="11" class="empty" th:text="#{admin.content.empty}">无匹配内容。</td>
             </tr>
             </tbody>
         </table>
@@ -138,6 +150,23 @@
                 <span class="badge" th:classappend="${c.deleted()} ? 'badge-danger' : 'badge-ok'"
                       th:text="${c.deleted()} ? #{admin.content.status.deleted} : #{admin.content.status.online}">上线中</span>
             </td>
+            <!-- Story 17.2 · AC3：限流状态 + 到期时间（WIB 由 @adminTime.wib 带出字样）+ 就地解除。 -->
+            <td sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.throttle_view')"
+                th:with="th=${throttles?.get(c.id())}">
+                <span th:if="${th == null}" class="muted">—</span>
+                <span th:if="${th != null}" class="badge badge-warn"
+                      th:text="${th.scope().name() == 'ACCOUNT'} ? #{admin.throttle.badge.account} : #{admin.throttle.badge.post}">限流中</span>
+                <span th:if="${th != null}" class="muted"
+                      th:text="${th.permanent()} ? #{admin.throttle.permanent} : ${@adminTime.wib(th.expiresAt())}">永久</span>
+                <form th:if="${th != null}" method="post" th:action="@{/admin/throttles/lift}"
+                      class="inline-form"
+                      sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.throttle_manage')">
+                    <input type="hidden" name="throttleIds" th:value="${th.throttleId()}"/>
+                    <input type="hidden" name="back" value="content"/>
+                    <button type="submit" class="btn btn-neutral btn-sm"
+                            th:text="#{admin.throttle.lift}">解除</button>
+                </form>
+            </td>
             <td>
                 <span th:text="${sp} == null ? '—' : ${sp.speciesLabel()}">—</span>
             </td>
@@ -167,6 +196,23 @@
                            style="width:160px"/>
                     <button type="submit" class="btn btn-danger btn-sm"
                             th:text="#{admin.content.takedown}">下架</button>
+                </form>
+                <!-- Story 17.2 · AC1：单条内容限流。粒度固定 POST（这里就是一条内容），期限须显式选。
+                     🛡 只在未下架时给 —— 已下架内容再降权没有意义。 -->
+                <form th:unless="${c.deleted()}" method="post" th:action="@{/admin/throttles}"
+                      class="inline-form" data-throttle-form
+                      sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.throttle_manage')">
+                    <input type="hidden" name="scope" value="POST"/>
+                    <input type="hidden" name="targetId" th:value="${c.id()}"/>
+                    <input type="hidden" name="back" value="content"/>
+                    <select name="duration" required>
+                        <option value="" th:text="#{admin.throttle.duration.pick}">选期限</option>
+                        <option value="DAYS_7" th:text="#{admin.throttle.duration.d7}">7 天</option>
+                        <option value="DAYS_30" th:text="#{admin.throttle.duration.d30}">30 天</option>
+                        <option value="PERMANENT" th:text="#{admin.throttle.duration.perm}">永久</option>
+                    </select>
+                    <button type="submit" class="btn btn-warn btn-sm"
+                            th:text="#{admin.throttle.apply}">限流曝光</button>
                 </form>
                 <!-- 已下架 → 恢复。HTMX 只替换本行。 -->
                 <form th:if="${c.deleted()}" th:action="@{/admin/content/{id}/restore(id=${c.id()})}"

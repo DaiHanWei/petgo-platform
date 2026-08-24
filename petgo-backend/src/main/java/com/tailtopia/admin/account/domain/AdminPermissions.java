@@ -90,6 +90,23 @@ public final class AdminPermissions {
      */
     public static final String CONTENT_DISPOSE_ACCOUNT = "content.dispose_account";
 
+    /**
+     * 查看限流（降权）状态与到期时间（V1.1.6 Story 17.2 · AC5）。
+     *
+     * <p>🛡 与 {@link #CONTENT_THROTTLE_MANAGE} <b>分成两个码</b>：能看见谁在限流，
+     * 和能动手限流/解除，是两件事 —— 客服要看，只有治理岗能动。
+     */
+    public static final String CONTENT_THROTTLE_VIEW = "content.throttle_view";
+
+    /**
+     * 执行限流与手动解除（V1.1.6 Story 17.2 · AC5）。
+     *
+     * <p>⚠️ 刻意<b>不</b>额外要 {@link #USER_DEACTIVATE}（封号那一档才要）：
+     * 限流是降权、可逆、用户不可感知，把它抬到与停用账号同级会让这一档又变得没人敢用 ——
+     * 而这一档存在的全部意义就是「不用在只说一句和直接封之间二选一」。
+     */
+    public static final String CONTENT_THROTTLE_MANAGE = "content.throttle_manage";
+
     // 问诊异常与会话（Epic 5）
     public static final String CONSULT_VIEW_ANOMALIES = "consult.view_anomalies";
     public static final String CONSULT_HANDLE = "consult.handle";
@@ -178,7 +195,7 @@ public final class AdminPermissions {
             new PermissionGroup("perm.group.view", List.of(
                     CONTENT_VIEW_REPORTS, CONTENT_VIEW_TICKETS, CONTENT_VIEW, CONTENT_PIN_VIEW, CONTENT_TAG_VIEW,
                     USER_VIEW, USER_TAG_VIEW, USER_PHONE_VIEW, USER_PHONE_EXPORT,
-                    CONTENT_STATS_VIEW, CONTENT_STATS_EXPORT,
+                    CONTENT_STATS_VIEW, CONTENT_STATS_EXPORT, CONTENT_THROTTLE_VIEW,
                     VET_VIEW, VET_QUALIFY_VIEW, RATING_VIEW,
                     CONSULT_VIEW_ANOMALIES, CONSULT_VIEW_SESSIONS,
                     SUPPORT_VIEW, REFUND_VIEW,
@@ -187,7 +204,8 @@ public final class AdminPermissions {
                     ADMIN_VIEW_ACCOUNTS, ADMIN_VIEW_LOGS)),
             new PermissionGroup("perm.group.edit", List.of(
                     CONTENT_TAKEDOWN, CONTENT_RESTORE, CONTENT_PROACTIVE_TAKEDOWN,
-                    CONTENT_MANUAL_REVIEW, CONTENT_DISPOSE_ACCOUNT, CONTENT_PIN_MANAGE, CONTENT_TAG_MANAGE,
+                    CONTENT_MANUAL_REVIEW, CONTENT_DISPOSE_ACCOUNT, CONTENT_THROTTLE_MANAGE,
+                    CONTENT_PIN_MANAGE, CONTENT_TAG_MANAGE,
                     USER_DEACTIVATE, USER_DELETE, USER_GRANT_PAWCOIN, USER_TAG_MANAGE,
                     VET_CREATE, VET_EDIT, VET_BAN, VET_RESET_PASSWORD, VET_QUALIFY,
                     CONSULT_HANDLE,
