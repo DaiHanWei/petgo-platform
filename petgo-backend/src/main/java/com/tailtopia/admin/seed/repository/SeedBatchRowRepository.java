@@ -23,6 +23,14 @@ public interface SeedBatchRowRepository extends JpaRepository<SeedBatchRow, Long
     long countByAuthorUserIdAndStatus(long authorUserId, SeedBatchRowStatus status);
 
     /**
+     * 过期草稿（13-2 清理用）。
+     *
+     * <p>🔴 <b>按最后修改时间</b>而不是创建时间：运营改过一次就该重新计时，
+     * 否则一个被持续编辑了 8 天的批次会在他眼前被清掉。
+     */
+    List<SeedBatchRow> findByStatusAndUpdatedAtLessThan(SeedBatchRowStatus status, Instant deadline);
+
+    /**
      * 到点该发的行（13-5 用）。
      *
      * <p>⚠️ 本 story <b>不做</b>到点发布，这个方法先摆在这里是因为

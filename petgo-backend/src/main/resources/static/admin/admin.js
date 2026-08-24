@@ -353,3 +353,130 @@ document.addEventListener('submit', function (e) {
 
     document.addEventListener('DOMContentLoaded', function () { eachRoot(sync); });
 })();
+
+// ===== 批次素材上传：选择时即拦截 + 实时计数（V1.1.6 Story 13.2 · AC2/AC3）=====
+//
+// 🔴 **不能等全部传完才报错**：运营已经等了几分钟，而且"部分成功部分失败"的中间状态
+//    很难处置（哪几张进去了？重传要跳过哪几张？）。所以在**发请求之前**就把超出的挡掉。
+//
+// 三条判据全在客户端先过一遍：累计张数 / 累计字节 / 同批文件名重复。
+// 🛡 这一层**只是省时间**，不是安全边界 —— 服务端各自还有一遍权威校验
+//    （勾选框和 JS 在浏览器里都改得动）。
+(function () {
+    function state(root) {
+        return {
+            maxCount: parseInt(root.getAttribute('data-max-count'), 10),
+            maxBytes: parseInt(root.getAttribute('data-max-bytes'), 10),
+            usedCount: parseInt(root.getAttribute('data-used-count'), 10) || 0,
+            usedBytes: parseInt(root.getAttribute('data-used-bytes'), 10) || 0
+        };
+    }
+
+    function paint(root) {
+        var s = state(root);
+        var live = root.querySelector('[data-batch-live]');
+        if (!live) { return; }
+        var mb = function (b) { return Math.round(b / 1024 / 1024); };
+        live.textContent = s.usedCount + ' / ' + s.maxCount + '，'
+                + mb(s.usedBytes) + ' / ' + mb(s.maxBytes) + ' MB';
+    }
+
+    function reject(root, name, msg) {
+        var box = root.querySelector('[data-batch-errors]');
+        if (!box) { return; }
+        var p = document.createElement('p');
+        p.className = 'err';
+        p.textContent = name + '：' + msg;
+        box.appendChild(p);
+    }
+
+    /** 墙上已有的文件名 —— 分次追加时最容易撞的就是这个（"先拖猫的、再拖狗的"）。 */
+    function existingNames() {
+        var wall = document.getElementById('seedAssetWall');
+        if (!wall) { return []; }
+        return [].slice.call(wall.querySelectorAll('.seed-thumb .hint'))
+                .map(function (el) { return el.textContent.trim(); });
+    }
+
+    function refreshWall(root) {
+        var url = root.getAttribute('data-wall-url');
+        if (!url || typeof htmx === 'undefined') { return; }
+        htmx.ajax('GET', url, { target: '#seedAssetWall', swap: 'outerHTML' });
+    }
+
+    function send(root, file, onDone) {
+        var body = new FormData();
+        body.append('file', file);
+        var headers = {};
+        var token = document.querySelector('meta[name="_csrf"]');
+        var header = document.querySelector('meta[name="_csrf_header"]');
+        if (token && header) { headers[header.content] = token.content; }
+        fetch(root.getAttribute('data-upload-url'), {
+            method: 'POST', body: body, headers: headers, credentials: 'same-origin'
+        }).then(function (r) {
+            return r.json().then(function (j) { return { ok: r.ok, body: j }; });
+        }).then(function (res) {
+            if (!res.ok) {
+                reject(root, file.name, res.body.error || 'upload failed');
+            } else {
+                // 用服务端回的权威用量校准本地计数（别自己累加 —— 会和真相慢慢分叉）。
+                root.setAttribute('data-used-count', res.body.usedCount);
+                root.setAttribute('data-used-bytes', res.body.usedBytes);
+                paint(root);
+            }
+            onDone();
+        }).catch(function () {
+            reject(root, file.name, 'upload failed');
+            onDone();
+        });
+    }
+
+    document.addEventListener('change', function (e) {
+        if (!e.target.hasAttribute || !e.target.hasAttribute('data-batch-file')) { return; }
+        var root = e.target.closest('[data-batch-uploader]');
+        var files = [].slice.call(e.target.files);
+        e.target.value = '';
+        root.querySelector('[data-batch-errors]').innerHTML = '';
+
+        var s = state(root);
+        var names = existingNames();
+        var accepted = [];
+        var plannedCount = s.usedCount;
+        var plannedBytes = s.usedBytes;
+        files.forEach(function (f) {
+            // ① 同名（含与墙上已有的、以及本次选中里自己重复的）
+            if (names.indexOf(f.name) >= 0) {
+                reject(root, f.name, root.getAttribute('data-msg-dup'));
+                return;
+            }
+            // ② 累计张数 —— 🛡 按累计算，否则分三次拖就能绕过限制
+            if (plannedCount + 1 > s.maxCount) {
+                reject(root, f.name, root.getAttribute('data-msg-over-count'));
+                return;
+            }
+            // ③ 累计字节
+            if (plannedBytes + f.size > s.maxBytes) {
+                reject(root, f.name, root.getAttribute('data-msg-over-bytes'));
+                return;
+            }
+            names.push(f.name);
+            plannedCount++;
+            plannedBytes += f.size;
+            accepted.push(f);
+        });
+
+        var left = accepted.length;
+        if (left === 0) { return; }
+        accepted.forEach(function (f) {
+            send(root, f, function () {
+                left--;
+                // 全部回来了再刷墙一次 —— 每张都刷会让缩略图墙闪十几下。
+                if (left === 0) { refreshWall(root); }
+            });
+        });
+    });
+
+    document.addEventListener('DOMContentLoaded', function () {
+        [].slice.call(document.querySelectorAll('[data-batch-uploader]')).forEach(paint);
+    });
+})();

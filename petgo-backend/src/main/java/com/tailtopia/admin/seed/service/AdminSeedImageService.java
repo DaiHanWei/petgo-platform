@@ -82,7 +82,7 @@ public class AdminSeedImageService {
         String url = oss.putPublicObject(key, bytes, contentType);
 
         return new UploadedImage(url, size == null ? 0 : size.w(), size == null ? 0 : size.h(),
-                advice.warns() ? warningText(advice) : null);
+                advice.warns() ? warningText(advice) : null, key, bytes.length);
     }
 
     /**

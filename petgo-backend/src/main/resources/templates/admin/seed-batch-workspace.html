@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  批量内容工作台（V1.1.6 Story 13.2 = AB-3K Step 1：素材墙）。
+  内容录入（13-3）、校验预览（13-4）、定时发布（13-5）会长在这同一页上。
+-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.batch.title}">批量内容 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <!-- 上传走 fetch，而 /admin/** 那条过滤链保留 CSRF —— 少了这两个 meta 就是 403。 -->
+    <meta name="_csrf" th:content="${_csrf?.token}"/>
+    <meta name="_csrf_header" th:content="${_csrf?.headerName}"/>
+    <script defer th:src="@{/admin/admin.js}"></script>
+    <script th:src="@{/admin/vendor/htmx.min.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1><span th:text="#{admin.batch.workspace}">批量内容工作台</span>
+            <span th:text="' #' + ${batchId}">#0</span></h1>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+
+        <h2 th:text="#{admin.batch.step1}">第 1 步：素材</h2>
+        <p class="hint" th:text="#{admin.batch.asset.hint}">
+            把这一批要用的图一次拖进来。支持分多次追加（追加不替换），上限按累计算。</p>
+
+        <!-- 🔴 「选择时即拦截」：data-* 把上限交给 admin.js，它在**发请求之前**就把超出的挡掉，
+             并即时更新计数。不能等全部传完才报错 —— 那时运营已经等了几分钟，
+             而且部分成功部分失败的中间状态很难处置。
+             🛡 服务端另有一遍权威校验（页面这层拦不住绕过页面直接打接口）。 -->
+        <div data-batch-uploader
+             th:attr="data-upload-url=@{/admin/seed-batches/{id}/assets(id=${batchId})},
+                      data-wall-url=@{/admin/seed-batches/{id}/assets(id=${batchId})},
+                      data-max-count=${usage.maxCount},
+                      data-max-bytes=${usage.maxBytes},
+                      data-used-count=${usage.count},
+                      data-used-bytes=${usage.bytes},
+                      data-msg-over-count=#{admin.batch.asset.tooManyClient},
+                      data-msg-over-bytes=#{admin.batch.asset.tooLargeClient},
+                      data-msg-dup=#{admin.batch.asset.duplicateClient}">
+            <input type="file" data-batch-file multiple
+                   accept="image/jpeg,image/png,image/webp"/>
+            <p class="hint" data-batch-live></p>
+            <div data-batch-errors></div>
+        </div>
+
+        <div th:replace="~{admin/fragments/seed-asset-wall :: wall}"></div>
+
+        <h2 th:text="#{admin.batch.rows}">内容行</h2>
+        <!-- 13-3 会把录入界面接在这里。当前只回显 13-1 那套行状态，便于人工核对。 -->
+        <p class="hint" th:if="${rows.isEmpty()}" th:text="#{admin.batch.rows.empty}">
+            还没有内容行 —— 录入界面由后续 story 交付。</p>
+        <table th:unless="${rows.isEmpty()}">
+            <thead>
+            <tr><th th:text="#{admin.batch.row.no}">行号</th>
+                <th th:text="#{admin.common.status}">状态</th>
+                <th th:text="#{admin.batch.row.error}">错误</th></tr>
+            </thead>
+            <tbody>
+            <tr th:each="r : ${rows}">
+                <td th:text="${r.rowNo}">0</td>
+                <td th:text="${r.status}">DRAFT</td>
+                <td th:text="${r.errorMessage} ?: '—'">—</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

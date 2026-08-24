@@ -23,6 +23,11 @@
             <div class="nav-sub">
                 <a th:href="@{/admin/seed-post}" th:classappend="${active == 'seed'} ? 'active'"
                    th:text="#{admin.nav.seed}">种子内容发布</a>
+                <!-- 批量内容工作台（V1.1.6 Story 13.2）。与单条发布同一门：
+                     🛡 与 AdminSeedBatchWorkspaceController 的 @PreAuthorize 逐字一致。 -->
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')"
+                   th:href="@{/admin/seed-batches}" th:classappend="${active == 'seed-batches'} ? 'active'"
+                   th:text="#{admin.nav.seedBatches}">批量内容</a>
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.proactive_takedown')"
                    th:href="@{/admin/content}" th:classappend="${active == 'content'} ? 'active'"
                    th:text="#{admin.nav.content}">内容管理</a>

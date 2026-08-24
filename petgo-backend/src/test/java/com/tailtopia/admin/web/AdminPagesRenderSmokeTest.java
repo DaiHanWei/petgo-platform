@@ -161,7 +161,9 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
                 "/admin/audit-logs", "/admin/accounts",
                 // V1.1.6 Story 12.1：「运营发布身份」页（虚拟账号 + 运营真实账号两区）。
                 // ⚠️ 这一页此前不在本表里 —— 加进来才会验它的 i18n 键在两种语言下都齐。
-                "/admin/virtual-accounts"};
+                "/admin/virtual-accounts",
+                // V1.1.6 Story 13.2：批次列表（工作台需要一个真实 batchId，另在其专属测试里渲染）。
+                "/admin/seed-batches"};
         for (String p : paths) {
             assertRenders(p, "zh_CN");
             assertRenders(p, "en");
