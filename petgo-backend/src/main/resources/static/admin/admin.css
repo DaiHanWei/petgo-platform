@@ -382,3 +382,24 @@ form.inline { display: inline; margin: 0; }
 dialog.lightbox { border: none; padding: 0; background: transparent; max-width: 92vw; max-height: 92vh; }
 dialog.lightbox::backdrop { background: rgba(0, 0, 0, .8); }
 dialog.lightbox img { display: block; max-width: 92vw; max-height: 92vh; object-fit: contain; cursor: zoom-out; }
+
+/* ===== 单条发布的图片上传控件（V1.1.6 Story 12.2）===== */
+.seed-thumbs { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0; }
+.seed-thumb {
+    position: relative; width: 108px; cursor: grab;
+    border: 1px solid var(--line, #ddd); border-radius: 8px; padding: 4px; background: #fff;
+}
+.seed-thumb img { width: 100%; height: 96px; object-fit: cover; border-radius: 6px; display: block; }
+/* 封面角标：第一张才显示 —— 「哪张是封面」不能靠运营数位置。 */
+.seed-cover {
+    position: absolute; left: 6px; top: 6px; padding: 1px 6px; border-radius: 999px;
+    font-size: 11px; background: rgba(0, 0, 0, .62); color: #fff;
+}
+.seed-thumb-del {
+    position: absolute; right: 4px; top: 4px; width: 20px; height: 20px; line-height: 18px;
+    border: none; border-radius: 50%; background: rgba(0, 0, 0, .62); color: #fff; cursor: pointer;
+}
+/* 裁切警告贴在那张图下面 —— 贴在整个控件下面就分不清是哪张图的问题了。 */
+.seed-thumb .err { font-size: 11px; margin: 4px 0 0; line-height: 1.35; }
+.seed-url-fallback { margin: 10px 0; }
+.seed-url-fallback > summary { cursor: pointer; font-size: 13px; }

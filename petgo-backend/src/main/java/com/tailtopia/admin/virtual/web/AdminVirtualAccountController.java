@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 /**
@@ -47,11 +48,14 @@ public class AdminVirtualAccountController {
 
     private final AdminVirtualAccountService service;
     private final AdminPublishIdentityService identities;
+    private final com.tailtopia.admin.seed.service.AdminSeedImageService images;
 
     public AdminVirtualAccountController(AdminVirtualAccountService service,
-            AdminPublishIdentityService identities) {
+            AdminPublishIdentityService identities,
+            com.tailtopia.admin.seed.service.AdminSeedImageService images) {
         this.service = service;
         this.identities = identities;
+        this.images = images;
     }
 
     @GetMapping("/admin/virtual-accounts")
@@ -66,16 +70,32 @@ public class AdminVirtualAccountController {
         return "admin/virtual-accounts";
     }
 
+    /**
+     * 建虚拟账号。
+     *
+     * <p>🔴 V1.1.6 Story 12.2 · AC2 最后一条：头像**改成可以直接上传**
+     * （原先同样只支持填 URL —— 运营得先去别处传图拿链接）。
+     * 上传优先；两个都没给就没有头像（选填）。URL 输入框保留作兜底，
+     * 理由与内容图一样：运营手上确实存在已有 CDN 链接的素材。
+     */
     @PostMapping("/admin/virtual-accounts")
     @PreAuthorize(AUTH)
     public String create(@AuthenticationPrincipal AdminUserDetails admin,
             @RequestParam String nickname, @RequestParam(required = false) String avatarUrl,
+            @RequestParam(required = false) MultipartFile avatarFile,
             RedirectAttributes flash) {
         try {
-            long id = service.create(nickname, avatarUrl, admin.getAdminAccountId());
+            String finalUrl = avatarUrl;
+            if (avatarFile != null && !avatarFile.isEmpty()) {
+                finalUrl = images.upload(avatarFile, "virtual-avatar").url();
+            }
+            long id = service.create(nickname, finalUrl, admin.getAdminAccountId());
             flash.addFlashAttribute("notice", "已创建虚拟账号（id=" + id + "，无登录能力）");
         } catch (AppException e) {
             flash.addFlashAttribute("error", e.getMessage());
+        } catch (Exception e) {
+            // 对象存储未配置 / 凭证异常 —— 优雅回显，不抛 500。
+            flash.addFlashAttribute("error", "头像上传失败，请重试");
         }
         return "redirect:/admin/virtual-accounts";
     }

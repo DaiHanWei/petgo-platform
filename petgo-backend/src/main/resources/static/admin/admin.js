@@ -177,3 +177,179 @@ document.addEventListener('submit', function (e) {
         e.preventDefault();
     }
 }, true);
+
+// ===== 单条发布的图片上传控件（V1.1.6 Story 12.2 · AC2/AC3）=====
+// 此前后台只能填图片 URL：运营为了发一条内容得先去别处传图、拿链接、再粘回来。
+//
+// 四件事：多图上传 · 拖拽排序（第一张即封面）· 单张删除 · 粘贴上传。
+// 提交给服务端的是两个隐藏 textarea：URL 与「宽x高」**同序等长**。
+//
+// 🔴 一次一张请求，不是一次一批：批量里有一张被拒（HEIC / 超 10MB），
+//    要么整批失败（运营重传全部），要么回一个"部分成功"（界面复杂度远超收益）。
+//    一张一个请求 ⇒ 失败那张单独标红、其余照常。
+//
+// 🛡 裁切警告文案由**服务端**给（算法只有一份，见 ImageRatioAdvisor），前端只负责显示。
+(function () {
+    var MAX = 9;
+
+    function fieldOf(id) { return document.getElementById(id); }
+
+    /** 把当前缩略图顺序写回两个隐藏字段 —— **顺序就是首图顺序**。 */
+    function sync(root) {
+        var thumbs = [].slice.call(root.querySelectorAll('[data-seed-thumb]'));
+        var urls = [], sizes = [];
+        thumbs.forEach(function (t) {
+            urls.push(t.getAttribute('data-url'));
+            // 测不出尺寸的图也要占一行，否则两个字段会错位 —— 服务端对长度不符是**整组作废**。
+            sizes.push((t.getAttribute('data-w') || '0') + 'x' + (t.getAttribute('data-h') || '0'));
+        });
+        // 兜底 URL 追加在上传图之后：它们没有尺寸，写 0x0（服务端会因长度虽等但值不合理而走异步兜底）。
+        var fallback = root.parentNode.querySelector('[data-seed-url-fallback]');
+        if (fallback && fallback.value.trim()) {
+            fallback.value.split(/\r?\n/).forEach(function (line) {
+                var u = line.trim();
+                if (u) { urls.push(u); sizes.push('0x0'); }
+            });
+        }
+        fieldOf('imageUrlsRaw').value = urls.join('\n');
+        fieldOf('imageSizesRaw').value = sizes.join('\n');
+
+        // 第一张打「封面」角标；>1 张时提示首图决定整帖容器高度（AC3 最后一条）。
+        thumbs.forEach(function (t, i) {
+            var badge = t.querySelector('[data-seed-cover]');
+            if (badge) { badge.hidden = i !== 0; }
+        });
+        var note = root.querySelector('[data-seed-first-note]');
+        if (note) { note.hidden = thumbs.length < 2; }
+    }
+
+    function addThumb(root, data) {
+        var box = root.querySelector('[data-seed-thumbs]');
+        var el = document.createElement('div');
+        el.className = 'seed-thumb';
+        el.setAttribute('data-seed-thumb', '');
+        el.setAttribute('draggable', 'true');
+        el.setAttribute('data-url', data.url);
+        el.setAttribute('data-w', data.w || 0);
+        el.setAttribute('data-h', data.h || 0);
+        var img = document.createElement('img');
+        img.src = data.url;
+        img.alt = '';
+        el.appendChild(img);
+        var cover = document.createElement('span');
+        cover.className = 'seed-cover';
+        cover.setAttribute('data-seed-cover', '');
+        cover.textContent = root.getAttribute('data-msg-cover') || 'cover';
+        el.appendChild(cover);
+        var del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'seed-thumb-del';
+        del.setAttribute('data-seed-del', '');
+        del.textContent = '×';
+        del.title = root.getAttribute('data-msg-remove') || 'remove';
+        el.appendChild(del);
+        if (data.warning) {
+            var warn = document.createElement('p');
+            warn.className = 'err';
+            warn.textContent = data.warning;
+            el.appendChild(warn);
+        }
+        box.appendChild(el);
+        sync(root);
+    }
+
+    function upload(root, file) {
+        var thumbs = root.querySelectorAll('[data-seed-thumb]').length;
+        if (thumbs >= MAX) {
+            window.alert(root.getAttribute('data-msg-limit') || 'max 9 images');
+            return;
+        }
+        var status = root.querySelector('[data-seed-status]');
+        if (status) { status.textContent = root.getAttribute('data-msg-uploading') || '...'; }
+        var body = new FormData();
+        body.append('file', file);
+        // ⚠️ /admin/** 那条过滤链**保留 CSRF** —— 少了这个头是 403，而不是"权限不够"。
+        var headers = {};
+        var token = document.querySelector('meta[name="_csrf"]');
+        var header = document.querySelector('meta[name="_csrf_header"]');
+        if (token && header) { headers[header.content] = token.content; }
+        fetch(root.getAttribute('data-upload-url'), {
+            method: 'POST', body: body, headers: headers, credentials: 'same-origin'
+        }).then(function (r) {
+            return r.json().then(function (j) { return { ok: r.ok, body: j }; });
+        }).then(function (res) {
+            if (status) { status.textContent = ''; }
+            if (!res.ok) {
+                // 被拒的那张单独报错，不影响其余（HEIC / 超 10MB 都是**预期内**的输入）。
+                var p = document.createElement('p');
+                p.className = 'err';
+                p.textContent = (file.name || '') + '：' + (res.body.error || 'upload failed');
+                root.querySelector('[data-seed-thumbs]').appendChild(p);
+                return;
+            }
+            addThumb(root, res.body);
+        }).catch(function () {
+            if (status) { status.textContent = ''; }
+        });
+    }
+
+    function eachRoot(fn) {
+        [].slice.call(document.querySelectorAll('[data-seed-uploader]')).forEach(fn);
+    }
+
+    document.addEventListener('change', function (e) {
+        if (!e.target.hasAttribute || !e.target.hasAttribute('data-seed-file')) { return; }
+        var root = e.target.closest('[data-seed-uploader]');
+        [].slice.call(e.target.files).forEach(function (f) { upload(root, f); });
+        e.target.value = ''; // 清空以便重选同一张
+    });
+
+    document.addEventListener('click', function (e) {
+        var del = e.target.closest && e.target.closest('[data-seed-del]');
+        if (!del) { return; }
+        var root = del.closest('[data-seed-uploader]');
+        del.closest('[data-seed-thumb]').remove();
+        sync(root);
+    });
+
+    // 粘贴上传：剪贴板里有图就直接传（AC2）。
+    document.addEventListener('paste', function (e) {
+        eachRoot(function (root) {
+            var items = (e.clipboardData && e.clipboardData.items) || [];
+            [].slice.call(items).forEach(function (it) {
+                if (it.kind === 'file' && it.type.indexOf('image/') === 0) {
+                    upload(root, it.getAsFile());
+                }
+            });
+        });
+    });
+
+    // 拖拽排序。用最朴素的做法：拖起来记住是谁，落在谁身上就插到它前面。
+    var dragging = null;
+    document.addEventListener('dragstart', function (e) {
+        var t = e.target.closest && e.target.closest('[data-seed-thumb]');
+        if (t) { dragging = t; e.dataTransfer.effectAllowed = 'move'; }
+    });
+    document.addEventListener('dragover', function (e) {
+        var over = e.target.closest && e.target.closest('[data-seed-thumb]');
+        if (dragging && over) { e.preventDefault(); }
+    });
+    document.addEventListener('drop', function (e) {
+        var over = e.target.closest && e.target.closest('[data-seed-thumb]');
+        if (!dragging || !over || over === dragging) { return; }
+        e.preventDefault();
+        over.parentNode.insertBefore(dragging, over);
+        sync(dragging.closest('[data-seed-uploader]'));
+        dragging = null;
+    });
+
+    // 兜底 URL 框改动也要同步进隐藏字段。
+    document.addEventListener('input', function (e) {
+        if (!e.target.hasAttribute || !e.target.hasAttribute('data-seed-url-fallback')) { return; }
+        var form = e.target.closest('[data-seed-form]');
+        var root = form && form.querySelector('[data-seed-uploader]');
+        if (root) { sync(root); }
+    });
+
+    document.addEventListener('DOMContentLoaded', function () { eachRoot(sync); });
+})();

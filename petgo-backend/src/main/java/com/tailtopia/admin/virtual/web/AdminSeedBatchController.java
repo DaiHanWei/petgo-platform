@@ -43,8 +43,11 @@ public class AdminSeedBatchController {
      * <p>🔴 与 {@code AdminPublishIdentityController.REAL_AUTH} 同一口径：
      * 超管隐式全权，其余看有没有 {@code seed.publish_as_real}。
      * 选虚拟账号发布不受它影响 —— 那条常用路径的门仍是 {@code virtual_account.manage}。
+     *
+     * <p>⚠️ <b>单条发布（Story 12.2）也用这一份</b>，刻意不各写一遍：
+     * 两处口径分叉的表现是"批量能发、单条发不了"（或反过来），而那种不一致很难被想到去查。
      */
-    private static boolean mayPublishAsReal(AdminUserDetails admin) {
+    public static boolean mayPublishAsReal(AdminUserDetails admin) {
         return admin.getAuthorities().stream().anyMatch(a ->
                 "ROLE_SUPER_ADMIN".equals(a.getAuthority())
                         || AdminPermissions.SEED_PUBLISH_AS_REAL.equals(a.getAuthority()));

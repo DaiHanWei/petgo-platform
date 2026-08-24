@@ -5,6 +5,15 @@
     <meta charset="UTF-8"/>
     <title th:text="#{admin.seed.title}">种子内容发布 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <!-- 🔴 上传走 fetch，而 /admin/** 那条过滤链**保留 CSRF** —— 少了这两个 meta
+         就是 403，且会被误读成"权限不够"。表单提交有 Thymeleaf 自动带的隐藏域，
+         fetch 没有，必须自己从这里取。 -->
+    <meta name="_csrf" th:content="${_csrf?.token}"/>
+    <meta name="_csrf_header" th:content="${_csrf?.headerName}"/>
+    <!-- admin.js：data-confirm / 条件式二次确认 / 图片上传控件（Story 12.2）。
+         htmx：切换发布账号时换掉宠物下拉（AC4）。 -->
+    <script defer th:src="@{/admin/admin.js}"></script>
+    <script th:src="@{/admin/vendor/htmx.min.js}"></script>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
@@ -22,11 +31,24 @@
             <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
             <div class="banner err" th:if="${error}" th:text="${error}">err</div>
             <section class="tab-panel" data-tab-panel="single">
-                <form th:action="@{/admin/seed-post}" th:object="${seedPostForm}" method="post">
+                <form th:action="@{/admin/seed-post}" th:object="${seedPostForm}" method="post"
+                      data-seed-form
+                      th:attr="data-real-identity-confirm=#{admin.publishIdentity.realConfirm}">
                     <div th:if="${#fields.hasGlobalErrors()}">
                         <p class="err" th:each="e : ${#fields.globalErrors()}" th:text="${e}">错误</p>
                     </div>
+
+                    <!-- ===== 发布账号（V1.1.6 Story 12.2 · AC1）=====
+                         此前这一页**根本没有账号选择控件**：作者写死为"登录后台账号所关联的
+                         官方作者身份"。防呆走 12-1 的共用片段，四条行为一份实现。 -->
+                    <div th:replace="~{admin/fragments/publish-identity-select :: select(${publishIdentities}, 'seedAuthorUserId', 'authorUserId', @{/admin/seed-post/pets}, '#seedPetSelect')}"></div>
+                    <p class="err" th:if="${#fields.hasErrors('authorUserId')}" th:errors="*{authorUserId}">账号错误</p>
+
                     <label class="field" for="type" th:text="#{admin.seed.type}">内容类型</label>
+                    <!-- ⚠️ 取值是**代码枚举** DAILY / GROWTH_MOMENT / KNOWLEDGE（AC6）。
+                         PRD 里写的 MOMENT 在代码里不存在：产品口语的 "Moment" = DAILY、
+                         "Diary" = GROWTH_MOMENT。单条发布是 GROWTH_MOMENT 的**唯一入口**，
+                         这里搞反枚举等于把成长日历入口做没了。 -->
                     <select id="type" th:field="*{type}" class="field-full">
                         <option th:each="t : ${types}" th:value="${t}" th:text="${t}">类型</option>
                     </select>
@@ -36,12 +58,39 @@
                     <textarea id="text" th:field="*{text}" maxlength="1000"></textarea>
                     <p class="err" th:if="${#fields.hasErrors('text')}" th:errors="*{text}">正文错误</p>
 
-                    <label class="field" for="imageUrlsRaw" th:text="#{admin.seed.images}">图片 URL（每行一个，≤9 张，公开桶 CDN 链接）</label>
-                    <textarea id="imageUrlsRaw" th:field="*{imageUrlsRaw}"></textarea>
-                    <p class="hint" th:text="#{admin.seed.images.hint}">种子图须为已上传公开桶的 URL。</p>
+                    <!-- ===== 图片（AC2/AC3）=====
+                         默认路径是**上传**；「粘贴图片 URL」折叠起来作兜底 ——
+                         运营手上确实存在已有 CDN 链接的素材，完全砍掉会制造新的绕路。 -->
+                    <label class="field" th:text="#{admin.seed.images.upload}">图片（≤9 张，单张 ≤10MB）</label>
+                    <div data-seed-uploader
+                         th:attr="data-upload-url=@{/admin/seed-post/images},
+                                  data-msg-cover=#{admin.seed.images.cover},
+                                  data-msg-first=#{admin.seed.images.firstDecidesHeight},
+                                  data-msg-limit=#{admin.seed.images.limit},
+                                  data-msg-remove=#{admin.seed.images.remove},
+                                  data-msg-uploading=#{admin.seed.images.uploading}">
+                        <input type="file" data-seed-file accept="image/jpeg,image/png,image/webp" multiple/>
+                        <p class="hint" th:text="#{admin.seed.images.pasteHint}">也可以直接 Ctrl+V 粘贴图片。缩略图可拖拽排序，第一张是封面。</p>
+                        <p class="hint" data-seed-status></p>
+                        <div class="seed-thumbs" data-seed-thumbs></div>
+                        <!-- 首图决定整帖容器高度（AC3 最后一条）。只在 >1 张时才提 ——
+                             单图时说这句是噪音。 -->
+                        <p class="hint" data-seed-first-note hidden
+                           th:text="#{admin.seed.images.firstDecidesHeight}">第一张图决定整帖的容器高度。</p>
+                    </div>
+                    <!-- 这两个隐藏字段才是提交给服务端的东西：URL 与尺寸**同序等长**。 -->
+                    <textarea id="imageUrlsRaw" th:field="*{imageUrlsRaw}" hidden></textarea>
+                    <textarea id="imageSizesRaw" th:field="*{imageSizesRaw}" hidden></textarea>
 
-                    <label class="field" for="petId" th:text="#{admin.seed.petId}">绑定宠物 ID</label>
-                    <input type="number" id="petId" th:field="*{petId}" class="field-full"/>
+                    <details class="seed-url-fallback">
+                        <summary th:text="#{admin.seed.images.urlFallback}">粘贴图片 URL（兜底）</summary>
+                        <p class="hint" th:text="#{admin.seed.images.urlFallbackHint}">每行一个公开桶 URL。填在这里的 URL 会追加到上传的图片之后。</p>
+                        <textarea data-seed-url-fallback rows="3"></textarea>
+                    </details>
+
+                    <label class="field" for="petId" th:text="#{admin.seed.pet}">绑定宠物</label>
+                    <!-- HTMX：切换发布账号 → 换掉这一块（AC4）。 -->
+                    <div th:replace="~{admin/fragments/seed-pet-select :: options}"></div>
 
                     <button type="submit" class="btn btn-primary form-submit" th:text="#{admin.seed.submit}">发布</button>
                 </form>
@@ -54,7 +103,7 @@
                      默认不预选 / 仅选中真实账号时弹二次确认。三处发布入口共用同一份实现。 -->
                 <form method="post" th:action="@{/admin/seed-batch}"
                       th:attr="data-real-identity-confirm=#{admin.publishIdentity.realConfirm}">
-                    <div th:replace="~{admin/fragments/publish-identity-select :: select(${publishIdentities}, 'batchVirtualUserId')}"></div>
+                    <div th:replace="~{admin/fragments/publish-identity-select :: select(${publishIdentities}, 'batchVirtualUserId', 'virtualUserId', null, null)}"></div>
                     <label class="field" for="batchLines" th:text="#{admin.seed.batch.lines}">批量内容（每行一条）</label>
                     <textarea id="batchLines" name="lines" rows="12" required
                               th:placeholder="#{admin.seed.batch.linesPlaceholder}"
@@ -64,7 +113,7 @@
                 <hr class="section-line"/>
                 <form method="post" th:action="@{/admin/seed-batch/import}" enctype="multipart/form-data"
                       th:attr="data-real-identity-confirm=#{admin.publishIdentity.realConfirm}">
-                    <div th:replace="~{admin/fragments/publish-identity-select :: select(${publishIdentities}, 'importVirtualUserId')}"></div>
+                    <div th:replace="~{admin/fragments/publish-identity-select :: select(${publishIdentities}, 'importVirtualUserId', 'virtualUserId', null, null)}"></div>
                     <label class="field" for="seedImportFile" th:text="#{admin.seed.batch.excel}">Excel 导入</label>
                     <input id="seedImportFile" name="file" type="file" class="field-full" required
                            accept=".xlsx,.xls,.csv,.tsv,.txt"/>

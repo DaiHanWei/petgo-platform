@@ -11,10 +11,14 @@
         <div th:replace="~{admin/fragments/publish-identity-select :: select(${publishIdentities}, 'batchAuthorId')}"></div>
 -->
 <body>
-<div th:fragment="select(identities, fieldId)" th:remove="tag">
+<div th:fragment="select(identities, fieldId, fieldName, hxGet, hxTarget)" th:remove="tag">
     <label th:for="${fieldId}">
         <span th:text="#{admin.publishIdentity.field}">发布账号</span>
-        <select th:id="${fieldId}" name="virtualUserId" class="field-full" required>
+        <!-- ⚠️ `name` 由调用方给：批量发布那两处的入参叫 virtualUserId（历史名，不改动它
+             以免连带改既有端点），单条发布叫 authorUserId。**同一个片段、两个字段名**，
+             所以 name 必须参数化 —— 写死会让其中一处静默收不到值。 -->
+        <select th:id="${fieldId}" th:name="${fieldName}" class="field-full" required
+                th:attr="hx-get=${hxGet}, hx-target=${hxTarget}, hx-trigger=${hxGet} != null ? 'change' : null">
             <!-- 🛡 默认不预选任何账号：占位项 disabled+selected，强制显式选择。
                  预选第一项 = 手滑直接提交时用的是"上次那个号"，这正是要防的。 -->
             <option value="" disabled selected

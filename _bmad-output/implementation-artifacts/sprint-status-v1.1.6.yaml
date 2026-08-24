@@ -220,7 +220,7 @@ development_status:
   #   而那两处基础从未交付过（PRD §7.4 原文误以为已随 V1.1.0 落地）。
   epic-12: in-progress
   12-1-运营发布身份池: review                        # AB-3I 🔴 必须最先；独立权限码 seed.publish_as_real，与 virtual_account.manage 解耦
-  12-2-单条发布整改: ready-for-dev                          # AB-3J 落地 V1.1.0 AB-1.1-03 两条从未交付的要求
+  12-2-单条发布整改: review                          # AB-3J 落地 V1.1.0 AB-1.1-03 两条从未交付的要求
   epic-12-retrospective: optional
   epic-13: backlog
   13-1-草稿与排期状态机及批次模型: ready-for-dev            # AB-3K/3L 地基 🔴 状态挂行上、批次不持有状态；草稿不得写进 content_posts
