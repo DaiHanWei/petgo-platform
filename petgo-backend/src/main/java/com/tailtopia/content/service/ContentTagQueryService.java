@@ -109,6 +109,21 @@ public class ContentTagQueryService {
         if (startsAt == null || (endsAt != null && !endsAt.isAfter(startsAt))) {
             throw AppException.validation("结束时间必须晚于开始时间");
         }
+        // 🔴 Story 11.6：一条内容**同时**最多一个装饰标签（2026-08-25 产品定）。
+        //
+        // 约束落在**打标这一刻**，不靠展示层截断 —— 靠截断的后果是数据里躺着 3 个、
+        // 界面只显示 1 个，运营会以为打标失败了又打一遍，越打越多且全程没有报错。
+        // ⚠️ 判据是**时间窗重叠**：窗口不重叠的排期（前一个到点、后一个接上）是正常操作。
+        List<ContentTagAssignment> clash =
+                assignments.findOverlapping(postId, startsAt, endsAt != null, endsAt, false, null);
+        if (!clash.isEmpty()) {
+            ContentTagAssignment first = clash.get(0);
+            String name = tags.findById(first.getTagId())
+                    .map(ContentTag::getName).orElse("#" + first.getTagId());
+            // 🛡 报错要**点明是哪一个**：只说"已有标签"运营得自己去列表里找。
+            throw AppException.validation("这条内容在该时段已有装饰标签「" + name
+                    + "」，一条内容同时只能挂一个。请先移除它，或把新标签的时间排在它之后。");
+        }
         return assignments.save(ContentTagAssignment.of(postId, tagId, startsAt, endsAt));
     }
 
