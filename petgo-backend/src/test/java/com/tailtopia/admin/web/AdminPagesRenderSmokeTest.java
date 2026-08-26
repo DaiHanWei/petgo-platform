@@ -41,6 +41,38 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
     }
 
     /**
+     * 🔴 运营配置页的**每一块都必须真的出现在页面上**。
+     *
+     * <h2>这条守的是一个真实事故（2026-08-26 实机截图发现）</h2>
+     * 「首页推荐算法」整块（Story 16.4 交付）当时写在了 {@code th:fragment="content"} 的
+     * <b>闭合标签之外</b>，而模板只渲染那个片段 ⇒ <b>整块被静默丢弃，从交付起就没显示过</b>。
+     * 连带 Story 17.1 加在同一表单里的「限流系数」输入框也一起不可见 ——
+     * 也就是那两条 story 的「后台可配」实际上办不到。
+     *
+     * <p>⚠️ <b>当时全套测试都是绿的</b>，因为没有一条测到「这一块在页面上」：
+     * 本类的 {@code assertRenders} 只验「渲染不报错」；服务层测试直接调 service；
+     * 端点测试直接 POST。**丢掉一整块 HTML 不会让任何一条变红。**
+     *
+     * <p>断言用 form 的 action 与 {@code data-section} 标记做锚点，
+     * 不断言可见文案 —— 文案会随 i18n 变，而锚点不会。
+     */
+    @Test
+    void everyConfigSectionIsActuallyRenderedOnThePage() throws Exception {
+        String html = mvc.perform(get("/admin/config").with(authentication(superAdminAuth())))
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(html).as("定价配置整块不见了").contains("/admin/config/pricing");
+        assertThat(html).as("PawCoin 整块不见了").contains("/admin/config/pawcoin");
+        assertThat(html).as("分享奖励整块不见了（Story 18.3）")
+                .contains("/admin/config/share-reward");
+        assertThat(html).as("🔴 首页推荐算法整块不见了（Story 16.4）—— 检查它是不是掉到 "
+                + "th:fragment=\"content\" 的闭合标签外面了").contains("/admin/config/feed-rank");
+        assertThat(html).as("🔴 限流系数输入框不见了（Story 17.1）—— 它挂在推荐算法那个表单里")
+                .contains("throttleFactor");
+        assertThat(html).as("充值档位整块不见了").contains("/admin/config/tiers/");
+    }
+
+    /**
      * 「内容」分组的侧栏次序由**产品指定**（2026-08-20）：
      * 种子内容发布 → 内容管理 → 评论管理 → 人工复核 → 用户 → 被举报用户。
      *

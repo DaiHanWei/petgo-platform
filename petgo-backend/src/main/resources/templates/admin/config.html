@@ -84,7 +84,11 @@
                 <b th:text="${ov.accountsAtCap()}">0</b>
             </p>
 
-            <form method="post" th:action="@{/admin/config/share-reward}"
+            <!-- ⚠️ class="card" 不是装饰：本块四个标签都很长（「身份证分享每日次数上限（0 = 不发）」），
+                 不加它标签是 inline 的，会在一行里排不下而**从中间断开**——
+                 实机截图上「身份证」被挤到上一行行尾、「分享每日次数上限」掉到下一行。
+                 .card 让 label 变 block，与上面「定价配置」同一形状。 -->
+            <form class="card" method="post" th:action="@{/admin/config/share-reward}"
                   sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.share_reward_edit')">
                 <!-- 🔴 总开关：发现被刷要能立刻全线关掉，优先于任何渠道层配置。 -->
                 <label><span th:text="#{admin.config.shareRewardEnabled}">分享奖励总开关</span>
@@ -126,7 +130,6 @@
             </tr>
             </tbody>
         </table>
-    </div>
 
     <!-- V1.1.6 Story 16.4（FR-95）：首页推荐算法打分参数。
          🛡 挂在既有配置页，**不新建后台模块**（AC2）。 -->
@@ -199,6 +202,7 @@
                        th:value="${feedRank.speciesGeneralQuota}"/></label>
             <button type="submit" class="btn btn-primary btn-sm">保存推荐算法参数</button>
         </form>
+    </div>
     </div>
 </div>
 </body>
