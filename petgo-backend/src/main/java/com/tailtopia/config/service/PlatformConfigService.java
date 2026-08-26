@@ -1,8 +1,10 @@
 package com.tailtopia.config.service;
 
+import com.tailtopia.config.domain.FeedRankConfig;
 import com.tailtopia.config.domain.PawCoinConfig;
 import com.tailtopia.config.domain.PawCoinTopupTier;
 import com.tailtopia.config.domain.PricingConfig;
+import com.tailtopia.config.repository.FeedRankConfigRepository;
 import com.tailtopia.config.repository.PawCoinConfigRepository;
 import com.tailtopia.config.repository.PawCoinTopupTierRepository;
 import com.tailtopia.config.repository.PricingConfigRepository;
@@ -24,12 +26,26 @@ public class PlatformConfigService {
     private final PricingConfigRepository pricing;
     private final PawCoinConfigRepository pawcoin;
     private final PawCoinTopupTierRepository tiers;
+    private final FeedRankConfigRepository feedRank;
 
     public PlatformConfigService(PricingConfigRepository pricing, PawCoinConfigRepository pawcoin,
-            PawCoinTopupTierRepository tiers) {
+            PawCoinTopupTierRepository tiers, FeedRankConfigRepository feedRank) {
         this.pricing = pricing;
         this.pawcoin = pawcoin;
         this.tiers = tiers;
+        this.feedRank = feedRank;
+    }
+
+    /**
+     * 当前推荐算法参数（单行，V1.1.6 Story 16.4）。
+     *
+     * <p>🛡 <b>无缓存</b>（沿用本类既有口径，护栏禁通用缓存层）：单行直读，
+     * 而且推荐序里它<b>每次生成序列只读一次</b>（不是每条内容读一次）。
+     */
+    @Transactional(readOnly = true)
+    public FeedRankConfig feedRank() {
+        return feedRank.findById(FeedRankConfig.SINGLETON_ID)
+                .orElseThrow(() -> new IllegalStateException("feed_rank_config 单行缺失（16.4 种子）"));
     }
 
     /** 当前定价配置（单行）。 */

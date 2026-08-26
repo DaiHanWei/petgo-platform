@@ -6,6 +6,7 @@ import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/content/data/feed_repository.dart';
 import 'package:tailtopia/features/content/data/mini_profile_repository.dart';
 import 'package:tailtopia/features/content/domain/feed_item.dart';
+import 'package:tailtopia/features/content/domain/pinned_slot.dart';
 import 'package:tailtopia/features/content/presentation/feed_controller.dart';
 import 'package:tailtopia/features/social/data/account_report_repository.dart';
 import 'package:tailtopia/features/social/data/blocked_users_repository.dart';
@@ -44,6 +45,9 @@ class _FakeFeedRepo implements FeedRepository {
     int limit = 20,
   }) async =>
       FeedPage(items: items, nextCursor: null, hasMore: false);
+
+  @override
+  Future<PinnedSlot?> getPinnedSlot() async => null;
 }
 
 class _FakeMiniRepo implements MiniProfileRepository {

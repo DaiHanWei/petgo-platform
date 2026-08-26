@@ -23,6 +23,15 @@
             <div class="nav-sub">
                 <a th:href="@{/admin/seed-post}" th:classappend="${active == 'seed'} ? 'active'"
                    th:text="#{admin.nav.seed}">种子内容发布</a>
+                <!-- 批量内容工作台（V1.1.6 Story 13.2）。与单条发布同一门：
+                     🛡 与 AdminSeedBatchWorkspaceController 的 @PreAuthorize 逐字一致。 -->
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')"
+                   th:href="@{/admin/seed-batches}" th:classappend="${active == 'seed-batches'} ? 'active'"
+                   th:text="#{admin.nav.seedBatches}">批量内容</a>
+                <!-- 排期管理（V1.1.6 Story 13.5）。🛡 与 AdminContentScheduleController 的门逐字一致。 -->
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')"
+                   th:href="@{/admin/content-schedules}" th:classappend="${active == 'content-schedules'} ? 'active'"
+                   th:text="#{admin.nav.contentSchedules}">排期管理</a>
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.proactive_takedown')"
                    th:href="@{/admin/content}" th:classappend="${active == 'content'} ? 'active'"
                    th:text="#{admin.nav.content}">内容管理</a>
@@ -51,6 +60,54 @@
                    th:text="#{admin.nav.tickets}">被举报用户</a>
             </div>
         </details>
+        <!-- 内容运营（后台 PRD 模块 15）：顶置坑位 / 装饰标签。
+             ⚠️ 刻意**另起一个分组**，不塞进上面的「内容」分组 —— 那个分组的次序是产品
+             2026-08-20 逐项指定过的（种子内容发布→内容管理→评论管理→人工复核→用户→被举报用户），
+             往中间插一项会打乱它，且渲染烟测 contentNavKeepsTheProductSpecifiedOrder 正盯着那个顺序。
+             本分组后续由 Story 11.2（装饰标签）继续加项。 -->
+        <details class="nav-section"
+                 sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.pin_view') or hasAuthority('content.tag_view') or hasAuthority('content.stats_view')"
+                 th:attr="open=${active == 'content-pins' or active == 'content-tags'} ? 'open' : null">
+            <summary th:classappend="${active == 'content-pins' or active == 'content-tags'} ? 'active'"
+                     th:text="#{admin.nav.group.contentOps}">内容运营</summary>
+            <div class="nav-sub">
+                <!-- 🛡 本条件必须与 AdminContentPinController 的 @PreAuthorize(VIEW) **逐字一致**：
+                     两边走散时，权限放行了、敲 URL 能进，但侧栏没链接 —— 运营只会以为自己没这个功能，
+                     而日志、403、报错一概没有，无从下手。 -->
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.pin_view')"
+                   th:href="@{/admin/content-pins}" th:classappend="${active == 'content-pins'} ? 'active'"
+                   th:text="#{admin.nav.contentPins}">顶置管理</a>
+                <!-- 🛡 与 AdminContentTagController 的 @PreAuthorize(VIEW) 逐字一致 -->
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.tag_view')"
+                   th:href="@{/admin/content-tags}" th:classappend="${active == 'content-tags'} ? 'active'"
+                   th:text="#{admin.nav.contentTags}">装饰标签</a>
+                <!-- 内容互动积分（V1.1.6 Story 15.1）。
+                     🛡 与 AdminContentStatsController.VIEW 逐字一致 ——
+                     不一致的表现是"看得见入口点进去 403"或"有权限却看不到入口"。 -->
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.stats_view')"
+                   th:href="@{/admin/content-stats}" th:classappend="${active == 'content-stats'} ? 'active'"
+                   th:text="#{admin.nav.contentStats}">内容互动积分</a>
+            </div>
+        </details>
+        <!-- 用户运营（后台 PRD 模块 12）：用户标签。
+             ⚠️ 刻意**不并入上面的「内容运营」** —— 用户标签挂在人身上、不是内容，
+             并入会让分组名与内容不符；而改「内容运营」这个名字要连带改四处（侧栏名/页内标题/
+             页面说明/权限显示名），代价更大。 -->
+        <details class="nav-section"
+                 sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.tag_view')"
+                 th:attr="open=${active == 'user-tags'} ? 'open' : null">
+            <summary th:classappend="${active == 'user-tags'} ? 'active'"
+                     th:text="#{admin.nav.group.userOps}">用户运营</summary>
+            <div class="nav-sub">
+                <!-- 🛡 与 AdminUserTagController 的 @PreAuthorize(VIEW) 逐字一致 -->
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.tag_view')"
+                   th:href="@{/admin/user-tags}" th:classappend="${active == 'user-tags'} ? 'active'"
+                   th:text="#{admin.nav.userTags}">用户标签</a>
+            </div>
+        </details>
+        <details class="nav-section"
+                 th:attr="open=${active == 'vets' or active == 'online' or active == 'failed-requests' or active == 'ratings'} ? 'open' : null">
+            <summary th:classappend="${active == 'vets' or active == 'online' or active == 'failed-requests' or active == 'ratings'} ? 'active'"
         <details class="nav-section" th:with="navOpen=${active == 'vets' or active == 'online' or active == 'failed-requests' or active == 'ratings'}"
                  th:attr="open=${navOpen} ? 'open' : null">
             <summary th:classappend="${navOpen} ? 'active'"
@@ -101,7 +158,7 @@
                    th:text="#{admin.nav.refunds}">退款管理</a>
             </div>
         </details>
-        <details class="nav-section" th:with="navOpen=${active == 'config' or active == 'consult-orders' or active == 'ai-orders' or active == 'settlements' or active == 'payments' or active == 'red-overage' or active == 'virtual-accounts'}" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view') or hasAuthority('order.view') or hasAuthority('settlement.view') or hasAuthority('payment.view') or hasAuthority('risk.view') or hasAuthority('virtual_account.manage')"
+        <details class="nav-section" th:with="navOpen=${active == 'config' or active == 'consult-orders' or active == 'ai-orders' or active == 'settlements' or active == 'payments' or active == 'red-overage' or active == 'virtual-accounts'}" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view') or hasAuthority('order.view') or hasAuthority('settlement.view') or hasAuthority('payment.view') or hasAuthority('risk.view') or hasAuthority('virtual_account.manage') or hasAuthority('seed.publish_as_real')"
                  th:attr="open=${navOpen} ? 'open' : null">
             <summary th:classappend="${navOpen} ? 'active'"
                      th:text="#{admin.nav.group.ops}">运营</summary>
@@ -109,6 +166,11 @@
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view')"
                    th:href="@{/admin/config}" th:classappend="${active == 'config'} ? 'active'"
                    th:text="#{admin.nav.config}">运营配置</a>
+                <!-- 🔴 算法参数独立成页、独立权限：不给运营（2026-08-26 产品决定）。
+                     侧栏这条与控制器 @PreAuthorize 引用同一个 AdminPermissions 常量。 -->
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.algo_param_view')"
+                   th:href="@{/admin/algo-params}" th:classappend="${active == 'algo-params'} ? 'active'"
+                   th:text="#{admin.nav.algoParams}">算法参数</a>
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('order.view')"
                    th:href="@{/admin/consult-orders}" th:classappend="${active == 'consult-orders'} ? 'active'"
                    th:text="#{admin.nav.consultOrders}">兽医订单</a>
@@ -124,9 +186,12 @@
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('risk.view')"
                    th:href="@{/admin/red-overage}" th:classappend="${active == 'red-overage'} ? 'active'"
                    th:text="#{admin.nav.redOverage}">红色超额</a>
-                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')"
+                <!-- 🛡 本表达式与 AdminVirtualAccountController 的 VIEW_AUTH **逐字一致**。
+                     必须含 seed.publish_as_real：只持有该码的人（管真实发布身份、不管虚拟账号）
+                     否则会看得见入口、点进去 403。 -->
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.view') or hasAuthority('virtual_account.manage') or hasAuthority('seed.publish_as_real')"
                    th:href="@{/admin/virtual-accounts}" th:classappend="${active == 'virtual-accounts'} ? 'active'"
-                   th:text="#{admin.nav.virtualAccounts}">虚拟账号</a>
+                   th:text="#{admin.nav.virtualAccounts}">运营发布身份</a>
             </div>
         </details>
         <details class="nav-section" th:with="navOpen=${active == 'audit-logs' or active == 'accounts'}"

@@ -148,7 +148,7 @@ class ShopCheckbox extends StatelessWidget {
           decoration: BoxDecoration(
             color: !enabled
                 ? ShopColors.border2
-                : (value ? ShopColors.rose : ShopColors.surface),
+                : (value ? ShopColors.accent : ShopColors.surface),
             borderRadius: BorderRadius.circular(size >= 18 ? 4 : 3),
             border: (enabled && !value)
                 ? Border.all(color: ShopColors.border, width: 1.5)
@@ -169,7 +169,7 @@ class ShopCheckbox extends StatelessWidget {
 
 /// 退货原因单选项 —— **整行是一个选项容器**，不是「圆点 + 旁边一行字」。
 ///
-/// 选中：1.5px 玫红边 + [ShopColors.roseBg] 底 + 文字转 700 + 右侧玫红实心圆 `✓`
+/// 选中：1.5px 玫红边 + [ShopColors.accentBg] 底 + 文字转 700 + 右侧玫红实心圆 `✓`
 /// 未选：1px [ShopColors.border2] 边 + 右侧空心圆
 ///
 /// 🔴 <b>只有退货原因用单选</b>。支付方式与退款去向虽然长得像，但它们表示**既定结果、
@@ -198,10 +198,10 @@ class ShopRadioTile extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           decoration: BoxDecoration(
-            color: selected ? ShopColors.roseBg : ShopColors.surface,
+            color: selected ? ShopColors.accentBg : ShopColors.surface,
             borderRadius: BorderRadius.circular(ShopShape.radiusChip),
             border: Border.all(
-              color: selected ? ShopColors.rose : ShopColors.border2,
+              color: selected ? ShopColors.accent : ShopColors.border2,
               width: selected ? 1.5 : 1,
             ),
           ),
@@ -222,7 +222,7 @@ class ShopRadioTile extends StatelessWidget {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: selected ? ShopColors.rose : Colors.transparent,
+                  color: selected ? ShopColors.accent : Colors.transparent,
                   border: selected
                       ? null
                       : Border.all(color: ShopColors.border, width: 1.5),

@@ -9,11 +9,14 @@ import 'package:tailtopia/features/content/data/feed_repository.dart';
 import 'package:tailtopia/features/content/presentation/feed_tab_row.dart';
 import 'package:tailtopia/features/profile/presentation/diary_demo_detail_page.dart';
 import 'package:tailtopia/features/profile/presentation/diary_guest_page.dart';
+import 'package:tailtopia/features/profile/presentation/visitor_archive_view.dart';
 import 'package:tailtopia/shared/widgets/app_shell.dart';
 import 'package:tailtopia/shared/widgets/bottom_tab_bar.dart';
 import 'package:tailtopia/shared/widgets/login_hard_dialog.dart';
 
 import '../support/fake_feed_repository.dart';
+import 'package:tailtopia/features/shop/data/shop_repository.dart';
+import 'package:tailtopia/features/shop/domain/shop_product.dart';
 
 /// 底栏标签精确定位：页面正文里也可能出现同名文字（如游客态页头的统计列 "Diary"），
 /// 直接 `find.text('Diary')` 会命中多个。
@@ -29,7 +32,12 @@ Finder _tabButton(String label) =>
 /// 本文件的断言是这条规则的守门人：拦截方向与放行方向都锁死，任一侧被改坏都会红。
 Future<ProviderContainer> _pumpGuestApp(WidgetTester tester) async {
   final container = ProviderContainer(
-    overrides: [feedRepositoryProvider.overrideWithValue(FakeFeedRepository())],
+    overrides: [
+      feedRepositoryProvider.overrideWithValue(FakeFeedRepository()),
+  // Toko 现为第 2 位 Tab（DEP-1 闭合）。打桩商品列表，否则点进去会走真实 dio 请求，
+  // 测试环境无后端 → 挂在 30s receiveTimeout 上（表现为 pumpAndSettle 不收敛 / pending timer）。
+      shopProductsProvider.overrideWith((ref, category) async => <ShopProductSummary>[]),
+    ],
   );
   addTearDown(container.dispose);
   await tester.pumpWidget(
@@ -91,26 +99,48 @@ void main() {
       expect(find.byType(LoginHardDialog), findsNothing);
     });
 
-    testWidgets('名片分享深链 tailtopia://card/<token> 的落点 /profile 对游客可达（FR-14 连带调整②）',
+    /// V1.1.6 Story 2.4 起落点改了：`/profile` → `/pet/<token>`。
+    ///
+    /// 🔴 **为什么变**：旧映射把 card 深链整个映射成 `/profile`，**token 连解析都没有** ——
+    /// 于是未登录的人点开看到给游客做的**示例成长本**，已登录有宠的人点开看到**自己家的宠物**。
+    /// 两种都不是被分享的那一只，这正是 Story 2.4 要修的缺陷。
+    ///
+    /// 本用例保留的部分：**落点对游客可达、不弹登录窗**（那才是这条一直在守的东西）。
+    testWidgets('名片分享深链 tailtopia://card/<token> → 被分享的那只宠物，且对游客可达',
         (tester) async {
       // 深链映射是纯函数（app.dart），此处验「映射目标 + 门控」这对组合对游客成立。
-      expect(deepLinkToLocation(Uri.parse('tailtopia://card/abc123')), '/profile');
+      expect(deepLinkToLocation(Uri.parse('tailtopia://card/abc123')), '/pet/abc123');
+      // 没有 token 时退回 Diary 根 —— 没有 token 就没有可展示的宠物。
+      expect(deepLinkToLocation(Uri.parse('tailtopia://card')), '/profile');
 
       final container = await _pumpGuestApp(tester);
       final router = container.read(routerProvider);
       router.go(deepLinkToLocation(Uri.parse('tailtopia://card/abc123'))!);
-      await tester.pumpAndSettle();
+      // ⚠️ 这里**不能用 pumpAndSettle**：访客页拉档案时是无限转圈动画，
+      // 而本用例没有桩掉访客接口 —— pumpAndSettle 会一直等下去直到超时。
+      // 本条要验的是「路由落到哪、有没有弹登录窗」，定量 pump 足够。
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
 
-      expect(router.state.matchedLocation, '/profile',
-          reason: '游客点名片深链应落 Diary 游客态，不再被弹回 Discovery');
-      expect(find.byType(DiaryGuestPage), findsOneWidget);
+      expect(router.state.matchedLocation, '/pet/abc123',
+          reason: '游客点名片深链应落到被分享的那只宠物，且不被门控改写');
+      expect(find.byType(LoginHardDialog), findsNothing,
+          reason: '🛡 不得要求登录 —— 同一个链接在浏览器里无需登录即可看，'
+              'App 内若弹登录只会把用户推回浏览器');
+      // 🛡 落在访客只读视图上（而不是给游客做的示例种草页）。
+      // ⚠️ 不断言「DiaryGuestPage 不存在」：Tab 壳层会把上一个 Diary 页留在树里（在下层），
+      // 那条断言会因为壳层实现而红，与本条要守的东西无关。
+      expect(find.byType(VisitorArchiveView), findsOneWidget);
     });
   });
 
   group('AC2 Tab 点击门控（第二处，PRD 未覆盖）', () {
-    test('免门控白名单 = {Discovery, Diary}；Health / Me 维持受控', () {
-      expect(kUngatedTabs, <AppTab>{AppTab.home, AppTab.profile});
-      expect(kUngatedTabs.contains(AppTab.triage), isFalse, reason: 'Health 对游客维持受控');
+    test('免门控白名单 = {Discovery, Diary, Toko}；Me 维持受控', () {
+      expect(kUngatedTabs, <AppTab>{AppTab.home, AppTab.profile, AppTab.shop});
+      // DEP-1 闭合（2026-08-21）：Toko 放行给游客，与路由层 _controlledLocations 不含 /shop
+      // 同源——商品浏览在转化漏斗最上层，登录引导推迟到加购（Epic 3）。
+      // ⚠️ 放行仅限 Toko 主页与商品详情；加购/结算/订单/地址仍受控。
+      expect(kUngatedTabs.contains(AppTab.shop), isTrue, reason: 'Toko 对游客开放');
       expect(kUngatedTabs.contains(AppTab.me), isFalse, reason: 'Me 对游客维持受控');
     });
 
@@ -128,15 +158,20 @@ void main() {
       expect(find.byType(DiaryGuestPage), findsOneWidget);
     });
 
-    testWidgets('游客点 Health → 仍弹强登录窗且不切换目的地', (tester) async {
+    // ⚠️ 本条于 2026-08-21 DEP-1 闭合时**语义反转**：第 2 位由 Health(受控) 换成 Toko(开放)。
+    //    原断言「游客点第 2 位会弹登录窗」不再成立，且不是回归 —— 商品浏览处于转化漏斗最上层，
+    //    用登录墙拦截会直接杀掉转化，登录引导推迟到加购（Epic 3）。
+    //    受控方向的守门未减：紧随其后的「游客点 Me → 仍弹强登录窗」保持不变。
+    testWidgets('游客点 Toko → 直接进入，不弹登录框（转化漏斗设计）', (tester) async {
       await _pumpGuestApp(tester);
 
-      await tester.tap(_tabButton('Health'));
+      await tester.tap(_tabButton('Toko'));
       await tester.pumpAndSettle();
 
-      expect(find.byType(LoginHardDialog), findsOneWidget);
-      // 不切换目的地：仍停在冷启动落地的 Diary 游客态
-      expect(find.byType(DiaryGuestPage), findsOneWidget);
+      expect(find.byType(LoginHardDialog), findsNothing,
+          reason: 'Toko 在 kUngatedTabs 里，与路由层 /shop 不受控同源');
+      // 确实切换了目的地：不再停在 Diary 游客态
+      expect(find.byType(DiaryGuestPage), findsNothing);
     });
 
     testWidgets('游客点 Me → 仍弹强登录窗', (tester) async {
@@ -186,7 +221,7 @@ void main() {
       // 真路径下游客态是 Tab 分支根页，底栏必须在（A1 稿亦有底栏）。
       expect(find.byType(BottomTabBar), findsOneWidget);
       expect(_tabButton('Diary'), findsOneWidget);
-      expect(_tabButton('Health'), findsOneWidget);
+      expect(_tabButton('Toko'), findsOneWidget);
       expect(_tabButton('Social'), findsOneWidget);
       expect(_tabButton('Me'), findsOneWidget);
     });

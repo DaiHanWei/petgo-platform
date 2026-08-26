@@ -262,6 +262,127 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
         org.junit.jupiter.api.Assertions.assertNotNull(saved.getCardToken());
     }
 
+    // ---------- 性别（V1.1.6 Story 1.1） ----------
+    //
+    // 本组守的是一个**曾经存在的缺陷**：编辑页的性别选择器 2026 年就画好了、能选能显示，
+    // 唯独选完不提交不入库（前端注释明写「仅前端占位」）。用户选了、保存了、退出再进来又变回未填。
+
+    @Test
+    void updatePersistsSexAndReadsBack() throws Exception {
+        User owner = newUser();
+        String token = userBearer(owner.getId());
+        mvc.perform(post("/api/v1/pet-profiles")
+                        .header(HttpHeaders.AUTHORIZATION, token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody("旺财")))
+                .andExpect(status().isCreated());
+
+        mvc.perform(patch("/api/v1/pet-profiles/me")
+                        .header(HttpHeaders.AUTHORIZATION, token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"sex":"MALE"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sex").value("MALE"));
+
+        // 真落库（不是只在响应里回显）。
+        PetProfile saved = profiles.findByOwnerId(owner.getId()).orElseThrow();
+        org.junit.jupiter.api.Assertions.assertEquals(
+                com.tailtopia.profile.domain.PetSex.MALE, saved.getSex());
+
+        // 重新 GET 一次 —— 这一步才对应用户「退出再进来」的真实路径。
+        mvc.perform(get("/api/v1/pet-profiles/me").header(HttpHeaders.AUTHORIZATION, token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sex").value("MALE"));
+    }
+
+    /**
+     * 存量档案（sex 为 NULL，迁移不回填）：不报错，且 Jackson NON_NULL 下
+     * <b>整个 sex 键不出现</b>，而不是 {@code "sex": null}。
+     */
+    @Test
+    void profileWithoutSexOmitsTheKeyEntirely() throws Exception {
+        User owner = newUser();
+        String token = userBearer(owner.getId());
+        mvc.perform(post("/api/v1/pet-profiles")
+                        .header(HttpHeaders.AUTHORIZATION, token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody("旺财")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.sex").doesNotExist());
+
+        mvc.perform(get("/api/v1/pet-profiles/me").header(HttpHeaders.AUTHORIZATION, token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sex").doesNotExist());
+    }
+
+    /**
+     * 取值域只有 MALE / FEMALE 两个（@Pattern 拦在 422）。
+     * ⚠️ 特别钉住 {@code UNKNOWN}：身份证那套性别是三值含 UNKNOWN，**两者独立不联动**，
+     * 谁若"顺手统一"把 UNKNOWN 加进来，这条就会红。
+     */
+    @Test
+    void invalidSexValuesAre422() throws Exception {
+        User owner = newUser();
+        String token = userBearer(owner.getId());
+        mvc.perform(post("/api/v1/pet-profiles")
+                        .header(HttpHeaders.AUTHORIZATION, token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody("旺财")))
+                .andExpect(status().isCreated());
+
+        for (String bad : new String[] {"UNKNOWN", "male", "OTHER", "M"}) {
+            mvc.perform(patch("/api/v1/pet-profiles/me")
+                            .header(HttpHeaders.AUTHORIZATION, token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"sex\":\"" + bad + "\"}"))
+                    .andExpect(status().isUnprocessableEntity());
+        }
+    }
+
+    /**
+     * 🛡 AC6：本接口语义是「传 null = 不改动」，<b>没有清空路径</b>。
+     * 不要照抄手机号（FR-70）的「允许清空写 null」—— 那是另一条要求，
+     * 为性别单开特例会破坏本接口的统一语义。
+     */
+    @Test
+    void sendingNullSexDoesNotClearExistingValue() throws Exception {
+        User owner = newUser();
+        String token = userBearer(owner.getId());
+        mvc.perform(post("/api/v1/pet-profiles")
+                        .header(HttpHeaders.AUTHORIZATION, token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody("旺财")))
+                .andExpect(status().isCreated());
+        mvc.perform(patch("/api/v1/pet-profiles/me")
+                        .header(HttpHeaders.AUTHORIZATION, token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"sex":"FEMALE"}
+                                """))
+                .andExpect(status().isOk());
+
+        // 显式传 null，以及整个字段缺席 —— 两种都不该清掉已存的值。
+        mvc.perform(patch("/api/v1/pet-profiles/me")
+                        .header(HttpHeaders.AUTHORIZATION, token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"sex":null,"intro":"只改简介"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sex").value("FEMALE"));
+
+        mvc.perform(patch("/api/v1/pet-profiles/me")
+                        .header(HttpHeaders.AUTHORIZATION, token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"大旺"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sex").value("FEMALE"));
+    }
+
     @Test
     void updateWhenNoProfileIs404() throws Exception {
         User owner = newUser();

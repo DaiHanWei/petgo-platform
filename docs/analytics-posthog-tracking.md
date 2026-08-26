@@ -390,3 +390,258 @@ social_user_hide_submitted       {origin: REPORT, entry: report_flow}
 ⚠️ **这条改动放弃了什么**：没有上线前的 before，**「工单总量不上升」这个主指标无法被证伪** ——
 剩下的只有上线后自己跟自己比的相对趋势。**四条反向指标不受影响**（周环比 / 分布形状 / 绝对阈值都不依赖前置基线）。
 埋点侧**无需任何改动**：本节 4 个事件在两种方案下都够用。
+
+---
+
+## 10. V1.1.6 新增埋点
+
+本节随 V1.1.6 各 story 增量补齐；需求侧清单见
+`_bmad-output/planning-artifacts/v1.1.6/埋点清单v116.md`（**两边须一致**）。
+
+### 10.1 `push_permission_state_reported`（E-21 · Story 8.1）
+
+| 项 | 值 |
+|---|---|
+| 时机 | **每次冷启动一次**，在本次启动的通知权限流程**落定之后** |
+| 属性 | `granted`（bool）—— 当前系统通知开关状态 |
+| 落点 | `lib/features/notify/domain/push_permission_state_reporter.dart`，由 `main.dart` 冷启动链路末尾调用 |
+
+**这是 FR-85（推送权限重构）唯一的裁决指标。** 其余事件（E-19 提示曝光、E-20 用户响应）
+只能解释过程 —— 「提示弹了多少次、各触发点响应如何」都回答不了「净授权率涨没涨」。
+只有本事件的**趋势**能回答。
+
+🔴 **它必须先于四个触发点上线**：晚一版不是晚点拿到数据，而是**改版前基线永久不存在**
+（§8 的 Tab 改版正因缺基线，五项核心指标里三项作废）。
+
+判读注意：
+
+1. **按启动数算授权率**，所以「一次冷启动恰好一次」是指标准确性的前提 ——
+   若 resume 也报，重度用户被反复计入，趋势会被拉向他们的个人状态。
+   实现里的一次性闸是**进程内布尔、不落盘**（落盘会变成"这台设备永远只报一次"，趋势只剩一个点）。
+2. **Android 13 以下没有「通知权限」这个概念**，`granted` 反映的是「用户有没有在系统设置里
+   关掉通知」。低版本 Android 上 `true` 偏多属正常，**跨平台绝对值不要直接比**，看同群体趋势。
+3. **ATT 未落定的启动也照实上报**。那条路径不会申请通知权限，但仍是一次真实观测；
+   跳过会让分母缺失，且缺失非随机（只缺 iPad 兼容模式 / 请求被系统吞掉的设备）。
+4. 事件名是 2026-08-18 按命名规范改名后的新名（旧名 `push_permission_state_snapshot`，
+   `snapshot` 是名词、不符合"动作在词尾且须是动词"）。**本次是首次落地；一旦发版即锁死**
+   —— 理由同 §8.9。
+
+### 10.2 `publish_page_image_source_selected`（E-28 · 2026-08-20 用户要求）
+
+| 项 | 值 |
+|---|---|
+| 时机 | 发布页点「Add」弹出来源 sheet 后，用户选了相机或相册（**sheet 已返回、真正去拍/去选之前**） |
+| 属性 | `source`：`camera` / `gallery`（直取 `MediaSource` 枚举名，稳定受控字面量） |
+| 落点 | `lib/features/content/presentation/publish_compose_page.dart` → `_pickImageSource` |
+
+**为什么值得埋**：这两条路的成本完全不同 —— 相册是「我已经有照片了」，
+相机是「我现在为发帖专门拍一张」。后者发布意愿更强，但也更容易在拍摄那一步流失。
+
+判读注意：
+
+1. **报的是「选了哪条路」，不是「取图成功」。** 挪到取图之后会变成成功率事件，
+   而"选了相机却没拍成"恰恰是想观察的流失。
+2. **点遮罩关掉 sheet 不报。** 否则占比的分母会混进"打开又关掉"的人。
+3. 一个事件 + `source` 属性，不是两个事件 —— 与同页 `publish_page_content_type_selected`
+   形状一致，看板里可直接对比占比。
+
+### 10.3 `push_permission_prompt_shown` / `push_permission_responded`（E-19 / E-20 · Story 8.2）
+
+| 项 | 值 |
+|---|---|
+| 时机 | 用户侧三点：**首次问诊后** · **建档后** · **打开通知中心**（各一次）· 兽医侧：**切换为在线**（Story 8.3，**不限次数**） |
+| 属性（曝光） | `trigger_point`、`prompt_type` |
+| 属性（响应） | `trigger_point`、`prompt_type`、`result` |
+| 落点 | `lib/features/notify/domain/push_permission_prompt.dart`（判定与上报）· `push_permission_guide_flow.dart`（触发点 1/2 的抽屉）· `notification_center_page.dart`（触发点 4 的顶部条） |
+
+**`trigger_point` 是这条 FR 的全部意义所在。** 产品 2026-08-14 决定「四个触发点先全做、
+观察一个周期后再砍」，而**砍哪个留哪个的唯一依据就是按 `trigger_point` 拆分的响应分布**。
+缺这个属性不是「埋点不全」，是**决策依据没了**。
+
+取值：
+
+| 属性 | 取值 |
+|---|---|
+| `trigger_point` | `first_consult` · `profile_created` · `notification_center` · `vet_online`（触发点 5，Story 8.3） |
+| `prompt_type` | 🛡 **恒为 `in_app_guide`** |
+| `result` | `granted` · `denied` · `settings_opened` · `dismissed` |
+
+判读注意：
+
+1. 🛡 **`prompt_type=native_dialog` 出现即实现违规**（AD-14 Rule 6）——
+   原生弹窗的机会在首启就被第二代「首启即申请」消耗掉了，那条分支是死的。
+   **这条可以配成线上告警**：一旦出现，说明有人绕过了 `PushPermissionPrompt`。
+2. ⚠️ **`result=settings_opened` 只表示跳走了，不代表真的开了。**
+   净授权率看 §10.1 的 E-21（冷启动快照）。两者别混着解读。
+3. ⚠️ **触发点 3 不存在** —— PRD 编号是 1/2/4/5，不是漏了一个。
+4. 🔴 **触发点 5（兽医切为在线，`trigger_point=vet_online`）不限次数**（Story 8.3）。
+   一个兽医一天切五次在线就产生五次曝光 ⇒ **它的曝光量天然远高于用户侧三点**。
+   横向对比四个触发点时**必须按人去重**，否则兽医那一点会把整体数据带偏 ——
+   这是模型差异的必然结果，**不是埋点缺陷**，也**不代表触发点 5 效果最好**。
+   兽医端与用户端的响应率**不可直接比**（模型不同、人群不同、动机不同）。
+   ⚠️ 兽医端此前**全流程零埋点**（G-3）；本事件是那里的**第一个也是唯一一个**事件，
+   其余兽医流程仍是黑盒。
+5. 曝光与响应**配对使用**：`_shown` 是分母、`_responded` 是分子。
+   两者都不 `await`（埋点不得阻塞用户流程 —— 这段逻辑夹在「建档完成 → 进首页」之间）。
+
+### 10.4 V1.1.6 事件全表（E-1~E-28 · 收尾于 Story 10.1）
+
+> 🔴 **本表列的是实现名。** 其中十条与 `埋点清单v116.md` 的原名不同 —— 那些名字在实现期
+> 按本项目命名规范（§8.1）逐条订正过，PRD §3.2 都写了订正块与理由，**清单当时漏了同步**，
+> 已随 Story 10.1 补回。看旧讨论/旧清单的人以本表为准。
+>
+> 🔴 **产品 2026-08-18 拍板的四个名字不在订正范围内**（`phone_prompt_responded` /
+> `push_permission_responded` / `push_permission_state_reported` / `post_share_card_sent`）——
+> 它们本身就是那次改名的产物。**一旦发版即锁死**（理由同 §8.9）。
+
+| # | 事件名（实现） | 清单原名（若不同） | 属性 | 落点 |
+|---|---|---|---|---|
+| E-1 | `social_pinned_slot_viewed` | `feed_pinned_slot_viewed` | `pin_config_id`、**`pin_type`**、`content_id` | `feed_view.dart` |
+| E-2 | `social_pinned_slot_tapped` | `feed_pinned_slot_tapped` | 同 E-1 + `jump_target` | `feed_view.dart` |
+| E-3 | `social_pinned_duplicate_viewed` | `feed_pinned_duplicate_exposed` | `content_id`、`serp_position` | `feed_view.dart` |
+| E-4 | `phone_prompt_shown` | — | **`trigger`** = `day3_open` | `phone_soft_prompt.dart` |
+| E-5 | `phone_prompt_responded` | — | **`action`**: submitted/skipped/**dismissed** | 同上 |
+| E-6 | `me_phone_save_succeeded` | `phone_saved` | **`entry`**、`is_first_time` | `phone_edit_sheet.dart` |
+| E-7 | `me_phone_save_error_shown` | `phone_save_failed` | `entry` | 同上 |
+| E-8 | `publish_image_crop_shown` | `publish_image_crop_required` | **`original_ratio`**、`batch_size` | `image_crop.dart` |
+| E-9 | `publish_image_crop_completed` | `publish_image_crop_confirmed` | **`target_ratio`**、`is_batch_lock_source` | 同上 |
+| E-10 | `publish_image_crop_exit_tapped` | `publish_image_crop_abandoned` | `original_ratio` | `publish_crop_page.dart` |
+| E-11 | `post_share_card_tapped` | — | `content_type`、**`is_private_diary`**、`has_image` | `content_detail_page.dart` |
+| E-12 | `post_share_card_generated` | — | `template`、`size`、**`duration_ms`** | `share_card_preview_page.dart` |
+| E-13 | `post_share_card_sent` | （旧名 `..._share_completed` 已废） | `channel` | 同上（**系统回调之后**） |
+| E-14 | `post_share_link_opened` | — | `open_method`、`ua_platform` | **服务端** `PostSharePageAnalytics` |
+| E-15 | `user_badge_tooltip_opened` | — | `badge_id`、**`position`** | `user_tag_row.dart` |
+| E-16 | `content_badge_tooltip_opened` | — | `badge_id`、**`position`** | `content_tag_chip.dart` |
+| E-17 | `app_notification_center_viewed` | `notification_center_opened` | `unread_count`、**`push_permission`** | `notification_center_page.dart` |
+| E-18 | `app_notification_item_tapped` | `notification_item_tapped` | **`notif_type`**、`level` | 同上 |
+| E-19 | `push_permission_prompt_shown` | — | 见 §10.3 | `push_permission_prompt.dart` |
+| E-20 | `push_permission_responded` | — | 见 §10.3 | 同上 |
+| E-21 | `push_permission_state_reported` | — | **`granted`** | 见 §10.1 |
+| E-22 | `post_like_tapped`（扩展） | — | `liked` + **新增 `source`** | `like_button.dart` |
+| E-23 | `pet_card_share_tapped` | — | **`entry`**、`has_milestone` | `growth_archive_page.dart` |
+| E-24 | `pet_card_link_opened` | — | **`page_state`**、`ua_platform`、`referrer_host` | **服务端** `CardPageAnalytics` |
+| E-25 | `pet_card_cta_tapped` | — | **`page_state`**、`ua_platform` | 同上（浏览器 → `/p/track`） |
+| E-26 | `pet_card_cta_outcome` | — | **`outcome`** | 同上（**尽力上报、会丢**） |
+| E-27 | `signup_succeeded`（扩展） | — | `entry_source` **新增 `pet_card`** | `login_guide_controller.dart` |
+| E-28 | `publish_page_image_source_selected` | — | **`source`** | 见 §10.2 |
+
+**三条口径，缺一条对应结论就做不出来：**
+
+1. **E-12 与 E-13 是两个事件，不得合并。** E-12 报「出图成功」（`duration_ms` 衡量基建性能），
+   E-13 报「系统分享菜单**回调成功**」。合成一个 = 每次预览导出都算一次分享，
+   「实际分享出去多少」只会被高估，且**事后无法修正**。
+   ⚠️ Story 9.3 当初就是合成一个的，Story 10.1 拆开了。
+2. **E-4 是 E-5 的分母。** 拿 E-5 的条数当分母算响应率会系统性高估
+   —— 那是"作答数"，与"曝光数"在崩溃/杀进程/埋点丢失时并不相等。
+3. **`open_method` 靠二维码印的那份 URL 带 `?src=qr`。**
+   码里和文字里印同一个 URL，服务端就永远分不出扫码与点链接 ——
+   而这是**下载二维码唯一的验收依据**（它占了卡片页脚近一半版面）。
+
+### 10.5 🛡 六项已知缺口：本版本**不解决、不承诺**
+
+> **写明缺口不是免责声明，是防止误判。** 看板上没数据的时候，分析的人必须能立刻分清
+> 「埋点坏了」和「这里从来没埋」。否则每次都要白查一轮。
+
+| # | 缺口 | 说明 |
+|---|---|---|
+| G-1 | **深链归因基建缺失** | 未装 App 的用户「安装 → 打开 → 注册」这一段拼不出来（AD-16 Rule 5）。E-27 的 `pet_card` **只覆盖已装用户**（深链直接进 App）。要覆盖未装用户需要 deferred deeplink 一整套基建，不在本版本。 |
+| G-2 | **兽医端全流程仍零埋点** | 本版本触发点 5（Story 8.3 · `trigger_point=vet_online`）是兽医端**第一个也是唯一一个**事件。派单、接单、回复、结束会话 —— 全是黑盒。 |
+| G-3 | **stag / prod 共用同一个 project token** | 打包时须用构建参数覆盖。忘了覆盖 ⇒ 测试流量混进生产看板，且**无法事后剔除**（事件里没有环境维度）。 |
+| G-4 | **后台侧完全无埋点** | 顶置配置、装饰标签打标、用户标签分配、批量催填 —— 这些**运营操作全无记录**。一旦出现「这条内容为什么被顶置了」「谁给这个用户打了标签」的争议，**没有任何客观依据可查**。⚠️ 出事时会先被当成"埋点坏了"去查，白费一轮 —— 所以这条尤其要写在这里。 |
+| G-6 | **没有曝光类埋点 ⇒「人均浏览深度」做不出来** | 🔴 数据侧从来没有 Feed 曝光事件（内容进入视口时上报）。后果有两处：① 灰度观测建议里的「人均浏览深度」这个指标**做不出来**；② 推荐算法的曝光衰减只能用「序列下发即记曝光」的口径（Story 16.1 AC2），代价是"下发但用户没滚到"的内容也被记入。🛡 Story 16.5 明确**不补**曝光埋点 —— 补它要一整套视口上报 + 回传，且量级远大于现有任何事件。 |
+| G-5 | **访客登录态属性做不出来** | `viewer_state`（访客是否已有账号）与 `is_app_installed`：H5 是无登录态公开页，服务端判不出来。🛡 **不得写进任何验收标准**（AD-16 Rule 4）—— 这不是「暂时没做」，是**做不出来**。也**不要拿 cookie 有无去猜新老访客**，那不是同一回事。已由 `PostSharePageAnalyticsIntegrationTest` 与 `CardPageAnalyticsIntegrationTest` 各钉一条「不得出现这两个属性」的测试。 |
+
+### 10.6 可配成线上告警的两条护栏
+
+两条都是**「实现违背规格」型**，与 §8.6 的 T-12 是同一类用法：出现即说明代码被绕过，
+而不是数据异常。
+
+| # | 出现即异常的组合 | 为什么 | 怎么查 |
+|---|---|---|---|
+| 护栏一 | `push_permission_prompt_shown` 且 `trigger_point=notification_center` 且 `prompt_type=native_dialog` | FR-85 于 2026-08-05 定稿「触发点 4 **永不**唤起原生弹窗」（原生弹窗机会留给 1/2/5）。AD-14 Rule 6。 | PostHog 建一个该组合的 insight，阈值 > 0 即告警。命中说明有人绕过了 `PushPermissionPrompt`。 |
+| 护栏二 | 同一设备同一用户出现**多条** `push_permission_prompt_shown` 且 `trigger_point ≠ vet_online` | 除兽医端外，每个触发点每设备每用户**最多一条**。重复即 AD-14 的四个标记键实现有误。 | 按 `distinct_id` + `trigger_point` 分组计数 > 1。🔴 **必须排除 `vet_online`** —— 触发点 5 不受"各一次"限制（2026-08-05 确认），不排除会天天误报。 |
+
+**§8.6 那条 V1.1.2 的护栏继续有效**：健康类里程碑（M3/M4/M5/M9）出现
+`path=checkin` 的 `milestone_achieved`，说明"取消手动打卡"的后端护栏被绕过。
+
+### 10.7 明确不做（本版本范围外）
+
+- **后台侧埋点** —— 见 G-4，本版本只写明缺口
+- **兽医端其余流程埋点** —— 见 G-2
+- **深链归因基建** —— 见 G-1，需独立基建
+
+
+### 10.8 `feed_tab` / `rank_mode`（Story 16.5 · FR-95）
+
+首页推荐算法上线后，Feed 相关事件补两个属性。**两个都要有，缺一个就都不带。**
+
+| 属性 | 取值 | 谁给的 |
+|---|---|---|
+| `feed_tab` | `all` / `daily` / `moment` / `tips` | 客户端（当前分类 Tab） |
+| `rank_mode` | `recommend` / `chrono` / `mixed` / `unknown` | 🔴 **服务端下发**（`FeedPageResponse.rankMode`） |
+
+**🔴 为什么 `rank_mode` 必须服务端给、客户端推不出来**
+
+降级链级别 4 会让 **ALL Tab 也走时间倒序**，而那对客户端完全无感。
+客户端按「是不是 ALL Tab」自己判断的话，降级期间的数据会被算进推荐序的效果里 ——
+而那正是 FR-95 参数校准要看的数（参数第一次校准必然在发版之后，OQ-B1）。
+
+**🔴 为什么只有 `feed_tab` 不够**
+
+降级时 `feed_tab=all` 但 `rank_mode=chrono`。只看 tab 会把两条排序路径的数据混在一起。
+
+**两个"说不清"的取值，都是有意保留的**
+
+- `mixed` —— 同一次刷新里各页路径不一致（首屏推荐序、第二页恰好降级）。
+  挑一边冒充会污染归因：记成 `recommend` 就把降级期间的数据算进效果里，
+  记成 `chrono` 又把推荐序的首屏效果丢掉。
+- `unknown` —— 服务端没下发（老客户端遇到新后端不会有这个问题；反过来会）。
+  🛡 **不默认成任何一边**，猜错哪边都会污染归因。
+
+分析时：算推荐序效果只取 `rank_mode=recommend`；`mixed` 与 `unknown` **整批筛掉**。
+
+**带这两个属性的事件**
+
+| 事件 | 为什么需要 |
+|---|---|
+| `post_like_tapped`（`source=feed` 时） | 首页点赞是效果归因的**主要信号**（无曝光埋点，见 G-6） |
+| `social_pinned_slot_viewed` / `_tapped` | 顶置位在两条排序路径下的表现不同 |
+| `social_pinned_duplicate_viewed` | 🔴 尤其需要：降级到时间倒序时 `serp_position` 根本不是算法排的，混在一起看会得出错误结论 |
+
+🛡 **详情页的点赞不带这两个属性**（`source=detail`）—— 那里没有「哪个 Tab、哪条排序路径」
+这回事，硬填会在看板上造出不存在的 Feed 会话。
+
+🛡 **「我的发布」不带 `rankMode`**（服务端返回 null，Jackson 省略）——
+给它填个 `chrono` 会让它被算进首页排序的分母里。
+
+### 10.9 `id_card_share_*`（Story 18.2 · FR-96 身份证分享奖励）
+
+三个事件，命名按 `模块_对象_动作`：`id_card`（模块）+ `share`（对象）+ 动作。
+
+| 事件 | 何时报 | 属性 | 判读 |
+|---|---|---|---|
+| `id_card_share_tapped` | 点卡面页的「分享」按钮（截图之前） | `card_style`（0=KTP / 1=护照 / 2=学生卡） | 漏斗起点；顺带看哪种卡面更愿意被分享 |
+| `id_card_share_sent` | 系统分享面板回调 **success** | `channel` | 真的分享出去多少、走哪个渠道 |
+| `id_card_share_rewarded` | 上报发放结果之后 | `rewarded`（bool） | 发放命中率 |
+
+**判读要点：**
+
+- `tapped → sent` 的落差就是「打开了面板又取消」。⚠️ 这个落差**不能当流失率看**：
+  部分平台压根不回调 success（`CardExport.shareImage` 那段注释记了这件事），
+  所以 `sent` 是**低估**的。
+- `rewarded=false` 的占比会**很快趋近 100%**，这是设计使然而不是故障：
+  奖励按**宠物档案**去重、一个档案一辈子只发一次（Story 18.2 · AC4）。
+  所以这个属性要看的是**新用户首次分享**那一段，不是全时段平均。
+- 🛡 **刻意没有「为什么没发」这个属性**。服务端也不返回原因（档案已拿过 / 日上限 /
+  月度上限 / 总开关关闭对客户端是同一件事）。
+  🔴 有了原因就会有人把它做成「你的额度用完了」的文案，而那会诱导
+  「攒着别分享」或「月初集中刷满」——这正是 18.1 AC3 明令不告知的原因。
+
+**⚠️ 不要与这两个事件混：**
+
+| 别混的 | 是什么 |
+|---|---|
+| `pet_card_share_tapped` | **宠物主页名片**（FR-92 的对外 H5），不是身份证卡面 |
+| `post_share_card_tapped` | **单条内容分享卡**（FR-73） |
+
+三者都是"分享"，但对象、落地页、付费边界完全不同。

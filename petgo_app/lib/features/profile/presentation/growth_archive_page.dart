@@ -23,6 +23,7 @@ import '../domain/pet_profile.dart';
 import '../domain/share_service.dart';
 import '../domain/timeline_item.dart';
 import 'diary_guest_page.dart';
+import 'visitor_archive_view.dart';
 import 'widgets/archive_calendar.dart';
 import 'widgets/diary_header.dart';
 import 'widgets/share_fab.dart';
@@ -46,6 +47,15 @@ enum DiaryUserState {
 
   /// 状态 A 且已建档 → 真实成长档案页。
   ownerWithProfile,
+
+  /// 访客（V1.1.6 Story 2.3 · AD-4）：拿着分享 token 看**别人的**宠物 → 只读态。
+  ///
+  /// ⚠️ **与登录态无关**：已登录非作者与未登录访客看到**同一套**只读视图
+  /// （AD-2 Rule 2）。判据只有一个 —— 有没有分享 token。
+  ///
+  /// ⚠️ 「作者本人点自己的链接该落回自己的档案页」（AD-2 Rule 3）是
+  /// **Story 2.4 深链分流**的职责，不在本页判定里做。
+  visitor,
 }
 
 /// AD-15 唯一状态判定：按序（游客 → 非有宠 → 有无档案）分发，不留隐式 fallback。
@@ -60,7 +70,27 @@ DiaryUserState resolveDiaryUserState({
   required bool isLoggedIn,
   required String? petStatus,
   required bool hasPetProfile,
+  String? visitorToken,
+  String? myCardToken,
 }) {
+  // V1.1.6 Story 2.3/2.4：带 token 时的判定。
+  if (visitorToken != null && visitorToken.isNotEmpty) {
+    // 🛡 作者本人点到自己分享出去的链接（比如从自己的聊天记录里翻出来）
+    // → 落**自己的**档案页、保留全部管理入口（AD-2 Rule 3）。
+    //
+    // ⚠️ 这个判定**只能在这里做**：Diary 页的状态判定是单一入口（AD-15）。
+    // 放到路由层判等于开第二处判定，两处迟早分叉 ——
+    // 而分叉的表现要么是作者丢了管理入口，要么是**访客拿到了管理入口**（后者严重得多）。
+    //
+    // ⚠️ myCardToken 为 null 有两种情况，**都按访客处理**：未登录（无从比对，
+    // 且不该为了比对去拉档案 —— 没有令牌会 401 并弹全局强登录窗），
+    // 或档案尚未加载完（加载完会自然重建切换，不必为此让所有访客白等一次网络往返）。
+    if (myCardToken != null && myCardToken == visitorToken) {
+      return DiaryUserState.ownerWithProfile;
+    }
+    // 已登录非作者与未登录访客看到**同一套**只读视图（AD-2 Rule 2）。
+    return DiaryUserState.visitor;
+  }
   final app = resolveAppUserState(
     isLoggedIn: isLoggedIn,
     // 兽医与用户侧路由互斥（router 层守卫），走不到本页 → 此处恒 false。
@@ -87,7 +117,15 @@ DiaryUserState resolveDiaryUserState({
 /// ⚠️ 本页**任何其它位置不得再判用户状态**（AD-15 核心约束）——要加状态相关分支，
 /// 一律扩 [DiaryUserState] 并在下面的 switch 里布线。
 class GrowthArchivePage extends ConsumerWidget {
-  const GrowthArchivePage({super.key});
+  const GrowthArchivePage({super.key, this.visitorToken});
+
+  /// 分享 token（V1.1.6 Story 2.3/2.4）。非 null = 从分享链接进来的。
+  ///
+  /// ⚠️ 由带 token 的**独立路由**注入（AD-2 Rule 6）；作者态路由永远传 null。
+  ///
+  /// ⚠️ 非 null **不等于**一定渲染只读态：作者本人点自己的链接会落回作者态
+  /// （AD-2 Rule 3），判定见 [resolveDiaryUserState]。
+  final String? visitorToken;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -97,8 +135,14 @@ class GrowthArchivePage extends ConsumerWidget {
     // 仅「有宠路径」订阅档案：游客无令牌，订阅会打出 401 → 全局强登录引导
     // （门控在 2.4 放行游客进本页后即暴露）；非有宠态本就无档案可拉。
     // 该条件与 resolveDiaryUserState 返回两个 owner 态的条件等价，故下面 `profileAsync!` 安全。
+    //
+    // ⚠️ V1.1.6 Story 2.3/2.4：访客态**只在已登录时**订阅自己的档案，
+    // 且只为一件事 —— 比对「这个 token 是不是我自己的」（AD-2 Rule 3）。
+    // 🛡 **未登录时绝不订阅**：没有令牌的请求会 401，而 401 会弹出全局强登录窗，
+    // 正好打破「点分享链接不要求登录」这条（否则会把用户推回浏览器）。
     final ownerPath = auth.isLoggedIn && (petStatus == null || petStatus == 'HAS_PET');
     final profileAsync = ownerPath ? ref.watch(petProfileProvider) : null;
+    final myProfile = profileAsync?.asData?.value;
 
     // ===== AD-15：全页唯一的用户状态判定 + 分发 =====
     final state = resolveDiaryUserState(
@@ -107,13 +151,16 @@ class GrowthArchivePage extends ConsumerWidget {
       // 「已建档」以真实档案为准，不信任登录响应里可能 stale 的 hasPetProfile（与「我的」页同口径）。
       // 加载中 / 失败先落 ownerWithoutProfile，两者的具体渲染由 _ownerBranch 内的
       // when(loading/error) 承接 —— 行为与改版前完全一致。
-      hasPetProfile: profileAsync?.asData?.value != null,
+      hasPetProfile: myProfile != null,
+      visitorToken: visitorToken,
+      myCardToken: myProfile?.cardToken,
     );
 
     return switch (state) {
       DiaryUserState.guest => const DiaryGuestPage(),
       DiaryUserState.nonOwner =>
         _NonOwnerView(onChangeStatus: () => _openStatusEditor(context, ref)),
+      DiaryUserState.visitor => VisitorArchiveView(token: visitorToken!),
       DiaryUserState.ownerWithoutProfile ||
       DiaryUserState.ownerWithProfile =>
         _ownerBranch(context, ref, profileAsync!, state),
@@ -312,7 +359,7 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
           // 页头（标题行 + 信息卡 + 健康记录入口 + 里程碑进度）走 Story 2.2 抽出的共用组件，
           // 与游客态同一份实现（3.3 要求两态页头一致）。入口跳转由本页注入。
           DiaryHeader(
-            profile: widget.profile,
+            profile: widget.profile.header,
             happyCount: stats?.happyMomentCount,
             consultCount: stats?.consultCount,
             milestoneCompleted: stats?.milestoneCompleted,
@@ -373,6 +420,20 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
         ref.invalidate(shareFabAnimatedShownProvider);
       },
       onPressed: (origin) async {
+        // E-23 `pet_card_share_tapped`（Story 10.1 补齐）：**FR-92 这条漏斗的起点**。
+        // 「名片分享 → 下载转化」此前一处埋点都没有，E-24 ÷ E-23 才算得出
+        // 「分享出去到底有没有人点」。
+        //
+        // 🔴 `has_milestone` 判据是「**除建档那条之外**还有没有已完成里程碑」，
+        //    不是「里程碑数 > 0」。建档动作本身就会自动完成一条（C-S1「Profil dibuat」），
+        //    所以任何档案都 ≥ 1 —— 按 `> 0` 判会让这个属性**恒为 true**、彻底没用。
+        //    1-2 在 H5 的 `page_state` 上正是踩过这个坑（见 CardPageAnalytics 的注释）。
+        //    这里用页头已经加载好的统计数，不额外发请求。
+        final done = ref.read(archiveStatsProvider).asData?.value.milestoneCompleted;
+        Analytics.capture('pet_card_share_tapped', {
+          'entry': 'archive_header',
+          'has_milestone': (done ?? 0) > 1,
+        });
         // 传按钮矩形作 iOS 分享面板锚点 + await + 兜错（bug 20260707：iOS 点了没反应）。
         try {
           await ref.read(shareServiceProvider)(

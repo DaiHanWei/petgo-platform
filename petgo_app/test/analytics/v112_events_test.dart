@@ -228,6 +228,43 @@ void main() {
         // 推送疲劳终点信号（2026-08-18，V1.4.0 Story 9.3）：撤销授权发生在 notify 模块的
         // 检测点上，混进 me_ 会让「在设置页撤销」与「冷启动才发现」看着像两回事。
         'notify_',
+        // 手机号采集（V1.1.6 FR-70 / Story 7.2）。模块是「手机号这件事」——
+        // 它横跨软引导浮层与设置页常驻入口两处界面，不属于任何单页；
+        // `phone_*` 一眼可读，符合本规则的用意。⚠️ 新模块入表，非为遗留事件放宽。
+        'phone_',
+        // 推送权限（V1.1.6 FR-85 / Story 8.1）。模块是「推送权限」而非某个页面 ——
+        // 它跨冷启动与四个触发点，本来就不属于任何单页；`push_permission_*` 一眼可读，
+        // 符合本规则的**用意**（产品看得出是哪个功能）。
+        // ⚠️ 这是**新模块**入表，不是为遗留事件放宽规则（那种情况请加 legacyEvents）。
+        'push_',
+        // 单条内容分享（V1.1.6 FR-73 / Story 9.3）。模块是「一条内容（post）」——
+        // 分享入口在详情页，但事件描述的对象是这条内容本身，`post_*` 一眼可读。
+        // ⚠️ 表里原本没有 `post_`，而 `post_like_tapped` 早已在用（见 legacyEvents）——
+        // 这次是把它作为**正式模块**入表，不是为遗留事件放宽规则。
+        // 🔴 名字由产品 2026-08-18 按命名规范定为 `post_share_card_sent`；
+        //    story 明令**不许**改名（改名等于推翻已闭合的 OA-7），所以扩表、不改名。
+        'post_',
+        // 用户运营标签（V1.1.6 FR-74 / Story 10.1 的 E-15）。模块是「用户身上的标签」——
+        // 它出现在四处**互不相干**的界面（首页卡、详情页、评论列表、迷你名片），
+        // 挂到任何单页前缀下都会误导（`social_badge_*` 会让人以为只有首页有）。
+        // 名字由产品定为 `user_badge_tooltip_opened`，扩表、不改名。
+        'user_',
+        // 内容装饰标签（V1.1.6 FR-75 / Story 10.1 的 E-16）。同上，跨首页/详情/Diary 三处。
+        // ⚠️ 表里原本没有 `content_`，而 `content_publish_submitted` 早已在用
+        // （见 legacyEvents）—— 这次是把它作为**正式模块**入表，不是为遗留事件放宽规则。
+        'content_',
+        // 宠物名片对外分享（V1.1.6 FR-92 / Story 10.1 的 E-23）。
+        // 🔴 与 App 内的 `diary_*` 刻意分开：`pet_card_*` 这一组四个事件里有三个是
+        //    **服务端从 H5 页上报**的（E-24~E-26），和 App 内的 Diary 页不是一回事。
+        //    共用前缀会让人把两组数混着看。
+        'pet_card_',
+        // 宠物身份证卡面分享奖励（FR-96 / Story 18.2）。
+        // 🔴 与 `pet_card_` 刻意分开：那一组是**宠物主页对外 H5 名片**（FR-92），
+        //    这一组是**身份证卡面图片**（FR-49A 那条链、带水印、有 HD 付费点）。
+        //    两者的对象、落地形态、付费边界完全不同，共用前缀会让人把两组分享数混着看
+        //    ——而"分享了多少次"正是这两个功能各自的核心指标。
+        // ⚠️ 这是**新模块**入表，不是为遗留事件放宽规则。
+        'id_card_',
       ];
       // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
       const allowedSuffixes = <String>[
@@ -235,6 +272,39 @@ void main() {
         '_succeeded', '_completed', '_landed_on_tab', '_achieved',
         // 问诊漏斗节点（2026-08-06）：下单提交 / 流程开始。
         '_submitted', '_started',
+        // 用户对提示的响应（V1.1.6 Story 8.2）：`_responded` 与 `_tapped` 的区别在于
+        // **它是对一个「被问」的回答**，取值有多档（granted / denied / settings_opened /
+        // dismissed），而不是单一动作。分母是提示曝光数（`_shown`），配对使用。
+        // 🔴 8-1 刻意**没有**提前把它加进来 —— 白名单里放尚未用到的条目，
+        //    就失去了「改动时被迫想一次」的作用。本 story 用到了才加。
+        '_responded',
+        // 状态上报（V1.1.6 Story 8.1）：`_reported` = 端上主动上报一次当前状态，
+        // 与「用户做了什么」的 _tapped/_selected 区分开 —— 这类事件没有用户动作，
+        // 分母是启动数而不是曝光数，混在一起会让判读口径错位。
+        // 🔴 产品 2026-08-18 定名时正是把旧名 `..._state_snapshot` 改成了它
+        //    （snapshot 是名词，不满足「动作在词尾且须是动词」），OA-7 已闭合。
+        '_reported',
+        // 分享已递给系统（V1.1.6 Story 9.3）：`_sent` = 出图完成、内容已交给系统分享面板。
+        // 🔴 刻意**不用** `_completed` —— 产品 2026-08-18 定名时的理由是
+        //    「completed 不如 sent 明确」：我们只知道递出去了，不知道对方到底发没发出。
+        //    `_completed` 会让人误读成"分享成功送达"。
+        '_sent',
+        // 出图完成（V1.1.6 Story 10.1 的 E-12 `post_share_card_generated`）：
+        // `_generated` = **系统产出了一个东西**，与用户动作（_tapped）分得开。
+        // 🔴 刻意不并进 `_completed`：这条事件的价值全在 `duration_ms`（生成基建性能），
+        //    它衡量的是机器而不是人，混进"用户完成了某步"那一档会让口径含混。
+        '_generated',
+        // 提示层被打开（V1.1.6 Story 10.1 的 E-15/E-16 tooltip）：
+        // `_opened` = **用户的动作让某个东西打开了**，与 `_viewed`（被动曝光、用户没做什么）
+        // 是两回事。tooltip 必须点一下才出来，记成 `_viewed` 会让它和真正的曝光事件
+        // 在同一维度上被拿来比。
+        // ⚠️ 也正因为这条界线，E-17 通知中心用的是 `_viewed`（打开页面即曝光，不是点某个东西）。
+        '_opened',
+        // 奖励发放结果（FR-96 / Story 18.2）：`_rewarded` = 系统就这次分享**做出了发放判定**，
+        // 属性 `rewarded`(bool) 说明发没发。
+        // 🔴 刻意不用 `_succeeded`：那会让"没发"看起来像失败，而"没发"是**预期的常态**
+        //    （按档案去重，一个档案一辈子只发一次），把它记成失败会让告警天天响。
+        '_rewarded',
       ];
       for (final e in eventNamesInSource()) {
         if (legacyEvents.contains(e)) continue;
@@ -425,6 +495,60 @@ void main() {
       expect(ev.props!['type'], ContentType.daily.wire);
       expect(ev.props!['is_default'], isFalse, reason: '已建档用户默认是 Diary，选 Moment 不是默认值');
       expect(ev.props!['has_pet_profile'], isTrue);
+    });
+
+    /// 图片来源选择（2026-08-20 用户要求）：发布页点「Add」后弹的 sheet 里，
+    /// 用户选了相机还是相册。
+    ///
+    /// **为什么值得埋**：这两条路的成本完全不同 —— 相册是"我已经有照片了"，
+    /// 相机是"我现在为发帖专门拍一张"。后者说明发布意愿更强、但也更容易在拍摄这一步流失。
+    /// 一个事件 + `source` 属性（不是两个事件），与同页 `publish_page_content_type_selected`
+    /// 的形状一致，看板里可直接对比占比。
+    testWidgets('选相机 / 选相册上报 publish_page_image_source_selected（source）', (tester) async {
+      tester.view.physicalSize = const Size(1200, 3200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_composeApp());
+      await tester.pumpAndSettle();
+
+      // 相册
+      events.clear();
+      await tester.tap(find.byKey(const ValueKey('publishAddImage')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('publishPickGallery')));
+      await tester.pumpAndSettle();
+      expect(_one('publish_page_image_source_selected').props!['source'], 'gallery');
+
+      // 相机
+      events.clear();
+      await tester.tap(find.byKey(const ValueKey('publishAddImage')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('publishPickCamera')));
+      await tester.pumpAndSettle();
+      expect(_one('publish_page_image_source_selected').props!['source'], 'camera');
+    });
+
+    /// 🛡 关掉 sheet 而不选 —— **不该**产生这个事件。
+    /// 否则「选了哪个来源」的分母会混进"打开又关掉"的人，占比失真。
+    testWidgets('关掉 sheet 不选来源 → 不报事件', (tester) async {
+      tester.view.physicalSize = const Size(1200, 3200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_composeApp());
+      await tester.pumpAndSettle();
+      events.clear();
+
+      await tester.tap(find.byKey(const ValueKey('publishAddImage')));
+      await tester.pumpAndSettle();
+      // 点 sheet 外的遮罩关掉
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+
+      expect(events.where((e) => e.event == 'publish_page_image_source_selected'), isEmpty);
     });
 
     testWidgets('关同步开关上报 publish_page_sync_to_moment_toggled(enabled=false)——本版本最关键的假设验证', (tester) async {

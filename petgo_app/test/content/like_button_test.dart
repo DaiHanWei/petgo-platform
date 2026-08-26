@@ -37,7 +37,7 @@ Future<void> _pump(WidgetTester tester, ProviderContainer container) async {
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
-        body: LikeButton(postId: 5, initialLiked: false, initialCount: 3),
+        body: LikeButton(postId: 5, initialLiked: false, initialCount: 3, source: 'detail'),
       ),
     ),
   ));
@@ -53,7 +53,7 @@ void main() {
 
     await _pump(tester, container);
     expect(find.text('3'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('detailLikeButton')));
+    await tester.tap(find.byKey(const ValueKey('likeButton_5')));
     await tester.pumpAndSettle();
     expect(find.text('4'), findsOneWidget); // 后端真值
     expect(repo.likeCalls, 1);
@@ -66,7 +66,7 @@ void main() {
     container.read(authControllerProvider.notifier).applyLogin(_user());
 
     await _pump(tester, container);
-    await tester.tap(find.byKey(const ValueKey('detailLikeButton')));
+    await tester.tap(find.byKey(const ValueKey('likeButton_5')));
     await tester.pumpAndSettle();
     expect(find.text('3'), findsOneWidget); // 回滚到原值
   });
@@ -77,7 +77,7 @@ void main() {
     addTearDown(container.dispose); // 默认游客态
 
     await _pump(tester, container);
-    await tester.tap(find.byKey(const ValueKey('detailLikeButton')));
+    await tester.tap(find.byKey(const ValueKey('likeButton_5')));
     await tester.pumpAndSettle();
     expect(find.byType(LoginHardDialog), findsOneWidget);
     expect(repo.likeCalls, 0);

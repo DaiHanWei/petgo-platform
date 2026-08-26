@@ -27,13 +27,21 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.mock.web.MockMultipartFile;
 
-/** L0（Story 9.8 Part 2）：批量逐条发 + 内容 hash 去重 + 虚拟账号校验。纯 Mockito。 */
+/**
+ * L0（Story 9.8 Part 2）：批量逐条发 + 内容 hash 去重 + 发布身份校验。纯 Mockito。
+ *
+ * <p>⚠️ V1.1.6 Story 12.1 起，「谁能当作者」的判定不再是这里的一句
+ * {@code accountType != VIRTUAL}，而是问身份池（{@link AdminPublishIdentityService#isInPool}）——
+ * 所以本类给它一个 mock。<b>池内/池外的真实语义在
+ * {@code AdminPublishIdentityIntegrationTest} 里跑真库</b>，这里只验批量逻辑本身。
+ */
 class AdminSeedBatchServiceTest {
 
     private UserRepository users;
     private ContentService content;
     private SeedContentHashRepository hashes;
     private AdminAuditService audit;
+    private AdminPublishIdentityService identities;
     private AdminSeedBatchService svc;
 
     @BeforeEach
@@ -42,7 +50,14 @@ class AdminSeedBatchServiceTest {
         content = Mockito.mock(ContentService.class);
         hashes = Mockito.mock(SeedContentHashRepository.class);
         audit = Mockito.mock(AdminAuditService.class);
-        svc = new AdminSeedBatchService(users, content, hashes, audit);
+        identities = Mockito.mock(AdminPublishIdentityService.class);
+        // 默认：虚拟账号在池内、不是"运营真实账号"。各用例按需覆盖。
+        when(identities.isInPool(any())).thenAnswer(inv -> {
+            User u = inv.getArgument(0);
+            return u.getAccountType() == com.tailtopia.auth.domain.AccountType.VIRTUAL;
+        });
+        when(identities.isRealPublishIdentity(Mockito.anyLong())).thenReturn(false);
+        svc = new AdminSeedBatchService(users, content, hashes, identities, audit);
         when(content.publish(Mockito.anyLong(), any(), anyString()))
                 .thenReturn(Mockito.mock(ContentPostResponse.class));
     }
@@ -57,9 +72,11 @@ class AdminSeedBatchServiceTest {
     @Test
     void publishesEachLineUnderVirtualAccount() {
         User v = virtual(50L);
-        when(hashes.existsById(anyString())).thenReturn(false);
+        // 🔴 V1.1.6 Story 13.4：去重判据加了**作者维度** —— 原先是 existsById(hash) 单列。
+        when(hashes.existsByContentHashAndAuthorId(anyString(), Mockito.anyLong()))
+                .thenReturn(false);
 
-        BatchResult r = svc.publishBatch(50L, "第一条\n第二条 ||| https://x/a.jpg, https://x/b.jpg\n\n", 7L);
+        BatchResult r = svc.publishBatch(50L, "第一条\n第二条 ||| https://x/a.jpg, https://x/b.jpg\n\n", 7L, true);
 
         assertThat(r.published()).isEqualTo(2);
         assertThat(r.skipped()).isEqualTo(0);
@@ -78,21 +95,23 @@ class AdminSeedBatchServiceTest {
     void skipsDuplicateContentByHash() {
         virtual(50L);
         // 首条 hash 已存在 → 跳过；次条新 → 发。
-        when(hashes.existsById(anyString())).thenReturn(true, false);
+        when(hashes.existsByContentHashAndAuthorId(anyString(), Mockito.anyLong()))
+                .thenReturn(true, false);
 
-        BatchResult r = svc.publishBatch(50L, "重复内容\n新内容", 7L);
+        BatchResult r = svc.publishBatch(50L, "重复内容\n新内容", 7L, true);
 
         assertThat(r.published()).isEqualTo(1);
         assertThat(r.skipped()).isEqualTo(1);
         verify(content, times(1)).publish(eq(50L), any(), anyString());
     }
 
+    /** 池外账号（这里是个普通真实用户）不能当作者 —— 判据已从"账号类型"换成"在不在池内"。 */
     @Test
-    void rejectsNonVirtualAuthor() {
+    void rejectsAuthorOutsideThePool() {
         User real = User.newGoogleUser("g", "e", "n", null);
         setId(real, 9L);
         when(users.findById(9L)).thenReturn(Optional.of(real));
-        assertThatThrownBy(() -> svc.publishBatch(9L, "x", 7L)).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> svc.publishBatch(9L, "x", 7L, true)).isInstanceOf(AppException.class);
         verify(content, never()).publish(Mockito.anyLong(), any(), anyString());
     }
 
@@ -100,13 +119,32 @@ class AdminSeedBatchServiceTest {
     void rejectsDisabledVirtualAccount() {
         User v = virtual(50L);
         v.setEnabled(false);
-        assertThatThrownBy(() -> svc.publishBatch(50L, "x", 7L)).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> svc.publishBatch(50L, "x", 7L, true)).isInstanceOf(AppException.class);
+    }
+
+    /**
+     * 🛡 池内真实账号 + 调用方**没有** {@code seed.publish_as_real} ⇒ 挡下。
+     *
+     * <p>这个布尔是**显式入参**而不是服务里偷读 SecurityContext ——
+     * 三处发布入口都要做这个检查，而"忘记检查"是静默的；做成参数就让漏掉变成编译错误。
+     */
+    @Test
+    void rejectsRealIdentityWhenCallerLacksTheDedicatedPermission() {
+        User real = User.newGoogleUser("g2", "e2", "n2", null);
+        setId(real, 77L);
+        when(users.findById(77L)).thenReturn(Optional.of(real));
+        when(identities.isInPool(real)).thenReturn(true);
+        when(identities.isRealPublishIdentity(77L)).thenReturn(true);
+
+        assertThatThrownBy(() -> svc.publishBatch(77L, "x", 7L, false))
+                .isInstanceOf(AppException.class);
+        verify(content, never()).publish(Mockito.anyLong(), any(), anyString());
     }
 
     @Test
     void rejectsEmptyBatch() {
         virtual(50L);
-        assertThatThrownBy(() -> svc.publishBatch(50L, "   ", 7L)).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> svc.publishBatch(50L, "   ", 7L, true)).isInstanceOf(AppException.class);
     }
 
     @Test

@@ -2,13 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/app.dart';
+import 'package:tailtopia/features/shop/data/shop_repository.dart';
+import 'package:tailtopia/features/shop/domain/shop_product.dart';
 import 'package:tailtopia/core/theme/colors.dart';
 import 'package:tailtopia/core/theme/motion.dart';
 import 'package:tailtopia/shared/widgets/app_shell.dart';
 import 'package:tailtopia/shared/widgets/bottom_tab_bar.dart';
 
 Future<void> _pumpApp(WidgetTester tester) async {
-  await tester.pumpWidget(const ProviderScope(child: TailTopiaApp()));
+  await tester.pumpWidget(ProviderScope(
+    overrides: [
+  // Toko 现为第 2 位 Tab（DEP-1 闭合）。打桩商品列表，否则点进去会走真实 dio 请求，
+  // 测试环境无后端 → 挂在 30s receiveTimeout 上（表现为 pumpAndSettle 不收敛 / pending timer）。
+      shopProductsProvider.overrideWith((ref, category) async => <ShopProductSummary>[]),
+    ],
+    child: const TailTopiaApp(),
+  ));
   await tester.pumpAndSettle();
 }
 
@@ -33,7 +42,7 @@ void main() {
     // 'Diary' 同时出现在底部导航(tabProfile)与 Feed 分类 tab(feedTabGrowth=GROWTH_MOMENT)，
     // 故 findsWidgets（与 id 'Diary' 同理）。bug 20260706-248：Growth→Diary、Consult→Health。
     expect(find.text('Diary'), findsWidgets);
-    expect(find.text('Health'), findsOneWidget);
+    expect(find.text('Toko'), findsOneWidget);
     expect(find.text('Me'), findsOneWidget);
   });
 
@@ -56,10 +65,10 @@ void main() {
   // AC2 — 点击 Tab 切换目的地。
   testWidgets('AC2: tapping a tab switches destination', (tester) async {
     await _pumpApp(tester);
-    await tester.tap(find.text('Health'));
+    await tester.tap(find.text('Toko'));
     await tester.pumpAndSettle();
-    // 问诊页占位标题出现（active 时标题由 body 渲染）。bug 20260706-248：Consult→Health。
-    expect(find.text('Health'), findsWidgets);
+    // DEP-1 闭合后第 2 位是 Toko；切过去后底栏标签仍在（active 时页面自身亦有标题）。
+    expect(find.text('Toko'), findsWidgets);
   });
 
   // AC3 — i18n 默认英语。

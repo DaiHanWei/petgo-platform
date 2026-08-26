@@ -2,6 +2,7 @@ package com.tailtopia.profile.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -128,6 +129,48 @@ class IdCardEndpointIntegrationTest extends ApiIntegrationTest {
                         .content(body))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
+    }
+
+    /**
+     * 🛡 V1.1.6 Story 1.1 AC4：<b>改档案性别，身份证一动不动</b>。
+     *
+     * <p>身份证是<b>建卡时的快照</b>，而且它的性别<b>编进了身份码</b>
+     * （{@code TT + 日+性别码 + 月 + 年 + 物种 + 序号}，见上一条用例的 {@code TT60032402\d{4}}，
+     * 其中 {@code 60} = 日 10 + 母 50）。若联动，已发出去的身份码会与卡面对不上，
+     * 甚至要重新分配号码、撞唯一约束。
+     *
+     * <p>⚠️ 两套字段的取值域也不同：档案是 {@code MALE/FEMALE} + NULL 两值，
+     * 身份证是 {@code MALE/FEMALE/UNKNOWN} 三值。<b>不要为了"统一"把它们归一化。</b>
+     */
+    @Test
+    void changingProfileSexDoesNotTouchIdCard() throws Exception {
+        User owner = newUser();
+        String token = userBearer(owner.getId());
+        createProfile(token);
+        // 建卡时性别为母（cardNo 里编的是 60）。
+        String created = postCard(token, newCardBody());
+        var before = json.readTree(created);
+        long cardId = before.get("id").asLong();
+        String cardNoBefore = before.get("cardNo").asString();
+        assertThat(before.get("gender").asString()).isEqualTo("FEMALE");
+
+        // 把档案性别改成公 —— 与身份证是两个独立字段。
+        mvc.perform(patch("/api/v1/pet-profiles/me")
+                        .header(HttpHeaders.AUTHORIZATION, token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"sex":"MALE"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sex").value("MALE"));
+
+        // 身份证的性别与身份码都必须原样不动。
+        // ⚠️ 走 /me/id-cards/{id} 而不是 /me/id-card —— 后者是 Story 6.1 的旧接口，响应里根本没有 gender。
+        mvc.perform(get("/api/v1/pet-profiles/me/id-cards/" + cardId)
+                        .header(HttpHeaders.AUTHORIZATION, token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.gender").value("FEMALE"))
+                .andExpect(jsonPath("$.cardNo").value(cardNoBefore));
     }
 
     @Test

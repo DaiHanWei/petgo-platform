@@ -201,7 +201,7 @@ class ShopBadge extends StatelessWidget {
 
   /// 电商订单徽标（玫红系）——「实物、需等快递」。
   factory ShopBadge.toko(String label) => ShopBadge(
-      label: label, background: ShopColors.roseBg, foreground: ShopColors.roseDark);
+      label: label, background: ShopColors.accentBg, foreground: ShopColors.accentDark);
 
   /// 虚拟服务徽标（紫系）——问诊等。
   factory ShopBadge.service(String label) => ShopBadge(
@@ -236,7 +236,7 @@ class ShopDiscountCorner extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
         decoration: const BoxDecoration(
-          color: ShopColors.rose,
+          color: ShopColors.accent,
           borderRadius: BorderRadius.only(
             topRight: Radius.circular(ShopShape.radiusButton),
             bottomLeft: Radius.circular(ShopShape.radiusChip),
@@ -311,7 +311,7 @@ class ShopLeftAccentBlock extends StatelessWidget {
   /// 玫红 —— 真钱侧（QRIS）与错误条。
   factory ShopLeftAccentBlock.money({Key? key, required Widget child}) =>
       ShopLeftAccentBlock(
-          key: key, accent: ShopColors.rose, background: ShopColors.roseBg, child: child);
+          key: key, accent: ShopColors.accent, background: ShopColors.accentBg, child: child);
 
   /// 置灰 —— 超服务范围时下游支付块整体降权。
   factory ShopLeftAccentBlock.muted({Key? key, required Widget child}) =>

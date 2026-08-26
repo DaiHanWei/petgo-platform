@@ -10,6 +10,8 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// 假 repo：详情页只用 getCard。
 class _FakeIdCardRepo implements IdCardRepository {
+  @override
+  Future<int> reportShareForReward(int cardId) async => 0; // Story 18.2：本类不验奖励
   _FakeIdCardRepo(this._card);
   final IdCard _card;
 

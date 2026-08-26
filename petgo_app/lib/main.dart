@@ -16,6 +16,7 @@ import 'package:tailtopia/core/storage/prefs.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/notify/domain/push_permission_bootstrap.dart';
+import 'package:tailtopia/features/notify/domain/push_permission_state_reporter.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -99,6 +100,19 @@ Future<void> main() async {
     } else {
       debugPrint('[ATT] undetermined after wait — defer notification prompt to next launch');
     }
+
+    // 权限状态快照（Story 8.1 / 埋点 E-21）：本次启动的通知权限流程**落定之后**报一次。
+    //
+    // 🔴 位置不能提前：报「申请之前」的状态会让首启永远是 false，把授权率系统性低估。
+    // 🔴 **两条分支之后都要报**（故放在 if/else 之外）：ATT 未落定那支不会走到
+    //    askNotificationOnce()，只在 if 里报就会漏掉全部「ATT 未落定」的启动 ——
+    //    那不是随机缺失，只缺 iPad 兼容模式 / 请求被系统吞掉这类设备，趋势会被带偏。
+    // ⚠️ 上面 installForegroundRetry 的补弹回调里**不要**再报：那是同一会话内的补弹、
+    //    不是新的冷启动，再报会违反「一次冷启动恰好一次」（分母会被重度用户拉偏）。
+    //    该类内有进程内一次性闸，即使误调也只空转。
+    // ⚠️ 本行不参与 init / ATT / 通知权限 / start 四者的排序，只在其后追加。
+    await PushPermissionStateReporter.reportOnColdStart();
+
     await afInit;
     await AppsFlyerClient.instance.start();
   });

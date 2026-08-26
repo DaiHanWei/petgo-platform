@@ -54,6 +54,14 @@ public class PetProfile {
     @Column(name = "birthday")
     private LocalDate birthday;
 
+    /**
+     * 性别（V1.1.6 Story 1.1）。<b>选填，null = 未填</b>；存量档案一律 null，不回填。
+     * ⚠️ 与 {@code IdCard.gender} 是独立字段、永不联动（后者是建卡快照且参与身份码生成）。
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "sex", length = 16)
+    private PetSex sex;
+
     @Column(name = "intro", length = 30)
     private String intro;
 
@@ -201,6 +209,14 @@ public class PetProfile {
 
     public void setBirthday(LocalDate birthday) {
         this.birthday = birthday;
+    }
+
+    public PetSex getSex() {
+        return sex;
+    }
+
+    public void setSex(PetSex sex) {
+        this.sex = sex;
     }
 
     public String getIntro() {

@@ -13,7 +13,7 @@
 ///
 /// ## 用法
 ///
-/// 默认变体可由构建期注入：`flutter run --dart-define=SHOP_UI=v2`。
+/// 默认变体可由构建期注入：`flutter run --dart-define=SHOP_UI=v1` 回退旧版式。
 /// 运行期用 [shopUiVariantProvider] 切换（debug 构建里 Toko 顶栏有切换入口）。
 ///
 /// 🔴 **两套实现都要能独立跑通**。不要为了少写代码让 v2 去 `extends` v1 的 State ——
@@ -35,19 +35,22 @@ enum ShopUiVariant {
   bool get isV2 => this == ShopUiVariant.v2;
 }
 
-/// 构建期默认值。`--dart-define=SHOP_UI=v2` → 启动即用新版式。
+/// 构建期覆盖。`--dart-define=SHOP_UI=v1` → 回退到首发版式。
 ///
-/// ⚠️ 取值只认 `v2` 一个字面量，其余（含拼错、空值）一律落回 [ShopUiVariant.v1] ——
-/// 拼错的 flag 静默启用新 UI 比不生效危险得多。
+/// ⚠️ 取值只认 `v1` 一个字面量，其余（含拼错、空值）一律落到 [ShopUiVariant.v2]。
+/// 2026-08-21 默认值翻转后，这条规则的方向也跟着翻：**拼错的 flag 不会把人静默送回旧版式**。
 const String _kShopUiDefine = String.fromEnvironment('SHOP_UI');
 
 ShopUiVariant get _defaultVariant =>
-    _kShopUiDefine == 'v2' ? ShopUiVariant.v2 : ShopUiVariant.v1;
+    _kShopUiDefine == 'v1' ? ShopUiVariant.v1 : ShopUiVariant.v2;
 
 /// 当前生效的电商 UI 变体。
 ///
-/// 🔴 默认 [ShopUiVariant.v1]：这是**发布安全**的默认值 —— 新版式尚未通过人工验收，
-/// 任何忘记显式指定的构建都应该拿到已验收过的那一套。
+/// 🔴 默认 [ShopUiVariant.v2]（2026-08-21 产品指定翻转，原为 v1）。
+///
+/// 原默认 v1 的理由是「新版式尚未通过人工验收，忘记指定的构建应拿到已验收那套」。
+/// 现在验收对象本身就是 v2 —— 继续默认 v1 会让每个包都得记着传 flag，反而更容易出错。
+/// v1 仍完整保留、可经 `--dart-define=SHOP_UI=v1` 回退，两套实现依旧各自独立。
 ///
 /// ⚠️ 用 [Notifier] 而非 `StateProvider` —— 后者在 Riverpod 3 已被移除
 /// （同 `shop_repository.dart` 的说明）。

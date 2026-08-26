@@ -9,6 +9,9 @@ import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../data/vet_repository.dart';
 import '../domain/vet_online_status.dart';
+import '../domain/vet_push_permission_prompt.dart';
+import '../../notify/domain/push_permission_prompt.dart';
+import '../../notify/data/push_permission_providers.dart';
 import 'vet_active_page.dart';
 import 'vet_history_page.dart';
 import 'vet_inbox_page.dart';
@@ -49,13 +52,55 @@ class _VetWorkbenchShellState extends ConsumerState<VetWorkbenchShell>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // 触发点 5（Story 8.3）：注册引导的展示方式。
+    // 判定与埋点在 VetPushPermissionPrompt 里，这里只提供「怎么显示」——
+    // 它需要 BuildContext，而那是个 domain 类。壳在工作台期间常驻，是唯一合适的注册点。
+    VetPushPermissionPrompt.showGuideHook = _showPushGuide;
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _heartbeat?.cancel();
+    // ⚠️ 只在钩子仍是自己时清掉：热重载/多实例场景下别把别人注册的钩子抹了。
+    if (VetPushPermissionPrompt.showGuideHook == _showPushGuide) {
+      VetPushPermissionPrompt.showGuideHook = null;
+    }
     super.dispose();
+  }
+
+  /// 兽医侧的通知引导。**口径与用户侧不同**：这里说的是「收不到派单」，
+  /// 因为兽医漏单是直接的收入损失 —— 文案要让这件事显而易见。
+  ///
+  /// 🛡 只有「去设置」与「稍后」两个选择，**没有任何拦截** ——
+  /// 他已经在线了，这个弹层只是告知（AC2 营收红线）。
+  Future<PushPromptResult> _showPushGuide() async {
+    if (!mounted) return PushPromptResult.dismissed;
+    final l10n = AppLocalizations.of(context);
+    final goSettings = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        key: const ValueKey('vetPushGuide'),
+        title: Text(l10n.vetPushGuideTitle),
+        content: Text(l10n.vetPushGuideBody),
+        actions: [
+          TextButton(
+            key: const ValueKey('vetPushGuideLater'),
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(l10n.vetPushGuideLater),
+          ),
+          FilledButton(
+            key: const ValueKey('vetPushGuideOpenSettings'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(l10n.mediaOpenSettings),
+          ),
+        ],
+      ),
+    );
+    if (goSettings != true) return PushPromptResult.dismissed;
+    await openPushSettings();
+    // ⚠️ settingsOpened 只表示跳走了，**不代表真的开了** —— 净结果看 E-21。
+    return PushPromptResult.settingsOpened;
   }
 
   @override

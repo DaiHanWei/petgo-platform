@@ -28,6 +28,7 @@ abstract class ProfileRepository {
 
   /// 编辑档案（Story 2.8，部分更新 PATCH）。cardToken 不变。
   ///
+  /// ⚠️ 全字段「传 null = 不改动」，**没有清空语义**（V1.1.6 Story 1.1 沿用该口径新增 [sex]）。
   /// Story 6.1 追加 [weightKg] / [neuterStatus]。
   /// 🔒 体重是 PII 邻近的健康数据 —— **禁止写入日志与埋点属性**（NFR-5）。
   Future<PetProfile> update({
@@ -35,6 +36,7 @@ abstract class ProfileRepository {
     String? avatarUrl,
     String? breed,
     DateTime? birthday,
+    String? sex,
     String? intro,
     double? weightKg,
     String? neuterStatus,
@@ -89,6 +91,7 @@ class DioProfileRepository implements ProfileRepository {
     String? avatarUrl,
     String? breed,
     DateTime? birthday,
+    String? sex,
     String? intro,
     double? weightKg,
     String? neuterStatus,
@@ -98,6 +101,7 @@ class DioProfileRepository implements ProfileRepository {
     if (avatarUrl != null) data['avatarUrl'] = avatarUrl;
     if (breed != null) data['breed'] = breed;
     if (birthday != null) data['birthday'] = _isoDate(birthday);
+    if (sex != null) data['sex'] = sex;
     if (intro != null) data['intro'] = intro;
     if (weightKg != null) data['weightKg'] = weightKg;
     if (neuterStatus != null) data['neuterStatus'] = neuterStatus;

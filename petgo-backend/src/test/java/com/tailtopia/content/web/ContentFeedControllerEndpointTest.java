@@ -103,7 +103,13 @@ class ContentFeedControllerEndpointTest extends ApiIntegrationTest {
                     .andReturn();
             var root = json.readTree(res.getResponse().getContentAsString());
             for (var item : root.get("items")) {
-                String body = item.get("body").asText(null);
+                // ⚠️ `body` 字段**可能整个不存在** —— 纯图片帖正文为 NULL，序列化时该字段被省略。
+                //    原写法 `item.get("body").asText(null)` 假设字段总在，
+                //    在没有任何测试造过纯图片帖之前一直成立；Story 11.1 补的
+                //    contentPickerIncludesPostsWithoutText 造了一条，这里当场 NPE。
+                //    （Feed 是全局的：任何测试造的公开帖都会流到这里来。）
+                var bodyNode = item.get("body");
+                String body = (bodyNode == null || bodyNode.isNull()) ? null : bodyNode.asText();
                 if (body != null && body.startsWith(marker)) {
                     collected.add(body);
                 }

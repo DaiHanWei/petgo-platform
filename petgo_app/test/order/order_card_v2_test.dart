@@ -77,7 +77,7 @@ void main() {
 
     testWidgets('待支付金额玫红、已完成金额墨色（三色分工）', (t) async {
       await open(t, _order(statusCode: 'PENDING_PAYMENT'));
-      expect(_amountColor(t), ShopColors.rose);
+      expect(_amountColor(t), ShopColors.accent);
 
       await open(t, _order(statusCode: 'COMPLETED', color: OrderStatusColor.success));
       expect(_amountColor(t), ShopColors.ink);

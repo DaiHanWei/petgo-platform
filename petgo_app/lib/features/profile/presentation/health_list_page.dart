@@ -135,6 +135,16 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
       appBar: AppBar(
         title: Text(l10n.healthListTitle),
         actions: [
+          // 🔴 DEP-1 闭合（2026-08-21）：Health 让出底栏 Tab 位给 Toko 后，
+          //    「发起问诊」失去全部界面入口——本页此前只**展示**问诊存档（_HealthCat CONSULT），
+          //    并无发起动作。故在此补入口，使「问诊已并入健康记录」成为事实而非说法。
+          //    `/triage` 已由 shell 分支降为顶层路由，用 push 保留返回栈（回得到本页）。
+          IconButton(
+            key: const ValueKey('healthStartConsult'),
+            icon: const Icon(Icons.medical_services_outlined, color: AppColors.ink),
+            tooltip: l10n.healthStartConsult,
+            onPressed: () => context.push('/triage'),
+          ),
           IconButton(
             key: const ValueKey('healthAddTop'),
             icon: const Icon(Icons.add, color: AppColors.ink),
@@ -385,7 +395,10 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
           //    的 `_dismissed`→`_dismiss_tapped`）改名迁就规则，而不是放宽规则。
           //    看板口径映射记在 Epic 9 交付说明里。
           Analytics.capture('triage_category_jump_tapped', {'record_type': recordType});
-          context.push('/shop?category=$category');
+          // ⚠️ 必须 `go` 不能 `push`：DEP-1 闭合后 `/shop` 是 shell 分支根，
+          //    push 会二次构建 StatefulShellRoute → GlobalKey 撞车 → release 白屏
+          //    （见 deep_link_routes.dart shellTabRoots 注释里的 20260729 事故）。
+          context.go('/shop?category=$category');
         },
         style: TextButton.styleFrom(
           foregroundColor: AppColors.mint,

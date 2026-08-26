@@ -36,6 +36,13 @@ abstract class IdCardRepository {
   /// HD 下载当前定价（IDR，后台可配 → 实时下发，417 同类修复）。
   /// 拉取失败/载荷异常**直接抛出**——UI 显示重试并禁用付款，不做本地兜底价。
   Future<int> hdPrice();
+
+  /// 分享成功上报 → 试发分享奖励（Story 18.2）。返回真的发了多少枚，0 = 没发。
+  ///
+  /// ⚠️ 只该在系统分享面板回调 `ShareResultStatus.success` 之后调（AC5）。
+  /// 🛡 服务端刻意不返回「为什么没发」——不区分就没法把「你额度用完了」讲给用户听（AC3）。
+  /// 🛡 失败不抛给分享链路：调用方把它当"没发"处理（AC7，不重试、不建补偿队列）。
+  Future<int> reportShareForReward(int cardId);
 }
 
 class DioIdCardRepository implements IdCardRepository {
@@ -83,6 +90,16 @@ class DioIdCardRepository implements IdCardRepository {
     return (res.data ?? const [])
         .map((e) => IdCard.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  @override
+  @override
+  Future<int> reportShareForReward(int cardId) async {
+    final res = await dio.post<Map<String, dynamic>>(
+      '${ApiPaths.meIdCards}/$cardId/share-rewards',
+    );
+    final coins = res.data?['coins'];
+    return coins is num ? coins.toInt() : 0;
   }
 
   @override

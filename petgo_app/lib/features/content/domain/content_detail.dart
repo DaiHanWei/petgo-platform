@@ -1,3 +1,5 @@
+import '../../auth/domain/user_tag.dart';
+import 'content_tag.dart';
 /// 内容详情（对应后端 `ContentDetailResponse`）。
 class ContentDetail {
   const ContentDetail({
@@ -11,9 +13,12 @@ class ContentDetail {
     required this.isAuthor,
     required this.createdAt,
     this.authorNickname,
+    this.authorTags = const [],
+    this.decorationTags = const [],
     this.authorAvatarUrl,
     this.body,
     this.imageUrls = const [],
+    this.visibility = 'PUBLIC',
   });
 
   final int id;
@@ -28,9 +33,24 @@ class ContentDetail {
   final bool isAuthor;
   final DateTime createdAt;
   final String? authorNickname;
+
+  /// 作者的运营标签（V1.1.6 Story 5.1）。最多 3 个；注销作者恒为空。
+  final List<UserTag> authorTags;
+
+  /// 内容装饰标签（V1.1.6 Story 5.2）。有图叠首图角落 / 无图置正文下方。
+  final List<ContentTag> decorationTags;
   final String? authorAvatarUrl;
   final String? body;
   final List<String> imageUrls;
+
+  /// 可见性线格式（`PUBLIC` / `PRIVATE`）。老响应体没有这个字段 ⇒ 按 `PUBLIC` 兜底。
+  ///
+  /// 只有一个用处：埋点 E-11 的 `is_private_diary`。**不要拿它当权限判据** ——
+  /// 私密内容照样允许用户自己分享（AD-15 Rule 6），拿它去藏分享按钮就改了产品规则。
+  final String visibility;
+
+  /// 是否「私密日记」（埋点 E-11 的加粗属性）。Diary = `GROWTH_MOMENT`。
+  bool get isPrivateDiary => type == 'GROWTH_MOMENT' && visibility == 'PRIVATE';
 
   factory ContentDetail.fromJson(Map<String, dynamic> json) {
     final raw = json['imageUrls'];
@@ -45,9 +65,12 @@ class ContentDetail {
       isAuthor: (json['isAuthor'] ?? false) as bool,
       createdAt: DateTime.parse(json['createdAt'] as String),
       authorNickname: json['authorNickname'] as String?,
+      authorTags: UserTag.listFromJson(json['authorTags']),
+      decorationTags: ContentTag.listFromJson(json['decorationTags']),
       authorAvatarUrl: json['authorAvatarUrl'] as String?,
       body: json['body'] as String?,
       imageUrls: raw is List ? raw.map((e) => e.toString()).toList() : const [],
+      visibility: (json['visibility'] ?? 'PUBLIC') as String,
     );
   }
 }

@@ -2,17 +2,29 @@ import 'package:flutter/foundation.dart';
 
 import '../data/content_repository.dart';
 import 'content_type.dart';
+import 'feed_image_layout.dart';
+import 'image_crop.dart';
 
 /// 单张图片上传状态（AC3 状态机）。
 enum ImageUploadStatus { pending, uploading, success, failed }
 
 /// 单张待发图片项（内存草稿，无持久化）。
 class ImageUploadItem {
-  ImageUploadItem(this.bytes, {this.status = ImageUploadStatus.pending, this.url});
+  ImageUploadItem(this.bytes, {this.status = ImageUploadStatus.pending, this.url, this.size});
 
   final Uint8List bytes;
   ImageUploadStatus status;
   String? url;
+
+  /// 这张图的原始宽高（V1.1.6 Story 3.5）。
+  ///
+  /// 🔴 客户端**此前从来没上报过尺寸** —— 后端 Story 3.1 的接口早就收，
+  /// 但发布请求里没这个字段，于是每条新帖都要等服务端异步下载图片再测一遍。
+  /// 那意味着 Story 3.3 说的「新内容零跳动」要等兜底任务跑完才成立，
+  /// 刚发完就刷首页的人看到的仍是占位比例。
+  ///
+  /// 发布路径本来就在解码图片，宽高顺手就有。量不出来时留 null，由服务端兜底。
+  final ImageSize? size;
 }
 
 /// 文字上限（FR：1000 字符实时计数，超出禁止发布）。
@@ -99,7 +111,8 @@ class PublishController extends ChangeNotifier {
   /// 加入一张待传图片（≤9）。返回是否成功加入。
   bool addImage(Uint8List bytes) {
     if (items.length >= kMaxImages) return false;
-    items.add(ImageUploadItem(bytes));
+    // 只读文件头，不整张解码 —— 9 张图各解一遍会让加图这一步明显卡顿。
+    items.add(ImageUploadItem(bytes, size: imageSizeOf(bytes)));
     notifyListeners();
     return true;
   }
@@ -143,12 +156,16 @@ class PublishController extends ChangeNotifier {
       await uploadAll();
       if (!allUploaded) return null; // 仍有失败件 → 让用户重试，不提交
       final urls = items.map((i) => i.url!).toList();
+      // 🛡 **与图片同序等长**：后端对长度不符的处理是**整组作废**（不做部分采信），
+      // 所以量不出来的位置也要占一个 null，绝不能"跳过不放"。
+      final sizes = items.map((i) => i.size).toList();
       final growth = type == ContentType.growthMoment;
       return await repository.publish(
         type: type,
         petId: growth ? petId : null,
         text: text.trim().isEmpty ? null : text.trim(),
         imageUrls: urls,
+        imageSizes: sizes,
         eventDate: growth ? (eventDate ?? DateTime.now()) : null,
         idempotencyKey: idempotencyKey,
         // 非 Diary 恒公开；Diary 由开关决定。

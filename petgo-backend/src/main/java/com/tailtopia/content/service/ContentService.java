@@ -4,11 +4,13 @@ import com.tailtopia.content.domain.Comment;
 import com.tailtopia.content.domain.ContentPost;
 import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.domain.DeleteReason;
+import com.tailtopia.content.domain.ImageSize;
 import com.tailtopia.content.domain.PostStatus;
 import com.tailtopia.content.dto.ContentPostCreateRequest;
 import com.tailtopia.content.dto.ContentPostResponse;
 import com.tailtopia.content.event.ContentPublishedEvent;
 import com.tailtopia.content.event.ContentRemovedEvent;
+import com.tailtopia.content.event.ContentUnavailableEvent;
 import com.tailtopia.content.moderation.ModerationOutcome;
 import com.tailtopia.content.repository.CommentRepository;
 import com.tailtopia.content.repository.ContentLikeRepository;
@@ -51,11 +53,19 @@ public class ContentService {
     private final ContentModerationService moderation;
     private final ApplicationEventPublisher events;
     private final ManualReviewGate manualReviewGate;
+    /** V1.1.6 Story 3.1：客户端上报尺寸的采信与归一（长度不符整组作废）。 */
+    private final ImageSizeResolver imageSizes;
+    /** V1.1.6 Story 3.1：缺失尺寸的异步兜底测量。⚠️ 绝不同步调用（见 scheduleSizeBackfill）。 */
+    private final ImageSizeBackfillService sizeBackfill;
+    /** V1.1.6 Story 4.1：注销联动收口顶置排期（注销是批量隐藏，发不出逐条事件）。 */
+    private final ContentPinService pins;
 
     public ContentService(ContentPostRepository posts, CommentRepository comments,
             ContentLikeRepository likes, ProfileService profileService,
             IdempotencyService idempotency, ContentModerationService moderation,
-            ApplicationEventPublisher events, ManualReviewGate manualReviewGate) {
+            ApplicationEventPublisher events, ManualReviewGate manualReviewGate,
+            ImageSizeResolver imageSizes, ImageSizeBackfillService sizeBackfill,
+            ContentPinService pins) {
         this.posts = posts;
         this.comments = comments;
         this.likes = likes;
@@ -64,6 +74,9 @@ public class ContentService {
         this.moderation = moderation;
         this.events = events;
         this.manualReviewGate = manualReviewGate;
+        this.imageSizes = imageSizes;
+        this.sizeBackfill = sizeBackfill;
+        this.pins = pins;
     }
 
     /**
@@ -101,12 +114,20 @@ public class ContentService {
         }
         likes.deleteByPostId(post.getId());
         log.info("内容软删 postId={} reason={}", post.getId(), reason);
+        Instant now = Instant.now();
         // AC3 ②：仅运营下架通知作者「内容因违规被移除」；作者自删不发事件（不自通知）。
         // 经领域事件 → notify 消费（content 不直调 notify）；不说明举报人、V1 无申诉入口。
         if (reason == DeleteReason.ADMIN_TAKEDOWN) {
             events.publishEvent(new ContentRemovedEvent(
-                    post.getId(), post.getAuthorId(), Instant.now()));
+                    post.getId(), post.getAuthorId(), now));
         }
+        // V1.1.6 Story 4.1：**无论什么原因**都发一条「这条内容不再可展示」，供顶置排期联动收手。
+        //
+        // 🔴 不能复用上面那个事件：它只在运营下架时发，而"作者自删不发"是刻意的
+        // （它被 notify 用来推「你的内容因违规被移除」，自删也发会让用户删自己的帖收到违规通知）。
+        // 而顶置联动要的是三种触发全覆盖（作者删除 / 审核判违规下架 / 作者账号被封禁）。
+        events.publishEvent(new ContentUnavailableEvent(
+                post.getId(), post.getAuthorId(), reason, now));
     }
 
     /**
@@ -120,6 +141,16 @@ public class ContentService {
         int posted = posts.deactivateByAuthor(userId, now);
         int commented = comments.deactivateByAuthor(userId, now);
         log.info("注销联动内容隐藏 userId(agent) posts={} comments={}", posted, commented);
+        // V1.1.6 Story 4.1：注销后内容对他人不可见，引用它的顶置排期一并收手。
+        //
+        // ⚠️ 这条**超出 Story 4.1 的 AC**（AC 只列了作者删除 / 违规下架 / 账号封禁三种），
+        // 但性质完全相同：顶置位会继续展示一条别人已经看不到的内容。
+        // 注销走的是**批量隐藏**（内容不软删、拿不到逐条 id），发不出上面那种逐条事件，
+        // 故在模块内直接收口。
+        int endedPins = pins.terminateForAuthor(userId, now);
+        if (endedPins > 0) {
+            log.info("注销联动顶置排期提前结束 count={}", endedPins);
+        }
     }
 
     /** 迷你主页发布数（Story 3.8）：某作者未软删的已发布内容数。经 service 暴露，不让 auth 直读 content 表。 */
@@ -160,6 +191,20 @@ public class ContentService {
             java.time.Instant from, java.time.Instant to, Boolean deleted, String keyword,
             int limit, int offset) {
         return posts.adminSearch(type, authorId, from, to, deleted, keyword, limit, offset);
+    }
+
+    /**
+     * 设置 / 清除行级物种覆写（V1.1.6 Story 14.1 · AC5）。传 {@code null} 即清除。
+     *
+     * <p>🛡 <b>本方法不做"谁能改"的判断</b> —— 那是运营侧的规则（真实用户内容只读），
+     * 由 {@code AdminContentManageService} 权威校验。content 模块只负责写这一列。
+     */
+    @Transactional
+    public void setSpeciesOverride(long postId, String species) {
+        posts.findById(postId).ifPresent(p -> {
+            p.setSpeciesOverride(species);
+            posts.save(p);
+        });
     }
 
     /** 后台按 id 取单条内容行（HTMX 局部刷新用）；不存在返回 null。 */
@@ -249,6 +294,17 @@ public class ContentService {
             if (p.getStatus() == PostStatus.UNDER_REVIEW && p.getDeletedAt() == null) {
                 p.softDelete();
                 posts.save(p);
+                // 🔴 V1.1.6 Story 13.4 补：这条路径原先**不发**「内容不再可展示」事件。
+                //
+                // 它此前没被注意到，是因为 4.1 的顶置联动碰不到挂起内容（顶置选择器
+                // 只挑得到公开内容）。但**去重指纹会**：批量发布记指纹是在 publish 之后，
+                // 而开了人工审核时 publish 落的就是 UNDER_REVIEW —— 审核判违规丢弃之后，
+                // 指纹留着、内容没了 ⇒ **同一文案永久无法重发**，正是 AC4 要修的那个后果。
+                //
+                // 用 AUTHOR_DELETE 作 reason：它只用于审计日志与"要不要通知作者违规"，
+                // 而审核丢弃**不该**给作者发违规通知（ADMIN_TAKEDOWN 会触发那条通知）。
+                events.publishEvent(new ContentUnavailableEvent(
+                        p.getId(), p.getAuthorId(), DeleteReason.AUTHOR_DELETE, Instant.now()));
             }
         });
     }
@@ -340,7 +396,12 @@ public class ContentService {
                 // 挂起帖同样要带上用户选择的可见范围——否则 PRIVATE 日记审核通过后会以实体默认的
                 // PUBLIC 进 Feed（approveReview 只翻 status、终身无修正机会），私密内容被公开。
                 pendingPost.setVisibility(req.visibilityOrPublic());
+                // V1.1.6 Story 3.1：🔴 挂起分支**同样要写尺寸** ——
+                // 只写下面那条正常分支的话，审核挂起的帖会永远没有尺寸。
+                List<ImageSize> pendingSizes = imageSizes.normalize(imageUrls, req.imageSizes());
+                pendingPost.setImageSizes(pendingSizes);
                 ContentPost pending = posts.save(pendingPost);
+                scheduleSizeBackfill(pending, pendingSizes);
                 idempotency.store(idempotencyKey, pending.getId());
                 manualReviewGate.enqueue(pending.getId());
                 return ContentPostResponse.from(pending);
@@ -354,7 +415,12 @@ public class ContentService {
         // Story 4.2 同步开关：关 → PRIVATE（仅作者自视）。省略/开 → PUBLIC。
         // ⚠️ 审核流程不因私密而跳过（私密内容同样过审核，AC9）——这里只设可见范围，不动 status。
         post.setVisibility(req.visibilityOrPublic());
+        // V1.1.6 Story 3.1（AD-5）：客户端上报的尺寸先归一（长度不符即整组作废），
+        // 缺失的位置交由异步兜底测量 —— 绝不在本事务里同步拉图。
+        List<ImageSize> sizes = imageSizes.normalize(imageUrls, req.imageSizes());
+        post.setImageSizes(sizes);
         ContentPost saved = posts.save(post);
+        scheduleSizeBackfill(saved, sizes);
 
         idempotency.store(idempotencyKey, saved.getId());
 
@@ -458,6 +524,40 @@ public class ContentService {
     }
 
     /**
+     * 某月快乐时刻的<b>访客版</b>（V1.1.6 Story 2.2 · 访客日历）—— 只含<b>已发布且未删除</b>。
+     *
+     * <p>🔴 <b>与 {@link #findGrowthMomentsInMonth} 成对，不可互换。</b>
+     * 那个是作者自看（含审核中，让作者知道自己的帖出了什么事）；
+     * 本方法是访客视角 —— 用错会让<b>下架内容经分享链接继续对外可见</b>，等于下架没生效。
+     */
+    @Transactional(readOnly = true)
+    public List<GrowthMomentView> findPublishedGrowthMomentsInMonth(long authorId, long petId,
+            LocalDate from, LocalDate to) {
+        return posts
+                .findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndStatusAndEventDateBetweenOrderByEventDateAscCreatedAtAsc(
+                        authorId, petId, ContentType.GROWTH_MOMENT, PostStatus.PUBLISHED, from, to)
+                .stream()
+                .map(ContentService::toGrowthMomentView)
+                .toList();
+    }
+
+    /**
+     * 某天快乐时刻的<b>访客版</b>（V1.1.6 Story 2.2 · 访客某天详情）—— 只含<b>已发布且未删除</b>。
+     *
+     * <p>🔴 与 {@link #findGrowthMomentsOnDate} 成对，不可互换，理由同上。
+     */
+    @Transactional(readOnly = true)
+    public List<GrowthMomentView> findPublishedGrowthMomentsOnDate(long authorId, long petId,
+            LocalDate eventDate) {
+        return posts
+                .findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndStatusAndEventDateOrderByCreatedAtAsc(
+                        authorId, petId, ContentType.GROWTH_MOMENT, PostStatus.PUBLISHED, eventDate)
+                .stream()
+                .map(ContentService::toGrowthMomentView)
+                .toList();
+    }
+
+    /**
      * 名片快乐时刻流（Story 2.6 AC7 · F9）：按 {@code event_date} 倒序取最近 limit 条 GROWTH_MOMENT。
      * 经 service 接口供 H5 名片 / 里程碑打卡候选取数（禁 join）。
      * bug 20260730-435：按 petId 过滤，排除删档遗留（pet_id=NULL）的旧宠物帖。
@@ -503,9 +603,24 @@ public class ContentService {
                 .orElse(false);
     }
 
+    /**
+     * 有位置没尺寸时排一次异步兜底测量（V1.1.6 Story 3.1 · AD-5 Rule 3）。
+     *
+     * <p>🛡 <b>异步是刻意的</b>：一条内容最多 9 张图，同步测量等于把 9 次网络往返压进发布事务、
+     * 长时间占着数据库连接。为一个装饰性字段赌上「发布成功」这件事不划算。
+     * 代价（刚发布的帖可能短暂没尺寸）是可接受的 —— 存量内容本来就永远没有尺寸，
+     * 客户端的加载期占位策略本就是必做项。
+     */
+    private void scheduleSizeBackfill(ContentPost saved, List<ImageSize> sizes) {
+        if (imageSizes.needsBackfill(sizes)) {
+            sizeBackfill.backfill(saved.getId());
+        }
+    }
+
     private static GrowthMomentView toGrowthMomentView(ContentPost p) {
         return new GrowthMomentView(
-                p.getId(), p.getCreatedAt(), p.getEventDate(), p.getImageUrls(), p.getText());
+                p.getId(), p.getCreatedAt(), p.getEventDate(), p.getImageUrls(), p.getText(),
+                p.getVisibility(), p.getStatus());
     }
 
     private static String blankToNull(String s) {

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<!--
+  「发布账号」选择器（V1.1.6 Story 12.1 · AC6）。**三处发布入口共用这一份**
+  （12-2 单条 / 13-x 批量 / 13-5 定时）—— 以运营真实账号误发的后果不可撤回：
+  内容会出现在那个真人的个人主页并推送给他的粉丝，事后删除也已经推送过了。
+  所以防呆是一份实现，不是每页各画一遍下拉框。
+
+  用法（外层 <form> 必须带 data-real-identity-confirm，否则二次确认不会生效）：
+    <form method="post" ... th:attr="data-real-identity-confirm=#{admin.publishIdentity.realConfirm}">
+        <div th:replace="~{admin/fragments/publish-identity-select :: select(${publishIdentities}, 'batchAuthorId')}"></div>
+-->
+<body>
+<div th:fragment="select(identities, fieldId, fieldName, hxGet, hxTarget)" th:remove="tag">
+    <label th:for="${fieldId}">
+        <span th:text="#{admin.publishIdentity.field}">发布账号</span>
+        <!-- ⚠️ `name` 由调用方给：批量发布那两处的入参叫 virtualUserId（历史名，不改动它
+             以免连带改既有端点），单条发布叫 authorUserId。**同一个片段、两个字段名**，
+             所以 name 必须参数化 —— 写死会让其中一处静默收不到值。 -->
+        <select th:id="${fieldId}" th:name="${fieldName}" class="field-full" required
+                th:attr="hx-get=${hxGet}, hx-target=${hxTarget}, hx-trigger=${hxGet} != null ? 'change' : null">
+            <!-- 🛡 默认不预选任何账号：占位项 disabled+selected，强制显式选择。
+                 预选第一项 = 手滑直接提交时用的是"上次那个号"，这正是要防的。 -->
+            <option value="" disabled selected
+                    th:text="#{admin.publishIdentity.placeholder}">请选择发布账号</option>
+            <optgroup th:label="#{admin.publishIdentity.group.virtual}"
+                      th:if="${identities.?[!real].size() > 0}">
+                <option th:each="o : ${identities.?[!real]}" th:value="${o.userId}"
+                        th:disabled="${o.disabled}" data-real="false"
+                        th:attr="data-species=${o.accountSpecies}"
+                        th:text="${o.nickname} + ' (id=' + ${o.userId} + (${o.disabled} ? ' · ' + #{admin.common.disabled} : '') + ')'">名</option>
+            </optgroup>
+            <!-- ⚠️ 真实账号一律在后：手滑选到靠前项时，选到的是危害最小的那类。 -->
+            <optgroup th:label="#{admin.publishIdentity.group.real}"
+                      th:if="${identities.?[real].size() > 0}">
+                <option th:each="o : ${identities.?[real]}" th:value="${o.userId}"
+                        th:disabled="${o.disabled}" data-real="true"
+                        th:attr="data-species=${o.accountSpecies}"
+                        th:text="'⚠️ ' + ${o.nickname} + ' (id=' + ${o.userId} + (${o.disabled} ? ' · ' + #{admin.common.disabled} : '') + ')'">名</option>
+            </optgroup>
+        </select>
+    </label>
+    <p class="hint" th:text="#{admin.publishIdentity.realWarning}">
+        ⚠️ 真实账号：内容会出现在该账号个人主页并推送给其粉丝。
+    </p>
+</div>
+</body>
+</html>

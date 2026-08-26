@@ -17,6 +17,7 @@ import 'feed_controller.dart';
 import 'feed_skeleton.dart';
 import 'feed_tab_row.dart';
 import 'feed_view.dart';
+import 'promo_target.dart';
 import 'publish_compose_page.dart';
 import 'report_sheet.dart';
 import '../../../shared/widgets/mini_profile_sheet.dart';
@@ -168,6 +169,15 @@ class HomePage extends ConsumerWidget {
         // 访客登录引导卡已下线（不再显示登录/注册按钮）；游客与登录态一致自动翻页浏览。
         return FeedMasonryView(
           header: header,
+          // V1.1.6 Story 16.5：FR-95 的效果归因靠这两个属性。
+          // 🔴 rank_mode 由**服务端下发**（state.rankMode）而不是按 category 自己推 ——
+          // 降级链级别 4 会让 ALL Tab 也走时间倒序，那对客户端完全无感。
+          feedTab: category.analyticsTab,
+          rankMode: state.rankMode,
+          // 顶置坑位（V1.1.6 Story 4.2）：取数失败或无生效配置 → null → 什么都不渲染。
+          pinned: ref.watch(pinnedSlotProvider).value,
+          onTapPinned: (item) => context.push('/content/${item.id}'),
+          onTapPromo: (promo) => openPromoTarget(context, promo),
           autoLoadMore: true,
           footer: null,
           items: state.items,
@@ -177,7 +187,11 @@ class HomePage extends ConsumerWidget {
           loadMoreErrorLabel: l10n.feedLoadMoreError,
           deletedUserLabel: l10n.feedDeletedUser,
           onLoadMore: () => ref.read(feedProvider.notifier).loadMore(),
-          onRefresh: () => ref.read(feedProvider.notifier).refresh(),
+          onRefresh: () async {
+            // 顶置与首页各自取数，下拉刷新要**两边一起**刷 —— 只刷一边会让坑位停在旧配置上。
+            ref.invalidate(pinnedSlotProvider);
+            await ref.read(feedProvider.notifier).refresh();
+          },
           onTapItem: (item) => context.push('/content/${item.id}'),
           onLongPressItem: (item) => openReport(context, ref, item.id, onReported: () {
             // cm-6 §6.1：举报成功 → 乐观移除卡片 +「不再向你展示」提示（后端 §5.4 已过滤，刷新亦不复现）。
@@ -197,6 +211,18 @@ class HomePage extends ConsumerWidget {
             onBlocked: onAuthorHidden(ref, item.authorId),
             onReported: onAuthorHidden(ref, item.authorId),
           ),
+          // V1.1.6 Story 3.2：评论跳详情页并**定位到评论区**。
+          // ⚠️ `?focus=comments` 是既有参数名（通知深链一直在产出它），两侧必须同名。
+          onCommentItem: (item) => context.push('/content/${item.id}?focus=comments'),
+          // 「···」：Feed 此前只有长按举报，没有显式入口；两者走同一个动作。
+          onMoreItem: (item) => openReport(context, ref, item.id, onReported: () {
+            ref.read(feedProvider.notifier).removeItem(item.id);
+            if (context.mounted) {
+              ScaffoldMessenger.of(context)
+                ..hideCurrentSnackBar()
+                ..showSnackBar(SnackBar(content: Text(l10n.reportHiddenToast)));
+            }
+          }),
         );
       },
     );

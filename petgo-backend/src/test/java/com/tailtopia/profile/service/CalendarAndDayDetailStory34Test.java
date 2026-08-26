@@ -59,7 +59,9 @@ class CalendarAndDayDetailStory34Test {
         IdCardRepository idCards = Mockito.mock(IdCardRepository.class);
         when(healthProvider.getIfAvailable()).thenReturn(health);
         service = new TimelineService(profileService, contentService, healthProvider, milestoneService,
-                healthRecords, completions, idCards);
+                healthRecords, completions, idCards,
+                // V1.1.6 Story 5.2：装饰标签统一贴标点；本类不验它，给 mock（默认无标签）。
+                Mockito.mock(com.tailtopia.content.service.ContentTagQueryService.class));
 
         PetProfile profile = PetProfile.create(1L, PetType.CAT, "Momo", null, null, null, null, "tok");
         java.lang.reflect.Field id;
@@ -116,7 +118,9 @@ class CalendarAndDayDetailStory34Test {
         // AD-16：日历是「整天取一个代表标记」，diary 图优先；条数仍照实累计供前端判定④。
         when(contentService.findGrowthMomentsInMonth(eq(1L), anyLong(), Mockito.any(), Mockito.any()))
                 .thenReturn(List.of(new GrowthMomentView(1L, Instant.parse("2026-06-02T07:00:00Z"),
-                        DAY, List.of("https://x/1.jpg"), "文字")));
+                        DAY, List.of("https://x/1.jpg"), "文字",
+                com.tailtopia.content.domain.ContentVisibility.PUBLIC,
+                com.tailtopia.content.domain.PostStatus.PUBLISHED)));
         when(health.healthEventsInRange(eq(1L), Mockito.any(), Mockito.any())).thenReturn(List.of());
         when(healthRecords.findByPetProfileIdAndEventDateBetweenOrderByEventDateAscIdAsc(
                 anyLong(), Mockito.any(), Mockito.any()))
@@ -136,10 +140,12 @@ class CalendarAndDayDetailStory34Test {
     void dayDetailIncludesStructuredHealthRecords_asThirdSource() {
         when(contentService.findGrowthMomentsOnDate(eq(1L), anyLong(), eq(DAY)))
                 .thenReturn(List.of(new GrowthMomentView(1L, Instant.parse("2026-06-02T10:00:00Z"),
-                        DAY, List.of(), "文字")));
-        when(health.healthEventsOnDay(eq(1L), Mockito.any(), Mockito.any()))
+                        DAY, List.of(), "文字",
+                com.tailtopia.content.domain.ContentVisibility.PUBLIC,
+                com.tailtopia.content.domain.PostStatus.PUBLISHED)));
+        when(health.healthEventsOnDay(eq(1L), Mockito.any()))
                 .thenReturn(List.of(new HealthEventView(Instant.parse("2026-06-02T09:00:00Z"),
-                        "GREEN", "摘要", "AI_TRIAGE", "triage:1")));
+                        DAY, "GREEN", "摘要", "AI_TRIAGE", "triage:1")));
         when(healthRecords.findByPetProfileIdAndEventDateBetweenOrderByEventDateAscIdAsc(
                 anyLong(), eq(DAY), eq(DAY)))
                 .thenReturn(List.of(record(HealthRecordType.VACCINE, "2026-06-02T08:00:00Z")));
@@ -158,9 +164,13 @@ class CalendarAndDayDetailStory34Test {
     void dayDetailSortsWithinCategoryByTimeAscending() {
         when(contentService.findGrowthMomentsOnDate(eq(1L), anyLong(), eq(DAY)))
                 .thenReturn(List.of(
-                        new GrowthMomentView(2L, Instant.parse("2026-06-02T11:00:00Z"), DAY, List.of(), "晚"),
-                        new GrowthMomentView(1L, Instant.parse("2026-06-02T09:00:00Z"), DAY, List.of(), "早")));
-        when(health.healthEventsOnDay(eq(1L), Mockito.any(), Mockito.any())).thenReturn(List.of());
+                        new GrowthMomentView(2L, Instant.parse("2026-06-02T11:00:00Z"), DAY, List.of(), "晚",
+                com.tailtopia.content.domain.ContentVisibility.PUBLIC,
+                com.tailtopia.content.domain.PostStatus.PUBLISHED),
+                        new GrowthMomentView(1L, Instant.parse("2026-06-02T09:00:00Z"), DAY, List.of(), "早",
+                com.tailtopia.content.domain.ContentVisibility.PUBLIC,
+                com.tailtopia.content.domain.PostStatus.PUBLISHED)));
+        when(health.healthEventsOnDay(eq(1L), Mockito.any())).thenReturn(List.of());
         when(healthRecords.findByPetProfileIdAndEventDateBetweenOrderByEventDateAscIdAsc(
                 anyLong(), eq(DAY), eq(DAY))).thenReturn(List.of());
 

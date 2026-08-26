@@ -158,16 +158,51 @@ void main() {
     // 这两条守的是「本 Story 不该动的东西」。它们在功能测试里永远不会红，
     // 只能靠直接读源码断言 —— 变异验证方式见 story（把 /shop 塞进受控名单 → 必须红）。
 
-    test('🔴 bottom_tab_bar.dart 的 AppTab 仍是既有 4 值（DEP-1 未闭合，不得动 Tab）', () {
+    // ⚠️ 本条原为「AppTab 仍是既有 4 值（DEP-1 未闭合，不得动 Tab）」。
+    //    2026-08-21 DEP-1 由产品闭合：Toko 顶替 Health 占第 2 位，问诊入口移入健康记录页。
+    //    护栏**翻转而非删除** —— 守的对象从「别动」变成「别改回去、别把问诊改丢」。
+    test('🔴 AppTab 第 2 位是 Toko，且问诊没有被改丢（DEP-1 已闭合）', () {
       final src = File('lib/shared/widgets/bottom_tab_bar.dart').readAsStringSync();
       final enumBody = src.substring(src.indexOf('enum AppTab'));
       final decl = enumBody.substring(0, enumBody.indexOf(';'));
 
-      for (final expected in ["profile('/profile'", "triage('/triage'", "home('/home'", "me('/me'"]) {
-        expect(decl, contains(expected), reason: '既有 Tab 值被改动');
+      for (final expected in ["profile('/profile'", "shop('/shop'", "home('/home'", "me('/me'"]) {
+        expect(decl, contains(expected), reason: 'Tab 值被改动');
       }
-      expect(decl, isNot(contains('shop')),
-          reason: 'Tab 位序归 DEP-1、图标归 DEP-2，均未闭合；本版本只挂路由不动 Tab（并行契约 C 类）');
+      expect(decl, isNot(contains("triage('/triage'")),
+          reason: 'Health 已让出 Tab 位给 Toko');
+
+      // 🔴 问诊让出 Tab 位后必须仍有界面入口，否则「问诊已并入健康记录」只是说法。
+      //    这是 DEP-1 闭合的前置条件，删掉入口 = 让一个付费功能失去唯一通路。
+      final health = File('lib/features/profile/presentation/health_list_page.dart').readAsStringSync();
+      expect(health, contains("ValueKey('healthStartConsult')"),
+          reason: '健康记录页的「发起问诊」入口被移除 —— 问诊将无任何界面通路');
+      expect(health, contains("push('/triage')"),
+          reason: '发起问诊应 push（/triage 已非 shell 分支根，push 保留返回栈）');
+
+      // 🔴 /triage 不再是 shell 分支，但十余处 context.go('/triage') 仍以它为返回落点。
+      final router = File('lib/core/router/app_router.dart').readAsStringSync();
+      expect(router, contains("GoRoute(path: '/triage'"),
+          reason: '/triage 顶层路由被删 —— 问诊流程结束后的返回落点会 404');
+    });
+
+    test('🔴 通向 /shop 的跳转一律用 go，不得 push（shell 分支根的 GlobalKey 陷阱）', () {
+      // push 一个 shell 分支根会二次构建 StatefulShellRoute → GlobalKey 撞车 → release 白屏，
+      // 且此后该分支 goBranch 持续抛异常（bug 20260729-纪念日通知白屏）。
+      // DEP-1 闭合把 /shop 变成了分支根，健康记录页的 FR-110 跳转当场从无害变成踩雷，
+      // 已同批改为 go。本条防它被改回去，也防新增跳转重蹈覆辙。
+      final roots = File('lib/core/router/deep_link_routes.dart').readAsStringSync();
+      expect(roots, contains("'/shop'"), reason: '/shop 应登记为 shell 分支根');
+      expect(roots, isNot(contains("'/triage', '/me'")), reason: '/triage 已不是分支根');
+
+      for (final f in Directory('lib').listSync(recursive: true).whereType<File>()
+          .where((f) => f.path.endsWith('.dart'))) {
+        final src = f.readAsStringSync();
+        expect(src, isNot(contains("push('/shop?")),
+            reason: '${f.path}: 用 push 打开 Toko 会白屏，改用 context.go');
+        expect(src, isNot(contains("push('/shop')")),
+            reason: '${f.path}: 用 push 打开 Toko 会白屏，改用 context.go');
+      }
     });
 
     test('🔴 受控路由白名单未被改动，且 /shop 未被加入（游客须能直接浏览）', () {

@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!-- 用户标签管理（V1.1.6 Story 11.3 · AB-12A）。
+     🔴 「同时只展示 3 个、按分配时间倒序」的实现在 App 侧的 UserTagQueryService，
+        本页的「当前展示中 / 超出上限未展示」一列**直接问它**，后台不自己排序 ——
+        各写一遍的表现是"后台说会展示这三个、App 上却是另三个"，运营手里没有任何线索能查。
+     🛡 生效判定查询时按 [starts_at, ends_at) 算，ends_at 为空 = 永久；无状态列、无扫描器。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.utags.title}">用户标签 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1 th:text="#{admin.utags.title}">用户标签</h1>
+        <p class="muted" th:text="#{admin.utags.subtitle}">给用户挂身份标签。</p>
+
+        <!-- 🔴 展示上限说明（AC3）。**这段不可删** ——
+             不提示的话，运营分配了标签、以为用户身上就能看见，实际被顶掉了，
+             他会以为是 bug，然后重复分配。 -->
+        <div class="banner warn" id="userTagCapNotice"
+             th:text="${#messages.msg('admin.utags.capNotice', maxVisible, maxVisible + 1)}">
+            用户端同时只展示 3 个标签……
+        </div>
+
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+
+        <!-- 标签列表 -->
+        <table class="table">
+            <thead>
+            <tr>
+                <th th:text="#{admin.utags.code}">标签码</th>
+                <th th:text="#{admin.utags.name}">名称</th>
+                <th th:text="#{admin.utags.description}">说明文案</th>
+                <th th:text="#{admin.utags.activeCount}">生效中分配数</th>
+                <th th:text="#{admin.utags.status}">状态</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:if="${#lists.isEmpty(tags)}">
+                <td colspan="6" class="muted" th:text="#{admin.utags.empty}">还没有任何用户标签。</td>
+            </tr>
+            <tr th:each="t : ${tags}">
+                <td th:text="${t.code}">code</td>
+                <td th:text="${t.name}">名称</td>
+                <td th:text="${t.description}">说明</td>
+                <td><a th:href="@{/admin/user-tags(tagId=${t.id})}" th:text="${t.activeAssignments}">0</a></td>
+                <td>
+                    <span class="badge" th:classappend="${t.retired} ? '' : 'badge-ok'"
+                          th:text="${t.retired} ? #{admin.utags.retired} : #{admin.utags.online}">在线</span>
+                </td>
+                <td sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.tag_manage')">
+                    <form class="inline-form" method="post" enctype="multipart/form-data"
+                          th:action="@{/admin/user-tags/{id}/edit(id=${t.id})}">
+                        <input type="text" name="name" th:value="${t.name}" required/>
+                        <!-- Story 11.5：图标改为上传。🛡 行内编辑**不设 required** ——
+                             不选文件表示"保留原图标"，运营改错别字时不该被迫重传一次图。 -->
+                        <img th:if="${t.icon != null and #strings.startsWith(t.icon, 'http')}"
+                             th:src="${t.icon}" alt="" width="20" height="20"
+                             style="vertical-align:middle;border-radius:4px"/>
+                        <span th:if="${t.icon != null and !#strings.startsWith(t.icon, 'http')}"
+                              th:text="${t.icon}" title="存量字符图标，重新上传即替换"></span>
+                        <input type="file" name="iconFile" accept="image/png,image/webp"/>
+                        <input type="text" name="description" th:value="${t.description}" required/>
+                        <button type="submit" class="btn btn-sm" th:text="#{admin.utags.edit}">编辑</button>
+                    </form>
+                    <form class="inline-form" method="post"
+                          th:action="@{/admin/user-tags/{id}/retire(id=${t.id})}">
+                        <input type="hidden" name="retired" th:value="${!t.retired}"/>
+                        <button type="submit" class="btn btn-sm"
+                                th:classappend="${t.retired} ? '' : 'btn-danger'"
+                                th:attr="data-confirm=${t.retired} ? null : #{admin.utags.retireConfirm}"
+                                th:text="${t.retired} ? #{admin.utags.restore} : #{admin.utags.retire}">下线</button>
+                    </form>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+
+        <!-- 新建标签 -->
+        <div class="card" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.tag_manage')">
+            <h2 th:text="#{admin.utags.newTag}">新建标签</h2>
+            <form method="post" enctype="multipart/form-data" th:action="@{/admin/user-tags}">
+                <label><span th:text="#{admin.utags.code}">标签码</span>
+                    <input type="text" name="code" class="field-full" required/></label>
+                <label><span th:text="#{admin.utags.name}">名称</span>
+                    <input type="text" name="name" class="field-full" required/></label>
+                <label><span th:text="#{admin.utags.icon}">图标</span>
+                    <input type="file" name="iconFile" accept="image/png,image/webp" required/></label>
+                <!-- 🔴 AC3：尺寸规范必须常驻在上传控件旁。
+                     不写的后果不是运营填错一次，而是每换一个人就问一遍，
+                     且传了不合规的图只会看到一句报错、不知道该改成多少。 -->
+                <p class="muted" data-notice="tag-icon-spec" th:text="${iconSpec}">
+                    PNG 或 WebP，必须透明底；正方形，最短边 ≥ 72 像素、最长边 ≤ 1024 像素；文件 ≤ 512 KB。
+                </p>
+                <label><span th:text="#{admin.utags.description}">说明文案</span>
+                    <input type="text" name="description" class="field-full" maxlength="140" required/></label>
+                <button type="submit" class="btn btn-primary" th:text="#{admin.utags.save}">保存</button>
+            </form>
+        </div>
+
+        <!-- 批量分配 -->
+        <div class="card" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.tag_manage')">
+            <h2 th:text="#{admin.utags.assignTitle}">批量分配</h2>
+            <form method="post" th:action="@{/admin/user-tags/assign}">
+                <label>
+                    <span th:text="#{admin.utags.name}">标签</span>
+                    <!-- 🛡 只列在线标签 -->
+                    <select name="tagId" required>
+                        <option th:each="t : ${assignable}" th:value="${t.id}"
+                                th:text="${t.name} + ' (' + ${t.code} + ')'">标签</option>
+                    </select>
+                </label>
+                <label>
+                    <span th:text="#{admin.utags.userIds}">用户 ID</span>
+                    <textarea name="userIds" class="field-full" rows="3"
+                              placeholder="1001, 1002 1003"></textarea>
+                </label>
+                <label>
+                    <span th:text="#{admin.utags.window}">生效时间（WIB，结束可留空 = 永久）</span>
+                    <input type="datetime-local" name="startsAt" required/>
+                    <input type="datetime-local" name="endsAt"/>
+                    <!-- 🛡 WIB 字样必须在输入框旁 -->
+                    <span class="muted">WIB</span>
+                </label>
+                <button type="submit" class="btn btn-primary" th:text="#{admin.utags.assign}">分配</button>
+            </form>
+        </div>
+
+        <!-- 分配记录：按标签 / 按用户两种维度 -->
+        <div class="card">
+            <h2 th:text="#{admin.utags.assignments}">分配记录</h2>
+            <form class="filter-bar" method="get" th:action="@{/admin/user-tags}" data-autosubmit>
+                <label>
+                    <span th:text="#{admin.utags.byTag}">按标签看</span>
+                    <select name="tagId">
+                        <option value=""></option>
+                        <option th:each="t : ${tags}" th:value="${t.id}" th:text="${t.name}"
+                                th:selected="${tagId != null and t.id == tagId}">标签</option>
+                    </select>
+                </label>
+                <label>
+                    <span th:text="#{admin.utags.byUser}">按用户看</span>
+                    <input type="number" name="userId" th:value="${userId}"
+                           th:placeholder="#{admin.utags.userId}"/>
+                </label>
+            </form>
+
+            <!-- 🔴 按用户看时，若该用户已达展示上限，就地把后果说清楚 -->
+            <div class="banner warn" th:if="${activeCount != null and activeCount >= maxVisible}"
+                 th:text="${#messages.msg('admin.utags.capHit', maxVisible)}">已达展示上限</div>
+
+            <table class="table" th:if="${assignments != null}">
+                <thead>
+                <tr>
+                    <th th:text="#{admin.utags.userId}">用户 ID</th>
+                    <th th:text="#{admin.utags.name}">标签</th>
+                    <th th:text="#{admin.utags.window}">生效时间</th>
+                    <th th:text="#{admin.utags.status}">展示</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:if="${#lists.isEmpty(assignments)}">
+                    <td colspan="5" class="muted" th:text="#{admin.utags.assignmentsEmpty}">没有符合条件的分配记录。</td>
+                </tr>
+                <tr th:each="a : ${assignments}">
+                    <td th:text="${a.userId}">1</td>
+                    <td th:text="${a.tagName}">标签</td>
+                    <td>
+                        <span th:text="${#temporals.format(a.startsAt, 'yyyy-MM-dd HH:mm', 'Asia/Jakarta')}">开始</span>
+                        –
+                        <span th:if="${a.permanent}" th:text="#{admin.utags.permanent}">永久</span>
+                        <span th:unless="${a.permanent}"
+                              th:text="${#temporals.format(a.endsAt, 'yyyy-MM-dd HH:mm', 'Asia/Jakarta')}">结束</span>
+                        <span class="muted">WIB</span>
+                    </td>
+                    <td>
+                        <!-- 🔴 这一列的值来自 App 侧那份权威实现，后台不排序 -->
+                        <span class="badge" th:classappend="${a.visible} ? 'badge-ok' : ''"
+                              th:text="${a.visible} ? #{admin.utags.visible} : #{admin.utags.hidden}">展示</span>
+                    </td>
+                    <td sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.tag_manage')">
+                        <form class="inline-form" method="post"
+                              th:action="@{/admin/user-tags/assignments/{id}/remove(id=${a.id})}">
+                            <button type="submit" class="btn btn-sm btn-danger"
+                                    th:attr="data-confirm=#{admin.utags.removeConfirm}"
+                                    th:text="#{admin.utags.remove}">取消分配</button>
+                        </form>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+</body>
+</html>
