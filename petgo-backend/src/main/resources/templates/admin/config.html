@@ -50,8 +50,59 @@
                 <input type="number" name="premiumFixed" min="0" th:value="${pawcoin.premiumFixed}"/></label>
             <label><span th:text="#{admin.config.topupPaused}">暂停充值</span>
                 <input type="checkbox" name="topupPaused" value="true" th:checked="${pawcoin.topupPaused}"/></label>
+
             <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.config.btn.savePawcoin}">保存 PawCoin 配置</button>
         </form>
+
+        <!-- ══ V1.1.6 Story 18.3 · AB-3M：分享奖励 ══
+             🛡 独立 form + 独立权限码（AC5）：关总开关不该顺带要「改兽医定价与分成」的权限。
+             🛡 落库仍是同一张 pawcoin_config 单行、同一个 PAWCOIN diff 审计组（AC1/AC6）。 -->
+        <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.share_reward_view')"
+             th:with="ov=${shareRewardOverview}">
+            <h2 th:text="#{admin.config.shareReward}">分享奖励</h2>
+
+            <!-- 🔴 AC2：白嫖倍数必须与配置**同屏**。两个数分开看都合理，
+                 放一起才看得出风险 —— 「月上限 30 / HD 解锁 60 = 两个月白嫖一次」。 -->
+            <p class="hint" data-notice="share-reward-freeride">
+                <span th:text="#{admin.config.shareReward.hdPrice}">当前 HD 解锁价</span>:
+                <b th:text="${ov.hdPrice()}">5000</b> ·
+                <span th:text="#{admin.config.shareReward.monthlyCap}">月度上限</span>:
+                <b th:text="${ov.monthlyCap()}">2000</b> &rArr;
+                <b th:if="${ov.monthsPerHdUnlock() != null}"
+                   th:text="|#{admin.config.shareReward.monthsPrefix} ${ov.monthsPerHdUnlock()} #{admin.config.shareReward.monthsSuffix}|">攒满 2.5 个月额度可换一次 HD 解锁</b>
+                <b th:if="${ov.monthsPerHdUnlock() == null}"
+                   th:text="#{admin.config.shareReward.noGrant}">月度上限为 0 ⇒ 不发币</b>
+            </p>
+
+            <!-- ⚠️ AC3：不给当月消耗，运营改这个数就是拍脑袋。WIB 字样显式标出。 -->
+            <p class="hint" data-notice="share-reward-usage">
+                <b th:text="${ov.period()}">2026-08</b>
+                <span th:text="#{admin.config.shareReward.wib}">（WIB 自然月）</span> ·
+                <span th:text="#{admin.config.shareReward.granted}">已发放</span>
+                <b th:text="${ov.grantedThisMonth()}">0</b> ·
+                <span th:text="#{admin.config.shareReward.atCap}">达上限账号数</span>
+                <b th:text="${ov.accountsAtCap()}">0</b>
+            </p>
+
+            <form method="post" th:action="@{/admin/config/share-reward}"
+                  sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.share_reward_edit')">
+                <!-- 🔴 总开关：发现被刷要能立刻全线关掉，优先于任何渠道层配置。 -->
+                <label><span th:text="#{admin.config.shareRewardEnabled}">分享奖励总开关</span>
+                    <input type="checkbox" name="shareRewardEnabled" value="true"
+                           th:checked="${pawcoin.shareRewardEnabled}"/></label>
+                <label><span th:text="#{admin.config.shareRewardMonthlyCap}">月度免费获取上限</span>
+                    <input type="number" name="shareRewardMonthlyCap" min="0" step="1"
+                           th:value="${pawcoin.shareRewardMonthlyCap}"/></label>
+                <label><span th:text="#{admin.config.idCardShareReward}">身份证分享每次发放</span>
+                    <input type="number" name="idCardShareReward" min="0" step="1"
+                           th:value="${pawcoin.idCardShareReward}"/></label>
+                <label><span th:text="#{admin.config.idCardShareDailyCap}">身份证分享每日次数上限</span>
+                    <input type="number" name="idCardShareDailyCap" min="0" step="1"
+                           th:value="${pawcoin.idCardShareDailyCap}"/></label>
+                <button type="submit" class="btn btn-primary btn-sm"
+                        th:text="#{admin.config.btn.saveShareReward}">保存分享奖励配置</button>
+            </form>
+        </div>
 
         <!-- 充值档位（AB-6B）——保底 ≥1 启用 -->
         <h2 th:text="#{admin.config.tiers}">充值档位</h2>
@@ -75,6 +126,79 @@
             </tr>
             </tbody>
         </table>
+    </div>
+
+    <!-- V1.1.6 Story 16.4（FR-95）：首页推荐算法打分参数。
+         🛡 挂在既有配置页，**不新建后台模块**（AC2）。 -->
+    <div class="card" data-section="feed-rank">
+        <h2>首页推荐算法</h2>
+        <p class="muted" data-notice="feed-rank-why">
+            ⚠️ 这些参数<b>第一次校准必然在发版之后</b>：首页点赞与推荐算法同批上线，
+            开发阶段线上没有首页点赞数据，权重与分位数无从校准。改这里<b>无需发版</b>，下一次刷新即生效。
+        </p>
+        <p class="muted" data-notice="p95-dynamic">
+            <b>互动量 95 分位（P95）</b>：<span th:text="${feedRank.interactionP95}">0</span>
+            —— 🔴 <b>系统每 6 小时自动重算</b>（近 30 天），不是手填项，所以这里没有输入框。
+            上次重算：<span th:text="${feedRank.p95RecomputedAt} != null
+                ? ${feedRank.p95RecomputedAt} : '尚未跑过（此时由本次候选池现算兜底）'">-</span>。
+            重算失败会沿用上一次的值，<b>不会回落到 0</b>。
+        </p>
+        <form method="post" th:action="@{/admin/config/feed-rank}"
+              sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.edit')">
+            <label><span>新鲜度权重（默认 0.6）</span>
+                <input type="number" step="0.01" min="0" name="freshnessWeight"
+                       th:value="${feedRank.freshnessWeight}"/></label>
+            <label><span>互动度权重（默认 0.4）</span>
+                <input type="number" step="0.01" min="0" name="interactionWeight"
+                       th:value="${feedRank.interactionWeight}"/></label>
+            <label><span>评论权重（相对点赞，默认 2）</span>
+                <input type="number" step="0.1" min="0" name="commentWeight"
+                       th:value="${feedRank.commentWeight}"/></label>
+            <label><span>曝光衰减（0–1，默认 0.3）</span>
+                <input type="number" step="0.05" min="0" max="1" name="exposureDecay"
+                       th:value="${feedRank.exposureDecay}"/></label>
+            <label><span>限流系数（0–1 两端不取，默认 0.2）</span>
+                <input type="number" step="0.05" min="0.05" max="0.95" name="throttleFactor"
+                       th:value="${feedRank.throttleFactor}"/></label>
+            <label><span>曝光窗口（天，默认 7）</span>
+                <input type="number" min="1" name="seenWindowDays"
+                       th:value="${feedRank.seenWindowDays}"/></label>
+            <label><span>配比窗口（条，默认 10）</span>
+                <input type="number" min="2" name="windowSize"
+                       th:value="${feedRank.windowSize}"/></label>
+
+            <p class="muted" data-notice="throttle-factor">
+                🛡 <b>限流系数</b>是被限流内容在打分时乘的那个数，<b>平台级、不逐条调</b>。
+                两端都不取：取 <b>1</b> 等于没处置；取 <b>0</b> 会让被限流的内容分数恒为 0、
+                永远排不进首页 —— 那是<b>下架</b>而不是降权，而限流的定义就是「降权不下架」
+                （直链与作者主页始终照常可访问）。
+            </p>
+
+            <p class="muted" data-notice="quota-sum">
+                🛡 下面两组配比<b>各自之和必须等于窗口大小</b>，否则拒绝保存 ——
+                凑不满或溢出<b>不会报错</b>，只会让首页节奏莫名其妙。
+                属性配比里<b>单项还不得超过窗口的一半</b>，否则必然出现同属性相邻。
+            </p>
+            <label><span>属性配比 · 逗趣/日常（默认 5）</span>
+                <input type="number" min="0" name="attrFunQuota"
+                       th:value="${feedRank.attrFunQuota}"/></label>
+            <label><span>属性配比 · 科普（默认 3）</span>
+                <input type="number" min="0" name="attrEduQuota"
+                       th:value="${feedRank.attrEduQuota}"/></label>
+            <label><span>属性配比 · 生活记录（默认 2）</span>
+                <input type="number" min="0" name="attrLifeQuota"
+                       th:value="${feedRank.attrLifeQuota}"/></label>
+            <label><span>物种配比 · 主物种（默认 6）</span>
+                <input type="number" min="0" name="speciesMainQuota"
+                       th:value="${feedRank.speciesMainQuota}"/></label>
+            <label><span>物种配比 · 其他物种（默认 2）</span>
+                <input type="number" min="0" name="speciesOtherQuota"
+                       th:value="${feedRank.speciesOtherQuota}"/></label>
+            <label><span>物种配比 · 通用（默认 2）</span>
+                <input type="number" min="0" name="speciesGeneralQuota"
+                       th:value="${feedRank.speciesGeneralQuota}"/></label>
+            <button type="submit" class="btn btn-primary btn-sm">保存推荐算法参数</button>
+        </form>
     </div>
 </div>
 </body>

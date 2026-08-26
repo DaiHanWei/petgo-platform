@@ -52,6 +52,7 @@ class _FakeRepo implements ProfileRepository {
     String? avatarUrl,
     String? breed,
     DateTime? birthday,
+    String? sex,
     String? intro,
     double? weightKg,
     String? neuterStatus,

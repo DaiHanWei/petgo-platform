@@ -9,6 +9,7 @@ import 'deep_link_routes.dart';
 import '../theme/app_theme.dart';
 
 import '../../features/auth/domain/auth_state.dart';
+import '../../features/auth/domain/login_guide_controller.dart';
 import '../../features/auth/domain/user_state.dart';
 import '../../features/auth/presentation/dev_login_guide_page.dart';
 import '../../features/auth/presentation/login_page.dart';
@@ -35,6 +36,7 @@ import '../../features/auth/presentation/nickname_page.dart';
 import '../../features/auth/presentation/pet_status_page.dart';
 import '../../features/content/domain/content_type.dart';
 import '../../features/content/presentation/content_detail_page.dart';
+import '../../features/content/presentation/shared_post_page.dart';
 import '../../features/content/presentation/home_page.dart';
 import '../../features/content/presentation/publish_landing_page.dart';
 import '../../features/content/presentation/publish_result_page.dart';
@@ -64,7 +66,8 @@ import '../../features/profile/presentation/id_card_detail_page.dart';
 import '../../features/profile/presentation/id_card_page.dart';
 import '../../features/profile/presentation/milestone_list_page.dart';
 import '../../features/profile/domain/pet_profile.dart';
-import '../../features/notify/data/push_permission_providers.dart';
+import '../../features/notify/domain/push_permission_prompt.dart';
+import '../../features/notify/presentation/push_permission_guide_flow.dart';
 import '../../features/onboarding/presentation/splash_page.dart';
 import '../../features/profile/presentation/pet_profile_create_page.dart';
 import '../../features/profile/presentation/day_detail_page.dart';
@@ -210,16 +213,42 @@ bool redirectWouldRewrite(AuthState auth, String location) {
   return !auth.isLoggedIn && controlled;
 }
 
+/// 热启动落深链（app 已活、被深链唤起）。
+///
+/// 🔴 **V1.1.6 Story 2.4 起必须走这里，不能再直接 `go`。**
+/// 在此之前名片深链落的是 `/profile`（一个 Tab 根），`go` 掉整个栈也无所谓 ——
+/// 用户落在带底部导航的主界面里，哪儿都去得了。
+/// 现在落的是 `/pet/{token}`，一个**在 Tab 外**的顶层路由：`go` 之后既没有底部导航、
+/// 也没有返回栈，**按返回键会直接退出 App**（2026-08-18 L2 实测踩到）。
+/// 对一个「从 WhatsApp 点链接进来」的人来说，那就是一条死路 ——
+/// 而这条链路的全部意义正是把人**引进** App。
+void goDeepLinkFromLiveApp(WidgetRef ref, String location) {
+  final ctx = rootNavigatorKey.currentContext;
+  if (ctx == null || !ctx.mounted) {
+    ref.read(routerProvider).go(location); // 极端兜底：拿不到 context 时至少别丢深链
+    return;
+  }
+  _goDeepLinkWith(ctx, () => ref.read(authControllerProvider), location);
+}
+
 /// 冷启动落深链：需要底座的先 `go` 到落地矩阵目标，再把深链 `push` 上去（这样才可返回）。
 ///
 /// 底座取**落地矩阵目标**而不是写死 `/home`：游客/已建档用户落 Diary、其余落 Social，
 /// 返回后看到的是他本该看到的那一屏，与不点推送直接冷启动完全一致。
-void _goDeepLink(BuildContext ctx, Ref ref, String location) {
+void _goDeepLink(BuildContext ctx, Ref ref, String location) =>
+    _goDeepLinkWith(ctx, () => ref.read(authControllerProvider), location);
+
+/// 冷启动与热启动共用的实现。
+///
+/// 两处的 ref 类型不同（`Ref` / `WidgetRef`），而这里只需要「当前登录态」这一样东西，
+/// 故把它做成一个取值函数传进来 —— 既避免复制一份逻辑，也保留「用时才读」：
+/// 下面那次读发生在**下一帧**，不能提前取快照。
+void _goDeepLinkWith(BuildContext ctx, AuthState Function() authNow, String location) {
   if (!deepLinkNeedsBaseRoute(location)) {
     ctx.go(location);
     return;
   }
-  ctx.go(appUserStateOf(ref.read(authControllerProvider)).landingLocation);
+  ctx.go(appUserStateOf(authNow()).landingLocation);
   // ⚠️ **必须等下一帧再 push，不能和 go 同帧发出**（2026-08-07 实测）：go_router 的 `go`
   // 走的是 RouteInformationParser 的**异步**解析，调用返回时 `currentConfiguration` 还是旧值。
   // 同帧接着 push，等于把目标叠在**旧栈**（/splash）上，随后 go 的解析落地又把整个栈替换掉 ——
@@ -229,7 +258,7 @@ void _goDeepLink(BuildContext ctx, Ref ref, String location) {
     if (c == null || !c.mounted) return;
     // PR#34 finding #8（孪生位）：游客/角色不符时受控深链会被 redirect 改写到 shell 根，
     // push 它 = GlobalKey 撞车白屏。底座已是该状态的正确落地页，直接放弃叠加。
-    if (redirectWouldRewrite(ref.read(authControllerProvider), location)) return;
+    if (redirectWouldRewrite(authNow(), location)) return;
     c.push(location);
   });
 }
@@ -645,10 +674,19 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
             petName: created.name,
             avatarUrl: created.avatarUrl,
             onStartExplore: () async {
-              // FR-22D 建档时机（庆祝页后、进首页前）：触发推送权限闸门（Story 6.4）。
-              // neverConsulted 传 true 安全——已问诊者其 `alreadyAsked` 守卫已使闸门跳过（取最早、仅一次）。
-              final gate = await ref.read(pushPermissionGateProvider.future);
-              await gate.maybeRequestAfterProfileCreated(neverConsulted: true);
+              // 触发点 2「建档后」（V1.1.6 Story 8.2 / FR-85）：庆祝页后、进首页前。
+              //
+              // 🔴 这里原先调的是 Story 6.4 的 PushPermissionGate ——
+              //    它的门是 `!alreadyAsked`，而那个键被第二代「首启即申请」
+              //    （PushPermissionBootstrap，2026-08-07）在**首次冷启动**就置位了
+              //    ⇒ 对所有用户恒 false，这个时机事实上从未触发过。
+              //    旧类按 AD-14 Rule 3 保留不删（仍供「我的」页被动引导用），但这里改走新模型。
+              //
+              // ⚠️ 不再传 neverConsulted：那是旧「双时机取最早、全局仅一次」模型的去重手段。
+              //    新模型是**多触发点、每点各一次**（AD-14 Rule 2 四键物理隔离），
+              //    触发点 1 与 2 相互独立 —— 沿用 neverConsulted 会压掉已问诊用户的建档那次机会，
+              //    与本 FR「多给几次机会」的目的相反。
+              await maybeShowPushPermissionGuide(c, PushTriggerPoint.profileCreated);
               if (c.mounted) c.go('/home');
             },
           );
@@ -847,7 +885,65 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // 内容详情（Story 3.3）。shell 外顶层 push（隐藏 Tab Bar）；返回保持 Feed 滚动位置。游客只读可进。
       GoRoute(
         path: '/content/:id',
-        builder: (c, s) => ContentDetailPage(postId: int.parse(s.pathParameters['id']!)),
+        // `?focus=comments` → 进来直接滚到评论区（V1.1.6 Story 3.2 · AC4）。
+        // ⚠️ 这个参数名**早就存在**：通知深链在生成"评论锚点"跳转时一直在产出它
+        // （deep_link_routes.dart，测试也断言了这个串），只是详情页从没消费过。
+        // 首页评论按钮沿用同一个名字 —— 两侧同名是硬要求，且接通后通知那条链路也跟着好了。
+        //
+        // ⚠️ 别与 `/profile/health?focus=<记录编号>` 混淆：同名不同义，路由不同不冲突。
+        builder: (c, s) => ContentDetailPage(
+          postId: int.parse(s.pathParameters['id']!),
+          focusComments: s.uri.queryParameters['focus'] == 'comments',
+        ),
+      ),
+      // ===== V1.1.6 Story 2.3：App 内访客只读视图（AD-2 Rule 6）=====
+      //
+      // 🛡 **带 token 的独立路由，刻意不复用 `/profile`**：后者对未登录会落游客示例页，
+      // 与「点开分享链接就要看到被分享的那只宠物」直接冲突。
+      //
+      // 🛡 **必须对未登录开放**（同一个链接在浏览器里无需登录即可看完整 Diary，
+      // App 内若要求登录只会把用户推回浏览器）。`/pet` 不在 `_controlledLocations` 任何前缀下，
+      // 因此天然不受门控 —— ⚠️ **不要把它挪到 `/profile/...` 之下**，那会让它自动受控。
+      //
+      // 页面本体复用 `GrowthArchivePage`（AD-4：复用作者态结构做减法，不另建页面），
+      // 由 `visitorToken` 触发第五个状态分支。
+      // 单条内容分享落点（V1.1.6 Story 9.3 · AD-15 Rule 5）。
+      //
+      // 🔴 **与上面的 `/pet/:token` 是两个不同的落地页，刻意不合并**：那边是整本档案的
+      // 只读视图，这里**只有被分享的那一条**。合成一个落点等于把「我只想分享一条」
+      // 变成「我把整本都给你了」—— 这是隐私边界。
+      //
+      // ⚠️ **刻意不进 `_controlledLocations`**：未登录访客必须能直接看（AC3），
+      // 加进受控前缀会把人 redirect 到 /home，等于把他推回浏览器。
+      GoRoute(
+        path: '/shared-post/:token',
+        builder: (c, s) => SharedPostPage(shareToken: s.pathParameters['token']!),
+      ),
+      GoRoute(
+        path: '/pet/:token',
+        builder: (c, s) {
+          // E-27（Story 10.1）：从名片分享链接深链进来的**已装用户**，
+          // 若之后在本次进程里注册，把这笔注册归因给 `pet_card`。
+          // ⚠️ 这一页自己没有注册入口，所以归因必须跨页留痕 —— 见 markPetCardEntry 的注释。
+          LoginGuideController.markPetCardEntry();
+          return GrowthArchivePage(visitorToken: s.pathParameters['token']);
+        },
+        routes: [
+          GoRoute(
+            path: 'day',
+            builder: (c, s) {
+              final raw = s.uri.queryParameters['date'];
+              final date = raw == null ? null : DateTime.tryParse(raw);
+              if (date == null) {
+                return const SizedBox.shrink();
+              }
+              return DayDetailPage(
+                date: date,
+                token: s.pathParameters['token'],
+              );
+            },
+          ),
+        ],
       ),
       // 发布深链着陆（Story 6.1 · FR-40）：PET_BIRTHDAY 深链 → 打开统一发布 sheet，可预选成长日历。受控（需登录）。
       GoRoute(

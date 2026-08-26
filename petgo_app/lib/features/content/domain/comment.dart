@@ -1,3 +1,4 @@
+import '../../auth/domain/user_tag.dart';
 /// 评论（对应后端 `CommentResponse`）。两级：一级含 [replyCount] + 内嵌前 3 条 [replies]；
 /// 二级回复 [replyCount]/[replies] 为 null。
 class Comment {
@@ -8,6 +9,7 @@ class Comment {
     required this.body,
     required this.createdAt,
     this.authorNickname,
+    this.authorTags = const [],
     this.authorAvatarUrl,
     this.replyCount,
     this.replies,
@@ -20,6 +22,12 @@ class Comment {
   final String body;
   final DateTime createdAt;
   final String? authorNickname;
+
+  /// 作者的运营标签（V1.1.6 Story 5.1）。
+  ///
+  /// ⚠️ 评论区是最容易退化成逐条查的地方，但取数在后端的作者投影里整批完成，
+  /// 这里只是把结果读出来。
+  final List<UserTag> authorTags;
   final String? authorAvatarUrl;
 
   /// 一级评论的二级回复总数（二级回复为 null）。
@@ -48,6 +56,7 @@ class Comment {
       body: (json['body'] ?? '') as String,
       createdAt: DateTime.parse(json['createdAt'] as String),
       authorNickname: json['authorNickname'] as String?,
+      authorTags: UserTag.listFromJson(json['authorTags']),
       authorAvatarUrl: json['authorAvatarUrl'] as String?,
       replyCount: json['replyCount'] as int?,
       replies: rawReplies is List

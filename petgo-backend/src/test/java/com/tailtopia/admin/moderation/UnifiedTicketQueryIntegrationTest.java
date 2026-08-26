@@ -229,11 +229,18 @@ class UnifiedTicketQueryIntegrationTest extends ApiIntegrationTest {
                         String.valueOf(author.getId()), PageRequest.of(0, 20))
                 .getContent();
 
-        assertThat(rows).hasSize(1);
-        assertThat(rows.get(0).sourceId()).isEqualTo(post.getId());
-        assertThat(rows.get(0).reporterCount()).isEqualTo(3);
-        assertThat(rows.get(0).score()).isEqualTo(3);
-        assertThat(rows.get(0).preview()).contains("被举报的正文");
+        // ⚠️ 不用 hasSize(1) 断言全局条数。search 的关键字过滤是**昵称子串匹配**，
+        //    而昵称是「用户<随机数>」—— 共享测试库攒得越多，某条陈旧昵称里
+        //    碰巧含有本次新作者 id 的概率就越高（2026-08-25 真的撞了一次：
+        //    残留行昵称「用户1273102991647286」包含新作者 id「47286」）。
+        //    「3 条举报聚合成 1 条工单」这个断言意图落在**这条帖**上就够了，
+        //    与库里有多少别的工单无关。
+        List<UnifiedTicketRow> mine = rows.stream()
+                .filter(r -> r.sourceId() == post.getId().longValue()).toList();
+        assertThat(mine).as("同一条帖的 3 条举报应聚合成 1 条工单").hasSize(1);
+        assertThat(mine.get(0).reporterCount()).isEqualTo(3);
+        assertThat(mine.get(0).score()).isEqualTo(3);
+        assertThat(mine.get(0).preview()).contains("被举报的正文");
     }
 
     // ===== AC6 · 账号标识字段没有举报人，分数按 priority 映射 =====

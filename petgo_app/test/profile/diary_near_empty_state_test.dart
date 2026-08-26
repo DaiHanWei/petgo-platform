@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/features/profile/domain/archive_scope.dart';
+import 'package:tailtopia/features/profile/domain/visitor_profile.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
@@ -25,22 +27,27 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 /// 于是「时间线为空 → 显示引导卡」这个判定**永远不成立**，引导卡从未出现过，
 /// banner 下面是一大片空白。判定必须是「还没有任何快乐时刻」而不是「时间线为空」。
 class _FakeTimelineRepo implements TimelineRepository {
+  /// 本假 repo 只服务作者态；访客态另有专门的测试夹具。
+  @override
+  Future<VisitorProfile> getVisitorProfile(String token) async =>
+      throw UnimplementedError('作者态测试不该走访客接口');
+
   _FakeTimelineRepo(this.nextPage);
 
   final TimelinePage nextPage;
 
   @override
-  Future<TimelinePage> getTimeline({String? cursor, int limit = 20}) async => nextPage;
+  Future<TimelinePage> getTimeline({String? cursor, int limit = 20, ArchiveScope scope = const ArchiveScope.me()}) async => nextPage;
 
   @override
-  Future<CalendarMonth> getCalendar(int year, int month) async =>
+  Future<CalendarMonth> getCalendar(int year, int month, {ArchiveScope scope = const ArchiveScope.me()}) async =>
       CalendarMonth(year: year, month: month, days: const []);
 
   @override
-  Future<DayDetail> getDay(DateTime date) async => DayDetail(date: date, items: const []);
+  Future<DayDetail> getDay(DateTime date, {ArchiveScope scope = const ArchiveScope.me()}) async => DayDetail(date: date, items: const []);
 
   @override
-  Future<ArchiveStats> getStats() async => const ArchiveStats(
+  Future<ArchiveStats> getStats({ArchiveScope scope = const ArchiveScope.me()}) async => const ArchiveStats(
       happyMomentCount: 0, consultCount: 0, milestoneCompleted: 1, milestoneTotal: 31);
 }
 

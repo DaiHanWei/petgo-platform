@@ -30,6 +30,27 @@ public final class AdminPermissions {
     public static final String USER_DELETE = "user.delete";
     /** 后台赠送 PawCoin（bug 20260728-389：运营向指定账户入账 BONUS）。 */
     public static final String USER_GRANT_PAWCOIN = "user.grant_pawcoin";
+    /**
+     * 用户标签管理（V1.1.6 Story 11.3 · AB-12A）。查看 / 编辑分两码。
+     * ⚠️ 编辑权限**不要下放得比其它模块更宽** —— 该页的分配支持批量，
+     * 是"一次影响很多用户"的动作。
+     */
+    public static final String USER_TAG_VIEW = "user.tag_view";
+    public static final String USER_TAG_MANAGE = "user.tag_manage";
+    /**
+     * 用户手机号查看（V1.1.6 Story 11.4 · AB-11A）。
+     *
+     * <p>🔴 手机号是 **PII**，因此**不沿用「能看用户详情就能看手机号」** ——
+     * 后台 PRD 原写「不新增独立权限项」，2026-08-21 决定改为独立权限。
+     */
+    public static final String USER_PHONE_VIEW = "user.phone_view";
+    /**
+     * 召回名单导出（Story 11.4）。
+     *
+     * <p>🔴 **与查看分开的第二个码**：查看是一次看一个人，导出是把 PII **批量带出系统**，
+     * 风险高一档，而且带出之后平台再也管不到它。
+     */
+    public static final String USER_PHONE_EXPORT = "user.phone_export";
 
     // 内容审核（Epic 4）
     public static final String CONTENT_VIEW_REPORTS = "content.view_reports";
@@ -39,6 +60,20 @@ public final class AdminPermissions {
     public static final String CONTENT_PROACTIVE_TAKEDOWN = "content.proactive_takedown";
     /** 人工审核队列：查看 + 通过/拒绝（内容审核 Story 4.3；开关仍限 SUPER_ADMIN）。 */
     public static final String CONTENT_MANUAL_REVIEW = "content.manual_review";
+    /**
+     * 顶置管理（V1.1.6 Story 11.1 · AB-10A）。查看 / 编辑分两码 ——
+     * 顶置直接改首页第一屏，能看不等于能改。
+     * ⚠️ 新功能**不做权限回填迁移**：不给存量账号自动授予才是对的，由超管按需勾选。
+     */
+    public static final String CONTENT_PIN_VIEW = "content.pin_view";
+    public static final String CONTENT_PIN_MANAGE = "content.pin_manage";
+    /**
+     * 内容装饰标签管理（V1.1.6 Story 11.2 · AB-10C）。同样查看 / 编辑分两码 ——
+     * 🔴 打标不只是发荣誉，**它同时是个流量动作**（生效中的标签给该内容 ×1.3 曝光加权），
+     * 能看不等于能改。
+     */
+    public static final String CONTENT_TAG_VIEW = "content.tag_view";
+    public static final String CONTENT_TAG_MANAGE = "content.tag_manage";
     /**
      * 统一工单队列（V1.1.4 Story 3.1，AB-3D）：三类工单一个列表。
      *
@@ -54,6 +89,23 @@ public final class AdminPermissions {
      * 停用账号本来就是一项受管能力，不能因为「他能看工单」就顺带把停用权也给了。
      */
     public static final String CONTENT_DISPOSE_ACCOUNT = "content.dispose_account";
+
+    /**
+     * 查看限流（降权）状态与到期时间（V1.1.6 Story 17.2 · AC5）。
+     *
+     * <p>🛡 与 {@link #CONTENT_THROTTLE_MANAGE} <b>分成两个码</b>：能看见谁在限流，
+     * 和能动手限流/解除，是两件事 —— 客服要看，只有治理岗能动。
+     */
+    public static final String CONTENT_THROTTLE_VIEW = "content.throttle_view";
+
+    /**
+     * 执行限流与手动解除（V1.1.6 Story 17.2 · AC5）。
+     *
+     * <p>⚠️ 刻意<b>不</b>额外要 {@link #USER_DEACTIVATE}（封号那一档才要）：
+     * 限流是降权、可逆、用户不可感知，把它抬到与停用账号同级会让这一档又变得没人敢用 ——
+     * 而这一档存在的全部意义就是「不用在只说一句和直接封之间二选一」。
+     */
+    public static final String CONTENT_THROTTLE_MANAGE = "content.throttle_manage";
 
     // 问诊异常与会话（Epic 5）
     public static final String CONSULT_VIEW_ANOMALIES = "consult.view_anomalies";
@@ -88,11 +140,54 @@ public final class AdminPermissions {
     public static final String VIRTUAL_ACCOUNT_MANAGE = "virtual_account.manage";
     public static final String VIRTUAL_ACCOUNT_VIEW = "virtual_account.view";
 
+    // 内容互动积分统计（V1.1.6 Story 15.1 · AB-3G）
+    /** 互动积分榜查看。 */
+    public static final String CONTENT_STATS_VIEW = "content.stats_view";
+    /**
+     * 互动积分榜导出。
+     *
+     * <p>🔴 <b>与查看分开的第二个码</b>，理由同 Story 11.4：导出是把数据**批量带出系统**，
+     * 风险高一档。⚠️ 本条导出的是内容统计而非 PII，但**既有约定一致更好记** ——
+     * 让"导出永远是单独一个码"成为一条不用查的规矩，比逐个功能权衡更省心。
+     */
+    public static final String CONTENT_STATS_EXPORT = "content.stats_export";
+
+    // 运营发布身份池（V1.1.6 Story 12.1 · AB-3I）
+    /**
+     * 以**运营真实账号**身份发布内容，以及该身份池的纳入 / 移除。
+     *
+     * <p>🔴 <b>与 {@link #VIRTUAL_ACCOUNT_MANAGE} 完全解耦，刻意独立</b>：
+     * 能管虚拟账号 ≠ 能以真人身份发言。以运营真实账号误发的后果**不可撤回** ——
+     * 内容会出现在那个真人的个人主页并推送给他的粉丝，事后删除也已经推送过了。
+     *
+     * <p>本版本**仅分配给超级管理员**，不下放（OQ-24）。权限码独立存在的意义是
+     * 后续如需下放，只改权限配置、不改代码。
+     */
+    public static final String SEED_PUBLISH_AS_REAL = "seed.publish_as_real";
+
     // 运营配置（V1.1 Epic 9，Story 9-2/9-6）——定价 / PawCoin / 红色超额阈值等
     /** 配置查看。 */
     public static final String CONFIG_VIEW = "config.view";
     /** 配置编辑（定价 / PawCoin / 阈值）。 */
     public static final String CONFIG_EDIT = "config.edit";
+
+    /**
+     * 查看分享奖励配置与当月消耗（V1.1.6 Story 18.3 · AC5）。
+     *
+     * <p>🛡 与 {@link #CONFIG_VIEW} 分开：分享奖励是增长侧的数，
+     * 让增长看得到它不该顺带把兽医定价与分成比例也放出去。
+     */
+    public static final String CONFIG_SHARE_REWARD_VIEW = "config.share_reward_view";
+
+    /**
+     * 改分享奖励四项，含**总开关**（V1.1.6 Story 18.3 · AC5）。
+     *
+     * <p>🔴 与 {@link #CONFIG_EDIT} 分开的理由是**可用性**而不是洁癖：
+     * 总开关存在的全部意义是「发现被刷要能立刻全线关掉」，
+     * 而 {@code config.edit} 那道门管着兽医单价与分成比例 —— 只有极少数人过得去。
+     * 把开关塞在那道门后面，"立刻"就根本做不到。
+     */
+    public static final String CONFIG_SHARE_REWARD_EDIT = "config.share_reward_edit";
 
     // 兽医分成月结对账（V1.1 Epic 9，Story 9-5）
     /** 月结对账查看。 */
@@ -158,25 +253,27 @@ public final class AdminPermissions {
     /** 按查看/编辑分组，供账号页勾选区展示。 */
     public static final List<PermissionGroup> GROUPS = List.of(
             new PermissionGroup("perm.group.view", List.of(
-                    CONTENT_VIEW_REPORTS, CONTENT_VIEW_TICKETS, CONTENT_VIEW,
-                    USER_VIEW,
+                    CONTENT_VIEW_REPORTS, CONTENT_VIEW_TICKETS, CONTENT_VIEW, CONTENT_PIN_VIEW, CONTENT_TAG_VIEW,
+                    USER_VIEW, USER_TAG_VIEW, USER_PHONE_VIEW, USER_PHONE_EXPORT,
+                    CONTENT_STATS_VIEW, CONTENT_STATS_EXPORT, CONTENT_THROTTLE_VIEW,
                     VET_VIEW, VET_QUALIFY_VIEW, RATING_VIEW,
                     CONSULT_VIEW_ANOMALIES, CONSULT_VIEW_SESSIONS,
                     SUPPORT_VIEW, REFUND_VIEW,
-                    CONFIG_VIEW, ORDER_VIEW, ORDER_EXPORT, SETTLEMENT_VIEW, PAYMENT_VIEW, RISK_VIEW,
+                    CONFIG_VIEW, CONFIG_SHARE_REWARD_VIEW, ORDER_VIEW, ORDER_EXPORT, SETTLEMENT_VIEW, PAYMENT_VIEW, RISK_VIEW,
                     VIRTUAL_ACCOUNT_VIEW,
                     ADMIN_VIEW_ACCOUNTS, ADMIN_VIEW_LOGS,
                     SHOP_PRODUCT_VIEW, SHOP_COST_VIEW, SHOP_INVENTORY_VIEW,
                     SHOP_ORDER_VIEW, SHOP_ORDER_PHONE_SEARCH, SHOP_FINANCE_VIEW)),
             new PermissionGroup("perm.group.edit", List.of(
                     CONTENT_TAKEDOWN, CONTENT_RESTORE, CONTENT_PROACTIVE_TAKEDOWN,
-                    CONTENT_MANUAL_REVIEW, CONTENT_DISPOSE_ACCOUNT,
-                    USER_DEACTIVATE, USER_DELETE, USER_GRANT_PAWCOIN,
+                    CONTENT_MANUAL_REVIEW, CONTENT_DISPOSE_ACCOUNT, CONTENT_THROTTLE_MANAGE,
+                    CONTENT_PIN_MANAGE, CONTENT_TAG_MANAGE,
+                    USER_DEACTIVATE, USER_DELETE, USER_GRANT_PAWCOIN, USER_TAG_MANAGE,
                     VET_CREATE, VET_EDIT, VET_BAN, VET_RESET_PASSWORD, VET_QUALIFY,
                     CONSULT_HANDLE,
                     SUPPORT_HANDLE, REFUND_SUBMIT, REFUND_APPROVE, REFUND_PAYOUT,
-                    CONFIG_EDIT, ORDER_EDIT, SETTLEMENT_PAYOUT, RISK_EDIT,
-                    VIRTUAL_ACCOUNT_MANAGE,
+                    CONFIG_EDIT, CONFIG_SHARE_REWARD_EDIT, ORDER_EDIT, SETTLEMENT_PAYOUT, RISK_EDIT,
+                    VIRTUAL_ACCOUNT_MANAGE, SEED_PUBLISH_AS_REAL,
                     ADMIN_CREATE_ACCOUNT, ADMIN_DEACTIVATE,
                     SHOP_PRODUCT_EDIT, SHOP_COST_EDIT, SHOP_INVENTORY_EDIT,
                     SHOP_ORDER_FULFILL)));

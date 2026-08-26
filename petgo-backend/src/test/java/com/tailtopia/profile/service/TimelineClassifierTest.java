@@ -24,6 +24,8 @@ class TimelineClassifierTest {
     private static final LocalDate D = LocalDate.of(2026, 5, 20);
     private static final Instant T9 = Instant.parse("2026-05-20T09:00:00Z");
     private static final Instant T10 = Instant.parse("2026-05-20T10:00:00Z");
+    /** 问诊存档的就诊日期（V1.1.6 起随条目下发）。本类用例不涉及"补录旧问诊"，取当天即可。 */
+    private static final java.time.LocalDate DAY = java.time.LocalDate.parse("2026-05-20");
 
     private static ContentCandidate content(long id, Instant createdAt, LocalDate eventDate) {
         return new ContentCandidate(id, createdAt, eventDate, List.of("https://x/1.jpg"), "文字");
@@ -39,7 +41,7 @@ class TimelineClassifierTest {
     void step1_healthRecordAndConsultArchive_areClassFour() {
         List<TimelineItemResponse> health = List.of(
                 TimelineItemResponse.healthRecord(7L, T9, D, "VACCINE", "第一针"),
-                TimelineItemResponse.healthEvent(T10, "GREEN", "轻微腹泻", "AI_TRIAGE", "triage:1"));
+                TimelineItemResponse.healthEvent(T10, DAY, "GREEN", "轻微腹泻", "AI_TRIAGE", "triage:1"));
 
         List<TimelineItemResponse> out =
                 TimelineClassifier.classify(List.of(), health, List.of(), List.of());
@@ -161,7 +163,7 @@ class TimelineClassifierTest {
 
         // ② 日后**补存** → 当天出现问诊存档条目 → 立即重查：banner 消失、由类④ 胶囊承载。
         List<TimelineItemResponse> after = TimelineClassifier.classify(List.of(),
-                List.of(TimelineItemResponse.healthEvent(T9, "GREEN", "轻微腹泻", "VET_CONSULT", "consult:9")),
+                List.of(TimelineItemResponse.healthEvent(T9, DAY, "GREEN", "轻微腹泻", "VET_CONSULT", "consult:9")),
                 m5, List.of());
 
         assertThat(after).singleElement()

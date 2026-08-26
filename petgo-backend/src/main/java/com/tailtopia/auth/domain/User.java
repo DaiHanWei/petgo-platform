@@ -50,6 +50,18 @@ public class User {
     private String signature;
 
     /**
+     * 手机号（V1.1.6 Story 7.1 · FR-70）。选填、**不验证、不用于登录**，仅供运营做流失召回。
+     *
+     * <p>🛡 **属个人信息，禁止写入任何日志**。项目的日志脱敏是**按字段名整串打码**的，
+     * 名单里已经有 {@code phone} —— 所以这个字段**必须叫 phone**。改成 phoneNumber / mobile
+     * 都不会命中，日志里就会出现真实号码，**且不会有任何报错**。命名本身就是护栏。
+     *
+     * <p>{@code null} = 未填写 / 已撤回（用户清空保存即写回 null，个人数据保护法的删除权）。
+     */
+    @Column(name = "phone", length = 32)
+    private String phone;
+
+    /**
      * 昵称当前是否为违规重置生成的系统默认编码名（{@code user_<hex>}，内容审核 story 4，D-CM4）。
      * 违规重置 ≠ 注销匿名化：此标记只随违规重置写入的真实昵称，与 7.3「已注销用户」展示层无关。
      * 用户主动改新昵称时清 false。
@@ -248,6 +260,15 @@ public class User {
         this.signature = signature;
     }
 
+    public String getPhone() {
+        return phone;
+    }
+
+    /** {@code null} = 清空（撤回）。 */
+    public void setPhone(String phone) {
+        this.phone = phone;
+    }
+
     public String getLocale() {
         return locale;
     }
@@ -309,6 +330,28 @@ public class User {
 
     public Instant getDeletedAt() {
         return deletedAt;
+    }
+
+    /**
+     * 账号物种定位（V1.1.6 Story 14.1 · AB-3H）。
+     *
+     * <p>🔴 <b>仅对虚拟账号有意义</b>：算法要 join 作者的宠物档案推导内容物种，
+     * 而虚拟账号创建时只填昵称+头像、<b>不建宠物档案</b> ⇒ 全部种子内容的物种推导都是空，
+     * 而 Tips/科普类主要由虚拟号发布。
+     *
+     * <p>⚠️ {@code null} 在读时按 {@code GENERAL} 解释（存量零回填）——
+     * 见 {@code ContentSpeciesResolver#effectiveAccountSpecies}。
+     * 真实账号恒 {@code null}：它们的物种走作者宠物档案推导。
+     */
+    @Column(name = "account_species", length = 20)
+    private String accountSpecies;
+
+    public String getAccountSpecies() {
+        return accountSpecies;
+    }
+
+    public void setAccountSpecies(String accountSpecies) {
+        this.accountSpecies = accountSpecies;
     }
 
     public AccountType getAccountType() {

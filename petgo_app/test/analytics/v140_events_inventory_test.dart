@@ -93,8 +93,14 @@ void main() {
         for (final p in RegExp(r"'([a-z0-9_]+)':\s").allMatches(m.group(0)!)) {
           final key = p.group(1)!;
           if (allowedDespiteMatch.contains(key)) continue;
+          // 按 snake_case 分词做**全词**匹配：子串匹配会把 template 误判成 lat
+          // （2026-08-26 合并 hex 分享卡时真实发生过），而 user_lat 这种真 PII 仍必中。
+          final words = key.split('_').toSet();
           for (final bad in forbidden) {
-            if (key.contains(bad)) offenders.add('${f.path} → $key（命中 "$bad"）');
+            // 带下划线的禁词（如 token_value）按短语匹配；单词禁词按全词匹配。
+            if (bad.contains('_') ? key.contains(bad) : (words.contains(bad) || key == bad)) {
+              offenders.add('${f.path} → $key（命中 "$bad"）');
+            }
           }
         }
       }

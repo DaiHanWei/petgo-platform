@@ -1,0 +1,118 @@
+package com.tailtopia.content.service;
+
+import com.tailtopia.auth.dto.AuthorView;
+import com.tailtopia.auth.service.AccountQueryService;
+import com.tailtopia.content.domain.ContentPost;
+import com.tailtopia.content.domain.ContentShare;
+import com.tailtopia.content.domain.PostStatus;
+import com.tailtopia.content.dto.ContentShareLinkResponse;
+import com.tailtopia.content.dto.SharedPostResponse;
+import com.tailtopia.content.repository.ContentPostRepository;
+import com.tailtopia.content.repository.ContentShareRepository;
+import com.tailtopia.profile.service.CardTokenGenerator;
+import com.tailtopia.shared.error.AppException;
+import java.util.List;
+import java.util.Optional;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * 单条内容对外分享（Story 9.3 · FR-73）。
+ *
+ * <p>职责：① 作者为自己的某条内容创建/复用分享 token（{@link #createOrRefresh}，按内容幂等）；
+ * ② 公开落地页按 token 取那一条的只读投影（{@link #findSharedPost}）。
+ *
+ * <p>🔴 <b>私密内容被主动分享后，访客可见</b>（AD-15 Rule 6）。这与「访客浏览整本档案看不到私密内容」
+ * 方向相反，且是刻意的：前者是平台自动分发，后者是<b>作者自己按下了分享键</b>。
+ * 这条口径不是本 story 新发明的 —— {@code ContentVisibility} 的注释里早已写明
+ * 「visibility 约束的是平台自动分发，不约束用户自己按下分享键的行为」（OQ-18，2026-08-03 拍板）。
+ * 所以这里<b>不按 visibility 过滤</b>；发现与 Epic 2 不一致时不要去「统一」它们。
+ *
+ * <p>但下面这些仍然要挡（它们不是"作者的授权"，而是"这条内容已经不该存在"）：
+ * 已删除、审核挂起、被举报下架、作者注销 —— 一律收敛到失效，绝不区分原因（防枚举）。
+ */
+@Service
+public class ContentShareService {
+
+    private final ContentPostRepository posts;
+    private final ContentShareRepository shares;
+    private final CardTokenGenerator tokenGenerator;
+    private final AccountQueryService accounts;
+
+    public ContentShareService(ContentPostRepository posts, ContentShareRepository shares,
+            CardTokenGenerator tokenGenerator, AccountQueryService accounts) {
+        this.posts = posts;
+        this.shares = shares;
+        this.tokenGenerator = tokenGenerator;
+        this.accounts = accounts;
+    }
+
+    /**
+     * 作者为自己的某条内容创建（或复用）分享链接。
+     *
+     * <p>护栏：author 取自 JWT（不信任客户端）；非本人 → 404（不用 403，免得成了"这条存在"的探测器）；
+     * 已删除 / 非 PUBLISHED → 422（自己都还没公开的内容不该拿到对外链接）。
+     */
+    @Transactional
+    public ContentShareLinkResponse createOrRefresh(long authorId, long postId) {
+        ContentPost post = posts.findById(postId)
+                .filter(p -> p.getDeletedAt() == null)
+                .filter(p -> p.getAuthorId() == authorId)
+                .orElseThrow(() -> AppException.notFound("内容不存在"));
+        if (post.getStatus() != PostStatus.PUBLISHED) {
+            throw AppException.validation("该内容当前不可分享");
+        }
+
+        Optional<ContentShare> existing = shares.findByContentPostId(postId);
+        if (existing.isPresent()) {
+            ContentShare share = existing.get();
+            share.touch();
+            return new ContentShareLinkResponse(share.getShareToken());
+        }
+
+        String token = tokenGenerator.generate();
+        try {
+            shares.save(ContentShare.create(token, postId));
+        } catch (DataIntegrityViolationException e) {
+            // 并发双建窗：唯一约束 (content_post_id) 兜底 → 复用已落库的那条。
+            ContentShare race = shares.findByContentPostId(postId).orElseThrow(() -> e);
+            return new ContentShareLinkResponse(race.getShareToken());
+        }
+        return new ContentShareLinkResponse(token);
+    }
+
+    /**
+     * 公开落地页 / 公开 JSON 按 token 取那一条。
+     *
+     * <p>失效一律返回 empty（不存在 / 已删 / 审核挂起 / 下架 / 作者注销 都是同一个结果），
+     * 由调用方收敛到失效页 —— <b>绝不区分原因</b>，否则这个端点就成了内容状态探测器。
+     */
+    @Transactional(readOnly = true)
+    public Optional<SharedPostResponse> findSharedPost(String shareToken) {
+        return shares.findByShareToken(shareToken)
+                .flatMap(s -> posts.findById(s.getContentPostId()))
+                .filter(p -> p.getDeletedAt() == null)
+                .filter(p -> p.getStatus() == PostStatus.PUBLISHED)
+                .filter(p -> p.getReportHiddenAt() == null)
+                .filter(p -> accounts.isActive(p.getAuthorId()))
+                // 🔴 这里**没有** visibility 过滤，是刻意的（AD-15 Rule 6，见类注释）。
+                .map(this::project);
+    }
+
+    private SharedPostResponse project(ContentPost post) {
+        // 作者投影走 AccountQueryService（content 不直 join users，Story 3.2 的既有约定）。
+        // 注销匿名化也在那一层，本处不重复实现。
+        AuthorView author = accounts.findAuthorViews(List.of(post.getAuthorId()))
+                .getOrDefault(post.getAuthorId(), AuthorView.anonymized(post.getAuthorId()));
+        List<String> images = post.getImageUrls() == null ? List.of() : List.copyOf(post.getImageUrls());
+        return new SharedPostResponse(
+                author.nickname(),
+                author.avatarUrl(),
+                author.deleted(),
+                post.getType().name(),
+                post.getText(),
+                images,
+                post.getCreatedAt());
+    }
+}

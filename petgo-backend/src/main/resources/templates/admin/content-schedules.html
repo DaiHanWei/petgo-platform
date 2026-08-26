@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<!--
+  排期管理（V1.1.6 Story 13.5 · AC4）。
+
+  📌 路径 /admin/content-schedules 是 Story 12.1 就写好的：那边"移出发布身份前"的提示
+     会带 ?authorId= 跳到这里。
+
+  🛡 列表**含失败行**：到点失败不自动消失、也不自动重试（AC5）——
+     它留在这里就是为了让运营看见并处理。
+-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.schedule.title}">排期管理 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1 th:text="#{admin.schedule.title}">排期管理</h1>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+
+        <!-- 🛡 AC3：时间一律 WIB，且**界面须明示** —— 四处口径一致（11-1/11-2/11-3 + 这里）。 -->
+        <p class="hint" th:text="#{admin.schedule.wibNote}">
+            所有计划时间都按印尼时间（WIB, Asia/Jakarta）解释。</p>
+
+        <form method="get" th:action="@{/admin/content-schedules}" data-autosubmit>
+            <label><span th:text="#{admin.schedule.filterByAuthor}">按发布账号过滤（用户 ID）</span>
+                <input type="number" name="authorId" th:value="${authorId}"/></label>
+            <button type="submit" class="btn btn-neutral btn-sm"
+                    th:text="#{admin.schedule.filter}">筛选</button>
+        </form>
+
+        <table>
+            <thead>
+            <tr><th th:text="#{admin.schedule.col.body}">内容摘要</th>
+                <th th:text="#{admin.batch.row.author}">发布账号</th>
+                <th th:text="#{admin.schedule.col.at}">计划时间（WIB）</th>
+                <th th:text="#{admin.common.status}">状态</th>
+                <th th:text="#{admin.batch.row.error}">失败原因</th>
+                <th th:text="#{admin.common.actions}">操作</th></tr>
+            </thead>
+            <tbody>
+            <tr th:each="r : ${rows}">
+                <td th:text="${#strings.abbreviate(r.body ?: '—', 40)}">摘要</td>
+                <td th:text="${r.authorUserId}">0</td>
+                <td th:text="${r.scheduledAt} ?: '—'">—</td>
+                <td th:text="${r.status}">SCHEDULED</td>
+                <!-- 🛡 失败原因要写清"我该怎么办"：账号被移出、审核拦下、宠物档案删了，
+                     处置方式完全不同。 -->
+                <td class="err" th:text="${r.errorMessage} ?: '—'">—</td>
+                <td>
+                    <form method="post" style="display:inline"
+                          th:action="@{/admin/content-schedules/{id}/time(id=${r.id})}">
+                        <input type="hidden" name="authorId" th:value="${authorId}"/>
+                        <input type="datetime-local" name="scheduledAt" required/>
+                        <button type="submit" class="btn btn-neutral btn-sm"
+                                th:text="#{admin.schedule.reschedule}">改时间</button>
+                    </form>
+                    <form method="post" style="display:inline"
+                          th:action="@{/admin/content-schedules/{id}/cancel(id=${r.id})}"
+                          th:attr="data-confirm=#{admin.schedule.cancelConfirm}">
+                        <input type="hidden" name="authorId" th:value="${authorId}"/>
+                        <button type="submit" class="btn btn-neutral btn-sm"
+                                th:text="#{admin.schedule.cancel}">取消排期</button>
+                    </form>
+                </td>
+            </tr>
+            <tr th:if="${rows.isEmpty()}"><td colspan="6"
+                    th:text="#{admin.schedule.empty}">当前没有排期</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

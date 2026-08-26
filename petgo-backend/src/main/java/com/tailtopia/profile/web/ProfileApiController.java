@@ -58,16 +58,19 @@ public class ProfileApiController {
     private final CardRerenderService cardRerenderService;
     private final IdCardService idCardService;
     private final IdCardHdService idCardHdService;
+    private final com.tailtopia.share.service.IdCardShareRewardService idCardShareRewards;
     private final RedisRateLimiter rateLimiter;
 
     public ProfileApiController(ProfileService profileService, TimelineService timelineService,
             CardRerenderService cardRerenderService, IdCardService idCardService,
-            IdCardHdService idCardHdService, RedisRateLimiter rateLimiter) {
+            IdCardHdService idCardHdService, RedisRateLimiter rateLimiter,
+            com.tailtopia.share.service.IdCardShareRewardService idCardShareRewards) {
         this.profileService = profileService;
         this.timelineService = timelineService;
         this.cardRerenderService = cardRerenderService;
         this.idCardService = idCardService;
         this.idCardHdService = idCardHdService;
+        this.idCardShareRewards = idCardShareRewards;
         this.rateLimiter = rateLimiter;
     }
 
@@ -221,6 +224,25 @@ public class ProfileApiController {
         long ownerId = currentUserId(jwt);
         rateLimiter.check("rl:profile:idcard:" + ownerId, CREATE_LIMIT, CREATE_WINDOW);
         return idCardService.createCard(ownerId, req);
+    }
+
+    /**
+     * 身份证卡面分享成功上报 → 试发分享奖励（V1.1.6 Story 18.2）。
+     *
+     * <p>⚠️ App 只在系统分享面板回调 {@code ShareResultStatus.success} 之后调本接口（AC5）——
+     * 用户取消面板就不调，所以「取消不发币」是在**客户端**成立的，服务端无从判断。
+     *
+     * <p>🛡 返回 {@code coins}：真的发了多少枚，{@code 0} = 没发。
+     * 刻意不返回原因（AC3）：不区分就让客户端没法把「你额度用完了」讲给用户听。
+     *
+     * <p>🛡 发放失败不影响分享本身（AC7）——服务层把异常消化掉，这里永远是 200。
+     */
+    @PostMapping("/me/id-cards/{cardId}/share-rewards")
+    public com.tailtopia.share.dto.IdCardShareRewardResponse rewardIdCardShare(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable long cardId) {
+        return com.tailtopia.share.dto.IdCardShareRewardResponse.of(
+                idCardShareRewards.rewardAfterShare(currentUserId(jwt), cardId,
+                        java.time.Instant.now()));
     }
 
     /** 购买某卡 HD（按卡解锁）。 */

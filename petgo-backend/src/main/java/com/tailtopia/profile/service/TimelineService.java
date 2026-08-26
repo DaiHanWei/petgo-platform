@@ -64,6 +64,9 @@ public class TimelineService {
 
     private final ProfileService profileService;
     private final ContentService contentService;
+
+    /** V1.1.6 Story 5.2：内容装饰标签，**组装完成后统一贴一次**（AD-11）。 */
+    private final com.tailtopia.content.service.ContentTagQueryService contentTags;
     private final ObjectProvider<HealthEventTimelineSource> healthSource;
     private final MilestoneService milestoneService;
     private final HealthRecordRepository healthRecords;
@@ -73,8 +76,10 @@ public class TimelineService {
     public TimelineService(ProfileService profileService, ContentService contentService,
             ObjectProvider<HealthEventTimelineSource> healthSource,
             MilestoneService milestoneService, HealthRecordRepository healthRecords,
-            MilestoneCompletionRepository milestoneCompletions, IdCardRepository idCards) {
+            MilestoneCompletionRepository milestoneCompletions, IdCardRepository idCards,
+            com.tailtopia.content.service.ContentTagQueryService contentTags) {
         this.profileService = profileService;
+        this.contentTags = contentTags;
         this.contentService = contentService;
         this.healthSource = healthSource;
         this.milestoneService = milestoneService;
@@ -130,7 +135,38 @@ public class TimelineService {
             TimelineItemResponse last = page.get(page.size() - 1);
             nextCursor = new TimelineAnchor(last.effectiveDate(), last.date()).encode();
         }
-        return new TimelinePageResponse(withinDayAscending(page), nextCursor, cut.hasMore());
+        return new TimelinePageResponse(
+                attachDecorationTags(withinDayAscending(page)), nextCursor, cut.hasMore());
+    }
+
+
+    /**
+     * 给一页时间线条目贴上内容装饰标签（V1.1.6 Story 5.2 · FR-75 / AD-11）。
+     *
+     * <h2>🔴 为什么在这里统一贴，而不是在各个组装点各取一遍</h2>
+     * 时间线是**五类混排**（快乐时刻 / 问诊 / 健康记录 / 里程碑 / 身份证），
+     * 且**组装点不止一处**（分页与当天详情各自组装）。在每个组装点各取一遍标签：
+     * 既容易漏掉某一处，又必然退化成逐条查。
+     *
+     * <p>所以做成**组装完成后的唯一贴标点**：一个响应一次批量查询。
+     * 只有带内容编号的快乐时刻类条目才可能有标签，其余类天然为空。
+     */
+    private List<TimelineItemResponse> attachDecorationTags(List<TimelineItemResponse> items) {
+        List<Long> postIds = items.stream()
+                .map(TimelineItemResponse::postId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        if (postIds.isEmpty()) {
+            return List.copyOf(items);
+        }
+        var tags = contentTags.findVisibleTags(postIds, Instant.now());
+        if (tags.isEmpty()) {
+            return List.copyOf(items);
+        }
+        return items.stream()
+                .map(i -> i.postId() == null ? i : i.withDecorationTags(tags.get(i.postId())))
+                .toList();
     }
 
     /** 一次截断的结果。{@code complete=false} 表示本批未能把边界所在的那一天取全，需放大批次重取。 */
@@ -147,8 +183,9 @@ public class TimelineService {
     /**
      * 各源按同一锚点取数后归并排序（AD-1 Rule 2 的前半段：**不在源内截断到页大小**）。
      *
-     * <p>健康事件无独立 event_date，其有效日期由 {@code createdAt} 推导、与之单调同序，
-     * 故锚点在该源上退化为夹紧后的单键上界（见 {@link TimelineAnchor#createdAtUpperBound()}）。
+     * <p>⚠️ V1.1.6 修正：<b>问诊存档有独立的就诊日期</b>（此前这里写着"无独立 event_date"，是错的），
+     * 故该源与 Diary 内容一样走<b>复合锚点</b>，不再退化为单键上界。
+     * 单键上界只剩里程碑与身份证两源在用 —— 它们确实没有独立的事件日期。
      *
      * <p><b>可信前缀</b>：若某源恰好返回了 {@code fetch} 条，说明它可能还有更早的条目没取回来。
      * 此时以「取满的源中**最新的那条末尾**」为地板——只有比该地板更新的条目，才能断言本批已是完整集合。
@@ -179,16 +216,21 @@ public class TimelineService {
         List<TimelineItemResponse> healthItems = new ArrayList<>();
         HealthEventTimelineSource health = healthSource.getIfAvailable();
         if (health != null) {
-            List<HealthEventView> events = health.recentHealthEvents(ownerId, anchor.createdAtUpperBound(), fetch);
+            // V1.1.6 修正：按**复合锚点**（就诊日期 + 同日归档时刻）取，不再退化为单键上界 ——
+            // 问诊存档有独立的就诊日期，排序按它、取数按归档时刻就是「两把尺子」。
+            List<HealthEventView> events = health.recentHealthEvents(
+                    ownerId, anchor.eventDate(), anchor.sameDayKey(), fetch);
             for (HealthEventView h : events) {
                 healthItems.add(TimelineItemResponse.healthEvent(
-                        h.createdAt(), h.aiLevel(), h.symptomSummary(), h.sourceType(), h.sourceRef()));
+                        h.createdAt(), h.eventDate(), h.aiLevel(), h.symptomSummary(),
+                        h.sourceType(), h.sourceRef()));
             }
             if (events.size() >= fetch) {
                 allKnown = false;
                 HealthEventView last = events.get(events.size() - 1);
-                floor = newestFloor(floor, new TimelineAnchor(
-                        last.createdAt().atZone(ZoneOffset.UTC).toLocalDate(), last.createdAt()));
+                // 🔴 地板锚点也必须用**就诊日期** —— 与上面的取数、与全局排序同一把尺子。
+                // 这里若还拿归档时刻推日期，分页边界会与排序错位（同日条目被拆到两页）。
+                floor = newestFloor(floor, new TimelineAnchor(last.eventDate(), last.createdAt()));
             }
         }
 
@@ -358,10 +400,11 @@ public class TimelineService {
 
         HealthEventTimelineSource health = healthSource.getIfAvailable();
         if (health != null) {
-            Instant rangeFrom = from.atStartOfDay(ZoneOffset.UTC).toInstant();
-            Instant rangeTo = to.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
-            for (HealthEventView h : health.healthEventsInRange(ownerId, rangeFrom, rangeTo)) {
-                int day = h.createdAt().atZone(ZoneOffset.UTC).toLocalDate().getDayOfMonth();
+            // 🔴 V1.1.6 修正：按**就诊日期**落格，不是归档时刻。
+            // 改之前一次三个月前的问诊若今天才归档，会显示在「今天」那一格 ——
+            // 数据本身没错（就诊日期一直存着），是取数读错了字段。
+            for (HealthEventView h : health.healthEventsInRange(ownerId, from, to)) {
+                int day = h.eventDate().getDayOfMonth();
                 CalendarMonthResponse.DayCell c = byDay.get(day);
                 if (c == null) {
                     byDay.put(day,
@@ -414,10 +457,10 @@ public class TimelineService {
         }
         HealthEventTimelineSource health = healthSource.getIfAvailable();
         if (health != null) {
-            Instant dayStart = date.atStartOfDay(ZoneOffset.UTC).toInstant();
-            Instant dayEnd = date.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
-            for (HealthEventView h : health.healthEventsOnDay(ownerId, dayStart, dayEnd)) {
-                items.add(TimelineItemResponse.healthEvent(h.createdAt(), h.aiLevel(), h.symptomSummary(), h.sourceType(), h.sourceRef()));
+            // 🔴 V1.1.6 修正：按**就诊日期**取当天，与上面的结构化健康记录同口径。
+            for (HealthEventView h : health.healthEventsOnDay(ownerId, date)) {
+                items.add(TimelineItemResponse.healthEvent(h.createdAt(), h.eventDate(),
+                        h.aiLevel(), h.symptomSummary(), h.sourceType(), h.sourceRef()));
             }
         }
         // 结构化健康记录（第三源，Story 3.4）：按 event_date 取当天。
@@ -429,7 +472,7 @@ public class TimelineService {
         // 大类优先级：diary(0) > 问诊(1) > 健康记录(2)；类内按时间正序。
         items.sort(Comparator.comparingInt(TimelineService::dayDetailCategory)
                 .thenComparing(TimelineItemResponse::date));
-        return new DayDetailResponse(date, List.copyOf(items));
+        return new DayDetailResponse(date, attachDecorationTags(items));
     }
 
     /**

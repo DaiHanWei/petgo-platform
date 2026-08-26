@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<!--
+  素材缩略图墙（V1.1.6 Story 13.2 · AC1）。上传完由 HTMX 刷这一块。
+
+  ⚠️ 超出 0.75~1.34 的图在这里就打标记 —— 避免整批发完才发现构图被裁。
+     裁切量的算法只有一份（服务端 ImageRatioAdvisor），这里只按宽高判断"要不要打标"。
+-->
+<body>
+<div th:fragment="wall" id="seedAssetWall" th:remove="tag">
+    <!-- 🔴 实时用量（AC2）。服务端权威值 —— 页面上那个即时计数器只是体验。 -->
+    <p class="hint">
+        <span th:text="#{admin.batch.asset.usage(${usage.count}, ${usage.maxCount},
+                        ${usage.bytes / 1024 / 1024}, ${usage.maxBytes / 1024 / 1024})}">已选 0/200 张，0/500 MB</span>
+        <span class="err" th:if="${usage.full()}" th:text="#{admin.batch.asset.full}">已达上限</span>
+    </p>
+    <div class="seed-thumbs">
+        <div class="seed-thumb" th:each="a : ${assets}">
+            <img th:src="${a.url}" alt="" data-lightbox="true"/>
+            <!-- 文件名清单与缩略图同处一格：运营认的是文件名，光看图分不出哪张是哪张。 -->
+            <p class="hint" th:text="${a.fileName}" style="font-size:11px;margin:4px 0 0;word-break:break-all">名</p>
+            <p class="err" th:if="${a.width > 0 and a.height > 0
+                            and (a.width * 100 / a.height > 134 or a.width * 100 / a.height < 75)}"
+               th:text="#{admin.batch.asset.ratioFlag}">⚠️ 比例超出展示区间，展示时会被裁切</p>
+        </div>
+    </div>
+    <p class="hint" th:if="${assets.isEmpty()}" th:text="#{admin.batch.asset.empty}">还没有素材。</p>
+</div>
+</body>
+</html>

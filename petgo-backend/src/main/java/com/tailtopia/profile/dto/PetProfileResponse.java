@@ -15,6 +15,8 @@ public record PetProfileResponse(
         String name,
         String breed,
         LocalDate birthday,
+        // 性别（V1.1.6 Story 1.1）。未填 → null，经 Jackson NON_NULL **整个键不出现**。
+        String sex,
         String intro,
         String cardToken,
         boolean isSystemDefaultName,
@@ -31,6 +33,7 @@ public record PetProfileResponse(
                 p.getName(),
                 p.getBreed(),
                 p.getBirthday(),
+                p.getSex() == null ? null : p.getSex().name(),
                 p.getIntro(),
                 p.getCardToken(),
                 // 内容审核 story 4：宠物名是否为违规重置的系统默认编码名。

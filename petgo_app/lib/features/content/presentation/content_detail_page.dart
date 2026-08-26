@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import '../../../core/analytics/analytics.dart';
 import '../../../shared/widgets/app_toast.dart';
+import '../../../shared/widgets/user_tag_row.dart';
+import '../../../shared/widgets/content_tag_chip.dart';
+import '../domain/content_tag.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/colors.dart';
@@ -17,7 +21,9 @@ import '../../../shared/widgets/mini_profile_sheet.dart';
 import '../../profile/data/timeline_repository.dart';
 import '../data/detail_repository.dart';
 import '../domain/content_detail.dart';
+import '../domain/content_type_badge.dart';
 import '../domain/content_type.dart';
+import '../domain/share_card_data.dart';
 import 'comment_composer.dart';
 import 'comment_section.dart';
 import 'detail_providers.dart';
@@ -25,15 +31,23 @@ import 'author_moderation_callbacks.dart';
 import 'feed_controller.dart';
 import 'like_button.dart';
 import 'report_sheet.dart';
+import 'share_card/share_card_preview_page.dart';
 
 /// 内容详情页（Story 3.3，FR-28）。只读容器：正文 + 多图左右滑 + 互动栏占位 + 评论区 + 底部评论框。
 ///
 /// 多态完整（UX-DR18）：404 失效页 / 403 无权限页 / 网络错误 / 加载骨架。
 /// 「···」举报入口[3.7] + 作者删除入口[3.6]、点赞按钮行为[3.4]、作者点击迷你卡[3.8] 本 Story 仅占位。
 class ContentDetailPage extends ConsumerWidget {
-  const ContentDetailPage({super.key, required this.postId});
+  const ContentDetailPage({super.key, required this.postId, this.focusComments = false});
 
   final int postId;
+
+  /// 进来就滚到评论区（V1.1.6 Story 3.2 · AC4）。
+  ///
+  /// 由路由的 `?focus=comments` 注入。⚠️ **这个参数名是既有的** ——
+  /// 通知深链早就在产出它，只是详情页一直没消费。首页评论按钮沿用同一个名字，
+  /// 满足「两侧必须同名」的要求，也顺带把通知深链的评论锚点接通了。
+  final bool focusComments;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -46,7 +60,7 @@ class ContentDetailPage extends ConsumerWidget {
       loading: () => _shell(context, body: const Center(
           child: CircularProgressIndicator(color: AppColors.accentGrowth))),
       error: (err, _) => _shell(context, body: _errorBody(context, ref, l10n, err)),
-      data: (d) => _DetailScaffold(postId: postId, detail: d),
+      data: (d) => _DetailScaffold(postId: postId, detail: d, focusComments: focusComments),
     );
   }
 
@@ -84,10 +98,15 @@ class ContentDetailPage extends ConsumerWidget {
 }
 
 class _DetailScaffold extends ConsumerWidget {
-  const _DetailScaffold({required this.postId, required this.detail});
+  const _DetailScaffold({
+    required this.postId,
+    required this.detail,
+    this.focusComments = false,
+  });
 
   final int postId;
   final ContentDetail detail;
+  final bool focusComments;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -125,19 +144,39 @@ class _DetailScaffold extends ConsumerWidget {
                     const SizedBox(height: AppSpacing.md),
                     if (detail.body != null && detail.body!.isNotEmpty)
                       Text(detail.body!, style: AppTypography.body),
+                    // V1.1.6 Story 5.2：装饰标签的位置**按有无配图切换**（FR-75）。
                     if (detail.imageUrls.isNotEmpty) ...[
                       const SizedBox(height: AppSpacing.md),
-                      _ImageCarousel(urls: detail.imageUrls),
+                      // 有图 → 叠在首图角落。
+                      _ImageCarousel(
+                        urls: detail.imageUrls,
+                        decorationTags: detail.decorationTags,
+                      ),
+                    ] else if (detail.decorationTags.isNotEmpty) ...[
+                      // 无图 → 正文下方**单独一行**小胶囊。
+                      const SizedBox(height: AppSpacing.sm),
+                      Wrap(
+                        spacing: AppSpacing.xs,
+                        runSpacing: AppSpacing.xs,
+                        children: [
+                          for (final t in detail.decorationTags) ContentTagChip.inline(tag: t, position: 'detail'),
+                        ],
+                      ),
                     ],
                     const SizedBox(height: AppSpacing.md),
                     _interactionBar(ref),
                     const Divider(height: AppSpacing.xl, color: AppColors.divider),
-                    // KOMENTAR (n) 计数标题（detail.html）。
-                    Text('${l10n.detailCommentsTitle.toUpperCase()} (${detail.commentCount})',
-                        style: AppTypography.caption.copyWith(
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.5,
-                            color: AppColors.ink2)),
+                    // KOMENTAR (n) 计数标题（detail.html）。带 ?focus=comments 进来时滚到这里。
+                    _ScrollIntoViewOnMount(
+                      enabled: focusComments,
+                      child: Text(
+                          '${l10n.detailCommentsTitle.toUpperCase()} (${detail.commentCount})',
+                          key: const ValueKey('detailCommentsTitle'),
+                          style: AppTypography.caption.copyWith(
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.5,
+                              color: AppColors.ink2)),
+                    ),
                     const SizedBox(height: AppSpacing.sm),
                     CommentSection(
                       postId: postId,
@@ -166,16 +205,11 @@ class _DetailScaffold extends ConsumerWidget {
     return l10n.timeDaysAgo(d.inDays);
   }
 
-  /// 内容类型徽章（detail.html 作者行右侧 chip）：Momen 绿 / Tips 黄 / Cerita 紫。
-  static (String, Color, Color) _typeBadge(String type, AppLocalizations l10n) => switch (type) {
-        'GROWTH_MOMENT' => (l10n.mePostTypeMomen, AppColors.momenBadgeText, AppColors.momenBadgeBg),
-        'KNOWLEDGE' => (l10n.mePostTypeTips, AppColors.tipsBadgeText, AppColors.goldTint),
-        _ => (l10n.mePostTypeCerita, AppColors.mint, AppColors.skyTint),
-      };
 
   Widget _authorRow(BuildContext context, WidgetRef ref, AppLocalizations l10n) {
     final name = detail.authorDeleted ? l10n.feedDeletedUser : (detail.authorNickname ?? l10n.feedDeletedUser);
-    final (badgeLabel, badgeFg, badgeBg) = _typeBadge(detail.type, l10n);
+    // 映射单一来源：分享卡也用它（见 ContentTypeBadge 的注释）。
+    final badge = ContentTypeBadge.of(detail.type, l10n);
     final row = Row(
       children: [
         // 头像着色与列表卡片共用同一算法（LetterAvatar），保证同一用户两处颜色一致。
@@ -190,9 +224,13 @@ class _DetailScaffold extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(name,
-                  style: AppTypography.body.copyWith(fontWeight: FontWeight.w700),
-                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              // V1.1.6 Story 5.1：作者区挂运营标签（四处展示位之一）。
+              UserTagRow(
+                position: 'detail',
+                name: name,
+                nameStyle: AppTypography.body.copyWith(fontWeight: FontWeight.w700),
+                tags: detail.authorDeleted ? const [] : detail.authorTags,
+              ),
               Text(_relativeTime(l10n, detail.createdAt),
                   style: AppTypography.caption.copyWith(color: AppColors.textTertiary)),
             ],
@@ -202,9 +240,9 @@ class _DetailScaffold extends ConsumerWidget {
         // 分类彩徽章。
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-          decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(7)),
-          child: Text(badgeLabel,
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: badgeFg)),
+          decoration: BoxDecoration(color: badge.bg, borderRadius: BorderRadius.circular(7)),
+          child: Text(badge.label,
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: badge.fg)),
         ),
       ],
     );
@@ -226,13 +264,15 @@ class _DetailScaffold extends ConsumerWidget {
   }
 
   Widget _interactionBar(WidgetRef ref) {
-    // 点赞按钮（Story 3.4，乐观更新）+ 评论数读取展示。卡片不展示计数，详情互动栏展示。
+    // 点赞按钮（Story 3.4，乐观更新）+ 评论数。⚠️ V1.1.6 Story 3.2 起**首页卡片也展示**这两项。
     return Row(
       children: [
         LikeButton(
           postId: detail.id,
           initialLiked: detail.liked,
           initialCount: detail.likeCount,
+          // 🛡 两个挂载点都必须传来源，否则「首页点赞是净增还是前移」这个对比失效。
+          source: 'detail',
         ),
         const SizedBox(width: AppSpacing.lg),
         // 点评论图标/计数 → 聚焦底部评论框弹键盘（游客转登录引导）。
@@ -248,6 +288,13 @@ class _DetailScaffold extends ConsumerWidget {
             ],
           ),
         ),
+        const SizedBox(width: AppSpacing.lg),
+        // 分享卡入口（V1.1.6 Story 9.3 · FR-73）。
+        //
+        // 🔴 **刻意放在这里，不放顶栏** —— UI 稿 SH1 画的是顶栏右上角，但那么做会把顶栏的
+        // 「···」挤掉，而「···」是**举报入口**（合规入口，不能变难找）。
+        // 2026-08-14 产品决定：分享让位，顶栏保持现状。照 SH1 实现就是把合规入口做掉。
+        _ShareCardButton(detail: detail),
       ],
     );
   }
@@ -369,9 +416,12 @@ class _DetailScaffold extends ConsumerWidget {
 
 /// 多图左右滑 + 角标 x/y（UX-DR12）；点击全屏 lightbox。
 class _ImageCarousel extends StatefulWidget {
-  const _ImageCarousel({required this.urls});
+  const _ImageCarousel({required this.urls, this.decorationTags = const []});
 
   final List<String> urls;
+
+  /// V1.1.6 Story 5.2：装饰标签叠在**首图角落**（有图时的位置）。
+  final List<ContentTag> decorationTags;
 
   @override
   State<_ImageCarousel> createState() => _ImageCarouselState();
@@ -419,6 +469,17 @@ class _ImageCarouselState extends State<_ImageCarousel> {
             ),
           ),
         ),
+        // 装饰标签：左下角，与右上角的页码角标分处两角、互不遮挡。
+        if (widget.decorationTags.isNotEmpty)
+          Positioned(
+            left: AppSpacing.sm,
+            bottom: AppSpacing.sm,
+            right: AppSpacing.xl,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: ContentTagChip.overlay(tag: widget.decorationTags.first, position: 'detail'),
+            ),
+          ),
         if (widget.urls.length > 1)
           Positioned(
             top: AppSpacing.sm,
@@ -487,6 +548,125 @@ class _LightboxState extends State<_Lightbox> {
             child: InteractiveViewer(child: AppImage.widget(widget.urls[i], fit: BoxFit.contain)),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 挂载后把自己滚进视野（V1.1.6 Story 3.2 · AC4）。
+///
+/// 为什么做成一个小组件而不是给页面加滚动控制器：详情页是**单一滚动容器**，
+/// `Scrollable.ensureVisible` 能自己找到外层的可滚动祖先 ——
+/// 不需要为此把整个页面改成有状态、也不需要额外管理控制器的生命周期。
+///
+/// ⚠️ 必须等下一帧：挂载当时布局还没完成，立刻滚会滚不到正确位置。
+class _ScrollIntoViewOnMount extends StatefulWidget {
+  const _ScrollIntoViewOnMount({required this.enabled, required this.child});
+
+  final bool enabled;
+  final Widget child;
+
+  @override
+  State<_ScrollIntoViewOnMount> createState() => _ScrollIntoViewOnMountState();
+}
+
+class _ScrollIntoViewOnMountState extends State<_ScrollIntoViewOnMount> {
+  @override
+  void initState() {
+    super.initState();
+    if (!widget.enabled) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Scrollable.ensureVisible(
+        context,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+        // 让标题落在视野靠上的位置，评论列表跟着露出来。
+        alignment: 0.05,
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
+/// 互动栏第三个图标：生成分享卡（Story 9.3 · FR-73）。
+///
+/// 点击 → 取该条内容的对外分享链接（后端幂等，重复分享复用同一 token）
+/// → 进预览页（9-2 的两套模板）→ 出图 → 系统分享菜单。
+///
+/// 🛡 **顶栏的「···」不受影响** —— 那是举报入口，见 `_interactionBar` 里的说明。
+class _ShareCardButton extends ConsumerStatefulWidget {
+  const _ShareCardButton({required this.detail});
+
+  final ContentDetail detail;
+
+  @override
+  ConsumerState<_ShareCardButton> createState() => _ShareCardButtonState();
+}
+
+class _ShareCardButtonState extends ConsumerState<_ShareCardButton> {
+  bool _busy = false;
+
+  /// 取链接用的仓库入口。测试用它替身，免得为一个按钮起 provider override。
+  static Future<String> Function(int postId)? shareUrlForTest;
+
+  /// 埋点 `content_type` 的词表（`diary`/`moment`/`tips`）。
+  ///
+  /// 🔴 **刻意做一次显式映射**，不把线格式 `GROWTH_MOMENT`/`DAILY`/`KNOWLEDGE` 直接发上去 ——
+  /// 埋点清单 §3 把这两套写法并列标了「需与工程统一」，而看板维度一旦发版就改不动了。
+  /// 与 4-2 对 `pin_type` 的处理同一做法。
+  static String _analyticsContentType(String wireType) => switch (wireType) {
+        'GROWTH_MOMENT' => 'diary',
+        'KNOWLEDGE' => 'tips',
+        _ => 'moment',
+      };
+
+  Future<void> _open() async {
+    final l10n = AppLocalizations.of(context);
+    // E-11（Story 10.1 补齐）：**漏斗起点**，在点击这一刻上报 ——
+    // 放在取链接成功之后会把「取链接失败」的人从分母里抹掉，
+    // 而那批人恰恰是这个漏斗最该看见的流失。
+    Analytics.capture('post_share_card_tapped', {
+      'content_type': _analyticsContentType(widget.detail.type),
+      'is_private_diary': widget.detail.isPrivateDiary,
+      'has_image': widget.detail.imageUrls.isNotEmpty,
+    });
+    setState(() => _busy = true);
+    try {
+      final fetch = shareUrlForTest ??
+          (int id) => ref.read(detailRepositoryProvider).getShareUrl(id);
+      final url = await fetch(widget.detail.id);
+      if (!mounted) return;
+      final data = ShareCardData.fromDetail(
+        widget.detail,
+        shareUrl: url,
+        fallbackAuthorName: l10n.feedDeletedUser,
+      );
+      await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => ShareCardPreviewPage(data: data),
+      ));
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(l10n.shareCardExportError)));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      key: const ValueKey('detailShareCardIcon'),
+      behavior: HitTestBehavior.opaque,
+      onTap: _busy ? null : _open,
+      child: Icon(
+        Icons.ios_share_rounded,
+        size: 20,
+        color: _busy ? AppColors.muted : AppColors.textSecondary,
       ),
     );
   }

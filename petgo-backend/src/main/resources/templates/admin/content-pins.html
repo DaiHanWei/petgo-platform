@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!-- 顶置管理（V1.1.6 Story 11.1 · AB-10A）。
+     本页是「已交付机制的开关」：排期写入、同坑位重叠校验、生效判定、下架联动都在 Story 4.1
+     随 ContentPinService 落地了，此前没有任何入口能调到它 —— 线上顶置坑位因此恒为空。
+     🛡 坑位按「一个下拉」渲染：表里 slot 是普通列、无 CHECK 约束，将来新增坑位只多一个取值。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.pins.title}">顶置管理 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin.js}"></script>
+    <script th:src="@{/admin/vendor/htmx.min.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1 th:text="#{admin.pins.title}">顶置管理</h1>
+        <p class="muted" th:text="#{admin.pins.subtitle}">配置首页 Feed 坑位。时间一律按 WIB 解释。</p>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+
+        <!-- 坑位切换（本版本只有一个取值，界面仍按可多坑位渲染）-->
+        <form class="filter-bar" method="get" th:action="@{/admin/content-pins}" data-autosubmit>
+            <label>
+                <span th:text="#{admin.pins.slot}">坑位</span>
+                <select name="slot">
+                    <option th:each="s : ${slots}" th:value="${s}" th:text="${s}"
+                            th:selected="${s == slot}">HOME_FEED</option>
+                </select>
+            </label>
+        </form>
+
+        <table class="table">
+            <thead>
+            <tr>
+                <th th:text="#{admin.pins.objectType}">类型</th>
+                <th th:text="#{admin.pins.summary}">内容 / 标题</th>
+                <th th:text="#{admin.pins.window}">生效时间（WIB）</th>
+                <th th:text="#{admin.pins.phase}">状态</th>
+                <th th:text="#{admin.pins.actions}">操作</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:if="${#lists.isEmpty(rows)}">
+                <td colspan="5" class="muted" th:text="#{admin.pins.empty}">该坑位还没有任何顶置排期。</td>
+            </tr>
+            <tr th:each="r : ${rows}">
+                <td th:text="${r.objectType == 'PROMO'} ? #{admin.pins.type.promo} : #{admin.pins.type.content}">类型</td>
+                <td>
+                    <span th:text="${r.summary}">摘要</span>
+                    <!-- 🔴 内容失效未生效：判定与 App 的 Feed 坑位同源（ContentDisplayability）。
+                         不标出来的话，运营看到「生效中」而 App 上坑位是空的，只会以为是缓存或故障。 -->
+                    <span class="badge badge-warn" th:if="${r.contentGone and r.objectType != 'PROMO'}"
+                          th:text="#{admin.pins.contentGone}">内容失效未生效</span>
+                </td>
+                <td>
+                    <span th:text="${#temporals.format(r.startsAt, 'yyyy-MM-dd HH:mm', 'Asia/Jakarta')}">开始</span>
+                    –
+                    <span th:text="${#temporals.format(r.endsAt, 'yyyy-MM-dd HH:mm', 'Asia/Jakarta')}">结束</span>
+                    <!-- 提前结束单独展示：ends_at 未被覆盖，排期意图与实际收手时刻都留着 -->
+                    <span class="muted" th:if="${r.terminatedAt != null}"
+                          th:text="'· ' + ${#temporals.format(r.terminatedAt, 'yyyy-MM-dd HH:mm', 'Asia/Jakarta')}">提前结束于</span>
+                    <span class="muted">WIB</span>
+                </td>
+                <td>
+                    <span class="badge"
+                          th:classappend="${r.phase.name() == 'ACTIVE'} ? 'badge-ok' : (${r.phase.name() == 'PENDING'} ? 'badge-neutral' : '')"
+                          th:text="${r.phase.name() == 'ACTIVE'} ? #{admin.pins.phase.active}
+                                   : (${r.phase.name() == 'PENDING'} ? #{admin.pins.phase.pending} : #{admin.pins.phase.ended})">状态</span>
+                </td>
+                <td>
+                    <div th:if="${r.editable}"
+                         sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.pin_manage')">
+                        <form class="inline-form" method="post"
+                              th:action="@{/admin/content-pins/{id}/edit(id=${r.id})}">
+                            <input type="datetime-local" name="startsAt"
+                                   th:value="${#temporals.format(r.startsAt, 'yyyy-MM-dd''T''HH:mm', 'Asia/Jakarta')}" required/>
+                            <input type="datetime-local" name="endsAt"
+                                   th:value="${#temporals.format(r.endsAt, 'yyyy-MM-dd''T''HH:mm', 'Asia/Jakarta')}" required/>
+                            <span class="muted">WIB</span>
+                            <button type="submit" class="btn btn-sm" th:text="#{admin.pins.edit}">改时间</button>
+                        </form>
+                        <form class="inline-form" method="post"
+                              th:action="@{/admin/content-pins/{id}/terminate(id=${r.id})}">
+                            <button type="submit" class="btn btn-sm btn-danger"
+                                    th:attr="data-confirm=#{admin.pins.terminateConfirm}"
+                                    th:text="#{admin.pins.terminate}">提前结束</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+
+        <!-- 新建 -->
+        <div class="card" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.pin_manage')">
+            <h2 th:text="#{admin.pins.new}">新建顶置</h2>
+            <form method="post" th:action="@{/admin/content-pins}" id="pinCreateForm">
+                <input type="hidden" name="slot" th:value="${slot}"/>
+                <label>
+                    <span th:text="#{admin.pins.objectType}">类型</span>
+                    <select name="objectType" id="pinObjectType">
+                        <option value="CONTENT" th:text="#{admin.pins.type.content}">顶置已发布内容</option>
+                        <option value="PROMO" th:text="#{admin.pins.type.promo}">推广卡片</option>
+                    </select>
+                </label>
+
+                <!-- 内容型：选择器（只列公开内容，搜索 + 分页）-->
+                <fieldset id="pinContentFields">
+                    <legend th:text="#{admin.pins.pickContent}">选择内容</legend>
+                    <p class="muted" th:text="#{admin.pins.pickHint}">只列可公开展示的内容。</p>
+                    <input type="search" name="q" th:placeholder="#{admin.pins.pickSearch}"
+                           hx-get="/admin/content-pins/pick" hx-target="#pinCandidates"
+                           hx-trigger="keyup changed delay:300ms, search"/>
+                    <div id="pinCandidates" hx-get="/admin/content-pins/pick" hx-trigger="load">
+                        <div th:replace="~{admin/content-pins :: candidates}"></div>
+                    </div>
+                </fieldset>
+
+                <!-- 推广卡片型 -->
+                <fieldset id="pinPromoFields">
+                    <legend th:text="#{admin.pins.type.promo}">推广卡片</legend>
+                    <label>
+                        <span th:text="#{admin.pins.promoImage}">卡片图 URL</span>
+                        <input type="url" name="promoImageUrl" id="pinPromoImageUrl" class="field-full"/>
+                    </label>
+                    <!-- 🔴 比例警告（AC7）：卡片在 Feed 里就是一张普通内容卡，同样受 0.75~1.34 的
+                         clamp + cover 裁切约束。运营按常见 16:9 出图会被左右各裁掉约 25%，而他不会知道。
+                         这里在浏览器里量 naturalWidth/naturalHeight —— 不需要上传，也不需要服务端抓图。 -->
+                    <img id="pinPromoProbe" alt="" hidden/>
+                    <p class="banner warn" id="pinAspectWarn" hidden></p>
+                    <label>
+                        <span th:text="#{admin.pins.promoTitle}">卡片标题</span>
+                        <input type="text" name="promoTitle" class="field-full"/>
+                    </label>
+                    <label>
+                        <span th:text="#{admin.pins.promoLink}">跳转目标（可空）</span>
+                        <input type="url" name="promoLinkUrl" class="field-full"/>
+                    </label>
+                </fieldset>
+
+                <label>
+                    <span th:text="#{admin.pins.window}">生效时间（WIB）</span>
+                    <input type="datetime-local" name="startsAt" required/>
+                    <input type="datetime-local" name="endsAt" required/>
+                    <!-- 🛡 WIB 字样必须在输入框旁：不写运营就按自己电脑的时区填，整批排期偏移 -->
+                    <span class="muted">WIB</span>
+                </label>
+                <button type="submit" class="btn btn-primary" th:text="#{admin.pins.save}">保存</button>
+            </form>
+        </div>
+
+        <script th:inline="javascript">
+            /*<![CDATA[*/
+            (function () {
+                var typeSel = document.getElementById('pinObjectType');
+                var contentFs = document.getElementById('pinContentFields');
+                var promoFs = document.getElementById('pinPromoFields');
+                function sync() {
+                    var promo = typeSel.value === 'PROMO';
+                    contentFs.hidden = promo;
+                    promoFs.hidden = !promo;
+                }
+                if (typeSel) { typeSel.addEventListener('change', sync); sync(); }
+
+                // 比例警告：把 URL 塞进一个隐藏 <img>，load 后读它的原始宽高。
+                var urlInput = document.getElementById('pinPromoImageUrl');
+                var probe = document.getElementById('pinPromoProbe');
+                var warn = document.getElementById('pinAspectWarn');
+                var TPL = /*[[#{admin.pins.aspectWarn}]]*/ '';
+                var SIDES = /*[[#{admin.pins.aspectCropSides}]]*/ '';
+                var TB = /*[[#{admin.pins.aspectCropTopBottom}]]*/ '';
+                function fmt(t, a, b) { return String(t).replace('{0}', a).replace('{1}', b); }
+                if (urlInput && probe && warn) {
+                    urlInput.addEventListener('change', function () {
+                        warn.hidden = true;
+                        if (!urlInput.value) { return; }
+                        probe.onload = function () {
+                            var ratio = probe.naturalWidth / probe.naturalHeight;
+                            if (ratio >= 0.75 && ratio <= 1.34) { warn.hidden = true; return; }
+                            // 裁切百分比：cover 裁的是"多出来的那一边"。
+                            var pct, how;
+                            if (ratio > 1.34) {
+                                pct = Math.round((1 - 1.34 / ratio) / 2 * 100);
+                                how = fmt(SIDES, pct, '');
+                            } else {
+                                pct = Math.round((1 - ratio / 0.75) / 2 * 100);
+                                how = fmt(TB, pct, '');
+                            }
+                            warn.textContent = fmt(TPL, ratio.toFixed(2), how);
+                            warn.hidden = false;   // 🛡 只警告，不阻止提交
+                        };
+                        probe.onerror = function () { warn.hidden = true; };
+                        probe.src = urlInput.value;
+                    });
+                }
+            })();
+            /*]]>*/
+        </script>
+
+        <!-- 内容候选（HTMX 局部）。分页：候选集接近全量内容，不可平铺。 -->
+        <div th:fragment="candidates" th:remove="tag">
+            <p class="muted" th:if="${#lists.isEmpty(candidates)}" th:text="#{admin.pins.pickEmpty}">没有可顶置的公开内容。</p>
+            <label th:each="c : ${candidates}" class="pick-row">
+                <input type="radio" name="contentId" th:value="${c.id}"/>
+                <span th:text="${c.id}">1</span>
+                <span th:text="${c.type}">DAILY</span>
+                <span th:text="${c.summary}">摘要</span>
+                <span class="muted" th:text="${#temporals.format(c.createdAt, 'yyyy-MM-dd', 'Asia/Jakarta')}">日期</span>
+            </label>
+        </div>
+    </div>
+</div>
+</body>
+</html>

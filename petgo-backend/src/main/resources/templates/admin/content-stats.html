@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  内容互动积分榜（V1.1.6 Story 15.1 · AB-3G）。
+
+  🔴 两个口径回答的是**不同问题**，不是同一个数的两种算法 —— 所以是**互斥单选**，
+     而不是两列并排。并排会让人下意识去比较两个数，而它们不可比。
+-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.stats.title}">互动积分 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1 th:text="#{admin.stats.title}">内容互动积分</h1>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+
+        <p class="hint" th:text="#{admin.stats.formula}">
+            互动积分 = 点赞 × 1 + 评论 × 5。默认按积分降序。</p>
+        <!-- 🛡 AC7：这个公式**与首页推荐算法的互动度权重是两套东西** ——
+             一个是给人看的运营指标，一个是排序输入。写在界面上，免得有人去"对齐"。 -->
+        <p class="hint" th:text="#{admin.stats.notAlgo}">
+            这个指标只用于运营选品与经营汇报，与首页推荐算法的权重无关。</p>
+
+        <form method="get" th:action="@{/admin/content-stats}" data-autosubmit>
+            <label>
+                <span th:text="#{admin.stats.scope}">统计口径</span>
+                <!-- 互斥单选（AC2）。 -->
+                <select name="scope">
+                    <option th:each="s : ${scopes}" th:value="${s}"
+                            th:text="${s.name() == 'CONTENT_QUALITY'}
+                                     ? #{admin.stats.scope.quality} : #{admin.stats.scope.activity}"
+                            th:selected="${scope == s}">口径</option>
+                </select>
+            </label>
+            <label><span th:text="#{admin.stats.from}">起（WIB）</span>
+                <input type="date" name="from" th:value="${from}"/></label>
+            <label><span th:text="#{admin.stats.to}">止（WIB，含当天）</span>
+                <input type="date" name="to" th:value="${to}"/></label>
+            <!-- 🔴 作者过滤不是锦上添花：挑「本周最佳」候选时常常是盯着某个 IP 号看，
+                 不按作者筛的话那个号的内容会被全平台热帖挤出前 50。 -->
+            <label><span th:text="#{admin.stats.author}">按作者（用户 ID，选填）</span>
+                <input type="number" name="authorId" th:value="${authorId}"/></label>
+            <button type="submit" class="btn btn-primary btn-sm"
+                    th:text="#{admin.stats.query}">查询</button>
+        </form>
+
+        <!-- 当前口径在算什么 —— 两句话说清，免得运营对着数字猜。 -->
+        <p class="hint" th:text="${scope.name() == 'CONTENT_QUALITY'}
+                                 ? #{admin.stats.explain.quality} : #{admin.stats.explain.activity}">说明</p>
+
+        <p sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.stats_export')">
+            <a class="btn btn-neutral btn-sm"
+               th:href="@{/admin/content-stats/export(scope=${scope},from=${from},to=${to},authorId=${authorId})}"
+               th:text="#{admin.stats.export}">导出 CSV</a>
+        </p>
+
+        <table>
+            <thead>
+            <tr><th th:text="#{admin.stats.col.post}">内容 ID</th>
+                <th th:text="#{admin.content.col.type}">类型</th>
+                <th th:text="#{admin.content.col.author}">作者</th>
+                <th th:text="#{admin.content.col.preview}">正文摘要</th>
+                <th th:text="#{admin.stats.col.publishedAt}">发布时间</th>
+                <th th:text="#{admin.stats.col.likes}">点赞</th>
+                <th th:text="#{admin.stats.col.comments}">评论</th>
+                <th th:text="#{admin.stats.col.score}">互动积分</th></tr>
+            </thead>
+            <tbody>
+            <tr th:each="r : ${rows}">
+                <td th:text="${r.postId}">0</td>
+                <td th:text="${r.type}">DAILY</td>
+                <td th:text="${r.authorId} ?: '—'">—</td>
+                <td class="muted" th:text="${r.textPreview}">摘要</td>
+                <td th:text="${@adminTime.wib(r.publishedAt)}">时间</td>
+                <td th:text="${r.likes}">0</td>
+                <td th:text="${r.comments}">0</td>
+                <td><strong th:text="${r.score}">0</strong></td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(rows)}"><td colspan="8"
+                    th:text="#{admin.stats.empty}">这个区间内没有数据</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

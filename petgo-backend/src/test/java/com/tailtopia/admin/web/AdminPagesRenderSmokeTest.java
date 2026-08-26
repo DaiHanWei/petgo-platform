@@ -127,6 +127,13 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
                 .doesNotContain("工单队列").doesNotContain("三类工单统一排队");
 
         assertThat(visibleText("/admin/manual-review")).as("人工复核页的标题").contains("人工复核");
+
+        // Story 11.1：侧栏叫「顶置管理」，页内标题必须同名（四处同源里的前两处）。
+        assertThat(visibleText("/admin/content-pins")).as("顶置管理页的标题").contains("顶置管理");
+        // Story 11.2：侧栏叫「装饰标签」，页内标题必须同名。
+        assertThat(visibleText("/admin/content-tags")).as("装饰标签页的标题").contains("装饰标签");
+        // Story 11.3：侧栏叫「用户标签」，页内标题必须同名。
+        assertThat(visibleText("/admin/user-tags")).as("用户标签页的标题").contains("用户标签");
     }
 
     /**
@@ -163,9 +170,19 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
     @Test
     void allExternalizedAdminPagesRenderInEveryLocale() throws Exception {
         String[] paths = {"/admin/dashboard", "/admin/seed-post", "/admin/tickets", "/admin/content",
+                "/admin/content-pins", "/admin/content-tags", "/admin/user-tags",
                 "/admin/manual-review", "/admin/anomalies", "/admin/consult-sessions", "/admin/vets",
                 "/admin/vets/online", "/admin/failed-requests", "/admin/ratings", "/admin/users",
-                "/admin/audit-logs", "/admin/accounts"};
+                "/admin/audit-logs", "/admin/accounts",
+                // V1.1.6 Story 12.1：「运营发布身份」页（虚拟账号 + 运营真实账号两区）。
+                // ⚠️ 这一页此前不在本表里 —— 加进来才会验它的 i18n 键在两种语言下都齐。
+                "/admin/virtual-accounts",
+                // V1.1.6 Story 13.2：批次列表（工作台需要一个真实 batchId，另在其专属测试里渲染）。
+                "/admin/seed-batches",
+                // V1.1.6 Story 13.5：排期管理（12-1 的移出提示会跳到这里）。
+                "/admin/content-schedules",
+                // V1.1.6 Story 15.1：内容互动积分榜。
+                "/admin/content-stats"};
         for (String p : paths) {
             for (java.util.Locale locale : com.tailtopia.shared.i18n.AdminLocaleConfig.SUPPORTED_LOCALES) {
                 assertRenders(p, locale.toString());

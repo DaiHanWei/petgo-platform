@@ -29,6 +29,19 @@ public interface ContentLikeRepository extends JpaRepository<ContentLike, Long> 
         long getLikeCount();
     }
 
+    /**
+     * 某访客在这一页里赞过哪些帖（V1.1.6 Story 3.1 · AD-7 Rule 2）。
+     *
+     * <p>🛡 <b>Feed 必须用这个，不要用 {@code existsByPostIdAndUserId}</b> ——
+     * 后者是逐条的，搬进循环就是每页 20 次查询（AD-7 明令禁止）。
+     *
+     * <p>只返回<b>赞过的</b> postId，调用方按「在集合里 = 已赞」判定；
+     * 未登录访客根本不该调到这里（应整批短路为 false，见 {@code FeedService}）。
+     */
+    @Query("SELECT l.postId FROM ContentLike l WHERE l.userId = :userId AND l.postId IN :postIds")
+    List<Long> findLikedPostIds(@Param("userId") long userId,
+            @Param("postIds") Collection<Long> postIds);
+
     @Transactional
     void deleteByPostIdAndUserId(long postId, long userId);
 

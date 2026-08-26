@@ -10,6 +10,9 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 /// story 3（AC-F2）：CommentResponse.moderationStatus 解析入 domain；TAKEN_DOWN 渲染「仅你可见」灰标签，
 /// VISIBLE/UNDER_REVIEW 无标签（D-CM2）。读路径已保证仅作者本人收到非 VISIBLE 行。
 class _CommentsRepo implements DetailRepository {
+  @override
+  Future<String> getShareUrl(int postId) => throw UnimplementedError();
+
   _CommentsRepo(this.items);
   final List<Comment> items;
 

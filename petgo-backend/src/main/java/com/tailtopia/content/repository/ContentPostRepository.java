@@ -36,6 +36,41 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
     List<ContentPost> findByAuthorIdOrderByCreatedAtDesc(long authorId);
 
     /**
+     * 顶置内容选择器（V1.1.6 Story 11.1 · AB-10A）：**只返回可公开展示的内容**。
+     *
+     * <p>🛡 三个条件缺一不可 —— 缺了就可能把作者主动设为私密的内容顶到 Feed，
+     * 直接违背 FR-83 给作者的可见范围选择权：
+     * 未软删 + 状态 PUBLISHED + visibility PUBLIC。
+     * （举报预处置会把状态翻成 UNDER_REVIEW，已被第二条覆盖。）
+     *
+     * <p>⚠️ 判定与 {@code ContentDisplayability} 同口径 —— 那是给单条对象用的 Java 版，
+     * 这里是分页查询必须写在 WHERE 里的 SQL 版（捞出来再筛会破坏分页）。
+     *
+     * <p>⚠️ **候选集接近全量内容**：FR-83 的同步开关已于 2026-07-30 反转为默认开启，
+     * 被排除的只是"作者主动关开关"的少数 —— 因此本查询**必须分页**，
+     * 调用方不可假设候选量小到能平铺。
+     *
+     * <h2>🔴 关键词一律传"已拼好的 LIKE 模式"，绝不传 null</h2>
+     * 原先写的是 {@code (:kw IS NULL OR LOWER(p.text) LIKE LOWER(CONCAT('%', :kw, '%')))}。
+     * 绑 null 时 Postgres 推不出参数类型，直接报
+     * {@code function lower(bytea) does not exist} —— 而**页面首次加载恰恰是不带关键词的那一次**。
+     * （Story 11.1 的测试当时是绿的，只因为它第一次调用带了关键词；换个顺序就炸。）
+     *
+     * <p>所以模式串在 Java 侧拼好：无关键词时传 {@code "%"}。
+     * {@code COALESCE(p.text, '')} 是配套的 —— 纯图片帖 {@code text} 为 NULL，
+     * 而 {@code NULL LIKE '%'} 结果是 NULL（不是 true），不 COALESCE 会把这些帖子整批漏掉。
+     */
+    @Query("""
+            SELECT p FROM ContentPost p
+            WHERE p.deletedAt IS NULL
+              AND p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
+              AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
+              AND LOWER(COALESCE(p.text, '')) LIKE :pattern
+            ORDER BY p.createdAt DESC, p.id DESC
+            """)
+    List<ContentPost> searchPinnable(@Param("pattern") String pattern, Pageable pageable);
+
+    /**
      * 成长时间线读：某作者某宠物某类型未删内容，createdAt 倒序游标分页（Story 2.4）。
      * bug 20260721-271：按 petId 过滤——删宠档后 detachPet 把旧帖 pet_id 置 NULL，
      * 不加 petId 会让 NULL 旧帖漏进新宠物档案（串档）。
@@ -105,6 +140,25 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
     /** 当天详情（Story 2.4 R2 · F9）：某作者某宠物某类型未删内容，指定 event_date，按 created_at 升序（bug 271 加 petId）。 */
     List<ContentPost> findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndEventDateOrderByCreatedAtAsc(
             long authorId, long petId, ContentType type, LocalDate eventDate);
+
+    /**
+     * 日历月度聚合的<b>访客版</b>（V1.1.6 Story 2.2）：在上面那条之上<b>再叠一层 {@code status} 过滤</b>。
+     *
+     * <p>🔴 <b>与上面那条是一对，不可互换</b>：
+     * 上面那条（无 status）供<b>作者自看</b> —— 作者要看得到自己被下架 / 审核中的帖，
+     * 才知道发生了什么；本条（传 {@code PUBLISHED}）供<b>访客</b> ——
+     * 照搬作者那条会让<b>违规内容被下架之后仍能通过分享链接对全网可见</b>。
+     *
+     * <p>⚠️ 将来若有人想「统一成一个方法」，请先读完这段再动。
+     */
+    List<ContentPost> findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndStatusAndEventDateBetweenOrderByEventDateAscCreatedAtAsc(
+            long authorId, long petId, ContentType type, PostStatus status, LocalDate from, LocalDate to);
+
+    /**
+     * 当天详情的<b>访客版</b>（V1.1.6 Story 2.2）。与上面「当天详情」那条成对，理由同上 —— 不可互换。
+     */
+    List<ContentPost> findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndStatusAndEventDateOrderByCreatedAtAsc(
+            long authorId, long petId, ContentType type, PostStatus status, LocalDate eventDate);
 
     /**
      * 名片快乐时刻流（Story 2.6 AC7 · F9）：某作者**某宠物**某类型未删内容，按 event_date 倒序取最近 N。
@@ -178,6 +232,11 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
      *       ⚠️ 该过滤属<b>安全规则层，只升不降不可绕过</b>，且必须留在 SQL WHERE 内 ——
      *       挪到 Java 侧 filter 会破坏 {@code PAGE_SIZE+1} / {@code hasMore} / 游标契约，
      *       并产生近乎空白的页（AD-5）。</li>
+     *   <li>顶置让位（V1.1.6 Story 4.2 · AD-8）：{@code hasExclude=true} → 排除被顶置的那条内容。
+     *       🛡 <b>只有第一页会传</b>，后续页仍可正常出现。
+     *       🔴 排除**留在 WHERE 内**而不是取完一页再内存剔除 —— 后者会同时坏掉两件事：
+     *       第一页少一条、以及"还有更多"的判断（它依赖多取一条），两者都要靠数据库自己往后补。
+     *       同样用布尔标志门控，避免不排除时传 NULL 触发 42P18。</li>
      *   <li>排序：{@code created_at DESC, id DESC}（id tie-breaker 保证游标稳定）。</li>
      * </ul>
      */
@@ -196,6 +255,7 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
               AND (:hasViewer = false
                    OR NOT EXISTS (SELECT 1 FROM UserHideRelation h
                                   WHERE h.holderId = :viewerId AND h.targetId = p.authorId))
+              AND (:hasExclude = false OR p.id <> :excludeId)
               AND (:hasCursor = false
                    OR p.createdAt < :cursorTs
                    OR (p.createdAt = :cursorTs AND p.id < :cursorId))
@@ -209,7 +269,118 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             @Param("hasCursor") boolean hasCursor,
             @Param("cursorTs") Instant cursorTs,
             @Param("cursorId") Long cursorId,
+            @Param("hasExclude") boolean hasExclude,
+            @Param("excludeId") Long excludeId,
             Pageable pageable);
+
+    /**
+     * 推荐序候选池（V1.1.6 Story 16.3 · AC2）。
+     *
+     * <p>🔴 <b>过滤口径与 {@link #findFeed} 逐条相同</b>，只去掉「分类」「游标」「排序」三件事 ——
+     * 推荐序不按 {@code created_at} 翻页，排序由引擎决定。
+     *
+     * <p>⚠️ <b>为什么仍带 {@code ORDER BY created_at DESC} 且必须传 Pageable</b>：候选池要有上界。
+     * 不设上界的话这个查询会随总帖数线性变大，而它每次下拉刷新都要跑一次；
+     * 且推导物种、批量取赞评、取装饰标签都要按这一批的规模走。
+     * 取「最近 N 条」是有意的：更早的内容新鲜度已趋近 0，靠互动度单独也很难排上来。
+     * ⚠️ 顺带这条 {@code ORDER BY ... LIMIT} 让查询走既有 {@code idx_content_posts_feed} 索引
+     * 而不是全表扫（Story 16.1 的索引重估结论）。
+     *
+     * <p>🛡 举报者隐藏与账号级隐藏<b>仍是两条并列条件，不合并</b>（AD-9）——
+     * 一条藏一条帖、一条藏一个人。合并会改变已上线行为。
+     *
+     * <p>🛡 <b>不传顶置排除</b>：顶置让位在<b>服务页时</b>处理，因为「首页」在推荐序里
+     * 是序列的前 20 个位置，而序列是一次算 100 条的 —— 在取数时排掉会让它永远不出现。
+     *
+     * <p>🔴 <b>只收 {@code PUBLISHED}，作者本人的挂起帖不进池</b>（AC2）：
+     * 挂起帖<b>不占算法槽位、不参与配比与打分</b>，由
+     * {@link #findOwnPendingPosts} 单独取、在服务页时插回。
+     * ⚠️ 让它进池是很自然的写法（{@code findFeed} 就是那么写的），但那会让作者自己的
+     * 待审内容去和全平台内容抢分数 —— 抢不到就等于「刚发的帖从首页消失」，正是 AC 要防的事。
+     */
+    @Query("""
+            SELECT p FROM ContentPost p
+            WHERE p.deletedAt IS NULL
+              AND p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
+              AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
+              AND (:hasViewer = false
+                   OR NOT EXISTS (SELECT 1 FROM ContentReport r
+                                  WHERE r.postId = p.id AND r.reporterId = :viewerId))
+              AND (:hasViewer = false
+                   OR NOT EXISTS (SELECT 1 FROM UserHideRelation h
+                                  WHERE h.holderId = :viewerId AND h.targetId = p.authorId))
+            ORDER BY p.createdAt DESC, p.id DESC
+            """)
+    List<ContentPost> findRankCandidatePool(
+            @Param("hasViewer") boolean hasViewer,
+            @Param("viewerId") Long viewerId,
+            Pageable pageable);
+
+    /**
+     * 按 id 取内容，<b>并重新套一遍候选池过滤</b>（V1.1.6 Story 16.3 · AC4）。
+     *
+     * <p>🔴 <b>这个方法存在的唯一理由</b>：序列快照有 30 分钟寿命，期间内容可能被删、被挂起、
+     * 转成私密，或者查看者刚拉黑了某个作者。直接 {@code findAllById} 取回来就是
+     * <b>绕过了安全规则层</b> —— 而 AC4 明写「任何级别下候选池的全部过滤都不得被绕过」。
+     *
+     * <p>⚠️ 返回条数可能少于传入的 id 数（有的已不合格）。调用方须据此从序列里<b>再多取几条</b>补齐，
+     * 而不是直接返回一个短页。
+     *
+     * <p>🛡 不带排序 —— 顺序由序列决定，调用方按 id 重排。
+     */
+    @Query("""
+            SELECT p FROM ContentPost p
+            WHERE p.id IN :ids
+              AND p.deletedAt IS NULL
+              AND (p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
+                   OR (p.status = com.tailtopia.content.domain.PostStatus.UNDER_REVIEW
+                       AND :hasViewer = true AND p.authorId = :viewerId))
+              AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
+              AND (:hasViewer = false
+                   OR NOT EXISTS (SELECT 1 FROM ContentReport r
+                                  WHERE r.postId = p.id AND r.reporterId = :viewerId))
+              AND (:hasViewer = false
+                   OR NOT EXISTS (SELECT 1 FROM UserHideRelation h
+                                  WHERE h.holderId = :viewerId AND h.targetId = p.authorId))
+            """)
+    List<ContentPost> findRankableByIds(
+            @Param("ids") Collection<Long> ids,
+            @Param("hasViewer") boolean hasViewer,
+            @Param("viewerId") Long viewerId);
+
+    /**
+     * 查看者<b>本人</b>的挂起帖（V1.1.6 Story 16.3 · AC2）。
+     *
+     * <p>推荐序里没有「时间序位置」这回事，所以 AC 那句「插回其时间序位置」在这条路径上
+     * 落成<b>首屏置顶</b>：作者刚发的内容本来就是他自己最新的东西，放在最前面最不意外。
+     * 关键是它<b>不参与打分</b> —— 抢不到分数就等于从首页消失，那是体验回退。
+     *
+     * <p>🛡 只有<b>本人</b>看得到（对他人零泄漏由候选池只收 {@code PUBLISHED} 保证）；
+     * 拒绝即软删（{@code deletedAt}），对所有人含作者隐藏。
+     */
+    @Query("""
+            SELECT p FROM ContentPost p
+            WHERE p.authorId = :authorId
+              AND p.deletedAt IS NULL
+              AND p.status = com.tailtopia.content.domain.PostStatus.UNDER_REVIEW
+              AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
+            ORDER BY p.createdAt DESC, p.id DESC
+            """)
+    List<ContentPost> findOwnPendingPosts(@Param("authorId") long authorId, Pageable pageable);
+
+    /**
+     * 近期公开内容的 id（V1.1.6 Story 16.4）—— 供 P95 重算统计互动量分布。
+     *
+     * <p>🛡 只取 id：这个集合可能有几万条，取整个实体是白搬数据。
+     */
+    @Query("""
+            SELECT p.id FROM ContentPost p
+            WHERE p.deletedAt IS NULL
+              AND p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
+              AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
+              AND p.createdAt >= :since
+            """)
+    List<Long> findPublicIdsPublishedSince(@Param("since") Instant since);
 
     /**
      * 注销联动（内容审核 story 9，§5.5.1）：把注销用户仍在公开/挂起口径的帖子置 {@code AUTHOR_DEACTIVATED}

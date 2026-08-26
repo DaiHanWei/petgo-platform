@@ -13,6 +13,9 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 /// story 3（AC-F1）：发一级评论遇审核拦截（422 COMMENT_BLOCKED）→ 保留输入 + 专属 toast
 /// `commentModerationBlocked`（区别网络失败 `commentSendFailed`）；网络失败仍走 `commentSendFailed`。
 class _BlockingRepo implements DetailRepository {
+  @override
+  Future<String> getShareUrl(int postId) => throw UnimplementedError();
+
   _BlockingRepo({required this.commentBlocked});
 
   /// true = 422 COMMENT_BLOCKED；false = 网络/500 失败。

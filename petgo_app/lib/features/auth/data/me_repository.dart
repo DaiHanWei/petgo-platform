@@ -14,6 +14,12 @@ abstract class MeRepository {
 
   /// 一次保存昵称 + 一句话签名（bug 20260721-327，编辑资料抽屉用）。
   Future<UserProfile> updateProfile({String? nickname, String? signature});
+
+  /// 保存手机号（V1.1.6 Story 7.1 · FR-70）。
+  ///
+  /// 🔴 **传空串 = 清空（撤回）**，不是"不改" —— 后端按这个约定分流。
+  /// 若传 null 就变成"这次不动手机号"，撤回权会静默落空。
+  Future<UserProfile> updatePhone(String phone);
 }
 
 class DioMeRepository implements MeRepository {
@@ -43,6 +49,9 @@ class DioMeRepository implements MeRepository {
     if (signature != null) body['signature'] = signature;
     return _patch(body);
   }
+
+  @override
+  Future<UserProfile> updatePhone(String phone) => _patch({'phone': phone});
 
   Future<UserProfile> _patch(Map<String, dynamic> body) async {
     final resp = await dio.patch<Map<String, dynamic>>(ApiPaths.me, data: body);

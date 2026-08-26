@@ -65,6 +65,7 @@ public class ContentPostAdminSearchImpl implements ContentPostAdminSearch {
 
     private static AdminContentRow toRow(ContentPost p) {
         return new AdminContentRow(p.getId(), p.getType(), p.getAuthorId(),
-                p.getText(), p.getDeletedAt() != null, p.getCreatedAt(), p.getImageUrls());
+                p.getText(), p.getDeletedAt() != null, p.getCreatedAt(), p.getImageUrls(),
+                p.getSpeciesOverride());
     }
 }

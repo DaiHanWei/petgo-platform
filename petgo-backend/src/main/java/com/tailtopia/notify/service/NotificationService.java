@@ -70,12 +70,36 @@ public class NotificationService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Notification send(long recipientUserId, NotificationType type, String title, String body,
             String deepLinkType, String targetRef) {
+        return write(recipientUserId, type, title, body, deepLinkType, targetRef, true);
+    }
+
+    /**
+     * 只写通知中心、**不发系统推送**（V1.1.6 Story 6.1 · FR-76 / AD-13）。
+     *
+     * <p>用于 S/M 级里程碑达成：数量比 L 级多得多，推送会变成打扰；但仍要进通知中心留痕，
+     * 好让"别人的互动触发了里程碑、本人当时不在现场"这件事被告知到。
+     *
+     * <p>🛡 <b>刻意与 {@link #send} 共用同一段落库 + 角标逻辑</b>，只切掉推送那一步 ——
+     * 未读角标自增就在那段里。另写一套"只落库"的逻辑就等于把 AC「必须让角标递增」那条护栏丢了：
+     * 通知进了中心而铃铛不动，用户仍需主动去翻，本 FR 直接失效。
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Notification sendWithoutPush(long recipientUserId, NotificationType type, String title,
+            String body, String deepLinkType, String targetRef) {
+        return write(recipientUserId, type, title, body, deepLinkType, targetRef, false);
+    }
+
+    private Notification write(long recipientUserId, NotificationType type, String title, String body,
+            String deepLinkType, String targetRef, boolean push) {
         String token = generateToken();
         Notification saved = repo.save(Notification.of(
                 recipientUserId, type, title, body, deepLinkType, token, targetRef));
         // 未读角标自增（用户侧通知中心 6.6）。bug 20260625-088：Redis 抖动/不可用**不得**回滚通知落库
         // 或阻断推送——角标是派生数据，稍后由通知中心首页 / unreadCount 回库自愈。
         bumpUnreadBadge(recipientUserId);
+        if (!push) {
+            return saved; // 只留痕、不打扰（Story 6.1）。角标已在上一行涨过。
+        }
         // 离线推送异步投递（失败不阻塞）。push 文案按收件人语言渲染（bug 20260625-105）；
         // 站内通知中心不用这里的文本（App 端按 type 自行本地化），故落库 title/body 保持不变。
         java.util.Locale locale = accountQuery.localeOf(recipientUserId);
