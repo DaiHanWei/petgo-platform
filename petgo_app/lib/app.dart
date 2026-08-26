@@ -14,6 +14,9 @@ import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/consult/presentation/consult_refresh.dart';
 import 'package:tailtopia/features/content/presentation/feed_controller.dart';
 import 'package:tailtopia/features/me/data/my_posts_repository.dart';
+import 'package:tailtopia/features/me/presentation/phone_edit_sheet.dart';
+import 'package:tailtopia/features/me/domain/phone_soft_prompt.dart';
+import 'package:tailtopia/core/storage/prefs.dart';
 import 'package:tailtopia/features/notify/data/notification_repository.dart';
 import 'package:tailtopia/features/pawcoin/presentation/pawcoin_controller.dart';
 import 'package:tailtopia/features/profile/data/health_record_repository.dart';
@@ -25,13 +28,38 @@ import 'package:tailtopia/features/profile/data/timeline_repository.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// 成长档案分享页深链 → go_router location 的纯映射（L0 可测）。
-/// `tailtopia://card/{token}` → `/profile`（成长档案 Tab，分享页 CTA 第①级）。
-/// `tailtopia://open` → `/home`（下载引导落地页 `s.tailtopia.id/get` 唤起已装 app 的通用深链）。
-/// `tailtopia://open/<路径>` → 该路径（🔧 **仅 debug 包**，本地验收导航用；release 恒 `/home`）。
-/// 其它 scheme/host 暂不识别（返回 null，调用方忽略）。
+///
+/// - `tailtopia://card/{token}` → `/pet/{token}`（**被分享的那只宠物**，V1.1.6 Story 2.4）
+/// - `tailtopia://post/{token}` → `/shared-post/{token}`（**只有被分享的那一条内容**，V1.1.6 Story 9.3）
+/// - `tailtopia://open` → `/home`（下载引导落地页 `s.tailtopia.id/get` 唤起已装 app 的通用深链）
+/// - `tailtopia://open/<路径>` → 该路径（🔧 **仅 debug 包**，本地验收导航用；release 恒 `/home`）
+/// - 其它 scheme/host 暂不识别（返回 null，调用方忽略）
+///
+/// ## 🔴 V1.1.6 Story 2.4 修的就是这里
+/// 改之前这个函数把 `card` 深链**整个映射成 `/profile`**，连 token 都没解析 —— 于是：
+/// 未登录的人点开看到给游客做的**示例成长本**，已登录有宠的人点开看到**自己家的宠物**。
+/// 两种都不是被分享的那一只。
+///
+/// ⚠️ token 只从 **path** 取，不接受 query 覆盖 —— 少一个可被构造的入口。
+/// 没有 token（如裸 `tailtopia://card`）则退回 `/profile`：没有 token 就没有可展示的宠物。
+///
+/// ⚠️ 「作者本人点自己的链接该落回自己的档案页」（AD-2 Rule 3）**不在这里判**：
+/// 那是 Diary 页单一状态判定入口的职责（AD-15）。在这里判等于开第二处判定，
+/// 两处迟早分叉，而分叉的表现是作者丢管理入口、或访客拿到管理入口。
 String? deepLinkToLocation(Uri uri) {
   if (uri.scheme == 'tailtopia' && uri.host == 'card') {
-    return '/profile';
+    final token = uri.pathSegments.isEmpty ? '' : uri.pathSegments.first;
+    return token.isEmpty ? '/profile' : '/pet/$token';
+  }
+  // 单条内容分享（V1.1.6 Story 9.3）。
+  // 🔴 **与 card 是两个独立类型、两个落点**（AD-15 Rule 5）：
+  // `card` 落整本档案的只读视图，`post` 只落被分享的那一条。
+  // 合成一个深链目标，就等于把「我只想分享一条」变成「我把整本都给你了」。
+  if (uri.scheme == 'tailtopia' && uri.host == 'post') {
+    final token = uri.pathSegments.isEmpty ? '' : uri.pathSegments.first;
+    // 没 token 就没有可展示的那一条 —— 落首页，不要退回任何档案页
+    // （退到档案页就成了"点别人的分享链接看到自己家宠物"，正是 2.4 修掉的那个 bug）。
+    return token.isEmpty ? '/home' : '/shared-post/$token';
   }
   if (uri.scheme == 'tailtopia' && uri.host == 'open') {
     // 🔧 DEBUG ONLY：`tailtopia://open/<路径>` 直达任意路由，供本地验收导航用。
@@ -78,6 +106,27 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> with WidgetsBinding
     // 不同步则后台收不到厂商离线推送 / 前台重复弹通知，见 core/push/push_service.dart）。
     WidgetsBinding.instance.addObserver(this);
     _initDeepLinks();
+
+    // 手机号软引导接进推送权限的排队入口（Story 7.2 / AD-14 Rule 7：先推送权限、后手机号）。
+    //
+    // 🛡 这里**只注册**，不弹任何东西 —— 它跟着推送权限那几个触发点走。
+    //    注册放这里而不是 `main.dart`：判定要读 `authControllerProvider`（当前用户档案），
+    //    而 main 的启动回调在 ProviderScope 之外，拿不到 ref。
+    // ⚠️ 取值全部是**函数**，到触发那一刻才读 —— 用户可能刚在设置页填过号码。
+    // ⚠️ 绝不在别处另写一套「同时命中谁先谁后」的判定，那正是 Rule 7 要消除的不确定性。
+    PhoneSoftPrompt.register(
+      prefs: AppPrefs.create,
+      registeredAt: () async => ref.read(authControllerProvider).profile?.createdAt,
+      hasPhone: () async {
+        final phone = ref.read(authControllerProvider).profile?.phone;
+        return phone != null && phone.isNotEmpty;
+      },
+      showSheet: () async {
+        final ctx = rootNavigatorKey.currentContext;
+        if (ctx == null) return false;
+        return PhoneEditSheet.openDetailed(ctx, entry: 'soft_prompt');
+      },
+    );
   }
 
   @override
@@ -96,10 +145,12 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> with WidgetsBinding
     } catch (_) {
       // 拿不到初始链接不阻塞启动。
     }
-    // 热启动（app 已活，后台/前台被深链唤起）：直接导航。
+    // 热启动（app 已活，后台/前台被深链唤起）。
+    // ⚠️ 走 goDeepLinkFromLiveApp 而**不是**直接 go：落点若在 Tab 外（如访客视图
+    // `/pet/{token}`），go 掉整个栈会让用户按返回直接退出 App —— 见该函数的说明。
     _linkSub = _appLinks.uriLinkStream.listen((uri) {
       final loc = deepLinkToLocation(uri);
-      if (loc != null) ref.read(routerProvider).go(loc);
+      if (loc != null) goDeepLinkFromLiveApp(ref, loc);
     }, onError: (_) {});
   }
 

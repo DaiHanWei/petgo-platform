@@ -8,8 +8,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gal/gal.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/card_render/card_export.dart';
 import '../../../shared/widgets/qr_payment_sheet.dart';
 import '../../pawcoin/presentation/pawcoin_controller.dart';
 import '../data/id_card_repository.dart';
@@ -34,11 +36,19 @@ class IdCardDetailPage extends ConsumerStatefulWidget {
 
 class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
   bool _hdBusy = false;
+  bool _shareBusy = false;
 
   /// 当前卡面（bug 20260730-430：一卡一面，由快照 cardType 决定，不再提供三 Tab 切换）。
   /// 0=KTP, 1=Paspor, 2=Pelajar；在 [_view] 随卡数据赋值，供导出链（[_exportHd]）选画布。
   int _styleIndex = 0;
   final GlobalKey idCardBoundaryKey = GlobalKey();
+
+  /// 含水印的外层 boundary（Story 18.2 · AC2）。
+  ///
+  /// 🔴 免费分享出去的必须是**带水印版**——无水印仍需付费，那是与既有付费点共存的前提。
+  /// 水印层刻意盖在 [idCardBoundaryKey] **之外**（见 IdCardWatermark 的类注释：
+  /// 挪进去会污染付费导出图），所以带水印的截图必须另用一个包住整个 Stack 的 boundary。
+  final GlobalKey idCardWatermarkedBoundaryKey = GlobalKey();
 
   @override
   Widget build(BuildContext context) {
@@ -99,14 +109,24 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
                   child: Stack(
                     fit: StackFit.expand, // 卡面保持 AspectRatio 紧约束（loose 会让 FittedBox 撑到画布原尺寸）
                     children: [
+                      // Story 18.2：外层 boundary 把水印一并包进来，供免费分享用（AC2）。
+                      // 🛡 内层 idCardBoundaryKey 依旧只含卡面 —— 付费 HD 导出无水印，不受影响。
                       RepaintBoundary(
-                        key: idCardBoundaryKey,
-                        child: FittedBox(
-                          fit: BoxFit.contain,
-                          child: cardFront,
+                        key: idCardWatermarkedBoundaryKey,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            RepaintBoundary(
+                              key: idCardBoundaryKey,
+                              child: FittedBox(
+                                fit: BoxFit.contain,
+                                child: cardFront,
+                              ),
+                            ),
+                            IdCardWatermark(canvas: canvas, canvasRadius: radius),
+                          ],
                         ),
                       ),
-                      IdCardWatermark(canvas: canvas, canvasRadius: radius),
                     ],
                   ),
                 ),
@@ -140,19 +160,43 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
                     ),
                   ),
                 const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    style: FilledButton.styleFrom(backgroundColor: AppColors.mint),
-                    onPressed: _hdBusy ? null : () => _onDownloadHd(card),
-                    icon: _hdBusy
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.download),
-                    label: Text(card.hdUnlocked ? l10n.idCardDownloadHd : l10n.idCardUnlockHd),
-                  ),
+                // 🔴 Story 18.2 · AC1：分享按钮与「解锁高清」**并列**。
+                //    绝不能只放进 HD 导出后的底部选单 —— 那等于仍被付费墙挡住：
+                //    用户得先付费才能看到"免费分享"的入口，整条激励失效。
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        key: const ValueKey('idCardFreeShare'),
+                        onPressed: _shareBusy ? null : () => _onFreeShare(card),
+                        icon: _shareBusy
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.ios_share_rounded),
+                        // 🛡 AC6：文案固定「分享」，**不含奖励信息**。
+                        //    这样总开关关闭时只需停掉成功后的提示，
+                        //    不会出现"按钮承诺了奖励却不发"。
+                        label: Text(l10n.idCardShare),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(backgroundColor: AppColors.mint),
+                        onPressed: _hdBusy ? null : () => _onDownloadHd(card),
+                        icon: _hdBusy
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: Colors.white))
+                            : const Icon(Icons.download),
+                        label: Text(card.hdUnlocked ? l10n.idCardDownloadHd : l10n.idCardUnlockHd),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -161,6 +205,54 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
         ],
       ),
     );
+  }
+
+  /// 🔴 Story 18.2：免费分享带水印版，成功后上报并按结果决定是否提示。
+  ///
+  /// ✅ AC5：只在系统面板回调 `ShareResultStatus.success` 时上报 —— 用户取消不上报、不发币。
+  ///    这条不是新写的判断：`CardExport.shareImage` 已经做了（非 success 返回 null），
+  ///    这里**照它的写法用**，不另起一套。
+  ///
+  /// 🛡 AC7：上报失败不影响分享本身 —— 分享已经发生了，奖励只是锦上添花。
+  ///    不重试、不建补偿队列。
+  Future<void> _onFreeShare(IdCard card) async {
+    final l10n = AppLocalizations.of(context);
+    setState(() => _shareBusy = true);
+    try {
+      final origin = _shareOrigin();
+      // 🛡 AC2：截**含水印**的那个 boundary。无水印仍需付费。
+      final bytes = await _capture(idCardWatermarkedBoundaryKey);
+      if (bytes == null) return;
+      Analytics.capture('id_card_share_tapped', {'card_style': _styleIndex});
+      final channel = await CardExport.shareImage(
+        bytes,
+        name: 'tailtopia_id_card',
+        origin: origin,
+      );
+      if (channel == null) {
+        // 取消 / 面板不可用 ⇒ 没分享出去 ⇒ 不上报、不发币、不提示。
+        return;
+      }
+      Analytics.capture('id_card_share_sent', {'channel': channel});
+      int coins = 0;
+      try {
+        coins = await ref.read(idCardRepositoryProvider).reportShareForReward(card.id);
+      } catch (_) {
+        // 🛡 发放上报失败 = 当作没发。分享本身已经成功，绝不因此报错给用户。
+        coins = 0;
+      }
+      Analytics.capture('id_card_share_rewarded', {'rewarded': coins > 0});
+      if (!mounted) return;
+      // 🛡 AC6：奖励只出现在**成功后的轻提示**里，且只在真的发了币时出现。
+      //    没发就静默 —— 不告知原因（AC3：告知会诱导"攒着别分享"或"月初集中刷满"）。
+      if (coins > 0) {
+        _toast(l10n.idCardShareRewardToast(coins));
+      }
+    } catch (_) {
+      if (mounted) _toast(l10n.idCardShareError);
+    } finally {
+      if (mounted) setState(() => _shareBusy = false);
+    }
   }
 
   Future<void> _onDownloadHd(IdCard card) async {
@@ -241,38 +333,49 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
   }
 
   /// 导出卡为 PNG → 弹选单：保存到相册 / 分享（bug 20260721-334）。
+  /// 把某个 boundary 截成导出规格的 PNG 字节。
+  ///
+  /// ⚠️ 传 boundary 而不是写死：付费 HD 导出用**不含水印**的内层 boundary，
+  /// 免费分享用**含水印**的外层 boundary（Story 18.2 · AC2）。两条路径共用这一份
+  /// 画布选择与白底合成逻辑 —— 抄两遍就会出现「改了一处忘了另一处」。
+  Future<Uint8List?> _capture(GlobalKey boundaryKey) async {
+    final boundary =
+        boundaryKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+    if (boundary == null) return null;
+    // 按当前卡面选画布（护照 1990×1548 与 KTP/学生卡 1988×1200 不同，
+    // 恒用 KTP 宽会把护照导出尺寸错算）。
+    final exportCanvas = switch (_styleIndex) {
+      1 => kPassportCardCanvas,
+      2 => kStudentCardCanvas,
+      _ => kIdCardCanvas,
+    };
+    final pixelRatio = exportCanvas.width / boundary.size.width;
+    final ui.Image shot = await boundary.toImage(pixelRatio: pixelRatio);
+    // bug 20260731-441：卡面 ClipRRect 圆角外是 alpha=0 透明像素，PNG 存透明本身没问题，
+    // 但相册查看器深色主题/IM 转发压缩会把透明平铺成黑角——导出前合成到白底再编码。
+    final recorder = ui.PictureRecorder();
+    final composeCanvas = Canvas(recorder);
+    composeCanvas.drawRect(
+      Rect.fromLTWH(0, 0, shot.width.toDouble(), shot.height.toDouble()),
+      Paint()..color = Colors.white,
+    );
+    composeCanvas.drawImage(shot, Offset.zero, Paint());
+    final ui.Image image = await recorder.endRecording().toImage(shot.width, shot.height);
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    return byteData?.buffer.asUint8List();
+  }
+
+  Rect? _shareOrigin() {
+    final box = context.findRenderObject() as RenderBox?;
+    return box != null ? box.localToGlobal(Offset.zero) & box.size : null;
+  }
+
   Future<void> _exportHd() async {
     final l10n = AppLocalizations.of(context);
     try {
-      final boundary =
-          idCardBoundaryKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-      if (boundary == null) return;
-      final box = context.findRenderObject() as RenderBox?;
-      final origin = box != null ? box.localToGlobal(Offset.zero) & box.size : null;
-      // 按当前卡面选画布（护照 1990×1548 与 KTP/学生卡 1988×1200 不同，
-      // 恒用 KTP 宽会把护照导出尺寸错算）。
-      final exportCanvas = switch (_styleIndex) {
-        1 => kPassportCardCanvas,
-        2 => kStudentCardCanvas,
-        _ => kIdCardCanvas,
-      };
-      final pixelRatio = exportCanvas.width / boundary.size.width;
-      final ui.Image shot = await boundary.toImage(pixelRatio: pixelRatio);
-      // bug 20260731-441：卡面 ClipRRect 圆角外是 alpha=0 透明像素，PNG 存透明本身没问题，
-      // 但相册查看器深色主题/IM 转发压缩会把透明平铺成黑角——导出前合成到白底再编码。
-      final recorder = ui.PictureRecorder();
-      final composeCanvas = Canvas(recorder);
-      composeCanvas.drawRect(
-        Rect.fromLTWH(0, 0, shot.width.toDouble(), shot.height.toDouble()),
-        Paint()..color = Colors.white,
-      );
-      composeCanvas.drawImage(shot, Offset.zero, Paint());
-      final ui.Image image =
-          await recorder.endRecording().toImage(shot.width, shot.height);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) return;
-      final bytes = byteData.buffer.asUint8List();
-      if (!mounted) return;
+      final origin = _shareOrigin();
+      final bytes = await _capture(idCardBoundaryKey);
+      if (bytes == null || !mounted) return;
       await _showExportSheet(bytes, origin);
     } catch (_) {
       if (mounted) _toast(l10n.idCardHdExportError);

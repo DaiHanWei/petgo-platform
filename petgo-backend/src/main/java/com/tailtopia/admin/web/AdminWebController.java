@@ -10,6 +10,8 @@ import com.tailtopia.admin.service.AdminContentService;
 import com.tailtopia.admin.service.AdminModerationService;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.admin.service.AdminVetService;
+import com.tailtopia.admin.virtual.service.AdminPublishIdentityService;
+import com.tailtopia.admin.virtual.web.AdminSeedBatchController;
 import com.tailtopia.admin.virtual.service.AdminVirtualAccountService;
 import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.dto.ContentPostResponse;
@@ -44,6 +46,7 @@ public class AdminWebController {
     private final AdminVetService adminVetService;
     private final com.tailtopia.admin.dashboard.service.AdminDashboardService dashboardService;
     private final AdminVirtualAccountService virtualAccountService;
+    private final AdminPublishIdentityService publishIdentityService;
 
     /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
     private final Messages msg;
@@ -53,13 +56,15 @@ public class AdminWebController {
             AdminVetService adminVetService,
             com.tailtopia.admin.dashboard.service.AdminDashboardService dashboardService,
             AdminVirtualAccountService virtualAccountService,
-            Messages msg) {
+            Messages msg,
+            AdminPublishIdentityService publishIdentityService) {
         this.adminContentService = adminContentService;
         this.adminModerationService = adminModerationService;
         this.adminVetService = adminVetService;
         this.dashboardService = dashboardService;
         this.virtualAccountService = virtualAccountService;
         this.msg = msg;
+        this.publishIdentityService = publishIdentityService;
     }
 
     /** 登录页（未认证可访问；认证失败回显 error，登出回显 logout）。 */
@@ -100,6 +105,15 @@ public class AdminWebController {
     private void seedPostModel(Model model) {
         model.addAttribute("types", ContentType.values());
         model.addAttribute("accounts", virtualAccountService.list());
+        // 发布账号选择器的数据源（V1.1.6 Story 12.1 · AC6）：虚拟账号 + 池内运营真实账号。
+        // 🛡 三处发布入口共用同一份数据与同一个片段 —— 别在某个页面另攒一份列表。
+        model.addAttribute("publishIdentities", publishIdentityService.selectableIdentities());
+        // ⚠️ 宠物下拉片段在**整页渲染**时也会被 include，所以这里必须给它一个空表 ——
+        //    不给的话 `petOptions.isEmpty()` 在 null 上求值，整页 500。
+        //    真正的内容由 HTMX 在选定账号后从 /admin/seed-post/pets 换进来。
+        model.addAttribute("petOptions", java.util.List.of());
+        // V1.1.6 Story 14.1 · AC4：「关联物种」下拉（挂在发布账号选择器之后）。
+        model.addAttribute("speciesOptions", com.tailtopia.content.species.ContentSpecies.ALL);
     }
 
     // ===== Story 3.7 + 4.1：举报审核队列（状态筛选 + 批量 + 双向通知 + 审计）=====
@@ -358,16 +372,31 @@ public class AdminWebController {
         if (binding.hasErrors()) {
             return "admin/seed-post";
         }
-        // 种子内容 author_id 须为合法 users.id（FK→users）；仅关联官方内容作者行的账号可发，
-        // 否则友好内联提示（勿用 admin_account_id 兜底——非 users.id 会破坏 FK）。避免对 STAFF/纯 Lark 账号 500。
-        if (!admin.hasOperatorUserId()) {
-            binding.reject("publish.failed", "当前后台账号未关联官方内容作者身份，无法发布种子内容（请用官方作者账号发布）。");
+        // 🔴 V1.1.6 Story 12.2：作者改为**表单选择**（数据源是 Story 12.1 的发布身份池）。
+        //
+        // 原先这里写死为"登录后台账号所关联的官方内容作者身份"，并对未关联的账号内联报错。
+        // 那个行为有两个后果：① 运营只能以那一个身份发内容；
+        // ② 成长日历（GROWTH_MOMENT）**实际发不出来** —— 它必须绑一份宠物档案，
+        //    而那个官方作者账号没有档案，于是"该宠物是否属于所选作者"这条校验必然失败，
+        //    且运营从错误文案里看不出原因。
+        //
+        // 🛡 "不信任客户端 author" 这条原则没放弃，只是换了守法：
+        //    服务端在 publishSeed 里校验该账号在身份池内 + 停用状态 + seed.publish_as_real。
+        //    ⚠️ `admin.hasOperatorUserId()` 这个前置条件**随之作废** ——
+        //    发布身份不再取自后台账号，纯 Lark / STAFF 账号照样能发。
+        // 🛡 兜一层 null：`@NotNull` 正常会在 binding 阶段拦住，但**这里不能靠"正常"** ——
+        //    authorUserId 是 Long，拆箱成 long 时若为 null 就是 NPE ⇒ 500 白屏，
+        //    而运营看到的只是"系统错误"。宁可多一句判断。
+        if (form.getAuthorUserId() == null) {
+            binding.reject("publish.failed", "请先选择发布账号。");
             model.addAttribute("seedPostForm", form);
             return "admin/seed-post";
         }
         try {
             ContentPostResponse saved = adminContentService.publishSeed(
-                    admin.getUserId(), form.getType(), form.getPetId(), form.getText(), form.imageUrls());
+                    form.getAuthorUserId(), form.getType(), form.getPetId(), form.getText(),
+                    form.imageUrls(), form.imageSizes(),
+                    AdminSeedBatchController.mayPublishAsReal(admin), form.getSpecies());
             // 发布成功：清空表单 + 成功提示（含 postId，便于运营核对）。
             model.addAttribute("seedPostForm", new SeedPostForm());
             model.addAttribute("publishedId", saved.id());

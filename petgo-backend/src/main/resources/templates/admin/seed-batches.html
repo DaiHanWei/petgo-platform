@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  批次列表（V1.1.6 Story 13.1 AC2 的聚合展示 + 13.2 的入口）。
+  🛡 这里显示的是**各行状态的统计**，不是"批次状态"—— 批次没有状态。
+-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.batch.listTitle}">批次列表 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1 th:text="#{admin.batch.listTitle}">批次列表</h1>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+
+        <form method="post" th:action="@{/admin/seed-batches}">
+            <button type="submit" class="btn btn-primary btn-sm"
+                    th:text="#{admin.batch.new}">新建批次</button>
+        </form>
+
+        <table>
+            <thead>
+            <tr><th>#</th><th th:text="#{admin.batch.source}">来源</th>
+                <th th:text="#{admin.common.createdAt}">创建时间</th>
+                <th th:text="#{admin.batch.aggregate}">各行状态</th>
+                <th th:text="#{admin.common.actions}">操作</th></tr>
+            </thead>
+            <tbody>
+            <tr th:each="b : ${batches}">
+                <td th:text="${b.batchId}">0</td>
+                <td th:text="${b.source}">EXCEL</td>
+                <td th:text="${b.createdAt}">时间</td>
+                <!-- 「本批 50 条：47 已发布 / 5 排期中 / 3 待修正」——
+                     🛡 只列出现过的状态，0 的不留位置。 -->
+                <td>
+                    <span th:text="${b.total} + ' '">0</span>
+                    <span th:each="e : ${b.counts}"
+                          th:text="' / ' + ${e.value} + ' ' + ${e.key}">0</span>
+                </td>
+                <td><a class="btn btn-neutral btn-sm"
+                       th:href="@{/admin/seed-batches/{id}(id=${b.batchId})}"
+                       th:text="#{admin.common.detail}">详情</a></td>
+            </tr>
+            <tr th:if="${batches.isEmpty()}"><td colspan="5"
+                    th:text="#{admin.batch.empty}">暂无批次</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

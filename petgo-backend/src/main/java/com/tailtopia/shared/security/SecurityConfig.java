@@ -143,9 +143,11 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // 登录/刷新放行（换取自签 JWT 的入口）
                         .requestMatchers("/api/v1/auth/**").permitAll()
-                        // 运维/文档/公开 H5（名片 /p、里程碑庆祝分享 /m）放行
+                        // 运维/文档/公开 H5（名片 /p、里程碑庆祝分享 /m、单条内容分享 /c）放行。
+                        // ⚠️ 三个前缀是**三种不同的分享类型**，各自落地页不同（Story 9.3 · AD-15 Rule 5）——
+                        // 不可合并成一个通配。
                         .requestMatchers("/actuator/**", "/v3/api-docs/**", "/swagger-ui/**",
-                                "/swagger-ui.html", "/p/**", "/m/**").permitAll()
+                                "/swagger-ui.html", "/p/**", "/m/**", "/c/**").permitAll()
                         // 品牌静态资源（H5 名片/分享页左上角 wordmark，bug 20260701-182）公开放行。
                         .requestMatchers(HttpMethod.GET, "/brand/**").permitAll()
                         // 法律政策 H5（隐私 / 条款 / Mitra 条款 / 账号删除 / 儿童安全 / 支持）+ 下载引导落地页公开放行（商店上架 + App WebView 引用）

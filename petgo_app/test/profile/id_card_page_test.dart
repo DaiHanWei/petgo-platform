@@ -8,6 +8,8 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// 假 repo：listCards 返当前态；其余方法 stub（Story 6-7 列表页只用 listCards）。
 class _FakeIdCardRepo implements IdCardRepository {
+  @override
+  Future<int> reportShareForReward(int cardId) async => 0; // Story 18.2：本类不验奖励
   _FakeIdCardRepo(this._cards);
   final List<IdCard> _cards;
 

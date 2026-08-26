@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/im/im_service.dart';
 import '../data/vet_repository.dart';
+import 'vet_push_permission_prompt.dart';
 
 /// 兽医在线态单一事实源（P1 工作台首页）。
 ///
@@ -51,6 +54,18 @@ class VetOnlineStatusNotifier extends Notifier<bool> {
       state = authoritative;
       if (authoritative) {
         ref.read(imServiceProvider).loginIfNeeded().catchError((_) {});
+        // 触发点 5（V1.1.6 Story 8.3 / FR-85）：真正在线之后，若系统通知关着就提醒一次。
+        //
+        // 🛡 **位置在切换成功之后**，且 afterGoingOnline 内部吞掉一切异常 ——
+        //    提示绝不能影响在线态（AC2 营收红线：把「通知已开」做成上线前置条件，
+        //    等于让一部分兽医完全无法接单）。
+        // 🛡 **不限次数、无标记位**（AD-14 Rule 4）—— 与用户侧三点的「各一次」模型
+        //    完全不同，**不要复用 PushPermissionPrompt 的标记位逻辑**。
+        // ⚠️ 用 authoritative 而不是 next：服务端拒了上线请求时兽医其实没在线，
+        //    没有「想接单却收不到」的处境，不该提醒。
+        // ⚠️ **只挂这一处**：VetAvailabilityNotifier.select 会转调本方法，
+        //    在那边再判一次会让同一次切换提醒两遍。
+        unawaited(VetPushPermissionPrompt.afterGoingOnline());
       } else {
         ref.read(imServiceProvider).logout();
       }

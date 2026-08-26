@@ -2,59 +2,82 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/core/storage/prefs.dart';
-import 'package:tailtopia/features/notify/data/push_permission_providers.dart';
-import 'package:tailtopia/features/notify/domain/push_permission_gate.dart';
-import 'package:tailtopia/features/profile/domain/share_service.dart';
+import 'package:tailtopia/features/notify/domain/push_permission_prompt.dart';
+import 'package:tailtopia/features/notify/presentation/push_permission_guide_flow.dart';
 import 'package:tailtopia/features/profile/presentation/profile_created_celebration_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tailtopia/features/profile/domain/share_service.dart';
 
-/// Story 6.4 AC3（F15）：建档时机推送权限的**弹出位置锚点**——FR-0G 庆祝页主 CTA「开始探索」
-/// 回调之后、进首页之前触发 `maybeRequestAfterProfileCreated`，且全程仅弹一次。
+/// 触发点 2「建档后」的**位置锚点**：庆祝页主 CTA「开始探索」回调之后、**进首页之前**。
 ///
-/// 本测试在庆祝页 + 真实 [PushPermissionGate] + GoRouter 上锁定该时序契约（与 app_router 的
-/// `/profile/created` 路由 `onStartExplore` 闭包同构：先 gate 后 `go('/home')`）。
+/// 🔴 2026-08-20（V1.1.6 Story 8.2）本文件整体改写。原版锁的是 Story 6.4 的
+/// `PushPermissionGate.maybeRequestAfterProfileCreated`，而那条路早已是死代码 ——
+/// 它的门 `!alreadyAsked` 被第二代「首启即申请」在首次冷启动就置位了。
+///
+/// ⚠️ 更要紧的是：原版**自己搭了一个与 app_router "同构"的闭包**，所以真实路由改了之后
+/// 它照样绿 —— 守的是一个已经不存在的结构。改写后仍沿用"同构"这个做法（真实路由难以在
+/// widget test 里整体加载），但**锁的是新模型**，且断言换成"引导被调用过 + 最终落到首页"。
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
+  tearDown(() {
+    Analytics.debugCaptureSink = null;
+    PushPermissionPrompt.phonePromptHook = null;
+  });
 
-  Future<({int requestCount})> pumpAndStart(WidgetTester tester) async {
+  Future<({int shown, List<String> order})> pumpAndStart(
+    WidgetTester tester, {
+    bool notificationsGranted = false,
+  }) async {
+    // ⚠️ 视口要够高：说明抽屉有三条好处说明，默认 800×600 下「不，谢谢」在屏幕外，
+    //    点不到 → 抽屉不关 → 回调永远挂着（表现是 order 为空，极易误判成"逻辑没跑"）。
+    tester.view.physicalSize = const Size(1200, 3200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     final prefs = await AppPrefs.create();
-    var requestCount = 0;
-    final gate = PushPermissionGate(
-      prefs: prefs,
-      requestSystemPermission: () async {
-        requestCount++;
-        return true;
-      },
-    );
+    var shown = 0;
+    final order = <String>[];
 
     final router = GoRouter(
       initialLocation: '/c',
       routes: [
         GoRoute(
           path: '/c',
-          builder: (c, s) => Consumer(builder: (ctx, ref, _) {
-            return ProfileCreatedCelebrationPage(
-              petName: 'Momo',
-              avatarUrl: null,
-              onStartExplore: () async {
-                // 与 app_router /profile/created 同构：建档时机锚点 = CTA 后、go home 前。
-                final g = await ref.read(pushPermissionGateProvider.future);
-                await g.maybeRequestAfterProfileCreated(neverConsulted: true);
-                if (ctx.mounted) ctx.go('/home');
-              },
-            );
-          }),
+          builder: (c, s) => ProfileCreatedCelebrationPage(
+            petName: 'Momo',
+            avatarUrl: null,
+            onStartExplore: () async {
+              // 与 app_router /profile/created 同构：建档时机锚点 = CTA 后、go home 前。
+              await maybeShowPushPermissionGuide(
+                c,
+                PushTriggerPoint.profileCreated,
+                prefs: prefs,
+                isGranted: () async => notificationsGranted,
+                openSettings: () async {
+                  order.add('settings');
+                  return true;
+                },
+              );
+              order.add('go-home');
+              if (c.mounted) c.go('/home');
+            },
+          ),
         ),
         GoRoute(path: '/home', builder: (c, s) => const Scaffold(body: Text('HOME'))),
       ],
     );
 
+    Analytics.debugCaptureSink = (e, p) {
+      if (e == 'push_permission_prompt_shown') shown++;
+    };
+
     await tester.pumpWidget(ProviderScope(
       overrides: [
         shareServiceProvider.overrideWithValue((_, {sharePositionOrigin}) async {}),
-        pushPermissionGateProvider.overrideWith((ref) async => gate),
       ],
       child: MaterialApp.router(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -67,20 +90,44 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('celebrationStartExplore')));
     await tester.pumpAndSettle();
-    return (requestCount: requestCount);
+
+    // 说明抽屉弹出时点「不，谢谢」关掉（本测试只锁时序，不测抽屉内容）
+    final dismiss = find.byKey(const ValueKey('pushPromptDismiss'));
+    if (dismiss.evaluate().isNotEmpty) {
+      await tester.tap(dismiss);
+      await tester.pumpAndSettle();
+    }
+    // 抽屉关闭后回调里还有几段 await（上报 → 手机号钩子 → go home），
+    // 一次 pumpAndSettle 不保证全部排完；有界等到 go-home 出现为止。
+    for (var i = 0; i < 20 && !order.contains('go-home'); i++) {
+      await tester.pumpAndSettle();
+    }
+    return (shown: shown, order: order);
   }
 
-  testWidgets('AC3: 庆祝页「开始探索」→ 触发建档推送时机 → 进首页（时序：gate 在 go home 前）',
-      (tester) async {
+  testWidgets('通知关闭：「开始探索」→ 引导曝光 → 才进首页（引导在 go home 之前）', (tester) async {
     final r = await pumpAndStart(tester);
-    expect(r.requestCount, 1); // 建档时机触发了推送权限请求
-    expect(find.text('HOME'), findsOneWidget); // 且最终落到首页（await 保证 gate 先于 go）
+
+    expect(r.shown, 1, reason: '建档触发点应曝光一次');
+    expect(r.order.last, 'go-home', reason: 'await 保证引导跑完才进首页');
+    expect(find.text('HOME'), findsOneWidget);
   });
 
-  testWidgets('AC3: 已问过权限（asked=true）→ 点「开始探索」不再弹、仍进首页（仅一次）', (tester) async {
+  /// 🛡 前置闸门（AD-14 Rule 5）：通知已开 → 不打扰，且仍正常进首页。
+  testWidgets('通知已开：不曝光引导，仍正常进首页', (tester) async {
+    final r = await pumpAndStart(tester, notificationsGranted: true);
+
+    expect(r.shown, 0);
+    expect(find.text('HOME'), findsOneWidget);
+  });
+
+  /// 🛡 存量用户（第二代已置位 `push_permission_asked`）**仍应拿到这一次机会** ——
+  /// 迁移成「已触发」会让 FR-85 对存量用户完全失效，而那正是这条 FR 要解决的问题。
+  testWidgets('存量用户（push_permission_asked=true）仍会曝光引导', (tester) async {
     SharedPreferences.setMockInitialValues({'petgo.push_permission_asked': true});
     final r = await pumpAndStart(tester);
-    expect(r.requestCount, 0); // 门控跳过，不重复弹
-    expect(find.text('HOME'), findsOneWidget); // 仍正常进首页
+
+    expect(r.shown, 1);
+    expect(find.text('HOME'), findsOneWidget);
   });
 }

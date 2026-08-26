@@ -34,8 +34,12 @@ class ProfileApiControllerTest {
     private final IdCardService idCardService = mock(IdCardService.class);
     private final IdCardHdService idCardHdService = mock(IdCardHdService.class);
     private final RedisRateLimiter rateLimiter = mock(RedisRateLimiter.class);
+    /** Story 18.2：本类不验分享奖励（有 IdCardShareRewardIntegrationTest），给个哑桩。 */
+    private final com.tailtopia.share.service.IdCardShareRewardService idCardShareRewards =
+            mock(com.tailtopia.share.service.IdCardShareRewardService.class);
     private final ProfileApiController controller = new ProfileApiController(
-            service, timelineService, cardRerenderService, idCardService, idCardHdService, rateLimiter);
+            service, timelineService, cardRerenderService, idCardService, idCardHdService,
+            rateLimiter, idCardShareRewards);
 
     private static Jwt jwt(String sub) {
         return Jwt.withTokenValue("t").header("alg", "HS256").subject(sub).claim("x", "y").build();
@@ -44,7 +48,7 @@ class ProfileApiControllerTest {
     @Test
     void createUsesOwnerFromJwtAndRateLimits() {
         PetProfileResponse stub = new PetProfileResponse(
-                5L, null, "CAT", "Momo", null, null, null, "TOK", false, null, null, Instant.now());
+                5L, null, "CAT", "Momo", null, null, null, null, "TOK", false, null, null, Instant.now());
         when(service.create(eq(77L), org.mockito.ArgumentMatchers.any())).thenReturn(stub);
 
         PetProfileResponse resp = controller.create(
@@ -65,7 +69,7 @@ class ProfileApiControllerTest {
     @Test
     void myProfileDelegatesWithJwtUser() {
         PetProfileResponse stub = new PetProfileResponse(
-                5L, null, "CAT", "Momo", null, null, null, "TOK", false, null, null, Instant.now());
+                5L, null, "CAT", "Momo", null, null, null, null, "TOK", false, null, null, Instant.now());
         when(service.getMyProfile(77L)).thenReturn(stub);
         assertThat(controller.myProfile(jwt("77")).cardToken()).isEqualTo("TOK");
     }
@@ -80,12 +84,14 @@ class ProfileApiControllerTest {
 
     @Test
     void updateUsesJwtOwnerAndTriggersRerender() {
+        // 参数序：id, avatarUrl, petType, name, breed, birthday, sex, intro, cardToken, isSystemDefaultName, createdAt
         PetProfileResponse updated = new PetProfileResponse(
-                5L, null, "CAT", "Momo2", null, null, null, "TOK", false, null, null, Instant.now());
+                5L, null, "CAT", "Momo2", null, null, null, null, "TOK", false, null, null, Instant.now());
         when(service.update(eq(77L), ArgumentMatchers.any())).thenReturn(updated);
 
+        // 参数序：avatarUrl, name, breed, birthday, sex, intro, weightKg, neuterStatus
         PetProfileResponse resp = controller.update(
-                jwt("77"), new PetProfileUpdateRequest(null, "Momo2", null, null, null));
+                jwt("77"), new PetProfileUpdateRequest(null, "Momo2", null, null, null, null, null, null));
 
         assertThat(resp.name()).isEqualTo("Momo2");
         verify(service).update(eq(77L), ArgumentMatchers.any());

@@ -56,6 +56,63 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
     }
 
     /**
+     * 🔴 运营配置页的**每一块都必须真的出现在页面上**。
+     *
+     * <h2>这条守的是一个真实事故（2026-08-26 实机截图发现）</h2>
+     * 「首页推荐算法」整块（Story 16.4 交付）当时写在了 {@code th:fragment="content"} 的
+     * <b>闭合标签之外</b>，而模板只渲染那个片段 ⇒ <b>整块被静默丢弃，从交付起就没显示过</b>。
+     * 连带 Story 17.1 加在同一表单里的「限流系数」输入框也一起不可见 ——
+     * 也就是那两条 story 的「后台可配」实际上办不到。
+     *
+     * <p>⚠️ <b>当时全套测试都是绿的</b>，因为没有一条测到「这一块在页面上」：
+     * 本类的 {@code assertRenders} 只验「渲染不报错」；服务层测试直接调 service；
+     * 端点测试直接 POST。**丢掉一整块 HTML 不会让任何一条变红。**
+     *
+     * <p>断言用 form 的 action 与 {@code data-section} 标记做锚点，
+     * 不断言可见文案 —— 文案会随 i18n 变，而锚点不会。
+     */
+    @Test
+    void everyConfigSectionIsActuallyRenderedOnThePage() throws Exception {
+        String html = mvc.perform(get("/admin/config").with(authentication(superAdminAuth())))
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(html).as("定价配置整块不见了").contains("/admin/config/pricing");
+        assertThat(html).as("PawCoin 整块不见了").contains("/admin/config/pawcoin");
+        assertThat(html).as("分享奖励整块不见了（Story 18.3）")
+                .contains("/admin/config/share-reward");
+        assertThat(html).as("充值档位整块不见了").contains("/admin/config/tiers/");
+        // ⚠️ 首页推荐算法已于 2026-08-26 搬到独立页「算法参数」（不对运营开放）——
+        //    这里反向断言它**不再**出现在运营配置页上，否则就是搬漏了、两处都有。
+        // 🔴 断的是**表单**（action + 输入框名），不是 `/admin/algo-params` 这个串 ——
+        //    侧栏导航链接在每一页都有，拿它断言会恒红。第一版就是这么写的，被本条自己抓到。
+        assertThat(html).as("算法参数的表单应该已经搬走了，运营配置页上不该还有")
+                .doesNotContain("/admin/config/feed-rank")
+                .doesNotContain("name=\"throttleFactor\"");
+    }
+
+    /**
+     * 🔴 「算法参数」页的每一块都必须真的在页面上（2026-08-26 独立成页）。
+     *
+     * <p>与上一条同源的教训：Story 16.4 的这一块曾经因为写在 {@code th:fragment} 之外而
+     * <b>整块被静默丢弃</b>，全套测试照样绿。搬家之后同样要钉住。
+     */
+    @Test
+    void algoParamPageRendersItsFormAndChangeLog() throws Exception {
+        String html = mvc.perform(get("/admin/algo-params").with(authentication(superAdminAuth())))
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(html).as("算法参数表单不见了").contains("/admin/algo-params");
+        assertThat(html).as("🔴 限流系数输入框不见了（Story 17.1 挂在这个表单里）")
+                .contains("throttleFactor");
+        assertThat(html).as("🔴 变更记录表不见了 —— 没有 A/B 时它是唯一的锚点")
+                .contains("data-section=\"algo-changelog\"");
+        assertThat(html).as("「不对运营开放」的说明不见了")
+                .contains("data-notice=\"algo-not-for-ops\"");
+        assertThat(html).as("「无 A/B 实验基建」的提醒不见了")
+                .contains("data-notice=\"algo-no-ab\"");
+    }
+
+    /**
      * 「内容」分组的侧栏次序由**产品指定**（2026-08-20）：
      * 种子内容发布 → 内容管理 → 评论管理 → 人工复核 → 用户 → 被举报用户。
      *
@@ -127,6 +184,13 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
                 .doesNotContain("工单队列").doesNotContain("三类工单统一排队");
 
         assertThat(visibleText("/admin/manual-review")).as("人工复核页的标题").contains("人工复核");
+
+        // Story 11.1：侧栏叫「顶置管理」，页内标题必须同名（四处同源里的前两处）。
+        assertThat(visibleText("/admin/content-pins")).as("顶置管理页的标题").contains("顶置管理");
+        // Story 11.2：侧栏叫「装饰标签」，页内标题必须同名。
+        assertThat(visibleText("/admin/content-tags")).as("装饰标签页的标题").contains("装饰标签");
+        // Story 11.3：侧栏叫「用户标签」，页内标题必须同名。
+        assertThat(visibleText("/admin/user-tags")).as("用户标签页的标题").contains("用户标签");
     }
 
     /**
@@ -163,9 +227,21 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
     @Test
     void allExternalizedAdminPagesRenderInEveryLocale() throws Exception {
         String[] paths = {"/admin/dashboard", "/admin/seed-post", "/admin/tickets", "/admin/content",
+                "/admin/content-pins", "/admin/content-tags", "/admin/user-tags",
                 "/admin/manual-review", "/admin/anomalies", "/admin/consult-sessions", "/admin/vets",
                 "/admin/vets/online", "/admin/failed-requests", "/admin/ratings", "/admin/users",
-                "/admin/audit-logs", "/admin/accounts"};
+                "/admin/audit-logs", "/admin/accounts",
+                // V1.1.6 Story 12.1：「运营发布身份」页（虚拟账号 + 运营真实账号两区）。
+                // ⚠️ 这一页此前不在本表里 —— 加进来才会验它的 i18n 键在两种语言下都齐。
+                "/admin/virtual-accounts",
+                // V1.1.6 Story 13.2：批次列表（工作台需要一个真实 batchId，另在其专属测试里渲染）。
+                "/admin/seed-batches",
+                // V1.1.6 Story 13.5：排期管理（12-1 的移出提示会跳到这里）。
+                "/admin/content-schedules",
+                // V1.1.6 Story 15.1：内容互动积分榜。
+                "/admin/content-stats",
+            // 2026-08-26：算法参数独立成页，须一并纳入逐页双语扫描
+            "/admin/algo-params"};
         for (String p : paths) {
             for (java.util.Locale locale : com.tailtopia.shared.i18n.AdminLocaleConfig.SUPPORTED_LOCALES) {
                 assertRenders(p, locale.toString());

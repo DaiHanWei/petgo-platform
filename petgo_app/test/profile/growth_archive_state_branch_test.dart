@@ -111,13 +111,51 @@ void main() {
       );
     });
 
-    test('穷尽性：枚举恰好四态（新增态会让分发 switch 编译期报错）', () {
+    test('穷尽性：枚举恰好五态（新增态会让分发 switch 编译期报错）', () {
+      // V1.1.6 Story 2.3 加了 visitor（AD-4：访客态作为 AD-15 单一判定入口的新增分支）。
       expect(DiaryUserState.values, <DiaryUserState>[
         DiaryUserState.guest,
         DiaryUserState.nonOwner,
         DiaryUserState.ownerWithoutProfile,
         DiaryUserState.ownerWithProfile,
+        DiaryUserState.visitor,
       ]);
+    });
+
+    test('🛡 访客判据独占：有 token 时，登录态与自己的档案一概不影响判定', () {
+      // AD-2 Rule 2：已登录非作者与未登录访客看到**同一套**只读视图。
+      // 这条把「同一套」钉死 —— 四种身份组合，只要带 token，一律 visitor。
+      for (final loggedIn in [true, false]) {
+        for (final hasProfile in [true, false]) {
+          expect(
+            resolveDiaryUserState(
+              isLoggedIn: loggedIn,
+              petStatus: hasProfile ? 'HAS_PET' : 'PLANNING',
+              hasPetProfile: hasProfile,
+              visitorToken: 'TOK',
+            ),
+            DiaryUserState.visitor,
+            reason: '带 token 时判定必须恒为 visitor'
+                '（isLoggedIn=$loggedIn hasPetProfile=$hasProfile）',
+          );
+        }
+      }
+    });
+
+    test('无 token 时判定完全不受影响（访客分支不得污染既有四态）', () {
+      // 空串也算没有 —— 路由参数缺失时拿到的是空串而不是 null，
+      // 漏判会让作者莫名其妙落进只读态。
+      for (final token in [null, '']) {
+        expect(
+          resolveDiaryUserState(
+            isLoggedIn: true,
+            petStatus: 'HAS_PET',
+            hasPetProfile: true,
+            visitorToken: token,
+          ),
+          DiaryUserState.ownerWithProfile,
+        );
+      }
     });
   });
 

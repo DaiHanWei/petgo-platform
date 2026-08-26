@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<!--
+  校验预览与确认发布（V1.1.6 Story 13.4 · AB-3K Step 3）。
+
+  🔴 **这一页是本 story 的全部意义**：此前没有校验预览、没有确认入库，**提交即上线** ——
+     50 行错 3 行就是 3 条线上真帖，只能逐条去找、逐条下架。
+-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.batch.preview.title}">校验预览 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1><span th:text="#{admin.batch.preview.title}">校验预览</span>
+            <span th:text="' #' + ${batchId}">#0</span></h1>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+
+        <p class="hint" th:text="#{admin.batch.preview.summary(${passCount}, ${failCount}, ${dupCount})}">
+            通过 0 条 / 未过 0 条 / 疑似重复 0 条</p>
+
+        <!-- 🛡 失败行**不阻塞整批**：通过的行照发，失败行留在草稿里可改后重提。 -->
+        <p class="hint" th:text="#{admin.batch.preview.notBlocking}">
+            校验未过的行不会阻塞整批 —— 通过的行照常发布，未过的行留在草稿里，改完再提交一次即可。</p>
+
+        <table>
+            <thead>
+            <tr><th th:text="#{admin.batch.row.no}">行号</th>
+                <th th:text="#{admin.batch.preview.body}">正文摘要</th>
+                <th th:text="#{admin.batch.preview.images}">图片</th>
+                <th th:text="#{admin.batch.row.author}">发布账号</th>
+                <th th:text="#{admin.batch.row.type}">类型</th>
+                <th th:text="#{admin.batch.row.species}">物种</th>
+                <th th:text="#{admin.batch.row.at}">计划时间</th>
+                <th th:text="#{admin.batch.preview.result}">校验结果</th></tr>
+            </thead>
+            <tbody>
+            <tr th:each="c : ${checks}">
+                <td th:text="${c.row.rowNo}">0</td>
+                <td th:text="${#strings.abbreviate(c.row.body ?: '—', 40)}">摘要</td>
+                <td>
+                    <img th:each="u : ${c.row.imageUrls}" th:src="${u}" alt="" data-lightbox="true"
+                         style="width:40px;height:40px;object-fit:cover;border-radius:4px;margin-right:4px"/>
+                </td>
+                <td th:text="${c.row.authorUserId} == 0 ? '—' : ${c.row.authorUserId}">—</td>
+                <td th:text="${c.row.contentType}">DAILY</td>
+                <td th:text="${c.row.species} ?: '—'">—</td>
+                <td th:text="${c.row.scheduledAt} ?: '—'">—</td>
+                <td>
+                    <!-- 每条错误都要能对上运营那份表格：素材报文件名、类型报合法取值、账号报原因。 -->
+                    <span th:if="${c.passes() and !c.duplicate()}" th:text="#{admin.batch.preview.pass}">通过</span>
+                    <!-- 🔴 去重命中是**提示**不是错误（AC4）：原先是静默跳过，
+                         界面只显示一个跳过条数，运营根本不知道哪一条被吞了。 -->
+                    <span class="err" th:if="${c.warns()}"
+                          th:text="#{admin.batch.preview.duplicate}">⚠️ 该账号已发过相同内容</span>
+                    <p class="err" th:each="e : ${c.errors}" th:text="${e}">错误</p>
+                </td>
+            </tr>
+            <tr th:if="${checks.isEmpty()}"><td colspan="8"
+                    th:text="#{admin.batch.preview.empty}">这个批次还没有内容行</td></tr>
+            </tbody>
+        </table>
+
+        <form method="post" th:action="@{/admin/seed-batches/{id}/confirm(id=${batchId})}"
+              th:attr="data-confirm=#{admin.batch.preview.confirmPrompt}">
+            <!-- 🔴 默认不勾：去重命中在预览里是提示，但"提示了却默认照发"等于没提示。 -->
+            <label><input type="checkbox" name="includeDuplicates" value="true"/>
+                <span th:text="#{admin.batch.preview.includeDuplicates}">重复的也发</span></label>
+            <button type="submit" class="btn btn-primary" th:text="#{admin.batch.preview.confirm}">确认发布</button>
+            <a class="btn btn-neutral btn-sm" th:href="@{/admin/seed-batches/{id}(id=${batchId})}"
+               th:text="#{admin.batch.preview.back}">回去改</a>
+        </form>
+    </div>
+</div>
+</body>
+</html>

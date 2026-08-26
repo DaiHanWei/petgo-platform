@@ -18,6 +18,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class AliyunOssClient {
 
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(AliyunOssClient.class);
+
     /** OSS 图片处理：任意 transform 都会重编码并丢弃 EXIF/GPS（E4 对外分发兜底）。 */
     static final String EXIF_STRIP_PROCESS = "image/format,jpg";
 
@@ -28,6 +31,12 @@ public class AliyunOssClient {
     }
 
     /** 构建 OSS 客户端（调用方负责 {@link OSS#shutdown()}）。endpoint+主账号 AK，用于服务端操作/签名。 */
+    /** 凭证是否已配（env 注入）。空 = 本地/测试环境。 */
+    public boolean hasCredentials() {
+        return props.getAccessKeyId() != null && !props.getAccessKeyId().isBlank()
+                && props.getAccessKeySecret() != null && !props.getAccessKeySecret().isBlank();
+    }
+
     public OSS buildClient() {
         return new OSSClientBuilder().build(
                 props.getOss().getEndpoint(),
@@ -99,6 +108,19 @@ public class AliyunOssClient {
 
     /** 服务端上传字节到公开桶①（Story 2.6 OG 预渲染图）。L2 真实网络。返回对外 CDN URL。 */
     public String putPublicObject(String objectKey, byte[] bytes, String contentType) {
+        // 🔴 无凭证时走打桩：直接返回 URL，不打网络（Story 11.5）。
+        //
+        // 沿用 Gemini 的 mode=stub 先例（`petgo.ai.gemini.mode`）—— 目的不是"让测试变绿"，
+        // 而是让**依赖上传的业务路径在无凭证环境仍可验证**：
+        // Story 11.5 把"建标签"改成了必须先上传图标成功，于是这条原本纯 L1 的路径
+        // 在没有凭证的本机变成了 L2 —— 连"重复标签码要被拦下"这种与上传无关的规则都验不了。
+        //
+        // ⚠️ 判据是**凭证是否配了**，不是某个开关：生产必然配了凭证 ⇒ 必然走真实上传，
+        // 不存在"忘了关 stub 导致线上图没真的传上去"这种事故。
+        if (!hasCredentials()) {
+            log.warn("OSS 未配凭证，putPublicObject 走打桩（仅本地/测试）key={}", objectKey);
+            return publicUrl(objectKey);
+        }
         OSS client = buildClient();
         try {
             com.aliyun.oss.model.ObjectMetadata meta = new com.aliyun.oss.model.ObjectMetadata();

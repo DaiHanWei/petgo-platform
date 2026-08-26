@@ -46,17 +46,27 @@
   "profileCreatedTitle": "Profil khusus {petName} sudah siap! 🎉",
   "@profileCreatedTitle": {
     "placeholders": {
-      "petName": { "type": "String" }
+      "petName": {
+        "type": "String"
+      }
     }
   },
   "profileCreatedStartExplore": "Mulai jelajahi",
   "profileCreatedGreeting": "Halo, {petName}! 🎉",
   "@profileCreatedGreeting": {
-    "placeholders": { "petName": { "type": "String" } }
+    "placeholders": {
+      "petName": {
+        "type": "String"
+      }
+    }
   },
   "profileCreatedJourney": "Profil {petName} berhasil dibuat!\nSekarang mulai rekam perjalanan kalian bersama.",
   "@profileCreatedJourney": {
-    "placeholders": { "petName": { "type": "String" } }
+    "placeholders": {
+      "petName": {
+        "type": "String"
+      }
+    }
   },
   "profileCreatedMilestoneTitle": "Milestone pertama terbuka!",
   "profileCreatedMilestoneDesc": "\"Profil hewan dibuat lengkap\" — S Level",
@@ -115,9 +125,24 @@
   "growthEditStatusTitle": "Ubah status hewan",
   "growthStatusSaveFailed": "Gagal memperbarui status, coba lagi",
   "growthStatsConsult": "{count} konsultasi",
-  "@growthStatsConsult": { "placeholders": { "count": { "type": "int" } } },
+  "@growthStatsConsult": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "growthMilestoneProgress": "{done} / {total} tonggak tercapai",
-  "@growthMilestoneProgress": { "placeholders": { "done": { "type": "int" }, "total": { "type": "int" } } },
+  "@growthMilestoneProgress": {
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "growthViewTimeline": "Linimasa",
   "growthViewCalendar": "Kalender",
   "growthFirstHappyMoment": "Catatan Diary pertama",
@@ -131,7 +156,16 @@
   "newbieCardShowLess": "Lihat lebih sedikit",
   "newbieCardTitle": "Tugas Pemula",
   "newbieCardProgress": "{done}/{total} selesai",
-  "@newbieCardProgress": { "placeholders": { "done": { "type": "int" }, "total": { "type": "int" } } },
+  "@newbieCardProgress": {
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "newbieCardAllDone": "Lulus Pemula terbuka!",
   "newbieCardError": "Gagal memuat tugas kamu",
   "newbieCardRetry": "Coba lagi",
@@ -140,7 +174,13 @@
   "milestoneLevelM": "M · Tonggak penting",
   "milestoneLevelS": "S · Tonggak harian",
   "milestoneCompletedOn": "Selesai pada {date}",
-  "@milestoneCompletedOn": { "placeholders": { "date": { "type": "String" } } },
+  "@milestoneCompletedOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "milestoneHintSystemAuto": "Otomatis menyala setelah kamu melakukannya.",
   "milestoneHintPushPublish": "Kami ingatkan di harinya — unggah catatan Diary untuk menyalakannya.",
   "milestoneHintCheckin": "Sudah pernah? Ketuk \"Sudah dilakukan\" untuk menautkan catatan Diary, atau \"Unggah sekarang\".",
@@ -166,7 +206,13 @@
   "milestoneLevelChipS": "S · SMALL",
   "milestoneCelebrateOpenChest": "Ketuk untuk buka",
   "milestoneShareText": "Peliharaanku baru membuka tonggak \"{title}\" di TailTopia! 🎉",
-  "@milestoneShareText": { "placeholders": { "title": { "type": "String" } } },
+  "@milestoneShareText": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
   "healthEventLabel": "🏥 Catatan konsultasi",
   "commonSave": "Simpan",
   "archivePromptTitle": "Simpan konsultasi ini ke diary {petName}?",
@@ -231,7 +277,6 @@
   "reportHiddenToast": "Kamu tidak akan melihat konten ini lagi",
   "detailMoreReportContent": "Laporkan Konten",
   "detailMoreDeleteContent": "Hapus Konten",
-  "commonClose": "Tutup",
   "miniProfilePostCount": "{count} postingan dibagikan",
   "miniProfileComingSoon": "Halaman pribadi mereka sedang disiapkan dengan penuh perhatian, lebih banyak kejutan menanti ✨",
   "triageEntryAiTitle": "Cek Gejala",
@@ -248,7 +293,9 @@
   "triageSymptomRemaining": "sisa {count} karakter",
   "@triageSymptomRemaining": {
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
   "triageAddPhoto": "Tambah foto",
@@ -278,19 +325,49 @@
   "triageLockedRiskTitle": "Tingkat risiko terkunci",
   "triageUnlockOpenFull": "Buka Detail Lengkap",
   "triageUnlockFooter": "Gunakan PawCoin atau bayar {price} untuk buka tingkat risiko & saran perawatan lengkap",
-  "@triageUnlockFooter": {"placeholders": {"price": {"type": "String"}}},
-  "@triageUnlockCta": { "placeholders": { "price": { "type": "String" } } },
+  "@triageUnlockFooter": {
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "@triageUnlockCta": {
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
   "triageUnlockSheetTitle": "Buka Saran Lengkap",
   "triageUnlockSheetBody": "Pilih metode pembayaran untuk membuka saran perawatan lengkap.",
   "triageUnlockTopupFirst": "Isi saldo dulu →",
   "triageUnlockPay": "Bayar dengan {method}",
-  "@triageUnlockPay": {"placeholders": {"method": {"type": "String"}}},
+  "@triageUnlockPay": {
+    "placeholders": {
+      "method": {
+        "type": "String"
+      }
+    }
+  },
   "triageUnlockMethodFree": "Kuota gratis",
   "triageUnlockFreeRemaining": "Sisa {count} bulan ini",
-  "@triageUnlockFreeRemaining": { "placeholders": { "count": { "type": "int" } } },
+  "@triageUnlockFreeRemaining": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "triageUnlockMethodPawcoin": "PawCoin",
   "triageUnlockPawcoinBalance": "Saldo: {balance} koin",
-  "@triageUnlockPawcoinBalance": { "placeholders": { "balance": { "type": "String" } } },
+  "@triageUnlockPawcoinBalance": {
+    "placeholders": {
+      "balance": {
+        "type": "String"
+      }
+    }
+  },
   "triageUnlockMethodQris": "QRIS",
   "triageUnlockQuotaExhausted": "Kuota gratis bulan ini sudah habis. Coba PawCoin atau bayar.",
   "triageUnlockInsufficientBalance": "Saldo PawCoin kurang. Isi ulang atau bayar tunai.",
@@ -306,7 +383,9 @@
   "triageRedTitle": "Segera bawa {petName} ke rumah sakit hewan",
   "@triageRedTitle": {
     "placeholders": {
-      "petName": { "type": "String" }
+      "petName": {
+        "type": "String"
+      }
     }
   },
   "triageRedTitleNoPet": "Segera bawa hewanmu ke rumah sakit hewan",
@@ -314,7 +393,9 @@
   "triageRedCountdown": "{seconds} detik lagi bisa beraksi",
   "@triageRedCountdown": {
     "placeholders": {
-      "seconds": { "type": "int" }
+      "seconds": {
+        "type": "int"
+      }
     }
   },
   "triageRedAcknowledge": "Saya mengerti",
@@ -327,6 +408,9 @@
   "triageRedAvoidHeader": "Jangan lakukan",
   "triageRedCtaHint": "Tombol aktif setelah membaca peringatan",
   "triageRedLevelLabel": "Mendesak: risiko tinggi",
+  "vetPushGuideTitle": "Notifikasi sedang nonaktif",
+  "vetPushGuideBody": "Kamu sedang online, tapi dengan notifikasi nonaktif kamu tidak akan diberi tahu saat ada konsultasi baru.",
+  "vetPushGuideLater": "Nanti saja",
   "vetLoginLink": "Login Dokter Hewan",
   "vetLoginTitle": "Masuk dokter hewan",
   "vetUsernameLabel": "Akun",
@@ -426,19 +510,43 @@
   "vetInboxTaken": "Sudah diambil dokter hewan lain",
   "vetInboxDirect": "Permintaan langsung",
   "vetInboxImages": "{count} foto",
-  "@vetInboxImages": { "placeholders": { "count": { "type": "int" } } },
+  "@vetInboxImages": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "vetDashboardStatQueue": "Antrian",
   "vetDashboardStatDone": "Selesai",
   "vetDashboardStatRating": "Rating",
   "vetDashboardQueueSection": "ANTRIAN SEKARANG ({count})",
-  "@vetDashboardQueueSection": { "placeholders": { "count": { "type": "int" } } },
+  "@vetDashboardQueueSection": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "vetAiContextLevelRed": "Cek Cepat: darurat",
   "vetQueueWaitingMinutes": "{count} mnt lalu",
-  "@vetQueueWaitingMinutes": { "placeholders": { "count": { "type": "int" } } },
+  "@vetQueueWaitingMinutes": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "vetQueueWaitingJustNow": "baru saja",
   "vetQueueAiSummaryTitle": "RINGKASAN CEK CEPAT",
   "vetQueuePhotosAttached": "{count} foto dilampirkan",
-  "@vetQueuePhotosAttached": { "placeholders": { "count": { "type": "int" } } },
+  "@vetQueuePhotosAttached": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "vetQueueNoPhoto": "tanpa foto",
   "vetQueueSkip": "Lewati",
   "vetQueueViewDetail": "Lihat Detail",
@@ -451,20 +559,44 @@
   "vetSexMale": "Jantan",
   "vetSexFemale": "Betina",
   "vetAgeYears": "{count} thn",
-  "@vetAgeYears": { "placeholders": { "count": { "type": "int" } } },
+  "@vetAgeYears": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "vetAgeMonths": "{count} bln",
-  "@vetAgeMonths": { "placeholders": { "count": { "type": "int" } } },
+  "@vetAgeMonths": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "vetRequestDetailTitle": "Detail Permintaan",
   "vetRequestPreviewSubtitle": "Tinjau sebelum mengambil kasus",
   "vetRequestPreviewTimeLeft": "Pratinjau {time}",
-  "@vetRequestPreviewTimeLeft": { "placeholders": { "time": { "type": "String" } } },
+  "@vetRequestPreviewTimeLeft": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "vetRequestPreviewLabel": "sisa waktu",
   "vetRequestClosed": "Permintaan ini sudah ditutup",
   "vetRequestPreviewExpired": "Waktu pratinjau habis, kembali ke daftar",
   "vetRequestNoDetail": "Tidak ada detail lain",
   "vetRequestComplaintLabel": "KELUHAN PEMILIK",
   "vetRequestPhotosLabel": "FOTO GEJALA ({count})",
-  "@vetRequestPhotosLabel": { "placeholders": { "count": { "type": "int" } } },
+  "@vetRequestPhotosLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "vetRequestAcceptCta": "Ambil Kasus → Mulai Chat",
   "vetRequestAiEvalGreen": "Cek Cepat: Tidak Mendesak",
   "vetRequestAiEvalYellow": "Cek Cepat: Perlu Konsultasi",
@@ -497,14 +629,26 @@
   "vetIncomeCurrentMonth": "Belum dicairkan bulan ini",
   "vetIncomeHistoryTitle": "RIWAYAT BULANAN",
   "vetIncomeOrders": "{count} konsultasi",
-  "@vetIncomeOrders": { "placeholders": { "count": { "type": "int" } } },
+  "@vetIncomeOrders": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "vetIncomePending": "Belum dicairkan",
   "vetIncomeSettled": "Sudah dicairkan",
   "vetIncomeEmpty": "Belum ada penghasilan bulanan",
   "vetIncomeLoadFailed": "Gagal memuat penghasilan",
   "vetHistoryTitle": "Riwayat Konsultasi",
   "vetHistoryTotalToday": "Total: {count} hari ini",
-  "@vetHistoryTotalToday": { "placeholders": { "count": { "type": "int" } } },
+  "@vetHistoryTotalToday": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "vetHistoryFilterAll": "Semua",
   "vetHistoryFilterTopRated": "⭐ 4-5 bintang",
   "vetHistoryFilterYellow": "🟡 Perlu Konsul",
@@ -512,7 +656,13 @@
   "vetHistoryFilterEmpty": "Tidak ada riwayat untuk filter ini",
   "vetHistoryView": "Lihat →",
   "vetHistoryPayout": "Diterima: {amount}",
-  "@vetHistoryPayout": {"placeholders": {"amount": {"type": "String"}}},
+  "@vetHistoryPayout": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "vetHistoryTypeBasic": "Konsultasi Dasar",
   "vetHistoryTypeUpgrade": "Dari Cek Cepat",
   "vetHistoryTypeRefund": "Refund",
@@ -555,7 +705,9 @@
   "pushSoftGuideTitleProfile": "Aktifkan notifikasi agar jadi yang pertama tahu pengingat ulang tahun dan hari jadi {petName}",
   "@pushSoftGuideTitleProfile": {
     "placeholders": {
-      "petName": { "type": "String" }
+      "petName": {
+        "type": "String"
+      }
     }
   },
   "pushSoftGuideAllow": "Aktifkan",
@@ -602,29 +754,53 @@
   "notifyTypeSystem": "Notifikasi sistem",
   "notifyBodySystem": "Ketuk untuk melihat detail di aplikasi.",
   "notifyTypeNameReset": "Nama telah direset",
-  "@notifyTypeNameReset": { "description": "Judul notifikasi reset nama (审核 cm-7; 母语润色待运营 §7#1)" },
+  "@notifyTypeNameReset": {
+    "description": "Judul notifikasi reset nama (审核 cm-7; 母语润色待运营 §7#1)"
+  },
   "notifyTypeAvatarReset": "Foto profil direset",
-  "@notifyTypeAvatarReset": { "description": "Judul notifikasi reset foto (审核 cm-7; 母语润色待运营 §7#1)" },
+  "@notifyTypeAvatarReset": {
+    "description": "Judul notifikasi reset foto (审核 cm-7; 母语润色待运营 §7#1)"
+  },
   "notifyTypeReviewRejected": "Postingan tidak dipublikasikan",
-  "@notifyTypeReviewRejected": { "description": "Judul notifikasi postingan ditolak (审核 cm-7; 母语润色待运营 §7#1)" },
+  "@notifyTypeReviewRejected": {
+    "description": "Judul notifikasi postingan ditolak (审核 cm-7; 母语润色待运营 §7#1)"
+  },
   "notifyTypeReviewTimedOut": "Postingan gagal dipublikasikan",
-  "@notifyTypeReviewTimedOut": { "description": "Judul notifikasi postingan gagal karena timeout (审核 cm-7; 母语润色待运营 §7#1)" },
+  "@notifyTypeReviewTimedOut": {
+    "description": "Judul notifikasi postingan gagal karena timeout (审核 cm-7; 母语润色待运营 §7#1)"
+  },
   "notifyTypeContentRemoved": "Konten disembunyikan",
-  "@notifyTypeContentRemoved": { "description": "Judul notifikasi konten disembunyikan; generik untuk postingan+komentar (审核 cm-7; 母语润色待运营 §7#1)" },
+  "@notifyTypeContentRemoved": {
+    "description": "Judul notifikasi konten disembunyikan; generik untuk postingan+komentar (审核 cm-7; 母语润色待运营 §7#1)"
+  },
   "notifyTypeReportReviewed": "Laporan diproses",
-  "@notifyTypeReportReviewed": { "description": "Judul notifikasi laporan selesai ditinjau (审核 cm-7; 母语润色待运营 §7#1)" },
+  "@notifyTypeReportReviewed": {
+    "description": "Judul notifikasi laporan selesai ditinjau (审核 cm-7; 母语润色待运营 §7#1)"
+  },
   "notifyBodyNameResetUser": "Nama penggunamu direset ke nama default karena melanggar Pedoman Komunitas. Atur nama baru kapan saja.",
-  "@notifyBodyNameResetUser": { "description": "Isi notifikasi reset nama pengguna (审核 cm-7; 母语润色待运营 §7#1)" },
+  "@notifyBodyNameResetUser": {
+    "description": "Isi notifikasi reset nama pengguna (审核 cm-7; 母语润色待运营 §7#1)"
+  },
   "notifyBodyNameResetPet": "Nama hewan peliharaanmu direset ke nama default karena melanggar Pedoman Komunitas. Atur nama baru kapan saja.",
-  "@notifyBodyNameResetPet": { "description": "Isi notifikasi reset nama hewan (审核 cm-7; 母语润色待运营 §7#1)" },
+  "@notifyBodyNameResetPet": {
+    "description": "Isi notifikasi reset nama hewan (审核 cm-7; 母语润色待运营 §7#1)"
+  },
   "notifyBodyAvatarResetUser": "Foto profilmu direset ke foto default karena melanggar Pedoman Komunitas. Unggah foto baru kapan saja.",
-  "@notifyBodyAvatarResetUser": { "description": "Isi notifikasi reset foto pengguna (审核 cm-7; 母语润色待运营 §7#1)" },
+  "@notifyBodyAvatarResetUser": {
+    "description": "Isi notifikasi reset foto pengguna (审核 cm-7; 母语润色待运营 §7#1)"
+  },
   "notifyBodyAvatarResetPet": "Foto hewan peliharaanmu direset ke foto default karena melanggar Pedoman Komunitas. Unggah foto baru kapan saja.",
-  "@notifyBodyAvatarResetPet": { "description": "Isi notifikasi reset foto hewan (审核 cm-7; 母语润色待运营 §7#1)" },
+  "@notifyBodyAvatarResetPet": {
+    "description": "Isi notifikasi reset foto hewan (审核 cm-7; 母语润色待运营 §7#1)"
+  },
   "notifyBodyReviewRejected": "Postingan yang kamu kirim melanggar Pedoman Komunitas TailTopia dan tidak akan dipublikasikan.",
-  "@notifyBodyReviewRejected": { "description": "Isi notifikasi postingan ditolak manual (审核 cm-7; 母语润色待运营 §7#1)" },
+  "@notifyBodyReviewRejected": {
+    "description": "Isi notifikasi postingan ditolak manual (审核 cm-7; 母语润色待运营 §7#1)"
+  },
   "notifyBodyReviewTimedOut": "Postingan yang kamu kirim melanggar Pedoman Komunitas TailTopia. Silakan kirim ulang postinganmu.",
-  "@notifyBodyReviewTimedOut": { "description": "Isi notifikasi postingan gagal timeout, minta kirim ulang (审核 cm-7; 母语润色待运营 §7#1)" },
+  "@notifyBodyReviewTimedOut": {
+    "description": "Isi notifikasi postingan gagal timeout, minta kirim ulang (审核 cm-7; 母语润色待运营 §7#1)"
+  },
   "notifyBodyContentRemoved": "Kontenmu terdeteksi melanggar Pedoman Komunitas dan disembunyikan dari publik. Kamu masih bisa melihatnya di halamanmu.",
   "@notifyBodyContentRemoved": { "description": "Isi notifikasi konten disembunyikan; generik postingan+komentar (审核 cm-7; 母语润色待运营 §7#1)" },
   "notifyBodyReportReviewed": "Laporanmu sudah kami tangani. Terima kasih sudah ikut menjaga komunitas ini.",
@@ -636,11 +812,19 @@
   "notifyTimeJustNow": "Baru saja",
   "notifyTimeMinutesAgo": "{count} menit lalu",
   "@notifyTimeMinutesAgo": {
-    "placeholders": { "count": { "type": "int" } }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "notifyTimeHoursAgo": "{count} jam lalu",
   "@notifyTimeHoursAgo": {
-    "placeholders": { "count": { "type": "int" } }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "meEditNickname": "Ubah nama panggilan",
   "meEditButton": "Edit",
@@ -654,7 +838,13 @@
   "meEditSave": "Simpan Perubahan",
   "meEditCancel": "Batalkan",
   "meDiaryCount": "{count} diary",
-  "@meDiaryCount": { "placeholders": { "count": { "type": "String" } } },
+  "@meDiaryCount": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
   "mePostTypeMomen": "Diary",
   "mePostTypeTips": "Edukasi & Tips",
   "mePostTypeCerita": "Momen",
@@ -711,13 +901,11 @@
   "terminalClosed": "Selesai",
   "terminalUnrated": "Belum dinilai",
   "terminalInterrupted": "Terputus",
-
   "splashTagline": "Komunitas Pecinta Hewan Peliharaan Indonesia",
   "splashSlowNetworkHint": "Koneksi kamu lambat, tunggu sebentar…",
   "@splashSlowNetworkHint": {
     "description": "Splash 慢网提示（Story 7.3 / FR-89）。动效播完后再等 430ms 仍未就绪才淡入，快网用户永远看不到。⚠️ 印尼语为设计侧占位（决策 D-3），待母语同事审核后替换 —— 见 PRD OQ-22。"
   },
-
   "pushPromptTitle": "Aktifkan notifikasi untuk si kecil berbulu?",
   "pushPromptSubtitle": "Jangan lewatkan momen penting bersama mereka.",
   "pushPromptBenefitBirthdayTitle": "Pengingat ulang tahun",
@@ -728,7 +916,6 @@
   "pushPromptBenefitMilestoneBody": "Rayakan setiap pencapaian bersama mereka",
   "pushPromptAllow": "Aktifkan Notifikasi",
   "pushPromptDismiss": "Tidak, terima kasih",
-
   "onboardWelcomeTagline": "Teman setia\nuntuk anabul-mu 🐾",
   "onboardWelcomeSubtitle": "Konsultasi cepat, kumpul bareng, dan simpan setiap momen tumbuh kembangnya — di satu tempat.",
   "onboardWelcomeStart": "Mulai sekarang",
@@ -749,8 +936,18 @@
   "onboardDoneTitle": "Halo, {name}! 🎉",
   "onboardDoneBody": "Kartu Paspor sudah dibuat. Yuk tulis catatan Diary pertamanya dan kenalkan ke teman-teman.",
   "onboardDoneEnter": "Masuk ke TailTopia",
-
   "publishCancel": "Batal",
+  "publishCropTitle": "Sesuaikan foto",
+  "publishCropHint": "Geser untuk memilih bagian yang tampil",
+  "publishCropApply": "Terapkan",
+  "publishCropLocked": "Rasio mengikuti foto pertama yang dipotong",
+  "feedPinnedBadge": "Disematkan",
+  "phoneEditTitle": "Nomor HP",
+  "phoneNotSet": "Belum diisi",
+  "phoneEditHint": "Contoh: 0812 3456 7890",
+  "phoneSaveSuccess": "Nomor HP tersimpan",
+  "phoneSaveFormatError": "Gagal menyimpan, periksa format nomor HP",
+  "phoneSaveNetworkError": "Gagal menyimpan, coba lagi",
   "publishCamera": "Kamera",
   "publishHintDaily": "Apa yang terjadi hari ini?",
   "publishHintGrowth": "Tulis catatan Diary {name}...",
@@ -760,7 +957,6 @@
   "greetingEvening": "Selamat sore 🌇",
   "greetingNight": "Selamat malam 🌙",
   "greetingHowAreYou": "Apa kabar, {name}?",
-
   "triageHeroTitle": "Kesehatan",
   "triageHeroSubtitle": "Tenang, kami bantu cek anabul-mu 💚",
   "triageAiCardTitle": "Cek Gejala",
@@ -775,9 +971,7 @@
   "triageVetAvailableNow": "Dokter tersedia sekarang",
   "triageVetHours": "Biasanya tersedia 08:00–23:00 WIB",
   "triageOnlineVetsHeader": "Dokter sedang online",
-
   "imInputHint": "Tulis pesan...",
-
   "daysTogetherLabel": "Hari bareng",
   "petCardHeader": "TailTopia · KARTU ANABUL",
   "petCardRecentMoments": "Catatan Diary terbaru",
@@ -883,14 +1077,19 @@
   "vetQueueAccept": "Terima",
   "vetQueueAcceptFailed": "Permintaan sudah diambil atau kedaluwarsa",
   "vetQueueViewCase": "Lihat Detail",
-  "vetQueueSkip": "Lewati",
   "vetQueueBadgeConsult": "Perlu Konsul",
   "vetQueueBadgeNormal": "Normal",
   "vetQueueCaseGone": "Permintaan sudah diambil atau kedaluwarsa",
   "vetQueueAwaitingPayTitle": "Menunggu pembayaran",
   "vetQueueAwaitingPaySubtitle": "Pesanan diterima, menunggu pengguna membayar",
   "vetQueueAwaitingPaySubtitleNamed": "Pesanan {petName} diterima, menunggu pengguna membayar",
-  "@vetQueueAwaitingPaySubtitleNamed": {"placeholders": {"petName": {"type": "String"}}},
+  "@vetQueueAwaitingPaySubtitleNamed": {
+    "placeholders": {
+      "petName": {
+        "type": "String"
+      }
+    }
+  },
   "vetQueueAwaitingPayRemaining": "Sisa waktu",
   "vetQueuePausedHint": "Pengguna sedang mengisi saldo…",
   "vetQueuePaidStarted": "Pengguna telah membayar, sesi dimulai",
@@ -987,7 +1186,13 @@
   "triageSaveHealthNote": "Simpan ke Catatan Kesehatan",
   "pawcoinBalanceLabel": "Saldo PawCoin",
   "pawcoinRateHint": "= Rp{amount} · 1 koin = Rp1",
-  "@pawcoinRateHint": { "placeholders": { "amount": { "type": "String" } } },
+  "@pawcoinRateHint": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "pawcoinIsiSaldo": "Isi Saldo",
   "pawcoinTxnListTitle": "Riwayat transaksi",
   "pawcoinEmpty": "Belum ada transaksi",
@@ -1008,7 +1213,13 @@
   "rechargeStubHint": "Mode uji — tanpa pembayaran nyata",
   "rechargeWaiting": "Menunggu pembayaran…",
   "rechargeExpiresIn": "Berlaku {time}",
-  "@rechargeExpiresIn": { "placeholders": { "time": { "type": "String" } } },
+  "@rechargeExpiresIn": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "rechargeExpiredTitle": "Pembayaran kedaluwarsa",
   "rechargeExpiredBody": "Batas waktu 1 jam sudah lewat. Silakan mulai isi ulang lagi.",
   "rechargeSuccess": "Isi saldo berhasil",
@@ -1024,7 +1235,13 @@
   "vetRequestStart": "Mulai Konsultasi",
   "vetRequestNoPet": "Buat profil hewan dulu sebelum konsultasi.",
   "vetRequestPayAfterAccept": "{price} · Bayar setelah dokter mengambil kasus",
-  "@vetRequestPayAfterAccept": { "placeholders": { "price": { "type": "String" } } },
+  "@vetRequestPayAfterAccept": {
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
   "vetPriceLoadFailed": "Gagal memuat biaya",
   "vetPriceRetry": "Coba lagi",
   "vetWaitingTitle": "Mencari dokter hewan…",
@@ -1043,7 +1260,13 @@
   "vetPayInsufficient": "Saldo PawCoin tidak cukup",
   "vetPayTopup": "Isi saldo",
   "vetPayButton": "Bayar {price}",
-  "@vetPayButton": { "placeholders": { "price": { "type": "String" } } },
+  "@vetPayButton": {
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
   "vetPayInterruptHint": "Permintaan dibatalkan. Kamu bisa mulai konsultasi baru kapan saja.",
   "vetPayProcessing": "Menunggu pembayaran…",
   "vetPayScanHint": "Pindai QR untuk membayar",
@@ -1054,7 +1277,6 @@
   "vetQueueTimeoutContinue": "Tetap tunggu",
   "vetQueueTimeoutCancel": "Batal",
   "vetPayFailed": "Pembayaran gagal, coba lagi",
-
   "csSubmitComplaint": "Ajukan keluhan",
   "csMyTickets": "Tiket saya",
   "ticketComposeTitle": "Laporkan Masalah",
@@ -1094,7 +1316,13 @@
   "ticketDetailTitle": "Detail tiket",
   "ticketContactLabel": "Kontak",
   "ticketAttachmentCount": "{count} foto terlampir",
-  "@ticketAttachmentCount": { "placeholders": { "count": { "type": "int" } } },
+  "@ticketAttachmentCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "ticketContactedNote": "Layanan pelanggan sudah menghubungi kamu",
   "ticketNotFound": "Tiket tidak ditemukan",
   "refundMyTitle": "Pengembalian saya",
@@ -1114,7 +1342,11 @@
   "refundConfirmChoiceCta": "Konfirmasi Pilihan",
   "refundPawcoinCreditPreview": "Terima {coins} koin",
   "@refundPawcoinCreditPreview": {
-    "placeholders": { "coins": { "type": "String" } }
+    "placeholders": {
+      "coins": {
+        "type": "String"
+      }
+    }
   },
   "refundPawcoinTitle": "Tukar ke Saldo PawCoin",
   "refundPawcoinDesc": "Masuk instan, dapat bonus tambahan.",
@@ -1141,7 +1373,11 @@
   "refundSuccessTimeLabel": "Waktu pengembalian",
   "refundSuccessTimeValue": "Instan · {time}",
   "@refundSuccessTimeValue": {
-    "placeholders": { "time": { "type": "String" } }
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
   },
   "refundSuccessBalanceLabel": "Saldo PawCoin sekarang",
   "refundSuccessBalanceHint": "Sudah termasuk pengembalian ini",
@@ -1197,7 +1433,11 @@
   "orderFilterAll": "Semua",
   "orderSpendingTitle": "Total pengeluaran {period}",
   "@orderSpendingTitle": {
-    "placeholders": { "period": { "type": "String" } }
+    "placeholders": {
+      "period": {
+        "type": "String"
+      }
+    }
   },
   "orderStatOngoing": "Berlangsung",
   "orderStatDone": "Selesai",
@@ -1264,7 +1504,16 @@
   "idCardHdPaywallBody": "Bayar sekali, unduh kapan saja selamanya. Kualitas 1600×900px, tanpa watermark.",
   "idCardHdPreviewSub": "Pratinjau · Resolusi rendah + watermark",
   "idCardHdPawcoinSub": "Saldo {balance} · Potong {cost} koin",
-  "@idCardHdPawcoinSub": {"placeholders": {"balance": {"type": "String"}, "cost": {"type": "String"}}},
+  "@idCardHdPawcoinSub": {
+    "placeholders": {
+      "balance": {
+        "type": "String"
+      },
+      "cost": {
+        "type": "String"
+      }
+    }
+  },
   "idCardHdPayConfirm": "Bayar & Unduh HD",
   "idCardHdPayPawcoin": "Bayar dengan PawCoin",
   "idCardHdPayQris": "Bayar dengan QRIS",
@@ -1273,7 +1522,22 @@
   "idCardHdInsufficientBalance": "PawCoin tidak cukup. Silakan isi ulang dulu.",
   "idCardHdPurchaseError": "Pembayaran gagal. Coba lagi.",
   "idCardHdExportError": "Gagal mengekspor gambar. Coba lagi.",
+  "shareCardPreviewTitle": "Pratinjau Kartu",
+  "shareCardShareCta": "Bagikan ke Story",
+  "shareCardExportError": "Gagal membuat kartu. Coba lagi ya.",
+  "detailShareCard": "Buat kartu gambar",
+  "sharedPostTitle": "Postingan dibagikan",
+  "sharedPostGone": "Postingan ini sudah tidak tersedia.",
+  "shareCardScanHint": "Scan buat unduh 🐾",
+  "cardSaveToGallery": "Simpan ke Galeri",
+  "cardShareImage": "Bagikan",
+  "cardSavedToGallery": "Tersimpan ke galeri",
+  "cardSaveError": "Gagal menyimpan. Izinkan akses galeri lalu coba lagi.",
   "idCardSaveToGallery": "Simpan ke Galeri",
+  "idCardShare": "Bagikan",
+  "idCardShareRewardToast": "Berhasil dibagikan · +{coins} PawCoin",
+  "@idCardShareRewardToast": {"placeholders": {"coins": {"type": "int"}}},
+  "idCardShareError": "Gagal membagikan. Silakan coba lagi.",
   "idCardShareImage": "Bagikan",
   "idCardSavedToGallery": "Tersimpan ke galeri",
   "idCardSaveError": "Gagal menyimpan. Izinkan akses galeri lalu coba lagi.",
@@ -1290,28 +1554,56 @@
   "idCardCreateError": "Gagal membuat kartu. Coba lagi.",
   "idCardHdUnlockedBadge": "HD",
   "idCardSerialLabel": "No. {serial}",
-  "@idCardSerialLabel": {"placeholders": {"serial": {"type": "String"}}},
+  "@idCardSerialLabel": {
+    "placeholders": {
+      "serial": {
+        "type": "String"
+      }
+    }
+  },
   "idCardCreatedLabel": "Dibuat {date}",
-  "@idCardCreatedLabel": {"placeholders": {"date": {"type": "String"}}},
+  "@idCardCreatedLabel": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "idCardGenderLabel": "JENIS KELAMIN",
-  "@idCardGenderLabel": {"description": "ID card create form: gender field section label"},
+  "@idCardGenderLabel": {
+    "description": "ID card create form: gender field section label"
+  },
   "idCardBirthCityLabel": "KOTA KELAHIRAN (OPSIONAL)",
-  "@idCardBirthCityLabel": {"description": "ID card create form: fun field birth city label (bug 409)"},
+  "@idCardBirthCityLabel": {
+    "description": "ID card create form: fun field birth city label (bug 409)"
+  },
   "idCardAddressLabel": "ALAMAT (OPSIONAL)",
-  "@idCardAddressLabel": {"description": "ID card create form: fun field address label (bug 409)"},
+  "@idCardAddressLabel": {
+    "description": "ID card create form: fun field address label (bug 409)"
+  },
   "idCardOccupationLabel": "PEKERJAAN (OPSIONAL)",
-  "@idCardOccupationLabel": {"description": "ID card create form: fun field occupation label (bug 409)"},
+  "@idCardOccupationLabel": {
+    "description": "ID card create form: fun field occupation label (bug 409)"
+  },
   "idCardMaritalLabel": "STATUS PERKAWINAN (OPSIONAL)",
-  "@idCardMaritalLabel": {"description": "ID card create form: fun field marital status label (bug 409)"},
+  "@idCardMaritalLabel": {
+    "description": "ID card create form: fun field marital status label (bug 409)"
+  },
   "idCardSchoolLabel": "SEKOLAH (OPSIONAL)",
-  "@idCardSchoolLabel": {"description": "ID card create form: student card school label (bug 429)"},
+  "@idCardSchoolLabel": {
+    "description": "ID card create form: student card school label (bug 429)"
+  },
   "idCardFacultyLabel": "FAKULTAS (OPSIONAL)",
-  "@idCardFacultyLabel": {"description": "ID card create form: student card faculty label (bug 429)"},
+  "@idCardFacultyLabel": {
+    "description": "ID card create form: student card faculty label (bug 429)"
+  },
   "idCardGenderMale": "Jantan",
   "idCardGenderFemale": "Betina",
   "idCardGenderUnknown": "Tidak diketahui",
   "idCardBirthdayRequired": "Tanggal lahir wajib diisi",
-  "@idCardBirthdayRequired": {"description": "ID card create form: hint under empty required birthday field"},
+  "@idCardBirthdayRequired": {
+    "description": "ID card create form: hint under empty required birthday field"
+  },
   "healthListTitle": "Catatan Kesehatan",
   "healthCategorySection": "KATEGORI",
   "healthAllSection": "SEMUA CATATAN · TERBARU",
@@ -1343,65 +1635,130 @@
   "healthDelete": "Hapus",
   "healthSaveError": "Gagal menyimpan. Coba lagi.",
   "timelineMilestoneGeneric": "Pencapaian",
-  "@timelineMilestoneGeneric": {"description": "Diary timeline: generic milestone label when no code is available"},
+  "@timelineMilestoneGeneric": {
+    "description": "Diary timeline: generic milestone label when no code is available"
+  },
   "timelineHealthTag": "Kesehatan",
-  "@timelineHealthTag": {"description": "Diary timeline: tag chip on the structured health-record capsule (class 4b)"},
+  "@timelineHealthTag": {
+    "description": "Diary timeline: tag chip on the structured health-record capsule (class 4b)"
+  },
   "timelineIdCardIssued": "Kartu Identitas {name} terbit",
-  "@timelineIdCardIssued": {"description": "Diary timeline: ID card unlocked card title", "placeholders": {"name": {"type": "String"}}},
+  "@timelineIdCardIssued": {
+    "description": "Diary timeline: ID card unlocked card title",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "timelineIdCardIssuedGeneric": "Kartu Identitas terbit",
-  "@timelineIdCardIssuedGeneric": {"description": "Diary timeline: ID card unlocked card title without pet name"},
+  "@timelineIdCardIssuedGeneric": {
+    "description": "Diary timeline: ID card unlocked card title without pet name"
+  },
   "timelineIdCardTapToView": "Ketuk untuk lihat",
-  "@timelineIdCardTapToView": {"description": "Diary timeline: ID card unlocked card subtitle"},
+  "@timelineIdCardTapToView": {
+    "description": "Diary timeline: ID card unlocked card subtitle"
+  },
   "diaryDemoChip": "Contoh",
-  "@diaryDemoChip": {"description": "Diary guest state: chip marking the timeline as a sample, not real data"},
+  "@diaryDemoChip": {
+    "description": "Diary guest state: chip marking the timeline as a sample, not real data"
+  },
   "diaryDemoStripLine": "Beginilah Diary si kecil nanti — yuk, mulai punyamu.",
-  "@diaryDemoStripLine": {"description": "Diary guest state: sample strip line next to the Example chip"},
+  "@diaryDemoStripLine": {
+    "description": "Diary guest state: sample strip line next to the Example chip"
+  },
   "diaryGuestPitchTitle": "Setiap hari bersamanya layak disimpan",
-  "@diaryGuestPitchTitle": {"description": "Diary guest state: emotional headline below the sample timeline"},
+  "@diaryGuestPitchTitle": {
+    "description": "Diary guest state: emotional headline below the sample timeline"
+  },
   "diaryGuestPitchBody": "Foto, catatan kesehatan, pencapaian — semuanya dalam satu buku yang tumbuh bersama si kecil.",
-  "@diaryGuestPitchBody": {"description": "Diary guest state: one-line explainer below the headline"},
+  "@diaryGuestPitchBody": {
+    "description": "Diary guest state: one-line explainer below the headline"
+  },
   "diaryGuestPrimaryCta": "Mulai Catat Perjalanan Si Kecil",
-  "@diaryGuestPrimaryCta": {"description": "Diary guest state: the single primary CTA (must not mention login)"},
+  "@diaryGuestPrimaryCta": {
+    "description": "Diary guest state: the single primary CTA (must not mention login)"
+  },
   "diaryDemoPetName": "Mochi",
-  "@diaryDemoPetName": {"description": "Diary guest state: sample pet name"},
+  "@diaryDemoPetName": {
+    "description": "Diary guest state: sample pet name"
+  },
   "diaryDemoPetBreed": "Domestik",
-  "@diaryDemoPetBreed": {"description": "Diary guest state: sample pet breed"},
+  "@diaryDemoPetBreed": {
+    "description": "Diary guest state: sample pet breed"
+  },
   "diaryDemoPetIntro": "Tukang tidur, bangun cuma buat makan",
-  "@diaryDemoPetIntro": {"description": "Diary guest state: sample pet one-line bio"},
+  "@diaryDemoPetIntro": {
+    "description": "Diary guest state: sample pet one-line bio"
+  },
   "diaryDemoOwnerName": "Aurel",
-  "@diaryDemoOwnerName": {"description": "Diary guest state: sample content author name"},
+  "@diaryDemoOwnerName": {
+    "description": "Diary guest state: sample content author name"
+  },
   "diaryDemoItemSwim": "Nyebur pertama kali di kolam",
-  "@diaryDemoItemSwim": {"description": "Diary guest state: sample item 3 caption (photo + milestone badge)"},
+  "@diaryDemoItemSwim": {
+    "description": "Diary guest state: sample item 3 caption (photo + milestone badge)"
+  },
   "diaryDemoItemVaccine": "Vaksinasi pertama selesai",
-  "@diaryDemoItemVaccine": {"description": "Diary guest state: sample item 5 (structured health record capsule)"},
+  "@diaryDemoItemVaccine": {
+    "description": "Diary guest state: sample item 5 (structured health record capsule)"
+  },
   "diaryDemoItemConsultSummary": "Diare ringan — ternyata cuma kekenyangan 😌",
-  "@diaryDemoItemConsultSummary": {"description": "Diary guest state: sample item 6 consult summary"},
+  "@diaryDemoItemConsultSummary": {
+    "description": "Diary guest state: sample item 6 consult summary"
+  },
   "diaryDemoItemNight": "Nemenin begadang 🌙",
-  "@diaryDemoItemNight": {"description": "Diary guest state: sample item 7 caption"},
+  "@diaryDemoItemNight": {
+    "description": "Diary guest state: sample item 7 caption"
+  },
   "diaryDemoItemBalcony": "Berjemur di balkon",
-  "@diaryDemoItemBalcony": {"description": "Diary guest state: sample item 8 caption"},
+  "@diaryDemoItemBalcony": {
+    "description": "Diary guest state: sample item 8 caption"
+  },
   "diaryDemoBodySwim": "Pertama kali dibawa ke kolam. Takut dua detik, habis itu susah diajak keluar.",
-  "@diaryDemoBodySwim": {"description": "Diary guest state: sample detail body for the pool item"},
+  "@diaryDemoBodySwim": {
+    "description": "Diary guest state: sample detail body for the pool item"
+  },
   "diaryDemoBodyNight": "Aku lembur, dia nemenin di meja sampai selesai — cuma duduk dan lihat.",
-  "@diaryDemoBodyNight": {"description": "Diary guest state: sample detail body for the late-night item"},
+  "@diaryDemoBodyNight": {
+    "description": "Diary guest state: sample detail body for the late-night item"
+  },
   "diaryDemoBodyBalcony": "Ketemu tempat favoritnya di balkon. Sudut yang sama, jam yang sama, tiap pagi.",
-  "@diaryDemoBodyBalcony": {"description": "Diary guest state: sample detail body for the balcony item"},
+  "@diaryDemoBodyBalcony": {
+    "description": "Diary guest state: sample detail body for the balcony item"
+  },
   "diaryDemoCommentTeaser": "Buat profil dulu buat ikut ngobrol di sini.",
-  "@diaryDemoCommentTeaser": {"description": "Diary guest state: sample detail comment teaser (tap goes to profile creation)"},
+  "@diaryDemoCommentTeaser": {
+    "description": "Diary guest state: sample detail comment teaser (tap goes to profile creation)"
+  },
   "growthArchiveEmptyBody": "Buat profil si kecil dulu, yuk — biar semua catatan Diary, kesehatan, dan pencapaiannya punya rumah.",
-  "@growthArchiveEmptyBody": {"description": "Diary: state-A-no-profile guide body (UI spec A2)"},
+  "@growthArchiveEmptyBody": {
+    "description": "Diary: state-A-no-profile guide body (UI spec A2)"
+  },
   "publishButtonSave": "Simpan",
-  "@publishButtonSave": {"description": "Publish page: main button when Moment sync is OFF (Diary saved privately)"},
+  "@publishButtonSave": {
+    "description": "Publish page: main button when Moment sync is OFF (Diary saved privately)"
+  },
   "publishSyncTitle": "Bagikan juga ke Moment",
-  "@publishSyncTitle": {"description": "Publish page: Diary→Moment sync switch title"},
+  "@publishSyncTitle": {
+    "description": "Publish page: Diary→Moment sync switch title"
+  },
   "publishSyncSub": "Disimpan di Diary dan tampil di Sosial.",
-  "@publishSyncSub": {"description": "Publish page: sync switch subtitle (ON state)"},
+  "@publishSyncSub": {
+    "description": "Publish page: sync switch subtitle (ON state)"
+  },
   "publishSyncOffSub": "Hanya disimpan di Diary-mu — orang lain tidak melihatnya.",
-  "@publishSyncOffSub": {"description": "Publish page: sync switch subtitle (OFF state)"},
+  "@publishSyncOffSub": {
+    "description": "Publish page: sync switch subtitle (OFF state)"
+  },
   "publishPublicHint": "Terbit publik, tampil di Sosial",
-  "@publishPublicHint": {"description": "Publish page: hint for Moment/Tips (always public)"},
+  "@publishPublicHint": {
+    "description": "Publish page: hint for Moment/Tips (always public)"
+  },
   "mePostPrivateBadge": "Hanya kamu",
-  "@mePostPrivateBadge": {"description": "My posts: badge on private (unsynced) Diary content"},
+  "@mePostPrivateBadge": {
+    "description": "My posts: badge on private (unsynced) Diary content"
+  },
   "milestoneHintAutoHealth": "Menyala otomatis saat kamu menambah catatan kesehatan atau selesai konsultasi dokter — tanpa check-in.",
   "@milestoneHintAutoHealth": {"description": "Milestone sheet: hint for auto-only health milestones (M3/M4/M5/M9), replaces check-in copy"},
 
@@ -1753,5 +2110,7 @@
   "recoBasicBadge": "MODE DASAR",
   "recoDegradedBody": "Catatan berat & makan {pet} belum cukup untuk rekomendasi personal. Tambah 3 catatan lagi untuk hasil yang lebih tepat.",
   "recoSettingsEntry": "Atur rekomendasi",
-  "recoSettingsEntrySub": "Matikan kapan saja · profil tetap tersimpan"
+  "recoSettingsEntrySub": "Matikan kapan saja · profil tetap tersimpan",
+  "visitorSharedBanner": "Dibagikan oleh {name} · hanya bisa dilihat",
+  "visitorPrivateItemNotice": "Pemiliknya belum membagikan catatan ini secara publik."
 }

@@ -80,6 +80,20 @@ petgo:
     android-store-url: ${APP_ANDROID_STORE_URL:}
   # 对外 H5（名片 /p、里程碑庆祝分享 /m）下载 CTA（CardPageController + MilestoneSharePageController 共用）。
   # V1 仅 Android 上架：iOS / 桌面统一兜底到 Play 商店；待 iOS 上架再单独配 CARD_IOS_URL。env 可覆盖。
+  # 首页推荐序**基建**参数（V1.1.6 Story 16.1，16.4 收窄）。
+  # ✅ 打分类参数（权重/评论权重/P95/曝光衰减/曝光窗口/两项配比/窗口大小）已迁到配置表
+  #    feed_rank_config，改后无需发版（后台「推荐算法」区块）。
+  # 🛡 留在这里的只有"改了要发版也无所谓"的基建量 —— 它们不是运营会去调的东西
+  #    （调错了表现是缓存失效或查询变慢，不是排序效果变差）。
+  feed:
+    rank:
+      # 序列快照 TTL（分钟）。翻页途中会续期，避免翻到一半快照过期导致下一页重复。
+      sequence-ttl-minutes: ${FEED_RANK_SEQUENCE_TTL_MINUTES:30}
+      # 一次生成的序列长度。游标超出后用同一种子续算下一段。
+      sequence-length: ${FEED_RANK_SEQUENCE_LENGTH:100}
+      # 候选池上界（最近 N 条公开内容）。🔴 必须有上界：这个查询每次下拉刷新都要跑一次，
+      # 且推导物种/批量取赞评/取装饰标签都按这一批规模走。取"最近 N 条"也让它走既有索引。
+      candidate-pool-size: ${FEED_RANK_CANDIDATE_POOL_SIZE:1000}
   card:
     android-url: ${CARD_ANDROID_URL:https://play.google.com/store/apps/details?id=com.tailtopia.app}
     ios-url: ${CARD_IOS_URL:https://play.google.com/store/apps/details?id=com.tailtopia.app}

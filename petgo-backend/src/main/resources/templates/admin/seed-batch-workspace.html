@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  批量内容工作台（V1.1.6 Story 13.2 = AB-3K Step 1：素材墙）。
+  内容录入（13-3）、校验预览（13-4）、定时发布（13-5）会长在这同一页上。
+-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.batch.title}">批量内容 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <!-- 上传走 fetch，而 /admin/** 那条过滤链保留 CSRF —— 少了这两个 meta 就是 403。 -->
+    <meta name="_csrf" th:content="${_csrf?.token}"/>
+    <meta name="_csrf_header" th:content="${_csrf?.headerName}"/>
+    <script defer th:src="@{/admin/admin.js}"></script>
+    <script th:src="@{/admin/vendor/htmx.min.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1><span th:text="#{admin.batch.workspace}">批量内容工作台</span>
+            <span th:text="' #' + ${batchId}">#0</span></h1>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+
+        <!-- ===== 🔴 AC6：这条提示不可省略 =====
+             AB-3H 规定存量虚拟账号统一置为 GENERAL。若在未配置定位时就开始批量发布，
+             该批内容的物种会**全部落到 GENERAL**，只能逐行填「关联物种」补救。
+             **工程与运营都不会自行想到这个先后关系** —— 所以必须由界面说出来。 -->
+        <div class="banner err" data-notice="species-first" th:text="#{admin.batch.speciesFirst}">
+            ⚠️ 请先给虚拟账号配好「账号物种定位」，再开始批量发布。</div>
+
+        <h2 th:text="#{admin.batch.step0}">第 0 步：批次设置</h2>
+        <!-- 🔴 **全页只有这一处** 批次级设置。此前在线录入与 Excel 导入各带一个
+             一模一样的账号下拉，同一页面出现两次（AC1 要消除的正是它）。 -->
+        <form method="post" th:action="@{/admin/seed-batches/{id}/settings(id=${batchId})}"
+              th:attr="data-real-identity-confirm=#{admin.publishIdentity.realConfirm}">
+            <div th:replace="~{admin/fragments/publish-identity-select :: select(${publishIdentities}, 'batchDefaultAuthor', 'defaultAuthorUserId', null, null)}"></div>
+            <label class="field" for="batchDefaultType" th:text="#{admin.batch.defaultType}">默认内容类型</label>
+            <!-- 🔴 不含 GROWTH_MOMENT（A-10）：成长日历需逐行绑宠物与事件日期、属"真实记录"
+                 性质，不适合批量灌入。服务端另有一遍硬校验（下拉里没有 ≠ 请求里发不上来）。 -->
+            <select id="batchDefaultType" name="defaultContentType" class="field-full">
+                <option value="" th:text="#{admin.batch.notSet}">未设置</option>
+                <option th:each="t : ${batchTypes}" th:value="${t}" th:text="${t}"
+                        th:selected="${batch != null and batch.defaultContentType == t}">类型</option>
+            </select>
+            <label class="field" for="batchDefaultAt" th:text="#{admin.batch.defaultAt}">默认计划发布时间（WIB，留空=立即发布）</label>
+            <input id="batchDefaultAt" type="datetime-local" name="defaultScheduledAt" class="field-full"/>
+            <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.batch.saveSettings}">保存设置</button>
+        </form>
+        <p class="hint" th:text="#{admin.batch.inheritHint}">
+            行内留空即继承以上默认值。四个字段的心智一致：填了就用你填的，留空就继承默认。</p>
+
+        <h2 th:text="#{admin.batch.step1}">第 1 步：素材</h2>
+        <p class="hint" th:text="#{admin.batch.asset.hint}">
+            把这一批要用的图一次拖进来。支持分多次追加（追加不替换），上限按累计算。</p>
+
+        <!-- 🔴 「选择时即拦截」：data-* 把上限交给 admin.js，它在**发请求之前**就把超出的挡掉，
+             并即时更新计数。不能等全部传完才报错 —— 那时运营已经等了几分钟，
+             而且部分成功部分失败的中间状态很难处置。
+             🛡 服务端另有一遍权威校验（页面这层拦不住绕过页面直接打接口）。 -->
+        <div data-batch-uploader
+             th:attr="data-upload-url=@{/admin/seed-batches/{id}/assets(id=${batchId})},
+                      data-wall-url=@{/admin/seed-batches/{id}/assets(id=${batchId})},
+                      data-max-count=${usage.maxCount},
+                      data-max-bytes=${usage.maxBytes},
+                      data-used-count=${usage.count},
+                      data-used-bytes=${usage.bytes},
+                      data-msg-over-count=#{admin.batch.asset.tooManyClient},
+                      data-msg-over-bytes=#{admin.batch.asset.tooLargeClient},
+                      data-msg-dup=#{admin.batch.asset.duplicateClient}">
+            <input type="file" data-batch-file multiple
+                   accept="image/jpeg,image/png,image/webp"/>
+            <p class="hint" data-batch-live></p>
+            <div data-batch-errors></div>
+        </div>
+
+        <div th:replace="~{admin/fragments/seed-asset-wall :: wall}"></div>
+
+        <h2 th:text="#{admin.batch.step2}">第 2 步：录内容</h2>
+
+        <h3 th:text="#{admin.batch.paste}">粘贴多行</h3>
+        <!-- ===== 🔴 AC3：这条提示不可省略 =====
+             运营若粘入一篇带段落的长科普，会被拆成一堆残句 —— **而且不会有任何报错**
+             （每一段都是合法的正文），只能手动合并回去，比原来的竖线格式更糟。
+             ⚠️ 刻意不选"按空行分隔"：它的失败模式更隐蔽 —— 从表格复制的短文案（本来没有空行）
+                会被**静默合并成一条**。 -->
+        <div class="banner err" data-notice="paste-split-limit" th:text="#{admin.batch.pasteLimit}">
+            粘贴按「一行一条」拆分。含段落换行的长正文请用 Excel 导入，或直接在此逐行编辑。</div>
+        <form method="post" th:action="@{/admin/seed-batches/{id}/rows/paste(id=${batchId})}">
+            <textarea name="lines" rows="6" th:placeholder="#{admin.batch.pastePlaceholder}"></textarea>
+            <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.batch.pasteSubmit}">生成待编辑行</button>
+        </form>
+
+        <h3 th:text="#{admin.batch.excel}">Excel 导入</h3>
+        <p class="hint" th:text="#{admin.batch.excelHint}">
+            模板六列，图片列填本批已上传素材的文件名（英文逗号分隔，顺序即展示顺序）。
+            内容类型 / 关联物种 / 发布账号三列在 Excel 里是下拉可选。</p>
+        <p><a class="btn btn-neutral btn-sm"
+              th:href="@{/admin/seed-batches/{id}/template(id=${batchId})}"
+              th:text="#{admin.batch.downloadTemplate}">下载模板</a></p>
+        <form method="post" th:action="@{/admin/seed-batches/{id}/import(id=${batchId})}"
+              enctype="multipart/form-data">
+            <input type="file" name="file" required accept=".xlsx,.xls"/>
+            <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.batch.importSubmit}">导入</button>
+        </form>
+
+        <h3><span th:text="#{admin.batch.rows}">内容行</span>
+            <span th:text="' (' + ${rows.size()} + ')'"> (0)</span></h3>
+        <p class="hint" th:if="${rows.isEmpty()}" th:text="#{admin.batch.rows.empty}">
+            还没有内容行。用上面的「粘贴多行」或「Excel 导入」，也可以直接新增空行。</p>
+        <form method="post" th:action="@{/admin/seed-batches/{id}/rows(id=${batchId})}">
+            <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.batch.addRow}">新增空行</button>
+        </form>
+
+        <!-- 🔴 Step 3 入口：先预览再发（此前是提交即上线）。 -->
+        <p><a class="btn btn-primary"
+              th:href="@{/admin/seed-batches/{id}/preview(id=${batchId})}"
+              th:text="#{admin.batch.toPreview}">下一步：校验预览</a></p>
+
+        <!-- 🛡 形态是**行卡片列表**而非电子表格网格（A-8）：后台是服务端渲染 + 轻量增强、
+             无框架无构建，真网格（单元格键盘导航、区域选择、撤销）成本高一个量级。 -->
+        <div class="seed-row-cards">
+            <div class="card" th:each="r : ${rows}">
+                <form method="post"
+                      th:action="@{/admin/seed-batches/{b}/rows/{r}(b=${batchId},r=${r.id})}"
+                      th:attr="data-real-identity-confirm=#{admin.publishIdentity.realConfirm}">
+                    <p><strong th:text="'#' + ${r.rowNo}">#1</strong>
+                        <span th:text="' · ' + ${r.status}"> · DRAFT</span></p>
+                    <!-- 校验/导入错误就贴在这一行上 —— 贴在整页顶部运营找不到是哪行。 -->
+                    <p class="err" th:if="${r.errorMessage}" th:text="${r.errorMessage}">错误</p>
+
+                    <label class="field" th:text="#{admin.batch.row.body}">正文</label>
+                    <textarea name="body" rows="3" th:text="${r.body}"></textarea>
+
+                    <label class="field" th:text="#{admin.batch.row.assets}">图片（素材文件名，逗号分隔）</label>
+                    <input type="text" name="assetFileNames" class="field-full"
+                           th:placeholder="#{admin.batch.row.assetsPlaceholder}"/>
+
+                    <label class="field" th:text="#{admin.batch.row.author}">发布账号（留空=继承批次默认）</label>
+                    <select name="authorUserId" class="field-full">
+                        <option value="" th:text="#{admin.batch.inherit}">继承批次默认</option>
+                        <option th:each="o : ${publishIdentities}" th:value="${o.userId}"
+                                th:disabled="${o.disabled}" th:attr="data-real=${o.real}"
+                                th:selected="${r.authorUserId == o.userId}"
+                                th:text="(${o.real} ? '⚠️ ' : '') + ${o.nickname} + ' (id=' + ${o.userId} + ')'">号</option>
+                    </select>
+
+                    <label class="field" th:text="#{admin.batch.row.type}">内容类型（留空=继承）</label>
+                    <select name="contentType" class="field-full">
+                        <option value="" th:text="#{admin.batch.inherit}">继承批次默认</option>
+                        <option th:each="t : ${batchTypes}" th:value="${t}" th:text="${t}"
+                                th:selected="${r.contentType == t}">类型</option>
+                    </select>
+
+                    <!-- 🔴 关联物种**刻意没有批次默认**（A-14）：账号物种定位已经在扮演
+                         账号级默认值、而且扮演得更好。再加一层批次默认会冲突 ——
+                         批次默认设「猫」、行留空、而该行账号是狗号时，取谁没有正确答案。 -->
+                    <label class="field" th:text="#{admin.batch.row.species}">关联物种（留空=按账号解析）</label>
+                    <select name="species" class="field-full">
+                        <option value="" th:text="#{admin.batch.speciesInherit}">按账号解析</option>
+                        <option th:each="sp : ${speciesOptions}" th:value="${sp}" th:text="${sp}"
+                                th:selected="${r.species == sp}">物种</option>
+                    </select>
+
+                    <label class="field" th:text="#{admin.batch.row.at}">计划发布时间（WIB，留空=继承）</label>
+                    <input type="datetime-local" name="scheduledAt" class="field-full"/>
+
+                    <button type="submit" class="btn btn-primary btn-sm"
+                            th:text="#{admin.batch.row.save}">保存这一行</button>
+                </form>
+                <form method="post" style="display:inline"
+                      th:action="@{/admin/seed-batches/{b}/rows/{r}/delete(b=${batchId},r=${r.id})}"
+                      th:attr="data-confirm=#{admin.batch.row.deleteConfirm}">
+                    <button type="submit" class="btn btn-neutral btn-sm"
+                            th:text="#{admin.batch.row.delete}">删除这一行</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

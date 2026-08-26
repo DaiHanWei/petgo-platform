@@ -3,6 +3,7 @@ package com.tailtopia.profile.dto;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.PastOrPresent;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -23,6 +24,11 @@ public record PetProfileUpdateRequest(
         @Size(max = 60) String breed,
         // 与创建端一致：允许生日=今天（@PastOrPresent），只拒未来。
         @PastOrPresent(message = "生日不能是未来") LocalDate birthday,
+        // 性别（V1.1.6 Story 1.1）。⚠️ 只有 MALE/FEMALE 两值，**没有 UNKNOWN**
+        // （身份证那套才是三值，两者独立不联动）。传 null = 不改动，
+        // 沿用本请求「仅非空字段被更新」的统一语义 —— **不支持清空**，
+        // 不要照抄手机号（FR-70）的「允许清空写 null」，那是另一条要求。
+        @Pattern(regexp = "MALE|FEMALE", message = "性别只能是 MALE 或 FEMALE") String sex,
         @Size(max = 30, message = "介绍不能超过 30 字") String intro,
         /** 🔒 体重（kg）。可空 = 不改动；用 {@code clearWeight} 显式清空。 */
         @DecimalMin(value = "0.1", message = "体重需大于 0")
@@ -30,9 +36,9 @@ public record PetProfileUpdateRequest(
         /** NEUTERED / INTACT / UNKNOWN，可空 = 不改动。 */
         String neuterStatus) {
 
-    /** 便捷构造：不改动体重与绝育状态（部分更新语义下 null = 不动）。 */
+    /** 便捷构造：不改动性别/体重/绝育状态（部分更新语义下 null = 不动）。 */
     public PetProfileUpdateRequest(String avatarUrl, String name, String breed,
             LocalDate birthday, String intro) {
-        this(avatarUrl, name, breed, birthday, intro, null, null);
+        this(avatarUrl, name, breed, birthday, null, intro, null, null);
     }
 }

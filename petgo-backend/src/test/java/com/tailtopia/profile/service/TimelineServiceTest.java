@@ -57,16 +57,22 @@ class TimelineServiceTest {
                 .thenReturn(List.of());
         when(idCards.findByUserIdOrderByCreatedAtDesc(anyLong())).thenReturn(List.of());
         service = new TimelineService(profileService, contentService, healthProvider, milestoneService,
-                healthRecords, milestoneCompletions, idCards);
+                healthRecords, milestoneCompletions, idCards,
+                // V1.1.6 Story 5.2：装饰标签统一贴标点；本类不验它，给 mock（默认无标签）。
+                Mockito.mock(com.tailtopia.content.service.ContentTagQueryService.class));
     }
 
     private GrowthMomentView moment(long id, String iso) {
-        return new GrowthMomentView(id, Instant.parse(iso), null, List.of("u" + id), "moment" + id);
+        return new GrowthMomentView(id, Instant.parse(iso), null, List.of("u" + id), "moment" + id,
+                com.tailtopia.content.domain.ContentVisibility.PUBLIC,
+                com.tailtopia.content.domain.PostStatus.PUBLISHED);
     }
 
     private GrowthMomentView momentEv(long id, String createdIso, String eventIso, String img) {
         return new GrowthMomentView(id, Instant.parse(createdIso), LocalDate.parse(eventIso),
-                List.of(img), "moment" + id);
+                List.of(img), "moment" + id,
+                com.tailtopia.content.domain.ContentVisibility.PUBLIC,
+                com.tailtopia.content.domain.PostStatus.PUBLISHED);
     }
 
     private static PetProfile pet(PetType type) {
@@ -131,8 +137,9 @@ class TimelineServiceTest {
         when(healthProvider.getIfAvailable()).thenReturn(health);
         when(contentService.findGrowthMomentsBeforeAnchor(eq(1L), anyLong(), Mockito.any(), Mockito.any(), Mockito.any(), anyInt()))
                 .thenReturn(List.of(moment(1, "2026-06-01T10:00:00Z")));
-        when(health.recentHealthEvents(anyLong(), Mockito.any(), anyInt()))
-                .thenReturn(List.of(new HealthEventView(Instant.parse("2026-06-03T10:00:00Z"), "YELLOW", "咳嗽", "AI_TRIAGE", "triage-1")));
+        when(health.recentHealthEvents(anyLong(), Mockito.any(), Mockito.any(), anyInt()))
+                .thenReturn(List.of(new HealthEventView(Instant.parse("2026-06-03T10:00:00Z"),
+                        LocalDate.parse("2026-06-03"), "YELLOW", "咳嗽", "AI_TRIAGE", "triage-1")));
 
         TimelinePageResponse resp = service.getTimeline(1L, null, 20);
 
@@ -199,8 +206,10 @@ class TimelineServiceTest {
                 momentEv(12, "2026-06-10T09:00:00Z", "2026-06-10", "img10")));
         // 健康事件 6/2（叠加角标）+ 6/20（独立 🏥 日）。
         when(health.healthEventsInRange(eq(1L), Mockito.any(), Mockito.any())).thenReturn(List.of(
-                new HealthEventView(Instant.parse("2026-06-02T12:00:00Z"), "GREEN", "x", "AI_TRIAGE", "triage-x"),
-                new HealthEventView(Instant.parse("2026-06-20T12:00:00Z"), "YELLOW", "y", "AI_TRIAGE", "triage-y")));
+                new HealthEventView(Instant.parse("2026-06-02T12:00:00Z"),
+                        LocalDate.parse("2026-06-02"), "GREEN", "x", "AI_TRIAGE", "triage-x"),
+                new HealthEventView(Instant.parse("2026-06-20T12:00:00Z"),
+                        LocalDate.parse("2026-06-20"), "YELLOW", "y", "AI_TRIAGE", "triage-y")));
 
         CalendarMonthResponse resp = service.getCalendarMonth(1L, 2026, 6);
 
@@ -225,8 +234,9 @@ class TimelineServiceTest {
         when(healthProvider.getIfAvailable()).thenReturn(health);
         when(contentService.findGrowthMomentsOnDate(eq(1L), anyLong(), eq(LocalDate.parse("2026-06-02"))))
                 .thenReturn(List.of(momentEv(10, "2026-06-02T08:00:00Z", "2026-06-02", "a")));
-        when(health.healthEventsOnDay(eq(1L), Mockito.any(), Mockito.any()))
-                .thenReturn(List.of(new HealthEventView(Instant.parse("2026-06-02T07:00:00Z"), "GREEN", "z", "AI_TRIAGE", "triage-z")));
+        when(health.healthEventsOnDay(eq(1L), Mockito.any()))
+                .thenReturn(List.of(new HealthEventView(Instant.parse("2026-06-02T07:00:00Z"),
+                        LocalDate.parse("2026-06-02"), "GREEN", "z", "AI_TRIAGE", "triage-z")));
 
         DayDetailResponse resp = service.getDayDetail(1L, LocalDate.parse("2026-06-02"));
 

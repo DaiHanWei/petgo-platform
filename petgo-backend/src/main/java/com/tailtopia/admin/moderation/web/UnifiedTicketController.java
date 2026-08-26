@@ -62,12 +62,14 @@ public class UnifiedTicketController {
     private final AccountDisposalRepository disposals;
     private final AccountQueryService accountQueryService;
     private final AccountDisposalService disposalService;
+    private final com.tailtopia.admin.throttle.service.AdminThrottleReadService throttleRead;
     private final com.tailtopia.moderation.service.ReportService contentReportService;
     private final com.tailtopia.admin.service.AdminModerationService moderationService;
 
     public UnifiedTicketController(UnifiedTicketQueryService query,
             AccountReportEntryRepository reportEntries, AccountDisposalRepository disposals,
             AccountQueryService accountQueryService, AccountDisposalService disposalService,
+            com.tailtopia.admin.throttle.service.AdminThrottleReadService throttleRead,
             com.tailtopia.moderation.service.ReportService contentReportService,
             com.tailtopia.admin.service.AdminModerationService moderationService) {
         this.query = query;
@@ -75,6 +77,7 @@ public class UnifiedTicketController {
         this.disposals = disposals;
         this.accountQueryService = accountQueryService;
         this.disposalService = disposalService;
+        this.throttleRead = throttleRead;
         this.contentReportService = contentReportService;
         this.moderationService = moderationService;
     }
@@ -98,6 +101,12 @@ public class UnifiedTicketController {
 
         model.addAttribute("active", "tickets");
         model.addAttribute("result", result);
+        // Story 17.2 · AC3：限流中的账号在工单上直接看到状态与到期时间。
+        // 🔴 整页一次取（逐行查是 N+1）。
+        model.addAttribute("accountThrottles", throttleRead.forAccounts(
+                result.getContent().stream().map(UnifiedTicketRow::targetUserId)
+                        .filter(java.util.Objects::nonNull).distinct().toList(),
+                java.time.Instant.now()));
         model.addAttribute("statuses", TicketStatusBucket.values());
         // 回显筛选条件（分页链接要带着它们走）。类别下拉已移除（本页恒为用户举报一类）。
         model.addAttribute("type", null);

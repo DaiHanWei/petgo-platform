@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,17 +8,35 @@ import 'package:intl/intl.dart';
 import '../../../core/router/deep_link_routes.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../core/analytics/analytics.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../profile/domain/milestone_celebration_copy.dart';
+import '../../profile/domain/milestone_titles.dart';
+import '../../profile/data/profile_repository.dart';
 import '../data/notification_repository.dart';
 import '../domain/notification_deep_link.dart';
 import '../domain/notification_item.dart';
+import '../domain/push_permission_prompt.dart';
+import '../../../core/storage/prefs.dart';
+import '../data/push_permission_providers.dart';
 
 /// 通知中心列表页（Story 6.6 F2/F3，FR-34）。倒序六(~七)类 + 空态 + 点击标记已读并深链跳目标。
 /// 🔄 PRD V1.0.0 修订（F2 · 2026-06-08）：展示类型由四类扩到六(~七)类（加生日/纪念日/里程碑节点）。
 ///
 /// 亦是 6.1 深链未知/兜底的落地页（`/notifications`）。
 class NotificationCenterPage extends ConsumerStatefulWidget {
-  const NotificationCenterPage({super.key});
+  const NotificationCenterPage({
+    super.key,
+    this.prefsForTest,
+    this.isNotificationGrantedForTest,
+    this.openSettingsForTest,
+  });
+
+  /// 以下三个仅供测试注入 —— 生产路径全部走默认实现。
+  /// 触发点 4 要读系统通知开关与 prefs，二者在 widget test 里都没有平台实现。
+  final AppPrefs? prefsForTest;
+  final Future<bool> Function()? isNotificationGrantedForTest;
+  final Future<bool> Function()? openSettingsForTest;
 
   @override
   ConsumerState<NotificationCenterPage> createState() =>
@@ -43,11 +63,80 @@ class _NotificationCenterPageState
   bool _markingAllRead = false;
   final ScrollController _scroll = ScrollController();
 
+  /// 触发点 4（FR-85 / Story 8.2）：打开通知中心且系统通知关闭 → 顶部引导条。
+  ///
+  /// **为什么这个位置语境最贴合**：用户主动打开通知中心，说明他此刻在意「有没有人找我」；
+  /// 而通知关着的话，这一页里的东西他从来不会被及时告知。
+  bool _showPushBanner = false;
+
   @override
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
     _loadFirstPage();
+    _maybeShowPushBanner();
+    unawaited(_reportOpened());
+  }
+
+  /// E-17 `app_notification_center_viewed`（Story 10.1 补齐）。
+  ///
+  /// **两个属性各有独立用途**：
+  /// - `unread_count`：通知中心使用率的分层维度 —— 「有未读才点进来」和
+  ///   「没未读也点进来」是两种完全不同的使用习惯。
+  /// - `push_permission`：本事件**同时是 FR-85 触发点 4 的曝光分母**（清单原话）。
+  ///   触发点 4 的引导条只对"通知关着"的人显示，所以要算它的转化率，
+  ///   就得知道打开通知中心的人里有多少本来就关着。
+  ///
+  /// 🔴 `not_asked` 必须与 `denied` 分开：iOS 上"从没问过"和"问过被拒"
+  /// 在系统 API 里返回的是同一个 `denied`，只有本地那个「问过没有」的标记能分开两者。
+  /// 混在一起会让"拒绝率"里混进一批压根没被问过的人，这个数就没法用了。
+  Future<void> _reportOpened() async {
+    try {
+      final granted = await (widget.isNotificationGrantedForTest ??
+          isPushPermissionGranted)();
+      final prefs = widget.prefsForTest ?? await AppPrefs.create();
+      final asked = prefs.pushPermissionAsked;
+      final unread = await ref.read(notificationRepositoryProvider).unreadCount();
+      await Analytics.capture('app_notification_center_viewed', {
+        'unread_count': unread,
+        'push_permission':
+            granted ? 'granted' : (asked ? 'denied' : 'not_asked'),
+      });
+    } catch (e) {
+      // 埋点失败绝不影响这一页 —— 它是用户主动打开的功能页。
+      debugPrint('[NotificationCenter] open report failed: $e');
+    }
+  }
+
+  /// 判定 + 曝光上报。⚠️ 判定与「各一次」的标记都走 [PushPermissionPrompt]，
+  /// 与触发点 1/2 共用同一套（形态不同，判定必须同一份）。
+  Future<void> _maybeShowPushBanner() async {
+    try {
+      final prefs = widget.prefsForTest ?? await AppPrefs.create();
+      final should = await PushPermissionPrompt.shouldPrompt(
+        PushTriggerPoint.notificationCenter,
+        prefs: prefs,
+        isGranted: widget.isNotificationGrantedForTest,
+      );
+      if (!should || !mounted) return;
+      // 展示即用掉这次机会（与触发点 1/2 同口径：划走也算）。
+      await PushPermissionPrompt.markPrompted(
+        PushTriggerPoint.notificationCenter,
+        prefs: prefs,
+      );
+      unawaited(PushPermissionPrompt.reportShown(PushTriggerPoint.notificationCenter));
+      if (mounted) setState(() => _showPushBanner = true);
+    } catch (e) {
+      debugPrint('[PushPrompt] notification center banner failed: $e');
+    }
+  }
+
+  Future<void> _openPushSettings() async {
+    unawaited(PushPermissionPrompt.reportResponded(
+      PushTriggerPoint.notificationCenter,
+      PushPromptResult.settingsOpened,
+    ));
+    await (widget.openSettingsForTest ?? openPushSettings)();
   }
 
   @override
@@ -146,7 +235,39 @@ class _NotificationCenterPageState
     }
   }
 
+  /// 通知类型 → 埋点取值（PRD §3.2 口径）。
+  ///
+  /// ⚠️ 与线格式**刻意分开**：线格式是 UPPER_SNAKE 的枚举名，埋点取值由 PRD 定死；
+  /// 直接把枚举名发上去会让这条事件与 PRD 的判读口径对不上。
+  static String _notifTypeForAnalytics(String type) => switch (type) {
+    'MILESTONE_SM_NODE' => 'milestone_sm',
+    'MILESTONE_NODE' => 'milestone_l',
+    'CONTENT_LIKED' => 'like',
+    'CONTENT_COMMENTED' => 'comment',
+    'VET_REPLY' => 'vet_reply',
+    _ => type.toLowerCase(),
+  };
+
+  /// 里程碑级别（S/M/L），从编码里取（形如 `C-S14`）。非里程碑通知返回 null。
+  static String? _milestoneLevelOf(NotificationItem item) {
+    if (!item.type.startsWith('MILESTONE')) return null;
+    final code = item.targetRef;
+    if (code == null) return null;
+    final parts = code.split('-');
+    if (parts.length < 2 || parts[1].isEmpty) return null;
+    return parts[1][0].toUpperCase();
+  }
+
   Future<void> _onTap(NotificationItem item) async {
+    // 埋点（V1.1.6 Story 6.1 · AC6）：**所有类型都报** —— 只报里程碑就没法横向对比点击率，
+    // 而"S/M 通知到底是留痕还是召回"这个判断恰恰要靠与点赞/评论类的对比得出。
+    final props = <String, Object>{'notif_type': _notifTypeForAnalytics(item.type)};
+    // 里程碑类另带级别（S/M/L）——判读时要能把 S/M 与 L 拆开看。
+    final level = _milestoneLevelOf(item);
+    if (level != null) {
+      props['level'] = level;
+    }
+    Analytics.capture('app_notification_item_tapped', props);
     final token = item.deepLinkToken;
     if (token != null && token.isNotEmpty && !item.read) {
       setState(() {
@@ -236,7 +357,71 @@ class _NotificationCenterPageState
                   ),
         ],
       ),
-      body: FutureBuilder<NotificationPage>(
+      // 引导条在列表**之外**、置于其上：它对空态与有内容态都要出现 ——
+      // 通知中心是空的恰恰可能正因为通知被关着（收不到 → 也没人点进来看过）。
+      body: Column(
+        children: [
+          if (_showPushBanner) _pushBanner(l10n),
+          Expanded(child: _listArea(l10n)),
+        ],
+      ),
+    );
+  }
+
+  /// 触发点 4 的引导条。形态与「我的」页的 [PushEnableGuide] 同族（同一套文案键），
+  /// 但这里是页内顶部条 + 可关闭，故不直接复用那个组件。
+  Widget _pushBanner(AppLocalizations l10n) {
+    return Container(
+      key: const ValueKey('pushCenterBanner'),
+      margin: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.notifications_active_outlined,
+              color: AppColors.accentConsult),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(l10n.pushEnableGuideTitle,
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 2),
+                Text(l10n.pushEnableGuideBody,
+                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+              ],
+            ),
+          ),
+          TextButton(
+            key: const ValueKey('pushCenterBannerAction'),
+            onPressed: _openPushSettings,
+            child: Text(l10n.mediaOpenSettings),
+          ),
+          IconButton(
+            key: const ValueKey('pushCenterBannerClose'),
+            icon: const Icon(Icons.close, size: 18),
+            tooltip: l10n.commonClose,
+            onPressed: () {
+              // 关掉即上报 dismissed。标记在展示时就已置位，这里不再动它。
+              unawaited(PushPermissionPrompt.reportResponded(
+                PushTriggerPoint.notificationCenter,
+                PushPromptResult.dismissed,
+              ));
+              setState(() => _showPushBanner = false);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _listArea(AppLocalizations l10n) {
+    return FutureBuilder<NotificationPage>(
         future: _page,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -260,9 +445,7 @@ class _NotificationCenterPageState
             );
           }
           return _notificationList(l10n, items);
-        },
-      ),
-    );
+        });
   }
 
   Widget _notificationList(
@@ -281,6 +464,9 @@ class _NotificationCenterPageState
     final earlier = items.where((it) => !isToday(it)).toList();
     // bug 20260730-436：显式 padding 会关掉 ScrollView 自动注入的底部安全区补偿，
     // edge-to-edge 下末条会被系统手势条/三键遮挡——固定 20 之上叠加安全区高度。
+    // V1.1.6 Story 6.1：S/M 里程碑通知要显示**具体是哪一条**，文案里带 `{name}` 占位符。
+    // V1 单宠物，取当前档案的名字；拿不到就退化成简短标题（仍然具体）。
+    final petName = ref.watch(petProfileProvider).asData?.value?.name;
     return ListView(
       controller: _scroll, // 滚到底附近自动加载下一页（_onScroll）
       padding: EdgeInsets.fromLTRB(16, 4, 16, 20 + MediaQuery.paddingOf(context).bottom),
@@ -292,6 +478,7 @@ class _NotificationCenterPageState
               item: it,
               read: _isRead(it),
               onTap: () => _onTap(it),
+              petName: petName,
             ),
         ],
         if (earlier.isNotEmpty) ...[
@@ -302,6 +489,7 @@ class _NotificationCenterPageState
               item: it,
               read: _isRead(it),
               onTap: () => _onTap(it),
+              petName: petName,
             ),
         ],
         // 翻页尾部：加载中 / 失败可重试 / 到底了。
@@ -374,11 +562,16 @@ class _NotificationTile extends StatefulWidget {
     required this.item,
     required this.read,
     required this.onTap,
+    this.petName,
   });
 
   final NotificationItem item;
   final bool read;
   final VoidCallback onTap;
+
+  /// 当前宠物名（V1 单宠物）。里程碑庆祝文案里带 `{name}` 占位符，靠它替换。
+  /// 拿不到时退化成里程碑的**简短标题** —— 仍然是具体名称，不会落到中性兜底。
+  final String? petName;
 
   @override
   State<_NotificationTile> createState() => _NotificationTileState();
@@ -386,6 +579,27 @@ class _NotificationTile extends StatefulWidget {
 
 class _NotificationTileState extends State<_NotificationTile> {
   bool _expanded = false;
+
+  /// S/M 里程碑通知的文案（V1.1.6 Story 6.1 · AC4）。
+  ///
+  /// 🔴 **具体名称由客户端按里程碑编码查表得出**，后端只下发编码（`targetRef`）——
+  /// 这是本模块一贯的约定：后端不下发展示文案，杜绝中文泄漏到印尼语界面。
+  ///
+  /// 优先用**庆祝文案**（AC 要求复用它）；它带 `{name}` 占位符，需要宠物名。
+  /// 拿不到宠物名时退化成里程碑的**简短标题** —— 仍然是具体名称，
+  /// **绝不会落到"你完成了一个里程碑"那种看不出发生了什么的兜底**。
+  ({String title, String body}) _milestoneCopy(BuildContext context) {
+    final code = widget.item.targetRef;
+    final locale = Localizations.localeOf(context);
+    if (code == null || code.isEmpty) {
+      return (title: AppLocalizations.of(context).notifyTypeMilestoneNode, body: '');
+    }
+    final name = widget.petName;
+    if (name == null || name.isEmpty) {
+      return (title: localizedMilestoneTitle(code, locale), body: '');
+    }
+    return localizedMilestoneCelebration(code, locale, name);
+  }
 
   /// 变体派生（内容审核 cm-7）：NAME_RESET/AVATAR_RESET 按 targetRef 判别主体是用户还是宠物。
   /// 后端约定 targetRef="NICKNAME"（昵称）/"USER_AVATAR"（用户头像）→ 用户变体；
@@ -425,6 +639,13 @@ class _NotificationTileState extends State<_NotificationTile> {
       Icons.emoji_events_rounded,
       AppColors.triageGreen,
       AppColors.momenBadgeBg,
+    ),
+    // V1.1.6 Story 6.1：S/M 级里程碑（只留痕、不推送）。与 L 级同族但换一个更轻的图标 ——
+    // 同族是因为落点一样（都进里程碑列表），轻一档是因为它本就是"小成就"。
+    'MILESTONE_SM_NODE' => (
+      Icons.military_tech_rounded,
+      AppColors.gold,
+      AppColors.goldTint,
     ),
     // bug 20260729-391：以下类型此前无映射 → 全落兜底渲染，同瞬两条(结案+邀评)看似「重复发送」。
     'TICKET_RESOLVED' => (
@@ -483,6 +704,8 @@ class _NotificationTileState extends State<_NotificationTile> {
     'PET_BIRTHDAY' => l10n.notifyTypePetBirthday,
     'COMPANION_ANNIVERSARY' => l10n.notifyTypeCompanionAnniversary,
     'MILESTONE_NODE' => l10n.notifyTypeMilestoneNode,
+    // 🔴 S/M 必须写明**是哪一条里程碑**（AC4 明令禁止"你完成了一个里程碑"这类泛化文案）。
+    'MILESTONE_SM_NODE' => _milestoneCopy(context).title,
     'TICKET_RESOLVED' => l10n.notifyTypeTicketResolved,
     'CSAT_SURVEY' => l10n.notifyTypeCsatSurvey,
     'REFUND_REJECTED' => l10n.notifyTypeRefundRejected,
@@ -511,6 +734,7 @@ class _NotificationTileState extends State<_NotificationTile> {
     'PET_BIRTHDAY' => l10n.notifyBodyPetBirthday,
     'COMPANION_ANNIVERSARY' => l10n.notifyBodyCompanionAnniversary,
     'MILESTONE_NODE' => l10n.notifyBodyMilestoneNode,
+    'MILESTONE_SM_NODE' => _milestoneCopy(context).body,
     'TICKET_RESOLVED' => l10n.notifyBodyTicketResolved,
     'CSAT_SURVEY' => l10n.notifyBodyCsatSurvey,
     'REFUND_REJECTED' => l10n.notifyBodyRefundRejected,

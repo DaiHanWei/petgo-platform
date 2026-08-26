@@ -42,7 +42,12 @@ class AdminContentManageServiceTest {
         reportService = mock(ReportService.class);
         violationCountService = mock(ViolationCountService.class);
         service = new AdminContentManageService(contentService, auditService, reportService,
-                violationCountService);
+                violationCountService,
+                // V1.1.6 Story 14.1：物种推导 + 「谁的内容运营可以改」的判据。
+                // 本类不验它们（真实语义在 ContentSpeciesIntegrationTest 跑真库），给 mock。
+                mock(com.tailtopia.content.species.ContentSpeciesResolver.class),
+                mock(com.tailtopia.auth.repository.UserRepository.class),
+                mock(com.tailtopia.admin.virtual.service.AdminPublishIdentityService.class));
     }
 
     private void stubSummary(long postId, long authorId, boolean deleted) {

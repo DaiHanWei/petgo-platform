@@ -54,8 +54,34 @@
                 <input type="search" name="q" th:value="${q}" th:placeholder="#{admin.content.searchPlaceholder}"
                        style="width:220px"/>
             </label>
+            <!-- AC5：按物种 + 按推导来源筛选。典型用法：把某号定位改成 CAT 后，
+                 用「来源=账号定位」+「物种=猫」筛出被批量套上去的内容，再改掉实际是狗的那几条。 -->
+            <label>
+                <select name="species">
+                    <option value="" th:text="#{admin.species.all}">全部物种</option>
+                    <option th:each="opt : ${speciesOptions}" th:value="${opt}" th:text="${opt}"
+                            th:selected="${species == opt}">GENERAL</option>
+                </select>
+            </label>
+            <label>
+                <select name="speciesSource">
+                    <option value="" th:text="#{admin.species.allSources}">全部来源</option>
+                    <option th:each="src : ${speciesSources}" th:value="${src}" th:text="${src}"
+                            th:selected="${speciesSource == src.name()}">NONE</option>
+                </select>
+            </label>
             <button type="submit" class="btn btn-primary" th:text="#{admin.content.search}">查询</button>
         </form>
+
+        <!-- 🔴 Story 17.2 · AC2：确认前必须明示这不是下架。
+             不明示运营会把它当下架用，然后向举报人回复「已处理」，而内容其实还在。 -->
+        <p class="hint" data-notice="throttle-not-takedown"
+           th:utext="#{admin.throttle.notTakedown}">
+            限流曝光只降低 Feed 分发权重，内容仍可通过直链和作者主页访问，不是下架。</p>
+        <!-- ⚠️ AC4：非 ALL Tab 无处施加（OQ-B6）。运营不知道这条就会以为限流后"到处都看不到了"。 -->
+        <p class="hint" data-notice="throttle-all-tab-only"
+           th:text="#{admin.throttle.allTabOnly}">
+            限流只作用于首页推荐（ALL）。分类 Tab 走纯时间倒序、不打分，限流在那里无处施加。</p>
 
         <table>
             <thead>
@@ -67,15 +93,31 @@
                 <th th:text="#{admin.content.col.images}">图片</th>
                 <th th:text="#{admin.content.col.created}">创建时间</th>
                 <th th:text="#{admin.content.col.status}">状态</th>
+                <th sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.throttle_view')"
+                    th:text="#{admin.throttle.col}">限流状态</th>
+                <!-- V1.1.6 Story 14.1 · AC5：物种 + **推导来源**。
+                     来源那一列是关键：没有它，运营看到一堆"猫"分不出哪些是自己逐条标的、
+                     哪些是账号定位顺带套上的。 -->
+                <th th:text="#{admin.species.col.value}">物种</th>
+                <th th:text="#{admin.species.col.source}">推导来源</th>
                 <th th:text="#{admin.content.col.action}">操作</th>
             </tr>
             </thead>
             <tbody id="content-rows" th:fragment="rows">
-            <th:block th:each="c : ${items}">
-                <tr th:replace="~{admin/content :: row}"></tr>
+            <!-- V1.1.6 Story 14.1：items 现在是 ContentSpeciesRow（内容行 + 物种推导结果）。
+                 片段参数化成 (c, sp)：HTMX 单行刷新那条路径只有内容行，传 null 即可 ——
+                 物种列会渲染成 '—'，而不是让整行报错。 -->
+            <th:block th:each="sr : ${items}">
+                <!-- ⚠️ 用 th:with 注入局部变量，**不把片段参数化**：
+                     HTMX 单行刷新那条路径只往 model 放 `c`（且 model 不接受 null 值），
+                     参数化片段在那条路径上会变成一处必须编造实参的地方。
+                     非参数化片段能自然继承上下文里的 `c` / `sp`，两条路径都成立。 -->
+                <th:block th:with="c=${sr.content()},sp=${sr}">
+                    <tr th:replace="~{admin/content :: row}"></tr>
+                </th:block>
             </th:block>
             <tr th:if="${#lists.isEmpty(items)}">
-                <td colspan="8" class="empty" th:text="#{admin.content.empty}">无匹配内容。</td>
+                <td colspan="11" class="empty" th:text="#{admin.content.empty}">无匹配内容。</td>
             </tr>
             </tbody>
         </table>
@@ -108,6 +150,41 @@
                 <span class="badge" th:classappend="${c.deleted()} ? 'badge-danger' : 'badge-ok'"
                       th:text="${c.deleted()} ? #{admin.content.status.deleted} : #{admin.content.status.online}">上线中</span>
             </td>
+            <!-- Story 17.2 · AC3：限流状态 + 到期时间（WIB 由 @adminTime.wib 带出字样）+ 就地解除。 -->
+            <td sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.throttle_view')"
+                th:with="th=${throttles?.get(c.id())}">
+                <span th:if="${th == null}" class="muted">—</span>
+                <span th:if="${th != null}" class="badge badge-warn"
+                      th:text="${th.scope().name() == 'ACCOUNT'} ? #{admin.throttle.badge.account} : #{admin.throttle.badge.post}">限流中</span>
+                <span th:if="${th != null}" class="muted"
+                      th:text="${th.permanent()} ? #{admin.throttle.permanent} : ${@adminTime.wib(th.expiresAt())}">永久</span>
+                <form th:if="${th != null}" method="post" th:action="@{/admin/throttles/lift}"
+                      class="inline-form"
+                      sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.throttle_manage')">
+                    <input type="hidden" name="throttleIds" th:value="${th.throttleId()}"/>
+                    <input type="hidden" name="back" value="content"/>
+                    <button type="submit" class="btn btn-neutral btn-sm"
+                            th:text="#{admin.throttle.lift}">解除</button>
+                </form>
+            </td>
+            <td>
+                <span th:text="${sp} == null ? '—' : ${sp.speciesLabel()}">—</span>
+            </td>
+            <td>
+                <span class="muted" th:text="${sp} == null ? '—' : ${sp.source()}">—</span>
+                <!-- 🔴 存量种子内容**唯一**的物种修正入口（AC5）：触点②③ 都只在发布时存在。
+                     🛡 真实用户内容不给这个控件 —— 其物种由作者宠物档案决定。
+                        （服务层另有权威校验：界面不给按钮只是体验。） -->
+                <form th:if="${sp != null} and ${sp?.editable()}" method="post"
+                      th:action="@{/admin/content/species}" class="inline-form" data-autosubmit>
+                    <input type="hidden" name="postId" th:value="${c.id()}"/>
+                    <select name="species">
+                        <option value="" th:text="#{admin.species.clear}">（清除覆写）</option>
+                        <option th:each="opt : ${speciesOptions}" th:value="${opt}" th:text="${opt}"
+                                th:selected="${c.speciesOverride() == opt}">GENERAL</option>
+                    </select>
+                </form>
+            </td>
             <td>
                 <!-- 上线中 → 主动下架（必填原因）。HTMX 只替换本行。 -->
                 <form th:unless="${c.deleted()}" th:action="@{/admin/content/{id}/takedown(id=${c.id()})}"
@@ -119,6 +196,23 @@
                            style="width:160px"/>
                     <button type="submit" class="btn btn-danger btn-sm"
                             th:text="#{admin.content.takedown}">下架</button>
+                </form>
+                <!-- Story 17.2 · AC1：单条内容限流。粒度固定 POST（这里就是一条内容），期限须显式选。
+                     🛡 只在未下架时给 —— 已下架内容再降权没有意义。 -->
+                <form th:unless="${c.deleted()}" method="post" th:action="@{/admin/throttles}"
+                      class="inline-form" data-throttle-form
+                      sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.throttle_manage')">
+                    <input type="hidden" name="scope" value="POST"/>
+                    <input type="hidden" name="targetId" th:value="${c.id()}"/>
+                    <input type="hidden" name="back" value="content"/>
+                    <select name="duration" required>
+                        <option value="" th:text="#{admin.throttle.duration.pick}">选期限</option>
+                        <option value="DAYS_7" th:text="#{admin.throttle.duration.d7}">7 天</option>
+                        <option value="DAYS_30" th:text="#{admin.throttle.duration.d30}">30 天</option>
+                        <option value="PERMANENT" th:text="#{admin.throttle.duration.perm}">永久</option>
+                    </select>
+                    <button type="submit" class="btn btn-warn btn-sm"
+                            th:text="#{admin.throttle.apply}">限流曝光</button>
                 </form>
                 <!-- 已下架 → 恢复。HTMX 只替换本行。 -->
                 <form th:if="${c.deleted()}" th:action="@{/admin/content/{id}/restore(id=${c.id()})}"

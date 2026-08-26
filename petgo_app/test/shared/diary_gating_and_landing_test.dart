@@ -9,6 +9,7 @@ import 'package:tailtopia/features/content/data/feed_repository.dart';
 import 'package:tailtopia/features/content/presentation/feed_tab_row.dart';
 import 'package:tailtopia/features/profile/presentation/diary_demo_detail_page.dart';
 import 'package:tailtopia/features/profile/presentation/diary_guest_page.dart';
+import 'package:tailtopia/features/profile/presentation/visitor_archive_view.dart';
 import 'package:tailtopia/shared/widgets/app_shell.dart';
 import 'package:tailtopia/shared/widgets/bottom_tab_bar.dart';
 import 'package:tailtopia/shared/widgets/login_hard_dialog.dart';
@@ -98,19 +99,38 @@ void main() {
       expect(find.byType(LoginHardDialog), findsNothing);
     });
 
-    testWidgets('名片分享深链 tailtopia://card/<token> 的落点 /profile 对游客可达（FR-14 连带调整②）',
+    /// V1.1.6 Story 2.4 起落点改了：`/profile` → `/pet/<token>`。
+    ///
+    /// 🔴 **为什么变**：旧映射把 card 深链整个映射成 `/profile`，**token 连解析都没有** ——
+    /// 于是未登录的人点开看到给游客做的**示例成长本**，已登录有宠的人点开看到**自己家的宠物**。
+    /// 两种都不是被分享的那一只，这正是 Story 2.4 要修的缺陷。
+    ///
+    /// 本用例保留的部分：**落点对游客可达、不弹登录窗**（那才是这条一直在守的东西）。
+    testWidgets('名片分享深链 tailtopia://card/<token> → 被分享的那只宠物，且对游客可达',
         (tester) async {
       // 深链映射是纯函数（app.dart），此处验「映射目标 + 门控」这对组合对游客成立。
-      expect(deepLinkToLocation(Uri.parse('tailtopia://card/abc123')), '/profile');
+      expect(deepLinkToLocation(Uri.parse('tailtopia://card/abc123')), '/pet/abc123');
+      // 没有 token 时退回 Diary 根 —— 没有 token 就没有可展示的宠物。
+      expect(deepLinkToLocation(Uri.parse('tailtopia://card')), '/profile');
 
       final container = await _pumpGuestApp(tester);
       final router = container.read(routerProvider);
       router.go(deepLinkToLocation(Uri.parse('tailtopia://card/abc123'))!);
-      await tester.pumpAndSettle();
+      // ⚠️ 这里**不能用 pumpAndSettle**：访客页拉档案时是无限转圈动画，
+      // 而本用例没有桩掉访客接口 —— pumpAndSettle 会一直等下去直到超时。
+      // 本条要验的是「路由落到哪、有没有弹登录窗」，定量 pump 足够。
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
 
-      expect(router.state.matchedLocation, '/profile',
-          reason: '游客点名片深链应落 Diary 游客态，不再被弹回 Discovery');
-      expect(find.byType(DiaryGuestPage), findsOneWidget);
+      expect(router.state.matchedLocation, '/pet/abc123',
+          reason: '游客点名片深链应落到被分享的那只宠物，且不被门控改写');
+      expect(find.byType(LoginHardDialog), findsNothing,
+          reason: '🛡 不得要求登录 —— 同一个链接在浏览器里无需登录即可看，'
+              'App 内若弹登录只会把用户推回浏览器');
+      // 🛡 落在访客只读视图上（而不是给游客做的示例种草页）。
+      // ⚠️ 不断言「DiaryGuestPage 不存在」：Tab 壳层会把上一个 Diary 页留在树里（在下层），
+      // 那条断言会因为壳层实现而红，与本条要守的东西无关。
+      expect(find.byType(VisitorArchiveView), findsOneWidget);
     });
   });
 

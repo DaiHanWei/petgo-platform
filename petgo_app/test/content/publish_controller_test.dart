@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
+import 'package:tailtopia/features/content/domain/feed_image_layout.dart';
 import 'package:tailtopia/features/content/data/content_repository.dart';
 import 'package:tailtopia/features/content/domain/content_type.dart';
 import 'package:tailtopia/features/content/domain/publish_controller.dart';
@@ -11,6 +13,7 @@ class _FakeRepo implements ContentRepository {
   ContentType? lastType;
   int? lastPetId;
   List<String>? lastUrls;
+  List<ImageSize?>? lastSizes;
   String? lastIdem;
   DateTime? lastEventDate;
   int publishCalls = 0;
@@ -24,6 +27,7 @@ class _FakeRepo implements ContentRepository {
     int? petId,
     String? text,
     List<String> imageUrls = const [],
+    List<ImageSize?> imageSizes = const [],
     DateTime? eventDate,
     required String idempotencyKey,
     bool syncToMoment = true,
@@ -32,6 +36,7 @@ class _FakeRepo implements ContentRepository {
     lastType = type;
     lastPetId = petId;
     lastUrls = imageUrls;
+    lastSizes = imageSizes;
     lastEventDate = eventDate;
     lastIdem = idempotencyKey;
     if (throwOnPublish != null) throw throwOnPublish!;
@@ -199,5 +204,51 @@ void main() {
     m.c.setText('x' * (kMaxPostTextLength + 1));
     expect(m.c.textWithinLimit, isFalse);
     expect(m.c.canPublish, isFalse); // 超限禁止发布
+  });
+
+  group('V1.1.6 Story 3.5：客户端上报图片尺寸', () {
+    // ⚠️ 上面的 make() 里 uploader 会 utf8.decode 字节，喂真实 JPEG 会抛 ——
+    // 这一组要用真图片，所以自己造一个二进制安全的 uploader。
+    ({PublishController c, _FakeRepo repo}) makeBinary() {
+      final repo = _FakeRepo();
+      var n = 0;
+      final c = PublishController(
+        repository: repo,
+        uploadOne: (b) async => 'https://cdn/${n++}.jpg',
+      );
+      return (c: c, repo: repo);
+    }
+
+    Uint8List jpeg(int w, int h) =>
+        Uint8List.fromList(img.encodeJpg(img.Image(width: w, height: h), quality: 80));
+
+    /// 🔴 客户端**此前从来没上报过尺寸** —— 后端 Story 3.1 的接口早就收，
+    /// 但发布请求里没这个字段，于是每条新帖都得等服务端异步下载图片再测一遍。
+    /// 那意味着 Story 3.3 说的「新内容零跳动」要等兜底任务跑完才成立。
+    test('发布时把每张图的宽高一起报上去', () async {
+      final m = makeBinary();
+      m.c.addImage(jpeg(1200, 1600));
+      m.c.addImage(jpeg(1000, 1000));
+      await m.c.publish(idempotencyKey: 'k');
+
+      expect(m.repo.lastSizes, hasLength(2));
+      expect((m.repo.lastSizes![0]!.w, m.repo.lastSizes![0]!.h), (1200, 1600));
+      expect((m.repo.lastSizes![1]!.w, m.repo.lastSizes![1]!.h), (1000, 1000));
+    });
+
+    /// 🛡 **与图片同序等长**：后端对长度不符的处理是**整组作废**（不做部分采信），
+    /// 所以量不出来的位置也必须占一个 null，绝不能"跳过不放"。
+    test('量不出来的位置留 null，长度仍与图片数一致', () async {
+      final m = makeBinary();
+      m.c.addImage(Uint8List.fromList([1, 2, 3, 4])); // 不是图片字节 → 量不出来
+      m.c.addImage(jpeg(800, 600));
+      await m.c.publish(idempotencyKey: 'k');
+
+      expect(m.repo.lastSizes, hasLength(2));
+      expect(m.repo.lastSizes![0], isNull);
+      expect(m.repo.lastSizes![1], isNotNull);
+      expect(m.repo.lastSizes!.length, m.repo.lastUrls!.length,
+          reason: '长度必须与图片数一致，否则后端整组作废');
+    });
   });
 }

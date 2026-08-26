@@ -50,6 +50,10 @@ class UnifiedTicketAccessControlTest {
         UnifiedTicketQueryService query() {
             var q = mock(UnifiedTicketQueryService.class);
             when(q.search(any(), any(), any(), any())).thenReturn(Page.empty());
+            // ⚠️ 控制器实际调的是**五参**重载（scope, type, status, q, pageable）。
+            // 之前只打了四参那个，五参返回 null —— 而旧代码从不解引用 result，
+            // 所以这个漏桩一直没露出来，直到 17.2 要读 result.getContent() 装配限流状态。
+            when(q.search(any(), any(), any(), any(), any())).thenReturn(Page.empty());
             return q;
         }
 
@@ -84,11 +88,18 @@ class UnifiedTicketAccessControlTest {
         }
 
         @Bean
+        com.tailtopia.admin.throttle.service.AdminThrottleReadService throttleRead() {
+            return mock(com.tailtopia.admin.throttle.service.AdminThrottleReadService.class);
+        }
+
+        @Bean
         UnifiedTicketController controller(UnifiedTicketQueryService q,
                 AccountReportEntryRepository e, AccountDisposalRepository d, AccountQueryService a,
-                AccountDisposalService ds, com.tailtopia.moderation.service.ReportService cr,
+                AccountDisposalService ds,
+                com.tailtopia.admin.throttle.service.AdminThrottleReadService t,
+                com.tailtopia.moderation.service.ReportService cr,
                 com.tailtopia.admin.service.AdminModerationService am) {
-            return new UnifiedTicketController(q, e, d, a, ds, cr, am);
+            return new UnifiedTicketController(q, e, d, a, ds, t, cr, am);
         }
     }
 
