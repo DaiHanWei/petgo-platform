@@ -30,6 +30,14 @@ class AdminPermissionsTest {
                 AdminPermissions.REFUND_APPROVE,
                 AdminPermissions.REFUND_PAYOUT,
                 AdminPermissions.SUPPORT_HANDLE);
+        // 🔴 人工审核码**按名字**钉住（2026-08-26 补）。这个码在权限分组重构里被漏纳过一次，
+        //    当时是靠合并的人手动求并集拣回来的（stag 侧那段 Stream.concat 注释记的就是这件事；
+        //    分组已修好后该并集成了冗余，本线不再复制）。
+        // ⚠️ 只有 listStableSize 的总数断言**守不住它**：总数变红时最省事的修法就是把数字改小，
+        //    而那恰好是它上次消失的方式。按名字断言才能让"少了哪个"直接说出来。
+        //    人工审核是内容能否放出去的闸门，漏权限的表现是审核员"以为自己没有这个功能"——
+        //    没有报错、没有 403、日志里什么都没有。
+        assertThat(AdminPermissions.ALL).contains(AdminPermissions.CONTENT_MANUAL_REVIEW);
         // 无重复码。
         assertThat(new HashSet<>(AdminPermissions.ALL)).hasSameSizeAs(AdminPermissions.ALL);
     }
