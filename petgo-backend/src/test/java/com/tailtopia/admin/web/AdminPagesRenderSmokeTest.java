@@ -28,6 +28,16 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
     @Autowired
     private AdminAccountRepository adminAccounts;
 
+    /**
+     * 真实路由表（清单自检用）：从这里反查后台页，避免手工维护清单反复漏页。
+     *
+     * <p>⚠️ 必须点名 {@code requestMappingHandlerMapping} —— actuator 另注册了一个同类型的
+     * {@code controllerEndpointHandlerMapping}，不限定则注入歧义、整个测试类起不来。
+     */
+    @Autowired
+    @org.springframework.beans.factory.annotation.Qualifier("requestMappingHandlerMapping")
+    private org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping mapping;
+
     private Authentication superAdminAuth() {
         long n = SEQ.incrementAndGet();
         AdminAccount acc = adminAccounts.save(AdminAccount.newSuperAdmin(
@@ -224,9 +234,11 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
         }
     }
 
-    @Test
-    void allExternalizedAdminPagesRenderInEveryLocale() throws Exception {
-        String[] paths = {"/admin/dashboard", "/admin/seed-post", "/admin/tickets", "/admin/content",
+    /**
+     * 逐页双语扫描的清单。**不要再手工判断该不该往里加** ——
+     * {@link #everyParameterFreeAdminPageIsInTheBilingualSweep()} 会把漏掉的页点名报出来。
+     */
+    static final java.util.List<String> SWEPT_PAGES = java.util.List.of("/admin/dashboard", "/admin/seed-post", "/admin/tickets", "/admin/content",
                 "/admin/content-pins", "/admin/content-tags", "/admin/user-tags",
                 "/admin/manual-review", "/admin/anomalies", "/admin/consult-sessions", "/admin/vets",
                 "/admin/vets/online", "/admin/failed-requests", "/admin/ratings", "/admin/users",
@@ -241,8 +253,104 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
                 // V1.1.6 Story 15.1：内容互动积分榜。
                 "/admin/content-stats",
             // 2026-08-26：算法参数独立成页，须一并纳入逐页双语扫描
-            "/admin/algo-params"};
-        for (String p : paths) {
+            "/admin/algo-params");
+
+    /**
+     * 🔴 <b>自动发现的双语扫描</b>：凡是「无路径参数的后台 GET」，一律真跑一遍并施加与
+     * {@link #assertRenders} 相同的检查 —— <b>新加一页自动进网，不需要谁记得回来加一行</b>。
+     *
+     * <h2>为什么不用手写清单</h2>
+     * 上面那张 {@link #SWEPT_PAGES} 是手写的，而它本身就漏过页：Story 12.1 的
+     * 「运营发布身份」页曾长期不在表内（注释里还留着「这一页此前不在本表里」），
+     * 于是它的 i18n 键在任何语言下都没被验过。手写清单会以同一种方式反复漏 ——
+     * 新页作者不知道有这张表。本条落地时实际覆盖 <b>46 页</b>，而手写清单只有 22 页：
+     * 多出来的 24 页（电商全部 12 页 + 运营配置 / 评论管理 / 支付 / 退款 / 结算 /
+     * 客服工单 / AI 单 / 问诊单 / 红码超额等）<b>此前从未在任何语言下被验过</b>，
+     * 而它们是运营天天要点的页面。
+     *
+     * <h2>刻意不做豁免名单</h2>
+     * 第一版写成「发现的路由必须出现在清单里」，结果逼出一张 11 条的豁免名单
+     * （跳转 / HTMX 片段 / 登录页）。豁免名单迟早会被当成绿灯开关用 ——
+     * 「加进去就绿了」。改成<b>运行时判定</b>后一条名单都不需要：
+     * <ul>
+     *   <li>3xx（{@code /admin} → dashboard、{@code /admin/reports} → 人工复核）→ 不是页面，跳过；</li>
+     *   <li>响应体没有 {@code <html>}（HTMX 片段，如挑内容/挑标签/挑宠物）→ 不是整页，跳过；</li>
+     *   <li>其余即整页，一律检查。</li>
+     * </ul>
+     *
+     * <p>🔴 顺带补上一条清单永远给不了的保障：<b>5xx 一律失败</b>。手写清单之外的页
+     * 从前连「打得开」都没人验过 —— 模板表达式写错只在渲染那一刻才炸，编译期查不出来。
+     *
+     * <p>⚠️ 带路径参数的详情页（某个兽医 / 某个订单 / 某个批次）**不在本条范围内**：
+     * 它们要先造出那条数据才打得开，归各自 story 的集成测试。
+     */
+    @Test
+    void everyParameterFreeAdminPageSurvivesTheBilingualSweep() throws Exception {
+        java.util.List<String> failures = new java.util.ArrayList<>();
+        java.util.Set<String> actuallyChecked = new java.util.TreeSet<>();
+        for (String path : parameterFreeAdminGets()) {
+            for (java.util.Locale locale : com.tailtopia.shared.i18n.AdminLocaleConfig.SUPPORTED_LOCALES) {
+                var res = mvc.perform(get(path).param("lang", locale.toString())
+                        .with(authentication(superAdminAuth()))).andReturn().getResponse();
+                if (res.getStatus() >= 500) {
+                    failures.add(path + " (" + locale + ") 渲染 " + res.getStatus()
+                            + " —— 模板表达式写错只在渲染那一刻才炸");
+                    continue;
+                }
+                if (res.getStatus() >= 300) {
+                    continue; // 纯跳转，不是页面
+                }
+                String html = res.getContentAsString();
+                if (!html.contains("<html")) {
+                    continue; // HTMX 片段，不是整页
+                }
+                actuallyChecked.add(path);
+                if (html.contains("??admin.")) {
+                    failures.add(path + " (" + locale + ") 有缺键标记 ??admin.");
+                }
+                java.util.regex.Matcher m = LEAKED_KEY.matcher(html);
+                if (m.find()) {
+                    failures.add(path + " (" + locale + ") 把 message key 当文案渲染了：" + m.group());
+                }
+            }
+        }
+        // 🛡 **防空跑**：本条的两个「跳过」分支（3xx / 非整页）是按响应内容判定的 ——
+        //    哪天守卫、路由前缀或 layout 变了，它可能把所有页都跳过而依然全绿。
+        //    钉一个下限，让「什么都没检查」这件事本身失败。2026-08-26 落地时实际检查到 **46 页**
+        //    （手写清单只有 22 页），下限取 35 留出余量；新增页只会让它更宽松，不会误红。
+        assertThat(actuallyChecked)
+                .as("🔴 本条一页都没真检查到 —— 极可能是守卫/路由/layout 变了导致全部被跳过，"
+                        + "而不是「没有问题」。实际检查到的页：" + actuallyChecked)
+                .hasSizeGreaterThanOrEqualTo(35);
+        assertThat(failures)
+                .as("🔴 自动发现的后台页在双语扫描下不合格。漏译不会报错 —— MessageSource 配了"
+                        + " useCodeAsDefaultMessage，缺键会安静地把 admin.xxx.yyy 键名本身当文案显示")
+                .isEmpty();
+    }
+
+    /** 全部「无路径参数、由 {@code @Controller} 处理」的后台 GET 路由（真实路由表，不手工维护）。 */
+    private java.util.List<String> parameterFreeAdminGets() {
+        java.util.Set<String> paths = new java.util.TreeSet<>();
+        mapping.getHandlerMethods().forEach((info, handler) -> {
+            boolean isGet = info.getMethodsCondition().getMethods().isEmpty()
+                    || info.getMethodsCondition().getMethods()
+                            .contains(org.springframework.web.bind.annotation.RequestMethod.GET);
+            if (!isGet || !handler.getBeanType()
+                    .isAnnotationPresent(org.springframework.stereotype.Controller.class)) {
+                return;
+            }
+            for (String pattern : info.getPatternValues()) {
+                if (pattern.startsWith("/admin") && !pattern.contains("{")) {
+                    paths.add(pattern);
+                }
+            }
+        });
+        return java.util.List.copyOf(paths);
+    }
+
+    @Test
+    void allExternalizedAdminPagesRenderInEveryLocale() throws Exception {
+        for (String p : SWEPT_PAGES) {
             for (java.util.Locale locale : com.tailtopia.shared.i18n.AdminLocaleConfig.SUPPORTED_LOCALES) {
                 assertRenders(p, locale.toString());
             }
