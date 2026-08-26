@@ -172,6 +172,26 @@ public final class AdminPermissions {
     public static final String CONFIG_EDIT = "config.edit";
 
     /**
+     * 查看「算法参数」页（2026-08-26 产品决定）。
+     *
+     * <p>🔴 <b>刻意不给运营</b>。这一页是**打分公式内部参数**（权重、分位数、限流强度），
+     * 与运营日常用的「顶置 / 打标 / 限流处置」不是一档东西 ——
+     * 后者是模型出结果**之后**的业务规则（行业惯例里运营该有的那一层），
+     * 前者改动的效果**没有任何机制能判定对错**（本平台无 A/B 实验基建）。
+     * 所以这一页留给产品做校准，运营不开放。
+     */
+    public static final String CONFIG_ALGO_PARAM_VIEW = "config.algo_param_view";
+
+    /**
+     * 改「算法参数」（2026-08-26 产品决定）。
+     *
+     * <p>⚠️ 每一次改动都逐字段写入配置变更日志，并在页面上直接展示最近若干条 ——
+     * 没有 A/B 的情况下，「谁在什么时候把哪个值从多少改成了多少」
+     * 是唯一能与指标漂移对上的锚点。
+     */
+    public static final String CONFIG_ALGO_PARAM_EDIT = "config.algo_param_edit";
+
+    /**
      * 查看分享奖励配置与当月消耗（V1.1.6 Story 18.3 · AC5）。
      *
      * <p>🛡 与 {@link #CONFIG_VIEW} 分开：分享奖励是增长侧的数，
@@ -259,7 +279,7 @@ public final class AdminPermissions {
                     VET_VIEW, VET_QUALIFY_VIEW, RATING_VIEW,
                     CONSULT_VIEW_ANOMALIES, CONSULT_VIEW_SESSIONS,
                     SUPPORT_VIEW, REFUND_VIEW,
-                    CONFIG_VIEW, CONFIG_SHARE_REWARD_VIEW, ORDER_VIEW, ORDER_EXPORT, SETTLEMENT_VIEW, PAYMENT_VIEW, RISK_VIEW,
+                    CONFIG_VIEW, CONFIG_SHARE_REWARD_VIEW, CONFIG_ALGO_PARAM_VIEW, ORDER_VIEW, ORDER_EXPORT, SETTLEMENT_VIEW, PAYMENT_VIEW, RISK_VIEW,
                     VIRTUAL_ACCOUNT_VIEW,
                     ADMIN_VIEW_ACCOUNTS, ADMIN_VIEW_LOGS,
                     SHOP_PRODUCT_VIEW, SHOP_COST_VIEW, SHOP_INVENTORY_VIEW,
@@ -272,7 +292,7 @@ public final class AdminPermissions {
                     VET_CREATE, VET_EDIT, VET_BAN, VET_RESET_PASSWORD, VET_QUALIFY,
                     CONSULT_HANDLE,
                     SUPPORT_HANDLE, REFUND_SUBMIT, REFUND_APPROVE, REFUND_PAYOUT,
-                    CONFIG_EDIT, CONFIG_SHARE_REWARD_EDIT, ORDER_EDIT, SETTLEMENT_PAYOUT, RISK_EDIT,
+                    CONFIG_EDIT, CONFIG_SHARE_REWARD_EDIT, CONFIG_ALGO_PARAM_EDIT, ORDER_EDIT, SETTLEMENT_PAYOUT, RISK_EDIT,
                     VIRTUAL_ACCOUNT_MANAGE, SEED_PUBLISH_AS_REAL,
                     ADMIN_CREATE_ACCOUNT, ADMIN_DEACTIVATE,
                     SHOP_PRODUCT_EDIT, SHOP_COST_EDIT, SHOP_INVENTORY_EDIT,

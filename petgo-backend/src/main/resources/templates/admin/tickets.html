@@ -264,7 +264,7 @@
                     <form th:action="@{/admin/throttles}" method="post">
                         <h3 th:text="#{admin.throttle.dialog.title}">限流曝光</h3>
                         <p class="hint" data-notice="throttle-not-takedown"
-                           th:text="#{admin.throttle.notTakedown}">
+                           th:utext="#{admin.throttle.notTakedown}">
                             只降低 Feed 分发权重，内容仍可通过直链和作者主页访问，不是下架。</p>
                         <p class="hint" data-notice="throttle-all-tab-only"
                            th:text="#{admin.throttle.allTabOnly}">
@@ -312,7 +312,7 @@
                     <form th:action="@{/admin/throttles}" method="post">
                         <h3 th:text="#{admin.throttle.dialog.title}">限流曝光</h3>
                         <p class="hint" data-notice="throttle-not-takedown"
-                           th:text="#{admin.throttle.notTakedown}">
+                           th:utext="#{admin.throttle.notTakedown}">
                             只降低 Feed 分发权重，内容仍可通过直链和作者主页访问，不是下架。</p>
                         <p class="hint" data-notice="throttle-all-tab-only"
                            th:text="#{admin.throttle.allTabOnly}">

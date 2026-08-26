@@ -166,6 +166,11 @@
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view')"
                    th:href="@{/admin/config}" th:classappend="${active == 'config'} ? 'active'"
                    th:text="#{admin.nav.config}">运营配置</a>
+                <!-- 🔴 算法参数独立成页、独立权限：不给运营（2026-08-26 产品决定）。
+                     侧栏这条与控制器 @PreAuthorize 引用同一个 AdminPermissions 常量。 -->
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.algo_param_view')"
+                   th:href="@{/admin/algo-params}" th:classappend="${active == 'algo-params'} ? 'active'"
+                   th:text="#{admin.nav.algoParams}">算法参数</a>
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('order.view')"
                    th:href="@{/admin/consult-orders}" th:classappend="${active == 'consult-orders'} ? 'active'"
                    th:text="#{admin.nav.consultOrders}">兽医订单</a>

@@ -239,6 +239,42 @@ class AdminMessagesParityTest {
         }
     }
 
+    /**
+     * 🔴 模板里用 {@code th:text}（转义）引用的键，文案<b>不得含标记</b>。
+     *
+     * <h2>这条守的是一个真实事故（2026-08-26 实机截图发现）</h2>
+     * 「算法参数」页顶部那句说明写成了 Markdown 的 {@code **…**}，而 HTML 不认 ——
+     * 页面上**原样显示了星号**。同一轮扫描还查出「限流不是下架」那条明示
+     * 在**三个展示位**上都有同样的问题，而那恰恰是最不能被读错的一句文案。
+     *
+     * <p>⚠️ 只管**模板**里的键。服务端的错误/警告文案（flash、ProblemDetail）是纯文本，
+     * 那里的 {@code **} 是合理的强调写法，不在此列。
+     */
+    @Test
+    void keysRenderedEscapedInTemplatesCarryNoMarkup() throws Exception {
+        Properties zh = load(LOCALES.get("zh_CN"));
+        java.util.regex.Pattern ref =
+                java.util.regex.Pattern.compile("th:text=\\\"#\\{([a-zA-Z0-9._]+)}\\\"");
+        Set<String> offenders = new TreeSet<>();
+        java.nio.file.Path dir = java.nio.file.Path.of("src", "main", "resources", "templates", "admin");
+        try (var files = java.nio.file.Files.walk(dir)) {
+            for (java.nio.file.Path f : files.filter(x -> x.toString().endsWith(".html")).toList()) {
+                java.util.regex.Matcher m =
+                        ref.matcher(java.nio.file.Files.readString(f, StandardCharsets.UTF_8));
+                while (m.find()) {
+                    String v = zh.getProperty(m.group(1), "");
+                    if (v.contains("**") || v.contains("<b>")) {
+                        offenders.add(f.getFileName() + " → " + m.group(1));
+                    }
+                }
+            }
+        }
+        assertThat(offenders)
+                .as("🔴 这些键的文案里有标记，却用 th:text 转义渲染 —— 标记会原样显示在页面上。"
+                        + "要么改用 th:utext，要么把标记从文案里去掉")
+                .isEmpty();
+    }
+
     private Set<String> placeholders(String text) {
         Set<String> out = new TreeSet<>();
         java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\{(\\d+)}").matcher(text);

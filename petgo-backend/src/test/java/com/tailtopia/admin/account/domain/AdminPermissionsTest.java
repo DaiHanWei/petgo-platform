@@ -82,6 +82,10 @@ class AdminPermissionsTest {
         // + 2（V1.1.6 Story 15.1 互动积分 content.stats_view / content.stats_export）= 56
         // + 2（V1.1.6 Story 17.2 限流处置 content.throttle_view / content.throttle_manage）= 58
         // + 2（V1.1.6 Story 18.3 分享奖励 config.share_reward_view / config.share_reward_edit）= 60
+        // + 2（2026-08-26 算法参数独立成页 config.algo_param_view / config.algo_param_edit）= 62
+        //     🔴 这两个码**刻意不给运营**：打分公式内部参数与运营日常的顶置/打标/限流
+        //     不是一档东西（后者是模型出结果后的业务规则，改了立刻能看出效果；前者不能）。
+        //     本平台无 A/B 实验基建 ⇒ 改完无法判定对错，故留给产品校准。详见 story 16-4 的变更记录。
         //     🔴 与 config.view/config.edit 分开不是洁癖而是**可用性**：
         //     总开关的意义是「发现被刷要能立刻全线关掉」，而 config.edit 那道门
         //     管着兽医单价与分成比例，只有极少数人过得去 —— 塞在那后面，"立刻"就做不到。
@@ -101,6 +105,6 @@ class AdminPermissionsTest {
         // + 1（V1.4.0 Story 8.4 模块 13 经营数据：shop.finance_view，毛利与对账单独权限位）= 55。
         // ↑ 电商（dev_1.1.6）与 ↓ 内容运营线（hex v1.1.6）在本次合并求并集：45 + 10 + 15 = 70。
         List<String> all = AdminPermissions.ALL;
-        assertThat(all).hasSize(70);
+        assertThat(all).hasSize(72);
     }
 }

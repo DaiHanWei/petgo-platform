@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.algo.title}">算法参数 · TailTopia 运营后台</title>
+    <!-- ⚠️ 每个页面自己带样式表与 i18n 标题：th:replace 用的是外层文档的 head，
+         layout 片段不会替你补。漏了它页面会以**无样式**渲染，而这不会报任何错。 -->
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+</head>
+<body>
+<!-- 「算法参数」独立页（2026-08-26 产品决定，原属 Story 16.4 的运营配置页一块）。
+     🔴 从「运营配置」搬出来单独成页，是因为它和运营日常那些配置**不是一档东西**：
+        顶置 / 打标 / 限流处置是模型出结果**之后**的业务规则（行业惯例里运营该有的那层）；
+        这一页是**打分公式内部参数**，改了之后没有任何机制能判定对错（本平台无 A/B 实验基建）。
+        混在同一页里，视觉上就是在暗示一种它并不具备的可控性。
+     🛡 权限独立（config.algo_param_view / _edit），**不给运营**，留给产品做校准。 -->
+<div th:replace="~{admin/layout :: page(~{::content})}">
+  <div th:fragment="content" th:remove="tag">
+
+    <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+    <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+
+    <h1 th:text="#{admin.algo.title}">算法参数</h1>
+    <!-- ⚠️ utext（不转义）：文案里带 <b>。
+         🔴 HTML 模板里的文案**不要写 Markdown 的 `**`** —— 它不会被渲染成加粗，
+            只会把星号原样显示在页面上。第一版就是这么写的，实机截图才看出来。 -->
+    <p class="hint" data-notice="algo-not-for-ops" th:utext="#{admin.algo.notForOps}">
+      这一页是首页推荐打分公式的内部参数，留给产品做校准。运营日常要用的顶置、打标、限流处置在各自的页面。</p>
+
+    <div class="card" data-section="feed-rank">
+      <h2 th:text="#{admin.algo.section.feedRank}">首页推荐算法</h2>
+
+      <p class="muted" data-notice="feed-rank-why" th:utext="#{admin.algo.why}">
+        ⚠️ 这些参数<b>第一次校准必然在发版之后</b>。</p>
+
+      <!-- 🔴 没有 A/B 实验基建时，「谁在什么时候改了什么」是唯一能与指标漂移对上的锚点。 -->
+      <p class="muted" data-notice="algo-no-ab" th:utext="#{admin.algo.noAbTest}">
+        ⚠️ 本平台没有 A/B 实验基建。</p>
+
+      <p class="muted" data-notice="p95-dynamic">
+        <b th:text="#{admin.algo.p95}">互动量 95 分位（P95）</b>:
+        <span th:text="${feedRank.interactionP95}">0</span>
+        <span th:utext="#{admin.algo.p95Note}">系统每 6 小时自动重算，不是手填项。</span>
+        <span th:text="#{admin.algo.p95LastRun}">上次重算</span>:
+        <span th:text="${feedRank.p95RecomputedAt} != null
+              ? ${@adminTime.wib(feedRank.p95RecomputedAt)} : #{admin.algo.p95Never}">-</span>
+      </p>
+
+      <form method="post" th:action="@{/admin/algo-params}"
+            sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.algo_param_edit')">
+        <label><span th:text="#{admin.algo.freshnessWeight}">新鲜度权重（默认 0.6）</span>
+          <input type="number" step="0.01" min="0" name="freshnessWeight"
+                 th:value="${feedRank.freshnessWeight}"/></label>
+        <label><span th:text="#{admin.algo.interactionWeight}">互动度权重（默认 0.4）</span>
+          <input type="number" step="0.01" min="0" name="interactionWeight"
+                 th:value="${feedRank.interactionWeight}"/></label>
+        <label><span th:text="#{admin.algo.commentWeight}">评论权重（相对点赞，默认 2）</span>
+          <input type="number" step="0.1" min="0" name="commentWeight"
+                 th:value="${feedRank.commentWeight}"/></label>
+        <label><span th:text="#{admin.algo.exposureDecay}">曝光衰减（0–1，默认 0.3）</span>
+          <input type="number" step="0.05" min="0" max="1" name="exposureDecay"
+                 th:value="${feedRank.exposureDecay}"/></label>
+        <label><span th:text="#{admin.algo.throttleFactor}">限流系数（0–1 两端不取，默认 0.2）</span>
+          <input type="number" step="0.05" min="0.05" max="0.95" name="throttleFactor"
+                 th:value="${feedRank.throttleFactor}"/></label>
+        <label><span th:text="#{admin.algo.seenWindowDays}">曝光窗口（天，默认 7）</span>
+          <input type="number" min="1" name="seenWindowDays"
+                 th:value="${feedRank.seenWindowDays}"/></label>
+        <label><span th:text="#{admin.algo.windowSize}">配比窗口（条，默认 10）</span>
+          <input type="number" min="2" name="windowSize"
+                 th:value="${feedRank.windowSize}"/></label>
+
+        <p class="hint" data-notice="throttle-factor" th:utext="#{admin.algo.throttleNote}">
+          🛡 限流系数是被限流内容在打分时乘的那个数。</p>
+        <p class="hint" data-notice="quota-sum" th:utext="#{admin.algo.quotaNote}">
+          🛡 下面两组配比各自之和必须等于窗口大小。</p>
+
+        <label><span th:text="#{admin.algo.attrFunQuota}">属性配比 · 趣味（默认 5）</span>
+          <input type="number" min="0" name="attrFunQuota"
+                 th:value="${feedRank.attrFunQuota}"/></label>
+        <label><span th:text="#{admin.algo.attrEduQuota}">属性配比 · 科普（默认 3）</span>
+          <input type="number" min="0" name="attrEduQuota"
+                 th:value="${feedRank.attrEduQuota}"/></label>
+        <label><span th:text="#{admin.algo.attrLifeQuota}">属性配比 · 生活记录（默认 2）</span>
+          <input type="number" min="0" name="attrLifeQuota"
+                 th:value="${feedRank.attrLifeQuota}"/></label>
+        <label><span th:text="#{admin.algo.speciesMainQuota}">物种配比 · 主物种（默认 6）</span>
+          <input type="number" min="0" name="speciesMainQuota"
+                 th:value="${feedRank.speciesMainQuota}"/></label>
+        <label><span th:text="#{admin.algo.speciesOtherQuota}">物种配比 · 其他物种（默认 2）</span>
+          <input type="number" min="0" name="speciesOtherQuota"
+                 th:value="${feedRank.speciesOtherQuota}"/></label>
+        <label><span th:text="#{admin.algo.speciesGeneralQuota}">物种配比 · 通用（默认 2）</span>
+          <input type="number" min="0" name="speciesGeneralQuota"
+                 th:value="${feedRank.speciesGeneralQuota}"/></label>
+
+        <button type="submit" class="btn btn-primary btn-sm"
+                th:text="#{admin.algo.save}">保存算法参数</button>
+      </form>
+    </div>
+
+    <!-- 🔴 变更留痕直接摆在改参数的同一屏上。埋在审计后台里没人会去翻，
+         而没有 A/B 时它是唯一能和指标漂移对上的锚点。 -->
+    <h2 th:text="#{admin.algo.changelog}">变更记录</h2>
+    <p class="hint" data-notice="algo-changelog-why" th:text="#{admin.algo.changelogWhy}">
+      改动时间是唯一能与埋点指标漂移对上的锚点。</p>
+    <table data-section="algo-changelog">
+      <thead>
+      <tr>
+        <th th:text="#{admin.algo.col.at}">时间（WIB）</th>
+        <th th:text="#{admin.algo.col.field}">参数</th>
+        <th th:text="#{admin.algo.col.from}">改前</th>
+        <th th:text="#{admin.algo.col.to}">改后</th>
+        <th th:text="#{admin.algo.col.by}">操作人</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr th:each="c : ${changeLogs}">
+        <td th:text="${@adminTime.wib(c.changedAt)}">-</td>
+        <td th:text="${c.field}">-</td>
+        <td class="muted" th:text="${c.oldValue}">-</td>
+        <td><b th:text="${c.newValue}">-</b></td>
+        <td th:text="${c.changedBy}">-</td>
+      </tr>
+      <tr th:if="${#lists.isEmpty(changeLogs)}">
+        <td colspan="5" class="empty" th:text="#{admin.algo.changelog.empty}">还没有改动过。</td>
+      </tr>
+      </tbody>
+    </table>
+
+  </div>
+</div>
+</body>
+</html>

@@ -50,7 +50,8 @@
         </form>
 
         <!-- 当前口径在算什么 —— 两句话说清，免得运营对着数字猜。 -->
-        <p class="hint" th:text="${scope.name() == 'CONTENT_QUALITY'}
+        <!-- ⚠️ utext：这两条文案里带 <b>。用 th:text 会把标签原样显示在页面上。 -->
+        <p class="hint" th:utext="${scope.name() == 'CONTENT_QUALITY'}
                                  ? #{admin.stats.explain.quality} : #{admin.stats.explain.activity}">说明</p>
 
         <p sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.stats_export')">
