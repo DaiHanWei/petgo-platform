@@ -65,11 +65,36 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
         assertThat(html).as("PawCoin 整块不见了").contains("/admin/config/pawcoin");
         assertThat(html).as("分享奖励整块不见了（Story 18.3）")
                 .contains("/admin/config/share-reward");
-        assertThat(html).as("🔴 首页推荐算法整块不见了（Story 16.4）—— 检查它是不是掉到 "
-                + "th:fragment=\"content\" 的闭合标签外面了").contains("/admin/config/feed-rank");
-        assertThat(html).as("🔴 限流系数输入框不见了（Story 17.1）—— 它挂在推荐算法那个表单里")
-                .contains("throttleFactor");
         assertThat(html).as("充值档位整块不见了").contains("/admin/config/tiers/");
+        // ⚠️ 首页推荐算法已于 2026-08-26 搬到独立页「算法参数」（不对运营开放）——
+        //    这里反向断言它**不再**出现在运营配置页上，否则就是搬漏了、两处都有。
+        // 🔴 断的是**表单**（action + 输入框名），不是 `/admin/algo-params` 这个串 ——
+        //    侧栏导航链接在每一页都有，拿它断言会恒红。第一版就是这么写的，被本条自己抓到。
+        assertThat(html).as("算法参数的表单应该已经搬走了，运营配置页上不该还有")
+                .doesNotContain("/admin/config/feed-rank")
+                .doesNotContain("name=\"throttleFactor\"");
+    }
+
+    /**
+     * 🔴 「算法参数」页的每一块都必须真的在页面上（2026-08-26 独立成页）。
+     *
+     * <p>与上一条同源的教训：Story 16.4 的这一块曾经因为写在 {@code th:fragment} 之外而
+     * <b>整块被静默丢弃</b>，全套测试照样绿。搬家之后同样要钉住。
+     */
+    @Test
+    void algoParamPageRendersItsFormAndChangeLog() throws Exception {
+        String html = mvc.perform(get("/admin/algo-params").with(authentication(superAdminAuth())))
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(html).as("算法参数表单不见了").contains("/admin/algo-params");
+        assertThat(html).as("🔴 限流系数输入框不见了（Story 17.1 挂在这个表单里）")
+                .contains("throttleFactor");
+        assertThat(html).as("🔴 变更记录表不见了 —— 没有 A/B 时它是唯一的锚点")
+                .contains("data-section=\"algo-changelog\"");
+        assertThat(html).as("「不对运营开放」的说明不见了")
+                .contains("data-notice=\"algo-not-for-ops\"");
+        assertThat(html).as("「无 A/B 实验基建」的提醒不见了")
+                .contains("data-notice=\"algo-no-ab\"");
     }
 
     /**
@@ -199,7 +224,9 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
                 // V1.1.6 Story 13.5：排期管理（12-1 的移出提示会跳到这里）。
                 "/admin/content-schedules",
                 // V1.1.6 Story 15.1：内容互动积分榜。
-                "/admin/content-stats"};
+                "/admin/content-stats",
+            // 2026-08-26：算法参数独立成页，须一并纳入逐页双语扫描
+            "/admin/algo-params"};
         for (String p : paths) {
             assertRenders(p, "zh_CN");
             assertRenders(p, "en");

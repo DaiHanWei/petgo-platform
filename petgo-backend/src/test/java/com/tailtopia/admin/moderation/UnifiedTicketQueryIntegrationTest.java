@@ -343,7 +343,17 @@ class UnifiedTicketQueryIntegrationTest extends ApiIntegrationTest {
         jdbc.update("DELETE FROM pet_profiles WHERE id = ?", petId);
 
         // 删档案后：源表仍是 MANUAL_PENDING，但队列里必须落到「无需处置」
-        var rows = query.search(TicketType.ACCOUNT_IDENTITY, null, null, PageRequest.of(0, 500))
+        // ⚠️ 必须带**搜索关键字**让数据库去过滤，不能取前 500 条回来在内存里筛。
+        //    队列排序是「待处理在前，终态沉到后面，组内按最早时间升序」（产品有意如此），
+        //    而这条被删掉对象之后恰好变成**终态**，于是排在整个队列的最末尾 ——
+        //    共享测试库里这一队有四千多行，前 500 条里根本不可能有它。
+        //    2026-08-26 实测：库存量攒够之后这两条必红，而且与被测行为毫无关系。
+        // ⚠️ 这里**不能按宠主 id 搜**：宠物头像那一支的归属人取自 pet_profiles.owner_id，
+        //    档案删掉后 LEFT JOIN 拿到的是 null —— 行还在队列里、状态也正确变成了终态，
+        //    但**没有归属人可搜**。这是正确行为，不是缺陷（下面那条断言正是要验它还在）。
+        //    所以改按「状态」筛：终态那一档虽然也大，但至少不是整个队列。
+        var rows = query.search(TicketType.ACCOUNT_IDENTITY, TicketStatusBucket.NO_ACTION, null,
+                        PageRequest.of(0, 2000))
                 .getContent().stream()
                 .filter(r -> marker.equals(r.preview()))
                 .toList();
@@ -351,7 +361,7 @@ class UnifiedTicketQueryIntegrationTest extends ApiIntegrationTest {
         assertThat(rows.get(0).status()).isEqualTo(TicketStatusBucket.NO_ACTION);
         // 也不该再出现在「待处理」筛选里 —— 那才是运营每天真正在看的那一屏。
         assertThat(query.search(TicketType.ACCOUNT_IDENTITY, TicketStatusBucket.PENDING, null,
-                        PageRequest.of(0, 500)).getContent().stream()
+                        PageRequest.of(0, 2000)).getContent().stream()
                 .filter(r -> marker.equals(r.preview())).toList())
                 .isEmpty();
     }
@@ -368,7 +378,13 @@ class UnifiedTicketQueryIntegrationTest extends ApiIntegrationTest {
 
         jdbc.update("UPDATE users SET deleted_at = now() WHERE id = ?", gone.getId());
 
-        var rows = query.search(TicketType.ACCOUNT_IDENTITY, null, null, PageRequest.of(0, 500))
+        // ⚠️ 必须带**搜索关键字**让数据库去过滤，不能取前 500 条回来在内存里筛。
+        //    队列排序是「待处理在前，终态沉到后面，组内按最早时间升序」（产品有意如此），
+        //    而这条被删掉对象之后恰好变成**终态**，于是排在整个队列的最末尾 ——
+        //    共享测试库里这一队有四千多行，前 500 条里根本不可能有它。
+        //    2026-08-26 实测：库存量攒够之后这两条必红，而且与被测行为毫无关系。
+        var rows = query.search(TicketType.ACCOUNT_IDENTITY, null,
+                        String.valueOf(gone.getId()), PageRequest.of(0, 500))
                 .getContent().stream()
                 .filter(r -> marker.equals(r.preview()))
                 .toList();

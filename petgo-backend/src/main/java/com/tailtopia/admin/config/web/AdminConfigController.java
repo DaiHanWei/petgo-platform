@@ -59,7 +59,6 @@ public class AdminConfigController {
         model.addAttribute("pawcoin", read.pawcoin());
         model.addAttribute("tiers", read.allTiers());
         // V1.1.6 Story 16.4：推荐算法参数（挂既有配置页，🛡 不新建后台模块）
-        model.addAttribute("feedRank", read.feedRank());
         // Story 18.3 · AC2/AC3：白嫖倍数与当月消耗必须**同屏**——
         // 「月度上限 30」和「HD 解锁 60」分开看都合理，放一起才看得出「两个月白嫖一次」。
         model.addAttribute("shareRewardOverview", shareRewardOverview());
@@ -138,31 +137,6 @@ public class AdminConfigController {
         } catch (AppException e) {
             flash.addFlashAttribute("error", e.getMessage());
         }
-        return "redirect:/admin/config";
-    }
-
-    /**
-     * 推荐算法参数（V1.1.6 Story 16.4，FR-95）。
-     *
-     * <p>🛡 复用本页既有的 {@code config.view / config.edit} 权限码 —— <b>不新增码</b>：
-     * 权限码一旦落地即冻结，为一个区块新增两个码会让权限表越长越没人看得懂，
-     * 而它本来就属于"运营配置"这件事。
-     */
-    @PostMapping("/admin/config/feed-rank")
-    @PreAuthorize(EDIT_AUTH)
-    public String updateFeedRank(@AuthenticationPrincipal AdminUserDetails admin,
-            @RequestParam double freshnessWeight, @RequestParam double interactionWeight,
-            @RequestParam double commentWeight, @RequestParam double exposureDecay,
-            @RequestParam double throttleFactor, @RequestParam int seenWindowDays, @RequestParam int windowSize,
-            @RequestParam int attrFunQuota, @RequestParam int attrEduQuota,
-            @RequestParam int attrLifeQuota, @RequestParam int speciesMainQuota,
-            @RequestParam int speciesOtherQuota, @RequestParam int speciesGeneralQuota,
-            RedirectAttributes flash) {
-        write.updateFeedRank(new FeedRankForm(freshnessWeight, interactionWeight, commentWeight,
-                exposureDecay, throttleFactor, seenWindowDays, windowSize, attrFunQuota, attrEduQuota,
-                attrLifeQuota, speciesMainQuota, speciesOtherQuota, speciesGeneralQuota),
-                admin.getAdminAccountId());
-        flash.addFlashAttribute("ok", "推荐算法参数已更新");
         return "redirect:/admin/config";
     }
 
