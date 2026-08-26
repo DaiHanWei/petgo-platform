@@ -4,13 +4,16 @@
 -- 全局层管「一个账号一个月最多免费拿多少」，本层管「这个渠道一次发几枚、一天最多几次」。
 -- 🔴 全局总开关优先于本层 —— 关掉它，本层配成什么都不发。
 --
--- ⚠️ id_card_share_reward 默认 200：全局月上限种子 2000 ⇒ 单月最多 10 次这个渠道的奖励。
---    但本渠道另有「按宠物档案去重、一个档案只发一次」的更强约束（18.2 AC4），
---    所以实际一个用户一辈子最多拿一次 —— 日上限与月上限对本渠道是**冗余的保险**，
+-- 🔴 两项均默认 **0 = 不发币**（2026-08-26 产品决定），与全局层同一姿态：
+--    功能随版本上线，但默认一分不发，等产品把数配上。
+--    ⚠️ 三个数里**任意一个是 0 都不会发**（闸门是串联的），所以配的时候三个都要看。
+--
+--    ⚠️ 本渠道另有「按宠物档案去重、一个档案只发一次」的更强约束（18.2 AC4），
+--    所以即便配上数，一个用户一辈子也最多拿一次 —— 日上限对本渠道是**冗余的保险**，
 --    存在的意义是后续渠道接入时这一层已经就位（18.1 AC1 的原话：额度定义成全局的）。
 ALTER TABLE pawcoin_config
-    ADD COLUMN id_card_share_reward    BIGINT NOT NULL DEFAULT 200,
-    ADD COLUMN id_card_share_daily_cap INT    NOT NULL DEFAULT 3;
+    ADD COLUMN id_card_share_reward    BIGINT NOT NULL DEFAULT 0,
+    ADD COLUMN id_card_share_daily_cap INT    NOT NULL DEFAULT 0;
 
 ALTER TABLE pawcoin_config
     ADD CONSTRAINT ck_pawcoin_id_card_share
