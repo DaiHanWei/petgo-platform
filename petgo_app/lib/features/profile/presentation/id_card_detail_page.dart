@@ -198,11 +198,41 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
                     ),
                   ],
                 ),
+                _shareRewardHint(l10n),
               ],
             ),
           ),
           const SizedBox(height: 12),
         ],
+      ),
+    );
+  }
+
+  /// 分享奖励提示（产品 2026-08-27）。**配好了才出现**。
+  ///
+  /// 🔴 奖励三个数（总开关 / 每次发放 / 日上限）**默认全是 0** —— 功能随版本上线，
+  /// 但默认一分不发，等运营在后台配上才开始发。所以这句话不能常驻：
+  /// 没配就显示「分享可得 PawCoin」，正是 Story 18.2 AC6 反复要避免的
+  /// **「承诺了奖励却不发」**（AC6 当初的做法是干脆一个字都不提）。
+  ///
+  /// ⚠️ 判据**由服务端给**（`/me/id-cards/share-reward` 返回可承诺的枚数，0 = 不提）。
+  /// 客户端不复刻那套判定：它涉及总开关、每次发放数、日上限、以及「这只宠物领过没」，
+  /// 复刻一份必然漂移，而漂移的后果就是空承诺。
+  ///
+  /// ⚠️ 文案写「**首次**分享」不是「每次」：这个奖励是**一只宠物档案只发一次**。
+  /// 写成「每次」在第二次分享时就是假话，而用户不会去读规则，只会觉得被骗了一次。
+  ///
+  /// 🛡 按钮本身仍**不含奖励信息**（AC6 原样保留）—— 这句提示是独立的一行，
+  /// 服务端说 0 就整行不渲染，按钮文案一个字都不用改。
+  Widget _shareRewardHint(AppLocalizations l10n) {
+    final coins = ref.watch(idCardShareRewardProvider).value ?? 0;
+    if (coins <= 0) return const SizedBox.shrink();
+    return Padding(
+      key: const ValueKey('idCardShareRewardHint'),
+      padding: const EdgeInsets.only(top: 8),
+      child: Text(
+        l10n.idCardShareRewardHint(coins),
+        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
       ),
     );
   }

@@ -1537,6 +1537,8 @@
   "cardSaveError": "Gagal menyimpan. Izinkan akses galeri lalu coba lagi.",
   "idCardSaveToGallery": "Simpan ke Galeri",
   "idCardShare": "Bagikan",
+  "idCardShareRewardHint": "Bagikan kartu ini pertama kali dan dapat {coins} PawCoin",
+  "@idCardShareRewardHint": {"placeholders": {"coins": {"type": "int"}}},
   "idCardShareRewardToast": "Berhasil dibagikan · +{coins} PawCoin",
   "@idCardShareRewardToast": {"placeholders": {"coins": {"type": "int"}}},
   "idCardShareError": "Gagal membagikan. Silakan coba lagi.",

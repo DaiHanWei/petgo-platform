@@ -167,6 +167,11 @@ class ApiPaths {
   /// HD 下载当前定价（417 同类：展示价改后端实时下发，与扣费同源 pricing_config）。
   static const String meIdCardHdPricing = '$base/pet-profiles/me/id-cards/pricing';
 
+  /// 分享奖励的**展示口径**（产品 2026-08-27）：可以对外承诺的枚数，0 = 一个字都不要提。
+  /// 与上面那条同一范式 —— 奖励三个数默认全是 0，没配好就不该出现「分享可得 PawCoin」的文案。
+  static const String meIdCardShareReward =
+      '$base/pet-profiles/me/id-cards/share-reward';
+
   /// 单卡快照详情（Story 6.7）。非本人 404。
   static String meIdCard(int cardId) => '$base/pet-profiles/me/id-cards/$cardId';
 

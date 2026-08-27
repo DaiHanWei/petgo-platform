@@ -2243,6 +2243,8 @@
   "cardSaveError": "Could not save. Please allow gallery access and try again.",
   "idCardSaveToGallery": "Save to gallery",
   "idCardShare": "Share",
+  "idCardShareRewardHint": "First share of this card earns {coins} PawCoin",
+  "@idCardShareRewardHint": {"placeholders": {"coins": {"type": "int"}}},
   "idCardShareRewardToast": "Shared · +{coins} PawCoin",
   "@idCardShareRewardToast": {"placeholders": {"coins": {"type": "int"}}},
   "idCardShareError": "Sharing failed. Please try again.",
