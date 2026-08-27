@@ -22,6 +22,10 @@
             <span th:text="' #' + ${batchId}">#0</span></h1>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+        <!-- 尚未保存过的批次不在列表里（bug 20260826）。不说这一句，运营会以为批次丢了。 -->
+        <div class="banner" data-notice="batch-unsaved"
+             th:if="${batch != null and batch.savedAt == null}"
+             th:text="#{admin.batch.unsavedHint}">本批次还没保存过，保存后才会出现在批次列表里。</div>
 
         <!-- ===== 🔴 AC6：这条提示不可省略 =====
              AB-3H 规定存量虚拟账号统一置为 GENERAL。若在未配置定位时就开始批量发布，
@@ -41,7 +45,7 @@
                  性质，不适合批量灌入。服务端另有一遍硬校验（下拉里没有 ≠ 请求里发不上来）。 -->
             <select id="batchDefaultType" name="defaultContentType" class="field-full">
                 <option value="" th:text="#{admin.batch.notSet}">未设置</option>
-                <option th:each="t : ${batchTypes}" th:value="${t}" th:text="${t}"
+                <option th:each="t : ${batchTypes}" th:value="${t}" th:text="#{'admin.contentType.' + ${t}}"
                         th:selected="${batch != null and batch.defaultContentType == t}">类型</option>
             </select>
             <label class="field" for="batchDefaultAt" th:text="#{admin.batch.defaultAt}">默认计划发布时间（WIB，留空=立即发布）</label>
@@ -149,7 +153,8 @@
                     <label class="field" th:text="#{admin.batch.row.type}">内容类型（留空=继承）</label>
                     <select name="contentType" class="field-full">
                         <option value="" th:text="#{admin.batch.inherit}">继承批次默认</option>
-                        <option th:each="t : ${batchTypes}" th:value="${t}" th:text="${t}"
+                        <option th:each="t : ${batchTypes}" th:value="${t}"
+                                th:text="#{'admin.contentType.' + ${t}}"
                                 th:selected="${r.contentType == t}">类型</option>
                     </select>
 

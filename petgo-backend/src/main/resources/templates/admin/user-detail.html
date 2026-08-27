@@ -137,7 +137,7 @@
                 <tbody>
                 <tr th:each="post : ${user.posts()}">
                     <td th:text="${post.id()}">1</td>
-                    <td th:text="${post.type()}">DAILY</td>
+                    <td th:text="#{'admin.contentType.' + ${post.type()}}">Moment</td>
                     <td class="cell-wide" th:text="${post.textPreview()}">…</td>
                     <td>
                         <span class="badge" th:classappend="${post.deleted()} ? 'badge-danger' : 'badge-ok'"

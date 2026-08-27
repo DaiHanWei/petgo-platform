@@ -74,7 +74,7 @@
             <tbody>
             <tr th:each="r : ${rows}">
                 <td th:text="${r.postId}">0</td>
-                <td th:text="${r.type}">DAILY</td>
+                <td th:text="#{'admin.contentType.' + ${r.type}}">Moment</td>
                 <td th:text="${r.authorId} ?: '—'">—</td>
                 <td class="muted" th:text="${r.textPreview}">摘要</td>
                 <td th:text="${@adminTime.wib(r.publishedAt)}">时间</td>
