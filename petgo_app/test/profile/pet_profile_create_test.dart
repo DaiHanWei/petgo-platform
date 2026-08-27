@@ -40,7 +40,13 @@ class _FakeRepo implements ProfileRepository {
         response: Response(requestOptions: req, statusCode: 409),
       );
     }
-    return PetProfile(id: 1, name: name, cardToken: 'T', petType: petType, birthday: birthday);
+    final made =
+        PetProfile(id: 1, name: name, cardToken: 'T', petType: petType, birthday: birthday);
+    // 🔴 建完档，档案**就存在了** —— 之前这里不回写，`getMyProfile()` 建档后仍返回 null，
+    //    于是「建档成功 → 重新拉档案 → 拉到非空」这条真实时序在测试里根本不会发生，
+    //    bug 20260826（庆祝页一闪而过）正是从这个缺口溜过去的。
+    existing = made;
+    return made;
   }
 
   @override
@@ -122,6 +128,32 @@ Future<void> _fillAndSubmit(WidgetTester tester) async {
 }
 
 void main() {
+  /// 🔴 bug 20260826：**建档成功后庆祝页只闪一下，人被送回 Diary**。
+  ///
+  /// 机制：本页 `build` 监听「当前档案」，拿到非空就走「已有档案直达」把人送去 `/profile`（F3）。
+  /// 而 `_submit` 在跳庆祝页**之前**先 `invalidate` 了这个 provider —— 重新拉到的正是刚建好的档案。
+  /// 路由切换有转场动画，本页在那 300ms 内仍在树上、仍会 build ⇒ 直达分支照常触发，
+  /// 把刚 go 过去的庆祝页顶掉。用户看到的就是「闪一下然后到了 Diary」。
+  ///
+  /// ⚠️ 老测试抓不到，是因为假仓库建档后**仍返回「没有档案」** ——
+  /// 那条真实时序在测试里从不发生。已一并修正（见 `_FakeRepo.create`）。
+  testWidgets('bug 20260826: 建档成功 → 停在庆祝页，不被「已有档案直达」顶掉', (tester) async {
+    final repo = _FakeRepo();
+    final container = ProviderContainer(overrides: [
+      profileRepositoryProvider.overrideWithValue(repo),
+      petProfileProvider.overrideWith((ref) => repo.getMyProfile()),
+    ]);
+    addTearDown(container.dispose);
+    await _pumpRouted(tester, container);
+    await _fillAndSubmit(tester);
+
+    expect(find.text('created'), findsOneWidget,
+        reason: '🔴 庆祝页被顶掉了 —— 这正是「闪一下就没了」的现象');
+    expect(find.text('profile'), findsNothing,
+        reason: '人被送去了 Diary，说明「已有档案直达」在建档成功后仍然触发');
+  });
+
+
   testWidgets('AC3: 必填三项（类型/名字/生日）齐全才可提交；缺一即禁用', (tester) async {
     // 表单较长（虚线头像+分段label+多行bio），用高视口确保 ListView 全量构建（提交钮不出 fold）。
     await tester.binding.setSurfaceSize(const Size(440, 1600));
