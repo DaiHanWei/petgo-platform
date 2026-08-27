@@ -383,11 +383,14 @@ public class ContentService {
     public ContentPostResponse publishTrusted(long authorId, ContentPostCreateRequest req,
             String idempotencyKey) {
         // 幂等重放：同 key 已落一条则取回，不重复创建（与 publish 同语义）。
+        // ⚠️ 幂等键写 Redis 不在事务内：调用方（如 Lark 发帖）在外层事务里调本方法后回滚，
+        // 键会残留 24h 指向幽灵 id。此时按「未发布」继续创建，而不是抛 notFound 把调用方卡死到 TTL 过期。
         Optional<Long> existing = idempotency.findResourceId(idempotencyKey);
         if (existing.isPresent()) {
-            return posts.findById(existing.get())
-                    .map(ContentPostResponse::from)
-                    .orElseThrow(() -> AppException.notFound("内容不存在"));
+            Optional<ContentPost> replay = posts.findById(existing.get());
+            if (replay.isPresent()) {
+                return ContentPostResponse.from(replay.get());
+            }
         }
 
         if (req.type() == null) {

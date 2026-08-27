@@ -197,9 +197,10 @@ class LarkContentSyncServiceTest {
                 row("DR001", "text-1", "DR001", "Ops@Example.com", "")));
         when(client.listFolderFiles()).thenReturn(Map.of("DR001-1.jpg", "tok1"));
         when(client.downloadFile("tok1")).thenReturn(new byte[] {1});
-        User named = User.newGoogleUser("g-1", "ops@example.com", "Ops Person", null);
+        User named = User.newVirtual("syn-42", "Ops Person", null, 1L);
         org.springframework.test.util.ReflectionTestUtils.setField(named, "id", 42L);
-        when(users.findByEmailIgnoreCase("Ops@Example.com")).thenReturn(List.of(named));
+        when(users.findByEmailAndRole("Ops@Example.com", com.tailtopia.auth.domain.Role.USER))
+                .thenReturn(Optional.of(named));
         when(users.findById(42L)).thenReturn(Optional.of(named));
 
         service.syncOnce();
@@ -214,7 +215,8 @@ class LarkContentSyncServiceTest {
         when(client.readRows()).thenReturn(List.of(
                 row("DR001", "text-1", "DR001", "nobody@example.com", ""),
                 row("DR002", "text-2", "DR002", "")));
-        when(users.findByEmailIgnoreCase("nobody@example.com")).thenReturn(List.of());
+        when(users.findByEmailAndRole("nobody@example.com", com.tailtopia.auth.domain.Role.USER))
+                .thenReturn(Optional.empty());
         when(client.listFolderFiles()).thenReturn(Map.of("DR002-1.jpg", "tok2"));
         when(client.downloadFile("tok2")).thenReturn(new byte[] {2});
 
@@ -222,8 +224,25 @@ class LarkContentSyncServiceTest {
 
         verify(client).writeCell(eq("G"), eq(2), eq("无效"));
         verify(client).writeCell(eq("I"), eq(2), contains("未匹配到有效用户"));
+        // PII 红线：备注/日志/DB 都不回显邮箱。
+        verify(client, never()).writeCell(anyString(), anyInt(), contains("nobody@example.com"));
         verify(contentService, never()).publishTrusted(Mockito.anyLong(), any(), eq("lark-content:DR001"));
         verify(contentService, times(1)).publishTrusted(eq(7L), any(), eq("lark-content:DR002"));
+    }
+
+    @Test
+    void 指定邮箱是真实用户_拒绝冒充_无效() {
+        when(client.readRows()).thenReturn(List.of(
+                row("DR001", "text-1", "DR001", "real@example.com", "")));
+        User real = User.newGoogleUser("g-1", "real@example.com", "Real Person", null);
+        org.springframework.test.util.ReflectionTestUtils.setField(real, "id", 99L);
+        when(users.findByEmailAndRole("real@example.com", com.tailtopia.auth.domain.Role.USER))
+                .thenReturn(Optional.of(real));
+
+        service.syncOnce();
+
+        verify(client).writeCell(eq("I"), eq(2), contains("不是虚拟账号"));
+        verifyNoInteractions(contentService, oss);
     }
 
     @Test
@@ -233,7 +252,7 @@ class LarkContentSyncServiceTest {
         service.syncOnce();
         verify(client).writeCell(eq("I"), eq(2), contains("不是合法邮箱"));
         verifyNoInteractions(contentService, oss);
-        verify(users, never()).findByEmailIgnoreCase(anyString());
+        verify(users, never()).findByEmailAndRole(anyString(), any());
     }
 
     @Test

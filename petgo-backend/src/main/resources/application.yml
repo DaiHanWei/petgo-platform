@@ -159,6 +159,10 @@ spring:
   task:
     execution:
       mode: force
+    # @Scheduled 默认单线程：Lark 发帖一轮可能阻塞数分钟（多图下载/上传），会饿死支付过期、问诊超时等扫描器。
+    scheduling:
+      pool:
+        size: ${TASK_SCHEDULING_POOL_SIZE:4}
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:petgo}
     username: ${DB_USER:petgo}

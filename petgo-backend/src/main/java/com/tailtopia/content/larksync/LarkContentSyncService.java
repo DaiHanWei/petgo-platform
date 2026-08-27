@@ -1,5 +1,7 @@
 package com.tailtopia.content.larksync;
 
+import com.tailtopia.auth.domain.AccountType;
+import com.tailtopia.auth.domain.Role;
 import com.tailtopia.auth.domain.User;
 import com.tailtopia.auth.domain.UserStatus;
 import com.tailtopia.auth.repository.UserRepository;
@@ -33,8 +35,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 取「上传状态」为空的最靠前一行 → 云盘图片转存 OSS → 以指定/随机作者经
  * {@link ContentService#publishTrusted} 发布（免审，运营=可信主体）→ 回写表格「上传状态/发布账号/备注」。
  *
- * <p><b>作者</b>（2026-08-27 起）：「发布账号(邮箱)」列填了邮箱 → 精确匹配该邮箱的 ACTIVE 用户；
- * 匹配不到 → 该行<b>无效</b>。留空 → 作者池随机虚拟账号（原逻辑）。
+ * <p><b>作者</b>（2026-08-27 起）：「发布账号(邮箱)」列填了邮箱 → 精确匹配该邮箱的 USER 角色、
+ * ACTIVE、<b>虚拟账号</b>（{@code account_type=VIRTUAL}）；匹配不到或是真实用户 → 该行<b>无效</b>
+ * （运营表格不得冒充任何真实用户免审发帖）。留空 → 作者池随机虚拟账号（原逻辑）。
  *
  * <p><b>图片</b>（2026-08-27 起）：「图片编号」列填<b>前缀</b>（如 {@code DR260823001}，不得含 {@code -}），
  * 云盘按 {@code {前缀}-{整数}.jpg} 匹配全部文件、按整数升序上传；{@code -} 后非纯整数
@@ -285,7 +288,7 @@ public class LarkContentSyncService {
         }
         String email = row.email();
         if (!email.isBlank() && (email.length() > 320 || !EMAIL_PATTERN.matcher(email).matches())) {
-            return "发布账号不是合法邮箱：" + brief(email);
+            return "发布账号不是合法邮箱"; // 不回显邮箱：reason 会进日志与 DB（PII 红线）
         }
         return null;
     }
@@ -310,14 +313,20 @@ public class LarkContentSyncService {
         throw new AuthorPoolExhausted();
     }
 
-    /** 「发布账号(邮箱)」→ ACTIVE 用户 id；匹配不到 → 行级无效。 */
+    /**
+     * 「发布账号(邮箱)」→ 用户 id。只接受 USER 角色（与全库其他邮箱查询同口径，排除 ADMIN shim 行）、
+     * ACTIVE、且 <b>account_type=VIRTUAL</b>：运营表格只能指定虚拟号，绝不能以真实用户身份免审发帖。
+     * 匹配不到 → 行级无效。reason 不带邮箱（会进日志与 DB）。
+     */
     private long resolveAuthorByEmail(String email) {
-        for (User u : users.findByEmailIgnoreCase(email)) {
-            if (u.getStatus() == UserStatus.ACTIVE) {
-                return u.getId();
-            }
+        Optional<User> u = users.findByEmailAndRole(email, Role.USER);
+        if (u.isEmpty() || u.get().getStatus() != UserStatus.ACTIVE) {
+            throw new IllegalStateException("发布账号未匹配到有效用户");
         }
-        throw new IllegalStateException("发布账号未匹配到有效用户：" + brief(email));
+        if (u.get().getAccountType() != AccountType.VIRTUAL) {
+            throw new IllegalStateException("发布账号不是虚拟账号（不允许以真实用户身份发布）");
+        }
+        return u.get().getId();
     }
 
     /** 行级失败：DB 记 FAILED（绝不降级已 PUBLISHED 的记录）+ 回写「无效」+ 备注原因。 */
