@@ -20,6 +20,10 @@ abstract class ProfileRepository {
     /// 设为必填会挡住既有建档转化，而建档转化在漏斗上比推荐精度重要得多。
     double? weightKg,
     String? neuterStatus,
+
+    /// 性别（bug 20260827）。**选填** —— 与体重同一理由：建档转化比字段完整度重要。
+    /// 此前只有编辑接口能填，于是身份证卡上「性别」永远是空。
+    String? sex,
     String? idempotencyKey,
   });
 
@@ -62,6 +66,7 @@ class DioProfileRepository implements ProfileRepository {
     String? intro,
     double? weightKg,
     String? neuterStatus,
+    String? sex,
     String? idempotencyKey,
   }) async {
     final data = <String, dynamic>{
@@ -75,6 +80,7 @@ class DioProfileRepository implements ProfileRepository {
     // Story 6.1：体重【可跳过】—— 建档流程不设必填，设必填会挡住建档转化
     if (weightKg != null) data['weightKg'] = weightKg;
     if (neuterStatus != null) data['neuterStatus'] = neuterStatus;
+    if (sex != null) data['sex'] = sex;
     final resp = await dio.post<Map<String, dynamic>>(
       ApiPaths.petProfiles,
       data: data,

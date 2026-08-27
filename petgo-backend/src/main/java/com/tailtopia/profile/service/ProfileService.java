@@ -78,6 +78,11 @@ public class ProfileService {
         if (req.neuterStatus() != null && !req.neuterStatus().isBlank()) {
             profile.setNeuterStatus(parseNeuterStatus(req.neuterStatus()));
         }
+        // 性别（bug 20260827）：此前只有编辑接口能填 ⇒ 身份证卡上「性别」永远是空。
+        // ⚠️ 取值已由 DTO 的 @Pattern 挡在 422，这里不再重复校验（重复一份迟早与那边走散）。
+        if (req.sex() != null && !req.sex().isBlank()) {
+            profile.setSex(PetSex.valueOf(req.sex()));
+        }
         try {
             PetProfile saved = profiles.save(profile);
             // 建档按 pet_type 自动分配里程碑 roster（Story 8.1，同模块直调，非事件订阅；幂等）。
