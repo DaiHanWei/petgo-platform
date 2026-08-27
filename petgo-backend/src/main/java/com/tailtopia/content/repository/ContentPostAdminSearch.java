@@ -18,9 +18,11 @@ public interface ContentPostAdminSearch {
      * @param to       创建时间上界（不含，null 忽略）
      * @param deleted  true=仅已下架 / false=仅上线中 / null=全部
      * @param keyword  正文关键词（ILIKE 子串，大小写不敏感；null/空忽略）
+     * @param sort     排序：{@code comments_desc} / {@code comments_asc}（评论数，同数按创建时间倒序）；
+     *                 其余/null = 创建时间倒序
      */
     List<AdminContentRow> adminSearch(ContentType type, Long authorId, Instant from, Instant to,
-            Boolean deleted, String keyword, int limit, int offset);
+            Boolean deleted, String keyword, String sort, int limit, int offset);
 
     /** 按 id 取单条后台行投影（HTMX 局部刷新用）；不存在返回 {@code null}。 */
     AdminContentRow adminRowById(long postId);

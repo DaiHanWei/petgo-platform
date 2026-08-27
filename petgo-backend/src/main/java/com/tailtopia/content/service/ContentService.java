@@ -158,8 +158,8 @@ public class ContentService {
     @Transactional(readOnly = true)
     public List<com.tailtopia.content.dto.AdminContentRow> adminSearch(ContentType type, Long authorId,
             java.time.Instant from, java.time.Instant to, Boolean deleted, String keyword,
-            int limit, int offset) {
-        return posts.adminSearch(type, authorId, from, to, deleted, keyword, limit, offset);
+            String sort, int limit, int offset) {
+        return posts.adminSearch(type, authorId, from, to, deleted, keyword, sort, limit, offset);
     }
 
     /** 后台按 id 取单条内容行（HTMX 局部刷新用）；不存在返回 null。 */

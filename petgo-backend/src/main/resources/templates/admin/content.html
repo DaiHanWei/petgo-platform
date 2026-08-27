@@ -54,8 +54,19 @@
                 <input type="search" name="q" th:value="${q}" th:placeholder="#{admin.content.searchPlaceholder}"
                        style="width:220px"/>
             </label>
+            <input type="hidden" name="sort" id="content-sort" th:value="${sort}"/>
             <button type="submit" class="btn btn-primary" th:text="#{admin.content.search}">查询</button>
         </form>
+        <!-- 评论数表头排序：每次点击在 高→低 / 低→高 间切换（写入隐藏 sort 后提交筛选表单，HTMX 只刷行）。 -->
+        <script>
+            function toggleCommentSort(th) {
+                var input = document.getElementById('content-sort');
+                var next = input.value === 'comments_desc' ? 'comments_asc' : 'comments_desc';
+                input.value = next;
+                th.querySelector('.sort-arrow').textContent = next === 'comments_desc' ? '▼' : '▲';
+                input.form.requestSubmit();
+            }
+        </script>
 
         <table>
             <thead>
@@ -65,6 +76,12 @@
                 <th th:text="#{admin.content.col.author}">作者</th>
                 <th th:text="#{admin.content.col.preview}">正文预览</th>
                 <th th:text="#{admin.content.col.images}">图片</th>
+                <th style="cursor:pointer;user-select:none" onclick="toggleCommentSort(this)"
+                    th:title="#{admin.content.col.commentsSortHint}">
+                    <span th:text="#{admin.content.col.comments}">评论数</span>
+                    <span class="sort-arrow"
+                          th:text="${sort == 'comments_desc'} ? '▼' : (${sort == 'comments_asc'} ? '▲' : '⇅')">⇅</span>
+                </th>
                 <th th:text="#{admin.content.col.created}">创建时间</th>
                 <th th:text="#{admin.content.col.status}">状态</th>
                 <th th:text="#{admin.content.col.action}">操作</th>
@@ -75,7 +92,7 @@
                 <tr th:replace="~{admin/content :: row}"></tr>
             </th:block>
             <tr th:if="${#lists.isEmpty(items)}">
-                <td colspan="8" class="empty" th:text="#{admin.content.empty}">无匹配内容。</td>
+                <td colspan="9" class="empty" th:text="#{admin.content.empty}">无匹配内容。</td>
             </tr>
             </tbody>
         </table>
@@ -103,6 +120,7 @@
                 <img th:each="img : ${c.imageUrls()}" th:src="${img}" alt="" loading="lazy" data-lightbox
                      style="width:48px;height:48px;object-fit:cover;border-radius:4px;margin:2px;vertical-align:middle;cursor:zoom-in"/>
             </td>
+            <td th:text="${c.commentCount()}">0</td>
             <td th:text="${@adminTime.wib(c.createdAt())}">-</td>
             <td>
                 <span class="badge" th:classappend="${c.deleted()} ? 'badge-danger' : 'badge-ok'"
