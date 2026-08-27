@@ -72,7 +72,11 @@ class _PhoneEditSheetState extends ConsumerState<PhoneEditSheet> {
     final phone = ref.read(authControllerProvider).profile?.phone;
     _hadPhoneBefore = phone != null && phone.isNotEmpty;
     // 编辑时展示**完整号码**（设置页列表那处才脱敏）。
-    _controller = TextEditingController(text: phone ?? '');
+    // ⚠️ 剥掉 `+62`（bug 20260826 对设计稿）：国家码已经由左侧前缀芯片常驻展示，
+    //    再留在输入框里就成了「+62 +62」。后端归一后存的是 `+62…` 形态，故必剥。
+    //    只剥这一种前缀 —— 后端 IndonesianPhone 归一后不会有 `62…` / `0…` 落库。
+    final national = (phone ?? '').startsWith('+62') ? phone!.substring(3) : (phone ?? '');
+    _controller = TextEditingController(text: national);
   }
 
   @override
@@ -143,41 +147,91 @@ class _PhoneEditSheetState extends ConsumerState<PhoneEditSheet> {
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
-          Text(l10n.phoneEditTitle,
+          Center(
+            child: Text(l10n.phoneEditTitle,
+                style: const TextStyle(
+                    fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.ink)),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          // 字段标签（设计稿：全大写、字距略开、弱化色）。
+          Text(l10n.phoneEditFieldLabel,
               style: const TextStyle(
-                  fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.ink)),
-          const SizedBox(height: AppSpacing.md),
-          TextField(
-            key: const ValueKey('phoneInput'),
-            controller: _controller,
-            keyboardType: TextInputType.phone,
-            autofocus: true,
-            decoration: InputDecoration(
-              hintText: l10n.phoneEditHint,
-              border: const OutlineInputBorder(),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.8,
+                color: AppColors.muted,
+              )),
+          const SizedBox(height: AppSpacing.sm),
+          // 输入行：🇮🇩 +62 常驻前缀 | 分隔线 | 只填国内部分。
+          //
+          // 🔴 前缀不是装饰：后端 `IndonesianPhone` 接受 `812…` / `0812…` / `+62812…` 三种写法
+          //    并统一归一成 `+62…`，所以「前缀常驻 + 只填 812…」这条路是通的，
+          //    用户少打三个字符，也不会再有人纠结要不要带 0。
+          //    ⚠️ 改前缀文案前先看那个类 —— 它才是真正决定什么能存进去的地方。
+          DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.mint, width: 1.6),
+            ),
+            child: Row(
+              children: [
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 14),
+                  child: Text('🇮🇩 +62',
+                      style: TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                ),
+                Container(width: 1, height: 26, color: AppColors.line2),
+                Expanded(
+                  child: TextField(
+                    key: const ValueKey('phoneInput'),
+                    controller: _controller,
+                    keyboardType: TextInputType.phone,
+                    autofocus: true,
+                    style: const TextStyle(fontSize: 16, color: AppColors.ink),
+                    decoration: InputDecoration(
+                      hintText: l10n.phoneEditHint,
+                      hintStyle: const TextStyle(color: AppColors.muted),
+                      border: InputBorder.none,
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
-          Row(
-            children: [
-              Expanded(
-                child: TextButton(
-                  key: const ValueKey('phoneCancel'),
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: Text(l10n.commonCancel),
-                ),
+          // 设计稿是**上下两个通栏按钮**，不是左右并排：主操作占满一行更好点，
+          // 「取消」降级为描边按钮放在下面（并排时两个等宽按钮谁是主操作看不出来）。
+          SizedBox(
+            height: 54,
+            child: FilledButton(
+              key: const ValueKey('phoneSave'),
+              // ⚠️ 输入框为空时**照样可点** —— 那是清空保存（撤回），不是无效操作。
+              onPressed: _saving ? null : _save,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.mint,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: FilledButton(
-                  key: const ValueKey('phoneSave'),
-                  // ⚠️ 输入框为空时**照样可点** —— 那是清空保存（撤回），不是无效操作。
-                  onPressed: _saving ? null : _save,
-                  style: FilledButton.styleFrom(backgroundColor: AppColors.mint),
-                  child: Text(l10n.commonSave),
-                ),
+              child: Text(l10n.commonSave,
+                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          SizedBox(
+            height: 54,
+            child: OutlinedButton(
+              key: const ValueKey('phoneCancel'),
+              onPressed: () => Navigator.of(context).pop(false),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: AppColors.line2),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
-            ],
+              child: Text(l10n.commonCancel,
+                  style: const TextStyle(
+                      fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.ink)),
+            ),
           ),
         ],
       ),
