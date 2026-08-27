@@ -31,6 +31,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
     /** 概览看板（bug 20260731-442）：真实且未注销的用户数（剔除虚拟/种子账号与已注销）。 */
     long countByAccountTypeAndDeletedAtIsNull(AccountType accountType);
 
+    /** Lark 定时发帖：按「发布账号(邮箱)」定位指定作者（同邮箱可能多角色，调用方再筛 ACTIVE）。 */
+    java.util.List<User> findByEmailIgnoreCase(String email);
+
     /** 内容审核 story 4：违规重置默认昵称唯一性查重（DefaultNameGenerator）。 */
     boolean existsByNickname(String nickname);
 }
