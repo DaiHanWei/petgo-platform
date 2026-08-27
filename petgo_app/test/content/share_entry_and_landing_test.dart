@@ -9,9 +9,12 @@ import 'package:tailtopia/features/content/data/detail_repository.dart';
 import 'package:tailtopia/features/content/data/shared_post_repository.dart';
 import 'package:tailtopia/features/content/domain/comment.dart';
 import 'package:tailtopia/features/content/domain/content_detail.dart';
+import 'package:tailtopia/features/content/domain/feed_item.dart';
 import 'package:tailtopia/features/content/domain/shared_post.dart';
 import 'package:tailtopia/features/content/presentation/content_detail_page.dart';
+import 'package:tailtopia/features/content/presentation/share_card/open_share_card.dart';
 import 'package:tailtopia/features/content/presentation/share_card/share_card_preview_page.dart';
+import 'package:tailtopia/shared/widgets/masonry_card.dart';
 import 'package:tailtopia/features/content/presentation/shared_post_page.dart';
 import 'package:tailtopia/features/profile/domain/card_link.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
@@ -93,6 +96,75 @@ void main() {
       expect(find.byType(ShareCardPreviewPage), findsOneWidget);
       // 两种尺寸都能选（9-1 的双尺寸能力在这里露出来）。
       expect(find.byKey(const ValueKey('shareCardRatioToggle')), findsOneWidget);
+    });
+  });
+
+  /// bug 20260826 · **信息流里也要有分享入口**。
+  ///
+  /// 此前分享只在详情页底部互动栏（2026-08-14 决策 X-22 把它从顶栏挪下来的那个位置）。
+  /// 而信息流才是内容被看到的地方 —— 要分享得先点进详情，白白掉一层漏斗。
+  group('bug 20260826 · 信息流分享入口', () {
+    FeedItem item() => FeedItem(
+          id: 5,
+          authorId: 9,
+          authorDeleted: false,
+          type: 'DAILY',
+          authorNickname: 'Sari',
+          body: 'halo',
+          createdAt: DateTime.utc(2026, 8, 26),
+        );
+
+    Future<void> pumpCard(WidgetTester tester, _FakeDetailRepo repo,
+        {required bool withShare}) async {
+      tester.view.physicalSize = const Size(1000, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      final container = ProviderContainer(overrides: [
+        detailRepositoryProvider.overrideWithValue(repo),
+      ]);
+      addTearDown(container.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Consumer(builder: (context, ref, _) => MasonryCard(
+              item: item(),
+              deletedUserLabel: 'Pengguna dihapus',
+              onShare: withShare
+                  ? () => ShareCardEntry.openForPostId(context, ref, item().id)
+                  : null,
+            )),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('信息流卡片上有分享图标', (tester) async {
+      await pumpCard(tester, _FakeDetailRepo(detail: detail()), withShare: true);
+      expect(find.byKey(const ValueKey('feedCardShare_5')), findsOneWidget);
+    });
+
+    /// 🛡 `MasonryCard` 是共享件：没有分享语义的调用方不该凭空多一个按钮。
+    testWidgets('未传 onShare 时不渲染该图标', (tester) async {
+      await pumpCard(tester, _FakeDetailRepo(detail: detail()), withShare: false);
+      expect(find.byKey(const ValueKey('feedCardShare_5')), findsNothing);
+    });
+
+    /// 🔴 流里点分享 **先取详情再出卡**。
+    /// 直接拿流里那份轻量数据拼卡，得到的会与从详情页分享出去的**不是同一张**
+    /// （正文是摘要、首图是裁过的），而没有任何东西会提示这件事。
+    testWidgets('点分享 → 取详情 → 取链接 → 进预览页', (tester) async {
+      final repo = _FakeDetailRepo(detail: detail());
+      await pumpCard(tester, repo, withShare: true);
+      await tester.tap(find.byKey(const ValueKey('feedCardShare_5')));
+      await tester.pumpAndSettle();
+
+      expect(repo.detailCalls, 1, reason: '没取详情 ⇒ 卡是拿流里的摘要拼的');
+      expect(repo.shareUrlCalls, 1);
+      expect(find.byType(ShareCardPreviewPage), findsOneWidget);
     });
   });
 
@@ -248,6 +320,7 @@ class _FakeDetailRepo implements DetailRepository {
 
   final ContentDetail detail;
   int shareUrlCalls = 0;
+  int detailCalls = 0;
 
   @override
   Future<String> getShareUrl(int postId) async {
@@ -256,7 +329,10 @@ class _FakeDetailRepo implements DetailRepository {
   }
 
   @override
-  Future<ContentDetail> getDetail(int id) async => detail;
+  Future<ContentDetail> getDetail(int id) async {
+    detailCalls++;
+    return detail;
+  }
   @override
   Future<CommentPage> getComments(int postId, {String? cursor}) async =>
       const CommentPage(items: [], nextCursor: null, hasMore: false);

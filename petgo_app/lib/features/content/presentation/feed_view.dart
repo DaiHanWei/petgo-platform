@@ -10,6 +10,7 @@ import '../domain/feed_item.dart';
 import '../domain/pinned_slot.dart';
 import 'pinned_badge.dart';
 import 'promo_pinned_card.dart';
+import 'share_card/open_share_card.dart';
 import '../domain/home_refresh_provider.dart';
 
 /// Feed 单列视图（原型 feed.html：单列全宽卡片，非 2 列瀑布）。
@@ -250,6 +251,7 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
                 key: const ValueKey('feedPinnedCard'),
                 item: pinnedItem,
                 deletedUserLabel: widget.deletedUserLabel,
+                onShare: () => ShareCardEntry.openForPostId(context, ref, pinnedItem.id),
                 feedTab: widget.feedTab,
                 rankMode: widget.rankMode,
                 maxImageHeight: maxImageHeight,
@@ -294,6 +296,9 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
               child: MasonryCard(
                 item: widget.items[i],
                 deletedUserLabel: widget.deletedUserLabel,
+                // 信息流分享入口（bug 20260826）。走 postId 版：卡面要的正文全文与首图原图
+                // 在流里是裁过的摘要，直接拿它拼卡会与详情页分享出去的不是同一张。
+                onShare: () => ShareCardEntry.openForPostId(context, ref, widget.items[i].id),
                 feedTab: widget.feedTab,
                 rankMode: widget.rankMode,
                 onTap: widget.onTapItem == null ? null : () => widget.onTapItem!(widget.items[i]),
