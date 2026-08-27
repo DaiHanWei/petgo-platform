@@ -29,7 +29,6 @@ import 'widgets/diary_header.dart';
 import 'widgets/share_fab.dart';
 import 'widgets/timeline_item_tile.dart';
 import '../../shop/presentation/shop_ui_variant.dart';
-import '../../shop/presentation/widgets/repurchase_zones.dart';
 import '../../shop/presentation/widgets/repurchase_zones_v2.dart';
 
 /// Diary 页（`/profile`）的四种用户状态（V1.1.2 · AD-15）。
@@ -371,17 +370,23 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
             onOpenHealth: () => context.push('/profile/health'),
             onOpenMilestones: () => context.push('/profile/milestones'),
           ),
-          // Story 6.5：档案推荐区的第二个展示位（另一处是 Toko 首页区域②）。
-          // 🔴 同一个组件、同一套规则 —— 两处各写一份判定迟早会漂移，
-          //    而「同一只宠物在两个页面看到不同推荐」是最难解释的一类 bug。
           // 🔴 复购触发卡（V1.4.0 设计稿屏 1）：**只在 v2 版式下渲染**。
           //    它是「记录的出口」，所以长在 Diary 里而不是 Toko 里。
           //    v1 版式没有这张卡 —— 保持 v1 一行不改。
           const ShopUiSwitch(v1: _nothing, v2: _diaryTriggerCard),
-          ShopUiSwitch(
-            v1: (_) => const ProfileRecoZone(zone: 'diary_profile_reco'),
-            v2: (_) => const ProfileRecoZoneV2(zone: 'diary_profile_reco'),
-          ),
+          // 🔴 **档案推荐区已从 Diary 撤下**（产品 2026-08-27）。
+          //
+          // Story 6.5 原本给它两个展示位：Toko 首页区域② 与本页。实机上本页那一份的问题是
+          // 大多数用户处在**降级态**（没有体重/喂养记录 ⇒ 推不出个性化结果），
+          // 于是 Diary 中段被一屏按年龄段的通用商品占掉 —— 成长记录页被商业内容打断，
+          // 而那一屏并不能提供"推荐"的价值。产品决定商业内容全部收到 Toko。
+          //
+          // ⚠️ **只撤展示位，组件与规则一行不动** —— `ProfileRecoZone(V2)` 在 Toko 侧照常使用。
+          //    要撤的是"在 Diary 露出"，不是这套推荐能力。
+          // ⚠️ 连带影响：埋点 zone 取值 `diary_profile_reco` 自此**不再上报**
+          //    （另一个位 `toko_profile_reco` 不受影响）。看板上这个位的曲线会归零，
+          //    那是预期的，不是埋点坏了。
+          // ⚠️ 「管理推荐」的关闭入口长在该组件内部，随组件留在 Toko —— 用户仍关得掉。
           _viewToggleRow(l10n),
           const SizedBox(height: 10),
           // 时间线**始终挂载**、只在切到日历时 offstage（code-review 2026-08-04）：
