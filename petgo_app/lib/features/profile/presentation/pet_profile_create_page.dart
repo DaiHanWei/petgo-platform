@@ -104,6 +104,7 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
             birthday: birthday,
             avatarUrl: _avatarUrl,
             breed: _emptyToNull(_breedController.text),
+            sex: _sex,
             intro: _emptyToNull(_introController.text),
             idempotencyKey: 'create-${DateTime.now().microsecondsSinceEpoch}',
           );
@@ -186,6 +187,9 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
   /// ⚠️ 「已有档案直达」本身要留着 —— 它守的是另一件事：用户绕开入口直接敲
   /// `/profile/create` 而档案已存在（F3）。两者的区别只有「这次档案是不是我刚建的」，
   /// 所以只能靠这个标志区分，不能改直达分支的判据。
+  /// 性别（bug 20260827，选填）。取值 MALE / FEMALE，与编辑页一致。
+  String? _sex;
+
   bool _leavingAfterCreate = false;
 
   void _markProfileCreated() {
@@ -311,6 +315,17 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
               onChanged: () => setState(() {}),
             ),
             const SizedBox(height: 16),
+            // 🔴 性别（bug 20260827）：此前**只有编辑页有这个字段**，建档页没有 ——
+            //    于是新用户建完档，身份证卡上「Jenis Kelamin」永远是「-」，
+            //    除非他自己再去编辑一次。而那张卡是身份证功能的门面。
+            // ⚠️ 选填（标签不带 *）：与体重同一理由 —— 建档转化在漏斗上比字段完整度重要，
+            //    多一个必填项就多一处流失。
+            // 🛡 选择器与编辑页**同一形态、同一取值**（MALE / FEMALE）：
+            //    两边长得不一样会让用户以为是两个不同的东西。
+            _sectionLabel(l10n.petProfileSexLabel),
+            const SizedBox(height: 6),
+            _sexField(l10n),
+            const SizedBox(height: 16),
             // TANGGAL LAHIR *
             _sectionLabel(l10n.petProfileBirthdayLabel, required: true),
             const SizedBox(height: 6),
@@ -427,6 +442,64 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
         ],
       ),
     );
+  }
+
+  /// 性别选择字段（与编辑页同一形态）。未选时显示占位文案。
+  Widget _sexField(AppLocalizations l10n) {
+    final label = switch (_sex) {
+      'MALE' => l10n.petProfileSexMale,
+      'FEMALE' => l10n.petProfileSexFemale,
+      _ => l10n.petProfileSexPick,
+    };
+    return InkWell(
+      key: const ValueKey('petProfileSexTile'),
+      onTap: _pickSex,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.line, width: 1.5),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 14, color: _sex == null ? AppColors.muted : AppColors.ink)),
+            ),
+            const Icon(Icons.keyboard_arrow_down, size: 18, color: AppColors.muted),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickSex() async {
+    final l10n = AppLocalizations.of(context);
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              key: const ValueKey('petSexMaleOption'),
+              title: Text(l10n.petProfileSexMale),
+              onTap: () => Navigator.of(ctx).pop('MALE'),
+            ),
+            ListTile(
+              key: const ValueKey('petSexFemaleOption'),
+              title: Text(l10n.petProfileSexFemale),
+              onTap: () => Navigator.of(ctx).pop('FEMALE'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (picked != null && mounted) setState(() => _sex = picked);
   }
 
   Widget _sectionLabel(String text, {bool required = false}) => RichText(

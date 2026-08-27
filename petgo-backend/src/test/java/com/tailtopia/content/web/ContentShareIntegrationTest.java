@@ -79,17 +79,51 @@ class ContentShareIntegrationTest extends ApiIntegrationTest {
         assertThat(sharesOf(p)).hasSize(1);
     }
 
+    /**
+     * 🔴 **非作者可以分享别人的「公开」内容**（产品 2026-08-27 放开）。
+     *
+     * <p>起因：信息流里加了分享入口，而流里绝大多数是别人的帖 ——
+     * 原先「只能分享自己的」会让那个入口在多数卡片上直接 404 报错（实机踩到）。
+     *
+     * <p>🛡 这不是把可见性护栏改松：能被非作者分享的只有**本来就公开**的内容，
+     * 分享链接暴露的东西一点没多（那条帖在信息流里人人可见）。
+     */
     @Test
-    void nonAuthorCannotCreateALinkForSomeoneElsesPost() throws Exception {
+    void nonAuthorCanCreateALinkForSomeoneElsesPublicPost() throws Exception {
         User author = newUser();
         User other = newUser();
-        ContentPost p = savePost(author.getId(), "别人的内容");
+        ContentPost p = savePost(author.getId(), "别人的公开内容");
 
-        // 404 而不是 403：403 会变成"这条内容存在"的探测器。
+        mvc.perform(post("/api/v1/content-posts/" + p.getId() + "/share-link")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(other.getId())))
+                .andExpect(status().isCreated());
+        assertThat(sharesOf(p)).hasSize(1);
+    }
+
+    /**
+     * 🔴 **私密内容仍然只有作者本人能分享。**
+     *
+     * <p>这一条是上面那次放开的边界，不能一起放：私密内容被分享后访客可见（AD-15 Rule 6），
+     * 而那条规则的全部依据是「**作者自己**按下了分享键 = 授权」——
+     * 换成别人按下就不成立了，等于让第三方把某人的私密日记公开出去。
+     *
+     * <p>⚠️ 404 而不是 403：403 会变成「这个 id 是私密内容」的探测器
+     * （与本类其它失效分支同一口径）。
+     */
+    @Test
+    void nonAuthorStillCannotShareSomeoneElsesPrivatePost() throws Exception {
+        User author = newUser();
+        User other = newUser();
+        ContentPost p = savePost(author.getId(), "别人的私密日记");
+        p.setVisibility(ContentVisibility.PRIVATE);
+        posts.save(p);
+
         mvc.perform(post("/api/v1/content-posts/" + p.getId() + "/share-link")
                         .header(HttpHeaders.AUTHORIZATION, userBearer(other.getId())))
                 .andExpect(status().isNotFound());
-        assertThat(sharesOf(p)).isEmpty();
+        assertThat(sharesOf(p))
+                .as("🔴 第三方把别人的私密日记公开出去了 —— Rule 6 的授权前提被绕过")
+                .isEmpty();
     }
 
     @Test

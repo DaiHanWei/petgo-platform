@@ -18,6 +18,7 @@ class _FakeRepo implements ProfileRepository {
   bool createCalled = false;
   bool failExists = false; // true → 模拟并发 409（档案已存在）
   String? lastPetType;
+  String? lastSex;
 
   @override
   Future<PetProfile> create({
@@ -29,10 +30,12 @@ class _FakeRepo implements ProfileRepository {
     String? intro,
     double? weightKg,
     String? neuterStatus,
+    String? sex,
     String? idempotencyKey,
   }) async {
     createCalled = true;
     lastPetType = petType;
+    lastSex = sex;
     if (failExists) {
       final req = RequestOptions(path: '/pet-profiles');
       throw DioException(
@@ -128,6 +131,55 @@ Future<void> _fillAndSubmit(WidgetTester tester) async {
 }
 
 void main() {
+  /// 🔴 **建档页必须能填性别**（bug 20260827）。
+  ///
+  /// 此前只有**编辑**页有这个字段，建档页没有 —— 于是新用户建完档，
+  /// 身份证卡上「Jenis Kelamin」永远是「-」，除非他自己再去编辑一次。
+  /// 而那张卡是身份证功能的门面，一个空字段就让整张卡看着没填完。
+  ///
+  /// ⚠️ 选填：与体重同一理由 —— 建档转化在漏斗上比字段完整度重要，多一个必填项就多一处流失。
+  /// 所以这里同时钉住「不选也能提交」。
+  group('bug 20260827 · 建档页的性别字段', () {
+    testWidgets('有性别选择入口，选了会随建档一起提交', (tester) async {
+      // ⚠️ 用带路由的挂载：提交成功后页面会 `context.go(...)`，
+      //    不带 router 的 _wrap 会在那一步抛 GoError（第一版就是这么红的）。
+      final repo = _FakeRepo();
+      final container = ProviderContainer(overrides: [
+        profileRepositoryProvider.overrideWithValue(repo),
+        petProfileProvider.overrideWith((ref) => repo.getMyProfile()),
+      ]);
+      addTearDown(container.dispose);
+      await _pumpRouted(tester, container);
+
+      expect(find.byKey(const ValueKey('petProfileSexTile')), findsOneWidget,
+          reason: '🔴 建档页没有性别入口 ⇒ 身份证卡上那一栏永远是空的');
+
+      await tester.tap(find.byKey(const ValueKey('petProfileSexTile')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('petSexFemaleOption')));
+      await tester.pumpAndSettle();
+
+      await _fillAndSubmit(tester);
+      expect(repo.lastSex, 'FEMALE', reason: '选了性别却没发给后端');
+    });
+
+    /// 🛡 不选也必须能建档 —— 它是选填项。
+    testWidgets('不选性别照样能提交（选填，不许挡住建档转化）', (tester) async {
+      final repo = _FakeRepo();
+      final container = ProviderContainer(overrides: [
+        profileRepositoryProvider.overrideWithValue(repo),
+        petProfileProvider.overrideWith((ref) => repo.getMyProfile()),
+      ]);
+      addTearDown(container.dispose);
+      await _pumpRouted(tester, container);
+      await _fillAndSubmit(tester);
+
+      expect(repo.createCalled, isTrue);
+      expect(repo.lastSex, isNull);
+    });
+  });
+
+
   /// 🔴 bug 20260826：**建档成功后庆祝页只闪一下，人被送回 Diary**。
   ///
   /// 机制：本页 `build` 监听「当前档案」，拿到非空就走「已有档案直达」把人送去 `/profile`（F3）。
@@ -196,6 +248,11 @@ void main() {
   });
 
   testWidgets('名字 maxLength=20、介绍 maxLength=30（实时计数约束）', (tester) async {
+    // ⚠️ 视口要够高：表单是 ListView（懒构建），默认 800×600 下「介绍」框落在屏外
+    //    ⇒ 根本没被构建，findByKey 直接 No element。
+    //    2026-08-27 加了性别字段后表单又长了一截，这条因此红过一次。
+    await tester.binding.setSurfaceSize(const Size(440, 2000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(_wrap(_FakeRepo()));
     await tester.pumpAndSettle();
     final field = tester.widget<TextField>(find.byKey(const ValueKey('petProfileNameField')));

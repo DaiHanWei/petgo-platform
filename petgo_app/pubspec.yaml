@@ -16,7 +16,12 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.1.6+11
+# 版本号（产品 2026-08-27 定为 1.2.0）。
+# ⚠️ build 号同步 11 → 12：安卓要求 versionCode **严格递增**才装得上更新，
+#    否则测试同学在已装 1.1.6-stag+11 的机器上会遇到「应用未安装」。
+# 🛡 这里**不写 `-stag` 后缀**（那是 scripts/build-stag-apk.sh 构建时注入的），
+#    写进来会让该脚本直接拒绝出包，且跨分支合并多一处冲突面。
+version: 1.2.0+12
 
 environment:
   sdk: ^3.12.1

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/features/shop/presentation/widgets/repurchase_zones.dart';
+import 'package:tailtopia/features/shop/presentation/widgets/repurchase_zones_v2.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
@@ -54,6 +56,29 @@ Widget _wrap({required AuthState auth, PetProfile? profile, TimelinePage? page, 
 }
 
 void main() {
+  /// 🔴 **档案推荐区不得出现在 Diary**（产品 2026-08-27）。
+  ///
+  /// Story 6.5 原本给它两个展示位：Toko 首页区域② 与本页。实机上本页那一份的问题是
+  /// 大多数用户处在**降级态**（没有体重/喂养记录 ⇒ 推不出个性化结果），
+  /// 于是 Diary 中段被一屏按年龄段的通用商品占掉 —— 成长记录页被商业内容打断，
+  /// 而那一屏并不提供"推荐"的价值。产品决定商业内容全部收到 Toko。
+  ///
+  /// ⚠️ 钉的是**展示位**，不是组件：`ProfileRecoZone(V2)` 在 Toko 侧照常使用，
+  /// 它自己的用例（test/shop/repurchase_zones*_test.dart）一条都没动。
+  /// 这一条只保证「它别再长回 Diary 上」—— 而那种回归通常是合并时顺手带回来的，
+  /// 不会有人特意去看这一屏。
+  testWidgets('有宠态 Diary 不渲染商品推荐区（2026-08-27 撤下）', (tester) async {
+    const profile = PetProfile(id: 1, name: 'Momo', cardToken: 'T');
+    await tester.pumpWidget(_wrap(auth: _authA(), profile: profile));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ProfileRecoZone), findsNothing,
+        reason: '🔴 商品推荐区又长回 Diary 了');
+    expect(find.byType(ProfileRecoZoneV2), findsNothing,
+        reason: '🔴 v2 版式下的商品推荐区又长回 Diary 了');
+  });
+
+
   testWidgets('状态 B/C → 非有宠态 + 修改状态入口（AC3）', (tester) async {
     await tester.pumpWidget(_wrap(auth: _authB()));
     await tester.pumpAndSettle();

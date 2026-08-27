@@ -128,6 +128,50 @@ public class IdCardShareRewardService {
     }
 
     /**
+     * 「值不值得把奖励讲给用户听」—— 返回**可以对外承诺的枚数**，0 = 一个字都不要提。
+     *
+     * <h2>为什么需要它（产品 2026-08-27）</h2>
+     * 分享奖励三个数**默认全是 0**（功能随版本上线、默认一分不发，等运营配好才开始发）。
+     * 于是卡面页上凡是提到「分享可得 PawCoin」的文案，都必须**配好了才显示** ——
+     * 否则就是 Story 18.2 AC6 反复要避免的那件事：<b>承诺了奖励却不发</b>。
+     *
+     * <h2>🔴 只看「配没配 + 你还有没有资格」，不看额度</h2>
+     * 判据刻意只有三条：总开关、每次发放数、渠道日上限（任一为 0 ⇒ 永远发不出来），
+     * 外加「这只宠物是不是已经领过」。
+     *
+     * <b>刻意不看月度总额度</b>：AC3 明确不许把「额度用完了」讲给用户听 ——
+     * 告知会诱导「攒着别分享」或「月初集中刷满」。额度耗尽时这句文案会短暂过承诺，
+     * 这是**有意接受的代价**，比诱导刷量便宜得多。
+     *
+     * <h2>⚠️ 这个奖励是「一只宠物档案只发一次」，不是每次都发</h2>
+     * 所以文案必须写「首次分享」。写成「每次分享」在第二次分享时就是假话，
+     * 而用户不会去读我们的规则，只会觉得被骗了一次。
+     */
+    public long advertisableCoins(long userId) {
+        try {
+            var cfg = platformConfig.pawcoin();
+            if (!cfg.isShareRewardEnabled()
+                    || cfg.getIdCardShareReward() <= 0
+                    || cfg.getIdCardShareDailyCap() <= 0) {
+                return 0; // 没配好 —— 一个字都不要提
+            }
+            Optional<PetProfile> profile = profiles.findByOwnerId(userId);
+            if (profile.isEmpty()) {
+                return 0; // AC4：无档案本来就不发，别承诺
+            }
+            if (rewards.findByPetProfileId(profile.get().getId()).isPresent()) {
+                return 0; // 这只宠物已经领过（一次性），再提就是假话
+            }
+            return cfg.getIdCardShareReward();
+        } catch (RuntimeException e) {
+            // 🛡 与发放同一姿态：这只是一句文案，读配置出问题绝不能把卡面页搞崩。
+            log.warn("分享奖励展示判定失败（按不展示处理）user={} cls={}",
+                    userId, e.getClass().getSimpleName());
+            return 0;
+        }
+    }
+
+    /**
      * 真正的发放尝试。由 {@link #tx}（REQUIRES_NEW）包起来跑。
      *
      * <p>⚠️ 独立事务而不是复用外层：撞唯一键会让事务进入 rollback-only，

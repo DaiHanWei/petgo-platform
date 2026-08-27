@@ -81,6 +81,7 @@ class _FakeProfileRepo implements ProfileRepository {
     String? intro,
     double? weightKg,
     String? neuterStatus,
+    String? sex,
     String? idempotencyKey,
   }) async =>
       PetProfile(id: 99, name: name, cardToken: 'T', petType: petType, birthday: birthday);
@@ -280,6 +281,11 @@ void main() {
         GoRoute(path: '/profile/created', builder: (c, s) => const Scaffold(body: Text('celebrate'))),
       ],
     );
+    // ⚠️ 视口要够高：建档表单是 ListView（懒构建），默认 800×600 下提交按钮落在屏外
+    //    ⇒ 根本没被构建，ensureVisible 直接 No element。
+    //    2026-08-27 加了性别字段后表单又长了一截，这条因此红过一次。
+    await tester.binding.setSurfaceSize(const Size(440, 2200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
       child: MaterialApp.router(
