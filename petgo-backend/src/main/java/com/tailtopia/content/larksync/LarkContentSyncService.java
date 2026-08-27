@@ -17,7 +17,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,17 +30,24 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Lark 定时发帖编排（spec-lark-scheduled-posts）：每小时从《List of Content for Automatic Upload》
- * 取「上传状态」为空的最靠前一行 → 云盘图片转存 OSS → 随机虚拟账号经
- * {@link ContentService#publishTrusted} 发布（免审，运营=可信主体）→ 回写表格 E/F 列。
+ * 取「上传状态」为空的最靠前一行 → 云盘图片转存 OSS → 以指定/随机作者经
+ * {@link ContentService#publishTrusted} 发布（免审，运营=可信主体）→ 回写表格「上传状态/发布账号/备注」。
+ *
+ * <p><b>作者</b>（2026-08-27 起）：「发布账号(邮箱)」列填了邮箱 → 精确匹配该邮箱的 ACTIVE 用户；
+ * 匹配不到 → 该行<b>无效</b>。留空 → 作者池随机虚拟账号（原逻辑）。
+ *
+ * <p><b>图片</b>（2026-08-27 起）：「图片编号」列填<b>前缀</b>（如 {@code DR260823001}，不得含 {@code -}），
+ * 云盘按 {@code {前缀}-{整数}.jpg} 匹配全部文件、按整数升序上传；{@code -} 后非纯整数
+ * （{@code -1.1}/{@code -A}/{@code -1-1}）一律不认。一张都没有 → 无效（缺图）。
  *
  * <p><b>每轮最多成功发布一条</b>（控制放出节奏）；<b>失败分两级</b>：
  * <ul>
  *   <li><b>轮级</b>（{@link LarkContentClient.LarkApiException}：token/读表/云盘/下载等传输
  *       与平台层失败，及作者池穷尽这类系统性配置错）——立即中止本轮、只记日志、
  *       <b>不写任何脏状态</b>，下小时自动重试；</li>
- *   <li><b>行级</b>（缺图/编号非法/文案超长等内容性失败）——记 FAILED + 回写「失败：原因」
- *       后顺延下一行；连续 {@value #MAX_ROW_FAILURES} 行失败触发熔断中止本轮，
- *       防止系统性问题把整表涂成失败。</li>
+ *   <li><b>行级</b>（缺图/编号非法/文案超长/邮箱不匹配等内容性问题）——记 FAILED、
+ *       回写「上传状态=无效」+「备注=原因」后顺延下一行；连续 {@value #MAX_ROW_FAILURES} 行失败
+ *       触发熔断中止本轮，防止系统性问题把整表涂成失败。</li>
  * </ul>
  *
  * <p>幂等防线：① 发帖与 {@code lark_content_publishes} 落库绑在<b>同一事务</b>
@@ -54,10 +63,22 @@ public class LarkContentSyncService {
     private static final Logger log = LoggerFactory.getLogger(LarkContentSyncService.class);
     private static final DateTimeFormatter WIB_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final ZoneId WIB = ZoneId.of("Asia/Jakarta");
-    /** 内容/图片编号白名单（拼进 OSS objectKey 与公网 URL，脏字符一律拒）。 */
+    /** 内容编号白名单（落 lark_content_publishes.content_code varchar(32)，拼进 OSS objectKey）。 */
     private static final Pattern CODE_PATTERN = Pattern.compile("[A-Za-z0-9_-]{1,32}");
+    /** 图片编号前缀白名单：不得含 {@code -}（{@code -} 后是序号），拼进 OSS objectKey 与公网 URL。 */
+    private static final Pattern IMAGE_PREFIX_PATTERN = Pattern.compile("[A-Za-z0-9_]{1,32}");
+    /** 云盘文件名：{前缀}-{整数}.jpg；组 1=前缀，组 2=序号。 */
+    private static final Pattern IMAGE_FILE_PATTERN = Pattern.compile("([A-Za-z0-9_]{1,32})-(\\d{1,6})\\.jpg");
+    /** 「发布账号(邮箱)」格式（users.email varchar(320)）。 */
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("[^@\\s]{1,64}@[^@\\s]{1,255}");
+    /** 文案上限：content_posts.text varchar(1000)。 */
+    static final int MAX_TEXT_LENGTH = 1000;
+    /** 单帖图片上限：ContentPostCreateRequest.imageUrls ≤ 9。 */
+    static final int MAX_IMAGES = 9;
     /** 行级失败熔断阈值：连续失败到这个数就中止本轮（多半是系统性问题，别再涂表）。 */
     static final int MAX_ROW_FAILURES = 5;
+    /** 回写「上传状态」用词。 */
+    static final String STATUS_INVALID = "无效";
 
     private final LarkContentSyncProperties props;
     private final LarkContentClient client;
@@ -117,17 +138,16 @@ public class LarkContentSyncService {
         if (pending.isEmpty()) {
             return;
         }
-        // 作者在轮初选定：池穷尽属系统性配置错 → 直接抛（轮级），绝不把行涂成失败。
-        long authorId = pickAuthor();
 
+        Long randomAuthor = null; // 懒选：全是指定邮箱行时不必碰作者池。
         Map<String, String> folder = null; // 懒加载：全是补回写/重复行时不必列文件夹。
         int rowFailures = 0;
         for (LarkRowParser.Row row : pending) {
             int firstRow = firstRowOf.get(row.contentCode());
             if (firstRow != row.sheetRowNumber()) {
                 // 重复编号行：只回写提醒（用快照行号——按编号定位会指到首行），绝不碰 DB。
-                writeStatusQuietly(cols, row.sheetRowNumber(),
-                        "失败：内容编号与第" + firstRow + "行重复", "");
+                writeStatusQuietly(cols, row.sheetRowNumber(), STATUS_INVALID, "",
+                        "内容编号与第" + firstRow + "行重复");
                 continue;
             }
             Optional<LarkContentPublish> existing = records.findByContentCode(row.contentCode());
@@ -149,6 +169,16 @@ public class LarkContentSyncService {
                 continue;
             }
             try {
+                long authorId;
+                if (row.email().isBlank()) {
+                    if (randomAuthor == null) {
+                        // 作者池穷尽属系统性配置错 → 直接抛（轮级），绝不把行涂成失败。
+                        randomAuthor = pickAuthor();
+                    }
+                    authorId = randomAuthor;
+                } else {
+                    authorId = resolveAuthorByEmail(row.email()); // 匹配不到 → IllegalStateException（行级：无效）
+                }
                 if (folder == null) {
                     folder = client.listFolderFiles();
                 }
@@ -157,6 +187,8 @@ public class LarkContentSyncService {
                 return; // 每轮恰好一条，发成即收工。
             } catch (LarkContentClient.LarkApiException e) {
                 throw e; // 传输/平台层失败：轮级——不标行、不回写，交 syncOnce 记日志。
+            } catch (AuthorPoolExhausted e) {
+                throw e; // 系统性配置错：轮级。
             } catch (RuntimeException e) {
                 rowFailures++;
                 String reason = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
@@ -170,17 +202,13 @@ public class LarkContentSyncService {
         }
     }
 
-    /** 发布一行：下图 → OSS →（事务内）免审发布 + DB 状态机 → 回写。 */
+    /** 发布一行：按前缀收集云盘图（按序号升序）→ 下图 → OSS →（事务内）免审发布 + DB 状态机 → 回写。 */
     private long publishRow(LarkRowParser.Columns cols, LarkRowParser.Row row,
             Map<String, String> folder, long authorId, LarkContentPublish existing) {
+        List<String> fileNames = resolveImageFiles(row.imageCodes(), folder);
         List<String> imageUrls = new ArrayList<>();
-        for (String code : row.imageCodes()) {
-            String fileName = code + ".jpg";
-            String fileToken = folder.get(fileName);
-            if (fileToken == null) {
-                throw new IllegalStateException("缺图 " + fileName);
-            }
-            byte[] bytes = client.downloadFile(fileToken); // 传输失败/非图片 → LarkApiException（轮级）
+        for (String fileName : fileNames) {
+            byte[] bytes = client.downloadFile(folder.get(fileName)); // 传输失败/非图片 → LarkApiException（轮级）
             String key = mediaProps.getOss().normalizedKeyPrefix()
                     + "public/lark-content/" + row.contentCode() + "/" + fileName;
             imageUrls.add(oss.putPublicObjectWithAcl(key, bytes, "image/jpeg"));
@@ -207,30 +235,66 @@ public class LarkContentSyncService {
         return postId;
     }
 
-    /** 内容性校验（下载前拦截）。返回失败原因，合法返回 null。 */
+    /**
+     * 按前缀在云盘文件夹里收集 {@code {前缀}-{整数}.jpg}，按整数升序；多前缀时按前缀在表格中的顺序拼接。
+     * 某前缀一张都没有 → 缺图（行级）；总数超 {@value #MAX_IMAGES} → 行级。
+     */
+    static List<String> resolveImageFiles(List<String> prefixes, Map<String, String> folder) {
+        List<String> out = new ArrayList<>();
+        for (String prefix : prefixes) {
+            TreeMap<Integer, String> ordered = new TreeMap<>();
+            for (String fileName : folder.keySet()) {
+                Matcher m = IMAGE_FILE_PATTERN.matcher(fileName);
+                if (m.matches() && m.group(1).equals(prefix)) {
+                    ordered.put(Integer.parseInt(m.group(2)), fileName);
+                }
+            }
+            if (ordered.isEmpty()) {
+                throw new IllegalStateException("缺图：云盘找不到 " + prefix + "-<序号>.jpg");
+            }
+            out.addAll(ordered.values());
+        }
+        if (out.size() > MAX_IMAGES) {
+            throw new IllegalStateException("图片超过 " + MAX_IMAGES + " 张（云盘匹配到 " + out.size() + " 张）");
+        }
+        return out;
+    }
+
+    /** 内容性校验（下载前拦截）。返回失败原因，合法返回 null。字段上限对齐生产库列定义。 */
     private static String validateRow(LarkRowParser.Row row) {
         if (!CODE_PATTERN.matcher(row.contentCode()).matches()) {
-            return "内容编号含非法字符或超长";
+            return "内容编号非法：仅限字母/数字/_/-，最长 32 字符";
         }
         for (String code : row.imageCodes()) {
-            if (!CODE_PATTERN.matcher(code).matches()) {
-                return "图片编号含非法字符或超长：" + brief(code);
+            if (code.contains("-")) {
+                return "图片编号不得带「-」及序号（应填前缀如 DR260823001，云盘文件为 DR260823001-1.jpg）：" + brief(code);
+            }
+            if (!IMAGE_PREFIX_PATTERN.matcher(code).matches()) {
+                return "图片编号非法：仅限字母/数字/_，最长 32 字符：" + brief(code);
             }
         }
-        if (row.imageCodes().size() > 9) {
-            return "图片超过 9 张";
-        }
         if (String.join(",", row.imageCodes()).length() > 255) {
-            return "图片编号列表过长";
+            return "图片编号列表过长（最长 255 字符）";
         }
         String text = row.text();
-        if (text != null && text.length() > 1000) {
-            return "文案超过 1000 字";
+        if (text != null && text.length() > MAX_TEXT_LENGTH) {
+            return "文案超过 " + MAX_TEXT_LENGTH + " 字（当前 " + text.length() + " 字）";
         }
         if ((text == null || text.isBlank()) && row.imageCodes().isEmpty()) {
             return "文案与图片均为空";
         }
+        String email = row.email();
+        if (!email.isBlank() && (email.length() > 320 || !EMAIL_PATTERN.matcher(email).matches())) {
+            return "发布账号不是合法邮箱：" + brief(email);
+        }
         return null;
+    }
+
+    /** 作者池穷尽——系统性配置错，走轮级。 */
+    static final class AuthorPoolExhausted extends IllegalStateException {
+        AuthorPoolExhausted() {
+            super("虚拟作者池无可用账号");
+        }
     }
 
     /** 作者池随机取一，跳过不存在/非 ACTIVE 的。池穷尽=系统性配置错 → 抛给轮级。 */
@@ -243,10 +307,20 @@ public class LarkContentSyncService {
                 return id;
             }
         }
-        throw new IllegalStateException("虚拟作者池无可用账号");
+        throw new AuthorPoolExhausted();
     }
 
-    /** 行级失败：DB 记 FAILED（绝不降级已 PUBLISHED 的记录）+ 回写「失败：原因」。 */
+    /** 「发布账号(邮箱)」→ ACTIVE 用户 id；匹配不到 → 行级无效。 */
+    private long resolveAuthorByEmail(String email) {
+        for (User u : users.findByEmailIgnoreCase(email)) {
+            if (u.getStatus() == UserStatus.ACTIVE) {
+                return u.getId();
+            }
+        }
+        throw new IllegalStateException("发布账号未匹配到有效用户：" + brief(email));
+    }
+
+    /** 行级失败：DB 记 FAILED（绝不降级已 PUBLISHED 的记录）+ 回写「无效」+ 备注原因。 */
     private void markRowFailed(LarkRowParser.Columns cols, LarkRowParser.Row row,
             Optional<LarkContentPublish> existing, String reason) {
         try {
@@ -263,15 +337,15 @@ public class LarkContentSyncService {
             log.warn("Lark 失败记录落库失败 code={} cause={}", row.contentCode(),
                     e.getClass().getSimpleName());
         }
-        writeBackByCode(cols, row.contentCode(), "失败：" + brief(reason), "");
+        writeBackByCode(cols, row.contentCode(), STATUS_INVALID, "", brief(reason));
     }
 
-    /** 回写「已发布 <WIB 时间>」+ 作者昵称。发布已成，任何失败只警告（下轮补）。 */
+    /** 回写「已发布 <WIB 时间>」+ 作者昵称，备注清空。发布已成，任何失败只警告（下轮补）。 */
     private void writeBackPublished(LarkRowParser.Columns cols, String contentCode, long authorId) {
         try {
             String nickname = users.findById(authorId).map(User::getNickname).orElse("");
             String status = "已发布 " + ZonedDateTime.now(WIB).format(WIB_FMT) + " WIB";
-            writeBackByCode(cols, contentCode, status, nickname != null ? nickname : "");
+            writeBackByCode(cols, contentCode, status, nickname != null ? nickname : "", "");
         } catch (RuntimeException e) {
             log.warn("Lark 回写失败 code={} cause={}", contentCode, e.getClass().getSimpleName());
         }
@@ -282,7 +356,7 @@ public class LarkContentSyncService {
      * 宁可漏写等下轮，也不按过期快照写错行。
      */
     private void writeBackByCode(LarkRowParser.Columns cols, String contentCode,
-            String status, String account) {
+            String status, String account, String note) {
         try {
             Optional<Integer> located = client.findRowByCode(
                     LarkRowParser.Columns.letter(cols.code()), contentCode);
@@ -290,8 +364,7 @@ public class LarkContentSyncService {
                 log.warn("Lark 回写跳过：表中已找不到编号 {}", contentCode);
                 return;
             }
-            client.writeCell(LarkRowParser.Columns.letter(cols.status()), located.get(), status);
-            client.writeCell(LarkRowParser.Columns.letter(cols.account()), located.get(), account);
+            writeCells(cols, located.get(), status, account, note);
         } catch (RuntimeException e) {
             log.warn("Lark 回写失败 code={} cause={}", contentCode, e.getClass().getSimpleName());
         }
@@ -299,13 +372,19 @@ public class LarkContentSyncService {
 
     /** 直接按行号静默回写（仅重复编号行使用——按编号定位会指到首行）。 */
     private void writeStatusQuietly(LarkRowParser.Columns cols, int sheetRowNumber,
-            String status, String account) {
+            String status, String account, String note) {
         try {
-            client.writeCell(LarkRowParser.Columns.letter(cols.status()), sheetRowNumber, status);
-            client.writeCell(LarkRowParser.Columns.letter(cols.account()), sheetRowNumber, account);
+            writeCells(cols, sheetRowNumber, status, account, note);
         } catch (RuntimeException e) {
             log.warn("Lark 回写失败 row={} cause={}", sheetRowNumber, e.getClass().getSimpleName());
         }
+    }
+
+    private void writeCells(LarkRowParser.Columns cols, int sheetRowNumber,
+            String status, String account, String note) {
+        client.writeCell(LarkRowParser.Columns.letter(cols.status()), sheetRowNumber, status);
+        client.writeCell(LarkRowParser.Columns.letter(cols.account()), sheetRowNumber, account);
+        client.writeCell(LarkRowParser.Columns.letter(cols.note()), sheetRowNumber, note);
     }
 
     private static String brief(String s) {

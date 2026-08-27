@@ -18,5 +18,7 @@ public record AdminContentRow(long id, ContentType type, Long authorId, String t
          * 推导要 join 作者与宠物档案，逐行做就是 N+1；由 admin 层用
          * {@code ContentSpeciesResolver#resolveAll} 对**整页**一次算完。
          */
-        String speciesOverride) {
+        String speciesOverride,
+        /** 该帖未删评论数（含一级+二级，不按 viewer 过滤——后台全量口径），支持表头点击排序。 */
+        long commentCount) {
 }

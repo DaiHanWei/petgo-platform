@@ -56,6 +56,7 @@ public class AdminContentManageController {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "q", required = false) String q,
+            @RequestParam(value = "sort", required = false) String sort,
             @RequestParam(value = "page", required = false, defaultValue = "0") int page,
             // V1.1.6 Story 14.1 · AC5：按物种与按**推导来源**筛选。
             @RequestParam(value = "species", required = false) String species,
@@ -75,8 +76,9 @@ public class AdminContentManageController {
         model.addAttribute("speciesSources",
                 com.tailtopia.content.species.SpeciesSource.values());
         // 🔴 带物种信息的行：整页一次推导（逐行会是 N+1）。
+        model.addAttribute("sort", sort);
         var items = contentManage.browseWithSpecies(type, authorId, from, to,
-                status, q, page, species, speciesSource);
+                status, q, sort, page, species, speciesSource);
         model.addAttribute("items", items);
         // Story 17.2 · AC3：限流状态列。🔴 整页一次取（逐行查就是 N+1，
         // 与上面物种推导同一份教训）。

@@ -72,9 +72,10 @@ class LarkContentSyncServiceTest {
                 .thenAnswer(inv -> "https://cdn.example/" + inv.getArgument(0));
         when(contentService.publishTrusted(Mockito.anyLong(), any(), anyString()))
                 .thenReturn(response(101L));
-        // 表头动态列映射（2026-08-24 实测运营会改表结构）：C=编号 F=状态 G=账号。
+        // 表头动态列映射（2026-08-27 实测）：C=编号 D=文案 E=图片前缀 F=邮箱 G=状态 H=账号 I=备注。
         when(client.readHeader()).thenReturn(List.of(
-                "序号", "内容分类", "内容编号", "文案部分", "图片编号", "上传状态", "发布账号"));
+                "序号", "内容分类", "内容编号", "文案部分(最多1000字)", "图片编号",
+                "发布账号(邮箱)，不填默认虚拟账号随机", "上传状态", "发布账号", "备注(代码填写，人不填)"));
         // 回写重定位：默认 DR001→行2 / DR002→行3（与各用例的 readRows 顺序一致）。
         when(client.findRowByCode("C", "DR001")).thenReturn(Optional.of(2));
         when(client.findRowByCode("C", "DR002")).thenReturn(Optional.of(3));
@@ -86,7 +87,12 @@ class LarkContentSyncServiceTest {
     }
 
     private static List<String> row(String code, String text, String img, String status) {
-        return Arrays.asList("1", "Moment", code, text, img, status, "");
+        return row(code, text, img, "", status);
+    }
+
+    private static List<String> row(String code, String text, String img, String email,
+            String status) {
+        return Arrays.asList("1", "Moment", code, text, img, email, status, "", "");
     }
 
     @Test
@@ -106,8 +112,8 @@ class LarkContentSyncServiceTest {
     @Test
     void 多行待发_每轮恰好发一条且回写EF() {
         when(client.readRows()).thenReturn(List.of(
-                row("DR001", "text-1", "DR001-1", ""),
-                row("DR002", "text-2", "DR002-1", "")));
+                row("DR001", "text-1", "DR001", ""),
+                row("DR002", "text-2", "DR002", "")));
         when(client.listFolderFiles()).thenReturn(Map.of(
                 "DR001-1.jpg", "tok1", "DR002-1.jpg", "tok2"));
         when(client.downloadFile("tok1")).thenReturn(new byte[] {1});
@@ -119,8 +125,8 @@ class LarkContentSyncServiceTest {
         verify(contentService, never()).publishTrusted(Mockito.anyLong(), any(), eq("lark-content:DR002"));
         // OSS key 带内容编号目录；回写「已发布 ... WIB」+ 昵称（行号经 findRowByCode 重定位）。
         verify(oss).putPublicObjectWithAcl(startsWith("public/lark-content/DR001/"), any(), eq("image/jpeg"));
-        verify(client).writeCell(eq("F"), eq(2), contains("已发布"));
-        verify(client).writeCell(eq("G"), eq(2), eq("Si Oyen"));
+        verify(client).writeCell(eq("G"), eq(2), contains("已发布"));
+        verify(client).writeCell(eq("H"), eq(2), eq("Si Oyen"));
         // DB 状态机落 PUBLISHED。
         ArgumentCaptor<LarkContentPublish> saved = ArgumentCaptor.forClass(LarkContentPublish.class);
         verify(records).save(saved.capture());
@@ -129,13 +135,15 @@ class LarkContentSyncServiceTest {
     }
 
     @Test
-    void 多图行_按序转存并按序入imageUrls() {
+    void 多图行_按前缀匹配云盘并按序号升序入imageUrls() {
         when(client.readRows()).thenReturn(List.of(
-                row("DR001", "text-1", "DR001-1，DR001-2", "")));
+                row("DR001", "text-1", "DR001", "")));
+        // 文件夹乱序 + 序号 10 > 2（按整数排非字典序）+ 非法后缀（-1.1 / -A / -1-1 / 别的前缀）不认。
         when(client.listFolderFiles()).thenReturn(Map.of(
-                "DR001-1.jpg", "tok1", "DR001-2.jpg", "tok2"));
-        when(client.downloadFile("tok1")).thenReturn(new byte[] {1});
-        when(client.downloadFile("tok2")).thenReturn(new byte[] {2});
+                "DR001-10.jpg", "tok10", "DR001-2.jpg", "tok2", "DR001-1.jpg", "tok1",
+                "DR001-1.1.jpg", "bad1", "DR001-A.jpg", "bad2", "DR001-1-1.jpg", "bad3",
+                "DR0011-1.jpg", "other"));
+        when(client.downloadFile(anyString())).thenReturn(new byte[] {1});
 
         service.syncOnce();
 
@@ -144,15 +152,104 @@ class LarkContentSyncServiceTest {
         verify(contentService).publishTrusted(eq(7L), req.capture(), eq("lark-content:DR001"));
         assertEquals(List.of(
                 "https://cdn.example/public/lark-content/DR001/DR001-1.jpg",
-                "https://cdn.example/public/lark-content/DR001/DR001-2.jpg"),
+                "https://cdn.example/public/lark-content/DR001/DR001-2.jpg",
+                "https://cdn.example/public/lark-content/DR001/DR001-10.jpg"),
                 req.getValue().imageUrls());
+        verify(client, never()).downloadFile("bad1");
+        verify(client, never()).downloadFile("other");
+    }
+
+    @Test
+    void 图片编号带序号_视为无效不下载() {
+        when(client.readRows()).thenReturn(List.of(
+                row("DR001", "text-1", "DR001-1", ""),
+                row("DR002", "text-2", "DR002", "")));
+        when(client.listFolderFiles()).thenReturn(Map.of(
+                "DR001-1.jpg", "tok1", "DR002-1.jpg", "tok2"));
+        when(client.downloadFile("tok2")).thenReturn(new byte[] {2});
+
+        service.syncOnce();
+
+        verify(client).writeCell(eq("G"), eq(2), eq("无效"));
+        verify(client).writeCell(eq("I"), eq(2), contains("不得带「-」"));
+        verify(client, never()).downloadFile("tok1");
+        verify(contentService, times(1)).publishTrusted(eq(7L), any(), eq("lark-content:DR002"));
+    }
+
+    @Test
+    void 云盘匹配超9张_无效() {
+        when(client.readRows()).thenReturn(List.of(row("DR001", "text-1", "DR001", "")));
+        java.util.Map<String, String> folder = new java.util.HashMap<>();
+        for (int i = 1; i <= 10; i++) {
+            folder.put("DR001-" + i + ".jpg", "tok" + i);
+        }
+        when(client.listFolderFiles()).thenReturn(folder);
+
+        service.syncOnce();
+
+        verify(client).writeCell(eq("I"), eq(2), contains("超过 9 张"));
+        verifyNoInteractions(contentService, oss);
+    }
+
+    @Test
+    void 指定邮箱_匹配ACTIVE用户为作者_不碰作者池() {
+        when(client.readRows()).thenReturn(List.of(
+                row("DR001", "text-1", "DR001", "Ops@Example.com", "")));
+        when(client.listFolderFiles()).thenReturn(Map.of("DR001-1.jpg", "tok1"));
+        when(client.downloadFile("tok1")).thenReturn(new byte[] {1});
+        User named = User.newGoogleUser("g-1", "ops@example.com", "Ops Person", null);
+        org.springframework.test.util.ReflectionTestUtils.setField(named, "id", 42L);
+        when(users.findByEmailIgnoreCase("Ops@Example.com")).thenReturn(List.of(named));
+        when(users.findById(42L)).thenReturn(Optional.of(named));
+
+        service.syncOnce();
+
+        verify(contentService).publishTrusted(eq(42L), any(), eq("lark-content:DR001"));
+        verify(users, never()).findById(7L);
+        verify(client).writeCell(eq("H"), eq(2), eq("Ops Person"));
+    }
+
+    @Test
+    void 指定邮箱_匹配不到_无效并备注原因顺延() {
+        when(client.readRows()).thenReturn(List.of(
+                row("DR001", "text-1", "DR001", "nobody@example.com", ""),
+                row("DR002", "text-2", "DR002", "")));
+        when(users.findByEmailIgnoreCase("nobody@example.com")).thenReturn(List.of());
+        when(client.listFolderFiles()).thenReturn(Map.of("DR002-1.jpg", "tok2"));
+        when(client.downloadFile("tok2")).thenReturn(new byte[] {2});
+
+        service.syncOnce();
+
+        verify(client).writeCell(eq("G"), eq(2), eq("无效"));
+        verify(client).writeCell(eq("I"), eq(2), contains("未匹配到有效用户"));
+        verify(contentService, never()).publishTrusted(Mockito.anyLong(), any(), eq("lark-content:DR001"));
+        verify(contentService, times(1)).publishTrusted(eq(7L), any(), eq("lark-content:DR002"));
+    }
+
+    @Test
+    void 指定邮箱格式非法_无效() {
+        when(client.readRows()).thenReturn(List.of(
+                row("DR001", "text-1", "DR001", "not-an-email", "")));
+        service.syncOnce();
+        verify(client).writeCell(eq("I"), eq(2), contains("不是合法邮箱"));
+        verifyNoInteractions(contentService, oss);
+        verify(users, never()).findByEmailIgnoreCase(anyString());
+    }
+
+    @Test
+    void 发布成功_备注清空() {
+        when(client.readRows()).thenReturn(List.of(row("DR001", "text-1", "DR001", "")));
+        when(client.listFolderFiles()).thenReturn(Map.of("DR001-1.jpg", "tok1"));
+        when(client.downloadFile("tok1")).thenReturn(new byte[] {1});
+        service.syncOnce();
+        verify(client).writeCell(eq("I"), eq(2), eq(""));
     }
 
     @Test
     void DB已PUBLISHED但表格状态空_只补回写不占额度() {
         when(client.readRows()).thenReturn(List.of(
-                row("DR001", "text-1", "DR001-1", ""),
-                row("DR002", "text-2", "DR002-1", "")));
+                row("DR001", "text-1", "DR001", ""),
+                row("DR002", "text-2", "DR002", "")));
         when(records.findByContentCode("DR001")).thenReturn(Optional.of(
                 LarkContentPublish.published("DR001", "DR001-1", 7L, 55L)));
         when(client.listFolderFiles()).thenReturn(Map.of("DR002-1.jpg", "tok2"));
@@ -162,25 +259,25 @@ class LarkContentSyncServiceTest {
 
         // DR001 补回写（行2），不再发帖；额度用于 DR002（行3）。
         verify(contentService, never()).publishTrusted(Mockito.anyLong(), any(), eq("lark-content:DR001"));
-        verify(client).writeCell(eq("F"), eq(2), contains("已发布"));
-        verify(client).writeCell(eq("G"), eq(2), eq("Si Oyen"));
+        verify(client).writeCell(eq("G"), eq(2), contains("已发布"));
+        verify(client).writeCell(eq("H"), eq(2), eq("Si Oyen"));
         verify(contentService, times(1)).publishTrusted(eq(7L), any(), eq("lark-content:DR002"));
-        verify(client).writeCell(eq("F"), eq(3), contains("已发布"));
-        verify(client).writeCell(eq("G"), eq(3), eq("Si Oyen"));
+        verify(client).writeCell(eq("G"), eq(3), contains("已发布"));
+        verify(client).writeCell(eq("H"), eq(3), eq("Si Oyen"));
     }
 
     @Test
     void 首选行缺图_记FAILED回写并顺延下一行成功一条() {
         when(client.readRows()).thenReturn(List.of(
-                row("DR001", "text-1", "DR001-1", ""),
-                row("DR002", "text-2", "DR002-1", "")));
+                row("DR001", "text-1", "DR001", ""),
+                row("DR002", "text-2", "DR002", "")));
         // 文件夹里只有 DR002 的图 → DR001 缺图失败顺延。
         when(client.listFolderFiles()).thenReturn(Map.of("DR002-1.jpg", "tok2"));
         when(client.downloadFile("tok2")).thenReturn(new byte[] {2});
 
         service.syncOnce();
 
-        verify(client).writeCell(eq("F"), eq(2), contains("失败"));
+        verify(client).writeCell(eq("G"), eq(2), eq("无效"));
         verify(contentService, times(1)).publishTrusted(eq(7L), any(), eq("lark-content:DR002"));
         // 两次落库：DR001 FAILED + DR002 PUBLISHED。
         ArgumentCaptor<LarkContentPublish> saved = ArgumentCaptor.forClass(LarkContentPublish.class);
@@ -192,32 +289,32 @@ class LarkContentSyncServiceTest {
     @Test
     void 多图缺一_整行FAILED顺延() {
         when(client.readRows()).thenReturn(List.of(
-                row("DR001", "text-1", "DR001-1, DR001-2", ""),
-                row("DR002", "text-2", "DR002-1", "")));
-        // DR001 两图只有第一张在文件夹 → 整行失败。
+                row("DR001", "text-1", "DR001A, DR001B", ""),
+                row("DR002", "text-2", "DR002", "")));
+        // DR001 两个前缀只有第一个在文件夹有图 → 整行失败。
         when(client.listFolderFiles()).thenReturn(Map.of(
-                "DR001-1.jpg", "tok1", "DR002-1.jpg", "tok2"));
+                "DR001A-1.jpg", "tok1", "DR002-1.jpg", "tok2"));
         when(client.downloadFile(anyString())).thenReturn(new byte[] {1});
 
         service.syncOnce();
 
         verify(contentService, never()).publishTrusted(Mockito.anyLong(), any(), eq("lark-content:DR001"));
-        verify(client).writeCell(eq("F"), eq(2), contains("缺图"));
+        verify(client).writeCell(eq("I"), eq(2), contains("缺图"));
         verify(contentService, times(1)).publishTrusted(eq(7L), any(), eq("lark-content:DR002"));
     }
 
     @Test
     void 文案超长_下载前拦截不碰OSS并顺延() {
         when(client.readRows()).thenReturn(List.of(
-                row("DR001", "x".repeat(1001), "DR001-1", ""),
-                row("DR002", "text-2", "DR002-1", "")));
+                row("DR001", "x".repeat(1001), "DR001", ""),
+                row("DR002", "text-2", "DR002", "")));
         when(client.listFolderFiles()).thenReturn(Map.of(
                 "DR001-1.jpg", "tok1", "DR002-1.jpg", "tok2"));
         when(client.downloadFile("tok2")).thenReturn(new byte[] {2});
 
         service.syncOnce();
 
-        verify(client).writeCell(eq("F"), eq(2), contains("失败"));
+        verify(client).writeCell(eq("G"), eq(2), eq("无效"));
         // 前置校验拦截：DR001 的图一张都不该下载/上传。
         verify(client, never()).downloadFile("tok1");
         verify(oss, never()).putPublicObjectWithAcl(startsWith("public/lark-content/DR001/"), any(), anyString());
@@ -227,7 +324,7 @@ class LarkContentSyncServiceTest {
     @Test
     void 状态列非空的行_直接跳过() {
         when(client.readRows()).thenReturn(List.of(
-                row("DR001", "text-1", "DR001-1", "已发布 2026-08-24 10:07 WIB")));
+                row("DR001", "text-1", "DR001", "已发布 2026-08-24 10:07 WIB")));
         service.syncOnce();
         verifyNoInteractions(contentService, oss);
         verify(client, never()).writeCell(anyString(), anyInt(), anyString());
@@ -244,8 +341,8 @@ class LarkContentSyncServiceTest {
     @Test
     void 云盘列表失败_轮级中止_绝不把行涂成失败() {
         when(client.readRows()).thenReturn(List.of(
-                row("DR001", "text-1", "DR001-1", ""),
-                row("DR002", "text-2", "DR002-1", "")));
+                row("DR001", "text-1", "DR001", ""),
+                row("DR002", "text-2", "DR002", "")));
         when(client.listFolderFiles())
                 .thenThrow(new LarkContentClient.LarkApiException("列云盘文件夹 失败 code=1061004"));
 
@@ -259,7 +356,7 @@ class LarkContentSyncServiceTest {
 
     @Test
     void 下载失败按平台异常_轮级中止不涂表() {
-        when(client.readRows()).thenReturn(List.of(row("DR001", "text-1", "DR001-1", "")));
+        when(client.readRows()).thenReturn(List.of(row("DR001", "text-1", "DR001", "")));
         when(client.listFolderFiles()).thenReturn(Map.of("DR001-1.jpg", "tok1"));
         when(client.downloadFile("tok1"))
                 .thenThrow(new LarkContentClient.LarkApiException("下载内容非图片（疑似错误体）token=tok1"));
@@ -276,7 +373,7 @@ class LarkContentSyncServiceTest {
         List<List<String>> rows = new ArrayList<>();
         for (int i = 1; i <= 7; i++) {
             String code = "DR00" + i;
-            rows.add(row(code, "text-" + i, code + "-1", ""));
+            rows.add(row(code, "text-" + i, code, ""));
             when(client.findRowByCode("C", code)).thenReturn(Optional.of(i + 1));
         }
         when(client.readRows()).thenReturn(rows);
@@ -294,20 +391,20 @@ class LarkContentSyncServiceTest {
     @Test
     void 重复内容编号_后行标重复且绝不碰DB() {
         when(client.readRows()).thenReturn(List.of(
-                row("DR001", "text-1", "DR001-1", "已发布 2026-08-24 10:07 WIB"),
-                row("DR001", "text-别的内容", "DR001-9", "")));
+                row("DR001", "text-1", "DR001", "已发布 2026-08-24 10:07 WIB"),
+                row("DR001", "text-别的内容", "DR001", "")));
 
         service.syncOnce();
 
         // 第二行（行3）是重复编号：只按快照行号回写提醒，不发帖不落库。
-        verify(client).writeCell(eq("F"), eq(3), contains("重复"));
+        verify(client).writeCell(eq("I"), eq(3), contains("重复"));
         verify(contentService, never()).publishTrusted(Mockito.anyLong(), any(), anyString());
         verify(records, never()).save(any());
     }
 
     @Test
     void 回写前重定位_行号漂移也写对行() {
-        when(client.readRows()).thenReturn(List.of(row("DR001", "text-1", "DR001-1", "")));
+        when(client.readRows()).thenReturn(List.of(row("DR001", "text-1", "DR001", "")));
         when(client.listFolderFiles()).thenReturn(Map.of("DR001-1.jpg", "tok1"));
         when(client.downloadFile("tok1")).thenReturn(new byte[] {1});
         // 快照时 DR001 在行2；回写前运营在上方插了 3 行 → 现在在行5。
@@ -315,7 +412,7 @@ class LarkContentSyncServiceTest {
 
         service.syncOnce();
 
-        verify(client).writeCell(eq("F"), eq(5), contains("已发布"));
+        verify(client).writeCell(eq("G"), eq(5), contains("已发布"));
         verify(client, never()).writeCell(anyString(), eq(2), anyString());
     }
 
