@@ -231,18 +231,21 @@ class LarkContentSyncServiceTest {
     }
 
     @Test
-    void 指定邮箱是真实用户_拒绝冒充_无效() {
+    void 指定邮箱是真实注册的官方运营号_照常以其身份发布() {
         when(client.readRows()).thenReturn(List.of(
-                row("DR001", "text-1", "DR001", "real@example.com", "")));
-        User real = User.newGoogleUser("g-1", "real@example.com", "Real Person", null);
+                row("DR001", "text-1", "DR001", "ops@tailtopia.id", "")));
+        when(client.listFolderFiles()).thenReturn(Map.of("DR001-1.jpg", "tok1"));
+        when(client.downloadFile("tok1")).thenReturn(new byte[] {1});
+        User real = User.newGoogleUser("g-1", "ops@tailtopia.id", "TailTopia Official", null);
         org.springframework.test.util.ReflectionTestUtils.setField(real, "id", 99L);
-        when(users.findByEmailAndRole("real@example.com", com.tailtopia.auth.domain.Role.USER))
+        when(users.findByEmailAndRole("ops@tailtopia.id", com.tailtopia.auth.domain.Role.USER))
                 .thenReturn(Optional.of(real));
+        when(users.findById(99L)).thenReturn(Optional.of(real));
 
         service.syncOnce();
 
-        verify(client).writeCell(eq("I"), eq(2), contains("不是虚拟账号"));
-        verifyNoInteractions(contentService, oss);
+        verify(contentService).publishTrusted(eq(99L), any(), eq("lark-content:DR001"));
+        verify(client).writeCell(eq("H"), eq(2), eq("TailTopia Official"));
     }
 
     @Test
