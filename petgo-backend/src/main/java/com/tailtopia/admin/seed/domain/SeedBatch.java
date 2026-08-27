@@ -48,6 +48,16 @@ public class SeedBatch {
     private Instant createdAt;
 
     /**
+     * 首次**真正保存**的时刻（bug 20260826）。为空 = 只点了「新建批次」、还没填任何东西。
+     *
+     * 🔴 <b>批次列表只展示非空的</b>。运营的心智是「填完点保存才算数」，而实现是点击即落库 ——
+     * 于是列表被点错的空批次占满，且没有删除入口。批次本身仍在点击时创建（工作台的所有子表单
+     * 都按 batchId 提交，没有 id 一个都发不出去），只是**列表把它藏起来**直到第一次保存。
+     */
+    @Column(name = "saved_at")
+    private Instant savedAt;
+
+    /**
      * 批次级默认发布账号（V1.1.6 Story 13.3 · AC1/AC5）。
      *
      * <p>🔴 <b>它的存在消除了两处重复的账号下拉</b>：此前在线录入与 Excel 导入
@@ -79,6 +89,20 @@ public class SeedBatch {
     }
 
     /** 页头那一处批次级设置。三项都可留空。 */
+    public Instant getSavedAt() {
+        return savedAt;
+    }
+
+    /**
+     * 标记「已保存过」。幂等 —— 记的是**首次**保存时刻，后续保存不刷新
+     * （这个字段是「该不该出现在列表里」的开关，不是「最后修改时间」）。
+     */
+    public void markSaved() {
+        if (savedAt == null) {
+            savedAt = Instant.now();
+        }
+    }
+
     public void applyDefaults(Long authorUserId, ContentType type, Instant scheduledAt) {
         this.defaultAuthorUserId = authorUserId;
         this.defaultContentType = type;

@@ -35,6 +35,7 @@ class MasonryCard extends StatelessWidget {
     this.onLongPress,
     this.onAuthorTap,
     this.onComment,
+    this.onShare,
     this.onMore,
     this.maxImageHeight,
     this.pinnedBadge,
@@ -57,6 +58,10 @@ class MasonryCard extends StatelessWidget {
 
   /// 点评论按钮（V1.1.6 Story 3.2）：跳详情页并定位到评论区。
   final VoidCallback? onComment;
+
+  /// 分享入口（bug 20260826：信息流里也要能分享）。
+  /// 🛡 为空则**不渲染**这个图标 —— 本组件是共享件，别的调用方没有分享语义时不该凭空多一个按钮。
+  final VoidCallback? onShare;
 
   /// 作者行右侧「···」（V1.1.6 Story 3.2）。Feed 此前只有长按举报，没有显式入口。
   final VoidCallback? onMore;
@@ -241,6 +246,19 @@ class MasonryCard extends StatelessWidget {
                     ],
                   ),
                 ),
+                // 分享（bug 20260826）：此前只有详情页底部互动栏有入口 ——
+                // 而信息流才是内容被看到的地方，要分享得先点进去，白白掉一层漏斗。
+                // ⚠️ 排在评论之后：点赞/评论是高频操作，位置不能被挤动。
+                if (onShare != null) ...[
+                  const SizedBox(width: 18),
+                  GestureDetector(
+                    key: ValueKey('feedCardShare_${item.id}'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onShare,
+                    child: const Icon(Icons.ios_share,
+                        size: 20, color: AppColors.textSecondary),
+                  ),
+                ],
               ],
             ),
           ),

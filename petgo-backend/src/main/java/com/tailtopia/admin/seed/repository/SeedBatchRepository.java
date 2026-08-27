@@ -8,4 +8,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface SeedBatchRepository extends JpaRepository<SeedBatch, Long> {
 
     List<SeedBatch> findTop50ByOrderByIdDesc();
+
+    /**
+     * 批次列表用（bug 20260826）：**只取已保存过的**。
+     * 只点了「新建批次」还没填任何东西的空批次不进列表。
+     */
+    List<SeedBatch> findTop50BySavedAtIsNotNullOrderByIdDesc();
 }

@@ -4,6 +4,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:tailtopia/core/theme/app_theme.dart';
 import 'package:tailtopia/features/content/domain/content_detail.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/features/content/domain/share_card_data.dart';
@@ -12,6 +14,8 @@ import 'package:tailtopia/shared/card_render/card_canvas.dart';
 import 'package:tailtopia/shared/card_render/card_frame.dart';
 import 'package:tailtopia/shared/card_render/card_qr.dart';
 import 'package:tailtopia/shared/card_render/card_render_pipeline.dart';
+import 'package:tailtopia/shared/card_render/card_watermark.dart';
+import 'package:tailtopia/features/content/presentation/share_card/share_card_preview_page.dart';
 
 /// Story 9.2 · 两套模板与下载二维码。
 ///
@@ -186,6 +190,183 @@ void main() {
         });
       }
     }
+  });
+
+  group('bug 20260826 · 图片占比随正文伸缩，不再在卡面中间留白条', () {
+    /// 量「图片区高度 ÷ 整张卡高度」。比例与预览缩放无关，故可在预览坐标系里量。
+    Future<double> imageFraction(
+      WidgetTester tester, {
+      required String body,
+      required CardCanvas canvas,
+    }) async {
+      final boundaryKey = GlobalKey();
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: Center(
+          child: SizedBox(
+            width: 216,
+            child: CardFrame(
+              boundaryKey: boundaryKey,
+              canvas: canvas,
+              child: ShareCardTemplate(
+                data: dataWith(imageUrl: 'https://x/a.jpg', body: body),
+                canvas: canvas,
+              ),
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      final card = tester.getRect(find.byKey(boundaryKey)).height;
+      final image = tester
+          .getRect(find.byKey(const ValueKey(ShareCardTemplate.shareCardImageAreaKey)))
+          .height;
+      return image / card;
+    }
+
+    const shortBody = 'disini';
+    const longBody = 'Musim hujan bikin anabul gampang masuk angin. '
+        'Pastikan tempat tidurnya kering dan hangat, lap kaki tiap habis jalan ya. '
+        'Jangan lupa cek telinga dan bulunya juga supaya tidak lembap dan berjamur '
+        'sepanjang musim hujan yang panjang ini, ya bund.';
+
+    /// 🔴 这条是 bug 本体：9:16 画布高 1920，图片原本固定占 42%，
+    /// 剩下 1114px 全归文字区 —— 一行短文案填不满，卡面中间空出一大条白
+    /// （2026-08-26 实机截图，「disini」那张）。
+    testWidgets('9:16 + 一行短正文 → 图片显著长过原来的 42%', (tester) async {
+      final f = await imageFraction(tester, body: shortBody, canvas: CardCanvas.story);
+      expect(f, greaterThan(0.55),
+          reason: '短正文时图片没长起来 ⇒ 下半部分又在按固定比例占位，白条会回来');
+    });
+
+    /// 🛡 与上一条同等重要：修白条**不能**以砍长文案为代价。
+    /// 「给 9:16 换一个更大的固定比例」就会犯这个错 —— 长帖的正文会被多截掉好几行。
+    testWidgets('9:16 + 长正文 → 图片退回下界，正文该占的高度一点没少', (tester) async {
+      final f = await imageFraction(tester, body: longBody, canvas: CardCanvas.story);
+      expect(f, closeTo(0.42, 0.03),
+          reason: '长正文时图片仍在长 ⇒ 正文被挤，等于用截字换版面');
+    });
+
+    /// 1:1 本来就没这个毛病（画布不高，42% 之外塞得满），修复不应把它带歪。
+    testWidgets('1:1 图片占比始终在合理区间（没被这次改动带歪）', (tester) async {
+      for (final body in [shortBody, longBody]) {
+        final f = await imageFraction(tester, body: body, canvas: CardCanvas.square);
+        expect(f, inInclusiveRange(0.40, 0.55));
+      }
+    });
+  });
+
+  group('bug 20260826 · 卡面按 UI 稿 SH2 的字号与页脚排版', () {
+    /// 把卡面渲出来，返回「取 widget」的工具。9:16 下排版单位恰等于卡宽，
+    /// 所以稿上的比例可以直接乘 `canvas.width` 来断言。
+    Future<void> pumpCard(WidgetTester tester, {String body = 'disini'}) async {
+      await tester.pumpWidget(MaterialApp(
+        theme: AppTheme.light,
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: Center(
+          child: SizedBox(
+            width: 216,
+            child: CardFrame(
+              boundaryKey: GlobalKey(),
+              canvas: CardCanvas.story,
+              child: ShareCardTemplate(
+                data: dataWith(imageUrl: 'https://x/a.jpg', body: body),
+                canvas: CardCanvas.story,
+              ),
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+    }
+
+    double fontOf(WidgetTester tester, Finder f) =>
+        tester.widget<Text>(f).style!.fontSize!;
+
+    /// 🔴 卡面文字整体只有设计稿的三分之二（2026-08-26 实机反馈「字体太小、
+    /// 和设计不一样」）。稿上卡宽 210px：正文 13px → 0.062，扫码提示 9px → 0.043。
+    /// 修复前分别是 0.042 / 0.026。
+    ///
+    /// ⚠️ 断言留 ±8% 余量：钉的是「有没有按稿放大」，不是像素级复刻 ——
+    /// 卡死会让后续微调每次都要改测试，那样它很快就会被顺手改绿。
+    testWidgets('正文与扫码提示的字号按 UI 稿 SH2（不再是原来的三分之二）', (tester) async {
+      await pumpCard(tester);
+      const w = 1080.0; // 9:16 画布宽 = 排版单位
+
+      expect(fontOf(tester, find.text('disini')), closeTo(w * 0.062, w * 0.062 * 0.08),
+          reason: '正文字号偏离设计稿 0.062 —— 小了就是修复前那个「太小不好看」的状态');
+      expect(fontOf(tester, find.textContaining('Scan')), closeTo(w * 0.043, w * 0.043 * 0.08),
+          reason: '扫码提示字号偏离设计稿 0.043');
+    });
+
+    /// 🔴 品牌字标资产是**纯白**的（给紫底启动页做的）。卡面白底，不上色就是
+    /// 白字画在白纸上 —— 整个 logo 隐形，而**不会有任何报错**。
+    /// 实机反馈「设计稿里的 logo 为什么不见了」就是这个。
+    testWidgets('品牌字标必须带上色滤镜，否则白底上隐形', (tester) async {
+      await pumpCard(tester);
+      final svg = tester.widget<SvgPicture>(find.byType(SvgPicture));
+      expect(svg.colorFilter, isNotNull,
+          reason: '🔴 字标资产是纯白的，去掉 colorFilter 它在白卡上就彻底看不见了');
+    });
+
+    /// 页脚行高应当**紧贴二维码**（实机要求「比二维码上下宽 1px 就够」）。
+    /// 修复前左列是 `mainAxisAlignment.end`、行按二维码高度撑开，
+    /// 提示文字被压到行底，看着就是二维码那一格空出一大块。
+    testWidgets('页脚只占一行：行高紧贴二维码（上下各 1px）', (tester) async {
+      await pumpCard(tester);
+      final qr = tester.getRect(find.byType(CardQr));
+      final row = tester.getRect(find.ancestor(
+          of: find.byType(CardQr), matching: find.byType(Row)).first);
+
+      // 行高只比二维码多出那 1px×2（换算到预览坐标系不到半个像素）。
+      // ⚠️ 阈值必须**卡死**：写成「小于二维码高度的 5%」等于没写 —— 行高本来就
+      //    等于二维码高度（左列比它矮），松阈值在回退后照样绿。已实测过这个假绿。
+      expect(row.height - qr.height, lessThan(1.0),
+          reason: '页脚行比二维码高出一截 ⇒ 又空出多余留白');
+
+      // 🔴 左列（字标 + 扫码提示）必须与二维码**垂直居中对齐**，不能沉到行底。
+      //    修复前是 `mainAxisAlignment.end`：左列被压到行底，字标上方空出一大块 ——
+      //    加上字标当时还是隐形的，实机看到的就是「二维码那一格空了一大片、
+      //    提示文字孤零零掉在左下角」。
+      //    判据取「提示文字的底边明显高于二维码底边」：沉底时两者会齐平。
+      final hint = tester.getRect(find.textContaining('Scan'));
+      expect(hint.bottom, lessThan(qr.bottom - qr.height * 0.1),
+          reason: '扫码提示与二维码底边齐平 ⇒ 左列又沉到行底了（应垂直居中）');
+    });
+  });
+
+  /// 🔴 **内容分享卡不加水印**（产品 2026-08-26 决定）。
+  ///
+  /// 水印这套是从身份证卡继承来的，在那边有明确用途：高清无水印图是**付费**的，
+  /// 预览带水印才防得住截屏白嫖。内容分享卡本身免费出图、且越多人转发越好 ——
+  /// 加水印既没有要保护的收入，又让预览满屏花纹看不清卡面。
+  ///
+  /// ⚠️ 这条钉的是**预览页**。正式导出本来就没有水印（水印挂在截图区之外），
+  /// 所以别把这条读成「导出图曾经带过水印」。
+  testWidgets('分享卡预览页不挂水印', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      theme: AppTheme.light,
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      home: ShareCardPreviewPage(data: dataWith(imageUrl: 'https://x/a.jpg')),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byType(CardWatermark), findsNothing,
+        reason: '🔴 分享卡是免费出图、鼓励转发的，不该给预览盖水印');
   });
 
   group('AC2 · 🔴 二维码在导出图里够大', () {

@@ -38,8 +38,13 @@ public class AdminContentScheduleController {
     /** 🛡 与 11-1/11-2/11-3、Excel 导入**四处一致**：运营填的墙上时间按 WIB 解释。 */
     private static final ZoneId WIB = ZoneId.of("Asia/Jakarta");
 
-    /** 排期列表里显示的状态。⚠️ 含 FAILED（见类注释）。 */
-    private static final List<SeedBatchRowStatus> LISTED =
+    /**
+     * 排期列表里显示的状态。⚠️ 含 FAILED（见类注释）。
+     *
+     * 🛡 包内可见而非私有：批量内容页嵌了同一段排期（bug 20260826），
+     * 两处**必须同一口径** —— 各写一份状态清单，迟早出现「这边有那边没有」的行。
+     */
+    static final List<SeedBatchRowStatus> LISTED =
             List.of(SeedBatchRowStatus.SCHEDULED, SeedBatchRowStatus.FAILED);
 
     private final SeedBatchRowRepository rows;

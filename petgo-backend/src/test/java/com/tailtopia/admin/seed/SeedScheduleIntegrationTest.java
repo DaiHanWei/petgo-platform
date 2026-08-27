@@ -313,11 +313,19 @@ class SeedScheduleIntegrationTest extends ApiIntegrationTest {
                 .andExpect(status().is3xxRedirection());
 
         // 没被保存进去才是对的（断言实体状态，不嗅页面文本）。
-        assertThat(batchService.recentBatches().stream()
-                .filter(b -> b.batchId() == batchId).findFirst()).isPresent();
         assertThat(jdbc.queryForObject(
                 "select default_scheduled_at from seed_batches where id = ?",
                 java.sql.Timestamp.class, batchId)).isNull();
+
+        // ⚠️ 这里原本还断言「批次在 recentBatches 里」，那只是用来定位批次的顺手写法。
+        //    bug 20260826 起批次列表只展示**已保存过**的批次，而本用例的保存是**被拒绝**的
+        //    —— 保存没成功，批次就不该进列表。故改断言 saved_at 仍为空：
+        //    它比原来那句更贴题（「这次保存确实没算数」），也不再依赖列表口径。
+        assertThat(jdbc.queryForObject(
+                "select saved_at from seed_batches where id = ?",
+                java.sql.Timestamp.class, batchId))
+                .as("保存被拒却把批次标记成已保存 ⇒ 一条什么都没存进去的批次会出现在列表里")
+                .isNull();
     }
 
     /** 改排期时间同样拒绝过去的时刻。 */

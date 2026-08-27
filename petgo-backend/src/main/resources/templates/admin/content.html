@@ -128,7 +128,7 @@
     <table hidden><tbody>
         <tr th:fragment="row" th:id="'content-row-' + ${c.id()}">
             <td th:text="${c.id()}">1</td>
-            <td th:text="${c.type()}">DAILY</td>
+            <td th:text="#{'admin.contentType.' + ${c.type()}}">Moment</td>
             <td th:text="${c.authorId()}">-</td>
             <!-- bug 20260803-447：长正文不再硬截断——短文直显，长文 <details> 折叠可展开看全文。 -->
             <td class="muted cell-wide">

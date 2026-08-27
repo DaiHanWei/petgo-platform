@@ -9,6 +9,8 @@ import com.tailtopia.admin.account.domain.AdminAccountType;
 import com.tailtopia.admin.account.repository.AdminAccountRepository;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.support.ApiIntegrationTest;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.TestingAuthenticationToken;
@@ -123,20 +125,34 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
     }
 
     /**
-     * 「内容」分组的侧栏次序由**产品指定**（2026-08-20）：
-     * 种子内容发布 → 内容管理 → 评论管理 → 人工复核 → 用户 → 被举报用户。
+     * 侧栏分组归属与次序由**产品指定**（2026-08-20 定次序，2026-08-26 重排分组）。
+     *
+     * <p><b>2026-08-26 的重排</b>：
+     * <ul>
+     *   <li>「用户」「被举报用户」从「内容」组移入「用户运营」—— 这两项处置的是<b>账号</b>
+     *       （查看资料 / 警告 / 封号），与内容维度不是一回事；原先挤在内容组里，
+     *       运营要找人得先点「内容」。</li>
+     *   <li>原「内容运营」整组（顶置 / 装饰标签 / 互动积分）并入「内容」—— 它们本就作用在
+     *       内容上，单列一组只是让运营在两组间来回找。该分组连同 i18n 键一并删除。</li>
+     * </ul>
      *
      * <p>钉住它是因为这个次序<b>没有任何自解释的规律</b>（不是字母序、不是权限分组序），
      * 后来人加菜单时很容易按「新加的往后排」或顺手重排，而改错了没有任何报错 ——
-     * 只有运营下次找不到入口时才会发现。被举报用户排末位是因为它是账号级处置
-     * （警告/封号），与前面几项的内容维度不同。
+     * 只有运营下次找不到入口时才会发现。
+     *
+     * <p>⚠️ 断言的是**文档中的先后**，所以它同时守住了「哪一项在哪个组里」：
+     * 用户 / 被举报用户若被挪回内容组，就会跑到顶置管理前面，本条即红。
      */
     @Test
     void contentNavKeepsTheProductSpecifiedOrder() throws Exception {
         String html = visibleText("/admin/dashboard");
         java.util.List<String> expected = java.util.List.of(
+                // 内容组
                 "/admin/seed-post", "/admin/content", "/admin/comments",
-                "/admin/manual-review", "/admin/users", "/admin/tickets");
+                "/admin/manual-review", "/admin/content-pins", "/admin/content-tags",
+                "/admin/content-stats",
+                // 用户运营组（在内容组之后）
+                "/admin/users", "/admin/tickets", "/admin/user-tags");
         java.util.List<Integer> positions = expected.stream().map(html::indexOf).toList();
         assertThat(positions).as("每个入口都应渲染出来").doesNotContain(-1);
         assertThat(positions).as("侧栏次序：" + String.join(" → ", expected))
@@ -326,6 +342,127 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
                 .as("🔴 自动发现的后台页在双语扫描下不合格。漏译不会报错 —— MessageSource 配了"
                         + " useCodeAsDefaultMessage，缺键会安静地把 admin.xxx.yyy 键名本身当文案显示")
                 .isEmpty();
+    }
+
+    /**
+     * 🔴 **侧栏可见性必须与页面入口门一致**（权限自查 2026-08-26）。
+     *
+     * <h2>两个方向都要守，而且坏起来的样子完全不同</h2>
+     * <ul>
+     *   <li><b>侧栏比入口紧</b>（有权限却看不见入口）—— 最难查的一类：权限放行了、
+     *       直接敲 URL 能进，但侧栏没有这个链接。运营只会得出「我没有这个功能」，
+     *       而日志、403、报错<b>一概没有</b>。</li>
+     *   <li><b>侧栏比入口松</b>（没权限却看得见）—— 点进去 403，整个后台看着到处报错。</li>
+     * </ul>
+     *
+     * <p>本条落地时一次查出 <b>7 处</b>：4 处侧栏无门而入口有门（种子内容发布 / 兽医账号 /
+     * 客服工单 / 退款管理），3 处侧栏漏码（内容管理漏 content.view、后台账号漏
+     * admin.view_accounts、退货先例漏 refund.payout）。另有两处是**分组门**比入口紧
+     * （客服组只认 support.handle、退款组不认 refund.view）—— 分组门必须是组内各项的并集。
+     *
+     * <h2>为什么这样测</h2>
+     * 从 {@code @PreAuthorize} 里取权限码，逐个造一个「只持这一个码」的 STAFF 去渲染侧栏。
+     * Java 会把常量拼接在编译期内联，所以注解里拿到的是**完整表达式**，
+     * 不需要在测试里复刻 {@code AdminPermissions} 的常量表 —— 那种复刻本身就会漂。
+     */
+    @Test
+    void everySidebarLinkMatchesItsPageGate() throws Exception {
+        // 超管视角，用来确定「哪些页在侧栏里有入口」。
+        // ⚠️ 必须显式给 ROLE_SUPER_ADMIN —— 第一版只给了 ROLE_ADMIN，于是 hasRole('SUPER_ADMIN')
+        //    全部为假、侧栏几乎是空的，绝大多数页被当成「侧栏没有入口」整体跳过 ⇒ **本条形同空跑**
+        //    （改错侧栏后照样绿，已实测）。这就是下面那条覆盖下限存在的理由。
+        String nav = navHtmlFor("ROLE_SUPER_ADMIN");
+        java.util.Set<String> checked = new java.util.TreeSet<>();
+        java.util.List<String> tooTight = new java.util.ArrayList<>();
+        java.util.List<String> tooLoose = new java.util.ArrayList<>();
+
+        for (var e : pageGates().entrySet()) {
+            String path = e.getKey();
+            String expr = e.getValue();
+            String marker = "href=\"" + path + "\"";
+            if (!nav.contains(marker)) {
+                continue; // 这一页侧栏本来就没有入口（详情页、跳转等），不在本条范围
+            }
+            java.util.Set<String> codes = new java.util.TreeSet<>();
+            Matcher m = Pattern.compile("hasAuthority\\('([^']+)'\\)").matcher(expr == null ? "" : expr);
+            while (m.find()) {
+                codes.add(m.group(1));
+            }
+            if (codes.isEmpty()) {
+                continue; // 无码门（对所有后台账号开放），无从比对
+            }
+            checked.add(path);
+            // 方向一：凡是能进这一页的码，都必须在侧栏看到入口。
+            for (String code : codes) {
+                if (!navHtmlFor(code).contains(marker)) {
+                    tooTight.add(path + " ← 只持 " + code + " 时侧栏没有入口（能进却看不见）");
+                }
+            }
+            // 方向二：一个码都不持时，不该看见入口。
+            if (navHtmlFor("__none__").contains(marker)) {
+                tooLoose.add(path + " ← 不持任何相关码却看得见入口（点进去 403）");
+            }
+        }
+        // 🛡 防空跑：上面两处 continue 都是「跳过」，一旦基线侧栏渲染不出来就会全跳过而依然全绿。
+        //    2026-08-26 落地时实际比对 20 页，下限取 15 留余量。
+        assertThat(checked)
+                .as("🔴 一页都没真比对到 —— 极可能是基线侧栏没渲染出来（见上面 ROLE_SUPER_ADMIN 那条注释），"
+                        + "而不是「没有问题」。实际比对到：" + checked)
+                .hasSizeGreaterThanOrEqualTo(15);
+        assertThat(tooTight)
+                .as("🔴 侧栏比入口**紧**：运营有权限却看不到入口，只会得出「我没有这个功能」，"
+                        + "而日志、403、报错一概没有 —— 这是最难查的一类")
+                .isEmpty();
+        assertThat(tooLoose)
+                .as("🔴 侧栏比入口**松**：没权限的人看得见入口，点进去 403")
+                .isEmpty();
+    }
+
+    /** 以「只持这些权限码」的 STAFF 渲染一页（取 /admin/dashboard —— 它无入口门，任何后台账号都进得去）。 */
+    private String navHtmlFor(String... authorities) throws Exception {
+        long n = SEQ.incrementAndGet();
+        AdminAccount acc = adminAccounts.save(AdminAccount.newSuperAdmin(
+                "gate-" + n + "@tailtopia.test", "权限一致性 STAFF", "{bcrypt}x"));
+        AdminUserDetails principal = new AdminUserDetails(acc.getId(), null, acc.getLarkEmail(),
+                acc.getPasswordHash(),
+                authorities.length == 0 ? AdminAccountType.SUPER_ADMIN : AdminAccountType.STAFF);
+        java.util.List<org.springframework.security.core.GrantedAuthority> granted =
+                new java.util.ArrayList<>();
+        granted.add(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_ADMIN"));
+        for (String a : authorities) {
+            granted.add(new org.springframework.security.core.authority.SimpleGrantedAuthority(a));
+        }
+        Authentication auth = new TestingAuthenticationToken(principal, null, granted);
+        String html = mvc.perform(get("/admin/dashboard").param("lang", "zh_CN")
+                        .with(authentication(auth)))
+                .andReturn().getResponse().getContentAsString();
+        // 🔴 只取 <nav>…</nav>：概览页**正文里也有若干快捷入口**（如种子内容发布），
+        //    对整页搜索会把它们误当成侧栏链接 —— 第一版就这么写的，误报了 /admin/seed-post。
+        int from = html.indexOf("<nav");
+        int to = html.indexOf("</nav>");
+        return (from >= 0 && to > from) ? html.substring(from, to) : "";
+    }
+
+    /** 每个「无路径参数的后台页」→ 它的 {@code @PreAuthorize} 表达式（常量已由编译期内联）。 */
+    private java.util.Map<String, String> pageGates() {
+        java.util.Map<String, String> out = new java.util.TreeMap<>();
+        mapping.getHandlerMethods().forEach((info, handler) -> {
+            boolean isGet = info.getMethodsCondition().getMethods().isEmpty()
+                    || info.getMethodsCondition().getMethods()
+                            .contains(org.springframework.web.bind.annotation.RequestMethod.GET);
+            if (!isGet || !handler.getBeanType()
+                    .isAnnotationPresent(org.springframework.stereotype.Controller.class)) {
+                return;
+            }
+            var pre = handler.getMethod()
+                    .getAnnotation(org.springframework.security.access.prepost.PreAuthorize.class);
+            for (String pattern : info.getPatternValues()) {
+                if (pattern.startsWith("/admin") && !pattern.contains("{")) {
+                    out.put(pattern, pre == null ? null : pre.value());
+                }
+            }
+        });
+        return out;
     }
 
     /** 全部「无路径参数、由 {@code @Controller} 处理」的后台 GET 路由（真实路由表，不手工维护）。 */

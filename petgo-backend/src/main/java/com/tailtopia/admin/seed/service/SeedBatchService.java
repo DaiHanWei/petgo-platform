@@ -68,6 +68,13 @@ public class SeedBatchService {
     public SeedBatchRow addDraft(long batchId, int rowNo, long authorUserId, ContentType type,
             Long petId, String body, List<String> imageUrls, List<ImageSize> imageSizes,
             String species) {
+        // 加了行就算「保存过」，批次自此进入列表（bug 20260826）。
+        // 🛡 放在这里而不是各调用方：粘贴 / 手动加行 / Excel 导入三条路都汇到本方法，
+        //    逐个去标记迟早漏一条，而漏掉的表现是「明明导入了却在列表里找不到」。
+        batches.findById(batchId).ifPresent(b -> {
+            b.markSaved();
+            batches.save(b);
+        });
         return rows.save(SeedBatchRow.draft(batchId, rowNo, authorUserId, type, petId, body,
                 imageUrls, imageSizes, species));
     }
@@ -187,7 +194,8 @@ public class SeedBatchService {
      */
     @Transactional(readOnly = true)
     public List<BatchSummary> recentBatches() {
-        List<SeedBatch> recent = batches.findTop50ByOrderByIdDesc();
+        // 🔴 只列**已保存过**的批次（bug 20260826）——「新建批次」点开没填就走的空批次不占位。
+        List<SeedBatch> recent = batches.findTop50BySavedAtIsNotNullOrderByIdDesc();
         if (recent.isEmpty()) {
             return List.of();
         }

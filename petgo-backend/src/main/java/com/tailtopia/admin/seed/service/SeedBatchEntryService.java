@@ -80,6 +80,10 @@ public class SeedBatchEntryService {
         }
         SeedBatch b = requireBatch(batchId);
         b.applyDefaults(authorUserId, type, scheduledAt);
+        // 点了「保存批次设置」即视为保存过 —— 哪怕三个默认值都留空。
+        // ⚠️ 不能靠「有没有填出内容」来推断：运营点了保存却仍不出现在列表里，
+        //    比原来那个 bug 更让人摸不着头脑。
+        b.markSaved();
         batches.save(b);
     }
 

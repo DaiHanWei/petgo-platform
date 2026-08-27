@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../core/analytics/analytics.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/user_tag_row.dart';
 import '../../../shared/widgets/content_tag_chip.dart';
@@ -23,7 +22,6 @@ import '../data/detail_repository.dart';
 import '../domain/content_detail.dart';
 import '../domain/content_type_badge.dart';
 import '../domain/content_type.dart';
-import '../domain/share_card_data.dart';
 import 'comment_composer.dart';
 import 'comment_section.dart';
 import 'detail_providers.dart';
@@ -31,7 +29,7 @@ import 'author_moderation_callbacks.dart';
 import 'feed_controller.dart';
 import 'like_button.dart';
 import 'report_sheet.dart';
-import 'share_card/share_card_preview_page.dart';
+import 'share_card/open_share_card.dart';
 
 /// 内容详情页（Story 3.3，FR-28）。只读容器：正文 + 多图左右滑 + 互动栏占位 + 评论区 + 底部评论框。
 ///
@@ -609,49 +607,16 @@ class _ShareCardButton extends ConsumerStatefulWidget {
 class _ShareCardButtonState extends ConsumerState<_ShareCardButton> {
   bool _busy = false;
 
-  /// 取链接用的仓库入口。测试用它替身，免得为一个按钮起 provider override。
-  static Future<String> Function(int postId)? shareUrlForTest;
-
-  /// 埋点 `content_type` 的词表（`diary`/`moment`/`tips`）。
+  /// 打开分享卡预览。
   ///
-  /// 🔴 **刻意做一次显式映射**，不把线格式 `GROWTH_MOMENT`/`DAILY`/`KNOWLEDGE` 直接发上去 ——
-  /// 埋点清单 §3 把这两套写法并列标了「需与工程统一」，而看板维度一旦发版就改不动了。
-  /// 与 4-2 对 `pin_type` 的处理同一做法。
-  static String _analyticsContentType(String wireType) => switch (wireType) {
-        'GROWTH_MOMENT' => 'diary',
-        'KNOWLEDGE' => 'tips',
-        _ => 'moment',
-      };
-
+  /// 🔴 实际逻辑在 [ShareCardEntry.openForDetail] —— **详情页与信息流共用同一处**
+  /// （bug 20260826 给信息流也加了分享入口时抽出）。抽出来是因为 E-11 的事件名与三个属性
+  /// 来自埋点清单 §3，两处各写一份迟早有一处漏属性，而看板维度发版后改不动。
+  /// 本类只留「点击态」这一件事。
   Future<void> _open() async {
-    final l10n = AppLocalizations.of(context);
-    // E-11（Story 10.1 补齐）：**漏斗起点**，在点击这一刻上报 ——
-    // 放在取链接成功之后会把「取链接失败」的人从分母里抹掉，
-    // 而那批人恰恰是这个漏斗最该看见的流失。
-    Analytics.capture('post_share_card_tapped', {
-      'content_type': _analyticsContentType(widget.detail.type),
-      'is_private_diary': widget.detail.isPrivateDiary,
-      'has_image': widget.detail.imageUrls.isNotEmpty,
-    });
     setState(() => _busy = true);
     try {
-      final fetch = shareUrlForTest ??
-          (int id) => ref.read(detailRepositoryProvider).getShareUrl(id);
-      final url = await fetch(widget.detail.id);
-      if (!mounted) return;
-      final data = ShareCardData.fromDetail(
-        widget.detail,
-        shareUrl: url,
-        fallbackAuthorName: l10n.feedDeletedUser,
-      );
-      await Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => ShareCardPreviewPage(data: data),
-      ));
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(l10n.shareCardExportError)));
-      }
+      await ShareCardEntry.openForDetail(context, ref, widget.detail);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
