@@ -43,16 +43,29 @@ public record PetProfileCreateRequest(
         @jakarta.validation.constraints.DecimalMax(value = "200", message = "体重不能超过 200 kg")
         java.math.BigDecimal weightKg,
         /** 绝育状态，选填：NEUTERED / INTACT / UNKNOWN。 */
-        String neuterStatus) {
+        String neuterStatus,
+        /**
+         * 性别，**选填**（bug 20260827）。
+         *
+         * <p>🔴 此前只有**编辑**接口有这个字段，建档接口没有 —— 于是新用户建完档，
+         * 身份证卡上「Jenis Kelamin」永远是「-」，除非他自己再去编辑一次。
+         * 而那张卡是身份证功能的门面，一个空字段就让整张卡看着没填完。
+         *
+         * <p>⚠️ 选填而不是必填：与体重同一理由 —— 建档转化在漏斗上比字段完整度重要，
+         * 多一个必填项就多一处流失。校验口径与编辑接口**逐字一致**（同一个 @Pattern），
+         * 两边走散会出现「建档能存、编辑存不进去」这类只在特定路径下复现的怪事。
+         */
+        @jakarta.validation.constraints.Pattern(regexp = "MALE|FEMALE",
+                message = "性别只能是 MALE 或 FEMALE") String sex) {
 
     /**
-     * 便捷构造：不带体重与绝育状态。
+     * 便捷构造：不带体重、绝育状态与性别。
      *
-     * <p>两者<b>本就选填</b>（Story 6.1：建档可跳过），既有调用点不必逐个补 null ——
+     * <p>三者<b>本就选填</b>（Story 6.1：建档可跳过；性别见上），既有调用点不必逐个补 null ——
      * 也顺带说明了「不填」是一等情形，不是遗漏。
      */
     public PetProfileCreateRequest(String avatarUrl, String petType, String name, String breed,
             LocalDate birthday, String intro) {
-        this(avatarUrl, petType, name, breed, birthday, intro, null, null);
+        this(avatarUrl, petType, name, breed, birthday, intro, null, null, null);
     }
 }

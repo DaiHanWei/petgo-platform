@@ -93,9 +93,17 @@ void main() {
   tearDown(() => Analytics.debugCaptureSink = null);
 
   group('AC2 保存', () {
-    testWidgets('编辑时展示完整号码', (tester) async {
+    /// 编辑时展示完整号码 —— 但 **`+62` 由常驻前缀承担**（bug 20260826 对齐设计稿）。
+    ///
+    /// 输入框里只留国内部分：国家码已经在左侧芯片上常驻，再留在框里就是「+62 +62」。
+    /// ⚠️ 这是**有意的行为变化**，不是把断言改松：`+62` 仍然出现在这一屏上（芯片里），
+    /// 变的只是它归谁渲染。两条都断言，避免哪天前缀被删掉而这里照样绿。
+    testWidgets('编辑时展示完整号码（+62 在常驻前缀里，输入框只放国内部分）', (tester) async {
       await _open(tester, existingPhone: '+6281234567890');
-      expect(find.text('+6281234567890'), findsOneWidget);
+      expect(find.text('81234567890'), findsOneWidget,
+          reason: '输入框应只放国内部分');
+      expect(find.textContaining('+62'), findsOneWidget,
+          reason: '🔴 国家码前缀不见了 —— 用户会以为要自己带 +62，反而填出两种形态');
     });
 
     testWidgets('保存成功显示成功提示', (tester) async {

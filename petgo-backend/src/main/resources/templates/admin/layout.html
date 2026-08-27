@@ -17,22 +17,26 @@
         <a th:href="@{/admin/dashboard}" th:classappend="${active == 'dashboard'} ? 'active'"
            th:text="#{admin.nav.dashboard}">概览</a>
         <details class="nav-section"
-                 th:attr="open=${active == 'seed' or active == 'tickets' or active == 'content' or active == 'comments' or active == 'manual-review' or active == 'users'} ? 'open' : null">
-            <summary th:classappend="${active == 'seed' or active == 'tickets' or active == 'content' or active == 'comments' or active == 'manual-review' or active == 'users'} ? 'active'"
+                 th:attr="open=${active == 'seed' or active == 'seed-batches' or active == 'content-schedules' or active == 'content' or active == 'comments' or active == 'manual-review' or active == 'content-pins' or active == 'content-tags' or active == 'content-stats'} ? 'open' : null">
+            <summary th:classappend="${active == 'seed' or active == 'seed-batches' or active == 'content-schedules' or active == 'content' or active == 'comments' or active == 'manual-review' or active == 'content-pins' or active == 'content-tags' or active == 'content-stats'} ? 'active'"
                      th:text="#{admin.nav.group.content}">内容</summary>
             <div class="nav-sub">
-                <a th:href="@{/admin/seed-post}" th:classappend="${active == 'seed'} ? 'active'"
+                <!-- 🛡 与 AdminWebController.seedPost 的 @PreAuthorize 逐字一致（权限自查 2026-08-26 补：
+                     此前**侧栏无门**，没有该权限的人看得见入口、点进去 403）。 -->
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')"
+                   th:href="@{/admin/seed-post}" th:classappend="${active == 'seed'} ? 'active'"
                    th:text="#{admin.nav.seed}">种子内容发布</a>
                 <!-- 批量内容工作台（V1.1.6 Story 13.2）。与单条发布同一门：
                      🛡 与 AdminSeedBatchWorkspaceController 的 @PreAuthorize 逐字一致。 -->
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')"
                    th:href="@{/admin/seed-batches}" th:classappend="${active == 'seed-batches'} ? 'active'"
                    th:text="#{admin.nav.seedBatches}">批量内容</a>
-                <!-- 排期管理（V1.1.6 Story 13.5）。🛡 与 AdminContentScheduleController 的门逐字一致。 -->
-                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')"
-                   th:href="@{/admin/content-schedules}" th:classappend="${active == 'content-schedules'} ? 'active'"
-                   th:text="#{admin.nav.contentSchedules}">排期管理</a>
-                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.proactive_takedown')"
+                <!-- 排期管理（V1.1.6 Story 13.5）**已并入「批量内容」页**（bug 20260826 产品要求：
+                     上传与看情况同一页），故侧栏不再单列入口 —— 运营发完一批不该换页才知道何时发。
+                     ⚠️ `/admin/content-schedules` 这个页面**仍然保留可访问**：改期 / 取消两个 POST
+                     处理完之后要重定向回去，而且它带按发布账号筛选，批量内容页那段没有。
+                     真要下线它，得连同那两个 POST 的落点与 6 条集成测试一起处理，不是删一行导航的事。 -->
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.view') or hasAuthority('content.proactive_takedown')"
                    th:href="@{/admin/content}" th:classappend="${active == 'content'} ? 'active'"
                    th:text="#{admin.nav.content}">内容管理</a>
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.proactive_takedown')"
@@ -45,75 +49,56 @@
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.manual_review') or hasAuthority('content.takedown')"
                    th:href="@{/admin/manual-review}" th:classappend="${active == 'manual-review'} ? 'active'"
                    th:text="#{admin.nav.review}">人工复核</a>
-                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.view')"
-                   th:href="@{/admin/users}" th:classappend="${active == 'users'} ? 'active'"
-                   th:text="#{admin.nav.users}">用户</a>
-                <!-- ⚠️ 顺序由产品指定（2026-08-20）：种子内容发布 → 内容管理 → 评论管理 →
-                     人工复核 → 用户 → **被举报用户**。别按字母序或「新加的往后排」自行调整。
-                     被举报用户排在末位是因为它是账号级处置（警告/封号），与前面几项的内容维度不同。 -->
-                <!-- V1.1.4 Story 3.1：统一队列**完全替代**旧的举报队列（/admin/reports 已重定向到这里）。
-                     2026-08-19 再拆：本项只留**用户举报**（账号级处置：警告/封号），
-                     内容举报与名称/头像审核移入「人工复核」——按「能不能在本页处置」分家，
-                     此前账号标识字段挤在这里只能看不能处置。名称/头像审核页已删除（列表并入人工复核）。 -->
-                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.view_tickets')"
-                   th:href="@{/admin/tickets}" th:classappend="${active == 'tickets'} ? 'active'"
-                   th:text="#{admin.nav.tickets}">被举报用户</a>
-            </div>
-        </details>
-        <!-- 内容运营（后台 PRD 模块 15）：顶置坑位 / 装饰标签。
-             ⚠️ 刻意**另起一个分组**，不塞进上面的「内容」分组 —— 那个分组的次序是产品
-             2026-08-20 逐项指定过的（种子内容发布→内容管理→评论管理→人工复核→用户→被举报用户），
-             往中间插一项会打乱它，且渲染烟测 contentNavKeepsTheProductSpecifiedOrder 正盯着那个顺序。
-             本分组后续由 Story 11.2（装饰标签）继续加项。 -->
-        <details class="nav-section"
-                 sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.pin_view') or hasAuthority('content.tag_view') or hasAuthority('content.stats_view')"
-                 th:attr="open=${active == 'content-pins' or active == 'content-tags'} ? 'open' : null">
-            <summary th:classappend="${active == 'content-pins' or active == 'content-tags'} ? 'active'"
-                     th:text="#{admin.nav.group.contentOps}">内容运营</summary>
-            <div class="nav-sub">
-                <!-- 🛡 本条件必须与 AdminContentPinController 的 @PreAuthorize(VIEW) **逐字一致**：
-                     两边走散时，权限放行了、敲 URL 能进，但侧栏没链接 —— 运营只会以为自己没这个功能，
-                     而日志、403、报错一概没有，无从下手。 -->
+                <!-- ⬇︎ 顶置 / 装饰标签 / 互动积分：2026-08-26 产品决定并入「内容」分组。
+                     它们本就作用在内容上，原先单列「内容运营」一组，运营要在两组之间来回找。
+                     🛡 三条的 sec:authorize 必须与各自 Controller 的 @PreAuthorize(VIEW) **逐字一致** ——
+                     两边走散时权限放行了、敲 URL 能进，但侧栏没链接，运营只会以为自己没这个功能，
+                     而日志、403、报错一概没有。 -->
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.pin_view')"
                    th:href="@{/admin/content-pins}" th:classappend="${active == 'content-pins'} ? 'active'"
                    th:text="#{admin.nav.contentPins}">顶置管理</a>
-                <!-- 🛡 与 AdminContentTagController 的 @PreAuthorize(VIEW) 逐字一致 -->
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.tag_view')"
                    th:href="@{/admin/content-tags}" th:classappend="${active == 'content-tags'} ? 'active'"
                    th:text="#{admin.nav.contentTags}">装饰标签</a>
-                <!-- 内容互动积分（V1.1.6 Story 15.1）。
-                     🛡 与 AdminContentStatsController.VIEW 逐字一致 ——
-                     不一致的表现是"看得见入口点进去 403"或"有权限却看不到入口"。 -->
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.stats_view')"
                    th:href="@{/admin/content-stats}" th:classappend="${active == 'content-stats'} ? 'active'"
                    th:text="#{admin.nav.contentStats}">内容互动积分</a>
             </div>
         </details>
-        <!-- 用户运营（后台 PRD 模块 12）：用户标签。
-             ⚠️ 刻意**不并入上面的「内容运营」** —— 用户标签挂在人身上、不是内容，
-             并入会让分组名与内容不符；而改「内容运营」这个名字要连带改四处（侧栏名/页内标题/
-             页面说明/权限显示名），代价更大。 -->
+        <!-- 用户运营（后台 PRD 模块 12）。2026-08-26 产品重排分组：
+             「用户」「被举报用户」从「内容」组移来 —— 这两项处置的是**账号**（查看资料、警告、封号），
+             与内容维度不是一回事；原先挤在内容组里，运营找人要先点进「内容」，反直觉。
+             同时原「内容运营」组整组并入「内容」，本组成为唯一的人相关分组。
+             ⚠️ 分组门是三项的**并集**：少一项就会出现「有权限却看不到整个分组」。 -->
         <details class="nav-section"
-                 sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.tag_view')"
-                 th:attr="open=${active == 'user-tags'} ? 'open' : null">
-            <summary th:classappend="${active == 'user-tags'} ? 'active'"
+                 sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.view') or hasAuthority('content.view_tickets') or hasAuthority('user.tag_view')"
+                 th:attr="open=${active == 'users' or active == 'tickets' or active == 'user-tags'} ? 'open' : null">
+            <summary th:classappend="${active == 'users' or active == 'tickets' or active == 'user-tags'} ? 'active'"
                      th:text="#{admin.nav.group.userOps}">用户运营</summary>
             <div class="nav-sub">
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.view')"
+                   th:href="@{/admin/users}" th:classappend="${active == 'users'} ? 'active'"
+                   th:text="#{admin.nav.users}">用户</a>
+                <!-- V1.1.4 Story 3.1：统一队列**完全替代**旧的举报队列（/admin/reports 已重定向到这里）。
+                     2026-08-19 再拆：本项只留**用户举报**（账号级处置：警告/封号），
+                     内容举报与名称/头像审核移入「人工复核」——按「能不能在本页处置」分家。 -->
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.view_tickets')"
+                   th:href="@{/admin/tickets}" th:classappend="${active == 'tickets'} ? 'active'"
+                   th:text="#{admin.nav.tickets}">被举报用户</a>
                 <!-- 🛡 与 AdminUserTagController 的 @PreAuthorize(VIEW) 逐字一致 -->
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.tag_view')"
                    th:href="@{/admin/user-tags}" th:classappend="${active == 'user-tags'} ? 'active'"
                    th:text="#{admin.nav.userTags}">用户标签</a>
             </div>
         </details>
-        <details class="nav-section"
-                 th:attr="open=${active == 'vets' or active == 'online' or active == 'failed-requests' or active == 'ratings'} ? 'open' : null">
-            <summary th:classappend="${active == 'vets' or active == 'online' or active == 'failed-requests' or active == 'ratings'} ? 'active'"
         <details class="nav-section" th:with="navOpen=${active == 'vets' or active == 'online' or active == 'failed-requests' or active == 'ratings'}"
                  th:attr="open=${navOpen} ? 'open' : null">
             <summary th:classappend="${navOpen} ? 'active'"
                      th:text="#{admin.nav.group.vet}">兽医（Epic 5）</summary>
             <div class="nav-sub">
-                <a th:href="@{/admin/vets}" th:classappend="${active == 'vets'} ? 'active'"
+                <!-- 🛡 与 AdminWebController.vets 的 @PreAuthorize 逐字一致（权限自查 2026-08-26 补）。 -->
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('vet.view')"
+                   th:href="@{/admin/vets}" th:classappend="${active == 'vets'} ? 'active'"
                    th:text="#{admin.nav.vets}">兽医账号</a>
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('vet.view')"
                    th:href="@{/admin/vets/online}" th:classappend="${active == 'online'} ? 'active'"
@@ -139,7 +124,7 @@
                    th:text="#{admin.nav.sessions}">历史会话查询</a>
             </div>
         </details>
-        <details class="nav-section" th:with="navOpen=${active == 'support-tickets'}" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('support.handle')"
+        <details class="nav-section" th:with="navOpen=${active == 'support-tickets'}" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('support.view') or hasAuthority('support.handle')"
                  th:attr="open=${navOpen} ? 'open' : null">
             <summary th:classappend="${navOpen} ? 'active'"
                      th:text="#{admin.nav.group.support}">客服</summary>
@@ -148,8 +133,13 @@
                    th:text="#{admin.nav.supportTickets}">客服工单</a>
             </div>
         </details>
+        <!-- 🛡 分组门必须是组内各项入口门的**并集**（权限自查 2026-08-26 补 refund.view）：
+             比入口紧 ⇒ 有权限的人看不见整个分组，只会得出「我没有这个功能」，
+             而日志、403、报错一概没有。
+             ⚠️ 注释放在标签**外面** —— 塞进属性之间会让整个 <details> 解析坏掉
+             （第一版就这么写的，被 AdminNavSectionOpenTest 当场抓住：分组再也不展开了）。 -->
         <details class="nav-section" th:with="navOpen=${active == 'refunds'}"
-                 sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('refund.submit') or hasAuthority('refund.approve') or hasAuthority('refund.payout')"
+                 sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('refund.view') or hasAuthority('refund.submit') or hasAuthority('refund.approve') or hasAuthority('refund.payout')"
                  th:attr="open=${navOpen} ? 'open' : null">
             <summary th:classappend="${navOpen} ? 'active'"
                      th:text="#{admin.nav.group.refund}">退款</summary>
@@ -158,7 +148,7 @@
                    th:text="#{admin.nav.refunds}">退款管理</a>
             </div>
         </details>
-        <details class="nav-section" th:with="navOpen=${active == 'config' or active == 'consult-orders' or active == 'ai-orders' or active == 'settlements' or active == 'payments' or active == 'red-overage' or active == 'virtual-accounts'}" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view') or hasAuthority('order.view') or hasAuthority('settlement.view') or hasAuthority('payment.view') or hasAuthority('risk.view') or hasAuthority('virtual_account.manage') or hasAuthority('seed.publish_as_real')"
+        <details class="nav-section" th:with="navOpen=${active == 'config' or active == 'consult-orders' or active == 'ai-orders' or active == 'settlements' or active == 'payments' or active == 'red-overage' or active == 'virtual-accounts' or active == 'algo-params'}" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view') or hasAuthority('order.view') or hasAuthority('settlement.view') or hasAuthority('payment.view') or hasAuthority('risk.view') or hasAuthority('config.algo_param_view') or hasAuthority('virtual_account.view') or hasAuthority('virtual_account.manage') or hasAuthority('seed.publish_as_real')"
                  th:attr="open=${navOpen} ? 'open' : null">
             <summary th:classappend="${navOpen} ? 'active'"
                      th:text="#{admin.nav.group.ops}">运营</summary>
@@ -195,7 +185,7 @@
             </div>
         </details>
         <details class="nav-section" th:with="navOpen=${active == 'audit-logs' or active == 'accounts'}"
-                 sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.view_logs') or hasAuthority('admin.create_account')"
+                 sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.view_logs') or hasAuthority('admin.view_accounts') or hasAuthority('admin.create_account')"
                  th:attr="open=${navOpen} ? 'open' : null">
             <summary th:classappend="${navOpen} ? 'active'"
                      th:text="#{admin.nav.group.security}">安全</summary>
@@ -203,7 +193,7 @@
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.view_logs')"
                    th:href="@{/admin/audit-logs}" th:classappend="${active == 'audit-logs'} ? 'active'"
                    th:text="#{admin.nav.audit}">操作审计</a>
-                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.create_account')"
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.view_accounts') or hasAuthority('admin.create_account')"
                    th:href="@{/admin/accounts}" th:classappend="${active == 'accounts'} ? 'active'"
                    th:text="#{admin.nav.accounts}">后台账号</a>
             </div>
@@ -237,7 +227,7 @@
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('refund.view') or hasAuthority('refund.approve') or hasAuthority('refund.payout')"
                    th:href="@{/admin/shop/returns}" th:classappend="${active == 'shopReturns'} ? 'active'"
                    th:text="#{admin.nav.shopReturns}">退货审核</a>
-                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('refund.view') or hasAuthority('refund.approve')"
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('refund.view') or hasAuthority('refund.approve') or hasAuthority('refund.payout')"
                    th:href="@{/admin/shop/return-precedents}"
                    th:text="#{admin.nav.shopPrecedents}">开封判例</a>
                 <!-- AB-13B 复购引擎效果看板（V1.4.0 Story 6.6）。裁决 A-16 的唯一依据。 -->

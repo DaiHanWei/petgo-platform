@@ -207,6 +207,33 @@ void main() {
       PushPermissionPrompt.phonePromptHook = null;
     });
 
+    /// 🔴 **建档完成这个点不问手机号**（产品 2026-08-26）。
+    ///
+    /// 用户刚填完一整张宠物档案表单，紧接着又被要一次个人手机号 —— 连续两次索取信息，
+    /// 观感是「这 App 一直在要东西」。手机号的正经时机是「注册第 3 天首次打开」（X-21），
+    /// 本来就不依赖建档这个点。
+    ///
+    /// ⚠️ 只关这一个触发点：其余触发点仍要跑（见下一条），否则等于把手机号采集整条关掉。
+    test('建档完成这个触发点：推送引导照跑，手机号钩子不跑', () async {
+      final p = await prefs();
+      final order = <String>[];
+      PushPermissionPrompt.phonePromptHook = () async => order.add('phone');
+
+      await PushPermissionPrompt.runForTrigger(
+        PushTriggerPoint.profileCreated,
+        prefs: p,
+        isGranted: () async => false,
+        showGuide: () async {
+          order.add('push');
+          return PushPromptResult.dismissed;
+        },
+      );
+
+      expect(order, ['push'],
+          reason: '🔴 建档后又弹手机号 —— 两次索取叠在一起，正是产品要去掉的观感');
+      PushPermissionPrompt.phonePromptHook = null;
+    });
+
     /// 推送权限这一侧被跳过（通知已开）时，手机号钩子**仍要跑** ——
     /// 否则"通知已开的用户永远不会被问手机号"，那是无意的耦合。
     test('推送权限被跳过时手机号钩子仍会跑', () async {

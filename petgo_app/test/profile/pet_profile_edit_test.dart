@@ -32,6 +32,7 @@ class _FakeRepo implements ProfileRepository {
     String? intro,
     double? weightKg,
     String? neuterStatus,
+    String? sex,
     String? idempotencyKey,
   }) async =>
       profile;

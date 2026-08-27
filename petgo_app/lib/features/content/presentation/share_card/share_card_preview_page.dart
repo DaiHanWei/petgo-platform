@@ -10,7 +10,6 @@ import '../../../../shared/card_render/card_canvas.dart';
 import '../../../../shared/card_render/card_export.dart';
 import '../../../../shared/card_render/card_frame.dart';
 import '../../../../shared/card_render/card_render_pipeline.dart';
-import '../../../../shared/card_render/card_watermark.dart';
 import '../../domain/share_card_data.dart';
 import 'share_card_template.dart';
 
@@ -136,8 +135,15 @@ class _ShareCardPreviewPageState extends State<ShareCardPreviewPage> {
                     key: ValueKey(_canvas),
                     boundaryKey: _boundaryKey,
                     canvas: _canvas,
-                    // 水印挂截图区外：预览与手动截屏带水印，正式导出不带（9-1 AC5）。
-                    watermark: CardWatermark(canvas: _canvas),
+                    // 🔴 **内容分享卡不加水印**（产品 2026-08-26 决定）。
+                    //
+                    // 水印这套是从身份证卡那边继承来的，在那里有明确用途：高清无水印图
+                    // 是**付费**的，预览带水印才防得住「截屏白嫖」。而内容分享卡本身
+                    // 就是免费出图、且**越多人转发越好** —— 给它加水印既没有要保护的收入，
+                    // 又让预览满屏花纹、脏得看不清卡面本身（实机反馈）。
+                    //
+                    // ⚠️ 正式导出**本来就没有**水印（水印挂在截图区之外，见 CardFrame），
+                    //    所以这次去掉只影响预览这一屏，不改变任何已导出图片的样子。
                     child: ShareCardTemplate(data: widget.data, canvas: _canvas),
                   ),
                 ),

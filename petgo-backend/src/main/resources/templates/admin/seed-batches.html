@@ -49,6 +49,13 @@
                     th:text="#{admin.batch.empty}">暂无批次</td></tr>
             </tbody>
         </table>
+
+        <!-- 排期（bug 20260826 产品要求）：**上传与看情况放同一页** ——
+             原先「批量内容」管上传、「排期管理」管查看，分在侧栏两个入口，
+             运营发完一批要换页才知道它们什么时候发、发没发。
+             🛡 整段复用排期页的片段，不另写一份：两处漂移会让运营看到两张对不上的排期表。 -->
+        <h2 th:text="#{admin.schedule.title}">排期管理</h2>
+        <div th:replace="~{admin/content-schedules :: scheduleSection}">排期</div>
     </div>
 </div>
 </body>

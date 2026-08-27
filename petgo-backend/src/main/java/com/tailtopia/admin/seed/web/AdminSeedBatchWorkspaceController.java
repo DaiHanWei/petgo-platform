@@ -47,18 +47,23 @@ public class AdminSeedBatchWorkspaceController {
     private final com.tailtopia.admin.virtual.service.AdminPublishIdentityService identities;
     private final com.tailtopia.admin.seed.service.SeedBatchPublishService publishing;
 
+    /** 批次列表页底部那段排期用（bug 20260826：上传与看情况同一页）。 */
+    private final com.tailtopia.admin.seed.repository.SeedBatchRowRepository scheduleRows;
+
     public AdminSeedBatchWorkspaceController(SeedBatchService batches,
             SeedBatchAssetService assets,
             com.tailtopia.admin.seed.service.SeedBatchEntryService entry,
             com.tailtopia.admin.seed.service.SeedBatchExcelService excel,
             com.tailtopia.admin.virtual.service.AdminPublishIdentityService identities,
-            com.tailtopia.admin.seed.service.SeedBatchPublishService publishing) {
+            com.tailtopia.admin.seed.service.SeedBatchPublishService publishing,
+            com.tailtopia.admin.seed.repository.SeedBatchRowRepository scheduleRows) {
         this.batches = batches;
         this.assets = assets;
         this.entry = entry;
         this.excel = excel;
         this.identities = identities;
         this.publishing = publishing;
+        this.scheduleRows = scheduleRows;
     }
 
     /** 批次列表 —— 🛡 按各行状态**聚合**展示（13-1 AC2），批次自己没有状态。 */
@@ -67,6 +72,13 @@ public class AdminSeedBatchWorkspaceController {
     public String list(Model model) {
         model.addAttribute("active", "seed");
         model.addAttribute("batches", batches.recentBatches());
+        // 排期段与「排期管理」页共用同一个模板片段，故模型键也必须一致（rows / authorId）。
+        // bug 20260826：产品要求上传与看情况同一页 —— 运营发完一批不该再换页才知道何时发。
+        // ⚠️ 这里刻意**不带 authorId 过滤**：本页的排期是「这批发出去之后的整体情况」，
+        //    按账号筛的诉求在排期页那边（片段里的筛选表单仍指向那个页面）。
+        model.addAttribute("authorId", null);
+        model.addAttribute("rows", scheduleRows.findByStatusInOrderByScheduledAtAsc(
+                com.tailtopia.admin.seed.web.AdminContentScheduleController.LISTED));
         return "admin/seed-batches";
     }
 

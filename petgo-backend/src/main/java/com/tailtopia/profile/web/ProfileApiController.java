@@ -245,6 +245,25 @@ public class ProfileApiController {
                         java.time.Instant.now()));
     }
 
+    /**
+     * 分享奖励的**展示口径**（产品 2026-08-27）。
+     *
+     * <p>返回 {@code coins}：可以对外承诺的枚数，{@code 0} = 卡面页一个字都不要提奖励。
+     * 与 HD 定价那条同一范式（实时读后台配置，不在客户端硬编码）——
+     * 分享奖励三个数**默认全是 0**，运营没配好就不该出现"分享可得 PawCoin"的文案，
+     * 否则就是 Story 18.2 AC6 反复要避免的「承诺了奖励却不发」。
+     *
+     * <p>🛡 只回一个数，**不回原因**：AC3 不许把「额度用完了」讲给用户听
+     * （会诱导攒着别分享 / 月初集中刷满）。判据见
+     * {@link com.tailtopia.share.service.IdCardShareRewardService#advertisableCoins(long)}。
+     */
+    @GetMapping("/me/id-cards/share-reward")
+    public com.tailtopia.share.dto.IdCardShareRewardResponse shareRewardPreview(
+            @AuthenticationPrincipal Jwt jwt) {
+        return com.tailtopia.share.dto.IdCardShareRewardResponse.of(
+                idCardShareRewards.advertisableCoins(currentUserId(jwt)));
+    }
+
     /** 购买某卡 HD（按卡解锁）。 */
     @PostMapping("/me/id-cards/{cardId}/hd-download")
     public HdPurchaseResponse purchaseCardHd(@AuthenticationPrincipal Jwt jwt,

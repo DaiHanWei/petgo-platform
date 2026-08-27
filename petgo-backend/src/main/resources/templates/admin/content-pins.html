@@ -204,7 +204,7 @@
             <label th:each="c : ${candidates}" class="pick-row">
                 <input type="radio" name="contentId" th:value="${c.id}"/>
                 <span th:text="${c.id}">1</span>
-                <span th:text="${c.type}">DAILY</span>
+                <span th:text="#{'admin.contentType.' + ${c.type}}">Moment</span>
                 <span th:text="${c.summary}">摘要</span>
                 <span class="muted" th:text="${#temporals.format(c.createdAt, 'yyyy-MM-dd', 'Asia/Jakarta')}">日期</span>
             </label>

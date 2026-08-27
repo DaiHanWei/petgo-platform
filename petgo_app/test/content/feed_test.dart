@@ -217,6 +217,35 @@ void main() {
     expect(s.items.map((e) => e.id), [1, 2]); // 续拉追加
   });
 
+  /// bug 20260826 · 信息流卡片必须**真的接上**分享入口。
+  ///
+  /// ⚠️ 分享图标本身与点击流程在 share_entry_and_landing_test 里覆盖了，但那边是直接
+  /// 挂 `MasonryCard` 并手动传 `onShare` —— **信息流有没有传这个回调，那些用例一条也管不到**。
+  /// 少了这一条，「图标组件好好的、信息流上就是没有」这种接线漏掉不会有任何测试变红。
+  testWidgets('信息流卡片接上了分享入口（不是只有组件支持）', (tester) async {
+    await tester.pumpWidget(ProviderScope(
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: FeedMasonryView(
+            items: [_item(id: 7, body: 'halo')],
+            hasMore: false,
+            loadingMore: false,
+            loadMoreFailed: false,
+            loadMoreErrorLabel: 'x',
+            deletedUserLabel: 'x',
+            onLoadMore: () async {},
+            onRefresh: () async {},
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('feedCardShare_7')), findsOneWidget,
+        reason: '信息流没给卡片传 onShare ⇒ 图标不渲染，而组件层的用例照样全绿');
+  });
+
   testWidgets('AC5: FeedMasonryView loadMoreFailed → 底部重试按钮可点', (tester) async {
     var retried = false;
     await tester.pumpWidget(ProviderScope(

@@ -66,8 +66,6 @@ import '../../features/profile/presentation/id_card_detail_page.dart';
 import '../../features/profile/presentation/id_card_page.dart';
 import '../../features/profile/presentation/milestone_list_page.dart';
 import '../../features/profile/domain/pet_profile.dart';
-import '../../features/notify/domain/push_permission_prompt.dart';
-import '../../features/notify/presentation/push_permission_guide_flow.dart';
 import '../../features/onboarding/presentation/splash_page.dart';
 import '../../features/profile/presentation/pet_profile_create_page.dart';
 import '../../features/profile/presentation/day_detail_page.dart';
@@ -670,20 +668,22 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
             petName: created.name,
             avatarUrl: created.avatarUrl,
             onStartExplore: () async {
-              // 触发点 2「建档后」（V1.1.6 Story 8.2 / FR-85）：庆祝页后、进首页前。
+              // 🔴 **建档这个时机不再弹推送权限**（产品 2026-08-27）。
               //
-              // 🔴 这里原先调的是 Story 6.4 的 PushPermissionGate ——
-              //    它的门是 `!alreadyAsked`，而那个键被第二代「首启即申请」
-              //    （PushPermissionBootstrap，2026-08-07）在**首次冷启动**就置位了
-              //    ⇒ 对所有用户恒 false，这个时机事实上从未触发过。
-              //    旧类按 AD-14 Rule 3 保留不删（仍供「我的」页被动引导用），但这里改走新模型。
+              // 实机路径是：建档成功 → 庆祝页 → 点主 CTA「记录第一个瞬间」→ 弹出一个
+              // 「为你的毛孩子打开通知吧？」的底部弹层。用户刚填完一整张档案表单、
+              // 正要去发第一条内容，中间横插一次权限索取 —— 那一刻他的意图非常明确，
+              // 打断它换来的授权率不值得。
               //
-              // ⚠️ 不再传 neverConsulted：那是旧「双时机取最早、全局仅一次」模型的去重手段。
-              //    新模型是**多触发点、每点各一次**（AD-14 Rule 2 四键物理隔离），
-              //    触发点 1 与 2 相互独立 —— 沿用 neverConsulted 会压掉已问诊用户的建档那次机会，
-              //    与本 FR「多给几次机会」的目的相反。
-              await maybeShowPushPermissionGuide(c, PushTriggerPoint.profileCreated);
-              if (c.mounted) c.go('/home');
+              // ⚠️ 连带后果：**触发点 2 自此没有调用方**（FR-85 的四个时机剩三个：
+              //    首次问诊完成 / 打开通知中心 / 兽医切上线）。
+              //    `PushTriggerPoint.profileCreated` 枚举值与它的 prefs 键**刻意保留不删** ——
+              //    键一删，将来若恢复这个时机，老用户的"已问过"标记就丢了，会被重新打扰一遍。
+              //
+              // 🔴 主 CTA 改为**直接拉起内容发布**（产品同批）。原先它 go 到 /home ——
+              //    而按钮上写的是「记录第一个瞬间 📸」，点完却落在首页信息流，
+              //    文案承诺的事一件没发生。/publish 着陆页首帧即开发布弹层，正是这句文案的落点。
+              if (c.mounted) c.go('/publish');
             },
           );
         },

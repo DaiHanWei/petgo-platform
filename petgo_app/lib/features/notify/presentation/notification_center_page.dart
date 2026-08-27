@@ -370,41 +370,67 @@ class _NotificationCenterPageState
 
   /// 触发点 4 的引导条。形态与「我的」页的 [PushEnableGuide] 同族（同一套文案键），
   /// 但这里是页内顶部条 + 可关闭，故不直接复用那个组件。
+  /// 推送开启引导条（FR-85 · UI 稿「15 · 通知中心 · 推送开启引导条」）。
+  ///
+  /// 🔴 **2026-08-26 按设计稿重做**。原实现与稿差得很远，而差的每一处都在削弱转化：
+  /// - 白底描边卡 → 稿是**淡紫柔填充**，它要在一列通知里"跳"出来，描边白卡跳不出来；
+  /// - 「Open Settings」是**纯文字按钮** → 稿是实心紫胶囊。整条引导只有一个动作，
+  ///   而它当时看着像个次要链接；
+  /// - 正文长到换四行、标题被挤成两行 —— 卡片高度顶掉了下面第一条真通知。
+  ///   文案已改成一行（英文按钮只留「Open」，产品口径）。
+  ///
+  /// ⚠️ **保留右上角关闭 ×**（稿上没有）：关闭会上报 `dismissed`，那是这条引导
+  /// 「打扰了多少人」的唯一度量；且不给关闭等于用户不开通知就永远顶着一条卡。
+  /// 已按稿的观感缩小、弱化到不抢动作按钮。
   Widget _pushBanner(AppLocalizations l10n) {
     return Container(
       key: const ValueKey('pushCenterBanner'),
-      margin: const EdgeInsets.all(12),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+      padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+        color: AppColors.mintTint,
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         children: [
-          const Icon(Icons.notifications_active_outlined,
-              color: AppColors.accentConsult),
+          const Text('🔔', style: TextStyle(fontSize: 22)),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(l10n.pushEnableGuideTitle,
-                    style: const TextStyle(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 2),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                const SizedBox(height: 3),
                 Text(l10n.pushEnableGuideBody,
-                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                    maxLines: 2,
+                    style: const TextStyle(
+                        fontSize: 12, height: 1.3, color: AppColors.textSecondary)),
               ],
             ),
           ),
-          TextButton(
+          const SizedBox(width: 10),
+          FilledButton(
             key: const ValueKey('pushCenterBannerAction'),
             onPressed: _openPushSettings,
-            child: Text(l10n.mediaOpenSettings),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.mint,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+            ),
+            child: Text(l10n.pushEnableGuideCta,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
           ),
           IconButton(
             key: const ValueKey('pushCenterBannerClose'),
-            icon: const Icon(Icons.close, size: 18),
+            icon: const Icon(Icons.close, size: 16, color: AppColors.muted),
+            visualDensity: VisualDensity.compact,
             tooltip: l10n.commonClose,
             onPressed: () {
               // 关掉即上报 dismissed。标记在展示时就已置位，这里不再动它。

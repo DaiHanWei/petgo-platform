@@ -3,6 +3,7 @@ package com.tailtopia.content.service;
 import com.tailtopia.auth.dto.AuthorView;
 import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.content.domain.ContentPost;
+import com.tailtopia.content.domain.ContentVisibility;
 import com.tailtopia.content.domain.ContentShare;
 import com.tailtopia.content.domain.PostStatus;
 import com.tailtopia.content.dto.ContentShareLinkResponse;
@@ -55,13 +56,34 @@ public class ContentShareService {
      * 已删除 / 非 PUBLISHED → 422（自己都还没公开的内容不该拿到对外链接）。
      */
     @Transactional
-    public ContentShareLinkResponse createOrRefresh(long authorId, long postId) {
+    public ContentShareLinkResponse createOrRefresh(long requesterId, long postId) {
         ContentPost post = posts.findById(postId)
                 .filter(p -> p.getDeletedAt() == null)
-                .filter(p -> p.getAuthorId() == authorId)
                 .orElseThrow(() -> AppException.notFound("内容不存在"));
         if (post.getStatus() != PostStatus.PUBLISHED) {
             throw AppException.validation("该内容当前不可分享");
+        }
+        // 🔴 **谁能为这条内容建分享链接**（产品 2026-08-27 放开非作者）：
+        //
+        // | 关系 | 公开内容 | 私密内容 |
+        // |---|---|---|
+        // | 作者本人 | 可以 | **可以**（AD-15 Rule 6：作者自己按下分享键 = 授权） |
+        // | 其他登录用户 | 可以（本次新增） | **不可以** |
+        //
+        // 放开的理由：信息流里加了分享入口（用户请求），而流里绝大多数是别人的帖 ——
+        // 原先「只能分享自己的」会让那个入口在多数卡片上直接报错。
+        //
+        // 🛡 **这不是把可见性护栏改松**：能被非作者分享的只有**本来就公开**的内容，
+        // 分享链接暴露的东西一点没有多出来（那条帖在信息流里人人可见）。
+        // 私密内容仍然只有作者本人能分享 —— 那一条正是 Rule 6 的全部依据
+        //（「visibility 约束的是平台自动分发，不约束用户自己按下分享键」），
+        // 换成别人按下就不成立了，所以这里必须按作者身份分岔，不能一律放开。
+        //
+        // ⚠️ 404 而不是 403：与本类其它失效分支同一口径 —— 不区分「没这条」/「不让你分享」，
+        // 否则可以拿它枚举出「某个 id 是私密内容」。
+        if (post.getAuthorId() != requesterId
+                && post.getVisibility() != ContentVisibility.PUBLIC) {
+            throw AppException.notFound("内容不存在");
         }
 
         Optional<ContentShare> existing = shares.findByContentPostId(postId);

@@ -90,6 +90,11 @@ class PushPermissionPrompt {
   /// 两段代码的偶然调用顺序，而这正是 Rule 7 要消除的不确定性。
   static Future<void> Function()? phonePromptHook;
 
+  /// **不追问手机号**的触发点（产品 2026-08-26）。见 [runForTrigger] 末尾的说明。
+  static const Set<PushTriggerPoint> _phonePromptSkippedAt = {
+    PushTriggerPoint.profileCreated,
+  };
+
   /// 该触发点此刻是否应该提示。
   ///
   /// 顺序刻意如此：
@@ -199,6 +204,14 @@ class PushPermissionPrompt {
       debugPrint('[PushPrompt] $point failed: $e');
     }
     // 手机号软引导排在后面（7-2 注册钩子）。它自己的"仅一次"由 7-2 负责。
+    //
+    // 🔴 **建档完成这个点不问手机号**（产品 2026-08-26）。用户刚填完一整张宠物档案表单，
+    // 紧接着又被要一次个人手机号 —— 连续两次索取信息，观感是"这 App 一直在要东西"。
+    // 手机号的正经时机是「注册第 3 天首次打开」（决策 X-21），本来就不依赖建档这个点。
+    //
+    // ⚠️ 只关掉**这一个触发点**，不动 PhoneSoftPrompt 自己的判定 ——
+    // 那套判定（第 3 天 / 已填过 / 已问过）还管着其余触发点，改它会连带关掉全部时机。
+    if (_phonePromptSkippedAt.contains(point)) return;
     try {
       await phonePromptHook?.call();
     } catch (e) {

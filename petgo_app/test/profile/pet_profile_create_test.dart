@@ -18,6 +18,7 @@ class _FakeRepo implements ProfileRepository {
   bool createCalled = false;
   bool failExists = false; // true → 模拟并发 409（档案已存在）
   String? lastPetType;
+  String? lastSex;
 
   @override
   Future<PetProfile> create({
@@ -29,10 +30,12 @@ class _FakeRepo implements ProfileRepository {
     String? intro,
     double? weightKg,
     String? neuterStatus,
+    String? sex,
     String? idempotencyKey,
   }) async {
     createCalled = true;
     lastPetType = petType;
+    lastSex = sex;
     if (failExists) {
       final req = RequestOptions(path: '/pet-profiles');
       throw DioException(
@@ -40,7 +43,13 @@ class _FakeRepo implements ProfileRepository {
         response: Response(requestOptions: req, statusCode: 409),
       );
     }
-    return PetProfile(id: 1, name: name, cardToken: 'T', petType: petType, birthday: birthday);
+    final made =
+        PetProfile(id: 1, name: name, cardToken: 'T', petType: petType, birthday: birthday);
+    // 🔴 建完档，档案**就存在了** —— 之前这里不回写，`getMyProfile()` 建档后仍返回 null，
+    //    于是「建档成功 → 重新拉档案 → 拉到非空」这条真实时序在测试里根本不会发生，
+    //    bug 20260826（庆祝页一闪而过）正是从这个缺口溜过去的。
+    existing = made;
+    return made;
   }
 
   @override
@@ -122,6 +131,81 @@ Future<void> _fillAndSubmit(WidgetTester tester) async {
 }
 
 void main() {
+  /// 🔴 **建档页必须能填性别**（bug 20260827）。
+  ///
+  /// 此前只有**编辑**页有这个字段，建档页没有 —— 于是新用户建完档，
+  /// 身份证卡上「Jenis Kelamin」永远是「-」，除非他自己再去编辑一次。
+  /// 而那张卡是身份证功能的门面，一个空字段就让整张卡看着没填完。
+  ///
+  /// ⚠️ 选填：与体重同一理由 —— 建档转化在漏斗上比字段完整度重要，多一个必填项就多一处流失。
+  /// 所以这里同时钉住「不选也能提交」。
+  group('bug 20260827 · 建档页的性别字段', () {
+    testWidgets('有性别选择入口，选了会随建档一起提交', (tester) async {
+      // ⚠️ 用带路由的挂载：提交成功后页面会 `context.go(...)`，
+      //    不带 router 的 _wrap 会在那一步抛 GoError（第一版就是这么红的）。
+      final repo = _FakeRepo();
+      final container = ProviderContainer(overrides: [
+        profileRepositoryProvider.overrideWithValue(repo),
+        petProfileProvider.overrideWith((ref) => repo.getMyProfile()),
+      ]);
+      addTearDown(container.dispose);
+      await _pumpRouted(tester, container);
+
+      expect(find.byKey(const ValueKey('petProfileSexTile')), findsOneWidget,
+          reason: '🔴 建档页没有性别入口 ⇒ 身份证卡上那一栏永远是空的');
+
+      await tester.tap(find.byKey(const ValueKey('petProfileSexTile')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('petSexFemaleOption')));
+      await tester.pumpAndSettle();
+
+      await _fillAndSubmit(tester);
+      expect(repo.lastSex, 'FEMALE', reason: '选了性别却没发给后端');
+    });
+
+    /// 🛡 不选也必须能建档 —— 它是选填项。
+    testWidgets('不选性别照样能提交（选填，不许挡住建档转化）', (tester) async {
+      final repo = _FakeRepo();
+      final container = ProviderContainer(overrides: [
+        profileRepositoryProvider.overrideWithValue(repo),
+        petProfileProvider.overrideWith((ref) => repo.getMyProfile()),
+      ]);
+      addTearDown(container.dispose);
+      await _pumpRouted(tester, container);
+      await _fillAndSubmit(tester);
+
+      expect(repo.createCalled, isTrue);
+      expect(repo.lastSex, isNull);
+    });
+  });
+
+
+  /// 🔴 bug 20260826：**建档成功后庆祝页只闪一下，人被送回 Diary**。
+  ///
+  /// 机制：本页 `build` 监听「当前档案」，拿到非空就走「已有档案直达」把人送去 `/profile`（F3）。
+  /// 而 `_submit` 在跳庆祝页**之前**先 `invalidate` 了这个 provider —— 重新拉到的正是刚建好的档案。
+  /// 路由切换有转场动画，本页在那 300ms 内仍在树上、仍会 build ⇒ 直达分支照常触发，
+  /// 把刚 go 过去的庆祝页顶掉。用户看到的就是「闪一下然后到了 Diary」。
+  ///
+  /// ⚠️ 老测试抓不到，是因为假仓库建档后**仍返回「没有档案」** ——
+  /// 那条真实时序在测试里从不发生。已一并修正（见 `_FakeRepo.create`）。
+  testWidgets('bug 20260826: 建档成功 → 停在庆祝页，不被「已有档案直达」顶掉', (tester) async {
+    final repo = _FakeRepo();
+    final container = ProviderContainer(overrides: [
+      profileRepositoryProvider.overrideWithValue(repo),
+      petProfileProvider.overrideWith((ref) => repo.getMyProfile()),
+    ]);
+    addTearDown(container.dispose);
+    await _pumpRouted(tester, container);
+    await _fillAndSubmit(tester);
+
+    expect(find.text('created'), findsOneWidget,
+        reason: '🔴 庆祝页被顶掉了 —— 这正是「闪一下就没了」的现象');
+    expect(find.text('profile'), findsNothing,
+        reason: '人被送去了 Diary，说明「已有档案直达」在建档成功后仍然触发');
+  });
+
+
   testWidgets('AC3: 必填三项（类型/名字/生日）齐全才可提交；缺一即禁用', (tester) async {
     // 表单较长（虚线头像+分段label+多行bio），用高视口确保 ListView 全量构建（提交钮不出 fold）。
     await tester.binding.setSurfaceSize(const Size(440, 1600));
@@ -164,6 +248,11 @@ void main() {
   });
 
   testWidgets('名字 maxLength=20、介绍 maxLength=30（实时计数约束）', (tester) async {
+    // ⚠️ 视口要够高：表单是 ListView（懒构建），默认 800×600 下「介绍」框落在屏外
+    //    ⇒ 根本没被构建，findByKey 直接 No element。
+    //    2026-08-27 加了性别字段后表单又长了一截，这条因此红过一次。
+    await tester.binding.setSurfaceSize(const Size(440, 2000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(_wrap(_FakeRepo()));
     await tester.pumpAndSettle();
     final field = tester.widget<TextField>(find.byKey(const ValueKey('petProfileNameField')));

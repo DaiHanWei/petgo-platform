@@ -10,6 +10,8 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 class _FakeIdCardRepo implements IdCardRepository {
   @override
   Future<int> reportShareForReward(int cardId) async => 0; // Story 18.2：本类不验奖励
+  @override
+  Future<int> advertisableShareReward() async => 0; // 出厂三个 0：默认不承诺奖励
   _FakeIdCardRepo(this._cards);
   final List<IdCard> _cards;
 

@@ -120,7 +120,9 @@ class _BalanceCard extends StatelessWidget {
                   style: const TextStyle(
                       fontSize: 34, fontWeight: FontWeight.w800, color: Colors.white)),
               const SizedBox(height: AppSpacing.xxs),
-              Text(l10n.pawcoinRateHint(_grouped(balance)),
+              // 只讲汇率，不再把余额换算成 IDR 重复一遍（产品 2026-08-27）——
+              //  1 枚 = Rp1，上面那行大字本身就是金额。
+              Text(l10n.pawcoinRateHint,
                   style: const TextStyle(fontSize: 12, color: Colors.white70)),
             ],
           ),

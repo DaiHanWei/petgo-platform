@@ -122,6 +122,71 @@ class AdminTemplateStructureTest {
                 .isEmpty();
     }
 
+    /**
+     * 🔴 结构标签必须**成对闭合**（bug 20260826）。
+     *
+     * <h2>这条守的是一个真实事故</h2>
+     * 侧栏模板里混进过一段合并残留：一个多余的 {@code <details>} 加一个<b>没有闭合的
+     * {@code <summary>}</b>，紧接着才是正确的那一组。浏览器会自行「修复」这种 HTML ——
+     * 结果是「兽医」整组被塞进上一组的标题里：<b>点不动、收不起来</b>，
+     * 侧栏上还多出一个孤零零的空箭头。
+     *
+     * <p>⚠️ <b>没有任何东西会报错</b>：Thymeleaf 只做属性替换、不校验标签配对；
+     * 页面照常 200；渲染冒烟、i18n 扫描、片段结构检查<b>全都是绿的</b>。
+     * 只有人打开侧栏点一下才发现收不起来。
+     *
+     * <p>先剥掉 HTML 注释再数 —— 注释里写着示例标签是常事，连注释一起数会误报。
+     */
+    @Test
+    void blockTagsAreBalanced() throws IOException {
+        List<String> offenders = new ArrayList<>();
+        for (Path f : templates()) {
+            String html = Files.readString(f, StandardCharsets.UTF_8)
+                    .replaceAll("(?s)<!--.*?-->", "");
+            for (String tag : List.of("details", "summary", "form", "table")) {
+                int open = count(Pattern.compile("<" + tag + "\\b"), html);
+                int close = count(Pattern.compile("</" + tag + "\\s*>"), html);
+                if (open != close) {
+                    offenders.add(fileName(f) + ": <" + tag + "> " + open + " 个开标签 / "
+                            + close + " 个闭合");
+                }
+            }
+        }
+        assertThat(offenders)
+                .as("🔴 标签没有成对闭合 —— 浏览器会自行重排 DOM，表现是「某一组莫名其妙嵌进了别人里面、"
+                        + "点不动也收不起来」，而服务端一切正常、测试全绿（2026-08-26 侧栏事故形态）")
+                .isEmpty();
+    }
+
+    /**
+     * 🔴 后台**不得直接渲染后端枚举名**（bug 20260826）。
+     *
+     * 运营看到的是 {@code DAILY} / {@code GROWTH_MOMENT}，而用户在 App 上看到的是
+     * {@code Moment} / {@code Diary} —— 运营与用户对不上话，连「用户说的 Diary 是后台哪一种」
+     * 都要靠人脑翻译。展示一律走 {@code #{'admin.contentType.' + …}}。
+     *
+     * <p>⚠️ 只管**展示**。表单 {@code th:value} / Excel 模板列仍是枚举名 —— 那是机器要解析的，
+     * 改了会让运营现有的 Excel 文件全部解析失败（解析器按枚举名匹配）。
+     */
+    @Test
+    void templatesNeverPrintRawContentTypeEnum() throws IOException {
+        Pattern rawTypeText = Pattern.compile(
+                "th:text=\"\\$\\{[A-Za-z]+\\.?type(\\(\\))?}\"");
+        List<String> offenders = new ArrayList<>();
+        for (Path f : templates()) {
+            String html = Files.readString(f, StandardCharsets.UTF_8)
+                    .replaceAll("(?s)<!--.*?-->", "");
+            Matcher m = rawTypeText.matcher(html);
+            while (m.find()) {
+                offenders.add(fileName(f) + " → " + m.group());
+            }
+        }
+        assertThat(offenders)
+                .as("🔴 直接把内容类型枚举名打到页面上了。运营后台的内容称呼必须与 App 一致，"
+                        + "改用 #{'admin.contentType.' + ${…}}")
+                .isEmpty();
+    }
+
     /** 该锚点元素内部起了一个片段 ⇒ 它是片段的外壳，不参与整页渲染，合法。 */
     private boolean wrapsAFragment(List<String> lines, int line, Matcher anchor, List<Span> fragments) {
         String tag = anchor.group(1) != null ? "form"

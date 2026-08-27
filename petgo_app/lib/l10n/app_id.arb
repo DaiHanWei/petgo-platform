@@ -712,8 +712,9 @@
   },
   "pushSoftGuideAllow": "Aktifkan",
   "pushSoftGuideLater": "Nanti saja",
+  "pushEnableGuideCta": "Aktifkan",
   "pushEnableGuideTitle": "Aktifkan notifikasi",
-  "pushEnableGuideBody": "Dapat pemberitahuan begitu dokter hewan membalas atau konsultasi diperbarui",
+  "pushEnableGuideBody": "Jangan kelewat balasan dokter & momen si kecil",
   "updateRecommendTitle": "Versi baru tersedia",
   "updateRecommendBody": "Perbarui untuk fitur dan perbaikan terbaru.",
   "updateForceTitle": "Perlu pembaruan untuk lanjut",
@@ -942,9 +943,10 @@
   "publishCropApply": "Terapkan",
   "publishCropLocked": "Rasio mengikuti foto pertama yang dipotong",
   "feedPinnedBadge": "Disematkan",
+  "phoneEditFieldLabel": "NOMOR HANDPHONE",
   "phoneEditTitle": "Nomor HP",
   "phoneNotSet": "Belum diisi",
-  "phoneEditHint": "Contoh: 0812 3456 7890",
+  "phoneEditHint": "812-3456-7890",
   "phoneSaveSuccess": "Nomor HP tersimpan",
   "phoneSaveFormatError": "Gagal menyimpan, periksa format nomor HP",
   "phoneSaveNetworkError": "Gagal menyimpan, coba lagi",
@@ -1185,13 +1187,9 @@
   "triageDone": "Selesai",
   "triageSaveHealthNote": "Simpan ke Catatan Kesehatan",
   "pawcoinBalanceLabel": "Saldo PawCoin",
-  "pawcoinRateHint": "= Rp{amount} · 1 koin = Rp1",
+  "pawcoinRateHint": "1 koin = Rp1",
   "@pawcoinRateHint": {
-    "placeholders": {
-      "amount": {
-        "type": "String"
-      }
-    }
+    "description": "PawCoin 余额下方的小字：只讲汇率。原文是「= Rp13.000 · 1 koin = Rp1」——\n1 枚就等于 Rp1，把余额再换算一遍是重复信息，且英文版当时还混着印尼语 koin（产品 2026-08-27）。"
   },
   "pawcoinIsiSaldo": "Isi Saldo",
   "pawcoinTxnListTitle": "Riwayat transaksi",
@@ -1535,6 +1533,8 @@
   "cardSaveError": "Gagal menyimpan. Izinkan akses galeri lalu coba lagi.",
   "idCardSaveToGallery": "Simpan ke Galeri",
   "idCardShare": "Bagikan",
+  "idCardShareRewardHint": "Bagikan kartu ini pertama kali dan dapat {coins} PawCoin",
+  "@idCardShareRewardHint": {"placeholders": {"coins": {"type": "int"}}},
   "idCardShareRewardToast": "Berhasil dibagikan · +{coins} PawCoin",
   "@idCardShareRewardToast": {"placeholders": {"coins": {"type": "int"}}},
   "idCardShareError": "Gagal membagikan. Silakan coba lagi.",
