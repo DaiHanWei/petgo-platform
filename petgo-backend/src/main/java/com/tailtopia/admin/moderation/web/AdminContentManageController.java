@@ -47,6 +47,7 @@ public class AdminContentManageController {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "q", required = false) String q,
+            @RequestParam(value = "sort", required = false) String sort,
             @RequestParam(value = "page", required = false, defaultValue = "0") int page,
             @RequestHeader(value = "HX-Request", required = false) String hxRequest, Model model) {
         model.addAttribute("active", "content");
@@ -56,8 +57,9 @@ public class AdminContentManageController {
         model.addAttribute("to", to);
         model.addAttribute("status", status);
         model.addAttribute("q", q);
+        model.addAttribute("sort", sort);
         model.addAttribute("page", page);
-        model.addAttribute("items", contentManage.browse(type, authorId, from, to, status, q, page));
+        model.addAttribute("items", contentManage.browse(type, authorId, from, to, status, q, sort, page));
         return hxRequest != null ? "admin/content :: rows" : "admin/content";
     }
 

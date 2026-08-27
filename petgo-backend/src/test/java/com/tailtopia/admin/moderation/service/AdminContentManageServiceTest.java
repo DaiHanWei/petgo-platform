@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -54,7 +55,17 @@ class AdminContentManageServiceTest {
     void browseDelegatesToContentService() {
         service.browse("DAILY", 7L, null, null, "ONLINE", "猫", 0);
         verify(contentService).adminSearch(eq(ContentType.DAILY), eq(7L), any(), any(),
-                eq(Boolean.FALSE), eq("猫"), anyInt(), anyInt());
+                eq(Boolean.FALSE), eq("猫"), isNull(), anyInt(), anyInt());
+    }
+
+    @Test
+    void browsePassesCommentSortAndRejectsUnknown() {
+        service.browse(null, null, null, null, null, null, "comments_desc", 0);
+        verify(contentService).adminSearch(isNull(), isNull(), any(), any(), isNull(), isNull(),
+                eq("comments_desc"), anyInt(), anyInt());
+        service.browse(null, null, null, null, null, null, "drop table", 0);
+        verify(contentService).adminSearch(isNull(), isNull(), any(), any(),
+                isNull(), isNull(), isNull(), anyInt(), anyInt());
     }
 
     @Test

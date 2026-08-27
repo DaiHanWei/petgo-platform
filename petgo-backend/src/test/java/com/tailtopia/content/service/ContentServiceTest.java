@@ -510,4 +510,89 @@ class ContentServiceTest {
             throw new RuntimeException(e);
         }
     }
+
+    // ===== publishTrusted（Lark 运营内容源，免审——spec-lark-scheduled-posts）=====
+
+    /** 会被硬拦截的文本经 publishTrusted 正常发布 = 审核确实被跳过；发布事件保留。 */
+    @Test
+    void publishTrustedSkipsModerationButKeepsEvent() {
+        ContentPostResponse resp = service.publishTrusted(1L,
+                new ContentPostCreateRequest(ContentType.DAILY, null, "ayo main judi online", null),
+                "lark-content:T1");
+        assertThat(resp.id()).isEqualTo(100L);
+        verify(events).publishEvent(any(com.tailtopia.content.event.ContentPublishedEvent.class));
+        verify(idempotency).store("lark-content:T1", 100L);
+    }
+
+    /** 幂等重放：同 key 已有资源 → 取回不重建。 */
+    @Test
+    void publishTrustedIdempotentReplay() {
+        when(idempotency.findResourceId("lark-content:T1")).thenReturn(Optional.of(77L));
+        ContentPost existing = ContentPost.publish(1L, ContentType.DAILY, null, "old", null);
+        setId(existing, 77L);
+        when(posts.findById(77L)).thenReturn(Optional.of(existing));
+
+        ContentPostResponse resp = service.publishTrusted(1L,
+                new ContentPostCreateRequest(ContentType.DAILY, null, "whatever", null),
+                "lark-content:T1");
+
+        assertThat(resp.id()).isEqualTo(77L);
+        verify(posts, never()).save(any());
+    }
+
+    /** 幂等键残留（外层事务回滚后 Redis 键指向幽灵 id）：不抛 notFound，按未发布继续创建。 */
+    @Test
+    void publishTrustedGhostIdempotencyKeyFallsThroughToCreate() {
+        when(idempotency.findResourceId("lark-content:T1")).thenReturn(Optional.of(77L));
+        when(posts.findById(77L)).thenReturn(Optional.empty());
+
+        ContentPostResponse resp = service.publishTrusted(1L,
+                new ContentPostCreateRequest(ContentType.DAILY, null, "retry", null),
+                "lark-content:T1");
+
+        assertThat(resp.id()).isEqualTo(100L);
+        verify(posts).save(any());
+        verify(idempotency).store("lark-content:T1", 100L);
+    }
+
+    @Test
+    void publishTrustedRejectsGrowthMoment() {
+        assertThatThrownBy(() -> service.publishTrusted(1L,
+                new ContentPostCreateRequest(ContentType.GROWTH_MOMENT, null, "x", null), "k"))
+                .isInstanceOf(AppException.class);
+        verify(posts, never()).save(any());
+    }
+
+    @Test
+    void publishTrustedRejectsNullType() {
+        assertThatThrownBy(() -> service.publishTrusted(1L,
+                new ContentPostCreateRequest(null, null, "x", null), "k"))
+                .isInstanceOf(AppException.class);
+        verify(posts, never()).save(any());
+    }
+
+    @Test
+    void publishTrustedRejectsOverlongText() {
+        assertThatThrownBy(() -> service.publishTrusted(1L,
+                new ContentPostCreateRequest(ContentType.DAILY, null, "x".repeat(1001), null), "k"))
+                .isInstanceOf(AppException.class);
+        verify(posts, never()).save(any());
+    }
+
+    @Test
+    void publishTrustedRejectsTooManyImages() {
+        List<String> ten = List.of("u1", "u2", "u3", "u4", "u5", "u6", "u7", "u8", "u9", "u10");
+        assertThatThrownBy(() -> service.publishTrusted(1L,
+                new ContentPostCreateRequest(ContentType.DAILY, null, null, ten), "k"))
+                .isInstanceOf(AppException.class);
+        verify(posts, never()).save(any());
+    }
+
+    @Test
+    void publishTrustedRejectsBothEmpty() {
+        assertThatThrownBy(() -> service.publishTrusted(1L,
+                new ContentPostCreateRequest(ContentType.DAILY, null, "  ", null), "k"))
+                .isInstanceOf(AppException.class);
+        verify(posts, never()).save(any());
+    }
 }
