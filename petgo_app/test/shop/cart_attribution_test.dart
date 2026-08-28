@@ -100,6 +100,8 @@ void main() {
     testWidgets('🔴 Toko 卡片：全部精选与品类页是两个不同的入口', (t) async {
       await t.pumpWidget(ProviderScope(
         overrides: [
+          // banner 同样必须 override —— 真 provider 会发请求并留下未完成 Timer。
+          shopBannerProvider.overrideWith((ref) async => null),
           shopProductsProvider.overrideWith((ref, category) async => const [
                 ShopProductSummary(
                     token: 'p1', name: 'Produk', brand: 'B', minPrice: 285000),

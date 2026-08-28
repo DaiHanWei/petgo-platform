@@ -36,6 +36,8 @@ Future<ProviderContainer> _pumpGuestApp(WidgetTester tester) async {
       feedRepositoryProvider.overrideWithValue(FakeFeedRepository()),
   // Toko 现为第 2 位 Tab（DEP-1 闭合）。打桩商品列表，否则点进去会走真实 dio 请求，
   // 测试环境无后端 → 挂在 30s receiveTimeout 上（表现为 pumpAndSettle 不收敛 / pending timer）。
+      // banner 同样必须 override —— 真 provider 会发请求并留下未完成 Timer。
+      shopBannerProvider.overrideWith((ref) async => null),
       shopProductsProvider.overrideWith((ref, category) async => <ShopProductSummary>[]),
     ],
   );
@@ -165,7 +167,7 @@ void main() {
     testWidgets('游客点 Toko → 直接进入，不弹登录框（转化漏斗设计）', (tester) async {
       await _pumpGuestApp(tester);
 
-      await tester.tap(_tabButton('Toko'));
+      await tester.tap(_tabButton('Shop'));
       await tester.pumpAndSettle();
 
       expect(find.byType(LoginHardDialog), findsNothing,
@@ -221,7 +223,7 @@ void main() {
       // 真路径下游客态是 Tab 分支根页，底栏必须在（A1 稿亦有底栏）。
       expect(find.byType(BottomTabBar), findsOneWidget);
       expect(_tabButton('Diary'), findsOneWidget);
-      expect(_tabButton('Toko'), findsOneWidget);
+      expect(_tabButton('Shop'), findsOneWidget);
       expect(_tabButton('Social'), findsOneWidget);
       expect(_tabButton('Me'), findsOneWidget);
     });

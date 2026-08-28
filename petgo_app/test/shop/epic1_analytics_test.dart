@@ -56,6 +56,8 @@ void main() {
     await t.pumpWidget(wrap(
       const TokoPage(),
       [
+        // banner 同样必须 override —— 真 provider 会发请求并留下未完成 Timer。
+        shopBannerProvider.overrideWith((ref) async => null),
         shopProductsProvider.overrideWith((ref, c) async => [
               const ShopProductSummary(
                   token: 'tok1', name: 'n', brand: 'b', minPrice: 285000),

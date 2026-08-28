@@ -18,6 +18,8 @@ void main() {
   Widget host(List<ShopProductSummary> products) {
     return ProviderScope(
       overrides: [
+        // banner 同样必须 override —— 真 provider 会发请求并留下未完成 Timer。
+        shopBannerProvider.overrideWith((ref) async => null),
         shopProductsProvider.overrideWith((ref, category) async => products),
       ],
       child: const MaterialApp(

@@ -9,7 +9,6 @@ import '../../../l10n/app_localizations.dart';
 import '../data/shop_repository.dart';
 import '../domain/shop_product.dart';
 import 'cart_icon_button.dart';
-import 'shop_ui_variant.dart';
 import 'widgets/repurchase_zones.dart';
 
 /// Toko 首页（Story 1.6，FR-93 / FR-93A）。
@@ -68,7 +67,6 @@ class _TokoPageState extends ConsumerState<TokoPage> {
         actions: const [
           // 🔧 仅 debug：切到设计稿版式（TokoPageV2）。release 构建里它渲染成空。
           //    这是本 Story 之外唯一对 v1 的改动，且只在顶栏加一个开发用图标。
-          ShopUiVariantToggle(),
           // Story 3.6 接上真实购物车页（角标 = 商品件数）。游客点进去看到的是「登录后查看」
           // 空态 + 软性引导，**不是登录墙**——浏览路径依旧零门槛（FR-93A）。
           CartIconButton(),

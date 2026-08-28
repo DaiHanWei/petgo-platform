@@ -14,6 +14,8 @@ Future<void> _pumpApp(WidgetTester tester) async {
     overrides: [
   // Toko 现为第 2 位 Tab（DEP-1 闭合）。打桩商品列表，否则点进去会走真实 dio 请求，
   // 测试环境无后端 → 挂在 30s receiveTimeout 上（表现为 pumpAndSettle 不收敛 / pending timer）。
+      // banner 同样必须 override —— 真 provider 会发请求并留下未完成 Timer。
+      shopBannerProvider.overrideWith((ref) async => null),
       shopProductsProvider.overrideWith((ref, category) async => <ShopProductSummary>[]),
     ],
     child: const TailTopiaApp(),
@@ -42,7 +44,7 @@ void main() {
     // 'Diary' 同时出现在底部导航(tabProfile)与 Feed 分类 tab(feedTabGrowth=GROWTH_MOMENT)，
     // 故 findsWidgets（与 id 'Diary' 同理）。bug 20260706-248：Growth→Diary、Consult→Health。
     expect(find.text('Diary'), findsWidgets);
-    expect(find.text('Toko'), findsOneWidget);
+    expect(find.text('Shop'), findsOneWidget);
     expect(find.text('Me'), findsOneWidget);
   });
 
@@ -65,10 +67,10 @@ void main() {
   // AC2 — 点击 Tab 切换目的地。
   testWidgets('AC2: tapping a tab switches destination', (tester) async {
     await _pumpApp(tester);
-    await tester.tap(find.text('Toko'));
+    await tester.tap(find.text('Shop'));
     await tester.pumpAndSettle();
     // DEP-1 闭合后第 2 位是 Toko；切过去后底栏标签仍在（active 时页面自身亦有标题）。
-    expect(find.text('Toko'), findsWidgets);
+    expect(find.text('Shop'), findsWidgets);
   });
 
   // AC3 — i18n 默认英语。

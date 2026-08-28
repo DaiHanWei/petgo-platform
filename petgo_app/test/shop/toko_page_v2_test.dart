@@ -27,6 +27,8 @@ void main() {
   }) {
     return ProviderScope(
       overrides: [
+        // banner 同样必须 override —— 真 provider 会发请求并留下未完成 Timer。
+        shopBannerProvider.overrideWith((ref) async => null),
         shopProductsProvider.overrideWith((ref, category) async => products),
       ],
       child: MaterialApp(
@@ -206,6 +208,8 @@ void main() {
       // 必须 override 商品 provider：不然真 provider 会去发请求，
       // 留下未完成的 Timer，widget test 在拆树时会因此断言失败。
       final container = ProviderContainer(overrides: [
+        // banner 同样必须 override —— 真 provider 会发请求并留下未完成 Timer。
+        shopBannerProvider.overrideWith((ref) async => null),
         shopProductsProvider.overrideWith((ref, category) async => <ShopProductSummary>[]),
       ]);
       addTearDown(container.dispose);
