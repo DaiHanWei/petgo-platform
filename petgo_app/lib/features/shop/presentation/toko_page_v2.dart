@@ -1,7 +1,7 @@
 /// Toko 首页 —— **设计稿版式**（V1.4.0 · `design_handoff_ecommerce/01_screens_browse_order.md` 屏 1/2）。
 ///
-/// 与 [TokoPage]（v1 版式）**并存**，由 `shopUiVariantProvider` 二选一。
-/// 两者走同一批 provider、同一条路由，差异只在渲染层 —— 见 `shop_ui_variant.dart` 的说明。
+/// ⚠️ 2026-08-28：v1 版式（TokoPage）已整体删除，双 UI 并存机制一并移除。
+/// 文件名保留 `_v2` 后缀是为了不制造一次纯改名的大 diff —— 现在它就是唯一的 Toko 页。
 ///
 /// ## 🔴 设计稿要求但**当前无数据源**的四处
 ///
@@ -40,7 +40,6 @@ import '../data/shop_repository.dart';
 import '../data/shop_repurchase_repository.dart';
 import '../domain/shop_product.dart';
 import '../domain/shop_repurchase.dart';
-import 'shop_ui_variant.dart';
 import 'widgets/shop_buttons.dart';
 import 'widgets/shop_controls.dart';
 import 'widgets/shop_decor.dart';
@@ -77,7 +76,6 @@ class _TokoPageV2State extends ConsumerState<TokoPageV2> {
         title: l10n.tokoTitle,
         large: true,
         actions: [
-          const ShopUiVariantToggle(color: ShopColors.surface),
           _pawcoinCapsule(l10n, loggedIn),
           const SizedBox(width: 8),
           const _CartCapsule(),

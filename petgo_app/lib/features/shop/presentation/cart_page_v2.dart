@@ -45,11 +45,29 @@ import 'widgets/shop_controls.dart';
 import 'widgets/shop_decor.dart';
 import 'widgets/shop_surface.dart';
 
-class CartPageV2 extends ConsumerWidget {
+/// 🔴 <b>改为有状态只为一件事：页面曝光埋点</b>（2026-08-28 补）。
+///
+/// `toko_cart_page_viewed` 原本只在 v1 的 CartPage 里上报。v2 自 2026-08-21 成为默认版式后
+/// 这个指标其实**已经空了一周多** —— 只是 v1 代码还在，埋点清单对账测试就一直是绿的，
+/// 直到 v1 整体删除才暴露出来。
+/// ⚠️ 必须在 initState 而不是 build 里报：build 会因 provider 变化被反复调用，
+/// 那样一次浏览会上报很多条，页面浏览量直接失真。
+class CartPageV2 extends ConsumerStatefulWidget {
   const CartPageV2({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CartPageV2> createState() => _CartPageV2State();
+}
+
+class _CartPageV2State extends ConsumerState<CartPageV2> {
+  @override
+  void initState() {
+    super.initState();
+    Analytics.capture('toko_cart_page_viewed');
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final async = ref.watch(cartProvider);
     // 🔒 游客态：**页内软性引导，不 redirect**。把游客弹回 /home 等于告诉他

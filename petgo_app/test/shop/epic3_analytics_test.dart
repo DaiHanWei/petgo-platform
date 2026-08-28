@@ -55,7 +55,7 @@ void main() {
     final repo = File('lib/features/shop/data/cart_repository.dart').readAsStringSync();
     expect(repo, contains('entrySource'),
         reason: '加购不带来源 → 订单行的 entry_source 恒为 null → AB-13B 算不出转化率');
-    final toko = File('lib/features/shop/presentation/toko_page.dart').readAsStringSync();
+    final toko = File('lib/features/shop/presentation/toko_page_v2.dart').readAsStringSync();
     expect(toko, contains('TOKO_ALL_FEATURED'));
     expect(toko, contains('TOKO_CATEGORY'),
         reason: '区域④ 与品类页是两个入口，混为一谈就算不出「品类页值不值得做」');

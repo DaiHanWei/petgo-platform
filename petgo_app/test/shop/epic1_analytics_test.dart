@@ -8,8 +8,8 @@ import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/features/shop/data/shop_repository.dart';
 import 'package:tailtopia/features/shop/domain/shop_product.dart';
 import 'package:tailtopia/features/shop/domain/shop_product_detail.dart';
-import 'package:tailtopia/features/shop/presentation/product_detail_page.dart';
-import 'package:tailtopia/features/shop/presentation/toko_page.dart';
+import 'package:tailtopia/features/shop/presentation/product_detail_page_v2.dart';
+import 'package:tailtopia/features/shop/presentation/toko_page_v2.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// Story 1.8：Epic 1 埋点收口。
@@ -54,7 +54,7 @@ void main() {
 
   testWidgets('Toko 页：toko_tab_viewed + toko_product_shown(zone)', (t) async {
     await t.pumpWidget(wrap(
-      const TokoPage(),
+      const TokoPageV2(),
       [
         // banner 同样必须 override —— 真 provider 会发请求并留下未完成 Timer。
         shopBannerProvider.overrideWith((ref) async => null),
@@ -74,7 +74,7 @@ void main() {
 
   testWidgets('详情页：toko_product_detail_viewed', (t) async {
     await t.pumpWidget(wrap(
-      const ProductDetailPage(token: 'tok1'),
+      const ProductDetailPageV2(token: 'tok1'),
       [
         shopProductDetailProvider.overrideWith((ref, token) async => ShopProductDetail(
               token: 'tok1', name: 'n', brand: 'b',
@@ -96,7 +96,7 @@ void main() {
     });
 
     await t.pumpWidget(wrap(
-      const ProductDetailPage(token: 'tok1'),
+      const ProductDetailPageV2(token: 'tok1'),
       [
         shopProductDetailProvider.overrideWith((ref, token) async => ShopProductDetail(
               token: 'tok1', name: 'n', brand: 'b',

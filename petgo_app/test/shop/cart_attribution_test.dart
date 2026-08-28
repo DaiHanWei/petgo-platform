@@ -12,9 +12,15 @@ import 'package:tailtopia/features/shop/data/shop_repository.dart';
 import 'package:tailtopia/features/shop/domain/shop_cart.dart';
 import 'package:tailtopia/features/shop/domain/shop_product.dart';
 import 'package:tailtopia/features/shop/domain/shop_product_detail.dart';
-import 'package:tailtopia/features/shop/presentation/product_detail_page.dart';
-import 'package:tailtopia/features/shop/presentation/toko_page.dart';
+import 'package:tailtopia/features/shop/presentation/product_detail_page_v2.dart';
+import 'package:tailtopia/features/shop/presentation/toko_page_v2.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/features/shop/presentation/widgets/shop_buttons.dart';
+
+// v2 详情页加购按钮的印尼语文案（AppLocalizationsId.tokoAddToCartShort）。
+// ⚠️ 两个测试都固定跑 Locale('id')，故直接用字面量；文案改了这里会红，正是想要的信号。
+const String _kAddToCartId = '+ Keranjang';
+
 
 /// Story 3.10：归因链闭合（AB-13B / A-16）。
 ///
@@ -62,7 +68,7 @@ void main() {
         routes: [
           GoRoute(
             path: '/shop/products/:token',
-            builder: (c, s) => ProductDetailPage(
+            builder: (c, s) => ProductDetailPageV2(
               token: s.pathParameters['token']!,
               entrySource: s.uri.queryParameters['from'],
             ),
@@ -88,7 +94,8 @@ void main() {
       ));
       await t.pumpAndSettle();
 
-      await t.tap(find.byType(FilledButton));
+      // ⚠️ 同上：按文案定位，避免点到旁边的「立即购买」。
+      await t.tap(find.widgetWithText(ShopButton, _kAddToCartId));
       await t.pumpAndSettle();
 
       expect(repo.lastEntrySource, 'TOKO_CATEGORY');
@@ -112,7 +119,7 @@ void main() {
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('id'),
           home: Builder(
-            builder: (context) => const TokoPage(),
+            builder: (context) => const TokoPageV2(),
           ),
         ),
       ));
@@ -121,7 +128,7 @@ void main() {
       // 未选品类 → 区域④；选了品类 → 品类入口。两者混为一谈就算不出「品类页值不值得做」。
       // widget 层拿不到 push 的 query，而这条三元分支是「两个入口不同」的唯一实现处。
       final source =
-          File('lib/features/shop/presentation/toko_page.dart').readAsStringSync();
+          File('lib/features/shop/presentation/toko_page_v2.dart').readAsStringSync();
       expect(source.contains("_selected == null ? 'TOKO_ALL_FEATURED' : 'TOKO_CATEGORY'"), isTrue,
           reason: '入口来源必须随当前筛选态变化');
     });

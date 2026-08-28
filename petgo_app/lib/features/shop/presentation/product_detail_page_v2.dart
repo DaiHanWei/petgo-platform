@@ -93,8 +93,40 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
   /// 把整页切成售罄态会挡住本来买得到的其它规格。
   bool _isSoldOut(ShopProductDetail d) {
     final sku = _effectiveSku(d);
-    if (sku != null) return sku.stockStatus == StockStatus.outOfStock;
-    return d.skus.isNotEmpty && d.skus.every((s) => s.stockStatus == StockStatus.outOfStock);
+    if (sku != null) {
+      final out = sku.stockStatus == StockStatus.outOfStock;
+      if (out) _reportOutOfStock(sku.token);
+      return out;
+    }
+    final allOut =
+        d.skus.isNotEmpty && d.skus.every((s) => s.stockStatus == StockStatus.outOfStock);
+    if (allOut) {
+      for (final s in d.skus) {
+        _reportOutOfStock(s.token);
+      }
+    }
+    return allOut;
+  }
+
+  /// 已上报过售罄曝光的 SKU（Story 1.8 埋点收口）。
+  final Set<String> _outOfStockReported = {};
+
+  /// 售罄曝光。
+  ///
+  /// 🔴 <b>2026-08-28 补</b>：`toko_out_of_stock_shown` 原本只在 v1 的详情页上报，
+  /// 而 v2 自 2026-08-21 起就是默认版式 —— 这个指标实际上**已经空了一周多**，
+  /// 只是 v1 代码还在、埋点清单对账测试就一直是绿的，直到 v1 整体删除才暴露。
+  ///
+  /// 售罄曝光是转化漏斗上最值得看的流失点之一（用户想买但没货 ≠ 用户不想买），
+  /// Epic 6 的补货提醒要靠它判断值不值得做。
+  ///
+  /// ⚠️ 按 SKU 去重：[_isSoldOut] 在 build 期间被调用，不去重会随每次重建反复上报。
+  void _reportOutOfStock(String skuToken) {
+    if (!_outOfStockReported.add(skuToken)) return;
+    Analytics.capture('toko_out_of_stock_shown', {
+      'product_token': widget.token,
+      'sku_token': skuToken,
+    });
   }
 
   @override
