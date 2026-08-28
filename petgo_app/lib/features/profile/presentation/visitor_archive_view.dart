@@ -73,10 +73,15 @@ class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
                 milestoneTotal: stats?.milestoneTotal,
                 // 里程碑进度条只展示，不跳转（跳的是当前登录用户自己的里程碑页）。
               ),
-              // ⚠️ 2026-08-18 产品决定：**访客态先不做日历屏**，只保留时间线。
-              // 因此这里没有「时间线 / 日历」切换行 —— 只有一种视图时给个切换器是噪音。
-              // 后端的访客日历接口已建好并有测试（Story 2.2），随时可以接回来；
-              // 要恢复的话，把切换行与 ArchiveCalendar 加回本处即可，服务端无需改动。
+              // ⚠️ **访客态不做日历屏**，只保留时间线 —— 因此这里没有「时间线 / 日历」切换行。
+              // 只有一种视图时给个切换器是噪音。
+              //
+              // 🔴 UI 稿 P1 上**画着** Linimasa / Kalender 两个按钮，所以这里看起来像漏做 ——
+              // 不是。2026-08-18 产品决定不做；2026-08-28 对着 P1 逐项核对后**再次确认不做**。
+              // 别再当成缺口补上去。
+              //
+              // 后端的访客日历接口已建好并有测试（Story 2.2）：真要恢复，把切换行与
+              // ArchiveCalendar 加回本处即可，服务端无需改动。
               const SizedBox(height: 10),
               _timeline(l10n, profile.name),
             ],

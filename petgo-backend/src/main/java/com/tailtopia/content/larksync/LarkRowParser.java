@@ -17,6 +17,7 @@ import java.util.List;
 final class LarkRowParser {
 
     /** 各列的表头文字（括号前部分；与运营约定的《List of Content for Automatic Upload》表头一致）。 */
+    static final String H_CATEGORY = "内容分类";
     static final String H_CODE = "内容编号";
     static final String H_TEXT = "文案部分";
     static final String H_IMAGE = "图片编号";
@@ -29,9 +30,11 @@ final class LarkRowParser {
     /**
      * 各列的 0 基下标（相对 A 列）。
      *
-     * @param email 「发布账号(邮箱)」输入列；表里没有时为 -1（全部走随机虚拟账号）
+     * @param email    「发布账号(邮箱)」输入列；表里没有时为 -1（全部走随机虚拟账号）
+     * @param category 「内容分类」列（Moment/Knowledge）；表里没有时为 -1（全部按 DAILY）
      */
-    record Columns(int code, int text, int image, int status, int account, int note, int email) {
+    record Columns(int code, int text, int image, int status, int account, int note, int email,
+            int category) {
 
         /** 0 基下标 → 表格列字母（0=A，25=Z，26=AA…）。 */
         static String letter(int zeroBased) {
@@ -53,9 +56,10 @@ final class LarkRowParser {
      *                       云盘文件名 = {前缀}-{整数}.jpg，按整数升序全部取用
      * @param status         上传状态列原文（空 = 待发布）
      * @param email          发布账号(邮箱) 列原文（空 = 随机虚拟账号）
+     * @param category       内容分类列原文（空 = Moment/DAILY；由服务层映射，非法值判无效）
      */
     record Row(int sheetRowNumber, String contentCode, String text,
-            List<String> imageCodes, String status, String email) {
+            List<String> imageCodes, String status, String email, String category) {
 
         boolean pending() {
             return status == null || status.isBlank();
@@ -95,7 +99,18 @@ final class LarkRowParser {
                 indexOf(header, H_STATUS),
                 account,
                 indexOf(header, H_NOTE),
-                email);
+                email,
+                optionalIndexOf(header, H_CATEGORY));
+    }
+
+    private static int optionalIndexOf(List<String> header, String name) {
+        for (int i = 0; i < header.size(); i++) {
+            String h = header.get(i);
+            if (h != null && name.equals(baseName(h))) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private static int indexOf(List<String> header, String name) {
@@ -141,7 +156,8 @@ final class LarkRowParser {
                     cell(cells, cols.text()),
                     splitImageCodes(cell(cells, cols.image())),
                     cell(cells, cols.status()),
-                    cols.email() >= 0 ? cell(cells, cols.email()) : ""));
+                    cols.email() >= 0 ? cell(cells, cols.email()) : "",
+                    cols.category() >= 0 ? cell(cells, cols.category()) : ""));
         }
         return out;
     }

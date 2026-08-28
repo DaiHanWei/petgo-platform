@@ -48,6 +48,7 @@ class AdminContentManageServiceTest {
                 // 本类不验它们（真实语义在 ContentSpeciesIntegrationTest 跑真库），给 mock。
                 mock(com.tailtopia.content.species.ContentSpeciesResolver.class),
                 mock(com.tailtopia.auth.repository.UserRepository.class),
+                mock(com.tailtopia.content.repository.ContentLikeRepository.class),
                 mock(com.tailtopia.admin.virtual.service.AdminPublishIdentityService.class));
     }
 

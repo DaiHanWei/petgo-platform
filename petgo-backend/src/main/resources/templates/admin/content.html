@@ -44,6 +44,19 @@
                             th:text="#{admin.content.status.deleted}">已下架</option>
                 </select>
             </label>
+            <!-- 🔴 日期范围的**口径**（2026-08-28，取代互动积分页的两档口径）。
+                 两者回答的是两个不同的问题，都对，但互相答不了：
+                 · 发布时间 —— 这段时间**发的**内容质量如何（点赞列 = 至今累计）
+                 · 点赞时间 —— 这段时间**产生了**多少互动（点赞列 = 窗口内的赞数，按它排序）
+                 一条三个月前的帖子这周被翻出来点了 50 个赞，只有后者看得见。 -->
+            <label>
+                <select name="dateBasis">
+                    <option value="published" th:selected="${dateBasis != 'liked'}"
+                            th:text="#{admin.content.basis.published}">按发布时间</option>
+                    <option value="liked" th:selected="${dateBasis == 'liked'}"
+                            th:text="#{admin.content.basis.liked}">按点赞时间</option>
+                </select>
+            </label>
             <label>
                 <input type="date" name="from" th:value="${from}"/>
             </label>
@@ -70,8 +83,18 @@
                             th:selected="${speciesSource == src.name()}">NONE</option>
                 </select>
             </label>
+            <!-- 表头点击排序把值写进这里再提交表单（保留筛选条件）。 -->
             <input type="hidden" name="sort" id="content-sort" th:value="${sort}"/>
             <button type="submit" class="btn btn-primary" th:text="#{admin.content.search}">查询</button>
+            <!-- 导出（2026-08-28，取代被撤掉的「内容互动积分」页的导出）。
+                 🔴 **按钮放在筛选表单里**，把当前条件原样带走 —— 导出的就是屏幕上这一份。
+                 ⚠️ sec:authorize 与控制器的 EXPORT_AUTH 逐字一致，否则按钮在、点了 403。
+                 ⚠️ 物种两个筛选**故意不带**：导出列里没有物种，带上会导出一份
+                    与文件内容对不上的子集（筛了却看不出筛过）。 -->
+            <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.list_export')"
+               class="btn"
+               th:href="@{/admin/content/export.csv(type=${type},authorId=${authorId},from=${from},to=${to},status=${status},q=${q},dateBasis=${dateBasis})}"
+               th:text="#{admin.content.exportCsv}">导出 CSV</a>
         </form>
         <!-- 评论数表头排序：每次点击在 高→低 / 低→高 间切换（写入隐藏 sort 后提交筛选表单，HTMX 只刷行）。 -->
         <script>
@@ -84,6 +107,14 @@
             }
         </script>
 
+        <!-- 「按点赞时间」口径下必须说清两件事，否则这一档的数会被误读。 -->
+        <p class="hint" data-notice="like-basis" th:if="${dateBasis == 'liked'}"
+           th:text="#{admin.content.basis.likedHint}">
+            当前按点赞发生的时间统计：列出这段时间里被点过赞的内容，点赞数是**这段时间内**产生的，不是至今累计；按它从多到少排序。</p>
+        <!-- 🔴 到顶必须明说 —— 一份看不出被截断的报表比没有报表更糟。 -->
+        <p class="hint" data-notice="like-pool-full" th:if="${likeWindowPoolFull}"
+           th:text="#{admin.content.basis.likedPoolFull}">
+            这段时间里有赞的内容超过上限，只纳入了赞数最高的一批。请收窄时间范围后再看。</p>
         <!-- 🔴 Story 17.2 · AC2：确认前必须明示这不是下架。
              不明示运营会把它当下架用，然后向举报人回复「已处理」，而内容其实还在。 -->
         <p class="hint" data-notice="throttle-not-takedown"
@@ -102,7 +133,14 @@
                 <th th:text="#{admin.content.col.author}">作者</th>
                 <th th:text="#{admin.content.col.preview}">正文预览</th>
                 <th th:text="#{admin.content.col.images}">图片</th>
-                <th style="cursor:pointer;user-select:none" onclick="toggleCommentSort(this)"
+                <!-- bug 20260828：点赞数。产品撤掉了「内容互动积分」整页，
+                     运营真正常用的就是这一个数，放回它本来该在的地方。 -->
+                <th th:text="${dateBasis == 'liked'} ? #{admin.content.col.likesInWindow} : #{admin.content.col.likes}">点赞数</th>
+                <!-- 评论数（可点表头排序）。⚠️「按点赞时间」口径下行序固定由窗口内赞数决定，
+                     排序在那一档无效 —— 那时不挂点击、也不显示箭头，免得点了没反应。 -->
+                <th th:if="${sortDisabled}" th:text="#{admin.content.col.comments}">评论数</th>
+                <th th:unless="${sortDisabled}" style="cursor:pointer;user-select:none"
+                    onclick="toggleCommentSort(this)"
                     th:title="#{admin.content.col.commentsSortHint}">
                     <span th:text="#{admin.content.col.comments}">评论数</span>
                     <span class="sort-arrow"
@@ -134,7 +172,7 @@
                 </th:block>
             </th:block>
             <tr th:if="${#lists.isEmpty(items)}">
-                <td colspan="12" class="empty" th:text="#{admin.content.empty}">无匹配内容。</td>
+                <td colspan="13" class="empty" th:text="#{admin.content.empty}">无匹配内容。</td>
             </tr>
             </tbody>
         </table>
@@ -162,6 +200,9 @@
                 <img th:each="img : ${c.imageUrls()}" th:src="${img}" alt="" loading="lazy" data-lightbox
                      style="width:48px;height:48px;object-fit:cover;border-radius:4px;margin:2px;vertical-align:middle;cursor:zoom-in"/>
             </td>
+            <!-- ⚠️ 零赞的帖子**不会出现在 likeCounts 里**（group by 不给空组造行），
+                 所以必须自己兜底成 0 —— 直接打印会是空格，看起来像没统计。 -->
+            <td th:text="${likeCounts == null ? '—' : (likeCounts[c.id()] ?: 0)}">0</td>
             <td th:text="${c.commentCount()}">0</td>
             <td th:text="${@adminTime.wib(c.createdAt())}">-</td>
             <td>

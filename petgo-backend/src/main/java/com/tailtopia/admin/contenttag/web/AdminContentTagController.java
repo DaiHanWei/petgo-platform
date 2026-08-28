@@ -70,7 +70,9 @@ public class AdminContentTagController {
             model.addAttribute("assignments", service.assignmentsByPost(postId));
         }
         // AC3：尺寸规范文案常驻在上传控件旁（三语走 MessageSource）。
-        model.addAttribute("iconSpec", icons.specText());
+        model.addAttribute("iconSpec", icons.specText("contentTag"));
+        // 2026-08-28：胶囊底色调色板（固定几档，见 ContentTagBadgeStyle 的说明）。
+        model.addAttribute("badgeStyles", com.tailtopia.content.domain.ContentTagBadgeStyle.values());
         return "admin/content-tags";
     }
 
@@ -89,6 +91,7 @@ public class AdminContentTagController {
             @RequestParam String code, @RequestParam String name,
             @RequestParam(value = "iconFile", required = false) MultipartFile iconFile,
             @RequestParam String description,
+            @RequestParam(value = "badgeStyle", required = false) String badgeStyle,
             RedirectAttributes flash) {
         try {
             // Story 11.5：图标改为上传。🔴 新建时**必须**有图标 —— 没有图标的标签在
@@ -97,7 +100,8 @@ public class AdminContentTagController {
             if (iconUrl == null) {
                 throw AppException.validation(icons.iconRequiredMessage());
             }
-            service.createTag(admin.getAdminAccountId(), code, name, iconUrl, description);
+            service.createTag(admin.getAdminAccountId(), code, name, iconUrl, description,
+                    badgeStyle);
             flash.addFlashAttribute("notice", "已新建装饰标签");
         } catch (AppException e) {
             flash.addFlashAttribute("error", e.getMessage());
@@ -110,11 +114,13 @@ public class AdminContentTagController {
     public String editTag(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id,
             @RequestParam String name,
             @RequestParam(value = "iconFile", required = false) MultipartFile iconFile,
-            @RequestParam String description, RedirectAttributes flash) {
+            @RequestParam String description,
+            @RequestParam(value = "badgeStyle", required = false) String badgeStyle,
+            RedirectAttributes flash) {
         try {
             // 🛡 没传新文件 → 传 null，服务层保留原图标（不是清空）。
             service.editTag(admin.getAdminAccountId(), id, name,
-                    icons.uploadOrKeep(iconFile), description);
+                    icons.uploadOrKeep(iconFile), description, badgeStyle);
             flash.addFlashAttribute("notice", "已更新标签");
         } catch (AppException e) {
             flash.addFlashAttribute("error", e.getMessage());

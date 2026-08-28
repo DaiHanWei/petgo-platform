@@ -82,7 +82,10 @@ class AdminContentManageAccessControlTest {
     }
 
     private void browse() {
-        controller.content(null, null, null, null, null, null, null, 0, null, null, null, new ConcurrentModel());
+        // type, authorId, from, to, status, q, sort, page, species, speciesSource,
+        // dateBasis, hxRequest, model
+        controller.content(null, null, null, null, null, null, null, 0, null, null,
+                "published", null, new ConcurrentModel());
     }
 
     private void takedown() {

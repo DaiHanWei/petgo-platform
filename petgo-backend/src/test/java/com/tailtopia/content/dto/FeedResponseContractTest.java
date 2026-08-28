@@ -67,9 +67,10 @@ class FeedResponseContractTest {
         FeedItemResponse item = new FeedItemResponse(
                 42L, 7L, "小明", "https://cdn.petgo/p/a.jpg", false,
                 // V1.1.6 Story 5.1：运营标签随作者一起下发；**空表不下发**（NON_NULL 省略）。
-                List.of(new com.tailtopia.auth.dto.UserTagView("vet", "兽医", "🩺", "已认证兽医")),
+                List.of(new com.tailtopia.auth.dto.UserTagView("vet", "兽医", "🩺", "已认证兽医", "#F6A609")),
                 // V1.1.6 Story 5.2：内容装饰标签；同样**空表不下发**。
-                List.of(new ContentTagView("editor_pick", "编辑推荐", "🏆", "被官方选中的优质内容")),
+                List.of(new ContentTagView("editor_pick", "编辑推荐", "🏆", "被官方选中的优质内容",
+                        "#F6A609", "#F0596E")),
                 ContentType.DAILY, "今天带毛孩子去遛弯", "https://cdn.petgo/p/img.jpg", 3L,
                 Instant.parse("2026-06-05T00:00:00Z"), ContentVisibility.PUBLIC,
                 List.of("https://cdn.petgo/p/img.jpg", "https://cdn.petgo/p/img2.jpg"),

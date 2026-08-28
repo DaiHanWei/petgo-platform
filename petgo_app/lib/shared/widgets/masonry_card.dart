@@ -14,11 +14,12 @@ import 'letter_avatar.dart';
 
 /// Feed 单列卡片。**V1.1.6 Story 3.2 起为通栏版式**（FR-93）。
 ///
-/// 自上而下：作者行 → 图片 → 操作行（点赞 / 评论）→ 正文 → 时间。
+/// 自上而下：作者行（头像 + 名字 / 发布时间）→ 图片（如有）→ 正文 → 操作行（点赞 / 评论 / 分享）。
+/// 🔴 操作行 2026-08-28 从「图片与正文之间」挪到最后 —— 见下方 build 里的说明。
 ///
 /// ## 🔴 只有图片出血
 /// 「去掉屏边距」指的是**列表容器**那 16px，好让**图片**贴到屏幕左右边缘；
-/// 作者行 / 操作行 / 正文 / 时间**各自仍有 16px 左右内边距**（视觉稿里这四块都写着）。
+/// 作者行 / 操作行 / 正文**各自仍有 16px 左右内边距**（视觉稿里这三块都写着）。
 /// 做成整张贴边会让文字顶到屏幕边上 —— 这是本次改版最容易做错的一处。
 ///
 /// ## 点击分区（FR-93）
@@ -141,29 +142,57 @@ class MasonryCard extends StatelessWidget {
                             deleted: item.authorDeleted,
                             size: 32),
                         const SizedBox(width: 9),
-                        Flexible(
-                          // V1.1.6 Story 5.1：昵称旁挂运营标签（四处展示位之一）。
-                          // 🛡 空间不足时**昵称完整优先、标签丢弃**，不截断昵称、不做「+N」折叠。
-                          child: UserTagRow(
-                            position: 'feed',
-                            name: name,
-                            nameStyle: const TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.ink),
-                            // 注销作者不挂标签（匿名化之后不该再有身份标识）。
-                            tags: item.authorDeleted ? const [] : item.authorTags,
+                        // 名字一行、发布时间一行，两行都与头像右侧对齐。
+                        //
+                        // 🔴 时间**挂在名字下面**（bug 20260828）：它此前跟在正文后面，
+                        //    读者要先读完内容才知道这是什么时候发的 —— 而「多久以前」
+                        //    恰恰是决定要不要往下读的那个信息，属于署名的一部分。
+                        //    这也把正文与操作行之间原本插着的一行小字清掉了。
+                        Expanded(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Flexible(
+                                    // V1.1.6 Story 5.1：昵称旁挂运营标签（四处展示位之一）。
+                                    // 🛡 空间不足时**昵称完整优先、标签丢弃**，不截断昵称、不做「+N」折叠。
+                                    child: UserTagRow(
+                                      position: 'feed',
+                                      name: name,
+                                      nameStyle: const TextStyle(
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.ink),
+                                      // 注销作者不挂标签（匿名化之后不该再有身份标识）。
+                                      tags: item.authorDeleted ? const [] : item.authorTags,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  // 类型徽章保留：三类内容要在首页可辨识（FR-93 明确要求保留）。
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                        color: badgeBg,
+                                        borderRadius: BorderRadius.circular(5)),
+                                    child: Text(badgeLabel,
+                                        style: TextStyle(
+                                            fontSize: 9.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: badgeFg)),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 1),
+                              Text(time,
+                                  style: const TextStyle(
+                                      fontSize: 11, color: AppColors.muted),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis),
+                            ],
                           ),
-                        ),
-                        const SizedBox(width: 6),
-                        // 类型徽章保留：三类内容要在首页可辨识（FR-93 明确要求保留）。
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                              color: badgeBg, borderRadius: BorderRadius.circular(5)),
-                          child: Text(badgeLabel,
-                              style: TextStyle(
-                                  fontSize: 9.5, fontWeight: FontWeight.w700, color: badgeFg)),
                         ),
                       ],
                     ),
@@ -183,7 +212,7 @@ class MasonryCard extends StatelessWidget {
             ),
           ),
           // 图片：**全宽出血**，是这一版唯一贴边的东西。
-          // 整块可点区从这里开始（图片 / 正文 / 时间都进详情页顶部）。
+          // 整块可点区从这里开始（图片 / 正文都进详情页顶部）。
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: onTap,
@@ -215,10 +244,52 @@ class MasonryCard extends StatelessWidget {
               ],
             ),
           ),
-          // 操作行：点赞就地切换、评论跳详情定位评论区 —— 都**不**走整块点击。
+          // 正文：同样走整块点击。
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            onLongPress: onLongPress,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (item.body != null && item.body!.isNotEmpty)
+                  Padding(
+                    // 🔴 正文的上内边距**只在有图时才要**（bug 20260828）。
+                    //
+                    // 作者行自己已经带了 10 的下内边距。有图时两者分别是
+                    // 「作者行↔图片」和「图片↔正文」的间隔，各留 10 正好；
+                    // 但**纯文字帖没有图**，这两段留白就首尾相接叠成了 20 ——
+                    // 再加上两行文字各自的行距，实机上头像行和正文之间空出一大条。
+                    //
+                    // ⚠️ 不要改成把作者行的下内边距减半：那会连带把有图帖
+                    //    「作者行↔图片」的间隔也压掉，而那一处是对的。
+                    padding: EdgeInsets.fromLTRB(
+                        AppSpacing.screenEdge, item.hasImage ? 10 : 0,
+                        AppSpacing.screenEdge, 0),
+                    // ⚠️ 不加作者名前缀（FR-93 明确要求）。
+                    child: Text(item.body!,
+                        style: AppTypography.body,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
+                  ),
+              ],
+            ),
+          ),
+          // 操作行（点赞 / 评论 / 分享）：点赞就地切换、评论跳详情定位评论区 —— 都**不**走整块点击。
+          //
+          // 🔴 **排在正文之后**（bug 20260828）。原先它夹在图片与正文之间（照 Instagram 的
+          //    「图 → 操作 → 文案」惯例），但那套惯例的前提是**有图**：图片本身就是内容，
+          //    操作行贴着它才成立。而纯文字帖没有图 ⇒ 变成「头像 → 点赞评论分享 → 正文」，
+          //    读者还没看到内容就先看到了对它的操作。实机反馈正是拿一条纯文字帖截的图。
+          //
+          // ⚠️ 有图帖也一并挪到正文之后（产品指定顺序：头像行 → 图片 → 文字 → 操作行）——
+          //    不按「有没有图」分两套顺序：同一个列表里两种卡的操作行位置忽上忽下，
+          //    比统一放底部更难用（手指要在两个高度之间找按钮）。
           Padding(
+            // ⚠️ 下内边距不能是 0：操作行现在是卡片**最后一个**元素，
+            //    0 会让图标直接贴上卡间分隔线（原先最后一个是时间那行小字，贴着不明显）。
             padding: const EdgeInsets.fromLTRB(
-                AppSpacing.screenEdge, 10, AppSpacing.screenEdge, 0),
+                AppSpacing.screenEdge, 10, AppSpacing.screenEdge, 6),
             child: Row(
               children: [
                 LikeButton(
@@ -259,35 +330,6 @@ class MasonryCard extends StatelessWidget {
                         size: 20, color: AppColors.textSecondary),
                   ),
                 ],
-              ],
-            ),
-          ),
-          // 正文与时间：同样走整块点击。
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onTap,
-            onLongPress: onLongPress,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (item.body != null && item.body!.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.screenEdge, 10, AppSpacing.screenEdge, 0),
-                    // ⚠️ 不加作者名前缀（FR-93 明确要求）。
-                    child: Text(item.body!,
-                        style: AppTypography.body,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis),
-                  ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.screenEdge, 5, AppSpacing.screenEdge, 0),
-                  child: Text(time,
-                      style: const TextStyle(fontSize: 11, color: AppColors.muted),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
-                ),
               ],
             ),
           ),

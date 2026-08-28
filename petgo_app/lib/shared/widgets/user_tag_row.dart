@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/analytics/analytics.dart';
+import '../../core/theme/colors.dart';
 import '../../features/auth/domain/user_tag.dart';
 import 'anchored_tooltip.dart';
 import 'tag_icon.dart';
@@ -24,7 +25,7 @@ class UserTagRow extends StatelessWidget {
     required this.nameStyle,
     required this.tags,
     required this.position,
-    this.iconSize = 15,
+    this.iconSize = 14,
     this.gap = 4,
   });
 
@@ -41,6 +42,7 @@ class UserTagRow extends StatelessWidget {
   /// 而看板上完全看不出来 —— 编译期报错反而是这里想要的。
   final String position;
 
+  /// 徽章外径。UI 稿 `.utag-icon` 是 **14×14 的圆**（不是裸图标的边长）。
   final double iconSize;
 
   /// 昵称与标签之间、标签彼此之间的间距。
@@ -119,12 +121,25 @@ class _TagIcon extends StatelessWidget {
         });
         showAnchoredTooltip(context, title: tag.name, message: tag.description);
       },
-      child: SizedBox(
+      child: Container(
+        // 🔴 **金色圆底**（UI 稿 `.utag-icon`：14×14 / border-radius 50% / 金色底 / 白色字形）。
+        //
+        // 此前实现成"裸图标、无衬底"（bug 20260828）—— 后果不是"少了个装饰"：
+        // 稿子里图标是**白色**的，运营照稿做一枚白色图标传上来，在白色 Feed 背景上
+        // 就是**完全看不见**。而 [TagIcon] 加载失败时也是收缩为零，两种情况长得一模一样，
+        // 于是"图标没显示"这件事在实机上完全无法自证。
+        //
+        // ⚠️ 内容装饰标签**不套这个圆底**：它的图标叠在橙红渐变胶囊里（见 ContentTagChip），
+        //    那里衬底由胶囊本身提供。两处刻意不共用同一个外壳。
         width: size,
         height: size,
+        // 底色由运营按标签配（UI 稿里官方号金、最佳新人紫）；没配/解析失败回落金色。
+        decoration: BoxDecoration(
+            color: tag.badgeColor ?? AppColors.gold, shape: BoxShape.circle),
+        alignment: Alignment.center,
         // 定宽定高 —— 上面"放得下几个"的计算依赖它。
-        // Story 11.5：图标改为上传的图片（存量 emoji 走 TagIcon 内的兼容分支）。
-        child: Center(child: TagIcon(icon: tag.icon, size: size)),
+        // 内圈按 UI 稿 8/14 的比例留出圆边，图标不会顶到圆的边缘。
+        child: TagIcon(icon: tag.icon, size: size * (8 / 14)),
       ),
     );
   }

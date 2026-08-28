@@ -92,7 +92,12 @@ class LarkContentSyncServiceTest {
 
     private static List<String> row(String code, String text, String img, String email,
             String status) {
-        return Arrays.asList("1", "Moment", code, text, img, email, status, "", "");
+        return rowWithCategory("Moment", code, text, img, email, status);
+    }
+
+    private static List<String> rowWithCategory(String category, String code, String text,
+            String img, String email, String status) {
+        return Arrays.asList("1", category, code, text, img, email, status, "", "");
     }
 
     @Test
@@ -197,9 +202,10 @@ class LarkContentSyncServiceTest {
                 row("DR001", "text-1", "DR001", "Ops@Example.com", "")));
         when(client.listFolderFiles()).thenReturn(Map.of("DR001-1.jpg", "tok1"));
         when(client.downloadFile("tok1")).thenReturn(new byte[] {1});
-        User named = User.newGoogleUser("g-1", "ops@example.com", "Ops Person", null);
+        User named = User.newVirtual("syn-42", "Ops Person", null, 1L);
         org.springframework.test.util.ReflectionTestUtils.setField(named, "id", 42L);
-        when(users.findByEmailIgnoreCase("Ops@Example.com")).thenReturn(List.of(named));
+        when(users.findByEmailAndRole("Ops@Example.com", com.tailtopia.auth.domain.Role.USER))
+                .thenReturn(Optional.of(named));
         when(users.findById(42L)).thenReturn(Optional.of(named));
 
         service.syncOnce();
@@ -214,7 +220,8 @@ class LarkContentSyncServiceTest {
         when(client.readRows()).thenReturn(List.of(
                 row("DR001", "text-1", "DR001", "nobody@example.com", ""),
                 row("DR002", "text-2", "DR002", "")));
-        when(users.findByEmailIgnoreCase("nobody@example.com")).thenReturn(List.of());
+        when(users.findByEmailAndRole("nobody@example.com", com.tailtopia.auth.domain.Role.USER))
+                .thenReturn(Optional.empty());
         when(client.listFolderFiles()).thenReturn(Map.of("DR002-1.jpg", "tok2"));
         when(client.downloadFile("tok2")).thenReturn(new byte[] {2});
 
@@ -222,8 +229,28 @@ class LarkContentSyncServiceTest {
 
         verify(client).writeCell(eq("G"), eq(2), eq("无效"));
         verify(client).writeCell(eq("I"), eq(2), contains("未匹配到有效用户"));
+        // PII 红线：备注/日志/DB 都不回显邮箱。
+        verify(client, never()).writeCell(anyString(), anyInt(), contains("nobody@example.com"));
         verify(contentService, never()).publishTrusted(Mockito.anyLong(), any(), eq("lark-content:DR001"));
         verify(contentService, times(1)).publishTrusted(eq(7L), any(), eq("lark-content:DR002"));
+    }
+
+    @Test
+    void 指定邮箱是真实注册的官方运营号_照常以其身份发布() {
+        when(client.readRows()).thenReturn(List.of(
+                row("DR001", "text-1", "DR001", "ops@tailtopia.id", "")));
+        when(client.listFolderFiles()).thenReturn(Map.of("DR001-1.jpg", "tok1"));
+        when(client.downloadFile("tok1")).thenReturn(new byte[] {1});
+        User real = User.newGoogleUser("g-1", "ops@tailtopia.id", "TailTopia Official", null);
+        org.springframework.test.util.ReflectionTestUtils.setField(real, "id", 99L);
+        when(users.findByEmailAndRole("ops@tailtopia.id", com.tailtopia.auth.domain.Role.USER))
+                .thenReturn(Optional.of(real));
+        when(users.findById(99L)).thenReturn(Optional.of(real));
+
+        service.syncOnce();
+
+        verify(contentService).publishTrusted(eq(99L), any(), eq("lark-content:DR001"));
+        verify(client).writeCell(eq("H"), eq(2), eq("TailTopia Official"));
     }
 
     @Test
@@ -233,7 +260,7 @@ class LarkContentSyncServiceTest {
         service.syncOnce();
         verify(client).writeCell(eq("I"), eq(2), contains("不是合法邮箱"));
         verifyNoInteractions(contentService, oss);
-        verify(users, never()).findByEmailIgnoreCase(anyString());
+        verify(users, never()).findByEmailAndRole(anyString(), any());
     }
 
     @Test
@@ -414,6 +441,32 @@ class LarkContentSyncServiceTest {
 
         verify(client).writeCell(eq("G"), eq(5), contains("已发布"));
         verify(client, never()).writeCell(anyString(), eq(2), anyString());
+    }
+
+    @Test
+    void 内容分类Knowledge_按KNOWLEDGE发布_空按DAILY() {
+        when(client.readRows()).thenReturn(List.of(
+                rowWithCategory("knowledge", "DR001", "科普", "", "", ""),
+                rowWithCategory("", "DR002", "日常", "", "", "")));
+        service.syncOnce(); // 每轮一条：DR001
+        ArgumentCaptor<ContentPostCreateRequest> req =
+                ArgumentCaptor.forClass(ContentPostCreateRequest.class);
+        verify(contentService).publishTrusted(eq(7L), req.capture(), eq("lark-content:DR001"));
+        assertEquals(ContentType.KNOWLEDGE, req.getValue().type());
+        assertEquals(ContentType.DAILY, LarkContentSyncService.mapCategory(""));
+        assertEquals(ContentType.DAILY, LarkContentSyncService.mapCategory(" Moment "));
+    }
+
+    @Test
+    void 内容分类非法值_无效并备注可填值() {
+        when(client.readRows()).thenReturn(List.of(
+                rowWithCategory("Video", "DR001", "x", "", "", ""),
+                row("DR002", "日常", "", "")));
+        service.syncOnce();
+        verify(client).writeCell(eq("G"), eq(2), eq("无效"));
+        verify(client).writeCell(eq("I"), eq(2), contains("Moment 或 Knowledge"));
+        verify(contentService, never()).publishTrusted(Mockito.anyLong(), any(), eq("lark-content:DR001"));
+        verify(contentService, times(1)).publishTrusted(eq(7L), any(), eq("lark-content:DR002"));
     }
 
     @Test

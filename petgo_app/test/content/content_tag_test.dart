@@ -62,6 +62,14 @@ Future<void> _pumpCard(WidgetTester tester,
   await tester.pump();
 }
 
+/// 只渲染一枚胶囊（不拉起整个 Feed）—— 底色这组用例只关心胶囊自身。
+Future<void> _pumpChip(WidgetTester tester, ContentTag tag) async {
+  await tester.pumpWidget(MaterialApp(
+    home: Scaffold(body: Center(child: ContentTagChip.inline(tag: tag, position: 'feed'))),
+  ));
+  await tester.pump();
+}
+
 void main() {
   tearDown(dismissAnchoredTooltip);
 
@@ -230,6 +238,49 @@ void main() {
           (a.gradient! as LinearGradient).colors);
       expect(b.borderRadius, a.borderRadius);
       expect(b.boxShadow!.length, a.boxShadow!.length);
+    });
+  });
+
+  /// 🔴 **胶囊底色按标签走**（2026-08-28）。
+  ///
+  /// 产品的原话是「我认为这一整枚都是运营配的」—— 而此前底色写死在 App 里，
+  /// 运营只能配胶囊上的字与那枚小图，于是这枚胶囊在他眼里只有一半是自己的。
+  group('bug 20260828 · 胶囊底色按标签配', () {
+    LinearGradient gradientOf(WidgetTester tester) {
+      final box = tester.widgetList<Container>(find.byType(Container))
+          .firstWhere((c) => c.decoration is BoxDecoration
+              && (c.decoration! as BoxDecoration).gradient != null);
+      return (box.decoration! as BoxDecoration).gradient! as LinearGradient;
+    }
+
+    testWidgets('后端给了色值就用它', (tester) async {
+      const a = Color(0xFF845EC9);
+      const b = Color(0xFF6C48AE);
+      await _pumpChip(tester, const ContentTag(
+          code: 'c', name: '编辑推荐', icon: '🏆', description: 'd',
+          badgeStart: a, badgeEnd: b));
+
+      expect(gradientOf(tester).colors, [a, b],
+          reason: '🔴 底色仍写死 —— 运营配的颜色没生效');
+    });
+
+    testWidgets('没给色值回落设计稿原始的橙→红', (tester) async {
+      await _pumpChip(tester, const ContentTag(
+          code: 'c', name: '编辑推荐', icon: '🏆', description: 'd'));
+
+      expect(gradientOf(tester).colors, [AppColors.gold, AppColors.decoBadgeEnd]);
+    });
+
+    test('坏色值当没给，不抛异常', () {
+      for (final bad in ['', 'red', '#GGGGGG', '#12345', 'F6A609']) {
+        final t = ContentTag.fromJson({
+          'code': 'c', 'name': 'n', 'icon': 'i', 'description': 'd',
+          'badgeStart': bad, 'badgeEnd': bad,
+        });
+        expect(t, isNotNull, reason: '坏色值 "$bad" 把整条标签解析掉了');
+        expect(t!.badgeStart, isNull);
+        expect(t.badgeEnd, isNull);
+      }
     });
   });
 }

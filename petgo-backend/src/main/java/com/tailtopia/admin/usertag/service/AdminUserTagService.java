@@ -1,11 +1,17 @@
 package com.tailtopia.admin.usertag.service;
 
 import com.tailtopia.admin.audit.service.AdminAuditService;
+import com.tailtopia.admin.usertag.dto.TaggableUserRow;
 import com.tailtopia.admin.usertag.dto.UserAssignmentRow;
 import com.tailtopia.admin.usertag.dto.UserTagRow;
+import com.tailtopia.auth.domain.AccountType;
+import com.tailtopia.auth.domain.Role;
+import com.tailtopia.auth.domain.UserStatus;
 import com.tailtopia.auth.domain.UserTag;
+import com.tailtopia.auth.domain.UserTagBadgeColor;
 import com.tailtopia.auth.domain.UserTagAssignment;
 import com.tailtopia.auth.dto.UserTagView;
+import com.tailtopia.auth.repository.UserRepository;
 import com.tailtopia.auth.repository.UserTagAssignmentRepository;
 import com.tailtopia.auth.repository.UserTagRepository;
 import com.tailtopia.auth.service.UserTagQueryService;
@@ -17,6 +23,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,13 +44,15 @@ public class AdminUserTagService {
 
     private final UserTagRepository tags;
     private final UserTagAssignmentRepository assignments;
+    private final UserRepository users;
     private final UserTagQueryService tagService;
     private final AdminAuditService audit;
 
     public AdminUserTagService(UserTagRepository tags, UserTagAssignmentRepository assignments,
-            UserTagQueryService tagService, AdminAuditService audit) {
+            UserRepository users, UserTagQueryService tagService, AdminAuditService audit) {
         this.tags = tags;
         this.assignments = assignments;
+        this.users = users;
         this.tagService = tagService;
         this.audit = audit;
     }
@@ -54,7 +63,7 @@ public class AdminUserTagService {
     public List<UserTagRow> listTags(Instant now) {
         return tags.findAllByOrderByIdDesc().stream()
                 .map(t -> new UserTagRow(t.getId(), t.getCode(), t.getName(), t.getIcon(),
-                        t.getDescription(), t.getRetiredAt(),
+                        t.getDescription(), t.getBadgeColor(), t.getRetiredAt(),
                         assignments.findActiveByTag(t.getId(), now).size()))
                 .toList();
     }
@@ -66,26 +75,33 @@ public class AdminUserTagService {
     }
 
     @Transactional
-    public void createTag(long adminId, String code, String name, String icon, String description) {
+    public void createTag(long adminId, String code, String name, String icon, String description,
+            String badgeColor) {
         if (isBlank(code) || isBlank(name) || isBlank(icon) || isBlank(description)) {
             throw AppException.validation("标签码、名称、图标与说明文案均为必填");
         }
         tags.findByCode(code).ifPresent(t -> {
             throw AppException.validation("标签码已存在：" + code);
         });
-        UserTag saved = tags.save(UserTag.of(code, name, icon, description));
+        // ⚠️ 宽松解析、不抛：底色是从下拉里选的，值不对只可能是有人手改了请求 ——
+        //    为此让整次建标签失败不划算，回落 UI 稿的默认金色即可。
+        UserTagBadgeColor color = UserTagBadgeColor.parse(badgeColor);
+        UserTag saved = tags.save(UserTag.of(code, name, icon, description, color));
         audit.record(adminId, "USER_TAG_CREATE", "user_tag", String.valueOf(saved.getId()),
-                "code=" + code + " name=" + name);
+                "code=" + code + " name=" + name + " color=" + color);
     }
 
     @Transactional
-    public void editTag(long adminId, long id, String name, String icon, String description) {
+    public void editTag(long adminId, long id, String name, String icon, String description,
+            String badgeColor) {
         UserTag tag = tags.findById(id).orElseThrow(() -> AppException.notFound("标签不存在"));
         // Story 11.5：icon 为 null 表示"这次没传新文件" ⇒ **保留原图标**，不是清空。
         // 🛡 写成 tag.edit(name, icon, ...) 会把不改图标的那次编辑变成"把图标删了"，
         //    而那在界面上看不出来 —— 运营改个错别字，App 上的图标就没了。
-        tag.edit(name, icon == null ? tag.getIcon() : icon, description);
-        audit.record(adminId, "USER_TAG_EDIT", "user_tag", String.valueOf(id), "name=" + name);
+        UserTagBadgeColor color = UserTagBadgeColor.parse(badgeColor);
+        tag.edit(name, icon == null ? tag.getIcon() : icon, description, color);
+        audit.record(adminId, "USER_TAG_EDIT", "user_tag", String.valueOf(id),
+                "name=" + name + " color=" + color);
     }
 
     /** 下线 / 重新上线。🛡 下线只影响能否再分配，已分配的照旧生效到各自 ends_at。 */
@@ -102,6 +118,43 @@ public class AdminUserTagService {
     }
 
     // ——————————————————— 分配 ———————————————————
+
+    /** 选择器每页候选数。与内容标签那边同量级：一屏能扫完，又不至于要翻很多页。 */
+    private static final int PICK_PAGE_SIZE = 30;
+
+    /**
+     * 用户标签选择器的候选（bug 20260828）。
+     *
+     * <p>运营原先只能手填用户 ID —— 手上没有 ID 就无从下手，填错一位也没人拦，
+     * 于是标签被分到了一个已注销账号上。这里给出与内容标签同形状的可搜索候选表。
+     *
+     * <p>🔴 已注销账号在**查询层**就被滤掉（见 {@code UserRepository#searchTaggableUsers}）。
+     */
+    @Transactional(readOnly = true)
+    public List<TaggableUserRow> pickableUsers(String keyword, int page) {
+        // 🔴 绝不传 null：无关键词 → "%" 匹配全部（首次加载走的正是这一支）。
+        String pattern = (keyword == null || keyword.isBlank())
+                ? "%" : "%" + keyword.trim().toLowerCase() + "%";
+        return users.searchTaggableUsers(Role.USER, pattern,
+                        PageRequest.of(Math.max(page, 0), PICK_PAGE_SIZE)).stream()
+                .map(u -> new TaggableUserRow(
+                        u.getId(),
+                        displayNameOf(u),
+                        u.getStatus() != UserStatus.ACTIVE,
+                        u.getAccountType() == AccountType.VIRTUAL))
+                .toList();
+    }
+
+    /** 昵称为空回落 displayName，都空给一个明确的占位（别在候选表里留一行空白）。 */
+    private static String displayNameOf(com.tailtopia.auth.domain.User u) {
+        if (u.getNickname() != null && !u.getNickname().isBlank()) {
+            return u.getNickname();
+        }
+        if (u.getDisplayName() != null && !u.getDisplayName().isBlank()) {
+            return u.getDisplayName();
+        }
+        return "(未设昵称)";
+    }
 
     /**
      * 批量分配同一标签给多个用户。
@@ -184,6 +237,8 @@ public class AdminUserTagService {
         Set<Long> userIds = rows.stream().map(UserTagAssignment::getUserId)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         Map<Long, List<UserTagView>> visible = tagService.findVisibleTags(userIds, now);
+        // bug 20260828：「不展示」要能分辨原因 —— 被前 3 个顶掉 vs 账号已注销。
+        Set<Long> deleted = tagService.deletedAmong(userIds);
 
         return rows.stream().map(a -> {
             UserTag t = tagById.get(a.getTagId());
@@ -191,8 +246,30 @@ public class AdminUserTagService {
                     .anyMatch(v -> v.code().equals(t.getCode()));
             return new UserAssignmentRow(a.getId(), a.getUserId(), a.getTagId(),
                     t == null ? null : t.getCode(), t == null ? null : t.getName(),
-                    a.getStartsAt(), a.getEndsAt(), shown);
+                    a.getStartsAt(), a.getEndsAt(), shown,
+                    shown ? null : hiddenReason(a, deleted.contains(a.getUserId()), now));
         }).toList();
+    }
+
+    /**
+     * 「不展示」的原因（bug 20260828）。
+     *
+     * <p>🔴 判定顺序 = **处置动作的优先级**，不是随手排的：
+     * 账号没了就没有后续可言（撤掉），其次才轮到时间窗（等/改时间），
+     * 都过了才是被顶掉（撤别的标签）。顺序反了会给出误导性的建议 ——
+     * 比如对一个注销账号说「被顶掉了」，运营就会去撤别人的标签。
+     */
+    private static String hiddenReason(UserTagAssignment a, boolean userDeleted, Instant now) {
+        if (userDeleted) {
+            return UserAssignmentRow.REASON_DELETED_USER;
+        }
+        if (a.getStartsAt() != null && now.isBefore(a.getStartsAt())) {
+            return UserAssignmentRow.REASON_NOT_STARTED;
+        }
+        if (a.getEndsAt() != null && !now.isBefore(a.getEndsAt())) {
+            return UserAssignmentRow.REASON_ENDED;
+        }
+        return UserAssignmentRow.REASON_OVER_CAP;
     }
 
     private static boolean isBlank(String s) {

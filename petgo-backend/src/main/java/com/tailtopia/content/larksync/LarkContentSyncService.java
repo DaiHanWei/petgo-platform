@@ -1,5 +1,6 @@
 package com.tailtopia.content.larksync;
 
+import com.tailtopia.auth.domain.Role;
 import com.tailtopia.auth.domain.User;
 import com.tailtopia.auth.domain.UserStatus;
 import com.tailtopia.auth.repository.UserRepository;
@@ -33,8 +34,12 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 取「上传状态」为空的最靠前一行 → 云盘图片转存 OSS → 以指定/随机作者经
  * {@link ContentService#publishTrusted} 发布（免审，运营=可信主体）→ 回写表格「上传状态/发布账号/备注」。
  *
- * <p><b>作者</b>（2026-08-27 起）：「发布账号(邮箱)」列填了邮箱 → 精确匹配该邮箱的 ACTIVE 用户；
+ * <p><b>作者</b>（2026-08-27 起）：「发布账号(邮箱)」列填了邮箱 → 精确匹配该邮箱的 USER 角色、ACTIVE 用户
+ * （真实号/虚拟号都可——官方运营号是真实注册的账号，2026-08-28 拍板去掉「仅虚拟号」限制）；
  * 匹配不到 → 该行<b>无效</b>。留空 → 作者池随机虚拟账号（原逻辑）。
+ *
+ * <p><b>内容分类</b>（2026-08-28 起）：「内容分类」列 {@code Moment}→DAILY、{@code Knowledge}→KNOWLEDGE
+ * （不区分大小写）；空 → DAILY；其他值 → 该行<b>无效</b>（备注写明可填值）。表里没这列 → 全部 DAILY。
  *
  * <p><b>图片</b>（2026-08-27 起）：「图片编号」列填<b>前缀</b>（如 {@code DR260823001}，不得含 {@code -}），
  * 云盘按 {@code {前缀}-{整数}.jpg} 匹配全部文件、按整数升序上传；{@code -} 后非纯整数
@@ -215,7 +220,7 @@ public class LarkContentSyncService {
         }
 
         ContentPostCreateRequest req = new ContentPostCreateRequest(
-                ContentType.DAILY, null, blankToNull(row.text()), imageUrls);
+                mapCategory(row.category()), null, blankToNull(row.text()), imageUrls);
         // 发帖与状态机落库同一事务：要么都成、要么都回滚，杜绝「发成未记账」。
         Long postId = tx.execute(status -> {
             ContentPostResponse post = contentService.publishTrusted(
@@ -260,10 +265,23 @@ public class LarkContentSyncService {
         return out;
     }
 
+    /** 「内容分类」→ 类型。空=DAILY；非法值返回 null（validateRow 已先拦，这里兜底）。 */
+    static ContentType mapCategory(String category) {
+        String c = category == null ? "" : category.trim().toLowerCase();
+        return switch (c) {
+            case "", "moment", "daily" -> ContentType.DAILY;
+            case "knowledge" -> ContentType.KNOWLEDGE;
+            default -> null;
+        };
+    }
+
     /** 内容性校验（下载前拦截）。返回失败原因，合法返回 null。字段上限对齐生产库列定义。 */
     private static String validateRow(LarkRowParser.Row row) {
         if (!CODE_PATTERN.matcher(row.contentCode()).matches()) {
             return "内容编号非法：仅限字母/数字/_/-，最长 32 字符";
+        }
+        if (mapCategory(row.category()) == null) {
+            return "内容分类只能填 Moment 或 Knowledge（留空按 Moment）";
         }
         for (String code : row.imageCodes()) {
             if (code.contains("-")) {
@@ -285,7 +303,7 @@ public class LarkContentSyncService {
         }
         String email = row.email();
         if (!email.isBlank() && (email.length() > 320 || !EMAIL_PATTERN.matcher(email).matches())) {
-            return "发布账号不是合法邮箱：" + brief(email);
+            return "发布账号不是合法邮箱"; // 不回显邮箱：reason 会进日志与 DB（PII 红线）
         }
         return null;
     }
@@ -310,14 +328,17 @@ public class LarkContentSyncService {
         throw new AuthorPoolExhausted();
     }
 
-    /** 「发布账号(邮箱)」→ ACTIVE 用户 id；匹配不到 → 行级无效。 */
+    /**
+     * 「发布账号(邮箱)」→ 用户 id。只接受 USER 角色（与全库其他邮箱查询同口径，排除 ADMIN shim 行）且 ACTIVE；
+     * 真实号/虚拟号不限——官方运营号是真实注册账号（2026-08-28 拍板）。表格是运营可信输入，填谁就以谁发布。
+     * 匹配不到 → 行级无效。reason 不带邮箱（会进日志与 DB）。
+     */
     private long resolveAuthorByEmail(String email) {
-        for (User u : users.findByEmailIgnoreCase(email)) {
-            if (u.getStatus() == UserStatus.ACTIVE) {
-                return u.getId();
-            }
+        Optional<User> u = users.findByEmailAndRole(email, Role.USER);
+        if (u.isEmpty() || u.get().getStatus() != UserStatus.ACTIVE) {
+            throw new IllegalStateException("发布账号未匹配到有效用户");
         }
-        throw new IllegalStateException("发布账号未匹配到有效用户：" + brief(email));
+        return u.get().getId();
     }
 
     /** 行级失败：DB 记 FAILED（绝不降级已 PUBLISHED 的记录）+ 回写「无效」+ 备注原因。 */

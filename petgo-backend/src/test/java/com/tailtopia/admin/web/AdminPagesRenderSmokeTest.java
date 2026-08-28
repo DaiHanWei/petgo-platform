@@ -132,7 +132,7 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
      *   <li>「用户」「被举报用户」从「内容」组移入「用户运营」—— 这两项处置的是<b>账号</b>
      *       （查看资料 / 警告 / 封号），与内容维度不是一回事；原先挤在内容组里，
      *       运营要找人得先点「内容」。</li>
-     *   <li>原「内容运营」整组（顶置 / 装饰标签 / 互动积分）并入「内容」—— 它们本就作用在
+     *   <li>原「内容运营」整组（顶置 / 内容标签 / 互动积分）并入「内容」—— 它们本就作用在
      *       内容上，单列一组只是让运营在两组间来回找。该分组连同 i18n 键一并删除。</li>
      * </ul>
      *
@@ -150,7 +150,6 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
                 // 内容组
                 "/admin/seed-post", "/admin/content", "/admin/comments",
                 "/admin/manual-review", "/admin/content-pins", "/admin/content-tags",
-                "/admin/content-stats",
                 // 用户运营组（在内容组之后）
                 "/admin/users", "/admin/tickets", "/admin/user-tags");
         java.util.List<Integer> positions = expected.stream().map(html::indexOf).toList();
@@ -213,8 +212,11 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
 
         // Story 11.1：侧栏叫「顶置管理」，页内标题必须同名（四处同源里的前两处）。
         assertThat(visibleText("/admin/content-pins")).as("顶置管理页的标题").contains("顶置管理");
-        // Story 11.2：侧栏叫「装饰标签」，页内标题必须同名。
-        assertThat(visibleText("/admin/content-tags")).as("装饰标签页的标题").contains("装饰标签");
+        // Story 11.2：侧栏叫「内容标签」，页内标题必须同名（2026-08-28 由「装饰标签」更名）。
+        // ⚠️ 旧名一并断言不再出现 —— 改名时它正是被漏在页内的那个字。
+        String contentTags = visibleText("/admin/content-tags");
+        assertThat(contentTags).as("内容标签页的标题").contains("内容标签");
+        assertThat(contentTags).as("改名后旧名不该再出现在页面上").doesNotContain("装饰标签");
         // Story 11.3：侧栏叫「用户标签」，页内标题必须同名。
         assertThat(visibleText("/admin/user-tags")).as("用户标签页的标题").contains("用户标签");
     }
@@ -267,7 +269,6 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
                 // V1.1.6 Story 13.5：排期管理（12-1 的移出提示会跳到这里）。
                 "/admin/content-schedules",
                 // V1.1.6 Story 15.1：内容互动积分榜。
-                "/admin/content-stats",
             // 2026-08-26：算法参数独立成页，须一并纳入逐页双语扫描
             "/admin/algo-params");
 

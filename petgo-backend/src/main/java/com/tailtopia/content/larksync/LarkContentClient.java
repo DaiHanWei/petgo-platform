@@ -11,6 +11,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 /**
  * Lark 开放平台客户端（spec-lark-scheduled-posts）——本功能所有 Lark API 的单一收口。
@@ -29,7 +30,9 @@ import org.springframework.web.client.RestClient;
  * （内容性失败如「缺图」由上层自行判定，不经本异常）。
  *
  * <p>任一 API 失败会同时作废 token 缓存：密钥轮换/token 提前吊销时，下次调用即重新换取，
- * 不会拿着死 token 撞到本地过期时刻（最长 2h）。
+ * 不会拿着死 token 撞到本地过期时刻（最长 2h）。HTTP 4xx/5xx（{@code RestClientResponseException}）
+ * 与超时/连接失败（{@code ResourceAccessException}）都经 {@link #call} 统一转成
+ * {@link LarkApiException}——否则会被上层通用 catch 当成内容性失败把行永久标「无效」。
  */
 @Component
 public class LarkContentClient {
@@ -66,17 +69,28 @@ public class LarkContentClient {
         if (cachedToken != null && Instant.now().isBefore(tokenExpireAt)) {
             return cachedToken;
         }
-        Map<?, ?> resp = rest.post()
+        Map<?, ?> resp = call("tenant_access_token", () -> rest.post()
                 .uri("/open-apis/auth/v3/tenant_access_token/internal")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(Map.of("app_id", props.getAppId(), "app_secret", props.getAppSecret()))
                 .retrieve()
-                .body(Map.class);
+                .body(Map.class));
         ensureOk(resp, "tenant_access_token");
         cachedToken = str(resp.get("tenant_access_token"));
         long expireSeconds = num(resp.get("expire"), 7200);
         tokenExpireAt = Instant.now().plusSeconds(Math.max(60, expireSeconds - 300));
         return cachedToken;
+    }
+
+    /** 统一执行 HTTP 调用：任何 RestClient 传输/状态码异常 → 作废 token + LarkApiException（轮级）。 */
+    private <T> T call(String action, java.util.function.Supplier<T> request) {
+        try {
+            return request.get();
+        } catch (RestClientException e) {
+            invalidateToken();
+            throw new LarkApiException(action + " 传输失败：" + e.getClass().getSimpleName()
+                    + (e.getMessage() != null ? " " + e.getMessage().split("\n")[0] : ""));
+        }
     }
 
     private synchronized void invalidateToken() {
@@ -88,12 +102,12 @@ public class LarkContentClient {
 
     /** 读表头行（A1:N1，宽裕余量）——列位置按表头文字动态定位，运营调整表结构不误读。 */
     public List<String> readHeader() {
-        Map<?, ?> resp = rest.get()
+        Map<?, ?> resp = call("读取表头", () -> rest.get()
                 .uri("/open-apis/sheets/v2/spreadsheets/{token}/values/{range}?valueRenderOption=ToString",
                         props.getSpreadsheetToken(), props.getSheetId() + "!A1:N1")
                 .header("Authorization", "Bearer " + tenantToken())
                 .retrieve()
-                .body(Map.class);
+                .body(Map.class));
         ensureOk(resp, "读取表头");
         List<?> values = valuesOf(resp);
         List<String> header = new ArrayList<>();
@@ -111,12 +125,12 @@ public class LarkContentClient {
      */
     public List<List<String>> readRows() {
         String range = props.getSheetId() + "!A2:N" + (props.getRowLimit() + 1);
-        Map<?, ?> resp = rest.get()
+        Map<?, ?> resp = call("读取表格", () -> rest.get()
                 .uri("/open-apis/sheets/v2/spreadsheets/{token}/values/{range}?valueRenderOption=ToString",
                         props.getSpreadsheetToken(), range)
                 .header("Authorization", "Bearer " + tenantToken())
                 .retrieve()
-                .body(Map.class);
+                .body(Map.class));
         ensureOk(resp, "读取表格");
         List<List<String>> rows = new ArrayList<>();
         for (Object rowObj : valuesOf(resp)) {
@@ -137,12 +151,12 @@ public class LarkContentClient {
     public Optional<Integer> findRowByCode(String codeColLetter, String contentCode) {
         String range = props.getSheetId() + "!" + codeColLetter + "2:" + codeColLetter
                 + (props.getRowLimit() + 1);
-        Map<?, ?> resp = rest.get()
+        Map<?, ?> resp = call("定位行", () -> rest.get()
                 .uri("/open-apis/sheets/v2/spreadsheets/{token}/values/{range}?valueRenderOption=ToString",
                         props.getSpreadsheetToken(), range)
                 .header("Authorization", "Bearer " + tenantToken())
                 .retrieve()
-                .body(Map.class);
+                .body(Map.class));
         ensureOk(resp, "定位行");
         int i = 0;
         for (Object rowObj : valuesOf(resp)) {
@@ -164,7 +178,7 @@ public class LarkContentClient {
     public void writeCell(String colLetter, int sheetRowNumber, String value) {
         String range = props.getSheetId() + "!" + colLetter + sheetRowNumber
                 + ":" + colLetter + sheetRowNumber;
-        Map<?, ?> resp = rest.put()
+        Map<?, ?> resp = call("回写表格", () -> rest.put()
                 .uri("/open-apis/sheets/v2/spreadsheets/{token}/values", props.getSpreadsheetToken())
                 .header("Authorization", "Bearer " + tenantToken())
                 .contentType(MediaType.APPLICATION_JSON)
@@ -172,7 +186,7 @@ public class LarkContentClient {
                         "range", range,
                         "values", List.of(List.of(value)))))
                 .retrieve()
-                .body(Map.class);
+                .body(Map.class));
         ensureOk(resp, "回写表格");
     }
 
@@ -184,7 +198,7 @@ public class LarkContentClient {
         String pageToken = null;
         do {
             final String pt = pageToken;
-            Map<?, ?> resp = rest.get()
+            Map<?, ?> resp = call("列云盘文件夹", () -> rest.get()
                     .uri(b -> {
                         b.path("/open-apis/drive/v1/files")
                                 .queryParam("folder_token", props.getFolderToken())
@@ -196,7 +210,7 @@ public class LarkContentClient {
                     })
                     .header("Authorization", "Bearer " + tenantToken())
                     .retrieve()
-                    .body(Map.class);
+                    .body(Map.class));
             ensureOk(resp, "列云盘文件夹");
             Map<?, ?> data = asMap(resp.get("data"));
             Object fileList = data.get("files");
@@ -220,11 +234,11 @@ public class LarkContentClient {
      * 绝不让错误体以 image/jpeg 之名传上公开桶发出去。
      */
     public byte[] downloadFile(String fileToken) {
-        byte[] bytes = rest.get()
+        byte[] bytes = call("下载文件", () -> rest.get()
                 .uri("/open-apis/drive/v1/files/{token}/download", fileToken)
                 .header("Authorization", "Bearer " + tenantToken())
                 .retrieve()
-                .body(byte[].class);
+                .body(byte[].class));
         if (bytes == null || bytes.length == 0) {
             throw new LarkApiException("下载文件为空 token=" + fileToken);
         }

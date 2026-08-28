@@ -11,6 +11,7 @@ import 'package:tailtopia/features/content/domain/feed_item.dart';
 import 'package:tailtopia/features/content/presentation/like_button.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/widgets/login_hard_dialog.dart';
+import 'package:tailtopia/shared/widgets/feed_image.dart';
 import 'package:tailtopia/shared/widgets/masonry_card.dart';
 
 /// V1.1.6 Story 3.2：Feed 通栏卡片的**操作行与点击分区**。
@@ -82,6 +83,112 @@ Widget _wrapCard(Widget card, {ProviderContainer? container}) => UncontrolledPro
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
   tearDown(() => Analytics.debugCaptureSink = null);
+
+  /// 🔴 **卡片自上而下的顺序**（产品 2026-08-28 指定）：
+  /// 头像行（名字 / 其下发布时间）→ 图片（如有）→ 正文 → 操作行。
+  ///
+  /// 修复前操作行夹在**图片与正文之间**（照 Instagram 的「图 → 操作 → 文案」惯例）。
+  /// 那套惯例的前提是**有图**：图片本身就是内容，操作行贴着它才成立。
+  /// 而纯文字帖没有图 ⇒ 变成「头像 → 点赞评论分享 → 正文」——
+  /// 读者还没看到内容就先看到了对它的操作。实机反馈正是拿一条纯文字帖截的图。
+  ///
+  /// ⚠️ 老用例（点赞数在不在、评论点得到不）**改前改后都绿** ——
+  /// 它们一条都不断言顺序，所以这个问题从交付起就没有任何东西挡着。
+  /// 这里按**纵坐标**断言，两种卡各一条（有图的也一起钉，避免有人只修纯文字那半）。
+  group('bug 20260828 · 卡片元素顺序', () {
+    Future<double> topOf(WidgetTester tester, Finder f) async =>
+        tester.getRect(f).top;
+
+    testWidgets('纯文字帖：正文在操作行**上面**', (tester) async {
+      await tester.pumpWidget(_wrapCard(
+          MasonryCard(item: _item(body: 'Mimaw got her first clothes'), deletedUserLabel: 'x')));
+      await tester.pump();
+
+      final body = await topOf(tester, find.text('Mimaw got her first clothes'));
+      final actions = await topOf(tester, find.byType(LikeButton));
+      expect(body, lessThan(actions),
+          reason: '🔴 点赞评论分享跑到正文上面了 —— 读者还没看到内容就先看到对它的操作');
+    });
+
+    testWidgets('有图帖：顺序同样是 正文 → 操作行（不分两套）', (tester) async {
+      await tester.pumpWidget(_wrapCard(MasonryCard(
+          item: _item(body: 'ada foto', image: 'https://img.example/1.jpg'),
+          deletedUserLabel: 'x')));
+      await tester.pump();
+
+      final body = await topOf(tester, find.text('ada foto'));
+      final actions = await topOf(tester, find.byType(LikeButton));
+      expect(body, lessThan(actions),
+          reason: '🛡 两种卡的操作行位置忽上忽下，比统一放底部更难用（手指要在两个高度之间找）');
+    });
+
+    /// 🔴 **发布时间属于署名，不属于正文的尾巴**（产品 2026-08-28 二次指定）。
+    ///
+    /// 它此前跟在正文后面：读者要先读完内容才知道这是什么时候发的 ——
+    /// 而「多久以前」恰恰是决定要不要往下读的信息。
+    ///
+    /// ⚠️ 断言用「时间在正文**之上**、且与名字在同一竖直区间」两条一起钉：
+    /// 只断前一条的话，把时间挪到图片上方的角标里也能过，那不是产品要的位置。
+    testWidgets('发布时间挂在名字下面（不在正文后面）', (tester) async {
+      await tester.pumpWidget(_wrapCard(MasonryCard(
+          item: _item(body: 'ada foto', image: 'https://img.example/1.jpg'),
+          deletedUserLabel: 'x')));
+      await tester.pump();
+
+      final timeFinder = find.textContaining(RegExp(r'\d+\s*[a-z]+\s*ago|yang lalu|baru saja'));
+      expect(timeFinder, findsOneWidget,
+          reason: '没找到发布时间那行小字 —— 断言无从谈起');
+
+      final timeRect = tester.getRect(timeFinder);
+      final nameRect = tester.getRect(find.text('Alice'));
+      final bodyTop = await topOf(tester, find.text('ada foto'));
+
+      expect(timeRect.top, greaterThan(nameRect.top),
+          reason: '🔴 时间跑到名字上面了');
+      expect(timeRect.top, lessThan(bodyTop),
+          reason: '🔴 发布时间还在正文后面 —— 读者要读完内容才知道这是什么时候发的');
+      expect(timeRect.left, closeTo(nameRect.left, 2),
+          reason: '🔴 时间没和名字左对齐 ⇒ 它不在署名那一块里，只是恰好排在了上面');
+    });
+
+    /// 🔴 **纯文字帖：头像行与正文之间不许空出一大条**（bug 20260828）。
+    ///
+    /// 作者行自带 10 的下内边距，正文原先又带 10 的上内边距 ——
+    /// 有图时这两段分别是「作者行↔图片」和「图片↔正文」的间隔，各自都对；
+    /// 但纯文字帖没有图，两段留白首尾相接叠成 20，再加上两行文字各自的行距，
+    /// 实机上就是产品截图里那一大条空白。
+    ///
+    /// ⚠️ 断的是「时间那行的底 → 正文的顶」这段**实际距离**，不是内边距的字面值：
+    /// 换个字号或行距，字面值没变而观感会变，只有量距离才守得住。
+    testWidgets('纯文字帖：时间行与正文贴得够近', (tester) async {
+      await tester.pumpWidget(_wrapCard(
+          MasonryCard(item: _item(body: 'android push test'), deletedUserLabel: 'x')));
+      await tester.pump();
+
+      final gap = tester.getRect(find.text('android push test')).top
+          - tester.getRect(find.textContaining(RegExp(r'ago|yang lalu|baru saja'))).bottom;
+      expect(gap, lessThan(16.0),
+          reason: '🔴 头像行和正文之间空出一大条 —— 纯文字帖把两段本该各自成立的'
+              '留白叠在了一起（修复前约 20+）');
+      expect(gap, greaterThanOrEqualTo(0.0), reason: '也不能压到重叠');
+    });
+
+    /// 🛡 反向：**有图帖那两段留白是对的，不许被顺手压掉。**
+    ///
+    /// 没有这一条，把作者行的下内边距减半同样能让上面那条绿 ——
+    /// 代价是有图帖「作者行↔图片」的间隔也没了。
+    testWidgets('有图帖：正文与图片之间仍留着间隔', (tester) async {
+      await tester.pumpWidget(_wrapCard(MasonryCard(
+          item: _item(body: 'ada foto', image: 'https://img.example/1.jpg'),
+          deletedUserLabel: 'x')));
+      await tester.pump();
+
+      final image = tester.getRect(find.byType(FeedImage));
+      final body = tester.getRect(find.text('ada foto'));
+      expect(body.top - image.bottom, greaterThanOrEqualTo(8.0),
+          reason: '🔴 图片和正文贴到一起了 —— 纯文字帖那处修复不该动到有图帖');
+    });
+  });
 
   group('AC1/AC2 通栏卡片渲染', () {
     /// 🔴 改版前卡片**没有**点赞与评论数（旧口径 FR-17「不在卡片展示」）。

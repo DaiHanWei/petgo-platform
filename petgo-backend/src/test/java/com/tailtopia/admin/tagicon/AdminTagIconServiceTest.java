@@ -196,10 +196,29 @@ class AdminTagIconServiceTest {
 
     // ── 界面文案 ────────────────────────────────────────────────────
 
-    /** AC3：尺寸规范文案要带三个数（最小边 / 最大边 / 大小上限）。 */
+    /** AC3：尺寸规范文案要带三个数（最小边 / 最大边 / 大小上限），**两页各一份**。 */
     @Test
     void specTextCarriesAllThreeNumbers() {
-        assertThat(service.specText())
-                .contains("72").contains("1024").contains("512");
+        for (String ctx : new String[] {"contentTag", "userTag"}) {
+            assertThat(service.specText(ctx))
+                    .as(ctx + " 的规格文案")
+                    .contains("72").contains("1024").contains("512");
+        }
+    }
+
+    /**
+     * 🔴 **两页的规格文案必须不一样**（bug 20260828）。
+     *
+     * <p>技术校验相同，但两处图标的最终显示尺寸与衬底完全不同（内容标签 9px 叠渐变胶囊 /
+     * 用户标签 8px 叠金色圆底）。共用一段话时它只能讲技术下限、讲不了「你做的图最后长什么样」——
+     * 运营因此做了 512×512 的精细图标，实机上是指甲盖上的一粒点，并据此认为尺寸规格是错的。
+     *
+     * <p>⚠️ 断"两段不相同"而不是断具体措辞：措辞会改，而**共用同一段**才是那个错误。
+     */
+    @Test
+    void theTwoPagesGetDifferentSpecText() {
+        assertThat(service.specText("contentTag"))
+                .as("🔴 两页又共用同一段规格文案了 —— 它讲不出各自的实际显示尺寸")
+                .isNotEqualTo(service.specText("userTag"));
     }
 }

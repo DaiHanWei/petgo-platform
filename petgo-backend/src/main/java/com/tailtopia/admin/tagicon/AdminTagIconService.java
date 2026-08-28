@@ -161,9 +161,21 @@ public class AdminTagIconService {
         return msg("admin.tagicon.required", null);
     }
 
-    /** 供界面展示的尺寸规范说明（AC3：后台必须常驻这段文字）。 */
-    public String specText() {
-        return msg("admin.tagicon.spec", new Object[] {MIN_SIDE, MAX_SIDE, MAX_BYTES / 1024});
+    /**
+     * 供界面展示的尺寸规范说明（AC3：后台必须常驻这段文字）。
+     *
+     * <p>🔴 **两页给两段不同的话**（bug 20260828）：技术校验相同（正方形 / 72–1024 / ≤512KB），
+     * 但两处图标的**最终显示尺寸与衬底完全不同** ——
+     * 内容标签是 9px、叠在橙红渐变胶囊上；用户标签是金色圆底里的 8px。
+     * 共用一段话的结果是：那段话只能讲技术下限，讲不了「你做的图最后长什么样」，
+     * 于是运营做了 512×512 的精细图标，实机上是指甲盖上的一粒点，
+     * 并据此认为「这个尺寸肯定不对」。
+     *
+     * @param context {@code contentTag} 或 {@code userTag}
+     */
+    public String specText(String context) {
+        return msg("admin.tagicon.spec." + context,
+                new Object[] {MIN_SIDE, MAX_SIDE, MAX_BYTES / 1024});
     }
 
     private String msg(String key, Object[] args) {

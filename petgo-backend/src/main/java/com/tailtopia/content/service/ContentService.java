@@ -213,6 +213,25 @@ public class ContentService {
         return posts.adminRowById(postId);
     }
 
+    /**
+     * 后台按一批 id 取内容行（2026-08-28「按点赞时间」口径用）。
+     *
+     * <p>⚠️ **不保证顺序** —— 调用方按自己的次序还原（这里的次序是"窗口内赞数降序"，
+     * 由点赞侧决定，内容表无从知道）。
+     */
+    @Transactional(readOnly = true)
+    public java.util.List<com.tailtopia.content.dto.AdminContentRow> adminRowsByIds(
+            java.util.Collection<Long> postIds) {
+        if (postIds == null || postIds.isEmpty()) {
+            return java.util.List.of();
+        }
+        return posts.findAllById(postIds).stream()
+                .map(p -> new com.tailtopia.content.dto.AdminContentRow(p.getId(), p.getType(),
+                        p.getAuthorId(), p.getText(), p.getDeletedAt() != null, p.getCreatedAt(),
+                        p.getImageUrls(), p.getSpeciesOverride()))
+                .toList();
+    }
+
     /** 后台恢复已下架内容（Story 4.2）：清 deletedAt（幂等：未删 no-op）。评论保持软删、点赞不还原（V1 接受）。 */
     @Transactional
     public void restore(long postId) {
@@ -449,11 +468,14 @@ public class ContentService {
     public ContentPostResponse publishTrusted(long authorId, ContentPostCreateRequest req,
             String idempotencyKey) {
         // 幂等重放：同 key 已落一条则取回，不重复创建（与 publish 同语义）。
+        // ⚠️ 幂等键写 Redis 不在事务内：调用方（如 Lark 发帖）在外层事务里调本方法后回滚，
+        // 键会残留 24h 指向幽灵 id。此时按「未发布」继续创建，而不是抛 notFound 把调用方卡死到 TTL 过期。
         Optional<Long> existing = idempotency.findResourceId(idempotencyKey);
         if (existing.isPresent()) {
-            return posts.findById(existing.get())
-                    .map(ContentPostResponse::from)
-                    .orElseThrow(() -> AppException.notFound("内容不存在"));
+            Optional<ContentPost> replay = posts.findById(existing.get());
+            if (replay.isPresent()) {
+                return ContentPostResponse.from(replay.get());
+            }
         }
 
         if (req.type() == null) {

@@ -570,6 +570,21 @@ class ContentServiceTest {
         verify(posts, never()).save(any());
     }
 
+    /** 幂等键残留（外层事务回滚后 Redis 键指向幽灵 id）：不抛 notFound，按未发布继续创建。 */
+    @Test
+    void publishTrustedGhostIdempotencyKeyFallsThroughToCreate() {
+        when(idempotency.findResourceId("lark-content:T1")).thenReturn(Optional.of(77L));
+        when(posts.findById(77L)).thenReturn(Optional.empty());
+
+        ContentPostResponse resp = service.publishTrusted(1L,
+                new ContentPostCreateRequest(ContentType.DAILY, null, "retry", null),
+                "lark-content:T1");
+
+        assertThat(resp.id()).isEqualTo(100L);
+        verify(posts).save(any());
+        verify(idempotency).store("lark-content:T1", 100L);
+    }
+
     @Test
     void publishTrustedRejectsGrowthMoment() {
         assertThatThrownBy(() -> service.publishTrusted(1L,

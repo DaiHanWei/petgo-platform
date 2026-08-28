@@ -5,6 +5,7 @@ import com.tailtopia.admin.contenttag.dto.AssignmentRow;
 import com.tailtopia.admin.contenttag.dto.TagRow;
 import com.tailtopia.content.domain.ContentPost;
 import com.tailtopia.content.domain.ContentTag;
+import com.tailtopia.content.domain.ContentTagBadgeStyle;
 import com.tailtopia.content.domain.ContentTagAssignment;
 import com.tailtopia.content.repository.ContentPostRepository;
 import com.tailtopia.content.repository.ContentTagAssignmentRepository;
@@ -58,7 +59,7 @@ public class AdminContentTagService {
     public List<TagRow> listTags(Instant now) {
         return tags.findAllByOrderByIdDesc().stream()
                 .map(t -> new TagRow(t.getId(), t.getCode(), t.getName(), t.getIcon(),
-                        t.getDescription(), t.getRetiredAt(),
+                        t.getDescription(), t.getBadgeStyle(), t.getRetiredAt(),
                         assignments.findActiveByTag(t.getId(), now).size()))
                 .toList();
     }
@@ -70,7 +71,8 @@ public class AdminContentTagService {
     }
 
     @Transactional
-    public void createTag(long adminId, String code, String name, String icon, String description) {
+    public void createTag(long adminId, String code, String name, String icon, String description,
+            String badgeStyle) {
         if (code == null || code.isBlank() || name == null || name.isBlank()
                 || icon == null || icon.isBlank() || description == null || description.isBlank()) {
             throw AppException.validation("标签码、名称、图标与说明文案均为必填");
@@ -78,21 +80,26 @@ public class AdminContentTagService {
         tags.findByCode(code).ifPresent(t -> {
             throw AppException.validation("标签码已存在：" + code);
         });
-        ContentTag saved = tags.save(ContentTag.of(code, name, icon, description));
+        // ⚠️ 宽松解析、不抛：底色从下拉里选，值不对只可能是有人手改了请求 ——
+        //    为此让整次建标签失败不划算，回落 UI 稿原始的橙→红即可。
+        ContentTagBadgeStyle style = ContentTagBadgeStyle.parse(badgeStyle);
+        ContentTag saved = tags.save(ContentTag.of(code, name, icon, description, style));
         audit.record(adminId, "CONTENT_TAG_CREATE", "content_tag", String.valueOf(saved.getId()),
-                "code=" + code + " name=" + name);
+                "code=" + code + " name=" + name + " style=" + style);
     }
 
     @Transactional
-    public void editTag(long adminId, long id, String name, String icon, String description) {
+    public void editTag(long adminId, long id, String name, String icon, String description,
+            String badgeStyle) {
         ContentTag tag = tags.findById(id)
                 .orElseThrow(() -> AppException.notFound("标签不存在"));
         // Story 11.5：icon 为 null 表示"这次没传新文件" ⇒ **保留原图标**，不是清空。
         // 🛡 直接传 icon 会把"只改错别字"的那次编辑变成"把图标删了"，
         //    而那在后台界面上看不出来，只有 App 上图标消失才会被发现。
-        tag.edit(name, icon == null ? tag.getIcon() : icon, description);
+        ContentTagBadgeStyle style = ContentTagBadgeStyle.parse(badgeStyle);
+        tag.edit(name, icon == null ? tag.getIcon() : icon, description, style);
         audit.record(adminId, "CONTENT_TAG_EDIT", "content_tag", String.valueOf(id),
-                "name=" + name);
+                "name=" + name + " style=" + style);
     }
 
     /**

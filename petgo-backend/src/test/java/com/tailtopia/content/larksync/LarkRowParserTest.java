@@ -27,6 +27,7 @@ class LarkRowParserTest {
         assertEquals(6, COLS.status());
         assertEquals(7, COLS.account());
         assertEquals(8, COLS.note());
+        assertEquals(1, COLS.category());
         // 无「发布账号(邮箱)」列的旧结构同样能映射（email=-1 全走随机）——列位置变化由表头驱动。
         LarkRowParser.Columns old = LarkRowParser.mapColumns(List.of(
                 "序号", "内容编号", "文案部分", "图片编号", "上传状态", "发布账号", "备注"));
@@ -34,6 +35,7 @@ class LarkRowParserTest {
         assertEquals(4, old.status());
         assertEquals(5, old.account());
         assertEquals(-1, old.email());
+        assertEquals(-1, old.category());
     }
 
     @Test
@@ -76,6 +78,7 @@ class LarkRowParserTest {
         assertEquals("Ketemu si oren", r.text());
         assertEquals(List.of("DR260823001"), r.imageCodes());
         assertEquals("", r.email());
+        assertEquals("Moment", r.category());
         assertTrue(r.pending());
     }
 

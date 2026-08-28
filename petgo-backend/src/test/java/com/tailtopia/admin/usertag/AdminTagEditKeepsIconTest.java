@@ -56,13 +56,14 @@ class AdminTagEditKeepsIconTest {
         UserTagRepository tags = mock(UserTagRepository.class);
         when(tags.findById(1L)).thenReturn(Optional.of(tag));
         return new AdminUserTagService(tags, mock(UserTagAssignmentRepository.class),
+                mock(com.tailtopia.auth.repository.UserRepository.class),
                 mock(UserTagQueryService.class), mock(AdminAuditService.class));
     }
 
     @Test
     void nullIconKeepsTheExistingOne() {
         UserTag tag = seed();
-        svc(tag).editTag(7L, 1L, "新名字", null, "新说明");
+        svc(tag).editTag(7L, 1L, "新名字", null, "新说明", "GOLD");
 
         assertThat(tag.getIcon()).as("🛡 不该被清空").isEqualTo("https://cdn/old.png");
         assertThat(tag.getName()).isEqualTo("新名字");
@@ -72,7 +73,7 @@ class AdminTagEditKeepsIconTest {
     @Test
     void newIconReplacesTheOldOne() {
         UserTag tag = seed();
-        svc(tag).editTag(7L, 1L, "新名字", "https://cdn/new.png", "新说明");
+        svc(tag).editTag(7L, 1L, "新名字", "https://cdn/new.png", "新说明", "GOLD");
 
         assertThat(tag.getIcon()).isEqualTo("https://cdn/new.png");
     }
