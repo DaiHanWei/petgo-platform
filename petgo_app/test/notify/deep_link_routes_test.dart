@@ -84,6 +84,44 @@ void main() {
     expect(DeepLinkRoutes.pushPayloadToLocation('REFUND_REJECTED', null), '/me/refunds');
   });
 
+  group('生命周期推送（留存运营作战手册 · 抓手 1）', () {
+    const nodes = ['LIFECYCLE_D1', 'LIFECYCLE_D3', 'LIFECYCLE_D7', 'LIFECYCLE_WINBACK'];
+
+    test('四个节点共用一套 variant 分流（targetRef 携带 variant，不是资源 id）', () {
+      for (final type in nodes) {
+        expect(DeepLinkRoutes.pushPayloadToLocation(type, 'CREATE_PROFILE'), '/profile/create',
+            reason: '$type + CREATE_PROFILE 应直达建档页');
+        expect(DeepLinkRoutes.pushPayloadToLocation(type, 'RECORD'),
+            '/publish?preset=growth-calendar',
+            reason: '$type + RECORD 应直达「+发布」预选成长日历');
+        expect(DeepLinkRoutes.pushPayloadToLocation(type, 'FEED'), '/home',
+            reason: '$type + FEED 应落 Feed');
+        expect(DeepLinkRoutes.pushPayloadToLocation(type, 'REVIEW'), '/profile',
+            reason: '$type + REVIEW 应落成长档案 Tab');
+      }
+    });
+
+    test('未知 / 缺失 variant 一律落建档页，而不是通知中心', () {
+      // 会收到这四类推送的人，绝大多数缺的就是建档这一步；
+      // 落回通知中心等于把召回链路断在最后一米。
+      for (final type in nodes) {
+        expect(DeepLinkRoutes.pushPayloadToLocation(type, null), '/profile/create');
+        expect(DeepLinkRoutes.pushPayloadToLocation(type, ''), '/profile/create');
+        expect(DeepLinkRoutes.pushPayloadToLocation(type, 'WHATEVER'), '/profile/create');
+      }
+    });
+
+    test('FEED / REVIEW 落点是 shell 分支根 —— 调用方必须 go 而非 push', () {
+      // 分支根被 push 会在同一匹配链里二次构建 StatefulShellRoute → GlobalKey 撞车 → release 白屏
+      // （bug 20260729-纪念日通知白屏）。这里钉住「它们确实是分支根」，让调用方的 go/push 判断有依据。
+      expect(DeepLinkRoutes.isShellTabRoot(DeepLinkRoutes.feedHome), isTrue);
+      expect(DeepLinkRoutes.isShellTabRoot(DeepLinkRoutes.growthArchive), isTrue);
+      // 建档页与发布页不是分支根，push 是安全的。
+      expect(DeepLinkRoutes.isShellTabRoot(DeepLinkRoutes.createPetProfile), isFalse);
+      expect(DeepLinkRoutes.isShellTabRoot(DeepLinkRoutes.publishGrowthCalendar), isFalse);
+    });
+  });
+
   test('未知 type / 空 token → 通知中心兜底（不崩溃）', () {
     expect(DeepLinkRoutes.pushPayloadToLocation('SOMETHING_NEW', 'x'),
         DeepLinkRoutes.notificationsCenter);

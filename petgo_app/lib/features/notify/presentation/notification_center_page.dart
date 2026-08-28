@@ -633,6 +633,13 @@ class _NotificationTileState extends State<_NotificationTile> {
   bool get _isUserSubject =>
       widget.item.targetRef == 'NICKNAME' || widget.item.targetRef == 'USER_AVATAR';
 
+  /// 生命周期推送（留存作战手册抓手 1）的分层 variant：后端把它放在 targetRef 里下发
+  /// （CREATE_PROFILE / RECORD / FEED / REVIEW）。App 据此选 body 键，同样不渲染后端串。
+  ///
+  /// ⚠️ 通知中心按 type 本地化，**拿不到宠物名** —— 带名字的那句只在 push 里。
+  ///    这是既有架构（后端 title/body 落库但客户端不读），不在本次改动范围内。
+  String get _lifecycleVariant => widget.item.targetRef ?? '';
+
   /// 圆角方形彩色图标块配色（按 type）：兽医薄荷 / 点赞红 / 评论紫 / 里程碑绿 / 生日金。
   (IconData, Color, Color) get _iconStyle => switch (widget.item.type) {
     'VET_REPLY' || 'CONSULT_CLOSED' => (
@@ -718,6 +725,23 @@ class _NotificationTileState extends State<_NotificationTile> {
       AppColors.coral,
       AppColors.coralTint,
     ),
+    // 生命周期推送（留存作战手册抓手 1）：温和的记录/发现语气，
+    // 刻意**不用**警示色 —— 这是邀请，不是处置。
+    'LIFECYCLE_D1' || 'LIFECYCLE_WINBACK' => (
+      Icons.auto_stories_rounded,
+      AppColors.mint,
+      AppColors.cream2,
+    ),
+    'LIFECYCLE_D3' => (
+      Icons.explore_rounded,
+      AppColors.mint,
+      AppColors.cream2,
+    ),
+    'LIFECYCLE_D7' => (
+      Icons.calendar_month_rounded,
+      AppColors.gold,
+      AppColors.goldTint,
+    ),
     _ => (Icons.notifications_rounded, AppColors.mint, AppColors.cream2),
   };
 
@@ -746,6 +770,11 @@ class _NotificationTileState extends State<_NotificationTile> {
     // 账号级处置（V1.1.4 Story 3.2）。
     'ACCOUNT_WARNED' => l10n.notifyTypeAccountWarned,
     'ACCOUNT_SUSPENDED' => l10n.notifyTypeAccountSuspended,
+    // 生命周期推送（留存作战手册抓手 1）。
+    'LIFECYCLE_D1' => l10n.notifyTypeLifecycleD1,
+    'LIFECYCLE_D3' => l10n.notifyTypeLifecycleD3,
+    'LIFECYCLE_D7' => l10n.notifyTypeLifecycleD7,
+    'LIFECYCLE_WINBACK' => l10n.notifyTypeLifecycleWinback,
     // 未知类型兜底：中性「系统通知」，不再复用页面标题（bug 20260729-391 的「克隆卡」观感来源）。
     _ => l10n.notifyTypeSystem,
   };
@@ -780,6 +809,18 @@ class _NotificationTileState extends State<_NotificationTile> {
     // ⚠️ 封号正文的印尼语**已经法务审核**（C-101），改词前必须回法务。
     'ACCOUNT_WARNED' => l10n.notifyBodyAccountWarned,
     'ACCOUNT_SUSPENDED' => l10n.notifyBodyAccountSuspended,
+    // 生命周期推送：正文按 targetRef 携带的分层 variant 选，而非按节点 ——
+    // 「还没建档」和「已建档没发布」要说的是两句完全不同的话。
+    'LIFECYCLE_D1' ||
+    'LIFECYCLE_D3' ||
+    'LIFECYCLE_D7' ||
+    'LIFECYCLE_WINBACK' => switch (_lifecycleVariant) {
+      'RECORD' => l10n.notifyBodyLifecycleRecord,
+      'FEED' => l10n.notifyBodyLifecycleFeed,
+      'REVIEW' => l10n.notifyBodyLifecycleReview,
+      // CREATE_PROFILE 与未知 variant 一律落建档引导（与深链落点同口径）。
+      _ => l10n.notifyBodyLifecycleCreateProfile,
+    },
     // 未知类型兜底：中性正文，不再复用空态提示串（那本身就是个 bug）。
     _ => l10n.notifyBodySystem,
   };

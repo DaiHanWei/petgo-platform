@@ -175,7 +175,8 @@ class LoginGuideController {
       final source = _entrySource == 'other' && _cameFromPetCard
           ? 'pet_card'
           : _entrySource;
-      Analytics.capture('signup_succeeded', {'entry_source': source});
+      // 埋点封装带 $set_once（signup_date / first_entry_source），留存分群要用。
+      Analytics.captureSignupSucceeded(source);
     }
     if (!rootContext.mounted) return LoginGuideOutcome.success;
     _handleSuccess(rootContext, resp);

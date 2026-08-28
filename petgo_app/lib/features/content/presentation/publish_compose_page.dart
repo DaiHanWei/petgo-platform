@@ -248,6 +248,17 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     final petId = controller.type == ContentType.growthMoment
         ? _linkedPet?.id
         : null;
+    // 分享飞轮（留存手册抓手 2）：成功页要**当场**给可分享的成长册链接，
+    // 所以这里 best-effort 把档案取上来拿 cardToken（成长日历路径上面已取过，直接命中缓存）。
+    // 失败/无档案不阻断发布——代价只是成功页少一个分享按钮。
+    if (_linkedPet == null && _hasPetProfile) {
+      try {
+        await _ensurePetLoaded();
+      } catch (_) {
+        // 静默：分享按钮是加分项，不能让它挡住发布。
+      }
+      if (!mounted) return;
+    }
     final args = _buildArgs(controller, l10n);
     // 进入「审核中」覆盖层（P-39b）。
     setState(() {
@@ -373,6 +384,9 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       photoCount: controller.items.length,
       // 私密保存（Diary 关掉同步开关）→ 成功页走私密文案/CTA（PR#34 finding #11）。
       isPrivate: !controller.isSharing,
+      // 抓手 2：有档案才有成长册可分享；为空时成功页不渲染分享 CTA。
+      cardToken: _linkedPet?.cardToken,
+      petName: _linkedPet?.name,
     );
   }
 

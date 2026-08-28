@@ -53,7 +53,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         Analytics.capture('af_complete_registration', {'af_registration_method': method});
         // T-7 signup_succeeded（Story 6.1）：登录页是「非引导浮层」路径 → entry_source=login_page。
         // 引导浮层/强弹窗路径由 LoginGuideController 上报，两处互不重复（登录页不走浮层）。
-        Analytics.capture('signup_succeeded', {'entry_source': 'login_page'});
+        Analytics.captureSignupSucceeded('login_page');
       }
       if (!mounted) return;
       // 新老分流：老用户进 App；新用户进引导占位（Story 1.6 本体）。

@@ -174,7 +174,8 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> with WidgetsBinding
         // 直接切到另一用户（中途未过 guest）时先 reset 再 identify，遵守 PostHog「换人先 reset」规约。
         if (nextId != prevId) {
           if (prevId != null) Analytics.reset();
-          Analytics.identifyUser(nextId);
+          // role 随 identify 落成 person property：留存看板据此把兽医号剔出宠主大盘。
+          Analytics.identifyUser(nextId, role: next.role);
         }
       } else if (next.status == AuthStatus.guest && prevId != null) {
         // 仅在此前确有身份时 reset，避免纯游客态抖动平白重置匿名 id（破坏匿名漏斗连续性）。
