@@ -53,6 +53,7 @@ public class AdminShopProductService {
         validate(form);
         ShopProduct p = ShopProduct.create(tokens.generate(), form.getName().trim(),
                 form.getBrand().trim(), form.getCategory(), form.getMainImageKey().trim(),
+                form.getMainImageW(), form.getMainImageH(),
                 form.galleryKeys(), form.getSpecies(), form.getBodySize(), form.getAgeStage(),
                 form.getDetailHtml(), form.feedingGuide(), form.getShelfLifeNote().trim(),
                 form.getReturnPolicy(), form.getSortWeight());
@@ -68,7 +69,8 @@ public class AdminShopProductService {
         ShopProduct p = products.findById(productId)
                 .orElseThrow(() -> AppException.notFound("商品不存在").code("admin.err.product.notFound"));
         p.apply(form.getName().trim(), form.getBrand().trim(), form.getCategory(),
-                form.getMainImageKey().trim(), form.galleryKeys(), form.getSpecies(),
+                form.getMainImageKey().trim(), form.getMainImageW(), form.getMainImageH(),
+                form.galleryKeys(), form.getSpecies(),
                 form.getBodySize(), form.getAgeStage(), form.getDetailHtml(),
                 form.feedingGuide(), form.getShelfLifeNote().trim(), form.getReturnPolicy(),
                 form.getSortWeight());

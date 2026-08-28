@@ -26,6 +26,7 @@ class ShopImage extends StatelessWidget {
     this.radius = ShopShape.radiusChip,
     this.onInk = false,
     this.fillWidth = false,
+    this.fit = BoxFit.cover,
   });
 
   final String? url;
@@ -38,10 +39,14 @@ class ShopImage extends StatelessWidget {
   final bool onInk;
 
   /// 宽度撑满、只锁高度（网格卡：设计稿是 104px 高的横图，不是方图）。
-  ///
-  /// 🔴 商品图素材规格是 1:1，这里用 [BoxFit.cover] 裁切而不是压扁 ——
-  /// 变形的商品图比裁掉边角难看得多。
   final bool fillWidth;
+
+  /// 图片填充方式。
+  ///
+  /// 🔴 **默认 [BoxFit.cover]（裁切）不能改** —— 十余处调用方（购物车行、订单行、
+  /// 退款选择、详情页轮播）都依赖这个默认值把图铺满各自的方框；改默认值会一次性
+  /// 影响全部，而它们并没有提出「要看完整图」的诉求。
+  final BoxFit fit;
 
   @override
   Widget build(BuildContext context) {
@@ -54,6 +59,7 @@ class ShopImage extends StatelessWidget {
         url!,
         width: fillWidth ? double.infinity : size,
         height: size,
+        fit: fit,
         // 物理像素：列表里的小图走 OSS 缩略图，省流量（AppImage 只对 OSS 网络图生效）。
         thumbWidth: (size * MediaQuery.devicePixelRatioOf(context)).round(),
         errorBuilder: (_, _, _) => placeholder,
