@@ -239,6 +239,49 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   });
+
+  group('🔴 有效行必须删得掉（2026-08-21 默认变体翻到 v2 后一度删不掉）', () {
+    // v1 的 `cart_page.dart` 一直是「qty=1 时 − 变垃圾桶」，v2 改版时漏了，
+    // 于是默认版式翻过来之后，加错东西的用户只能整单买下或放弃结算。
+    // 这条守的是**页面上那个入口**；步进器本身的行为在 shop_widgets_test.dart。
+    testWidgets('qty=1 时行内出现删除图标，点击调用 remove()', (tester) async {
+      final ctrl = _FakeCartController(CartView(
+        lines: [line('sku-a', qty: 1)],
+        invalidLines: const [],
+        itemCount: 1,
+        subtotal: 185000,
+      ));
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          authControllerProvider.overrideWith(() => _TestAuthController(
+                const AuthState(status: AuthStatus.authenticated, role: 'USER'),
+              )),
+          cartProvider.overrideWith(() => ctrl),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('id'),
+          home: const MediaQuery(
+            data: MediaQueryData(size: Size(411, 891)),
+            child: CartPageV2(),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.delete_outline), findsOneWidget,
+          reason: '数量为 1 时「−」必须变成删除 —— 否则这一行没有任何删除入口');
+      await tester.tap(find.byKey(const ValueKey('stepperDec')));
+      await tester.pumpAndSettle();
+      expect(ctrl.removed, ['sku-a']);
+    });
+  });
 }
 
 /// 固定返回给定购物车的 controller。
@@ -251,8 +294,14 @@ class _FakeCartController extends CartController {
 
   final CartView _cart;
 
+  /// 被 `remove()` 掉的 skuToken，供用例断言。
+  final removed = <String>[];
+
   @override
   Future<CartView> build() async => _cart;
+
+  @override
+  Future<void> remove(String skuToken) async => removed.add(skuToken);
 }
 
 class _TestAuthController extends AuthController {

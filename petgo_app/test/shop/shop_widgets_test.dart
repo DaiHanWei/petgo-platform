@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/core/theme/shop_tokens.dart';
+import 'package:tailtopia/features/shop/presentation/widgets/shop_buttons.dart';
 import 'package:tailtopia/features/shop/presentation/widgets/shop_controls.dart';
+import 'package:tailtopia/features/shop/presentation/widgets/shop_decor.dart';
+import 'package:tailtopia/features/shop/presentation/widgets/shop_pressable.dart';
 import 'package:tailtopia/features/shop/presentation/widgets/shop_countdown.dart';
 import 'package:tailtopia/features/shop/presentation/widgets/shop_surface.dart';
 
@@ -156,18 +159,102 @@ void main() {
     });
 
     testWidgets('两个按钮的命中区都撑到 44×44 —— 视觉 22px 直接点不中', (tester) async {
+      int? got;
       await tester.pumpWidget(host(
-        ShopStepper(value: 3, min: 1, max: 9, onChanged: (_) {}),
+        ShopStepper(value: 3, min: 1, max: 9, onChanged: (v) => got = v),
       ));
+      // 命中区由 [ShopPressable] 承担（2026-08-27 由本文件私有的 _TapTarget 提升而来），
+      // 因此直接量它 —— 比「最近的一个 SizedBox」精确，换实现也不会误报。
       for (final k in ['stepperDec', 'stepperInc']) {
         final target = find.ancestor(
           of: find.byKey(ValueKey(k)),
-          matching: find.byType(SizedBox),
+          matching: find.byType(ShopPressable),
         );
         final box = tester.getSize(target.first);
         expect(box.width, greaterThanOrEqualTo(44), reason: '$k 命中区宽度不足');
         expect(box.height, greaterThanOrEqualTo(44), reason: '$k 命中区高度不足');
       }
+      // 光有尺寸不够：撑出来的那圈必须真的可点（HitTestBehavior.opaque），
+      // 否则 44 的盒子里只有中间 22 能响应，等于白撑。
+      final inc = find.ancestor(
+        of: find.byKey(const ValueKey('stepperInc')),
+        matching: find.byType(ShopPressable),
+      );
+      final r = tester.getRect(inc.first);
+      await tester.tapAt(Offset(r.left + 2, r.top + 2));
+      expect(got, 4, reason: '命中区边角点不中 —— 撑大的区域没有参与命中测试');
+    });
+
+    testWidgets('🔴 触底 + onRemove ⇒ − 变删除图标，点击走删除而不是减一', (tester) async {
+      // 2026-08-21 默认变体翻到 v2 后，v2 购物车的有效行**没有任何删除入口** ——
+      // 减到 1 就到底。这条锁住补回来的行为。
+      int? changed;
+      var removed = 0;
+      await tester.pumpWidget(host(ShopStepper(
+        value: 1,
+        min: 1,
+        max: 9,
+        onChanged: (v) => changed = v,
+        onRemove: () => removed++,
+      )));
+
+      expect(find.byIcon(Icons.delete_outline), findsOneWidget,
+          reason: '图标必须跟着换 —— 否则用户点了「−」整行却消失，会以为自己点错了');
+      await tester.tap(find.byKey(const ValueKey('stepperDec')));
+      expect(removed, 1);
+      expect(changed, isNull, reason: '触底时点 − 是删除，不是把数量减成 0');
+    });
+
+    testWidgets('不给 onRemove 时保持原行为：触底禁用 −', (tester) async {
+      // 退货申请页就是这一支：那里的数量是「退几件」，退 0 件没有意义。
+      int? changed;
+      await tester.pumpWidget(host(
+        ShopStepper(value: 1, min: 1, max: 9, onChanged: (v) => changed = v),
+      ));
+      expect(find.byIcon(Icons.delete_outline), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('stepperDec')));
+      expect(changed, isNull);
+    });
+  });
+
+  group('按钮的请求进行中态', () {
+    testWidgets('🔴 loading 时转圈而不是置灰，且不可点', (tester) async {
+      // 此前各页的做法是把 variant 切成 disabled —— 屏幕上和「这个商品卖完了」
+      // 完全一样，在 `Bayar` 上会让用户重复点击。
+      var taps = 0;
+      await tester.pumpWidget(host(ShopButton(
+        label: 'Bayar',
+        variant: ShopButtonVariant.pay,
+        loading: true,
+        onTap: () => taps++,
+      )));
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      await tester.tap(find.byType(ShopButton), warnIfMissed: false);
+      expect(taps, 0, reason: 'loading 期间必须吃掉点击');
+    });
+
+    testWidgets('loading 不改变按钮尺寸 —— 否则底部条会跳一下', (tester) async {
+      await tester.pumpWidget(host(const ShopButton(
+          label: 'Bayar Rp 154.000', variant: ShopButtonVariant.pay)));
+      final idle = tester.getSize(find.byType(ShopButton));
+
+      await tester.pumpWidget(host(const ShopButton(
+          label: 'Bayar Rp 154.000', variant: ShopButtonVariant.pay, loading: true)));
+      expect(tester.getSize(find.byType(ShopButton)), idle);
+    });
+  });
+
+  group('计数角标', () {
+    testWidgets('🔴 不是正圆 —— BoxShape.circle 只按最短边画圆，99+ 会溢出', (tester) async {
+      await tester.pumpWidget(host(const ShopCountBadge(count: 120)));
+      final d = tester.widget<Container>(find.byType(Container)).decoration! as BoxDecoration;
+      expect(d.shape, BoxShape.rectangle);
+      expect(d.borderRadius, isNotNull, reason: '要用胶囊圆角，一位数时仍是正圆、多位数横向伸长');
+      expect(find.text('99+'), findsOneWidget);
+      // 文字必须画得进背景块里。
+      final box = tester.getSize(find.byType(Container));
+      final label = tester.getSize(find.text('99+'));
+      expect(box.width, greaterThanOrEqualTo(label.width));
     });
   });
 

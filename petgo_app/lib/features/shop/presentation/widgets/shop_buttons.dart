@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/shop_tokens.dart';
+import 'shop_pressable.dart';
 
 /// 电商板块的按钮。
 ///
@@ -10,7 +11,11 @@ import '../../../../core/theme/shop_tokens.dart';
 ///
 /// 🔴 <b>不用 Material 的 FilledButton/OutlinedButton</b>：它们带 M3 的 elevation、
 /// 波纹溢出与 40px 最小高度，三者都和本设计冲突（设计稿明令产品 UI 内不使用阴影，
-/// 且小按钮实测高度 30–34px）。改用 [InkWell] + [DecoratedBox] 自绘。
+/// 且小按钮实测高度 30–34px）。改用 [ShopPressable] + [DecoratedBox] 自绘。
+///
+/// 🔴 <b>按下反馈由 [ShopPressable] 承担</b>（2026-08-27）。此前用的 `InkWell` 在这里
+/// **完全不可见** —— 涟漪画在 Material 的 ink 层、被本组件不透明的 `DecoratedBox` 盖住，
+/// 而按钮又没有别的按下态。详见 `shop_pressable.dart` 的说明。
 enum ShopButtonVariant {
   /// 强调实色 —— **未完成的付款动作**与促销转化（`Bayar` / `Checkout` / `Beli Lagi`）。
   ///
@@ -38,6 +43,10 @@ enum ShopButtonVariant {
   ///
   /// 🔴 <b>置灰但不消失</b>：设计稿刻意保留主按钮的位置，传达「同一个页面、只是买不了」。
   /// 真正的出口在旁边的次按钮。**不要因为不可点就把它 remove 掉。**
+  ///
+  /// ⚠️ <b>不要拿它当「请求进行中」用</b>：那是 [ShopButton.loading] 的活。置灰表达的是
+  /// 「这个动作现在不可用」，而请求进行中要表达的是「正在处理，别再点」——
+  /// 两者在屏幕上长得一样的话，用户会把网络慢读成「东西卖完了」。
   disabled,
 }
 
@@ -50,6 +59,7 @@ class ShopButton extends StatelessWidget {
     this.subtitle,
     this.dense = false,
     this.padding,
+    this.loading = false,
   });
 
   final String label;
@@ -70,7 +80,19 @@ class ShopButton extends StatelessWidget {
 
   final EdgeInsets? padding;
 
-  bool get _enabled => onTap != null && variant != ShopButtonVariant.disabled;
+  /// 请求进行中。
+  ///
+  /// 🔴 <b>底色保持不变，只把文字换成转圈</b>（2026-08-27 审查结论）。此前各页的做法是
+  /// 把 variant 切到 [ShopButtonVariant.disabled]，屏幕上的表现是「按钮变灰，然后什么都
+  /// 不发生」—— 和「这个商品刚卖完」的视觉完全一样。在 `Bayar Rp 154.000` 上，用户的
+  /// 合理反应是再点一次，而那是支付链路。
+  ///
+  /// 🔴 用 [Stack] 保留原 label 占位（`Opacity(0)`）而不是直接替换：否则按钮宽度会随
+  /// 文字消失而缩水，底部操作条当场跳一下。
+  final bool loading;
+
+  bool get _enabled =>
+      onTap != null && variant != ShopButtonVariant.disabled && !loading;
 
   @override
   Widget build(BuildContext context) {
@@ -100,12 +122,30 @@ class ShopButton extends StatelessWidget {
     final textStyle =
         (dense ? ShopText.buttonSecondary : ShopText.buttonPrimary).copyWith(color: fg);
 
+    final Widget labels = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, textAlign: TextAlign.center, style: textStyle),
+        if (subtitle != null) ...[
+          const SizedBox(height: 1),
+          Text(
+            subtitle!,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                fontSize: 9.5, fontWeight: FontWeight.w400, color: fg.withValues(alpha: .85)),
+          ),
+        ],
+      ],
+    );
+
     return Semantics(
       button: true,
       enabled: _enabled,
-      child: InkWell(
-        onTap: _enabled ? onTap : null,
-        borderRadius: BorderRadius.circular(ShopShape.radiusButton),
+      // 请求进行中对读屏用户同样要可感知，否则只听到「按钮」却不知道已经在处理。
+      liveRegion: loading,
+      child: ShopPressable(
+        onTap: onTap,
+        enabled: _enabled,
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: bg,
@@ -114,21 +154,23 @@ class ShopButton extends StatelessWidget {
           ),
           child: Padding(
             padding: effectivePadding,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(label, textAlign: TextAlign.center, style: textStyle),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 1),
-                  Text(
-                    subtitle!,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                        fontSize: 9.5, fontWeight: FontWeight.w400, color: fg.withValues(alpha: .85)),
-                  ),
-                ],
-              ],
-            ),
+            child: loading
+                ? Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // 占位：保住原尺寸，避免底部条在请求期间跳动。
+                      Opacity(opacity: 0, child: labels),
+                      SizedBox(
+                        width: 15,
+                        height: 15,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(fg),
+                        ),
+                      ),
+                    ],
+                  )
+                : labels,
           ),
         ),
       ),

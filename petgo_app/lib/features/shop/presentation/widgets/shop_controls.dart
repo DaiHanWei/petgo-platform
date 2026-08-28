@@ -7,38 +7,24 @@
 /// 硬套原生的结果是每一处都差几个像素，且没有任何办法对齐。
 ///
 /// ⚠️ 自绘的代价是**触控区**：视觉 15–22px 远小于 44px 的可点最小尺寸。
-/// 因此每个控件都用 [_TapTarget] 把命中区域撑到 44×44（视觉不变），
+/// 因此每个控件都用 [ShopPressable] 把命中区域撑到 44×44（视觉不变），
 /// 不要为了「紧凑」把它去掉 —— 那会让购物车的勾选框实际点不中。
+///
+/// 🔴 2026-08-27：原本文件私有的 `_TapTarget` 已提升为 `widgets/shop_pressable.dart`
+/// 的 [ShopPressable]，因为**页面层没有享受到这份纪律** —— 商品详情页的返回按钮
+/// (`ShopImageButton`) 只有 30×30，顶栏购物车 30×30，六个「文字 + ›」按钮约 30×23。
+/// 同时它顺带补上了这套控件此前完全没有的**按下反馈**。
+///
+/// 🔴 无障碍：自绘控件不会像 Material 的 `Checkbox`/`Switch` 那样自带角色与名称，
+/// 因此每个控件都收一个 [semanticLabel]。**不要嫌麻烦省掉** —— 少了它，读屏用户
+/// 听到的是「已勾选」而不知道勾的是什么。
 library;
 
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/shop_tokens.dart';
+import 'shop_pressable.dart';
 
-
-/// 把任意小尺寸控件的命中区撑到 44×44，视觉尺寸不变。
-class _TapTarget extends StatelessWidget {
-  const _TapTarget({required this.child, this.onTap, this.enabled = true});
-
-  final Widget child;
-  final VoidCallback? onTap;
-  final bool enabled;
-
-  static const double _minTarget = 44;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: enabled ? onTap : null,
-      child: SizedBox(
-        width: _minTarget,
-        height: _minTarget,
-        child: Center(child: child),
-      ),
-    );
-  }
-}
 
 // ============================================================
 // 步进器
@@ -51,6 +37,12 @@ class _TapTarget extends StatelessWidget {
 /// 🔴 <b>触顶不是禁用整个控件，只禁用 `+`</b>：数量上限 = 当前库存，触顶后 `+` 的边框与
 /// 符号转灰，`−` 仍可点。设计稿同时要求在标签处提示 `Sisa n` —— 那部分由调用方渲染，
 /// 本组件只负责按钮态。
+///
+/// 🔴 <b>[onRemove] 非空时，`−` 在触底那一刻变成垃圾桶</b>（2026-08-27 补回）。
+/// v1 的 `cart_page.dart` 一直是这么做的，v2 改版时漏了，导致 2026-08-21 默认变体
+/// 翻到 v2 之后**线上用户无法从购物车里删除商品** —— 减到 1 就到底，没有任何删除入口。
+/// 图标必须跟着换：否则用户点了「−」东西却整行消失，会以为自己点错了。
+/// 退货申请页不传 [onRemove]（那里的数量是「退几件」，退 0 件没有意义）。
 class ShopStepper extends StatelessWidget {
   const ShopStepper({
     super.key,
@@ -58,6 +50,10 @@ class ShopStepper extends StatelessWidget {
     required this.min,
     required this.max,
     required this.onChanged,
+    this.onRemove,
+    this.decrementLabel,
+    this.incrementLabel,
+    this.removeLabel,
   });
 
   final int value;
@@ -67,14 +63,31 @@ class ShopStepper extends StatelessWidget {
   final int max;
   final ValueChanged<int>? onChanged;
 
+  /// 触底再减 = 删除整行。为 null 时触底即禁用 `−`（原行为）。
+  final VoidCallback? onRemove;
+
+  /// 无障碍名称。自绘控件不带角色与名称，读屏只会念出 `−` / `+` 这两个符号。
+  final String? decrementLabel;
+  final String? incrementLabel;
+  final String? removeLabel;
+
   @override
   Widget build(BuildContext context) {
-    final canDec = onChanged != null && value > min;
+    final atFloor = value <= min;
+    final isRemove = atFloor && onRemove != null;
+    final canDec = onChanged != null && (!atFloor || isRemove);
     final canInc = onChanged != null && value < max;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _box('−', canDec, () => onChanged!(value - 1), 'stepperDec'),
+        _box(
+          isRemove ? null : '−',
+          canDec,
+          isRemove ? onRemove! : () => onChanged!(value - 1),
+          'stepperDec',
+          isRemove ? removeLabel : decrementLabel,
+          icon: isRemove ? Icons.delete_outline : null,
+        ),
         SizedBox(
           width: 30,
           child: Text('$value',
@@ -82,29 +95,36 @@ class ShopStepper extends StatelessWidget {
               style: const TextStyle(
                   fontSize: 12, fontWeight: FontWeight.w600, color: ShopColors.text)),
         ),
-        _box('+', canInc, () => onChanged!(value + 1), 'stepperInc'),
+        _box('+', canInc, () => onChanged!(value + 1), 'stepperInc', incrementLabel),
       ],
     );
   }
 
-  Widget _box(String glyph, bool enabled, VoidCallback onTap, String keyName) {
-    return _TapTarget(
+  Widget _box(String? glyph, bool enabled, VoidCallback onTap, String keyName,
+      String? semanticLabel,
+      {IconData? icon}) {
+    final fg = enabled ? ShopColors.text2 : ShopColors.disabledText;
+    return Semantics(
+      button: true,
       enabled: enabled,
-      onTap: onTap,
-      child: Container(
-        width: 22,
-        height: 22,
-        key: ValueKey(keyName),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          border: Border.all(color: enabled ? ShopColors.border : ShopColors.border2),
-          borderRadius: BorderRadius.circular(ShopShape.radiusPayRow),
+      label: semanticLabel,
+      child: ShopPressable(
+        enabled: enabled,
+        onTap: onTap,
+        minSize: kShopMinTapTarget,
+        child: Container(
+          width: 22,
+          height: 22,
+          key: ValueKey(keyName),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            border: Border.all(color: enabled ? ShopColors.border : ShopColors.border2),
+            borderRadius: BorderRadius.circular(ShopShape.radiusPayRow),
+          ),
+          child: icon != null
+              ? Icon(icon, size: 14, color: fg)
+              : Text(glyph!, style: TextStyle(fontSize: 13, height: 1, color: fg)),
         ),
-        child: Text(glyph,
-            style: TextStyle(
-                fontSize: 13,
-                height: 1,
-                color: enabled ? ShopColors.text2 : ShopColors.disabledText)),
       ),
     );
   }
@@ -125,6 +145,7 @@ class ShopCheckbox extends StatelessWidget {
     required this.onChanged,
     this.size = 18,
     this.enabled = true,
+    this.semanticLabel,
   });
 
   final bool value;
@@ -132,15 +153,21 @@ class ShopCheckbox extends StatelessWidget {
   final double size;
   final bool enabled;
 
+  /// 无障碍名称。🔴 不给的话读屏只会念「已勾选」，勾的是什么完全听不出来 ——
+  /// 结算页那个勾选框勾的是「开封不退」协议（FR-104 合规位），尤其不能没有名字。
+  final String? semanticLabel;
+
   @override
   Widget build(BuildContext context) {
     final interactive = enabled && onChanged != null;
     return Semantics(
       checked: value,
       enabled: interactive,
-      child: _TapTarget(
+      label: semanticLabel,
+      child: ShopPressable(
         enabled: interactive,
         onTap: () => onChanged!(!value),
+        minSize: kShopMinTapTarget,
         child: Container(
           width: size,
           height: size,
@@ -192,9 +219,8 @@ class ShopRadioTile extends StatelessWidget {
       inMutuallyExclusiveGroup: true,
       selected: selected,
       button: true,
-      child: InkWell(
+      child: ShopPressable(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(ShopShape.radiusChip),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           decoration: BoxDecoration(
@@ -254,6 +280,7 @@ class ShopSwitch extends StatelessWidget {
     required this.onChanged,
     this.large = true,
     this.alwaysOn = false,
+    this.semanticLabel,
   });
 
   final bool value;
@@ -262,6 +289,9 @@ class ShopSwitch extends StatelessWidget {
 
   /// 常亮不可关（静默期）。为 true 时忽略 [value] 与 [onChanged]。
   final bool alwaysOn;
+
+  /// 无障碍名称（同 [ShopCheckbox.semanticLabel]）。
+  final String? semanticLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -296,9 +326,11 @@ class ShopSwitch extends StatelessWidget {
     return Semantics(
       toggled: on,
       enabled: !alwaysOn && onChanged != null,
-      child: _TapTarget(
+      label: semanticLabel,
+      child: ShopPressable(
         enabled: !alwaysOn && onChanged != null,
         onTap: () => onChanged!(!value),
+        minSize: kShopMinTapTarget,
         child: alwaysOn ? Opacity(opacity: .5, child: track) : track,
       ),
     );
@@ -342,10 +374,13 @@ class ShopChip extends StatelessWidget {
           )),
     );
     if (onTap == null) return chip;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(ShopShape.radiusChip),
-      child: chip,
+    // 🔴 `selected` 语义不可省：商品详情页用 chip 做**规格选择**，而 FR-94A 的核心
+    //    就是「多规格必须由用户显式选择」。没有这个标志，读屏用户听不出选中了哪个规格。
+    return Semantics(
+      button: true,
+      selected: selected,
+      inMutuallyExclusiveGroup: true,
+      child: ShopPressable(onTap: onTap, child: chip),
     );
   }
 }
@@ -370,9 +405,12 @@ class ShopSegmented extends StatelessWidget {
         for (var i = 0; i < labels.length; i++) ...[
           if (i > 0) const SizedBox(width: 6),
           Expanded(
-            child: InkWell(
+            child: Semantics(
+              button: true,
+              selected: i == selectedIndex,
+              inMutuallyExclusiveGroup: true,
+              child: ShopPressable(
               onTap: () => onSelected(i),
-              borderRadius: BorderRadius.circular(ShopShape.radiusField),
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 9),
                 alignment: Alignment.center,
@@ -386,6 +424,7 @@ class ShopSegmented extends StatelessWidget {
                       fontWeight: i == selectedIndex ? FontWeight.w700 : FontWeight.w400,
                       color: i == selectedIndex ? ShopColors.surface : ShopColors.text2,
                     )),
+              ),
               ),
             ),
           ),

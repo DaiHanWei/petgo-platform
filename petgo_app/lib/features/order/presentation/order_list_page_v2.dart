@@ -1,6 +1,6 @@
 /// 订单列表 —— **设计稿版式**（V1.4.0 · `02_screens_orders_refund.md` 屏 1）。
 ///
-/// 与 [OrderListPage]（v1 版式）并存，由 `shopUiVariantProvider` 二选一。
+/// ⚠️ 2026-08-28：v1 版式已整体删除，本文件是该页唯一实现（`_v2` 后缀保留以免制造纯改名 diff）。
 ///
 /// ## 🔴 这是**多业务共享**的订单壳（FR-54）
 ///
@@ -326,11 +326,22 @@ class OrderCardV2 extends StatelessWidget {
   bool get _awaitingPayment =>
       order.statusCode == 'PENDING' || order.statusCode == 'PENDING_PAYMENT';
 
+  /// 状态文字色。
+  ///
+  /// 🔴 <b>四个状态必须落在四个可分辨的值上</b>（2026-08-27 修）。原映射是
+  /// `warn → accent`、`info → purple`、`success/unknown → text3` —— 而 2026-08-21
+  /// `accent` 改成品牌紫之后它与 `purple` **同值**，于是四个语义塌成两个颜色，
+  /// 且塌在一起的两对恰好意思不同（「等你付钱」vs「我们在处理」、「已完成」vs「状态未知」）。
+  /// 颜色这条通道当时等于没在传信息。
+  ///
+  /// 现在按**需不需要你动手**排序，由重到轻：
+  /// 紫（等你行动）> 深墨（平台处理中）> 中灰（已完成，不用管）> 浅灰（状态未知）。
+  /// 四个值在白底上依次是 4.75 / 8.44 / 5.05 / 3.52，都还读得出来。
   Color _statusColor() => switch (order.statusColor) {
         OrderStatusColor.warn => ShopColors.accent,
-        OrderStatusColor.info => ShopColors.purple,
+        OrderStatusColor.info => ShopColors.text2,
         OrderStatusColor.success => ShopColors.text3,
-        OrderStatusColor.unknown => ShopColors.text3,
+        OrderStatusColor.unknown => ShopColors.text4,
       };
 
   /// 操作条。

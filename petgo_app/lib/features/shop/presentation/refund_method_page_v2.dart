@@ -1,6 +1,6 @@
 /// 退款方式 · 混合支付拆分 —— **设计稿版式**（V1.4.0 · `02_screens_orders_refund.md` 屏 5）。
 ///
-/// 与 [RefundMethodPage]（v1 版式）并存，由 `shopUiVariantProvider` 二选一。
+/// ⚠️ 2026-08-28：v1 版式已整体删除，本文件是该页唯一实现（`_v2` 后缀保留以免制造纯改名 diff）。
 ///
 /// 🔴 **这一页存在的唯一理由：让用户不会误以为整笔都能退成真钱。**
 /// 混合支付的两段各有各的归宿，而用户对此毫无预期 —— 不在退款前讲清楚，
@@ -31,6 +31,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/analytics/analytics.dart';
@@ -61,6 +62,16 @@ class _RefundMethodPageV2State extends ConsumerState<RefundMethodPageV2> {
   final _holder = TextEditingController();
   bool _busy = false;
 
+  /// 逐字段错误。
+  ///
+  /// 🔴 <b>这是钱出去的那一步，校验必须贴着字段</b>（2026-08-27 补）。此前本页只在提交时
+  /// 检查了账号非空，**收款人姓名一个字都不校验**（空串照样提交），账号也没有格式检查；
+  /// 唯一的反馈是一条飘在屏幕另一头的 toast，不指向出错的那个框。
+  /// 而本页自己的文案写着「提交后不可改 —— 打错账号的钱找回来要走人工」。
+  ///
+  /// 形态照抄同仓库的 `address_form_page_v2`：失焦即校验、错误时描边转红 + 框下一行说明。
+  final Map<String, String?> _errors = {};
+
   @override
   void initState() {
     super.initState();
@@ -74,6 +85,40 @@ class _RefundMethodPageV2State extends ConsumerState<RefundMethodPageV2> {
     super.dispose();
   }
 
+  /// 单字段校验。返回 null 表示通过。
+  ///
+  /// ⚠️ 位数范围与 `refundAccountNumberHint`（"10–13 digits"）保持一致 —— 提示和校验
+  /// 说的必须是同一件事，否则用户照着提示填却被拦下。
+  String? _errorFor(AppLocalizations l10n, String id) {
+    switch (id) {
+      case 'holder':
+        return _holder.text.trim().isEmpty ? l10n.refundAccountHolderRequired : null;
+      case 'account':
+        final v = _account.text.trim();
+        if (v.isEmpty) return l10n.refundMethodAccountRequired;
+        if (!RegExp(r'^\d{10,13}$').hasMatch(v)) return l10n.refundAccountNumberInvalid;
+        return null;
+    }
+    return null;
+  }
+
+  void _revalidate(AppLocalizations l10n, String id) {
+    final e = _errorFor(l10n, id);
+    if (_errors[id] == e) return;
+    setState(() => _errors[id] = e);
+  }
+
+  /// 提交前全量校验。任一不过即把全部错误一次性显示出来。
+  bool _validateAll(AppLocalizations l10n) {
+    final next = <String, String?>{
+      for (final id in const ['holder', 'account']) id: _errorFor(l10n, id),
+    };
+    setState(() => _errors
+      ..clear()
+      ..addAll(next));
+    return next.values.every((e) => e == null);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -84,7 +129,11 @@ class _RefundMethodPageV2State extends ConsumerState<RefundMethodPageV2> {
       appBar: ShopAppBar(title: l10n.refundMethodTitle),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) => _hint(l10n.refundLoadFailed),
+        error: (_, _) => ShopRetryState(
+          message: l10n.refundLoadFailed,
+          retryLabel: l10n.commonRetry,
+          onRetry: () => ref.invalidate(returnProgressProvider(widget.returnToken)),
+        ),
         data: (p) => _content(l10n, p),
       ),
       bottomNavigationBar: async.maybeWhen(
@@ -292,12 +341,14 @@ class _RefundMethodPageV2State extends ConsumerState<RefundMethodPageV2> {
                 ],
               ),
               const SizedBox(height: 11),
-              _field(l10n.refundAccountHolderLabel, _holder,
+              _field(l10n, l10n.refundAccountHolderLabel, _holder,
                   hint: l10n.refundAccountHolderPlaceholder, id: 'holder'),
               const SizedBox(height: 11),
-              _field(l10n.refundAccountNumberLabel, _account,
+              _field(l10n, l10n.refundAccountNumberLabel, _account,
                   hint: l10n.refundAccountNumberPlaceholder,
+                  helper: l10n.refundAccountNumberHint,
                   keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   id: 'account'),
               const SizedBox(height: 7),
               // 🔴 提交后不可改 —— 打错账号的钱找回来要走人工，提前说清。
@@ -313,29 +364,60 @@ class _RefundMethodPageV2State extends ConsumerState<RefundMethodPageV2> {
         PayoutChannel.gopay => l10n.refundChannelGopay,
       };
 
-  Widget _field(String label, TextEditingController controller,
-          {required String id, String? hint, TextInputType? keyboardType}) =>
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: ShopText.meta.copyWith(fontSize: 10, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 4),
-          TextField(
+  Widget _field(AppLocalizations l10n, String label, TextEditingController controller,
+      {required String id,
+      String? hint,
+      String? helper,
+      TextInputType? keyboardType,
+      List<TextInputFormatter>? inputFormatters}) {
+    final error = _errors[id];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: ShopText.meta.copyWith(fontSize: 10, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 4),
+        // 失焦即校验：不等到提交才告诉用户填错了。
+        Focus(
+          onFocusChange: (has) {
+            if (!has) _revalidate(l10n, id);
+          },
+          child: TextField(
             key: ValueKey('refundField_$id'),
             controller: controller,
             keyboardType: keyboardType,
+            inputFormatters: inputFormatters,
             style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
             decoration: InputDecoration(
               hintText: hint,
-              hintStyle: ShopText.body.copyWith(color: ShopColors.text4),
+              // 🔴 与输入值同字号（12）。原先 hint 走 ShopText.body(10.5)，
+              //    用户一开始打字框内文字就跳一档。
+              hintStyle: const TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w400, color: ShopColors.text4),
               isDense: true,
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
               border: _border(ShopColors.border),
-              enabledBorder: _border(ShopColors.border),
-              focusedBorder: _border(ShopColors.purple),
+              // 🔴 错误边框保持红（ShopColors.error）：强调色已改为品牌紫，
+              //    错误态若跟着变紫，「这里填错了」就读不出来了。
+              enabledBorder: _border(error == null ? ShopColors.border : ShopColors.error),
+              focusedBorder: _border(error == null ? ShopColors.purple : ShopColors.error),
             ),
           ),
-        ],
+        ),
+        if (error != null) _errorLine(error),
+        if (error == null && helper != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 3),
+            child: Text(helper, style: ShopText.meta.copyWith(fontSize: 9.5)),
+          ),
+      ],
+    );
+  }
+
+  Widget _errorLine(String text) => Padding(
+        padding: const EdgeInsets.only(top: 3),
+        child: Text(text,
+            key: const ValueKey('refundFieldError'),
+            style: ShopText.meta.copyWith(fontSize: 9.5, color: ShopColors.errorText)),
       );
 
   OutlineInputBorder _border(Color c) => OutlineInputBorder(
@@ -398,9 +480,11 @@ class _RefundMethodPageV2State extends ConsumerState<RefundMethodPageV2> {
                 color: current ? ShopColors.accent : ShopColors.border,
                 shape: BoxShape.circle,
               ),
+              // 2026-08-27：原为硬编码 #6B5B8A，违反 colors.dart 的护栏。
+              // ShopColors.purpleText (#4A3D66) 语义相同（浅紫底上的文字）且更清楚。
               child: Text('$n',
                   style: ShopText.badge.copyWith(
-                      color: current ? ShopColors.surface : const Color(0xFF6B5B8A))),
+                      color: current ? ShopColors.surface : ShopColors.purpleText)),
             ),
             const SizedBox(width: 9),
             Expanded(
@@ -423,18 +507,18 @@ class _RefundMethodPageV2State extends ConsumerState<RefundMethodPageV2> {
         primary: ShopButton(
           key: const ValueKey('refundConfirmV2'),
           label: l10n.refundAgreeShipBack,
-          variant: _busy ? ShopButtonVariant.disabled : ShopButtonVariant.pay,
+          variant: ShopButtonVariant.pay,
+          loading: _busy,
           onTap: _busy ? null : () => _confirm(l10n, p),
         ),
       );
 
   Future<void> _confirm(AppLocalizations l10n, ReturnProgress p) async {
     // 纯 PawCoin 退款没有现金段 → 无需选去向，直接确认。
-    if (p.cashRefund > 0 &&
-        _destination == CashDestination.toBank &&
-        _account.text.trim().isEmpty) {
-      showAppToast(context, l10n.refundMethodAccountRequired);
-      return;
+    if (p.cashRefund > 0 && _destination == CashDestination.toBank) {
+      // 🔴 姓名与账号都要过（2026-08-27）。此前只查了账号非空 —— 一个空的收款人姓名
+      //    照样提交，而这笔钱一旦打错要走人工找回。
+      if (!_validateAll(l10n)) return;
     }
     Analytics.capture('toko_refund_method_submitted');
     setState(() => _busy = true);
@@ -459,10 +543,4 @@ class _RefundMethodPageV2State extends ConsumerState<RefundMethodPageV2> {
     }
   }
 
-  Widget _hint(String text) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Text(text, textAlign: TextAlign.center, style: ShopText.body),
-        ),
-      );
 }
