@@ -1,6 +1,7 @@
 package com.tailtopia.admin.shop.web;
 
 import com.tailtopia.admin.account.domain.AdminPermissions;
+import com.tailtopia.admin.seed.service.AdminSeedImageService;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.admin.shop.dto.ShopProductForm;
 import com.tailtopia.admin.shop.dto.ShopSkuForm;
@@ -16,11 +17,13 @@ import com.tailtopia.shop.domain.Species;
 import com.tailtopia.shop.repository.ShopProductRepository;
 import com.tailtopia.shop.repository.ShopSkuRepository;
 import com.tailtopia.shop.service.InventoryService;
+import com.tailtopia.shop.service.ShopImageUrlResolver;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.i18n.Messages;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -31,6 +34,8 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 /**
@@ -55,18 +60,28 @@ public class AdminShopProductController {
     private final ShopSkuRepository skus;
     private final InventoryService inventory;
 
+    /** 图片直传。🔴 复用内容侧那条既有链路（白名单 jpeg/png/webp、≤10MB、走 OSS 公开桶），
+        不新建基建 —— 差别只在 folder 参数。 */
+    private final AdminSeedImageService images;
+
+    /** objectKey → 公开 URL。编辑态要把库里存的 key 还原成缩略图才看得见。 */
+    private final ShopImageUrlResolver imageUrls;
+
     /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
     private final Messages msg;
 
     public AdminShopProductController(AdminShopProductService service,
             AdminShopListingService listing, ShopProductRepository products,
             ShopSkuRepository skus, InventoryService inventory,
+            AdminSeedImageService images, ShopImageUrlResolver imageUrls,
             Messages msg) {
         this.service = service;
         this.listing = listing;
         this.products = products;
         this.skus = skus;
         this.inventory = inventory;
+        this.images = images;
+        this.imageUrls = imageUrls;
         this.msg = msg;
     }
 
@@ -115,6 +130,8 @@ public class AdminShopProductController {
     public String createForm(Model model) {
         model.addAttribute("form", new ShopProductForm());
         model.addAttribute("productId", null);
+        // 新建态没有已存图；给空列表而不是不放，模板那边就不用两套写法。
+        model.addAttribute("existingImages", List.of());
         putEnums(model);
         model.addAttribute("active", "shopProducts");
         return "admin/shop-product-form";
@@ -129,6 +146,26 @@ public class AdminShopProductController {
         List<ShopSku> ss = skus.findByProductIdOrderByIdAsc(id);
         model.addAttribute("form", toForm(p));
         model.addAttribute("productId", id);
+        // 编辑态回填：库里存的是 objectKey，直接塞进 <img> 是显示不出来的。
+        // ⚠️ 顺序必须是「主图在前 + 图集依次」—— 页面把第一张当封面，写回时也按这个顺序拆回
+        //    mainImageKey / galleryKeysRaw。顺序错了会把图集第一张变成主图。
+        // ⚠️ 用空串而不是 null 表示"没有尺寸"：Map.of 不接受 null 值，
+        //    且模板里 data-w="" 与缺属性对 JS 是等价的（getAttribute 取到空串即视为无）。
+        List<Map<String, String>> existing = new java.util.ArrayList<>();
+        if (p.getMainImageKey() != null && !p.getMainImageKey().isBlank()) {
+            existing.add(Map.of("key", p.getMainImageKey(),
+                    "url", String.valueOf(imageUrls.publicUrl(p.getMainImageKey())),
+                    "w", p.getMainImageW() == null ? "" : String.valueOf(p.getMainImageW()),
+                    "h", p.getMainImageH() == null ? "" : String.valueOf(p.getMainImageH())));
+        }
+        // 🔴 图集不存尺寸：列表页只渲染主图，详情页轮播是等高容器，用不上比例。
+        for (String k : p.getGalleryKeys()) {
+            if (k != null && !k.isBlank()) {
+                existing.add(Map.of("key", k, "url", String.valueOf(imageUrls.publicUrl(k)),
+                        "w", "", "h", ""));
+            }
+        }
+        model.addAttribute("existingImages", existing);
         model.addAttribute("product", p);
         model.addAttribute("skus", ss);
         model.addAttribute("availableBySku", inventory.availableBySkuId(
@@ -150,6 +187,34 @@ public class AdminShopProductController {
         putEnums(model);
         model.addAttribute("active", "shopProducts");
         return "admin/shop-product-form";
+    }
+
+    /**
+     * 商品图直传（2026-08-27）。
+     *
+     * <p><b>此前运营只能填 objectKey</b> —— 意味着得先去别处把图传上对象存储、抄下 key、
+     * 再粘回这个框。内容侧（Story 12.2）早已把这一步收回后台，商品这边一直没跟上。
+     *
+     * <p>🔴 <b>返回体里页面真正要用的是 {@code objectKey} 而不是 {@code url}</b>：
+     * 商品图入库存的是 key（{@code ShopProductSummaryView} 的契约写明「是 objectKey 不是 URL」），
+     * URL 只用于当场显示缩略图。两者都在 {@link com.tailtopia.admin.seed.dto.UploadedImage} 里。
+     *
+     * <p>⚠️ 一次一张、错误一律 400 + {@code {"error":...}}，与内容侧同构 ——
+     * 前端那个上传控件是共用的，回包形状不一致它就得分叉。
+     */
+    @PostMapping("/admin/shop/products/images")
+    @PreAuthorize(EDIT_AUTH)
+    @ResponseBody
+    public ResponseEntity<?> uploadImage(@RequestParam("file") MultipartFile file) {
+        try {
+            return ResponseEntity.ok(images.upload(file, "shop-product"));
+        } catch (AppException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            // 对象存储未配置 / 凭证异常：回人话，不把 500 甩到运营脸上。
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", msg.get("admin.shop.form.uploadFailed")));
+        }
     }
 
     // ---------- 写入 ----------

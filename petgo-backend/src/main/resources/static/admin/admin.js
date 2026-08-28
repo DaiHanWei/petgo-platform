@@ -238,6 +238,31 @@ document.addEventListener('submit', function (e) {
             // 测不出尺寸的图也要占一行，否则两个字段会错位 —— 服务端对长度不符是**整组作废**。
             sizes.push((t.getAttribute('data-w') || '0') + 'x' + (t.getAttribute('data-h') || '0'));
         });
+        // ── 模式二：objectKey（商品图，2026-08-27）──
+        // 商品图**入库存的是 objectKey 不是 URL**（ShopProductSummaryView 的契约写明这点），
+        // 且拆成「主图 + 图集」两个字段 —— 与内容侧「URL + 尺寸两个同序等长数组」的结构完全不同，
+        // 所以在这里分叉，而不是让两边共用一套字段名。
+        // 🔴 第一张即主图：拖拽换序会直接改变哪张是主图，这正是运营要的操作方式。
+        if (root.getAttribute('data-mode') === 'objectkey') {
+            var keys = thumbs.map(function (t) {
+                return t.getAttribute('data-key') || '';
+            }).filter(function (k) { return k; });
+            var mainEl = fieldOf(root.getAttribute('data-field-main'));
+            var galEl = fieldOf(root.getAttribute('data-field-gallery'));
+            if (mainEl) { mainEl.value = keys.length ? keys[0] : ''; }
+            if (galEl) { galEl.value = keys.slice(1).join('\n'); }
+            // 主图尺寸随主图一起写回（2026-08-27）：App 端瀑布流用它预置卡片高度。
+            // 🔴 必须跟着**第一张**走 —— 拖拽换序会换主图，尺寸不跟着换就会按旧比例预置，
+            //    表现为卡片高度与图对不上。
+            var wEl = fieldOf(root.getAttribute('data-field-w'));
+            var hEl = fieldOf(root.getAttribute('data-field-h'));
+            var first = thumbs.length ? thumbs[0] : null;
+            if (wEl) { wEl.value = first ? (first.getAttribute('data-w') || '') : ''; }
+            if (hEl) { hEl.value = first ? (first.getAttribute('data-h') || '') : ''; }
+            markCover(root, thumbs);
+            return;
+        }
+
         // 兜底 URL 追加在上传图之后：它们没有尺寸，写 0x0（服务端会因长度虽等但值不合理而走异步兜底）。
         var fallback = root.parentNode.querySelector('[data-seed-url-fallback]');
         if (fallback && fallback.value.trim()) {
@@ -249,7 +274,11 @@ document.addEventListener('submit', function (e) {
         fieldOf('imageUrlsRaw').value = urls.join('\n');
         fieldOf('imageSizesRaw').value = sizes.join('\n');
 
-        // 第一张打「封面」角标；>1 张时提示首图决定整帖容器高度（AC3 最后一条）。
+        markCover(root, thumbs);
+    }
+
+    /** 第一张打「封面」角标；>1 张时提示首图决定整帖容器高度（AC3 最后一条）。两种模式共用。 */
+    function markCover(root, thumbs) {
         thumbs.forEach(function (t, i) {
             var badge = t.querySelector('[data-seed-cover]');
             if (badge) { badge.hidden = i !== 0; }
@@ -265,6 +294,8 @@ document.addEventListener('submit', function (e) {
         el.setAttribute('data-seed-thumb', '');
         el.setAttribute('draggable', 'true');
         el.setAttribute('data-url', data.url);
+        // objectKey 模式要用它写回 mainImageKey / galleryKeysRaw（url 只用于当场显示）。
+        el.setAttribute('data-key', data.objectKey || '');
         el.setAttribute('data-w', data.w || 0);
         el.setAttribute('data-h', data.h || 0);
         var img = document.createElement('img');
