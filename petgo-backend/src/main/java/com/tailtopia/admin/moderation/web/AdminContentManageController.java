@@ -31,6 +31,9 @@ public class AdminContentManageController {
             "hasRole('SUPER_ADMIN') or hasAuthority('content.view') or hasAuthority('content.proactive_takedown')";
     private static final String RESTORE_AUTH =
             "hasRole('SUPER_ADMIN') or hasAuthority('content.restore')";
+    /** ⚠️ 须与模板里导出按钮的 sec:authorize 逐字一致，否则按钮在、点了 403。 */
+    private static final String EXPORT_AUTH =
+            "hasRole('SUPER_ADMIN') or hasAuthority('content.list_export')";
 
     private final AdminContentManageService contentManage;
     private final com.tailtopia.admin.throttle.service.AdminThrottleReadService throttleRead;
@@ -90,6 +93,37 @@ public class AdminContentManageController {
         model.addAttribute("likeCounts", contentManage.likeCounts(
                 items.stream().map(r -> r.content().id()).toList()));
         return hxRequest != null ? "admin/content :: rows" : "admin/content";
+    }
+
+    /**
+     * 按当前筛选条件导出 CSV（2026-08-28，取代被撤掉的「内容互动积分」页的导出）。
+     *
+     * <p>🔴 独立权限 {@code content.list_export} —— 与列表查看分开：
+     * 查看是一次看一屏，导出是把数据**批量带出系统**。导出动作记审计。
+     *
+     * <p>⚠️ 参数与列表页**逐个对齐**：按钮直接把当前筛选条件带过来，
+     * 导出的就是屏幕上正在看的那一份。少一个参数，运营就会导出一份跟屏幕对不上的表。
+     */
+    @GetMapping(value = "/admin/content/export.csv", produces = "text/csv; charset=UTF-8")
+    @PreAuthorize(EXPORT_AUTH)
+    public org.springframework.http.ResponseEntity<String> exportCsv(
+            @AuthenticationPrincipal AdminUserDetails admin,
+            @RequestParam(value = "type", required = false) String type,
+            @RequestParam(value = "authorId", required = false) Long authorId,
+            @RequestParam(value = "from", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(value = "to", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "q", required = false) String q) {
+        String csv = contentManage.exportCsv(admin.getAdminAccountId(), type, authorId,
+                from, to, status, q);
+        // 🔴 BOM 不能省：Excel 打开无 BOM 的 UTF-8 CSV 会把中文正文显示成乱码，
+        //    运营会以为是数据坏了。（与召回名单导出同一处教训。）
+        return org.springframework.http.ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"content-list.csv\"")
+                .body('﻿' + csv);
     }
 
     /**

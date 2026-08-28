@@ -163,6 +163,81 @@ public class AdminContentManageService {
         return changed;
     }
 
+    /** 导出一次最多带出多少行。到顶时**在文件尾和审计里都写明**，绝不静默截断。 */
+    private static final int EXPORT_MAX_ROWS = 5000;
+
+    /**
+     * 按当前筛选条件导出 CSV（bug 20260828）。
+     *
+     * <p>「内容互动积分」整页撤掉后，导出能力随之没了。它是运营做经营汇报时唯一的出口，
+     * 于是回到它本来该在的地方 —— **内容管理的筛选结果直接导出**，
+     * 而不是再开一个只为导出而存在的页面。
+     *
+     * <p>🔴 **导出是把数据批量带出系统**，因此与列表查看分权限、且**记审计**
+     * （操作人 / 时间 / 条数 / 筛选条件）—— 与召回名单导出同一条口径（Story 11.4）。
+     *
+     * <p>🔴 **不静默截断**：超过 {@link #EXPORT_MAX_ROWS} 时，文件末尾追加一行说明、
+     * 审计摘要里也记 truncated。一份被悄悄砍掉一半的报表，比没有报表更糟 ——
+     * 看的人不会知道自己看的是残缺数据。
+     *
+     * @return CSV 文本（首行表头，UTF-8 BOM 由控制器负责）
+     */
+    @Transactional
+    public String exportCsv(long actorAccountId, String type, Long authorId, LocalDate from,
+            LocalDate to, String status, String q) {
+        ContentType ct = parseType(type);
+        Boolean deleted = "DELETED".equals(status) ? Boolean.TRUE
+                : ("ONLINE".equals(status) ? Boolean.FALSE : null);
+        Instant fromI = from == null ? null : from.atStartOfDay(ZoneOffset.UTC).toInstant();
+        Instant toI = to == null ? null : to.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+        String keyword = (q == null || q.isBlank()) ? null : q;
+
+        // 多取一行用来判断「是不是还有更多」——不额外发一次 count。
+        List<AdminContentRow> rows = contentService.adminSearch(ct, authorId, fromI, toI, deleted,
+                keyword, EXPORT_MAX_ROWS + 1, 0);
+        boolean truncated = rows.size() > EXPORT_MAX_ROWS;
+        if (truncated) {
+            rows = rows.subList(0, EXPORT_MAX_ROWS);
+        }
+        java.util.Map<Long, Long> likes = likeCounts(rows.stream().map(AdminContentRow::id).toList());
+
+        StringBuilder csv = new StringBuilder(
+                "post_id,type,author_id,likes,created_at_wib,status,text\n");
+        for (AdminContentRow r : rows) {
+            csv.append(r.id()).append(',')
+                    .append(r.type() == null ? "" : r.type().name()).append(',')
+                    .append(r.authorId() == null ? "" : r.authorId()).append(',')
+                    .append(likes.getOrDefault(r.id(), 0L)).append(',')
+                    // 🔴 导出的时间一律 WIB —— 后台全站按雅加达解释，
+                    //    导出若给 UTC，运营会把两份对不上的数拿去做汇报。
+                    .append(WIB_CSV.format(r.createdAt().atZone(WIB))).append(',')
+                    .append(r.deleted() ? "DELETED" : "ONLINE").append(',')
+                    .append(csvCell(r.textPreview())).append('\n');
+        }
+        if (truncated) {
+            csv.append("# 已达单次导出上限 ").append(EXPORT_MAX_ROWS)
+                    .append(" 行，请收窄时间范围后分批导出\n");
+        }
+        auditService.record(actorAccountId, "CONTENT_LIST_EXPORT", "content_post", "-",
+                "rows=" + rows.size() + " truncated=" + truncated
+                        + " type=" + type + " authorId=" + authorId
+                        + " from=" + from + " to=" + to + " status=" + status
+                        + " q=" + (keyword == null ? "" : "(有关键词)"));
+        return csv.toString();
+    }
+
+    private static final java.time.ZoneId WIB = java.time.ZoneId.of("Asia/Jakarta");
+    private static final java.time.format.DateTimeFormatter WIB_CSV =
+            java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    /** 逗号/引号/换行都要转义，否则一条正文里的逗号就能把整份表的列错开。 */
+    private static String csvCell(String raw) {
+        if (raw == null) {
+            return "\"\"";
+        }
+        return '"' + raw.replace("\"", "\"\"") + '"';
+    }
+
     /**
      * 本页内容各自的点赞数（bug 20260828）。
      *

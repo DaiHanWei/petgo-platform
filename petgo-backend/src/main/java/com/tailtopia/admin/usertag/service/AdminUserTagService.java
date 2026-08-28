@@ -229,6 +229,8 @@ public class AdminUserTagService {
         Set<Long> userIds = rows.stream().map(UserTagAssignment::getUserId)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         Map<Long, List<UserTagView>> visible = tagService.findVisibleTags(userIds, now);
+        // bug 20260828：「不展示」要能分辨原因 —— 被前 3 个顶掉 vs 账号已注销。
+        Set<Long> deleted = tagService.deletedAmong(userIds);
 
         return rows.stream().map(a -> {
             UserTag t = tagById.get(a.getTagId());
@@ -236,7 +238,7 @@ public class AdminUserTagService {
                     .anyMatch(v -> v.code().equals(t.getCode()));
             return new UserAssignmentRow(a.getId(), a.getUserId(), a.getTagId(),
                     t == null ? null : t.getCode(), t == null ? null : t.getName(),
-                    a.getStartsAt(), a.getEndsAt(), shown);
+                    a.getStartsAt(), a.getEndsAt(), shown, deleted.contains(a.getUserId()));
         }).toList();
     }
 

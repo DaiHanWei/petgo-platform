@@ -105,6 +105,15 @@ public class UserTagQueryService {
      * 一批用户各自当前生效中的标签，**每人最多 {@link #MAX_VISIBLE} 个**（按分配时间倒序取最近的）。
      *
      * <p>空集合直接短路，不发这次查询 —— Feed 每页都要调一次，纯文字页没必要白跑。
+     *
+     * <p>🔴 **已注销账号一律返回空**（bug 20260828）：注销走「就地匿名化」，
+     * 匿名化之后不该再挂着身份标识（AC6）。
+     *
+     * <p>⚠️ 这条规则原先只写在 {@code AccountQueryService#attachTags} 里（App 那条路），
+     * 而后台「这条分配会不会真的展示」那一列问的是**本方法** ——
+     * 于是后台对一个注销账号的分配显示「✓ 会展示」，用户端却永远不展示。
+     * 运营配了图标却看不到，还以为是图标坏了。
+     * 规则挪到这一层 = **两条路同一个答案**，这正是那一列存在的意义。
      */
     @Transactional(readOnly = true)
     public Map<Long, List<UserTagView>> findVisibleTags(Collection<Long> userIds, Instant now) {
@@ -121,6 +130,35 @@ public class UserTagQueryService {
                 list.add(new UserTagView(t.getCode(), t.getName(), t.getIcon(), t.getDescription()));
             }
         }
+        // 🔴 注销账号的整条移除。⚠️ 只在**确实有人拿到标签**时才发这次查询 ——
+        // Feed 每页都会走这里，绝大多数页一个标签都没有。
+        if (!byUser.isEmpty()) {
+            for (User u : users.findAllById(byUser.keySet())) {
+                if (u.getDeletedAt() != null) {
+                    byUser.remove(u.getId());
+                }
+            }
+        }
         return byUser;
+    }
+
+    /**
+     * 这些用户里哪些已注销（bug 20260828，供后台分配记录标注「不会展示」的**原因**）。
+     *
+     * <p>🛡 只答「是否注销」，不返回任何账号字段 —— 注销账号的 PII 已被擦除，
+     * 但仍不该由一个标签服务顺手把用户对象递出去。
+     */
+    @Transactional(readOnly = true)
+    public java.util.Set<Long> deletedAmong(Collection<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return java.util.Set.of();
+        }
+        java.util.Set<Long> out = new java.util.HashSet<>();
+        for (User u : users.findAllById(userIds)) {
+            if (u.getDeletedAt() != null) {
+                out.add(u.getId());
+            }
+        }
+        return out;
     }
 }

@@ -140,6 +140,20 @@ public final class AdminPermissions {
     public static final String VIRTUAL_ACCOUNT_MANAGE = "virtual_account.manage";
     public static final String VIRTUAL_ACCOUNT_VIEW = "virtual_account.view";
 
+    /**
+     * 内容列表按当前筛选导出 CSV（2026-08-28）。
+     *
+     * <p>🔴 <b>与列表查看分开的第二个码</b>，同 Story 11.4 的口径：
+     * 查看是一次看一屏，导出是把数据**批量带出系统**，风险高一档。
+     *
+     * <p>⚠️ <b>刻意起一个全新的码，不复用已撤销的 {@code content.stats_export}
+     * 或历史死码 {@code content.export}</b>：那两个字符串可能仍留在某些存量账号的
+     * permissions 里（前者刚撤、后者是 bug 20260731-440 摘掉的死码）。
+     * 复用等于**给一批从未被评估过的账号静默发一项新能力** ——
+     * 而这正是"导出单独一个码"想避免的事。新码零存量，只有 SUPER_ADMIN 与明确勾选的人有。
+     */
+    public static final String CONTENT_LIST_EXPORT = "content.list_export";
+
     // 内容互动积分统计（V1.1.6 Story 15.1 · AB-3G）—— **整页已于 2026-08-28 撤销**。
     // 产品判定：运营真正会看的只有点赞数，为它单开一页（两套统计口径 + CSV 导出）
     // 是把一个小问题做成了一个要先学会怎么用的工具。点赞数已作为一列并入「内容管理」。
@@ -271,7 +285,7 @@ public final class AdminPermissions {
             new PermissionGroup("perm.group.view", List.of(
                     CONTENT_VIEW_REPORTS, CONTENT_VIEW_TICKETS, CONTENT_VIEW, CONTENT_PIN_VIEW, CONTENT_TAG_VIEW,
                     USER_VIEW, USER_TAG_VIEW, USER_PHONE_VIEW, USER_PHONE_EXPORT,
-                    CONTENT_THROTTLE_VIEW,
+                    CONTENT_LIST_EXPORT, CONTENT_THROTTLE_VIEW,
                     VET_VIEW, VET_QUALIFY_VIEW, RATING_VIEW,
                     CONSULT_VIEW_ANOMALIES, CONSULT_VIEW_SESSIONS,
                     SUPPORT_VIEW, REFUND_VIEW,

@@ -219,6 +219,11 @@
                         <!-- 🔴 这一列的值来自 App 侧那份权威实现，后台不排序 -->
                         <span class="badge" th:classappend="${a.visible} ? 'badge-ok' : ''"
                               th:text="${a.visible} ? #{admin.utags.visible} : #{admin.utags.hidden}">展示</span>
+                        <!-- 🔴 「不展示」要能分辨原因（bug 20260828）：被前 3 个顶掉，
+                             还是账号已注销。只给一个「不展示」，运营会去撤别的标签、
+                             或者以为是图标坏了 —— 实机上正是后者。 -->
+                        <span class="muted" th:if="${a.deletedUser}"
+                              th:text="#{admin.utags.userDeleted}">该账号已注销，标签永不展示</span>
                     </td>
                     <td sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.tag_manage')">
                         <form class="inline-form" method="post"

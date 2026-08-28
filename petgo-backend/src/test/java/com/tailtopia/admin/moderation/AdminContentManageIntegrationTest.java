@@ -91,4 +91,48 @@ class AdminContentManageIntegrationTest extends ApiIntegrationTest {
         List<AdminContentRow> online = contentManage.browse(null, null, null, null, "ONLINE", null, 0);
         assertThat(online).extracting(AdminContentRow::id).contains(postId);
     }
+
+    /**
+     * CSV 导出（2026-08-28，取代被撤掉的「内容互动积分」页的导出）。
+     *
+     * <p>钉三件事：**筛选条件真的生效**、**点赞数真的在里面**、**导出记审计**。
+     * 前两件决定这份表能不能用于经营汇报；第三件是"这份数据是谁什么时候导的"的唯一答案。
+     */
+    @Test
+    void exportCsvHonoursTheFilterCarriesLikesAndWritesAudit() {
+        long keep = newPost(ContentType.DAILY, "kucing oren lucu banget");
+        newPost(ContentType.KNOWLEDGE, "tips merawat anjing");
+
+        long actor = 828000L + SEQ.incrementAndGet();
+        String csv = contentManage.exportCsv(actor, null, null, null, null, null, "oren");
+
+        assertThat(csv).startsWith("post_id,type,author_id,likes,created_at_wib,status,text");
+        assertThat(csv).contains(String.valueOf(keep));
+        assertThat(csv).doesNotContain("tips merawat anjing")
+                .as("🔴 筛选条件没带进导出 ⇒ 导出的表与屏幕上看到的不是同一份");
+        assertThat(auditService.search(null, null, actor, "CONTENT_LIST_EXPORT",
+                PageRequest.of(0, 5)).getContent())
+                .as("🔴 导出未记审计 ⇒ 事后无从回答「这份表是谁导的」")
+                .isNotEmpty();
+    }
+
+    /**
+     * 🔴 **正文里的逗号与引号不许把列冲散**。
+     *
+     * <p>一条正文里的逗号就能让整份表从那一行起全部错列，而打开表格的人**看不出来** ——
+     * 他只会觉得数据很奇怪。这类错误没有报错、没有异常，只有一份读起来"怪怪的"报表。
+     */
+    @Test
+    void exportCsvEscapesCommasAndQuotesInTheBody() {
+        long id = newPost(ContentType.DAILY, "aku bilang \"halo\", lalu dia pergi");
+
+        String csv = contentManage.exportCsv(1L, null, null, null, null, null, "lalu dia pergi");
+
+        // ⚠️ **只看自己那一行**，不数总行数：这个库跨多次 mvn test 不重置，
+        //    上一轮跑剩的同关键词内容会让「表头 + 1 行」的计数偶发变成 3
+        //    —— 那是用例太脆，不是转义坏了。第一版正是这么写的，单跑绿、全量红。
+        List<String> mine = csv.lines().filter(l -> l.startsWith(id + ",")).toList();
+        assertThat(mine).as("🔴 正文里的逗号/引号把这一条冲成了多行").hasSize(1);
+        assertThat(mine.get(0)).endsWith("\"aku bilang \"\"halo\"\", lalu dia pergi\"");
+    }
 }

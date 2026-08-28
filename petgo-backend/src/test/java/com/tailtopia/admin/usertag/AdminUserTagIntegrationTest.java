@@ -413,4 +413,77 @@ class AdminUserTagIntegrationTest extends ApiIntegrationTest {
         assertThat(ids).contains(alive.getId());
         assertThat(ids).doesNotContain(gone.getId());
     }
+
+    /**
+     * 🔴 **后台的「会不会展示」必须和用户端给出同一个答案 —— 包括注销这一档**（bug 20260828）。
+     *
+     * <p>实机现象是「后台配了标签图标，用户端不显示」。查下来不是图标坏了：
+     * 那枚标签分给的是一个**已注销**账号。App 侧 {@code AccountQueryService#attachTags}
+     * 早就不给注销作者贴标签（AC6），但后台那一列问的是 {@code findVisibleTags} ——
+     * 它当时不看注销，于是后台白纸黑字写着「会展示」，用户端永远不展示。
+     *
+     * <p>规则已挪进 {@code findVisibleTags}，两条路自此同源。
+     */
+    @Test
+    void deletedUsersTagsAreInvisibleEverywhereIncludingTheAdminColumn() {
+        UserTag t = tag("VIS");
+        User u = newUser();
+        tagService.assign(u.getId(), t.getId(), Instant.now().minusSeconds(60), null);
+        // 分配当时账号还在 —— 之后才注销（真实顺序：先有标签，用户后来注销）。
+        assertThat(tagService.findVisibleTags(List.of(u.getId()), Instant.now()))
+                .as("前提：注销之前它是看得见的，否则下面的断言证明不了什么")
+                .containsKey(u.getId());
+
+        u.anonymizeForDeletion(Instant.now());
+        users.save(u);
+
+        assertThat(tagService.findVisibleTags(List.of(u.getId()), Instant.now()))
+                .as("🔴 注销账号仍被算作「会展示」")
+                .doesNotContainKey(u.getId());
+
+        List<UserAssignmentRow> rows = adminService.assignmentsByUser(u.getId(), Instant.now());
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).visible())
+                .as("🔴 后台说会展示、用户端却不展示 —— 运营会去查图标而不是查账号")
+                .isFalse();
+        assertThat(rows.get(0).deletedUser())
+                .as("🔴 只说「不展示」不够：运营分不清是被前 3 个顶掉了还是账号没了")
+                .isTrue();
+    }
+
+    /** 🛡 反向：**没注销的用户照旧展示**，且不被误标成已注销。 */
+    @Test
+    void liveUsersTagStaysVisibleAndIsNotMarkedDeleted() {
+        UserTag t = tag("LIVE");
+        User u = newUser();
+        tagService.assign(u.getId(), t.getId(), Instant.now().minusSeconds(60), null);
+
+        List<UserAssignmentRow> rows = adminService.assignmentsByUser(u.getId(), Instant.now());
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).visible()).isTrue();
+        assertThat(rows.get(0).deletedUser()).isFalse();
+    }
+
+    /**
+     * 🛡 **图标是图片 URL 时原样下发** —— 这条钉住「后台传的图能到用户端手里」。
+     *
+     * <p>实机那次的怀疑对象是图标链路，虽然最后证明不是它，但当时**没有任何用例**
+     * 能一口否掉这个怀疑，于是排查从这里开始绕了一圈。补上它。
+     */
+    @Test
+    void anUploadedIconUrlReachesTheClientUnchanged() {
+        String iconUrl = "https://cdn.example/public/tag-icons/abc.png";
+        UserTag t = UserTag.of("ICON_" + SEQ.incrementAndGet(), "本周最佳", iconUrl, "说明");
+        tags.save(t);
+        User u = newUser();
+        tagService.assign(u.getId(), t.getId(), Instant.now().minusSeconds(60), null);
+
+        List<UserTagView> views = tagService.findVisibleTags(List.of(u.getId()), Instant.now())
+                .get(u.getId());
+        assertThat(views).hasSize(1);
+        assertThat(views.get(0).icon())
+                .as("🔴 图标 URL 在下发路上被改过 ⇒ 用户端 Image.network 取不到，"
+                        + "而它取不到时是**静默收缩为零**的，看起来就像运营没配图标")
+                .isEqualTo(iconUrl);
+    }
 }

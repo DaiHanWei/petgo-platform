@@ -71,6 +71,15 @@
                 </select>
             </label>
             <button type="submit" class="btn btn-primary" th:text="#{admin.content.search}">查询</button>
+            <!-- 导出（2026-08-28，取代被撤掉的「内容互动积分」页的导出）。
+                 🔴 **按钮放在筛选表单里**，把当前条件原样带走 —— 导出的就是屏幕上这一份。
+                 ⚠️ sec:authorize 与控制器的 EXPORT_AUTH 逐字一致，否则按钮在、点了 403。
+                 ⚠️ 物种两个筛选**故意不带**：导出列里没有物种，带上会导出一份
+                    与文件内容对不上的子集（筛了却看不出筛过）。 -->
+            <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.list_export')"
+               class="btn"
+               th:href="@{/admin/content/export.csv(type=${type},authorId=${authorId},from=${from},to=${to},status=${status},q=${q})}"
+               th:text="#{admin.content.exportCsv}">导出 CSV</a>
         </form>
 
         <!-- 🔴 Story 17.2 · AC2：确认前必须明示这不是下架。
