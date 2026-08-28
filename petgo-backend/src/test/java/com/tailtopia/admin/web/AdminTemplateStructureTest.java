@@ -7,7 +7,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
@@ -254,6 +256,82 @@ class AdminTemplateStructureTest {
                         + "它们会被 Flyway 当成本分支的迁移执行，报出指向错误方向的错误"
                         + "（「column already exists」之类）。**先跑 `./mvnw clean`**")
                 .isEmpty();
+    }
+
+    /**
+     * 🔴 后台改名必须**四处一起改**，否则界面会自相矛盾（bug 20260828「装饰标签」→「内容标签」）。
+     *
+     * <p>一个后台功能的名字散在四个地方：侧栏导航名、页内标题、空态文案、以及
+     * 权限清单里那两条显示名。只改导航名的结果是：侧栏写「内容标签」、点进去标题写
+     * 「装饰标签」、去权限页勾选时又变回「装饰标签」—— 运营会以为是三个功能。
+     *
+     * <p>⚠️ 断的是**旧名一个字都不许剩在用户可见文案里**，而不是逐个 key 比对：
+     * 逐个比对得在改名时同步维护一份清单，而清单本身就是下一次漏改的地方。
+     *
+     * <p>⚠️ 只扫 i18n 文案（用户读到的字），**不扫代码与迁移注释** ——
+     * 那些是写给开发看的历史脉络，把 Story 5.2 当年的措辞也一并改掉反而丢信息。
+     */
+    @Test
+    void renamedAdminFeaturesLeaveNoOldNameInAnyUserFacingString() throws IOException {
+        // 已完成的改名：旧名 → 新名（新增改名时往这里加一行）。
+        Map<String, String> renamed = new LinkedHashMap<>();
+        renamed.put("装饰标签", "内容标签");
+        renamed.put("Decoration tag", "Content tag");
+        renamed.put("decoration tag", "content tag");
+        renamed.put("Tag dekorasi", "Tag konten");
+        renamed.put("tag dekorasi", "tag konten");
+
+        Path i18n = Path.of("src", "main", "resources", "i18n");
+        List<String> hits = new ArrayList<>();
+        try (Stream<Path> files = Files.list(i18n)) {
+            for (Path f : files.filter(p -> p.getFileName().toString().endsWith(".properties")).toList()) {
+                List<String> lines = Files.readAllLines(f);
+                for (int i = 0; i < lines.size(); i++) {
+                    String line = lines.get(i);
+                    // 注释行是分节说明，允许保留「由 XX 更名」这类历史脉络。
+                    if (line.stripLeading().startsWith("#")) {
+                        continue;
+                    }
+                    for (Map.Entry<String, String> e : renamed.entrySet()) {
+                        if (line.contains(e.getKey())) {
+                            hits.add(f.getFileName() + ":" + (i + 1) + " 仍写着「" + e.getKey()
+                                    + "」，应为「" + e.getValue() + "」 → " + line.strip());
+                        }
+                    }
+                }
+            }
+        }
+        assertThat(hits)
+                .as("🔴 改名没改齐 —— 侧栏 / 标题 / 空态 / 权限显示名必须同时换，"
+                        + "只改一处会让运营以为是两个不同的功能")
+                .isEmpty();
+    }
+
+    /**
+     * 🔴 **没有可用标签时，「给内容打标」不许渲染一个点不开的空下拉**（bug 20260828）。
+     *
+     * <p>实机：一个标签都还没建，页面照样把整张打标表单铺出来 —— 一个空的、点开什么都没有的
+     * 下拉，底下跟着几十条待选内容。界面上没有任何一句话说明「先去建标签」，
+     * 于是它读起来像**坏了**，而不是像**还没准备好**。运营的原话就是「点不开，是空的」。
+     *
+     * <p>⚠️ 用文本结构断言而不是渲染断言：要渲染出这一屏得先准备一个「零标签」的库，
+     * 而这一页的判据只有两条、都写在模板里，扫文本就够，且不依赖 Docker。
+     */
+    @Test
+    void tagAssignFormIsHiddenWhenNoTagExistsYet() throws IOException {
+        String html = Files.readString(DIR.resolve("content-tags.html"));
+
+        assertThat(html)
+                .as("🔴 打标表单没有「无可用标签时不渲染」的条件 ⇒ 运营会看到一个点不开的空下拉")
+                .contains("th:unless=\"${#lists.isEmpty(assignable)}\"");
+        assertThat(html)
+                .as("🔴 少了「先去建标签」那句提示 ⇒ 表单藏起来之后，那一块变成一片空白，"
+                        + "比空下拉更让人不知道该干什么")
+                .contains("data-notice=\"assign-needs-tag\"");
+        assertThat(html)
+                .as("🔴 判据必须是 assignable（**在线**标签）而不是 tags —— "
+                        + "标签全部下线时同样打不了标，用 tags 判会漏掉那种情况")
+                .doesNotContain("th:unless=\"${#lists.isEmpty(tags)}\"");
     }
 
     /** 该锚点元素内部起了一个片段 ⇒ 它是片段的外壳，不参与整页渲染，合法。 */

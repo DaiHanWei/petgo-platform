@@ -49,7 +49,7 @@
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.manual_review') or hasAuthority('content.takedown')"
                    th:href="@{/admin/manual-review}" th:classappend="${active == 'manual-review'} ? 'active'"
                    th:text="#{admin.nav.review}">人工复核</a>
-                <!-- ⬇︎ 顶置 / 装饰标签 / 互动积分：2026-08-26 产品决定并入「内容」分组。
+                <!-- ⬇︎ 顶置 / 内容标签 / 互动积分：2026-08-26 产品决定并入「内容」分组。
                      它们本就作用在内容上，原先单列「内容运营」一组，运营要在两组之间来回找。
                      🛡 三条的 sec:authorize 必须与各自 Controller 的 @PreAuthorize(VIEW) **逐字一致** ——
                      两边走散时权限放行了、敲 URL 能进，但侧栏没链接，运营只会以为自己没这个功能，
@@ -59,7 +59,7 @@
                    th:text="#{admin.nav.contentPins}">顶置管理</a>
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.tag_view')"
                    th:href="@{/admin/content-tags}" th:classappend="${active == 'content-tags'} ? 'active'"
-                   th:text="#{admin.nav.contentTags}">装饰标签</a>
+                   th:text="#{admin.nav.contentTags}">内容标签</a>
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.stats_view')"
                    th:href="@{/admin/content-stats}" th:classappend="${active == 'content-stats'} ? 'active'"
                    th:text="#{admin.nav.contentStats}">内容互动积分</a>

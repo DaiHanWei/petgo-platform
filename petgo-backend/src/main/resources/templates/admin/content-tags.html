@@ -1,12 +1,13 @@
 <!DOCTYPE html>
 <html lang="zh" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
-<!-- 内容装饰标签管理（V1.1.6 Story 11.2 · AB-10C）。
+<!-- 内容标签管理（V1.1.6 Story 11.2 · AB-10C；2026-08-28 产品把「装饰标签」更名为「内容标签」，
+     路由 /admin/content-tags 与权限码 content.tag_* 保持不变 —— 改的只是显示名）。
      打标机制（含"只有公开内容可打标"的校验）与生效判定早在 Story 5.2 就随 ContentTagQueryService
      落地了，此前没有入口 —— 线上装饰标签因此恒为空。本页把它接上，并补齐标签增改下线与取消打标。
      🛡 生效判定一律查询时按 [starts_at, ends_at) 算，ends_at 为空 = 永久；无状态列、无扫描器。 -->
 <head>
     <meta charset="UTF-8"/>
-    <title th:text="#{admin.tags.title}">装饰标签 · TailTopia 运营后台</title>
+    <title th:text="#{admin.tags.title}">内容标签 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <script defer th:src="@{/admin/admin.js}"></script>
     <script th:src="@{/admin/vendor/htmx.min.js}"></script>
@@ -14,7 +15,7 @@
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1 th:text="#{admin.tags.title}">装饰标签</h1>
+        <h1 th:text="#{admin.tags.title}">内容标签</h1>
         <p class="muted" th:text="#{admin.tags.subtitle}">为公开内容挂荣誉标签。</p>
 
         <!-- 🔴 排序副作用提示（AC4）。**这段不可删** ——
@@ -42,7 +43,7 @@
             </thead>
             <tbody>
             <tr th:if="${#lists.isEmpty(tags)}">
-                <td colspan="6" class="muted" th:text="#{admin.tags.empty}">还没有任何装饰标签。</td>
+                <td colspan="6" class="muted" th:text="#{admin.tags.empty}">还没有任何内容标签。</td>
             </tr>
             <tr th:each="t : ${tags}">
                 <td th:text="${t.code}">code</td>
@@ -87,10 +88,20 @@
         <div class="card" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.tag_manage')">
             <h2 th:text="#{admin.tags.newTag}">新建标签</h2>
             <form method="post" enctype="multipart/form-data" th:action="@{/admin/content-tags}">
+                <!-- 🔴 两个字段的用途完全不同，而界面上原先只有两个光秃秃的标题
+                     （bug 20260828：运营问「标签码和名称分别是干嘛的」）。
+                     码 = 对外稳定标识，建后不可改，只进埋点与操作日志，用户永远看不到；
+                     名 = 用户在胶囊上看到的那几个字，随时可改。 -->
                 <label><span th:text="#{admin.tags.code}">标签码</span>
                     <input type="text" name="code" class="field-full" required/></label>
+                <p class="muted" data-notice="tag-code-hint" th:text="#{admin.tags.codeHint}">
+                    用户看不到。建后不可修改。
+                </p>
                 <label><span th:text="#{admin.tags.name}">名称</span>
                     <input type="text" name="name" class="field-full" required/></label>
+                <p class="muted" data-notice="tag-name-hint" th:text="#{admin.tags.nameHint}">
+                    用户在胶囊上看到的字。
+                </p>
                 <label><span th:text="#{admin.tags.icon}">图标</span>
                     <input type="file" name="iconFile" accept="image/png,image/webp" required/></label>
                 <!-- 🔴 AC3：尺寸规范必须常驻在上传控件旁。
@@ -108,9 +119,22 @@
         <!-- 打标 -->
         <div class="card" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.tag_manage')">
             <h2 th:text="#{admin.tags.assignTitle}">给内容打标</h2>
-            <form method="post" th:action="@{/admin/content-tags/assign}">
+            <!-- 🔴 一个标签都没有时，**整张表单不渲染**，只留一句话（bug 20260828）。
+                 原先照渲染：运营看到的是一个「点不开、里面是空的」下拉，
+                 底下还铺着几十条待选内容 —— 界面上没有任何东西说明「先去建标签」，
+                 于是它读起来像坏了，而不是像还没准备好。
+                 ⚠️ 判据用 assignable（**在线**标签），不是 tags：标签全部下线时同样打不了标。 -->
+            <p class="muted" th:if="${#lists.isEmpty(assignable)}"
+               data-notice="assign-needs-tag" th:text="#{admin.tags.assignNoTag}">
+                还没有可用的标签。先在上面「新建标签」建一个，才能给内容打标。
+            </p>
+            <form method="post" th:action="@{/admin/content-tags/assign}"
+                  th:unless="${#lists.isEmpty(assignable)}">
                 <label>
-                    <span th:text="#{admin.tags.name}">标签</span>
+                    <!-- ⚠️ 标题是「选择标签」不是「名称」：上面的新建表单里已经有一个叫「名称」的
+                         输入框，同屏两个「名称」指的却是两件事（一个是新标签的名字、
+                         一个是选哪个已有标签），实机上运营正是在这里读不懂。 -->
+                    <span th:text="#{admin.tags.assignPickTag}">选择标签</span>
                     <!-- 🛡 只列在线标签：已下线的不可再分配 -->
                     <select name="tagId" required>
                         <option th:each="t : ${assignable}" th:value="${t.id}"
