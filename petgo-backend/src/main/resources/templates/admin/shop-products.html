@@ -103,11 +103,11 @@
                     <td class="s-col-num" th:text="${p.sortWeight}">0</td>
                     <td class="s-col-act">
                         <a th:href="@{'/admin/shop/products/' + ${p.id}}" th:text="#{admin.common.detail}">详情</a>
-                        <form th:if="${canEdit and not p.active}" method="post" style="display:inline"
+                        <form th:if="${canEdit and not p.active}" method="post" class="inline"
                               th:action="@{'/admin/shop/products/' + ${p.id} + '/list'}">
                             <button type="submit" class="btn btn-sm" th:text="#{admin.shop.btn.list}">上架</button>
                         </form>
-                        <form th:if="${canEdit and p.active}" method="post" style="display:inline"
+                        <form th:if="${canEdit and p.active}" method="post" class="inline"
                               th:action="@{'/admin/shop/products/' + ${p.id} + '/delist'}">
                             <button type="submit" class="btn btn-sm" th:text="#{admin.shop.btn.delist}">下架</button>
                         </form>

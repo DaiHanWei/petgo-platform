@@ -21,7 +21,7 @@
         <p th:if="${notice}" class="flash" th:text="${notice}">已保存</p>
         <p th:if="${error}" class="flash error" th:text="${error}">操作失败</p>
 
-        <div th:each="o : ${orders}">
+        <div class="s-card" th:each="o : ${orders}">
             <h2>
                 <a th:href="@{/admin/shop/orders/{t}(t=${o.publicToken})}"
                    th:text="${o.publicToken}">abc</a>
@@ -54,7 +54,7 @@
                                    th:value="${l.qty - l.refundedQty}" required/>
                             <input type="text" name="reason" required maxlength="200"
                                    th:placeholder="#{admin.shop.exceptions.reason.placeholder}"/>
-                            <button type="submit" th:text="#{admin.shop.exceptions.btn.cancelLine}">部分取消</button>
+                            <button class="btn btn-sm btn-danger" type="submit" th:text="#{admin.shop.exceptions.btn.cancelLine}">部分取消</button>
                         </form>
                     </td>
                 </tr>
@@ -68,14 +68,14 @@
                       th:action="@{/admin/shop/order-exceptions/{t}/cancel(t=${o.publicToken})}">
                     <input type="text" name="reason" required maxlength="200"
                            th:placeholder="#{admin.shop.exceptions.reason.placeholder}"/>
-                    <button type="submit" th:text="#{admin.shop.exceptions.btn.cancelWhole}">整单取消并退款</button>
+                    <button class="btn btn-danger" type="submit" th:text="#{admin.shop.exceptions.btn.cancelWhole}">整单取消并退款</button>
                 </form>
                 <!-- 处置③：联系用户后继续 -->
                 <form method="post"
                       th:action="@{/admin/shop/order-exceptions/{t}/continue(t=${o.publicToken})}">
                     <input type="text" name="reason" required maxlength="200"
                            th:placeholder="#{admin.shop.exceptions.reason.placeholder}"/>
-                    <button type="submit" th:text="#{admin.shop.exceptions.btn.continue}">联系用户后继续</button>
+                    <button class="btn btn-neutral" type="submit" th:text="#{admin.shop.exceptions.btn.continue}">联系用户后继续</button>
                 </form>
             </div>
         </div>

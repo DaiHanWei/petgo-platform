@@ -42,7 +42,7 @@
                     <form method="post" th:action="@{/admin/shop/shipping/zones/toggle}">
                         <input type="hidden" name="kecamatan" th:value="${z.kecamatan}"/>
                         <input type="hidden" name="active" th:value="${!z.active}"/>
-                        <button type="submit"
+                        <button class="btn btn-sm btn-neutral" type="submit"
                                 th:text="${z.active} ? #{admin.shop.shipping.btn.disable} : #{admin.shop.shipping.btn.enable}">停用</button>
                     </form>
                 </td>
@@ -54,23 +54,28 @@
         </table>
         </div>
 
+        <div class="s-card">
         <h2 th:text="#{admin.shop.shipping.section.addZone}">新增 / 更新区域</h2>
         <form method="post" th:action="@{/admin/shop/shipping/zones}">
             <input type="text" name="kecamatan" required maxlength="60" placeholder="Kecamatan"/>
             <input type="text" name="kotaKabupaten" required maxlength="60" placeholder="Kota/Kabupaten"/>
             <input type="text" name="provinsi" required maxlength="60" placeholder="Provinsi"/>
             <input type="number" name="fee" min="0" required/>
-            <button type="submit" th:text="#{admin.shop.shipping.btn.saveZone}">保存区域</button>
+            <button class="btn btn-primary" type="submit" th:text="#{admin.shop.shipping.btn.saveZone}">保存区域</button>
         </form>
+        </div>
 
+        <div class="s-card">
         <h2 th:text="#{admin.shop.shipping.section.threshold}">免运门槛</h2>
         <p class="hint" th:text="#{admin.shop.shipping.threshold.hint}">商品小计达到该金额即免运费。填 0 表示不做免运——不是「0 元即免运」。</p>
         <form method="post" th:action="@{/admin/shop/shipping/threshold}">
             <input type="number" name="threshold" min="0" required
                    th:value="${settings != null} ? ${settings.freeShippingThreshold} : 0"/>
-            <button type="submit" th:text="#{admin.shop.shipping.btn.saveThreshold}">保存门槛</button>
+            <button class="btn btn-primary" type="submit" th:text="#{admin.shop.shipping.btn.saveThreshold}">保存门槛</button>
         </form>
+        </div>
 
+        <div class="s-card">
         <h2 th:text="#{admin.shop.shipping.section.returnAddress}">退货收件地址</h2>
         <p class="hint" th:text="#{admin.shop.shipping.returnAddress.hint}">用户自寄退货到这个地址；本版本不做上门取件。三项要么都填、要么都留空——只填一半的地址寄不到，而寄不到的退货会变成「货在路上、钱也没退」的双输。</p>
         <form method="post" th:action="@{/admin/shop/shipping/return-address}">
@@ -83,8 +88,9 @@
             <input type="text" name="addressText" maxlength="300"
                    th:value="${settings != null} ? ${settings.returnAddressText} : ''"
                    th:placeholder="#{admin.shop.order.col.address}"/>
-            <button type="submit" th:text="#{admin.shop.shipping.btn.saveReturnAddress}">保存退货地址</button>
+            <button class="btn btn-primary" type="submit" th:text="#{admin.shop.shipping.btn.saveReturnAddress}">保存退货地址</button>
         </form>
+        </div>
     </div>
 </div>
 </body>

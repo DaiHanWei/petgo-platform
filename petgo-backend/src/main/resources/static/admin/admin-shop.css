@@ -23,9 +23,67 @@
  * | 底部固定操作条 | 长表单不用滚到底找保存；也杜绝「改完忘了保存」 |
  * | 页头块（标题 + 说明 + 右侧主操作） | 每页第一屏就说清「这是哪、能干什么」 |
  *
- * ⚠️ 复用 `admin.css` 的 :root 令牌与 `.btn` / `.badge` / `.flash`，**不重新定义它们** ——
+ * ⚠️ 复用 `admin.css` 的 `.btn` / `.badge` / `.flash` 的**语义与类名**，不另起一套 ——
  * 两套按钮样式并存的结果是同一个后台里出现两种「主按钮」。
+ *
+ * ## 2026-08-26：叠加 PAWSI 设计语言（形态层，非配色层）
+ *
+ * 参考 app.pawsi.id 的设计语言做形态对齐。**主色仍是 TailTopia 紫，一个色值都没动** ——
+ * 借的是 PAWSI 处理「高密度后台」的形态决策：圆角阶梯、暖描边、克制阴影、mono 承担数字。
+ *
+ * 🔴 本文件现在**会覆盖若干 :root 令牌**（`--s-*` 前缀，见下方令牌块），与上面那条
+ * 「不重新定义」并不矛盾：新增的是 `--s-` 命名空间下的**形态令牌**，
+ * admin.css 的颜色/字号令牌一个都没重定义。且因为只有电商 15 页引入本文件，
+ * 这些令牌天然只在电商页生效，其余 47 页观感不变（产品要求的作用域）。
+ *
+ * ⚠️ **两处 PAWSI 特征刻意没有照搬**（2026-08-26 产品拍板）：
+ *   ① 淡染主按钮 —— PAWSI 原文自己标注「主次按钮层级差被压得很薄，关键转化路径上要重新验证」。
+ *      后台主按钮挂的是发货/退款/处置这类不可逆动作，**必须一眼认出**，故保持实心。
+ *   ② vh 驱动的自适应字号 —— 那是为 POS「一屏跑完开单流程」设计的；后台是滚动式长列表，
+ *      收益不成立，反而会让字号随窗口高度跳动。
  */
+
+/* ============================================================
+   PAWSI 形态令牌（只作用于电商 15 页）
+   ============================================================ */
+
+:root {
+    /* 圆角阶梯。PAWSI 的视觉签名是卡片 14px —— 明显大于 shadcn 默认的 10px 基准，
+       配合内边距形成偏软、偏亲和的容器语言。嵌套元素按层级递减，不是全站一个值：
+       卡片 14 > 输入框 10 > 按钮 8 > 药丸/徽标全圆。 */
+    --s-radius-card: 14px;
+    --s-radius-input: 10px;
+    --s-radius-btn: 8px;
+
+    /* 描边。PAWSI 整套色板是 OKLCH，唯独描边写死 hex 且**偏暖** —— 与米白侧栏呼应。
+       输入框另有一个更精细的值：微偏紫、宽度 1px→1.5px。
+       输入框在这套系统里是被特意加重的一处，不是随手写的。 */
+    --s-line: #E9E9E8;
+    --s-line-input: #ECEBF0;
+
+    /* 阴影只有两级，且几乎不用 —— 层次来自留白节奏与面的明度差，不是浮起来的高度。
+       🔴 列表项/表格行**零阴影**，只靠 1px 描边分隔。 */
+    --s-shadow-xs: 0 1px 2px rgb(0 0 0 / .05);
+    --s-shadow-sm: 0 1px 3px rgb(0 0 0 / .10), 0 1px 2px -1px rgb(0 0 0 / .10);
+
+    /* 字距。全局负字距让小字号下的西文更紧凑；大写分组标签反向加正字距
+       （大写字母需要更多呼吸空间，标准做法但很多系统会漏）。
+       🔴 mono 必须例外 —— 等宽字的对齐依赖原始步进，加字距会破坏金额小数点对齐。 */
+    --s-tracking: -0.15px;
+    --s-tracking-caps: .5px;
+
+    /* 数字字族。PAWSI 把 mono 专门用于金额、计数、快捷键三类内容并配 tabular-nums，
+       是功能性决策不是审美偏好：对每天核几百笔账的人，小数点对齐直接决定核对速度。 */
+    --s-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* 字距只作用于工作区，**不碰侧栏** —— 侧栏是 62 页共享外壳，
+   电商页字距与其他页不同会在切页时露馅。 */
+main { letter-spacing: var(--s-tracking); }
+main .s-mono,
+main .mono,
+main code,
+main [class*="s-col-num"] { letter-spacing: normal; }
 
 /* ============================================================
    页头块
@@ -65,9 +123,10 @@
 
 .s-card {
     background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: var(--radius-sm);
+    border: 1px solid var(--s-line);
+    border-radius: var(--s-radius-card);
     margin-bottom: 14px;
+    box-shadow: var(--s-shadow-sm);
 }
 
 /* 🔴 不用 admin.css 的 .card：那个带 max-width:680px，是给窄表单用的。
@@ -97,6 +156,9 @@
 
 /* 表格直接贴卡片边缘：外层卡片已经给了边框，表格再来一圈就是双线 */
 .s-card > table { border: 0; border-radius: 0; }
+/* 🔴 圆角从 6px 提到 14px 后必须裁剪：表格首行表头底色与末行 hover 底色
+   会从四个角溢出到圆角之外，露出直角。overflow:hidden 挂在卡片上统一裁掉。 */
+.s-card { overflow: hidden; }
 .s-card > table th:first-child,
 .s-card > table td:first-child { padding-left: 16px; }
 .s-card > table th:last-child,
@@ -165,6 +227,8 @@
     margin-bottom: -1px;
 }
 
+/* 同 admin.css 的 .btn：hover / active 的颜色变化要有过渡，否则是硬跳。 */
+.s-tabs a { transition: color .12s ease, border-color .12s ease; }
 .s-tabs a:hover { color: var(--brand-strong); }
 
 .s-tabs a.active {
@@ -179,12 +243,14 @@
     display: inline-block;
     margin-left: 5px;
     padding: 0 6px;
-    border-radius: 9px;
+    border-radius: 999px;
     background: var(--brand-tint);
     color: var(--brand-strong);
     font-size: 11px;
-    font-weight: 700;
+    font-weight: 500;
     line-height: 17px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: normal;
 }
 .s-tabs a.active .s-tab-n { background: var(--brand); color: #fff; }
 
@@ -192,22 +258,45 @@
    表格（卡片内）
    ============================================================ */
 
-.s-card th {
+/* 🔴 必须限定 thead：电商 15 页里有两类表格并存 ——
+   列表型带 <thead>（商品/订单列表），详情型直接 <tr><th>标签</th><td>值</td></tr>
+   （订单详情、退款试算、对账，全站约 90 行）。写成 `.s-card th` 会同时命中两者，
+   把行首标签也刷成表头灰底，在详情页切出一条占半宽的灰块，左右割裂。 */
+.s-card thead th {
     background: #FAFAFB;
     font-size: var(--fs-xs);
-    font-weight: 600;
-    color: var(--ink-2);
-    letter-spacing: .2px;
+    font-weight: 500;
+    color: var(--muted);
+    letter-spacing: var(--s-tracking-caps);
     white-space: nowrap;
+}
+
+/* 键值对表格的行首标签：它是「字段名」不是「列名」，不该有底色。
+   定宽让同一张表的值列起始位置对齐 —— 眼睛沿一条竖线扫，比逐行找值快。 */
+.s-card tbody th {
+    background: transparent;
+    width: 190px;
+    font-size: var(--fs-sm);
+    font-weight: 400;
+    color: var(--muted);
+    letter-spacing: var(--s-tracking);
+    white-space: normal;
+    vertical-align: top;
 }
 
 .s-card td { vertical-align: middle; }
 
+.s-card tbody tr { transition: background-color .12s ease; }
 .s-card tbody tr:hover { background: #FAF8FE; }
 
 /* 操作列贴右，且不许换行把按钮拆散 */
 .s-card .s-col-act { text-align: right; white-space: nowrap; }
-.s-card .s-col-num { text-align: right; font-variant-numeric: tabular-nums; }
+.s-card .s-col-num {
+    text-align: right;
+    font-family: var(--s-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: normal;
+}
 
 /* 单号/token 这类等宽内容 */
 .s-mono {
@@ -220,7 +309,7 @@
 .s-cell-product { display: flex; gap: 10px; align-items: center; }
 .s-cell-product .s-thumb {
     width: 40px; height: 40px; flex-shrink: 0;
-    border-radius: 4px; border: 1px solid var(--line);
+    border-radius: var(--s-radius-btn); border: 1px solid var(--s-line);
     background: #F3F1F8;
     object-fit: cover;
 }
@@ -285,8 +374,8 @@
     gap: 10px;
     padding: 12px 16px;
     background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: var(--radius-sm);
+    border: 1px solid var(--s-line);
+    border-radius: var(--s-radius-card);
     box-shadow: 0 -2px 10px rgba(31, 35, 48, .06);
     margin-top: 14px;
 }
@@ -325,17 +414,21 @@ form:has(> .s-actionbar) > .s-card:last-of-type { margin-bottom: 56px; }
 
 .s-stat {
     background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: var(--radius-sm);
+    border: 1px solid var(--s-line);
+    border-radius: var(--s-radius-card);
     padding: 14px 16px;
+    box-shadow: var(--s-shadow-sm);
 }
 .s-stat .s-stat-k { color: var(--muted); font-size: var(--fs-xs); }
 .s-stat .s-stat-v {
     margin-top: 6px;
     font-size: 22px;
-    font-weight: 700;
+    font-weight: 600;
     color: var(--ink);
+    /* 金额走等宽 —— 「今日营收 Rp34.765.900」与下一行的 Rp217.287 小数点要对齐。 */
+    font-family: var(--s-mono);
     font-variant-numeric: tabular-nums;
+    letter-spacing: normal;
 }
 .s-stat .s-stat-sub { margin-top: 4px; font-size: var(--fs-xs); color: var(--muted); }
 
@@ -384,7 +477,205 @@ form:has(> .s-actionbar) > .s-card:last-of-type { margin-bottom: 56px; }
     color: #fff;
     line-height: 1.3;
 }
+.s-card .filters > button { transition: background-color .12s ease; }
 .s-card .filters > button:hover { background: var(--brand-strong); }
 
 /* 说明文字独占一行，不参与横向排布 */
 .s-card .filters > .hint { flex-basis: 100%; margin: 2px 0 0; }
+
+/* ============================================================
+   控件配方（PAWSI · 2026-08-26）
+   ============================================================ */
+
+/* 输入框在 PAWSI 里是被**特意加重**的一处：描边不用通用的 #E9E9E8，
+   而是微偏紫的 #ECEBF0，且宽度从 1px 加到 1.5px、圆角 10px。
+   作用域限定在 main —— 侧栏里没有输入框，但写死 main 可以防止将来外壳加了搜索框被误伤。 */
+main input,
+main select,
+main textarea {
+    border: 1.5px solid var(--s-line-input);
+    border-radius: var(--s-radius-input);
+}
+
+/* 🛡 主按钮**保持实心**，不采用 PAWSI 的 12% 淡染方案（2026-08-26 产品拍板）。
+   PAWSI 原文自评：「主次按钮的层级差被压缩了……关键转化路径上要重新验证」。
+   电商后台的主按钮挂的是发货 / 退款 / 处置这类不可逆动作，必须一眼认出。
+   这里只吸收它的形态部分：8px 圆角 + 500 字重 + xs 阴影。 */
+main .btn {
+    border-radius: var(--s-radius-btn);
+    font-weight: 500;
+    box-shadow: var(--s-shadow-xs);
+}
+
+/* 那几页裸 <button> 的筛选表单同步跟上，否则同屏两种按钮圆角。 */
+.s-card .filters > button {
+    border-radius: var(--s-radius-btn);
+    font-weight: 500;
+    box-shadow: var(--s-shadow-xs);
+}
+
+/* 表格行零阴影是 PAWSI 的明确规定（层次靠描边与留白，不靠高度）。
+   .s-card 已带 sm 阴影，行内不得再叠。此处显式写出来防止后续被加上。 */
+.s-card tbody tr { box-shadow: none; }
+
+/* ============================================================
+   操作结果提示条与警告块
+   ============================================================
+
+   🔴 **缺陷修复（2026-08-26）**：`.flash` / `.flash.error` / `.warn` 三个类
+   在 admin.css 与本文件中**都没有任何样式定义**。本文件顶部注释写的是
+   「复用 admin.css 的 .flash」—— 但 admin.css 里那个类实际叫 `.banner`，
+   从来不存在 `.flash`。注释描述的复用关系从第一天起就不成立。
+
+   后果：11 个电商页的「已保存」与「操作失败」全部渲染成**裸 <p> 段落** ——
+   无背景、无边框、无内边距，成功态与失败态字号颜色完全一致。
+   运营点完发货，成功和失败在页面上长得一模一样，漏看失败是必然而非偶然。
+
+   ⚠️ 修 CSS 而不是改模板：11 个页面共 30 余处引用，且 `.banner` 的修饰符是
+   `.ok` / `.err`，与模板里的 `.error` 不同名 —— 改模板要逐处替换两个类名，
+   返工面大得多，收益完全一样。这里按 `.banner` 的既有语义补齐同等表现。
+
+   形态取 PAWSI 的 callout 配方：左侧 3px 实心条 + 淡染底 + 同色描边。
+   左条是这三类提示唯一的差异化信号，扫页面时比纯底色更快定位。 */
+
+.flash,
+.warn {
+    margin: 0 0 14px;
+    padding: 10px 14px 10px 13px;
+    border-radius: var(--s-radius-input);
+    font-size: var(--fs-sm);
+    line-height: 1.6;
+    border: 1px solid transparent;
+    border-left-width: 3px;
+}
+
+/* 成功（默认态）。模板写法是 <p class="flash">，不带修饰符即成功。 */
+.flash {
+    background: var(--ok-bg);
+    color: var(--ok);
+    border-color: rgba(30, 126, 69, .20);
+    border-left-color: var(--ok);
+}
+
+/* 失败。⚠️ 修饰符是 `.error` 不是 `.err` —— 与 admin.css 的 .banner.err 不同名，
+   照抄 .banner 的选择器会命不中。 */
+.flash.error {
+    background: var(--danger-bg);
+    color: var(--danger);
+    border-color: rgba(192, 57, 43, .20);
+    border-left-color: var(--danger);
+}
+
+/* 警告块。两处用法都是「填错会让整条机制失效」级别的提醒
+   （Makanan 未填喂量 / 喂量填成描述性文字），不是普通 hint，故给足视觉重量。 */
+.warn {
+    background: var(--warn-bg);
+    color: var(--warn);
+    border-color: rgba(154, 107, 0, .20);
+    border-left-color: var(--warn);
+}
+
+/* 卡片内的警告块收一点外边距——它下面通常紧跟表格或输入行。 */
+.s-card-body > .warn:first-child { margin-top: 0; }
+
+/* ============================================================
+   区块标题（模式 A：标题在卡片外）
+   ============================================================
+
+   电商 15 页里有 20 处是这种写法：
+
+       <h2>订单</h2>
+       <div class="s-card"><table>…</table></div>
+
+   标题浮在卡片外、卡片只包内容。把这 20 个 h2 逐个搬进 `.s-card-head`
+   要改 20 处 HTML 结构，而「区块标题 + 内容卡片」本身是成立的布局 ——
+   收益只是形式统一，不值这个返工面。这里用样式把**从属关系**做实：
+   标题与它下方的卡片贴紧、与上一个区块拉开，一眼能读出分组。
+
+   ⚠️ 依赖 `th:remove="tag"`：模板里 h2 的父层 <div th:fragment> 渲染时会被移除，
+   所以运行时 h2 确实是 main 的直接子元素，`main > h2` 才命中。 */
+
+main > h2 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--ink);
+    letter-spacing: var(--s-tracking);
+    /* 上间距 22 / 下间距 8：与下方自己的卡片贴紧，与上一个区块拉开，
+       靠间距差表达从属，不靠线框。 */
+    margin: 22px 0 8px;
+}
+
+main > h2 + .s-card,
+main > h2 + .s-stats { margin-top: 0; }
+
+/* 页面首个区块标题不要多余上间距（它上面是 .s-page-head 或提示条）。 */
+main > .s-page-head + h2,
+main > .flash + h2,
+main > .warn + h2,
+main > h2:first-child { margin-top: 0; }
+
+/* ============================================================
+   卡片的简写形状：h2 + 内容直接作为 .s-card 的子元素
+   ============================================================
+
+   电商 15 页里有 18 处区块长这样（采购入库 / 报损 / 审核 / 质检 / 退款执行 / 免运门槛…）：
+
+       <section class="s-card" th:if="${canPurchase}">
+         <h2>采购入库</h2>
+         <p class="hint">…</p>
+         <form>…</form>
+       </section>
+
+   🔴 为什么不套标准的 .s-card-head / .s-card-body 两层：
+   这些区块**多数带 th:if 条件**，而 `.s-card` 必须加在那个条件元素**本身**上 ——
+   新包一层卡片在外面，条件不成立时 form 不渲染、卡片照渲染，页面上留一张空白卡
+   （shop-orders.html 里记着这个教训）。条件元素上再往里插两层结构要动更多 HTML，
+   收益只是形式统一。这里用 CSS 让这个简写形状直接成立，模板只加一个 class。 */
+
+.s-card > h2 {
+    margin: 0;
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--s-line);
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--ink);
+    letter-spacing: var(--s-tracking);
+}
+
+/* h2 之后的直接子内容补上卡片内边距。
+   ⚠️ table 例外 —— 它要贴卡片边缘（上方 `.s-card > table` 已规定），
+   再加内边距会让表格与卡片边框之间露出一圈白，且首尾行底色对不齐圆角。 */
+.s-card > h2 ~ *:not(table) {
+    padding-left: 16px;
+    padding-right: 16px;
+}
+.s-card > h2 + *:not(table) { padding-top: 14px; }
+.s-card > h2 ~ *:last-child:not(table) { padding-bottom: 16px; }
+
+/* 简写形状里的表单不需要自己的外边距，垂直节奏由上面的 padding 统一给。 */
+.s-card > h2 ~ form { margin: 0; }
+.s-card > h2 ~ form + form { padding-top: 10px; }
+
+/* 简写形状的垂直节奏：段落自带的 margin 会与上面的 padding 叠加 ——
+   `.hint` 有 margin-top:4px，而 <p> 默认还带 margin-bottom:1em，
+   叠下来卡片头与正文之间空出 ~31px，中间一大块空白。
+   节奏统一交给 padding，段落自身 margin 归零。 */
+.s-card > h2 ~ p { margin-top: 0; margin-bottom: 10px; }
+.s-card > h2 ~ p:last-child { margin-bottom: 0; }
+
+/* ============================================================
+   卡片底部操作区 / 大区间距（2026-08-26 从内联 style 提取）
+   ============================================================ */
+
+/* 卡片内的提交行：上分隔线 + 右对齐。原是 shop-product-form 的一处内联 style，
+   但「卡片底部放一个提交按钮」是通用形状，提为组件避免下一处再写一遍内联。
+   ⚠️ 与 .s-actionbar 的区别：那个是**整页表单**的 sticky 底栏，这个属于**单张卡片**。 */
+.s-card .s-card-foot {
+    border-top: 1px solid var(--s-line);
+    text-align: right;
+    padding: 13px 16px;
+}
+
+/* 大区之间的断点（如「商品表单」→「SKU 维护」）。
+   .s-card 默认的 margin-bottom:14px 是同一区内相邻卡片的节奏，跨区需要更明显的间隔。 */
+.s-section { margin-top: 20px; }

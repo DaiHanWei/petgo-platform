@@ -55,7 +55,7 @@
 
         <!-- ===== 采购入库：需 shop.inventory_edit + shop.cost_edit 双权限 ===== -->
         <!-- 🔒 canPurchase 为 false 时整块不渲染；服务端在控制器里【独立再判一次】，看源码绕不过 -->
-        <section th:if="${canPurchase}">
+        <section class="s-card" th:if="${canPurchase}">
             <h2 th:text="#{admin.shop.inventory.purchase.title}">采购入库</h2>
             <p class="hint" th:text="#{admin.shop.inventory.purchase.hint}">进货单价必填，不允许留空——留空会使入库的货在成本上不存在，污染毛利与资金占用核算。</p>
             <form method="post" th:action="@{/admin/shop/inventory/purchase}">
@@ -80,7 +80,7 @@
         </section>
 
         <!-- ===== 退货入库批次：只需 shop.inventory_edit（单价由系统带出，S-9） ===== -->
-        <section th:if="${canEdit}">
+        <section class="s-card" th:if="${canEdit}">
             <h2 th:text="#{admin.shop.inventory.return.title}">退货入库</h2>
             <p class="hint" th:text="#{admin.shop.inventory.return.hint}">退货与拒收的货走此入口，记为退货入库批次（二次销售风险与采购货不同）。采购单号填原订单号，进货单价由系统取该 SKU 最近一次采购单价。</p>
             <form method="post" th:action="@{/admin/shop/inventory/return-inbound}">
@@ -101,7 +101,7 @@
         </section>
 
         <!-- ===== 报损：上限是【可售库存】，不是实际库存 ===== -->
-        <section th:if="${canEdit}">
+        <section class="s-card" th:if="${canEdit}">
             <h2 th:text="#{admin.shop.inventory.damage.title}">报损</h2>
             <p class="hint" th:text="#{admin.shop.inventory.damage.hint}">只能报损可售库存。已被订单锁定的货不可报损——那等于把已卖给用户的东西销账。</p>
             <form method="post" th:action="@{/admin/shop/inventory/damage}">
@@ -120,7 +120,7 @@
         </section>
 
         <!-- ===== 盘点调整：下限是锁定库存 ===== -->
-        <section th:if="${canEdit}">
+        <section class="s-card" th:if="${canEdit}">
             <h2 th:text="#{admin.shop.inventory.stocktake.title}">盘点调整</h2>
             <p class="hint" th:text="#{admin.shop.inventory.stocktake.hint}">填写实际盘点到的数量，系统按差额记流水。盘点值不得低于锁定库存。若库存在盘点期间被改动，本次盘点会被拒绝并要求重盘。</p>
             <form method="post" th:action="@{/admin/shop/inventory/stocktake}">

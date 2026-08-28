@@ -12,19 +12,38 @@
     /* 中性 */
     --bg: #F5F6F8;
     --surface: #FFFFFF;
-    --sidebar: #2E2A45;
+    /* 侧栏改浅色（PAWSI 设计语言）：微暖米白，靠明度 + 色温差与主画布分区，不再用深色块。
+       PAWSI 原文——「用极小的明度/色温差分区，比加边框加阴影更高级」。
+       ⚠️ 侧栏属 layout.html 全局外壳，本组令牌 62 页一起生效。这是刻意的：
+       只给电商页换侧栏，运营从「内容」点进「电商」时导航会变个样，比内容区变化刺眼得多。 */
+    --sidebar: #FAF9F7;
+    --sidebar-ink: #4A4658;
+    /* 二级导航与折叠箭头专用。🔴 不能直接用 --muted(#8A91A0)：它是为白底正文辅助文字调的，
+       落到米白侧栏上对比度只有 3.01，达不到 WCAG AA 的 4.5（二级导航是可点链接，
+       不是装饰文字，必须达标）。此值实测 5.38，且仍比一级项的 8.65 轻，层级不丢。 */
+    --sidebar-ink-soft: #6B6579;
+    --sidebar-ink-strong: #1F2330;
+    --sidebar-line: #EAE7E1;
     --ink: #1F2330;
     --ink-2: #444A57;
-    --muted: #8A91A0;
+    /* 辅助文字。
+       🔴 2026-08-27 由 #8A91A0 压深到 #6C717D。上面那条关于侧栏的说明里写着
+       「--muted 是为白底正文辅助文字调的」——**那个前提是错的**：#8A91A0 在白底上
+       实测只有 3.16:1、在 --bg 画布上 2.93:1，两个都达不到 AA 的 4.5。
+       侧栏另起 --sidebar-ink-soft 的结论是对的，只是理由说反了。
+       现值白底 4.89:1 / 画布 4.52:1，仍明显轻于 --ink-2(8.89)，层级不丢。 */
+    --muted: #6C717D;
     --line: #E6E8EC;
-    /* 状态 */
+    /* 状态。四个语义色都按「在各自的浅底上 ≥4.5:1」调过；
+       2026-08-27 复测发现 warn(4.17) 与 info(4.24) 差一点点，各压深一档补上。
+       ok(4.55) 与 danger(4.63) 原本就是过的，不动。 */
     --ok: #1E7E45;
     --ok-bg: #E7F6EC;
-    --warn: #9A6B00;
+    --warn: #936600;   /* 原 #9A6B00 = 4.17:1 */
     --warn-bg: #FBF1D9;
     --danger: #C0392B;
     --danger-bg: #FDE8E8;
-    --info: #2D6CDF;
+    --info: #2B68D7;   /* 原 #2D6CDF = 4.24:1 */
     --info-bg: #E8F0FE;
     /* 排版 / 半径 / 间距 */
     --radius: 8px;
@@ -55,26 +74,31 @@ a { color: var(--brand-strong); }
 nav {
     width: 210px;
     background: var(--sidebar);
-    color: #D7D2E8;
+    color: var(--sidebar-ink);
     padding: 16px 10px;
     flex-shrink: 0;
+    border-right: 1px solid var(--sidebar-line);
 }
-nav .brand { font-weight: 700; color: #fff; padding: 0 8px 14px; }
+nav .brand { font-weight: 700; color: var(--sidebar-ink-strong); padding: 0 8px 14px; }
 nav a,
 nav summary {
     display: block;
     padding: 9px 10px;
-    color: #D7D2E8;
+    color: var(--sidebar-ink);
     text-decoration: none;
     font-size: var(--fs-sm);
     border-radius: var(--radius-sm);
     border-left: 3px solid transparent;
 }
 nav a:hover,
-nav summary:hover { background: rgba(255, 255, 255, .07); }
+nav summary:hover { background: rgba(31, 35, 48, .05); }
+/* 选中项是 PAWSI 里紫色仅有的几个落点之一（「紫色只用来指路」）。
+   🔴 底色**不能**用 --brand-tint(#F8F2FF)：它与新侧栏底 #FAF9F7 只差 (-2,-7,+8)，
+   浅底换深底后这个高亮等于没有（深色侧栏时代它是够的，换底色后失效）。
+   改用品牌紫 12% 淡染 —— 叠在米白上能明确偏紫，且与 PAWSI「主色淡染」的做法一致。 */
 nav a.active,
-nav summary.active { background: rgba(132, 94, 201, .34); color: #fff; border-left-color: var(--brand-line); }
-nav a.disabled { color: #6E6883; pointer-events: none; }
+nav summary.active { background: rgba(132, 94, 201, .12); color: var(--brand-strong); border-left-color: var(--brand); }
+nav a.disabled { color: #A9A5B5; pointer-events: none; }
 .nav-section { margin: 4px 0; }
 .nav-section summary {
     cursor: pointer;
@@ -88,21 +112,21 @@ nav a.disabled { color: #6E6883; pointer-events: none; }
     content: "›";
     position: absolute;
     right: 10px;
-    color: #9D97B5;
+    color: var(--sidebar-ink-soft);
     transition: transform .15s ease;
 }
 .nav-section[open] summary::after { transform: rotate(90deg); }
 .nav-sub {
     margin: 4px 0 6px 10px;
     padding-left: 8px;
-    border-left: 1px solid rgba(255, 255, 255, .10);
+    border-left: 1px solid var(--sidebar-line);
 }
 .nav-sub a {
     padding: 7px 10px;
-    color: #BDB6D5;
+    color: var(--sidebar-ink-soft);
     font-size: var(--fs-xs);
 }
-.nav-sub a.active { background: rgba(255, 255, 255, .10); color: #fff; border-left-color: var(--brand); }
+.nav-sub a.active { background: rgba(132, 94, 201, .10); color: var(--brand-strong); border-left-color: var(--brand); }
 
 main { flex: 1; padding: 24px 32px; }
 .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
@@ -162,6 +186,19 @@ input, select, textarea {
     color: var(--ink);
 }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand-line); border-color: var(--brand); }
+
+/* 键盘焦点。
+   🔴 此前只有表单控件定义了焦点样式，按钮 / 链接 / 状态 Tab 全靠浏览器默认环 ——
+   在 14px 圆角的卡片语言里那个方框既不贴合也不统一，Safari 上部分按钮甚至不给环。
+   用 :focus-visible 而不是 :focus：鼠标点击不该出现焦点环，只有键盘导航才需要。 */
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
 textarea { min-height: 96px; resize: vertical; width: 100%; }
 .field-full { width: 100%; }
 label.field .field-full { display: block; margin-top: 4px; }
@@ -177,6 +214,9 @@ label.field .field-full { display: block; margin-top: 4px; }
     text-decoration: none;
     line-height: 1.3;
 }
+/* 状态切换要有过渡：0ms 的颜色跳变读起来像页面闪了一下，而不是「我按到了」。
+   120ms 落在 80–150ms 的触觉反馈窗口内。只写具体属性，不用 transition: all。 */
+.btn { transition: background-color .12s ease, color .12s ease, border-color .12s ease; }
 .btn-primary { background: var(--brand); color: #fff; }
 .btn-primary:hover { background: var(--brand-strong); }
 .btn-danger { background: var(--danger); color: #fff; }
