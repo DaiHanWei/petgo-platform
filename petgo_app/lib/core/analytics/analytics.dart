@@ -79,17 +79,40 @@ class Analytics {
   /// 暴露面）。username/昵称/邮箱/手机号仍一概不传（PDP 合规红线）。
   /// 同一哈希值同时设为 AppsFlyer CUID（跨端归因 P0）：两端跑同一份 Dart 代码，
   /// 天然逐字节一致。
-  static Future<void> identifyUser(int userId) async {
+  static Future<void> identifyUser(int userId, {String? role}) async {
     AppsFlyerClient.instance.setUserId(distinctIdFor(userId));
     try {
       await Posthog().identify(
         userId: distinctIdFor(userId),
-        userProperties: {'internal_user_id': userId},
+        userProperties: personProperties(userId: userId, role: role),
       );
     } catch (e) {
       debugPrint('[Analytics] identify failed: $e');
     }
   }
+
+  /// identify 随附的 person property（`$set` 语义：**每次 identify 覆盖**）。纯函数，L0 可测。
+  ///
+  /// ⚠️ **只放对该账号恒定的字段**。person property 是覆盖式的、且回溯查询取**最新值**，
+  /// 放可变字段会静默变脏：`identifyUser` 只在**换人**时触发（`app.dart` 的 auth 监听），
+  /// 用户后来建了档 / 选了养宠状态都不会重报 —— 属性会永远停在首次登录那一刻的值。
+  ///
+  /// 因此 `user_state` / `has_pet_profile` **刻意不放这里**：
+  /// - `user_state` 已是 T-1 / T-2 的**事件**属性，按事件取数天然是当时的真值；
+  /// - 「注册后 N 天内是否建档」这类**时点归因**本来就不能用 person property 表达
+  ///   （取最新值会把第 60 天才建档的人算进他第 7 天的「已建档」组，归因是反的），
+  ///   必须用 event-based cohort。
+  @visibleForTesting
+  static Map<String, Object> personProperties({
+    required int userId,
+    String? role,
+  }) =>
+      scrub({
+        'internal_user_id': userId,
+        // 账号角色（USER / VET）。留存看板据此**把兽医号剔出宠主大盘** ——
+        // 混在一起会让所有留存曲线带上一批行为模式完全不同的样本。
+        'role': ?role,
+      });
 
   /// 登出 / 续期失败 → 解除关联，回到匿名。AppsFlyer CUID 同步清空（防换账号串数据）。
   static Future<void> reset() async {
@@ -136,6 +159,42 @@ class Analytics {
       debugPrint('[Analytics] capture failed: $e');
     }
   }
+
+  /// T-7 `signup_succeeded` 的**唯一**上报入口（登录页与引导浮层两条注册路径共用）。
+  ///
+  /// 除事件本身，顺带以 `$set_once` 固化两个 person property：`signup_date` 与
+  /// `first_entry_source`。它们是留存看板「按注册月分群」「注册来源 × 留存」的唯一来源 ——
+  /// 在此之前 person property 只有 `internal_user_id`，这两个切法根本做不了。
+  ///
+  /// **为什么挂在事件上、而不是单独调 `setPersonProperties`：**
+  /// ① 与事件原子同发，两者不会漂开；
+  /// ② 不依赖 identify 与本次上报的先后 —— 事件落到哪个 person，属性就跟到哪个；
+  /// ③ 走 [capture] 一条通路，因此既过 [scrub]，也能被 `debugCaptureSink` 在 L0 断言到
+  ///    （`setPersonProperties` 绕开 sink，只能靠 platform channel mock 才测得动）。
+  ///
+  /// ⚠️ **配看板前必读的三条口径：**
+  /// - **是 `$set_once` 不是 `$set`**：identify 每次登录都调，若用 `$set`，老用户的
+  ///   `signup_date` 会被刷成「最近一次登录日」，整列失去意义。
+  /// - **存量用户没有这两个属性**：后端 `UserProfileResponse` 不下发 `createdAt`，
+  ///   补不了历史。按 `signup_date` 分群时**分母只含本次上线之后注册的人**，不是全体用户。
+  /// - **`signup_date` 取设备本地时钟的 UTC 日期**，改系统时间即可伪造。分群够用，
+  ///   **不可作对账依据**。
+  static Future<void> captureSignupSucceeded(
+    String entrySource, {
+    @visibleForTesting DateTime? now,
+  }) =>
+      // 🔴 **必须写成 `Analytics.capture(` 这个自限定形式，不能简化成裸 `capture(`**：
+      // 埋点守卫（`test/analytics/*_events_test.dart`）是从 `lib/` 里正则提取
+      // `Analytics\.capture\(\s*'([A-Za-z0-9_]+)'` 的字面量来对账的。写成裸调用，
+      // `signup_succeeded` 会从提取集里整个消失 —— T-7 的断言当场变红，
+      // 而真正危险的是反过来：哪天守卫放宽了，事件就此悄悄脱离对账，看板恒空。
+      Analytics.capture('signup_succeeded', {
+        'entry_source': entrySource,
+        r'$set_once': {
+          'signup_date': (now ?? DateTime.now()).toUtc().toIso8601String().substring(0, 10),
+          'first_entry_source': entrySource,
+        },
+      });
 
   /// 页面浏览事件（PostHog `$screen`）。
   ///
