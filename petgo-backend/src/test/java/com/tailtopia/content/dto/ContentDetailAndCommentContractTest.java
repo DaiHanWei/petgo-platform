@@ -41,7 +41,7 @@ class ContentDetailAndCommentContractTest {
         ContentDetailResponse d = new ContentDetailResponse(
                 1L, 7L, "小明", "https://cdn/a.jpg", false,
                 // V1.1.6 Story 5.1：运营标签随作者一起下发；**空表不下发**（NON_NULL 省略）。
-                List.of(new com.tailtopia.auth.dto.UserTagView("vet", "兽医", "🩺", "已认证兽医")),
+                List.of(new com.tailtopia.auth.dto.UserTagView("vet", "兽医", "🩺", "已认证兽医", "#F6A609")),
                 List.of(new ContentTagView("editor_pick", "编辑推荐", "🏆", "被官方选中的优质内容")),
                 ContentType.DAILY, "正文",
                 List.of("https://cdn/1.jpg", "https://cdn/2.jpg"), 5L, 2L, true, false,
@@ -64,7 +64,7 @@ class ContentDetailAndCommentContractTest {
         // story 3：新增 moderationStatus 字段（VISIBLE 无标签；TAKEN_DOWN 前端渲染「仅你可见」）。
         CommentResponse top = new CommentResponse(
                 10L, 7L, "小明", "https://cdn/a.jpg", false,
-                List.of(new com.tailtopia.auth.dto.UserTagView("vet", "兽医", "🩺", "已认证兽医")),
+                List.of(new com.tailtopia.auth.dto.UserTagView("vet", "兽医", "🩺", "已认证兽医", "#F6A609")),
                 "评论正文",
                 Instant.parse("2026-06-05T00:00:00Z"), 3, List.of(), "VISIBLE");
 

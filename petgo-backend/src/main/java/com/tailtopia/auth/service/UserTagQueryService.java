@@ -127,7 +127,8 @@ public class UserTagQueryService {
             UserTag t = (UserTag) row[1];
             List<UserTagView> list = byUser.computeIfAbsent(a.getUserId(), k -> new ArrayList<>());
             if (list.size() < MAX_VISIBLE) {
-                list.add(new UserTagView(t.getCode(), t.getName(), t.getIcon(), t.getDescription()));
+                list.add(new UserTagView(t.getCode(), t.getName(), t.getIcon(), t.getDescription(),
+                        t.getBadgeColor().hex()));
             }
         }
         // 🔴 注销账号的整条移除。⚠️ 只在**确实有人拿到标签**时才发这次查询 ——

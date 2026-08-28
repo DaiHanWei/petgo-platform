@@ -39,6 +39,14 @@ Future<void> _pumpRow(
   await tester.pump();
 }
 
+/// 当前渲染出的所有圆形衬底的颜色（按出现顺序）。
+List<Color?> _circleColors(WidgetTester tester) =>
+    tester.widgetList<Container>(find.byType(Container))
+        .where((c) => c.decoration is BoxDecoration
+            && (c.decoration! as BoxDecoration).shape == BoxShape.circle)
+        .map((c) => (c.decoration! as BoxDecoration).color)
+        .toList();
+
 void main() {
   tearDown(dismissAnchoredTooltip);
 
@@ -208,6 +216,46 @@ void main() {
       expect(circle.constraints?.maxWidth ?? 0, closeTo(14, 0.01));
       // 内圈按 8/14 收 —— 直接铺满会让图标压在圆的描边上。
       expect(tester.widget<TagIcon>(find.byType(TagIcon)).size, closeTo(8, 0.01));
+    });
+  });
+
+  /// 🔴 **底色按标签走**（2026-08-28，UI 稿 `.utag-icon`：官方号金、最佳新人紫）。
+  ///
+  /// 此前圆底是写死的金色，运营配不出第二种 —— 而稿子里颜色正是区分标签类别的手段。
+  group('bug 20260828 · 徽章底色按标签配', () {
+    testWidgets('后端给了色值就用它', (tester) async {
+      const violet = Color(0xFF845EC9);
+      await _pumpRow(tester, name: 'Alice', tags: [
+        UserTag(code: 'star', name: '最佳新人', icon: '★', description: 'x',
+            badgeColor: violet),
+      ]);
+
+      expect(_circleColors(tester), [violet],
+          reason: '🔴 底色仍写死 —— 运营配的颜色没生效');
+    });
+
+    testWidgets('没给色值回落金色（稿子的默认值）', (tester) async {
+      await _pumpRow(tester, name: 'Alice', tags: [_tag('a')]);
+      expect(_circleColors(tester), [AppColors.gold]);
+    });
+
+    /// 🛡 **色值解析不出来不许炸**：它是展示层的锦上添花，
+    /// 一个格式不对的字符串不该让整页 Feed 解析失败。
+    test('坏色值当没给，不抛异常', () {
+      for (final bad in ['', 'red', '#GGGGGG', '#12345', 'F6A609']) {
+        final t = UserTag.fromJson({
+          'code': 'c', 'name': 'n', 'icon': 'i', 'description': 'd', 'badgeColor': bad,
+        });
+        expect(t, isNotNull, reason: '坏色值 "$bad" 把整条标签解析掉了');
+        expect(t!.badgeColor, isNull);
+      }
+    });
+
+    test('合法色值解析成对应颜色', () {
+      final t = UserTag.fromJson({
+        'code': 'c', 'name': 'n', 'icon': 'i', 'description': 'd', 'badgeColor': '#845EC9',
+      });
+      expect(t!.badgeColor, const Color(0xFF845EC9));
     });
   });
 }

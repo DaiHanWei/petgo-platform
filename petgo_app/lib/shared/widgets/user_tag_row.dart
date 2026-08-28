@@ -133,7 +133,9 @@ class _TagIcon extends StatelessWidget {
         //    那里衬底由胶囊本身提供。两处刻意不共用同一个外壳。
         width: size,
         height: size,
-        decoration: const BoxDecoration(color: AppColors.gold, shape: BoxShape.circle),
+        // 底色由运营按标签配（UI 稿里官方号金、最佳新人紫）；没配/解析失败回落金色。
+        decoration: BoxDecoration(
+            color: tag.badgeColor ?? AppColors.gold, shape: BoxShape.circle),
         alignment: Alignment.center,
         // 定宽定高 —— 上面"放得下几个"的计算依赖它。
         // 内圈按 UI 稿 8/14 的比例留出圆边，图标不会顶到圆的边缘。

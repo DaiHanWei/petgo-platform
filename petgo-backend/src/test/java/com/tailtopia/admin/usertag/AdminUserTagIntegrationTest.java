@@ -17,6 +17,7 @@ import com.tailtopia.admin.usertag.dto.UserAssignmentRow;
 import com.tailtopia.admin.usertag.service.AdminUserTagService;
 import com.tailtopia.auth.domain.User;
 import com.tailtopia.auth.domain.UserTag;
+import com.tailtopia.auth.domain.UserTagBadgeColor;
 import com.tailtopia.auth.dto.UserTagView;
 import com.tailtopia.auth.repository.UserTagAssignmentRepository;
 import com.tailtopia.auth.repository.UserTagRepository;
@@ -566,5 +567,65 @@ class AdminUserTagIntegrationTest extends ApiIntegrationTest {
         List<UserAssignmentRow> rows = adminService.assignmentsByUser(u.getId(), now);
         assertThat(rows).hasSize(1);
         return rows.get(0);
+    }
+
+    /**
+     * 🔴 **徽章底色按标签走，并以色值下发**（2026-08-28，UI 稿 `.utag-icon`）。
+     *
+     * <p>稿子里颜色是区分标签类别的手段（官方号金 ✓、最佳新人紫 ★），
+     * 而实现里圆底一直是写死的金色 —— 运营配不出第二种。
+     *
+     * <p>⚠️ 断言下发的是**色值**而不是枚举名：客户端不认识调色板，
+     * 这样将来加一档颜色不需要发版。改成下发枚举名会安静地让老客户端画不出颜色。
+     */
+    @Test
+    void badgeColourIsPerTagAndGoesOutAsAHexValue() {
+        long admin = 8281L + SEQ.incrementAndGet();
+        String code = "VIOLET_" + SEQ.incrementAndGet();
+        adminService.createTag(admin, code, "最佳新人", "https://cdn/x.png", "说明", "VIOLET");
+
+        UserTag t = tags.findByCode(code).orElseThrow();
+        assertThat(t.getBadgeColor()).isEqualTo(UserTagBadgeColor.VIOLET);
+
+        User u = newUser();
+        tagService.assign(u.getId(), t.getId(), Instant.now().minusSeconds(60), null);
+        UserTagView view = tagService.findVisibleTags(List.of(u.getId()), Instant.now())
+                .get(u.getId()).get(0);
+        assertThat(view.badgeColor())
+                .as("🔴 下发的不是色值 ⇒ 客户端得认识调色板，加一档颜色就要发版")
+                .isEqualTo("#845EC9");
+    }
+
+    /**
+     * 🛡 没选颜色 / 值不认识 → 金色（UI 稿的默认值），**不报错**。
+     *
+     * <p>底色是从下拉里选的，值不对只可能是有人手改了请求 ——
+     * 为此让整次建标签失败不划算。
+     */
+    @Test
+    void unknownBadgeColourFallsBackToGoldInsteadOfFailing() {
+        long admin = 8282L + SEQ.incrementAndGet();
+        String code = "FALLBACK_" + SEQ.incrementAndGet();
+        adminService.createTag(admin, code, "官方", "https://cdn/y.png", "说明", "NOT_A_COLOUR");
+
+        assertThat(tags.findByCode(code).orElseThrow().getBadgeColor())
+                .isEqualTo(UserTagBadgeColor.GOLD);
+    }
+
+    /** 🛡 编辑时能改色，且**不选新图标**不会把图标弄丢（与既有的保留图标规则叠加）。 */
+    @Test
+    void editingTheColourKeepsTheExistingIcon() {
+        long admin = 8283L + SEQ.incrementAndGet();
+        String code = "KEEP_" + SEQ.incrementAndGet();
+        adminService.createTag(admin, code, "官方", "https://cdn/keep.png", "说明", "GOLD");
+        UserTag t = tags.findByCode(code).orElseThrow();
+
+        adminService.editTag(admin, t.getId(), "官方", null, "说明", "CORAL");
+
+        UserTag after = tags.findById(t.getId()).orElseThrow();
+        assertThat(after.getBadgeColor()).isEqualTo(UserTagBadgeColor.CORAL);
+        assertThat(after.getIcon())
+                .as("🔴 改个颜色把图标弄丢了 —— 界面上看不出来，直到用户端图标消失")
+                .isEqualTo("https://cdn/keep.png");
     }
 }

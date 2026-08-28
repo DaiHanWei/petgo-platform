@@ -75,6 +75,8 @@ public class AdminUserTagController {
         model.addAttribute("iconSpec", icons.specText("userTag"));
         // bug 20260828：用户选择器的首屏候选（htmx 之后再按关键词换）。
         model.addAttribute("candidates", service.pickableUsers(null, 0));
+        // 2026-08-28：徽章底色调色板（固定几档，见 UserTagBadgeColor 的说明）。
+        model.addAttribute("badgeColors", com.tailtopia.auth.domain.UserTagBadgeColor.values());
         return "admin/user-tags";
     }
 
@@ -84,6 +86,7 @@ public class AdminUserTagController {
             @RequestParam String code, @RequestParam String name,
             @RequestParam(value = "iconFile", required = false) MultipartFile iconFile,
             @RequestParam String description,
+            @RequestParam(value = "badgeColor", required = false) String badgeColor,
             RedirectAttributes flash) {
         try {
             // Story 11.5：图标改为上传。🔴 新建时**必须**有图标 —— 没有图标的标签在
@@ -92,7 +95,8 @@ public class AdminUserTagController {
             if (iconUrl == null) {
                 throw AppException.validation(icons.iconRequiredMessage());
             }
-            service.createTag(admin.getAdminAccountId(), code, name, iconUrl, description);
+            service.createTag(admin.getAdminAccountId(), code, name, iconUrl, description,
+                    badgeColor);
             flash.addFlashAttribute("notice", "已新建用户标签");
         } catch (AppException e) {
             flash.addFlashAttribute("error", e.getMessage());
@@ -105,11 +109,13 @@ public class AdminUserTagController {
     public String editTag(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id,
             @RequestParam String name,
             @RequestParam(value = "iconFile", required = false) MultipartFile iconFile,
-            @RequestParam String description, RedirectAttributes flash) {
+            @RequestParam String description,
+            @RequestParam(value = "badgeColor", required = false) String badgeColor,
+            RedirectAttributes flash) {
         try {
             // 🛡 没传新文件 → 传 null，服务层保留原图标（不是清空）。
             service.editTag(admin.getAdminAccountId(), id, name,
-                    icons.uploadOrKeep(iconFile), description);
+                    icons.uploadOrKeep(iconFile), description, badgeColor);
             flash.addFlashAttribute("notice", "已更新标签");
         } catch (AppException e) {
             flash.addFlashAttribute("error", e.getMessage());
