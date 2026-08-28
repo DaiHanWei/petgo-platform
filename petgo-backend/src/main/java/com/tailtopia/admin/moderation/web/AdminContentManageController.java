@@ -59,6 +59,7 @@ public class AdminContentManageController {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "q", required = false) String q,
+            @RequestParam(value = "sort", required = false) String sort,
             @RequestParam(value = "page", required = false, defaultValue = "0") int page,
             // V1.1.6 Story 14.1 · AC5：按物种与按**推导来源**筛选。
             @RequestParam(value = "species", required = false) String species,
@@ -77,6 +78,7 @@ public class AdminContentManageController {
         model.addAttribute("to", to);
         model.addAttribute("status", status);
         model.addAttribute("q", q);
+        model.addAttribute("sort", sort);
         model.addAttribute("page", page);
         model.addAttribute("species", species);
         model.addAttribute("speciesSource", speciesSource);
@@ -101,9 +103,13 @@ public class AdminContentManageController {
                     .toList();
             likeCounts = win.windowLikes();
             model.addAttribute("likeWindowPoolFull", win.poolFull());
+            // ⚠️ 这一档的行序**固定**由窗口内赞数决定，表头排序在此无效 ——
+            //    与其让运营点了没反应，不如把排序状态清掉、并在界面上说明。
+            model.addAttribute("sort", null);
+            model.addAttribute("sortDisabled", true);
         } else {
             items = contentManage.browseWithSpecies(type, authorId, from, to,
-                    status, q, page, species, speciesSource);
+                    status, q, sort, page, species, speciesSource);
             likeCounts = contentManage.likeCounts(
                     items.stream().map(r -> r.content().id()).toList());
         }

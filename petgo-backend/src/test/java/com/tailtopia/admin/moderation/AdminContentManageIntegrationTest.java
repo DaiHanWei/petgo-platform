@@ -5,9 +5,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.admin.moderation.service.AdminContentManageService;
+import com.tailtopia.content.domain.Comment;
 import com.tailtopia.content.domain.ContentPost;
 import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.dto.AdminContentRow;
+import com.tailtopia.content.repository.CommentRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
 import com.tailtopia.content.service.ContentService;
 import com.tailtopia.support.ApiIntegrationTest;
@@ -31,6 +33,8 @@ class AdminContentManageIntegrationTest extends ApiIntegrationTest {
     @Autowired
     private ContentService contentService;
     @Autowired
+    private CommentRepository comments;
+    @Autowired
     private AdminAuditService auditService;
     @Autowired
     private com.tailtopia.content.repository.ContentLikeRepository likes;
@@ -42,6 +46,33 @@ class AdminContentManageIntegrationTest extends ApiIntegrationTest {
     private long newPost(ContentType type, String text) {
         long author = newUser().getId(); // content_posts.author_id 有 FK→users
         return posts.save(ContentPost.publish(author, type, null, text, List.of())).getId();
+    }
+
+    @Test
+    void browseCountsUndeletedCommentsAndSortsByThem() {
+        String token = "ZxqCmt" + SEQ.incrementAndGet();
+        long none = newPost(ContentType.DAILY, token + " 零评论");
+        long two = newPost(ContentType.DAILY, token + " 两评论");
+        long one = newPost(ContentType.DAILY, token + " 一评论");
+        long commenter = newUser().getId();
+        comments.save(Comment.create(two, null, commenter, "a"));
+        comments.save(Comment.create(two, null, commenter, "b"));
+        comments.save(Comment.create(one, null, commenter, "c"));
+        Comment deleted = comments.save(Comment.create(one, null, commenter, "d"));
+        deleted.softDelete();
+        comments.save(deleted); // 已删评论不计
+
+        List<AdminContentRow> desc = contentManage.browse(null, null, null, null, null, token,
+                "comments_desc", 0);
+        assertThat(desc).extracting(AdminContentRow::id).containsExactly(two, one, none);
+        assertThat(desc).extracting(AdminContentRow::commentCount).containsExactly(2L, 1L, 0L);
+
+        List<AdminContentRow> asc = contentManage.browse(null, null, null, null, null, token,
+                "comments_asc", 0);
+        assertThat(asc).extracting(AdminContentRow::id).containsExactly(none, one, two);
+
+        // 单行投影（HTMX 局部刷新）同口径。
+        assertThat(contentManage.row(one).commentCount()).isEqualTo(1L);
     }
 
     @Test

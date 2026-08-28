@@ -58,17 +58,28 @@ public class AdminContentManageService {
         this.identities = identities;
     }
 
-    /** 全量浏览/筛选/搜索。status: ONLINE / DELETED / null=全部；type/authorId/q 任一空忽略。 */
+    /** 全量浏览/筛选/搜索（默认创建时间倒序）。 */
     @Transactional(readOnly = true)
     public List<AdminContentRow> browse(String type, Long authorId, LocalDate from, LocalDate to,
             String status, String q, int page) {
+        return browse(type, authorId, from, to, status, q, null, page);
+    }
+
+    /**
+     * 全量浏览/筛选/搜索。status: ONLINE / DELETED / null=全部；type/authorId/q 任一空忽略；
+     * sort: comments_desc / comments_asc 按评论数排，其余按创建时间倒序。
+     */
+    @Transactional(readOnly = true)
+    public List<AdminContentRow> browse(String type, Long authorId, LocalDate from, LocalDate to,
+            String status, String q, String sort, int page) {
         ContentType ct = parseType(type);
         Boolean deleted = "DELETED".equals(status) ? Boolean.TRUE
                 : ("ONLINE".equals(status) ? Boolean.FALSE : null);
         Instant fromI = from == null ? null : from.atStartOfDay(ZoneOffset.UTC).toInstant();
         Instant toI = to == null ? null : to.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
         String keyword = (q == null || q.isBlank()) ? null : q;
-        return contentService.adminSearch(ct, authorId, fromI, toI, deleted, keyword,
+        String s = ("comments_desc".equals(sort) || "comments_asc".equals(sort)) ? sort : null;
+        return contentService.adminSearch(ct, authorId, fromI, toI, deleted, keyword, s,
                 PAGE_SIZE, Math.max(page, 0) * PAGE_SIZE);
     }
 
@@ -90,7 +101,22 @@ public class AdminContentManageService {
     @Transactional(readOnly = true)
     public List<ContentSpeciesRow> browseWithSpecies(String type, Long authorId, LocalDate from,
             LocalDate to, String status, String q, int page, String species, String speciesSource) {
-        List<AdminContentRow> rows = browse(type, authorId, from, to, status, q, page);
+        return browseWithSpecies(type, authorId, from, to, status, q, null, page,
+                species, speciesSource);
+    }
+
+    /**
+     * 带物种信息的浏览 + 排序（2026-08-28 合并 main 时补的透传）。
+     *
+     * <p>🔴 `sort` 必须一路传到查询层：内容管理页走的是**本方法**而不是 {@link #browse}，
+     * 合并时若只在 browse 上接了 sort，「按评论数排序」在运营天天打开的这一页上是**死的** ——
+     * 点表头有反应（URL 变了）、顺序不变，而这种"半生效"最难被发现。
+     */
+    @Transactional(readOnly = true)
+    public List<ContentSpeciesRow> browseWithSpecies(String type, Long authorId, LocalDate from,
+            LocalDate to, String status, String q, String sort, int page, String species,
+            String speciesSource) {
+        List<AdminContentRow> rows = browse(type, authorId, from, to, status, q, sort, page);
         // 🛡 **整页一次算完**（resolveAll）—— 逐行 resolve 是 N+1，而这是运营最常打开的一页。
         var resolved = speciesResolver.resolveAll(rows.stream()
                 .map(r -> new ContentSpeciesResolver.Input(r.id(), r.speciesOverride(), r.authorId()))
@@ -286,8 +312,10 @@ public class AdminContentManageService {
         String keyword = (q == null || q.isBlank()) ? null : q;
 
         // 多取一行用来判断「是不是还有更多」——不额外发一次 count。
+        // sort 传 null = 创建时间倒序。导出不跟随表头排序：一份报表按"最近在前"最好读，
+        // 而表头排序是屏幕上临时看的动作，带进文件反而让两次导出对不上。
         List<AdminContentRow> rows = contentService.adminSearch(ct, authorId, fromI, toI, deleted,
-                keyword, EXPORT_MAX_ROWS + 1, 0);
+                keyword, null, EXPORT_MAX_ROWS + 1, 0);
         boolean truncated = rows.size() > EXPORT_MAX_ROWS;
         if (truncated) {
             rows = rows.subList(0, EXPORT_MAX_ROWS);
