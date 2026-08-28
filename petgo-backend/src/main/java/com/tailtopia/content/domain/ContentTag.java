@@ -38,6 +38,17 @@ public class ContentTag {
     private String description;
 
     /**
+     * 胶囊底色（2026-08-28，UI 稿 `.deco-badge` 的 135° 双色渐变）。
+     *
+     * <p>⚠️ 与 {@link #icon} 是两件事：icon 是胶囊里那枚 9px 小图，本列是它底下那道渐变。
+     * 胶囊上的字是白色粗体 9.5px，所以只提供"白字读得出"的固定几档
+     * （见 {@link ContentTagBadgeStyle}）。
+     */
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    @Column(name = "badge_style", nullable = false, length = 24)
+    private ContentTagBadgeStyle badgeStyle = ContentTagBadgeStyle.SUNSET;
+
+    /**
      * 下线时刻；NULL = 在线（V1.1.6 Story 11.2）。
      *
      * <p>🛡 用可空时间戳而不是布尔：「什么时候下线的」也一并留档。
@@ -56,7 +67,13 @@ public class ContentTag {
     }
 
     public static ContentTag of(String code, String name, String icon, String description) {
+        return of(code, name, icon, description, ContentTagBadgeStyle.SUNSET);
+    }
+
+    public static ContentTag of(String code, String name, String icon, String description,
+            ContentTagBadgeStyle badgeStyle) {
         ContentTag t = new ContentTag();
+        t.badgeStyle = badgeStyle == null ? ContentTagBadgeStyle.SUNSET : badgeStyle;
         t.code = code;
         t.name = name;
         t.icon = icon;
@@ -78,9 +95,16 @@ public class ContentTag {
 
     /** 编辑展示信息（Story 11.2）。code 不可改 —— 它是对外稳定标识。 */
     public void edit(String name, String icon, String description) {
+        edit(name, icon, description, this.badgeStyle);
+    }
+
+    /** 编辑展示信息（含胶囊底色）。code 不可改 —— 它是对外稳定标识。 */
+    public void edit(String name, String icon, String description,
+            ContentTagBadgeStyle badgeStyle) {
         this.name = name;
         this.icon = icon;
         this.description = description;
+        this.badgeStyle = badgeStyle == null ? ContentTagBadgeStyle.SUNSET : badgeStyle;
     }
 
     /** 下线（幂等）。 */
@@ -105,6 +129,10 @@ public class ContentTag {
 
     public Long getId() {
         return id;
+    }
+
+    public ContentTagBadgeStyle getBadgeStyle() {
+        return badgeStyle;
     }
 
     public String getCode() {

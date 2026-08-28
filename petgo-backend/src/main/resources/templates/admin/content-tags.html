@@ -34,6 +34,7 @@
             <thead>
             <tr>
                 <th th:text="#{admin.tags.code}">标签码</th>
+                <th th:text="#{admin.tags.badge}">胶囊</th>
                 <th th:text="#{admin.tags.name}">名称</th>
                 <th th:text="#{admin.tags.description}">说明文案</th>
                 <th th:text="#{admin.tags.activeCount}">生效中分配数</th>
@@ -43,10 +44,18 @@
             </thead>
             <tbody>
             <tr th:if="${#lists.isEmpty(tags)}">
-                <td colspan="6" class="muted" th:text="#{admin.tags.empty}">还没有任何内容标签。</td>
+                <td colspan="7" class="muted" th:text="#{admin.tags.empty}">还没有任何内容标签。</td>
             </tr>
             <tr th:each="t : ${tags}">
                 <td th:text="${t.code}">code</td>
+                <!-- 🔴 **按真实样子画出整枚胶囊**（2026-08-28）：图标只有 9px、字是白色，
+                     脱开胶囊单看那张 PNG 什么都看不出来 —— 运营因此判断不了
+                     「我配的这枚最后长什么样」，也是「这枚胶囊只有一半是我的」那个误解的来源。
+                     左边一枚是用户看到的实际大小，右边放大到 2 倍便于检查细节。 -->
+                <td style="white-space:nowrap">
+                    <span th:replace="~{admin/content-tags :: chip(${t}, 1)}"></span>
+                    <span th:replace="~{admin/content-tags :: chip(${t}, 2)}"></span>
+                </td>
                 <td th:text="${t.name}">名称</td>
                 <td th:text="${t.description}">说明</td>
                 <td>
@@ -68,7 +77,12 @@
                         <span th:if="${t.icon != null and !#strings.startsWith(t.icon, 'http')}"
                               th:text="${t.icon}" title="存量字符图标，重新上传即替换"></span>
                         <input type="file" name="iconFile" accept="image/png,image/webp"/>
-                        <input type="text" name="description" th:value="${t.description}" required/>
+                        <select name="badgeStyle">
+                        <option th:each="st : ${badgeStyles}" th:value="${st}"
+                                th:selected="${st == t.badgeStyle}"
+                                th:text="#{'admin.tags.style.' + ${st}}">橙红</option>
+                    </select>
+                    <input type="text" name="description" th:value="${t.description}" required/>
                         <button type="submit" class="btn btn-sm" th:text="#{admin.tags.edit}">编辑</button>
                     </form>
                     <form class="inline-form" method="post"
@@ -110,6 +124,14 @@
                 <p class="muted" data-notice="tag-icon-spec" th:text="${iconSpec}">
                     PNG 或 WebP，必须透明底；正方形，最短边 ≥ 72 像素、最长边 ≤ 1024 像素；文件 ≤ 512 KB。
                 </p>
+                <!-- 🔴 胶囊底色（UI 稿 `.deco-badge` 的 135° 双色渐变）。
+                     固定几档、不给自由填色：胶囊上的字是白色粗体 9.5px，底色浅一点那行字就读不出来，
+                     而运营在后台看到的是自己电脑上的大图、察觉不到手机上的实际观感。 -->
+                <label><span th:text="#{admin.tags.badgeStyle}">胶囊底色</span>
+                    <select name="badgeStyle">
+                        <option th:each="st : ${badgeStyles}" th:value="${st}"
+                                th:text="#{'admin.tags.style.' + ${st}}">橙红</option>
+                    </select></label>
                 <label><span th:text="#{admin.tags.description}">说明文案</span>
                     <input type="text" name="description" class="field-full" maxlength="140" required/></label>
                 <button type="submit" class="btn btn-primary" th:text="#{admin.tags.save}">保存</button>
@@ -237,6 +259,32 @@
             </label>
         </div>
     </div>
+
+    <!-- 整枚胶囊预览片段（2026-08-28）。数值逐项照 UI 稿 `.deco-badge`：
+         padding 4/10、全圆角、135° 双色渐变、双层红投影、白色粗体 9.5px、图标 9px。
+         ⚠️ 改这里请对着稿改 —— 它的全部意义就是「后台看到的 = 用户看到的」，
+            与 ContentTagChip 有任何一处对不上，预览就成了另一种误导。
+         k = 放大倍数（1 = 用户实际大小，2 = 便于检查细节）。
+
+         ⚠️ 带参数的片段必须放在**外层 th:replace 之内、content 片段之外**：
+            外层 div 带 th:replace ⇒ 它的整个内容被丢弃、只由 ~{::content} 选出片段，
+            所以放这里整页渲染时不会被求值。放到外层 div **之外**（</body> 前）
+            反而会被渲染 ⇒ 那时 k 未绑定，页面直接 500（已踩过）。
+            与 content.html 里 `row` 片段的摆法一致。 -->
+    <span th:fragment="chip(t, k)"
+          th:style="'display:inline-flex;align-items:center;gap:' + ${4 * k} + 'px;'
+                  + 'padding:' + ${4 * k} + 'px ' + ${10 * k} + 'px;border-radius:999px;'
+                  + 'font-size:' + ${9.5 * k} + 'px;font-weight:700;color:#fff;'
+                  + 'white-space:nowrap;vertical-align:middle;margin-right:8px;'
+                  + 'box-shadow:0 ' + ${1 * k} + 'px ' + ${2 * k} + 'px rgba(240,66,90,.22),'
+                  + '0 ' + ${3 * k} + 'px ' + ${8 * k} + 'px rgba(240,66,90,.22);'
+                  + 'background:' + ${t.badgeCss()}">
+        <img th:if="${#strings.startsWith(t.icon, 'http')}" th:src="${t.icon}" alt=""
+             th:width="${9 * k}" th:height="${9 * k}"/>
+        <span th:unless="${#strings.startsWith(t.icon, 'http')}" th:text="${t.icon}"
+              th:style="'font-size:' + ${9 * k} + 'px;line-height:1'"></span>
+        <span th:text="${t.name}">Terbaik Minggu Ini</span>
+    </span>
 </div>
 </body>
 </html>
