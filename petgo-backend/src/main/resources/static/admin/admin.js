@@ -182,6 +182,14 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     roleSelect.addEventListener('change', sync);
     sync();
+});
+// 🔴 上面这个 `});` 曾在 merge b391bea59（2026-08-26，hex/v1.1.6-rebased 合入 dev_1.1.6）中丢失。
+//    后果不是"角色显隐失效"这么局部 —— 少了它，下面每一个 addEventListener 都被吞进
+//    DOMContentLoaded 的回调里层层嵌套，解析到文件末尾仍未闭合 ⇒
+//    **整个 admin.js 抛 SyntaxError、一行都不执行**。layout.html 引它，所以是全后台 JS 全灭：
+//    HTMX 增强、标签页切换、图片上传、拖拽排序、灯箱、二次确认，全部静默失效。
+//    ⚠️ 静默是这个 bug 最坏的地方：页面照常渲染、按钮照常在，只是点了没反应。
+//    污染范围：origin/dev/dev_1.1.6 与 origin/stag 都已带上（Shawn 8-21 的原始提交是好的）。
 
 // ===== 「以运营真实账号发布」的二次确认（V1.1.6 Story 12.1 · AC6）=====
 // 顶部那个 data-confirm 是**静态**文案、每次提交都弹；这里要的是**只在选中真实账号时**弹
