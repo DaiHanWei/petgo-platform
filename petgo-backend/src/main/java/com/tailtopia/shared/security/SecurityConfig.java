@@ -179,6 +179,10 @@ public class SecurityConfig {
                         // 写入端点属 Story 1.3 后台，走 /admin/**，不在此放行。
                         .requestMatchers(HttpMethod.GET, "/api/v1/shop/products",
                                 "/api/v1/shop/products/**").permitAll()
+                        // Toko 顶部 banner（2026-08-27）：与商品列表同理 ——
+                        // banner 在转化漏斗最上层，用登录墙拦它没有任何意义。
+                        // 只读；配置走 /admin/shop/banners，不在此放行。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/shop/banner").permitAll()
                         // 行政区划树（Story 2.4）：区划与是否可配送都不敏感，
                         // 且用户在注册前就该能看到「你们送不送我这儿」。
                         .requestMatchers(HttpMethod.GET, "/api/v1/shop/regions").permitAll()

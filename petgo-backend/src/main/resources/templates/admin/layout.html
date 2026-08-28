@@ -213,6 +213,11 @@
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('shop.product_view') or hasAuthority('shop.product_edit')"
                    th:href="@{/admin/shop/products}" th:classappend="${active == 'shopProducts'} ? 'active'"
                    th:text="#{admin.nav.shopProducts}">商品管理</a>
+                <!-- Toko 顶部 banner（2026-08-27）。🔒 权限复用商品的两码，不另立 banner 码 ——
+                     与 AdminShopBannerController 的 VIEW_AUTH 逐字一致。 -->
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('shop.product_view') or hasAuthority('shop.product_edit')"
+                   th:href="@{/admin/shop/banners}" th:classappend="${active == 'shopBanners'} ? 'active'"
+                   th:text="#{admin.nav.shopBanners}">顶部 Banner</a>
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('shop.inventory_view') or hasAuthority('shop.inventory_edit')"
                    th:href="@{/admin/shop/inventory}" th:classappend="${active == 'shopInventory'} ? 'active'"
                    th:text="#{admin.nav.shopInventory}">库存管理</a>

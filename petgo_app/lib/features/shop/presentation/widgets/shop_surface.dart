@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/theme/shop_tokens.dart';
+import 'shop_buttons.dart';
 
 
 /// 白色内容块 + 底部 3px 灰缝。
@@ -53,6 +54,49 @@ class ShopSection extends StatelessWidget {
   }
 }
 
+/// 加载失败占位 —— 一句说明 + 一个**可见的重试按钮**。
+///
+/// 🔴 <b>错误态必须给出口</b>（2026-08-27 审查结论）。此前电商各页的错误分支一律只画一行
+/// 文案，唯一的重试途径是下拉刷新 —— 而 Android 的 `ClampingScrollPhysics` 在内容撑不满
+/// 一屏时**根本拉不动**，于是「下拉重试」这句提示指向一个不存在的手势。
+///
+/// ⚠️ 用它替换错误占位时，如果外层还挂着 `RefreshIndicator`，记得同时把滚动容器的
+/// physics 设为 [AlwaysScrollableScrollPhysics]，否则下拉那条路依旧是断的。
+class ShopRetryState extends StatelessWidget {
+  const ShopRetryState({
+    super.key,
+    required this.message,
+    required this.retryLabel,
+    required this.onRetry,
+  });
+
+  final String message;
+
+  /// 由调用方传 `l10n.commonRetry` —— 本目录下的组件刻意不依赖 l10n。
+  final String retryLabel;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(message, textAlign: TextAlign.center, style: ShopText.body),
+              const SizedBox(height: 16),
+              ShopButton(
+                key: const ValueKey('shopRetryButton'),
+                label: retryLabel,
+                variant: ShopButtonVariant.outlinePurple,
+                onTap: onRetry,
+              ),
+            ],
+          ),
+        ),
+      );
+}
+
 /// 块内分隔线（1px，比灰缝弱一档）。用于「同一区块里的下一行」。
 class ShopDivider extends StatelessWidget {
   const ShopDivider({super.key, this.color = ShopColors.divider, this.margin = EdgeInsets.zero});
@@ -85,6 +129,7 @@ class ShopAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.actions = const [],
     this.leading,
     this.bottom,
+    this.tone = ShopAppBarTone.dark,
   });
 
   final String title;
@@ -97,8 +142,18 @@ class ShopAppBar extends StatelessWidget implements PreferredSizeWidget {
   /// 顶栏之下的附加行（订单列表的状态 Tab 行）。高度计入 [preferredSize]。
   final PreferredSizeWidget? bottom;
 
+  /// 顶栏配色（2026-08-27）。
+  ///
+  /// 🔴 三个值必须**成组**变化：底色、前景色、状态栏图标亮暗 ——
+  /// 单独改任何一个都会得到"白底白字"或"深底看不见状态栏图标"这类当场失效的组合。
+  /// 所以做成一个枚举而不是三个独立参数。
+  final ShopAppBarTone tone;
+
   /// 栏体高度。设计稿：垂直内边距 14 上 / 12 下 + 文字行高 ≈ 48。
-  static const double _barHeight = 48;
+  ///
+  /// 🔴 同时以 [kShopAppBarHeight] 对外暴露：Toko 的 banner 渐变要盖住整条顶栏，
+  /// 必须知道它多高。让调用方各写一个字面量 48，改这里时就会对不上。
+  static const double _barHeight = kShopAppBarHeight;
 
   @override
   Size get preferredSize =>
@@ -112,12 +167,21 @@ class ShopAppBar extends StatelessWidget implements PreferredSizeWidget {
     //    所以按「有没有 leading」决定：有则 0（标题紧跟箭头），无则退回屏边距。
     final hasLeading =
         leading != null || (!large && (Navigator.of(context).canPop()));
+    // 🔴 底色 / 前景 / 状态栏图标必须同源于 tone，见 [tone] 的说明。
+    final (bg, fg, overlay) = switch (tone) {
+      ShopAppBarTone.dark => (ShopColors.ink, ShopColors.surface, SystemUiOverlayStyle.light),
+      ShopAppBarTone.light => (ShopColors.surface, ShopColors.ink, SystemUiOverlayStyle.dark),
+      // 透明：浮在 banner 图之上。前景仍取白色 —— 可读性由页面在图上压的那层
+      // 渐变保证（见 toko_page_v2 的 _BannerHeader），不是靠这里换颜色。
+      ShopAppBarTone.transparent =>
+        (Colors.transparent, ShopColors.surface, SystemUiOverlayStyle.light),
+    };
     return AppBar(
-      backgroundColor: ShopColors.ink,
-      foregroundColor: ShopColors.surface,
+      backgroundColor: bg,
+      foregroundColor: fg,
       elevation: 0,
       scrolledUnderElevation: 0, // 🔴 设计稿明令产品 UI 内不使用阴影；M3 滚动阴影须显式关掉
-      systemOverlayStyle: SystemUiOverlayStyle.light,
+      systemOverlayStyle: overlay,
       toolbarHeight: _barHeight,
       titleSpacing: hasLeading ? 0 : kShopScreenEdge,
       automaticallyImplyLeading: !large,
@@ -127,6 +191,24 @@ class ShopAppBar extends StatelessWidget implements PreferredSizeWidget {
       bottom: bottom,
     );
   }
+}
+
+/// [ShopAppBar] 的栏体高度（不含状态栏）。见 ShopAppBar._barHeight 的说明。
+const double kShopAppBarHeight = 48;
+
+/// [ShopAppBar] 的配色形态（2026-08-27）。
+///
+/// 每个值代表一整组「底色 + 前景色 + 状态栏图标亮暗」的搭配，不可拆开使用。
+enum ShopAppBarTone {
+  /// 深紫底 + 白字（电商各页默认）。
+  dark,
+
+  /// 白底 + 深字。Toko 在**没有 banner** 时用它 ——
+  /// 产品要求此时顶部与其他板块的深色顶栏区分开。
+  light,
+
+  /// 完全透明，浮在 banner 图之上。图要顶到屏幕最上沿、不留纯色条时用。
+  transparent,
 }
 
 /// 底部操作条 —— 形态 A：**左总价 + 右按钮**（购物车、结算、待支付详情）。
