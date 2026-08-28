@@ -84,7 +84,7 @@ void main() {
   tearDown(() => Analytics.debugCaptureSink = null);
 
   /// 🔴 **卡片自上而下的顺序**（产品 2026-08-28 指定）：
-  /// 头像行 → 图片（如有）→ 正文 → 时间 → 操作行。
+  /// 头像行（名字 / 其下发布时间）→ 图片（如有）→ 正文 → 操作行。
   ///
   /// 修复前操作行夹在**图片与正文之间**（照 Instagram 的「图 → 操作 → 文案」惯例）。
   /// 那套惯例的前提是**有图**：图片本身就是内容，操作行贴着它才成立。
@@ -119,6 +119,35 @@ void main() {
       final actions = await topOf(tester, find.byType(LikeButton));
       expect(body, lessThan(actions),
           reason: '🛡 两种卡的操作行位置忽上忽下，比统一放底部更难用（手指要在两个高度之间找）');
+    });
+
+    /// 🔴 **发布时间属于署名，不属于正文的尾巴**（产品 2026-08-28 二次指定）。
+    ///
+    /// 它此前跟在正文后面：读者要先读完内容才知道这是什么时候发的 ——
+    /// 而「多久以前」恰恰是决定要不要往下读的信息。
+    ///
+    /// ⚠️ 断言用「时间在正文**之上**、且与名字在同一竖直区间」两条一起钉：
+    /// 只断前一条的话，把时间挪到图片上方的角标里也能过，那不是产品要的位置。
+    testWidgets('发布时间挂在名字下面（不在正文后面）', (tester) async {
+      await tester.pumpWidget(_wrapCard(MasonryCard(
+          item: _item(body: 'ada foto', image: 'https://img.example/1.jpg'),
+          deletedUserLabel: 'x')));
+      await tester.pump();
+
+      final timeFinder = find.textContaining(RegExp(r'\d+\s*[a-z]+\s*ago|yang lalu|baru saja'));
+      expect(timeFinder, findsOneWidget,
+          reason: '没找到发布时间那行小字 —— 断言无从谈起');
+
+      final timeRect = tester.getRect(timeFinder);
+      final nameRect = tester.getRect(find.text('Alice'));
+      final bodyTop = await topOf(tester, find.text('ada foto'));
+
+      expect(timeRect.top, greaterThan(nameRect.top),
+          reason: '🔴 时间跑到名字上面了');
+      expect(timeRect.top, lessThan(bodyTop),
+          reason: '🔴 发布时间还在正文后面 —— 读者要读完内容才知道这是什么时候发的');
+      expect(timeRect.left, closeTo(nameRect.left, 2),
+          reason: '🔴 时间没和名字左对齐 ⇒ 它不在署名那一块里，只是恰好排在了上面');
     });
   });
 

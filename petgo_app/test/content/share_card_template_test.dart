@@ -202,7 +202,7 @@ void main() {
   ///
   /// ⚠️ 固定比例的代价是明知故犯的：一行短文案时内容段会剩下约 100px 空白。
   /// 要么每张卡一样高、要么不留空白，二者不可兼得。
-  group('bug 20260828 · 卡面三段固定占比 65 / 20 / 15', () {
+  group('bug 20260828 · 品牌段固定、图文按内容伸缩', () {
     /// 量某一段占画布高度的比例。比例与预览缩放无关，故可在预览坐标系里量。
     Future<double> bandFraction(
       WidgetTester tester, {
@@ -245,21 +245,11 @@ void main() {
         'Jangan lupa cek telinga dan bulunya juga supaya tidak lembap dan berjamur '
         'sepanjang musim hujan yang panjang ini, ya bund.';
 
-    /// 🔴 三段占比**不随文案长短变化** —— 这正是固定比例要买到的东西：每张卡一样高。
+    /// 🔴 **品牌段是唯一固定的那一段** —— 一批卡混着发到 Story 里成套，靠的就是这条底边。
+    ///
+    /// 图片段和内容段现在按内容伸缩（产品 2026-08-28 二次拍板），所以这里**不能**再断死数字。
     for (final (label, body) in [('短正文', shortBody), ('长正文', longBody)]) {
-      testWidgets('9:16 · $label → 65 / 20 / 15', (tester) async {
-        expect(
-            await bandFraction(tester,
-                key: ShareCardTemplate.shareCardImageAreaKey,
-                body: body,
-                canvas: CardCanvas.story),
-            closeTo(0.65, 0.005));
-        expect(
-            await bandFraction(tester,
-                key: ShareCardTemplate.shareCardContentAreaKey,
-                body: body,
-                canvas: CardCanvas.story),
-            closeTo(0.20, 0.005));
+      testWidgets('9:16 · $label · 品牌段恒 15%，不随文案长短变', (tester) async {
         expect(
             await bandFraction(tester,
                 key: ShareCardTemplate.shareCardBrandAreaKey,
@@ -270,16 +260,77 @@ void main() {
       });
     }
 
+    /// 🔴 **按内容伸缩这件事本身**：正文越长，内容段越高、图片段越矮。
+    ///
+    /// 没有这一条，把布局改回固定比例后所有用例照样绿 —— 而「短文案时白掉一条」
+    /// 正是这次改版要修的那个实机问题，它不会以任何其它方式暴露出来。
+    ///
+    /// ⚠️ 断的是**方向**（严格大于/小于）不是差多少：具体差值由字号、行高、
+    /// 头像大小共同决定，写死一个差值等于把三处无关改动都变成红灯。
+    testWidgets('9:16 · 正文越长 → 内容段越高、图片段越矮', (tester) async {
+      final shortContent = await bandFraction(tester,
+          key: ShareCardTemplate.shareCardContentAreaKey,
+          body: shortBody,
+          canvas: CardCanvas.story);
+      final longContent = await bandFraction(tester,
+          key: ShareCardTemplate.shareCardContentAreaKey,
+          body: longBody,
+          canvas: CardCanvas.story);
+      final shortImage = await bandFraction(tester,
+          key: ShareCardTemplate.shareCardImageAreaKey,
+          body: shortBody,
+          canvas: CardCanvas.story);
+      final longImage = await bandFraction(tester,
+          key: ShareCardTemplate.shareCardImageAreaKey,
+          body: longBody,
+          canvas: CardCanvas.story);
+
+      expect(longContent, greaterThan(shortContent + 0.02),
+          reason: '🔴 长短正文的内容段一样高 ⇒ 布局又变回固定比例了，'
+              '短文案下方会白掉一条');
+      expect(longImage, lessThan(shortImage - 0.02),
+          reason: '🔴 内容段变高了图片段却没让位 ⇒ 三段加起来会超过卡面');
+    });
+
+    /// 🛡 **上下界**：短正文时内容段不塌、长正文时图片不被挤没。
+    ///
+    /// 上界那半是真正的护栏 —— 用户能贴进来的正文没有长度上限，
+    /// 没有上界时一段长文案会把图片压到只剩一条缝（而那张图往往才是分享的理由）。
+    testWidgets('9:16 · 内容段被夹在上下界之间（图片永远留得住）', (tester) async {
+      for (final (label, body) in [('短正文', shortBody), ('长正文', longBody)]) {
+        final content = await bandFraction(tester,
+            key: ShareCardTemplate.shareCardContentAreaKey,
+            body: body,
+            canvas: CardCanvas.story);
+        final image = await bandFraction(tester,
+            key: ShareCardTemplate.shareCardImageAreaKey,
+            body: body,
+            canvas: CardCanvas.story);
+        final brand = await bandFraction(tester,
+            key: ShareCardTemplate.shareCardBrandAreaKey,
+            body: body,
+            canvas: CardCanvas.story);
+        final rest = 1 - brand;
+
+        expect(content / rest, greaterThanOrEqualTo(0.18 - 0.005),
+            reason: '$label：内容段塌到下界以下 ⇒ 作者行紧贴图片、下方没有呼吸');
+        expect(content / rest, lessThanOrEqualTo(0.45 + 0.005),
+            reason: '🔴 $label：内容段冲破上界 ⇒ 再长的正文就能把图片挤没');
+        expect(image + content + brand, closeTo(1.0, 0.005),
+            reason: '$label：三段没铺满卡面 ⇒ 中间会多出一条谁也没注意到的缝');
+      }
+    });
+
     /// 🔴 **1:1 上品牌段必须比 15% 高** —— 这不是没照产品的数做，是**物理装不下**。
     ///
     /// 二维码可扫底线 140px，而它四周必须留 4 个码元的静默区 ⇒ 实际占位 140×1.381≈193px。
     /// 1:1 画布只有 1080 高，15% = 162px < 193px。硬按 15% 的结果是码被压到 87px、
     /// 扫不出来（既有的「导出图里码 ≥140」那条用例当场抓住过）。
-    /// 产品 2026-08-27 拍板：9:16 严格 15%，1:1 抬到装得下为止，差额从图片与内容按 65:20 扣。
+    /// 产品 2026-08-27 拍板：9:16 严格 15%，1:1 抬到装得下为止，差额从非品牌区扣。
     ///
     /// ⚠️ 断言的是「>15% 且刚好够用」，不是写死 19.2% ——
     /// 那个数由画布高、可扫底线、静默区规则三者算出，写死会在任何一处变动时变成假绿。
-    testWidgets('1:1 · 品牌段被二维码底线抬高，图片:内容仍是 65:20', (tester) async {
+    testWidgets('1:1 · 品牌段被二维码底线抬高，余下的仍按内容分', (tester) async {
       final brand = await bandFraction(tester,
           key: ShareCardTemplate.shareCardBrandAreaKey,
           body: shortBody,
@@ -302,8 +353,9 @@ void main() {
       expect(brand, lessThan(needed + 0.03),
           reason: '品牌段比需要的大出一截 ⇒ 白占了图片和内容的地方');
 
-      // 剩下的仍按 65:20 分 —— 抬品牌段不该顺手改变图文比例。
-      expect(image / content, closeTo(0.65 / 0.20, 0.02));
+      // 抬品牌段之后，余下的高度仍按内容分，且图片仍是大头（短正文场景）。
+      expect(image, greaterThan(content),
+          reason: '🔴 1:1 上图片段没比内容段大 ⇒ 抬品牌段时把图文比例也带歪了');
       expect(image + content + brand, closeTo(1.0, 0.005),
           reason: '三段没铺满卡面 ⇒ 中间会多出一条谁也没注意到的缝');
     });

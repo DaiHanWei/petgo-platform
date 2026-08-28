@@ -37,17 +37,34 @@ class ShareCardTemplate extends StatelessWidget {
 
   /// 🔴 **卡面三段占比**（产品 2026-08-28 定稿）：图片 65% / 作者+正文 20% / 品牌 15%。
   ///
-  /// <h2>它取代了什么</h2>
-  /// 上一版是「下半部分按内容收缩、图片在 42%~64% 之间浮动」——
-  /// 那是为了修「短文案时卡面中间空一大条白」。修好了，但带来一个新问题：
-  /// **同一批分享卡长得不一样高**（文案长短决定图片多大），发到 Story 里排在一起时不成套。
-  /// 产品因此改为固定三段，牺牲一点空间利用率换取**每张卡长得一样**。
+  /// <h2>这一版的取舍（产品 2026-08-28 二次拍板）</h2>
+  /// 分两半看：
+  /// - **品牌段固定** 15%（1:1 上被二维码底线抬高，见 [_brandBand]）——
+  ///   一批卡混着发到 Story 里**成套**靠的就是这条底边一样高。
+  /// - **上面 85% 按内容伸缩**，只夹上下界（[_contentMinOfRest] / [_contentMaxOfRest]）。
   ///
-  /// ⚠️ 代价是**明知故犯**的：一行短文案时内容段会剩下约 100px 空白。
-  /// 要么每张卡一样高、要么不留空白，二者不可兼得。
-  static const double _imageShare = 0.65;
-  static const double _contentShare = 0.20;
+  /// 🔴 这是对同日早些时候「三段全固定」的**修正**，不是把它推翻重来：
+  /// 全固定确实让每张卡一样高，但代价是一行短文案时内容段白掉约 100px ——
+  /// 而那 100px 本该给图片。产品看过实机后判定「白一条」比「图文比例略有差异」更刺眼，
+  /// 于是只保留真正决定成套感的那一段（品牌段）固定。
+  ///
+  /// ⚠️ 因此**图片段不再是一个可以写死断言的数**。回归测试改断上下界与单调性
+  /// （正文越长 → 内容段越高、图片段越矮），不要再改回 `closeTo(0.65)` ——
+  /// 那会让「按内容伸缩」这件事在测试里彻底失效。
   static const double _brandShare = 0.15;
+
+  /// 内容段（作者行 + 正文）在**非品牌区**里的上下界。
+  ///
+  /// 段高本身**取正文实际需要的高度**，这两个数只是把它夹住：
+  /// - 下界 [_contentMinOfRest]：正文只有一行时，段高不至于缩到只剩作者行紧贴图片，
+  ///   下方还留得出一点呼吸；也保证 `1 - 上界` 之外总有确定的图片高度可算。
+  /// - 上界 [_contentMaxOfRest]：正文再长也不能把图片挤没。9:16 上 0.45 约 6 行，
+  ///   超出部分由 [_body] 按剩余高度自己收行（`…` 截断），**不会溢出**。
+  ///
+  /// ⚠️ 写成「占非品牌区的比例」而不是「占整卡的比例」：品牌段在 1:1 上会被二维码
+  /// 抬高（见 [_brandBand]），若按整卡算，1:1 上的上界会连带吃掉本就不多的图片高度。
+  static const double _contentMinOfRest = 0.18;
+  static const double _contentMaxOfRest = 0.45;
 
   /// 品牌段最少要多高，**由二维码反算**（不是拍一个数）。
   ///
@@ -68,12 +85,8 @@ class ShareCardTemplate extends StatelessWidget {
   ///   差额从图片与内容按 65:20 的比例扣（产品 2026-08-28 拍板）。
   double get _brandBand => math.max(_brandShare, _minBrandPx / canvas.height);
 
-  /// 图片段 / 内容段：把品牌段之外的部分按 65:20 分。
-  /// 9:16 上恰好还原成 0.65 / 0.20；1:1 上等比缩成约 0.62 / 0.19。
-  double get _imageBand =>
-      (1 - _brandBand) * (_imageShare / (_imageShare + _contentShare));
-  double get _contentBand =>
-      (1 - _brandBand) * (_contentShare / (_imageShare + _contentShare));
+  /// 非品牌区（图片 + 内容）的总高度，px。图片段与内容段在这里面分。
+  double get _restPx => canvas.height * (1 - _brandBand);
 
   double get _dividerPx => _u * 0.0015;
   double get _brandVPad => _u * 0.008;
@@ -150,56 +163,73 @@ class ShareCardTemplate extends StatelessWidget {
 
   // ——— SH2 图文模板 ———
   ///
-  /// 🔴 **三段固定占比**：图片 65% / 作者+正文 20% / 品牌 15%（产品 2026-08-28 定稿）。
-  /// 为什么从「按内容伸缩」改回固定比例，见 [_imageBand] 的说明（一句话：每张卡要一样高）。
+  /// 🔴 **品牌段固定、上面按内容伸缩**（产品 2026-08-28 二次拍板，取舍见类头注释）：
+  /// 品牌段 15%（1:1 上被二维码底线抬高）；余下的高度里，内容段取正文实际需要的高度、
+  /// 夹在 [_contentMinOfRest]~[_contentMaxOfRest] 之间，**剩下的全部归图片**。
   ///
-  /// ⚠️ 三段都用 `SizedBox` 定死高度、**不用 Expanded** ——
-  /// Expanded 会把舍入误差都塞给弹性的那一段，导致同一张卡在不同画布上比例微妙地对不上；
-  /// 而这三个数是产品拿尺子量出来的，得按字面落地。
+  /// ⚠️ 顺序不能反：`Column` 先量非弹性子节点、再把余量给 `Expanded`。
+  /// 所以内容段必须是那个被量的（`ConstrainedBox`），图片段才是拿余量的（`Expanded`）。
+  /// 反过来写会让图片抢先占满、内容段被压成 0。
   Widget _imageLayout(AppLocalizations l10n) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // 图片区 65%。
-        // key 供回归测试量占比 —— 这三段的全部内容就是这几个比例，
-        // 没有它就只能靠人眼看截图。
+        // 图片区 + 内容区：合起来是非品牌区，内部按内容分。
         SizedBox(
-          key: const ValueKey(shareCardImageAreaKey),
-          height: canvas.height * _imageBand,
-          child: AppImage.widget(
-            data.imageUrl!,
-            fit: BoxFit.cover,
-            // 🔴 缩略图宽度按**画布宽度**取，不是按预览宽度。
-            // 按预览宽度（屏幕上可能只有 300px）取图，导出的 1080 大图里首图是糊的
-            // —— 与二维码那条是同一个坑的两种表现。
-            thumbWidth: canvas.width.round(),
-            errorBuilder: (_, _, _) => const ColoredBox(color: AppColors.mintTint),
-          ),
-        ),
-        // 作者 + 正文 20%。
-        SizedBox(
-          key: const ValueKey(shareCardContentAreaKey),
-          height: canvas.height * _contentBand,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(_pad, _pad * 0.55, _pad, _pad * 0.4),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _authorRow(l10n),
-                if ((data.body ?? '').isNotEmpty) ...[
-                  SizedBox(height: _u * 0.043),
-                  // ⚠️ `Flexible` 而不是 `Expanded`：正文短就只占它需要的高度。
-                  //    段高是定死的，正文长了由 [_body] 按剩余高度自己收行 —— 不会溢出。
-                  Flexible(
-                    child: _body(fontSize: _u * _bodyFontFraction, weight: FontWeight.w400),
+          height: _restPx,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // 图片吃掉内容段用剩的全部高度。
+              // key 供回归测试量占比 —— 没有它就只能靠人眼看截图。
+              Expanded(
+                child: SizedBox.expand(
+                  key: const ValueKey(shareCardImageAreaKey),
+                  child: AppImage.widget(
+                    data.imageUrl!,
+                    fit: BoxFit.cover,
+                    // 🔴 缩略图宽度按**画布宽度**取，不是按预览宽度。
+                    // 按预览宽度（屏幕上可能只有 300px）取图，导出的 1080 大图里首图是糊的
+                    // —— 与二维码那条是同一个坑的两种表现。
+                    thumbWidth: canvas.width.round(),
+                    errorBuilder: (_, _, _) =>
+                        const ColoredBox(color: AppColors.mintTint),
                   ),
-                ],
-              ],
-            ),
+                ),
+              ),
+              // 作者 + 正文：高度 = 内容实际需要，夹在上下界之间。
+              ConstrainedBox(
+                key: const ValueKey(shareCardContentAreaKey),
+                constraints: BoxConstraints(
+                  minHeight: _restPx * _contentMinOfRest,
+                  maxHeight: _restPx * _contentMaxOfRest,
+                ),
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(_pad, _pad * 0.55, _pad, _pad * 0.4),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _authorRow(l10n),
+                      if ((data.body ?? '').isNotEmpty) ...[
+                        SizedBox(height: _u * 0.043),
+                        // ⚠️ `Flexible` 而不是 `Expanded`：正文短就只占它需要的高度
+                        //    （整段能跟着缩，靠的就是这一点）；正文长到顶到上界时，
+                        //    由 [_body] 按剩余高度自己收行 —— 不会溢出。
+                        Flexible(
+                          child: _body(
+                              fontSize: _u * _bodyFontFraction,
+                              weight: FontWeight.w400),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-        // 品牌 15%（字标 + 扫码引导 + 二维码）。
+        // 品牌 15%（字标 + 扫码引导 + 二维码）—— 这一段**不参与伸缩**。
         SizedBox(
           key: const ValueKey(shareCardBrandAreaKey),
           height: canvas.height * _brandBand,

@@ -260,8 +260,20 @@ public class TimelineService {
         // ===== 源⑤ 身份证首次生成（类⑤，Story 3.2 新增）=====
         // 每用户卡片数量极少（V1 单宠物），全量取后在内存里挑「最早一张」作为首次生成事件，
         // 无需为它加一条专用查询；锚点过滤同样在内存完成。
+        //
+        // 🔴 **必须先剔掉 profileDeletedAt 非空的卡**（bug 20260828）：
+        // id_cards 只挂在 **user** 上、没有宠物外键（见 IdCard），所以「这个用户最早的一张卡」
+        // 未必属于**当前这只宠物** —— 用户删档重建后，旧卡照样被算成新宠物的「名片已生成」，
+        // 时间线上就出现一条**早于建档日期**的条目（实机：档案 8/27 建、名片却标 8/07，
+        // 且那张卡的卡号解出来是「8/2 出生的公狗」，而当前宠物是母猫 —— 根本是上一只）。
+        //
+        // ⚠️ 这里**不看 hdUnlocked**：付费卡在身份证页里恒可见是另一回事（V108 决策 F21，
+        // 保的是用户已经花过的钱）；而时间线讲的是「这只宠物的成长事件」，
+        // 一张属于别的宠物的卡不该占这只宠物的时间线位置，付没付费都一样。
         List<TimelineItemResponse> idCardIssues = new ArrayList<>();
-        List<IdCard> cards = idCards.findByUserIdOrderByCreatedAtDesc(ownerId);
+        List<IdCard> cards = idCards.findByUserIdOrderByCreatedAtDesc(ownerId).stream()
+                .filter(c -> c.getProfileDeletedAt() == null)
+                .toList();
         if (!cards.isEmpty()) {
             IdCard first = cards.get(cards.size() - 1); // 倒序列表的末尾 = 最早生成
             Instant issuedAt = first.getCreatedAt();
