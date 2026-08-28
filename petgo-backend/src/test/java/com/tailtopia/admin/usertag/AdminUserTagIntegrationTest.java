@@ -1,6 +1,7 @@
 package com.tailtopia.admin.usertag;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -20,6 +21,7 @@ import com.tailtopia.auth.dto.UserTagView;
 import com.tailtopia.auth.repository.UserTagAssignmentRepository;
 import com.tailtopia.auth.repository.UserTagRepository;
 import com.tailtopia.auth.service.UserTagQueryService;
+import com.tailtopia.shared.error.AppException;
 import com.tailtopia.support.ApiIntegrationTest;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -342,5 +344,73 @@ class AdminUserTagIntegrationTest extends ApiIntegrationTest {
                         .with(authentication(authFor(AdminAccountType.STAFF, "user.tag_view"))))
                 .andReturn().getResponse().getContentAsString();
         assertThat(html).contains("/admin/user-tags");
+    }
+
+    /**
+     * 🔴 **标签不许分配给已注销账号**（bug 20260828）。
+     *
+     * <p>实机：运营把用户标签分给了 63 号 —— 一个已经注销的账号，后台一声不吭地接受了。
+     * 此前 {@code assign} 对 userId **一个字都不查**：不存在的 id 也照写。
+     *
+     * <p>为什么这不只是脏数据：注销走的是「就地匿名化」（Story 7.3 · 决策 D1），
+     * 账号的昵称/头像/邮箱都被擦成空、UGC 解析为「已注销用户」。
+     * 给它挂一枚身份标签，等于把一个本该没有身份标识的账号重新标记出来；
+     * 而分配记录页按 userId 展示，运营会看到一行查无此人、也无从判断该不该撤。
+     *
+     * <p>⚠️ 断言打在 {@code UserTagQueryService.assign} 这一层，不是后台控制器 ——
+     * 后台批量、后台单个、将来任何自动发标签的路径都经过它。
+     */
+    @Test
+    void assigningToADeletedAccountIsRejected() {
+        UserTag t = tag("DEL");
+        User u = newUser();
+        u.anonymizeForDeletion(Instant.now());
+        users.save(u);
+
+        assertThatThrownBy(() -> tagService.assign(u.getId(), t.getId(), Instant.now(), null))
+                .isInstanceOf(AppException.class)
+                .hasMessageContaining("已注销");
+        assertThat(assignments.findByUserIdOrderByStartsAtDesc(u.getId())).isEmpty();
+    }
+
+    /** 🛡 连"用户根本不存在"也要拦 —— 手填框里填错一位数字就是这种情况。 */
+    @Test
+    void assigningToANonExistentUserIsRejected() {
+        UserTag t = tag("GHOST");
+        assertThatThrownBy(() -> tagService.assign(999_000_111L, t.getId(), Instant.now(), null))
+                .isInstanceOf(AppException.class)
+                .hasMessageContaining("不存在");
+    }
+
+    /**
+     * 🛡 反向：**正常用户照旧分配得上**。
+     *
+     * <p>没有这一条，把校验写成"一律拒绝"也能让上面两条绿。
+     */
+    @Test
+    void assigningToAnActiveUserStillWorks() {
+        UserTag t = tag("OK");
+        User u = newUser();
+        tagService.assign(u.getId(), t.getId(), Instant.now().minusSeconds(60), null);
+        assertThat(assignments.findByUserIdOrderByStartsAtDesc(u.getId())).hasSize(1);
+    }
+
+    /**
+     * 🔴 **选择器里列不出已注销账号** —— 服务端硬校验之外的第一道闸。
+     *
+     * <p>两道都要有：只有硬校验的话，运营要在候选表里挑到一个注销账号、点了分配、
+     * 才收到一句报错；只有选择器的话，手填 ID 那条路照样绕过去。
+     */
+    @Test
+    void deletedAccountsNeverAppearInThePicker() {
+        User alive = newUser();
+        User gone = newUser();
+        gone.anonymizeForDeletion(Instant.now());
+        users.save(gone);
+
+        List<Long> ids = adminService.pickableUsers(null, 0).stream()
+                .map(com.tailtopia.admin.usertag.dto.TaggableUserRow::id).toList();
+        assertThat(ids).contains(alive.getId());
+        assertThat(ids).doesNotContain(gone.getId());
     }
 }

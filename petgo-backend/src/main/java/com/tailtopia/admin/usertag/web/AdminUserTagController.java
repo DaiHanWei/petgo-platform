@@ -73,6 +73,8 @@ public class AdminUserTagController {
         }
         // AC3：尺寸规范文案常驻在上传控件旁（三语走 MessageSource）。
         model.addAttribute("iconSpec", icons.specText());
+        // bug 20260828：用户选择器的首屏候选（htmx 之后再按关键词换）。
+        model.addAttribute("candidates", service.pickableUsers(null, 0));
         return "admin/user-tags";
     }
 
@@ -136,15 +138,44 @@ public class AdminUserTagController {
      * <p>用户 id 支持逗号 / 空白分隔，便于运营从名单直接粘贴。
      * 单个失败不拖垮整批，失败的 id 回显出来。
      */
+    /**
+     * 用户选择器的候选片段（bug 20260828，htmx 局部刷新）。
+     *
+     * <p>与内容标签的 {@code /admin/content-tags/pick} 同形状 —— 运营在两页之间切换时
+     * 不该遇到两套不同的挑选方式。
+     *
+     * <p>🔴 已注销账号在查询层就不出现（{@code UserRepository#searchTaggableUsers}）。
+     */
+    @GetMapping("/admin/user-tags/pick")
+    @PreAuthorize(MANAGE)
+    public String pick(@RequestParam(value = "q", required = false) String q,
+            @RequestParam(value = "page", defaultValue = "0") int page, Model model) {
+        model.addAttribute("candidates", service.pickableUsers(q, page));
+        return "admin/user-tags :: candidates";
+    }
+
     @PostMapping("/admin/user-tags/assign")
     @PreAuthorize(MANAGE)
     public String assign(@AuthenticationPrincipal AdminUserDetails admin,
-            @RequestParam String userIds, @RequestParam long tagId,
+            @RequestParam(required = false) List<Long> pickedUserIds,
+            @RequestParam(required = false) String userIds, @RequestParam long tagId,
             @RequestParam String startsAt,
             @RequestParam(required = false) String endsAt,
             RedirectAttributes flash) {
         try {
-            List<Long> ids = parseIds(userIds);
+            // bug 20260828：两条入口合并 —— 选择器勾选的（pickedUserIds）+ 手填的（userIds）。
+            // ⚠️ 手填那条**保留**：运营手上有时就是一串从别处导出的 id，
+            //    逼他在候选表里一个个找反而更慢。两条走同一套服务端校验，
+            //    所以保留它不会重新打开「分给注销用户」那个口子。
+            List<Long> ids = new java.util.ArrayList<>();
+            if (pickedUserIds != null) {
+                ids.addAll(pickedUserIds);
+            }
+            ids.addAll(parseIds(userIds));
+            if (ids.isEmpty()) {
+                throw AppException.validation("请先勾选用户，或在下方手动填写用户 ID")
+                        .code("admin.err.userTag.noneSelected");
+            }
             Instant to = (endsAt == null || endsAt.isBlank()) ? null : toInstant(endsAt);
             List<Long> failed = service.assignBulk(admin.getAdminAccountId(), ids, tagId,
                     toInstant(startsAt), to);
@@ -170,9 +201,14 @@ public class AdminUserTagController {
         return "redirect:/admin/user-tags";
     }
 
+    /**
+     * 手填框的 id 解析。**留空是合法的**（bug 20260828 起）——
+     * 用户可以只在选择器里勾选、一个字都不填。「一个都没选」由 {@code assign} 统一判，
+     * 它才同时看得到两条入口；在这里抛会让「只用选择器」这条正路直接报错。
+     */
     private static List<Long> parseIds(String raw) {
         if (raw == null || raw.isBlank()) {
-            throw AppException.validation("请选择至少一个用户");
+            return List.of();
         }
         try {
             return Arrays.stream(raw.split("[,\\s]+"))

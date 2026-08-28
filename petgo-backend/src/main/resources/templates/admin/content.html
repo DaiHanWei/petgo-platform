@@ -91,6 +91,9 @@
                 <th th:text="#{admin.content.col.author}">作者</th>
                 <th th:text="#{admin.content.col.preview}">正文预览</th>
                 <th th:text="#{admin.content.col.images}">图片</th>
+                <!-- bug 20260828：点赞数。产品撤掉了「内容互动积分」整页，
+                     运营真正常用的就是这一个数，放回它本来该在的地方。 -->
+                <th th:text="#{admin.content.col.likes}">点赞数</th>
                 <th th:text="#{admin.content.col.created}">创建时间</th>
                 <th th:text="#{admin.content.col.status}">状态</th>
                 <th sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.throttle_view')"
@@ -117,7 +120,7 @@
                 </th:block>
             </th:block>
             <tr th:if="${#lists.isEmpty(items)}">
-                <td colspan="11" class="empty" th:text="#{admin.content.empty}">无匹配内容。</td>
+                <td colspan="12" class="empty" th:text="#{admin.content.empty}">无匹配内容。</td>
             </tr>
             </tbody>
         </table>
@@ -145,6 +148,9 @@
                 <img th:each="img : ${c.imageUrls()}" th:src="${img}" alt="" loading="lazy" data-lightbox
                      style="width:48px;height:48px;object-fit:cover;border-radius:4px;margin:2px;vertical-align:middle;cursor:zoom-in"/>
             </td>
+            <!-- ⚠️ 零赞的帖子**不会出现在 likeCounts 里**（group by 不给空组造行），
+                 所以必须自己兜底成 0 —— 直接打印会是空格，看起来像没统计。 -->
+            <td th:text="${likeCounts == null ? '—' : (likeCounts[c.id()] ?: 0)}">0</td>
             <td th:text="${@adminTime.wib(c.createdAt())}">-</td>
             <td>
                 <span class="badge" th:classappend="${c.deleted()} ? 'badge-danger' : 'badge-ok'"

@@ -38,12 +38,14 @@ public class AdminContentManageService {
     // V1.1.6 Story 14.1：物种推导 + 「谁的内容运营可以改」的判据。
     private final ContentSpeciesResolver speciesResolver;
     private final com.tailtopia.auth.repository.UserRepository usersRepo;
+    private final com.tailtopia.content.repository.ContentLikeRepository likes;
     private final com.tailtopia.admin.virtual.service.AdminPublishIdentityService identities;
 
     public AdminContentManageService(ContentService contentService, AdminAuditService auditService,
             ReportService reportService, ViolationCountService violationCountService,
             ContentSpeciesResolver speciesResolver,
             com.tailtopia.auth.repository.UserRepository usersRepo,
+            com.tailtopia.content.repository.ContentLikeRepository likes,
             com.tailtopia.admin.virtual.service.AdminPublishIdentityService identities) {
         this.contentService = contentService;
         this.auditService = auditService;
@@ -51,6 +53,7 @@ public class AdminContentManageService {
         this.violationCountService = violationCountService;
         this.speciesResolver = speciesResolver;
         this.usersRepo = usersRepo;
+        this.likes = likes;
         this.identities = identities;
     }
 
@@ -159,6 +162,31 @@ public class AdminContentManageService {
         }
         return changed;
     }
+
+    /**
+     * 本页内容各自的点赞数（bug 20260828）。
+     *
+     * <p>产品把「内容互动积分」那一整页撤掉了，改为在内容管理里直接看点赞数 ——
+     * 运营真正常用的只有这一个数，为它单开一页（还带两套统计口径与 CSV 导出）
+     * 是把一个小问题做成了一个要先学会怎么用的工具。
+     *
+     * <p>🔴 **整页一次批量取**，与物种推导、限流状态同一条纪律：
+     * 逐行 count 就是 N+1，一页 50 行就是 50 次查询。
+     *
+     * <p>⚠️ 返回的 Map **不包含零赞的帖子**（SQL 的 group by 不会给空组造行），
+     * 模板取值时必须自己兜底成 0，不能直接打印 null。
+     */
+    @Transactional(readOnly = true)
+    public java.util.Map<Long, Long> likeCounts(java.util.Collection<Long> postIds) {
+        if (postIds == null || postIds.isEmpty()) {
+            return java.util.Map.of();
+        }
+        return likes.countByPostIdIn(postIds).stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        com.tailtopia.content.repository.ContentLikeRepository.PostLikeCount::getPostId,
+                        com.tailtopia.content.repository.ContentLikeRepository.PostLikeCount::getLikeCount));
+    }
+
 
     /** 按 id 取单条后台行（HTMX 局部刷新用）；不存在返回 null。 */
     @Transactional(readOnly = true)

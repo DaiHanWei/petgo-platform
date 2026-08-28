@@ -140,17 +140,13 @@ public final class AdminPermissions {
     public static final String VIRTUAL_ACCOUNT_MANAGE = "virtual_account.manage";
     public static final String VIRTUAL_ACCOUNT_VIEW = "virtual_account.view";
 
-    // 内容互动积分统计（V1.1.6 Story 15.1 · AB-3G）
-    /** 互动积分榜查看。 */
-    public static final String CONTENT_STATS_VIEW = "content.stats_view";
-    /**
-     * 互动积分榜导出。
-     *
-     * <p>🔴 <b>与查看分开的第二个码</b>，理由同 Story 11.4：导出是把数据**批量带出系统**，
-     * 风险高一档。⚠️ 本条导出的是内容统计而非 PII，但**既有约定一致更好记** ——
-     * 让"导出永远是单独一个码"成为一条不用查的规矩，比逐个功能权衡更省心。
-     */
-    public static final String CONTENT_STATS_EXPORT = "content.stats_export";
+    // 内容互动积分统计（V1.1.6 Story 15.1 · AB-3G）—— **整页已于 2026-08-28 撤销**。
+    // 产品判定：运营真正会看的只有点赞数，为它单开一页（两套统计口径 + CSV 导出）
+    // 是把一个小问题做成了一个要先学会怎么用的工具。点赞数已作为一列并入「内容管理」。
+    // 两个权限码 content.stats_view / content.stats_export 一并移除。
+    // ⚠️ 已授予过它们的存量账号，permissions 里会剩下两个不再对应任何页面的字符串。
+    //    它们不会生效（没有 @PreAuthorize 再引用），账号页也不会渲染（勾选区只遍历 GROUPS）。
+    //    刻意**不写迁移去清**：那是一次为纯噪音数据承担的线上写操作，不划算。
 
     // 运营发布身份池（V1.1.6 Story 12.1 · AB-3I）
     /**
@@ -275,7 +271,7 @@ public final class AdminPermissions {
             new PermissionGroup("perm.group.view", List.of(
                     CONTENT_VIEW_REPORTS, CONTENT_VIEW_TICKETS, CONTENT_VIEW, CONTENT_PIN_VIEW, CONTENT_TAG_VIEW,
                     USER_VIEW, USER_TAG_VIEW, USER_PHONE_VIEW, USER_PHONE_EXPORT,
-                    CONTENT_STATS_VIEW, CONTENT_STATS_EXPORT, CONTENT_THROTTLE_VIEW,
+                    CONTENT_THROTTLE_VIEW,
                     VET_VIEW, VET_QUALIFY_VIEW, RATING_VIEW,
                     CONSULT_VIEW_ANOMALIES, CONSULT_VIEW_SESSIONS,
                     SUPPORT_VIEW, REFUND_VIEW,

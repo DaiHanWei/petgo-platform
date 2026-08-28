@@ -150,7 +150,6 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
                 // 内容组
                 "/admin/seed-post", "/admin/content", "/admin/comments",
                 "/admin/manual-review", "/admin/content-pins", "/admin/content-tags",
-                "/admin/content-stats",
                 // 用户运营组（在内容组之后）
                 "/admin/users", "/admin/tickets", "/admin/user-tags");
         java.util.List<Integer> positions = expected.stream().map(html::indexOf).toList();
@@ -270,7 +269,6 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
                 // V1.1.6 Story 13.5：排期管理（12-1 的移出提示会跳到这里）。
                 "/admin/content-schedules",
                 // V1.1.6 Story 15.1：内容互动积分榜。
-                "/admin/content-stats",
             // 2026-08-26：算法参数独立成页，须一并纳入逐页双语扫描
             "/admin/algo-params");
 

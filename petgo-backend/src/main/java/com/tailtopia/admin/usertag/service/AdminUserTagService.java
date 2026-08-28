@@ -1,11 +1,16 @@
 package com.tailtopia.admin.usertag.service;
 
 import com.tailtopia.admin.audit.service.AdminAuditService;
+import com.tailtopia.admin.usertag.dto.TaggableUserRow;
 import com.tailtopia.admin.usertag.dto.UserAssignmentRow;
 import com.tailtopia.admin.usertag.dto.UserTagRow;
+import com.tailtopia.auth.domain.AccountType;
+import com.tailtopia.auth.domain.Role;
+import com.tailtopia.auth.domain.UserStatus;
 import com.tailtopia.auth.domain.UserTag;
 import com.tailtopia.auth.domain.UserTagAssignment;
 import com.tailtopia.auth.dto.UserTagView;
+import com.tailtopia.auth.repository.UserRepository;
 import com.tailtopia.auth.repository.UserTagAssignmentRepository;
 import com.tailtopia.auth.repository.UserTagRepository;
 import com.tailtopia.auth.service.UserTagQueryService;
@@ -17,6 +22,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,13 +43,15 @@ public class AdminUserTagService {
 
     private final UserTagRepository tags;
     private final UserTagAssignmentRepository assignments;
+    private final UserRepository users;
     private final UserTagQueryService tagService;
     private final AdminAuditService audit;
 
     public AdminUserTagService(UserTagRepository tags, UserTagAssignmentRepository assignments,
-            UserTagQueryService tagService, AdminAuditService audit) {
+            UserRepository users, UserTagQueryService tagService, AdminAuditService audit) {
         this.tags = tags;
         this.assignments = assignments;
+        this.users = users;
         this.tagService = tagService;
         this.audit = audit;
     }
@@ -102,6 +110,43 @@ public class AdminUserTagService {
     }
 
     // ——————————————————— 分配 ———————————————————
+
+    /** 选择器每页候选数。与内容标签那边同量级：一屏能扫完，又不至于要翻很多页。 */
+    private static final int PICK_PAGE_SIZE = 30;
+
+    /**
+     * 用户标签选择器的候选（bug 20260828）。
+     *
+     * <p>运营原先只能手填用户 ID —— 手上没有 ID 就无从下手，填错一位也没人拦，
+     * 于是标签被分到了一个已注销账号上。这里给出与内容标签同形状的可搜索候选表。
+     *
+     * <p>🔴 已注销账号在**查询层**就被滤掉（见 {@code UserRepository#searchTaggableUsers}）。
+     */
+    @Transactional(readOnly = true)
+    public List<TaggableUserRow> pickableUsers(String keyword, int page) {
+        // 🔴 绝不传 null：无关键词 → "%" 匹配全部（首次加载走的正是这一支）。
+        String pattern = (keyword == null || keyword.isBlank())
+                ? "%" : "%" + keyword.trim().toLowerCase() + "%";
+        return users.searchTaggableUsers(Role.USER, pattern,
+                        PageRequest.of(Math.max(page, 0), PICK_PAGE_SIZE)).stream()
+                .map(u -> new TaggableUserRow(
+                        u.getId(),
+                        displayNameOf(u),
+                        u.getStatus() != UserStatus.ACTIVE,
+                        u.getAccountType() == AccountType.VIRTUAL))
+                .toList();
+    }
+
+    /** 昵称为空回落 displayName，都空给一个明确的占位（别在候选表里留一行空白）。 */
+    private static String displayNameOf(com.tailtopia.auth.domain.User u) {
+        if (u.getNickname() != null && !u.getNickname().isBlank()) {
+            return u.getNickname();
+        }
+        if (u.getDisplayName() != null && !u.getDisplayName().isBlank()) {
+            return u.getDisplayName();
+        }
+        return "(未设昵称)";
+    }
 
     /**
      * 批量分配同一标签给多个用户。

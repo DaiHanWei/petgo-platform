@@ -85,10 +85,18 @@
         <div class="card" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.tag_manage')">
             <h2 th:text="#{admin.utags.newTag}">新建标签</h2>
             <form method="post" enctype="multipart/form-data" th:action="@{/admin/user-tags}">
+                <!-- 🔴 两个字段的用途完全不同，而界面上原先只有两个光秃秃的标题
+                     （bug 20260828，与内容标签同一处困惑）。 -->
                 <label><span th:text="#{admin.utags.code}">标签码</span>
                     <input type="text" name="code" class="field-full" required/></label>
+                <p class="muted" data-notice="utag-code-hint" th:text="#{admin.utags.codeHint}">
+                    用户看不到。建后不可修改。
+                </p>
                 <label><span th:text="#{admin.utags.name}">名称</span>
                     <input type="text" name="name" class="field-full" required/></label>
+                <p class="muted" data-notice="utag-name-hint" th:text="#{admin.utags.nameHint}">
+                    用户在标签上看到的字。
+                </p>
                 <label><span th:text="#{admin.utags.icon}">图标</span>
                     <input type="file" name="iconFile" accept="image/png,image/webp" required/></label>
                 <!-- 🔴 AC3：尺寸规范必须常驻在上传控件旁。
@@ -106,18 +114,46 @@
         <!-- 批量分配 -->
         <div class="card" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.tag_manage')">
             <h2 th:text="#{admin.utags.assignTitle}">批量分配</h2>
-            <form method="post" th:action="@{/admin/user-tags/assign}">
+            <!-- 🔴 一个可分配的标签都没有时，**整张表单不渲染**（bug 20260828，与内容标签同）。
+                 照渲染的话运营看到的是一个点不开的空下拉 —— 读起来像坏了，
+                 而不是像还没准备好。判据用 assignable（在线标签），标签全下线时同样不能分配。 -->
+            <p class="muted" th:if="${#lists.isEmpty(assignable)}"
+               data-notice="assign-needs-tag" th:text="#{admin.utags.assignNoTag}">
+                还没有可用的标签。先在上面「新建标签」建一个，才能分配。
+            </p>
+            <form method="post" th:action="@{/admin/user-tags/assign}"
+                  th:unless="${#lists.isEmpty(assignable)}">
                 <label>
-                    <span th:text="#{admin.utags.name}">标签</span>
+                    <!-- ⚠️ 标题是「选择标签」不是「名称」：同屏上面的新建表单里已经有一个
+                         叫「名称」的输入框，两个「名称」指的是两件事。 -->
+                    <span th:text="#{admin.utags.assignPickTag}">选择标签</span>
                     <!-- 🛡 只列在线标签 -->
                     <select name="tagId" required>
                         <option th:each="t : ${assignable}" th:value="${t.id}"
                                 th:text="${t.name} + ' (' + ${t.code} + ')'">标签</option>
                     </select>
                 </label>
+                <!-- 🔴 用户选择器（bug 20260828）：此前只有一个手填 ID 的文本框 ——
+                     运营手上没有 ID 就无从下手，填错一位也没人拦，
+                     实机上标签因此被分给了一个**已注销**账号。
+                     候选表在查询层就滤掉已注销账号，是第一道闸。 -->
+                <fieldset>
+                    <legend th:text="#{admin.utags.pickUsers}">选择用户</legend>
+                    <p class="muted" th:text="#{admin.utags.pickHint}">
+                        只列未注销的用户。已停用（封号）的会列出但标注状态，由你决定要不要分配。
+                    </p>
+                    <input type="search" name="q" th:placeholder="#{admin.utags.pickSearch}"
+                           hx-get="/admin/user-tags/pick" hx-target="#userCandidates"
+                           hx-trigger="keyup changed delay:300ms, search"/>
+                    <div id="userCandidates">
+                        <div th:replace="~{admin/user-tags :: candidates}"></div>
+                    </div>
+                </fieldset>
                 <label>
-                    <span th:text="#{admin.utags.userIds}">用户 ID</span>
-                    <textarea name="userIds" class="field-full" rows="3"
+                    <!-- ⚠️ 手填框**保留**：运营手上有时就是一串从别处导出的 id。
+                         两条入口走同一套服务端校验，所以留着它不会重新打开那个口子。 -->
+                    <span th:text="#{admin.utags.userIdsOptional}">或手动填用户 ID（选填）</span>
+                    <textarea name="userIds" class="field-full" rows="2"
                               placeholder="1001, 1002 1003"></textarea>
                 </label>
                 <label>
@@ -195,6 +231,23 @@
                 </tr>
                 </tbody>
             </table>
+        </div>
+
+        <!-- 用户候选（HTMX 局部）。🔴 已注销账号不会出现在这里 —— 查询层就滤掉了。 -->
+        <div th:fragment="candidates" th:remove="tag">
+            <p class="muted" th:if="${#lists.isEmpty(candidates)}"
+               th:text="#{admin.utags.pickEmpty}">没有匹配的用户。</p>
+            <label th:each="c : ${candidates}" class="pick-row">
+                <input type="checkbox" name="pickedUserIds" th:value="${c.id}"/>
+                <span th:text="${c.id}">1</span>
+                <span th:text="${c.name}">昵称</span>
+                <!-- ⚠️ 状态只标注、不隐藏：运营有时确实要给封号账号挂标签，
+                     但不标注就等于让他在不知情的情况下分配。 -->
+                <span class="muted" th:if="${c.deactivated}"
+                      th:text="#{admin.utags.pickDeactivated}">已停用</span>
+                <span class="muted" th:if="${c.virtualAccount}"
+                      th:text="#{admin.utags.pickVirtual}">虚拟账号</span>
+            </label>
         </div>
     </div>
 </div>

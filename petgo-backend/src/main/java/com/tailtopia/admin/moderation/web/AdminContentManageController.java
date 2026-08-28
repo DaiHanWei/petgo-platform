@@ -85,6 +85,10 @@ public class AdminContentManageController {
                 items.stream().collect(java.util.stream.Collectors.toMap(
                         r -> r.content().id(), r -> r.content().authorId(), (a, b) -> a)),
                 java.time.Instant.now()));
+        // bug 20260828：点赞数列（取代被撤掉的「内容互动积分」整页）。
+        // 🔴 同样整页一次批量取 —— 与物种推导、限流状态同一条纪律。
+        model.addAttribute("likeCounts", contentManage.likeCounts(
+                items.stream().map(r -> r.content().id()).toList()));
         return hxRequest != null ? "admin/content :: rows" : "admin/content";
     }
 
@@ -145,6 +149,10 @@ public class AdminContentManageController {
     private String rowOrRedirect(String hxRequest, long postId, Model model) {
         if (hxRequest != null) {
             model.addAttribute("c", contentManage.row(postId));
+            // ⚠️ 点赞数**这一行照样给**（与下面的物种两列不同）：下架/恢复不改变赞数，
+            //    但若这里不给，那一格会从「3」跳成「—」，看起来像数据丢了。
+            //    一行一次 count 很便宜，不值得为省它制造一个假象。
+            model.addAttribute("likeCounts", contentManage.likeCounts(java.util.List.of(postId)));
             // ⚠️ 这条 HTMX 路径只刷一行、**不放 `sp`**（物种推导要查作者+档案，
             //    整页那次已经批量算过；为一行再算一次不值当）。
             //    片段里 `sp` 未定义 ⇒ 物种两列渲染成 '—'。

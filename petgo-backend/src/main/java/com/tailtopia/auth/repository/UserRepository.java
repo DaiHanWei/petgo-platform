@@ -81,4 +81,33 @@ public interface UserRepository extends JpaRepository<User, Long> {
      */
     java.util.List<User> findTop20ByRoleAndAccountTypeAndNicknameContainingIgnoreCaseOrderByIdDesc(
             Role role, com.tailtopia.auth.domain.AccountType accountType, String nickname);
+
+    /**
+     * 用户标签选择器的候选（bug 20260828）：**未注销**的普通用户，按 id 或昵称模糊匹配。
+     *
+     * <p>🔴 {@code deletedAt is null} 是这条查询存在的主要理由 —— 后台此前只有一个手填
+     * 用户 ID 的文本框，运营把标签分给了一个已注销账号。选择器从**列不出来**开始堵，
+     * 服务层的硬校验（{@code UserTagQueryService#assign}）是第二道。两道都要有：
+     * 只有选择器的话，手填那条路照样能绕过去。
+     *
+     * <p>⚠️ **不剔除已停用（封号）账号**：运营有时确实要给封号账号挂标签（如「观察中」），
+     * 但候选行必须标注状态 —— 与召回名单导出同一条口径（不替运营做决定，
+     * 但也不让他在不知情的情况下操作）。
+     *
+     * <p>⚠️ {@code :pattern} 绝不传 null：空关键词传 {@code "%"} 匹配全部。
+     * 绑 null 时 Postgres 推不出类型，而「不带关键词」正是首次加载的那一次
+     * （与内容标签的 {@code searchPinnable} 同一个坑）。
+     */
+    @Query("""
+            select u from User u
+            where u.role = :role and u.deletedAt is null
+              and (:pattern = '%'
+                   or lower(coalesce(u.nickname, '')) like :pattern
+                   or lower(coalesce(u.displayName, '')) like :pattern
+                   or cast(u.id as string) like :pattern)
+            order by u.id desc
+            """)
+    Page<User> searchTaggableUsers(@Param("role") Role role, @Param("pattern") String pattern,
+            Pageable pageable);
 }
+

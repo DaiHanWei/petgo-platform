@@ -56,6 +56,7 @@ class AdminTagEditKeepsIconTest {
         UserTagRepository tags = mock(UserTagRepository.class);
         when(tags.findById(1L)).thenReturn(Optional.of(tag));
         return new AdminUserTagService(tags, mock(UserTagAssignmentRepository.class),
+                mock(com.tailtopia.auth.repository.UserRepository.class),
                 mock(UserTagQueryService.class), mock(AdminAuditService.class));
     }
 
