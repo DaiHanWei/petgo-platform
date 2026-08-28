@@ -10,13 +10,53 @@
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
         <h1 th:text="#{admin.payments.title}">支付记录查询</h1>
-        <p class="hint" th:if="${userId == null}" th:text="#{admin.payments.hint.all}">按时间倒序分页展示全部支付记录（跨类型：兽医咨询 / 充值 / AI 解锁 / 高清图）；如需精确排查可按用户 ID 过滤。</p>
-        <p class="hint" th:if="${userId != null}" th:text="#{admin.payments.hint.filtered(${userId})}">当前按用户 ID 过滤；清空用户 ID 再查询可返回最近记录列表。</p>
+        <p class="hint" th:text="#{admin.payments.hint.all}">按时间倒序分页展示全部支付记录（跨类型：兽医咨询 / 充值 / AI 解锁 / 高清图 / 电商订单）；可按用途、状态、时间段、用户 ID 组合筛选。</p>
         <form method="get" th:action="@{/admin/payments}">
             <label><span th:text="#{admin.common.userId}">用户 ID</span> <input type="number" name="userId" th:value="${userId}"/></label>
+            <label><span th:text="#{admin.payments.col.purpose}">用途</span>
+                <select name="purpose">
+                    <option value="" th:text="#{admin.payments.filter.allPurposes}">全部用途</option>
+                    <option th:each="o : ${purposeOptions}" th:value="${o}"
+                            th:selected="${purpose == o.name()}"
+                            th:text="#{'admin.payments.purpose.' + ${o}}">VET_CONSULT</option>
+                </select></label>
+            <label><span th:text="#{admin.common.status}">状态</span>
+                <select name="status">
+                    <option value="" th:text="#{admin.payments.filter.allStatuses}">全部状态</option>
+                    <option th:each="o : ${statusOptions}" th:value="${o}"
+                            th:selected="${status == o.name()}"
+                            th:text="#{'admin.payments.status.' + ${o}}">PAID</option>
+                </select></label>
+            <!-- 🛡 WIB 字样必须在输入框旁：后台一律按雅加达时间解释，
+                 而运营在 UTC+8 —— 不标注就会按自己的表理解这个区间。
+                 「止」**含当天**（服务层取次日 00:00 为上界），否则起止选同一天会查不到东西。 -->
+            <label><span th:text="#{admin.payments.filter.dateRange}">时间段（WIB，含止当天）</span>
+                <input type="date" name="from" th:value="${from}"/>
+                <input type="date" name="to" th:value="${to}"/>
+                <span class="muted">WIB</span></label>
             <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.payments.btn.search}">查询</button>
-            <a th:if="${userId != null}" th:href="@{/admin/payments}" class="btn btn-sm" th:text="#{admin.payments.btn.backRecent}">返回最近记录</a>
+            <a th:href="@{/admin/payments}" class="btn btn-sm" th:text="#{admin.payments.btn.reset}">清空筛选</a>
         </form>
+
+        <!-- 🔴 汇总条：回答「这一屏筛出来的到底是多少钱、多少笔」。
+             两个数口径不同，**必须在界面上写明**，否则「收入」是一个看着权威的错数：
+             订单数含全部状态，收入只算已支付且真正收到钱的（PawCoin 抵扣不是现金收入，
+             混合支付只有现金段算）。金币抵扣单列出来，是为了让运营对得上账 ——
+             现金 + 金币 = 已支付订单的金额合计。 -->
+        <div class="card" data-notice="payments-summary" th:if="${summary != null}">
+            <span th:text="#{admin.payments.sum.orders(${summary.orderCount()})}">订单数</span>
+            &nbsp;·&nbsp;
+            <span th:text="#{admin.payments.sum.paid(${summary.paidCount()})}">已支付</span>
+            &nbsp;·&nbsp;
+            <strong th:unless="${summary.currencyIsMixed()}"
+                    th:text="#{admin.payments.sum.cash(${summary.currency()}, ${#numbers.formatInteger(summary.cashIncome(), 1, 'COMMA')})}">现金收入</strong>
+            <strong th:if="${summary.currencyIsMixed()}"
+                    th:text="#{admin.payments.sum.mixedCurrency}">币种不一致，不做换算</strong>
+            &nbsp;·&nbsp;
+            <span class="muted" th:unless="${summary.currencyIsMixed()}"
+                  th:text="#{admin.payments.sum.coin(${summary.currency()}, ${#numbers.formatInteger(summary.coinSpent(), 1, 'COMMA')})}">金币抵扣</span>
+            <p class="muted" th:text="#{admin.payments.sum.note}">收入只计已支付、且经收款渠道真正到账的金额。</p>
+        </div>
         <table th:if="${payments != null}">
             <thead>
             <tr><th th:text="#{admin.common.user}">用户</th><th th:text="#{admin.payments.col.paymentNo}">支付号</th><th th:text="#{admin.payments.col.purpose}">用途</th><th th:text="#{admin.common.channel}">渠道</th><th th:text="#{admin.common.amount}">金额</th><th th:text="#{admin.payments.col.currency}">币种</th><th th:text="#{admin.common.status}">状态</th><th th:text="#{admin.common.time}">时间</th></tr>
@@ -25,20 +65,24 @@
             <tr th:each="p : ${payments}">
                 <td th:text="${p.userId}">0</td>
                 <td th:text="${p.displayNo != null ? p.displayNo : p.publicToken}" th:title="${p.publicToken}">no</td>
-                <td th:text="${p.purpose}">VET_CONSULT</td>
+                <td th:text="#{'admin.payments.purpose.' + ${p.purpose}}">VET_CONSULT</td>
                 <td th:text="${p.channel}">QRIS</td>
                 <td th:text="${p.amount}">0</td>
                 <td th:text="${p.currency}">IDR</td>
-                <td th:text="${p.status}">PAID</td>
+                <td th:text="#{'admin.payments.status.' + ${p.status}}">PAID</td>
                 <td th:text="${p.createdAtLabel}">t</td>
             </tr>
-            <tr th:if="${payments.isEmpty()}"><td colspan="8" th:text="${userId == null} ? #{admin.payments.empty} : #{admin.payments.emptyForUser}">暂无支付记录</td></tr>
+            <tr th:if="${payments.isEmpty()}"><td colspan="8" th:text="#{admin.payments.empty}">暂无符合筛选条件的支付记录</td></tr>
             </tbody>
         </table>
-        <div class="pager" th:if="${userId == null and payments != null and totalPages > 0}">
-            <a th:if="${hasPrev}" th:href="@{/admin/payments(page=${page - 1})}" class="btn btn-sm" th:text="#{admin.audit.prev}">上一页</a>
+        <!-- ⚠️ 翻页链接必须带上全部筛选条件，否则点"下一页"会**悄悄回到无筛选的全量**，
+             而页码还在往前走 —— 运营看到的是一堆对不上的数据，却看不出筛选没了。 -->
+        <div class="pager" th:if="${payments != null and totalPages > 0}">
+            <a th:if="${hasPrev}" class="btn btn-sm" th:text="#{admin.audit.prev}"
+               th:href="@{/admin/payments(page=${page - 1},userId=${userId},purpose=${purpose},status=${status},from=${from},to=${to})}">上一页</a>
             <span th:text="#{admin.audit.page(${page + 1}, ${totalPages}, ${totalElements})}">分页</span>
-            <a th:if="${hasNext}" th:href="@{/admin/payments(page=${page + 1})}" class="btn btn-sm" th:text="#{admin.audit.next}">下一页</a>
+            <a th:if="${hasNext}" class="btn btn-sm" th:text="#{admin.audit.next}"
+               th:href="@{/admin/payments(page=${page + 1},userId=${userId},purpose=${purpose},status=${status},from=${from},to=${to})}">下一页</a>
         </div>
     </div>
 </div>
