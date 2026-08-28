@@ -16,7 +16,7 @@
   "@tabAdd": {
     "description": "Bottom tab center plus button (publish)."
   },
-  "tabShop": "Toko",
+  "tabShop": "Shop",
   "@tabShop": {
     "description": "Bottom tab label: Toko (e-commerce). DEP-1 闭合（2026-08-21）后占用原 Health 位。两语均用 Toko —— 它在印尼语里就是「店铺」，英文侧沿用同一词保持品牌一致，且 4 字符远短于底栏 66px 格宽的截断线（对比 tabTriage 那条关于 Kesehatan 被截断的记录）。"
   },
@@ -2558,8 +2558,8 @@
   "notifyBodyAccountSuspended": "Your account has been suspended for breaking the TailTopia Community Guidelines. If you'd like to appeal, please contact our customer support team.",
   "@notifyBodyAccountSuspended": {"description": "Notification center: body for ACCOUNT_SUSPENDED. The Indonesian wording was cleared by legal on 2026-08-16 (C-101) \u2014 do not reword it without going back to legal."},
 
-  "tokoTitle": "Toko",
-  "@tokoTitle": {"description": "Toko page: app bar title (Indonesian word kept as-is — it is the user-facing brand of the shop tab)"},
+  "tokoTitle": "Shop",
+  "@tokoTitle": {"description": "Shop page: app bar title. 2026-08-27 product decision: English uses \"Shop\", Indonesian keeps \"Toko\" — the earlier \"keep Toko as brand in all locales\" rule is superseded"},
   "tokoCategoryLabel": "Kategori",
   "@tokoCategoryLabel": {"description": "Toko page: zone 3 section label (category entries)"},
   "tokoAllFeaturedLabel": "Semua Pilihan",
@@ -3062,7 +3062,7 @@
   "shopOrderShippedNow": "On the way",
   "shopOrderHelpTitle": "Something wrong with this order?",
   "shopOrderHelpBody": "Returns can be requested within 2x24 hours of delivery",
-  "orderBadgeToko": "TOKO",
+  "orderBadgeToko": "SHOP",
   "@orderBadgeToko": {"description": "Order card type badge for physical goods (rose family). Physical = the customer waits for a courier, which is why it is visually separated from virtual services"},
   "orderBadgeService": "SERVICE",
   "@orderBadgeService": {"description": "Order card type badge for virtual services - consults, unlocks, top-ups (purple family = platform capability)"},
