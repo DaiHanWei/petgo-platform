@@ -92,7 +92,12 @@ class LarkContentSyncServiceTest {
 
     private static List<String> row(String code, String text, String img, String email,
             String status) {
-        return Arrays.asList("1", "Moment", code, text, img, email, status, "", "");
+        return rowWithCategory("Moment", code, text, img, email, status);
+    }
+
+    private static List<String> rowWithCategory(String category, String code, String text,
+            String img, String email, String status) {
+        return Arrays.asList("1", category, code, text, img, email, status, "", "");
     }
 
     @Test
@@ -436,6 +441,32 @@ class LarkContentSyncServiceTest {
 
         verify(client).writeCell(eq("G"), eq(5), contains("已发布"));
         verify(client, never()).writeCell(anyString(), eq(2), anyString());
+    }
+
+    @Test
+    void 内容分类Knowledge_按KNOWLEDGE发布_空按DAILY() {
+        when(client.readRows()).thenReturn(List.of(
+                rowWithCategory("knowledge", "DR001", "科普", "", "", ""),
+                rowWithCategory("", "DR002", "日常", "", "", "")));
+        service.syncOnce(); // 每轮一条：DR001
+        ArgumentCaptor<ContentPostCreateRequest> req =
+                ArgumentCaptor.forClass(ContentPostCreateRequest.class);
+        verify(contentService).publishTrusted(eq(7L), req.capture(), eq("lark-content:DR001"));
+        assertEquals(ContentType.KNOWLEDGE, req.getValue().type());
+        assertEquals(ContentType.DAILY, LarkContentSyncService.mapCategory(""));
+        assertEquals(ContentType.DAILY, LarkContentSyncService.mapCategory(" Moment "));
+    }
+
+    @Test
+    void 内容分类非法值_无效并备注可填值() {
+        when(client.readRows()).thenReturn(List.of(
+                rowWithCategory("Video", "DR001", "x", "", "", ""),
+                row("DR002", "日常", "", "")));
+        service.syncOnce();
+        verify(client).writeCell(eq("G"), eq(2), eq("无效"));
+        verify(client).writeCell(eq("I"), eq(2), contains("Moment 或 Knowledge"));
+        verify(contentService, never()).publishTrusted(Mockito.anyLong(), any(), eq("lark-content:DR001"));
+        verify(contentService, times(1)).publishTrusted(eq(7L), any(), eq("lark-content:DR002"));
     }
 
     @Test

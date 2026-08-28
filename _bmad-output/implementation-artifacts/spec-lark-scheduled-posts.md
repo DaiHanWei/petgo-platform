@@ -149,3 +149,4 @@ baseline_commit: '202f976bca5588d4925f0c8038421196eec7981a'
 - **图片编号**：填**前缀**（如 `DR260823001`，不得含 `-`）；云盘按 `{前缀}-{整数}.jpg` 匹配全部文件、**按整数升序**上传（`-10` 排在 `-2` 后）；`-1.1` / `-A` / `-1-1` 一律不认；一张都没有 → 无效（缺图）；匹配超 9 张 → 无效。
 - **回写**：成功 → 上传状态=`已发布 <WIB>`、发布账号=作者昵称、备注清空；行级问题 → 上传状态=`无效`、备注=原因（重复编号行同样）。
 - **字段上限（对齐生产库）**：内容编号 `[A-Za-z0-9_-]{1,32}`（`lark_content_publishes.content_code varchar(32)`）；图片前缀 `[A-Za-z0-9_]{1,32}`、前缀列表 ≤255；文案 ≤1000（`content_posts.text varchar(1000)`）；图片 ≤9（`ContentPostCreateRequest`）；邮箱 ≤320（`users.email varchar(320)`）。超限/类型不符 → 无效 + 备注原因。
+- **内容分类**（2026-08-28）：`Moment`→DAILY、`Knowledge`→KNOWLEDGE（不区分大小写）；空→DAILY；其他值→无效+备注「只能填 Moment 或 Knowledge」；表无此列→全 DAILY。

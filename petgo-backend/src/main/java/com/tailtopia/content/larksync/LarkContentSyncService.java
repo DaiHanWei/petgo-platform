@@ -38,6 +38,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * （真实号/虚拟号都可——官方运营号是真实注册的账号，2026-08-28 拍板去掉「仅虚拟号」限制）；
  * 匹配不到 → 该行<b>无效</b>。留空 → 作者池随机虚拟账号（原逻辑）。
  *
+ * <p><b>内容分类</b>（2026-08-28 起）：「内容分类」列 {@code Moment}→DAILY、{@code Knowledge}→KNOWLEDGE
+ * （不区分大小写）；空 → DAILY；其他值 → 该行<b>无效</b>（备注写明可填值）。表里没这列 → 全部 DAILY。
+ *
  * <p><b>图片</b>（2026-08-27 起）：「图片编号」列填<b>前缀</b>（如 {@code DR260823001}，不得含 {@code -}），
  * 云盘按 {@code {前缀}-{整数}.jpg} 匹配全部文件、按整数升序上传；{@code -} 后非纯整数
  * （{@code -1.1}/{@code -A}/{@code -1-1}）一律不认。一张都没有 → 无效（缺图）。
@@ -217,7 +220,7 @@ public class LarkContentSyncService {
         }
 
         ContentPostCreateRequest req = new ContentPostCreateRequest(
-                ContentType.DAILY, null, blankToNull(row.text()), imageUrls);
+                mapCategory(row.category()), null, blankToNull(row.text()), imageUrls);
         // 发帖与状态机落库同一事务：要么都成、要么都回滚，杜绝「发成未记账」。
         Long postId = tx.execute(status -> {
             ContentPostResponse post = contentService.publishTrusted(
@@ -262,10 +265,23 @@ public class LarkContentSyncService {
         return out;
     }
 
+    /** 「内容分类」→ 类型。空=DAILY；非法值返回 null（validateRow 已先拦，这里兜底）。 */
+    static ContentType mapCategory(String category) {
+        String c = category == null ? "" : category.trim().toLowerCase();
+        return switch (c) {
+            case "", "moment", "daily" -> ContentType.DAILY;
+            case "knowledge" -> ContentType.KNOWLEDGE;
+            default -> null;
+        };
+    }
+
     /** 内容性校验（下载前拦截）。返回失败原因，合法返回 null。字段上限对齐生产库列定义。 */
     private static String validateRow(LarkRowParser.Row row) {
         if (!CODE_PATTERN.matcher(row.contentCode()).matches()) {
             return "内容编号非法：仅限字母/数字/_/-，最长 32 字符";
+        }
+        if (mapCategory(row.category()) == null) {
+            return "内容分类只能填 Moment 或 Knowledge（留空按 Moment）";
         }
         for (String code : row.imageCodes()) {
             if (code.contains("-")) {
