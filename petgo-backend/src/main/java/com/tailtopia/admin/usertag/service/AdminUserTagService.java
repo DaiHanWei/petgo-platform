@@ -238,8 +238,30 @@ public class AdminUserTagService {
                     .anyMatch(v -> v.code().equals(t.getCode()));
             return new UserAssignmentRow(a.getId(), a.getUserId(), a.getTagId(),
                     t == null ? null : t.getCode(), t == null ? null : t.getName(),
-                    a.getStartsAt(), a.getEndsAt(), shown, deleted.contains(a.getUserId()));
+                    a.getStartsAt(), a.getEndsAt(), shown,
+                    shown ? null : hiddenReason(a, deleted.contains(a.getUserId()), now));
         }).toList();
+    }
+
+    /**
+     * 「不展示」的原因（bug 20260828）。
+     *
+     * <p>🔴 判定顺序 = **处置动作的优先级**，不是随手排的：
+     * 账号没了就没有后续可言（撤掉），其次才轮到时间窗（等/改时间），
+     * 都过了才是被顶掉（撤别的标签）。顺序反了会给出误导性的建议 ——
+     * 比如对一个注销账号说「被顶掉了」，运营就会去撤别人的标签。
+     */
+    private static String hiddenReason(UserTagAssignment a, boolean userDeleted, Instant now) {
+        if (userDeleted) {
+            return UserAssignmentRow.REASON_DELETED_USER;
+        }
+        if (a.getStartsAt() != null && now.isBefore(a.getStartsAt())) {
+            return UserAssignmentRow.REASON_NOT_STARTED;
+        }
+        if (a.getEndsAt() != null && !now.isBefore(a.getEndsAt())) {
+            return UserAssignmentRow.REASON_ENDED;
+        }
+        return UserAssignmentRow.REASON_OVER_CAP;
     }
 
     private static boolean isBlank(String s) {

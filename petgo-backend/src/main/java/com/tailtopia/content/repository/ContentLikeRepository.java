@@ -1,6 +1,7 @@
 package com.tailtopia.content.repository;
 
 import com.tailtopia.content.domain.ContentLike;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -21,6 +22,23 @@ public interface ContentLikeRepository extends JpaRepository<ContentLike, Long> 
     @Query("SELECT l.postId AS postId, COUNT(l) AS likeCount FROM ContentLike l "
             + "WHERE l.postId IN :postIds GROUP BY l.postId")
     List<PostLikeCount> countByPostIdIn(@Param("postIds") Collection<Long> postIds);
+
+    /**
+     * 某时间窗内**产生的**点赞数，按窗口内赞数从多到少（2026-08-28，取代互动积分页的口径B）。
+     *
+     * <p>🔴 与 {@link #countByPostIdIn} 回答的是**两个不同的问题**：
+     * 那个问「这些帖子至今一共多少赞」，本方法问「这段时间里产生了多少赞」。
+     * 一条三个月前的帖子这周被翻出来点了 50 个赞，只有本方法看得见。
+     * 运营做周报要的是后者，而按发布时间筛内容永远给不出这个数。
+     *
+     * <p>⚠️ 只返回**窗口内有赞**的帖子 —— 零赞的不在结果里（GROUP BY 不给空组造行）。
+     * 这正是这一档口径想要的行数：没产生互动的内容不该占周报的位置。
+     */
+    @Query("SELECT l.postId AS postId, COUNT(l) AS likeCount FROM ContentLike l "
+            + "WHERE l.createdAt >= :from AND l.createdAt < :to "
+            + "GROUP BY l.postId ORDER BY COUNT(l) DESC, l.postId DESC")
+    List<PostLikeCount> countInWindow(@Param("from") Instant from, @Param("to") Instant to,
+            org.springframework.data.domain.Pageable pageable);
 
     /** 批量点赞数投影（postId → 赞数）。无赞的帖不在结果中，调用方默认 0。 */
     interface PostLikeCount {

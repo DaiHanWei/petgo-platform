@@ -70,7 +70,7 @@ public class AdminContentTagController {
             model.addAttribute("assignments", service.assignmentsByPost(postId));
         }
         // AC3：尺寸规范文案常驻在上传控件旁（三语走 MessageSource）。
-        model.addAttribute("iconSpec", icons.specText());
+        model.addAttribute("iconSpec", icons.specText("contentTag"));
         return "admin/content-tags";
     }
 

@@ -44,6 +44,19 @@
                             th:text="#{admin.content.status.deleted}">已下架</option>
                 </select>
             </label>
+            <!-- 🔴 日期范围的**口径**（2026-08-28，取代互动积分页的两档口径）。
+                 两者回答的是两个不同的问题，都对，但互相答不了：
+                 · 发布时间 —— 这段时间**发的**内容质量如何（点赞列 = 至今累计）
+                 · 点赞时间 —— 这段时间**产生了**多少互动（点赞列 = 窗口内的赞数，按它排序）
+                 一条三个月前的帖子这周被翻出来点了 50 个赞，只有后者看得见。 -->
+            <label>
+                <select name="dateBasis">
+                    <option value="published" th:selected="${dateBasis != 'liked'}"
+                            th:text="#{admin.content.basis.published}">按发布时间</option>
+                    <option value="liked" th:selected="${dateBasis == 'liked'}"
+                            th:text="#{admin.content.basis.liked}">按点赞时间</option>
+                </select>
+            </label>
             <label>
                 <input type="date" name="from" th:value="${from}"/>
             </label>
@@ -78,10 +91,18 @@
                     与文件内容对不上的子集（筛了却看不出筛过）。 -->
             <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.list_export')"
                class="btn"
-               th:href="@{/admin/content/export.csv(type=${type},authorId=${authorId},from=${from},to=${to},status=${status},q=${q})}"
+               th:href="@{/admin/content/export.csv(type=${type},authorId=${authorId},from=${from},to=${to},status=${status},q=${q},dateBasis=${dateBasis})}"
                th:text="#{admin.content.exportCsv}">导出 CSV</a>
         </form>
 
+        <!-- 「按点赞时间」口径下必须说清两件事，否则这一档的数会被误读。 -->
+        <p class="hint" data-notice="like-basis" th:if="${dateBasis == 'liked'}"
+           th:text="#{admin.content.basis.likedHint}">
+            当前按点赞发生的时间统计：列出这段时间里被点过赞的内容，点赞数是**这段时间内**产生的，不是至今累计；按它从多到少排序。</p>
+        <!-- 🔴 到顶必须明说 —— 一份看不出被截断的报表比没有报表更糟。 -->
+        <p class="hint" data-notice="like-pool-full" th:if="${likeWindowPoolFull}"
+           th:text="#{admin.content.basis.likedPoolFull}">
+            这段时间里有赞的内容超过上限，只纳入了赞数最高的一批。请收窄时间范围后再看。</p>
         <!-- 🔴 Story 17.2 · AC2：确认前必须明示这不是下架。
              不明示运营会把它当下架用，然后向举报人回复「已处理」，而内容其实还在。 -->
         <p class="hint" data-notice="throttle-not-takedown"
@@ -102,7 +123,7 @@
                 <th th:text="#{admin.content.col.images}">图片</th>
                 <!-- bug 20260828：点赞数。产品撤掉了「内容互动积分」整页，
                      运营真正常用的就是这一个数，放回它本来该在的地方。 -->
-                <th th:text="#{admin.content.col.likes}">点赞数</th>
+                <th th:text="${dateBasis == 'liked'} ? #{admin.content.col.likesInWindow} : #{admin.content.col.likes}">点赞数</th>
                 <th th:text="#{admin.content.col.created}">创建时间</th>
                 <th th:text="#{admin.content.col.status}">状态</th>
                 <th sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.throttle_view')"

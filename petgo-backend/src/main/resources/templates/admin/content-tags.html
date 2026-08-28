@@ -155,8 +155,13 @@
                     <span th:text="#{admin.tags.window}">生效时间（WIB，结束可留空 = 永久）</span>
                     <input type="datetime-local" name="startsAt" required/>
                     <input type="datetime-local" name="endsAt"/>
-                    <!-- 🛡 WIB 字样必须在输入框旁 -->
+                    <!-- 🛡 WIB 字样必须在输入框旁。
+                         🔴 光写「WIB」不够（bug 20260828）：运营在 UTC+8，照自己的表填「现在」
+                            落到 WIB 就是一小时后，标签当场看起来「没生效」—— 这已经误判过一次。
+                            把**此刻的 WIB** 直接摆出来，不要求任何人心算时差。 -->
                     <span class="muted">WIB</span>
+                    <span class="muted" data-notice="wib-now"
+                          th:text="#{admin.wibNow(${@adminTime.nowWibForInput()})}">现在是 WIB …</span>
                 </label>
                 <button type="submit" class="btn btn-primary" th:text="#{admin.tags.assign}">打标</button>
             </form>

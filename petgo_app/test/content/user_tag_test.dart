@@ -4,6 +4,8 @@ import 'package:tailtopia/features/auth/domain/user_tag.dart';
 import 'package:tailtopia/features/content/domain/comment.dart';
 import 'package:tailtopia/features/content/domain/feed_item.dart';
 import 'package:tailtopia/shared/widgets/anchored_tooltip.dart';
+import 'package:tailtopia/core/theme/colors.dart';
+import 'package:tailtopia/shared/widgets/tag_icon.dart';
 import 'package:tailtopia/shared/widgets/user_tag_row.dart';
 
 /// V1.1.6 Story 5.1：用户标签的展示与 tooltip。
@@ -172,6 +174,40 @@ void main() {
         ],
       });
       expect(comment.authorTags.single.code, 'vet');
+    });
+  });
+
+  /// 🔴 **图标必须有金色圆底**（UI 稿 `.utag-icon`：14×14 / 圆 / 金色底 / 白色字形）。
+  ///
+  /// 此前实现成"裸图标、无衬底"（bug 20260828）。后果不是少了个装饰：
+  /// 稿子里图标是**白色**的，运营照稿做一枚白色图标传上来，在白色 Feed 背景上
+  /// 完全看不见；而 `TagIcon` 加载失败时同样收缩为零 —— 两种情况长得一模一样，
+  /// 「图标没显示」这件事在实机上因此无法自证，实机排查绕了一大圈。
+  group('bug 20260828 · 图标衬底', () {
+    testWidgets('每个标签图标都套在金色圆底上', (tester) async {
+      await _pumpRow(tester, name: 'Alice', tags: [_tag('a'), _tag('b')]);
+
+      final circles = tester.widgetList<Container>(find.byType(Container))
+          .where((c) => c.decoration is BoxDecoration
+              && (c.decoration! as BoxDecoration).shape == BoxShape.circle)
+          .toList();
+      expect(circles, hasLength(2),
+          reason: '🔴 图标没有圆形衬底 —— 白色图标在白底上会完全看不见');
+      for (final c in circles) {
+        expect((c.decoration! as BoxDecoration).color, AppColors.gold,
+            reason: '🔴 衬底不是稿子里的金色');
+      }
+    });
+
+    testWidgets('圆底 14、内圈 8 —— 与 UI 稿同比例，图标不顶到边缘', (tester) async {
+      await _pumpRow(tester, name: 'Alice', tags: [_tag('a')]);
+
+      final circle = tester.widgetList<Container>(find.byType(Container))
+          .firstWhere((c) => c.decoration is BoxDecoration
+              && (c.decoration! as BoxDecoration).shape == BoxShape.circle);
+      expect(circle.constraints?.maxWidth ?? 0, closeTo(14, 0.01));
+      // 内圈按 8/14 收 —— 直接铺满会让图标压在圆的描边上。
+      expect(tester.widget<TagIcon>(find.byType(TagIcon)).size, closeTo(8, 0.01));
     });
   });
 }

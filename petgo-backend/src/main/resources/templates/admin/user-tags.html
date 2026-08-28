@@ -160,8 +160,13 @@
                     <span th:text="#{admin.utags.window}">生效时间（WIB，结束可留空 = 永久）</span>
                     <input type="datetime-local" name="startsAt" required/>
                     <input type="datetime-local" name="endsAt"/>
-                    <!-- 🛡 WIB 字样必须在输入框旁 -->
+                    <!-- 🛡 WIB 字样必须在输入框旁。
+                         🔴 光写「WIB」不够（bug 20260828）：运营在 UTC+8，照自己的表填「现在」
+                            落到 WIB 就是一小时后，标签当场看起来「没生效」—— 这已经误判过一次。
+                            把**此刻的 WIB** 直接摆出来，不要求任何人心算时差。 -->
                     <span class="muted">WIB</span>
+                    <span class="muted" data-notice="wib-now"
+                          th:text="#{admin.wibNow(${@adminTime.nowWibForInput()})}">现在是 WIB …</span>
                 </label>
                 <button type="submit" class="btn btn-primary" th:text="#{admin.utags.assign}">分配</button>
             </form>
@@ -219,11 +224,12 @@
                         <!-- 🔴 这一列的值来自 App 侧那份权威实现，后台不排序 -->
                         <span class="badge" th:classappend="${a.visible} ? 'badge-ok' : ''"
                               th:text="${a.visible} ? #{admin.utags.visible} : #{admin.utags.hidden}">展示</span>
-                        <!-- 🔴 「不展示」要能分辨原因（bug 20260828）：被前 3 个顶掉，
-                             还是账号已注销。只给一个「不展示」，运营会去撤别的标签、
-                             或者以为是图标坏了 —— 实机上正是后者。 -->
-                        <span class="muted" th:if="${a.deletedUser}"
-                              th:text="#{admin.utags.userDeleted}">该账号已注销，标签永不展示</span>
+                        <!-- 🔴 「不展示」必须说出**原因**（bug 20260828）：四种原因的处置动作
+                             完全不同 —— 注销要撤掉、未开始要等或改时间、已结束要重新分配、
+                             被顶掉要撤别的标签。合并成一个「不展示」等于什么都没说，
+                             实机上运营两次都因此查错了方向（一次怀疑图标，一次怀疑没生效）。 -->
+                        <span class="muted" th:if="${a.hiddenReason != null}"
+                              th:text="#{'admin.utags.why.' + ${a.hiddenReason}}">原因</span>
                     </td>
                     <td sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.tag_manage')">
                         <form class="inline-form" method="post"

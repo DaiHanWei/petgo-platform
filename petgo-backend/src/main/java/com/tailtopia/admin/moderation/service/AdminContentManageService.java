@@ -6,6 +6,7 @@ import com.tailtopia.admin.moderation.read.ViolationType;
 import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.domain.DeleteReason;
 import com.tailtopia.content.dto.AdminContentRow;
+import com.tailtopia.content.repository.ContentLikeRepository;
 import com.tailtopia.admin.moderation.dto.ContentSpeciesRow;
 import com.tailtopia.content.service.ContentService;
 import com.tailtopia.content.species.ContentSpecies;
@@ -163,6 +164,92 @@ public class AdminContentManageService {
         return changed;
     }
 
+    /**
+     * 「按点赞时间」口径一次最多纳入多少条内容。到顶时**在界面上明说**，绝不静默截断。
+     *
+     * <p>它先于其它筛选生效（先按窗口内赞数取前 N，再套类型/作者/关键词），
+     * 所以到顶意味着「这段时间里有赞的内容超过 N 条」，收窄时间范围即可。
+     */
+    private static final int LIKE_WINDOW_POOL = 2000;
+
+    /**
+     * 「这段时间里产生了多少互动」（2026-08-28，取代互动积分页的口径B）。
+     *
+     * <p>🔴 与默认口径回答的是**两个不同的问题**，这正是它必须存在的理由：
+     * <ul>
+     *   <li>默认（按发布时间）：这段时间**发的**内容，质量如何 —— 赞数是至今累计。</li>
+     *   <li>本口径（按点赞时间）：这段时间**产生了**多少互动 —— 一条三个月前的帖子
+     *       这周被翻出来点了 50 个赞，只有它看得见。</li>
+     * </ul>
+     * 两者都对，但回答不了对方的问题。互动积分页原来就是靠这两档并存，撤页时一并丢了。
+     *
+     * <p>取数分两步而不是一条大 SQL：先按窗口内赞数取前 {@link #LIKE_WINDOW_POOL} 条，
+     * 再在内存里套类型/作者/状态/关键词。⚠️ 这**不是**偷懒 —— 窗口内有赞的内容本就是
+     * 全量里很小的一撮，为它拼一条带可空参数的原生 SQL 反而要处理 Postgres 的类型推断
+     * （那个坑这个仓库已经踩过两次）。
+     *
+     * @return 已排好序（窗口内赞数降序）的行 + 窗口内赞数 + 是否到顶
+     */
+    @Transactional(readOnly = true)
+    public LikeWindowPage browseByLikeWindow(String type, Long authorId, LocalDate from,
+            LocalDate to, String status, String q, int page) {
+        Instant fromI = (from == null ? LocalDate.now(WIB).minusDays(6) : from)
+                .atStartOfDay(WIB).toInstant();
+        Instant toI = (to == null ? LocalDate.now(WIB) : to).plusDays(1).atStartOfDay(WIB).toInstant();
+
+        List<ContentLikeRepository.PostLikeCount> pool = likes.countInWindow(fromI, toI,
+                org.springframework.data.domain.PageRequest.of(0, LIKE_WINDOW_POOL));
+        boolean poolFull = pool.size() >= LIKE_WINDOW_POOL;
+        if (pool.isEmpty()) {
+            return new LikeWindowPage(List.of(), java.util.Map.of(), false);
+        }
+
+        java.util.LinkedHashMap<Long, Long> ordered = new java.util.LinkedHashMap<>();
+        pool.forEach(c -> ordered.put(c.getPostId(), c.getLikeCount()));
+
+        // 一次取回，再按 pool 的顺序还原 —— findAllById 不保证顺序。
+        java.util.Map<Long, AdminContentRow> byId = contentService.adminRowsByIds(ordered.keySet())
+                .stream().collect(java.util.stream.Collectors.toMap(AdminContentRow::id, r -> r, (a, b) -> a));
+
+        ContentType ct = parseType(type);
+        Boolean deleted = "DELETED".equals(status) ? Boolean.TRUE
+                : ("ONLINE".equals(status) ? Boolean.FALSE : null);
+        String keyword = (q == null || q.isBlank()) ? null : q.trim().toLowerCase();
+
+        List<AdminContentRow> matched = ordered.keySet().stream()
+                .map(byId::get)
+                .filter(java.util.Objects::nonNull)
+                .filter(r -> ct == null || r.type() == ct)
+                .filter(r -> authorId == null || java.util.Objects.equals(r.authorId(), authorId))
+                .filter(r -> deleted == null || r.deleted() == deleted)
+                .filter(r -> keyword == null
+                        || (r.textPreview() != null
+                            && r.textPreview().toLowerCase().contains(keyword)))
+                .toList();
+
+        // page < 0 = **不分页**（导出用）。⚠️ 用一个显式的负数约定，
+        // 不要拿 Integer.MIN_VALUE 之类去撞 Math.max —— 那会安静地退化成"第一页"，
+        // 导出于是只带出 50 行而没有任何报错（第一版正是这么写的）。
+        if (page < 0) {
+            return new LikeWindowPage(matched, ordered, poolFull);
+        }
+        int offset = page * PAGE_SIZE;
+        List<AdminContentRow> pageRows = offset >= matched.size() ? List.of()
+                : matched.subList(offset, Math.min(offset + PAGE_SIZE, matched.size()));
+        return new LikeWindowPage(pageRows, ordered, poolFull);
+    }
+
+    /**
+     * 「按点赞时间」口径的一页。
+     *
+     * @param windowLikes postId → **窗口内**赞数（不是至今累计）
+     * @param poolFull    候选池已到 {@link #LIKE_WINDOW_POOL} 上限 ⇒ 界面必须提示收窄时间范围。
+     *                    🔴 不提示等于给出一份看不出被截断的报表。
+     */
+    public record LikeWindowPage(List<AdminContentRow> rows, java.util.Map<Long, Long> windowLikes,
+            boolean poolFull) {
+    }
+
     /** 导出一次最多带出多少行。到顶时**在文件尾和审计里都写明**，绝不静默截断。 */
     private static final int EXPORT_MAX_ROWS = 5000;
 
@@ -184,7 +271,13 @@ public class AdminContentManageService {
      */
     @Transactional
     public String exportCsv(long actorAccountId, String type, Long authorId, LocalDate from,
-            LocalDate to, String status, String q) {
+            LocalDate to, String status, String q, String dateBasis) {
+        // 🔴 导出必须跟随屏幕上的**口径**（2026-08-28）：不跟随的话，运营在
+        //    「按点赞时间」下点导出，拿到的却是一份按发布时间筛的表 —— 数字对不上，
+        //    而两份表长得一模一样，他不会怀疑是口径不同。
+        if ("liked".equals(dateBasis)) {
+            return exportLikeWindowCsv(actorAccountId, type, authorId, from, to, status, q);
+        }
         ContentType ct = parseType(type);
         Boolean deleted = "DELETED".equals(status) ? Boolean.TRUE
                 : ("ONLINE".equals(status) ? Boolean.FALSE : null);
@@ -236,6 +329,39 @@ public class AdminContentManageService {
             return "\"\"";
         }
         return '"' + raw.replace("\"", "\"\"") + '"';
+    }
+
+    /** 「按点赞时间」口径的导出。列头里的赞数是**窗口内**的，与屏幕一致。 */
+    private String exportLikeWindowCsv(long actorAccountId, String type, Long authorId,
+            LocalDate from, LocalDate to, String status, String q) {
+        // page=-1 拿不到全部，这里直接把池子当成一页取：口径本身已按 LIKE_WINDOW_POOL 封顶。
+        LikeWindowPage all = browseByLikeWindowAll(type, authorId, from, to, status, q);
+        StringBuilder csv = new StringBuilder(
+                "post_id,type,author_id,likes_in_range,created_at_wib,status,text\n");
+        for (AdminContentRow r : all.rows()) {
+            csv.append(r.id()).append(',')
+                    .append(r.type() == null ? "" : r.type().name()).append(',')
+                    .append(r.authorId() == null ? "" : r.authorId()).append(',')
+                    .append(all.windowLikes().getOrDefault(r.id(), 0L)).append(',')
+                    .append(WIB_CSV.format(r.createdAt().atZone(WIB))).append(',')
+                    .append(r.deleted() ? "DELETED" : "ONLINE").append(',')
+                    .append(csvCell(r.textPreview())).append('\n');
+        }
+        if (all.poolFull()) {
+            csv.append("# 这段时间里有赞的内容超过单次上限 ").append(LIKE_WINDOW_POOL)
+                    .append(" 条，只算了赞数最高的一批，请收窄时间范围后分批导出\n");
+        }
+        auditService.record(actorAccountId, "CONTENT_LIST_EXPORT", "content_post", "-",
+                "basis=liked rows=" + all.rows().size() + " truncated=" + all.poolFull()
+                        + " from=" + from + " to=" + to);
+        return csv.toString();
+    }
+
+    /** 同 {@link #browseByLikeWindow} 但**不分页**（导出用）。page 传 -1 即全部。 */
+    @Transactional(readOnly = true)
+    public LikeWindowPage browseByLikeWindowAll(String type, Long authorId, LocalDate from,
+            LocalDate to, String status, String q) {
+        return browseByLikeWindow(type, authorId, from, to, status, q, -1);
     }
 
     /**

@@ -72,7 +72,7 @@ public class AdminUserTagController {
             model.addAttribute("activeCount", service.activeCount(userId, now));
         }
         // AC3：尺寸规范文案常驻在上传控件旁（三语走 MessageSource）。
-        model.addAttribute("iconSpec", icons.specText());
+        model.addAttribute("iconSpec", icons.specText("userTag"));
         // bug 20260828：用户选择器的首屏候选（htmx 之后再按关键词换）。
         model.addAttribute("candidates", service.pickableUsers(null, 0));
         return "admin/user-tags";

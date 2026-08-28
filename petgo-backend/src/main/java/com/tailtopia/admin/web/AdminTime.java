@@ -21,4 +21,19 @@ public class AdminTime {
     public String wib(Instant t) {
         return t == null ? "—" : WIB_FMT.format(t) + " WIB";
     }
+
+    /**
+     * 「此刻的 WIB 时间」，供 {@code datetime-local} 输入框旁边做参照（bug 20260828）。
+     *
+     * <p>🔴 后台所有 {@code datetime-local} 都按 WIB 解释，而运营在中国（UTC+8）——
+     * 照着自己的表填「现在」，落到 WIB 就是**一小时后**，标签当场看起来「没生效」。
+     * 实机上这已经导致过一次「配了标签用户端不显示」的误判。
+     * 光写「WIB」三个字母不解决问题：那要求运营心算时差。直接把此刻的 WIB 摆出来。
+     *
+     * <p>格式与输入框一致（{@code yyyy-MM-ddTHH:mm}），方便直接照抄。
+     */
+    public String nowWibForInput() {
+        return java.time.LocalDateTime.now(ZoneId.of("Asia/Jakarta"))
+                .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm"));
+    }
 }

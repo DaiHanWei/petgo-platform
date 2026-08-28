@@ -486,4 +486,85 @@ class AdminUserTagIntegrationTest extends ApiIntegrationTest {
                         + "而它取不到时是**静默收缩为零**的，看起来就像运营没配图标")
                 .isEqualTo(iconUrl);
     }
+
+    /**
+     * 🔴 **「不展示」必须说出原因** —— 四种原因的处置动作完全不同（bug 20260828）。
+     *
+     * <p>运营两次栽在同一个「不展示」上：一次以为图标坏了（实际账号已注销），
+     * 一次以为标签没配好（时间窗按 WIB 解释，照自己的表填就填成了未来）。
+     * 一个不带原因的「不展示」把这两次都指向了错误的方向。
+     */
+    @Test
+    void hiddenAssignmentsExplainWhyNotJustThatTheyAreHidden() {
+        Instant now = Instant.now();
+
+        // ① 还没开始（运营按 UTC+8 的表填 WIB 时间，最典型的一种）
+        User future = newUser();
+        tagService.assign(future.getId(), tag("FUT").getId(), now.plusSeconds(3600), null);
+        assertThat(only(future, now).hiddenReason())
+                .isEqualTo(UserAssignmentRow.REASON_NOT_STARTED);
+
+        // ② 已结束
+        User past = newUser();
+        tagService.assign(past.getId(), tag("PAST").getId(),
+                now.minusSeconds(7200), now.minusSeconds(3600));
+        assertThat(only(past, now).hiddenReason()).isEqualTo(UserAssignmentRow.REASON_ENDED);
+
+        // ③ 账号已注销
+        User gone = newUser();
+        tagService.assign(gone.getId(), tag("GONE").getId(), now.minusSeconds(60), null);
+        gone.anonymizeForDeletion(now);
+        users.save(gone);
+        assertThat(only(gone, now).hiddenReason())
+                .isEqualTo(UserAssignmentRow.REASON_DELETED_USER);
+
+        // ④ 生效中但被顶出展示上限（挂 4 个，最早的那个被挤出去）
+        User capped = newUser();
+        for (int i = 0; i < 4; i++) {
+            tagService.assign(capped.getId(), tag("CAP" + i).getId(),
+                    now.minusSeconds(400 - i * 10L), null);
+        }
+        List<UserAssignmentRow> rows = adminService.assignmentsByUser(capped.getId(), now);
+        assertThat(rows).hasSize(4);
+        assertThat(rows.stream().filter(r -> !r.visible()).toList())
+                .singleElement()
+                .extracting(UserAssignmentRow::hiddenReason)
+                .isEqualTo(UserAssignmentRow.REASON_OVER_CAP);
+    }
+
+    /**
+     * 🛡 判定**顺序**：注销压过时间窗。
+     *
+     * <p>一个「开始时间在未来」且「账号已注销」的分配，如果先判时间窗，
+     * 运营会被告知「等等就好」—— 而它其实永远不会展示。
+     */
+    @Test
+    void deletionOutranksTheTimeWindowWhenBothApply() {
+        Instant now = Instant.now();
+        User u = newUser();
+        tagService.assign(u.getId(), tag("BOTH").getId(), now.plusSeconds(3600), null);
+        u.anonymizeForDeletion(now);
+        users.save(u);
+
+        assertThat(only(u, now).hiddenReason())
+                .as("🔴 对一个注销账号说「还没开始」= 让运营白等一场")
+                .isEqualTo(UserAssignmentRow.REASON_DELETED_USER);
+    }
+
+    /** 🛡 展示中的那条**不带原因** —— 否则界面上每行都挂着一句解释，等于没有解释。 */
+    @Test
+    void visibleAssignmentsCarryNoReason() {
+        Instant now = Instant.now();
+        User u = newUser();
+        tagService.assign(u.getId(), tag("SHOW").getId(), now.minusSeconds(60), null);
+        UserAssignmentRow row = only(u, now);
+        assertThat(row.visible()).isTrue();
+        assertThat(row.hiddenReason()).isNull();
+    }
+
+    private UserAssignmentRow only(User u, Instant now) {
+        List<UserAssignmentRow> rows = adminService.assignmentsByUser(u.getId(), now);
+        assertThat(rows).hasSize(1);
+        return rows.get(0);
+    }
 }
