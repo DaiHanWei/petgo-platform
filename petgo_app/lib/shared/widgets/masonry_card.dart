@@ -254,8 +254,18 @@ class MasonryCard extends StatelessWidget {
               children: [
                 if (item.body != null && item.body!.isNotEmpty)
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.screenEdge, 10, AppSpacing.screenEdge, 0),
+                    // 🔴 正文的上内边距**只在有图时才要**（bug 20260828）。
+                    //
+                    // 作者行自己已经带了 10 的下内边距。有图时两者分别是
+                    // 「作者行↔图片」和「图片↔正文」的间隔，各留 10 正好；
+                    // 但**纯文字帖没有图**，这两段留白就首尾相接叠成了 20 ——
+                    // 再加上两行文字各自的行距，实机上头像行和正文之间空出一大条。
+                    //
+                    // ⚠️ 不要改成把作者行的下内边距减半：那会连带把有图帖
+                    //    「作者行↔图片」的间隔也压掉，而那一处是对的。
+                    padding: EdgeInsets.fromLTRB(
+                        AppSpacing.screenEdge, item.hasImage ? 10 : 0,
+                        AppSpacing.screenEdge, 0),
                     // ⚠️ 不加作者名前缀（FR-93 明确要求）。
                     child: Text(item.body!,
                         style: AppTypography.body,

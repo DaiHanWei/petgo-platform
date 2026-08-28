@@ -11,6 +11,7 @@ import 'package:tailtopia/features/content/domain/feed_item.dart';
 import 'package:tailtopia/features/content/presentation/like_button.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/widgets/login_hard_dialog.dart';
+import 'package:tailtopia/shared/widgets/feed_image.dart';
 import 'package:tailtopia/shared/widgets/masonry_card.dart';
 
 /// V1.1.6 Story 3.2：Feed 通栏卡片的**操作行与点击分区**。
@@ -148,6 +149,44 @@ void main() {
           reason: '🔴 发布时间还在正文后面 —— 读者要读完内容才知道这是什么时候发的');
       expect(timeRect.left, closeTo(nameRect.left, 2),
           reason: '🔴 时间没和名字左对齐 ⇒ 它不在署名那一块里，只是恰好排在了上面');
+    });
+
+    /// 🔴 **纯文字帖：头像行与正文之间不许空出一大条**（bug 20260828）。
+    ///
+    /// 作者行自带 10 的下内边距，正文原先又带 10 的上内边距 ——
+    /// 有图时这两段分别是「作者行↔图片」和「图片↔正文」的间隔，各自都对；
+    /// 但纯文字帖没有图，两段留白首尾相接叠成 20，再加上两行文字各自的行距，
+    /// 实机上就是产品截图里那一大条空白。
+    ///
+    /// ⚠️ 断的是「时间那行的底 → 正文的顶」这段**实际距离**，不是内边距的字面值：
+    /// 换个字号或行距，字面值没变而观感会变，只有量距离才守得住。
+    testWidgets('纯文字帖：时间行与正文贴得够近', (tester) async {
+      await tester.pumpWidget(_wrapCard(
+          MasonryCard(item: _item(body: 'android push test'), deletedUserLabel: 'x')));
+      await tester.pump();
+
+      final gap = tester.getRect(find.text('android push test')).top
+          - tester.getRect(find.textContaining(RegExp(r'ago|yang lalu|baru saja'))).bottom;
+      expect(gap, lessThan(16.0),
+          reason: '🔴 头像行和正文之间空出一大条 —— 纯文字帖把两段本该各自成立的'
+              '留白叠在了一起（修复前约 20+）');
+      expect(gap, greaterThanOrEqualTo(0.0), reason: '也不能压到重叠');
+    });
+
+    /// 🛡 反向：**有图帖那两段留白是对的，不许被顺手压掉。**
+    ///
+    /// 没有这一条，把作者行的下内边距减半同样能让上面那条绿 ——
+    /// 代价是有图帖「作者行↔图片」的间隔也没了。
+    testWidgets('有图帖：正文与图片之间仍留着间隔', (tester) async {
+      await tester.pumpWidget(_wrapCard(MasonryCard(
+          item: _item(body: 'ada foto', image: 'https://img.example/1.jpg'),
+          deletedUserLabel: 'x')));
+      await tester.pump();
+
+      final image = tester.getRect(find.byType(FeedImage));
+      final body = tester.getRect(find.text('ada foto'));
+      expect(body.top - image.bottom, greaterThanOrEqualTo(8.0),
+          reason: '🔴 图片和正文贴到一起了 —— 纯文字帖那处修复不该动到有图帖');
     });
   });
 
