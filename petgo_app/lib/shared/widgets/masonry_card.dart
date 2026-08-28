@@ -14,7 +14,8 @@ import 'letter_avatar.dart';
 
 /// Feed 单列卡片。**V1.1.6 Story 3.2 起为通栏版式**（FR-93）。
 ///
-/// 自上而下：作者行 → 图片 → 操作行（点赞 / 评论）→ 正文 → 时间。
+/// 自上而下：作者行 → 图片（如有）→ 正文 → 时间 → 操作行（点赞 / 评论 / 分享）。
+/// 🔴 操作行 2026-08-28 从「图片与正文之间」挪到最后 —— 见下方 build 里的说明。
 ///
 /// ## 🔴 只有图片出血
 /// 「去掉屏边距」指的是**列表容器**那 16px，好让**图片**贴到屏幕左右边缘；
@@ -215,10 +216,50 @@ class MasonryCard extends StatelessWidget {
               ],
             ),
           ),
-          // 操作行：点赞就地切换、评论跳详情定位评论区 —— 都**不**走整块点击。
+          // 正文与时间：同样走整块点击。
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            onLongPress: onLongPress,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (item.body != null && item.body!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.screenEdge, 10, AppSpacing.screenEdge, 0),
+                    // ⚠️ 不加作者名前缀（FR-93 明确要求）。
+                    child: Text(item.body!,
+                        style: AppTypography.body,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.screenEdge, 5, AppSpacing.screenEdge, 0),
+                  child: Text(time,
+                      style: const TextStyle(fontSize: 11, color: AppColors.muted),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                ),
+              ],
+            ),
+          ),
+          // 操作行（点赞 / 评论 / 分享）：点赞就地切换、评论跳详情定位评论区 —— 都**不**走整块点击。
+          //
+          // 🔴 **排在正文之后**（bug 20260828）。原先它夹在图片与正文之间（照 Instagram 的
+          //    「图 → 操作 → 文案」惯例），但那套惯例的前提是**有图**：图片本身就是内容，
+          //    操作行贴着它才成立。而纯文字帖没有图 ⇒ 变成「头像 → 点赞评论分享 → 正文」，
+          //    读者还没看到内容就先看到了对它的操作。实机反馈正是拿一条纯文字帖截的图。
+          //
+          // ⚠️ 有图帖也一并挪到正文之后（产品指定顺序：头像行 → 图片 → 文字 → 操作行）——
+          //    不按「有没有图」分两套顺序：同一个列表里两种卡的操作行位置忽上忽下，
+          //    比统一放底部更难用（手指要在两个高度之间找按钮）。
           Padding(
+            // ⚠️ 下内边距不能是 0：操作行现在是卡片**最后一个**元素，
+            //    0 会让图标直接贴上卡间分隔线（原先最后一个是时间那行小字，贴着不明显）。
             padding: const EdgeInsets.fromLTRB(
-                AppSpacing.screenEdge, 10, AppSpacing.screenEdge, 0),
+                AppSpacing.screenEdge, 10, AppSpacing.screenEdge, 6),
             child: Row(
               children: [
                 LikeButton(
@@ -259,35 +300,6 @@ class MasonryCard extends StatelessWidget {
                         size: 20, color: AppColors.textSecondary),
                   ),
                 ],
-              ],
-            ),
-          ),
-          // 正文与时间：同样走整块点击。
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onTap,
-            onLongPress: onLongPress,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (item.body != null && item.body!.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.screenEdge, 10, AppSpacing.screenEdge, 0),
-                    // ⚠️ 不加作者名前缀（FR-93 明确要求）。
-                    child: Text(item.body!,
-                        style: AppTypography.body,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis),
-                  ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.screenEdge, 5, AppSpacing.screenEdge, 0),
-                  child: Text(time,
-                      style: const TextStyle(fontSize: 11, color: AppColors.muted),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
-                ),
               ],
             ),
           ),
