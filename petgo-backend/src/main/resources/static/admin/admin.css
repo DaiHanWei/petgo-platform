@@ -105,6 +105,15 @@ nav a.disabled { color: #6E6883; pointer-events: none; }
 .nav-sub a.active { background: rgba(255, 255, 255, .10); color: #fff; border-left-color: var(--brand); }
 
 main { flex: 1; padding: 24px 32px; }
+
+/* 🔴 含原生日期选择器的页面，底部要留出弹层的位置（bug 20260828）。
+   现象：顶置管理的「生效时间」点开日历后，弹层被窗口底边裁掉，而页面**滚不动** ——
+   页面本身不够长，浏览器没有可滚的余量，运营只能盲选或改窗口大小。
+   原生 datetime-local 的弹层由浏览器绘制，位置与高度都控制不了，只能给它腾地方。
+   ⚠️ 用 :has() 精确命中，**不给所有页面加空白**：目前 5 个页面有这类输入
+   （顶置管理 / 装饰标签 / 用户标签 / 排期管理 / 批次工作台）。
+   ⚠️ 老浏览器不支持 :has() 时规则整条失效 —— 退回今天的行为，不会更糟。 */
+main:has(input[type="datetime-local"]) { padding-bottom: 340px; }
 .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
 .topbar form { margin: 0; }
 .topbar .lang { font-size: var(--fs-xs); color: var(--muted); }

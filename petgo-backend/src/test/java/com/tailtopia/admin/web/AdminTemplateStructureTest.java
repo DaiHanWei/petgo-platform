@@ -187,6 +187,75 @@ class AdminTemplateStructureTest {
                 .isEmpty();
     }
 
+    /**
+     * 🔴 有原生日期选择器的页面，底部必须留出弹层的位置（bug 20260828）。
+     *
+     * 现象：顶置管理的「生效时间」点开日历后，弹层被窗口底边裁掉，而页面**滚不动** ——
+     * 页面本身不够长，浏览器没有可滚的余量，运营只能盲选或去改窗口大小。
+     * 原生 {@code datetime-local} 的弹层由浏览器绘制，位置与高度都控制不了，只能给它腾地方。
+     *
+     * <p>⚠️ 钉的是「这条 CSS 还在」。它是一行容易被当成多余空白删掉的规则，
+     * 而删掉之后**页面照常渲染、所有测试照常绿**，只有运营下次点日历时才发现 ——
+     * 与本类守的其它几条同一性质。
+     */
+    @Test
+    void pagesWithNativeDatePickersReserveRoomForThePopup() throws IOException {
+        List<String> withPicker = new ArrayList<>();
+        for (Path f : templates()) {
+            if (Files.readString(f, StandardCharsets.UTF_8).contains("datetime-local")) {
+                withPicker.add(fileName(f));
+            }
+        }
+        assertThat(withPicker).as("本条的前提是确实有页面用原生日期选择器").isNotEmpty();
+
+        String css = Files.readString(
+                Path.of("src", "main", "resources", "static", "admin", "admin.css"),
+                StandardCharsets.UTF_8);
+        assertThat(css)
+                .as("🔴 这些页面用了原生日期选择器：" + withPicker
+                        + "，但 admin.css 里没有给弹层留空间的规则 —— "
+                        + "日历会被窗口底边裁掉且页面滚不动")
+                .contains("input[type=\"datetime-local\"]")
+                .contains("padding-bottom");
+    }
+
+    /**
+     * 🔴 **构建产物里不得有源码树之外的迁移**（切分支残留）。
+     *
+     * <h2>这条守的是一个反复浪费时间的坑</h2>
+     * `mvn` 的 process-resources 只**覆盖**、不删除 —— 在 A 分支打过包再切到 B 分支跑测试，
+     * `target/classes/db/migration` 里会留着 A 独有的迁移文件，被当成本分支的一起执行。
+     * 报错长这样：
+     * <pre>Failed to execute script V105__...sql: column "sex" already exists</pre>
+     * 看着像**代码坏了**，实际只需要 `mvn clean`。同一个坑 2026-08-26 到 28 踩了三次，
+     * 每次都要先怀疑一遍自己的改动。
+     *
+     * <p>⚠️ 本条**只在 target 已存在时**比对（先跑过 compile/test）。它不能阻止那次失败，
+     * 但能把一个指向错误方向的 Flyway 报错，换成一句「先 mvn clean」。
+     */
+    @Test
+    void buildOutputCarriesNoStaleMigrationsFromAnotherBranch() throws IOException {
+        Path built = Path.of("target", "classes", "db", "migration");
+        if (!Files.isDirectory(built)) {
+            return; // 还没编译过，无从比对
+        }
+        Set<String> inSource = new TreeSet<>();
+        try (Stream<Path> f = Files.list(Path.of("src", "main", "resources", "db", "migration"))) {
+            f.forEach(p -> inSource.add(p.getFileName().toString()));
+        }
+        List<String> stale = new ArrayList<>();
+        try (Stream<Path> f = Files.list(built)) {
+            f.map(p -> p.getFileName().toString())
+                    .filter(n -> n.endsWith(".sql") && !inSource.contains(n))
+                    .forEach(stale::add);
+        }
+        assertThat(stale)
+                .as("🔴 target 里有源码树里没有的迁移 —— 多半是在另一条分支打过包后没 clean。"
+                        + "它们会被 Flyway 当成本分支的迁移执行，报出指向错误方向的错误"
+                        + "（「column already exists」之类）。**先跑 `./mvnw clean`**")
+                .isEmpty();
+    }
+
     /** 该锚点元素内部起了一个片段 ⇒ 它是片段的外壳，不参与整页渲染，合法。 */
     private boolean wrapsAFragment(List<String> lines, int line, Matcher anchor, List<Span> fragments) {
         String tag = anchor.group(1) != null ? "form"
