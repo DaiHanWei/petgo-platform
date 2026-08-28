@@ -112,6 +112,16 @@ public class User {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /**
+     * 最后活跃时刻（UTC，留存手册抓手 1）。任意已认证 {@code /api/v1} 请求每日至多刷新一次
+     * （{@code UserActivityFilter}），是生命周期召回推送「7 天未回」判定的<b>唯一依据</b>。
+     *
+     * <p>🔒 仅服务端内部使用：不进 {@code AuthorView} / 名片 / Feed 投影，不出任何对外 API
+     * —— 「某人最后一次上线是什么时候」对其他用户是隐私。
+     */
+    @Column(name = "last_active_at")
+    private Instant lastActiveAt;
+
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
@@ -321,6 +331,10 @@ public class User {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public Instant getLastActiveAt() {
+        return lastActiveAt;
     }
 
     public Instant getUpdatedAt() {

@@ -2,10 +2,14 @@ package com.tailtopia.auth.service;
 
 import com.tailtopia.auth.domain.Role;
 import com.tailtopia.auth.domain.User;
+import com.tailtopia.auth.domain.AccountType;
 import com.tailtopia.auth.domain.UserStatus;
 import com.tailtopia.auth.dto.AuthorView;
+import com.tailtopia.auth.dto.UserLifecycleSnapshot;
 import com.tailtopia.auth.repository.UserRepository;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -155,6 +159,40 @@ public class AccountQueryService {
         return users.findById(userId)
                 .filter(u -> u.getDeletedAt() == null)
                 .map(User::getSignature);
+    }
+
+    /**
+     * 生命周期推送日扫快照（留存手册抓手 1）。只读端口 —— notify 模块<b>不直访</b> users 表。
+     *
+     * <p>日期一律折 UTC：定时日扫、{@code created_at}、{@code last_active_at} 三者必须同一基准，
+     * 否则「注册满 1 天」会在时区边界上抖动，同一个人可能连着两天各收一条 D1。
+     */
+    @Transactional(readOnly = true)
+    public List<UserLifecycleSnapshot> lifecycleSnapshots() {
+        return users.findLifecyclePushCandidates(Role.USER, AccountType.REAL, UserStatus.ACTIVE)
+                .stream()
+                .map(u -> new UserLifecycleSnapshot(
+                        u.getId(),
+                        toUtcDate(u.getCreatedAt()),
+                        toUtcDate(u.getLastActiveAt()),
+                        u.getPublishedCount()))
+                .toList();
+    }
+
+    /**
+     * 刷新「最后活跃」（留存手册抓手 1）。每日至多落一次写（条件 UPDATE 幂等，见 repository 注释）。
+     *
+     * <p>独立事务：调用方是请求链路上的 filter，活跃刷新失败<b>绝不可</b>波及业务事务
+     * —— 记不上「他今天来过」最多让召回推送晚一轮，让用户的请求 500 则是真事故。
+     */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public void touchLastActive(long userId, Instant now) {
+        users.touchLastActiveAt(userId, now, now.atZone(ZoneOffset.UTC).toLocalDate()
+                .atStartOfDay(ZoneOffset.UTC).toInstant());
+    }
+
+    private static LocalDate toUtcDate(Instant instant) {
+        return instant == null ? null : instant.atZone(ZoneOffset.UTC).toLocalDate();
     }
 
     private static AuthorView toAuthorView(User u) {

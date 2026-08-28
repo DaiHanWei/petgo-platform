@@ -42,9 +42,17 @@ public class ScheduledPushDispatcher {
             marks.save(ScheduledPushMark.of(push.petProfileId(), push.type().name(), push.nodeKey()));
             String[] text = buildText(push);
             // recipient = 档案主人；deepLinkType = type 名（客户端 pushPayloadToLocation 据此映射固定目标）。
-            // targetRef 内部存 petProfileId（不外泄）；deepLinkToken 由 send 自动生成（不可枚举）。
-            notificationService.send(push.ownerId(), push.type(), text[0], text[1],
-                    push.type().name(), String.valueOf(push.petProfileId()));
+            // targetRef 内部存 petProfileId（不外泄）；deepLinkToken 由 sendWithCopy 自动生成（不可枚举）。
+            //
+            // 🔴 走 sendWithCopy 而非 send（bug：生日推送丢宠物名）——
+            //    send 取的是**静态**键 notify.<TYPE>.body（args=null），会把上面拼好的
+            //    「Mochi 明天满 3 岁」整句覆盖成「Hari ini ulang tahun anabulmu」（"今天是你家宠物生日"）：
+            //    宠物名没了，而且计划器明明是**提前 1 天**推的，文案却说"今天"。
+            //    留存作战手册的铁律恰恰是「文案必须带宠物名」——「记录 Mochi 的一个瞬间」
+            //    和「回来看看」是两个转化率量级。改用参数化键 + {0}=宠物名 / {1}=数字。
+            notificationService.sendWithCopy(push.ownerId(), push.type(), copyKey(push),
+                    new Object[] {petName(push), String.valueOf(push.number())},
+                    text[0], text[1], String.valueOf(push.petProfileId()));
         } catch (DataIntegrityViolationException dup) {
             // 并发/重扫撞唯一约束 → 已推，安全跳过。
         } catch (RuntimeException e) {
@@ -54,9 +62,26 @@ public class ScheduledPushDispatcher {
         }
     }
 
-    /** 印尼语推送文案（[title, body]，市场主语言）。不含健康数据明文。 */
+    /**
+     * 文案 i18n 键。生日/纪念日直接用 type 名；
+     * 「第一个生日」里程碑另起 {@code MILESTONE_NODE.FIRST_BIRTHDAY} 子键 ——
+     * {@code notify.MILESTONE_NODE.*} 还被 {@code MilestoneNotifyListener} 用着，
+     * 那条路径不带参数，把它改成含 {@code {0}} 的串会让用户真的看到一个字面量「{0}」。
+     */
+    private String copyKey(PlannedPush push) {
+        return push.type() == com.tailtopia.notify.domain.NotificationType.MILESTONE_NODE
+                ? push.type().name() + "." + ScheduledPushPlanner.FIRST_BIRTHDAY_NODE
+                : push.type().name();
+    }
+
+    /** 宠物名，缺失回退印尼语「你的毛孩子」。 */
+    private String petName(PlannedPush push) {
+        return push.petName() == null || push.petName().isBlank() ? "hewanmu" : push.petName();
+    }
+
+    /** i18n 缺键时的兜底印尼语文案（[title, body]，市场主语言）。不含健康数据明文。 */
     private String[] buildText(PlannedPush push) {
-        String name = push.petName() == null ? "hewanmu" : push.petName();
+        String name = petName(push);
         return switch (push.type()) {
             case PET_BIRTHDAY -> new String[] {
                     "🎂 Pengingat ulang tahun",

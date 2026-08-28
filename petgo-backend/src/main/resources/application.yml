@@ -14,6 +14,16 @@ petgo:
     apple:
       # Apple Sign-In client id（aud 校验，通常 = iOS bundle id）。env 注入；留空时跳过 aud 严格校验（仅 dev/L0）。
       client-id: ${APPLE_CLIENT_ID:}
+  # 生命周期推送（留存运营作战手册 · 抓手 1）：D1 / D3 / D7 / 7 天未回召回，打 D1 留存 9.6% → 20%。
+  # 🔴 enabled 默认 false：迁移把存量用户 last_active_at 回填成 updated_at 后，一大批老用户会立刻
+  #    满足「7 天未回」。随部署自动生效 = 第一次日扫给几百人同时推召回。手册要的是「按 SOP 放量、
+  #    看漏斗、换文案」，所以上线后由运营在 env 里显式打开，并用 daily-cap 按天放量。
+  lifecycle-push:
+    enabled: ${LIFECYCLE_PUSH_ENABLED:false}
+    daily-cap: ${LIFECYCLE_PUSH_DAILY_CAP:200}
+    winback-after-days: ${LIFECYCLE_PUSH_WINBACK_AFTER_DAYS:7}
+    # 12:00 UTC = 19:00 WIB，晚间黄金时段。别照抄 Story 6.7 的 01:00 UTC（=08:00 WIB 通勤路上）。
+    cron: ${LIFECYCLE_PUSH_CRON:0 0 12 * * *}
   # AI 智能分诊（Story 4.1）：Gemini Developer API（gemini-2.5-flash，签名 URL 直拉私密图）。
   # mode=stub（默认）走打桩客户端，无凭证即可启动并验状态机；mode=live 才打真实 Gemini（L2，需 key）。
   ai:
