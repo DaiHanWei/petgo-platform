@@ -131,6 +131,8 @@ main:has(input[type="datetime-local"]) { padding-bottom: 340px; }
     max-width: 680px;
 }
 .card-wide { max-width: 920px; }
+/* 与全宽表格同宽的卡片（表格是 width:100%，卡片默认 680px 上限会让两者错位）。 */
+.card-full { max-width: none; }
 .muted { color: var(--muted); font-size: var(--fs-sm); }
 .hint { color: var(--muted); font-size: var(--fs-xs); margin-top: 4px; }
 .empty { color: var(--muted); padding: 24px; }

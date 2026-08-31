@@ -43,7 +43,8 @@
              订单数含全部状态，收入只算已支付且真正收到钱的（PawCoin 抵扣不是现金收入，
              混合支付只有现金段算）。金币抵扣单列出来，是为了让运营对得上账 ——
              现金 + 金币 = 已支付订单的金额合计。 -->
-        <div class="card" data-notice="payments-summary" th:if="${summary != null}">
+        <!-- card-full：与下方表格同宽（2026-08-31 用户要求），不然 680px 的卡片和全宽表格错位。 -->
+        <div class="card card-full" data-notice="payments-summary" th:if="${summary != null}">
             <span th:text="#{admin.payments.sum.orders(${summary.orderCount()})}">订单数</span>
             &nbsp;·&nbsp;
             <span th:text="#{admin.payments.sum.paid(${summary.paidCount()})}">已支付</span>
