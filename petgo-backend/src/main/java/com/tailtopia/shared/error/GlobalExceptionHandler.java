@@ -7,16 +7,19 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.util.unit.DataSize;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -32,8 +35,13 @@ public class GlobalExceptionHandler {
 
     private final com.tailtopia.shared.i18n.Messages messages;
 
-    public GlobalExceptionHandler(com.tailtopia.shared.i18n.Messages messages) {
+    /** 与 {@code spring.servlet.multipart.max-file-size} 同源——文案里的数字不另写死，避免两处对不上。 */
+    private final DataSize maxFileSize;
+
+    public GlobalExceptionHandler(com.tailtopia.shared.i18n.Messages messages,
+            @Value("${spring.servlet.multipart.max-file-size:1MB}") DataSize maxFileSize) {
         this.messages = messages;
+        this.maxFileSize = maxFileSize;
     }
 
     @ExceptionHandler(AppException.class)
@@ -83,6 +91,23 @@ public class GlobalExceptionHandler {
         ProblemDetail pd = base(HttpStatus.BAD_REQUEST, ErrorTypes.VALIDATION, "Bad Request",
                 "请求格式不正确", req);
         return ResponseEntity.badRequest().body(pd);
+    }
+
+    /**
+     * 上传超出 multipart 上限 → 413，并给出**具体 MB 数**。
+     *
+     * <p>🔴 这一段是在 controller <b>之前</b>发生的：Tomcat 解析 multipart 时就抛，
+     * 所以 {@code AdminSeedImageService} 里那道 10MB 校验根本轮不到执行。
+     * 不单独接住它，就会掉进最后的 catch-all → 500「服务暂时不可用」，
+     * 运营看到的是一句与体积毫无关系的话，只会反复重传同一张图。
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ProblemDetail> handleUploadTooLarge(MaxUploadSizeExceededException ex,
+            HttpServletRequest req) {
+        ProblemDetail pd = base(HttpStatus.PAYLOAD_TOO_LARGE, ErrorTypes.VALIDATION,
+                "Payload Too Large",
+                messages.get("admin.seed.upload.tooLarge", maxFileSize.toMegabytes()), req);
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(pd);
     }
 
     /**

@@ -20,9 +20,15 @@ class GlobalExceptionHandlerTest {
                 new com.tailtopia.shared.i18n.AdminLocaleConfig().messageSource());
     }
 
+    /** 与 application.yml 的 spring.servlet.multipart.max-file-size 同值——超限文案里的数字取自它。 */
+    private static GlobalExceptionHandler handler() {
+        return new GlobalExceptionHandler(messages(),
+                org.springframework.util.unit.DataSize.ofMegabytes(10));
+    }
+
     private final MockMvc mockMvc = MockMvcBuilders
             .standaloneSetup(new PingErrorController())
-            .setControllerAdvice(new GlobalExceptionHandler(messages()))
+            .setControllerAdvice(handler())
             .build();
 
     /**
@@ -32,10 +38,30 @@ class GlobalExceptionHandlerTest {
      */
     @Test
     void accessDeniedIsRethrownNotSwallowedAs500() {
-        var handler = new GlobalExceptionHandler(messages());
+        var handler = handler();
         var denied = new org.springframework.security.authorization.AuthorizationDeniedException("Access Denied");
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> handler.handleAccessDenied(denied))
                 .isSameAs(denied);
+    }
+
+    /**
+     * 上传超出 multipart 上限 → 413 且 detail 里带**具体 MB 数**。
+     *
+     * <p>护的是一次真实事故：{@code spring.servlet.multipart.max-file-size} 没配，Boot 默认 1MB，
+     * Tomcat 在进 controller 之前就抛 {@code MaxUploadSizeExceededException} →
+     * 落进 catch-all → 500「服务暂时不可用」。运营看到的是一句与体积无关的话，
+     * 而 AdminSeedImageService 那道 10MB 校验与它的文案**永远走不到**。
+     */
+    @Test
+    void oversizedUploadIsPayloadTooLargeWithConcreteLimit() {
+        var req = new org.springframework.mock.web.MockHttpServletRequest(
+                "POST", "/admin/shop/banners/images");
+        var pd = handler().handleUploadTooLarge(
+                new org.springframework.web.multipart.MaxUploadSizeExceededException(10L * 1024 * 1024),
+                req);
+        org.assertj.core.api.Assertions.assertThat(pd.getStatusCode().value()).isEqualTo(413);
+        org.assertj.core.api.Assertions.assertThat(pd.getBody()).isNotNull();
+        org.assertj.core.api.Assertions.assertThat(pd.getBody().getDetail()).contains("10");
     }
 
     @Test

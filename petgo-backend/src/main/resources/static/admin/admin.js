@@ -342,21 +342,60 @@ document.addEventListener('submit', function (e) {
         fetch(root.getAttribute('data-upload-url'), {
             method: 'POST', body: body, headers: headers, credentials: 'same-origin'
         }).then(function (r) {
-            return r.json().then(function (j) { return { ok: r.ok, body: j }; });
+            // 🔴 会话过期要**单独认出来**：后台会话 8h 过期，过期后这个 POST 会被重定向到
+            //    /admin/login，而 fetch 默认跟随重定向 ⇒ 拿到的是 **200 + 登录页 HTML**。
+            //    不认它就会报成"上传失败，请重试" —— 而重试一万次也不会成功，
+            //    真正要做的是重新登录。判据用 r.redirected + 落点，不猜响应体。
+            if (r.redirected && r.url && r.url.indexOf('/admin/login') >= 0) {
+                return { ok: false, status: r.status, body: null, expired: true };
+            }
+            // 🔴 不能直接 r.json()：失败响应**未必是 JSON**。
+            //    403（缺 CSRF 头）回的是 Security 的错误页，5xx 回的是 RFC 9457 信封。
+            //    早先在这里直接解析，非 JSON 一律抛进下面的 catch，而 catch 只清了状态字
+            //    —— 界面上一个字都不显示，表现为"选了图没反应"，排障时毫无线索。
+            return r.text().then(function (t) {
+                var parsed = null;
+                try { parsed = t ? JSON.parse(t) : null; } catch (e) { parsed = null; }
+                return { ok: r.ok, status: r.status, body: parsed };
+            });
         }).then(function (res) {
             if (status) { status.textContent = ''; }
+            if (res.expired) {
+                showError(root, file, root.getAttribute('data-msg-expired') || 'session expired');
+                return;
+            }
             if (!res.ok) {
-                // 被拒的那张单独报错，不影响其余（HEIC / 超 10MB 都是**预期内**的输入）。
-                var p = document.createElement('p');
-                p.className = 'err';
-                p.textContent = (file.name || '') + '：' + (res.body.error || 'upload failed');
-                root.querySelector('[data-seed-thumbs]').appendChild(p);
+                // 被拒的那张单独报错，不影响其余（HEIC / 超限都是**预期内**的输入）。
+                // error 是本链路自定义的字段；detail 是 RFC 9457 的；两者都没有才回落通用文案，
+                // 并**带上状态码** —— 否则 403 与 500 在界面上长得一模一样，没法分诊。
+                var text = (res.body && (res.body.error || res.body.detail))
+                        || failedText(root) + '（HTTP ' + res.status + '）';
+                showError(root, file, text);
+                return;
+            }
+            if (!res.body || !res.body.url) {
+                // 200 却拿不到可用信封 —— 宁可报错，也不能让 addThumb 拿 null 崩在 then 里
+                // （那会掉进 catch，错因被抹平成一句通用文案）。
+                showError(root, file, failedText(root));
                 return;
             }
             addThumb(root, res.body);
         }).catch(function () {
+            // 网络层就没走通（断网 / 被扩展拦掉）。同样必须出声。
             if (status) { status.textContent = ''; }
+            showError(root, file, failedText(root));
         });
+    }
+
+    function failedText(root) {
+        return root.getAttribute('data-msg-failed') || 'upload failed';
+    }
+
+    function showError(root, file, text) {
+        var p = document.createElement('p');
+        p.className = 'err';
+        p.textContent = (file.name || '') + '：' + text;
+        root.querySelector('[data-seed-thumbs]').appendChild(p);
     }
 
     function eachRoot(fn) {

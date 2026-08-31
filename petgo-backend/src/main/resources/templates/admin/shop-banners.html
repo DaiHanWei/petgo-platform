@@ -9,6 +9,13 @@
     <title th:text="#{admin.shop.banners.title}">Toko 顶部 Banner · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
+    <!-- 🔴 上传走 fetch，而 /admin/** 那条过滤链**保留 CSRF** —— 少了这两个 meta
+         就是 403，且会被误读成"权限不够"。表单提交有 Thymeleaf 自动带的隐藏域，
+         fetch 没有，必须自己从这里取。
+         ⚠️ 不能挪到 admin/layout.html 统一放：业务页用 th:replace 只换掉 body 里那个 div，
+         各页保留**自己的 <head>**（layout 注释亦言明"各业务页在自身 head 引入"）。 -->
+    <meta name="_csrf" th:content="${_csrf?.token}"/>
+    <meta name="_csrf_header" th:content="${_csrf?.headerName}"/>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
@@ -113,7 +120,9 @@
                                           data-msg-cover=#{admin.seed.images.cover},
                                           data-msg-limit=#{admin.shop.form.images.limit},
                                           data-msg-remove=#{admin.seed.images.remove},
-                                          data-msg-uploading=#{admin.seed.images.uploading}">
+                                          data-msg-uploading=#{admin.seed.images.uploading},
+                                          data-msg-failed=#{admin.seed.upload.failed},
+                                          data-msg-expired=#{admin.seed.upload.sessionExpired}">
                                 <input type="file" data-seed-file
                                        accept="image/jpeg,image/png,image/webp"/>
                                 <p class="hint" th:text="#{admin.shop.form.images.hint}">可直接 Ctrl+V 粘贴。</p>

@@ -193,6 +193,16 @@ spring:
     scheduling:
       pool:
         size: ${TASK_SCHEDULING_POOL_SIZE:4}
+  # 🔴 后台图片上传（banner / 商品图 / 种子内容）的**真正**上限在这里。
+  # Boot 默认 max-file-size=1MB，而 AdminSeedImageService.MAX_BYTES 写的是 10MB ——
+  # 不配这段，Tomcat 在**进 controller 之前**就拒掉 >1MB 的请求，那段 10MB 校验
+  # 与 admin.seed.upload.tooLarge 文案**永远走不到**（banner 是整屏宽主视觉，必超 1MB）。
+  # ⚠️ 改 MAX_BYTES 必须同步改这里：这里只负责放行，判定点唯一地留在服务层。
+  servlet:
+    multipart:
+      max-file-size: ${MULTIPART_MAX_FILE_SIZE:10MB}
+      # 整请求上限：本控件一张图一个请求，留一倍余量兜住表单其余字段。
+      max-request-size: ${MULTIPART_MAX_REQUEST_SIZE:20MB}
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:petgo}
     username: ${DB_USER:petgo}
