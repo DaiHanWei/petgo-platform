@@ -27,27 +27,69 @@ import '../../domain/share_card_data.dart';
 class ShareCardTemplate extends StatelessWidget {
   const ShareCardTemplate({super.key, required this.data, required this.canvas});
 
-  /// 图片区的 key（回归测试量图片占比用）。
+  /// 三段的 key（回归测试量占比用）。
   static const String shareCardImageAreaKey = 'shareCardImageArea';
+  static const String shareCardContentAreaKey = 'shareCardContentArea';
+  static const String shareCardBrandAreaKey = 'shareCardBrandArea';
 
   final ShareCardData data;
   final CardCanvas canvas;
 
-  /// 图片区占画布高度的**下界**（长正文时）。
+  /// 🔴 **卡面三段占比**（产品 2026-08-28 定稿）：图片 65% / 作者+正文 20% / 品牌 15%。
   ///
-  /// 这个数原本是**唯一**的图片高度比例，两种画布共用。1:1 下看着正常，
-  /// 9:16 下就出事了：画布高 1920，42% 给图、剩下 1114px 全归文字区 ——
-  /// 而「disini」这种一行的短文案根本填不满，卡面中间空出一大条白
-  /// （2026-08-26 实机截图）。
-  static const double _minImageFraction = 0.42;
+  /// <h2>这一版的取舍（产品 2026-08-28 二次拍板）</h2>
+  /// 分两半看：
+  /// - **品牌段固定** 15%（1:1 上被二维码底线抬高，见 [_brandBand]）——
+  ///   一批卡混着发到 Story 里**成套**靠的就是这条底边一样高。
+  /// - **上面 85% 按内容伸缩**，只夹上下界（[_contentMinOfRest] / [_contentMaxOfRest]）。
+  ///
+  /// 🔴 这是对同日早些时候「三段全固定」的**修正**，不是把它推翻重来：
+  /// 全固定确实让每张卡一样高，但代价是一行短文案时内容段白掉约 100px ——
+  /// 而那 100px 本该给图片。产品看过实机后判定「白一条」比「图文比例略有差异」更刺眼，
+  /// 于是只保留真正决定成套感的那一段（品牌段）固定。
+  ///
+  /// ⚠️ 因此**图片段不再是一个可以写死断言的数**。回归测试改断上下界与单调性
+  /// （正文越长 → 内容段越高、图片段越矮），不要再改回 `closeTo(0.65)` ——
+  /// 那会让「按内容伸缩」这件事在测试里彻底失效。
+  static const double _brandShare = 0.15;
 
-  /// 图片区占画布高度的**上界**（短正文时）。
+  /// 内容段（作者行 + 正文）在**非品牌区**里的上下界。
   ///
-  /// 🔴 有上界才不会走到另一个极端：图片顶到底、作者名与二维码被挤成一条缝。
-  /// 0.64 是让 9:16 的图片区略高于正方形（1080×1229）—— 竖屏 Story 里
-  /// 这个形状最接近观看者手机的取景，同时下半部分仍留得住
-  /// 「作者 + 三四行文案 + 分隔线 + 二维码」。
-  static const double _maxImageFraction = 0.64;
+  /// 段高本身**取正文实际需要的高度**，这两个数只是把它夹住：
+  /// - 下界 [_contentMinOfRest]：正文只有一行时，段高不至于缩到只剩作者行紧贴图片，
+  ///   下方还留得出一点呼吸；也保证 `1 - 上界` 之外总有确定的图片高度可算。
+  /// - 上界 [_contentMaxOfRest]：正文再长也不能把图片挤没。9:16 上 0.45 约 6 行，
+  ///   超出部分由 [_body] 按剩余高度自己收行（`…` 截断），**不会溢出**。
+  ///
+  /// ⚠️ 写成「占非品牌区的比例」而不是「占整卡的比例」：品牌段在 1:1 上会被二维码
+  /// 抬高（见 [_brandBand]），若按整卡算，1:1 上的上界会连带吃掉本就不多的图片高度。
+  static const double _contentMinOfRest = 0.18;
+  static const double _contentMaxOfRest = 0.45;
+
+  /// 品牌段最少要多高，**由二维码反算**（不是拍一个数）。
+  ///
+  /// 🔴 二维码的可扫底线是 [CardQr.minExportSide]=140px，而它**实际占位是 1.38 倍**——
+  /// 四周必须留 4 个码元的静默区（[CardQr.footprintFor]），少了就扫不出来。
+  /// 所以真正要预留的是 140×1.381 ≈ 193px，再加一条分隔线与上下留白。
+  ///
+  /// ⚠️ **写成反算而不是写死 19%**：这个数同时取决于画布高、可扫底线、静默区规则。
+  /// 写死的话，将来任何一处一动，代码会安静地产出一张**扫不出来的码** ——
+  /// 而二维码是卡片发到 Story 后唯一的转化通路，坏了没人会立刻发现。
+  double get _minBrandPx =>
+      CardQr.footprintFor(CardQr.minExportSide) + _dividerPx + _brandVPad * 2;
+
+  /// 品牌段实际占比：取「产品定的 15%」与「二维码装得下的最小值」中的**较大者**。
+  ///
+  /// - 9:16（1920 高）：15% = 288px，远够 ⇒ 严格 15%（产品红框量的就是这一档）。
+  /// - 1:1（1080 高）：15% 只有 162px < 193px ⇒ **装不下可扫的码**，抬到约 19%。
+  ///   差额从图片与内容按 65:20 的比例扣（产品 2026-08-28 拍板）。
+  double get _brandBand => math.max(_brandShare, _minBrandPx / canvas.height);
+
+  /// 非品牌区（图片 + 内容）的总高度，px。图片段与内容段在这里面分。
+  double get _restPx => canvas.height * (1 - _brandBand);
+
+  double get _dividerPx => _u * 0.0015;
+  double get _brandVPad => _u * 0.008;
 
   /// 下半部分的**排版单位**。所有字号 / 间距 / 头像 / 二维码都按它的比例算。
   ///
@@ -73,14 +115,13 @@ class ShareCardTemplate extends StatelessWidget {
   /// | 扫码提示 | 9 | 0.043 | 0.026 |
   /// | 品牌字标宽 | 47 | 0.224 | 0.20 |
   /// | 二维码 | 48 | 0.229 | 按**画布高**算，9:16 上 0.204 |
-  /// | 分隔线上下 | 14+11 | 0.119 | 0.055 |
+  /// | 分隔线 | 1px | —— | 原为 0.119 的**宽带**，固定分段后压成一条线（宽带塞不进 15%） |
   static const double _padFraction = 0.0667;
   static const double _avatarFraction = 0.124;
   static const double _authorFontFraction = 0.055;
   static const double _bodyFontFraction = 0.062;
   static const double _hintFontFraction = 0.043;
   static const double _wordmarkFraction = 0.224;
-  static const double _dividerBandFraction = 0.119;
 
   /// 二维码边长，**不得低于** [CardQr.minExportSide]。
   ///
@@ -92,7 +133,6 @@ class ShareCardTemplate extends StatelessWidget {
   /// 只把它周围**多余的留白**收掉。要严格对稿改这一个数即可。
   static const double _qrFraction = 0.204;
 
-  double get _qrSide => math.max(CardQr.minExportSide, _u * _qrFraction);
 
   double get _pad => _u * _padFraction;
 
@@ -123,86 +163,114 @@ class ShareCardTemplate extends StatelessWidget {
 
   // ——— SH2 图文模板 ———
   ///
-  /// 🔴 **下半部分按内容收缩，剩下的全给图片** —— 不是给图片一个固定比例。
+  /// 🔴 **品牌段固定、上面按内容伸缩**（产品 2026-08-28 二次拍板，取舍见类头注释）：
+  /// 品牌段 15%（1:1 上被二维码底线抬高）；余下的高度里，内容段取正文实际需要的高度、
+  /// 夹在 [_contentMinOfRest]~[_contentMaxOfRest] 之间，**剩下的全部归图片**。
   ///
-  /// 原来的写法是「图片 = 画布高 × 0.42，其余归文字」，两种画布共用那一个数。
-  /// 后果是 9:16 下短文案会在卡面中间留一大条白（见 [_minImageFraction]）。
-  /// 把主次颠倒过来之后：文案一行就只占一行的高度，图片自然长满余下的空间；
-  /// 文案很长时下半部分撑大、图片退回 [_minImageFraction] 的下界，
-  /// **长文案不会因为这次修复而被多截掉一行**。
-  ///
-  /// 上下界钉在 [_maxImageFraction] / [_minImageFraction] 两端，
-  /// 所以两种画布都不需要各写一份数字（沿用本类「尺寸都从 canvas 算」的约定）。
+  /// ⚠️ 顺序不能反：`Column` 先量非弹性子节点、再把余量给 `Expanded`。
+  /// 所以内容段必须是那个被量的（`ConstrainedBox`），图片段才是拿余量的（`Expanded`）。
+  /// 反过来写会让图片抢先占满、内容段被压成 0。
   Widget _imageLayout(AppLocalizations l10n) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // 图片区：拿走下半部分之外的全部高度。
-        // key 供回归测试量「图片占了画布多少」—— 这条修复的全部内容就是这个比例，
-        // 没有它就只能靠人眼看截图。
-        Expanded(
-          key: const ValueKey(shareCardImageAreaKey),
-          child: AppImage.widget(
-            data.imageUrl!,
-            fit: BoxFit.cover,
-            // 🔴 缩略图宽度按**画布宽度**取，不是按预览宽度。
-            // 按预览宽度（屏幕上可能只有 300px）取图，导出的 1080 大图里首图是糊的
-            // —— 与二维码那条是同一个坑的两种表现。
-            thumbWidth: canvas.width.round(),
-            errorBuilder: (_, _, _) => const ColoredBox(color: AppColors.mintTint),
+        // 图片区 + 内容区：合起来是非品牌区，内部按内容分。
+        SizedBox(
+          height: _restPx,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // 图片吃掉内容段用剩的全部高度。
+              // key 供回归测试量占比 —— 没有它就只能靠人眼看截图。
+              Expanded(
+                child: SizedBox.expand(
+                  key: const ValueKey(shareCardImageAreaKey),
+                  child: AppImage.widget(
+                    data.imageUrl!,
+                    fit: BoxFit.cover,
+                    // 🔴 缩略图宽度按**画布宽度**取，不是按预览宽度。
+                    // 按预览宽度（屏幕上可能只有 300px）取图，导出的 1080 大图里首图是糊的
+                    // —— 与二维码那条是同一个坑的两种表现。
+                    thumbWidth: canvas.width.round(),
+                    errorBuilder: (_, _, _) =>
+                        const ColoredBox(color: AppColors.mintTint),
+                  ),
+                ),
+              ),
+              // 作者 + 正文：高度 = 内容实际需要，夹在上下界之间。
+              ConstrainedBox(
+                key: const ValueKey(shareCardContentAreaKey),
+                constraints: BoxConstraints(
+                  minHeight: _restPx * _contentMinOfRest,
+                  maxHeight: _restPx * _contentMaxOfRest,
+                ),
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(_pad, _pad * 0.55, _pad, _pad * 0.4),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _authorRow(l10n),
+                      if ((data.body ?? '').isNotEmpty) ...[
+                        SizedBox(height: _u * 0.043),
+                        // ⚠️ `Flexible` 而不是 `Expanded`：正文短就只占它需要的高度
+                        //    （整段能跟着缩，靠的就是这一点）；正文长到顶到上界时，
+                        //    由 [_body] 按剩余高度自己收行 —— 不会溢出。
+                        Flexible(
+                          child: _body(
+                              fontSize: _u * _bodyFontFraction,
+                              weight: FontWeight.w400),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-        // 下半部分：高度由内容决定，只在上下界之间浮动。
-        // ⚠️ `Column` 先按无界高度量非弹性子级、再把余量分给 `Expanded`，
-        //    所以这里必须 `mainAxisSize.min` + 外层 `ConstrainedBox` 夹住 ——
-        //    少了 min 它会撑满，图片又回到「被固定比例分掉」的老样子。
-        ConstrainedBox(
-          constraints: BoxConstraints(
-            minHeight: canvas.height * (1 - _maxImageFraction),
-            maxHeight: canvas.height * (1 - _minImageFraction),
-          ),
-          child: Padding(
-            padding: EdgeInsets.all(_pad),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _authorRow(l10n),
-                if ((data.body ?? '').isNotEmpty) ...[
-                  SizedBox(height: _u * 0.043),
-                  // ⚠️ `Flexible`（loose）而不是 `Expanded`：正文短就只占它需要的高度，
-                  //    长了才吃掉余量并由 [_body] 按可用高度收行。
-                  //    用 `Expanded` 会强行占满 ⇒ 空白照旧。
-                  Flexible(
-                    child: _body(fontSize: _u * _bodyFontFraction, weight: FontWeight.w400),
-                  ),
-                ],
-                _footer(l10n, withDivider: true),
-              ],
-            ),
-          ),
+        // 品牌 15%（字标 + 扫码引导 + 二维码）—— 这一段**不参与伸缩**。
+        SizedBox(
+          key: const ValueKey(shareCardBrandAreaKey),
+          height: canvas.height * _brandBand,
+          child: _footer(l10n, withDivider: true),
         ),
       ],
     );
   }
 
   // ——— SH3 纯文字模板（不放图片区）———
+  ///
+  /// 🔴 品牌段同样占 15%（产品 2026-08-28「统一一下」）—— 两套模板的品牌区一样高，
+  /// 一批卡混着发到 Story 里才成套。余下 85% 全归文字（无图，图片段那 65% 并入正文）。
   Widget _textLayout(AppLocalizations l10n) {
-    return Padding(
-      padding: EdgeInsets.all(_pad * 1.2),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _typeChip(l10n),
-          SizedBox(height: _pad),
-          // 文字占满主体：字号比图文模板大一档、半粗，正文自己就是主视觉。
-          Expanded(child: _body(fontSize: canvas.width * 0.055, weight: FontWeight.w600)),
-          SizedBox(height: _pad),
-          _authorRow(l10n),
-          SizedBox(height: _pad * 0.6),
-          _footer(l10n, withDivider: true),
-        ],
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: canvas.height * (1 - _brandBand),
+          child: Padding(
+            padding: EdgeInsets.all(_pad * 1.2),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _typeChip(l10n),
+                SizedBox(height: _pad),
+                // 文字占满主体：字号比图文模板大一档、半粗，正文自己就是主视觉。
+                Expanded(
+                    child: _body(fontSize: _u * 0.055, weight: FontWeight.w600)),
+                SizedBox(height: _pad),
+                _authorRow(l10n),
+              ],
+            ),
+          ),
+        ),
+        SizedBox(
+          key: const ValueKey(shareCardBrandAreaKey),
+          height: canvas.height * _brandBand,
+          child: _footer(l10n, withDivider: true),
+        ),
+      ],
     );
   }
 
@@ -285,68 +353,81 @@ class ShareCardTemplate extends StatelessWidget {
     );
   }
 
-  /// 页脚：品牌字标 + 扫码引导 + 二维码。
+  /// 品牌段：分隔线 + 字标 + 扫码引导 + 二维码。**整段高度由调用方定死**（画布的 15%）。
+  ///
+  /// 🔴 二维码边长**从段高反推**，不再是一个独立比例。
+  /// 改前它按排版单位算（9:16 是 220、1:1 是 158），而分隔线还占了一条 0.119 的宽带 ——
+  /// 两者加起来 9:16 要 350px、1:1 要 251px，都**塞不进 15% 的段**（288 / 162）。
+  /// 固定分段之后，尺寸必须反过来服从段高，否则就是溢出。
+  ///
+  /// ⚠️ 1:1 是**最紧的那一侧**：段高只有 162，减掉分隔线与上下留白剩 ~149，
+  /// 而二维码有 140 的可扫底线（[CardQr.minExportSide]）—— 余量只有 9px。
+  /// 想再压品牌段的比例前先算这一步，`CardQr` 的构造期 assert 会当场拦下，但那是运行时。
   ///
   /// 二维码是**卡片导出到 Stories 后唯一的转化通路**（观看者点不了图上的链接）。
-  ///
-  /// 🔴 **整块只占一行、紧贴二维码**（bug 20260826）。修复前是
-  /// `crossAxisAlignment.end` + 左列 `mainAxisAlignment.end`：行高被二维码撑到
-  /// 220px，而左边字标+提示只有百来 px 且被压到行底 —— 实机上看就是
-  /// 「二维码那一格空出一大块、提示文字孤零零掉在左下角」。
-  /// 现按 UI 稿 SH2 的 `align-items:center` 垂直居中，行高就等于二维码本身。
   Widget _footer(AppLocalizations l10n, {required bool withDivider}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (withDivider) ...[
-          // 稿上是 margin-top:14 + padding-top:11（合 0.119 卡宽）；`Divider.height`
-          // 正是「含线在内的整条带高」，所以这一个数就够，不要再另加 SizedBox。
-          Divider(
-            height: _u * _dividerBandFraction,
-            thickness: _u * 0.0015,
-            color: AppColors.line2,
+    final vPad = _brandVPad;
+    return LayoutBuilder(builder: (context, c) {
+      final lineH = withDivider ? _dividerPx : 0.0;
+      final avail = c.maxHeight - lineH - vPad * 2;
+      // 🔴 按**占位**反推边长，不是拿 avail 当边长：`CardQr` 四周还有静默区，
+      //    实际占位是边长的 1.381 倍（[CardQr.footprintFor]）。
+      //    第一版直接把 avail 当边长传进去 —— 1:1 上码被压到 87px、扫不出来，
+      //    是既有的「导出图里码 ≥140」那条用例当场抓住的。
+      final fitByHeight = avail / (CardQr.footprintFor(1) );
+      final qrSide = math.max(
+          CardQr.minExportSide, math.min(fitByHeight, _u * _qrFraction));
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (withDivider)
+            Container(height: lineH, width: double.infinity, color: AppColors.line2),
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: _pad, vertical: vPad),
+              child: Row(
+                // 🔴 垂直居中（UI 稿 SH2 的 align-items:center）：底对齐会让左边的字标+提示
+                // 沉到行底，与二维码错开半个身位 —— 那正是 2026-08-26 实机反馈的样子。
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Column(
+                      // 🛡 `min` 不能省：默认 `max` 会把左列撑到与二维码等高，居中也就失去意义。
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SvgPicture.asset(
+                          'assets/brand/wordmark_brand.svg',
+                          width: _u * _wordmarkFraction,
+                          // 🔴 这个字标资产是**纯白**的（给紫底启动页做的，见 splash_page）。
+                          //    卡面是白底 ⇒ 不上色就是**白字画在白纸上，整个 logo 隐形** ——
+                          //    实机反馈「设计稿里的 logo 为什么不见了」就是这个原因。
+                          colorFilter:
+                              const ColorFilter.mode(AppColors.mint, BlendMode.srcIn),
+                        ),
+                        SizedBox(height: _u * 0.029),
+                        Text(
+                          l10n.shareCardScanHint,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: _u * _hintFontFraction,
+                            color: AppColors.muted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // 🔴 码里印的是带 `?src=qr` 的变体 —— 见 [ShareCardData.qrUrl]。
+                  // 印 shareUrl 会让 E-14 的 open_method 永远分不出 qr。
+                  CardQr(data: data.qrUrl, side: qrSide),
+                ],
+              ),
+            ),
           ),
         ],
-        // ⚠️ 上下各 1px：实机反馈明确要求这一行「比二维码上下宽 1px 就够」。
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 1),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Column(
-                  // 🛡 `min` 不能省：默认 `max` 会把左列撑到与二维码等高，
-                  //    居中也就失去意义（字标与提示又会散开）。
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SvgPicture.asset(
-                      'assets/brand/wordmark_brand.svg',
-                      width: _u * _wordmarkFraction,
-                      // 🔴 这个字标资产是**纯白**的（给紫底启动页做的，见 splash_page）。
-                      //    卡面是白底 ⇒ 不上色就是**白字画在白纸上，整个 logo 隐形** ——
-                      //    实机反馈「设计稿里的 logo 为什么不见了」就是这个原因，
-                      //    而不是资产缺失或没进 pubspec（两者都正常）。
-                      colorFilter: const ColorFilter.mode(AppColors.mint, BlendMode.srcIn),
-                    ),
-                    SizedBox(height: _u * 0.029),
-                    Text(
-                      l10n.shareCardScanHint,
-                      style: TextStyle(
-                        fontSize: _u * _hintFontFraction,
-                        color: AppColors.muted,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // 🔴 码里印的是带 `?src=qr` 的变体 —— 见 [ShareCardData.qrUrl]。
-              // 印 shareUrl 会让 E-14 的 open_method 永远分不出 qr。
-              CardQr(data: data.qrUrl, side: _qrSide),
-            ],
-          ),
-        ),
-      ],
-    );
+      );
+    });
   }
+
 }

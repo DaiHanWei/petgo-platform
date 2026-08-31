@@ -134,11 +134,14 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
     }
     // 受控 Tab：单一门控入口；未登录弹强弹窗 + 注入 pendingAction（登录后回到该 Tab）。
     // 目的地取自枚举内嵌的 location，不再依赖并行数组。
-    // 埋点放在 onAllowed 里 —— 被门控拦下时页面没打开，不该记一条浏览。
-    requireLogin(
+    // **浏览**埋点放在 onAllowed 里 —— 被门控拦下时页面没打开，不该记一条浏览。
+    final bool allowed = requireLogin(
       ref,
       context,
       pendingAction: RouteIntent(location: tab.location),
+      // 埋点缺口修复（2026-08-31）：此前不传 ⇒ 这里触发的注册在 signup_succeeded 里
+      // 全落 `other` 一档，漏斗上看不出用户是从哪个入口被弹的窗。
+      entrySource: 'tab_${tab.analyticsName}',
       onAllowed: () {
         if (!reTap) {
           _reportTabEntered(from, tab);
@@ -146,13 +149,20 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
         _goBranch(index);
       },
     );
+    // **点击意图**埋点与浏览相反，必须在门控**之外**记：被拦下时「用户想进这里」这件事
+    // 正是漏斗缺的那一环（此前强弹窗路径从触发到注册中间零事件）。
+    if (!allowed) {
+      Analytics.capture('login_guide_entry_blocked', {'entry': 'tab_${tab.analyticsName}'});
+    }
   }
 
   void _onAddPressed() {
     // 「＋」=发布入口，受控。未登录弹强弹窗；已登录打开 Publish Compose（Story 2.3）。
-    requireLogin(
+    final bool allowed = requireLogin(
       ref,
       context,
+      // 埋点缺口修复（2026-08-31）：同 _onTabSelected —— 不传就落 signup_succeeded 的 `other` 档。
+      entrySource: 'publish_add',
       // 登录后回跳落 Social（内容流）。
       //
       // ⚠️ 2026-08-04 code-review 决策 D3 改于此：原先写死 `/profile`（Diary），注释还引着
@@ -176,6 +186,10 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
         PublishComposePage.open(context, preset: addButtonPreset(tab, canGrowth: canGrowth));
       },
     );
+    // 点击意图埋点（2026-08-31）：与 _onTabSelected 同一条规则，被拦下也要记。
+    if (!allowed) {
+      Analytics.capture('login_guide_entry_blocked', {'entry': 'publish_add'});
+    }
   }
 
   @override

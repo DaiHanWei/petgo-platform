@@ -12,6 +12,7 @@ import com.tailtopia.admin.account.domain.AdminAccount;
 import com.tailtopia.admin.account.domain.AdminAccountType;
 import com.tailtopia.admin.account.repository.AdminAccountRepository;
 import com.tailtopia.admin.service.AdminUserDetails;
+import com.tailtopia.content.domain.ContentTagBadgeStyle;
 import com.tailtopia.auth.domain.User;
 import com.tailtopia.content.domain.ContentPost;
 import com.tailtopia.content.domain.ContentTag;
@@ -50,6 +51,9 @@ class AdminContentTagIntegrationTest extends ApiIntegrationTest {
 
     @Autowired
     private ContentTagRepository tags;
+
+    @Autowired
+    private com.tailtopia.content.service.ContentTagQueryService tagQuery;
 
     @Autowired
     private ContentTagAssignmentRepository assignments;
@@ -336,5 +340,106 @@ class AdminContentTagIntegrationTest extends ApiIntegrationTest {
                         .with(authentication(staffAuth(AdminAccountType.STAFF, "content.tag_view"))))
                 .andReturn().getResponse().getContentAsString();
         assertThat(html).contains("/admin/content-tags");
+    }
+
+    // ——————————————————— 胶囊底色（2026-08-28）———————————————————
+
+    /**
+     * 🔴 **胶囊底色按标签走，并以色值下发**。
+     *
+     * <p>产品原话：「我认为这一整枚都是运营配的」—— 此前底色写死在 App 里，
+     * 运营只能配胶囊上的字与那枚小图，于是这枚胶囊在他眼里只有一半是自己的。
+     *
+     * <p>⚠️ 断言下发的是**色值**而不是枚举名：客户端不认识调色板，
+     * 这样将来加一档颜色不需要发版。改成下发枚举名会安静地让老客户端画不出颜色。
+     */
+    @Test
+    void badgeStyleIsPerTagAndGoesOutAsHexValues() throws Exception {
+        String code = "STYLE_" + SEQ.incrementAndGet();
+        mvc.perform(multipart("/admin/content-tags").file(iconPng())
+                        .with(authentication(superAdminAuth())).with(csrf())
+                        .param("code", code).param("name", "编辑推荐")
+                        .param("description", "编辑精选")
+                        .param("badgeStyle", "VIOLET"))
+                .andExpect(status().is3xxRedirection());
+
+        ContentTag t = tags.findByCode(code).orElseThrow();
+        assertThat(t.getBadgeStyle()).isEqualTo(ContentTagBadgeStyle.VIOLET);
+
+        ContentPost p = publicPost(newUser().getId(), "被打标的内容");
+        mvc.perform(post("/admin/content-tags/assign")
+                        .with(authentication(superAdminAuth())).with(csrf())
+                        .param("postId", String.valueOf(p.getId()))
+                        .param("tagId", String.valueOf(t.getId()))
+                        .param("startsAt", wib(1, 10)))
+                .andExpect(status().is3xxRedirection());
+
+        var view = tagQuery.findVisibleTags(List.of(p.getId()), wibInstant(1, 12))
+                .get(p.getId()).get(0);
+        assertThat(view.badgeStart())
+                .as("🔴 下发的不是色值 ⇒ 客户端得认识调色板，加一档颜色就要发版")
+                .isEqualTo("#845EC9");
+        assertThat(view.badgeEnd()).isEqualTo("#6C48AE");
+    }
+
+    /** 🛡 没选 / 值不认识 → 设计稿原始的橙→红，**不报错**（值不对只可能是有人手改了请求）。 */
+    @Test
+    void unknownBadgeStyleFallsBackToTheDesignDefault() throws Exception {
+        String code = "FB_" + SEQ.incrementAndGet();
+        mvc.perform(multipart("/admin/content-tags").file(iconPng())
+                        .with(authentication(superAdminAuth())).with(csrf())
+                        .param("code", code).param("name", "编辑推荐")
+                        .param("description", "x").param("badgeStyle", "NOPE"))
+                .andExpect(status().is3xxRedirection());
+
+        assertThat(tags.findByCode(code).orElseThrow().getBadgeStyle())
+                .isEqualTo(ContentTagBadgeStyle.SUNSET);
+    }
+
+    /**
+     * 🛡 改底色时**不选新图标不会把图标弄丢**（与既有的「保留原图标」规则叠加）。
+     *
+     * <p>那个坑一旦复发，后台界面上看不出来 —— 直到用户端图标消失。
+     */
+    @Test
+    void editingTheBadgeStyleKeepsTheExistingIcon() throws Exception {
+        ContentTag t = tag("KEEPICON");
+        String iconBefore = t.getIcon();
+
+        mvc.perform(multipart("/admin/content-tags/" + t.getId() + "/edit")
+                        .with(authentication(superAdminAuth())).with(csrf())
+                        .param("name", t.getName()).param("description", "说明")
+                        .param("badgeStyle", "GREEN"))
+                .andExpect(status().is3xxRedirection());
+
+        ContentTag after = tags.findById(t.getId()).orElseThrow();
+        assertThat(after.getBadgeStyle()).isEqualTo(ContentTagBadgeStyle.GREEN);
+        assertThat(after.getIcon())
+                .as("🔴 改个底色把图标弄丢了 —— 后台界面上看不出来，直到用户端图标消失")
+                .isEqualTo(iconBefore);
+    }
+
+    /**
+     * 🔴 **后台列表要按真实样子画出整枚胶囊**。
+     *
+     * <p>图标只有 9px、字是白色，脱开胶囊单看那张 PNG 什么都看不出来 ——
+     * 运营因此判断不了「我配的这枚最后长什么样」，这正是「这枚胶囊只有一半是我的」
+     * 那个误解的来源。
+     */
+    @Test
+    void theAdminListRendersTheWholeBadgeInItsRealColours() throws Exception {
+        String code = "PREVIEW_" + SEQ.incrementAndGet();
+        mvc.perform(multipart("/admin/content-tags").file(iconPng())
+                .with(authentication(superAdminAuth())).with(csrf())
+                .param("code", code).param("name", "本周最佳")
+                .param("description", "x").param("badgeStyle", "GREEN"));
+
+        String html = mvc.perform(get("/admin/content-tags").param("lang", "zh_CN")
+                        .with(authentication(superAdminAuth())))
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(html)
+                .as("🔴 列表里没有按该标签的真实底色画出胶囊 ⇒ 运营看不到成品")
+                .contains(ContentTagBadgeStyle.GREEN.css());
     }
 }

@@ -2,6 +2,7 @@ package com.tailtopia.auth.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -39,6 +40,16 @@ public class UserTag {
     @Column(name = "description", nullable = false, length = 140)
     private String description;
 
+    /**
+     * 徽章圆底颜色（2026-08-28，UI 稿 `.utag-icon` 按标签取不同底色）。
+     *
+     * <p>⚠️ 与 {@link #icon} 是两件事：icon 是圆里那枚**纯白剪影**，本列是它底下那个圆。
+     * 正因为图标是纯白的，底色只提供足够深的固定几档（见 {@link UserTagBadgeColor}）。
+     */
+    @Enumerated(jakarta.persistence.EnumType.STRING)
+    @Column(name = "badge_color", nullable = false, length = 16)
+    private UserTagBadgeColor badgeColor = UserTagBadgeColor.GOLD;
+
     /** 下线时刻；NULL = 在线（Story 11.3，与装饰标签同形状）。 */
     @Column(name = "retired_at")
     private Instant retiredAt;
@@ -53,11 +64,17 @@ public class UserTag {
     }
 
     public static UserTag of(String code, String name, String icon, String description) {
+        return of(code, name, icon, description, UserTagBadgeColor.GOLD);
+    }
+
+    public static UserTag of(String code, String name, String icon, String description,
+            UserTagBadgeColor badgeColor) {
         UserTag t = new UserTag();
         t.code = code;
         t.name = name;
         t.icon = icon;
         t.description = description;
+        t.badgeColor = badgeColor == null ? UserTagBadgeColor.GOLD : badgeColor;
         return t;
     }
 
@@ -75,9 +92,15 @@ public class UserTag {
 
     /** 编辑展示信息。code 不可改 —— 它是对外稳定标识。 */
     public void edit(String name, String icon, String description) {
+        edit(name, icon, description, this.badgeColor);
+    }
+
+    /** 编辑展示信息（含徽章底色）。code 不可改 —— 它是对外稳定标识。 */
+    public void edit(String name, String icon, String description, UserTagBadgeColor badgeColor) {
         this.name = name;
         this.icon = icon;
         this.description = description;
+        this.badgeColor = badgeColor == null ? UserTagBadgeColor.GOLD : badgeColor;
     }
 
     /** 下线（幂等）。 */
@@ -110,6 +133,10 @@ public class UserTag {
 
     public String getName() {
         return name;
+    }
+
+    public UserTagBadgeColor getBadgeColor() {
+        return badgeColor;
     }
 
     public String getIcon() {

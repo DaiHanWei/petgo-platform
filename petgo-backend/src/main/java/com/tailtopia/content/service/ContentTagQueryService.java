@@ -80,7 +80,8 @@ public class ContentTagQueryService {
             ContentTagAssignment a = (ContentTagAssignment) row[0];
             ContentTag t = (ContentTag) row[1];
             byPost.computeIfAbsent(a.getPostId(), k -> new ArrayList<>())
-                    .add(new ContentTagView(t.getCode(), t.getName(), t.getIcon(), t.getDescription()));
+                    .add(new ContentTagView(t.getCode(), t.getName(), t.getIcon(), t.getDescription(),
+                            t.getBadgeStyle().startHex(), t.getBadgeStyle().endHex()));
         }
         return byPost;
     }

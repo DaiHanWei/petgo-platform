@@ -189,8 +189,8 @@ public class ContentService {
     @Transactional(readOnly = true)
     public List<com.tailtopia.content.dto.AdminContentRow> adminSearch(ContentType type, Long authorId,
             java.time.Instant from, java.time.Instant to, Boolean deleted, String keyword,
-            int limit, int offset) {
-        return posts.adminSearch(type, authorId, from, to, deleted, keyword, limit, offset);
+            String sort, int limit, int offset) {
+        return posts.adminSearch(type, authorId, from, to, deleted, keyword, sort, limit, offset);
     }
 
     /**
@@ -211,6 +211,25 @@ public class ContentService {
     @Transactional(readOnly = true)
     public com.tailtopia.content.dto.AdminContentRow adminRow(long postId) {
         return posts.adminRowById(postId);
+    }
+
+    /**
+     * 后台按一批 id 取内容行（2026-08-28「按点赞时间」口径用）。
+     *
+     * <p>⚠️ **不保证顺序** —— 调用方按自己的次序还原（这里的次序是"窗口内赞数降序"，
+     * 由点赞侧决定，内容表无从知道）。
+     */
+    @Transactional(readOnly = true)
+    public java.util.List<com.tailtopia.content.dto.AdminContentRow> adminRowsByIds(
+            java.util.Collection<Long> postIds) {
+        if (postIds == null || postIds.isEmpty()) {
+            return java.util.List.of();
+        }
+        return posts.findAllById(postIds).stream()
+                .map(p -> new com.tailtopia.content.dto.AdminContentRow(p.getId(), p.getType(),
+                        p.getAuthorId(), p.getText(), p.getDeletedAt() != null, p.getCreatedAt(),
+                        p.getImageUrls(), p.getSpeciesOverride()))
+                .toList();
     }
 
     /** 后台恢复已下架内容（Story 4.2）：清 deletedAt（幂等：未删 no-op）。评论保持软删、点赞不还原（V1 接受）。 */
@@ -432,6 +451,59 @@ public class ContentService {
                 : 0L;
         events.publishEvent(new ContentPublishedEvent(saved.getId(), authorId, req.type(), petId,
                 growthCount, saved.getVisibility(), saved.getCreatedAt()));
+        return ContentPostResponse.from(saved);
+    }
+
+    /**
+     * 🔴 免审发布——<b>仅限运营策划内容源</b>（当前唯一调用方：Lark 定时发帖
+     * {@code content.larksync.LarkContentSyncService}）。UGC 一律走 {@link #publish}，
+     * 任何面向用户输入的路径接入本方法都是违规（内容审核不可绕过是 UGC 侧护栏）。
+     *
+     * <p>与 {@link #publish} 的差异<b>只有一处</b>：跳过 {@code moderation.evaluate}
+     * （运营=可信主体，先例见兽医头像 {@code AdminVetService.updateAvatar}）。
+     * 幂等键、内容门槛校验、发布事件（里程碑联动）全部保留。仅支持非 GROWTH_MOMENT
+     * 类型（运营内容不绑宠物档案）——传 GROWTH_MOMENT 直接拒。
+     */
+    @Transactional
+    public ContentPostResponse publishTrusted(long authorId, ContentPostCreateRequest req,
+            String idempotencyKey) {
+        // 幂等重放：同 key 已落一条则取回，不重复创建（与 publish 同语义）。
+        // ⚠️ 幂等键写 Redis 不在事务内：调用方（如 Lark 发帖）在外层事务里调本方法后回滚，
+        // 键会残留 24h 指向幽灵 id。此时按「未发布」继续创建，而不是抛 notFound 把调用方卡死到 TTL 过期。
+        Optional<Long> existing = idempotency.findResourceId(idempotencyKey);
+        if (existing.isPresent()) {
+            Optional<ContentPost> replay = posts.findById(existing.get());
+            if (replay.isPresent()) {
+                return ContentPostResponse.from(replay.get());
+            }
+        }
+
+        if (req.type() == null) {
+            throw AppException.validation("内容类型不能为空");
+        }
+        if (req.type() == ContentType.GROWTH_MOMENT) {
+            throw AppException.validation("运营内容源不支持成长日历类型");
+        }
+        String text = blankToNull(req.text());
+        // service 层权威校验：本路径不经 Controller 的 @Valid，DTO 注解不生效，须显式设防。
+        if (text != null && text.length() > 1000) {
+            throw AppException.validation("正文不能超过 1000 字");
+        }
+        List<String> imageUrls = req.imageUrls();
+        if (imageUrls != null && imageUrls.size() > 9) {
+            throw AppException.validation("最多 9 张图片");
+        }
+        if (text == null && (imageUrls == null || imageUrls.isEmpty())) {
+            throw AppException.validation("请填写文字或上传图片");
+        }
+
+        ContentPost post = ContentPost.publish(authorId, req.type(), null, text, imageUrls);
+        post.setVisibility(req.visibilityOrPublic());
+        ContentPost saved = posts.save(post);
+        idempotency.store(idempotencyKey, saved.getId());
+        // 与 publish 同口径发布事件（非 GROWTH_MOMENT → growthCount=0）。
+        events.publishEvent(new ContentPublishedEvent(saved.getId(), authorId, req.type(), null,
+                0L, saved.getVisibility(), saved.getCreatedAt()));
         return ContentPostResponse.from(saved);
     }
 

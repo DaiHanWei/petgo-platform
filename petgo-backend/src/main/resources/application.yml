@@ -108,6 +108,21 @@ petgo:
     android-url: ${CARD_ANDROID_URL:https://play.google.com/store/apps/details?id=com.tailtopia.app}
     ios-url: ${CARD_IOS_URL:https://play.google.com/store/apps/details?id=com.tailtopia.app}
     app-download-url: ${CARD_APP_DOWNLOAD_URL:https://play.google.com/store/apps/details?id=com.tailtopia.app}
+  # Lark 定时发帖（spec-lark-scheduled-posts）：每小时从运营内容表格取一条经虚拟账号免审发布。
+  # 凭证 env 注入绝不入库；mode=off（默认）任务静默，只有显式 live 才打 Lark API。
+  lark-content:
+    mode: ${LARK_CONTENT_MODE:off}
+    app-id: ${LARK_CONTENT_APP_ID:}
+    app-secret: ${LARK_CONTENT_APP_SECRET:}
+    base-url: ${LARK_CONTENT_BASE_URL:https://open.larksuite.com}
+    spreadsheet-token: ${LARK_CONTENT_SPREADSHEET_TOKEN:}
+    sheet-id: ${LARK_CONTENT_SHEET_ID:}
+    folder-token: ${LARK_CONTENT_FOLDER_TOKEN:}
+    sync-cron: ${LARK_CONTENT_SYNC_CRON:0 7 * * * *}
+    author-ids: ${LARK_CONTENT_AUTHOR_IDS:1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20}
+    timeout-seconds: ${LARK_CONTENT_TIMEOUT_SECONDS:30}
+    # 读表行数上限（数据区 A2:F{limit+1}）。已发布行会一直留在表内占坑，触顶时任务会 warn 提醒调大。
+    row-limit: ${LARK_CONTENT_ROW_LIMIT:500}
 
   # 精选自营电商（V1.4.0）
   shop:
@@ -174,6 +189,10 @@ spring:
   task:
     execution:
       mode: force
+    # @Scheduled 默认单线程：Lark 发帖一轮可能阻塞数分钟（多图下载/上传），会饿死支付过期、问诊超时等扫描器。
+    scheduling:
+      pool:
+        size: ${TASK_SCHEDULING_POOL_SIZE:4}
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:petgo}
     username: ${DB_USER:petgo}

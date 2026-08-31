@@ -88,6 +88,9 @@ class AdminPermissionsTest {
         // + 2（V1.1.6 Story 11.4 手机号 user.phone_view / user.phone_export）= 53
         // + 1（V1.1.6 Story 12.1 运营发布身份池 seed.publish_as_real）= 54
         // + 2（V1.1.6 Story 15.1 互动积分 content.stats_view / content.stats_export）= 56
+        // − 2（2026-08-28 产品撤掉「内容互动积分」整页，点赞数并入内容管理列）= 54
+        //     ⚠️ 记账**只加不改**：上一行保留原样，这一行记减 —— 把「先有过、后撤掉」
+        //     写在账上，比让 56 直接变成 54 更能回答「这两个码去哪了」。
         // + 2（V1.1.6 Story 17.2 限流处置 content.throttle_view / content.throttle_manage）= 58
         // + 2（V1.1.6 Story 18.3 分享奖励 config.share_reward_view / config.share_reward_edit）= 60
         // + 2（2026-08-26 算法参数独立成页 config.algo_param_view / config.algo_param_edit）= 62
@@ -112,7 +115,12 @@ class AdminPermissionsTest {
         //      shop.order_view / shop.order_fulfill / shop.order_phone_search）= 54
         // + 1（V1.4.0 Story 8.4 模块 13 经营数据：shop.finance_view，毛利与对账单独权限位）= 55。
         // ↑ 电商（dev_1.1.6）与 ↓ 内容运营线（hex v1.1.6）在本次合并求并集：45 + 10 + 15 = 70。
+        // 2026-08-28：互动积分两码移除 ⇒ 72 − 2 = 70；
+        //             内容列表导出新增一码 content.list_export ⇒ 70 + 1 = 71。
+        //     🔴 新码而非复用刚撤的 content.stats_export / 历史死码 content.export ——
+        //     那两个字符串可能仍留在存量账号的 permissions 里，复用等于给一批
+        //     从未被评估过的账号静默发一项新能力。详见 AdminPermissions 里那段注释。
         List<String> all = AdminPermissions.ALL;
-        assertThat(all).hasSize(72);
+        assertThat(all).hasSize(71);
     }
 }

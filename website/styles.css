@@ -261,6 +261,10 @@ h1, h2 { font-weight: 700; letter-spacing: -.02em; line-height: 1.1; color: var(
 .footer__inner { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr 1fr; gap: 30px; padding-bottom: 40px; border-bottom: 1px solid rgba(255, 255, 255, .1); }
 .footer__logo { height: 26px; margin-bottom: 14px; }
 .footer__brand p { font-size: .9rem; max-width: 22em; }
+.footer__company { margin-top: 16px; font-style: normal; font-size: .82rem; line-height: 1.7; color: rgba(255, 255, 255, .55); }
+.footer__company strong { color: rgba(255, 255, 255, .85); font-weight: 600; }
+.footer__company a { color: rgba(255, 255, 255, .7); transition: color .15s; }
+.footer__company a:hover { color: #fff; }
 .footer__col h4 { color: #fff; font-size: .8rem; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 14px; }
 .footer__col a { display: block; padding: 6px 0; font-size: .92rem; color: rgba(255, 255, 255, .7); transition: color .15s; }
 .footer__col a:hover { color: #fff; }

@@ -68,12 +68,16 @@ class ContentTagChip extends StatelessWidget {
         //    全是这一个 class，没有第二套样式。此前实现成"叠图深底 / 无图金色浅底"
         //    是与规格不符（2026-08-24 实机比对发现）。
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             // CSS 135deg = 左上 → 右下。
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [AppColors.gold, AppColors.decoBadgeEnd],
+            // 2026-08-28：底色由运营按标签配；没配 / 解析失败回落 UI 稿原始的橙→红。
+            colors: [
+              tag.badgeStart ?? AppColors.gold,
+              tag.badgeEnd ?? AppColors.decoBadgeEnd,
+            ],
           ),
           borderRadius: BorderRadius.all(Radius.circular(999)),
           boxShadow: [

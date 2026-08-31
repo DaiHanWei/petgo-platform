@@ -6,6 +6,7 @@ import '../../../core/network/dio_client.dart';
 import '../domain/comment.dart';
 import '../../profile/domain/card_link.dart';
 import '../domain/content_detail.dart';
+import 'anon_feed_session.dart';
 
 /// 内容详情 + 评论只读数据层（Story 3.3）。
 ///
@@ -48,7 +49,12 @@ class DioDetailRepository implements DetailRepository {
   @override
   Future<ContentDetail> getDetail(int id) async {
     try {
-      final resp = await dio.get<Map<String, dynamic>>(ApiPaths.contentPostDetail(id));
+      final resp = await dio.get<Map<String, dynamic>>(
+        ApiPaths.contentPostDetail(id),
+        // 2026-08-31：详情打开计入浏览统计，游客靠这个头去重「浏览人数」。
+        // 🛡 与首页取数同一约定：只挂在这一个请求上，不做成全局请求头。
+        options: Options(headers: {'X-Anon-Session': AnonFeedSession.id}),
+      );
       return ContentDetail.fromJson(resp.data!);
     } on DioException catch (e) {
       throw ContentLoadError(_classify(e));

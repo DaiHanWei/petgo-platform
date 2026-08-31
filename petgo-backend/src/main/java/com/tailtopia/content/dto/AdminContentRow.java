@@ -18,5 +18,20 @@ public record AdminContentRow(long id, ContentType type, Long authorId, String t
          * 推导要 join 作者与宠物档案，逐行做就是 N+1；由 admin 层用
          * {@code ContentSpeciesResolver#resolveAll} 对**整页**一次算完。
          */
-        String speciesOverride) {
+        String speciesOverride,
+        /**
+         * 该帖未删评论数（含一级 + 二级，不按 viewer 过滤 —— 后台全量口径）。
+         *
+         * <p>⚠️ **点赞数不在这里**：它由 {@code AdminContentManageService#likeCounts} 整页批量取，
+         * 走一张独立的 Map。看着不对称，但不是随手写的 ——
+         * 「按点赞时间」那档口径要的是**时间窗内**的赞数，与这一行"至今累计"是两个数；
+         * 塞进行投影就得为同一个字段准备两种含义，那是更糟的一种对称。
+         */
+        long commentCount) {
+
+    /** 兼容旧调用（评论数 = 0）。 */
+    public AdminContentRow(long id, ContentType type, Long authorId, String textPreview,
+            boolean deleted, Instant createdAt, List<String> imageUrls, String speciesOverride) {
+        this(id, type, authorId, textPreview, deleted, createdAt, imageUrls, speciesOverride, 0L);
+    }
 }

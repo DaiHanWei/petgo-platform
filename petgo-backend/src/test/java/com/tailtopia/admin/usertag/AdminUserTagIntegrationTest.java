@@ -1,6 +1,7 @@
 package com.tailtopia.admin.usertag;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -16,10 +17,12 @@ import com.tailtopia.admin.usertag.dto.UserAssignmentRow;
 import com.tailtopia.admin.usertag.service.AdminUserTagService;
 import com.tailtopia.auth.domain.User;
 import com.tailtopia.auth.domain.UserTag;
+import com.tailtopia.auth.domain.UserTagBadgeColor;
 import com.tailtopia.auth.dto.UserTagView;
 import com.tailtopia.auth.repository.UserTagAssignmentRepository;
 import com.tailtopia.auth.repository.UserTagRepository;
 import com.tailtopia.auth.service.UserTagQueryService;
+import com.tailtopia.shared.error.AppException;
 import com.tailtopia.support.ApiIntegrationTest;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -342,5 +345,287 @@ class AdminUserTagIntegrationTest extends ApiIntegrationTest {
                         .with(authentication(authFor(AdminAccountType.STAFF, "user.tag_view"))))
                 .andReturn().getResponse().getContentAsString();
         assertThat(html).contains("/admin/user-tags");
+    }
+
+    /**
+     * 🔴 **标签不许分配给已注销账号**（bug 20260828）。
+     *
+     * <p>实机：运营把用户标签分给了 63 号 —— 一个已经注销的账号，后台一声不吭地接受了。
+     * 此前 {@code assign} 对 userId **一个字都不查**：不存在的 id 也照写。
+     *
+     * <p>为什么这不只是脏数据：注销走的是「就地匿名化」（Story 7.3 · 决策 D1），
+     * 账号的昵称/头像/邮箱都被擦成空、UGC 解析为「已注销用户」。
+     * 给它挂一枚身份标签，等于把一个本该没有身份标识的账号重新标记出来；
+     * 而分配记录页按 userId 展示，运营会看到一行查无此人、也无从判断该不该撤。
+     *
+     * <p>⚠️ 断言打在 {@code UserTagQueryService.assign} 这一层，不是后台控制器 ——
+     * 后台批量、后台单个、将来任何自动发标签的路径都经过它。
+     */
+    @Test
+    void assigningToADeletedAccountIsRejected() {
+        UserTag t = tag("DEL");
+        User u = newUser();
+        u.anonymizeForDeletion(Instant.now());
+        users.save(u);
+
+        assertThatThrownBy(() -> tagService.assign(u.getId(), t.getId(), Instant.now(), null))
+                .isInstanceOf(AppException.class)
+                .hasMessageContaining("已注销");
+        assertThat(assignments.findByUserIdOrderByStartsAtDesc(u.getId())).isEmpty();
+    }
+
+    /** 🛡 连"用户根本不存在"也要拦 —— 手填框里填错一位数字就是这种情况。 */
+    @Test
+    void assigningToANonExistentUserIsRejected() {
+        UserTag t = tag("GHOST");
+        assertThatThrownBy(() -> tagService.assign(999_000_111L, t.getId(), Instant.now(), null))
+                .isInstanceOf(AppException.class)
+                .hasMessageContaining("不存在");
+    }
+
+    /**
+     * 🛡 反向：**正常用户照旧分配得上**。
+     *
+     * <p>没有这一条，把校验写成"一律拒绝"也能让上面两条绿。
+     */
+    @Test
+    void assigningToAnActiveUserStillWorks() {
+        UserTag t = tag("OK");
+        User u = newUser();
+        tagService.assign(u.getId(), t.getId(), Instant.now().minusSeconds(60), null);
+        assertThat(assignments.findByUserIdOrderByStartsAtDesc(u.getId())).hasSize(1);
+    }
+
+    /**
+     * 🔴 **选择器里列不出已注销账号** —— 服务端硬校验之外的第一道闸。
+     *
+     * <p>两道都要有：只有硬校验的话，运营要在候选表里挑到一个注销账号、点了分配、
+     * 才收到一句报错；只有选择器的话，手填 ID 那条路照样绕过去。
+     */
+    @Test
+    void deletedAccountsNeverAppearInThePicker() {
+        User alive = newUser();
+        User gone = newUser();
+        gone.anonymizeForDeletion(Instant.now());
+        users.save(gone);
+
+        List<Long> ids = adminService.pickableUsers(null, 0).stream()
+                .map(com.tailtopia.admin.usertag.dto.TaggableUserRow::id).toList();
+        assertThat(ids).contains(alive.getId());
+        assertThat(ids).doesNotContain(gone.getId());
+    }
+
+    /**
+     * 🔴 **后台的「会不会展示」必须和用户端给出同一个答案 —— 包括注销这一档**（bug 20260828）。
+     *
+     * <p>实机现象是「后台配了标签图标，用户端不显示」。查下来不是图标坏了：
+     * 那枚标签分给的是一个**已注销**账号。App 侧 {@code AccountQueryService#attachTags}
+     * 早就不给注销作者贴标签（AC6），但后台那一列问的是 {@code findVisibleTags} ——
+     * 它当时不看注销，于是后台白纸黑字写着「会展示」，用户端永远不展示。
+     *
+     * <p>规则已挪进 {@code findVisibleTags}，两条路自此同源。
+     */
+    @Test
+    void deletedUsersTagsAreInvisibleEverywhereIncludingTheAdminColumn() {
+        UserTag t = tag("VIS");
+        User u = newUser();
+        tagService.assign(u.getId(), t.getId(), Instant.now().minusSeconds(60), null);
+        // 分配当时账号还在 —— 之后才注销（真实顺序：先有标签，用户后来注销）。
+        assertThat(tagService.findVisibleTags(List.of(u.getId()), Instant.now()))
+                .as("前提：注销之前它是看得见的，否则下面的断言证明不了什么")
+                .containsKey(u.getId());
+
+        u.anonymizeForDeletion(Instant.now());
+        users.save(u);
+
+        assertThat(tagService.findVisibleTags(List.of(u.getId()), Instant.now()))
+                .as("🔴 注销账号仍被算作「会展示」")
+                .doesNotContainKey(u.getId());
+
+        List<UserAssignmentRow> rows = adminService.assignmentsByUser(u.getId(), Instant.now());
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).visible())
+                .as("🔴 后台说会展示、用户端却不展示 —— 运营会去查图标而不是查账号")
+                .isFalse();
+        assertThat(rows.get(0).deletedUser())
+                .as("🔴 只说「不展示」不够：运营分不清是被前 3 个顶掉了还是账号没了")
+                .isTrue();
+    }
+
+    /** 🛡 反向：**没注销的用户照旧展示**，且不被误标成已注销。 */
+    @Test
+    void liveUsersTagStaysVisibleAndIsNotMarkedDeleted() {
+        UserTag t = tag("LIVE");
+        User u = newUser();
+        tagService.assign(u.getId(), t.getId(), Instant.now().minusSeconds(60), null);
+
+        List<UserAssignmentRow> rows = adminService.assignmentsByUser(u.getId(), Instant.now());
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).visible()).isTrue();
+        assertThat(rows.get(0).deletedUser()).isFalse();
+    }
+
+    /**
+     * 🛡 **图标是图片 URL 时原样下发** —— 这条钉住「后台传的图能到用户端手里」。
+     *
+     * <p>实机那次的怀疑对象是图标链路，虽然最后证明不是它，但当时**没有任何用例**
+     * 能一口否掉这个怀疑，于是排查从这里开始绕了一圈。补上它。
+     */
+    @Test
+    void anUploadedIconUrlReachesTheClientUnchanged() {
+        String iconUrl = "https://cdn.example/public/tag-icons/abc.png";
+        UserTag t = UserTag.of("ICON_" + SEQ.incrementAndGet(), "本周最佳", iconUrl, "说明");
+        tags.save(t);
+        User u = newUser();
+        tagService.assign(u.getId(), t.getId(), Instant.now().minusSeconds(60), null);
+
+        List<UserTagView> views = tagService.findVisibleTags(List.of(u.getId()), Instant.now())
+                .get(u.getId());
+        assertThat(views).hasSize(1);
+        assertThat(views.get(0).icon())
+                .as("🔴 图标 URL 在下发路上被改过 ⇒ 用户端 Image.network 取不到，"
+                        + "而它取不到时是**静默收缩为零**的，看起来就像运营没配图标")
+                .isEqualTo(iconUrl);
+    }
+
+    /**
+     * 🔴 **「不展示」必须说出原因** —— 四种原因的处置动作完全不同（bug 20260828）。
+     *
+     * <p>运营两次栽在同一个「不展示」上：一次以为图标坏了（实际账号已注销），
+     * 一次以为标签没配好（时间窗按 WIB 解释，照自己的表填就填成了未来）。
+     * 一个不带原因的「不展示」把这两次都指向了错误的方向。
+     */
+    @Test
+    void hiddenAssignmentsExplainWhyNotJustThatTheyAreHidden() {
+        Instant now = Instant.now();
+
+        // ① 还没开始（运营按 UTC+8 的表填 WIB 时间，最典型的一种）
+        User future = newUser();
+        tagService.assign(future.getId(), tag("FUT").getId(), now.plusSeconds(3600), null);
+        assertThat(only(future, now).hiddenReason())
+                .isEqualTo(UserAssignmentRow.REASON_NOT_STARTED);
+
+        // ② 已结束
+        User past = newUser();
+        tagService.assign(past.getId(), tag("PAST").getId(),
+                now.minusSeconds(7200), now.minusSeconds(3600));
+        assertThat(only(past, now).hiddenReason()).isEqualTo(UserAssignmentRow.REASON_ENDED);
+
+        // ③ 账号已注销
+        User gone = newUser();
+        tagService.assign(gone.getId(), tag("GONE").getId(), now.minusSeconds(60), null);
+        gone.anonymizeForDeletion(now);
+        users.save(gone);
+        assertThat(only(gone, now).hiddenReason())
+                .isEqualTo(UserAssignmentRow.REASON_DELETED_USER);
+
+        // ④ 生效中但被顶出展示上限（挂 4 个，最早的那个被挤出去）
+        User capped = newUser();
+        for (int i = 0; i < 4; i++) {
+            tagService.assign(capped.getId(), tag("CAP" + i).getId(),
+                    now.minusSeconds(400 - i * 10L), null);
+        }
+        List<UserAssignmentRow> rows = adminService.assignmentsByUser(capped.getId(), now);
+        assertThat(rows).hasSize(4);
+        assertThat(rows.stream().filter(r -> !r.visible()).toList())
+                .singleElement()
+                .extracting(UserAssignmentRow::hiddenReason)
+                .isEqualTo(UserAssignmentRow.REASON_OVER_CAP);
+    }
+
+    /**
+     * 🛡 判定**顺序**：注销压过时间窗。
+     *
+     * <p>一个「开始时间在未来」且「账号已注销」的分配，如果先判时间窗，
+     * 运营会被告知「等等就好」—— 而它其实永远不会展示。
+     */
+    @Test
+    void deletionOutranksTheTimeWindowWhenBothApply() {
+        Instant now = Instant.now();
+        User u = newUser();
+        tagService.assign(u.getId(), tag("BOTH").getId(), now.plusSeconds(3600), null);
+        u.anonymizeForDeletion(now);
+        users.save(u);
+
+        assertThat(only(u, now).hiddenReason())
+                .as("🔴 对一个注销账号说「还没开始」= 让运营白等一场")
+                .isEqualTo(UserAssignmentRow.REASON_DELETED_USER);
+    }
+
+    /** 🛡 展示中的那条**不带原因** —— 否则界面上每行都挂着一句解释，等于没有解释。 */
+    @Test
+    void visibleAssignmentsCarryNoReason() {
+        Instant now = Instant.now();
+        User u = newUser();
+        tagService.assign(u.getId(), tag("SHOW").getId(), now.minusSeconds(60), null);
+        UserAssignmentRow row = only(u, now);
+        assertThat(row.visible()).isTrue();
+        assertThat(row.hiddenReason()).isNull();
+    }
+
+    private UserAssignmentRow only(User u, Instant now) {
+        List<UserAssignmentRow> rows = adminService.assignmentsByUser(u.getId(), now);
+        assertThat(rows).hasSize(1);
+        return rows.get(0);
+    }
+
+    /**
+     * 🔴 **徽章底色按标签走，并以色值下发**（2026-08-28，UI 稿 `.utag-icon`）。
+     *
+     * <p>稿子里颜色是区分标签类别的手段（官方号金 ✓、最佳新人紫 ★），
+     * 而实现里圆底一直是写死的金色 —— 运营配不出第二种。
+     *
+     * <p>⚠️ 断言下发的是**色值**而不是枚举名：客户端不认识调色板，
+     * 这样将来加一档颜色不需要发版。改成下发枚举名会安静地让老客户端画不出颜色。
+     */
+    @Test
+    void badgeColourIsPerTagAndGoesOutAsAHexValue() {
+        long admin = 8281L + SEQ.incrementAndGet();
+        String code = "VIOLET_" + SEQ.incrementAndGet();
+        adminService.createTag(admin, code, "最佳新人", "https://cdn/x.png", "说明", "VIOLET");
+
+        UserTag t = tags.findByCode(code).orElseThrow();
+        assertThat(t.getBadgeColor()).isEqualTo(UserTagBadgeColor.VIOLET);
+
+        User u = newUser();
+        tagService.assign(u.getId(), t.getId(), Instant.now().minusSeconds(60), null);
+        UserTagView view = tagService.findVisibleTags(List.of(u.getId()), Instant.now())
+                .get(u.getId()).get(0);
+        assertThat(view.badgeColor())
+                .as("🔴 下发的不是色值 ⇒ 客户端得认识调色板，加一档颜色就要发版")
+                .isEqualTo("#845EC9");
+    }
+
+    /**
+     * 🛡 没选颜色 / 值不认识 → 金色（UI 稿的默认值），**不报错**。
+     *
+     * <p>底色是从下拉里选的，值不对只可能是有人手改了请求 ——
+     * 为此让整次建标签失败不划算。
+     */
+    @Test
+    void unknownBadgeColourFallsBackToGoldInsteadOfFailing() {
+        long admin = 8282L + SEQ.incrementAndGet();
+        String code = "FALLBACK_" + SEQ.incrementAndGet();
+        adminService.createTag(admin, code, "官方", "https://cdn/y.png", "说明", "NOT_A_COLOUR");
+
+        assertThat(tags.findByCode(code).orElseThrow().getBadgeColor())
+                .isEqualTo(UserTagBadgeColor.GOLD);
+    }
+
+    /** 🛡 编辑时能改色，且**不选新图标**不会把图标弄丢（与既有的保留图标规则叠加）。 */
+    @Test
+    void editingTheColourKeepsTheExistingIcon() {
+        long admin = 8283L + SEQ.incrementAndGet();
+        String code = "KEEP_" + SEQ.incrementAndGet();
+        adminService.createTag(admin, code, "官方", "https://cdn/keep.png", "说明", "GOLD");
+        UserTag t = tags.findByCode(code).orElseThrow();
+
+        adminService.editTag(admin, t.getId(), "官方", null, "说明", "CORAL");
+
+        UserTag after = tags.findById(t.getId()).orElseThrow();
+        assertThat(after.getBadgeColor()).isEqualTo(UserTagBadgeColor.CORAL);
+        assertThat(after.getIcon())
+                .as("🔴 改个颜色把图标弄丢了 —— 界面上看不出来，直到用户端图标消失")
+                .isEqualTo("https://cdn/keep.png");
     }
 }
