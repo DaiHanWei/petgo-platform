@@ -124,6 +124,10 @@ public class AdminContentManageController {
         // bug 20260828：点赞数列（取代被撤掉的「内容互动积分」整页）。
         // 🔴 整页一次批量取 —— 与物种推导、限流状态同一条纪律。
         model.addAttribute("likeCounts", likeCounts);
+        // 2026-08-31：浏览次数/人数列（至今累计，两个口径下都一样 —— 浏览没有逐次时间线，
+        // 给不出「窗口内的浏览」，所以「按点赞时间」档也照给累计值，模板里注明）。
+        model.addAttribute("viewStats", contentManage.viewStats(
+                items.stream().map(r -> r.content().id()).toList()));
         return hxRequest != null ? "admin/content :: rows" : "admin/content";
     }
 
@@ -221,6 +225,8 @@ public class AdminContentManageController {
             //    但若这里不给，那一格会从「3」跳成「—」，看起来像数据丢了。
             //    一行一次 count 很便宜，不值得为省它制造一个假象。
             model.addAttribute("likeCounts", contentManage.likeCounts(java.util.List.of(postId)));
+            // 浏览两列同理：下架/恢复不改变浏览数，但不给这一行就会从数字跳成"—"。
+            model.addAttribute("viewStats", contentManage.viewStats(java.util.List.of(postId)));
             // ⚠️ 这条 HTMX 路径只刷一行、**不放 `sp`**（物种推导要查作者+档案，
             //    整页那次已经批量算过；为一行再算一次不值当）。
             //    片段里 `sp` 未定义 ⇒ 物种两列渲染成 '—'。

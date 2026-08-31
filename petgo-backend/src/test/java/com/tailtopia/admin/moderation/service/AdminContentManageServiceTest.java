@@ -49,7 +49,8 @@ class AdminContentManageServiceTest {
                 mock(com.tailtopia.content.species.ContentSpeciesResolver.class),
                 mock(com.tailtopia.auth.repository.UserRepository.class),
                 mock(com.tailtopia.content.repository.ContentLikeRepository.class),
-                mock(com.tailtopia.admin.virtual.service.AdminPublishIdentityService.class));
+                mock(com.tailtopia.admin.virtual.service.AdminPublishIdentityService.class),
+                mock(com.tailtopia.content.service.ContentViewStatsService.class));
     }
 
     private void stubSummary(long postId, long authorId, boolean deleted) {

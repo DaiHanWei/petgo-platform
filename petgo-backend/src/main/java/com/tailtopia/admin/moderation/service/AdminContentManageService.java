@@ -41,13 +41,16 @@ public class AdminContentManageService {
     private final com.tailtopia.auth.repository.UserRepository usersRepo;
     private final com.tailtopia.content.repository.ContentLikeRepository likes;
     private final com.tailtopia.admin.virtual.service.AdminPublishIdentityService identities;
+    // 2026-08-31：浏览次数/人数列。经 content 模块的统计服务，不直读 view 表。
+    private final com.tailtopia.content.service.ContentViewStatsService viewStats;
 
     public AdminContentManageService(ContentService contentService, AdminAuditService auditService,
             ReportService reportService, ViolationCountService violationCountService,
             ContentSpeciesResolver speciesResolver,
             com.tailtopia.auth.repository.UserRepository usersRepo,
             com.tailtopia.content.repository.ContentLikeRepository likes,
-            com.tailtopia.admin.virtual.service.AdminPublishIdentityService identities) {
+            com.tailtopia.admin.virtual.service.AdminPublishIdentityService identities,
+            com.tailtopia.content.service.ContentViewStatsService viewStats) {
         this.contentService = contentService;
         this.auditService = auditService;
         this.reportService = reportService;
@@ -56,6 +59,7 @@ public class AdminContentManageService {
         this.usersRepo = usersRepo;
         this.likes = likes;
         this.identities = identities;
+        this.viewStats = viewStats;
     }
 
     /** 全量浏览/筛选/搜索（默认创建时间倒序）。 */
@@ -321,14 +325,18 @@ public class AdminContentManageService {
             rows = rows.subList(0, EXPORT_MAX_ROWS);
         }
         java.util.Map<Long, Long> likes = likeCounts(rows.stream().map(AdminContentRow::id).toList());
+        var views = viewStats(rows.stream().map(AdminContentRow::id).toList());
 
         StringBuilder csv = new StringBuilder(
-                "post_id,type,author_id,likes,created_at_wib,status,text\n");
+                "post_id,type,author_id,likes,views,viewers,created_at_wib,status,text\n");
         for (AdminContentRow r : rows) {
+            var vs = views.get(r.id());
             csv.append(r.id()).append(',')
                     .append(r.type() == null ? "" : r.type().name()).append(',')
                     .append(r.authorId() == null ? "" : r.authorId()).append(',')
                     .append(likes.getOrDefault(r.id(), 0L)).append(',')
+                    .append(vs == null ? 0 : vs.views()).append(',')
+                    .append(vs == null ? 0 : vs.viewers()).append(',')
                     // 🔴 导出的时间一律 WIB —— 后台全站按雅加达解释，
                     //    导出若给 UTC，运营会把两份对不上的数拿去做汇报。
                     .append(WIB_CSV.format(r.createdAt().atZone(WIB))).append(',')
@@ -364,13 +372,19 @@ public class AdminContentManageService {
             LocalDate from, LocalDate to, String status, String q) {
         // page=-1 拿不到全部，这里直接把池子当成一页取：口径本身已按 LIKE_WINDOW_POOL 封顶。
         LikeWindowPage all = browseByLikeWindowAll(type, authorId, from, to, status, q);
+        // ⚠️ 浏览两列是**至今累计**，不跟随「点赞时间」窗口 —— 浏览记录只存每人累计次数，
+        //    没有逐次时间线，给不出「窗口内的浏览」。列名不带 in_range，就是为了不被误读成窗口值。
+        var views = viewStats(all.rows().stream().map(AdminContentRow::id).toList());
         StringBuilder csv = new StringBuilder(
-                "post_id,type,author_id,likes_in_range,created_at_wib,status,text\n");
+                "post_id,type,author_id,likes_in_range,views,viewers,created_at_wib,status,text\n");
         for (AdminContentRow r : all.rows()) {
+            var vs = views.get(r.id());
             csv.append(r.id()).append(',')
                     .append(r.type() == null ? "" : r.type().name()).append(',')
                     .append(r.authorId() == null ? "" : r.authorId()).append(',')
                     .append(all.windowLikes().getOrDefault(r.id(), 0L)).append(',')
+                    .append(vs == null ? 0 : vs.views()).append(',')
+                    .append(vs == null ? 0 : vs.viewers()).append(',')
                     .append(WIB_CSV.format(r.createdAt().atZone(WIB))).append(',')
                     .append(r.deleted() ? "DELETED" : "ONLINE").append(',')
                     .append(csvCell(r.textPreview())).append('\n');
@@ -416,6 +430,19 @@ public class AdminContentManageService {
                         com.tailtopia.content.repository.ContentLikeRepository.PostLikeCount::getLikeCount));
     }
 
+
+    /**
+     * 本页内容各自的浏览统计（次数 + 人数，2026-08-31）。
+     *
+     * <p>口径：打开详情页记一次，作者本人不计（写入侧的规则，见
+     * {@code ContentViewStatsService}）。🔴 整页一次批量取，与点赞数同一条纪律。
+     * ⚠️ 没被看过的帖不在 Map 里，模板自己兜底成 0。
+     */
+    @Transactional(readOnly = true)
+    public java.util.Map<Long, com.tailtopia.content.service.ContentViewStatsService.ViewStat>
+            viewStats(java.util.Collection<Long> postIds) {
+        return viewStats.statsFor(postIds);
+    }
 
     /** 按 id 取单条后台行（HTMX 局部刷新用）；不存在返回 null。 */
     @Transactional(readOnly = true)
