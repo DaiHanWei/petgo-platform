@@ -116,6 +116,10 @@ class LoginGuideController {
     _hardDialogShowing = true;
     _pending = pendingAction;
     _entrySource = entrySource;
+    // 埋点缺口修复（2026-08-31）：强弹窗此前曝光/点击零埋点，13 个走它的受控入口在漏斗里
+    // 表现为「上一个事件直接跳 af_complete_registration」。曝光埋在并发去重**之后**
+    // （与软浮层把曝光埋在 session 去重之后同一道理：no-op 的那次不该记曝光）。
+    Analytics.capture('login_guide_hard_dialog_shown', {'entry_source': entrySource});
     try {
       await showDialog<void>(
         context: context,
@@ -123,10 +127,18 @@ class LoginGuideController {
         // 原型深遮罩（rgba(14,16,25,.72)）：强门控视觉强度高于软浮层。
         barrierColor: AppColors.splashInk.withValues(alpha: 0.72),
         builder: (dlgCtx) => LoginHardDialog(
-          onLogin: () => _attemptLogin(context, dlgCtx, _login),
+          onLogin: () {
+            Analytics.capture('login_guide_hard_dialog_login_tapped',
+                {'method': 'google', 'entry_source': entrySource});
+            return _attemptLogin(context, dlgCtx, _login);
+          },
           onAppleLogin: _loginApple == null
               ? null
-              : () => _attemptLogin(context, dlgCtx, _loginApple),
+              : () {
+                  Analytics.capture('login_guide_hard_dialog_login_tapped',
+                      {'method': 'apple', 'entry_source': entrySource});
+                  return _attemptLogin(context, dlgCtx, _loginApple);
+                },
           onClose: () {
             _pending = null;
             Navigator.of(dlgCtx).pop();
