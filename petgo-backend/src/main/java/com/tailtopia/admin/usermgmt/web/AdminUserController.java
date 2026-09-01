@@ -167,17 +167,28 @@ public class AdminUserController {
      * <p>🛡 名单**不自动剔除已封号账号，但每行标注账号状态**，由运营自行判断。
      * 导出动作记审计（操作人 / 时间 / 条数 / 筛选条件），号码本身绝不进审计摘要。
      */
-    @GetMapping(value = "/admin/users/phone-recall.csv", produces = "text/csv; charset=UTF-8")
+    // bug 20260901-469：产物改真 .xlsx（原 CSV 在运营 Excel 里挤成一列）。
+    // 🔴 phone 严格必填且只认 filled/empty —— 原来的 defaultValue="empty" 是事故根源：
+    //    页面链接一旦丢参（翻页丢参就是这么发生的），导出的不是报错而是**恰好相反的那份名单**，
+    //    而两份名单长得一模一样，运营看不出来拿错了。
+    @GetMapping(value = "/admin/users/phone-recall.xlsx")
     @PreAuthorize(EXPORT_AUTH)
-    public ResponseEntity<String> exportRecallList(
+    public ResponseEntity<byte[]> exportRecallList(
             @AuthenticationPrincipal AdminUserDetails admin,
-            @RequestParam(value = "phone", defaultValue = "empty") String phone) {
+            @RequestParam(value = "phone") String phone) {
+        if (!"filled".equals(phone) && !"empty".equals(phone)) {
+            throw com.tailtopia.shared.error.AppException
+                    .validation("导出前请先选择手机号筛选（已填写 / 未填写）")
+                    .code("admin.err.users.exportNeedsFilter");
+        }
         boolean filled = "filled".equals(phone);
-        String csv = adminUserService.exportRecallList(admin.getAdminAccountId(), filled);
+        byte[] body = adminUserService.exportRecallList(admin.getAdminAccountId(), filled);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"phone-recall.csv\"")
-                .body(csv);
+                        "attachment; filename=\"phone-recall.xlsx\"")
+                .contentType(org.springframework.http.MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(body);
     }
 
     /** 是否持有手机号查看权限。⚠️ 表达式须与侧栏/模板的 sec:authorize 逐字一致。 */
