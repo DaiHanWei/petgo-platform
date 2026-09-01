@@ -21,14 +21,20 @@ import org.springframework.web.bind.annotation.RequestParam;
 public class AdminPaymentController {
 
     private static final String VIEW_AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('payment.view')";
+    /** ⚠️ 须与模板里导出按钮的 sec:authorize 逐字一致，否则按钮在、点了 403。 */
+    private static final String EXPORT_AUTH =
+            "hasRole('SUPER_ADMIN') or hasAuthority('payment.list_export')";
 
     /** 默认视图每页条数。 */
     private static final int PAGE_SIZE = 20;
 
     private final AdminPaymentQueryService service;
+    private final com.tailtopia.admin.payment.service.AdminPaymentExportService exportService;
 
-    public AdminPaymentController(AdminPaymentQueryService service) {
+    public AdminPaymentController(AdminPaymentQueryService service,
+            com.tailtopia.admin.payment.service.AdminPaymentExportService exportService) {
         this.service = service;
+        this.exportService = exportService;
     }
 
     @GetMapping("/admin/payments")
@@ -67,6 +73,39 @@ public class AdminPaymentController {
         // 🔴 汇总覆盖**整个筛选结果**，不是当前这一页（见 summarize 的说明）。
         model.addAttribute("summary", service.summarize(filter));
         return "admin/payments";
+    }
+
+    /**
+     * 按当前筛选条件导出 Excel（2026-08-31）。
+     *
+     * <p>🔴 独立权限 {@code payment.list_export}、记审计 —— 与内容列表导出同口径：
+     * 查看是一次看一屏，导出是把支付数据批量带出系统。
+     *
+     * <p>⚠️ 参数与列表页**逐个对齐**：按钮把当前筛选条件原样带过来，
+     * 导出的就是屏幕上正在看的那一份。
+     */
+    @GetMapping("/admin/payments/export.xlsx")
+    @PreAuthorize(EXPORT_AUTH)
+    public org.springframework.http.ResponseEntity<byte[]> exportXlsx(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal
+            com.tailtopia.admin.service.AdminUserDetails admin,
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) String purpose,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        var filter = new AdminPaymentQueryService.Filter(
+                userId, parseEnum(PaymentPurpose.class, purpose),
+                parseEnum(PaymentStatus.class, status), from, to);
+        byte[] body = exportService.exportXlsx(admin.getAdminAccountId(), filter);
+        return org.springframework.http.ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"payment-records.xlsx\"")
+                .contentType(org.springframework.http.MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(body);
     }
 
     /** 宽松解析：空 / 不认识 → null（= 不限），绝不抛。 */

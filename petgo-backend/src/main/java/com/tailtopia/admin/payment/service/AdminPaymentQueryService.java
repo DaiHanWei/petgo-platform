@@ -120,6 +120,22 @@ public class AdminPaymentQueryService {
     }
 
     /**
+     * 按筛选条件取前 {@code limit} 条（创建时间倒序、不分页），Excel 导出用（2026-08-31）。
+     *
+     * <p>⚠️ 调用方传「上限 + 1」来判断是否截断 —— 不额外发一次 count（与内容列表导出同一招）。
+     */
+    @Transactional(readOnly = true)
+    public List<AdminPaymentRow> searchAll(Filter f, int limit) {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<PaymentIntent> cq = cb.createQuery(PaymentIntent.class);
+        Root<PaymentIntent> r = cq.from(PaymentIntent.class);
+        cq.where(where(cb, r, f).toArray(Predicate[]::new));
+        cq.orderBy(cb.desc(r.get("createdAt")));
+        return em.createQuery(cq).setMaxResults(limit)
+                .getResultList().stream().map(AdminPaymentQueryService::toRow).toList();
+    }
+
+    /**
      * 筛选结果的汇总（摆在表格上方）。
      *
      * <p>🔴 **不是 SUM(amount)**。那个数偏大且没人会察觉，三处失真见
