@@ -45,14 +45,18 @@ public class SeedBatchAssetService {
     // bug 20260901-468 第 5 处：上传素材也要 markSaved，否则「新建批次 → 只拖图 → 离开」
     // 的批次进不了列表，运营找不回来，7 天后连图被回收。
     private final com.tailtopia.admin.seed.repository.SeedBatchRepository batches;
+    /** 单删素材前的引用校验用（bug 20260901-474）。 */
+    private final com.tailtopia.admin.seed.repository.SeedBatchRowRepository rows;
 
     public SeedBatchAssetService(SeedBatchAssetRepository assets, AdminSeedImageService images,
             MessageSource messages,
-            com.tailtopia.admin.seed.repository.SeedBatchRepository batches) {
+            com.tailtopia.admin.seed.repository.SeedBatchRepository batches,
+            com.tailtopia.admin.seed.repository.SeedBatchRowRepository rows) {
         this.assets = assets;
         this.images = images;
         this.messages = messages;
         this.batches = batches;
+        this.rows = rows;
     }
 
     /** 当前工作集（不含已废弃）。 */
@@ -93,7 +97,7 @@ public class SeedBatchAssetService {
             throw AppException.validation(msg("admin.batch.asset.tooMany",
                     new Object[] {MAX_ASSETS}));
         }
-        if (assets.findByBatchIdAndFileName(batchId, fileName).isPresent()) {
+        if (assets.findByBatchIdAndFileNameAndOrphanedAtIsNull(batchId, fileName).isPresent()) {
             // 🛡 与**已在墙上的**素材一并查重（AC3）：分次追加时最容易撞的就是这个。
             throw AppException.validation(msg("admin.batch.asset.duplicateName",
                     new Object[] {fileName}));
@@ -131,6 +135,40 @@ public class SeedBatchAssetService {
             throw AppException.validation(msg("admin.batch.asset.duplicateName",
                     new Object[] {fileName}));
         }
+    }
+
+    /**
+     * 单张素材删除 = 标记废弃（bug 20260901-474）。
+     *
+     * <p>🛡 OSS 对象**不物理删**（F21：对象任何情况不物理删除），只做记账废弃：
+     * 从素材墙消失、不占配额、同名可重传（部分唯一索引只约束在用行）。
+     *
+     * <p>🔴 <b>被待发布行引用的素材不许删</b>：行内图片输入框的回显靠「URL→在用素材文件名」
+     * 反查，删了之后那一行的回显会退化成裸 URL、再保存即报「素材不在本批素材里」。
+     * 已发布行不算引用 —— 帖子已经带着 URL 上线，对象也不会被物理删，删素材不影响它。
+     */
+    @Transactional
+    public void remove(long batchId, long assetId) {
+        SeedBatchAsset a = assets.findById(assetId)
+                .filter(x -> x.getBatchId() == batchId && !x.isOrphaned())
+                .orElseThrow(() -> AppException.notFound(msg("admin.batch.asset.removeNotFound", null)));
+        List<Integer> holders = new java.util.ArrayList<>();
+        for (com.tailtopia.admin.seed.domain.SeedBatchRow r
+                : rows.findByBatchIdOrderByRowNoAsc(batchId)) {
+            if (r.getStatus() == com.tailtopia.admin.seed.domain.SeedBatchRowStatus.PUBLISHED) {
+                continue;
+            }
+            if (r.getImageUrls() != null && r.getImageUrls().contains(a.getUrl())) {
+                holders.add(r.getRowNo());
+            }
+        }
+        if (!holders.isEmpty()) {
+            throw AppException.validation(msg("admin.batch.asset.removeInUse",
+                    new Object[] {holders.stream().map(String::valueOf)
+                            .collect(java.util.stream.Collectors.joining("、"))}));
+        }
+        a.markOrphaned();
+        assets.save(a);
     }
 
     /**

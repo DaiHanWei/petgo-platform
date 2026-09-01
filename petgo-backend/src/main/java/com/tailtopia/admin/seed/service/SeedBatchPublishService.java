@@ -77,7 +77,10 @@ public class SeedBatchPublishService {
 
     /** 确认发布的结果。 */
     public record PublishOutcome(int published, int scheduled, int skippedByError,
-            int skippedByDuplicate, int failed) {
+            int skippedByDuplicate, int failed,
+            /** bug 20260901-473：此前已发布/已排期而本次跳过的行数 —— 原先不计数不提示，
+             *  运营把预览刷两遍再点确认时，汇总看起来像「通过的那行凭空消失」。 */
+            int alreadyDone) {
     }
 
     /**
@@ -98,12 +101,16 @@ public class SeedBatchPublishService {
         int skippedByError = 0;
         int skippedByDuplicate = 0;
         int failed = 0;
+        int alreadyDone = 0;
 
         for (RowValidation check : checks) {
             SeedBatchRow row = check.row();
             // 已经发过 / 已经排期的行不重复处理 —— 运营可能把预览页刷两遍再点确认。
             if (row.getStatus() == SeedBatchRowStatus.PUBLISHED
                     || row.getStatus() == SeedBatchRowStatus.SCHEDULED) {
+                // bug 20260901-473：这个桶必须计数并出现在结果提示里 —— 静默跳过会让
+                // 「表格里明明有一条 Pass、汇总却说 0 条发布」，运营读成计数坏了。
+                alreadyDone++;
                 continue;
             }
             if (!check.passes()) {
@@ -139,8 +146,10 @@ public class SeedBatchPublishService {
         audit.record(adminAccountId, "SEED_BATCH_CONFIRM", "seed_batch", String.valueOf(batchId),
                 "published=" + published + " scheduled=" + scheduled
                         + " skippedByError=" + skippedByError
-                        + " skippedByDuplicate=" + skippedByDuplicate + " failed=" + failed);
-        return new PublishOutcome(published, scheduled, skippedByError, skippedByDuplicate, failed);
+                        + " skippedByDuplicate=" + skippedByDuplicate + " failed=" + failed
+                        + " alreadyDone=" + alreadyDone);
+        return new PublishOutcome(published, scheduled, skippedByError, skippedByDuplicate, failed,
+                alreadyDone);
     }
 
     /**
