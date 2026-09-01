@@ -163,6 +163,9 @@ public class AdminConfigService {
         require(form.commentWeight() >= 0, "评论权重不可为负");
         require(form.exposureDecay() >= 0 && form.exposureDecay() <= 1,
                 "曝光衰减须在 0–1（大于 1 就是「看过的排更前面」，与这一维的意图相反）");
+        // 两端都可取：0 = 关闭抖动（回到纯分数排序），1 = 最强抖动 —— 与建表 CHECK 同一口径。
+        require(form.shuffleStrength() >= 0 && form.shuffleStrength() <= 1,
+                "刷新抖动幅度须在 0–1（0=关闭抖动，越大下拉刷新换得越狠）");
         require(form.seenWindowDays() >= 1, "曝光窗口须 ≥ 1 天");
         // 🛡 Story 17.1 · AC2：两头都不能取到 —— 与建表 CHECK 同一口径。
         // ≥ 1 不是降权（等于没处置）；= 0 让分数恒为 0 ⇒ 永远排不进推荐序 ⇒ 事实上等于下架，
@@ -191,6 +194,7 @@ public class AdminConfigService {
         diff(logs, t, "interaction_weight", c.getInteractionWeight(), form.interactionWeight(), adminId);
         diff(logs, t, "comment_weight", c.getCommentWeight(), form.commentWeight(), adminId);
         diff(logs, t, "exposure_decay", c.getExposureDecay(), form.exposureDecay(), adminId);
+        diff(logs, t, "shuffle_strength", c.getShuffleStrength(), form.shuffleStrength(), adminId);
         diff(logs, t, "throttle_factor", c.getThrottleFactor(), form.throttleFactor(), adminId);
         diff(logs, t, "seen_window_days", c.getSeenWindowDays(), form.seenWindowDays(), adminId);
         diff(logs, t, "window_size", c.getWindowSize(), form.windowSize(), adminId);
@@ -207,6 +211,7 @@ public class AdminConfigService {
         c.setInteractionWeight(form.interactionWeight());
         c.setCommentWeight(form.commentWeight());
         c.setExposureDecay(form.exposureDecay());
+        c.setShuffleStrength(form.shuffleStrength());
         c.setThrottleFactor(form.throttleFactor());
         c.setSeenWindowDays(form.seenWindowDays());
         c.setWindowSize(form.windowSize());
