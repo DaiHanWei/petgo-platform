@@ -22,6 +22,10 @@
             <p class="err" th:if="${a.width > 0 and a.height > 0
                             and (a.width * 100 / a.height > 134 or a.width * 100 / a.height < 75)}"
                th:text="#{admin.batch.asset.ratioFlag}">⚠️ 比例超出展示区间，展示时会被裁切</p>
+            <!-- bug 20260901-467：内容重复标记（按文件字节哈希判，改名/跨批都认得出）。
+                 只标后传的那张；标记不拦截 —— 运营刻意复用时照常可用。 -->
+            <p class="err" th:if="${assetDupNotes != null and assetDupNotes[a.id] != null}"
+               th:text="${assetDupNotes[a.id]}">⚠️ 与已上传素材内容相同</p>
         </div>
     </div>
     <p class="hint" th:if="${assets.isEmpty()}" th:text="#{admin.batch.asset.empty}">还没有素材。</p>

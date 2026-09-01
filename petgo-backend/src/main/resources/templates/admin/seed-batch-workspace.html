@@ -39,7 +39,8 @@
              一模一样的账号下拉，同一页面出现两次（AC1 要消除的正是它）。 -->
         <form method="post" th:action="@{/admin/seed-batches/{id}/settings(id=${batchId})}"
               th:attr="data-real-identity-confirm=#{admin.publishIdentity.realConfirm}">
-            <div th:replace="~{admin/fragments/publish-identity-select :: select(${publishIdentities}, 'batchDefaultAuthor', 'defaultAuthorUserId', null, null)}"></div>
+            <!-- bug 20260901-468：回显已存的默认发布账号（存过才回显，首次仍不预选）。 -->
+            <div th:replace="~{admin/fragments/publish-identity-select :: select(${publishIdentities}, 'batchDefaultAuthor', 'defaultAuthorUserId', null, null, ${batch?.defaultAuthorUserId})}"></div>
             <label class="field" for="batchDefaultType" th:text="#{admin.batch.defaultType}">默认内容类型</label>
             <!-- 🔴 不含 GROWTH_MOMENT（A-10）：成长日历需逐行绑宠物与事件日期、属"真实记录"
                  性质，不适合批量灌入。服务端另有一遍硬校验（下拉里没有 ≠ 请求里发不上来）。 -->
@@ -49,7 +50,10 @@
                         th:selected="${batch != null and batch.defaultContentType == t}">类型</option>
             </select>
             <label class="field" for="batchDefaultAt" th:text="#{admin.batch.defaultAt}">默认计划发布时间（WIB，留空=立即发布）</label>
-            <input id="batchDefaultAt" type="datetime-local" name="defaultScheduledAt" class="field-full"/>
+            <!-- bug 20260901-468：必须回显 —— saveDefaults 是全量覆写，这里不回显的话，
+                 运营下次改别的字段保存时，空输入框会把已存的时间**静默清空**。 -->
+            <input id="batchDefaultAt" type="datetime-local" name="defaultScheduledAt" class="field-full"
+                   th:value="${@adminTime.wibForInput(batch?.defaultScheduledAt)}"/>
             <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.batch.saveSettings}">保存设置</button>
         </form>
         <p class="hint" th:text="#{admin.batch.inheritHint}">
@@ -138,7 +142,10 @@
                     <textarea name="body" rows="3" th:text="${r.body}"></textarea>
 
                     <label class="field" th:text="#{admin.batch.row.assets}">图片（素材文件名，逗号分隔）</label>
+                    <!-- bug 20260901-468：必须回显已绑定的图片 —— 不回显的话，这一格看着永远是空的，
+                         运营再点一次「保存这一行」，空值会被当成"清空图片"把已绑定的全部抹掉（真丢数据）。 -->
                     <input type="text" name="assetFileNames" class="field-full"
+                           th:value="${rowAssetNames != null ? rowAssetNames[r.id] : ''}"
                            th:placeholder="#{admin.batch.row.assetsPlaceholder}"/>
 
                     <label class="field" th:text="#{admin.batch.row.author}">发布账号（留空=继承批次默认）</label>
@@ -169,7 +176,9 @@
                     </select>
 
                     <label class="field" th:text="#{admin.batch.row.at}">计划发布时间（WIB，留空=继承）</label>
-                    <input type="datetime-local" name="scheduledAt" class="field-full"/>
+                    <!-- bug 20260901-468：回显行级排期，防再保存时被静默回落成批次默认。 -->
+                    <input type="datetime-local" name="scheduledAt" class="field-full"
+                           th:value="${@adminTime.wibForInput(r.scheduledAt)}"/>
 
                     <button type="submit" class="btn btn-primary btn-sm"
                             th:text="#{admin.batch.row.save}">保存这一行</button>

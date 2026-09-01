@@ -42,12 +42,17 @@ public class SeedBatchAssetService {
     private final SeedBatchAssetRepository assets;
     private final AdminSeedImageService images;
     private final MessageSource messages;
+    // bug 20260901-468 第 5 处：上传素材也要 markSaved，否则「新建批次 → 只拖图 → 离开」
+    // 的批次进不了列表，运营找不回来，7 天后连图被回收。
+    private final com.tailtopia.admin.seed.repository.SeedBatchRepository batches;
 
     public SeedBatchAssetService(SeedBatchAssetRepository assets, AdminSeedImageService images,
-            MessageSource messages) {
+            MessageSource messages,
+            com.tailtopia.admin.seed.repository.SeedBatchRepository batches) {
         this.assets = assets;
         this.images = images;
         this.messages = messages;
+        this.batches = batches;
     }
 
     /** 当前工作集（不含已废弃）。 */
@@ -98,15 +103,94 @@ public class SeedBatchAssetService {
                     new Object[] {MAX_TOTAL_BYTES / 1024 / 1024}));
         }
 
+        // bug 20260901-467：文件内容 SHA-256 —— 素材级查重的判据（同内容改名/跨批都认得出）。
+        // 字节本来就要整个读进来传 OSS，顺手摘要一次，代价可忽略。
+        String sha;
+        try {
+            sha = sha256Hex(file.getBytes());
+        } catch (java.io.IOException e) {
+            throw AppException.validation(msg("admin.batch.asset.unreadable", new Object[] {fileName}));
+        }
+
         // 格式 / 单张大小 / 量宽高 / 落存储全部复用 12-2 那条链路（含 HEIC 拒绝与裁切预判）。
         UploadedImage up = images.upload(file, "seed-batch/" + batchId);
         try {
-            return assets.save(SeedBatchAsset.of(batchId, fileName, up.objectKey(), up.url(),
-                    up.w(), up.h(), up.sizeBytes()));
+            SeedBatchAsset a = SeedBatchAsset.of(batchId, fileName, up.objectKey(), up.url(),
+                    up.w(), up.h(), up.sizeBytes());
+            a.setContentSha256(sha);
+            SeedBatchAsset saved = assets.save(a);
+            // bug 20260901-468：拖了图即视为「这个批次是真的」——否则只传素材的批次
+            // 不出现在列表里，除了记住 URL 没有任何路径能回来。markSaved 幂等。
+            batches.findById(batchId).ifPresent(b -> {
+                b.markSaved();
+                batches.save(b);
+            });
+            return saved;
         } catch (DataIntegrityViolationException e) {
             // 唯一索引兜底：两个浏览器标签同时拖同名文件时，应用层那次查重会双双通过。
             throw AppException.validation(msg("admin.batch.asset.duplicateName",
                     new Object[] {fileName}));
+        }
+    }
+
+    /**
+     * 素材墙的「内容重复」标记（bug 20260901-467，产品拍板：标记提示但放行）。
+     *
+     * @return assetId → 本地化提示「与批次 #X 的 y.jpg 内容相同」。只标**后传的那张**
+     *         （与更早的比），首张不标 —— 两张都标会让人分不清谁重复了谁。
+     */
+    @Transactional(readOnly = true)
+    public java.util.Map<Long, String> duplicateNotes(long batchId) {
+        java.util.Map<Long, String> notes = new java.util.HashMap<>();
+        for (SeedBatchAsset a : wall(batchId)) {
+            if (a.getContentSha256() == null) {
+                continue; // 存量素材无哈希，不参与
+            }
+            assets.findByContentSha256AndOrphanedAtIsNullOrderByIdAsc(a.getContentSha256()).stream()
+                    .filter(other -> other.getId() < a.getId())
+                    .findFirst()
+                    .ifPresent(first -> notes.put(a.getId(),
+                            msg("admin.batch.asset.duplicateContent",
+                                    new Object[] {first.getBatchId(), first.getFileName()})));
+        }
+        return notes;
+    }
+
+    /**
+     * 内容指纹用的图片键（bug 20260901-467 次生缺陷）：URL → 素材内容哈希。
+     *
+     * <p>🔴 指纹原来直接拼 URL，而每次上传的 URL 都带随机串 ⇒ 「同一张图 + 同一段正文」
+     * 重传后指纹不同，**带图内容的跨批去重一直是失效的**。改为能解析到素材的 URL 用
+     * {@code sha:<内容哈希>}，解析不到（站外 URL / 无哈希的存量素材）回落 URL 原文。
+     * ⚠️ 三条发布路径都必须走这里 —— 判据分叉的表现是"另一条路径发过的判不出重复"。
+     * 代价：存量指纹里带图的那部分从此对不上（它们本来也从没对上过）。
+     */
+    @Transactional(readOnly = true)
+    public List<String> fingerprintKeys(List<String> urls) {
+        if (urls == null || urls.isEmpty()) {
+            return urls;
+        }
+        java.util.Map<String, String> shaByUrl = new java.util.HashMap<>();
+        for (SeedBatchAsset a : assets.findByUrlIn(urls)) {
+            if (a.getContentSha256() != null) {
+                shaByUrl.put(a.getUrl(), "sha:" + a.getContentSha256());
+            }
+        }
+        return urls.stream().map(u -> shaByUrl.getOrDefault(u, u)).toList();
+    }
+
+    /** 十六进制 SHA-256。 */
+    private static String sha256Hex(byte[] bytes) {
+        try {
+            byte[] d = java.security.MessageDigest.getInstance("SHA-256").digest(bytes);
+            StringBuilder hex = new StringBuilder(64);
+            for (byte b : d) {
+                hex.append(Character.forDigit((b >> 4) & 0xF, 16));
+                hex.append(Character.forDigit(b & 0xF, 16));
+            }
+            return hex.toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
         }
     }
 

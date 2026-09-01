@@ -25,4 +25,14 @@ public interface SeedBatchAssetRepository extends JpaRepository<SeedBatchAsset, 
     /** 废弃素材台账（供后续回收决策用；F21 反转后一条 SQL 即可动手）。 */
     @Query("select coalesce(sum(a.sizeBytes), 0) from SeedBatchAsset a where a.orphanedAt is not null")
     long totalOrphanedBytes();
+
+    /**
+     * 素材级内容查重（bug 20260901-467）：同内容哈希的**在用**素材，跨批次全表查。
+     *
+     * <p>存量行哈希为 null，天然不会命中（调用方也不得拿 null 来查）。
+     */
+    List<SeedBatchAsset> findByContentSha256AndOrphanedAtIsNullOrderByIdAsc(String contentSha256);
+
+    /** 一批素材的哈希批量取（指纹解析用，见 {@code SeedBatchAssetService#fingerprintKeys}）。 */
+    List<SeedBatchAsset> findByUrlIn(java.util.Collection<String> urls);
 }

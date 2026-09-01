@@ -42,6 +42,7 @@ class AdminSeedBatchServiceTest {
     private SeedContentHashRepository hashes;
     private AdminAuditService audit;
     private AdminPublishIdentityService identities;
+    private com.tailtopia.admin.seed.service.SeedBatchAssetService assetService;
     private AdminSeedBatchService svc;
 
     @BeforeEach
@@ -51,13 +52,16 @@ class AdminSeedBatchServiceTest {
         hashes = Mockito.mock(SeedContentHashRepository.class);
         audit = Mockito.mock(AdminAuditService.class);
         identities = Mockito.mock(AdminPublishIdentityService.class);
+        assetService = Mockito.mock(com.tailtopia.admin.seed.service.SeedBatchAssetService.class);
+        // 指纹图片键解析：单测里原样透传（老路径的图多为站外 URL，解析不到时就是原样回落）。
+        when(assetService.fingerprintKeys(any())).thenAnswer(inv -> inv.getArgument(0));
         // 默认：虚拟账号在池内、不是"运营真实账号"。各用例按需覆盖。
         when(identities.isInPool(any())).thenAnswer(inv -> {
             User u = inv.getArgument(0);
             return u.getAccountType() == com.tailtopia.auth.domain.AccountType.VIRTUAL;
         });
         when(identities.isRealPublishIdentity(Mockito.anyLong())).thenReturn(false);
-        svc = new AdminSeedBatchService(users, content, hashes, identities, audit);
+        svc = new AdminSeedBatchService(users, content, hashes, identities, audit, assetService);
         when(content.publish(Mockito.anyLong(), any(), anyString()))
                 .thenReturn(Mockito.mock(ContentPostResponse.class));
     }

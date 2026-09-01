@@ -36,4 +36,15 @@ public class AdminTime {
         return java.time.LocalDateTime.now(ZoneId.of("Asia/Jakarta"))
                 .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm"));
     }
+
+    /**
+     * 已存的时刻 → {@code datetime-local} 输入框可回显的值（WIB）；null → 空串。
+     *
+     * <p>bug 20260901-468：批量工作台的时间输入框此前没有回显 —— 存过的值刷新即"看不见"，
+     * 且下次保存会被空输入框静默清空。格式与 {@link #nowWibForInput()} 一致。
+     */
+    public String wibForInput(Instant t) {
+        return t == null ? "" : java.time.LocalDateTime.ofInstant(t, ZoneId.of("Asia/Jakarta"))
+                .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm"));
+    }
 }
