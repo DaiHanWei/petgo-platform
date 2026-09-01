@@ -82,6 +82,12 @@ void main() {
     // REFUND_REJECTED：详情页以 extra 寻址无 token 路由 → 固定落退款列表
     expect(DeepLinkRoutes.pushPayloadToLocation('REFUND_REJECTED', 'rf1'), '/me/refunds');
     expect(DeepLinkRoutes.pushPayloadToLocation('REFUND_REJECTED', null), '/me/refunds');
+    // 账号警告/停用（bug 20260901-477）：targetRef 恒空也必须落提工单页 ——
+    // 落回通知中心 = 点了没反应的死点击（20260729-391 同型回归钉）。
+    expect(DeepLinkRoutes.pushPayloadToLocation('ACCOUNT_WARNED', null),
+        '/me/support-tickets/new');
+    expect(DeepLinkRoutes.pushPayloadToLocation('ACCOUNT_SUSPENDED', null),
+        '/me/support-tickets/new');
   });
 
   group('生命周期推送（留存运营作战手册 · 抓手 1）', () {

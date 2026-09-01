@@ -20,6 +20,9 @@
     <div th:fragment="content" th:remove="tag">
         <h1><span th:text="#{admin.batch.workspace}">批量内容工作台</span>
             <span th:text="' #' + ${batchId}">#0</span></h1>
+        <!-- bug 20260901-472：显式返回入口 —— 此前只能靠浏览器后退，运营不确定会不会丢数据。 -->
+        <p><a class="btn btn-neutral btn-sm" th:href="@{/admin/seed-batches}"
+              th:text="#{admin.batch.backToList}">← 返回批次列表（本页数据已实时保存）</a></p>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
         <!-- 尚未保存过的批次不在列表里（bug 20260826）。不说这一句，运营会以为批次丢了。 -->

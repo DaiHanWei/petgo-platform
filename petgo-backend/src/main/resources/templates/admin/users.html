@@ -40,11 +40,17 @@
                  原先「没选就当未填写」的回落，配上翻页丢参，导出的正好是相反的那份名单。 -->
             <!-- ⚠️ 搜索态（q 非空）列表显示的是搜索结果、不按手机号筛 —— 此时也不给导出，
                  否则又是「屏幕一份、文件一份」。 -->
+            <!-- bug 20260901-475：不可用时**置灰而不是消失** —— 整个按钮不见会被读成「功能没了」。 -->
             <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.phone_export')"
                th:if="${!searched and (phone == 'filled' or phone == 'empty')}"
                class="btn btn-sm"
                th:href="@{/admin/users/phone-recall.xlsx(phone=${phone})}"
                th:text="#{admin.users.exportRecall}">导出召回名单</a>
+            <button sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.phone_export')"
+                    th:unless="${!searched and (phone == 'filled' or phone == 'empty')}"
+                    type="button" class="btn btn-sm" disabled
+                    th:title="#{admin.users.exportNeedsFilter}"
+                    th:text="#{admin.users.exportRecall}">导出召回名单</button>
             <span sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.phone_export')"
                   th:unless="${!searched and (phone == 'filled' or phone == 'empty')}"
                   class="muted" th:text="#{admin.users.exportNeedsFilter}">

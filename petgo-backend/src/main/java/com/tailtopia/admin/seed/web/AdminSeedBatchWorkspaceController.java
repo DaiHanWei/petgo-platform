@@ -49,6 +49,8 @@ public class AdminSeedBatchWorkspaceController {
 
     /** 批次列表页底部那段排期用（bug 20260826：上传与看情况同一页）。 */
     private final com.tailtopia.admin.seed.repository.SeedBatchRowRepository scheduleRows;
+    /** 确认发布的结果提示按当前语言输出（bug 20260901-473，后台三语）。 */
+    private final com.tailtopia.shared.i18n.Messages i18n;
 
     public AdminSeedBatchWorkspaceController(SeedBatchService batches,
             SeedBatchAssetService assets,
@@ -56,7 +58,8 @@ public class AdminSeedBatchWorkspaceController {
             com.tailtopia.admin.seed.service.SeedBatchExcelService excel,
             com.tailtopia.admin.virtual.service.AdminPublishIdentityService identities,
             com.tailtopia.admin.seed.service.SeedBatchPublishService publishing,
-            com.tailtopia.admin.seed.repository.SeedBatchRowRepository scheduleRows) {
+            com.tailtopia.admin.seed.repository.SeedBatchRowRepository scheduleRows,
+            com.tailtopia.shared.i18n.Messages i18n) {
         this.batches = batches;
         this.assets = assets;
         this.entry = entry;
@@ -64,6 +67,7 @@ public class AdminSeedBatchWorkspaceController {
         this.identities = identities;
         this.publishing = publishing;
         this.scheduleRows = scheduleRows;
+        this.i18n = i18n;
     }
 
     /** 批次列表 —— 🛡 按各行状态**聚合**展示（13-1 AC2），批次自己没有状态。 */
@@ -125,6 +129,23 @@ public class AdminSeedBatchWorkspaceController {
                 com.tailtopia.admin.seed.service.SeedBatchExcelService.SPECIES_OPTIONS);
         addWall(model, batchId);
         return "admin/seed-batch-workspace";
+    }
+
+    /**
+     * 单张素材删除（bug 20260901-474）：标记废弃，OSS 对象不物理删（F21）。
+     * 被待发布行引用时拒绝并指出行号（校验在服务层，权威）。
+     */
+    @PostMapping("/admin/seed-batches/{batchId}/assets/{assetId}/delete")
+    @PreAuthorize(AUTH)
+    public String removeAsset(@PathVariable long batchId, @PathVariable long assetId,
+            RedirectAttributes flash) {
+        try {
+            assets.remove(batchId, assetId);
+            flash.addFlashAttribute("notice", i18n.get("admin.batch.asset.removed"));
+        } catch (AppException e) {
+            flash.addFlashAttribute("error", e.getMessage());
+        }
+        return "redirect:/admin/seed-batches/" + batchId;
     }
 
     /** 页头那一处批次级设置（AC1）。 */
@@ -338,20 +359,27 @@ public class AdminSeedBatchWorkspaceController {
             RedirectAttributes flash) {
         try {
             var out = publishing.confirm(batchId, admin.getAdminAccountId(), includeDuplicates);
-            StringBuilder msg = new StringBuilder("已发布 " + out.published() + " 条");
+            // bug 20260901-473：改经 i18n 组装（后台三语，硬编码中文会原样怼给印尼运营），
+            // 且**每个桶都必须出声** —— 少说一个桶，运营就会觉得有一行凭空消失了。
+            StringBuilder msg = new StringBuilder(i18n.get("admin.batch.confirm.published",
+                    out.published()));
             if (out.scheduled() > 0) {
-                msg.append("，转入排期 ").append(out.scheduled()).append(" 条");
+                msg.append(i18n.get("admin.batch.confirm.scheduled", out.scheduled()));
+            }
+            if (out.alreadyDone() > 0) {
+                // 此前已发布/已排期的行（比如预览刷两遍再点确认）—— 不说这一句，
+                // 汇总看起来就像「表格里的 Pass 行凭空消失」（473 的现场正是如此）。
+                msg.append(i18n.get("admin.batch.confirm.alreadyDone", out.alreadyDone()));
             }
             if (out.skippedByError() > 0) {
                 // 🛡 措辞写明"留在草稿里可改后重提"—— 只说"跳过 N 条"运营不知道那几条去哪了。
-                msg.append("；").append(out.skippedByError()).append(" 条校验未过，留在草稿里可修改后再提交");
+                msg.append(i18n.get("admin.batch.confirm.skippedError", out.skippedByError()));
             }
             if (out.skippedByDuplicate() > 0) {
-                msg.append("；").append(out.skippedByDuplicate())
-                        .append(" 条与该账号已发内容重复，未发（如仍要发请勾选「重复的也发」）");
+                msg.append(i18n.get("admin.batch.confirm.skippedDuplicate", out.skippedByDuplicate()));
             }
             if (out.failed() > 0) {
-                msg.append("；").append(out.failed()).append(" 条发布失败，原因见该行");
+                msg.append(i18n.get("admin.batch.confirm.failed", out.failed()));
             }
             flash.addFlashAttribute("notice", msg.toString());
         } catch (AppException e) {

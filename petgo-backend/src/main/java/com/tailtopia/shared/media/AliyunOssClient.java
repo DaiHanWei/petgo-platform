@@ -144,6 +144,12 @@ public class AliyunOssClient {
      * @return 对外 CDN URL
      */
     public String putPublicObjectWithAcl(String objectKey, byte[] bytes, String contentType) {
+        // 🔴 与 putPublicObject 同一条打桩规则（bug 20260901-472）：无凭证直接回 URL 不打网络。
+        //    没有这条，后台图片上传在本地/测试环境（无 OSS 凭证）会直接抛错。
+        if (!hasCredentials()) {
+            log.warn("OSS 未配凭证，putPublicObjectWithAcl 走打桩（仅本地/测试）key={}", objectKey);
+            return publicUrl(objectKey);
+        }
         OSS client = buildClient();
         try {
             com.aliyun.oss.model.ObjectMetadata meta = new com.aliyun.oss.model.ObjectMetadata();
