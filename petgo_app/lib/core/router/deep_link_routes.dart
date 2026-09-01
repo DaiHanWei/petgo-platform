@@ -107,6 +107,13 @@ class DeepLinkRoutes {
     }
     // 退款被驳回：refund 详情页以 extra 对象寻址、无 token 路由 → 落退款列表（安全落点）。
     if (type == 'REFUND_REJECTED') return '/me/refunds';
+    // 账号警告/停用（bug 20260901-477）：后端 targetRef 恒空，必须在下面「无 targetRef →
+    // 落通知中心」的短路**之前**分流（与 REFUND_REJECTED 同位）——落回通知中心时人本来
+    // 就在通知中心，表现即「点了没反应」（与 bug 20260729-391 的死点击同型）。
+    // 落点 = 提工单页（Report a Problem）：收到处置通知的人下一步就是申诉/联系客服。
+    if (type == 'ACCOUNT_WARNED' || type == 'ACCOUNT_SUSPENDED') {
+      return '/me/support-tickets/new';
+    }
     // id 寻址类：缺 targetRef 落兜底（避免拼出非法路由）。
     if (targetRef == null || targetRef.isEmpty) return notificationsCenter;
     switch (type) {
