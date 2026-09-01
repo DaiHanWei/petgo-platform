@@ -444,4 +444,43 @@ class SeedBatchAssetIntegrationTest extends ApiIntegrationTest {
         jdbc.update("update seed_batches set created_at = ? where id = ?",
                 java.sql.Timestamp.from(Instant.now().minus(days, ChronoUnit.DAYS)), batchId);
     }
+
+    // ── 单张删除（bug 20260901-474）────────────────────────────────
+
+    /** 删除 = 标记废弃：从墙上消失、不占配额，同名可重传（替换路径）。 */
+    @Test
+    void removingAnAssetFreesTheWallAndAllowsSameNameReupload() throws Exception {
+        long batchId = newBatch();
+        SeedBatchAsset a = upload(batchId, "replace-me.png", 900, 900);
+        assertThat(assetService.wall(batchId)).hasSize(1);
+
+        assetService.remove(batchId, a.getId());
+
+        assertThat(assetService.wall(batchId)).isEmpty();
+        assertThat(assetService.usage(batchId).count()).isZero();
+        // 🔴 替换的正当路径：删掉之后同名重传必须能过（部分唯一索引只约束在用行）。
+        assertThat(upload(batchId, "replace-me.png", 800, 800).getFileName())
+                .isEqualTo("replace-me.png");
+    }
+
+    /** 🛡 被待发布行引用的素材拒删，并在报错里指出行号；已发布行不算引用。 */
+    @Test
+    void removingAnAssetReferencedByAPendingRowIsRejectedWithTheRowNo() throws Exception {
+        long batchId = newBatch();
+        SeedBatchAsset used = upload(batchId, "in-use.png", 900, 900);
+        rowRepo.save(SeedBatchRow.draft(batchId, 7, adminId(), ContentType.DAILY,
+                null, "正文", List.of(used.getUrl()), null));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> assetService.remove(batchId, used.getId()))
+                .hasMessageContaining("7");
+        assertThat(assetService.wall(batchId)).hasSize(1); // 没被删
+
+        // 已发布的行不算引用：把行推到 PUBLISHED 后允许删除。
+        SeedBatchRow r = rowRepo.findByBatchIdOrderByRowNoAsc(batchId).get(0);
+        jdbc.update("update seed_batch_rows set status = 'PUBLISHED', content_post_id = 1 "
+                + "where id = ?", r.getId());
+        assetService.remove(batchId, used.getId());
+        assertThat(assetService.wall(batchId)).isEmpty();
+    }
 }

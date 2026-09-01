@@ -204,6 +204,9 @@ class SeedBatchPublishIntegrationTest extends ApiIntegrationTest {
         var second = publishing.confirm(batchId, admin, false);
 
         assertThat(second.published()).isZero();
+        // bug 20260901-473：跳过的行必须**计数**（结果提示据此说「N 条此前已发布/已排期」）——
+        // 原来这个桶不出声，第二次确认的汇总看起来像「表格里的 Pass 行凭空消失」。
+        assertThat(second.alreadyDone()).isEqualTo(1);
         assertThat(postsOf(authorId)).hasSize(1);
     }
 
