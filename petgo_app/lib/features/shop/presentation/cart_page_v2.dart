@@ -1,6 +1,6 @@
 /// 购物车 —— **设计稿版式**（V1.4.0 · `01_screens_browse_order.md` 屏 5）。
 ///
-/// 与 [CartPage]（v1 版式）并存，由 `shopUiVariantProvider` 二选一。
+/// ⚠️ 2026-08-28：v1 版式已整体删除，本文件是该页唯一实现（`_v2` 后缀保留以免制造纯改名 diff）。
 ///
 /// ## 🔴 单店模型：没有店铺分组
 ///
@@ -42,14 +42,34 @@ import '../domain/shop_cart.dart';
 import '../domain/shop_product.dart';
 import 'widgets/shop_buttons.dart';
 import 'widgets/shop_controls.dart';
+import 'widgets/shop_dialog.dart';
+import 'widgets/shop_pressable.dart';
 import 'widgets/shop_decor.dart';
 import 'widgets/shop_surface.dart';
 
-class CartPageV2 extends ConsumerWidget {
+/// 🔴 <b>改为有状态只为一件事：页面曝光埋点</b>（2026-08-28 补）。
+///
+/// `toko_cart_page_viewed` 原本只在 v1 的 CartPage 里上报。v2 自 2026-08-21 成为默认版式后
+/// 这个指标其实**已经空了一周多** —— 只是 v1 代码还在，埋点清单对账测试就一直是绿的，
+/// 直到 v1 整体删除才暴露出来。
+/// ⚠️ 必须在 initState 而不是 build 里报：build 会因 provider 变化被反复调用，
+/// 那样一次浏览会上报很多条，页面浏览量直接失真。
+class CartPageV2 extends ConsumerStatefulWidget {
   const CartPageV2({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CartPageV2> createState() => _CartPageV2State();
+}
+
+class _CartPageV2State extends ConsumerState<CartPageV2> {
+  @override
+  void initState() {
+    super.initState();
+    Analytics.capture('toko_cart_page_viewed');
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final async = ref.watch(cartProvider);
     // 🔒 游客态：**页内软性引导，不 redirect**。把游客弹回 /home 等于告诉他
@@ -63,7 +83,11 @@ class CartPageV2 extends ConsumerWidget {
           ? _guestState(context, l10n)
           : async.when(
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (_, _) => _hint(l10n.cartLoadFailed),
+              error: (_, _) => ShopRetryState(
+                message: l10n.cartLoadFailed,
+                retryLabel: l10n.commonRetry,
+                onRetry: () => ref.invalidate(cartProvider),
+              ),
               data: (cart) =>
                   cart.isEmpty ? _emptyState(context, l10n) : _list(context, ref, l10n, cart),
             ),
@@ -115,14 +139,26 @@ class CartPageV2 extends ConsumerWidget {
               child: Text(l10n.cartInvalidSection(cart.invalidLines.length),
                   style: ShopText.cardTitle.copyWith(color: ShopColors.text3)),
             ),
-            InkWell(
+            // 🔴 批量删除不可撤销，先确认（2026-08-27）。此前点一下整组直接消失。
+            //    padding 由 4/6 提到 8/12：原命中区约 30×23，够不到 44。
+            ShopPressable(
               key: const ValueKey('cartClearInvalidV2'),
               onTap: () async {
+                final ok = await showShopConfirm(
+                  context,
+                  dialogKey: const ValueKey('cartClearInvalidConfirmV2'),
+                  confirmKey: const ValueKey('cartClearInvalidConfirmYesV2'),
+                  title: l10n.cartClearInvalidConfirmTitle,
+                  body: l10n.cartClearInvalidConfirmBody,
+                  confirmLabel: l10n.cartClearInvalidConfirmYes,
+                  cancelLabel: l10n.commonCancel,
+                );
+                if (!ok) return;
                 Analytics.capture('toko_cart_clear_invalid_tapped');
                 await ref.read(cartProvider.notifier).clearInvalid();
               },
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
                 child: Text(l10n.cartClearInvalid,
                     style: ShopText.badge
                         .copyWith(fontSize: 10.5, color: ShopColors.purple)),
@@ -161,10 +197,6 @@ class CartPageV2 extends ConsumerWidget {
         onTap: () => context.go('/shop'),
       );
 
-  Widget _hint(String text) => ShopSection(
-        padding: const EdgeInsets.symmetric(vertical: 32, horizontal: kShopScreenEdge),
-        child: Center(child: Text(text, textAlign: TextAlign.center, style: ShopText.body)),
-      );
 }
 
 /// 可购商品行。
@@ -217,6 +249,14 @@ class _ValidLineState extends ConsumerState<_ValidLine> {
                       min: 1,
                       max: maxQty,
                       onChanged: _busy ? null : (v) => _setQty(l10n, line, v),
+                      // 🔴 触底再减 = 删除整行（2026-08-27 补回）。此前 v2 的有效行
+                      //    **没有任何删除入口**，而 v2 自 2026-08-21 起是默认变体 ——
+                      //    加错东西的用户只能整单买下或放弃结算。v1 一直有这个能力
+                      //    （cart_page.dart 的 `_qtyStepper`），改版时漏了。
+                      onRemove: _busy ? null : () => _remove(l10n, line),
+                      decrementLabel: l10n.cartDecrease,
+                      incrementLabel: l10n.cartIncrease,
+                      removeLabel: l10n.cartRemoveLine,
                     ),
                   ],
                 ),
@@ -245,6 +285,18 @@ class _ValidLineState extends ConsumerState<_ValidLine> {
     );
   }
 
+  /// 删除整行。走的是失效行 `Hapus` 用的同一个 `remove()`，不是新增能力。
+  Future<void> _remove(AppLocalizations l10n, CartLine line) async {
+    setState(() => _busy = true);
+    try {
+      await ref.read(cartProvider.notifier).remove(line.skuToken);
+    } on CartMutationError {
+      if (mounted) showAppToast(context, l10n.cartGenericError);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _setQty(AppLocalizations l10n, CartLine line, int qty) async {
     setState(() => _busy = true);
     try {
@@ -262,7 +314,11 @@ class _ValidLineState extends ConsumerState<_ValidLine> {
 
 /// 失效商品行。
 ///
-/// 整组 `opacity: .75`；图上盖蒙层；价格转灰；**不参与合计**。
+/// 信息部分 `opacity: .75`；图上盖蒙层；价格转灰；**不参与合计**。
+///
+/// 🔴 <b>降权只罩「信息」，不罩「操作」</b>（2026-08-27）：原先整行 `.75` 把两个按钮
+/// 一起压暗，`outlineMuted` 的字色因此掉到约 2.8:1 —— 一个本来就低对比的次按钮被再乘
+/// 一次。降权要表达的是「这些东西买不到」，不是「这两个出口也不太好用」。
 /// 两个出口：`Cari mirip`（紫描边，**优先级更高**）与 `Hapus`（浅描边）——
 /// 🔴 失效不等于流失：一件买不到的东西，用户真正想要的是「有没有别的」。
 class _InvalidLine extends ConsumerWidget {
@@ -273,13 +329,13 @@ class _InvalidLine extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    return Opacity(
-      opacity: .75,
-      child: ShopSection(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
+    return ShopSection(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Opacity(
+            opacity: .75,
+            child: SizedBox(
               width: 64,
               height: 64,
               child: Stack(
@@ -295,48 +351,57 @@ class _InvalidLine extends ConsumerWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 11),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(line.productName ?? line.specName,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: ShopText.productNameCard.copyWith(color: ShopColors.text3)),
-                  const SizedBox(height: 2),
-                  // 🔴 价格转灰 —— 买不到的价格不该用玫红做促销刺激（三色分工）。
-                  Text(formatIdr(line.price),
-                      style: ShopText.priceRail.copyWith(color: ShopColors.text4)),
-                  const SizedBox(height: 8),
-                  Row(
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Opacity(
+                  opacity: .75,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      ShopButton(
-                        key: ValueKey('cartFindSimilar_${line.skuToken}'),
-                        label: l10n.cartFindSimilar,
-                        variant: ShopButtonVariant.outlinePurple,
-                        dense: true,
-                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                        // 无「同类目替代品」端点 → 跳全部精选列表。
-                        // 语义仍是「看看别的」，不编一个不存在的推荐。
-                        onTap: () => context.go('/shop'),
-                      ),
-                      const SizedBox(width: 7),
-                      ShopButton(
-                        key: ValueKey('cartRemoveInvalid_${line.skuToken}'),
-                        label: l10n.cartRemoveShort,
-                        variant: ShopButtonVariant.outlineMuted,
-                        dense: true,
-                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                        onTap: () => ref.read(cartProvider.notifier).remove(line.skuToken),
-                      ),
+                      Text(line.productName ?? line.specName,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style:
+                              ShopText.productNameCard.copyWith(color: ShopColors.text3)),
+                      const SizedBox(height: 2),
+                      // 🔴 价格转灰 —— 买不到的价格不该用玫红做促销刺激（三色分工）。
+                      Text(formatIdr(line.price),
+                          style: ShopText.priceRail.copyWith(color: ShopColors.text4)),
                     ],
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    ShopButton(
+                      key: ValueKey('cartFindSimilar_${line.skuToken}'),
+                      label: l10n.cartFindSimilar,
+                      variant: ShopButtonVariant.outlinePurple,
+                      dense: true,
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
+                      // 无「同类目替代品」端点 → 跳全部精选列表。
+                      // 语义仍是「看看别的」，不编一个不存在的推荐。
+                      onTap: () => context.go('/shop'),
+                    ),
+                    const SizedBox(width: 7),
+                    ShopButton(
+                      key: ValueKey('cartRemoveInvalid_${line.skuToken}'),
+                      label: l10n.cartRemoveShort,
+                      variant: ShopButtonVariant.outlineMuted,
+                      dense: true,
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
+                      onTap: () => ref.read(cartProvider.notifier).remove(line.skuToken),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

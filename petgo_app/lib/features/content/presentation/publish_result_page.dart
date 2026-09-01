@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../profile/domain/card_link.dart';
+import '../../profile/domain/share_service.dart';
 import 'publish_compose_page.dart';
 
 /// 发布结果三屏（P-39 成功 / P-39b 审核中 / P-39c 被拒）的共享参数。
@@ -16,6 +20,8 @@ class PublishResultArgs {
     this.petEmoji = '🐱',
     this.reasons = const <String>[],
     this.isPrivate = false,
+    this.cardToken,
+    this.petName,
   });
 
   final String excerpt;
@@ -23,6 +29,17 @@ class PublishResultArgs {
   final int photoCount;
   final String petEmoji;
   final List<String> reasons;
+
+  /// 宠物成长册的不可枚举对外 token（留存手册抓手 2）。
+  ///
+  /// 有它才渲染成功页的分享 CTA。手册指出的浪费就在这儿：106 人发布过内容，
+  /// 只有 15 人触发过分享——分享链路根本没接上，用户得自己摸到成长档案页的 FAB 才找得到。
+  /// 而分享落地页是**已验证 70% 注册转化**的唯一有效增长通道。
+  /// 拿不到（无档案 / 取档案失败）→ 不渲染按钮，绝不阻断发布成功页。
+  final String? cardToken;
+
+  /// 宠物名，只用于分享 CTA 文案（"把 Mochi 的成长册分享给朋友"）。
+  final String? petName;
 
   /// 私密保存（Diary 关掉「同步到 Moment」，PR#34 finding #11）：成功页不得再用
   /// 社区口吻 +「去 Social 看」CTA——该内容永远不进公开 Feed，用户会翻找无果误以为失败。
@@ -35,6 +52,8 @@ class PublishResultArgs {
         petEmoji: petEmoji,
         reasons: r,
         isPrivate: isPrivate,
+        cardToken: cardToken,
+        petName: petName,
       );
 
   /// DEV 直达样例（深链无 extra 时用，供逐屏视觉验收）。
@@ -56,13 +75,13 @@ class PublishResultArgs {
 // P-39 发布成功
 // ─────────────────────────────────────────────────────────────────────────
 
-class PublishDonePage extends StatelessWidget {
+class PublishDonePage extends ConsumerWidget {
   const PublishDonePage({super.key, required this.args});
 
   final PublishResultArgs args;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     // 私密保存（finding #11）：换标题/副文案、CTA 改「去 Diary 看」；不渲染 ❤/💬 社区 meta。
     final private = args.isPrivate;
@@ -155,6 +174,11 @@ class PublishDonePage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
+              // 分享飞轮（留存手册抓手 2）：**当场**给可分享的成长册，别等用户自己
+              // 去成长档案页摸那个 FAB。分享出去 → 朋友点进来 → 看到真实日记 → 注册，
+              // 这条链路已实测 70% 转化，是目前唯一有效的增长通道。
+              // 私密保存也照给：分享的是宠物的成长册主页，不是刚才这条内容。
+              if (args.cardToken != null) _ShareGrowthBookButton(args: args),
               // 私密时主 CTA 已指向 Diary，次按钮再指 Diary 就重复 → 不渲染。
               if (!private)
                 TextButton(
@@ -168,6 +192,76 @@ class PublishDonePage extends StatelessWidget {
                 ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 发布成功页的「分享成长册」CTA（留存手册抓手 2）。
+///
+/// 分享的是 `/p/{cardToken}` 宠物成长册 H5——**不是**刚发的这条内容。
+/// 选它而不是新造一张卡的原因：这个页面是诊断报告里唯一验证过的增长通道
+/// （落地→注册 70%），而新造的分享物要重新验证一遍转化。
+///
+/// ⚠️ iOS 必须把按钮矩形当分享面板锚点传下去，否则 iPad 崩、iPhone 点了没反应
+/// （bug 20260707 成长档案分享按钮就栽在这）。
+class _ShareGrowthBookButton extends ConsumerStatefulWidget {
+  const _ShareGrowthBookButton({required this.args});
+
+  final PublishResultArgs args;
+
+  @override
+  ConsumerState<_ShareGrowthBookButton> createState() => _ShareGrowthBookButtonState();
+}
+
+class _ShareGrowthBookButtonState extends ConsumerState<_ShareGrowthBookButton> {
+  bool _sharing = false;
+
+  Future<void> _share() async {
+    final token = widget.args.cardToken;
+    if (token == null || _sharing) return;
+    setState(() => _sharing = true);
+    Analytics.capture('publish_done_share_tapped', {
+      'is_private': widget.args.isPrivate,
+    });
+    try {
+      final box = context.findRenderObject() as RenderBox?;
+      final origin = box != null && box.hasSize
+          ? box.localToGlobal(Offset.zero) & box.size
+          : null;
+      await ref.read(shareServiceProvider)(
+        petCardShareUrl(token),
+        sharePositionOrigin: origin,
+      );
+    } catch (_) {
+      // 分享失败不做任何打扰：用户刚发布成功，此刻弹错误吐司只会冲淡正反馈。
+    } finally {
+      if (mounted) setState(() => _sharing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final name = widget.args.petName;
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        key: const ValueKey('publishDoneShareGrowthBook'),
+        onPressed: _sharing ? null : _share,
+        icon: const Icon(Icons.ios_share_rounded, size: 18),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.ink,
+          side: const BorderSide(color: AppColors.mint, width: 1.5),
+          padding: const EdgeInsets.symmetric(vertical: 13),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+        label: Text(
+          name == null || name.isEmpty
+              ? l10n.publishDoneShareGrowthBook
+              : l10n.publishDoneShareGrowthBookNamed(name),
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
         ),
       ),
     );

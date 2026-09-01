@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,8 +15,8 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// 电商订单详情 · **设计稿版式**（V1.4.0 第 2 批）。
 ///
-/// v1 版式的用例在 `shop_order_detail_page_test.dart` 与
-/// `shop_order_fulfillment_page_test.dart`，两套互不影响。
+/// ⚠️ 2026-08-28：v1 版式整体删除，`shop_order_detail_page_test.dart` 与
+/// `shop_order_fulfillment_page_test.dart` 一并移除；其中在 v2 下仍成立的用例已迁入本文件。
 ///
 /// 本类看四件**说不清就会来客服**的事：倒计时来源、PawCoin 冻结明示、
 /// 已付订单保留 PawCoin 分段、以及物流「非自动追踪」的免责行。
@@ -266,6 +267,45 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('shopOrderCopyResiV2')), findsNothing);
+    });
+
+    // ⚠️ 2026-08-28 自 shop_order_fulfillment_page_test.dart 迁入（v1 版式删除）。
+    //    那个文件其余用例测的是 v1 的**多包裹逐条列表**（carrier_0 / trackingNo_0/1 /
+    //    packageState_0/1），v2 不再逐包渲染，随 v1 一并作废；唯独这一条在 v2 下依然成立 ——
+    //    而本文件此前只断言过「某态下复制按钮不出现」，从没验过**复制真的写进了剪贴板**。
+    testWidgets('🔴 复制按钮把单号写进剪贴板（不是只把按钮画出来）', (tester) async {
+      String? copied;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied = (call.arguments as Map)['text'] as String?;
+        }
+        return null;
+      });
+      addTearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null));
+
+      await tester.pumpWidget(host(order(
+        status: ShopOrderStatus.shipped,
+        packages: const [
+          ShopOrderPackage(
+            carrier: 'SICEPAT',
+            carrierName: 'SiCepat',
+            trackingNo: 'SC123456',
+            trackingUrl: 'https://www.sicepat.com/checkAwb',
+            delivered: false,
+          ),
+        ],
+      )));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('shopOrderCopyResiV2')));
+      await tester.pumpAndSettle();
+      expect(copied, 'SC123456', reason: '🔴 复制按钮必须真的把单号写进剪贴板');
+      // ⚠️ 复制后会弹 toast（app_toast 默认 2600ms）。必须等它自己消失，
+      //    否则 widget 树拆除时仍有 pending Timer，测试框架会断言失败。
+      //    原 v1 用例写的是 2 秒 —— 迁过来才暴露，因为两边 toast 时长不同。
+      await tester.pump(const Duration(milliseconds: 2700));
     });
   });
 

@@ -6,9 +6,15 @@ petgo_stag/redis DB3)同在 62.146.239.156。本 hook 供非技术同事用 Clau
 staging 时兜底，命中规则直接拒绝执行（exit 2），理由回显给模型自行改道。
 
 ⚠️ 只存在于 stag 分支，勿合回 v1.1-dev / main。
+   —— 但「勿合回」全靠人守，实际已经随 stag→dev 的合并流到了 dev/dev_1.1.6，
+   而 settings.json 里的注册也一并跟了过来。所以规则判定前先做一次分支自检
+   （见 _on_stag_branch），让代码自己兜住这条契约：在别的分支上注册了也不动作，
+   不把 staging 的运维约束强加给在那边工作的人。stag 上的拦截强度不变。
 """
 import json
+import os
 import re
+import subprocess
 import sys
 
 
@@ -46,7 +52,29 @@ RULES = [
 ]
 
 
+def _on_stag_branch() -> bool:
+    """当前是否在 stag 线上。
+
+    🔴 判不出来时返回 True（**继续拦**）：detached HEAD、git 不可用、超时——这些情况下
+    宁可误伤一条命令，也不能静默放行生产操作。本 hook 的失败方向只有一个是安全的。
+    """
+    try:
+        r = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=os.environ.get("CLAUDE_PROJECT_DIR") or None,
+            capture_output=True, text=True, timeout=5,
+        )
+    except Exception:
+        return True
+    if r.returncode != 0:
+        return True
+    return r.stdout.strip().startswith("stag")
+
+
 def main() -> int:
+    # 分支自检放在最前面：不在 stag 线上就直接放行，连 stdin 都不必读。
+    if not _on_stag_branch():
+        return 0
     try:
         payload = json.load(sys.stdin)
     except Exception:

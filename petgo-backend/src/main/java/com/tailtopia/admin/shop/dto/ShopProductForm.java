@@ -25,6 +25,16 @@ public class ShopProductForm {
     private String brand;
     private ProductCategory category;
     private String mainImageKey;
+
+    /**
+     * 主图原始宽高（2026-08-27）。由上传控件回填的隐藏字段带上来。
+     *
+     * <p>⚠️ 手填 objectKey 那条兜底路径**给不出尺寸** ⇒ 两者为 null ⇒
+     * 客户端按未知比例走占位兜底。这是可接受的降级，不是错误。
+     */
+    private Integer mainImageW;
+
+    private Integer mainImageH;
     /** 图集 objectKey，逗号/换行分隔的原始输入（照 QualificationForm.specialtiesRaw 范式）。 */
     private String galleryKeysRaw;
     private Species species;
@@ -76,6 +86,10 @@ public class ShopProductForm {
     public void setBrand(String brand) { this.brand = brand; }
     public ProductCategory getCategory() { return category; }
     public void setCategory(ProductCategory category) { this.category = category; }
+    public Integer getMainImageW() { return mainImageW; }
+    public void setMainImageW(Integer v) { this.mainImageW = v; }
+    public Integer getMainImageH() { return mainImageH; }
+    public void setMainImageH(Integer v) { this.mainImageH = v; }
     public String getMainImageKey() { return mainImageKey; }
     public void setMainImageKey(String mainImageKey) { this.mainImageKey = mainImageKey; }
     public String getGalleryKeysRaw() { return galleryKeysRaw; }

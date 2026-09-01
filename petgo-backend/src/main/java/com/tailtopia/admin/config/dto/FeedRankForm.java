@@ -13,6 +13,8 @@ public record FeedRankForm(
         double interactionWeight,
         double commentWeight,
         double exposureDecay,
+        /** 刷新抖动幅度 0–1（2026-09-01）：0=关闭，越大下拉刷新换得越狠。 */
+        double shuffleStrength,
         double throttleFactor,
         int seenWindowDays,
         int windowSize,

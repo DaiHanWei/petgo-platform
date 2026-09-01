@@ -14,15 +14,6 @@ import '../../features/auth/domain/user_state.dart';
 import '../../features/auth/presentation/dev_login_guide_page.dart';
 import '../../features/auth/presentation/login_page.dart';
 import '../../features/shop/address/presentation/address_book_page.dart';
-import '../../features/shop/address/presentation/address_form_page.dart';
-import '../../features/shop/presentation/cart_page.dart';
-import '../../features/shop/presentation/checkout_page.dart';
-import '../../features/shop/presentation/product_detail_page.dart';
-import '../../features/shop/presentation/refund_method_page.dart';
-import '../../features/shop/presentation/return_request_page.dart';
-import '../../features/shop/presentation/shop_order_detail_page.dart';
-import '../../features/shop/presentation/toko_page.dart';
-import '../../features/shop/presentation/shop_ui_variant.dart';
 import '../../features/order/presentation/order_list_page_v2.dart';
 import '../../features/shop/address/presentation/address_form_page_v2.dart';
 import '../../features/shop/presentation/cart_page_v2.dart';
@@ -51,7 +42,6 @@ import '../../features/support/presentation/ticket_detail_page.dart';
 import '../../features/support/presentation/csat_page.dart';
 import '../../features/pawcoin/presentation/pawcoin_page.dart';
 import '../../features/pawcoin/presentation/recharge_page.dart';
-import '../../features/order/presentation/order_list_page.dart';
 import '../../features/order/presentation/order_detail_page.dart';
 import '../../features/refund/domain/refund_request.dart';
 import '../../features/refund/presentation/refund_list_page.dart';
@@ -166,11 +156,8 @@ const String _devRoute = String.fromEnvironment('DEV_ROUTE');
 /// （FR-110 品类跳转注入），无 state 就取不到。其余 Tab 忽略它。
 Widget _tabRootPage(AppTab tab, GoRouterState state) => switch (tab) {
   AppTab.profile => const GrowthArchivePage(),
-  // 🔴 双 UI 并存（见 shop_ui_variant.dart）：切换只在渲染层，路由结构不变。
-  AppTab.shop => ShopUiSwitch(
-      v1: (_) => TokoPage(initialCategory: state.uri.queryParameters['category']),
-      v2: (_) => TokoPageV2(initialCategory: state.uri.queryParameters['category']),
-    ),
+  // ⚠️ 2026-08-28 v1 版式整体删除，双 UI 并存机制随之移除；此处直接构造 v2 页面。
+  AppTab.shop => TokoPageV2(initialCategory: state.uri.queryParameters['category']),
   AppTab.home => const HomePage(),
   AppTab.me => const MePage(),
 };
@@ -545,7 +532,7 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // 系统生成、无 SKU。非法值由 ShopCategory.fromApi 落回 null（= 全部精选）。
       // 🔴 双 UI 并存（2026-08-19）：v1 = 逐 story 实现的首发版式，v2 = 电商设计稿版式。
       //    **路由结构一行不改** —— URL、深链、导航栈、受控路由名单全不变，
-      //    切换的只是渲染层，否则对比的就不只是 UI 了（见 shop_ui_variant.dart）。
+      //    （2026-08-28 起只有一套版式，此约束自然成立。）
       // 商品详情（Story 1.7）。同样对游客开放——不在 _controlledLocations 里。
       GoRoute(
         path: '/shop/products/:token',
@@ -553,10 +540,7 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         builder: (c, s) {
           final token = s.pathParameters['token']!;
           final from = s.uri.queryParameters['from'];
-          return ShopUiSwitch(
-            v1: (_) => ProductDetailPage(token: token, entrySource: from),
-            v2: (_) => ProductDetailPageV2(token: token, entrySource: from),
-          );
+          return ProductDetailPageV2(token: token, entrySource: from);
         },
       ),
       // 购物车（Story 3.6）。🔒 **有意不放进 _controlledLocations**：门控在页面内部
@@ -566,29 +550,20 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       //    页面本身不发任何 /me 请求，游客态零数据暴露。
       GoRoute(
         path: '/shop/cart',
-        builder: (c, s) => ShopUiSwitch(
-          v1: (_) => const CartPage(),
-          v2: (_) => const CartPageV2(),
-        ),
+        builder: (c, s) => const CartPageV2(),
       ),
       // 结算页（Story 3.7）。🔒 与购物车同理：门控在页内（本页只在已登录态可达 ——
       //    入口是购物车页的 Checkout 按钮，而游客的购物车页根本不渲染那个按钮）。
       GoRoute(
         path: '/shop/checkout',
-        builder: (c, s) => ShopUiSwitch(
-          v1: (_) => const CheckoutPage(),
-          v2: (_) => const CheckoutPageV2(),
-        ),
+        builder: (c, s) => const CheckoutPageV2(),
       ),
       // 电商订单详情（Story 3.8）。token 寻址（不可枚举）；越权与不存在同为后端 404。
       GoRoute(
         path: '/shop/orders/:token',
         builder: (c, s) {
           final token = s.pathParameters['token']!;
-          return ShopUiSwitch(
-            v1: (_) => ShopOrderDetailPage(orderToken: token),
-            v2: (_) => ShopOrderDetailPageV2(orderToken: token),
-          );
+          return ShopOrderDetailPageV2(orderToken: token);
         },
       ),
       // 退货申请页（Story 5.7）。入口在订单详情；已有进行中申请时页面自己渲染置灰态
@@ -597,10 +572,7 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         path: '/shop/orders/:token/return',
         builder: (c, s) {
           final token = s.pathParameters['token']!;
-          return ShopUiSwitch(
-            v1: (_) => ReturnRequestPage(orderToken: token),
-            v2: (_) => ReturnRequestPageV2(orderToken: token),
-          );
+          return ReturnRequestPageV2(orderToken: token);
         },
       ),
       // 退款方式选择页（Story 5.8）。token 寻址（退货申请的不可枚举 token）。
@@ -608,10 +580,7 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         path: '/shop/returns/:token/refund-method',
         builder: (c, s) {
           final token = s.pathParameters['token']!;
-          return ShopUiSwitch(
-            v1: (_) => RefundMethodPage(returnToken: token),
-            v2: (_) => RefundMethodPageV2(returnToken: token),
-          );
+          return RefundMethodPageV2(returnToken: token);
         },
       ),
       // ⏳ 退货进度页（Story 5.9）路由暂不挂载：UX-DR5 视觉稿未交付，
@@ -621,14 +590,11 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/me/addresses', builder: (c, s) => const AddressBookPage()),
       GoRoute(
         path: '/me/addresses/new',
-        builder: (c, s) => ShopUiSwitch(
-          v1: (_) => const AddressFormPage(),
-          v2: (_) => const AddressFormPageV2(),
-        ),
+        builder: (c, s) => const AddressFormPageV2(),
       ),
       GoRoute(
         path: '/me/addresses/:token',
-        builder: (c, s) => AddressFormPage(token: s.pathParameters['token']),
+        builder: (c, s) => AddressFormPageV2(token: s.pathParameters['token']),
       ),
       // 兽医账密登录 + 工作台壳（Story 5.1）。与用户侧 5-Tab 隔离：shell 外顶层路由。
       GoRoute(path: '/vet/login', builder: (c, s) => _vetScoped(const VetLoginPage())),
@@ -845,10 +811,7 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // 订单中心列表（Story 5.2）。受控（/me 前缀，需登录）；shell 外顶层隐 Tab。
       GoRoute(
         path: '/me/orders',
-        builder: (c, s) => ShopUiSwitch(
-          v1: (_) => const OrderListPage(),
-          v2: (_) => const OrderListPageV2(),
-        ),
+        builder: (c, s) => const OrderListPageV2(),
       ),
       // 订单详情（Story 5.3）：各态 + 退款进度 + 宠物已删失效占位。受控（/me 前缀）。
       GoRoute(

@@ -47,13 +47,15 @@ public class SeedBatchPublishService {
     private final com.tailtopia.auth.repository.UserRepository users;
     private final com.tailtopia.admin.virtual.service.AdminPublishIdentityService identities;
     private final AdminAuditService audit;
+    /** 指纹图片键解析（bug 20260901-467）：URL → 素材内容哈希，三条发布路径同一判据。 */
+    private final SeedBatchAssetService assetService;
 
     public SeedBatchPublishService(SeedBatchRepository batches, SeedBatchRowRepository rows,
             SeedBatchValidator validator, SeedBatchService stateMachine,
             ContentService contentService, SeedContentHashRepository hashes,
             com.tailtopia.auth.repository.UserRepository users,
             com.tailtopia.admin.virtual.service.AdminPublishIdentityService identities,
-            AdminAuditService audit) {
+            AdminAuditService audit, SeedBatchAssetService assetService) {
         this.batches = batches;
         this.rows = rows;
         this.validator = validator;
@@ -63,6 +65,7 @@ public class SeedBatchPublishService {
         this.users = users;
         this.identities = identities;
         this.audit = audit;
+        this.assetService = assetService;
     }
 
     /** 预览：逐行校验结果（AC1）。 */
@@ -184,7 +187,7 @@ public class SeedBatchPublishService {
         }
         // 指纹：🔴 带**作者维度**（同一文案不同账号各自独立），并记下按发布键的后台账号。
         String hash = SeedContentFingerprint.of(row.getContentType(), row.getBody(),
-                row.getImageUrls());
+                assetService.fingerprintKeys(row.getImageUrls()));
         if (!hashes.existsByContentHashAndAuthorId(hash, row.getAuthorUserId())) {
             hashes.save(SeedContentHash.of(hash, saved.id(), row.getAuthorUserId(), adminAccountId));
         }

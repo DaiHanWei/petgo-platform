@@ -1,6 +1,6 @@
 /// 电商订单详情 —— **设计稿版式**（V1.4.0 · `02_screens_orders_refund.md` 屏 2 待支付 / 屏 3 已发货）。
 ///
-/// 与 [ShopOrderDetailPage]（v1 版式）并存，由 `shopUiVariantProvider` 二选一。
+/// ⚠️ 2026-08-28：v1 版式已整体删除，本文件是该页唯一实现（`_v2` 后缀保留以免制造纯改名 diff）。
 ///
 /// ## 🔴 四条硬规则（版式换了，规则一条不改）
 ///
@@ -37,6 +37,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/shop_tokens.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/qr_payment_sheet.dart';
 import '../../pawcoin/presentation/pawcoin_controller.dart';
@@ -48,6 +49,8 @@ import '../domain/shop_product.dart';
 import 'widgets/shop_buttons.dart';
 import 'widgets/shop_countdown.dart';
 import 'widgets/shop_decor.dart';
+import 'widgets/shop_dialog.dart';
+import 'widgets/shop_pressable.dart';
 import 'widgets/shop_surface.dart';
 
 class ShopOrderDetailPageV2 extends ConsumerStatefulWidget {
@@ -59,8 +62,14 @@ class ShopOrderDetailPageV2 extends ConsumerStatefulWidget {
   ConsumerState<ShopOrderDetailPageV2> createState() => _ShopOrderDetailPageV2State();
 }
 
+/// 正在进行中的动作。用来把转圈画在**被点的那个按钮**上 ——
+/// 共用一个 bool 的话，点「取消」会让旁边的「支付」转圈。
+enum _OrderAction { pay, cancel, receipt }
+
 class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
-  bool _busy = false;
+  _OrderAction? _busyAction;
+
+  bool get _busy => _busyAction != null;
 
   /// 倒计时归零后只刷新一次 —— 归零时刻页面还在，得让服务端告诉我们它真的关单了。
   bool _refreshedOnExpiry = false;
@@ -81,12 +90,10 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
       appBar: ShopAppBar(title: l10n.shopOrderTitle),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Text(l10n.shopOrderLoadFailed,
-                textAlign: TextAlign.center, style: ShopText.body),
-          ),
+        error: (_, _) => ShopRetryState(
+          message: l10n.shopOrderLoadFailed,
+          retryLabel: l10n.commonRetry,
+          onRetry: () => ref.invalidate(shopOrderDetailProvider(widget.orderToken)),
         ),
         data: (order) => RefreshIndicator(
           // 履约状态由运营在后台推进 —— 页面自己不会知道，得让用户能主动拉。
@@ -144,7 +151,9 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
             textAlign: TextAlign.center,
             style: ShopText.body.copyWith(
                 fontSize: 11,
-                color: expired ? ShopColors.text3 : ShopColors.onInk85),
+                // 过期块的底是 border2(#EFECF7)，text3 在它上面只有 4.33:1；
+                // 「订单已自动取消」是状态信息不是装饰，改用 text2（7.5:1）。
+                color: expired ? ShopColors.text2 : ShopColors.onInk85),
           ),
           if (!expired) ...[
             const SizedBox(height: 2),
@@ -187,11 +196,11 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
                     style: ShopText.sectionTitle
                         .copyWith(fontSize: 13, color: ShopColors.purple)),
               ),
-              InkWell(
+              ShopPressable(
                 key: const ValueKey('shopOrderCopyResiV2'),
                 onTap: () => _copyTracking(l10n, pkg),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
                   child: Text(l10n.shopOrderCopy,
                       style: ShopText.badge
                           .copyWith(fontSize: 10.5, color: ShopColors.purple)),
@@ -200,7 +209,8 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
             ],
           ),
           const SizedBox(height: 9),
-          ShopLeftAccentBlock.pawcoin(
+          // 🔴 中性色条：物流与钱无关，不能借用 PawCoin 的紫（2026-08-27 修）。
+          ShopLeftAccentBlock.neutral(
             child: Row(
               children: [
                 Expanded(
@@ -219,11 +229,11 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
                   ),
                 ),
                 if (pkg.trackingUrl.isNotEmpty)
-                  InkWell(
+                  ShopPressable(
                     key: const ValueKey('shopOrderTrackSiteV2'),
                     onTap: () => _openCarrierSite(l10n, pkg),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
                       child: Text('${l10n.shopOrderTrackOnCarrierSite} ›',
                           style: ShopText.badge
                               .copyWith(fontSize: 11, color: ShopColors.purple)),
@@ -305,7 +315,7 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
                             fontSize: 11.5,
                             fontWeight: current ? FontWeight.w600 : FontWeight.w400,
                             color: current ? ShopColors.text : ShopColors.text2)),
-                    Text(_dateTime(at), style: ShopText.meta),
+                    Text(formatDayMonthTime(context, at.toLocal()), style: ShopText.meta),
                   ],
                 ),
               ),
@@ -522,7 +532,8 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
                     child: Text(l10n.orderCreatedAtLabel,
                         style: ShopText.body.copyWith(fontSize: 10.5)),
                   ),
-                  Text(_dateTime(order.createdAt!), style: ShopText.meta),
+                  Text(formatDayMonthYearTime(context, order.createdAt!.toLocal()),
+                      style: ShopText.meta),
                 ],
               ),
             ],
@@ -566,7 +577,10 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
           // 设计稿写的是单词 `Batalkan`：次操作是固定宽的，两个词会折成两行、
           // 把整条底部条撑高，次操作看着比主操作还重（2026-08-19 上机）。
           label: l10n.shopOrderCancelShort,
-          variant: _busy ? ShopButtonVariant.disabled : ShopButtonVariant.outlineMuted,
+          variant: _busy && _busyAction != _OrderAction.cancel
+              ? ShopButtonVariant.disabled
+              : ShopButtonVariant.outlineMuted,
+          loading: _busyAction == _OrderAction.cancel,
           onTap: _busy ? null : () => _cancel(l10n),
         ),
         primary: ShopButton(
@@ -574,7 +588,12 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
           // 🔴 金额是**现在真要付的现金段**，不是订单总额：币段下单时已冻结，
           //    按钮写总额会让用户以为币白冻结了、还要再付一次全款。
           label: '${l10n.shopOrderPayNow} ${formatIdr(_cashSegment(order))}',
-          variant: _busy ? ShopButtonVariant.disabled : ShopButtonVariant.pay,
+          // 🔴 支付请求进行中保持强调色 + 转圈，**不置灰**（2026-08-27）：置灰与
+          //    「这单已经付不了了」是同一个视觉，用户会重复点击 —— 而这是支付链路。
+          variant: _busy && _busyAction != _OrderAction.pay
+              ? ShopButtonVariant.disabled
+              : ShopButtonVariant.pay,
+          loading: _busyAction == _OrderAction.pay,
           onTap: _busy ? null : () => _pay(l10n, order),
         ),
       );
@@ -594,7 +613,10 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
         primary: ShopButton(
           key: const ValueKey('shopOrderConfirmReceiptV2'),
           label: l10n.shopOrderConfirmReceipt,
-          variant: _busy ? ShopButtonVariant.disabled : ShopButtonVariant.ink,
+          variant: _busy && _busyAction != _OrderAction.receipt
+              ? ShopButtonVariant.disabled
+              : ShopButtonVariant.ink,
+          loading: _busyAction == _OrderAction.receipt,
           onTap: _busy ? null : () => _confirmReceipt(l10n),
         ),
       );
@@ -651,7 +673,7 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
 
   Future<void> _pay(AppLocalizations l10n, ShopOrderDetail order) async {
     Analytics.capture('toko_order_pay_tapped');
-    setState(() => _busy = true);
+    setState(() => _busyAction = _OrderAction.pay);
     try {
       final result = await ref.read(shopOrderRepositoryProvider).pay(widget.orderToken);
       if (!mounted) return;
@@ -691,40 +713,26 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
         showAppToast(context, l10n.shopOrderPayFailed);
       }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) setState(() => _busyAction = null);
     }
   }
 
   Future<void> _confirmReceipt(AppLocalizations l10n) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dlgCtx) => AlertDialog(
-        key: const ValueKey('shopOrderConfirmReceiptDialogV2'),
-        title: Text(l10n.shopOrderConfirmReceiptTitle, style: ShopText.sectionTitle),
-        content: Text(l10n.shopOrderConfirmReceiptBody, style: ShopText.body),
-        actions: [
-          ShopButton(
-            label: l10n.shopOrderConfirmReceiptNo,
-            variant: ShopButtonVariant.outlineMuted,
-            dense: true,
-            onTap: () => Navigator.of(dlgCtx).pop(false),
-          ),
-          ShopButton(
-            key: const ValueKey('shopOrderConfirmReceiptYesV2'),
-            label: l10n.shopOrderConfirmReceiptYes,
-            variant: ShopButtonVariant.ink,
-            dense: true,
-            onTap: () => Navigator.of(dlgCtx).pop(true),
-          ),
-        ],
-      ),
+    final confirmed = await showShopConfirm(
+      context,
+      dialogKey: const ValueKey('shopOrderConfirmReceiptDialogV2'),
+      confirmKey: const ValueKey('shopOrderConfirmReceiptYesV2'),
+      title: l10n.shopOrderConfirmReceiptTitle,
+      body: l10n.shopOrderConfirmReceiptBody,
+      confirmLabel: l10n.shopOrderConfirmReceiptYes,
+      cancelLabel: l10n.shopOrderConfirmReceiptNo,
     );
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
 
     // 🔴 「点了」与「成功了」是两个事件：确认收货会失败（网络 / 状态已变），
     //    只埋一个的话，漏斗上分不清是没人点还是点了没成。
     Analytics.capture('toko_order_receipt_confirm_tapped');
-    setState(() => _busy = true);
+    setState(() => _busyAction = _OrderAction.receipt);
     try {
       await ref.read(shopOrderRepositoryProvider).confirmReceipt(widget.orderToken);
       if (!mounted) return;
@@ -734,38 +742,27 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
     } catch (_) {
       if (mounted) showAppToast(context, l10n.shopOrderConfirmReceiptFailed);
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) setState(() => _busyAction = null);
     }
   }
 
   Future<void> _cancel(AppLocalizations l10n) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dlgCtx) => AlertDialog(
-        key: const ValueKey('shopOrderCancelDialogV2'),
-        title: Text(l10n.shopOrderCancelConfirm, style: ShopText.sectionTitle),
-        content: Text(l10n.shopOrderCancelConfirmBody, style: ShopText.body),
-        actions: [
-          ShopButton(
-            label: l10n.shopOrderCancelConfirmNo,
-            variant: ShopButtonVariant.outlineMuted,
-            dense: true,
-            onTap: () => Navigator.of(dlgCtx).pop(false),
-          ),
-          ShopButton(
-            key: const ValueKey('shopOrderCancelConfirmYesV2'),
-            label: l10n.shopOrderCancelConfirmYes,
-            variant: ShopButtonVariant.pay,
-            dense: true,
-            onTap: () => Navigator.of(dlgCtx).pop(true),
-          ),
-        ],
-      ),
+    // 🔴 确认按钮**不用 [ShopButtonVariant.pay]**（2026-08-27 修）：那个变体按 token
+    //    文档是「未完成的付款动作」，用它确认「取消订单」既与语义相反，也让最该让人
+    //    停一拍的按钮长得最像转化 CTA。同页的确认收货用的就是 ink，两处现在一致了。
+    final confirmed = await showShopConfirm(
+      context,
+      dialogKey: const ValueKey('shopOrderCancelDialogV2'),
+      confirmKey: const ValueKey('shopOrderCancelConfirmYesV2'),
+      title: l10n.shopOrderCancelConfirm,
+      body: l10n.shopOrderCancelConfirmBody,
+      confirmLabel: l10n.shopOrderCancelConfirmYes,
+      cancelLabel: l10n.shopOrderCancelConfirmNo,
     );
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
 
     Analytics.capture('toko_order_cancel_tapped');
-    setState(() => _busy = true);
+    setState(() => _busyAction = _OrderAction.cancel);
     try {
       await ref.read(shopOrderRepositoryProvider).cancel(widget.orderToken);
       if (!mounted) return;
@@ -774,15 +771,11 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
       ref.invalidate(cartProvider);
       showAppToast(context, l10n.shopOrderCancelled);
     } catch (_) {
-      if (mounted) showAppToast(context, l10n.shopOrderPayFailed);
+      // 2026-08-27：原先复用 shopOrderPayFailed，取消失败会提示「支付失败」。
+      if (mounted) showAppToast(context, l10n.shopOrderCancelFailed);
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) setState(() => _busyAction = null);
     }
   }
 
-  static String _dateTime(DateTime d) {
-    final local = d.toLocal();
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '${two(local.day)}/${two(local.month)} ${two(local.hour)}:${two(local.minute)}';
-  }
 }

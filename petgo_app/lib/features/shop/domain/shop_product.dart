@@ -39,6 +39,8 @@ class ShopProductSummary {
     required this.brand,
     this.category,
     this.mainImageUrl,
+    this.mainImageW,
+    this.mainImageH,
     this.minPrice,
   });
 
@@ -51,6 +53,27 @@ class ShopProductSummary {
   /// 公开桶 CDN 全 URL。null → 用占位图。
   final String? mainImageUrl;
 
+  /// 主图原始像素宽高（2026-08-27）。
+  ///
+  /// 🔴 **存量商品恒为 null** —— 尺寸列是上传时才测的，存量图早在对象存储里、不回填
+  /// （与内容侧「存量内容永远是 null」同一处理）。所以占位兜底不可取消。
+  final int? mainImageW;
+  final int? mainImageH;
+
+  /// 瀑布流卡片的图片宽高比（w / h）。**null ⇒ 调用方必须走占位兜底**。
+  ///
+  /// 🔴 收敛到 [kShopImageRatioMin] ~ [kShopImageRatioMax]，与内容侧 Feed 同一区间
+  /// （见 `feed_image_layout.dart` 的三段口径）：不收敛的话，一张 1:3 的长图会把卡片
+  /// 拉到三倍列宽那么高，后面的商品全被挤出首屏。
+  ///
+  /// ⚠️ 收敛发生在**客户端**，服务端只给原始宽高 —— 两边都 clamp 就是双重裁切。
+  double? get mainImageAspect {
+    final w = mainImageW;
+    final h = mainImageH;
+    if (w == null || h == null || w <= 0 || h <= 0) return null;
+    return (w / h).clamp(kShopImageRatioMin, kShopImageRatioMax);
+  }
+
   /// 起价（最小币种单位，IDR 无小数）。null → 无 SKU。
   final int? minPrice;
 
@@ -62,12 +85,27 @@ class ShopProductSummary {
       brand: json['brand']?.toString() ?? '',
       category: ShopCategory.fromApi(json['category']?.toString()),
       mainImageUrl: _blankToNull(json['mainImageUrl']?.toString()),
+      mainImageW: _posIntOrNull(json['mainImageW']),
+      mainImageH: _posIntOrNull(json['mainImageH']),
       minPrice: price is num ? price.toInt() : null,
     );
   }
 
   static String? _blankToNull(String? s) => (s == null || s.isEmpty) ? null : s;
+
+  /// 宽高只接受正整数；0 / 负数 / 非数字一律当"测不出来"。
+  /// ⚠️ 后端已挡过离谱值，这里是最后一道防线（同 `ImageSize.isUsable` 的判据）。
+  static int? _posIntOrNull(Object? raw) {
+    final n = raw is num ? raw.toInt() : null;
+    return (n != null && n > 0) ? n : null;
+  }
 }
+
+/// 商品图比例的收敛区间。**与内容侧 Feed 的 `kFeedRatioMin/Max` 取同值**：
+/// 同一个 App 里两处图片流用不同的比例区间，用户会觉得其中一处"图被压过"。
+/// 0.75 = 3:4 竖拍（最常见的竖图比例），1.34 ≈ 4:3 横图。
+const double kShopImageRatioMin = 0.75;
+const double kShopImageRatioMax = 1.34;
 
 /// IDR 金额格式化：`285000` → `Rp 285.000`。
 ///

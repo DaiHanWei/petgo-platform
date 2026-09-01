@@ -3,10 +3,14 @@ package com.tailtopia.auth.repository;
 import com.tailtopia.auth.domain.Role;
 import com.tailtopia.auth.domain.AccountType;
 import com.tailtopia.auth.domain.User;
+import com.tailtopia.auth.domain.UserStatus;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -81,6 +85,33 @@ public interface UserRepository extends JpaRepository<User, Long> {
      */
     java.util.List<User> findTop20ByRoleAndAccountTypeAndNicknameContainingIgnoreCaseOrderByIdDesc(
             Role role, com.tailtopia.auth.domain.AccountType accountType, String nickname);
+
+    /**
+     * 生命周期推送日扫候选（留存手册抓手 1）。只取<b>能被推、且推了有意义</b>的账号：
+     * 普通用户（不推兽医/管理员）、真实账号（<b>不推虚拟种子账号</b>——给自己的运营马甲发召回
+     * 既污染漏斗又毫无意义）、未注销、未停用、状态 ACTIVE（被封号的人不该收到「回来记录吧」）。
+     */
+    @Query("select u from User u where u.role = :role and u.accountType = :accountType "
+            + "and u.deletedAt is null and u.enabled = true and u.status = :status")
+    List<User> findLifecyclePushCandidates(@Param("role") Role role,
+            @Param("accountType") AccountType accountType,
+            @Param("status") UserStatus status);
+
+    /**
+     * 刷新最后活跃时刻，<b>每日至多写一次</b>（留存手册抓手 1 的流失判定依据）。
+     *
+     * <p>{@code dayStart} 之后已刷过则 WHERE 不命中 → Postgres 不产生行版本、不写 WAL，
+     * 代价只剩一次主键索引查找。这就是为什么这里不需要 Redis 去重键：
+     * 条件 UPDATE 本身就是幂等的，再压一层缓存只会多一个可失效的活动部件。
+     *
+     * <p>JPQL 批量更新绕过 {@code @PreUpdate} —— 刻意为之：活跃刷新<b>不应</b>动 {@code updated_at}
+     * （那一列的语义是「业务数据被改过」，不是「人来过」）。
+     */
+    @Modifying
+    @Query("update User u set u.lastActiveAt = :now "
+            + "where u.id = :userId and (u.lastActiveAt is null or u.lastActiveAt < :dayStart)")
+    int touchLastActiveAt(@Param("userId") long userId, @Param("now") Instant now,
+            @Param("dayStart") Instant dayStart);
 
     /**
      * 用户标签选择器的候选（bug 20260828）：**未注销**的普通用户，按 id 或昵称模糊匹配。

@@ -98,16 +98,67 @@
             <div class="s-card">
                 <div class="s-card-head"><h2 th:text="#{admin.shop.form.section.media}">图片与详情</h2></div>
                 <div class="s-card-body">
+                    <!-- 图片直传（2026-08-27）。此前这里是两个纯文本框，运营得先去别处把图传上
+                         对象存储、抄下 objectKey、再粘回来 —— ShopProductForm 的类注释写的本就是
+                         「前端经直传上传后回填 key」，只是一直没实现。
+                         🔴 复用内容侧那个上传控件（data-seed-uploader），但走 objectKey 模式：
+                            商品图入库存的是 key 不是 URL，且拆成「主图 + 图集」两个字段。
+                         🔴 第一张即主图 —— 拖拽换序就是在改主图，这是运营最直觉的操作方式。 -->
                     <div class="s-form-row">
-                        <label class="s-label s-req" for="f-mainImage" th:text="#{admin.shop.col.mainImage}">主图 objectKey</label>
+                        <div class="s-label s-req" th:text="#{admin.shop.form.images.label}">商品图片</div>
                         <div class="s-ctl">
-                            <input id="f-mainImage" type="text" th:field="*{mainImageKey}" required/>
-                            <p class="hint" th:text="#{admin.shop.form.hint.imageKey}">填 OSS 对象 key，不是 URL。签名 URL 绝不入库。</p>
+                            <div data-seed-uploader
+                                 data-mode="objectkey"
+                                 data-field-main="f-mainImage"
+                                 data-field-gallery="f-gallery"
+                                 data-field-w="f-mainImageW"
+                                 data-field-h="f-mainImageH"
+                                 th:attr="data-upload-url=@{/admin/shop/products/images},
+                                          data-msg-cover=#{admin.seed.images.cover},
+                                          data-msg-limit=#{admin.shop.form.images.limit},
+                                          data-msg-remove=#{admin.seed.images.remove},
+                                          data-msg-uploading=#{admin.seed.images.uploading}">
+                                <input type="file" data-seed-file
+                                       accept="image/jpeg,image/png,image/webp" multiple/>
+                                <p class="hint" th:text="#{admin.shop.form.images.hint}">可多选、可 Ctrl+V 粘贴；拖拽排序，第一张即主图。</p>
+                                <p class="hint" data-seed-status></p>
+                                <div class="seed-thumbs" data-seed-thumbs>
+                                    <!-- 编辑态回填：库里存的是 objectKey，直接塞进 <img> 显示不出来，
+                                         所以服务端顺带给了 url（见控制器 detail 的 existingImages）。
+                                         ⚠️ 顺序＝主图在前 + 图集依次，与写回时的拆分口径必须一致。
+                                         封面角标由 admin.js 的 DOMContentLoaded → sync 统一打，这里不预设。 -->
+                                    <div th:each="img : ${existingImages}"
+                                         class="seed-thumb" data-seed-thumb draggable="true"
+                                         th:attr="data-key=${img.key},data-url=${img.url},
+                                                  data-w=${img.w},data-h=${img.h}">
+                                        <img th:src="${img.url}" alt=""/>
+                                        <span class="seed-cover" data-seed-cover
+                                              th:text="#{admin.seed.images.cover}">封面</span>
+                                        <button type="button" class="seed-thumb-del"
+                                                data-seed-del
+                                                th:title="#{admin.seed.images.remove}">&times;</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 兜底：素材已在对象存储、手上只有 key 时用。折叠起来是因为它已不是默认路径。
+                                 ⚠️ 这两个才是真正提交给服务端的字段，上传控件只是它们的可视化编辑器。
+                                 🔴 主图**不能**再写 required：它现在被折叠在 <details> 里，
+                                    HTML5 校验对隐藏控件会抛 "not focusable"、表单静默提交不出去。
+                                    必填由服务端兜住（AdminShopProductService.validate → requireText）。 -->
+                            <details class="seed-url-fallback">
+                                <summary th:text="#{admin.shop.form.images.keyFallback}">直接填 objectKey（兜底）</summary>
+                                <p class="hint" th:text="#{admin.shop.form.images.keyFallbackHint}">第一行是主图，其余每行一个图集 key。</p>
+                                <label class="field" for="f-mainImage" th:text="#{admin.shop.col.mainImage}">主图 objectKey</label>
+                                <input id="f-mainImage" type="text" class="field-full" th:field="*{mainImageKey}"/>
+                                <label class="field" for="f-gallery" th:text="#{admin.shop.col.gallery}">图集 objectKey（每行一个，≤8）</label>
+                                <textarea id="f-gallery" class="field-full" th:field="*{galleryKeysRaw}" rows="3"></textarea>
+                                <!-- 主图原始宽高：由上传控件自动回填，运营不需要也不应该手改。
+                                     🔴 手填 objectKey 那条路给不出尺寸 ⇒ 留空 ⇒ App 走占位兜底，属可接受降级。 -->
+                                <input type="hidden" id="f-mainImageW" th:field="*{mainImageW}"/>
+                                <input type="hidden" id="f-mainImageH" th:field="*{mainImageH}"/>
+                            </details>
                         </div>
-                    </div>
-                    <div class="s-form-row">
-                        <label class="s-label" for="f-gallery" th:text="#{admin.shop.col.gallery}">图集 objectKey（每行一个，≤8）</label>
-                        <div class="s-ctl"><textarea id="f-gallery" th:field="*{galleryKeysRaw}" rows="4"></textarea></div>
                     </div>
                     <div class="s-form-row">
                         <label class="s-label s-req" for="f-detail" th:text="#{admin.shop.col.detail}">商品详情（含成分表）</label>
@@ -156,8 +207,8 @@
         </form>
 
         <!-- ===== SKU 维护（AB-10B），仅编辑态展示 ===== -->
-        <div th:if="${productId} != null">
-            <div class="s-card" style="margin-top:20px">
+        <div class="s-section" th:if="${productId} != null">
+            <div class="s-card">
                 <div class="s-card-head"><h2 th:text="#{admin.shop.form.section.skus}">规格与价格</h2></div>
                 <table>
                     <thead><tr>
@@ -220,7 +271,7 @@
                             <div class="s-ctl"><input id="sku-cost" type="number" name="costPrice" min="0"/></div>
                         </div>
                     </div>
-                    <div class="s-card-body" style="border-top:1px solid var(--line);text-align:right">
+                    <div class="s-card-foot">
                         <button type="submit" class="btn btn-primary" th:text="#{admin.common.save}">保存规格</button>
                     </div>
                 </div>

@@ -38,15 +38,19 @@ public class AdminSeedBatchService {
     private final SeedContentHashRepository hashes;
     private final AdminPublishIdentityService identities;
     private final AdminAuditService audit;
+    /** 指纹图片键解析（bug 20260901-467）：URL → 素材内容哈希，三条发布路径同一判据。 */
+    private final com.tailtopia.admin.seed.service.SeedBatchAssetService assetService;
 
     public AdminSeedBatchService(UserRepository users, ContentService contentService,
             SeedContentHashRepository hashes, AdminPublishIdentityService identities,
-            AdminAuditService audit) {
+            AdminAuditService audit,
+            com.tailtopia.admin.seed.service.SeedBatchAssetService assetService) {
         this.users = users;
         this.contentService = contentService;
         this.hashes = hashes;
         this.identities = identities;
         this.audit = audit;
+        this.assetService = assetService;
     }
 
     /** 批量结果。 */
@@ -137,7 +141,7 @@ public class AdminSeedBatchService {
                 continue;
             }
             String hash = com.tailtopia.admin.seed.service.SeedContentFingerprint.of(
-                    ContentType.DAILY, text, images);
+                    ContentType.DAILY, text, assetService.fingerprintKeys(images));
             // 🔴 V1.1.6 Story 13.4：判据加了**作者维度** —— 同一文案不同账号各自独立。
             //    原先按 hash 单列判，"同一文案换个账号再发一遍"（内容运营的常规操作）
             //    会被静默吞掉。

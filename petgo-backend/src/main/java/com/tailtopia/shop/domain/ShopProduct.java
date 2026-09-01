@@ -51,6 +51,22 @@ public class ShopProduct {
     @Column(name = "main_image_key", nullable = false, length = 255)
     private String mainImageKey;
 
+    /**
+     * 主图原始像素宽高（2026-08-27）。
+     *
+     * <p>🔴 <b>只存原始宽高，不存比例、不存算好的高度</b> —— 与内容侧同一口径
+     * （见 {@code feed_image_layout.dart} 的三段说明）：比例区间收敛与高度护栏依赖
+     * 可视区尺寸，因机而异，只能由客户端施加；服务端先 clamp 一遍会造成双重裁切。
+     *
+     * <p>⚠️ <b>可空</b>：存量商品的图早在对象存储里，尺寸是上传时才测的，不回填。
+     * 客户端占位兜底因此不可取消。
+     */
+    @Column(name = "main_image_w")
+    private Integer mainImageW;
+
+    @Column(name = "main_image_h")
+    private Integer mainImageH;
+
     /** 图集 ≤8：objectKey 列表，同样非 URL。 */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "gallery_keys")
@@ -111,20 +127,29 @@ public class ShopProduct {
      * <b>绝不由自增 id 派生</b>（CLAUDE.md 护栏）。新建默认<b>未上架</b>，由运营主动上架（Story 1.5）。
      */
     public static ShopProduct create(String publicToken, String name, String brand,
-            ProductCategory category, String mainImageKey, List<String> galleryKeys,
+            ProductCategory category, String mainImageKey, Integer mainImageW, Integer mainImageH,
+            List<String> galleryKeys,
             Species species, BodySize bodySize, AgeStage ageStage, String detailHtml,
             List<FeedingGuideEntry> feedingGuide, String shelfLifeNote,
             ReturnPolicy returnPolicy, int sortWeight) {
         ShopProduct p = new ShopProduct();
         p.publicToken = publicToken;
-        p.apply(name, brand, category, mainImageKey, galleryKeys, species, bodySize, ageStage,
+        p.apply(name, brand, category, mainImageKey, mainImageW, mainImageH, galleryKeys,
+                species, bodySize, ageStage,
                 detailHtml, feedingGuide, shelfLifeNote, returnPolicy, sortWeight);
         p.active = false;
         return p;
     }
 
-    /** 编辑商品（Story 1.3）。上架状态与 token 不经此方法改动。 */
+    /**
+     * 编辑商品（Story 1.3）。上架状态与 token 不经此方法改动。
+     *
+     * <p>🔴 {@code mainImageW / mainImageH} <b>紧跟 mainImageKey</b> 且必须与之成对传入：
+     * 换了图却没换尺寸，客户端会按旧比例预置高度 —— 瀑布流里表现为卡片高度与图对不上。
+     * ⚠️ 两者相邻且同为 {@code Integer}，<b>传反不会编译报错</b>，改调用处时看准顺序（先宽后高）。
+     */
     public void apply(String name, String brand, ProductCategory category, String mainImageKey,
+            Integer mainImageW, Integer mainImageH,
             List<String> galleryKeys, Species species, BodySize bodySize, AgeStage ageStage,
             String detailHtml, List<FeedingGuideEntry> feedingGuide, String shelfLifeNote,
             ReturnPolicy returnPolicy, int sortWeight) {
@@ -132,6 +157,8 @@ public class ShopProduct {
         this.brand = brand;
         this.category = category;
         this.mainImageKey = mainImageKey;
+        this.mainImageW = mainImageW;
+        this.mainImageH = mainImageH;
         this.galleryKeys = galleryKeys;
         this.species = species;
         this.bodySize = bodySize;
@@ -200,6 +227,16 @@ public class ShopProduct {
 
     public ProductCategory getCategory() {
         return category;
+    }
+
+    /** 主图原始宽；null = 未知（存量或测量失败）。 */
+    public Integer getMainImageW() {
+        return mainImageW;
+    }
+
+    /** 主图原始高；null = 未知（存量或测量失败）。 */
+    public Integer getMainImageH() {
+        return mainImageH;
     }
 
     public String getMainImageKey() {

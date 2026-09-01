@@ -51,6 +51,7 @@
         </table>
         </div>
 
+        <div class="s-card">
         <h2 th:text="#{admin.shop.precedents.section.add}">沉淀一条判例</h2>
         <form method="post" th:action="@{/admin/shop/return-precedents}">
             <input type="text" name="situation" required maxlength="300"
@@ -62,8 +63,9 @@
             <input type="text" name="rationale" required maxlength="1000"
                    th:placeholder="#{admin.shop.precedents.col.rationale}"/>
             <input type="text" name="evidenceKeys" maxlength="1000"/>
-            <button type="submit" th:text="#{admin.shop.precedents.btn.add}">沉淀判例</button>
+            <button class="btn btn-primary" type="submit" th:text="#{admin.shop.precedents.btn.add}">沉淀判例</button>
         </form>
+        </div>
     </div>
 </div>
 </body>

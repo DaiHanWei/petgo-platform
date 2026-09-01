@@ -182,6 +182,14 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     roleSelect.addEventListener('change', sync);
     sync();
+});
+// 🔴 上面这个 `});` 曾在 merge b391bea59（2026-08-26，hex/v1.1.6-rebased 合入 dev_1.1.6）中丢失。
+//    后果不是"角色显隐失效"这么局部 —— 少了它，下面每一个 addEventListener 都被吞进
+//    DOMContentLoaded 的回调里层层嵌套，解析到文件末尾仍未闭合 ⇒
+//    **整个 admin.js 抛 SyntaxError、一行都不执行**。layout.html 引它，所以是全后台 JS 全灭：
+//    HTMX 增强、标签页切换、图片上传、拖拽排序、灯箱、二次确认，全部静默失效。
+//    ⚠️ 静默是这个 bug 最坏的地方：页面照常渲染、按钮照常在，只是点了没反应。
+//    污染范围：origin/dev/dev_1.1.6 与 origin/stag 都已带上（Shawn 8-21 的原始提交是好的）。
 
 // ===== 「以运营真实账号发布」的二次确认（V1.1.6 Story 12.1 · AC6）=====
 // 顶部那个 data-confirm 是**静态**文案、每次提交都弹；这里要的是**只在选中真实账号时**弹
@@ -230,6 +238,31 @@ document.addEventListener('submit', function (e) {
             // 测不出尺寸的图也要占一行，否则两个字段会错位 —— 服务端对长度不符是**整组作废**。
             sizes.push((t.getAttribute('data-w') || '0') + 'x' + (t.getAttribute('data-h') || '0'));
         });
+        // ── 模式二：objectKey（商品图，2026-08-27）──
+        // 商品图**入库存的是 objectKey 不是 URL**（ShopProductSummaryView 的契约写明这点），
+        // 且拆成「主图 + 图集」两个字段 —— 与内容侧「URL + 尺寸两个同序等长数组」的结构完全不同，
+        // 所以在这里分叉，而不是让两边共用一套字段名。
+        // 🔴 第一张即主图：拖拽换序会直接改变哪张是主图，这正是运营要的操作方式。
+        if (root.getAttribute('data-mode') === 'objectkey') {
+            var keys = thumbs.map(function (t) {
+                return t.getAttribute('data-key') || '';
+            }).filter(function (k) { return k; });
+            var mainEl = fieldOf(root.getAttribute('data-field-main'));
+            var galEl = fieldOf(root.getAttribute('data-field-gallery'));
+            if (mainEl) { mainEl.value = keys.length ? keys[0] : ''; }
+            if (galEl) { galEl.value = keys.slice(1).join('\n'); }
+            // 主图尺寸随主图一起写回（2026-08-27）：App 端瀑布流用它预置卡片高度。
+            // 🔴 必须跟着**第一张**走 —— 拖拽换序会换主图，尺寸不跟着换就会按旧比例预置，
+            //    表现为卡片高度与图对不上。
+            var wEl = fieldOf(root.getAttribute('data-field-w'));
+            var hEl = fieldOf(root.getAttribute('data-field-h'));
+            var first = thumbs.length ? thumbs[0] : null;
+            if (wEl) { wEl.value = first ? (first.getAttribute('data-w') || '') : ''; }
+            if (hEl) { hEl.value = first ? (first.getAttribute('data-h') || '') : ''; }
+            markCover(root, thumbs);
+            return;
+        }
+
         // 兜底 URL 追加在上传图之后：它们没有尺寸，写 0x0（服务端会因长度虽等但值不合理而走异步兜底）。
         var fallback = root.parentNode.querySelector('[data-seed-url-fallback]');
         if (fallback && fallback.value.trim()) {
@@ -241,7 +274,11 @@ document.addEventListener('submit', function (e) {
         fieldOf('imageUrlsRaw').value = urls.join('\n');
         fieldOf('imageSizesRaw').value = sizes.join('\n');
 
-        // 第一张打「封面」角标；>1 张时提示首图决定整帖容器高度（AC3 最后一条）。
+        markCover(root, thumbs);
+    }
+
+    /** 第一张打「封面」角标；>1 张时提示首图决定整帖容器高度（AC3 最后一条）。两种模式共用。 */
+    function markCover(root, thumbs) {
         thumbs.forEach(function (t, i) {
             var badge = t.querySelector('[data-seed-cover]');
             if (badge) { badge.hidden = i !== 0; }
@@ -257,6 +294,8 @@ document.addEventListener('submit', function (e) {
         el.setAttribute('data-seed-thumb', '');
         el.setAttribute('draggable', 'true');
         el.setAttribute('data-url', data.url);
+        // objectKey 模式要用它写回 mainImageKey / galleryKeysRaw（url 只用于当场显示）。
+        el.setAttribute('data-key', data.objectKey || '');
         el.setAttribute('data-w', data.w || 0);
         el.setAttribute('data-h', data.h || 0);
         var img = document.createElement('img');

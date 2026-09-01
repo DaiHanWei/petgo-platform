@@ -232,7 +232,7 @@ public class FeedRecommendationService {
             return stored;
         }
         int block = Math.max(props.sequenceLength(), target - stored.size());
-        List<Long> fresh = generate(key, viewerId, new HashSet<>(stored), block, now);
+        List<Long> fresh = generate(key, seed, viewerId, new HashSet<>(stored), block, now);
         if (!fresh.isEmpty()) {
             sequenceStore.append(key, seed, fresh);
         }
@@ -241,9 +241,14 @@ public class FeedRecommendationService {
         return full;
     }
 
-    /** 跑一次候选池取数 + 打分配比，产出 {@code wanted} 条 id。 */
-    private List<Long> generate(FeedRankCacheKey key, Long viewerId, Set<Long> exclude, int wanted,
-            Instant now) {
+    /**
+     * 跑一次候选池取数 + 打分配比，产出 {@code wanted} 条 id。
+     *
+     * <p>{@code seed} 自 2026-09-01 起参与打分（刷新抖动的随机源）——
+     * 同一种子算出同一序列（续算不重复），换种子（下拉刷新）明显换一批。
+     */
+    private List<Long> generate(FeedRankCacheKey key, String seed, Long viewerId,
+            Set<Long> exclude, int wanted, Instant now) {
         List<ContentPost> pool = posts.findRankCandidatePool(viewerId != null, viewerId,
                 PageRequest.of(0, props.candidatePoolSize()));
         List<ContentPost> usable = pool.stream().filter(p -> !exclude.contains(p.getId())).toList();
@@ -294,7 +299,7 @@ public class FeedRecommendationService {
 
         FeedRankEngine.Result r = engine.rank(new FeedRankEngine.Input(candidates,
                 viewerMainSpecies(viewerId), decay, honored,
-                throttle, now, params, schedule), wanted);
+                throttle, now, params, schedule, seed), wanted);
         if (r.attributeRelaxed() > 0 || r.speciesRelaxed() > 0) {
             // 🛡 级别 1、2 是**预期行为，不告警** —— 只记 debug 供排查（§6.2）。
             log.debug("推荐序降级 池={} 属性放宽={} 物种放宽={} 防扎堆让步={}",
@@ -319,6 +324,7 @@ public class FeedRecommendationService {
                 cfg.getFreshnessWeight(), cfg.getInteractionWeight(), cfg.getCommentWeight(),
                 effectiveP95(cfg, candidates),
                 ContentTagQueryService.RANK_WEIGHT_MULTIPLIER,
+                cfg.getShuffleStrength(),
                 cfg.getSpeciesMainQuota(), cfg.getSpeciesOtherQuota(), cfg.getSpeciesGeneralQuota(),
                 RankParams.DEFAULT_MAX_SAME_ATTRIBUTE_RUN, RankParams.DEFAULT_MAX_SAME_AUTHOR_RUN,
                 RankParams.DEFAULT_MAX_SAME_AUTHOR_PER_WINDOW,

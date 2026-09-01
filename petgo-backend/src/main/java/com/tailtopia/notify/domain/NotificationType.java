@@ -124,4 +124,19 @@ public enum NotificationType {
      * 具体是哪一条里程碑，由 App 拿 {@code targetRef}（里程碑编码）查它自己那份双语表。
      */
     MILESTONE_SM_NODE
+,
+
+    // ===== 留存运营作战手册 · 抓手 1：生命周期推送（V20260821_1646 追加 CHECK 值）=====
+    // 铁律：文案永远说「记录你的宠物」，绝不说「回来看看」—— 后者是空话，
+    // 前者是用户自己用行为承认过的动机（106/343 发布过内容，发布是唯一的强行为）。
+    // 四类共用一套分流：深链落点由 targetRef 携带的 variant 决定
+    // （CREATE_PROFILE / RECORD / FEED / REVIEW），沿用 NAME_RESET/AVATAR_RESET 的单类型 + variant 范式。
+    /** D1 次日：把「记录宠物」变成第一天的习惯（手册第一武器）。 */
+    LIFECYCLE_D1,
+    /** D3：仍未发布 → 内容钩子「看看别人家宠物今天做了什么」。 */
+    LIFECYCLE_D3,
+    /** D7：周回顾「这一周 {petName} 的成长」，留存钩子 + 分享获客。 */
+    LIFECYCLE_D7,
+    /** 流失召回：{@code last_active_at} 距今 ≥ N 天，深链直达建档 / 发布。每月至多一次。 */
+    LIFECYCLE_WINBACK
 }

@@ -35,6 +35,14 @@ class DeepLinkRoutes {
   /// 里程碑列表页（壳）（L级里程碑节点深链落点，FR-42；本体属里程碑 mini-epic）。
   static const String milestoneList = '/profile/milestones';
 
+  /// 宠物建档页（生命周期召回深链落点，留存作战手册抓手 1）。
+  /// 手册里 ROI 最高的一刀：557 人只打开过 1 天、1.1.0 还残留 506 人装了却没建档，
+  /// 获客成本已经沉没，只差把他们直接送到这一页。
+  static const String createPetProfile = '/profile/create';
+
+  /// Feed（D3 内容钩子落点）。**分支根，必须 `go` 不能 `push`**，见 [shellTabRoots]。
+  static const String feedHome = '/home';
+
   /// 通知 payload → go_router location。
   ///
   /// **id 寻址类**（用 `targetRef`=帖子 id / 会话 id 拼路由，缺则落兜底）：目标页均以数字 id 寻址
@@ -79,6 +87,23 @@ class DeepLinkRoutes {
         return (targetRef == null || targetRef.isEmpty || targetRef == 'USER_AVATAR')
             ? '/me'
             : '/profile/edit';
+    }
+    // 生命周期推送（留存作战手册抓手 1）：D1/D3/D7/召回四类共用一套分流 ——
+    // 落点由 targetRef 携带的 variant 决定，而不是给每个落点再开一个 type
+    // （沿用 NAME_RESET/AVATAR_RESET 范式；也避免 ck_notifications_type 被撑爆）。
+    // ⚠️ 走 targetRef 而非通知自身的随机 deepLinkToken —— [notify 跳转改用 targetRef] 的教训。
+    if (type == 'LIFECYCLE_D1' ||
+        type == 'LIFECYCLE_D3' ||
+        type == 'LIFECYCLE_D7' ||
+        type == 'LIFECYCLE_WINBACK') {
+      return switch (targetRef) {
+        'RECORD' => publishGrowthCalendar,
+        'FEED' => feedHome,
+        'REVIEW' => growthArchive,
+        // CREATE_PROFILE 与任何未知/缺失 variant 一律落建档页：
+        // 会收到这四类推送的人，绝大多数缺的就是这一步。
+        _ => createPetProfile,
+      };
     }
     // 退款被驳回：refund 详情页以 extra 对象寻址、无 token 路由 → 落退款列表（安全落点）。
     if (type == 'REFUND_REJECTED') return '/me/refunds';

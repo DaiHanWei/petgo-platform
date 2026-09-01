@@ -1,6 +1,6 @@
 /// 退货申请 —— **设计稿版式**（V1.4.0 · `02_screens_orders_refund.md` 屏 4）。
 ///
-/// 与 [ReturnRequestPage]（v1 版式）并存，由 `shopUiVariantProvider` 二选一。
+/// ⚠️ 2026-08-28：v1 版式已整体删除，本文件是该页唯一实现（`_v2` 后缀保留以免制造纯改名 diff）。
 ///
 /// ## 🔴 四条不能省的告知（每一条对应一类真实客诉，与 v1 逐条相同）
 ///
@@ -38,6 +38,7 @@ import '../domain/shop_return.dart';
 import 'widgets/shop_buttons.dart';
 import 'widgets/shop_controls.dart';
 import 'widgets/shop_decor.dart';
+import 'widgets/shop_pressable.dart';
 import 'widgets/shop_surface.dart';
 
 /// 设计稿的 4 个退货原因 → 后端两个 `ReturnType`。
@@ -95,7 +96,11 @@ class _ReturnRequestPageV2State extends ConsumerState<ReturnRequestPageV2> {
       appBar: ShopAppBar(title: l10n.returnRequestTitle),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) => _hint(l10n.returnRequestLoadFailed),
+        error: (_, _) => ShopRetryState(
+          message: l10n.returnRequestLoadFailed,
+          retryLabel: l10n.commonRetry,
+          onRetry: () => ref.invalidate(returnEligibilityProvider(widget.orderToken)),
+        ),
         data: (data) => data.eligible ? _content(l10n, data) : _blocked(l10n, data),
       ),
       bottomNavigationBar: async.maybeWhen(
@@ -262,9 +267,11 @@ class _ReturnRequestPageV2State extends ConsumerState<ReturnRequestPageV2> {
                         Positioned(
                           right: 2,
                           top: 2,
-                          child: InkWell(
+                          child: ShopPressable(
                             key: ValueKey('returnEvidenceRemove_$i'),
                             onTap: () => setState(() => _evidence.removeAt(i)),
+                            // 18px 的 × 靠 ShopPressable 撑到 44 命中区，视觉不变。
+                            minSize: kShopMinTapTarget,
                             child: Container(
                               width: 18,
                               height: 18,
@@ -280,7 +287,7 @@ class _ReturnRequestPageV2State extends ConsumerState<ReturnRequestPageV2> {
                     ),
                   ),
                 if (_evidence.length < kMaxPhotos)
-                  InkWell(
+                  ShopPressable(
                     key: const ValueKey('returnEvidenceAddV2'),
                     onTap: () => setState(() =>
                         _evidence.add('return-evidence-${_evidence.length + 1}')),
@@ -359,7 +366,8 @@ class _ReturnRequestPageV2State extends ConsumerState<ReturnRequestPageV2> {
           primary: ShopButton(
             key: const ValueKey('returnSubmitV2'),
             label: l10n.returnNextChooseRefund,
-            variant: _busy ? ShopButtonVariant.disabled : ShopButtonVariant.pay,
+            variant: ShopButtonVariant.pay,
+            loading: _busy,
             onTap: _busy ? null : () => _submit(l10n),
           ),
         ),
@@ -386,13 +394,6 @@ class _ReturnRequestPageV2State extends ConsumerState<ReturnRequestPageV2> {
             textAlign: TextAlign.center,
             style: ShopText.body,
           ),
-        ),
-      );
-
-  Widget _hint(String text) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Text(text, textAlign: TextAlign.center, style: ShopText.body),
         ),
       );
 

@@ -85,6 +85,7 @@ public class AdminAlgoParamController {
     public String save(@AuthenticationPrincipal AdminUserDetails admin,
             @RequestParam double freshnessWeight, @RequestParam double interactionWeight,
             @RequestParam double commentWeight, @RequestParam double exposureDecay,
+            @RequestParam double shuffleStrength,
             @RequestParam double throttleFactor, @RequestParam int seenWindowDays,
             @RequestParam int windowSize, @RequestParam int attrFunQuota,
             @RequestParam int attrEduQuota, @RequestParam int attrLifeQuota,
@@ -92,7 +93,7 @@ public class AdminAlgoParamController {
             @RequestParam int speciesGeneralQuota, RedirectAttributes flash) {
         try {
             write.updateFeedRank(new FeedRankForm(freshnessWeight, interactionWeight, commentWeight,
-                    exposureDecay, throttleFactor, seenWindowDays, windowSize, attrFunQuota,
+                    exposureDecay, shuffleStrength, throttleFactor, seenWindowDays, windowSize, attrFunQuota,
                     attrEduQuota, attrLifeQuota, speciesMainQuota, speciesOtherQuota,
                     speciesGeneralQuota), admin.getAdminAccountId());
             flash.addFlashAttribute("notice", "算法参数已更新（逐字段留痕，见下方变更记录）");

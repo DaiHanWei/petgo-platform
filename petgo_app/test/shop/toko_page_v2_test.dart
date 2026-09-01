@@ -5,15 +5,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/core/theme/shop_tokens.dart';
 import 'package:tailtopia/features/shop/data/shop_repository.dart';
 import 'package:tailtopia/features/shop/domain/shop_product.dart';
-import 'package:tailtopia/features/shop/presentation/shop_ui_variant.dart';
-import 'package:tailtopia/features/shop/presentation/toko_page.dart';
 import 'package:tailtopia/features/shop/presentation/toko_page_v2.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// Toko 首页 · **设计稿版式**（V1.4.0 第 1 批）。
 ///
-/// v1 版式的用例在 `toko_page_test.dart`，两套各测各的、互不影响 ——
-/// 这正是双 UI 并存的目的（见 `shop_ui_variant.dart`）。
+/// ⚠️ 2026-08-28：v1 版式整体删除，`toko_page_test.dart` 与「双 UI 开关」那组用例
+/// 一并移除 —— 被测机制已不存在。本文件现在是 Toko 首页的唯一用例集。
 ///
 /// 🔴 本类的第一组是**溢出**。那个缺陷是「跑到模拟器上才看见」的类型：
 /// `flutter analyze` 绿、单测绿、卡片照常渲染，只是每张卡底部糊了一条黄黑警戒条，
@@ -27,6 +25,8 @@ void main() {
   }) {
     return ProviderScope(
       overrides: [
+        // banner 同样必须 override —— 真 provider 会发请求并留下未完成 Timer。
+        shopBannerProvider.overrideWith((ref) async => null),
         shopProductsProvider.overrideWith((ref, category) async => products),
       ],
       child: MaterialApp(
@@ -188,63 +188,6 @@ void main() {
           tester.getTopLeft(find.text(c)).dy,
       };
       expect(tops.length, 1, reason: '出现第二个 y 值 = 折行了');
-    });
-  });
-
-  group('双 UI 开关', () {
-    // ⚠️ 2026-08-21 产品指定翻转默认值：v1 → v2。本条随之改向。
-    //    原理由「未验收的版式不该被忘记指定的构建拿到」在验收对象本身就是 v2 之后不再成立
-    //    —— 继续默认 v1 会让每个包都得记着传 flag，反而更容易出错。
-    testWidgets('默认变体是 v2；v1 仍可经 --dart-define=SHOP_UI=v1 回退', (tester) async {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-
-      expect(container.read(shopUiVariantProvider), ShopUiVariant.v2);
-    });
-
-    testWidgets('ShopUiSwitch 按变体二选一，切换后立即换页面', (tester) async {
-      // 必须 override 商品 provider：不然真 provider 会去发请求，
-      // 留下未完成的 Timer，widget test 在拆树时会因此断言失败。
-      final container = ProviderContainer(overrides: [
-        shopProductsProvider.overrideWith((ref, category) async => <ShopProductSummary>[]),
-      ]);
-      addTearDown(container.dispose);
-
-      await tester.pumpWidget(UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp(
-          localizationsDelegates: const [
-            AppLocalizations.delegate,
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          supportedLocales: AppLocalizations.supportedLocales,
-          locale: const Locale('id'),
-          home: ShopUiSwitch(
-            v1: (_) => const TokoPage(),
-            v2: (_) => const TokoPageV2(),
-          ),
-        ),
-      ));
-      await tester.pump();
-
-      // 默认 v2（翻转后）→ toggle 到 v1 → 再 toggle 回 v2，双向都验，
-      // 免得只验单向时「toggle 其实是单程票」这种缺陷混过去。
-      expect(find.byType(TokoPageV2), findsOneWidget);
-      expect(find.byType(TokoPage), findsNothing);
-
-      container.read(shopUiVariantProvider.notifier).toggle();
-      await tester.pump();
-
-      expect(find.byType(TokoPage), findsOneWidget);
-      expect(find.byType(TokoPageV2), findsNothing);
-
-      container.read(shopUiVariantProvider.notifier).toggle();
-      await tester.pump();
-
-      expect(find.byType(TokoPageV2), findsOneWidget);
-      expect(find.byType(TokoPage), findsNothing);
     });
   });
 }

@@ -1,6 +1,6 @@
 /// 结算页 —— **设计稿版式**（V1.4.0 · `01_screens_browse_order.md` 屏 6 正常 / 屏 7 超服务范围）。
 ///
-/// 与 [CheckoutPage]（v1 版式）并存，由 `shopUiVariantProvider` 二选一。
+/// ⚠️ 2026-08-28：v1 版式已整体删除，本文件是该页唯一实现（`_v2` 后缀保留以免制造纯改名 diff）。
 ///
 /// ## 🔴 五条硬规则，与 v1 逐字相同（版式换了，规则一条不改）
 ///
@@ -49,6 +49,8 @@ import '../domain/shop_product.dart';
 import '../domain/shop_product_detail.dart' show ReturnPolicy;
 import 'widgets/shop_buttons.dart';
 import 'widgets/shop_controls.dart';
+import 'widgets/shop_dialog.dart';
+import 'widgets/shop_pressable.dart';
 import 'widgets/shop_decor.dart';
 import 'widgets/shop_surface.dart';
 
@@ -101,13 +103,14 @@ class _CheckoutPageV2State extends ConsumerState<CheckoutPageV2> {
       appBar: ShopAppBar(title: l10n.checkoutTitle),
       body: addresses.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) => _hint(l10n.checkoutLoadFailed),
+        error: (_, _) => _retry(l10n, () => ref.invalidate(addressListProvider)),
         data: (list) {
           final token = _effectiveAddressToken(list);
           if (token == null) return _noAddressState(l10n);
           return ref.watch(checkoutPreviewProvider(token)).when(
                 loading: () => const Center(child: CircularProgressIndicator()),
-                error: (_, _) => _hint(l10n.checkoutLoadFailed),
+                error: (_, _) =>
+                    _retry(l10n, () => ref.invalidate(checkoutPreviewProvider(token))),
                 data: (p) => _content(l10n, p),
               );
         },
@@ -135,10 +138,18 @@ class _CheckoutPageV2State extends ConsumerState<CheckoutPageV2> {
       padding: EdgeInsets.zero,
       children: [
         _addressBlock(l10n, p),
-        // 🔴 超范围时下游区块整体降权到 .55（设计稿）—— 它们仍然可读（用户要能核对买了什么），
+        // 🔴 超范围时下游区块整体降权 —— 它们仍然可读（用户要能核对买了什么），
         //    但视觉上明确「这些还不作数」。
+        //
+        // ⚠️ <b>设计稿写的是 .55，实测下来那个值和上一行的意图是矛盾的</b>（2026-08-27）：
+        //    .55 会把 [ShopColors.text2] 正文压到 **2.72:1**、[ShopColors.text3] 压到 2.18 ——
+        //    「用户要能核对买了什么」这句话在那个对比度下不成立。改用 .85：视觉上依然是
+        //    明显降权的一整块，而正文仍有 5.62:1（AA 合格）。
+        //
+        //    真正承担「不作数」这层意思的本来就不是透明度，而是块内的显式降级：
+        //    支付条走 [ShopLeftAccentBlock.muted]、金额位显示「暂不可用」而非数字。
         Opacity(
-          opacity: p.serviceable ? 1 : .55,
+          opacity: p.serviceable ? 1 : .85,
           child: Column(
             children: [
               _itemsBlock(l10n, p),
@@ -232,8 +243,11 @@ class _CheckoutPageV2State extends ConsumerState<CheckoutPageV2> {
                       style: ShopText.cardTitle
                           .copyWith(fontSize: 11, color: ShopColors.accentDark)),
                   const SizedBox(height: 2),
+                  // 2026-08-27：原为硬编码 #8A5560，违反 colors.dart「业务文件禁止硬编码
+                  // hex」的护栏。改用 [ShopColors.purpleText]（#4A3D66）—— 同为「强调块
+                  // 内的正文」语义，且在浅底上 9:1，比原值更清楚。
                   Text(l10n.checkoutOutOfRangeBody,
-                      style: ShopText.body.copyWith(color: const Color(0xFF8A5560))),
+                      style: ShopText.body.copyWith(color: ShopColors.purpleText)),
                 ],
               ),
             ),
@@ -493,24 +507,33 @@ class _CheckoutPageV2State extends ConsumerState<CheckoutPageV2> {
       ReturnPolicy.noReturnAfterOpen => l10n.tokoNoReturnAfterOpenBody,
       ReturnPolicy.noReturn => l10n.tokoNoReturnBody,
     };
+    // 🔴 <b>整行可点</b>（2026-08-27）：此前只有 15px 的勾选框能切换，旁边那段协议
+    //    文字点不动 —— 而用户的直觉是「点文字也算勾」。协议本身是 FR-104 的合规位点，
+    //    越容易操作越好，不该靠精准点中一个小方块。
     return ShopSection(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ShopCheckbox(
-            key: const ValueKey('checkoutAgreeNoReturn'),
-            value: _agreedNoReturn,
-            size: 15,
-            onChanged: (v) => setState(() => _agreedNoReturn = v),
-          ),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 13),
-              child: Text(body, style: ShopText.body.copyWith(fontSize: 10)),
+      child: ShopPressable(
+        onTap: () => setState(() => _agreedNoReturn = !_agreedNoReturn),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ShopCheckbox(
+              key: const ValueKey('checkoutAgreeNoReturn'),
+              value: _agreedNoReturn,
+              size: 15,
+              semanticLabel: body,
+              onChanged: (v) => setState(() => _agreedNoReturn = v),
             ),
-          ),
-        ],
+            const SizedBox(width: 4),
+            Expanded(
+              child: Padding(
+                // 把文字首行对齐到 44px 命中区里居中的那个 15px 方块。
+                // 由命中区常量推出来，不再是写死的 13。
+                padding: const EdgeInsets.only(top: (kShopMinTapTarget - 15) / 2 - 7),
+                child: Text(body, style: ShopText.body.copyWith(fontSize: 10)),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -518,7 +541,10 @@ class _CheckoutPageV2State extends ConsumerState<CheckoutPageV2> {
   // ---------------------------------------------------------------- 底部条
 
   Widget _bottomBar(AppLocalizations l10n, CheckoutPreview p) {
-    final canSubmit = p.canSubmit && _agreedNoReturn && !_submitting;
+    // 🔴 `_submitting` 不再并进 variant（2026-08-27）：下单请求期间按钮置灰，和
+    //    「这单不能提交」长得一样。改为保持强调色 + 转圈。
+    final allowed = p.canSubmit && _agreedNoReturn;
+    final canSubmit = allowed && !_submitting;
     return ShopBottomBarWithTotal(
       label: l10n.checkoutPayable,
       // 🔴 超范围时总价位显示文案而非数字，且转灰。
@@ -529,7 +555,8 @@ class _CheckoutPageV2State extends ConsumerState<CheckoutPageV2> {
       action: ShopButton(
         key: const ValueKey('checkoutSubmitV2'),
         label: l10n.checkoutSubmit,
-        variant: canSubmit ? ShopButtonVariant.pay : ShopButtonVariant.disabled,
+        variant: allowed ? ShopButtonVariant.pay : ShopButtonVariant.disabled,
+        loading: _submitting,
         padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
         onTap: canSubmit ? () => _submit(l10n, p) : null,
       ),
@@ -582,38 +609,33 @@ class _CheckoutPageV2State extends ConsumerState<CheckoutPageV2> {
   /// 只移除被挡住的那几行，其余原样留在车里 —— 整单打回会让用户重来一遍。
   Future<void> _showUnavailable(
       AppLocalizations l10n, CheckoutPreview p, List<UnavailableLine> lines) async {
-    final removed = await showDialog<bool>(
-      context: context,
-      builder: (dlgCtx) => AlertDialog(
-        key: const ValueKey('checkoutUnavailableDialogV2'),
-        title: Text(l10n.checkoutUnavailableTitle, style: ShopText.sectionTitle),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (final l in lines)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text(
-                  '${l.productName ?? l.skuToken} · '
-                  '${l.isDelisted ? l10n.checkoutUnavailableDelisted : l10n.checkoutUnavailableStock(l.available, l.requested)}',
-                  style: ShopText.body,
-                ),
+    // 🔴 <b>必须给取消</b>（2026-08-27）：此前这个弹窗只有「移除」一个按钮，
+    //    唯一的退出方式是点遮罩 —— 而它要做的是从购物车里删东西。
+    //    内容也从裸 Column 换成可滚（[showShopConfirm] 内建），行数多时不再溢出。
+    final removed = await showShopConfirm(
+      context,
+      dialogKey: const ValueKey('checkoutUnavailableDialogV2'),
+      confirmKey: const ValueKey('checkoutRemoveUnavailableV2'),
+      title: l10n.checkoutUnavailableTitle,
+      confirmLabel: l10n.checkoutUnavailableRemove,
+      cancelLabel: l10n.commonCancel,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final l in lines)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                '${l.productName ?? l.skuToken} · '
+                '${l.isDelisted ? l10n.checkoutUnavailableDelisted : l10n.checkoutUnavailableStock(l.available, l.requested)}',
+                style: ShopText.body,
               ),
-          ],
-        ),
-        actions: [
-          ShopButton(
-            key: const ValueKey('checkoutRemoveUnavailableV2'),
-            label: l10n.checkoutUnavailableRemove,
-            variant: ShopButtonVariant.pay,
-            dense: true,
-            onTap: () => Navigator.of(dlgCtx).pop(true),
-          ),
+            ),
         ],
       ),
     );
-    if (removed != true || !mounted) return;
+    if (!removed || !mounted) return;
     for (final l in lines) {
       try {
         await ref.read(cartProvider.notifier).remove(l.skuToken);
@@ -646,10 +668,9 @@ class _CheckoutPageV2State extends ConsumerState<CheckoutPageV2> {
         ),
       );
 
-  Widget _hint(String text) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Text(text, textAlign: TextAlign.center, style: ShopText.body),
-        ),
+  Widget _retry(AppLocalizations l10n, VoidCallback onRetry) => ShopRetryState(
+        message: l10n.checkoutLoadFailed,
+        retryLabel: l10n.commonRetry,
+        onRetry: onRetry,
       );
 }

@@ -49,6 +49,7 @@ class AdminFeedRankConfigTest {
         set(c, "commentWeight", 2.0);
         set(c, "interactionP95", 0d);
         set(c, "exposureDecay", 0.3);
+        set(c, "shuffleStrength", 0.8); // 2026-09-01 刷新抖动
         set(c, "throttleFactor", 0.2); // Story 17.1
 
         set(c, "seenWindowDays", 7);
@@ -88,15 +89,16 @@ class AdminFeedRankConfigTest {
      * {@code throttleFactor...} 那几条用例用 {@link #formWithThrottle} 单独验。
      */
     private static final double VALID_THROTTLE = 0.2;
+    private static final double VALID_SHUFFLE = 0.8;
 
     private static FeedRankForm form(double fw, double iw, double cw, double decay, int days,
             int window, int fun, int edu, int life, int main, int other, int general) {
-        return new FeedRankForm(fw, iw, cw, decay, VALID_THROTTLE, days, window, fun, edu, life,
+        return new FeedRankForm(fw, iw, cw, decay, VALID_SHUFFLE, VALID_THROTTLE, days, window, fun, edu, life,
                 main, other, general);
     }
 
     private static FeedRankForm formWithThrottle(double throttle) {
-        return new FeedRankForm(0.7, 0.3, 3, 0.2, throttle, 14, 10, 5, 3, 2, 6, 2, 2);
+        return new FeedRankForm(0.7, 0.3, 3, 0.2, VALID_SHUFFLE, throttle, 14, 10, 5, 3, 2, 6, 2, 2);
     }
 
     private static FeedRankForm valid() {

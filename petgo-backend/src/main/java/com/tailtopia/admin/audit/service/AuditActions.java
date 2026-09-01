@@ -140,6 +140,22 @@ public final class AuditActions {
     // ===== 上下架与精选排序（V1.4.0 Story 1.5，AB-10D）=====
     /** 商品上架（详情记上架后的在售 SKU 总数与上限，便于回溯超限争议）。 */
     public static final String SHOP_PRODUCT_LISTED = "SHOP_PRODUCT_LISTED";
+
+    /**
+     * Toko 顶部 banner 的增删改与上下架（2026-08-27）。
+     *
+     * <p>🔴 banner 是**所有用户进 Toko 第一眼看到的东西**，误配的影响面比改一个商品大得多，
+     * 所以每一次变更都留痕 —— 出问题时能立刻回答「谁、什么时候、把哪张推上去的」。
+     */
+    public static final String SHOP_BANNER_CREATED = "SHOP_BANNER_CREATED";
+
+    public static final String SHOP_BANNER_UPDATED = "SHOP_BANNER_UPDATED";
+
+    public static final String SHOP_BANNER_ACTIVATED = "SHOP_BANNER_ACTIVATED";
+
+    public static final String SHOP_BANNER_DEACTIVATED = "SHOP_BANNER_DEACTIVATED";
+
+    public static final String SHOP_BANNER_DELETED = "SHOP_BANNER_DELETED";
     /** 商品下架。🔴 只改可见性，不触发任何库存或订单动作（SPEC-7 口径）。 */
     public static final String SHOP_PRODUCT_DELISTED = "SHOP_PRODUCT_DELISTED";
 

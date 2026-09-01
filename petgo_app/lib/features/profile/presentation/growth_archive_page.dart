@@ -28,7 +28,6 @@ import 'widgets/archive_calendar.dart';
 import 'widgets/diary_header.dart';
 import 'widgets/share_fab.dart';
 import 'widgets/timeline_item_tile.dart';
-import '../../shop/presentation/shop_ui_variant.dart';
 import '../../shop/presentation/widgets/repurchase_zones_v2.dart';
 
 /// Diary 页（`/profile`）的四种用户状态（V1.1.2 · AD-15）。
@@ -370,10 +369,10 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
             onOpenHealth: () => context.push('/profile/health'),
             onOpenMilestones: () => context.push('/profile/milestones'),
           ),
-          // 🔴 复购触发卡（V1.4.0 设计稿屏 1）：**只在 v2 版式下渲染**。
-          //    它是「记录的出口」，所以长在 Diary 里而不是 Toko 里。
-          //    v1 版式没有这张卡 —— 保持 v1 一行不改。
-          const ShopUiSwitch(v1: _nothing, v2: _diaryTriggerCard),
+          // 复购触发卡（V1.4.0 设计稿屏 1）。它是「记录的出口」，所以长在 Diary 里而不是 Toko 里。
+          // ⚠️ 2026-08-28 v1 版式整体删除后，此处不再需要 ShopUiSwitch 包一层 ——
+          //    那个开关原本用来"只在 v2 下渲染"，现在条件恒真。
+          const RepurchaseTriggerCardV2(source: 'diary'),
           // 🔴 **档案推荐区已从 Diary 撤下**（产品 2026-08-27）。
           //
           // Story 6.5 原本给它两个展示位：Toko 首页区域② 与本页。实机上本页那一份的问题是
@@ -995,8 +994,5 @@ class _NonOwnerView extends StatelessWidget {
 }
 
 /// v1 版式下不渲染复购触发卡（那是 V1.4.0 设计稿新增的东西）。
-Widget _nothing(BuildContext _) => const SizedBox.shrink();
 
-/// v2 版式下的 Diary 复购触发卡。
-Widget _diaryTriggerCard(BuildContext _) =>
-    const RepurchaseTriggerCardV2(source: 'diary');
+

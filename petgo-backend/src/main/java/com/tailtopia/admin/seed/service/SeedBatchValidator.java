@@ -39,13 +39,17 @@ public class SeedBatchValidator {
     private final UserRepository users;
     private final AdminPublishIdentityService identities;
     private final SeedContentHashRepository hashes;
+    /** 指纹图片键解析（bug 20260901-467）：URL → 素材内容哈希，三条发布路径同一判据。 */
+    private final SeedBatchAssetService assetService;
 
     public SeedBatchValidator(SeedBatchAssetRepository assets, UserRepository users,
-            AdminPublishIdentityService identities, SeedContentHashRepository hashes) {
+            AdminPublishIdentityService identities, SeedContentHashRepository hashes,
+            SeedBatchAssetService assetService) {
         this.assets = assets;
         this.users = users;
         this.identities = identities;
         this.hashes = hashes;
+        this.assetService = assetService;
     }
 
     /** 校验一个批次的全部行。 */
@@ -130,7 +134,7 @@ public class SeedBatchValidator {
         boolean duplicate = false;
         if (errors.isEmpty() && author.isPresent()) {
             String hash = SeedContentFingerprint.of(row.getContentType(), row.getBody(),
-                    row.getImageUrls());
+                    assetService.fingerprintKeys(row.getImageUrls()));
             duplicate = hashes.existsByContentHashAndAuthorId(hash, author.get().getId());
         }
         return new RowValidation(row, errors, duplicate);

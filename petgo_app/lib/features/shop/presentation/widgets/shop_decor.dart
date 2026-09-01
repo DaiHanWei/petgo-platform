@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/shop_tokens.dart';
+import 'shop_pressable.dart';
 import '../../../../shared/widgets/app_image.dart';
 
 
@@ -26,6 +27,7 @@ class ShopImage extends StatelessWidget {
     this.radius = ShopShape.radiusChip,
     this.onInk = false,
     this.fillWidth = false,
+    this.fit = BoxFit.cover,
   });
 
   final String? url;
@@ -38,10 +40,18 @@ class ShopImage extends StatelessWidget {
   final bool onInk;
 
   /// 宽度撑满、只锁高度（网格卡：设计稿是 104px 高的横图，不是方图）。
-  ///
-  /// 🔴 商品图素材规格是 1:1，这里用 [BoxFit.cover] 裁切而不是压扁 ——
-  /// 变形的商品图比裁掉边角难看得多。
   final bool fillWidth;
+
+  /// 图片填充方式。
+  ///
+  /// 🔴 **默认 [BoxFit.cover]（裁切）不能改** —— 十余处调用方（购物车行、订单行、
+  /// 退款选择、详情页轮播）都依赖这个默认值把图铺满各自的方框；改默认值会一次性
+  /// 影响全部，而它们并没有提出「要看完整图」的诉求。
+  ///
+  /// ⚠️ 传 [BoxFit.contain] 的代价是**留白**：商品图素材规格是 1:1，
+  /// 而网格图位是 104px 高的横向框 ⇒ 左右必然留白。这是「不裁切」的必然结果，
+  /// 不是没对齐 —— 2026-08-27 产品选择了「宁可留白也要看到完整商品」。
+  final BoxFit fit;
 
   @override
   Widget build(BuildContext context) {
@@ -54,6 +64,7 @@ class ShopImage extends StatelessWidget {
         url!,
         width: fillWidth ? double.infinity : size,
         height: size,
+        fit: fit,
         // 物理像素：列表里的小图走 OSS 缩略图，省流量（AppImage 只对 OSS 网络图生效）。
         thumbWidth: (size * MediaQuery.devicePixelRatioOf(context)).round(),
         errorBuilder: (_, _, _) => placeholder,
@@ -248,32 +259,114 @@ class ShopDiscountCorner extends StatelessWidget {
       );
 }
 
-/// 商品图上的半透明圆角按钮（返回 / 收藏 / 购物车 / 页码）。30×30。
+/// 图上按钮的**视觉**边长。命中区另由 [kShopMinTapTarget] 撑到 44。
+const double kShopImageButtonSize = 30;
+
+/// 视觉 30 与命中区 44 之间的单边差值。
+///
+/// 🔴 调用方用 [Positioned] 摆放本按钮时**必须减掉它**，否则 44 的盒子会把可见的
+/// 圆角方块整体推进 7px。例：`left: kShopScreenEdge - kShopImageButtonInset`。
+const double kShopImageButtonInset = (kShopMinTapTarget - kShopImageButtonSize) / 2;
+
+/// 商品图上的半透明圆角按钮（返回 / 收藏 / 购物车）。视觉 30×30，命中区 44×44。
+///
+/// 🔴 <b>命中区必须撑到 44</b>（2026-08-27 补）：商品详情页没有 AppBar，**返回箭头就是
+/// 这个组件** —— 一个 30×30 的返回按钮是这一屏最要紧的导航控件，此前一直不达标。
+///
+/// 🔴 角标**内建**而不是让调用方在外面套 [Stack]：套在外面的话，角标会挂在 44 盒子的
+/// 角上而不是可见方块的角上；而且此前两个调用点各写了一份，两份都带着同一个
+/// `BoxShape.circle` 缺陷（见 [ShopCountBadge]）。
 class ShopImageButton extends StatelessWidget {
-  const ShopImageButton({super.key, required this.icon, this.onTap, this.semanticLabel});
+  const ShopImageButton({
+    super.key,
+    required this.icon,
+    this.onTap,
+    this.semanticLabel,
+    this.badgeCount = 0,
+  });
 
   final IconData icon;
   final VoidCallback? onTap;
   final String? semanticLabel;
 
+  /// 大于 0 时在右上角画计数角标。
+  final int badgeCount;
+
   @override
   Widget build(BuildContext context) => Semantics(
         button: true,
         label: semanticLabel,
-        child: InkWell(
+        child: ShopPressable(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(ShopShape.radiusButton),
-          child: Container(
-            width: 30,
-            height: 30,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: ShopColors.imageButtonScrim,
-              borderRadius: BorderRadius.circular(ShopShape.radiusButton),
-            ),
-            child: Icon(icon, size: 16, color: ShopColors.surface),
+          minSize: kShopMinTapTarget,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: kShopImageButtonSize,
+                height: kShopImageButtonSize,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: ShopColors.imageButtonScrim,
+                  borderRadius: BorderRadius.circular(ShopShape.radiusButton),
+                ),
+                child: Icon(icon, size: 16, color: ShopColors.surface),
+              ),
+              if (badgeCount > 0)
+                Positioned(right: -5, top: -5, child: ShopCountBadge(count: badgeCount)),
+            ],
           ),
         ),
+      );
+}
+
+/// PawCoin 标记。
+///
+/// 🔴 此前顶栏与商品详情各画了一个**纯色圆点**占着图标的位置（2026-08-27 修）——
+/// 一个没有任何内容的圆点不是图标，它只是告诉用户「这里本来该有个什么」。
+/// 现在圆里放一个爪印：既是「Paw」Coin 的字面所指，也让这个标记在灰底顶栏上认得出来。
+///
+/// ⚠️ 用 Material 的 [Icons.pets] 而非 `assets/icons/paw.svg`：那个资源全仓无人引用、
+/// 也没进 pubspec 的 assets 清单，引它得先补声明并确认它在 flutter_svg 下渲染正常。
+/// 真要换成品牌爪印，改这一处即可。
+class ShopCoinMark extends StatelessWidget {
+  const ShopCoinMark({super.key, this.size = 15});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: size,
+        height: size,
+        alignment: Alignment.center,
+        decoration: const BoxDecoration(color: ShopColors.purple, shape: BoxShape.circle),
+        child: Icon(Icons.pets, size: size * .62, color: ShopColors.surface),
+      );
+}
+
+/// 计数角标（购物车件数）。
+///
+/// 🔴 <b>不用 `BoxShape.circle`</b>（2026-08-27 修）：`BoxShape.circle` 只按**最短边**
+/// 画圆并居中，所以一个 23×16 的盒子会得到一个直径 16 的圆 —— 而 `99+` 在 9px/700 下
+/// 约 16.5px 宽，字会溢到圆外面去。改用 `borderRadius: 999` 的胶囊：一位数时仍是正圆，
+/// 多位数时自然横向伸长。
+class ShopCountBadge extends StatelessWidget {
+  const ShopCountBadge({super.key, required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        constraints: const BoxConstraints(minWidth: 16),
+        height: 16,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        decoration: BoxDecoration(
+          color: ShopColors.accent,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(count > 99 ? '99+' : count.toString(),
+            style: ShopText.badge.copyWith(color: ShopColors.surface)),
       );
 }
 
@@ -289,6 +382,12 @@ class ShopImageButton extends StatelessWidget {
 ///
 /// 色条语义在结算页 / 待支付页 / 退款页**一一对应**（紫 = PawCoin、玫红 = 真钱），
 /// 用户据此把「怎么付的」和「怎么退的」对上 —— 因此三处必须用同一个组件同一套配色。
+///
+/// ⚠️ <b>2026-08-27 起这条规则事实上不成立</b>：`ShopColors.accent` 于 2026-08-21 由玫红
+/// 改为品牌紫，与 `purple` **同值**，两个 factory 的左色条对比度 1.00:1、底色 1.02:1，
+/// 肉眼不可分。目前区分「PawCoin 段 / 真钱段」的是**块内文案**，不是颜色。
+/// 恢复颜色通道需产品决策（`docs/design/.decision-log.md` D-2）——
+/// 在那之前，**不要新增依赖「读者能看出这两块颜色不同」的界面**。
 class ShopLeftAccentBlock extends StatelessWidget {
   const ShopLeftAccentBlock({
     super.key,
@@ -313,12 +412,24 @@ class ShopLeftAccentBlock extends StatelessWidget {
       ShopLeftAccentBlock(
           key: key, accent: ShopColors.accent, background: ShopColors.accentBg, child: child);
 
+  /// 中性 —— **与钱无关**的信息块（物流承运商 / 运单号）。
+  ///
+  /// 🔴 2026-08-27 新增。此前订单详情的物流块借用了 [ShopLeftAccentBlock.pawcoin]，
+  /// 而紫色条在这套系统里是「PawCoin / 平台能力」的专用标记 —— 一个装着快递单号的
+  /// 块打着 PawCoin 的色条，正是本组件文档反复强调不能出现的那种串味。
+  factory ShopLeftAccentBlock.neutral({Key? key, required Widget child}) =>
+      ShopLeftAccentBlock(
+          key: key, accent: ShopColors.border, background: ShopColors.bg, child: child);
+
   /// 置灰 —— 超服务范围时下游支付块整体降权。
   factory ShopLeftAccentBlock.muted({Key? key, required Widget child}) =>
       ShopLeftAccentBlock(
           key: key,
           accent: ShopColors.disabledText,
-          background: const Color(0xFFF5F3F9),
+          // 2026-08-27：原先是硬编码的 #F5F3F9，违反 colors.dart 顶部那条
+          // 「业务/组件文件禁止硬编码 hex」的护栏。[ShopColors.divider2] (#F5F2FA)
+          // 与它差 1 个色阶、语义同为「最浅的一层灰」，直接改用常量。
+          background: ShopColors.divider2,
           child: child);
 
   @override

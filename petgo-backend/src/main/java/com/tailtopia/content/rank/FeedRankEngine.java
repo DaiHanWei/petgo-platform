@@ -60,7 +60,16 @@ public class FeedRankEngine {
              * <p>⚠️ 窗口大小来自它（{@code schedule.window()}），<b>不再是常量</b> ——
              * 配比与模板由同一处产生，改配比就会真的改顺序。
              */
-            AttributeSchedule schedule) {
+            AttributeSchedule schedule,
+            /**
+             * 刷新抖动的随机源 = <b>序列种子</b>（2026-09-01 产品拍板「刷新要明显换一批」）。
+             *
+             * <p>此前种子只是快照缓存键、不参与排序，排序纯确定性 ⇒ 下拉刷新「换种子重算」
+             * 算出来的还是同一份 —— 表现就是"刷新没变化"。现在每条内容乘一个由
+             * （种子 + 内容 id）确定的抖动系数：<b>同一种子内排序稳定</b>（翻页快照契约不变、
+             * 续算不重复），换种子即换排序。{@code null} = 不抖动（既有单测全部走这里，行为一字不变）。
+             */
+            String shuffleSeed) {
     }
 
     /**
@@ -99,8 +108,12 @@ public class FeedRankEngine {
             double honor = in.honoredContentIds() != null && in.honoredContentIds().contains(c.id())
                     ? p.honorBoost() : 1.0;
             double throttle = factor(in.throttleFactors(), c.id());
+            // 刷新抖动（2026-09-01）：最终分再乘一个 (1-幅度, 1] 区间的确定性系数。
+            // ⚠️ 用 seeded Random 而不是 Math.random —— 同一种子必须算出同一序列
+            //    （续算、级别 3 降级重算都依赖这一点），类注释禁的是**不可重放**的随机。
+            double jitter = jitterFactor(in.shuffleSeed(), c.id(), p.shuffleStrength());
             pool.add(new Scored(c, SpeciesBucket.of(c.species(), in.mainSpecies()),
-                    FeedRankScorer.finalScore(c, now, p, decay, honor, throttle)));
+                    FeedRankScorer.finalScore(c, now, p, decay, honor, throttle) * jitter));
         }
         // 一次排好序，后面每个槽位顺序扫、取第一个合格的 —— 天然就是「分最高的那条」。
         // ⚠️ 分数与槽位无关，所以只排一次；每槽重算是纯浪费。
@@ -232,6 +245,22 @@ public class FeedRankEngine {
             case OTHER -> p.otherSpeciesQuota();
             case GENERAL -> p.generalQuota();
         };
+    }
+
+    /**
+     * 刷新抖动系数 ∈ (1-strength, 1]，由（种子, 内容 id）完全决定。
+     *
+     * <p>🛡 种子为 null 或幅度 ≤ 0 → 1.0（不抖动）：既有单测与「关闭抖动」的运营配置
+     * 都靠这条回到纯分数排序。乘法而非加法 —— 分数为 0 的内容抖不上来。
+     */
+    private static double jitterFactor(String seed, long id, double strength) {
+        if (seed == null || strength <= 0) {
+            return 1.0;
+        }
+        // java.util.Random 的算法是 JDK 规范钉死的（LCG），String.hashCode 同理 ——
+        // 跨 JVM、跨重启同一（种子, id）永远得到同一个数。
+        double rand = new java.util.Random(seed.hashCode() * 1_000_003L + id).nextDouble();
+        return 1.0 - strength * rand;
     }
 
     /** 缺省系数 = 1.0（🛡 不是 0 —— 那会把内容分整条抹平）。 */

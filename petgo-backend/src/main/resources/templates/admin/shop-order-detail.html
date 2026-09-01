@@ -128,7 +128,7 @@
                 <td>
                     <form th:if="${canFulfill and markable and !p.delivered}" method="post"
                           th:action="@{/admin/shop/orders/{t}/packages/{id}/delivered(t=${order.publicToken},id=${p.id})}">
-                        <button type="submit" th:text="#{admin.shop.order.btn.packageDelivered}">标记该包裹送达</button>
+                        <button class="btn btn-sm btn-neutral" type="submit" th:text="#{admin.shop.order.btn.packageDelivered}">标记该包裹送达</button>
                     </form>
                 </td>
             </tr>
@@ -140,7 +140,7 @@
         </div>
 
         <!-- 发货表单（AB-11B）。承运成本必填（S-11）。 -->
-        <div th:if="${canFulfill and shippable}">
+        <div class="s-card" th:if="${canFulfill and shippable}">
             <h2 th:text="#{admin.shop.order.section.ship}">发货</h2>
             <p class="hint" th:text="#{admin.shop.order.ship.hint}">承运成本填运单实际金额。不录会让毛利看板缺行，自营毛利是否成立就无法验证。承运商只作留痕，不影响用户运费。</p>
             <form method="post" th:action="@{/admin/shop/orders/{t}/ship(t=${order.publicToken})}">
@@ -152,14 +152,14 @@
                 <input type="text" name="trackingNo" required maxlength="64"/>
                 <label th:text="#{admin.shop.order.col.carrierCost}">承运成本</label>
                 <input type="number" name="carrierCost" min="0" required/>
-                <button type="submit" th:text="#{admin.shop.order.btn.ship}">发货</button>
+                <button class="btn btn-primary" type="submit" th:text="#{admin.shop.order.btn.ship}">发货</button>
             </form>
         </div>
 
         <!-- SPEC-2 出口①：整单标记已送达。 -->
         <form th:if="${canFulfill and markable}" method="post"
               th:action="@{/admin/shop/orders/{t}/mark-delivered(t=${order.publicToken})}">
-            <button type="submit" th:text="#{admin.shop.order.btn.markDelivered}">标记整单已送达</button>
+            <button class="btn btn-neutral" type="submit" th:text="#{admin.shop.order.btn.markDelivered}">标记整单已送达</button>
         </form>
     </div>
 </div>

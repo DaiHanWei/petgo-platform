@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<!-- Toko 顶部 banner 配置（2026-08-27）。
+     🔴 同一时间只展示一张：App 取「已上架 + 权重最高」。本页可配多条，
+        但只有标着「生效中」的那条用户看得到 —— 不标出来运营会以为在轮播。
+     🔴 本版本 banner **纯展示、不可点**，所以没有任何跳转目标字段。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.shop.banners.title}">Toko 顶部 Banner · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+
+        <div class="s-page-head">
+            <div class="s-title-wrap">
+                <h1 th:text="#{admin.shop.banners.title}">Toko 顶部 Banner</h1>
+                <p class="s-sub" th:utext="#{admin.shop.banners.hint}">同一时间只展示一张。</p>
+            </div>
+        </div>
+
+        <p th:if="${notice}" class="flash" th:text="${notice}">已保存</p>
+        <p th:if="${error}" class="flash error" th:text="${error}">操作失败</p>
+
+        <!-- 没有生效中的 banner 时明确说明：App 顶部会是白色顶栏，这是设计内的空态。
+             不写这句，运营看到 App 上没有 banner 会以为配置没生效。 -->
+        <p th:if="${!hasLive}" class="warn" th:text="#{admin.shop.banners.noneHint}">
+            当前没有已上架的 banner —— App 顶部会显示白色顶栏。
+        </p>
+
+        <h2 th:text="#{admin.shop.banners.title}">已配置的 Banner</h2>
+        <div class="s-card">
+            <table th:if="${!#lists.isEmpty(banners)}">
+                <thead><tr>
+                    <th th:text="#{admin.shop.banners.col.preview}">预览</th>
+                    <th th:text="#{admin.shop.banners.col.size}">原始尺寸</th>
+                    <th class="s-col-num" th:text="#{admin.shop.banners.col.weight}">权重</th>
+                    <th th:text="#{admin.shop.banners.col.status}">状态</th>
+                    <th class="s-col-act">操作</th>
+                </tr></thead>
+                <tbody>
+                <tr th:each="b : ${banners}">
+                    <td>
+                        <!-- CDN 未配时 imageUrl 为 null：显示提示而不是渲染一张裂图 -->
+                        <img th:if="${b.imageUrl != null}" th:src="${b.imageUrl}" alt=""
+                             style="max-width:220px;max-height:88px;object-fit:contain;display:block"/>
+                        <span th:if="${b.imageUrl == null}" class="err"
+                              th:text="#{admin.shop.banners.urlUnresolved}">URL 拼不出来</span>
+                        <div class="s-mono" th:text="${b.imageKey}">shop-banner/xxx.jpg</div>
+                    </td>
+                    <td>
+                        <span th:if="${b.w != null and b.h != null}"
+                              th:text="${b.w} + ' × ' + ${b.h}">1200 × 400</span>
+                        <span th:if="${b.w == null or b.h == null}" class="muted"
+                              th:text="#{admin.shop.banners.sizeUnknown}">未知</span>
+                    </td>
+                    <td class="s-col-num" th:text="${b.sortWeight}">0</td>
+                    <td>
+                        <!-- 三态而不是两态：「已上架但被更高权重压住」的那些，运营必须能一眼分辨，
+                             否则会反复怀疑"我明明上架了为什么没显示"。 -->
+                        <span th:if="${b.live}" class="badge badge-ok"
+                              th:text="#{admin.shop.banners.live}">生效中</span>
+                        <span th:if="${b.active and !b.live}" class="badge badge-warn"
+                              th:text="#{admin.shop.banners.activeNotLive}">已上架（被压住）</span>
+                        <span th:if="${!b.active}" class="badge badge-muted"
+                              th:text="#{admin.shop.banners.inactive}">未上架</span>
+                    </td>
+                    <td class="s-col-act">
+                        <form class="inline" method="post" th:if="${!b.active}"
+                              th:action="@{/admin/shop/banners/{id}/activate(id=${b.id})}">
+                            <button class="btn btn-sm btn-primary" type="submit"
+                                    th:text="#{admin.shop.banners.btn.activate}">上架</button>
+                        </form>
+                        <form class="inline" method="post" th:if="${b.active}"
+                              th:action="@{/admin/shop/banners/{id}/deactivate(id=${b.id})}">
+                            <button class="btn btn-sm btn-neutral" type="submit"
+                                    th:text="#{admin.shop.banners.btn.deactivate}">下架</button>
+                        </form>
+                        <!-- 🔴 已上架的不给删除按钮：service 层也会拦，这里不渲染是为了不让人点了才知道不行。
+                             删一条正在首屏展示的 banner 不可撤销，而它与「下架」在运营眼里长得很像。 -->
+                        <form class="inline" method="post" th:if="${!b.active}"
+                              th:action="@{/admin/shop/banners/{id}/delete(id=${b.id})}"
+                              th:attr="data-confirm=#{admin.shop.banners.confirmDelete}">
+                            <button class="btn btn-sm btn-danger" type="submit"
+                                    th:text="#{admin.shop.banners.btn.delete}">删除</button>
+                        </form>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+            <div th:if="${#lists.isEmpty(banners)}" class="s-empty">
+                <div class="s-empty-title" th:text="#{admin.shop.banners.empty}">还没有配置任何 banner。</div>
+            </div>
+        </div>
+
+        <h2 th:text="#{admin.shop.banners.section.add}">新增 Banner</h2>
+        <div class="s-card">
+            <div class="s-card-body">
+                <form method="post" th:action="@{/admin/shop/banners}" th:object="${form}">
+                    <div class="s-form-row">
+                        <div class="s-label s-req" th:text="#{admin.shop.form.images.label}">Banner 图</div>
+                        <div class="s-ctl">
+                            <!-- 复用商品图那套直传控件（objectKey 模式）：一张图，
+                                 第一张即主图 ⇒ 这里就是唯一那张。 -->
+                            <div data-seed-uploader
+                                 data-mode="objectkey"
+                                 data-field-main="f-bannerKey"
+                                 data-field-w="f-bannerW"
+                                 data-field-h="f-bannerH"
+                                 th:attr="data-upload-url=@{/admin/shop/banners/images},
+                                          data-msg-cover=#{admin.seed.images.cover},
+                                          data-msg-limit=#{admin.shop.form.images.limit},
+                                          data-msg-remove=#{admin.seed.images.remove},
+                                          data-msg-uploading=#{admin.seed.images.uploading}">
+                                <input type="file" data-seed-file
+                                       accept="image/jpeg,image/png,image/webp"/>
+                                <p class="hint" th:text="#{admin.shop.form.images.hint}">可直接 Ctrl+V 粘贴。</p>
+                                <p class="hint" data-seed-status></p>
+                                <div class="seed-thumbs" data-seed-thumbs></div>
+                            </div>
+                            <input type="hidden" id="f-bannerKey" th:field="*{imageKey}"/>
+                            <input type="hidden" id="f-bannerW" th:field="*{imageW}"/>
+                            <input type="hidden" id="f-bannerH" th:field="*{imageH}"/>
+                        </div>
+                    </div>
+                    <div class="s-form-row">
+                        <div class="s-label" th:text="#{admin.shop.banners.col.weight}">权重</div>
+                        <div class="s-ctl">
+                            <input type="number" th:field="*{sortWeight}" value="0"/>
+                            <p class="hint" th:text="#{admin.shop.banners.hint}">越大越优先。</p>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary"
+                            th:text="#{admin.shop.banners.btn.add}">新增</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<script th:src="@{/admin/admin.js}"></script>
+</body>
+</html>

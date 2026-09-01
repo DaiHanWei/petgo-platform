@@ -118,12 +118,20 @@ class RecommendationItem {
     required this.reason,
     this.brand,
     this.mainImageKey,
+    this.mainImageUrl,
   });
 
   final String productToken;
   final String name;
   final String? brand;
+  /// 🔴 裸 objectKey，**不能直接喂给 Image** —— 客户端没有 key→URL 拼装
+  /// （CDN base 只在服务端）。保留它是因为埋点与既有契约在用。显示一律走 [mainImageUrl]。
   final String? mainImageKey;
+
+  /// 可直接显示的公开 URL（2026-08-27 由服务端补下发）。
+  /// 在此之前推荐滑道只能渲染斜纹占位 —— 不是样式问题，是压根没有图可显示。
+  final String? mainImageUrl;
+
   final int minPrice;
 
   /// 🔴 **推荐理由**（如 `Untuk anjing dewasa 10–25 kg`）。由服务端给 ——
@@ -135,6 +143,7 @@ class RecommendationItem {
         name: j['name']?.toString() ?? '',
         brand: j['brand']?.toString(),
         mainImageKey: j['mainImageKey']?.toString(),
+        mainImageUrl: j['mainImageUrl']?.toString(),
         minPrice: (j['minPrice'] as num?)?.toInt() ?? 0,
         reason: j['reason']?.toString() ?? '',
       );

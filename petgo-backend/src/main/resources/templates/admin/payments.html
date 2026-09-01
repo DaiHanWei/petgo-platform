@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <!-- 支付记录通用查询（Story 9.6，AB-8E）。按用户跨类型只读查 payment_intents。 -->
 <head>
     <meta charset="UTF-8"/>
@@ -39,6 +39,12 @@
                 <span class="muted">WIB</span></label>
             <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.payments.btn.search}">查询</button>
             <a th:href="@{/admin/payments}" class="btn btn-sm" th:text="#{admin.payments.btn.reset}">清空筛选</a>
+            <!-- 导出 Excel（2026-08-31）。🔴 按钮把当前筛选条件原样带走 —— 导出的就是屏幕上这一份。
+                 ⚠️ sec:authorize 与控制器的 EXPORT_AUTH 逐字一致，否则按钮在、点了 403。 -->
+            <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('payment.list_export')"
+               class="btn btn-sm"
+               th:href="@{/admin/payments/export.xlsx(userId=${userId},purpose=${purpose},status=${status},from=${from},to=${to})}"
+               th:text="#{admin.payments.btn.export}">导出 Excel</a>
         </form>
 
         <!-- 🔴 汇总条：回答「这一屏筛出来的到底是多少钱、多少笔」。
@@ -46,7 +52,8 @@
              订单数含全部状态，收入只算已支付且真正收到钱的（PawCoin 抵扣不是现金收入，
              混合支付只有现金段算）。金币抵扣单列出来，是为了让运营对得上账 ——
              现金 + 金币 = 已支付订单的金额合计。 -->
-        <div class="card" data-notice="payments-summary" th:if="${summary != null}">
+        <!-- card-full：与下方表格同宽（2026-08-31 用户要求），不然 680px 的卡片和全宽表格错位。 -->
+        <div class="card card-full" data-notice="payments-summary" th:if="${summary != null}">
             <span th:text="#{admin.payments.sum.orders(${summary.orderCount()})}">订单数</span>
             &nbsp;·&nbsp;
             <span th:text="#{admin.payments.sum.paid(${summary.paidCount()})}">已支付</span>

@@ -10,9 +10,15 @@ import 'package:tailtopia/features/shop/data/cart_repository.dart';
 import 'package:tailtopia/features/shop/data/shop_repository.dart';
 import 'package:tailtopia/features/shop/domain/shop_cart.dart';
 import 'package:tailtopia/features/shop/domain/shop_product_detail.dart';
-import 'package:tailtopia/features/shop/presentation/product_detail_page.dart';
+import 'package:tailtopia/features/shop/presentation/product_detail_page_v2.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/widgets/login_soft_sheet.dart';
+import 'package:tailtopia/features/shop/presentation/widgets/shop_buttons.dart';
+
+// v2 详情页加购按钮的印尼语文案（AppLocalizationsId.tokoAddToCartShort）。
+// ⚠️ 两个测试都固定跑 Locale('id')，故直接用字面量；文案改了这里会红，正是想要的信号。
+const String _kAddToCartId = '+ Keranjang';
+
 
 /// Story 3.6 AC2：游客加购走**软性登录引导**，登录成功后**自动完成本次加购并停留原页**。
 ///
@@ -46,7 +52,7 @@ void main() {
         routes: [
           GoRoute(
             path: '/shop/products/:token',
-            builder: (c, s) => ProductDetailPage(token: s.pathParameters['token']!),
+            builder: (c, s) => ProductDetailPageV2(token: s.pathParameters['token']!),
           ),
           GoRoute(path: '/shop/cart', builder: (c, s) => const Scaffold(body: Text('CART PAGE'))),
           GoRoute(path: '/login', builder: (c, s) => const Scaffold(body: Text('LOGIN PAGE'))),
@@ -99,7 +105,9 @@ void main() {
 
   String path(GoRouter r) => r.routerDelegate.currentConfiguration.uri.path;
 
-  Finder addButton() => find.byType(FilledButton);
+  /// ⚠️ 2026-08-28 v1 删除后改为**按文案定位**：v2 详情页底部有「加入购物车」与
+  /// 「立即购买」两个 ShopButton，按 byType 会拿到第一个 —— 那是最容易悄悄测错对象的地方。
+  Finder addButton() => find.widgetWithText(ShopButton, _kAddToCartId);
 
   testWidgets('🔴 游客点加购：弹软浮层，不跳登录页、不跳走、也不偷偷加购', (t) async {
     final r = await open(t, loggedIn: false);

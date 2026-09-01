@@ -23,7 +23,7 @@ public record RecommendationView(
      *     不可解释的推荐在信任驱动的产品里是负资产
      */
     public record Item(String productToken, String name, String brand, String mainImageKey,
-            long minPrice, String reason) {
+            String mainImageUrl, long minPrice, String reason) {
     }
 
     public static RecommendationView empty(String petName, boolean degraded, String missing) {

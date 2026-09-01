@@ -10,6 +10,7 @@ import com.tailtopia.shop.domain.ShopSku;
 import com.tailtopia.shop.domain.Species;
 import com.tailtopia.shop.repository.ShopProductRepository;
 import com.tailtopia.shop.repository.ShopSkuRepository;
+import com.tailtopia.shop.service.ShopImageUrlResolver;
 import com.tailtopia.shop.repurchase.domain.ProfileFacts;
 import com.tailtopia.shop.repurchase.dto.RecommendationView;
 import java.time.LocalDate;
@@ -45,19 +46,24 @@ public class ProfileRecommendationService {
     private final ShopSkuRepository skus;
     private final RecommendationSilenceService silence;
 
+    /** 🔴 App 端拿裸 objectKey 是显示不出图的：全仓没有 key→URL 的客户端拼装。
+        推荐滑道此前一直是斜纹占位，就是因为只下发了 key。 */
+    private final ShopImageUrlResolver imageUrls;
+
     /** 🔴 犬猫年龄阈值可后台配置（FR-107）。这里经配置注入，默认取 PRD 值。 */
     private final int puppyMaxYears;
     private final int adultMaxYears;
 
     public ProfileRecommendationService(PetProfileRepository profiles,
             ShopProductRepository products, ShopSkuRepository skus,
-            RecommendationSilenceService silence,
+            RecommendationSilenceService silence, ShopImageUrlResolver imageUrls,
             @Value("${petgo.shop.reco.puppy-max-years:1}") int puppyMaxYears,
             @Value("${petgo.shop.reco.adult-max-years:7}") int adultMaxYears) {
         this.profiles = profiles;
         this.products = products;
         this.skus = skus;
         this.silence = silence;
+        this.imageUrls = imageUrls;
         this.puppyMaxYears = puppyMaxYears;
         this.adultMaxYears = adultMaxYears;
     }
@@ -99,8 +105,11 @@ public class ProfileRecommendationService {
         List<ShopProduct> matched = filter(active, facts);
         List<RecommendationView.Item> items = new ArrayList<>();
         for (ShopProduct p : matched) {
+            // key 与 url 同时下发：key 保留是因为既有契约与后台链路都在用它，
+            // url 是给 App 显示的 —— 客户端不做 key→URL 拼装（CDN base 只在服务端）。
             items.add(new RecommendationView.Item(p.getPublicToken(), p.getName(), p.getBrand(),
-                    p.getMainImageKey(), minPriceOf(p.getId()), reasonFor(p, facts)));
+                    p.getMainImageKey(), imageUrls.publicUrl(p.getMainImageKey()),
+                    minPriceOf(p.getId()), reasonFor(p, facts)));
         }
         return new RecommendationView(!facts.isComplete(), facts.missing(), facts.petName(),
                 items);

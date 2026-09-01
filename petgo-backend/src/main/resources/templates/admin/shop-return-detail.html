@@ -81,38 +81,38 @@
         </div>
 
         <!-- 审核（5.3）。🔴 没有运费归属的输入框：那是自动得出的，不是可调项。 -->
-        <div th:if="${r.status.name() == 'PENDING_REVIEW'}">
+        <div class="s-card" th:if="${r.status.name() == 'PENDING_REVIEW'}">
             <h2 th:text="#{admin.shop.returns.section.review}">审核</h2>
             <form method="post" th:action="@{/admin/shop/returns/{t}/approve(t=${r.publicToken})}">
-                <button type="submit" th:text="#{admin.shop.returns.btn.approve}">批准退货</button>
+                <button class="btn btn-primary" type="submit" th:text="#{admin.shop.returns.btn.approve}">批准退货</button>
             </form>
             <form method="post" th:action="@{/admin/shop/returns/{t}/reject(t=${r.publicToken})}">
                 <input type="text" name="reason" required maxlength="500"
                        th:placeholder="#{admin.shop.returns.reject.placeholder}"/>
-                <button type="submit" th:text="#{admin.shop.returns.btn.reject}">驳回</button>
+                <button class="btn btn-danger" type="submit" th:text="#{admin.shop.returns.btn.reject}">驳回</button>
             </form>
         </div>
 
         <!-- 寄回登记（5.4 / S-7 用户自寄） -->
-        <div th:if="${r.status.name() == 'AWAIT_SHIPBACK'}">
+        <div class="s-card" th:if="${r.status.name() == 'AWAIT_SHIPBACK'}">
             <h2 th:text="#{admin.shop.returns.section.shipback}">寄回登记</h2>
             <p class="hint" th:text="#{admin.shop.returns.shipback.hint}">用户自寄到后台配置的退货收件地址；不做上门取件。运费先由用户垫付，平台承担的情形在退款执行时按实际运单金额一并返还。</p>
             <form method="post" th:action="@{/admin/shop/returns/{t}/shipback(t=${r.publicToken})}">
                 <input type="text" name="carrier" required maxlength="16" placeholder="JNE"/>
                 <input type="text" name="trackingNo" required maxlength="64"/>
                 <input type="number" name="fee" min="0"/>
-                <button type="submit" th:text="#{admin.shop.returns.btn.shipback}">登记寄回</button>
+                <button class="btn btn-primary" type="submit" th:text="#{admin.shop.returns.btn.shipback}">登记寄回</button>
             </form>
         </div>
 
         <!-- 质检（5.4） -->
-        <div th:if="${r.status.name() == 'INSPECTING'}">
+        <div class="s-card" th:if="${r.status.name() == 'INSPECTING'}">
             <h2 th:text="#{admin.shop.returns.section.inspect}">质检</h2>
             <p class="hint" th:text="#{admin.shop.returns.inspect.hint}">只有质检通过的退货才进入可售库存，且以退货入库批次入库（采购单号填原订单号、单价取该 SKU 最近一次采购价）。不通过时必须选择商品处置方式，不留悬空；选「退回用户」时回寄运费由平台承担。</p>
             <form method="post" th:action="@{/admin/shop/returns/{t}/inspect-pass(t=${r.publicToken})}">
                 <input type="text" name="note" maxlength="500"/>
                 <input type="text" name="photoKeys" maxlength="1000"/>
-                <button type="submit" th:text="#{admin.shop.returns.btn.inspectPass}">质检通过并入库</button>
+                <button class="btn btn-primary" type="submit" th:text="#{admin.shop.returns.btn.inspectPass}">质检通过并入库</button>
             </form>
             <form method="post" th:action="@{/admin/shop/returns/{t}/inspect-fail(t=${r.publicToken})}">
                 <input type="text" name="note" required maxlength="500"
@@ -124,17 +124,17 @@
                 </select>
                 <input type="text" name="shipBackTrackingNo" maxlength="64"
                        th:placeholder="#{admin.shop.returns.disposal.trackingPlaceholder}"/>
-                <button type="submit" th:text="#{admin.shop.returns.btn.inspectFail}">质检不通过</button>
+                <button class="btn btn-danger" type="submit" th:text="#{admin.shop.returns.btn.inspectFail}">质检不通过</button>
             </form>
         </div>
 
         <!-- 退款执行（5.5，财务 refund.payout） -->
-        <div th:if="${r.status.name() == 'REFUNDING' or r.status.name() == 'REFUND_FAILED'}"
+        <div class="s-card" th:if="${r.status.name() == 'REFUNDING' or r.status.name() == 'REFUND_FAILED'}"
              sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('refund.payout')"
              xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
             <h2 th:text="#{admin.shop.returns.section.refund}">退款执行</h2>
             <form method="post" th:action="@{/admin/shop/returns/{t}/refund(t=${r.publicToken})}">
-                <button type="submit" th:text="#{admin.shop.returns.btn.refund}">执行退款</button>
+                <button class="btn btn-primary" type="submit" th:text="#{admin.shop.returns.btn.refund}">执行退款</button>
             </form>
         </div>
     </div>

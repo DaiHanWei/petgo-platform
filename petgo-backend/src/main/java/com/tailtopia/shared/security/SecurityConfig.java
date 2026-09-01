@@ -76,8 +76,12 @@ public class SecurityConfig {
                 .addFilterBefore(new AdminSessionGuardFilter(adminAccounts),
                         AuthorizationFilter.class)
                 .authorizeHttpRequests(auth -> auth
-                        // 静态资源放行（登录页未登录即需加载 CSS/JS，否则登录页裸奔无样式）
-                        .requestMatchers("/admin/admin.css", "/admin/admin.js",
+                        // 静态资源放行（登录页未登录即需加载 CSS/JS，否则登录页裸奔无样式）。
+                        // ⚠️ 用 *.css / *.js 模式而不是精确文件名：静态资源已开内容指纹
+                        //   （bug 20260901-471，admin.js → admin-<md5>.js），精确名匹配不到
+                        //    指纹化后的 URL，表现是登录页 CSS/JS 全 403、页面裸奔。
+                        //    模式只覆盖 /admin/ 一级目录下的样式与脚本，不放行任何页面路由。
+                        .requestMatchers("/admin/*.css", "/admin/*.js",
                                 "/admin/vendor/**").permitAll()
                         // 登录页 + Lark OAuth 登录/回调放行（未登录可访问以建会话）
                         .requestMatchers("/admin/login", "/admin/oauth/**").permitAll()
@@ -179,6 +183,10 @@ public class SecurityConfig {
                         // 写入端点属 Story 1.3 后台，走 /admin/**，不在此放行。
                         .requestMatchers(HttpMethod.GET, "/api/v1/shop/products",
                                 "/api/v1/shop/products/**").permitAll()
+                        // Toko 顶部 banner（2026-08-27）：与商品列表同理 ——
+                        // banner 在转化漏斗最上层，用登录墙拦它没有任何意义。
+                        // 只读；配置走 /admin/shop/banners，不在此放行。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/shop/banner").permitAll()
                         // 行政区划树（Story 2.4）：区划与是否可配送都不敏感，
                         // 且用户在注册前就该能看到「你们送不送我这儿」。
                         .requestMatchers(HttpMethod.GET, "/api/v1/shop/regions").permitAll()

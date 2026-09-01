@@ -65,7 +65,7 @@ void main() {
 
     testWidgets('英文：Diary / Toko / Discovery / Me', (tester) async {
       final labels = await renderLabels(tester, const Locale('en'));
-      expect(labels, <String>['Diary', 'Toko', 'Social', 'Me']);
+      expect(labels, <String>['Diary', 'Shop', 'Social', 'Me']);
     });
 
     testWidgets('印尼文：Diary / Toko / Sosial / Saya', (tester) async {

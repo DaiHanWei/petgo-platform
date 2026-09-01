@@ -120,7 +120,9 @@ class AdminPermissionsTest {
         //     🔴 新码而非复用刚撤的 content.stats_export / 历史死码 content.export ——
         //     那两个字符串可能仍留在存量账号的 permissions 里，复用等于给一批
         //     从未被评估过的账号静默发一项新能力。详见 AdminPermissions 里那段注释。
+        // 2026-08-31：支付记录导出新增一码 payment.list_export（与 content.list_export
+        //     同口径：导出与查看分权限、记审计）⇒ 71 + 1 = 72。
         List<String> all = AdminPermissions.ALL;
-        assertThat(all).hasSize(71);
+        assertThat(all).hasSize(72);
     }
 }

@@ -66,6 +66,8 @@ public class ShopProductQueryService {
                     p.getCategory(),
                     p.getMainImageKey(),
                     imageUrls.publicUrl(p.getMainImageKey()),
+                    p.getMainImageW(),
+                    p.getMainImageH(),
                     p.getSpecies(),
                     minPriceByProduct.get(p.getId())));
         }

@@ -1,6 +1,6 @@
 /// 商品详情页 —— **设计稿版式**（V1.4.0 · `01_screens_browse_order.md` 屏 3 在售 / 屏 4 售罄）。
 ///
-/// 与 [ProductDetailPage]（v1 版式）并存，由 `shopUiVariantProvider` 二选一。
+/// ⚠️ 2026-08-28：v1 版式已整体删除，本文件是该页唯一实现（`_v2` 后缀保留以免制造纯改名 diff）。
 ///
 /// ## 🔴 从 v1 原样继承的三条硬规则（版式变了，规则一条不改）
 ///
@@ -30,6 +30,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -93,8 +94,40 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
   /// 把整页切成售罄态会挡住本来买得到的其它规格。
   bool _isSoldOut(ShopProductDetail d) {
     final sku = _effectiveSku(d);
-    if (sku != null) return sku.stockStatus == StockStatus.outOfStock;
-    return d.skus.isNotEmpty && d.skus.every((s) => s.stockStatus == StockStatus.outOfStock);
+    if (sku != null) {
+      final out = sku.stockStatus == StockStatus.outOfStock;
+      if (out) _reportOutOfStock(sku.token);
+      return out;
+    }
+    final allOut =
+        d.skus.isNotEmpty && d.skus.every((s) => s.stockStatus == StockStatus.outOfStock);
+    if (allOut) {
+      for (final s in d.skus) {
+        _reportOutOfStock(s.token);
+      }
+    }
+    return allOut;
+  }
+
+  /// 已上报过售罄曝光的 SKU（Story 1.8 埋点收口）。
+  final Set<String> _outOfStockReported = {};
+
+  /// 售罄曝光。
+  ///
+  /// 🔴 <b>2026-08-28 补</b>：`toko_out_of_stock_shown` 原本只在 v1 的详情页上报，
+  /// 而 v2 自 2026-08-21 起就是默认版式 —— 这个指标实际上**已经空了一周多**，
+  /// 只是 v1 代码还在、埋点清单对账测试就一直是绿的，直到 v1 整体删除才暴露。
+  ///
+  /// 售罄曝光是转化漏斗上最值得看的流失点之一（用户想买但没货 ≠ 用户不想买），
+  /// Epic 6 的补货提醒要靠它判断值不值得做。
+  ///
+  /// ⚠️ 按 SKU 去重：[_isSoldOut] 在 build 期间被调用，不去重会随每次重建反复上报。
+  void _reportOutOfStock(String skuToken) {
+    if (!_outOfStockReported.add(skuToken)) return;
+    Analytics.capture('toko_out_of_stock_shown', {
+      'product_token': widget.token,
+      'sku_token': skuToken,
+    });
   }
 
   @override
@@ -102,16 +135,20 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
     final l10n = AppLocalizations.of(context);
     final async = ref.watch(shopProductDetailProvider(widget.token));
 
+    // 🔴 <b>loading / error 态必须自带 AppBar</b>（2026-08-27）。本页正常态没有 AppBar ——
+    //    返回箭头画在图区里（[_gallery] 的 Positioned）。而 loading/error 分支不渲染图区，
+    //    于是接口一挂，用户面对的是一屏文字、**界面上一个可点的控件都没有**。
+    //    系统返回手势还能用，但那是「用户得知道有这么个手势」，不是界面给的出口。
+    final placeholderBar = async.hasValue ? null : ShopAppBar(title: l10n.tokoTitle);
     return Scaffold(
       backgroundColor: ShopColors.bg,
+      appBar: placeholderBar,
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text(l10n.tokoDetailLoadFailed,
-                textAlign: TextAlign.center, style: ShopText.body),
-          ),
+        error: (_, _) => ShopRetryState(
+          message: l10n.tokoDetailLoadFailed,
+          retryLabel: l10n.commonRetry,
+          onRetry: () => ref.invalidate(shopProductDetailProvider(widget.token)),
         ),
         data: (d) => _content(l10n, d),
       ),
@@ -153,7 +190,14 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
     // 一张都没有时仍渲染一个占位位，保持页面结构（不塌陷成没有图区的怪样子）。
     final pages = images.isEmpty ? <String?>[null] : images;
 
-    return SizedBox(
+    final topInset = MediaQuery.paddingOf(context).top;
+    // 🔴 本页图区是全幅出血、顶到状态栏之下，而页面没有 AppBar 去声明 overlay 样式。
+    //    不声明的话状态栏图标颜色取决于上一个路由残留的设置，浅色商品图上会整排消失。
+    //    这里显式声明 light（浅色图标），并在图片顶部铺一层极轻的墨色渐变兜底 ——
+    //    渐变同时也是返回/购物车两个按钮的底衬（它们本来就带 imageButtonScrim）。
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: SizedBox(
       height: 266,
       child: Stack(
         children: [
@@ -169,6 +213,23 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
               ),
             ),
           ),
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            height: topInset + 46,
+            child: const IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: ShopColors.imageTopScrim,
+                  ),
+                ),
+              ),
+            ),
+          ),
           if (soldOut)
             ShopSoldOutOverlay(
               label: l10n.tokoOutOfStock,
@@ -179,9 +240,11 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
               //    设计稿把 `segera`（很快）这类无信息文案列为禁用 → 传 null。
               subtitle: null,
             ),
+          // ⚠️ 减去 [kShopImageButtonInset]：按钮的命中区已撑到 44×44，可见的 30×30
+          //    方块居中其中；不减的话可见方块会整体被推进 7px。
           Positioned(
-            left: kShopScreenEdge,
-            top: MediaQuery.paddingOf(context).top + 8,
+            left: kShopScreenEdge - kShopImageButtonInset,
+            top: topInset + 8 - kShopImageButtonInset,
             child: ShopImageButton(
               icon: Icons.arrow_back_ios_new,
               semanticLabel: MaterialLocalizations.of(context).backButtonTooltip,
@@ -189,9 +252,9 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
             ),
           ),
           Positioned(
-            right: kShopScreenEdge,
-            top: MediaQuery.paddingOf(context).top + 8,
-            child: _CartButton(),
+            right: kShopScreenEdge - kShopImageButtonInset,
+            top: topInset + 8 - kShopImageButtonInset,
+            child: const _CartButton(),
           ),
           if (pages.length > 1)
             Positioned(
@@ -209,6 +272,7 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
               ),
             ),
         ],
+      ),
       ),
     );
   }
@@ -314,11 +378,7 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
       ),
       child: Row(
         children: [
-          Container(
-            width: 15,
-            height: 15,
-            decoration: const BoxDecoration(color: ShopColors.purple, shape: BoxShape.circle),
-          ),
+          const ShopCoinMark(),
           const SizedBox(width: 8),
           Expanded(
             child: Text(l10n.tokoPawcoinPartial,
@@ -418,29 +478,38 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
 
     if (soldOut) {
       final category = d.category;
+      final disabled = ShopButton(
+        key: const ValueKey('pdpSoldOutDisabled'),
+        label: l10n.tokoOutOfStock,
+        variant: ShopButtonVariant.disabled,
+      );
+      // 🔴 品类未知 ⇒ 没有替代出口，这时**置灰按钮整宽**（2026-08-27 修）。
+      //    此前 primary 传的是 SizedBox.shrink()，但外层仍包着 Expanded(flex: 1) ——
+      //    结果是灰按钮只占半宽、右半边悬空一块白，看着像稿子没画完。
+      if (category == null) {
+        return ShopBottomBarActions(primary: disabled);
+      }
       return ShopBottomBarActions(
-        secondary: ShopButton(
-          key: const ValueKey('pdpSoldOutDisabled'),
-          label: l10n.tokoOutOfStock,
-          variant: ShopButtonVariant.disabled,
-        ),
+        secondary: disabled,
         // 替代品区无数据源 → 次出口改跳同品类列表（既有能力，不编推荐）。
-        // 品类未知时整个按钮不渲染，而不是给一个点了没去处的按钮。
-        primary: category == null
-            ? const SizedBox.shrink()
-            : ShopButton(
-                key: const ValueKey('pdpSeeAlternatives'),
-                label: l10n.tokoSeeAlternatives,
-                variant: ShopButtonVariant.purple,
-                // ⚠️ `go` 而非 `push`：DEP-1 闭合后 `/shop` 是 shell 分支根，
-                //    push 会二次构建 StatefulShellRoute → GlobalKey 撞车 → release 白屏。
-                onTap: () => context.go('/shop?category=${category.api}'),
-              ),
+        primary: ShopButton(
+          key: const ValueKey('pdpSeeAlternatives'),
+          label: l10n.tokoSeeAlternatives,
+          variant: ShopButtonVariant.purple,
+          // ⚠️ `go` 而非 `push`：DEP-1 闭合后 `/shop` 是 shell 分支根，
+          //    push 会二次构建 StatefulShellRoute → GlobalKey 撞车 → release 白屏。
+          onTap: () => context.go('/shop?category=${category.api}'),
+        ),
       );
     }
 
     // 🔴 多规格未选 → 主按钮禁用并提示先选规格（FR-94A）。
-    final canBuy = sku != null && sku.stockStatus.purchasable && !_adding;
+    //
+    // 🔴 <b>「请求进行中」不再走 disabled</b>（2026-08-27）：`_adding` 期间置灰，与
+    //    「这个规格卖完了」的视觉完全一样。改为保持底色 + 转圈（[ShopButton.loading]），
+    //    `canBuy` 因此不再把 `_adding` 算进去 —— 那是两件事。
+    final purchasable = sku != null && sku.stockStatus.purchasable;
+    final canBuy = purchasable && !_adding;
     return ShopBottomBarActions(
       secondaryFlex: 1,
       primaryFlex: 1,
@@ -448,7 +517,8 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
         key: const ValueKey('pdpAddToCart'),
         // 文案恒定；不可点由 variant 表达（原因写在规格区的提示行里）。
         label: l10n.tokoAddToCartShort,
-        variant: canBuy ? ShopButtonVariant.ink : ShopButtonVariant.disabled,
+        variant: purchasable ? ShopButtonVariant.ink : ShopButtonVariant.disabled,
+        loading: _adding,
         onTap: canBuy ? () => _onAddTapped(l10n, sku) : null,
       ),
       primary: ShopButton(
@@ -456,7 +526,8 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
         label: l10n.tokoBuyNow,
         // 副文案 = 售价 − 可抵扣 PawCoin，未含运费。当前无「可抵扣额」接口，
         // 🔴 **宁可不显示也不显示一个算错的数** —— 这一行直接影响用户对要付多少钱的预期。
-        variant: canBuy ? ShopButtonVariant.pay : ShopButtonVariant.disabled,
+        variant: purchasable ? ShopButtonVariant.pay : ShopButtonVariant.disabled,
+        loading: _adding,
         onTap: canBuy ? () => _onBuyNowTapped(l10n, sku) : null,
       ),
     );
@@ -529,40 +600,48 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
     }
   }
 
-  static String _stripHtml(String html) =>
-      html.replaceAll(RegExp(r'<[^>]*>'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+  /// 后台富文本 → 纯文本。
+  ///
+  /// 🔴 <b>块级标签要换成换行，不能一并压成空格</b>（2026-08-27 修）。原实现是
+  /// `<[^>]*>` → 空格，再把所有 `\s+` 折叠成一个空格 —— 段落、换行、列表全没了，
+  /// 一篇有结构的商品说明会变成一整段密不透风的文字。
+  ///
+  /// ⚠️ 这里刻意**不引富文本渲染器**：详情 HTML 由运营在后台自由编辑，直接渲染等于
+  /// 把排版控制权交出去，还多一条 XSS 面。要真正还原排版应当先约定受限的标签白名单。
+  static String _stripHtml(String html) => html
+      .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
+      .replaceAll(RegExp(r'<li[^>]*>', caseSensitive: false), '\n• ')
+      .replaceAll(
+          RegExp(r'</(p|div|li|h[1-6]|tr|ul|ol)\s*>', caseSensitive: false), '\n')
+      .replaceAll(RegExp(r'<[^>]*>'), ' ')
+      .replaceAll('&nbsp;', ' ')
+      .replaceAll('&amp;', '&')
+      .replaceAll('&lt;', '<')
+      .replaceAll('&gt;', '>')
+      .replaceAll('&quot;', '"')
+      .replaceAll(RegExp(r'[ \t]+'), ' ')
+      .replaceAll(RegExp(r' *\n *'), '\n')
+      .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+      .trim();
 }
 
 /// 图上的购物车按钮（带件数角标）。
+///
+/// 🔴 角标与命中区都由 [ShopImageButton] 内建（2026-08-27）。此前这里和 Toko 顶栏
+/// 各写了一份角标，**两份都用 `BoxShape.circle`** —— 那个形状只按最短边画圆，
+/// `99+` 会溢到圆外面去。
 class _CartButton extends ConsumerWidget {
+  const _CartButton();
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final count = ref.watch(cartItemCountProvider);
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        ShopImageButton(
-          icon: Icons.shopping_cart_outlined,
-          semanticLabel: l10n.cartOpen,
-          onTap: () => context.push('/shop/cart'),
-        ),
-        if (count > 0)
-          Positioned(
-            right: -5,
-            top: -5,
-            child: Container(
-              key: const ValueKey('cartBadgeV2'),
-              constraints: const BoxConstraints(minWidth: 16),
-              height: 16,
-              alignment: Alignment.center,
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              decoration: const BoxDecoration(color: ShopColors.accent, shape: BoxShape.circle),
-              child: Text(count > 99 ? '99+' : '$count',
-                  style: ShopText.badge.copyWith(color: ShopColors.surface)),
-            ),
-          ),
-      ],
+    return ShopImageButton(
+      key: const ValueKey('cartBadgeV2'),
+      icon: Icons.shopping_cart_outlined,
+      semanticLabel: l10n.cartOpen,
+      badgeCount: ref.watch(cartItemCountProvider),
+      onTap: () => context.push('/shop/cart'),
     );
   }
 }

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tailtopia/features/shop/presentation/widgets/repurchase_zones.dart';
 import 'package:tailtopia/features/shop/presentation/widgets/repurchase_zones_v2.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
@@ -63,19 +62,19 @@ void main() {
   /// 于是 Diary 中段被一屏按年龄段的通用商品占掉 —— 成长记录页被商业内容打断，
   /// 而那一屏并不提供"推荐"的价值。产品决定商业内容全部收到 Toko。
   ///
-  /// ⚠️ 钉的是**展示位**，不是组件：`ProfileRecoZone(V2)` 在 Toko 侧照常使用，
-  /// 它自己的用例（test/shop/repurchase_zones*_test.dart）一条都没动。
+  /// ⚠️ 钉的是**展示位**，不是组件：`ProfileRecoZoneV2` 在 Toko 侧照常使用，
+  /// 它自己的用例（test/shop/repurchase_zones_v2_test.dart）一条都没动。
   /// 这一条只保证「它别再长回 Diary 上」—— 而那种回归通常是合并时顺手带回来的，
   /// 不会有人特意去看这一屏。
+  /// ⚠️ 2026-08-28：v1 的 ProfileRecoZone 随 repurchase_zones.dart 一并删除，
+  ///    原本针对它的那条断言随之移除（组件已不存在，断言恒真无意义）。
   testWidgets('有宠态 Diary 不渲染商品推荐区（2026-08-27 撤下）', (tester) async {
     const profile = PetProfile(id: 1, name: 'Momo', cardToken: 'T');
     await tester.pumpWidget(_wrap(auth: _authA(), profile: profile));
     await tester.pumpAndSettle();
 
-    expect(find.byType(ProfileRecoZone), findsNothing,
-        reason: '🔴 商品推荐区又长回 Diary 了');
     expect(find.byType(ProfileRecoZoneV2), findsNothing,
-        reason: '🔴 v2 版式下的商品推荐区又长回 Diary 了');
+        reason: '🔴 商品推荐区又长回 Diary 了');
   });
 
 

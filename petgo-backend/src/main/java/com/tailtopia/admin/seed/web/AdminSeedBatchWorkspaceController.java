@@ -98,8 +98,24 @@ public class AdminSeedBatchWorkspaceController {
     public String workspace(@PathVariable long batchId, Model model) {
         model.addAttribute("active", "seed");
         model.addAttribute("batchId", batchId);
-        model.addAttribute("rows", batches.rowsOf(batchId));
+        var batchRows = batches.rowsOf(batchId);
+        model.addAttribute("rows", batchRows);
         model.addAttribute("batch", entry.findBatch(batchId).orElse(null));
+        // bug 20260901-468：行内「图片」输入框的回显值。行存的是 URL、输入框填的是文件名，
+        // 这里反查一次拼回逗号串 —— 不回显的话，再点一次保存会把已绑定的图片当成"清空"抹掉。
+        java.util.Map<String, String> urlToName = new java.util.HashMap<>();
+        for (var a : assets.wall(batchId)) {
+            urlToName.put(a.getUrl(), a.getFileName());
+        }
+        java.util.Map<Long, String> rowAssetNames = new java.util.HashMap<>();
+        for (var r : batchRows) {
+            if (r.getImageUrls() == null || r.getImageUrls().isEmpty()) {
+                continue;
+            }
+            rowAssetNames.put(r.getId(), r.getImageUrls().stream()
+                    .map(u -> urlToName.getOrDefault(u, u)).collect(java.util.stream.Collectors.joining(",")));
+        }
+        model.addAttribute("rowAssetNames", rowAssetNames);
         // 🔴 批次级设置的三个下拉数据源。**全页只有这一处** —— 此前在线录入与
         //    Excel 导入各带一个一模一样的账号下拉，同一页面出现两次。
         model.addAttribute("publishIdentities", identities.selectableIdentities());
@@ -348,5 +364,8 @@ public class AdminSeedBatchWorkspaceController {
         model.addAttribute("assets", assets.wall(batchId));
         model.addAttribute("usage", assets.usage(batchId));
         model.addAttribute("wallBatchId", batchId);
+        // bug 20260901-467：内容重复标记（标记提示但放行）。上传后墙经此路径整体刷新，
+        // 所以标记在拖完图的下一刻就可见。
+        model.addAttribute("assetDupNotes", assets.duplicateNotes(batchId));
     }
 }

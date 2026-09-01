@@ -46,6 +46,12 @@ class ShopColors {
   /// 🔴 与 [purple] **当前同值但仍是两个旋钮**：purple 管平台能力，accent 管钱与转化。
   /// 日后若要重新拉开二者，改这里一行即可，不必回头去分辨 41 个调用点当初想表达哪个语义。
   ///
+  /// ⚠️ <b>但要清楚现在的后果</b>（2026-08-27 审查）：设计稿「紫 = PawCoin、玫红 = 真钱，
+  /// 用户据此把『怎么付的』和『怎么退的』对上」这条规则，在两者同值期间**事实上不成立** ——
+  /// `ShopLeftAccentBlock.pawcoin` 与 `.money` 的左色条对比度 1.00:1，底色 1.02:1，肉眼不可分。
+  /// 依赖颜色区分二者的界面（结算页 / 待支付页 / 退款页的支付构成）目前靠**文案**承担这层语义。
+  /// 要恢复颜色通道需产品决策，见 `docs/design/.decision-log.md` D-2。
+  ///
   /// 🔴 推论式规则（设计稿明列，换色后逐条仍适用）：
   /// - 售罄商品与超服务范围页的价格转 [text4] 灰，**不用强调色** —— 不用一个买不到的价格做促销刺激。
   /// - 已支付订单的价格用 [ink] 墨色 —— 强调色只留给「还需要付钱」的动作。
@@ -109,10 +115,22 @@ class ShopColors {
   static const Color text2 = AppColors.ink2; // #544864，与全局同值
 
   /// 次要信息、时间、灰标签。
-  static const Color text3 = Color(0xFF8A8398);
+  ///
+  /// 🔴 2026-08-27 由设计稿的 #8A8398 压深到 #726C7E：原值在白底只有 **3.63:1**、
+  /// 在 [bg] 灰底 3.24:1，达不到 WCAG AA 的 4.5。而它承载的是库存数、订单号、
+  /// 配送时间这类**影响购买决策**的信息，不是装饰文字，不能按「弱化文字可以低对比」处理。
+  /// 现值白底 5.05:1 / 灰底 4.50:1，与 [text2] (8.44) 的层级差仍在。
+  static const Color text3 = Color(0xFF726C7E);
 
   /// 占位、禁用文字、**售罄价格**。
-  static const Color text4 = Color(0xFFA79FBE);
+  ///
+  /// 🔴 2026-08-27 由 #A79FBE 压深到 #8C859F：原值白底 **2.52:1**，
+  /// 连大字号的 3:1 都不到 —— 而详情页售罄价用它渲染 24px 主价。
+  /// 现值 3.52:1，满足大字号 AA，同时仍明显弱于 [text3]，「买不到」的降权语义不丢。
+  ///
+  /// ⚠️ 降权靠**色阶**而不是 `Opacity`：透明度会把它盖住的所有层级一起拉平
+  /// （见 checkout_page_v2 超范围态的处置）。
+  static const Color text4 = Color(0xFF8C859F);
 
   /// 输入框描边、时间线竖线、开关关闭态轨道。
   static const Color border = Color(0xFFE4DCF7);
@@ -140,7 +158,10 @@ class ShopColors {
   static const Color warnBorder = Color(0xFFF0DCC8);
 
   /// 橙提示标题。
-  static const Color warnTitle = Color(0xFF9A6B33);
+  ///
+  /// 🔴 2026-08-27 由 #9A6B33 微调到 #976932：原值在 [warnBg] 上 4.36:1，差 0.14 不达标。
+  /// 这个块承载「开封不退」（FR-104 三处明示），是合规位点，不能踩线。现值 4.50:1。
+  static const Color warnTitle = Color(0xFF976932);
 
   /// 橙提示正文。
   static const Color warnText = Color(0xFF8A6C4A);
@@ -159,10 +180,23 @@ class ShopColors {
   static const Color onInk20 = Color(0x33FFFFFF); // .2
 
   /// 极弱文字（`Kenapa ini muncul?`）。
-  static const Color onInk45 = Color(0x73FFFFFF); // .45
+  ///
+  /// 🔴 2026-08-27 由 .45 提到 .50：墨底之上 .45 只有 4.10:1。名字保留 `onInk45`
+  /// 是因为 25 个调用点按「墨底上最弱的那一档」引用它，语义没变，只是值达标了。
+  static const Color onInk45 = Color(0x80FFFFFF); // .50（原 .45 = 4.10:1，不达标）
 
   /// 次要文字（推算依据行）。
   static const Color onInk60 = Color(0x99FFFFFF); // .6
+
+  /// Toko 顶部 banner 的渐变遮罩起止色（2026-08-27）。
+  ///
+  /// 🔴 **不是装饰，是可读性的唯一保障**：banner 图内容完全由运营决定，
+  /// 浅色图上白色的标题与按钮会直接看不见。顶部压一层由深到透的渐变，
+  /// 让顶栏文字在任何图上都有足够对比度。
+  /// ⚠️ .55 是权衡结果 —— 再淡压不住浅色图，再深会把图的上缘染成明显的灰带。
+  static const Color bannerScrimTop = Color(0x8C000000); // rgba(0,0,0,.55)
+
+  static const Color bannerScrimBottom = Color(0x00000000); // 全透明
 
   /// 近正文（倒计时块的说明行）。
   static const Color onInk85 = Color(0xD9FFFFFF); // .85
@@ -172,6 +206,13 @@ class ShopColors {
 
   /// 商品图上的圆形按钮底（返回 / 收藏 / 购物车）。
   static const Color imageButtonScrim = Color(0x8C2E2742); // rgba(46,39,66,.55)
+
+  /// 全幅商品图**顶部**的渐变蒙层（墨色 .35 → 全透明）。
+  ///
+  /// 🔴 商品详情页的图区顶到状态栏之下，而该页没有 AppBar 去声明 overlay 样式。
+  /// 浅色商品图上系统状态栏图标会整排看不见 —— 这层渐变是兜底，
+  /// 同时也给图上的返回 / 购物车按钮当底衬。
+  static const List<Color> imageTopScrim = [Color(0x592E2742), Color(0x002E2742)];
 
   /// 售罄蒙层 —— 详情页整图覆盖。
   static const Color soldOutScrimDetail = Color(0x802E2742); // .5

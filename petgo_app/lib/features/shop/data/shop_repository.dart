@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
+import '../domain/shop_banner.dart';
 import '../domain/shop_product.dart';
 import '../domain/shop_product_detail.dart';
 
@@ -31,6 +32,24 @@ class ShopRepository {
         .toList(growable: false);
   }
 
+  /// Toko 顶部 banner（2026-08-27）。**没有可展示的 banner 时返回 null**。
+  ///
+  /// 🔴 判据是 **204 No Content**，不是"data 为空"：后端在拼不出 URL 时也回 204，
+  /// 把"有没有 banner"收敛成了一个明确的状态码。这里照着它判，不要改成判 data ——
+  /// 判 data 会把网络层的空响应也误当成"没有 banner"。
+  ///
+  /// ⚠️ 拉取失败一律当作**没有 banner**（返回 null）而不是抛错：banner 是锦上添花的
+  /// 展示位，它挂了不该让整个 Toko 页进入错误态 —— 那是主次颠倒。
+  Future<ShopBanner?> fetchBanner() async {
+    try {
+      final resp = await dio.get<Map<String, dynamic>>(ApiPaths.shopBanner);
+      if (resp.statusCode == 204 || resp.data == null) return null;
+      return ShopBanner.fromJson(resp.data!);
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// 商品详情（Story 1.7）。未上架/不存在 → 后端 404（`DioException` 抛给页面）。
   /// 🔒 同样对游客开放，不做登录判断。
   Future<ShopProductDetail> fetchDetail(String token) async {
@@ -49,6 +68,14 @@ final shopRepositoryProvider =
 final shopProductsProvider = FutureProvider.autoDispose
     .family<List<ShopProductSummary>, ShopCategory?>((ref, category) async {
   return ref.read(shopRepositoryProvider).fetchProducts(category: category);
+});
+
+/// Toko 顶部 banner。null = 没有可展示的 banner（页面据此显示白色顶栏）。
+///
+/// 🔴 **不用 autoDispose**：banner 变动极少，而 Toko 是高频进出的 Tab ——
+/// 每次进出都重拉一次纯属浪费，且会让顶部在每次返回时闪一下。
+final shopBannerProvider = FutureProvider<ShopBanner?>((ref) async {
+  return ref.read(shopRepositoryProvider).fetchBanner();
 });
 
 /// 商品详情（按 token）。
