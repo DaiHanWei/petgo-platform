@@ -228,6 +228,14 @@ public final class AdminPermissions {
     // 支付记录查询 / 风险观测（V1.1 Epic 9，Story 9-6）
     /** 支付记录通用查询。 */
     public static final String PAYMENT_VIEW = "payment.view";
+    /**
+     * 支付记录导出（Excel，2026-08-31）。
+     *
+     * <p>🔴 与 {@link #PAYMENT_VIEW} 分开：查看是一次看一屏，导出是把支付数据**批量带出系统**，
+     * 风险高一档 —— 与 {@link #CONTENT_LIST_EXPORT} 同一条口径。新码零存量，
+     * 只有 SUPER_ADMIN 与明确勾选的人有。导出动作记审计。
+     */
+    public static final String PAYMENT_LIST_EXPORT = "payment.list_export";
     /** 红色超额只读监控 + 人工标记（无自动拦截，AB-7A）。 */
     public static final String RISK_VIEW = "risk.view";
     public static final String RISK_EDIT = "risk.edit";
@@ -289,7 +297,7 @@ public final class AdminPermissions {
                     VET_VIEW, VET_QUALIFY_VIEW, RATING_VIEW,
                     CONSULT_VIEW_ANOMALIES, CONSULT_VIEW_SESSIONS,
                     SUPPORT_VIEW, REFUND_VIEW,
-                    CONFIG_VIEW, CONFIG_SHARE_REWARD_VIEW, CONFIG_ALGO_PARAM_VIEW, ORDER_VIEW, ORDER_EXPORT, SETTLEMENT_VIEW, PAYMENT_VIEW, RISK_VIEW,
+                    CONFIG_VIEW, CONFIG_SHARE_REWARD_VIEW, CONFIG_ALGO_PARAM_VIEW, ORDER_VIEW, ORDER_EXPORT, SETTLEMENT_VIEW, PAYMENT_VIEW, PAYMENT_LIST_EXPORT, RISK_VIEW,
                     VIRTUAL_ACCOUNT_VIEW,
                     ADMIN_VIEW_ACCOUNTS, ADMIN_VIEW_LOGS,
                     SHOP_PRODUCT_VIEW, SHOP_COST_VIEW, SHOP_INVENTORY_VIEW,

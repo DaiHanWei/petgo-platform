@@ -50,6 +50,10 @@ public class FeedRankConfig {
     @Column(name = "exposure_decay", nullable = false)
     private double exposureDecay;
 
+    /** 刷新抖动幅度 0–1（2026-09-01）：0=关闭（纯分数排序），越大下拉刷新换得越狠。 */
+    @Column(name = "shuffle_strength", nullable = false)
+    private double shuffleStrength;
+
     @Column(name = "seen_window_days", nullable = false)
     private int seenWindowDays;
 
@@ -151,6 +155,14 @@ public class FeedRankConfig {
 
     public void setExposureDecay(double v) {
         this.exposureDecay = v;
+    }
+
+    public double getShuffleStrength() {
+        return shuffleStrength;
+    }
+
+    public void setShuffleStrength(double v) {
+        this.shuffleStrength = v;
     }
 
     public int getSeenWindowDays() {

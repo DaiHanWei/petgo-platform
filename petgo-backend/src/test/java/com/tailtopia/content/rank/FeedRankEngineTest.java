@@ -30,7 +30,7 @@ class FeedRankEngineTest {
 
     private FeedRankEngine.Result rank(List<RankCandidate> pool, String mainSpecies, int wanted) {
         return engine.rank(new FeedRankEngine.Input(pool, mainSpecies, Map.of(), Set.of(),
-                Map.of(), NOW, P, AttributeTemplate.defaultSchedule()), wanted);
+                Map.of(), NOW, P, AttributeTemplate.defaultSchedule(), null), wanted);
     }
 
     private static List<FeedAttribute> attrs(FeedRankEngine.Result r) {
@@ -197,7 +197,7 @@ class FeedRankEngineTest {
 
         // id1 已曝光（×0.3）→ 让位给 id2
         FeedRankEngine.Result r = engine.rank(new FeedRankEngine.Input(pool, null,
-                Map.of(1L, 0.3), Set.of(), Map.of(), NOW, P, AttributeTemplate.defaultSchedule()), 1);
+                Map.of(1L, 0.3), Set.of(), Map.of(), NOW, P, AttributeTemplate.defaultSchedule(), null), 1);
         assertThat(ids(r)).containsExactly(2L);
     }
 
@@ -212,12 +212,12 @@ class FeedRankEngineTest {
 
         // id2 带生效中标签 → ×1.3 反超
         FeedRankEngine.Result boosted = engine.rank(new FeedRankEngine.Input(pool, null,
-                Map.of(), Set.of(2L), Map.of(), NOW, P, AttributeTemplate.defaultSchedule()), 1);
+                Map.of(), Set.of(2L), Map.of(), NOW, P, AttributeTemplate.defaultSchedule(), null), 1);
         assertThat(ids(boosted)).containsExactly(2L);
 
         // 标签到期（不在集合内）→ 回落 1.0，id1 恢复领先
         FeedRankEngine.Result expired = engine.rank(new FeedRankEngine.Input(pool, null,
-                Map.of(), Set.of(), Map.of(), NOW, P, AttributeTemplate.defaultSchedule()), 1);
+                Map.of(), Set.of(), Map.of(), NOW, P, AttributeTemplate.defaultSchedule(), null), 1);
         assertThat(ids(expired)).containsExactly(1L);
     }
 
@@ -231,7 +231,7 @@ class FeedRankEngineTest {
         assertThat(ids(rank(pool, null, 1))).containsExactly(1L);
 
         FeedRankEngine.Result throttled = engine.rank(new FeedRankEngine.Input(pool, null,
-                Map.of(), Set.of(), Map.of(1L, 0.2), NOW, P, AttributeTemplate.defaultSchedule()), 1);
+                Map.of(), Set.of(), Map.of(1L, 0.2), NOW, P, AttributeTemplate.defaultSchedule(), null), 1);
         assertThat(ids(throttled)).containsExactly(2L);
     }
 
@@ -396,7 +396,51 @@ class FeedRankEngineTest {
     @Test
     void speciesQuotaConsistencyIsCheckable() {
         assertThat(P.speciesQuotasConsistent(10)).isTrue();
-        assertThat(new RankParams(0.6, 0.4, 2, 50, 1.3, 6, 2, 3, 2, 1, 2, 1)
+        assertThat(new RankParams(0.6, 0.4, 2, 50, 1.3, 0, 6, 2, 3, 2, 1, 2, 1)
                 .speciesQuotasConsistent(10)).isFalse();
+    }
+
+    // ── 刷新抖动（2026-09-01：下拉刷新要明显换一批）─────────────────────
+
+    private FeedRankEngine.Result rankSeeded(List<RankCandidate> pool, String seed, int wanted) {
+        return engine.rank(new FeedRankEngine.Input(pool, null, Map.of(), Set.of(),
+                Map.of(), NOW, P, AttributeTemplate.defaultSchedule(), seed), wanted);
+    }
+
+    /**
+     * 🔴 同一种子必须可重放 —— 快照续算与级别 3 降级实时重算都依赖
+     * 「同一（种子, 候选池）永远算出同一序列」，抖动破坏它就等于翻页会重复。
+     */
+    @Test
+    void sameSeedIsReplayable() {
+        List<RankCandidate> pool = richPool(List.of("CAT", "DOG"));
+        assertThat(ids(rankSeeded(pool, "s:aaa", 10)))
+                .isEqualTo(ids(rankSeeded(pool, "s:aaa", 10)));
+    }
+
+    /** 换种子（= 下拉刷新）排序必须变 —— 种子不参与排序正是这次要修的 bug 本体。 */
+    @Test
+    void differentSeedShufflesOrder() {
+        List<RankCandidate> pool = richPool(List.of("CAT", "DOG"));
+        // ⚠️ 断言的是**顺序**不同，不是集合不同：池子小于两页时集合可能相同，
+        //    但「明显换一批」在小池子里的表现就是顺序被重排。
+        assertThat(ids(rankSeeded(pool, "s:aaa", 10)))
+                .isNotEqualTo(ids(rankSeeded(pool, "s:bbb", 10)));
+    }
+
+    /** 🛡 幅度 0 = 关闭抖动：带种子也必须与「无种子」逐位一致（运营的关闭开关要真能关）。 */
+    @Test
+    void zeroStrengthDisablesShuffle() {
+        List<RankCandidate> pool = richPool(List.of("CAT", "DOG"));
+        RankParams off = new RankParams(P.freshnessWeight(), P.interactionWeight(),
+                P.commentWeight(), P.interactionP95(), P.honorBoost(), 0,
+                P.mainSpeciesQuota(), P.otherSpeciesQuota(), P.generalQuota(),
+                P.maxSameAttributeRun(), P.maxSameAuthorRun(), P.maxSameAuthorPerWindow(),
+                P.maxSameOtherSpeciesRun());
+        FeedRankEngine.Result seeded = engine.rank(new FeedRankEngine.Input(pool, null, Map.of(),
+                Set.of(), Map.of(), NOW, off, AttributeTemplate.defaultSchedule(), "s:aaa"), 10);
+        FeedRankEngine.Result plain = engine.rank(new FeedRankEngine.Input(pool, null, Map.of(),
+                Set.of(), Map.of(), NOW, off, AttributeTemplate.defaultSchedule(), null), 10);
+        assertThat(ids(seeded)).isEqualTo(ids(plain));
     }
 }

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <!-- 支付记录通用查询（Story 9.6，AB-8E）。按用户跨类型只读查 payment_intents。 -->
 <head>
     <meta charset="UTF-8"/>
@@ -39,6 +39,12 @@
                 <span class="muted">WIB</span></label>
             <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.payments.btn.search}">查询</button>
             <a th:href="@{/admin/payments}" class="btn btn-sm" th:text="#{admin.payments.btn.reset}">清空筛选</a>
+            <!-- 导出 Excel（2026-08-31）。🔴 按钮把当前筛选条件原样带走 —— 导出的就是屏幕上这一份。
+                 ⚠️ sec:authorize 与控制器的 EXPORT_AUTH 逐字一致，否则按钮在、点了 403。 -->
+            <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('payment.list_export')"
+               class="btn btn-sm"
+               th:href="@{/admin/payments/export.xlsx(userId=${userId},purpose=${purpose},status=${status},from=${from},to=${to})}"
+               th:text="#{admin.payments.btn.export}">导出 Excel</a>
         </form>
 
         <!-- 🔴 汇总条：回答「这一屏筛出来的到底是多少钱、多少笔」。

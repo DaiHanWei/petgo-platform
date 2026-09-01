@@ -13,6 +13,10 @@ package com.tailtopia.content.rank;
  * @param interactionP95    互动量的 95 分位归一化基准。🔴 {@code <= 0} 时互动度按 0 计
  *                          —— {@code ln(1 + P95)} 是分母，P95=0 会<b>除零</b>
  * @param honorBoost        带生效中装饰标签的加成（默认 1.3）
+ * @param shuffleStrength   刷新抖动幅度 0–1（2026-09-01 产品拍板「刷新要明显换一批」）：
+ *                          0=关闭（纯分数排序），越大换得越狠。默认 0.8。
+ *                          ⚠️ 抖动的随机源是<b>序列种子</b>（见引擎 Input.shuffleSeed），
+ *                          本参数只定幅度 —— 种子不变排序就不变，快照契约不受影响
  * @param mainSpeciesQuota  10 条窗口内主物种配额（默认 6）
  * @param otherSpeciesQuota 其他物种配额（默认 2）
  * @param generalQuota      通用配额（默认 2）
@@ -27,6 +31,7 @@ public record RankParams(
         double commentWeight,
         double interactionP95,
         double honorBoost,
+        double shuffleStrength,
         int mainSpeciesQuota,
         int otherSpeciesQuota,
         int generalQuota,
@@ -46,9 +51,9 @@ public record RankParams(
     public static final int DEFAULT_MAX_SAME_AUTHOR_PER_WINDOW = 2;
     public static final int DEFAULT_MAX_SAME_OTHER_SPECIES_RUN = 1;
 
-    /** 上线初值（发版后按 OQ-B1 校准）。 */
+    /** 上线初值（发版后按 OQ-B1 校准）。抖动幅度 0.8 与迁移默认值一致。 */
     public static RankParams defaults(double interactionP95) {
-        return new RankParams(0.6, 0.4, 2.0, interactionP95, 1.3, 6, 2, 2,
+        return new RankParams(0.6, 0.4, 2.0, interactionP95, 1.3, 0.8, 6, 2, 2,
                 DEFAULT_MAX_SAME_ATTRIBUTE_RUN, DEFAULT_MAX_SAME_AUTHOR_RUN,
                 DEFAULT_MAX_SAME_AUTHOR_PER_WINDOW, DEFAULT_MAX_SAME_OTHER_SPECIES_RUN);
     }

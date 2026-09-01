@@ -61,6 +61,10 @@
         <label><span th:text="#{admin.algo.exposureDecay}">曝光衰减（0–1，默认 0.3）</span>
           <input type="number" step="0.05" min="0" max="1" name="exposureDecay"
                  th:value="${feedRank.exposureDecay}"/></label>
+        <!-- 刷新抖动（2026-09-01 产品拍板「下拉刷新要明显换一批」）：0=关闭回到纯分数排序。 -->
+        <label><span th:text="#{admin.algo.shuffleStrength}">刷新抖动幅度（0–1，默认 0.8；0=关闭）</span>
+          <input type="number" step="0.05" min="0" max="1" name="shuffleStrength"
+                 th:value="${feedRank.shuffleStrength}"/></label>
         <label><span th:text="#{admin.algo.throttleFactor}">限流系数（0–1 两端不取，默认 0.2）</span>
           <input type="number" step="0.05" min="0.05" max="0.95" name="throttleFactor"
                  th:value="${feedRank.throttleFactor}"/></label>
