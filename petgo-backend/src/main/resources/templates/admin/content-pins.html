@@ -95,7 +95,9 @@
         <!-- 新建 -->
         <div class="card" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.pin_manage')">
             <h2 th:text="#{admin.pins.new}">新建顶置</h2>
-            <form method="post" th:action="@{/admin/content-pins}" id="pinCreateForm">
+            <!-- 2026-09-02：卡片图支持本地上传 → multipart。 -->
+            <form method="post" th:action="@{/admin/content-pins}" id="pinCreateForm"
+                  enctype="multipart/form-data">
                 <input type="hidden" name="slot" th:value="${slot}"/>
                 <label>
                     <span th:text="#{admin.pins.objectType}">类型</span>
@@ -120,13 +122,26 @@
                 <!-- 推广卡片型 -->
                 <fieldset id="pinPromoFields">
                     <legend th:text="#{admin.pins.type.promo}">推广卡片</legend>
+                    <!-- 2026-09-02：本地上传（与 URL 二选一，都填时以上传为准）。 -->
                     <label>
-                        <span th:text="#{admin.pins.promoImage}">卡片图 URL</span>
+                        <span th:text="#{admin.pins.promoUpload}">卡片图（本地上传）</span>
+                        <input type="file" name="promoImageFile" id="pinPromoImageFile"
+                               accept="image/jpeg,image/png,image/webp"/>
+                    </label>
+                    <!-- 🔴 尺寸要求常驻在控件旁（2026-09-02，与标签图标的 AC3 同一条纪律）：
+                         后端此前没有任何硬校验、页面也没写要求，运营只能靠猜。 -->
+                    <p class="muted" th:text="#{admin.pins.promoImageSpec}">
+                        JPG / PNG / WebP，≤ 10MB。展示为 Feed 内容卡，宽高比 0.75–1.34 之间不裁切；
+                        超出按居中裁切（选图后与保存后都会提示具体裁切比例）。
+                    </p>
+                    <label>
+                        <span th:text="#{admin.pins.promoImage}">或填图片 URL</span>
                         <input type="url" name="promoImageUrl" id="pinPromoImageUrl" class="field-full"/>
                     </label>
                     <!-- 🔴 比例警告（AC7）：卡片在 Feed 里就是一张普通内容卡，同样受 0.75~1.34 的
                          clamp + cover 裁切约束。运营按常见 16:9 出图会被左右各裁掉约 25%，而他不会知道。
-                         这里在浏览器里量 naturalWidth/naturalHeight —— 不需要上传，也不需要服务端抓图。 -->
+                         这里在浏览器里量 naturalWidth/naturalHeight —— URL 与本地文件都量，
+                         不需要上传，也不需要服务端抓图。 -->
                     <img id="pinPromoProbe" alt="" hidden/>
                     <p class="banner warn" id="pinAspectWarn" hidden></p>
                     <label>
@@ -167,48 +182,61 @@
                 var urlInput = document.getElementById('pinPromoImageUrl');
                 var probe = document.getElementById('pinPromoProbe');
                 var warn = document.getElementById('pinAspectWarn');
+                var fileInput = document.getElementById('pinPromoImageFile');
                 var TPL = /*[[#{admin.pins.aspectWarn}]]*/ '';
                 var SIDES = /*[[#{admin.pins.aspectCropSides}]]*/ '';
                 var TB = /*[[#{admin.pins.aspectCropTopBottom}]]*/ '';
                 function fmt(t, a, b) { return String(t).replace('{0}', a).replace('{1}', b); }
+                function probeSrc(src) {
+                    warn.hidden = true;
+                    if (!src) { return; }
+                    probe.onload = function () {
+                        var ratio = probe.naturalWidth / probe.naturalHeight;
+                        if (ratio >= 0.75 && ratio <= 1.34) { warn.hidden = true; return; }
+                        // 裁切百分比：cover 裁的是"多出来的那一边"。
+                        var pct, how;
+                        if (ratio > 1.34) {
+                            pct = Math.round((1 - 1.34 / ratio) / 2 * 100);
+                            how = fmt(SIDES, pct, '');
+                        } else {
+                            pct = Math.round((1 - ratio / 0.75) / 2 * 100);
+                            how = fmt(TB, pct, '');
+                        }
+                        warn.textContent = fmt(TPL, ratio.toFixed(2), how);
+                        warn.hidden = false;   // 🛡 只警告，不阻止提交
+                    };
+                    probe.onerror = function () { warn.hidden = true; };
+                    probe.src = src;
+                }
                 if (urlInput && probe && warn) {
-                    urlInput.addEventListener('change', function () {
-                        warn.hidden = true;
-                        if (!urlInput.value) { return; }
-                        probe.onload = function () {
-                            var ratio = probe.naturalWidth / probe.naturalHeight;
-                            if (ratio >= 0.75 && ratio <= 1.34) { warn.hidden = true; return; }
-                            // 裁切百分比：cover 裁的是"多出来的那一边"。
-                            var pct, how;
-                            if (ratio > 1.34) {
-                                pct = Math.round((1 - 1.34 / ratio) / 2 * 100);
-                                how = fmt(SIDES, pct, '');
-                            } else {
-                                pct = Math.round((1 - ratio / 0.75) / 2 * 100);
-                                how = fmt(TB, pct, '');
-                            }
-                            warn.textContent = fmt(TPL, ratio.toFixed(2), how);
-                            warn.hidden = false;   // 🛡 只警告，不阻止提交
-                        };
-                        probe.onerror = function () { warn.hidden = true; };
-                        probe.src = urlInput.value;
+                    urlInput.addEventListener('change', function () { probeSrc(urlInput.value); });
+                }
+                // 2026-09-02：本地文件同样预警 —— createObjectURL 在浏览器本地量宽高，不用先上传。
+                if (fileInput && probe && warn) {
+                    fileInput.addEventListener('change', function () {
+                        var f = fileInput.files && fileInput.files[0];
+                        probeSrc(f ? URL.createObjectURL(f) : '');
                     });
                 }
             })();
             /*]]>*/
         </script>
 
-        <!-- 内容候选（HTMX 局部）。分页：候选集接近全量内容，不可平铺。 -->
-        <div th:fragment="candidates" th:remove="tag">
-            <p class="muted" th:if="${#lists.isEmpty(candidates)}" th:text="#{admin.pins.pickEmpty}">没有可顶置的公开内容。</p>
-            <label th:each="c : ${candidates}" class="pick-row">
-                <input type="radio" name="contentId" th:value="${c.id}"/>
-                <span th:text="${c.id}">1</span>
-                <span th:text="#{'admin.contentType.' + ${c.type}}">Moment</span>
-                <span th:text="${c.summary}">摘要</span>
-                <span class="muted" th:text="${#temporals.format(c.createdAt, 'yyyy-MM-dd', 'Asia/Jakarta')}">日期</span>
-            </label>
-        </div>
+    </div>
+
+    <!-- 内容候选（HTMX 局部）。分页：候选集接近全量内容，不可平铺。
+         🔴 2026-09-02：从 content 片段**内部**挪到这里（外层 th:replace 之内、content 之外）——
+         原先定义在 content 里，整页渲染时片段本体会在页面底部**再游离渲染一遍**
+         （表现为页面最底下多一行「没有可顶置的公开内容」）。 -->
+    <div th:fragment="candidates" th:remove="tag">
+        <p class="muted" th:if="${#lists.isEmpty(candidates)}" th:text="#{admin.pins.pickEmpty}">没有可顶置的公开内容。</p>
+        <label th:each="c : ${candidates}" class="pick-row">
+            <input type="radio" name="contentId" th:value="${c.id}"/>
+            <span th:text="${c.id}">1</span>
+            <span th:text="#{'admin.contentType.' + ${c.type}}">Moment</span>
+            <span th:text="${c.summary}">摘要</span>
+            <span class="muted" th:text="${#temporals.format(c.createdAt, 'yyyy-MM-dd', 'Asia/Jakarta')}">日期</span>
+        </label>
     </div>
 </div>
 </body>

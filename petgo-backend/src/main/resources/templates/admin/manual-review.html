@@ -70,8 +70,9 @@
             <thead>
             <tr>
                 <th th:text="#{admin.review.col.ticketType}">类型</th>
-                <th th:text="#{admin.review.col.subject}">对象</th>
-                <th th:text="#{admin.review.col.preview}">摘要</th>
+                <!-- 2026-09-02 产品要求：摘要列缩三成，腾出来的宽度给对象列与操作列。 -->
+                <th th:text="#{admin.review.col.subject}" style="width:20%">对象</th>
+                <th th:text="#{admin.review.col.preview}" style="width:24%">摘要</th>
                 <th th:text="#{admin.review.col.score}">优先级分</th>
                 <th th:text="#{admin.review.col.earliest}">最早时间</th>
                 <th th:text="#{admin.review.col.status}">状态</th>
