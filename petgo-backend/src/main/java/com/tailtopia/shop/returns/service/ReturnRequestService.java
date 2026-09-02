@@ -57,14 +57,19 @@ public class ReturnRequestService {
     private final ShopOrderLineRepository orderLines;
     private final ShopTokenGenerator tokens;
 
+    /** 校验凭证 key 归属用（D-10）。见 {@link com.tailtopia.shared.media.MediaObjectKeys}。 */
+    private final com.tailtopia.shared.media.MediaProperties mediaProps;
+
     public ReturnRequestService(ReturnRequestRepository returns, ReturnLineRepository returnLines,
             ShopOrderRepository orders, ShopOrderLineRepository orderLines,
-            ShopTokenGenerator tokens) {
+            ShopTokenGenerator tokens,
+            com.tailtopia.shared.media.MediaProperties mediaProps) {
         this.returns = returns;
         this.returnLines = returnLines;
         this.orders = orders;
         this.orderLines = orderLines;
         this.tokens = tokens;
+        this.mediaProps = mediaProps;
     }
 
     /**
@@ -84,6 +89,14 @@ public class ReturnRequestService {
         if (evidenceKeys != null && evidenceKeys.size() > MAX_EVIDENCE) {
             throw AppException.validation("凭证图最多 " + MAX_EVIDENCE + " 张");
         }
+        // 🔴 凭证 key 必须是**这个用户自己直传**产生的（D-10，2026-09-02 stag）。
+        //    此前这里来者不拒：App 端那时压根没调相册、只塞了字面量
+        //    `return-evidence-1/2/…`，服务端照单全收、原样入库 ——
+        //    运营在审核页无图可看，「开封判例」这类依赖凭证的功能一并失去输入。
+        //    ⚠️ 端上修好只解决「诚实客户端」；这一道才挡得住伪造与越权（key 前缀带 userId）。
+        com.tailtopia.shared.media.MediaObjectKeys.requireAllOwned(
+                mediaProps, com.tailtopia.shared.media.MediaScope.PRIVATE, userId,
+                evidenceKeys, "凭证图");
         // 🔴 质量问题必填凭证：没有凭证的「质量问题」既无法质检也无法复盘，
         //    而它恰恰是平台承担运费 + 发补偿溢价的那一类。
         if (type == ReturnType.QUALITY_ISSUE && (evidenceKeys == null || evidenceKeys.isEmpty())) {

@@ -67,6 +67,49 @@ void main() {
         lines: lines ?? [line()],
       );
 
+  /// 🔴 D-10（2026-09-02 stag，P0）：凭证照片曾是**桩实现**。
+  ///
+  /// 点「+」**不弹相册也不拍照**，只往列表里追加字面量 `return-evidence-1/2/…`，
+  /// 计数照跳 0/5 → 1/5、缩略图是占位斜纹；随后这些假串被原样提交入库。
+  /// 后端当时也不校验 key 是否指向真实对象 ⇒ 运营在退货审核页无图可看，
+  /// 而本页文案还写着「拍到封口和保质期标签 —— 这是质检要看的」。
+  /// 整条凭证链路端到端不可用。
+  ///
+  /// ⚠️ 本组只能测到**入口行为**：真正的选图/上传要打相册与网络，
+  /// 归 `MediaUploadUseCase` 自己的用例管。这里钉住的是「点下去发生的是选图，
+  /// 而不是凭空造一个 key」——那正是 D-10 的形态。
+  group('🔴 D-10：凭证照片必须真的选图上传', () {
+    testWidgets('🔴 点「+」弹来源选择，而不是凭空加一张', (tester) async {
+      await tester.pumpWidget(requestHost(eligibility()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('0/5'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('returnEvidenceAddV2')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('returnEvidenceCameraV2')), findsOneWidget,
+          reason: '不给相机/相册入口，就只能是桩');
+      expect(find.byKey(const ValueKey('returnEvidenceGalleryV2')), findsOneWidget);
+      expect(find.text('1/5'), findsNothing,
+          reason: '🔴 计数在选图之前就涨 = 又变回那个假 key 的桩');
+    });
+
+    testWidgets('取消选择 → 计数不变，也没有凭证被加进去', (tester) async {
+      await tester.pumpWidget(requestHost(eligibility()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('returnEvidenceAddV2')));
+      await tester.pumpAndSettle();
+      // 点 sheet 外面关掉（用户改主意）
+      await tester.tapAt(const Offset(200, 60));
+      await tester.pumpAndSettle();
+
+      expect(find.text('0/5'), findsOneWidget);
+      expect(find.byKey(const ValueKey('returnEvidenceRemove_0')), findsNothing);
+    });
+  });
+
   group('🔴 退货申请：回程运费归属必须在提交前告知', () {
     testWidgets('选「质量问题」类原因 → 平台承担', (tester) async {
       await tester.pumpWidget(requestHost(eligibility()));

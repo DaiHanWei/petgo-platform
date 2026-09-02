@@ -3105,6 +3105,8 @@
   "returnPhotoRequired": "Required · min. 2 photos",
   "returnPhotoHint": "Include the seal and the expiry label — these are what the inspection looks at.",
   "returnPhotoTooFew": "Add at least 2 photos",
+  "returnPhotoUploadFailed": "Could not upload that photo. Please try again.",
+  "@returnPhotoUploadFailed": {"description": "Return request: the evidence photo failed to upload. Must be said out loud \u2014 the counter does not move, so a silent failure makes the user tap again and again (same class as D-8)."},
   "returnNextChooseRefund": "Next · Choose refund method",
   "returnShipBearerPlatform": "Return shipping is covered by TailTopia",
   "returnShipBearerBuyer": "Return shipping is paid by the buyer",

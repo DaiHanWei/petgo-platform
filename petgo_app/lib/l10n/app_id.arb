@@ -2101,6 +2101,7 @@
   "returnPhotoRequired": "Wajib · min. 2 foto",
   "returnPhotoHint": "Sertakan foto segel dan label kedaluwarsa — dipakai saat pemeriksaan.",
   "returnPhotoTooFew": "Tambahkan minimal 2 foto",
+  "returnPhotoUploadFailed": "Foto gagal diunggah. Silakan coba lagi.",
   "returnNextChooseRefund": "Lanjut · Pilih Cara Refund",
   "returnShipBearerPlatform": "Ongkos kirim balik ditanggung TailTopia",
   "returnShipBearerBuyer": "Ongkos kirim balik ditanggung pembeli",
