@@ -545,12 +545,24 @@ class _CheckoutPageV2State extends ConsumerState<CheckoutPageV2> {
     //    「这单不能提交」长得一样。改为保持强调色 + 转圈。
     final allowed = p.canSubmit && _agreedNoReturn;
     final canSubmit = allowed && !_submitting;
+    // 🔴 底栏合计 = **明细区那串加减的结果**（D-4，2026-09-02 stag 电商测试，P0）。
+    //    明细区把 PawCoin 渲染成一条负数抵扣行（`− 999`，与免运同一种表达），
+    //    而这里原先给的是 `payableTotal` —— 那是**订单总额，含币段**。
+    //    于是同屏三处对同一笔钱给出两个数：明细区算下来 304.001、支付块的 QRIS 行
+    //    304.001，底栏却写 305.000，差额恰好是一个币段。
+    //    方向还是**显示得比实收多**，属于金额类展示错误里最容易引发客诉与对账争议的那种。
+    //
+    // ⚠️ 判据用 `coin > 0` 而不是 `isMixed`：明细区那条抵扣行也是按 `coin > 0` 渲染的。
+    //    两处必须**同一个判据** —— 用 isMixed 的话纯币单（cash 段为 0）又会重新对不上：
+    //    明细区减到 0、底栏却仍写总额。
+    final coin = p.coinAmount ?? 0;
+    final due = coin > 0 ? (p.cashAmount ?? p.payableTotal) : p.payableTotal;
     return ShopBottomBarWithTotal(
       label: l10n.checkoutPayable,
       // 🔴 超范围时总价位显示文案而非数字，且转灰。
-      amount: p.payableTotal == null
+      amount: due == null
           ? l10n.checkoutShippingUnavailable
-          : formatIdr(p.payableTotal!),
+          : formatIdr(due),
       amountColor: p.serviceable ? ShopColors.accent : ShopColors.text4,
       action: ShopButton(
         key: const ValueKey('checkoutSubmitV2'),

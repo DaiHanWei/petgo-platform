@@ -202,14 +202,48 @@ void main() {
           reason: '204.000 已含 50.000 币，再跟一行「+ 50.000 PawCoin」就是重复计币');
     });
 
-    testWidgets('待支付 → 金额行仍是总额（此时标题是 Total bayar，语义正确）', (tester) async {
+    // 🔴 这条原先断言的是**反过来的**：「待支付 → 金额行仍是总额（此时标题是
+    //    Total bayar，语义正确）」。那个理由只在印尼语下成立 —— 同一个 ARB key
+    //    (`checkoutPayable`) 的英文是 **Total due**（现在还欠多少），而币段下单时已冻结。
+    //    2026-09-02 stag 用英文 locale 实测（D-4，P0）：同屏「Total due Rp 305.000」
+    //    配按钮「Pay now Rp 304.001」，那 999 的差额页面上无处可解释，
+    //    且该页明细区连 PawCoin 那一行都没有。已支付态本就按现金段显示 ⇒ 同页两态口径打架。
+    testWidgets('🔴 D-4：待支付 → 金额行也给**现金段**，与支付按钮同数', (tester) async {
       await tester.pumpWidget(host(order(
         expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30)),
       )));
       await tester.pumpAndSettle();
 
       final total = tester.widget<Text>(find.byKey(const ValueKey('shopOrderTotalV2')));
+      expect(total.data, contains('154.000'));
+      expect(total.data, isNot(contains('204.000')),
+          reason: '204.000 含 50.000 币段；按钮写 154.000，合计写 204.000 就是同屏自相矛盾');
+
+      final btn = tester.widget<ShopButton>(find.byKey(const ValueKey('shopOrderPayV2')));
+      expect(btn.label, contains('154.000'), reason: '合计与按钮必须是同一个数');
+    });
+
+    testWidgets('🔴 D-4：待支付也必须列出 PawCoin 分段 —— 否则差额无从解释', (tester) async {
+      await tester.pumpWidget(host(order(
+        expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30)),
+      )));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('shopOrderPaidCoinSplitV2')), findsOneWidget,
+          reason: '合计从 204.000 变成 154.000，页面必须说清那 50.000 去哪了');
+    });
+
+    testWidgets('待支付 · 纯现金单 → 金额行仍是总额（无币段可拆）', (tester) async {
+      await tester.pumpWidget(host(order(
+        coinAmount: 0,
+        cashAmount: 204000,
+        expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30)),
+      )));
+      await tester.pumpAndSettle();
+
+      final total = tester.widget<Text>(find.byKey(const ValueKey('shopOrderTotalV2')));
       expect(total.data, contains('204.000'));
+      expect(find.byKey(const ValueKey('shopOrderPaidCoinSplitV2')), findsNothing);
     });
 
     testWidgets('🔴 支付按钮上的金额是**现在真要付的现金**，不是订单总额', (tester) async {

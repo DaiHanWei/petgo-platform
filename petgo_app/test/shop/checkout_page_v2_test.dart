@@ -119,7 +119,10 @@ void main() {
       expect(find.text('QRIS'), findsOneWidget);
       expect(find.text('− Rp 50.000'), findsWidgets,
           reason: '只显示一个总数会让用户误解扣款构成 —— 而 PawCoin 段不能提现');
-      expect(find.text('Rp 150.000'), findsOneWidget);
+      // 🔴 现金段出现**两次**且必须是同一个数：QRIS 行一次、底栏合计一次（D-4）。
+      //    此前底栏给的是含币段的总额，同屏两个数差着一个币段。
+      expect(find.text('Rp 150.000'), findsNWidgets(2),
+          reason: 'QRIS 行与底栏合计是同一笔钱，写成两个数就是 D-4 那种自相矛盾');
     });
 
     testWidgets('coinAmount 为 0 时不渲染「− Rp 0」这种噪音行', (tester) async {
@@ -259,15 +262,52 @@ void main() {
       await tester.pumpWidget(host(preview(
         shippingFee: 15000,
         payableTotal: 200000,
+        coinAmount: 50000,
+        cashAmount: 149000,
       )));
       await tester.pumpAndSettle();
 
       expect(find.text('Rp 185.000'), findsWidgets); // 小计
       expect(find.text('Rp 15.000'), findsWidgets); // 运费
       final bar = tester.widget<ShopBottomBarWithTotal>(find.byType(ShopBottomBarWithTotal));
-      // 🔴 200.000 ≠ 185.000 + 15.000 − 50.000。刻意给一个「算不出来」的组合：
-      //    页面若自己算过一遍，这条就会红。
-      expect(bar.amount, 'Rp 200.000');
+      // 🔴 底栏取的是服务端下发的 **cashAmount 原样**，不是自己拿明细加减出来的。
+      //    夹具刻意让两者不等：185.000 + 15.000 − 50.000 = 150.000，而服务端给的是
+      //    149.000。页面若自己算过一遍，这条就会红。
+      //    （D-4 之前这里取的是 payableTotal，含币段 ⇒ 与明细区、QRIS 行都对不上。）
+      expect(bar.amount, 'Rp 149.000');
+      expect(bar.amount, isNot('Rp 150.000'), reason: '自己算的');
+      expect(bar.amount, isNot('Rp 200.000'), reason: '含币段的订单总额，不是现在要付的');
+    });
+
+    testWidgets('🔴 D-4：底栏合计不含 PawCoin 段 —— 与明细区、QRIS 行三处同数',
+        (tester) async {
+      await tester.pumpWidget(host(preview(
+        shippingFee: 15000,
+        shippingDiscount: -15000,
+        payableTotal: 200000,
+        coinAmount: 50000,
+        cashAmount: 150000,
+      )));
+      await tester.pumpAndSettle();
+
+      final bar = tester.widget<ShopBottomBarWithTotal>(find.byType(ShopBottomBarWithTotal));
+      expect(bar.amount, 'Rp 150.000',
+          reason: '明细区把 PawCoin 列成负数抵扣行，合计就必须是减完的数');
+      expect(bar.amount, isNot(contains('200.000')),
+          reason: 'stag D-4 原形：合计比实收多一个币段，方向是「显示得比实收多」');
+    });
+
+    testWidgets('无 PawCoin 段时底栏仍取 payableTotal 原样', (tester) async {
+      await tester.pumpWidget(host(preview(
+        payableTotal: 200000,
+        coinAmount: 0,
+        cashAmount: 200000,
+      )));
+      await tester.pumpAndSettle();
+
+      final bar = tester.widget<ShopBottomBarWithTotal>(find.byType(ShopBottomBarWithTotal));
+      expect(bar.amount, 'Rp 200.000',
+          reason: '没有抵扣行可减时，合计就是订单总额 —— 判据与明细区那条行同源');
     });
 
     testWidgets('免运抵扣是一条负数行，不是把运费改成 0', (tester) async {
