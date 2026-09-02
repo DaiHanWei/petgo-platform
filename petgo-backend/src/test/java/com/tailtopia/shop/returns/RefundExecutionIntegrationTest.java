@@ -272,9 +272,21 @@ class RefundExecutionIntegrationTest extends ApiIntegrationTest {
         assertThat(out.incentivePremium()).as("现金段退银行 → 不给激励溢价").isZero();
     }
 
+    /**
+     * 🔴 <b>本条 2026-09-02 反转过（D-16）</b>：原先断言「现金段转 PawCoin 就给激励溢价」，
+     * 用的正是<b>已交付</b>的退货（{@code mixedDeliveredOrder} + {@code NON_QUALITY_ISSUE}）——
+     * 那恰恰是套利口子本身：买 → 收货 → 退 → 转币白拿溢价。
+     *
+     * <p>{@code premium_rate} / {@code premium_fixed} 这对配置是<b>「未交付+转币」分支专用</b>的
+     * 反套利激励（迁移 V20260817_2330 头注释 + PawCoinConfig 的 javadoc 两处写明），
+     * 代码此前漏了这道门。现在补上：已交付的退货一律不给。
+     *
+     * <p>⚠️ 门本身的完整真值表在 L0 的 {@code RefundIncentiveGateTest}（含未交付那一支）——
+     * 这里只钉住「有 DB 的真实链路上，已交付确实拿不到」。
+     */
     @Test
-    @DisplayName("🔴 D-8：现金段转 PawCoin → 给【激励】溢价，读的是另一个配置项")
-    void incentivePremiumOnlyWhenCashGoesToPawcoin() {
+    @DisplayName("🔴 D-16：已交付的退货转 PawCoin → **不给**激励溢价（C-1 反套利门）")
+    void noIncentivePremiumForDeliveredReturns() {
         jdbc.update("UPDATE pawcoin_config SET premium_rate = 5, compensation_premium_rate = 20, "
                 + "compensation_premium_cap = 0");
         Ctx c = mixedDeliveredOrder(60_000L, 0L, 100_000L);
@@ -284,7 +296,9 @@ class RefundExecutionIntegrationTest extends ApiIntegrationTest {
 
         var out = refunds.execute(r.getPublicToken());
 
-        assertThat(out.incentivePremium()).isEqualTo(out.cashRefunded() * 5 / 100);
+        assertThat(out.incentivePremium())
+                .as("货到过用户手上；再给转币激励就是付钱请人「买 → 退 → 转币」")
+                .isZero();
         assertThat(out.compensationPremium())
                 .as("非质量问题不是平台责任 → 不给补偿溢价").isZero();
     }

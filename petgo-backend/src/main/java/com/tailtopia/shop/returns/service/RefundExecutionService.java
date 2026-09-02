@@ -227,18 +227,35 @@ public class RefundExecutionService {
                     config.getCompensationPremiumCap());
         }
 
-        // 🔴 【激励】溢价：只在「现金段转 PawCoin」时给，读的是另一个配置项（C-1 反套利）
-        long incentive = 0L;
-        if (r.getCashDestination() == CashDestination.TO_PAWCOIN && config != null) {
-            incentive = premium(split.thisCash(), config.getPremiumRate(), 0L);
-        }
-        // 🔴 **「选了转币会拿到多少」的预览**（D-11，2026-09-02 stag）。
-        //    上面那个 incentive 要**已经选了** TO_PAWCOIN 才非零，而用户是在退款方式页
-        //    **做选择之前**看到「Lands instantly, with a bonus」这句承诺的 ——
-        //    端上拿 incentive 去判就恒为 0，等于永远藏掉；不判又变成无条件承诺（就是 D-11）。
-        //    所以额外给一个与当前选择无关的预览值，端上据此决定那句话说不说。
+        // 🔴 【激励】溢价：只在「**未交付** + 现金段转 PawCoin」时给（C-1 反套利）。
+        //
+        // ⚠️ **「未交付」这道门是 2026-09-02 补的**（D-16）。此前这里对**任何** TO_PAWCOIN
+        //    退货都给 —— 而 premium_rate/premium_fixed 这对配置，
+        //    迁移 V20260817_2330 的头注释与 PawCoinConfig 的 javadoc **两处都写明**
+        //    是「未交付+转币」分支专用的反套利激励。代码漏了这道门。
+        //    已交付的退货也给，等于付钱请人「买 → 收货 → 退 → 转币」；
+        //    质量问题那一档尤其糟：平台还要承担回程运费并另给补偿溢价。
+        //    当时 premiumRate=0 把这件事掩盖着 —— 而那是个后台随时可改的值。
+        //
+        // 🔴 金额改走**领域方法** `refundPawcoinPremium`（= base × rate% + **premiumFixed**），
+        //    不再用本类那个私有 premium()。此前两套公式并存，
+        //    运营改「退款转币固定溢价」只有 pay/refund 那条链路会变，这条不变。
+        //    ⚠️ 补偿溢价**仍走私有 premium()**：它读的是另一对配置
+        //    （compensation_premium_rate/cap）且带上限，迁移注释明确警告
+        //    「两条溢价必须是两个独立配置项，写成同一个数值会**静默**毁掉
+        //     AB-13A 售后成本口径与 AB-6C 浮存归因」。两者不可合并。
+        //
+        // ⚠️ 还要求 `thisCash > 0`：领域公式在 base=0 时仍会加上 premiumFixed，
+        //    而没有现金段就没有「转币」这回事，不该凭空给一笔固定溢价。
+        boolean incentiveEligible =
+                incentiveApplies(r.getReturnType(), split.thisCash(), config != null);
+        // 「选了转币会拿到多少」的预览（D-11）：与**当前选择**无关，但同样受上面这道门约束 ——
+        // 门外的退货本来就拿不到激励，端上再承诺 bonus 就又变回 D-11 那种空头支票。
         long incentiveIfPawcoin =
-                config == null ? 0L : premium(split.thisCash(), config.getPremiumRate(), 0L);
+                incentiveEligible ? config.refundPawcoinPremium(split.thisCash()) : 0L;
+        long incentive = incentiveEligible
+                && r.getCashDestination() == CashDestination.TO_PAWCOIN
+                        ? incentiveIfPawcoin : 0L;
 
         // 回程运费：平台承担时按用户上传的实际运单金额返还（S-7）
         long shipbackReimbursement =
@@ -250,9 +267,39 @@ public class RefundExecutionService {
     }
 
     /**
+     * 转币【激励】溢价是否适用 —— <b>C-1 反套利那道门</b>（D-16，2026-09-02）。
+     *
+     * <p>抽成纯函数是为了让这道门<b>可被 L0 直接断言</b>：它守的是资损，
+     * 而金额计算本身埋在需要 DB 的集成链路里，那一层跑得慢、也不便穷举真值表。
+     *
+     * <p>三个条件缺一不可：
+     * <ul>
+     *   <li><b>未交付</b>（{@link com.tailtopia.shop.returns.domain.ReturnType#isUndelivered()}）—— 已交付的退货也给激励，
+     *       等于付钱请人「买 → 收货 → 退 → 转币」；</li>
+     *   <li><b>有现金段可转</b> —— 领域公式在 base=0 时仍会加上 {@code premiumFixed}，
+     *       而没有现金段就没有「转币」这回事，不该凭空给一笔固定溢价；</li>
+     *   <li>配置存在。</li>
+     * </ul>
+     *
+     * <p>⚠️ 「是否真的选了 TO_PAWCOIN」<b>不在这里判</b>：本判据同时服务于
+     * 「选了拿多少」（结算）与「若选会拿多少」（端上展示预览，D-11），
+     * 后者正是在用户做选择<b>之前</b>要回答的。
+     */
+    static boolean incentiveApplies(com.tailtopia.shop.returns.domain.ReturnType type, long cashSegment, boolean hasConfig) {
+        return type != null && type.isUndelivered() && cashSegment > 0 && hasConfig;
+    }
+
+    /**
      * 溢价 = 基数 × 比例%，按 cap 封顶（cap = 0 表示不封顶）。整数运算，禁浮点。
      *
-     * <h2>⚠️ 这是**第二套**溢价公式，与领域对象声明的那套不一致（D-16 查证，2026-09-02）</h2>
+     * <h2>⚠️ 只给**补偿**溢价用（D-16 处理后，2026-09-02）</h2>
+     * 激励溢价已改走领域方法 {@link com.tailtopia.config.domain.PawCoinConfig#refundPawcoinPremium}
+     * （那套带 {@code premiumFixed}）。本方法只剩补偿溢价一个调用方 ——
+     * 它读的是**另一对配置**（{@code compensation_premium_rate/cap}）且**带上限**，
+     * 与激励溢价是两个独立配置项，不可合并（迁移 V20260817_2330 的头注释写明：
+     * 写成同一个数值会**静默**毁掉 AB-13A 售后成本口径与 AB-6C 浮存归因）。
+     *
+     * <h2>历史（保留以防再被"统一"掉）</h2>
      * {@link com.tailtopia.config.domain.PawCoinConfig#refundPawcoinPremium} 写的是
      * <pre>溢价 = 基数 × premiumRate% + <b>premiumFixed</b></pre>
      * 而本方法**不加 premiumFixed**。于是同一个后台配置项在两条退款链路上行为不同：
