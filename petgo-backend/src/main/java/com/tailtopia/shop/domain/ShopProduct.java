@@ -243,8 +243,27 @@ public class ShopProduct {
         return mainImageKey;
     }
 
+    /**
+     * 图集 objectKey 列表。**空列表而不是 null**。
+     *
+     * <h2>D-20（2026-09-02 stag，P0）</h2>
+     * 多图是后加的字段，{@code @JdbcTypeCode(JSON)} 无默认值 ⇒ <b>存量行该列为 NULL</b>，
+     * 读出来就是 {@code null}。调用方直接 {@code for (String k : getGalleryKeys())}
+     * 就是 NPE —— {@code AdminShopProductController.detail} 正是这么让
+     * <b>后台商品编辑页几乎全部 500</b> 的：抽查 8 个商品 7 个挂，
+     * 只有本次测试新建的那个（创建时赋了空列表）能打开。
+     * 运营改价、改描述、换图、调排序权重全部阻断。
+     *
+     * <p>🔴 在 getter 上收口而不是逐个调用点加判空：同一个控制器里
+     * {@code editForm}（340 行）**早就判了 null**、{@code detail}（162 行）忘了 ——
+     * 一个「有时候是 null」的 getter 就是在等下一个调用方漏判。
+     *
+     * <p>⚠️ 返回不可变空列表：本类的写入一律经 {@link #apply}，没有调用方去改这个返回值。
+     * ⚠️ 实体是**字段访问**（注解都在字段上），所以改 getter 不影响持久化 ——
+     * 库里仍是 NULL，不会被悄悄写成 {@code []}。
+     */
     public List<String> getGalleryKeys() {
-        return galleryKeys;
+        return galleryKeys == null ? List.of() : galleryKeys;
     }
 
     public Species getSpecies() {

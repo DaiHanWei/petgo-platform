@@ -177,8 +177,17 @@ class ShopProductQueryServiceTest {
         assertThat(view.mainImageUrl()).isEqualTo("https://cdn.test/shop/p/1/main.jpg");
     }
 
+    /**
+     * 🔴 D-20（2026-09-02 stag，P0）：存量行该列为 NULL，getter 直接把 null 交出去，
+     * 调用方一 for 循环就是 NPE —— 后台商品编辑页因此**几乎全部 500**
+     * （抽查 8 个商品 7 个挂，只有测试新建的那个能打开），
+     * 运营改价 / 改描述 / 换图 / 调权重全部阻断。
+     *
+     * <p>已在 {@code ShopProduct.getGalleryKeys()} 上收口成空列表。本条从**读取侧**
+     * 钉住它：实体字段仍是 null，但任何取用方拿到的都是可安全迭代的空列表。
+     */
     @Test
-    @DisplayName("🔴 存量行 galleryKeys 为 null → 空列表，不是 null 也不抛")
+    @DisplayName("🔴 D-20：存量行 galleryKeys 为 null → 取用方拿到空列表，可直接迭代")
     void detailHandlesNullGallery() {
         // 多图是后加的字段，存量商品那一列是 NULL。下发 null 会让 App 端
         // `[mainImageUrl, ...galleryUrls]` 直接炸在展开上；这里必须收敛成空列表。
@@ -191,6 +200,13 @@ class ShopProductQueryServiceTest {
         ShopProductDetailView view = service.detail("tokA");
 
         assertThat(view.galleryUrls()).isNotNull().isEmpty();
+        // 🔴 keys 本身也不能是 null：D-20 的崩点是「拿到 null 就地 for 循环」，
+        //    下发 null 只是把同一颗雷交给了客户端。
+        assertThat(view.galleryKeys()).isNotNull().isEmpty();
+        // 能直接迭代 —— 这正是后台那 7 个 500 挂掉的那一步
+        for (String k : view.galleryKeys()) {
+            assertThat(k).isNotNull();
+        }
     }
 
     @Test
